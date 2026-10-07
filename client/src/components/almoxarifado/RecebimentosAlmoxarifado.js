@@ -19,6 +19,7 @@ import AnexosDocumento from './AnexosDocumento';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import { montarEtiquetasDoRecebimento } from '../../utils/etiquetasPdf';
 import { quantidadeQueEntra } from '../../utils/quantidadeQueEntra';
+import { formatDateBR } from '../../utils/formatDate';
 import './Almoxarifado.css';
 
 const STATUS_INFO = {
@@ -225,6 +226,14 @@ const RecebimentosAlmoxarifado = () => {
   // escolher 313 e depois 312 deixava a tela do 312 dizendo "já foi recebido por completo", com os
   // itens apagados e o submit bloqueado. Mesmo molde de `detalheFetchSeqRef` (Etapa 35).
   const pedidoSeqRef = useRef(0);
+  // Etapa 39 (RN-39.08): o DOCUMENTO do pedido — Fornecedor e Condições — que a Etapa 32 mostrava
+  // neste modal e a 42 tirou junto com o preço. Volta SEM preço, SEM totais e SEM `observacoes`
+  // (B22/B23: a rota `-aux` alcança PRODUCAO/CONSULTA, e `observacoes` do pedido é negociação com
+  // o fornecedor). Estado separado dos itens de propósito: a falha deste GET é cosmética e NÃO pode
+  // tocar `erroItensPedido` nem o submit — quem recebe continua recebendo sem o painel.
+  const [documentoPedido, setDocumentoPedido] = useState(null);
+  const [erroDocumentoPedido, setErroDocumentoPedido] = useState(null);
+  const [carregandoDocumentoPedido, setCarregandoDocumentoPedido] = useState(false);
   // Três estados e não um: "carregando", "a rota falhou" e "o pedido não tem saldo" são fatos
   // diferentes, e um só faria a tela dizer "já foi recebido por completo" quando a requisição
   // caiu — mentindo sobre o pedido para esconder um erro de rede.
@@ -616,6 +625,34 @@ const RecebimentosAlmoxarifado = () => {
     setAvisoPedidoSemSaldo(null);
     setErroCriacao(null);
     setAutorizarExcedenteCriacao(false);
+    // Etapa 39 (RN-39.08): o painel do documento é do pedido — sai junto com ele.
+    setDocumentoPedido(null);
+    setErroDocumentoPedido(null);
+    setCarregandoDocumentoPedido(false);
+  };
+
+  /**
+   * Etapa 39 (RN-39.08) — o documento do pedido (Fornecedor + Condições) para o painel do modal.
+   *
+   * Corre em PARALELO com a rota de itens e sob o MESMO `seq` de `selecionarPedido`: a corrida da
+   * Etapa 37 (F4) existe aqui igual — escolher 312 e logo 313 deixa dois documentos em voo, e sem
+   * a guarda o painel do 313 ganharia o fornecedor do 312. Não é `await`ada por quem chama: a
+   * falha dela fica neste `catch`, e o recebimento (itens, quantidade, submit) segue inteiro.
+   */
+  const carregarDocumentoDoPedido = async (pedidoId, seq) => {
+    setCarregandoDocumentoPedido(true);
+    try {
+      const res = await api.get(`/almoxarifado/recebimentos-aux/pedidos-compra/${pedidoId}`);
+      if (seq !== pedidoSeqRef.current) return;   // chegou atrasada: outra escolha venceu
+      setDocumentoPedido(res.data || null);
+    } catch (err) {
+      if (seq !== pedidoSeqRef.current) return;   // a falha do abandonado não acusa o escolhido
+      // A literal fixa fica no JSX; aqui só o MOTIVO que o servidor deu (404 → "Pedido não
+      // encontrado"), ou a string vazia quando a falha é de rede.
+      setErroDocumentoPedido(err.response?.data?.error || '');
+    } finally {
+      if (seq === pedidoSeqRef.current) setCarregandoDocumentoPedido(false);
+    }
   };
 
   /**
@@ -643,6 +680,8 @@ const RecebimentosAlmoxarifado = () => {
     // "Selecione o pedido..." — senão a resposta em voo do pedido abandonado repovoaria o bloco.
     const seq = ++pedidoSeqRef.current;
     if (!pedidoId) return;
+    // Etapa 39 (RN-39.08): o documento sai sob o MESMO `seq`, sem `await` — ver a função.
+    carregarDocumentoDoPedido(pedidoId, seq);
     setCarregandoItensPedido(true);
     try {
       const res = await api.get(`/almoxarifado/recebimentos-aux/pedidos-compra/${pedidoId}/itens`);
@@ -1390,6 +1429,84 @@ const RecebimentosAlmoxarifado = () => {
                     fundiria as duas (e o React reclamaria de chave repetida). */}
                 {form.tipo_recebimento === 'PEDIDO_COMPRA' && form.pedido_compra_id && (
                   <div style={{ marginTop: 16 }}>
+                    {/* Etapa 39 (RN-39.08): o documento do pedido — só Fornecedor e Condições.
+                        É o painel da Etapa 32 (`b3abc723`) SEM os blocos de itens, preço e
+                        totais e SEM `observacoes` (B22/B23). O painel lê APENAS as chaves do
+                        contrato: o que a rota não deveria mandar, ela também não exibe se vier.
+                        Classes `.ped-rec-*` são as da 32, que ficaram no CSS. */}
+                    {carregandoDocumentoPedido && !documentoPedido && (
+                      <div className="ped-rec-loading">Carregando dados do pedido...</div>
+                    )}
+                    {erroDocumentoPedido !== null && !documentoPedido && (
+                      <p style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', margin: '0 0 8px' }}>
+                        Dados do pedido não disponíveis{erroDocumentoPedido ? ` — ${erroDocumentoPedido}` : ''}.
+                        {' '}O recebimento pode seguir normalmente.
+                      </p>
+                    )}
+                    {documentoPedido && (
+                      <div className="ped-rec-painel" data-testid="painel-pedido" style={{ marginTop: 0, marginBottom: 12 }}>
+                        <div className="ped-rec-bloco">
+                          <div className="ped-rec-bloco-titulo">
+                            Fornecedor
+                            {documentoPedido.fornecedor?.origem === 'cadastro' && (
+                              <span className="almox-badge almox-badge-ok" data-testid="painel-pedido-origem"
+                                title="Dados lidos do cadastro atual do fornecedor (o pedido não tem snapshot)"
+                                style={{ marginLeft: 8, fontSize: '0.65rem', padding: '1px 8px', textTransform: 'none', letterSpacing: 0 }}>
+                                cadastro
+                              </span>
+                            )}
+                          </div>
+                          <div className="ped-rec-forn-nome">{documentoPedido.fornecedor?.nome || '—'}</div>
+                          <div className="ped-rec-grid">
+                            <div><span>CNPJ</span><strong>{documentoPedido.fornecedor?.cnpj || '—'}</strong></div>
+                            <div><span>Inscrição Estadual</span><strong>{documentoPedido.fornecedor?.ie || '—'}</strong></div>
+                            <div>
+                              <span>Telefone / celular</span>
+                              <strong>
+                                {[documentoPedido.fornecedor?.telefone, documentoPedido.fornecedor?.celular]
+                                  .filter(Boolean).join(' / ') || '—'}
+                              </strong>
+                            </div>
+                            <div><span>E-mail</span><strong>{documentoPedido.fornecedor?.email || '—'}</strong></div>
+                            <div className="ped-rec-grid-full">
+                              <span>Endereço</span>
+                              <strong>
+                                {[
+                                  documentoPedido.fornecedor?.endereco,
+                                  [documentoPedido.fornecedor?.municipio, documentoPedido.fornecedor?.uf]
+                                    .filter(Boolean).join('/'),
+                                  documentoPedido.fornecedor?.cep ? `CEP ${documentoPedido.fornecedor.cep}` : null,
+                                ].filter(Boolean).join(' — ') || '—'}
+                              </strong>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="ped-rec-bloco" style={{ borderBottom: 'none' }}>
+                          <div className="ped-rec-bloco-titulo">Condições do pedido</div>
+                          <div className="ped-rec-grid">
+                            <div><span>Data do pedido</span><strong>{formatDateBR(documentoPedido.data_pedido)}</strong></div>
+                            <div><span>Previsão de entrega</span><strong>{formatDateBR(documentoPedido.previsao_entrega)}</strong></div>
+                            <div><span>Condição de pagamento</span><strong>{documentoPedido.condicoes?.condicao_pagamento || '—'}</strong></div>
+                            <div><span>Frete</span><strong>{documentoPedido.condicoes?.frete_modalidade || '—'}</strong></div>
+                            <div>
+                              <span>Transportadora</span>
+                              <strong>
+                                {[documentoPedido.condicoes?.transportadora, documentoPedido.condicoes?.transportadora_telefone]
+                                  .filter(Boolean).join(' — ') || '—'}
+                              </strong>
+                            </div>
+                            <div><span>Via de transporte</span><strong>{documentoPedido.condicoes?.via_transporte || '—'}</strong></div>
+                            <div><span>Contato</span><strong>{documentoPedido.condicoes?.contato || '—'}</strong></div>
+                            {/* `tabela_preco` vem no contrato mas fica FORA do painel: a RN-39.08
+                                enumera as condições sem ela, e a palavra "preço" não entra aqui. */}
+                            <div className="ped-rec-grid-full">
+                              <span>Entregar em</span>
+                              <strong>{documentoPedido.condicoes?.local_entrega || '—'}</strong>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <label className="almox-label">Itens do pedido</label>
                     {carregandoItensPedido && (
                       <p style={{ fontSize: '0.8rem', margin: '0 0 8px' }}>Carregando os itens do pedido...</p>
