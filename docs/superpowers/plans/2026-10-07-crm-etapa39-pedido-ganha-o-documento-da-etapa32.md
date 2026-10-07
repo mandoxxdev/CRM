@@ -253,6 +253,38 @@ ERP (a task que a 32 deixou "a fazer").
   fixture invertida, 29/29. Nenhuma suíte antiga quebrou na primeira rodada (o `valor_total` de
   pedido sem IPI/encargos é mesmo o mesmo até o centavo, como a Fase 0 previu).
   _T2/T3/T4: preencher._
-- Achados da revisão: _preencher_ (reais vs. ruído)
-- Paralelismo: T1 rodou sozinha na worktree `c39` (servidor); T2/T3 _preencher_.
+- Achados da revisão: PLANO — 1 trava (rota do painel dependia da T1) + 5 "corrige antes" (cotação × pedido arredondando diferente foi o mais valioso: nenhum teste cruzava), 0 ruído; CÓDIGO — 3 Minors reais (M1 declarado, M2 e M3 corrigidos), 0 ruído, 7/7 sabotagens pegas.
+- Paralelismo: três executores em paralelo em worktrees próprias — T1 (servidor, `c39`), T2 (form, `c39b`), T3 (painel do recebimento, `c39c`) — contra o contrato congelado; T2 e T3 só mockaram o `api`. Zero retrabalho entre galhos; o único cruzamento foi o executor da T1 ter sido cortado por limite de uso no fim da suíte (retomado pelo integrador: 2 testes que afirmavam o schema antigo — `comprasCotacaoFkProducao` e `pedidoSaldoRecebido` — adaptados em `6a21c4ea`). Merges `1cc47af8` (T3), `d01ad23f` (T1), `afcd1be7` (T2), sem conflito de código.
 - Defeito escapado: preencher na etapa seguinte.
+
+## Como foi executado (integração medida em `main`, 2026-10-07)
+
+- Servidor: `test:api` **295/295** arquivos (293 + `comprasPedidoDocumento` 29 cenários + 1
+  arquivo já contado), `test:almoxarifado`, `test:validation`, `test:safealter`, `test:sqlite`
+  verdes; `tests/pedidoTotais.test.js` **22/22**. Boot em pasta de dados nova (T1): 0 `no such
+  table|no column named`; `pedidos_compra` 34 colunas, `itens_pedido_compra` 14.
+- Client: **85 suítes / 1323 testes** (baseline pós-unificação 84/1309 → +1 suíte
+  `RecebimentosPainelPedido`, +14 testes), `CI=true npx react-scripts build` "Compiled successfully".
+- Revisão adversarial (Fase 5) na worktree `review39` — resultado na seção seguinte.
+
+## Revisão adversarial (2026-10-07) e onda de correção
+
+Revisor fresco, worktree `review39`, servidor REAL pelo harness. Fluxo inteiro (2 itens com IPI +
+frete → 190 em `totais`/`valor_total`/lista → recebimento parcial → custo médio 50 sem IPI → completar
+→ `recebido` automático → PUT bloqueado) **sustentou**; snapshot (renomear, trocar, legado, legado
+editado), `/calcular` tolerante, cotação `1 × 1.005 × 2` = pedido gerado, importação, rota `-aux`
+para PRODUCAO sem valor/totais/observações, harness = `ALTERS_PEDIDOS_COMPRA` (24 = 24) — todos
+confirmados por sonda. **Sabotagens: 7/7 pegas** (`valor_total` = produtos 24/5; snapshot não
+reescrito 26/3; `-aux` com observações 28/1; form somando local 31/2; `item_numero` do payload
+28/1; GET sem `semColunasCruas` 28/1; cotação arredondando a soma 28/1). Regressão: 13 suítes do
+servidor e 6 do client verdes. **Nenhum Critical/Major.**
+
+| # | Sev. | Achado | Destino |
+|---|---|---|---|
+| M1 | Minor | Pedido **anterior à 39** com preço de 3+ casas mostra `valor_total` cru na lista e `totais` recalculado por linha na tela; o primeiro PUT grava o recalculado (delta até N × 0,005) | **Declarado** (G15); correção apontada (devolver os totais gravados quando existem) |
+| M2 | Minor | A lista `GET /pedidos` viajava com as 10 colunas cruas `snap_fornecedor_*` (só payload; export não afetado — refutado) | **Corrigido**: a rota tira as chaves `snap_*` das linhas; teste `[M2 revisão]` |
+| M3 | Minor | Condição limpa na tela gravava `''`, nunca tocada `NULL` — dado inconsistente | **Corrigido**: `camposDoCabecalho` grava NULL para `''`/só espaços nas condições e tira espaços; teste `[M3 revisão]` (sabotagem → 1 vermelho) |
+
+Refutados: export com `snap_*`; injeção no `distinct` (colunas constantes); preço/observações na
+lista `-aux`; CSS global; debounce (3 teclas → 1 chamada aos 300 ms); harness ≠ produção.
+`comprasPedidoDocumento` após a onda: **31/31**.

@@ -201,6 +201,12 @@
   exportado e reimportado nasce com valor menor. Coluna "IPI %" no export fica para depois.
 - **G14** (Etapa 39) O documento impresso do pedido (PDF/HTML no formato do ERP) **ainda não
   existe** — a Etapa 32 deixou "a fazer" e a 39 porta só o conteúdo. É a **Etapa 40**.
+- **G15** (Etapa 39, achado da revisão) Pedido criado **antes** da 39 com preço unitário de 3+
+  casas (ex.: `0,105`) mostra dois totais até ser salvo de novo: a lista mostra o valor gravado cru
+  (`0,315`) e a tela do pedido mostra o recalculado por linha (`0,33`); o primeiro salvar grava o
+  recalculado. Só pedidos antigos com preço de 4 casas; nenhum pedido novo passa por isso. Se
+  incomodar, a correção é devolver os totais gravados quando existem (uma condição em
+  `relerPedido`).
 - **G11** `?familia_id=<id de subfamília>` digitado na URL de Materiais antes de a lista de famílias
   carregar manda só `familia_id` e devolve zero linhas até mexer no filtro. Nenhum link do sistema
   gera essa URL. Correção: incluir `familias` nas dependências da busca (um GET a mais).
