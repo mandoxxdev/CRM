@@ -504,6 +504,54 @@ const NAO_ENCONTRADO = 'Pedido de compra não encontrado';
     assert.deepStrictEqual(comTabela.body.empresa, { nome: 'GMP Industriais', endereco: 'Av. Angelo Demarchi, 130 - São Bernardo do Campo - SP - 09820-000' });
   });
 
+  /* ── 7. RN-39.08 / B22 / B23: o painel do recebimento ────────────────────────────────────── */
+  console.log('\nRN-39.08 — GET /almoxarifado/recebimentos-aux/pedidos-compra/:id (painel do recebimento)');
+
+  await test('PRODUCAO (sem perfil) ve fornecedor e condicoes; NAO ve valor_unitario, totais, observacoes nem itens', async () => {
+    setUser(SEM_PERFIL);
+    try {
+      const r = await aux(criadoId);
+      assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+      assert.strictEqual(r.body.id, criadoId);
+      assert.ok(/^PC-/.test(r.body.numero));
+      assert.strictEqual(r.body.data_pedido, '2025-12-16');
+      assert.strictEqual(r.body.previsao_entrega, '2025-12-18');
+      assert.strictEqual(r.body.fornecedor.nome, 'TECNOPAR FIXADORES LTDA');
+      assert.strictEqual(r.body.fornecedor.cnpj, '54.984.382/0001-64');
+      assert.strictEqual(r.body.fornecedor.ie, '799850123110');
+      assert.strictEqual(r.body.fornecedor.origem, 'snapshot');
+      assert.strictEqual(r.body.condicoes.condicao_pagamento, '30 D.D.L.');
+      assert.ok(String(r.body.condicoes.frete_modalidade).startsWith('2-Contrata'));
+      assert.strictEqual(r.body.condicoes.transportadora, 'TRANSPORTES ABC');
+      assert.strictEqual(r.body.condicoes.via_transporte, 'Rodoviário');
+      assert.strictEqual(r.body.condicoes.contato, 'Matheus');
+      assert.strictEqual(r.body.condicoes.local_entrega, 'AVENIDA ANGELO DEMARCHI, 130 - SAO BERNARDO DO CAMPO - SP');
+      const texto = JSON.stringify(r.body);
+      assert.ok(!('totais' in r.body), 'B22: totais nao saem para quem recebe');
+      assert.ok(!('observacoes' in r.body), 'B23: observacoes do pedido e negociacao com fornecedor');
+      assert.ok(!('itens' in r.body), 'os itens tem rota propria (/:id/itens)');
+      assert.ok(!('valor_total' in r.body) && !texto.includes('valor_unitario') && !texto.includes('211.61'),
+        `preco vazou no painel do recebimento: ${texto}`);
+      assert.ok(!texto.includes('snap_fornecedor_'), 'colunas cruas vazaram');
+      const nao = await aux(987654);
+      assert.strictEqual(nao.status, 404);
+      assert.strictEqual(nao.body.error, NAO_ENCONTRADO);
+      // E a rota de itens, registrada ANTES, continua respondendo por /:id/itens.
+      const itens = await request(app).get(`/api/almoxarifado/recebimentos-aux/pedidos-compra/${criadoId}/itens`);
+      assert.strictEqual(itens.status, 200, JSON.stringify(itens.body));
+      assert.ok(Array.isArray(itens.body));
+    } finally { setUser(ADMIN); }
+  });
+
+  await test('legado sem snapshot no painel: origem cadastro, condicoes todas null', async () => {
+    const r = await dbRun(db, "INSERT INTO pedidos_compra (numero, fornecedor_id, status) VALUES ('PC-LEGADO-AUX-E39', ?, 'pendente')", [outroForn]);
+    const resp = await aux(r.lastID);
+    assert.strictEqual(resp.status, 200, JSON.stringify(resp.body));
+    assert.strictEqual(resp.body.fornecedor.origem, 'cadastro');
+    assert.strictEqual(resp.body.fornecedor.nome, 'OUTRO FORNECEDOR SA');
+    assert.deepStrictEqual(Object.values(resp.body.condicoes), Array(9).fill(null));
+  });
+
   /* ── 8. RN-39.09: o recebimento continua sem IPI ─────────────────────────────────────────── */
   console.log('\nRN-39.09 — o recebimento REAL: custo medio pelo valor_unitario, SEM IPI');
 
