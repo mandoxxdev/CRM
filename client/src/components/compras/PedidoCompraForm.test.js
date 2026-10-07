@@ -159,6 +159,88 @@ const PEDIDO_418 = {
  */
 const PEDIDO_418_RECEBIDO = { ...PEDIDO_418, teve_recebimento: 1 };
 
+/**
+ * ── Etapa 39 (RN-39.06/07) — as OPCOES do documento e o pedido COM o documento ─────────────────
+ *
+ * O contrato congelado de `GET /compras/pedidos-aux/opcoes`: listas fixas unidas ao DISTINCT do
+ * que ja foi usado. As chaves sao as do plano (`frete_modalidades`, `condicoes_pagamento`, …), e
+ * NAO as da Etapa 32 (`frete_modalidade`, `condicao_pagamento`, `ipi`) — a tela nova consome o
+ * contrato novo. O frete tem `valor` (a string da SEFAZ, que e o que GRAVA) e `curto` (o rotulo
+ * do botao): o cenario (39a) afirma que o payload leva o VALOR, nao o rotulo.
+ */
+const FRETE_CIF = '0-Contratação do Frete por conta do Remetente (CIF)';
+const FRETE_FOB = '1-Contratação do Frete por conta do Destinatário (FOB)';
+const ENDERECO_EMPRESA = 'Rua das Prensas, 100 - Caxias do Sul - RS - 95000-000';
+const OPCOES = {
+  frete_modalidades: [
+    { valor: FRETE_CIF, curto: 'CIF — fornecedor paga' },
+    { valor: FRETE_FOB, curto: 'FOB — nós pagamos' },
+  ],
+  condicoes_pagamento: ['À vista', 'Boleto', '30/60'],
+  vias_transporte: ['Rodoviário', 'Retirada no fornecedor'],
+  unidades: [{ valor: 'UN', curto: 'UN' }, { valor: 'KG', curto: 'KG' }],
+  ipi_sugerido: [0, 3.25, 5, 6.5, 10, 15],
+  transportadoras: ['Transportes Vale'],
+  tabelas_preco: [],
+  empresa: { nome: 'GMP Industriais', endereco: ENDERECO_EMPRESA },
+};
+
+/**
+ * A SIMULACAO do servidor para `POST /compras/pedidos/calcular` (RN-39.02/05): arredonda por linha
+ * e soma, como `pedidoTotais.js`. Esta e a conta do MOCK, usada para os cenarios que precisam de
+ * um total plausivel ((f), (39f)); o cenario (39d) a SUBSTITUI por totais impossiveis justamente
+ * para provar que o navegador mostra o que o servidor devolveu e nao o que ele mesmo somaria.
+ */
+const arred2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+function calcularComoServidor(corpo) {
+  const itens = (corpo.itens || []).map((it) => {
+    const valor_linha = arred2((Number(it.quantidade) || 0) * (Number(it.valor_unitario) || 0));
+    const ipi_linha = arred2(valor_linha * (Number(it.ipi_percentual) || 0) / 100);
+    return { ...it, valor_linha, ipi_linha };
+  });
+  const total_produtos = arred2(itens.reduce((s, it) => s + it.valor_linha, 0));
+  const total_ipi = arred2(itens.reduce((s, it) => s + it.ipi_linha, 0));
+  const total_icms_st = arred2(corpo.total_icms_st);
+  const valor_frete = arred2(corpo.valor_frete);
+  const total_desconto = arred2(corpo.total_desconto);
+  return {
+    itens,
+    totais: {
+      total_produtos, total_ipi, total_icms_st, total_desconto, valor_frete,
+      total_geral: arred2(total_produtos + total_ipi + total_icms_st + valor_frete - total_desconto),
+    },
+  };
+}
+
+// O 418 COM o documento (RN-39.03): condicoes, IPI/NCM/peso/observacao por item e os `totais`.
+// 315 + 31,50 (IPI 10%) + 10 (ICMS-ST) + 80 (frete) - 36,50 (desconto) = 400.
+const PEDIDO_418_DOCUMENTO = {
+  ...PEDIDO_418,
+  valor_total: 400,
+  condicao_pagamento: 'Boleto',
+  frete_modalidade: FRETE_FOB,
+  transportadora: 'Transportes Vale',
+  transportadora_telefone: '(54) 3222-1000',
+  via_transporte: 'Rodoviário',
+  tabela_preco: 'Tabela 2026',
+  contato: 'Sr. Paulo',
+  local_entrega: ENDERECO_EMPRESA,
+  local_cobranca: 'Av. Fiscal, 9',
+  total_icms_st: 10,
+  valor_frete: 80,
+  total_desconto: 36.5,
+  itens: [{
+    ...PEDIDO_418.itens[0],
+    item_numero: 1, ipi_percentual: 10, ncm: '7208.51.00', peso_unitario: 2.5,
+    observacao: 'Pintura epóxi', valor_linha: 315, ipi_linha: 31.5,
+  }],
+  totais: {
+    total_produtos: 315, total_ipi: 31.5, total_icms_st: 10, total_desconto: 36.5,
+    valor_frete: 80, total_geral: 400,
+  },
+  fornecedor: { nome: 'Aços Vale Ltda', cnpj: '11.222.333/0001-44', origem: 'snapshot' },
+};
+
 // A linha da LISTA (aba Pedidos de `Compras.js`) usada pelos cenários de clique e da lixeira.
 const PEDIDO_418_LISTA = {
   id: 418, numero: 'PC-2026-418', fornecedor_nome: 'Aços Vale Ltda', valor_total: 315,
@@ -205,9 +287,15 @@ beforeEach(() => {
         : Promise.reject(new Error(`Pedido ${id} fora da fixture`));
     }
     if (url === '/compras/materiais') return Promise.resolve({ data: MATERIAIS_CHAPA });
+    if (url === '/compras/pedidos-aux/opcoes') return Promise.resolve({ data: OPCOES });
     return Promise.reject(new Error(`URL inesperada no teste: ${url}`));
   });
-  api.post.mockImplementation(() => Promise.resolve({ data: { id: 640, numero: 'PC-2026-640' } }));
+  // Etapa 39: o POST e por URL — `/calcular` responde a conta simulada (ver `calcularComoServidor`)
+  // e o resto continua sendo a criacao. Os cenarios que trocam `api.post` por um `reject` geral
+  // ((g), (k), (m)…) derrubam TAMBEM o `/calcular`: a tela tem de seguir de pe sem ele.
+  api.post.mockImplementation((url, corpo) => (url === '/compras/pedidos/calcular'
+    ? Promise.resolve({ data: calcularComoServidor(corpo) })
+    : Promise.resolve({ data: { id: 640, numero: 'PC-2026-640' } })));
   api.put.mockImplementation(() => Promise.resolve({ data: { id: 418, numero: 'PC-2026-418' } }));
   // Onda de correcao, F4: a porta nova `PATCH /compras/pedidos/:id/status`. O `api` e um instance
   // do axios (que TEM `patch`); o mock precisava ganhar a chave, senao o cenario novo mediria
@@ -298,6 +386,14 @@ const chamadasMateriais = () => api.get.mock.calls.filter(([url]) => url === '/c
 const chamadasDetalhe = (id) => api.get.mock.calls.filter(([url]) => url === `/compras/pedidos/${id}`);
 const chamadasLista = () => api.get.mock.calls.filter(([url]) => url === '/compras/pedidos');
 const chamadasImportar = () => api.post.mock.calls.filter(([url]) => url === '/compras/pedidos/importar');
+const chamadasCalcular = () => api.post.mock.calls.filter(([url]) => url === '/compras/pedidos/calcular');
+const chamadasOpcoes = () => api.get.mock.calls.filter(([url]) => url === '/compras/pedidos-aux/opcoes');
+// O debounce do `/calcular` e de 300 ms (RN-39.07); com timers REAIS, esperar 350 ms e o que faz
+// a conta chegar ao DOM. Os cenarios de TEMPO ((39d)) usam timers falsos e nao passam por aqui.
+const esperarCalculo = async () => {
+  await act(async () => { await new Promise((r) => setTimeout(r, 350)); });
+};
+const textoDe = (id) => (porTestId(id)?.textContent || '').replace(/ /g, ' ');
 const botaoPorTexto = (t) => [...container.querySelectorAll('button')]
   .find((b) => b.textContent.trim().includes(t));
 const linkPorTexto = (t) => [...container.querySelectorAll('a')]
@@ -366,13 +462,31 @@ test('(c) submeter manda UM POST com o payload exato, sem numero e sem valor_tot
 
   expect(chamadasPost()).toHaveLength(1);
   const payload = chamadasPost()[0][1];
+  // Etapa 39: o cabecalho ganhou as 9 condicoes (strings, vazias quando nao escolhidas) e os 3
+  // encargos (numeros); o item ganhou IPI/NCM/peso/observacao. O cenario (39e) afirma o payload
+  // COM o documento preenchido; este continua afirmando o pedido MINIMO — e que nada mais viaja.
   expect(payload).toEqual({
     fornecedor_id: 312,
     data_pedido: '2026-09-16',
     previsao_entrega: '2026-09-30',
     status: 'pendente',
     observacoes: '',
-    itens: [{ material_id: 907, quantidade: 4, valor_unitario: 25 }],
+    condicao_pagamento: '',
+    frete_modalidade: '',
+    transportadora: '',
+    transportadora_telefone: '',
+    via_transporte: '',
+    tabela_preco: '',
+    contato: '',
+    local_entrega: '',
+    local_cobranca: '',
+    total_icms_st: 0,
+    valor_frete: 0,
+    total_desconto: 0,
+    itens: [{
+      material_id: 907, quantidade: 4, valor_unitario: 25,
+      ipi_percentual: 0, ncm: '', peso_unitario: '', observacao: '',
+    }],
   });
   expect('numero' in payload).toBe(false);
   expect('valor_total' in payload).toBe(false);
@@ -424,28 +538,51 @@ test('(e) /compras/pedidos/editar/418 carrega o GET /:id, mostra os itens e subm
 
   expect(chamadasPut(418)).toHaveLength(1);
   expect(api.post.mock.calls).toHaveLength(0);
+  // O 418 desta fixture e ANTERIOR ao documento (sem condicoes, sem `totais`): a edicao de um
+  // pedido legado manda as condicoes vazias e o item com IPI 0 — o servidor completa NCM/peso.
   expect(chamadasPut(418)[0][1]).toEqual({
     fornecedor_id: 312,
     data_pedido: '2026-09-10',
     previsao_entrega: '2026-09-25',
     status: 'aprovado',
     observacoes: 'Entregar no portão 2',
-    itens: [{ material_id: 907, quantidade: 9, valor_unitario: 35 }],
+    condicao_pagamento: '',
+    frete_modalidade: '',
+    transportadora: '',
+    transportadora_telefone: '',
+    via_transporte: '',
+    tabela_preco: '',
+    contato: '',
+    local_entrega: '',
+    local_cobranca: '',
+    total_icms_st: 0,
+    valor_frete: 0,
+    total_desconto: 0,
+    itens: [{
+      material_id: 907, quantidade: 9, valor_unitario: 35,
+      ipi_percentual: 0, ncm: '', peso_unitario: '', observacao: '',
+    }],
   });
 });
 
 // ── (f) o total calculado ─────────────────────────────────────────────────────────────────────
+//
+// Etapa 39: o total deixou de ser uma conta local — e o que `/calcular` devolve (aqui, a
+// simulacao `calcularComoServidor` do mock), 300 ms depois da ultima tecla. O cenario (39d) e quem
+// prova que o navegador NAO soma; este prova que o total ACOMPANHA o que se digita.
 test('(f) o total calculado aparece e acompanha a quantidade', async () => {
   await renderizarEm('/compras/pedidos/novo');
   await preencherPedidoValido();
+  await esperarCalculo();
 
-  expect(texto()).toContain('Total: R$ 100,00');
+  expect(textoDe('total-geral')).toContain('R$ 100,00');
+  expect(textoDe('subtotal-item-907')).toContain('R$ 100,00');
 
   // Metade positiva: mudar a quantidade muda o total (um total hard-coded passaria na primeira).
   digitar(porTestId('qtd-item-907'), '5');
-  await esperarEfeitos();
-  expect(texto()).toContain('Total: R$ 125,00');
-  expect(texto()).not.toContain('Total: R$ 100,00');
+  await esperarCalculo();
+  expect(textoDe('total-geral')).toContain('R$ 125,00');
+  expect(textoDe('total-geral')).not.toContain('R$ 100,00');
 });
 
 // ── (g) o 400 do servidor chega ao DOM e o formulário fica de pé ───────────────────────────────
@@ -676,7 +813,10 @@ test('(l) /novo?solicitacao&material&quantidade pre-carrega o item e manda solic
   expect(chamadasPost()).toHaveLength(1);
   expect(chamadasPost()[0][1].solicitacao_id).toBe(77);
   expect(typeof chamadasPost()[0][1].solicitacao_id).toBe('number');
-  expect(chamadasPost()[0][1].itens).toEqual([{ material_id: 907, quantidade: 6, valor_unitario: 25 }]);
+  expect(chamadasPost()[0][1].itens).toEqual([{
+    material_id: 907, quantidade: 6, valor_unitario: 25,
+    ipi_percentual: 0, ncm: '', peso_unitario: '', observacao: '',
+  }]);
 });
 
 // ── (m) o 403 do gate condicional do vínculo (fix 1 da Task 2) vira frase ─────────────────────
@@ -957,4 +1097,388 @@ test('(r3) a recusa do PATCH aparece em role=alert e o formulario fica de pe', a
   expect(alertas()).toContain(LITERAL_400_STATUS);
   expect(texto()).toContain('Editar pedido de compra');
   expect(toast.success).not.toHaveBeenCalled();
+});
+
+/**
+ * ═══ Etapa 39 — RN-39.07: o formulario ganha o DOCUMENTO da Etapa 32 ═══════════════════════════
+ *
+ * No merge de 2026-10-07 o pedido da branch venceu o da Etapa 32 — e com ele sumiram as condicoes
+ * comerciais, o IPI por item, NCM/peso/observacao do item e a conta do servidor. Esta describe porta
+ * o documento SOBRE o formulario atual: busca de material, importacao por planilha, 7 status, numero
+ * gerado e "so status" apos recebimento continuam (cenarios (a)…(r3) acima seguem valendo).
+ *
+ * Tres regras que estes cenarios medem e que uma leitura do JSX nao mede:
+ *  - O payload leva o VALOR da opcao, nunca o rotulo do botao ((39a): o frete grava a string da
+ *    SEFAZ, o chip mostra "FOB — nós pagamos").
+ *  - O que se digita em "Outro" e o que viaja ((39b)) — e o servidor o devolve como botao no
+ *    proximo pedido (RN-39.06), por isso nao existe cadastro de condicao.
+ *  - O NAVEGADOR NAO SOMA ((39d)): os seis totais sao os da resposta de `/calcular`, chamado com
+ *    debounce de 300 ms. O mock devolve totais IMPOSSIVEIS (R$ 999,99 para 7 × 25) e o DOM tem de
+ *    mostra-los — um formulario que somasse localmente passaria em (f) e cairia aqui.
+ *
+ * A importacao por planilha NAO ganha cenario novo: (k)/(k2)/(k3)/(k4) ja a medem, e o mock deles
+ * REJEITA todo POST que nao seja `/importar` — inclusive `/calcular` — entao eles tambem provam que
+ * a tela fica de pe sem a conta do servidor.
+ *
+ * Divergencia declarada: `GET /compras/materiais` devolve so `id, codigo, descricao, unidade`
+ * (medido em `pedidoCompraService.buscarMateriais`), entao NCM e peso nascem VAZIOS na criacao
+ * (`''` = "o do material", RN-39.01) e so na edicao vem preenchidos, do `GET /:id`.
+ */
+describe('RN-39', () => {
+  const itemDe = (payload, materialId) => payload.itens.find((it) => it.material_id === materialId);
+
+  // ── (39a) as opcoes viram chips; o payload leva o VALOR, nao o rotulo ──────────────────────
+  test('(39a) as opcoes carregadas viram chips, a escolha e unica e o payload leva o VALOR', async () => {
+    await renderizarEm('/compras/pedidos/novo');
+
+    expect(chamadasOpcoes()).toHaveLength(1);
+    expect(texto()).toContain('3. Condições');
+    // O rotulo CURTO do frete esta no botao; o valor longo da SEFAZ nao aparece na tela.
+    expect(porTestId(`chip-frete_modalidade-${FRETE_FOB}`).textContent).toContain('FOB — nós pagamos');
+    expect(texto()).not.toContain(FRETE_FOB);
+    // A ajuda que explica por que nao existe cadastro de condicao.
+    expect(texto()).toContain('vira botão no próximo pedido');
+
+    await clicar(porTestId('chip-condicao_pagamento-À vista'));
+    await clicar(porTestId('chip-condicao_pagamento-Boleto'));
+    // Escolha UNICA: o segundo clique tira o primeiro.
+    expect(porTestId('chip-condicao_pagamento-Boleto').getAttribute('aria-pressed')).toBe('true');
+    expect(porTestId('chip-condicao_pagamento-À vista').getAttribute('aria-pressed')).toBe('false');
+    await clicar(porTestId(`chip-frete_modalidade-${FRETE_FOB}`));
+    await clicar(porTestId('chip-via_transporte-Rodoviário'));
+    await clicar(porTestId('chip-transportadora-Transportes Vale'));
+
+    await preencherPedidoValido();
+    await submeter();
+
+    expect(chamadasPost()).toHaveLength(1);
+    const payload = chamadasPost()[0][1];
+    expect(payload.condicao_pagamento).toBe('Boleto');
+    expect(payload.frete_modalidade).toBe(FRETE_FOB);
+    expect(payload.via_transporte).toBe('Rodoviário');
+    expect(payload.transportadora).toBe('Transportes Vale');
+  });
+
+  // ── (39b) "Outro" vira o valor digitado ───────────────────────────────────────────────────
+  test('(39b) "Outro" abre um campo e o que for digitado e o que viaja no payload', async () => {
+    await renderizarEm('/compras/pedidos/novo');
+
+    // Antes do clique o campo nao existe: a tela e de botao, o campo e a excecao.
+    expect(porTestId('outro-condicao_pagamento')).toBeNull();
+    await clicar(porTestId('chip-condicao_pagamento-outro'));
+    digitar(porTestId('outro-condicao_pagamento'), '45 D.D.L.');
+    await esperarEfeitos();
+    // O proprio botao "Outro" passa a mostrar o valor, pressionado.
+    expect(porTestId('chip-condicao_pagamento-outro').textContent).toContain('45 D.D.L.');
+    expect(porTestId('chip-condicao_pagamento-outro').getAttribute('aria-pressed')).toBe('true');
+
+    await clicar(porTestId('chip-transportadora-outro'));
+    digitar(porTestId('outro-transportadora'), 'Jamef');
+    // `tabelas_preco` veio VAZIA do servidor: so o "Outro" existe, e ele tem de bastar.
+    await clicar(porTestId('chip-tabela_preco-outro'));
+    digitar(porTestId('outro-tabela_preco'), 'Tabela 2026');
+    digitar(porTestId('pedido-transportadora-telefone'), '54999998888');
+    digitar(porTestId('pedido-contato'), 'Sr. Paulo');
+    // Entregar em: o endereco da EMPRESA vem de `opcoes.empresa`; cobrar em: outro endereco.
+    await clicar(porTestId('chip-local_entrega-empresa'));
+    await clicar(porTestId('chip-local_cobranca-outro'));
+    digitar(porTestId('outro-local_cobranca'), 'Av. Fiscal, 9');
+    await esperarEfeitos();
+
+    await preencherPedidoValido();
+    await submeter();
+
+    expect(chamadasPost()).toHaveLength(1);
+    const payload = chamadasPost()[0][1];
+    expect(payload.condicao_pagamento).toBe('45 D.D.L.');
+    expect(payload.transportadora).toBe('Jamef');
+    expect(payload.tabela_preco).toBe('Tabela 2026');
+    // A mascara e a mesma dos demais telefones do sistema (`utils/telefone`).
+    expect(payload.transportadora_telefone).toBe('(54) 99999-8888');
+    expect(payload.contato).toBe('Sr. Paulo');
+    expect(payload.local_entrega).toBe(ENDERECO_EMPRESA);
+    expect(payload.local_cobranca).toBe('Av. Fiscal, 9');
+  });
+
+  // ── (39c) IPI por item: padrao 0, chip, "Outro"; NCM/peso/observacao ──────────────────────
+  test('(39c) IPI do item por chip e por "Outro", e NCM/peso/observacao do item viajam', async () => {
+    await renderizarEm('/compras/pedidos/novo');
+    await selecionar(porTestId('pedido-fornecedor'), '312');
+    digitar(porTestId('busca-material'), 'CHAPA');
+    await clicar(porTestId('botao-buscar-material'));
+    await clicar(porTestId('adicionar-material-907'));
+    await clicar(porTestId('adicionar-material-901'));
+    digitar(porTestId('qtd-item-907'), '4');
+    digitar(porTestId('valor-item-907'), '25');
+    digitar(porTestId('qtd-item-901'), '2');
+    digitar(porTestId('valor-item-901'), '10');
+    await esperarEfeitos();
+
+    // O painel de detalhes do item nasce FECHADO (a linha e compacta: 50 itens cabem na tela).
+    expect(porTestId('ncm-item-907')).toBeNull();
+    await clicar(porTestId('detalhes-item-907'));
+    await clicar(porTestId('chip-ipi-907-10'));
+    expect(porTestId('chip-ipi-907-10').getAttribute('aria-pressed')).toBe('true');
+    // NCM e peso nascem VAZIOS na criacao (a busca de material nao os traz) — e sao editaveis.
+    expect(porTestId('ncm-item-907').value).toBe('');
+    expect(porTestId('peso-item-907').value).toBe('');
+    digitar(porTestId('ncm-item-907'), '7208.51.00');
+    digitar(porTestId('peso-item-907'), '2.5');
+    digitar(porTestId('obs-item-907'), 'Pintura epóxi');
+    await esperarEfeitos();
+
+    // O 901: IPI fora da lista, por "Outro".
+    await clicar(porTestId('detalhes-item-901'));
+    await clicar(porTestId('chip-ipi-901-outro'));
+    digitar(porTestId('outro-ipi-901'), '4.5');
+    await esperarEfeitos();
+    // A linha fechada DIZ o IPI do item, para um entre cinquenta nao passar despercebido.
+    expect(porTestId('detalhes-item-901').textContent).toContain('4,5%');
+
+    await submeter();
+
+    expect(chamadasPost()).toHaveLength(1);
+    const payload = chamadasPost()[0][1];
+    const i907 = itemDe(payload, 907);
+    const i901 = itemDe(payload, 901);
+    expect(i907.ipi_percentual).toBe(10);
+    expect(typeof i907.ipi_percentual).toBe('number');
+    expect(i907.ncm).toBe('7208.51.00');
+    expect(i907.peso_unitario).toBe(2.5);
+    expect(typeof i907.peso_unitario).toBe('number');
+    expect(i907.observacao).toBe('Pintura epóxi');
+    expect(i901.ipi_percentual).toBe(4.5);
+    // `''` em ncm/peso = "o do material" (RN-39.01): a tela NAO manda 0 nem null, que o servidor
+    // trataria como valor preenchido.
+    expect(i901.ncm).toBe('');
+    expect(i901.peso_unitario).toBe('');
+    expect(i901.observacao).toBe('');
+    // E `item_numero` e do servidor: nunca sai do navegador.
+    expect('item_numero' in i907).toBe(false);
+  });
+
+  // ── (39c2) o IPI PADRAO do pedido aplica a todos; o item pode divergir depois ──────────────
+  test('(39c2) o IPI padrao do pedido vale para todos os itens, e um item pode divergir', async () => {
+    await renderizarEm('/compras/pedidos/novo');
+    await selecionar(porTestId('pedido-fornecedor'), '312');
+    digitar(porTestId('busca-material'), 'CHAPA');
+    await clicar(porTestId('botao-buscar-material'));
+    await clicar(porTestId('adicionar-material-907'));
+    await clicar(porTestId('chip-ipi_padrao-5'));
+    // Item adicionado DEPOIS do padrao nasce com ele.
+    await clicar(porTestId('adicionar-material-901'));
+    digitar(porTestId('qtd-item-907'), '1');
+    digitar(porTestId('valor-item-907'), '1');
+    digitar(porTestId('qtd-item-901'), '1');
+    digitar(porTestId('valor-item-901'), '1');
+    await clicar(porTestId('detalhes-item-907'));
+    await clicar(porTestId('chip-ipi-907-15'));
+    await esperarEfeitos();
+
+    await submeter();
+    const payload = chamadasPost()[0][1];
+    expect(itemDe(payload, 907).ipi_percentual).toBe(15);
+    expect(itemDe(payload, 901).ipi_percentual).toBe(5);
+  });
+
+  // ── (39d) /calcular com debounce de 300 ms; o navegador NAO soma ──────────────────────────
+  test('(39d) /calcular e chamado 300 ms depois da ultima tecla e os seis totais sao os da resposta', async () => {
+    const IMPOSSIVEL = {
+      itens: [{ material_id: 907, valor_linha: 123.45, ipi_linha: 6.78 }],
+      totais: {
+        total_produtos: 777.77, total_ipi: 11.11, total_icms_st: 22.22,
+        total_desconto: 33.33, valor_frete: 44.44, total_geral: 999.99,
+      },
+    };
+    api.post.mockImplementation((url) => (url === '/compras/pedidos/calcular'
+      ? Promise.resolve({ data: IMPOSSIVEL })
+      : Promise.resolve({ data: { id: 640, numero: 'PC-2026-640' } })));
+    await renderizarEm('/compras/pedidos/novo');
+    // Sem item nenhum nao ha o que calcular: nenhuma viagem ao servidor.
+    expect(chamadasCalcular()).toHaveLength(0);
+    await preencherPedidoValido();
+    await esperarCalculo();
+    const antes = chamadasCalcular().length;
+    expect(antes).toBeGreaterThanOrEqual(1);
+
+    // Daqui em diante o relogio e FALSO (instalado depois da montagem: `esperarEfeitos` espera
+    // um `setTimeout(0)` real e nunca resolveria com os timers do Jest 27 — ver cenario (q)).
+    jest.useFakeTimers();
+    try {
+      digitar(porTestId('qtd-item-907'), '7');
+      digitar(porTestId('qtd-item-907'), '70');
+      digitar(porTestId('qtd-item-907'), '7');
+      await act(async () => { jest.advanceTimersByTime(299); });
+      // 299 ms depois da ultima tecla: NADA. Tres teclas, zero chamadas — e o debounce.
+      expect(chamadasCalcular()).toHaveLength(antes);
+      await act(async () => { jest.advanceTimersByTime(1); });
+      expect(chamadasCalcular()).toHaveLength(antes + 1);
+      // O corpo EXATO: os itens com IPI e os tres encargos, numeros (o schema e tolerante, mas a
+      // tela manda o que o servidor grava).
+      expect(chamadasCalcular()[antes][1]).toEqual({
+        itens: [{ material_id: 907, quantidade: 7, valor_unitario: 25, ipi_percentual: 0 }],
+        total_icms_st: 0, valor_frete: 0, total_desconto: 0,
+      });
+      await act(async () => { await Promise.resolve(); });
+
+      // ⚠️ AS ASSERCOES QUE MEDEM O DANO: 7 × 25 = 175, e o DOM mostra 777,77 / 999,99 — os
+      // numeros da RESPOSTA. Um formulario que somasse localmente mostraria 175,00 aqui.
+      expect(textoDe('total-produtos')).toContain('R$ 777,77');
+      expect(textoDe('total-ipi')).toContain('R$ 11,11');
+      expect(textoDe('total-icms-st')).toContain('R$ 22,22');
+      expect(textoDe('total-desconto')).toContain('R$ 33,33');
+      expect(textoDe('total-frete')).toContain('R$ 44,44');
+      expect(textoDe('total-geral')).toContain('R$ 999,99');
+      expect(texto()).not.toContain('R$ 175,00');
+      // O subtotal da LINHA tambem e o do servidor (`valor_linha`), nao qtd × unitario.
+      expect(textoDe('subtotal-item-907')).toContain('R$ 123,45');
+
+      // Os encargos tambem disparam a conta, e viajam como NUMERO.
+      digitar(porTestId('pedido-frete'), '50');
+      await act(async () => { jest.advanceTimersByTime(300); });
+      expect(chamadasCalcular()).toHaveLength(antes + 2);
+      expect(chamadasCalcular()[antes + 1][1].valor_frete).toBe(50);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  // ── (39e) o POST completo ─────────────────────────────────────────────────────────────────
+  test('(39e) o POST leva o cabecalho e os itens do documento, sem item_numero e sem valor_total', async () => {
+    await renderizarEm('/compras/pedidos/novo');
+    await preencherPedidoValido();
+    await clicar(porTestId('chip-condicao_pagamento-Boleto'));
+    digitar(porTestId('pedido-frete'), '80');
+    digitar(porTestId('pedido-desconto'), '36.5');
+    digitar(porTestId('pedido-icms-st'), '10');
+    await esperarEfeitos();
+    await submeter();
+
+    expect(chamadasPost()).toHaveLength(1);
+    const payload = chamadasPost()[0][1];
+    expect(payload).toEqual({
+      fornecedor_id: 312,
+      data_pedido: '2026-09-16',
+      previsao_entrega: '2026-09-30',
+      status: 'pendente',
+      observacoes: '',
+      condicao_pagamento: 'Boleto',
+      frete_modalidade: '',
+      transportadora: '',
+      transportadora_telefone: '',
+      via_transporte: '',
+      tabela_preco: '',
+      contato: '',
+      local_entrega: '',
+      local_cobranca: '',
+      total_icms_st: 10,
+      valor_frete: 80,
+      total_desconto: 36.5,
+      itens: [{
+        material_id: 907, quantidade: 4, valor_unitario: 25,
+        ipi_percentual: 0, ncm: '', peso_unitario: '', observacao: '',
+      }],
+    });
+    expect('valor_total' in payload).toBe(false);
+    expect('numero' in payload).toBe(false);
+    expect(typeof payload.valor_frete).toBe('number');
+    expect(typeof payload.total_desconto).toBe('number');
+    expect(typeof payload.total_icms_st).toBe('number');
+  });
+
+  // ── (39f) edicao: o que esta gravado aparece, e os totais do GET nao sao recalculados a toa ─
+  test('(39f) a edicao carrega condicoes, IPI/NCM/peso/observacao e os totais do GET, e o PUT os devolve', async () => {
+    detalhe418 = PEDIDO_418_DOCUMENTO;
+    await renderizarEm('/compras/pedidos/editar/418');
+
+    expect(porTestId('chip-condicao_pagamento-Boleto').getAttribute('aria-pressed')).toBe('true');
+    expect(porTestId(`chip-frete_modalidade-${FRETE_FOB}`).getAttribute('aria-pressed')).toBe('true');
+    expect(porTestId('chip-via_transporte-Rodoviário').getAttribute('aria-pressed')).toBe('true');
+    expect(porTestId('chip-transportadora-Transportes Vale').getAttribute('aria-pressed')).toBe('true');
+    // 'Tabela 2026' nao esta na lista (veio vazia): e o "Outro" que a mostra, pressionado.
+    expect(porTestId('chip-tabela_preco-outro').getAttribute('aria-pressed')).toBe('true');
+    expect(porTestId('outro-tabela_preco').value).toBe('Tabela 2026');
+    expect(porTestId('pedido-transportadora-telefone').value).toBe('(54) 3222-1000');
+    expect(porTestId('pedido-contato').value).toBe('Sr. Paulo');
+    expect(porTestId('chip-local_entrega-empresa').getAttribute('aria-pressed')).toBe('true');
+    expect(porTestId('outro-local_cobranca').value).toBe('Av. Fiscal, 9');
+    expect(porTestId('pedido-frete').value).toBe('80');
+    expect(porTestId('pedido-desconto').value).toBe('36.5');
+    expect(porTestId('pedido-icms-st').value).toBe('10');
+
+    // Os seis totais sao os do GET, mostrados de imediato — e SEM uma viagem ao `/calcular`
+    // para refazer o que o servidor acabou de devolver (mesmo depois do prazo do debounce).
+    expect(textoDe('total-geral')).toContain('R$ 400,00');
+    expect(textoDe('total-ipi')).toContain('R$ 31,50');
+    expect(textoDe('subtotal-item-907')).toContain('R$ 315,00');
+    await esperarCalculo();
+    expect(chamadasCalcular()).toHaveLength(0);
+
+    // O item: IPI na linha fechada; NCM/peso/observacao no painel.
+    expect(porTestId('detalhes-item-907').textContent).toContain('10%');
+    await clicar(porTestId('detalhes-item-907'));
+    expect(porTestId('chip-ipi-907-10').getAttribute('aria-pressed')).toBe('true');
+    expect(porTestId('ncm-item-907').value).toBe('7208.51.00');
+    expect(porTestId('peso-item-907').value).toBe('2.5');
+    expect(porTestId('obs-item-907').value).toBe('Pintura epóxi');
+
+    // Metade positiva: MUDAR algo volta a chamar a conta.
+    digitar(porTestId('qtd-item-907'), '10');
+    await esperarCalculo();
+    expect(chamadasCalcular()).toHaveLength(1);
+    expect(textoDe('total-produtos')).toContain('R$ 350,00');
+
+    await submeter();
+    expect(chamadasPut(418)).toHaveLength(1);
+    expect(chamadasPut(418)[0][1]).toEqual({
+      fornecedor_id: 312,
+      data_pedido: '2026-09-10',
+      previsao_entrega: '2026-09-25',
+      status: 'aprovado',
+      observacoes: 'Entregar no portão 2',
+      condicao_pagamento: 'Boleto',
+      frete_modalidade: FRETE_FOB,
+      transportadora: 'Transportes Vale',
+      transportadora_telefone: '(54) 3222-1000',
+      via_transporte: 'Rodoviário',
+      tabela_preco: 'Tabela 2026',
+      contato: 'Sr. Paulo',
+      local_entrega: ENDERECO_EMPRESA,
+      local_cobranca: 'Av. Fiscal, 9',
+      total_icms_st: 10,
+      valor_frete: 80,
+      total_desconto: 36.5,
+      itens: [{
+        material_id: 907, quantidade: 10, valor_unitario: 35,
+        ipi_percentual: 10, ncm: '7208.51.00', peso_unitario: 2.5, observacao: 'Pintura epóxi',
+      }],
+    });
+  });
+
+  // ── (39g) pedido ja recebido: o documento inteiro trava, e o salvar continua PATCH de status ─
+  test('(39g) com teve_recebimento 1 as condicoes, o IPI e os encargos travam e o salvar continua so status', async () => {
+    detalhe418 = { ...PEDIDO_418_DOCUMENTO, teve_recebimento: 1 };
+    await renderizarEm('/compras/pedidos/editar/418');
+
+    expect(alertas()).toContain(LITERAL_SO_STATUS);
+    expect(porTestId('chip-condicao_pagamento-Boleto').disabled).toBe(true);
+    expect(porTestId('chip-condicao_pagamento-outro').disabled).toBe(true);
+    expect(porTestId('chip-ipi_padrao-5').disabled).toBe(true);
+    expect(porTestId('pedido-frete').disabled).toBe(true);
+    expect(porTestId('pedido-desconto').disabled).toBe(true);
+    expect(porTestId('pedido-icms-st').disabled).toBe(true);
+    expect(porTestId('pedido-contato').disabled).toBe(true);
+    await clicar(porTestId('detalhes-item-907'));
+    expect(porTestId('chip-ipi-907-10').disabled).toBe(true);
+    expect(porTestId('ncm-item-907').disabled).toBe(true);
+    expect(porTestId('obs-item-907').disabled).toBe(true);
+    // O que esta gravado continua VISIVEL (travado nao e escondido).
+    expect(textoDe('total-geral')).toContain('R$ 400,00');
+
+    await selecionar(porTestId('pedido-status'), 'recebido');
+    await submeter();
+    expect(chamadasPatchStatus(418)).toHaveLength(1);
+    expect(chamadasPatchStatus(418)[0][1]).toEqual({ status: 'recebido' });
+    expect(chamadasPut(418)).toHaveLength(0);
+  });
 });

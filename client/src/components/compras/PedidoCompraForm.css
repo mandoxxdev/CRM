@@ -1,0 +1,220 @@
+/* Formulário do pedido de compra — Etapa 39 (RN-39.07), o documento da Etapa 32 portado.
+
+   TUDO escopado em `.pedido-form`: o formulário continua importando `../Compras.css` (tabela,
+   filtros, botões do módulo), e este arquivo só acrescenta o que o documento trouxe — chips,
+   seções numeradas, painel do item, encargos e totais. Nenhuma classe global: `.form-group`,
+   `.form-section` e afins existem soltos em dezenas de arquivos com estilos diferentes, e uma
+   tela não pode depender de qual CSS de módulo o usuário carregou antes.
+
+   Tokens `--gmp-*` de `styles/design-tokens.css`, com fallback literal — o acento NÃO pode ser
+   `--spotify-green` (escopado ao mapa do almoxarifado; medido na 32: chip ativo com fundo
+   transparente e texto preto, contraste 1.00). O alvo de clique mínimo é 36px: quem usa isto
+   está no balcão de compras, às vezes no celular. */
+
+.pedido-form {
+  --pf-acento: var(--gmp-primary, #4facfe);
+  --pf-acento-escuro: var(--gmp-primary-dark, #3b82f6);
+  --pf-dinheiro: var(--gmp-success, #1aa34a);
+  --pf-sobre-acento: #06283d;
+}
+
+/* ── seções numeradas ───────────────────────────────────────────── */
+
+.pedido-form .pedido-form-bloco {
+  background: var(--gmp-surface, #ffffff);
+  border: 1px solid var(--gmp-border, #e2e8f0);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+
+.pedido-form .pedido-form-bloco > h2 {
+  margin: 0 0 14px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gmp-text-light, #6a6a6a);
+}
+
+/* ── chips: o controle padrão do documento ──────────────────────── */
+
+.pedido-form .pedido-form-chips-bloco { margin: 14px 0 0; }
+
+.pedido-form .pedido-form-chips-label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gmp-text-light, #6a6a6a);
+}
+
+.pedido-form .pedido-form-chips-label small {
+  margin-left: 6px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+.pedido-form .pedido-form-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.pedido-form .pedido-form-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 8px 14px;
+  border: 1px solid var(--gmp-border, #e2e8f0);
+  border-radius: 999px;
+  background: var(--gmp-bg, #f8fafc);
+  color: var(--gmp-text, #121212);
+  font-size: 0.82rem;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.pedido-form .pedido-form-chip:hover:not(:disabled) { border-color: var(--pf-acento); }
+.pedido-form .pedido-form-chip:disabled { opacity: 0.55; cursor: default; }
+
+.pedido-form .pedido-form-chip-ativo {
+  background: var(--pf-acento);
+  border-color: var(--pf-acento);
+  color: var(--pf-sobre-acento);
+  font-weight: 700;
+}
+
+.pedido-form .pedido-form-chip svg { width: 14px; height: 14px; }
+
+.pedido-form .pedido-form-escolhido {
+  margin-top: 7px;
+  font-size: 0.78rem;
+  color: var(--gmp-text-light, #6a6a6a);
+}
+
+/* ── os campos que sobraram de digitação ────────────────────────── */
+
+.pedido-form .pedido-form-input {
+  padding: 9px 11px;
+  border: 1px solid var(--gmp-border, #e2e8f0);
+  border-radius: 8px;
+  background: var(--gmp-bg, #f8fafc);
+  color: var(--gmp-text, #121212);
+  font-size: 0.85rem;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pedido-form .pedido-form-input:focus { outline: none; border-color: var(--pf-acento); }
+.pedido-form .pedido-form-input:disabled { opacity: 0.6; }
+.pedido-form .pedido-form-input-outro { max-width: 280px; margin-top: 7px; }
+
+.pedido-form .pedido-form-livres {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px 14px;
+  margin-top: 14px;
+}
+
+.pedido-form .pedido-form-livres label { display: flex; flex-direction: column; gap: 5px; }
+.pedido-form .pedido-form-livre-full { grid-column: 1 / -1; }
+
+.pedido-form .pedido-form-livres span,
+.pedido-form .pedido-form-encargos span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gmp-text-light, #6a6a6a);
+}
+
+/* ── a linha do item: subtotal do servidor e o botão de detalhes ─── */
+
+.pedido-form .pedido-form-subtotal {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pedido-form .pedido-form-detalhes {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--gmp-border, #e2e8f0);
+  border-radius: 8px;
+  background: var(--gmp-surface, #ffffff);
+  color: var(--gmp-text-light, #6a6a6a);
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pedido-form .pedido-form-detalhes:hover { border-color: var(--pf-acento); color: var(--pf-acento); }
+
+.pedido-form .pedido-form-detalhes em {
+  font-style: normal;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+/* Um IPI diferente do padrão do pedido fica VISÍVEL na linha fechada. */
+.pedido-form .pedido-form-detalhes .pedido-form-ipi-diverge { color: var(--gmp-warning, #e59800); }
+
+.pedido-form .pedido-form-item-extra > td {
+  background: var(--gmp-bg, #f8fafc);
+  padding: 4px 16px 16px;
+}
+
+.pedido-form .pedido-form-item-extra .pedido-form-chips-bloco { margin-top: 8px; }
+
+/* ── encargos e totais ──────────────────────────────────────────── */
+
+.pedido-form .pedido-form-encargos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px 14px;
+}
+
+.pedido-form .pedido-form-encargos label { display: flex; flex-direction: column; gap: 5px; }
+
+.pedido-form .pedido-form-dica {
+  font-size: 0.68rem;
+  color: var(--gmp-text-light, #6a6a6a);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.pedido-form .pedido-form-totais {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px 16px;
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--gmp-bg, #f8fafc);
+  border: 1px solid var(--gmp-border, #e2e8f0);
+}
+
+.pedido-form .pedido-form-totais > div { display: flex; flex-direction: column; }
+
+.pedido-form .pedido-form-totais span {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gmp-text-light, #6a6a6a);
+}
+
+.pedido-form .pedido-form-totais strong { font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+
+.pedido-form .pedido-form-total-geral strong {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--pf-dinheiro);
+}
