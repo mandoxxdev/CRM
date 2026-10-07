@@ -144,6 +144,20 @@ importação por planilha continua). Mock do `api` na fronteira.
 **T3 — galho (client puro, almoxarifado):** RN-39.08 — painel em `RecebimentosAlmoxarifado.js` +
 teste, contra o contrato da rota (mock do `api` por URL — o mock de `:275` faz fall-through, então
 precisa do ramo novo; sem ele `res.data` lança e o painel tem de falhar sem derrubar a tela).
+- [x] **T3 — FEITA em `a3ecbdcd`** (branch `c39c`). Teste novo `RecebimentosPainelPedido.test.js`
+  6/6 (vermelho antes: 6 falhas); suítes de Recebimentos 42/42; `CI=true build` ok. O GET do
+  documento sai de `selecionarPedido` sob o mesmo `pedidoSeqRef`, **sem `await`** — a falha fica
+  no `catch` de `carregarDocumentoDoPedido` e vira "Dados do pedido não disponíveis", itens e
+  submit seguem (é o que o arnês antigo prova de graça: lá a rota nova rejeita em todo cenário do
+  pedido e os 27 continuam verdes). Fixture CONTAMINADA (313 com `observacoes`, `valor_total`,
+  `totais`, item com `valor_unitario`) afirma que o painel lê só as chaves do contrato.
+  Sabotagens: guarda do `seq` removida → só (d) cai; painel exibindo `observacoes` → só (b) cai.
+  Decisões reversíveis: `tabela_preco` vem no contrato mas **não** aparece no painel (a RN-39.08
+  enumera as condições sem ela, e a palavra "preço" não entra na tela de quem recebe); o selo
+  "cadastro" é `almox-badge almox-badge-ok` com `data-testid="painel-pedido-origem"`; classes
+  `.ped-rec-*` da 32 reaproveitadas do CSS de HEAD (nenhuma linha de CSS nova). Não cobre: botão
+  "Tentar de novo" só para o documento (o da rota de itens refaz os dois, porque chama
+  `selecionarPedido`).
 **T4 — integração/fechamento:** suíte inteira; `docs/compras-novidades-por-etapa.md` (seção 39 +
 B19–B22); `specs/modulo-compras/README.md`; manual (seção do pedido: o que o documento tem, RN-11);
 retro. **Próxima (Etapa 40):** `GET /pedidos/:id/impressao` — o documento em PDF/HTML no formato do
