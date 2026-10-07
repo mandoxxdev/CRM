@@ -603,6 +603,35 @@ const NAO_ENCONTRADO = 'Pedido de compra não encontrado';
     assert.strictEqual(depois.body.teve_recebimento, 1);
   });
 
+  await test('[M2 revisão] a lista GET /pedidos NAO traz as colunas cruas snap_fornecedor_*', async () => {
+    const r = await request(app).get('/api/compras/pedidos');
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.ok(Array.isArray(r.body) && r.body.length > 0, 'lista vazia — os cenarios anteriores criaram pedidos');
+    const cruas = Object.keys(r.body[0]).filter((k) => k.startsWith('snap_fornecedor_'));
+    assert.deepStrictEqual(cruas, [], 'a lista nao deve trazer snap_*: ' + cruas.join(','));
+    assert.ok('total_geral' in r.body[0] && 'total_itens' in r.body[0], 'total_geral/total_itens continuam');
+  });
+
+  await test('[M3 revisão] condicao limpa ("" ou so espacos) grava NULL; texto e gravado sem espacos', async () => {
+    const criado = await request(app).post('/api/compras/pedidos').send({
+      fornecedor_id: tecnopar, itens: [{ material_id: matA, quantidade: 1, valor_unitario: 10 }],
+      condicao_pagamento: '  30 dias  ', via_transporte: '',
+    });
+    assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
+    let row = await dbGet(db, 'SELECT condicao_pagamento, via_transporte, frete_modalidade FROM pedidos_compra WHERE id = ?', [criado.body.id]);
+    assert.strictEqual(row.condicao_pagamento, '30 dias');
+    assert.strictEqual(row.via_transporte, null, "'' no POST grava NULL");
+    assert.strictEqual(row.frete_modalidade, null, 'nunca tocado fica NULL');
+    const put = await request(app).put('/api/compras/pedidos/' + criado.body.id).send({
+      fornecedor_id: tecnopar, itens: [{ material_id: matA, quantidade: 1, valor_unitario: 10 }],
+      condicao_pagamento: '   ', frete_modalidade: 'CIF',
+    });
+    assert.strictEqual(put.status, 200, JSON.stringify(put.body));
+    row = await dbGet(db, 'SELECT condicao_pagamento, frete_modalidade FROM pedidos_compra WHERE id = ?', [criado.body.id]);
+    assert.strictEqual(row.condicao_pagamento, null, "so espacos no PUT limpa (NULL, nao '')");
+    assert.strictEqual(row.frete_modalidade, 'CIF');
+  });
+
   await close();
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed === 0 ? 0 : 1);

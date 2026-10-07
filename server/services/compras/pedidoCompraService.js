@@ -222,6 +222,14 @@ function camposDoCabecalho(dados) {
     // (`schemas.js`), entao se `null` fosse tratado como "ausente" o comprador NAO CONSEGUIRIA
     // apagar uma previsao pelo `PUT` — o campo voltaria com o valor antigo e ninguem entenderia.
     if (ehData) { campos.push([col, bruto === '' ? null : bruto]); continue; }
+    // Revisao da Etapa 39 (M3): nas condicoes comerciais, '' (campo limpo na tela) e NULL (nunca
+    // tocado) significam a MESMA coisa — a -aux e o distinct das opcoes tratavam os dois, mas o
+    // dado ficava inconsistente. '' (e so espacos) grava NULL; null continua "nao mexe".
+    if (CONDICOES_COMERCIAIS.includes(col) && bruto !== null) {
+      const t = String(bruto).trim();
+      campos.push([col, t === '' ? null : t]);
+      continue;
+    }
     // Fora das datas, `null` continua sendo "nao mexe": `status = NULL` sobrescreveria o
     // `DEFAULT 'pendente'` do DDL, e a tela de Compras filtra por essa coluna.
     if (bruto === null) continue;

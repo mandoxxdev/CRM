@@ -148,6 +148,14 @@ app.get('/api/compras/pedidos', authenticateToken, checkModulePermission('compra
     if (err) {
       return res.status(500).json({ error: err.message });
     }
+    // M2 da revisao da Etapa 39: o `p.*` traz as 10 colunas cruas `snap_fornecedor_*` em toda
+    // linha da lista; ninguem as le aqui (o GET /:id resolve o snapshot em `fornecedor{}`). So
+    // payload, sem exposicao (gate compras) — mas 10 chaves x N pedidos a cada carregamento.
+    rows = rows.map((r) => {
+      const limpo = {};
+      for (const k of Object.keys(r)) if (!k.startsWith('snap_fornecedor_')) limpo[k] = r[k];
+      return limpo;
+    });
     // Etapa 39 (RN-D04/RN-D06): `atrasado` e `dias_atraso` são DERIVADOS na leitura, nunca
     // gravados — apagar estas quatro linhas apaga a feature inteira, sem migration nem coluna
     // órfã. `hoje` é calculado UMA vez para a resposta toda: chamar `hojeLocalISO()` por linha
