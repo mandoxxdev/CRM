@@ -34,6 +34,8 @@
 | 36 | Configurações com uma aba por módulo (`/configuracoes`; almoxarifado e produção embutidos; `Tabs` reutilizável) | 🟢 2026-10-07 (`724cbbdd` Tabs, `74c30cd4` Configuracoes, `127425bc` embedded; merges `2bec1eb9`, `a84d2121`) — zero linhas de servidor | design do lote §6 · `…plans/2026-10-06-crm-etapa36-configuracoes-por-modulo.md` |
 | 37 | Subfamílias cadastráveis na aba Famílias (Configurações → Almoxarifado) — a árvore família → subfamília que a task 2 pedia, pela opção (ii) da D-36a escolhida pelo André em 2026-10-07; servidor honesto para subfamília (contagem, itens, filtro) e `DELETE` recusando sub com itens | 🟢 2026-10-07 (`0777d1b3` servidor, `49d1c24e` aba Famílias, `bbabe37c` Materiais/form; merges `51d77c21`, `a3b57583`) | `…plans/2026-10-07-crm-etapa37-subfamilias-na-aba-familias.md` |
 
+| 38 | "1 CX contém 12 UN": a unidade de compra vira frase no cadastro de material (resposta à D-35b: não converte; o time não entendia "fator") + G11 | 🟢 2026-10-07 (`f98fc160` form, `0c890f24` G11, `29cd05c1` manual; merge `a10174c5`; onda da revisão `bc77464f`) — só client + docs | `…plans/2026-10-07-crm-etapa38-unidade-de-compra-em-frase.md` |
+
 Design do lote: `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`.
 Documento de apresentação: `docs/compras-novidades-por-etapa.md`.
 

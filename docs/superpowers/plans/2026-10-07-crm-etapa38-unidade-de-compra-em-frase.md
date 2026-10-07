@@ -86,4 +86,27 @@
   é o preço de prender o texto que o usuário lê, e está registrado no cabeçalho do helper.
 - Paralelismo: nenhum — T1→T2→T3 num executor só, como o plano previa (uma tela, um arquivo
   vizinho, um doc).
-- Defeito escapado: preencher na etapa seguinte.
+- Defeito escapado: preencher na etapa seguinte (os cinco achados abaixo foram pegos antes do push).
+
+## Revisão adversarial (2026-10-07, só leitura) e onda de correção (`bc77464f`)
+
+Revisor fresco sobre `9acb6c7d..a10174c5`. **Refutado:** texto visível com "fator/conversão" no
+client (só comentários e nomes de chave sobraram); payload inalterado (`schemas.js` coage `''`→
+ausente e `'12'`→12); edição de ROLO/50; CSS/mobile da frase (`flex-wrap`, o inline vence o
+`width: 100%`, nada força largura em `input`). **Achados, todos reproduzidos por leitura e
+fechados na onda:**
+
+| # | Sev. | Achado | Correção | Prova |
+|---|---|---|---|---|
+| 1 | Major (doc) | O guia (`:749`, `:627`, `:738`) mandava procurar "Unidade de Compra"/"Fator de Conversão (Compra)", que saíram da tela | Linhas corrigidas com "era verdade até a Etapa 38" e nota no cabeçalho da cópia de `main` | leitura |
+| 2 | Minor | Voltar "Como é comprado" para a própria unidade escondia a frase, mas o número digitado continuava no state e ia no POST (número órfão); no PUT `''` **preservaria** o antigo | payload `fator_conversao_compra: form.unidade_compra ? … : null` (null explícito, padrão dos FKs) | teste novo "voltar para a própria unidade → POST manda `null`"; sabotagem → **1 vermelho** |
+| 3 | Minor | G11 em rede lenta: `familias` chegando depois dos 300 ms disparava um **segundo** GET e voltava a lista ao skeleton; comentário antigo contradizia a correção | dependência vira `familiasKey = familiaFilter ? familias.length : 0` (sem filtro, constante); comentário apagado | `MateriaisAlmoxarifado` 16/16 (RN-38.05 continua) |
+| 4 | Minor | Obrigatoriedade sumiu da tela (o `*` foi embora com o rótulo antigo; a nota soava opcional) | `aria-required="true"` no input e "Obrigatório." na nota | teste novo |
+| 5 | Minor | O select oferecia a própria unidade de medida ("1 UN contém [ ] UN") | `UNIDADES.filter(u => u !== form.unidade)` | teste novo |
+
+Verificação da onda: `MaterialAlmoxarifadoForm` 34/34 + `MateriaisAlmoxarifado` 16/16.
+
+**Integração medida em `main` (merge `a10174c5` + onda `bc77464f`):** client **54 suítes / 802
+testes** (baseline 794 → +8: 5 RN-38 no lugar de 2 da RN-35.02, +2 RN-38.05, +3 da onda);
+`CI=true npx react-scripts build` "Compiled successfully."; servidor **não tocado** nesta etapa
+(`test:api` continua 172/172 da Etapa 37).

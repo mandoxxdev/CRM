@@ -5,10 +5,11 @@
 > roteiro curto para demonstrar ao vivo. Pedido do André em 2026-10-06. O equivalente do
 > almoxarifado é `docs/almoxarifado-novidades-por-etapa.md`.
 >
-> **Onde o desenvolvimento está:** lote de 2026-10-06, branch `main`. Etapas **33 a 37
+> **Onde o desenvolvimento está:** lote de 2026-10-06, branch `main`. Etapas **33 a 38
 > entregues e integradas** (merges `ca8a1364`, `891c960a`, `2bec1eb9`, `a84d2121`, `51d77c21`,
-> `a3b57583`; seções abaixo). As nove tasks do lote estão todas entregues; o que sobra para o
-> P.O. é **D-37** (categoria depende de família?), **D-35** e **D-35b**. Design do lote:
+> `a3b57583`, `a10174c5`; seções abaixo). As nove tasks do lote estão entregues, mais a Etapa 38
+> (resposta à D-35b). O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35**
+> (significado de A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
 > `specs/modulo-compras/README.md`.
 
@@ -89,6 +90,10 @@
   ser editável.** O servidor passou a revalidar a subfamília só quando ela **muda**; o cadastro
   mostra "(subfamília inativa)" e deixa manter ou limpar. **Descartado:** apagar o vínculo em
   silêncio ao editar (era o único jeito de salvar antes — e apagava dado sem avisar).
+- **B17 — Etapa 38: o número da frase "1 CX contém [12] UN" é obrigatório quando há unidade de
+  compra** (o servidor já exigia; a tela agora diz "Obrigatório."), e voltar para "na própria
+  unidade" **limpa** o número gravado (antes ficava um número órfão escondido). **Descartado:**
+  tornar o número opcional (mudaria a regra do servidor sem pedido).
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -160,6 +165,51 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 38 — "1 CX contém 12 UN": a unidade de compra vira frase (2026-10-07)
+
+**Em uma frase.** No cadastro de material, a palavra **"fator de conversão" sumiu**: o campo
+virou a frase que a pessoa diria — *"Como é comprado: 1 CX contém [12] UN"* — com a nota de que
+o estoque conta sempre na unidade de medida. Resposta à D-35b (o sistema **não converte**, por
+decisão; o time não entendia o termo).
+
+### O que há de novo (visível para o usuário)
+- Em **Almoxarifado → Materiais → Novo / Editar**, bloco "Unidades e Custos": o campo *Unidade de
+  Compra* passa a se chamar **"Como é comprado"**, com a opção padrão "— na própria unidade de
+  medida —".
+- Ao escolher uma unidade de compra (ex.: CX), aparece a linha **"1 CX contém [ __ ] UN"** com o
+  número dentro da frase, e a nota *"O estoque conta sempre em UN. Este número é só informação
+  para quem compra."*
+- Sem unidade de compra, nada disso aparece — a tela não fala em fator, conversão nem "só se aplica".
+- Se escolher a unidade de compra e deixar o número vazio: *"Informe quantas UN há em 1 CX"*.
+- **Nada muda no que é gravado**: é a mesma informação de antes, perguntada de outro jeito. Materiais
+  já cadastrados abrem com a frase preenchida ("1 ROLO contém 50 M").
+
+### Por baixo do capô
+- Só o formulário (`MaterialAlmoxarifadoForm.js`) e o manual; a coluna `fator_conversao_compra` e a
+  validação do servidor (obrigatório e > 0 quando há unidade de compra) ficam iguais.
+- Bônus G11: em **Materiais**, abrir a lista com `?familia_id=` de uma subfamília na URL passa a
+  rebuscar quando a lista de famílias chega (antes mostrava zero linhas até mexer no filtro).
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| "Unidade de Compra" + "Fator de conversão" (número solto, placeholder "Ex.: 12 (1 CX = 12 UN)") | "Como é comprado: 1 CX contém [12] UN" |
+| Ajuda "Quantas UN há em 1 CX. Obrigatório e maior que zero." + "Informativo: … não converte sozinho" | "O estoque conta sempre em UN. Este número é só informação para quem compra." |
+| Toast "fator de conversão obrigatório…" | "Informe quantas UN há em 1 CX" |
+
+### Roteiro de teste manual (clicável)
+1. **Almoxarifado → Materiais → Novo**. Em "Unidades e Custos", veja que não existe a palavra
+   "fator" em lugar nenhum. Unidade de medida: UN.
+2. Em **"Como é comprado"** escolha **CX**: aparece "1 CX contém [ ] UN" e a nota do estoque.
+3. Salve sem preencher o número: *"Informe quantas UN há em 1 CX"*. Digite 12 e salve.
+4. Edite o material: a frase volta preenchida "1 CX contém 12 UN".
+5. Troque "Como é comprado" para a opção padrão: a frase some; salve — grava sem o número.
+
+### O que a etapa NÃO cobre
+- O sistema continua **sem converter** quantidades (decisão D-35b); o número é informação.
+- A tela de recebimento não mostra a frase (fora do escopo; se quiserem ver "1 CX = 12 UN" ao
+  receber, é uma linha de leitura — anotar como pedido).
 
 ## Etapa 37 — Subfamílias cadastráveis na aba Famílias (2026-10-07)
 
