@@ -109,6 +109,23 @@
   da branch). **Reverter:** `git revert -m 1` do commit de merge devolve a `main` de antes; o
   histórico da branch continua existindo. Se os campos de IPI/frete/condições fizerem falta,
   viram pedido para o pedido da branch (etapa própria) — não há como ter os dois.
+  **Atualização (mesmo dia):** fizeram falta — a Etapa 32 nascia do documento real que a GMP
+  emite ao fornecedor (PDF do ERP, pedido 28433). A **Etapa 39** porta esse conteúdo para o pedido
+  atual (B19–B23).
+- **B19 — Etapa 39: as regras de ciclo de vida são as do pedido atual.** Número gerado (`PC-…`),
+  7 status, status automático pelo recebimento, edição bloqueada após recebimento. **Descartado:**
+  número digitado pelo comprador e o enum de 4 status da Etapa 32 (o recebimento, a cotação e a
+  importação já geram o número).
+- **B20 — Etapa 39: as colunas voltam com os mesmos nomes da Etapa 32** (produção já as tem no
+  banco); `data_entrega` por item **não** volta (Etapa 33).
+- **B21 — Etapa 39: o snapshot fiscal do fornecedor é reescrito quando o fornecedor do pedido
+  muda** (a Etapa 32 nunca reescrevia — um pedido editado para outro fornecedor imprimiria o fiscal
+  do antigo) e também quando o pedido antigo ainda não tinha snapshot. `celular` entra no snapshot.
+- **B22 — Etapa 39: o painel do pedido no recebimento mostra fornecedor e condições, não preços
+  nem totais** — mantém a decisão da Etapa 42 (quem recebe não vê preço).
+- **B23 — Etapa 39: `observacoes` do pedido também fica fora do painel do recebimento** (a rota
+  tem o gate do módulo, que alcança produção; o alerta de pedido já classifica a observação como
+  "negociação com o fornecedor"). Reverter = uma chave na projeção.
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -174,6 +191,11 @@
   nenhuma tela faz isso): a subfamília conta e lista, a raiz não, e o filtro de Materiais não o
   acha. Correção apontada: `validateFamiliaAtiva` recusar subfamília como família em material
   **novo** ("use a subfamília"). Não feito — sem consumidor real.
+- **G13** (Etapa 39) O export de pedidos para Excel passa a trazer "Valor Total" **com** IPI e
+  frete, repetido em cada linha de item, e a reimportação ignora essa coluna — um pedido
+  exportado e reimportado nasce com valor menor. Coluna "IPI %" no export fica para depois.
+- **G14** (Etapa 39) O documento impresso do pedido (PDF/HTML no formato do ERP) **ainda não
+  existe** — a Etapa 32 deixou "a fazer" e a 39 porta só o conteúdo. É a **Etapa 40**.
 - **G11** `?familia_id=<id de subfamília>` digitado na URL de Materiais antes de a lista de famílias
   carregar manda só `familia_id` e devolve zero linhas até mexer no filtro. Nenhum link do sistema
   gera essa URL. Correção: incluir `familias` nas dependências da busca (um GET a mais).
@@ -189,6 +211,10 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 39 — O pedido de compra ganha o documento da Etapa 32 (2026-10-07)
+
+_Em execução — seção escrita no fechamento da etapa._
 
 ## Etapa 38 — "1 CX contém 12 UN": a unidade de compra vira frase (2026-10-07)
 
