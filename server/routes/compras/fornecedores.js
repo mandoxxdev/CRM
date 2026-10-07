@@ -23,7 +23,7 @@
  * Regras: docs/superpowers/plans/2026-10-06-crm-etapa34-ficha-do-fornecedor.md (grep RN-34).
  */
 
-const { dbRun, dbGet } = require('../../services/compras/db');
+const { dbRun, dbGet, dbAll } = require('../../services/compras/db');
 
 // Literal já usada pelas outras rotas de fornecedor do index.js (foto, planilha) — uma só.
 const NAO_ENCONTRADO = 'Fornecedor não encontrado';
@@ -66,7 +66,35 @@ function parseGrupoId(v) {
 module.exports = function (app, db, authenticateToken, checkModulePermission) {
   const guard = [authenticateToken, checkModulePermission('compras')];
 
-  // RN-34.06 — nasce aqui; a lista continua `SELECT *` no index.js.
+  // G2 (lote de outubro): a lista morava inline no index.js como `SELECT *` e devolvia
+  // `planilha_dados` — a planilha de precos inteira em JSON — para QUATRO telas que nao a leem
+  // (Compras.js, PedidoCompraForm.js, FornecedoresDoGrupo.js, ItensFornecedor.js); um fornecedor
+  // com planilha de milhares de linhas entrava em todo pedido novo. Mesma projecao nomeada do
+  // GET /:id; `search` (razao, fantasia, cnpj) e `status` continuam; ORDER BY created_at DESC
+  // continua. Mora aqui para o harness alcancar (o index.js nao e carregado nos testes).
+  app.get('/api/compras/fornecedores', guard, async (req, res) => {
+    const { search, status } = req.query;
+    let sql = `SELECT ${COLUNAS_FICHA.join(', ')} FROM fornecedores WHERE 1=1`;
+    const params = [];
+    if (search) {
+      sql += ' AND (razao_social LIKE ? OR nome_fantasia LIKE ? OR cnpj LIKE ?)';
+      const termo = `%${search}%`;
+      params.push(termo, termo, termo);
+    }
+    if (status) {
+      sql += ' AND status = ?';
+      params.push(status);
+    }
+    sql += ' ORDER BY created_at DESC';
+    try {
+      res.json(await dbAll(db, sql, params));
+    } catch (err) {
+      console.error('Erro ao listar fornecedores:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // RN-34.06 — nasce aqui.
   app.get('/api/compras/fornecedores/:id', guard, async (req, res) => {
     const id = parseInt(req.params.id, 10);
     if (!id) return res.status(404).json({ error: NAO_ENCONTRADO });

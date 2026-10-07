@@ -20350,30 +20350,8 @@ db.run(`CREATE TABLE IF NOT EXISTS oee_registros (
 
 // ========== ROTAS MÓDULO COMPRAS ==========
 // Fornecedores
-app.get('/api/compras/fornecedores', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const { search, status } = req.query;
-  let query = 'SELECT * FROM fornecedores WHERE 1=1';
-  const params = [];
-
-  if (search) {
-    query += ' AND (razao_social LIKE ? OR nome_fantasia LIKE ? OR cnpj LIKE ?)';
-    const searchTerm = `%${search}%`;
-    params.push(searchTerm, searchTerm, searchTerm);
-  }
-  if (status) {
-    query += ' AND status = ?';
-    params.push(status);
-  }
-
-  query += ' ORDER BY created_at DESC';
-
-  db.all(query, params, (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.json(rows);
-  });
-});
+// Lista de fornecedores: G2 (lote de outubro) — saiu daqui para routes/compras/fornecedores.js
+// (projecao nomeada, sem planilha_*). Registrado abaixo junto do GET /:id, POST e PUT.
 
 // Pedidos de Compra
 // Pedido de compra (Etapa 32) — saiu daqui para `routes/compras/pedidos.js`, que o harness

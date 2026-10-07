@@ -286,6 +286,36 @@ function corpoDoModal(grupoId) {
     }
   });
 
+  await test('[G2] GET /api/compras/fornecedores (lista) NAO devolve planilha_*; search e status continuam; mais novo primeiro', async () => {
+    const a = await request(app).post('/api/compras/fornecedores').send({ razao_social: 'G2 Alfa Planilhada', cnpj: '11.111.111/0001-11' });
+    const b = await request(app).post('/api/compras/fornecedores').send({ razao_social: 'G2 Beta Inativo', cnpj: '22.222.222/0001-22' });
+    assert.strictEqual(a.status, 201); assert.strictEqual(b.status, 201);
+    const planilha = JSON.stringify(Array.from({ length: 500 }, (_, i) => ({ codigo: 'P' + i, preco: i })));
+    await dbRun(db, 'UPDATE fornecedores SET planilha_dados = ?, planilha_nome = ?, planilha_atualizado_em = CURRENT_TIMESTAMP WHERE id = ?', [planilha, 'precos.xlsx', a.body.id]);
+    await dbRun(db, "UPDATE fornecedores SET status = 'inativo' WHERE id = ?", [b.body.id]);
+    await dbRun(db, "UPDATE fornecedores SET created_at = '2030-01-01 00:00:00' WHERE id = ?", [b.body.id]);
+
+    const lista = await request(app).get('/api/compras/fornecedores');
+    assert.strictEqual(lista.status, 200, JSON.stringify(lista.body));
+    const linhaA = lista.body.find((f) => f.id === a.body.id);
+    assert.ok(linhaA, 'a lista traz o fornecedor');
+    for (const k of ['planilha_dados', 'planilha_nome', 'planilha_atualizado_em']) {
+      assert.ok(!(k in linhaA), 'a lista NAO deve trazer ' + k);
+    }
+    for (const k of CHAVES_CONTRATO_GET) assert.ok(k in linhaA, 'a lista traz ' + k);
+    assert.ok(JSON.stringify(lista.body).length < planilha.length, 'a resposta inteira e menor que a planilha de um fornecedor');
+    assert.strictEqual(lista.body[0].id, b.body.id, 'ORDER BY created_at DESC: o mais novo vem primeiro');
+
+    const busca = await request(app).get('/api/compras/fornecedores?search=G2 Alfa');
+    assert.deepStrictEqual(busca.body.map((f) => f.id), [a.body.id]);
+    const porCnpj = await request(app).get('/api/compras/fornecedores?search=22.222');
+    assert.deepStrictEqual(porCnpj.body.map((f) => f.id), [b.body.id]);
+    const inativos = await request(app).get('/api/compras/fornecedores?status=inativo');
+    assert.ok(inativos.body.every((f) => f.status === 'inativo') && inativos.body.some((f) => f.id === b.body.id));
+    const semToken = await (async () => { ctx.setUser(null); const r = await request(app).get('/api/compras/fornecedores'); ctx.setUser(COMPRAS); return r; })();
+    assert.strictEqual(semToken.status, 401);
+  });
+
   await ctx.close();
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   process.exit(failed > 0 ? 1 : 0);
