@@ -50,22 +50,42 @@
 
 - **RN-39.01** `POST`/`PUT /api/compras/pedidos` aceitam no cabeçalho os 9 complementares e os 3
   encargos (`total_icms_st`, `valor_frete`, `total_desconto`), todos opcionais; e por item
-  `ipi_percentual` (0 por padrão), `ncm` e `peso_unitario` (padrão: os do material), `observacao`.
-  `item_numero` é a posição (1..n), gravada.
+  `ipi_percentual` (0 por padrão), `ncm` e `peso_unitario` (`''`/`null`/ausente → **os do
+  material**; só valor preenchido sobrescreve), `observacao`. `item_numero` é a posição (1..n),
+  **atribuída pelo servidor** — nunca aceita do payload.
 - **RN-39.02** A conta é a de `pedidoTotais.js` (RN-03/04/05 da 32): `valor_linha`, `ipi_linha`
   arredondados por linha; `total_produtos`, `total_ipi`, encargos arredondados; `total_geral`;
-  **`valor_total` = `total_geral`** (RN-10 — a lista, o alerta de atraso e a cotação leem
-  `valor_total`). Pedido criado pela cotação ou pela importação entra com IPI 0 e encargos 0 →
-  `valor_total` igual ao de hoje (teste de não-regressão).
-- **RN-39.03** `GET /api/compras/pedidos/:id` devolve, além do que já devolve: `itens[].{item_numero,
+  **`valor_total` = `total_geral`** (RN-10). ⚠️ Revisão do plano: os leitores reais de
+  `valor_total` são **só** `Compras.js` (lista `:421` e export `:246`) — o alerta de atraso projeta
+  colunas nomeadas, o aux do recebimento não traz valor, a cotação não relê. Pedido criado pela
+  cotação ou pela importação entra com IPI 0 e encargos 0 → `valor_total` **igual até o centavo**
+  ao de hoje (hoje é soma crua; o novo arredonda por linha — muda só além da 2ª casa, ex.
+  `49 × 0.1063`); o teste de não-regressão usa tolerância `< 0.005` **e** um caso de 4 casas como
+  controle positivo (com inteiros ele não sabe falhar). **A cotação passa a usar a mesma conta:**
+  `cotacaoService.somaItens` → `calcularTotaisPedido(resolvidos).totais.total_produtos` (hoje
+  arredonda a soma; com preço de 4 casas cotação e pedido gerado divergiam em centavos e nenhum
+  teste cruzava os dois — teste novo compara `cotacoes.valor_total` com o `valor_total` do pedido
+  gerado usando `1 × 1.005` × 2).
+- **RN-39.03** `GET /api/compras/pedidos/:id` devolve, além do que já devolve (**`fornecedor_nome`
+  e `teve_recebimento` continuam** — são contrato afirmado em `comprasPedidoEditarExcluir:194`,
+  `comprasPedidoStatus:171-202` e lidos por `PedidoCompraForm.js:200`; as 10 colunas cruas
+  `snap_fornecedor_*` **não** saem na resposta): `itens[].{item_numero,
   ncm, peso_unitario, ipi_percentual, observacao, valor_linha, ipi_linha}`, `totais{total_produtos,
   total_ipi, total_icms_st, total_desconto, valor_frete, total_geral}` e `fornecedor{nome, cnpj,
   ie, endereco, municipio, uf, cep, telefone, celular, email, origem:'snapshot'|'cadastro'}`.
-- **RN-39.04** Snapshot (B21): 10 colunas `snap_fornecedor_*` gravadas no POST a partir de
-  `fornecedores`; no PUT, reescritas **só** se `fornecedor_id` mudou; renomear o fornecedor não
-  altera o pedido; pedido anterior à etapa (snapshot nulo) cai no cadastro vivo com `origem:'cadastro'`.
+- **RN-39.04** Snapshot (B21): 10 colunas `snap_fornecedor_*` gravadas **no serviço** (`criarPedido`
+  — assim cotação e importação também ganham snapshot; a 32 gravava na rota) a partir de
+  `fornecedores`; no PUT (`atualizarPedido` passa a ler o `fornecedor_id` atual), reescritas se
+  `fornecedor_id` mudou **ou se o snapshot está nulo** (pedido legado editado deixa de ficar
+  `cadastro` para sempre); renomear o fornecedor não altera o pedido; pedido anterior à etapa não
+  editado cai no cadastro vivo com `origem:'cadastro'`. Fornecedor inativo entra (D5 da 40) e o
+  snapshot é exatamente o que preserva o fiscal dele.
 - **RN-39.05** `POST /api/compras/pedidos/calcular` (corpo `{itens, total_icms_st, valor_frete,
-  total_desconto}`) devolve `{itens, totais}` sem gravar; lista vazia devolve zeros.
+  total_desconto}`) devolve `{itens, totais}` sem gravar; lista vazia devolve zeros. **É calculadora,
+  não porta de gravação:** schema **tolerante** próprio (`quantidade ≥ 0`, `material_id` opcional,
+  números inválidos viram 0) — só `ipi_percentual` fora de 0–100 recusa. (A 32 deixou sem validação
+  de propósito; com o Zod de gravação, limpar o campo quantidade para digitar outro número daria 400
+  a cada tecla no debounce do form.)
 - **RN-39.06** `GET /api/compras/pedidos-aux/opcoes` devolve `frete_modalidades`,
   `condicoes_pagamento`, `vias_transporte`, `unidades`, `ipi_sugerido`, `transportadoras`,
   `tabelas_preco`, `empresa` — fixas ∪ `DISTINCT` do uso (LIMIT 40).
@@ -76,9 +96,14 @@
   de `/calcular` (debounce 300 ms; o navegador não soma). Edição mostra o que está gravado.
 - **RN-39.08** Painel do recebimento contra pedido (`RecebimentosAlmoxarifado.js`) mostra o bloco
   **Fornecedor** (nome, CNPJ, IE, telefone, e-mail, endereço) e **Condições** (pagamento, frete,
-  transportadora, via, contato, local de entrega, observações) — **sem preço, sem totais** (B22).
-  Fonte: `GET /recebimentos-aux/pedidos-compra/:id` (nova, só `auth` + módulo almoxarifado, projeção
-  sem valores).
+  transportadora, via, contato, local de entrega) — **sem preço, sem totais e sem `observacoes`**
+  (B22/B23: as rotas `-aux` têm o gate do módulo, que alcança PRODUCAO/CONSULTA — a Etapa 42 tirou
+  o preço daí por isso, e `alertRegistry.js:751-760` classifica `observacoes` do pedido como
+  negociação com fornecedor, mesma classe). Fonte: `GET /recebimentos-aux/pedidos-compra/:id`
+  (**feita na T1**, em `extended.js`, registrada depois de `/:id/itens`, mesmo gate das outras
+  `-aux`; projeção vem de `pedidoCompraService.lerPedidoParaRecebimento(db, id)` — implementador
+  único da resolução snapshot × cadastro). No client, o GET entra sob o mesmo `pedidoSeqRef` de
+  `selecionarPedido` (`:644-646`) e falha **sem** derrubar o recebimento.
 - **RN-39.09** O recebimento continua por quantidade; custo médio continua pelo `valor_unitario`
   (sem IPI) — RN-11 da 32 vale e é afirmada em teste.
 
@@ -107,22 +132,32 @@ totais, complementares, derivados por item, RN-10, snapshot/renomear/legado, `ca
 invariante de 40 pedidos, RN-11 com o recebimento real) e não-regressão: `comprasPedidoCriar`,
 `comprasCotacaoGerarPedido`, `comprasPedidoImportar`, `recebimentoContraPedidoIntegracao`,
 `comprasPedidoAtraso` continuam verdes (o `valor_total` de pedido sem IPI/encargos é o mesmo).
+**T1 (continuação):** a rota `GET /almoxarifado/recebimentos-aux/pedidos-compra/:id` e
+`lerPedidoParaRecebimento` também são da T1 (revisão: T3 não pode criar colunas nem um segundo
+resolvedor de snapshot). Cenário de teste: PRODUCAO vê condições e fornecedor, **não** vê
+`valor_unitario`, `totais` nem `observacoes`. `/opcoes.empresa`: o harness não cria a tabela
+`configuracoes` core — o teste cria a tabela localmente ou afirma o fallback, senão prova nada.
 **T2 — galho (client, form):** RN-39.07 em `PedidoCompraForm.js` + `PedidoCompraForm.test.js`
 (cenários: opções carregadas em chips; "Outro" vira valor; IPI por item; NCM/peso do material;
 `/calcular` chamado com debounce e totais exibidos; POST com as chaves novas; edição carrega;
 importação por planilha continua). Mock do `api` na fronteira.
-**T3 — galho (client + 1 rota de leitura, almoxarifado):** RN-39.08 — rota de leitura em
-`routes/almoxarifado/extended.js` (projeção sem valores) + painel em `RecebimentosAlmoxarifado.js`
-+ teste. T3 depende só do contrato.
+**T3 — galho (client puro, almoxarifado):** RN-39.08 — painel em `RecebimentosAlmoxarifado.js` +
+teste, contra o contrato da rota (mock do `api` por URL — o mock de `:275` faz fall-through, então
+precisa do ramo novo; sem ele `res.data` lança e o painel tem de falhar sem derrubar a tela).
 **T4 — integração/fechamento:** suíte inteira; `docs/compras-novidades-por-etapa.md` (seção 39 +
 B19–B22); `specs/modulo-compras/README.md`; manual (seção do pedido: o que o documento tem, RN-11);
 retro. **Próxima (Etapa 40):** `GET /pedidos/:id/impressao` — o documento em PDF/HTML no formato do
 ERP (a task que a 32 deixou "a fazer").
 
 ## Pontos de atenção
-- `valor_total` tem leitores: `Compras.js` lista/export, `alertRegistry` (atraso), `cotacaoService`
-  (gerar-pedido relê), `pedidoCompraSaldoSql`? (quantidades só). Mudar para `total_geral` só muda o
-  número quando há IPI/encargos — provar com teste de não-regressão sem eles.
+- `valor_total`: leitores reais só `Compras.js` (lista/export). ~~alertRegistry, cotacaoService,
+  pedidoCompraSaldoSql~~ — a primeira versão deste plano estava errada (corrigida pela revisão).
+  Export (`Compras.js:246`): "Valor Total" passa a incluir IPI/frete, repetido em cada linha de
+  item, e a reimportação ignora a coluna → declarar no guia (G13); coluna "IPI %" no export fica
+  para depois.
+- Ordem de registro: não há `GET /api/compras/:x/:y` genérico em HEAD; registrar `/calcular` e
+  `/pedidos-aux/opcoes` no bloco de pedido acima do `DELETE /:tipo/:id` (`routes/compras.js:394`)
+  só para honrar o comentário de `:189-197`.
 - `resolverItens` é reusada pela **cotação** (`cotacaoService.js:~1079`): os campos novos têm de
   ser opcionais e o default (NCM/peso do material, IPI 0) não pode quebrar `itens_cotacao` (que
   não tem essas colunas — o INSERT da cotação lista colunas explicitamente; conferir).
