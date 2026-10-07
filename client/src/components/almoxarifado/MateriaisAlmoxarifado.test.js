@@ -297,3 +297,67 @@ describe('MateriaisAlmoxarifado — RN-01: a ação Plano de inspeção', () => 
     expect(mockPlanoMateriaisRecebidos).toHaveLength(0);
   });
 });
+
+/**
+ * Etapa 37 (RN-37.06) — o filtro de família lista a ÁRVORE (raiz; "— sub" indentada) e, ao
+ * escolher uma subfamília, manda `subfamilia_id` (+ `familia_id` da raiz) para o servidor.
+ *
+ * Até aqui o <select> listava raízes e subs misturadas e mandava `familia_id=<sub>` — e o
+ * material grava `familia_id` = raiz, então escolher uma subfamília devolvia ZERO linhas, que
+ * parece estoque vazio. Os params são derivados de `familias.find(...)` na hora da busca, sem
+ * state novo (o reset de "Limpar filtros" e a condição que o mostra continuam valendo).
+ */
+const RAIZ_ROL = { id: 1, codigo: 'ROL', nome: 'Rolamentos', parent_id: null, ativo: 1, qtd_itens: 3 };
+const SUB_ESF = { id: 3, codigo: 'ROL-ESF', nome: 'Esferas', parent_id: 1, ativo: 1, qtd_itens: 2 };
+const RAIZ_PAR = { id: 2, codigo: 'PAR', nome: 'Parafusos', parent_id: null, ativo: 1, qtd_itens: 0 };
+
+const filtroFamilia = () => [...container.querySelectorAll('.almox-filters select')]
+  .find((s) => s.querySelector('option')?.textContent.trim() === 'Todas famílias');
+const ultimaBusca = () => {
+  const chamadas = api.get.mock.calls.filter((c) => c[0] === '/almoxarifado/materiais');
+  return chamadas[chamadas.length - 1][1];
+};
+const aguardarDebounce = () => act(async () => { await new Promise((r) => setTimeout(r, 350)); });
+
+describe('MateriaisAlmoxarifado — RN-37.06: filtrar por subfamília', () => {
+  beforeEach(() => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [MATERIAL_NOSSO] });
+      if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
+      if (url === '/almoxarifado/familias') return Promise.resolve({ data: [SUB_ESF, RAIZ_PAR, RAIZ_ROL] });
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  test('o select lista a árvore: raiz, depois as subs dela como "— ⟨código⟩ ⟨nome⟩"', async () => {
+    await renderizar();
+    const opcoes = [...filtroFamilia().querySelectorAll('option')].map((o) => o.textContent.trim());
+    expect(opcoes[0]).toBe('Todas famílias');
+    // Raízes por nome (Parafusos antes de Rolamentos), a sub logo depois da raiz dela.
+    expect(opcoes.slice(1)).toEqual(['PAR — Parafusos', 'ROL — Rolamentos', '— ROL-ESF Esferas']);
+  });
+
+  test('escolher a sub manda familia_id da raiz E subfamilia_id da sub; limpar tira as duas chaves', async () => {
+    await renderizar();
+    escolher(filtroFamilia(), '3');
+    await aguardarDebounce();
+    expect(ultimaBusca()).toEqual({ params: { familia_id: 1, subfamilia_id: 3 } });
+
+    const limpar = [...container.querySelectorAll('button')].find((b) => /Limpar filtros/.test(b.textContent));
+    expect(limpar).toBeDefined();
+    clicar(limpar);
+    await aguardarDebounce();
+    expect(ultimaBusca()).toEqual({ params: {} });
+    expect(ultimaBusca().params).not.toHaveProperty('familia_id');
+    expect(ultimaBusca().params).not.toHaveProperty('subfamilia_id');
+  });
+
+  test('[controle] escolher a raiz continua mandando só familia_id', async () => {
+    await renderizar();
+    escolher(filtroFamilia(), '1');
+    await aguardarDebounce();
+    const { params } = ultimaBusca();
+    expect(String(params.familia_id)).toBe('1');
+    expect(params).not.toHaveProperty('subfamilia_id');
+  });
+});
