@@ -141,6 +141,34 @@ resolvedor de snapshot). Cenário de teste: PRODUCAO vê condições e fornecedo
 (cenários: opções carregadas em chips; "Outro" vira valor; IPI por item; NCM/peso do material;
 `/calcular` chamado com debounce e totais exibidos; POST com as chaves novas; edição carrega;
 importação por planilha continua). Mock do `api` na fronteira.
+**✅ T2 feita — `202fd4d9`** (branch `c39b`, contra o contrato congelado; o servidor da T1 não
+foi consumido de verdade — o `api` é mockado por URL). Describe `RN-39` com 8 cenários
+(39a–39g); placar medido: `PedidoCompraForm.test.js` 33/33 (vermelho inicial 8/33: exatamente
+os 8 novos), `src/components/compras` 5 suítes / 83 testes, `CI=true react-scripts build` limpo.
+Sabotagens (restauradas por edição, `git diff` vazio): (1) form somando localmente em vez de
+usar a resposta de `/calcular` → só (39d) cai (1/33) — (f) e (39f) usam valores que uma soma
+local reproduz, por isso (39d) devolve totais impossíveis; (2) POST sem `ipi_percentual` → 7/33
+caem ((c), (e), (l), 39c, 39c2, 39e, 39f). CSS novo `PedidoCompraForm.css` escopado em
+`.pedido-form`, tokens `--gmp-*`. Pontos para a T4 registrar no doc de novidades:
+- **Divergência:** `GET /compras/materiais` não devolve `ncm`/`peso_unitario` (só `id, codigo,
+  descricao, unidade`): NCM e peso nascem **vazios** na criação (`''` = "o do material", o
+  servidor completa) e só na edição vêm preenchidos, do `GET /:id`. Se a T1 ampliar a busca, o
+  form já lê `material.ncm`/`material.peso_unitario` quando vierem.
+- **Decisão reversível (form):** os 9 complementares viajam **sempre**, como string (vazia
+  quando não escolhidos) — é o que permite LIMPAR uma condição na edição; os 3 encargos viajam
+  como número (0 quando vazios). Os cenários (c)/(e)/(l) foram atualizados a esse payload mínimo.
+- **Decisão reversível (form):** na edição, os `totais` do `GET /:id` aparecem de imediato e o
+  **primeiro** disparo do recálculo é pulado (não refaz no servidor o que ele acabou de devolver);
+  qualquer mudança do comprador volta a chamar `/calcular`. Sem item e sem encargo: zeros locais e
+  nenhuma viagem (os cenários (d) e (39d) afirmam zero chamadas nesse estado).
+- **Descartado da 32** (além de B19): modais de escolha de material/fornecedor, inclusão em lote
+  por F2, chips de unidade e descrição editável do item (fora do contrato do POST/PUT). Mantido da
+  32: o **IPI padrão do pedido** (chips acima da tabela; item novo nasce com ele; cada item pode
+  divergir em "detalhes" — G1c, pedidos com 50+ itens).
+- Falha de `GET /pedidos-aux/opcoes` **não** trava a tela: `toast.warn` e os chips ficam só com
+  "Outro" (o servidor aceita qualquer valor). Falha de `/calcular` é silenciosa (último total
+  conhecido fica; o servidor decide no salvar).
+- Export de `Compras.js` e importação por planilha **não** mudaram (G13 continua para a T4).
 **T3 — galho (client puro, almoxarifado):** RN-39.08 — painel em `RecebimentosAlmoxarifado.js` +
 teste, contra o contrato da rota (mock do `api` por URL — o mock de `:275` faz fall-through, então
 precisa do ramo novo; sem ele `res.data` lança e o painel tem de falhar sem derrubar a tela).
