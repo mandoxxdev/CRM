@@ -1,8 +1,29 @@
+const crypto = require('crypto');
 const { dbRun, dbGet, dbAll } = require('./db');
+// Etapa 36 (RN-11): o enum de `tipo_recebimento` tem fonte UNICA em schema.js — quem grava (aqui) e
+// quem valida (schemas.js/Zod) leem a MESMA lista. Sem ciclo: schema.js so requer ./db.
+// Os dois nomes saem da PROPRIA lista, sem reescrever nenhuma string do enum a mao, e o default
+// derivado abaixo le por NOME em vez de `TIPOS_RECEBIMENTO[0]` / `[1]` espalhados.
+//
+// ⚠️ Mas a ligacao e POSICIONAL, e isso NAO e seguro a reordenacao (revisao final, F4 — o
+// comentario anterior afirmava o contrario, que e o oposto da verdade): se `TIPOS_RECEBIMENTO`
+// mudar de ordem em schema.js, `TIPO_NOTA_FISCAL` passa a valer 'PEDIDO_COMPRA' e vice-versa, em
+// silencio. Nenhum teste de hoje pega: a coluna e write-only e o unico ramo de comportamento
+// compara com `TIPO_PEDIDO_COMPRA`, entao o enum continua valido e o ramo troca sozinho.
+// Fica assim de proposito: exportar dois nomes proprios de schema.js foi declarado FORA DE ESCOPO
+// na T1 desta etapa. Quem reordenar a lista tem de vir ate aqui.
+const { TIPOS_RECEBIMENTO } = require('./schema');
+const [TIPO_NOTA_FISCAL, TIPO_PEDIDO_COMPRA] = TIPOS_RECEBIMENTO;
 const { registrarAuditoria } = require('./audit');
+// (Etapa 42, onda de correcao) O epsilon vem de `divergencia.js`, que existe desde a Etapa 10b como
+// dono unico de "isto e zero para efeito pratico" — reescrever o literal aqui seria a segunda
+// definicao, e a divergencia entre as duas apareceria na primeira edicao de uma delas.
+const { EPSILON_DIVERGENCIA } = require('./divergencia');
+// Etapa 72, T0 (D9): o nivel por material da regua do pedido — modulo proprio, sem ciclo (so texto SQL).
+const { SOMA_POR_MATERIAL_SQL } = require('./pedidoCompraSaldoSql');
 const { inserirComNumeroUnico } = require('./numeroDoc');
 const {
-  registrarMovimentacao, resolveLocalizacaoEntrada, validarLocalizacaoParaMovimento,
+  registrarMovimentacao, resolveLocalizacaoEntrada, validarLocalizacaoParaMovimento, validarEnderecoExplicito,
 } = require('./stockService');
 const lotService = require('./lotService');
 // Etapa 14, Task 1 (RN-03): sem ciclo — purchaseService NAO requer receiptService. Chamado pelo
@@ -15,14 +36,74 @@ const purchaseService = require('./purchaseService');
 // capturaria a funcao original. Sem ciclo (purchaseService/stockService ja carregam a fila).
 const notificationQueueService = require('./notificationQueueService');
 const alertRegistry = require('./alertRegistry');
-// Etapa 32 — implementador unico da leitura do pedido de compra (ver
-// getPedidoCompraParaRecebimento). Sem ciclo: pedidoLeitura so conhece o proprio db helper.
-const { carregarPedido: carregarPedidoCompra } = require('../compras/pedidoLeitura');
+// Etapa 36 (RN-18): a barreira de excedente e CONDICIONAL (so quando o body traz a flag), entao a
+// checagem mora aqui e nao em `requirePermission` na rota — molde de
+// `ownerRules.assertAjustePermitido`. Sem ciclo: `permissions.js` nao requer nada no topo (o
+// `../systemPermissions` dele e requerido DENTRO de `getPerfilFromUser`, de proposito).
+const { can, getPerfilFromUser } = require('./permissions');
+// Etapa 43 (T3, D4): o DOCUMENTO da divergencia de quantidade. Require de TOPO, e nao preguicoso,
+// porque foi MEDIDO que nao ha ciclo: `nonConformityService` so requer db/divergencia/numeroDoc/
+// audit, e nenhum deles chega de volta aqui (sonda de carga fria nas duas ordens de import, T3).
+// Pelo OBJETO do modulo, NAO desestruturado — mesmo motivo de `purchaseService` e
+// `notificationQueueService` acima: o teste de nao-fatalidade monkeypatcha
+// `sincronizarNaoConformidadeQuantidade` em tempo de execucao para provar que o gancho que explode
+// nao derruba a conferencia, e uma desestruturacao capturaria a funcao original antes do patch.
+const nonConformityService = require('./nonConformityService');
+// Etapa 70 (T2): o aviso da nota que entrou no estoque. Sem ciclo: o servico requer db,
+// notificationQueueService e requisitionStateMachine — nenhum chega de volta aqui; `alertService` e
+// requerido LAZY la dentro. Pelo OBJETO do modulo pelo mesmo motivo dos de cima (monkeypatch).
+const receiptNotificationService = require('./receiptNotificationService');
+// Etapa 74 (T1, D1/B367): a reserva na chegada para quem esperava. Sem ciclo (carga fria nas duas ordens):
+// o servico requer stockService/requisitionService/receiptNotificationService, nenhum requer este arquivo
+// no topo. Pelo OBJETO do modulo pelo mesmo motivo dos de cima (o teste da RN-07 monkeypatcha).
+const reservaChegadaService = require('./reservaChegadaService');
+
+/**
+ * Etapa 70 (T2, D6, RN-05): o gancho do aviso, DEPOIS do UPDATE de status terminal e do
+ * `fecharSolicitacoesDoPedido` — o ultimo passo de cada ponto terminal. Best-effort: o recebimento
+ * ja esta PROCESSADO/APROVADO e o estoque ja entrou quando chegamos aqui; uma falha do aviso so vira
+ * `console.warn` com a literal do contrato, nunca muda a resposta. Roda DENTRO do claim do
+ * processamento (T0b): o perdedor de dois cliques toma 409 antes e nunca chega aqui com o laco do
+ * vencedor pela metade.
+ */
+async function avisarEntradaConfirmadaSemFalhar(db, user, recebimentoId) {
+  try {
+    await receiptNotificationService.avisarEntradaConfirmada(db, user, recebimentoId);
+  } catch (e) {
+    console.warn(`[recebimento] aviso de entrada confirmada falhou (recebimento ${recebimentoId}): ${e.message}`);
+  }
+}
+
+/**
+ * Etapa 74 (T1, D1/B367): a reserva na chegada, nos dois pontos terminais, DEPOIS de
+ * `fecharSolicitacoesDoPedido` e ANTES do aviso (o aviso le o banco: com a reserva depois, o e-mail diria
+ * "ainda nao esta reservado" a quem acabou de ganhar). Best-effort, o molde do aviso: a nota ja entrou e
+ * ja esta PROCESSADO/APROVADO; uma falha so vira `console.warn` com a literal do contrato. Roda dentro do
+ * claim do processamento (Etapa 70 T0b): o perdedor de dois cliques toma 409 antes.
+ */
+async function reservarChegadaSemFalhar(db, user, recebimentoId) {
+  try {
+    await reservaChegadaService.reservarChegadaParaQuemEspera(db, user, recebimentoId);
+  } catch (e) {
+    console.warn(`[recebimento] reserva na chegada falhou (recebimento ${recebimentoId}): ${e.message}`);
+  }
+}
 
 /**
  * Etapa 17 (RN-04, gancho C4.2) — aviso pos-escrita da quantidade recebida, nos DOIS escritores
- * reais (`conferirRecebimento` e `salvarDadosFiscal`; a UI de producao passa pelo fiscal, entao
- * um gancho so na conferencia nunca dispararia de verdade — achado Critico da revisao do plano).
+ * reais (`conferirRecebimento` e `salvarDadosFiscal`).
+ *
+ * ⚠️ CORRECAO (revisao adversarial da Etapa 43): este cabecalho dizia *"a UI de producao passa
+ * pelo fiscal, entao um gancho so na conferencia nunca dispararia de verdade"*. Estava certo em
+ * 2026-08-28 e FICOU DESATUALIZADO na Etapa 36: `PUT /conferir` ganhou chamador de tela naquela
+ * etapa — o botao "Salvar Conferencia" do painel de detalhe
+ * (`client/src/components/almoxarifado/RecebimentosAlmoxarifado.js:415-419`, que registra a
+ * decisao de usar `/conferir` e NAO `/fiscal`). Hoje a UI escreve quantidade pelos DOIS caminhos:
+ * o campo "Qtd. conferida" do painel (status RECEBIDO/EM_CONFERENCIA) chama `/conferir`, e o
+ * `salvarFiscal` REENVIA a quantidade ja em estado ao salvar os dados fiscais (o modal de NF nao
+ * tem campo de quantidade — ver `:964`). A conclusao do achado Critico da Etapa 17 continua
+ * valendo, e por outro motivo: o gancho tem de estar nos dois escritores porque os dois sao
+ * alcancaveis por tela. Nada muda de comportamento aqui.
  *
  * A regua e a query compartilhada do registro (`listarDivergenciasRecebimento({ recebimentoId })`,
  * float-safe por `divergenciaRealSql`): refazer a comparacao em JS aqui seria a segunda definicao
@@ -40,6 +121,56 @@ async function avisarDivergenciasDoRecebimento(db, recebimentoId) {
     }
   } catch (e) {
     console.warn('[almoxarifado-alertas] Falha ao avisar divergencia de recebimento:', e.message);
+  }
+}
+
+/**
+ * Etapa 43 (T3, D4) — o DOCUMENTO da divergencia, nos MESMOS dois escritores de
+ * `quantidade_recebida` em que o aviso da Etapa 17 ja mora. Ate aqui a falta de 3 kg virava
+ * e-mail e alerta, e sumia quando caia fora da janela de dias: nao havia como responder "quem
+ * decidiu aceitar, e quando". Agora vira `NC-…`.
+ *
+ * ── TRES DECISOES QUE ESTAO NESTE CORPO ──────────────────────────────────────────────────────
+ *
+ * 1. **Nos DOIS escritores, nao so no `conferir`.** ⚠️ CORRECAO (revisao adversarial da Etapa
+ *    43): esta decisao estava escrita aqui como *"a UI de producao NUNCA chama `/conferir` — ela
+ *    escreve quantidade pelo modal de NF"*, repetindo o cabecalho do arquivo. **Estava errado
+ *    desde a Etapa 36**, que deu chamador de tela ao `/conferir` (botao "Salvar Conferencia",
+ *    `RecebimentosAlmoxarifado.js:415-419`) — e o campo de quantidade por item vive justamente
+ *    no painel de conferencia, sob a guarda de status RECEBIDO/EM_CONFERENCIA, porque o modal de
+ *    NF nao tem campo de quantidade nenhum (`:964`). **O que continua verdade e a conclusao**: o
+ *    gancho tem de estar nos DOIS escritores, agora porque os dois tem gesto de tela — o painel
+ *    escreve pelo `/conferir` e o `salvarFiscal` reenvia a quantidade ao salvar a NF. Com o
+ *    gancho so em um deles, metade dos caminhos reais ficaria sem documento, com a suite verde.
+ *    Ha teste congelando os dois disparos (`alertaEventoGanchos.api.test.js:160`).
+ *
+ * 2. **DEPOIS de `avisarDivergenciasDoRecebimento`**, posicao congelada no D4: uma falha do
+ *    gancho novo nao pode afetar o aviso que ja existia.
+ *
+ * 3. **Por item, e o `try/catch` por item tambem** (molde do gancho de status da Etapa 42, em
+ *    `darEntradaEstoque`): um item que explode nao pode fazer os outros do mesmo documento
+ *    perderem a NC. NAO-FATAL sempre — um `throw` aqui devolveria 400/500 para uma conferencia
+ *    que JA gravou a quantidade, e o operador reenviaria achando que nao salvou. Perder o
+ *    documento com um `warn` e reparavel pela porta manual e pelo alerta de divergencia, que
+ *    continua sendo a rede de seguranca (D6); travar a conferencia nao e.
+ */
+// ⚠️ `recebimentoId` NAO e opcional na pratica, e a razao foi medida: o `UPDATE` do item, nas duas
+// portas, e protegido por `WHERE id = ? AND recebimento_id = ?`, mas este gancho recebia a lista
+// crua e o servico buscava o item SO por id. Achado 5 da revisao adversarial, reproduzido:
+// conferir o recebimento A citando o id de um item do recebimento B ABRIA documento para o item de
+// B (com autor, hora e ato errados) e, quando o item de B nao estava divergente, CANCELAVA a NC de
+// B — destruindo documento por um gesto que o proprio `UPDATE` ja tinha ignorado. O gancho passa a
+// herdar o mesmo escopo do `UPDATE`.
+async function abrirNaoConformidadesDeQuantidade(db, user, itens, recebimentoId) {
+  if (!itens?.length) return;
+  for (const item of itens) {
+    try {
+      await nonConformityService.sincronizarNaoConformidadeQuantidade(db, user, item?.id,
+        { recebimentoId });
+    } catch (e) {
+      console.warn('[recebimento] nao conformidade de quantidade falhou '
+        + `(item ${item?.id}): ${e.message}`);
+    }
   }
 }
 
@@ -100,33 +231,274 @@ async function resolverPedidoCompra(db, { pedido_compra_id, pedido_compra_numero
   return null;
 }
 
+/**
+ * RN-12/13/14 (Etapa 36) — a mesma nota fiscal do mesmo fornecedor nao entra duas vezes.
+ *
+ * Medido por sonda executada na Fase 0: dois POST com a mesma `nota_fiscal` e o mesmo
+ * `fornecedor_id` respondiam 201 + 201; processando as duas, o material era creditado DUAS VEZES
+ * (20 em vez de 10) e nasciam DUAS contas a pagar, com descricao identica exceto pelo numero do REC.
+ * Ninguem mais no sistema segurava essa porta: `gerarContaPagar` insere sem consultar duplicidade.
+ *
+ * Mora no SERVICO e e chamada pelos DOIS escritores — `criarRecebimento` e `salvarDadosFiscal` —
+ * porque o PUT /fiscal PREENCHE a NF depois, e uma guarda so no POST seria contornavel pelo mesmo
+ * caminho que tornava o enum contornavel (RN-11).
+ *
+ * NAO e `UNIQUE(nota_fiscal, fornecedor_id)` no banco, e isso e decisao reversivel registrada na
+ * letra B: producao pode ja ter duplicatas e o indice unico falharia na SUBIDA do servidor (o
+ * `numero TEXT UNIQUE` nasceu no CREATE TABLE, nao por safeAlter — nao ha precedente de unico
+ * aplicado a acervo aqui); `NULL` nunca colide, entao o indice seria silenciosamente parcial onde
+ * mais importa; e a recusa viria como SQLITE_CONSTRAINT, nao como literal legivel. A letra A do
+ * fechamento leva a consulta SQL que mede duplicatas em producao ANTES de qualquer deploy.
+ *
+ * Tres coisas NAO sao duplicata: NF vazia/nula, fornecedor diferente, e fornecedor nao identificado
+ * (id, CNPJ e NOME os tres nulos) — sem fornecedor nao existe "mesmo fornecedor" a afirmar.
+ *
+ * (Fase 2) O `fornecedor_nome` E o terceiro identificador, e nao um detalhe: a TELA nunca manda
+ * `fornecedor_id` — `handleCriar` monta o payload sem ele e `form` nao tem esse campo
+ * (`RecebimentosAlmoxarifado.js:86-93` e `:342-354`); o `<select>` de fornecedores copia
+ * `razao_social` -> `fornecedor_nome` e `cnpj` -> `fornecedor_cnpj` (`selecionarFornecedor`).
+ * Com a chave so em id/CNPJ, a guarda ficaria INALCANCAVEL pelo caminho real sempre que o
+ * fornecedor nao tivesse CNPJ digitado — regra entregue e porta faltando, a classe de defeito que
+ * esta etapa esta pagando do outro lado (a rota /conferir sem chamador).
+ *
+ * ⚠️ (revisao final, R3/R4/R5) A COMPARACAO SAIU DO SQL. Ela era `UPPER(TRIM(coluna)) = UPPER(?)`
+ * sobre UMA perna escolhida por ordem de preferencia, e isso era contornavel de tres jeitos, os
+ * tres medidos por sonda:
+ * - `UPPER` do SQLite e ASCII-ONLY: 'José Aços Ltda' e 'JOSÉ AÇOS LTDA' entravam as DUAS (201 +
+ *   201), com o estoque creditado duas vezes. E o caminho real da tela, que manda nome digitado;
+ * - identificacao MISTA vencia a guarda inteira: A digitado a mao (so nome) e B escolhido no
+ *   `<select>` (nome E CNPJ) nunca se achavam, porque a ordem de preferencia escolhia UMA perna e
+ *   descartava as outras;
+ * - a perna do CNPJ fazia TRIM na coluna e nao no parametro, e ignorava pontuacao.
+ *
+ * Agora: busca os candidatos pela NF normalizada (`UPPER(TRIM(...))` basta para NF, que e ASCII) e
+ * compara o FORNECEDOR em JS, casando se QUALQUER perna casar — mesmo `fornecedor_id`, ou mesmo
+ * CNPJ so-digitos, ou mesmo nome sem acento/caixa/espaco duplo. Nenhuma perna vazia casa.
+ * DESCARTADO resolver no SQL: nao ha como tirar acento em SQLite sem extensao, e um REPLACE
+ * encadeado por acento seria ilegivel e incompleto. CONSEQUENCIA REGISTRADA: a consulta que mede
+ * duplicatas em PRODUCAO (letra A do fechamento) roda em SQL e NAO ve as duplicatas por acento —
+ * ela SUB-REPORTA, e isso esta dito no fechamento.
+ */
+const digitosDe = (v) => (v == null ? '' : String(v).replace(/\D+/g, ''));
+const nomeChave = (v) => (typeof v === 'string'
+  // NFD separa a letra do acento; `\p{M}` apaga so as marcas. Depois caixa, bordas e espaco duplo
+  // (o Caps Lock e o espaco a mais sao os dois erros de digitacao que criavam documento novo).
+  ? v.normalize('NFD').replace(/\p{M}+/gu, '').toUpperCase().trim().replace(/\s+/g, ' ')
+  : '');
+
+async function assertNotaNaoDuplicada(db, { nota_fiscal, fornecedor_id, fornecedor_cnpj, fornecedor_nome }, recebimentoId = null) {
+  const nf = typeof nota_fiscal === 'string' ? nota_fiscal.trim() : nota_fiscal;
+  if (!nf) return;                                   // RN-13: sem NF nao ha duplicata
+  const nome = nomeChave(fornecedor_nome);
+  const cnpj = digitosDe(fornecedor_cnpj);
+  if (!fornecedor_id && !cnpj && !nome) return;       // RN-13: sem fornecedor, idem
+
+  const params = [nf];
+  // (Fase 2) O filtro de CANCELADO saiu: `STATUS` do recebimento nao tem 'CANCELADO' (os 11 status
+  // sao RECEBIDO..BLOQUEADO), entao a clausula era codigo morto que fazia o proximo leitor acreditar
+  // num cancelamento que nao existe. Se um dia existir, ela volta COM o teste que a exercita.
+  // Etapa 71 (Fase 2, decisao reversivel da letra B): o recebimento cujas entradas de estoque EXISTEM
+  // e estao TODAS estornadas no livro nao bloqueia a NF. "Lancei errado -> estornei -> relanco" e o
+  // caso mais comum do estorno (sonda 71r-c: o relancamento tomava 409 no POST e no /fiscal). Um
+  // recebimento com QUALQUER entrada viva continua bloqueando, e o sem entrada nenhuma (ainda nao
+  // processado) tambem — ele e o documento em andamento da mesma NF. Declarado: a conta a pagar do
+  // primeiro fica (D6); relancar deixa duas contas para a mesma compra.
+  let sql = `SELECT r.id, r.numero, r.fornecedor_id, r.fornecedor_cnpj, r.fornecedor_nome
+    FROM recebimentos_material_almoxarifado r WHERE UPPER(TRIM(r.nota_fiscal)) = UPPER(?)
+      AND NOT (
+        EXISTS (SELECT 1 FROM movimentacoes_almoxarifado m
+          WHERE m.recebimento_id = r.id AND m.tipo = 'ENTRADA_COMPRA')
+        AND NOT EXISTS (SELECT 1 FROM movimentacoes_almoxarifado m
+          WHERE m.recebimento_id = r.id AND m.tipo = 'ENTRADA_COMPRA' AND COALESCE(m.cancelado, 0) = 0)
+        -- e nenhum item ainda por entrar: o documento que falhou no meio (um item entrou e foi
+        -- estornado, o outro espera o reprocessamento) continua sendo o dono da NF. A quantidade
+        -- e a regua da Etapa 70 (QTD_DO_ITEM_SQL = quantidadeDoItem): o '' legado vale a esperada
+        -- (Fase 5 — com COALESCE puro o '' virava 0 e o documento que espera perdia a NF).
+        AND NOT EXISTS (SELECT 1 FROM recebimentos_material_itens_almoxarifado ri
+          WHERE ri.recebimento_id = r.id AND ri.entrada_estoque_em IS NULL
+            AND CAST(COALESCE(${receiptNotificationService.QTD_DO_ITEM_SQL}, 0) AS REAL) > 0)
+      )`;
+  if (recebimentoId) { sql += ' AND r.id <> ?'; params.push(recebimentoId); }
+
+  // A NF e seletiva: este `dbAll` traz 0 ou 1 linha no caso normal, e as duplicatas de acervo sao
+  // exatamente o que se quer ver. `LIMIT 1` aqui seria errado — o candidato certo pode ser o segundo.
+  const candidatos = await dbAll(db, sql, params);
+  const ja = candidatos.find((c) => (
+    (fornecedor_id && Number(c.fornecedor_id) === Number(fornecedor_id))
+    || (cnpj && digitosDe(c.fornecedor_cnpj) === cnpj)
+    || (nome && nomeChave(c.fornecedor_nome) === nome)
+  ));
+  if (ja) {
+    throw Object.assign(
+      new Error(`Nota fiscal ${nf} já lançada no recebimento ${ja.numero} para este fornecedor`),
+      { status: 409 },
+    );
+  }
+}
+
+/**
+ * (Etapa 37) A recebida que o operador DECLAROU, lida do payload CRU — antes de a esperada ser
+ * trocada pelo saldo. A ordem de preferencia e a mesma que o INSERT dos itens usa
+ * (`quantidade_recebida`, senao a esperada, senao a quantidade), e `parseFloat` +
+ * `Number.isFinite` pelo motivo ja comentado na barreira da Etapa 36: `''` nao pode ser lido como
+ * ZERO, senao a comparacao ficaria falsa por acidente e nao por regra.
+ */
+const recebidaDeclaradaNoPayload = (item) => {
+  for (const v of [item.quantidade_recebida, item.quantidade_esperada, item.quantidade]) {
+    if (v == null || v === '') continue;
+    const n = parseFloat(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return 0;
+};
+
 async function criarRecebimento(db, user, data) {
   const {
     pedido_compra_id, pedido_compra_numero, tipo_recebimento, nota_fiscal,
     fornecedor_id, fornecedor_nome, fornecedor_cnpj, observacoes, itens: itensInput,
   } = data;
 
+  // Etapa 70, Fase 5: a recebida ilegivel recusa ANTES de qualquer leitura/INSERT (o INSERT do
+  // item normaliza de novo com a mesma funcao). Ver `normalizarRecebida`.
+  normalizarRecebidasDoPayload(itensInput);
   let pedido = null;
   let itens = itensInput || [];
-  const tipo = tipo_recebimento || (pedido_compra_id || pedido_compra_numero ? 'PEDIDO_COMPRA' : 'NOTA_FISCAL');
+  // (Etapa 37) As linhas do pedido COM o saldo de cada uma, e a ligacao item -> linha resolvida
+  // pelo SERVIDOR. Ficam vazias no caminho NF puro (e ai nao ha saldo a medir: o unico "esperado"
+  // e o que o proprio operador digitou, e quem governa e a barreira da Etapa 36).
+  let linhasDoPedido = [];
+  let resolvidos = [];
+  const tipo = tipo_recebimento || (pedido_compra_id || pedido_compra_numero ? TIPO_PEDIDO_COMPRA : TIPO_NOTA_FISCAL);
 
-  if (tipo === 'PEDIDO_COMPRA') {
+  if (tipo === TIPO_PEDIDO_COMPRA) {
     pedido = await resolverPedidoCompra(db, { pedido_compra_id, pedido_compra_numero });
     if (!pedido) throw Object.assign(new Error('Pedido de compra não encontrado'), { status: 400 });
+    linhasDoPedido = await saldoDasLinhasDoPedido(db, pedido.id);
+
     if (!itens.length) {
-      const itensPedido = await carregarItensPedidoCompra(db, pedido.id);
-      itens = itensPedido.map((i) => ({
-        material_id: i.material_id,
-        quantidade: i.quantidade,
-        quantidade_esperada: i.quantidade,
-        quantidade_recebida: i.quantidade,
-        valor_unitario: i.valor_unitario || 0,
-        valor_total: (i.quantidade || 0) * (i.valor_unitario || 0),
+      // RN-25 — DUAS contagens, DUAS literais (decisao 14). "Nenhuma linha com saldo" abrigava
+      // dois fatos diferentes: o pedido QUITADO e o pedido cujo Compras ainda NAO LANCOU as
+      // linhas. Dizer "ja foi recebido por completo" ao segundo e MENTIRA — e ele e justamente o
+      // pedido que a RN-24 manda manter visivel em `?pendentes=1` como ABERTO: a tela o oferece e
+      // a porta o recusaria mentindo. Nenhuma das duas e 'Inclua ao menos um item', que e a recusa
+      // do caminho NF e nao explica nada ao operador do pedido.
+      if (!linhasDoPedido.length) {
+        throw Object.assign(new Error(
+          `Pedido de compra ${pedido.numero} não tem itens lançados no módulo Compras`,
+        ), { status: 400 });
+      }
+      const comSaldo = linhasDoPedido.filter((l) => l.saldo > 0);
+      if (!comSaldo.length) {
+        throw Object.assign(new Error(
+          `Pedido de compra ${pedido.numero} já foi recebido por completo`,
+        ), { status: 400 });
+      }
+      // ⚠️ (revisao final, F2) O RATEIO, e nao o saldo da linha. Medido na revisao da branch: um
+      // pedido com a linha A (10 pedidos, 15 recebidos — saldo -5, estado que o excedente
+      // autorizado desta etapa CRIA) e a linha B (10 pedidos, 0 recebidos) fazia este caminho
+      // oferecer 10 para B e, seis linhas abaixo, `assertSaldoDoPedidoPermitido` recusar com 400
+      // "saldo do pedido (5)": a regua e o agregado POR MATERIAL, e a linha A entra NEGATIVA nele.
+      // O SERVIDOR montava um payload que o SERVIDOR recusa — e o operador nao tinha como evitar,
+      // porque o payload nao era dele (a tela manda `itens` desde a T5, mas este caminho e
+      // contrato publico da rota e o fallback de qualquer chamador sem itens).
+      // Por material, `restante` comeca no agregado (nunca negativo) e cada linha leva o que ainda
+      // cabe; linha que nao leva nada SAI (gravar 0 seria pior: o `||` do INSERT abaixo le 0 como
+      // "campo ausente", e `Inclua ao menos um item` e a recusa do caminho NF, que nao explica
+      // nada a quem escolheu um pedido).
+      const restantePorMaterial = new Map();
+      for (const l of linhasDoPedido) {
+        const chave = String(l.material_id);
+        restantePorMaterial.set(chave, (restantePorMaterial.get(chave) || 0) + l.saldo);
+      }
+      for (const [chave, total] of restantePorMaterial) {
+        restantePorMaterial.set(chave, Math.max(0, total));
+      }
+      const rateadas = [];
+      for (const l of comSaldo) {
+        const chave = String(l.material_id);
+        const restante = restantePorMaterial.get(chave) || 0;
+        const quantidade = Math.min(l.saldo, restante);
+        if (!(quantidade > 0)) continue;
+        restantePorMaterial.set(chave, restante - quantidade);
+        rateadas.push({ linha: l, quantidade });
+      }
+      // Agregado inteiro <= 0 com linha de saldo positivo: nao ha o que receber, e e isso que a
+      // literal do quitado diz. A mesma frase do `if` acima, de proposito — o fato e o mesmo.
+      if (!rateadas.length) {
+        throw Object.assign(new Error(
+          `Pedido de compra ${pedido.numero} já foi recebido por completo`,
+        ), { status: 400 });
+      }
+      // RN-25, caminho SEM `itens` (o que a tela usa hoje): o item nasce do SALDO, e nao da
+      // quantidade original. Antes nascia `esperada = recebida = quantidade` — um pedido de 10 com
+      // 6 ja recebidos gerava um recebimento de 10/10, e o `/conferir` da Etapa 36 passava a medir
+      // a contagem contra o pedido INTEIRO: recebimento parcial era impossivel de registrar certo.
+      itens = rateadas.map(({ linha, quantidade }) => ({
+        material_id: linha.material_id,
+        pedido_item_id: linha.id,
+        quantidade,
+        quantidade_esperada: quantidade,
+        quantidade_recebida: quantidade,
+        valor_unitario: linha.valor_unitario || 0,
+        valor_total: quantidade * (linha.valor_unitario || 0),
       }));
+      resolvidos = rateadas.map(({ linha, quantidade }, indice) => ({
+        indice, linha, recebida: quantidade,
+      }));
+    } else if (linhasDoPedido.length) {
+      // (Fase 2) O caminho COM `itens` e o que a TELA usa depois da T5, e o unico em que o payload
+      // traz `quantidade_esperada`. A esperada GRAVADA tem de ser o SALDO e nao o payload: a
+      // barreira da Etapa 36 no `/conferir`/`/fiscal` compara a contagem com a ESPERADA GRAVADA,
+      // entao uma esperada vinda do payload a desligaria EM SILENCIO (mandar 99 aceitaria qualquer
+      // contagem depois). A recebida declarada e lida ANTES da troca, pelo mesmo motivo.
+      resolvidos = itens.map((item, indice) => ({
+        indice,
+        linha: resolverLinhaDoPedido(item, linhasDoPedido),
+        recebida: recebidaDeclaradaNoPayload(item),
+      }));
+      itens = itens.map((item, indice) => {
+        const { linha } = resolvidos[indice];
+        // Linha quitada (saldo 0) nao tem saldo a congelar, e gravar `quantidade_esperada = 0`
+        // seria pior que nao gravar: o `||` do INSERT abaixo leria 0 como "campo ausente".
+        if (!linha || !(linha.saldo > 0)) return item;
+        return { ...item, quantidade_esperada: linha.saldo };
+      });
     }
   }
 
   if (!itens.length) throw Object.assign(new Error('Inclua ao menos um item'), { status: 400 });
+
+  // RN-12 (Etapa 36): DEPOIS de resolver o pedido (e ele quem traz o fornecedor quando o
+  // recebimento nasce de um PEDIDO_COMPRA) e ANTES do `inserirComNumeroUnico` — se a guarda
+  // rodasse depois, o INSERT do cabecalho ja teria gravado e o `throw` deixaria o documento
+  // duplicado no banco (nao ha transacao neste modulo). Os tres identificadores sao os MESMOS
+  // valores efetivos que o INSERT abaixo grava.
+  await assertNotaNaoDuplicada(db, {
+    nota_fiscal,
+    fornecedor_id: pedido?.fornecedor_id || fornecedor_id || null,
+    fornecedor_cnpj: pedido?.fornecedor_cnpj || fornecedor_cnpj || null,
+    fornecedor_nome: pedido?.fornecedor_nome || fornecedor_nome || null,
+  });
+
+  // RN-18, TERCEIRA porta (fix-round 2, F5): o item NASCE com `quantidade_recebida`, e ate aqui
+  // ninguem checava — a regra da barreira "so o AUMENTO sobre a gravada" tirou o bloqueio
+  // ACIDENTAL que o `/fiscal` fazia, e a RN-18 passou a ser contornavel por um payload de criacao.
+  // ANTES do INSERT do cabecalho, DEPOIS da guarda de NF (que mantem a precedencia do 409).
+  // ⚠️ Mede o payload CRU (`itensInput`), e nao `itens`: no caminho do pedido a esperada de `itens`
+  // ja foi trocada pelo SALDO, e comparar contra ela barraria um recebimento LEGITIMO de duas
+  // linhas do mesmo material (saldo agregado 10 dividido em 6 e 4 — a regua do pedido, abaixo, e
+  // quem julga esse caso). O que esta barreira mede continua sendo o que a Etapa 36 mediu: a
+  // coerencia do payload consigo mesmo, com `#` = POSICAO no payload. No caminho SEM `itens`
+  // `itensInput` e vazio, e nao ha payload de item nenhum a medir.
+  const excedentesDaCriacao = assertExcedenteNaCriacaoPermitido(user, itensInput || [], data.autorizar_excedente === true);
+
+  // RN-20/RN-21 (Etapa 37) — a SEGUNDA comparacao da criacao, e ela nao substitui a de cima: a da
+  // 36 mede o documento contra a esperada que ele mesmo declarou; esta mede contra o SALDO DO
+  // PEDIDO DE COMPRA, agregado por material. Antes desta linha, `POST` de 999 contra um pedido de
+  // 10 entrava com 201, porque a unica referencia do excedente era o numero que o operador digitou.
+  // ANTES do `inserirComNumeroUnico`, DEPOIS da guarda de NF (que mantem a precedencia do 409).
+  const excedentesDoPedido = assertSaldoDoPedidoPermitido(user, resolvidos, linhasDoPedido,
+    data.autorizar_excedente === true);
 
   // Etapa 31 (RN-07): o numero nasce DENTRO do gerador, na tentativa que vencer o UNIQUE, e e ele
   // que volta no `return` daqui. O `fn` contem SO o INSERT do cabecalho — os itens sao inseridos
@@ -148,19 +520,71 @@ async function criarRecebimento(db, user, data) {
     user.id, user.nome || user.email, observacoes || null,
   ]));
 
-  for (const item of itens) {
+  // (F5) O id de cada item inserido, por POSICAO no payload: e o que deixa a trilha do excedente
+  // autorizado nascer com o id REAL do item, e nao com a posicao que a literal do 400 usa.
+  const idsPorIndice = [];
+  for (const [indice, item] of itens.entries()) {
     const qtd = item.quantidade_esperada || item.quantidade;
-    const vUnit = parseFloat(item.valor_unitario) || 0;
+    // (Etapa 37) `pedido_item_id` sai de `resolvidos`, NUNCA de `item.pedido_item_id`: e o link que
+    // a Task 3 usa para somar na linha certa, e deixar o id do payload chegar ao INSERT faria a
+    // contagem cair na linha de outro pedido. Sem linha resolvida, `null` — item fora do pedido
+    // (decisao 9) nao inventa link.
+    const linhaResolvida = resolvidos[indice] && resolvidos[indice].linha;
+    // ⚠️ (revisao final, U1) O PRECO da linha do pedido quando o payload OMITE o campo.
+    // Medido na revisao da branch: o payload da tela (T5) manda material, linha e quantidade e
+    // NAO manda `valor_unitario` — o preco nao e informacao do almoxarife, e sim do pedido. Com
+    // `parseFloat(item.valor_unitario) || 0` o item nascia 0/0, e na entrada fisica o
+    // `custo_unitario` da movimentacao so viaja quando > 0 (decisao 5 da Etapa 8c), entao o
+    // `custo_medio` do material deixou de ser alimentado por TODO recebimento contra pedido. Era
+    // REGRESSAO: antes da T5 a tela mandava `itens: []` e este servico preenchia o preco da linha
+    // (o caminho RN-25, acima). E o custo medio e a base do rateio da Etapa 8c — em 0, o rateio
+    // distribui R$ 0,00 e a conta "fecha" (zero = zero) sem ninguem perceber.
+    // Vale SO para o campo AUSENTE (`null`/`undefined`/`''`/ilegivel): `valor_unitario: 0`
+    // EXPLICITO e um fato (amostra, brinde, conserto, material de cliente — os casos que a 8c
+    // documentou), e herdar o preco do pedido ali inventaria valor que ninguem declarou.
+    const vUnitPayload = item.valor_unitario != null && item.valor_unitario !== ''
+      ? parseFloat(item.valor_unitario) : NaN;
+    const vUnit = Number.isFinite(vUnitPayload)
+      ? vUnitPayload
+      : (linhaResolvida ? parseFloat(linhaResolvida.valor_unitario) || 0 : 0);
     const vTotal = parseFloat(item.valor_total) || (qtd * vUnit);
-    await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado
-      (recebimento_id, material_id, quantidade_esperada, quantidade_recebida, lote, series, observacoes,
+    // `linhaResolvida` esta declarada ACIMA (o fallback de preco da U1 tambem precisa dela).
+    const ins = await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado
+      (recebimento_id, material_id, pedido_item_id, quantidade_esperada, quantidade_recebida,
+       lote, series, observacoes,
        valor_unitario, valor_total, valor_icms, valor_ipi, reducao_icms_percent)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, [
-      r.lastID, item.material_id, qtd,
-      item.quantidade_recebida || qtd, item.lote || null, item.series || null, item.observacoes || null,
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+      r.lastID, item.material_id, linhaResolvida ? linhaResolvida.id : null, qtd,
+      normalizarRecebida(item.quantidade_recebida) ?? qtd, item.lote || null, item.series || null, item.observacoes || null,
       vUnit, vTotal, parseFloat(item.valor_icms) || 0, parseFloat(item.valor_ipi) || 0,
       parseFloat(item.reducao_icms_percent) || 0,
     ]);
+    idsPorIndice[indice] = ins.lastID;
+  }
+
+  // (F5) A trilha DEPOIS do INSERT, e nao dentro da barreira: antes do INSERT o item nao tem id, e
+  // auditar a posicao do payload deixaria `entidade_id` apontando para lugar nenhum.
+  for (const ex of excedentesDaCriacao) {
+    await auditarExcedenteAutorizado(db, user, idsPorIndice[ex.indice], ex);
+  }
+
+  // (Etapa 37) A trilha do excedente CONTRA O PEDIDO, uma linha por item excedente, DEPOIS dos
+  // INSERT (antes do INSERT o item nao tem id, e auditar a posicao do payload deixaria
+  // `entidade_id` apontando para lugar nenhum). Verbo e entidade sao os MESMOS da Etapa 36 — os
+  // rotulos ja existem em `auditLabels.js` e esta etapa nao os toca.
+  // `dados_anteriores` guarda `saldo_pedido` e nao `quantidade_esperada`: a medida desta porta e
+  // outra, e chamar as duas pelo mesmo nome faria a leitura da trilha mentir sobre o que foi
+  // comparado. Por isso NAO reusa `auditarExcedenteAutorizado`.
+  for (const ex of excedentesDoPedido) {
+    for (const indice of ex.indices) {
+      await registrarAuditoria(db, {
+        entidade: 'recebimento_item', entidade_id: idsPorIndice[indice],
+        acao: 'EXCEDENTE_AUTORIZADO',
+        usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+        dados_anteriores: { saldo_pedido: ex.saldoMaterial },
+        dados_novos: { quantidade_recebida: resolvidos[indice].recebida },
+      });
+    }
   }
 
   await registrarAuditoria(db, {
@@ -170,8 +594,305 @@ async function criarRecebimento(db, user, data) {
   return { id: r.lastID, numero, status: STATUS.RECEBIDO };
 }
 
+/**
+ * RN-18 — as DUAS recusas e a trilha, em UM lugar para as TRES portas (criacao, conferencia e
+ * fiscal). Escritas de novo em cada porta, divergiriam na primeira edicao e o operador veria texto
+ * diferente dependendo de qual porta recusou — foi o que aconteceu com a literal do F3, que estava
+ * copiada em cinco lugares.
+ *
+ * `referencia` e o id do item nas portas de UPDATE e a POSICAO no payload (1-based) na criacao,
+ * onde o item ainda nao existe. Quem chama diz qual; a frase e a mesma.
+ *
+ * (F3) A literal NOMEIA quem autoriza em vez de mandar marcar a caixa: quem mais toma este 400 e o
+ * ALMOXARIFE, e ele NUNCA ve a caixa — ela e escondida por `pode('autorizar_excedente')` e a acao e
+ * de [ADMINISTRADOR, COMPRAS]. A instrucao antiga mandava um gesto impossivel.
+ */
+// (Etapa 37) O SUFIXO e UMA constante para as TRES portas. Escrito de novo no 400 do saldo, o F3
+// se repetiria: a instrucao ao operador divergiria entre as portas na primeira edicao, e foi
+// exatamente por estar copiada em cinco lugares que ela precisou de um fix-round.
+const SUFIXO_AUTORIZACAO_EXCEDENTE = ' — a autorização de excedente é de Compras ou do Administrador';
+
+const mensagemExcedenteSemFlag = (recebida, esperada, referencia) => `Quantidade recebida `
+  + `(${recebida}) maior que a esperada (${esperada}) no item #${referencia}`
+  + SUFIXO_AUTORIZACAO_EXCEDENTE;
+
+/**
+ * (Etapa 37, RN-20) O 400 do caminho do PEDIDO tem literal PROPRIA, e isso e decisao (a 10 do
+ * design). A da Etapa 36 diz "maior que a esperada (10) no item #58": no `POST` nao existe id de
+ * item (nada foi inserido ainda) e "esperada" nao e o que se esta medindo — a medida e o SALDO do
+ * pedido de compra, agregado por material.
+ * DESCARTADO parametrizar a literal da 36 com dois buracos ("no item #x" / "para o material y"):
+ * uma frase com dois buracos para dizer duas coisas diferentes fica pior de ler nas duas portas, e
+ * a regua deixaria de poder afirmar texto literal.
+ */
+const mensagemAcimaDoSaldoDoPedido = (recebida, saldo, codigo) => `Quantidade recebida `
+  + `(${recebida}) maior que o saldo do pedido (${saldo}) para o material ${codigo}`
+  + SUFIXO_AUTORIZACAO_EXCEDENTE;
+
+/**
+ * (Etapa 37, decisao 7) A metade DECISORIA, compartilhada pelas TRES portas: a INTENCAO (a flag) e
+ * a AUTORIDADE (a acao). Só a metade, e nao a funcao inteira: `assertExcedentePermitido` compara o
+ * payload com a linha JA GRAVADA e e INALCANCAVEL no `POST` por construcao (medido na Fase 0 — no
+ * `POST` os itens ainda nao existem, e ela da `continue`). Cada porta COLETA os excedentes e
+ * formata o PROPRIO 400, porque "excedente" mede coisas diferentes em cada uma — contra a esperada
+ * do item (36) e contra o saldo do pedido (37).
+ *
+ * O 403, ao contrario, e o MESMO fato nas tres portas ("voce nao tem a acao"), e por isso a literal
+ * mora AQUI, em UM lugar: mudar uma palavra dela derruba o teste da Etapa 36 E o da 37 ao mesmo
+ * tempo, que e a prova EXECUTADA de que o reuso existe (sabotagem 3 da Task 2).
+ */
+function assertAutorizacaoExcedente(user, autorizado, mensagem400) {
+  if (!autorizado) throw Object.assign(new Error(mensagem400), { status: 400 });
+  if (!can(user, 'autorizar_excedente')) {
+    throw Object.assign(new Error(
+      'Autorizar recebimento acima do pedido exige a permissão "autorizar_excedente"'
+      + ` (seu perfil: ${getPerfilFromUser(user)}).`), { status: 403 });
+  }
+}
+
+const auditarExcedenteAutorizado = (db, user, itemId, { esperada, recebida }) => registrarAuditoria(db, {
+  entidade: 'recebimento_item', entidade_id: itemId, acao: 'EXCEDENTE_AUTORIZADO',
+  usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+  dados_anteriores: { quantidade_esperada: esperada },
+  dados_novos: { quantidade_recebida: recebida },
+});
+
+/**
+ * RN-18 (Etapa 36) — recebimento acima do esperado exige autorizacao EXPLICITA e PERMISSAO.
+ *
+ * Medido por sonda na Fase 0: `quantidade_esperada: 10, quantidade_recebida: 999` entrava com 201 e
+ * era gravado. O motor de DETECCAO ja existia inteiro (`alertRegistry.listarDivergenciasRecebimento`
+ * + `avisarDivergenciasDoRecebimento` nos dois escritores); o que nao existia era a BARREIRA.
+ *
+ * Duas condicoes, e as duas importam: a flag e a INTENCAO ("eu sei que estou recebendo a mais"), a
+ * permissao e a AUTORIDADE. Só a flag foi descartado no design: flag que qualquer perfil liga nao e
+ * barreira, e formulario — o mesmo usuario que digita 999 marca a caixa.
+ *
+ * Chamada ANTES de qualquer UPDATE nas DUAS portas: nao ha transacao neste modulo, entao recusar
+ * depois de gravar deixaria o excedente no banco com um 400 por cima (o mesmo defeito que a
+ * sabotagem 3 da Task 2 mede na guarda de NF duplicada).
+ *
+ * `parseFloat` + `Number.isFinite`, e nao `Number(...)`: item sem o campo (o caso do COALESCE
+ * abaixo) e item com `''` nao podem ser lidos como ZERO — `Number('')` e 0, e 0 > 10 e falso por
+ * acidente, nao por regra. O `continue` do `== null` e o que deixa o payload parcial passar.
+ *
+ * A barreira exige AUMENTO (revisao final, F1 + R2): barra o item quando `recebida > esperada`
+ * **E** `recebida > quantidade_recebida GRAVADA`. Ecoar a quantidade que ja esta no banco nao e
+ * ato novo de autorizacao (ou ela foi autorizada e auditada quando entrou, ou e acervo anterior a
+ * esta etapa), e BAIXAR um excedente ja registrado nao pede autorizacao nenhuma. `> gravada`, e
+ * nao `!== gravada`: corrigir 25 para 20 num item de 10 esperados continua acima do pedido e
+ * continua sendo uma correcao para baixo.
+ *
+ * Sem isso, as DUAS telas travavam depois do primeiro excedente autorizado, porque as duas
+ * reenviam a quantidade JA GRAVADA de todos os itens que tem o campo preenchido e nenhuma manda
+ * `autorizar_excedente` fora da caixa da conferencia: (a) o modal de NF ficava preso em 400 para
+ * sempre — nao tem campo de quantidade nem caixa —, e o `processar` seguinte morria em
+ * `validarDadosProcessamento`; (b) na conferencia, o ALMOXARIFE nao conseguia mais salvar a
+ * contagem de NENHUM outro item do documento, e COMPRAS/ADMIN, remarcando a caixa para escapar do
+ * 400, gravavam uma linha nova de EXCEDENTE_AUTORIZADO A CADA SAVE. Como a trilha so e escrita
+ * quando a barreira DISPAROU, exigir aumento tambem conserta a auditoria inflada.
+ */
+async function assertExcedentePermitido(db, user, recebimentoId, itens, autorizado) {
+  const excedentes = [];
+  for (const item of itens || []) {
+    if (item.quantidade_recebida == null) continue;
+    const atual = await dbGet(db, `SELECT id, quantidade_esperada, quantidade_recebida
+      FROM recebimentos_material_itens_almoxarifado WHERE id = ? AND recebimento_id = ?`,
+    [item.id, recebimentoId]);
+    if (!atual) continue;
+    const recebida = parseFloat(item.quantidade_recebida);
+    const esperada = parseFloat(atual.quantidade_esperada);
+    const gravada = parseFloat(atual.quantidade_recebida);
+    // Coluna vazia (ou texto) NAO e "zero gravado": sem numero no banco nao existe "aumento sobre
+    // o que ja esta registrado", e a barreira volta a depender so de `recebida > esperada`.
+    const aumenta = !Number.isFinite(gravada) || recebida > gravada;
+    if (Number.isFinite(recebida) && Number.isFinite(esperada) && recebida > esperada && aumenta) {
+      excedentes.push({ id: atual.id, recebida, esperada });
+    }
+  }
+  if (!excedentes.length) return;
+
+  const e = excedentes[0];
+  assertAutorizacaoExcedente(user, autorizado,
+    mensagemExcedenteSemFlag(e.recebida, e.esperada, e.id));
+  for (const ex of excedentes) {
+    await auditarExcedenteAutorizado(db, user, ex.id, ex);
+  }
+}
+
+/**
+ * RN-18 na TERCEIRA porta (fix-round 2, F5) — o item NASCE com a quantidade recebida.
+ *
+ * `criarRecebimento` grava `quantidade_recebida` (o informado, ou a esperada — Etapa 70 T0: o 0
+ * informado fica 0, antes o `|| qtd` o trocava pela esperada) e nunca chamou
+ * a barreira: a RN-18 tinha duas portas, nao tres. Antes da onda de correcao, a barreira do
+ * `/fiscal` parava esse documento por ACIDENTE — qualquer edicao fiscal reenviava 999 sobre uma
+ * esperada de 10 e tomava 400 (era exatamente o F1, o defeito que TRAVAVA o documento). Com a
+ * regra correta (barra so o AUMENTO sobre a quantidade gravada), ecoar deixou de barrar e o
+ * bloqueio acidental caiu junto: medido por sonda, um POST como ALMOXARIFE com
+ * `quantidade: 10, quantidade_recebida: 999` entrava com 201, sem trilha, e depois atravessava
+ * `/fiscal`, `/conferir` e `finalizar_conferencia` com 200. Nao e alcancavel pela TELA
+ * (`handleCriar` manda `quantidade_recebida = quantidade`) — basta um payload de API.
+ *
+ * ⚠️ Na criacao NAO EXISTE id de item, e o `#` da literal leva a POSICAO DO ITEM NO PAYLOAD
+ * (1-based) — a unica referencia que quem chamou tem. E a MESMA literal das outras portas (os
+ * helpers acima existem para isso: escrita de novo aqui, ela divergiria na primeira edicao).
+ *
+ * Roda ANTES do INSERT (nao ha transacao neste modulo, entao recusar depois deixaria o documento
+ * gravado com um 400 por cima) e DEVOLVE os excedentes para `criarRecebimento` auditar DEPOIS do
+ * INSERT, quando o item ja tem id real. Auditar aqui gravaria a posicao no lugar do id.
+ */
+function assertExcedenteNaCriacaoPermitido(user, itens, autorizado) {
+  const excedentes = [];
+  (itens || []).forEach((item, i) => {
+    if (item.quantidade_recebida == null) return;
+    const recebida = parseFloat(item.quantidade_recebida);
+    // A esperada EFETIVA e a mesma expressao que o INSERT abaixo usa (`quantidade_esperada ||
+    // quantidade`): comparar com outra coisa barraria um item e gravaria outro.
+    const esperada = parseFloat(item.quantidade_esperada || item.quantidade);
+    if (Number.isFinite(recebida) && Number.isFinite(esperada) && recebida > esperada) {
+      excedentes.push({ indice: i, posicao: i + 1, recebida, esperada });
+    }
+  });
+  if (!excedentes.length) return excedentes;
+
+  const e = excedentes[0];
+  assertAutorizacaoExcedente(user, autorizado,
+    mensagemExcedenteSemFlag(e.recebida, e.esperada, e.posicao));
+  return excedentes;
+}
+
+/**
+ * RN-20 (Etapa 37) — o SALDO de cada linha do pedido de compra.
+ *
+ * `saldo = quantidade - COALESCE(quantidade_recebida, 0)`, e o `COALESCE` em JS (`Number.isFinite`)
+ * pelo mesmo motivo do SQL: producao pode ter linha com `quantidade_recebida` NULL (anterior ao
+ * ALTER da Task 1), e `10 - null` viraria `NaN` — com `NaN` toda comparacao e falsa e a barreira
+ * ficaria DESLIGADA em silencio, exatamente na linha mais antiga do acervo.
+ *
+ * Ordenado por `id` porque a resolucao da linha (abaixo) e "menor id primeiro", e
+ * `carregarItensPedidoCompra` nao tem `ORDER BY` — ordenar aqui evita mudar a query compartilhada.
+ * "Linhas lancadas" aqui sao as linhas COM material: `carregarItensPedidoCompra` filtra as sem
+ * `material_id` (sem material nao ha o que dar entrada no estoque), e e o mesmo filtro do resto do
+ * modulo.
+ */
+async function saldoDasLinhasDoPedido(db, pedidoId) {
+  const linhas = await carregarItensPedidoCompra(db, pedidoId);
+  return linhas
+    .map((l) => {
+      const pedida = parseFloat(l.quantidade);
+      const recebida = parseFloat(l.quantidade_recebida);
+      return {
+        ...l,
+        saldo: (Number.isFinite(pedida) ? pedida : 0) - (Number.isFinite(recebida) ? recebida : 0),
+      };
+    })
+    .sort((a, b) => a.id - b.id);
+}
+
+/**
+ * Decisao 9 + risco R5 — o SERVIDOR escolhe a linha do pedido; o payload nunca decide.
+ *
+ * `pedido_item_id` do payload vale se, e SO SE, ele pertence ao pedido resolvido — um id de outra
+ * linha (ou de outro pedido) escolheria a linha errada e a Task 3 somaria no pedido alheio. Senao:
+ * a linha do mesmo material com menor id e saldo > 0; senao a linha do mesmo material com menor
+ * id; sem linha nenhuma, `null` — e ai o item mantem o que o payload mandou e NAO tem regua de
+ * saldo (decisao 9: material fora do pedido e caso legitimo, e recusa-lo e regra NOVA).
+ *
+ * Omitir o campo tambem nao contorna nada, porque a regua e o saldo AGREGADO POR MATERIAL: o id do
+ * payload nunca decide se o `POST` passa.
+ */
+function resolverLinhaDoPedido(item, linhas) {
+  if (item.pedido_item_id != null) {
+    const daqui = linhas.find((l) => Number(l.id) === Number(item.pedido_item_id));
+    // ⚠️ (revisao final, F3) Pertencer ao pedido NAO basta: o material tem de ser o MESMO.
+    // Medido por sonda na revisao da branch: `{ material_id: X, pedido_item_id: <linha de Y> }`
+    // com o Y do MESMO pedido respondia 201, e o INSERT gravava o material X ao lado da linha de
+    // Y. O documento passava a mentir dos dois lados — a T3 somava 5 na linha de Y (o pedido
+    // dizia que chegou Y) e o estoque creditava 5 de X, com Y em 0 — e nenhuma porta pegava,
+    // porque a regua do saldo agrupa o payload pelo material DA LINHA RESOLVIDA e media 5 contra
+    // o saldo de Y.
+    // 400 e nao re-resolucao silenciosa: o payload afirmou DUAS coisas incompativeis, e escolher
+    // uma em silencio grava um documento que ninguem pediu. `item.material_id` ausente nao
+    // contradiz nada (a validacao da rota e quem exige o campo), entao so compara quando ele vem.
+    if (daqui && item.material_id != null
+      && Number(daqui.material_id) !== Number(item.material_id)) {
+      // O codigo que o operador reconhece, na MESMA convencao de `assertSaldoDoPedidoPermitido`:
+      // o do cadastro, senao o que o Compras digitou na linha, senao `#<id do material>`.
+      const doMaterial = linhas.find((l) => Number(l.material_id) === Number(item.material_id));
+      const codigo = (doMaterial && (doMaterial.material_codigo || doMaterial.codigo))
+        || `#${item.material_id}`;
+      throw Object.assign(new Error(
+        `Item do pedido #${item.pedido_item_id} não é do material ${codigo}`,
+      ), { status: 400 });
+    }
+    if (daqui) return daqui;
+  }
+  const doMaterial = linhas.filter((l) => Number(l.material_id) === Number(item.material_id));
+  if (!doMaterial.length) return null;
+  return doMaterial.find((l) => l.saldo > 0) || doMaterial[0];
+}
+
+/**
+ * RN-20/RN-21 (Etapa 37) — a regua do `POST` contra o saldo do pedido, AGREGADA POR MATERIAL.
+ *
+ * Decisao 3: agregada, e nao por linha. Duas linhas do mesmo material no mesmo pedido (precos ou
+ * prazos diferentes, caso legitimo) fariam um recebimento LEGITIMO tomar 400 so por o operador ter
+ * digitado na "linha errada". O saldo do material e a soma do saldo de TODAS as linhas dele no
+ * pedido, e a recebida e a soma do que o payload declarou para aquele material.
+ *
+ * A recebida DECLARADA vem do payload cru (`quantidade_recebida`, senao `quantidade_esperada`,
+ * senao `quantidade`) e e medida ANTES de a esperada ser trocada pelo saldo: medir depois faria um
+ * payload de `quantidade: 999` sem `quantidade_recebida` ser silenciosamente reduzido ao saldo em
+ * vez de recusado.
+ *
+ * Roda ANTES de `inserirComNumeroUnico` (nao ha transacao neste modulo: recusar depois deixaria o
+ * documento gravado com um 400 por cima) e DEVOLVE os excedentes para `criarRecebimento` auditar
+ * DEPOIS dos INSERT, quando o item ja tem id real.
+ */
+function assertSaldoDoPedidoPermitido(user, resolvidos, linhas, autorizado) {
+  const porMaterial = new Map();
+  for (const r of resolvidos) {
+    if (!r.linha) continue;
+    const chave = String(r.linha.material_id);
+    const g = porMaterial.get(chave) || { recebidaTotal: 0, indices: [] };
+    g.recebidaTotal += r.recebida;
+    g.indices.push(r.indice);
+    porMaterial.set(chave, g);
+  }
+
+  const excedentes = [];
+  for (const [chave, grupo] of porMaterial) {
+    const doMaterial = linhas.filter((l) => String(l.material_id) === chave);
+    const saldoMaterial = doMaterial.reduce((s, l) => s + l.saldo, 0);
+    const { recebidaTotal } = grupo;
+    // Etapa 71 (Fase 2, defeito anterior medido por sonda): EPSILON, e o mesmo dono de "zero para
+    // efeito pratico" do resto do modulo. Sem ele, pedido de 0,3 KG com nota de 0,1 deixava saldo
+    // 0.19999999999999998, e a nota com EXATAMENTE o que falta (0,2) tomava 400 "maior que o saldo
+    // do pedido" — so passava com autorizacao de EXCEDENTE, gravando trilha de excedente sobre o que
+    // nao excedeu. O epsilon e 1e-9: folga de ruido, nunca de quantidade (0,21 contra 0,2 recusa).
+    if (recebidaTotal > saldoMaterial + EPSILON_DIVERGENCIA) {
+      // O codigo que o operador reconhece: o do cadastro do material, senao o que o Compras
+      // digitou na linha do pedido, senao o id — nunca uma mensagem sem referencia nenhuma.
+      const codigo = doMaterial[0].material_codigo || doMaterial[0].codigo || `#${chave}`;
+      excedentes.push({
+        codigo, recebidaTotal, saldoMaterial, indices: grupo.indices,
+      });
+    }
+  }
+  if (!excedentes.length) return excedentes;
+
+  const e = excedentes[0];
+  assertAutorizacaoExcedente(user, autorizado,
+    mensagemAcimaDoSaldoDoPedido(e.recebidaTotal, e.saldoMaterial, e.codigo));
+  return excedentes;
+}
+
 async function conferirRecebimento(db, user, recebimentoId, data) {
-  const { status, itens } = data;
+  const { status } = data;
+  // Etapa 70, Fase 5: ANTES de tudo (o UPDATE de status vem logo abaixo) — '' vira null, texto
+  // nao numerico recusa 400. Ver `normalizarRecebida`.
+  const itens = normalizarRecebidasDoPayload(data.itens);
   const validStatus = [
     STATUS.EM_CONFERENCIA, STATUS.CONFERIDO_ALMOX, STATUS.APROVADO, STATUS.REPROVADO,
     STATUS.PARCIALMENTE_APROVADO, STATUS.BLOQUEADO,
@@ -179,6 +900,10 @@ async function conferirRecebimento(db, user, recebimentoId, data) {
   if (status && !validStatus.includes(status)) {
     throw Object.assign(new Error('Status inválido'), { status: 400 });
   }
+
+  // RN-18: a PRIMEIRA porta. Antes do UPDATE de status e do UPDATE de item — recusar depois de
+  // gravar deixaria o documento meio escrito com um 400 por cima.
+  await assertExcedentePermitido(db, user, recebimentoId, itens, data.autorizar_excedente === true);
 
   if (status) {
     const etapa = STATUS_ETAPA[status] || ETAPAS.ALMOXARIFADO;
@@ -189,12 +914,24 @@ async function conferirRecebimento(db, user, recebimentoId, data) {
 
   if (itens) {
     for (const item of itens) {
+      // Etapa 36 (T3): as CINCO colunas com COALESCE, no molde ja escrito em `salvarDadosFiscal`.
+      // Esta rota esta ganhando o PRIMEIRO chamador da vida (o painel de conferencia da T5), e
+      // enquanto ela nao tinha chamador o defeito ficou invisivel: com `quantidade_recebida = ?` e
+      // `observacoes = ?`, um item enviado SEM esses campos APAGAVA os dois (medido por sonda: a
+      // coluna ia a `null`, e 200 na resposta). Duas colunas, nao uma. Os booleanos so viram 0/1
+      // quando VIERAM (`!= null`), senao `false` e `ausente` seriam a mesma coisa e qualquer
+      // chamada parcial zeraria o que a conferencia anterior marcou.
       await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado SET
-        quantidade_recebida = ?, conferencia_quantidade = ?, conferencia_descricao = ?, observacoes = ?,
+        quantidade_recebida = COALESCE(?, quantidade_recebida),
+        conferencia_quantidade = COALESCE(?, conferencia_quantidade),
+        conferencia_descricao = COALESCE(?, conferencia_descricao),
+        observacoes = COALESCE(?, observacoes),
         series = COALESCE(?, series)
         WHERE id = ? AND recebimento_id = ?`, [
-        item.quantidade_recebida, item.conferencia_quantidade ? 1 : 0,
-        item.conferencia_descricao ? 1 : 0, item.observacoes || null,
+        item.quantidade_recebida, // ja normalizado: numero ou null (null = COALESCE mantem)
+        item.conferencia_quantidade != null ? (item.conferencia_quantidade ? 1 : 0) : null,
+        item.conferencia_descricao != null ? (item.conferencia_descricao ? 1 : 0) : null,
+        item.observacoes ?? null,
         item.series ?? null,
         item.id, recebimentoId,
       ]);
@@ -202,11 +939,13 @@ async function conferirRecebimento(db, user, recebimentoId, data) {
   }
 
   await avisarDivergenciasDoRecebimento(db, recebimentoId);
+  // Etapa 43 (T3): DEPOIS do aviso, posicao congelada no D4. Ver `abrirNaoConformidadesDeQuantidade`.
+  await abrirNaoConformidadesDeQuantidade(db, user, itens, recebimentoId);
 
   return { success: true };
 }
 
-async function avancarWorkflow(db, user, recebimentoId, acao) {
+async function avancarWorkflow(db, user, recebimentoId, acao, opcoes = {}) {
   const rec = await dbGet(db, 'SELECT * FROM recebimentos_material_almoxarifado WHERE id = ?', [recebimentoId]);
   if (!rec) throw Object.assign(new Error('Recebimento não encontrado'), { status: 404 });
 
@@ -228,7 +967,8 @@ async function avancarWorkflow(db, user, recebimentoId, acao) {
   }
 
   if (t.handler === 'processar') {
-    return processarNota(db, user, recebimentoId);
+    // Etapa 57 (RN-04): o workflow repassa o destino — antes processava sempre na padrao.
+    return processarNota(db, user, recebimentoId, opcoes);
   }
 
   const sets = ['status = ?', 'etapa_atual = ?', 'updated_at = CURRENT_TIMESTAMP'];
@@ -265,13 +1005,40 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
     nota_fiscal, nota_serie, data_emissao_nf, data_entrada_nf, cfop_nota, cfop_entrada, chave_nfe,
     fornecedor_id, fornecedor_nome, fornecedor_cnpj, pedido_compra_id, pedido_compra_numero, tipo_recebimento,
     base_icms, valor_icms, valor_produtos, frete, desconto, outras_despesas, valor_ipi, valor_total_nota,
-    itens,
   } = data;
+  // Etapa 70, Fase 5: antes da guarda de NF e do UPDATE do cabecalho. Ver `normalizarRecebida`.
+  const itens = normalizarRecebidasDoPayload(data.itens);
 
   let pedido = null;
   if (pedido_compra_id || pedido_compra_numero) {
     pedido = await resolverPedidoCompra(db, { pedido_compra_id, pedido_compra_numero });
   }
+
+  // RN-14 (Etapa 36): a SEGUNDA porta. Roda DEPOIS de `resolverPedidoCompra` e ANTES do UPDATE,
+  // com `recebimentoId` — que exclui o proprio documento, senao salvar os dados fiscais duas vezes
+  // com a PROPRIA nota se autoacusaria com 409.
+  // Os valores olhados sao os EFETIVOS do UPDATE abaixo, que usa COALESCE: um `PUT` que manda so a
+  // NF herda o fornecedor DO REGISTRO (`rec`), e e esse o caso mais comum da tela — comparar com o
+  // que veio no body deixaria passar exatamente a duplicata mais provavel. Mesmo motivo para a NF:
+  // sem o `?? rec.nota_fiscal`, um PUT que nao manda NF cairia no `if (!nf) return`.
+  await assertNotaNaoDuplicada(db, {
+    nota_fiscal: nota_fiscal ?? rec.nota_fiscal,
+    fornecedor_id: pedido?.fornecedor_id ?? fornecedor_id ?? rec.fornecedor_id,
+    fornecedor_cnpj: pedido?.fornecedor_cnpj ?? fornecedor_cnpj ?? rec.fornecedor_cnpj,
+    fornecedor_nome: pedido?.fornecedor_nome ?? fornecedor_nome ?? rec.fornecedor_nome,
+  }, recebimentoId);
+
+  // RN-18 (Etapa 36): a SEGUNDA porta pela qual a quantidade chega ao banco — nao a que o
+  // operador DIGITA (⚠️ isto tambem dizia "a que a UI de producao realmente usa para escrever
+  // quantidade", e a revisao adversarial da Etapa 43 mediu que esta errado: quem digita e o campo
+  // "Qtd. conferida" do painel de conferencia, que chama `/conferir`; aqui a quantidade chega
+  // REENVIADA pelo `salvarFiscal`, do estado da tela). E o mesmo motivo que colocou o gancho de
+  // divergencia nos dois escritores na Etapa 17.
+  // ANTES do UPDATE do cabecalho: recusar depois gravaria os dados fiscais e devolveria 400.
+  // A regra de AUMENTO (F1 + R2) mora dentro de `assertExcedentePermitido` e vale nas duas portas:
+  // o modal de NF nao tem campo de quantidade nem caixa de autorizacao, e reenvia a quantidade de
+  // TODOS os itens.
+  await assertExcedentePermitido(db, user, recebimentoId, itens, data.autorizar_excedente === true);
 
   await dbRun(db, `UPDATE recebimentos_material_almoxarifado SET
     nota_fiscal = COALESCE(?, nota_fiscal),
@@ -335,7 +1102,7 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
         corrida_lote = COALESCE(?, corrida_lote),
         series = COALESCE(?, series)
         WHERE id = ? AND recebimento_id = ?`, [
-        item.quantidade_recebida ?? null, vUnit || null, vTotal || null,
+        item.quantidade_recebida, vUnit || null, vTotal || null, // recebida ja normalizada
         item.valor_icms ?? null, item.valor_ipi ?? null, item.reducao_icms_percent ?? null,
         item.conferencia_quantidade != null ? (item.conferencia_quantidade ? 1 : 0) : null,
         item.conferencia_descricao != null ? (item.conferencia_descricao ? 1 : 0) : null,
@@ -347,6 +1114,9 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
   }
 
   await avisarDivergenciasDoRecebimento(db, recebimentoId);
+  // Etapa 43 (T3): o gancho da porta que a UI REALMENTE usa — sem esta linha a feature nasceria
+  // invisivel em producao com a suite verde (ver `abrirNaoConformidadesDeQuantidade`, decisao 1).
+  await abrirNaoConformidadesDeQuantidade(db, user, itens, recebimentoId);
 
   return { success: true };
 }
@@ -367,9 +1137,56 @@ function validarDadosProcessamento(rec) {
  * Quantidade que um item de recebimento leva para o estoque. Um lugar so — a pre-checagem e o
  * laco de entrada TEM de concordar sobre quais itens movem estoque, senao a pre-checagem valida
  * um conjunto e o laco move outro.
+ *
+ * ⚠️ Etapa 70 (T0, critico da Fase 2): `??` e NAO `||`. Com `||` o 0 conferido ("chegou zero" — a
+ * tela grava o 0 de proposito) caia na ESPERADA e entrava no estoque o que nao chegou: esperada 5,
+ * conferida 0 -> saldo 5 (sonda `sonda70r-zero.js`). NULL continua sendo "ninguem conferiu" e vale
+ * o documento (a esperada). O item zerado nao move estoque, nao e reclamado e nao trava a nota (o
+ * `continue` da pre-checagem e o `if (qtd > 0)` do laco ja tratavam o 0 — o que faltava era o 0
+ * chegar ate eles). O espelho na tela e `quantidadeQueEntra` (RecebimentosAlmoxarifado.js).
  */
 function quantidadeDoItem(item) {
-  return item.quantidade_recebida || item.quantidade_esperada;
+  // Etapa 70, Fase 5: o `''` (ou so espacos) LEGADO vale "nao informado" — a mesma regua de
+  // `quantidadeQueEntra` na tela. As portas de escrita ja nao gravam texto (`normalizarRecebida`),
+  // mas linha gravada antes do conserto existe: com o `??` puro ela devolvia `''`, `'' > 0` era
+  // falso e o item era pulado CALADO com a nota fechando PROCESSADO (sonda `sonda70f-vazio.js`).
+  return recebidaVazia(item.quantidade_recebida) ? item.quantidade_esperada : item.quantidade_recebida;
+}
+
+function recebidaVazia(valor) {
+  return valor === undefined || valor === null || (typeof valor === 'string' && valor.trim() === '');
+}
+
+/**
+ * Etapa 70 (T0 + Fase 5) — a recebida que o payload trouxe, como a coluna REAL deve guardar.
+ * `null`/`undefined`/`''`/so espacos -> `null` ("nao informado": no INSERT nasce a esperada, nos
+ * UPDATEs o `COALESCE` mantem o gravado); numero ou texto numerico (`'4'`, `' 4 '` — a tela manda o
+ * estado cru do `<input>`) -> numero; o 0 e informado (e um fato: nao chegou nada). Texto nao
+ * numerico -> 400 `quantidade_recebida deve ser um número`.
+ *
+ * Por que existe (Fase 5): T0 consertou o INSERT com `recebidaInformada`, mas `/conferir` e
+ * `/fiscal` gravavam `item.quantidade_recebida ?? null` — o `''` passava pelo `??`, o SQLite
+ * guardava TEXTO na coluna REAL e o processamento pulava o item sem avisar, enquanto a tela
+ * mostrava a esperada. Uma funcao para as TRES portas, para nao divergirem de novo.
+ * Descartado: deixar o UPDATE gravar `''` e so consertar a leitura — a coluna seguiria aceitando
+ * texto e cada leitor novo (SQL com `COALESCE`, relatorios) teria de lembrar do caso.
+ */
+const LITERAL_RECEBIDA_INVALIDA = 'quantidade_recebida deve ser um número';
+function normalizarRecebida(valor) {
+  if (recebidaVazia(valor)) return null;
+  const n = typeof valor === 'string' ? Number(valor.trim()) : valor;
+  if (typeof n !== 'number' || !Number.isFinite(n)) {
+    throw Object.assign(new Error(LITERAL_RECEBIDA_INVALIDA), { status: 400 });
+  }
+  return n;
+}
+
+/** Copia dos itens do payload com `quantidade_recebida` normalizada (lanca 400 se ilegivel). */
+function normalizarRecebidasDoPayload(itens) {
+  if (!Array.isArray(itens)) return itens;
+  return itens.map((item) => (item && typeof item === 'object'
+    ? { ...item, quantidade_recebida: normalizarRecebida(item.quantidade_recebida) }
+    : item));
 }
 
 /**
@@ -406,7 +1223,34 @@ function parseSeries(txt) {
  * Coberto por `server/tests/api/recebimentoEntradaAtomica.api.test.js`, que mede os numeros da
  * reproducao acima (A continua em 10 depois do reprocessamento, nao 20).
  */
-async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id } = {}) {
+/**
+ * Etapa 57 (RN-03) — `destinos` do body ([{ item_id, localizacao_id }]) vira um Map item -> endereço.
+ * Mora aqui, e não em `processarNota`, porque `aprovarRecebimento` também chama `darEntradaEstoque`
+ * com o body cru (Fase 2, crítico 3).
+ */
+function normalizarDestinos(destinos, itens) {
+  const mapa = new Map();
+  if (destinos === undefined || destinos === null) return mapa;
+  if (!Array.isArray(destinos)) throw Object.assign(new Error('Destinos inválidos'), { status: 400 });
+  for (const d of destinos) {
+    if (!d || typeof d !== 'object') throw Object.assign(new Error('Destinos inválidos'), { status: 400 });
+    // Fase 5: estrito — parseInt aceitava "12abc" e 12.9 como o item 12, e Number(true) virava a localizacao 1.
+    const itemId = Number(d.item_id);
+    if (!itens.some((i) => i.id === itemId)) {
+      throw Object.assign(new Error(`Item ${d.item_id} não pertence a este recebimento`), { status: 400 });
+    }
+    const bruto = d.localizacao_id;
+    const loc = typeof bruto === 'number' || (typeof bruto === 'string' && /^\d+$/.test(bruto.trim())) ? Number(bruto) : NaN;
+    if (!Number.isInteger(loc) || loc <= 0) {
+      throw Object.assign(new Error(`Destino inválido para o item ${itemId}`), { status: 400 });
+    }
+    if (mapa.has(itemId)) throw Object.assign(new Error(`Item ${itemId} repetido nos destinos`), { status: 400 });
+    mapa.set(itemId, loc);
+  }
+  return mapa;
+}
+
+async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id, destinos } = {}) {
   const itens = await dbAll(db, `SELECT ri.*, m.material_critico, m.controle_certificado,
       m.controle_lote, m.controle_serie, m.ativo as material_ativo, m.codigo as material_codigo,
       m.tipo_material, m.localizacao_padrao_id,
@@ -419,6 +1263,16 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
     WHERE ri.recebimento_id = ?`, [recebimentoId]);
 
   // ── 1. Pre-checagem: nada se move enquanto houver item invalido ──
+  // Etapa 54 (RN-01/RN-02): o destino INFORMADO e um so para a nota — checado uma vez (Fase 5: dentro
+  // do laco a mensagem se repetia por item). A mesma funcao do motor, antecipada.
+  try {
+    await validarEnderecoExplicito(db, localizacao_id, 'destino');
+  } catch (e) {
+    throw Object.assign(new Error(`Nao foi possivel dar entrada no estoque: ${e.message}`), { status: 400 });
+  }
+  // Etapa 57 (RN-01): destino POR ITEM. O efetivo de cada item (o dele -> o da nota -> a padrao) e
+  // calculado uma vez e usado na pre-checagem E na chamada do motor (Fase 2, critico 1).
+  const destinoPorItem = normalizarDestinos(destinos, itens);
   const problemas = [];
   for (const item of itens) {
     if (!(quantidadeDoItem(item) > 0)) continue; // item sem quantidade nao move estoque
@@ -464,9 +1318,13 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
     // Mesma resolucao e mesma validacao que o motor fara — antecipada aqui para que a nota seja
     // recusada inteira em vez de parar no meio.
     const material = { localizacao_padrao_id: item.localizacao_padrao_id, tipo_material: item.tipo_material };
+    // Item que nao vai entrar (quantidade 0, ja entrou) saiu nos `continue` acima: o destino dele e
+    // ignorado, sem validar — o item fica onde entrou.
+    const destinoItem = destinoPorItem.get(item.id);
     try {
+      if (destinoItem) await validarEnderecoExplicito(db, destinoItem, 'destino');
       await validarLocalizacaoParaMovimento(
-        db, resolveLocalizacaoEntrada(material, localizacao_id), material, 'destino');
+        db, resolveLocalizacaoEntrada(material, destinoItem || localizacao_id), material, 'destino');
     } catch (e) {
       problemas.push(`${item.material_codigo}: ${e.message}`);
     }
@@ -536,7 +1394,7 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
 
         const numerosSerie = parseSeries(item.series);
 
-        await registrarMovimentacao(db, user, {
+        const movEntrada = await registrarMovimentacao(db, user, {
           material_id: item.material_id,
           tipo: 'ENTRADA_COMPRA',
           quantidade: qtd,
@@ -566,7 +1424,7 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
           motivo: `Recebimento ${rec.numero}`,
           referencia: rec.nota_fiscal,
           recebimento_id: recebimentoId,
-          localizacao_destino_id: localizacao_id,
+          localizacao_destino_id: destinoPorItem.get(item.id) || localizacao_id,
           lote_id: loteId,
           documento_vinculado: rec.numero,
           // Etapa 6b, Task 6: a serie nasce aqui. O motor (com exigeSerie) cria/reativa cada
@@ -581,6 +1439,25 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
         // `exigeSerie`: o recebimento e um caminho onde o operador tem como informar as series.
         }, { exigeLote: true, exigeSerie: true });
         entrouFisicamente = true;
+        // Etapa 71 (D4/B332): QUAL movimentacao este item gerou — o estorno dela (T2) desconta a linha
+        // do pedido DESTE item, e o par (recebimento, material) e ambiguo com dois itens do mesmo
+        // material. Rastro, como o `localizacao_entrada_id` abaixo: falhar aqui nao desfaz a entrada.
+        try {
+          await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET movimentacao_entrada_id = ? WHERE id = ?',
+            [movEntrada && movEntrada.id != null ? movEntrada.id : null, item.id]);
+        } catch (errMov) {
+          console.warn(`[recebimento] falha ao gravar movimentacao_entrada_id: ${errMov.message}`);
+        }
+        // Etapa 57 (Fase 5): onde ESTE item entrou (a devolucao ao fornecedor sai dali). E rastro: uma
+        // falha aqui nao pode desfazer uma entrada que ja aconteceu.
+        try {
+          const locEntrada = resolveLocalizacaoEntrada({ localizacao_padrao_id: item.localizacao_padrao_id },
+            destinoPorItem.get(item.id) || localizacao_id);
+          await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET localizacao_entrada_id = ? WHERE id = ?',
+            [locEntrada || null, item.id]);
+        } catch (errLoc) {
+          console.warn('[recebimento] falha ao gravar localizacao_entrada_id:', errLoc.message);
+        }
 
         // Griffa a origem (Etapa 6b, Task 6, fix round 1 do review): as series que o motor acabou
         // de criar/reativar para este material ainda nao sabem de qual recebimento/item elas
@@ -615,6 +1492,48 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
           }
         }
 
+        // (Etapa 37, RN-22) O PEDIDO DE COMPRA passa a saber o que chegou. `itens_pedido_compra`
+        // tinha 8 colunas, 1 leitor e ZERO escritores: um pedido de 10 recebeu 25 em tres
+        // recebimentos e continuou `ABERTO` com `quantidade = 10` (sonda executada). Este e o
+        // escritor.
+        //
+        // AQUI, e nao em `processarNota`, porque ha DOIS caminhos de entrada fisica:
+        // `processarNota` e `aprovarRecebimento` (ramo APROVADO, `POST /recebimentos/:id/aprovar`,
+        // que chama esta funcao DIRETO). Somar la deixaria o segundo caminho creditando estoque
+        // sem contar ao pedido — e com a suite inteira verde, porque nenhum teste olhava
+        // `itens_pedido_compra` depois de processar.
+        //
+        // DENTRO do claim `entrada_estoque_em IS NULL` e DEPOIS de `entrouFisicamente = true`, de
+        // proposito pelos dois lados: fora do claim, reprocessar a mesma nota somaria DE NOVO (o
+        // defeito que esta funcao ja pagou — "a 2a tentativa entrou MAIS 10 do A"); antes da
+        // entrada fisica, uma falha do motor devolveria a marca (`entrada_estoque_em = NULL`) e o
+        // pedido ficaria creditado por material que nunca entrou.
+        //
+        // `qtd` (= `quantidadeDoItem`) e o MESMO numero que acabou de mover estoque: somar a
+        // esperada faria o pedido e o estoque discordarem. `COALESCE` porque producao pode ter
+        // linha com `quantidade_recebida` NULL (anterior ao ALTER da Task 1) e `null + 6` em
+        // SQLite e NULL — o saldo daquela linha ficaria NULL para sempre, e saldo NULL desliga a
+        // barreira do `POST` em silencio.
+        //
+        // NAO-FATAL, como a griffagem acima e por um motivo proprio: daqui para baixo o `catch`
+        // NAO devolve o claim, e o modulo ASSUME que as tabelas de compras podem nao existir
+        // (`listarPedidosCompraAux` e `gerarContaPagar` tem guarda de tabela ausente). Um `throw`
+        // aqui faria `processarNota` falhar DEPOIS de o estoque ter entrado: o recebimento ficaria
+        // fora de PROCESSADO e o reprocessamento PULARIA o item pelo claim — material no estoque,
+        // documento travado e o pedido sem contar. Perder a contagem de um pedido com um `warn` e
+        // reparavel por SQL; travar a nota nao e.
+        if (item.pedido_item_id) {
+          try {
+            await dbRun(db, `UPDATE itens_pedido_compra
+                SET quantidade_recebida = COALESCE(quantidade_recebida, 0) + ?
+              WHERE id = ?`, [qtd, item.pedido_item_id]);
+          } catch (ePedido) {
+            console.warn(`[recebimento] soma no saldo do pedido de compra falhou (item ${item.id}, `
+              + `linha do pedido ${item.pedido_item_id}, recebimento ${recebimentoId}): `
+              + `${ePedido.message}`);
+          }
+        }
+
         if (reter) {
           await registrarMovimentacao(db, user, {
             material_id: item.material_id,
@@ -645,6 +1564,18 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id 
       }
     }
   }
+
+  // ── 3. (Etapa 42, RN-E01..RN-E07) O PEDIDO FECHA ──
+  // AQUI, depois do laco inteiro, e NAO-FATAL: os dois motivos estao escritos no cabecalho de
+  // `fecharPedidosCompletos`. O `catch` e do CHAMADOR (e nao de dentro da funcao) para que uma
+  // excecao inesperada em QUALQUER passo dela — a leitura da soma, o UPDATE, a auditoria — caia no
+  // mesmo lugar com a mesma literal, em vez de cada passo inventar o seu.
+  try {
+    await fecharPedidosCompletos(db, user, recebimentoId);
+  } catch (eStatus) {
+    console.warn('[recebimento] status automatico do pedido de compra falhou '
+      + `(recebimento ${recebimentoId}): ${eStatus.message}`);
+  }
 }
 
 async function gerarContaPagar(db, rec) {
@@ -671,7 +1602,78 @@ async function gerarContaPagar(db, rec) {
   return r.lastID;
 }
 
-async function processarNota(db, user, recebimentoId, { localizacao_id } = {}) {
+/**
+ * Etapa 70 (T0b, importante da Fase 2) — o claim do PROCESSAMENTO, no nivel do recebimento.
+ *
+ * O defeito (sonda `sonda70r-corrida2.js`): dois "Processar Nota" simultaneos passavam os dois a
+ * checagem de status (os dois liam `EM_ENTRADA_NF`). O claim POR ITEM de `darEntradaEstoque` fazia
+ * so um mover cada item, mas OS DOIS seguiam ate o fim: `gerarContaPagar` duas vezes (a conta a
+ * pagar em dobro, Surpresa 5 do plano) e o gancho pos-entrada rodando no PERDEDOR antes de o
+ * vencedor terminar o laco — o aviso de entrada (dedupe por recebimento) guardava o conteudo
+ * ERRADO, com o material critico "disponivel" porque a QUARENTENA ainda nao tinha acontecido.
+ *
+ * O claim: `processando_em` so e escrito se estiver vazio (ou VELHO — mais de 10 minutos: um
+ * processo que morreu no meio nao trava a nota para sempre) e o status nao for terminal. O perdedor
+ * toma 409 com a literal; se o motivo da falha foi o status ter virado terminal entre a leitura e o
+ * claim, a recusa e a de sempre (400 de "ja processada"). Quem ganhou SEMPRE devolve a marca
+ * (`liberarProcessamento` no `finally`), inclusive na falha parcial — a retomada continua possivel,
+ * e o claim por item continua sendo o que impede creditar duas vezes.
+ * Descartado: status novo `PROCESSANDO` (mexeria em telas, filtros e na maquina do workflow).
+ *
+ * Etapa 70, Fase 5 — o DONO da marca. A expiracao de 10 min tinha um efeito colateral: um
+ * processamento LONGO (mais de 10 min em voo) perdia a nota para um segundo clique, os dois iam ate
+ * o fim e saiam DUAS contas a pagar (sonda `sonda70f-claim.js` (b): contas [2, 3]); e a liberacao
+ * zerava a marca sem conferir de quem era (o primeiro, ao terminar, apagava a do segundo em voo).
+ * Agora a marca e UNICA por execucao — `'<YYYY-MM-DD HH:MM:SS> #<uuid>'`: o prefixo de data mantem a
+ * comparacao de expiracao (`< datetime('now','-10 minutes')`, texto ordenavel) e o sufixo
+ * identifica o dono. `reivindicarProcessamento` devolve o uuid; `liberarProcessamento` so limpa
+ * a marca cujo sufixo e o MEU uuid; e `concluirProcessamentoNota` confere a posse
+ * (`aindaDonoDoProcessamento`) ANTES de `gerarContaPagar` — se perdeu: nao cria a conta, registra
+ * `console.warn` e recusa com o 409 literal (quem assumiu a marca termina a nota).
+ * A expiracao continua: sem ela um processo morto trava a nota para sempre. Marca vencida que
+ * ninguem assumiu continua sendo do dono (a posse e pelo uuid, nao pela idade).
+ * Descartado: renovar a marca a cada item (heartbeat) — reduz a janela mas nao a fecha, e espalha
+ * escrita pelo laco do motor; a conferencia no ponto irreversivel (a conta) e o que impede o dobro.
+ */
+const LITERAL_EM_PROCESSAMENTO = 'Esta nota já está sendo processada';
+
+async function reivindicarProcessamento(db, recebimentoId, mensagemTerminal) {
+  const dono = crypto.randomUUID();
+  const claim = await dbGet(db, `UPDATE recebimentos_material_almoxarifado
+    SET processando_em = strftime('%Y-%m-%d %H:%M:%S', 'now') || ' #' || ?
+    WHERE id = ? AND status NOT IN ('PROCESSADO', 'APROVADO')
+      AND (processando_em IS NULL OR processando_em < datetime('now', '-10 minutes'))
+    RETURNING id`, [dono, recebimentoId]);
+  if (claim) return dono;
+  const atual = await dbGet(db, 'SELECT status FROM recebimentos_material_almoxarifado WHERE id = ?', [recebimentoId]);
+  if (atual && [STATUS.PROCESSADO, STATUS.APROVADO].includes(atual.status)) {
+    throw Object.assign(new Error(mensagemTerminal), { status: 400 });
+  }
+  throw Object.assign(new Error(LITERAL_EM_PROCESSAMENTO), { status: 409 });
+}
+
+// O dono e o sufixo `#<uuid>` da marca (o prefixo de data so serve a expiracao).
+const DONO_DA_MARCA_SQL = "substr(processando_em, instr(processando_em, ' #') + 2)";
+
+/** A marca ainda e desta execucao? (Fase 5 — ver o cabecalho de `reivindicarProcessamento`.) */
+async function aindaDonoDoProcessamento(db, recebimentoId, dono) {
+  const row = await dbGet(db, `SELECT 1 AS ok FROM recebimentos_material_almoxarifado
+    WHERE id = ? AND instr(processando_em, ' #') > 0 AND ${DONO_DA_MARCA_SQL} = ?`, [recebimentoId, dono]);
+  return !!row;
+}
+
+async function liberarProcessamento(db, recebimentoId, dono) {
+  try {
+    // So a PROPRIA marca: a de outra execucao que assumiu a nota (marca vencida) continua.
+    await dbRun(db, `UPDATE recebimentos_material_almoxarifado SET processando_em = NULL
+      WHERE id = ? AND instr(processando_em, ' #') > 0 AND ${DONO_DA_MARCA_SQL} = ?`, [recebimentoId, dono]);
+  } catch (e) {
+    // Nao mascara o resultado de quem chamou; a marca expira sozinha em 10 minutos.
+    console.warn(`[recebimento] falha ao liberar a marca de processamento (recebimento ${recebimentoId}): ${e.message}`);
+  }
+}
+
+async function processarNota(db, user, recebimentoId, { localizacao_id, destinos } = {}) {
   const rec = await dbGet(db, 'SELECT * FROM recebimentos_material_almoxarifado WHERE id = ?', [recebimentoId]);
   if (!rec) throw Object.assign(new Error('Recebimento não encontrado'), { status: 404 });
   if ([STATUS.PROCESSADO, STATUS.APROVADO].includes(rec.status)) {
@@ -684,7 +1686,28 @@ async function processarNota(db, user, recebimentoId, { localizacao_id } = {}) {
   }
 
   validarDadosProcessamento(rec);
-  await darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id });
+  // Etapa 70 (T0b): so um processamento por vez; a marca volta no `finally` (ver o cabecalho de
+  // `reivindicarProcessamento`).
+  const marca = await reivindicarProcessamento(db, recebimentoId, 'Nota já processada');
+  try {
+    return await concluirProcessamentoNota(db, user, rec, recebimentoId, { localizacao_id, destinos }, marca);
+  } finally {
+    await liberarProcessamento(db, recebimentoId, marca);
+  }
+}
+
+/** O corpo de `processarNota` depois do claim (Etapa 70, T0b) — so ela chama. */
+async function concluirProcessamentoNota(db, user, rec, recebimentoId, { localizacao_id, destinos }, marca) {
+  await darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id, destinos });
+  // Etapa 70, Fase 5: a conta a pagar e o ponto IRREVERSIVEL — so sai se a marca ainda e minha. Se
+  // outra execucao assumiu (a minha venceu no meio de um processamento longo), ELA termina a nota:
+  // aqui nao se cria conta nem se sobrescreve status/`contas_pagar_id`. A entrada no estoque que
+  // esta execucao ja fez e legitima (o claim por item de `darEntradaEstoque` impede o dobro).
+  if (!(await aindaDonoDoProcessamento(db, recebimentoId, marca))) {
+    console.warn(`[recebimento] a marca de processamento passou a outra execucao (recebimento ${recebimentoId}): `
+      + 'conta a pagar nao gerada por esta execucao');
+    throw Object.assign(new Error(LITERAL_EM_PROCESSAMENTO), { status: 409 });
+  }
   const contasPagarId = await gerarContaPagar(db, rec);
 
   await dbRun(db, `UPDATE recebimentos_material_almoxarifado SET
@@ -709,11 +1732,16 @@ async function processarNota(db, user, recebimentoId, { localizacao_id } = {}) {
   // fica VINCULADO, nao RECEBIDA, porque o recebimento nunca chegou a PROCESSADO de verdade.
   if (rec.pedido_compra_id) {
     try {
-      await purchaseService.fecharSolicitacoesDoPedido(db, user, rec.pedido_compra_id);
+      await purchaseService.fecharSolicitacoesDoPedido(db, user, rec.pedido_compra_id, { recebimentoId });
     } catch (e) {
       console.warn('[almoxarifado-compras] Falha ao fechar solicitacoes do pedido apos processar nota:', e.message);
     }
   }
+
+  // Etapa 74 (T1): antes do aviso, o que entrou livre fica reservado para quem esperava (C121).
+  await reservarChegadaSemFalhar(db, user, recebimentoId);
+  // Etapa 70 (T2): o aviso da nota e o de quem esperava o material — o ultimo passo.
+  await avisarEntradaConfirmadaSemFalhar(db, user, recebimentoId);
 
   return { success: true, status: STATUS.PROCESSADO, contas_pagar_id: contasPagarId };
 }
@@ -729,6 +1757,17 @@ async function aprovarRecebimento(db, user, recebimentoId, opts = {}) {
     return processarNota(db, user, recebimentoId, opts);
   }
 
+  // Etapa 70 (T0b): o ramo direto tambem da entrada no estoque — mesmo claim, mesma literal 409.
+  const marca = await reivindicarProcessamento(db, recebimentoId, 'Recebimento já aprovado/processado');
+  try {
+    return await concluirAprovacaoDireta(db, user, rec, recebimentoId, opts);
+  } finally {
+    await liberarProcessamento(db, recebimentoId, marca);
+  }
+}
+
+/** O ramo direto de `aprovarRecebimento` depois do claim (Etapa 70, T0b) — so ela chama. */
+async function concluirAprovacaoDireta(db, user, rec, recebimentoId, opts) {
   await darEntradaEstoque(db, user, rec, recebimentoId, opts);
   await dbRun(db, `UPDATE recebimentos_material_almoxarifado
     SET status = 'APROVADO', etapa_atual = 'CONCLUIDO', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
@@ -742,11 +1781,18 @@ async function aprovarRecebimento(db, user, recebimentoId, opts = {}) {
   // nao duplicaria auditoria porque o `AND status='VINCULADO'` already fechou na 1a chamada.
   if (rec.pedido_compra_id) {
     try {
-      await purchaseService.fecharSolicitacoesDoPedido(db, user, rec.pedido_compra_id);
+      await purchaseService.fecharSolicitacoesDoPedido(db, user, rec.pedido_compra_id, { recebimentoId });
     } catch (e) {
       console.warn('[almoxarifado-compras] Falha ao fechar solicitacoes do pedido apos aprovar recebimento:', e.message);
     }
   }
+
+  // Etapa 74 (T1): a mesma reserva na chegada no ramo direto, antes do aviso.
+  await reservarChegadaSemFalhar(db, user, recebimentoId);
+
+  // Etapa 70 (T2): o mesmo aviso no ramo direto. O ramo que DELEGA para processarNota nao chega
+  // aqui — o aviso ja saiu la.
+  await avisarEntradaConfirmadaSemFalhar(db, user, recebimentoId);
 
   return { success: true };
 }
@@ -760,54 +1806,759 @@ async function listarRecebimentos(db, filters = {}) {
   return dbAll(db, sql, params);
 }
 
-async function listarPedidosCompraAux(db, { search } = {}) {
+/**
+ * `parseFloat` + `Number.isFinite` (e nao `Number(...)`) pelo mesmo motivo de
+ * `saldoDasLinhasDoPedido`: producao pode ter `quantidade_recebida` NULL (linha anterior ao ALTER
+ * da Task 1) e `10 - null` viraria `NaN` — com `NaN` a situacao derivada seria sempre 'PARCIAL' e
+ * o `saldo_pendente` sairia `NaN` no JSON (que `JSON.stringify` escreve como `null`).
+ */
+function quantidadeFinita(valor) {
+  const n = parseFloat(valor);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * RN-24 (Etapa 37) — a SITUACAO do pedido de compra, em UMA funcao.
+ *
+ * `ABERTO` quando nada chegou (INCLUSIVE o pedido cujas linhas o Compras ainda nao lancou:
+ * `COUNT(itens_pedido_compra) = 0`, que a RN-24 manda manter visivel); `PARCIAL` quando
+ * `0 < recebida < pedida`; `RECEBIDO` quando `pedida > 0 && recebida >= pedida`.
+ *
+ * `>=` e nao `>` de proposito: a IGUALDADE EXATA e o caso comum (o pedido que chegou inteiro), e
+ * com `>` ele ficaria `PARCIAL` para sempre e a tela pediria para receber o que ja chegou. O
+ * `pedida > 0` na mesma condicao e o que impede um pedido SEM linhas (0 de 0) de nascer
+ * "RECEBIDO" — ele nunca foi recebido, so nao foi lancado.
+ *
+ * UMA funcao, consumida pelas DUAS rotas de leitura (lista e itens): duas copias divergiriam na
+ * primeira edicao, e e a classe de bug que `divergencia.js` existe para matar neste modulo.
+ */
+function situacaoRecebimentoPedido(quantidadePedida, quantidadeRecebida, saldoPendente) {
+  const pedida = quantidadeFinita(quantidadePedida);
+  const recebida = quantidadeFinita(quantidadeRecebida);
+  // ⚠️ QUEM DECIDE "completo" e o SALDO, nao a comparacao `recebida >= pedida` — e a troca e a
+  // correcao de DOIS achados da revisao adversarial de uma vez (float e excedente cruzado), porque os
+  // dois eram o mesmo erro: comparar dois agregados do pedido em vez de olhar o que FALTA.
+  if (pedida > 0 && quantidadeFinita(saldoPendente) <= 0) return 'RECEBIDO';
+  if (recebida <= EPSILON_DIVERGENCIA) return 'ABERTO';
+  return 'PARCIAL';
+}
+
+/**
+ * O saldo LIMPO, e as duas limpezas sao correcao de achado, nao cosmetica.
+ *
+ * (a) **Residuo de float vira ZERO** (`<= EPSILON_DIVERGENCIA`). Medido por sonda pelas portas reais:
+ *     pedido de 20,1 KG recebido em 2,2 + 17,9 soma `20.099999999999998`, e `recebida >= pedida` dava
+ *     **false** — o pedido fisicamente completo ficava `pendente` e dentro de `?atrasados=1` PARA
+ *     SEMPRE, que e exatamente o beco que esta etapa existe para fechar. Uma casa decimal em KG basta,
+ *     e este modulo tem KG/M por construcao.
+ *
+ * (b) **O numero exibido tambem e arredondado** (6 casas). Sem isso o corpo do e-mail do alerta saia
+ *     com `Saldo pendente: 3.552713678800501e-15` enquanto o cartao da central, que formata com 4
+ *     casas, escrevia `Saldo pendente 0` — o mesmo numero contando duas historias, e a do e-mail em
+ *     notacao cientifica. 6 casas e folga sobre as 3 que o dedupe do alerta usa e sobre as 4 do
+ *     cartao.
+ *
+ * O epsilon e o de `divergencia.js`, que existe desde a Etapa 10b pelo MESMO motivo (subtracao REAL
+ * gerando divergencia de 7e-16, com cada consumidor de comparacao exata tratando o operador que
+ * ACERTOU como divergente). Um dono para o epsilon, como ja ha um dono para a regua e um para a
+ * agregacao — reescrever `1e-9` aqui seria a segunda definicao de "zero para efeito pratico".
+ */
+function saldoLimpo(valor) {
+  const bruto = Math.max(0, quantidadeFinita(valor));
+  if (bruto <= EPSILON_DIVERGENCIA) return 0;
+  return Math.round(bruto * 1e6) / 1e6;
+}
+
+/**
+ * Os quatro campos derivados, num lugar so — e o `Math.max(0, ...)` mora AQUI, para as duas rotas.
+ *
+ * O clamp NAO e cosmetico: a Task 2 permite excedente autorizado e a Task 3 soma o que ENTROU no
+ * estoque, entao uma linha pode terminar com `quantidade_recebida > quantidade` (medido: 12 de 10
+ * no cenario (12) de `recebimentoExcedentePedido`, e duas linhas do mesmo material dividindo um
+ * recebimento pela regua agregada produzem o mesmo efeito). Sem o clamp a rota devolveria
+ * `saldo_pendente: -2`, a tela escreveria "Saldo pendente: -2", a linha VOLTARIA a ser oferecida
+ * ao operador (o filtro da rota de itens e `saldo_pendente > 0`) e a assercao da RN-24
+ * ("saldo 0 no pedido completado") ficaria falsa exatamente no caso que esta etapa CRIA.
+ */
+function derivarRecebimentoDoPedido(quantidadePedida, quantidadeRecebida, saldoPorMaterial) {
+  const pedida = quantidadeFinita(quantidadePedida);
+  const recebida = quantidadeFinita(quantidadeRecebida);
+  // ⚠️ O TERCEIRO PARAMETRO E A CORRECAO DO ACHADO DO EXCEDENTE CRUZADO, e ele e OPCIONAL de
+  // proposito. Quando o chamador conhece o deficit POR MATERIAL (as duas rotas de PEDIDO, via
+  // `SOMA_POR_PEDIDO_SQL`), ele manda — e ai o excesso de um material NAO paga a falta de outro.
+  // Quando o chamador olha UMA linha (a rota de itens do pedido, `:1794`), nao existe "por material"
+  // a considerar e o saldo e a subtracao mesmo.
+  //
+  // Medido por sonda: pedido A(10)+B(10) com uma nota de 25 de A (excedente autorizado) e 0 de B
+  // fechava como `RECEBIDO` com saldo 0 — o pedido saia de `?atrasados=1`, saia de `?pendentes=1` e
+  // ficava fora do alerta de parcial, enquanto `listarItensPedidoCompraAux` continuava oferecendo 10
+  // de B com teto 10. A MESMA base afirmando "completo" e "faltam 10" ao mesmo tempo. A causa: o
+  // "completo" agregava por PEDIDO enquanto a regua da ESCRITA (`assertSaldoDoPedidoPermitido`)
+  // agrega por MATERIAL — duas unidades de medida para a mesma pergunta.
+  //
+  // ⚠️ ESTE COMENTARIO ESTAVA ERRADO ATE A ETAPA 71 ao dar o achado por corrigido: a 42 corrigiu so
+  // a LEITURA. O proprio fechamento (`fecharPedidosCompletos`) continuou chamando esta regua com 2
+  // argumentos e o `?pendentes=1` continuou comparando a soma do PEDIDO — medido na Fase 0 da 71
+  // (sonda 71b): status `recebido`, situacao `PARCIAL` saldo 10, fora de `?pendentes=1`. A T0 da 71
+  // levou o 3o argumento ao fechamento e o saldo por material ao filtro; os cenarios (10) de
+  // `comprasPedidoStatusAutomatico` e (1c)/(1d) de `comprasPedidoSituacaoFonte` prendem as tres portas.
+  //
+  // `quantidade_pedida` e `quantidade_recebida` continuam sendo os totais CRUS do pedido (so limpos
+  // do ruido de float): elas sao o que a tela e o e-mail EXIBEM, e mostrar 20 pedidos quando o
+  // pedido pediu 20 e o certo, mesmo que o saldo venha de outra conta.
+  const saldo = saldoPorMaterial == null
+    ? saldoLimpo(pedida - recebida)
+    : saldoLimpo(saldoPorMaterial);
+  return {
+    quantidade_pedida: saldoLimpo(pedida),
+    quantidade_recebida: saldoLimpo(recebida),
+    saldo_pendente: saldo,
+    situacao_recebimento: situacaoRecebimentoPedido(pedida, recebida, saldo),
+  };
+}
+
+/**
+ * A AGREGACAO DO SALDO DO PEDIDO, num lugar so (Etapa 42, T1).
+ *
+ * Duas consultas leem esta soma — `listarPedidosCompraAux` (a aba de recebimento, com `LIMIT 50`) e
+ * `situacaoDosPedidosCompra` (a fonte do alerta, sem `LIMIT`). Duplicar a subquery faria a segunda
+ * divergir da primeira na primeira edicao, que e exatamente o motivo pelo qual
+ * `derivarRecebimentoDoPedido` tambem e UMA funcao: a regua e a agregacao precisam ter o MESMO dono,
+ * senao "PARCIAL" passa a significar coisas diferentes na tela e no e-mail.
+ *
+ * `material_id IS NOT NULL` e o MESMO recorte de `carregarItensPedidoCompra`: sem material nao ha o
+ * que dar entrada no estoque, e e o recorte que a regua de saldo do `POST` usa. Contar linhas de
+ * texto livre (frete, servico) faria a rota dizer "PARCIAL" num pedido que ja chegou inteiro.
+ *
+ * ⚠️ A SUBQUERY DE DOIS NIVEIS (agrupa por material, depois por pedido) E CORRECAO DE ACHADO, nao
+ * estilo. A coluna `saldo_por_material` soma o deficit de CADA material com o clamp em zero ANTES da
+ * soma, e e por isso que o excesso de um material nao paga a falta de outro. A causa do defeito: a
+ * regua da ESCRITA (`assertSaldoDoPedidoPermitido`) sempre agregou por MATERIAL, e o "completo"
+ * agregava por PEDIDO — duas unidades de medida para a mesma pergunta. Medido por sonda: uma nota de
+ * 25 de A num pedido A(10)+B(10), com excedente autorizado, fechava o pedido com B em ZERO, e a rota
+ * de itens continuava oferecendo 10 de B com teto 10 — a mesma base afirmando "completo" e "faltam
+ * 10". O cenario (1c) de `comprasPedidoSituacaoFonte` prende isto.
+ * ⚠️ (Etapa 71) A frase acima dava o achado por fechado e ESTAVA ERRADA: so a leitura usava a coluna;
+ * o fechamento automatico e o `?pendentes=1` so passaram a usa-la na T0 da 71.
+ *
+ * `MAX(a, b)` de DOIS argumentos e a funcao ESCALAR do SQLite (a agregada e a de um argumento so) — e
+ * o que permite clampar linha a linha dentro da propria soma.
+ *
+ * ⚠️ (Etapa 72, T0 — D9/B351) O NIVEL INTERNO (a soma por pedido+material) mora em
+ * `pedidoCompraSaldoSql.SOMA_POR_MATERIAL_SQL`, e esta consulta so agrega por pedido em cima dele. A
+ * mudanca e de LUGAR, nao de regua: `purchaseService` passou a precisar do mesmo nivel por material
+ * (a solicitacao de compra fecha quando o material DELA completa no pedido) e nao pode requerer este
+ * arquivo (ciclo). Uma copia la seria a segunda regua — o defeito que a Etapa 71 corrigiu aqui.
+ */
+const SOMA_POR_PEDIDO_SQL = `SELECT pedido_id,
+    SUM(total_material) as total_pedido,
+    SUM(recebida_material) as soma_recebida,
+    SUM(MAX(0, total_material - recebida_material)) as saldo_por_material
+  FROM (${SOMA_POR_MATERIAL_SQL})
+  GROUP BY pedido_id`;
+
+/**
+ * Etapa 71 (Fase 2) — a regua do "completo" escrita como CONDICAO de `WHERE` sobre `pedidos_compra`,
+ * para os dois UPDATE de status (o fechamento e a reabertura) a repetirem atomicamente. E a MESMA
+ * regua de `situacaoRecebimentoPedido` (pedida > 0 e saldo por material <= epsilon), sobre a MESMA
+ * agregacao — nao uma segunda definicao.
+ */
+const SQL_PEDIDO_COMPLETO = `EXISTS (SELECT 1 FROM (${SOMA_POR_PEDIDO_SQL}) s
+    WHERE s.pedido_id = pedidos_compra.id AND s.total_pedido > 0
+      AND s.saldo_por_material <= ${EPSILON_DIVERGENCIA})`;
+
+async function listarPedidosCompraAux(db, { search, pendentes } = {}) {
   const tableExists = await dbGet(db,
     "SELECT name FROM sqlite_master WHERE type='table' AND name='pedidos_compra'");
   if (!tableExists) return [];
 
-  let sql = `SELECT p.id, p.numero, p.valor_total, p.status, p.data_pedido,
-    f.razao_social as fornecedor_nome, f.cnpj as fornecedor_cnpj
-    FROM pedidos_compra p LEFT JOIN fornecedores f ON p.fornecedor_id = f.id WHERE 1=1`;
+  // A soma por pedido vem de uma SUBQUERY AGRUPADA (`SOMA_POR_PEDIDO_SQL`), e nao de um
+  // `.filter()`/`reduce` em JS depois da consulta, porque o filtro de `?pendentes=1` tem de rodar
+  // ANTES do `LIMIT 50` (ver abaixo) — e para isso a soma precisa existir dentro do SQL.
+  let sql = `SELECT p.id, p.numero, p.status, p.data_pedido,
+    f.razao_social as fornecedor_nome, f.cnpj as fornecedor_cnpj,
+    COALESCE(i.total_pedido, 0) as total_pedido,
+    COALESCE(i.soma_recebida, 0) as soma_recebida,
+    COALESCE(i.saldo_por_material, 0) as saldo_por_material
+    FROM pedidos_compra p
+    LEFT JOIN fornecedores f ON p.fornecedor_id = f.id
+    LEFT JOIN (${SOMA_POR_PEDIDO_SQL}) i
+      ON i.pedido_id = p.id
+    WHERE 1=1`;
   const params = [];
   if (search) {
     sql += ' AND (p.numero LIKE ? OR f.razao_social LIKE ?)';
     params.push(`%${search}%`, `%${search}%`);
   }
+  // `?pendentes=1` — a clausula e a NEGACAO da derivacao, escrita no `WHERE`, e a POSICAO dela e
+  // contrato, nao detalhe: esta query termina em `ORDER BY p.created_at DESC LIMIT 50`, entao
+  // filtrar DEPOIS aplicaria a regua aos 50 pedidos MAIS NOVOS. Num banco onde os 50 mais novos
+  // estejam quitados, `?pendentes=1` devolveria `[]` COM pedidos abertos existindo, e a tela
+  // ficaria sem o unico pedido que o operador precisa receber (cenario (6) da T4).
+  //
+  // NAO e `saldo_pendente > 0`: o pedido cujas linhas o Compras ainda nao lancou tem total 0 e
+  // saldo 0, e desapareceria — e ele e exatamente o pedido que a RN-24 manda mostrar (`ABERTO`),
+  // porque e o que o operador precisa cobrar.
+  const apenasPendentes = pendentes === '1' || pendentes === 'true' || pendentes === true;
+  if (apenasPendentes) {
+    // Etapa 71, T0: a ultima clausula e o SALDO POR MATERIAL (a mesma regua de
+    // `derivarRecebimentoDoPedido` com 3 argumentos), e nao mais `soma_recebida < total_pedido`.
+    // A comparacao por PEDIDO tinha dois defeitos medidos: o excesso de um material pagava a falta de
+    // outro (25 de A num A(10)+B(10) tirava o pedido do filtro com B faltando) e o residuo de float
+    // mantinha o pedido completo DENTRO (2,2 + 17,9 de 20,1). O epsilon e interpolado da constante —
+    // nunca reescrito.
+    sql += ` AND (i.soma_recebida IS NULL OR i.soma_recebida = 0
+      OR i.total_pedido IS NULL OR i.total_pedido = 0
+      OR i.saldo_por_material > ${EPSILON_DIVERGENCIA})`;
+  }
   sql += ' ORDER BY p.created_at DESC LIMIT 50';
-  return dbAll(db, sql, params);
+  const linhas = await dbAll(db, sql, params);
+  // Os campos NOVOS ficam AO LADO de `status` (o status CORE, ecoado como sempre) e nunca no lugar
+  // dele: `pedidos_compra` nao e escrita por nenhuma linha desta etapa.
+  return linhas.map((linha) => ({
+    id: linha.id,
+    numero: linha.numero,
+    status: linha.status,
+    data_pedido: linha.data_pedido,
+    fornecedor_nome: linha.fornecedor_nome,
+    fornecedor_cnpj: linha.fornecedor_cnpj,
+    ...derivarRecebimentoDoPedido(linha.total_pedido, linha.soma_recebida, linha.saldo_por_material),
+  }));
 }
 
 /**
- * Etapa 32 — o pedido de compra INTEIRO para quem vai receber.
+ * RN-E01..RN-E07 (Etapa 42, T2) — O RECEBIMENTO FECHA O PEDIDO DE COMPRA.
  *
- * Por que existe, se `GET /api/compras/pedidos/:id` ja devolve isto: aquela rota e guardada por
- * `checkModulePermission('compras')` e o almoxarife NAO tem o modulo compras — ele tomaria 403
- * bem no meio do lancamento. Mesma familia das outras `recebimentos-aux/*`: leitura, guardada
- * so por `auth`.
+ * ⚠️ ESTA FUNCAO REVOGA A RN-24 DA ETAPA 37, e a revogacao e declarada, nao silenciosa: aquela RN
+ * dizia "a situacao do pedido e DERIVADA na leitura, NUNCA gravada" e "nada e escrito em
+ * `pedidos_compra`" (`specs/modulo-almoxarifado/08-recebimento/README.md:107` e `:329`), e o design
+ * da Etapa 39 usou exatamente essa frase para descartar o gancho automatico. A RN-24 estava CERTA
+ * ate a Etapa 41: sem gesto automatico, gravar o status seria inventar uma maquina de estados. O que
+ * mudou e que as Etapas 38-41 fecharam a cadeia cotacao -> pedido -> recebimento, e o ultimo elo
+ * aberto era um pedido que continuava "Atrasado" PARA SEMPRE depois de fisicamente recebido, ate o
+ * comprador lembrar de usar o `PATCH .../status` a mao (o beco que a Etapa 39 mediu, provou por teste
+ * e resolveu com uma porta MANUAL, deixando o automatico nomeado).
  *
- * A leitura em si NAO e reimplementada aqui: delega para services/compras/pedidoLeitura, o mesmo
- * implementador da rota do comprador. Uma segunda copia divergiria, e a divergencia apareceria
- * como "o comprador ve um total e quem recebe ve outro".
+ * ── AS SEIS DECISOES QUE ESTAO NESTE CORPO ────────────────────────────────────────────────────
+ *
+ * 1. **DEPOIS do laco de itens, nunca dentro dele.** `RECEBIDO` e AGREGADO POR PEDIDO, e o laco da
+ *    entrada anda item a item: um gancho por item fecharia um pedido de 2 linhas na PRIMEIRA linha.
+ *
+ * 2. **Dentro de `darEntradaEstoque`, que os DOIS caminhos de entrada fisica chamam** — o mesmo
+ *    motivo, escrito no acumulador da Etapa 37 logo acima: `processarNota` E `aprovarRecebimento`
+ *    (ramo APROVADO) creditam estoque, e a Etapa 37 ja pagou uma vez por esquecer o segundo.
+ *
+ * 3. **A lista de linhas sai de TODOS os itens DO RECEBIMENTO, nunca dos que casaram o claim nesta
+ *    execucao — e esta frase e a correcao de um CRITICAL achado por sonda na revisao adversarial.**
+ *
+ *    A primeira versao recebia a lista pronta, montada dentro do laco com os itens que reclamaram o
+ *    `entrada_estoque_em IS NULL`, e justificava isso com "reprobar nao pode re-auditar um fechamento
+ *    que ja aconteceu". **A justificativa era desnecessaria** (a idempotencia vem do `r.changes` do
+ *    UPDATE, decisao 5) **e o preco era um estado irrecuperavel e MUDO**, reproduzido assim: item 1 do
+ *    recebimento e a linha do pedido e soma; item 2 e material com controle de serie cujo numero ja
+ *    esta em estoque, o motor recusa e o `throw` sobe — o gancho nunca roda (correto ate aqui). O
+ *    operador conserta a serie e reprocessa: o claim do item 1 JA esta tomado, a lista sai VAZIA, e o
+ *    gancho volta `[]` na primeira linha. Medido: nota PROCESSADA, estoque creditado, saldo do pedido
+ *    ZERO, pedido `pendente` com situacao derivada `RECEBIDO` — dentro de `?atrasados=1` para sempre,
+ *    FORA do alerta de parcial (a situacao e RECEBIDO), FORA do `?pendentes=1` (saldo 0) e **sem uma
+ *    linha de log**. Nenhum sinal e nenhuma recuperacao a nao ser SQL, sem ninguem saber que precisa.
+ *
+ *    Ler todos os itens do recebimento e seguro exatamente porque a decisao de gravar NAO depende de
+ *    quem entrou agora: ela depende da SOMA do pedido, que e lida do banco. O cenario (5c) de
+ *    `comprasPedidoStatusAutomatico` prende isto, e o (3) prende a idempotencia.
+ *
+ * 3b. **O pedido sai do DADO, nao do cabecalho**: as linhas viram pedido por `SELECT DISTINCT
+ *    pedido_id`. `rec.pedido_compra_id` daria o mesmo resultado hoje (medido: `pedido_item_id` so e
+ *    gravado a partir das linhas do pedido resolvido, `resolverLinhaDoPedido`), mas seria confiar num
+ *    invariante em vez de no dado.
+ *
+ * 4. **SOBE AQUI; DESCE em `estornarEntradaNoPedido` (Etapa 71 — revoga em parte a RN-E03 e a
+ *    B161).** Ate a 71 esta decisao dizia "so sobe: nao existe estorno de `quantidade_recebida`", e
+ *    a B161 declarava que o estorno do livro (`POST /movimentacoes/:id/cancelar`) revertia o SALDO
+ *    sem tocar no pedido, com a recuperacao pelo `PATCH` manual. A recuperacao NAO bastava (Fase 0
+ *    da 71): o `PATCH` volta o status mas nao o acumulador, e a nota seguinte com o que faltava
+ *    tomava 400 "maior que o saldo do pedido (0)". Agora o estorno de uma `ENTRADA_COMPRA` de nota
+ *    contra pedido desconta a linha e reabre o pedido que a conta tinha fechado — isso mora no
+ *    MOTOR (`cancelarMovimentacao` chama `estornarEntradaNoPedido`), e esta funcao continua so
+ *    subindo. O que continua valendo da RN-E03: o pedido que o comprador fechou a mao com a conta
+ *    ja aberta nao e rebaixado por ninguem (cenario (8) deste arquivo e (3b) de
+ *    `pedidoReabreNoEstorno`).
+ *
+ * 5. **Nao sobrescreve o que o COMPRADOR decidiu (RN-E04).** `cancelado`/`rejeitado` ficam como
+ *    estao — o aux `?pendentes=1` nao filtra status, entao a nota PODE chegar num pedido cancelado, e
+ *    ressuscita-lo para `recebido` seria decidir pelo comprador. A guarda mora no `WHERE` do UPDATE
+ *    (e nao num `if` antes dele) para ser ATOMICA: dois `processar` simultaneos de notas diferentes do
+ *    mesmo pedido nao podem os dois achar que ganharam. `r.changes` e o que decide se audita — e por
+ *    isso `recebido` tambem entra na lista: idempotencia, sem UPDATE e sem segunda linha de trilha.
+ *    (Etapa 72) A lista tem nome: `pedidoCompraSaldoSql.STATUS_PEDIDO_ENCERRADO` — a mesma que diz
+ *    "pedido encerrado nao traz mais nada" para a solicitacao de compra. O literal do UPDATE abaixo
+ *    ficou como estava (a T0 da 72 e sem mudanca de comportamento); quem mudar um muda o outro.
+ *
+ * 6. **NAO-FATAL, com guarda de tabela ausente**, como o acumulador e o `gerarContaPagar`. Um
+ *    `throw` aqui faria `processarNota` falhar DEPOIS de o estoque ter entrado: o recebimento ficaria
+ *    fora de PROCESSADO e o reprocessamento PULARIA os itens pelo claim — material no galpao,
+ *    documento travado e o pedido sem fechar. Perder o fechamento de um pedido com um `warn` e
+ *    reparavel por `PATCH`; travar a nota nao e.
+ *
+ * O `warn` do status terminal sai SO para `cancelado`/`rejeitado`: `recebido` e o caminho ESPERADO
+ * (segundo recebimento, excedente autorizado) e avisar nele treinaria o operador a ignorar o log.
  */
-async function getPedidoCompraParaRecebimento(db, id) {
+async function fecharPedidosCompletos(db, user, recebimentoId) {
+  const tableExists = await dbGet(db,
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='pedidos_compra'");
+  if (!tableExists) return [];
+
+  // TODOS os itens deste recebimento que apontam para linha de pedido — nao so os desta execucao
+  // (decisao 3). Um `JOIN` em vez de dois passos porque a linha pode ter sido apagada pelo Compras
+  // entre a nota e o reprocessamento: `pedido_id IS NOT NULL` ja cobre isso, e sem o `JOIN` teriamos
+  // um `IN (...)` com ids que nao existem mais.
+  const pedidos = await dbAll(db, `SELECT DISTINCT ip.pedido_id
+    FROM recebimentos_material_itens_almoxarifado ri
+    JOIN itens_pedido_compra ip ON ip.id = ri.pedido_item_id
+    WHERE ri.recebimento_id = ? AND ri.pedido_item_id IS NOT NULL AND ip.pedido_id IS NOT NULL`,
+  [recebimentoId]);
+  if (!pedidos.length) return [];
+
+  const fechados = [];
+  for (const { pedido_id: pedidoId } of pedidos) {
+    const pedido = await dbGet(db, 'SELECT id, numero, status FROM pedidos_compra WHERE id = ?', [pedidoId]);
+    if (!pedido) continue;
+
+    // A MESMA agregacao das duas rotas de leitura (`SOMA_POR_PEDIDO_SQL`), recortada a este pedido:
+    // uma segunda soma escrita aqui divergiria da tela na primeira edicao, e "completo" passaria a
+    // significar coisas diferentes no e-mail, na aba e neste UPDATE.
+    //
+    // ⚠️ Etapa 71, T0: com o `saldo_por_material` (3o argumento). Ate a 71 este SELECT lia so os dois
+    // totais e a regua corria com 2 argumentos — a correcao do excedente cruzado da 42 tinha chegado
+    // a LEITURA e nao a ESTE fechamento: 25 de A num A(10)+B(10) gravava `recebido` com B faltando.
+    const soma = await dbGet(db,
+      `SELECT total_pedido, soma_recebida, saldo_por_material FROM (${SOMA_POR_PEDIDO_SQL}) WHERE pedido_id = ?`,
+      [pedidoId]);
+    const { situacao_recebimento: situacao } = derivarRecebimentoDoPedido(
+      soma?.total_pedido, soma?.soma_recebida, soma?.saldo_por_material);
+    if (situacao !== 'RECEBIDO') continue;
+
+    // Etapa 71 (Fase 2): o WHERE REPETE a regua ("completo" = pedida > 0 e saldo por material zero),
+    // e isto e o que torna a decisao atomica contra o estorno. A soma acima e lida FORA do UPDATE: um
+    // estorno que desconte a linha entre a leitura e este UPDATE faria o pedido virar `recebido` com a
+    // conta ja aberta — e o estorno, que leu o status antes, nao teria reaberto. Cenario (11) de
+    // `pedidoReabreNoEstorno`.
+    const r = await dbRun(db, `UPDATE pedidos_compra
+        SET status = 'recebido', updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND LOWER(COALESCE(status, '')) NOT IN ('recebido', 'cancelado', 'rejeitado')
+        AND ${SQL_PEDIDO_COMPLETO}`,
+    [pedidoId]);
+
+    if (!r.changes) {
+      const atual = String(pedido.status || '').toLowerCase();
+      if (atual === 'cancelado' || atual === 'rejeitado') {
+        console.warn(`[recebimento] pedido ${pedido.numero || `#${pedidoId}`} completo, mas status `
+          + `${pedido.status} nao e sobrescrito automaticamente`);
+      }
+      continue;
+    }
+
+    // RN-E07 — a trilha. (`alterarStatusPedido`, a porta MANUAL da Etapa 39, nao auditava ate a
+    // Fase 5 da Etapa 71 — agora grava `STATUS_MANUAL_ALTERADO`, que o estorno le para nao desfazer
+    // o fechamento do comprador.) Aqui o pedido do comprador muda SOZINHO, por um ato de outro modulo. Sem esta linha ninguem responde "quem
+    // mudou meu pedido". Dentro do mesmo `try` nao-fatal do chamador, de proposito: a trilha nao
+    // vale travar a nota.
+    await registrarAuditoria(db, {
+      entidade: 'pedido_compra',
+      entidade_id: pedidoId,
+      acao: 'STATUS_AUTOMATICO_RECEBIDO',
+      usuario_id: user?.id,
+      usuario_nome: user?.nome || user?.email,
+      dados_anteriores: { status: pedido.status },
+      dados_novos: { status: 'recebido' },
+      justificativa: `Recebimento ${recebimentoId} completou o pedido`,
+    });
+    fechados.push(pedidoId);
+  }
+  return fechados;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// Etapa 71 (RN-01..RN-07, D1-D5) — O ESTORNO DA ENTRADA DESCONTA O PEDIDO E REABRE O QUE FECHOU
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+
+/** Os status para onde a reabertura pode voltar (D2): os de pedido "em andamento" do Compras. */
+const STATUS_REABERTURA = ['pendente', 'aprovado', 'em_analise', 'enviado'];
+
+/** A situacao do pedido pela regua UNICA (3 argumentos), recortada a um pedido. */
+async function situacaoDoPedido(db, pedidoId) {
+  const soma = await dbGet(db,
+    `SELECT total_pedido, soma_recebida, saldo_por_material FROM (${SOMA_POR_PEDIDO_SQL}) WHERE pedido_id = ?`,
+    [pedidoId]);
+  return derivarRecebimentoDoPedido(soma?.total_pedido, soma?.soma_recebida, soma?.saldo_por_material);
+}
+
+/**
+ * D4 — o item do recebimento que gerou ESTA movimentacao.
+ *
+ * Primeiro o vinculo gravado desde a T1 (`movimentacao_entrada_id`). Sem ele (recebimento anterior a
+ * 71), o par (recebimento, material) entre os itens que ENTRARAM e ainda nao tem vinculo: um so ->
+ * ele; varios -> o primeiro (menor id) de quantidade igual a da movimentacao; nenhum -> null. O item
+ * escolhido ADOTA o vinculo (`WHERE movimentacao_entrada_id IS NULL`, `changes === 1`), senao o
+ * estorno da OUTRA movimentacao do mesmo par cairia no mesmo item. Se a adocao perde a corrida
+ * (`changes` 0), o item nao e mais "sem dono" — devolve null em vez de descontar o item alheio.
+ */
+async function resolverItemDaEntrada(db, mov) {
+  const colunas = 'id, pedido_item_id, quantidade_recebida, quantidade_esperada';
+  const vinculado = await dbGet(db, `SELECT ${colunas} FROM recebimentos_material_itens_almoxarifado
+    WHERE movimentacao_entrada_id = ? AND recebimento_id = ? ORDER BY id LIMIT 1`, [mov.id, mov.recebimento_id]);
+  if (vinculado) return vinculado;
+
+  const candidatos = await dbAll(db, `SELECT ${colunas} FROM recebimentos_material_itens_almoxarifado
+    WHERE recebimento_id = ? AND material_id = ? AND entrada_estoque_em IS NOT NULL
+      AND movimentacao_entrada_id IS NULL
+    ORDER BY id`, [mov.recebimento_id, mov.material_id]);
+  let escolhido = null;
+  if (candidatos.length === 1) {
+    [escolhido] = candidatos;
+  } else if (candidatos.length > 1) {
+    const qtdMov = quantidadeFinita(mov.quantidade);
+    escolhido = candidatos.find((c) => Math.abs(quantidadeFinita(quantidadeDoItem(c)) - qtdMov)
+      <= EPSILON_DIVERGENCIA) || null;
+  }
+  if (!escolhido) return null;
+  const adotou = await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado
+    SET movimentacao_entrada_id = ? WHERE id = ? AND movimentacao_entrada_id IS NULL`, [mov.id, escolhido.id]);
+  return adotou.changes === 1 ? escolhido : null;
+}
+
+/**
+ * D2 — SE e para onde o pedido volta. Fase 5 (corrige a Fase 2, que estava ERRADA): so reabre quando o
+ * ULTIMO registro de mudanca de status do pedido (`ORDER BY id DESC` entre `TRILHAS_DE_STATUS`) e o
+ * fechamento AUTOMATICO — o `recebido` foi escrito pelo almoxarifado, e o estorno desfaz o que o
+ * almoxarifado fez. Se o ultimo e manual (`STATUS_MANUAL_ALTERADO`, a porta `PATCH .../status` do
+ * Compras, auditada desde a Fase 5) o `recebido` e decisao do comprador (RN-E03): devolve `null`, o
+ * estorno so desconta a linha. Sem trilha nenhuma, tambem `null` — o fallback "sem trilha ->
+ * `pendente`" da Fase 2 reabria o pedido fechado a mao, o defeito que o 81a734c dizia descartar.
+ * Destino: o `dados_anteriores.status` dessa trilha automatica, se for um de `STATUS_REABERTURA`;
+ * trilha automatica ilegivel -> `pendente` (o fechamento automatico e certo, so o "de onde" se perdeu).
+ *
+ * LIMITE DECLARADO (letra B): a mudanca manual feita ANTES do deploy da Fase 5 nao deixou rastro; num
+ * pedido fechado pelo automatico e reescrito a mao antes disso, o automatico ainda e o "ultimo" e o
+ * estorno reabre. A A35 lista os pedidos a conferir.
+ */
+const TRILHAS_DE_STATUS = ['STATUS_AUTOMATICO_RECEBIDO', 'STATUS_AUTOMATICO_REABERTO', 'STATUS_MANUAL_ALTERADO'];
+
+async function destinoDaReabertura(db, pedidoId) {
+  const trilha = await dbGet(db, `SELECT acao, dados_anteriores FROM auditoria_log_almoxarifado
+    WHERE entidade = 'pedido_compra' AND entidade_id = ?
+      AND acao IN (${TRILHAS_DE_STATUS.map(() => '?').join(', ')})
+    ORDER BY id DESC LIMIT 1`, [pedidoId, ...TRILHAS_DE_STATUS]);
+  if (!trilha || trilha.acao !== 'STATUS_AUTOMATICO_RECEBIDO') return null;
+  if (!trilha.dados_anteriores) return 'pendente';
+  let anterior = null;
+  try {
+    anterior = JSON.parse(trilha.dados_anteriores);
+  } catch (_) {
+    return 'pendente';
+  }
+  const status = String((anterior && anterior.status) || '').toLowerCase();
+  return STATUS_REABERTURA.includes(status) ? status : 'pendente';
+}
+
+const numeroLimpo = (v) => Number(quantidadeFinita(v).toFixed(6));
+
+/**
+ * O GANCHO DO ESTORNO (chamado por `stockService.cancelarMovimentacao`, DEPOIS do claim e da
+ * auditoria do cancelamento — por isso roda uma vez so por movimentacao, RN-05).
+ *
+ * Devolve `null` quando nao ha pedido a tocar (nao e `ENTRADA_COMPRA` de nota; sem tabela de compras;
+ * item nao resolvido; item sem `pedido_item_id`; linha ou pedido apagados) ou o objeto do contrato.
+ *
+ * ORDEM DAS ESCRITAS (Fase 2): a LINHA e o STATUS primeiro, as trilhas depois, cada uma no seu try.
+ * A trilha e rastro; perder uma linha de auditoria com um `warn` e reparavel, deixar a linha
+ * descontada com o pedido sem reabrir porque o INSERT da auditoria falhou no meio nao e.
+ *
+ * Quem chama trata a excecao como nao-fatal (D5): um estorno de saldo legitimo nao falha porque a
+ * tabela do Compras falhou.
+ */
+async function estornarEntradaNoPedido(db, user, mov) {
+  if (!mov || mov.tipo !== 'ENTRADA_COMPRA' || !mov.recebimento_id) return null;
+  const tabela = await dbGet(db,
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='pedidos_compra'");
+  if (!tabela) return null;
+
+  const item = await resolverItemDaEntrada(db, mov);
+  if (!item) {
+    console.warn(`[recebimento] estorno da movimentacao ${mov.id}: item do recebimento ${mov.recebimento_id} `
+      + 'nao encontrado — pedido nao descontado');
+    return null;
+  }
+  if (!item.pedido_item_id) return null;
+  // Etapa 72 (Fase 2): `material_id` da LINHA — e o material dela que define o par (pedido, material)
+  // da solicitacao a reabrir, nao o da movimentacao.
+  const linha = await dbGet(db, 'SELECT id, pedido_id, material_id, quantidade_recebida FROM itens_pedido_compra WHERE id = ?',
+    [item.pedido_item_id]);
+  if (!linha || linha.pedido_id == null) return null;
+  const pedido = await dbGet(db, 'SELECT id, numero, status FROM pedidos_compra WHERE id = ?', [linha.pedido_id]);
+  if (!pedido) return null;
+
+  const qtd = quantidadeFinita(mov.quantidade);
+  const antes = await situacaoDoPedido(db, pedido.id);
+  const recebidaAntes = quantidadeFinita(linha.quantidade_recebida);
+
+  // (1) A LINHA — aritmetica atomica, piso em 0 (D1).
+  await dbRun(db, `UPDATE itens_pedido_compra
+      SET quantidade_recebida = MAX(0, COALESCE(quantidade_recebida, 0) - ?)
+    WHERE id = ?`, [qtd, linha.id]);
+  if (recebidaAntes + EPSILON_DIVERGENCIA < qtd) {
+    console.warn(`[recebimento] estorno da movimentacao ${mov.id}: linha do pedido ${linha.id} tinha `
+      + `${numeroLimpo(recebidaAntes)}, descontado ate 0`);
+  }
+  const recebidaDepois = quantidadeFinita((await dbGet(db,
+    'SELECT quantidade_recebida FROM itens_pedido_compra WHERE id = ?', [linha.id]))?.quantidade_recebida);
+  const depois = await situacaoDoPedido(db, pedido.id);
+
+  // (2) O STATUS (D2/D3) — so o que a conta fechava ANTES e deixou de fechar DEPOIS, e so se o status
+  // e `recebido`. Guarda atomica no WHERE: o status E a regua (o pedido continua aberto) — senao uma
+  // nota processada entre a leitura "depois" e este UPDATE seria reaberta (cenario (11b)).
+  let reaberto = false;
+  let destino = null;
+  if (antes.situacao_recebimento === 'RECEBIDO' && depois.situacao_recebimento !== 'RECEBIDO'
+    && String(pedido.status || '').toLowerCase() === 'recebido') {
+    destino = await destinoDaReabertura(db, pedido.id);
+    if (destino) {   // null = o ultimo `recebido` foi do comprador (ou sem trilha): nao reabre (Fase 5)
+      const r = await dbRun(db, `UPDATE pedidos_compra SET status = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND LOWER(COALESCE(status, '')) = 'recebido' AND NOT ${SQL_PEDIDO_COMPLETO}`,
+      [destino, pedido.id]);
+      reaberto = r.changes === 1;
+    }
+  }
+
+  // (2b) Etapa 72, T2 (D6/B348 — revoga em parte a B334/D6 da 71): A SOLICITACAO DE COMPRA que esta
+  // entrada tinha fechado volta a VINCULADO, se a condicao de fechamento por material valia antes do
+  // estorno e deixou de valer. DEPOIS do passo do pedido (o pedido `recebido` que o estorno reabriu
+  // ja esta vivo aqui) e antes das trilhas do pedido. Nao-fatal: o estorno do saldo e o desconto da
+  // linha ja aconteceram. Pelo OBJETO `purchaseService` (monkeypatch do RN-09).
+  let solicitacoesReabertas = [];
+  if (linha.material_id != null) {
+    try {
+      solicitacoesReabertas = await purchaseService.reabrirSolicitacoesDoMaterial(db, user, {
+        pedidoId: pedido.id,
+        materialId: linha.material_id,
+        movimentacaoId: mov.id,
+        quantidadeDescontada: recebidaAntes - recebidaDepois,
+      });
+    } catch (e) {
+      console.warn(`[recebimento] reabertura das solicitacoes do pedido ${pedido.id} no estorno falhou: ${e.message}`);
+    }
+  }
+
+  // (3) AS TRILHAS — cada uma no seu try (Fase 2).
+  try {
+    await registrarAuditoria(db, {
+      entidade: 'pedido_compra',
+      entidade_id: pedido.id,
+      acao: 'RECEBIDO_ESTORNADO',
+      usuario_id: user?.id,
+      usuario_nome: user?.nome || user?.email,
+      dados_anteriores: { pedido_item_id: linha.id, quantidade_recebida: numeroLimpo(recebidaAntes) },
+      dados_novos: {
+        quantidade_recebida: numeroLimpo(recebidaDepois), movimentacao_id: mov.id, recebimento_id: mov.recebimento_id,
+      },
+      justificativa: `Estorno da movimentação #${mov.id} descontou ${numeroLimpo(qtd)} do pedido`,
+    });
+  } catch (e) {
+    console.warn(`[recebimento] trilha RECEBIDO_ESTORNADO do pedido ${pedido.id} falhou: ${e.message}`);
+  }
+  if (reaberto) {
+    try {
+      await registrarAuditoria(db, {
+        entidade: 'pedido_compra',
+        entidade_id: pedido.id,
+        acao: 'STATUS_AUTOMATICO_REABERTO',
+        usuario_id: user?.id,
+        usuario_nome: user?.nome || user?.email,
+        dados_anteriores: { status: 'recebido' },
+        dados_novos: { status: destino },
+        justificativa: `Estorno da movimentação #${mov.id} reabriu o pedido`,
+      });
+    } catch (e) {
+      console.warn(`[recebimento] trilha STATUS_AUTOMATICO_REABERTO do pedido ${pedido.id} falhou: ${e.message}`);
+    }
+  }
+
+  const statusAgora = reaberto ? destino
+    : ((await dbGet(db, 'SELECT status FROM pedidos_compra WHERE id = ?', [pedido.id]))?.status ?? pedido.status);
+  return {
+    id: pedido.id,
+    numero: pedido.numero,
+    pedido_item_id: linha.id,
+    quantidade_estornada: numeroLimpo(qtd),
+    situacao_antes: antes.situacao_recebimento,
+    situacao_depois: depois.situacao_recebimento,
+    saldo_pendente: depois.saldo_pendente,
+    status_anterior: pedido.status,
+    status: statusAgora,
+    reaberto,
+    // Etapa 72: sempre presente quando ha pedido; [] sem reabertura.
+    solicitacoes_reabertas: solicitacoesReabertas,
+  };
+}
+
+/**
+ * RN-E08 (Etapa 42, T1) — a SITUACAO DE TODOS OS PEDIDOS, sem `LIMIT`, para quem NAO e a tela.
+ *
+ * ⚠️ POR QUE NAO REUSAR `listarPedidosCompraAux` (a pergunta que a spec 20 deixou registrada):
+ * o aux termina em `ORDER BY p.created_at DESC LIMIT 50` porque a ABA DE RECEBIMENTO lista os 50
+ * pedidos mais novos — contrato de tela, com o `?pendentes=1` dependendo da POSICAO do filtro. Um
+ * alerta por e-mail construido sobre ele ignoraria o 51o pedido parcial EM SILENCIO, e e um silencio
+ * pior que a ausencia do alerta: o comprador passa a confiar numa varredura incompleta. Pendurar um
+ * `semLimite` no aux mexeria na porta da TELA por causa do e-mail; daqui sai uma segunda CONSULTA,
+ * nunca uma segunda REGUA — a situacao e o saldo continuam vindo de `derivarRecebimentoDoPedido` e a
+ * agregacao de `SOMA_POR_PEDIDO_SQL`.
+ *
+ * `previsao_entrega` e `status` VEM (o aux nao os traz): sao o que o alerta precisa para escrever a
+ * linha "Previsão de entrega" e para descartar pedido `cancelado`/`rejeitado`/`recebido`.
+ *
+ * ⚠️ COLUNAS PROJETADAS, nunca `p.*` — a MESMA regra (e o mesmo motivo) do F3 da Etapa 39: a linha
+ * crua desta fonte viaja para `GET /almoxarifado/alertas/central`, cujo gate e
+ * `requirePermission('ver_alertas')`, uma lista que **nao** inclui PRODUCAO/CONSULTA e **nao** exige
+ * o modulo Compras. Com `p.*`, `valor_total` e `observacoes` de pedidos CORE viajariam para quem tem
+ * `ver_alertas` sem ter Compras — e, pior, qualquer coluna acrescentada amanha a `pedidos_compra`
+ * viajaria junto, sem revisao nenhuma. A projecao e o que impede isso.
+ *
+ * ⚠️ **A JUSTIFICATIVA ANTERIOR DESTE PARAGRAFO ESTAVA ERRADA, e a correcao fica a vista.** Ela dizia
+ * *"um almoxarife que toma 403 em `GET /api/compras/pedidos` receberia `valor_total` e `observacoes`
+ * na aba Network"* — e o almoxarife **nao** tomava 403 para aquele dado: ele **ja recebia**
+ * `valor_total` e `fornecedor_cnpj` pela porta do PROPRIO almoxarifado
+ * (`GET /recebimentos-aux/pedidos-compra`, que tem `auth` e nenhum `requirePermission`), medido por
+ * sonda na revisao adversarial — e recebia tambem quem nao tem perfil nenhum (fallback `PRODUCAO`) e
+ * quem e `CONSULTA`, que **tomam** 403 na central. A projecao continua certa por higiene; o argumento
+ * que a sustentava e que era falso, e frase assim faz o proximo confiar num 403 que nao existe.
+ * O `valor_total` saiu daquela porta nesta onda de correcao; o GATE dela continua aberto, e essa
+ * decisao esta na letra B para o Andre arbitrar.
+ *
+ * `LEFT JOIN`, nao `JOIN`: pedido orfao de fornecedor tambem tem saldo pendente (R9 da Etapa 39).
+ *
+ * O filtro `situacao` roda em JS, DEPOIS da regua — de proposito. Escrever
+ * `AND i.soma_recebida > 0 AND i.soma_recebida < i.total_pedido` aqui seria a SEGUNDA definicao de
+ * "PARCIAL", e ela divergiria da primeira no unico caso que importa (excedente autorizado, que o
+ * clamp da regua resolve). Sem `LIMIT`, filtrar depois nao esconde nada — era o `LIMIT` que fazia a
+ * posicao do filtro ser contrato no aux.
+ *
+ * Tabela ausente -> `[]`, o mesmo contrato do aux e de `gerarContaPagar`: este modulo ASSUME que as
+ * tabelas de compras podem nao existir, e a central de alertas roda no mesmo handle.
+ */
+async function situacaoDosPedidosCompra(db, { situacao } = {}) {
+  const tableExists = await dbGet(db,
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='pedidos_compra'");
+  if (!tableExists) return [];
+
+  const linhas = await dbAll(db, `SELECT p.id, p.numero, p.status, p.previsao_entrega,
+      f.razao_social as fornecedor_nome,
+      COALESCE(i.total_pedido, 0) as total_pedido,
+      COALESCE(i.soma_recebida, 0) as soma_recebida,
+    COALESCE(i.saldo_por_material, 0) as saldo_por_material
+    FROM pedidos_compra p
+    LEFT JOIN fornecedores f ON p.fornecedor_id = f.id
+    LEFT JOIN (${SOMA_POR_PEDIDO_SQL}) i ON i.pedido_id = p.id
+    ORDER BY p.id ASC`);
+
+  return linhas
+    .map((linha) => ({
+      id: linha.id,
+      numero: linha.numero,
+      status: linha.status,
+      previsao_entrega: linha.previsao_entrega,
+      fornecedor_nome: linha.fornecedor_nome,
+      ...derivarRecebimentoDoPedido(linha.total_pedido, linha.soma_recebida, linha.saldo_por_material),
+    }))
+    .filter((linha) => !situacao || linha.situacao_recebimento === situacao);
+}
+
+/**
+ * RN-24 (Etapa 37) — as LINHAS do pedido com saldo, para a tela de recebimento (T5).
+ *
+ * `null` (e nao `[]`) quando o pedido NAO EXISTE: e a rota que traduz isso no 404 com a MESMA
+ * literal do `POST`. Pedido que existe e esta quitado devolve `[]` com 200 — nao e erro, e a
+ * informacao de que nao ha o que receber.
+ *
+ * Cada linha leva DOIS saldos, e os dois sao necessarios: `saldo_pendente` e o que falta NAQUELA
+ * linha, e `saldo_pendente_material` e o TETO que a porta aceita para aquele material (o agregado
+ * que `assertSaldoDoPedidoPermitido` compara). Eles so divergem quando o pedido tem duas linhas do
+ * mesmo material e uma delas recebeu a mais — e a divergencia era o furo: a tela prometia o saldo
+ * da linha e a porta recusava pelo agregado. A tela limita por `saldo_pendente_material`.
+ *
+ * Quem filtra por saldo e ESTA funcao, e isso e contrato: o client renderiza o que vem e NAO
+ * refiltra, senao passam a existir duas definicoes de "linha recebivel". O recorte por
+ * `material_id` vem de `saldoDasLinhasDoPedido` -> `carregarItensPedidoCompra` (linha sem material
+ * nao tem o que dar entrada no estoque), que e o mesmo do resto do modulo, e a ordem por `id` vem
+ * de la tambem — a mesma ordem que resolve a linha no `POST`.
+ */
+async function listarItensPedidoCompraAux(db, pedidoId) {
   const tableExists = await dbGet(db,
     "SELECT name FROM sqlite_master WHERE type='table' AND name='pedidos_compra'");
   if (!tableExists) return null;
-
-  const pedido = await carregarPedidoCompra(db, id);
+  const pedido = await dbGet(db, 'SELECT id FROM pedidos_compra WHERE id = ?', [pedidoId]);
   if (!pedido) return null;
 
-  // `recebivel` espelha o filtro de `carregarItensPedidoCompra` (item sem material_id e
-  // DESCARTADO no lancamento). Sem esta marca, o almoxarife ve 5 itens na tela e recebe 4,
-  // sem nada dizendo qual sumiu. Pedidos novos nao caem aqui (RN-09 barra no POST); pedidos
-  // antigos, sim.
-  const itens = pedido.itens.map((i) => ({ ...i, recebivel: !!i.material_id }));
+  const linhas = await saldoDasLinhasDoPedido(db, pedido.id);
 
-  return {
-    ...pedido,
-    itens,
-    itens_sem_material: itens.filter((i) => !i.recebivel).length,
-  };
+  // (fix 1 da T4, achado da revisao) O saldo AGREGADO POR MATERIAL, que e o numero que a ESCRITA
+  // compara: `assertSaldoDoPedidoPermitido` soma `l.saldo` das linhas do mesmo material
+  // (`doMaterial.reduce((s, l) => s + l.saldo, 0)`) e mede a recebida TOTAL contra ele.
+  //
+  // A soma e do saldo SEM CLAMP, de proposito, porque e assim que a regua soma: linha com
+  // `recebida > quantidade` (excedente autorizado) entra NEGATIVA e CONSOME o saldo das outras
+  // linhas do mesmo material. Sem este campo a rota prometia o saldo da linha (10) e a porta
+  // recusava com o agregado (5) — o operador digitava e tomava 400 sem aviso nenhum antes.
+  // O clamp final existe para nao devolver negativo quando o material todo esta estourado.
+  const saldoPorMaterial = new Map();
+  for (const linha of linhas) {
+    const chave = String(linha.material_id);
+    saldoPorMaterial.set(chave, (saldoPorMaterial.get(chave) || 0) + linha.saldo);
+  }
+
+  return linhas
+    .map((linha) => {
+      const derivado = derivarRecebimentoDoPedido(linha.quantidade, linha.quantidade_recebida);
+      return {
+        // `id` e o id da LINHA do pedido (`itens_pedido_compra.id`) — e o `pedido_item_id` que o
+        // client devolve no `POST`, e o que a T3 usa para somar na linha certa.
+        id: linha.id,
+        material_id: linha.material_id,
+        material_nome: linha.material_nome,
+        material_codigo: linha.material_codigo,
+        codigo: linha.codigo,
+        descricao: linha.descricao,
+        unidade: linha.unidade,
+        quantidade: derivado.quantidade_pedida,
+        quantidade_recebida: derivado.quantidade_recebida,
+        saldo_pendente: derivado.saldo_pendente,
+        // O TETO que a porta aceita para este material, repetido em toda linha dele. Igual a
+        // `saldo_pendente` no caso comum (uma linha por material); menor quando outra linha do
+        // mesmo material ja recebeu a mais, e MAIOR quando o material tem duas linhas pendentes.
+        // Por isso o contrato do client e (fix 1 da T5): ele SOMA o que digitou por material e
+        // compara a soma com ESTE campo — nunca a quantidade de UMA linha contra o saldo DELA, que
+        // divergiria da regua da porta nos dois sentidos (`assertSaldoDoPedidoPermitido` agrupa o
+        // payload por material e mede a recebida TOTAL). `saldo_pendente` segue sendo exibido como
+        // informacao do que falta naquela linha.
+        saldo_pendente_material: Math.max(0, saldoPorMaterial.get(String(linha.material_id))),
+        // ⚠️ `valor_unitario` SAIU daqui na onda de correcao da Etapa 42, e a remocao e a correcao de
+        // uma EXPOSICAO medida, nao limpeza de campo sobrando. Esta rota tem `auth` e NENHUM
+        // `requirePermission` (`routes/almoxarifado/extended.js:1137`), entao qualquer usuario
+        // autenticado do sistema — inclusive quem nao tem perfil nenhum, que cai no fallback
+        // `PRODUCAO`, e quem tem `CONSULTA` — recebia o PRECO NEGOCIADO de cada linha do pedido de
+        // compra. Medido por sonda na revisao adversarial, com `valor_unitario: 98765.432` chegando em
+        // 200 para os tres perfis.
+        //
+        // Medido tambem que o client NAO consome este campo: `RecebimentosAlmoxarifado.js:566-578`
+        // mapeia id/material/unidade/saldos e nada mais (o `valor_unitario` que aquela tela manda no
+        // `PUT /fiscal` vem de `detalhe.itens`, do proprio recebimento, nao daqui).
+        //
+        // O gate da rota continua aberto e isso esta na letra B, para o Andre arbitrar: apertar
+        // `requirePermission('receber_material')` aqui e uma linha, mas tira a tela de recebimento de
+        // quem hoje so olha (CONSULTA/PRODUCAO), e essa e decisao dele, nao minha. Tirar o preco e
+        // reversivel e nao muda gesto nenhum.
+      };
+    })
+    .filter((item) => item.saldo_pendente > 0);
 }
 
 async function listarFornecedoresAux(db, { search } = {}) {
@@ -857,7 +2608,19 @@ module.exports = {
   processarNota,
   listarRecebimentos,
   listarPedidosCompraAux,
-  getPedidoCompraParaRecebimento,
+  // Etapa 42, T1 (RN-E08): a regua de situacao/saldo do pedido passa a ter UM dono EXPORTADO, e a
+  // fonte sem `LIMIT` nasce ao lado dela. Antes desta linha o `alertRegistry` nao tinha como
+  // perguntar "este pedido esta parcial?" sem COPIAR a regua — e a spec 20 registrou isso, por
+  // escrito, como o bloqueio real do alerta de pedido parcial (nao era falta de dado).
+  derivarRecebimentoDoPedido,
+  situacaoDosPedidosCompra,
+  listarItensPedidoCompraAux,
   listarFornecedoresAux,
   getRecebimento,
+  // Etapa 71 (D5): o gancho do estorno — chamado pelo MOTOR (`stockService.cancelarMovimentacao`) por
+  // `require` lazy, porque este arquivo requer o motor no topo.
+  estornarEntradaNoPedido,
+  // Exportada para teste (Etapa 71, cenario (11) de `pedidoReabreNoEstorno`): a corrida estorno x
+  // fechamento so e medivel chamando o fechamento com a leitura da soma interceptada.
+  fecharPedidosCompletos,
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
@@ -10,11 +10,14 @@ import {
   FiPackage, FiSliders, FiMapPin, FiSettings,
   FiShield, FiRefreshCw, FiArrowLeft, FiArrowRight, FiMove,
   FiLayers, FiChevronDown, FiChevronRight, FiGrid, FiBell, FiSend, FiMail, FiMessageCircle, FiUsers, FiClipboard, FiShoppingCart, FiDollarSign,
-  FiTag, FiAlertTriangle, FiRotateCcw
+  FiTag, FiAlertTriangle, FiRotateCcw, FiCheckSquare
 } from 'react-icons/fi';
+import TabRegrasAprovacao from './TabRegrasAprovacao';
 import { useSearchParams } from 'react-router-dom';
 import { prefixarAlmoxarifado, buildLocalizacaoPath } from '../../utils/localizacaoLabel';
-import { invalidarAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
+import { invalidarAlmoxPermissoes, useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
+import EtiquetasPdfModal from './EtiquetasPdfModal';
+import { montarEtiquetaLocalizacao } from '../../utils/etiquetasPdf';
 import './Almoxarifado.css';
 
 const ICONES = ['📦', '🔧', '🪛', '⚙️', '🛡️', '🧰', '🪝', '💡', '🔩', '🪜', '🧪', '🏗️', '🔌', '🧲', '📋'];
@@ -112,6 +115,13 @@ const generateNextCodigo = (localizacoes, { setor, parent_id, tipo }, setoresCon
   return `${prefix}-${String(maxNum + 1).padStart(2, '0')}`;
 };
 
+// Etapa 55 (Fase 5): os códigos recusados entram no fallback como irmãs fictícias — o gerador local
+// passa a propor o seguinte a eles.
+const comRecusados = (lista, recusados, setor, parentId) => [
+  ...lista,
+  ...[...recusados].map((codigo, i) => ({ id: -1 - i, codigo, setor, parent_id: parentId })),
+];
+
 const parseSubgrupo = (subgrupo) => {
   const m = String(subgrupo || '').match(/^([A-Za-z]+)(\d+)$/);
   return m ? { letter: m[1].toUpperCase(), num: parseInt(m[2], 10) } : null;
@@ -184,12 +194,14 @@ const TABS = [
   { id: 'tipos', label: 'Tipos de Material', icon: FiPackage },
   { id: 'familias', label: 'Famílias', icon: FiLayers },
   { id: 'categorias', label: 'Categorias', icon: FiTag },
+  { id: 'motivos-movimentacao', label: 'Motivos de Movimentação', icon: FiClipboard }, // Etapa 66 (T4)
   { id: 'materiais-setor', label: 'Materiais por Setor', icon: FiUsers },
   { id: 'estoques', label: 'Estoques Mínimos', icon: FiSliders },
   { id: 'setores', label: 'Setores e Áreas', icon: FiGrid },
   { id: 'localizacoes', label: 'Localizações', icon: FiMapPin },
   { id: 'alertas', label: 'Alertas de Estoque', icon: FiBell },
   { id: 'liberacao-valor', label: 'Liberação por Valor', icon: FiDollarSign },
+  { id: 'regras-aprovacao', label: 'Regras de Aprovação', icon: FiCheckSquare }, // Etapa 47 (T6)
   { id: 'perfis', label: 'Perfis de Acesso', icon: FiShield },
   { id: 'geral', label: 'Configurações Gerais', icon: FiSettings },
 ];
@@ -276,12 +288,14 @@ const ConfiguracoesAlmoxarifado = ({ embedded = false }) => {
       {tab === 'tipos' && <TabTiposMaterial />}
       {tab === 'familias' && <TabFamilias />}
       {tab === 'categorias' && <TabCategorias />}
+      {tab === 'motivos-movimentacao' && <TabMotivosMovimentacao />}
       {tab === 'materiais-setor' && <TabMateriaisPorSetor />}
       {tab === 'estoques' && <TabEstoquesMinimos />}
       {tab === 'setores' && <TabSetores />}
       {tab === 'localizacoes' && <TabLocalizacoes />}
       {tab === 'alertas' && <TabAlertasEstoque />}
       {tab === 'liberacao-valor' && <TabLiberacaoValor />}
+      {tab === 'regras-aprovacao' && <TabRegrasAprovacao />}
       {tab === 'perfis' && <TabPerfisAcesso />}
       {tab === 'geral' && <TabConfiguracoes />}
     </div>
@@ -1058,6 +1072,215 @@ const TabCategorias = () => {
   );
 };
 
+/* ===================== TAB MOTIVOS DE MOVIMENTAÇÃO (Etapa 66, T4) ===================== */
+/*
+ * Molde: TabCategorias logo acima. Diferenças que importam:
+ *  - os checkboxes de tipo vêm de GET /motivos-movimentacao/tipos — a lista dos tipos já existe
+ *    no servidor (TIPOS_MOVIMENTO_ROTA); uma terceira cópia aqui divergiria na primeira mudança;
+ *  - os tipos vão no payload na ORDEM DO SERVIDOR (não na dos cliques), para o mesmo conjunto
+ *    gravar sempre igual;
+ *  - a escrita some para quem não tem `configurar` (useAlmoxPermissoes). Isso só evita abrir um
+ *    formulário que daria 403 — quem decide é o `requirePermission('configurar')` da rota.
+ *  - editar os tipos de um motivo já usado é permitido e NÃO reescreve o livro: a linha antiga
+ *    guarda o texto do motivo da época.
+ */
+const TabMotivosMovimentacao = () => {
+  const { pode } = useAlmoxPermissoes();
+  const podeEscrever = pode('configurar');
+  const [motivos, setMotivos] = useState([]);
+  const [tiposDisponiveis, setTiposDisponiveis] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [editando, setEditando] = useState(null);
+  const [form, setForm] = useState({ nome: '', tipos: [] });
+
+  useEffect(() => {
+    loadMotivos();
+    api.get('/almoxarifado/motivos-movimentacao/tipos')
+      .then(res => setTiposDisponiveis(Array.isArray(res.data) ? res.data : []))
+      .catch(() => toast.error('Erro ao carregar os tipos de movimentação'));
+  }, []);
+
+  const loadMotivos = async () => {
+    setLoading(true);
+    try {
+      // `?todos=1`: sem ele o desativado some da única tela que pode reativá-lo.
+      const res = await api.get('/almoxarifado/motivos-movimentacao?todos=1');
+      setMotivos(Array.isArray(res.data) ? res.data : []);
+    } catch { toast.error('Erro ao carregar motivos de movimentação'); }
+    finally { setLoading(false); }
+  };
+
+  const resetForm = () => {
+    setForm({ nome: '', tipos: [] });
+    setEditando(null);
+    setShowForm(false);
+  };
+
+  const handleEditar = (m) => {
+    setForm({ nome: m.nome, tipos: Array.isArray(m.tipos) ? m.tipos : [] });
+    setEditando(m.id);
+    setShowForm(true);
+  };
+
+  const toggleTipo = (tipo) => {
+    setForm(f => ({
+      ...f,
+      tipos: f.tipos.includes(tipo) ? f.tipos.filter(t => t !== tipo) : [...f.tipos, tipo],
+    }));
+  };
+
+  const handleSalvar = async () => {
+    // Mesmas frases do servidor (motivoMovimentacao.js): o atalho local não muda a mensagem.
+    if (!form.nome.trim()) { toast.error('Nome é obrigatório'); return; }
+    if (form.tipos.length === 0) { toast.error('Informe ao menos um tipo de movimentação'); return; }
+    const tipos = tiposDisponiveis.filter(t => form.tipos.includes(t));
+    setSaving(true);
+    try {
+      if (editando) {
+        // SEM `ativo`: omitir preserva o valor atual (não ressuscita um desativado).
+        await api.put(`/almoxarifado/motivos-movimentacao/${editando}`, { nome: form.nome, tipos });
+        toast.success('Motivo atualizado! As movimentações já registradas mantêm o texto da época.');
+      } else {
+        await api.post('/almoxarifado/motivos-movimentacao', { nome: form.nome, tipos });
+        toast.success('Motivo criado!');
+      }
+      resetForm();
+      loadMotivos();
+    } catch (err) {
+      // Mensagem do servidor CRUA: o duplicado de desativado diz "reative-o".
+      toast.error(err.response?.data?.error || 'Erro ao salvar');
+    } finally { setSaving(false); }
+  };
+
+  const handleDesativar = async (m) => {
+    if (!window.confirm(
+      `Desativar o motivo "${m.nome}"? Ele sai da lista da movimentação, mas as movimentações que já o usam continuam com ele.`
+    )) return;
+    try {
+      await api.delete(`/almoxarifado/motivos-movimentacao/${m.id}`);
+      toast.success('Motivo desativado');
+      loadMotivos();
+    } catch (err) { toast.error(err.response?.data?.error || 'Erro ao desativar'); }
+  };
+
+  const handleReativar = async (m) => {
+    try {
+      // `ativo: 1` explícito e numérico — o servidor recusa qualquer coisa fora de 0|1.
+      await api.put(`/almoxarifado/motivos-movimentacao/${m.id}`, { ativo: 1 });
+      toast.success('Motivo reativado');
+      loadMotivos();
+    } catch (err) { toast.error(err.response?.data?.error || 'Erro ao reativar'); }
+  };
+
+  return (
+    <div>
+      <p style={{ fontSize: '0.85rem', color: 'var(--gmp-text-light)', marginBottom: 20 }}>
+        Motivos padronizados para as movimentações (ex.: Avaria no manuseio, Inventário anual), cada
+        um valendo para os tipos marcados. Desativar não apaga: o motivo sai da lista da movimentação
+        e continua nas movimentações que já o usam.
+      </p>
+
+      {podeEscrever && !showForm && (
+        <button className="btn-almox-primary" style={{ marginBottom: 20 }} onClick={() => setShowForm(true)}>
+          <FiPlus size={14} /> Novo Motivo
+        </button>
+      )}
+
+      {podeEscrever && showForm && (
+        <div style={{ background: 'var(--gmp-surface)', border: '1px solid rgba(79,172,254,0.25)', borderRadius: 12, padding: 24, marginBottom: 24 }}>
+          <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 18 }}>
+            {editando ? '✏️ Editar Motivo' : '➕ Novo Motivo'}
+          </div>
+          <div className="almox-field" style={{ marginBottom: 16, maxWidth: 420 }}>
+            <label className="almox-label">Nome<span className="required">*</span></label>
+            <input type="text" className="almox-input" value={form.nome}
+              onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
+              placeholder="Ex: Avaria no manuseio, Inventário anual..." />
+          </div>
+          <div className="almox-field" style={{ marginBottom: 20 }}>
+            <label className="almox-label">Vale para os tipos<span className="required">*</span></label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 18px', marginTop: 6 }}>
+              {tiposDisponiveis.map(tipo => (
+                <label key={tipo} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', cursor: 'pointer' }}>
+                  <input type="checkbox" value={tipo}
+                    checked={form.tipos.includes(tipo)}
+                    onChange={() => toggleTipo(tipo)} />
+                  {tipo}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="btn-almox-primary" onClick={handleSalvar} disabled={saving}>
+              <FiSave size={14} /> {saving ? 'Salvando...' : 'Salvar Motivo'}
+            </button>
+            <button className="btn-almox-secondary" onClick={resetForm}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>
+      ) : motivos.length === 0 ? (
+        <div className="almox-empty" style={{ padding: 40 }}>
+          <FiClipboard size={40} style={{ opacity: 0.3, display: 'block', margin: '0 auto 12px' }} />
+          <p>Nenhum motivo de movimentação cadastrado</p>
+        </div>
+      ) : (
+        <table className="almox-table">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Tipos</th>
+              <th style={{ width: 120 }}>Situação</th>
+              {podeEscrever && <th style={{ width: 140 }}>Ações</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {motivos.map(m => (
+              <tr key={m.id} style={{ opacity: m.ativo ? 1 : 0.6 }}>
+                <td style={{ fontWeight: 600 }}>{m.nome}</td>
+                <td style={{ fontSize: '0.78rem' }}>{(m.tipos || []).join(', ')}</td>
+                <td>
+                  {m.ativo ? (
+                    <span style={{ fontSize: '0.7rem', background: 'rgba(67,233,123,0.12)', color: '#27ae60', padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>Ativo</span>
+                  ) : (
+                    <span style={{ fontSize: '0.7rem', background: 'rgba(120,144,156,0.15)', color: 'var(--gmp-text-light)', padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>Inativo</span>
+                  )}
+                </td>
+                {podeEscrever && (
+                  <td>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {m.ativo ? (
+                        <>
+                          <button className="almox-btn-icon" title="Editar" onClick={() => handleEditar(m)}>
+                            <FiEdit2 size={13} />
+                          </button>
+                          <button className="almox-btn-icon danger" title="Desativar" onClick={() => handleDesativar(m)}>
+                            <FiTrash2 size={13} />
+                          </button>
+                        </>
+                      ) : (
+                        <button className="btn-almox-secondary" title="Reativar"
+                          style={{ fontSize: '0.75rem', padding: '4px 12px' }}
+                          onClick={() => handleReativar(m)}>
+                          <FiRotateCcw size={12} /> Reativar
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+};
+
 /* ===================== TAB ESTOQUES MÍNIMOS ===================== */
 const TabEstoquesMinimos = () => {
   const [materiais, setMateriais] = useState([]);
@@ -1559,6 +1782,8 @@ const TabLocalizacoes = () => {
   const [setoresConfig, setSetoresConfig] = useState([]);
   const [tiposLoc, setTiposLoc] = useState([]);
   const [tiposMaterial, setTiposMaterial] = useState([]);
+  // Etapa 68: `areas_especiais` do meta (aditivo; servidor anterior não manda — fica []).
+  const [areasEspeciais, setAreasEspeciais] = useState([]);
   const [almoxarifados, setAlmoxarifados] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1578,7 +1803,79 @@ const TabLocalizacoes = () => {
   const [moverData, setMoverData] = useState({ setor: '', estruturaTipo: '', parent_id: '', subgrupo: '', codigo: '' });
   const [moverError, setMoverError] = useState('');
 
+  // Etapa 55 (RN-01/RN-04): o código proposto vem do SERVIDOR, que conta também as localizações
+  // inativas — o gerador local só vê a lista de `GET /localizacoes` (só ativas) e propunha o código
+  // de uma desativada: o POST a reativava em silêncio e o Mover estourava UNIQUE (500 cru).
+  // O código vira estado, buscado por efeito; a prévia e a gravação usam o código MOSTRADO.
+  // `...Tentativa` força uma nova busca depois que o servidor recusou o código (409/400).
+  const [wizardCodigo, setWizardCodigo] = useState('');
+  const [wizardCodigoLoading, setWizardCodigoLoading] = useState(false);
+  const [wizardCodigoTentativa, setWizardCodigoTentativa] = useState(0);
+  const [moverCodigo, setMoverCodigo] = useState('');
+  const [moverCodigoLoading, setMoverCodigoLoading] = useState(false);
+  const [moverCodigoTentativa, setMoverCodigoTentativa] = useState(0);
+  // Fase 5: códigos que o servidor RECUSOU nesta sessão. Só o fallback local precisa disto — ele não
+  // vê as inativas, e sem a lista propunha de novo o mesmo código recusado (409 em laço, sem saída).
+  const codigosRecusados = useRef(new Set());
+  // Etapa 56 (RN-01): etiquetas de localização — null = modal fechado (mesmo molde de Materiais).
+  const [etiquetas, setEtiquetas] = useState(null);
+
   useEffect(() => { loadLocs(); loadTipos(); loadSetores(); loadAlmoxarifados(); }, []);
+
+  const wizardPronto = showWizard && !!wizard.setor && !!wizard.estruturaTipo
+    && (wizard.estruturaTipo !== 'child' || !!wizard.parent_id);
+  const wizardParentParam = wizard.estruturaTipo === 'child' && wizard.parent_id
+    ? parseInt(wizard.parent_id, 10) : null;
+
+  useEffect(() => {
+    if (!wizardPronto) { setWizardCodigo(''); setWizardCodigoLoading(false); return undefined; }
+    let cancelado = false;
+    const params = { setor: wizard.setor };
+    if (wizardParentParam) params.parent_id = wizardParentParam;
+    setWizardCodigo('');
+    setWizardCodigoLoading(true);
+    api.get('/almoxarifado/localizacoes/proximo-codigo', { params })
+      .then(r => {
+        if (cancelado) return;
+        const codigo = r?.data?.codigo;
+        setWizardCodigo(codigo || generateNextCodigo(comRecusados(localizacoes, codigosRecusados.current, wizard.setor, wizardParentParam), { setor: wizard.setor, parent_id: wizardParentParam }, setoresConfig));
+      })
+      .catch(() => {
+        if (cancelado) return;
+        // RN-04: a tela nunca fica sem proposta — cai no gerador local (o de antes da Etapa 55).
+        setWizardCodigo(generateNextCodigo(comRecusados(localizacoes, codigosRecusados.current, wizard.setor, wizardParentParam), { setor: wizard.setor, parent_id: wizardParentParam }, setoresConfig));
+      })
+      .finally(() => { if (!cancelado) setWizardCodigoLoading(false); });
+    return () => { cancelado = true; };
+  }, [wizardPronto, wizard.setor, wizardParentParam, wizardCodigoTentativa, localizacoes, setoresConfig]);
+
+  const moverPronto = !!moverLoc && !!moverData.setor && !!moverData.estruturaTipo
+    && (moverData.estruturaTipo !== 'child' || !!moverData.parent_id);
+  const moverParentParam = moverData.estruturaTipo === 'child' && moverData.parent_id
+    ? parseInt(moverData.parent_id, 10) : null;
+
+  useEffect(() => {
+    if (!moverPronto) { setMoverCodigo(''); setMoverCodigoLoading(false); return undefined; }
+    let cancelado = false;
+    // excluir_id: a própria localização movida não conta como irmã nem como colisão.
+    const params = { setor: moverData.setor, excluir_id: moverLoc.id };
+    if (moverParentParam) params.parent_id = moverParentParam;
+    const fallback = () => generateNextCodigo(
+      comRecusados(localizacoes.filter(l => l.id !== moverLoc.id), codigosRecusados.current, moverData.setor, moverParentParam),
+      { setor: moverData.setor, parent_id: moverParentParam, tipo: moverLoc.tipo },
+      setoresConfig,
+    );
+    setMoverCodigo('');
+    setMoverCodigoLoading(true);
+    api.get('/almoxarifado/localizacoes/proximo-codigo', { params })
+      .then(r => {
+        if (cancelado) return;
+        setMoverCodigo(r?.data?.codigo || fallback());
+      })
+      .catch(() => { if (!cancelado) setMoverCodigo(fallback()); })
+      .finally(() => { if (!cancelado) setMoverCodigoLoading(false); });
+    return () => { cancelado = true; };
+  }, [moverPronto, moverLoc, moverData.setor, moverParentParam, moverCodigoTentativa, localizacoes, setoresConfig]);
 
   const loadSetores = async () => {
     try {
@@ -1591,6 +1888,7 @@ const TabLocalizacoes = () => {
       const r = await api.get('/almoxarifado/meta/tipos-material');
       setTiposLoc(r.data.localizacoes_tipos || []);
       setTiposMaterial(r.data.tipos || []);
+      setAreasEspeciais(Array.isArray(r.data.areas_especiais) ? r.data.areas_especiais : []);
     } catch { /* ignore */ }
   };
   const loadAlmoxarifados = async () => {
@@ -1605,9 +1903,12 @@ const TabLocalizacoes = () => {
     catch { toast.error('Erro ao carregar localizações'); } finally { setLoading(false); }
   };
 
-  const tiposAreaRaiz = TIPOS_AREA_RAIZ.filter(t =>
-    !tiposLoc.length || tiposLoc.includes(t) || TIPOS_AREA_RAIZ.includes(t)
-  );
+  // Etapa 68: a raiz oferece os 6 de sempre e as áreas especiais do registro do servidor
+  // (`areas_especiais`) — sem cópia da lista aqui. Antes, as "Área de …" só eram alcançáveis pelo
+  // Editar. (O filtro antigo `tiposLoc.includes(t) || TIPOS_AREA_RAIZ.includes(t)` era sempre
+  // verdadeiro para os 6 — saiu.)
+  const tiposAreaEspecial = areasEspeciais.map(a => a && a.tipo).filter(Boolean);
+  const tiposAreaRaiz = [...TIPOS_AREA_RAIZ, ...tiposAreaEspecial.filter(t => !TIPOS_AREA_RAIZ.includes(t))];
   const setoresOptions = buildSetoresOptions(setoresConfig, localizacoes);
 
   // almoxarifadoId é opcional: o wizard passa (uma posição filha não pode ter pai em outro
@@ -1663,11 +1964,8 @@ const TabLocalizacoes = () => {
     const parentId = isChild && data.parent_id ? parseInt(data.parent_id, 10) : null;
     const subgrupoOpts = isChild && data.parent_id ? generateSubgrupoOptions(localizacoes, data.parent_id) : [];
     const subgrupo = isChild ? (data.subgrupo || subgrupoOpts[0] || '') : '';
-    const codigo = generateNextCodigo(localizacoes, {
-      setor: data.setor,
-      parent_id: parentId,
-      tipo: data.tipo,
-    }, setoresConfig);
+    // O código é o do estado (buscado no servidor pelo efeito acima) — nunca recalculado aqui.
+    const codigo = wizardCodigo;
     const descricao = data.descricao?.trim() || suggestDescricao({
       setor: data.setor,
       tipo: data.tipo,
@@ -1738,6 +2036,7 @@ const TabLocalizacoes = () => {
   };
 
   const handleWizardConfirm = async () => {
+    if (wizardCodigoLoading) return;
     const { subgrupo, codigo, descricao, parentId } = computeWizardDetails(wizard);
     if (!codigo) { setWizardError('Não foi possível gerar o código. Revise as seleções.'); return; }
     if (isSubgrupoDuplicado(localizacoes, { subgrupo, setor: wizard.setor, parent_id: parentId })) {
@@ -1758,12 +2057,21 @@ const TabLocalizacoes = () => {
         pos_y: wizard.pos_y !== '' && wizard.pos_y != null ? parseFloat(wizard.pos_y) : null,
         largura: parseFloat(wizard.largura) || 120,
         altura: parseFloat(wizard.altura) || 80,
+        // RN-05: o assistente só CRIA. Se o código virou de uma inativa entre a busca e a
+        // gravação (ou veio do gerador local), o servidor responde 409 em vez de reativar a antiga.
+        somente_novo: true,
       });
       toast.success('Localização cadastrada!');
       resetWizard();
       loadLocs();
     } catch (err) {
       setWizardError(err.response?.data?.error || 'Erro ao cadastrar localização');
+      const status = err.response?.status;
+      // Código recusado (409 inativa / 400 já existe): busca outro — a prévia atualiza.
+      if (status === 409 || status === 400) {
+        if (status === 409 || /já existe/i.test(err.response?.data?.error || '')) codigosRecusados.current.add(wizardCodigo);
+        setWizardCodigoTentativa(n => n + 1);
+      }
     } finally { setSaving(false); }
   };
 
@@ -1829,12 +2137,13 @@ const TabLocalizacoes = () => {
     const locsExcl = localizacoes.filter(l => l.id !== loc.id);
     const subgrupoOpts = isChild && data.parent_id ? generateSubgrupoOptions(locsExcl, data.parent_id) : [];
     const subgrupo = isChild ? (data.subgrupo || subgrupoOpts[0] || loc.subgrupo || '') : null;
-    const codigo = generateNextCodigo(locsExcl, { setor: data.setor, parent_id: parentId, tipo: loc.tipo }, setoresConfig);
+    // O código é o do estado (buscado no servidor com excluir_id pelo efeito acima).
+    const codigo = moverCodigo;
     return { subgrupo, codigo, parentId };
   };
 
   const handleMoverConfirm = async () => {
-    if (!moverLoc) return;
+    if (!moverLoc || moverCodigoLoading) return;
     const { subgrupo, codigo, parentId } = computeMoverDetails(moverData, moverLoc);
     if (moverData.estruturaTipo === 'child' && !moverData.parent_id) {
       setMoverError('Selecione a estrutura pai no novo setor.');
@@ -1846,6 +2155,7 @@ const TabLocalizacoes = () => {
       setMoverError('Subgrupo já existe na estrutura de destino.');
       return;
     }
+    if (!codigo) { setMoverError('Não foi possível gerar o novo código. Revise as seleções.'); return; }
     setSaving(true);
     try {
       await api.put(`/almoxarifado/localizacoes/${moverLoc.id}`, {
@@ -1863,7 +2173,15 @@ const TabLocalizacoes = () => {
       toast.success('Localização movida com novo código!');
       resetMover();
       loadLocs();
-    } catch (err) { setMoverError(err.response?.data?.error || 'Erro ao mover'); }
+    } catch (err) {
+      setMoverError(err.response?.data?.error || 'Erro ao mover');
+      const status = err.response?.status;
+      // Código recusado pelo servidor (ex.: "Código já existe"): busca outro — a prévia atualiza.
+      if (status === 409 || status === 400) {
+        if (/já existe/i.test(err.response?.data?.error || '')) codigosRecusados.current.add(moverCodigo);
+        setMoverCodigoTentativa(n => n + 1);
+      }
+    }
     finally { setSaving(false); }
   };
 
@@ -1879,7 +2197,12 @@ const TabLocalizacoes = () => {
   const moverParents = moverLoc ? parentOptionsForSetor(moverData.setor, moverLoc.id) : [];
   const moverPreview = moverLoc ? computeMoverDetails(moverData, moverLoc) : null;
   const editLoc = editando ? localizacoes.find(l => l.id === editando) : null;
-  const tiposEdit = tiposLoc.length ? tiposLoc : ['Almoxarifado', 'Rua', 'Prateleira', 'Gaveta', 'Box', 'Área externa'];
+  const tiposEditBase = tiposLoc.length ? tiposLoc : ['Almoxarifado', 'Rua', 'Prateleira', 'Gaveta', 'Box', 'Área externa'];
+  // Etapa 68: tipo legado (gravado antes da validação, fora da lista) continua aparecendo como o
+  // atual — sem a opção, o select mostrava o primeiro da lista enquanto o PUT mandava o legado.
+  // O servidor aceita o PUT com o MESMO tipo legado (só recusa quando MUDA para fora da lista).
+  const tiposEdit = editForm.tipo && !tiposEditBase.includes(editForm.tipo)
+    ? [editForm.tipo, ...tiposEditBase] : tiposEditBase;
 
   return (
     <div>
@@ -1892,6 +2215,16 @@ const TabLocalizacoes = () => {
         <Link to="/almoxarifado/mapa" className="btn-almox-secondary" style={{ marginLeft: (!showWizard && !showEdit && !moverLoc) ? 'auto' : 0 }}>
           <FiMapPin size={14} /> Ver Mapa de Áreas
         </Link>
+        {localizacoes.length > 0 && (
+          <button
+            type="button"
+            className="btn-almox-secondary"
+            title="Imprimir etiquetas (QR) de todas as localizações listadas"
+            onClick={() => setEtiquetas(localizacoes.map(l => montarEtiquetaLocalizacao(l, window.location.origin)))}
+          >
+            <FiTag size={14} /> Etiquetas ({localizacoes.length})
+          </button>
+        )}
       </div>
 
       {showWizard && (
@@ -1976,7 +2309,15 @@ const TabLocalizacoes = () => {
                 />
                 <RadioCard
                   selected={wizard.estruturaTipo === 'child'}
-                  onClick={() => setWizard(w => ({ ...w, estruturaTipo: 'child', parent_id: '' }))}
+                  // Etapa 68 (Fase 2): escolher área na raiz e voltar para posição filha NÃO leva
+                  // o rótulo da área para o filho — o filho herda a área pela árvore (parent_id),
+                  // não pelo tipo. O filho volta ao tipo padrão do assistente.
+                  onClick={() => setWizard(w => ({
+                    ...w,
+                    estruturaTipo: 'child',
+                    parent_id: '',
+                    tipo: tiposAreaEspecial.includes(w.tipo) ? WIZARD_INITIAL.tipo : w.tipo,
+                  }))}
                   title="Dentro de uma estrutura existente"
                   subtitle="Posição filha (ex.: coluna dentro da prateleira)"
                   icon="📦"
@@ -2012,7 +2353,7 @@ const TabLocalizacoes = () => {
                 <div className="almox-field" style={{ marginBottom: 16 }}>
                   <label className="almox-label">Tipo de área<span className="required">*</span></label>
                   <select className="almox-select" value={wizard.tipo} onChange={e => setWizard(w => ({ ...w, tipo: e.target.value }))}>
-                    {(tiposLoc.length ? tiposAreaRaiz.filter(t => tiposLoc.includes(t) || TIPOS_AREA_RAIZ.includes(t)) : tiposAreaRaiz).map(t => (
+                    {tiposAreaRaiz.map(t => (
                       <option key={t} value={t}>{t}</option>
                     ))}
                   </select>
@@ -2045,7 +2386,7 @@ const TabLocalizacoes = () => {
               </div>
               <div className="almox-field">
                 <label className="almox-label">Código</label>
-                <input className="almox-input" value={computeWizardDetails(wizard).codigo} readOnly style={{ fontFamily: 'monospace', fontWeight: 700, color: '#4facfe', opacity: 0.9 }} />
+                <input className="almox-input" value={wizardCodigoLoading ? 'Gerando código...' : computeWizardDetails(wizard).codigo} readOnly style={{ fontFamily: 'monospace', fontWeight: 700, color: '#4facfe', opacity: 0.9 }} />
                 <p className="almox-wizard-hint">Gerado automaticamente — não editável no cadastro.</p>
               </div>
             </div>
@@ -2060,7 +2401,7 @@ const TabLocalizacoes = () => {
                   <strong>{formatLocalizacaoPath(preview, localizacoes)} / {preview.codigo}</strong>
                 </div>
                 <dl className="almox-wizard-confirm-dl">
-                  <dt>Código</dt><dd style={{ fontFamily: 'monospace', color: '#4facfe' }}>{preview.codigo}</dd>
+                  <dt>Código</dt><dd style={{ fontFamily: 'monospace', color: '#4facfe' }}>{wizardCodigoLoading ? 'Gerando código...' : preview.codigo}</dd>
                   <dt>Almoxarifado</dt><dd>{almoxarifadoSelecionado ? `${almoxarifadoSelecionado.codigo} — ${almoxarifadoSelecionado.nome}` : '—'}</dd>
                   <dt>Setor</dt><dd>{preview.setor}</dd>
                   <dt>Tipo</dt><dd>{preview.tipo}</dd>
@@ -2111,7 +2452,7 @@ const TabLocalizacoes = () => {
                 Próximo <FiArrowRight size={14} />
               </button>
             ) : (
-              <button type="button" className="btn-almox-primary" onClick={handleWizardConfirm} disabled={saving}>
+              <button type="button" className="btn-almox-primary" onClick={handleWizardConfirm} disabled={saving || wizardCodigoLoading || !wizardCodigo}>
                 <FiCheck size={14} /> {saving ? 'Cadastrando...' : 'Confirmar cadastro'}
               </button>
             )}
@@ -2278,7 +2619,7 @@ const TabLocalizacoes = () => {
               <h4>Confirmar movimentação</h4>
               <div className="almox-wizard-confirm-box">
                 <p><span className="almox-wizard-confirm-label">Código atual</span> <s>{moverLoc.codigo}</s></p>
-                <p><span className="almox-wizard-confirm-label">Novo código</span> <strong style={{ fontFamily: 'monospace', color: '#4facfe' }}>{moverPreview.codigo}</strong></p>
+                <p><span className="almox-wizard-confirm-label">Novo código</span> <strong style={{ fontFamily: 'monospace', color: '#4facfe' }}>{moverCodigoLoading ? 'Gerando código...' : moverPreview.codigo}</strong></p>
                 <p><span className="almox-wizard-confirm-label">Novo caminho</span>{' '}
                   <strong>{formatLocalizacaoPath({
                     setor: moverData.setor,
@@ -2317,7 +2658,7 @@ const TabLocalizacoes = () => {
                 Próximo <FiArrowRight size={14} />
               </button>
             ) : (
-              <button type="button" className="btn-almox-primary" onClick={handleMoverConfirm} disabled={saving}>
+              <button type="button" className="btn-almox-primary" onClick={handleMoverConfirm} disabled={saving || moverCodigoLoading || !moverCodigo}>
                 <FiCheck size={14} /> {saving ? 'Movendo...' : 'Confirmar movimentação'}
               </button>
             )}
@@ -2348,6 +2689,7 @@ const TabLocalizacoes = () => {
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                       <button className="almox-btn-icon" onClick={() => handleEditar(loc)} title="Editar"><FiEdit2 size={13} /></button>
                       <button className="almox-btn-icon" onClick={() => startMover(loc)} title="Mover"><FiMove size={13} /></button>
+                      <button className="almox-btn-icon" onClick={() => setEtiquetas([montarEtiquetaLocalizacao(loc, window.location.origin)])} title="Etiqueta" aria-label={`Etiqueta ${loc.codigo}`}><FiTag size={13} /></button>
                       <button className="almox-btn-icon danger" onClick={() => handleDeletar(loc.id)} title="Excluir"><FiTrash2 size={13} /></button>
                     </div>
                   </td>
@@ -2357,6 +2699,7 @@ const TabLocalizacoes = () => {
           </table>
         </div>
       )}
+      <EtiquetasPdfModal etiquetas={etiquetas} onClose={() => setEtiquetas(null)} />
     </div>
   );
 };
@@ -2696,8 +3039,10 @@ const TabAlertasEstoque = () => {
           <FiBell size={16} style={{ color: '#f59e0b' }} /> Lembretes de requisições pendentes
         </div>
         <p style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', marginBottom: 14, lineHeight: 1.5 }}>
-          Envia e-mail diário quando uma requisição permanece com status <strong>PENDENTE</strong> sem aprovação ou rejeição.
-          Usa os mesmos destinatários configurados acima (ou alertas de estoque). O envio para quando o status muda.
+          Envia e-mail repetido enquanto uma requisição espera um gesto de aprovação. Quem recebe depende do que falta:
+          aprovação normal → os destinatários configurados acima (ou os de alertas de estoque);
+          liberação por valor → os aprovadores de alto valor; assinatura de uma regra de aprovação → quem pode assinar
+          aquela regra. O envio para quando o gesto é feito.
         </p>
         <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, maxWidth: 420 }}>
           <span style={{ fontWeight: 600 }}>Ativar lembretes diários</span>
@@ -3117,11 +3462,31 @@ const TabConfiguracoes = () => {
     // recebimento, divergencia de inventario) — semeada no schema.js e lida pela mesma
     // alertRegistry.resolverDias. O prefixo `alerta_` ja cai no guard do handleSalvar.
     { chave: 'alerta_eventos_janela_dias', label: 'Alerta de Eventos (dias)', tipo: 'number', descricao: 'Janela em dias que os alertas de evento (reprovado, divergências) mostram na central' },
+    // Etapa 43 (T4): a janela do 14o alerta (nao conformidade ABERTA sem decisao). A chave foi
+    // semeada no schema.js pela task do servidor, mas a tela renderiza a LISTA FIXA `CAMPOS` —
+    // chave fora dela existe no banco e e INEDITAVEL pela UI. E o mesmo buraco que a Etapa 16
+    // pagou com as tres janelas acima, e que o cabecalho de ConfiguracoesGerais.test.js registra;
+    // por isso a linha entra aqui no fechamento da etapa, e nao "quando alguem pedir".
+    { chave: 'alerta_nc_parada_dias', label: 'Alerta de Não Conformidade Parada (dias)', tipo: 'number', descricao: 'Dias com a não conformidade ABERTA (sem decisão) para alertar documento parado' },
+    // Etapa 46 (T3): a janela do 15o alerta (NC DECIDIDA com execução ainda PENDENTE). Entra aqui
+    // no MESMO passo da semeadura, e não "quando alguém pedir": esta lista `CAMPOS` é fixa, e
+    // chave semeada fora dela existe no banco e é INEDITÁVEL pela UI — o administrador salvaria
+    // 200 "Configurações salvas!" e o motor continuaria no default. É o buraco que a Etapa 16
+    // pagou com três janelas e a Etapa 43 com esta linha acima.
+    { chave: 'alerta_nc_execucao_pendente_dias', label: 'Alerta de Execução Pendente da NC (dias)', tipo: 'number', descricao: 'Dias desde a decisão com a execução da não conformidade ainda pendente para alertar' },
     { chave: 'notificacoes_dest_entradas', label: 'Destinatários — Entradas', tipo: 'text', descricao: 'E-mails (lista) para notificação de entrada de material; vazio usa o e-mail de alertas' },
     { chave: 'notificacoes_dest_saidas', label: 'Destinatários — Saídas', tipo: 'text', descricao: 'E-mails (lista) para notificação de saída de material; vazio usa o e-mail de alertas' },
     { chave: 'notificacoes_dest_ajustes', label: 'Destinatários — Ajustes', tipo: 'text', descricao: 'E-mails (lista) para notificação de ajuste de estoque; vazio usa o e-mail de alertas' },
     { chave: 'notificacoes_dest_terceiros', label: 'Destinatários — Terceiros', tipo: 'text', descricao: 'E-mails (lista) para notificação de movimentação de terceiro; vazio usa o e-mail de alertas' },
     { chave: 'notificacoes_dest_compras', label: 'Destinatários — Compras', tipo: 'text', descricao: 'E-mails (lista) para notificação de solicitação de compra gerada; vazio usa compras_notificar_emails' },
+    // Etapa 70 (T3): os avisos de quando a nota de um recebimento dá entrada no estoque — lidos
+    // por receiptNotificationService.js. O da nota nasce DESLIGADO (D3 revisto na Fase 2: ele
+    // vai para a lista compartilhada de Compras, que em produção já tem destinatários reais;
+    // ligar é decisão de quem opera). O do solicitante nasce LIGADO: vai só a quem pediu o
+    // material, e é o valor da etapa.
+    { chave: 'notificar_recebimento_entrada', label: 'Avisar Entrada de Recebimento por E-mail', tipo: 'boolean', descricao: 'Um e-mail por nota que deu entrada no estoque, para a lista de destinatários abaixo (sem lista própria, vai para a de Compras) — desligado por padrão' },
+    { chave: 'notificar_recebimento_solicitante', label: 'Avisar o Solicitante quando o Material Chega', tipo: 'boolean', descricao: 'Um e-mail só para quem pediu, em cada requisição que esperava um material que entrou disponível no estoque — ligado por padrão' },
+    { chave: 'notificacoes_dest_recebimento', label: 'Destinatários — Entrada de Recebimento', tipo: 'text', descricao: 'E-mails (lista) do aviso de entrada da nota; vazio usa os destinatários de Compras (e, sem eles, compras_notificar_emails)' },
   ];
   // Saíram daqui por não ter leitor nenhum no servidor — nenhuma delas fazia coisa alguma:
   // `prazo_atendimento_horas` (semeada, mas nada calcula prazo de atendimento),

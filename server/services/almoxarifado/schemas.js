@@ -1,6 +1,6 @@
 /** Schemas Zod compartilhados do almoxarifado (padrão da fundação — ver validation.js). */
 const { z } = require('zod');
-const { TIPOS_REQUISICAO, TIPOS_MOVIMENTO, TIPOS_RETENCAO, TIPOS_DEDICADOS, TIPOS_RESULTADO, STATUS_SOBRA } = require('./schema');
+const { TIPOS_REQUISICAO, TIPOS_MOVIMENTO, TIPOS_RETENCAO, TIPOS_DEDICADOS, TIPOS_RESULTADO, STATUS_SOBRA, TIPOS_RECEBIMENTO } = require('./schema');
 // Etapa 9, Task 6: o enum dos destinos finais do sucateamento tem FONTE UNICA na maquina de
 // estados (ver o comentario de SucateamentoDestinoSchema no fim do arquivo). O modulo e puro —
 // nao requer nada — entao nao ha ciclo aqui.
@@ -76,6 +76,7 @@ const CAMINHO_TIPO_DEDICADO = {
   CONSUMO_TERCEIRO: 'consumo em poder de terceiro é registrado na transformação ou no encerramento da remessa, em Remessas a Terceiros',
   RETORNO_TRANSFORMACAO: 'o retorno transformado é registrado pela transformação da remessa, em Remessas a Terceiros',
   AJUSTE_INVENTARIO: 'a tela de Inventário (conclua uma conferência com ajustes aplicados)',
+  DEVOLUCAO_FORNECEDOR: 'a devolução ao fornecedor é registrada no documento que a decidiu — use Almoxarifado → Não Conformidades e registre a execução',
 };
 
 const MSG_TIPO_NAO_PERMITIDO_GENERICA = 'tipo de movimentação não permitido nesta rota '
@@ -119,6 +120,15 @@ const MovimentacaoSchema = z.object({
   // precisam estar aqui para chegarem ao motor.
   series: z.array(z.string().trim().min(1)).max(1000).optional(),
   serie_ids: z.array(z.coerce.number().int().positive()).max(1000).optional(),
+  // Etapa 56: declarados (senao o z.object descarta) mas SEM tipo aqui — quem valida e o motor, que
+  // tambem recebe o body cru de /transferencias; assim as duas rotas dao a MESMA mensagem.
+  codigo_lido_origem: z.unknown().optional(),
+  codigo_lido_destino: z.unknown().optional(),
+  // Etapa 66: o motivo do cadastro. Mesma regua dos `codigo_lido_*` acima — declarado (senao o
+  // z.object o descarta e a feature morre na v2 com os testes de servico verdes) mas SEM tipo: o
+  // formato e julgado no motor (motivoMovimentacao.resolverMotivoDoCadastro), que tambem recebe o
+  // body cru de /transferencias, para as duas rotas darem a MESMA mensagem.
+  motivo_id: z.unknown().optional(),
 }).superRefine((d, ctx) => {
   // quantidade 0 só é aceita para AJUSTE com localização (zera aquela localização
   // e propaga o total do material — ver stockService.registrarMovimentacao). Para
@@ -597,6 +607,21 @@ const SucateamentoCreateSchema = z.object({
 });
 
 /**
+ * POST /nao-conformidades/:id/solicitar-sucateamento (Etapa 69, RN-04). Material, quantidade e lote
+ * NAO existem aqui de proposito: sao DERIVADOS da inspecao da NC (a reprovada inteira — D4). O Zod
+ * descarta em silencio o que o cliente mandar a mais (status, aprovadores, material_id, quantidade),
+ * como no `SucateamentoCreateSchema`.
+ */
+const SucateamentoDoReprovadoSchema = z.object({
+  justificativa: z.string().trim().min(1, 'justificativa é obrigatória para sucatear'),
+  classificacao: z.string().nullable().optional(),
+  peso_estimado: z.number().nonnegative().nullable().optional(),
+  projeto_origem_id: z.number().int().positive().nullable().optional(),
+  os_origem_id: z.number().int().positive().nullable().optional(),
+  observacoes: z.string().nullable().optional(),
+});
+
+/**
  * PUT /sucateamentos/:id/destino (Etapa 9, Task 6) — o destino final, DEPOIS da baixa.
  *
  * O enum vem de `scrapDisposalStateMachine.DESTINOS_FINAIS`, importado, e nao reescrito aqui.
@@ -733,6 +758,65 @@ const AssinaturaEntregaFormSchema = z.object({
   recebedor_nome: z.string().trim().min(1).max(120),
 });
 
+/**
+ * Anexo de documento (Etapa 32) — o body chega por multipart, entao TUDO e string:
+ * `entidade_id` vem como '12'. `coerce` aqui e o mesmo movimento que `numFromForm` faz nos
+ * schemas de formulario do modulo. A validacao da ENTIDADE contra o mapa fechado NAO esta aqui
+ * de proposito: ela e regra de negocio com literal propria ("Entidade inválida para anexo") e
+ * mora no servico, pelo mesmo motivo de CalibracaoSchema/OcorrenciaSchema — o Zod embrulharia
+ * em "Dados inválidos — ...".
+ */
+const AnexoCreateSchema = z.object({
+  entidade: z.string().min(1, 'Entidade é obrigatória'),
+  entidade_id: z.coerce.number().int().positive('Registro inválido'),
+  tipo: z.string().min(1, 'Tipo é obrigatório').max(60),
+  descricao: z.string().max(300).optional(),
+});
+
+/**
+ * Recebimento (Etapa 36, RN-11) — `tipo_recebimento` nas DUAS portas de escrita
+ * (`POST /recebimentos` e `PUT /recebimentos/:id/fiscal`).
+ */
+// UMA literal para as DUAS portas: escrita a mao duas vezes, ela divergiria na primeira edicao e o
+// operador veria texto diferente dependendo de qual porta recusou. A mensagem e propria porque o
+// `z.enum` nu do Zod 4.4.3 responde EM INGLES e sem o valor recebido (medido na Fase 0), o que
+// quebra a convencao de mensagens em portugues deste modulo.
+const TIPO_RECEBIMENTO_INVALIDO = 'forma de recebimento inválida (use NOTA_FISCAL ou PEDIDO_COMPRA)';
+
+// `looseObject`, NUNCA `object`: `validate()` substitui `req.body` por `parsed.data` e `z.object`
+// descarta chave nao declarada — com `object`, `nota_fiscal` e `itens` SOMEM e todo POST valido
+// responde 400 "Inclua ao menos um item" (`receiptService.js:126`). Quarta encarnacao do defeito
+// ja comentado neste arquivo para `reserva_id`, `lote_id` e `series`.
+// `.optional()` nao e estilo: `criarRecebimento` DERIVA o tipo quando o body nao traz (`:108`), e
+// `recebimentoEntradaAtomica.api.test.js:192` / `alertaEventoJornada.api.test.js:82` chamam sem ele.
+//
+// (revisao final, R6) `itens` GANHOU schema, e o motivo e uma barreira que ficava desligada:
+// SQLite tem tipagem fraca, entao `quantidade_esperada: 'abc'` era GRAVADO COMO TEXTO e a barreira
+// de excedente da RN-18 — que le a coluna com `parseFloat` + `Number.isFinite` — dava `continue`
+// naquele item. Mandar `'abc'` na criacao era a forma de desligar a RN-18 e depois receber
+// qualquer quantidade. O conserto e na PORTA e nao na barreira: a barreira nao pode inventar um
+// numero que ninguem informou.
+// `z.coerce.number`, e nao `z.number()`: a tela manda `quantidade` de `<input>`, e `'5'` e payload
+// legitimo. A mensagem vai nas DUAS pontas (construtor e `.positive()`) porque `'abc'` falha no
+// `number` (vira NaN) e `0`/`-3` falham no `positive` — sem as duas, um dos casos sai em INGLES.
+// `looseObject` no ITEM pelo mesmo motivo do objeto de fora: `z.object` descartaria `material_id`,
+// `lote`, `series` e `observacoes`. E `itens` segue `.optional()`: no caminho PEDIDO_COMPRA o body
+// nao traz itens, `criarRecebimento` os deriva do pedido.
+const QTD_ITEM_INVALIDA = 'quantidade do item deve ser um número maior que zero';
+const QTD_ESPERADA_ITEM_INVALIDA = 'quantidade esperada do item deve ser um número maior que zero';
+const RecebimentoItemSchema = z.looseObject({
+  quantidade: z.coerce.number({ message: QTD_ITEM_INVALIDA }).positive(QTD_ITEM_INVALIDA),
+  quantidade_esperada: z.coerce.number({ message: QTD_ESPERADA_ITEM_INVALIDA })
+    .positive(QTD_ESPERADA_ITEM_INVALIDA).optional(),
+});
+const RecebimentoCreateSchema = z.looseObject({
+  tipo_recebimento: z.enum(TIPOS_RECEBIMENTO, { message: TIPO_RECEBIMENTO_INVALIDO }).optional(),
+  itens: z.array(RecebimentoItemSchema).optional(),
+});
+const RecebimentoFiscalSchema = z.looseObject({
+  tipo_recebimento: z.enum(TIPOS_RECEBIMENTO, { message: TIPO_RECEBIMENTO_INVALIDO }).optional(),
+});
+
 module.exports = {
   CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, TIPOS_MOVIMENTO_ROTA,
   RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema,
@@ -742,7 +826,17 @@ module.exports = {
   EncerramentoRemessaSchema, CancelamentoRemessaSchema,
   SobraUpdateSchema, GerarRetalhoSchema,
   SucateamentoCreateSchema, SucateamentoDestinoSchema, SucateamentoDestinoFormSchema,
+  SucateamentoDoReprovadoSchema,
   FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema,
   CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema,
   OcorrenciaSchema, AssinaturaEntregaFormSchema,
+  // Etapa 32: este arquivo exporta por LISTA FECHADA, nao por spread — esquecer a linha aqui
+  // deixa o binding `undefined` na extended e faz TODO POST /anexos morrer em
+  // `undefined.safeParse`, 500 com stack, DEPOIS de o multer ja ter gravado.
+  AnexoCreateSchema,
+  // Etapa 36 (RN-11): as DUAS portas do recebimento. Mesma lista fechada, mesmo risco de 500 —
+  // esquecer estas duas linhas deixa o binding `undefined` na extended e mata a rota em
+  // `undefined.safeParse`, DEPOIS do gate de permissao.
+  RecebimentoCreateSchema,
+  RecebimentoFiscalSchema,
 };

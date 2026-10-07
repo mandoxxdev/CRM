@@ -42,6 +42,42 @@ const ACOES = {
   // Etapa 16, Task 3: sem a entrada, o gate visual da central de alertas cairia no fallback
   // de labelAcao e mostraria "ver alertas" cru (mesmo buraco do achado 7 da Etapa 11).
   ver_alertas: 'ver a central de alertas',
+  // Etapa 36, Task 3: a acao nova entra no mapa NO MESMO commit que a cria em ACAO_PERFIS. Sem
+  // esta linha, `permissaoErro.test.js:44` ("toda acao de ACAO_PERFIS tem rotulo proprio") fica
+  // vermelho — e ficaria vermelho na task do CLIENT, parecendo regressao de outra frente. O 403
+  // desta acao e o que a caixa "Autorizo o recebimento acima do pedido" produz quando o perfil
+  // nao pode: sem rotulo, o toast mostraria "autorizar excedente" cru.
+  autorizar_excedente: 'autorizar recebimento acima do pedido',
+  // Etapa 43, T2: as DUAS acoes da nao conformidade numerada entram no mapa NO MESMO commit que
+  // as cria em ACAO_PERFIS — e a SEXTA vez que este buraco aparece nesta base (achado 7 da Etapa
+  // 11, Etapa 12 Task 4, Etapa 16 Task 3, fix-round da Etapa 30, Etapa 32). Sem estas duas linhas,
+  // `permissaoErro.test.js:44` ("toda acao de ACAO_PERFIS tem rotulo proprio") fica vermelho na
+  // suite do CLIENT por causa de uma task de SERVIDOR, parecendo regressao de outra frente.
+  // O 403 de `decidir_nao_conformidade` e o que o modal de decisao produz para ALMOXARIFE e
+  // COMPRAS (que abrem, mas nao decidem — D8): sem rotulo, o toast mostraria "decidir nao
+  // conformidade" cru, sem acento, e o usuario nao saberia que ABRIR ele ainda pode.
+  registrar_nao_conformidade: 'registrar não conformidade',
+  decidir_nao_conformidade: 'decidir não conformidade',
+  // Etapa 45, T4: a SÉTIMA vez que este buraco aparece. `executar_encaminhamento` entrou em
+  // ACAO_PERFIS na T2 (commit de SERVIDOR) e deixou `permissaoErro.test.js:52` VERMELHO na suíte
+  // do CLIENT — medido no início desta task, antes de qualquer edição: `semRotulo` veio
+  // `["executar_encaminhamento"]`. A guarda da Etapa 30 fez o serviço dela; quem atrasou foi o
+  // rótulo. O 403 desta ação é o que QUALIDADE e ALMOXARIFE veem ao tentar registrar a execução
+  // de uma devolução — ela é de COMPRAS (e de ADMINISTRADOR), e é justamente a plateia diferente
+  // de `decidir_nao_conformidade` que faz esta ação existir.
+  executar_encaminhamento: 'registrar a execução do encaminhamento',
+  // Etapa 46, T1: entrou JUNTO com a ação em `ACAO_PERFIS`, no MESMO commit — e esta linha existe
+  // para que não haja oitava vez. A sétima, logo acima, custou uma suíte de client vermelha e um
+  // relatório meu afirmando duas tasks fechadas com base só nos números de servidor.
+  // O 403 desta ação é o que COMPRAS e ALMOXARIFE veem ao tentar anular um documento: cancelar é
+  // de ADMINISTRADOR e QUALIDADE, e a exclusão do COMPRAS é deliberada — ele executa e é cobrado
+  // pela fila, então não deve poder limpá-la.
+  cancelar_nao_conformidade: 'cancelar não conformidade',
+  // Etapa 77, T0: entra NO MESMO commit que cria a ação em ACAO_PERFIS (permissaoErro.test.js importa
+  // o mapa do servidor). O 403 da rota de liberar SAI SEM `perfil` de propósito (a regra é "só quem
+  // pediu, o almoxarife ou o administrador", não "solicite acesso"), então este rótulo serve ao gate
+  // da tela (`bloquearSeNaoPode`) e ao /minhas-permissoes.
+  liberar_reserva_requisicao: 'liberar a reserva de uma requisição',
 
   // Etapa 30, fix-round da revisao adversarial: QUATRO acoes de ACAO_PERFIS nao tinham rotulo, e
   // tres delas ja tinham call site de UI — o toast mostrava a chave crua ("gerenciar plano
@@ -53,6 +89,14 @@ const ACOES = {
   conferir_separacao: 'conferir a separação de requisição',
   remessar_terceiro: 'enviar material a terceiros',
   ajustar_material_cliente: 'ajustar saldo de material de cliente',
+
+  // Etapa 32: as duas acoes de anexo. Escritas DEPOIS de ACAO_PERFIS, de proposito — o vermelho
+  // deste arquivo de teste foi medido antes deste commit, e ele nomeou as duas sozinho. Isso e o
+  // controle positivo de que a regua da Etapa 30 (a lista vem de ACAO_PERFIS do servidor, e o
+  // criterio e PRESENCA, nao formato do texto) esta viva: a quinta ocorrencia do buraco de rotulo
+  // foi barrada pela guarda em vez de descoberta por revisao.
+  anexar_documento: 'anexar documento',
+  remover_anexo: 'remover anexo',
 
   aprovar_sucateamento: 'aprovar sucateamento (almoxarifado)',
   aprovar_sucateamento_gestao: 'aprovar sucateamento (gestão)',

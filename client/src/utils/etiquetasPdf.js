@@ -3,6 +3,7 @@
 
 import jsPDF from 'jspdf';
 import QRCode from 'qrcode';
+import { quantidadeQueEntra } from './quantidadeQueEntra';
 
 export const FORMATOS_ETIQUETA = {
   A4_GRADE: {
@@ -80,13 +81,34 @@ export function montarEtiquetaRetalho(sobra, materialRetalho) {
   };
 }
 
+/**
+ * Etiqueta de LOCALIZAÇÃO (Etapa 56, RN-01). O QR abre a localização no Mapa (`?loc=<id>`) e leva
+ * também o `codigo` impresso: o Mover renumera o código e mantém o id, então a etiqueta fica velha
+ * sem que o id mude — o Mapa compara o `codigo` da URL com o atual e avisa "Etiqueta desatualizada".
+ * `encodeURIComponent` porque o código é texto livre (`A&B#1+2` quebraria a query sem ele).
+ * `origin` segue o molde dos montadores de material/lote/série (parâmetro), com o da janela de padrão.
+ */
+export function montarEtiquetaLocalizacao(loc, origin = window.location.origin) {
+  return {
+    codigo: loc.codigo,
+    nome: loc.endereco_completo || loc.descricao || '',
+    linhaControle: [loc.tipo, loc.setor].filter(Boolean).join(' · '),
+    qrUrl: `${origin}/almoxarifado/mapa?loc=${loc.id}&codigo=${encodeURIComponent(loc.codigo)}`,
+  };
+}
+
+/** Alias com o nome do contrato da Etapa 56. */
+export const etiquetaLocalizacao = montarEtiquetaLocalizacao;
+
 const linhasDeSeries = (txt) => String(txt || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
 
 export function montarEtiquetasDoRecebimento(itens, materiais, origin) {
   const out = [];
   for (const item of itens || []) {
-    const qtd = Number(item.quantidade_recebida || item.quantidade_esperada) || 0;
-    if (qtd <= 0) continue;
+    // Etapa 70, Fase 5: a MESMA regua do servidor e do modal de Processar (`quantidadeQueEntra`).
+    // Era `Number(recebida || esperada)`: o item que chegou ZERO (recebida 0) caia na esperada e
+    // ganhava etiqueta de material que nao entrou no estoque.
+    if (!(quantidadeQueEntra(item) > 0)) continue;
     const m = (materiais || []).find((x) => x.id === item.material_id);
     if (!m) continue; // sem o material nao ha codigo/flags confiaveis para a etiqueta
     if (m.controle_serie === 1) {

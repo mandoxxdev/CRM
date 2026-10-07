@@ -14,12 +14,26 @@ const notificationQueueService = require('../services/almoxarifado/notificationQ
 const alertRegistry = require('../services/almoxarifado/alertRegistry');
 const requisitionReminderService = require('../services/almoxarifado/requisitionReminderService');
 const requisitionService = require('../services/almoxarifado/requisitionService');
+const { proximoCodigoLocalizacao } = require('../services/almoxarifado/localizacaoCodigo');
 const deliverySignatureService = require('../services/almoxarifado/deliverySignatureService');
 const { disponivelSql } = require('../services/almoxarifado/availabilitySql');
 const { valorEstoqueSql, custoUnitarioSql } = require('../services/almoxarifado/custoSql');
 const requisitionCreateService = require('../services/almoxarifado/requisitionCreateService');
 const requisitionStateMachine = require('../services/almoxarifado/requisitionStateMachine');
 const valueApprovalService = require('../services/almoxarifado/requisitionValueApprovalService');
+const approvalRulesService = require('../services/almoxarifado/approvalRulesService');
+const { TIPOS_URGENCIA, TIPOS_LOCALIZACAO } = require('../services/almoxarifado/schema');
+
+// Etapa 68 (D4): o tipo da localizacao passa a ter semantica (areas especiais) — um erro de
+// digitacao pela API perderia a semantica calado. So tipo PRESENTE (nao undefined/null/'') e fora
+// da lista recusa; ausente/vazio continua 'Almoxarifado' (POST) como hoje. Descartado: normalizar
+// acento/maiuscula (inventa equivalencia).
+function tipoLocalizacaoPresente(tipo) {
+  return tipo !== undefined && tipo !== null && tipo !== '';
+}
+function mensagemTipoInvalido(tipo) {
+  return `Tipo de localização inválido: ${tipo}`;
+}
 const stockService = require('../services/almoxarifado/stockService');
 const materialService = require('../services/almoxarifado/materialService');
 const {
@@ -46,6 +60,10 @@ const { registrarAuditoria } = require('../services/almoxarifado/audit');
 // oito ultimos digitos) e SEM aleatorio nenhum: duas conferencias abertas no mesmo milissegundo
 // colidiam com CERTEZA.
 const { inserirComNumeroUnico } = require('../services/almoxarifado/numeroDoc');
+// Etapa 33 (C42): a assinatura dos uploads legados. O segredo vem de `resolveJwtSecret`, o mesmo
+// resolvedor do JWT — mas o que sai daqui NAO e o token de sessao (ver o cabecalho de urlUpload.js).
+const { criarAssinadorUpload, extensaoSegura, cabecalhosUploadSeguro } = require('../services/almoxarifado/urlUpload');
+const { resolveJwtSecret } = require('../services/runtimeSecrets');
 // Etapa 18 (C0): o binding desestruturado acima e resolvido no require e cacheado — um teste
 // nao consegue substituir `registrarAuditoria` por um stub que lanca, e a RN-02 ("auditoria
 // nunca derruba o ato") viraria um teste VAZIO: passaria verde sem jamais ter derrubado
@@ -188,10 +206,18 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   const uploadsAlmoxDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'almoxarifado');
   if (!fs.existsSync(uploadsAlmoxDir)) fs.mkdirSync(uploadsAlmoxDir, { recursive: true });
 
+  // Etapa 32 (D1): os anexos vao para um diretorio IRMAO, nao para uma subpasta de
+  // uploadsAlmoxDir. `express.static(root)` serve as subpastas de root tambem — guardar em
+  // uploads/almoxarifado/anexos deixaria todo anexo publico pelos mounts das linhas ~229-230,
+  // que nao passam por auth nenhuma. Criado explicitamente porque o multer NAO cria diretorio
+  // (D3 da Etapa 9b: o primeiro upload numa subpasta inexistente da ENOENT -> 500).
+  const uploadsAnexosDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'almoxarifado-anexos');
+  if (!fs.existsSync(uploadsAnexosDir)) fs.mkdirSync(uploadsAnexosDir, { recursive: true });
+
   const storageAlmox = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
     filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname);
+      const ext = extensaoSegura(file.mimetype); // NUNCA do originalname — ver urlUpload.js
       cb(null, `material-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
     }
   });
@@ -210,7 +236,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     storage: multer.diskStorage({
       destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
       filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
+        const ext = extensaoSegura(file.mimetype); // NUNCA do originalname — ver urlUpload.js
         cb(null, `certificado-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
       },
     }),
@@ -225,9 +251,47 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   const { initSchema } = require('../services/almoxarifado/schema');
   initSchema(db).catch((e) => console.error('❌ Erro no schema do almoxarifado:', e.message));
 
-  // Servir fotos — padrão /api/uploads/almoxarifado (compatível com proxy /api)
-  app.use('/api/uploads/almoxarifado', require('express').static(uploadsAlmoxDir));
-  app.use('/uploads/almoxarifado', require('express').static(uploadsAlmoxDir));
+  // ── Servir uploads legados — Etapa 33 (furo C42) ────────────────────────────────────────────
+  // Ate aqui estes dois mounts eram PUBLICOS: ficam em prefixo diferente do `/api/almoxarifado`
+  // autenticado logo abaixo, entao nao passavam por `authenticateToken` nem por
+  // `checkModulePermission`. Deslogado, com a URL na mao, qualquer um baixava certificado de
+  // fornecedor, comprovante de sucateamento e a imagem da assinatura de entrega.
+  //
+  // O verificador vem ANTES do static e so olha `exp` + `sig` — sem banco e sem sessao, porque
+  // roda em toda imagem de toda lista.
+  const assinadorUpload = criarAssinadorUpload(resolveJwtSecret(PERSISTENT_DATA_DIR));
+  // Ponto unico de mintagem do modulo. Sem esta linha, materialPhotoUrl LANCA — de proposito:
+  // devolver URL sem assinatura seria o furo C42 de volta, e de volta em silencio.
+  require('../services/almoxarifado/materialPhoto').configurarAssinador(assinadorUpload);
+  app.use('/api/uploads/almoxarifado', assinadorUpload.middleware, require('express').static(uploadsAlmoxDir, {
+    index: false,
+    dotfiles: 'deny',
+    // nosniff + CSP sandbox: neutralizam script mesmo em arquivo .html/.svg que JA esteja no disco
+    // de antes desta correcao — fechar o upload nao limpa o que ja foi gravado.
+    setHeaders: cabecalhosUploadSeguro,
+  }));
+  // FECHO obrigatorio. `express.static` chama `next()` quando o arquivo NAO existe, e a requisicao
+  // continuaria descendo — uma assinatura VALIDA para um nome inexistente cairia no proximo
+  // handler em vez de responder 404. Medido na revisao do plano.
+  app.use('/api/uploads/almoxarifado', (req, res) => res.status(404).end());
+
+  // ⚠️ O MOUNT LEGADO `/uploads/almoxarifado` (sem `/api`) FOI REMOVIDO — nao esqueca dele aqui.
+  //
+  // Ele existia desde a Etapa 2 e, em PRODUCAO, ja estava morto: `server/index.js` registra o
+  // catch-all do SPA (`app.get('*')`) ANTES deste modulo, e a lista de prefixos que ele deixa
+  // passar (`:23222-23228`) tem `/api`, `/health`, `/logo`, `/cabecalho` e `/Logo_` — **nao tem
+  // `/uploads`**. Ou seja: `/uploads/almoxarifado/x.png` nunca chegava aqui; devolvia o index.html
+  // do React com 200.
+  //
+  // Isso foi medido na revisao adversarial da Etapa 33, e derrubou uma afirmacao que ESTE
+  // COMENTARIO fazia: dizia que "este modulo e registrado ANTES" do build do client. E o
+  // CONTRARIO. A consequencia pratica era que a regra "os dois mounts exigem assinatura" so valia
+  // no `/api` — o outro nao exigia nada porque nunca era alcancado.
+  //
+  // Removido em vez de consertado (bastaria acrescentar `/uploads` a lista do catch-all) porque
+  // ninguem o usa: o client so aceita URL comecando em `/api/uploads/almoxarifado/`
+  // (`resolveMaterialPhotoUrl`), e o servidor so mina URLs com esse prefixo. Manter um mount morto
+  // que promete protecao e pior que nao ter mount.
 
   const almoxMiddleware = checkModulePermission
     ? [authenticateToken, checkModulePermission('almoxarifado')]
@@ -580,6 +644,17 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       }
     }
 
+    // Etapa 54 (RN-05): só quando a padrão MUDA — editar outro campo de um material cuja padrão já
+    // estava inativa (legado) não pode travar.
+    if (req.body.localizacao_padrao_id !== undefined
+        && Number(req.body.localizacao_padrao_id || 0) !== Number(current.localizacao_padrao_id || 0)) {
+      try {
+        await materialService.validarLocalizacaoPadrao(db, req.body.localizacao_padrao_id);
+      } catch (errPadrao) {
+        return res.status(errPadrao.status || 400).json({ error: errPadrao.message });
+      }
+    }
+
     let locId, locText;
     try {
       ({ locId, locText } = await resolveLocalizacaoFromFk(merged.localizacao_padrao_id));
@@ -644,7 +719,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         stockService.syncSaldoLocalizacaoPadrao(db, materialId).catch(() => null),
         alertService.verificarAlertaPorMaterialId(db, materialId).catch(() => null),
       ]);
-      res.json(row);
+      // Etapa 33 (fix-round): este PUT devolvia `foto` CRU enquanto o GET irmao devolve assinada —
+      // dois contratos divergentes para a MESMA entidade. Inocuo hoje so porque o formulario navega
+      // embora depois de salvar; a primeira tela que consumir a resposta do PUT receberia '' do
+      // helper e perderia a foto. Achado da revisao adversarial.
+      res.json(enrichMaterialRow(row));
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -1488,6 +1567,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             falhasRetencao.push(`${material.codigo}: Material inativo não pode ser movimentado`);
             continue;
           }
+          // Etapa 62 (RN-02): material com serie nao pode ser contado em fracao — o ajuste nao se
+          // estorna (AJUSTE_INVENTARIO) e a regularizacao das series (floor) nunca fecharia a diferenca.
+          if (material.controle_serie && !Number.isInteger(Number(item.quantidade_contada))) {
+            falhasRetencao.push(`${material.codigo}: material com controle de serie exige contagem inteira`);
+            continue;
+          }
 
           if (material.proprietario_cliente_id && !can(req.user, 'ajustar_material_cliente')) {
             // Checagem LEVE — de propósito NÃO chama ownerRules.assertAjustePermitido aqui: essa
@@ -1602,7 +1687,21 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         console.warn('[almoxarifado-alertas] Falha ao avisar divergencia de inventario pos-conclusao:', e.message);
       }
 
-      res.json({ success: true, ajustesAplicados, impactoFinanceiro });
+      // Etapa 62 (RN-02): o inventario ajusta o fisico sem saber QUAIS series foram contadas — os
+      // materiais com serie cujas presentes nao batem mais com o fisico vao na resposta, e a tela
+      // manda para Regularizar series (Etapa 61), cujos limites sao exatamente essa diferenca.
+      const seriesARegularizar = [];
+      for (const mid of materiaisAjustados) {
+        // eslint-disable-next-line no-await-in-loop
+        const mt = await dbGet(db, `SELECT id, codigo, quantidade_atual, controle_serie,
+            (SELECT COUNT(*) FROM series_almoxarifado s WHERE s.material_id = m.id AND s.status IN ('EM_ESTOQUE','BLOQUEADA')) as presentes
+          FROM materiais_almoxarifado m WHERE id = ?`, [mid]);
+        if (mt && mt.controle_serie && Number(mt.presentes) !== Number(mt.quantidade_atual)) {
+          seriesARegularizar.push({ material_id: mt.id, codigo: mt.codigo, fisico: mt.quantidade_atual, presentes: Number(mt.presentes) });
+        }
+      }
+
+      res.json({ success: true, ajustesAplicados, impactoFinanceiro, series_a_regularizar: seriesARegularizar });
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
     }
@@ -1727,29 +1826,6 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // ════════════════════════════════════════════════════════════════════════════
   // NOVAS TABELAS — Requisições, Tipos, Localizações, Configurações
   // ════════════════════════════════════════════════════════════════════════════
-
-  // Adicionar coluna tipo_material_id na tabela materiais (se não existir)
-  db.run(`ALTER TABLE materiais_almoxarifado ADD COLUMN tipo_material_id INTEGER REFERENCES tipos_material_almoxarifado(id)`, () => {});
-  db.run(`ALTER TABLE materiais_almoxarifado ADD COLUMN ponto_pedido REAL DEFAULT 0`, () => {});
-  db.run(`ALTER TABLE materiais_almoxarifado ADD COLUMN prazo_reposicao_dias INTEGER DEFAULT 0`, () => {});
-  db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN tipo TEXT DEFAULT 'Almoxarifado'`, () => {});
-  db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN parent_id INTEGER`, () => {});
-  db.run(`ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_separada REAL DEFAULT 0`, () => {});
-  db.run(`ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_entregue REAL DEFAULT 0`, () => {});
-  db.run(`ALTER TABLE requisicoes_almoxarifado ADD COLUMN ativo INTEGER DEFAULT 1`, () => {});
-  db.run(`ALTER TABLE requisicoes_almoxarifado ADD COLUMN ultimo_lembrete_enviado DATETIME`, () => {});
-  db.run(`ALTER TABLE requisicoes_almoxarifado ADD COLUMN valor_total REAL DEFAULT 0`, () => {});
-  db.run(`ALTER TABLE requisicoes_almoxarifado ADD COLUMN requer_aprovacao_valor INTEGER DEFAULT 0`, () => {});
-  db.run(`ALTER TABLE requisicoes_almoxarifado ADD COLUMN aprovador_valor_id INTEGER`, () => {});
-  db.run(`ALTER TABLE requisicoes_almoxarifado ADD COLUMN aprovador_valor_nome TEXT`, () => {});
-  db.run(`ALTER TABLE requisicoes_almoxarifado ADD COLUMN data_aprovacao_valor DATETIME`, () => {});
-  db.run(`ALTER TABLE requisicoes_almoxarifado ADD COLUMN rejeicao_valor_motivo TEXT`, () => {});
-  db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN pos_x REAL`, () => {});
-  db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN pos_y REAL`, () => {});
-  db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN largura REAL DEFAULT 120`, () => {});
-  db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN altura REAL DEFAULT 80`, () => {});
-  db.run(`ALTER TABLE localizacoes_almoxarifado ADD COLUMN subgrupo TEXT`, () => {});
-  db.run(`ALTER TABLE materiais_almoxarifado ADD COLUMN familia_id INTEGER REFERENCES familias_material_almoxarifado(id)`, () => {});
 
   // ════════════════════════════════════════════════════════════════════════════
   // TIPOS DE MATERIAL
@@ -1884,10 +1960,27 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     return JSON.stringify(value);
   }
 
+  // Etapa 55 (RN-01): o próximo código vem do servidor, contando as INATIVAS e a tabela inteira —
+  // ver services/almoxarifado/localizacaoCodigo.js. A tela cai no gerador local se isto falhar.
+  app.get('/api/almoxarifado/localizacoes/proximo-codigo', async (req, res) => {
+    try {
+      const codigo = await proximoCodigoLocalizacao(db, {
+        setor: req.query.setor, parent_id: req.query.parent_id, excluir_id: req.query.excluir_id,
+      });
+      res.json({ codigo });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
   app.post('/api/almoxarifado/localizacoes',(req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
     const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, almoxarifado_id, bloqueada, tipos_material_permitidos } = req.body;
     if (!codigo) return res.status(400).json({ error: 'Código obrigatório' });
+    // Etapa 68 (RN-02): antes de qualquer escrita — inclusive do ramo de reativacao abaixo.
+    if (tipoLocalizacaoPresente(tipo) && !TIPOS_LOCALIZACAO.includes(tipo)) {
+      return res.status(400).json({ error: mensagemTipoInvalido(tipo) });
+    }
     const subgrupoVal = subgrupo ? String(subgrupo).trim() || null : null;
     const parentVal = parent_id ? parseInt(parent_id, 10) : null;
     const bloqueadaVal = bloqueada ? 1 : 0;
@@ -1912,6 +2005,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
           // Existe uma localização EXCLUÍDA com este código → reativa e atualiza os dados.
           if (existente) {
+            // Etapa 55 (RN-05): o assistente manda `somente_novo` — ele PROPÔS um código novo, e reativar
+            // em silêncio uma localização desativada (com histórico e saldo) não é o que o usuário pediu.
+            // Sem o campo, a reativação da Etapa 19 continua (código digitado à mão).
+            if (req.body.somente_novo === true) {
+              return res.status(409).json({ error: `O código ${codigo} pertence a uma localização desativada — gere outro código` });
+            }
             db.run(`UPDATE localizacoes_almoxarifado
                     SET descricao=?, setor=?, subgrupo=?, tipo=?, parent_id=?, pos_x=?, pos_y=?, largura=?, altura=?, almoxarifado_id=?, bloqueada=?, tipos_material_permitidos=?, ativo=1
                     WHERE id=?`,
@@ -1957,9 +2056,20 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     });
   });
 
+  // Etapa 54 (RN-04): localização que é PADRÃO de material ativo não é apagada nem desativada. A
+  // entrada sem destino (recebimento, exclusão de requisição, retorno de terceiros — nenhum tem
+  // campo de destino) cai na padrão; desativá-la mandava o saldo para um endereço que o mapa não
+  // mostra. Descartado: limpar a padrão dos materiais sozinho (muda cadastro sem o dono saber).
+  function mensagemPadraoEmUso(usam) {
+    const codigos = usam.slice(0, 5).map((m) => m.codigo).join(', ') + (usam.length > 5 ? ', …' : '');
+    return `Localização é a padrão de ${usam.length} material(is) ativo(s) (${codigos}). Troque a localização padrão deles antes de apagar ou desativar.`;
+  }
+
   app.put('/api/almoxarifado/localizacoes/:id',(req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
     const { codigo, descricao, setor, subgrupo, tipo, parent_id, pos_x, pos_y, largura, altura, ativo, almoxarifado_id, bloqueada, tipos_material_permitidos } = req.body;
+    // Etapa 55 (Fase 2): sem código o UPDATE estourava o NOT NULL com 500.
+    if (!codigo) return res.status(400).json({ error: 'Código obrigatório' });
     const subgrupoVal = subgrupo ? String(subgrupo).trim() || null : null;
     const parentVal = parent_id ? parseInt(parent_id, 10) : null;
     if (parentVal && parseInt(req.params.id, 10) === parentVal) {
@@ -1991,6 +2101,43 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         if (curErr) return res.status(500).json({ error: curErr.message });
         if (!current) return res.status(404).json({ error: 'Localização não encontrada' });
 
+        // Etapa 68 (RN-03): recusa so quando o tipo MUDA para fora da lista — o legado esquisito
+        // gravado antes continua editavel/movivel (a tela manda o tipo atual). Logo depois do 404 e
+        // antes da guarda de desativacao (Fase 2 da Etapa 68).
+        if (tipoLocalizacaoPresente(tipo) && tipo !== current.tipo && !TIPOS_LOCALIZACAO.includes(tipo)) {
+          return res.status(400).json({ error: mensagemTipoInvalido(tipo) });
+        }
+        // Etapa 68 (Surpresa 2): sem `tipo` no body PRESERVA — `tipo || 'Almoxarifado'` apagava a
+        // area calado (o mesmo padrao que a Etapa 55 corrigiu para `ativo`). null/'' = Almoxarifado.
+        const tipoFinal = tipo === undefined ? current.tipo : (tipo || 'Almoxarifado');
+
+        // Etapa 52 (RN-04): desativar pelo PUT é apagar por outro caminho — a mesma guarda do DELETE.
+        // Fase 5: `Number(ativo) !== 1` e nao `!Number(ativo)` - `ativo: 2` gravava 2 e a localizacao
+        // sumia do mapa (que filtra ativo = 1) com o material dentro.
+        const desativando = ativo !== undefined && Number(ativo) !== 1 && Number(current.ativo) === 1;
+        if (desativando) {
+          stockService.contarOcupacaoLocalizacao(db, Number(req.params.id)).then((ocupantes) => {
+            if (ocupantes > 0) {
+              return res.status(400).json({
+                error: `Localização ocupada: há material nela (${ocupantes} item(ns)). Transfira o saldo antes de apagar ou desativar.`,
+              });
+            }
+            return stockService.materiaisComPadrao(db, Number(req.params.id)).then((usam) => {
+              if (usam.length > 0) return res.status(400).json({ error: mensagemPadraoEmUso(usam) });
+              return continuarPut();
+            });
+          }).catch((e) => res.status(500).json({ error: e.message }));
+          return;
+        }
+        continuarPut();
+        function continuarPut() {
+        // Etapa 55 (RN-02): código de OUTRA localização — o Mover propunha o de uma inativa e o UPDATE
+        // estourava o UNIQUE com 500 cru. A mensagem diz quando a dona é desativada (a tela não a lista).
+        db.get('SELECT id, ativo FROM localizacoes_almoxarifado WHERE codigo = ? AND id <> ?', [codigo, req.params.id], (cErr, dona) => {
+        if (cErr) return res.status(500).json({ error: cErr.message });
+        if (dona) {
+          return res.status(400).json({ error: Number(dona.ativo) === 1 ? 'Código já existe' : 'Código já existe (localização desativada)' });
+        }
         const bloqueadaFinal = bloqueada === undefined ? (current.bloqueada ? 1 : 0) : (bloqueada ? 1 : 0);
         const tiposFinal = tipos_material_permitidos === undefined
           ? current.tipos_material_permitidos
@@ -2000,12 +2147,16 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           if (dupErr) return res.status(500).json({ error: dupErr.message });
           if (isDup) return res.status(400).json({ error: 'Subgrupo já existe neste setor e localização pai' });
           db.run(`UPDATE localizacoes_almoxarifado SET codigo=?, descricao=?, setor=?, subgrupo=?, tipo=?, parent_id=?, pos_x=?, pos_y=?, largura=?, altura=?, almoxarifado_id=COALESCE(?, almoxarifado_id), bloqueada=?, tipos_material_permitidos=?, ativo=? WHERE id=?`,
-            [codigo, descricao || null, setor || null, subgrupoVal, tipo || 'Almoxarifado', parentVal,
+            [codigo, descricao || null, setor || null, subgrupoVal, tipoFinal, parentVal,
              pos_x ?? null, pos_y ?? null, largura ?? 120, altura ?? 80, almoxarifadoIdParam,
              bloqueadaFinal, tiposFinal,
-             ativo !== undefined ? ativo : 1, req.params.id],
+             // Etapa 55 (RN-03, C74 (3)): sem `ativo` PRESERVA — gravava 1 e reativava pela API.
+             ativo !== undefined ? (Number(ativo) === 1 ? 1 : 0) : current.ativo, req.params.id],
             function (err) {
-              if (err) return res.status(500).json({ error: err.message });
+              if (err) {
+                if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
+                return res.status(500).json({ error: err.message });
+              }
               db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [req.params.id], (e, r) => {
                 auditarCadastro({
                   req, entidade: 'localizacao', entidade_id: Number(req.params.id), acao: 'EDICAO',
@@ -2014,6 +2165,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
               });
             });
         });
+        });
+        }
       });
   });
 
@@ -2028,6 +2181,24 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         if (row) {
           return res.status(400).json({ error: 'Não é possível remover: localização possui saldo' });
         }
+        // Etapa 52 (RN-04): a régua de "ocupada" é a do mapa (`OCUPACAO_SQL`). Sem isto, uma
+        // localização ocupada SÓ pelo legado (material com padrão aqui e sem linha endereçada) era
+        // apagada, e o material sumia de todas as telas.
+        // Fase 5 (MINOR 4): só para localização ATIVA — a já apagada respondia "ocupada… transfira o
+        // saldo antes de apagar", o que engana (ela já está apagada; o 200 `ja_inativo` é o certo).
+        Promise.all([
+          stockService.contarOcupacaoLocalizacao(db, Number(req.params.id)),
+          dbGet(db, 'SELECT ativo FROM localizacoes_almoxarifado WHERE id = ?', [req.params.id]),
+        ]).then(([ocupantesBrutos, linhaLoc]) => {
+        const ocupantes = linhaLoc && Number(linhaLoc.ativo) === 1 ? ocupantesBrutos : 0;
+        if (ocupantes > 0) {
+          return res.status(400).json({
+            error: `Localização ocupada: há material nela (${ocupantes} item(ns)). Transfira o saldo antes de apagar ou desativar.`,
+          });
+        }
+        // Etapa 54 (RN-04): nem padrão de material ativo — ver `mensagemPadraoEmUso`.
+        return (linhaLoc && Number(linhaLoc.ativo) === 1 ? stockService.materiaisComPadrao(db, Number(req.params.id)) : Promise.resolve([])).then((usam) => {
+        if (usam.length > 0) return res.status(400).json({ error: mensagemPadraoEmUso(usam) });
         // Etapa 19 (RN-01): leitura previa so para o "de" do log — as leituras que a rota ja
         // fazia sao de SALDO, nao da linha.
         db.get(`SELECT * FROM localizacoes_almoxarifado WHERE id = ?`, [req.params.id], (selErr, anterior) => {
@@ -2048,6 +2219,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             }).finally(() => res.json({ success: true }));
           });
         });
+        });
+        }).catch((e) => res.status(500).json({ error: e.message }));
       });
   });
 
@@ -2507,6 +2680,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       if (err) return res.status(500).json({ error: err.message });
       const obj = {};
       rows.forEach(r => {
+        if (configDiff.CHAVES_APOSENTADAS.includes(r.chave)) return;
         const valor = configDiff.CHAVES_SECRETAS.includes(r.chave)
           ? (r.valor ? alertService.PASSWORD_MASK : '')
           : r.valor;
@@ -2542,7 +2716,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // alimenta o Set de chaves conhecidas, entao a coluna a mais nao muda nada nela, e e ela
       // que da o `dados_anteriores` do diff sem um segundo SELECT.
       const existentes = await dbAll(db, `SELECT chave, valor FROM configuracoes_almoxarifado`);
-      const conhecidas = new Set(existentes.map(r => r.chave));
+      // Etapa 47 (T2): a chave aposentada tem linha em banco antigo, mas não é "conhecida" — senão
+      // ela sumiria da listagem e continuaria gravável com 200.
+      const conhecidas = new Set(existentes.map(r => r.chave)
+        .filter(c => !configDiff.CHAVES_APOSENTADAS.includes(c)));
       const desconhecidas = entradas.map(([chave]) => chave).filter(c => !conhecidas.has(c));
       if (desconhecidas.length) {
         return res.status(400).json({ error: `Configuração desconhecida: ${desconhecidas.join(', ')}` });
@@ -2573,7 +2750,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // Revisao da Task 1 (Minor i): a RN-09 promete "0 ou 1" para o liga/desliga — sem esta
       // guarda, 'banana' gravava com 200 e o gancho da Task 2 trataria como desligado em
       // silencio (getConfig compara com '1').
-      const CHAVES_BOOL = ['notificar_movimentacoes'];
+      // Etapa 70: as duas chaves do aviso de entrada de recebimento (receiptNotificationService
+      // compara com '1' — 'talvez' seria desligado em silencio).
+      const CHAVES_BOOL = ['notificar_movimentacoes', 'notificar_recebimento_entrada', 'notificar_recebimento_solicitante'];
       for (const [chave, valor] of entradas) {
         // Etapa 20 (C4, RN-06): as duas chaves de SEGREDO sao semeadas, entao passavam na guarda
         // de chaves conhecidas acima e esta rota as gravava — SEM o `shouldUpdateSecret` que a
@@ -2953,7 +3132,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   app.get('/api/almoxarifado/requisicoes',(req, res) => {
     const { status, urgencia, minha, departamento } = req.query;
     let sql = `SELECT r.*,
-                 (SELECT COUNT(*) FROM itens_requisicao_almoxarifado WHERE requisicao_id = r.id) as total_itens
+                 (SELECT COUNT(*) FROM itens_requisicao_almoxarifado WHERE requisicao_id = r.id) as total_itens,
+                 -- Etapa 47 (9.7/I4): a tela sabe que o "Aprovar" vai ser barrado pelas regras.
+                 (SELECT COUNT(*) FROM requisicao_aprovacoes_regra p
+                   WHERE p.requisicao_id = r.id AND p.status = 'ABERTA'
+                     AND r.status IN ('PENDENTE','AGUARDANDO_APROVACAO_VALOR')) as pendencias_regra_abertas
                FROM requisicoes_almoxarifado r WHERE COALESCE(r.ativo, 1) = 1`;
     const params = [];
 
@@ -2963,7 +3146,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     if (urgencia) { sql += ` AND r.urgencia = ?`; params.push(urgencia); }
     if (departamento) { sql += ` AND r.departamento LIKE ?`; params.push(`%${departamento}%`); }
 
-    sql += ` ORDER BY CASE r.urgencia WHEN 'CRITICO' THEN 1 WHEN 'URGENTE' THEN 2 ELSE 3 END, r.created_at DESC`;
+    sql += ` ORDER BY CASE UPPER(r.urgencia) WHEN 'CRITICO' THEN 1 WHEN 'URGENTE' THEN 2 ELSE 3 END, r.created_at DESC`;
 
     db.all(sql, params, (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -2985,7 +3168,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   // GET /api/almoxarifado/requisicoes/:id — detalhe com itens
   app.get('/api/almoxarifado/requisicoes/:id',(req, res) => {
-    db.get(`SELECT * FROM requisicoes_almoxarifado WHERE id = ? AND COALESCE(ativo, 1) = 1`, [req.params.id], (err, req_row) => {
+    db.get(`SELECT *,
+              (SELECT COUNT(*) FROM requisicao_aprovacoes_regra p
+                WHERE p.requisicao_id = requisicoes_almoxarifado.id AND p.status = 'ABERTA'
+                  AND requisicoes_almoxarifado.status IN ('PENDENTE','AGUARDANDO_APROVACAO_VALOR')) as pendencias_regra_abertas
+            FROM requisicoes_almoxarifado WHERE id = ? AND COALESCE(ativo, 1) = 1`, [req.params.id], (err, req_row) => {
       if (err) return res.status(500).json({ error: err.message });
       if (!req_row) return res.status(404).json({ error: 'Requisição não encontrada' });
 
@@ -3008,13 +3195,19 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                      ma.foto, ma.material_critico,
                      ma.localizacao, ma.localizacao_padrao_id,
                      a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,
-                     tm.nome as tipo_nome, tm.icone as tipo_icone, tm.is_epi, tm.requer_assinatura
+                     tm.nome as tipo_nome, tm.icone as tipo_icone, tm.is_epi, tm.requer_assinatura,
+                     -- Etapa 59: a origem planejada na separação, para a tela mostrar "separado de X".
+                     lsep.codigo as origem_separacao_codigo, ltsep.codigo as lote_separacao_codigo
               FROM itens_requisicao_almoxarifado ir
               JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
               LEFT JOIN tipos_material_almoxarifado tm ON ma.tipo_material_id = tm.id
               LEFT JOIN localizacoes_almoxarifado l ON ma.localizacao_padrao_id = l.id
               LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
-              WHERE ir.requisicao_id = ?`,
+              LEFT JOIN localizacoes_almoxarifado lsep ON lsep.id = ir.origem_separacao_id
+              LEFT JOIN lotes_almoxarifado ltsep ON ltsep.id = ir.lote_separacao_id
+              WHERE ir.requisicao_id = ?
+              -- Etapa 73 (T0): a ordem do pedido (o id do item nasce na ordem do payload).
+              ORDER BY ir.id`,
         [req.params.id], async (err2, itens) => {
           if (err2) return res.status(500).json({ error: err2.message });
           // Etapa 15 (C2, mudança aditiva): quem vê a requisição vê as assinaturas de entrega
@@ -3025,9 +3218,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           // ela é obrigatória (material crítico SEPARADO) saem junto — leitura sem gate novo.
           let assinaturas;
           let separacoes;
+          let substituicoes; // Etapa 63 (RN-03)
           try {
             assinaturas = await deliverySignatureService.listarAssinaturas(db, req.params.id);
             separacoes = await requisitionService.listarSeparacoes(db, req.params.id);
+            substituicoes = await requisitionService.listarSubstituicoes(db, req.params.id);
           } catch (e) {
             return res.status(500).json({ error: e.message });
           }
@@ -3041,12 +3236,71 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             ),
             assinaturas_entrega: assinaturas,
             separacoes,
+            substituicoes,
             conferencia,
             conferencia_obrigatoria: requisitionService.conferenciaObrigatoria(itens || []),
           });
         });
     });
   });
+
+  /**
+   * Aprovação automática (config `aprovacao_automatica`), comum às duas portas de envio.
+   * Etapa 47 (RN-10, 9.7/M1): não se aplica com pendência de regra aberta nem com regras ainda
+   * não avaliadas — a guarda está no WHERE, e `changes` diz a verdade. Antes eram dois `db.run`
+   * com callback arrow (sem `this.changes`) e a resposta afirmava APROVADO sem conferir.
+   *
+   * Etapa 73 (T2, RN-06, C122, D3/B359): gravava APROVADO direto — sem reservar nada com saldo e
+   * sem calcular AGUARDANDO_* sem saldo. A Etapa 4 fez o /aprovar reservar e a Task 6 fez o
+   * /aprovar-valor reservar ("o mesmo fato teria dois status conforme a rota que aprovou"); esta
+   * terceira porta tinha ficado de fora. Agora segue a ordem do /aprovar: pré-checagem do gate
+   * (se lançar, fica PENDENTE e NADA é reservado), pós-aprovação (status calculado + reserva no
+   * nome de quem criou/enviou, D5/B361), UPDATE guardado e, perdendo, desfaz as reservas.
+   * A pré-checagem reavalia as regras se o avaliador falhou no envio (mesmo efeito do /aprovar):
+   * sem regra casada, a requisição aprova sozinha mesmo depois da falha (B359).
+   * @returns {Promise<null|{status: string, reservas: Array}>} null se não aprovou.
+   */
+  async function tentarAprovacaoAutomatica(requisicaoId, urgencia, user) {
+    const cfg = await dbGet(db, `SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'aprovacao_automatica'`);
+    // Etapa 48 (Fase 2, IMPORTANT-2): sem distinguir maiuscula - um rascunho gravado antes da lista
+    // fechar com 'critico' minusculo escapava da trava e era auto-aprovado.
+    if (!cfg || cfg.valor !== '1' || String(urgencia || '').toUpperCase() === 'CRITICO') return null;
+    const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
+    if (!reqRow || reqRow.status !== 'PENDENTE') return null;
+    try {
+      await approvalRulesService.exigirSemPendenciaAberta(db, reqRow);
+    } catch (e) {
+      return null;
+    }
+    // Etapa 73 (Fase 5, MENOR): uma falha no meio (ex.: SQLITE_BUSY lendo o saldo de um item) saia
+    // como 500 para uma requisicao JA criada, com a reserva do 1o item presa e a requisicao PENDENTE.
+    // Agora prepararPosAprovacao desfaz as proprias reservas antes de lancar, e aqui a falha vira
+    // "a aprovacao automatica nao aconteceu": a requisicao fica PENDENTE (201) e o /aprovar manual
+    // aprova depois. O mesmo para o UPDATE que falha (desfaz o que reservou).
+    let pos;
+    try {
+      pos = await requisitionService.prepararPosAprovacao(db, requisicaoId, user, reqRow);
+    } catch (e) {
+      console.warn(`[almoxarifado-aprovacao-automatica] Falha ao aprovar automaticamente a requisição ${requisicaoId}; fica PENDENTE: ${e.message}`);
+      return null;
+    }
+    let upd;
+    try {
+      upd = await dbRun(db,
+        `UPDATE requisicoes_almoxarifado SET status=?, aprovador_nome='Sistema (automático)', data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
+         WHERE id=? AND status='PENDENTE' AND ${approvalRulesService.GATE_SQL}`,
+        [pos.status, requisicaoId]);
+    } catch (e) {
+      console.warn(`[almoxarifado-aprovacao-automatica] Falha ao gravar a aprovação automática da requisição ${requisicaoId}; fica PENDENTE: ${e.message}`);
+      await requisitionService.desfazerReservas(db, user, pos.reservas);
+      return null;
+    }
+    if (!upd.changes) {
+      await requisitionService.desfazerReservas(db, user, pos.reservas);
+      return null;
+    }
+    return { status: pos.status, reservas: pos.reservas };
+  }
 
   // POST /api/almoxarifado/requisicoes — criar requisição
   // requirePermission('requisitar'): [ADMINISTRADOR, PRODUCAO, ENGENHARIA, ALMOXARIFE] —
@@ -3073,22 +3327,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         });
       }
 
-      // Verificar aprovação automática
-      db.get(`SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'aprovacao_automatica'`, [], (e, cfg) => {
-        if (!e && cfg && cfg.valor === '1' && req.body.urgencia !== 'CRITICO') {
-          db.run(`UPDATE requisicoes_almoxarifado SET status='APROVADO', aprovador_nome='Sistema (automático)', data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
-            [result.id], () => {
-              res.status(201).json({
-                id: result.id, numero: result.numero, status: 'APROVADO', aprovacao: 'automatica',
-                valor_total: result.valor_total,
-              });
-            });
-        } else {
-          res.status(201).json({
-            id: result.id, numero: result.numero, status: 'PENDENTE',
-            valor_total: result.valor_total,
-          });
-        }
+      const auto = await tentarAprovacaoAutomatica(result.id, req.body.urgencia, req.user);
+      // Etapa 73 (D4/B360): o status GRAVADO (TOTALMENTE_RESERVADA, AGUARDANDO_COMPRA...), nao mais
+      // 'APROVADO' fixo. A tela (RequisicaoForm) le so `aprovacao`.
+      res.status(201).json({
+        id: result.id, numero: result.numero,
+        status: auto ? auto.status : 'PENDENTE',
+        ...(auto ? { aprovacao: 'automatica' } : {}),
+        valor_total: result.valor_total,
       });
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
@@ -3120,7 +3366,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         return res.status(400).json({ error: 'Apenas rascunhos podem ser enviados' });
       }
 
-      // RN-A (Etapa 33): o rascunho pode ter sido salvo sem OS, mas enviar significa pedir
+      // Etapa 48 (Fase 5, IMPORTANT-1): o envio é quando a urgência passa a valer (regras,
+      // auto-aprovação), e o rascunho pode ter sido gravado antes da lista fechar. Normaliza a caixa
+      // e recusa o que continuar fora da lista, com a mesma literal da criação.
+      const urgenciaEnvio = String(reqRow.urgencia || 'NORMAL').toUpperCase();
+      if (!TIPOS_URGENCIA.includes(urgenciaEnvio)) {
+        return res.status(400).json({ error: `Urgência inválida: ${reqRow.urgencia}` });
+      }
+
+      // RN-A (Etapa 33 da main): o rascunho pode ter sido salvo sem OS, mas enviar significa pedir
       // material de verdade. A regra e a MESMA funcao usada na criacao, nao uma copia.
       try {
         requisitionCreateService.exigirOS(reqRow.os_referencia);
@@ -3129,8 +3383,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       }
 
       await dbRun(db,
-        `UPDATE requisicoes_almoxarifado SET status='PENDENTE', updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-        [req.params.id]);
+        // Etapa 47 (Fase 5, regras, I2): `regras_avaliadas_em = NULL` no mesmo UPDATE - o gate fica
+        // FECHADO desde o instante em que a requisicao vira PENDENTE ate o avaliador gravar o carimbo.
+        // Sem isto, um rascunho que ja tivesse carimbo (os da migracao) enviado com o avaliador falhando
+        // deixava o /aprovar passar por vazio.
+        `UPDATE requisicoes_almoxarifado SET status='PENDENTE', urgencia=?, regras_avaliadas_em=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+        [urgenciaEnvio, req.params.id]);
 
       const avaliacaoValor = await requisitionCreateService.dispararNotificacoesCriacao(
         db, req.params.id, req.user.email,
@@ -3147,21 +3405,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       }
 
       // Mesma checagem de aprovação automática que o POST /requisicoes aplica na criação direta.
-      db.get(`SELECT valor FROM configuracoes_almoxarifado WHERE chave = 'aprovacao_automatica'`, [], (e, cfg) => {
-        if (!e && cfg && cfg.valor === '1' && reqRow.urgencia !== 'CRITICO') {
-          db.run(`UPDATE requisicoes_almoxarifado SET status='APROVADO', aprovador_nome='Sistema (automático)', data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
-            [req.params.id], () => {
-              res.json({
-                id: Number(req.params.id), numero: reqRow.numero, status: 'APROVADO', aprovacao: 'automatica',
-                valor_total: avaliacaoValor.valor_total,
-              });
-            });
-        } else {
-          res.json({
-            id: Number(req.params.id), numero: reqRow.numero, status: 'PENDENTE',
-            valor_total: avaliacaoValor.valor_total,
-          });
-        }
+      const auto = await tentarAprovacaoAutomatica(req.params.id, reqRow.urgencia, req.user);
+      res.json({
+        id: Number(req.params.id), numero: reqRow.numero,
+        status: auto ? auto.status : 'PENDENTE', // Etapa 73 (D4/B360)
+        ...(auto ? { aprovacao: 'automatica' } : {}),
+        valor_total: avaliacaoValor.valor_total,
       });
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
@@ -3206,8 +3455,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // dos itens/materiais, não do status da requisição) para gravar tudo num único
       // UPDATE — evita uma janela transitória com status=APROVADO visível a leitores
       // concorrentes entre dois writes.
-      const statusPosAprovacao = await requisitionStateMachine.calcularStatusPosAprovacao(db, req.params.id);
+      // Etapa 47 (RN-11, 9.7/C1): a pré-checagem das regras vem ANTES de reservar. Recusar só no
+      // WHERE do UPDATE deixaria a reserva criada com a requisição PENDENTE, e a reaprovação
+      // reservaria em dobro (medido pela revisão: duas reservas de 10 para um item de 10).
+      await approvalRulesService.exigirSemPendenciaAberta(db, reqRow);
 
+      // Etapa 73 (T2, D3/B359): o cálculo do status e a reserva (abaixo) viraram UMA função,
+      // `requisitionService.prepararPosAprovacao`, a mesma das outras duas portas (/aprovar-valor e
+      // a aprovação automática). Mesma ordem de sempre: calcula ANTES de reservar.
+      //
       // Etapa 4 (design, decisão 2 — ligação 04→07): a aprovação RESERVA o saldo de cada item,
       // e a requisição assume TOTALMENTE_RESERVADA/PARCIALMENTE_RESERVADA em vez de ficar só
       // APROVADO. Sem isso o material aprovado continuava no bolo do disponível e podia ser
@@ -3222,13 +3478,26 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // concorrentes). A janela invertida — reserva criada com a requisição ainda PENDENTE — é
       // inofensiva: a reserva já segura o saldo e carrega requisicao_id, então a entrega a
       // encontra normalmente depois.
-      const reserva = await requisitionService.reservarItensAprovacao(db, req.params.id, req.user, reqRow);
-      const statusFinal = reserva.status || statusPosAprovacao;
+      const reserva = await requisitionService.prepararPosAprovacao(db, req.params.id, req.user, reqRow);
+      const statusFinal = reserva.status;
 
-      await dbRun(db,
+      // A GARANTIA: status ainda PENDENTE e o gate das regras, no mesmo UPDATE. `status='PENDENTE'`
+      // fecha também o achado anterior à etapa — dois /aprovar simultâneos respondiam 200 os dois
+      // e o segundo reservava de novo.
+      const upd = await dbRun(db,
         `UPDATE requisicoes_almoxarifado SET status=?, aprovador_id=?, aprovador_nome=?, data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
-         WHERE id=?`,
+         WHERE id=? AND status='PENDENTE' AND ${approvalRulesService.GATE_SQL}`,
         [statusFinal, req.user.id, req.user.nome || req.user.email, req.params.id]);
+      if (!upd.changes) {
+        // Perdeu: devolve SÓ as reservas que ESTA chamada criou. Não `liberarReservasDaRequisicao`
+        // — ela soltaria também as de um /aprovar concorrente que venceu (9.7/C1).
+        await requisitionService.desfazerReservas(db, req.user, reserva.reservas);
+        const atual = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+        const msgGate = await approvalRulesService.mensagemGateAtual(db, req.params.id);
+        return res.status(400).json({
+          error: msgGate || `Transição inválida: ${atual?.status} → APROVADO`,
+        });
+      }
 
       await registrarAuditoria(db, {
         entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'APROVACAO',
@@ -3309,22 +3578,108 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // status vivem lá, e não faz sentido segurar saldo de uma aprovação que vai ser recusada.
       // Se nada for reservado, `status` vem null e o APROVADO gravado pelo serviço permanece —
       // o comportamento anterior sobrevive intacto quando não há o que reservar.
+      //
+      // Etapa 73 (T2, RN-05, D3/B359): o "se nada for reservado, o APROVADO permanece" deixou de
+      // valer. Sem saldo nenhum a liberação por valor ficava APROVADO — nunca AGUARDANDO_COMPRA/
+      // AGUARDANDO_ESTOQUE como o /aprovar. Agora passa pelo mesmo pós-aprovação das outras portas
+      // e grava o status calculado. O UPDATE ganhou guarda (`status = 'APROVADO'`): antes era sem
+      // guarda e sobrescrevia quem mexesse na requisição entre o serviço e aqui. Perdendo, desfaz as
+      // reservas desta chamada e responde o status RELIDO (Fase 2 da 73), não o calculado.
       const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
-      const reserva = await requisitionService.reservarItensAprovacao(db, req.params.id, req.user, reqRow);
-      if (reserva.status) {
-        await dbRun(db,
-          `UPDATE requisicoes_almoxarifado SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-          [reserva.status, req.params.id]);
-        result.status = reserva.status;
+      const pos = await requisitionService.prepararPosAprovacao(db, req.params.id, req.user, reqRow);
+      result.reservas = pos.reservas;
+      if (pos.status !== 'APROVADO') {
+        const upd = await dbRun(db,
+          `UPDATE requisicoes_almoxarifado SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='APROVADO'`,
+          [pos.status, req.params.id]);
+        if (upd.changes) {
+          result.status = pos.status;
+        } else {
+          await requisitionService.desfazerReservas(db, req.user, pos.reservas);
+          const atual = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+          result.status = atual?.status;
+          result.reservas = [];
+        }
       }
-      result.reservas = reserva.reservas;
 
       await registrarAuditoria(db, {
         entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'APROVACAO_VALOR',
         usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
-        dados_novos: { status: result.status, reservas: reserva.reservas },
+        dados_novos: { status: result.status, reservas: result.reservas },
       });
 
+      res.json(result);
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  // ── Etapa 47 (T3/T4): regras de aprovação e as pendências que elas geram ──
+  // Contratos congelados: desenho da etapa, seções 9.5 e 9.7. Configurar regra usa o gate de
+  // configuração do módulo; assinar é por IDENTIDADE (a regra nomeia quem assina — 8.4), por isso
+  // nenhuma ação nova em ACAO_PERFIS.
+  app.get('/api/almoxarifado/regras-aprovacao', async (req, res) => {
+    if (denyUnlessAlmoxAdmin(req, res)) return;
+    try {
+      res.json(await approvalRulesService.listarRegras(db));
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/almoxarifado/regras-aprovacao', async (req, res) => {
+    if (denyUnlessAlmoxAdmin(req, res)) return;
+    try {
+      const regra = await approvalRulesService.criarRegra(db, req.body, req.user);
+      await registrarAuditoria(db, {
+        entidade: 'regra_aprovacao', entidade_id: regra.id, acao: 'CRIACAO',
+        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email, dados_novos: regra,
+      });
+      res.status(201).json(regra);
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  app.put('/api/almoxarifado/regras-aprovacao/:id', async (req, res) => {
+    if (denyUnlessAlmoxAdmin(req, res)) return;
+    try {
+      const result = await approvalRulesService.atualizarRegra(db, req.params.id, req.body, req.user);
+      await registrarAuditoria(db, {
+        entidade: 'regra_aprovacao', entidade_id: Number(req.params.id), acao: 'EDICAO',
+        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+        dados_novos: { ...result.regra, pendencias_obsoletadas: result.pendencias_obsoletadas },
+      });
+      res.json(result);
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  app.get('/api/almoxarifado/aprovacoes-regra/pendentes', async (req, res) => {
+    try {
+      res.json(await approvalRulesService.listarFilaPendentes(db, req.user));
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  app.get('/api/almoxarifado/requisicoes/:id/aprovacoes-regra', async (req, res) => {
+    try {
+      res.json(await approvalRulesService.listarPendenciasDaRequisicao(db, req.params.id));
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  });
+
+  app.put('/api/almoxarifado/requisicoes/:id/aprovacoes-regra/:pid/aprovar', async (req, res) => {
+    try {
+      const result = await approvalRulesService.assinarPendencia(db, req.params.id, req.params.pid, req.user);
+      await registrarAuditoria(db, {
+        entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'APROVACAO_REGRA',
+        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+        dados_novos: { pendencia_id: Number(req.params.pid), pendencias_abertas: result.pendencias_abertas },
+      });
       res.json(result);
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
@@ -3336,6 +3691,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   app.put('/api/almoxarifado/requisicoes/:id/rejeitar-valor', validate(RejeicaoSchema), async (req, res) => {
     try {
       const result = await valueApprovalService.rejeitarValor(db, req.params.id, req.user, req.body.motivo);
+
+      // Etapa 74 (T3, Fase 2): REJEITADO e terminal — o hold ATIVO da requisicao (da aprovacao ou da chegada)
+      // nao pode ficar preso. Best-effort, o molde do cancelamento: a rejeicao ja aconteceu.
+      try {
+        await reservationService.liberarReservasDaRequisicao(db, req.user, req.params.id, 'Requisição rejeitada por valor',
+          { motivoMovimentacao: 'Liberação por rejeição de valor da requisição' });
+      } catch (relErr) {
+        console.warn('[almoxarifado] Liberação de reservas na rejeição por valor:', relErr.message);
+      }
 
       await registrarAuditoria(db, {
         entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'REJEICAO_VALOR',
@@ -3363,6 +3727,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // qualquer usuário com acesso separava/liberava/entregava requisição (e /entregar baixa
   // estoque real via requisitionService -> stockService).
   const requireSepararEmitir = requirePermission('separar_emitir');
+
+  // Etapa 64: a fila de separação do almoxarife (só leitura) — ver requisitionService.listarFilaSeparacao.
+  app.get('/api/almoxarifado/fila-separacao', requireSepararEmitir, (req, res) => {
+    requisitionService.listarFilaSeparacao(db, req.user)
+      .then((fila) => res.json(fila))
+      .catch((e) => res.status(e.status || 500).json({ error: e.message }));
+  });
 
   // PUT /api/almoxarifado/requisicoes/:id/separacao — iniciar separação (com quantidades opcionais)
   app.put('/api/almoxarifado/requisicoes/:id/separacao', requireSepararEmitir, handleSeparacao);
@@ -3516,6 +3887,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         `UPDATE requisicoes_almoxarifado SET status='ENCERRADA', encerrado_por=?, encerrado_em=CURRENT_TIMESTAMP,
          updated_at=CURRENT_TIMESTAMP WHERE id=?`,
         [req.user.id, req.params.id]);
+
+      // Etapa 74 (T3, Fase 2): ENCERRADA e terminal ("nenhuma entrega futura") — o hold que sobrou (da aprovacao ou
+      // da chegada) volta ao disponivel. Best-effort, o molde do cancelamento: o encerramento ja aconteceu.
+      try {
+        await reservationService.liberarReservasDaRequisicao(db, req.user, req.params.id, 'Requisição encerrada',
+          { motivoMovimentacao: 'Liberação por encerramento de requisição' });
+      } catch (relErr) {
+        console.warn('[almoxarifado] Liberação de reservas no encerramento:', relErr.message);
+      }
 
       await registrarAuditoria(db, {
         entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'ENCERRAMENTO',
@@ -3692,7 +4072,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   app.get('/api/almoxarifado/dashboard/requisicoes',(req, res) => {
     db.get(`SELECT COUNT(*) as total FROM requisicoes_almoxarifado WHERE status = 'PENDENTE'`, [], (err, pendente) => {
       if (err) return res.status(500).json({ error: err.message });
-      db.get(`SELECT COUNT(*) as total FROM requisicoes_almoxarifado WHERE status = 'URGENTE' OR urgencia IN ('URGENTE','CRITICO') AND status NOT IN ('ENTREGUE','CANCELADO','REJEITADO')`, [], (err2, urgentes) => {
+      db.get(`SELECT COUNT(*) as total FROM requisicoes_almoxarifado WHERE status = 'URGENTE' OR UPPER(urgencia) IN ('URGENTE','CRITICO') AND status NOT IN ('ENTREGUE','CANCELADO','REJEITADO')`, [], (err2, urgentes) => {
         if (err2) return res.status(500).json({ error: err2.message });
         db.get(`SELECT COUNT(*) as total FROM requisicoes_almoxarifado`, [], (err3, emitidas) => {
           if (err3) return res.status(500).json({ error: err3.message });
@@ -3700,9 +4080,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             if (err4) return res.status(500).json({ error: err4.message });
             db.all(`SELECT r.*, (SELECT COUNT(*) FROM itens_requisicao_almoxarifado WHERE requisicao_id = r.id) as total_itens
                     FROM requisicoes_almoxarifado r
+                    -- Etapa 74 (T4, D10/B376): as reservadas tambem estao abertas — a reserva na chegada leva a requisicao
+                    -- a *_RESERVADA quando o material chega, e sem elas aqui ela sumia do painel nesse momento.
                     WHERE r.status IN ('PENDENTE','APROVADO','EM_SEPARACAO','PARCIALMENTE_ATENDIDA',
-                                        'AGUARDANDO_ESTOQUE','AGUARDANDO_COMPRA','PRONTA_PARA_RETIRADA','AGUARDANDO_APROVACAO_VALOR')
-                    ORDER BY CASE r.urgencia WHEN 'CRITICO' THEN 1 WHEN 'URGENTE' THEN 2 ELSE 3 END, r.created_at ASC
+                                        'AGUARDANDO_ESTOQUE','AGUARDANDO_COMPRA','PRONTA_PARA_RETIRADA','AGUARDANDO_APROVACAO_VALOR',
+                                        'PARCIALMENTE_RESERVADA','TOTALMENTE_RESERVADA')
+                    ORDER BY CASE UPPER(r.urgencia) WHEN 'CRITICO' THEN 1 WHEN 'URGENTE' THEN 2 ELSE 3 END, r.created_at ASC
                     LIMIT 5`, [], (err5, abertas) => {
               if (err5) return res.status(500).json({ error: err5.message });
               res.json({
@@ -3731,7 +4114,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // (tests/helpers/testApp.js), apontaria para o diretorio ERRADO — o harness passa um
     // `dataDir` temporario como PERSISTENT_DATA_DIR so para ESTE arquivo, e `require('./config/paths')`
     // dentro da extended nao veria esse temporario nenhum.
-    require('./almoxarifado/extended')(app, db, authenticateToken, uploadsAlmoxDir);
+    // Etapa 32: `uploadsAnexosDir` desce como 5o parametro pelo MESMO motivo do 4o — e ele que a
+    // extended usa no `destination` do multer de anexo. Sem este argumento a rota registra
+    // normalmente e so morre no primeiro upload real, com a suite de unidade inteira verde: o
+    // modo de falha exato da Etapa 25.
+    require('./almoxarifado/extended')(app, db, authenticateToken, uploadsAlmoxDir, uploadsAnexosDir);
     console.log('✅ Módulo Almoxarifado registrado (v3 — controle completo de estoque)');
   });
 

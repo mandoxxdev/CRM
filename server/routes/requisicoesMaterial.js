@@ -277,7 +277,9 @@ module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticat
 
            LEFT JOIN tipos_material_almoxarifado tm ON ma.tipo_material_id = tm.id
 
-           WHERE ir.requisicao_id = ?`,
+           WHERE ir.requisicao_id = ?
+
+           ORDER BY ir.id`,
 
           [req.params.id],
 
@@ -285,7 +287,11 @@ module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticat
 
             if (err2) return res.status(500).json({ error: err2.message });
 
-            const itensSanitizados = (itens || []).map(sanitizeRequisicaoItemForSector);
+            // Etapa 33: este endpoint devolvia `foto` CRU — o irmao da linha ~153 enriquece e
+            // este nao enriquecia. A tela de Minhas Requisicoes (RequisicoesList.js) remontava a
+            // URL no client, e URL remontada nao tem assinatura: sem este enrich a miniatura de
+            // TODO item sumiria, em silencio. Achado da revisao do plano.
+            const itensSanitizados = (itens || []).map((row) => enrichMaterialRow(sanitizeRequisicaoItemForSector(row)));
 
             res.json({ ...reqRow, itens: itensSanitizados });
 

@@ -6,6 +6,7 @@ import {
 } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import { prefixarAlmoxarifado } from '../../utils/localizacaoLabel';
+import { justificativaDiferente } from '../../utils/justificativaMovimentacao';
 import SeloProprietario from './SeloProprietario';
 import './Almoxarifado.css';
 
@@ -266,6 +267,13 @@ const ExtratoMaterialModal = ({ materialId, onClose }) => {
                             <td style={{ fontWeight: 600 }}>{m.saldo_posterior}</td>
                             <td style={{ fontSize: '0.8rem' }}>
                               {m.motivo || '—'}
+                              {/* Etapa 66 (RN-08): o porquê de bloqueio/inventário/estorno mora em
+                                  `justificativa`; aparece quando difere do motivo. */}
+                              {justificativaDiferente(m) && (
+                                <div data-testid="extrato-justificativa" style={{ color: 'var(--gmp-text-light)' }}>
+                                  {justificativaDiferente(m)}
+                                </div>
+                              )}
                               {vinculo && <div style={{ color: 'var(--gmp-text-light)' }}>{vinculo}</div>}
                             </td>
                           </tr>

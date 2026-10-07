@@ -1,11 +1,629 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-08-31 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
-> **Nota de 2026-10-07 (linha `main`):** esta cópia do guia recebeu só as correções das Etapas 35, 37 e 38 do lote de Compras (unidades do material, subfamílias) — as seções dessas etapas estão em `docs/compras-novidades-por-etapa.md`. A versão completa e mais nova do guia vive na branch `desenvolvimento-almoxarifado`.
+> Atualizado em 2026-10-02 (Etapa 76) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 31) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 76) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-08-31 (Etapa 31 ENTREGUE · modo contínuo pelo mapa)
+> ## Onde o desenvolvimento está — 2026-10-02 (Etapa 76 ENTREGUE · Etapa 77 começando)
+>
+> **O desenvolvimento parou aqui: Etapa 76 fechada, Etapa 77 começando — 2026-10-02.** A **Etapa 76 (liberar ou deixar
+> vencer a reserva de uma requisição atualiza o status dela)**: liberar à mão na tela **Reservas** (tudo ou parte) ou a
+> reserva vencer pelo **Processar expiração** passa a recalcular o status da requisição dona — liberou tudo, **Aprovado**;
+> parte, **Parcialmente Reservada**. A revisão estendeu ao recálculo da chegada, da inspeção e do estorno a espera pela
+> trava do material, e corrigiu o executor da suíte de testes, que podia contar como verde um arquivo que pendurasse.
+> **Próxima etapa, já começando: 77 — a reserva de uma requisição só sai pela requisição** (uma saída avulsa pela API
+> pode gastar a reserva de uma requisição sem ela saber, e qualquer usuário sem perfil libera reserva alheia; ver
+> *"Próxima tarefa detalhada"* no plano da Etapa 76).
+>
+> **Etapas 1 a 20 e 22 a 76 completas.**
+>
+> **Etapa 75, 2026-10-02.** A **Etapa 75 (o material que a
+> inspeção libera fica com quem esperava)**: material crítico entra retido para inspeção e não é reservado na chegada;
+> agora, quando a **inspeção aprova** (ou a **não conformidade** do reprovado é decidida **Aceitar**/**Aceitar sob
+> desvio**), o liberado é **reservado** para as requisições que esperavam, na ordem da fila de separação, e o
+> solicitante recebe *"Material liberado para a sua requisição"*. Quem é aprovado depois só leva o que sobrou. A revisão
+> corrigiu também o e-mail da chegada (o pendente de quem tem material separado na caixa) e a corrida de duas liberações
+> do mesmo material, que deixava a fila inteira sem nada. ~~**Próxima etapa, já começando: 76 — liberar à mão ou deixar
+> vencer a reserva de uma requisição passa a recalcular o status dela**~~ *(feita — acima)*.
+>
+> **Etapa 74, 2026-10-02.** A **Etapa 74 (a requisição que
+> esperava fica com o material que chegou)**: ao processar a nota, o que chegou livre é **reservado** para as
+> requisições que esperavam, na ordem da fila de separação (urgência, necessidade, mais antiga); a que ganhou vira
+> **Parcialmente/Totalmente Reservada**, o e-mail diz quanto ficou reservado, e quem é aprovado depois só leva o que
+> sobrou. Estornar a entrada da nota solta essa reserva de quem ainda não separou; **Encerrar Requisição** e **Rejeitar**
+> por valor passaram a liberar reservas; e o painel **📋 Requisições Abertas** mostra as reservadas. **Próxima etapa, já
+> começando: 75 — a inspeção que libera o material retido reserva para quem esperava** (hoje o material aprovado na
+> inspeção fica solto; ver *"Próxima tarefa detalhada"* no plano da Etapa 74). *(feita — acima)*
+>
+> **Etapa 73, 2026-10-02.** A **Etapa 73 (a requisição que
+> espera compra nasce com o status certo)**: com a compra já pedida ao fornecedor, a requisição sem saldo nasce **Aguard.
+> Compra** (antes, **Aguard. Estoque**); as três formas de aprovar — **Só Aprovar**, **Aprovar Liberação** e a aprovação
+> automática — fazem o mesmo depois de aprovar (a liberação por valor sem saldo não fica mais **Aprovado**, e a
+> automática passa a reservar); o detalhe da requisição em espera diz *"Chegou material para esta requisição — já dá para
+> separar…"* e quanto; e os itens aparecem na ordem em que foram pedidos. **Próxima etapa, já começando: 74 — a
+> requisição que esperava fica com o material que chegou** (hoje quem aprova depois pode levá-lo; ver *"Próxima tarefa
+> detalhada"* no plano da Etapa 73). *(feita — acima)*
+>
+> **Etapa 72, 2026-10-02.** A **Etapa 72 (a solicitação de
+> compra só fecha quando o material dela chega)**: a nota parcial — ou de outro material do pedido — não fecha mais a
+> solicitação de compra; ela continua na aba **Solicitações** da tela **Reposição e Compras** com *"chegou 4 de 10"*, e a
+> sugestão de reposição conta só o que ainda falta, sem mandar comprar de novo o que vem pelo pedido. Pedido cancelado
+> deixa de contar (*"pedido encerrado — nada a caminho"*); estornar a entrada que a fechou a reabre. A verificação de
+> mínimos parou de abrir solicitação em dobro assim que o pedido é gerado. **Próxima etapa, já começando: 73 — a
+> requisição que espera compra** (nasce *Aguardando estoque* com a compra vinculada e não muda quando o material chega;
+> ver *"Próxima tarefa detalhada"* no plano da Etapa 72). *(feita — acima)*
+>
+> **Etapa 71, 2026-10-02.** A **Etapa 71 (estornar a
+> entrada da nota reabre o pedido de compra)**: em **Movimentações**, estornar a linha **ENTRADA_COMPRA** de uma nota
+> contra pedido **desconta** o pedido e o **reabre** quando a nota o tinha fechado — ele volta ao status de antes, aos
+> atrasados e aos pendentes do Recebimento, e a nota do que falta passa sem autorização de excedente; a tela avisa
+> *"Pedido de compra … reaberto: faltam … para receber"*. A mesma NF pode ser relançada depois de estornar todas as
+> entradas dela (**atenção:** ficam duas contas a pagar — avisar o Financeiro). Entrada com material em inspeção ou
+> reprovado não se estorna. **A feature de Recebimento vai a 🟢.** **Próxima etapa, já começando: 72 — a solicitação de
+> compra que fecha na primeira nota parcial** (ver *"Próxima tarefa detalhada"* no plano da Etapa 71). *(feita — acima)*
+>
+> **Etapa 70, 2026-10-01.** A **Etapa 70 (quem esperava o
+> material fica sabendo que ele chegou)**: ao processar uma nota, o **solicitante** de cada requisição que esperava o
+> material recebe um e-mail com o que chegou e o link para a lista do módulo de onde pediu (ligado de fábrica); o
+> aviso **da nota inteira** para uma lista nasce desligado (**Configurações → Configurações Gerais**); o painel de
+> **Notificações** filtra os dois. E dois defeitos antigos do recebimento foram corrigidos: o item contado **zero** não
+> entra mais com a quantidade esperada, e dois cliques em **Processar** não geram mais duas contas a pagar. **Próxima
+> etapa, já começando: 71 — o pedido de compra que reabre quando a entrada é estornada (B161)** (ver *"Próxima tarefa
+> detalhada"* no plano da Etapa 70). *(feita — acima)*
+>
+> **Etapa 69, 2026-10-01.** A **Etapa 69 (o material
+> reprovado na inspeção vai para o sucateamento)**: em **Não Conformidades**, a decisão **Sucatear** ganhou o botão
+> **Solicitar sucateamento** (do almoxarifado); o pedido passa pelas duas aprovações de sempre em **Sobras e Retalhos →
+> Sucateamentos** e a segunda baixa **do bloqueado** — o material aprovado não é tocado; **Registrar execução** de um
+> Sucatear recusa e diz o caminho. **Atenção:** o formulário comum de sucateamento, numa reprovação parcial, continua
+> levando material **bom** — reprovado se sucateia pela não conformidade (C96). **Próxima etapa, já começando: 70 — o
+> e-mail automático na entrada confirmada do recebimento** (ver *"Próxima tarefa detalhada"* no plano da Etapa 69). *(feita — acima)*
+>
+> **Etapa 68, 2026-10-01.** A **Etapa 68 (as áreas
+> especiais passam a dizer o que fazem)**: existem a **Área de sucata** e a **Área de devoluções**; o assistente de
+> **Nova Localização** (Configurações → Setores e Áreas) oferece as cinco áreas especiais; a **Nova Movimentação** avisa,
+> abaixo do destino, o que a área **não** faz; a sugestão de entrada não manda para área especial; o sucateamento
+> aprovado baixa da área de sucata quando ela cobre tudo; e o **Mapa de Áreas** explica cada área. Nenhuma área recusa
+> nada. Próxima: 69 *(feita — acima)*.
+>
+> **Etapa 67, 2026-10-01.** A **Etapa 67 (os indicadores
+> que faltavam)**: a requisição ganhou o campo **"Data de necessidade"** (na **Nova Requisição de Material** e na cesta
+> **Solicitação de material**); o painel do almoxarifado tem o cartão **"Requisições no prazo"**; os **Indicadores
+> gerenciais** contam requisições no prazo, integrais e ajustes; e há dois relatórios novos — **Ajustes por motivo**
+> (Movimentações) e **Qualidade por fornecedor** (Gestão). O tempo médio de atendimento deixou de contar requisição
+> excluída, e a entrega em frações fecha a requisição e a reserva. Próxima: 68 *(feita — acima)*.
+>
+> **Etapa 66, 2026-10-01.** A **Etapa 66 (motivos de
+> movimentação viram cadastro)**: em **Configurações → Motivos de Movimentação** o Administrador mantém a lista de
+> motivos, cada um valendo para os tipos marcados; em **Movimentações → Nova Movimentação** o campo **Motivo** vira uma
+> lista com os motivos do tipo e *"Outro (digitar)"* (com **"Complemento (opcional)"**); o livro e o extrato mostram a
+> justificativa; e **Relatórios → Histórico de movimentações** tem as colunas Motivo e Justificativa e o filtro
+> **"Motivo (cadastro)"**. Próxima: 67 *(feita — acima)*.
+>
+> **Etapa 65, 2026-10-01.** A **Etapa 65 (a troca do lugar separado fica registrada também na separação)**: em
+> **Ajustar Separação**, o "Sai de" parte do lugar da rodada anterior quando ele ainda tem saldo; trocar de lugar avisa
+> e pede o motivo (opcional); a troca aparece em **"Substituições"**. Próxima: 66 *(feita — acima)*.
+>
+> **Etapa 64, 2026-10-01.** A **Etapa 64 (a fila de separação do almoxarife)**: no menu, **Fila de separação** mostra
+> só as requisições com trabalho de almoxarife, na ordem de trabalho, com um chip por etapa e o que falta em cada item;
+> só leitura, e não manda fazer o que vai ser recusado. Próxima: 65 *(feita — acima)*.
+>
+> **Etapa 63, 2026-10-01.** A **Etapa 63 (a troca do lugar
+> separado fica registrada na entrega)**: entregar de outro endereço ou lote que não o separado deixa registro — quanto,
+> separado de onde, saiu de onde, quem e o motivo (opcional) — no bloco **"Substituições"** do detalhe da requisição; e
+> acima do separado pendente, a parte separada sai de onde foi separada (o resto pelo automático) — o que **pode recusar**
+> a entrega se lá não houver mais o separado (**B251**, **C84**). Próxima: 64 *(feita — acima)*.
+>
+> **Etapa 62, 2026-09-30.** A **Etapa 62 (o ajuste de material com série diz quais peças entram ou saem)**: o
+> **ajuste** do total de um material com série pede os números das peças novas ou as peças que saem; por endereço e o
+> estorno do ajuste são recusados; o inventário recusa fração e avisa quais materiais ficaram a regularizar. Fecha o
+> **C82**. Próxima: 63 *(feita — acima)*.
+>
+> **Etapa 61, 2026-09-30.** A **Etapa 61 (a entrega de
+> material com série diz quais peças saem)**: a janela de entrega pede **as séries** de cada item com série (contador e
+> quantidade exata); a entrega de um clique de material com série é recusada; excluir a requisição devolve as mesmas
+> peças, só o que falta devolver; e **Lotes e Séries → Séries** ganhou **Regularizar séries** para acertar o que as
+> entregas antigas deixaram errado. **Antes do deploy, rode a consulta A30** das novidades. Próxima: 62 — o
+> ajuste e o inventário de material com série *(feita — acima)*.
+>
+> **Etapa 60, 2026-09-30.** A **Etapa 60 (separar menos do
+> que dava passa a deixar registro, com o porquê)**: cada rodada de separação grava, por item, quanto dava para
+> separar, se ficou abaixo e o motivo; a janela de separação pede **"Motivo da divergência (opcional)"** quando a
+> quantidade fica abaixo do possível — **sem obrigar** —, e o conferente lê a divergência no bloco **Separação** do
+> detalhe.
+>
+> **Etapa 59, 2026-09-30.** A **Etapa 59 (a separação diz
+> de onde cada item sai, e a entrega de um clique usa)**: a janela de separação tem **"Sai de"** por item (endereço e
+> lote), conferido como na entrega; o item mostra *"separado de ⟨endereço⟩"*; a entrega — inclusive o botão
+> **"Confirmar Entrega e Baixar Estoque"** — sai de onde foi separado, até o separado ainda não entregue; se a origem
+> não serve mais, a entrega é recusada dizendo o que fazer. **Próxima etapa: 60** (feita — acima).
+>
+> **Etapa 58, 2026-09-30.** A **Etapa 58 (a entrega de requisição diz de onde cada item sai)**: na janela de entrega,
+> cada item tem **"Sai de"** e **"Confirmar endereço lido"**; a escolha é exata; excluir a requisição devolve ao lote e
+> ao endereço de onde saiu. **Próxima etapa: 59** (feita — acima).
+>
+> **Etapa 57, 2026-09-30.** A **Etapa 57 (o recebimento
+> deixa escolher o endereço de cada item)**: **Processar Nota** abre uma janela com um destino por item ("Padrão do
+> material" continua o padrão); um endereço que não pode receber recusa a nota inteira com a lista; e a devolução ao
+> fornecedor sai do endereço onde a peça reprovada entrou. **Próxima etapa: 58** (feita — acima; a origem foi paga na
+> entrega, não na separação).
+>
+> **Etapa 56, 2026-09-30.** A **Etapa 56 (o endereço ganha
+> etiqueta, e a movimentação pode conferir a etiqueta lida)**: etiqueta com QR para endereço, que o Scanner abre no
+> Mapa (com aviso de etiqueta desatualizada depois de um **Mover**); na movimentação, o campo opcional **Confirmar
+> endereço lido** recusa o endereço errado antes de mexer no saldo.
+>
+> **Etapa 55, 2026-09-30.** A **Etapa 55 (o código proposto para um endereço novo para de ressuscitar endereço
+> removido)**: o próximo código de endereço é calculado pelo servidor, conta os endereços removidos e nunca repete um
+> código existente; o assistente de **Nova localização** avisa em vez de trazer de volta um endereço removido; o
+> **Mover** deixou de mostrar erro técnico.
+>
+> **Etapa 54, 2026-09-30.** A **Etapa 54 (o sistema para de gravar material em endereço desativado ou que não
+> existe)**: destino desativado ou inexistente é recusado, não se remove endereço que é padrão de material ativo, o
+> cadastro de material não aceita padrão desativado, e o ajuste num endereço desativado só reduz ou zera. **Próxima
+> etapa: 55** (feita — acima; o formato hierárquico do código ficou fora por decisão, **B220** nas novidades).
+>
+> **Etapa 53, 2026-09-30.** A **Etapa 53 (a sugestão
+> de localização na entrada)**: em **Movimentações → Entrada**, ao escolher o material aparecem até 3 endereços
+> sugeridos (o padrão, onde o material já está, vazios que o aceitam), e a tela **avisa** quando o endereço padrão
+> está bloqueado, não aceita o tipo ou está inativo. **Próxima etapa: 54** (feita — acima).
+>
+> **Etapa 52, 2026-09-30.** A **Etapa 52 (a lista de localizações vazias)** dá
+> tela ao espaço livre: **Relatórios → Estoque → Localizações vazias**, pela **mesma regra do Mapa**, exportável
+> em planilha. E apagar ou desativar endereço **ocupado** passou a ser recusado — inclusive o endereço padrão de
+> material antigo, que antes era apagado e sumia com o material. **Próxima etapa:** ver *"Próxima tarefa
+> detalhada"* no plano da Etapa 52.
+>
+> **Etapa 51, 2026-09-30.** A **Etapa 51 (a saída baixa o endereço de onde o
+> material sai)** conserta o motor de estoque: a entrega de requisição, que não diz de onde sai, passa a tirar
+> dos endereços que **têm** o material, e o endereço esvaziado aparece **vazio** no Mapa. A etapa nasceu de
+> uma **medição**: a tela de localizações vazias, que era o plano, mentiria sobre prateleiras vazias. **Material
+> com lote** continua com o problema (novidades, C72). **Próxima etapa: 52 — a tela de localizações vazias**
+> (ver *"Próxima tarefa detalhada"* no plano da Etapa 51).
+>
+> **Etapa 50, 2026-09-30.** A **Etapa 50 (a tela de Lotes para de mostrar
+> o saldo do lote como se fosse o físico)** fecha o furo **C71**: em *Lotes e Séries*, abaixo da tabela,
+> aparecem **"Sem lote atribuído"** e **"Físico total do material"**, com a mesma conta do relatório *Saldo
+> por lote*. O saldo de cada lote continua o **atribuído** (é o certo para escolher lote na saída). A
+> revisão achou e corrigiu um defeito que tinha escapado da Etapa 49 no próprio relatório.
+>
+> **Etapa 49, 2026-09-30.** A **Etapa 49 (os relatórios de saldo que
+> faltavam)** fecha os relatórios de estoque e de movimentação da feature **21 (Relatórios)**: em
+> *Relatórios → Estoque* entram **Saldo por lote** (com a linha *"Sem lote atribuído"*, que fecha a conta
+> com o físico — o saldo de lote é o **atribuído**, não o da prateleira), **Séries em estoque** e
+> **Saldos comprometidos**; e o **Histórico de movimentações** filtra por **grupo**, **usuário** e
+> **centro de custo**. A feature 21 **continua 🟡**, presa a outras features (previsto × realizado;
+> indicadores restantes). A tela de *Lotes e Séries* mostrava o saldo atribuído como físico (furo C71) —
+> **resolvido na Etapa 50**.
+>
+> **Etapa 48, 2026-09-30.** A **Etapa 48 (regras por urgência e por
+> material de cliente, e a fila da aprovação simples)** completa o que a 47 deixou na feature **06
+> (Aprovações)**: as regras ganham os critérios **urgência** e **material de cliente**; a urgência vira
+> **lista fechada** (Normal, Urgente, Crítico — o resto é recusado com *"Urgência inválida: ⟨valor⟩"*,
+> e o rascunho antigo tem a caixa corrigida no envio); e quem pode aprovar ganha o painel
+> **"Requisições aguardando sua aprovação"**. A feature 06 **continua 🟡**, a **dois** itens, os dois
+> presos a dependência: a dupla aprovação de ajuste (decisão **B11**) e a regra da lista técnica
+> (feature 22).
+> **Próxima etapa:** ver *"Próxima tarefa detalhada"* no plano da Etapa 48.
+>
+> **Etapa 47, 2026-09-30.** A **Etapa 47 (o motor de aprovações ganha
+> regras, e a requisição de alto valor passa a ser cobrada)** fecha dois achados antigos da feature
+> **06 (Aprovações)** e paga o item que ela adiava desde a Etapa 3. O administrador cadastra **regras
+> de aprovação** em *Configurações → Regras de Aprovação* (tipo de requisição, material crítico, valor
+> a partir de, quantidade a partir de, centro de custo, e **quem pode assinar**). A requisição que se
+> encaixa em N regras precisa de **N assinaturas de N pessoas diferentes** antes de o *Só Aprovar*, o
+> *Aprovar e Separar*, o *Aprovar Liberação* ou a **Aprovação Automática** passarem — os botões ficam
+> **cinza com o motivo** (*"Aguardando N aprovação(ões) de regra antes da aprovação"*). Cada
+> assinatura pendente é **cobrada por e-mail de quem pode dá-la**, e a requisição travada por valor —
+> que avisava uma vez e nunca mais — passou a ser **cobrada todo dia**, dos aprovadores de valor.
+> **O que ela NÃO faz e você precisa saber:** assinar **não aprova** a requisição (as regras **somam**
+> à aprovação normal); regra nova **não** alcança requisição já enviada; urgência e material de
+> cliente **não** são critério; e a requisição **já aprovada** que caiu em liberação por valor depois
+> **não** recebe o lembrete (furo C68). A feature 06 **continua 🟡**.
+> **Próxima etapa:** ver *"Próxima tarefa detalhada"* no plano da Etapa 47.
+>
+> **Etapas 1 a 20 e 22 a 47 completas; a Etapa 21 foi entregue no NÚCLEO do CRM e as 38 a 42 no
+> módulo COMPRAS** (a 42 nos dois: o gancho roda no Almoxarifado, o efeito aparece no Compras).
+> A **43, a 44, a 45 e a 46 estão dentro do almoxarifado**, nas features 08 (Recebimento) e 09
+> (Inspeção) — a 46 com efeito também em 20 (Alertas) e 23 (Perfis).
+>
+> **O desenvolvimento parou aqui: Etapa 46, 2026-09-30.** A **feature 09 (Inspeção e qualidade)**
+> fechou em 🟢 na Etapa 45; a **46 nasceu de um furo declarado no fechamento dela** (o **C64**) e
+> paga esse furo — não é item novo da lista da feature.
+>
+> A **Etapa 46 (a não conformidade decidida deixa de ser um beco)** fechou em 2026-09-30 e **paga o
+> furo C64 que a 45 declarou**: o documento decidido *Devolver ao fornecedor* de material com
+> **número de série** (ou lote não identificável) era recusado pela execução com erro **fatal** e
+> ficava **Decidido / execução Pendente para sempre**, cobrando um gesto que ninguém conseguia
+> registrar. Agora há **saída** e há **cobrança**. A saída é o botão **✕ "Cancelar a não
+> conformidade"**, com **motivo obrigatório** de 5 caracteres, que fecha o documento
+> **preservando a decisão** (*"Documento cancelado — a decisão fica registrada, e a execução deixa
+> de ser cobrada"*); a coluna **Execução** passa a dizer **"Deixou de ser cobrada"** e a linha sai da
+> fila *"Pendentes de execução"*. A cobrança é o **15º alerta** da central — o cartão **"Execução
+> pendente"**, com janela própria em *Configurações* (**"Alerta de Execução Pendente da NC (dias)"**,
+> semeada em 7) —, porque o documento preso **também não cobrava ninguém**. **Quem cancela é
+> Administrador e Qualidade; o Compras NÃO** — ele executa e é cobrado pela fila, então não deve
+> poder limpá-la. **Só cancela documento DECIDIDO com execução PENDENTE:** *Aberto* recusa ensinando
+> o caminho (*"decida o documento, ou corrija a quantidade conferida"*), decisão de aceitação já
+> liberada recusa, e execução já registrada recusa.
+> **O que ela NÃO faz e você precisa saber:** cancelar **não desbloqueia** o material (os quilos
+> reprovados continuam bloqueados — soltá-los é *Desbloquear Material*, de Administrador/Gestor, ou
+> a baixa por Movimentações), **não redecide** o documento, **não** devolve peça serializada por
+> esta tela, e **não cancela documento Aberto** — este último foi **corte de escopo da revisão
+> final**, porque cancelar documento sem decisão silenciaria divergência **viva**.
+>
+> A **Etapa 45 (a devolução ao fornecedor deixa de ser um combinado verbal)** fechou em 2026-09-29 e
+> **fecha o último buraco que a 44 deixou aberto**: decidir *Devolver ao fornecedor* virou só a
+> **intenção**, e a baixa do estoque passou a acontecer num **segundo clique** — o **Registrar
+> execução** —, dado por quem despachou a caixa de verdade. Quem decide continua sendo a Qualidade;
+> quem registra a saída pode ser **Compras, Qualidade ou Administrador** (o **Almoxarife não**, de
+> propósito). A tela de *Não Conformidades* ganhou a coluna **Execução** (*Pendente*, *Executada*,
+> *Não se aplica*) e a fila **"Pendentes de execução"** — o que falta despachar —, o livro de
+> movimentações passou a registrar a saída com o motivo *"Devolução ao fornecedor"* e o número da NC,
+> e o cartão de *Material reprovado* passou a medir **material que saiu**, não intenção registrada.
+> **O que ela NÃO faz e você precisa saber:** não emite nota fiscal de devolução, não avisa o
+> fornecedor, não pede reposição, não reabre o pedido de compra (ele continua *Recebido*) e **não
+> desfaz** — execução registrada não tem estorno, nem pelo livro.
+> **⚠️ Um furo para não demonstrar ao vivo (C64):** material com **número de série**, ou com lote não
+> identificável, é **recusado** na execução — e o documento fica **preso** na fila *Pendentes de
+> execução*, sem gesto de tela que o destrave. Use material sem série e sem lote na apresentação; o
+> destravamento é a próxima etapa.
+> **ISTO FOI PAGO NA ETAPA 46** — fica corrigido aqui em vez de apagado. A recusa da execução é a
+> mesma, mas o documento **não fica mais preso**: a Qualidade (ou um Administrador) **cancela** com
+> motivo, e a decisão continua registrada. **Já é seguro demonstrar série ao vivo** — o roteiro está
+> na seção da Etapa 46. Duas ressalvas que o cancelamento **não** cobre: o material reprovado
+> **continua bloqueado**, e devolução de peça serializada continua sem tela.
+>
+> **Próxima etapa: escolhida pelo mapa** `specs/modulo-almoxarifado/README.md` — com a feature 09
+> em 🟢, a escolha sai da 🔴/🟡 de maior valor, medida antes de prometer.
+>
+> A **Etapa 44 (a Qualidade executa a própria decisão)** fechou em 2026-09-28 e **fecha o furo que
+> a 43 abriu**: aceitar uma não conformidade de inspeção agora **libera sozinha** o material que a
+> reprovação havia bloqueado, e a tela diz quanto saiu — *"Não conformidade NC-… decidida! 3
+> liberado(s) do bloqueio"*. Ninguém precisa mais pedir a um Administrador que desbloqueie à mão, e
+> o livro de movimentações passou a apontar **qual documento** soltou aquele bloqueio.
+> **Sem permissão nova:** quem já podia decidir o documento executa o efeito dele. Os botões
+> avulsos de bloquear/desbloquear continuam fora do perfil Qualidade, de propósito.
+> **O que ela NÃO faz e você precisa saber:** só as duas decisões de **aceitação** mexem no saldo
+> (*Devolver*, *Substituição*, *Análise da Engenharia* e *Sucatear* só registram a intenção, e a
+> tela diz isso); liberar a NC **não reabilita o lote** em material com controle por lote — a saída
+> continua recusando até alguém voltar o lote para *Ativo* (furo **C62**); e reprovações
+> **anteriores** a esta atualização continuam só no caminho manual (consulta **A22**).
+> **UM PEDAÇO DISTO DEIXOU DE VALER NA ETAPA 45** — corrigido aqui em vez de apagado: *Devolver ao
+> fornecedor* **passou a mexer no saldo**, só não no clique da decisão: quem move é o **Registrar
+> execução**, no gesto seguinte. *Substituição*, *Análise da Engenharia* e *Sucatear* continuam
+> registrando apenas a intenção, agora com data e autor da execução.
+>
+> A **Etapa 43 (a divergência vira documento numerado)** fechou em 2026-09-28. O que o sistema já
+> **detectava** — chegou menos material do que a nota diz, a inspeção reprovou um lote — passou a
+> virar **documento numerado** (`NC-…`), que nasce sozinho em três portas (conferência, dados
+> fiscais e inspeção), congela o fato, guarda **a decisão** com autor e justificativa, aceita anexo
+> e tem **tela própria no menu**: *Não Conformidades*. Um alerta novo cobra documento parado sem
+> decisão, e o alerta antigo de divergência virou a **rede de segurança** de quando o documento não
+> nasce. E a caixa *"divergência de quantidade"* da inspeção, que era **marcada à mão**, passou a
+> ser **calculada** e somente leitura — o mesmo que aconteceu com a dimensional na Etapa 27.
+> ~~**O que ela NÃO faz e você precisa saber:** a decisão **não mexe no estoque** — *aceitar sob
+> desvio* fecha o documento e **não desbloqueia** o material, e o perfil Qualidade não tem permissão
+> de ajuste de estoque (furo **C57** das novidades, e é o próximo passo natural).~~
+> **ISTO DEIXOU DE VALER NA ETAPA 44** — ficou certo por um dia e está corrigido aqui em vez de
+> apagado. As duas decisões de **aceitação** passaram a desbloquear o material; as outras quatro
+> continuam só registrando a intenção. O furo **C57** está **resolvido**, e o conserto **não** foi
+> a permissão nova que este parágrafo previa — ver a seção da Etapa 44, acima.
+>
+> A **Etapa 42 (o recebimento fecha o pedido)** fechou em 2026-09-27 e **encerrou a cadeia** que as
+> Etapas 38 a 41 abriram: cotação → pedido → recebimento → pedido fechado. O pedido recebido por
+> inteiro passa a **Recebido** sozinho, sai da lista de atrasados, deixa trilha de auditoria, e o
+> pedido que chegou pela metade ganhou **alerta próprio** dizendo quanto falta. Duas limitações que
+> estavam na letra **D** das novidades desde a Etapa 39 deixaram de existir; uma limitação **nova**
+> nasceu no lugar e está declarada (**B161**: movimentação ESTORNADA depois do fechamento não deixa
+> sinal de que falta material).
+>
+> **Próxima etapa: escolhida pelo mapa** `specs/modulo-almoxarifado/README.md` — a feature 🔴/🟡 de
+> maior valor, medida antes de prometer. As candidatas medidas no fechamento da 42 estão no fim do
+> plano (`docs/superpowers/plans/2026-09-27-almoxarifado-etapa42-recebimento-fecha-pedido.md`, seção
+> "Próxima tarefa detalhada").
+>
+> **O problema era que a cotação não dizia o que foi cotado, e aprovar não fazia nada.** A cotação
+> da Etapa 40 era só cabeçalho: *"R$ 1.500,00 da Aços Vale"* — qual material, quanto e a que preço
+> ficavam no PDF do fornecedor. Aprovada, o comprador **redigitava o pedido** inteiro em *Novo
+> Pedido*. E a lixeira da cotação apagava o registro "cru": no dia em que existisse um item
+> pendurado nela, daria erro genérico em produção.
+>
+> **O que a 41 mudou:**
+> - **Compras → Cotações → Nova Cotação** ganhou o bloco **"Itens da cotação"**: busca de material
+>   (*"Buscar material"*), botão **+** por material, tabela com **Quantidade**, **Valor unitário** e
+>   **Subtotal**, e **"Total: R$ …"** somado. Com pelo menos uma linha, o campo **Valor total** fica
+>   **cinza e travado** com a soma; sem linha, continua digitável como na 40.
+> - **A aba Cotações ganhou a coluna "Pedido"** (`-` ou o `PC-…` clicável) e o botão **"Gerar
+>   pedido"** (ícone de carrinho), só na cotação sem pedido com status *Em Análise* ou *Aprovado*.
+>   Clique → *"Pedido PC-… gerado da cotação ⟨número⟩"* e a tela **"Editar pedido de compra"**
+>   abre com fornecedor, linhas e preços; a cotação vira **Aprovado** e o carrinho **some**.
+> - **A mesma cotação não gera dois pedidos** — nem com duplo clique nem com duas abas: um vence, os
+>   outros recebem *"Cotação ⟨número⟩ já gerou o pedido PC-…"* e nada sobra.
+> - **A cotação convertida abre travada**: faixa âmbar *"Esta cotação já gerou o pedido PC-… — não
+>   pode mais ser editada"* (o `PC-…` é link), campos desabilitados, sem Salvar.
+> - **Fornecedor inativo não vira pedido**: *"Fornecedor inativo — reative-o em Compras →
+>   Fornecedores antes de gerar o pedido"*. Cotação sem itens: *"cotação sem itens não pode gerar
+>   pedido"*.
+> - **Lixeira da cotação**: com itens, apaga tudo junto (*"Item excluído com sucesso"*); convertida,
+>   recusa (*"Cotação ⟨número⟩ já gerou o pedido PC-… — não pode ser excluída"*). **Lixeira do
+>   pedido gerado libera a cotação** — o `-` e o carrinho voltam.
+> - **"Exportar Excel"** da aba Cotações ganhou a coluna **Pedido** no fim.
+>
+> **⚠️ Três coisas antes de apresentar a 41:**
+> 1. **Rode a consulta A18 do documento de novidades DEPOIS do primeiro boot** — ela confere as três
+>    tabelas (9 / 8 / 11 colunas). Num banco **novo**, a coluna do vínculo só entra no **segundo**
+>    boot (**G57**): se as cotações derem erro logo depois de criar o banco, reinicie o servidor.
+> 2. **Excluir o pedido gerado LIBERA a cotação** (**B153**) — a coluna *Pedido* volta a `-` e o
+>    carrinho reaparece; o status continua *Aprovado* (**G60**). Gerar de novo cria um `PC-…` **novo**
+>    a partir das linhas **da cotação** — o que foi editado no pedido anterior se perde (**B159**).
+> 3. **Inativo é recusado só na conversão.** Cotação e pedido feito à mão para fornecedor inativo
+>    continuam aceitos (**B127** da 40, ainda aberta); "Gerar pedido" recusa (**B148**).
+>
+> **Antes disto: a Etapa 40 (Fornecedores e Cotações ganham tela)** fechou em 2026-09-21, com uma
+> onda de correção da revisão final; a documentação do fechamento foi completada em 2026-09-22.
+>
+> **O problema era que quatro botões do Compras não faziam nada.** A tela de Compras tem três abas
+> — Fornecedores, Pedidos de Compra e Cotações. Desde a 38 a aba Pedidos tem formulário; nas outras
+> duas, **"Novo Fornecedor"**, **"Nova Cotação"** e os dois **lápis** apontavam para um endereço sem
+> tela e **voltavam para a lista**. Cotação não podia ser criada por caminho nenhum; fornecedor, só
+> pelo modal escondido em *Fornecedores homologados → grupo*. E dois defeitos nunca reportados
+> estavam no caminho: **"Remover do grupo" dizia sucesso e não removia**, e o status **Inativo** do
+> filtro da aba **não podia ser gravado por tela nenhuma**.
+>
+> **O que a 40 mudou:**
+> - **Compras → Fornecedores → "Novo Fornecedor"** abre **"Novo fornecedor"** (razão social, nome
+>   fantasia, CNPJ, contato, e-mail, telefone, endereço e **Grupo**); o lápis abre **"Editar
+>   fornecedor"** com o campo **Status** (*Ativo/Inativo*). Salvar mostra *"Fornecedor salvo"*.
+> - **Inativar um fornecedor** o tira do **seletor do Recebimento** e do **"Vincular"** dos grupos;
+>   ele **continua** na lista de Compras (selo *inativo*), na tela do grupo (selo **"Inativo"**) e
+>   **continua aceito** em pedido e em cotação — decisão declarada, **B127**.
+> - **Compras → Cotações → "Nova Cotação"** (o botão dizia *"Novo Cotação"*) abre **"Nova cotação"**:
+>   número **digitado e único** (*"Já existe uma cotação com o número ⟨X⟩"*), fornecedor, data,
+>   validade, valor total, status (*Em Análise, Aprovado, Rejeitado, Cancelado*) e observações.
+> - **O filtro de status mostra só as opções de cada aba** — a aba Cotações oferecia *Pendente*, que
+>   nunca casava com nada.
+> - **"Remover do grupo" remove.** E a lixeira de fornecedor ganhou duas frases novas, além da de
+>   pedido: *"Fornecedor possui cotações — não pode ser excluído"* e *"Fornecedor possui itens
+>   cadastrados — não pode ser excluído"* — a segunda dava erro genérico em produção.
+>
+> **⚠️ Três coisas antes de apresentar a 40:**
+> 1. **Quem acreditava ter tirado um fornecedor de um grupo precisa conferir** — o botão não
+>    removia (**C54**). Em produção todos os fornecedores estão em grupo; não há como saber se algum
+>    deveria ter saído.
+> 2. **Rode as consultas A16 e A17 do documento de novidades antes do deploy.** Fornecedor com
+>    status vazio aparece como ativo na lista, mas **não aparece no seletor do Recebimento**; e
+>    itens de preço órfãos de fornecedor podem existir se alguém contornou o erro antigo da lixeira.
+> 3. **Inativo NÃO bloqueia pedido nem cotação.** Se a empresa esperar que bloqueie, é a decisão
+>    **B127** que precisa de resposta — hoje é aceito, de propósito.
+>
+> **Antes disto: a Etapa 39 (o pedido de compra passa a ser acompanhado)** fechou em 2026-09-17,
+> com uma onda de correção da revisão final; a documentação do fechamento foi completada em
+> 2026-09-21.
+>
+> **O problema era que ninguém olhava o prazo do pedido.** A Etapa 38 passou a gravar uma **Previsão
+> de entrega** em cada pedido — e nada no sistema comparava essa promessa com o calendário. Um pedido
+> prometido para a semana passada tinha exatamente a mesma cara de um prometido para o mês que vem, e
+> descobrir o atraso dependia de alguém ler a lista data a data.
+>
+> **O que a 39 mudou:**
+> - **A coluna *Previsão Entrega* ganhou o selo vermelho "Atrasado há N dias"** (com o singular
+>   certo: *"Atrasado há 1 dia"*), e a aba ganhou a caixa **"Só atrasados"**, que compõe com a busca
+>   e com o filtro de status.
+> - **"Exportar Excel" da aba Pedidos** passou a trazer as colunas **"Atrasado"** (*Sim*/*Não*) e
+>   **"Dias de atraso"** — e respeita o filtro da tela.
+> - **A varredura diária passou a mandar e-mail para a lista de Compras** por pedido atrasado
+>   (assunto *"[Compras] Pedido de compra atrasado — ⟨número⟩"*), e **Almoxarifado → Alertas** ganhou
+>   o cartão **"Pedido de compra atrasado"** com *Pedido, Fornecedor, Previsão e Dias de atraso*.
+> - **As datas do pedido pararam de aparecer um dia atrás.** Na tela **e** no Excel: exportar e
+>   reimportar o próprio arquivo do sistema movia as duas datas um dia para trás a cada volta. E o
+>   "hoje" que decide o atraso passou a ser o dia de **Brasília**, independentemente do relógio da
+>   máquina onde o sistema roda.
+> - **Um pedido que já teve recebimento pode ter o status corrigido.** O lápis abre o formulário com
+>   a faixa *"Este pedido já teve recebimento — só o status pode ser alterado"*: tudo travado, menos
+>   o **Status**. Salvar mostra *"Status do pedido atualizado"* e o selo de atraso some.
+>
+> **⚠️ Três coisas antes de apresentar a 39:**
+> 1. **Enquanto não houver pedido com previsão de entrega em produção, o alerta novo é INERTE.** O
+>    cartão aparece zerado e nenhum e-mail sai — é o esperado, não defeito. A consulta **A15** do
+>    documento de novidades conta, em 30 segundos, quantos pedidos têm prazo e quantos já estariam
+>    atrasados no primeiro dia (se esse número for alto, **a primeira varredura manda um e-mail por
+>    pedido, de uma vez**).
+> 2. **Receber o material NÃO fecha o pedido.** Um pedido entregue com atraso continua com o selo, no
+>    filtro e no cartão até alguém trocar o status pelo lápis. É decisão declarada (**B121**), e o
+>    gesto que resolve é um clique — está no roteiro, passo 9.
+> 3. **Para ver o e-mail numa demonstração, reinicie o servidor e espere 30 segundos.** A varredura
+>    roda 30 s depois do arranque e depois a cada 24 h; não há horário configurável. O cartão da
+>    central, por ser leitura **ao vivo**, não espera nada.
+>
+> **Antes disto: a Etapa 38 (o pedido de compra ganha criação)** fechou em 2026-09-16, com uma onda de
+> correção da revisão final. **O problema era que nenhuma tela do sistema criava um pedido de
+> compra.** Medido, não suposto: o
+> banco de produção tinha **zero** pedidos e **zero** itens de pedido, e os botões **"Novo Pedido"**
+> e **"Editar"** da aba *Pedidos de Compra* **voltavam para a lista** — o endereço não tinha tela do
+> outro lado. Consequência: a **Reposição** gerava solicitações de compra desde a Etapa 11 que
+> **ninguém convertia em pedido** (nasciam PENDENTE e morriam PENDENTE), e tudo o que a **Etapa 37**
+> entregou — recebimento parcial, saldo do pedido, excedente autorizado — era **inalcançável por um
+> clique**.
+>
+> **O que a 38 mudou:**
+> - **Compras → Pedidos de Compra → "Novo Pedido"** abre o formulário **"Novo pedido de compra"**:
+>   fornecedor, datas, status, observações e itens com busca de material, quantidade e valor
+>   unitário, com **"Total: R$ …"** somado na tela. O **número do pedido é gerado pelo sistema**.
+> - **Editar e excluir** existem — **enquanto nenhum recebimento tocou o pedido**. Depois disso, a
+>   recusa diz o número do pedido, e a lixeira mostra **a mensagem do servidor** em vez do antigo
+>   *"Erro ao excluir item"* genérico.
+> - **Excluir o pedido devolve as solicitações da Reposição para PENDENTE** — antes elas ficavam
+>   vinculadas a um pedido apagado, para sempre.
+> - **Almoxarifado → Reposição e Compras → Solicitações** ganhou o botão **"Gerar pedido"**, que abre
+>   o formulário do Compras **já preenchido** com o material e a quantidade da solicitação. Salvo o
+>   pedido, a solicitação vira **VINCULADO**.
+> - **"Importar planilha"** sobe o acervo de pedidos que já existe em Excel, agrupando as linhas por
+>   **ordem de compra × fornecedor**, com lista de **linhas ignoradas** (com o motivo) e de **linhas
+>   importadas com aviso**.
+> - **"Exportar Excel" da aba Pedidos** passou a sair **uma linha por item, com a coluna Código** —
+>   antes o próprio arquivo do sistema não voltava pela importação.
+> - **Excluir um fornecedor que tem pedido é recusado** com *"Fornecedor possui pedidos de compra —
+>   não pode ser excluído"*. Esse caminho era inalcançável antes desta etapa.
+>
+> **⚠️ Três coisas da 38 antes de apresentar:**
+> 1. **O roteiro da Etapa 37 não precisa mais de SQL.** Ele começava inserindo um pedido à mão,
+>    porque não havia tela que criasse pedido. **Agora começa em Compras → Pedidos de Compra → Novo
+>    pedido de compra**, e o pedido criado aparece no campo *Número do Pedido de Compra* do
+>    recebimento. A verificação **F13** do documento de novidades **fechou**.
+> 2. **Rode a consulta A14 do documento de novidades antes do deploy.** Ela mostra quantos pedidos e
+>    itens existem em produção (esperado: **zero**) e quais status aparecem no banco. Se houver
+>    pedido com status fora dos **sete** que a tela conhece, ele aparece como texto cru na lista — e
+>    abrir esse pedido para editar e salvar **reescreveria** o status. Vale os 30 segundos.
+> 3. **No módulo Compras, quem abre o módulo faz tudo dentro dele.** Não há perfis como no
+>    almoxarifado, nem alçada por valor: qualquer usuário com acesso a Compras cria, edita e exclui
+>    pedido, fornecedor e cotação. É herança declarada (fragilidade **G30**), não regressão. A
+>    **única** porta com permissão própria é o **vínculo com a Reposição**, que exige *gerenciar
+>    reposição e compras*.
+>
+> **Antes disto: a Etapa 37 (o pedido de compra passa a saber quanto já chegou)** fechou no mesmo dia
+> (`ea0aa4f..13ad237`, mais a onda de correção da revisão final `4007344..13ad237`). **É feature** —
+> a **08 (Recebimento)**, a mesma da 36 — e fecha exatamente o que a Etapa 36 declarou que não
+> cobria. **O problema era que o pedido de compra não sabia que tinha sido recebido:** um pedido de
+> 10 unidades podia receber **25 em três recebimentos** e continuar marcado como **10 e ABERTO** —
+> medido, não suposto. E escolher *"Por Pedido de Compra"* abria a lista de itens **vazia**: dizer
+> "chegaram 6 dos 10, o resto vem depois" **não era um gesto possível**.
+>
+> **O que a 37 mudou:**
+> - **Recebimento parcial existe.** Escolher o pedido carrega as linhas dele com
+>   **"Saldo pendente: N"** e um campo editável em cada uma. Campo vazio é *"esta linha não
+>   chegou"* — não entra como zero.
+> - **O pedido passa a contar o que chegou**, no instante em que o material **entra fisicamente no
+>   estoque** (pelo *Processar Nota* e pela aprovação direta). Reprocessar não conta duas vezes.
+> - **Receber acima do saldo do pedido é recusado**, com o número na frente:
+>   *"Quantidade recebida (5) maior que o saldo do pedido (4) para o material ⟨código⟩ — a
+>   autorização de excedente é de Compras ou do Administrador"* — e a tela avisa antes, enquanto
+>   você digita: *"Acima do saldo: 1 a mais que o saldo do pedido (4)"*.
+> - **O saldo é por MATERIAL**, somando as linhas daquele material no pedido — e a tela mostra
+>   exatamente o número que o servidor cobra.
+> - **Pedido totalmente recebido some do campo de escolha**; pedido que o Compras abriu e ainda não
+>   preencheu continua aparecendo, com a mensagem certa (*"não tem itens lançados no módulo
+>   Compras"*), que é diferente de *"já foi recebido por completo"*.
+> - **21 comandos mortos** de criação de coluna, que falhavam a cada arranque do servidor em
+>   silêncio, foram **apagados**.
+>
+> **⚠️ Duas pendências da 37 continuam suas:**
+> 1. **Rode as consultas A12 e A13 do documento de novidades.** A **A13** confirma, em 30 segundos,
+>    que as 21 colunas dos comandos apagados existem mesmo no banco de produção (deve dar **zero**
+>    ausentes). A **A12** só faz sentido **depois** do deploy, quando houver pedido: ela reconcilia a
+>    contagem do pedido com os recebimentos já processados, e é a mesma consulta que repara a janela
+>    de falha da decisão **B90**.
+> 2. **Duas decisões esperam você:** a **B96** (a lista de quem autoriza excedente **não mudou** —
+>    continua Administrador e Compras, e o Gestor segue fora; é a pergunta da **B82**, agora valendo
+>    para três portas) e a **B97** (mandar a linha de **outro** pedido continua sendo aceito e
+>    corrigido em silêncio — recusar é regra nova sobre contrato já entregue).
+>
+> *(Este cabeçalho dizia que **não existe tela para criar um pedido de compra** e que, por isso, o
+> roteiro da Etapa 37 começava inserindo um pedido **por SQL**. **Deixou de valer com a Etapa 38** —
+> a tela existe, o campo de pedidos deixa de abrir vazio em produção, e nenhum roteiro deste guia
+> usa SQL para criar pedido. Corrigido dizendo o que estava escrito antes, em vez de reescrito em
+> silêncio.)*
+>
+> **Antes disto: a Etapa 36 (o recebimento para de aceitar qualquer coisa, e a conferência física
+> ganha campo)** fechou no mesmo dia (`d02b9f4..e287a06`, mais a onda de correção da revisão final).
+> **É feature** — a **08 (Recebimento)** — e **mexeu no servidor de propósito**. Eram quatro
+> problemas no mesmo documento: a **forma de recebimento** gravava qualquer texto que chegasse por
+> fora da tela; **a mesma nota fiscal do mesmo fornecedor entrava duas vezes** (dois documentos,
+> estoque **dobrado** e **duas** contas a pagar), e agora é recusada dizendo **em qual documento** a
+> nota já está, reconhecendo o fornecedor pelo cadastro, pelo **CNPJ só dígitos** ou pelo **nome
+> ignorando acento**; **a conferência física ganhou o campo que faltava** (**"Qtd. conferida"**, com
+> o aviso *"Divergência: N a menos/a mais que o esperado (E)"* e o botão **Salvar Conferência**); e
+> **receber acima do esperado passou a exigir autorização de Compras ou do Administrador**, em
+> qualquer momento em que a quantidade recebida é informada, com a caixa **"Autorizo o recebimento
+> acima do pedido"** e a trilha **"Excedente autorizado"** por item. **Três pendências dela
+> continuam suas:** as consultas **A9** (notas repetidas já no banco — e ela **sub-reporta**, porque
+> não ignora acento), **A10** (formas de recebimento fora dos dois valores) e **A11** (informativa);
+> a decisão **B82** (o Gestor deve poder autorizar excedente?); e o **passo 9** do roteiro da Etapa
+> 36, que é o furo crítico que a revisão final pegou — um recebimento com excedente autorizado
+> ficava **preso** e nunca chegava ao estoque. Vale testar até o fim.
+>
+> **Antes disto: a Etapa 35 (as telas vizinhas param de esconder falha e de mostrar o registro
+> errado)** fechou no mesmo dia (`6f6a8b0..2d5cd35`), **sem uma linha de servidor** — em
+> Requisições, clicar numa linha passou a fazer **uma** consulta em vez de duas; em Recebimentos, a
+> falha de rede parou de se disfarçar de lista vazia e o painel parou de mostrar o recebimento
+> anterior sob o número novo; e as 11 telas com coluna de ações passaram a **quebrar os botões em
+> duas fileiras** em vez de deixá-los cortados. **Duas pendências dela continuam suas:** a
+> verificação manual **F12** (o teto da faixa de ~1100 a ~1355 pixels e quais linhas passaram a
+> ocupar duas fileiras — cinco minutos, roteiro na seção da Etapa 35) e o fato de que **o avanço de
+> situação e a impressão de etiquetas de Recebimentos continuam sem teste automático**, que é a
+> parte da **G10** que não fechou. *(O modal de dados fiscais, que também estava nessa lista, passou
+> a ter cenário automático na Etapa 36.)*
+>
+> Antes disto: **Etapa 34 (anexos nas cinco telas restantes)**, `746a106..054f727`.
+>
+> **Etapas 1 a 20 e 22 a 34 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
+> A **Etapa 34 (anexos nas cinco telas restantes)** fechou em 2026-09-16
+> (`746a106..054f727`) e **nenhuma linha do servidor mudou** — o mecanismo de anexos já aceitava
+> as seis entidades desde a Etapa 32; o que faltava era a tela.
+>
+> A Etapa 32 construiu o lugar de guardar documento e plugou **uma tela só** (a inspeção). Agora
+> **material, requisição, recebimento, devolução e cada ITEM de remessa a terceiros** também têm
+> onde guardar — com a inspeção, são **seis**.
+>
+> **Onde aparece:**
+> - **Materiais**, **Devoluções** e os **itens de uma remessa a terceiros**: um **clipe** na linha,
+>   que abre uma janela de anexos. Em Devoluções, essa é a **primeira coluna de ações** que a tela
+>   já teve.
+> - **Requisições** e **Recebimentos**: um bloco **Anexos** no **fim do painel de detalhe**, depois
+>   dos botões de ação.
+>
+> **⚠️ Duas coisas antes de apresentar:**
+> 1. **O bloco não aparece nas telas de requisição dos outros módulos** (Comercial, Frota, Compras,
+>    Financeiro, Fábrica, Engenharia) — é a decisão **B71**, e ela tem uma pergunta de negócio para
+>    você responder: o solicitante de fora do almoxarifado deve poder anexar o desenho na própria
+>    requisição?
+> 2. **Duas coisas que a revisão achou nas telas vizinhas continuam de pé**, e são anteriores a esta
+>    etapa: clicar numa requisição **busca o detalhe duas vezes** (furo **C45**, só lentidão) e a
+>    tela de Recebimentos **esconde falha de rede** atrás de *"Nenhum recebimento registrado"*
+>    (fragilidade **G10**). As duas são a Etapa 35.
+>
+> Antes disto: **Etapa 33 (os arquivos param de abrir sem login)**, `13dfd4f..65811d2`.
+>
+> **Etapas 1 a 20 e 22 a 33 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
+> A **Etapa 33 (os arquivos param de abrir sem login)** fechou em 2026-09-03
+> (`13dfd4f..65811d2`) e **não é feature — é o fechamento de um furo de segurança** que a
+> Etapa 32 mediu e declarou.
+>
+> Todo arquivo guardado pelo almoxarifado — foto de material, certificado do fornecedor,
+> comprovante de sucateamento, certificado de calibração, foto de ocorrência e **a imagem da
+> assinatura de quem retirou material** — ficava num endereço que **abria sem login**, para
+> qualquer um com o link. Agora o endereço vem **assinado pelo servidor**, vale só para aquele
+> arquivo e expira em **15 a 20 minutos**.
+>
+> **⚠️ Duas coisas antes de apresentar:**
+> 1. **Links de imagem copiados antes do deploy param de funcionar** (letra **A8**). Se alguém
+>    guardou endereços em planilha ou e-mail, avise.
+> 2. **Quem já baixou continua com o arquivo.** Fechar a porta impede novos downloads; não
+>    recolhe o que saiu.
+>
+> Antes disto: **Etapa 32 (anexos de documento)**, `e708125..fd71958`.
+>
+> **Etapas 1 a 20 e 22 a 32 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
+> A **Etapa 32 (anexos de documento)** fechou em 2026-09-02 (`e708125..fd71958`) e é a primeira
+> vez que um documento — certificado do fornecedor, relatório dimensional, foto — fica **preso**
+> a um registro do almoxarifado, dentro do sistema.
+>
+> **Onde aparece:** Almoxarifado → Inspeções → aba **Histórico** → clique numa linha. O bloco
+> **Anexos** está lá. É a **única** tela com o botão nesta etapa; o mecanismo é genérico e já
+> aceita material, requisição, recebimento, devolução e item de remessa, mas o plug de cada uma
+> fica para a etapa seguinte.
+>
+> **⚠️ Duas coisas para saber antes de apresentar:**
+> 1. **O anexo novo exige login para baixar** — e isso é diferente de tudo que o módulo guardava
+>    até aqui. Os arquivos **antigos** (foto de material, certificado de lote, comprovante de
+>    sucateamento, certificado de calibração, foto de ocorrência e **assinatura de entrega**)
+>    continuam abrindo **sem login** para quem tiver o link. Isso é anterior a esta etapa; leia o
+>    furo **C42** no documento de novidades.
+> 2. **Cada download fica registrado** na Auditoria, com nome e hora. É a única leitura auditada
+>    do módulo, e existe porque qualquer perfil com acesso baixa qualquer anexo.
+>
+> Antes disto: **Etapa 31 (os números de documento paravam de ser únicos)**, `1e6c9a9..67b6758`.
 >
 > **Etapas 1 a 20 e 22 a 31 completas no módulo; a Etapa 21 foi entregue no NÚCLEO do CRM.**
 > A **Etapa 31 (os números de documento paravam de ser únicos)** fechou em 2026-08-31
@@ -1780,7 +2398,7 @@ aparecer na tela for diferente, é bug — reporte.
   transferência. Não há perda de saldo nem de rastreabilidade da peça — só o endereço da série fica
   desatualizado. O saldo real, que a transferência move corretamente, mora em outro lugar.
 - **Série no descarte de devolução** (Sucata/Retrabalho) — caminho de dois passos, ver R15.
-- **Fotos/anexos da devolução** — não implementado.
+- **Fotos/anexos da devolução** — o mecanismo de anexos **existe desde a Etapa 32** e já aceita a devolução; falta só o botão nesta tela (é um plug de poucas linhas). Hoje o anexo só tem botão na aba Histórico de Inspeções.
 - **Devolução ao fornecedor** — é fluxo próprio, com documento fiscal e contraparte externa; não é
   "a mesma devolução com outro destino".
 - **Estorno de custo de projeto** quando o material volta — depende da integração de custos.
@@ -3050,7 +3668,8 @@ Etapa 11 serve).
    vinculado (recebimento → dados fiscais → processar). Volte à aba de solicitações do
    almoxarifado: a solicitação **sumiu das pendentes** (virou RECEBIDA — confira no relatório
    Solicitações de Compra, que mostra o status). Vale também para entrega **parcial**: a
-   primeira nota fecha.
+   primeira nota fecha. *(**Deixou de valer na Etapa 72:** a nota parcial **não** fecha mais a solicitação —
+   ela fica na aba com "chegou X de Y" até o material dela chegar; ver a seção da Etapa 72.)*
 6. **Cancelada não ressuscita.** Vincule outra solicitação a um pedido, **cancele-a** (com
    justificativa) e só depois processe a nota do pedido: a solicitação **continua CANCELADA**.
    Tentar cancelar de novo:
@@ -4131,8 +4750,8 @@ requisição. Nos comandos abaixo ele é `$TOKEN`.
    ```
    Sem o `material_id`, recusa com *"Material é obrigatório"*.
 5. **Deixe um item retido para inspecionar:** Almoxarifado → Recebimentos → novo recebimento do
-   **mesmo material** (ele precisa estar marcado como **crítico** e a retenção de material crítico
-   precisa estar ligada em Configurações) → aprovar. Ele aparece em **Inspeções → Pendentes**.
+   **mesmo material** (basta ele estar marcado como **crítico**; a retenção nasce ativa e não tem
+   interruptor em tela — ver a correção no roteiro da Etapa 44) → aprovar. Ele aparece em **Inspeções → Pendentes**.
    Anote o **id do item** (ele vem na fila; ou use `GET /api/almoxarifado/inspecoes/pendentes`).
 6. **Decida a inspeção mandando a medida, e NENHUMA caixa marcada.** Com o plano `+0,005/+0,021`
    sobre nominal 25, a faixa é `[25,005 ; 25,021]` — mande `24.998`, que está fora:
@@ -4239,9 +4858,9 @@ qualquer requisição do sistema logado; abaixo ele é `$TOKEN`.
      -d '{"material_id": 1, "caracteristica": "Furo", "unidade": "mm",
           "valor_nominal": 10, "desvio_inferior": 0.005, "desvio_superior": 0.021}'
    ```
-2. **Deixe um item retido:** Almoxarifado → Recebimentos → novo recebimento **desse material** (ele
-   precisa estar marcado como **crítico**, e a retenção de material crítico ligada em
-   Configurações) → aprovar. Ele aparece em **Inspeções → Pendentes**.
+2. **Deixe um item retido:** Almoxarifado → Recebimentos → novo recebimento **desse material** (basta ele
+   estar marcado como **crítico**; a retenção nasce ativa e não tem interruptor em tela — ver a
+   correção no roteiro da Etapa 44) → aprovar. Ele aparece em **Inspeções → Pendentes**.
 3. **Abra Decidir Inspeção.** Agora existe o bloco **Medidas do plano**, com duas linhas:
    - *Diâmetro (mm) — nominal 12.3 · faixa **[12.2 ; 12.4]***
    - *Furo (mm) — nominal 10 · faixa **[10.005 ; 10.021]***
@@ -4317,7 +4936,7 @@ qualquer requisição do sistema logado; abaixo ele é `$TOKEN`.
   **B60**): calcular a tolerância na tela seria uma **segunda cópia** da régua, e a Etapa 27 mediu
   a versão ingênua reprovar 12,3% das peças no limite. O resultado vem do servidor, no aviso de
   sucesso, e a tela mostra a **faixa** ao lado do campo.
-- **Fotos, certificado e relatório dimensional** anexados à inspeção — dependem do módulo de anexos.
+- ~~**Fotos, certificado e relatório dimensional** anexados à inspeção — dependem do módulo de anexos.~~ **ENTREGUE na Etapa 32:** estão na aba **Histórico**, na linha expandida da inspeção. Riscado em vez de apagado, para quem leu a versão anterior confirmar o que saiu.
 - **Reabrir ou corrigir uma inspeção decidida** — a leitura é só leitura; medida errada não tem
   como ser corrigida pela tela (nem tinha antes).
 - **Paginação do Histórico** — a aba mostra no máximo as **100 mais recentes** e não avisa que
@@ -4408,7 +5027,7 @@ galpão cadastra plano por `curl`. Esta etapa é a chave que abre as outras duas
 
 - **Plano herdado da família** (**B59**) — continua por material.
 - **Copiar o plano de outro material** — hoje se cadastra característica por característica.
-- **Anexar desenho técnico** — depende do módulo de anexos.
+- **Anexar desenho técnico** — o mecanismo de anexos **existe desde a Etapa 32** e já aceita a requisição; falta só o botão nesta tela.
 - **Editar característica inativa** — o bloco de inativas é somente leitura, com **Reativar**;
   editar ali convidaria a reativação acidental que o servidor foi feito para impedir.
 - **Trocar o material de uma característica** — seria mover a característica deixando as medidas já
@@ -4484,6 +5103,3825 @@ que ele não tinha como repetir com sucesso garantido.
 - **Números de outros módulos do CRM** — a varredura foi do almoxarifado.
 
 ---
+
+## Etapa 68 — As áreas especiais passam a dizer o que fazem — e o que não fazem (ENTREGUE — 2026-10-01)
+
+**O que mudou, em uma frase:** as localizações do tipo "Área de …" (quarentena, expedição, sucata, devoluções, materiais
+do cliente) deixam de ser só um nome — o sistema avisa o que cada uma não faz, deixa de sugeri-las como vaga comum e,
+na sucata, baixa o material de lá quando o sucateamento é aprovado.
+
+**O problema que ela resolve.** Quem guardava material na "Área de quarentena" podia achar que ele estava retido — não
+estava, continuava disponível. A área de sucata não existia, e o material transferido para "a sucata" continuava
+aparecendo lá no Mapa depois de descartado, porque a baixa saía da prateleira. E o assistente de nova localização nem
+oferecia as áreas.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| "Área de …" era só um rótulo | Aviso e sugestão por área — nenhuma recusa nova |
+| Não havia área de sucata nem de devoluções | **Área de sucata** (♻️) e **Área de devoluções** (↩️) |
+| O assistente de **Nova Localização** não oferecia as áreas | Oferece as cinco no **Tipo de área** da raiz |
+| A sugestão de entrada podia propor a área de quarentena vazia | Área especial não é sugerida como vaga (a área de cliente vem primeiro para material de cliente) |
+| Transferir para a área não dizia nada | Aviso abaixo do destino na **Nova Movimentação** |
+| O sucateamento baixava da prateleira; a área de sucata ficava "ocupada" | Baixa da área de sucata quando ela cobre o sucateamento inteiro |
+| O Mapa mostrava só o tipo | O painel explica o que a área faz, também para as posições dentro dela |
+
+### Roteiro de teste manual (≈10 min)
+
+**Preparação.** Um material **sem lote** com localização padrão numa prateleira comum **P** e 10 unidades em P. Entre
+como **Administrador** do almoxarifado; tenha à mão um segundo usuário para a segunda assinatura do sucateamento.
+
+1. **Criar a área.** **Configurações → Setores e Áreas → Nova Localização**: no **Tipo de área** da raiz escolha
+   **Área de sucata** e crie **SUC**. Crie também uma posição **SUC-01** dentro de SUC (ela nasce como **Prateleira** —
+   é área pela árvore, não pelo nome).
+2. **O Mapa explica.** **Mapa de Áreas** → clique em **SUC**: o painel mostra **Área especial** com *"Guardar aqui não
+   sucateia: o material continua no estoque até o sucateamento aprovado, que baixa daqui quando o saldo aqui cobre o
+   sucateamento inteiro."*. Clique em **SUC-01**: a mesma frase, começando por *"Dentro de SUC (Área de sucata)."*.
+3. **A sugestão.** **Movimentações → Nova Movimentação → Entrada** do material: a sugestão de localização traz P, e não
+   SUC nem SUC-01.
+4. **O aviso.** **Nova Movimentação → Transferência** de 4 unidades, de P para **SUC-01**: abaixo do destino aparece
+   *"Localização SUC-01 é área de sucata, mas guardar aqui não sucateia — o material continua no estoque disponível até
+   o sucateamento aprovado."*. Troque o destino para uma prateleira: o aviso some. Volte para SUC-01 e confirme — a
+   transferência passa.
+5. **O sucateamento.** **Sobras e Retalhos → Sucateamentos → Solicitar sucateamento** de 4 do material. **Aprovar
+   almoxarifado** com um usuário, **Aprovar gestão** com o outro. No **Mapa de Áreas**, SUC-01 fica vazia e P continua
+   com 6.
+6. **Quando a área não cobre.** Transfira só 2 para SUC-01 e sucateie 4: a baixa sai da prateleira, como antes (a área
+   só é usada quando cobre tudo).
+7. **Tipo inválido (opcional, pela API).** Criar localização com tipo *"Area de sucata"* (sem acento) responde *"Tipo de
+   localização inválido: Area de sucata"*.
+
+### O que esta etapa NÃO cobre
+
+- **"Em terceiros" não é área** — o material em terceiros não tem endereço físico aqui.
+- **Nenhuma área retém nem recusa** — o material guardado na quarentena continua disponível; quem retém é a inspeção ou
+  o bloqueio.
+- **Material reprovado na inspeção não vai para o sucateamento**: fica bloqueado, e o sucateamento só aceita o
+  disponível. É a próxima etapa.
+- **Outras saídas ainda tiram da área de sucata** — perda, entrega automática e o "Sai de" da entrega.
+- Saldo espalhado em duas posições da área, ou material com lote, não usa a área no sucateamento.
+- A tela de **Devoluções** não tem campo de endereço; o processamento do recebimento não avisa.
+
+---
+
+## Etapa 69 — O material reprovado na inspeção vai para o sucateamento (ENTREGUE — 2026-10-01)
+
+**O que mudou, em uma frase:** a não conformidade decidida **Sucatear** ganhou o botão **Solicitar sucateamento**, e
+a baixa, depois das duas aprovações de sempre, sai do material **bloqueado** (o reprovado) — não do disponível.
+
+**O problema que ela resolve.** A peça reprovada na inspeção fica bloqueada, e a decisão "Sucatear" não fazia nada. O
+formulário de sucateamento só aceita o disponível: com tudo reprovado ele recusava, e na reprovação **parcial** (chegou
+10, reprovou 3) ele **aceitava** e baixava 3 peças **boas**, deixando as ruins no galpão. Registrar a execução do
+Sucatear tirava o documento da fila sem mexer em nada.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| "Sucatear" na não conformidade era só intenção | **Solicitar sucateamento** na linha da não conformidade |
+| O sucateamento do reprovado recusava (ou levava material bom) | A segunda aprovação baixa **do bloqueado**; o disponível não muda |
+| **Registrar execução** de Sucatear limpava a fila sem baixa | Recusa e diz o caminho; sem baixa, só com motivo escrito |
+| A fila de sucateamentos não dizia a origem | Selo **Origem: NC-…** e *"Material reprovado — baixa do material bloqueado, não do disponível"* |
+| A sucata podia ser estornada pelo livro | A sucata do reprovado não se estorna pelo livro |
+
+### Roteiro de teste manual (≈15 min)
+
+**Preparação.** Um material **crítico** (exige inspeção) com **controle de lote e de certificado**. Usuários: um da
+**Qualidade**, dois **Almoxarifes** (A e B) e um **Gestor**. Registre e processe uma nota de **10** desse material (o lote
+nasce **Bloqueado**, por falta de certificado) e, em **Inspeções**, com a Qualidade, reprove **3** e aprove 7. Em
+**Não Conformidades** aparece uma **NC-…** nova; decida-a **Sucatear**.
+
+1. **Registrar execução recusa e ensina.** **Registrar execução** na NC, sem motivo: a mensagem começa por *"O lote …
+   está bloqueado (…): libere o lote para sucatear o reprovado, ou registre a execução sem baixa informando o motivo."*
+   A NC continua pendente.
+2. **Liberar o lote.** Em **Lotes e Séries**, mude o status do lote para **Ativo**. **Registrar execução** de novo:
+   *"Esta não conformidade pede sucateamento: o almoxarifado registra em "Solicitar sucateamento" (duas aprovações) — a
+   execução fica registrada na segunda aprovação."*
+3. **O botão é do almoxarifado.** Com a Qualidade, a linha **não** tem **Solicitar sucateamento**. Entre com o
+   Almoxarife A: o botão aparece.
+4. **Solicitar.** Clique, confira a justificativa (vem a da decisão) e confirme. O aviso cita **SUC-…** e *"Sobras e
+   Retalhos › Sucateamentos"*. Nada saiu: o material continua com físico 10 e 3 bloqueados (confira em **Materiais**).
+5. **As aprovações.** **Sobras e Retalhos → Sucateamentos**: a linha tem **Origem: NC-…**. Com o **Gestor**, **Aprovar
+   gestão** (nada sai). Com o Almoxarife **B**, **Aprovar almoxarifado**: o aviso diz que a baixa do material bloqueado
+   foi emitida. Confira: **físico 7, bloqueado 0**; a NC fica **Executada** e sai do cartão **Material reprovado**.
+6. **Estorno recusado.** Em **Movimentações**, estornar essa sucata: *"Sucateamento de material reprovado não pode ser
+   estornado pelo livro — …"*.
+7. **O que não fazer (C96).** Repita a preparação e, em vez da NC, use o formulário comum de **Sobras e Retalhos →
+   Solicitar sucateamento** para 3: ele aceita, e as duas aprovações baixam 3 do **disponível** — o reprovado continua
+   bloqueado. Reprovado se sucateia **pela não conformidade**.
+
+### O que esta etapa NÃO cobre
+
+- **Sucatear parte** da quantidade reprovada — vai a quantidade inteira.
+- **Material com série** — recusado.
+- **Material de cliente pela tela** — a janela não tem OS/projeto; só pela API (ou registrar a execução sem baixa).
+- **O formulário comum de sucateamento** continua aceitando o disponível de material com reprovado pendente (decisão).
+- **E-mail do sucateamento** — é da feature de notificações.
+
+---
+
+## Etapa 70 — Quem esperava o material fica sabendo que ele chegou (ENTREGUE — 2026-10-01)
+
+**O que mudou, em uma frase:** ao processar uma nota de compra, quem pediu aquele material recebe um e-mail dizendo
+que ele chegou — e o recebimento parou de dar entrada no item contado zero e de gerar conta a pagar em dobro.
+
+**O problema que ela resolve.** A requisição que ficava *Aguardando compra* nunca ficava sabendo que o material tinha
+chegado: o único e-mail que existia era um por movimentação, desligado de fábrica, só para as listas do almoxarifado.
+E, no recebimento, contar **0** de um item fazia entrar a quantidade **esperada**; e dois cliques em **Processar** ao
+mesmo tempo geravam duas contas a pagar.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Quem pediu o material não era avisado de nada | E-mail ao solicitante de cada requisição que esperava o material (ligado de fábrica) |
+| Nenhum aviso falava da nota inteira | Aviso **da nota** (NF, fornecedor, pedido, itens, retido para inspeção) para uma lista — **desligado de fábrica** |
+| Item contado **0** entrava com a quantidade esperada | Não entra; **em branco** continua "não contei" (entra a esperada) |
+| Dois **Processar** juntos geravam duas contas a pagar | O segundo recebe *"Esta nota já está sendo processada"* |
+| Etiqueta para item que chegou zero | Sem etiqueta |
+| O filtro do painel de Notificações não tinha esses avisos | **"Entrada de recebimento"** e **"Aviso ao requisitante"** |
+
+### Roteiro de teste manual (≈15 min)
+
+**Preparação.** Um usuário **Ana** com e-mail cadastrado e acesso ao **Comercial**; dois materiais **M** e **N** sem
+saldo. Com a Ana, crie em **Comercial → Solicitar Material** uma requisição de **4 M** e aprove-a (ela fica
+**Aguardando compra** se houver solicitação de compra de M — gere em **Reposição**, se preciso). Em **Compras →
+Pedidos**, crie um pedido com **10 M** e **5 N**.
+
+1. **As configurações.** **Configurações → Configurações Gerais**: **"Avisar Entrada de Recebimento por E-mail"**
+   desligado, **"Avisar o Solicitante quando o Material Chega"** ligado, **"Destinatários — Entrada de Recebimento"**
+   vazio.
+2. **O recebimento.** **Recebimentos → Novo Recebimento**, contra o pedido. **Iniciar Conferência (Almoxarifado)**; em **"Qtd. conferida"**, **10**
+   em M e **0** em N; **Salvar Conferência** (a divergência de N aparece). Siga até a entrada de NF e preencha os dados
+   fiscais.
+3. **Processar.** **Processar Nota**: a janela lista só **M**. Confirme. O saldo de **M** vira 10 e o de **N** continua
+   **0**.
+4. **O e-mail da Ana.** **Notificações**, filtro **"Aviso ao requisitante"**: uma linha para o e-mail da Ana, assunto
+   *"[Almoxarifado] Chegou material da sua requisição REQ-…"*. Com o SMTP configurado, o e-mail chega; o link abre
+   **Comercial → Minhas Requisições**.
+5. **O aviso da nota está desligado.** Filtro **"Entrada de recebimento"**: nenhuma linha. Ligue **"Avisar Entrada de
+   Recebimento por E-mail"**, processe outra nota e veja a linha *"[Almoxarifado] Entrada confirmada — REC-… — NF …"*.
+6. **Clique duplo.** Numa terceira nota, clique **Processar** em duas abas quase juntas: uma das duas mostra *"Esta
+   nota já está sendo processada"*; a nota fica **Processado** e o Financeiro tem **uma** conta a pagar dela.
+7. **A requisição.** A da Ana continua **Aguardando compra** (o e-mail diz que a separação é do almoxarifado). Na
+   **Fila de separação** ela aparece para separar.
+
+### O que esta etapa NÃO cobre
+
+- **Outras entradas** (avulsa, devolução, retorno de terceiro) e a **liberação da inspeção** — não mandam aviso.
+- **Comprador e solicitante da compra** — o sistema não sabe quem são; o aviso da nota vai para uma lista.
+- **A situação da requisição** não muda sozinha quando o material chega.
+- **Estornar** a entrada não corrige o e-mail já enviado.
+- **Requisição esquecida** recebe um e-mail a cada nota do material — encerre as que ninguém mais espera.
+
+---
+
+## Etapa 71 — Estornar a entrada da nota reabre o pedido de compra (ENTREGUE — 2026-10-02)
+
+**O que mudou, em uma frase:** estornar a entrada de uma nota que tinha fechado um pedido de compra agora devolve o
+pedido ao estado de antes — ele volta a aparecer como faltando material, e a nota do que falta passa sem autorização.
+
+**O problema que ela resolve.** Quem lançava uma nota errada e estornava a entrada deixava o pedido *Recebido*: ele
+sumia dos atrasados e dos pendentes do Recebimento, e a nota certa era **recusada** como excedente, porque o pedido
+continuava dizendo que tudo tinha chegado. A saída era SQL.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Estorno da entrada deixava o pedido *Recebido*, sem sinal | O pedido volta ao status de antes (ex.: *Enviado*), aos atrasados, aos pendentes e ao alerta de parcial |
+| A nota do que faltava era recusada *"…maior que o saldo do pedido (0)…"* | Passa sem autorização de excedente |
+| O estorno não dizia nada do pedido | *"Pedido de compra ⟨número⟩ reaberto: faltam ⟨saldo⟩ para receber"* |
+| A mesma NF não podia ser relançada | Pode, depois de **todas** as entradas dela estornadas (ficam duas contas a pagar) |
+| Estorno de entrada com material em inspeção ou reprovado podia passar | Recusado, com a mensagem própria |
+| Excedente de um material fechava o pedido mesmo faltando outro | Não fecha: a conta é por material |
+| Mudança manual de status do pedido sem trilha | *"Mudança manual de status do pedido"* na Auditoria |
+
+### Roteiro de teste manual (≈15 min)
+
+**Preparação.** Em **Compras → Pedidos → Novo Pedido**, um pedido de **10** de um material **M** e **5** de outro
+**P**, **Previsão de entrega** ontem, status **Enviado**. No Almoxarifado, **Recebimentos → Novo Recebimento**, forma
+*Pedido de compra*, esse pedido, as quantidades cheias; **Iniciar Conferência (Almoxarifado)**, conferir, preencher os
+dados fiscais e **Processar Nota**. Em **Compras → Pedidos**, o pedido está **Recebido** e sem selo de atraso.
+
+1. **A barreira.** Tente outro recebimento de **10 M** contra o mesmo pedido: recusado com *"Quantidade recebida (10)
+   maior que o saldo do pedido (0) para o material … — a autorização de excedente é de Compras ou do Administrador"*.
+2. **O estorno.** **Almoxarifado → Movimentações**, linha **ENTRADA_COMPRA** de M → seta curva → motivo → **Confirmar
+   Estorno**: aparecem *"Movimentação estornada!"* e *"Pedido de compra ⟨número⟩ reaberto: faltam 10 para receber"*.
+3. **O pedido voltou.** **Compras → Pedidos**: **Enviado**, com *"Atrasado há 1 dia"* (e na caixa **"Só atrasados"**).
+   Na central de alertas, o atrasado e o parcial.
+4. **A nota do que falta.** Novo recebimento contra o pedido: a linha de M mostra **"Saldo pendente: 10"**; salve 10
+   **sem** marcar a autorização — passa. Processe: o pedido volta a **Recebido**.
+5. **A trilha.** **Almoxarifado → Auditoria**: *"Recebido do pedido estornado"* e *"Reabertura automática do pedido"*.
+6. **O fechamento à mão.** Outro pedido de 10, recebido 6. No Compras, lápis → **Status** → **Recebido** (a Auditoria
+   mostra *"Mudança manual de status do pedido"*). Receba os 4 e estorne essa entrada: o aviso é *"Pedido de compra
+   ⟨número⟩: o saldo a receber voltou a 4"* e o pedido **continua Recebido** — a decisão era do comprador.
+7. **Relançar a mesma NF.** Estorne **todas** as entradas de uma nota e crie outro recebimento com a mesma NF: passa
+   (com uma entrada ainda viva, a recusa é *"Nota fiscal … já lançada no recebimento REC-… para este fornecedor"*).
+   Confira no Financeiro: são **duas** contas a pagar.
+8. **Material crítico.** Recebido e ainda em inspeção, o estorno é recusado com *"Esta entrada tem ⟨q⟩ ⟨un⟩ em
+   inspeção — decida a inspeção antes de estornar a entrada"*; com parte reprovada, com *"Esta entrada teve ⟨q⟩ ⟨un⟩
+   reprovado(s) na inspeção — o reprovado sai pela não conformidade; esta entrada não pode ser estornada"*.
+
+### O que esta etapa NÃO cobre
+
+- **Devolução ao fornecedor e sucata** não reabrem o pedido — cobrar a reposição é lápis → **Status**.
+- **Estorno do recebimento inteiro** não existe: o recebimento, a conta a pagar e a solicitação de compra ficam. *(A solicitação de compra **reabre** desde a Etapa 72.)*
+- **O aviso do pedido vem depois** do estorno, não no modal.
+- **Pedido mudado à mão antes desta versão** pode ser reaberto pelo estorno (não há trilha daquela mudança).
+- **O e-mail de atrasado** do pedido reaberto pode não sair de novo — acompanhe pela central de alertas.
+
+---
+
+## Etapa 73 — A requisição que espera compra nasce com o status certo, em qualquer forma de aprovar (ENTREGUE — 2026-10-02)
+
+**O que mudou, em uma frase:** a requisição sem saldo cuja compra já foi pedida ao fornecedor passa a esperar como
+**Aguard. Compra** (e não **Aguard. Estoque**), as três formas de aprovar fazem o mesmo depois de aprovar, e o detalhe
+avisa quando o material chegou.
+
+**O problema que ela resolve.** Bastava o comprador gerar o pedido para a requisição seguinte do material nascer
+**Aguard. Estoque** — como se nada viesse. A **liberação por valor** sem saldo deixava a requisição **Aprovado**, e a
+**aprovação automática** não reservava nada, nem com saldo. E quando o material chegava, o detalhe continuava dizendo
+"sem saldo".
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Com o pedido gerado, a requisição nascia **Aguard. Estoque** | Nasce **Aguard. Compra** enquanto a compra estiver a caminho |
+| **Aprovar Liberação** sem saldo deixava **Aprovado** | Deixa **Aguard. Compra** ou **Aguard. Estoque** |
+| A aprovação automática não reservava | Reserva o que há, como **Só Aprovar** |
+| O detalhe em espera dizia "sem saldo" mesmo depois de chegar material | Diz *"Chegou material para esta requisição — já dá para separar…"* e quanto |
+| Duas aprovações ao mesmo tempo pelo último saldo deixavam uma **Aprovado** sem nada | A que perde fica esperando |
+| Os itens podiam aparecer fora da ordem pedida | Aparecem na ordem em que foram pedidos |
+
+### Roteiro de teste manual (≈15 min)
+
+**Preparação.** Um material **M** sem saldo, com mínimo e fornecedor. **Almoxarifado → Reposição e Compras**, aba
+**Sugestões de Compra**: marque M e **Gerar solicitações**; aba **Solicitações**: **Gerar pedido** na linha de M e
+salve o pedido (a linha fica **Vinculado**). Use dois usuários: um cria as requisições, **outro** aprova.
+
+1. **O rótulo certo.** Crie uma requisição de M e aprove (**Só Aprovar**): o badge mostra **Aguard. Compra** e o aviso
+   *"Sem saldo disponível — há uma solicitação de compra em andamento para os materiais desta requisição."*
+2. **O pedido cancelado.** No Compras, lápis → **Status** → **Cancelado** no pedido de M. Crie e aprove outra requisição
+   de M: **Aguard. Estoque**. (Para seguir, gere um pedido novo de M.)
+3. **Chegou material.** Processe uma nota de **4** do pedido de M (**Recebimentos**, até **Processar Nota**). Abra a
+   requisição do passo 1 em **Requisições (almox.)**: o badge continua **Aguard. Compra**, e o aviso diz *"Chegou material
+   para esta requisição — já dá para separar. O material ainda não está reservado para ela. Dá para separar agora: 4 … de
+   M. O saldo é compartilhado: enquanto não for separado, outra requisição pode separá-lo antes."* **Iniciar Separação**
+   funciona. *(**Mudou na Etapa 74:** a nota agora reserva os 4 para esta requisição — ela vira **Parcialmente
+   Reservada** e o aviso é o de reserva. O aviso *"Chegou material…"* continua quando o material chega por outra
+   porta — ajuste, devolução, inspeção liberada.)*
+4. **A aprovação automática reserva.** **Configurações → Configurações Gerais → Aprovação Automática** ligada. Crie uma
+   requisição de um material **com** saldo: ela nasce **Totalmente Reservada**, e a tela **Reservas** mostra a reserva no
+   seu nome. Desligue depois.
+5. **A liberação por valor** (opcional). Com a alçada por valor ligada, uma requisição de M acima do limite, sem saldo:
+   **Aprovar Liberação** deixa **Aguard. Compra** (não mais **Aprovado**).
+6. **A ordem dos itens.** Crie uma requisição com cinco materiais numa ordem qualquer: o detalhe os mostra na mesma
+   ordem.
+
+### O que esta etapa NÃO cobre
+
+- **O material que chega não é reservado para quem esperava** — uma requisição aprovada depois pode levá-lo (aviso
+  **C121** das novidades). É a próxima etapa; até lá, separe logo quem já mostra *"Chegou material…"*. *(Pago na
+  Etapa 74, para a nota.)*
+- **O status não muda quando o material chega** — por decisão; o aviso do detalhe é que muda. *(Revisto na Etapa 74:
+  a nota reserva e o status acompanha.)*
+- **Pedido lançado direto no Compras, sem solicitação**, não conta como compra a caminho.
+- **Requisições de antes desta versão** ficam como estão (consulta **A37** das novidades).
+
+---
+
+## Etapa 74 — A requisição que esperava fica com o material que chegou (ENTREGUE — 2026-10-02)
+
+**O que mudou, em uma frase:** ao processar a nota do fornecedor, o que chegou livre é reservado para as requisições
+que esperavam aquele material, na ordem da fila de separação — e quem é aprovado depois só leva o que sobrou.
+
+**O problema que ela resolve.** Duas requisições esperavam um material; chegava a nota de 4; uma terceira, aprovada
+**depois** (ou criada depois, com a aprovação automática ligada), reservava os 4 — e a que esperava ouvia *"Máximo: 0"*
+ao tentar separar. O e-mail *"chegou material"* ainda prometia os mesmos 4 a quem esperava 6 e a quem esperava 3.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A nota dava entrada e o material ficava solto | Reserva o que entrou livre para quem esperava, na ordem da fila |
+| Quem aprovava depois levava o material de quem esperava | Só leva o que sobrou |
+| A requisição que esperava continuava **Aguard. Compra** com o material no prédio | Vira **Parcialmente/Totalmente Reservada** |
+| O e-mail prometia o mesmo material a todos | Diz *"reservado para a sua requisição: N"*; quem não ganhou nada nem tem saldo livre não recebe |
+| Estornar a entrada com o material reservado: *"…(material já consumido)"* | Solta a reserva de quem ainda não separou; senão, a recusa diz quem segura o material |
+| **Encerrar Requisição** e **Rejeitar** por valor deixavam a reserva presa | Liberam |
+| O painel **📋 Requisições Abertas** não mostrava as reservadas | Mostra |
+
+### Roteiro de teste manual (≈15 min)
+
+**Preparação.** Um material **M** sem saldo, com fornecedor e pedido (como na Etapa 73: **Reposição e Compras →
+Gerar solicitações → Gerar pedido**). Dois usuários: um cria as requisições, **outro** aprova. Crie **R2** (urgência
+**Normal**, 3 de M) e **depois** **R1** (urgência **Urgente**, 6 de M); aprove as duas: **Aguard. Compra**.
+
+1. **A nota reserva para quem esperava, na ordem da fila.** Processe uma nota de **4** de M (**Recebimentos**, até
+   **Processar Nota**). Em **Requisições (almox.)**: R1 está **Parcialmente Reservada**; R2 continua **Aguard. Compra**.
+   Na tela **Reservas**, a reserva de R1 diz *"Reserva na chegada do recebimento ⟨REC⟩ — requisição ⟨R1⟩"*, no nome
+   de quem processou a nota.
+2. **A fila concorda.** **Fila de separação**: R1 em **Separar**, R2 em **Aguardando saldo**.
+3. **Quem chega depois não leva.** Crie e aprove **R3** (2 de M): fica **Aguard. Compra**, sem reserva. **Iniciar
+   Separação** de R1 funciona com os 4.
+4. **O painel.** No painel do almoxarifado, o cartão **📋 Requisições Abertas** lista R1.
+5. **O estorno.** Em **Movimentações**, estorne a linha **ENTRADA_COMPRA** da nota do passo 1 **antes** de separar R1:
+   o estorno passa, a reserva de R1 é liberada e R1 volta a **Aguard. Compra**. *(Se R1 já tiver separado, o estorno é
+   recusado com "Não é possível estornar: o material está reservado para requisições (⟨R1⟩) — libere as reservas antes
+   de estornar".)*
+6. **Encerrar libera.** Numa requisição **Parcialmente Atendida** que ainda tenha reserva, **Encerrar Requisição**: na
+   tela **Reservas** a reserva dela fica **Liberada**.
+7. **O e-mail** (se o e-mail estiver configurado). O solicitante de R1 recebe *"… entrou 4 ⟨un⟩ (pendente na
+   requisição: 6 ⟨un⟩; reservado para a sua requisição: 4 ⟨un⟩)"* e a frase *"O material indicado como reservado fica
+   guardado para a sua requisição — outra requisição não pode levá-lo…"*; o de R2 não recebe nada.
+
+### O que esta etapa NÃO cobre
+
+- **A inspeção que libera o material retido não reserva para quem esperava** (aviso **C126** das novidades) — é a
+  próxima etapa; até lá, depois de aprovar uma inspeção, separe logo quem esperava aquele material. *(Feita na Etapa 75
+  — seção abaixo.)*
+- **Entradas que não são nota** (manual, devolução, transferência, ajuste) deixam o material solto.
+- ~~**Liberar à mão uma reserva de requisição, ou ela vencer**, não muda o status da requisição (aviso **C127**).~~
+  *(Mudou na Etapa 76: liberar à mão ou vencer recalcula o status — seção da Etapa 76.)*
+- **Nada é reservado no dia do deploy** — quem esperava ganha a reserva na próxima nota (consulta **A38**).
+- **A requisição em *Aguardando aprovação de valor*** não ganha reserva na chegada.
+
+---
+
+## Etapa 75 — O material que a inspeção libera fica com quem esperava (ENTREGUE — 2026-10-02)
+
+**O que mudou, em uma frase:** quando a inspeção aprova o material crítico que estava retido — ou a não conformidade do
+reprovado é aceita —, o que foi liberado é reservado para as requisições que esperavam aquele material, na ordem da
+fila de separação, e o solicitante recebe um e-mail.
+
+**O problema que ela resolve.** Material crítico entra retido para inspeção, então a nota não o reserva para ninguém.
+Quando a Qualidade aprovava, o material ficava solto: uma requisição aprovada logo depois levava tudo, e a que esperava
+ouvia *"Máximo: 0"* ao separar. Quem pediu o material crítico também não recebia e-mail nenhum.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A inspeção aprovava e o material ficava solto | A parte aprovada é reservada para quem esperava, na ordem da fila |
+| A não conformidade aceita devolvia o reprovado ao estoque solto | O liberado é reservado para quem ainda faltava |
+| Quem pediu material crítico não recebia e-mail | Recebe *"[Almoxarifado] Material liberado para a sua requisição ⟨REQ⟩"* |
+| O e-mail da chegada dizia um pendente menor para quem tinha material separado na caixa | Diz o pendente certo |
+| Duas inspeções do mesmo material ao mesmo tempo deixavam a fila inteira sem nada | Cada requisição fica com o que lhe cabe |
+
+### Roteiro de teste manual (≈15 min)
+
+**Preparação.** Um material **M** com a caixa **Material crítico** marcada no cadastro (a inspeção de materiais
+críticos no recebimento vem ligada de fábrica), sem saldo, com fornecedor e pedido de compra. Três usuários: um cria as requisições, **outro** aprova,
+e um da **Qualidade** decide a inspeção. Crie **R2** (urgência **Normal**, 4 de M) e **depois** **R1** (urgência
+**Urgente**, 4 de M); aprove as duas: **Aguard. Compra**.
+
+1. **A nota retém e não reserva.** Processe uma nota de **6** de M (**Recebimentos**, até **Processar Nota**). R1 e R2
+   continuam **Aguard. Compra**; nenhuma reserva nova na tela **Reservas**; o item aparece em **Inspeções**, aba
+   **Pendentes**.
+2. **A inspeção aprova e reserva.** Como Qualidade, em **Inspeções**, decida o item: **Quantidade aprovada** 5,
+   **Quantidade reprovada** 1, observação, **Salvar**. Em **Requisições (almox.)**: R1 está **Totalmente Reservada** (4)
+   e R2 **Parcialmente Reservada** (1). Na tela **Reservas**: *"Reserva na liberação da inspeção — recebimento ⟨REC⟩ —
+   requisição ⟨REQ⟩"*, no nome de quem decidiu.
+3. **Quem chega depois não leva.** Crie e aprove **R3** (2 de M): fica **Aguard. Compra**, sem reserva. Na **Fila de
+   separação**, R1 e R2 estão em **Separar**.
+4. **A não conformidade aceita completa quem faltava.** Em **Não Conformidades**, a do 1 reprovado: decida **Aceitar**
+   → **Registrar decisão**. R2 passa a ter 2 de 4 reservados (continua **Parcialmente Reservada**); a reserva nova diz
+   *"Reserva na liberação da não conformidade ⟨NC⟩ — requisição ⟨R2⟩"*. R3 continua sem nada.
+5. **O e-mail** (se o e-mail estiver configurado). O solicitante de R1 recebe *"[Almoxarifado] Material liberado para a
+   sua requisição ⟨R1⟩"*, começando com *"O material que a sua requisição aguardava foi aprovado na inspeção e está no
+   estoque."*, com *"liberado 5 ⟨un⟩ (pendente na requisição: 4 ⟨un⟩; reservado para a sua requisição: 4 ⟨un⟩)"*. Depois
+   da não conformidade, o de R2 recebe outro, começando com *"…foi liberado pela não conformidade ⟨NC⟩ e está no
+   estoque."* Na tela **Notificações**, o filtro *Aviso ao requisitante* mostra as linhas.
+6. **Decidir de novo não reserva de novo.** Tente decidir de novo a mesma inspeção: *"Item não possui quantidade em
+   inspeção retida"*, e nada muda nas reservas.
+
+### O que esta etapa NÃO cobre
+
+- **Aprovar uma requisição no exato instante** em que a inspeção é decidida pode inverter a fila — a aprovada leva antes
+  de quem esperava (aviso **C131** das novidades). Na prática: não aprove requisições daquele material enquanto a
+  Qualidade decide a inspeção dele.
+- **Desbloquear Material** (o desbloqueio avulso da tela **Inspeções**) devolve ao estoque sem reservar para ninguém.
+- ~~**Liberar à mão uma reserva de requisição, ou ela vencer**, ainda não muda o status da requisição (aviso **C127**) — é
+  a próxima etapa.~~ *(Feito na Etapa 76 — seção abaixo.)*
+- **Nada é reservado no dia do deploy** — quem esperava ganha a reserva na próxima decisão (consulta **A39**).
+- **A requisição *Em Separação*** ganha a reserva, mas não recebe o e-mail.
+
+---
+
+## Etapa 76 — Liberar ou deixar vencer a reserva de uma requisição atualiza o status dela (ENTREGUE — 2026-10-02)
+
+**O que mudou, em uma frase:** quando o almoxarife libera à mão a reserva de uma requisição na tela **Reservas**, ou a
+reserva vence, o status da requisição passa a acompanhar — liberou tudo, ela volta a **Aprovado**; liberou parte, fica
+**Parcialmente Reservada**.
+
+**O problema que ela resolve.** O saldo voltava ao disponível, mas a requisição continuava dizendo **Totalmente
+Reservada** com nada seguro — a lista, o painel e o e-mail repetiam o rótulo errado.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Liberar tudo à mão: a requisição continuava **Totalmente Reservada** | Vira **Aprovado** |
+| Liberar parte: o status não mudava | Vira **Parcialmente Reservada** |
+| Reserva vencida (**Processar expiração**): o rótulo mentia | O status da requisição dona é recalculado |
+| *Em Separação* / *Parcialmente Atendida* | Não mudam (já estão separando) |
+
+### Roteiro de teste manual (≈10 min)
+
+**Preparação.** Um material **M** com **4** em estoque. Um usuário cria a requisição **R1** (4 de M) e **outro** aprova:
+R1 fica **Totalmente Reservada**. Crie e aprove **R2** (4 de M): fica **Aguard. Estoque**.
+
+1. **Liberar tudo.** Na tela **Reservas**, ache a reserva de R1 e clique no cadeado (**Liberar**). O modal avisa
+   *"Esta reserva pertence à requisição #⟨id⟩. Liberar devolve o saldo ao disponível geral e a entrega dessa requisição
+   volta a disputar estoque com as demais."* Deixe **Quantidade a liberar** em branco, escreva o **Motivo**, clique
+   **Liberar**. Em **Requisições (almox.)**: R1 está **Aprovado**. R2 **continua Aguard. Estoque** — isso é esperado: o
+   liberado não vai sozinho para quem esperava (aviso **C135** das novidades). Na **Fila de separação**, as duas
+   aparecem em **Separar**.
+2. **Liberar parte.** Aprove de novo uma requisição de 4 com saldo (fica **Totalmente Reservada**) e libere **2**
+   (**Quantidade a liberar** = 2): ela vira **Parcialmente Reservada**.
+3. **Quem separa não regride.** Inicie a separação de uma requisição reservada (**Em Separação**) e libere a reserva
+   dela: o status continua **Em Separação**.
+4. **O vencimento** (precisa da validade de reserva ligada — configuração `reserva_dias_validade`, sem campo na tela).
+   Com uma reserva de requisição vencida, na tela **Reservas** clique **Processar expiração** (só Administrador): o toast
+   diz *"⟨n⟩ reserva(s) expirada(s) e devolvida(s) ao disponível"* e a requisição dona vira **Aprovado**.
+5. **O painel.** O cartão **📋 Requisições Abertas** do painel mostra o status novo.
+
+### O que esta etapa NÃO cobre
+
+- **O material liberado não vai para quem esperava** — fica solto; uma requisição aprovada depois pode levá-lo (aviso
+  **C135**).
+- **Uma saída avulsa pela API pode gastar a reserva de uma requisição** sem ela saber (aviso **C136**), e **qualquer
+  usuário sem perfil pode liberar a reserva de outra pessoa** (aviso **C137**) — próxima etapa.
+- **As requisições que já mentiam antes do deploy** não são corrigidas sozinhas (consulta **A40**).
+- **O solicitante não recebe e-mail** quando a reserva dele é liberada ou vence.
+
+---
+
+## Etapa 72 — A solicitação de compra só fecha quando o material dela chega (ENTREGUE — 2026-10-02)
+
+**O que mudou, em uma frase:** a solicitação de compra vinculada a um pedido não fecha mais na primeira nota do pedido —
+ela continua na aba Solicitações, mostrando quanto já chegou, até o material dela chegar, e a sugestão de reposição
+para de mandar comprar de novo o que ainda vem.
+
+**O problema que ela resolve.** Com uma solicitação de 10 e um pedido de 10, a primeira nota (4) fechava a
+solicitação. Daí a sugestão de reposição mandava comprar os 6 que estavam a caminho, a verificação de mínimos abria
+outra solicitação de 10, e a linha sumia da aba. Pior: num pedido de dois materiais, a nota de um fechava a
+solicitação do outro.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A primeira nota (parcial) fechava a solicitação | Ela continua *Vinculado* até o material dela chegar |
+| A nota de um material fechava a solicitação de outro do mesmo pedido | Cada uma fecha pelo material dela |
+| Depois da nota parcial, a sugestão mandava comprar de novo | Conta só o que ainda falta como "a caminho" |
+| A verificação de mínimos abria outra solicitação assim que o pedido era gerado | Não abre enquanto o pedido estiver em andamento |
+| A linha sumia da aba Solicitações | Fica, com *"chegou 4 de 10"* |
+| Pedido cancelado: a solicitação já tinha fechado | Conta zero e mostra *"pedido encerrado — nada a caminho"* |
+| Estornar a entrada deixava a solicitação *Recebida* | O estorno a reabre |
+
+### Roteiro de teste manual (≈15 min)
+
+**Preparação.** Um material **M** com **mínimo 9**, **máximo 10** e saldo 0, com fornecedor. **Almoxarifado →
+Reposição e Compras**, aba **Sugestões de Compra**: marque M e clique **Gerar solicitações**. Aba **Solicitações**: na
+linha de M, **Gerar pedido** — o pedido de compra abre preenchido; salve com **10**. A linha fica **Vinculado**.
+
+1. **A nota parcial não fecha.** **Recebimentos → Novo Recebimento**, forma *Pedido de compra*, esse pedido, **4** de
+   M; conferência, dados fiscais e **Processar Nota**. Volte à aba **Solicitações**: a linha continua lá, *Vinculado*,
+   com **"chegou 4 de 10"**.
+2. **A sugestão não pede de novo.** Aba **Sugestões de Compra**: M **não** aparece (4 em estoque + 6 a caminho cobrem a
+   mínima).
+3. **A nota que completa.** Receba e processe os **6** que faltam: a linha sai da aba Solicitações. **Almoxarifado →
+   Auditoria**: a solicitação mostra *"Recebida"*.
+4. **O estorno reabre.** **Movimentações**, linha **ENTRADA_COMPRA** dos 6 → seta curva → motivo → **Confirmar
+   Estorno**. A linha volta à aba com **"chegou 4 de 10"**; a Auditoria mostra *"Solicitação reaberta (estorno)"*.
+5. **O pedido cancelado.** No Compras, lápis → **Status** → **Cancelado**. Na aba Solicitações, a linha mostra
+   **"pedido encerrado — nada a caminho"**, e M volta à sugestão com o que falta. Cancele a solicitação antiga na própria
+   aba (botão de cancelar, com justificativa).
+6. **Dois materiais no mesmo pedido** (opcional). Um pedido com dois materiais, cada um com a sua solicitação
+   vinculada; receba só um: a solicitação do outro continua *Vinculado*.
+
+### O que esta etapa NÃO cobre
+
+- **A requisição que espera compra** continua nascendo *Aguardando estoque* com a compra vinculada, e não muda de status
+  quando o material chega — é a próxima etapa. *(Paga na Etapa 73: nasce **Aguard. Compra**; a chegada continua sem mudar o status, por decisão, e o detalhe avisa.)*
+- **Solicitações fechadas cedo antes desta versão** não reabrem sozinhas (consulta **A36** das novidades).
+- **"Chegou X de Y"** aparece só na aba Solicitações — não no relatório de **Relatórios**, na exportação nem no painel
+  **Ver contexto**.
+- **Encerrar o pedido no Compras não fecha a solicitação** — cancele-a na aba.
+- **Pedido ainda esperado depois de 60 dias**: a verificação de mínimos pode abrir uma segunda solicitação (cancele a
+  sobrando).
+
+---
+
+## Etapa 67 — Os indicadores que faltavam: no prazo, integral, fornecedor e ajustes (ENTREGUE — 2026-10-01)
+
+**O que mudou, em uma frase:** o sistema passa a responder "quantas requisições atendemos no prazo e por inteiro",
+"quanto cada fornecedor erra e tem reprovado" e "quantos ajustes fizemos, e por quê" — e a requisição ganha o campo de
+prazo que faltava para a primeira pergunta.
+
+**O problema que ela resolve.** A especificação pedia esses números entre os "Indicadores principais" e nenhum existia.
+Pior: o prazo da requisição só entrava pela API — nenhuma tela o pedia —, então "% no prazo" nunca teria dado.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Nenhuma tela pedia o prazo da requisição | Campo **"Data de necessidade"** (opcional) na **Nova Requisição de Material** e na cesta **Solicitação de material** |
+| Painel com três cartões | Quarto cartão **"Requisições no prazo"** (percentual, ou *"—"* quando não há o que medir) |
+| Indicadores gerenciais sem prazo nem ajustes | Blocos de requisições no prazo, integrais e ajustes, com a régua na nota |
+| Ajustes só linha a linha no histórico | Relatório **Ajustes por motivo** (Movimentações) |
+| Nenhum número por fornecedor | Relatório **Qualidade por fornecedor** (Gestão), com a coluna **"Agrupado por"** |
+| Tempo médio de atendimento contava requisição excluída | Excluída fica fora |
+| Entrega em frações (10 × 0,1) ficava "parcial" para sempre e a reserva "ativa" | Completa a requisição e fecha a reserva |
+
+### Roteiro de teste manual (≈10 min)
+
+**Preparação.** Um material com saldo, um material **crítico** (com inspeção ligada na configuração), um fornecedor com
+CNPJ. Entre como **Administrador** do almoxarifado.
+
+1. **O campo.** **Nova Requisição de Material**: preencha **"Data de necessidade"** com hoje, um item, e crie. Crie outra
+   sem a data — também passa (sem prazo).
+2. **O cartão vazio.** Antes de entregar, abra o painel do almoxarifado: o cartão **"Requisições no prazo"** mostra
+   *"—"* e *"sem requisições com prazo no período"* (a de prazo hoje, ainda não entregue, não entra na conta).
+3. **No prazo.** Aprove, separe e entregue **completa** a requisição de prazo hoje. Volte ao painel: o cartão mostra um
+   percentual (100% se for a única).
+4. **Integral.** Crie uma requisição com dois itens, entregue só um e clique **Encerrar**. Em **Relatórios → Gestão →
+   Indicadores gerenciais**, o bloco *requisicoes_integrais* conta uma **encerrada incompleta**.
+5. **Ajustes por motivo.** Faça um **Ajuste** escolhendo um motivo do cadastro e outro digitando o mesmo texto à mão.
+   **Relatórios → Movimentações → Ajustes por motivo**: uma linha **Cadastro** com o nome do motivo e uma **Texto livre ·
+   Sem motivo do cadastro** — o texto igual ao nome não entra na linha do cadastro. Estorne um dos dois e reabra: ele
+   some da conta.
+6. **Qualidade por fornecedor.** Registre um recebimento do material crítico (10 unidades) do fornecedor com CNPJ,
+   confira **8** e clique **"Finalizar Conferência"**; siga o recebimento até a entrada (o material crítico fica
+   retido para inspeção) e, na inspeção, reprove 3. **Relatórios → Gestão →
+   Qualidade por fornecedor**: a linha do fornecedor mostra 1 item conferido, 1 com divergência (com falta), **% divergência
+   100**, 1 inspeção com reprovação e **% rejeição 100**; **"Agrupado por"** mostra *"CNPJ …"*.
+7. **Só "salvar" não é conferir.** Em outro recebimento, apenas **Salvar Conferência** (sem **Finalizar**): ele não
+   conta como item conferido.
+8. **Exportar.** Nos dois relatórios novos, **Exportar** gera o Excel com as mesmas colunas da tela.
+
+### O que esta etapa NÃO cobre
+
+- **Consumo previsto × realizado** por projeto — depende da lista de materiais e ordem de produção, que o sistema não tem.
+- **Tempo médio de recebimento** — há dado, mas falta medir se é confiável.
+- A rejeição é **por inspeção**, não por quantidade; entrega parcial combinada com o fornecedor conta como falta (está
+  na nota do relatório).
+- Entrega às **22h30 de Brasília** no dia do prazo conta **fora** do prazo — o dia é o dia em UTC (nota do relatório).
+- Requisições e reservas que ficaram presas por entrega fracionada **antes** desta etapa não se corrigem sozinhas.
+
+---
+
+## Etapa 66 — Motivos de movimentação viram cadastro (ENTREGUE — 2026-10-01)
+
+**O que mudou, em uma frase:** o porquê de um ajuste, de uma perda ou de uma saída deixa de ser só texto digitado — vira
+uma lista mantida pelo Administrador, escolhida na movimentação e filtrável no relatório.
+
+**O problema que ela resolve.** Cada um digitava o motivo de um jeito ("avaria", "Avaria", "quebrou"…), e não dava para
+perguntar "quanto saiu por avaria este mês". E o porquê digitado em bloqueio, inventário e estorno era gravado, mas não
+aparecia no livro.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Motivo sempre digitado | **Configurações → Motivos de Movimentação**: a lista de motivos, cada um com os tipos para os quais vale |
+| Na Nova Movimentação, só um campo de texto | **Motivo** é uma lista com os motivos do tipo escolhido + *"Outro (digitar)"*; escolhido da lista, aparece **"Complemento (opcional)"** |
+| O livro e o extrato mostravam só o motivo | Mostram também a justificativa, quando diferente do motivo |
+| O Histórico de movimentações não tinha motivo | Colunas **Motivo** e **Justificativa** (tela e Excel) e o filtro **"Motivo (cadastro)"** |
+
+### Roteiro de teste manual (≈6 min)
+
+**Preparação.** Entre como **Administrador** do almoxarifado. Tenha um material com saldo.
+
+1. **Cadastrar.** **Configurações → Motivos de Movimentação → Novo Motivo**: nome "Avaria no manuseio", marque
+   **AJUSTE** e **PERDA** em **"Vale para os tipos"** e clique **Salvar Motivo** → *"Motivo criado!"*; a linha aparece
+   com *"AJUSTE, PERDA"* e **Ativo**.
+2. **Nome repetido.** Crie "AVARIA NO MANUSEIO" → *"Já existe um motivo com este nome"*.
+3. **Escolher na movimentação.** **Movimentações → Nova Movimentação**, escolha o material, tipo **Perda**, quantidade
+   1. O campo **Motivo** mostra *"Selecionar motivo..."*, "Avaria no manuseio" e *"Outro (digitar)"*. Escolha o motivo,
+   escreva "caixa amassada" em **"Complemento (opcional)"** e registre → *"Movimentação registrada!"*.
+4. **O livro.** A linha da perda mostra *"Avaria no manuseio"* e, abaixo, *"Avaria no manuseio — caixa amassada"*.
+5. **"Outro".** Nova perda com *"Outro (digitar)"* e o texto "Avaria no manuseio" digitado à mão → grava como sempre.
+   Tipo **Entrada**: só o campo de texto (nenhum motivo vale para ele).
+6. **O relatório.** **Relatórios → Histórico de movimentações**: em **"Motivo (cadastro)"** escolha "Avaria no
+   manuseio" → aparece a perda do passo 3 e **não** a do passo 5 (o filtro é pelo cadastro, não pelo texto). As colunas
+   **Motivo** e **Justificativa** aparecem na tela e no Excel.
+7. **Renomear.** Edite o motivo para "Avaria" → *"Motivo atualizado! As movimentações já registradas mantêm o texto da
+   época."*. O livro continua *"Avaria no manuseio"* na perda do passo 3.
+8. **Desativar.** Desative o motivo (confirme) → *"Motivo desativado"*. Na Nova Movimentação ele some da lista; no
+   relatório aparece como *"Avaria (desativado)"*. **Reativar** o devolve.
+
+### O que esta etapa NÃO cobre
+
+- Escolher da lista **não é obrigatório** — o motivo digitado continua aceito.
+- A movimentação rápida da tela de Materiais, bloqueio, inventário, estorno, não conformidade e devolução continuam com o
+  motivo digitado.
+- Motivo de ajuste não muda a aprovação; não há gráfico por motivo; os motivos digitados antes não foram convertidos.
+- Movimentação **estornada** não aparece no histórico (já era assim) — portanto também não no filtro por motivo.
+
+---
+
+## Etapa 65 — A troca do lugar separado fica registrada também na separação (ENTREGUE — 2026-10-01)
+
+**O que mudou, em uma frase:** separar de outro lugar o que já estava separado de A não apaga mais a origem calado — a
+janela avisa, pede o porquê, e a troca fica registrada.
+
+**O problema que ela resolve.** Desde a Etapa 59 a separação diz de onde cada item sai, e a entrega de um clique tira de
+lá. Mas uma segunda rodada de separação tirada de outro lugar — ou feita sem mexer no "Sai de", que abria em automático
+— apagava essa origem sem aviso e sem rastro. Agora a janela parte do lugar anterior quando ele ainda tem saldo, avisa a
+troca, e o detalhe da requisição mostra a troca no bloco **"Substituições"**, junto com as trocas feitas na entrega.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Ajustar Separação** abria o "Sai de" em automático | O "Sai de" vem com o lugar da rodada anterior, se ele tem saldo livre para a quantidade sugerida |
+| Trocar de lugar apagava a origem sem aviso | Aviso *"A origem da separação anterior (⟨A⟩) deixa de valer: o que já está separado passa a sair automático na entrega."* e **"Motivo da troca (opcional)"** |
+| A troca na separação não deixava rastro | **"Substituições"** mostra *"⟨cód⟩: ⟨q⟩ já separados de A · nova separação de B — a origem anterior deixou de valer"* |
+| As trocas registradas eram só as da entrega | Cada linha diz se foi na separação ("nova separação de …") ou na entrega ("saiu de …") |
+
+### Roteiro de teste manual (≈5 min)
+
+**Preparação.** Entre como **Almoxarife** (ou Administrador). Tenha um material com **10 em A** e **10 em B**, e uma
+requisição aprovada de **10** desse material.
+
+1. **A primeira rodada.** Na requisição, **Iniciar Separação**, ponha **5** e "Sai de" **A**; confirme. O item mostra
+   *"separado de A"*.
+2. **O "Sai de" partindo de A.** Clique **Ajustar Separação**: o "Sai de" do item já vem com **A**, sem aviso.
+3. **O aviso.** Troque o "Sai de" para **B**: aparece *"A origem da separação anterior (A) deixa de valer: o que já está
+   separado passa a sair automático na entrega."* e o campo **"Motivo da troca (opcional)"**. Volte para **A**: os dois
+   somem. Volte para **B**.
+4. **Confirmar a troca.** Escreva "A acabou na prateleira", ponha **3** e confirme.
+5. **O registro.** No detalhe da requisição, **"Substituições (1)"** mostra *"⟨cód⟩: 5 já separados de A · nova
+   separação de B — a origem anterior deixou de valer · A acabou na prateleira"*, com seu nome e a hora. O item não
+   mostra mais *"separado de A"*.
+6. **O mesmo lugar não é troca.** Numa outra requisição, separe 3 de **A** e depois mais 2 de **A**: sem aviso e sem
+   linha em "Substituições".
+7. **Quando A não cobre.** Numa requisição de 10 de um material com só **5 em A** (e saldo em B), separe 5 de A e
+   clique **Ajustar Separação**: o "Sai de" vem em **automático**, já com o aviso (A só tem o que está na caixa).
+
+### O que esta etapa NÃO cobre
+
+- Trocar a **série** escolhida não é registrado como troca.
+- A origem da separação continua **uma** por item: depois de rodadas de lugares diferentes, o item fica sem origem (a
+  troca fica registrada) e a entrega de um clique sai em automático.
+- Se os saldos não carregarem, ou se você confirmar antes de eles chegarem, a rodada vai em automático (com o aviso na
+  tela, e a troca registrada).
+
+---
+
+## Etapa 64 — A fila de separação do almoxarife (ENTREGUE — 2026-10-01)
+
+**O que mudou, em uma frase:** o almoxarife tem uma tela que diz o que separar, conferir e entregar agora, e em que
+ordem.
+
+**O problema que ela resolve.** O almoxarife trabalhava na lista geral de requisições (a mais nova primeiro, só o
+cabeçalho) e abria uma por uma para descobrir o que tinha de fazer. Agora a **Fila de separação** mostra só as
+requisições com trabalho, na ordem de trabalho, com o que falta em cada item — e não manda fazer o que vai ser
+recusado (sem saldo, sem conferência, sem aprovação de valor).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Abrir requisição por requisição para saber o que separar | Menu **Fila de separação**: só as requisições com trabalho, com os itens |
+| A mais nova primeiro | O que dá para fazer agora primeiro; depois Crítico → Urgente → Normal; depois a data de necessidade; depois a mais antiga |
+| Requisição sem saldo parecia separável | **"Aguardando saldo"**, no grupo **"Aguardando"** |
+| Conferência pendente descoberta no clique | **"Conferir"**, **"Conferir — você separou, peça a outra pessoa"**, **"Separar de novo para conferir"** ou **"Conferência pendente — peça ao administrador"** |
+| Limite de valor estourado descoberto no clique | **"Aguardando aprovação de valor"** |
+
+### Roteiro de teste manual (≈5 min)
+
+**Preparação.** Entre como **Almoxarife** (ou Administrador). Tenha um material com saldo 10 e outro com saldo 0.
+
+1. **O menu.** No almoxarifado, **Fila de separação** fica logo abaixo de **Requisições (almox.)**. Sem requisições
+   com trabalho, a tela diz *"Nada para separar ou entregar agora."*.
+2. **A ordem.** Crie e aprove três requisições do material com saldo — **Normal**, **Urgente** e **Crítico**. Na fila:
+   Crítico, Urgente, Normal. Cada uma com o chip **"Separar"** e o item *"a separar ⟨q⟩ (separável agora ⟨q⟩) ·
+   disponível ⟨d⟩"*.
+3. **Sem saldo.** Crie e aprove uma requisição de 5 do material com saldo **0**: ela aparece embaixo, no grupo
+   **"Aguardando"**, com **"Aguardando saldo"** e *"separável agora 0"*. Dê entrada de 3 e clique **Atualizar**: ela
+   sobe com **"Separar"**.
+4. **Entregar.** Separe uma requisição (pela requisição, **Iniciar Separação**): na fila ela passa a ter **"Entregar"**
+   e *"a entregar ⟨q⟩ (entregável agora ⟨q⟩)"*.
+5. **Conferência.** Com um material **crítico**, separe uma requisição: na fila, para você, o chip diz **"Conferir —
+   você separou, peça a outra pessoa"** e a linha mostra *"Separado por: ⟨seu nome⟩"*. Entre como outro almoxarife:
+   **"Conferir"**.
+6. **Abrir.** Clique **Abrir**: abre a tela de requisições com o detalhe daquela requisição.
+7. **Sem permissão.** Entre com um usuário que acessa o almoxarifado mas não é almoxarife: o menu aparece, e a tela diz
+   *"Você não tem permissão para a fila de separação."*.
+
+### O que esta etapa NÃO cobre
+
+- Lista de separação juntando várias requisições, agrupamento por projeto/setor/localização e rota de picking.
+- **Abrir** abre o detalhe, não a janela de separar.
+- O menu aparece para todos com acesso ao módulo.
+- Data de necessidade antiga gravada como *DD/MM/AAAA* fica fora de ordem.
+- Item com série sem séries em estoque aparece como entregável (a entrega recusa ali).
+- A fila é uma fotografia: outra pessoa pode levar o material depois — clique **Atualizar**.
+
+---
+
+
+## Etapa 63 — A troca do lugar separado fica registrada na entrega (ENTREGUE — 2026-10-01)
+
+**O que mudou, em uma frase:** quando a entrega sai de outro lugar que não o separado, isso fica registrado (com o
+motivo, se quiser), e a parte separada que ainda está na caixa sai de onde foi separada.
+
+**O problema que ela resolve.** A separação diz de onde cada item sai (Etapa 59), mas o operador pode entregar de
+outro lugar — o lote separado venceu, foi bloqueado, acabou — e isso acontecia calado. E quando a entrega passava do
+que estava separado, **tudo** saía pelo automático, inclusive o que estava na caixa.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Entregar de outro lugar que não o separado não deixava rastro | Registro no bloco **"Substituições"** do detalhe: quanto, separado de onde, saiu de onde, quem, quando, motivo |
+| Nenhum campo de motivo na troca | **"Motivo da troca (opcional)"** quando o "Sai de" difere do separado ou vai pelo automático |
+| Acima do separado pendente, tudo pelo automático | A parte separada sai de onde foi separada; o resto, automático — e recusa se lá não houver mais o separado |
+
+### Roteiro de teste manual (≈5 min)
+
+**Preparação.** Um material com saldo em dois endereços, **A** e **B** (por **Movimentações → Nova → Entrada** com
+destino A, e outra com destino B). Uma requisição aprovada de **5** desse material.
+
+1. **Separar de A.** Em **Separar**, no "Sai de" do item, escolha **A** e separe 5. O item mostra *"separado de A"*.
+2. **Entregar de B, com motivo.** Em **"Entregar escolhendo de onde sai…"**, escolha **B** no "Sai de": aparece
+   **"Motivo da troca (opcional)"** com a dica *"Saindo de onde não foi separado — conte o porquê."*. Escreva *"A
+   interditada"* e confirme. No detalhe da requisição aparece **"Substituições (1)"** com *"⟨material⟩: 5 — separado de
+   A · saiu de B · A interditada"* e quem/quando.
+3. **Sem troca, sem registro.** Outra requisição separada de A e entregue pelo botão de um clique: **nenhum** bloco
+   "Substituições".
+4. **Acima do separado.** Requisição de **10**, separe **3** de A, entregue **1**. Abra **"Entregar escolhendo de onde
+   sai…"** e ponha **5** sem escolher: a dica é *"O separado pendente sai de A; o restante, automático. Se lá não houver
+   mais o separado, a entrega é recusada — escolha de onde sai."*. Confirme: 2 saem de A e 3 pelo automático (confira no
+   livro de movimentações).
+5. **A recusa.** Repita o passo 4, mas antes de entregar transfira todo o saldo de A para B: a entrega é recusada com
+   *"⟨material⟩: a origem da separação (A) não serve mais (…) — entregue escolhendo de onde sai"*. Escolha **B** ou
+   **"Qualquer endereço (automático)"**: passa, e a troca fica registrada.
+
+### O que esta etapa NÃO cobre
+
+- A troca **na separação** (outra rodada com outra origem) continua sem registro (**B248**).
+- Trocar a **série** escolhida não conta como troca.
+- O extrato por **lote** ainda não mostra as trocas.
+- O registro não acompanha estorno nem exclusão (é só de acréscimo).
+
+---
+
+## Etapa 62 — O ajuste de material com série diz quais peças entram ou saem (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** ajustar o estoque de um material com número de série pede **quais** peças entram (os
+números novos) ou **quais** saem — e o inventário avisa o que ficou a acertar.
+
+**O problema que ela resolve.** O ajuste mudava só o número: ajustar 3 → 5 deixava 5 no estoque e 3 séries, e as duas
+"a mais" não existiam. Agora o ajuste pede as séries; o inventário, que conta o número mas não as peças, lista os
+materiais com série a regularizar.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Ajuste de material com série mudava só o número | Pede os números novos (sobe) ou as peças que saem (desce, ficam **Baixada**) |
+| Ajuste por endereço de material com série era aceito | Recusado — o ajuste é do total |
+| Estornar o ajuste voltava só o número | Recusado — faça um novo ajuste |
+| O inventário mudava o número e ninguém sabia | Fração recusada; ao concluir, aviso com os materiais a regularizar |
+
+### Roteiro de teste manual (≈6 min)
+
+**Preparação.** Um material com **controle de série** e uma **Entrada** de 3 unidades com as séries **S1**, **S2**,
+**S3**.
+
+1. **Subir.** Em **Movimentações → Nova**, tipo **Ajuste**, escolha o material: aparecem *"Material com série: o ajuste
+   é do total, sem endereço."* e *"Séries presentes: 3"*. Digite **5**: aparece **"Números das novas séries (um por
+   linha)"** com *"0 de 2"*; o **Confirmar** está travado. Escreva **S4** e **S5**: *"2 de 2"*; confirme. Em **Lotes e
+   Séries → Séries**: 5 em estoque.
+2. **Descer.** Novo **Ajuste** para **3**: aparecem as **"Séries a baixar"** com *"0 de 2"*; marque **S4** e **S5** e
+   confirme. S4 e S5 aparecem como **Baixada**; o físico é 3.
+3. **Zerar.** Digite **0** no total: aparece *"Para zerar, use Ajuste negativo com as séries."* — o Confirmar fica
+   travado.
+4. **Estorno recusado.** No livro de movimentações, estorne o ajuste do passo 2: a mensagem é *"estorno de ajuste de
+   material com serie recusado — faca um novo ajuste (ele pede as series)"*.
+5. **Inventário.** Abra uma **Conferência** que pegue o material, conte **2** (diferente do sistema) e conclua aplicando
+   os ajustes: aparece o aviso *"Estes materiais com série ficaram com séries presentes diferentes do físico — regularize
+   em Lotes e Séries:"* com o material *"(físico 2, presentes 3)"*. Clique no link: **Lotes e Séries** abre em **outra
+   aba**; regularize (baixe a série que "não está" na prateleira) e o aviso de lá some.
+6. **Fração no inventário.** Conte **2,5** para o mesmo material e conclua: a conclusão é recusada com *"Ajuste bloqueado:
+   ⟨código⟩: material com controle de serie exige contagem inteira"*.
+
+### O que esta etapa NÃO cobre
+
+- O **inventário** não pede as séries — ajusta o número e manda regularizar (**B247**).
+- Ajuste de material com série **por endereço** é recusado (**B245**).
+- Séries **bloqueadas** não descem pelo ajuste — desbloqueie antes.
+- O botão de estorno continua aparecendo para ajuste de material com série — o servidor recusa.
+
+---
+
+## Etapa 61 — A entrega de material com série diz quais peças saem (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** ao entregar material com número de série, o sistema pergunta **quais** peças saem — e
+só elas saem do estoque.
+
+**O problema que ela resolve.** A entrega de requisição baixava o número mas deixava a peça entregue marcada "em
+estoque"; a próxima entrega podia escolher uma peça que já não estava lá. Agora a entrega pede as séries, a exclusão
+da requisição devolve as mesmas peças, e dá para acertar as séries que ficaram erradas.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A entrega baixava o número e a peça continuava "em estoque" | A entrega pede **quais séries** saem e dá baixa nelas |
+| A entrega de um clique entregava material com série | É recusada — escolha as séries em **"Entregar escolhendo de onde sai…"** |
+| Excluir a requisição devolvia o número sem as peças (e creditava de novo o que já tinha sido devolvido) | Devolve as **mesmas** peças, só o que falta devolver |
+| Séries erradas não tinham conserto na tela | **Lotes e Séries → Séries**: aviso e **Regularizar séries** |
+
+### Roteiro de teste manual (≈6 min)
+
+**Preparação.** Um material com **controle de série** (Materiais → editar → Controle de série) e uma **Entrada** de 3
+unidades com as séries **S1**, **S2**, **S3**. Uma requisição dele com **2**, aprovada e separada.
+
+1. **A de um clique recusa.** No detalhe da requisição, clique **"Confirmar Entrega e Baixar Estoque"**: a mensagem
+   termina em *"— recebidas 0 — entregue escolhendo as series"*. Nada sai.
+2. **Escolher as séries.** Clique **"Entregar escolhendo de onde sai…"**: o item mostra **"Séries que saem"** e *"0 de
+   2"*; o **Confirmar** está travado. Marque **S1** e **S3**: *"2 de 2"*, e o **Confirmar** libera. Confirme.
+3. **Conferir o estoque.** Em **Lotes e Séries → Séries** do material: só **S2** está em estoque; S1 e S3 aparecem como
+   entregues; o físico é **1**.
+4. **Excluir devolve as peças.** Exclua a requisição (como administrador): o físico volta a **3**, e S1 e S3 voltam para
+   em estoque.
+5. **Regularizar.** Crie uma divergência de propósito: faça um **Ajuste** do material para **2** (o ajuste não mexe em
+   série — **C82**). *(Desde a Etapa 62 o ajuste **pede** as séries e não cria mais divergência — para este passo, use
+   uma **conferência de inventário** contando 2: ela ajusta o número e manda regularizar.)* Em **Lotes e Séries → Séries** aparece *"Séries presentes: 3 · Físico: 2"* e **Regularizar
+   séries**; marque uma série que "não está" na prateleira, escreva a justificativa (mínimo 5 letras) e regularize: o
+   aviso some, e a série aparece como **Baixada**. Para trazê-la de volta, faça o ajuste para 3 e **cadastre** o mesmo
+   número no formulário.
+6. **Sem perfil.** Com um usuário que não ajusta estoque, a mesma tela mostra o aviso, mas **não** o formulário.
+
+### O que esta etapa NÃO cobre
+
+- O **ajuste** e o **inventário** de material com série não mexem nas séries (**C82**) — acerte pela regularização.
+- A entrega de um clique de material com série é **recusada** (**D (61)**).
+- A **separação** não registra série — só a entrega.
+- A transferência não muda o endereço da série (**C76**).
+
+---
+
+## Etapa 60 — Separar menos do que dava passa a deixar registro, com o porquê (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** quando o separador pega menos do que dava, fica registrado — com o porquê, se ele
+escrever —, e quem confere vê.
+
+**O problema que ela resolve.** Separar menos do que o pedido, havendo material, era aceito calado: o conferente não
+sabia se era avaria, falta na prateleira ou pressa. Agora a rodada guarda quanto dava para separar e se ficou abaixo, e
+a janela pede o porquê. **Não é obrigatório** — separar em várias viagens continua valendo.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Separar menos do que dava era aceito calado | A rodada grava quanto dava, se ficou abaixo e o motivo |
+| — | Abaixo do possível, a janela mostra **"Motivo da divergência (opcional)"** |
+| O bloco **Separação** mostrava quem, quando e quantos itens | Mostra também *"⟨material⟩: separou ⟨q⟩ de ⟨máximo⟩ — ⟨motivo⟩"* |
+
+### Roteiro de teste manual (≈5 min)
+
+**Preparação.** Um material com **20** em estoque (Movimentações → Entrada) e uma requisição aprovada dele com **10**
+solicitados. Outro material com só **3** em estoque e uma requisição aprovada dele com **10**.
+
+1. **O campo aparece abaixo do possível.** Abra a primeira requisição → **Iniciar Separação** e informe **6**: aparece
+   **"Motivo da divergência (opcional)"**, com *"Separando menos que o possível — conte o porquê para quem confere."*.
+   Volte para **10**: o campo some.
+2. **Com motivo.** Informe **6**, escreva *"4 avariadas na prateleira"* e confirme. No detalhe, no bloco **Separação**,
+   a rodada mostra *"⟨material⟩: separou 6 de 10 — 4 avariadas na prateleira"*.
+3. **Sem motivo.** Em outra requisição igual, separe **6** sem escrever nada e confirme: a rodada é aceita e mostra
+   *"⟨material⟩: separou 6 de 10 — sem motivo informado"*.
+4. **Falta de material não é divergência.** Na requisição do segundo material, separe **3**: o campo **não** aparece, e
+   a rodada não mostra divergência.
+5. **Um endereço por rodada.** Com o material em dois endereços (4 em **A**, 6 em **B**), separe 4 escolhendo **Sai de:
+   A**: o campo não aparece — o máximo é o que **A** tem.
+
+### O que esta etapa NÃO cobre
+
+- O motivo **não** é obrigatório, e a divergência **não** avisa ninguém nem abre não conformidade (**B238**).
+- Separado **sem endereço** de outra requisição não sai do "livre" — o máximo pode sair maior que o real (**D (60)**).
+- Não separar nada de um item (quantidade 0) não fica registrado (**D (60)**).
+- A **série** por item continua fora — é a próxima etapa.
+
+---
+
+## Etapa 59 — A separação diz de onde cada item sai, e a entrega de um clique usa (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** quem separa diz de onde tirou cada item, e a entrega — até a de um clique — sai dali.
+
+**O problema que ela resolve.** Na Etapa 58 a origem só podia ser escolhida na janela de entrega; o botão de um
+clique, o mais usado, continuava tirando do endereço padrão. Quem vai à prateleira é quem separa — agora é ele quem diz
+de onde o material sai.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A separação só registrava a quantidade | **"Sai de"** por item na separação (endereço e lote) |
+| — | O item mostra *"separado de ⟨endereço⟩"* enquanto há separado a entregar |
+| O botão de um clique entregava sem origem | Entrega **de onde foi separado** (até o que foi separado) |
+| Na janela de entrega, "Sai de" começava em automático | Começa na origem da separação; "automático" a ignora |
+| — | Origem da separação que não serve mais: a entrega é recusada, com o caminho escrito |
+
+### Roteiro de teste manual (≈6 min)
+
+**Preparação.** Dois endereços ativos, **A** e **B**. Um material com **3** em **A** e **50** em **B** (Movimentações →
+Entrada), com endereço padrão **B**. Uma requisição aprovada desse material, com **5** solicitados.
+
+1. **Separar dizendo de onde.** Abra a requisição → **Iniciar Separação**. O item tem **Sai de**, com
+   **"Qualquer endereço (automático)"**, *"⟨A⟩ (3)"* e *"⟨B⟩ (50)"*. Escolha **A**, quantidade 5, confirme:
+   *"⟨material⟩: O saldo em ⟨A⟩ (3) não cobre a quantidade (5) — a saída tiraria de outros endereços"*. Nada foi gravado.
+2. **Separar 3 de A.** Troque a quantidade para 3 e confirme. No detalhe, o item mostra *"separado de ⟨A⟩"*.
+3. **O um clique usa a separação.** Clique **"Confirmar Entrega e Baixar Estoque"**. No **Mapa**, **A** ficou com 0 e
+   **B** continua com 50 — saiu de onde foi separado, não do padrão. O *"separado de"* sumiu.
+4. **Origem que não serve mais.** Em outra requisição, separe 3 de **B**; depois, em **Movimentações**, transfira 49 de
+   **B** para **A**. Clique **"Confirmar Entrega e Baixar Estoque"**: *"⟨material⟩: a origem da separação (⟨B⟩) não
+   serve mais (O saldo em ⟨B⟩ (1) não cobre a quantidade (3) — a saída tiraria de outros endereços) — entregue
+   escolhendo de onde sai"*.
+5. **A saída.** Clique **"Entregar escolhendo de onde sai…"**: o **Sai de** vem em **B**; troque para **"Qualquer
+   endereço (automático)"** e confirme — a entrega sai.
+6. **Rodadas diferentes.** Numa requisição de 6, separe 3 de **A** e, numa segunda rodada, 3 sem mexer no **Sai de**:
+   o *"separado de"* some — a entrega desse item volta ao automático.
+
+### O que esta etapa NÃO cobre
+
+- Uma segunda rodada feita sem mexer no **Sai de** apaga a origem da primeira, sem aviso (**B237**, **D (59)**).
+- Não há reserva por endereço: outra saída pode levar o saldo entre separar e entregar (**D (59)**).
+- Ler a etiqueta do endereço na separação; série e divergência por item (**D (59)**).
+
+---
+
+## Etapa 58 — A entrega de requisição diz de onde cada item sai (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** na janela de entrega de requisição, cada item pode dizer **de onde sai** (endereço e
+lote) e, se quiser, confirmar lendo a etiqueta do endereço — e a escolha é exata.
+
+**O problema que ela resolve.** A entrega de requisição, a saída mais comum do galpão, não dizia de onde saía: o
+sistema tirava do endereço padrão primeiro e, em material com lote, não baixava de lote nenhum. Quem vai à prateleira
+sabe de onde tirou; agora o sistema também sabe.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Entrega sem origem (padrão primeiro) | **"Sai de"** por item; **"Qualquer endereço (automático)"** é o de antes |
+| Material com lote não baixava de lote | Escolher a origem escolhe também o lote |
+| — | Origem exata: se não cobre, a entrega é recusada, nada sai |
+| — | **"Confirmar endereço lido"** por item |
+| Só o botão de um clique | Ao lado, **"Entregar escolhendo de onde sai…"**; o de um clique continua igual |
+| Excluir a requisição devolvia ao padrão, sem lote | Devolve ao lote e ao endereço de cada saída |
+
+### Roteiro de teste manual (≈6 min)
+
+**Preparação.** Dois endereços ativos, **A** e **B**. Um material com **3** em **A** e **50** em **B** (Movimentações →
+Entrada). Uma requisição desse material, com **5** separados (Requisições → separar).
+
+1. **As opções.** Abra a requisição e clique **"Entregar escolhendo de onde sai…"**. A janela **Confirmar Entrega**
+   mostra, no item, **Sai de** com **"Qualquer endereço (automático)"**, *"⟨A⟩ (3)"* e *"⟨B⟩ (50)"*.
+2. **A escolha é exata.** Escolha **A**, deixe a quantidade em 5 e clique **✅ Confirmar Entrega**: aparece
+   *"⟨material⟩: O saldo em ⟨A⟩ (3) não cobre a quantidade (5) — a saída tiraria de outros endereços"*. Nada saiu.
+3. **Entregar de B.** Troque para **B** e confirme: no **Mapa**, **B** ficou com 45 e **A** continua com 3.
+4. **Leitura.** Numa nova entrega, com **A** escolhido, leia a etiqueta de **B** em **Confirmar endereço lido**:
+   *"⟨material⟩: Endereço lido (⟨B⟩) não confere com a localização de origem (⟨A⟩) — se a etiqueta é antiga,
+   reimprima"*. Sem origem escolhida, o campo fica desabilitado.
+5. **Excluir devolve para onde saiu.** Exclua a requisição (administrador): os 5 voltam para **B**.
+6. **O botão de um clique.** Em outra requisição separada, **"Confirmar Entrega e Baixar Estoque"** entrega sem abrir
+   janela — como sempre.
+
+### O que esta etapa NÃO cobre
+
+- A entrega de **um clique** continua sem origem (**C80**).
+- A **separação** não registra de onde vai sair — é a próxima etapa (**D (58)**).
+- A janela não marca lote bloqueado/vencido nem endereço bloqueado; escolher um deles é recusado pelo servidor
+  (**D (58)**).
+- Série e divergência por item (**D (58)**); entre itens **sem** escolha, a entrega ainda pode sair pela metade (**C81**).
+
+---
+
+## Etapa 57 — O recebimento deixa escolher o endereço de cada item (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** **Processar Nota** abre uma janela com os itens que vão entrar, e cada item pode ir para
+um endereço diferente — deixar em **"Padrão do material"** é o comportamento de antes.
+
+**O problema que ela resolve.** Processar a nota mandava todo item para o endereço padrão do material (ou "sem
+endereço"), e a tela nem perguntava. Quem descarrega sabe em que prateleira cada material vai. E, com o material entrando
+em endereços diferentes, a devolução ao fornecedor de uma peça reprovada passou a sair **de onde ela entrou**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| "Processar Nota" pedia só uma confirmação | Janela **Processar nota fiscal** com os itens e um destino por item |
+| Todo item no endereço padrão | Destino por item; **"Padrão do material"** continua o padrão |
+| Nada avisava que o padrão não recebe o material | Aviso por item (padrão que recusa, inativo, ou sem padrão) |
+| Erro ao processar num aviso que some | Erro **na janela**, com as escolhas mantidas |
+| Devolução ao fornecedor sairia do padrão | Sai do endereço onde o item reprovado entrou |
+
+### Roteiro de teste manual (≈6 min)
+
+**Preparação.** Dois endereços ativos, **A** e **B**, e um endereço **C** que só aceita o tipo **EPI** (Configurações →
+Localizações). Uma nota com dois materiais (não EPI), pronta para processar (dados fiscais preenchidos e encaminhada ao
+faturamento).
+
+1. **Abrir a janela.** Abra a nota em **Recebimentos** e clique **Processar Nota — Estoque + Contas a Pagar**: aparece
+   *"Processar nota fiscal? Isso dará entrada no estoque e gerará contas a pagar."* e a tabela
+   **Material / Quantidade / Destino**, com os dois itens em **"Padrão do material"**. Se um material não tem padrão, o
+   item mostra *"Sem localização padrão — o saldo entra sem endereço."*
+2. **Recusa com a lista.** Escolha **C** para o primeiro item e **Confirmar**: a janela mostra
+   *"Nao foi possivel dar entrada no estoque: ⟨MAT⟩: Localização ⟨C⟩ não aceita o tipo de material '⟨tipo⟩'"*, continua
+   aberta, e nada entrou.
+3. **Cada item no seu lugar.** Troque o primeiro para **A**, escolha **B** para o segundo e **Confirmar**: *"Nota
+   processada — …"*. No **Mapa**, o primeiro material está em **A** e o segundo em **B**.
+4. **(Opcional, com material crítico e inspeção ligada)** Receba 10 de um material crítico no endereço **A**, com 20
+   peças boas no padrão dele; reprove 3 na inspeção com **Devolver ao fornecedor**, decida e execute a devolução em
+   **Não Conformidades**: **A** fica com 7 e o padrão continua com 20.
+
+### O que esta etapa NÃO cobre
+
+- A janela **não mostra os botões de sugestão** de Movimentações — só o aviso sobre o padrão (**D (57)**).
+- Endereço de **almoxarifado inativo** aparece na lista (**D (57)**).
+- **Quarentena não tem endereço**: escolher uma área "Quarentena" põe o material lá, e depois de liberado ele não se
+  move sozinho — transfira à mão (**D (57)**).
+- Os furos **C78** (a devolução pode tirar de um padrão bloqueado) e **C79** (o histórico da devolução registra só o
+  endereço de entrada).
+
+---
+
+## Etapa 56 — O endereço ganha etiqueta, e a movimentação pode conferir a etiqueta lida (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** cada endereço passa a ter **etiqueta com QR** impressa pelo sistema, e na movimentação
+quem está na prateleira pode **ler a etiqueta** para o sistema conferir o endereço antes de gravar.
+
+**O problema que ela resolve.** Havia etiqueta para material, lote, série e sobra, mas **não para o endereço** — a
+pessoa escolhia a prateleira numa lista e o sistema acreditava. Agora dá para provar, no momento do movimento, que o
+material foi posto ou tirado do endereço certo; e o histórico guarda qual endereço foi conferido.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Endereço sem etiqueta | **Etiqueta** (por linha) e **Etiquetas (N)** em Configurações → Localizações |
+| Ler QR de endereço: não existia | O **Scanner** abre o endereço no **Mapa**, selecionado |
+| Etiqueta velha depois de um **Mover**: ninguém sabia | Mapa: *"Etiqueta desatualizada: ⟨impresso⟩ → ⟨atual⟩. Reimprima."* |
+| Movimentação sem conferência do endereço | Campo opcional **Confirmar endereço lido** — endereço errado é recusado sem mexer no saldo |
+
+### Roteiro de teste manual (≈6 min)
+
+**Preparação.** Dois endereços ativos, **A** e **B** (Configurações → Localizações), e um material qualquer.
+
+1. **Imprimir.** Em **Configurações → Localizações**, clique no ícone **Etiqueta** da linha de **A**: abre o PDF com o
+   código, o caminho do endereço e um QR. (**Etiquetas (N)** imprime todas as listadas.)
+2. **Ler com o Scanner.** Abra **Scanner** no celular e leia o QR: o **Mapa** abre com **A** selecionado.
+3. **Entrada conferida (certa).** **Movimentações → Nova movimentação → Entrada**, material, quantidade 10, destino
+   **A**; no campo **Confirmar endereço lido**, leia a etiqueta de **A** (ou digite o código de A). Salvar: gravado.
+4. **Entrada conferida (errada).** Repita com destino **A** e leia (ou digite) o código de **B**: a tela mostra
+   *"Endereço lido (⟨B⟩) não confere com a localização de destino (⟨A⟩) — se a etiqueta é antiga, reimprima"*, e o
+   saldo não muda.
+5. **Saída conferida.** Faça uma entrada de 50 em **B**. Agora **Saída** de 40 com origem **A** e leia a etiqueta de
+   **A**: recusada com *"O saldo em ⟨A⟩ (10) não cobre a quantidade (40) — a saída tiraria de outros endereços"*. Com
+   quantidade 10: gravada. Sem escolher a origem: *"Para confirmar a origem pela leitura, informe a localização de
+   origem"*.
+6. **Etiqueta velha.** Use **Mover** em **A** (o código dele muda) e leia com o Scanner a etiqueta impressa no passo 1:
+   o Mapa abre o endereço e avisa *"Etiqueta desatualizada: ⟨código antigo⟩ → ⟨código novo⟩. Reimprima."* Clique em
+   **Fechar**: o aviso some.
+
+### O que esta etapa NÃO cobre
+
+- **A conferência é opcional** (**B223**) — o campo pode ficar em branco.
+- **Ajuste** não tem o campo na tela (**D (56)**).
+- A saída com **série** não confere de qual endereço cada série sai (**C76**).
+- A etiqueta confere pelo **código**: depois de um **Mover**, reimprima (**C77**).
+
+---
+
+## Etapa 55 — O código proposto para um endereço novo para de ressuscitar endereço removido (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** o código que o sistema propõe para um endereço novo (e para um endereço movido) passa a
+ser calculado pelo servidor, que **conta os endereços removidos** e **nunca repete** um código que já existe.
+
+**O problema que ela resolve.** A tela calculava o próximo código olhando só os endereços **ativos**. Removido o último
+endereço de um setor, o assistente propunha **o código dele** — e salvar **trazia de volta o endereço removido**, com o
+histórico e o saldo dele, enquanto a pessoa achava que tinha criado um novo. No **Mover**, o mesmo código dava um erro
+técnico na tela (*"SQLITE_CONSTRAINT: UNIQUE constraint failed: localizacoes_almoxarifado.codigo"*).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Removido o `X-02`, a proposta era `X-02` — e salvar reativava o removido | A proposta é `X-03` |
+| Código que virou de um removido entre calcular e salvar: reativava em silêncio | Aviso: *"O código ⟨código⟩ pertence a uma localização desativada — gere outro código"*, e a tela já propõe outro |
+| Mover para um lugar cujo próximo código era de um removido: erro técnico | Aceito com o código seguinte |
+| 1º endereço dentro de `A-01` recebia `A-02` (que já existe): *"Código já existe"* ao salvar | Recebe o próximo código **livre** |
+| Nada indicava o cálculo | *"Gerando código..."* e o botão de confirmar espera |
+
+### Roteiro de teste manual (≈4 min)
+
+**Preparação.** Em **Configurações → Localizações**, um setor com dois endereços raiz, **X-01** e **X-02** (use
+**Nova localização** duas vezes no mesmo setor).
+
+1. **Remova X-02.** Ele sai da lista.
+2. **Nova localização** no mesmo setor, endereço raiz: o campo do código mostra *"Gerando código..."* por um instante e
+   depois **X-03** (antes desta etapa: **X-02**). **Confirmar cadastro** fica desabilitado enquanto calcula.
+3. **Confirme.** O endereço **X-03** aparece na lista como novo — **X-02** continua removido.
+4. **Mover.** Crie um endereço em outro setor e use **Mover** para levá-lo ao setor do passo 1: o novo código proposto
+   é o seguinte livre (**X-04**), e a movimentação é aceita sem erro técnico.
+5. **Estrutura dentro de outra.** **Nova localização** do tipo "dentro de uma estrutura", escolhendo **X-01** como pai:
+   o código proposto é o próximo **livre** (se **X-02** existe no cadastro, mesmo removido, ele não é proposto).
+
+### O que esta etapa NÃO cobre
+
+- **O formato hierárquico** do código (`ALM-GERAL-A03-E02-N04-P01`) — ficou fora por decisão (**B220**): trocaria o
+  código de etiquetas já impressas.
+- **Mover continua trocando o código** do endereço movido (**C75**) — uma etiqueta física feita fora do sistema fica
+  errada.
+- **Digitar à mão** (pela integração) o código de um endereço removido continua reativando (**B221**).
+- Detalhes declarados em **D (55)** nas novidades: a mensagem de recusa fica na tela ao lado do código novo; dois
+  pontos ficam em branco enquanto o código carrega.
+
+---
+
+## Etapa 54 — O sistema para de gravar material em endereço desativado ou que não existe (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** o sistema **recusa** gravar material num endereço desativado ou que não existe, **não
+deixa** desativar um endereço que é padrão de material ativo, e o cadastro de material **não aceita** endereço padrão
+desativado.
+
+**O problema que ela resolve.** Endereço desativado some do Mapa. Mas o sistema aceitava entrada e transferência
+**para** ele (e, pela integração, para um endereço que nem existe) — o material ficava registrado num lugar que
+nenhuma tela mostra. O caminho mais comum era silencioso: desativar um endereço vazio que era padrão de algum material,
+e a próxima nota processada daquele material ia para lá.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Entrada/transferência para endereço desativado: aceita, saldo invisível no Mapa | Recusada: *"Localização ⟨código⟩ está inativa"* |
+| Endereço inexistente (integração): saldo órfão | Recusado: *"Localização de destino não encontrada"* / *"Localização de origem não encontrada"* |
+| Ajuste podia **subir** o saldo de um endereço desativado | Só reduz ou zera: *"Localização ⟨código⟩ está inativa — o ajuste só pode reduzir ou zerar o saldo dela"* |
+| Remover endereço vazio que é padrão de material: aceito | Recusado: *"Localização é a padrão de ⟨N⟩ material(is) ativo(s) (⟨códigos⟩). Troque a localização padrão deles antes de apagar ou desativar."* |
+| Cadastro aceitava endereço padrão desativado | Recusa: *"Localização padrão ⟨código⟩ está inativa"* |
+
+**Continua aceito, de propósito:** tirar material **de** um endereço desativado (saída, transferência); o estorno; e a
+entrada sem destino num padrão que **já estava** desativado antes do deploy (novidades, **B218** e **A29**).
+
+### Roteiro de teste manual (≈5 min)
+
+**Preparação.** Dois endereços **X** e **Y**, vazios. Um material ativo com endereço padrão **X**.
+
+1. **Não remove o padrão.** Em **Configurações → Localizações**, remova **X**: aviso vermelho *"Localização é a padrão
+   de 1 material(is) ativo(s) (⟨código⟩). Troque a localização padrão deles antes de apagar ou desativar."*, e **X**
+   continua na lista.
+2. **Troca e remove.** Edite o material e troque o endereço padrão para **Y**. Remova **X** de novo: agora sai da lista.
+3. **O cadastro só oferece ativos.** Edite o material: **X** não aparece mais na lista de endereço padrão.
+4. **Esvaziar continua possível** (só se houver endereço desativado com saldo, anterior ao deploy — consulta **A29 (b)**
+   nas novidades): uma **Transferência** com ele como **origem** para **Y** é aceita; um **Ajuste** dele para **0** é
+   aceito; para mais que o saldo atual, a recusa é *"Localização ⟨código⟩ está inativa — o ajuste só pode reduzir ou
+   zerar o saldo dela"*.
+
+As recusas de **destino** desativado ou inexistente não se reproduzem clicando: a lista de destino só mostra endereços
+ativos. Elas protegem a integração e o formulário que ficou aberto enquanto alguém desativava o endereço — o cenário
+pela API está nas novidades (Etapa 54, regra 3).
+
+### O que esta etapa NÃO cobre
+
+- **Almoxarifado inativo** — o sistema recusa endereço desativado, não olha o almoxarifado.
+- **Padrão desativado de antes do deploy** — continua recebendo a entrada sem destino (**B218**); meça com a **A29**.
+- **Estorno** — não checa endereço (reverter tem de ser sempre possível).
+- **Reativar um material** cujo padrão está desativado não é barrado.
+- As pontas da **C74** (endereço em campo que o tipo não usa; lote criado antes da recusa; edição de endereço pela
+  integração sem o campo "ativo" o reativa).
+
+---
+
+## Etapa 53 — A sugestão de localização na entrada (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** na **Entrada** de material, a tela de Movimentações **sugere onde guardar** — o
+endereço padrão, onde o material já está e endereços vazios que o aceitam — e **avisa** quando o endereço padrão não
+pode receber o material.
+
+**O problema que ela resolve.** O campo de destino listava todos os endereços, sem dizer qual fazia sentido. E, com o
+destino em branco, a entrada ia para o endereço padrão — se ele estivesse **bloqueado**, a entrada era recusada só
+**depois** de salvar, sem aviso antes.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Destino escolhido numa lista com todos os endereços | **"Sugestões:"** com até 3 botões: *"⟨código⟩ · padrão do material"*, *"⟨código⟩ · já tem este material (N)"*, *"⟨código⟩ · vazia"* |
+| Padrão bloqueado ou que não aceita o tipo: erro só ao salvar | Aviso antes: *"A localização padrão ⟨código⟩ não recebe este material (⟨motivo⟩) — escolha um destino."* |
+| Padrão inativo: a entrada ia para um endereço que o Mapa não mostra, sem aviso | Aviso: *"A localização padrão ⟨código⟩ está inativa — escolha um destino."* (a entrada ainda é aceita — novidades **C73**, Etapa 54) |
+
+### Roteiro de teste manual (≈8 min)
+
+**Preparação.** Três endereços **A**, **B** e **C**, sem restrição de tipo. Um material **sem** lote, tipo
+**Consumível**, com endereço padrão **A**. Em **Movimentações → Nova Movimentação → Entrada**, dê entrada de **20** em
+**B** e de **5** em **C** (escolhendo o destino na lista).
+
+1. **As sugestões.** **Nova Movimentação**, tipo **Entrada**, escolha o material. Abaixo de *Localização de destino*:
+   **"Sugestões:"** *"A · padrão do material"*, *"B · já tem este material (20)"*, *"C · já tem este material (5)"*.
+   Passe o mouse num botão: aparece o endereço completo.
+2. **Nada preenche sozinho.** O destino continua **"—"**. Clique em *"B · já tem este material (20)"*: o destino vira **B**.
+3. **Trocar de material.** Com **B** vindo da sugestão, troque o material: o destino volta a **"—"** e os botões
+   mudam. Agora escolha o destino **à mão** na lista e troque de novo o material: o destino escolhido à mão **fica**.
+4. **Padrão bloqueado.** Em **Configurações → Localizações**, bloqueie **A**. Volte à Entrada do material: aparece
+   *"A localização padrão A não recebe este material (Localização A está bloqueada) — escolha um destino."*, e **A**
+   não está nos botões. Salve **sem** destino: o sistema recusa com *"Localização A está bloqueada"*. Escolha um destino:
+   o aviso some. Desbloqueie **A**.
+5. **Padrão que não aceita o tipo.** Restrinja **A** ao tipo **EPI**: o aviso vira *"… (Localização A não aceita o tipo
+   de material 'CONSUMIVEL') — escolha um destino."*. Tire a restrição.
+6. **Padrão inativo.** Com **A** vazio, remova-o em **Configurações → Localizações** (remover **desativa** o
+   endereço; o material continua com ele como padrão): aparece *"A localização padrão A está inativa — escolha um destino."*.
+   **Desde a Etapa 54 este passo não se reproduz assim:** remover **A** enquanto ele é padrão do material é
+   **recusado** (*"Localização é a padrão de 1 material(is) ativo(s) (…)"*). O aviso de padrão inativo só aparece
+   para padrão que já estava desativado antes do deploy (novidades, **A29**).
+7. **Só na entrada.** Troque o tipo para **Saída** ou **Transferência**: os botões e os avisos somem.
+
+### O que esta etapa NÃO cobre
+
+- **Recebimentos** — a tela não tem campo de endereço; a sugestão está só em Movimentações.
+- **Espaço de verdade** — "vazia" é pela regra do Mapa; capacidade e peso não entram.
+- **Material COM lote** — *"já tem este material"* pode apontar um endereço que a entrega já esvaziou (**C72**).
+- **Recusar entrada em endereço inativo ou inexistente** — a sugestão não propõe, mas o sistema ainda aceita
+  (**C73**). É a **Etapa 54**.
+- **Endereço padrão que é "pai"** (tem sub-endereço ativo) some das sugestões **sem aviso**.
+
+---
+
+## Etapa 52 — A lista de localizações vazias (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** há uma lista de **onde tem espaço livre** — **Relatórios → Estoque →
+Localizações vazias** —, que concorda com o Mapa; e apagar um endereço **ocupado** passou a ser recusado.
+
+**O problema que ela resolve.** O servidor já tinha uma lista de vazias, sem tela, que **discordava do Mapa**:
+um material antigo (sem saldo por endereço) aparecia **com 40** no Mapa e o mesmo endereço aparecia **vazio** na
+lista. E apagar esse endereço era aceito — o material **sumia de todas as telas**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Sem tela de espaço livre | **Relatórios → Estoque → Localizações vazias**, exportável em XLSX |
+| Lista (sem tela) e Mapa discordavam no material antigo | Mesma regra: vazio na lista ⇔ vazio no Mapa |
+| Apagar endereço ocupado só por material antigo era aceito — o material sumia | Recusado: *"Localização ocupada: há material nela (N item(ns)). Transfira o saldo antes de apagar ou desativar."* |
+
+### Roteiro de teste manual (≈8 min)
+
+**Preparação.** Dois endereços (**A** e **B**) e um material **sem** controle por lote.
+
+1. **A lista.** **Almoxarifado → Relatórios**, categoria **Estoque**, **Localizações vazias** → **Consultar**. A e B
+   aparecem (estão vazios). Leia a nota: ela explica a regra, o endereço bloqueado, as filhas ocupadas e o caso
+   do material com lote.
+2. **Exportar.** Clique **Exportar XLSX**: a planilha tem Código, Endereço, Almoxarifado, Tipo, Bloqueada e
+   Filhas ocupadas.
+3. **Ocupar um endereço.** Em **Movimentações → Entrada**, dê entrada de **10** do material em **A**. Consulte de
+   novo: **A saiu** da lista; B continua.
+4. **Conferir com o Mapa.** **Almoxarifado → Mapa**: A aparece ocupado, B vazio — a mesma coisa que a lista.
+5. **Apagar o endereço ocupado.** **Configurações → Localizações**, remova **A**: depois do *"Remover
+   localização?"*, aparece *"Não é possível remover: localização possui saldo"* (A tem saldo no endereço). O
+   endereço continua lá.
+6. **Esvaziar e apagar.** Entregue uma requisição dos 10 (Etapa 51 — o endereço esvazia). Consulte a lista: A
+   **voltou**. Agora remova A: removido.
+7. **Endereço padrão de material antigo.** (Se houver material antigo com endereço padrão e saldo, sem saldo por
+   endereço.) O endereço padrão dele **não** aparece na lista, e removê-lo é recusado com *"Localização ocupada:
+   há material nela (1 item(ns))…"*. Antes, era removido e o material sumia.
+8. **Endereço bloqueado vazio** aparece na lista com **Bloqueada = 1**.
+
+### O que esta etapa NÃO cobre
+
+- **Material COM lote** — um endereço pode continuar aparecendo ocupado depois da entrega (novidades, **C72**; está na
+  nota do relatório).
+- **Hierarquia** — o "pai" (rua, setor) sem saldo próprio aparece vazio, com a coluna **Filhas ocupadas**; e pode ser
+  apagado com filhas ocupadas.
+- **Filtro na tela** (almoxarifado, setor) — filtrar é na planilha.
+- **Desativar pela tela** — a tela não tem esse botão; a recusa vale para a integração.
+
+---
+
+## Etapa 51 — A saída baixa o endereço de onde o material sai (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** quando uma saída não diz de onde sai — como a **entrega de requisição** —, o
+sistema passa a tirar dos **endereços que têm o material**, e o endereço esvaziado aparece **vazio** no Mapa.
+
+**O problema que ela resolve.** Antes, a saída sem endereço baixava o material do total mas **deixava o
+endereço com o saldo antigo**: entrada de 100 no endereço A e entrega de 100 deixavam o material com 0 e o
+endereço A "com 100", **ocupado** no Mapa. Isso impediria a tela de localizações vazias (Etapa 52) de ser
+verdadeira.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Entrega de 100 do endereço A: A continua "com 100" no Mapa | A fica com **0** e aparece **vazio** |
+| Saída declarando um endereço vazio deixava o endereço **negativo** | O endereço declarado é a preferência; quem tem o material cede |
+| Transferir de um endereço já esvaziado era aceito (estoque fantasma no destino) | Recusado: *"Saldo insuficiente na localização de origem"* |
+| Uma contagem por endereço podia deixar o material com saldo negativo | Não deixa — zera primeiro o "sem localização atribuída" negativo |
+
+### Roteiro de teste manual (≈10 min)
+
+**Preparação.** Um material **sem** controle por lote, dois endereços (**A** e **B**) e **dois usuários** — um que
+pede a requisição e outro que aprova (quem pede não aprova a própria).
+
+1. **Entrada no endereço A.** Em **Movimentações → Entrada**, dê entrada de **100** do material com destino **A**.
+2. **O Mapa mostra A ocupado.** **Almoxarifado → Mapa**: o endereço A aparece com o material.
+3. **A entrega.** Com o primeiro usuário, faça uma requisição de **100**; com o segundo, aprove; depois separe e
+   **entregue**.
+4. **O Mapa mostra A vazio.** Volte ao **Mapa** (recarregue): o endereço A aparece **vazio**. *Antes desta
+   etapa, continuava ocupado com 100.*
+5. **A transferência de um endereço vazio.** Em **Movimentações → Transferência**, tente mover **100** de A para
+   B: recusado com *"Saldo insuficiente na localização de origem"*.
+6. **Quem cede primeiro.** Dê entrada de **60** em A e **40** em B. Entregue uma requisição de **70**. No Mapa: A
+   **vazio** e B com **30** (sai primeiro do endereço com mais saldo; se o material tiver endereço padrão, é ele
+   que cede primeiro).
+7. **A saída que declara endereço vazio.** Com o material só em A (por exemplo, 40), em **Movimentações → Saída**
+   informe como origem o endereço **B** e saia com **5**: aceito. B continua vazio e A fica com **35**.
+
+### O que esta etapa NÃO cobre
+
+- **Material COM lote.** A entrega de requisição não escolhe lote, e o endereço do lote continua "ocupado"
+  depois dela (novidades, **C72**). A contagem por endereço resolve caso a caso.
+- **A tela de localizações vazias** — é a Etapa 52.
+- **O passado.** Endereços com saldo que não existe, gravados antes desta etapa, ficam — consulta **A28** das
+  novidades.
+- **O estorno de uma saída** devolve tudo ao endereço informado, ao padrão ou a "sem localização atribuída" — não
+  aos endereços de onde saiu.
+- **A tela de Movimentações não oferece endereço no ajuste** — a contagem por endereço é pela integração.
+
+---
+
+## Etapa 50 — A tela de Lotes mostra o físico e o "sem lote atribuído" (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** a tela **Lotes e Séries** passa a mostrar, abaixo da tabela de lotes,
+**quanto do material não está em lote nenhum** e **o físico total** — e para de deixar o saldo do lote
+passar por saldo da prateleira.
+
+**O problema que ela resolve.** O saldo de cada lote é o **atribuído** a ele. A **entrega de
+requisição** não pergunta lote, e o **ajuste de saldo total** também não — os dois mudam o material sem
+mudar lote nenhum. Entrada de 100 no lote A, entrega de 30: o material ficava com 70 e a tela seguia
+dizendo **100** no lote A.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Lote A com 100, e nada mais, com o material em 70 | Lote A com 100 **e**, abaixo, **"Sem lote atribuído: -30"** · **"Físico total do material: 70"** |
+| Material antigo sem lote nenhum: só *"Nenhum lote cadastrado"* | *"Nenhum lote cadastrado"* **e** o bloco com o físico inteiro sem lote |
+| Para saber o que estava fora dos lotes, só pelo relatório | A própria tela mostra, com o mesmo número do relatório |
+
+### Roteiro de teste manual (≈8 min)
+
+**Preparação.** Um material com **Controle por lote**, um lote **A** cadastrado, e **dois usuários** — um
+que pede a requisição e outro que aprova (quem pede não aprova a própria).
+
+1. **Entrada no lote.** Em **Movimentações**, dê **Entrada** de **100** no lote A.
+2. **Sem diferença, sem bloco.** **Almoxarifado → Lotes e Séries**, escolha o material: o lote A com
+   **100**, e **nada** abaixo da tabela (tudo está em lote).
+3. **Uma saída sem lote.** Com o primeiro usuário, faça uma requisição de **30**; com o segundo, aprove;
+   depois separe e **entregue**.
+4. **O bloco aparece.** Volte a **Lotes e Séries** e clique **Atualizar**: o lote A **continua com 100**,
+   e abaixo da tabela aparece **"Sem lote atribuído: -30 UN · Físico total do material: 70 UN"**, com o
+   texto: *"O saldo de cada lote é o atribuído a ele. Saídas que não informam lote (como a entrega de
+   requisição) e o ajuste de saldo total não baixam de lote nenhum; entradas sem lote (por exemplo, antes
+   de ligar o controle de lote) também ficam fora dos lotes. Lotes + sem lote atribuído = físico total."*
+5. **O mesmo número no relatório.** **Relatórios → Estoque → Saldo por lote → Consultar**: a linha *"Sem
+   lote atribuído"* do material mostra **−30**, igual à tela.
+6. **Aba Séries.** Na mesma tela, troque para a aba **Séries**: o bloco **não** aparece ali.
+7. **Troca de material.** Escolha outro material cujo saldo esteja todo em lote: o bloco some (não fica o
+   do material anterior).
+8. **Material antigo sem lote.** (Se houver um material que ganhou *Controle por lote* com estoque e nunca
+   teve lote.) A tela mostra *"Nenhum lote cadastrado para este material"* e, abaixo, o bloco com o
+   físico inteiro em *"Sem lote atribuído"*.
+
+### O que esta etapa NÃO cobre
+
+- **A entrega de requisição continua sem baixar de lote** — a tela mostra a diferença, não a elimina.
+- **Os seletores de lote** (Movimentações, Devoluções, Sobras) continuam mostrando o saldo **atribuído**
+  do lote — é o certo para eles, porque a saída por lote é conferida contra ele.
+
+---
+
+## Etapa 49 — Os relatórios de saldo que faltavam (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** a tela de **Relatórios** ganha, na categoria **Estoque**, o **Saldo por
+lote**, as **Séries em estoque** e os **Saldos comprometidos**; e o **Histórico de movimentações** passa
+a filtrar por **grupo**, **usuário** e **centro de custo**.
+
+**O problema que ela resolve.** Perguntas de todo dia — *quanto sobrou do lote?*, *que séries estão aqui?*,
+*quanto está preso em reserva, inspeção ou com terceiro?*, *o que fulano movimentou?* — não tinham
+relatório. E o filtro de tipo do histórico pedia o nome exato: *ENTRADA* trazia um dos oito tipos de
+entrada.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Sem relatório de lote | **Saldo por lote**, com a linha **"Sem lote atribuído"** que fecha com o físico |
+| Sem relatório de séries | **Séries em estoque** (em estoque e bloqueadas) |
+| Só *Materiais bloqueados* | **Saldos comprometidos**: físico, reservado, bloqueado, em inspeção, em terceiros, disponível |
+| Filtro *Tipo de movimento* pelo nome exato | Filtro **Grupo** (ENTRADA, SAIDA, AJUSTE, DEVOLUCAO, TRANSFERENCIA) |
+| Histórico sem usuário nem centro de custo | Colunas e filtros **Usuário** e **Centro de custo** |
+
+### Roteiro de teste manual (≈10 min)
+
+**Preparação.** Um material com **Controle por lote** e dois lotes cadastrados (A e B); um material
+qualquer com uma **reserva** (aprove uma requisição dele com saldo).
+
+1. **Entrada por lote.** Em **Movimentações**, dê **Entrada** de **100** no lote A e de **20** no lote B.
+2. **Uma saída sem lote.** Faça uma requisição de **30** desse material, aprove, separe e **entregue**
+   (a entrega não pergunta lote).
+3. **Saldo por lote.** **Almoxarifado → Relatórios → Estoque → Saldo por lote → Consultar**: o lote **A**
+   com **100**, o **B** com **20**, e a linha **"Sem lote atribuído"** com **−30**; a coluna **Físico
+   total do material** mostra **90**. **100 + 20 − 30 = 90.** Leia a nota no rodapé — ela explica isso.
+4. **O lote zerado some.** Em **Movimentações**, dê **Saída** de **20** informando o **lote B**. Consulte
+   de novo: o lote B **não** aparece mais.
+5. **Séries em estoque.** Num material com **Controle por número de série**, dê entrada de 2 séries.
+   **Relatórios → Estoque → Séries em estoque → Consultar**: as duas aparecem, com status *EM_ESTOQUE*.
+6. **Saldos comprometidos.** **Relatórios → Estoque → Saldos comprometidos → Consultar**: o material da
+   reserva aparece com a coluna **Reservado** preenchida e o **Disponível** = físico menos as retenções.
+   Um material sem nenhuma retenção **não** aparece.
+7. **Histórico por grupo.** **Relatórios → Movimentações → Histórico de movimentações**, campo **Grupo**
+   = *entrada* → **Consultar**: aparecem as entradas do passo 1 (todas, qualquer que seja o tipo exato).
+   Troque para *COMPRAS* → a tela mostra *"Grupo de movimento inválido: COMPRAS (use ENTRADA, SAIDA,
+   AJUSTE, DEVOLUCAO ou TRANSFERENCIA)"*.
+8. **Histórico por usuário.** Limpe o grupo e digite parte do **seu** nome em **Usuário (parte do
+   nome)** → só as suas movimentações; a coluna **Usuário** mostra o nome.
+9. **Exportar.** Em cada relatório novo, depois de **Consultar**, clique **Exportar XLSX**: a planilha tem
+   as mesmas colunas da tela.
+
+### O que esta etapa NÃO cobre
+
+- **A tela de Lotes (Lotes e Séries) ainda mostra o saldo atribuído como físico** — no passo 3, ela
+  continuaria mostrando o lote A com 100. É anterior a esta etapa (furo **C71** das novidades); confira
+  lote pelo relatório. **Resolvido na Etapa 50** (a tela ganhou o bloco "Sem lote atribuído").
+- **Saldo por endereço / por almoxarifado** fica fora (almoxarifado é área física, não filial).
+- **O filtro de centro de custo pede o número (id)** do centro de custo — não há lista de escolha.
+- **A busca por usuário** ignora maiúsculas só em letras sem acento.
+- **PDF** continua fora.
+
+---
+
+## Etapa 48 — Regras por urgência e por material de cliente, e a fila da aprovação simples (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** as regras de aprovação passam a poder exigir aval pela **urgência** da
+requisição e por ela levar **material de cliente**; a urgência vira uma lista fechada; e quem pode
+aprovar ganha, no topo de Requisições, a lista do que espera a aprovação dele.
+
+**O problema que ela resolve.** A etapa passada criou as regras, mas sem os dois critérios que a
+especificação pedia e que mais aparecem no galpão. E a urgência era, por trás da tela, texto livre:
+uma regra "Urgente" nunca casaria com um *"urgente"* gravado por outro caminho — e um rascunho antigo
+com *"critico"* em minúsculo escapava da trava que impede aprovar Crítico automaticamente. Por fim, o
+aprovador comum não tinha onde ver *"estas esperam você"*.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Urgência aceitava qualquer texto pela porta de programação | Só **Normal / Urgente / Crítico**; o resto → *"Urgência inválida: ⟨valor⟩"* |
+| Rascunho antigo com urgência em minúsculo escapava da trava do Crítico | O **envio** grava a forma certa; outra palavra é recusada |
+| Regras sem urgência nem material de cliente | Campo **Urgência** e caixa **Algum item é material de cliente** na aba Regras de Aprovação |
+| Aprovador comum procurava na lista | Painel **"Requisições aguardando sua aprovação (N)"** |
+
+### Roteiro de teste manual (≈10 min)
+
+**Preparação.** Os usuários da Etapa 47 (Solicitante; **Ana** e **Bia**, perfil Gestor; um
+**Administrador** do módulo), um material **nosso** e um **material de cliente** (cadastrado com dono
+em *Materiais de Clientes*).
+
+1. **A urgência no formulário.** Como Solicitante, abra *Nova requisição*: o campo **Urgência** tem
+   *"Normal — atendimento padrão"*, *"⚠️ Urgente — linha parada"* e *"🔴 Crítico — risco de
+   segurança"*. Nada muda para quem usa a tela.
+2. **Regra por urgência.** Como Administrador: **Configurações → Regras de Aprovação → Nova regra**,
+   nome *"Urgente"*, **Urgência** = *Urgente*, marque a **Ana**, **Salvar regra** → *"Regra criada"*.
+   A lista mostra *"Urgência: Urgente"*.
+3. **Regra por material de cliente.** Nova regra *"De cliente"*, marque **Algum item é material de
+   cliente** e a **Bia**. A lista mostra *"Algum item é material de cliente"*.
+4. **A requisição que se encaixa nas duas.** Como Solicitante: requisição **Urgente** (justifique a
+   urgência) com **1** do material de cliente. Como Administrador, abra-a: o bloco *Aprovações de
+   regra* mostra *"Urgente · Aguardando assinatura"* e *"De cliente · Aguardando assinatura"*.
+5. **As metades que NÃO casam.** Uma requisição **Normal** só com material nosso: **nenhuma**
+   assinatura. Uma **Normal** com material de cliente: só *"De cliente"*.
+6. **A fila simples.** Crie, como Solicitante, uma requisição **Normal** só com material nosso. Entre
+   como **Bia** (Gestor, pode aprovar): no topo de **Requisições**, o painel **"Requisições aguardando
+   sua aprovação"** lista essa requisição (número, solicitante, valor). A do passo 4 **não** aparece
+   ali (espera assinatura de regra — está no painel das regras). Clique na linha → abre a requisição;
+   **Só Aprovar** → ela **sai** do painel.
+7. **Quem não pode aprovar não vê.** Entre como um usuário de perfil **Produção**: o painel **não**
+   aparece.
+8. **A recusa da urgência (pela porta de programação, opcional).** Um `POST` de requisição com
+   `"urgencia": "ALTA"` → *"Urgência inválida: ALTA"*; nada é gravado.
+
+### O que esta etapa NÃO cobre
+
+- **A urgência antiga fora da lista não é corrigida no banco** — só no envio do rascunho. A consulta
+  **A27** das novidades mostra se você tem alguma.
+- **A feature 06 continua 🟡**: faltam a **dupla aprovação de ajuste** (espera a decisão **B11**) e a
+  **regra da lista técnica** (depende da feature 22).
+- **O painel da fila simples é um recorte fixo**, sem filtro próprio.
+
+---
+
+## Etapa 47 — O motor de aprovações ganha regras, e a requisição de alto valor passa a ser cobrada (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** o administrador passa a cadastrar **regras de aprovação** — *quando*
+a requisição precisa de um aval extra e *quem* pode dá-lo —, cada aval pendente é **cobrado por
+e-mail** de quem pode dá-lo, e a requisição travada por valor passou a ser cobrada **todo dia**.
+
+**O problema que ela resolve.** A aprovação tinha duas portas fixas: a aprovação normal (por perfil) e
+a liberação por valor (acima de um limite em R$). Não dava para dizer *"material crítico precisa do
+aval da Manutenção"*. E a requisição travada por valor avisava os aprovadores **uma vez**, na hora em
+que travava, e nunca mais — o lembrete diário só olhava requisição *Pendente*.
+
+**Como funciona.** Cada regra tem critérios — **tipo de requisição**, **algum item é material
+crítico**, **valor total a partir de**, **algum item com quantidade a partir de**, **centro de
+custo** — e vale quando **todos** os preenchidos batem. Quando a requisição é **enviada**, cada regra
+que se encaixa gera uma **assinatura pendente**. Enquanto houver assinatura pendente, **nenhuma**
+aprovação passa: nem *Só Aprovar*, nem *Aprovar e Separar*, nem *Aprovar Liberação*, nem a
+*Aprovação Automática*. Cada assinatura tem de ser de uma **pessoa diferente**, e o solicitante nunca
+assina. **Assinar não aprova:** depois da última assinatura, a aprovação normal continua sendo
+necessária — é ela que reserva o material.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Duas portas fixas de aprovação | Aba **Regras de Aprovação** em Configurações |
+| Botões de aprovar sempre clicáveis em requisição pendente | Cinza com o motivo enquanto faltar assinatura de regra |
+| — | Bloco **Aprovações de regra** no detalhe, com **Assinar** para quem pode |
+| — | Painel **"Aprovações de regra aguardando você (N)"** no topo de Requisições |
+| Requisição travada por valor recebia um e-mail só | Lembrete diário para os **aprovadores de valor**, com o valor e o limite |
+| — | Lembrete diário de cada assinatura pendente, para **quem pode assinar** |
+| Aprovação Automática aprovava toda requisição normal não crítica | Não aprova a que tem assinatura de regra pendente |
+
+### Roteiro de teste manual (≈15 min)
+
+**Preparação.** Quatro usuários: **Solicitante** (qualquer perfil que requisita), **Ana** e **Bia**
+(perfil *Gestor*) e você como **Administrador** do módulo. Dois materiais: um com custo unitário de
+**R$ 600** e outro marcado como **material crítico** (no cadastro do material). Para ver os e-mails,
+o SMTP em *Configurações → Alertas de Estoque* precisa estar configurado.
+
+1. **Cadastrar as regras.** Como Administrador: **Almoxarifado → Configurações → Regras de
+   Aprovação → Nova regra**. Nome **Valor alto**, *Valor total a partir de (R$)* = **1000**, marque a
+   **Ana**, **Salvar regra** → *"Regra criada"*. Repita: **Material crítico**, marque *Algum item é
+   material crítico*, marque a **Bia**.
+   ✅ As duas aparecem na lista, com *"Valor ≥ R$ 1.000,00"* e *"Algum item é material crítico"*, e
+   *"Assinam: Ana"* / *"Assinam: Bia"*.
+2. **As recusas.** *Nova regra*, só o nome, **Salvar regra** → *"Regra precisa de pelo menos um
+   critério"*. Preencha um valor e desmarque todos → *"Regra precisa de pelo menos um aprovador"*.
+   Apague o nome → *"Regra precisa de um nome"*. **Cancelar**.
+3. **Criar a requisição.** Como **Solicitante**: nova requisição com **2** do material de R$ 600 e
+   **1** do crítico, **enviar**.
+4. **Ver o bloqueio.** Como **Administrador**, abra a requisição em **Requisições**.
+   ✅ Bloco **Aprovações de regra** com *Valor alto · Aguardando assinatura* e *Material crítico ·
+   Aguardando assinatura*.
+   ✅ Aviso *"Aguardando 2 aprovação(ões) de regra antes da aprovação. Quem assina cada regra está no
+   bloco acima."*.
+   ✅ **Aprovar e Separar** e **Só Aprovar** cinza.
+5. **Assinar a primeira.** Como **Ana**: em **Requisições**, o painel *"Aprovações de regra
+   aguardando você (1)"* mostra a requisição. Clique nela, e no detalhe clique **Assinar** →
+   *"Aprovação da regra "Valor alto" assinada. Ainda falta(m) 1."*. O botão *Assinar* da outra regra
+   **não** aparece para ela.
+6. **Assinar a segunda.** Como **Bia**, mesma coisa na *Material crítico* → *"Aprovação da regra
+   "Material crítico" assinada. A requisição já pode ser aprovada."*.
+7. **Aprovar.** Como **Administrador**, os botões voltaram a ficar ativos: **Só Aprovar** → aprovada.
+8. **Desativar com pendência.** Crie outra requisição igual à do passo 3. Em **Regras de Aprovação**,
+   clique **Desativar** na *Valor alto*.
+   ✅ Aparece *"Desativar esta regra libera 1 requisição(ões) que aguardam a assinatura dela — a
+   pendência fica registrada como obsoleta e deixa de bloquear a aprovação."*.
+   **Desativar mesmo assim** → *"1 aprovação(ões) pendente(s) desta regra deixaram de bloquear
+   requisições"*. Na requisição, a linha *Valor alto* diz *"Obsoleta (regra desativada)"*.
+9. **Aprovação Automática.** Em *Configurações Gerais*, ligue **Aprovação Automática**. Uma requisição
+   só com o material crítico nasce **Pendente** (a regra *Material crítico* segura); uma só com o
+   material de R$ 600 × 1 (sem regra ativa que case) nasce **Aprovada**. Desligue ao terminar.
+10. **Liberação por valor.** Em *Configurações → Liberação por Valor*, ligue com limite **500** e
+    marque um aprovador. Reative a *Valor alto*. Uma requisição de R$ 1.200 nasce *Aguard. Aprov.
+    Valor*, e **Aprovar Liberação** fica cinza até a Ana assinar.
+11. **Os e-mails (só com SMTP).** Com o lembrete ligado em *Configurações → Alertas de Estoque*, a
+    requisição parada em *Aguard. Aprov. Valor* recebe *"Lembrete: Requisição REQ-… aguardando
+    liberação por valor há N dias"*, com *"Valor total: R$ … (limite de liberação automática: R$ …)"*,
+    e cada assinatura pendente recebe *"Lembrete: Requisição REQ-… aguardando aprovação da regra
+    "Valor alto" há N dias"*. O lembrete só sai depois do intervalo configurado (padrão 24 h) — para
+    demonstrar, use um intervalo de 1 h e uma requisição antiga.
+
+### O que esta etapa NÃO cobre
+
+- **Urgência** e **material de cliente** não são critério de regra.
+- **Projeto** é critério só pela porta de programação — a tela de requisição não grava projeto.
+- Regra criada, editada ou reativada **não** alcança requisição **já enviada**.
+- A requisição **já aprovada** que caiu em liberação por valor depois **não** recebe o lembrete (C68).
+- Não há fila "minhas aprovações" da aprovação **normal** — só das assinaturas de regra.
+- ⚠️ O texto de ajuda do bloco *Lembretes de requisições pendentes* (em *Alertas de Estoque*) ainda
+  fala só de *PENDENTE* e dos destinatários de cima — ver a letra F (47) das novidades.
+
+## Etapa 46 — A não conformidade decidida deixa de ser um beco (ENTREGUE — 2026-09-30)
+
+**O que mudou, em uma frase:** o documento decidido que **ninguém consegue executar** ganhou uma
+porta de saída — **Cancelar**, com motivo, preservando a decisão — e, enquanto espera, passou a
+**cobrar** num cartão próprio da central de Alertas.
+
+**O problema que ela resolve.** A Etapa 45 separou *decidir* de *executar*, e criou um beco no
+mesmo movimento: material com **número de série** (ou com lote não identificável) decidido
+*Devolver ao fornecedor* é **recusado** na execução com um erro **fatal**, que se repete para
+sempre. O documento ficava **Decidido / execução Pendente** eternamente, cobrando do Compras um
+gesto que ninguém conseguia registrar — e cobrando **só dentro de um filtro de tela** que alguém
+precisava escolher, porque o cartão de *"Não conformidade aberta"* mede documento `ABERTA` e o
+documento decidido sai dele sem entrar em nenhum outro. Era o furo **C64**. Agora há **saída** (a
+Qualidade cancela, com motivo, e a decisão continua legível) e há **cobrança** (o cartão *"Execução
+pendente"*, com janela configurável).
+
+**Quem pode cancelar: Administrador e Qualidade.** O **Compras não pode**, de propósito: é ele quem
+executa e quem é cobrado pela fila — dar-lhe o cancelar seria dar-lhe o botão de **limpar a própria
+cobrança**.
+
+**Só cancela documento DECIDIDO cuja execução está PENDENTE.** Documento **Aberto** não cancela (o
+gesto certo é **decidir**, ou corrigir a quantidade conferida); documento cuja **decisão de
+aceitação** já se executou não cancela (não há pendência a encerrar); documento **já executado** não
+cancela.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| NC decidida *Devolver* de material com série ficava **Decidida / Pendente para sempre** — a execução recusava, o documento não se decidia de novo e **nenhum gesto de tela** o destravava | Botão **Cancelar** na linha (ícone ✕), só para **Administrador e Qualidade**, com **motivo obrigatório**: o documento fecha e a decisão **fica registrada** |
+| O documento parado **não cobrava ninguém** — morava só no filtro *"Pendentes de execução"*, que alguém precisava escolher | Cartão **"Execução pendente"** na central de **Alertas**, com janela própria em *Configurações* (**"Alerta de Execução Pendente da NC (dias)"**, semeada em **7**) |
+| A coluna **Execução** mostrava o selo **Pendente** na linha **cancelada** — contradizendo, na mesma tela, o aviso que acabara de dizer que a cobrança terminou | A coluna diz **"Deixou de ser cobrada"** — e **`—`** quando o documento cancelado **nunca foi decidido** (o cancelamento automático da reconferência) |
+| Tentar executar um documento cancelado respondia *"a execução desta não conformidade já foi registrada"*, o que era **falso** (nada havia sido registrado) | Responde *"Esta não conformidade foi cancelada — não há execução a registrar"* |
+| `CANCELADA` só nascia do **gancho automático** da reconferência, e a trilha creditava o ato a quem apenas **reconferiu a quantidade** — inclusive ao Compras, que toma 403 no cancelar | Os **dois** atos gravam autor e a marca de automático em *Auditoria → **"Não conformidade cancelada"***, e o cancelamento humano registra **quem** cancelou e o **motivo** |
+
+### Roteiro de teste manual
+
+**O que você precisa antes de começar** — este roteiro usa **dois perfis de trabalho** e um
+administrador para duas telas:
+
+- **quem decide e cancela**: usuário com perfil **Qualidade** (o **Administrador** também cancela);
+- **quem executa e toma o 403**: usuário com perfil **Compras**;
+- **um Administrador**, para dois passos que a Qualidade não alcança: mudar a janela em
+  *Configurações* e **abrir a central de Alertas** — a Qualidade está **fora** de `ver_alertas` de
+  propósito (a central carrega o valor em dinheiro do estoque parado). Quem vê o cartão é
+  **Administrador, Almoxarife, Gestor ou Compras**.
+
+O material tem de estar marcado como **Material crítico** (é isso que faz a entrada cair na fila de
+inspeção) **e com Controle por número de série** — e aqui a série é o **ponto**, não um detalhe: é
+ela que cria o beco que esta etapa paga. Se a entrada não cair em inspeção, a chave
+`inspecao_material_critico` foi desligada no banco (ela nasce ligada e **não tem tela**).
+
+⚠️ **Este roteiro tem uma espera de um dia**, e não há como encurtá-la: a janela do cartão novo
+conta dias **desde a decisão** e o menor valor aceito é **1** (pôr 0 é recusado com *"Configuração
+"alerta_nc_execucao_pendente_dias" deve ser um número de dias maior que zero"*). Faça os Trechos A
+e B num dia e os Trechos C e D no dia seguinte. A **fila** (*Pendentes de execução*) é imediata; o
+**cartão** não.
+
+#### Trecho A — armar o beco (entre como **Administrador**, depois como **Qualidade**)
+
+1. **Almoxarifado → Configurações → Configurações Gerais.** Ponha **1** no campo **"Alerta de
+   Execução Pendente da NC (dias)"** e salve → *"Configurações salvas!"*. É o campo novo da etapa;
+   se ele não estiver na lista, você está numa versão anterior a 2026-09-30.
+2. **Almoxarifado → Materiais.** Crie um material novo, marque **Material crítico** e marque
+   **"Controle por número de série"**. Anote o código.
+3. **Almoxarifado → Recebimentos → Novo recebimento.** Escolha o fornecedor, preencha a nota fiscal
+   e lance **10** unidades do material do passo 2. No item, na caixa **"Séries (uma por linha)"**,
+   digite **10** números de série (o contador ao lado tem de fechar com a quantidade recebida — sem
+   isso o processamento recusa a nota inteira). **Salve antes de processar.**
+4. Na lista de recebimentos, abra o que você criou e **processe/aprove** a entrada.
+5. **A verificação de saldo "antes". Almoxarifado → Materiais:** **10 no físico**, **0
+   disponível**, **10 em inspeção**. É a quarentena — material crítico entra retido.
+6. **Almoxarifado → Inspeções**, aba **Pendentes**. Na linha do material, clique em **"Decidir
+   inspeção (aprovar/reprovar)"**. No modal **"Decidir Inspeção"**: **Quantidade aprovada: 7**,
+   **Quantidade reprovada: 3**, **Encaminhamento: Devolver ao fornecedor**, marque **Dano físico**
+   e escreva a observação (obrigatória quando há quantidade reprovada). Confirme.
+   → Em **Materiais**: **10 no físico**, **7 disponíveis**, **3 bloqueados**.
+7. **Almoxarifado → Não Conformidades.** O documento `NC-…` já está lá, **Aberta**, origem
+   **Inspeção**, coluna **Execução** em **—**. Anote o número.
+8. **Ainda com o documento Aberto, olhe a coluna de ações: não há botão de cancelar.** É regra, não
+   esquecimento — documento sem decisão não se cancela, e a recusa do servidor **ensina o caminho**:
+   *"Só é possível cancelar uma não conformidade já decidida — decida o documento, ou corrija a
+   quantidade conferida"* (409). Cancelar um documento aberto mataria a divergência **viva**: o item
+   sairia do cartão *"Divergência de recebimento"*, o gancho não reabriria nada e **não existe tela
+   de abertura manual de não conformidade** para recomeçar.
+9. Entre como **Qualidade** (se já não estiver) e clique em **"Decidir a não conformidade"**. No
+   modal **"Decidir NC-…"** escolha **Decisão: Devolver ao fornecedor**, escreva a **Justificativa**
+   e clique em **Registrar decisão**.
+   → *"Não conformidade NC-… decidida! Esta decisão não altera o saldo"*.
+   → A coluna **Execução** passa a **Pendente**, e o botão **✕ ("Cancelar a não conformidade")**
+   **aparece** — as duas condições de visibilidade dele são exatamente as duas em que o servidor
+   diz sim.
+10. **Confira que nada se moveu. Materiais:** ainda **10 no físico** e **3 bloqueados**.
+
+#### Trecho B — o beco, visto por quem é cobrado (saia e entre como **Compras**)
+
+11. **Almoxarifado → Não Conformidades.** No **terceiro filtro** (o de execução), troque *"Qualquer
+    execução"* por **"Pendentes de execução"** — o filtro de status salta sozinho para
+    **"Decididas"**, como na Etapa 45. O `NC-…` do passo 7 está na fila.
+12. Na linha dele, clique no botão de **caminhão** (*"Registrar execução do encaminhamento"*) e
+    confirme em **Registrar execução**.
+    → **A recusa fatal, e é o beco:** *"Material com controle de série não pode ser devolvido por
+    aqui — dê baixa pela tela de Movimentações"* (400). Clique de novo: **a mesma recusa, sempre**.
+    Devolver peça serializada é escolher **quais peças** voltam, e essa escolha não existe nesta
+    tela.
+13. **E o Compras não tem porta de saída: o botão ✕ não aparece nas linhas dele.** O gate de perfil
+    **esconde** o cancelar de quem não pode usá-lo, como já faz com o caminhão para o Almoxarife —
+    botão com 403 garantido é armadilha, não gate. **Se você quiser ver o 403 com os próprios
+    olhos**, force a falha da leitura de permissões (ela falha **aberta** de propósito): F12 →
+    **Network** → localize a chamada **`minhas-permissoes`** → *Block request URL* → recarregue a
+    tela. O ✕ aparece por precaução, o modal traz o aviso âmbar e o clique volta do servidor com
+    *"Sem permissão para cancelar não conformidade — seu perfil é Compras. Solicite acesso a um
+    administrador."* — **antes** de qualquer efeito.
+14. **Materiais, de novo:** **10 no físico**, **3 bloqueados**. Nenhuma das tentativas moveu nada.
+
+#### Trecho C — no dia seguinte: o documento passa a cobrar (**Administrador** ou **Compras**)
+
+15. **Almoxarifado → Alertas.** O cartão **"Execução pendente"** traz o `NC-…`, com as colunas
+    **NC**, **Material**, **Decisão**, **Decidida em**, **Decidida há** e **Recebimento**. A coluna
+    *Decisão* mostra o código da decisão (`DEVOLVER`). **Este é o segundo entregável da etapa:**
+    antes, o documento preso não aparecia em cartão nenhum.
+16. Repare que o cartão **nomeia a saída** na descrição — *"Se a execução for impossível (material
+    com número de série, lote não identificável), a Qualidade pode cancelar o documento."* — e o
+    e-mail (assunto **"[Almoxarifado] Execução pendente — NC-…"**) repete a frase no fim do corpo.
+    É deliberado: quem recebe o aviso é o Compras, que **não** tem o botão; sem essa linha o cartão
+    ficaria aceso para sempre para quem só pode tomar 400.
+17. **A fila continua lá também.** Em **Não Conformidades**, com **"Pendentes de execução"**, o
+    documento está nos **dois** lugares. Guarde isso: é o que o Trecho D vai apagar.
+
+#### Trecho D — a saída (saia e entre como **Qualidade**)
+
+18. **Almoxarifado → Não Conformidades**, filtro de status em **"Decididas"**. Na linha do `NC-…`,
+    clique no botão **✕ ("Cancelar a não conformidade")**. Abre o modal **"Cancelar NC-…"**, com o
+    material, a decisão tomada e o parágrafo cinza que é **a única explicação que o usuário
+    recebe**: cancelar **não apaga a decisão**, o que termina é a **cobrança da execução**.
+19. **Motivo curto não passa.** Digite **`nao`** (3 caracteres) no campo **Motivo** (placeholder
+    *"Por que este documento não se cumpre? Mínimo de 5 caracteres — é o que fica para quem auditar
+    depois."*).
+    → O botão **"Cancelar documento"** fica **desabilitado**, e abaixo do campo aparece *"O motivo
+    precisa de pelo menos 5 caracteres."* A mesma régua existe no servidor, que recusaria com *"O
+    motivo do cancelamento deve ter pelo menos 5 caracteres"* (400) — a tela só evita a viagem.
+20. Apague e escreva um motivo de verdade: *"Peça serializada — baixa pela tela de Movimentações"*.
+    Clique em **"Cancelar documento"** (o botão secundário chama-se **Voltar**, e não *Cancelar*,
+    para não haver dois "Cancelar" no mesmo rodapé).
+    → **O aviso que prova a etapa:** *"Não conformidade NC-… cancelada! Documento cancelado — a
+    decisão fica registrada, e a execução deixa de ser cobrada"*.
+    → E **a linha não desaparece**: a tela **larga os dois filtros** (status volta a *"Todos os
+    status"*, execução a *"Qualquer execução"*), porque quem acabou de cancelar quer **ver** o
+    documento com o motivo que digitou.
+21. **Leia a linha cancelada, coluna por coluna** — é aqui que se confere que a etapa não apagou
+    evidência:
+    - **Status**: selo **Cancelada**;
+    - **Decisão**: continua **"Devolver ao fornecedor"**, com **quem decidiu e quando** — a decisão
+      ficou **legível**;
+    - **Execução**: **"Deixou de ser cobrada"** (e **não** o selo *Pendente*, que é o que a coluna
+      mostrava antes do conserto);
+    - clique no **chevron** da linha (*"Detalhes e anexos"*): aparece **"Motivo do cancelamento:"**
+      com o texto do passo 20, ao lado da **"Justificativa da decisão:"**.
+22. **Conferir que saiu dos DOIS lugares:**
+    - **a fila** — ponha o filtro de execução em **"Pendentes de execução"**: o `NC-…` **não está
+      mais lá** (o que exclui a linha é o **status**, não o estado de execução, que continua
+      gravado como *Pendente* de propósito);
+    - **o cartão** — entre como **Administrador** (ou **Compras**), vá em **Almoxarifado →
+      Alertas**: o cartão **"Execução pendente"** **já não traz** o documento. Cancelar **calou a
+      cobrança**, e essa é a composição que nenhuma das duas metades prova sozinha.
+23. **A trilha. Almoxarifado → Auditoria.** No filtro de ações escolha **"Não conformidade
+    cancelada"** → a linha do passo 20, com o autor e, na coluna de justificativa, **o motivo** que
+    você digitou. Troque para **"Não conformidade decidida"** → a linha do passo 9. Dois atos, dois
+    registros — e, nos detalhes da linha do cancelamento, os campos **`cancelado_por_id`** e
+    **`automatico`** (aqui em **`false`**) dizem **qual dos dois cancelamentos** foi: o humano ou o
+    gancho automático da reconferência, que usa o mesmo verbo.
+24. **O saldo, pela última vez. Almoxarifado → Materiais:** **10 no físico**, **7 disponíveis**,
+    **3 bloqueados** — exatamente o que estava no passo 6. **Nenhum passo desta etapa moveu
+    estoque**, e é o comportamento desejado: cancelar encerra a **cobrança**, não o problema
+    físico. Os 3 continuam bloqueados, e soltá-los é outro gesto, de outro perfil (ver *"O que esta
+    etapa não cobre"*).
+25. **Os outros dois desfechos que não cancelam, vistos pela ausência do botão.** Repita 2 a 9 com
+    outro material (pode ser sem série) e decida **Aceitar sob desvio** → a coluna **Execução**
+    nasce em **"Não se aplica"** e **não há ✕**: a decisão já se executou no mesmo clique, não há
+    pendência a encerrar (pela porta de programação: *"Esta decisão não deixou execução pendente —
+    não há o que encerrar"*, 409). Depois faça um material **sem série**, decida **Devolver ao
+    fornecedor** e **registre a execução** (Trecho B da Etapa 45) → **Execução: Executada** e o ✕
+    **desaparece**; o servidor recusaria com *"A execução desta não conformidade já foi registrada
+    — o documento não pode ser cancelado"* (409).
+
+### Passos que NÃO são reproduzíveis por tela
+
+Estas proteções existem no código, têm teste e **não se demonstram ao vivo** — não porque falhem,
+mas porque hoje não há botão que chegue até elas:
+
+- **A corrida de dois cancelamentos.** Dois cancelamentos **simultâneos** do mesmo documento
+  (medidos com duas chamadas em paralelo) dão **um sucesso e uma recusa**, e **uma** linha de
+  trilha. O que se consegue ver pela tela é a versão lenta: com a fila aberta em **duas abas**,
+  cancele na primeira e depois na segunda (que ainda mostra o ✕) → a segunda volta com *"Esta não
+  conformidade já está cancelada"* (409). A versão **realmente simultânea** tem uma terceira
+  resposta, quando a linha muda **duas** vezes no meio do caminho (por exemplo: a execução gravou o
+  carimbo e o rollback dela o limpou) — *"O documento mudou de estado durante o cancelamento —
+  tente de novo"* (409) —, e chegar a esse estado por cliques não é possível.
+- **Executar um documento já cancelado.** Depois do cancelamento o botão de caminhão **não existe
+  mais** na linha, então a recusa só se alcança por fora: *"Esta não conformidade foi cancelada —
+  não há execução a registrar"* (400). Ela é **nova nesta etapa** — é o estado que a etapa criou —
+  e substituiu uma resposta que **mentia**, dizendo que a execução já havia sido registrada quando
+  nada havia sido registrado.
+- **A régua do documento cancelado em relação à divergência que ele fechava.** Cancelar **por
+  pessoa** é um **encerramento** (como decidir): o item **não** volta ao cartão *"Divergência de
+  recebimento"* e o reenvio da mesma nota **não** abre documento novo — mas, se o operador corrigir
+  a quantidade e ela **quebrar de novo no mesmo valor**, um documento **novo** nasce. O
+  cancelamento **automático** da reconferência continua significando *"a divergência sumiu"* e
+  segue a régua antiga. São quatro estados que exigem armar a base pela integração; a diferença
+  entre os dois cancelamentos mora numa coluna, não num botão.
+
+### O que esta etapa não cobre
+
+- **Cancelar não desbloqueia o material.** Os 3 do roteiro continuam **bloqueados** depois do
+  cancelamento, de propósito: o documento morreu, o material não se moveu. Soltá-los é outro gesto
+  e de outro perfil — **"Desbloquear Material"** em *Inspeções* (Administrador ou Gestor, exige
+  permissão de ajuste de estoque) — ou a baixa pela tela de **Movimentações**, que é o que a recusa
+  da execução manda fazer.
+- **Não devolve material com número de série.** A etapa deu a **saída** do beco, não a devolução
+  serializada: escolher **quais peças** voltam continua sem tela, e o caminho segue sendo
+  Movimentações.
+- **Não redecide o documento.** Cancelar não reabre a decisão. O modal diz *"cancele este documento
+  e abra outro"* — e vale saber que **abrir não conformidade à mão não tem botão em tela nenhuma**
+  (herança da Etapa 43): o documento novo nasce pelas portas automáticas (conferência, dados
+  fiscais, inspeção).
+- **Não cancela documento Aberto.** Foi **corte de escopo da revisão final**, não esquecimento:
+  cancelar um documento sem decisão silenciaria uma divergência **viva** — o item sairia do cartão
+  antigo, o gancho não reabriria e não haveria como recomeçar. A recusa indica os dois gestos
+  certos (decidir, ou corrigir a quantidade conferida).
+- ~~**A linha não diz quem cancelou, no documento que foi decidido.** A coluna *Decisão* continua
+  mostrando **quem decidiu**; o autor do cancelamento aparece na linha **só** quando o documento
+  nunca foi decidido.~~
+  ⚠️ **CORRIGIDO no fechamento da etapa, e vale contar por que estava assim.** O nome de quem
+  cancelou **aparece sim**, embaixo do badge **Cancelada**, na coluna de **Situação** — junto com a
+  data. A coluna *Decisão* continua mostrando **quem decidiu**, que é o certo: são dois atos, com
+  dois autores.
+  **O que havia acontecido:** o campo existia no servidor e o código da tela o desenhava… no ramo
+  errado — um ramo que só é alcançado quando o documento **nunca foi decidido**. E como cancelar
+  **exige** documento decidido, aquele desenho nunca era executado. Foi escrevendo **este roteiro**
+  que o problema apareceu: quem foi conferir na tela, para escrever o passo, não achou o nome.
+  Vale como lição de método: **escrever o roteiro de teste manual é uma forma de medir a tela** —
+  ela achou um defeito que 44 cenários automatizados não acharam.
+- **O cartão novo não é verificável no mesmo minuto.** A janela mínima é **1 dia** e conta desde a
+  **decisão** (não desde a abertura do documento) — um documento aberto há 60 dias e decidido hoje
+  **não** está atrasado na execução.
+- **A Qualidade não recebe o aviso.** Quem cancela é Administrador e Qualidade, e a **Qualidade
+  está fora** de `ver_alertas` — o cartão e o e-mail chegam a Administrador, Almoxarife, Gestor e
+  Compras. O conserto escolhido foi **escrever a saída** na descrição e no corpo do e-mail, em vez
+  de alargar a permissão (decisão registrada na letra **B** do documento de novidades).
+- **Não retroage e não mexe em mais nada.** Nenhum pedido de compra é reaberto, nenhuma nota fiscal
+  é emitida, nenhum e-mail sai para o fornecedor e nenhum valor é estornado — tudo o que a Etapa 45
+  já declarava continua valendo.
+
+---
+
+## Etapa 45 — A devolução ao fornecedor deixa de ser um combinado verbal (ENTREGUE — 2026-09-29)
+
+**O que mudou, em uma frase:** decidir *Devolver ao fornecedor* passou a ser só a **intenção** — a
+baixa no estoque acontece num **segundo clique**, o **Registrar execução**, dado por quem despachou
+a caixa de verdade.
+
+**O problema que ela resolve.** Quem manda o material de volta é o **Compras**, dias depois, por
+telefone e transportadora. Até aqui o sistema não tinha onde registrar isso: a Qualidade decidia
+*Devolver ao fornecedor*, o documento fechava e os quilos reprovados **ficavam bloqueados para
+sempre**, porque nada perguntava se a caixa tinha ido embora. O estoque contava material que já não
+estava no galpão, o cartão de *Material reprovado* cobrava uma providência que talvez já tivesse
+sido tomada, e ninguém conseguia responder *"essa devolução já foi feita?"*. Agora são **dois
+gestos, com dois donos e duas datas**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Decidir *Devolver ao fornecedor* fechava o documento e **o material continuava bloqueado**, sem prazo e sem cobrança | O documento fica **Pendente de execução** até alguém registrar que o material saiu |
+| Não havia onde dizer que a devolução foi feita | Botão **Registrar execução** na linha do documento, com data, autor e observações (nº da nota, transportadora, quem recebeu) |
+| A baixa teria de ser feita à mão, sem vínculo com o documento | A baixa é **automática no registro da execução**, com o número da NC no livro e o motivo *"Devolução ao fornecedor"* |
+| A tela não respondia *"o material já voltou ao fornecedor?"* | Coluna **Execução**: vazio (não decidido), **Pendente**, **Executada** (com quem e quando) e **Não se aplica** |
+| Não havia fila de trabalho para o Compras | Filtro **"Pendentes de execução"** — a fila do que falta despachar |
+| Quem decide era quem (não) executava | Ação própria: **Administrador, Qualidade e Compras** registram execução; o **Almoxarife não** |
+
+### Roteiro de teste manual
+
+**O que você precisa antes de começar** — este roteiro usa **dois logins** (e mais dois só para
+passos específicos):
+
+- **quem decide**: usuário com perfil **Qualidade** (ou **Administrador**);
+- **quem registra a execução**: usuário com perfil **Compras** (Qualidade e Administrador também
+  podem);
+- **quem tenta e não consegue**: usuário com perfil **Almoxarife** (passo 22);
+- um **Administrador** no passo 20 — é ele que desbloqueia material à mão.
+
+O material tem de estar marcado como **Material crítico** no cadastro: é isso que faz a entrada cair
+na fila de inspeção. Se não cair, a chave `inspecao_material_critico` foi desligada no banco (ela
+nasce ligada e **não tem tela**).
+
+#### Trecho A — a Qualidade decide, e nada se move (entre como **Qualidade** ou **Administrador**)
+
+1. **Almoxarifado → Materiais.** Crie um material novo (ou edite um existente), marque **Material
+   crítico** e deixe-o **sem** controle de série e **sem** controle de lote — o caminho principal é
+   este; série e lote estão no aviso do fim desta seção. Anote o código.
+2. **Almoxarifado → Recebimentos → Novo recebimento.** Escolha o fornecedor, preencha a nota fiscal
+   e lance **10** unidades do material do passo 1. Salve.
+3. Na lista de recebimentos, abra o que você criou e **processe/aprove** a entrada.
+4. **A verificação de saldo "antes".** Volte a **Materiais** e anote o que está lá: **10 no físico**,
+   **0 disponível**, **10 em inspeção**. É a quarentena — material crítico entra retido.
+5. **Almoxarifado → Inspeções**, aba **Pendentes**. Na linha do material, clique no botão
+   **"Decidir inspeção (aprovar/reprovar)"**. No modal **"Decidir Inspeção"** preencha
+   **Quantidade aprovada: 7**, **Quantidade reprovada: 3**, **Encaminhamento: Devolver ao
+   fornecedor**, marque **Dano físico** em *Problemas identificados* e escreva a observação (ela é
+   obrigatória quando há quantidade reprovada). Confirme.
+   → Em **Materiais**: **10 no físico**, **7 disponíveis**, **3 bloqueados**.
+6. **Almoxarifado → Não Conformidades.** O documento `NC-…` já está na lista, com status **Aberta** e
+   origem **Inspeção** — ninguém o criou, ele nasceu da reprovação. A coluna **Execução** mostra
+   **—**: documento não decidido não tem execução a mostrar. Anote o número.
+7. Clique no botão **"Decidir a não conformidade"**. No modal **"Decidir NC-…"**, **leia o parágrafo
+   cinza antes de escolher** — é ele que diz o que cada decisão faz com o saldo. Escolha a
+   **Decisão: Devolver ao fornecedor**, escreva a **Justificativa** e clique em **Registrar
+   decisão**.
+   → **O aviso:** *"Não conformidade NC-… decidida! Esta decisão não altera o saldo"*.
+   → A coluna **Execução** da linha passa a **Pendente**.
+8. **Volte a Materiais e confira que NADA mudou:** ainda **10 no físico** e **3 bloqueados**. **Este
+   é o ponto da etapa** — a decisão registrou a intenção, e o material continua no galpão.
+
+#### Trecho B — o Compras executa, e é aí que o saldo desce (saia e entre como **Compras**)
+
+9. **Almoxarifado → Não Conformidades.** No **terceiro filtro** (o de execução), troque *"Qualquer
+   execução"* por **"Pendentes de execução"**.
+   → A lista traz só o que espera despacho — e repare que o **filtro de status saltou sozinho para
+   "Decididas"**. É de propósito: execução só existe em documento decidido. Para ver o avesso,
+   escolha **"Abertas"** no filtro de status e o filtro de execução volta a **"Qualquer execução"**.
+   Deixe a fila em **"Pendentes de execução"** para o passo seguinte.
+10. Na linha do `NC-…`, clique no botão de **caminhão** — **"Registrar execução do encaminhamento"**.
+    No modal **"Registrar execução de NC-…"** o texto cinza diz que é **este** registro que dá a
+    baixa. No campo **Observações** (placeholder *"Opcional — nº da nota de devolução,
+    transportadora, quem recebeu do outro lado."*) escreva *"NF de devolução 123, transportadora
+    X"*. Clique em **Registrar execução**.
+    → **O aviso que prova a etapa:** *"Execução de NC-… registrada!"* — **sem** frase de efeito
+    depois dela, porque o saldo se moveu de verdade.
+    → A coluna **Execução** passa a **Executada**, com **o seu nome e a hora**. E a tela **larga a
+    fila sozinha** (volta a *"Qualquer execução"*), para você ver o registro que acabou de fazer —
+    com o filtro *Pendentes* ligado, a linha teria sumido junto com o aviso.
+11. **A verificação de saldo "depois". Almoxarifado → Materiais:** **7 no físico**, **7
+    disponíveis**, **0 bloqueado**. Os 3 saíram do galpão e saíram da conta.
+12. **O livro. Almoxarifado → Movimentações.** A linha nova é a da devolução: a coluna **Motivo /
+    Referência** traz *"Devolução ao fornecedor"* e a coluna **Vínculo** traz o **número da NC**.
+    Na coluna **Tipo** ela aparece como **Devolução ao fornecedor**, com a cor de saída (vermelho), e
+    o filtro *"Todos os tipos"* **oferece** essa opção — use-a para achar todas as devoluções do mês.
+    ⚠️ **Isto foi consertado no fechamento da etapa, e vale saber:** o tipo nasceu **fora** da lista
+    de rótulos do livro, então até o conserto a coluna Tipo mostrava o código cru
+    `DEVOLUCAO_FORNECEDOR` e o filtro não tinha a opção — a devolução era **não-localizável** no
+    livro. Se você estiver numa versão anterior a 2026-09-29, é isso que vai ver, e o jeito de achar
+    a linha é filtrar por data.
+13. **A devolução não tem botão de estornar — e isso é a proteção.** Na linha da devolução, a coluna
+    de ações **não oferece** o estorno (compare com a linha de uma **Saída** comum, que oferece).
+    **Por quê:** o estorno devolveria o material ao bloqueio e deixaria o documento dizendo
+    "executada", com o material fisicamente no fornecedor — e **sem saída**, porque o documento não
+    pode ser decidido de novo. O servidor recusa de todo jeito, com
+    *"Devolução ao fornecedor não pode ser estornada pelo livro — o material voltaria bloqueado com o
+    documento dizendo que foi devolvido"*; a tela apenas não oferece o clique que erra sempre.
+    ⚠️ **Também consertado no fechamento da etapa:** até 2026-09-29 o botão **aparecia** e entregava
+    essa recusa. Se você estiver numa versão anterior, é isso que vai ver — e a recusa é a mesma.
+14. **A trilha. Almoxarifado → Auditoria.** No filtro de ações (*"Todas as ações"*), escolha
+    **"Não conformidade executada"** → a linha do passo 10, com **quem** e **quando**. Troque para
+    **"Não conformidade decidida"** → a linha do passo 7, com **outro autor e outra data**. São
+    **dois atos, dois donos, duas datas** — era exatamente o que não existia antes.
+15. **O cartão para de cobrar. Almoxarifado → Alertas**, cartão **"Material reprovado"**: a inspeção
+    do passo 5 **desapareceu** dele. Enquanto a execução não é registrada, ela continua listada.
+
+#### Trecho C — os desfechos que não movem saldo (e continuam sendo registrados)
+
+16. **Documento não decidido não tem botão.** Repita os passos 1 a 6 com outro material e **não
+    decida**. A linha fica com **Execução —** e **sem** o botão de caminhão: a tela só o mostra onde
+    ele pode dar certo. A recusa existe no servidor, para quem tentar por fora:
+    *"Só é possível registrar a execução de uma não conformidade decidida"* (400).
+17. **Aceitação não tem execução — ela já se executou.** Repita 1 a 7 com outro material, decidindo
+    **Aceitar sob desvio**.
+    → A coluna **Execução** nasce em **"Não se aplica"**, e **não há botão**. Aceitar libera o
+    material no mesmo clique (é a Etapa 44); não há um segundo gesto esperando no mundo físico. Pela
+    porta de programação a resposta é *"Esta decisão não tem execução a registrar"* (400).
+18. **As outras três decisões registram o ato e não mexem no saldo.** Repita 1 a 7 com outro
+    material, decidindo **Sucatear** (vale igual para **Substituição** e **Análise da Engenharia**).
+    → **Execução: Pendente**, com botão. Abra o modal e **repare que o texto cinza mudou**: *"Esta
+    decisão não movimenta estoque: o registro guarda a data, o autor e a observação de que o
+    encaminhamento foi cumprido."* Confirme.
+    → *"Execução de NC-… registrada! Esta execução não altera o saldo"*, e os **3 continuam
+    bloqueados**. Está certo: alguém precisava poder dizer *"cumprido, nesta data"*.
+19. **Falta de quantidade no recebimento não devolve nada** — e este é o caso **mais comum**. Em
+    **Não Conformidades**, ponha o filtro de origem em **Recebimento**, pegue um documento que
+    nasceu de conferência (chegou menos do que a nota dizia), decida **Devolver ao fornecedor** e
+    registre a execução.
+    → *"Execução de NC-… registrada! Só a não conformidade aberta pela reprovação da inspeção
+    devolve material"*. Não chegou: não há o que mandar de volta.
+20. **Quando alguém já soltou o material à mão.** Repita 1 a 7 com outro material, decidindo
+    **Devolver ao fornecedor**. Antes de executar, entre como **Administrador**, vá em
+    **Almoxarifado → Inspeções** e use o botão **"Desbloquear Material"** para soltar os 3 (ele
+    exige permissão de ajuste de estoque — Administrador ou Gestor). Volte como **Compras** e
+    registre a execução.
+    → *"Execução de NC-… registrada! O material já havia saído do bloqueio — a execução foi
+    registrada sem mover saldo"*. **O registro FICA gravado**, e é deliberado: recusar deixaria o
+    documento cobrando na fila para sempre, e a única saída seria mentir em outra decisão — o mesmo
+    beco que a Etapa 44 fechou.
+21. **Registrar duas vezes é recusado.** Com a fila **"Pendentes de execução"** aberta em **duas
+    abas** do navegador, registre a execução do mesmo documento nas duas (ou dê **dois cliques
+    rápidos** no botão do modal).
+    → A segunda responde *"A execução desta não conformidade já foi registrada"* (409), e o saldo
+    **não se move de novo**.
+22. **Sem permissão.** Entre com um usuário de perfil **Almoxarife** e abra **Não Conformidades**.
+    → O botão de **caminhão nem aparece** nas linhas pendentes — é a única ação desta tela cuja
+    plateia (Compras) é diferente de quem decide, e mostrá-lo seria convite permanente a um 403. Se
+    a leitura de permissões da tela falhar, o botão **aparece por precaução** (ela falha aberta de
+    propósito) — e aí o modal traz o aviso âmbar e o clique volta do servidor com: *"Sem permissão
+    para registrar a execução do encaminhamento — seu perfil é Almoxarife. Solicite acesso a um
+    administrador."* — **antes** de qualquer efeito no saldo.
+
+### ⚠️ Antes de apresentar: o furo C64 — NÃO demonstre série nem lote ao vivo
+
+Material com **número de série** é recusado na execução, de propósito: *"Material com controle de
+série não pode ser devolvido por aqui — dê baixa pela tela de Movimentações"*. Devolver material
+serializado é escolher **quais peças** voltam, e essa escolha não existe nesta tela. O mesmo vale
+quando o lote do material devolvido não pode ser identificado: *"Não foi possível identificar o lote
+do material devolvido"*.
+
+**O problema é o que sobra depois da recusa.** O documento **continua preso na fila *"Pendentes de
+execução"*** e **não há gesto de tela que o destrave**: a execução não se registra (a recusa volta
+sempre), o documento não se decide de novo, e a fila do Compras fica com um item que ninguém
+consegue baixar. É o furo **C64**, declarado no documento de novidades, e é o assunto da próxima
+etapa.
+
+**Na prática:** escolha um material **sem** controle de série e **sem** controle de lote para a
+demonstração (passo 1 do roteiro). Se alguém perguntar sobre série, responda pela mensagem — ela é
+correta e é a decisão certa —, mas **não clique**.
+
+> ⚠️ **O C64 FOI PAGO NA ETAPA 46 (2026-09-30)** — o texto acima fica **como está** porque descreve
+> corretamente o que a Etapa 45 entregou; o que mudou é que **o beco já tem saída**. A recusa da
+> execução continua a mesma (*"Material com controle de série não pode ser devolvido por aqui — dê
+> baixa pela tela de Movimentações"*), mas o documento **não fica mais preso**: a **Qualidade** (ou
+> um **Administrador**) usa o botão **✕ "Cancelar a não conformidade"**, informa um **motivo de no
+> mínimo 5 caracteres** e o documento fecha **preservando a decisão** — *"Documento cancelado — a
+> decisão fica registrada, e a execução deixa de ser cobrada"*. A linha passa a mostrar **"Deixou de
+> ser cobrada"** na coluna Execução e sai da fila *"Pendentes de execução"*. E, enquanto ninguém
+> resolve, o documento **cobra**: nasceu o cartão **"Execução pendente"** na central de Alertas. O
+> **Compras continua sem** o cancelar, de propósito. **Já é seguro demonstrar série ao vivo** — o
+> roteiro completo está na seção da **Etapa 46**, acima. Duas ressalvas: cancelar **não desbloqueia**
+> o material (os quilos reprovados continuam bloqueados) e **não existe** devolução de peça
+> serializada por esta tela.
+
+### Passos que NÃO são reproduzíveis por tela
+
+Estas proteções existem no código, têm teste e **não se demonstram ao vivo** — não porque falhem,
+mas porque hoje **não há botão** que chegue até elas:
+
+- **Documento aberto à mão sobre uma inspeção não devolve material.** A resposta é *"Execução de
+  NC-… registrada! Só a não conformidade aberta pela reprovação da inspeção devolve material"* — a
+  mesma do passo 19. Só que abrir documento à mão **não tem botão em tela nenhuma** (é herança da
+  Etapa 43): existe apenas pela integração. **É esta linha que sustenta a permissão do Compras** —
+  ele *pode* abrir documento e *não pode* decidir; se documento manual devolvesse material, abrir +
+  executar somaria uma porta para apagar estoque sem passar por ajuste de estoque nem pela
+  Qualidade.
+- **Duas devoluções da mesma inspeção: a segunda não baixa de novo** — *"O material desta inspeção
+  já havia sido devolvido"*. A trava mora na **inspeção**, não no documento, porque a mesma inspeção
+  pode em teoria carregar mais de um documento. Para vê-la pela tela seriam necessários **dois
+  documentos** sobre a mesma inspeção — e o segundo só nasce à mão, que é o item de cima.
+- **As demais mensagens da família "registrada sem mover saldo"** — *"Não há saldo físico deste
+  material — a execução foi registrada sem mover saldo"*, *"Material inativo — a execução foi
+  registrada sem mover saldo"*, *"O material desta inspeção já havia sido liberado por outra não
+  conformidade — a execução foi registrada sem mover saldo"* e *"Esta não conformidade não tem
+  material reprovado para devolver"*. Todas **gravam** o registro; chegar a cada uma exige armar um
+  estado que a operação normal não produz.
+
+E uma quarta, esta por desenho: **a devolução ao fornecedor não entra pelo formulário genérico de
+Movimentações** — o tipo é **dedicado** a este fluxo, como já são a devolução ao cliente e o retorno
+de transformação. O formulário de *Nova Movimentação* **nem oferece** a opção; o caminho é o
+documento.
+
+### O que esta etapa não cobre
+
+- **Não emite documento fiscal de devolução.** Nota, CFOP e impostos ficam fora — o registro é de
+  **estoque e rastreabilidade**. O número da nota cabe no campo de observações da execução.
+- **Não manda e-mail ao fornecedor.** Nenhum aviso externo sai do sistema.
+- **Não pede material de reposição.** Devolver não abre solicitação de compra, e *Substituição*
+  continua sendo uma **decisão** que alguém cumpre fora do sistema.
+- **Não reabre o pedido de compra.** O pedido fechado pelo recebimento **continua Recebido** depois
+  da devolução; a quantidade recebida não é reduzida. Corte declarado e fixado por teste.
+- **Não desfaz.** Registrada, a execução não tem botão de estorno (passo 13), e o documento não pode
+  ser decidido de novo.
+- **Não mexe em contas a pagar.** Nenhum valor é estornado.
+- **Não devolve material com número de série** — ver o aviso do **C64**, acima.
+- **Não retroage.** Documentos decididos *Devolver* **antes** desta atualização aparecem na fila
+  **"Pendentes de execução"** — que é o comportamento desejado —, mas nada devolve material
+  automaticamente por eles.
+- **A coluna Execução não diz quanto saiu.** O número aparece no aviso do momento; depois, o vínculo
+  está no livro de movimentações, pelo número da NC.
+
+---
+
+## Etapa 44 — A Qualidade executa a própria decisão (ENTREGUE — 2026-09-28)
+
+**O que mudou, em uma frase:** aceitar uma não conformidade de inspeção **libera sozinha** o
+material que a reprovação havia bloqueado — antes, o documento fechava e os quilos continuavam
+presos até alguém da gestão desbloquear à mão, noutra tela.
+
+**O problema que ela resolve.** A Qualidade analisava o lote reprovado, concluía *"está fora da
+especificação, mas nesta aplicação serve"*, assinava com justificativa — e nada acontecia com o
+saldo. Quem podia desbloquear era o Administrador ou o Gestor, pela tela de Movimentações, sem
+nenhum vínculo com a decisão recém-tomada. **O documento dizia uma coisa e o saldo dizia outra**, e
+esse era o furo **C57**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| *Aceitar sob desvio* fechava o documento e **o material continuava bloqueado** | A decisão libera a quantidade que aquela inspeção reprovou, no mesmo clique |
+| Era preciso **pedir a outra pessoa** que desbloqueasse pela tela de Movimentações | Quem decide o documento executa o efeito dele — sem permissão nova |
+| O livro registrava *"Desbloqueio avulso"*, sem dizer por ordem de quê | A movimentação carrega o **número da NC** e o motivo *"Liberação por não conformidade"* |
+| Decidir *Aceitar sob desvio* e decidir *Devolver* davam o mesmo retorno na tela | A tela diz o que aconteceu com o saldo — **inclusive quando nada muda** |
+
+### Roteiro de teste manual
+
+**O que você precisa antes de começar:** um usuário com perfil **Qualidade** (ou Administrador) e
+a retenção de material crítico ativa — e ela **nasce ativa**, não há nada para ligar.
+
+> ⚠️ **CORREÇÃO (fechamento da Etapa 45, 2026-09-29).** Este pré-requisito dizia *"a configuração
+> 'Inspeção de material crítico' ligada em Almoxarifado → Configurações"*. **Não existe esse
+> controle em tela nenhuma.** A chave existe no banco, nasce com o valor **ligado** e só é lida pelo
+> servidor no processamento do recebimento — nenhuma tela a exibe ou edita. Quem seguisse a
+> instrução procuraria um interruptor que não existe e concluiria que o roteiro está errado. **O que
+> você precisa de verdade é só marcar o material como crítico** no cadastro. A mesma frase aparecia
+> em outros dois roteiros deste guia e foi corrigida nos três.
+
+1. **Entre** no sistema e vá em **Almoxarifado → Materiais**. Crie um material novo (ou edite um
+   existente) e marque **Material crítico**. Anote o código.
+2. **Almoxarifado → Recebimentos → Novo recebimento.** Escolha o fornecedor, preencha a nota
+   fiscal e adicione **10** unidades do material do passo 1. Salve.
+3. Na lista de recebimentos, abra o que você criou e **processe/aprove** a entrada.
+   → Vá em **Materiais** e confira: o material tem **10 em inspeção** e **0 disponível**. É a
+   quarentena — material crítico entra retido.
+4. **Almoxarifado → Inspeções.** O item aparece na fila de pendentes. Clique em **Decidir**.
+5. No modal, preencha **Quantidade aprovada: 7** e **Quantidade reprovada: 3**, marque **Dano
+   físico**, escolha o encaminhamento **Análise da Engenharia** e escreva uma observação. Confirme.
+   → Volte a **Materiais**: o material agora tem **7 disponíveis e 3 bloqueados**.
+6. **Almoxarifado → Não Conformidades.** O documento `NC-…` já está lá, com status **Aberta** —
+   ninguém o criou, ele nasceu da reprovação. Anote o número.
+7. Clique no ícone de **decidir** da linha. Escolha **Aceitar sob desvio**, escreva a justificativa
+   (*"desvio autorizado pela engenharia, laudo em anexo"*) e confirme.
+   → **O aviso que prova a etapa:** *"Não conformidade NC-… decidida! 3 liberado(s) do bloqueio"*.
+8. **Volte a Materiais.** O material agora tem **10 disponíveis e 0 bloqueados**. A quantidade
+   total **não mudou** — liberar não cria material, só tira a retenção.
+9. **Almoxarifado → Movimentações.** A última linha é um **Desbloqueio** de 3, com o motivo
+   *"Liberação por não conformidade"* e o **número da NC** no documento vinculado. Antes desta
+   etapa, ali só se lia "Desbloqueio avulso".
+10. **Agora o outro lado.** Repita os passos 1 a 6 com outro material, e desta vez decida
+    **Devolver ao fornecedor**.
+    → *"Não conformidade NC-… decidida! Esta decisão não altera o saldo"*, e o material continua
+    com **3 bloqueados**. Está certo: o material ainda não voltou a lugar nenhum.
+11. **Quando alguém já desbloqueou à mão.** Repita até o passo 6 com um terceiro material. Antes
+    de decidir, vá em **Movimentações** e faça um **Desbloqueio** manual de 2 (deixando 1
+    bloqueado). Volte a Não Conformidades e decida **Aceitar**.
+    → *"Não conformidade NC-… decidida! O material já havia sido desbloqueado fora do documento —
+    a decisão foi registrada sem liberar saldo"*. **O documento FECHA**, e o saldo não muda.
+    **Por que o documento fecha em vez de recusar:** desbloquear à mão era o procedimento normal
+    antes desta etapa. Se a decisão fosse recusada, quem o tivesse feito ficaria com um documento
+    que **nunca mais fecha**, cobrando todo dia no alerta — e a única saída seria registrar uma
+    decisão falsa só para calá-lo.
+12. **Estornar a liberação é recusado.** Em **Movimentações**, ache o *Desbloqueio* que a decisão
+    do passo 7 gerou e tente estorná-lo.
+    → *"Liberação por não conformidade não pode ser estornada pelo livro — o documento continuaria
+    dizendo 'aceito' com o material bloqueado"*. Um *Desbloqueio* **avulso** continua estornável
+    normalmente.
+13. **Sem permissão.** Entre com um usuário de perfil **Almoxarife** e tente decidir qualquer não
+    conformidade.
+    → *"Sem permissão para decidir não conformidade — seu perfil é Almoxarife. Solicite acesso a
+    um administrador."*, **antes** de qualquer efeito no saldo.
+
+### ⚠️ Um passo a mais quando o material tem controle por lote
+
+Se o material tiver **controle por lote** e alguém tiver posto o lote em **Reprovado** (tela de
+Lotes), liberar a não conformidade **não reabilita o lote**. A tela dirá *"3 liberado(s) do
+bloqueio"*, o saldo disponível subirá — **e a saída continuará sendo recusada**, com *"Lote LOTE-123
+esta reprovado e nao pode ser utilizado"*.
+
+São **dois portões**, e esta etapa abre um. Para o material sair, é preciso um segundo gesto:
+voltar o lote para **Ativo** na tela de Lotes, com justificativa. Isso está fixado por teste de
+propósito — lote reprovado tem de continuar barrado até alguém decidir o contrário.
+
+### O que esta etapa NÃO cobre
+
+- **Os botões avulsos de Bloquear/Desbloquear material continuam fora do perfil Qualidade.** Eles
+  exigem permissão de ajuste de estoque (Administrador e Gestor). Foi decisão declarada, não
+  esquecimento — o que a etapa deu à Qualidade foi executar **o documento que ela assinou**, não
+  mexer em saldo livremente.
+- **Devolver, Substituição e Sucatear não executam nada** — só registram a intenção.
+- **Reprovações anteriores a esta atualização não liberam.** Elas continuam no caminho manual, pela
+  tela de Movimentações. É proteção deliberada: se liberassem, bastaria apontar um documento novo
+  para uma inspeção antiga qualquer para soltar material bloqueado por outro motivo.
+- **Documento aberto à mão sobre uma inspeção não libera saldo** — mesma proteção, e a tela diz
+  *"Não conformidade aberta manualmente não libera saldo"*. (Hoje **não há botão** de abrir
+  documento à mão em tela nenhuma; a proteção existe para a integração e para o futuro.)
+- **A tela não mostra, na linha, quanto aquele documento liberou.** O aviso aparece no momento da
+  decisão; depois, o vínculo está no livro de movimentações, pelo número da NC.
+
+---
+
+## Etapa 43 — A divergência vira documento numerado (ENTREGUE — 2026-09-28)
+
+**O que mudou, em uma frase:** quando chega material a menos (ou a mais) do que a nota diz, e quando
+a inspeção reprova um lote, o sistema **abre sozinho um documento numerado** — `NC-…` — que guarda o
+fato do jeito que foi observado e, depois, **a decisão**: aceitar, aceitar sob desvio, devolver ao
+fornecedor, mandar para a Engenharia, substituir ou sucatear — com quem decidiu, quando e por quê.
+
+**Por que faltava.** O sistema já **detectava** a divergência e a reprovação: mostrava na central de
+alertas e mandava e-mail. Mas o aviso **envelhece e sai da janela de dias**, e a decisão não ficava
+escrita em lugar nenhum. Três meses depois ninguém conseguia responder *"quem decidiu aceitar aquela
+falta de 3 kg, e por quê?"*.
+
+**Um documento só para os dois lados.** A divergência que o almoxarifado vê na conferência e a não
+conformidade que a qualidade vê na inspeção são o mesmo fato visto de ângulos diferentes — então são
+o mesmo documento, com um campo dizendo a **origem** (*Recebimento* ou *Inspeção*). Dois documentos
+dariam dois números para o mesmo problema.
+
+**E uma caixa parou de aceitar opinião.** No formulário de inspeção, *"Divergência de quantidade"*
+era uma caixa que o inspetor marcava — enquanto o sistema tinha os números para calcular. Agora ela é
+**somente leitura**, preenchida pela conta. É o mesmo tratamento que a divergência **dimensional**
+recebeu quando passou a sair da medição.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Divergência aparecia no alerta e sumia com o tempo | Vira **documento numerado** que fica, com estado *Aberta* / *Decidida* / *Cancelada* |
+| A decisão não era gravada em lugar nenhum | **Decisão, autor, data e justificativa** no documento, com trilha |
+| Reprovar na inspeção só bloqueava o material | A reprovação **abre o documento sozinha**, com o tipo da causa |
+| "Divergência de quantidade" era caixa marcada à mão | Caixa **travada**, preenchida pela conta do sistema |
+| Nada cobrava decisão | Alerta **"Não conformidade aberta"** para documento parado mais de 7 dias |
+| Corrigir digitação deixava o aviso velho de pé | Documento **cancelado sozinho**, com o motivo escrito |
+| **Almoxarifado → Alertas**: 13 cartões | **14**: o novo é **"Não conformidade aberta"**, com as colunas **NC · Material · Tipo · Origem · Dias parada · Recebimento** |
+| — | Menu **Almoxarifado → Não Conformidades**, com filtro de **status**, filtro de **origem**, decisão e anexos |
+
+### Roteiro de teste manual (do login à verificação)
+
+> Entre como **Administrador** para os passos 1 a 10; os passos 11 e 12 pedem outros perfis.
+
+1. **Login** e vá em **Almoxarifado → Recebimentos**.
+2. Clique em **"Novo Recebimento"**, escolha um material e ponha **quantidade esperada 10**. Salve.
+   O painel de detalhe **abre sozinho** e o recebimento fica em **"Recebido — Almoxarifado"**.
+   ⚠️ **Não avance o fluxo aqui** — é neste estado que existe o campo de quantidade.
+3. No painel de detalhe, embaixo do nome do material, há o campo **"Qtd. conferida"**. Digite **7** e
+   clique em **"Salvar Conferência"** (o botão de cima da coluna de ações): aparece
+   **"Conferência salva"**.
+
+   > **Onde esse campo vive, e por que só ali.** Ele aparece **nos dois estados em que o material
+   > ainda está com o almoxarifado** — *"Recebido — Almoxarifado"* e *"Em Conferência"* — e **some**
+   > assim que o recebimento passa para *"Conferido — Almoxarifado"*: dali em diante a quantidade já
+   > virou base de custo médio e de conta a pagar, e corrigi-la pela tela seria mexer no passado sem
+   > trilha. **O modal "Preencher Dados da NF (Faturamento)" NÃO tem campo de quantidade** — ele só
+   > pede o cabeçalho da nota (número, série, datas, CFOP, chave, CNPJ, pedido) e os totais fiscais.
+   > Ele **reenvia** ao servidor a quantidade que já estava gravada, e por isso também abre/atualiza
+   > a não conformidade; mas quem **digita** o número é o painel de conferência, aqui.
+
+4. Vá em **Almoxarifado → Não Conformidades** (item novo no menu). O filtro nasce em **"Abertas"**, e
+   **deve haver uma linha nova**: número `NC-…`, estado **Aberta**, origem **Recebimento**, tipo
+   **Quantidade**, *Esperada 10*, *Recebida 7*, *Divergência −3*.
+5. Volte a **Recebimentos**, clique na linha do recebimento para reabrir o painel, mude a
+   **"Qtd. conferida"** para **6** e clique de novo em **"Salvar Conferência"**. Volte à tela de Não
+   Conformidades: **continua UMA linha**, agora com *Recebida 6* e *Divergência −4*. (Conferir de
+   novo **não** cria documento repetido.)
+6. Mude a quantidade de volta para **10** e salve. Na tela de Não Conformidades, troque o filtro de
+   status para **Canceladas**: a linha está lá e a coluna *Decisão* mostra **"Cancelada em ⟨data⟩"**.
+   **O motivo NÃO fica na linha** — clique no **chevron** da linha (botão *"Detalhes e anexos"*) e,
+   no painel que se abre, aparece **"Motivo do cancelamento: Divergência corrigida na reconferência:
+   recebida 10 de 10 esperada"**.
+7. Volte ao recebimento e registre **7** de novo (mesmo gesto do passo 3). Em Não Conformidades,
+   ponha o filtro de status de volta em **Abertas**: há uma NC aberta com número **novo**. O
+   documento cancelado **não reabre** — depois de uma correção, errar de novo é problema **novo**.
+8. Na linha *Aberta*, clique no botão de **decidir** (o ícone de check). **Confirme com tudo em
+   branco**: aparece **"Escolha a decisão"** — a decisão é conferida **antes** da justificativa.
+   Agora escolha **Aceitar sob desvio**, **deixe a justificativa vazia** e confirme de novo: aparece
+   **"Justificativa é obrigatória para decidir a não conformidade"**. Nas duas tentativas **nada é
+   salvo** e o formulário continua aberto para corrigir.
+9. Escreva a justificativa e confirme: aparece **"Não conformidade NC-… decidida!"**, a linha vira
+   **Decidida** e mostra seu nome e a data.
+
+   > **Repare no filtro de status:** ele volta sozinho para **"Todos os status"**, e a linha que você
+   > acabou de decidir **continua na tela**. É de propósito: com o filtro preso em *Abertas*, a NC
+   > recém-decidida deixaria de casar o filtro e **sumiria junto com o toast** — quem decide quer ver
+   > a decisão gravada, com o próprio nome. O filtro de **origem**, se você tiver escolhido um,
+   > **continua onde estava** (ele não esconde o que você acabou de fazer).
+
+10. Clique no **chevron** (*"Detalhes e anexos"*) da linha decidida: aparecem a **justificativa da
+    decisão** e o bloco de **anexos** — anexe um PDF qualquer (o laudo, na vida real) e confira que
+    ele baixa.
+11. **Troque para um usuário de perfil Compras.** Abra Não Conformidades — **a tela abre e a lista
+    aparece** — e tente decidir: o sistema recusa com **"Sem permissão para decidir não conformidade
+    — seu perfil é Compras. Solicite acesso a um administrador."**
+12. **Troque para um usuário de perfil Qualidade** e decida: **funciona**.
+
+    > **Quem pode o quê, sem ambiguidade:** **ver** a tela e os documentos é de **qualquer usuário
+    > com acesso ao módulo** — inclusive **Produção** e **Consulta**, porque as duas rotas de leitura
+    > exigem só login e acesso ao módulo, sem perfil. **Abrir** um documento (hoje só pela API, sem
+    > botão) é de Administrador, Almoxarife, Qualidade e Compras. **Decidir** é só de Administrador e
+    > Qualidade.
+13. **O lado da inspeção.** Volte como Administrador, vá em **Almoxarifado → Inspeções**, escolha um
+    item retido e abra a decisão. Repare que a caixa **"Divergência de quantidade"** está
+    **travada** — marcada ou não conforme a conta, e não conforme a sua vontade.
+14. Reprove parte do item, marcando **Dano físico** e **Certificado ausente**. Salve.
+15. Em **Não Conformidades**, use o **segundo filtro** da barra — o que começa em *"Todas as
+    origens"* — e escolha **Inspeção**: há **uma** linha nova, tipo **Dano físico** (a causa mais
+    específica vence; as duas marcações ficam descritas no documento). Os dois filtros **somam**:
+    com *Abertas* + *Inspeção*, a lista mostra só o que a qualidade abriu e ainda não decidiu.
+16. **O alerta — e por que ele não aparece no mesmo dia.** Um documento aberto só começa a cobrar
+    depois de **7 dias parados**. O número é editável em **Almoxarifado → Configurações →
+    "Alerta de Não Conformidade Parada (dias)"**, mas o menor valor aceito é **1** (pôr 0 é recusado
+    com *"Configuração "alerta_nc_parada_dias" deve ser um número de dias maior que zero"*). Ou
+    seja: **este cartão não é verificável no mesmo minuto em que você cria o documento** — deixe uma
+    NC aberta e confira no dia seguinte com o valor em 1. O cartão chama-se **"Não conformidade
+    aberta"** e traz NC, material, tipo, origem, dias parada e recebimento; o e-mail sai com assunto
+    **"[Almoxarifado] Não conformidade aberta — NC-…"**, uma vez por documento.
+17. **A rede de segurança.** Ainda na tela de Alertas, repare que o item que virou documento **não**
+    aparece mais no cartão *"Divergência de recebimento"*. Isso é de propósito: o mesmo problema em
+    dois cartões ensina qualquer um a ignorar os dois. O cartão antigo passou a significar *"o
+    automático não conseguiu abrir o documento"* — **com uma exceção, e ela é deliberada**: a régua
+    da exclusão é *"tem não conformidade que **não** está cancelada"*. Um item cuja única NC foi
+    **cancelada** (o caso do passo 6: alguém corrigiu, e depois errou de novo) **volta a aparecer**
+    no cartão antigo. É o que se quer — tratar o documento morto como *"já documentado"* esconderia
+    justamente o **erro novo**. Ver item ali significa, então, uma de duas coisas: *o automático
+    falhou* **ou** *a divergência voltou depois de uma correção*.
+    > ⚠️ **METADE DESTE PARÁGRAFO DEIXOU DE VALER NA ETAPA 46** — corrigido aqui em vez de apagado.
+    > Desde 2026-09-30 há **dois** tipos de documento cancelado, e a régua passou a distingui-los:
+    > o cancelamento **automático** da reconferência (a divergência sumiu) continua devolvendo o
+    > item ao cartão antigo, exatamente como descrito acima; o cancelamento feito **por uma pessoa**
+    > passou a valer como **encerramento**, igual a decidir, e o item **não** volta ao cartão. Sem
+    > isso, o cartão cobraria uma divergência que ninguém pode documentar — não há tela de abertura
+    > manual de não conformidade.
+
+### O que esta etapa NÃO cobre
+
+- **A decisão não mexe no estoque.** *Devolver ao fornecedor* não cria a devolução; *Sucatear* não
+  baixa saldo; *Aceitar sob desvio* **não desbloqueia** o material — e o perfil **Qualidade não tem**
+  permissão de ajuste de estoque, então ele precisa pedir o desbloqueio a um Administrador ou Gestor.
+  É o furo **C57** das novidades, e o próximo passo natural desta feature.
+- **Não há botão "abrir não conformidade" nas telas de Recebimento e Inspeções.** O documento nasce
+  só pelos caminhos automáticos. Registrar um certificado ausente **sem** reprovar na inspeção não
+  tem caminho de tela hoje (**B171**).
+- **Não conformidade aberta não trava o processamento da nota** (**B172**).
+- **A divergência de inventário continua sem documento numerado** — e **não** é só um campo a
+  preencher: a origem do documento é um enum de **dois** valores (*Recebimento* e *Inspeção*), e
+  `INVENTARIO` é recusado com **"Origem inválida"**. O que seria preciso mudar está escrito na letra
+  **D** das novidades — que até a revisão desta etapa afirmava o contrário ("o campo de origem já a
+  aceita"), e foi corrigida.
+- **A tela de Recebimento não mostra o número da NC do item.**
+- **Divergências antigas, anteriores a esta etapa, não ganham documento sozinhas** — a consulta
+  **A21** das novidades lista quais são e o que fazer com elas.
+
+## Etapa 42 — O recebimento fecha o pedido (ENTREGUE — 2026-09-27)
+
+**O que mudou, em uma frase:** quando a última remessa chega e o pedido de compra passa a ter tudo o
+que pediu, o sistema grava **Status: Recebido** nele **sozinho** — o selo *Atrasado* cai junto, sem
+ninguém clicar no lápis — e, enquanto o pedido está pela metade, um alerta novo (*"Pedido de compra
+recebido parcialmente"*) diz **quanto falta**.
+
+**Esta etapa mexe nos dois módulos:** o gancho que fecha o pedido roda no **Almoxarifado** (no
+processamento da nota), e o efeito aparece no **Compras** (aba Pedidos de Compra). O alerta é da tela
+de **Alertas do Almoxarifado**.
+
+O problema era o último elo aberto da cadeia que as Etapas 38 a 41 construíram (cotação → pedido →
+recebimento → custo médio). O **Status** do pedido era a única coisa que o tirava da lista de
+atrasados, e **nenhum recebimento o escrevia**: todo pedido que o almoxarifado recebia **depois** da
+data prometida — que é o caminho normal, não a exceção — ficava com o selo *Atrasado* crescendo sem
+teto e morando dentro do filtro *"Atrasados"*, até alguém abrir o pedido e trocar o status à mão. A
+Etapa 39 mediu isso, provou por teste e abriu a **porta manual**, deixando o automático nomeado para
+depois. E do outro lado havia silêncio: um pedido de 10 que recebeu 4 e parou não avisava ninguém.
+
+> **Uma decisão escrita foi revogada, e vale saber:** a Etapa 37 registrou *"a situação do pedido é
+> derivada na leitura, **nunca gravada**"* — e estava **certa até a Etapa 41**. Sem nenhum gesto
+> automático, gravar o status seria inventar uma máquina de estados. O que mudou é que a cadeia
+> fechou e o único elo que faltava era exatamente este. Três suítes de teste que **afirmavam** o
+> comportamento antigo foram reescritas dizendo que estavam certas, em vez de remendadas — uma delas
+> até **pedia a própria reescrita** por escrito, para quando este dia chegasse.
+
+### Onde se percebe cada mudança
+
+| Tela | Antes | Agora |
+|---|---|---|
+| **Compras → Pedidos de Compra**, depois de receber tudo | *Status* continuava **Pendente**/**Aprovado**, com o selo **Atrasado** | *Status* vira **Recebido** sozinho, e o selo de atraso **desaparece** |
+| **Filtro "Atrasados"** da aba Pedidos | Trazia o pedido já recebido para sempre | O pedido fechado **sai** do filtro |
+| **Recebimento parcial** (chegou parte) | — | **Nada muda** no status: o pedido segue em aberto, e é o alerta novo que avisa |
+| **Almoxarifado → Alertas** | 12 cartões | **13**: o novo é **"Pedido de compra recebido parcialmente"**, com as colunas **Pedido · Fornecedor · Pedida · Recebida · Saldo pendente · Previsão** |
+| **E-mail diário de alertas** | — | Um a mais, assunto **`[Compras] Pedido de compra recebido parcialmente — PC-…`**, corpo com pedido, fornecedor, pedida, recebida, **saldo pendente**, previsão (ou *"não informada"*) e status |
+| **Repetição do aviso de parcial** | — | Um aviso **por saldo**: mesmo saldo não repete; chegou mais e ainda falta, avisa de novo com o número novo |
+| **Trilha de auditoria** (Almoxarifado → Auditoria) | — | Linha **"Fechamento automático do pedido"**, entidade **Pedido de compra**, com o nome de **quem processou a nota** |
+| **Pedido Cancelado ou Rejeitado** que recebe nota | — | O material **entra no estoque** (ele está no galpão), e o status **fica como você deixou** |
+| **Pedido já fechado que recebe excedente autorizado** | — | Continua **Recebido**, sem segunda linha de trilha |
+| **Lápis → Status** (a porta manual da Etapa 39) | Era o único jeito de fechar | **Continua existindo**, agora para os casos que o automático não cobre: reabrir um pedido, fechar um que chegou por fora, e mexer em Cancelado/Rejeitado |
+
+### Roteiro de teste manual
+
+**Nada aqui usa SQL.** Você precisa de um usuário com acesso aos módulos **Compras** e
+**Almoxarifado**, um **fornecedor ativo** e **um material** no cadastro.
+
+**O pedido que fecha sozinho**
+
+1. **Compras → Pedidos de Compra → "Novo Pedido"**. Escolha o fornecedor, adicione **um** material com
+   quantidade **10** e valor unitário **5**. Em *Previsão de entrega*, ponha uma data **de ontem** (é
+   o que faz o selo *Atrasado* aparecer). Salve e anote o número `PC-…`.
+2. Na lista, confirme: *Status* **Pendente** e o selo **Atrasado** na linha. Marque o filtro
+   **"Atrasados"** → o pedido está lá. (É o estado de partida: pedido cobrado, nada recebido.)
+3. **Almoxarifado → Recebimento → "Novo Recebimento"**, forma **"Por Pedido de Compra"**, escolha o
+   `PC-…`. A linha do material aparece com **"Saldo pendente: 10"**. Digite **4** e salve.
+4. Percorra o recebimento até o fim: **Conferir** (mantenha 4) → **Encaminhar para compras** →
+   **Finalizar compras** → **Iniciar faturamento** → preencha os **dados da nota** (número, datas,
+   valor) → **Processar nota**.
+5. **Volte a Compras → Pedidos de Compra.** O pedido **continua Pendente** e **continua Atrasado** —
+   é o esperado: chegou só parte. *(Se ele tivesse fechado aqui, seria bug.)*
+6. **Almoxarifado → Alertas.** O cartão **"Pedido de compra recebido parcialmente"** está lá; expanda
+   → a linha mostra o seu `PC-…`, o fornecedor, **Pedida 10**, **Recebida 4**, **Saldo pendente 6** e
+   a previsão. Pedido sem previsão cadastrada aparece com **—** nessa coluna (e o e-mail diz *"não
+   informada"*).
+7. **Receba o resto.** Repita os passos 3 e 4 com quantidade **6** (a tela vai oferecer *"Saldo
+   pendente: 6"*).
+8. **Compras → Pedidos de Compra:** o *Status* agora é **Recebido** e o **selo de atraso sumiu**.
+   Marque **"Atrasados"** → o pedido **não aparece mais**. **Ninguém clicou no lápis.**
+9. **Almoxarifado → Alertas** → o cartão de parcial **não lista mais** esse pedido (se não houver
+   outro parcial, o cartão fica zerado).
+10. **A trilha.** **Almoxarifado → Auditoria**, filtre entidade **"Pedido de compra"** → há **uma**
+    linha **"Fechamento automático do pedido"**, com o **seu nome** (o de quem processou a nota) e a
+    hora. É aqui que se responde *"quem mudou meu pedido?"*.
+
+**As três recusas do automático — o que ele NÃO faz**
+
+11. **Ele não reabre.** No pedido do passo 8 (Recebido), vá em **Almoxarifado → Movimentações**, ache
+    a entrada do último recebimento e clique em **Estornar Movimentação** (o modal exige *Motivo do
+    estorno*; confirme com **Confirmar Estorno**). O saldo do material volta — e o pedido **continua
+    Recebido**. ⚠️ **Isto é limitação declarada, não bug** (letra **B161** das
+    novidades): nesse estado **não sobra sinal nenhum** de que falta material, e a correção é sua,
+    pelo lápis → *Status* → **Pendente**.
+12. **Ele não mexe em Cancelado.** Crie um segundo pedido de **4** do mesmo material. Registre e
+    processe um recebimento de **4** — mas **antes de processar a nota**, vá a Compras e mude o
+    *Status* do pedido para **Cancelado** pelo lápis. Processe a nota → o material **entra no
+    estoque** e o pedido **continua Cancelado**. (No log do servidor fica registrado que ele estava
+    completo e não foi sobrescrito.)
+13. **Ele não desce.** Crie um terceiro pedido de **20**, marque o *Status* como **Recebido** pelo
+    lápis (sem receber nada), e depois registre e processe um recebimento de **5**. O pedido
+    **continua Recebido** — o automático só fecha, nunca reabre.
+
+### O que esta etapa NÃO cobre
+
+- **Não existe status *"parcial"*** no pedido de compra: enquanto faltar material ele segue
+  *Pendente*/*Aprovado*, e quem conta a história é o alerta novo e o *"Saldo pendente"* da tela de
+  recebimento.
+- **O e-mail de parcial pode chegar depois de o pedido fechar.** A varredura monta o aviso uma vez por
+  dia e o envio sai minutos depois; se o pedido for completado nesse intervalo, o e-mail sai de todo
+  jeito (ele era verdade quando foi escrito). O estado de agora está sempre na aba Compras.
+- **A mudança manual de status continua sem trilha de auditoria** — só a automática tem. A assimetria
+  é decisão declarada (**B163**), não esquecimento.
+- **Nada de divergência formal numerada nem de conferência física estruturada** (contagem, pesagem,
+  checklist por tipo de material): continuam sendo as fatias abertas da feature de recebimento.
+- **Nada de comparação de cotações** entre fornecedores — exige um "processo de cotação" com vários
+  fornecedores por material, entidade que não existe e que foi descartada por desenho na Etapa 41.
+
+---
+
+## Etapa 41 — A cotação ganha itens e vira pedido de compra (ENTREGUE — 2026-09-22)
+
+**O que mudou, em uma frase:** a cotação de compra passou a ter **linhas de material** (material do
+catálogo, quantidade, preço) com o **total somado sozinho**, e a aba Cotações ganhou o botão
+**"Gerar pedido"**, que cria o pedido de compra no servidor a partir da cotação e abre a edição
+dele — a mesma cotação não gera dois pedidos, a cotação convertida abre travada, e excluir o
+pedido libera a cotação.
+
+**Esta etapa é do módulo Compras**, como a 38, a 39 e a 40. **Todas as telas deste roteiro são do
+módulo Compras** (menu *Compras*), com uma única ida ao Almoxarifado, opcional, para ver o pedido
+gerado no Recebimento.
+
+O problema era que a cotação da Etapa 40 era só cabeçalho: *"R$ 1.500,00 da Aços Vale"* — o que foi
+cotado (material, quantidade, preço) ficava no PDF do fornecedor, e a cotação do CRM não servia para
+conferir na entrega nem para comparar. Aprovada a cotação, o comprador **redigitava o pedido** em
+*Novo Pedido*: fornecedor, cada material pela busca, quantidade e preço. E havia uma armadilha
+escondida: a lixeira da cotação apagava o registro "cru", e **no dia em que existisse um item
+pendurado**, responderia erro genérico em produção — o mesmo caso que a 38 fechou para o pedido.
+
+### Onde se percebe cada mudança
+
+| Tela | Antes | Agora |
+|---|---|---|
+| **Compras → Cotações → "Nova Cotação"** | Só cabeçalho | Cabeçalho **+ "Itens da cotação"**: busca (*"Buscar material"*), **+** por material (*"Adicionar à cotação"*), tabela **Código · Descrição · Unidade · Quantidade · Valor unitário · Subtotal · Ações**, **"Total: R$ …"** |
+| **Campo "Valor total"** | Sempre digitado | Com linha: **cinza, travado, com a soma** (duas casas). Sem linha: digitável, como antes |
+| **Lápis da aba Cotações** | Abria o cabeçalho | Abre cabeçalho **e linhas**; salvar substitui as linhas pelo que está na tela |
+| **Coluna "Pedido"** (entre Status e Ações) | Não existia | `-` sem pedido; **`PC-…` clicável** depois de gerar |
+| **Botão "Gerar pedido"** (carrinho na linha) | Não existia | Só na cotação **sem pedido** com status *Em Análise* ou *Aprovado*. Clique → *"Pedido PC-… gerado da cotação ⟨número⟩"* → **"Editar pedido de compra"** com fornecedor, linhas e preços; a cotação vira **Aprovado** e o carrinho **some** |
+| **Segundo "Gerar pedido"** | — | Recusado: *"Cotação ⟨número⟩ já gerou o pedido PC-…"* — inclusive sob duplo clique (o botão fica desabilitado enquanto o primeiro está em voo) |
+| **Lápis de cotação convertida** | — | Tela **travada**: faixa âmbar *"Esta cotação já gerou o pedido PC-… — não pode mais ser editada"* (o `PC-…` é link), sem botão Salvar |
+| **"Gerar pedido" sem itens / fornecedor inativo** | — | *"cotação sem itens não pode gerar pedido"* / *"Fornecedor inativo — reative-o em Compras → Fornecedores antes de gerar o pedido"* (aviso vermelho, sem sair da lista) |
+| **Lixeira de cotação com itens** | Erro genérico em produção | *"Item excluído com sucesso"* — os itens vão junto |
+| **Lixeira de cotação convertida** | — | *"Cotação ⟨número⟩ já gerou o pedido PC-… — não pode ser excluída"* |
+| **Lixeira do pedido gerado** | — | Apaga o pedido **e libera a cotação**: `-` e carrinho de volta |
+| **"Exportar Excel" da aba Cotações** | 6 colunas | As mesmas 6 **+ "Pedido"** no fim |
+
+### Roteiro de teste manual
+
+**Nada aqui usa SQL.** Você precisa de um usuário com acesso ao **módulo Compras**; para o passo 12,
+também ao **Almoxarifado**. Precisa existir pelo menos **um fornecedor ativo** (crie pela Etapa 40
+se não houver) e **dois materiais** no cadastro do almoxarifado.
+
+**A cotação com itens**
+
+1. Entre em **Compras → Cotações** → **"Nova Cotação"**. Preencha *Número* = **COT-TESTE-41**,
+   escolha o fornecedor, e digite **999** em *Valor total* (é para provar que ele será ignorado).
+2. Desça até **"Itens da cotação"**. Digite parte do código ou da descrição de um material e clique
+   em **"Buscar material"** (ou **Enter** no campo — a busca é ato seu, não da digitação) → a lista de
+   materiais aparece com um **+** por linha. Clique no **+** → a linha entra na tabela com
+   **quantidade 1** e **valor unitário vazio**, e aparece o aviso âmbar *"Item sem preço entra na
+   cotação com valor unitário 0."*.
+3. Troque a quantidade para **2** e o valor unitário para **10** → o aviso some, *Subtotal* mostra
+   **R$ 20,00**, **"Total: R$ 20,00"**, e o campo *Valor total* lá em cima ficou **cinza, travado, com
+   20** — o 999 sumiu. Busque um segundo material, **+**, quantidade **1**, valor **5** → Total
+   **R$ 25,00** e o campo mostra **25**.
+4. **A recusa do servidor chega à faixa.** Apague a quantidade da segunda linha (deixe vazia) e clique
+   em **Salvar cotação** → faixa vermelha **"Dados inválidos — itens.1.quantidade: quantidade do item
+   da cotação deve ser um número maior que zero"** (o `1` é a posição da linha: a primeira seria
+   `itens.0`). Volte a quantidade para **1**.
+5. **Salvar cotação** → *"Cotação salva"*. Na lista: **R$ 25,00**, status *em_analise*, coluna
+   **Pedido** = `-`, e na linha o ícone de **carrinho** (*"Gerar pedido"*) ao lado do lápis e da
+   lixeira.
+6. **O lápis traz as linhas.** Lápis da COT-TESTE-41 → as duas linhas estão lá, sem nenhuma busca;
+   *Valor total* travado com 25. Remova a segunda linha (lixeira da linha) → Total **R$ 20,00**.
+   Remova a primeira também → o campo *Valor total* volta a ser **digitável, com o 999** que você
+   tinha digitado no passo 1 (o digitado não se perde enquanto há linhas — ele só não vale). Clique
+   em **"Voltar para cotações"** sem salvar.
+
+**Gerar o pedido**
+
+7. Na linha da COT-TESTE-41, clique no **carrinho** → aviso verde **"Pedido PC-… gerado da cotação
+   COT-TESTE-41"** e a tela **"Editar pedido de compra"** abre: fornecedor da cotação, as **duas
+   linhas** com código, descrição, unidade, quantidade e valor unitário, **Total: R$ 25,00**, *Data do
+   pedido* = **hoje**, *Previsão de entrega* **vazia**, *Status* **Pendente**. Anote o número `PC-…`.
+   Preencha uma previsão e **Salvar** (ou só volte — o pedido já existe de qualquer jeito).
+8. **Compras → Cotações** → a linha da COT-TESTE-41 mostra o **`PC-…`** na coluna *Pedido*
+   (clicável: abre a mesma edição do pedido), o status virou **aprovado**, e o **carrinho sumiu** —
+   só lápis e lixeira.
+9. **A cotação convertida abre travada.** Lápis → a faixa âmbar **"Esta cotação já gerou o pedido
+   PC-… — não pode mais ser editada"** com o `PC-…` em link; todos os campos e o bloco de itens
+   desabilitados; **não há** botão *Salvar cotação*. Clique no link → abre o pedido. Volte.
+10. **Excluir a convertida é recusado.** Lixeira da COT-TESTE-41 → *"Tem certeza que deseja excluir
+    este item?"* → OK → aviso vermelho **"Cotação COT-TESTE-41 já gerou o pedido PC-… — não pode ser
+    excluída"**, e a linha continua lá.
+11. **As duas recusas do "Gerar pedido".** **"Nova Cotação"** → *Número* **COT-TESTE-41-B**, mesmo
+    fornecedor, **sem nenhuma linha**, *Valor total* **50** → salvar. Na lista o carrinho **aparece**
+    (a lista não sabe que não há itens); clique → aviso vermelho **"cotação sem itens não pode gerar
+    pedido"**, nada muda. Agora **Compras → Fornecedores → lápis** desse fornecedor → *Status*
+    **Inativo** → salvar. Volte em **Cotações**, carrinho da COT-TESTE-41-B → **"Fornecedor inativo —
+    reative-o em Compras → Fornecedores antes de gerar o pedido"**. Reative o fornecedor.
+12. *(Opcional, Almoxarifado.)* **Almoxarifado → Recebimentos → Novo Recebimento → "Por Pedido de
+    Compra"** → o `PC-…` do passo 7 está na lista, com as duas linhas e **"Saldo pendente"** cheio
+    (2 e 1). É o pedido normal da Etapa 37 — receber contra ele leva o **preço da cotação** para o
+    custo médio. Não precisa concluir o recebimento (se concluir, o pedido deixa de ser excluível e o
+    passo 13 não funciona — é a regra da 38).
+
+**Excluir o pedido libera a cotação**
+
+13. **Compras → Pedidos de Compra** → lixeira do `PC-…` → OK → *"Item excluído com sucesso"*.
+14. **Compras → Cotações** → a COT-TESTE-41 voltou a `-` na coluna *Pedido*, o **carrinho
+    reapareceu**, e o status **continua aprovado** (o rastro fica — é decisão, **G60**). Lápis → a
+    tela abre **livre** de novo, com as duas linhas.
+15. *(Opcional.)* Carrinho de novo → um **`PC-…` diferente** nasce, com as linhas **da cotação** (não
+    com a previsão que você tinha preenchido no pedido anterior — **B159**). Exclua esse pedido também
+    pela aba Pedidos.
+16. **A lixeira leva os itens.** Lixeira da COT-TESTE-41 (agora sem pedido) → *"Item excluído com
+    sucesso"*, a linha some — e os dois itens foram junto (não há como vê-los pela tela: a prova é que
+    nada dá erro, onde antes daria). Apague a COT-TESTE-41-B também.
+17. *(Opcional.)* **"Exportar Excel"** na aba Cotações antes de apagar → a planilha tem, no fim, a
+    coluna **Pedido** com o `PC-…` das cotações convertidas e vazio nas outras.
+
+### O que esperar no dia a dia
+
+- **Com linhas, o total é sempre a soma.** Não há campo de desconto: um desconto do fornecedor entra
+  no preço unitário das linhas. Sem linha nenhuma, o campo é digitado (o "R$ 1.500 o lote").
+- **"Gerar pedido" grava o pedido na hora.** Fechar a tela de edição sem salvar não desfaz nada — o
+  pedido existe, com previsão vazia. Desfazer é a lixeira do pedido.
+- **Gerar é aprovar.** A cotação vira *Aprovado* sozinha ao gerar; *Rejeitado* e *Cancelado* não
+  têm carrinho.
+- **A cotação convertida não se edita.** Para corrigir, exclua o pedido (libera) e edite.
+- **Excluir o pedido libera a cotação, e o status continua Aprovado.** Gerar de novo cria um número
+  novo a partir das linhas da cotação.
+- **Inativo bloqueia só a conversão.** Cotação e pedido feito à mão para fornecedor inativo
+  continuam aceitos (decisão **B127** da 40, aberta).
+- **Duplo clique não cria dois pedidos** — nem em duas abas. Se acontecer de dois cliques chegarem
+  juntos, o segundo mostra *"Cotação … já gerou o pedido PC-…"* e nada sobra.
+- **A lixeira da cotação convertida continua visível** e só recusa depois do clique (**G63**).
+- **Num banco recém-criado**, a coluna do vínculo só entra no segundo boot (**G57**): se as
+  cotações derem erro logo após criar o banco, reinicie. Em produção não se aplica; a consulta
+  **A18** prova.
+
+### O que a Etapa 41 NÃO cobre
+
+- **Comparar cotações** de fornecedores diferentes para o mesmo material (**B141**).
+- **Preço puxado da lista de itens do fornecedor homologado** — aquela lista é texto livre.
+- **Status "Convertida"** — o vínculo é a coluna *Pedido*; a cotação fica *Aprovado* (**B146**).
+- **"Novo pedido" pré-preenchido pela cotação sem gravar** (**B145**).
+- **Item de cotação sem material do catálogo.**
+- **Recebimento olhando a cotação** — continua contra o pedido.
+- **O total do pedido gerado com duas casas** — só a cotação arredonda; o pedido soma cru, invisível
+  na tela (**B158**).
+- **Confirmação no "Gerar pedido"** (**B155**) e **esconder a lixeira da convertida** (**G63**).
+- **Perfis no módulo Compras**: quem abre o módulo faz tudo dentro dele.
+
+---
+
+## Etapa 40 — Fornecedores e Cotações ganham tela (ENTREGUE — 2026-09-21)
+
+**O que mudou, em uma frase:** as abas **Fornecedores** e **Cotações** do módulo Compras ganharam
+formulário de criar e editar — os quatro botões que voltavam para a lista passaram a abrir uma tela
+que grava —, o fornecedor pode ser **inativado**, o botão **"Remover do grupo"** passou a remover, e
+a lixeira de fornecedor passou a dizer **por que** recusa.
+
+**Esta etapa é do módulo Compras**, como a 38 e a 39. **Todas as telas deste roteiro são do módulo
+Compras** (menu *Compras*), com uma única ida ao Almoxarifado para conferir o seletor do Recebimento.
+
+O problema era simples: a tela de Compras tem três abas, e só a de Pedidos tinha formulário. Nas
+outras duas, **"Novo Fornecedor"**, **"Nova Cotação"** e os dois **lápis** apontavam para um endereço
+sem tela do outro lado — o comprador clicava e **voltava para a lista**. Cotação não tinha como ser
+criada; fornecedor, só por um modal escondido em *Fornecedores homologados → grupo*. No caminho,
+duas coisas que ninguém tinha reportado: **"Remover do grupo" dizia sucesso e não removia**, e o
+status **Inativo**, que o filtro da aba oferecia, **não podia ser gravado por nenhuma tela**.
+
+### Onde se percebe cada mudança
+
+| Tela | Antes | Agora |
+|---|---|---|
+| **Compras → Fornecedores → "Novo Fornecedor"** | Voltava para a lista | Abre **"Novo fornecedor"**: Razão social*, Nome fantasia, CNPJ, Contato, E-mail, Telefone, Endereço, **Grupo** (*Sem grupo* ou um grupo homologado). **Salvar fornecedor** → *"Fornecedor salvo"* |
+| **Lápis da aba Fornecedores** | Voltava para a lista | Abre **"Editar fornecedor"** preenchido, com o campo **Status** (*Ativo* / *Inativo*) |
+| **Inativar** | Não havia como | *Inativo* → selo na lista, some do **seletor do Recebimento** e do **"Vincular"** dos grupos; continua aceito em pedido e cotação |
+| **Compras → Cotações → "Nova Cotação"** | Botão *"Novo Cotação"*, voltava para a lista | Botão **"Nova Cotação"** → **"Nova cotação"**: Número*, Fornecedor*, Data, Validade, Valor total, Status, Observações. **Salvar cotação** → *"Cotação salva"* |
+| **Lápis da aba Cotações** | Voltava para a lista | **"Editar cotação"** preenchida |
+| **Número da cotação repetido** | — | *"Já existe uma cotação com o número ⟨X⟩"* na faixa vermelha |
+| **Filtro de status** | Uma lista só para as três abas | Só as opções da aba: Fornecedores *Ativo/Inativo*; Cotações *Em Análise, Aprovado, Rejeitado, Cancelado* |
+| **Fornecedores homologados → grupo → "Remover do grupo"** | *"Fornecedor removido do grupo"* e nada mudava | Remove de verdade |
+| **Fornecedores homologados → grupo**, fornecedor inativo | Sumia | Aparece depois dos ativos com o selo **"Inativo"**; o "Vincular" não o oferece |
+| **Lixeira de fornecedor com cotação / com itens de preço** | Erro genérico *"Erro ao excluir item"* | *"Fornecedor possui cotações — não pode ser excluído"* / *"Fornecedor possui itens cadastrados — não pode ser excluído"* |
+
+### Roteiro de teste manual
+
+**Nada aqui usa SQL.** Você precisa de um usuário com acesso ao **módulo Compras**; para o passo 6,
+também ao **Almoxarifado**. Todas as telas são do menu **Compras**, salvo o passo 6.
+
+**Fornecedor: criar, recusar, editar, inativar**
+
+1. Entre em **Compras → Fornecedores** e clique em **"Novo Fornecedor"** → abre a tela **"Novo
+   fornecedor"** (é o primeiro sinal da etapa: antes, você continuava na lista).
+2. **A recusa local.** Deixe *Razão social* em branco, preencha só *Nome fantasia* e clique em
+   **Salvar fornecedor** → a faixa vermelha diz **"Razão social é obrigatória"** e nada é enviado.
+3. Preencha *Razão social* = **Fornecedor Teste 40**, um telefone (ele ganha máscara enquanto você
+   digita), escolha um **Grupo** (se houver algum grupo homologado cadastrado) e salve → aviso verde
+   **"Fornecedor salvo"**, a tela volta para a lista e a linha nova está lá com o selo *ativo*.
+4. Clique no **lápis** dessa linha → **"Editar fornecedor"** com tudo preenchido e, no fim, o campo
+   **Status** (que **não** existia na tela de criação). Troque para **Inativo** e salve → na lista o
+   selo virou *inativo*. No filtro de status, escolha **"Inativo"** → só ele aparece; **"Ativo"** → ele
+   some. *(Antes da etapa, o filtro "Inativo" nunca encontrava ninguém.)*
+5. **Onde o inativo aparece e onde some — a parte para demonstrar com cuidado:**
+   - **Compras → Fornecedores homologados → o grupo** que você escolheu no passo 3 → o cartão dele
+     está lá, **depois dos ativos**, com o selo **"Inativo"** (passe o mouse: *"Fornecedor inativo —
+     reative em Compras › Fornecedores"*). Clique em **"Vincular fornecedor"** → ele **não** está na
+     lista do modal (e, se não houver mais ninguém disponível, a frase é *"Todos os fornecedores
+     ativos já estão em um grupo (inativos não podem ser vinculados) — ou cadastre um novo."*).
+   - **Compras → Pedidos de Compra → Novo Pedido** → no seletor de fornecedor ele **aparece**, e um
+     pedido para ele é **aceito**. *É decisão declarada, não defeito: inativar não bloqueia pedido.*
+6. **Almoxarifado → Recebimentos → Novo Recebimento** (*Somente pela Nota Fiscal*) → no seletor de
+   fornecedor ele **não aparece**. Volte em **Compras → Fornecedores**, lápis, **Ativo**, salve →
+   reapareceu no Recebimento.
+
+**Remover do grupo (o defeito que ninguém tinha visto)**
+
+7. **Compras → Fornecedores homologados → o grupo** → no cartão do fornecedor de teste, clique em
+   **"Remover do grupo"** → confirmação *"Remover "Fornecedor Teste 40" deste grupo? O fornecedor
+   continua cadastrado."* → **OK** → aviso *"Fornecedor removido do grupo"* e o cartão **some**. Antes
+   da etapa o aviso era o mesmo **e o cartão ficava**. Confira em **Compras → Fornecedores → lápis**:
+   *Grupo* está em **"Sem grupo"**. *(O caminho inverso também vale: escolher "Sem grupo" no lápis
+   tira o fornecedor do grupo.)*
+
+**Cotação: criar, repetir o número, valor negativo**
+
+8. **Compras → Cotações** → o botão diz **"Nova Cotação"** (dizia *"Novo Cotação"*) → abre **"Nova
+   cotação"**, com o subtítulo *"O número é o do documento do fornecedor e tem de ser único."* e a
+   **Data** já preenchida com hoje.
+9. **Recusas locais:** salve sem nada → **"Número da cotação é obrigatório"**; digite o número
+   **COT-TESTE-40** e salve sem fornecedor → **"Fornecedor da cotação é obrigatório"**. Nenhuma das
+   duas chama o servidor.
+10. Escolha o **Fornecedor Teste 40**, *Valor total* **1500**, deixe *Status* em **Em Análise** e
+    salve → **"Cotação salva"**, e a lista mostra Número, Fornecedor, **R$ 1.500,00**, Data, Validade
+    e o selo *em_analise*.
+11. **O número único.** **"Nova Cotação"** de novo, mesmo número **COT-TESTE-40**, qualquer
+    fornecedor, salvar → faixa vermelha **"Já existe uma cotação com o número COT-TESTE-40"**, e a tela
+    fica aberta com o que você digitou. Troque o número para **COT-TESTE-41** e salve → gravou.
+12. **O valor negativo é o servidor quem recusa.** Lápis da COT-TESTE-41, *Valor total* **-1**,
+    salvar → faixa **"Dados inválidos — valor_total: valor total da cotação não pode ser negativo"**.
+    *(O navegador não barra antes — de propósito, para a frase do servidor chegar à tela.)* Corrija
+    para **0** e salve.
+13. **O filtro por aba.** Na aba Cotações, o filtro de status oferece **Todos os status, Em Análise,
+    Aprovado, Rejeitado, Cancelado** — e mais nada. Na aba Fornecedores, **Todos, Ativo, Inativo**.
+
+**A lixeira do fornecedor: três recusas, uma ordem**
+
+14. **Compras → Fornecedores** → lixeira do **Fornecedor Teste 40** → *"Tem certeza que deseja
+    excluir este item?"* → OK → aviso vermelho **"Fornecedor possui cotações — não pode ser
+    excluído"** (ele tem as duas cotações dos passos 10 e 11).
+15. Se você criou o pedido do passo 5 para ele, a frase que aparece é a de **pedido** —
+    *"Fornecedor possui pedidos de compra — não pode ser excluído"* —, porque pedido é checado
+    **antes** de cotação. Apague esse pedido pela lixeira da aba Pedidos e tente de novo: agora é a
+    frase de **cotação**.
+16. *(Opcional, para ver a terceira frase.)* **Fornecedores homologados → grupo → clique no cartão do
+    fornecedor** → tela **"Itens e preços – …"** → **Novo item** com uma descrição qualquer. Apague as
+    duas cotações pela lixeira da aba Cotações (cotação é sempre excluível) e tente excluir o
+    fornecedor → **"Fornecedor possui itens cadastrados — não pode ser excluído"**. Apague o item.
+17. **A verificação final:** sem pedido, sem cotação e sem item, a lixeira do fornecedor responde
+    **"Item excluído com sucesso"** e a linha some.
+
+### O que esperar no dia a dia
+
+- **Inativar não é apagar, e não bloqueia tudo.** Um fornecedor inativo some do seletor do
+  Recebimento (sem pedido) e do "Vincular" dos grupos, e **só**. Ele continua na lista, continua no
+  grupo em que estava (com selo) e continua aceito em pedido de compra e em cotação. Se a empresa
+  quiser que inativo bloqueie pedido e cotação, é a decisão **B127** que precisa de resposta.
+- **Para tirar um fornecedor de um grupo há dois caminhos**, e os dois funcionam: o botão "Remover do
+  grupo" na tela do grupo, ou *Grupo = Sem grupo* no lápis de Compras → Fornecedores.
+- **Quem acreditava ter removido um fornecedor de um grupo antes desta etapa precisa conferir**: o
+  botão dizia sucesso e não removia (**C54**).
+- **O número da cotação é o do documento do fornecedor**, digitado. O sistema não gera número de
+  cotação (o pedido, sim). Espaços nas pontas não contam.
+- **O status da cotação é declaração do comprador.** Aprovar uma cotação **não gera pedido**; não há
+  fluxo. O efeito é a coluna e o filtro.
+- **A cotação é só cabeçalho**: sem itens, sem comparação entre fornecedores. O *Valor total* é
+  digitado.
+- **Fornecedor com status vazio** (cadastrado antes de existir a coluna) aparece como ativo na lista,
+  mas **não aparece no seletor do Recebimento**. Abrir e salvar pelo lápis normaliza; a consulta
+  **A16** do documento de novidades encontra todos de uma vez.
+- **Salvar ou voltar de qualquer formulário perde a busca e o filtro da aba** — igual ao pedido.
+- **CNPJ e e-mail aceitam qualquer texto**, e dois fornecedores podem ter o mesmo CNPJ (**B125**).
+
+### O que a Etapa 40 NÃO cobre
+
+- **Itens de cotação, comparação de cotações e "converter cotação em pedido".** A cotação é
+  cabeçalho só; aprovar não gera nada. É o corte de escopo declarado (**B123**).
+- **Foto do fornecedor** na tela nova: continua no modal de *Fornecedores homologados → grupo →
+  lápis*.
+- **Cidade, estado e CEP**: existem no cadastro, nenhuma tela os mostra.
+- **Validação de CNPJ e e-mail, e CNPJ único.**
+- **Bloquear pedido e cotação para fornecedor inativo** (decisão **B127**, aberta).
+- **Perfis no módulo Compras**: quem abre o módulo faz tudo dentro dele.
+- **Testes automatizados da tela do grupo** (*Fornecedores homologados*): o selo "Inativo", o
+  "Vincular" e o "Remover do grupo" foram verificados pelo servidor e pela compilação, não por uma
+  suíte que abra a tela (**G55**) — por isso o roteiro acima passa por ela.
+
+---
+
+## Etapa 39 — O pedido de compra passa a ser acompanhado (ENTREGUE — 2026-09-17)
+
+**O que mudou, em uma frase:** o pedido de compra passou a ter **prazo cobrado** — a aba Pedidos
+mostra há quantos dias cada um está atrasado, filtra só os atrasados, leva o atraso para o Excel, e o
+sistema manda e-mail para Compras quando um prazo vence.
+
+**Esta etapa é do módulo Compras**, como a 38. Ela está neste guia porque o aviso de atraso nasce na
+**varredura diária do almoxarifado** e aparece em **Almoxarifado → Alertas**, junto com lote vencendo
+e remessa vencida.
+
+O problema era simples e inteiro: a Etapa 38 passou a gravar uma **Previsão de entrega** em cada
+pedido, e **nada no sistema comparava essa data com o calendário**. Um pedido prometido para a semana
+passada era visualmente idêntico a um prometido para o mês que vem. Junto vieram os dois resíduos que
+a 38 deixou: **as datas apareciam um dia antes** do que está gravado (na tela e no Excel), e **um
+pedido já recebido não tinha como ter o status corrigido** — ficava marcado como atrasado para
+sempre.
+
+### Onde se percebe cada mudança
+
+| Tela | Antes | Agora |
+|---|---|---|
+| **Compras → Pedidos de Compra**, coluna *Previsão Entrega* | Só a data | A data e, ao lado, o selo vermelho **"Atrasado há 1 dia"** / **"Atrasado há 12 dias"** |
+| **Filtros da aba Pedidos** | Busca e status | Mais a caixa **"Só atrasados"** — e ela compõe com a busca e com o status. A caixa **não** aparece nas abas Fornecedores e Cotações |
+| **"Exportar Excel" da aba Pedidos** | Onze colunas | Mais **"Atrasado"** (*Sim*/*Não*) e **"Dias de atraso"** (vazio quando o pedido está no prazo). O arquivo respeita o filtro da tela |
+| **Almoxarifado → Alertas** | Onze cartões | Mais o cartão **"Pedido de compra atrasado"** (*"Pedidos de compra com previsão de entrega vencida e ainda não recebidos."*), com **Pedido, Fornecedor, Previsão, Dias de atraso** |
+| **E-mail** | Nenhum aviso de prazo de pedido | Um e-mail por pedido atrasado, para a lista de alertas: **"[Compras] Pedido de compra atrasado — ⟨número⟩"** |
+| **Datas do pedido na tela e no Excel** | **Um dia atrás** do que está gravado — e exportar/reimportar andava mais um dia a cada volta | A data do pedido, em qualquer fuso e a qualquer hora |
+| **Data sugerida no "Novo Pedido"** | Depois das 21h vinha **a de amanhã** | A de hoje |
+| **Lápis de um pedido já recebido** | Abria o formulário e o salvar era recusado — sem saída | Abre com a faixa **"Este pedido já teve recebimento — só o status pode ser alterado"**, tudo travado menos o **Status**, e salvar mostra **"Status do pedido atualizado"** |
+
+### Roteiro de teste manual
+
+**Nada aqui usa SQL.** Você precisa de um usuário com acesso ao **módulo Compras** e, para os passos
+6 a 8, também ao **Almoxarifado** (perfil Administrador, Almoxarife, Gestor ou Compras — o cartão de
+alertas é desses quatro).
+
+**O pedido que já nasce atrasado**
+
+1. Entre em **Compras → Pedidos de Compra → Novo Pedido**. Escolha o fornecedor, adicione um item
+   (busque o material, clique no **+**, ponha quantidade **10** e valor unitário **50**) e, em
+   **Previsão de entrega**, escolha **ontem**. Clique em **Salvar pedido**.
+2. Na lista, olhe a coluna **Previsão Entrega** do pedido novo: a data de ontem aparece **igual à que
+   você escolheu** (é o conserto das datas), e ao lado dela o selo vermelho **"Atrasado há 1 dia"**.
+   *Se você tivesse escolhido três dias atrás, diria "Atrasado há 3 dias" — o singular e o plural
+   estão certos.*
+3. **A fronteira que vale demonstrar:** clique no **lápis**, troque a previsão para **hoje** e salve
+   → o selo **some**. *Vence hoje não está atrasado.* Volte a previsão para **ontem** e o selo
+   retorna.
+4. **O filtro.** Marque a caixa **"Só atrasados"**, ao lado da busca → a lista mostra **só** os
+   atrasados. Combine com a busca por número ou com o filtro de status: os três funcionam juntos.
+   Desmarque para voltar à lista inteira.
+5. **O Excel.** Com o filtro marcado, clique em **Exportar Excel** → o arquivo sai com as duas
+   colunas novas no fim: **Atrasado** = *Sim* e **Dias de atraso** = o número. Exporte de novo **sem**
+   o filtro e confira um pedido no prazo: **Atrasado** = *Não* e **Dias de atraso** **vazio** (não
+   zero). Confira também que a coluna **Previsão Entrega** do arquivo bate com a tela — e, se quiser
+   a prova completa, reimporte o arquivo em **Novo Pedido → Importar planilha** e veja que as datas
+   voltam **iguais**.
+
+**O alerta e o e-mail**
+
+6. **Para a varredura rodar agora, reinicie o servidor e espere 30 segundos.** (Ela roda 30 s depois
+   de cada arranque e, depois, a cada 24 h — não há horário configurável. Sem reiniciar, o e-mail
+   pode levar até um dia para sair.)
+7. Vá em **Almoxarifado → Alertas** → o cartão **"Pedido de compra atrasado"** mostra o total, e
+   **Detalhes** abre as linhas com **Pedido, Fornecedor, Previsão e Dias de atraso**. *O cartão é
+   leitura ao vivo: ele não depende da varredura nem do e-mail.*
+8. O e-mail vai para a lista de **Alertas de Estoque** (Configurações), com assunto
+   **"[Compras] Pedido de compra atrasado — PC-…"** e corpo com **Pedido, Fornecedor, Previsão de
+   entrega, Atraso: N dia(s)** e **Status**. Em **Almoxarifado → Notificações** dá para ver o aviso
+   enfileirado mesmo sem servidor de e-mail configurado. **Ele sai uma vez por prazo prometido:**
+   rodar a varredura de novo **não** duplica. Mas se você **renegociar** (mudar a previsão para outra
+   data passada) e rodar de novo, **sai um segundo e-mail** — porque é outro prazo quebrado.
+
+**Receber não fecha o pedido — e o clique que fecha**
+
+9. Receba o pedido pelo almoxarifado: **Almoxarifado → Recebimentos → Novo Recebimento → Por Pedido
+   de Compra**, escolha o pedido, digite a quantidade e leve até o fim (**Iniciar Conferência →
+   Finalizar Conferência → Encaminhar para Compras → Encaminhar para Faturamento → Iniciar Entrada de
+   NF → Preencher Dados da NF → Processar Nota**).
+10. Volte em **Compras → Pedidos de Compra** → **o pedido continua com o selo "Atrasado há N dias"**,
+    e continua dentro de **"Só atrasados"**. **Isto é o comportamento correto**, não um defeito:
+    receber o material não muda o **status** do pedido, que é a declaração do comprador.
+11. **O gesto que resolve.** Clique no **lápis** desse pedido → o formulário abre com a faixa laranja
+    **"Este pedido já teve recebimento — só o status pode ser alterado"**, e fornecedor, datas,
+    observações, a busca de material e todas as linhas de item estão **desabilitados**. Troque o
+    **Status** para **Recebido** e clique em **Salvar pedido** → aviso verde
+    **"Status do pedido atualizado"**.
+12. **A verificação final:** na lista, o pedido **não tem mais o selo**, some do filtro
+    **"Só atrasados"** e desaparece do cartão em **Almoxarifado → Alertas**. *(Status **Cancelado** e
+    **Rejeitado** têm o mesmo efeito — são os três desfechos em que a cobrança não faz sentido.)*
+
+**Limpeza**
+
+13. O pedido do passo 9 **não sai** pela lixeira (já teve recebimento) — é o comportamento correto.
+    Os demais pedidos de teste você apaga normalmente.
+
+### O que esperar no dia a dia
+
+- **O alerta nasce inerte enquanto ninguém preencher previsão de entrega.** Em produção, hoje, não há
+  pedido com prazo: o cartão aparece **zerado** e nenhum e-mail sai. Não é defeito — é a ausência de
+  dado. Rode a consulta **A15** do documento de novidades antes do deploy: ela diz quantos pedidos
+  têm prazo e quantos já estariam atrasados no primeiro dia. Se esse segundo número for alto, **a
+  primeira varredura manda um e-mail por pedido**, de uma vez.
+- **Pedido recebido continua "Atrasado" até alguém mudar o status.** Combine com o comprador quem faz
+  isso — senão a lista de atrasados vira uma lista de pedidos já entregues e deixa de ser olhada.
+- **O e-mail pode levar até 24 horas.** A varredura é ancorada na hora em que o servidor subiu. Para
+  ver na hora, use o cartão da central (ao vivo).
+- **O atraso não fica gravado em lugar nenhum.** É calculado toda vez que a lista é lida: corrigiu a
+  previsão, o selo some na hora; não há nada a reprocessar.
+- **Pedido sem previsão de entrega nunca atrasa** — o campo continua opcional, e sem promessa não há
+  promessa quebrada. Vale também para os pedidos antigos.
+- **O "hoje" é o de Brasília**, independentemente do relógio da máquina onde o sistema roda. Depois
+  do deploy vale conferir: **depois das 21h, nenhum pedido com previsão de hoje pode estar com o
+  selo vermelho**.
+- **O status pode ser trocado para qualquer um dos sete, mesmo depois do recebimento.** Não há
+  travas de fluxo no módulo Compras: dá para marcar como *Cancelado* um pedido cujo material já
+  entrou no estoque. O sistema aceita e só o texto da lista fica errado.
+- **Filtro marcado numa base sem atrasados mostra "Nenhum pedido encontrado"** — a mesma frase da
+  lista vazia. Se a tela parecer vazia, confira a caixa **"Só atrasados"** logo acima.
+
+### O que a Etapa 39 NÃO cobre
+
+- **Criar fornecedor e criar cotação.** As outras duas abas do Compras continuam sem tela de
+  criação — é o próximo candidato declarado.
+- **Ver quanto do pedido já chegou, na aba Pedidos.** A lista ganhou **prazo**, não **quantidade**:
+  saldo pendente e situação (**ABERTO / PARCIAL / RECEBIDO**) continuam só no formulário de
+  recebimento.
+- **Status automático no recebimento.** Receber não marca o pedido como *Recebido* nem como
+  "parcial"; é sempre o comprador quem declara. Fazer isso é etapa própria — envolve decidir o que
+  acontece no recebimento parcial, no excedente e no pedido já cancelado à mão.
+- **Aviso de "pedido recebido parcialmente".** Não existe: a conta de quanto falta é feita dentro do
+  formulário de recebimento e não é publicada para a varredura.
+- **Escolher a hora da varredura.** Não há configuração de horário para nenhum dos avisos diários.
+- **Editar qualquer outra coisa num pedido já recebido.** Só o **status**. Fornecedor, datas,
+  observações e itens continuam congelados — é o que impede a quantidade já recebida de ser zerada e
+  o mesmo material de ser recebido duas vezes.
+- **Atraso na tela de recebimento.** Quem recebe não vê que o pedido está atrasado; a informação está
+  na aba Pedidos e na central de alertas.
+
+---
+
+## Etapa 38 — O pedido de compra ganha criação (ENTREGUE — 2026-09-16)
+
+**O que mudou, em uma frase:** o comprador passou a **criar, editar, excluir e importar** pedido de
+compra numa tela do sistema, e a Reposição passou a **gerar o pedido com um clique** — o que fecha o
+laço que estava aberto desde a Etapa 11 e torna a Etapa 37 usável sem SQL.
+
+**Esta etapa é do módulo Compras**, não do almoxarifado. Ela está neste guia porque é ela que fecha o
+que as Etapas 11 e 37 deixaram pela metade. O problema era medido, não suposto: **nenhum lugar do
+sistema gravava um pedido de compra**. O banco de produção tinha **zero** pedidos e **zero** itens de
+pedido; os botões **"Novo Pedido"** e **"Editar"** da aba *Pedidos de Compra* **voltavam para a
+lista**, porque o endereço não tinha tela do outro lado. Consequência dupla: a **Reposição** gerava
+solicitações de compra que **ninguém convertia em pedido** (nasciam PENDENTE e morriam PENDENTE), e
+todo o recebimento contra pedido da **Etapa 37** era **inalcançável por um clique**.
+
+### Onde se percebe cada mudança
+
+| Tela | Antes | Agora |
+|---|---|---|
+| **Compras → Pedidos de Compra → "Novo Pedido"** | Voltava para a lista | Abre **"Novo pedido de compra"**: fornecedor, **Data do pedido**, **Previsão de entrega**, **Status**, **Observações** e os **Itens do pedido** (buscar material, quantidade, valor unitário), com **"Total: R$ …"** somado na tela |
+| **Número do pedido** | Não havia de onde vir | **Gerado pelo sistema** — a tela diz *"O número do pedido é gerado pelo sistema."*, e na edição *"o número não é editável."* |
+| **Lápis da lista** | Voltava para a lista | Abre **"Editar pedido de compra"** com os itens carregados |
+| **Lixeira da lista** | Apagava o cabeçalho e deixava as **linhas órfãs** — ou falhava com **500** *"Erro ao excluir item"* | Apaga as linhas junto, **libera as solicitações** da Reposição, e recusa se o pedido já teve recebimento |
+| **Erro na lixeira** | Qualquer falha virava *"Erro ao excluir item"* | Mostra **a mensagem do servidor** |
+| **Reposição → Solicitações** | Só **Cancelar** | Cada solicitação **PENDENTE** ganha **"Gerar pedido"** (dica: *"Abre o pedido de compra já preenchido com este material"*) |
+| **Carga do acervo** | Não existia | Botão **"Importar planilha"** na tela de novo pedido, com **"Importação concluída"** / **"Nenhum pedido importado — veja os motivos abaixo"**, **"Linhas ignoradas"** e **"Linhas importadas com aviso"** |
+| **"Exportar Excel" da aba Pedidos** | Uma linha por pedido, **sem coluna de código** — não voltava pela importação | Uma linha por **item**, com a coluna **Código** |
+| **Compras → Fornecedores → lixeira** | Estouraria a chave estrangeira com **500** *"Erro ao excluir item"* (caso inalcançável antes, porque não havia pedido) | **409**: *"Fornecedor possui pedidos de compra — não pode ser excluído"* |
+
+### Roteiro de teste manual
+
+**Nada aqui usa SQL.** Você precisa de um usuário com acesso ao **módulo Compras** e, para os passos
+7 a 9, também ao **Almoxarifado** com a permissão de **gerenciar reposição** (Administrador, Gestor
+ou Compras).
+
+**Criar o pedido**
+
+1. Entre no sistema e vá em **Compras → Pedidos de Compra**. Clique em **Novo Pedido** (botão do
+   alto, à direita) → abre **"Novo pedido de compra"**, com a frase *"O número do pedido é gerado
+   pelo sistema."* no cabeçalho.
+2. **Duas recusas para ver primeiro.** Sem escolher nada, clique em **Salvar pedido** → aparece a
+   faixa vermelha *"Inclua ao menos um item no pedido de compra"*. Agora adicione um item (passo 3)
+   e salve **sem escolher fornecedor** → *"Dados inválidos — fornecedor_id: fornecedor do pedido é
+   obrigatório"*.
+3. Em **Itens do pedido**, digite parte do código ou da descrição de um material no campo *Buscar
+   material por código ou descrição...* e clique em **Buscar material**. Na tabela de resultados,
+   clique no **+** da linha para adicionar ao pedido.
+4. Na linha adicionada, ponha **quantidade 10** e deixe o **valor unitário vazio** → aparece o aviso
+   laranja *"Sem preço o custo médio do material não é alimentado no recebimento."* Preencha o valor
+   com **50** → o aviso desaparece e **"Total: R$ 500,00"** aparece embaixo da tabela.
+5. Escolha o **Fornecedor**, confira a **Data do pedido** (vem preenchida) e clique em **Salvar
+   pedido** → a tela volta para a lista, com o aviso *"Pedido PC-… criado"*. **A linha nova mostra o
+   número gerado, o fornecedor, o valor total, a data e o status.**
+
+**O pedido chega ao recebimento — é o que a Etapa 37 esperava**
+
+6. Vá em **Almoxarifado → Recebimentos → Novo Recebimento** e escolha a forma **Por Pedido de
+   Compra**. Abra o campo *Número do Pedido de Compra* → **o pedido que você acabou de criar está na
+   lista**. Escolha-o → aparece o bloco **"Itens do pedido"** com **"Saldo pendente: 10"**.
+   Digite **10**, salve, e leve o recebimento até o estoque: **Iniciar Conferência → Finalizar
+   Conferência → Encaminhar para Compras → Encaminhar para Faturamento → Iniciar Entrada de NF →
+   Preencher Dados da NF → Processar Nota**.
+
+**As duas recusas do pedido já recebido**
+
+7. Volte em **Compras → Pedidos de Compra**, clique no **lápis** do pedido e mude qualquer coisa
+   (por exemplo a observação). Clique em **Salvar pedido** → recusa em faixa vermelha:
+   *"Pedido de compra PC-… já teve recebimento — não pode mais ser editado"*.
+8. Na lista, clique na **lixeira** do mesmo pedido e confirme → o aviso mostra
+   *"Pedido de compra PC-… já teve recebimento — não pode ser excluído"*. **Repare que a lista não
+   se recarrega e o pedido continua lá.** *(Antes desta etapa esta mensagem seria o genérico "Erro ao
+   excluir item".)*
+
+**Da Reposição ao pedido, com um clique**
+
+9. Vá em **Almoxarifado → Reposição e Compras → aba Sugestões de Compra**, marque um material e
+   clique em **Gerar solicitações**. Depois abra a aba **Solicitações** → a linha nova está
+   **PENDENTE** e tem o botão **Gerar pedido**.
+10. Clique em **Gerar pedido** → abre **"Novo pedido de compra"** com **o material da solicitação já
+    na tabela de itens**, com o código e a quantidade preenchidos. Escolha o fornecedor, ponha o
+    valor unitário e **Salvar pedido**.
+11. **A verificação que importa:** volte em **Almoxarifado → Reposição e Compras → Solicitações** →
+    a linha daquela solicitação agora está **VINCULADO**, e o botão **Gerar pedido** **não aparece
+    mais** nela. *(A tela da Reposição não se atualiza sozinha enquanto você está no Compras — é ao
+    reabri-la que a mudança aparece.)*
+12. **Uma verificação negativa que vale o clique:** exclua esse pedido em **Compras → Pedidos de
+    Compra → lixeira** (ele ainda não teve recebimento, então a exclusão passa) e volte à aba
+    **Solicitações** → a solicitação **voltou para PENDENTE** e oferece **Gerar pedido** de novo.
+
+**A importação de planilha — inclusive o caso da mesma ordem com dois fornecedores**
+
+13. Monte uma planilha (`.xlsx` ou `.csv`) com estas colunas na primeira linha:
+    **Pedido | CNPJ | Código | Quantidade | Valor Unitário | Data | Previsão Entrega**.
+    Preencha **três linhas**: duas com a ordem `OC-1` e o CNPJ do **fornecedor A**, e uma **terceira
+    também com `OC-1`** mas com o CNPJ do **fornecedor B** — use códigos de materiais que existam no
+    cadastro. **Preencha o CNPJ em todas as linhas** (nenhuma linha herda o fornecedor de outra).
+14. Em **Compras → Pedidos de Compra → Novo Pedido**, clique em **Importar planilha** e escolha o
+    arquivo. A caixa verde mostra **"Importação concluída"**, **"2 pedidos criados, 3 itens."** e a
+    lista dos números criados, mais **"Nenhuma linha ignorada."**
+    **É aqui que está o conserto mais importante da etapa:** a mesma ordem com dois fornecedores
+    produz **dois pedidos** — antes virava **um só**, com o item de um fornecedor gravado no pedido
+    do outro, e a conta a pagar nasceria para o fornecedor errado.
+15. Volte à lista de pedidos → os dois pedidos novos aparecem **com data** (nunca *"Data Pedido:
+    -"*), e abrindo cada um em **Editar** você vê em **Observações** a origem: **"Planilha: OC-1"**.
+16. **A importação que recusa tudo.** Renomeie a coluna **Código** para **Material** e importe de
+    novo → a caixa fica **vermelha** com **"Nenhum pedido importado — veja os motivos abaixo"**, o
+    aviso de topo também é vermelho, e cada linha aparece em **"Linhas ignoradas"** como
+    *"Linha 1: linha sem código de material"*. **A linha 1 é a primeira linha de DADOS**, não o
+    cabeçalho. *(Antes desta etapa isso aparecia como um aviso VERDE escrito "0 pedido(s)
+    importado(s)" — e o operador ia embora achando que a carga funcionou.)*
+17. **A ida e volta pelo Excel do próprio sistema.** Na aba **Pedidos de Compra**, clique em
+    **Exportar Excel** → o arquivo sai **uma linha por item**, com a coluna **Código**. Importe esse
+    mesmo arquivo → ele é aceito (e cria pedidos **novos**: veja a última observação abaixo).
+
+**A recusa do fornecedor**
+
+18. Vá em **Compras → Fornecedores** e clique na **lixeira** do fornecedor que você usou nos pedidos
+    → *"Fornecedor possui pedidos de compra — não pode ser excluído"*. Apague os pedidos dele
+    primeiro, se quiser mesmo excluí-lo.
+
+**Limpeza**
+
+19. Apague pelas **lixeiras da aba Pedidos de Compra** os pedidos que você criou para o teste. O
+    pedido do passo 6 **não sai** (já teve recebimento) — isso é o comportamento correto.
+
+### O que esperar no dia a dia
+
+- **Reimportar a mesma planilha DUPLICA os pedidos.** Não há como o sistema saber que aquela ordem
+  já entrou (o número do pedido é dele, não da planilha). Importe **uma vez**; se errar, apague os
+  duplicados pela lixeira.
+- **Preencha a coluna de fornecedor em TODAS as linhas da planilha.** Planilha com o CNPJ só na
+  primeira linha da ordem tem as demais recusadas com *"fornecedor não encontrado"*.
+- **Preço negativo na planilha entra como zero**, sem aviso. Só a tela de criação manual avisa sobre
+  preço ausente.
+- **Depois do primeiro recebimento, o pedido está congelado.** Não dá para corrigir só a previsão de
+  entrega ou só a observação — a recusa é do pedido inteiro. E **um recebimento apenas criado, ainda
+  não processado, já tranca o pedido**: ele guarda o elo com a linha desde que nasce.
+- **Excluir o pedido devolve a solicitação para a fila de compras.** É o certo, mas surpreende: o
+  material volta a ser sugerido e a solicitação volta a oferecer "Gerar pedido".
+- **O botão "Gerar pedido" não aparece para todo mundo.** Precisa da permissão de **gerenciar
+  reposição** **e** de acesso ao módulo **Compras** — e a verificação do módulo usa o cache do menu,
+  que pode levar até **5 minutos** para refletir uma permissão recém-concedida.
+- **Item sem preço é aceito, e a tela diz o que você está deixando de acontecer:** *"Sem preço o
+  custo médio do material não é alimentado no recebimento."*
+- **No módulo Compras não há perfis.** Quem tem acesso ao módulo cria, edita e exclui pedido,
+  fornecedor e cotação — sem alçada por valor. A única exceção é o vínculo com a Reposição.
+
+### O que a Etapa 38 NÃO cobre
+
+- **Criar fornecedor e criar cotação.** As outras duas abas do Compras continuam sem tela de
+  criação — os botões "Novo Fornecedor" e "Nova Cotação" seguem sem destino.
+- **Aprovação de pedido de compra.** O status é escolhido à mão pelo comprador; não há "enviar para
+  aprovação", ninguém é notificado e nenhum valor exige segunda assinatura.
+- **Ver quanto do pedido já chegou, em alguma tela.** Continua como a Etapa 37 deixou: pedido,
+  recebido, saldo e situação (**ABERTO / PARCIAL / RECEBIDO**) existem, mas só aparecem linha a linha
+  no formulário de recebimento. A lista da aba Pedidos mostra o status do Compras, e nada do que
+  chegou.
+- **Idempotência da importação.** Ver acima: reimportar duplica.
+- **Pedido de serviço, frete ou despesa.** Todo item do pedido exige **material cadastrado** — linha
+  de texto livre não existe, porque o recebimento ignoraria essa linha e o pedido apareceria aberto
+  com saldo zero sem ninguém entender por quê.
+- **Saber antes de clicar que o pedido está travado.** O salvar e a lixeira não ficam desabilitados
+  num pedido já recebido: a recusa vem do servidor depois da tentativa.
+- **Excluir pedido com recebimento, nem por SQL seguro.** Não há caminho de tela para isso, e é
+  deliberado — o recebimento ficaria apontando para linhas que não existem.
+
+---
+
+## Etapa 37 — O pedido de compra passa a saber quanto já chegou (ENTREGUE — 2026-09-16)
+
+**O que mudou, em uma frase:** receber **parte** de um pedido de compra virou um gesto possível na
+tela — o sistema passou a guardar quanto de cada linha do pedido já chegou, a mostrar o **saldo
+pendente** de cada material e a **recusar** o que passa desse saldo sem autorização de Compras ou do
+Administrador.
+
+**Esta é feature**, a do **Recebimento** — a mesma da Etapa 36 —, e ela fecha exatamente o que a 36
+declarou que não cobria. O problema era medido, não suposto: **um pedido de 10 unidades podia receber
+25 em três recebimentos e continuar marcado como 10 e ABERTO.** Nada no sistema escrevia quanto de
+cada linha do pedido já tinha chegado. E, do outro lado, escolher *"Por Pedido de Compra"* abria a
+lista de itens **vazia**: o operador não conseguia dizer "chegaram 6 dos 10, o resto vem depois", e o
+servidor completava sozinho o **pedido inteiro**. De quebra, **21 comandos mortos** que falhavam em
+silêncio a cada arranque do servidor foram apagados.
+
+> ### ✅ RESOLVIDO PELA ETAPA 38 — este aviso não vale mais
+>
+> **Este bloco dizia:** ~~"nenhum lugar do sistema grava um pedido de compra; o módulo Compras tem
+> as três abas e nenhuma tem tela de criação, o botão 'Novo Pedido' volta para a lista, e por isso o
+> roteiro abaixo começa inserindo um pedido por SQL"~~. **Era verdade quando a Etapa 37 fechou, e
+> deixou de ser em 2026-09-16, com a Etapa 38.**
+>
+> **O que vale agora:** o pedido de compra é criado em **Compras → Pedidos de Compra → "Novo
+> Pedido"** (formulário **"Novo pedido de compra"**), ou pelo botão **"Gerar pedido"** da aba
+> Solicitações da Reposição. **Faça o passo 1 do roteiro abaixo por ali** — os comandos SQL do passo
+> 1 continuam escritos só como apoio, para quem quiser montar um caso sem passar pela tela. A
+> verificação **F13** do documento de novidades **fechou**.
+>
+> Ficou dito em vez de apagado: quem leu este guia antes e decorou "não existe tela de pedido"
+> precisa ver **onde** e **quando** isso mudou.
+
+### Onde se percebe cada mudança
+
+| Tela | O que você vai notar |
+|---|---|
+| **Recebimentos → Novo Recebimento → Por Pedido de Compra** | O campo do pedido lista os pedidos que **ainda têm saldo** — e também os que o Compras abriu e ainda não preencheu. Pedido totalmente recebido **some da lista** |
+| **Ao escolher o pedido** | Aparece o bloco **"Itens do pedido"**: cada linha com o material, o código e **"Saldo pendente: N"**, e um campo de quantidade editável ao lado |
+| **Ao digitar acima do saldo** | Aparece em vermelho, embaixo da linha: *"Acima do saldo: 1 a mais que o saldo do pedido (4)"* |
+| **Ao salvar acima do saldo, como Almoxarife** | Recusado: *"Quantidade recebida (5) maior que o saldo do pedido (4) para o material ⟨código⟩ — a autorização de excedente é de Compras ou do Administrador"*. O que você digitou **continua lá** |
+| **Como Compras ou Administrador** | Aparece a caixa **"Autorizo o recebimento acima do pedido"**. Marcada, o recebimento entra e a auditoria registra **"Excedente autorizado"** |
+| **Pedido que o Compras ainda não preencheu** | *"Pedido de compra ⟨número⟩ não tem itens lançados no módulo Compras."* — mensagem **diferente** da do pedido quitado |
+| **Pedido totalmente recebido** | *"Este pedido já foi recebido por completo."* |
+| **Depois de Processar Nota** | O saldo pendente do pedido **cai**. Antes de processar, ele não se mexe — o pedido só conta o que **entrou no estoque** |
+
+### Roteiro de teste manual
+
+**Preparação — e este passo é obrigatório hoje**
+
+1. **Insira um pedido de compra por SQL.** Não há tela que faça isso. Abra o banco e rode, trocando
+   `F1` pelo id de um fornecedor real e `M1` pelo id de um material real (e `'COD-M1'` pelo código
+   desse material, para a mensagem de recusa sair legível):
+
+   ```sql
+   SELECT id, nome FROM fornecedores LIMIT 3;
+   SELECT id, codigo FROM materiais_almoxarifado LIMIT 3;
+
+   INSERT INTO pedidos_compra (numero, fornecedor_id, valor_total, data_pedido, status, observacoes)
+   VALUES ('PC-TESTE-37', F1, 500, date('now'), 'aprovado', 'pedido de teste da Etapa 37 - apagar depois');
+
+   INSERT INTO itens_pedido_compra (pedido_id, material_id, codigo, descricao, quantidade, valor_unitario, unidade)
+   SELECT id, M1, 'COD-M1', 'item de teste', 10, 50, 'UN'
+     FROM pedidos_compra WHERE numero = 'PC-TESTE-37';
+   ```
+
+   Você acabou de criar um pedido de **10 unidades** de um material. Para os passos 8 e 9 vai
+   precisar de um segundo usuário com perfil **Compras** (ou do **Administrador**).
+
+**O pedido aparece, e as linhas vêm com o saldo**
+
+2. Entre como **Almoxarife** (ou Administrador) e vá em **Almoxarifado → Recebimentos → Novo
+   Recebimento**. Em *Forma de recebimento*, escolha **Por Pedido de Compra**.
+3. Abra o campo *Número do Pedido de Compra* → **`PC-TESTE-37` está na lista**, com o nome do
+   fornecedor ao lado.
+4. Escolha o pedido → aparece o bloco **"Itens do pedido"** com a linha do material e
+   **"Saldo pendente: 10"**, e um campo de quantidade ao lado. **Antes desta etapa esse bloco não
+   existia: a tela mostrava só o campo do pedido, e o servidor recebia o pedido inteiro.**
+
+**O parcial — é o coração da etapa**
+
+5. Digite **6** no campo da linha e salve. O recebimento entra normalmente.
+6. **A verificação que surpreende, e está certa:** abra **Novo Recebimento** de novo e escolha o
+   mesmo `PC-TESTE-37` → ele **continua na lista** e o saldo pendente **continua 10**. O pedido só
+   passa a contar quando o material **entra no estoque**, não quando o documento nasce. Feche sem
+   salvar.
+7. **Leve o recebimento do passo 5 até o estoque:** abra o documento na lista e avance
+   **Iniciar Conferência → Finalizar Conferência → Encaminhar para Compras → Encaminhar para
+   Faturamento → Iniciar Entrada de NF → Preencher Dados da NF** (preencha número, série, datas e
+   valor total) **→ Processar Nota**.
+   Agora volte a **Novo Recebimento → Por Pedido de Compra → `PC-TESTE-37`** → a linha mostra
+   **"Saldo pendente: 4"**.
+
+**A recusa, e a autorização**
+
+8. **Como Almoxarife**, digite **5** na linha (o saldo é 4) → aparece embaixo, em vermelho:
+   *"Acima do saldo: 1 a mais que o saldo do pedido (4)"*. Salve mesmo assim → a recusa aparece na
+   tela:
+   *"Quantidade recebida (5) maior que o saldo do pedido (4) para o material ⟨código⟩ — a
+   autorização de excedente é de Compras ou do Administrador"*.
+   **Repare em duas coisas:** o **5** que você digitou continua lá (nada é perdido), e a mensagem diz
+   **quem resolve** — não manda você marcar uma caixa que o seu perfil não tem.
+9. **Entre como Compras** (ou **Administrador**) e repita o passo 8. Agora, junto com o aviso,
+   aparece a caixa **"Autorizo o recebimento acima do pedido"**.
+   **Duas verificações negativas que valem o clique:** a caixa **não** aparece para o Almoxarife, e
+   **não** aparece enquanto nenhuma linha estiver acima do saldo.
+   **Marque a caixa** e salve → o recebimento entra. Vá em **Almoxarifado → Auditoria** e confirme a
+   linha **"Excedente autorizado"** com o seu nome.
+
+**O pedido fecha e some**
+
+10. Crie mais um recebimento contra o `PC-TESTE-37` com as **4** restantes e leve-o até
+    **Processar Nota** (mesma sequência do passo 7).
+11. Volte a **Novo Recebimento → Por Pedido de Compra** → **`PC-TESTE-37` não está mais na lista.**
+    Pedido totalmente recebido sai do campo de escolha.
+12. **A conferência final, pelo banco** (é a prova do que nenhuma tela mostra hoje):
+
+    ```sql
+    SELECT quantidade, quantidade_recebida
+      FROM itens_pedido_compra
+     WHERE pedido_id = (SELECT id FROM pedidos_compra WHERE numero = 'PC-TESTE-37');
+    ```
+
+    Tem de vir `10 | 10` (mais o que você tiver autorizado de excedente no passo 9).
+
+**Limpeza**
+
+13. **Apague o pedido de teste.** São **dois** comandos, e os dois são necessários: apagar o pedido
+    **não** apaga as linhas dele.
+
+    ```sql
+    DELETE FROM itens_pedido_compra
+     WHERE pedido_id = (SELECT id FROM pedidos_compra WHERE numero = 'PC-TESTE-37');
+    DELETE FROM pedidos_compra WHERE numero = 'PC-TESTE-37';
+    ```
+
+### O que esperar no dia a dia
+
+- **Limpar o campo de uma linha é "esta linha não chegou".** A linha sai do recebimento e **não**
+  entra como zero. Recebeu só dois dos cinco materiais do pedido? Preencha dois e deixe os outros
+  três vazios.
+- **O saldo é por MATERIAL, não por linha.** Se o pedido tiver duas linhas do mesmo material (preços
+  ou prazos diferentes — é legítimo), o teto é a **soma** das duas, e o aviso "Acima do saldo"
+  aparece nas **duas** linhas quando a soma do que você digitou passa do teto. É de propósito: a
+  tela mostra exatamente o número que o servidor cobra.
+- **O saldo só cai quando o material entra no estoque.** Criar o recebimento não mexe no pedido —
+  quem mexe é o **Processar Nota** (ou a aprovação direta). Isso é o que permite corrigir um
+  recebimento antes de processá-lo sem bagunçar o pedido.
+- **Processar duas vezes não conta duas vezes.** O reprocessamento de uma nota não soma de novo no
+  pedido.
+- **Duas mensagens parecidas dizem coisas diferentes.** *"não tem itens lançados no módulo Compras"*
+  é o pedido que o Compras abriu e ainda não preencheu — o problema está **lá**, não aqui.
+  *"Este pedido já foi recebido por completo"* é pedido fechado. Nos dois casos o botão de salvar
+  fica desabilitado.
+- **Quem autoriza o excedente é Compras ou o Administrador — a mesma lista da Etapa 36.** Nada mudou
+  em quem pode. Se você é Almoxarife e leu a recusa, o caminho é chamar Compras: não há controle
+  escondido na sua tela.
+- **O preço do item vem do pedido.** A tela não pergunta preço a quem recebe (preço é informação do
+  pedido, não de quem descarrega), e o sistema usa o valor unitário da linha do pedido — é ele que
+  alimenta o custo médio do material. Se a nota vier com preço diferente, quem corrige é a **entrada
+  fiscal**, como sempre foi.
+
+### O que esta etapa NÃO cobre
+
+- **Criar um pedido de compra.** Não existe tela, em nenhuma das três abas do Compras, e nenhum
+  ponto do sistema grava um pedido. Em produção o campo de pedidos abre **vazio**. **É a Etapa 38**,
+  já desenhada: o pedido de compra ganha criação, com importação de planilha como carga inicial e o
+  botão **"Gerar pedido"** na Reposição — que hoje gera solicitação de compra e **para ali**, porque
+  ninguém converte solicitação em pedido. **Enquanto isso, o teste manual depende do SQL do passo
+  1.**
+- **Ver o saldo do pedido em alguma TELA.** A quantidade pedida, a recebida, o saldo e a situação
+  (**ABERTO / PARCIAL / RECEBIDO**) são calculados e existem — mas hoje só aparecem linha a linha no
+  formulário de recebimento. A tela de **Compras** não foi tocada.
+- **Material que chega FORA do pedido.** Ele é aceito, sem régua de saldo e **sem aviso** — não há
+  saldo contra o que medir. Pela tela o caso nem se produz (ela só oferece as linhas do pedido); é
+  alcançável só por integração.
+- **Dois recebimentos abertos contra o mesmo pedido.** Como o saldo só conta o que entrou no
+  estoque, dois documentos de 10 criados antes de processar qualquer um passam os dois, e o pedido
+  de 10 termina com 20 contados. Conferir de novo no processamento seria pior (travaria uma nota com
+  o estoque já creditado). E esse excesso **não deixa linha de auditoria nenhuma**.
+- **Estorno ou cancelamento de recebimento.** Não existe — e portanto o que um recebimento somou ao
+  pedido também não se desfaz. É outra feature.
+- **A conferência física continua sendo a da Etapa 36.** O campo "Qtd. conferida" do painel mede
+  contra a **esperada daquele documento**; o saldo do pedido é medido na **criação** do recebimento.
+  São duas réguas, em dois momentos, de propósito.
+- **Divergência formal.** Receber menos do que o pedido deixa saldo em aberto e nada mais: não há
+  registro de divergência com número, dono, prazo e desfecho.
+- **Os 51 comandos iguais aos 21 apagados, no núcleo do CRM.** A limpeza valeu para o arquivo do
+  almoxarifado. O arquivo principal do servidor tem 51 do mesmo tipo, fora do escopo do módulo.
+
+---
+
+## Etapa 36 — O recebimento para de aceitar qualquer coisa, e a conferência física ganha campo (ENTREGUE — 2026-09-16)
+
+**O que mudou, em uma frase:** as duas portas por onde um recebimento é escrito pararam de aceitar
+qualquer coisa — a mesma nota fiscal do mesmo fornecedor não entra mais duas vezes dobrando o
+estoque, receber acima do esperado passou a exigir autorização de Compras ou do Administrador, e a
+conferência física finalmente tem **onde digitar quanto chegou**.
+
+**Esta é feature**, a do **Recebimento**, e o servidor mudou de propósito. Eram quatro problemas no
+mesmo documento:
+
+1. **A "forma de recebimento" aceitava qualquer texto.** A tela oferece dois valores; o sistema
+   aceitava infinitos, para quem mandasse por fora dela.
+2. **A mesma nota fiscal do mesmo fornecedor entrava duas vezes.** Dois documentos, material
+   creditado **duas vezes** (20 onde entraram 10) e **duas contas a pagar** para a mesma nota.
+3. **Receber mais do que o esperado entrava em silêncio.** Um item de 10 podia ser registrado como
+   999, por quem estava no balcão.
+4. **O campo de contagem não existia.** O sistema tem alerta de *"Divergência de recebimento"*, a
+   tela tem a etapa **Conferência** — e o painel mostrava **uma** quantidade só. A conferência
+   existia como situação no fluxo e não existia como gesto.
+
+### Onde se percebe cada mudança
+
+| Tela | O que você vai notar |
+|---|---|
+| **Recebimentos → Novo Recebimento** | Lançar a mesma nota do mesmo fornecedor de novo é recusado: *"Nota fiscal ⟨número⟩ já lançada no recebimento REC-… para este fornecedor"* — com o número do documento que já tem a nota |
+| **Recebimentos → painel de detalhe** (RECEBIDO ou EM_CONFERENCIA) | Cada item mostra a quantidade em cima e **"Esperada: N"** embaixo, tem o campo **"Qtd. conferida"** e um botão **Salvar Conferência** |
+| **Ao digitar quantidade diferente da esperada** | Aparece em vermelho, na hora: *"Divergência: 13 a menos que o esperado (200)"* |
+| **Ao digitar quantidade acima da esperada** | Como **Almoxarife**, a recusa fica **fixa na tela** e **nomeia quem autoriza**. Como **Compras** ou **Administrador**, aparece a caixa **"Autorizo o recebimento acima do pedido"** |
+| **Almoxarifado → Auditoria** | Linha **"Excedente autorizado"**, uma por item, com quem autorizou |
+| **Preencher Dados da NF** | A mesma recusa de nota repetida vale aqui. E salvar duas vezes a **própria** nota do documento continua funcionando |
+
+### Roteiro de teste manual
+
+**Preparação**
+1. Entre no sistema com um usuário **Almoxarife** (ou Administrador) e vá em **Almoxarifado →
+   Recebimentos**. Para os passos 7 em diante você vai precisar de um segundo usuário com perfil
+   **Compras** (ou do **Administrador**).
+
+**A nota repetida — inclusive com o nome escrito diferente**
+2. **Novo Recebimento**, tipo **Nota fiscal**. Nota `12345`, fornecedor `José Aços Ltda` (**com**
+   acento), um item com quantidade **10**. Salvar → entra normalmente.
+3. **Novo Recebimento** outra vez: nota `12345`, e agora digite o fornecedor **sem acento** —
+   `Jose Acos Ltda` — e o mesmo item. Salvar → recusado com *"Nota fiscal 12345 já lançada no
+   recebimento REC-… para este fornecedor"*.
+   **É este o passo que interessa:** com acento e sem acento, para o sistema é o **mesmo**
+   fornecedor. Anote o número `REC-…` que a mensagem cita e confirme na lista que é o documento do
+   passo 2.
+4. **O contraste que prova a regra:** nota `12345` com o fornecedor `Metalúrgica Outra Ltda` →
+   **entra**. Duas empresas podem emitir nota com o mesmo número, e isso continua sendo legítimo.
+
+**O campo "Qtd. conferida" e a divergência**
+5. Abra o recebimento do passo 2 (situação **RECEBIDO**). Cada item agora mostra a quantidade em
+   cima e **"Esperada: 10"** embaixo, e tem o campo **"Qtd. conferida"**.
+6. Digite **7** → aparece *"Divergência: 3 a menos que o esperado (10)"*. Clique em **Salvar
+   Conferência** → o aviso *"Conferência salva"* e o número gravado no painel.
+   **Confira que o campo vazio é diferente de zero:** limpe o campo e salve de novo — o `7`
+   continua gravado. Campo vazio significa "não contei este item", não "chegou zero".
+
+**O excedente recusado, e o excedente autorizado até o fim**
+7. Ainda como **Almoxarife**, digite **12** no mesmo item → o aviso vira *"Divergência: 2 a mais que
+   o esperado (10)"*. Clique em **Salvar Conferência**. A recusa aparece **na tela**, em vermelho:
+   *"Quantidade recebida (12) maior que a esperada (10) no item #⟨id⟩ — a autorização de excedente é
+   de Compras ou do Administrador"*.
+   **Repare em duas coisas:** o `12` que você digitou **continua lá** (nada é perdido), e a mensagem
+   diz **quem resolve** — não manda você marcar uma caixa que o seu perfil não tem.
+8. Entre como **Compras** (ou **Administrador**) e abra o mesmo recebimento. Com `12` no campo,
+   aparece a caixa **"Autorizo o recebimento acima do pedido"**. **Marque a caixa** e clique em
+   **Salvar Conferência** → *"Conferência salva"*. Vá em **Almoxarifado → Auditoria** e confirme a
+   linha **"Excedente autorizado"** com o seu nome.
+   **Duas verificações negativas que valem o clique:** essa caixa **não** aparece para o Almoxarife,
+   e **não** aparece se nenhum item estiver acima do esperado.
+9. **Este é o passo mais importante do roteiro — é o furo que a revisão final pegou, e ele TEM de
+   funcionar até o fim.** Com o excedente já autorizado, avance o documento: **Finalizar
+   Conferência → Encaminhar para Compras → Encaminhar para Faturamento → Iniciar Entrada de NF**.
+   Clique em **Preencher Dados da NF**, preencha número da nota, série, data de emissão, data de
+   entrada e valor total, e **Salvar Dados Fiscais** → tem de **salvar**. Depois **Processar Nota**
+   → estoque creditado e conta a pagar gerada.
+   **Por que isto é o teste que importa:** antes da correção, este documento ficava **preso**.
+   Salvar os dados fiscais respondia com a recusa de excedente — pedindo uma autorização que o
+   formulário de nota fiscal nem tem como mandar — e o processar morria em seguida. Nota conferida,
+   autorizada, e sem caminho para o estoque.
+10. **A diferença pequena que a tela mentia:** num item de `200` esperados, digite `200,001`. O
+    aviso mostra *"Divergência: 0.001 a mais que o esperado (200)"*. Antes ele arredondava e dizia
+    *"0 a mais"* — afirmando que não havia diferença enquanto o servidor recusava o salvamento.
+
+**A forma de recebimento (este não se demonstra pela tela)**
+11. Pela tela você só consegue escolher **Nota fiscal** ou **Pedido de compra**, então não há como
+    produzir o caso clicando. Se quiser demonstrar, é por `curl` ou pela aba de rede do navegador:
+    um cadastro de recebimento com a forma fora desses dois valores responde *"Dados inválidos —
+    tipo_recebimento: forma de recebimento inválida (use NOTA_FISCAL ou PEDIDO_COMPRA)"*.
+    **E é exatamente por isso que o problema passou tanto tempo sem ninguém ver.**
+
+### O que esperar no dia a dia
+
+- **A recusa de nota repetida cita OUTRO documento — e é para ir nele.** A mensagem traz o número
+  `REC-…` de onde a nota já está. Se for engano seu, o trabalho já está feito lá; se forem cargas
+  diferentes com a mesma nota, alguma das duas tem o número errado.
+- **Trocar o fornecedor de um recebimento pode fazer nascer a recusa.** Se você alterar o
+  fornecedor (nos dados fiscais) para o mesmo de outro documento que já tem aquela nota, ele passa a
+  tomar a recusa a partir dali. **Não é bug** — os dois passaram a ser a mesma nota do mesmo
+  fornecedor.
+- **A recusa de excedente nomeia SÓ O PRIMEIRO item acima do esperado.** Se a nota tiver dois itens
+  excedentes, você corrige o primeiro, reenvia e pode tomar uma recusa nova pelo segundo. A trilha
+  de auditoria, ao contrário, escreve **uma linha por item**.
+- **A recusa de excedente recusa o salvamento INTEIRO, não só o item problemático.** Nada é gravado
+  enquanto houver um item acima do esperado sem autorização — mesmo critério do processamento da
+  nota: metade gravada é pior que nada gravado.
+- **A caixa de autorização só aparece para quem pode autorizar, e só quando há excedente de fato.**
+  Se você é Almoxarife e a mensagem fala de autorização, o caminho é chamar Compras — não existe
+  controle escondido na sua tela.
+- **Autorizado uma vez, o sistema não pede de novo.** Reenviar a mesma quantidade (ao preencher a
+  nota, ao reconferir outro item) **não** é um ato novo de autorização, e **não** gera outra linha de
+  auditoria. Só **aumentar** sobre o que já está gravado pede autorização outra vez.
+- **Campo "Qtd. conferida" vazio não é zero.** Vazio é "não contei este item": o sistema preserva o
+  que estava gravado e não desmarca a conferência que outra pessoa fez naquele item.
+- **Notas repetidas que já existem no banco continuam lá.** A guarda impede novas; ela não limpa o
+  passado. É a consulta **A9** do documento de novidades, e ela precisa ser rodada antes do deploy.
+
+### O que esta etapa NÃO cobre
+
+- **O saldo do pedido de compra.** A autorização de excedente compara a quantidade com a
+  **esperada daquele item, naquele recebimento** — não com quanto o pedido ainda tem a receber. Um
+  pedido de 10 pode receber 25 em três recebimentos, cada um "dentro do esperado" do próprio
+  documento, e o pedido continua marcado como 10 e **ABERTO**. **É a Etapa 37**, já desenhada.
+- **Recebimento parcial pela tela.** A tela **nunca carrega os itens do pedido de compra**, então
+  registrar "chegaram 6 dos 10, o resto vem depois" não é um gesto disponível hoje. Também é a
+  Etapa 37.
+- **Dois lançamentos exatamente simultâneos da mesma nota.** A guarda pergunta ao banco e depois
+  grava; duas pessoas salvando a mesma nota no mesmo décimo de segundo ainda passam as duas. O caso
+  realista (a mesma pessoa duas vezes, ou dois operadores em minutos diferentes) está coberto.
+- **Nada do histórico foi limpo.** Notas repetidas e formas de recebimento fora dos dois valores
+  que já existam no banco ficam como estão. As consultas **A9** e **A10** existem para medir isso.
+- **A divergência não virou documento.** Ela aparece na tela, dispara o alerta e entra no
+  relatório — mas não existe um registro formal de divergência com número, dono e desfecho
+  (aceitar, devolver, cobrar do fornecedor).
+- **O campo "Qtd. conferida" só existe em RECEBIDO e EM_CONFERENCIA.** Depois disso a quantidade já
+  virou base de custo médio e de conta a pagar, e corrigi-la pelo painel seria mexer no passado sem
+  trilha.
+- **O campo "Qtd. conferida" não tem rótulo visível** — só o texto dentro dele, que desaparece ao
+  digitar, e a dica ao passar o mouse.
+- **A recusa de nota repetida ao salvar os dados fiscais só sai no aviso flutuante**, que passa em
+  alguns segundos — diferente da conferência, onde a recusa fica fixa na tela. O formulário continua
+  aberto e nada é perdido.
+
+---
+
+## Etapa 35 — As telas vizinhas param de esconder falha e de mostrar o registro errado (ENTREGUE — 2026-09-16)
+
+**O que mudou, em uma frase:** três telas pararam de mostrar algo **plausível** em vez de dizer a
+verdade — a lista de recebimentos não finge mais estar vazia quando a rede caiu, o painel de detalhe
+não mostra mais o recebimento anterior sob o número novo, e os botões da coluna de ações não são mais
+cortados pela borda da tabela.
+
+**Esta etapa não é feature.** Não tem tela nova, campo novo nem botão novo. São os três problemas
+que a revisão da Etapa 34 achou nas telas **vizinhas** às que ela mexeu, e **dois deles são
+anteriores a qualquer etapa recente**: existiam desde que as telas foram construídas. **Nada mudou
+no servidor.**
+
+**O caso com consequência real de operação é um só:** com o servidor fora do ar, a tela de
+Recebimentos dizia *"Nenhum recebimento registrado"*. Quem operava concluía que a nota não havia
+sido lançada e **lançava de novo** — recebimento duplicado de material que já tinha entrado.
+
+### Onde se percebe cada mudança
+
+| Tela | O que você vai notar |
+|---|---|
+| **Almoxarifado → Requisições** | Abre mais rápido, e o piscar de *"Carregando"* ao clicar numa linha desapareceu — era uma consulta a mais, agora é uma só |
+| **Almoxarifado → Recebimentos** (lista) | Se a lista não carregar: *"Não foi possível carregar os recebimentos."*, o motivo em letra menor e o botão **Tentar de novo**. A lista de verdade vazia continua dizendo *"Nenhum recebimento registrado"*, com **Registrar primeiro recebimento** — são duas telas diferentes |
+| **Almoxarifado → Recebimentos** (novo, por nota fiscal) | Se a lista de materiais não carregar: *"Não foi possível carregar a lista de materiais."* junto do campo de busca, com **Tentar de novo**. **Não trava** o formulário: recebimento por pedido de compra continua funcionando |
+| **Almoxarifado → Recebimentos** (trocar de linha) | O painel esvazia na hora: cabeçalho em **"..."**, aviso de carregando, e o bloco de anexos do anterior sai da tela. Com dois cliques rápidos, vence o **último** |
+| **As 11 telas com coluna de ações** | Em janela estreita, os botões **quebram para uma segunda fileira** em vez de sumir na borda. O custo aceito: essas linhas ficam mais altas |
+
+### Roteiro de teste manual
+
+**Preparação**
+1. Entre no sistema com um usuário que tenha acesso ao módulo Almoxarifado. Você vai precisar de
+   **parar e subir o servidor** durante o roteiro (o `npm run dev`, ou desligar a rede da máquina),
+   e do **F12** do navegador.
+
+**Requisições — a consulta que era feita duas vezes**
+2. **Almoxarifado → Requisições.** Abra o **F12 → aba Rede**, filtre por `requisicoes` e limpe a
+   lista.
+3. **Clique numa linha da tabela.** Conte as consultas do detalhe daquela requisição: tem de ser
+   **uma**. (Antes desta etapa eram duas, e por isso o aviso de "Carregando" às vezes piscava.)
+4. Clique em **outra** linha: mais **uma**.
+5. **Confirme que as atualizações legítimas não morreram junto:** com uma requisição aberta, clique
+   em outro programa e volte para a janela do navegador → aparece **uma** consulta nova. Isso é de
+   propósito: quem volta para a tela quer o dado fresco.
+6. Ainda com ela aberta, ligue e desligue o filtro **Minhas requisições** → a lista e o detalhe são
+   buscados de novo. Também de propósito.
+7. **Copie o endereço da página** (ele tem `?id=...`), cole numa aba nova e entre: a requisição abre
+   no painel, com **uma** consulta.
+
+**Recebimentos — a falha de rede que era invisível**
+8. **Almoxarifado → Recebimentos** com o sistema no ar: a lista aparece normalmente.
+9. **Pare o servidor.**
+10. Clique no botão de **atualizar** da tela (passe o mouse: a dica diz *"Atualizar lista"*). A
+    lista **desaparece** e a tela passa a mostrar:
+    *"Não foi possível carregar os recebimentos."*, o motivo técnico em letra menor, e o botão
+    **Tentar de novo**.
+    **Repare no que NÃO aparece:** a frase *"Nenhum recebimento registrado"*. Era exatamente ela que
+    aparecia antes — e é ela que fazia alguém lançar a nota duas vezes.
+11. **Suba o servidor** e clique em **Tentar de novo**: a lista volta e a mensagem de erro sai.
+12. **Pare o servidor outra vez** e clique em atualizar: a mensagem volta. (Ela não "gasta": erra,
+    limpa no sucesso, erra de novo.)
+13. **Com o servidor ainda parado**, clique em **Novo Recebimento** e escolha o tipo **Nota fiscal**.
+    Junto do campo *Buscar material...* aparece *"Não foi possível carregar a lista de materiais."*
+    com **Tentar de novo**.
+14. **Confirme que isso é aviso e não barreira:** no mesmo modal, troque para o tipo **Pedido de
+    compra** — o caminho continua disponível. Feche o modal, suba o servidor, abra de novo: o aviso
+    não está mais lá.
+15. **E o contraste que prova a regra:** com o servidor no ar e a lista realmente sem nenhum
+    recebimento, a tela diz *"Nenhum recebimento registrado"* e oferece **Registrar primeiro
+    recebimento**. Lista vazia e falha de rede são duas telas diferentes.
+
+**Recebimentos — o painel que mostrava o recebimento anterior**
+16. Com o servidor no ar, abra **F12 → aba Rede** e ligue o estrangulamento **Slow 3G** (a caixa de
+    seleção de velocidade da rede).
+17. Clique num recebimento e espere ele abrir. Agora clique em **outro, sem esperar**.
+18. **Olhe o cabeçalho do painel:** ele passa por **"..."** e o corpo mostra o aviso de carregando.
+    Em nenhum instante o número do segundo recebimento aparece **em cima dos dados do primeiro**.
+    O bloco de anexos do primeiro também sai da tela.
+19. **Repita algumas vezes, invertendo a ordem dos dois.** O painel sempre acaba no recebimento do
+    **último** clique — mesmo que a resposta do primeiro chegue depois.
+20. **A não regressão que vale conferir:** com um recebimento aberto, escolha um arquivo no bloco de
+    anexos e **salve os dados fiscais** (ou avance a situação). O painel se atualiza, o bloco de
+    anexos **não** é desmontado e o arquivo escolhido **continua escolhido**.
+21. **O ✕ do painel:** clique numa linha e, imediatamente, no **✕** do painel. Ele fecha **e fica
+    fechado** — não reabre sozinho alguns instantes depois, e o endereço da página não volta a
+    apontar para a requisição/recebimento que você fechou.
+
+**Tabelas — os botões que eram cortados**
+22. **Almoxarifado → Ferramentas.** Arraste a borda da janela do navegador para estreitá-la aos
+    poucos.
+23. Olhe a última coluna: os botões **quebram para uma segunda fileira** dentro da mesma célula, e o
+    último continua inteiro e clicável. Antes, ele era cortado pela borda da tabela — sem barra de
+    rolagem e sem aviso nenhum.
+24. Repita em **Materiais** e em **Remessas a Terceiros**.
+
+### O roteiro do F12 — a única coisa desta etapa que ficou sem prova
+
+A mudança de estilo está feita e travada por teste automático, mas **medir pixel exige navegador**.
+Falta conferir duas coisas, e são cinco minutos.
+
+**Nota importante, porque a instrução anterior estava errada:** o roteiro antigo (letra **F12** do
+documento de novidades) mandava olhar **Materiais**. **Estava errado na tela** — os dez ícones de
+Materiais ocupam cerca de 374 pixels e cabem com folga. O pior caso é **Ferramentas**, que mostra
+**cinco botões com texto**, e texto não quebra no meio da palavra.
+
+**Como fazer:**
+1. Abra o **F12** e use o modo de dispositivo (ou arraste a borda da janela, acompanhando a largura
+   que o navegador mostra).
+2. Repita em **cada** uma destas larguras: **769, 820, 900, 1024, 1100, 1280 e 1400 pixels**, mais
+   **uma largura abaixo de 768 pixels** (celular — ali o desenho da tabela é outro, e a quebra de
+   linha muda a **altura** das linhas nas 11 telas).
+3. Em cada largura, olhe **três telas**:
+   - **Almoxarifado → Ferramentas**, numa linha de ferramenta **DISPONÍVEL que exige calibração** —
+     é a que mostra os **cinco** botões, o pior caso;
+   - **Almoxarifado → Materiais** — dez ícones na coluna de ações;
+   - **Almoxarifado → Remessas a Terceiros** — seis botões.
+4. **Confira duas coisas em cada uma:**
+   - **o ÚLTIMO botão da coluna está inteiro** e clicável — não cortado pela borda, não escondido;
+   - **a tabela não ganhou uma área escondida sem barra de rolagem.** Cole no console do F12:
+
+     ```js
+     const c = document.querySelector('.almox-table-container');
+     console.log(c.scrollWidth, c.clientWidth, c.scrollWidth > c.clientWidth);
+     ```
+
+     O terceiro valor tem de ser **`false`**. Se der `true`, há conteúdo fora da área visível e sem
+     barra para alcançá-lo — é o caso a relatar.
+5. **Anote também quais linhas passaram a ocupar duas fileiras** em cada largura. Esse é o custo
+   aceito da mudança, e é preciso ver se incomoda na prática.
+
+**Se algo estiver errado:** diga **qual largura, qual tela e qual botão**. O ajuste é de estilo e é
+de uma linha.
+
+### O que esperar no dia a dia
+
+- **Requisição abre mais rápido.** Metade das consultas ao abrir uma linha desapareceu. Nenhum dado
+  mudou — era leitura repetida, não lançamento duplicado.
+- **Mensagem de erro em Recebimentos é informação, não pânico.** Ela significa "não consegui
+  perguntar ao servidor", e quase sempre a causa é rede ou sessão expirada. Clicar em **Tentar de
+  novo** resolve; se não resolver, recarregue a tela (o login pode ter expirado).
+- **Lista vazia e falha de rede agora são distinguíveis** — e essa diferença é o ponto da etapa.
+  Nunca registre de novo um recebimento porque a lista "está vazia": confira qual das duas telas
+  você está vendo.
+- **O painel do recebimento pode "esvaziar" por um instante.** É de propósito: ele esvazia em vez de
+  mostrar o recebimento anterior com o número do novo. Em rede boa é imperceptível.
+- **Vale sempre o último clique.** Se você clicar em dois recebimentos em sequência, o painel acaba
+  no segundo, mesmo que a resposta do primeiro chegue atrasada.
+- **Tabelas mais altas em janela estreita.** Os botões que não cabem passam para uma segunda
+  fileira. Foi escolha: linha mais alta incomoda, botão cortado **não existe** para quem olha.
+
+### O que esta etapa NÃO cobre
+
+- **O teto da faixa de largura e as linhas que passaram a ocupar duas fileiras** — é o roteiro do
+  F12 acima, e é a única coisa desta etapa sem prova. Cinco minutos de navegador.
+- **Voltar e avançar do navegador na tela de Requisições.** As setas de histórico não têm prova
+  automática (exigiria um histórico de navegador real no teste). Pela leitura do código elas não
+  disparam consulta duplicada — mas é leitura, não medição.
+- **Anexar arquivo exatamente no instante em que você troca de recebimento.** O arquivo ainda pousa
+  no recebimento anterior. É uma janela de fração de segundo, e fechá-la exige mexer no envio do
+  arquivo, não na leitura do painel.
+- **O modal de dados fiscais, o avanço de situação e a impressão de etiquetas de Recebimentos
+  continuam sem teste automático.** A suíte dessa tela nasceu na Etapa 34 em volta dos anexos;
+  esta etapa somou erro de carga e troca de painel. O resto segue descoberto.
+- **As mensagens novas não são anunciadas por leitor de tela.** O aviso flutuante do sistema é o
+  único anúncio assistivo que o módulo tem — vale para o módulo inteiro, não é particularidade
+  desta etapa.
+- **Os furos C43 e C44**, da Etapa 33, seguem abertos.
+- **Nada no servidor.** Nenhuma rota, nenhum perfil, nenhuma permissão, nenhuma migration.
+
+---
+
+## Etapa 34 — Anexar documento em material, requisição, recebimento, devolução e item de remessa (ENTREGUE — 2026-09-16)
+
+**O que mudou, em uma frase:** o clipe de anexos, que existia só na inspeção, passou a existir em
+mais **cinco** lugares — e agora quase todo papel do galpão tem um registro a que se prender.
+
+Nenhuma regra de arquivo mudou: continuam valendo PDF ou imagem, até 10 MB, download registrado na
+Auditoria e o perfil decidindo quem anexa e quem remove. O que mudou é **onde** você encontra o
+clipe. E **nada mudou no servidor** — o mecanismo já aceitava as seis entidades; faltava a tela.
+
+### Onde fica cada um
+
+| Tela | Onde está | O que abre |
+|---|---|---|
+| **Almoxarifado → Materiais** | **clipe** na coluna de ações de cada linha da lista (*"Anexos e documentos deste material"*) | janela **Anexos do material**, com `CÓDIGO — Nome` abaixo do título |
+| **Almoxarifado → Requisições** | bloco **Anexos** no **fim do painel de detalhe**, depois dos botões de ação | o bloco inteiro, ali mesmo |
+| **Almoxarifado → Recebimentos** | bloco **Anexos** no **fim do painel de detalhe** | o bloco inteiro, ali mesmo |
+| **Almoxarifado → Devoluções** | **clipe** na coluna de ações — **a coluna é nova** (*"Anexos e documentos desta devolução"*) | janela **Anexos da devolução**, com material e data |
+| **Almoxarifado → Remessas a Terceiros** | abra a remessa: **clipe em cada linha da tabela de itens** (*"Anexos e documentos deste item"*) | janela **Anexos do item da remessa**, com o material do item |
+
+O sexto lugar, que já existia, é **Inspeções → aba Histórico → clicar na linha** (Etapa 32).
+
+### Roteiro de teste manual
+
+**Preparação**
+1. Entre no sistema com um usuário que tenha acesso ao módulo Almoxarifado. Tenha à mão um PDF
+   qualquer (uma ficha técnica, uma nota escaneada) e um arquivo `.txt`, para testar a recusa.
+
+**Materiais**
+2. **Almoxarifado → Materiais.** Na última coluna de qualquer linha, clique no **clipe**.
+3. A janela **Anexos do material** abre, com o código e o nome do material. Sem documento ainda,
+   ela diz *"Nenhum anexo."*.
+4. Escolha o tipo, selecione o PDF e clique em **Anexar**. Ele entra na lista com o seu nome, o
+   tamanho e a data, e aparece o aviso **Anexo enviado**.
+5. Clique em **Baixar**: o arquivo desce com o nome original.
+6. **Teste a recusa:** tente anexar o `.txt` → *"Anexo deve ser PDF ou imagem"*.
+7. Feche a janela (no ✕ ou clicando fora) e abra o clipe de **outro material**: o documento **não**
+   está lá. Volte ao primeiro: está.
+
+**Requisições**
+8. **Almoxarifado → Requisições** e clique numa requisição da lista. O painel de detalhe abre.
+9. **Role o painel até o fim**, passando pelos botões de ação: o bloco **Anexos** é a última coisa
+   do painel. Anexe um desenho.
+10. Clique em **outra requisição** da lista: o painel troca e os anexos mostrados são os **daquela**
+    requisição.
+11. **Confirme o corte deliberado (decisão B71):** abra **Comercial → Requisições de Material** e
+    clique numa requisição. O painel abre com os mesmos dados — e **sem** o bloco Anexos. Vale
+    também para Frota, Compras, Financeiro, Fábrica e Engenharia. **Isto é de propósito**, não é
+    falha: essas telas ficam fora da permissão do módulo Almoxarifado, e o bloco ali só saberia
+    mostrar um erro.
+
+**Recebimentos**
+12. **Almoxarifado → Recebimentos → Novo Recebimento** e registre um. Ao salvar, o sistema já abre
+    o detalhe dele.
+13. Sem sair da tela, role até o fim do painel e anexe a nota fiscal escaneada — é o caso de uso
+    real: a nota está na mão de quem acabou de registrar.
+14. Clique em **outro recebimento** da lista e volte: cada um mostra os próprios anexos.
+
+**Devoluções**
+15. **Almoxarifado → Devoluções.** Repare que a tabela agora tem uma **coluna de ações** à direita,
+    que antes não existia.
+16. Clique no clipe de uma devolução **antiga**, de semanas atrás. A janela abre normalmente e
+    aceita o anexo. **Devolução não se edita nem se cancela no sistema, mas recebe anexo a qualquer
+    momento** — é comum o comprovante assinado chegar dias depois.
+
+**Remessas a terceiros**
+17. **Almoxarifado → Remessas a Terceiros** e abra uma remessa (clique na linha).
+18. Na tabela de itens, clique no **clipe** de um item e anexe o certificado do serviço.
+19. Abra o clipe de **outro item da mesma remessa**: o certificado **não** está lá. O anexo é do
+    **item**, não da remessa.
+20. **Agora o contrário:** clique em **Nova remessa**, acrescente uma linha de item no formulário e
+    olhe a linha — ela **não tem clipe**. Só depois de salvar o item passa a existir para o sistema,
+    e só então pode receber documento.
+
+**O perfil, e a prova que vale para todas as telas**
+21. **Entre com um usuário de perfil Consulta** e repita os passos 2 e 8: o clipe aparece, a janela
+    abre, a lista de anexos aparece e **Baixar** funciona — mas o **formulário de enviar não
+    aparece**, e o botão de remover também não. Com **Qualidade** ou **Produção**, o formulário de
+    enviar aparece e o de remover não. Só **Administrador** e **Almoxarife** removem.
+22. **O teste do arquivo que não some:** no bloco de anexos de uma requisição (ou de um
+    recebimento), clique em escolher arquivo, selecione o PDF, **clique em outro programa fora do
+    navegador** e volte para a tela. O arquivo escolhido **continua escolhido**, e clicar em Anexar
+    envia normalmente.
+23. **Almoxarifado → Auditoria**, filtrando pela entidade **Anexo**: *Anexo enviado*, *Anexo
+    baixado* e *Anexo removido*, com quem fez e quando — agora vindos das seis telas.
+
+### O que esperar no dia a dia
+
+- **O clipe não diz quantos documentos tem.** A linha da lista não mostra um contador; é preciso
+  abrir para ver. Foi decisão: um contador obrigaria a consultar os anexos de **cada linha** ao
+  carregar a lista, e a lista de materiais ficaria lenta.
+- **Não dá para anexar enquanto está digitando.** É preciso salvar o registro primeiro. A exceção
+  prática é o recebimento: como ele já abre o detalhe assim que é salvo, o anexo vem no mesmo
+  fôlego.
+- **Na remessa, pense por item.** Um documento que vale para a remessa inteira não tem lugar
+  próprio — ou vai num item, ou é repetido em cada um.
+- **Remover não apaga o arquivo do servidor** (mesma regra da Etapa 32), e **baixar deixa rastro**.
+- **Quem requisita fora do Almoxarifado não vê anexo na requisição.** Se isso incomodar na
+  operação, é a decisão **B71** e tem correção própria.
+
+### O que esta etapa NÃO cobre
+
+- **Anexo na remessa inteira** — o clipe é por item, e acrescentar a remessa à lista do que aceita
+  anexo é mexer no mecanismo, não plugar uma tela.
+- **Anexar durante a criação** de material, requisição, recebimento, devolução ou item de remessa.
+- **Contador de anexos na linha da lista** ("3 📎").
+- **O bloco nas telas de requisição dos outros seis módulos** (decisão **B71**).
+- **Dois problemas anteriores, em telas vizinhas, que a revisão desta etapa descobriu e não
+  corrigiu:** clicar numa requisição **busca o detalhe duas vezes** (furo **C45** — só lentidão,
+  nenhum dado errado) e a tela de Recebimentos mostra *"Nenhum recebimento registrado"* quando o
+  que houve foi **falha de rede** (fragilidade **G10**). Os dois são a Etapa 35.
+
+## Etapa 33 — Os arquivos param de abrir sem login (ENTREGUE — 2026-09-03)
+
+**O que mudou, em uma frase:** o endereço de cada arquivo do almoxarifado agora vem assinado pelo
+sistema, vale só para aquele arquivo, e expira em 15 a 20 minutos.
+
+Antes, qualquer pessoa com o link abria o arquivo **deslogada**, de qualquer lugar — inclusive a
+imagem da assinatura de quem retirou material. A única proteção era o nome do arquivo ser difícil
+de adivinhar, o que não protege contra quem já tem o link.
+
+### Roteiro de teste manual
+
+1. Vá em **Almoxarifado → Materiais** e encontre um material com foto. A foto aparece normal.
+2. **Botão direito na foto → “Copiar endereço da imagem”**, e cole num bloco de notas. O endereço
+   termina com `?exp=...&sig=...` — essa parte é a assinatura.
+3. **Cole o endereço completo numa aba anônima**, sem estar logado: a imagem abre. É o que
+   permite a foto carregar dentro da tela.
+4. **Apague o `?exp=...&sig=...` e abra de novo:** dá “não encontrado”. Antes desta etapa, esse
+   endereço curto **abria** — é exatamente essa a mudança.
+5. **Troque o nome do arquivo no endereço** (mantendo a assinatura) por outro arquivo qualquer:
+   também dá “não encontrado”. Cada assinatura vale para um arquivo só.
+6. **Espere ~20 minutos** e recarregue a aba anônima com o endereço completo: para de funcionar.
+   Voltando ao sistema e recarregando a tela, a foto aparece de novo (com um endereço novo).
+7. Repita em **Lotes → Ver certificado** e na **assinatura de entrega** de uma requisição
+   entregue: as duas seguem a mesma regra.
+
+### O que esperar no dia a dia
+
+- **Nada muda para quem usa o sistema normalmente.** As fotos e os certificados aparecem como
+  sempre; o sistema pede o endereço assinado sozinho, a cada vez que carrega a tela.
+- **Tela aberta por muito tempo pode mostrar imagem em branco.** Recarregar resolve. Aparece mais
+  na tela de montar requisição, que é a de uso mais demorado e carrega as fotos conforme você
+  rola a lista.
+- **Links antigos morrem.** Endereço de foto ou certificado guardado em planilha, documento ou
+  e-mail para de funcionar. O caminho passa a ser abrir pelo sistema.
+
+### Um segundo problema que a revisão encontrou, e que já está corrigido
+
+Ao revisar a etapa, apareceu um defeito **anterior a ela** e mais sério que o original: era
+possível enviar um arquivo **dizendo** ser uma imagem, mas com nome terminado em `.html`, e o
+sistema o guardava assim. Quando alguém clicasse para abrir esse arquivo, o navegador o trataria
+como uma página do próprio CRM — o que permitiria a quem enviou o arquivo executar código na
+sessão de quem clicasse.
+
+**Está fechado, e em duas frentes:** o sistema passou a gravar a extensão pelo **tipo real** do
+arquivo, ignorando o nome enviado; e passou a entregar todo arquivo com instruções que impedem o
+navegador de executá-lo. A segunda frente existe porque a primeira não limpa o passado — arquivos
+gravados antes disso continuam no servidor, e agora estão neutralizados (furo **C44**).
+
+**Como conferir:** envie uma foto de material renomeando o arquivo para `teste.html` antes de
+enviar. O sistema aceita — é uma imagem de verdade — e o guarda como `.png`. Nada terminado em
+`.html` chega ao servidor.
+
+### O que esta etapa NÃO cobre
+
+- **Quem já baixou continua com o arquivo** — fechar a porta não recolhe o que saiu.
+- **Não há registro de quem baixou** esses arquivos. O registro de download existe só para os
+  **anexos** (Etapa 32).
+- **Três tipos de arquivo continuam sem tela para vê-los** (comprovante de sucateamento,
+  certificado de calibração e foto de ocorrência) — são guardados e nunca exibidos. Ficaram
+  fechados junto com o resto.
+## Etapa 32 — Anexar certificado, relatório e foto à inspeção (ENTREGUE — 2026-09-02)
+
+**O que mudou, em uma frase:** o papel que prova a qualidade — certificado do fornecedor,
+relatório dimensional, foto da peça — agora fica preso à inspeção dentro do sistema, e quem tem
+acesso ao almoxarifado baixa em dois cliques.
+
+Antes disso, esse documento vivia no e-mail de quem recebeu o material, numa pasta da rede ou
+impresso numa gaveta. Quando o cliente ou o auditor pedia "me mostre o certificado do material
+desta OS", alguém precisava lembrar onde tinha guardado.
+
+### Onde fica
+
+**Almoxarifado → Inspeções → aba Histórico → clique em qualquer linha.**
+
+A linha abre. Se aquela inspeção tiver medidas dimensionais, elas aparecem primeiro; **abaixo,
+sempre, o bloco Anexos**. Linha sem medida também abre agora — antes ela não abria de jeito
+nenhum.
+
+### Roteiro de teste manual
+
+1. Entre no sistema e vá em **Almoxarifado → Inspeções**.
+2. Clique na aba **Histórico**. Se não houver nenhuma inspeção decidida, faça uma primeiro (aba
+   Pendentes → decidir um item).
+3. **Clique numa linha da lista.** Ela expande. Repare no ícone de seta na última coluna — ele
+   agora aparece em todas as linhas, com medidas ou sem.
+4. No bloco **Anexos**, escolha o **tipo** (por exemplo *Certificado*), escreva uma descrição se
+   quiser, clique em **Escolher arquivo** e selecione um PDF.
+5. Clique em **Anexar**. Ele aparece na lista com o seu nome e a data.
+6. Clique no botão de **baixar** da linha do anexo. O arquivo desce com o nome original — inclusive
+   se o nome tiver acento ou traço longo (`Certificado nº 123 — aço.pdf` desce exatamente assim).
+7. **Teste a recusa:** tente anexar um arquivo `.txt` ou `.docx`. A tela mostra
+   *"Anexo deve ser PDF ou imagem"* e nada é enviado.
+8. **Teste o limite:** um arquivo acima de 10 MB devolve *"Arquivo excede o limite de 10 MB"*.
+9. Clique na **lixeira** do anexo. Ele some da lista na hora.
+10. Vá em **Almoxarifado → Auditoria** e filtre pela entidade **Anexo**. Estão lá as três linhas:
+    **Anexo enviado**, **Anexo baixado** e **Anexo removido**, cada uma com quem fez e quando.
+
+### O que muda conforme o perfil
+
+Faça o teste com um usuário de perfil **Consulta**: ele **vê** a lista de anexos e **baixa**, mas
+**não vê** o formulário de anexar nem a lixeira. Com **Qualidade** ou **Produção**: vê o formulário
+de anexar, mas **não** vê a lixeira. Só **Administrador** e **Almoxarife** removem.
+
+Isso é deliberado: tirar um certificado de vista é apagar evidência, e a permissão para isso é mais
+estreita que a de anexar. A explicação completa está na letra **B68** do documento de novidades.
+
+### Duas coisas que valem saber
+
+- **Remover não apaga o arquivo do servidor.** Ele some da tela e a remoção fica na trilha, mas o
+  arquivo continua guardado — de propósito, para que a linha de auditoria não vire uma promessa
+  vazia. Consequência: anexo removido continua ocupando disco, e não há rotina de limpeza.
+- **Baixar deixa rastro.** É a única leitura registrada no módulo inteiro. Existe porque qualquer
+  pessoa com acesso ao almoxarifado baixa qualquer anexo, e nessa situação a trilha é o que
+  permite saber depois quem viu o quê.
+
+### O que esta etapa NÃO cobre
+
+- **As outras cinco telas.** Material, requisição, recebimento, devolução e item de remessa a
+  terceiro **já são aceitos pelo mecanismo**, mas **não têm o botão** — só a inspeção tem. Cada
+  plug é pequeno e fica para a etapa seguinte.
+- **Os arquivos antigos continuam públicos por link** — foto de material, certificado de lote,
+  comprovante de sucateamento, certificado de calibração, foto de ocorrência e assinatura de
+  entrega abrem **sem login** para quem tiver a URL. É defeito **anterior** a esta etapa; a
+  correção é etapa própria, porque duas telas apontam direto para aqueles endereços. Ver furo
+  **C42**.
+- **O sistema não abre o arquivo para conferir o conteúdo.** Ele confere o tipo declarado e
+  controla a extensão que grava no servidor, mas não valida que o PDF é um PDF de verdade.
 
 ## Correção — a posição por cliente não fechava a conta (2026-08-13)
 

@@ -1,12 +1,36 @@
 # 12 — Devoluções
 
-> **Status:** 🟢 — **Etapa 7 entregue (2026-08-12, `29524fc..0722bfd` + `eabd848`/`7fc1b7f`)**: a
+> **✅ RESSALVA RESOLVIDA em 2026-09-29 (Etapa 45, `a425559..7f72e39`) — a devolução AO FORNECEDOR
+> existe.** Ela não é a "mesma devolução com outro destino", como esta spec sempre disse, e por isso
+> **não** mora na tela de Devoluções: ela é a **execução de uma decisão de não conformidade**. Quem
+> decide *Devolver ao fornecedor* registra a intenção; quem despacha o material registra a
+> **execução**, e é esse registro que gera a saída `DEVOLUCAO_FORNECEDOR` — da quantidade reprovada,
+> do lote que entrou naquele recebimento, com o número da NC em `documento_vinculado` e o motivo
+> *"Devolução ao fornecedor"*. O caminho é **Almoxarifado → Não Conformidades**, e o item 187 do
+> checklist abaixo está marcado **em parte**, com o que ficou de fora dito ali.
+> **A feature 09 fechou em 🟢 junto com isto** — era o último item dela.
+> ~~**⚠️ RESSALVA DO 🟢, acrescentada em 2026-09-28 (Fase 0 da Etapa 45) — leia antes de confiar na
+> cor.** O verde vale para a **devolução AO ESTOQUE**; a **devolução AO FORNECEDOR continua
+> desmarcada** no checklist, e a feature 09 depende dela. **Não mude a cor sem entregar a devolução
+> ao fornecedor** — e, quando entregar, tire esta ressalva.~~
+> *(Riscada, não apagada: o diagnóstico dela estava certo — inclusive o detalhe de que o erro
+> atravessava as duas specs e nenhuma o via sozinha — e é o registro de que o 🟢 desta feature
+> escondeu por sete semanas (2026-08-12 a 2026-09-29) um item de que outra feature dependia. O verde agora vale para os dois
+> destinos; o que ficou de fora está no item 187 e nas limitações desta spec, não na cor.)*
+>
+> **Status:** 🟢 — **os DOIS destinos existem**: ao estoque desde a Etapa 7, ao fornecedor desde a **Etapa 45** (2026-09-29, `a425559..7f72e39`, pela tela de **Não Conformidades** — ver a nota resolvida no topo e o item 187). **Etapa 7 entregue (2026-08-12, `29524fc..0722bfd` + `eabd848`/`7fc1b7f`)**: a
 > devolução cita a saída original (com validação de quantidade), herda o lote, reativa a série,
 > tem tela dedicada em `/almoxarifado/devolucoes` — e o **bug de saldo do destino SUCATA foi
 > corrigido**. O cabeçalho anterior dizia *"falta vínculo à saída original e devolução com lote"*:
 > **isso está entregue**. · **Spec original:** seção 16
-> **Última atualização:** 2026-08-12 — Etapa 7 (Tasks 1, 3, 4, 5, 7) + o conserto de compensação
-> fora do plano
+> **Etapa 34 (2026-09-16, `746a106..054f727`) — a tabela de devoluções ganhou ANEXOS** (`67f2389`):
+> a tela recebeu a **primeira coluna de ações que já teve**, com um clipe por linha abrindo o modal
+> **Anexos** (entidade `devolucao`). Como a devolução é **imutável** no servidor (não há PUT nem
+> DELETE), anexar comprovante numa devolução antiga é legítimo — e é justamente quando o
+> comprovante costuma chegar. Zero linhas de servidor. A frase "plugar aqui é uma linha", que esta
+> spec repetia desde a Etapa 32, **estava errada** — ver a correção no item de checklist de fotos.
+> **Última atualização:** 2026-09-16 (Etapa 34 — anexos na tela; antes: 2026-08-12 — Etapa 7
+> (Tasks 1, 3, 4, 5, 7) + o conserto de compensação fora do plano)
 > Antes: 2026-08-11 — auditoria de cauda: corrigida a descrição da movimentação (anterior à Etapa 6) e registradas as decisões da Etapa 6 que afetam esta feature (isenção de lote, RETRABALHO neutro, SUCATA com justificativa)
 
 ## Objetivo
@@ -140,10 +164,69 @@ vez de implícito.
 - [x] Devolução **com lote** — **`38d2391`**. Herda o `lote_id` da saída original quando o material tem `controle_lote`; lote informado à mão ganha do herdado; devolução avulsa exige o lote pelo seletor da tela. Resolve o saldo que ficava **preso**: entrava com `lote_id NULL` e a saída seguinte, que exige lote, não achava nenhum
 - [x] Devolução com **número de série** — **`9e27bcb`**. Destinos `ESTOQUE`/`QUARENTENA`: o motor reativa a série `ENTREGUE → EM_ESTOQUE` (`seriesService.entradaSeries`). Antes, devolver material serializado voltava o saldo **sem voltar a peça**, quebrando o invariante `COUNT(séries presentes) == quantidade_atual` da Etapa 6b a cada devolução
 - [x] Condição → destino: boa → estoque · suspeita → quarentena · danificada → sucata — **`0722bfd`**, entregue **como sugestão na tela**. O backend aceita qualquer combinação **de propósito**: uma regra rígida no motor criaria um caso sem saída (material bom que precisa ir para inspeção por outro motivo). Trocar o destino à mão não é desfeito pela sugestão — quem decide é quem está com a peça na mão. "Suspeita → inspeção (feature 09)" foi implementada como **quarentena** (`ENTRADA_DEVOLUCAO` + `BLOQUEIO`): o físico volta, o disponível não sobe. Ligar isso à fila formal de inspeção da feature 09 continua aberto
-- [ ] Tipos de devolução (spec 16): produção, projeto, instalação externa, ferramenta (feature 16), não utilizado, ao fornecedor, do fornecedor, de cliente (feature 13), assistência técnica. **Continua aberto** — é uma **coluna a mais** nesta tabela, não tabela nova; conteúdo das features 13/16
-- [ ] Fotos da devolução (anexos) — **fora do escopo da Etapa 7, declarado**
+- [ ] Tipos de devolução (spec 16): produção, projeto, instalação externa, ferramenta (feature 16), não utilizado, ~~ao fornecedor~~, do fornecedor, de cliente (feature 13), assistência técnica. **Continua aberto** — é uma **coluna a mais** nesta tabela, não tabela nova; conteúdo das features 13/16
+      > ⚠️ **"Ao fornecedor" saiu desta lista na Etapa 45, e NÃO como coluna desta tabela.** Ele
+      > virou um **tipo de movimento próprio** (`DEVOLUCAO_FORNECEDOR`) disparado pela execução de
+      > uma não conformidade, e não passa por `devolucoes_material_almoxarifado`. Fica riscado aqui
+      > porque a premissa *"é só uma coluna a mais"* **estava errada para este caso** — e quem
+      > confiasse nela acrescentaria a coluna e não teria construído nada do que faltava.
+- [x] Fotos da devolução (anexos) — **`67f2389`** (Etapa 34, 2026-09-16). *Era "fora do escopo da Etapa 7, declarado" — deixou de ser.* A tabela de `DevolucoesAlmoxarifado.js` ganhou uma **9ª coluna, de ações** — a primeira coluna de ações que esta tela já teve —, com um botão de clipe por linha (`title` "Anexos e documentos desta devolução") que abre o modal **Anexos** na entidade `devolucao`. O botão **não** é gateado por perfil (RN-03/B68): quem vê a tela vê o clipe; enviar e remover são decididos dentro do bloco, pelo backend. **Anexar em devolução antiga é legítimo e deliberado:** a devolução é imutável no servidor (sem `PUT`, sem `DELETE`), e o comprovante em papel quase sempre chega depois do lançamento
+      **Etapa 32 (`e708125..fd71958`): o MECANISMO existe, está testado, e falta SÓ o plug desta
+      tela.** A entidade é `devolucao`, já no mapa fechado do serviço.
+      A `anexos_documento_almoxarifado` era **órfã** — zero leitor, zero escritor, sem índice —,
+      e virou `services/almoxarifado/anexoService.js` (mapa fechado de seis entidades,
+      existência do registro-pai verificada, soft delete, auditoria) mais as rotas
+      `POST/GET/DELETE /almoxarifado/anexos` e `GET /almoxarifado/anexos/:id/arquivo`, esta com
+      **download autenticado** — o arquivo NÃO é servido estaticamente. No client existe o
+      componente genérico `client/src/components/almoxarifado/AnexosDocumento.js`.
+      **Plugar aqui é uma linha** — `<AnexosDocumento entidade="CHAVE" entidadeId={id} />` — mais
+      dois cenários de teste. **Ponto de atenção medido na Etapa 32:** confira QUANDO o `id`
+      existe nesta tela. Na inspeção o plug teve de ir para a aba Histórico, porque a linha só
+      nasce **depois** da decisão — anexar antes penduraria o arquivo num id inexistente.
+
+      **⚠️ Correção da Etapa 34 (2026-09-16, `746a106..054f727`).** O parágrafo acima dizia que
+      **"plugar aqui é uma linha"**; isso **ESTAVA ERRADO**. O certo, medido no design `6ccaf40` e
+      confirmado na execução: esta tela **não tinha casa** para o bloco — a devolução não tem
+      painel de detalhe nem linha expansível, e a tabela nem coluna de ações tinha —, então foi
+      preciso construir antes a casca de modal (`AnexosModal` + `titulo` opcional em
+      `AnexosDocumento`, `746a106`), abrir a coluna de ações e pendurar o clipe nela. O mesmo
+      valeu para Materiais e para o item da remessa a terceiros; e mesmo nas duas telas que tinham
+      painel (requisição e recebimento) o plug não foi uma linha — o bloco precisou sair do
+      ternário de `loadingDetalhe` (`c5d9e99`) e, na requisição, de gate por `warehouseMode`
+      (`a88d715`, B71). O texto da Etapa 32 fica acima **de propósito** — o mecanismo que ele
+      descreve continua exato; errada era só a estimativa do custo do plug.
 - [ ] Atualizar custo do projeto (estorno de consumo — feature 22) — **fora do escopo da Etapa 7, declarado**
-- [ ] Devolução ao fornecedor: fluxo próprio com documento e e-mail — **fora do escopo da Etapa 7, declarado**. Não é "a mesma devolução com outro destino": tem documento fiscal e contraparte externa
+- [x] Devolução ao fornecedor — **PAGO EM PARTE na Etapa 45** (2026-09-29, `a425559..7f72e39`):
+      T1 `a425559` (tipo `DEVOLUCAO_FORNECEDOR` no motor, dedicado, fora da rota genérica),
+      T2 `f8ab433` (estado de execução da NC + migração com backfill), T3 `dc629e1`
+      (`POST /nao-conformidades/:id/executar` e a fila `?execucao=PENDENTE`), T5 `7c9bd1f`,
+      T6 `a5b800c`, T4 `0305acc` (tela), fix-round `7f72e39`.
+      ~~fluxo próprio com documento e e-mail — **fora do escopo da Etapa 7, declarado**. Não é
+      "a mesma devolução com outro destino": tem documento fiscal e contraparte externa~~
+      > **A frase riscada estava CERTA no diagnóstico, e foi ela que decidiu o desenho:** não é a
+      > mesma devolução com outro destino, então **não** entrou na tela de Devoluções nem na tabela
+      > `devolucoes_material_almoxarifado`. Entrou como **execução de uma decisão de não
+      > conformidade**, na feature 09 — quem decide *Devolver* registra a intenção, quem despacha
+      > registra a execução, e é a execução que move o estoque.
+      >
+      > **O que saiu:** a saída de estoque com baixa simultânea do físico e do bloqueado, do lote
+      > que entrou naquele recebimento; autor, data e observações da execução; o número da NC em
+      > `documento_vinculado` e o motivo *"Devolução ao fornecedor"*; a fila do que falta despachar;
+      > o gate de perfil próprio (`executar_encaminhamento`); e o cartão de material reprovado
+      > deixando de cobrar o que saiu.
+      >
+      > **O que NÃO saiu, e é por isso que este item é "em parte":** **(a)** o **documento fiscal**
+      > — nota de devolução, CFOP e impostos ficam fora; o número da nota vai no campo de
+      > observações; **(b)** o **e-mail ao fornecedor** — nenhum aviso externo sai do sistema (o
+      > e-mail interno da reprovação, esse existe desde a Etapa 17); **(c)** material com **número
+      > de série**, que continua no caminho de dois passos por **Movimentações**, pela mesma razão
+      > declarada no descarte de devolução desta spec; **(d)** o pedido de compra **não** é reaberto
+      > e `quantidade_recebida` **não** é reduzida (corte declarado, fixado por teste).
+      >
+      > **E um furo de operação nasceu com isto:** o documento recusado por série ou por lote não
+      > identificável fica **preso** em *Pendente de execução*, porque nada em tela nenhuma cancela,
+      > redecide ou reabre um documento já decidido — furo **C64** das novidades, e é a próxima
+      > etapa. Quem marcar este item como 100% sem ler isso vai prometer o que não existe.
 - [ ] E-mail automático (feature 19) — **fora do escopo da Etapa 7, declarado**
 
 ### Frontend

@@ -36,6 +36,9 @@ const TIPO_ICONES = {
   'Área de expedição': '🚚',
   'Área de materiais do cliente': '👤',
   'Área de quarentena/inspeção': '🔍',
+  // Etapa 68: os dois tipos novos do servidor (TIPOS_LOCALIZACAO) — sem isto caíam no 📍 genérico.
+  'Área de sucata': '♻️',
+  'Área de devoluções': '↩️',
 };
 
 const TIPO_CORES = {
@@ -52,6 +55,8 @@ const TIPO_CORES = {
   'Área de expedição': '#66bb6a',
   'Área de materiais do cliente': '#8d6e63',
   'Área de quarentena/inspeção': '#ff7043',
+  'Área de sucata': '#9e9d24',
+  'Área de devoluções': '#7e57c2',
 };
 
 const TIPO_TAMANHOS = {
@@ -82,6 +87,24 @@ function statusLocalizacao(loc) {
   if (loc.itens_criticos > 0) return 'critico';
   if (loc.itens_baixo_minimo > 0) return 'baixo';
   return 'ok';
+}
+
+// Etapa 68: área EFETIVA = a própria localização, se o tipo dela for área especial; senão o
+// ancestral mais próximo que for (o assistente grava `Prateleira` nas posições dentro de uma área).
+// Mesma regra do servidor (`stockService.resolverAreaEfetiva`), com a mesma guarda de ciclo. A
+// subida usa a lista do mapa (só ativas): pai inativo encerra a subida — o servidor faz o mesmo
+// desde a Fase 5 da Etapa 68 (antes subia para o pai inativo). `areasPorTipo` vem de
+// `areas_especiais` do meta — sem ele (servidor anterior), nenhuma área.
+function areaEfetivaDe(loc, porId, areasPorTipo) {
+  const vistos = new Set();
+  let atual = loc;
+  while (atual && !vistos.has(atual.id)) {
+    vistos.add(atual.id);
+    const area = areasPorTipo[atual.tipo];
+    if (area) return { ...area, origem: atual };
+    atual = atual.parent_id != null ? porId.get(atual.parent_id) : null;
+  }
+  return null;
 }
 
 function corStatus(status) {
@@ -265,6 +288,7 @@ const MapaLocalizacoesAlmoxarifado = () => {
 
   const [localizacoes, setLocalizacoes] = useState([]);
   const [tiposLoc, setTiposLoc] = useState([]);
+  const [areasEspeciais, setAreasEspeciais] = useState([]);
   const [almoxarifados, setAlmoxarifados] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtroSetor, setFiltroSetor] = useState('');
@@ -278,6 +302,9 @@ const MapaLocalizacoesAlmoxarifado = () => {
   const [arrastando, setArrastando] = useState(null);
   const [celulaAlvo, setCelulaAlvo] = useState(null);
   const posicoesEditRef = useRef({});
+  // Etapa 56: só avalia o `?loc` depois de uma carga BEM-SUCEDIDA — com a carga falhando a lista
+  // fica vazia e "não encontrada" mentiria (o erro já aparece no toast).
+  const [carregou, setCarregou] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -289,7 +316,10 @@ const MapaLocalizacoesAlmoxarifado = () => {
       ]);
       setLocalizacoes(mapRes.data);
       setTiposLoc(metaRes.data.localizacoes_tipos || []);
+      // Etapa 68: aditivo no meta — servidor anterior não manda; sem ele o painel só não descreve.
+      setAreasEspeciais(Array.isArray(metaRes.data.areas_especiais) ? metaRes.data.areas_especiais : []);
       setAlmoxarifados(almoxRes.data);
+      setCarregou(true);
     } catch {
       toast.error('Erro ao carregar mapa de localizações');
     } finally {
@@ -308,6 +338,36 @@ const MapaLocalizacoesAlmoxarifado = () => {
       if (loc.setor) setFiltroSetor(loc.setor);
     }
   }, [localizacoes, searchParams]);
+
+  // Etapa 56 (RN-01, crítico 2 da revisão): a etiqueta leva `loc` (id) e o `codigo` impresso. O Mover
+  // renumera o código e mantém o id — a etiqueta continua abrindo a localização certa, mas o código
+  // impresso ficou velho. Comparação exata (o código é o que está impresso; não normaliza).
+  // `?loc` fora da lista (inativa ou apagada: o mapa só traz ativas) também avisa, em vez de abrir
+  // o mapa sem seleção nenhuma e deixar o operador achando que leu a etiqueta certa.
+  const avisoEtiqueta = useMemo(() => {
+    const locId = searchParams.get('loc');
+    if (!locId || !carregou) return null;
+    const loc = localizacoes.find(l => String(l.id) === locId);
+    // Fase 5: o aviso é da localização DA ETIQUETA — clicar noutra célula (ou fechar a seleção) não
+    // mexe na URL, e o aviso ficava ao lado de outra localização aberta.
+    if (!loc) return selecionada ? null : { tipo: 'nao-encontrada', texto: 'Localização não encontrada ou inativa' };
+    if (selecionada?.id !== loc.id) return null;
+    const codigoEtiqueta = searchParams.get('codigo');
+    if (codigoEtiqueta && codigoEtiqueta !== loc.codigo) {
+      return { tipo: 'desatualizada', texto: `Etiqueta desatualizada: ${codigoEtiqueta} → ${loc.codigo}. Reimprima.` };
+    }
+    return null;
+  }, [localizacoes, searchParams, carregou, selecionada]);
+
+  // Etapa 68: descrição da área especial (efetiva) da selecionada — o texto curto do registro do
+  // servidor, nunca uma cópia local das frases.
+  const areaSelecionada = useMemo(() => {
+    if (!selecionada || !areasEspeciais.length) return null;
+    const areasPorTipo = {};
+    areasEspeciais.forEach(a => { if (a && a.tipo) areasPorTipo[a.tipo] = a; });
+    const porId = new Map(localizacoes.map(l => [l.id, l]));
+    return areaEfetivaDe(porId.get(selecionada.id) || selecionada, porId, areasPorTipo);
+  }, [selecionada, areasEspeciais, localizacoes]);
 
   const setores = useMemo(() => {
     const s = new Set(localizacoes.map(l => l.setor).filter(Boolean));
@@ -530,6 +590,20 @@ const MapaLocalizacoesAlmoxarifado = () => {
           )}
         </div>
       </div>
+
+      {avisoEtiqueta && (
+        <div
+          role="alert"
+          data-testid={avisoEtiqueta.tipo === 'desatualizada' ? 'aviso-etiqueta-desatualizada' : 'aviso-loc-nao-encontrada'}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, padding: '10px 14px',
+            borderRadius: 8, border: '1px solid #f9a825', background: 'rgba(249,168,37,0.12)', fontWeight: 600,
+          }}
+        >
+          <FiAlertTriangle size={16} style={{ color: '#f9a825', flexShrink: 0 }} />
+          <span>{avisoEtiqueta.texto}</span>
+        </div>
+      )}
 
       <div className="almox-kpis" style={{ marginBottom: 20 }}>
         <div className="almox-kpi-card">
@@ -761,6 +835,17 @@ const MapaLocalizacoesAlmoxarifado = () => {
               <p className="almox-mapa-detail-desc">{selecionada.descricao || 'Sem descrição'}</p>
               <dl className="almox-mapa-detail-list">
                 <dt>Tipo</dt><dd>{selecionada.tipo || 'Almoxarifado'}</dd>
+                {areaSelecionada && (
+                  <>
+                    <dt>Área especial</dt>
+                    <dd data-testid="descricao-area" style={{ fontSize: '0.8rem' }}>
+                      {areaSelecionada.origem.id !== selecionada.id && (
+                        <strong>{`Dentro de ${areaSelecionada.origem.codigo} (${areaSelecionada.tipo}). `}</strong>
+                      )}
+                      {areaSelecionada.descricao}
+                    </dd>
+                  </>
+                )}
                 <dt>Almoxarifado</dt>
                 <dd>{almoxarifados.find(a => a.id === selecionada.almoxarifado_id)?.codigo || '—'}</dd>
                 <dt>Setor</dt><dd>{selecionada.setor || '—'}</dd>

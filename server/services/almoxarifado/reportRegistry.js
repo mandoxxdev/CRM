@@ -40,10 +40,13 @@
  *   limite:      number|null. Teto que a query do proprio relatorio ja aplica via LIMIT — o
  *                export HERDA esse teto (nao ha paginacao separada); a tela avisa "mostrando os
  *                primeiros N" quando `linhas.length === limite`.
- *   params:      [{ nome, rotulo, tipo: 'date'|'number'|'text', obrigatorio }] — os NOMES REAIS
+ *   params:      [{ nome, rotulo, tipo: 'date'|'number'|'text'|'select', obrigatorio }] — os NOMES REAIS
  *                que a funcao ligada em extended.js consome da querystring (ex.: sucata-financeiro
  *                usa `de`/`ate`, NAO `data_inicio`/`data_fim` — nome errado nao da erro, e
  *                IGNORADO e devolve o periodo inteiro parecendo filtrado).
+ *                `tipo: 'select'` (Etapa 66) exige `opcoes_url`: rota do cliente que devolve
+ *                `[{ id, nome, ativo }]`; a tela mostra `nome` (+ " (desativado)" se ativo=0) e
+ *                manda `id`. Quem valida o valor continua sendo a funcao do relatorio.
  *   colunas:     [{ chave, rotulo }] | null. OBRIGATORIA quando exportavel:true (o export projeta
  *                as linhas por ela ANTES do json_to_sheet — nunca passa o array cru, que a lib
  *                MUTA com push). `null` quando exportavel:false.
@@ -142,7 +145,9 @@ const RELATORIOS = {
     categoria: 'Movimentações',
     acao: null,
     exportavel: true,
-    nota: "Mostra as 500 movimentações mais recentes do filtro.",
+    nota: 'Mostra as 500 movimentações mais recentes do filtro. Os grupos se sobrepõem: AJUSTE_POSITIVO '
+      + 'está em ENTRADA e em AJUSTE, e AJUSTE_NEGATIVO em SAIDA e em AJUSTE — não some grupos. A busca '
+      + 'por usuário ignora maiúsculas só em letras sem acento.',
     // Fase 2, I5: a query do proprio relatorio ja tem LIMIT 500 (reportService.js) — o export
     // herda esse teto, nunca refaz a query sem limite.
     limite: 500,
@@ -151,6 +156,15 @@ const RELATORIOS = {
       { nome: 'tipo', rotulo: 'Tipo de movimento', tipo: 'text', obrigatorio: false },
       { nome: 'data_inicio', rotulo: 'Data início', tipo: 'date', obrigatorio: false },
       { nome: 'data_fim', rotulo: 'Data fim', tipo: 'date', obrigatorio: false },
+      // Etapa 49 (RN-04/05): aditivos — nenhum filtro existente mudou.
+      { nome: 'grupo', rotulo: 'Grupo (ENTRADA, SAIDA, AJUSTE, DEVOLUCAO ou TRANSFERENCIA)', tipo: 'text', obrigatorio: false, exemplo: 'ENTRADA' },
+      { nome: 'usuario', rotulo: 'Usuário (parte do nome)', tipo: 'text', obrigatorio: false },
+      { nome: 'centro_custo_id', rotulo: 'Centro de custo (id)', tipo: 'number', obrigatorio: false },
+      // Etapa 66 (T3): filtro pelo motivo do CADASTRO (m.motivo_id), nunca pelo texto — uma PERDA
+      // de texto livre com o mesmo nome nao entra. Select na tela com opcoes de `opcoes_url`
+      // (?todos=1: desativados inclusos, o historico os tem). `exemplo` e o valor que a varredura do
+      // relatoriosRegistro usa (o 'x' generico seria recusado com 400).
+      { nome: 'motivo_id', rotulo: 'Motivo (cadastro)', tipo: 'select', obrigatorio: false, opcoes_url: '/almoxarifado/motivos-movimentacao?todos=1', exemplo: 1 },
     ],
     colunas: [
       { chave: 'material_codigo', rotulo: 'Código' },
@@ -158,8 +172,50 @@ const RELATORIOS = {
       { chave: 'tipo', rotulo: 'Tipo' },
       { chave: 'quantidade', rotulo: 'Quantidade' },
       { chave: 'saldo_posterior', rotulo: 'Saldo após' },
+      // Etapa 66 (T3): o nome gravado no momento (renomear o cadastro nao reescreve) e o texto
+      // completo ("Nome — complemento"); valem tambem para o texto livre de antes do cadastro.
+      { chave: 'motivo', rotulo: 'Motivo' },
+      { chave: 'justificativa', rotulo: 'Justificativa' },
       { chave: 'referencia', rotulo: 'Referência' },
+      { chave: 'usuario_nome', rotulo: 'Usuário' },
+      { chave: 'centro_custo', rotulo: 'Centro de custo' },
       { chave: 'created_at', rotulo: 'Data' },
+    ],
+    fn: null,
+  },
+  // Etapa 67 (T2, RN-06/RN-07): o "numero de ajustes" da spec 27 aberto por motivo. Gate null
+  // (D10): o historico ja mostra os mesmos ajustes sem gate. A regua e a do bloco `ajustes` do
+  // indicadores (reportService.ajustesWhereSql) — os dois numeros nao podem divergir.
+  'ajustes-por-motivo': {
+    titulo: 'Ajustes por motivo',
+    categoria: 'Movimentações',
+    acao: null,
+    exportavel: true,
+    // Literal do plano + a frase da paridade (Fase 2: as reguas de janela do indicadores e do
+    // historico diferem, e as condicoes em que os tres numeros batem ficam declaradas).
+    nota: 'Conta os lançamentos AJUSTE, AJUSTE_POSITIVO, AJUSTE_NEGATIVO e AJUSTE_INVENTARIO (o mesmo grupo '
+      + 'AJUSTE do Histórico de movimentações), sem os estornados. O motivo do cadastro aparece pelo nome '
+      + 'ATUAL: renomear junta as linhas antigas, e o livro continua com o nome do momento. O ajuste de '
+      + 'inventário não usa o cadastro e tem linha própria; os demais sem motivo do cadastro aparecem '
+      + 'juntos em "Sem motivo do cadastro", mesmo que o texto digitado seja igual ao nome de um motivo. '
+      + 'Quantidades não são somadas (cada material tem sua unidade, e o AJUSTE grava o saldo final, não '
+      + 'a diferença). Materiais de clientes ficam fora; material inativado conta. As datas comparam o '
+      + 'DIA em UTC. O total bate com o bloco Ajustes dos Indicadores e com o Histórico de movimentações '
+      + '(grupo AJUSTE) só no mesmo recorte: os Indicadores contam uma janela móvel até agora, e o '
+      + 'Histórico mostra só as 500 linhas mais recentes e inclui materiais de clientes.',
+    limite: null,
+    params: [
+      { nome: 'data_inicio', rotulo: 'Data início', tipo: 'date', obrigatorio: false },
+      { nome: 'data_fim', rotulo: 'Data fim', tipo: 'date', obrigatorio: false },
+      { nome: 'material_id', rotulo: 'Material', tipo: 'number', obrigatorio: false },
+    ],
+    colunas: [
+      { chave: 'origem', rotulo: 'Origem' },
+      { chave: 'motivo_id', rotulo: 'Motivo (id)' },
+      { chave: 'motivo', rotulo: 'Motivo' },
+      { chave: 'ajustes', rotulo: 'Ajustes' },
+      { chave: 'materiais', rotulo: 'Materiais' },
+      { chave: 'ultimo_em', rotulo: 'Último em' },
     ],
     fn: null,
   },
@@ -264,6 +320,53 @@ const RELATORIOS = {
       { chave: 'fornecedor_nome', rotulo: 'Fornecedor' },
       { chave: 'status', rotulo: 'Status' },
       { chave: 'data_recebimento', rotulo: 'Data de recebimento' },
+    ],
+    fn: null,
+  },
+  // Etapa 67 (T3, RN-08/09/10): divergencia de recebimento e indice de rejeicao por fornecedor
+  // (spec 27). Gate null (D10): recebimentos-pendentes ja mostra fornecedor sem gate. A nota e a
+  // literal do plano REVISTA pela Fase 2: "conferido" e a conferencia FINALIZADA (o sinal medido na
+  // T3), a chave do fornecedor comeca pelo CNPJ, e a entrega parcial combinada esta declarada.
+  'qualidade-fornecedores': {
+    titulo: 'Qualidade por fornecedor',
+    categoria: 'Gestão',
+    acao: null,
+    exportavel: true,
+    nota: 'Período pela data do recebimento (DIA em UTC; data inválida devolve a lista vazia). Item conferido '
+      + 'é o de recebimento cuja conferência foi FINALIZADA (botão Finalizar Conferência); recebimento '
+      + 'aprovado sem passar pela conferência não tem item conferido. Divergência: itens conferidos com '
+      + 'quantidade recebida diferente da esperada (falta ou sobra, inclusive o excedente autorizado), '
+      + 'contados uma vez por item pelo estado atual da conferência — as não conformidades abertas por ela '
+      + 'não somam de novo. No recebimento de pedido a esperada é o saldo da linha do pedido: entrega parcial '
+      + 'combinada com o fornecedor conta como falta (a mesma régua do alerta de divergência). Rejeição: '
+      + 'inspeções com alguma quantidade reprovada sobre as inspeções decididas; só material crítico passa por '
+      + 'inspeção, e inspeção antiga sem quantidade fica fora. Liberação posterior por não conformidade e '
+      + 'devolução ao fornecedor não mudam o índice. Os índices contam itens e inspeções, não quantidades '
+      + '(unidades diferentes não se somam). O fornecedor é agrupado pelo CNPJ do recebimento (sem '
+      + 'pontuação), senão pelo cadastro, senão pelo nome digitado — letras acentuadas em maiúsculas e '
+      + 'minúsculas podem separar o mesmo nome — e aparece com o nome do recebimento mais recente do grupo. '
+      + 'Materiais de clientes ficam fora. Sem item conferido ou sem inspeção, o índice fica vazio. '
+      + 'A coluna Agrupado por mostra o que juntou a linha: "CNPJ" seguido do CNPJ como veio no recebimento '
+      + 'mais recente, "Cadastro #" seguido do número do fornecedor no cadastro, ou "Nome digitado". O mesmo '
+      + 'fornecedor pode aparecer em mais de uma linha quando os recebimentos não trazem o mesmo CNPJ (por '
+      + 'exemplo, uma nota com CNPJ e outra só com o nome).',
+    limite: null,
+    params: [
+      { nome: 'data_inicio', rotulo: 'Data início', tipo: 'date', obrigatorio: false },
+      { nome: 'data_fim', rotulo: 'Data fim', tipo: 'date', obrigatorio: false },
+    ],
+    colunas: [
+      { chave: 'fornecedor', rotulo: 'Fornecedor' },
+      { chave: 'agrupado_por', rotulo: 'Agrupado por' },
+      { chave: 'recebimentos', rotulo: 'Recebimentos' },
+      { chave: 'itens_conferidos', rotulo: 'Itens conferidos (conferência finalizada)' },
+      { chave: 'itens_divergentes', rotulo: 'Itens com divergência' },
+      { chave: 'itens_com_falta', rotulo: 'Com falta' },
+      { chave: 'itens_com_sobra', rotulo: 'Com sobra' },
+      { chave: 'percentual_divergencia', rotulo: '% divergência' },
+      { chave: 'inspecoes', rotulo: 'Inspeções' },
+      { chave: 'inspecoes_com_reprovacao', rotulo: 'Inspeções com reprovação' },
+      { chave: 'indice_rejeicao', rotulo: '% rejeição' },
     ],
     fn: null,
   },
@@ -384,7 +487,8 @@ const RELATORIOS = {
     // D5 (Etapa 13): gate null, IGUAL ao dashboard hoje — o valorTotalEstoque ja e visivel a
     // todo usuario do modulo; gate novo seria regra nova sem pedido. Reversivel (uma linha).
     acao: null,
-    // Devolve OBJETO (giro/cobertura/rupturas/valor_por_grupo/atendimento_requisicoes), nao
+    // Devolve OBJETO (giro/cobertura/rupturas/valor_por_grupo/atendimento_requisicoes e, desde a
+    // Etapa 67, requisicoes_no_prazo/requisicoes_integrais/ajustes), nao
     // array — mesma razao de materiais-cliente/sucata-financeiro (Fase 2 da Task 1, C1).
     exportavel: false,
     // A regua de cada bloco, para a tela nao deixar implicito (RN-05): giro e APROXIMACAO
@@ -402,10 +506,25 @@ const RELATORIOS = {
       + 'materiais próprios e ativos cujo saldo FÍSICO tocou zero por saída ou ajuste de '
       + 'inventário na janela — material 100% reservado não conta, e material inativado sai do '
       + 'histórico. Tempo de atendimento: só requisições com entrega COMPLETA, de TODO o '
-      + 'histórico (sem janela). Materiais de clientes ficam fora de todos os blocos. Janela '
+      + 'histórico (sem janela). Requisição excluída fica fora. Materiais de clientes ficam fora '
+      + 'de giro, cobertura, rupturas, valor e ajustes; os blocos de requisição contam a '
+      + 'requisição inteira. Janela '
       + 'padrão: a mesma da Reposição (config; 90 dias de fábrica). Esta régua de consumo é '
       + 'MAIS LARGA que a dos relatórios de consumo (que contam só saídas diretas); mediana 0 '
-      + 'significa que nenhum material teve consumo na janela.',
+      + 'significa que nenhum material teve consumo na janela. '
+      // Etapa 67 (contrato do plano, literal): as reguas dos tres blocos novos.
+      + 'Requisições no prazo: as que têm o prazo (data de necessidade) entre o início da janela e '
+      + 'hoje; no prazo é a entrega COMPLETA até o dia do prazo; entrega parcial, encerrada '
+      + 'incompleta e ainda aberta com o prazo vencido contam como fora do prazo; prazo de hoje '
+      + 'ainda não entregue não entra (em_aberto_no_dia). Sem data de necessidade, ou com data fora '
+      + 'do formato AAAA-MM-DD, a requisição fica fora e é contada à parte (sem_data_valida). As '
+      + 'datas comparam o DIA em UTC. Requisições integrais: das finalizadas na janela (entrega '
+      + 'completa ou encerramento), as que tiveram todos os itens entregues na quantidade pedida; '
+      + 'encerrada sem completar não é integral, e devolução depois da entrega não desfaz. '
+      + 'Requisição excluída fica fora de todos os blocos de requisição. Ajustes: lançamentos '
+      + 'AJUSTE, AJUSTE_POSITIVO, AJUSTE_NEGATIVO e AJUSTE_INVENTARIO na janela, sem os '
+      + 'estornados; material inativado conta. O detalhe por motivo está no relatório Ajustes por '
+      + 'motivo.',
     limite: null,
     params: [
       { nome: 'janela_dias', rotulo: 'Janela (dias)', tipo: 'number', obrigatorio: false },
@@ -442,6 +561,97 @@ const RELATORIOS = {
       { chave: 'devolvido', rotulo: 'Devolvido' },
       { chave: 'liquido', rotulo: 'Líquido' },
       { chave: 'movimentacoes', rotulo: 'Movimentações' },
+    ],
+    fn: null,
+  },
+  // ── Etapa 52 ─────────────────────────────────────────────────────────────────────────────
+  'localizacoes-vazias': {
+    titulo: 'Localizações vazias',
+    categoria: 'Estoque',
+    acao: null,
+    exportavel: true,
+    nota: 'Localizações ativas sem material, pela mesma regra do Mapa de localizações. Endereço '
+      + 'bloqueado vazio aparece (coluna Bloqueada). Uma localização "pai" sem saldo próprio aparece '
+      + 'mesmo com filhas ocupadas — a coluna Filhas ocupadas diz quantas. Em material com LOTE, um '
+      + 'endereço pode continuar aparecendo ocupado depois de a entrega de requisição retirar o '
+      + 'material, porque a entrega não escolhe lote.',
+    limite: null,
+    params: [],
+    colunas: [
+      { chave: 'codigo', rotulo: 'Código' },
+      { chave: 'endereco_completo', rotulo: 'Endereço' },
+      { chave: 'almoxarifado_codigo', rotulo: 'Almoxarifado' },
+      { chave: 'tipo', rotulo: 'Tipo' },
+      { chave: 'bloqueada', rotulo: 'Bloqueada' },
+      { chave: 'sub_ocupadas', rotulo: 'Filhas ocupadas' },
+    ],
+    fn: null,
+  },
+  // ── Etapa 49 — saldos ─────────────────────────────────────────────────────────────────────
+  'saldo-por-lote': {
+    titulo: 'Saldo por lote',
+    categoria: 'Estoque',
+    acao: null,
+    exportavel: true,
+    nota: 'O saldo de cada lote é o ATRIBUÍDO a ele. Saídas que não informam lote (a entrega de '
+      + 'requisição, por exemplo) e o ajuste de saldo total não baixam de lote nenhum — elas aparecem '
+      + 'na linha "Sem lote atribuído", que pode ser negativa. Lote + Sem lote atribuído = físico total. '
+      + 'Lote negativo aparece (material que permite saldo negativo). Material com controle de lote que '
+      + 'nunca teve lote aparece só com a linha "Sem lote atribuído". Materiais inativos ficam fora.',
+    limite: null,
+    params: [],
+    colunas: [
+      { chave: 'material_codigo', rotulo: 'Código' },
+      { chave: 'material_nome', rotulo: 'Material' },
+      { chave: 'cliente', rotulo: 'Cliente' },
+      { chave: 'lote', rotulo: 'Lote' },
+      { chave: 'validade', rotulo: 'Validade' },
+      { chave: 'status_lote', rotulo: 'Status do lote' },
+      { chave: 'quantidade', rotulo: 'Saldo atribuído' },
+      { chave: 'fisico_material', rotulo: 'Físico total do material' },
+    ],
+    fn: null,
+  },
+  'series-em-estoque': {
+    titulo: 'Séries em estoque',
+    categoria: 'Estoque',
+    acao: null,
+    exportavel: true,
+    nota: 'Séries presentes no almoxarifado: em estoque e bloqueadas.',
+    limite: null,
+    params: [],
+    colunas: [
+      { chave: 'material_codigo', rotulo: 'Código' },
+      { chave: 'material_nome', rotulo: 'Material' },
+      { chave: 'cliente', rotulo: 'Cliente' },
+      { chave: 'numero', rotulo: 'Número de série' },
+      { chave: 'status', rotulo: 'Status' },
+      { chave: 'lote', rotulo: 'Lote' },
+    ],
+    fn: null,
+  },
+  'saldos-comprometidos': {
+    titulo: 'Saldos comprometidos',
+    categoria: 'Estoque',
+    acao: null,
+    exportavel: true,
+    nota: 'Materiais ativos com saldo reservado, bloqueado, em inspeção ou em terceiros. Disponível = físico '
+      + 'menos essas quatro retenções. Material inativado com retenção não aparece aqui (mesma régua de '
+      + '"Materiais bloqueados").',
+    limite: null,
+    params: [],
+    // As quatro colunas de retenção TEM de ser as de availabilitySql.COLUNAS_RETENCAO — o teste do
+    // registro exige colunas ⊇ COLUNAS_RETENCAO (este arquivo não importa services, por regra).
+    colunas: [
+      { chave: 'material_codigo', rotulo: 'Código' },
+      { chave: 'material_nome', rotulo: 'Material' },
+      { chave: 'cliente', rotulo: 'Cliente' },
+      { chave: 'fisico', rotulo: 'Físico' },
+      { chave: 'quantidade_reservada', rotulo: 'Reservado' },
+      { chave: 'quantidade_bloqueada', rotulo: 'Bloqueado' },
+      { chave: 'quantidade_em_inspecao', rotulo: 'Em inspeção' },
+      { chave: 'quantidade_em_terceiros', rotulo: 'Em terceiros' },
+      { chave: 'disponivel', rotulo: 'Disponível' },
     ],
     fn: null,
   },

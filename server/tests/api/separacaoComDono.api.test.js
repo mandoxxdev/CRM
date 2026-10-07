@@ -193,8 +193,14 @@ const auditoriaSeparacao = (db, reqId) => dbAll(db,
     assert.strictEqual(rodadas[0].usuario_nome, 'Almox A');
     assert.strictEqual(rodadas[1].usuario_nome, 'Almox B');
     assert.strictEqual(rodadas[0].itens_tocados, 1);
-    assert.deepStrictEqual(rodadas[0].itens, [{ item_id: itemIds[0], material_id: matId, quantidade: 1 }]);
-    assert.deepStrictEqual(rodadas[1].itens, [{ item_id: itemIds[0], material_id: matId, quantidade: 1 }]);
+    // Etapa 60: cada entrada ganhou maximo/divergente/motivo_divergencia (contrato aditivo) — os campos
+    // de antes seguem exatos, e os novos existem.
+    const base = (its) => its.map(({ item_id, material_id, quantidade }) => ({ item_id, material_id, quantidade }));
+    assert.deepStrictEqual(base(rodadas[0].itens), [{ item_id: itemIds[0], material_id: matId, quantidade: 1 }]);
+    assert.ok('divergente' in rodadas[0].itens[0] && 'maximo' in rodadas[0].itens[0]);
+    // O deepStrictEqual de antes provava também que rodada SEM origem não carrega origem/lote (Fase 5).
+    assert.ok(rodadas.every((r) => r.itens.every((i) => !('localizacao_origem_id' in i) && !('lote_id' in i))));
+    assert.deepStrictEqual(base(rodadas[1].itens), [{ item_id: itemIds[0], material_id: matId, quantidade: 1 }]);
     assert.ok(rodadas[0].created_at, 'created_at preenchido');
 
     const item = await dbGet(db, 'SELECT quantidade_separada FROM itens_requisicao_almoxarifado WHERE id = ?', [itemIds[0]]);
@@ -251,7 +257,9 @@ const auditoriaSeparacao = (db, reqId) => dbAll(db,
     const novos = JSON.parse(log.dados_novos);
     assert.strictEqual(novos.rodada_id, r.rodada_id, 'dados_novos.rodada_id aponta para a rodada');
     assert.strictEqual(novos.itens_tocados, 1);
-    assert.deepStrictEqual(novos.itens, [{ item_id: itemIds[0], quantidade: 2 }]);
+    // Etapa 60: + maximo/divergente/motivo_divergencia na auditoria (contrato aditivo).
+    assert.deepStrictEqual(novos.itens.map(({ item_id, quantidade }) => ({ item_id, quantidade })), [{ item_id: itemIds[0], quantidade: 2 }]);
+    assert.ok('divergente' in novos.itens[0] && 'motivo_divergencia' in novos.itens[0]);
     assert.strictEqual(log.dados_anteriores, null, 'sem conferencia anterior nao ha dados_anteriores');
   });
 

@@ -26,6 +26,7 @@ jest.mock('qrcode', () => ({
 import {
   FORMATOS_ETIQUETA, montarEtiquetaMaterial, montarEtiquetaLote,
   montarEtiquetaSerie, montarEtiquetasDoRecebimento, montarEtiquetaRetalho, gerarEtiquetasPDF,
+  montarEtiquetaLocalizacao, etiquetaLocalizacao,
 } from './etiquetasPdf';
 
 const ORIGIN = 'https://crm.gmp.ind.br';
@@ -132,6 +133,36 @@ describe('montarEtiquetasDoRecebimento', () => {
     expect(es).toHaveLength(1);
     expect(es[0].codigo).toBe('MAT-7');
   });
+  // Etapa 70, Fase 5: a regua e `quantidadeQueEntra` (a mesma do servidor). Era
+  // `Number(recebida || esperada)`: o 0 conferido caia na esperada e o item que chegou ZERO
+  // ganhava etiqueta; o "so espacos" virava 0 e o item que entrou pela esperada ficava sem.
+  test('chegou zero (recebida 0, esperada 5) NAO gera etiqueta; vazio/espacos/null usam a esperada', () => {
+    const itens = [
+      { material_id: 8, quantidade_esperada: 5, quantidade_recebida: 0, lote: 'L-ZERO' },
+      { material_id: 7, quantidade_esperada: 2, quantidade_recebida: '' },
+      { material_id: 7, quantidade_esperada: 2, quantidade_recebida: '   ' },
+      { material_id: 7, quantidade_esperada: 2, quantidade_recebida: null },
+      { material_id: 7, quantidade_esperada: 2, quantidade_recebida: '0' },
+    ];
+    const es = montarEtiquetasDoRecebimento(itens, MATERIAIS, ORIGIN);
+    expect(es.map((e) => e.codigo)).toEqual(['MAT-7', 'MAT-7', 'MAT-7']);
+    expect(es.some((e) => (e.linhaControle || '').includes('L-ZERO'))).toBe(false);
+  });
+});
+
+describe('quantidadeQueEntra (a regua unica da tela)', () => {
+  const { quantidadeQueEntra } = require('./quantidadeQueEntra');
+  test.each([
+    [{ quantidade_recebida: 0, quantidade_esperada: 5 }, 0],
+    [{ quantidade_recebida: '0', quantidade_esperada: 5 }, 0],
+    [{ quantidade_recebida: 3, quantidade_esperada: 5 }, 3],
+    [{ quantidade_recebida: null, quantidade_esperada: 5 }, 5],
+    [{ quantidade_esperada: 5 }, 5],
+    [{ quantidade_recebida: '', quantidade_esperada: 5 }, 5],
+    [{ quantidade_recebida: '   ', quantidade_esperada: 5 }, 5],
+  ])('%j -> %d', (item, esperado) => {
+    expect(quantidadeQueEntra(item)).toBe(esperado);
+  });
 });
 
 describe('gerarEtiquetasPDF', () => {
@@ -180,5 +211,33 @@ describe('gerarEtiquetasPDF', () => {
       .rejects.toThrow(/formato de etiqueta desconhecido/);
     await expect(gerarEtiquetasPDF({ formato: 'A4_GRADE', etiquetas: [] }))
       .rejects.toThrow(/nenhuma etiqueta/);
+  });
+});
+
+describe('montarEtiquetaLocalizacao (Etapa 56, RN-01)', () => {
+  const LOC = {
+    id: 42, codigo: 'A&B#1+2', descricao: 'Prateleira do meio', tipo: 'Prateleira', setor: 'Corredor A',
+    endereco_completo: 'ALM-01 / Corredor A / A&B#1+2',
+  };
+
+  test('QR abre o Mapa com loc e o código exato (encodeURIComponent), nome = endereço completo', () => {
+    const e = montarEtiquetaLocalizacao(LOC, ORIGIN);
+    expect(e.codigo).toBe('A&B#1+2');
+    expect(e.nome).toBe('ALM-01 / Corredor A / A&B#1+2');
+    expect(e.linhaControle).toBe('Prateleira · Corredor A');
+    const url = new URL(e.qrUrl);
+    expect(url.origin).toBe(ORIGIN);
+    expect(url.pathname).toBe('/almoxarifado/mapa');
+    expect(url.hash).toBe(''); // sem encode o '#' viraria fragmento e cortaria o código
+    const q = new URLSearchParams(url.search);
+    expect(q.get('loc')).toBe('42');
+    expect(q.get('codigo')).toBe('A&B#1+2');
+  });
+
+  test('sem endereço completo cai na descrição; sem tipo/setor não sobra separador solto', () => {
+    const e = etiquetaLocalizacao({ id: 3, codigo: 'X-1', descricao: 'Gaveta' }, ORIGIN);
+    expect(e.nome).toBe('Gaveta');
+    expect(e.linhaControle).toBe('');
+    expect(e.qrUrl).toBe(`${ORIGIN}/almoxarifado/mapa?loc=3&codigo=X-1`);
   });
 });

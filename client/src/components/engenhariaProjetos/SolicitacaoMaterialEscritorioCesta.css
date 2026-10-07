@@ -325,7 +325,8 @@
 }
 
 .engc-obs textarea,
-.engc-obs select {
+.engc-obs select,
+.engc-obs input[type="date"] {
   width: 100%;
   padding: 10px 12px;
   border-radius: 12px;

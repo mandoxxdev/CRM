@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
-import { FiRefreshCw, FiSend, FiCornerDownLeft, FiCheckSquare, FiXCircle, FiFileText, FiEye, FiPlus, FiTrash2, FiScissors } from 'react-icons/fi';
+import { FiRefreshCw, FiSend, FiCornerDownLeft, FiCheckSquare, FiXCircle, FiFileText, FiEye, FiPlus, FiTrash2, FiScissors, FiPaperclip } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
+import AnexosModal from './AnexosModal';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import { gerarRemessaPDF } from '../../utils/remessaPdf';
 import SeloProprietario, { nomeDoDono, DONO_SEM_NOME } from './SeloProprietario';
@@ -87,6 +88,9 @@ const RemessasTerceirosAlmoxarifado = () => {
   const [reloadToken, setReloadToken] = useState(0);
   const [filtroStatus, setFiltroStatus] = useState('');
   const [aberta, setAberta] = useState(null);
+  // Etapa 34: guarda o OBJETO do ITEM de remessa (linha de itens_remessa_terceiro_almoxarifado),
+  // nao o da remessa — o subtitulo do modal mostra codigo e nome do material, que a linha ja tem.
+  const [anexosItem, setAnexosItem] = useState(null);
 
   const [modal, setModal] = useState(null); // { tipo: 'nova'|'retorno'|'encerrar'|'cancelar', remessa }
   const [form, setForm] = useState({});
@@ -597,6 +601,7 @@ const RemessasTerceirosAlmoxarifado = () => {
                 <th title="Consumido numa transformação: a chapa deixou de existir e voltou como outro material">Transformado</th>
                 <th title="Saldo que deixou de ser pendente sem voltar: baixa no encerramento ou estorno do cancelamento">Baixado (não voltou)</th>
                 <th>Ainda no terceiro</th>
+                <th aria-label="Ações"></th>
               </tr>
             </thead>
             <tbody>
@@ -620,6 +625,22 @@ const RemessasTerceirosAlmoxarifado = () => {
                     </td>
                     <td>
                       <span className={`almox-badge almox-badge-${Number(i.pendente) > 0 ? 'baixo' : 'ok'}`}>{i.pendente}</span>
+                    </td>
+                    <td>
+                      {/* Etapa 34 — o clipe do ITEM: o certificado de galvanização e o laudo
+                          dimensional chegam por item, não por remessa. `entidadeId` é `i.id` (a
+                          linha de itens_remessa_terceiro_almoxarifado), NUNCA `aberta.id`: a rota
+                          filtra por `entidade` E `entidade_id`, então trocar os dois devolveria os
+                          anexos de outra coisa sem erro nenhum na tela (RN-05).
+                          Botão + modal, e não bloco inline aqui: esta tabela tem N linhas, e o
+                          bloco inline faria N requisições só por abrir a remessa (RN-02).
+                          Sem gate de permissão, como nas telas 2 e 3 — quem só tem `visualizar`
+                          precisa poder ver e baixar (B68). */}
+                      <button className="almox-btn-icon" title="Anexos e documentos deste item"
+                        data-testid={`anexos-item-${i.id}`}
+                        onClick={() => setAnexosItem(i)}>
+                        <FiPaperclip />
+                      </button>
                     </td>
                   </tr>
                 );
@@ -973,6 +994,21 @@ const RemessasTerceirosAlmoxarifado = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Anexos do item de remessa (Etapa 34). Montado aqui, no fim do componente, e não dentro
+          de `.almox-remessa-detalhe`: o overlay é filho do painel apenas na árvore visual, e
+          pendurá-lo lá dentro faria as linhas da tabela do modal contarem como linhas de item.
+          A condição é o ESTADO `anexosItem`, não `aberta` — fechar o painel com o modal aberto
+          desmontaria o modal no meio de um upload. */}
+      {anexosItem && (
+        <AnexosModal
+          titulo="Anexos do item da remessa"
+          subtitulo={`${anexosItem.material_codigo} — ${anexosItem.material_nome}`}
+          entidade="item_remessa"
+          entidadeId={anexosItem.id}
+          onClose={() => setAnexosItem(null)}
+        />
       )}
     </div>
   );

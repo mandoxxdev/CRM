@@ -46,6 +46,10 @@
  */
 const ROTULOS_ENTIDADE = Object.freeze({
   almoxarifado: 'Almoxarifado',
+  // Etapa 32: a tabela de anexos ficou orfa desde a Etapa 0 e ganhou dono aqui. Mesma regra da
+  // `categoria` abaixo: sem esta linha o teste de cobertura de entidades fica vermelho de
+  // proposito.
+  anexo: 'Anexo',
   // Etapa 26: o catalogo de categorias virou cadastro editavel e passou a auditar. Sem esta
   // linha o teste de cobertura de entidades deste vocabulario (auditLabels.api.test.js) fica
   // vermelho — de proposito: ele varre `entidade: '<nome>'` em routes/ e services/ e exige
@@ -62,13 +66,34 @@ const ROTULOS_ENTIDADE = Object.freeze({
   material: 'Material',
   material_cliente: 'Material de cliente',
   movimentacao: 'Movimentação',
+  // Etapa 66: o motivo de movimentacao virou cadastro auditado. Mesma regra da `categoria`: sem
+  // esta linha o teste de cobertura de entidades fica vermelho de proposito.
+  motivo_movimentacao: 'Motivo de movimentação',
+  // Etapa 43: a divergência deixa de ser só alerta e vira DOCUMENTO numerado (`NC-…`), com autor,
+  // decisão e justificativa. Mesma regra da `categoria` e do `plano_inspecao` acima: sem esta linha
+  // o teste de cobertura de entidades fica vermelho de propósito e `nao_conformidade` apareceria
+  // crua no filtro da tela de auditoria.
+  nao_conformidade: 'Não conformidade',
   notificacao: 'Notificação',
+  // Etapa 42 (RN-E07): o recebimento que completa o pedido grava `pedidos_compra.status` sozinho, e
+  // essa e a UNICA escrita do almoxarifado numa tabela do CORE Compras que deixa trilha propria — o
+  // `PATCH ./status` manual da Etapa 39 nao audita (assimetria declarada: ali o autor e o proprio
+  // ato humano na porta; aqui o pedido do comprador muda sozinho). Sem esta linha o teste de
+  // cobertura de entidades fica vermelho de proposito e `pedido_compra` apareceria cru no filtro.
+  pedido_compra: 'Pedido de compra',
   perfil_almoxarifado_usuario: 'Perfil de usuário',
   // Etapa 27: o plano de inspeção do material (característica, nominal e os dois desvios) nasce
   // auditado — quem muda a tolerância muda, por número, qual peça reprova (RN-03). Mesma regra da
   // `categoria` acima: sem esta linha o teste de cobertura de entidades fica vermelho de propósito.
   plano_inspecao: 'Plano de inspeção',
   recebimento: 'Recebimento',
+  // Etapa 36 (RN-18): o excedente autorizado e ato do ITEM, nao do documento — o id que importa na
+  // trilha e o do item que veio a mais. Auditar como `entidade: 'recebimento'` com o id do item em
+  // `dados_novos` foi DESCARTADO: perde a precisao que a trilha existe para dar, por uma linha de
+  // rotulo. Sem esta linha, `auditLabels.api.test.js` ("os 26 literais tem rotulo") fica vermelho
+  // de proposito e a entidade nova apareceria crua no filtro da tela.
+  recebimento_item: 'Item do recebimento',
+  regra_aprovacao: 'Regra de aprovação', // Etapa 47 (T3)
   remessa_terceiro: 'Remessa a terceiro',
   requisicao: 'Requisição',
   reserva: 'Reserva',
@@ -113,12 +138,14 @@ const GRUPOS_ACAO = congelarGrupos([
   // Requisição / aprovação
   { rotulo: 'Aprovação', verbos: ['APROVACAO'] },
   { rotulo: 'Aprovação por valor', verbos: ['APROVACAO_VALOR'] },
+  { rotulo: 'Aprovação de regra', verbos: ['APROVACAO_REGRA'] }, // Etapa 47 (T4)
   { rotulo: 'Rejeição', verbos: ['REJEICAO'] },
   { rotulo: 'Rejeição por valor', verbos: ['REJEICAO_VALOR'] },
   { rotulo: 'Cancelamento', verbos: ['CANCELAMENTO'] },
   { rotulo: 'Conclusão', verbos: ['CONCLUSAO'] },
   { rotulo: 'Encerramento', verbos: ['ENCERRAMENTO'] },
   { rotulo: 'Mudança de status', verbos: ['MUDANCA_STATUS'] },
+  { rotulo: 'Regularização de séries', verbos: ['REGULARIZACAO_SERIES'] }, // Etapa 61
   { rotulo: 'Assinatura de entrega', verbos: ['ASSINATURA_ENTREGA'] },
   { rotulo: 'Confirmação de recebimento', verbos: ['CONFIRMACAO_RECEBIMENTO'] },
   // Etapa 28: a separação passa a ter dono e a auditar (SEPARACAO, Task 1); a segunda
@@ -138,6 +165,48 @@ const GRUPOS_ACAO = congelarGrupos([
   { rotulo: 'Início do faturamento', verbos: ['INICIAR_FATURAMENTO'] },
   { rotulo: 'Processamento da nota', verbos: ['PROCESSAR_NOTA'] },
   { rotulo: 'Recebida', verbos: ['RECEBIDA'] },
+  // Etapa 72 (D6): o estorno da entrada que tinha fechado a solicitacao de compra a devolve a
+  // VINCULADO. Verbo proprio (conferido antes: 'REABERTA' nao estava em nenhum grupo).
+  { rotulo: 'Solicitação reaberta (estorno)', verbos: ['REABERTA'] },
+  // Etapa 42 (RN-E07): a entrada fisica que completa o pedido de compra grava
+  // `pedidos_compra.status = 'recebido'` sozinha. Rotulo PROPRIO, e NAO agrupado com
+  // 'Mudança de status': aquele grupo e de `lote`/`serie` (lotService:105,143, seriesService:316) e
+  // agrupar juntaria, num filtro so, dois atos que nem entidade compartilham — a regra de agrupar
+  // vale para SINONIMOS do mesmo ato (RN-06), nao para atos diferentes com nome parecido. O rotulo
+  // diz "automático" de proposito: e o que permite ao comprador distinguir, na trilha, o fechamento
+  // que o almoxarifado fez do que ele mesmo fez pelo `PATCH .../status`.
+  { rotulo: 'Fechamento automático do pedido', verbos: ['STATUS_AUTOMATICO_RECEBIDO'] },
+  // Etapa 71 (D1/D2): o estorno da entrada da nota DESCONTA a linha do pedido e REABRE o pedido que a
+  // conta tinha fechado. Dois rotulos, e nao um: descontar acontece em todo estorno de entrada contra
+  // pedido; reabrir so quando o status muda — "o que reabriu este mes" e pergunta propria.
+  { rotulo: 'Recebido do pedido estornado', verbos: ['RECEBIDO_ESTORNADO'] },
+  { rotulo: 'Reabertura automática do pedido', verbos: ['STATUS_AUTOMATICO_REABERTO'] },
+  // Etapa 71, Fase 5: a porta manual do Compras (`PATCH /api/compras/pedidos/:id/status`) passou a
+  // deixar trilha — e o que o estorno le para nao desfazer o fechamento do comprador (RN-E03).
+  { rotulo: 'Mudança manual de status do pedido', verbos: ['STATUS_MANUAL_ALTERADO'] },
+  // Etapa 36 (RN-18): quem autorizou receber ACIMA do pedido, e em que item. Sem esta linha o
+  // cenario "TODO verbo gravavel tem rotulo" de `auditLabels.api.test.js` fica vermelho — a
+  // varredura le o literal `acao: 'EXCEDENTE_AUTORIZADO'` do receiptService. E o mesmo buraco de
+  // fiacao que a Etapa 30 pagou num fix-round por nao existir regua na epoca.
+  { rotulo: 'Excedente autorizado', verbos: ['EXCEDENTE_AUTORIZADO'] },
+
+  // Nao conformidade numerada (Etapa 43, RN-09) — TRES rotulos distintos, e NAO um grupo so.
+  // Agrupar os tres num 'Nao conformidade' unico foi considerado e DESCARTADO pela mesma regra
+  // escrita acima na nota do 'Fechamento automatico do pedido': agrupar vale para SINONIMOS do
+  // mesmo ato (RN-06), nao para atos DIFERENTES de nome parecido. Aqui os tres sao atos distintos
+  // com autores distintos — abrir pode ser do gancho automatico ou de quem viu o problema, decidir
+  // e de quem responde pela qualidade (gate `decidir_nao_conformidade`) e cancelar so o sistema faz
+  // (RN-05, quando a divergencia sumiu na reconferencia). Num grupo so, o filtro "Nao conformidade"
+  // traria as tres coisas juntas e ninguem conseguiria listar "o que foi DECIDIDO neste mes", que
+  // e a pergunta para a qual o documento existe.
+  { rotulo: 'Não conformidade aberta', verbos: ['NC_ABERTA'] },
+  { rotulo: 'Não conformidade decidida', verbos: ['NC_DECIDIDA'] },
+  { rotulo: 'Não conformidade cancelada', verbos: ['NC_CANCELADA'] },
+  // Etapa 45: QUARTO grupo, e pelo mesmo critério dos três acima — é ato distinto, com autor
+  // distinto e gate próprio (`executar_encaminhamento`, que inclui COMPRAS, fora de
+  // `decidir_nao_conformidade`). Juntá-lo a "decidida" apagaria a pergunta que esta etapa existe
+  // para responder: "o que já foi de fato EXECUTADO", que é diferente de "o que foi decidido".
+  { rotulo: 'Não conformidade executada', verbos: ['NC_EXECUTADA'] },
 
   // Conferência de inventário (routes/almoxarifado.js, ternário — invisível para a varredura)
   { rotulo: 'Contagem', verbos: ['CONTAGEM'] },
@@ -160,6 +229,19 @@ const GRUPOS_ACAO = congelarGrupos([
   { rotulo: 'Reenvio', verbos: ['REENVIAR'] },
   { rotulo: 'Estorno de entrada', verbos: ['ESTORNO_ENTRADA'] },
   { rotulo: 'Estorno de saída', verbos: ['ESTORNO_SAIDA'] },
+
+  // Etapa 32 — anexos. Os verbos sao MAIUSCULOS e isso nao e estilo: a varredura de cobertura
+  // deste vocabulario (auditLabels.api.test.js:60-61) usa `acao: '\K[A-Z_]+` e SO enxerga
+  // maiuscula. Gravar 'anexar' minusculo no servico faria a acao escapar do `semRotulo`, o
+  // teste ficaria verde, e a tela de auditoria mostraria o verbo cru ao lado de 'Criação'.
+  // REMOVER_ANEXO em vez de REMOVER porque a trilha e lida meses depois: verbo generico nao diz
+  // o que foi removido.
+  { rotulo: 'Anexo enviado', verbos: ['ANEXAR'] },
+  { rotulo: 'Anexo removido', verbos: ['REMOVER_ANEXO'] },
+  // Fix-round da revisao adversarial: baixar tambem audita. E o controle compensatorio da B68 —
+  // com "todo mundo baixa" e ids sequenciais, a trilha e o que separa "aberto" de "aberto e
+  // invisivel". E o unico verbo do modulo que registra LEITURA.
+  { rotulo: 'Anexo baixado', verbos: ['BAIXAR_ANEXO'] },
 
   // Remessa a terceiro
   { rotulo: 'Envio', verbos: ['ENVIO'] },
@@ -187,6 +269,7 @@ const GRUPOS_ACAO = congelarGrupos([
   { rotulo: 'Sucata', verbos: ['SUCATA'] },
   { rotulo: 'Perda', verbos: ['PERDA'] },
   { rotulo: 'Devolução ao cliente', verbos: ['DEVOLUCAO_CLIENTE'] },
+  { rotulo: 'Devolução ao fornecedor', verbos: ['DEVOLUCAO_FORNECEDOR'] },
   { rotulo: 'Perda em terceiro', verbos: ['PERDA_TERCEIRO'] },
   { rotulo: 'Consumo em terceiro', verbos: ['CONSUMO_TERCEIRO'] },
 ]);

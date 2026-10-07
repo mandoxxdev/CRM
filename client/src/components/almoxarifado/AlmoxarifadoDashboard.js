@@ -403,6 +403,30 @@ const AlmoxarifadoDashboard = () => {
                   </div>
                 </div>
               </div>
+              {/* Etapa 67, T4 (RN-12/D11): so aparece se o servidor mandar o bloco — servidor
+                  antigo mantem os tres cartoes. D12: percentual null (nenhuma requisicao com
+                  prazo vencido na janela) mostra "—", nunca "0%". */}
+              {indicadores.requisicoes_no_prazo && (
+                <div className="almox-kpi-card">
+                  <div className="almox-kpi-icon success"><FiCheckCircle /></div>
+                  <div className="almox-kpi-info">
+                    <div className="almox-kpi-value" data-testid="kpi-no-prazo">
+                      {typeof indicadores.requisicoes_no_prazo.percentual === 'number'
+                        ? `${indicadores.requisicoes_no_prazo.percentual}%`
+                        : '—'}
+                    </div>
+                    <div className="almox-kpi-label">Requisições no prazo</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)' }}>
+                      Janela de {indicadores.janela_dias} dias · prazo vencido até hoje · entrega completa até o dia
+                    </div>
+                    {typeof indicadores.requisicoes_no_prazo.percentual !== 'number' && (
+                      <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)' }}>
+                        sem requisições com prazo no período
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -273,6 +273,31 @@ describe('NotificacoesAlmoxarifado — filtros refazem a chamada', () => {
     expect(api.get).toHaveBeenCalledWith('/almoxarifado/notificacoes', { params: { evento: 'LOTE_VENCENDO' } });
   });
 
+  // Etapa 70 (T3): os dois avisos novos do recebimento (receiptNotificationService.js) entram
+  // no filtro com o literal EXATO que a fila grava — a rota filtra por igualdade, entao um
+  // rotulo com o valor errado devolveria lista vazia sem erro nenhum. No jsdom, atribuir a um
+  // <select> um valor sem <option> correspondente deixa o value '' — por isso este teste cai
+  // se a opcao faltar (controle positivo medido na T3).
+  test('filtro de evento oferece os dois avisos do recebimento (Etapa 70) com o literal da fila', async () => {
+    await renderizar();
+    const selectEvento = container.querySelector('#notif-filtro-evento');
+    const opcoes = [...selectEvento.querySelectorAll('option')].map((o) => [o.value, o.textContent]);
+    expect(opcoes).toEqual(expect.arrayContaining([
+      ['RECEBIMENTO_ENTRADA', 'Entrada de recebimento'],
+      ['RECEBIMENTO_ENTRADA_REQUISITANTE', 'Aviso ao requisitante'],
+    ]));
+
+    api.get.mockClear();
+    preencherSelect(selectEvento, 'RECEBIMENTO_ENTRADA_REQUISITANTE');
+    await esperarEfeitos();
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/notificacoes', { params: { evento: 'RECEBIMENTO_ENTRADA_REQUISITANTE' } });
+
+    api.get.mockClear();
+    preencherSelect(selectEvento, 'RECEBIMENTO_ENTRADA');
+    await esperarEfeitos();
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/notificacoes', { params: { evento: 'RECEBIMENTO_ENTRADA' } });
+  });
+
   test('status vazio (Todos) nao manda o parametro', async () => {
     await renderizar();
     const selectStatus = container.querySelector('#notif-filtro-status');

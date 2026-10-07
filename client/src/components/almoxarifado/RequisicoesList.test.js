@@ -11,10 +11,11 @@
  */
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import RequisicoesList from './RequisicoesList';
 import { getRequisicaoStepIndex, REQUISICAO_FLOW } from './AlmoxPageHeader';
 import api from '../../services/api';
+import { toast } from 'react-toastify';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -42,8 +43,18 @@ jest.mock('../../context/AuthContext', () => ({
   useAuth: () => ({ user: { id: 99, nome: 'Almoxarife Teste', role: 'admin' } }),
 }));
 
+// `warehouseMode` MUTÁVEL, e não a constante `true` que este arquivo tinha: a MESMA tela roda em
+// modo não-almoxarifado em seis rotas de outros módulos (`App.js` →
+// `RequisicoesMaterialPages.js:24-33`; só `almoxarifado` tem `warehouseMode: true` em
+// `config/requisicoesMaterialConfig.js:55-61`), com `apiPrefix = '/requisicoes-material'` — rota
+// servida SEM a permissão do módulo almoxarifado. Com o mock preso em `true` nenhum cenário podia
+// ver um bloco de almoxarifado disparando `GET /almoxarifado/anexos` (403) nessas rotas, que é
+// exatamente o achado F1 da revisão da Etapa 34.
+let mockWarehouseMode = true;
 jest.mock('./RequisicoesMaterialContext', () => ({
-  useRequisicoesMaterialContext: () => ({ warehouseMode: true, basePath: '', setor: null }),
+  useRequisicoesMaterialContext: () => ({
+    warehouseMode: mockWarehouseMode, basePath: '', setor: null,
+  }),
 }));
 
 const ITEM = {
@@ -66,15 +77,31 @@ let container;
 let root;
 let detalheDoBanco;
 
+// A URL do `MemoryRouter` não é `window.location` — o histórico é em memória, então nenhuma
+// asserção sobre `window.location.search` veria o que a tela escreve. Esta sonda vive DENTRO do
+// router, ao lado do componente, e publica a query corrente em `buscaDaUrl()`. É a única forma
+// de um cenário afirmar "a URL NÃO tem `id=`" sem espiar estado interno do componente.
+let buscaCorrenteDaUrl = '';
+const SondaDeUrl = () => {
+  buscaCorrenteDaUrl = useLocation().search;
+  return null;
+};
+const buscaDaUrl = () => buscaCorrenteDaUrl;
+
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
+  buscaCorrenteDaUrl = '';
   mockPode = () => true;
+  mockWarehouseMode = true;
   api.get.mockImplementation((url) => {
-    if (url === '/almoxarifado/requisicoes') {
+    // Os dois prefixos que a tela usa, conforme `warehouseMode` (`RequisicoesList.js:82`).
+    if (url === '/almoxarifado/requisicoes' || url === '/requisicoes-material') {
       const { itens, ...linha } = detalheDoBanco;
       return Promise.resolve({ data: [linha] });
     }
-    if (url === '/almoxarifado/requisicoes/55') return Promise.resolve({ data: detalheDoBanco });
+    if (url === '/almoxarifado/requisicoes/55' || url === '/requisicoes-material/55') {
+      return Promise.resolve({ data: detalheDoBanco });
+    }
     if (url === '/almoxarifado/configuracoes/liberacao-valor') {
       return Promise.resolve({ data: { souAprovador: false } });
     }
@@ -97,6 +124,20 @@ async function renderizar() {
     root.render(
       <MemoryRouter initialEntries={['/almoxarifado/requisicoes?id=55']}>
         <RequisicoesList />
+        <SondaDeUrl />
+      </MemoryRouter>
+    );
+  });
+}
+
+// Sem `?id=` na URL: a lista abre sem painel de detalhe — é o estado que prova a metade
+// negativa da RN-02 da Etapa 34 (sem documento aberto, nenhuma consulta de anexos).
+async function renderizarSemDetalhe() {
+  await act(async () => {
+    root.render(
+      <MemoryRouter initialEntries={['/almoxarifado/requisicoes']}>
+        <RequisicoesList />
+        <SondaDeUrl />
       </MemoryRouter>
     );
   });
@@ -152,7 +193,11 @@ describe('Etapa 15: colher assinatura do recebedor na entrega', () => {
   const ASSINATURA = {
     id: 1,
     recebedor_nome: 'Maria Recebedora',
-    arquivo_url: '/api/uploads/almoxarifado/assinatura-abc.png',
+    // Etapa 33: a URL vem do servidor JA ASSINADA. O fixture antigo era o endereco publico, e o
+    // cenario abaixo usava .includes() sobre ele — que continuava verdadeiro com a query como
+    // sufixo, entao o teste passava ANTES, DEPOIS, e com a feature quebrada. Agora ele exige a
+    // URL inteira, e reprova se o helper voltar a mutilar a query.
+    arquivo_url: '/api/uploads/almoxarifado/assinatura-abc.png?exp=99999999999&sig=abc123def456abc123def456abc12345',
     criado_em: '2026-08-28T14:00:00',
     criado_por_nome: 'Almoxarife Teste',
   };
@@ -286,8 +331,10 @@ describe('Etapa 15: colher assinatura do recebedor na entrega', () => {
     expect(container.textContent).toContain('Maria Recebedora');
     expect(container.textContent).toContain('28/08');
     const thumb = [...container.querySelectorAll('img')]
-      .find((img) => (img.getAttribute('src') || '').includes('/api/uploads/almoxarifado/assinatura-abc.png'));
+      .find((img) => (img.getAttribute('src') || '').startsWith('/api/uploads/almoxarifado/assinatura-abc.png'));
     expect(thumb).toBeTruthy();
+    // A assinatura tem de chegar INTEIRA ao src — sem ela o navegador toma 404 e a miniatura some.
+    expect(thumb.getAttribute('src')).toBe(ASSINATURA.arquivo_url);
   });
 
   test.each(['ENTREGUE', 'PARCIALMENTE_ATENDIDA', 'ENCERRADA'])(
@@ -454,5 +501,600 @@ describe('Etapa 28: rodadas de separação e segunda conferência', () => {
     await renderizar();
     expect(container.textContent).toContain('REQ-055');
     expect(botaoPorTexto('Liberar para Retirada').disabled).toBe(false);
+  });
+});
+
+// ─── Etapa 34: anexos do documento no painel de detalhe da requisição ───────────────────────
+//
+// O bloco `AnexosDocumento` (Etapa 32) entra INLINE aqui, no mesmo molde dos dois blocos
+// aditivos que já leem junto da requisição (Separação, Assinaturas de entrega): sem gate novo,
+// sem modal. Mock só na fronteira HTTP — o `api.get` do fixture cai no fallback `{ data: [] }`
+// para `/almoxarifado/anexos`, então o cenário que só afirmasse "renderiza" ficaria verde COM E
+// SEM o bloco. A régua destes cenários é presença + `params`, não ausência de erro.
+describe('Etapa 34: anexos da requisição no painel de detalhe', () => {
+  const chamadasDeAnexos = () => api.get.mock.calls.filter(([url]) => url === '/almoxarifado/anexos');
+  const blocoDeAnexos = () => container.querySelector('[data-testid="anexos-documento"]');
+  // A carga do DETALHE, que nenhum cenário contava até a Etapa 35 — e era onde estava o defeito:
+  // o clique disparava DUAS (clique → `syncSearchParams` reescreve `?id=` → efeito de deep-link →
+  // `abrirDetalhe` de novo). Medido vermelho em 2 antes do conserto, na T1 da Etapa 35.
+  const cargasDoDetalhe = () => api.get.mock.calls.filter(([u]) => u === '/almoxarifado/requisicoes/55');
+
+  test('o painel de detalhe mostra os anexos DA REQUISIÇÃO aberta', async () => {
+    detalheDoBanco = baseRequisicao('APROVADO');
+    await renderizar();
+    expect(blocoDeAnexos()).not.toBeNull();
+    // `entidade` errada é o defeito mais barato de cometer (o componente é genérico para seis
+    // entidades) e o mais invisível: com a chave trocada a tela lista os anexos de OUTRO
+    // registro sem nenhum sintoma visual.
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/anexos',
+      { params: { entidade: 'requisicao', entidade_id: 55 } });
+    expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/anexos')).toHaveLength(1);
+    // RN-02: deep-link puro carrega UMA vez — verde antes e depois do conserto.
+    expect(cargasDoDetalhe()).toHaveLength(1);
+  });
+
+  test('o bloco lê o id do DETALHE CARREGADO, não o da URL', async () => {
+    // Divergência forçada na fixture (produção não muda): a URL pede a requisição 55 e o
+    // servidor responde `id: 555`. Com `entidadeId={detalhe.id}` fica verde; com
+    // `entidadeId={selectedId}` (55) fica vermelho. É o que trava a distinção em vez de
+    // deixá-la como comentário.
+    detalheDoBanco = { ...baseRequisicao('APROVADO'), id: 555 };
+    await renderizar();
+    expect(blocoDeAnexos()).not.toBeNull();
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/anexos',
+      { params: { entidade: 'requisicao', entidade_id: 555 } });
+    expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/anexos')).toHaveLength(1);
+  });
+
+  test('RN-02: sem detalhe aberto não consulta anexos; abrir a requisição consulta', async () => {
+    detalheDoBanco = baseRequisicao('APROVADO');
+    await renderizarSemDetalhe();
+    // Metade negativa: a lista inteira renderizada, nenhum painel — nenhuma consulta.
+    expect(blocoDeAnexos()).toBeNull();
+    expect(chamadasDeAnexos()).toHaveLength(0);
+    // Metade positiva: o clique na linha abre o detalhe e só então nasce o bloco.
+    await act(async () => { container.querySelector('tbody tr').click(); });
+    expect(blocoDeAnexos()).not.toBeNull();
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/anexos',
+      { params: { entidade: 'requisicao', entidade_id: 55 } });
+    // Uma consulta de anexos por carga do detalhe — e, desde a Etapa 35 (RN-01), UMA carga por
+    // clique. Até a 34 este contador era 2: o clique chamava `abrirDetalhe`, o `syncSearchParams`
+    // reescrevia `?id=` e o efeito de deep-link chamava `abrirDetalhe` de novo. A flag de
+    // navegação interna por identidade de query (`navInternaRef`) fecha esse segundo passe.
+    // O comentário antigo daqui estava ERRADO em duas frentes e ficou registrado para não voltar:
+    // (1) narrava os 2 GETs como fato permanente, quando eram o defeito; (2) apontava
+    // `RequisicoesList.js:232-234` para o `setDetalhe(null)` condicional, que já tinha andado de
+    // linha. Não repita número de linha em comentário — descreva a regra.
+    // O que continua travado aqui é a RELAÇÃO: uma consulta de anexos por carga do detalhe, nunca
+    // duas por montagem. Com o bloco FORA do ternário de `loadingDetalhe` (achado F2) e
+    // `abrirDetalhe` zerando `detalhe` só quando o id MUDA, o bloco permanece montado.
+    expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/anexos')).toHaveLength(1);
+    // RN-01 da Etapa 35: um clique, UMA carga do detalhe.
+    expect(cargasDoDetalhe()).toHaveLength(1);
+  });
+
+  // ── F1 da revisão da branch: o gate de `warehouseMode` ──────────────────────────────────────
+  // Sem ele, `/comercial/requisicoes-material` (e frota, compras, financeiro, fábrica,
+  // engenharia) abria o painel e disparava `GET /api/almoxarifado/anexos`, que está atrás de
+  // `checkModulePermission('almoxarifado')`: 403 "Acesso negado ao módulo" em vermelho DENTRO do
+  // painel, um formulário de upload morto (o hook de permissões falha ABERTO de propósito) e uma
+  // linha de auditoria de acesso negado por abertura de painel. Todos os outros blocos daquele
+  // painel já eram gateados por `warehouseMode &&` — o bloco de separação/conferência, o de
+  // aprovação por valor e o de assinaturas de entrega. (Referência por NOME e não por linha: os
+  // três números que estavam aqui — `:976`, `:1047`, `:1066` — já apontavam para o meio de outros
+  // JSX antes desta revisão. É o mesmo drift que a Etapa 35 teve de corrigir três vezes.)
+  test('F1: fora do almoxarifado (warehouseMode=false) o bloco não existe e nada vai para /almoxarifado/anexos', async () => {
+    mockWarehouseMode = false;
+    detalheDoBanco = baseRequisicao('PENDENTE');
+    await renderizar();
+
+    // Metade POSITIVA primeiro: sem ela este cenário passaria com a tela vazia — que é a forma
+    // de teste vazio que esta base já pagou três vezes.
+    expect(container.textContent).toContain('REQ-055');
+    expect(api.get).toHaveBeenCalledWith('/requisicoes-material/55', expect.anything());
+    expect(api.get).not.toHaveBeenCalledWith('/almoxarifado/requisicoes/55', expect.anything());
+
+    // Metade negativa: painel aberto, e nenhuma superfície de almoxarifado nele.
+    expect(blocoDeAnexos()).toBeNull();
+    expect(chamadasDeAnexos()).toHaveLength(0);
+    expect(api.get).not.toHaveBeenCalledWith('/almoxarifado/anexos', expect.anything());
+  });
+
+  // ── F2 da revisão da branch: o bloco não pode remontar a cada refetch do detalhe ────────────
+  // Cenário do revisor: o usuário abre a REQ-055, clica no input de arquivo e escolhe `nf.pdf`;
+  // ao fechar o diálogo do SO o foco volta para a janela → `refetchDetalhe` (`:270-284`) →
+  // `setLoadingDetalhe(true)` → o corpo do painel desmonta → o `AnexosDocumento` perde o arquivo
+  // escolhido (estado local, `AnexosDocumento.js:110-112`) e remonta vazio, com um SEGUNDO GET.
+  // "Anexar" então responde "Arquivo é obrigatório", sem nada na tela explicando o porquê.
+  test('F2: refetch do detalhe por foco da janela mantém o MESMO nó do bloco e não repete a consulta', async () => {
+    detalheDoBanco = baseRequisicao('APROVADO');
+    await renderizar();
+
+    const antes = blocoDeAnexos();
+    expect(antes).not.toBeNull();
+    expect(chamadasDeAnexos()).toHaveLength(1);
+    const cargasAntes = api.get.mock.calls.filter(([u]) => u === '/almoxarifado/requisicoes/55').length;
+
+    await act(async () => { window.dispatchEvent(new Event('focus')); });
+
+    // Ancora: o refetch REALMENTE aconteceu (senão as duas asserções abaixo provariam nada).
+    expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/requisicoes/55').length)
+      .toBe(cargasAntes + 1);
+    // Identidade de nó, não presença: é o que distingue "continua montado" de "remontou igual".
+    expect(blocoDeAnexos()).toBe(antes);
+    expect(chamadasDeAnexos()).toHaveLength(1);
+  });
+
+  test('F2 (filtro): trocar um filtro refaz o detalhe sem remontar o bloco', async () => {
+    detalheDoBanco = baseRequisicao('APROVADO');
+    await renderizar();
+    const antes = blocoDeAnexos();
+    expect(antes).not.toBeNull();
+
+    // `filtroMinha` → `syncSearchParams` → efeito de deep-link → `abrirDetalhe(55, force)`.
+    const checkMinha = [...container.querySelectorAll('input[type="checkbox"]')][0];
+    expect(checkMinha).toBeTruthy();
+    await act(async () => { checkMinha.click(); });
+
+    expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/requisicoes/55').length)
+      .toBeGreaterThan(1);
+    expect(blocoDeAnexos()).toBe(antes);
+    expect(chamadasDeAnexos()).toHaveLength(1);
+  });
+
+  /* ── Etapa 35 ────────────────────────────────────────────────────────────────────────────────
+   * Os cenários abaixo são da Etapa 35, e não da 34: ficam num `describe` aninhado (e não em um
+   * arquivo/bloco próprio) porque dependem dos helpers `cargasDoDetalhe` / `blocoDeAnexos` /
+   * `chamadasDeAnexos` declarados acima — o achado F5 da revisão final era exatamente isto:
+   * cenários da 35 rodando sob um título que dizia "Etapa 34", o que faz `-t 'Etapa 35'` não
+   * achar nada e a próxima sessão procurar no arquivo errado.
+   */
+  describe('Etapa 35: uma carga por gesto, e fechar é fechar', () => {
+  /* ── Integração da Etapa 35: os três gestos em sequência, no MESMO componente montado ──────────
+   * Os dois cenários F2 acima (foco e filtro) remontam a tela antes de medir, então nenhum deles vê
+   * o estado que a flag de navegação interna deixa para o gesto SEGUINTE. O defeito que este
+   * cenário pega: uma flag booleana armada no refetch por foco (que NÃO escreve na URL) fica de pé
+   * e ENGOLE a troca de filtro seguinte — o detalhe deixa de recarregar e nada mais nesta suíte
+   * reclama. Por isso a contagem é por PASSO, e não no fim.
+   */
+  test('integração: clique, foco, troca de filtro e VOLTA do filtro — uma carga por gesto', async () => {
+    detalheDoBanco = baseRequisicao('APROVADO');
+    await renderizarSemDetalhe();
+
+    // Passo 0 — metade positiva: a lista montou e nada foi buscado ainda.
+    expect(container.textContent).toContain('REQ-055');
+    expect(cargasDoDetalhe()).toHaveLength(0);
+
+    // Passo 1 — o clique (RN-01): UMA carga, e não duas.
+    await act(async () => { container.querySelector('tbody tr').click(); });
+    expect(cargasDoDetalhe()).toHaveLength(1);
+    expect(blocoDeAnexos()).not.toBeNull();
+
+    // Passo 2 — o foco da janela (RN-03): o refetch pós-diálogo continua existindo. Ele NÃO muda a
+    // URL, então `syncSearchParams` devolve `null` e a flag NÃO é armada.
+    await act(async () => { window.dispatchEvent(new Event('focus')); });
+    expect(cargasDoDetalhe()).toHaveLength(2);
+    expect(blocoDeAnexos()).not.toBeNull();
+
+    // Passo 3 — a troca de filtro (RN-03): escreve `minha=1` na URL, o efeito de deep-link reacende
+    // e o detalhe É recarregado. É aqui que uma flag BOOLEANA armada no passo 2 apareceria
+    // (sabotagem 2 da T2: `Received 2`).
+    const checkMinha = [...container.querySelectorAll('input[type="checkbox"]')][0];
+    expect(checkMinha).toBeTruthy();
+    await act(async () => { checkMinha.click(); });
+    // Metade positiva do passo: o filtro REALMENTE ligou (sem isto, um clique que não faz nada
+    // deixaria a contagem parada e o passo ainda pareceria correto).
+    expect(checkMinha.checked).toBe(true);
+    expect(cargasDoDetalhe()).toHaveLength(3);
+
+    // Passo 4 — a VOLTA do filtro, que devolve a URL a `id=55`: exatamente a query que o passo 1
+    // escreveu. É o único passo que pega a flag armada SEM escrita (sabotagem 3 da T2): uma flag
+    // que não casa NÃO é desarmada, fica esperando a query voltar a ser aquela, e engole este
+    // refetch (`Received 3`). Sem este passo, a sabotagem 3 é um falso "nada cai".
+    await act(async () => { checkMinha.click(); });
+    expect(checkMinha.checked).toBe(false);
+    expect(cargasDoDetalhe()).toHaveLength(4);
+
+    // E o bloco de anexos atravessou os quatro gestos sem remontar nem reconsultar (F2 da Etapa 34).
+    expect(blocoDeAnexos()).not.toBeNull();
+    expect(chamadasDeAnexos()).toHaveLength(1);
+  });
+
+  /* ── F1 da revisão final da branch: o ✕ tem de descartar a resposta em voo ────────────────────
+   * `fecharDetalhe` zerava painel, detalhe e `loadedDetalheIdRef`, mas NÃO bumpava
+   * `detalheFetchSeqRef`. Cenário: lista sem `?id=`, clique na linha 55 (GET em voo), ✕ — o
+   * `syncSearchParams(null)` não escreve nada porque a URL ainda não tinha `id=` — e então a
+   * resposta chega, passa o teste de sequência (nada a invalidou), `aplicarDetalhe` repõe
+   * `detalhe`/`loadedDetalheIdRef` e `syncSearchParams(55)` ESCREVE `?id=55` na URL, armando de
+   * quebra a flag de navegação interna. O painel fica fechado (`selectedId` é null e nada o
+   * repõe), então nada na tela denuncia: só o F5 do usuário, que reabre a requisição que ele
+   * acabou de fechar. É a MESMA regra que a T4 escreveu para o painel de recebimentos
+   * ("Fechar é fechar: além de zerar o painel, BUMPA a sequência").
+   *
+   * A régua discriminante é a URL: painel e bloco de anexos ficam nulos com e sem o conserto
+   * (ambos dependem de `selectedId`), então um cenário que só olhasse a tela passaria com o
+   * defeito de pé.
+   */
+  test('F1: o ✕ descarta a resposta em voo — nada de `id=` na URL depois de fechar', async () => {
+    detalheDoBanco = baseRequisicao('APROVADO');
+    const original = api.get.getMockImplementation();
+    let liberarDetalhe;
+    // GET do detalhe DEFERIDO a mão: sem segurar a resposta, o `act` do clique já a entrega e a
+    // janela em que o usuário aperta o ✕ nunca existe — o cenário ficaria verde medindo outra coisa.
+    api.get.mockImplementation((url, cfg) => {
+      if (url === '/almoxarifado/requisicoes/55') {
+        return new Promise((resolve) => { liberarDetalhe = () => resolve({ data: detalheDoBanco }); });
+      }
+      return original(url, cfg);
+    });
+
+    await renderizarSemDetalhe();
+    // Metades positivas do estado inicial: a lista montou, e a URL ainda NÃO tem `id=` (é essa
+    // ausência que faz o `syncSearchParams(null)` do ✕ devolver `null` sem escrever).
+    expect(container.textContent).toContain('REQ-055');
+    expect(buscaDaUrl()).not.toContain('id=');
+
+    await act(async () => { container.querySelector('tbody tr').click(); });
+    expect(liberarDetalhe).toBeInstanceOf(Function);     // âncora: o GET está EM VOO
+    // Metade positiva: o painel ABRIU (em carga) antes do ✕ — sem ela, um clique que não abrisse
+    // nada deixaria o resto do cenário verde provando nada.
+    expect(container.querySelector('.almox-loading')).not.toBeNull();
+    const fechar = container.querySelector('.almox-modal-close');
+    expect(fechar).not.toBeNull();
+
+    await act(async () => { fechar.click(); });
+    expect(container.querySelector('.almox-loading')).toBeNull();   // fechou de fato
+
+    // A resposta atrasada chega DEPOIS do ✕ e não pode ressuscitar nada.
+    await act(async () => { liberarDetalhe(); });
+
+    // A régua: a URL continua sem `id=`. Com o defeito, aqui vinha `?id=55` e o F5 reabria a
+    // requisição fechada.
+    expect(buscaDaUrl()).not.toContain('id=');
+    expect(blocoDeAnexos()).toBeNull();
+    expect(cargasDoDetalhe()).toHaveLength(1);           // e nenhum GET novo foi disparado
+  });
+  });
+});
+
+// ─── Etapa 47 (T7): pendências de regra de aprovação ───────────────────────────────────────
+//
+// Contrato congelado no desenho da etapa (9.5/9.7). O servidor barra /aprovar e /aprovar-valor
+// enquanto houver pendência ABERTA; o que só a tela prova é que ela NÃO oferece o gesto que vai
+// ser recusado, diz POR QUÊ, oferece o "Assinar" a quem pode — e que nada disso dispara GET do
+// almoxarifado fora do modo almoxarifado (o F1 da Etapa 34).
+describe('Etapa 47: pendências de regra na tela de requisições', () => {
+  const PEND = (over = {}) => ({
+    id: 7, requisicao_id: 55, regra_id: 3, regra_nome: 'Valor alto', aprovadores: [99],
+    status: 'ABERTA', aprovador_id: null, aprovador_nome: null, ...over,
+  });
+  let pendenciasDoBanco;
+  let filaDoBanco;
+
+  beforeEach(() => {
+    pendenciasDoBanco = [PEND()];
+    filaDoBanco = [];
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => {
+      if (url === '/almoxarifado/requisicoes/55/aprovacoes-regra') return Promise.resolve({ data: pendenciasDoBanco });
+      if (url === '/almoxarifado/aprovacoes-regra/pendentes') return Promise.resolve({ data: filaDoBanco });
+      return base(url, cfg);
+    });
+  });
+
+  const urlsGet = () => api.get.mock.calls.map(([u]) => u);
+
+  test('com pendencia aberta: Aprovar desabilitado com o motivo, e o aviso na tela', async () => {
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1, pendencias_regra_abertas: 2 };
+    await renderizar();
+    const aprovar = botaoPorTexto('Só Aprovar');
+    expect(aprovar.disabled).toBe(true);
+    expect(aprovar.title).toBe('Aguardando 2 aprovação(ões) de regra antes da aprovação');
+    expect(botaoPorTexto('Aprovar e Separar').disabled).toBe(true);
+    expect(container.querySelector('[data-testid="aviso-pendencia-regra"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="aprovacoes-regra"]').textContent).toContain('Valor alto');
+  });
+
+  test('sem pendencia aberta: Aprovar habilitado e sem aviso (metade positiva)', async () => {
+    pendenciasDoBanco = [];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1, pendencias_regra_abertas: 0 };
+    await renderizar();
+    expect(botaoPorTexto('Só Aprovar').disabled).toBe(false);
+    expect(container.querySelector('[data-testid="aviso-pendencia-regra"]')).toBeNull();
+    expect(container.querySelector('[data-testid="aprovacoes-regra"]')).toBeNull();
+  });
+
+  test('Assinar: aparece para quem esta na lista, chama a rota certa, e some para o solicitante', async () => {
+    api.put.mockResolvedValue({ data: { success: true, pendencias_abertas: 0 } });
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1, pendencias_regra_abertas: 1 };
+    await renderizar();
+    const assinar = botaoPorTexto('Assinar');
+    expect(assinar).toBeTruthy();
+    await act(async () => { assinar.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(api.put).toHaveBeenCalledWith('/almoxarifado/requisicoes/55/aprovacoes-regra/7/aprovar');
+  });
+
+  test('o solicitante NAO ve o Assinar, e quem ja assinou outra perna tambem nao', async () => {
+    // O usuário do harness é o 99 — aqui ele é o solicitante.
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 99, pendencias_regra_abertas: 1 };
+    await renderizar();
+    expect(botaoPorTexto('Assinar')).toBeFalsy();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    pendenciasDoBanco = [PEND(), PEND({ id: 8, regra_nome: 'Crítico', status: 'APROVADA', aprovador_id: 99, aprovador_nome: 'Eu' })];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1, pendencias_regra_abertas: 1 };
+    await renderizar();
+    expect(container.querySelector('[data-testid="aprovacoes-regra"]').textContent).toContain('Assinada por Eu');
+    expect(botaoPorTexto('Assinar')).toBeFalsy();
+  });
+
+  test('a lane de valor tambem fica desabilitada com pendencia aberta', async () => {
+    detalheDoBanco = {
+      ...baseRequisicao('AGUARDANDO_APROVACAO_VALOR'), solicitante_id: 1, valor_total: 900, pendencias_regra_abertas: 1,
+    };
+    await renderizar();
+    const liberar = botaoPorTexto('Aprovar Liberação');
+    expect(liberar).toBeTruthy();
+    expect(liberar.disabled).toBe(true);
+  });
+
+  test('a fila mostra so o que o usuario pode assinar, e abre a requisicao', async () => {
+    filaDoBanco = [
+      { id: 7, requisicao_id: 55, numero: 'REQ-055', regra_nome: 'Valor alto', solicitante_nome: 'Joao', valor_total: 1200, pode_assinar: true },
+      { id: 9, requisicao_id: 56, numero: 'REQ-056', regra_nome: 'Crítico', solicitante_nome: 'Maria', valor_total: 10, pode_assinar: false },
+    ];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1, pendencias_regra_abertas: 1 };
+    await renderizarSemDetalhe();
+    const fila = container.querySelector('[data-testid="fila-aprovacoes-regra"]');
+    expect(fila.textContent).toContain('Aprovações de regra aguardando você (1)');
+    expect(fila.textContent).toContain('REQ-055');
+    expect(fila.textContent).not.toContain('REQ-056');
+  });
+
+  test('fora do modo almoxarifado: nenhuma consulta de pendencia de regra (F1 da Etapa 34)', async () => {
+    mockWarehouseMode = false;
+    filaDoBanco = [{ id: 7, requisicao_id: 55, numero: 'REQ-055', regra_nome: 'x', pode_assinar: true }];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1, pendencias_regra_abertas: 1 };
+    await renderizar();
+    expect(urlsGet().filter((u) => String(u).includes('aprovacoes-regra'))).toEqual([]);
+    expect(container.querySelector('[data-testid="fila-aprovacoes-regra"]')).toBeNull();
+  });
+});
+
+describe('Etapa 47 (Fase 5): os gestos que a primeira rodada nao exercitava', () => {
+  const PEND = (over = {}) => ({
+    id: 7, requisicao_id: 55, regra_id: 3, regra_nome: 'Valor alto', aprovadores: [99],
+    status: 'ABERTA', aprovador_id: null, aprovador_nome: null, ...over,
+  });
+  let pendenciasDoBanco;
+  let filaDoBanco;
+  beforeEach(() => {
+    pendenciasDoBanco = [PEND()];
+    filaDoBanco = [];
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => {
+      if (url === '/almoxarifado/requisicoes/55/aprovacoes-regra') return Promise.resolve({ data: pendenciasDoBanco });
+      if (url === '/almoxarifado/aprovacoes-regra/pendentes') return Promise.resolve({ data: filaDoBanco });
+      return base(url, cfg);
+    });
+  });
+  const clicar = async (el) => {
+    await act(async () => { el.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  };
+  const getsDoDetalhe = () => api.get.mock.calls.filter(([u]) => u === '/almoxarifado/requisicoes/55').length;
+
+  test('requisicao REJEITADA com pendencia aberta: nada de Assinar (autorizacao, M-2)', async () => {
+    detalheDoBanco = { ...baseRequisicao('REJEITADO'), solicitante_id: 1, pendencias_regra_abertas: 0 };
+    await renderizar();
+    expect(container.querySelector('[data-testid="aprovacoes-regra"]').textContent).toContain('Valor alto');
+    expect(botaoPorTexto('Assinar')).toBeFalsy();
+  });
+
+  test('assinar a ULTIMA: toast diz que ja pode aprovar, e o detalhe e recarregado', async () => {
+    api.put.mockResolvedValue({ data: { success: true, pendencias_abertas: 0 } });
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1, pendencias_regra_abertas: 1 };
+    await renderizar();
+    const antes = getsDoDetalhe();
+    await clicar(botaoPorTexto('Assinar'));
+    expect(toast.success).toHaveBeenCalledWith('Aprovação da regra "Valor alto" assinada. A requisição já pode ser aprovada.');
+    expect(getsDoDetalhe()).toBeGreaterThan(antes);
+  });
+
+  test('assinar uma de duas: toast diz quantas faltam', async () => {
+    api.put.mockResolvedValue({ data: { success: true, pendencias_abertas: 1 } });
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1, pendencias_regra_abertas: 2 };
+    await renderizar();
+    await clicar(botaoPorTexto('Assinar'));
+    expect(toast.success).toHaveBeenCalledWith('Aprovação da regra "Valor alto" assinada. Ainda falta(m) 1.');
+  });
+
+  test('clicar na fila abre a REQUISICAO (requisicao_id, nao o id da pendencia)', async () => {
+    filaDoBanco = [{ id: 7, requisicao_id: 55, numero: 'REQ-055', regra_nome: 'Valor alto', solicitante_nome: 'Joao', valor_total: 1200, pode_assinar: true }];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1, pendencias_regra_abertas: 1 };
+    await renderizarSemDetalhe();
+    const fila = container.querySelector('[data-testid="fila-aprovacoes-regra"]');
+    expect(fila.textContent).toContain('R$');
+    const antes = getsDoDetalhe();
+    await clicar(fila.querySelector('button'));
+    expect(getsDoDetalhe()).toBeGreaterThan(antes);
+  });
+});
+
+// ─── Etapa 48 (T4, RN-04): a fila da aprovação simples ─────────────────────────────────────
+describe('Etapa 48: fila da aprovação simples', () => {
+  let linhasPendentes;
+  beforeEach(() => {
+    const base = api.get.getMockImplementation();
+    api.get.mockImplementation((url, cfg) => {
+      if (url === '/almoxarifado/requisicoes' && cfg?.params?.status === 'PENDENTE') {
+        return Promise.resolve({ data: linhasPendentes });
+      }
+      return base(url, cfg);
+    });
+  });
+  const LINHA = (over) => ({
+    id: 70, numero: 'REQ-070', status: 'PENDENTE', solicitante_id: 1, solicitante_nome: 'Joao',
+    valor_total: 10, pendencias_regra_abertas: 0, regras_avaliadas_em: '2026-09-30 10:00:00', ...over,
+  });
+  const painel = () => container.querySelector('[data-testid="fila-aprovacao-simples"]');
+
+  test('o recorte: so PENDENTE de outra pessoa sem regra aberta — com a metade positiva', async () => {
+    linhasPendentes = [
+      LINHA({ id: 70, numero: 'REQ-070' }),
+      LINHA({ id: 71, numero: 'REQ-071', solicitante_id: 99 }), // a minha (usuário do harness é o 99)
+      LINHA({ id: 72, numero: 'REQ-072', pendencias_regra_abertas: 1 }), // barrada por regra
+      LINHA({ id: 73, numero: 'REQ-073', status: 'APROVADO' }),
+      LINHA({ id: 74, numero: 'REQ-074', regras_avaliadas_em: null }), // não avaliada: FICA, marcada
+    ];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1 };
+    await renderizarSemDetalhe();
+    const p = painel();
+    expect(p.textContent).toContain('Requisições aguardando sua aprovação (2)');
+    expect(p.textContent).toContain('REQ-070');
+    expect(p.textContent).not.toContain('REQ-071');
+    expect(p.textContent).not.toContain('REQ-072');
+    expect(p.textContent).not.toContain('REQ-073');
+    expect(p.textContent).toContain('REQ-074');
+    expect(p.textContent).toContain('regras ainda não avaliadas — a aprovação vai conferir');
+  });
+
+  test('sem a permissao de aprovar o painel nao aparece (e a lista continua)', async () => {
+    mockPode = (acao) => acao !== 'aprovar_requisicao';
+    linhasPendentes = [LINHA({})];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1 };
+    await renderizarSemDetalhe();
+    expect(painel()).toBeNull();
+    expect(container.textContent).toContain('REQ-055');
+  });
+
+  test('fora do modo almoxarifado: nenhum GET de pendentes', async () => {
+    mockWarehouseMode = false;
+    linhasPendentes = [LINHA({})];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1 };
+    await renderizarSemDetalhe();
+    expect(api.get.mock.calls.filter(([u, c]) => u === '/almoxarifado/requisicoes' && c?.params?.status === 'PENDENTE')).toEqual([]);
+    expect(painel()).toBeNull();
+  });
+
+  test('a fila RECARREGA quando a lista recarrega: a requisicao aprovada sai do painel (Fase 5, MINOR-H)', async () => {
+    linhasPendentes = [LINHA({ id: 70, numero: 'REQ-070' })];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1 };
+    await renderizarSemDetalhe();
+    expect(painel()).not.toBeNull();
+    linhasPendentes = [];
+    // Qualquer gesto que recarrega a lista (aqui o filtro de status) tem de recarregar a fila junto.
+    const sel = [...container.querySelectorAll('select')].find((s) => [...s.options].some((o) => o.value === 'PENDENTE'));
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+      setter.call(sel, 'PENDENTE');
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(painel()).toBeNull();
+  });
+
+  test('clicar abre a requisicao certa', async () => {
+    linhasPendentes = [LINHA({ id: 55, numero: 'REQ-055' })];
+    detalheDoBanco = { ...baseRequisicao('PENDENTE'), solicitante_id: 1 };
+    await renderizarSemDetalhe();
+    const antes = api.get.mock.calls.filter(([u]) => u === '/almoxarifado/requisicoes/55').length;
+    await act(async () => { painel().querySelector('button').dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    expect(api.get.mock.calls.filter(([u]) => u === '/almoxarifado/requisicoes/55').length).toBeGreaterThan(antes);
+  });
+});
+
+// ─── Etapa 73 (RN-07, B358): a tela diz que chegou ──────────────────────────────────────────
+//
+// A chegada do material NÃO muda o status (D2/B358): a requisição continua AGUARDANDO_COMPRA ou
+// AGUARDANDO_ESTOQUE. Quem diz que chegou é o banner do detalhe, pela régua da tela
+// (`maxSeparavelNaTela` = min(pendente de separação, saldo)), dizendo QUANTO dá para separar e que o
+// saldo é compartilhado — separar não reserva.
+describe('Etapa 73: o banner diz que chegou material para a requisição que espera', () => {
+  const LITERAL_CHEGOU = 'Chegou material para esta requisição — já dá para separar. O material ainda não está reservado para ela.';
+  const LITERAL_COMPRA_HOJE = 'Sem saldo disponível — há uma solicitação de compra em andamento para os materiais desta requisição.';
+  const LITERAL_ESTOQUE_HOJE = 'Sem saldo disponível no momento — inicie a separação assim que o estoque for reposto.';
+  const comItens = (status, itens) => ({ ...baseRequisicao(status), itens });
+  const item = (extra) => ({ ...ITEM, unidade: 'PC', ...extra });
+
+  test('AGUARDANDO_COMPRA com saldo 4 e pendente 6: a literal nova, quanto dá e que o saldo é compartilhado', async () => {
+    detalheDoBanco = comItens('AGUARDANDO_COMPRA', [item({ quantidade_solicitada: 6, saldo_atual: 4 })]);
+    await renderizar();
+    expect(container.textContent).toContain(LITERAL_CHEGOU);
+    expect(container.textContent).toContain('Dá para separar agora: 4 PC de Chapa 3mm.');
+    expect(container.textContent).toContain('outra requisição pode separá-lo antes');
+    expect(container.textContent).not.toContain(LITERAL_COMPRA_HOJE);
+    // O status não muda (D2): o badge continua o de quem espera compra.
+    expect(container.textContent).toContain('Aguard. Compra');
+  });
+
+  test('AGUARDANDO_COMPRA com saldo 0: só a literal de hoje (metade positiva)', async () => {
+    detalheDoBanco = comItens('AGUARDANDO_COMPRA', [item({ quantidade_solicitada: 6, saldo_atual: 0 })]);
+    await renderizar();
+    expect(container.textContent).toContain(LITERAL_COMPRA_HOJE);
+    expect(container.textContent).not.toContain('Chegou material');
+  });
+
+  test('AGUARDANDO_ESTOQUE com saldo 4 e pendente 6: a literal nova', async () => {
+    detalheDoBanco = comItens('AGUARDANDO_ESTOQUE', [item({ quantidade_solicitada: 6, saldo_atual: 4 })]);
+    await renderizar();
+    expect(container.textContent).toContain(LITERAL_CHEGOU);
+    expect(container.textContent).toContain('Dá para separar agora: 4 PC de Chapa 3mm.');
+    expect(container.textContent).not.toContain(LITERAL_ESTOQUE_HOJE);
+  });
+
+  test('AGUARDANDO_ESTOQUE com saldo 0: só a literal de hoje', async () => {
+    detalheDoBanco = comItens('AGUARDANDO_ESTOQUE', [item({ quantidade_solicitada: 6, saldo_atual: 0 })]);
+    await renderizar();
+    expect(container.textContent).toContain(LITERAL_ESTOQUE_HOJE);
+    expect(container.textContent).not.toContain('Chegou material');
+  });
+
+  test('item JÁ TODO SEPARADO com saldo > 0: a literal de hoje (não é "dá para separar")', async () => {
+    detalheDoBanco = comItens('AGUARDANDO_COMPRA', [item({ quantidade_solicitada: 6, quantidade_separada: 6, saldo_atual: 10 })]);
+    await renderizar();
+    expect(container.textContent).toContain(LITERAL_COMPRA_HOJE);
+    expect(container.textContent).not.toContain('Chegou material');
+  });
+
+  test('separado em parte: o quanto dá é o pendente de separação, não o saldo', async () => {
+    detalheDoBanco = comItens('AGUARDANDO_COMPRA', [item({ quantidade_solicitada: 6, quantidade_separada: 2, saldo_atual: 10 })]);
+    await renderizar();
+    expect(container.textContent).toContain('Dá para separar agora: 4 PC de Chapa 3mm.');
+  });
+
+  test('dois itens do MESMO material dividem o saldo: 4 que chegaram não viram 8', async () => {
+    detalheDoBanco = comItens('AGUARDANDO_COMPRA', [
+      item({ id: 1, quantidade_solicitada: 3, saldo_atual: 4 }),
+      item({ id: 2, quantidade_solicitada: 3, saldo_atual: 4 }),
+    ]);
+    await renderizar();
+    expect(container.textContent).toContain('Dá para separar agora: 3 PC de Chapa 3mm; 1 PC de Chapa 3mm.');
+  });
+
+  test('só o item com saldo entra na lista do quanto dá', async () => {
+    detalheDoBanco = comItens('AGUARDANDO_COMPRA', [
+      item({ id: 1, quantidade_solicitada: 6, saldo_atual: 0 }),
+      item({ id: 2, material_id: 11, material_nome: 'Parafuso M8', quantidade_solicitada: 2, saldo_atual: 50 }),
+    ]);
+    await renderizar();
+    expect(container.textContent).toContain('Dá para separar agora: 2 PC de Parafuso M8.');
+    expect(container.textContent).not.toContain('de Chapa 3mm');
+  });
+
+  test('TOTALMENTE_RESERVADA com saldo: inalterado, sem o banner novo', async () => {
+    detalheDoBanco = comItens('TOTALMENTE_RESERVADA', [item({ quantidade_solicitada: 6, saldo_atual: 10 })]);
+    await renderizar();
+    expect(container.textContent).toContain('Todo o saldo desta requisição está reservado — inicie a separação.');
+    expect(container.textContent).not.toContain('Chegou material');
+  });
+
+  test('fora do modo almoxarifado: nada do banner (o bloco inteiro é do almoxarife)', async () => {
+    mockWarehouseMode = false;
+    detalheDoBanco = comItens('AGUARDANDO_COMPRA', [item({ quantidade_solicitada: 6, saldo_atual: 4 })]);
+    await renderizar();
+    expect(container.textContent).not.toContain('Chegou material');
   });
 });

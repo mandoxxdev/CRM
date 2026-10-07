@@ -292,6 +292,17 @@
 .almox-badge-vencida         { background: rgba(229,25,58,0.12);   color: var(--gmp-error);
                                border: 1px solid rgba(229,25,58,0.35); }
 
+/* Etapa 43 — status da NAO CONFORMIDADE numerada. As tres classes PRECISAM existir pelo mesmo
+   motivo escrito no bloco acima: o componente monta `almox-badge-nc-${status.toLowerCase()}` e
+   classe inexistente sai sem fundo nem cor, sem nenhum teste de comportamento pegar.
+   PREFIXO PROPRIO (`-nc-`) em vez de reusar `almox-badge-aberta`/`-cancelada` da remessa a
+   terceiros: as palavras coincidem por acaso (substantivo feminino), mas as escalas nao — na
+   remessa ABERTA e o estado normal e neutro, aqui ABERTA e um problema esperando decisao e tem
+   de puxar o olho. Reusar amarraria as duas telas: mudar a cor da remessa repintaria a NC. */
+.almox-badge-nc-aberta       { background: rgba(229,25,58,0.12);   color: var(--gmp-error); }
+.almox-badge-nc-decidida     { background: rgba(26,163,74,0.12);   color: var(--gmp-success); }
+.almox-badge-nc-cancelada    { background: rgba(107,107,107,0.12); color: var(--gmp-text-light); }
+
 /* ── Nome como link (abre extrato/detalhe sem sair da tela) ── */
 .almox-link-btn {
   background: none;
@@ -312,6 +323,21 @@
   display: flex;
   gap: 6px;
   align-items: center;
+  /* Etapa 35: sem `flex-wrap`, a celula de acoes estourava a largura da tabela e o
+     `overflow: hidden` de `.almox-table-container` (que existe pelo `border-radius: 12px` da
+     mesma regra) CORTAVA o excedente — sem barra de rolagem e sem sintoma. Acima de 768px nao
+     ha `overflow-x` em lugar nenhum: a declaracao `overflow-x: auto` de `.almox-table` vive
+     dentro de `@media (max-width: 768px)` e so vale abaixo dele. Pior caso medido: Ferramentas
+     em DISPONIVEL + exige_calibracao, com 5 botoes de TEXTO (`.btn-almox-secondary` em
+     `FerramentasAlmoxarifado.js`), que por serem `white-space: nowrap` tem piso duro de ~684px
+     numa largura util de 721px em 769px — "Calibracao" ficava inalcancavel.
+     Duas regras que este comentario aprendeu apanhando: referencias por SELETOR e nao por
+     numero de linha (ele nasceu citando `:368` e `:1030`, e as proprias 9 linhas dele
+     empurraram os alvos para `:377` e `:1039`); e nenhuma chave de fechamento no texto, porque
+     o `bloco()` do teste de drift casa `[^` mais chave `]*` e encerraria o bloco antes do
+     `flex-wrap` — o teste pegou isso na primeira tentativa desta correcao. Medicao e faixa em
+     docs/superpowers/specs/2026-09-16-almoxarifado-etapa35-vizinhas-da-34-design.md. */
+  flex-wrap: wrap;
 }
 
 .almox-btn-icon {
@@ -1618,6 +1644,48 @@
 /* Loading no tema escuro */
 .almox-mapa-page .almox-loading { color: var(--gmp-text-light); }
 
+/* ===== Anexos de documento (Etapa 32) — bloco generico por entidade =====
+   Sem estas regras o bloco cai no meio da linha expandida do historico sem borda nenhuma:
+   o componente e generico e nao pode depender do CSS da tela que o hospeda. */
+.almox-anexos {
+  border: 1px solid var(--gmp-border);
+  border-radius: 10px;
+  background: var(--gmp-surface);
+  padding: 0.75rem 0.9rem;
+  margin-top: 0.75rem;
+}
+.almox-anexos-titulo {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--gmp-text);
+}
+.almox-anexos-erro { margin: 0 0 0.5rem; font-size: 0.8rem; }
+.almox-anexos-vazio { margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--gmp-text-light); }
+.almox-anexos-lista { list-style: none; margin: 0 0 0.6rem; padding: 0; }
+.almox-anexos-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--gmp-border);
+  font-size: 0.8rem;
+}
+.almox-anexos-item:last-child { border-bottom: none; }
+.almox-anexos-nome { font-weight: 600; color: var(--gmp-text); word-break: break-all; }
+.almox-anexos-meta { color: var(--gmp-text-light); font-size: 0.75rem; }
+.almox-anexos-desc { color: var(--gmp-text-light); font-size: 0.75rem; font-style: italic; }
+.almox-anexos-item .almox-btn-icon:first-of-type { margin-left: auto; }
+.almox-anexos-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.almox-anexos-form .almox-input { max-width: 220px; }
 
 /* ═══════════════════════════════════════════════════════════════════════
    Etapa 32 — Pedido de compra dentro do "Novo Recebimento"

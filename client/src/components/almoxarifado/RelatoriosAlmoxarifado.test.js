@@ -673,3 +673,76 @@ describe('RelatoriosAlmoxarifado — botão desabilitado em voo', () => {
     expect(api.get).toHaveBeenCalledTimes(1);
   });
 });
+
+// Etapa 66 (T3): parametro `tipo: 'select'` com opcoes vindas de `opcoes_url` (o filtro de
+// motivo do historico). As opcoes vem do cadastro com DESATIVADOS inclusos (o historico os tem),
+// marcados "(desativado)"; a consulta manda o ID, nunca o nome.
+describe('RelatoriosAlmoxarifado — parâmetro select com opções do servidor (Etapa 66)', () => {
+  const HISTORICO = {
+    tipo: 'historico-movimentacoes', titulo: 'Histórico de movimentações', categoria: 'Movimentações',
+    params: [
+      { nome: 'tipo', rotulo: 'Tipo de movimento', tipo: 'text', obrigatorio: false },
+      { nome: 'motivo_id', rotulo: 'Motivo (cadastro)', tipo: 'select', obrigatorio: false, opcoes_url: '/almoxarifado/motivos-movimentacao?todos=1' },
+    ],
+    exportavel: true, limite: 500, nota: null,
+    colunas: [{ chave: 'motivo', rotulo: 'Motivo' }, { chave: 'justificativa', rotulo: 'Justificativa' }],
+  };
+  const MOTIVOS = [
+    { id: 7, nome: 'Avaria no manuseio', tipos: ['PERDA'], ativo: 1 },
+    { id: 9, nome: 'Inventário antigo', tipos: ['AJUSTE'], ativo: 0 },
+  ];
+  const mockar = (motivos = () => Promise.resolve({ data: MOTIVOS }), consulta = () => Promise.resolve({ data: [] })) => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/relatorios') return Promise.resolve({ data: { relatorios: [HISTORICO, ...LISTA_FIXTURE] } });
+      if (url === '/almoxarifado/motivos-movimentacao?todos=1') return motivos();
+      if (url === '/almoxarifado/relatorios/historico-movimentacoes') return consulta();
+      return Promise.reject(new Error(`URL inesperada no mock: ${url}`));
+    });
+  };
+  async function escolher(select, valor) {
+    await act(async () => {
+      select.value = valor;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+
+  test('renderiza SELECT (não input) com os nomes do cadastro, desativado marcado, e consulta manda o id', async () => {
+    mockar();
+    await renderizar();
+    await selecionarRelatorio('historico-movimentacoes');
+
+    const campo = container.querySelector('#param-motivo_id');
+    expect(campo.tagName).toBe('SELECT');
+    const opcoes = [...campo.options].map((o) => [o.value, o.textContent]);
+    expect(opcoes).toEqual([
+      ['', 'Todos'],
+      ['7', 'Avaria no manuseio'],
+      ['9', 'Inventário antigo (desativado)'],
+    ]);
+    // Os outros parâmetros continuam input — o select é por declaração, não por nome.
+    expect(container.querySelector('#param-tipo').tagName).toBe('INPUT');
+
+    await escolher(campo, '9');
+    await clicar(botao('Consultar'));
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/relatorios/historico-movimentacoes', { params: { motivo_id: '9' } });
+  });
+
+  test('relatório sem select não busca opção nenhuma', async () => {
+    mockar();
+    await renderizar();
+    await selecionarRelatorio('materiais-mais-consumidos');
+    // Só a lista — nenhuma busca de opções para parâmetro que não é select.
+    expect(api.get.mock.calls.map((c) => c[0])).toEqual(['/almoxarifado/relatorios']);
+  });
+
+  test('falha ao carregar as opções aparece na tela e não vira lista vazia calada', async () => {
+    mockar(() => Promise.reject(Object.assign(new Error('x'), { response: { status: 500, data: { error: 'falhou' } } })));
+    await renderizar();
+    await selecionarRelatorio('historico-movimentacoes');
+    expect(container.querySelector('[data-testid="param-erro-motivo_id"]').textContent)
+      .toContain('Não foi possível carregar as opções');
+    // Sem filtro de motivo a consulta ainda funciona.
+    await clicar(botao('Consultar'));
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/relatorios/historico-movimentacoes', { params: {} });
+  });
+});

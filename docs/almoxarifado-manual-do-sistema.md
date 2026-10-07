@@ -25,7 +25,10 @@ explicada logo abaixo dela.
 12. [Devoluções ao estoque](#12-devoluções-ao-estoque)
 13. [Inventário e conferência de estoque](#13-inventário-e-conferência-de-estoque)
 14. [Recebimento de material](#14-recebimento-de-material)
+14b. [Pedido de compra](#14b-pedido-de-compra)
+14c. [Fornecedores e cotações](#14c-fornecedores-e-cotações)
 15. [Inspeção e qualidade](#15-inspeção-e-qualidade)
+15b. [Não conformidades](#15b-não-conformidades)
 16. [Materiais de clientes](#16-materiais-de-clientes)
 17. [Material enviado a terceiros](#17-material-enviado-a-terceiros)
 18. [Transformação no terceiro](#18-transformação-no-terceiro)
@@ -71,6 +74,8 @@ As telas do módulo ficam em **Almoxarifado**, no menu lateral:
 | Configurações | famílias, setores, localizações, perfis, parâmetros do módulo |
 
 **No celular**, o módulo funciona no próprio navegador, sem aplicativo: o menu vira o botão de três linhas no topo, as tabelas mostram **todas** as colunas (deslize para o lado para alcançar as ações) e as janelas de confirmação abrem em tela cheia. A leitura de etiquetas pela câmera está na tela **Scanner** (seção 4.9) — atenção ao requisito de HTTPS descrito lá.
+
+**Uma regra de tela que vale para todas as tabelas do módulo:** a última coluna de cada tabela é a de **ações**, e os botões dela **quebram em mais de uma fileira** quando não cabem na largura disponível. Nenhum botão fica cortado pela borda da tabela nem escondido: se a janela for estreita — meia tela de monitor, notebook pequeno, celular —, a linha simplesmente fica mais alta e todos os botões continuam visíveis e clicáveis. As telas mais afetadas são as que têm botões com texto em vez de ícone, como **Ferramentas** e **Remessas a Terceiros**.
 
 ### 1.1 O número dos documentos
 
@@ -277,7 +282,7 @@ O bloco **Controles** tem sete opções. Ligar uma delas muda o comportamento do
 
 Há ainda uma marcação fora deste bloco que tem efeito operacional: **Material crítico**, no bloco Classificação. É ela — e não a opção "Requer inspeção" — que faz a quantidade recebida entrar **retida em inspeção** no recebimento, em vez de entrar direto como disponível (ver 14.6). O material fica fisicamente no galpão, contado no saldo total, mas fora do disponível até que a inspeção decida.
 
-Onde a exigência de lote e de série **não** se aplica, e isso é deliberado: entrega de requisição, estorno de requisição excluída, inspeção, ajuste puro de inventário e as movimentações de remessa a terceiros. Essas telas não têm campo de lote nem de série, e exigi-los ali tornaria o material impossível de entregar. O ajuste é isento por um motivo próprio: é por ele que se regulariza estoque antigo, que não tem lote nenhum. O preço é que a quantidade movimentada por esses caminhos fica na linha "sem lote" — o saldo total do material continua correto.
+Onde a exigência de lote e de série **não** se aplica, e isso é deliberado: entrega de requisição, estorno de requisição excluída, inspeção, ajuste puro de inventário e as movimentações de remessa a terceiros. Exigi-los ali tornaria o material impossível de entregar. Na entrega de requisição o lote é **opcional**: escolhendo em **"Sai de"** (7.5) o endereço e o lote de onde o item sai, a baixa é daquele lote; sem escolher, fica na linha "sem lote". O ajuste é isento por um motivo próprio: é por ele que se regulariza estoque antigo, que não tem lote nenhum. O preço é que a quantidade movimentada por esses caminhos fica na linha "sem lote" — o saldo total do material continua correto.
 
 ### 2.8 Proprietário — material que é do cliente
 
@@ -292,6 +297,12 @@ Não existe cadastro separado de "material de cliente": ele é material normal, 
 Toda criação e toda edição de material ficam registradas com **quem fez, quando, e o de/para de cada campo alterado** — apenas os campos que realmente mudaram, não a ficha inteira. **Trocar a foto também conta como edição**, e o registro guarda o nome do arquivo anterior e o do novo. Excluir um material é uma **inativação**: ele sai das listas, mas o histórico de movimentações continua íntegro. **Desativar um material que já estava inativo não gera registro nenhum** — o sistema aceita a operação, mas o histórico só recebe linha quando houve efeito (seção 5.7).
 
 Esse histórico é lido em **Almoxarifado → Auditoria**, filtrando a entidade **Material** (seção 5.8). Ele não aparece dentro da ficha do material — a consulta é sempre pela tela de Auditoria, e é restrita a quem administra o módulo.
+
+### 2.10 Anexos do material
+
+Além da foto, cada material guarda **documentos**. Na lista de **Almoxarifado → Materiais**, a coluna de ações de cada linha tem um ícone de **clipe** (*"Anexos e documentos deste material"*) que abre a janela **Anexos do material**, identificada pelo código e pelo nome. É onde ficam a **ficha técnica**, o **desenho** e o **catálogo do fabricante** — documentos que valem para o item, não para um lançamento dele.
+
+O clipe aparece para todo mundo que enxerga a tela, inclusive para quem só consulta: **ver e baixar** é liberado a qualquer perfil do módulo, e é **enviar** e **remover** que dependem do perfil. Material desativado continua aceitando anexo — ficha técnica de item aposentado é exatamente o tipo de documento que se precisa consultar depois. As regras completas de formato, tamanho, permissão e registro de download estão em **15.2.4**.
 
 ---
 
@@ -320,15 +331,74 @@ O endereço é montado em quatro níveis, e é exibido no formato `ALM-GERAL / C
 
 Cada localização tem: **Código** (único), **Descrição**, **Setor**, **Subgrupo**, **Tipo**, **Almoxarifado**, além da posição e do tamanho que ela ocupa no Mapa de Áreas.
 
-O **código é sugerido automaticamente** ao criar: o sistema toma o prefixo do setor (ou o prefixo do código da localização pai, quando é uma filha), procura o maior número já usado e propõe o próximo, com dois dígitos — `A-01`, `A-02`, `GAV-03`. O assistente de criação mostra o código e a descrição em pré-visualização antes de confirmar.
+O **código é sugerido automaticamente** ao criar, e o operador não o digita: o assistente de criação mostra o código e
+a descrição em pré-visualização antes de confirmar. A regra da sugestão:
+
+- **Prefixo.** Numa localização filha, o prefixo do código da localização pai (`A-01` → `A`). Numa localização raiz, o
+  prefixo configurado do setor (só de setor ativo); sem prefixo configurado, a letra depois de "Corredor"
+  (`Corredor K` → `K`); sem isso, as três primeiras letras ou números do nome do setor, em maiúsculas; setor em branco
+  → `LOC`.
+- **Número.** O maior número já usado entre as irmãs — **inclusive as posições excluídas** — mais um, com dois dígitos
+  (`A-01`, `A-02`, `GAV-03`; passa de 99 para 100 normalmente). Numa filha que ainda não tem irmãs, parte do número do
+  código da pai.
+- **Nunca repete.** Se o código resultante já existir em **qualquer** lugar do cadastro — outro setor com o mesmo
+  prefixo, uma posição raiz com o mesmo código, uma posição excluída —, a sugestão sobe até o primeiro livre.
+- Enquanto o código é calculado, o campo mostra *"Gerando código..."* e o botão **Confirmar cadastro** fica
+  desabilitado.
+- Se, entre a sugestão e a confirmação, o código passar a ser de uma posição excluída, a gravação é recusada com
+  *"O código ⟨código⟩ pertence a uma localização desativada — gere outro código"* e o assistente já mostra um código
+  novo; basta confirmar de novo.
+
+**Mover** uma localização (para outro setor ou para dentro de outra estrutura) **troca o código dela** pelo próximo
+código do lugar de destino, pela mesma regra — a própria localização movida não conta como já usada. Uma etiqueta
+física feita fora do sistema com o código antigo deixa de valer. Se o código escolhido já pertencer a outra posição, a
+recusa é *"Código já existe"* ou, quando a dona é uma posição excluída, *"Código já existe (localização desativada)"*.
 
 ### 3.3 Tipos de localização
 
-Ao criar ou editar, escolhe-se um entre treze tipos:
+Ao criar ou editar, escolhe-se um entre quinze tipos:
 
-`Almoxarifado` · `Rua` · `Prateleira` · `Gaveta` · `Box` · `Área externa` · `Área de corte` · `Área de montagem` · `Área de elétrica` · `Área de pintura` · `Área de expedição` · `Área de materiais do cliente` · `Área de quarentena/inspeção`
+`Almoxarifado` · `Rua` · `Prateleira` · `Gaveta` · `Box` · `Área externa` · `Área de corte` · `Área de montagem` · `Área de elétrica` · `Área de pintura` · `Área de expedição` · `Área de materiais do cliente` · `Área de quarentena/inspeção` · `Área de sucata` · `Área de devoluções`
 
-O tipo é **descritivo**: ele define o ícone, a cor e o tamanho com que a posição aparece no Mapa de Áreas, e o rótulo na tabela. Ele **não** carrega regra de negócio — endereçar um material numa posição do tipo "Área de quarentena/inspeção" não coloca esse material em quarentena. Quarentena é um estado de saldo, decidido pela inspeção, não pelo endereço.
+O tipo define o ícone, a cor e o tamanho com que a posição aparece no Mapa de Áreas, e o rótulo na tabela. Para **cinco** deles — as **áreas especiais** (3.3b) — ele também define **avisos e sugestões**; para os outros dez, é só descritivo. **Nenhum tipo retém nem recusa material:** endereçar um material numa posição do tipo "Área de quarentena/inspeção" **não** coloca esse material em quarentena. Quarentena é um estado de saldo, decidido pela inspeção, não pelo endereço.
+
+**O tipo tem de ser um da lista.** Pela tela só se escolhe da lista; quem cria ou altera localização pela integração recebe *"Tipo de localização inválido: ⟨tipo⟩"* para qualquer outro texto (inclusive *"Area de sucata"*, sem acento). Uma localização antiga gravada com um tipo fora da lista continua podendo ser editada e movida, desde que o tipo não seja trocado; para ela ganhar a regra de área, troque o tipo por um da lista. Editar uma localização sem informar o tipo **mantém** o tipo gravado.
+
+### 3.3b Áreas especiais — o que cada uma faz, e o que não faz
+
+São áreas especiais: **Área de quarentena/inspeção**, **Área de expedição**, **Área de sucata**, **Área de devoluções** e **Área de materiais do cliente**. O assistente de **Nova Localização** (Configurações → Setores e Áreas) oferece as cinco no **Tipo de área** da posição raiz.
+
+**A área vale também para o que está dentro dela.** Uma posição criada dentro de uma área especial (por exemplo, uma prateleira **SUC-01** dentro da área de sucata **SUC**) é tratada como parte da área, mesmo com o tipo "Prateleira": o sistema sobe pela hierarquia até achar a área mais próxima. Se a área de cima estiver **desativada**, a subida para ali — área desativada não dá regra a ninguém.
+
+**O que as áreas fazem — três coisas, e nenhuma delas bloqueia:**
+
+1. **Avisam no destino da movimentação.** Em **Movimentações → Nova Movimentação**, nos tipos **Entrada** e **Transferência**, com material e destino escolhidos, aparece abaixo do destino a frase da área (o código da localização no lugar de ⟨c⟩). A movimentação é aceita do mesmo jeito.
+
+   | Área | Aviso |
+   |---|---|
+   | Quarentena/inspeção | *"Localização ⟨c⟩ é área de quarentena/inspeção, mas guardar aqui não retém o material — ele continua disponível. Para reter, use Inspeções ou o bloqueio."* |
+   | Expedição | *"Localização ⟨c⟩ é área de expedição, mas a requisição não usa este endereço — a entrega baixa da origem separada."* |
+   | Sucata | *"Localização ⟨c⟩ é área de sucata, mas guardar aqui não sucateia — o material continua no estoque disponível até o sucateamento aprovado."* |
+   | Devoluções | *"Localização ⟨c⟩ é área de devoluções, mas guardar aqui não muda o estado do material — ele continua disponível."* |
+   | Materiais do cliente | só para material **próprio**: *"Localização ⟨c⟩ é área de materiais do cliente, e ⟨m⟩ é material próprio."* (⟨m⟩ = código do material). Para material de cliente, nenhum aviso. |
+
+   O processamento do recebimento e a devolução **não** mostram esse aviso.
+
+2. **Ficam fora das sugestões de vaga.** A sugestão de posição na entrada (3.8) não oferece área especial como "já tem este material" nem como "vazia" — com uma exceção: para **material de cliente**, a área de materiais do cliente é oferecida, e **antes** das outras vagas. Se a **posição padrão** do material for uma área, ela continua sendo sugerida como padrão (é cadastro explícito).
+
+3. **A área de sucata é de onde sai o sucateamento aprovado** — quando ela cobre a quantidade inteira (20.2).
+
+**O que as áreas NÃO fazem.** Não retêm saldo: o material numa área continua **disponível** e pode sair por qualquer saída — perda, entrega de requisição, transferência. Isso vale também para a área de sucata: enquanto o sucateamento não é aprovado, o material ali pode ser levado por outra saída, inclusive pelo "Sai de" da entrega, que lista os endereços com saldo. Não existe área "em terceiros": o material enviado a terceiros não tem endereço aqui — ele é acompanhado como saldo em poder de terceiros (seção 17).
+
+**No Mapa de Áreas**, a área de sucata aparece com ♻️ e a de devoluções com ↩️, e o painel da posição selecionada mostra, em **Área especial**, o que a área faz. A descrição de cada área:
+
+- **Quarentena/inspeção:** *"Guardar aqui não retém o material: ele continua disponível. Quem retém é a inspeção ou o bloqueio."*
+- **Expedição:** *"A separação da requisição não usa este endereço: a entrega baixa da origem separada."*
+- **Sucata:** *"Guardar aqui não sucateia: o material continua no estoque até o sucateamento aprovado, que baixa daqui quando o saldo aqui cobre o sucateamento inteiro."*
+- **Devoluções:** *"Guardar aqui não muda o estado do material: ele continua disponível."*
+- **Materiais do cliente:** *"Endereço para material de cliente. Material próprio guardado aqui gera aviso."*
+
+Para uma posição dentro da área, a descrição começa por *"Dentro de ⟨código da área⟩ (⟨tipo da área⟩)."*.
 
 ### 3.4 Bloqueio e restrição por tipo de material
 
@@ -338,7 +408,7 @@ Duas travas configuráveis por posição, no modal **Editar Localização** (Con
 
 > *"Localização A-01 está bloqueada"*
 
-Atenção a um detalhe que economiza tempo: a validação vale também quando você **não** informa a localização, porque nesse caso o sistema usa a **Localização no estoque** cadastrada no material. Bloquear a posição padrão de um item bloqueia a entrada dele mesmo sem ninguém escolher destino.
+Atenção a um detalhe que economiza tempo: a validação vale também quando você **não** informa a localização, porque nesse caso o sistema usa a **Localização no estoque** cadastrada no material. Bloquear a posição padrão de um item bloqueia a entrada dele mesmo sem ninguém escolher destino. A tela de Movimentações avisa isso antes de salvar (ver 3.8).
 
 Uma exceção deliberada: o **estorno** de uma movimentação **não** valida bloqueio. Reverter um lançamento precisa sempre ser possível, mesmo que a posição tenha sido bloqueada depois do movimento original.
 
@@ -352,13 +422,44 @@ Recusa:
 
 Deixar a lista vazia significa **sem restrição** (não "nenhum tipo permitido").
 
-### 3.5 Excluir uma localização que tem saldo
+**Posição inativa ou que não existe.** Uma posição inativa não aparece no Mapa de Áreas nem nas listas de escolha, e o sistema não deixa material ser gravado nela quando ela é **informada** no movimento. A trava é avaliada antes de qualquer efeito no saldo, e depende do papel da posição:
 
-Excluir é permitido apenas quando a posição está vazia. A verificação é feita por **existência de linha de saldo diferente de zero**, e não pela soma — um endereço com +10 de um material e −10 de outro **não** conta como vazio.
+| Situação | O que o sistema faz |
+|---|---|
+| Posição **inativa** informada como **destino** — de qualquer entrada (inclusive o ajuste positivo) ou de uma transferência | Recusa: *"Localização A-01 está inativa"* |
+| Posição que **não existe** informada como destino ou como origem | Recusa: *"Localização de destino não encontrada"* ou *"Localização de origem não encontrada"* |
+| Posição **inativa** como **origem** — saída ou transferência | **Aceita.** É assim que se esvazia uma posição desativada que ainda tem saldo: transfira dela para uma posição ativa |
+| **Ajuste com localização** numa posição inativa | Aceito só para **reduzir ou zerar** o saldo dela; para aumentar: *"Localização A-01 está inativa — o ajuste só pode reduzir ou zerar o saldo dela"*. Se o saldo da posição estiver negativo, zerar é aceito |
 
-> *"Não é possível remover: localização possui saldo"*
+O campo de posição que conta é o que o tipo de movimento **usa**: o destino na entrada e no ajuste, a origem na saída, os dois na transferência.
 
-A exclusão bem-sucedida é uma **inativação**: a posição sai das listas, mas o código continua reservado. Recriar depois o mesmo código reaproveita e reativa aquele endereço.
+Diferente do bloqueio, esta trava **não** vale quando você deixa o destino em branco e a entrada cai na posição padrão do material: se a posição padrão estiver inativa, a entrada é aceita e vai para lá. Duas regras impedem que isso aconteça — uma posição que é padrão de material ativo não pode ser desativada (3.5), e o cadastro do material não aceita posição inativa como padrão (3.6) —, mas um material ainda pode ter a posição padrão inativa — por exemplo, se ele estava inativo quando a posição foi desativada e depois foi reativado, ou se o cadastro é anterior a essas duas regras. A tela de Movimentações avisa nesse caso (3.8), e a correção é trocar a **Localização no estoque** do material.
+
+O **estorno** também aqui é exceção: ele não verifica a posição, e estornar uma saída feita de uma posição que depois foi desativada devolve o material para ela.
+
+### 3.5 Excluir ou desativar uma localização ocupada
+
+Excluir é permitido apenas quando a posição está vazia, e são duas verificações, nesta ordem:
+
+1. **Existe alguma linha de saldo diferente de zero** na posição (positiva ou negativa)? A verificação é por linha, não pela soma — um endereço com +10 de um material e −10 de outro **não** conta como vazio:
+
+   > *"Não é possível remover: localização possui saldo"*
+
+2. **A posição está ocupada pela regra do Mapa?** Conta também o material que tem esta posição como **padrão**, tem saldo e **nenhum** saldo endereçado — o material cadastrado antes do controle por posição, que o Mapa mostra aqui mesmo sem linha de saldo:
+
+   > *"Localização ocupada: há material nela (1 item(ns)). Transfira o saldo antes de apagar ou desativar."*
+
+   O número é de **materiais** distintos — um material em dois lotes conta 1.
+
+3. **A posição é a posição padrão de algum material ativo?** Mesmo vazia, ela não pode sair: a entrada sem destino desses materiais cairia numa posição que nenhuma tela mostra.
+
+   > *"Localização é a padrão de 2 material(is) ativo(s) (MAT-001, MAT-002). Troque a localização padrão deles antes de apagar ou desativar."*
+
+   A frase lista até cinco códigos, em ordem alfabética, e termina em *", …"* quando há mais. Material **inativo** não conta. Troque a **Localização no estoque** dos materiais listados e exclua de novo.
+
+A segunda e a terceira recusas valem também para **desativar** a posição pela integração (a tela de localizações não tem esse botão). Uma posição que **já** está inativa responde que já estava inativa, sem recusar.
+
+A exclusão bem-sucedida é uma **inativação**: a posição sai das listas, mas o código continua reservado. O assistente de criação nunca sugere o código de uma posição excluída (ver 3.2). Pela integração, cadastrar uma posição com o código de uma excluída **reativa** aquele endereço, com o histórico dele.
 
 Três recusas irmãs, na mesma família:
 
@@ -374,15 +475,68 @@ Três recusas irmãs, na mesma família:
 
 Há duas coisas diferentes, e confundi-las causa dúvida:
 
-**A localização de cadastro** — o campo **Localização no estoque**, no bloco Estoque e Reposição da ficha do material. É a posição *padrão*: quando uma movimentação não informa origem ou destino, é ela que o sistema usa. Se houver mais de um almoxarifado cadastrado, o formulário pede primeiro o almoxarifado e só então lista as posições dele.
+**A localização de cadastro** — o campo **Localização no estoque**, no bloco Estoque e Reposição da ficha do material. É a posição *padrão*: quando uma movimentação não informa origem ou destino, é ela que o sistema usa.  A posição padrão tem de existir e estar **ativa**: *"Localização padrão não encontrada"* ou *"Localização padrão A-01 está inativa"*. Essa verificação só acontece quando a posição padrão **muda** — editar outros campos de um material cuja posição padrão ficou inativa é aceito, e deixar a posição padrão em branco sempre é.
 
-**O saldo endereçado** — as quantidades que efetivamente estão em cada posição, escritas pelas movimentações: a entrada credita o destino, a saída debita a origem, a transferência move de uma posição para outra, e o ajuste com localização **define** (não soma) o que existe naquela prateleira, recalculando em seguida o total do material pela soma de todas as posições.
+**O saldo endereçado** — as quantidades que efetivamente estão em cada posição, escritas pelas movimentações. A regra que vale para todas: **a soma das posições de um material é sempre igual ao físico dele.**
 
-Duas consultas de apoio para quem está organizando o galpão — **posições vazias** e **materiais sem endereço** — existem hoje como consulta de sistema, sem tela própria.
+ O destino informado tem de estar ativo (3.4).
+- **A saída** tira de **onde o material está**. Quando a saída informa uma origem, essa posição é a **preferida**: sai dela primeiro. O que ela não tiver sai da **posição padrão** do material e, depois, das posições com **mais** saldo. Quando a saída não informa origem — é o caso da **entrega de requisição**, que nunca informa —, a ordem é a mesma a partir da posição padrão. Uma posição informada vazia **não** fica negativa: outra cede. Isso segue a regra de sempre do módulo: os almoxarifados são áreas físicas do mesmo site, não filiais, e uma saída consome o saldo do material onde quer que ele esteja.
+- **O que sobra sem posição.** Se as posições não cobrem a saída inteira, o que falta fica numa conta **"sem localização atribuída"**, que pode ser negativa. Isso só acontece em material que **permite saldo negativo** ou quando o físico estava fora de qualquer posição. Material que não permite saldo negativo tem a saída maior que o saldo recusada antes.
+- **A transferência** move de uma posição para outra e **exige** saldo na origem, mesmo em material que permite negativo: *"Saldo insuficiente na localização de origem"*.
+- **O ajuste de saldo total** (sem posição) define o total do material. Quando ele **aumenta**, a diferença vai para a posição padrão (ou "sem localização atribuída"), porque não há como saber onde o material apareceu. Quando ele **diminui**, as posições **cedem** (a padrão primeiro, depois as maiores) antes de qualquer conta ficar negativa.
+- **O ajuste com localização** — a **contagem daquela prateleira** — **define** (não soma) o que existe ali e recalcula o total do material pela soma de todas as posições. Se a contagem deixaria o material com saldo **negativo** (num material que não permite), o sistema primeiro zera a conta "sem localização atribuída" negativa; só recusa se nem isso bastar: *"Ajuste deixaria o saldo do material negativo (-50). O material não permite saldo negativo."* A tela de Movimentações não oferece posição no ajuste; a contagem por posição é feita pela integração.
+- **Material com lote.** O lote tem posição própria. A saída **sem** lote (como a entrega de requisição, que não escolhe lote) **não** tira de posição de lote. Nesse material, uma posição pode continuar mostrando o lote depois que ele saiu pela entrega, e a contagem daquela posição ("este lote, aqui, tem 0") põe a conta em dia.
+
+Duas consultas de apoio para quem está organizando o galpão, as duas em **Relatórios → Estoque**: **Materiais sem endereço** e **Localizações vazias** (ver 3.7).
 
 ### 3.7 O Mapa de Áreas
 
-**Almoxarifado → Mapa de Áreas** desenha o galpão em duas dimensões, com uma caixa por posição, arrastável para representar o layout real. Cada caixa mostra a ocupação: quantos materiais distintos estão ali, a quantidade total, quantos itens estão abaixo do mínimo e quantos estão críticos. Há filtro por almoxarifado no topo, e a posição bloqueada aparece com contorno tracejado e o cadeado 🔒.
+**Almoxarifado → Mapa de Áreas** desenha o galpão em duas dimensões, com uma caixa por posição, arrastável para representar o layout real. Cada caixa mostra a ocupação: quantos materiais distintos estão ali, a quantidade total, quantos itens estão abaixo do mínimo e quantos estão críticos. Há filtro por almoxarifado no topo, e a posição bloqueada aparece com contorno tracejado e o cadeado 🔒. Selecionar uma posição que é área especial — ou que está dentro de uma — mostra no painel, em **Área especial**, o que a área faz (3.3b).
+
+**A regra de "ocupada".** Uma posição está ocupada quando tem saldo endereçado maior que zero de algum material, **ou** quando é a posição **padrão** de um material ativo com saldo que não tem saldo endereçado nenhum (o material cadastrado antes do controle por posição). O material de cliente ocupa como qualquer outro — a chapa do cliente ocupa a prateleira de verdade. Material **inativado** ocupa pelo saldo endereçado, mas não pela posição padrão.
+
+**Localizações vazias** — em **Relatórios → Estoque → Localizações vazias** — é a lista das posições **ativas** que **não** estão ocupadas pela **mesma regra**: o que o Mapa mostra vazio está na lista, e nada que o Mapa mostra ocupado está. A lista traz código, endereço (almoxarifado / setor / posição pai / código), almoxarifado, tipo, **Bloqueada** e **Filhas ocupadas**, e exporta em planilha. Três leituras que a nota do relatório já explica:
+
+- a posição **bloqueada** vazia aparece (coluna Bloqueada = 1); a posição **inativa** não;
+- uma posição **"pai"** (rua, setor) sem saldo próprio aparece mesmo com as filhas ocupadas — a coluna **Filhas ocupadas** diz quantas filhas ativas estão ocupadas; o Mapa e a lista são planos;
+- em material **com lote**, uma posição pode continuar aparecendo **ocupada** depois de a entrega de requisição retirar o material, porque a entrega não escolhe lote (ver 3.6).
+
+**Aberto pela etiqueta da posição.** A etiqueta de uma posição (seção 4.8) abre o Mapa **já com aquela posição
+selecionada**. Dois avisos podem aparecer no topo:
+
+- *"Etiqueta desatualizada: ⟨código impresso⟩ → ⟨código atual⟩. Reimprima."* — a posição foi **movida** depois da
+  impressão (mover uma posição troca o código dela; seção 3.2). A etiqueta continua abrindo a posição certa, mas o
+  código impresso não é mais o dela. O aviso é daquela posição: fechar a seleção o tira da tela.
+- *"Localização não encontrada ou inativa"* — a posição da etiqueta foi removida ou desativada (o Mapa só mostra
+  posições ativas).
+
+### 3.8 A sugestão de posição na entrada
+
+Em **Movimentações → Nova Movimentação**, com o tipo **Entrada** e um material escolhido, aparecem abaixo do campo **Localização de destino** a palavra **"Sugestões:"** e até **três** botões. Cada botão traz o código da posição e o motivo da sugestão; passar o mouse mostra o endereço completo (almoxarifado / setor / posição pai / código). Clicar num botão preenche o destino. **Nada é preenchido sozinho**: enquanto ninguém clica, o destino continua vazio, e uma entrada salva sem destino segue a regra de 3.6 (vai para a posição padrão).
+
+**A ordem das sugestões**, sem repetir posição:
+
+1. *"⟨código⟩ · padrão do material"* — a **Localização no estoque** do cadastro do material;
+2. *"⟨código⟩ · já tem este material (N)"* — as posições onde o material já tem saldo positivo, **da maior para a menor** (N é a quantidade nela). Guardar junto evita espalhar o mesmo material pelo galpão;
+3. *"⟨código⟩ · vazia"* — posições **vazias pela regra do Mapa** (3.7), dando preferência às do mesmo almoxarifado da posição padrão.
+
+**O que nunca é sugerido:** posição **bloqueada**; posição cuja restrição de tipo **não aceita** o tipo do material (3.4); posição **inativa**; posição de almoxarifado **inativo**; posição **"pai"** que tem alguma posição filha ativa — uma rua ou prateleira que contém outras posições não é vaga; e, como "já tem este material" ou "vazia", **área especial** ou posição dentro de uma (3.3b) — salvo a área de materiais do cliente para material de cliente, que vem **antes** das outras vazias. A posição padrão é sugerida mesmo sendo área. Uma posição onde o material tem saldo **negativo** também não é oferecida como vazia. A regra que decide se a posição aceita o material é **a mesma** que valida a entrada ao salvar, e por isso uma sugestão nunca é recusada pelas travas de 3.4.
+
+"Vazia" quer dizer "o Mapa não mostra material ali" — **não** quer dizer que cabe: capacidade e peso não são modelados (3.5). E, em material **com lote**, *"já tem este material"* pode apontar uma posição que a entrega de requisição já esvaziou (ver 3.6).
+
+**Os avisos sobre a posição padrão.** Eles aparecem abaixo do destino enquanto ele estiver vazio, e somem assim que um destino é escolhido:
+
+- Se a posição padrão está **bloqueada** ou **não aceita o tipo** do material, a entrada sem destino seria recusada ao salvar, e a tela avisa antes, repetindo entre parênteses a mesma frase da recusa:
+
+  > *"A localização padrão A-01 não recebe este material (Localização A-01 está bloqueada) — escolha um destino."*
+
+- Se a posição padrão está **inativa** (ou é de um almoxarifado inativo):
+
+  > *"A localização padrão A-01 está inativa — escolha um destino."*
+
+  Aqui o aviso é o que protege o saldo: a entrada **sem destino** vai para a posição padrão mesmo inativa — o sistema não a recusa (3.4) —, e o Mapa de Áreas só desenha posições ativas; o material entraria num lugar que nenhuma tela de ocupação mostra. Escolha um destino ativo, e corrija a **Localização no estoque** do material.
+
+Trocar de material apaga as sugestões na hora e limpa o destino **se** ele veio de uma sugestão; um destino escolhido à mão na lista continua escolhido. As sugestões aparecem **só na Entrada** — não em Saída, Transferência ou Ajuste — e, se a consulta falhar, o formulário funciona normalmente, sem os botões. A tela de **Recebimento** não tem campo de posição e não mostra sugestão.
 
 ---
 
@@ -468,6 +622,36 @@ Quando o lote é informado, a saída é validada **contra o saldo daquele lote**
 
 Ou seja: um material com 102 unidades no total, sendo 100 no lote `L-001` e 2 no `L-002`, recusa um pedido de 10 unidades do `L-002` — e a mensagem diz o saldo real daquele lote.
 
+**O saldo de um lote é o que foi atribuído a ele.** Entrada e saída que **informam** o lote movem o
+saldo daquele lote. As que **não informam** — a entrega de requisição, as saídas internas e o ajuste de
+saldo total — movem o saldo do material numa linha sem lote. Assim, a soma dos lotes pode ser maior ou
+menor que o físico do material; a diferença é o saldo **sem lote atribuído**. O relatório **Saldo por
+lote** (21d) mostra os dois e fecha a conta com o físico.
+
+A tela **Lotes e Séries** mostra, em cada lote, o saldo **atribuído** — é o número contra o qual a saída
+por lote é conferida, e o mesmo que os seletores de lote de Movimentações, Devoluções e Sobras mostram.
+**Abaixo da tabela**, quando o material tem saldo fora dos lotes, aparece o bloco:
+
+> **Sem lote atribuído:** ⟨valor⟩ · **Físico total do material:** ⟨valor⟩
+> *"O saldo de cada lote é o atribuído a ele. Saídas que não informam lote (como a entrega de
+> requisição) e o ajuste de saldo total não baixam de lote nenhum; entradas sem lote (por exemplo, antes
+> de ligar o controle de lote) também ficam fora dos lotes. Lotes + sem lote atribuído = físico total."*
+
+A conta é: **sem lote atribuído = físico do material − soma do saldo de todos os lotes existentes do
+material**, arredondada a seis casas. Ela **pode ser negativa** (saíram 30 sem lote de um material cujo
+lote tinha 100: o lote segue com 100 e o sem lote fica −30) ou **positiva** (entrou material sem lote,
+por exemplo antes de ligar o controle). É **a mesma conta** do relatório *Saldo por lote*, e as duas
+mostram o mesmo número.
+
+**Quando o bloco aparece.** Só quando o resultado é diferente de zero **e** o material:
+- está **ativo**; e
+- tem saldo em algum lote, **ou** tem **Controle por lote** ligado com físico diferente de zero.
+
+Por isso um material **sem** controle de lote e **sem** lote nenhum não mostra o bloco (não há o que
+conferir); um material antigo que ganhou **Controle por lote** depois de já ter estoque, e nunca teve
+lote, mostra *"Nenhum lote cadastrado para este material"* **e** o bloco com o físico inteiro em *"Sem
+lote atribuído"*. O bloco não aparece na aba **Séries**.
+
 ### 4.6 Certificado do fornecedor
 
 Com **Requer certificado** ligado no material, o lote nasce **Bloqueado** no recebimento, com o motivo *"Certificado do fornecedor nao anexado"*. O material entra fisicamente no estoque; a saída é que fica travada. A trava mora no lote — se o item for recebido sem lote informado, não há o que bloquear; por isso esta opção anda junto com **Controle por lote**.
@@ -490,7 +674,7 @@ Com **Controle por número de série** ligado, cada unidade tem identidade próp
 
 **No Recebimento**, cada item tem a caixa **"Séries (uma por linha)"** ao lado dos campos de lote, com contador contra a quantidade recebida.
 
-**Ciclo de vida da série.** Os estados possíveis são cinco:
+**Ciclo de vida da série.** Os estados possíveis são seis:
 
 | Estado | Significado |
 |---|---|
@@ -499,6 +683,7 @@ Com **Controle por número de série** ligado, cada unidade tem identidade próp
 | **Entregue** | saiu do estoque numa saída |
 | **Sucateada** | saiu por sucata ou perda |
 | **Estornada** | a entrada que a criou foi cancelada — a série não volta a ficar disponível, porque aquela entrada nunca deveria ter acontecido |
+| **Baixada** | dada como ausente numa **regularização** (a peça não está no estoque, mas a série constava como presente) ou escolhida para sair num **ajuste** que diminui o saldo — não conta como presente |
 
 O ciclo normal é **Em estoque → Entregue → (devolução) → Em estoque**: devolver uma unidade reativa a série, que volta a ficar disponível. Bloquear e desbloquear é a única transição manual, e vai e volta entre Em estoque e Bloqueada.
 
@@ -515,7 +700,25 @@ Recusas mais comuns, na letra:
 
 **Bloquear e desbloquear** se faz em **Almoxarifado → Lotes e Séries → aba "Séries"**, que lista Número, Status, Lote, Localização e as ações. A **justificativa é obrigatória** e fica registrada junto com a série. Só as séries Em estoque e Bloqueadas têm ação — os estados finais não voltam por essa via.
 
-Uma unidade de controle importante: o sistema mantém a igualdade entre **quantidade de séries presentes** e **saldo do material**. É isso que impede um material serializado ter 10 no saldo e 8 séries cadastradas.
+Uma unidade de controle importante: o sistema mantém a igualdade entre **quantidade de séries presentes** (em estoque + bloqueadas) e **saldo do material**. A entrada, a saída, a **entrega de requisição** (7.5), a **exclusão de requisição** (7.6), a devolução e o **ajuste de estoque** (6.2) mexem nas séries junto com o saldo. **O inventário não mexe**: a contagem diz quantas peças há, não quais — ao concluir, ele lista os materiais com série que ficaram com séries diferentes do saldo, com o link para regularizar (13.5 e abaixo).
+
+**Regularizar séries.** Em **Lotes e Séries → aba "Séries"**, escolhido um material com série cujas séries presentes não batem com o saldo, aparece o aviso *"Séries presentes: 3 · Físico: 2"*. Para quem tem o perfil que **ajusta estoque** (Administrador ou Gestor), aparece também o formulário **Regularizar séries**, que acerta nos dois sentidos — sem movimentar estoque, porque o saldo já está certo:
+
+- **Séries a mais** (a peça já saiu, mas a série consta como presente): marque as séries que não estão na prateleira; elas passam a **Baixada**. Dá para baixar **no máximo a diferença** entre presentes e saldo.
+- **Séries a menos** (unidades sem série cadastrada): digite os números, **um por linha**, e o **lote** delas se o material tiver lote. Dá para cadastrar **no máximo a diferença** entre saldo e presentes. Cadastrar o número de uma série **Baixada** a traz de volta para Em estoque — é o caminho para desfazer uma baixa feita por engano: *"Para reativar uma série baixada por engano, informe o número dela."*
+
+A **justificativa é obrigatória** (mínimo 5 caracteres) e fica registrada em cada série regularizada. O limite é conferido no momento da gravação: se duas pessoas regularizarem ao mesmo tempo, a segunda recebe o aviso para recarregar. Recusas, na letra:
+
+| Situação | Mensagem |
+|---|---|
+| Justificativa curta | *"justificativa obrigatoria (minimo 5 caracteres)"* |
+| Baixar mais do que a diferença | *"baixar 3 serie(s) deixaria menos series que o fisico (1) — presentes 3, baixe no maximo 2"* |
+| Cadastrar mais do que a diferença | *"cadastrar 6 serie(s) passaria o fisico (5) — presentes 0, cadastre no maximo 5"* |
+| Número que já existe (e não está Baixada) | *"serie SN-001 ja existe neste material"* |
+| Série que não está presente | *"serie SN-001 nao esta presente neste material"* |
+| Lote de outro material | *"lote nao pertence a este material"* |
+| Outra pessoa regularizou antes | *"o limite de series mudou durante a regularizacao — recarregue"* |
+| Material sem controle de série | *"material sem controle de serie"* |
 
 ### 4.8 Etiquetas com QR Code
 
@@ -539,9 +742,11 @@ O formato escolhido fica **lembrado** para a próxima vez (por navegador). O arq
   - etiqueta de **lote**: `Lote L-001 · Val 31/01/2026` — a parte da validade só aparece se o lote tiver validade;
   - etiqueta de **série**: `SN: GMP-042`;
   - etiqueta de **retalho**: as dimensões restantes com a espessura e o peso aproximado, no formato `1200x800x3mm · ~18kg` — cada parte é omitida quando o retalho não a tem registrada;
+  - etiqueta de **posição (localização)**: o tipo e o setor da posição (`Prateleira · Corredor A`); no lugar do nome vai o
+    caminho completo da posição;
 - **QR Code**, à direita.
 
-**Não** vão para o papel: fornecedor, corrida, número da nota fiscal, projeto, localização, saldo e situação de inspeção. Isso é escolha de projeto, não omissão — etiqueta cheia de letra miúda é ilegível numa prateleira de galpão, e o QR existe justamente para carregar o resto.
+Na etiqueta de material, lote, série ou retalho **não** vão para o papel: fornecedor, corrida, número da nota fiscal, projeto, localização, saldo e situação de inspeção. Isso é escolha de projeto, não omissão — etiqueta cheia de letra miúda é ilegível numa prateleira de galpão, e o QR existe justamente para carregar o resto.
 
 **O que o QR abre.** Ele contém um endereço do próprio sistema, que leva à tela certa **já filtrada**:
 
@@ -551,6 +756,7 @@ O formato escolhido fica **lembrado** para a próxima vez (por navegador). O arq
 | Lote | a tela **Lotes e Séries**, no material certo, na aba **Lotes**, com a linha daquele lote **destacada** |
 | Série | a tela **Lotes e Séries**, no material certo, na aba **Séries**, com a linha daquela série **destacada** |
 | Retalho | a tela **Sobras e Retalhos**, com a linha daquele retalho **destacada** |
+| Posição (localização) | o **Mapa de Áreas**, com aquela posição selecionada — e o aviso de etiqueta desatualizada quando o código impresso não é mais o da posição (seção 3.7) |
 
 Há dois jeitos de ler o QR. Pelo aplicativo de câmera do celular, ele abre o navegador nesse endereço — como dado de estoque exige sessão, quem não estiver logado cai na tela de login; faça o login e escaneie de novo. Ou, já dentro do sistema, pela tela **Scanner** (seção 4.9), que lê a etiqueta e abre o item sem sair do módulo. Não é preciso aplicativo nem coletor: o leitor é a câmera do próprio celular.
 
@@ -561,8 +767,9 @@ Há dois jeitos de ler o QR. Pelo aplicativo de câmera do celular, ele abre o n
 | **Materiais** | em cada linha. Material **sem** controle de lote nem de série abre o modal direto, com a etiqueta simples do material. Material **com** um dos dois controles **leva você para Lotes e Séries**, já naquele material — porque a etiqueta certa de um material controlado é a do lote ou da série específicos, não uma etiqueta genérica |
 | **Lotes e Séries** | em cada linha de lote e em cada linha de série — inclusive séries já entregues ou sucateadas, para reimprimir uma via danificada |
 | **Lotes e Séries → aba Séries** | botão no topo, **"Etiquetas das séries em estoque"**, que gera uma etiqueta para cada série em estoque daquele material de uma vez |
-| **Recebimentos** | botão **"Imprimir etiquetas dos itens"**, na nota já processada — gera uma etiqueta por série (material serializado), ou uma por lote (material com controle de lote), ou uma do material |
+| **Recebimentos** | botão **"Imprimir etiquetas dos itens"**, na nota já processada — gera uma etiqueta por série (material serializado), ou uma por lote (material com controle de lote), ou uma do material. Item que chegou **zero** (conferido com 0) não ganha etiqueta |
 | **Sobras e Retalhos** | botão **Etiqueta** em cada linha de retalho; além disso, ao **gerar um retalho** o modal de impressão abre sozinho com a etiqueta daquele retalho — imprimir é opcional |
+| **Configurações → Localizações** | botão **Etiqueta** em cada linha (a etiqueta daquela posição) e **Etiquetas (N)** no topo, que gera uma etiqueta para cada posição listada |
 
 O modal de impressão se chama **Imprimir etiquetas** e mostra, antes de gerar, quantas etiquetas e quantas páginas o PDF terá. O campo **Cópias** só aparece quando há uma única etiqueta selecionada. Quando não há nada a etiquetar, o botão fica desabilitado com a explicação na tela.
 
@@ -634,10 +841,10 @@ Corolário que vale conhecer: o perfil **Consulta** nunca acontece por omissão 
 | **Administrador** | Acesso total, incluindo configurações do módulo |
 | **Almoxarife** | Movimenta estoque, cadastra material, separa, entrega, aprova e inventaria — não ajusta saldo nem configura |
 | **Gestor** | Ajusta saldo, aprova requisição e inventaria — não movimenta nem cadastra material |
-| **Compras** | Consulta e recebe material |
+| **Compras** | Consulta, recebe material e **registra a execução do encaminhamento** de uma não conformidade — inclusive a devolução ao fornecedor, que é a baixa do material (15b.4-ter). **Não cancela** o documento: quem é cobrado pela fila não a limpa (15b.4-quater) |
 | **Engenharia** | Cadastra e edita material, requisita, reserva e **define o plano de inspeção** (as tolerâncias que ela mesma especifica) |
 | **Produção** | Consulta, requisita e reserva material (é o padrão de quem não tem perfil definido) |
-| **Qualidade** | Consulta, decide inspeção (aprova/reprova item recebido, libera vencimento de lote, muda situação de lote e de série) e **define o plano de inspeção** — as características a medir e suas tolerâncias. Não movimenta estoque, não ajusta saldo nem cadastra material |
+| **Qualidade** | Consulta, decide inspeção (aprova/reprova item recebido, libera vencimento de lote, muda situação de lote e de série), **define o plano de inspeção** — as características a medir e suas tolerâncias — e é quem **decide as não conformidades** (15b), pode **registrar a execução do encaminhamento** delas (15b.4-ter) e é quem **cancela** o documento cuja execução não se cumpre (15b.4-quater). Não movimenta estoque, não ajusta saldo nem cadastra material — mas as duas decisões de aceitação de uma não conformidade **liberam o material bloqueado sozinhas**, no clique da decisão, sem depender de ninguém com ajuste de estoque (15b.4-bis) |
 | **Consulta** | Somente leitura |
 
 A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de controle interno do módulo: quem **movimenta** o estoque não é quem **corrige** o saldo. O almoxarife lança entradas e saídas; o ajuste de inventário — o lançamento que faz o número bater sem que nada tenha entrado ou saído — pertence ao gestor.
@@ -661,8 +868,13 @@ A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de
 | Conferir separação (segunda conferência da caixa) | ● | ● | – | – | – | – | – | – |
 | Requisitar | ● | ● | – | ● | ● | – | – | – |
 | Receber material | ● | ● | ● | – | – | – | – | – |
+| Autorizar recebimento acima do pedido | ● | – | ● | – | – | – | – | – |
 | Inspecionar | ● | ● | – | – | – | – | ● | – |
 | Gerenciar plano de inspeção (características a medir e tolerâncias) | ● | – | – | – | ● | – | ● | – |
+| Registrar não conformidade | ● | ● | ● | – | – | – | ● | – |
+| Decidir não conformidade (aceitar, devolver, sucatear…) | ● | – | – | – | – | – | ● | – |
+| Registrar a execução do encaminhamento (confirmar que a devolução, a substituição, a análise ou o sucateamento foi cumprido) | ● | – | ● | – | – | – | ● | – |
+| Cancelar não conformidade (encerrar a cobrança da execução de um documento decidido) | ● | – | – | – | – | – | ● | – |
 | Reservar | ● | ● | – | ● | ● | – | – | – |
 | Reservar para outra OS | ● | – | – | – | – | ● | – | – |
 | Inventariar | ● | ● | – | – | – | ● | – | – |
@@ -670,7 +882,7 @@ A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de
 | Ver a central de alertas | ● | ● | ● | – | – | ● | – | – |
 | Configurar o módulo | ● | – | – | – | – | – | – | – |
 
-Seis leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
+As leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
 
 - **Gerenciar ferramentas é independente de movimentar estoque**, mesmo com os mesmos dois perfis
   hoje: ferramenta é patrimônio emprestável, não estoque (seção 21), e a permissão existe separada
@@ -680,14 +892,17 @@ Seis leituras que essa tabela permite fazer, e que vale explicar a quem pergunta
 - **Reservar para outra OS** é separado de **Reservar**. Qualquer requisitante reserva material para a própria ordem; transferir uma reserva de uma OS para outra é decisão de priorização, e fica com o Administrador e o Gestor.
 - **Inspecionar** é o que autoriza aprovar, reprovar e liberar material da quarentena, e também mudar a situação de um lote ou de uma série, e liberar vencimento. Pertence ao Administrador, ao Almoxarife e ao **Qualidade**.
 - **Gerenciar plano de inspeção** é o que autoriza cadastrar, editar e desativar as características a medir de um material, com o valor nominal e a tolerância (15.2.1). Pertence ao Administrador, ao **Qualidade** e à **Engenharia** — quem especifica tolerância. **Ler** o plano é liberado a qualquer usuário do módulo, porque quem inspeciona precisa saber o que medir. É permissão **separada de Configurar** de propósito: *Configurar* é só do Administrador, e prendê-la ali deixaria a qualidade sem cadastrar o que ela mesma mede.
-- **O perfil Qualidade decide inspeção e define o plano de inspeção — e nada além disso.** Ele existe justamente para que a área de qualidade não precise pedir ao almoxarifado que decida por ela, nem receber um perfil largo. Além de *Inspecionar*, ele tem **Gerenciar plano de inspeção** (15.2.1), que é o cadastro das características a medir e das tolerâncias — não faria sentido a qualidade não poder cadastrar o que ela mesma vai medir. Consequência que quem for usá-lo precisa saber: **os botões "Bloquear Material" e "Desbloquear Material" da tela de Inspeções não são dele** — eles mexem em saldo e pertencem a **Ajustar estoque** (Administrador e Gestor). Clicando neles, o Qualidade recebe:
+- **O perfil Qualidade tem seis ações, e todas são da mesma família: decidir qualidade.** Ele existe justamente para que a área de qualidade não precise pedir ao almoxarifado que decida por ela, nem receber um perfil largo. São elas: **Inspecionar** (aprovar, reprovar, liberar da quarentena, mudar situação de lote e de série, liberar vencimento); **Gerenciar plano de inspeção** (15.2.1), o cadastro das características a medir e das tolerâncias — não faria sentido a qualidade não poder cadastrar o que ela mesma vai medir; e as quatro da não conformidade, **Registrar não conformidade**, **Decidir não conformidade**, **Registrar a execução do encaminhamento** e **Cancelar não conformidade** (15b), sendo que **decidir** e **cancelar** são dele e do Administrador, e de mais ninguém. Fora dessas seis, ele é leitura. Consequência que quem for usá-lo precisa saber: **os botões "Bloquear Material" e "Desbloquear Material" da tela de Inspeções não são dele** — eles mexem em saldo e pertencem a **Ajustar estoque** (Administrador e Gestor). Clicando neles, o Qualidade recebe:
   > *Sem permissão para ajustar saldo de estoque — seu perfil é Qualidade. Solicite acesso a um administrador.*
 
   Bloquear material por decisão de qualidade continua acontecendo **dentro da inspeção** (reprovar o item recebido), que é o que ele pode.
+- **Autorizar recebimento acima do pedido é separado de Receber material, e o Almoxarife não a tem.** Quem recebe a carga registra quanto chegou; autorizar que **entre mais do que o esperado — ou mais do que o saldo do pedido de compra** — é decisão de **Compras** ou do **Administrador** (14.1c e 14.2b). É o mesmo critério das duas assinaturas de sucateamento: quem executa não aprova a própria exceção. Consequência prática para quem usa: a caixa *"Autorizo o recebimento acima do pedido"* **não aparece** na tela do Almoxarife, e por isso a recusa que ele recebe nomeia quem resolve em vez de mandá-lo marcar algo. O **Gestor** não tem esta ação — e não teria como usá-la, porque ele não tem *Receber material* e não abre o recebimento.
+- **Registrar a execução do encaminhamento é a única ação do módulo que Compras tem e o Almoxarife não.** Ela confirma que o que a não conformidade decidiu foi cumprido — e, no caso de *Devolver ao fornecedor*, é ela que **baixa o material** (15b.4-ter). **Compras está dentro** porque é quem fala com o fornecedor, agenda a coleta e emite os documentos comerciais: é quem sabe que o material saiu. **O Almoxarife está fora** porque quem opera o estoque não confirma sozinho a saída do material que a qualidade reprovou — é o mesmo critério de "quem recebe não julga o próprio recebimento", aplicado do lado da baixa. A **Qualidade** também pode registrar a execução, e isso não é contradição: ela decide e, quando é ela mesma que cuida do envio, confirma — o que a permissão separada garante é que **Compras consiga executar sem poder decidir**, e que o **Almoxarife não consiga nenhuma das duas coisas**.
+- **Cancelar não conformidade é a terceira permissão dessa família, e ela é o espelho da de execução.** Encerrar a cobrança da execução de um documento decidido (15b.4-quater) pertence ao **Administrador** e à **Qualidade** — e **Compras está fora de propósito**, porque é ele quem a fila cobra, e quem é cobrado por uma pendência não deve poder apagá-la sem passar por quem respondeu pelo material. **Compras executa; não anula.** O **Almoxarife** continua fora das três. Cancelar também **não** é decidir: a decisão fica preservada, e é justamente por isso que as duas permissões são separadas — anular a cobrança e julgar o material são atos diferentes.
 - **Conferir separação é separado de Separar / emitir**, mesmo com os mesmos dois perfis hoje: a conferência é a segunda pessoa olhando a caixa (10.3), e a permissão existe à parte para poder ser restringida sem mexer na separação. Ter a permissão não basta: **quem separou não confere**, e isso vale para o Administrador também — a barreira é por pessoa, não por perfil.
 - **As duas aprovações de sucateamento são de balcões diferentes de propósito.** A perna do almoxarifado (Administrador, Almoxarife) e a perna da gestão (Administrador, Gestor) precisam **das duas assinaturas, de pessoas diferentes**, para uma baixa de sucata sair do estoque — e, embora o Administrador tenha as duas permissões, **a mesma pessoa nunca assina as duas pernas** (seção 20).
 
-E duas que a tabela **não** mostra: **Inspecionar** cobre as decisões de qualidade, mas anexar o certificado do fornecedor a um lote pertence a **Receber material** — é o pessoal que recebe a carga que tem o documento em mãos. E **a central de alertas não é filtrada por perfil**: quem tem *Ver a central de alertas* vê o registro inteiro, inclusive os alertas de estoque parado e de estoque excessivo, que trazem o **valor em dinheiro** parado. É por isso que o perfil **Qualidade** não a recebe — os quatro alertas que interessariam a ele (material reprovado, divergência de recebimento, lote sem certificado e fila de itens aguardando inspeção) só ficam acessíveis quando a central souber filtrar por perfil.
+E duas que a tabela **não** mostra: **Inspecionar** cobre as decisões de qualidade, mas anexar o certificado do fornecedor a um lote pertence a **Receber material** — é o pessoal que recebe a carga que tem o documento em mãos. E **a central de alertas não é filtrada por perfil**: quem tem *Ver a central de alertas* vê o registro inteiro, inclusive os alertas de estoque parado e de estoque excessivo, que trazem o **valor em dinheiro** parado. É por isso que o perfil **Qualidade** não a recebe — os **seis** alertas que interessariam a ele (material reprovado, divergência de recebimento, lote sem certificado, fila de itens aguardando inspeção, **não conformidade aberta** e **execução pendente**) só ficam acessíveis quando a central souber filtrar por perfil. Os dois últimos são os que mudam o tamanho do problema: até eles, a exclusão custava à Qualidade apenas **visibilidade**; com eles, **a ação pertence justamente a quem não vê o cartão que a cobra**. O cartão *"Não conformidade aberta"* é visto por Administrador, Almoxarife, Gestor e Compras, e quem **decide** é Administrador e Qualidade. No cartão *"Execução pendente"* a torção é dupla e vale explicar: quem o vê é quem **executa** (Compras), e a única saída para o documento que **não pode** ser executado é **cancelá-lo**, o que é da Qualidade — que não vê o cartão. É por isso que o texto daquele aviso **nomeia a saída e diz de quem ela é** (15b.6-bis), em vez de só cobrar: sem essa linha, o destinatário ficaria com um cartão aceso e nenhuma porta. Na prática, a Qualidade acompanha as pendências pela tela **Não Conformidades** (15b), que é aberta a qualquer usuário do módulo e tem filtro por estado e por estado de execução; o que ela não recebe é o cartão e o e-mail. Esta é uma limitação conhecida e registrada, e a correção passa por a central saber filtrar por perfil — enquanto ela não souber, dar o cartão à Qualidade significaria dar também o valor em dinheiro do estoque parado.
 
 ### 5.6 Como se atribui um perfil
 
@@ -782,6 +997,42 @@ O sistema **anota** a origem; ele não a usa para decidir nada. Não existe recu
 
 ---
 
+### 5.9 Como o sistema protege os arquivos guardados
+
+O almoxarifado guarda arquivos em vários pontos: a foto do material, o certificado do fornecedor
+no lote, o comprovante do sucateamento, o certificado de calibração da ferramenta, a foto da
+ocorrência e a imagem da assinatura de quem retirou material. Além deles, existem os **anexos**
+(seção 15.2.4), que seguem uma regra própria.
+
+**Todos esses arquivos só são alcançáveis por um endereço que o sistema emite na hora.** Esse
+endereço carrega uma assinatura e um prazo:
+
+| Regra | Comportamento |
+|---|---|
+| Endereço sem assinatura | Responde **não encontrado** |
+| Assinatura de **outro** arquivo | Responde **não encontrado** — a assinatura inclui o nome do arquivo |
+| Assinatura **vencida** | Responde **não encontrado**. O prazo é de 15 a 20 minutos |
+| Assinatura adulterada | Responde **não encontrado** |
+| Arquivo que não existe | Responde **não encontrado** |
+
+**A resposta é sempre a mesma — “não encontrado” — e isso é deliberado.** Responder “sem
+permissão” confirmaria que aquele arquivo existe, que é justamente o que não se quer entregar a
+quem está tentando adivinhar endereços.
+
+**Na prática, para quem opera, nada muda:** as fotos e os certificados aparecem normalmente,
+porque o sistema pede o endereço assinado sozinho toda vez que carrega a tela. Duas
+consequências aparecem no dia a dia:
+
+- **Endereço copiado não vira acesso permanente.** Guardar o link de uma foto ou de um
+  certificado numa planilha ou num e-mail não funciona: ele expira. Para consultar de novo,
+  abre-se pelo sistema.
+- **Tela aberta por muito tempo pode mostrar imagem em branco.** Recarregar resolve. Aparece mais
+  na tela de montar requisição, que carrega as fotos conforme se rola a lista.
+
+**Os anexos são diferentes, e mais restritos:** eles não usam endereço assinado — exigem estar
+logado no sistema no momento do download, e **cada download fica registrado** na trilha de
+auditoria com quem baixou e quando (seção 15.2.4). Os arquivos desta seção não têm esse
+registro.
 ## 6. Movimentações de estoque
 
 Toda mudança de saldo do almoxarifado passa por um único motor e vira uma linha no **livro de movimentações** (tela **Almoxarifado → Movimentações**). Não existe caminho que altere saldo sem deixar linha: quem, quando, quanto, saldo antes e saldo depois.
@@ -835,26 +1086,93 @@ O formulário de **Nova Movimentação** oferece cinco tipos:
 
 | Tipo na tela | O que faz com o saldo | Campos que aparecem |
 |---|---|---|
-| **Entrada** | Soma ao físico | Localização de destino, Lote, Custo unitário, Séries |
-| **Saída** | Subtrai do físico | Localização de origem, Lote (seletor), Séries, Saída emergencial |
-| **Transferência** | **Não altera o físico** — move de uma localização para outra | Origem **e** destino, Lote (seletor) |
+| **Entrada** | Soma ao físico | Localização de destino, Confirmar endereço lido, Lote, Custo unitário, Séries |
+| **Saída** | Subtrai do físico | Localização de origem, Confirmar endereço lido, Lote (seletor), Séries, Saída emergencial |
+| **Transferência** | **Não altera o físico** — move de uma localização para outra | Origem **e** destino (cada um com seu Confirmar endereço lido), Lote (seletor) |
 | **Ajuste** | Define o físico por um **valor absoluto** (o campo passa a se chamar "Novo Saldo") | Localização de destino (opcional) |
-| **Perda** | Subtrai do físico | Localização de origem, Lote (seletor) |
+| **Perda** | Subtrai do físico | Localização de origem, Confirmar endereço lido, Lote (seletor) |
 
 **Sucata não está na lista, e não é falta.** Baixar material como sucata exige **duas aprovações
 de pessoas diferentes**, e por isso tem processo próprio, na tela **Sobras e Retalhos** — a
 seção 20 descreve o caminho completo. O livro de Movimentações continua **exibindo** os
 lançamentos de sucata; só o formulário não os cria.
 
+**Devolução ao fornecedor também não está na lista, pela mesma razão.** Ela nasce só de dentro do
+documento de não conformidade que decidiu devolver, no botão **Registrar execução** (15b.4-ter),
+porque é a única baixa do módulo que consome material **bloqueado** — aceitá-la aqui deixaria
+qualquer pessoa com permissão de movimentar apagar material retido pela qualidade, sem documento
+nenhum por trás. O livro também a **exibe**; o formulário não a cria.
+
 Pontos técnicos importantes:
 
 - **Ajuste é absoluto, não incremental.** Digitar 40 num material que tem 100 leva o saldo a 40. Por isso o rótulo do campo muda para "Novo Saldo" quando o tipo é Ajuste.
 - **Ajuste com localização escolhida** zera/redefine **aquela** localização e recalcula o total do material pela soma das prateleiras. É o único tipo que aceita quantidade **zero** — justamente para permitir "esta prateleira está vazia". Em qualquer outro caso, quantidade 0 é recusada com *"quantidade deve ser maior que zero"*.
+- **Ajuste de material com número de série** é sempre do **total** do material — sem localização — e o novo total tem de ser um número inteiro. O formulário mostra *"Material com série: o ajuste é do total, sem endereço."* e *"Séries presentes: P"* (em estoque + bloqueadas). A diferença entre o novo total e as séries presentes decide o que ele pede:
+  - **sobe** → **"Números das novas séries (um por linha)"**, exatamente a diferença (contador *"n de d"*);
+  - **desce** → **"Séries a baixar"**, só entre as que estão em estoque, exatamente a diferença; as escolhidas passam a **Baixada** (4.7);
+  - **igual** → nada é pedido. Isso vale também para acertar um saldo que estava errado: com saldo 5 e 3 séries presentes, ajustar para 3 não pede série nenhuma.
+
+  O **Confirmar** (e o Enter) só liberam com o contador batendo. Total **0** não é aceito: *"Para zerar, use Ajuste negativo com as séries."* As recusas, na ordem em que aparecem:
+
+  | Situação | Mensagem |
+  |---|---|
+  | Com localização | *"material com controle de serie: ajuste por endereco nao e suportado — ajuste o total do material (sem endereco)"* |
+  | Total em fração | *"material com controle de serie exige quantidade inteira"* |
+  | Número informado já em estoque | *"serie SN-001 ja esta em estoque"* |
+  | Quantidade de séries diferente da diferença | *"material com controle de serie: o ajuste sobe 2 serie(s) (fisico novo 5, series presentes 3) — informe 2 serie(s) (recebidas 0)"* (ou *"baixa"*) |
+  | Séries informadas quando a diferença é zero | *"material com controle de serie: o ajuste nao muda as series (presentes 3) — nao informe series"* |
+  | As séries do material mudaram entre abrir a tela e confirmar (outra pessoa ajustou ou entregou) | *"as series do material mudaram durante o ajuste — recarregue e tente de novo"* — nada muda, e a tela recarrega as séries |
+
+  Séries **bloqueadas** contam como presentes mas não aparecem para baixar: desbloqueie antes.
 - **Perda é saída de verdade** para o motor: baixa o físico, respeita controle de lote e a situação do lote. O que a diferencia da Saída comum é que ela **é isenta da trava de vencimento** — assim como a sucata, que passa pela mesma isenção quando a baixa dela sai pelo processo de sucateamento: é assim que um lote vencido consegue sair do sistema (4.3).
+
+### 6.2b Conferir o endereço lendo a etiqueta da posição
+
+Quem está na frente da prateleira pode **ler a etiqueta da posição** (seção 4.8) no campo **Confirmar endereço lido**,
+para o sistema conferir que o endereço escolhido no formulário é mesmo aquele. O campo é **opcional**: em branco, a
+movimentação segue como sempre. Ele aceita o que o leitor de código "digitar" — o conteúdo do QR da etiqueta ou o
+código da posição digitado à mão —, sem diferenciar maiúsculas e ignorando espaços nas pontas. O Enter que o leitor
+manda no fim da leitura **não** envia o formulário.
+
+**Contra o que o sistema confere** (a posição onde o material de fato entra ou de onde sai):
+
+| Tipo | Destino conferido | Origem conferida |
+|---|---|---|
+| Entrada | a localização de destino escolhida; sem ela, a **posição padrão** do material (é para lá que a entrada vai) | — |
+| Saída, Perda | — | a localização de origem escolhida — **obrigatória** para conferir a origem |
+| Transferência | a localização de destino escolhida | a localização de origem escolhida |
+
+**Quando a conferência recusa** — nada é gravado, nenhum saldo muda:
+
+- endereço lido diferente: *"Endereço lido (⟨lido⟩) não confere com a localização de ⟨destino ou origem⟩ (⟨código⟩) —
+  se a etiqueta é antiga, reimprima"*;
+- endereço lido num papel que o movimento não tem (ex.: origem numa entrada; entrada sem destino e sem posição
+  padrão): *"Endereço lido (⟨lido⟩), mas o movimento não tem localização de ⟨destino ou origem⟩"*;
+- origem conferida sem a localização de origem escolhida: *"Para confirmar a origem pela leitura, informe a
+  localização de origem"*;
+- **saída** conferida em que o saldo **daquela posição** (do lote escolhido, quando houver) não cobre a quantidade:
+  *"O saldo em ⟨código⟩ (⟨saldo⟩) não cobre a quantidade (⟨quantidade⟩) — a saída tiraria de outros endereços"*. A
+  regra existe porque, sem conferência, a saída completa o que falta tirando de outras posições; conferida, ela só
+  pode sair da posição lida;
+- duas saídas conferidas na mesma posição ao mesmo tempo, quando a posição só cobre uma: a segunda recebe *"O saldo
+  em ⟨código⟩ mudou durante a saída e não cobre mais a quantidade — confira e tente de novo"*;
+- texto lido com mais de 100 caracteres: *"Endereço lido inválido"*.
+
+Na **transferência**, saldo insuficiente na origem continua com a mensagem da própria transferência (*"Saldo
+insuficiente na localização de origem"*) — ela nunca tira de outras posições.
+
+**O que fica registrado.** O extrato guarda, em cada lançamento conferido, o **código da posição conferida** — na
+origem, no destino ou nos dois. O estorno de um lançamento conferido não herda a conferência (ninguém leu etiqueta ao
+estornar).
+
+**Limites.** O **Ajuste** não tem o campo na tela. A conferência olha o **código**: depois de mover uma posição (o
+código muda), reimprima a etiqueta dela. Em material com **número de série**, a conferência vale para o saldo, mas a
+escolha das séries não olha a posição.
+
 
 ### 6.3 Outros movimentos que o sistema gera sozinho
 
-Além dos cinco do formulário, o livro registra movimentos criados pelas telas especializadas. Eles **não podem** ser lançados pelo formulário genérico — a tela de Movimentações recusa, e a mensagem depende do tipo. Para os tipos de retenção, a recusa é *"tipo de movimentação não permitido nesta rota (tipos de reserva, bloqueio e inspeção só podem ser criados pelas telas de Reservas e Inspeções)"*. Para os tipos que têm processo próprio, a recusa **ensina o caminho certo** — para Sucata: *"tipo de movimentação não permitido nesta rota — sucatear é um processo com dupla aprovação — use Almoxarifado → Sobras e Retalhos → aba Sucateamentos"*; para Entrada (retalho): *"tipo de movimentação não permitido nesta rota — retalho nasce pelo botão Gerar retalho, em Almoxarifado → Sobras e Retalhos"* (devolução ao cliente, perda/consumo no terceiro e retorno de transformação têm recusas equivalentes apontando para Materiais de Clientes e Remessas a Terceiros).
+Além dos cinco do formulário, o livro registra movimentos criados pelas telas especializadas. Eles **não podem** ser lançados pelo formulário genérico — a tela de Movimentações recusa, e a mensagem depende do tipo. Para os tipos de retenção, a recusa é *"tipo de movimentação não permitido nesta rota (tipos de reserva, bloqueio e inspeção só podem ser criados pelas telas de Reservas e Inspeções)"*. Para os tipos que têm processo próprio, a recusa **ensina o caminho certo** — para Sucata: *"tipo de movimentação não permitido nesta rota — sucatear é um processo com dupla aprovação — use Almoxarifado → Sobras e Retalhos → aba Sucateamentos"*; para Entrada (retalho): *"tipo de movimentação não permitido nesta rota — retalho nasce pelo botão Gerar retalho, em Almoxarifado → Sobras e Retalhos"*; para Devolução ao fornecedor: *"tipo de movimentação não permitido nesta rota — a devolução ao fornecedor é registrada no documento que a decidiu — use Almoxarifado → Não Conformidades e registre a execução"* (devolução ao cliente, perda/consumo no terceiro e retorno de transformação têm recusas equivalentes apontando para Materiais de Clientes e Remessas a Terceiros).
 
 | Movimento | Nasce em | Efeito |
 |---|---|---|
@@ -865,6 +1183,7 @@ Além dos cinco do formulário, o livro registra movimentos criados pelas telas 
 | Remessa / Retorno de terceiro | Remessas a Terceiros | Mexe só no **Em poder de terceiros** |
 | Entrada (retalho) | Sobras e Retalhos → Gerar retalho | Soma ao físico do material-retalho, **sempre sem custo** (seção 19) |
 | Sucata | Segunda aprovação de um sucateamento (seção 20) e devolução com destino Sucata (12.6) | Subtrai do físico |
+| Devolução ao fornecedor | Não Conformidades → **Registrar execução** de um documento decidido *Devolver ao fornecedor* (15b.4-ter) | Subtrai do físico **e do Bloqueado, juntos** |
 | Estorno | Botão "Estornar" do livro | Lançamento reverso |
 
 Essa separação é deliberada: cada um desses movimentos tem uma tela dona, com a permissão certa e um registro paralelo (a reserva, o item do recebimento, a inspeção, a remessa) que dá lastro ao número. Se a tela genérica os aceitasse, o número da coluna existiria sem nada por trás.
@@ -873,7 +1192,7 @@ Essa separação é deliberada: cada um desses movimentos tem uma tela dona, com
 
 São dois campos com papéis diferentes.
 
-**Motivo** é o campo do formulário. Ele é **obrigatório na tela** para Saída, Ajuste e Perda (o campo fica marcado com asterisco e o navegador não deixa enviar em branco).
+**Motivo** é o campo do formulário. Ele é **obrigatório na tela** para Saída, Ajuste e Perda (o campo fica marcado com asterisco e o navegador não deixa enviar em branco). Quando existe algum **motivo cadastrado** que vale para o tipo escolhido, o campo é uma **lista** (6.4b); quando não existe, é o campo de texto livre. Pela lista ou pelo texto, o motivo também preenche a justificativa — por isso, na tela, quem informou o motivo já cumpriu a exigência abaixo.
 
 **Justificativa** é a exigência do servidor, por tipo de movimento. Sem ela a operação é recusada com a mensagem *"&lt;TIPO&gt; exige justificativa"* — por exemplo, *"AJUSTE exige justificativa"*.
 
@@ -885,9 +1204,66 @@ São dois campos com papéis diferentes.
 | Bloqueio / Desbloqueio | **Sim** |
 | Reprovação / Decisão de inspeção | **Sim** |
 | Remessa, Retorno, Perda e Consumo no terceiro | **Sim** |
+| Devolução ao fornecedor | **Sim** — e ela nunca falta na prática: é a **observação** que você escreve ao registrar a execução da não conformidade, ou, se você deixar o campo em branco, um texto que o sistema grava citando o documento que decidiu devolver (15b.4-ter) |
 | Entrada, Saída, Transferência | Não |
 
 O raciocínio é uniforme: **todo movimento que muda a resposta à pergunta "onde está esse material?" ou "por que ele sumiu?" precisa da resposta escrita**. Tirar material do disponível sem dizer por que é baixa sem motivo.
+
+### 6.4b Motivos cadastrados — escolher o porquê de uma lista
+
+Para que o porquê de ajustes, perdas e saídas possa ser contado ("quanto saiu por avaria este mês?"), a empresa mantém
+uma **lista de motivos de movimentação**. Escolher da lista **não é obrigatório**: o motivo digitado continua aceito
+em todo lugar.
+
+**O cadastro.** Em **Almoxarifado → Configurações → aba "Motivos de Movimentação"**, quem tem perfil **Administrador**
+do módulo cria (**Novo Motivo**), edita, desativa e reativa motivos. Cada motivo tem um **nome** e os **tipos de
+movimentação para os quais vale** (**"Vale para os tipos"**, ao menos um, entre os tipos da movimentação comum, mostrados
+pelo código: ENTRADA, SAIDA, AJUSTE, AJUSTE_POSITIVO, AJUSTE_NEGATIVO, PERDA, TRANSFERENCIA…). O tipo é comparado
+exato: um motivo marcado só para AJUSTE não vale para AJUSTE_POSITIVO. Ler a lista é liberado a qualquer usuário do
+módulo — a tela de movimentação precisa dela; quem abre Configurações sem o perfil Administrador vê a aba sem
+**Novo Motivo** e sem a coluna **Ações**, e o servidor recusa a gravação com *"Sem permissão para esta operação"*.
+
+| Situação no cadastro | Mensagem |
+|---|---|
+| Nome vazio (ou só espaços / caracteres invisíveis) | *"Nome é obrigatório"* |
+| Nenhum tipo marcado | *"Informe ao menos um tipo de movimentação"* |
+| Tipo que não é da movimentação comum | *"Tipo de movimentação inválido para motivo: ⟨tipo⟩"* |
+| Já existe um motivo com o mesmo nome | *"Já existe um motivo com este nome"* |
+| …e o existente está desativado | *"Já existe um motivo desativado com este nome — reative-o"* |
+
+"O mesmo nome" ignora maiúsculas e minúsculas (inclusive em letras acentuadas: "Manutenção" e "MANUTENÇÃO" são o mesmo),
+espaços repetidos, espaço não-quebrável e caracteres invisíveis; o nome é gravado sem eles.
+
+**Desativar não apaga.** O motivo desativado (confirmação: *"Desativar o motivo "⟨nome⟩"? Ele sai da lista da
+movimentação, mas as movimentações que já o usam continuam com ele."*) sai da lista da movimentação e continua na aba
+como **Inativo**, de onde volta com **Reativar**. **Renomear não reescreve o passado**: cada movimentação guarda o nome
+do motivo **do momento em que foi feita** (*"Motivo atualizado! As movimentações já registradas mantêm o texto da
+época."*).
+
+**Na movimentação.** Em **Nova Movimentação**, ao escolher o tipo, o campo **Motivo** mostra *"Selecionar motivo..."*,
+os motivos **ativos** que valem para aquele tipo e *"Outro (digitar)"*:
+
+- escolhido um motivo da lista, aparece **"Complemento (opcional)"**. O livro grava como motivo o nome do motivo e, como
+  justificativa, o nome — ou *"⟨nome⟩ — ⟨complemento⟩"* quando há complemento;
+- *"Outro (digitar)"* abre o campo de texto e grava exatamente como a movimentação de texto livre;
+- trocar o tipo mantém o motivo escolhido se ele também vale para o novo tipo; se não vale, a escolha é limpa;
+- se a lista do tipo não puder ser carregada, a tela mostra o campo de texto com o aviso *"Não foi possível carregar os
+  motivos do cadastro — digite o motivo."*.
+
+Quem integra pela API e manda o motivo do cadastro recebe estas recusas (nenhuma mexe no estoque):
+
+| Situação | Mensagem |
+|---|---|
+| Identificador do motivo que não é um número inteiro positivo | *"motivo_id deve ser um número inteiro positivo"* |
+| Motivo do cadastro **e** motivo digitado juntos | *"Informe o motivo do cadastro (motivo_id) ou o motivo digitado (motivo), não os dois"* |
+| Complemento que não é texto | *"justificativa deve ser texto"* |
+| Motivo inexistente | *"Motivo de movimentação não encontrado"* |
+| Motivo desativado | *"O motivo "⟨nome⟩" está desativado"* |
+| Motivo que não vale para o tipo | *"O motivo "⟨nome⟩" não serve para movimentação do tipo ⟨tipo⟩"* |
+
+Só a **Nova Movimentação** (e, pela API, a transferência) escolhe da lista. A movimentação rápida da tela de
+**Materiais**, o bloqueio e o desbloqueio, o inventário, o estorno, a não conformidade e a devolução continuam com o
+motivo digitado — ou com o texto que o próprio processo grava.
 
 ### 6.5 Movimentação vinculada — quando o sistema exige que o movimento cite um documento
 
@@ -900,7 +1276,7 @@ A regra é por tipo de movimento:
 | Saída para produção, Saída para montagem, Saída para assistência | **OS ou Projeto** — obrigatoriamente um dos dois | *"SAIDA_PRODUCAO exige vínculo com OS ou projeto (ou use emergencial com justificativa)"* |
 | Saída (genérica) | **Qualquer um**: OS, Projeto, Centro de Custo, justificativa ou referência | *"Saída exige OS, projeto, centro de custo ou justificativa"* |
 | Transferência, Devolução ao cliente | Nenhum | — |
-| Ajuste, Sucata, Perda, Bloqueio, Inspeção, Terceiros | Nenhum, mas **justificativa é obrigatória** (6.4) | — |
+| Ajuste, Sucata, Perda, Bloqueio, Inspeção, Terceiros, Devolução ao fornecedor | Nenhum, mas **justificativa é obrigatória** (6.4) | — |
 
 Por que a saída para produção é mais exigente: ela é a saída que vira **custo de alguém**. Sem OS ou projeto, o material sai do estoque e não entra em lugar nenhum — o custo desaparece.
 
@@ -935,6 +1311,23 @@ O motor testa nesta ordem, e **nada de saldo é tocado até todas passarem**:
 9. **Saldo disponível** → *"Saldo insuficiente. Disponível: 12 UN"*. O número na mensagem é o disponível real, não o físico.
 10. **Bloqueio de qualidade** — se há quantidade bloqueada e a saída invadiria essa parte: *"Material bloqueado não pode ser utilizado"*.
 
+**Quatro dessas travas não valem para a devolução ao fornecedor** (15b.4-ter), e cada dispensa tem
+um motivo:
+
+- **saldo disponível (9)** e **bloqueio de qualidade (10)**: a quantidade que ela baixa é exatamente
+  a que está **bloqueada**, e o disponível a exclui — com essas duas valendo, devolver material
+  inteiramente reprovado seria impossível. A validação, ali, acontece contra a própria parcela
+  bloqueada;
+- **vencimento do lote (8)**: lote vencido é uma das razões mais comuns de devolver ao fornecedor, e
+  barrá-lo o deixaria preso no estoque para sempre;
+- **propriedade (5)**: devolver não aplica material no trabalho de ninguém — manda de volta para
+  quem entregou o que a inspeção reprovou. Exigir OS ou projeto travaria justamente a devolução de
+  uma chapa de cliente que chegou errada.
+
+**As outras continuam valendo, e a mais importante é a situação do lote (7):** lote Bloqueado ou
+Reprovado não sai nem por esse caminho. E, como essa baixa só nasce de dentro do documento de não
+conformidade, ninguém a alcança pelo formulário de Movimentações (6.2, 6.3).
+
 A validação final de saldo acontece **no próprio comando que desconta**, e não numa leitura anterior: duas saídas simultâneas do mesmo material não conseguem consumir o mesmo saldo.
 
 ### 6.8 Custo na entrada
@@ -952,10 +1345,14 @@ Clicar no nome do material — no livro de Movimentações ou no ícone "Extrato
 
 - **Cartões de saldo:** Físico, Reservado, Bloqueado, Em inspeção, **Disponível** e **Custo médio**. Em material com controle de série, aparece também **Séries em estoque**.
 - **Saldos por localização:** em qual prateleira, de qual lote, quanta quantidade. Não há colunas de reservado/bloqueado aqui de propósito — **retenção não existe por localização**, ela é do material (ou do lote inteiro, por situação). Mostrá-la por prateleira sugeriria uma dimensão que o sistema não modela.
-- **Últimas 100 movimentações:** data, tipo, quantidade, saldo posterior, motivo e vínculo.
+- **Últimas 100 movimentações:** data, tipo, quantidade, saldo posterior, motivo e vínculo. Quando a **justificativa**
+  é diferente do motivo, ela aparece abaixo dele — é ali que fica o porquê digitado num bloqueio, num desbloqueio, num
+  inventário ou num estorno (o motivo dessas linhas é o texto fixo do processo), e o complemento de um motivo
+  cadastrado (*"⟨nome⟩ — ⟨complemento⟩"*). Justificativa igual ao motivo não se repete.
 - **Reservas ativas:** quantidade, quanto já foi utilizado, saldo, destino (OS/projeto), solicitante e prazos.
 
-No **livro** (tela de Movimentações), a coluna Quantidade mostra o **sinal real** do movimento (+ ou −) calculado pela diferença entre saldo anterior e saldo posterior — e não pelo nome do tipo. Isso importa porque Transferência, Bloqueio, Reserva e Liberação **não mexem no físico** (aparecem sem sinal), e um Estorno pode ir em qualquer direção conforme o que reverte.
+No **livro** (tela de Movimentações), a justificativa diferente do motivo aparece da mesma forma, abaixo do motivo.
+A coluna Quantidade mostra o **sinal real** do movimento (+ ou −) calculado pela diferença entre saldo anterior e saldo posterior — e não pelo nome do tipo. Isso importa porque Transferência, Bloqueio, Reserva e Liberação **não mexem no físico** (aparecem sem sinal), e um Estorno pode ir em qualquer direção conforme o que reverte.
 
 ### 6.10 Estorno — o engano se desfaz, nunca se apaga
 
@@ -964,8 +1361,62 @@ Movimentação errada **não é excluída**. O botão de estornar (seta curva) n
 - **Motivo é obrigatório** → *"Justificativa obrigatória para cancelamento"*.
 - Exige o perfil que pode **ajustar estoque** (mais restrito que o de movimentar).
 - **Estorno de estorno não existe** → *"Estorno não pode ser estornado"*.
-- **Estorno de entrada** vira uma saída, e por isso respeita o disponível: se a mercadoria já foi consumida, a recusa é *"Não é possível estornar: saldo disponível insuficiente (material já consumido)"*.
-- **Duas pessoas estornando ao mesmo tempo:** só a primeira passa; a segunda recebe *"Movimentação já cancelada"*.
+- **Estorno de entrada** vira uma saída, e por isso respeita o disponível: se a mercadoria já foi consumida, a recusa é *"Não é possível estornar: saldo disponível insuficiente (material já consumido)"*. Se a mercadoria **está no estoque mas reservada** (o físico cobre, o disponível não), a recusa diz quem a segura: *"Não é possível estornar: o material está reservado para requisições (⟨números⟩) — libere as reservas antes de estornar"* (uma reserva sem requisição aparece como *"reservas manuais"*). Em material sem lote, se a posição da entrada já não tem aquela quantidade (porque uma saída tirou dela), o estorno tira **como uma saída**: da posição da entrada primeiro, depois das outras com saldo — nenhuma posição fica negativa.
+- **Estorno de saída** devolve a quantidade **a uma posição só**: a origem informada na saída ou, sem ela, a posição padrão do material (ou a conta "sem localização atribuída"). A saída não guarda de quais posições tirou; o físico volta certo, a posição pode não ser a original.
+- **Estorno de uma contagem com localização** que deixaria o material com saldo negativo (porque o material já saiu depois da contagem) é recusado: *"Não é possível estornar: o saldo já foi consumido (o estorno deixaria o material negativo)"*.
+- **Duas pessoas estornando ao mesmo tempo:** só a primeira passa; a segunda recebe *"Movimentação já cancelada"*. Estornar de novo uma linha **já estornada** recebe a mesma mensagem, antes de qualquer alteração.
+
+**Estornar a entrada de uma nota de compra mexe no pedido de compra.** Quando a linha estornada é a **ENTRADA_COMPRA**
+(a entrada que o processamento da nota gera — o livro mostra o tipo por esse código) de uma nota recebida **contra um
+pedido**, o sistema:
+
+- **desconta** da linha do pedido a quantidade daquela entrada (sem deixar a linha negativa) — o pedido volta a dizer
+  que esse material falta, e a próxima nota dele é aceita sem autorização de excedente;
+- **reabre** o pedido quando a nota o tinha fechado: se antes do estorno o pedido estava completo e *Recebido*, depois
+  dele deixou de estar completo, e o último registro de status do pedido é o **fechamento automático**, o pedido volta
+  ao status que tinha antes de fechar (*Pendente*, *Aprovado*, *Em Análise* ou *Enviado*) — e com isso volta à lista de
+  atrasados (se a previsão venceu), aos pendentes do Recebimento e ao alerta de parcial;
+- **não reabre** quando o último *Recebido* foi escrito **à mão** pelo comprador (lápis → *Status*, que deixa a trilha
+  *"Mudança manual de status do pedido"*), nem quando o pedido está *Cancelado* ou *Rejeitado* — nesses casos só a linha
+  desconta.
+
+Depois de *"Movimentação estornada!"*, a tela mostra um segundo aviso: *"Pedido de compra ⟨número⟩ reaberto: faltam
+⟨saldo⟩ para receber"* (o pedido reabriu) ou *"Pedido de compra ⟨número⟩: o saldo a receber voltou a ⟨saldo⟩"* (só a
+linha descontou). Não há segundo aviso quando o pedido está cancelado ou rejeitado, nem quando o saldo voltou a zero.
+A trilha de auditoria do pedido registra *"Recebido do pedido estornado"* (*"Estorno da movimentação #⟨id⟩ descontou
+⟨quantidade⟩ do pedido"*) e, quando reabre, *"Reabertura automática do pedido"*. Se a parte do pedido falhar, o estorno
+do estoque continua valendo.
+
+**Estornar a entrada também reabre a solicitação de compra que ela tinha atendido.** Se aquela entrada era o que cobria
+uma solicitação de compra do almoxarifado (seção 21b.3b) — a solicitação estava *Recebida* por causa dela e, sem ela,
+deixa de estar coberta —, a solicitação volta a **Vinculada**, com a trilha *"Solicitação reaberta (estorno)"*
+(*"Estorno da movimentação #⟨id⟩ reabriu a solicitação"*), e volta a contar como "a caminho" na sugestão de
+reposição. Não reabre quando o pedido está *Recebido* à mão, *Cancelado* ou *Rejeitado*, nem a solicitação *Cancelada*.
+Uma nota que entrou **antes** de a solicitação ser ligada ao pedido não reabre nada: aquela entrada não era dela.
+
+O estorno **não** desfaz o resto da nota: o recebimento continua *Processado* e a conta a pagar fica como está.
+Estornar a entrada de nota **sem** pedido não toca pedido nenhum.
+
+**Duas recusas próprias da entrada de compra**, verificadas antes de qualquer alteração:
+
+| Situação | Mensagem |
+|---|---|
+| A entrada tem material **ainda em inspeção** | *"Esta entrada tem ⟨q⟩ ⟨un⟩ em inspeção — decida a inspeção antes de estornar a entrada"* |
+| A entrada teve material **reprovado** na inspeção | *"Esta entrada teve ⟨q⟩ ⟨un⟩ reprovado(s) na inspeção — o reprovado sai pela não conformidade; esta entrada não pode ser estornada"* |
+
+Inspeção decidida só com aprovado não impede o estorno.
+
+**Estornar a entrada de uma nota que reservou material para requisições (9.3b, 9.3c).** Vale igual para as reservas
+que a **inspeção** ou a **não conformidade** daquela nota criaram ao liberar o material (elas levam a marca da nota).
+Se o disponível não cobre o estorno porque aquela nota reservou o que trouxe para quem esperava, o estorno **solta**
+dessas reservas só o que falta — da
+**última** requisição na ordem da fila para a primeira, e só de requisições que ainda **esperam sem nada separado** — e
+a requisição que perdeu a reserva volta ao status de espera (normalmente *Aguard. Compra*, já que o pedido reabre).
+Reservas feitas na aprovação ou à mão **nunca** são soltas pelo estorno. Se nem assim cobre (alguém já separou ou
+entregou), o estorno é recusado com a mensagem do material reservado (acima) e nada é solto. Se o estorno for recusado
+**depois** de soltar (por exemplo, pela conferência do lote — *"Não é possível estornar: o lote ⟨L⟩ tem ⟨q⟩ ⟨un⟩ nesta
+localização, menos que os ⟨q⟩ que a entrada creditou"*), as reservas soltas são **recriadas** iguais (observação
+*"Reserva recriada após estorno recusado — recebimento ⟨REC⟩, requisição ⟨REQ⟩"*) e a recusa é a resposta.
 
 Há linhas que o livro **não estorna de propósito**, cada uma com a porta certa nomeada na mensagem:
 
@@ -974,15 +1425,18 @@ Há linhas que o livro **não estorna de propósito**, cada uma com a porta cert
 | Reserva / Liberação de reserva | *"Use a liberação de reserva para desfazer reservas"* |
 | Quarentena e decisões de inspeção | *"Movimento de inspeção não pode ser estornado pelo livro — use a tela de Inspeções para rever a decisão"* |
 | Remessa / Retorno de terceiro | *"Movimento de remessa a terceiro não pode ser estornado pelo livro — use a tela de Remessas para cancelar ou encerrar a remessa"* |
+| Devolução ao fornecedor | *"Devolução ao fornecedor não pode ser estornada pelo livro — o material voltaria bloqueado com o documento dizendo que foi devolvido"* — e não há outra porta: a execução não se registra duas vezes e o documento decidido não se decide de novo (15b.4-ter) |
 | Qualquer movimentação gerada por uma requisição | *"Movimentação vinculada a requisição — use os fluxos da requisição (exclusão/encerramento)"* |
 
-Em material com número de série há duas guardas a mais, ambas verificadas **antes** de qualquer alteração: não se estorna uma entrada cujas séries já saíram (*"estorno de entrada recusado: ha series desta entrada ja movimentadas — estorne as saidas primeiro"*), nem uma saída cujas séries já voltaram por outro caminho (*"estorno de saida recusado: series desta saida ja reentraram no estoque — a devolucao ja repos o material"*).
+Em material com número de série há duas guardas a mais, ambas verificadas **antes** de qualquer alteração: não se estorna uma entrada cujas séries já saíram (*"estorno de entrada recusado: ha series desta entrada ja movimentadas — estorne as saidas primeiro"*), nem uma saída cujas séries já voltaram por outro caminho (*"estorno de saida recusado: series desta saida ja reentraram no estoque — a devolucao ja repos o material"*). E o **ajuste** de material com série não se estorna — o sistema não tem como saber com segurança quais séries desfazer: *"estorno de ajuste de material com serie recusado — faca um novo ajuste (ele pede as series)"*. O ajuste de material sem série continua estornável.
 
 ---
 
 ## 7. Requisições de material
 
 A requisição é o pedido formal: alguém precisa de material, o almoxarifado separa e entrega. A tela é **Almoxarifado → Requisições**.
+
+Clicar numa linha da lista abre o painel de detalhe à direita, com **uma única consulta** ao servidor, e o endereço da página passa a apontar para aquela requisição — dá para copiar e colar o link, ou abri-lo direto, e a requisição abre já no painel. O detalhe é buscado de novo quando você volta para a janela do navegador depois de sair dela, e quando troca o filtro da lista: é assim de propósito, para que quem retorna à tela veja a posição atual.
 
 ### 7.1 O ciclo completo
 
@@ -1003,7 +1457,8 @@ Os status e as passagens permitidas entre eles são fixos; qualquer tentativa fo
 
 **Os três status que muita gente estranha:**
 
-- **Aguard. Estoque** e **Aguard. Compra** — a requisição cai automaticamente num deles quando, na aprovação, **nenhum item** tem saldo disponível. Fica em *Aguard. Compra* quando já existe uma solicitação de compra pendente para algum dos materiais; caso contrário, *Aguard. Estoque*. Se ao menos um item tem disponível, ela segue o caminho normal.
+- **Aguard. Estoque** e **Aguard. Compra** — a requisição cai automaticamente num deles quando, na aprovação, **nenhum item** tem saldo disponível — qualquer que seja a forma de aprovar (**Só Aprovar**, **Aprovar Liberação** ou a aprovação automática). Fica em *Aguard. Compra* quando algum dos materiais tem **compra a caminho**: uma solicitação de compra ainda não pedida, ou já pedida ao fornecedor (vinculada a um pedido) com material que ainda falta chegar, aberta há no máximo 60 dias. É a mesma conta do "a caminho" da sugestão de reposição: pedido cancelado ou rejeitado, e material que já chegou todo pelo pedido, **não** contam; pedido lançado direto no Compras, sem solicitação de compra, também não. Caso contrário, *Aguard. Estoque*. Se ao menos um item tem disponível, ela segue o caminho normal (a reserva decide o status, 9.3).
+- **A chegada do material pela nota de compra reserva para quem esperava, e o status acompanha.** Quando a nota do material entra, o que chegou livre é reservado para as requisições que esperavam, na ordem da fila de separação, e a que ficou com reserva passa a *Parcialmente Reservada* ou *Totalmente Reservada* (9.3b). Uma requisição aprovada depois só leva o que sobrou. Quando o material chega por **outra porta** (ajuste, devolução, inspeção liberada) ou a reserva não acontece, a requisição continua *Aguard. Compra* ou *Aguard. Estoque*; a separação já pode começar (ela trabalha pelo saldo, não pelo status), o detalhe diz que o material chegou (10.1) — e esse material não fica reservado para ela.
 - **Totalmente Reservada** / **Parcialmente Reservada** — é o estado **normal** de uma requisição recém-aprovada que encontrou saldo (seção 9).
 
 ### 7.2 Criação — o que o sistema valida
@@ -1012,11 +1467,19 @@ Os status e as passagens permitidas entre eles são fixos; qualquer tentativa fo
 - **Quantidade maior que zero** em cada item → *"Dados inválidos — itens.0.quantidade: quantidade deve ser maior que zero"* (o número é a posição do item na lista). Vale igual para "Salvar Rascunho" e para "Enviar".
 - **Material existente e ativo** → *"Material(is) inexistente(s) ou inativo(s): MAT-001, MAT-007"*.
 - **Tipo da requisição** — 14 opções: Consumo, Ordem de Produção, Ordem de Serviço, Projeto, Montagem, Instalação Externa, Assistência Técnica, Manutenção, Desenvolvimento, Administrativo, Emergencial, Ferramenta, EPI e Material do Cliente. Sem escolha, assume **Consumo**.
+- **Urgência** — três opções, e só elas: **Normal** (*"Normal — atendimento padrão"*), **Urgente** (*"⚠️ Urgente — linha parada"*) e **Crítico** (*"🔴 Crítico — risco de segurança"*). Sem escolha, assume **Normal**. Urgente e Crítico pedem justificativa na tela (*"Justifique a urgência para requisições urgentes/críticas"*). Qualquer outro valor — inclusive a mesma palavra escrita de outro jeito, como *"urgente"* — é recusado, sem gravar nada: *"Urgência inválida: urgente"*. Um rascunho salvo com a urgência escrita de outro jeito tem a forma corrigida quando é **enviado** (*"critico"* vira Crítico); se for outra palavra, o envio é recusado com a mesma frase e ele continua rascunho.
+- **Data de necessidade** — opcional, no campo **"Data de necessidade"** (calendário) da **Nova Requisição de Material**
+  e da cesta **Solicitação de material**. É o **prazo** da requisição: é por ela que a requisição entra no indicador
+  **"Requisições no prazo"** (21d). Em branco, a requisição fica sem prazo. Pela API, ela tem de vir no formato
+  *AAAA-MM-DD* e ser um dia que existe; fora disso — *15/09/2026*, *2026-02-30* — a criação é recusada, sem gravar nada:
+  *"data_necessidade deve estar no formato AAAA-MM-DD"*.
 - **Rascunho é do dono.** Só o solicitante envia o próprio rascunho: *"Apenas o solicitante pode enviar o rascunho"*; e só rascunho pode ser enviado: *"Apenas rascunhos podem ser enviados"*.
+- **A ordem dos itens é a do pedido.** Os itens são gravados e mostrados — no detalhe, no comprovante e na fila de separação — na ordem em que o solicitante os incluiu, tanto na tela do almoxarifado quanto na de requisição das outras áreas.
 
-**Enviar é o gatilho de tudo.** Enquanto está em Rascunho, a requisição não dispara e-mail, não é avaliada pela alçada de valor e não é vista pelo almoxarifado. É o envio que a coloca em circulação.
+**Enviar é o gatilho de tudo.** Enquanto está em Rascunho, a requisição não dispara e-mail, não é avaliada pelas regras de aprovação nem pela alçada de valor, e não é vista pelo almoxarifado. É o envio que a coloca em circulação — e é **no envio** que o sistema decide quais regras de aprovação ela precisa cumprir (8.4).
 
-Existe ainda **"Copiar como Novo Rascunho"**, que gera um rascunho novo com os mesmos itens, tipo e vínculos, sem as quantidades já entregues. A justificativa só é copiada quando o tipo é Emergencial.
+Existe ainda **"Copiar como Novo Rascunho"**, que gera um rascunho novo com os mesmos itens, tipo e vínculos, sem as quantidades já entregues. A justificativa só é copiada quando o tipo é Emergencial. A urgência **não** é copiada: a cópia nasce **Normal**. A
+data de necessidade também **não** é copiada.
 
 ### 7.3 Requisição emergencial — o que fura e o que não fura
 
@@ -1060,6 +1523,18 @@ Regras:
 - Se nada foi informado → *"Informe ao menos uma quantidade maior que zero para entregar"*.
 - Se todos os itens foram atendidos por completo, o status vira **Entregue**; senão, **Parcialmente Atendida**.
 
+**De onde sai — "Sai de".** A janela de entrega (aberta por **Entregar escolhendo de onde sai…** ou por **Completar Entrega**) mostra, em cada item, o campo **Sai de**. A primeira opção, **"Qualquer endereço (automático)"**, é a regra geral da saída: o sistema tira primeiro do endereço padrão do material e depois dos endereços com mais saldo. As outras opções são os endereços onde o material está, com o lote quando houver, no formato *"A-01 (10)"* ou *"B-02 — lote L-7 (4)"* — só endereços com saldo positivo aparecem. Escolher uma opção diz ao sistema exatamente de qual endereço, e de qual lote, o item sai. Regras:
+
+- **A escolha é exata.** O endereço escolhido (no lote escolhido) tem de cobrir a quantidade inteira do item; o sistema **não completa** com outro endereço. Senão: *"Chapa 3mm: O saldo em A-01 (3) não cobre a quantidade (5) — a saída tiraria de outros endereços"*. A mesma conferência é refeita depois da baixa: se outra entrega levou o saldo daquele endereço ao mesmo tempo, a segunda é recusada com *"Chapa 3mm: O saldo em A-01 mudou durante a saída e não cobre mais a quantidade — confira e tente de novo"*, e nada dela fica gravado.
+- **Tudo o que foi escolhido é conferido antes de qualquer baixa**, em todos os itens: se um item tem escolha inválida, **nenhum** item é entregue. Recusas, sempre com o nome do material na frente: *"Chapa 3mm: Localização A-01 está bloqueada"*, *"Chapa 3mm: Localização de origem não encontrada"*, *"Chapa 3mm: Lote não pertence a este material"*, *"Chapa 3mm: Lote L-7 esta bloqueado e nao pode ser utilizado"* (e a de lote vencido sem liberação, a mesma da movimentação — 4.3).
+- **Dois itens do mesmo material** saindo do mesmo endereço e lote somam: o endereço precisa cobrir a soma.
+- **Confirmar endereço lido.** Com uma origem escolhida, o campo **"Confirmar endereço lido"** aceita a leitura da etiqueta do endereço (ou o código digitado) e confere com a origem escolhida — a mesma regra da movimentação (6.2b): *"Chapa 3mm: Endereço lido (B-02) não confere com a localização de origem (A-01) — se a etiqueta é antiga, reimprima"*. Sem origem escolhida o campo fica desabilitado, com a dica *"Para confirmar a leitura, escolha antes de onde o item sai."*
+- **A origem da separação.** Quando o item foi separado dizendo de onde (10.2), a entrega sai **dali** sem que ninguém precise escolher de novo — inclusive pelo botão **"Confirmar Entrega e Baixar Estoque"**, que entrega tudo o que foi separado em um clique. Na janela de entrega, o **Sai de** desse item já vem com a origem da separação escolhida. A origem da separação vale **para o que foi separado e ainda não foi entregue**. Quando a entrega passa disso (depois de uma entrega parcial o teto de material comum sobe), ela **se divide**: o separado ainda não entregue sai da origem da separação — com a mesma exigência de saldo da escolha exata —, e o restante, que nunca foi separado dali, sai pela regra automática. Na janela, o item avisa: *"O separado pendente sai de A-01; o restante, automático. Se lá não houver mais o separado, a entrega é recusada — escolha de onde sai."* (com *"— lote L-7"* quando houver). Num material com série, a parte automática sai do lote das séries escolhidas. Item separado **sem** origem sai pela regra automática.
+- **Quando a origem da separação não serve mais** — o endereço perdeu saldo para outra saída, foi bloqueado, ou o lote foi bloqueado ou venceu —, a entrega é recusada **antes de qualquer baixa**, com o motivo e o caminho: *"Chapa 3mm: a origem da separação (A-01) não serve mais (O saldo em A-01 (1) não cobre a quantidade (5) — a saída tiraria de outros endereços) — entregue escolhendo de onde sai"*. Pelo botão **Entregar escolhendo de onde sai…**, escolha outro endereço ou **"Qualquer endereço (automático)"** — neste item, "automático" quer dizer **ignorar** a origem da separação. O sistema **não** troca de endereço sozinho: o histórico diria que saiu de onde não saiu. Se a lista de endereços não carregar, o **Sai de** mostra **"Planejada da separação (A-01)"** (a entrega usa a origem da separação) e "automático" continua disponível.
+- **Trocar de onde sai fica registrado.** Quando o item tem origem da separação e a entrega sai de **outro endereço** — ou do mesmo endereço com **outro lote**, quando a separação disse o lote — ou vai por **"Qualquer endereço (automático)"**, a janela mostra **"Motivo da troca (opcional)"** com a dica *"Saindo de onde não foi separado — conte o porquê."*. O motivo não é obrigatório. Com ou sem motivo, a troca fica registrada na requisição: quanto, separado de onde, saiu de onde (ou *"automático"*, com o lote quando a saída foi de um lote só), quem e quando — e aparece no bloco **"Substituições (N)"** do detalhe (10.1). Separação que não disse o lote vale para qualquer lote do endereço: sair do mesmo endereço em outro lote **não** é troca. Escolher "automático" num item com origem da separação **sempre** conta como troca, mesmo que o sistema acabe tirando do mesmo lugar. Sair da própria origem da separação não registra nada. O registro nunca é editado nem apagado — estornos e a exclusão da requisição não o desfazem.
+- **Material com número de série: a entrega diz QUAIS séries saem.** Na janela de entrega, o item com série mostra **"Séries que saem"** — as séries em estoque do material (só as do lote escolhido no **Sai de**, se houver lote), com o endereço como dica — e o contador *"0 de 2"*. O **Confirmar** só libera quando cada item com série tem **exatamente** a quantidade marcada; séries de lotes diferentes no mesmo item travam com *"Escolha séries de um lote só."*. As séries marcadas saem do estoque (passam a **Entregue**) junto com o saldo; o lote da saída é o lote delas. O botão de um clique **não** tem onde escolher série: para material com série ele é recusado com *"Chapa 3mm: material com controle de serie: informe 2 serie(s) para 2 unidade(s) — recebidas 0 — entregue escolhendo as series"*. Outras recusas, todas antes de qualquer baixa: *"Chapa 3mm: serie SN-004 nao esta em estoque deste material"*, *"Chapa 3mm: serie repetida na entrega"* (inclusive a mesma série em dois itens), *"Chapa 3mm: escolha series de um lote so"*, *"Chapa 3mm: as series escolhidas nao sao do lote escolhido"* e *"Chapa 3mm: material com controle de serie exige quantidade inteira"*. Se outra entrega levou uma das séries enquanto a janela estava aberta, a recusa do servidor aparece e a lista de séries é recarregada.
+- Itens **sem** escolha continuam sendo entregues um a um: se um deles for recusado no meio, os anteriores já saíram e ficam contados como entregues.
+
 **O disponível usado aqui soma de volta a reserva da própria requisição** — o que a aprovação reservou é daquela requisição e não pode barrá-la (9.4).
 
 **Assinatura do recebedor.** Logo depois de uma entrega bem-sucedida, o sistema abre **✍ Colher assinatura do recebedor**: o nome de quem retirou o material e um quadro para assinar na tela (funciona com o dedo e com o mouse; **Confirmar assinatura** só habilita depois de existir traço, e **Limpar** recomeça). As regras:
@@ -1073,9 +1548,17 @@ Regras:
 ### 7.6 Confirmação de recebimento, encerramento e cancelamento
 
 - **Confirmar recebimento** é o testemunho do **próprio solicitante** de que o material chegou às mãos dele. **Não há atalho de administrador**: *"Apenas o solicitante pode confirmar o recebimento"*. Só vale nos status Entregue, Parcialmente Atendida e Encerrada (*"Confirmação de recebimento não permitida no status EM_SEPARACAO"*), e só uma vez (*"Recebimento já confirmado"*).
-- **Encerrar** fecha a requisição de vez: cancela o saldo pendente e nenhuma entrega futura é aceita. Parte de Entregue ou Parcialmente Atendida, e exige o perfil de aprovação — *"Sem permissão para encerrar requisições"*. O motivo é opcional — contraste deliberado com a rejeição, onde ele é obrigatório.
+- **Encerrar** fecha a requisição de vez: cancela o saldo pendente e nenhuma entrega futura é aceita. Parte de Entregue ou Parcialmente Atendida, e exige o perfil de aprovação — *"Sem permissão para encerrar requisições"*. O motivo é opcional — contraste deliberado com a rejeição, onde ele é obrigatório. Encerrar **libera as reservas** que a requisição ainda segurava (no livro, *"Liberação por encerramento de requisição"*) — inclusive a que a nota reservou para ela na chegada (9.3b). **Rejeitar** a liberação por valor (8.3) também libera (*"Liberação por rejeição de valor da requisição"*).
 - **Cancelar** é do solicitante (ou de administrador do sistema): sem permissão, *"Sem permissão"*; em status que não aceita, *"Não é possível cancelar neste status"*. Cancelar **libera as reservas** daquela requisição.
-- **Excluir** uma requisição **estorna as entregas já feitas** (devolve ao estoque, com linha no livro) e **libera as reservas** que ela ainda segurava. É restrito a administradores do almoxarifado ou super administrador: *"Apenas administradores do Almoxarifado ou Super Administrador podem excluir requisições"*.
+- **Excluir** uma requisição **estorna as entregas já feitas** (devolve ao estoque, com linha no livro) e **libera as reservas** que ela ainda segurava. A devolução é **por saída**, e só do que **ainda não voltou**: o que já foi devolvido pela Devolução citando aquela saída é descontado, então excluir depois de devolver não credita o estoque duas vezes. Cada quantidade volta ao **lote** de onde saiu e ao **endereço** de onde saiu, se esse endereço ainda pode receber o material (ativo, não bloqueado, com o tipo do material permitido); senão, vai para o endereço padrão. Material com número de série volta **com as mesmas séries** que saíram (voltam a Em estoque); se as séries daquela saída não batem com o que falta devolver, a exclusão é recusada com *"Chapa 3mm: as series desta entrega nao batem com o que falta devolver — use a devolucao"*. Tudo é conferido antes da primeira devolução — se o padrão também não puder receber, a exclusão é recusada com a mensagem do endereço, e nada volta. Numa requisição antiga cujo histórico de saídas não fecha com o total entregue, o estorno é feito numa entrada só, no endereço padrão e sem lote, descontado o que já foi devolvido. É restrito a administradores do almoxarifado ou super administrador: *"Apenas administradores do Almoxarifado ou Super Administrador podem excluir requisições"*.
+
+### 7.7 Anexos da requisição
+
+O painel de detalhe da requisição termina com o bloco **Anexos**, depois dos botões de ação. É onde fica o **desenho da peça**, a autorização ou qualquer documento que acompanhe o pedido — preso à requisição, e não no e-mail de quem pediu. O bloco só aparece com a requisição já criada; requisição em montagem, no formulário, não tem onde anexar.
+
+**Esse bloco existe apenas em Almoxarifado → Requisições.** A mesma tela de requisição de material é servida também pelos módulos **Comercial, Frota, Compras, Financeiro, Fábrica e Engenharia**, e nessas telas **o bloco de anexos não aparece** — elas ficam fora da permissão do módulo Almoxarifado, que é o que guarda os documentos. Na prática: quem requisita pelo próprio setor não anexa nem enxerga documento na requisição; quem tem acesso ao Almoxarifado anexa e enxerga, inclusive nas requisições abertas pelos outros setores.
+
+As regras de formato, tamanho, permissão e registro de download estão em **15.2.4**.
 
 ---
 
@@ -1091,6 +1574,8 @@ São **duas checagens independentes e cumulativas**:
 2. **Segregação** — nem quem tem o perfil aprova a própria.
 
 **A rejeição é o oposto e isso é deliberado:** rejeitar a **própria** requisição é **desistência**, decisão legítima de quem pediu — qualquer perfil pode. Rejeitar a requisição de **outra pessoa** é decisão de aprovação e exige o perfil: *"Sem permissão para rejeitar requisição de outro solicitante"*.
+
+**Onde o aprovador vê o que espera por ele.** Quem tem o perfil de aprovar vê, no topo da tela de Requisições, o painel **"Requisições aguardando sua aprovação (N)"**, com número, solicitante e valor de cada uma. Entram as requisições **Pendentes** de **outras pessoas** que **não** esperam assinatura de regra (8.4). Ficam de fora a própria (que ele não pode aprovar), a que ainda espera assinatura de regra (essa aparece no painel das regras), e a que aguarda a aprovação por valor. Clicar numa linha abre a requisição; depois de aprovada, ela sai do painel. Quem não pode aprovar não vê o painel. Uma requisição cujas regras o sistema ainda não conseguiu conferir aparece marcada com *"· regras ainda não avaliadas — a aprovação vai conferir"*: ao aprovar, a conferência é feita na hora e, se ela se encaixa numa regra, a aprovação é recusada com *"Requisição tem aprovação de regra pendente: ⟨nome da regra⟩"*, sem reservar nada.
 
 ### 8.2 Rejeição justificada
 
@@ -1125,27 +1610,107 @@ Repare que o teste é **"maior que zero"**, não "preenchido". Materiais que nun
 
 **O que acontece:**
 
-1. Ao enviar, a requisição vai para **Aguard. Aprov. Valor** em vez de Pendente, e os aprovadores configurados recebem e-mail.
+1. Ao enviar, a requisição vai para **Aguard. Aprov. Valor** em vez de Pendente, e os aprovadores configurados recebem e-mail. Enquanto ela continuar parada, o e-mail **se repete** no intervalo do lembrete (8.6).
 2. Separação e entrega ficam bloqueadas enquanto isso: *"Requisição aguardando aprovação de valor (R$ 12.400,00). Um aprovador autorizado deve liberar antes da separação ou entrega."*
 3. Se o valor da requisição **subir** depois (itens alterados) e ultrapassar o limite sem ter sido liberada antes, ela volta a travar na tentativa de separar/entregar: *"Valor total (R$ 12.400,00) excede o limite de liberação automática (R$ 10.000,00). Aprovação de alto valor necessária."*
 4. **Quem pode liberar:** os usuários da lista configurada, mais o administrador do sistema. Fora disso: *"Sem permissão para aprovar liberação por valor"*. A segregação continua valendo — o solicitante não libera a própria, ainda que esteja na lista.
 5. Só requisição nesse status pode ser liberada ou reprovada: *"Apenas requisições aguardando aprovação de valor podem ser liberadas"* / *"Apenas requisições aguardando aprovação de valor podem ser reprovadas"*.
-6. **A liberação por valor reserva o estoque**, exatamente como a aprovação comum (9.3). O solicitante é notificado por e-mail da liberação ou da reprovação, com o motivo.
+6. **A liberação por valor reserva o estoque e calcula a espera**, exatamente como a aprovação comum (9.3): sem saldo nenhum, a requisição liberada fica **Aguard. Compra** ou **Aguard. Estoque** (7.1), não *Aprovado*. O solicitante é notificado por e-mail da liberação ou da reprovação, com o motivo.
 
 Reprovar por valor rejeita a requisição. Aqui **não há segregação**: o solicitante pode desistir da própria mesmo sendo aprovador de valor.
 
 > Note que a lista de aprovadores de valor é **nominal** (usuários escolhidos um a um na configuração), e não um perfil. Ela não se confunde com a permissão "aprovar requisição", que é por perfil. O administrador do sistema sempre pode liberar por valor.
 
-### 8.4 Aprovação automática
+### 8.4 Regras de aprovação — o aval extra configurável
 
-Existe ainda uma configuração de **aprovação automática**. Com ela ligada, a requisição enviada é aprovada na hora, com o aprovador registrado como **"Sistema (automático)"**.
+Além da aprovação comum e da alçada por valor, o administrador do módulo cadastra **regras de aprovação** em **Almoxarifado → Configurações → Regras de Aprovação**. Uma regra diz **quando** a requisição precisa de um aval extra e **quem** pode dá-lo.
 
-Duas ressalvas:
+**Os critérios de uma regra:**
 
-- **Urgência "Crítico" nunca é auto-aprovada** — justamente a que mais chama atenção precisa de olho humano.
+| Critério | A regra se encaixa quando… |
+|---|---|
+| **Tipo de requisição** | o tipo da requisição é o escolhido |
+| **Urgência** | a urgência da requisição é a escolhida (Normal, Urgente ou Crítico) |
+| **Algum item é material crítico** | pelo menos um item é de material marcado como crítico |
+| **Algum item é material de cliente** | pelo menos um item é de material que pertence a um cliente (cadastrado com dono em Materiais de Clientes), mesmo misturado com material próprio |
+| **Valor total a partir de (R$)** | `valor_total ≥ valor informado` — o mesmo cálculo de valor da alçada (8.3), mas com **"maior ou igual"** |
+| **Algum item com quantidade a partir de** | pelo menos um **material** da requisição tem quantidade **maior ou igual** à informada — somando todas as linhas desse mesmo material (duas linhas de 30 do mesmo parafuso contam como 60) |
+| **Centro de custo** | o centro de custo da requisição é o escolhido |
+
+**A regra vale quando TODOS os critérios preenchidos batem** — critérios somam restrição ("E"), não alternativa ("OU"). Critério em branco não filtra. A regra também pode filtrar por **projeto**, mas só por integração: a tela de requisição não grava projeto.
+
+**Quem assina** é uma **lista de pessoas**, escolhidas uma a uma — não um perfil. É isso que permite ao sistema garantir que duas regras sejam assinadas por duas pessoas diferentes.
+
+**O que o cadastro recusa, com a frase exata:**
+
+- sem nome: *"Regra precisa de um nome"*;
+- sem nenhum critério: *"Regra precisa de pelo menos um critério"*. Deixar *material crítico* ou *material de cliente* desmarcado não conta como critério;
+- sem ninguém em *Quem pode assinar*: *"Regra precisa de pelo menos um aprovador"*;
+- valor ou quantidade zero ou negativos: *"valor_minimo deve ser um número maior que zero"* / *"quantidade_minima deve ser um número maior que zero"*. A frase sai com o nome técnico do campo;
+- por integração, usuário inexistente ou desativado na lista: *"Aprovador inexistente ou inativo: ⟨ids⟩"*;
+- por integração, tipo desconhecido: *"Tipo de requisição inválido: ⟨valor⟩"*;
+- por integração, urgência fora das três: *"Urgência inválida: ⟨valor⟩"* — a mesma frase da requisição;
+- só quem administra o módulo cadastra regra. Os demais recebem *"Acesso restrito — administrador do Almoxarifado ou Super Administrador"*.
+
+**Como uma regra atua na requisição:**
+
+1. **No envio**, o sistema confere as regras **ativas**. Cada regra que se encaixa gera uma **assinatura pendente**, que guarda o nome da regra e a lista de quem pode assinar **naquele momento**. Mudar a lista da regra depois não altera a requisição que já entrou. Regra criada, editada ou reativada também **não** alcança requisição já enviada.
+2. **Enquanto houver assinatura pendente, nenhuma aprovação passa**: nem a comum, nem a liberação por valor, nem a aprovação automática. Na tela, **Aprovar e Separar**, **Só Aprovar** e **Aprovar Liberação** ficam desabilitados, com o aviso *"Aguardando N aprovação(ões) de regra antes da aprovação"*. Por integração, a recusa é *"Requisição tem aprovação de regra pendente: ⟨nomes das regras⟩"*. A recusa acontece **antes** de qualquer reserva, então nenhum saldo fica preso por uma aprovação recusada.
+3. **Assinar** é feito no bloco **Aprovações de regra** do detalhe da requisição, pelo botão **Assinar**, que só aparece para quem pode assinar. No topo da tela de Requisições, o painel **"Aprovações de regra aguardando você (N)"** lista o que o usuário pode assinar agora — e só isso: a pendência que ele não pode assinar não chega até ele. Ao assinar, o sistema confirma *"Aprovação da regra "⟨regra⟩" assinada. Ainda falta(m) N."* ou, na última, *"… A requisição já pode ser aprovada."*.
+4. **Assinar não aprova a requisição.** Depois da última assinatura, a aprovação comum (ou a liberação por valor) continua necessária, e é ela que reserva o material (9.3). Uma requisição que se encaixa em duas regras passa por três pessoas: as duas assinaturas e a aprovação.
+
+**Quem pode assinar, e as recusas:**
+
+- quem está na lista da regra, ou quem administra o módulo (administrador do Almoxarifado ou Super Administrador) — que pode assinar qualquer regra;
+- **nunca o solicitante**: *"Solicitante não pode aprovar a própria requisição"*;
+- quem não está na lista: *"Você não está entre os aprovadores desta regra"*;
+- **a mesma pessoa não assina duas regras da mesma requisição**, administrador inclusive: *"Você já assinou outra aprovação de regra desta requisição"*. Essa garantia vale mesmo com os dois cliques no mesmo instante. A aprovação comum **não** conta como assinatura de regra, então quem assinou uma regra pode aprovar a requisição depois;
+- assinatura já dada, ou de regra desativada: *"Esta aprovação de regra não está mais aberta"*;
+- requisição que não está mais aguardando (rejeitada, cancelada, aprovada): *"Requisição não está aguardando aprovação"*.
+- usuário **desativado** no cadastro, mesmo que ainda esteja na lista: *"Usuário inativo não pode assinar aprovação de regra"*.
+
+> **Cuidado ao configurar:** duas regras cujo **único** aprovador é a mesma pessoa travam a requisição que se encaixa nas duas, porque essa pessoa assina uma e é recusada na outra. A saída é um administrador assinar a segunda, ou desativar uma das regras. Dê a cada regra pelo menos duas pessoas, ou evite regras que se sobreponham.
+
+**Desativar uma regra** que está segurando requisições **libera** essas requisições. A tela avisa antes: *"Desativar esta regra libera N requisição(ões) que aguardam a assinatura dela — a pendência fica registrada como obsoleta e deixa de bloquear a aprovação."*. Depois confirma *"N aprovação(ões) pendente(s) desta regra deixaram de bloquear requisições"*. Na requisição, a assinatura passa a aparecer como *"Obsoleta (regra desativada)"*. Isso vale só para requisição que ainda aguarda aprovação; a de requisição já rejeitada ou cancelada fica como estava. Editar uma regra pela tela preserva todos os critérios dela; por integração, um critério que não é mandado na edição **fica como estava** — só o critério mandado vazio é limpo. **Reativar a regra não reabre** a assinatura obsoleta. Desativar funciona mesmo que alguém da lista tenha sido desativado no cadastro — é justamente a saída quando o único aprovador sai da empresa; já **acrescentar** à lista alguém desativado continua recusado com *"Aprovador inexistente ou inativo: ⟨ids⟩"*.
+
+Cada assinatura fica na auditoria da requisição como **Aprovação de regra**, e cada criação ou edição de regra na entidade **Regra de aprovação**.
+
+### 8.5 Aprovação automática
+
+Existe ainda uma configuração de **aprovação automática** (**Configurações → Configurações Gerais → Aprovação Automática**). Com ela ligada, a requisição enviada é aprovada na hora, com o aprovador registrado como **"Sistema (automático)"**.
+
+**Ela faz o mesmo que a aprovação comum depois de aprovar:** reserva o saldo disponível (9.3) e grava **Totalmente Reservada**, **Parcialmente Reservada**, ou — sem saldo nenhum — **Aguard. Compra** / **Aguard. Estoque** (7.1). A reserva fica no nome de quem criou ou enviou a requisição. Por integração, a resposta da criação ou do envio traz o status gravado e a indicação de aprovação automática.
+
+Se duas requisições disputam o último saldo ao mesmo tempo, a que fica sem nada é gravada esperando (*Aguard. Compra* ou *Aguard. Estoque*), nunca *Aprovado* sem reserva. Se a aprovação automática falhar no meio (por exemplo, o banco ocupado), nada fica reservado: a requisição continua **Pendente** e é aprovada pela forma comum.
+
+Três ressalvas:
+
+- **Urgência "Crítico" nunca é auto-aprovada** — justamente a que mais chama atenção precisa de olho humano. Vale também para um rascunho antigo em que a urgência esteja escrita de outro jeito (*"critico"*).
 - A aprovação automática **só corre depois** da alçada por valor. Requisição que caiu em *Aguard. Aprov. Valor* não é auto-aprovada.
+- **Requisição com assinatura de regra pendente não é auto-aprovada** (8.4) — ela fica **Pendente**, sem nenhuma reserva (as regras são conferidas antes de reservar).
+- A aprovação automática registra o aprovador e a data na própria requisição, mas **não** grava o registro *Aprovação* na **Auditoria** — para saber quem aprovou uma requisição automática, leia o aprovador nela.
 
-> As regras de aprovação em vigor são estas — **segregação**, **limite por valor** e **aprovação automática**. Não existe hoje configuração de regras por tipo de material, quantidade ou projeto.
+> As regras de aprovação em vigor são estas: **segregação**, **limite por valor**, **regras de aprovação configuráveis** (inclusive por urgência e por material de cliente) e **aprovação automática**.
+
+### 8.6 A cobrança por e-mail — o lembrete de requisição parada
+
+Requisição parada esperando uma decisão recebe um **lembrete por e-mail**, repetido a cada intervalo, enquanto continuar parada. Ele é configurado em **Almoxarifado → Configurações → Alertas de Estoque → Lembretes de requisições pendentes**: liga/desliga e **Intervalo entre lembretes (horas)**, com padrão de 24 h. O sistema confere de hora em hora.
+
+**A regra de quando sai:** a requisição (ou a assinatura pendente) precisa estar parada há **mais que o intervalo**, e o último lembrete dela precisa ter saído há **mais que o intervalo**. O número de dias do e-mail conta desde a última mudança da requisição (ou desde a criação da assinatura pendente), arredondado para cima, com mínimo de 1.
+
+**Há três lembretes, e cada um vai para quem pode fazer o gesto que falta:**
+
+| A requisição está… | O e-mail diz | Vai para |
+|---|---|---|
+| **Pendente**, sem assinatura de regra pendente | *"Lembrete: Requisição ⟨número⟩ aguardando aprovação há N dias"* | a lista de e-mails de notificação de requisições |
+| **Aguard. Aprov. Valor**, sem assinatura de regra pendente | *"Lembrete: Requisição ⟨número⟩ aguardando liberação por valor há N dias"*, com a linha *"Valor total: R$ … (limite de liberação automática: R$ …)"* | os **aprovadores de valor**; sem nenhum configurado, a lista de notificação de requisições |
+| com **assinatura de regra pendente** | um e-mail **por assinatura**: *"Lembrete: Requisição ⟨número⟩ aguardando aprovação da regra "⟨regra⟩" há N dias"*, com a linha *"Regra: ⟨regra⟩"* | quem está na lista **daquela** regra e está ativo no cadastro, **menos** o solicitante e quem já assinou outra regra da mesma requisição. Se não sobrar ninguém, vai para a lista de notificação de requisições |
+
+**Enquanto houver assinatura de regra pendente, os dois primeiros lembretes não saem.** Eles cobrariam uma aprovação que o sistema está recusando. Assinada a última regra, a cobrança volta à aprovação comum (ou à liberação por valor).
+
+**Uma exceção:** a requisição que **já tinha sido aprovada** e caiu em *Aguard. Aprov. Valor* depois não recebe o lembrete de valor. Isso acontece quando a alçada é ligada depois da aprovação e alguém tenta separar ou entregar. Essa requisição aparece no filtro de aprovações de valor da tela de Requisições.
+
+Cada envio fica registrado no histórico de lembretes, por destinatário e com o número de dias. O registro do lembrete de regra diz também qual assinatura foi cobrada.
 
 ---
 
@@ -1186,11 +1751,13 @@ Reservas nascidas de requisição aparecem com a etiqueta **REQ #número**; as f
 
 ### 9.3 Reserva automática na aprovação
 
-Ao aprovar uma requisição, o sistema percorre os itens e, para cada um, reserva:
+Ao aprovar uma requisição — por qualquer das três formas: **Só Aprovar**, **Aprovar Liberação** ou a aprovação automática —, o sistema percorre os itens e, para cada um, reserva:
 
 ```
-a reservar = mínimo(quantidade ainda pendente de entrega, disponível do material)
+a reservar = mínimo(quantidade ainda pendente de entrega − o que o item já tem reservado, disponível do material)
 ```
+
+O "já tem reservado" faz a reserva nunca dobrar: um item que já segura saldo da própria requisição só reserva o que falta.
 
 As reservas são criadas **uma a uma**, relendo o disponível a cada uma — dois itens do mesmo material não reservam o mesmo saldo duas vezes.
 
@@ -1200,9 +1767,70 @@ O status final da requisição sai daí:
 |---|---|
 | Todo item pendente saiu com o pedido **inteiro** reservado | **Totalmente Reservada** |
 | Alguma coisa foi reservada, mas não tudo | **Parcialmente Reservada** |
-| Nada foi reservado | Mantém **Aprovado**, **Aguard. Estoque** ou **Aguard. Compra** |
+| Nada foi reservado, e nenhum item tinha saldo | **Aguard. Compra** ou **Aguard. Estoque** (7.1) |
+| Nada foi reservado, mas algum item tinha saldo (a reserva falhou) | **Aprovado** |
+| Nada foi reservado porque outra aprovação levou o último saldo ao mesmo tempo | O sistema relê o saldo e grava **Aguard. Compra** ou **Aguard. Estoque** |
 
-**Falhar em reservar não derruba a aprovação.** A decisão de aprovar já foi tomada e é independente de haver saldo — é exatamente o caso "Aguard. Estoque". No pior cenário a requisição fica sem hold e a separação disputa o disponível como qualquer outra saída.
+**Falhar em reservar não derruba a aprovação.** A decisão de aprovar já foi tomada e é independente de haver saldo — é exatamente o caso "Aguard. Estoque". No pior cenário a requisição fica sem hold e a separação disputa o disponível como qualquer outra saída. Se a falha acontece **no meio** (um item reservado, o seguinte não), as reservas já feitas por aquela aprovação são desfeitas: nenhum saldo fica preso por uma aprovação que não terminou.
+
+### 9.3b Reserva na chegada da nota — quem esperava fica com o que chegou
+
+Quando uma nota de compra dá entrada no estoque (**Processar Nota**, ou o **Aprovar** direto do recebimento), o sistema reserva o que entrou **livre** para as requisições que **esperavam** aquele material — antes que qualquer outra requisição, aprovada depois, possa levá-lo.
+
+**Quem esperava.** Toda requisição ativa que ainda pode ser separada — **Aprovado**, **Aguard. Compra**, **Aguard. Estoque**, **Parcialmente Reservada**, **Totalmente Reservada**, **Parcialmente Atendida** e **Em Separação** — com algum item daquele material em que falta:
+
+```
+falta do item = quantidade ainda pendente de entrega − o que o item já tem reservado
+```
+
+**Em que ordem.** A mesma da **Fila de separação** (10.6): urgência (**Crítica**, depois **Urgente**, depois as demais), depois a data de necessidade mais cedo (sem data por último), depois a requisição mais antiga. A primeira da fila leva o que falta para ela; o que sobrar passa à seguinte.
+
+**Quanto, no máximo.** Para cada material da nota:
+
+```
+a distribuir = mínimo(o que ENTROU LIVRE desta nota, disponível do material naquele momento)
+```
+
+- O que entrou **retido para inspeção** (14.6) não entra na conta — não está disponível.
+- A nota distribui só o que **ela** trouxe: saldo que já estava no estoque (de ajuste, devolução, outra entrada) não é distribuído por ela.
+
+**Quem é pulado.**
+- A requisição cuja **liberação por valor** (8.3) bloquearia a separação naquele momento — a reserva ficaria presa atrás da alçada. O material vai para a próxima da fila; quando a liberação vier, ela leva só o que sobrou.
+- A requisição de **material de cliente** que a saída recusaria (sem o projeto do dono — 13) — a reserva ficaria presa e passaria na frente de quem pode levar.
+- A requisição em **Aguard. Aprov. Valor** não está entre as que podem separar e não recebe reserva na chegada.
+
+**O status acompanha.** A requisição que ficou com reserva desta nota passa a **Totalmente Reservada** (todo item pendente coberto) ou **Parcialmente Reservada**. **Em Separação** e **Parcialmente Atendida** ganham a reserva e mantêm o status. Requisição cancelada, rejeitada ou encerrada nunca é tocada; se uma for cancelada no exato momento da reserva, a reserva é desfeita. O cartão **📋 Requisições Abertas** do Dashboard lista também as requisições *Parcialmente* e *Totalmente Reservada* — a requisição não some do painel quando o material chega.
+
+**A reserva criada.** É uma reserva de requisição comum — a entrega a consome como qualquer outra (9.4). Na tela **Reservas** ela aparece no nome de **quem processou a nota**, com a observação *"Reserva na chegada do recebimento ⟨REC⟩ — requisição ⟨REQ⟩"*. Se a configuração de dias de validade estiver ligada, ela nasce com validade (9.7).
+
+**Nunca derruba a nota.** Se a reserva falhar por qualquer motivo, a nota fica **Processado** do mesmo jeito; quem esperava pode separar o que estiver disponível. Duas notas do mesmo material processadas ao mesmo tempo — ou uma nota e uma decisão de inspeção do mesmo material — não disputam: a distribuição de um material espera a anterior do mesmo material terminar, e cada requisição fica com o que lhe cabe. Como defesa, o que falta é relido antes de cada reserva, e o que passar do pendente é desfeito (*"Reserva na chegada acima do pendente — excesso desfeito"*).
+
+**O e-mail.** O aviso ao solicitante (21c) diz, em cada material, *"reservado para a sua requisição: N"* quando houve reserva, e termina com uma de três frases (21c.1). Quem esperava e não ficou com nada — nem há saldo livre do material — **não** recebe o aviso daquela nota.
+
+**O que NÃO reserva na chegada:** o material que entrou **retido para inspeção** — ele é reservado depois, quando a inspeção o aprova (9.3c) —, e as entradas que não são nota (entrada manual, devolução, transferência, ajuste, retorno de terceiro): o material fica disponível para quem chegar primeiro. Se uma nota que falhou no meio for processada de novo depois de o item crítico já ter sido inspecionado, a nota **não** conta esse item como livre — o que a inspeção liberou já foi distribuído por ela.
+
+### 9.3c Reserva na liberação da inspeção e da não conformidade
+
+O material crítico entra **retido para inspeção** (14.6) e não é reservado na chegada. Quando ele é liberado, o liberado é reservado para quem esperava, pelas mesmas regras de 9.3b (quem esperava, a ordem da fila, quem é pulado, o status que acompanha). Duas portas liberam:
+
+- **A decisão da inspeção** (15.2) — a **Quantidade aprovada** é reservada; o reprovado não.
+- **A decisão da não conformidade** do reprovado como **Aceitar** ou **Aceitar sob desvio** (15b.4-bis) — o que a decisão devolveu ao disponível é reservado. As outras decisões (*Devolver*, *Sucatear*, *Substituição*, *Análise da engenharia*) não liberam nada e não reservam; nem a não conformidade cujo material já tinha saído do bloqueio por fora (*Desbloquear Material*).
+
+**Quanto, no máximo.**
+
+```
+a distribuir = mínimo(o que ESTA decisão liberou, disponível do material naquele momento)
+```
+
+Saldo que já estava no estoque (de ajuste, de outra nota, de uma entrada manual) não é distribuído pela decisão.
+
+**A reserva criada.** Na tela **Reservas**, no nome de **quem decidiu** — inclusive quem tem só o perfil **Qualidade**, que não reserva à mão: a reserva é feita pelo sistema em nome dele. A observação diz a porta: *"Reserva na liberação da inspeção — recebimento ⟨REC⟩ — requisição ⟨REQ⟩"* ou *"Reserva na liberação da não conformidade ⟨NC⟩ — requisição ⟨REQ⟩"*. Ela leva a marca da nota: estornar a entrada da nota depois solta essa reserva como solta a da chegada (só o necessário, só de quem ainda não separou — 6.10).
+
+**Nunca derruba a decisão.** Se a reserva falhar, a decisão da inspeção (ou da não conformidade) fica gravada, o saldo já mudou, e só um aviso vai ao log; a resposta da tela é a mesma de sempre. Decidir de novo é recusado como sempre (*"Item não possui quantidade em inspeção retida"*, *"Esta não conformidade já foi encerrada"*) — nada é reservado duas vezes.
+
+**O e-mail.** O solicitante de cada requisição que ganhou reserva — ou que ainda tem saldo livre do material para separar — recebe *"Material liberado para a sua requisição"* (21c.1), uma vez por decisão.
+
+**O que NÃO reserva:** **Desbloquear Material** (o desbloqueio avulso da tela **Inspeções**) e o estorno de um bloqueio avulso — são ajustes de prateleira, sem documento; o material volta ao disponível para quem chegar primeiro. E uma requisição aprovada **no exato instante** em que a inspeção é decidida pode levar o material antes de quem esperava: o **Aprovar** não passa pela distribuição de quem esperava.
 
 ### 9.4 Consumo contra reserva
 
@@ -1240,7 +1868,22 @@ Liberar devolve ao disponível o que a reserva ainda segura. Pode ser **total** 
 - **A tela exige o motivo** antes de enviar (*"Informe o motivo da liberação"*), e ele fica gravado junto com **quem liberou e quando** — na própria reserva e no livro.
 - Ao liberar uma reserva nascida de requisição, a tela avisa antes: *"Esta reserva pertence à requisição #N. Liberar devolve o saldo ao disponível geral e a entrega dessa requisição volta a disputar estoque com as demais."*
 
-**Liberação automática:** **cancelar** ou **excluir** uma requisição solta todas as reservas ativas que ela criou. Isso é essencial porque a expiração é opcional (9.7) — sem essa liberação, o saldo ficaria preso a uma requisição morta para sempre.
+**Liberação automática:** **cancelar**, **excluir**, **encerrar** (**Encerrar Requisição**) ou **rejeitar a liberação por valor** de uma requisição solta todas as reservas ativas dela. Isso é essencial porque a expiração é opcional (9.7) — sem essa liberação, o saldo ficaria preso a uma requisição morta para sempre. No livro, o motivo diz qual foi o gesto (por exemplo, *"Liberação por encerramento de requisição"*, *"Liberação por rejeição de valor da requisição"*).
+
+**Liberar à mão atualiza o status da requisição.** Logo depois de liberar pela tela **Reservas** a reserva de uma requisição, o sistema recalcula o status dela pela mesma régua de quando o material chega (9.3b):
+
+| A requisição estava | Liberou | Fica |
+|---|---|---|
+| **Totalmente Reservada** | a reserva inteira (ou a única reserva que ela tinha) | **Aprovado** — aprovada, com o material no disponível, sem nada seguro para ela |
+| **Totalmente Reservada** | só uma parte, ou a reserva de um dos itens | **Parcialmente Reservada** |
+| **Parcialmente Reservada** | a parte que restava reservada | **Aprovado** |
+| **Em Separação** ou **Parcialmente Atendida** | qualquer quantidade | não muda — ela já está sendo separada ou entregue |
+
+Como decide: o sistema olha, item a item, quanto ainda falta entregar e quanto continua reservado para aquele item. Se todos os itens pendentes continuam cobertos, **Totalmente Reservada**; se só alguns, **Parcialmente Reservada**; se nenhum, a requisição volta ao status de quem foi aprovado — **Aprovado** quando há saldo disponível do material (o caso normal, porque o que acabou de ser liberado está no disponível), ou **Aguardando estoque/compra** se o saldo já tiver sido levado por outra requisição no mesmo instante. O recálculo espera uma nota, inspeção ou não conformidade do mesmo material que esteja reservando naquele momento, para não gravar um status velho.
+
+**O liberado não vai sozinho para quem esperava.** O saldo liberado volta ao disponível **solto**: uma outra requisição que esperava o mesmo material continua **Aguardando**, e uma requisição aprovada depois pode levá-lo. Se a liberação foi feita para atender outra requisição, separe-a logo — a **Fila de separação** mostra **Separar** para quem pode separar.
+
+Liberar uma reserva **manual** (criada na própria tela **Reservas**, sem requisição) não muda nenhuma requisição. Se o recálculo do status falhar, a liberação vale assim mesmo (o saldo já voltou ao disponível) e o aviso fica no log do servidor; o status se corrige no próximo evento do material.
 
 ### 9.7 Expiração
 
@@ -1250,6 +1893,9 @@ A expiração é **opcional** e roda por acionamento — o botão **Processar ex
 - O vencimento é **no dia seguinte** à data: a data gravada é o último dia válido do hold.
 - Ao expirar, o saldo volta ao disponível e a reserva fica **EXPIRADA** — e não *Liberada*. "Venceu sozinha" e "alguém soltou" são fatos diferentes no relatório.
 - O processamento é seguro para repetir: rodar duas vezes não devolve saldo em dobro, e uma reserva problemática não interrompe o processamento das demais.
+- Como na liberação à mão (9.6), a expiração **atualiza o status** da requisição dona da reserva, com a mesma tabela: a requisição **Totalmente Reservada** cuja reserva venceu volta a **Aprovado**; se só uma de duas reservas venceu, fica **Parcialmente Reservada**. O recálculo é feito **uma vez por requisição**, depois de todo o processamento, só para as reservas que de fato venceram — a que falhou ao vencer continua ativa e a requisição dela não muda.
+- A reserva nascida de requisição também tem validade quando a configuração de dias de validade está ligada — não só as reservas manuais.
+- O vencimento não avisa o solicitante por e-mail; o status novo aparece na lista de requisições e no painel.
 
 ---
 
@@ -1259,7 +1905,7 @@ Separação é a etapa em que o almoxarifado **junta fisicamente** o material da
 
 ### 10.1 O que a tela mostra
 
-A separação não tem tela própria: ela acontece **dentro da requisição**. Ao abrir uma requisição aprovada, o almoxarifado vê um **passo a passo** no topo (Criar → Aprovar → Separar → Retirada → Entregar → Encerrar), um aviso do que fazer agora, e os botões da etapa.
+A separação acontece **dentro da requisição**; para saber o que separar, conferir e entregar agora, e em que ordem, o almoxarife usa a **Fila de separação** (10.6). Ao abrir uma requisição aprovada, o almoxarifado vê um **passo a passo** no topo (Criar → Aprovar → Separar → Retirada → Entregar → Encerrar), um aviso do que fazer agora, e os botões da etapa.
 
 Os avisos por situação são estes:
 
@@ -1270,12 +1916,15 @@ Os avisos por situação são estes:
 | Parcialmente Reservada | *"Parte dos itens não tinha saldo e ficou sem reserva — separe o que está reservado e acompanhe a reposição do restante."* |
 | Aguard. Estoque | *"Sem saldo disponível no momento — inicie a separação assim que o estoque for reposto."* |
 | Aguard. Compra | *"Sem saldo disponível — há uma solicitação de compra em andamento para os materiais desta requisição."* |
+| Aguard. Estoque ou Aguard. Compra, **com saldo** para algum item ainda não separado | *"Chegou material para esta requisição — já dá para separar. O material ainda não está reservado para ela."*, seguido de *"Dá para separar agora: ⟨quantidade⟩ ⟨unidade⟩ de ⟨material⟩"* (um por material) e de *"O saldo é compartilhado: enquanto não for separado, outra requisição pode separá-lo antes."* |
 
-Os botões, na ordem do fluxo: **Iniciar Separação** (que vira **Ajustar Separação** quando a separação já começou), **Conferir separação**, **Liberar para Retirada** — que só aparece se algum item tem quantidade separada — e **Confirmar Entrega e Baixar Estoque**. Sem nada separado, no lugar do botão de entrega a tela informa: *"Nenhuma quantidade separada disponível para entrega no momento."*
+O aviso de "chegou" aparece no lugar do de "sem saldo" e não muda o status. Quando o material chega pela **nota de compra**, ele em geral já foi reservado para quem esperava (9.3b) e a requisição já está *Parcialmente/Totalmente Reservada* — o aviso de "chegou" é o caso do material que chegou por outra porta (ajuste, devolução, inspeção liberada) ou cuja reserva não aconteceu. A quantidade é o menor entre o que falta separar e o saldo disponível; itens do mesmo material dividem esse saldo entre si (4 que chegaram não aparecem como 4 para cada item).
 
-Abaixo dos itens, o bloco **Separação (N)** lista cada rodada de separação com **quem separou, quando e quantos itens tocou**; e, quando a caixa já foi conferida, a linha **Conferida por … em …**.
+Os botões, na ordem do fluxo: **Iniciar Separação** (que vira **Ajustar Separação** quando a separação já começou), **Conferir separação**, **Liberar para Retirada** — que só aparece se algum item tem quantidade separada — e **Confirmar Entrega e Baixar Estoque**, que entrega em um clique; ao lado dele, **Entregar escolhendo de onde sai…** abre a janela de entrega com o campo **Sai de** por item (7.5). Sem nada separado, no lugar do botão de entrega a tela informa: *"Nenhuma quantidade separada disponível para entrega no momento."*
 
-No modal de separação, cada item mostra **Solicitado · Já separado · Saldo**, com o campo de quantidade limitado ao saldo. No modal de entrega, cada item mostra **Solicitado · Separado · Entregue · Pendente · Saldo**, e a tela antecipa o resultado: *"Será entregue: 8 UN | Permanecerá pendente: 4 UN"*.
+Abaixo dos itens, o bloco **Separação (N)** lista cada rodada de separação com **quem separou, quando e quantos itens tocou**; embaixo da rodada, cada item separado **abaixo do possível** aparece como *"Chapa 3mm: separou 6 de 10 — 4 avariadas na prateleira"* (ou *"— sem motivo informado"*) — ver **Divergência** em 10.2; e, quando a caixa já foi conferida, a linha **Conferida por … em …**.
+
+No modal de separação, cada item mostra **Solicitado · Já separado · Saldo**, com o campo de quantidade limitado ao saldo, e o campo **Sai de** (10.2). No detalhe da requisição, o item separado dizendo de onde mostra *"separado de A-01"* (e *"— lote L-7"* quando houver) enquanto houver separado a entregar. Quando alguma entrega saiu de outro lugar que não o separado, ou uma rodada de separação tirou de outro lugar o que faltava de um item já separado, o detalhe mostra o bloco **"Substituições (N)"**, uma linha por troca, e abaixo quem e quando. A troca feita **na entrega** diz *"⟨material⟩: ⟨quantidade⟩ — separado de A-01 · saiu de B-02 · ⟨motivo⟩"* (com os lotes quando houver, e *"saiu de automático"* quando a saída foi automática). A troca feita **na separação** — onde nada sai do estoque — diz *"⟨material⟩: ⟨quantidade⟩ já separados de A-01 · nova separação de B-02 — a origem anterior deixou de valer · ⟨motivo⟩"*, onde a quantidade é o que já estava separado de A-01, e a rodada nova aparece como *"de B-02"* (com *" — lote L-8"* quando houver), *"do lote L-8"*, *"sem origem (automática)"* ou *"de mais de uma origem"*. No modal de entrega, cada item mostra **Solicitado · Separado · Entregue · Pendente · Saldo**, e a tela antecipa o resultado: *"Será entregue: 8 UN | Permanecerá pendente: 4 UN"*.
 
 O "Saldo" mostrado é o **disponível do material somado ao que a própria requisição já reservou** — o que a aprovação reservou é dela e não pode barrá-la.
 
@@ -1288,6 +1937,28 @@ Registra a quantidade separada por item e leva a requisição para **Em Separaç
 - A aprovação por valor é verificada aqui também: requisição travada por alçada não separa (8.3).
 - **Ou grava tudo, ou nada.** O sistema valida todos os itens do formulário antes de gravar o primeiro: se um item estiver acima do máximo, a recusa aparece e **nenhum** item é gravado.
 - Uma rodada nova **apaga a conferência** já feita (10.3): a caixa mudou e precisa ser conferida de novo. Confirmar o formulário **sem nenhuma quantidade** não é rodada — leva a requisição para *Em Separação*, mas não registra nada nem apaga a conferência.
+
+**De onde sai — "Sai de" na separação.** Cada item do modal de separação tem o campo **Sai de**, com as mesmas opções da entrega (7.5): **"Qualquer endereço (automático)"** e os endereços onde o material está, como *"A-01 (10)"* ou *"B-02 — lote L-7 (4)"*. Quem separa escolhe o endereço (e o lote) de onde tirou. Regras:
+
+- **O endereço escolhido precisa cobrir** a quantidade desta rodada **somada** ao que já foi separado dali (no mesmo lote) e ainda não foi entregue — por este item ou por outro item do mesmo material na requisição. Senão: *"Chapa 3mm: O saldo em A-01 (3) não cobre a quantidade (5) — a saída tiraria de outros endereços"*, com o saldo já descontado do que está separado. As outras recusas são as da entrega, com o nome do material na frente (endereço bloqueado, lote de outro material, lote bloqueado ou vencido).
+- **Ou grava tudo, ou nada** — como a quantidade: um item recusado recusa a rodada inteira.
+- O endereço escolhido vira a **origem da separação** do item, e a entrega sai dali (7.5). Rodadas que nomeiam lugares **diferentes** para o mesmo item — outro endereço, o mesmo endereço com outro lote (ou com lote, quando a separação anterior não disse o lote), ou o **Sai de** em automático sobre material já separado de um endereço — deixam o item **sem** origem da separação, e a entrega volta a ser automática. Na separação, "o mesmo lugar" é o mesmo endereço **e** o mesmo lote.
+- **Ao ajustar a separação, o Sai de parte do lugar anterior.** Em **Ajustar Separação**, o item que tem separado de A-01 ainda não entregue abre com **A-01** (e o lote, se houver) já escolhido no **Sai de** — desde que A-01 apareça nas opções **e** tenha saldo livre para a quantidade sugerida, descontado o que já está separado dali. Se não tiver (por exemplo, A-01 só tem o que já está na caixa), o campo abre em automático. Se a lista de endereços não carregar, ou se a separação for confirmada antes de ela chegar, o campo fica em automático.
+- **Trocar de lugar avisa.** Com quantidade maior que zero e um **Sai de** diferente da origem da separação (inclusive automático), o item mostra *"A origem da separação anterior (A-01) deixa de valer: o que já está separado passa a sair automático na entrega."* (com *" — lote L-7"* quando houver) e o campo **"Motivo da troca (opcional)"**. O motivo não é obrigatório. Voltar ao mesmo lugar esconde o aviso.
+- **A troca fica registrada.** Quando a rodada deixa sem origem um item que tinha separado ainda não entregue, a troca aparece no bloco **"Substituições (N)"** do detalhe (10.1): quanto já estava separado, de onde, de onde veio a rodada nova, o motivo, quem e quando. Rodada do mesmo lugar, item sem origem anterior, ou com tudo o que foi separado dali já entregue, não registram nada. Rodada recusada não registra nada. O registro nunca é editado nem apagado.
+
+- Escolher só o lote, sem endereço, não vira origem da separação.
+- A separação continua **não mexendo em saldo** (10.5): o material separado de A-01 continua contado em A-01 até a entrega, e outra saída pode levá-lo antes — nesse caso a entrega é recusada com o caminho (7.5).
+
+**Divergência — separar menos do que dava.** Cada rodada guarda, por item, **quanto dava para separar** naquele momento e se o separador ficou **abaixo** disso — e o porquê, se ele escrever. No modal de separação, quando a quantidade de um item fica abaixo do possível, aparece o campo **"Motivo da divergência (opcional)"**, com a dica *"Separando menos que o possível — conte o porquê para quem confere."*. Regras:
+
+- **O motivo não é obrigatório.** A rodada é aceita com ou sem ele — separar em várias viagens é normal. O que muda é o registro: o bloco **Separação (N)** mostra *"⟨material⟩: separou ⟨q⟩ de ⟨máximo⟩ — ⟨motivo⟩"*, ou *"— sem motivo informado"*, para quem confere.
+- **"Quanto dava"** é o que o item ainda tem a separar, limitado ao que está livre: descontado o que **outros itens do mesmo material** estão separando na mesma rodada; e, quando se escolhe um endereço no **Sai de**, limitado ao saldo nele menos o que **já foi separado dali e ainda não foi entregue** (por esta ou por outra requisição).
+- **Falta de material não é divergência.** Com 3 no estoque e 10 pedidos, separar 3 é separar tudo o que dava — o campo não aparece e nada é registrado como divergência. Separar 4 de um endereço que só tem 4 também não é.
+- **Quem decide o registro é o sistema, não a tela.** A tela faz a mesma conta para saber quando pedir o motivo, mas não enxerga as outras requisições; o motivo digitado é **sempre guardado**, mesmo quando o sistema conclui que não houve divergência.
+- Item com quantidade **0** não entra na rodada — não separar nada de um item não aparece como divergência.
+- A divergência é **só registro**: não bloqueia, não avisa ninguém, não abre não conformidade nem ajusta o inventário. Fica também na **Auditoria**, na linha da rodada.
+- O material separado **sem** escolher endereço por **outra** requisição continua contado como livre (a separação não reserva) — nesse caso o "quanto dava" pode sair maior do que o real.
 
 ### 10.3 Conferir separação — a segunda pessoa
 
@@ -1325,6 +1996,63 @@ Esta é a pergunta mais importante do capítulo, e a resposta é: **na entrega, 
 Ou seja: **o disponível cai na aprovação** (pela reserva) e **o físico cai na entrega**. A separação não mexe em saldo nenhum — ela registra o trabalho de campo e prepara a entrega. Quem espera ver o estoque baixar ao separar vai achar que o sistema não funcionou; ele funcionou, e o material já estava protegido desde a aprovação.
 
 ---
+
+### 10.6 Fila de separação — o que fazer agora, e em que ordem
+
+A **Fila de separação** (menu do almoxarifado, logo abaixo de **Requisições (almox.)**) é a lista de trabalho do
+almoxarife: mostra **só as requisições que têm algo a separar, conferir ou entregar**, na ordem em que devem ser
+feitas, e o que falta em cada item. É **só consulta**: separar, conferir e entregar continuam na requisição (10.2 a
+10.4 e 7.5), com as mesmas regras. O botão **Abrir** leva à tela de requisições com o detalhe daquela requisição. O
+botão **Atualizar** recalcula a fila.
+
+Quem vê: quem tem a permissão **separar e emitir** (Administrador e Almoxarife). O menu aparece para todos com acesso
+ao almoxarifado; os demais veem *"Você não tem permissão para a fila de separação."*. Sem nenhuma requisição com
+trabalho, a tela diz *"Nada para separar ou entregar agora."*.
+
+**Quem entra.** Requisições ativas nos estados em que se pode separar (Aprovado, Aguard. Estoque, Aguard. Compra,
+Totalmente Reservada, Parcialmente Reservada, Em Separação, Parcialmente Atendida) ou entregar (Em Separação, Pronta p/ Retirada, Parcialmente Atendida) e que tenham pelo menos uma das etapas abaixo. As demais não aparecem.
+
+**As etapas — um chip para cada uma que se aplica.** Uma requisição pode ter mais de uma ao mesmo tempo.
+
+| Chip | Quando aparece | Dá para agir agora? |
+|---|---|---|
+| **Separar** | Algum item é **separável agora**: o menor entre o que falta separar e o disponível (que conta o que a própria requisição reservou — 10.1) é maior que zero | Sim |
+| **Aguardando saldo** | Algum item falta separar e não há nada disponível para ele; ou há separado a entregar, mas nada **entregável agora** | Não |
+| **Conferir** | Material crítico separado sem a segunda conferência (10.3), com a requisição *Em Separação*. Para quem separou, o chip diz **"Conferir — você separou, peça a outra pessoa"** | Sim |
+| **Separar de novo para conferir** | A mesma conferência pendente, num estado de separação que não é *Em Separação* (por exemplo, *Parcialmente Atendida*): o caminho é **Ajustar Separação** e confirmar, que volta a *Em Separação* (10.3) | Sim |
+| **Conferência pendente — peça ao administrador** | A mesma conferência pendente com a requisição *Pronta p/ Retirada*, de onde não há volta à separação | Não |
+| **Entregar** | Há separado não entregue, nenhuma conferência pendente, e algum item **entregável agora**: o separado ainda não entregue, limitado ao disponível | Sim |
+| **Aguardando aprovação de valor** | No lugar de *Separar* ou *Entregar*, quando a requisição não tem aprovação de valor e o valor dela (soma das quantidades solicitadas pelo custo) passa do limite **ativo naquele momento** (8.3) | Não |
+
+A conta da aprovação de valor é feita na hora em que a fila é aberta, com a configuração vigente — se o limite baixou
+ou o custo subiu depois da aprovação da requisição, a fila já mostra o bloqueio. A fila **não grava nada** e não
+notifica ninguém: quem aplica a regra é o separar e o entregar.
+
+**A ordem.** De cima para baixo:
+
+1. as requisições em que **dá para agir agora** (com *Separar*, *Conferir*, *Separar de novo para conferir* ou
+   *Entregar*); as outras ficam embaixo, no grupo **"Aguardando"**;
+2. a **urgência**: Crítico, depois Urgente, depois as demais;
+3. a **data de necessidade**, a mais cedo primeiro; requisição sem data vem depois das que têm;
+4. a **mais antiga** primeiro (ordem de chegada).
+
+A prioridade da requisição não entra na ordem. Datas de necessidade antigas gravadas no formato *DD/MM/AAAA* não
+ordenam corretamente entre si.
+
+**Cada linha mostra** o número, a urgência, *"Necessário em DD/MM/AAAA"* (ou *"Sem data de necessidade"*), o
+solicitante e o setor, os chips, *"Separado por: ⟨nomes⟩"* quando já houve rodada de separação, e os itens com algo a
+fazer, assim:
+
+> *"a separar 5 UN (separável agora 3) · a entregar 2 UN (entregável agora 2) · disponível 3 · separado de A-01 — L-7"*
+
+Cada parte só aparece quando se aplica (*a separar* só se falta separar; *a entregar* só se há separado não entregue;
+*separado de* só se o item tem endereço de separação — 10.2).
+
+**A fila é uma fotografia.** Como a separação não reserva saldo (10.5), outra pessoa pode separar ou entregar o mesmo
+material depois que a fila foi aberta: uma requisição que estava em *Separar* ou *Entregar* pode ser recusada no
+gesto. Clique **Atualizar** antes de ir à prateleira. Item de material com série aparece como entregável pelo saldo,
+mesmo sem séries em estoque — a entrega pede as séries e recusa ali (7.5).
+
 
 ## 11. Transferências entre localizações
 
@@ -1368,7 +2096,12 @@ O contraste é fácil de demonstrar: no mesmo material, mudando o tipo de **Tran
 
 Material entregue que volta ao almoxarifado é registrado em **Almoxarifado → Devoluções** — não pelo formulário de Movimentações. A diferença é o que a tela de Devoluções guarda e o formulário genérico não guardaria: **de qual entrega** o material está voltando, em **que condição**, com **que destino** e de **qual lote**.
 
-> **Não confundir** com a devolução **ao cliente** (16.7), que é o caminho oposto: lá o material sai do prédio de volta para o dono. Aqui ele volta para o estoque depois de ter sido entregue.
+> **Não confundir** com as outras duas devoluções do módulo, que são o caminho oposto — nas duas o material **sai** do prédio, de volta para quem é dele ou para quem o entregou:
+>
+> - a devolução **ao cliente** (16.7), pela tela Materiais de Clientes;
+> - a devolução **ao fornecedor** (15b.4-ter), registrada dentro do documento de não conformidade que a decidiu, e que baixa o material reprovado.
+>
+> Aqui, na seção 12, o material **volta para o estoque** depois de ter sido entregue.
 
 ### 12.1 O formulário começa pelo material
 
@@ -1424,7 +2157,7 @@ Em material com "Controle por lote":
 - **Com entrega citada**, o lote é **herdado da entrega** — o campo aparece em modo leitura, com o rótulo "Lote (herdado da entrega)", sem seletor. Não há o que escolher: o material voltou do lote de onde saiu.
 - **Sem entrega citada** (avulsa), o lote é escolhido no seletor. Sem escolher, a tela barra: *"Material com controle por lote: informe de qual lote é a devolução"*.
 - Um lote informado à mão **ganha** do herdado.
-- Em material **sem** controle de lote, nada é herdado — herdar criaria linhas de saldo quebradas por lote que ninguém pediu.
+- Em material **sem** controle de lote, o lote é herdado **só** quando a entrega citada saiu de um lote (escolhido em **"Sai de"**, 7.5) e a devolução vai para **Estoque** ou **Quarentena** — o material volta ao lote de onde saiu. Na devolução para **Retrabalho**, que é uma saída, nada é herdado. Entrega sem lote não tem o que herdar.
 
 O **projeto e a OS** seguem a mesma lógica: com entrega citada, a devolução **herda o projeto
 e a OS da saída original** — é o que faz o relatório de custo por projeto (seção 21d) abater a
@@ -1456,6 +2189,12 @@ Uma trava específica protege esse caminho: **sucata com lote bloqueado é recus
 > *"Lote L-001 está bloqueado e não pode ser sucateado por devolução. Resolva o status do lote primeiro (tela Lotes e Séries) e repita a devolução."*
 
 Toda devolução recebe uma referência própria no livro (no formato `DEV-<número>`), que amarra os lançamentos ao registro da devolução.
+
+### 12.7 Anexos da devolução
+
+A lista de **Almoxarifado → Devoluções** tem uma coluna de ações com um ícone de **clipe** (*"Anexos e documentos desta devolução"*), que abre a janela **Anexos da devolução**, identificada pelo material e pela data. É onde ficam o **comprovante assinado** e as **fotos do estado em que o material voltou**.
+
+**A devolução não se edita nem se cancela** — ela é um lançamento definitivo —, **mas aceita anexo a qualquer momento**, inclusive meses depois. Isso é deliberado, e é o caso normal: o comprovante costuma chegar dias depois do lançamento. As regras de formato, tamanho, permissão e registro de download estão em **15.2.4**.
 
 ---
 
@@ -1623,6 +2362,12 @@ prioridade sobre a de retenção quando a mesma conferência tem os dois problem
 
 > `Ajuste bloqueado — os seguintes materiais são de cliente e exigem a permissão "ajustar_material_cliente": <código> (<cliente>)`
 
+**Material com número de série** tem duas regras próprias na conclusão com ajustes. A contagem tem de ser **inteira** — em fração, a conclusão é recusada:
+
+> `Ajuste bloqueado: <código>: material com controle de serie exige contagem inteira`
+
+E como a contagem diz quantas peças há, mas não **quais**, o ajuste muda só o saldo: ao concluir, os materiais com série que ficaram com as séries presentes diferentes do saldo aparecem num aviso fixo — *"Estes materiais com série ficaram com séries presentes diferentes do físico — regularize em Lotes e Séries:"* — com cada material *"(físico F, presentes P)"* e um link que abre a aba Séries dele em outra aba do navegador. A regularização (4.7) aceita exatamente essa diferença.
+
 **A aplicação é tudo ou nada.** Se qualquer item da conferência for recusado (por retenção ou por
 permissão), **nenhum** ajuste é aplicado — nem os que passariam sozinhos — e a conferência
 continua Aberta. Resolva o motivo da recusa (libere a retenção, peça a autorização) e conclua de
@@ -1698,10 +2443,111 @@ Um recebimento é o documento que registra a chegada física do material no galp
 
 | Forma de recebimento | O que o sistema faz |
 |---|---|
-| **Pedido de compra** | Você informa o número do pedido; o sistema traz os itens, as quantidades e os valores unitários já preenchidos, e herda fornecedor e CNPJ do pedido |
+| **Pedido de compra** | Você escolhe o pedido numa lista; o sistema carrega **as linhas daquele pedido** com o **saldo que ainda falta receber** de cada material, e você ajusta a quantidade que chegou de verdade. Fornecedor, CNPJ e o **valor unitário** vêm do pedido |
 | **Nota fiscal (sem pedido)** | Você informa a nota, o fornecedor e digita os itens um a um |
 
+> **O pedido de compra precisa existir no módulo Compras.** A lista da forma *Pedido de compra*
+> mostra os pedidos lançados lá — se nenhum pedido tiver sido lançado, a lista aparece **vazia**.
+> Quem cria, edita e exclui pedido de compra é o comprador, em **Compras → Pedidos de Compra**:
+> **ver a seção 14b**.
+
+**São só essas duas, e o sistema recusa qualquer outra.** A forma de recebimento é um de dois valores — *Nota fiscal* ou *Pedido de compra* — e nada além disso é aceito, nem ao criar o recebimento nem ao preencher os dados fiscais depois. Quem enviar outro valor por fora da tela (uma integração, um script) recebe:
+
+> *"Dados inválidos — tipo_recebimento: forma de recebimento inválida (use NOTA_FISCAL ou PEDIDO_COMPRA)"*
+
+**Cada item exige quantidade numérica maior que zero.** Item sem quantidade, com quantidade zero, negativa ou com texto no lugar do número é recusado, e a recusa nomeia o item e o campo:
+
+> *"Dados inválidos — itens.0.quantidade: quantidade do item deve ser um número maior que zero"*
+
+A mesma regra vale para a quantidade esperada, quando ela é informada: *"quantidade esperada do item deve ser um número maior que zero"*.
+
 Se o pedido informado não existir, o sistema responde *"Pedido de compra não encontrado"*. Um recebimento sem nenhum item é recusado com *"Inclua ao menos um item"*.
+
+### 14.1b A mesma nota do mesmo fornecedor não entra duas vezes
+
+Duas entradas da mesma nota fiscal do mesmo fornecedor significariam o material creditado duas vezes no estoque e duas contas a pagar para a mesma nota. O sistema **recusa** a segunda, e diz **em qual documento** a nota já está:
+
+> *"Nota fiscal 12345 já lançada no recebimento REC-… para este fornecedor"*
+
+A recusa acontece nos **dois** momentos em que uma nota pode ser informada: ao **criar** o recebimento e ao **preencher os dados fiscais** depois. E um documento nunca acusa a si mesmo — salvar os dados fiscais duas vezes com a **própria** nota funciona normalmente.
+
+**Como o sistema decide que é "o mesmo fornecedor".** Ele compara **três** identificações e considera o mesmo fornecedor se **qualquer uma** delas casar:
+
+| Identificação | Como é comparada |
+|---|---|
+| Fornecedor escolhido no cadastro | pelo próprio registro do fornecedor |
+| CNPJ | **só pelos dígitos** — `12.345.678/0001-00` e ` 12345678000100 ` são o mesmo |
+| Nome digitado | **ignorando acento, maiúsculas e espaços repetidos** — `José Aços Ltda`, `JOSÉ  AÇOS LTDA` e `Jose Acos Ltda` são o mesmo |
+
+Casar por **qualquer** uma é o que faz a regra valer no caminho real: um documento lançado com o fornecedor escolhido no cadastro (que traz nome **e** CNPJ) e outro com o nome digitado à mão são reconhecidos como o mesmo fornecedor. O número da nota também é comparado ignorando maiúsculas e espaços nas pontas.
+
+**Três situações NÃO são nota repetida, de propósito:**
+
+| Situação | Por que passa |
+|---|---|
+| Mesma nota, **fornecedores diferentes** | Duas empresas podem emitir nota com o mesmo número |
+| Dois recebimentos **sem número de nota**, mesmo fornecedor | Receber por pedido de compra sem nota é legítimo |
+| Mesma nota, **fornecedor não identificado** nos dois (sem cadastro, sem CNPJ e sem nome) | Tratar "sem fornecedor" como um fornecedor único juntaria documentos de origens diferentes |
+| Mesma nota de um recebimento cujas **entradas foram todas estornadas** (e que não tem item ainda esperando entrar) | É o "lancei errado, estornei, relanço": o documento estornado deixa de ser dono da nota. Com **qualquer** entrada ainda valendo — ou um item ainda por processar —, a recusa continua |
+
+**Relançar deixa duas contas a pagar.** O estorno não cancela a conta a pagar gerada pelo primeiro lançamento; o
+relançamento gera outra. Quem relança uma nota precisa avisar o Financeiro para cancelar a primeira.
+
+**Uma consequência que parece erro e não é:** se você **alterar o fornecedor** de um recebimento (ao preencher os dados fiscais) para o mesmo fornecedor de outro documento que já tem aquela nota, a partir dali ele passa a receber a recusa citando o outro documento. É o comportamento correto — os dois passaram a ser a mesma nota do mesmo fornecedor.
+
+**O limite desta regra:** ela consulta e depois grava. Dois lançamentos **exatamente simultâneos** da mesma nota — duas pessoas salvando no mesmo instante — ainda podem passar os dois. O caso do dia a dia (a mesma pessoa lançando duas vezes, ou dois operadores em minutos diferentes) está coberto.
+
+### 14.1c Receber contra um pedido de compra — parcial, saldo e excedente
+
+Quando a forma é **Pedido de compra**, o recebimento deixa de ser uma digitação livre e passa a ser medido contra o pedido.
+
+**O que a tela carrega.** Escolhido o pedido, aparece o bloco **"Itens do pedido"** com uma linha para cada item daquele pedido: o nome e o código do material, o texto **"Saldo pendente: N"** e um campo de quantidade ao lado, já editável.
+
+**Recebimento parcial é o caso normal.** Digite em cada linha **a quantidade que realmente chegou**. Se um material do pedido não veio nesta carga, **deixe o campo vazio** — campo vazio significa *"esta linha não chegou"*, e a linha simplesmente não entra no recebimento. Ela **não** é registrada como zero. O que faltou continua como saldo do pedido e pode ser recebido depois, em outro documento.
+
+**Como o saldo é calculado.** O saldo de um material num pedido é:
+
+> **saldo = quantidade pedida − quantidade já recebida**, somando **todas as linhas daquele material** naquele pedido.
+
+A soma por material é deliberada: um pedido pode ter **duas linhas do mesmo material** (preços ou prazos diferentes), e o que limita o recebimento é o total do material, não cada linha isolada. Por isso, quando você digita quantidade em duas linhas do mesmo material, o sistema **soma as duas** antes de comparar com o saldo — e, se a soma passar, o aviso aparece nas **duas** linhas.
+
+Em quantidade fracionada, a diferença de arredondamento do computador não conta como excedente: um pedido de 0,3 kg
+recebido em 0,1 e depois 0,2 aceita a segunda nota (o saldo calculado seria 0,19999… e não 0,2).
+
+**Só o que entra no estoque consome o saldo.** Criar o recebimento **não** muda o saldo do pedido. O pedido só passa a contar quando o material **entra fisicamente no estoque**, o que acontece no **Processar Nota** (ou na aprovação direta do recebimento). Consequências práticas:
+
+- um recebimento criado e ainda não processado **não** reduz o saldo — o pedido continua oferecendo o mesmo saldo até a entrada acontecer;
+- processar a mesma nota duas vezes **não** conta duas vezes;
+- **estornar** a entrada da nota (6.10) **devolve** o saldo ao pedido — a linha deixa de contar o que foi estornado, e
+  a próxima nota daquele material é aceita sem autorização de excedente;
+- **dois recebimentos criados contra o mesmo pedido, antes de qualquer um ser processado, são aceitos os dois** — cada um é medido contra o saldo que existia quando foi criado. Quem lança recebimento em duplicata contra o mesmo pedido precisa saber disso.
+
+**O aviso que aparece enquanto você digita.** Passando do saldo, aparece embaixo da linha, em vermelho:
+
+> *"Acima do saldo: 1 a mais que o saldo do pedido (4)"*
+
+É só um aviso — ele não impede de digitar. Quem decide é o servidor, ao salvar.
+
+**O que o sistema recusa, e com que mensagem.**
+
+| Situação | O que acontece |
+|---|---|
+| Quantidade acima do saldo do material no pedido, **sem autorização** | Recusado: *"Quantidade recebida (5) maior que o saldo do pedido (4) para o material ⟨código⟩ — a autorização de excedente é de Compras ou do Administrador"*. **Nada é gravado**, e o que você digitou continua na tela |
+| Marcar a autorização **sem ter a permissão** | Recusado: *"Autorizar recebimento acima do pedido exige a permissão "autorizar_excedente" (seu perfil: ⟨seu perfil⟩)."* |
+| Pedido **sem itens lançados** no módulo Compras | A tela informa *"Pedido de compra ⟨número⟩ não tem itens lançados no módulo Compras."* e o botão de salvar fica desabilitado. O que falta é o Compras preencher as linhas do pedido |
+| Pedido **já totalmente recebido** | A tela informa *"Este pedido já foi recebido por completo."* e o botão de salvar fica desabilitado |
+| Item apontando para a **linha de outro material** do pedido | Recusado: *"Item do pedido #⟨número⟩ não é do material ⟨código⟩"*. Pela tela isso não acontece — ela sempre aponta para a linha certa |
+| Pedido informado que **não existe** | Recusado: *"Pedido de compra não encontrado"* |
+
+**Receber acima do pedido, quando é legítimo.** Se o fornecedor mandou mais do que o pedido e a empresa vai aceitar, quem tem **Autorizar recebimento acima do pedido** — **Compras** ou **Administrador** — vê a caixa **"Autorizo o recebimento acima do pedido"** no formulário. Ela **só aparece quando existe de fato uma linha acima do saldo**, e só para quem pode marcá-la. Marcada, o recebimento entra e a trilha de auditoria registra **"Excedente autorizado"**, **uma linha por item** excedente. O **Almoxarife** não vê essa caixa — é por isso que a recusa dele nomeia quem resolve, em vez de mandá-lo marcar algo (ver 5.5).
+
+**O pedido some da lista quando fecha.** A lista da forma *Pedido de compra* mostra os pedidos que **ainda têm saldo a receber** — e também os pedidos que o Compras abriu e ainda **não preencheu** (que aparecem porque existem, mas não podem ser recebidos, conforme a tabela acima). **Pedido totalmente recebido não aparece mais na lista.**
+
+**O preço vem do pedido.** A tela de recebimento por pedido **não pergunta o valor unitário** — preço é informação do pedido, não de quem descarrega a carga. Quando o valor não é informado, o sistema usa o **valor unitário da linha do pedido**, e é esse valor que entra no cálculo do **custo médio** do material na hora da entrada (ver 6.8). Se a nota vier com preço diferente do pedido, quem corrige é a **entrada fiscal**, antes de processar.
+
+**Material que chega fora do pedido.** Um item cujo material **não está** no pedido não tem saldo contra o que ser medido, e por isso **não** é barrado nem avisado. Pela tela isso não se produz — ela oferece apenas as linhas do próprio pedido.
+
+**Duas réguas, dois momentos.** O limite do **saldo do pedido** vale quando o recebimento é **criado**. Já o campo **"Qtd. conferida"** do painel de detalhe (14.2b) compara a contagem física com a **quantidade esperada daquele documento**. São medidas diferentes, em momentos diferentes, e cada uma tem a sua mensagem.
 
 ### 14.2 O caminho do recebimento até o estoque
 
@@ -1725,6 +2571,95 @@ Tentar pular etapa é recusado com a mensagem nomeando a situação atual — po
 
 **A entrada no estoque acontece em um único momento: no botão "Processar Nota".** Antes dele, o recebimento existe como documento, mas o saldo do material ainda não mudou.
 
+O botão abre a janela **Processar nota fiscal**, com a pergunta *"Processar nota fiscal? Isso dará entrada no estoque e gerará contas a pagar."* e a lista dos itens que vão entrar, cada um com o **endereço de destino** — a regra completa está em 14.3b. **Confirmar** dá a entrada; **Cancelar** fecha sem mexer em nada.
+
+**Quanto entra de cada item.** Entra a quantidade **conferida** (14.2b). Item conferido com **0** — chegou zero — **não**
+entra no estoque e não aparece na lista da janela; a nota é processada do mesmo jeito com os outros itens, e a
+divergência do item zero continua registrada na não conformidade de quantidade. Item **sem** quantidade conferida
+(campo deixado em branco) entra com a quantidade **esperada**.
+
+**Uma nota é processada uma vez só.** Processar de novo uma nota já processada é recusado com *"Nota já processada"*.
+E se dois processamentos da mesma nota começarem ao mesmo tempo (dois cliques, duas abas, duas pessoas), o segundo é
+recusado com:
+
+> *"Esta nota já está sendo processada"*
+
+— a nota fica *Processado* com **uma** conta a pagar. A trava dura enquanto o processamento roda; se um processamento
+for interrompido no meio (queda do servidor), ela se desfaz sozinha em 10 minutos e a nota pode ser processada de
+novo — o que já tinha entrado não entra duas vezes.
+
+**Ao terminar de processar, a nota reserva o que chegou para quem esperava** — as requisições que aguardavam o
+material ficam com o que entrou livre, na ordem da fila de separação, e passam a *Parcialmente/Totalmente Reservada*
+(9.3b). Isso vale para **Processar Nota** e para o **Aprovar** direto; se a reserva falhar, a nota fica processada do
+mesmo jeito.
+
+**Depois de processar, dois avisos por e-mail podem sair** — ao solicitante de cada requisição que esperava o material
+(dizendo quanto ficou reservado para ela), e o aviso da nota para uma lista; as regras estão em 21c.1.
+
+### 14.2b Conferir a quantidade que chegou
+
+Enquanto o recebimento está com o almoxarifado — situações **RECEBIDO** e **EM_CONFERENCIA** —, cada item do painel de detalhe mostra **duas** quantidades e tem um campo para registrar a contagem física:
+
+- em cima, a quantidade **recebida** (ou a esperada, enquanto ninguém contou);
+- embaixo, **"Esperada: N"**;
+- e o campo **"Qtd. conferida"**, onde se digita quanto chegou de verdade.
+
+O botão **Salvar Conferência**, no fim do painel, grava as contagens digitadas. Ao terminar, aparece *"Conferência salva"*.
+
+**A divergência aparece na hora de digitar**, embaixo do campo, em vermelho:
+
+> *"Divergência: 13 a menos que o esperado (200)"*
+
+Ela mostra a diferença e a quantidade esperada entre parênteses, e diz *a menos* ou *a mais*. Diferença muito pequena também aparece com precisão — `200,001` contra `200` mostra *"Divergência: 0.001 a mais que o esperado (200)"* — porque o sistema compara os números crus, não o número arredondado que a tela mostraria.
+
+Registrar quantidade diferente da esperada também **dispara o aviso de divergência de recebimento** (21c) e **abre uma não conformidade** (15b), no mesmo instante — vale tanto ao salvar a conferência quanto ao salvar os dados fiscais. É um documento numerado por item divergente, e conferir o mesmo item de novo **atualiza** esse documento em vez de criar outro.
+
+Se a abertura do documento falhar por qualquer motivo, **a conferência é salva do mesmo jeito**: o material chegou, e travar o registro por causa do documento deixaria saldo real fora do sistema. O item continua aparecendo no cartão *"Divergência de recebimento"* da central de alertas, que é exatamente a rede de segurança para esse caso (15b.7).
+
+**Campo vazio não é zero.** Deixar "Qtd. conferida" em branco significa *"não contei este item"*: o sistema preserva a quantidade que já estava gravada e **não** desmarca a conferência que outra pessoa já tenha feito naquele item. Isso importa quando se salva a contagem de um item e os outros ficam em branco — os outros não são zerados nem desmarcados.
+
+**E zero é zero.** Digitar **0** significa *"contei e não chegou nada"*: o item fica com quantidade recebida 0, a
+divergência aparece, e no processamento ele **não** entra no estoque (14.2). A mesma régua vale em todo lugar que grava
+a quantidade recebida — ao criar o recebimento, ao salvar a conferência e ao salvar os dados fiscais: em branco ou só
+espaços é "não informado"; um número (inclusive escrito como texto, *" 4 "*) é gravado como número; qualquer outra coisa
+é recusada antes de gravar nada:
+
+> *"quantidade_recebida deve ser um número"*
+
+**O campo só existe nessas duas situações.** Depois que o documento sai do almoxarifado, a quantidade já é base de custo médio e de conta a pagar, e corrigi-la pelo painel seria mexer no passado sem deixar rastro.
+
+#### Receber mais do que o esperado exige autorização
+
+Quantidade recebida **acima** da esperada é recusada, e a recusa vale em **qualquer momento em que a quantidade recebida é informada** — ao criar o recebimento, ao salvar a conferência e ao salvar os dados fiscais:
+
+> *"Quantidade recebida (12) maior que a esperada (10) no item #11 — a autorização de excedente é de Compras ou do Administrador"*
+
+A autorização é de **Administrador** e **Compras**. Quem tem essa permissão vê, no painel, a caixa:
+
+> **"Autorizo o recebimento acima do pedido"**
+
+Ela aparece **somente** quando existe de fato um item acima do esperado, e **somente** para quem pode marcá-la — quem não tem a permissão não vê controle nenhum, e é por isso que a mensagem de recusa nomeia **quem resolve** em vez de mandar marcar uma caixa. Marcada, o salvamento é aceito e o sistema escreve na trilha de auditoria o evento **"Excedente autorizado"**, **uma linha por item** excedente, com quem autorizou.
+
+Quem envia a autorização sem ter a permissão (possível por fora da tela) recebe:
+
+> *"Autorizar recebimento acima do pedido exige a permissão "autorizar_excedente" (seu perfil: ALMOXARIFE)."*
+
+**O Almoxarife recebe material mas não autoriza o próprio excedente** — mesmo critério das duas assinaturas de sucateamento (seção 20): quem executa não é quem aprova a exceção.
+
+**Como a regra decide, com precisão.** A recusa acontece quando **as duas** condições valem ao mesmo tempo:
+
+```
+quantidade recebida > quantidade esperada
+        E
+quantidade recebida > quantidade recebida já gravada no item
+```
+
+A segunda condição é o que faz a autorização valer **uma vez**: depois de autorizado, reenviar a **mesma** quantidade — ao preencher os dados fiscais, ao salvar a conferência de outro item, ao reabrir o painel — não é um ato novo de autorização, não pede a caixa de novo e **não** gera outra linha de auditoria. **Baixar** a quantidade também nunca pede autorização. Só **aumentar** sobre o que já está registrado pede.
+
+**A recusa recusa o salvamento inteiro, não apenas o item problemático**, e nomeia **só o primeiro** item acima do esperado. Se a nota tiver dois itens excedentes, corrigir o primeiro e salvar de novo pode trazer a recusa do segundo. A trilha, ao contrário, escreve uma linha por item.
+
+**O que esta autorização NÃO mede:** ela compara a quantidade com a **esperada daquele item, naquele recebimento** — não com o saldo do pedido de compra. Um pedido de 10 unidades pode receber 25 em três recebimentos diferentes, cada um dentro do esperado do próprio documento.
+
 ### 14.3 O que é obrigatório para processar
 
 O sistema só dá entrada quando os dados fiscais estão completos. Faltando qualquer um, ele recusa com *"Preencha antes de processar: …"* listando **todos** os que faltam de uma vez:
@@ -1746,15 +2681,73 @@ Além disso, antes de mover qualquer saldo, o sistema verifica **item por item**
 | Material com controle de série não aceita quantidade quebrada | *"…: quantidade fracionaria com controle de serie"* |
 | Localização de destino tem de aceitar aquele material | a razão específica da localização (3.4) |
 
-Todas as recusas vêm juntas, dentro de uma frase única que começa com *"Nao foi possivel dar entrada no estoque:"*. **Nenhum item entra enquanto houver um item com problema** — a nota é recusada inteira, você acerta e reprocessa. Isso evita o pior cenário do galpão: metade da nota no estoque e ninguém sabendo qual metade.
+Quando uma localização de destino é informada para a nota inteira (pela integração), ela é conferida **uma vez**, antes dos itens: tem de existir e estar ativa — *"Nao foi possivel dar entrada no estoque: Localização A-01 está inativa"*. O destino escolhido **para um item** (14.3b) é conferido junto com os outros problemas daquele item — existir, estar ativo e aceitar o material — e entra na mesma lista: *"Nao foi possivel dar entrada no estoque: ⟨MAT-1⟩: Localização ⟨X⟩ está inativa; ⟨MAT-2⟩: Localização ⟨Y⟩ está bloqueada"*.
+
+ **Nenhum item entra enquanto houver um item com problema** — a nota é recusada inteira, você acerta e reprocessa. Isso evita o pior cenário do galpão: metade da nota no estoque e ninguém sabendo qual metade.
 
 > **Atenção operacional:** lote e séries são lidos **do que está salvo**, não do que está digitado na tela. Preencha lote/séries e clique em **Salvar Dados Fiscais** antes de **Processar Nota**.
 
-### 14.4 Reprocessar a mesma nota não duplica estoque
+### 14.3b Onde cada item entra — o destino por item
 
-Cada item da nota é "carimbado" no momento exato em que entra no estoque. Quando você processa a nota de novo — por dois cliques seguidos, por recarregar a tela, ou porque a primeira tentativa parou no meio — o sistema **pula os itens que já foram carimbados** e só trabalha nos que faltam.
+Na janela **Processar nota fiscal**, cada item tem um seletor de **Destino**. A primeira opção é **"Padrão do
+material"**, e é com ela que a janela abre: quem não mexer em nada processa a nota mandando cada item para o endereço
+padrão do seu material — ou para "sem endereço", se o material não tiver padrão.
 
-Na prática:
+**Quais itens aparecem.** Só os que **vão entrar agora**: quantidade maior que zero — a **recebida**, ou a
+**esperada** quando a recebida está em zero — e que ainda não entraram numa tentativa anterior (14.4). Se não sobrar
+nenhum, a janela diz *"Nenhum item com quantidade a dar entrada."*
+
+**Quais endereços são oferecidos.** Os **ativos**, menos os **bloqueados** e menos os que têm **sub-endereços** (um
+endereço "pai" não aparece no Mapa como ocupado, então o que fosse guardado nele ficaria invisível). A lista não
+distingue endereços de um almoxarifado desativado.
+
+**Como o sistema decide o endereço de cada item**, nesta ordem:
+
+1. o destino escolhido **para aquele item**;
+2. senão, o destino informado **para a nota inteira** (só pela integração);
+3. senão, o **endereço padrão** do material;
+4. senão, "sem endereço".
+
+**O aviso sobre o padrão.** Enquanto um item está em "Padrão do material", a janela avisa quando o padrão não serve:
+
+| O que a janela diz | Quando |
+|---|---|
+| *"A localização padrão ⟨código⟩ não recebe este material (⟨motivo⟩) — escolha um destino."* | o padrão está bloqueado ou não aceita o tipo do material — a nota seria recusada |
+| *"A localização padrão ⟨código⟩ está inativa — escolha um destino."* | o padrão está desativado — o material entraria num endereço que o Mapa não mostra |
+| *"Sem localização padrão — o saldo entra sem endereço."* | o material não tem padrão |
+
+Escolher um endereço para o item tira o aviso.
+
+**Quando algo é recusado, a nota inteira é recusada** (14.3), a mensagem aparece **dentro da janela** e as escolhas
+ficam como estavam: corrija o destino que a mensagem aponta e clique **Confirmar** de novo. Se a lista de endereços não
+puder ser carregada, a janela avisa *"Não foi possível carregar as localizações — os itens entram na padrão do
+material."* e processa assim mesmo.
+
+**O endereço de entrada fica registrado no item.** É ele que a devolução ao fornecedor usa para saber de onde tirar a
+peça reprovada (15b.4-ter).
+
+**Quarentena não é um endereço.** O material retido para inspeção (14.6) é uma quantidade do material, não de um
+endereço. Escolher como destino uma área chamada "Quarentena" guarda o material lá; depois da liberação ele **não se
+move sozinho** — leve-o ao endereço definitivo por **Transferência** (11).
+
+**Pela integração**, o destino por item vai em `destinos` — uma lista de pares item/endereço — no processamento, no
+avanço de etapa para processar e na aprovação direta. Recusas, antes de qualquer item entrar:
+
+| Mensagem | Quando |
+|---|---|
+| *"Destinos inválidos"* | não é uma lista, ou uma posição dela não é um par item/endereço |
+| *"Item ⟨id⟩ não pertence a este recebimento"* | o item não é desta nota (inclusive um identificador que não é número) |
+| *"Destino inválido para o item ⟨id⟩"* | o endereço não é um número inteiro positivo |
+| *"Item ⟨id⟩ repetido nos destinos"* | o mesmo item aparece duas vezes |
+
+O destino de um item que não vai entrar (quantidade zero ou já entrado) é **ignorado**, sem ser conferido: o item fica
+onde entrou.
+
+### 14.4 A mesma nota não duplica estoque — nem no mesmo documento, nem entre documentos
+
+São **duas** proteções diferentes, nas duas formas de a mesma nota entrar duas vezes.
+
+**1. Dentro do mesmo recebimento: o carimbo por item.** Cada item da nota é "carimbado" no momento exato em que entra no estoque. Quando você processa a nota de novo — por dois cliques seguidos, por recarregar a tela, ou porque a primeira tentativa parou no meio — o sistema **pula os itens que já foram carimbados** e só trabalha nos que faltam.
 
 | Cenário | Resultado |
 |---|---|
@@ -1764,6 +2757,10 @@ Na prática:
 | Nota já concluída | *"Nota já processada"* |
 
 O carimbo só é devolvido quando **nada** chegou a entrar naquele item. Depois que o saldo foi creditado, o carimbo fica — creditar duas vezes é um engano que não tem como ser desfeito sem rastro, e o sistema prefere recusar a repetir.
+
+**2. Entre documentos diferentes: a mesma nota do mesmo fornecedor não é lançada duas vezes.** O carimbo acima protege o documento contra si mesmo, e nada mais — dois recebimentos *diferentes* com a mesma nota seriam duas entradas legítimas aos olhos dele. É a regra de **14.1b** que fecha esse caminho: a segunda tentativa é recusada com *"Nota fiscal ⟨número⟩ já lançada no recebimento REC-… para este fornecedor"*, tanto ao criar o recebimento como ao preencher os dados fiscais, e o sistema reconhece o mesmo fornecedor pelo cadastro, pelo CNPJ só-dígitos ou pelo nome ignorando acento.
+
+**O que essa segunda proteção NÃO faz:** ela impede lançamentos **novos**; ela não corrige nota repetida que já esteja no sistema de antes. Se houver suspeita de que a mesma nota entrou duas vezes no passado, o saldo daquele material precisa ser conferido por inventário (seção 13) e corrigido por ajuste (6.2), com o motivo registrado.
 
 ### 14.5 O que a entrada cria junto com o saldo
 
@@ -1795,6 +2792,673 @@ O efeito prático:
 
 O item retido aparece na tela **Inspeções Pendentes** com a quantidade retida, o recebimento de origem, a nota fiscal e **há quantos dias está esperando**.
 
+### 14.7 Anexos do recebimento
+
+O painel de detalhe do recebimento termina com o bloco **Anexos**. É onde fica a **nota fiscal digitalizada**, o boleto e o certificado que veio com a carga.
+
+O momento natural de usar é o do próprio registro: ao salvar um recebimento novo, o sistema **já abre o detalhe dele** — a nota ainda está na mão de quem recebeu, e o anexo entra sem trocar de tela. Trocar de recebimento na lista troca os anexos mostrados: o bloco sempre mostra os documentos do recebimento que está aberto no painel.
+
+As regras de formato, tamanho, permissão e registro de download estão em **15.2.4**.
+
+### 14.8 Quando a tela não consegue carregar — e por que a diferença importa
+
+A tela de Recebimentos distingue, na cara, **"não existe nenhum"** de **"não consegui perguntar"**. São duas situações diferentes e duas telas diferentes, e confundi-las é o que leva alguém a lançar duas vezes a mesma nota fiscal.
+
+| O que a tela mostra | O que significa | O que fazer |
+|---|---|---|
+| *"Nenhum recebimento registrado"*, com o botão **Registrar primeiro recebimento** | A consulta funcionou e **não há recebimento nenhum** cadastrado | Registrar |
+| *"Não foi possível carregar os recebimentos."*, o motivo em letra menor e o botão **Tentar de novo** | A consulta **falhou** — servidor indisponível, rede caindo ou sessão expirada. **Nada se sabe** sobre o que existe ou não | Clicar em **Tentar de novo**. Se insistir, recarregar a tela: a sessão pode ter expirado |
+
+**Nunca conclua que um recebimento não foi lançado a partir de uma lista que falhou.** Quando a carga falha, a lista **fica vazia de propósito**: o sistema prefere não mostrar nada a mostrar uma posição antiga passando por atual. O botão de atualizar da tela (a dica dele é *"Atualizar lista"*) tenta de novo a qualquer momento.
+
+**No cadastro de um recebimento por nota fiscal**, a lista de materiais disponíveis para escolha é carregada junto com o formulário. Se essa carga falhar, aparece *"Não foi possível carregar a lista de materiais."* com um **Tentar de novo**, ao lado do campo de busca de material. **Isso avisa, não bloqueia:** o formulário continua utilizável e um recebimento **por pedido de compra** — em que os itens vêm do próprio pedido — pode ser registrado normalmente. O que não dá é digitar item à mão sem a lista, porque é dela que sai o material escolhido.
+
+**Ao trocar de recebimento no painel de detalhe**, o painel **esvazia** enquanto o novo carrega: o número no alto fica como **"..."** e o corpo mostra o aviso de carregamento. Ele nunca mostra os dados de um recebimento com o número de outro. E se você clicar em dois recebimentos em sequência rápida, **vale o último clique** — a resposta atrasada do anterior é descartada, mesmo que chegue depois.
+
+---
+
+## 14b. Pedido de compra
+
+O pedido de compra é o documento do comprador: ele diz **o que** a empresa pediu, **de quem** e **por
+quanto**. É contra ele que o almoxarifado recebe (seção 14), e é ele que fecha a solicitação nascida
+da Reposição (seção 21b). A tela é **Compras → Pedidos de Compra**. Um pedido nasce de três
+maneiras: digitado nesta tela (14b.2), gerado de uma solicitação da Reposição (21b) ou gerado de
+uma **cotação** com um clique (14c.9) — nos três casos ele é o mesmo documento, com as mesmas regras.
+
+### 14b.1 A lista de pedidos
+
+A aba mostra, por pedido: **Número**, **Fornecedor**, **Valor Total**, **Data Pedido**, **Previsão
+Entrega**, **Status** e os botões de **editar** e **excluir**. Há busca por número do pedido ou razão
+social do fornecedor, filtro por status, a caixa **"Só atrasados"** e o botão **Exportar Excel**. Sem
+nenhum pedido cadastrado — e também quando um filtro não deixa nenhuma linha —, a lista mostra
+*"Nenhum pedido encontrado"*.
+
+Na coluna **Previsão Entrega**, o pedido em atraso mostra, ao lado da data, um selo vermelho com o
+tamanho do atraso (14b.1b).
+
+**As datas são mostradas exatamente como estão gravadas no pedido**, sem conversão de fuso: um pedido
+com previsão `2026-09-16` aparece como **16/09/2026** em qualquer horário e em qualquer máquina.
+
+**A lista não mostra quanto do pedido já chegou.** Quantidade pedida, quantidade recebida, saldo
+pendente e a situação do recebimento (**ABERTO / PARCIAL / RECEBIDO**) são calculados pelo sistema,
+mas aparecem **linha a linha no formulário de recebimento** (14.1c), não aqui. O **Status** desta
+lista é outra coisa: é a declaração do comprador sobre o andamento do pedido.
+
+### 14b.1b Atraso — quando o sistema marca um pedido como atrasado
+
+Um pedido está **atrasado** quando as duas condições valem ao mesmo tempo:
+
+1. a **Previsão de entrega** está preenchida e é **anterior a hoje**; e
+2. o **Status** do pedido **não** é *Recebido*, *Cancelado* nem *Rejeitado*.
+
+Os **dias de atraso** são a diferença, em dias inteiros, entre hoje e a previsão: previsão de ontem =
+**1**; previsão de três dias atrás = **3**.
+
+**O "hoje" é o dia do calendário de Brasília** (fuso *America/Sao_Paulo*), calculado
+independentemente do relógio da máquina em que o sistema roda. Isso importa porque o servidor pode
+estar configurado em horário universal, que está três horas à frente — sem essa regra, às 21h de
+Brasília o sistema já acharia que é o dia seguinte e acusaria atraso em pedido que vence hoje.
+
+**O que nunca atrasa, e por quê:**
+
+| Situação | Por quê |
+|---|---|
+| Pedido **sem** previsão de entrega | O campo é opcional; sem promessa não há promessa quebrada |
+| Previsão **igual a hoje** | *Vence hoje* não está atrasado — o fornecedor tem o dia inteiro. O selo aparece a partir de amanhã |
+| Status *Recebido*, *Cancelado* ou *Rejeitado* | São os desfechos em que a cobrança não faz mais sentido |
+
+Os outros quatro status — *Pendente* (o padrão), *Aprovado*, *Em Análise* e *Enviado* — **atrasam**.
+
+**O atraso não é gravado em lugar nenhum.** Ele é calculado toda vez que a lista é lida: mudar a
+previsão de entrega ou o status faz o selo aparecer ou sumir **imediatamente**, sem nenhuma rotina
+intermediária e sem nada a reprocessar.
+
+**Na tela.** Na coluna *Previsão Entrega*, ao lado da data, aparece o selo vermelho com o texto
+**"Atrasado há 1 dia"** (um dia) ou **"Atrasado há 3 dias"** (dois ou mais).
+
+**O filtro.** A caixa **"Só atrasados"**, na barra de filtros, deixa na lista apenas os pedidos
+atrasados. Ela **combina** com a busca e com o filtro de status — dá para pedir os atrasados de um
+fornecedor com um status específico — e vale também para o **Exportar Excel**, que sai com o que
+está na tela. A caixa existe apenas na aba **Pedidos de Compra**; nas abas Fornecedores e Cotações
+ela não aparece.
+
+**No Excel.** A exportação traz duas colunas sobre isto (14b.7): **Atrasado**, com *Sim* ou *Não*, e
+**Dias de atraso**, com o número — **vazio**, nunca zero, quando o pedido está no prazo.
+
+**E o sistema avisa por e-mail.** O pedido atrasado gera um aviso na varredura diária de alertas,
+descrito na seção 21c-bis.
+
+> **Receber o material POR INTEIRO tira o pedido da lista de atrasados, automaticamente.** Quando a
+> última remessa chega e o processamento da nota faz a quantidade recebida alcançar a quantidade
+> pedida, o sistema grava **Status: Recebido** no pedido sozinho, e o selo de atraso cai junto —
+> ninguém precisa lembrar de mudar o status à mão.
+>
+> A régua é **por material**: o pedido fecha quando, para **cada material** dele, o que entrou
+> fisicamente no estoque por aquele pedido **≥** o que o pedido pediu daquele material (somando as
+> linhas do mesmo material), contando só as linhas que têm material do cadastro (linha de frete ou
+> serviço, sem material, não entra na conta). Chegar **mais** do que o pedido pediu de um material
+> também conta como completo **para aquele material** — mas o que chegou a mais de um material **não
+> paga** o que faltou de outro: um pedido de 10 A + 10 B que recebeu 25 de A e nada de B **não** fecha.
+> Diferença de arredondamento de quantidade fracionada não impede o fechamento.
+>
+> **O que o automático NÃO faz** (e por isso o caminho manual da seção 14b.4b continua existindo):
+> - **recebimento parcial não fecha nada** — enquanto faltar material, o pedido segue em aberto e
+>   atrasado, e é isso que o alerta *"Pedido de compra recebido parcialmente"* (21c-bis) avisa;
+> - **devolução ao fornecedor e sucata não reabrem o pedido**: o material entrou e saiu por decisão de
+>   qualidade; se o fornecedor vai repor, quem reabre é o comprador, por 14b.4b. Já o **estorno** da
+>   entrada da nota **reabre** o pedido que o fechamento automático tinha fechado (6.10);
+> - **ele não mexe em pedido Cancelado nem Rejeitado**: se a nota chegar num pedido que você cancelou,
+>   o material entra no estoque (ele está fisicamente no galpão) mas o status fica como você deixou.
+>
+> Toda mudança automática fica registrada na **trilha de auditoria** como *"Fechamento automático do
+> pedido"*, com o nome de quem processou a nota — é onde você descobre por que um pedido seu mudou de
+> status sem você ter tocado nele. A reabertura pelo estorno aparece como *"Reabertura automática do
+> pedido"*, e o desconto da linha como *"Recebido do pedido estornado"*.
+
+### 14b.2 Criar um pedido
+
+**Compras → Pedidos de Compra → Novo Pedido** abre a tela **"Novo pedido de compra"**, com:
+
+| Campo | O que é |
+|---|---|
+| **Fornecedor** | Obrigatório. Lista de razões sociais cadastradas; o padrão é *"Selecione o fornecedor"* |
+| **Data do pedido** | Calendário, já preenchido com a data corrente |
+| **Previsão de entrega** | Calendário, opcional |
+| **Status** | *Pendente, Aprovado, Rejeitado, Em Análise, Enviado, Recebido, Cancelado* — o padrão é *Pendente* |
+| **Observações** | Texto livre |
+| **Itens do pedido** | Um ou mais materiais, cada um com **Quantidade** e **Valor unitário** |
+
+**O número do pedido não é digitado: o sistema o gera.** A tela diz
+*"O número do pedido é gerado pelo sistema."*, e ao abrir um pedido existente para editar diz
+*"o número não é editável."*. O número segue o padrão dos documentos do sistema (seção 1.1) e é
+garantidamente único, mesmo que duas pessoas salvem ao mesmo tempo.
+
+**Os itens entram pela busca de material.** No campo *"Buscar material por código ou descrição..."*,
+digite parte do código ou da descrição e clique em **Buscar material**; a tabela de resultados traz
+**Código, Descrição e Unidade**, e o botão **+** (*"Adicionar ao pedido"*) põe o material na tabela
+de itens. A busca traz no máximo **50** materiais **ativos** por vez — busca mais específica, lista
+mais curta. Sem nenhum item, a tabela mostra *"Nenhum item adicionado"*.
+
+**O total é do sistema, não seu.** Cada linha mostra o **Subtotal** (`quantidade × valor unitário`) e
+embaixo da tabela aparece **"Total: R$ …"**, que é a soma dos subtotais. Não existe campo de valor
+total para digitar: o valor gravado é sempre o derivado dos itens.
+
+> **Item sem preço é aceito — e a tela avisa o que você está deixando de acontecer:**
+> *"Sem preço o custo médio do material não é alimentado no recebimento."*
+>
+> A razão é a da seção 6.8: quando o recebimento é feito contra o pedido, o valor unitário da
+> **linha do pedido** é o que entra no cálculo do custo médio do material. Linha com preço **zero**
+> não alimenta esse cálculo. Pedido aberto antes de fechar a cotação é caso legítimo — o aviso
+> existe para a decisão ser sua, não do sistema.
+
+Salvo o pedido, a tela volta para a lista e o número gerado aparece na mensagem de sucesso.
+
+### 14b.3 O que o sistema recusa, e com que mensagem
+
+| Situação | O que acontece |
+|---|---|
+| Salvar **sem nenhum item** | A tela recusa antes mesmo de chamar o servidor: *"Inclua ao menos um item no pedido de compra"* |
+| Salvar **sem fornecedor** | *"Dados inválidos — fornecedor_id: fornecedor do pedido é obrigatório"* |
+| Item **sem material** | *"material do item é obrigatório"* |
+| Quantidade **zero, negativa ou não numérica** | *"quantidade do item do pedido deve ser um número maior que zero"* |
+| Valor unitário **negativo** | *"valor unitário do item não pode ser negativo"* |
+| **Status** fora dos sete valores | *"status do pedido inválido (use pendente, aprovado, rejeitado, em_analise, enviado, recebido ou cancelado)"* |
+| **Data do pedido** que não seja uma data | *"data do pedido inválida (use AAAA-MM-DD)"* |
+| **Previsão de entrega** que não seja uma data | *"previsão de entrega inválida (use AAAA-MM-DD)"* |
+| Fornecedor que **não existe** | *"Fornecedor não encontrado"* — e **nada** é gravado |
+| Material que **não existe** | *"Material não encontrado"* — e **nada** é gravado |
+| Pedido que **não existe** (abrir, editar ou excluir) | *"Pedido de compra não encontrado"* |
+
+**As duas datas só aceitam o formato `AAAA-MM-DD` ou nada.** Campo de data em branco é gravado como
+**vazio de verdade** (e não como texto vazio), o que importa para qualquer consulta que procure
+pedidos com previsão vencida. Ao **editar**, apagar a data é gesto válido: ela volta a ficar em
+branco.
+
+**A recusa nomeia a posição do item.** Num pedido com três itens, o erro do segundo vem como
+`itens.1` (a contagem começa em zero) — é assim que você sabe **qual** linha corrigir.
+
+### 14b.4 Editar e excluir — e o que trava o pedido
+
+Editar substitui os itens do pedido e **recalcula o valor total**. Excluir apaga o pedido **com os
+itens dele**.
+
+> **Os dois só valem enquanto nenhum recebimento tocou o pedido.** Depois disso:
+>
+> - editar é recusado com *"Pedido de compra ⟨número⟩ já teve recebimento — não pode mais ser
+>   editado"*;
+> - excluir é recusado com *"Pedido de compra ⟨número⟩ já teve recebimento — não pode ser
+>   excluído"*.
+
+**"Tocou o pedido" é mais amplo do que parece, e é deliberado.** A trava dispara em **duas**
+situações:
+
+1. alguma linha do pedido já tem **quantidade recebida** (o material entrou no estoque);
+2. existe **documento de recebimento** apontando para uma linha deste pedido — **mesmo que esse
+   recebimento ainda não tenha entrado no estoque**.
+
+A segunda é a que surpreende: um recebimento **apenas criado**, ainda em conferência, já guarda o
+elo com a linha do pedido. Trocar as linhas do pedido nessa janela deixaria o recebimento apontando
+para uma linha que não existe mais, **sem nenhum aviso**. Por isso a trava é do **pedido inteiro**:
+não há como corrigir só a observação ou só a previsão de entrega depois que a primeira carga chegou.
+**A única exceção é o Status**, que tem caminho próprio (14b.4b).
+
+**A lixeira não fica desabilitada** num pedido travado — a recusa de exclusão aparece depois da
+tentativa, com a frase acima, e nada é gravado. Já o **formulário de edição avisa antes**: ao abrir
+um pedido que já teve recebimento, ele mostra a faixa de aviso e desabilita os campos travados
+(14b.4b).
+
+**Excluir o pedido devolve a solicitação para a fila de compras.** As solicitações de compra que
+estavam **vinculadas** a ele voltam para **Pendente** e soltam o vínculo; as que já estavam
+**Recebida** ou **Cancelada** não se mexem, porque são estados finais (seção 21b.3b). O material
+volta a ser sugerido pela régua normal da Reposição, e a solicitação volta a oferecer **Gerar
+pedido**.
+
+**Excluir o pedido também libera a cotação que o gerou** (14c.9): a cotação volta a mostrar `-` na
+coluna *Pedido*, recupera o botão **Gerar pedido** e volta a poder ser editada ou excluída; o status
+dela continua *Aprovado*.
+
+### 14b.4b Alterar o status de um pedido que já teve recebimento
+
+O **Status** é o único campo que continua editável depois do primeiro recebimento.
+
+Este caminho **não** é o normal para o pedido que chegou inteiro — esse fecha sozinho (14b.1b) — nem
+para o pedido cuja entrada foi **estornada**, que reabre sozinho (6.10). Ele existe para os casos em que
+a decisão é sua: **reabrir** um pedido fechado cujo material voltou por **devolução** ao fornecedor ou
+**sucata** (que não reabrem sozinhos), **fechar** um pedido que chegou por fora do sistema — ou dar por
+encerrado um pedido com saldo aberto —, e mexer no status de um pedido **Cancelado** ou **Rejeitado**,
+que o automático nunca toca.
+
+**A mudança fica registrada.** Toda mudança de status por este caminho grava na trilha de auditoria
+*"Mudança manual de status do pedido"*, com o status de antes, o de depois e quem mudou (salvar sem
+mudar o status não grava nada). Isso tem um efeito: um pedido que **você** marcou *Recebido* **não** é
+reaberto quando alguém estorna depois a entrada de uma nota dele — o estorno só devolve o saldo da
+linha. A decisão de reabrir continua sua.
+
+Clique no **lápis** do pedido na aba Pedidos de Compra. Se ele já teve recebimento, o formulário abre
+com uma faixa de aviso no topo:
+
+> *"Este pedido já teve recebimento — só o status pode ser alterado"*
+
+Com a faixa na tela, ficam **desabilitados**: **Fornecedor**, **Data do pedido**, **Previsão de
+entrega**, **Observações**, a **busca de material** e **todos os campos das linhas de item**
+(quantidade, valor unitário e o botão de remover). Só o seletor **Status** continua ativo.
+
+Escolha o status e clique em **Salvar pedido**:
+
+- deu certo: aparece *"Status do pedido atualizado"* e a tela volta para a lista;
+- falhou: a faixa vermelha diz *"Não foi possível atualizar o status do pedido."*;
+- pedido apagado nesse meio tempo: *"Pedido de compra não encontrado"*;
+- status fora dos sete valores (só alcançável fora da tela): *"status do pedido inválido (use
+  pendente, aprovado, rejeitado, em_analise, enviado, recebido ou cancelado)"*.
+
+**O que esse salvamento faz, exatamente: grava o status e nada mais.** Nenhuma linha de item é
+tocada, o **valor total não é recalculado** e a quantidade já recebida de cada linha permanece
+intacta. É por isso que ele é permitido onde a edição completa é recusada: a edição completa
+substitui as linhas do pedido, e substituí-las **zeraria a quantidade recebida** — o pedido voltaria
+a aparecer aberto, com o saldo inteiro, e o mesmo material poderia ser recebido duas vezes.
+
+> **O sistema não julga qual status faz sentido.** Qualquer um dos sete é aceito, inclusive marcar
+> como *Cancelado* um pedido cujo material já entrou no estoque. Não há fluxo de aprovação nem
+> sequência obrigatória de status no módulo Compras (14b.8) — a escolha é do comprador, e o efeito
+> visível é a coluna **Status**, o selo de atraso e os filtros.
+
+### 14b.5 Fornecedor com pedido, cotação ou itens de preço não pode ser excluído
+
+Na aba **Fornecedores**, a lixeira pergunta *"Tem certeza que deseja excluir este item?"* e, depois
+da confirmação, recusa o fornecedor que tenha qualquer vínculo. As três verificações são feitas
+**nesta ordem**, e a mensagem é a da primeira que encontrar algo:
+
+| O fornecedor tem… | Mensagem |
+|---|---|
+| pelo menos um **pedido de compra** | *"Fornecedor possui pedidos de compra — não pode ser excluído"* |
+| nenhum pedido, mas pelo menos uma **cotação** | *"Fornecedor possui cotações — não pode ser excluído"* |
+| nem pedido nem cotação, mas **itens na lista de preços** (14c.5) | *"Fornecedor possui itens cadastrados — não pode ser excluído"* |
+| nenhum dos três | *"Item excluído com sucesso"* |
+
+Para excluí-lo mesmo assim é preciso desfazer os vínculos primeiro: apagar os pedidos dele (os que
+já tiveram recebimento **não são apagáveis**, 14b.4), apagar as cotações dele (a cotação que já
+gerou pedido só é excluível depois do pedido, 14c.8) e esvaziar a lista de itens pela tela de itens
+e preços. As verificações são feitas
+**antes** de qualquer tentativa de apagar, então a mensagem é a mesma em qualquer instalação. Inativar
+o fornecedor (14c.3) é a alternativa quando o histórico precisa ficar.
+
+### 14b.6 Importar uma planilha de pedidos
+
+O botão **Importar planilha** (na tela de **novo** pedido) sobe de uma vez os pedidos que a empresa
+já tem em Excel. Aceita `.xlsx`, `.xls` e `.csv`; a planilha é lida no próprio navegador.
+
+**Como as linhas se transformam em pedidos.** Cada combinação de **ordem de compra × fornecedor**
+vira **um** pedido. Duas linhas da mesma ordem com fornecedores **diferentes** viram **dois**
+pedidos — nunca um só, porque o fornecedor do pedido é quem o recebimento copia para o documento de
+entrada e para a conta a pagar.
+
+O cabeçalho é lido sem diferenciar maiúsculas de minúsculas, e cada campo tem uma lista de grafias
+aceitas:
+
+| O que o sistema procura | Grafias aceitas no cabeçalho |
+|---|---|
+| Agrupador do pedido | `Pedido`, `Numero`, `Número`, `OC`, `Ordem`, `Ordem de compra`, `Pedido de compra` |
+| Fornecedor | `CNPJ`, `Fornecedor`, `Razao social`, `Razão social`, `Razao_social`, `Fornecedor_nome` (e `Fornecedor_id`, `Id do fornecedor`) |
+| Material | `Codigo`, `Código`, `Cod`, `SKU`, `Codigo_material`, `Codigo do material` |
+| Quantidade | `Quantidade`, `Qtd`, `Qtde`, `Quant`, `Qtd.` |
+| Valor unitário | `Valor unitario`, `Valor unitário`, `Preco`, `Preço`, `Valor`, `Vlr`, `Valor unit`, `Preco unit` (e as formas com acento) |
+| Data do pedido | `Data`, `Data pedido`, `Data do pedido`, `Data_pedido`, `Emissao`, `Emissão`, `Data de emissão` |
+| Previsão de entrega | `Previsao`, `Previsão`, `Entrega`, `Data de entrega`, `Previsao entrega`, `Previsão entrega`, `Previsao de entrega` |
+
+**Coluna com outro nome não é lida.** Uma planilha cuja coluna de código se chame `Material` ou
+`Item` tem **todas** as linhas recusadas. O caminho seguro é partir do **Exportar Excel** da própria
+aba Pedidos (14b.7), cujo cabeçalho é exatamente o que a importação lê.
+
+**O fornecedor é resolvido linha por linha, e nenhuma linha herda o fornecedor de outra.** Ele é
+reconhecido pelo **CNPJ** (ignorando ponto, barra, traço e espaço), pela **razão social** exata
+(ignorando maiúsculas) ou pelo **nome fantasia** exato. **Preencha a coluna de fornecedor em todas
+as linhas:** a planilha que traz o CNPJ só na primeira linha da ordem tem as demais recusadas.
+
+**O resultado vem em duas listas, e a diferença entre elas é o que importa:**
+
+| Lista | O que significa | Mensagens |
+|---|---|---|
+| **Linhas ignoradas** | A linha **não entrou** em nenhum pedido | *"linha sem código de material"* · *"quantidade inválida"* · *"material não encontrado pelo código ⟨código⟩"* · *"fornecedor não encontrado"* |
+| **Linhas importadas com aviso** | A linha **entrou**, e só um campo ficou em branco | *"previsão de entrega não reconhecida (use AAAA-MM-DD ou DD/MM/AAAA)"* · *"data do pedido não reconhecida (use AAAA-MM-DD ou DD/MM/AAAA)"* |
+
+Cada recusa aparece como **"Linha ⟨n⟩: ⟨motivo⟩"** e cada aviso como
+**"Linha ⟨n⟩ (⟨campo⟩): ⟨motivo⟩"**. **A linha 1 é a primeira linha de dados**, não o cabeçalho.
+Sem nenhuma recusa, a caixa diz *"Nenhuma linha ignorada."*; as listas mostram no máximo **20**
+itens cada, e o resto vira **"… e mais N linha(s)"**, para ficar claro que a lista está cortada.
+
+**A caixa de resultado tem duas caras, e a cor é informação:**
+
+- com pedidos criados, ela é **verde** e diz **"Importação concluída"**, seguida de quantos pedidos e
+  quantos itens entraram e da lista dos números gerados;
+- com **nenhum** pedido criado, ela é **vermelha** e diz
+  **"Nenhum pedido importado — veja os motivos abaixo"**.
+
+**Datas da planilha.** `AAAA-MM-DD`, `DD/MM/AAAA` e a data numérica que o Excel guarda por baixo são
+convertidas automaticamente. O que não for reconhecido vira **vazio + aviso** (a linha entra: data é
+informação, não regra). **Sem coluna de data, o pedido nasce com a data corrente**, nunca em branco.
+
+**Preço.** Ausente, entra como **zero** (vale o aviso de 14b.2). **Negativo também entra como
+zero**, e este é o único ajuste que a importação faz **sem avisar** — a alternativa seria recusar o
+pedido inteiro por causa de uma célula.
+
+**A origem fica registrada no pedido.** As observações de cada pedido importado dizem
+**"Planilha: ⟨ordem de compra⟩"** — ou **"Importado de planilha (sem coluna de pedido)"**, quando a
+planilha não tem coluna de ordem e tudo cai num pedido só. É a única pista de qual linha da planilha
+virou qual número de pedido.
+
+> **⚠️ Importar a mesma planilha duas vezes cria os pedidos duas vezes.** O sistema não tem como
+> saber que aquela ordem já entrou, porque o número do pedido é gerado por ele e não vem da planilha.
+> **Importe uma vez.** Se duplicar, apague os pedidos repetidos pela lixeira — e note que os que já
+> tiverem recebimento não sairão (14b.4).
+
+### 14b.7 Exportar
+
+**Exportar Excel**, na aba Pedidos, gera **uma linha por item de pedido**, com as colunas **Número,
+Fornecedor, Código, Descrição, Unidade, Quantidade, Valor Unitário, Valor Total, Status, Data,
+Previsão Entrega, Atrasado** e **Dias de atraso**. Pedido sem item sai como uma linha com as colunas
+de item vazias.
+
+**As duas últimas colunas descrevem o prazo** (14b.1b): **Atrasado** traz *Sim* ou *Não*, e **Dias de
+atraso** traz o número de dias — **em branco**, nunca zero, quando o pedido está no prazo, porque
+"zero dias de atraso" não é a mesma afirmação que "não está atrasado" e seria lida errado num filtro
+da planilha. As duas são do cabeçalho do pedido, então se repetem em todas as linhas de itens dele, e
+a importação (14b.6) **as ignora**, como já ignora *Status* e *Valor Total*.
+
+**O arquivo sai com o que está na tela:** busca, filtro de status e a caixa **"Só atrasados"** valem
+para a exportação.
+
+**As datas saem como estão gravadas no pedido** — é o que permite exportar e reimportar o mesmo
+arquivo sem que *Data* e *Previsão Entrega* mudem de dia.
+
+**Quantidade e Valor Unitário saem como número**, não como texto formatado — é o que permite que o
+arquivo exportado seja **reimportado** pela própria tela (14b.6). O **Valor Total** sai formatado,
+porque é coluna de leitura humana e a importação não a lê.
+
+### 14b.8 Quem pode trabalhar com pedido de compra
+
+**Quem tem acesso ao módulo Compras faz tudo dentro dele**: criar, editar e excluir pedido,
+fornecedor e cotação. O módulo Compras **não tem perfis** como o Almoxarifado (seção 5) e **não tem
+alçada por valor** — um pedido de qualquer valor é criado com um clique, e não existe fluxo de
+aprovação de pedido.
+
+**A única exceção** é o pedido criado **a partir de uma solicitação da Reposição** (seção 21b.3d):
+esse exige, além do acesso ao módulo, a permissão de **gerenciar reposição e compras**. Sem ela, a
+recusa é:
+
+> *"Sem permissão para gerenciar reposição e compras — seu perfil é ⟨seu perfil⟩. Solicite acesso a
+> um administrador."*
+
+Quem decide é sempre o servidor (seção 5.2): o botão escondido na tela é conveniência, não barreira.
+
+## 14c. Fornecedores e cotações
+
+O fornecedor é o cadastro de quem vende para a empresa; a cotação é o registro de um preço que um
+fornecedor deu — com as linhas de material cotadas — e é a origem de um pedido de compra (14c.9).
+As duas telas ficam no módulo Compras: **Compras → Fornecedores** e **Compras → Cotações**. Os
+grupos de fornecedores homologados têm tela própria, **Compras → Fornecedores homologados** (14c.5).
+
+### 14c.1 A lista de fornecedores
+
+A aba mostra, por fornecedor: **Razão Social** (com o nome fantasia embaixo), **CNPJ**, **Contato**,
+**Email**, **Telefone**, **Status** (o selo *ativo* ou *inativo*) e os botões de **editar** e
+**excluir**. Há busca por razão social, nome fantasia ou CNPJ, e o filtro de status com as opções
+**Todos os status**, **Ativo** e **Inativo**. A lista traz **todos** os fornecedores, inativos
+inclusive — o filtro é que separa.
+
+### 14c.2 Cadastrar e editar um fornecedor
+
+**Compras → Fornecedores → Novo Fornecedor** abre a tela **"Novo fornecedor"**; o lápis de uma linha
+abre **"Editar fornecedor"** com tudo preenchido. Os campos:
+
+| Campo | O que é |
+|---|---|
+| **Razão social** | **Obrigatória.** É o único campo que a tela exige |
+| **Nome fantasia**, **CNPJ**, **Contato**, **E-mail**, **Endereço** | Texto livre, opcionais. Não há validação de formato de CNPJ nem de e-mail, e dois fornecedores podem ter o mesmo CNPJ |
+| **Telefone** | Opcional; ganha máscara enquanto se digita |
+| **Grupo** | Opcional. *"Sem grupo"* ou um dos grupos de fornecedores homologados. Escolher *"Sem grupo"* na edição **tira** o fornecedor do grupo em que estava |
+| **Status** | **Só na edição.** *Ativo* ou *Inativo*. Todo fornecedor **nasce ativo** — a tela de criação não tem o campo |
+
+Salvar mostra *"Fornecedor salvo"* e volta para a lista. Salvar **sem razão social** (ou só com
+espaços) é recusado pela própria tela, antes de chamar o servidor, com a faixa vermelha
+**"Razão social é obrigatória"**. A edição **reenvia todos os campos**: o que estiver em branco na
+tela fica em branco no cadastro.
+
+Se o fornecedor tiver sido apagado por outra pessoa enquanto a tela estava aberta, a edição abre com a
+faixa *"Fornecedor não encontrado"*.
+
+**Os outros caminhos que também cadastram e editam fornecedor** são os modais da tela do grupo
+homologado (14c.5). Todos gravam no mesmo cadastro; a diferença é que só a tela de edição de
+**Compras → Fornecedores** tem o campo **Status**, e só o modal do grupo tem a **foto**.
+
+### 14c.3 O que "Inativo" faz — e o que não faz
+
+Inativar um fornecedor **não o apaga** e **não bloqueia tudo**. O efeito é este, tela por tela:
+
+| Tela | Fornecedor inativo |
+|---|---|
+| **Compras → Fornecedores** (lista) | **Aparece**, com o selo *inativo*. O filtro *Ativo* o esconde; o filtro *Inativo* o isola |
+| **Recebimento** (seção 14), seletor de fornecedor | **Não aparece.** O seletor lista só fornecedores ativos |
+| **Fornecedores homologados → grupo** (14c.5) | **Aparece** no grupo em que estava, depois dos ativos, com o selo **"Inativo"** |
+| **Fornecedores homologados → grupo → Vincular fornecedor** | **Não é oferecido** |
+| **Pedido de compra** (14b.2), seletor de fornecedor | **Aparece**, e o pedido para ele é **aceito** |
+| **Cotação** (14c.6), seletor de fornecedor | **Aparece**, e a cotação para ele é **aceita** |
+| **Cotação → Gerar pedido** (14c.9) | **Recusado**: *"Fornecedor inativo — reative-o em Compras → Fornecedores antes de gerar o pedido"* |
+
+Ou seja: inativar impede que material **sem pedido** entre em nome dele, impede que ele seja
+**vinculado** a um grupo novo e impede que uma **cotação dele vire pedido** — e nada mais. Pedido
+feito à mão e cotação continuam possíveis; a relação comercial não é cancelada pelo sistema. Para
+voltar, basta editar e escolher *Ativo*.
+
+Um fornecedor cadastrado sem status (o campo em branco) é mostrado como ativo na lista e na edição,
+mas **não** aparece no seletor do Recebimento até ser salvo uma vez pelo lápis — o que grava *Ativo*.
+
+### 14c.4 O que o sistema recusa no fornecedor, e com que mensagem
+
+| Situação | O que acontece |
+|---|---|
+| Razão social vazia | A tela recusa antes do servidor: *"Razão social é obrigatória"*. Pelo servidor, a mesma regra responde *"Dados inválidos — razao_social: Razão social é obrigatória"* |
+| Grupo que não seja um número de grupo | *"Dados inválidos — grupo_id: grupo do fornecedor inválido"* (a tela só oferece grupos existentes; isto só ocorre por outro caminho) |
+| Status fora de *ativo* / *inativo* | *"Dados inválidos — status: status do fornecedor inválido (use ativo ou inativo)"* (idem) |
+| Fornecedor que não existe (abrir ou editar) | *"Fornecedor não encontrado"* |
+| Excluir fornecedor com pedido, cotação ou itens | As três frases de 14b.5, nessa ordem |
+
+### 14c.5 Grupos de fornecedores homologados
+
+**Compras → Fornecedores homologados** lista os grupos; abrir um grupo mostra um cartão por
+fornecedor, **ativos primeiro**, cada um com o nome, o nome fantasia, a foto (quando houver), o
+selo **"Inativo"** quando for o caso (passar o mouse sobre o selo mostra *"Fornecedor inativo —
+reative em Compras › Fornecedores"*), e dois botões: **Editar fornecedor** (abre o modal com todos os
+campos e a foto) e **Remover do grupo**. Clicar no cartão abre a tela **"Itens e preços – ⟨razão
+social⟩"**, que é a lista de preços do fornecedor (é ela que conta como "itens cadastrados" na
+recusa da lixeira, 14b.5).
+
+- **Vincular fornecedor** abre o modal *"Vincular fornecedor ao grupo"*, que oferece os fornecedores
+  **ativos** que ainda não estão neste grupo. Sem ninguém disponível, a frase é *"Todos os
+  fornecedores ativos já estão em um grupo (inativos não podem ser vinculados) — ou cadastre um
+  novo."*. Confirmar mostra *"Fornecedor adicionado ao grupo"*.
+- **Novo fornecedor** (o outro botão da tela do grupo) abre o modal *"Novo fornecedor"*, que pede
+  razão social (obrigatória: *"Razão social é obrigatória"*), nome fantasia e CNPJ, e mostra
+  *"Fornecedor cadastrado e vinculado ao grupo"* — o fornecedor nasce ativo e já dentro do grupo.
+- **Remover do grupo** pergunta *"Remover "⟨razão social⟩" deste grupo? O fornecedor continua
+  cadastrado."* e, confirmado, mostra *"Fornecedor removido do grupo"* — o cartão sai do grupo e o
+  fornecedor continua existindo em **Compras → Fornecedores**, sem grupo. O mesmo efeito se obtém
+  escolhendo *"Sem grupo"* no lápis de Compras → Fornecedores.
+- **Editar fornecedor** no modal grava e mostra *"Fornecedor atualizado"*. O modal **não** tem o
+  campo Status — para inativar, use o lápis de Compras → Fornecedores.
+
+### 14c.6 A lista de cotações
+
+**Compras → Cotações** mostra, por cotação: **Número**, **Fornecedor**, **Valor Total**, **Data**,
+**Validade**, **Status**, **Pedido** e os botões de ação. Há busca por número ou razão social do
+fornecedor e o filtro de status com **Todos os status**, **Em Análise**, **Aprovado**, **Rejeitado**
+e **Cancelado**. Sem nenhuma cotação — ou com um filtro que não deixa nenhuma —, a lista diz
+*"Nenhuma cotação encontrada"*.
+
+A coluna **Pedido** mostra `-` enquanto a cotação não gerou pedido de compra, e o número do pedido
+(`PC-…`, clicável — abre a edição do pedido) depois que gerou (14c.9).
+
+Os botões de ação de cada linha são até três: **Gerar pedido** (ícone de carrinho — só aparece na
+cotação que ainda não tem pedido e cujo status é *Em Análise* ou *Aprovado*), **editar** (lápis) e
+**excluir** (lixeira).
+
+**Exportar Excel** nesta aba gera uma linha por cotação com **Número, Fornecedor, Valor, Status,
+Data, Validade** e, por último, **Pedido** (o número do pedido gerado, ou vazio).
+
+### 14c.7 Criar e editar uma cotação
+
+**Compras → Cotações → Nova Cotação** abre a tela **"Nova cotação"**, com o aviso *"O número é o do
+documento do fornecedor e tem de ser único."*; o lápis abre **"Editar cotação"** com tudo
+preenchido, inclusive as linhas. A cotação tem um cabeçalho e, abaixo dele, o bloco **"Itens da
+cotação"**.
+
+**O cabeçalho:**
+
+| Campo | O que é |
+|---|---|
+| **Número** | **Obrigatório e digitado** — é o número do documento que o fornecedor mandou. O sistema não gera número de cotação. Tem de ser **único**; espaços nas pontas não contam |
+| **Fornecedor** | **Obrigatório.** Lista de razões sociais; o padrão é *"Selecione o fornecedor"*. Fornecedores inativos aparecem e são aceitos na cotação — mas não na hora de gerar o pedido (14c.9) |
+| **Data** | Calendário, já preenchido com o dia corrente de quem está usando |
+| **Validade** | Calendário, opcional |
+| **Valor total** | Tem **duas regras**, descritas abaixo: **somado** quando há linhas, **digitado** quando não há |
+| **Status** | *Em Análise* (o padrão), *Aprovado*, *Rejeitado* ou *Cancelado* |
+| **Observações** | Texto livre. Vai para o pedido gerado (14c.9) |
+
+**Os itens.** No bloco **"Itens da cotação"**, digite parte do código ou da descrição de um material
+do almoxarifado e clique em **"Buscar material"** (ou **Enter** no campo — a busca é disparada por
+você, não a cada letra). Os materiais encontrados aparecem com um botão **+** (*"Adicionar à
+cotação"*); clicar nele acrescenta uma linha à tabela com **Código, Descrição, Unidade, Quantidade,
+Valor unitário, Subtotal** e a lixeira da linha. A linha nasce com **quantidade 1** e **valor
+unitário vazio**; o mesmo material pode entrar mais de uma vez. Sem nenhuma linha, a tabela diz
+*"Nenhum item adicionado"*. Abaixo da tabela, **"Total: R$ …"** é a soma de quantidade × valor
+unitário de todas as linhas.
+
+- **Quantidade** tem de ser um número **maior que zero**.
+- **Valor unitário** pode ficar vazio: a linha entra com **0**, e a tela avisa em âmbar *"Item sem
+  preço entra na cotação com valor unitário 0."* enquanto houver alguma linha sem preço. Não pode
+  ser negativo.
+- Toda linha é um material **do catálogo** do almoxarifado; não existe linha de texto livre.
+- O código, a descrição e a unidade são **copiados do material no momento em que a cotação é
+  gravada**: renomear o material depois não muda o texto das cotações já gravadas — até que a
+  cotação seja editada e salva de novo, quando as linhas são regravadas com o texto atual.
+
+**As duas regras do Valor total.**
+
+1. **Com pelo menos uma linha**, o *Valor total* é **a soma das linhas** (quantidade × valor
+   unitário, arredondada a duas casas). O campo fica **cinza e travado** mostrando a soma, e o que
+   estiver digitado nele **é ignorado** ao gravar. Não há campo de desconto: um desconto do
+   fornecedor entra no valor unitário das linhas.
+2. **Sem nenhuma linha**, o *Valor total* é **digitado** — é a cotação "valor fechado", sem
+   discriminar itens. Em branco grava **0**.
+
+Ao remover a última linha, o campo volta a ser digitável com o valor que estava nele antes de a
+primeira linha entrar.
+
+Salvar mostra *"Cotação salva"* e volta para a lista. **A edição substitui a cotação inteira** —
+cabeçalho e linhas — pelo que está na tela: uma linha removida some, uma linha alterada é regravada,
+e o total é recalculado.
+
+**O que cada status significa.** O status é a **declaração do comprador** sobre o que fez com aquele
+preço: *Em Análise* enquanto está sendo avaliado, *Aprovado* quando foi o escolhido, *Rejeitado*
+quando não foi, *Cancelado* quando a cotação deixou de valer. O sistema **não julga a sequência** —
+qualquer um dos quatro pode ser gravado a qualquer momento — e **mudar o status, por si, não dispara
+nada**: marcar *Aprovado* à mão não cria pedido. O que cria pedido é o botão **Gerar pedido**
+(14c.9), que **grava *Aprovado* sozinho** ao gerar. *Rejeitado* e *Cancelado* tiram o botão da
+linha.
+
+### 14c.8 O que o sistema recusa na cotação, e com que mensagem
+
+| Situação | O que acontece |
+|---|---|
+| Salvar **sem número** | A tela recusa antes do servidor: *"Número da cotação é obrigatório"* |
+| Salvar **sem fornecedor** | A tela recusa antes do servidor: *"Fornecedor da cotação é obrigatório"* |
+| **Número já usado** por outra cotação (ao criar ou ao editar) | *"Já existe uma cotação com o número ⟨número⟩"* — e **nada** é gravado |
+| **Valor total negativo** (cotação sem linhas) | *"Dados inválidos — valor_total: valor total da cotação não pode ser negativo"*. A tela deixa digitar; é o servidor quem recusa |
+| Linha com **quantidade vazia, zero ou negativa** | *"Dados inválidos — itens.⟨posição⟩.quantidade: quantidade do item da cotação deve ser um número maior que zero"* — a posição começa em **0** para a primeira linha |
+| Linha com **valor unitário negativo** | *"Dados inválidos — itens.⟨posição⟩.valor_unitario: valor unitário do item da cotação não pode ser negativo"* |
+| Linha cujo **material não existe mais** no catálogo | *"Material não encontrado"* — e **nada** é gravado, nem o cabeçalho |
+| Linha **sem material** (só por outro caminho que não a tela) | *"Dados inválidos — itens.⟨posição⟩.material_id: material do item da cotação é obrigatório"* |
+| Lista de itens que **não é uma lista** (só por outro caminho) | *"Dados inválidos — itens: itens da cotação devem ser uma lista"* |
+| **Data** que não seja uma data | *"Dados inválidos — data_cotacao: data da cotação inválida (use AAAA-MM-DD)"* |
+| **Validade** que não seja uma data | *"Dados inválidos — validade: validade da cotação inválida (use AAAA-MM-DD)"* |
+| **Status** fora dos quatro valores | *"Dados inválidos — status: status da cotação inválido (use em_analise, aprovado, rejeitado ou cancelado)"* |
+| Fornecedor que **não existe** | *"Fornecedor não encontrado"* — e **nada** é gravado |
+| Cotação que **não existe** (abrir ou editar) | *"Cotação não encontrada"* |
+| Editar uma cotação que **já gerou pedido** | A tela abre travada (14c.9); por outro caminho, *"Cotação ⟨número⟩ já gerou o pedido ⟨PC-…⟩ — não pode mais ser editada"* |
+
+Os erros do servidor aparecem na **faixa vermelha dentro do formulário**, com a tela aberta e o que
+você digitou preservado; só o sucesso aparece como aviso flutuante. **As duas datas** aceitam apenas
+o formato de calendário ou nada — a tela usa o seletor de data do navegador, então os formatos
+errados só chegam por outro caminho.
+
+**Excluir uma cotação.** A lixeira pergunta *"Tem certeza que deseja excluir este item?"* e, depois
+da confirmação:
+
+- cotação **sem pedido gerado** (com ou sem linhas): é apagada **com as linhas dela** — *"Item
+  excluído com sucesso"*;
+- cotação **que já gerou pedido**: recusada com *"Cotação ⟨número⟩ já gerou o pedido ⟨PC-…⟩ — não
+  pode ser excluída"*. Para excluí-la é preciso primeiro excluir o pedido (14c.9), o que libera a
+  cotação.
+
+A lixeira continua visível na cotação que já gerou pedido; a recusa aparece depois do clique. O
+fornecedor não depende da cotação para nada, mas a cotação impede excluir o fornecedor (14b.5).
+
+### 14c.9 Gerar o pedido de compra a partir da cotação
+
+O botão **Gerar pedido** (ícone de carrinho na linha da lista, 14c.6) cria um **pedido de compra**
+(14b) a partir da cotação, num clique, e abre a tela **"Editar pedido de compra"** desse pedido.
+Ele só aparece na cotação que **ainda não tem pedido** e cujo status é **Em Análise** ou
+**Aprovado**.
+
+**O que o pedido gerado recebe da cotação:** o **fornecedor**, **todas as linhas** (material,
+quantidade e valor unitário — e por isso o código, a descrição e a unidade), as **observações** e o
+**valor total** somado. O que ele **não** recebe e nasce com o padrão do pedido: **número** gerado
+pelo sistema (`PC-…`), **Data do pedido = hoje**, **Previsão de entrega vazia** e **Status
+Pendente**. A tela de edição abre justamente para você preencher a previsão e conferir o resto; o
+pedido **já está gravado** quando ela abre — fechar sem salvar não o desfaz.
+
+**O que acontece com a cotação:** ela passa a apontar para o pedido — a coluna **Pedido** mostra o
+`PC-…` —, o status vira **Aprovado** (gerar o pedido **é** aprovar a cotação) e o botão **Gerar
+pedido some** da linha. Ao gerar, aparece o aviso *"Pedido ⟨PC-…⟩ gerado da cotação ⟨número⟩"*.
+
+**O pedido gerado é um pedido como outro qualquer:** aparece em **Compras → Pedidos de Compra**,
+pode ser editado e exportado, entra no **Recebimento** (14.1c) com o saldo cheio, e o valor unitário
+de cada linha — o preço da cotação — é o que o recebimento leva para o custo médio (seção 22). O
+pedido **não guarda** de qual cotação nasceu; é a cotação que sabe qual pedido gerou.
+
+**Uma cotação gera um pedido só.** Se o botão for acionado de novo por qualquer caminho — inclusive
+dois cliques quase ao mesmo tempo, ou duas janelas abertas —, um deles cria o pedido e o outro é
+recusado com *"Cotação ⟨número⟩ já gerou o pedido ⟨PC-…⟩"*; nenhum pedido a mais sobra. Na tela, o
+botão fica desabilitado enquanto o primeiro clique está sendo processado.
+
+**A cotação que gerou pedido fica travada.** O lápis abre a tela com a faixa âmbar *"Esta cotação já
+gerou o pedido ⟨PC-…⟩ — não pode mais ser editada"* — o número é um link para a edição do pedido —,
+todos os campos e o bloco de itens desabilitados, e sem o botão de salvar. Para corrigir uma
+cotação já convertida, exclua o pedido (abaixo) e edite depois.
+
+**O que Gerar pedido recusa, e com que mensagem** (o aviso aparece em vermelho na própria lista, e
+nada é gravado):
+
+| Situação | Mensagem |
+|---|---|
+| Cotação **sem nenhuma linha** (o botão aparece mesmo assim, porque a lista não carrega as linhas) | *"cotação sem itens não pode gerar pedido"* |
+| Cotação **Rejeitado** ou **Cancelado** (o botão não aparece; só por outro caminho) | *"cotação rejeitado não pode gerar pedido"* / *"cotação cancelado não pode gerar pedido"* |
+| Fornecedor da cotação **Inativo** (14c.3) | *"Fornecedor inativo — reative-o em Compras → Fornecedores antes de gerar o pedido"* — reative o fornecedor e gere de novo |
+| Fornecedor que **não existe mais** | *"Fornecedor não encontrado"* |
+| Cotação que **já gerou pedido** | *"Cotação ⟨número⟩ já gerou o pedido ⟨PC-…⟩"* |
+| Cotação que **não existe** | *"Cotação não encontrada"* |
+| Sem resposta do servidor (rede) | *"Não foi possível gerar o pedido"* |
+
+É a única porta do módulo Compras que recusa fornecedor inativo: a cotação em si e o pedido feito à
+mão continuam aceitando (14c.3).
+
+**Excluir o pedido gerado libera a cotação.** A lixeira do pedido (14b.4 — só enquanto nenhum
+recebimento o tocou) apaga o pedido e **solta o vínculo**: na aba Cotações a coluna *Pedido* volta a
+`-`, o botão **Gerar pedido** reaparece e a cotação volta a poder ser editada ou excluída. O status
+da cotação **continua Aprovado** — o sistema não o desfaz. Gerar de novo cria um pedido com **número
+novo**, a partir das linhas **da cotação** — o que tiver sido alterado no pedido anterior (previsão,
+quantidades) **não é reaproveitado**. Um pedido gerado que **já teve recebimento** não pode ser
+excluído, e por isso a cotação dele fica presa a ele.
+
 ---
 
 ## 15. Inspeção e qualidade
@@ -1817,7 +3481,19 @@ Campos:
 | Quantidade reprovada | sim | pode ser 0 |
 | Encaminhamento | aparece quando há reprovado | Devolver ao fornecedor · Análise da Engenharia · Substituição |
 | Observações | **sim quando há reprovado** | é o único registro do motivo da reprovação |
-| Problemas identificados | não | Divergência de quantidade · Divergência dimensional · Certificado ausente · Dano físico · Material incorreto |
+| Problemas identificados | não | Divergência de quantidade · Divergência dimensional · Certificado ausente · Dano físico · Material incorreto — **as duas primeiras são calculadas pelo sistema e aparecem travadas** |
+
+**Duas das cinco caixas de "Problemas identificados" não aceitam opinião.**
+
+- **Divergência de quantidade** é calculada comparando o que se esperava receber com o que foi
+  registrado na conferência do item. A caixa aparece **travada**, marcada ou desmarcada conforme a
+  conta. Marcá-la por fora não tem efeito: o registro grava o resultado do cálculo.
+- **Divergência dimensional** é calculada a partir das medidas, quando há plano de inspeção
+  (15.2.1). Sem medidas, ela continua sendo declaração do inspetor.
+
+As outras três — **certificado ausente**, **dano físico** e **material incorreto** — continuam sendo
+marcação do inspetor, porque nada no sistema as calcula: é um papel que faltou no envelope, uma
+amassadura na chapa, uma peça trocada.
 
 **A regra central: aprovado + reprovado tem de fechar exatamente com o retido.** Não fechar deixaria uma sobra presa em quarentena para sempre, sem fila que a mostrasse. Se não fechar, o sistema recusa com *"Aprovado + reprovado (85) tem de fechar com o retido (100)"* — nomeando os dois números.
 
@@ -1839,6 +3515,14 @@ Os três resultados possíveis:
 | **Parcial** | a parte aprovada vira disponível e a parte reprovada vira bloqueada, **na mesma operação** |
 
 A quantidade física do material **não muda** em nenhum dos três casos — o material continua na prateleira; o que muda é o que se pode fazer com ele. E decidir é uma operação única: aprovar e reprovar acontecem juntos, nunca em dois passos que poderiam ficar pela metade.
+
+**A parte aprovada vai primeiro para quem esperava.** Logo depois da decisão, a quantidade aprovada é **reservada** para as requisições que esperavam aquele material, na ordem da **Fila de separação** — a urgente primeiro (9.3c). Essas requisições passam a **Parcialmente** ou **Totalmente Reservada**, e o solicitante recebe *"Material liberado para a sua requisição"* (21c.1). Só o que sobrar fica livre para quem for aprovado depois. A reserva é consequência da decisão, não condição: se ela falhar, a decisão vale do mesmo jeito.
+
+**O campo Encaminhamento é a intenção da qualidade, não o ato.** Ele fica no registro da inspeção e
+não move material nenhum. O que decide e o que executa o destino da parte reprovada é o documento de
+**não conformidade** que a reprovação abre sozinha (15b): é lá que se escolhe entre aceitar, devolver,
+substituir, mandar à Engenharia ou sucatear, e é lá que se registra que a devolução ao fornecedor
+**aconteceu** — o gesto que de fato tira o material do prédio (15b.4-ter).
 
 A tela de Inspeções tem duas abas: **Pendentes**, com a fila do que ainda não foi decidido, e **Histórico**, com o que já foi (15.2.3). O filtro de material do topo vale para as duas.
 
@@ -1922,7 +3606,7 @@ Recusas do sistema ao salvar:
 
 A aba **Histórico**, na tela de Inspeções, lista as inspeções **já decididas**, da mais recente para a mais antiga: data, material (com código, recebimento e nota fiscal), quantidade aprovada e reprovada, os problemas identificados como etiquetas — ou **Conforme** quando não houve nenhum —, o responsável e a contagem de medidas no formato `2 (1 fora)`.
 
-**Clicar na linha abre as medidas daquela inspeção**, numa tabela com característica, nominal, faixa, valor medido, conforme ou não conforme, e o instrumento usado. Inspeção decidida sem medida mostra *"Sem medidas registradas"* e não abre.
+**Clicar na linha abre o detalhe daquela inspeção**: as medidas, numa tabela com característica, nominal, faixa, valor medido, conforme ou não conforme e o instrumento usado; e, abaixo delas, os **anexos** (seção 15.2.4). Inspeção decidida sem medida também abre — ela mostra *"Sem medidas registradas"* no lugar da tabela, e o bloco de anexos do mesmo jeito.
 
 **Os valores são os do dia da medição, não os de hoje.** Cada medida guarda uma cópia do nominal e da tolerância que valiam no ato — mudar o plano depois não altera o que esta tabela mostra. É o que permite defender uma decisão meses depois.
 
@@ -1932,6 +3616,62 @@ A aba **Histórico**, na tela de Inspeções, lista as inspeções **já decidid
 
 **Se a lista não carregar**, a aba mostra *"Não foi possível carregar o histórico de inspeções."*, a mensagem que o servidor devolveu e um botão **Tentar de novo** — nunca *"Nenhuma inspeção decidida ainda."*, que faria concluir que não há inspeções quando na verdade não foi possível perguntar.
 
+
+### 15.2.4 Anexos de documento — onde existem, o que o sistema aceita e quem pode o quê
+
+O bloco **Anexos** é o lugar onde um documento fica **preso ao registro a que ele pertence**, dentro do sistema, em vez de viver numa pasta de rede ou no e-mail de quem recebeu. Ele existe em **seis** lugares do módulo, e é **o mesmo bloco em todos**: mesma lista, mesmas regras de arquivo, mesmas permissões, mesmo registro de quem baixou. Esta seção descreve as regras de uma vez; as seções de cada tela apontam para cá.
+
+| Onde | Como chegar | O que costuma ficar ali |
+|---|---|---|
+| **Inspeção** | Inspeções → aba **Histórico** → clicar na linha; o bloco fica abaixo das medidas | certificado do fornecedor, relatório dimensional, fotos da peça |
+| **Material** | Materiais → **clipe** na coluna de ações da linha → janela **Anexos do material** | ficha técnica, desenho, catálogo do fabricante |
+| **Requisição** | Almoxarifado → Requisições → abrir a requisição; o bloco é o fim do painel de detalhe | desenho da peça, autorização, documento do pedido |
+| **Recebimento** | Recebimentos → abrir o recebimento; o bloco é o fim do painel de detalhe | nota fiscal digitalizada, boleto, certificado que veio com a carga |
+| **Devolução** | Devoluções → **clipe** na coluna de ações da linha → janela **Anexos da devolução** | comprovante assinado, foto do estado em que o material voltou |
+| **Item de remessa a terceiros** | Remessas a Terceiros → abrir a remessa → **clipe** na linha **do item** → janela **Anexos do item da remessa** | certificado do serviço (galvanização, pintura, tratamento), laudo |
+
+**Dois detalhes de comportamento que valem saber antes de procurar o bloco:**
+
+- **O bloco só existe em registro já salvo.** Material em cadastro, requisição em rascunho, recebimento em digitação, devolução no formulário de criação e item de remessa ainda não salvo **não** têm o bloco nem o clipe: o documento precisa de um registro a que se prender, e ele só existe depois de gravado. O recebimento é o caso mais confortável, porque o sistema abre o detalhe dele assim que é salvo — a nota pode ser anexada no mesmo fôlego.
+- **Na remessa a terceiros, o anexo é do ITEM, não da remessa.** Cada linha da tabela de itens tem o seu próprio clipe, e o documento anexado num item não aparece nos outros.
+
+Cada anexo aparece com o **tipo**, a descrição (se houver), o nome do arquivo, o tamanho, **quem enviou** e **quando**. Registro sem nenhum documento mostra *"Nenhum anexo."*.
+
+**O que o sistema aceita:**
+
+| Regra | Comportamento |
+|---|---|
+| Formatos | PDF, JPG, PNG e WEBP. Outro formato é recusado com *"Anexo deve ser PDF ou imagem"* |
+| Tamanho | Até 10 MB por arquivo. Acima: *"Arquivo excede o limite de 10 MB"* |
+| Arquivo | Obrigatório. Enviar sem escolher devolve *"Arquivo é obrigatório"* |
+| Registro de destino | Tem de existir. Se o registro (a inspeção, o material, a requisição, o recebimento, a devolução ou o item de remessa) não existir mais, o envio é recusado com *"Registro não encontrado para anexar"* e o arquivo é descartado |
+
+**O nome que o sistema guarda no servidor não é o nome que você enviou.** O arquivo é gravado com um nome próprio e com a extensão correspondente ao **tipo real declarado no envio** — nunca a extensão que veio no nome. Um arquivo chamado `nota-fiscal.exe` enviado como PDF é guardado como PDF; nada com extensão executável chega ao servidor. O nome original continua guardado e é o que aparece na tela e o que você recebe ao baixar, **inclusive com acentos e traços longos**: `Certificado nº 123 — aço.pdf` volta exatamente assim.
+
+**Baixar exige estar logado.** O anexo não é um endereço público: quem não estiver autenticado no sistema não alcança o arquivo, mesmo com o endereço em mãos. Isso vale para os anexos — outros arquivos do módulo, como a foto do material e o certificado do lote, seguem regra diferente.
+
+**Remover esconde, não apaga.** O anexo removido some da lista imediatamente e a remoção fica na trilha de auditoria com quem removeu, mas **o arquivo continua guardado no servidor**. Isso é deliberado: uma linha de auditoria que aponta para um arquivo inexistente não prova nada. Tentar remover o mesmo anexo duas vezes devolve *"Anexo não encontrado"* em vez de repetir sucesso.
+
+**Se o registro existir mas o arquivo tiver se perdido** — restauração de banco sem restauração dos arquivos, por exemplo — o download responde *"Arquivo do anexo não encontrado"*, mensagem diferente de *"Anexo não encontrado"*. A distinção importa: uma coisa é o documento ter sido removido, outra é o arquivo ter sumido do disco.
+
+**Quem pode o quê:**
+
+| Perfil | Ver e baixar | Anexar | Remover |
+|---|---|---|---|
+| Administrador, Almoxarife | sim | sim | **sim** |
+| Compras, Produção, Engenharia, Gestor, Qualidade | sim | sim | não |
+| Consulta | sim | não | não |
+
+A permissão de **anexar** é larga porque anexar é ato de quem opera: compras anexa a nota fiscal do recebimento, a qualidade anexa o certificado e o relatório, a produção anexa o desenho. A de **remover** é estreita porque tirar um certificado de vista é apagar evidência. A tela **esconde** o que o perfil não pode — quem não anexa não vê o formulário, quem não remove não vê o botão de remover —, e mesmo que alguém alcance a operação por outro caminho o sistema recusa.
+
+**Baixar fica registrado.** Enviar, baixar e remover anexo aparecem na tela de Auditoria como **Anexo enviado**, **Anexo baixado** e **Anexo removido**, com o nome de quem fez e a hora. O download é a **única leitura registrada** do módulo inteiro, e o motivo é a permissão larga: como qualquer pessoa com acesso ao almoxarifado baixa qualquer anexo, o registro é o que permite saber depois quem viu o quê.
+
+**Onde anexo ainda NÃO existe, e é bom saber antes de procurar:**
+
+- **Na remessa a terceiros como um todo.** O clipe é **por item**; a remessa inteira não tem um lugar próprio. Um documento que vale para a remessa toda — a nota de remessa, por exemplo — ou é anexado num dos itens, ou é repetido em cada um.
+- **Durante a criação de qualquer registro.** Não há como anexar enquanto o material, a requisição, o recebimento, a devolução ou o item de remessa ainda está sendo digitado: é preciso salvar e abrir o registro.
+- **Na lista, não há contador de anexos.** Nenhuma tela mostra "3 anexos" ao lado da linha — para saber se um registro tem documento, é preciso abrir o bloco. Isso é deliberado: um contador obrigaria o sistema a consultar os anexos de **cada linha** ao carregar a lista, e uma lista de centenas de materiais ficaria lenta por um dado que quase nunca é olhado.
+- **Nas telas de Requisições de Material dos outros módulos** (Comercial, Frota, Compras, Financeiro, Fábrica e Engenharia). O bloco de anexos da requisição existe **apenas** em Almoxarifado → Requisições — ver 7.7.
 ### 15.3 Bloqueio e desbloqueio avulso
 
 Nem todo bloqueio nasce da inspeção. Avaria encontrada na prateleira, material suspeito, material segurado por decisão da qualidade: para isso existem, no topo da tela de Inspeções, os botões **Bloquear Material** e **Desbloquear Material**.
@@ -1948,6 +3688,21 @@ O desbloqueio **nunca satura em silêncio**: pedir para desbloquear 50 quando h�
 
 Perfil exigido para bloquear e desbloquear: **ajustar estoque** (Administrador e Gestor). Ele é **diferente** do de decidir inspeção — quem decide inspeção não necessariamente pode bloquear material avulso.
 
+**Há outros dois caminhos para tirar material do bloqueio, e nenhum deles passa por estes botões** —
+os dois vivem no documento de **não conformidade** que a reprovação gerou:
+
+- **aceitar** o documento (*Aceitar* ou *Aceitar sob desvio*) devolve ao disponível a quantidade que
+  aquela inspeção reprovou, e quem faz isso é quem pode **decidir não conformidade** (Administrador e
+  Qualidade) — ver **15b.4-bis**;
+- **registrar a execução** de um documento decidido *Devolver ao fornecedor* **tira o material do
+  prédio**: baixa o físico e o bloqueado juntos, e quem faz isso é quem pode registrar a execução do
+  encaminhamento (Administrador, Qualidade e Compras) — ver **15b.4-ter**.
+
+Os três caminhos existem de propósito e não se substituem: estes botões soltam **qualquer quantidade
+de qualquer material**, a qualquer momento, e por isso continuam restritos ao ajuste de estoque; os
+dois do documento agem **só sobre o que aquela inspeção reprovou**, uma vez, com o número do
+documento gravado no livro.
+
 ### 15.4 O que material bloqueado deixa de poder fazer
 
 Bloqueado é um **estado administrativo**, não uma ausência física. O material continua no galpão, continua valendo dinheiro e continua sendo contado no inventário.
@@ -1960,11 +3715,635 @@ Bloqueado é um **estado administrativo**, não uma ausência física. O materia
 | Atender requisição | **Não** |
 | Ser enviado a um terceiro | **Não** |
 | Ser devolvido ao cliente dono | **Não** |
+| Ser devolvido ao **fornecedor**, pelo registro da execução da não conformidade (15b.4-ter) | **Sim** — é a única saída que consome justamente a parcela bloqueada |
 | Ser transferido de prateleira | Sim |
 | Ser contado no inventário | **Sim** |
 | Entrar no valor total do estoque | **Sim** |
 
 A razão de tudo isso é uma só: material bloqueado sai do **saldo disponível** (6.1), e é o saldo disponível que autoriza qualquer saída. A tentativa de usar material bloqueado é recusada com *"Material bloqueado não pode ser utilizado"*.
+
+A exceção da devolução ao fornecedor não é uma brecha nessa regra, é o outro lado dela: aquela baixa
+existe **para** desfazer a retenção, baixa físico e bloqueado ao mesmo tempo e só nasce de dentro do
+documento que decidiu devolver — o formulário de Movimentações não a oferece (6.3).
+
+---
+
+## 15b. Não conformidades
+
+### 15b.1 O que é
+
+Uma **não conformidade** é o documento que registra um problema com material que entrou — e, mais
+importante, **o que se decidiu fazer a respeito**. Ela tem número próprio (`NC-` seguido de 16
+caracteres), fica guardada para sempre e vive na tela **Almoxarifado → Não Conformidades**.
+
+O documento serve a dois públicos que enxergam o mesmo fato de ângulos diferentes:
+
+- o **almoxarifado**, que na conferência vê que chegou quantidade diferente da esperada;
+- a **qualidade**, que na inspeção reprova parte do material.
+
+São **um documento só**, com um campo dizendo a **origem** (*Recebimento* ou *Inspeção*). Dois
+documentos separados dariam dois números para o mesmo problema.
+
+### 15b.2 Como o documento nasce
+
+Ele nasce **sozinho**, em três momentos:
+
+| Momento | O que dispara | Origem e tipo |
+|---|---|---|
+| Conferência de recebimento | o campo **"Qtd. conferida"** salvo com quantidade diferente da esperada — é aqui que alguém **digita** o número (14.2b) | Recebimento · Quantidade |
+| Preenchimento dos dados fiscais | o mesmo fato, pela segunda porta: o modal da NF **não tem campo de quantidade**, mas **reenvia** ao servidor a quantidade já gravada | Recebimento · Quantidade |
+| Decisão de inspeção | quantidade reprovada maior que zero | Inspeção · o tipo mais específico |
+
+**"Diferente" tem régua**, e é a mesma do resto do módulo: a diferença precisa ser maior que
+0,000000001. Sem essa margem, uma conta com casas decimais — receber 20,1 kg em duas pesagens de 2,2
+e 17,9 — produziria diferenças fantasmas da ordem de 0,000000000000003 e abriria documento contra
+quem acertou.
+
+**Quando a origem é a inspeção e há mais de um problema marcado** (por exemplo, dano físico **e**
+certificado ausente), nasce **um** documento, com o tipo da causa mais específica, nesta ordem:
+material incorreto → dano físico → dimensional → certificado ausente → quantidade. As outras
+marcações ficam descritas no documento; o tipo serve para agrupar e filtrar, não para contar a
+história inteira.
+
+**Não existe botão de abrir um documento à mão.** A abertura manual existe no sistema, mas não tem
+tela: registrar formalmente um certificado ausente **sem** reprovar na inspeção não tem caminho de
+clique hoje.
+
+### 15b.3 O fato é congelado; a decisão é gravada
+
+No momento em que nasce, o documento **copia** o que se esperava, o que foi recebido e a diferença.
+Esses números não são recalculados depois: o documento conta o que foi observado.
+
+Enquanto o documento está **Aberto**, ele ainda acompanha o fato:
+
+| O que você faz | O que acontece com o documento |
+|---|---|
+| Confere de novo com outra quantidade ainda divergente | **Os números são atualizados** — continua sendo **um** documento |
+| Confere de novo e a diferença **desaparece** | O documento é **cancelado sozinho**, com o motivo: *"Divergência corrigida na reconferência: recebida ⟨X⟩ de ⟨Y⟩ esperada"* |
+| Salva a conferência **sem mudar nada** depois de o documento ter sido decidido | **Nada acontece** — documento encerrado não reabre, e não nasce outro |
+| Confere de novo um recebimento **já processado** | **Nada é cancelado nem reescrito**; pode nascer documento novo, se aparecer diferença que não existia |
+
+A última linha é a que mais importa, e a regra é assimétrica de propósito: depois que a nota foi
+processada — material no estoque, conta a pagar gerada —, o documento **não pode ser apagado** por
+uma correção posterior de tela. Criar documento é reversível; apagar o registro de uma falta que já
+virou estoque e dinheiro, não.
+
+### 15b.4 Decidir
+
+A decisão é o que dá sentido ao documento. Na linha **Aberta**, o botão de decidir abre um
+formulário com **seis** escolhas — e a **justificativa**:
+
+| Decisão | Significa |
+|---|---|
+| **Aceitar** | o material serve como está |
+| **Aceitar sob desvio** | está fora do especificado, mas serve nesta aplicação |
+| **Devolver ao fornecedor** | volta para quem mandou |
+| **Substituição** | o fornecedor manda outro no lugar |
+| **Análise da Engenharia** | a Engenharia decide o destino |
+| **Sucatear** | vira sucata |
+
+**A justificativa é obrigatória.** Sem ela o sistema recusa com *"Justificativa é obrigatória para
+decidir a não conformidade"* — é o único registro de **por quê**, que é a razão de o documento
+existir. Decidir grava também **quem** decidiu e **quando**. A **decisão** é conferida **antes** da
+justificativa: confirmar o formulário em branco mostra primeiro *"Escolha a decisão"*.
+
+Depois de gravada a decisão, a tela **larga o filtro de status** e volta a mostrar *Todos os
+status*, para que a linha recém-decidida **continue à vista** com a decisão e o nome de quem
+decidiu — com o filtro preso em *Abertas* ela sumiria no mesmo instante em que fosse decidida. O
+filtro de **origem**, se estiver escolhido, permanece.
+
+Um documento só é decidido **uma vez**. Se alguém decidiu no intervalo, a segunda tentativa recebe
+*"Esta não conformidade já foi encerrada"*.
+
+**A decisão já nasce dizendo se ainda falta alguém executá-la.** No mesmo instante em que é gravada,
+o documento recebe um **estado de execução**: as duas decisões de aceitação nascem como *Não se
+aplica* (elas se executam ali mesmo), e as outras quatro nascem **Pendente**, esperando o segundo
+gesto descrito em 15b.4-ter.
+
+### 15b.4-bis O que a decisão faz com o saldo
+
+**As duas decisões de aceitação liberam o material; as outras quatro não tocam no estoque.**
+
+Quando o documento veio de uma **inspeção** e é a aceitação de uma reprovação, decidir **Aceitar**
+ou **Aceitar sob desvio** faz o sistema devolver ao disponível, sozinho, a quantidade que aquela
+inspeção reprovou — a mesma que estava em **bloqueado** (15.3). A movimentação nasce como um
+**Desbloqueio** no livro, com o motivo *"Liberação por não conformidade"* e o **número do
+documento** no campo de documento vinculado, e leva a justificativa da decisão. Logo em seguida, o
+liberado é **reservado** para as requisições que esperavam aquele material, na ordem da **Fila de
+separação** (9.3c), e o solicitante recebe *"Material liberado para a sua requisição"* (21c.1) — só o que
+sobrar fica livre. A reserva é consequência da decisão: se ela falhar, a decisão vale do mesmo jeito.
+
+**Decidir *Devolver ao fornecedor*, *Substituição*, *Análise da Engenharia* ou *Sucatear* não muda
+saldo nenhum neste clique.** Essas quatro registram o que se **decidiu** e deixam o documento
+**Pendente de execução**: falta alguém confirmar que o encaminhamento foi cumprido (15b.4-ter). Até
+esse registro, o material reprovado continua **bloqueado** na prateleira.
+
+Das quatro, **duas chegam a baixar estoque — e nunca no clique da decisão**:
+
+- ***Devolver ao fornecedor*** baixa no **registro da execução** (15b.4-ter);
+- ***Sucatear*** baixa pelo **processo de sucateamento** aberto na própria não conformidade — o botão
+  **Solicitar sucateamento** (20.2b) —, na **segunda aprovação** do sucateamento, que é também o que
+  registra a execução do documento.
+
+*Substituição* e *Análise da Engenharia* não mexem em saldo nem quando executadas: pedir a reposição
+ao fornecedor e cumprir o destino que a Engenharia definiu continuam sendo gestos próprios, nas telas
+de sempre.
+
+**A tela diz, em todos os casos, o que aconteceu com o saldo** — porque "não mexeu" é informação, e
+não ausência dela. O aviso de sucesso da **decisão** traz uma destas frases:
+
+| O que a tela diz | Quando |
+|---|---|
+| *"N liberado(s) do bloqueio"* | a aceitação liberou N unidades |
+| *"Esta decisão não altera o saldo"* | a decisão é uma das quatro que deixam o documento pendente de execução |
+| *"Esta não conformidade não tem material bloqueado para liberar"* | o documento veio de **recebimento** (faltar material não bloqueia nada), ou a inspeção não reprovou quantidade nenhuma |
+| *"O material desta inspeção já havia sido liberado"* | outro documento da mesma inspeção já liberou |
+| *"O material desta inspeção já saiu do estoque — a decisão foi registrada sem liberar saldo"* | o material daquela inspeção já foi **devolvido ao fornecedor** ou **sucateado** por outro documento — liberar soltaria bloqueio de outra origem |
+| *"Não conformidade aberta manualmente não libera saldo"* | o documento foi criado à mão, e não pelo registro automático da reprovação |
+| *"Material inativo — a decisão foi registrada sem liberar saldo"* | o material foi desativado no cadastro depois da reprovação |
+| *"O material já havia sido desbloqueado fora do documento — a decisão foi registrada sem liberar saldo"* | o bloqueio do material é **menor** que a quantidade reprovada: alguém já o desbloqueou pela tela de Movimentações |
+
+**A liberação acontece uma vez por inspeção, não por documento.** Se a mesma inspeção tiver mais de
+um documento e os dois forem aceitos, só o primeiro libera; o segundo grava a decisão e avisa que o
+material já havia sido liberado. ⚠️ **E a quantidade liberada é a reprovada INTEIRA daquela
+inspeção** — se um documento da mesma inspeção tiver sido decidido *Devolver*, a aceitação do outro
+solta também a parte que se pretendia devolver.
+
+**Dois estados conhecidos não travam o documento: ele fecha e a tela diz por quê.**
+
+- **O material já foi desbloqueado à mão.** Se o bloqueio do material for menor que a quantidade
+  reprovada — porque alguém desbloqueou pela tela de Movimentações —, a decisão **é gravada** e o
+  saldo não muda.
+- **O material foi desativado** no cadastro depois da reprovação: idem.
+
+Em ambos, recusar a decisão deixaria o documento **aberto para sempre**, cobrando todo dia no
+cartão de alerta, e a única saída seria registrar uma decisão falsa só para fechá-lo. **A recusa
+continua valendo para falha inesperada do sistema:** aí a decisão **não** é gravada, e o documento
+permanece Aberto para ser decidido de novo.
+
+**A liberação não pode ser desfeita pelo livro.** A movimentação de *Desbloqueio* que a decisão
+gera **recusa o estorno**, com *"Liberação por não conformidade não pode ser estornada pelo livro —
+o documento continuaria dizendo 'aceito' com o material bloqueado"*. Estorná-la devolveria o
+material ao bloqueio deixando o documento afirmando que ele foi aceito — e sem saída, porque um
+documento decidido não se decide de novo. Um *Desbloqueio* **avulso** (15.3) continua estornável.
+
+⚠️ **Dois portões: o bloqueio é do material, o status é do lote.** Em material com **controle por
+lote**, liberar o documento **não reabilita o lote**. Se o lote estiver **Reprovado** (4), o saldo
+disponível sobe e a saída continua sendo recusada com *"Lote ⟨código⟩ esta reprovado e nao pode ser
+utilizado"*. Para o material sair, é preciso um segundo gesto: voltar o lote para **Ativo** na tela
+de Lotes, com justificativa.
+
+**A liberação vale só para inspeções decididas a partir da versão que a introduziu.** Reprovações
+anteriores continuam saindo do bloqueio pelo caminho manual, na tela de Movimentações, com a
+permissão **ajustar_estoque**. Não é limitação por descuido: se documentos pudessem liberar
+reprovações antigas, bastaria criar um apontando para qualquer inspeção do passado para soltar
+material bloqueado por outro motivo — sem passar pela permissão de ajuste de estoque. Pela mesma
+razão, documento **aberto à mão** não libera.
+
+### 15b.4-ter Registrar a execução — o segundo gesto
+
+Decidir e executar são **dois atos separados, com donos e datas diferentes**. Quem decide diz o que
+fazer com o material; quem registra a execução confirma que **foi feito**. O documento guarda os
+dois, cada um com o seu autor e a sua data — e é isso que permite responder à pergunta que a
+decisão sozinha não responde: *o material já saiu?*
+
+- **Aceitar** e **Aceitar sob desvio** se executam no mesmo ato da decisão, porque é ali que elas
+  liberam o material (15b.4-bis). Esses documentos nascem com execução **"Não se aplica"** e **não
+  têm botão de execução**.
+- **Devolver ao fornecedor**, **Substituição**, **Análise da Engenharia** e **Sucatear** deixam o
+  documento com execução **"Pendente"**.
+
+#### A coluna Execução
+
+| O que aparece | Significa |
+|---|---|
+| *(um travessão)* | o documento **ainda não foi decidido** — não há execução a mostrar. É também o que aparece no documento **cancelado que nunca chegou a ser decidido**, porque ali também não havia cobrança nenhuma |
+| **Pendente** | decidido, esperando alguém confirmar que o encaminhamento foi cumprido |
+| **Executada** | cumprido — com o **nome de quem registrou** e a data e hora |
+| **Não se aplica** | a decisão foi uma das duas de aceitação, que já se executou no clique da decisão |
+| **Deixou de ser cobrada** | o documento foi **cancelado** enquanto a execução ainda estava Pendente — a decisão continua gravada, e a cobrança terminou (15b.4-quater) |
+
+Travessão e *Pendente* são propositalmente diferentes: tratar documento não decidido como pendente
+de execução faria a fila parecer maior do que é, com trabalho que ninguém decidiu ainda. E
+*"Deixou de ser cobrada"* é propositalmente diferente do travessão: nesta linha **havia** uma
+execução pendente e alguém a encerrou, com motivo — o travessão diria que nunca houve cobrança.
+
+#### O botão e o modal
+
+O botão **Registrar execução** aparece **só** na linha de documento **Decidido** com execução
+**Pendente** — nas outras a operação seria recusada, e botão que erra sempre é armadilha, não
+controle. Ele também **só aparece para quem tem a permissão**: é um dos dois botões desta tela que a
+falta de perfil **esconde** em vez de recusar no clique (o outro é o de cancelar, 15b.4-quater), e
+pela mesma razão nos dois — quem registra a execução (Compras) não é quem decide nem quem cancela
+(Qualidade), e deixar o botão visível para a plateia errada seria um convite permanente a uma recusa
+que não é engano dela. O botão de **decidir**, cuja plateia é a mesma de quem olha a lista, continua
+recusando no clique. Quem autoriza continua sendo o servidor.
+
+O botão abre o modal **"Registrar execução de ⟨número do documento⟩"**, que mostra o **material**, a
+**decisão** gravada e um campo **Observações** — **opcional**, e é o lugar do número da nota de
+devolução, da transportadora, de quem recebeu do outro lado.
+
+O texto do modal muda com a decisão, porque o efeito muda:
+
+- em **Devolver ao fornecedor**, ele pede que se confirme que o material **saiu de fato** para o
+  fornecedor, e avisa que **é este registro que dá a baixa no estoque — antes dele o material segue
+  retido**;
+- em **Sucatear**, ele diz que o sucateamento do material reprovado é feito em **Solicitar
+  sucateamento**, que a baixa acontece na **segunda aprovação** do sucateamento e que é ela que
+  registra esta execução — e que aqui só se registra quando o sucateamento não é possível. Este
+  modal tem um segundo campo, **Motivo para registrar sem baixa** (ver *A execução de Sucatear*,
+  abaixo);
+- em **Substituição** e **Análise da Engenharia**, ele diz que a decisão **não movimenta estoque**:
+  o registro guarda a data, o autor e a observação de que o encaminhamento foi cumprido.
+
+#### O que a execução de *Devolver ao fornecedor* faz com o saldo
+
+**É ela que dá a baixa.** Sai a quantidade que aquela inspeção **reprovou**, baixando ao mesmo
+tempo o **saldo físico** e o **saldo bloqueado** — é a única saída do módulo que consome justamente
+a parcela bloqueada, que todas as outras são recusadas por tocar (15.4).
+
+Em material com **controle por lote**, a baixa sai da **linha do lote que entrou naquele
+recebimento**: o lote do item inspecionado, não uma escolha de tela.
+
+**De qual endereço sai.** A baixa sai primeiro do **endereço onde aquele item do recebimento entrou** (14.3b) — mesmo
+que o material tenha entrado em endereços diferentes na mesma nota, ou que o padrão tenha outras peças, boas. Se esse
+endereço não tiver a quantidade inteira, o sistema completa com os outros endereços que têm o material, e o livro
+registra o endereço de entrada como origem. Se o endereço de entrada tiver sido **desativado ou bloqueado** depois, a
+execução não é recusada: a baixa sai como qualquer saída sem endereço declarado, começando pelo endereço padrão.
+
+A movimentação aparece no **livro de movimentações** (6) com o motivo **"Devolução ao fornecedor"** e
+com o **número do documento de não conformidade** no campo de documento vinculado. A observação que
+você escreveu vai como justificativa do movimento; se você não escrever nada, o sistema grava uma
+dizendo que aquilo é a execução da devolução decidida naquele documento.
+
+**A trilha guarda a execução como um ato próprio**, e não como uma segunda versão da decisão: na
+tela de Auditoria (5.8) ela aparece como *Não conformidade executada*, com quem registrou, quando, a
+decisão que estava valendo e a observação como justificativa. São dois atos, com dois autores e duas
+datas, e a trilha os separa.
+
+⚠️ **A situação do lote continua valendo, e ela é verificada antes.** Lote **vencido** sai por aqui —
+devolver ao fornecedor é uma das razões mais comuns de um lote vencido deixar o estoque, e barrá-lo
+o deixaria preso para sempre. Mas lote **Bloqueado** ou **Reprovado** não sai nem por aqui: a
+recusa é a mesma de qualquer saída (*"Lote ⟨código⟩ esta reprovado e nao pode ser utilizado"*), e
+reabilitar o lote é um segundo gesto, na tela de Lotes, com justificativa.
+
+#### O aviso de sucesso
+
+O aviso traz sempre *"Execução de ⟨número do documento⟩ registrada!"* e, quando há o que dizer sobre
+o saldo, a frase que explica o que aconteceu com ele:
+
+| O que a tela diz | Quando |
+|---|---|
+| *"⟨N⟩ devolvido(s) ao fornecedor"* | a devolução baixou N unidades — o caso normal |
+| *"Esta execução não altera o saldo"* | a decisão é *Substituição* ou *Análise da Engenharia* — ou *Sucatear* num documento aberto à mão, em material com número de série, ou sem lote identificável |
+| *"Só a não conformidade aberta pela reprovação da inspeção devolve material"* | o documento foi aberto à mão, e não pelo registro automático da reprovação |
+| *"O material desta inspeção já havia sido devolvido"* | o material daquela inspeção já tinha saído |
+| *"O material já havia saído do bloqueio — a execução foi registrada sem mover saldo"* | o bloqueio do material é **menor** que a quantidade reprovada: alguém já o soltou pela tela de Movimentações |
+| *"Não há saldo físico deste material — a execução foi registrada sem mover saldo"* | o saldo físico não cobre a quantidade reprovada |
+| *"Material inativo — a execução foi registrada sem mover saldo"* | o material foi desativado no cadastro depois da reprovação |
+| *"Esta não conformidade não tem material reprovado para devolver"* | a inspeção do documento não tem quantidade reprovada |
+| *"O material desta inspeção já havia sido liberado por outra não conformidade — a execução foi registrada sem mover saldo"* | outro documento da mesma inspeção foi **aceito** e já soltou a retenção daquela inspeção |
+| *"O material desta inspeção já havia sido sucateado — a execução foi registrada sem mover saldo"* | o material daquela inspeção já foi para o **sucateamento** por outro documento |
+| *"O material desta inspeção já havia sido devolvido ao fornecedor — a execução foi registrada sem mover saldo"* | (num *Sucatear*) o material daquela inspeção já foi **devolvido** por outro documento |
+| *"Esta não conformidade não tem material reprovado para sucatear — a execução foi registrada sem mover saldo"* | (num *Sucatear*) a inspeção do documento não tem quantidade reprovada |
+| *"A execução foi registrada sem baixa, pelo motivo informado — o material continua bloqueado"* | (num *Sucatear*) o sucateamento não era possível pelo lote ou por ser material de cliente, e o **Motivo para registrar sem baixa** foi preenchido |
+
+#### A execução de *Sucatear* — o registro é a segunda aprovação do sucateamento
+
+Num documento decidido **Sucatear**, quem dá a baixa **não** é este botão: é o sucateamento aberto
+pela própria não conformidade (**Solicitar sucateamento**, 20.2b), na segunda aprovação — e é essa
+aprovação que grava a execução do documento, com a data, o autor e a movimentação. Por isso o
+**Registrar execução** de um *Sucatear* se comporta assim:
+
+| Situação | O que acontece |
+|---|---|
+| O sucateamento **é possível** | **Recusa:** *"Esta não conformidade pede sucateamento: o almoxarifado registra em "Solicitar sucateamento" (duas aprovações) — a execução fica registrada na segunda aprovação."* |
+| Já existe um sucateamento **esperando assinatura** para o documento | **Recusa:** *"Já existe o sucateamento SUC-⟨n⟩ desta não conformidade aguardando aprovação no almoxarifado."* |
+| O **lote** do material reprovado não está **Ativo** (o caso típico do material com controle de certificado, cujo lote nasce Bloqueado) | **Recusa:** *"O lote ⟨L⟩ está ⟨status⟩ (⟨motivo do lote⟩): libere o lote para sucatear o reprovado, ou registre a execução sem baixa informando o motivo."* |
+| O lote **não tem mais** a quantidade reprovada (saiu por outra saída) | **Recusa:** *"O lote ⟨L⟩ tem ⟨s⟩ ⟨un⟩ em estoque, menos que o reprovado (⟨q⟩) — o reprovado já saiu do lote; registre a execução sem baixa informando o motivo"* |
+| O material é **de cliente** | **Recusa:** *"Material de cliente: o sucateamento precisa da OS ou do projeto do cliente — solicite pela API informando os_origem_id/projeto_origem_id, ou registre a execução sem baixa informando o motivo"* |
+| O sucateamento é **impossível por saldo** (o material já saiu do bloqueio ou do físico, já foi devolvido, sucateado ou liberado, ou foi desativado) | Registra **sem mover saldo**, com a frase correspondente da tabela acima |
+
+Nos três casos de **lote** e de **material de cliente**, preencher o campo **Motivo para registrar sem
+baixa** faz o registro passar **sem baixa**: o material **continua bloqueado**, e o motivo fica
+gravado nas observações da execução. Esse campo **não** destrava o caso em que o sucateamento é
+possível, nem o que já tem sucateamento esperando assinatura — ali o caminho é o sucateamento (ou
+rejeitá-lo, em *Sobras e Retalhos*, antes de registrar).
+
+#### As quatro regras que quem executa precisa conhecer
+
+**1. Só o documento que nasceu da reprovação de uma inspeção devolve material.** Documento aberto à
+mão registra a execução e **não move saldo** — e a frase do aviso diz isso. A razão é a mesma da
+liberação (15b.4-bis): abrir documento é permissão larga, e sem essa trava bastaria apontar um
+documento para qualquer inspeção do passado para apagar material bloqueado sem passar nem pela
+permissão de movimentar estoque nem pela de ajustar saldo.
+
+**2. A devolução acontece uma vez por inspeção, não por documento.** Se o material daquela inspeção
+já saiu, uma segunda tentativa **registra a execução e não baixa de novo** — e avisa que já havia
+sido devolvido.
+
+**3. A execução é registrada mesmo quando não há saldo a mover, e a mensagem diz o motivo.** Alguém
+de fato embalou e despachou; o registro vale, e o que a tela explica é **por que o saldo não mudou**.
+Recusar deixaria o documento cobrando execução na fila sem que ninguém pudesse dar por cumprido o
+que já tinha sido cumprido. **A recusa continua valendo para falha inesperada do sistema:** aí
+o documento **volta a Pendente** de execução — decidido, documentado, esperando nova tentativa. A
+decisão **não** é desfeita, porque foi tomada em outro dia, por outra pessoa, e continua valendo.
+
+**4. Material com número de série não é devolvido por esta tela.** A tentativa é recusada com
+*"Material com controle de série não pode ser devolvido por aqui — dê baixa pela tela de
+Movimentações"*. Escolher **quais** peças voltam é gesto de tela, e baixar a quantidade sem baixar as
+séries deixaria a peça já devolvida ainda entregável pelo sistema. **Este documento não fica preso
+por causa disso:** depois de dar a baixa das séries em Movimentações, a Qualidade **cancela** o
+documento dizendo isso no motivo (15b.4-quater). O mesmo vale para o caso em que o sistema não
+consegue identificar o lote do material devolvido.
+
+#### As recusas
+
+| Situação | Mensagem |
+|---|---|
+| A decisão é *Aceitar* ou *Aceitar sob desvio* | *"Esta decisão não tem execução a registrar"* |
+| O documento ainda está **Aberto** | *"Só é possível registrar a execução de uma não conformidade decidida"* |
+| O documento foi **cancelado** | *"Esta não conformidade foi cancelada — não há execução a registrar"* |
+| A execução já foi registrada | *"A execução desta não conformidade já foi registrada"* |
+| Material com controle de número de série | *"Material com controle de série não pode ser devolvido por aqui — dê baixa pela tela de Movimentações"* |
+| Material com controle por lote, e nenhum lote identificável no item recebido | *"Não foi possível identificar o lote do material devolvido"* |
+| Perfil sem a permissão | *"Sem permissão para registrar a execução do encaminhamento — seu perfil é Almoxarife. Solicite acesso a um administrador."* |
+
+#### A execução registrada não se desfaz
+
+A execução **não se registra duas vezes**, e a movimentação de devolução **recusa o estorno** pelo
+livro, com *"Devolução ao fornecedor não pode ser estornada pelo livro — o material voltaria
+bloqueado com o documento dizendo que foi devolvido"* (6.10). O documento decidido também **não pode
+ser decidido de novo**. Confirme com o material já embalado, não antes.
+
+**O que tem saída é o contrário disso: o documento que ainda *não* foi executado.** Enquanto a
+execução está Pendente, o documento pode ser **cancelado** por Administrador ou Qualidade
+(15b.4-quater) — é o caminho para o encaminhamento que não se cumpre. Depois de registrada a
+execução, não: aí a única resposta é *"A execução desta não conformidade já foi registrada — o
+documento não pode ser cancelado"*.
+
+#### A fila do que falta executar
+
+A tela tem um **filtro de execução**, com quatro opções: *Qualquer execução*, *Pendentes de
+execução*, *Já executadas* e *Sem execução a registrar*. **Pendentes de execução** é a fila de quem
+executa.
+
+Os dois filtros são **amarrados de propósito**, porque execução só existe em documento decidido:
+
+- **escolher um estado de execução muda o filtro de status para *Decididas***;
+- **escolher um status diferente de *Decididas* limpa o filtro de execução.**
+
+Sem essa amarração, um estado de execução somado ao status padrão (*Abertas*) devolveria **lista
+vazia sempre** — e quem olhasse leria "não há nada pendente de execução" quando a verdade é que a
+pergunta nunca pôde ser respondida.
+
+Depois de uma execução registrada com a fila *Pendentes de execução* ligada, a tela **larga o filtro
+de execução** e volta a *Qualquer execução*, para que a linha recém-executada continue à vista com o
+nome de quem registrou — presa na fila, ela sumiria no mesmo instante em que fosse executada. O
+filtro de origem, se estiver escolhido, permanece.
+
+**A fila sai por dois caminhos, e os dois são deliberados:** a **execução registrada** e o
+**cancelamento do documento** (15b.4-quater). Não há um terceiro — a fila não esvazia com o tempo,
+porque não tem prazo. Depois de um cancelamento a tela larga **os dois** filtros: o de execução
+volta a *Qualquer execução* e o de status volta a *Todos os status*, porque o documento cancelado
+não casa nem *Abertas* nem *Decididas* e, presos, os dois filtros esconderiam a linha que a pessoa
+acabou de cancelar — justamente a que ela quer ver, com o motivo que digitou. O filtro de origem
+permanece.
+
+#### O painel de Alertas para de cobrar o que saiu
+
+O cartão **Material reprovado** da central de alertas (21c-bis) deixa de listar a inspeção **cujo
+material saiu de fato** — para o fornecedor ou para o sucateamento. Se a execução foi registrada **sem mover saldo** — qualquer
+uma das frases acima que termina em "sem mover saldo" —, o aviso **continua** listando, porque o
+material continua no galpão. O cartão mede **material movido**, não intenção registrada. Pela mesma
+régua, **cancelar o documento não tira a inspeção deste cartão** (15b.4-quater): o cancelamento
+encerra a cobrança da execução, e não move material. O que tira essa inspeção do cartão é o material
+sair — ou a janela de dias do próprio cartão vencer, porque ele é aviso de evento e não fila.
+
+#### O que a devolução NÃO faz
+
+Registrar a execução é um lançamento de **estoque** e de **documento**, e nada além disso. Ela:
+
+- **não** emite nota fiscal de devolução;
+- **não** manda e-mail ao fornecedor — a única notificação possível é o aviso **interno** de
+  movimentação, que sai para a lista de e-mails da empresa e só quando a chave *"Notificar
+  movimentações por e-mail"* estiver ligada (21c.1);
+- **não** pede material de reposição;
+- **não** reabre o pedido de compra — a quantidade recebida do pedido **não** é reduzida, e o pedido
+  continua registrando que aquela quantidade chegou;
+- **não** mexe em contas a pagar.
+
+O que ela faz é gravar quem executou e quando, baixar o material do estoque e deixar a linha no
+livro. O acerto comercial com o fornecedor é combinado fora do sistema.
+
+### 15b.4-quater Cancelar o documento — a saída quando o encaminhamento não se cumpre
+
+Nem todo encaminhamento decidido pode ser executado pelo sistema. O caso mais comum é o material
+com **número de série** decidido *Devolver ao fornecedor*: a execução recusa a baixa (a regra 4 de
+15b.4-ter), a baixa das séries é feita na tela de **Movimentações**, e o documento continuaria
+cobrando um gesto que ninguém consegue fazer por ali. **Cancelar o documento é a saída para isso** —
+o registro do encerramento de uma cobrança que não tem como ser atendida.
+
+A ordem prática nesse caso é esta: **primeiro** dá-se a baixa das peças em **Movimentações**,
+escolhendo quais séries saem; **depois** a Qualidade cancela o documento, dizendo no motivo que a
+baixa foi feita por lá. O documento fica no histórico com a decisão, com o motivo e com o nome de
+quem o encerrou — e para de aparecer nas duas cobranças da execução.
+
+**Quem pode: Administrador e Qualidade.** O **Compras não pode**, e a razão é de incentivo, não de
+confiança: é ele quem registra a execução e é ele quem a fila cobra, então deixá-lo encerrar o
+próprio documento seria deixá-lo limpar a própria fila sem passar por quem respondeu pelo material.
+**Compras executa; não anula.** O **Almoxarife** também está fora, pelo mesmo critério das outras
+ações desta família: quem opera o estoque não encerra o documento que julga o que ele recebeu. A
+tentativa é recusada com *"Sem permissão para cancelar não conformidade — seu perfil é ⟨perfil⟩.
+Solicite acesso a um administrador."*
+
+Como no botão de execução, o botão **some** para quem não tem a permissão, em vez de recusar no
+clique — a plateia dele é outra (Qualidade), e deixá-lo visível para quem opera a fila seria um
+convite permanente a uma recusa que não é engano dessa pessoa. Quem decide continua sendo o
+servidor.
+
+#### Só documento decidido com execução pendente
+
+O botão **Cancelar a não conformidade** aparece **só** na linha **Decidida** com execução
+**Pendente**. Em qualquer outra situação a operação é recusada, e cada recusa tem a sua razão
+própria:
+
+| Situação | Mensagem |
+|---|---|
+| O documento **ainda não foi decidido** | *"Só é possível cancelar uma não conformidade já decidida — decida o documento, ou corrija a quantidade conferida"* |
+| A decisão foi de **aceitação** (*Aceitar* ou *Aceitar sob desvio*), que já se executou no próprio clique | *"Esta decisão não deixou execução pendente — não há o que encerrar"* |
+| A **execução já foi registrada** | *"A execução desta não conformidade já foi registrada — o documento não pode ser cancelado"* |
+| O documento **já está cancelado** | *"Esta não conformidade já está cancelada"* |
+| Outra pessoa mexeu no documento no mesmo instante | *"O documento mudou de estado durante o cancelamento — tente de novo"* |
+
+A primeira recusa **nomeia as duas saídas certas** de propósito: um documento aberto ou se **decide**
+(e aí, se for o caso, se cancela) ou se resolve **corrigindo a quantidade conferida** no recebimento,
+que é o que o cancela sozinho (15b.3). Cancelar documento aberto à mão silenciaria uma divergência
+que continua de pé, sem ninguém ter decidido nada sobre ela.
+
+#### O motivo é obrigatório
+
+O botão abre o modal **"Cancelar ⟨número do documento⟩"**, que mostra o material e a decisão gravada,
+explica o que o cancelamento faz e pede o **Motivo**, com o lembrete *"Por que este documento não se
+cumpre? Mínimo de 5 caracteres — é o que fica para quem auditar depois."*
+
+**O motivo precisa de pelo menos 5 caracteres.** Abaixo disso o botão de confirmar fica
+**desabilitado**, com o aviso *"O motivo precisa de pelo menos 5 caracteres."*; forçado, o sistema
+recusa com *"O motivo do cancelamento deve ter pelo menos 5 caracteres"*. É o único registro de **por
+que** a cobrança terminou.
+
+Os dois botões do rodapé são **"Voltar"** e **"Cancelar documento"** — o secundário não se chama
+"Cancelar", como nos outros modais desta tela, porque num modal cujo botão principal é *Cancelar
+documento* duas palavras iguais seriam convite ao clique errado.
+
+#### Cancelar NÃO apaga a decisão
+
+Esta é a regra central, e o modal a diz com as mesmas palavras: **cancelar não apaga a decisão.** O
+documento continua guardando **o que foi decidido, quem decidiu e quando**, com a justificativa da
+decisão. O que termina é a **cobrança da execução**: o documento sai da fila *Pendentes de execução*
+e do aviso de execução pendente (21c-bis).
+
+O aviso de sucesso diz exatamente isso: *"Não conformidade ⟨número⟩ cancelada! Documento cancelado —
+a decisão fica registrada, e a execução deixa de ser cobrada"*.
+
+**Para mudar o rumo do material, não se reedita este documento:** cancela-se este, com o motivo, e
+abre-se outro. Este fica no histórico.
+
+#### O que o documento cancelado passa a mostrar
+
+- o **status** vira **Cancelada**, e a coluna de decisão continua mostrando a decisão e quem decidiu;
+- a coluna de **Execução** passa a dizer **"Deixou de ser cobrada"** — e um travessão, quando o
+  documento cancelado nunca havia sido decidido;
+- no painel de detalhes da linha aparece **"Motivo do cancelamento:"** com o texto que foi digitado;
+- a linha registra **quem cancelou e quando** (*"Cancelada em ⟨data e hora⟩ por ⟨nome⟩"*), e é esse
+  autor que distingue o cancelamento **feito por uma pessoa** do cancelamento **automático** da
+  reconferência (15b.3), que não tem autor;
+- na tela de **Auditoria** (5.8) o ato aparece como *Não conformidade cancelada*, com quem cancelou,
+  o motivo como justificativa e o registro de que havia execução **Pendente** no instante do
+  cancelamento — que é a informação que o motivo explica.
+
+Para achar o documento depois, o filtro de status tem a opção **Canceladas** (e *Todos os status*).
+
+#### Depois de cancelado, não há execução a registrar
+
+Tentar registrar a execução de um documento cancelado é recusado com *"Esta não conformidade foi
+cancelada — não há execução a registrar"*. E o documento cancelado **não volta**: decidi-lo de novo
+é recusado com *"Esta não conformidade já foi encerrada"*.
+
+#### O que o cancelamento humano NÃO reabre
+
+O item **não volta** ao cartão *"Divergência de recebimento"* da central de alertas quando o
+documento foi **decidido e depois cancelado por uma pessoa**. Isso é deliberado, e a régua é dupla:
+o item só reaparece no cartão antigo se o documento cancelado **não tinha decisão** — que é o caso
+do cancelamento automático da reconferência (15b.7). Cancelamento por pessoa sobre documento
+decidido é um **encerramento**, como decidir: alguém olhou o problema, decidiu e registrou por que a
+execução não se cumpre. Devolvê-lo ao cartão como "divergência não documentada" cobraria o que
+ninguém pode atender — não existe tela para abrir um documento à mão (15b.2).
+
+### 15b.5 Quem pode o quê
+
+| Ato | Perfis |
+|---|---|
+| **Ver** a lista e os documentos | qualquer usuário com acesso ao módulo |
+| **Abrir** um documento | Administrador · Almoxarife · Qualidade · Compras |
+| **Decidir** | **Administrador · Qualidade** |
+| **Registrar a execução** do encaminhamento | **Administrador · Qualidade · Compras** |
+| **Cancelar** o documento decidido com execução pendente | **Administrador · Qualidade** |
+
+Compras fica **fora da decisão** de propósito: ele recebe material e é quem trata com o fornecedor,
+então decidir sobre a entrega do fornecedor que ele mesmo escolheu seria decidir em causa própria. A
+tentativa é recusada com *"Sem permissão para decidir não conformidade — seu perfil é ⟨perfil⟩.
+Solicite acesso a um administrador."*
+
+**E Compras fica dentro da execução pela mesma lógica invertida:** quem fala com o fornecedor,
+agenda a coleta e emite os documentos comerciais é quem sabe que o material saiu — negar-lhe o
+registro obrigaria a pedir a outra área que confirmasse um fato que ela não viu. O **Almoxarife**
+é o único perfil que **não** pode registrar a execução, mesmo movimentando estoque no dia a dia:
+quem opera o estoque não confirma sozinho a saída do material que a qualidade reprovou, pelo mesmo
+critério de "quem recebe não julga o próprio recebimento", do lado da baixa. A tentativa dele é
+recusada com *"Sem permissão para registrar a execução do encaminhamento — seu perfil é Almoxarife.
+Solicite acesso a um administrador."*
+
+**E Compras fica fora do cancelamento, que é a terceira permissão desta família.** Cancelar não é
+decidir (a decisão fica preservada) e não é executar, então é permissão à parte — e ela é de
+**Administrador e Qualidade**. Dar o cancelamento a Compras seria dar a quem a fila cobra o poder de
+limpar a própria fila; o Almoxarife fica fora pela mesma razão das outras duas. Resumindo a família
+inteira: **a Qualidade decide e encerra; Compras executa; o Almoxarife não faz nenhuma das três.**
+
+### 15b.6 O documento que ninguém decide
+
+Um documento que fica **Aberto** mais dias que o configurado (padrão **7**; o campo é *Alerta de Não
+Conformidade Parada (dias)*, em Configurações) aparece no cartão **"Não conformidade aberta"** da
+central de alertas, com número, material, tipo, origem, dias parado e recebimento — e gera e-mail
+com o assunto *"[Almoxarifado] Não conformidade aberta — NC-…"*.
+
+**O aviso sai uma vez por documento.** Relembrar todo mês uma pendência parada geraria e-mail
+eterno sem nenhum fato novo. **Decidir** tira o documento do cartão, sem nenhum gesto extra — e
+também sai dele o documento que a reconferência cancelou sozinha, porque a divergência deixou de
+existir (15b.3).
+
+**Esse cartão cobra a decisão; quem cobra a execução é outro.** Um documento decidido que ninguém
+executou **não** entra neste cartão e **não** gera este e-mail: ele é cobrado pelo cartão
+**"Execução pendente"** (21c-bis) e pelo filtro *Pendentes de execução* da própria tela de Não
+Conformidades (15b.4-ter).
+
+**São dois avisos separados de propósito, e a separação é de destinatário e de prazo.** Este cobra a
+**decisão**, e quem decide é a **Qualidade**; o outro cobra a **execução**, e quem executa é
+**Compras**. Um cartão só somaria as duas cobranças no mesmo lugar e no mesmo e-mail — a Qualidade
+recebendo cobrança de devolução que não é dela, Compras recebendo cobrança de decisão que não é
+dele — e obrigaria os dois prazos a ser um só, quando na prática decidir leva dias e uma devolução
+que depende do fornecedor leva semanas. Cada um tem a sua janela em Configurações.
+
+### 15b.6-bis O documento decidido que ninguém executa
+
+Um documento **decidido** cuja execução continua **Pendente** mais dias que o configurado (padrão
+**7**; o campo é *Alerta de Execução Pendente da NC (dias)*, em **Almoxarifado → Configurações**)
+aparece no cartão **"Execução pendente"** da central de alertas, com número, material, tipo,
+origem, **a decisão** e há quantos dias foi decidida — e gera e-mail com o assunto
+*"[Almoxarifado] Execução pendente — NC-…"*.
+
+**O relógio conta desde a decisão**, não desde a abertura do documento: o que este aviso cobra é o
+segundo gesto, e o prazo dele começa quando ficou combinado o que fazer.
+
+**O aviso sai uma vez por documento**, como o de cima e pela mesma razão. Sai da condição de duas
+maneiras: **registrando a execução** ou **cancelando o documento** (15b.4-quater).
+
+**E o aviso nomeia a segunda saída, de propósito:** *"Execução impossível (número de série, lote não
+identificável)? A Qualidade pode cancelar o documento em Almoxarifado → Não Conformidades."* O
+motivo é de perfil, e vale entender: **quem recebe este aviso é quem executa** (a central é de
+Administrador, Almoxarife, Gestor e Compras), e **quem cancela é a Qualidade**, que não vê a central.
+Sem essa linha, o destinatário do aviso seria justamente alguém sem porta de saída — a execução
+recusada pela regra da série, e o cancelamento fora do seu perfil. O aviso diz o caminho em vez de
+deixar quem o recebe sem resposta.
+
+### 15b.7 O cartão antigo de divergência mudou de significado
+
+O item que virou documento **sai** do cartão *"Divergência de recebimento"* da central de alertas —
+o mesmo problema em dois avisos ensina qualquer um a ignorar os dois.
+
+Com isso, o cartão *"Divergência de recebimento"* passou a significar outra coisa: **"chegou
+diferente e o documento não foi aberto"**. Ele é a rede de segurança para o caso raro de a abertura
+automática falhar — e é por isso que a falha da abertura **não derruba** a conferência nem a decisão
+de inspeção: o material entra, e o item continua visível no cartão antigo até alguém cuidar dele.
+
+**Há uma segunda leitura, e ela é deliberada.** A régua não é *"o item tem documento"*: é *"o item
+tem documento que ainda vale"* — e um documento cancelado **pode ou não** valer, dependendo de como
+foi cancelado. Os dois casos são diferentes e o sistema os separa:
+
+| Como o documento foi cancelado | O item volta ao cartão antigo? |
+|---|---|
+| **Sozinho, pela reconferência** — alguém corrigiu a quantidade e a divergência desapareceu (15b.3), e depois ela divergiu de novo. O documento morreu **sem decisão** e sem autor | **Sim.** Aquele documento registra um problema que **deixou de existir**; tratá-lo como "já documentado" esconderia o problema **novo** |
+| **Por uma pessoa**, sobre documento **decidido**, com a execução pendente (15b.4-quater) | **Não.** Alguém olhou, decidiu e registrou por que a execução não se cumpre — é um encerramento, como decidir. Devolvê-lo ao cartão cobraria um documento novo que não existe caminho para abrir (15b.2) |
+
+Resumindo o que quem olha o cartão precisa saber: **item em *"Divergência de recebimento"* significa
+ou que o documento não pôde ser aberto, ou que a divergência voltou depois de uma correção.** Nos
+dois casos a tela para conferir é **Não Conformidades**, filtrando por *Todos os status*.
+
+### 15b.8 Anexos
+
+Cada documento aceita anexos, pelo mesmo mecanismo das outras telas (15.2.4): o laudo do
+fornecedor, a foto da peça amassada, o e-mail que autorizou a devolução. Eles ficam presos ao
+documento e o download é autenticado.
 
 ---
 
@@ -2007,6 +4386,13 @@ Esta é a regra mais importante da seção, e ela é verificada **no momento da 
 Quando os dois lados existem, o **projeto** tem precedência sobre a OS na hora de identificar o cliente do vínculo.
 
 O erro que essa regra impede é o mais caro da operação, e ele **não é erro de estoque**: o número fecha perfeitamente. É erro contratual — o cliente cobra onde a chapa dele foi aplicada, e a chapa foi para o equipamento de outro.
+
+**Há uma saída que a garantia não cobre, e ela é da mesma família da devolução ao dono:** a
+**devolução ao fornecedor**, registrada na execução de uma não conformidade (15b.4-ter), **não exige
+OS nem projeto**. A regra existe para impedir que material de um cliente seja **aplicado** no
+trabalho de outro; devolver ao fornecedor não aplica material em trabalho nenhum — manda de volta,
+para quem entregou, o que a inspeção reprovou. Exigir vínculo ali travaria exatamente o caso em que
+devolver é mais urgente: a chapa do cliente que chegou errada.
 
 ### 16.5 A movimentação emergencial NÃO fura essa garantia
 
@@ -2067,14 +4453,14 @@ Em **Almoxarifado → Materiais de Clientes**, escolhe-se o cliente e o sistema 
 |---|---|
 | Código / Material / Un. | identificação do item |
 | **Recebido** | tudo que entrou daquele material, somado do livro |
-| **Consumido** | tudo que saiu por aplicação, perda, sucata, consumo em terceiro |
+| **Consumido** | tudo que saiu por aplicação, perda, sucata, consumo em terceiro e devolução ao fornecedor |
 | **Devolvido** | o que voltou para o cliente (coluna separada, de propósito) |
 | **Saldo** | o que está no galpão agora |
 | **Aplicado em** | a lista de OS e projetos onde aquele material foi usado, com a quantidade de cada |
 
 Os números **saem do livro de movimentações**, não de contadores paralelos: a conta que o cliente faz de cabeça — **recebido − consumido − devolvido = saldo** — fecha. Movimentações estornadas não contam (o estorno é visível no livro, mas não pesa na posição).
 
-"Devolvido" é coluna separada porque o cliente precisa distinguir **o que virou peça** de **o que voltou para ele**. Perda no terceiro e consumo no processo entram em "Consumido", e não somem da tela: material que o cliente não vai receber de volta tem de aparecer em algum lugar.
+"Devolvido" é coluna separada porque o cliente precisa distinguir **o que virou peça** de **o que voltou para ele**. Perda no terceiro e consumo no processo entram em "Consumido", e não somem da tela: material que o cliente não vai receber de volta tem de aparecer em algum lugar. **Material do cliente devolvido ao fornecedor entra em "Consumido"** pela mesma razão — ele saiu do galpão e não vai voltar para o cliente, e deixá-lo fora tornaria a saída invisível e a conta da tela não fecharia.
 
 O botão **PDF da posição** gera, no próprio navegador, um documento com:
 
@@ -2240,6 +4626,14 @@ Essa é a única das quatro retenções que significa "não está no prédio", e
 A remessa com **prazo previsto de retorno** já vencido e material ainda lá fora recebe na lista o selo **Vencida**, com o texto explicativo:
 
 > *"O prazo combinado com o terceiro já passou e ainda há material lá fora"*
+
+### 17.10 Anexos do item da remessa
+
+Abrindo uma remessa, **cada linha da tabela de itens** tem um ícone de **clipe** (*"Anexos e documentos deste item"*), que abre a janela **Anexos do item da remessa**, identificada pelo material daquele item. É onde fica o **certificado do serviço** — galvanização, pintura, tratamento térmico — e o laudo que volta com a peça.
+
+**O anexo é do item, não da remessa.** Numa remessa com três materiais, o certificado anexado no primeiro item **não** aparece nos outros dois. E **item ainda não salvo não tem clipe**: as linhas que você acrescenta no formulário de uma remessa nova só passam a aceitar documento depois que a remessa é gravada e aberta de novo.
+
+**A remessa como um todo não tem anexo próprio.** Um documento que vale para o embarque inteiro ou é anexado em um dos itens, ou é repetido em cada um. As regras de formato, tamanho, permissão e registro de download estão em **15.2.4**.
 
 ---
 
@@ -2440,6 +4834,12 @@ O que o sistema valida já na solicitação (para a recusa não esperar duas ass
 - **Material de cliente exige o vínculo do dono** (OS/projeto do próprio cliente), com a mesma
   regra e a mesma mensagem da saída comum (16.4).
 
+⚠️ **Este formulário baixa sempre do DISPONÍVEL — nunca do material bloqueado.** Material
+**reprovado na inspeção** se sucateia pela não conformidade (20.2b). Se a inspeção reprovou só
+parte do que chegou (10 chegaram, 3 reprovadas), o material tem 7 disponíveis e 3 bloqueados: um
+pedido de 3 por **este** formulário é **aceito**, e as duas aprovações baixam 3 peças **aprovadas** —
+as reprovadas continuam bloqueadas no galpão.
+
 A **classificação** é texto livre com seis sugestões que aparecem ao digitar: aço carbono, inox,
 alumínio, cobre, cavaco, misto. Ela agrupa o relatório financeiro — vale combinar a grafia com a
 equipe.
@@ -2477,6 +4877,99 @@ solicitação e a referência `SUC-<número>` amarrando o lançamento ao process
 de saldo (com os números) e o sistema **desfaz a assinatura recém-dada sozinho**: o processo volta
 a "Solicitado", a assinatura anterior é preservada, e a reversão fica registrada no histórico.
 Nunca existe processo "aprovado" sem a baixa correspondente no livro.
+
+**De onde sai a baixa.** Se existe uma **área de sucata** (3.3b) — ou uma posição dentro dela —, **ativa**, **não
+bloqueada**, em que o saldo **sem lote** do material **cobre a quantidade inteira** do sucateamento, a baixa sai **de
+lá**, e só de lá; com mais de uma que cubra, sai da de maior saldo. Em qualquer outro caso — nenhuma área de sucata, a
+área não cobre tudo, o saldo está espalhado em duas posições da área, ou o sucateamento é de material com lote —, a
+baixa sai como qualquer saída sem endereço informado: da posição padrão primeiro e, se faltar, dos outros endereços. A
+baixa nunca mistura "um pouco da área e o resto da prateleira".
+
+Se, entre a primeira e a segunda assinatura, alguém tirar material da área de sucata que ia ser a origem, a segunda
+assinatura é recusada com *"O saldo em ⟨área⟩ (⟨saldo⟩) não cobre a quantidade (⟨quantidade⟩) — a saída tiraria de
+outros endereços"* e a assinatura é desfeita, como acima. Assinar de novo resolve: a nova tentativa escolhe a origem
+outra vez pela regra deste parágrafo.
+
+### 20.2b Sucatear o material reprovado na inspeção — pela não conformidade
+
+O material reprovado numa inspeção fica **bloqueado** (15.3), e o formulário de 20.1 só baixa o
+disponível. O caminho dele é a **não conformidade** que a reprovação abriu: decidida **Sucatear**
+(15b.4), a linha dela na tela **Não Conformidades** ganha o botão **Solicitar sucateamento**.
+
+**Quem vê o botão:** quem pode movimentar estoque (Administrador e Almoxarife) — a Qualidade decide,
+o almoxarifado solicita, almoxarifado e gestão aprovam. O botão aparece na não conformidade aberta
+**automaticamente pela reprovação da inspeção**, **decidida Sucatear**, **não cancelada**, e cuja
+execução **ainda não tem baixa** — inclusive a que já aparece como *Executada* sem baixa nenhuma.
+
+**A janela.** Mostra o material e a decisão, e explica: *"Vai para o sucateamento toda a quantidade
+reprovada na inspeção, do lote dela. Solicitar não movimenta estoque: o pedido espera as duas
+aprovações (almoxarifado e gestão) em Sobras e Retalhos › Sucateamentos, e a segunda dá a baixa do
+material bloqueado e registra a execução desta não conformidade."* A **justificativa** (obrigatória)
+vem preenchida com a da decisão; classificação, peso estimado e observações são opcionais. **Material,
+quantidade e lote não se escolhem** — vêm da inspeção: a quantidade reprovada **inteira**, do lote
+do item inspecionado. Ao confirmar: *"Sucateamento SUC-⟨n⟩ solicitado para ⟨NC⟩. A baixa do
+material reprovado acontece na segunda aprovação, em Sobras e Retalhos › Sucateamentos."*
+
+**As aprovações são as de 20.2**, com as mesmas três regras de segregação. Na fila, o pedido traz o
+selo **Origem: ⟨NC⟩** e a frase *"Material reprovado — baixa do material bloqueado, não do
+disponível"*. Na segunda aprovação: *"Sucateamento aprovado nas duas pernas — a baixa do material
+bloqueado (reprovado na ⟨NC⟩) foi emitida no estoque"*. Nesse momento:
+
+- o **físico** e o **bloqueado** caem juntos pela quantidade reprovada — o **disponível não muda**
+  (as peças aprovadas não são tocadas); se o bloqueado já não cobre a quantidade, a aprovação é
+  recusada com *"Sucateamento acima do que está bloqueado: há ⟨b⟩ ⟨un⟩ bloqueado(s) (físico: ⟨a⟩)"* e
+  desfeita;
+- a linha de **Sucata** entra no livro com o lote, a referência `SUC-⟨n⟩` e o número da não
+  conformidade como documento vinculado — e conta no relatório financeiro de sucata como qualquer
+  outra;
+- a não conformidade fica **Executada**, com essa movimentação; e a inspeção sai do cartão
+  **Material reprovado**.
+
+**De onde sai a baixa.** De uma **área de sucata** (3.3b) — ou posição dentro dela — onde o saldo do
+material (do **lote** reprovado, quando o material controla lote) cubra a quantidade inteira; senão, do **endereço onde aquele item do
+recebimento entrou** (completando com os outros, se faltar, como na devolução ao fornecedor —
+15b.4-ter); senão, como qualquer saída sem endereço declarado.
+
+**O que a solicitação recusa** — na ordem em que o sistema confere:
+
+| Situação | Mensagem |
+|---|---|
+| O documento foi cancelado | *"Esta não conformidade foi cancelada — não há sucateamento a solicitar"* |
+| O documento ainda não foi decidido | *"Só é possível sucatear o material de uma não conformidade decidida"* |
+| A decisão não é Sucatear | *"A decisão desta não conformidade não é Sucatear — o material reprovado só vai para o sucateamento por essa decisão"* |
+| A execução do documento já tem baixa | *"O material desta não conformidade já saiu do estoque"* |
+| O documento foi aberto à mão | *"Só a não conformidade aberta pela reprovação da inspeção sucateia material reprovado"* |
+| A inspeção não tem quantidade reprovada | *"Esta não conformidade não tem material reprovado para sucatear"* |
+| O material da inspeção já foi sucateado | *"O material desta inspeção já foi sucateado"* |
+| … já foi devolvido ao fornecedor | *"O material desta inspeção já havia sido devolvido ao fornecedor"* |
+| … já foi liberado por outra não conformidade | *"O material desta inspeção já havia sido liberado por outra não conformidade"* |
+| Material inativo | *"O material ⟨código⟩ esta inativo e nao pode ser movimentado — reative o cadastro antes de sucatear"* |
+| Material com número de série | *"Material com controle de série não pode ser sucateado por aqui — dê baixa pela tela de Movimentações"* |
+| Material com lote e o lote não identificável | *"Não foi possível identificar o lote do material reprovado"* |
+| O lote não está **Ativo** | *"O lote ⟨L⟩ está ⟨status⟩ — o estoque não baixa lote fora de ATIVO, nem para sucata. Mude o status do lote antes de sucatear"* |
+| O bloqueado é menor que a reprovação | *"O material já havia saído do bloqueio — há ⟨b⟩ ⟨un⟩ bloqueado(s), a reprovação foi de ⟨r⟩"* |
+| O físico é menor que a reprovação | *"Não há saldo físico deste material para sucatear — físico ⟨a⟩ ⟨un⟩, reprovado ⟨r⟩"* |
+| O lote não tem mais a quantidade reprovada | *"O lote ⟨L⟩ tem ⟨s⟩ ⟨un⟩ em estoque, menos que o reprovado (⟨q⟩) — o reprovado já saiu do lote; registre a execução sem baixa informando o motivo"* |
+| Já há um sucateamento esperando assinatura para o documento | *"Já existe um sucateamento solicitado para esta não conformidade (SUC-⟨n⟩) — aprove ou rejeite esse antes"* |
+| Material de cliente sem OS/projeto do cliente | a mensagem da guarda do dono (16.4) — a janela não tem esses campos; só pela API |
+| Justificativa em branco | *"justificativa é obrigatória para sucatear"* |
+
+**Se algo mudou entre o pedido e a segunda aprovação**, a aprovação é recusada e **desfeita** (o
+pedido volta a *Solicitado*), com a causa: o documento foi cancelado (*"A não conformidade ⟨NC⟩ foi
+cancelada — o sucateamento não baixa material de documento cancelado"*; a outra perna, antes de
+assinar, recusa com *"A não conformidade foi cancelada — recuse este sucateamento."*), ou o material
+da inspeção saiu por outro caminho (*"O material desta inspeção já foi sucateado — a assinatura foi
+desfeita"*, e as variantes *"já havia sido devolvido ao fornecedor"* e *"já havia sido liberado por
+outra não conformidade"*).
+
+**A baixa não se desfaz pelo livro.** O estorno dessa sucata é recusado: *"Sucateamento de material
+reprovado não pode ser estornado pelo livro — o material voltaria ao estoque disponível com a não
+conformidade dizendo que foi sucateado"*. Corrigir um sucateamento indevido é um **ajuste** de
+estoque, com justificativa. O estorno de uma sucata do processo comum (20.1) continua possível.
+
+**A quantidade sai uma vez por inspeção.** Depois de sucateado, o material daquela inspeção não sai
+de novo por outro documento: a devolução ao fornecedor registra *"O material desta inspeção já havia
+sido sucateado — a execução foi registrada sem mover saldo"*, e a aceitação registra sem liberar.
 
 ### 20.3 Rejeitar e cancelar
 
@@ -2658,8 +5151,19 @@ devolução **não** é descontada) nos últimos N dias, dividida por N — N é
 **Janela do Consumo Médio (dias)**, padrão 90, e a legenda da aba mostra o valor em uso.
 
 A **posição** do material é `disponível + a caminho`, onde "a caminho" soma as solicitações de
-compra abertas (pendentes ou vinculadas a pedido) criadas nos últimos **Horizonte da
-Solicitação (dias)** — padrão 60. O material é sugerido quando `posição < ponto efetivo`.
+compra abertas criadas nos últimos **Horizonte da Solicitação (dias)** — padrão 60:
+
+- a solicitação **Pendente** conta a quantidade inteira;
+- a solicitação **Vinculada** a um pedido conta **só o que ainda falta chegar para ela** — o que ela pediu menos o que
+  as notas do pedido já entregaram para ela (seção 21b.3b). Uma solicitação de 10 com 4 já recebidos conta 6: os 4
+  já estão no disponível e não contam duas vezes;
+- a solicitação vinculada a um pedido **encerrado** (*Recebido* à mão, *Cancelado* ou *Rejeitado*) conta **zero** — o
+  pedido não vai trazer mais nada;
+- a solicitação vinculada a um pedido que **já entregou todo** o material dela conta **zero**.
+
+O "a caminho" de uma solicitação vinculada não é limitado pelo que o pedido comprou: uma solicitação de 100 ligada a um
+pedido de 5 conta 100 enquanto o pedido estiver em andamento — a decisão de comprar menos é do comprador, que cancela a
+solicitação ou gera outro pedido. O material é sugerido quando `posição < ponto efetivo`.
 Consequências práticas:
 
 - **O que já foi pedido não é pedido de novo** — gerar a solicitação tira o material da lista.
@@ -2698,9 +5202,13 @@ escolhe *quais* materiais, nunca *quanto* — e o painel de resultado lista cada
 criada com a quantidade real gravada. Cada criação fica registrada na auditoria. As
 solicitações aparecem na aba **Solicitações** (pendentes e vinculadas a pedido, com o motivo).
 
-Também existe a varredura **verificar mínimos**, que percorre os materiais próprios abaixo do
-mínimo e cria as solicitações que faltam — cada solicitação criada por ela registra na
-auditoria **quem disparou a varredura**.
+Também existe a varredura **verificar mínimos** (pela API), que percorre os materiais próprios
+abaixo do mínimo e cria as solicitações que faltam — cada solicitação criada por ela registra na
+auditoria **quem disparou a varredura**. Ela **não** cria solicitação para o material que já
+tem uma solicitação **Pendente**, nem para o que tem uma **Vinculada** a pedido em andamento
+(não encerrado) criada dentro do horizonte. Fora do horizonte, a vinculada antiga deixa de
+segurar — um pedido esperado há mais de 60 dias pode ganhar uma segunda solicitação, que o
+comprador cancela se o pedido ainda vier.
 
 ### 21b.3b O ciclo da solicitação — vincular, receber, cancelar
 
@@ -2708,22 +5216,51 @@ Uma solicitação de compra passa por, no máximo, três estados:
 
 - **Pendente** — recém-criada. Enquanto pendente (ou vinculada), ela conta como "a caminho" na
   matemática da sugestão, dentro do horizonte configurado.
-- **Vinculada** — alguém a amarrou a um **pedido de compra** do módulo Compras. O vínculo é
+- **Vinculada** — alguém a amarrou a um **pedido de compra** do módulo Compras, normalmente pelo
+  botão **Gerar pedido** desta mesma aba (seção 21b.3d). O vínculo é
   validado nas duas pontas: pedido inexistente é recusado com "Pedido de compra não
   encontrado", e solicitação já finalizada, com "Solicitação já finalizada (RECEBIDA ou
-  CANCELADA) — não pode ser vinculada a um pedido". Vincular de novo a **outro** pedido
-  substitui o vínculo anterior — e a chegada do pedido antigo deixa de fechar esta
-  solicitação (só o vínculo atual fecha).
-- **Recebida** ou **Cancelada** — os dois estados finais. Uma solicitação finalizada não muda
-  mais de estado: não pode ser cancelada de novo, re-vinculada, nem "reaberta" pela chegada
-  de uma nota.
+  CANCELADA) — não pode ser vinculada a um pedido". Vincular a um pedido que **já recebeu todo**
+  o material da solicitação também é recusado: "O pedido ⟨número⟩ já recebeu todo o ⟨nome do
+  material⟩: vincule a solicitação a outro pedido" (o pedido sem número aparece como #⟨id⟩).
+  Vincular de novo a **outro** pedido substitui o vínculo anterior — e a chegada do pedido
+  antigo deixa de fechar esta solicitação (só o vínculo atual fecha); o que já tinha chegado
+  para ela pelo primeiro pedido continua dela.
+- **Recebida** ou **Cancelada** — os dois estados finais. Uma solicitação finalizada não pode
+  ser cancelada de novo nem re-vinculada. A **Recebida** só volta a **Vinculada** por um
+  caminho: o estorno da entrada que a tinha atendido (seção 6.10). A **Cancelada** nunca volta.
 
-**Recebida (automático).** Quando a **nota fiscal do pedido vinculado é processada** no
-recebimento, todas as solicitações vinculadas àquele pedido viram **Recebida**, com registro
-na auditoria. Isso acontece na **primeira** nota do pedido, mesmo que a entrega seja parcial —
-o sistema não confere quantidade nesse fechamento. Se a entrega parcial deixar o material
-ainda abaixo do ponto de reposição, ele simplesmente **volta a ser sugerido** pela régua
-normal.
+**O que chegou para cada solicitação.** Cada vez que uma nota de um pedido é processada (pelo
+processamento da nota ou pela aprovação direta do recebimento), o que entrou de cada material é
+**atribuído** às solicitações vinculadas àquele pedido e material, por ordem de criação — cada
+uma recebe até o que falta para ela, e o que sobrar não é de nenhuma. Esse registro é gravado
+uma vez, na entrada, e não é recalculado depois: cancelar uma solicitação não passa o que ela
+recebeu para outra, e uma nota que entrou **antes** de a solicitação ser ligada ao pedido não
+conta para ela. Na aba **Solicitações**, a solicitação vinculada mostra ao lado do status
+**"chegou ⟨X⟩ de ⟨Y⟩"** (X é o que chegou para ela; Y, o que ela pediu) quando alguma coisa já
+chegou, e **"pedido encerrado — nada a caminho"** quando o pedido dela foi encerrado
+(*Recebido* à mão, *Cancelado* ou *Rejeitado*). A solicitação Pendente não mostra nenhum dos
+dois.
+
+**Recebida (automático).** Ao processar uma nota do pedido vinculado, a solicitação vira
+**Recebida**, com registro na auditoria que diz a regra que a fechou, quando:
+
+| Regra (na auditoria) | Quando |
+|---|---|
+| `MATERIAL_COMPLETO` | o pedido completou o material dela — tudo o que foi pedido daquele material no pedido chegou. Fecha todas as solicitações daquele material no pedido |
+| `SOLICITADO_RECEBIDO` | o que chegou **para ela** já cobre o que ela pediu, mesmo com o pedido ainda trazendo mais. Vale por solicitação: num pedido de 10 com duas solicitações (6 e 4), a nota de 6 fecha a de 6 e deixa a de 4 vinculada |
+| `SEM_LINHA_NO_PEDIDO` | o pedido não tem linha do material dela (vínculo feito pela API a um pedido de outro material) — fecha na primeira nota processada do pedido |
+
+A nota **parcial** não fecha: a solicitação continua vinculada, mostrando quanto chegou, e
+conta só o que falta como "a caminho" (seção 21b.1). A nota de **outro** material do mesmo
+pedido também não fecha. Pedido encerrado não fecha a solicitação: ela continua vinculada,
+com o aviso de pedido encerrado, até o comprador cancelá-la ou re-vinculá-la — e enquanto
+isso não conta nada como "a caminho", então o material volta à sugestão.
+
+**Volta a Pendente (automático).** Se o **pedido de compra** ao qual ela estava vinculada for
+**excluído** no módulo Compras, a solicitação volta a **Pendente** e solta o vínculo — o material
+voltará a ser sugerido pela régua normal, e a linha volta a oferecer **Gerar pedido**. Solicitação
+já **Recebida** ou **Cancelada** não é afetada: são estados finais.
 
 **Cancelada (manual).** Na aba **Solicitações**, o botão **Cancelar** pede confirmação —
 "Cancelar esta solicitação de compra? A justificativa ficará registrada." — e em seguida a
@@ -2750,6 +5287,42 @@ O painel guarda o resultado em memória para não reconsultar a cada clique — 
 solicitações** e **Atualizar** descartam essa memória na hora: um painel aberto reconsulta
 sozinho e mostra os números novos. O botão vira **Ocultar contexto** enquanto o painel está
 aberto.
+
+### 21b.3d Gerar o pedido de compra a partir da solicitação
+
+Na aba **Solicitações**, cada solicitação **Pendente** tem o botão **Gerar pedido** (a dica do botão
+é *"Abre o pedido de compra já preenchido com este material"*). É o caminho que transforma a
+necessidade calculada aqui em documento de compra.
+
+**O botão não cria o pedido nesta tela — ele leva você ao formulário do comprador.** O pedido abre
+em **"Novo pedido de compra"** (seção 14b.2) com **o material, o código e a quantidade da
+solicitação já preenchidos** na tabela de itens. O que falta é o que só o comprador decide:
+**fornecedor** e **valor unitário**. Salvo o pedido, a solicitação passa a **Vinculada**.
+
+**A linha da Reposição só muda quando você volta.** A tela de Reposição não se atualiza enquanto
+você está no módulo Compras: reabra a aba **Solicitações** para ver o status novo. Se o vínculo não
+puder ser feito, o formulário avisa que **o pedido foi criado mas a solicitação não pôde ser
+vinculada** — o pedido existe, e a solicitação continua Pendente.
+
+**Quando o botão não aparece**, e cada caso é deliberado:
+
+| Situação | Por quê |
+|---|---|
+| Solicitação **Vinculada** | Ela já tem pedido; um segundo pedido sobrescreveria o vínculo do primeiro, e a chegada do pedido antigo deixaria de fechá-la |
+| Solicitação **Recebida** ou **Cancelada** | São estados finais, e nem aparecem nesta aba |
+| Você **não tem** a permissão de gerenciar reposição | É a mesma permissão de toda esta tela |
+| Você **não tem acesso ao módulo Compras** | O destino do botão está atrás desse acesso: clicar terminaria numa tela de acesso negado |
+
+A verificação do módulo Compras usa a mesma informação de permissões que monta o menu, que é
+guardada por alguns minutos — uma permissão **recém-concedida** pode levar até **cinco minutos**
+para o botão aparecer. E quando essa informação ainda não está carregada, o botão **aparece**: é
+melhor deixar clicar e receber a recusa do servidor do que esconder a ação de quem pode.
+
+**Vincular é ato de quem tem a permissão desta tela, não só do módulo Compras.** Mesmo salvando o
+pedido pelo formulário do comprador, é a permissão de **gerenciar reposição e compras** que autoriza
+mexer na solicitação — sem ela a recusa é *"Sem permissão para gerenciar reposição e compras — seu
+perfil é ⟨seu perfil⟩. Solicite acesso a um administrador."*, e **nada** é gravado: nem o pedido, nem
+o vínculo.
 
 ### 21b.4 Estoque Parado
 
@@ -2784,8 +5357,8 @@ falha do servidor de e-mail nunca trava uma movimentação, uma devolução ou u
 
 ### 21c.1 O que gera aviso
 
-- **Movimentações de estoque** (entrada, saída, ajuste manual e movimentos de terceiros que
-  baixam saldo) — **somente se a chave "Notificar movimentações por e-mail" estiver ligada**
+- **Movimentações de estoque** (entrada, saída, ajuste manual, movimentos de terceiros que
+  baixam saldo e a devolução ao fornecedor) — **somente se a chave "Notificar movimentações por e-mail" estiver ligada**
   em Configurações; ela vem desligada de fábrica. O e-mail traz tipo, número, data/hora,
   usuário, material, quantidade, **saldo anterior e posterior**, lote e séries quando houver,
   projeto/OS/cliente, motivo, justificativa e um link direto para o livro de movimentações.
@@ -2804,6 +5377,94 @@ falha do servidor de e-mail nunca trava uma movimentação, uma devolução ou u
   por validade: mudou a validade do lote, pode avisar de novo; no mesmo dia seguinte, não.
   Lote cujo vencimento foi **liberado** por decisão registrada não entra.
 - **Remessa a terceiro vencida** — varredura diária pela mesma régua da tela de remessas.
+- **Pedido de compra atrasado** — varredura diária dos pedidos de compra com previsão de entrega
+  vencida e status que ainda cobra entrega (14b.1b). Um aviso por **prazo prometido**: enquanto a
+  previsão for a mesma, não repete; renegociado o prazo e vencido de novo, avisa outra vez.
+- **Não conformidade aberta** — varredura diária dos documentos de não conformidade (15b) que
+  continuam **sem decisão** há mais dias que o configurado (7 de fábrica). O aviso diz o número
+  da NC, o material, o tipo, a origem, há quantos dias está parado e o recebimento de origem.
+  **Um aviso por documento, para sempre:** relembrar periodicamente uma pendência parada geraria
+  e-mail eterno sem nenhum fato novo, e o dado que o destinatário precisa — *"esta NC está
+  parada"* — não muda enquanto ninguém decide. Decidir tira o documento da condição, sem nenhum
+  gesto extra, e o mesmo vale para o documento que a reconferência cancela sozinha.
+- **Execução pendente** — varredura diária dos documentos de não conformidade **já decididos** cuja
+  execução do encaminhamento (15b.4-ter) segue **pendente** há mais dias que o configurado (7 de
+  fábrica), contados **desde a decisão**. O aviso diz o número, o material, o tipo, a origem, **a
+  decisão** — que é o que quem lê precisa saber para saber o que executar —, há quantos dias foi
+  decidida e o recebimento de origem; o assunto é *"[Almoxarifado] Execução pendente — NC-…"*. E ele
+  **nomeia a saída**: *"Execução impossível (número de série, lote não identificável)? A Qualidade
+  pode cancelar o documento em Almoxarifado → Não Conformidades."* **Um aviso por documento, para
+  sempre**, pela mesma razão do de cima. Registrar a execução ou cancelar o documento tira a linha
+  da condição. É alerta **separado** do *"Não conformidade aberta"*, e não uma versão mais larga
+  dele: aquele cobra a **decisão** (dona: a Qualidade), este cobra a **execução** (dono: Compras),
+  e as duas janelas são reguláveis à parte porque decidir leva dias e uma devolução que depende do
+  fornecedor leva semanas.
+- **Pedido de compra recebido parcialmente** — varredura diária dos pedidos que
+  receberam **parte** do material e ainda têm saldo pendente. O aviso diz o pedido, o fornecedor,
+  quanto foi pedido, quanto chegou, **quanto falta** e a previsão de entrega (ou *"não informada"*,
+  quando o pedido não tem prazo cadastrado). Um aviso por **saldo**: enquanto faltar a mesma
+  quantidade, não repete; chegou mais material e ainda sobrou saldo, avisa outra vez com o número
+  novo. Pedido **Cancelado**, **Rejeitado** ou já marcado **Recebido** não entra — nos três casos a
+  decisão já é do comprador. Quando a última remessa fecha o pedido, ele sai deste alerta **e** sai
+  do alerta de atrasado, porque o status passa a *Recebido* sozinho (14b.1b).
+  > Um detalhe de tempo, para não assustar: o aviso é montado pela varredura e enviado alguns minutos
+  > depois. Se o pedido for completado nesse intervalo, o e-mail já estava na fila e **sai de todo
+  > jeito** — ele era verdade quando foi escrito. Basta conferir o pedido na aba Compras: lá o estado
+  > é sempre o de agora.
+- **Material chegou para a sua requisição** (aviso ao solicitante) — quando uma nota é processada (ou o recebimento é
+  aprovado direto) e um material **entrou disponível** (não retido para inspeção), o **solicitante** de cada requisição
+  que o esperava recebe **um** e-mail. "Esperava" é decidido **item a item**: a requisição está ativa, numa situação de
+  onde ainda se separa — **exceto Em separação** (o almoxarife já está com ela) —, e tem item daquele material em que
+  falta material, pela mesma conta da reserva na chegada (9.3b): **o que ainda falta entregar, menos o que o item já tem
+  reservado por outro motivo que não esta nota**. Material de cliente só aparece para a requisição que tem o projeto
+  do dono (a saída recusaria as demais). Um e-mail por requisição por nota, para o
+  e-mail do cadastro do usuário; usuário inativo ou sem e-mail não recebe (sem erro). **Ligado de fábrica**, pela chave
+  *"Avisar o Solicitante quando o Material Chega"* (21c.6). Assunto *"[Almoxarifado] Chegou material da sua requisição
+  REQ-…"*; o corpo diz a requisição, a situação dela, o recebimento e, por material, quanto entrou e quanto está
+  pendente na requisição. Antes do aviso, a nota já reservou o que chegou para quem esperava (9.3b), e o e-mail conta
+  isso: cada material que ganhou reserva para esta requisição diz *"⟨cód⟩ — ⟨nome⟩: entrou ⟨q⟩ ⟨un⟩ (pendente na
+  requisição: ⟨p⟩ ⟨un⟩; reservado para a sua requisição: ⟨r⟩ ⟨un⟩)"*, e a frase final é uma de três:
+  - todo material listado ganhou reserva — *"O material indicado como reservado fica guardado para a sua requisição —
+    outra requisição não pode levá-lo. A separação é feita pelo almoxarifado."*;
+  - parte ganhou, parte não — *"Só o material indicado como reservado fica guardado para a sua requisição; o restante
+    ainda não está reservado — a separação é feita pelo almoxarifado."*;
+  - nenhum ganhou — *"O material ainda não está reservado para a sua requisição — a separação é feita pelo
+    almoxarifado."*
+  O e-mail só lista os materiais que ganharam reserva para esta requisição ou que ainda têm saldo livre; quem esperava
+  e não ganhou nada — com o saldo todo reservado a outras requisições — **não** recebe o aviso daquela nota (será
+  avisado na próxima). O link abre a lista **Minhas Requisições** do módulo de onde a requisição saiu (Comercial,
+  Compras, Fábrica, …); sem módulo de origem, a lista de requisições do almoxarifado. Material que entrou **retido
+  para inspeção** não gera este aviso — ele ainda pode ser reprovado; o aviso dele vem quando a inspeção o libera (o
+  próximo item). Uma requisição que continua esperando recebe um aviso **a cada nota** daquele material.
+- **Material liberado para a sua requisição** (aviso ao solicitante, na liberação) — quando a **inspeção aprova**
+  material retido, ou a **não conformidade** do reprovado é decidida **Aceitar**/**Aceitar sob desvio**, o liberado é
+  reservado para quem esperava (9.3c) e o solicitante de cada requisição que ganhou reserva — ou que ainda tem saldo
+  livre do material para separar — recebe **um** e-mail por decisão. Mesmas regras de quem esperava, do material de
+  cliente e do e-mail do usuário que o aviso da chegada; governado pela mesma chave *"Avisar o Solicitante quando o
+  Material Chega"*. Assunto *"[Almoxarifado] Material liberado para a sua requisição REQ-…"*. A primeira linha diz a
+  porta: *"O material que a sua requisição aguardava foi aprovado na inspeção e está no estoque."* ou *"O material que
+  a sua requisição aguardava foi liberado pela não conformidade NC-… e está no estoque."* Depois: a requisição, a
+  situação dela (já com a reserva), o recebimento e a linha do material — *"⟨cód⟩ — ⟨nome⟩: liberado ⟨q⟩ ⟨un⟩
+  (pendente na requisição: ⟨p⟩ ⟨un⟩; reservado para a sua requisição: ⟨r⟩ ⟨un⟩)"* (sem a parte do reservado quando não
+  houve reserva) — e a frase final: *"O material indicado como reservado fica guardado para a sua requisição — outra
+  requisição não pode levá-lo. A separação é feita pelo almoxarifado."* com reserva, ou *"O material ainda não está
+  reservado para a sua requisição — a separação é feita pelo almoxarifado."* sem. Duas inspeções da mesma nota (dois
+  itens) avisam duas vezes; a mesma decisão nunca avisa duas vezes. Na tela **Notificações**, aparece no filtro
+  *Aviso ao requisitante*. A requisição **Em separação** ganha a reserva, mas não recebe este aviso.
+- **Entrada de recebimento** (aviso da nota) — um e-mail **por nota** que deu entrada no estoque, com o recebimento, a
+  nota fiscal, o fornecedor, o pedido de compra (quando há), data/hora, quem processou, cada item que entrou com a
+  quantidade, o endereço e *"disponível"* ou *"retido para inspeção"*, e as requisições que aguardavam aqueles
+  materiais (com o nome de quem pediu). Item que chegou **zero** não aparece; nota em que nada entrou não gera aviso.
+  **Desligado de fábrica**, pela chave *"Avisar Entrada de Recebimento por E-mail"* (21c.6). Assunto *"[Almoxarifado]
+  Entrada confirmada — REC-…"*, seguido de *" — NF …"* quando a nota tem número. O link abre a lista de Recebimentos.
+  Processar a mesma nota de novo não manda outro; estornar depois uma entrada da nota **não** corrige o aviso já
+  enviado.
+
+Os dois avisos de recebimento são montados **depois** que a nota termina de entrar e **nunca** atrapalham o
+processamento: se falharem, a nota fica processada do mesmo jeito. Só a nota processada (ou o recebimento aprovado
+direto) os gera — entrada avulsa, devolução ao estoque e retorno de terceiro não. A liberação de material retido tem
+o aviso próprio (*Material liberado para a sua requisição*, acima), que também nunca derruba a decisão da inspeção ou
+da não conformidade.
 
 O que **não** gera aviso de movimentação, de propósito: reservas e liberações, envio e retorno
 de remessa a terceiro (a remessa tem o aviso próprio de vencida) e os ajustes aplicados pela
@@ -2821,6 +5482,11 @@ o e-mail de movimentação que cairia nela). Família **com** lista própria ign
 destino foi escolhido explicitamente. As solicitações de compra usam a lista própria de compras
 e não dependem do checkbox de alertas.
 
+O **aviso da nota** (entrada de recebimento) vai para a lista **"Destinatários — Entrada de Recebimento"**; vazia, para
+a lista de **Compras** e, sem ela, para a lista geral de e-mails de Compras. Tudo vazio: o aviso da nota não é gerado
+(sem erro), e o aviso ao solicitante sai do mesmo jeito — ele vai para o e-mail de quem pediu, não para uma lista.
+Nenhum dos dois depende do checkbox de alertas.
+
 Atenção ao volume com a chave de movimentações ligada: cada item de um fluxo em lote gera um
 e-mail — entregar uma requisição de 10 itens gera 10 avisos.
 
@@ -2837,7 +5503,8 @@ depois de um reenvio manual.
 
 Em **Almoxarifado → Notificações** (perfis Gestor e Administrador; os demais recebem a recusa
 de permissão — a tela mostra o motivo, nunca uma lista vazia): três cartões com o total de
-**pendentes, enviadas e falhas** do conjunto inteiro, filtros por status e por evento, e cada
+**pendentes, enviadas e falhas** do conjunto inteiro, filtros por status e por evento (os avisos de recebimento
+aparecem no filtro como **"Entrada de recebimento"** e **"Aviso ao requisitante"**), e cada
 linha com destinatários, tentativas, o motivo literal da última falha e as datas de criação e
 envio. Filtro de status inválido pela API responde:
 
@@ -2860,13 +5527,15 @@ não há e-mail de correção — o livro de movimentações é a fonte da verda
 
 ### 21c.6 As configurações — e a validação
 
-Em **Configurações → Configurações Gerais**: a chave liga/desliga (**só aceita 0 ou 1** — outro
-valor é recusado com `Configuração "notificar_movimentacoes" deve ser 0 ou 1`), o intervalo do
+Em **Configurações → Configurações Gerais**: as chaves liga/desliga — **"Notificar movimentações por e-mail"**,
+**"Avisar Entrada de Recebimento por E-mail"** (desligada de fábrica) e **"Avisar o Solicitante quando o Material
+Chega"** (ligada de fábrica) —, que **só aceitam 0 ou 1** (outro valor é recusado com `Configuração "<chave>" deve ser
+0 ou 1`, por exemplo `Configuração "notificar_movimentacoes" deve ser 0 ou 1`), o intervalo do
 processador da fila em minutos e o máximo de tentativas (**número inteiro maior que zero** —
 `Configuração "<chave>" deve ser um número inteiro maior que zero`), as janelas em dias — lote
 vencendo, calibração, quarentena parada, reserva parada e eventos — (`Configuração "<chave>"
-deve ser um número de dias maior que zero`) e as cinco listas
-de destinatários (texto livre). Mudar o **intervalo do processador** só passa a valer depois de
+deve ser um número de dias maior que zero`) e as listas
+de destinatários (texto livre) — inclusive **"Destinatários — Entrada de Recebimento"**, a do aviso da nota. Mudar o **intervalo do processador** só passa a valer depois de
 reiniciar o sistema; o espaçamento das retentativas muda imediatamente.
 
 **As credenciais têm uma tela só, e é de propósito.** A **senha do servidor de e-mail (SMTP)** e a
@@ -2907,14 +5576,20 @@ A tela **Almoxarifado → Alertas** reúne, num lugar só, as condições que o 
 | Materiais sem endereço | material ativo sem localização padrão e sem nenhum saldo endereçado — **material de cliente conta**, porque endereçá-lo é trabalho do almoxarife (mesma régua do relatório de mesmo nome) |
 | Requisição atrasada | requisição ativa, em qualquer status em que ainda possa ser atendida, com a data de necessidade no passado — só entra quem **preencheu** a data de necessidade |
 | Reserva parada | reserva ativa criada há mais dias que a janela configurada, ou com a data de expiração vencida |
-| Material reprovado | inspeção de recebimento com quantidade reprovada, dentro da janela de eventos |
-| Divergência de recebimento | item cuja quantidade recebida difere da esperada, dentro da janela de eventos |
+| Material reprovado | inspeção de recebimento com quantidade reprovada, dentro da janela de eventos, **e cujo material ainda não saiu de fato para o fornecedor**. A inspeção some do cartão quando alguém registra a execução de uma não conformidade decidida *Devolver ao fornecedor* **e a baixa acontece** (15b.4-ter) — o cartão mede material movido, não intenção registrada. Se a execução foi registrada **sem mover saldo** (qualquer uma das frases que terminam em "sem mover saldo"), a linha **continua** aqui, porque o material continua no galpão |
+| Divergência de recebimento | item cuja quantidade recebida difere da esperada, dentro da janela de eventos, **e que ainda não virou não conformidade** (15b.7). **Quem produz esse número é o campo "Qtd. conferida"** do painel do recebimento (14.2b) — digitar uma quantidade diferente da esperada e salvar a conferência é o gesto que cria a divergência; a entrada fiscal, quando altera a quantidade, também. Como a não conformidade nasce no mesmo instante, este cartão tende a ficar **vazio** na operação normal: ver item aqui significa que o documento **não foi aberto** |
+| Não conformidade aberta | documento de não conformidade (15b) ainda **sem decisão** há mais dias que o configurado (padrão 7) — uma linha por documento, com número, material, tipo, origem, dias parado e recebimento. Decidir tira a linha, sem nenhum gesto extra, e o mesmo vale para o documento que a reconferência cancela sozinha |
+| Execução pendente | documento de não conformidade **já decidido** cuja **execução** do encaminhamento (15b.4-ter) segue pendente há mais dias que o configurado (padrão 7). **O relógio conta desde a decisão**, não desde a abertura do documento — uma linha por documento, com número, material, tipo, origem, **a decisão** e há quantos dias foi decidida. Sai da lista quando a execução é registrada **ou** quando o documento é cancelado (15b.4-quater). O aviso **nomeia essa saída** no próprio texto: *"Execução impossível (número de série, lote não identificável)? A Qualidade pode cancelar o documento em Almoxarifado → Não Conformidades."* |
 | Divergência de inventário | conferência concluída com pelo menos um item divergente, dentro da janela de eventos — **uma linha por conferência**, com a contagem de itens (nunca o valor em reais) |
 | Lotes sem certificado | resumo dos lotes com saldo cujo material exige certificado do fornecedor e que estão sem o arquivo — inclui lote bloqueado (o caso mais comum, porque o lote que exige certificado nasce travado) e material de cliente |
 
-**Quatro desses avisos nascem no ATO, não na varredura.** Reprovar material numa inspeção, registrar quantidade diferente da esperada (tanto na conferência quanto na entrada fiscal) e concluir uma conferência com divergência disparam o e-mail no mesmo instante do fato; a varredura diária continua olhando a janela de eventos como rede de segurança, e o mesmo fato **não** é avisado duas vezes. Se o envio falhar, o ato acontece do mesmo jeito — a inspeção é gravada, o estoque se move, a conferência conclui: o aviso nunca segura a operação.
+**Quatro desses avisos nascem no ATO, não na varredura.** Reprovar material numa inspeção, registrar quantidade diferente da esperada — no campo **"Qtd. conferida"** ao salvar a conferência, ou na entrada fiscal — e concluir uma conferência com divergência disparam o e-mail no mesmo instante do fato; a varredura diária continua olhando a janela de eventos como rede de segurança, e o mesmo fato **não** é avisado duas vezes. Se o envio falhar, o ato acontece do mesmo jeito — a inspeção é gravada, o estoque se move, a conferência conclui: o aviso nunca segura a operação.
 
 Um detalhe que o operador precisa entender: a janela de eventos olha a **última atualização** do documento. Mexer num recebimento antigo que tem divergência nunca comunicada faz o aviso nascer ali — é a rede de segurança, não repetição.
+
+**E um aviso de evento não é uma fila de pendência.** A janela do cartão *Material reprovado* é configurável (padrão **7** dias) e a inspeção **sai dele sozinha** passado o prazo, devolvida ou não — o cartão diz "isto aconteceu nos últimos dias", não "isto ainda falta fazer". Quem cobra o que falta executar são dois outros lugares, e nenhum dos dois esvazia com o tempo: o cartão **Execução pendente**, que só sai por execução registrada ou por cancelamento do documento, e o filtro **Pendentes de execução** da tela de Não Conformidades (15b.4-ter), que não tem prazo nenhum. Pelo mesmo motivo, registrar a devolução **não** cancela o e-mail de material reprovado: ele saiu uma única vez, no instante da reprovação.
+
+**Uma nota de operação que vale saber antes de receber o aviso.** Quem vê a central — e recebe o e-mail de *Execução pendente* — é quem **executa** (Administrador, Almoxarife, Gestor e Compras); quem **cancela** o documento é a **Qualidade**, que não vê a central. É exatamente por isso que o texto do aviso **diz o caminho** em vez de só cobrar: sem essa linha, o único destinatário do aviso seria alguém sem nenhuma porta de saída para o documento — a execução recusada e o cancelamento fora do seu perfil. Na prática: Compras recebe o aviso, vê que a execução é impossível e pede à Qualidade que cancele o documento com o motivo.
 
 **E-mail: um aviso por situação, não um por dia.** A varredura roda diariamente, mas cada situação gera um único e-mail: calibração avisa uma vez por validade; requisição atrasada e reserva parada, uma vez cada; sem consumo e excessivo re-lembram no máximo uma vez por mês enquanto persistirem; materiais sem endereço é um resumo semanal com a contagem, e lotes sem certificado um resumo mensal. Nos avisos de ato, cada fato avisa uma vez: uma inspeção reprovada, uma conferência concluída, e — no caso da quantidade recebida — cada valor divergente diferente. Corrigir a quantidade e errar de novo com outro número é fato novo e avisa outra vez; salvar o mesmo número duas vezes, não. Os avisos saem para a mesma lista de e-mails dos alertas de estoque, e o interruptor geral de e-mail dos alertas desliga todos — a central, por ser leitura ao vivo, continua funcionando mesmo com o e-mail desligado.
 
@@ -2943,6 +5618,57 @@ permissão de um relatório simplesmente não o vê no menu; forçar o endereço
   de consumo (por OS, por período, mais consumidos) contam apenas as saídas diretas de
   produção; o indicador de giro conta tudo que debita o patrimônio (incluindo sucata e
   perda). Cada rodapé diz qual régua usa.
+
+### Saldo por lote, séries e saldos comprometidos
+
+No grupo **Estoque**, visíveis para todo perfil com acesso ao módulo:
+
+- **Localizações vazias** — as posições ativas sem material, pela mesma regra do Mapa de Áreas, com endereço,
+  almoxarifado, tipo, **Bloqueada** e **Filhas ocupadas**. A regra e as três leituras da nota estão em 3.7.
+- **Saldo por lote** — uma linha por lote com saldo, com **Validade**, **Status do lote**, **Saldo
+  atribuído** e **Físico total do material**. O saldo de um lote é o **atribuído** a ele: as saídas
+  que não informam lote (a entrega de requisição, por exemplo) e o ajuste de saldo total não baixam de
+  lote nenhum. Por isso o relatório acrescenta, por material, a linha **"Sem lote atribuído"** =
+  físico − soma dos lotes, que **pode ser negativa**. A conta sempre fecha:
+  **soma dos lotes + Sem lote atribuído = físico total**. Exemplo: entrada de 100 no lote A, entrega
+  de 30 sem lote → lote A **100**, Sem lote atribuído **−30**, físico **70**.
+  Regras de quem aparece: lote com saldo **zero** não aparece; lote **negativo** aparece (material
+  que permite saldo negativo); material com controle de lote que **nunca teve lote** aparece só com a
+  linha "Sem lote atribuído"; material **inativo** fica fora.
+- **Séries em estoque** — uma linha por número de série **em estoque** ou **bloqueado** (os presentes
+  no almoxarifado), com material, número, status e lote. Séries entregues, sucateadas ou estornadas
+  não aparecem.
+- **Saldos comprometidos** — os materiais **ativos** com **alguma** retenção, com **Físico, Reservado,
+  Bloqueado, Em inspeção, Em terceiros** e **Disponível** (físico menos as quatro retenções — o mesmo
+  número do relatório Estoque atual). Material sem retenção não aparece; material inativado com
+  retenção também não (mesma régua de Materiais bloqueados).
+
+Os três incluem **material de cliente**, com o nome do dono na coluna **Cliente** — ao contrário do
+Estoque atual, que só lista o estoque próprio porque soma valor.
+
+### Histórico de movimentações — filtros por grupo, usuário e centro de custo
+
+Além de material, tipo exato e período, o **Histórico de movimentações** (grupo Movimentações) filtra
+por:
+
+- **Grupo (ENTRADA, SAIDA, AJUSTE, DEVOLUCAO ou TRANSFERENCIA)** — traz todos os tipos daquele grupo
+  (ENTRADA pega entrada de compra, manual, por devolução, retalho etc.; aceita minúsculas). Os grupos
+  **se sobrepõem**: o ajuste positivo está em ENTRADA e em AJUSTE, e o negativo em SAIDA e em AJUSTE —
+  não some grupos. Outra palavra é recusada:
+  *"Grupo de movimento inválido: COMPRAS (use ENTRADA, SAIDA, AJUSTE, DEVOLUCAO ou TRANSFERENCIA)"*.
+- **Usuário (parte do nome)** — um `%` ou `_` digitado vale como letra. Maiúsculas e minúsculas são
+  equivalentes só em letras sem acento.
+- **Centro de custo (id)** — o número do centro de custo.
+- **Motivo (cadastro)** — uma lista com *"Todos"* e os motivos cadastrados (6.4b), inclusive os desativados, marcados
+  *"(desativado)"*. Traz só as movimentações gravadas **escolhendo aquele motivo da lista** — também as feitas antes de
+  ele ser renomeado; uma movimentação com o mesmo texto **digitado** não entra. Se a lista não carregar, o campo diz
+  *"Não foi possível carregar as opções"* e o relatório roda sem esse filtro. Pela API, um identificador que não é
+  número inteiro positivo é recusado com *"Parâmetro "motivo_id" deve ser um número inteiro positivo"*.
+
+As colunas **Motivo** e **Justificativa** (logo depois de **Saldo após**), **Usuário** e **Centro de custo** (código e
+nome) saem na tela e no Excel. O relatório
+mostra as 500 movimentações mais recentes do filtro e não inclui as canceladas; o histórico completo
+de um material, sem teto e com as canceladas, é a tela **Movimentações** filtrada por ele.
 
 ### Custo por projeto
 
@@ -2973,7 +5699,10 @@ regras, que o rodapé do próprio relatório também declara:
 
 O relatório **Indicadores** aceita uma janela em dias (vazia, usa a mesma janela do consumo
 médio da Reposição; valor inválido responde "Parâmetro \"janela_dias\" deve ser um número
-inteiro maior que zero") e traz cinco blocos — materiais de clientes ficam fora de todos:
+inteiro maior que zero") e traz oito blocos. Materiais de clientes ficam fora de giro, cobertura,
+rupturas, valor e ajustes; os blocos de requisição contam a requisição inteira. A tela mostra os
+três blocos de requisição e o de ajustes pelo nome técnico do campo (*requisicoes_no_prazo*,
+*requisicoes_integrais*, *ajustes*); a nota do rodapé traz a régua de cada um.
 
 - **Giro**: valor consumido na janela dividido pelo valor do estoque ATUAL — é uma
   aproximação declarada (o sistema não guarda histórico diário de estoque).
@@ -2986,11 +5715,104 @@ inteiro maior que zero") e traz cinco blocos — materiais de clientes ficam for
 - **Valor do estoque por grupo**: soma do valor por categoria de material.
 - **Tempo médio de atendimento**: horas entre a criação e a **entrega completa** da
   requisição, considerando todo o histórico (não é limitado pela janela); entregas parciais
-  não contam até completarem.
+  não contam até completarem. Requisição excluída fica fora.
+- **Requisições no prazo** (*requisicoes_no_prazo*): entram as requisições cuja **data de
+  necessidade** (7.2) está entre o início da janela e hoje. **No prazo** é a que teve a
+  entrega **completa** até o dia do prazo; **fora do prazo** é todo o resto que entrou —
+  entregue depois do prazo, entregue só em parte, encerrada sem completar, ou ainda aberta com
+  o prazo vencido (inclusive a pendente que ninguém aprovou):
+  > **% no prazo = no prazo ÷ (no prazo + fora do prazo) × 100**, com duas casas.
+  A requisição com prazo **hoje** que ainda não foi entregue **não entra** na conta (o dia não
+  acabou) — aparece à parte, em *em_aberto_no_dia*. A requisição sem data de necessidade, ou com
+  data fora do formato *AAAA-MM-DD* (as antigas), também não entra — as criadas na janela são
+  contadas à parte, em *sem_data_valida*. Rascunho, rejeitada, cancelada e excluída ficam fora de tudo. **As datas
+  comparam o dia em horário universal (UTC):** uma entrega completa feita das 21h à meia-noite
+  de Brasília no dia do prazo já cai no dia seguinte e conta **fora do prazo**. Sem nenhuma
+  requisição para medir, o percentual fica vazio (*—*), nunca 0%.
+- **Requisições integrais** (*requisicoes_integrais*): das requisições **finalizadas** na
+  janela — entregues por completo ou encerradas —, **integral** é a que teve todos os itens
+  entregues na quantidade pedida; a encerrada sem completar conta como *encerradas_incompletas*:
+  > **% integrais = integrais ÷ (integrais + encerradas incompletas) × 100**.
+  Devolução depois da entrega não desfaz a integral. Requisição ainda aberta (parcial ou não)
+  não entra até ser finalizada.
+- **Ajustes** (*ajustes*): quantos lançamentos de ajuste — AJUSTE, AJUSTE_POSITIVO,
+  AJUSTE_NEGATIVO e AJUSTE_INVENTARIO — foram feitos na janela, no total e por tipo. Os
+  estornados não contam (nem o lançamento estornado, nem a linha do estorno); material inativado
+  conta. Conta **lançamentos**, não quantidade: cada material tem sua unidade, e o AJUSTE grava o
+  saldo final, não a diferença. O detalhe por motivo está em **Ajustes por motivo**, abaixo.
 
-O painel inicial do almoxarifado mostra três desses números em cartões (giro, rupturas e
-tempo de atendimento), com a janela na legenda; se os indicadores falharem, apenas os três
-cartões mostram o erro — o restante do painel continua.
+**Entrega em frações completa.** Uma requisição entregue em várias partes fracionárias (dez
+entregas de 0,1, por exemplo) passa a **Entregue** quando a soma alcança o pedido, e a reserva
+do item fecha como **Consumida** — a diferença de arredondamento do computador
+(0,9999999999999999 em vez de 1) não deixa nada pendente.
+
+O painel inicial do almoxarifado mostra quatro desses números em cartões — giro, rupturas,
+tempo de atendimento e **"Requisições no prazo"** —, com a janela na legenda. O cartão de prazo
+tem a legenda *"Janela de N dias · prazo vencido até hoje · entrega completa até o dia"*; sem
+nada para medir, mostra *"—"* e *"sem requisições com prazo no período"*. Se os indicadores
+falharem, apenas os cartões mostram o erro — o restante do painel continua.
+
+### Ajustes por motivo
+
+No grupo **Movimentações**, visível para todo perfil com acesso ao módulo, com filtros opcionais
+**Data início**, **Data fim** e **Material**. Uma linha por motivo, com **Origem**, **Motivo
+(id)**, **Motivo**, **Ajustes** (quantos lançamentos), **Materiais** (quantos materiais
+diferentes) e **Último em**, do maior número de ajustes para o menor:
+
+- **Origem "Cadastro"** — ajustes feitos escolhendo um motivo da lista (6.4b). O motivo aparece
+  pelo **nome atual**: renomear um motivo junta as linhas antigas a ele (o livro continua com o
+  nome da época); motivo desativado aparece com *"(desativado)"*.
+- **Origem "Inventário"** — os ajustes da conclusão de uma conferência de inventário, na linha
+  *"Ajuste de conferência de inventário"* (o inventário não usa a lista de motivos).
+- **Origem "Texto livre"** — todos os outros, juntos em *"Sem motivo do cadastro"* — **mesmo que
+  o texto digitado seja igual ao nome de um motivo** da lista.
+
+Mesma régua do bloco **Ajustes** dos indicadores: os quatro tipos de ajuste, sem os estornados,
+materiais de clientes fora, material inativado conta; as datas comparam o dia em UTC. O total bate
+com o bloco Ajustes e com o **Histórico de movimentações** filtrado pelo grupo AJUSTE **só no mesmo
+recorte** — os indicadores contam uma janela móvel até agora, e o histórico mostra só as 500 linhas
+mais recentes e inclui materiais de clientes. Material inválido no filtro (pela API) é recusado com
+*"Parâmetro "material_id" deve ser um número inteiro positivo"*.
+
+### Qualidade por fornecedor
+
+No grupo **Gestão**, visível para todo perfil com acesso ao módulo, com filtros opcionais **Data
+início** e **Data fim** (sobre a data do recebimento, dia em UTC; data inválida devolve a lista
+vazia). Uma linha por fornecedor:
+
+| Coluna | O que conta |
+|---|---|
+| **Fornecedor** | o nome que veio no recebimento mais recente do grupo |
+| **Agrupado por** | o que juntou a linha: *"CNPJ ⟨como veio⟩"*, *"Cadastro #⟨número⟩"* ou *"Nome digitado"* |
+| **Recebimentos** | quantos recebimentos do fornecedor no período |
+| **Itens conferidos (conferência finalizada)** | itens de recebimentos em que alguém clicou **"Finalizar Conferência"** |
+| **Itens com divergência** / **Com falta** / **Com sobra** | itens conferidos com quantidade recebida diferente da esperada |
+| **% divergência** | itens com divergência ÷ itens conferidos × 100 |
+| **Inspeções** / **Inspeções com reprovação** | inspeções decididas dos itens do fornecedor, e as que reprovaram alguma quantidade |
+| **% rejeição** | inspeções com reprovação ÷ inspeções × 100 |
+
+Como o sistema decide:
+
+- **Conferido é conferência finalizada.** Todo item de recebimento já nasce com a quantidade
+  recebida igual à esperada; só o gesto **"Finalizar Conferência"** prova que alguém contou.
+  Recebimento apenas salvo, ou aprovado sem passar pela conferência, não tem item conferido.
+- **Divergência é uma vez por item**, pelo estado atual da conferência (inclusive o excedente
+  autorizado, que conta como sobra); as não conformidades que a divergência abriu não somam de
+  novo. **No recebimento de pedido, a esperada é o saldo da linha do pedido:** uma entrega
+  parcial combinada com o fornecedor conta como **falta** — a mesma régua do alerta de
+  divergência.
+- **Rejeição é por inspeção.** Só material crítico passa por inspeção; inspeção antiga sem
+  quantidade fica fora. Liberar depois por não conformidade, ou devolver ao fornecedor, **não**
+  muda o índice — ele mede a entrega do fornecedor.
+- **Os índices contam itens e inspeções, não quantidades** — o mesmo fornecedor entrega em
+  unidades diferentes, que não se somam.
+- **O fornecedor é agrupado pelo CNPJ do recebimento** (pontos, barra, hífen e espaços não
+  importam), senão pelo fornecedor do cadastro, senão pelo nome digitado. A mesma empresa pode
+  aparecer em mais de uma linha quando os recebimentos não trazem o mesmo CNPJ — uma nota com
+  CNPJ e outra só com o nome, por exemplo; a coluna **Agrupado por** mostra a diferença. Pelo
+  nome digitado, letras acentuadas em maiúsculas e minúsculas podem separar o mesmo nome.
+- Materiais de clientes ficam fora. Sem item conferido, ou sem inspeção, o índice correspondente
+  fica vazio (*—*), não 0.
 
 ## 22. Como o sistema calcula
 

@@ -532,3 +532,516 @@ describe('MovimentacoesAlmoxarifado — hint de retalho disponível na SAÍDA (E
     }));
   });
 });
+
+/**
+ * Etapa 45, fechamento — DEVOLUCAO_FORNECEDOR no livro.
+ *
+ * ACHADO DA FASE 6, e ele escapou de três revisores: a etapa criou o tipo de movimento novo e
+ * NÃO o pôs em `TIPOS`, que é a lista que o livro usa para rótulo (`tipoInfo`) e para o dropdown
+ * de filtro. O efeito é o fallback `{ label: tipo }` — a coluna Tipo mostra o código cru
+ * `DEVOLUCAO_FORNECEDOR` e o filtro não tem a opção, então a devolução ao fornecedor não é
+ * localizável no livro.
+ *
+ * O ARQUIVO JÁ AVISAVA: o comentário de `AJUSTE_INVENTARIO` (linha ~55) foi escrito na Etapa 10
+ * por este mesmo motivo, com a frase "senão cai no fallback genérico (rótulo cru
+ * 'AJUSTE_INVENTARIO', sem opção no dropdown de filtro)". Mesma classe do épsilon do fix-round:
+ * o aviso estava escrito no arquivo e eu passei por cima.
+ *
+ * `cls: 'saida'` (vermelho) e não `'devolucao'` (violeta): DEVOLUCAO é a devolução AO estoque, que
+ * devolve material; esta TIRA material do galpão. A cor tem de dizer isso.
+ *
+ * ⚠️ O BURACO MAIOR FICA DECLARADO, não consertado aqui (letra G das novidades): medido em
+ * 2026-09-29, `TIPOS` cobre 10 tipos e o serviço grava pelo menos 14 outros que caem no rótulo
+ * cru — BLOQUEIO, DESBLOQUEIO, QUARENTENA, RESERVA, LIBERACAO_RESERVA, REMESSA_TERCEIRO,
+ * RETORNO_TERCEIRO, CONSUMO_TERCEIRO, PERDA_TERCEIRO, RETORNO_TRANSFORMACAO, DEVOLUCAO_CLIENTE,
+ * ENTRADA_COMPRA, ENTRADA_DEVOLUCAO e os de inspeção. Consertar todos é etapa própria (rótulo +
+ * opção de filtro + cor por tipo); esta etapa paga só o tipo que ela mesma criou.
+ */
+const MOV_DEVOLUCAO_FORNECEDOR = [
+  movimento(1, 'SAIDA'),
+  { ...movimento(20, 'DEVOLUCAO_FORNECEDOR'), motivo: 'Devolução ao fornecedor', documento_vinculado: 'NC-2026-0007' },
+];
+
+describe('MovimentacoesAlmoxarifado — DEVOLUCAO_FORNECEDOR no livro (Etapa 45)', () => {
+  beforeEach(() => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/movimentacoes') return Promise.resolve({ data: MOV_DEVOLUCAO_FORNECEDOR });
+      if (url === '/almoxarifado/materiais') {
+        return Promise.resolve({ data: [{ id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC' }] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  test('a linha mostra o rótulo "Devolução ao fornecedor", e NÃO o código cru', async () => {
+    await renderizar();
+    const badges = linhas().map((tr) => tr.querySelector('.almox-badge')?.textContent);
+    // A metade positiva: a linha de controle tem o rótulo dela, senão este teste passaria com uma
+    // tela que não desenha badge nenhuma.
+    expect(badges).toContain('Saída');
+    expect(badges).toContain('Devolução ao fornecedor');
+    expect(badges).not.toContain('DEVOLUCAO_FORNECEDOR');
+  });
+
+  test('a badge da devolução ao fornecedor usa a cor de SAÍDA (o material sai do galpão)', async () => {
+    await renderizar();
+    const badge = linhas()
+      .map((tr) => tr.querySelector('.almox-badge'))
+      .find((b) => b?.textContent === 'Devolução ao fornecedor');
+    expect(badge.className).toContain('almox-badge-saida');
+  });
+
+  test('o filtro do livro oferece a opção (senão a devolução não é localizável)', async () => {
+    await renderizar();
+    const filtro = container.querySelector('.almox-filters select.almox-select');
+    const valores = [...filtro.querySelectorAll('option')].map((o) => o.value);
+    expect(valores).toContain('DEVOLUCAO_FORNECEDOR');
+    // Metade positiva de novo: a lista de filtro existe e tem os tipos vizinhos.
+    expect(valores).toContain('SAIDA');
+  });
+
+  test('o FORMULÁRIO continua sem oferecer o tipo — ele é dedicado à execução da não conformidade', async () => {
+    await abrirModalNovaMovimentacao();
+    const valores = [...seletorTipo().querySelectorAll('option')].map((o) => o.value);
+    expect(valores).not.toContain('DEVOLUCAO_FORNECEDOR');
+    // Metade positiva: o seletor do formulário está de pé e oferece o que deve.
+    expect(valores).toContain('SAIDA');
+    expect(valores).toContain('TRANSFERENCIA');
+  });
+});
+
+/**
+ * Etapa 45, fechamento (segundo achado da Fase 6): o botão de estorno aparecia na linha da
+ * devolução ao fornecedor, e o servidor recusa SEMPRE
+ * (`stockService.js:1594`, casando por TIPO: *"Devolução ao fornecedor não pode ser estornada pelo
+ * livro — o material voltaria bloqueado com o documento dizendo que foi devolvido"*).
+ *
+ * O cabeçalho DESTE arquivo já fixou o princípio, na Etapa 5: *"Com o servidor recusando, o botão
+ * só entregaria um 400. Nos dois casos a tela não pode oferecê-lo."* A recusa aqui é por tipo e
+ * incondicional, então `TIPOS_SEM_ESTORNO` é exatamente o lugar dela.
+ *
+ * ⚠️ NÃO vale para o `DESBLOQUEIO` da Etapa 44: lá a recusa casa por MOTIVO (o desbloqueio avulso
+ * continua estornável), e `TIPOS_SEM_ESTORNO` é por tipo. Aquele caso continua recusado pelo
+ * servidor com o botão visível, e fica declarado em G73.
+ */
+describe('MovimentacoesAlmoxarifado — estorno da devolução ao fornecedor (Etapa 45)', () => {
+  beforeEach(() => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/movimentacoes') return Promise.resolve({ data: MOV_DEVOLUCAO_FORNECEDOR });
+      if (url === '/almoxarifado/materiais') {
+        return Promise.resolve({ data: [{ id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC' }] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  test('não oferece estorno na devolução ao fornecedor, e CONTINUA oferecendo na saída comum', async () => {
+    await renderizar();
+    // MOV_DEVOLUCAO_FORNECEDOR = [SAIDA, DEVOLUCAO_FORNECEDOR]. A linha de controle é obrigatória:
+    // sem ela o teste passaria com um `podeEstornar` que devolvesse false para tudo.
+    expect(temBotaoEstorno(0)).toBe(true);
+    expect(temBotaoEstorno(1)).toBe(false);
+  });
+});
+
+// ─── Etapa 53: sugestão de localização na ENTRADA ──────────────────────────────────────────
+describe('Etapa 53: sugestao de localizacao na entrada', () => {
+  let sugestaoDoBanco;
+  beforeEach(() => {
+    sugestaoDoBanco = {
+      padrao: { localizacao_id: 1, codigo: 'A-01', recusa: null },
+      sugestoes: [
+        { localizacao_id: 1, codigo: 'A-01', endereco_completo: 'A-01', motivo: 'PADRAO', quantidade_no_endereco: 3 },
+        { localizacao_id: 2, codigo: 'B-01', endereco_completo: 'B-01', motivo: 'JA_TEM_O_MATERIAL', quantidade_no_endereco: 20 },
+        { localizacao_id: 3, codigo: 'C-01', endereco_completo: 'C-01', motivo: 'VAZIA_COMPATIVEL', quantidade_no_endereco: 0 },
+        { localizacao_id: 4, codigo: 'D-01', endereco_completo: 'D-01', motivo: 'VAZIA_COMPATIVEL', quantidade_no_endereco: 0 },
+      ],
+    };
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/movimentacoes') return Promise.resolve({ data: MOVIMENTOS });
+      if (url === '/almoxarifado/materiais') {
+        return Promise.resolve({ data: [
+          { id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC' },
+          { id: 11, codigo: 'MAT-2', nome: 'Perfil', unidade: 'PC' },
+        ] });
+      }
+      if (url.endsWith('/sugestao-localizacao')) return Promise.resolve({ data: sugestaoDoBanco });
+      if (url === '/almoxarifado/localizacoes') {
+        return Promise.resolve({ data: [1, 2, 3, 4].map((id) => ({ id, codigo: `${'ABCD'[id - 1]}-01` })) });
+      }
+      return Promise.resolve({ data: [] });
+    });
+  });
+  const blocoSugestoes = () => container.querySelector('[data-testid="sugestoes-localizacao"]');
+  const selectDestino = () => [...container.querySelectorAll('.almox-modal .almox-field')]
+    .find((f) => f.textContent.includes('Localização de destino')).querySelector('select');
+  const urlsSugestao = () => api.get.mock.calls.filter(([u]) => String(u).endsWith('/sugestao-localizacao'));
+  async function entradaCom(materialId) {
+    await abrirModalNovaMovimentacao();
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), String(materialId));
+    preencher(seletorTipo(), 'ENTRADA');
+    await esperarEfeitos();
+  }
+
+  test('ate 3 sugestoes com o motivo, e o clique preenche o destino (nada preenche sozinho)', async () => {
+    await entradaCom(10);
+    const botoes = [...blocoSugestoes().querySelectorAll('button')];
+    expect(botoes.map((b) => b.textContent)).toEqual([
+      'A-01 · padrão do material', 'B-01 · já tem este material (20)', 'C-01 · vazia',
+    ]);
+    expect(selectDestino().value).toBe('');
+    await act(async () => { botoes[1].dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(selectDestino().value).toBe('2');
+  });
+
+  test('padrao RECUSADA: aviso com o motivo enquanto o destino esta vazio', async () => {
+    sugestaoDoBanco = { padrao: { localizacao_id: 1, codigo: 'A-01', recusa: 'Localização A-01 está bloqueada' }, sugestoes: [] };
+    await entradaCom(10);
+    const aviso = container.querySelector('[data-testid="aviso-padrao-recusada"]');
+    expect(aviso.textContent).toBe('A localização padrão A-01 não recebe este material (Localização A-01 está bloqueada) — escolha um destino.');
+    // Fase 5: escolher o destino SOME com o aviso (a condição !destino não tinha prova).
+    preencher(selectDestino(), '3');
+    expect(container.querySelector('[data-testid="aviso-padrao-recusada"]')).toBeNull();
+    expect(selectDestino().value).toBe('3');
+  });
+
+  test('padrao INATIVA: aviso proprio (o motor ainda aceitaria, e o saldo sumiria do mapa)', async () => {
+    sugestaoDoBanco = { padrao: { localizacao_id: 1, codigo: 'A-01', recusa: null, inativa: true }, sugestoes: [] };
+    await entradaCom(10);
+    expect(container.querySelector('[data-testid="aviso-padrao-inativa"]').textContent)
+      .toBe('A localização padrão A-01 está inativa — escolha um destino.');
+    expect(container.querySelector('[data-testid="aviso-padrao-recusada"]')).toBeNull();
+    preencher(selectDestino(), '2');
+    expect(container.querySelector('[data-testid="aviso-padrao-inativa"]')).toBeNull();
+  });
+
+  test('trocar de material ZERA a sugestao na hora, antes da resposta nova chegar', async () => {
+    await entradaCom(10);
+    expect(blocoSugestoes()).not.toBeNull();
+    let resolver;
+    api.get.mockImplementation((url) => {
+      if (url.endsWith('/sugestao-localizacao')) return new Promise((r) => { resolver = r; });
+      return Promise.resolve({ data: [] });
+    });
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), '11');
+    await esperarEfeitos();
+    expect(blocoSugestoes()).toBeNull(); // as sugestões do material 10 não ficam na tela do 11
+    await act(async () => { resolver({ data: sugestaoDoBanco }); });
+    expect(blocoSugestoes()).not.toBeNull();
+  });
+
+  test('resposta ATRASADA do material anterior nao sobrescreve a do atual', async () => {
+    const pendentes = {};
+    api.get.mockImplementation((url) => {
+      const m = String(url).match(/materiais\/(\d+)\/sugestao-localizacao$/);
+      if (m) return new Promise((r) => { pendentes[m[1]] = r; });
+      if (url === '/almoxarifado/materiais') {
+        return Promise.resolve({ data: [
+          { id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC' },
+          { id: 11, codigo: 'MAT-2', nome: 'Perfil', unidade: 'PC' },
+        ] });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await entradaCom(10);
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), '11');
+    await esperarEfeitos();
+    const so = (codigo) => ({ padrao: null, sugestoes: [{ localizacao_id: 9, codigo, endereco_completo: codigo, motivo: 'VAZIA_COMPATIVEL', quantidade_no_endereco: 0 }] });
+    await act(async () => { pendentes['11'](({ data: so('DO-11') })); });
+    await act(async () => { pendentes['10'](({ data: so('DO-10') })); }); // chega depois, e é do material velho
+    expect([...blocoSugestoes().querySelectorAll('button')].map((b) => b.textContent)).toEqual(['DO-11 · vazia']);
+  });
+
+  test('trocar de material LIMPA o destino que veio de sugestao; o escolhido a mao fica', async () => {
+    await entradaCom(10);
+    await act(async () => { blocoSugestoes().querySelector('button').dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    expect(selectDestino().value).toBe('1');
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), '11');
+    await esperarEfeitos();
+    expect(selectDestino().value).toBe('');
+    // à mão
+    preencher(selectDestino(), '4');
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), '10');
+    await esperarEfeitos();
+    expect(selectDestino().value).toBe('4');
+    // Clicou uma sugestão e DEPOIS trocou à mão: a troca manual vence — o destino fica.
+    await act(async () => { blocoSugestoes().querySelector('button').dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    preencher(selectDestino(), '3');
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), '11');
+    await esperarEfeitos();
+    expect(selectDestino().value).toBe('3');
+  });
+
+  test('numa SAIDA nao ha GET de sugestao; sem material tambem nao', async () => {
+    await abrirModalNovaMovimentacao();
+    preencher(seletorTipo(), 'ENTRADA');
+    await esperarEfeitos();
+    expect(urlsSugestao()).toEqual([]);
+    // SAIDA primeiro, material depois: escolher o material com ENTRADA dispararia um GET legítimo.
+    preencher(seletorTipo(), 'SAIDA');
+    preencher(container.querySelector('.almox-modal select.almox-form-select'), '10');
+    await esperarEfeitos();
+    expect(urlsSugestao()).toEqual([]);
+    expect(blocoSugestoes()).toBeNull();
+  });
+
+  test('falha da sugestao nao quebra o formulario', async () => {
+    api.get.mockImplementation((url) => {
+      if (url.endsWith('/sugestao-localizacao')) return Promise.reject(new Error('x'));
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [{ id: 10, codigo: 'MAT-1', nome: 'Chapa', unidade: 'PC' }] });
+      return Promise.resolve({ data: [] });
+    });
+    await entradaCom(10);
+    expect(blocoSugestoes()).toBeNull();
+    expect(container.querySelector('.almox-modal')).not.toBeNull();
+  });
+});
+
+// ─── Etapa 68: aviso de área especial no DESTINO ──────────────────────────────────────────
+// O servidor é a única fonte das frases (GET /localizacoes/:id/aviso-area?material_id=); a tela
+// mostra o `aviso` LITERAL, não bloqueia o envio e falha aberta. Mock só na fronteira HTTP, com as
+// frases do contrato (stockService.avisoAreaEspecial).
+describe('Etapa 68: aviso de area especial no destino', () => {
+  const FRASE_SUCATA = 'Localização C-01 é área de sucata, mas guardar aqui não sucateia — o material continua no estoque disponível até o sucateamento aprovado.';
+  const FRASE_DEVOLUCOES = 'Localização D-01 é área de devoluções, mas guardar aqui não muda o estado do material — ele continua disponível.';
+  const FRASE_CLIENTE = 'Localização D-01 é área de materiais do cliente, e MAT-2 é material próprio.';
+  let respostaAviso;
+  beforeEach(() => {
+    // (loc, material) -> Promise; padrão: 3 = sucata; 4 = devoluções (cliente para o MAT-2); 1/2 = sem área.
+    respostaAviso = (loc, mat) => {
+      if (loc === '3') return Promise.resolve({ data: { area: 'SUCATA', aviso: FRASE_SUCATA } });
+      if (loc === '4' && mat === '11') return Promise.resolve({ data: { area: 'MATERIAIS_CLIENTE', aviso: FRASE_CLIENTE } });
+      if (loc === '4') return Promise.resolve({ data: { area: 'DEVOLUCOES', aviso: FRASE_DEVOLUCOES } });
+      return Promise.resolve({ data: { area: null, aviso: null } });
+    };
+    api.get.mockImplementation((url) => {
+      const m = String(url).match(/^\/almoxarifado\/localizacoes\/(\d+)\/aviso-area\?material_id=(\d+)$/);
+      if (m) return respostaAviso(m[1], m[2]);
+      if (url === '/almoxarifado/movimentacoes') return Promise.resolve({ data: MOVIMENTOS });
+      if (url === '/almoxarifado/materiais') {
+        return Promise.resolve({ data: [
+          { id: 10, codigo: 'MAT-1', nome: 'Chapa 3mm', unidade: 'PC' },
+          { id: 11, codigo: 'MAT-2', nome: 'Perfil', unidade: 'PC' },
+        ] });
+      }
+      if (url === '/almoxarifado/localizacoes') {
+        return Promise.resolve({ data: [1, 2, 3, 4].map((id) => ({ id, codigo: `${'ABCD'[id - 1]}-01` })) });
+      }
+      return Promise.resolve({ data: [] });
+    });
+  });
+  const aviso = () => container.querySelector('[data-testid="aviso-area-especial"]');
+  const selectMaterial = () => container.querySelector('.almox-modal select.almox-form-select');
+  const selectDestino = () => [...container.querySelectorAll('.almox-modal .almox-field')]
+    .find((f) => f.textContent.includes('Localização de destino')).querySelector('select');
+  const urlsAviso = () => api.get.mock.calls.map(([u]) => String(u)).filter((u) => u.includes('/aviso-area'));
+  async function abrir(tipo, materialId) {
+    await abrirModalNovaMovimentacao();
+    if (materialId) preencher(selectMaterial(), String(materialId));
+    preencher(seletorTipo(), tipo);
+    await esperarEfeitos();
+  }
+  async function destino(id) {
+    preencher(selectDestino(), String(id));
+    await esperarEfeitos();
+  }
+  async function enviarQuantidade(qtd) {
+    const inputs = [...container.querySelectorAll('.almox-modal input.almox-input')];
+    preencher(inputs.find((i) => i.type === 'number'), String(qtd));
+    const form = container.querySelector('.almox-modal form');
+    await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+  }
+
+  test('destino que e area: o aviso do servidor aparece LITERAL abaixo do destino (ENTRADA e TRANSFERENCIA)', async () => {
+    await abrir('ENTRADA', 10);
+    await destino(3);
+    expect(urlsAviso()).toEqual(['/almoxarifado/localizacoes/3/aviso-area?material_id=10']);
+    expect(aviso().textContent).toBe(FRASE_SUCATA);
+    expect(selectDestino().parentElement.contains(aviso())).toBe(true);
+    preencher(seletorTipo(), 'TRANSFERENCIA');
+    await esperarEfeitos();
+    expect(aviso().textContent).toBe(FRASE_SUCATA);
+  });
+
+  test('aviso null nao mostra nada; e o mesmo campo MOSTRA quando o destino passa a ser area (metade positiva)', async () => {
+    await abrir('ENTRADA', 10);
+    await destino(2);
+    expect(urlsAviso()).toEqual(['/almoxarifado/localizacoes/2/aviso-area?material_id=10']);
+    expect(aviso()).toBeNull();
+    await destino(4);
+    expect(aviso().textContent).toBe(FRASE_DEVOLUCOES);
+  });
+
+  test('sem material ou sem destino nao busca; numa SAIDA (sem destino) tambem nao', async () => {
+    await abrir('ENTRADA', null);
+    await destino(3);
+    expect(urlsAviso()).toEqual([]);
+    expect(aviso()).toBeNull();
+    preencher(seletorTipo(), 'SAIDA');
+    preencher(selectMaterial(), '10');
+    await esperarEfeitos();
+    expect(urlsAviso()).toEqual([]);
+    expect(aviso()).toBeNull();
+  });
+
+  test('trocar destino ou material LIMPA o aviso na hora e refaz a busca', async () => {
+    await abrir('ENTRADA', 10);
+    await destino(3);
+    expect(aviso().textContent).toBe(FRASE_SUCATA);
+    // Troca de destino com a resposta nova pendente: o aviso velho some antes dela chegar.
+    let resolver;
+    respostaAviso = () => new Promise((r) => { resolver = r; });
+    await destino(4);
+    expect(aviso()).toBeNull();
+    await act(async () => { resolver({ data: { area: 'DEVOLUCOES', aviso: FRASE_DEVOLUCOES } }); });
+    expect(aviso().textContent).toBe(FRASE_DEVOLUCOES);
+    // Troca de material: o destino escolhido à mão fica, o aviso some e a busca é refeita com o novo material.
+    preencher(selectMaterial(), '11');
+    await esperarEfeitos();
+    expect(selectDestino().value).toBe('4');
+    expect(aviso()).toBeNull();
+    expect(urlsAviso().slice(-1)).toEqual(['/almoxarifado/localizacoes/4/aviso-area?material_id=11']);
+    await act(async () => { resolver({ data: { area: 'MATERIAIS_CLIENTE', aviso: FRASE_CLIENTE } }); });
+    expect(aviso().textContent).toBe(FRASE_CLIENTE);
+    // Voltar o destino para vazio: nada de aviso.
+    await destino('');
+    expect(aviso()).toBeNull();
+  });
+
+  test('resposta ATRASADA do destino anterior nao sobrescreve a do atual', async () => {
+    const pendentes = {};
+    respostaAviso = (loc) => new Promise((r) => { pendentes[loc] = r; });
+    await abrir('ENTRADA', 10);
+    await destino(3);
+    await destino(4);
+    await act(async () => { pendentes['4']({ data: { area: 'DEVOLUCOES', aviso: FRASE_DEVOLUCOES } }); });
+    await act(async () => { pendentes['3']({ data: { area: 'SUCATA', aviso: FRASE_SUCATA } }); }); // chega depois, é do destino velho
+    expect(aviso().textContent).toBe(FRASE_DEVOLUCOES);
+  });
+
+  test('falha da busca = sem aviso, e o envio sai com o destino (falha aberta)', async () => {
+    respostaAviso = () => Promise.reject(Object.assign(new Error('x'), { response: { status: 404, data: { error: 'Localização não encontrada' } } }));
+    await abrir('ENTRADA', 10);
+    await destino(3);
+    expect(aviso()).toBeNull();
+    await enviarQuantidade(5);
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/movimentacoes/v2', expect.objectContaining({
+      tipo: 'ENTRADA', material_id: 10, quantidade: 5, localizacao_destino_id: 3,
+    }));
+  });
+
+  test('com o aviso NA TELA o envio tambem sai (o aviso nunca bloqueia)', async () => {
+    await abrir('ENTRADA', 10);
+    await destino(3);
+    expect(aviso().textContent).toBe(FRASE_SUCATA);
+    await enviarQuantidade(5);
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/movimentacoes/v2', expect.objectContaining({
+      tipo: 'ENTRADA', material_id: 10, quantidade: 5, localizacao_destino_id: 3,
+    }));
+  });
+});
+
+/**
+ * Etapa 71 T3: o estorno da ENTRADA_COMPRA de uma nota contra pedido desconta a linha do pedido e,
+ * se a conta fechava antes e nao fecha depois, reabre o pedido. O servidor devolve isso em
+ * `pedido_compra` (so quando um pedido foi tocado); a tela avisa DEPOIS do sucesso:
+ * - reaberto -> "Pedido de compra <numero> reaberto: faltam <saldo> para receber";
+ * - so descontado -> "Pedido de compra <numero>: o saldo a receber voltou a <saldo>";
+ * - pedido cancelado/rejeitado (o comprador decidiu) ou saldo 0 -> nada alem do sucesso (Fase 2).
+ * A leitura e defensiva: um TypeError depois do toast.success cairia no catch e mostraria um
+ * toast.error de um estorno que deu certo.
+ */
+describe('MovimentacoesAlmoxarifado — aviso do pedido de compra no estorno (Etapa 71)', () => {
+  const { toast } = jest.requireMock('react-toastify');
+
+  const pedido = (extra) => ({
+    id: 7, numero: 'PC-0007', pedido_item_id: 70, quantidade_estornada: 10,
+    situacao_antes: 'RECEBIDO', situacao_depois: 'ABERTO', saldo_pendente: 10,
+    status_anterior: 'recebido', status: 'enviado', reaberto: true, ...extra,
+  });
+
+  async function estornar() {
+    await renderizar();
+    await act(async () => { linhas()[0].querySelector('.almox-btn-icon.danger').click(); });
+    const textarea = container.querySelector('.almox-modal textarea');
+    const setValue = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+    act(() => {
+      setValue.call(textarea, 'lancei errado');
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const botao = [...container.querySelectorAll('.almox-modal button')].find((b) => b.textContent === 'Confirmar Estorno');
+    await act(async () => { botao.click(); });
+    await esperarEfeitos();
+  }
+
+  const modalAberto = () => !!container.querySelector('.almox-modal textarea');
+
+  test('pedido reaberto: aviso literal de reabertura, depois do sucesso', async () => {
+    api.post.mockResolvedValue({ data: { success: true, estorno_id: 99, pedido_compra: pedido() } });
+    await estornar();
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/movimentacoes/1/cancelar', { motivo: 'lancei errado' });
+    expect(toast.success).toHaveBeenCalledWith('Movimentação estornada!');
+    expect(toast.info.mock.calls).toEqual([['Pedido de compra PC-0007 reaberto: faltam 10 para receber']]);
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(modalAberto()).toBe(false);
+  });
+
+  test('pedido so descontado: aviso literal do saldo, sem ruido de ponto flutuante', async () => {
+    api.post.mockResolvedValue({ data: { success: true, estorno_id: 99, pedido_compra: pedido({
+      reaberto: false, situacao_antes: 'PARCIAL', situacao_depois: 'PARCIAL',
+      status_anterior: 'enviado', status: 'enviado', saldo_pendente: 0.30000000000000004,
+    }) } });
+    await estornar();
+    expect(toast.success).toHaveBeenCalledWith('Movimentação estornada!');
+    expect(toast.info.mock.calls).toEqual([['Pedido de compra PC-0007: o saldo a receber voltou a 0.3']]);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['cancelado', { status: 'cancelado', status_anterior: 'cancelado', reaberto: false }],
+    ['rejeitado', { status: 'rejeitado', status_anterior: 'rejeitado', reaberto: false }],
+    ['saldo 0', { status: 'enviado', reaberto: false, saldo_pendente: 0 }],
+  ])('pedido %s: so o sucesso, sem aviso extra', async (_nome, extra) => {
+    api.post.mockResolvedValue({ data: { success: true, estorno_id: 99, pedido_compra: pedido(extra) } });
+    await estornar();
+    expect(toast.success).toHaveBeenCalledWith('Movimentação estornada!');
+    expect(toast.info).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(modalAberto()).toBe(false);
+  });
+
+  test('metade positiva: o mesmo pedido com status vivo e saldo > 0 AVISA (o filtro nao engole tudo)', async () => {
+    api.post.mockResolvedValue({ data: { success: true, estorno_id: 99, pedido_compra: pedido({
+      status: 'pendente', reaberto: false, saldo_pendente: 4,
+    }) } });
+    await estornar();
+    expect(toast.info.mock.calls).toEqual([['Pedido de compra PC-0007: o saldo a receber voltou a 4']]);
+  });
+
+  test('sem pedido_compra: so o sucesso de hoje', async () => {
+    api.post.mockResolvedValue({ data: { success: true, estorno_id: 99 } });
+    await estornar();
+    expect(toast.success).toHaveBeenCalledWith('Movimentação estornada!');
+    expect(toast.info).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  test('resposta sem data: nada de TypeError no catch, e o modal fecha', async () => {
+    api.post.mockResolvedValue(undefined);
+    await estornar();
+    expect(toast.success).toHaveBeenCalledWith('Movimentação estornada!');
+    expect(toast.info).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(modalAberto()).toBe(false);
+  });
+
+  test('recusa 400 da inspecao: mostra o error do servidor literal, sem sucesso', async () => {
+    const msg = 'Esta entrada tem 4 PC em inspeção — decida a inspeção antes de estornar a entrada';
+    api.post.mockRejectedValue(Object.assign(new Error('400'), { response: { status: 400, data: { error: msg } } }));
+    await estornar();
+    expect(toast.error.mock.calls).toEqual([[msg]]);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.info).not.toHaveBeenCalled();
+    expect(modalAberto()).toBe(true);
+  });
+});

@@ -43,13 +43,25 @@
  *
  * ⚠️ NAO EMBRULHE ESTAS ESCRITAS AQUI (achado da revisao adversarial da Etapa 31). A regua casa
  * `numero` de coluna unica, e o banco CORE tem duas tabelas com exatamente essa forma que NAO sao
- * documento deste modulo: `pedidos_compra.numero` (`server/index.js:19159`) e `cotacoes.numero`
- * (`server/index.js:19173`). Hoje isso e INALCANCAVEL — nenhum `fn` passado a
- * `inserirComNumeroUnico` insere nelas —, mas o numero de pedido de compra e de cotacao e
- * DIGITADO pelo comprador, igual ao de serie. Embrulhar a criacao deles aqui faria o retry
- * reescrever em silencio um numero que uma pessoa escolheu, que e exatamente a falha que a
- * exclusao da serie existe para evitar. Documento novo que queira este helper precisa de numero
- * GERADO pelo sistema, nunca digitado.
+ * documento deste modulo: `pedidos_compra.numero` (`server/index.js:19230`) e `cotacoes.numero`
+ * (`server/index.js:19244`). O numero de pedido de compra e de cotacao era DIGITADO pelo
+ * comprador, igual ao de serie: embrulhar uma criacao dessas aqui faria o retry reescrever em
+ * silencio um numero que uma pessoa escolheu, que e exatamente a falha que a exclusao da serie
+ * existe para evitar. Documento novo que queira este helper precisa de numero GERADO pelo
+ * sistema, nunca digitado.
+ *
+ * ⚠️ CORRECAO DA ETAPA 38 — duas coisas mudaram neste paragrafo, e as duas estao ditas em vez de
+ * apagadas (regra 5 do CLAUDE.md: apagar afirmacao errada em silencio faz o proximo confiar nela
+ * de novo):
+ *   1. As linhas citadas estavam ERRADAS — eram `:19159` e `:19173`, e os `CREATE TABLE` reais
+ *      sao `:19230` e `:19244`. Corrigidas acima.
+ *   2. A frase "Hoje isso e INALCANCAVEL — nenhum `fn` passado a `inserirComNumeroUnico` insere
+ *      nelas" era VERDADE ate a Etapa 38 e **deixou de ser**: `services/compras/
+ *      pedidoCompraService.criarPedido` chama `inserirComNumeroUnico(db, 'PC', …)` e insere em
+ *      `pedidos_compra`. Isso NAO viola o aviso — ele satisfaz a condicao que o aviso exige: o
+ *      `POST /api/compras/pedidos` **nao tem campo de numero na entrada** (mandar `numero` no
+ *      payload e ignorado, e ha cenario congelando isso), entao nao existe escolha humana a ser
+ *      reescrita pelo retry. `cotacoes.numero` continua fora, e continua DIGITADO.
  */
 
 /** Tentativas de INSERT com numero novo antes de desistir (RN-04). */

@@ -9,7 +9,8 @@
 > [Etapa 10](../../../docs/superpowers/specs/2026-08-22-almoxarifado-etapa10-inventario-avancado-design.md) ·
 > [Etapa 10b](../../../docs/superpowers/specs/2026-08-23-almoxarifado-etapa10b-inventario-avancado-2-design.md)
 > **Etapa 31 (2026-08-31, `1e6c9a9..67b6758`) — o NÚMERO deste documento mudou de forma, e só ele.** O `INV-` era montado com os **últimos dígitos** do milissegundo mais um sorteio de 0 a 99, e por isso o carimbo **repetia** a cada **27,78 horas**, e **sem sorteio nenhum**: a colisão em criação simultânea era CERTA. Agora vem do gerador único `services/almoxarifado/numeroDoc.js` (relógio inteiro em base36 + 8 aleatórios), com retry na colisão. **Nada mais desta feature mudou** — nem status, nem checklist, nem comportamento: o número passa de 12–14 caracteres só com dígitos para 20 com letras, os antigos **não** foram migrados e continuam legíveis (RN-05, testada). Furo **C41** das novidades.
-> **Última atualização:** 2026-08-23 (Etapa 10b fechada, `14f4458..7290481`)
+> **Última atualização:** 2026-09-30 (**Etapa 62** — contagem em fração de material com série recusada, e a conclusão lista os materiais com série a regularizar; ver a seção no fim)
+> Antes: 2026-08-23 (Etapa 10b fechada, `14f4458..7290481`)
 > Antes: 2026-08-22 (Etapa 10, `d644827..8db2671`) · 2026-08-11
 
 ## Correção declarada (2026-08-22)
@@ -176,3 +177,19 @@ fora, agora sem etapa marcada:
 
 - 03 (ajuste via movimentação — **atendido nesta etapa**) · 06 (dupla aprovação formal — ainda
   não construída) · 01 (classe ABC — para contagem cíclica automática, fora do escopo).
+
+## Etapa 62 (2026-09-30) — material com série no inventário
+
+`327703d` (servidor), `b242545` (tela), fix-round `1080491`.
+
+- [x] **Contagem em fração de material com série é recusada** na pré-validação da conclusão (tudo ou nada):
+  `Ajuste bloqueado: {codigo}: material com controle de serie exige contagem inteira` — a regularização das séries nunca
+  fecharia uma diferença fracionária.
+- [x] **A conclusão devolve `series_a_regularizar: [{ material_id, codigo, fisico, presentes }]`** — os materiais com
+  série ajustados cujas séries presentes ficaram diferentes do físico. A tela (`ConferenciaEstoque.js`) mostra o aviso
+  fixo *"Estes materiais com série ficaram com séries presentes diferentes do físico — regularize em Lotes e Séries:"*
+  com o link de cada material (abre em outra aba).
+- **Não mudou (decisão B247):** o `AJUSTE_INVENTARIO` continua ajustando só o número — a contagem não diz quais peças
+  foram contadas. Pedir as séries na contagem é outra etapa, se quiserem.
+- Testes: `server/tests/api/ajusteComSerie.api.test.js` (os dois cenários de inventário) e
+  `client/src/components/almoxarifado/ConferenciaSeriesARegularizar.test.js`.

@@ -102,6 +102,16 @@ const ACAO_PERFIS = {
   inspecionar: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.QUALIDADE],
   reservar: [PERFIS.ADMINISTRADOR, PERFIS.ENGENHARIA, PERFIS.PRODUCAO, PERFIS.ALMOXARIFE],
   reservar_outra_os: [PERFIS.ADMINISTRADOR, PERFIS.GESTOR],
+  // Etapa 77 (T0, C137, D3/B409): liberar a mao (POST /reservas/:id/liberar) uma reserva de origem
+  // REQUISICAO. Ate a 76 bastava `reservar` — e o fallback de getPerfilFromUser cai em PRODUCAO, entao
+  // qualquer usuario sem perfil soltava o material prometido a requisicao de OUTRA pessoa.
+  // Esta acao NAO e a regra inteira: QUEM PEDIU a requisicao tambem libera (desistencia parcial, como o
+  // /rejeitar e o /cancelar ja lhe dao), e essa excecao por IDENTIDADE mora em
+  // reservationService.assertPodeLiberarReserva, chamada pela rota — nao aqui.
+  // GESTOR fica de fora DE PROPOSITO (D4/B410): a rota continua exigindo `reservar`, que ele nao tem;
+  // lista-lo aqui seria configuracao morta (regra da Etapa 36). Ele solta tudo pelo /encerrar.
+  // `reservar` continua inalterado: reserva MANUAL segue liberavel por qualquer `reservar` (D6/B412).
+  liberar_reserva_requisicao: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
   inventario: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.GESTOR],
   configurar: [PERFIS.ADMINISTRADOR],
   // Etapa 27 (C4): cadastrar o PLANO DE INSPECAO (caracteristica, nominal e os dois desvios) e
@@ -123,6 +133,19 @@ const ACAO_PERFIS = {
   //
   // Entra de graca em GET /almoxarifado/minhas-permissoes — a rota itera Object.keys(ACAO_PERFIS).
   gerenciar_plano_inspecao: [PERFIS.ADMINISTRADOR, PERFIS.QUALIDADE, PERFIS.ENGENHARIA],
+  // Etapa 32 (D3): anexar documento e ato de QUEM OPERA, e nao de um papel so — COMPRAS anexa a
+  // NF do recebimento, QUALIDADE anexa o certificado e o relatorio dimensional, PRODUCAO anexa o
+  // desenho da requisicao. Por isso a lista e larga: todos MENOS CONSULTA, cujo nome ja diz o que
+  // ele faz. Nao pega carona em `movimentar` porque anexar nao mexe em saldo, e nao pega carona
+  // em `visualizar` porque visualizar e leitura.
+  anexar_documento: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.COMPRAS, PERFIS.PRODUCAO, PERFIS.ENGENHARIA, PERFIS.GESTOR, PERFIS.QUALIDADE],
+  // E a ASSIMETRIA e a decisao, nao um descuido: remover e estreita. Tirar um certificado de
+  // vista e apagar EVIDENCIA de qualidade — risco de natureza diferente de anexar —, e o criterio
+  // "quando a operacao muda a NATUREZA DO RISCO, ela ganha acao propria" e o mesmo ja escrito
+  // acima para ajustar_material_cliente, remessar_terceiro e conferir_separacao. A remocao e soft
+  // delete e auditada (o arquivo fica no disco); ainda assim, quem esconde documento e o balcao e
+  // o administrador. Reversivel numa linha se o cliente pedir.
+  remover_anexo: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE],
   // Etapa 12 (D7 do design): reenviar e-mail e drenar a fila e operacao administrativa da fila,
   // nao operacao de balcao — COMPRAS fica fora DE PROPOSITO (recebe e-mail, nao opera a fila).
   // Mesmo criterio de gerenciar_reposicao (Etapa 11, D9): reversivel, uma linha, registrado na
@@ -134,6 +157,107 @@ const ACAO_PERFIS = {
   // compra (mesmo criterio que a colocou em gerenciar_reposicao, Etapa 11 D9). Entra de graca
   // em GET /almoxarifado/minhas-permissoes — a rota itera Object.keys(ACAO_PERFIS).
   ver_alertas: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.GESTOR, PERFIS.COMPRAS],
+  // Etapa 36 (RN-18): aceitar MAIS material do que foi pedido gera CONTA A PAGAR maior que o pedido
+  // de compra — risco financeiro, nao risco de prateleira. Mesmo criterio ja escrito acima para
+  // ajustar_material_cliente, remessar_terceiro e conferir_separacao: quando a operacao muda a
+  // NATUREZA DO RISCO, ela ganha acao propria em vez de pegar carona no gate existente
+  // (`receber_material`, que e de quem recebe).
+  //
+  // O ALMOXARIFE fica FORA de proposito, e essa e a exclusao que precisa de justificativa porque
+  // ele e o candidato obvio (tem `receber_material`): quem RECEBE nao autoriza o proprio excedente.
+  // Mesmo raciocinio, escrito, de gerenciar_plano_inspecao. COMPRAS entra porque negocia com o
+  // fornecedor e responde pelo pedido.
+  // Reversivel numa linha se o cliente pedir; registrado na letra B do doc de novidades.
+  //
+  // ⚠️ O GESTOR estava no design desta etapa (pelo precedente de ajustar_estoque) e FICOU DE FORA
+  // na execucao, porque MEDIDO: ele nao tem PORTA. As duas rotas que escrevem quantidade
+  // (`/conferir` e `/fiscal`) sao gateadas por `receber_material`, que nao tem GESTOR, e nao existe
+  // outro chamador das funcoes de servico — logo o GESTOR na lista seria configuracao MORTA. A
+  // regra e que o mapa nao pode listar quem nao consegue agir: quem le `minhas-permissoes` veria
+  // `true` para uma acao que nunca acontece. Fica de fora ATE existir uma porta. Descartado aqui:
+  // alargar `receber_material` (daria ao GESTOR o recebimento inteiro para resolver uma
+  // autorizacao pontual) e abrir uma rota de excecao (porta de autorizacao propria e questao de
+  // design, na letra B: "GESTOR deve autorizar excedente? Se sim, precisa de porta propria").
+  //
+  // A checagem NAO e `requirePermission` na rota, e isso e decisao: o gate de rota faria o
+  // `PUT /conferir` inteiro exigir a acao, e o ALMOXARIFE — que e quem confere — perderia a
+  // conferencia normal. E condicional e mora no SERVICO, molde de
+  // `ownerRules.assertAjustePermitido` ("a checagem real acontece no MOTOR, nao em
+  // requirePermission na rota"). Entra de graca em GET /almoxarifado/minhas-permissoes — a rota
+  // itera Object.keys(ACAO_PERFIS).
+  autorizar_excedente: [PERFIS.ADMINISTRADOR, PERFIS.COMPRAS],
+  // Etapa 43 (D8): a nao conformidade numerada tem DUAS acoes proprias, e a assimetria entre elas
+  // E a feature — abrir e largo, decidir e estreito.
+  //
+  // Por que acoes proprias, e nao carona em `inspecionar`/`receber_material` (o criterio ja escrito
+  // acima para ajustar_material_cliente, remessar_terceiro, conferir_separacao e
+  // autorizar_excedente): a NC e DOCUMENTO com autor, decisao e justificativa, e o risco e de
+  // natureza diferente do ato que a origina. Com carona em `inspecionar`, quem decide a inspecao
+  // decidiria tambem o documento que julga o proprio recebimento; com carona em
+  // `receber_material`, o COMPRAS — que abre — decidiria junto, que e exatamente o que o paragrafo
+  // seguinte recusa. E restringir uma coisa passaria a restringir a outra.
+  //
+  // `registrar_nao_conformidade` e larga porque quem VE o problema abre: quem confere (ALMOXARIFE,
+  // COMPRAS) e quem inspeciona (QUALIDADE). Nao ha risco em abrir documento a mais — ha risco em
+  // nao abrir. Os ganchos automaticos da T3 rodam SEM requirePermission: sao efeito do ato ja
+  // autorizado (conferir, inspecionar), mesmo desenho do gancho de status da Etapa 42.
+  //
+  // COMPRAS fica FORA de `decidir_nao_conformidade` DE PROPOSITO, e essa e a exclusao que precisa
+  // de justificativa porque ele e o candidato obvio (tem `receber_material` e `autorizar_excedente`):
+  // COMPRAS e PARTE INTERESSADA no fornecedor sobre o qual decidiria — aceitar sob desvio a falta
+  // de um fornecedor que ele mesmo negociou e o conflito que a separacao de papeis existe para
+  // evitar. Mesmo raciocinio, escrito, de gerenciar_plano_inspecao (Etapa 27) e autorizar_excedente
+  // (Etapa 36). Aceitar sob desvio e ato de quem responde pela qualidade do que entra.
+  // ALMOXARIFE tambem fica fora: quem RECEBE nao julga o proprio recebimento.
+  // Reversivel numa linha se o cliente pedir; registrado na letra B do doc de novidades.
+  //
+  // As duas entram de graca em GET /almoxarifado/minhas-permissoes — a rota itera
+  // Object.keys(ACAO_PERFIS) — e e o que permite a tela da T5 esconder o botao de decidir.
+  registrar_nao_conformidade: [PERFIS.ADMINISTRADOR, PERFIS.ALMOXARIFE, PERFIS.QUALIDADE, PERFIS.COMPRAS],
+  decidir_nao_conformidade: [PERFIS.ADMINISTRADOR, PERFIS.QUALIDADE],
+  // Etapa 45 — REGISTRAR QUE O ENCAMINHAMENTO FOI EXECUTADO. Acao PROPRIA, e ao contrario da
+  // Etapa 44 (onde liberar era efeito do ato ja autorizado, no mesmo gesto e no mesmo instante),
+  // aqui e OUTRO ato, outro dia, OUTRA PESSOA: quem trata com o fornecedor e o COMPRAS.
+  //
+  // ⚠️ A CONCESSAO A COMPRAS E CONDICIONADA A RN-06, E ESTA E A LINHA QUE PRECISA SER LIDA ANTES
+  // DE QUALQUER AFROUXAMENTO. COMPRAS tem `registrar_nao_conformidade` (larga de proposito: quem
+  // VE o problema abre) e fica FORA de `decidir_nao_conformidade` por conflito de interesse com o
+  // fornecedor (parágrafo acima, B169). Sem a RN-06 — "so a NC ABERTA AUTOMATICAMENTE pela
+  // reprovacao da inspecao, de origem INSPECAO, baixa saldo" —, a soma das duas acoes daria a
+  // Compras meia porta para APAGAR ESTOQUE: abrir uma NC a mao apontando para qualquer inspecao
+  // da historia (`resolverFato` so exige que ela exista) e executa-la baixaria material bloqueado
+  // por outro fato inteiramente, sem `ajustar_estoque` e sem `movimentar`. E a irma da RN-09 da
+  // Etapa 44, e AQUI ELA PESA MAIS: la a porta lateral liberava retencao; aqui apaga patrimonio.
+  //
+  // Com a RN-06 valendo, o alcance desta acao para o COMPRAS cai para exatamente o que a etapa
+  // promete: "confirmar que a devolucao que a QUALIDADE ja decidiu de fato saiu". Quem afrouxar a
+  // RN-06 esta mexendo na RAZAO desta concessao, nao so numa guarda de servico.
+  //
+  // ALMOXARIFE fica de fora: quem opera o estoque nao confirma sozinho a saida do material que a
+  // qualidade reprovou — seria o mesmo conflito de "quem recebe nao julga o proprio recebimento",
+  // do lado da baixa. Reversivel numa linha; registrado na letra B.
+  executar_encaminhamento: [PERFIS.ADMINISTRADOR, PERFIS.QUALIDADE, PERFIS.COMPRAS],
+
+  // Etapa 46 — ANULAR O DOCUMENTO, e ela existe porque a Etapa 45 criou um beco: a execucao
+  // recusa material com serie e lote nao identificavel com 400 FATAL (niveis 6 e 7 da
+  // precedencia), e o documento ficava DECIDIDA + PENDENTE para sempre, sem nada em tela nenhuma
+  // que o tirasse de la. Dois revisores independentes acharam isso na Fase 5 da 45 (furo C64).
+  //
+  // ⚠️ POR QUE ACAO PROPRIA, e nao uma das duas que ja existem:
+  //
+  // NAO e `decidir_nao_conformidade` porque anular nao e decidir. Quem decidiu nao deve poder
+  // apagar o proprio rastro por baixo de uma acao que se chama "decidir" — a Etapa 43 congelou a
+  // decisao como imutavel e auditada de proposito. Cancelar PRESERVA a decisao; o que ele encerra
+  // e a COBRANCA da execucao. Sao gestos diferentes e merecem gates diferentes.
+  //
+  // NAO e `executar_encaminhamento` porque o COMPRAS a tem (B176), e daria a ele LIMPAR A PROPRIA
+  // FILA. O incentivo esta errado: quem e cobrado pela pendencia nao deve poder apaga-la sem
+  // passar por quem respondeu pelo material. Compras EXECUTA; nao ANULA.
+  //
+  // ALMOXARIFE fica de fora pela mesma razao das outras duas acoes desta familia: quem opera o
+  // estoque nao encerra o documento que julga o que ele recebeu. Reversivel numa linha; registrado
+  // na letra B.
+  cancelar_nao_conformidade: [PERFIS.ADMINISTRADOR, PERFIS.QUALIDADE],
 };
 
 function getPerfilFromUser(user) {

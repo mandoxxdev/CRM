@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
@@ -7,6 +7,9 @@ import { SkeletonTable } from '../SkeletonLoader';
 import ExtratoMaterialModal from './ExtratoMaterialModal';
 import SeloProprietario, { rotuloMaterialComDono } from './SeloProprietario';
 import { formatLocalizacaoLabel } from '../../utils/localizacaoLabel';
+import { extrairCodigoLido } from '../../utils/codigoLido';
+import { justificativaDiferente } from '../../utils/justificativaMovimentacao';
+import CampoCodigoLido from './CampoCodigoLido';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import './Almoxarifado.css';
 
@@ -57,6 +60,15 @@ const TIPOS = [
   // aparecer no livro com rótulo e opção de filtro, senão cai no fallback genérico (rótulo cru
   // "AJUSTE_INVENTARIO", sem opção no dropdown de filtro).
   { value: 'AJUSTE_INVENTARIO', label: 'Ajuste (inventário)', cls: 'ajuste' },
+  // Etapa 45 (achado da Fase 6, e o comentário de AJUSTE_INVENTARIO acima já avisava): o tipo
+  // nasce SÓ do registro da execução de uma não conformidade decidida `DEVOLVER` — nunca deste
+  // formulário, que é por isso que ele está em `TIPOS_DEDICADOS` no servidor. Mas o LIVRO precisa
+  // do rótulo e da opção de filtro, senão a coluna Tipo mostra `DEVOLUCAO_FORNECEDOR` cru e a
+  // devolução ao fornecedor fica não-localizável no filtro.
+  //
+  // `cls: 'saida'` e não `'devolucao'`: DEVOLUCAO é a devolução AO estoque (material volta);
+  // esta TIRA material do galpão. A cor precisa dizer isso.
+  { value: 'DEVOLUCAO_FORNECEDOR', label: 'Devolução ao fornecedor', cls: 'saida' },
   { value: 'ESTORNO', label: 'Estorno', cls: 'estorno' },
 ];
 
@@ -119,6 +131,12 @@ const TIPOS_SEM_ESTORNO = [
   'RESERVA', 'LIBERACAO_RESERVA',
   'QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO', 'DECISAO_INSPECAO',
   'AJUSTE_INVENTARIO',
+  // Etapa 45: o servidor recusa o estorno deste tipo SEMPRE, casando por tipo — o material
+  // voltaria bloqueado com o documento da não conformidade dizendo que foi devolvido. Botão que
+  // erra sempre é armadilha, não gate: mesmo princípio do cabeçalho deste arquivo, da Etapa 5.
+  // (O DESBLOQUEIO por não conformidade da Etapa 44 NÃO cabe aqui: lá a recusa casa por MOTIVO, e
+  // o desbloqueio avulso continua estornável. Fica declarado em G73.)
+  'DEVOLUCAO_FORNECEDOR',
 ];
 const podeEstornar = (m) => !m.cancelado && m.tipo !== 'ESTORNO' && !TIPOS_SEM_ESTORNO.includes(m.tipo);
 
@@ -149,6 +167,8 @@ const MovimentacoesAlmoxarifado = () => {
     tipo: 'ENTRADA',
     quantidade: '',
     motivo: '',
+    motivo_escolha: '',
+    motivo_complemento: '',
     referencia: '',
     observacoes: '',
     os_id: '',
@@ -156,6 +176,8 @@ const MovimentacoesAlmoxarifado = () => {
     centro_custo_id: '',
     localizacao_origem_id: '',
     localizacao_destino_id: '',
+    codigo_lido_origem: '',
+    codigo_lido_destino: '',
     lote: '',
     lote_id: '',
     custo_unitario: '',
@@ -239,15 +261,91 @@ const MovimentacoesAlmoxarifado = () => {
     return () => { cancelado = true; };
   }, [form.material_id, form.tipo]);
 
+  // Etapa 53: sugestão de localização numa ENTRADA. Só oferece — nada é preenchido sozinho, e o
+  // motor decide. Mesmo molde do efeito de lotes (guarda `cancelado`). Na troca de material as
+  // sugestões são zeradas NA HORA (sem isso, os botões do material anterior ficavam clicáveis
+  // durante o carregamento), e o destino é limpo SÓ se veio de uma sugestão — o escolhido à mão
+  // continua (Fase 2 da etapa).
+  const [sugestaoLoc, setSugestaoLoc] = useState(null);
+  const destinoDeSugestao = useRef(false);
+  useEffect(() => {
+    setSugestaoLoc(null);
+    if (destinoDeSugestao.current) {
+      destinoDeSugestao.current = false;
+      setForm((f) => ({ ...f, localizacao_destino_id: '' }));
+    }
+    if (!form.material_id || form.tipo !== 'ENTRADA') return undefined;
+    let cancelado = false;
+    api.get(`/almoxarifado/materiais/${form.material_id}/sugestao-localizacao`)
+      .then((res) => { if (!cancelado) setSugestaoLoc(res.data || null); })
+      .catch(() => { if (!cancelado) setSugestaoLoc(null); });
+    return () => { cancelado = true; };
+  }, [form.material_id, form.tipo]);
+
+  // Etapa 68 (RN-04): aviso de ÁREA ESPECIAL do destino escolhido. A frase é do servidor (uma
+  // definição só, stockService.avisoAreaEspecial) e vai LITERAL para a tela. Só avisa: o motor não
+  // recusa por área (D1), então o envio nunca é bloqueado. Mesmo molde da sugestão: zera NA HORA
+  // em qualquer troca (o aviso do destino velho não fica na tela do novo) e a guarda `cancelado`
+  // descarta a resposta atrasada. Falha da rota = sem aviso (falha aberta, como minhas-permissoes).
+  const [avisoArea, setAvisoArea] = useState(null);
+  useEffect(() => {
+    setAvisoArea(null);
+    if (!TIPOS_COM_DESTINO.includes(form.tipo) || !form.localizacao_destino_id || !form.material_id) return undefined;
+    let cancelado = false;
+    api.get(`/almoxarifado/localizacoes/${encodeURIComponent(form.localizacao_destino_id)}/aviso-area?material_id=${encodeURIComponent(form.material_id)}`)
+      .then((res) => { if (!cancelado) setAvisoArea(typeof res.data?.aviso === 'string' && res.data.aviso ? res.data.aviso : null); })
+      .catch(() => { if (!cancelado) setAvisoArea(null); });
+    return () => { cancelado = true; };
+  }, [form.tipo, form.localizacao_destino_id, form.material_id]);
+
   // Série, como lote, só é escolhida (não digitada) numa saída — molde exato do efeito de lotes
   // acima, mesma guarda `cancelado`. Só busca quando o material exige controle de série; senão
   // a lista fica vazia e o bloco de checkboxes nem aparece no JSX.
+  //
+  // Etapa 62 (RN-03): no AJUSTE de material com série a tela precisa também das BLOQUEADAS — as
+  // "presentes" do motor são EM_ESTOQUE + BLOQUEADA (seriesService.contarPresentes), e é contra
+  // elas que o novo total é comparado. Só as EM_ESTOQUE entram na lista de baixa (o motor só
+  // baixa EM_ESTOQUE). `seriesAjusteCarregadas` trava o Confirmar até as duas listas chegarem:
+  // com P ainda desconhecido (0), o contador pediria séries novas que o servidor recusaria.
+  const [seriesBloqueadasAjuste, setSeriesBloqueadasAjuste] = useState([]);
+  const [seriesAjusteCarregadas, setSeriesAjusteCarregadas] = useState(false);
+  // Review da Etapa 62: se uma das duas buscas falha, a tela diz isso e segue travada (falha
+  // fechada) — antes ficava em "Carregando..." para sempre. `recargaSeriesAjuste` refaz as buscas
+  // (botão "Tentar de novo" e depois de o servidor recusar o POST do ajuste, que pode ter sido
+  // "as séries do material mudaram durante o ajuste").
+  const [seriesAjusteErro, setSeriesAjusteErro] = useState(false);
+  const [recargaSeriesAjuste, setRecargaSeriesAjuste] = useState(0);
+  const ajusteComSerie = selectedMaterial?.controle_serie === 1 && form.tipo === 'AJUSTE';
   useEffect(() => {
-    if (!form.material_id || !TIPOS_SAIDA_LOTE.includes(form.tipo) || !selectedMaterial?.controle_serie) {
+    setSeriesBloqueadasAjuste([]);
+    setSeriesAjusteCarregadas(false);
+    setSeriesAjusteErro(false);
+    const buscaSaida = TIPOS_SAIDA_LOTE.includes(form.tipo) || form.tipo === 'AJUSTE';
+    if (!form.material_id || !buscaSaida || !selectedMaterial?.controle_serie) {
       setSeriesDisponiveis([]);
       return;
     }
     let cancelado = false;
+    if (form.tipo === 'AJUSTE') {
+      setSeriesDisponiveis([]);
+      Promise.all([
+        api.get(`/almoxarifado/materiais/${form.material_id}/series?status=EM_ESTOQUE`),
+        api.get(`/almoxarifado/materiais/${form.material_id}/series?status=BLOQUEADA`),
+      ])
+        .then(([emEstoque, bloqueadas]) => {
+          if (cancelado) return;
+          setSeriesDisponiveis(emEstoque.data || []);
+          setSeriesBloqueadasAjuste(bloqueadas.data || []);
+          setSeriesAjusteCarregadas(true);
+        })
+        .catch(() => {
+          if (cancelado) return;
+          setSeriesDisponiveis([]);
+          setSeriesBloqueadasAjuste([]);
+          setSeriesAjusteErro(true);
+        });
+      return () => { cancelado = true; };
+    }
     api.get(`/almoxarifado/materiais/${form.material_id}/series?status=EM_ESTOQUE`)
       .then((res) => {
         if (cancelado) return;
@@ -256,7 +354,24 @@ const MovimentacoesAlmoxarifado = () => {
       .catch(() => { if (!cancelado) setSeriesDisponiveis([]); });
     return () => { cancelado = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.material_id, form.tipo, selectedMaterial?.controle_serie]);
+  }, [form.material_id, form.tipo, selectedMaterial?.controle_serie, recargaSeriesAjuste]);
+
+  // Etapa 62 (RN-03): o AJUSTE define o NOVO total; as séries que entram ou saem são a diferença
+  // `novo − presentes` (a mesma conta do motor). Inteiro obrigatório: série é unidade.
+  // Review: total 0 NÃO é aceito — o schema só admite AJUSTE 0 com endereço, e o ajuste de
+  // material com série não aceita endereço; o servidor recusaria. Para zerar, ajuste negativo.
+  const ajusteSerieInfo = (() => {
+    if (!ajusteComSerie) return null;
+    const txt = String(form.quantidade ?? '').trim();
+    const inteiro = /^\d+$/.test(txt);
+    const zero = inteiro && Number(txt) === 0;
+    const presentes = seriesDisponiveis.length + seriesBloqueadasAjuste.length;
+    const diferenca = inteiro && !zero ? Number(txt) - presentes : 0;
+    const informadas = diferenca > 0 ? linhasSerie(form.series).length
+      : diferenca < 0 ? form.serie_ids.length : 0;
+    const ok = seriesAjusteCarregadas && inteiro && !zero && informadas === Math.abs(diferenca);
+    return { inteiro, zero, presentes, diferenca, informadas, ok };
+  })();
 
   // Fix round 1 (review da Task 8): o JSX de checkboxes filtra por `form.lote_id`, mas isso só
   // esconde a série visualmente — o id continua em `form.serie_ids` até algo limpar. Sem este
@@ -296,6 +411,57 @@ const MovimentacoesAlmoxarifado = () => {
     return () => { cancelado = true; };
   }, [form.material_id, form.tipo]);
 
+  // Etapa 66 (RN-09): motivos do cadastro que servem ao tipo escolhido. O servidor já devolve só
+  // os ATIVOS daquele tipo (`?tipo=`). Lista vazia — nenhum cadastrado, ou a busca falhou — deixa
+  // só o campo de texto de antes: a busca nunca trava a movimentação (o motivo continua podendo
+  // ser digitado, e quem decide é o servidor).
+  // `motivo_escolha`: '' (nada), 'OUTRO' (texto livre) ou o id do cadastro como string (valor do
+  // <select>); o payload converte com Number().
+  const [motivosDoTipo, setMotivosDoTipo] = useState([]);
+  const [motivosErro, setMotivosErro] = useState(false);
+  useEffect(() => {
+    setMotivosDoTipo([]);
+    setMotivosErro(false);
+    if (!showModal || !form.tipo) return undefined;
+    let cancelado = false;
+    api.get(`/almoxarifado/motivos-movimentacao?tipo=${encodeURIComponent(form.tipo)}`)
+      .then((res) => {
+        if (cancelado) return;
+        const lista = Array.isArray(res?.data) ? res.data : [];
+        setMotivosDoTipo(lista);
+        setForm((f) => {
+          // Escolha de cadastro que não veio na lista nova (não serve ao tipo, ou foi desativado
+          // entre uma busca e outra) é limpa: o select não pode mostrar uma coisa e o payload
+          // mandar outra.
+          if (f.motivo_escolha && f.motivo_escolha !== 'OUTRO'
+            && !lista.some((m) => String(m.id) === f.motivo_escolha)) {
+            return { ...f, motivo_escolha: '', motivo_complemento: '' };
+          }
+          // Texto já digitado no campo livre (antes de a lista chegar, ou num tipo sem cadastro)
+          // continua visível: vira "Outro" em vez de sumir atrás do select e ir escondido no body.
+          if (lista.length > 0 && !f.motivo_escolha && f.motivo) return { ...f, motivo_escolha: 'OUTRO' };
+          return f;
+        });
+      })
+      .catch(() => {
+        if (cancelado) return;
+        setMotivosDoTipo([]);
+        // Fase 5 (M3): a escolha do cadastro feita no tipo anterior ficava no estado sem select
+        // para mostrá-la — a tela exibia o campo de texto vazio e o payload ia sem motivo nenhum.
+        // Limpa, e o aviso abaixo do campo diz por que o select sumiu.
+        setMotivosErro(true);
+        setForm((f) => (f.motivo_escolha && f.motivo_escolha !== 'OUTRO'
+          ? { ...f, motivo_escolha: '', motivo_complemento: '' } : f));
+      });
+    return () => { cancelado = true; };
+  }, [form.tipo, showModal]);
+
+  const motivoEscolhidoDoCadastro = () => (
+    form.motivo_escolha && form.motivo_escolha !== 'OUTRO'
+      ? motivosDoTipo.find((m) => String(m.id) === form.motivo_escolha) || null
+      : null
+  );
+
   const loadMateriais = async () => {
     try {
       const res = await api.get('/almoxarifado/materiais');
@@ -334,8 +500,10 @@ const MovimentacoesAlmoxarifado = () => {
 
   const openModal = () => {
     setForm({
-      material_id: '', tipo: 'ENTRADA', quantidade: '', motivo: '', referencia: '', observacoes: '',
+      material_id: '', tipo: 'ENTRADA', quantidade: '', motivo: '', motivo_escolha: '', motivo_complemento: '',
+      referencia: '', observacoes: '',
       os_id: '', projeto_id: '', centro_custo_id: '', localizacao_origem_id: '', localizacao_destino_id: '',
+      codigo_lido_origem: '', codigo_lido_destino: '',
       lote: '', lote_id: '', custo_unitario: '', emergencial: false,
       series: '', serie_ids: []
     });
@@ -344,7 +512,16 @@ const MovimentacoesAlmoxarifado = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.material_id || !form.quantidade || parseFloat(form.quantidade) <= 0) {
+    // Etapa 62: no ajuste com série o novo total é inteiro > 0 (o servidor recusa AJUSTE 0 sem
+    // endereço, e este ajuste não tem endereço) e as séries informadas batem com a diferença.
+    if (ajusteSerieInfo) {
+      if (!form.material_id || !ajusteSerieInfo.ok) {
+        toast.error(ajusteSerieInfo.zero
+          ? 'Para zerar, use Ajuste negativo com as séries.'
+          : 'Material com série: informe um total inteiro e exatamente as séries da diferença');
+        return;
+      }
+    } else if (!form.material_id || !form.quantidade || parseFloat(form.quantidade) <= 0) {
       toast.error('Selecione o material e informe a quantidade');
       return;
     }
@@ -369,7 +546,16 @@ const MovimentacoesAlmoxarifado = () => {
         tipo: form.tipo,
         quantidade: parseFloat(form.quantidade),
       };
-      if (form.motivo) {
+      // Etapa 66 (RN-09): motivo do cadastro → `motivo_id` numérico e SEM `motivo` (o servidor
+      // recusa os dois juntos); o complemento opcional vai em `justificativa` e o servidor grava
+      // "Nome — complemento". Sem motivo do cadastro ("Outro" ou tipo sem cadastro) → o payload
+      // de antes, idêntico.
+      const motivoCadastro = motivoEscolhidoDoCadastro();
+      if (motivoCadastro) {
+        payload.motivo_id = Number(motivoCadastro.id);
+        const compl = form.motivo_complemento.trim();
+        if (compl) payload.justificativa = compl;
+      } else if (form.motivo) {
         payload.motivo = form.motivo;
         payload.justificativa = form.motivo;
       }
@@ -383,6 +569,13 @@ const MovimentacoesAlmoxarifado = () => {
       // trocado para AJUSTE) vaze para um tipo onde o campo nem aparece na tela.
       if (TIPOS_COM_ORIGEM.includes(form.tipo) && form.localizacao_origem_id) payload.localizacao_origem_id = Number(form.localizacao_origem_id);
       if (TIPOS_COM_DESTINO.includes(form.tipo) && form.localizacao_destino_id) payload.localizacao_destino_id = Number(form.localizacao_destino_id);
+      // Etapa 56 (RN-03/04): confirmação do endereço por leitura — opcional, e só para o papel que o
+      // tipo exibe. Aceita o código puro ou a URL da etiqueta (extrai `codigo`); vazio não vai no body
+      // (ausente = comportamento de antes). Quem compara e recusa é o servidor.
+      const lidoOrigem = TIPOS_COM_ORIGEM.includes(form.tipo) ? extrairCodigoLido(form.codigo_lido_origem) : '';
+      const lidoDestino = TIPOS_COM_DESTINO.includes(form.tipo) ? extrairCodigoLido(form.codigo_lido_destino) : '';
+      if (lidoOrigem) payload.codigo_lido_origem = lidoOrigem;
+      if (lidoDestino) payload.codigo_lido_destino = lidoDestino;
       // Entrada: lote nasce aqui, texto livre. Saída do formulário (SAIDA/PERDA): lote é
       // escolhido de um já existente (lote_id), nunca digitado — evita saída registrada contra um
       // lote que não existe.
@@ -393,6 +586,10 @@ const MovimentacoesAlmoxarifado = () => {
       // escolhida na saída.
       if (selectedMaterial?.controle_serie === 1 && form.tipo === 'ENTRADA') payload.series = linhasSerie(form.series);
       if (selectedMaterial?.controle_serie === 1 && TIPOS_SAIDA_LOTE.includes(form.tipo)) payload.serie_ids = form.serie_ids;
+      // Etapa 62 (RN-03): ajuste com série manda SÓ o lado da diferença — subir leva os números
+      // novos, descer leva os ids das EM_ESTOQUE a baixar, zero não leva nada (o motor recusa).
+      if (ajusteSerieInfo?.diferenca > 0) payload.series = linhasSerie(form.series);
+      if (ajusteSerieInfo?.diferenca < 0) payload.serie_ids = form.serie_ids.map(Number);
       if (form.tipo === 'ENTRADA' && form.custo_unitario) {
         const custo = parseFloat(form.custo_unitario);
         if (!Number.isNaN(custo) && custo > 0) payload.custo_unitario = custo;
@@ -408,6 +605,9 @@ const MovimentacoesAlmoxarifado = () => {
       loadMovimentacoes();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao registrar movimentação');
+      // Review da Etapa 62: a recusa pode ser "as séries do material mudaram durante o ajuste" —
+      // a lista na tela está velha; recarrega as presentes para o operador escolher de novo.
+      if (ajusteSerieInfo) setRecargaSeriesAjuste((n) => n + 1);
     } finally {
       setSaving(false);
     }
@@ -418,6 +618,25 @@ const MovimentacoesAlmoxarifado = () => {
     setEstornoMotivo('');
   };
 
+  // Etapa 71: o estorno da ENTRADA_COMPRA de uma nota contra pedido desconta a linha do pedido e
+  // pode reabri-lo; o servidor devolve `pedido_compra` só quando um pedido foi tocado. Leitura
+  // defensiva: roda depois do toast.success, e um TypeError aqui cairia no catch como toast.error
+  // de um estorno que deu certo. Sem aviso em pedido cancelado/rejeitado (decisão do comprador,
+  // o status não muda) nem quando o saldo a receber voltou a 0 (Fase 2 do plano).
+  const avisarPedidoCompra = (pc) => {
+    if (!pc || typeof pc !== 'object') return;
+    const status = String(pc.status || '').toLowerCase();
+    if (status === 'cancelado' || status === 'rejeitado') return;
+    const saldo = Number(Number(pc.saldo_pendente).toFixed(6));
+    if (!Number.isFinite(saldo) || saldo <= 0) return;
+    const numero = pc.numero || `#${pc.id}`;
+    if (pc.reaberto === true) {
+      toast.info(`Pedido de compra ${numero} reaberto: faltam ${saldo} para receber`);
+    } else {
+      toast.info(`Pedido de compra ${numero}: o saldo a receber voltou a ${saldo}`);
+    }
+  };
+
   const confirmarEstorno = async () => {
     if (!estornoMotivo.trim()) {
       toast.error('Informe o motivo do estorno');
@@ -425,8 +644,9 @@ const MovimentacoesAlmoxarifado = () => {
     }
     setEstornoSaving(true);
     try {
-      await api.post(`/almoxarifado/movimentacoes/${estornoTarget.id}/cancelar`, { motivo: estornoMotivo.trim() });
+      const resp = await api.post(`/almoxarifado/movimentacoes/${estornoTarget.id}/cancelar`, { motivo: estornoMotivo.trim() });
       toast.success('Movimentação estornada!');
+      avisarPedidoCompra(resp?.data?.pedido_compra);
       setEstornoTarget(null);
       loadMovimentacoes();
     } catch (err) {
@@ -562,6 +782,13 @@ const MovimentacoesAlmoxarifado = () => {
                     <td style={{ fontWeight: 600 }}>{m.saldo_posterior} {m.unidade}</td>
                     <td>
                       {m.motivo && <div style={{ fontSize: '0.875rem' }}>{m.motivo}</div>}
+                      {/* Etapa 66 (RN-08): bloqueio, inventário e estorno guardam o porquê em
+                          `justificativa` — só o motivo aparecia. Igual ao motivo não repete. */}
+                      {justificativaDiferente(m) && (
+                        <div data-testid="mov-justificativa" style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
+                          {justificativaDiferente(m)}
+                        </div>
+                      )}
                       {m.referencia && !vinculo && (
                         <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>📋 {m.referencia}</div>
                       )}
@@ -638,16 +865,25 @@ const MovimentacoesAlmoxarifado = () => {
                       onChange={e => {
                         const novoTipo = e.target.value;
                         const mostraLote = novoTipo === 'ENTRADA' || TIPOS_COM_LOTE_EXISTENTE.includes(novoTipo);
+                        // Etapa 66: o motivo do cadastro escolhido só sobrevive à troca se servir
+                        // ao tipo novo (o efeito dos motivos confere de novo quando a lista chega).
+                        const motivoAtual = motivoEscolhidoDoCadastro();
+                        const motivoServe = !motivoAtual
+                          || (Array.isArray(motivoAtual.tipos) && motivoAtual.tipos.includes(novoTipo));
                         // Limpa qualquer campo que só aparece para outro tipo — o estado nunca
                         // pode carregar um valor que o usuário não está mais vendo na tela
                         // (senão ele vaza escondido para o payload do tipo atual).
                         setForm(f => ({
                           ...f,
                           tipo: novoTipo,
+                          motivo_escolha: motivoServe ? f.motivo_escolha : '',
+                          motivo_complemento: motivoServe ? f.motivo_complemento : '',
                           emergencial: novoTipo === 'SAIDA' ? f.emergencial : false,
                           localizacao_destino_id: TIPOS_COM_DESTINO.includes(novoTipo) ? f.localizacao_destino_id : '',
+                          codigo_lido_destino: TIPOS_COM_DESTINO.includes(novoTipo) ? f.codigo_lido_destino : '',
                           custo_unitario: novoTipo === 'ENTRADA' ? f.custo_unitario : '',
                           localizacao_origem_id: TIPOS_COM_ORIGEM.includes(novoTipo) ? f.localizacao_origem_id : '',
+                          codigo_lido_origem: TIPOS_COM_ORIGEM.includes(novoTipo) ? f.codigo_lido_origem : '',
                           lote: mostraLote ? f.lote : '',
                           lote_id: mostraLote ? f.lote_id : '',
                           series: novoTipo === 'ENTRADA' ? f.series : '',
@@ -685,16 +921,67 @@ const MovimentacoesAlmoxarifado = () => {
                       </small>
                     )}
                   </div>
-                  <div className="almox-field">
-                    <label className="almox-label">
-                      Motivo
-                      {(form.tipo === 'SAIDA' || form.tipo === 'AJUSTE' || form.tipo === 'PERDA') && <span className="required">*</span>}
-                    </label>
-                    <input className="almox-input" value={form.motivo}
-                      onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))}
-                      placeholder="Compra, Uso produção, Retorno, etc."
-                      required={form.tipo === 'SAIDA' || form.tipo === 'AJUSTE' || form.tipo === 'PERDA'} />
-                  </div>
+                  {/* Etapa 66 (RN-09): com motivo cadastrado para o tipo, o campo vira select
+                      (cadastro + "Outro (digitar)"); sem cadastro — ou se a busca falhou — fica o
+                      texto livre de antes. Obrigatoriedade igual à de antes: SAIDA/AJUSTE/PERDA
+                      exigem um motivo do cadastro OU o texto. */}
+                  {(() => {
+                    const exige = form.tipo === 'SAIDA' || form.tipo === 'AJUSTE' || form.tipo === 'PERDA';
+                    const rotulo = (
+                      <label className="almox-label" htmlFor={motivosDoTipo.length > 0 ? 'mov-motivo-cadastro' : 'mov-motivo'}>
+                        Motivo
+                        {exige && <span className="required">*</span>}
+                      </label>
+                    );
+                    const campoTexto = (
+                      <input id="mov-motivo" className="almox-input" value={form.motivo}
+                        onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))}
+                        placeholder="Compra, Uso produção, Retorno, etc."
+                        required={exige} />
+                    );
+                    if (motivosDoTipo.length === 0) {
+                      return (
+                        <div className="almox-field">
+                          {rotulo}{campoTexto}
+                          {motivosErro && (
+                            <div data-testid="mov-motivos-erro" style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', marginTop: 4 }}>
+                              Não foi possível carregar os motivos do cadastro — digite o motivo.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+                    const doCadastro = !!motivoEscolhidoDoCadastro();
+                    return (
+                      <>
+                        <div className="almox-field">
+                          {rotulo}
+                          <select id="mov-motivo-cadastro" className="almox-form-select" value={form.motivo_escolha}
+                            required={exige}
+                            onChange={e => {
+                              const escolha = e.target.value;
+                              // Trocar para um motivo do cadastro LIMPA o texto livre: os dois juntos
+                              // são recusados pelo servidor (400 "não os dois"). Voltar para "Outro"
+                              // começa do texto vazio — o complemento não vira motivo digitado.
+                              setForm(f => ({ ...f, motivo_escolha: escolha, motivo: '', motivo_complemento: '' }));
+                            }}>
+                            <option value="">Selecionar motivo...</option>
+                            {motivosDoTipo.map(m => <option key={m.id} value={String(m.id)}>{m.nome}</option>)}
+                            <option value="OUTRO">Outro (digitar)</option>
+                          </select>
+                          {form.motivo_escolha === 'OUTRO' && <div style={{ marginTop: 6 }}>{campoTexto}</div>}
+                        </div>
+                        {doCadastro && (
+                          <div className="almox-field">
+                            <label className="almox-label" htmlFor="mov-motivo-complemento">Complemento (opcional)</label>
+                            <input id="mov-motivo-complemento" className="almox-input" value={form.motivo_complemento}
+                              onChange={e => setForm(f => ({ ...f, motivo_complemento: e.target.value }))}
+                              placeholder="Detalhe que acompanha o motivo" />
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                   <div className="almox-field">
                     <label className="almox-label">Referência (OS / NF)</label>
                     <input className="almox-input" value={form.referencia}
@@ -747,7 +1034,7 @@ const MovimentacoesAlmoxarifado = () => {
                     <div className="almox-field">
                       <label className="almox-label">Localização de destino</label>
                       <select className="almox-form-select" value={form.localizacao_destino_id}
-                        onChange={e => setForm(f => ({ ...f, localizacao_destino_id: e.target.value }))}>
+                        onChange={e => { destinoDeSugestao.current = false; setForm(f => ({ ...f, localizacao_destino_id: e.target.value })); }}>
                         <option value="">—</option>
                         {localizacoes.map(l => (
                           <option key={l.id} value={l.id}>
@@ -756,6 +1043,43 @@ const MovimentacoesAlmoxarifado = () => {
                           </option>
                         ))}
                       </select>
+                      {/* Etapa 68: área especial — só aviso, o texto é o do servidor. */}
+                      {avisoArea && (
+                        <div data-testid="aviso-area-especial" className="almox-hint-banner" style={{ marginTop: 6, fontSize: '0.8rem' }}>
+                          {avisoArea}
+                        </div>
+                      )}
+                      {/* Etapa 53: a padrão que o motor recusaria — sem destino, a entrada toma 400. */}
+                      {form.tipo === 'ENTRADA' && sugestaoLoc?.padrao?.recusa && !form.localizacao_destino_id && (
+                        <div data-testid="aviso-padrao-recusada" className="almox-hint-banner" style={{ marginTop: 6, fontSize: '0.8rem' }}>
+                          A localização padrão {sugestaoLoc.padrao.codigo} não recebe este material ({sugestaoLoc.padrao.recusa}) — escolha um destino.
+                        </div>
+                      )}
+                      {/* A padrão INATIVA o motor ainda aceita, e o saldo some do mapa — aqui só avisa. */}
+                      {form.tipo === 'ENTRADA' && !sugestaoLoc?.padrao?.recusa && sugestaoLoc?.padrao?.inativa && !form.localizacao_destino_id && (
+                        <div data-testid="aviso-padrao-inativa" className="almox-hint-banner" style={{ marginTop: 6, fontSize: '0.8rem' }}>
+                          A localização padrão {sugestaoLoc.padrao.codigo} está inativa — escolha um destino.
+                        </div>
+                      )}
+                      {form.tipo === 'ENTRADA' && sugestaoLoc?.sugestoes?.length > 0 && (
+                        <div data-testid="sugestoes-localizacao" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', alignSelf: 'center' }}>Sugestões:</span>
+                          {sugestaoLoc.sugestoes.slice(0, 3).map((s) => (
+                            <button key={s.localizacao_id} type="button" className="btn-almox-secondary"
+                              style={{ fontSize: '0.75rem', padding: '3px 8px' }}
+                              onClick={() => { destinoDeSugestao.current = true; setForm((f) => ({ ...f, localizacao_destino_id: String(s.localizacao_id) })); }}
+                              title={s.endereco_completo}>
+                              {s.codigo} · {s.motivo === 'PADRAO' ? 'padrão do material'
+                                : s.motivo === 'JA_TEM_O_MATERIAL' ? `já tem este material (${s.quantidade_no_endereco})` : 'vazia'}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <CampoCodigoLido
+                        id="mov-codigo-lido-destino"
+                        value={form.codigo_lido_destino}
+                        onChange={(v) => setForm(f => ({ ...f, codigo_lido_destino: v }))}
+                      />
                     </div>
                   )}
                   {form.tipo === 'ENTRADA' && (
@@ -779,6 +1103,12 @@ const MovimentacoesAlmoxarifado = () => {
                           </option>
                         ))}
                       </select>
+                      <CampoCodigoLido
+                        id="mov-codigo-lido-origem"
+                        value={form.codigo_lido_origem}
+                        onChange={(v) => setForm(f => ({ ...f, codigo_lido_origem: v }))}
+                        dica={form.localizacao_origem_id ? null : 'Para confirmar a origem, escolha também a localização de origem.'}
+                      />
                     </div>
                   )}
                   {(form.tipo === 'ENTRADA' || TIPOS_COM_LOTE_EXISTENTE.includes(form.tipo)) && (
@@ -824,7 +1154,7 @@ const MovimentacoesAlmoxarifado = () => {
                       <label>Números de série (um por linha) *</label>
                       <textarea className="almox-textarea" rows={3} value={form.series}
                         onChange={(e) => setForm({ ...form, series: e.target.value })} />
-                      <small style={{ color: linhasSerie(form.series).length === Number(form.quantidade) ? 'var(--gmp-text-light)' : 'var(--gmp-danger)' }}>
+                      <small style={{ color: linhasSerie(form.series).length === Number(form.quantidade) ? 'var(--gmp-text-light)' : 'var(--gmp-error)' }}>
                         {linhasSerie(form.series).length}/{form.quantidade || 0} série(s)
                       </small>
                       <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
@@ -864,6 +1194,78 @@ const MovimentacoesAlmoxarifado = () => {
                       <small>{form.serie_ids.length}/{form.quantidade || 0} série(s) selecionada(s)</small>
                     </div>
                   )}
+                  {/* Etapa 62 (RN-03): ajuste de material com série. Sem endereço (o motor recusa por
+                      endereço — e o AJUSTE já não mostra destino); o novo total contra as presentes
+                      (EM_ESTOQUE + BLOQUEADA) diz se pede números novos, séries a baixar, ou nada. */}
+                  {ajusteSerieInfo && (
+                    <div className="almox-field almox-form-full" data-testid="ajuste-serie">
+                      <small data-testid="ajuste-serie-dica" style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                        Material com série: o ajuste é do total, sem endereço.
+                      </small>
+                      <div data-testid="ajuste-serie-presentes" style={{ fontSize: '0.85rem', marginTop: 4 }}>
+                        {seriesAjusteCarregadas
+                          ? `Séries presentes: ${ajusteSerieInfo.presentes}`
+                          : seriesAjusteErro ? null : 'Carregando séries presentes...'}
+                      </div>
+                      {seriesAjusteErro && (
+                        <div data-testid="ajuste-serie-erro" style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
+                          <small style={{ color: 'var(--gmp-error)', fontSize: '0.75rem' }}>
+                            Não foi possível carregar as séries do material.
+                          </small>
+                          <button type="button" className="btn-almox-secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                            onClick={() => setRecargaSeriesAjuste((n) => n + 1)}>
+                            Tentar de novo
+                          </button>
+                        </div>
+                      )}
+                      {form.quantidade !== '' && !ajusteSerieInfo.inteiro && (
+                        <small data-testid="ajuste-serie-inteiro" style={{ color: 'var(--gmp-error)', fontSize: '0.75rem' }}>
+                          Material com série: o novo total precisa ser um número inteiro.
+                        </small>
+                      )}
+                      {ajusteSerieInfo.zero && (
+                        <small data-testid="ajuste-serie-zero" style={{ color: 'var(--gmp-error)', fontSize: '0.75rem' }}>
+                          Para zerar, use Ajuste negativo com as séries.
+                        </small>
+                      )}
+                      {seriesAjusteCarregadas && ajusteSerieInfo.inteiro && ajusteSerieInfo.diferenca > 0 && (
+                        <>
+                          <label htmlFor="ajuste-serie-novas" style={{ marginTop: 6 }}>Números das novas séries (um por linha) *</label>
+                          <textarea id="ajuste-serie-novas" className="almox-textarea" rows={3} value={form.series}
+                            onChange={(e) => setForm((f) => ({ ...f, series: e.target.value }))} />
+                          <small data-testid="ajuste-serie-contador"
+                            style={{ color: ajusteSerieInfo.ok ? 'var(--gmp-text-light)' : 'var(--gmp-error)' }}>
+                            {ajusteSerieInfo.informadas} de {ajusteSerieInfo.diferenca}
+                          </small>
+                        </>
+                      )}
+                      {seriesAjusteCarregadas && ajusteSerieInfo.inteiro && ajusteSerieInfo.diferenca < 0 && (
+                        <>
+                          <label style={{ marginTop: 6 }}>Séries a baixar *</label>
+                          <div id="ajuste-serie-baixa" style={{ maxHeight: 140, overflowY: 'auto', border: '1px solid var(--gmp-border)', borderRadius: 6, padding: 6 }}>
+                            {seriesDisponiveis.map((s) => (
+                              <label key={s.id} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.85rem' }}>
+                                <input type="checkbox" data-serie-id={s.id} checked={form.serie_ids.includes(s.id)}
+                                  onChange={(e) => {
+                                    const marcado = e.target.checked;
+                                    setForm((f) => ({
+                                      ...f,
+                                      serie_ids: marcado ? [...f.serie_ids, s.id] : f.serie_ids.filter((id) => id !== s.id),
+                                    }));
+                                  }} />
+                                {s.numero}{s.lote_codigo ? ` · lote ${s.lote_codigo}` : ''}
+                              </label>
+                            ))}
+                            {seriesDisponiveis.length === 0 && <small>Nenhuma série em estoque para baixar (as bloqueadas não saem por ajuste).</small>}
+                          </div>
+                          <small data-testid="ajuste-serie-contador"
+                            style={{ color: ajusteSerieInfo.ok ? 'var(--gmp-text-light)' : 'var(--gmp-error)' }}>
+                            {ajusteSerieInfo.informadas} de {-ajusteSerieInfo.diferenca}
+                          </small>
+                        </>
+                      )}
+                    </div>
+                  )}
 
                   {/* Hint de retalho (Etapa 9, Task 8): NÃO bloqueia — só avisa. Fica antes do
                       checkbox de emergencial de propósito, para o operador ver antes de confirmar
@@ -895,7 +1297,7 @@ const MovimentacoesAlmoxarifado = () => {
               </div>
               <div className="almox-modal-footer">
                 <button type="button" className="btn-almox-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
-                <button type="submit" className="btn-almox-primary" disabled={saving}>
+                <button type="submit" className="btn-almox-primary" disabled={saving || (ajusteSerieInfo ? !ajusteSerieInfo.ok : false)}>
                   {saving ? 'Registrando...' : 'Confirmar Movimentação'}
                 </button>
               </div>

@@ -1,8 +1,163 @@
 # 08 — Entrada e Recebimento de Materiais
 
-> **Status:** 🟡 — workflow fiscal NF maduro, quarentena na entrada fechada (Etapa 5), **lote nasce aqui desde a Etapa 6**, entrada da nota **atômica e idempotente** desde o review final do branch (2026-08-10); faltam tipos de entrada, conferência física estruturada e etiqueta · **Spec original:** seção 8
+> **Status:** 🟢 **desde a Etapa 71 (2026-10-02), com os cortes declarados** — a conferência física estruturada (contagem/pesagem/medição/checklist por tipo de material), fora por decisão do design desde a Etapa 5 (**B338** das novidades), e os dois itens do checklist que já estavam desmarcados **por decisão de negócio**, não por falta: "Tipos de entrada no form" (as features 11–15 são a porta dos outros tipos) e, no item "Ao aprovar", a etiqueta automática e os botões de sugestão na janela (letra D (57)). O item (4) "o pedido que reabre" foi pago (`39da666`, `beedc40`, `81a734c`, `63b2680`, `87fe520` + Fase 5 `9a442f1`, `2335c52`, `a9696f3`) — ver o bloco "Entregue na Etapa 71" no fim. Histórico do status: 🟡 — workflow fiscal NF maduro, quarentena na entrada fechada (Etapa 5), **lote nasce aqui desde a Etapa 6**, entrada da nota **atômica e idempotente** desde o review final do branch (2026-08-10), desde a **Etapa 36** as duas portas de escrita têm enum, guarda de NF duplicada e barreira de excedente, mais o campo de quantidade conferida na tela, e desde a **Etapa 37** (`ea0aa4f..13ad237`) o **recebimento parcial contra o PEDIDO DE COMPRA existe de ponta a ponta** — o pedido tem saldo, a tela carrega os itens com o que falta chegar, e a porta recusa acima do saldo. E desde a **Etapa 42** (2026-09-27) o recebimento **FECHA o pedido**: a entrada física que completa o pedido grava `pedidos_compra.status = 'recebido'`, com trilha de auditoria, e o pedido parcial ganhou alerta próprio. **E desde a Etapa 43** (2026-09-28, `4e11793..`) a **divergência tem DOCUMENTO NUMERADO**: registrar quantidade diferente da esperada — na conferência **e** nos dados fiscais, que é o caminho que a tela usa — abre sozinha uma não conformidade `NC-…` (`nao_conformidades_almoxarifado`, tabela única compartilhada com a feature 09), que congela o fato, guarda a decisão com autor e justificativa, tem trilha, anexos, alerta de documento parado e tela própria; reconferir atualiza o mesmo documento e corrigir a divergência o cancela. **O que falta para 🟢:** (1) **conferência física estruturada** (contagem, pesagem, medição, checklist por tipo de material); ~~(2) **divergência formal numerada**~~ — **PAGO na Etapa 43**, riscado em vez de apagado; (3) ~~definição de localização na entrada (feature 02)~~ — **PAGO na Etapa 57** (`aaf09cb`, `86ee1c1`, fix-round `18c67a8`): destino **por item** ao processar a nota, riscado em vez de apagado; ~~sobra o e-mail automático na entrada confirmada (feature 19)~~ — **PAGO na Etapa 70**; (4) **o pedido que reabre** — a limitação NOVA da Etapa 42: estornar a movimentação de entrada de um pedido já fechado não reverte `quantidade_recebida` nem o status, e o estado não deixa sinal (`B161` das novidades). **E desde a Etapa 57** (2026-09-30) o processamento da nota abre uma janela com um **destino por item** ("Padrão do material" continua o padrão, B226), a pré-checagem da nota inteira lista "MAT: motivo" do destino de cada item, `/processar`, `/workflow` e `/aprovar` aceitam `destinos`, o item grava `localizacao_entrada_id`, e a devolução ao fornecedor sai do endereço onde o item reprovado entrou (B227). **E desde a Etapa 70** (2026-10-01, `faa8f65..eb6c614`) o item da lista **"e-mail automático na entrada confirmada"** está pago — aviso da nota (nasce desligado) e aviso a cada solicitante que esperava o material (nasce ligado) —, e dois defeitos anteriores foram corrigidos: o item conferido com **0** deixou de entrar com a quantidade esperada, e dois processamentos simultâneos deixaram de gerar duas contas a pagar. **O que sobra para 🟢:** (1) conferência física estruturada (decisão do design, fora desde a Etapa 5) e (4) o pedido que reabre no estorno (`B161`) — a próxima etapa (71). **E desde a Etapa 71** (2026-10-02) o (4) está **PAGO**: estornar a `ENTRADA_COMPRA` de nota contra pedido desconta a linha do pedido e reabre o pedido que o fechamento automático tinha fechado; a régua do "completo" passou a ser por material também no fechamento e no `?pendentes=1` (defeito anterior da Etapa 42, **C107**); a barreira do saldo ganhou o epsilon. **Sobra só o (1), declarado como corte** (B338) — por isso o 🟢 no topo. **E desde a Etapa 72** (2026-10-02, `db9c63f..6e1ac7c`) a nota processada fecha a **solicitação de compra** só quando o material dela chegou (não mais na primeira nota), e o estorno da entrada a reabre — gancho daqui, regra da feature 18 (bloco "Etapa 72" no fim).
+
+> ⚠️ **ESTA LISTA TINHA UM ITEM (1) FALSO, e ele enganou três etapas.** Até a Etapa 42 o primeiro item era *"criação de pedido de compra no módulo Compras — … tudo o que a Etapa 37 entregou fica inerte até isso existir. É a **Etapa 38**, já decidida e desenhada"*. **A Etapa 38 ENTREGOU** (2026-09-16), e a 41 ainda acrescentou o caminho cotação → "Gerar pedido" — mas a frase continuou aqui dizendo que a feature era inerte em produção. Quem lesse esta spec entre 2026-09-16 e 2026-09-27 seria ativamente enganado sobre o estado do módulo. Corrigido ao medir, na Fase 0 da Etapa 42, e dito em vez de apagado. **O handoff da Etapa 41 repetiu o erro por outro lado**, falando de um *"item (5)"* desta lista — que nunca teve cinco itens. **A frase anterior deste status dizia que faltava "etiqueta" — ESTAVA ERRADA:** a etiqueta foi entregue na **Etapa 6c** (`4ebd1ce`), ver a correção no item de checklist "Ao aprovar" · **Spec original:** seção 8
 > **Etapa 31 (2026-08-31, `1e6c9a9..67b6758`) — o NÚMERO deste documento mudou de forma, e só ele.** O `REC-` era montado com os **últimos dígitos** do milissegundo mais um sorteio de 0 a 99, e por isso o carimbo **repetia** a cada **27,78 horas**. Agora vem do gerador único `services/almoxarifado/numeroDoc.js` (relógio inteiro em base36 + 8 aleatórios), com retry na colisão. **Nada mais desta feature mudou** — nem status, nem checklist, nem comportamento: o número passa de 12–14 caracteres só com dígitos para 20 com letras, os antigos **não** foram migrados e continuam legíveis (RN-05, testada). Furo **C41** das novidades.
-> **Última atualização:** 2026-08-11 (**auditoria spec×código**: corrigida a afirmação — que estava
+> **Etapa 34 (2026-09-16, `746a106..054f727`) — o painel do recebimento ganhou ANEXOS, e a tela
+> ganhou a PRIMEIRA suíte de teste que já teve.** Bloco "Anexos" no fim do painel de detalhe
+> (entidade `recebimento`, id do detalhe) — `01dd3ce` + `c5d9e99` —, mais
+> `RecebimentosAlmoxarifado.test.js` com **7 cenários** (contados no arquivo). Zero linhas de
+> servidor. A frase "plugar aqui é uma linha", que esta spec repetia desde a Etapa 32, **estava
+> errada** — ver a correção no item de checklist de fotos/anexos, que também registra o defeito
+> **pré-existente** descoberto aqui (os três `catch` que engolem erro de carga — **fechado na
+> Etapa 35**, `22e1d9b`).
+> **Etapa 35 (2026-09-16, `6f6a8b0..2d5cd35`) — a tela passou a DIZER quando não conseguiu
+> carregar, e o painel parou de mostrar o recebimento anterior.** NÃO é feature nova: são defeitos
+> pré-existentes desta tela, achados pela revisão da Etapa 34 e pelas duas lentes da revisão final
+> desta. (1) **`22e1d9b`** — os três `catch` de carga engoliam o erro: falha de rede ou 500
+> aparecia como *"Nenhum recebimento registrado"*, indistinguível de "não há recebimento", com o
+> risco real de registrar de novo uma nota que já existe. Agora a falha vai para o **DOM**
+> (*"Não foi possível carregar os recebimentos."* + botão *"Tentar de novo"*), a lista é **zerada**
+> na falha (recarregamento que falha não deixa dado velho passando por fresco) e o erro de
+> materiais aparece **dentro** do modal de criar (*"Não foi possível carregar a lista de
+> materiais."*); `loadAuxiliares` **continua silencioso de propósito**, e o porquê está escrito no
+> próprio `catch`. (2) **`4681111`** — trocar de linha mostrava o registro **anterior** sob o id
+> novo, e resposta fora de ordem vencia o último clique: fechado com `selectedId` +
+> `idCarregadoRef` + `detalheFetchSeqRef`, o molde da tela irmã de Requisições. (3) **`29cbdfa`** —
+> consequência do (2) pega pela revisão final: a barra de etapas do cabeçalho piscava para o
+> **passo 1** durante a carga; agora fica **neutra**. (4) A tela ganhou aqui os cenários que
+> faltavam: `RecebimentosAlmoxarifado.test.js` foi de 7 para **12 cenários** (contados no arquivo,
+> `test(` de (a) a (l)). Zero linhas de servidor no range.
+> **Etapa 36 (2026-09-16, `d02b9f4..e287a06`) — as DUAS portas de escrita do recebimento
+> passaram a recusar o que sempre aceitaram, e a tela ganhou onde dizer QUANTO chegou.** É feature
+> desta 08 (servidor + client), não higiene de tela. As duas portas são
+> `POST /almoxarifado/recebimentos` e `PUT /almoxarifado/recebimentos/:id/fiscal`; a terceira
+> (quantidade contra o **pedido** no POST) ficou declarada fora e é a Etapa 37.
+> **(1) `d02b9f4` — enum de `tipo_recebimento` nas duas portas.** `TIPOS_RECEBIMENTO` (fonte única
+> em `schema.js`) validado por Zod `z.looseObject` nos dois schemas, literal
+> *"forma de recebimento inválida (use NOTA_FISCAL ou PEDIDO_COMPRA)"*. O `z.looseObject` **não** é
+> preciosismo: `z.object` faz *strip* de `nota_fiscal` e `itens`, e todo POST válido viraria 400
+> *"Inclua ao menos um item"* — medido por sonda antes de escrever. Sonda que gravava
+> `'BANANA<script>'` com 201 passou a 400.
+> **(2) `ffc5f47` + `c5f14c8` — a mesma NF do mesmo fornecedor não entra duas vezes.**
+> `assertNotaNaoDuplicada` **no serviço** (`receiptService.js`), antes do `INSERT` da criação e do
+> `UPDATE` do fiscal, com 409 *"Nota fiscal {nf} já lançada no recebimento {numero} para este
+> fornecedor"*. Dano medido antes: a mesma NF em dois documentos creditava **20** em vez de 10 e
+> gerava **2** contas a pagar.
+> **(3) `f747df4` + `3e36af4` + `230baf6` + `2d7787d` + o F5 da onda (`17c4130`) — receber mais
+> que o esperado exige autorização.** Ação nova `autorizar_excedente` em `ACAO_PERFIS`
+> (`[ADMINISTRADOR, COMPRAS]`), checada **no serviço** (`assertExcedentePermitido`) nas **três**
+> portas que escrevem quantidade recebida — `criarRecebimento`, `/conferir` e `/fiscal`: 400
+> nomeando quem autoriza sem a flag, 403 nomeando a ação e o perfil sem a permissão, e trilha
+> `EXCEDENTE_AUTORIZADO` por item excedente. A T3 cobria **duas**; a terceira entrou na
+> re-revisão da onda, ver o item de checklist.
+> **(4) `9d19e7d` — `avancar etapa fora de ordem falha`**, a régua de workflow que esta spec exigia
+> desde 2026-08-11 (`recebimentoWorkflowOrdem.api.test.js`, zero linhas de produção).
+> **(5) `e2a23a9` + `d02744a` + `e287a06` — o campo "Qtd. conferida" por item no painel**, com o
+> aviso *"Divergência: N a menos/a mais que o esperado (E)"*, o botão "Salvar Conferência" (a rota
+> `PUT /:id/conferir` **nunca tinha tido chamador**) e a caixa de autorizar excedente visível só
+> para quem tem a ação.
+> **(6) `d90853d` — os itens do POST passaram a ser validados** (`quantidade` e
+> `quantidade_esperada` numéricas e positivas): mandar `quantidade_esperada: 'abc'` era a forma de
+> **desligar** a barreira de excedente daquele item em silêncio.
+> **(7) `5ce3fdf` — `fecharDetalhe` zera `loadingDetalhe`** nas duas telas (o resíduo que esta spec
+> nomeou como item da Etapa 36), **declaradamente sem régua** e com controle positivo executado:
+> placar idêntico com e sem a linha.
+> **(8) `aa39155` — integração** das três guardas em cinco pontos de chamada, pela rota e pelo
+> serviço.
+> **A revisão adversarial final (duas lentes independentes) convergiu num CRÍTICO** que nenhuma
+> suíte via: o documento cujo excedente havia sido **autorizado** na conferência **nunca mais
+> salvava dados fiscais** (o modal de NF reenvia a quantidade de todos os itens e não tem caixa
+> nenhuma) e morria no `processar` — documento **preso**. Consertado em `230baf6`+`2d7787d`, com a
+> regra unificada: a barreira só dispara quando `recebida > esperada` **E** `recebida > quantidade
+> já gravada`, e a trilha só é escrita quando a barreira disparou e foi autorizada. **E a
+> re-revisão dessa onda achou o efeito colateral do próprio conserto (F5):** a regra certa removeu
+> um bloqueio **acidental** que o `/fiscal` dava a um recebimento criado por API já com quantidade
+> acima da esperada — 201 → 200 → 200 → processável, sem flag, sem permissão e sem trilha. A
+> barreira passou a valer também em `criarRecebimento`. **Re-revisar o conserto de um crítico não é
+> zelo:** esse defeito **não existia** quando as duas lentes rodaram.
+> **Etapa 37 (2026-09-16, `ea0aa4f..13ad237`) — o pedido de compra passou a SABER quanto dele já
+> chegou, e a tela deixou de impedir o recebimento parcial.** É feature desta 08 (servidor +
+> client), a **terceira porta** anunciada pela Etapa 36 — e não deve ser confundida com ela: a 36
+> compara com a `quantidade_esperada` **do próprio documento**; esta compara com o **saldo do
+> pedido de compra**, que é outra conta, tem literal própria e vive em `itens_pedido_compra`.
+> **(1) `ea0aa4f` — onde o saldo mora.** `itens_pedido_compra.quantidade_recebida REAL DEFAULT 0`
+> (acumulador) e `recebimentos_material_itens_almoxarifado.pedido_item_id INTEGER` (o elo item↔linha
+> do pedido), pelo `safeAlter` do `schema.js`, mais o índice
+> `idx_itens_pedido_compra_pedido(pedido_id)` e o stub de `pedidos_compra` no harness
+> (`tests/helpers/testApp.js`). **Migration aditiva, sem ledger e sem backfill** — acervo com
+> `COUNT = 0`; a consulta de reconciliação, para o dia em que houver acervo, é a letra **A** do doc
+> de novidades.
+> **(2) `57ace18` — a régua do saldo no `POST`.** `POST /almoxarifado/recebimentos` com
+> `pedido_compra_id` resolve o `pedido_item_id` **no servidor** (nunca do payload), grava
+> `quantidade_esperada` = **saldo da linha** e compara **por MATERIAL** (as linhas do mesmo material
+> somadas, sem clamp por linha). Sem a flag: **400** *"Quantidade recebida (N) maior que o saldo do
+> pedido (S) para o material COD — a autorização de excedente é de Compras ou do Administrador"* —
+> o sufixo é a **mesma constante** do 400 da Etapa 36 (`SUFIXO_AUTORIZACAO_EXCEDENTE`), de propósito,
+> para as duas portas não darem instruções diferentes. Com a flag e sem a permissão: o **mesmo 403**
+> da 36, agora emitido de um lugar só (`assertAutorizacaoExcedente`). Com os dois: **201 + trilha**.
+> Mais duas recusas próprias (RN-25): *"Pedido de compra <numero> não tem itens lançados no módulo
+> Compras"* e *"Pedido de compra <numero> já foi recebido por completo"*. As duas comparações
+> coexistem e **nunca** disparam juntas: primeiro a da 36 (sobre a esperada do documento), depois a
+> do saldo do pedido.
+> **(3) `d062889` — só o que ENTROU no estoque consome saldo.** O acumulador
+> (`quantidade_recebida = COALESCE(quantidade_recebida,0) + qtd`) fica em `darEntradaEstoque`,
+> **dentro do claim** e depois de `entrouFisicamente = true`, nos **dois** caminhos (`processarNota`
+> e `aprovarRecebimento` direto). É **idempotente** pelo claim e **não-fatal** de propósito: falha do
+> `UPDATE` vira `console.warn` e a nota processa — perder a contagem é reversível por SQL, travar a
+> nota com o estoque já creditado não é. ~~Nada é escrito em `pedidos_compra`.~~ **Deixou de ser
+> verdade na Etapa 42** (`371b838`): ao lado deste acumulador, e **depois do laço de itens** (porque
+> "completo" é agregado por pedido, não por linha), passou a rodar o gancho que grava
+> `pedidos_compra.status = 'recebido'` — com o **mesmo** molde deste parágrafo: dentro do fluxo da
+> entrada física, **não-fatal**, com guarda de tabela ausente, e pelo mesmo motivo (travar a nota com
+> o estoque creditado é o dano maior). A frase riscada fica porque ela é o que explica por que o
+> gancho tem essa forma.
+> **(4) `402070c` + `eb10d9c` — a situação do pedido é DERIVADA na leitura.** A lista
+> `-aux/pedidos-compra` ganhou `quantidade_pedida`, `quantidade_recebida`, `saldo_pendente` (com
+> `Math.max(0, …)`) e `situacao_recebimento` (`ABERTO`/`PARCIAL`/`RECEBIDO`) **ao lado** do `status`
+> do core, que **não é tocado**; `?pendentes=1` filtra no `WHERE`, **antes** do `LIMIT 50` (filtrar
+> depois deixaria a tela sem o único pedido recebível); e nasceu a rota
+> `GET /almoxarifado/recebimentos-aux/pedidos-compra/:id/itens` (só as linhas com saldo; `[]` quando
+> quitado; 404 *"Pedido de compra não encontrado"*). O **fix 1** (`eb10d9c`) acrescentou
+> `saldo_pendente_material` — o **mesmo** agregado que a barreira usa —, porque a leitura prometia 10
+> e a porta recusava com 5.
+> **(5) `a9acb4c` + `838f971` — a tela parou de apagar os itens do pedido.** Escolher "Pedido de
+> compra" carrega os itens pela rota nova (o `<select>` manda `?pendentes=1`), as linhas nascem
+> **editáveis** com o saldo, o aviso *"Acima do saldo: {n} a mais que o saldo do pedido ({saldo})"*
+> aparece quando o digitado passa do saldo, e a caixa *"Autorizo o recebimento acima do pedido"* só
+> com `pode('autorizar_excedente')` — **a UI não decide**, o hook falha **aberto** e quem recusa é o
+> backend. O payload leva `pedido_compra_id` + `{pedido_item_id, material_id, quantidade}` e **não**
+> leva `quantidade_esperada` (ela nasce do saldo, no servidor) — quem declarar a chave "por simetria"
+> derruba a tela. O **fix 1** (`838f971`): o aviso media a **linha** e a porta mede a **soma do
+> material**; agora o client soma o digitado por material e compara com `saldo_pendente_material`, o
+> mesmo número do servidor.
+> **(6) `4955805` — os 21 `ALTER TABLE` mortos de `routes/almoxarifado.js` apagados** (galho de
+> fundação, ver spec 00) e a spec 00 corrigida **dizendo que estava errada**.
+> **(7) `97726c3` — a integração que cruza os galhos:**
+> `recebimentoContraPedidoIntegracao.api.test.js`, pedido de 10 → parcial de 6 pela forma **da tela**
+> → processar → saldo 4/`PARCIAL` → segundo de 5 recusado (400) → 403 → 201 com autorização →
+> `/conferir` e `/fiscal` ecoam **200 sem trilha nova** (o CRÍTICO da 36 não renasceu) → processar →
+> saldo 0/`RECEBIDO`, some do `?pendentes=1`, itens `[]`.
+> **A REVISÃO ADVERSARIAL FINAL (2 lentes independentes, 0 ruído) achou 4 Important, e os quatro
+> vivem na COMPOSIÇÃO — não dentro de nenhuma task.** **F1** (`4007344`): a tela colapsava *"pedido
+> sem itens lançados"* e *"pedido quitado"* no mesmo `[]` e dizia *"Este pedido já foi recebido por
+> completo."* para um pedido **vazio** — a mentira que a decisão 14 do design tirou do servidor,
+> renascida no client. **F2** (`8ead95e`): o `POST` **sem `itens`** montava o payload com o saldo
+> **por linha** enquanto a barreira agrega **por material** — o servidor recusava o próprio payload.
+> **F3** (`c40fca8`): `resolverLinhaDoPedido` validava o `pedido_item_id` contra o pedido mas **não
+> contra o material**, então receber X com o id da linha de Y creditava o estoque de X e dava baixa
+> em Y; 400 novo *"Item do pedido #<id> não é do material <COD>"*. **U1** (`dd11972`): o caminho por
+> pedido gravava os itens a **R$ 0,00** e **deixou de alimentar o custo médio** do material —
+> regressão silenciosa da Etapa 8c introduzida pela T5, hoje com fallback ao `valor_unitario` da
+> linha do pedido. Mais **6 Minor** (`e253ad2` corrida do `<select>`; `93cce5e` os dois contratos que
+> a suíte exercitava sem afirmar; `e0f8b18` o hash da T6; `13ad237` `var(--gmp-danger)`, que **nunca
+> existiu** — só `--gmp-error` —, e por isso os avisos saíam na cor herdada).
+> **Última atualização:** 2026-10-02 (**Etapa 71** — o estorno da entrada da nota desconta a linha do pedido e reabre o pedido que o automático fechou; régua única por material; NF relançável depois de todas as entradas estornadas; estorno recusado com material em inspeção ou reprovado; a feature vai a 🟢 com a conferência física estruturada como corte); antes: 2026-10-01 (**Etapa 70** — aviso de entrada da nota e ao solicitante); antes: 2026-09-30 (**Etapa 57** — o destino por item no processamento da nota, e a devolução ao fornecedor saindo do endereço de entrada; antes: 2026-09-16, Etapa 37 — saldo do pedido, recebimento parcial pela tela,
+> acumulador na entrada física e a situação derivada; antes: 2026-09-16, Etapa 36 — enum, NF duplicada, barreira de excedente,
+> quantidade conferida na tela e a régua do workflow; antes: 2026-09-16, Etapa 35 — erro de carga visível, painel que não mente e
+> barra de etapas neutra; antes: 2026-09-16, Etapa 34 — anexos no painel + primeira suíte da tela;
+> antes: 2026-08-11 — **auditoria spec×código**: corrigida a afirmação — que estava
 > errada — de que a rota de certificado não tinha tela; registradas a entrada atômica/idempotente e
 > a exigência de lote do review final de 2026-08-10, que só a spec 10 documentava; tabela de testes
 > ganhou coluna de estado porque cinco linhas citavam testes que não existem; refs de linha
@@ -94,17 +249,187 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
   `[recebimento] nota com item sem lote em material controlado e recusada inteira` —
   `server/tests/api/loteControleObrigatorio.api.test.js`. O alcance completo de `controle_lote`
   (onde exige, onde é isento de propósito) está documentado na spec 10.
+- **Etapa 36 (2026-09-16, `d02b9f4..e287a06`) — as três guardas das duas portas, com as regras
+  exatas.** Todas moram **no serviço** (`receiptService.js` / `schemas.js`), não na rota, porque a
+  rota não é o único chamador possível:
+  - **Enum** — `TIPOS_RECEBIMENTO` é `string[]` exportado de `schema.js` (fonte única) e consumido
+    pelos dois schemas Zod (`RecebimentoCreateSchema` e `RecebimentoFiscalSchema`, os dois
+    `z.looseObject`). Literal congelada numa constante só (`TIPO_RECEBIMENTO_INVALIDO`).
+    **Limitação declarada:** o enum é checado no **schema da rota**, não dentro de
+    `criarRecebimento` — quem chamar o serviço direto grava `tipo_recebimento` cru (afirmado por
+    asserção de caracterização na T7; hoje os únicos chamadores são as duas rotas validadas).
+  - **NF duplicada** — `assertNotaNaoDuplicada(db, dados, recebimentoId?)`. Busca os candidatos
+    pela NF normalizada (`UPPER(TRIM(nota_fiscal))`, com `AND id <> ?` no `/fiscal` para o
+    documento não se autoacusar) e compara o **fornecedor em JS**, casando se **QUALQUER** perna
+    casar: mesmo `fornecedor_id`; ou mesmo CNPJ **só dígitos**
+    (`String(v).replace(/\D+/g, '')`); ou mesmo nome por
+    `normalize('NFD').replace(/\p{M}+/gu, '').toUpperCase().trim().replace(/\s+/g, ' ')`. Perna
+    vazia não casa. NF vazia/nula não é duplicata, e fornecedor não identificado (id, CNPJ e nome
+    os três vazios) também não. O índice é **`CREATE INDEX` NÃO-único de propósito** — produção
+    pode já ter duplicatas, e a consulta de diagnóstico é a **letra A9** do doc de novidades.
+  - **Excedente** — `assertExcedentePermitido(db, user, recebimentoId, itens, autorizado)` nas
+    **três** portas que escrevem quantidade recebida: `criarRecebimento` (o `POST`),
+    `PUT /:id/conferir` e `PUT /:id/fiscal`. Barra o item quando `recebida > esperada` **E**
+    `recebida > quantidade_recebida já gravada` (no `POST` não há quantidade gravada, então vale só
+    a primeira metade); a trilha `EXCEDENTE_AUTORIZADO` (entidade `recebimento_item`) só é escrita quando a
+    barreira disparou **e** foi autorizada. Sem a flag: **400**
+    *"Quantidade recebida (N) maior que a esperada (E) no item #ID — a autorização de excedente é
+    de Compras ou do Administrador"*. Com a flag e sem a permissão: **403** *"Autorizar recebimento
+    acima do pedido exige a permissão "autorizar_excedente" (seu perfil: X)."*
+  - **Itens do POST** — `RecebimentoItemSchema` (`z.looseObject`) exige `quantidade` numérica
+    positiva e aceita `quantidade_esperada` positiva opcional. Literais:
+    *"quantidade do item deve ser um número maior que zero"* e *"quantidade esperada do item deve
+    ser um número maior que zero"*. **Isto é mudança de contrato do `POST`** para qualquer cliente
+    externo que mandasse quantidade não numérica; os 9 arquivos de teste internos que criam
+    recebimento pela rota passaram sem alteração.
+
+  **Pendências nomeadas nesta etapa, nenhuma silenciosa:**
+  1. **A terceira porta (`POST`) fechou PARCIALMENTE, e o recorte importa.** A T3 pôs a barreira em
+     **duas** portas (`/conferir` e `/fiscal`) e declarou o `POST` fora (decisão **B84**); a
+     re-revisão da onda (**F5**) mostrou que isso deixou um caminho **inteiramente aberto** e o
+     fechou: hoje o `POST` também barra excedente. **O que continua aberto e é a Etapa 37** é coisa
+     diferente e não deve ser confundida: o **saldo contra o PEDIDO DE COMPRA**. A barreira desta
+     etapa compara com a `quantidade_esperada` **do próprio documento**; ninguém compara com o que
+     o pedido ainda tem a receber — um pedido de 10 pode receber 25 em três recebimentos e
+     continuar `ABERTO`. Design commitado em `5f03afc`, plano em `9790b07`.
+  2. **A guarda de NF não é airtight** — é *check-then-insert* sem transação: dois `POST`
+     simultâneos com a mesma NF passam os dois. O CRM tem uma conexão SQLite só e `ROLLBACK`
+     desfaria escrita alheia; fecha de verdade na migração para Postgres. Nomeada na letra G do doc
+     de novidades.
+  3. **A consulta A9 SUB-REPORTA duplicatas por acento** — ela roda em SQL, e o `UPPER` do SQLite é
+     ASCII-only; `'José Aços'` × `'Jose Acos'` **não** aparecem como par. O número que ela devolver
+     é **piso**, não total. A guarda em JS cruza os dois; a consulta, não.
+  4. **O 400 do excedente nomeia só o PRIMEIRO item excedente**, enquanto a trilha grava uma linha
+     por item: quem corrige o item A e reenvia pode tomar um 400 novo pelo item B.
+  5. **`PUT /:id/conferir` não tem `validate()`** — quantidade em **texto** é aceita pela rota. A
+     barreira usa `parseFloat` + `isFinite` e portanto não quebra, mas grava o que vier. É
+     **pré-existente**, e o `d90853d` fechou só o lado do `POST`: a mesma família de defeito, outra
+     porta.
+  6. **Resíduo do aviso de divergência:** diferença **abaixo de `0,00005`** continua sendo exibida
+     como `0`. O `e287a06` mudou o piso de 2 para 4 casas, não para infinito — a régua é o
+     arredondamento, e ele sempre tem um piso.
+  7. **`fornecedor_id` `'0'` casaria uma coluna nula** na comparação por id
+     (`Number('0') === Number(null)` dá `0 === 0`). **Inalcançável pela UI** — não existe fornecedor
+     com id 0 —, registrado aqui para não ser descoberto como surpresa por quem chamar o serviço
+     direto.
+
+- **Etapa 37 (2026-09-16, `ea0aa4f..13ad237`) — as regras do saldo do pedido, RN-20 a RN-27.**
+  Todas moram **no serviço** (`receiptService.js`), pelo mesmo motivo da 36: a rota não é o único
+  chamador possível.
+  - **RN-20 — saldo do pedido = pedida − recebida, comparado POR MATERIAL.** As linhas do mesmo
+    material são **somadas sem clamp por linha** (uma linha sobre-recebida abate o saldo das
+    irmãs), e o clamp em 0 é aplicado só no fim. Receber acima do saldo exige autorização. A
+    leitura expõe **o mesmo número** (`saldo_pendente_material`) — foi o fix 1 da T4: sem ele a
+    leitura prometia 10 e a porta recusava com 5. **Descartado:** comparar por linha.
+  - **RN-21 — a recusa é a mesma da Etapa 36, de um lugar só.** Sem a flag, **400** com a literal
+    do saldo; com a flag e sem a permissão, **403** nomeando a ação e o perfil. O 403 vive em
+    `assertAutorizacaoExcedente`, consumido pelas **três** portas, e o sufixo do 400 é a constante
+    `SUFIXO_AUTORIZACAO_EXCEDENTE`, compartilhada com o 400 da 36.
+  - **RN-22 — o `pedido_item_id` é resolvido pelo SERVIDOR, nunca aceito do payload.** Um id
+    explícito só é honrado se for **do pedido E do mesmo material** (esse "e do mesmo material" é o
+    **F3** da revisão final, `c40fca8`; sem ele, receber X com o id da linha de Y creditava X no
+    estoque e dava baixa em Y). **Limite conhecido:** o id de linha de **outro** pedido não é
+    recusado — contrato entregue, mudança exige decisão nova.
+  - **RN-23 — só o que ENTROU no estoque consome saldo.** O acumulador roda em `darEntradaEstoque`,
+    dentro do claim, nos dois caminhos (`processarNota` e `aprovarRecebimento` direto). É
+    idempotente pelo claim e **não-fatal**. **Consequência inerente, não bug:** dois documentos
+    abertos contra o mesmo pedido passam os dois — é o mesmo mecanismo que faz a regra valer.
+  - **RN-24 — a situação do pedido é DERIVADA na leitura.** `ABERTO`/`PARCIAL`/`RECEBIDO` e
+    `saldo_pendente` (com `Math.max(0, …)`) saem **ao lado** do `status` do core. `?pendentes=1`
+    filtra no `WHERE`, antes do `LIMIT`, e **pedido sem linhas conta como pendente** — é o Compras
+    que ainda não lançou os itens, não um pedido quitado.
+    > ⚠️ **METADE DESTA RN FOI REVOGADA NA ETAPA 42, e a metade revogada era o título.** Até a Etapa
+    > 41 ela dizia *"**nunca gravada**"* e *"o `status` do core … **não é tocado**"*, e estava
+    > **certa**: não havia gesto automático nenhum, e gravar sem régua seria inventar uma máquina de
+    > estados. A Etapa 42 (`371b838`, RN-E01) **grava** `status = 'recebido'` quando a entrada física
+    > completa o pedido. **O que continua valendo, e é a parte que importa:** a situação derivada
+    > (`situacao_recebimento`, `saldo_pendente`) continua sendo campo **ao lado** do status, nunca no
+    > lugar dele — as rotas de leitura desta feature seguem sem escrever nada —, e o `?pendentes=1`
+    > continua sendo saldo, não status. O medo que a frase antiga protegia (badge cinza com palavra
+    > crua, `?status=` que não casa) segue endereçado por **medida**: `'recebido'` pertence a
+    > `STATUS_PEDIDO_COMPRA`, tem cor no badge e é opção do filtro — e há teste que afirma isso com a
+    > lista **importada do schema**, não copiada.
+  - **RN-25 — as duas recusas próprias do pedido, e por que são DUAS.** *"Pedido de compra
+    <numero> não tem itens lançados no módulo Compras"* e *"Pedido de compra <numero> já foi
+    recebido por completo"*: colapsar as duas foi o defeito que a decisão 14 do design tirou do
+    servidor e que o **F1** teve de tirar do client (`4007344`) — a tela dizia *"já foi recebido por
+    completo"* para um pedido **vazio**. A literal da tela leva **ponto final** e cai para o id
+    quando não há número; **não são byte-idênticas**, a comparação é por substring.
+  - **RN-26 — a tela carrega os itens com saldo e mede o mesmo que o servidor.** O payload **não**
+    leva `quantidade_esperada`; o aviso *"Acima do saldo: …"* compara a **soma digitada por
+    material** com `saldo_pendente_material`.
+  - **RN-27 — os 21 `ALTER TABLE` mortos** de `routes/almoxarifado.js` (galho de fundação da
+    etapa, `4955805`; ver spec 00).
+  - **Duas heranças da Etapa 36 que ESTA feature confirma, e que não devem ser "aproximadas"
+    depois:** (a) a regra *"recebida > esperada **E** recebida > gravada"* vale nas **três** portas
+    — o documento que **nasce** excedente pelo `POST` continua salvando `/conferir` e `/fiscal` com
+    200 e **sem trilha nova** (é o passo 5b da T7, e o CRÍTICO da 36 não renasceu); (b) os schemas
+    Zod são `z.looseObject` e `quantidade_esperada` é **opcional** — torná-la obrigatória "por
+    simetria" derruba todo recebimento por pedido feito pela tela.
+
+  **⚠️ CINCO afirmações que os documentos desta etapa faziam e que ESTAVAM ERRADAS.** Ficam
+  escritas, não apagadas, porque cada uma foi acreditada por alguém:
+  1. **O design da 37 chamava `itens_pedido_compra` de "tabela core que não se toca" — errado.** O
+     `CREATE TABLE` está em `services/almoxarifado/schema.js:1311`: a tabela de itens é **do
+     almoxarifado**; só `pedidos_compra` é core (`server/index.js:19230`). Medido na Fase 0 da
+     Etapa 38.
+  2. **O item R5 do design dizia que o servidor valida o `pedido_item_id` "contra o pedido" —
+     incompleto, e o buraco era real.** Validar contra o pedido e **não contra o material** deixava
+     receber X com o id da linha de Y: o estoque creditava X e o pedido dava baixa em Y. Corrigido
+     no **F3** (`c40fca8`), com literal própria.
+  3. **O plano previa `201` para o `POST` sem `itens` contra o pedido — e o servidor recusava o
+     próprio payload.** Ele montava os itens com o saldo **por linha** enquanto a barreira agrega
+     **por material**: com duas linhas do mesmo material, uma sobre-recebida, ele oferecia 10 e
+     respondia 400 *"saldo do pedido (5)"*. Corrigido no **F2** (`8ead95e`): o rateio passou a usar
+     `min(saldo da linha, agregado do material)`, e material com agregado ≤ 0 é pulado.
+  4. **O contexto de execução afirmava que "o `<select>` lista só pedidos com saldo" — falso.**
+     `?pendentes=1` lista **também** os pedidos **sem linhas lançadas** (saldo 0, `ABERTO`), de
+     propósito (RN-24) — e é exatamente esse pedido que o **F1** fez a tela nomear direito.
+  5. **A Etapa 8c registrava que o custo do recebimento alimenta o custo médio do material — e a
+     T5 quebrou isso em silêncio.** O caminho por pedido não manda preço, o item nascia a **R$
+     0,00** e o `custo_medio` deixou de ser alimentado por **todo** recebimento contra pedido.
+     Ninguém notou até a lente de UX/dados (**U1**, `dd11972`): hoje o servidor cai no
+     `valor_unitario` da **linha do pedido** quando o payload omite o campo; um `0` explícito
+     continua 0. Esta é a razão de a spec 8c continuar verdadeira.
 
 ## Checklist
 
 ### Backend
-- [ ] Tipos de entrada (spec 8.1): materiais de cliente, consignado, retorno de industrialização/fornecedor/assistência, devolução da produção, transferência, fabricado internamente, sobra/retalho, ajuste, ferramenta, produto acabado — hoje o recebimento é só de NF de compra (os demais entram pelas features 11/12/13/14/15). **Fora do escopo da Etapa 5** (design 2026-08-07): decisão explícita de deixar para quando houver demanda real de um tipo específico.
+- [x] Tipos de entrada (spec 8.1): materiais de cliente, consignado, retorno de industrialização/fornecedor/assistência, devolução da produção, transferência, fabricado internamente, sobra/retalho, ajuste, ferramenta, produto acabado — hoje o recebimento é só de NF de compra (os demais entram pelas features 11/12/13/14/15). **Fora do escopo da Etapa 5** (design 2026-08-07): decisão explícita de deixar para quando houver demanda real de um tipo específico.
+  > **`[x]` PARCIAL, e o recorte está dito aqui para não parecer marcação folgada — Etapa 36,
+  > `d02b9f4`.** O que o ponto (3) da correção abaixo definiu como *"a tarefa real desta linha"*
+  > está **feito**: o enum dos dois tipos que o recebimento de fato faz (`NOTA_FISCAL`,
+  > `PEDIDO_COMPRA`) está fechado em `TIPOS_RECEBIMENTO` (fonte única em `schema.js`) e **validado
+  > nas duas portas de escrita** — `POST /almoxarifado/recebimentos` e
+  > `PUT /almoxarifado/recebimentos/:id/fiscal` —, com a literal
+  > *"forma de recebimento inválida (use NOTA_FISCAL ou PEDIDO_COMPRA)"*. Antes disso o valor do
+  > body era gravado cru: `'BANANA<script>'` entrava com 201 (sonda executada).
+  > **O que NÃO está feito, e não é código:** ampliar a lista para os dez tipos da spec 8.1
+  > continua sendo **decisão de negócio**, e esbarra no ponto (2) — as features 11–15 estão 🟢 e
+  > **já são a porta** dos outros tipos; replicá-los aqui criaria uma segunda porta. Enquanto essa
+  > decisão não vier, esta linha está fechada no que dependia de código.
+  > **Sem backfill do acervo:** a validação vale só para escritas novas, e o `tipo_recebimento`
+  > fora do enum que já estiver gravado continua gravado (letra **A10** do doc de novidades leva a
+  > consulta de diagnóstico). O modal fiscal **deixou de ecoar** o campo (`41df1cb`), justamente
+  > para que uma linha de acervo fora do enum não tomasse 400 em toda gravação fiscal.
   > **CORREÇÃO (Fase 0 da Etapa 27, medida em 2026-08-29): esta linha dizia "aqui: campo
   > `tipo_entrada` + validações por tipo", e ESTAVA ERRADA nas duas metades.**
+  > ⚠️ **Correção da Etapa 36: as TRÊS refs de linha deste bloco apodreceram, e uma delas já
+  > apontava para outra coisa.** `schema.js:1147` — **estava errado** em 2026-09-16 (a coluna
+  > `tipo_recebimento` estava em `:1229`); `extended.js:765` — **estava errado** (`:765` passou a
+  > ser a `POST /movimentacoes/v2`, ou seja, a ref não só envelheceu, ela passou a **mentir**; a
+  > rota do recebimento estava em `:973`); `receiptService.js:281` — **estava errado** (o
+  > `tipo_recebimento = COALESCE(?, tipo_recebimento)` estava em `:286`). **Não estamos trocando
+  > número por número:** as três passam a ser citadas pelo **nome** do `CREATE TABLE`, da rota e da
+  > função, que é o que sobrevive a um commit — o mesmo movimento que a Etapa 35 fez no seu F3, e a
+  > terceira vez que uma ref de linha apodrecida aparece nesta base. Os números ficam escritos aqui
+  > **de propósito**, riscados pela frase acima, para que quem já confiou neles reconheça o erro em
+  > vez de achar que a linha mudou sozinha.
   > **(1) O campo não se chama `tipo_entrada` e ele JÁ EXISTE**: é `tipo_recebimento`
-  > (`schema.js:1147`, `TEXT DEFAULT 'NOTA_FISCAL'`), gravado por `criarRecebimento`
-  > (`receiptService.js:106`), e há um `<select>` para ele na tela
-  > (`RecebimentosAlmoxarifado.js:600`). Procurar por `tipo_entrada` no código não acha **nada** —
+  > (o `CREATE TABLE recebimentos_material_almoxarifado` em `schema.js`,
+  > `TEXT DEFAULT 'NOTA_FISCAL'`), gravado por `criarRecebimento`
+  > (`receiptService.js`), e há um `<select>` para ele na tela
+  > (`RecebimentosAlmoxarifado.js`, modal de novo recebimento). Procurar por `tipo_entrada` no código não acha **nada** —
   > é exatamente o modo de errar que já custou duas etapas nesta base (medir ausência pelo nome
   > que se imagina, em vez do nome do **contrato**).
   > **(2) Os outros tipos JÁ TÊM PORTA, e construí-los aqui criaria uma segunda.** Esta linha diz
@@ -116,29 +441,564 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
   > **(3) O que falta de verdade não é o campo: são os VALORES e a VALIDAÇÃO.** O campo aceita hoje dois
   > valores por convenção (`NOTA_FISCAL` e `PEDIDO_COMPRA`) e **não é validado em lugar nenhum** —
   > não há enum, não há Zod (`schemas.js` não tem schema de recebimento) e a rota
-  > `POST /api/almoxarifado/recebimentos` (`extended.js:765`) tem **só** o gate
+  > `POST /api/almoxarifado/recebimentos` (em `routes/almoxarifado/extended.js`) tem **só** o gate
   > `requirePermission('receber_material')`, sem `validate(...)`. O valor do body é gravado cru:
   > qualquer string entra na coluna. **A tarefa real desta linha é**: fechar o enum dos tipos
   > que o recebimento de fato faz hoje e validá-lo nas **duas** portas de escrita — o `POST` e o
-  > `PUT /:id/fiscal` (`receiptService.js:281`, `tipo_recebimento = COALESCE(?, tipo_recebimento)`),
+  > `PUT /:id/fiscal` (`salvarDadosFiscal`, em `receiptService.js`, o
+  > `tipo_recebimento = COALESCE(?, tipo_recebimento)` do `UPDATE`),
   > senão a validação é contornável por um `PUT`. Ampliar a lista para os dez tipos da spec 8.1 é
   > **decisão de negócio**, não código, e esbarra no ponto (2).
+  > **↑ ESTE PARÁGRAFO DESCREVE O ESTADO ATÉ 2026-09-16 (Etapa 27).** A tarefa que ele nomeia foi
+  > cumprida na **Etapa 36** (`d02b9f4`) — fica no lugar porque é o diagnóstico que gerou a tarefa,
+  > e apagá-lo esconderia o motivo de o enum existir.
   > **Medido no banco de desenvolvimento: zero recebimentos gravados** — não há acervo a migrar,
   > e um enum aplicado agora não invalida dado nenhum.
-- [ ] Recebimento parcial de pedido (validar suporte real + saldo pendente do pedido)
-- [ ] Recebimento excedente só com autorização
+- [x] **O recebimento FECHA o pedido: status automático + trilha (Etapa 42, 2026-09-27)** —
+      **`dcda360`** (T1: a régua `derivarRecebimentoDoPedido` passa a ser **exportada** e nasce
+      `situacaoDosPedidosCompra`, sem `LIMIT` e com `previsao_entrega`; a subquery da soma virou a
+      constante compartilhada `SOMA_POR_PEDIDO_SQL`, para a agregação também ter um dono) e
+      **`371b838`** (T2: `fecharPedidosCompletos` no **fim** de `darEntradaEstoque`, mais o rótulo de
+      auditoria e a reescrita das três suítes que afirmavam o comportamento antigo).
+      **RN-E01..RN-E07.** Testes: `comprasPedidoSituacaoFonte.api.test.js` (8 cenários),
+      `comprasPedidoStatusAutomatico.api.test.js` (10) e
+      `recebimentoFechaPedidoIntegracao.api.test.js` (a cadeia cotação → pedido → recebimento
+      parcial → fechamento, pela rota).
+      > ⚠️ **Esta entrega REVOGA a RN-24 desta própria spec** (e o item `:107`, *"nada é escrito em
+      > `pedidos_compra`"*). A RN-24 estava **correta até a Etapa 41**: sem gesto automático nenhum,
+      > gravar o status seria inventar uma máquina de estados, e o design da Etapa 39 usou
+      > exatamente essa frase para descartar o gancho. O que mudou é que as Etapas 38–41 fecharam a
+      > cadeia e o último elo aberto era um pedido que ficava *"Atrasado"* **para sempre** depois de
+      > fisicamente recebido. A régua de atraso **não** mudou (`derivarAtraso`, que já excluía
+      > `'recebido'`): mudou **quem escreve a palavra**. Ver a RN-24 mais abaixo, onde a revogação
+      > está anotada no lugar dela.
+      >
+      > **Os limites, que são decisão e não falta:** o gancho **só sobe** (nunca reabre pedido — e
+      > estornar a movimentação de entrada depois do fechamento **não deixa sinal**, limitação nova
+      > `B161`); não sobrescreve `cancelado`/`rejeitado`; é **não-fatal** com guarda de tabela
+      > ausente (um `throw` travaria a nota com o estoque já creditado, e o claim impediria o
+      > reprocessamento); e **audita**, embora o `PATCH .../status` manual não audite — ali o autor é
+      > o próprio ato humano na porta, aqui o pedido muda sozinho por ato de outro módulo.
+      >
+      > ⚠️ **Etapa 71 (2026-10-02): dois destes "limites" deixaram de valer, e ficam corrigidos em vez de apagados.**
+      > (1) *"o gancho só sobe (nunca reabre pedido)"* — o **estorno** da entrada agora desce: desconta a linha e reabre o
+      > pedido que o automático fechou (`81a734c`, corrigido na Fase 5 por `2335c52`). E a B161 **subestimava** a
+      > limitação: a nota seguinte do que faltava era **recusada** (*"maior que o saldo do pedido (0)"*), e a frase da
+      > B161 *"o recebido se corrige por consulta"* **estava errada** (a consulta só lê o acumulador). Devolução e sucata
+      > continuam não reabrindo (B336). (2) *"embora o `PATCH .../status` manual não audite"* — passou a auditar
+      > (`STATUS_MANUAL_ALTERADO`, `2335c52`), porque a reabertura precisa saber quem escreveu o último *Recebido*.
+      > **E um terceiro ponto deste item estava errado desde a Etapa 42:** o fechamento chamava
+      > `derivarRecebimentoDoPedido` com **dois** argumentos e o `?pendentes=1` somava por pedido — o excedente cruzado
+      > fechava o pedido. A correção da revisão da 42 tinha chegado só à leitura; os comentários que a davam por completa
+      > estavam errados (`39da666`, C107).
+- [x] **O pedido que reabre — estornar a entrada da nota desconta a linha e reabre o pedido (Etapa 71, 2026-10-02)** —
+      **`39da666`** (T0: régua única do "completo" por material no fechamento e no `?pendentes=1`, epsilon na barreira
+      do saldo), **`beedc40`** (T1: `movimentacao_entrada_id` no item do recebimento), **`81a734c`** (T2:
+      `estornarEntradaNoPedido` + gancho em `cancelarMovimentacao`, recusa com material em inspeção, NF relançável),
+      **`63b2680`** (T3: aviso na tela de Movimentações), **`87fe520`** (T4: integração pelas rotas), Fase 5
+      **`9a442f1`** (recusa com reprovado), **`2335c52`** (fechamento manual não é desfeito; `PATCH` do Compras auditado)
+      e **`a9696f3`** (NF relançável com a régua de quantidade da Etapa 70). Testes: `pedidoReabreNoEstorno` (36),
+      `pedidoReabreIntegracao` (10), `recebimentoVinculoMovimentacao` (4), `comprasPedidoStatusAutomatico` (14),
+      `comprasPedidoSituacaoFonte` (11), `MovimentacoesAlmoxarifado.test.js` (bloco da Etapa 71, 9). Decisões
+      B329–B342 das novidades; passado na A35.
+- [x] Recebimento parcial de pedido (validar suporte real + saldo pendente do pedido) —
+      **`ea0aa4f`** (as duas colunas + índice + stub do harness), **`57ace18`** (a régua do saldo no
+      `POST`), **`d062889`** (o acumulador na entrada física), **`402070c`** + **`eb10d9c`** (a
+      situação derivada na leitura e o `saldo_pendente_material`), **`a9acb4c`** + **`838f971`** (a
+      tela carregando os itens com o saldo) e a onda de correção
+      (**`4007344`**, **`8ead95e`**, **`c40fca8`**, **`e253ad2`**, **`93cce5e`**, **`e0f8b18`**,
+      **`dd11972`**, **`13ad237`**) — Etapa 37, 2026-09-16. Teste de ponta a ponta:
+      `server/tests/api/recebimentoContraPedidoIntegracao.api.test.js`, mais
+      `pedidoSaldoRecebido`, `pedidosCompraSaldoAux` e `recebimentoExcedentePedido`.
+      > **O parágrafo abaixo era o diagnóstico que gerou a Etapa 37 — a tarefa que ele nomeia está
+      > FEITA.** Fica escrito porque é o que explica por que a coluna existe:
+      > ~~*`itens_pedido_compra` tem 8 colunas, 1 leitor e 0 escritores; não existe coluna de
+      > `quantidade_recebida` acumulada, então não há onde o saldo pendente morar. A tela nunca
+      > carrega os itens do pedido, logo o parcial é impossível pela tela. E um pedido de 10 que
+      > recebeu 25 em três recebimentos fica `ABERTO` com `quantidade = 10`.*~~ Hoje a coluna existe
+      > (`ea0aa4f`), tem **um escritor** (`darEntradaEstoque`, `d062889`), a tela carrega os itens
+      > com o saldo (`a9acb4c`) e o pedido de 10 recusa o 25 com literal própria (`57ace18`).
+      > ⚠️ **E o design da Etapa 37 classificou uma tabela ERRADO, o que vale corrigir aqui porque a
+      > próxima etapa depende disso:** ele chamava **as duas** tabelas de *core que não se toca*.
+      > Falso — só `pedidos_compra` é core (`server/index.js:19230`); o `CREATE TABLE` de
+      > **`itens_pedido_compra` está em `server/services/almoxarifado/schema.js:1311`**, isto é, a
+      > tabela de itens é **do almoxarifado**. Não muda o que foi feito (a migration já rodava pelo
+      > `safeAlter` do `schema.js`, e por isso o harness stuba só `pedidos_compra`), mas muda o custo
+      > da Etapa 38: mexer nos itens do pedido **não** é invasão de módulo core. Medido na Fase 0 da
+      > 38 (`.superpowers/sdd/etapa38-fase0-pedido-de-compra.md`).
+      > **O que esta entrega NÃO alcança, nomeado item a item** (nenhum é surpresa; todos estão na
+      > letra **G** do doc de novidades): (a) **item que não está no pedido** entra sem régua de
+      > saldo — decisão 9 do design, e **só pela API**: a tela não produz esse payload, porque a
+      > busca de material aparece apenas na forma `NOTA_FISCAL`; (b) **dois recebimentos abertos**
+      > contra o mesmo pedido dão **201 os dois** (o saldo só conta o que foi processado — é o mesmo
+      > mecanismo que faz a RN-23 valer), e o excesso resultante — 12 de 10 — **não deixa nenhuma
+      > linha de `EXCEDENTE_AUTORIZADO`**: a reconciliação trabalha sem trilha; (c) **estorno de
+      > recebimento não devolve saldo ao pedido** — não existe cancelamento de recebimento (feature
+      > 12), e quando existir terá de decrementar o acumulador; (d) **residual do F4**: trocar a
+      > forma de volta para "Nota fiscal" (ou Cancelar) com a resposta de itens **em voo** repovoa os
+      > itens sob `NOTA_FISCAL` — a guarda cobre pedido→pedido; o conserto é uma linha
+      > (`++pedidoSeqRef.current` em `limparEstadoDoPedido`); (e) o **agregado por material está
+      > escrito duas vezes** (rateio do `POST` sem itens e barreira) — concordam hoje, e o conserto é
+      > extrair um helper; (f) `valor_total` do item usa a **quantidade esperada** (o saldo) e não a
+      > recebida — **pré-existente**, agora visível porque a U1 passou a preencher o preço: num
+      > parcial o valor gravado fica acima do que chegou (o custo médio usa o **unitário**, e contas
+      > a pagar usa o total da **nota**); (g) o F3 recusa o `pedido_item_id` de outro **material**,
+      > mas **não** o id de linha de **outro pedido** — é o contrato entregue pela T2/decisão 9, e
+      > mudá-lo é decisão nova (pergunta da letra **B**); (h) a rota de itens **expõe
+      > `valor_unitario` por linha** a qualquer perfil do módulo (a lista `-aux` já expunha o total);
+      > (i) **janela do primeiro boot** depois do deploy: a rota consulta `quantidade_recebida` antes
+      > de o `safeAlter` rodar e o `catch` é silencioso → `<select>` vazio sem mensagem, ao lado do
+      > `initSchema` não-awaited.
+- [x] **Criação de pedido de compra no módulo Compras — ENTREGUE na Etapa 38** (`2fb9f68` e
+      seguintes; a tela, o `POST`/`PUT` com itens, a importação de planilha e o "Gerar pedido" da
+      Reposição). ⚠️ **Este item ficou `[ ]` por DESATUALIZAÇÃO, não por decisão, desde 2026-09-16**
+      — e a linha de status no topo desta spec repetiu o erro até a **Etapa 42** (2026-09-27), que o
+      corrigiu ao medir. Quem leu a spec entre uma data e a outra concluiu que a feature continuava
+      **inerte em produção**, quando ela já era alcançável por clique desde a 38, e a Etapa 41 ainda
+      acrescentou o caminho **cotação → "Gerar pedido"**. O texto medido na Fase 0 da 38 fica abaixo,
+      porque ele explica **por que** a feature ficou inerte por três etapas — e é a única fonte que
+      registra o acervo `0/0` daquele momento:
+      </br>
+      *(texto original, verdadeiro em 2026-09-16 e falso desde a Etapa 38)* — medido na Fase 0 da Etapa 38
+      (`.superpowers/sdd/etapa38-fase0-pedido-de-compra.md`, 2026-09-16) — **nenhum código da
+      aplicação insere `pedidos_compra` nem `itens_pedido_compra`**. A rota core
+      `server/index.js:20002` é **GET-only**, não existe `POST` em lugar nenhum, e o botão "Novo
+      Pedido" de `client/src/components/Compras.js` cai no `path="*"` e **volta para a lista** (o
+      mesmo vale para "Editar", para fornecedores/novo e para cotações/nova: o core Compras **não
+      tem uma tela de criação nas três abas**). Acervo: `pedidos_compra = 0`, `itens_pedido_compra
+      = 0`. **Consequência:** em produção o `<select>` de pedido nasce **vazio** e **obrigatório**,
+      logo a forma "Pedido de compra" é inalcançável pela tela e com ela toda a RN-20..RN-26. O
+      único escritor dessas tabelas em produção é o acumulador desta Etapa 37. **É a Etapa 38, já
+      decidida e desenhada** (`docs/superpowers/specs/2026-09-16-crm-etapa38-pedido-de-compra-design.md` +
+      `docs/superpowers/plans/2026-09-16-crm-etapa38-pedido-de-compra.md`): extrair `/api/compras/*` para
+      `routes/compras.js`, Zod + `POST`/`PUT` com itens, formulário e rotas **antes** do `path="*"`,
+      importação de planilha como carga inicial, e "Gerar pedido" na Reposição fechando o elo com
+      `vincularPedidoCompra`. **Até lá, o teste manual desta feature exige um pedido inserido por
+      SQL** — o `INSERT` pronto está na letra **F** do doc de novidades.
+- [x] Recebimento excedente só com autorização — **`f747df4`** + **`3e36af4`** + **`230baf6`** +
+      **`2d7787d`** + o F5 da onda de correção (hash no `git log`: `17c4130`) — Etapa 36,
+      2026-09-16. Ação nova `autorizar_excedente` em `ACAO_PERFIS`,
+      **`[ADMINISTRADOR, COMPRAS]`**, checada **no serviço** (`assertExcedentePermitido`) nas
+      **três** portas que escrevem quantidade recebida: `criarRecebimento` (o `POST`),
+      `PUT /:id/conferir` e `PUT /:id/fiscal`. Sem a flag → 400
+      *"Quantidade recebida (N) maior que a esperada (E) no item #ID — a autorização de excedente é
+      de Compras ou do Administrador"*; com a flag e sem a permissão → 403 nomeando a ação **e o
+      perfil**; trilha `EXCEDENTE_AUTORIZADO` (entidade `recebimento_item`) por item excedente.
+      **O ALMOXARIFE ficou de fora de propósito:** quem recebe não autoriza o próprio excedente.
+      > ⚠️ **O design desta etapa dizia *"GESTOR → 200"*, e ESTAVA ERRADO** — e errado por
+      > **inconsistência interna**, porque ele mesmo havia medido o gate e escreveu o contrário. A
+      > lista desenhada era `[ADMINISTRADOR, GESTOR, COMPRAS]`, mas as duas portas são gateadas por
+      > `receber_material` = `[ADMINISTRADOR, ALMOXARIFE, COMPRAS]`: o GESTOR tomava **403 antes de
+      > chegar ao serviço**, e a entrada dele na lista era **configuração morta**. Corrigido em
+      > `3e36af4`. **Descartado:** alargar `receber_material` (entregaria o fluxo inteiro de
+      > recebimento ao GESTOR) e abrir um *carve-out* de rota. Se o negócio decidir que o GESTOR
+      > autoriza excedente, isso exige **rota própria** — é etapa própria (letra **B82** do doc de
+      > novidades).
+      > ⚠️ **E a regra escrita na T3 ESTAVA INCOMPLETA — foi o CRÍTICO desta etapa.** Ela comparava
+      > a quantidade do **payload** com a **esperada** e nada mais; como o modal de NF reenvia a
+      > quantidade de **todos** os itens e não tem caixa de autorização nenhuma, o documento cujo
+      > excedente já havia sido autorizado na conferência **nunca mais salvava dados fiscais** e
+      > morria no `processar` — documento **preso** —, e toda linha de acervo com
+      > `recebida > esperada` travaria no primeiro deploy. Pelo mesmo motivo, depois do primeiro
+      > excedente autorizado **todo** "Salvar Conferência" seguinte tomava 400, e a trilha ganhava
+      > uma linha nova a cada save. Regra corrigida nas **duas** portas (`230baf6` + `2d7787d`): a
+      > barreira só dispara quando `recebida > esperada` **E** `recebida > quantidade já gravada`, e
+      > a trilha só é escrita quando a barreira disparou e foi autorizada. **`> gravada`, não
+      > `!== gravada`:** baixar 25 → 20 num item de 10 não é ato novo de autorização. **Descartado:**
+      > mandar o client reenviar a flag (não cobre o acervo) e tirar a quantidade do payload fiscal
+      > (o fiscal é o escritor real de quantidade em produção).
+      > ⚠️ **E a T3 cobria DUAS portas, não três — o que a re-revisão da onda (F5) mostrou é que
+      > isso deixava um caminho inteiro aberto.** Com a regra certa (`> esperada` **E**
+      > `> gravada`), um recebimento **criado por API** já com `quantidade_recebida` acima da
+      > esperada passa a ter aquela quantidade **como gravada**: `POST` 999/10 → **201**, `/fiscal`
+      > → **200**, `/conferir` → **200**, documento **processável** — **sem flag, sem permissão e
+      > sem uma linha de trilha**. Antes do conserto do crítico, o `/fiscal` barrava isso **por
+      > acidente** (tratava o eco como ato novo), e era esse acidente que segurava o caminho; a
+      > regra correta o removeu. A tela **nunca** produz esse payload, e é justamente por isso que
+      > nenhum cenário de client o alcançaria. **Conserto:** a mesma barreira passou a valer em
+      > `criarRecebimento` — 400 com a literal sem a flag, 403 nomeando a ação e o perfil sem a
+      > permissão, e **201 + trilha por item** quando autorizado. **Consequência para a decisão
+      > B84:** a "terceira porta" declarada fora fechou **parcialmente** — o excedente sobre a
+      > **esperada do próprio documento** está fechado nas três portas; o que fica para a **Etapa
+      > 37** é o **saldo contra o PEDIDO DE COMPRA**, que é outra comparação (contra
+      > `itens_pedido_compra`) e tem literal própria.
+      > ✅ **E essa outra comparação chegou na Etapa 37 (`57ace18`) — mas este item continua sendo
+      > da 36, não dela.** A 37 **não repagou** nada aqui: ela **reusou** a autorização
+      > (`autorizar_excedente`, as mesmas listas de perfil, o mesmo 403, o mesmo sufixo do 400) e
+      > acrescentou uma **régua a mais**, contra o saldo do pedido, com literal própria
+      > (*"… maior que o saldo do pedido (S) para o material COD — …"*). As duas convivem e
+      > **nunca** disparam juntas: a da 36 é avaliada primeiro. Quem for medir cobertura deste item
+      > mede `recebimentoExcedente.api.test.js`; o saldo do pedido está em
+      > `recebimentoExcedentePedido.api.test.js`.
+- [x] Itens do `POST /recebimentos` validados — **`d90853d`** (Etapa 36): `RecebimentoItemSchema`
+      (`z.looseObject`) exige `quantidade` numérica positiva e aceita `quantidade_esperada`
+      positiva opcional. Antes, `quantidade_esperada: 'abc'` era **gravado como texto** e a
+      barreira de excedente fazia `continue` — mandar `'abc'` era a forma de **desligar** a RN-18
+      para aquele item, em silêncio. Literais: *"quantidade do item deve ser um número maior que
+      zero"* e *"quantidade esperada do item deve ser um número maior que zero"*.
+      **Ponto de atenção: isto é MUDANÇA DE CONTRATO do `POST`** — cliente externo que mandasse
+      quantidade não numérica passa a tomar 400. Os 9 arquivos de teste internos que criam
+      recebimento pela rota passaram sem alteração.
 - [ ] Conferência física estruturada (spec 8.3): contagem, pesagem, medição, checklist configurável por tipo de material. **Fora do escopo da Etapa 5**, mesma decisão acima.
-- [ ] Fotos do recebimento (`anexos_documento_almoxarifado` entidade `recebimento`)
-- [ ] Divergências: registro formal (tipo, quantidade, ação) — parcial na inspeção
-- [ ] Ao aprovar: definir localização (sugestão da feature 02) + gerar etiqueta (feature 10) + **atualizar saldo via movimentação v2** — a entrada já passa pelo motor (`registrarMovimentacao`) desde antes da Etapa 5, e desde a Etapa 6 a movimentação vai com `lote_id` (`64686b1`). Continuam faltando a **etiqueta** (Etapa 6c, não a 6) e a sugestão de localização
+  > **Etapa 71 (2026-10-02): continua desmarcado, agora como CORTE DECLARADO que não impede o 🟢 da feature (B338).**
+  > É o único item que sobrava; nenhuma etapa o pagará sem especificação nova do cliente. Reversível: vira etapa se a
+  > empresa pedir.
+  > **Continua desmarcado, e agora com um recorte exato (Etapa 36):** a **quantidade conferida** por
+  > item passou a existir (campo "Qtd. conferida" no painel, `e2a23a9`; ver o item de frontend
+  > abaixo), com o aviso de divergência e a gravação pela rota `PUT /:id/conferir`. **Contagem
+  > estruturada, pesagem, medição e checklist configurável por tipo de material continuam não
+  > existindo** — não há tabela de checklist, não há campo de peso nem de medida, e nada disso foi
+  > tocado aqui. O que a Etapa 36 entregou é o **dado de entrada** que faltava (quanto chegou de
+  > fato), não a conferência estruturada.
+  > **Etapa 37: continua desmarcado, e ela não chegou perto.** A 37 mexeu no **saldo do pedido** —
+  > quanto ainda falta chegar —, que é outra pergunta: contagem, pesagem, medição e checklist por
+  > tipo de material seguem sem tabela, sem campo e sem tela.
+- [x] Fotos do recebimento (`anexos_documento_almoxarifado` entidade `recebimento`) — **`01dd3ce`** + **`c5d9e99`** (Etapa 34, 2026-09-16): bloco **Anexos** inline no fim do painel de detalhe do recebimento, entidade `recebimento` com o id do detalhe carregado. Quem acaba de registrar um recebimento cai no painel e já anexa a nota fiscal sem sair da tela (cenário testado). **Esta tela ganhou aqui a primeira suíte de teste que já teve** — `client/src/components/almoxarifado/RecebimentosAlmoxarifado.test.js`, **7 cenários**: (a) uma linha por recebimento, (b) o clique abre o painel do recebimento clicado, (c) o bloco consulta `entidade=recebimento` com o id DO DETALHE, uma vez, (d) lista fechada não consulta anexos (100 recebimentos ≠ 100 requisições — RN-02), (e) trocar de linha refaz a consulta com o novo id, (f) depois de registrar, o painel do recém-criado já traz o bloco com o id devolvido pelo POST, (g) refetch por ação de workflow não desmonta o bloco nem repete a consulta. **Na Etapa 35 essa suíte foi de 7 para 12 cenários** — (h) a (l), ver o item de erro de carga abaixo.
+      **Etapa 32 (`e708125..fd71958`): o MECANISMO existe, está testado, e falta SÓ o plug desta
+      tela.** A entidade é `recebimento` — e a tabela por trás é `recebimentos_material_almoxarifado`, não `recebimentos_almoxarifado`, que é o nome que a intuição erra.
+      A `anexos_documento_almoxarifado` era **órfã** — zero leitor, zero escritor, sem índice —,
+      e virou `services/almoxarifado/anexoService.js` (mapa fechado de seis entidades,
+      existência do registro-pai verificada, soft delete, auditoria) mais as rotas
+      `POST/GET/DELETE /almoxarifado/anexos` e `GET /almoxarifado/anexos/:id/arquivo`, esta com
+      **download autenticado** — o arquivo NÃO é servido estaticamente. No client existe o
+      componente genérico `client/src/components/almoxarifado/AnexosDocumento.js`.
+      **Plugar aqui é uma linha** — `<AnexosDocumento entidade="CHAVE" entidadeId={id} />` — mais
+      dois cenários de teste. **Ponto de atenção medido na Etapa 32:** confira QUANDO o `id`
+      existe nesta tela. Na inspeção o plug teve de ir para a aba Histórico, porque a linha só
+      nasce **depois** da decisão — anexar antes penduraria o arquivo num id inexistente.
+
+      **⚠️ Correção da Etapa 34 (2026-09-16, `746a106..054f727`).** O parágrafo acima dizia que
+      **"plugar aqui é uma linha"**; isso **ESTAVA ERRADO**. O certo, medido no design `6ccaf40` e
+      confirmado na execução: esta tela era uma das **duas** (com Requisições) que tinham painel
+      onde plugar inline — as outras três (Materiais, Devoluções, item de remessa) não tinham casa
+      nenhuma, nem linha expansível nem painel, e precisaram de uma casca de modal (`AnexosModal`,
+      `746a106`) e de um botão por linha. E nem aqui foi uma linha: o corpo do painel vivia dentro
+      do ternário de `loadingDetalhe` (`RecebimentosAlmoxarifado.js:496`), então **desmontava a
+      cada refetch** — foco da janela, que é exatamente o que acontece ao FECHAR o diálogo de
+      escolher arquivo; troca de filtro; ação de workflow ou fiscal —, e com ele sumia o arquivo
+      recém-escolhido, mais um GET de anexos a cada volta. O bloco teve de sair do ternário
+      (`c5d9e99`, cenário (g): identidade do nó DOM mais contagem `=== 1` depois do refetch). O
+      texto da Etapa 32 fica acima **de propósito** — o mecanismo que ele descreve continua exato;
+      errada era só a estimativa do custo do plug.
+
+      **Defeito PRÉ-EXISTENTE descoberto ao escrever a suíte desta tela (não era da Etapa 34) —
+      ✅ FECHADO NA ETAPA 35 (`22e1d9b`), fragilidade G10.** Os três carregamentos de
+      `RecebimentosAlmoxarifado.js` **engoliam o erro**: `loadRecebimentos` só disparava um toast e
+      caía no estado vazio, `loadMateriais` e `loadAuxiliares` tinham `catch { /* ignore */ }`
+      literal. Falha de rede ou 500 do servidor aparecia para o operador como **"Nenhum recebimento
+      registrado"**, isto é, como se não houvesse recebimento nenhum — o mesmo pecado que a Etapa 29
+      corrigiu em `HistoricoInspecoes`, e com risco de registrar de novo uma nota que já existe.
+
+      > ⚠️ **Correção da Etapa 35: a redação anterior deste parágrafo citava linhas, e uma delas
+      > ESTAVA ERRADA.** Isto dizia que `loadAuxiliares` ficava em `:99-108`; **estava errado**; o
+      > certo, na época, era **`:100-109`** — `:99` era **linha em branco**. E depois
+      > do `22e1d9b` e do `4681111` as três funções se deslocaram de novo, então **nenhum** dos
+      > três intervalos que este parágrafo citava (`:72-85`, `:93-97`, `:99-108` — **estava errado**
+      > o terceiro, e os outros dois apodreceram) aponta mais para o que descrevia.
+      > Por isso as referências desta spec passam a ser pelo **nome da função** —
+      > `loadRecebimentos`, `loadMateriais`, `loadAuxiliares` —, que é o que sobrevive a um commit.
+      > Fica registrado em vez de trocado em silêncio: já aconteceu duas vezes nesta base alguém
+      > confiar numa ref de linha apodrecida.
+
+      **Como ficou** (`22e1d9b`, molde do `HistoricoInspecoes` pós-Etapa 29, sem classe CSS nova):
+      `loadRecebimentos` grava estado de erro e a tela renderiza **"Não foi possível carregar os
+      recebimentos."** com botão **"Tentar de novo"** (RN-04), **zerando a lista** na falha para que
+      um refresh que falha não deixe linhas velhas passando por frescas (RN-05); `loadMateriais`
+      grava o seu próprio erro e a frase **"Não foi possível carregar a lista de materiais."**
+      aparece **dentro** do modal de novo recebimento, junto do campo de busca, onde ela atrapalha
+      (RN-06) — e só **avisa**, não bloqueia registrar. O botão de refresh do cabeçalho ganhou
+      `title="Atualizar lista"`, que era o que faltava para o cenário poder clicá-lo.
+      **`loadAuxiliares` continua silencioso, e isso é decisão, não esquecimento:** pedidos de
+      compra e fornecedores alimentam dois `<select>` **opcionais**, os dois têm entrada manual ao
+      lado, e o recebimento pode ser registrado inteiro sem eles — um terceiro estado de erro pagaria
+      uma superfície nova por uma falha que não bloqueia ninguém. O que era errado ali era o
+      `/* ignore */` **sem explicação**, que fazia parecer esquecimento; o porquê está escrito dentro
+      do próprio `catch`.
+
+      **Cenários que travam isto** (`RecebimentosAlmoxarifado.test.js`, o `api.get` da suíte tem
+      fallback que **rejeita**): **(h)** a lista que não carregou mostra erro, nunca "Nenhum
+      recebimento registrado" — com as duas metades positivas: a tela montada e o *"Tentar de novo"*
+      **restaurando** a lista (um `<button>` sem `onClick` passaria verde); **(i)** refresh que falha
+      não deixa a lista velha na tela; **(j)** falha ao carregar materiais aparece **dentro** do
+      modal.
+
+      **Dois itens que NENHUMA spec tinha, fechados aqui** (`4681111`) — registrados porque ficaram
+      sem número até esta etapa (letra C das novidades: **C46** e **C47**):
+      - **RN-07 — o painel mostrava o registro ANTERIOR sob o id novo.** `abrirDetalhe` nunca
+        anulava `detalhe`, nem ao trocar de linha: durante a carga do recebimento B o painel (e o
+        bloco de anexos, que desde `c5d9e99` vive **fora** do ternário de loading) continuava
+        exibindo A — e nessa janela um arquivo escolhido "para A" seria enviado a **B**. Conserto no
+        molde completo de Requisições: o painel passa a ser gatilhado por **`selectedId`** (não por
+        `detalhe`), `idCarregadoRef` diz qual id está **realmente** dentro de `detalhe` e o `detalhe`
+        é anulado **só na troca de id**. **Descartado:** apenas "anular `detalhe`" sem `selectedId` —
+        sem ele o painel inteiro desaparece e os pontos que desreferenciam `detalhe` lançam
+        `TypeError`. Sete pontos de render ganharam guarda explícita, e o cabeçalho mostra
+        `detalhe?.numero || '...'` enquanto carrega. Cenário **(k)**.
+      - **RN-08 — resposta fora de ordem vencia.** Dois cliques rápidos deixam dois `GET` em voo e o
+        que chegasse **por último** pintava o painel, mesmo sendo o do clique **anterior**.
+        `detalheFetchSeqRef` descarta a resposta atrasada. Cenário **(l)**.
+      - **RN-09 (não-regressão):** refetch do **mesmo** id (ação de workflow/fiscal) **não** desmonta
+        o bloco de anexos — é o cenário (g) da Etapa 34, que continua verde porque a anulação de
+        `detalhe` é condicionada a `idCarregadoRef.current !== id`.
+
+      **E a consequência que a revisão final pegou** (`29cbdfa`): `currentStep` era derivado de
+      `detalhe` e era o **oitavo** consumidor dele — a tabela de sete pontos do design **estava
+      incompleta**. Com `detalhe` anulado na troca de linha, o `: 0` fazia a **barra de etapas** do
+      cabeçalho acender o **passo 1** por um round-trip inteiro e pular de volta ao chegar o detalhe
+      novo (e acender "Almoxarifado" já na lista, sem nada aberto). Agora vale `undefined` enquanto
+      carrega e `AlmoxPageHeader` (`idx = currentStep ?? -1`) deixa a barra **neutra** em vez de
+      mentir; `currentStep = 0` legítimo continua acendendo. **Descartado:** congelar o último passo
+      num ref — mostraria o passo do recebimento **anterior** sob o id novo, exatamente a classe de
+      defeito que a RN-07 acabou de fechar.
+
+      **O que CONTINUA aberto nesta tela (residual da G10):** **workflow e etiquetas seguem sem
+      teste** — a suíte cobre lista, painel, anexos, erro de carga, ordem de resposta, o campo de
+      conferência e, desde a Etapa 36, **um** cenário do modal fiscal (o (r), que prova que o
+      payload do `/fiscal` **não** leva `tipo_recebimento`). O resto do modal fiscal — lote,
+      validade, valores, chave NFe — continua sem cenário.
+      > ✅ **O resíduo do `loadingDetalhe` foi FECHADO na Etapa 36 (`5ce3fdf`).** O texto anterior
+      > deste parágrafo o descrevia como aberto e dizia que *"o irmão em Requisições tem (`2817054`)
+      > e serve de molde"* — **isso estava errado**, e é a mesma correção que o plano da Etapa 35
+      > recebeu: `2817054` **não** zerava `loadingDetalhe`, e `RequisicoesList.js` tinha o **mesmo**
+      > resíduo. O defeito era **gêmeo, não moldado** — as duas telas foram consertadas juntas, com
+      > `setLoadingDetalhe(false)` em `fecharDetalhe`. E a régua proposta na época (*"reabrir e ver
+      > se nasce em Carregando…"*) **não funcionaria**, porque `abrirDetalhe` religa a flag em toda
+      > abertura. Por isso a Etapa 36 entregou a linha **declaradamente sem régua** (caso 2 da skill
+      > `fechar-etapa`: defeito inalcançável pelo harness — todo leitor de `loadingDetalhe` renderiza
+      > só sob `selectedId`), com **controle positivo executado** e o placar **idêntico** com e sem
+      > a linha (17/17 e 35/35). Fingir um vermelho seria pior; remover a proteção porque nada cai
+      > seria muito pior.
+- [x] Divergências: registro formal (tipo, quantidade, ação) — parcial na inspeção
+  > **Marcado no fechamento da Etapa 71 (2026-10-02) — a caixa estava DESMARCADA POR ESQUECIMENTO, e isso fica dito.**
+  > O registro formal foi **pago na Etapa 43** (`4e11793`, `6a4c984`, `21ef822`, `9b6f205`, `1bab308` + `9e4fb3d`):
+  > divergência de quantidade abre sozinha uma não conformidade numerada `NC-…`, com fato congelado, decisão com autor e
+  > justificativa, trilha e anexos — o status no topo desta spec já o registrava como "(2) PAGO na Etapa 43", mas esta
+  > caixa ficou com o texto das Etapas 36/37 abaixo. Quem lesse só o checklist acharia que falta.
+  > **Continua desmarcado (Etapa 36), e o que mudou é que ele deixou de ser impossível.** Antes
+  > desta etapa **nenhum gesto de tela** produzia `recebida ≠ esperada`, então "registrar a
+  > divergência formalmente" não tinha nem dado de entrada. Agora tem: a quantidade conferida é
+  > digitável e a tela avisa
+  > *"Divergência: N a menos/a mais que o esperado (E)"* (`e2a23a9`), e o evento
+  > `DIVERGENCIA_RECEBIMENTO` já existia. **O que falta é o registro FORMAL:** divergência
+  > numerada, com tipo, ação e responsável — tabela própria, fluxo próprio. Não foi tocado aqui, e
+  > é candidato natural depois da Etapa 37.
+  > **Etapa 37: continua desmarcado, e agora os DOIS insumos existem.** A 36 deu o *quanto chegou*
+  > (quantidade conferida) e a 37 deu o *contra o quê* (`pedido_item_id`, o elo item de
+  > recebimento ↔ linha do pedido, mais o saldo). Falta o registro **formal**: numeração própria,
+  > tipo, ação e responsável. Não foi tocado na 37 — e ela **não** entrou na frente da Etapa 38
+  > porque, sem pedido criável, não há nem divergência contra pedido para registrar.
+- [ ] Ao aprovar: definir localização (sugestão da feature 02) + gerar etiqueta (feature 10) + **atualizar saldo via movimentação v2** — a entrada já passa pelo motor (`registrarMovimentacao`) desde antes da Etapa 5, e desde a Etapa 6 a movimentação vai com `lote_id` (`64686b1`).
+  > ⚠️ **Correção da Etapa 36 (2026-09-16): a frase que estava aqui — *"Continuam faltando a
+  > etiqueta (Etapa 6c, não a 6) e a sugestão de localização"* — ESTAVA ERRADA na metade da
+  > etiqueta.** A etiqueta **foi entregue**, em 2026-08-11, na **Etapa 6c**, commit **`4ebd1ce`**:
+  > o botão *"Imprimir etiquetas dos itens"* está em `RecebimentosAlmoxarifado.js` (status
+  > `PROCESSADO`/`APROVADO`), o montador do PDF é `client/src/utils/etiquetasPdf.js`, e **a spec 10
+  > já registrava a entrega** — esta spec seguiu afirmando o contrário por cinco etapas, e o texto
+  > foi copiado daqui para a tabela final do plano da Etapa 35, propagando o mesmo erro. Esta é a
+  > razão pela qual a correção fica **escrita** em vez de apagada: quem lesse "falta etiqueta"
+  > planejaria uma etapa para construir o que existe.
+  > **O que de fato falta neste item são duas coisas, e nenhuma é a etiqueta:** (a) a **sugestão de
+  > localização** na entrada (feature 02, não construída); (b) a etiqueta **automática ao aprovar**
+  > — hoje é impressão sob demanda por clique, e disparar automaticamente é **decisão de negócio**,
+  > não ausência de código. O item fica desmarcado por (a).
+  > **Etapa 57 (2026-09-30): a metade (a) está PAGA quanto a DEFINIR a localização, e o item continua desmarcado
+  > pela SUGESTÃO.** O processamento da nota escolhe o destino **por item** (`aaf09cb` backend, `86ee1c1` tela) e
+  > usa a sugestão da feature 02 só para o **aviso** sobre o padrão (recusado, inativo, inexistente); os **botões** de
+  > sugestão ("já tem este material", "vazia") não estão na janela — ver o item "Definição de localização na entrada"
+  > abaixo, que é o que fica marcado. A etiqueta automática (b) continua decisão de negócio.
 - [x] Quarentena: material aguardando inspeção não entra no disponível (`quantidade_em_inspecao`) — **Etapa 5 (2026-08-08)**. Três movimentos novos no motor (`QUARENTENA`, `LIBERACAO_INSPECAO`, `REPROVACAO_INSPECAO`) com guarda atômica (`c37b67e`); entrada retida em vez de barrada (`4db5e11`). A decisão de inspeção em si (aprovar/reprovar/parcial) é da feature 09 — ver aquele README para o motor real usado na decisão (`DECISAO_INSPECAO`, não os dois tipos separados acima).
-- [ ] E-mail automático na entrada confirmada (feature 19)
-- [ ] Duplicidade: mesma NF+fornecedor não entra duas vezes — **confirmado ausente** (Fase 0 da Etapa 27, 2026-08-29): não há nenhuma checagem de nota repetida em `receiptService.js`, e a rota não tem schema de validação
+- [x] E-mail automático na entrada confirmada (feature 19) — **Etapa 70 (2026-10-01):** serviço
+  `receiptNotificationService.js` (`5aaa5c1`) e ganchos no fim de `processarNota` e do ramo direto de
+  `aprovarRecebimento` (`a2db931`), tela de configuração e filtro do painel (`b90e228`), integração pelas rotas do
+  pedido de Compras à separação (`585e384`). **O que é pago:** um aviso **da nota** (`RECEBIMENTO_ENTRADA`, dedupe por
+  recebimento, lista `notificacoes_dest_recebimento` → cadeia de Compras, chave `notificar_recebimento_entrada` nasce
+  `'0'`) e um aviso **a cada solicitante** de requisição que esperava material que entrou livre
+  (`RECEBIMENTO_ENTRADA_REQUISITANTE`, dedupe por recebimento + requisição, critério por item, link pelo módulo de
+  origem, chave `notificar_recebimento_solicitante` nasce `'1'`). Conteúdo lido do banco depois do status terminal,
+  best-effort. Decisões B316–B328 das novidades.
+  > ⚠️ **A frase que estava aqui ESTAVA ERRADA, e fica corrigida em vez de apagada.** Dizia: *"Desmarcado: é da feature
+  > 19 (notificações), não desta. Não foi tocado na Etapa 36 e não depende de nada entregue aqui."* A spec 19 já marcava
+  > `[x] E-mail em toda entrada confirmada — 77d1f38` desde a Etapa 12: a `ENTRADA_COMPRA` da nota processada
+  > **enfileirava** um e-mail por movimentação (medido por sonda na Fase 0 da Etapa 70), quando a chave
+  > `notificar_movimentacoes` estava ligada. As duas specs se contradiziam. O que de fato faltava era outra coisa — um
+  > aviso por **nota** (não por item) e um aviso a **quem esperava** o material — e é o que a Etapa 70 pagou.
+  > **E a etapa corrigiu, no caminho, dois defeitos anteriores desta feature:** (1) o item conferido com **0** entrava
+  > no estoque com a quantidade **esperada** (`quantidade_recebida || quantidade_esperada`) — `faa8f65` (`??` em
+  > `quantidadeDoItem`, no INSERT e no espelho da tela) + `f039576` (Fase 5: `normalizarRecebida` nas três portas que
+  > gravam a quantidade — `''`/espaços → `null`, texto não numérico → 400 *"quantidade_recebida deve ser um número"*;
+  > `QTD_DO_ITEM_SQL` no aviso) + `e8f503c` (as etiquetas na mesma régua, `quantidadeQueEntra` em
+  > `client/src/utils/`); (2) dois `processarNota` simultâneos geravam **duas contas a pagar** — `0d8bcfa` (marca
+  > `processando_em` no recebimento, 409 *"Esta nota já está sendo processada"*, vence em 10 min) + `b5f51c0` (Fase 5:
+  > a marca tem dono — uuid; só o dono a libera; quem a perdeu não gera conta). Testes: `recebimentoChegouZero` (17),
+  > `recebimentoProcessamentoConcorrente` (11), `recebimentoAvisoEntrada` (17), `recebimentoAvisoEntradaRotas` (12),
+  > `recebimentoAvisoEntradaIntegracao` (6).
+- [x] Duplicidade: mesma NF+fornecedor não entra duas vezes — **`ffc5f47`** + **`c5f14c8`**
+      (Etapa 36, 2026-09-16). *(Era "**confirmado ausente**" na Fase 0 da Etapa 27, 2026-08-29:
+      não havia nenhuma checagem de nota repetida em `receiptService.js` e a rota não tinha schema
+      de validação. **O dano foi medido antes do conserto:** a mesma NF em dois documentos creditava
+      **20** em vez de 10 no estoque e gerava **2** contas a pagar.)*
+      `assertNotaNaoDuplicada` roda **no serviço**, antes do `INSERT` da criação **e** antes do
+      `UPDATE` do `/fiscal` — as duas portas, senão a regra é contornável por um `PUT`. 409
+      *"Nota fiscal {nf} já lançada no recebimento {numero} para este fornecedor"*.
+      **As três exceções são deliberadas:** NF vazia/nula não é duplicata (nota sem número não
+      identifica nada); **fornecedor diferente** com a mesma NF é legítimo (numeração de NF é por
+      emitente); e **fornecedor não identificado** (id, CNPJ e nome os três vazios) não conta. No
+      `/fiscal` há `AND id <> ?` para o documento não se autoacusar da própria NF.
+      **`UNIQUE(nota_fiscal, fornecedor)` foi DESCARTADO, com motivo:** produção pode já ter
+      duplicatas, e um índice único subiria **quebrando o deploy** sobre dado histórico; o índice
+      criado é `CREATE INDEX IF NOT EXISTS` **não-único**, e a consulta de diagnóstico está na letra
+      **A9** do doc de novidades — zero linhas ⇒ o `UNIQUE` pode subir numa etapa futura sem
+      migração de dado. **Consequência assumida:** a guarda é *check-then-insert* sem transação, ou
+      seja **não é airtight** — dois `POST` simultâneos com a mesma NF passam os dois, e isso só
+      fecha na migração para Postgres.
+      > ⚠️ **A chave de fornecedor escrita na T2 ESTAVA INCOMPLETA, e era contornável de três
+      > jeitos** (achados da revisão final, corrigidos em `c5f14c8`): (1) a comparação de nome rodava
+      > em SQL, e o `UPPER` do SQLite é **ASCII-only** — `'José Aços Ltda'` e `'JOSÉ AÇOS LTDA'` com
+      > a mesma NF viravam **dois** documentos, com o estoque dobrado; (2) a guarda comparava **UMA
+      > perna só**, a que o documento novo trazia, então identificação **mista** (documento A só com
+      > o nome digitado, documento B com o fornecedor escolhido no `<select>`, que copia nome **e**
+      > CNPJ) nunca colidia; (3) o CNPJ era trimado na coluna, não no parâmetro. A regra passou a
+      > buscar candidatos pela NF normalizada e comparar o fornecedor **em JS por QUALQUER perna que
+      > case** (id; CNPJ só dígitos; nome NFD sem diacrítico, maiúsculo, espaços colapsados) — a
+      > forma verbatim está no bloco da Etapa 36 em "O que já existe". **Descartado:** resolver no
+      > SQL (não há como remover acento em SQLite sem extensão) e manter uma perna por documento,
+      > que era o desenho original. **Consequência para a letra A:** a consulta A9 roda em SQL e
+      > portanto **SUB-REPORTA** duplicatas de nome acentuado — o número dela é piso, não total.
+      > **Lição de harness registrada:** a sabotagem prevista para o strip de acento era **no-op**,
+      > porque `'José'.toUpperCase()` em JS **já** casa com `'JOSÉ'` (o `toUpperCase` do JS é
+      > Unicode-aware; o `UPPER` do SQLite não é, e era esse o bug). A régua do strip NFD só existe
+      > com o par **sem acento × com acento**, que foi acrescentado ao cenário.
 
 ### Frontend
-- [ ] Campos de conferência física + fotos
-- [ ] Definição de localização na entrada
+- [x] Campos de conferência física + fotos — **`e2a23a9`** + **`d02744a`** + **`e287a06`**
+      (Etapa 36) para a **quantidade conferida**, e **`01dd3ce`** + **`c5d9e99`** (Etapa 34) para as
+      **fotos/anexos**. Cada item do painel, nos status `RECEBIDO` e `EM_CONFERENCIA`, ganhou o campo
+      **"Qtd. conferida"** (`title`, sem label visível) e o botão **"Salvar Conferência"**, que chama
+      `PUT /almoxarifado/recebimentos/:id/conferir` — **rota que existia e nunca tinha tido um
+      chamador**. Digitar quantidade diferente da esperada mostra
+      *"Divergência: N a menos/a mais que o esperado (E)"*; a caixa de autorizar excedente aparece
+      só com `pode('autorizar_excedente')` (**a UI não decide** — o hook falha **aberto** de
+      propósito, e quem recusa é o backend); a recusa 400/403 do servidor vai para o **DOM** com
+      `role="alert"`, e o 400 **não apaga** o que foi digitado, de modo que marcar a caixa e
+      reenviar funciona.
+      **Dois detalhes que são decisão, não sobra:** (1) campo **vazio** omite tanto
+      `quantidade_recebida` quanto `conferencia_quantidade` do payload (`d02744a`) — mandar
+      `Number('')` gravaria **zero** e dispararia divergência de "0 recebidos", e mandar o boolean
+      sempre concreto tornava o `COALESCE` do servidor **morto** para o único chamador, fazendo com
+      que salvar a contagem de um item **desmarcasse** a conferência de outro; (2) o aviso mostra até
+      **4 casas** quando a diferença arredonda a zero em duas (`e287a06`) — antes dizia
+      *"Divergência: 0 a mais que o esperado (200)"* para `200.001`, isto é, **a tela afirmava zero
+      enquanto o servidor barrava o save**.
+      **O que este item NÃO cobre, e por isso o item de backend "Conferência física estruturada"
+      continua desmarcado:** pesagem, medição, contagem estruturada e checklist por tipo de material.
+- [x] Definição de localização na entrada — **Etapa 57 (2026-09-30)**: `aaf09cb` (serviço e rotas: `destinos`
+  > por item em `darEntradaEstoque`, o destino efetivo — o do item → o da nota → o padrão — calculado uma vez e usado na
+  > pré-checagem, no motor e nas séries; `/processar`, `/workflow` e `/aprovar`), `86ee1c1` (a janela *Processar nota
+  > fiscal* com um destino por item e o aviso sobre o padrão), fix-round `18c67a8`
+  > (`localizacao_entrada_id` no item; a devolução ao fornecedor usa o endereço do item; validação estrita de
+  > `destinos`).
+  > ⚠️ **A justificativa que estava aqui — *"Desmarcado: depende da feature 02 (sugestão de localização), não
+  > construída"* — ESTAVA ERRADA desde a Etapa 53**: a sugestão foi entregue na 53 (`GET
+  > /materiais/:id/sugestao-localizacao`), e o que faltava de fato era a tela do recebimento ter onde dizer o destino.
+  > Fica escrita em vez de apagada pela mesma razão das outras correções desta spec.
+  > **O que este item NÃO cobre:** os botões de sugestão na janela (só o aviso), endereço de almoxarifado inativo na
+  > lista, e a quarentena, que não tem endereço — letra D (57) das novidades.
 - [ ] Tipos de entrada no form
+  > **Desmarcado por decisão de negócio, não por falta de código.** O `<select>` de forma de
+  > recebimento existe no modal de novo recebimento e, desde a Etapa 36, os dois valores que ele
+  > oferece são os **únicos** que o servidor aceita (`d02b9f4`). Acrescentar os outros tipos da spec
+  > 8.1 ao formulário é o mesmo item do checklist de backend: as features 11–15 🟢 já são a porta
+  > deles, e replicá-las aqui criaria uma segunda porta.
+
+## Entregue na Etapa 57 (2026-09-30) — o destino por item no recebimento
+
+Plano: `docs/superpowers/plans/2026-09-30-almoxarifado-etapa57-destino-no-recebimento.md`.
+
+- [x] **RN-01** destino por item: `destinos: [{ item_id, localizacao_id }]` em `/processar`, `/workflow` (acao
+      `processar`) e `/aprovar`; destino efetivo = o do item → o da nota (`localizacao_id`) → o padrão — `aaf09cb`.
+- [x] **RN-02** a pré-checagem da nota inteira usa o destino efetivo de cada item e lista
+      *"Nao foi possivel dar entrada no estoque: ⟨MAT⟩: ⟨motivo⟩; …"*; o destino **da nota** continua checado uma vez,
+      com a mensagem da Etapa 54 — `aaf09cb`.
+- [x] **RN-03** `destinos` malformado: *"Destinos inválidos"*, *"Item ⟨id⟩ não pertence a este recebimento"*,
+      *"Destino inválido para o item ⟨id⟩"*, *"Item ⟨id⟩ repetido nos destinos"* — `aaf09cb`; estrito ("12abc",
+      booleano) no fix-round `18c67a8`. Destino de item que não vai entrar é ignorado sem validar.
+- [x] **RN-04** o workflow repassa `localizacao_id`/`destinos` (antes processava sempre no padrão) — `aaf09cb`.
+- [x] **RN-05** a janela *Processar nota fiscal*: itens que vão entrar (recebida, ou a esperada quando a recebida é
+      zero; sem os já entrados), destino por item sem bloqueadas, sem "pais" e sem inativas, aviso sobre o padrão,
+      erro na janela — `86ee1c1`; teste de corrida (fechar/reabrir) no fix-round.
+- [x] **RN-06** a devolução ao fornecedor sai do endereço onde o item reprovado entrou — `aaf09cb` (pelo histórico da
+      entrada) e fix-round (coluna `localizacao_entrada_id` no item: o mesmo material duas vezes na nota escolhia o
+      endereço do outro item); endereço desativado/bloqueado depois = sem origem, o comportamento de antes.
+- [ ] Botões de sugestão na janela — fora por escopo (a janela usa a sugestão só para o aviso) — **D (57)**.
+- [ ] Endereço de almoxarifado inativo fora da lista — a lista de endereços não traz o dado — **D (57)**.
+
+Testes: `server/tests/api/recebimentoDestinoPorItem.api.test.js` (11 cenários, 16 sabotagens vermelhas) e
+`client/src/components/almoxarifado/RecebimentosProcessarDestino.test.js` (9 cenários, 12 sabotagens vermelhas).
+
+## Entregue na Etapa 71 (2026-10-02) — o pedido que reabre no estorno
+
+Plano: `docs/superpowers/plans/2026-10-01-almoxarifado-etapa71-pedido-reabre.md`. Decisões B329–B342, avisos
+C107–C113 e a consulta A35 nas novidades.
+
+- **O estorno da `ENTRADA_COMPRA` de nota contra pedido** (`stockService.cancelarMovimentacao` → gancho
+  `receiptService.estornarEntradaNoPedido`, não-fatal, depois do claim e da auditoria do cancelamento) desconta da
+  linha do pedido a quantidade da movimentação (piso 0, trilha `RECEBIDO_ESTORNADO` — rótulo *"Recebido do pedido
+  estornado"*) e, se a conta fechava antes e deixou de fechar, e o **último** registro de status do pedido é o
+  fechamento automático, volta o pedido ao status anterior ao fechamento (trilha `STATUS_AUTOMATICO_REABERTO` — rótulo
+  *"Reabertura automática do pedido"*). A resposta do estorno ganha `pedido_compra` quando um pedido foi tocado, e a tela
+  de Movimentações avisa.
+- **O vínculo** item do recebimento ↔ `ENTRADA_COMPRA` (`movimentacao_entrada_id`), gravado na entrada; o passado se
+  resolve pelo par nota + material com adoção.
+- **Recusas novas no estorno** (antes do claim): material ainda em inspeção; material com reprovado na inspeção.
+- **NF relançável**: `assertNotaNaoDuplicada` ignora o recebimento com entradas **todas** estornadas e nenhum item por
+  entrar (régua de quantidade da Etapa 70).
+- **Régua única do "completo"** (`SQL_PEDIDO_COMPLETO`, por material) no fechamento automático, no `?pendentes=1` e
+  repetida no `WHERE` dos dois `UPDATE` de status; epsilon na barreira do saldo.
+- **Toque no módulo Compras, declarado:** o `PATCH /api/compras/pedidos/:id/status` passou a gravar
+  `STATUS_MANUAL_ALTERADO` (rótulo *"Mudança manual de status do pedido"*) quando o status muda, não-fatal — é o que
+  separa o *Recebido* do comprador do automático. Limite: mudança manual anterior ao deploy não tem trilha (C113).
+
+**Correções desta spec, ditas em vez de apagadas:** a limitação B161 estava **subestimada** (a nota do que faltava era
+recusada, e "o recebido se corrige por consulta" estava errado); a correção da revisão da Etapa 42 tinha chegado só à
+leitura (o fechamento e o `?pendentes=1` continuavam por pedido); e a caixa "Divergências: registro formal" estava
+desmarcada por esquecimento desde a Etapa 43. **A Fase 2 da própria etapa errou num ponto** (o fallback "sem trilha
+→ reabre para pendente", que desfazia o fechamento à mão) — corrigido na Fase 5 (`2335c52`).
+
+**O que não cobre:** devolução e sucata não reabrem o pedido (B336); não há estorno do recebimento inteiro (conta a
+pagar, solicitação de compra e o aviso da 70 ficam — B334); relançar a NF deixa duas contas a pagar (C109); o aviso do
+pedido vem depois do estorno, não no modal.
+*(**Etapa 72:** a "solicitação de compra fica" acima mudou — o estorno da entrada que tinha coberto a solicitação de
+compra a **reabre** (B348). Ver o bloco abaixo.)*
+
+## Etapa 72 (2026-10-02) — o recebimento fecha a solicitação de compra por material
+
+Não é item novo do checklist desta feature (o fechamento mora na feature 18), mas o gancho mora aqui: as duas portas
+que dão entrada na nota (`processarNota` e a aprovação direta) passam o recebimento para
+`purchaseService.fecharSolicitacoesDoPedido`, que **atribui** o que entrou de cada material às solicitações vinculadas
+daquele pedido (livro `solicitacao_compra_recebimentos`, em ordem de criação, cada uma até o que falta) e fecha a
+solicitação só quando **o material dela** chegou — não mais na primeira nota do pedido (`c57c0c7`, livro `f192901`). O
+estorno da entrada (o gancho da Etapa 71, `estornarEntradaNoPedido`) tira do livro o que aquela entrada tinha atribuído
+e reabre a solicitação que tinha coberto (`6981afc`); a resposta do estorno ganha `pedido_compra.solicitacoes_reabertas`.
+A soma por material do pedido saiu para `pedidoCompraSaldoSql.js` (`db9c63f`) — a régua do fechamento do pedido da
+Etapa 71 não mudou (os testes da 42/71 passaram sem edição; só os dois `deepStrictEqual(pedido_compra)` ganharam a chave
+nova). Detalhes: spec 18 e as novidades (B343–B356, C114–C120).
+
+## Etapa 74 (2026-10-02) — o recebimento reserva o que chegou para quem esperava
+
+Também não é item novo desta feature (a reserva mora na 07), mas o gancho mora aqui: os dois `concluir*` (o
+`processarNota` e o `aprovarRecebimento` direto) chamam `reservaChegadaService.reservarChegadaParaQuemEspera` **depois**
+de `fecharSolicitacoesDoPedido` e **antes** do aviso da Etapa 70, dentro da marca de processamento, best-effort
+(`[recebimento] reserva na chegada falhou (recebimento <id>): <msg>` — a nota segue `PROCESSADO`/`APROVADO`)
+(`63e377e1`). O teto é o que entrou **livre** desta nota por material (o retido para inspeção não entra). O aviso da 70
+(`receiptNotificationService`) passou a contar a reserva: *"reservado para a sua requisição: N"* e três frases finais
+(`63e377e1`, testes `21f9306b`). O estorno da `ENTRADA_COMPRA` (o motor) solta só o necessário das reservas desta nota,
+de quem ainda espera sem nada separado (`9af1691a`), e o estorno que não acontece recria o que soltou (`65d9bc8f`); a
+recusa por material só reservado diz quem segura (`eaef9ed1`). Detalhes: spec 07 e as novidades (B367–B382,
+C126–C130). ~~A inspeção que libera o retido ainda **não** reserva (C126 — Etapa 75).~~ *(Paga na Etapa 75: a inspeção
+que aprova e a NC que aceita reservam o liberado — spec 07 e 09. Do lado do recebimento, a Etapa 75 mudou uma coisa: se
+a nota for retomada depois de falhar no meio, a reserva da chegada não conta como livre o item que já tem inspeção
+registrada (`1b2a6959`, B390); e o e-mail da chegada passou a usar o pendente de entrega menos o hold alheio — a mesma
+régua da reserva (`655d75b8`, B393) — e a seguir a regra do dono (`18405a2e`, B395).)*
 
 ## Regras essenciais + testes de API exigidos
 
@@ -149,11 +1009,28 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
 > grep em `server/tests`). A coluna **Estado** abaixo distingue o que existe (✅) do que continua
 > exigido e ainda não escrito (⏳), no mesmo padrão da spec 10. Também faltava aqui o quinto teste
 > da suíte de quarentena, agora listado.
+>
+> **Atualização da Etapa 36 (2026-09-16): dos cinco que faltavam, TRÊS foram escritos** — NF
+> duplicada (`ffc5f47`), excedente sem autorização (`f747df4`) e workflow fora de ordem
+> (`9d19e7d`) —, e a tabela ganhou **duas linhas novas** (o enum nas duas portas + itens do POST, e
+> a integração das três guardas). **Continuam ⏳ dois**, cada um com o motivo escrito na própria
+> linha: `processar recebimento cria movimentacao v2 vinculada` (a entrada **já passa** pelo motor;
+> falta o teste dedicado a saldo anterior/posterior) e `recebimento parcial atualiza saldo pendente
+> do pedido` (não existe onde o saldo pendente morar — Etapa 37).
+>
+> **Atualização da Etapa 37 (2026-09-16): dos dois que faltavam, UM foi escrito** — o saldo pendente
+> do pedido, em **quatro** arquivos novos (`pedidoSaldoRecebido`, `pedidosCompraSaldoAux`,
+> `recebimentoExcedentePedido`, `recebimentoContraPedidoIntegracao`), ver a última linha da tabela.
+> **Continua ⏳ um só:** `processar recebimento cria movimentacao v2 vinculada` — e ele **não** foi
+> pago de carona pela 37: a jornada nova afirma saldo do **pedido**, não saldo anterior/posterior da
+> **movimentação**, que é outra conta e continua sem teste dedicado.
 
 | Regra | Teste | Estado |
 |-------|-------|--------|
-| NF duplicada (fornecedor+número) falha | `recebimento com NF duplicada falha` | ⏳ exigido — ainda não escrito |
-| Quantidade recebida > pedida sem autorização falha | `recebimento excedente sem autorizacao falha` | ⏳ exigido — ainda não escrito |
+| NF duplicada (fornecedor+número) falha | `recebimento com NF duplicada falha` e mais 9 cenários — `server/tests/api/recebimentoNfDuplicada.api.test.js` (`ffc5f47`, ampliado em `c5f14c8` com acento, identificação mista e CNPJ sem trim) | ✅ |
+| Quantidade recebida > pedida sem autorização falha | `recebimento excedente sem autorizacao falha` e mais 11 cenários — `server/tests/api/recebimentoExcedente.api.test.js` (`f747df4`/`3e36af4`, ampliado em `230baf6` e `2d7787d` com o eco do fiscal, o acervo e o `> gravada`) | ✅ |
+| Forma de recebimento fora do enum falha nas DUAS portas, e o item do POST exige quantidade numérica positiva | `server/tests/api/recebimentoTipoEnum.api.test.js` — 7 cenários (`d02b9f4`, cenário (7) em `d90853d`) | ✅ |
+| As três guardas valem em todos os cinco pontos de chamada, pela rota **e** pelo serviço | `server/tests/api/recebimentoPortasIntegracao.api.test.js` (`aa39155`) | ✅ |
 | Material com necessidade de inspeção entra em quarentena (físico sobe, disponível não) | `item critico entra no fisico mas fora do disponivel` — `server/tests/api/recebimentoQuarentena.api.test.js` (`4db5e11`) | ✅ |
 | Aprovar recebimento de item crítico **não exige mais inspeção prévia** (mudança da Etapa 5 — antes lançava erro) | `aprovar recebimento de item critico NAO exige inspecao previa (mudanca da Etapa 5)` — mesmo arquivo | ✅ |
 | Item não crítico entra direto no disponível (regressão) | `item NAO critico entra direto no disponivel (regressao)` — mesmo arquivo | ✅ |
@@ -167,9 +1044,11 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
 | Material com `controle_certificado` e sem anexo: lote nasce BLOQUEADO, mas o material **entra** | `sem certificado, o lote nasce BLOQUEADO: entra fisicamente mas a saida e recusada` — mesmo arquivo | ✅ |
 | Anexar certificado libera o lote — mas nunca um lote REPROVADO | `anexar o certificado libera o lote` + `lote REPROVADO continua bloqueado depois de anexar o certificado` — mesmo arquivo (`c11db85`) | ✅ |
 | Upload de certificado sem permissão não grava arquivo (permissão antes do multer) | `upload de certificado sem permissao nao grava arquivo` — mesmo arquivo | ✅ |
-| Workflow não pula etapas | `avancar etapa fora de ordem falha` | ⏳ exigido — ainda não escrito |
-| Recebimento parcial mantém pendência do pedido | `recebimento parcial atualiza saldo pendente do pedido` | ⏳ exigido — ainda não escrito |
+| Workflow não pula etapas | `avancar etapa fora de ordem falha` + `acao de workflow inexistente falha` + `id inexistente responde 404` + a sequência completa de cinco 200 — `server/tests/api/recebimentoWorkflowOrdem.api.test.js` (`9d19e7d`, zero linhas de produção) | ✅ |
+| Estornar a entrada da nota desconta a linha do pedido e reabre o pedido que o automático fechou; não reabre o fechado à mão; recusa com material em inspeção ou reprovado; NF relançável só com todas as entradas estornadas (Etapa 71) | `server/tests/api/pedidoReabreNoEstorno.api.test.js` (36 cenários, pela rota e pelo serviço) + `pedidoReabreIntegracao.api.test.js` (10, ponta a ponta pelas rotas, do pedido de Compras à segunda nota) + `recebimentoVinculoMovimentacao.api.test.js` (4) | ✅ `39da666`/`beedc40`/`81a734c`/`87fe520` + Fase 5 `9a442f1`/`2335c52`/`a9696f3` |
+| Régua única do "pedido completo", por material, no fechamento e no `?pendentes=1`; barreira com epsilon (Etapa 71, defeito anterior da 42) | `comprasPedidoStatusAutomatico.api.test.js` (10)(11) + `comprasPedidoSituacaoFonte.api.test.js` (1c)(1d) | ✅ `39da666` |
+| Recebimento parcial mantém pendência do pedido | `recebimento parcial atualiza saldo pendente do pedido` — **entregue como** `server/tests/api/pedidoSaldoRecebido.api.test.js` (o acumulador: 11 cenários, incluindo o `pedido_item_id` honrado com duas linhas pendentes do mesmo material e o preço herdado da linha do pedido) + `server/tests/api/recebimentoContraPedidoIntegracao.api.test.js` (a jornada inteira: parcial de 6 em 10 → `PARCIAL`/saldo 4 → recusa do segundo → autorização → `RECEBIDO`/saldo 0, e o `/conferir`+`/fiscal` ecoando 200 sem trilha nova). Ao lado deles, `pedidosCompraSaldoAux.api.test.js` (a leitura derivada e o `?pendentes=1`) e `recebimentoExcedentePedido.api.test.js` (a régua do saldo na porta) | ✅ `ea0aa4f`/`57ace18`/`d062889`/`402070c`/`eb10d9c`/`a9acb4c`/`838f971` + onda `4007344..13ad237` |
 
 ## Dependências
 
-- 03 (movimentação v2) · 02 (localização na entrada) · 09 (inspeção — decide o que este README apenas retém) · 10 (**lote ligado na Etapa 6**; etiqueta continua ausente — Etapa 6c) · 19 (e-mail).
+- 03 (movimentação v2) · 02 (localização na entrada) · 09 (inspeção — decide o que este README apenas retém) · 10 (**lote ligado na Etapa 6**; **etiqueta entregue na Etapa 6c, `4ebd1ce`** — esta linha dizia *"etiqueta continua ausente — Etapa 6c"* e **ESTAVA ERRADA**, ver a correção no item "Ao aprovar" do checklist) · 19 (e-mail) · **08 ↔ Compras: recebimento parcial/excedente contra o pedido FOI ENTREGUE na Etapa 37** (`ea0aa4f..13ad237` — o acumulador e a situação derivada existem). **A dependência que sobra é a inversa e é bloqueante na prática:** o módulo **Compras não tem como criar pedido** (0 escritores, nenhuma tela em nenhuma das três abas — Fase 0 da Etapa 38), então esta feature só sai do papel em produção quando a **Etapa 38** entregar a criação do pedido. E `itens_pedido_compra` **não** é tabela do core, ao contrário do que o design da 37 dizia: o `CREATE TABLE` está em `services/almoxarifado/schema.js:1311`.

@@ -22,7 +22,37 @@ const TIPOS_LOCALIZACAO = [
   'Almoxarifado', 'Rua', 'Prateleira', 'Gaveta', 'Box', 'Área externa', 'Área de corte',
   'Área de montagem', 'Área de elétrica', 'Área de pintura', 'Área de expedição',
   'Área de materiais do cliente', 'Área de quarentena/inspeção',
+  // Etapa 68 (D3): os dois tipos novos vao NO FIM — a ordem dos 13 antigos e contrato da tela.
+  'Área de sucata', 'Área de devoluções',
 ];
+
+// Etapa 68 (D2): registro das areas especiais, por ROTULO exato de TIPOS_LOCALIZACAO. A semantica
+// e de SUGESTAO e AVISO — nenhuma recusa no motor (D1, licao B217). As frases do aviso saem de
+// `stockService.avisoAreaEspecial`; `descricao` e o texto curto do Mapa. Descartado: coluna nova
+// `area_especial` na localizacao (segunda fonte do mesmo fato que o `tipo` ja diz). Em-terceiros
+// fica fora por decisao (D7): remessa e retencao, sem endereco fisico.
+const AREAS_ESPECIAIS = {
+  'Área de quarentena/inspeção': {
+    chave: 'QUARENTENA',
+    descricao: 'Guardar aqui não retém o material: ele continua disponível. Quem retém é a inspeção ou o bloqueio.',
+  },
+  'Área de expedição': {
+    chave: 'EXPEDICAO',
+    descricao: 'A separação da requisição não usa este endereço: a entrega baixa da origem separada.',
+  },
+  'Área de sucata': {
+    chave: 'SUCATA',
+    descricao: 'Guardar aqui não sucateia: o material continua no estoque até o sucateamento aprovado, que baixa daqui quando o saldo aqui cobre o sucateamento inteiro.',
+  },
+  'Área de devoluções': {
+    chave: 'DEVOLUCOES',
+    descricao: 'Guardar aqui não muda o estado do material: ele continua disponível.',
+  },
+  'Área de materiais do cliente': {
+    chave: 'MATERIAIS_CLIENTE',
+    descricao: 'Endereço para material de cliente. Material próprio guardado aqui gera aviso.',
+  },
+};
 
 const UNIDADES_SEED = [
   ['UN', 'Unidade'], ['KG', 'Quilograma'], ['M', 'Metro'], ['M2', 'Metro quadrado'],
@@ -43,6 +73,18 @@ const TIPOS_REQUISICAO = [
   'ADMINISTRATIVO', 'EMERGENCIAL', 'FERRAMENTA', 'EPI', 'MATERIAL_CLIENTE',
 ];
 
+// Etapa 48 (RN-01): urgencia da requisicao, LISTA FECHADA. Era texto livre no servidor, e so o select do
+// formulario a escrevia (com estes tres). Critério de regra sobre enum aberto nunca casaria com o que
+// entrasse por fora. Quem valida: requisitionCreateService.createRequisicao e o cadastro de regras.
+const TIPOS_URGENCIA = ['NORMAL', 'URGENTE', 'CRITICO'];
+
+// Etapa 36 (RN-11): fonte UNICA dos valores de `tipo_recebimento`. A coluna existe desde sempre
+// (`recebCols`, "tipo_recebimento TEXT DEFAULT 'NOTA_FISCAL'") e aceitava QUALQUER string — medido
+// por sonda na Fase 0: 'BANANA<script>' entrava com 201. Mora aqui, e nao em schemas.js, pelo mesmo
+// motivo de TIPOS_REQUISICAO/TIPOS_MOVIMENTO: quem grava (receiptService) e quem valida (Zod) tem de
+// ler a MESMA lista, senao a etapa cria duas definicoes do mesmo enum.
+const TIPOS_RECEBIMENTO = ['NOTA_FISCAL', 'PEDIDO_COMPRA'];
+
 const TIPOS_MOVIMENTO = [
   'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_DEVOLUCAO', 'SAIDA_PRODUCAO',
   'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'TRANSFERENCIA', 'RESERVA', 'LIBERACAO_RESERVA',
@@ -54,6 +96,17 @@ const TIPOS_MOVIMENTO = [
   // Passa pelo motor de proposito: assim lote, serie e endereco funcionam, que e justamente o
   // que a ilha de materiais de cliente nao dava.
   'DEVOLUCAO_CLIENTE',
+  // Etapa 45: a IRMA de DEVOLUCAO_CLIENTE, e vale ler as duas juntas. Devolver ao FORNECEDOR
+  // tambem e SAIDA — o material reprovado sai do predio de volta para quem o entregou. A
+  // diferenca entre as duas e de onde o material sai:
+  //   - DEVOLUCAO_CLIENTE tira do DISPONIVEL (o material do cliente estava utilizavel);
+  //   - DEVOLUCAO_FORNECEDOR tira do BLOQUEADO (a inspecao o reprovou e ele esta retido), e por
+  //     isso baixa `quantidade_atual` E `quantidade_bloqueada` no MESMO UPDATE — molde de
+  //     PERDA_TERCEIRO, pela mesma razao.
+  // E as DUAS sao direcao OPOSTA a devolucao da Etapa 7 (tela /almoxarifado/devolucoes, tipo
+  // ENTRADA_DEVOLUCAO), onde o material VOLTA para o estoque. Agora sao TRES nomes parecidos com
+  // duas direcoes; o aviso que ja estava aqui vale em dobro.
+  'DEVOLUCAO_FORNECEDOR',
   // Etapa 5 — quarentena. Simetria de BLOQUEIO/DESBLOQUEIO: mexem em coluna de retencao
   // sem tocar o fisico, porque o material esta no galpao o tempo todo.
   'QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO',
@@ -199,8 +252,25 @@ const TIPOS_RETENCAO = [
 //     bastaria mandar {tipo:'AJUSTE_INVENTARIO'} para gravar um ajuste "homologado por
 //     conferencia" sem conferencia nenhuma por tras — a exigencia de que o valor venha de uma
 //     contagem revisada ficaria decorativa.
+/*
+ * Etapa 45 — `DEVOLUCAO_FORNECEDOR`. ⚠️ ESTA ENTRADA E A GUARDA INTEIRA, e isso nao e obvio:
+ * `TIPOS_MOVIMENTO_ROTA` (schemas.js:58) e DERIVADA por filter — TIPOS_MOVIMENTO menos ESTORNO,
+ * menos TIPOS_RETENCAO, menos ESTA lista. Nao existe lista de permitidos a editar: o default e
+ * ABERTO, e esquecer de entrar aqui entrega o tipo na rota generica.
+ *
+ * O que estaria aberto sem ela: `DEVOLUCAO_FORNECEDOR` desliga as DUAS guardas de saida (a do
+ * disponivel e a de "material bloqueado nao pode ser utilizado"), porque o que ele baixa esta
+ * justamente no bloqueado. Um ALMOXARIFE — gate `movimentar`, o mais amplo do modulo — mandaria
+ * `{tipo:'DEVOLUCAO_FORNECEDOR'}` na v2 e apagaria material bloqueado sem documento nenhum.
+ *
+ * A revisao do plano previu exatamente este erro ("o modo de falhar e esquecer de optar por
+ * fora"), e ele aconteceu mesmo assim na primeira escrita — o tipo foi parar duas vezes em
+ * TIPOS_MOVIMENTO e nenhuma aqui. Quem pegou foi o cenario (5) de
+ * `devolucaoFornecedorMotor.api.test.js`, que manda o tipo pela v2 e exige a recusa.
+ */
 const TIPOS_DEDICADOS = ['DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO',
-  'RETORNO_TRANSFORMACAO', 'ENTRADA_RETALHO', 'SUCATA', 'AJUSTE_INVENTARIO'];
+  'RETORNO_TRANSFORMACAO', 'ENTRADA_RETALHO', 'SUCATA', 'AJUSTE_INVENTARIO',
+  'DEVOLUCAO_FORNECEDOR'];
 
 /**
  * Classificacao da linha de resultado de uma TRANSFORMACAO (Etapa 8c, decisao 8 do design).
@@ -533,6 +603,138 @@ async function migrateBackfillItemQuantidadeEmInspecao(db) {
   }
 }
 
+const MIGRATION_BACKFILL_LIBERACAO_NC = 'backfill_liberacao_nc_inspecoes_antigas';
+
+/**
+ * Backfill da Etapa 44 (RN-03): marca TODAS as inspecoes que ja existiam como "ja liberadas".
+ *
+ * ⚠️ UM UPDATE QUE CARIMBA TUDO PARECE ERRADO — e nao e. Sem ele, a Etapa 44 sai com uma porta
+ * lateral CRITICAL, achada pela Fase 2: `abrirNaoConformidadeManual` (Etapa 43) deixa um perfil
+ * QUALIDADE abrir, a mao, uma NC apontando para QUALQUER inspecao da historia — `resolverFato` so
+ * exige que a inspecao exista, nao checa reprovada, nem data, nem autoria. Com a coluna nascendo
+ * NULL em todas elas, cada reprovacao ja arquivada viraria um VALE-DESBLOQUEIO no valor da
+ * propria reprovada, cobravel contra o pool bloqueado do material — que pode estar bloqueado por
+ * outra coisa inteiramente (um bloqueio avulso de inventario, por exemplo). Ou seja: um caminho
+ * para mexer em saldo sem `ajustar_estoque` e sem passar por `POST /materiais/:id/desbloquear`.
+ *
+ * Carimbar tudo e o que torna verdadeira a frase "esta etapa nao retroage": a liberacao so vale
+ * para inspecao decidida DEPOIS do deploy, que e a unica cujo bloqueio nasceu sob esta regra.
+ * Nao ha perda: nenhuma NC anterior a esta etapa jamais liberou nada — a liberacao nao existia.
+ *
+ * A defesa em profundidade e a RN-09 (so NC aberta AUTOMATICAMENTE libera). As duas ficam de
+ * proposito: a RN-09 depende de raciocinio sobre quantas NCs automaticas podem existir por
+ * inspecao, e este carimbo nao depende de raciocinio nenhum.
+ *
+ * ── A BARREIRA SAO DUAS, E A SEGUNDA É A QUE IMPORTA ────────────────────────────────────────
+ * O ledger impede a re-execucao no caso normal. **Mas ele era a UNICA barreira, e isso era um
+ * furo** (achado da revisao adversarial): perdida a linha do ledger — restauracao de backup,
+ * limpeza de tabela, um `DELETE` distraido —, o proximo boot rodava `initSchema` de novo e
+ * carimbava as inspecoes RECENTES, que ainda nao tinham sido decididas. O efeito e o pior
+ * residual que o design desta etapa nomeia: decidir devolve 200 dizendo *"ja havia sido
+ * liberado"* com o material **preso**, em silencio e sem caminho de volta.
+ *
+ * Por isso a barreira real e ESTRUTURAL: `jaExistia` diz se a coluna existia ANTES do `safeAlter`
+ * desta rodada. Se existia, esta instalacao ja passou pela migracao — e o backfill **nunca mais
+ * roda**, tenha o ledger a linha ou nao. So carimba na rodada em que a coluna NASCE, que e a
+ * unica em que "todas as inspecoes da tabela sao antigas" e verdade por construcao. Em banco novo
+ * a coluna tambem nasce, e a tabela esta vazia: carimba zero linhas.
+ */
+async function migrateBackfillLiberacaoNcInspecoesAntigas(db, jaExistia = false) {
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS schema_migrations_almoxarifado (
+    id TEXT PRIMARY KEY,
+    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  const applied = await dbGet(db,
+    'SELECT 1 as ok FROM schema_migrations_almoxarifado WHERE id = ?',
+    [MIGRATION_BACKFILL_LIBERACAO_NC]);
+  if (applied) return;
+
+  // A barreira estrutural (ver o cabeçalho): a coluna já existia antes desta rodada, logo esta
+  // instalação já passou pela migração. Registra no ledger e sai SEM carimbar — se chegou aqui
+  // com o ledger vazio, ele foi perdido, e carimbar agora atingiria inspeções recentes.
+  if (jaExistia) {
+    await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
+      [MIGRATION_BACKFILL_LIBERACAO_NC]);
+    return;
+  }
+
+  const colInfo = await dbGet(db,
+    `SELECT name FROM pragma_table_info('inspecoes_recebimento_almoxarifado') WHERE name = 'liberacao_nc_em'`);
+  if (!colInfo) {
+    await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
+      [MIGRATION_BACKFILL_LIBERACAO_NC]);
+    return;
+  }
+
+  const result = await dbRun(db, `UPDATE inspecoes_recebimento_almoxarifado
+    SET liberacao_nc_em = CURRENT_TIMESTAMP
+    WHERE liberacao_nc_em IS NULL`);
+
+  await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
+    [MIGRATION_BACKFILL_LIBERACAO_NC]);
+  if (result.changes > 0) {
+    console.log(`✅ Migração backfill_liberacao_nc_inspecoes_antigas aplicada (${result.changes} inspeção(ões) anterior(es) marcada(s) como não liberáveis)`);
+  }
+}
+
+const MIGRATION_BACKFILL_EXECUCAO_NC = 'backfill_execucao_estado_nc';
+
+/**
+ * Etapa 45 (RN-01) — dá `execucao_estado` às NCs que JÁ estavam decididas quando a coluna nasceu.
+ *
+ * Sem ela, toda NC decidida antes do deploy fica com `execucao_estado` NULL: some do filtro
+ * `?execucao=PENDENTE` (a fila do que falta executar) e o botão da tela não aparece — ou seja, a
+ * feature nasceria cega justamente para o acúmulo que ela existe para resolver. As decisões de
+ * aceitação viram `NAO_SE_APLICA`, porque a Etapa 44 já as executou no mesmo clique.
+ *
+ * ── ⚠️ ESTE BACKFILL É O OPOSTO DO DA ETAPA 44, E A ASSIMETRIA É DELIBERADA ──────────────────
+ * `migrateBackfillLiberacaoNcInspecoesAntigas` (acima) carimba o passado para IMPEDIR uma ação
+ * retroativa, e por isso precisou de uma barreira ESTRUTURAL além do ledger: re-executá-lo depois
+ * de uma restauração de backup atingiria inspeções RECENTES e as trancaria em silêncio, sem
+ * caminho de volta. Aqui a direção é a inversa — o backfill HABILITA um gesto, e um gesto que
+ * **ninguém executa sozinho**: alguém precisa clicar em "registrar execução", com perfil
+ * `executar_encaminhamento`, e a RN-06 ainda decide se aquilo move saldo.
+ *
+ * Por isso aqui basta o ledger, e a re-execução é inofensiva por construção: o `WHERE` exige
+ * `execucao_estado IS NULL`, então ela **nunca** toca uma NC já executada nem rebaixa um
+ * `EXECUTADA` para `PENDENTE`. Quem ler as duas migrações lado a lado e achar que uma delas está
+ * errada está lendo o efeito de cada carimbo — trancar vs. destrancar —, e são opostos mesmo.
+ */
+async function migrateBackfillExecucaoEstadoNc(db) {
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS schema_migrations_almoxarifado (
+    id TEXT PRIMARY KEY,
+    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  const applied = await dbGet(db,
+    'SELECT 1 as ok FROM schema_migrations_almoxarifado WHERE id = ?',
+    [MIGRATION_BACKFILL_EXECUCAO_NC]);
+  if (applied) return;
+
+  const colInfo = await dbGet(db,
+    `SELECT name FROM pragma_table_info('nao_conformidades_almoxarifado') WHERE name = 'execucao_estado'`);
+  if (!colInfo) {
+    await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
+      [MIGRATION_BACKFILL_EXECUCAO_NC]);
+    return;
+  }
+
+  // A lista literal espelha `DECISOES_QUE_LIBERAM` de `nonConformityService.js`. Copiá-la aqui é
+  // deliberado (schema.js não importa serviço, e o ciclo seria certo); o cenário (0) de
+  // `encaminhamentoExecucao.api.test.js` compara as duas para a cópia não derivar em silêncio.
+  const result = await dbRun(db, `UPDATE nao_conformidades_almoxarifado
+    SET execucao_estado = CASE WHEN decisao IN ('ACEITAR','ACEITAR_SOB_DESVIO')
+                               THEN 'NAO_SE_APLICA' ELSE 'PENDENTE' END
+    WHERE status = 'DECIDIDA' AND decisao IS NOT NULL AND execucao_estado IS NULL`);
+
+  await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
+    [MIGRATION_BACKFILL_EXECUCAO_NC]);
+  if (result.changes > 0) {
+    console.log(`✅ Migração backfill_execucao_estado_nc aplicada (${result.changes} não conformidade(s) decidida(s) com estado de execução)`);
+  }
+}
+
 const MIGRATION_HISTORICO_NULLABLE = 'alertas_historico_nullable_material';
 
 async function migrateHistoricoNullableMaterial(db) {
@@ -720,6 +922,34 @@ async function initSchema(db) {
     console.error('⚠️  [almoxarifado] Nao foi possivel criar idx_categorias_almox_nome:', e.message,
       '— ha categorias com nome repetido. Renomeie/desative as duplicadas '
       + '(SELECT nome, COUNT(*) FROM categorias_material_almoxarifado GROUP BY nome HAVING COUNT(*) > 1) '
+      + 'e reinicie o servidor.');
+  }
+
+  // ── Motivos de movimentação (Etapa 66) ──
+  // Cadastro que ACOMPANHA o texto livre (D1): a movimentacao pode citar `motivo_id`, e o livro
+  // grava o NOME do momento em `motivo` mais o id (D2). `tipos` e um array JSON na propria linha
+  // (D3: sem transacao, uma tabela de juncao poderia ficar pela metade num PUT). Sem semente (D7).
+  //
+  // Unicidade por `nome_normalizado` (trim + NFC + minusculas pt-BR, calculado no servico) e nao
+  // por `COLLATE NOCASE`, que so dobra ASCII e nao existe no Postgres (revisao da Fase 2). O
+  // try/catch do indice e o mesmo das categorias acima: uma excecao aqui derrubaria o initSchema
+  // inteiro; a tabela nasce vazia nesta etapa, entao em base nova o indice aplica sempre.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS motivos_movimentacao_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    nome_normalizado TEXT NOT NULL,
+    tipos TEXT NOT NULL,
+    ativo INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  try {
+    await dbRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS idx_motivos_mov_almox_nome
+      ON motivos_movimentacao_almoxarifado(nome_normalizado)`);
+  } catch (e) {
+    console.error('⚠️  [almoxarifado] Nao foi possivel criar idx_motivos_mov_almox_nome:', e.message,
+      '— ha motivos com nome repetido. Renomeie/desative os duplicados '
+      + '(SELECT nome_normalizado, COUNT(*) FROM motivos_movimentacao_almoxarifado GROUP BY nome_normalizado HAVING COUNT(*) > 1) '
       + 'e reinicie o servidor.');
   }
 
@@ -1042,6 +1272,9 @@ async function initSchema(db) {
     'reserva_id INTEGER',
     'recebimento_id INTEGER',
     'requisicao_id INTEGER',
+    // Etapa 66 (D2): o motivo do cadastro citado pela movimentacao. `motivo` (texto) continua
+    // sendo gravado com o NOME do momento — renomear o cadastro nao reescreve o livro.
+    'motivo_id INTEGER',
   ];
   for (const col of movCols) await safeAlter(db, `ALTER TABLE movimentacoes_almoxarifado ADD COLUMN ${col}`);
 
@@ -1086,6 +1319,11 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE reservas_material_almoxarifado ADD COLUMN requisicao_id INTEGER');
   await safeAlter(db, 'ALTER TABLE reservas_material_almoxarifado ADD COLUMN item_requisicao_id INTEGER');
   await safeAlter(db, "ALTER TABLE reservas_material_almoxarifado ADD COLUMN origem TEXT DEFAULT 'MANUAL'");
+  // Etapa 74 (B372) — a reserva que a CHEGADA da nota criou para quem esperava o material
+  // (reservaChegadaService). Continua sendo uma reserva de requisição comum (origem REQUISICAO, a
+  // entrega consome igual); a coluna existe para o estorno da entrada (Etapa 71) achar e desfazer só
+  // as reservas que aquela nota criou. Gravada só pelo 4º argumento de criarReserva — nunca do body.
+  await safeAlter(db, 'ALTER TABLE reservas_material_almoxarifado ADD COLUMN recebimento_id INTEGER');
 
   // ── Recebimentos ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS recebimentos_material_almoxarifado (
@@ -1142,6 +1380,50 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN quantidade_aprovada REAL');
   await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN quantidade_reprovada REAL');
   await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN encaminhamento TEXT');
+
+  // Etapa 44 (RN-03) — o carimbo de "o material reprovado por ESTA inspecao ja foi liberado por
+  // uma nao conformidade". E o claim que torna a liberacao IDEMPOTENTE.
+  //
+  // ⚠️ POR QUE A TRAVA MORA NA INSPECAO E NAO NA NC, que e o lugar obvio: o indice unico da NC e
+  // PARCIAL E POR TIPO (`idx_nc_almox_aberta`), entao a MESMA inspecao pode carregar mais de uma
+  // NC aberta — basta o `tipo` ser outro —, e `abrirNaoConformidadeManual` deixa abrir uma a mao
+  // apontando para ela. Duas NCs da mesma inspecao decididas como aceitacao liberariam a
+  // quantidade reprovada DUAS VEZES. Travar na NC (`status = 'DECIDIDA'`) protege contra decidir
+  // a MESMA NC duas vezes, que ja estava protegido, e nao contra o buraco real. O motor tambem
+  // nao salva: ele so recusa quando o pool do material esta insuficiente, e o pool e AGREGADO —
+  // com um bloqueio de outra origem na mesma peca, a segunda liberacao passa em silencio.
+  // A ordem destas três linhas É a barreira do backfill — ver o comentário da migração.
+  const liberacaoNcJaExistia = !!(await dbGet(db,
+    `SELECT name FROM pragma_table_info('inspecoes_recebimento_almoxarifado') WHERE name = 'liberacao_nc_em'`));
+  await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN liberacao_nc_em DATETIME');
+  await migrateBackfillLiberacaoNcInspecoesAntigas(db, liberacaoNcJaExistia);
+
+  // Etapa 45 (RN-05) — o irmao do carimbo acima, para o outro lado da decisao: "o material
+  // reprovado por ESTA inspecao ja foi DEVOLVIDO AO FORNECEDOR". E o claim que torna a execucao
+  // idempotente NO NIVEL QUE IMPORTA.
+  //
+  // ⚠️ A trava mora na INSPECAO pela MESMA razao escrita tres paragrafos acima, e vale repetir
+  // porque a primeira versao do plano desta etapa a pos na NC e teria passado: `idx_nc_almox_aberta`
+  // e parcial E POR TIPO, entao a mesma inspecao carrega mais de uma NC. `execucao_em` na NC
+  // protege contra executar a MESMA NC duas vezes — que e protecao de documento, nao de saldo.
+  // Duas NCs da mesma inspecao (tipos diferentes) executadas como `DEVOLVER` baixariam a
+  // quantidade reprovada DUAS VEZES, e o motor nao salva: ele so recusa quando o pool esta
+  // insuficiente, e o pool e AGREGADO — com bloqueio de outra origem na mesma peca, a segunda
+  // baixa passa em silencio e apaga material que ninguem devolveu.
+  //
+  // SEM BACKFILL, e a assimetria com `liberacao_nc_em` e deliberada: la o carimbo retroativo
+  // FECHAVA uma porta de abuso (inspecao antiga virando vale-desbloqueio); aqui carimbar o
+  // passado TRANCARIA a devolucao legitima de material que ainda esta bloqueado no galpao hoje —
+  // e nada acontece sozinho, porque alguem precisa clicar em "registrar execucao".
+  await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN devolucao_fornecedor_em DATETIME');
+
+  // Etapa 69 (D5) — o TERCEIRO carimbo da mesma familia: "o material reprovado por ESTA inspecao ja
+  // foi SUCATEADO" (a segunda assinatura do sucateamento ligado a NC baixou do bloqueado). As tres
+  // portas sobre o mesmo bloqueado agregado (liberar — 44, devolver — 45, sucatear — 69) olham os
+  // TRES carimbos no claim: com so a porta nova olhando, a devolucao posterior baixaria de novo o
+  // que ja foi para a cacamba, contra a retencao de outra origem.
+  // SEM BACKFILL, pela mesma razao da 45: carimbar o passado trancaria material ainda bloqueado.
+  await safeAlter(db, 'ALTER TABLE inspecoes_recebimento_almoxarifado ADD COLUMN sucateamento_em DATETIME');
 
   // ── Plano de inspeção e medidas (Etapa 27, contrato C2) ──────────────────────────────────────
   //
@@ -1225,6 +1507,140 @@ async function initSchema(db) {
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_medidas_inspecao_almox_inspecao
     ON medidas_inspecao_almoxarifado(inspecao_id)`);
 
+  // ── Não conformidade NUMERADA (Etapa 43, features 08 + 09) ──────────────────────────────────
+  //
+  // POR QUE UMA TABELA SÓ, com `origem` (D1). A spec 08 pede "divergência formal numerada" e a 09
+  // pede "não conformidade formal numerada" — é o MESMO documento visto de dois lados. Duas
+  // tabelas divergiriam na primeira edição e dariam DOIS números para o mesmo fato físico, que é
+  // a classe de bug que este módulo mais combate. O precedente a favor é
+  // `anexos_documento_almoxarifado`: tabela única com `entidade` + `entidade_id`, que serviu seis
+  // consumidores sem virar duas. `origem` aceita `INVENTARIO` no dia em que for pedido, sem
+  // migração — ele fica FORA agora porque a divergência de inventário tem fluxo próprio.
+  //
+  // POR QUE `material_id` E `recebimento_id` MORAM AQUI, e não saem de JOIN pela origem: são
+  // CONGELADOS no ato da abertura, qualquer que seja a origem. É isso que torna a listagem
+  // NÃO-POLIMÓRFICA — um `LEFT JOIN materiais` + `LEFT JOIN recebimentos` e pronto, em vez de dois
+  // caminhos de JOIN com metade das colunas vindo nula para metade das linhas.
+  //
+  // POR QUE o fato (`quantidade_*`, `divergencia`) é copiado e não lido do item: mesmo precedente
+  // das medidas de inspeção logo acima (RN-05 da Etapa 27) — o documento conta o que se observou
+  // NAQUELE instante, e reconferir o item depois de DECIDIDA não pode reescrever a história.
+  // Enquanto a NC está ABERTA o fato ainda está sendo apurado e é atualizado (RN-04); depois, não.
+  //
+  // Os nomes de coluna seguem o que o schema JÁ usa: `motivo_cancelamento`, `cancelado_em` e o
+  // padrão `<particípio masculino>_por_id/_nome` (`criado_por_nome`, `conferido_por_nome`,
+  // `recebido_por_nome`… — 19 colunas). `aberta_por_nome`/`decidida_em` seria flexão que não
+  // existe em nenhuma delas, e DDL fica para sempre.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS nao_conformidades_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero TEXT UNIQUE NOT NULL,
+    origem TEXT NOT NULL,
+    referencia_tipo TEXT NOT NULL,
+    referencia_id INTEGER NOT NULL,
+    tipo TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ABERTA',
+    material_id INTEGER,
+    recebimento_id INTEGER,
+    quantidade_esperada REAL,
+    quantidade_recebida REAL,
+    divergencia REAL,
+    descricao TEXT,
+    decisao TEXT,
+    justificativa TEXT,
+    aberto_por_id INTEGER,
+    aberto_por_nome TEXT,
+    aberto_automaticamente INTEGER DEFAULT 0,
+    decidido_por_id INTEGER,
+    decidido_por_nome TEXT,
+    decidido_em DATETIME,
+    motivo_cancelamento TEXT,
+    cancelado_em DATETIME,
+    -- Carimbo da RN-10: "o fato deste documento foi SUPERADO". Escrito quando o item volta a NAO
+    -- ter divergencia DEPOIS de o documento ter sido decidido. Existe porque sem ele o modulo
+    -- ficava MUDO no cenario medido pela revisao adversarial: decidir, corrigir, quebrar de novo
+    -- no mesmo numero — a guarda de reabertura via "mesmo fato" e nao abria nada, e o cartao
+    -- antigo ja tinha excluido o item por ele ter documento. Ver getUltimaEncerrada.
+    fato_superado_em DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
+  )`);
+
+  // O índice é ÚNICO e PARCIAL, e as duas coisas importam (D5):
+  //
+  //   - ÚNICO sobre `(origem, referencia_tipo, referencia_id, tipo)`: reconferir dez vezes o mesmo
+  //     item não pode abrir dez documentos. A colisão é detectada PELO BANCO, nunca por um
+  //     SELECT-antes-do-INSERT, que tem janela de corrida (mesma razão escrita em extended.js:200).
+  //   - PARCIAL `WHERE status = 'ABERTA'`: sem isso, decidir uma NC trancaria o par item+tipo para
+  //     sempre — chegou a menos e aceitou-se; reconferiu e faltou MAIS ainda: isso é fato novo e
+  //     merece documento novo. Duas NCs ENCERRADAS do mesmo item são consequência DESEJADA. A
+  //     guarda contra reabrir sem fato novo é a RN-10, em código (nonConformityService), porque é
+  //     comparação por epsilon e índice não sabe fazer isso.
+  //
+  // Sem try/catch, como `idx_planos_inspecao_almox_mat_carac` e pela mesma razão medida: a tabela
+  // NASCE com o índice, não existe base legada com NC duplicada porque não existe base legada com
+  // NC. O try/catch da Etapa 26 foi para um índice acrescentado a tabela que JÁ tinha dados.
+  await dbRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS idx_nc_almox_aberta
+    ON nao_conformidades_almoxarifado(origem, referencia_tipo, referencia_id, tipo)
+    WHERE status = 'ABERTA'`);
+
+  // A consulta da tela e a do alerta são as duas "abertas, mais velhas primeiro".
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_nc_almox_status
+    ON nao_conformidades_almoxarifado(status, created_at)`);
+
+  // ── Etapa 45 (RN-01) — O ESTADO DE EXECUÇÃO DA DECISÃO ───────────────────────────────────────
+  //
+  // O requisito da feature 09 é *"acompanhar se a devolução/análise/substituição já foi
+  // executada"*, e até aqui a NC respondia só "o que se decidiu". Decidir `DEVOLVER` é intenção;
+  // a caixa continua no galpão até alguém embalar, emitir documento e chamar a transportadora.
+  //
+  // ⚠️ POR QUE SÃO DOIS GESTOS, e não um só como na Etapa 44: lá a decisão de ACEITAR executava
+  // no mesmo clique e estava certo, porque liberar é ato ADMINISTRATIVO — o material está no
+  // galpão antes e depois, só deixa de estar retido. Devolver não é: o material SAI. Baixar o
+  // estoque no instante da decisão faria o sistema afirmar uma remessa que ainda não aconteceu, e
+  // o galpão teria material que o sistema diz não existir.
+  //
+  // `execucao_estado`: `PENDENTE` (a decisão exige ato externo), `EXECUTADA`, ou `NAO_SE_APLICA`
+  // (as duas decisões de aceitação, que já se executaram na 44). NULL = NC ainda não decidida.
+  // `execucao_movimentacao_id` é o elo com o livro — INTEGER solto, no padrão do módulo.
+  const ncCols = [
+    "execucao_estado TEXT",
+    'execucao_em DATETIME',
+    'execucao_por_id INTEGER',
+    'execucao_por_nome TEXT',
+    'execucao_observacoes TEXT',
+    'execucao_movimentacao_id INTEGER',
+  ];
+  for (const col of ncCols) await safeAlter(db, `ALTER TABLE nao_conformidades_almoxarifado ADD COLUMN ${col}`);
+
+  // ── Etapa 46 — QUEM cancelou, e por que estas DUAS colunas sao o discriminador da etapa ─────
+  //
+  // A tabela ja tinha `motivo_cancelamento` e `cancelado_em` desde a Etapa 43, e ficou PELA
+  // METADE: `conferencias_almoxarifado` tem o QUARTETO completo desde a Etapa 17
+  // (cancelado_por_id / cancelado_por_nome / cancelado_em / motivo_cancelamento, mais abaixo neste
+  // arquivo). Esta etapa completa o da NC, e nao e so simetria:
+  //
+  // ⚠️ `cancelado_por_id IS NOT NULL` E O DISCRIMINADOR ENTRE OS DOIS SIGNIFICADOS DE `CANCELADA`.
+  // Ate a Etapa 45, cancelar era UM ato so — automatico, dentro de
+  // `sincronizarNaoConformidadeQuantidade`, quando a divergencia DESAPARECE. A Etapa 46 acrescenta
+  // o cancelamento HUMANO, e nele o problema NAO desapareceu: ele continua de pe, e uma pessoa
+  // decidiu encerrar o documento. Os dois consumidores do estado precisam distinguir:
+  //
+  //   · `CANCELADA` + `cancelado_por_id IS NULL`  -> o fato sumiu; NAO e encerramento
+  //   · `CANCELADA` + `cancelado_por_id NOT NULL` -> encerrado por PESSOA; E encerramento
+  //
+  // O desenho da 46 tentou primeiro `decidido_em` como discriminador, e a revisao da Fase 2
+  // mostrou por execucao que ele e EXCLUSIVO mas NAO SUFICIENTE: uma NC ABERTA cancelada por
+  // pessoa tem `decidido_em IS NULL`, a MESMA assinatura do cancelamento automatico — e o gancho
+  // de quantidade reabriria, a cada salvamento de NF, o documento que a pessoa acabou de anular.
+  //
+  // NULL nas linhas antigas e exatamente o certo: toda NC cancelada antes desta etapa e
+  // automatica, por construcao (o unico escritor de `CANCELADA` tinha `WHERE status = 'ABERTA'` e
+  // exigia `aberto_automaticamente`). Sem backfill, de proposito.
+  await safeAlter(db, 'ALTER TABLE nao_conformidades_almoxarifado ADD COLUMN cancelado_por_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE nao_conformidades_almoxarifado ADD COLUMN cancelado_por_nome TEXT');
+  await migrateBackfillExecucaoEstadoNc(db);
+
   const recebCols = [
     "tipo_recebimento TEXT DEFAULT 'NOTA_FISCAL'",
     'fornecedor_cnpj TEXT',
@@ -1251,10 +1667,24 @@ async function initSchema(db) {
     'faturamento_data DATETIME',
     'contas_pagar_id INTEGER',
     'etapa_atual TEXT DEFAULT \'ALMOXARIFADO\'',
+    // Etapa 70 (T0b): claim do PROCESSAMENTO no nivel do documento — dois "Processar Nota" ao
+    // mesmo tempo geravam duas contas a pagar e o gancho pos-entrada rodava no perdedor. Ver
+    // `reivindicarProcessamento` no receiptService. Nao e status novo (telas e listas nao mudam).
+    'processando_em DATETIME',
   ];
   for (const col of recebCols) await safeAlter(db, `ALTER TABLE recebimentos_material_almoxarifado ADD COLUMN ${col}`);
 
+  // Etapa 36: a tabela de recebimentos nao tinha indice NENHUM alem do UNIQUE de `numero`
+  // (`grep "INDEX.*recebimentos"` voltava vazio), e a guarda de NF duplicada roda em TODA criacao.
+  // NAO e unico, de proposito — ver o comentario de `assertNotaNaoDuplicada` no receiptService.
+  // Vem DEPOIS do safeAlter de `recebCols` porque a ordem importa para banco antigo.
+  await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_receb_nf_fornecedor ON recebimentos_material_almoxarifado(nota_fiscal, fornecedor_id)');
+
   const recebItemCols = [
+    // Etapa 57 (Fase 5): o endereco onde ESTE item entrou. A devolucao ao fornecedor precisa dele: o
+    // livro nao guarda o item, e o mesmo material duas vezes na nota em enderecos diferentes fazia a
+    // busca pela movimentacao escolher o endereco errado.
+    'localizacao_entrada_id INTEGER',
     'valor_unitario REAL DEFAULT 0',
     'valor_total REAL DEFAULT 0',
     'valor_icms REAL DEFAULT 0',
@@ -1285,6 +1715,18 @@ async function initSchema(db) {
     // e quem cria/reativa as linhas em series_almoxarifado. Este texto e so o que o operador
     // digitou — a fonte de verdade de "quais series existem" continua sendo series_almoxarifado.
     'series TEXT',
+    // Etapa 37: QUAL linha do pedido de compra este item atendeu. Sem ela o recebimento sabia o
+    // MATERIAL mas nao a linha, e duas linhas do mesmo material no mesmo pedido (precos ou prazos
+    // diferentes, caso legitimo) eram indistinguiveis — nem depois dava para reconstruir a conta.
+    // INTEGER SOLTO, sem FK, no padrao do modulo: o pedido e tabela CORE e a linha pode ser
+    // apagada pelo Compras sem que o recebimento deixe de ser historico valido.
+    'pedido_item_id INTEGER',
+    // Etapa 71 (D4/B332): QUAL `ENTRADA_COMPRA` este item gerou. Sem ela o estorno da entrada so
+    // achava o item pelo par (recebimento_id, material_id) — ambiguo quando a nota tem dois itens do
+    // mesmo material (duas linhas do mesmo pedido). Mesmo padrao de `localizacao_entrada_id`:
+    // gravada por `darEntradaEstoque` logo depois da entrada, INTEGER solto, sem FK, sem backfill
+    // (o passado se resolve na hora do estorno, `estornarEntradaNoPedido`).
+    'movimentacao_entrada_id INTEGER',
   ];
   for (const col of recebItemCols) await safeAlter(db, `ALTER TABLE recebimentos_material_itens_almoxarifado ADD COLUMN ${col}`);
   await migrateBackfillItemQuantidadeEmInspecao(db);
@@ -1302,20 +1744,44 @@ async function initSchema(db) {
     FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
   )`);
 
-  // Etapa 32 — o que a linha do documento impresso mostra e a tabela não tinha.
-  // `valor_total` da linha NÃO entra aqui de propósito: é derivado de
-  // quantidade × valor_unitario (RN-03), e guardá-lo convida a divergir do cálculo.
-  const itensPedidoCompraColsE32 = [
-    'item_numero INTEGER',
-    'ncm TEXT',
-    'peso_unitario REAL DEFAULT 0',
-    'data_entrega DATE',
-    'ipi_percentual REAL DEFAULT 0',
-    'observacao TEXT',
+  // Etapa 37: a coluna que faz o PEDIDO saber quanto dele ja chegou. Medido na Fase 0 por sonda
+  // executada: a tabela tinha 8 colunas, UM leitor e ZERO escritores, e um pedido de 10 unidades
+  // recebeu 25 em tres recebimentos continuando `ABERTO` com `quantidade = 10` — nao havia onde
+  // guardar o recebido. Aditiva, por `safeAlter`, e SEM ledger de proposito (decisao 2 do design):
+  // os 4 ids de `schema_migrations_almoxarifado` sao reconstrucao/backfill/seed, as ~40 chamadas de
+  // `safeAlter` deste arquivo nao tem ledger, e `COUNT(itens_pedido_compra) = 0` — nao existe
+  // backfill a marcar. `REAL DEFAULT 0` e NAO `NOT NULL`: a aritmetica do saldo
+  // (`quantidade - COALESCE(quantidade_recebida, 0)`) nao pode virar NaN na primeira leitura, e um
+  // `NOT NULL` sem default faria o ALTER FALHAR em banco de producao com linhas.
+  const itensPedidoCols = [
+    'quantidade_recebida REAL DEFAULT 0',
   ];
-  for (const col of itensPedidoCompraColsE32) {
-    await safeAlter(db, `ALTER TABLE itens_pedido_compra ADD COLUMN ${col}`);
-  }
+  for (const col of itensPedidoCols) await safeAlter(db, `ALTER TABLE itens_pedido_compra ADD COLUMN ${col}`);
+  // Indice em `pedido_id`: a tabela nao tinha NENHUM indice, e a partir desta etapa toda leitura
+  // de saldo do pedido (rota aux, rota de itens e o acumulador da entrada) filtra por pedido_id.
+  await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_itens_pedido_compra_pedido ON itens_pedido_compra(pedido_id)');
+
+  // ── Itens de cotação (Etapa 41, Task 1) ──
+  // Espelho de `itens_pedido_compra` SEM `quantidade_recebida` (cotação não é recebida): `codigo`,
+  // `descricao` e `unidade` copiados do material por `resolverItens` (a tela de edição lê por linha,
+  // como o pedido). `valor_unitario` tem o MESMO nome da linha do pedido de propósito: a conversão
+  // copia sem renomear e o custo médio do recebimento (U1 da Etapa 37) herda o preço da cotação.
+  // Vive AQUI e não em `index.js` (onde está `cotacoes`) porque `initSchema` roda no harness
+  // (`testApp.js:32`): a tabela chega a toda suíte com a DDL de produção, sem stub — a divergência
+  // stub/produção foi a classe de defeito da F1 da Etapa 40.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS itens_cotacao (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cotacao_id INTEGER NOT NULL,
+    material_id INTEGER,
+    codigo TEXT,
+    descricao TEXT,
+    quantidade REAL NOT NULL DEFAULT 1,
+    valor_unitario REAL DEFAULT 0,
+    unidade TEXT DEFAULT 'UN',
+    FOREIGN KEY (cotacao_id) REFERENCES cotacoes(id),
+    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
+  )`);
+  await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_itens_cotacao_cotacao ON itens_cotacao(cotacao_id)');
 
   // ── Devoluções ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS devolucoes_material_almoxarifado (
@@ -1602,6 +2068,17 @@ async function initSchema(db) {
   await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_sucateamento_status ON sucateamentos_almoxarifado(status)');
   await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_sucateamento_material ON sucateamentos_almoxarifado(material_id)');
 
+  // Etapa 69 (D1) — o sucateamento LIGADO a uma NC de inspecao decidida SUCATEAR. NULL = o
+  // sucateamento comum (do disponivel), que nao muda. Com a coluna preenchida a segunda assinatura
+  // baixa do BLOQUEADO (`doBloqueado`), carimba a inspecao e registra a execucao da NC; e o estorno
+  // dessa SUCATA e recusado (D3), casando `referencia = 'SUC-'||id` com esta coluna.
+  await safeAlter(db, 'ALTER TABLE sucateamentos_almoxarifado ADD COLUMN nao_conformidade_id INTEGER');
+  // A guarda REAL contra duas solicitacoes concorrentes para a mesma NC (RN-04): a pre-checagem do
+  // servico e so para a mensagem. Parcial em SOLICITADO — rejeitado/cancelado libera nova solicitacao.
+  await dbRun(db, `CREATE UNIQUE INDEX IF NOT EXISTS ux_sucateamento_nc_solicitado
+    ON sucateamentos_almoxarifado(nao_conformidade_id)
+    WHERE nao_conformidade_id IS NOT NULL AND status = 'SOLICITADO'`);
+
   // ── Ferramentas ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS ferramentas_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1712,8 +2189,37 @@ async function initSchema(db) {
     arquivo_path TEXT NOT NULL,
     nome_original TEXT,
     uploaded_by INTEGER,
+    uploaded_by_nome TEXT,
+    descricao TEXT,
+    tamanho_bytes INTEGER,
+    mime_type TEXT,
+    ativo INTEGER DEFAULT 1,
+    deleted_by INTEGER,
+    deleted_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+  // Etapa 32: a tabela nasceu na Etapa 0 e ficou ORFA ate aqui — nenhum INSERT, nenhum SELECT,
+  // nenhum indice. As sete colunas acima sao novas; em banco NOVO o CREATE ja as traz, e os
+  // safeAlter abaixo viram no-op (o safeAlter engole `duplicate column name`). Em banco EXISTENTE
+  // — producao, que roda desde 2026-08-03 — o CREATE TABLE IF NOT EXISTS nao faz nada e sao os
+  // ALTERs que pagam. Sem os dois caminhos, uma das duas instalacoes fica sem as colunas.
+  // `ativo` com DEFAULT 1 para que qualquer linha legada nasca visivel.
+  for (const col of [
+    'uploaded_by_nome TEXT',
+    'descricao TEXT',
+    'tamanho_bytes INTEGER',
+    'mime_type TEXT',
+    'ativo INTEGER DEFAULT 1',
+    'deleted_by INTEGER',
+    'deleted_at DATETIME',
+  ]) await safeAlter(db, `ALTER TABLE anexos_documento_almoxarifado ADD COLUMN ${col}`);
+
+  // A listagem SEMPRE filtra por (entidade, entidade_id, ativo). Sem indice e full scan numa
+  // tabela que so cresce — mesmo raciocinio do indice da auditoria, logo abaixo. DEPOIS dos
+  // ALTERs, porque o indice cita `ativo`, que so existe apos a migracao em banco antigo.
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_anexos_almox_entidade
+    ON anexos_documento_almoxarifado (entidade, entidade_id, ativo)`);
 
   // ── Auditoria ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS auditoria_log_almoxarifado (
@@ -1769,6 +2275,40 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE solicitacoes_compra_almoxarifado ADD COLUMN cancelada_em DATETIME');
   await safeAlter(db, 'ALTER TABLE solicitacoes_compra_almoxarifado ADD COLUMN cancelada_por TEXT');
   await safeAlter(db, 'ALTER TABLE solicitacoes_compra_almoxarifado ADD COLUMN cancelamento_motivo TEXT');
+  // Etapa 72, T1 (Fase 2 do plano): quanto do material o pedido ja tinha recebido NO MOMENTO do
+  // vinculo. A solicitacao so enxerga o que chegou DEPOIS dele — senao, ligada por `vincular-pedido` a
+  // um pedido ja parcialmente recebido, ela contaria como "chegou" o que entrou antes de ela existir.
+  // NULL (legado, vinculado antes da 72) vale 0 — declarado.
+  await safeAlter(db, 'ALTER TABLE solicitacoes_compra_almoxarifado ADD COLUMN recebido_no_vinculo REAL');
+  // Etapa 72, Fase 5: `recebido_no_vinculo` DEIXOU DE SER LIDO. Continua gravado pelo vinculo, como
+  // rastro ("quanto o pedido ja tinha recebido quando a solicitacao foi ligada"), mas nenhuma conta
+  // usa: o que cada solicitacao recebeu vem do LIVRO abaixo.
+
+  // Etapa 72, Fase 5 — O LIVRO DE ATRIBUICAO: o que de cada entrada de nota foi de cada solicitacao.
+  // Antes dele o "recebido da solicitacao" era CALCULADO a cada leitura, rateando o recebido do par
+  // (pedido, material) entre as VINCULADO de hoje a partir de um retrato fixo (`recebido_no_vinculo`).
+  // O calculo mudava de dono quando o conjunto mudava: a irma cancelada passava o que recebeu para a
+  // outra (compra em dobro), o estorno de uma nota anterior ao vinculo reabria quem ja tinha recebido,
+  // e a solicitacao ligada depois era sub-creditada. Agora a atribuicao e GRAVADA uma vez, na entrada
+  // (`purchaseService.fecharSolicitacoesDoPedido` com o recebimento), e nunca recalculada: o recebido
+  // da solicitacao e SUM(quantidade) das linhas dela. O estorno da movimentacao grava a linha NEGATIVA
+  // das linhas dela (`quantidade` < 0, mesma `movimentacao_id`) — o livro so cresce, o rastro fica.
+  // Sem backfill (decisao da Fase 5, letra B): o livro nasce vazio, o que e exato para o legado de
+  // producao (ver o plano da Etapa 72, Fase 5).
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS solicitacao_compra_recebimentos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    solicitacao_id INTEGER NOT NULL,
+    pedido_compra_id INTEGER,
+    material_id INTEGER NOT NULL,
+    movimentacao_id INTEGER,
+    quantidade REAL NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (solicitacao_id) REFERENCES solicitacoes_compra_almoxarifado(id)
+  )`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_sc_recebimentos_solicitacao
+    ON solicitacao_compra_recebimentos(solicitacao_id)`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_sc_recebimentos_movimentacao
+    ON solicitacao_compra_recebimentos(movimentacao_id)`);
 
   // ── Alertas de estoque mínimo ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS alertas_estoque_material_almoxarifado (
@@ -1882,6 +2422,32 @@ async function initSchema(db) {
   )`);
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_separacoes_req
     ON separacoes_requisicao_almoxarifado(requisicao_id)`);
+  // Etapa 63: a substituicao da origem separada na entrega (append-only). Tabela propria — a
+  // auditoria e best-effort e restrita a `configurar`, e a rastreabilidade do lote vai consultar por
+  // lote (lote_planejado_id / lote_saida_id), nao por JSON.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS substituicoes_origem_requisicao (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requisicao_id INTEGER NOT NULL,
+    item_id INTEGER NOT NULL,
+    material_id INTEGER NOT NULL,
+    quantidade REAL NOT NULL,
+    localizacao_planejada_id INTEGER,
+    lote_planejado_id INTEGER,
+    localizacao_saida_id INTEGER,
+    lote_saida_id INTEGER,
+    automatica INTEGER NOT NULL DEFAULT 0,
+    movimentacao_ids TEXT,
+    motivo TEXT,
+    usuario_id INTEGER,
+    usuario_nome TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_substituicoes_req ON substituicoes_origem_requisicao(requisicao_id)`);
+  // Etapa 65: a troca tambem na SEPARACAO (sem movimentacao). O legado e a entrega viram 'ENTREGA'.
+  // Numa linha SEPARACAO, lote_saida_id e o lote SEPARADO na rodada, nao um lote que saiu do estoque —
+  // a rastreabilidade por lote filtra o momento.
+  await safeAlter(db, "ALTER TABLE substituicoes_origem_requisicao ADD COLUMN momento TEXT NOT NULL DEFAULT 'ENTREGA'");
+  await safeAlter(db, 'ALTER TABLE substituicoes_origem_requisicao ADD COLUMN separacao_id INTEGER');
   // Segunda conferência da separação (Etapa 28, RN-05/RN-07). As colunas entram JÁ na Task 1
   // porque uma rodada nova de separação as limpa (a caixa mudou, a conferência anterior não vale).
   await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN conferido_por_id INTEGER');
@@ -1891,6 +2457,10 @@ async function initSchema(db) {
   // ── Atendimento parcial por item ──
   await safeAlter(db, 'ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_separada REAL DEFAULT 0');
   await safeAlter(db, 'ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN quantidade_entregue REAL DEFAULT 0');
+  // Etapa 59: a origem PLANEJADA na separacao (endereco + lote de onde o separador tirou). Nula quando
+  // nao informada ou quando rodadas diferentes nomearam origens diferentes (mista -> automatico).
+  await safeAlter(db, 'ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN origem_separacao_id INTEGER');
+  await safeAlter(db, 'ALTER TABLE itens_requisicao_almoxarifado ADD COLUMN lote_separacao_id INTEGER');
   await dbRun(db, `UPDATE itens_requisicao_almoxarifado
     SET quantidade_entregue = quantidade_atendida
     WHERE COALESCE(quantidade_entregue, 0) = 0 AND COALESCE(quantidade_atendida, 0) > 0`);
@@ -1938,12 +2508,72 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN cancelado_em DATETIME');
   await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN motivo_cancelamento TEXT');
 
+  // ── Etapa 47 (T3): regras de aprovação configuráveis e as pendências que elas geram ──
+  // Desenho: docs/superpowers/specs/2026-09-30-almoxarifado-etapa47-aprovacoes-com-regras-design.md
+  // seções 8 e 9. A pendência é a VERDADE; assinar uma NÃO muda o status da requisição — o gate
+  // mora no WHERE do UPDATE de /aprovar e /aprovar-valor (9.1).
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS regras_aprovacao (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    ativo INTEGER NOT NULL DEFAULT 1,
+    ordem INTEGER NOT NULL DEFAULT 0,
+    tipo_requisicao TEXT,
+    material_critico INTEGER,
+    valor_minimo REAL,
+    quantidade_minima REAL,
+    centro_custo_id INTEGER,
+    projeto_id INTEGER,
+    aprovadores TEXT NOT NULL DEFAULT '[]',
+    criado_por_id INTEGER,
+    criado_por_nome TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS requisicao_aprovacoes_regra (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requisicao_id INTEGER NOT NULL,
+    regra_id INTEGER NOT NULL,
+    regra_nome TEXT,
+    aprovadores TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'ABERTA',
+    aprovador_id INTEGER,
+    aprovador_nome TEXT,
+    aprovado_em DATETIME,
+    obsoleta_em DATETIME,
+    obsoleta_por_nome TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (requisicao_id, regra_id)
+  )`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_req_aprov_regra_status
+    ON requisicao_aprovacoes_regra (status, requisicao_id)`);
+  // T5: o lembrete de regra é POR PENDÊNCIA — a reincidência é dela, não da requisição, e o log
+  // diz qual pendência foi cobrada (NULL = lembrete da lane de status).
+  await safeAlter(db, 'ALTER TABLE requisicao_aprovacoes_regra ADD COLUMN ultimo_lembrete_enviado DATETIME');
+  await safeAlter(db, 'ALTER TABLE requisicao_lembretes_log ADD COLUMN pendencia_regra_id INTEGER');
+  // Etapa 48 (RN-02/03): dois criterios novos. NULL = nao filtra, como os demais.
+  await safeAlter(db, 'ALTER TABLE regras_aprovacao ADD COLUMN urgencia TEXT');
+  await safeAlter(db, 'ALTER TABLE regras_aprovacao ADD COLUMN material_cliente INTEGER');
+  // 9.7/C2: `regras_avaliadas_em` só é gravada DEPOIS de todas as pendências inseridas; sem ela o
+  // gate de aprovação fecha. As requisições que já existem quando a coluna NASCE foram enviadas
+  // antes de existir regra — recebem o carimbo, senão nenhuma delas poderia ser aprovada.
+  // `safeAlter` não diz se criou a coluna, por isso o PRAGMA antes.
+  // Fase 5 (regras, I2): RASCUNHO fica de fora — ainda não foi enviado, e com o carimbo o envio
+  // dele com o avaliador falhando passaria pelo gate vazio. (O `/enviar` também zera o carimbo.)
+  const colsReqE47 = await dbAll(db, 'PRAGMA table_info(requisicoes_almoxarifado)');
+  const colunaAvaliadaNasce = !colsReqE47.some((c) => c.name === 'regras_avaliadas_em');
+  await safeAlter(db, 'ALTER TABLE requisicoes_almoxarifado ADD COLUMN regras_avaliadas_em DATETIME');
+  if (colunaAvaliadaNasce) {
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET regras_avaliadas_em = CURRENT_TIMESTAMP WHERE regras_avaliadas_em IS NULL AND status <> 'RASCUNHO'");
+  }
+
   // ── Config defaults ──
   const configs = [
     // Migrado de routes/almoxarifado.js (diff de segurança — Task 3): chaves base que só
     // existiam no callback do CREATE TABLE da rota.
     ['aprovacao_automatica', '0', 'Aprovar requisições automaticamente sem revisão'],
-    ['limite_aprovacao_auto', '5', 'Quantidade máxima para aprovação automática por item'],
+    // Etapa 47 (T2, RN-04): `limite_aprovacao_auto` SAIU daqui — prometia "quantidade máxima para
+    // aprovação automática por item", e isso nunca existiu (nenhum leitor no repositório). A linha
+    // já gravada em produção NÃO é apagada; ela é escondida por `configDiff.CHAVES_APOSENTADAS`.
     ['notificar_estoque_critico', '1', 'Enviar alerta quando estoque atingir mínimo'],
     ['prazo_atendimento_horas', '24', 'Prazo padrão para atendimento de requisições (horas)'],
     ['prefixo_requisicao', 'REQ', 'Prefixo do número de requisição'],
@@ -2002,6 +2632,13 @@ async function initSchema(db) {
     ['notificacoes_dest_ajustes', '', 'E-mails para notificacao de ajuste de estoque (lista; vazio = usa alertas_estoque_emails)'],
     ['notificacoes_dest_terceiros', '', 'E-mails para notificacao de movimentacao de terceiro (lista; vazio = usa alertas_estoque_emails)'],
     ['notificacoes_dest_compras', '', 'E-mails para notificacao de solicitacao de compra gerada (lista; vazio = usa compras_notificar_emails)'],
+    // Etapa 70 (receiptNotificationService): o aviso da nota que entrou no estoque e o aviso a quem
+    // pediu o material. DUAS chaves (Fase 2): o da nota vai para uma lista compartilhada e nasce '0'
+    // (o deploy mandaria e-mail na hora para gente real — ligar e decisao de quem opera); o do
+    // solicitante vai so a quem pediu e nasce '1' (e o valor da etapa).
+    ['notificar_recebimento_entrada', '0', 'Enviar aviso quando um recebimento termina de dar entrada no estoque (um por nota)'],
+    ['notificar_recebimento_solicitante', '1', 'Enviar aviso ao solicitante da requisicao que aguardava o material que entrou no estoque'],
+    ['notificacoes_dest_recebimento', '', 'E-mails para o aviso de entrada de recebimento (lista; vazio = usa notificacoes_dest_compras, depois compras_notificar_emails)'],
     // Etapa 16 (C4): janelas dos alertas do registro (alertRegistry.js). Mesma licao da Etapa 10
     // registrada acima — chave nao semeada e ineditavel pelo PUT /configuracoes. As tres caem na
     // validacao de dias pelo prefixo unico 'alerta_' (routes/almoxarifado.js, PREFIXOS_DIAS);
@@ -2015,6 +2652,18 @@ async function initSchema(db) {
     // central mostra e o que a varredura diaria re-verifica como rede de seguranca. Mesmo
     // prefixo 'alerta_' ja validado nos dois lados na Etapa 16.
     ['alerta_eventos_janela_dias', '7', 'Janela em dias que os alertas de evento (reprovado, divergencias) mostram na central'],
+    // Etapa 43 (T4, D6): janela do alerta NAO_CONFORMIDADE_ABERTA — dias com a NC ainda sem
+    // decisao. SEMEADA porque chave nao semeada e ineditavel pelo PUT /configuracoes (a licao da
+    // Etapa 10 registrada acima): o administrador salvaria 200 "Configuracoes salvas!" e o motor
+    // continuaria usando o default. Mesmo prefixo 'alerta_' ja validado nos dois lados.
+    ['alerta_nc_parada_dias', '7', 'Dias com a nao conformidade ABERTA (sem decisao) para alertar documento parado'],
+    // Etapa 46 (T3, RN-08): janela do alerta NAO_CONFORMIDADE_EXECUCAO_PENDENTE — dias desde a
+    // DECISAO com a execucao ainda pendente. Chave PROPRIA, e nao a reutilizacao de
+    // `alerta_nc_parada_dias`: sao dois prazos com dois donos (decidir e da Qualidade, executar e
+    // de Compras e pode depender do fornecedor), e o motivo inteiro esta no comentario da entrada
+    // em alertRegistry.js. SEMEADA pelo mesmo motivo da irma acima — chave nao semeada e
+    // ineditavel pelo PUT /configuracoes (a licao da Etapa 10).
+    ['alerta_nc_execucao_pendente_dias', '7', 'Dias desde a decisao com a execucao da nao conformidade ainda PENDENTE para alertar'],
   ];
   for (const [chave, valor, desc] of configs) {
     await dbRun(db, 'INSERT OR IGNORE INTO configuracoes_almoxarifado (chave, valor, descricao) VALUES (?,?,?)', [chave, valor, desc]);
@@ -2037,6 +2686,9 @@ async function initSchema(db) {
   await safeAlter(db, 'ALTER TABLE movimentacoes_almoxarifado ADD COLUMN centro_custo_id INTEGER');
   await safeAlter(db, 'ALTER TABLE movimentacoes_almoxarifado ADD COLUMN emergencial INTEGER DEFAULT 0');
   await safeAlter(db, 'ALTER TABLE movimentacoes_almoxarifado ADD COLUMN regularizacao_pendente INTEGER DEFAULT 0');
+  // Etapa 56: o rastro da confirmação por leitura — o código da localização conferida em cada papel.
+  await safeAlter(db, 'ALTER TABLE movimentacoes_almoxarifado ADD COLUMN codigo_lido_origem TEXT');
+  await safeAlter(db, 'ALTER TABLE movimentacoes_almoxarifado ADD COLUMN codigo_lido_destino TEXT');
 
   // Etapa 11: primeiro shape de consulta do modulo com subselect correlacionado por material
   // sobre o livro inteiro (consumo medio, ultima entrada/saida) — sem indice e N x full scan.
@@ -2075,6 +2727,12 @@ async function initSchema(db) {
 module.exports = {
   initSchema,
   safeAlter,
+  // Exportada para o cenario (12) da Etapa 44 poder rodar a migracao DEPOIS de criar a inspecao,
+  // que e o unico jeito de simular "a inspecao ja existia no dia do deploy" num banco de teste.
+  migrateBackfillLiberacaoNcInspecoesAntigas,
+  // Etapa 45: mesmo motivo — o cenario do backfill precisa roda-la DEPOIS de criar a NC decidida,
+  // que e o unico jeito de simular "a NC ja estava decidida no dia do deploy" num banco de teste.
+  migrateBackfillExecucaoEstadoNc,
   CATEGORIAS_SEED,
   FAMILIAS_SEED,
   SETORES_ALMOX_SEED,
@@ -2082,6 +2740,7 @@ module.exports = {
   LOCALIZACOES_ALMOX_SEED,
   TIPOS_MATERIAL_ENUM,
   TIPOS_LOCALIZACAO,
+  AREAS_ESPECIAIS,
   UNIDADES_SEED,
   SETORES_REQUISICAO,
   TIPOS_MOVIMENTO,
@@ -2089,5 +2748,7 @@ module.exports = {
   TIPOS_DEDICADOS,
   TIPOS_RESULTADO,
   TIPOS_REQUISICAO,
+  TIPOS_URGENCIA,
+  TIPOS_RECEBIMENTO,
   STATUS_SOBRA,
 };

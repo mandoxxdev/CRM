@@ -6,8 +6,24 @@ const { can } = require('./permissions');
 const alertService = require('./alertService');
 const { avaliarRegrasVinculo } = require('./movementRules');
 const ownerRules = require('./ownerRules');
-const { TIPOS_MOVIMENTO, TIPOS_RETENCAO } = require('./schema');
+// Etapa 66: resolve `motivo_id` (cadastro de motivos) no topo de registrarMovimentacao.
+const motivoMovimentacao = require('./motivoMovimentacao');
+const { TIPOS_MOVIMENTO, TIPOS_RETENCAO, AREAS_ESPECIAIS } = require('./schema');
 const { disponivelSql, COLUNAS_RETENCAO } = require('./availabilitySql');
+// Etapa 45 (fix-round): a regua de "isto e diferenca de verdade", dona unica desde a Etapa 10b.
+// Usada SO no claim de `baixandoBloqueado` (`DEVOLUCAO_FORNECEDOR` e, desde a Etapa 69, a `SUCATA`
+// com `doBloqueado`), e o raio pequeno e deliberado — ver o comentario
+// la. Afrouxar por epsilon TODO claim de saida e mudanca de motor, nao de etapa.
+const { EPSILON_DIVERGENCIA } = require('./divergencia');
+/**
+ * Espelha `nonConformityService.MOTIVO_LIBERACAO` SEM importá-lo — o mesmo desenho, e pelo mesmo
+ * motivo, da cópia de `STATUS_RECEBIMENTO_PROCESSADO` que mora lá: `nonConformityService` faz
+ * `require('./stockService')` (preguiçoso) para chamar o motor, e um require recíproco no topo
+ * daqui devolveria um objeto pela metade dependendo da ordem de carga.
+ * Há cenário em `naoConformidadeLiberacao.api.test.js` comparando as duas strings — uma cópia sem
+ * guarda deriva em silêncio, e a recusa de estorno viraria comparação com literal morta.
+ */
+const MOTIVO_LIBERACAO_NC = 'Liberação por não conformidade';
 const { custoUnitarioSql, valorEstoqueSql } = require('./custoSql');
 const movementTypes = require('./movementTypes');
 // seriesService nao importa stockService de volta — sem ciclo.
@@ -265,6 +281,15 @@ async function ajustarSaldoExistente(db, materialId, localizacaoId, loteId, delt
  */
 const EPS = 1e-9; // tolerância de ponto flutuante: quantidade é REAL no SQLite
 
+/**
+ * Etapa 67 (Fase 5): `quantidade_reservada` do material menos `?`, com a sobra de ponto flutuante
+ * (<= EPS) virando ZERO. Dez consumos de 0,1 contra uma reserva de 1 deixavam 1,38e-16 reservado
+ * no material e a reserva ATIVA com 1,1e-16 de saldo: lixo que segura disponivel e mantem uma
+ * reserva zumbi. Usa DOIS placeholders com o mesmo valor (a conta aparece duas vezes).
+ */
+const RESERVADA_MENOS_SQL = `CASE WHEN COALESCE(quantidade_reservada,0) - ? <= ${EPS} THEN 0
+  ELSE COALESCE(quantidade_reservada,0) - ? END`;
+
 async function claimSaldoDoLote(db, materialId, loteId, locPreferida, quantidade) {
   const linhas = await dbAll(db, `
     SELECT id, quantidade FROM estoque_saldo_almoxarifado
@@ -302,6 +327,96 @@ async function claimSaldoDoLote(db, materialId, loteId, locPreferida, quantidade
 }
 
 /**
+ * Etapa 51 (RN-01/02) — a saída SEM LOTE baixa os endereços que têm saldo.
+ *
+ * Antes, a saída sem lote debitava UMA linha — a da origem declarada, a da localização padrão ou a
+ * `NULL` — sem guarda. A entrega de requisição (o fluxo principal) não manda origem: entrada de 100
+ * em A e entrega de 100 deixavam **A:100 e NULL:−100** com o físico em 0. O endereço vazio aparecia
+ * OCUPADO no mapa, e uma tela de "localizações vazias" o esconderia (sonda da Fase 0).
+ *
+ * Mesma regra que o motor já usa para lote (`claimSaldoDoLote`, "área física não é filial"): drena
+ * as linhas SEM LOTE com saldo, a localização resolvida primeiro (a origem declarada ou a padrão),
+ * depois as maiores. Só o que SOBRAR vai para a linha da localização resolvida (ou `NULL`), que
+ * pode ficar negativa — é o "sem localização atribuída", no molde do "sem lote atribuído" das
+ * Etapas 49/50. Linha de LOTE nunca é tocada aqui (B204: a entrega não escolhe lote).
+ *
+ * **Diferença deliberada do claim de lote — relê em vez de pular** (Fase 2 da etapa, sonda de
+ * concorrência): no lote, um débito condicional que não casa vira RECUSA; aqui o resto seria
+ * negativado em silêncio. Duas saídas simultâneas de 60 com A:100 davam A:40 e NULL:−60 — o
+ * perdedor leu 100, falhou o débito e pulou a linha que ainda tinha 40. Agora, se o débito não
+ * casar, relê a linha e tira o que houver nela.
+ *
+ * Devolve TODAS as linhas debitadas (inclusive a do resto), para as compensações da saída
+ * (série recusada, INSERT do ledger falhando) devolverem exatamente o que foi tirado.
+ */
+async function claimSaldoSemLote(db, materialId, locPreferida, quantidade) {
+  const linhas = await dbAll(db, `
+    SELECT id FROM estoque_saldo_almoxarifado
+    WHERE material_id = ? AND lote_id IS NULL AND quantidade > 0
+    ORDER BY (localizacao_id IS ?) DESC, quantidade DESC, id`,
+  [materialId, locPreferida || null]);
+
+  const aplicados = [];
+  let restante = quantidade;
+  for (const linha of linhas) {
+    if (restante <= EPS) break;
+    for (let tentativa = 0; tentativa < 3; tentativa++) {
+      const atual = await dbGet(db, 'SELECT quantidade FROM estoque_saldo_almoxarifado WHERE id = ?', [linha.id]);
+      const disponivel = Number(atual?.quantidade) || 0;
+      if (disponivel <= EPS) break;
+      const take = Math.min(restante, disponivel);
+      const claim = await dbGet(db, `UPDATE estoque_saldo_almoxarifado
+        SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND quantidade >= ?
+        RETURNING id`, [take, linha.id, take]);
+      if (claim) {
+        aplicados.push({ id: linha.id, quantidade: take });
+        restante -= take;
+        break;
+      }
+    }
+  }
+
+  if (restante > EPS) {
+    const saldo = await getOrCreateSaldo(db, materialId, locPreferida, null);
+    await dbRun(db, `UPDATE estoque_saldo_almoxarifado
+      SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [restante, saldo.id]);
+    aplicados.push({ id: saldo.id, quantidade: restante });
+  }
+  return aplicados;
+}
+
+/**
+ * Etapa 51 (RN-04) — nenhum AJUSTE com localização deixa o físico negativo em material que não o
+ * permite. O AJUSTE com localização grava o valor absoluto na linha e recalcula `quantidade_atual`
+ * pela SOMA das linhas — e uma linha negativa "sem localização atribuída" (herança da saída antiga)
+ * entrava nessa soma: A:0, B:20, NULL:−45 dava físico −25 num material sem negativo.
+ *
+ * **Absorve em vez de recusar** (Fase 2, CRITICAL): recusar travaria para sempre o material com
+ * lote — entrada de 100 no lote L2 em A e entrega sem lote deixam A/L2:100 e NULL:−100, e a contagem
+ * verdadeira "L2 em A = 0" seria barrada, sem outro caminho para zerar linha de lote. Então as
+ * linhas SEM LOTE NEGATIVAS (a `NULL/NULL` primeiro, depois as mais negativas) sobem até o total dar
+ * 0. Devolve o déficit que sobrar (> 0 = nem absorvendo tudo o total chega a 0 → o chamador recusa).
+ */
+async function absorverNegativosSemLote(db, materialId, { excluirId = null } = {}) {
+  const tot = await dbGet(db, 'SELECT COALESCE(SUM(quantidade),0) as total FROM estoque_saldo_almoxarifado WHERE material_id = ?',
+    [materialId]);
+  let deficit = -(Number(tot.total) || 0);
+  if (deficit <= EPS) return 0;
+  const negativas = await dbAll(db, `SELECT id, quantidade FROM estoque_saldo_almoxarifado
+    WHERE material_id = ? AND lote_id IS NULL AND quantidade < 0 AND id IS NOT ?
+    ORDER BY (localizacao_id IS NULL) DESC, quantidade ASC, id`, [materialId, excluirId]);
+  for (const n of negativas) {
+    if (deficit <= EPS) break;
+    const sobe = Math.min(deficit, -Number(n.quantidade));
+    await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [sobe, n.id]);
+    deficit -= sobe;
+  }
+  return deficit > EPS ? deficit : 0;
+}
+
+/**
  * Mantém a linha de saldo "sem localização explícita" (ou a da localização padrão do material,
  * se houver) coerente com `quantidade_atual` depois de um AJUSTE sem localização — que define o
  * total do material por um valor absoluto, sem dizer onde ele está.
@@ -319,7 +434,7 @@ async function claimSaldoDoLote(db, materialId, loteId, locPreferida, quantidade
  * outras linhas conhecidas. Isso preserva quantidade já distribuída em localizações/lotes reais,
  * em vez de sobrescrever cegamente com o total inteiro.
  */
-async function syncSaldoLocalizacaoPadrao(db, materialId, loteId = null) {
+async function syncSaldoLocalizacaoPadrao(db, materialId, loteId = null, { drenar = false } = {}) {
   const material = await getMaterial(db, materialId);
   const locKey = material.localizacao_padrao_id || null;
   const materialQty = material.quantidade_atual || 0;
@@ -328,7 +443,24 @@ async function syncSaldoLocalizacaoPadrao(db, materialId, loteId = null) {
   const outras = await dbGet(db,
     'SELECT COALESCE(SUM(quantidade),0) as total FROM estoque_saldo_almoxarifado WHERE material_id = ? AND id != ?',
     [materialId, saldo.id]);
-  const novaLinha = materialQty - (outras.total || 0);
+  let novaLinha = materialQty - (outras.total || 0);
+  // Etapa 51 (RN-03): AJUSTE absoluto sem localização PARA BAIXO drena os endereços sem lote com
+  // saldo antes de negativar a linha padrão/NULL — senão A30 e B20 ajustados para 5 davam A:30,
+  // B:20, NULL:−45, e os dois endereços pareciam ocupados com o material quase zerado.
+  // `drenar` só vem ligado do AJUSTE de ida: esta função também serve à reconciliação de estorno e
+  // às compensações, e drenar ali mudaria caminhos que ninguém pediu (Fase 2, MINOR 5).
+  if (drenar && !loteId && novaLinha < -EPS) {
+    const positivas = await dbAll(db, `SELECT id, quantidade FROM estoque_saldo_almoxarifado
+      WHERE material_id = ? AND lote_id IS NULL AND quantidade > 0 AND id != ?
+      ORDER BY quantidade DESC, id`, [materialId, saldo.id]);
+    for (const p of positivas) {
+      if (novaLinha >= -EPS) break;
+      const tira = Math.min(-novaLinha, Number(p.quantidade));
+      await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [tira, p.id]);
+      novaLinha += tira;
+    }
+  }
   await dbRun(db,
     'UPDATE estoque_saldo_almoxarifado SET quantidade = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
     [novaLinha, saldo.id]);
@@ -400,15 +532,16 @@ function resolveLocalizacaoSaida(material, origemId) {
  * NÃO é chamado por cancelarMovimentacao (estorno): reverter precisa sempre ser possível, mesmo
  * numa localização bloqueada depois do movimento original — ver comentário em cancelarMovimentacao.
  */
-async function validarLocalizacaoParaMovimento(db, localizacaoId, material, papel) {
-  if (!localizacaoId) return;
-  const loc = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [localizacaoId]);
-  if (!loc) return; // localização inexistente: não é responsabilidade deste helper (FK/lookup trata em outro lugar)
-
-  if (loc.bloqueada) {
-    throw Object.assign(new Error(`Localização ${loc.codigo} está bloqueada`), { status: 400 });
-  }
-
+/**
+ * Etapa 53 (RN-01) — a regra de "este endereço aceita este material neste papel", PURA e ÚNICA.
+ * Devolve a mensagem de recusa (a MESMA literal que o motor sempre lançou) ou `null`. O motor
+ * (`validarLocalizacaoParaMovimento`) e a sugestão de localização usam esta função, e por isso a
+ * sugestão nunca propõe um endereço que o motor recusaria. Vale para os DOIS papéis: o bloqueio
+ * recusa na origem também (Fase 2 da etapa — um predicado só de destino deixaria uma 2ª cópia).
+ */
+function motivoRecusaEndereco(loc, material, papel) {
+  if (!loc) return null;
+  if (loc.bloqueada) return `Localização ${loc.codigo} está bloqueada`;
   if (papel === 'destino' && loc.tipos_material_permitidos) {
     let permitidos;
     try {
@@ -420,10 +553,261 @@ async function validarLocalizacaoParaMovimento(db, localizacaoId, material, pape
     // permitido". A rota já normaliza [] para NULL na gravação, mas o helper trata o caso aqui
     // também (defesa em profundidade: dado escrito por outro caminho, ex. SQL direto/migração).
     if (Array.isArray(permitidos) && permitidos.length > 0 && !permitidos.includes(material.tipo_material)) {
-      throw Object.assign(new Error(
-        `Localização ${loc.codigo} não aceita o tipo de material '${material.tipo_material || ''}'`), { status: 400 });
+      return `Localização ${loc.codigo} não aceita o tipo de material '${material.tipo_material || ''}'`;
     }
   }
+  return null;
+}
+
+/**
+ * Etapa 68 (D2) — a chave da area especial de um ROTULO de tipo (`AREAS_ESPECIAIS`), ou null.
+ */
+function areaEspecialDe(tipo) {
+  const a = tipo ? AREAS_ESPECIAIS[tipo] : null;
+  return a ? a.chave : null;
+}
+
+/**
+ * Etapa 68 (Fase 2) — a area EFETIVA de uma localizacao: o tipo proprio se for area, senao o do
+ * ancestral MAIS PROXIMO que for area (o assistente grava 'Prateleira' nas posicoes de dentro da
+ * area). `porId` e um Map id -> { id, parent_id, tipo }. Guarda de ciclo: parent_id e editavel por
+ * SQL e um ciclo travaria a subida. Devolve { chave, localizacao_id } (a linha que da a area) ou null.
+ *
+ * Fase 5: ANCESTRAL INATIVO encerra a subida — uma area desativada nao da semantica a ninguem. Antes
+ * o servidor subia para o pai inativo (o filho seguia "sucata" no aviso, na sugestao e na origem do
+ * sucateamento) enquanto o Mapa, que so lista ativas, parava nele. A PROPRIA localizacao vale pelo
+ * tipo mesmo inativa (o aviso-area de uma inativa responde normal — Etapa 54). `ativo` ausente no
+ * Map (chamador antigo) conta como ativo.
+ */
+function resolverAreaEfetiva(porId, localizacaoId) {
+  const vistos = new Set();
+  let atual = porId.get(Number(localizacaoId));
+  while (atual && !vistos.has(atual.id)) {
+    vistos.add(atual.id);
+    const chave = areaEspecialDe(atual.tipo);
+    if (chave) return { chave, localizacao_id: atual.id };
+    atual = atual.parent_id ? porId.get(Number(atual.parent_id)) : null;
+    if (atual && atual.ativo !== undefined && Number(atual.ativo) !== 1) return null;
+  }
+  return null;
+}
+
+async function carregarArvoreLocalizacoes(db) {
+  const linhas = await dbAll(db, 'SELECT id, parent_id, tipo, ativo FROM localizacoes_almoxarifado');
+  return new Map(linhas.map((l) => [Number(l.id), l]));
+}
+
+/** Etapa 68: a chave da area efetiva de UMA localizacao (null se nao esta em area). */
+async function areaEfetivaDaLocalizacao(db, localizacaoId) {
+  const r = resolverAreaEfetiva(await carregarArvoreLocalizacoes(db), localizacaoId);
+  return r ? r.chave : null;
+}
+
+/**
+ * Etapa 68 (RN-04, D1) — a frase de AVISO de guardar `material` em `loc`, ou null. PURA, ao lado de
+ * `motivoRecusaEndereco` e no mesmo formato, mas NUNCA vira recusa (licao B217: a entrada sem destino
+ * cai na padrao). Apertar depois e trocar o aviso por `throw` aqui. `loc.area_especial` (chave da
+ * area EFETIVA, ja resolvida pela arvore) vale sobre o tipo da propria linha; sem ele, usa o tipo.
+ * MATERIAIS_CLIENTE so avisa material PROPRIO (sem material, nao da para saber o dono → null).
+ */
+function avisoAreaEspecial(loc, material) {
+  if (!loc) return null;
+  const chave = loc.area_especial !== undefined ? loc.area_especial : areaEspecialDe(loc.tipo);
+  const c = loc.codigo;
+  switch (chave) {
+    case 'QUARENTENA':
+      return `Localização ${c} é área de quarentena/inspeção, mas guardar aqui não retém o material — ele continua disponível. Para reter, use Inspeções ou o bloqueio.`;
+    case 'EXPEDICAO':
+      // Fase 2: sem "não daqui" — o "Sai de" da entrega pode ser a propria area.
+      return `Localização ${c} é área de expedição, mas a requisição não usa este endereço — a entrega baixa da origem separada.`;
+    case 'SUCATA':
+      return `Localização ${c} é área de sucata, mas guardar aqui não sucateia — o material continua no estoque disponível até o sucateamento aprovado.`;
+    case 'DEVOLUCOES':
+      return `Localização ${c} é área de devoluções, mas guardar aqui não muda o estado do material — ele continua disponível.`;
+    case 'MATERIAIS_CLIENTE':
+      if (!material || material.proprietario_cliente_id) return null;
+      return `Localização ${c} é área de materiais do cliente, e ${material.codigo} é material próprio.`;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Etapa 54 (RN-01/RN-02) — o endereço INFORMADO no movimento tem de existir e, como destino, estar
+ * ativo. Só o id EXPLÍCITO: a entrada sem destino que cai na padrão NÃO passa por aqui (Fase 2 —
+ * recusar a padrão inativa travava recebimento, exclusão de requisição e retorno de terceiros, que
+ * não têm campo de destino). A padrão inativa é impedida na origem: não se desativa localização que
+ * é padrão de material ativo, e o cadastro não aceita padrão inativa (RN-04/RN-05).
+ * `aceitaInativa`: o AJUSTE precisa conseguir zerar um endereço desativado (RN-03, checado no ramo).
+ */
+async function validarEnderecoExplicito(db, localizacaoId, papel, { aceitaInativa = false } = {}) {
+  // Fase 5: 0 tambem e "nao informado" — o resto do motor (e o retalho, `localizacaoId || undefined`)
+  // ja tratava 0 como ausente; so aqui ele virava "nao encontrada".
+  if (localizacaoId === undefined || localizacaoId === null || localizacaoId === '' || Number(localizacaoId) === 0) return null;
+  const loc = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [localizacaoId]);
+  if (!loc) throw Object.assign(new Error(`Localização de ${papel} não encontrada`), { status: 400 });
+  if (papel === 'destino' && !aceitaInativa && Number(loc.ativo) !== 1) {
+    throw Object.assign(new Error(`Localização ${loc.codigo} está inativa`), { status: 400 });
+  }
+  return loc;
+}
+
+/**
+ * Etapa 54 (RN-04): materiais ATIVOS que têm esta localização como padrão. Desativar uma delas
+ * armaria a armadilha: a próxima entrada sem destino (recebimento, requisição excluída) cairia num
+ * endereço que o mapa não mostra.
+ */
+async function materiaisComPadrao(db, localizacaoId) {
+  return dbAll(db, `SELECT codigo FROM materiais_almoxarifado WHERE ativo = 1 AND localizacao_padrao_id = ?
+    ORDER BY codigo`, [localizacaoId]);
+}
+
+/**
+ * Etapa 56 (RN-02) — confirmação do endereço por leitura da etiqueta. Opcional: ausente, nada muda.
+ * O texto lido é validado AQUI (e não só no Zod) porque `/transferencias` repassa o body cru.
+ */
+function normalizarCodigoLido(valor) {
+  if (valor === undefined || valor === null) return null;
+  if (typeof valor !== 'string') throw Object.assign(new Error('Endereço lido inválido'), { status: 400 });
+  const s = valor.trim();
+  if (!s) return null;
+  if (s.length > 100) throw Object.assign(new Error('Endereço lido inválido'), { status: 400 });
+  return s;
+}
+
+/** Compara o lido com o código da localização efetiva do papel; devolve o código DA LOCALIZAÇÃO. */
+async function conferirLeitura(db, lido, localizacaoId, papel) {
+  const loc = localizacaoId
+    ? await dbGet(db, 'SELECT codigo FROM localizacoes_almoxarifado WHERE id = ?', [localizacaoId])
+    : null;
+  if (!loc) {
+    throw Object.assign(new Error(`Endereço lido (${lido}), mas o movimento não tem localização de ${papel}`), { status: 400 });
+  }
+  if (String(loc.codigo).toLowerCase() !== lido.toLowerCase()) {
+    throw Object.assign(new Error(
+      `Endereço lido (${lido}) não confere com a localização de ${papel} (${loc.codigo}) — se a etiqueta é antiga, reimprima`,
+    ), { status: 400 });
+  }
+  return loc.codigo;
+}
+
+async function validarLocalizacaoParaMovimento(db, localizacaoId, material, papel) {
+  if (!localizacaoId) return;
+  const loc = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [localizacaoId]);
+  if (!loc) return; // localização inexistente: não é responsabilidade deste helper (FK/lookup trata em outro lugar)
+  const recusa = motivoRecusaEndereco(loc, material, papel);
+  if (recusa) throw Object.assign(new Error(recusa), { status: 400 });
+}
+
+/**
+ * Etapa 53 (RN-02) — sugestão de localização para uma ENTRADA. Só oferece: quem decide é o motor.
+ * `padrao` diz se a localização padrão recebe o material — se não recebe, a entrada SEM destino é
+ * recusada pelo motor, e a tela precisa avisar (Fase 2: a RN-04 do desenho dizia o contrário).
+ * `sugestoes`, sem repetição e só endereços ATIVOS, de almoxarifado ativo, que a regra aceita:
+ *   1. PADRAO — a padrão;
+ *   2. JA_TEM_O_MATERIAL — onde o material já tem saldo, maiores primeiro (consolidar);
+ *   3. VAZIA_COMPATIVEL — vazias pela régua da Etapa 52, SEM filho ativo (contêiner não é vaga),
+ *      no máximo 5, as do almoxarifado da padrão primeiro.
+ */
+async function sugerirLocalizacaoEntrada(db, materialId) {
+  const material = await getMaterial(db, materialId);
+  if (!material) throw Object.assign(new Error('Material não encontrado'), { status: 404 });
+  if (!material.ativo) throw Object.assign(new Error('Material inativo não pode ser movimentado'), { status: 400 });
+
+  const LOC_SQL = `SELECT l.*, a.ativo as almoxarifado_ativo, a.codigo as almoxarifado_codigo, p.codigo as parent_codigo,
+      COALESCE(a.codigo || ' / ', '') || COALESCE(NULLIF(l.setor, '') || ' / ', '')
+        || COALESCE(p.codigo || ' / ', '') || l.codigo as endereco_completo,
+      EXISTS (SELECT 1 FROM localizacoes_almoxarifado f WHERE f.parent_id = l.id AND f.ativo = 1) as tem_filho_ativo
+    FROM localizacoes_almoxarifado l
+    LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
+    LEFT JOIN localizacoes_almoxarifado p ON l.parent_id = p.id`;
+  // Um endereço é SUGERÍVEL quando está ativo, num almoxarifado ativo, não é contêiner (pai com filho
+  // ativo) e a regra do motor o aceita. Fase 5: o filtro de "pai" só valia para as vazias — um pai
+  // com saldo, ou uma padrão que é pai, eram sugeridos. Agora vale para os três caminhos.
+  const sugerivel = (loc) => loc && Number(loc.ativo) === 1 && loc.almoxarifado_ativo !== 0
+    && !Number(loc.tem_filho_ativo) && !motivoRecusaEndereco(loc, material, 'destino');
+  // Etapa 68 (D5, RN-06/RN-07): "ja tem" e "vazia" nao propoem AREA ESPECIAL (efetiva, pela arvore)
+  // como vaga comum — uma compra ia para a quarentena vazia. Excecao: area de materiais do cliente
+  // para material DE CLIENTE. A PADRAO nao passa por aqui (cadastro explicito, continua sugerida):
+  // `sugerivel` fica separado por caminho (Fase 2). Muda o CONJUNTO, nao o formato da Etapa 53.
+  const arvore = await carregarArvoreLocalizacoes(db);
+  const ehDeCliente = !!material.proprietario_cliente_id;
+  const areaDe = (loc) => { const a = resolverAreaEfetiva(arvore, loc.id); return a ? a.chave : null; };
+  const vagaComum = (loc) => {
+    const area = areaDe(loc);
+    return !area || (area === 'MATERIAIS_CLIENTE' && ehDeCliente);
+  };
+  const sugerivelComoVaga = (loc) => sugerivel(loc) && vagaComum(loc);
+
+  let padrao = null;
+  const sugestoes = [];
+  const vistos = new Set();
+  const incluir = (loc, motivo, quantidade = 0) => {
+    if (vistos.has(loc.id)) return;
+    vistos.add(loc.id);
+    sugestoes.push({
+      localizacao_id: loc.id, codigo: loc.codigo, endereco_completo: loc.endereco_completo,
+      motivo, quantidade_no_endereco: quantidade,
+    });
+  };
+
+  if (material.localizacao_padrao_id) {
+    const loc = await dbGet(db, `${LOC_SQL} WHERE l.id = ?`, [material.localizacao_padrao_id]);
+    if (loc) {
+      const recusa = motivoRecusaEndereco(loc, material, 'destino');
+      // Fase 5 (I-2): a padrão INATIVA (ou de almoxarifado inativo) não é recusada pelo motor — a
+      // entrada sem destino cai nela sem aviso (defeito do motor, letra C). A tela avisa por `inativa`.
+      const inativa = Number(loc.ativo) !== 1 || loc.almoxarifado_ativo === 0;
+      padrao = { localizacao_id: loc.id, codigo: loc.codigo, recusa, inativa };
+      if (sugerivel(loc)) {
+        const q = await dbGet(db, `SELECT COALESCE(SUM(quantidade),0) q FROM estoque_saldo_almoxarifado
+          WHERE material_id = ? AND localizacao_id = ?`, [materialId, loc.id]);
+        incluir(loc, 'PADRAO', Number(q.q) || 0);
+      }
+    }
+  }
+
+  // A quantidade vem do próprio JOIN (sem N+1), e no máximo 10 posições (Fase 5, M-4).
+  const comSaldo = await dbAll(db, `${LOC_SQL.replace('FROM localizacoes_almoxarifado l', ', sd.q as q_material FROM localizacoes_almoxarifado l')}
+    JOIN (SELECT localizacao_id, SUM(quantidade) q FROM estoque_saldo_almoxarifado
+          WHERE material_id = ? AND localizacao_id IS NOT NULL GROUP BY localizacao_id HAVING SUM(quantidade) > 0) sd
+      ON sd.localizacao_id = l.id
+    ORDER BY sd.q DESC, l.id`, [materialId]);
+  let jaTem = 0;
+  for (const loc of comSaldo) {
+    if (jaTem >= 10) break;
+    if (sugerivelComoVaga(loc) && !vistos.has(loc.id)) { incluir(loc, 'JA_TEM_O_MATERIAL', Number(loc.q_material) || 0); jaTem += 1; }
+  }
+
+  const almoxPadrao = padrao
+    ? (await dbGet(db, 'SELECT almoxarifado_id FROM localizacoes_almoxarifado WHERE id = ?', [padrao.localizacao_id]))?.almoxarifado_id
+    : null;
+  // Fase 5 (M-2): endereço com saldo NEGATIVO deste material não é "vazio" — o rótulo enganaria.
+  const negativos = new Set((await dbAll(db, `SELECT localizacao_id FROM estoque_saldo_almoxarifado
+    WHERE material_id = ? AND localizacao_id IS NOT NULL GROUP BY localizacao_id HAVING SUM(quantidade) < 0`,
+  [materialId])).map((r) => r.localizacao_id));
+  const idsVazias = (await listarLocalizacoesVazias(db)).map((l) => l.id)
+    .filter((id) => !vistos.has(id) && !negativos.has(id));
+  const candidatas = [];
+  for (const id of idsVazias) {
+    const loc = await dbGet(db, `${LOC_SQL} WHERE l.id = ?`, [id]);
+    if (sugerivelComoVaga(loc)) candidatas.push(loc);
+  }
+  // Fase 5 (M-3): só ordena pelo almoxarifado da padrão quando HÁ padrão — sem ela, `null === null`
+  // jogava para o topo as vazias sem almoxarifado.
+  // Etapa 68 (RN-07): UMA ordenação por chave composta — área de cliente primeiro (só chega aqui para
+  // material de cliente), depois o almoxarifado da padrão. Dois `sort` em cadeia desfariam um ao outro.
+  const peso = (loc) => [
+    areaDe(loc) === 'MATERIAIS_CLIENTE' ? 1 : 0,
+    almoxPadrao != null && loc.almoxarifado_id === almoxPadrao ? 1 : 0,
+  ];
+  candidatas.sort((a, b) => {
+    const pa = peso(a); const pb = peso(b);
+    return (pb[0] - pa[0]) || (pb[1] - pa[1]);
+  });
+  for (const loc of candidatas.slice(0, 5)) incluir(loc, 'VAZIA_COMPATIVEL', 0);
+
+  return { padrao, sugestoes };
 }
 
 // `quantidade_reservada` SAIU deste mapa no review final da Etapa 6. A Task 2 removeu a coluna de
@@ -433,18 +817,15 @@ async function validarLocalizacaoParaMovimento(db, localizacaoId, material, pape
 // localizacao: mora em `materiais_almoxarifado` (por material) ou no lote inteiro (por status).
 // Devolver o campo zerado era pior do que nao devolver — sugeria uma dimensao que o sistema nao
 // modela. Este mapa e so por localizacao fisica.
-const MAPA_LOCALIZACOES_SQL = `
-  SELECT l.*,
-    COALESCE(s.qtd_itens, 0) as qtd_itens,
-    COALESCE(s.quantidade_total, 0) as quantidade_total,
-    COALESCE(m.itens_baixo_minimo, 0) as itens_baixo_minimo,
-    COALESCE(m.itens_criticos, 0) as itens_criticos
-  FROM localizacoes_almoxarifado l
-  LEFT JOIN (
-    SELECT loc_id,
-      COUNT(DISTINCT material_id) as qtd_itens,
-      SUM(qty) as quantidade_total
-    FROM (
+/**
+ * Etapa 52 (RN-01): a REGRA UNICA de ocupacao de localizacao - uma linha (loc_id, material_id, qty)
+ * por material que ocupa um endereco: as linhas de saldo COM endereco e quantidade > 0, mais o
+ * FALLBACK do legado (material ativo com padrao e fisico > 0 e nenhuma linha enderecada positiva
+ * ocupa a padrao). Usada pelo mapa, pela lista de localizacoes vazias e pela guarda de apagar/
+ * desativar localizacao - antes eram tres reguas, e a lista dava como vazia o que o mapa mostrava
+ * com 40 (S8 da Fase 0 da Etapa 51), e o DELETE apagava localizacao ocupada so pelo legado.
+ */
+const OCUPACAO_SQL = `
       SELECT localizacao_id as loc_id, material_id, quantidade as qty
       FROM estoque_saldo_almoxarifado
       WHERE localizacao_id IS NOT NULL AND quantidade > 0
@@ -469,6 +850,21 @@ const MAPA_LOCALIZACOES_SQL = `
           SELECT 1 FROM estoque_saldo_almoxarifado s
           WHERE s.material_id = m.id AND s.localizacao_id IS NOT NULL AND s.quantidade > 0
         )
+`;
+
+const MAPA_LOCALIZACOES_SQL = `
+  SELECT l.*,
+    COALESCE(s.qtd_itens, 0) as qtd_itens,
+    COALESCE(s.quantidade_total, 0) as quantidade_total,
+    COALESCE(m.itens_baixo_minimo, 0) as itens_baixo_minimo,
+    COALESCE(m.itens_criticos, 0) as itens_criticos
+  FROM localizacoes_almoxarifado l
+  LEFT JOIN (
+    SELECT loc_id,
+      COUNT(DISTINCT material_id) as qtd_itens,
+      SUM(qty) as quantidade_total
+    FROM (
+      ${OCUPACAO_SQL}
     ) combined
     GROUP BY loc_id
   ) s ON s.loc_id = l.id
@@ -507,6 +903,41 @@ async function consultarMapaLocalizacoes(db) {
 }
 
 /**
+ * Etapa 52 (RN-01/03): localizações ATIVAS vazias pela mesma régua do mapa (`OCUPACAO_SQL`) —
+ * nenhuma localização pode estar ocupada no mapa e vazia aqui, nem o contrário.
+ * O endereço é montado no SELECT (a varredura do registro de relatórios confere as colunas contra o
+ * SQL real): almoxarifado / setor / pai / código, pulando as partes vazias, como a rota montava em JS.
+ * `sub_ocupadas` conta os FILHOS ativos ocupados: o pai sem saldo direto aparece (o invariante com o
+ * mapa exige), e a coluna diz que ele é um contêiner.
+ */
+async function listarLocalizacoesVazias(db) {
+  return dbAll(db, `
+    SELECT l.*, a.codigo as almoxarifado_codigo, p.codigo as parent_codigo,
+      COALESCE(a.codigo || ' / ', '') || COALESCE(NULLIF(l.setor, '') || ' / ', '')
+        || COALESCE(p.codigo || ' / ', '') || l.codigo as endereco_completo,
+      (SELECT COUNT(*) FROM localizacoes_almoxarifado f
+        WHERE f.parent_id = l.id AND f.ativo = 1
+          AND EXISTS (SELECT 1 FROM (${OCUPACAO_SQL}) oc WHERE oc.loc_id = f.id)) as sub_ocupadas
+    FROM localizacoes_almoxarifado l
+    LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
+    LEFT JOIN localizacoes_almoxarifado p ON l.parent_id = p.id
+    WHERE l.ativo = 1
+      AND NOT EXISTS (SELECT 1 FROM (${OCUPACAO_SQL}) oc WHERE oc.loc_id = l.id)
+    ORDER BY l.setor, l.parent_id, l.subgrupo, l.codigo`);
+}
+
+/**
+ * Etapa 52 (RN-04): quantos materiais ocupam a localização, pela régua única. O DELETE e o PUT que
+ * desativa localização usam isto — antes o DELETE olhava só `quantidade != 0` e apagava
+ * localização ocupada só pelo legado (40 unidades ficavam invisíveis em todas as telas).
+ */
+async function contarOcupacaoLocalizacao(db, localizacaoId) {
+  const r = await dbGet(db, `SELECT COUNT(DISTINCT material_id) as n FROM (${OCUPACAO_SQL}) oc WHERE oc.loc_id = ?`,
+    [localizacaoId]);
+  return Number(r?.n) || 0;
+}
+
+/**
  * `opcoes` é o 4º argumento de propósito, e NÃO vem do body — mesma razão documentada em
  * `criarReserva`: as rotas de movimentação repassam `req.body` inteiro como `params`
  * (`routes/almoxarifado/extended.js`, `POST /movimentacoes/v2`), então qualquer chave lida de
@@ -518,8 +949,14 @@ async function consultarMapaLocalizacoes(db) {
  *    declarada pelo chamador e não deduzida pelo motor.
  */
 async function registrarMovimentacao(db, user, params, opcoes = {}) {
+  // Etapa 66 (RN-05/RN-06): o motivo do CADASTRO (`motivo_id`) e resolvido AQUI, antes da
+  // desestruturacao — ele reescreve `motivo` e `justificativa`, que a regra "exige justificativa",
+  // o livro, a auditoria e a fila leem abaixo. Recusa (formato, "os dois", inexistente, inativo,
+  // nao serve ao tipo) sai antes de tocar em estoque. Tipo invalido passa intocado e e recusado
+  // logo abaixo com a mensagem de hoje. Ver services/almoxarifado/motivoMovimentacao.js.
+  params = await motivoMovimentacao.resolverMotivoDoCadastro(db, params);
   const {
-    material_id, tipo, quantidade, motivo, referencia, observacoes,
+    material_id, tipo, quantidade, motivo, motivo_id, referencia, observacoes,
     localizacao_origem_id, localizacao_destino_id, lote, lote_id, projeto_id, os_id, cliente_id,
     documento_vinculado, justificativa, reserva_id, recebimento_id, requisicao_id, centro_custo_id,
     emergencial, custo_unitario: custoInformado, quantidade_reprovada,
@@ -587,6 +1024,28 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   // entao a guarda do disponivel nao pode barra-la; a validacao real acontece contra a propria
   // coluna de retencao, atomicamente, no claim mais abaixo.
   const baixandoTerceiro = ['PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'].includes(tipo);
+
+  // Etapa 45 — MESMO papel de `baixandoTerceiro`, com a outra coluna de retencao. A quantidade que
+  // `DEVOLUCAO_FORNECEDOR` baixa esta em `quantidade_bloqueada` (a inspecao reprovou e reteve), e
+  // o disponivel a subtrai — sem esta flag, devolver material 100% bloqueado seria impossivel
+  // (disponivel = 0), e a guarda explicita de material bloqueado o recusaria de qualquer forma.
+  // A validacao real acontece contra a propria coluna, atomicamente, no claim mais abaixo.
+  //
+  // ⚠️ A flag desliga DUAS guardas, e por isso o tipo TEM de ser DEDICADO (`TIPOS_DEDICADOS`, em
+  // schema.js): sem aquilo, a rota generica `/movimentacoes/v2` aceitaria o tipo e qualquer um com
+  // o gate `movimentar` apagaria material bloqueado sem documento nenhum.
+  //
+  // Etapa 69 (D2/RN-01): a `SUCATA` do material REPROVADO tambem baixa do bloqueado — mas por OPCAO
+  // do chamador (`opcoes.doBloqueado`, 4o argumento, NUNCA do body), e nao por tipo novo: um
+  // `SUCATA_REPROVADO` sumiria do relatorio `sucata-financeiro` (que le `tipo = 'SUCATA'`). A
+  // `SUCATA` continua em TIPOS_DEDICADOS, entao a v2 segue recusando o tipo; e o unico chamador que
+  // liga a opcao e a segunda assinatura de um sucateamento LIGADO a NC de inspecao.
+  // Sem a opcao, `SUCATA` e exatamente a de antes (baixa do disponivel).
+  if (opcoes.doBloqueado && tipo !== 'SUCATA') {
+    throw Object.assign(new Error('doBloqueado só vale para SUCATA'), { status: 400 });
+  }
+  const baixandoBloqueado = tipo === 'DEVOLUCAO_FORNECEDOR'
+    || (tipo === 'SUCATA' && opcoes.doBloqueado === true);
 
   // ── Lote (Etapa 6) ──────────────────────────────────────────────────────────
   // Aceita `lote_id` (numero) ou `lote` (codigo). O ledger guarda os DOIS: `lote_id` para juntar
@@ -658,8 +1117,9 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   // Mesmo alcance e mesma decisao de desenho do exigeLote acima: exigeSerie so e
   // declarado pelo CHAMADOR, nunca deduzido pelo motor. A movimentacao manual (v1/v2) e o
   // recebimento (Task 6) declaram — os dois caminhos onde o operador tem como informar
-  // series na tela; entrega/exclusao de requisicao e devolucao/sucata de devolucao continuam
-  // isentas ate as telas deles terem campo de serie (pendencia declarada nas specs 04/12).
+  // series na tela. ~~entrega/exclusao de requisicao ... continuam isentas~~ — ESTAVA ERRADO desde
+  // a Etapa 61: a isencao da entrega era o defeito (o fisico baixava e a serie ficava EM_ESTOQUE).
+  // A entrega e a exclusao de requisicao declaram exigeSerie desde entao (requisitionService).
   const seriesEntrada = Array.isArray(params.series)
     ? params.series.map((s) => String(s).trim()).filter(Boolean) : [];
   const serieIdsSaida = Array.isArray(params.serie_ids)
@@ -675,6 +1135,51 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     if (informadas !== Number(quantidade)) {
       const e = new Error(`material com controle de serie: informe ${quantidade} serie(s) para ${quantidade} unidade(s) — recebidas ${informadas}`);
       e.status = 400; throw e;
+    }
+  }
+
+  // Etapa 62 (RN-01, fecha o C82): AJUSTE de valor absoluto de material com serie, quando o chamador
+  // declara exigeSerie (v1/v2). Sonda: AJUSTE para 5 com 3 series presentes deixava fisico 5 e
+  // presentes 3. As series que entram/saem sao `novo − presentes` (Fase 2: pela diferenca do fisico
+  // o legado fracionario ou divergente nunca fechava). Por ENDERECO nao: a linha, a absorcao dos
+  // negativos e o legado fazem o total do material mudar diferente da linha — recusado (letra B).
+  const serieAjuste = !!(opcoes.exigeSerie && material.controle_serie && tiposAjuste.includes(tipo));
+  let serieAjusteDelta = 0;
+  if (serieAjuste) {
+    if (localizacao_destino_id) {
+      throw Object.assign(new Error('material com controle de serie: ajuste por endereco nao e suportado — ajuste o total do material (sem endereco)'), { status: 400 });
+    }
+    const novo = parseFloat(quantidade);
+    // Fase 5: negativo tambem (antes respondia "informe N serie(s)" para um total -2).
+    if (!Number.isInteger(novo) || novo < 0) {
+      throw Object.assign(new Error('material com controle de serie exige quantidade inteira'), { status: 400 });
+    }
+    const presentesAjuste = await seriesService.contarPresentes(db, material_id);
+    serieAjusteDelta = novo - presentesAjuste;
+    // Fase 5: numero que ja esta presente e recusado AQUI, antes de qualquer efeito — senao a
+    // recusa vinha do entradaSeries, depois da auditoria do ajuste de material de cliente (orfa).
+    if (serieAjusteDelta > 0 && seriesEntrada.length) {
+      const jaPresentes = await dbAll(db, `SELECT numero FROM series_almoxarifado WHERE material_id = ?
+        AND status IN ('EM_ESTOQUE','BLOQUEADA') AND numero IN (${seriesEntrada.map(() => '?').join(',')})`,
+      [material_id, ...seriesEntrada]);
+      if (jaPresentes.length) {
+        throw Object.assign(new Error(`serie ${jaPresentes[0].numero} ja esta em estoque`), { status: 400 });
+      }
+    }
+    const abs = Math.abs(serieAjusteDelta);
+    if (serieAjusteDelta === 0) {
+      if (seriesEntrada.length || serieIdsSaida.length) {
+        throw Object.assign(new Error(`material com controle de serie: o ajuste nao muda as series (presentes ${presentesAjuste}) — nao informe series`), { status: 400 });
+      }
+    } else {
+      const certas = serieAjusteDelta > 0 ? seriesEntrada.length : serieIdsSaida.length;
+      const erradas = serieAjusteDelta > 0 ? serieIdsSaida.length : seriesEntrada.length;
+      if (certas !== abs || erradas) {
+        throw Object.assign(new Error(
+          `material com controle de serie: o ajuste ${serieAjusteDelta > 0 ? 'sobe' : 'baixa'} ${abs} serie(s) `
+          + `(fisico novo ${novo}, series presentes ${presentesAjuste}) — informe ${abs} serie(s) (recebidas ${certas + erradas})`,
+        ), { status: 400 });
+      }
     }
   }
 
@@ -703,15 +1208,93 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   // estoque_saldo_almoxarifado. Usa a MESMA resolução de localização (fallback para
   // localizacao_padrao_id) que será usada mais adiante para aplicar o efeito de saldo.
   if (tiposEntrada.includes(tipo)) {
+    await validarEnderecoExplicito(db, localizacao_destino_id, 'destino');
     await validarLocalizacaoParaMovimento(db, resolveLocalizacaoEntrada(material, localizacao_destino_id), material, 'destino');
   } else if (tiposSaida.includes(tipo)) {
+    await validarEnderecoExplicito(db, localizacao_origem_id, 'origem');
     await validarLocalizacaoParaMovimento(db, resolveLocalizacaoSaida(material, localizacao_origem_id), material, 'origem');
   } else if (tipo === 'TRANSFERENCIA') {
+    await validarEnderecoExplicito(db, localizacao_origem_id, 'origem');
+    await validarEnderecoExplicito(db, localizacao_destino_id, 'destino');
     await validarLocalizacaoParaMovimento(db, localizacao_origem_id, material, 'origem');
     await validarLocalizacaoParaMovimento(db, localizacao_destino_id, material, 'destino');
   } else if (tiposAjuste.includes(tipo) && localizacao_destino_id) {
+    await validarEnderecoExplicito(db, localizacao_destino_id, 'destino', { aceitaInativa: true });
     await validarLocalizacaoParaMovimento(db, localizacao_destino_id, material, 'destino');
   }
+
+  // Etapa 56 (RN-02): confirmação por leitura, DEPOIS das checagens de endereço (a inexistente
+  // mantém a própria mensagem) e antes de qualquer efeito — inclusive as UPDATEs da TRANSFERENCIA.
+  const lidoOrigem = normalizarCodigoLido(params.codigo_lido_origem);
+  const lidoDestino = normalizarCodigoLido(params.codigo_lido_destino);
+  let confirmadoOrigem = null;
+  let confirmadoDestino = null;
+  if (lidoDestino) {
+    // Entrada: a informada ou a padrão (tudo vai para UM endereço). Transferência e ajuste: só a
+    // informada — nenhum dos dois cai na padrão.
+    let locDestino = null;
+    if (tiposEntrada.includes(tipo)) locDestino = resolveLocalizacaoEntrada(material, localizacao_destino_id);
+    else if (tipo === 'TRANSFERENCIA' || tiposAjuste.includes(tipo)) locDestino = localizacao_destino_id || null;
+    confirmadoDestino = await conferirLeitura(db, lidoDestino, locDestino, 'destino');
+  }
+  if (lidoOrigem) {
+    if (!tiposSaida.includes(tipo) && tipo !== 'TRANSFERENCIA') await conferirLeitura(db, lidoOrigem, null, 'origem');
+    // Fase 2 (CRÍTICO): a saída DRENA vários endereços (claimSaldoSemLote/claimSaldoDoLote) — sem
+    // origem informada, ou sem saldo nela que cubra, "confirmar a origem" certificaria um endereço de
+    // onde o material não saiu (A:10, saída de 40 "confirmada" em A tirava 30 de B).
+    if (!localizacao_origem_id) {
+      throw Object.assign(new Error('Para confirmar a origem pela leitura, informe a localização de origem'), { status: 400 });
+    }
+    confirmadoOrigem = await conferirLeitura(db, lidoOrigem, localizacao_origem_id, 'origem');
+    const aqui = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
+      WHERE material_id = ? AND localizacao_id = ? AND lote_id IS ?`, [material_id, localizacao_origem_id, loteIdFinal || null]);
+    const saldoAqui = Number(aqui.q) || 0;
+    // A TRANSFERENCIA nao drena outros enderecos: a guarda dela ("Saldo insuficiente na localizacao
+    // de origem") ja diz a coisa certa — esta mensagem ali enganaria (Fase 5).
+    if (tipo !== 'TRANSFERENCIA' && saldoAqui + EPS < parseFloat(quantidade)) {
+      throw Object.assign(new Error(
+        `O saldo em ${confirmadoOrigem} (${Math.round(saldoAqui * 1e6) / 1e6}) não cobre a quantidade (${parseFloat(quantidade)}) — a saída tiraria de outros endereços`,
+      ), { status: 400 });
+    }
+  }
+
+  // Etapa 58: a entrega de requisição com origem informada é ESTRITA (opção do chamador, no 4º
+  // argumento — nunca no body): sem isto a saída só PREFERE a origem e drena os outros endereços,
+  // e o livro grava "saiu de A" para o que saiu de B (Fase 2, crítico 1). Mesma régua da origem
+  // confirmada por leitura: saldo nela cobre a quantidade, e a conferência pós-claim abaixo.
+  let codigoOrigemEstrita = null;
+  if (!confirmadoOrigem && opcoes.origemEstrita && localizacao_origem_id && tiposSaida.includes(tipo)) {
+    const lo = await dbGet(db, 'SELECT codigo FROM localizacoes_almoxarifado WHERE id = ?', [localizacao_origem_id]);
+    codigoOrigemEstrita = lo ? lo.codigo : String(localizacao_origem_id);
+    const aqui = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
+      WHERE material_id = ? AND localizacao_id = ? AND lote_id IS ?`, [material_id, localizacao_origem_id, loteIdFinal || null]);
+    const saldoAqui = Number(aqui.q) || 0;
+    if (saldoAqui + EPS < parseFloat(quantidade)) {
+      throw Object.assign(new Error(
+        `O saldo em ${codigoOrigemEstrita} (${Math.round(saldoAqui * 1e6) / 1e6}) não cobre a quantidade (${parseFloat(quantidade)}) — a saída tiraria de outros endereços`,
+      ), { status: 400 });
+    }
+  }
+
+  // ⚠️ O QUE ESTE MOVIMENTO APLICOU NAS COLUNAS DE RETENÇÃO, para o catch amplo poder reverter.
+  //
+  // Achado CRITICAL da revisão adversarial da Etapa 44, e ele é do MOTOR, não daquela etapa: os
+  // seis ramos de retenção abaixo (`BLOQUEIO`, `DESBLOQUEIO`, `QUARENTENA`, `LIBERACAO_INSPECAO`,
+  // `REPROVACAO_INSPECAO`, `DECISAO_INSPECAO`) escrevem em `quantidade_bloqueada` /
+  // `quantidade_em_inspecao` **antes do `try`** que começa mais abaixo — então qualquer falha
+  // posterior (o `INSERT` do ledger, a auditoria interna, um trigger, o disco) saía da função com
+  // o pool **já alterado e sem linha nenhuma no livro**. O catch compensava série, linha de saldo,
+  // crédito de entrada e físico de saída; a retenção era a única coisa aplicada aqui que ele não
+  // conhecia.
+  //
+  // Por que isso é grave e não teórico: quem chama confia no `throw` para concluir "nada
+  // aconteceu" e desfazer o próprio estado. Na Etapa 44 o efeito medido foi **liberação em
+  // dobro** — a NC voltava a ABERTA, era decidida de novo, e o pool caía duas vezes para uma
+  // única reprovação de 3 kg, com **uma** linha no livro.
+  //
+  // Guardamos o DELTA aplicado (com sinal), e não o valor anterior, porque o pool é agregado por
+  // material: restaurar o valor lido no topo apagaria o que outra operação fez no intervalo.
+  let retencaoAplicada = null;
 
   if (tiposEntrada.includes(tipo)) {
     saldoPosterior = saldoAnterior + parseFloat(quantidade);
@@ -740,7 +1323,13 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       // Etapa 8b: PERDA_TERCEIRO/CONSUMO_TERCEIRO tambem sao descarte — lote vencido perdido no
       // galvanizador tem de poder ser baixado, pelo mesmo motivo do resto da lista (senao o lote
       // fica PRESO: nao pode sair como consumo, e tambem nao pode ser encerrado).
-      const tiposDescarte = ['SUCATA', 'PERDA', 'AJUSTE_NEGATIVO', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'];
+      // Etapa 45: DEVOLUCAO_FORNECEDOR entra pelo MESMO motivo, e o caso e mais comum que os
+      // outros — lote vencido e uma das razoes tipicas de devolver ao fornecedor. Sem ele o lote
+      // ficaria PRESO: nao sai para consumo por estar vencido, e nao pode voltar para quem o
+      // entregou. ⚠️ A guarda de STATUS do lote continua valendo (ela roda antes desta): lote
+      // REPROVADO nao sai nem por aqui, e isso e deliberado — reabilitar o lote e outro gesto.
+      const tiposDescarte = ['SUCATA', 'PERDA', 'AJUSTE_NEGATIVO', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO',
+        'DEVOLUCAO_FORNECEDOR'];
       if (!tiposDescarte.includes(tipo) && lotService.isVencido(loteResolvido) && !lotService.vencimentoLiberado(loteResolvido)) {
         throw Object.assign(
           new Error(`Lote ${loteResolvido.codigo} vencido em ${loteResolvido.data_validade} nao pode sair para consumo. `
@@ -758,13 +1347,16 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // quantidade_em_terceiros, que o disponivel subtrai. Sem esta excecao, encerrar uma remessa
     // que levou TODO o saldo do material seria impossivel (disponivel = 0). A validacao real
     // acontece contra a propria coluna, atomicamente, no claim mais abaixo.
-    if (!consumindoReserva && !baixandoTerceiro) {
+    if (!consumindoReserva && !baixandoTerceiro && !baixandoBloqueado) {
       const disponivel = await getSaldoDisponivel(material);
       if (disponivel < quantidade && !permiteNegativo) {
         throw Object.assign(new Error(`Saldo insuficiente. Disponível: ${disponivel} ${material.unidade}`), { status: 400 });
       }
     }
-    if ((material.quantidade_bloqueada || 0) > 0 && tiposSaida.includes(tipo)) {
+    // Etapa 45: `baixandoBloqueado` sai daqui pela razao OPOSTA a de todos os outros tipos — ele
+    // existe para tirar do bloqueado, e esta guarda existe para impedir que o bloqueado seja usado.
+    // Aplicada a ele, ela proibiria exatamente a operacao que ele e.
+    if (!baixandoBloqueado && (material.quantidade_bloqueada || 0) > 0 && tiposSaida.includes(tipo)) {
       const dispSemBloqueio = material.quantidade_atual - (material.quantidade_bloqueada || 0);
       if (quantidade > dispSemBloqueio && !permiteNegativo) {
         throw Object.assign(new Error('Material bloqueado não pode ser utilizado'), { status: 400 });
@@ -812,6 +1404,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   } else if (tipo === 'BLOQUEIO') {
     await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [quantidade, material_id]);
+    retencaoAplicada = { bloqueada: quantidade, emInspecao: 0 };
     saldoPosterior = saldoAnterior;
   } else if (tipo === 'DESBLOQUEIO') {
     // Guarda no WHERE em vez de MAX(0,...): saturar em silencio devolve ao disponivel menos do
@@ -825,11 +1418,13 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         new Error(`Quantidade bloqueada insuficiente: ${material.quantidade_bloqueada || 0}`),
         { status: 400 });
     }
+    retencaoAplicada = { bloqueada: -quantidade, emInspecao: 0 };
     saldoPosterior = saldoAnterior;
   } else if (tipo === 'QUARENTENA') {
     await dbRun(db, `UPDATE materiais_almoxarifado
       SET quantidade_em_inspecao = COALESCE(quantidade_em_inspecao,0) + ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`, [quantidade, material_id]);
+    retencaoAplicada = { bloqueada: 0, emInspecao: quantidade };
     saldoPosterior = saldoAnterior;
   } else if (tipo === 'LIBERACAO_INSPECAO' || tipo === 'REPROVACAO_INSPECAO') {
     // Guarda no proprio WHERE, como o resto do motor: liberar/reprovar mais do que esta retido
@@ -848,6 +1443,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         new Error(`Quantidade em inspeção insuficiente: ${material.quantidade_em_inspecao || 0}`),
         { status: 400 });
     }
+    retencaoAplicada = { bloqueada: bloqueiaTambem, emInspecao: -quantidade };
     saldoPosterior = saldoAnterior;
   } else if (tipo === 'DECISAO_INSPECAO') {
     // Correcao de review (Etapa 5): uma decisao de inspecao pode aprovar parte e reprovar parte
@@ -875,6 +1471,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         new Error(`Quantidade em inspeção insuficiente: ${material.quantidade_em_inspecao || 0}`),
         { status: 400 });
     }
+    retencaoAplicada = { bloqueada: reprovadaQtd, emInspecao: -quantidade };
     saldoPosterior = saldoAnterior;
   } else if (tipo === 'REMESSA_TERCEIRO') {
     // Guarda no proprio WHERE, como o resto do motor: mandar para fora mais do que esta disponivel
@@ -915,6 +1512,9 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   // populada quando a saída reivindica série(s) especificas. Mesmo escopo aberto: usada depois do
   // INSERT do ledger para vincular `movimentacao_saida_id`, no mesmo padrão de `seriesAfetadas`.
   let seriesClaim = [];
+  // Etapa 62 (Fase 5): o fisico ANTERIOR de um AJUSTE com serie ja gravado — o catch amplo o restaura
+  // (antes o comentario prometia a compensacao e so as series voltavam).
+  let ajusteSerieFisicoAnterior = null;
   let result;
 
   // ── Compensação do catch AMPLO para o efeito FÍSICO (Etapa 6b, Task 4, fix round 1) ──────────
@@ -972,6 +1572,24 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
             quantidade_em_terceiros = COALESCE(quantidade_em_terceiros,0) + ?,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?`, [quantidade, quantidade, material_id]);
+    } else if (baixandoBloqueado) {
+      // Etapa 45 — espelho do bloco acima. Devolve os DOIS efeitos do claim: compensar so o fisico
+      // deixaria o material de volta no galpao e FORA do bloqueio, ou seja, disponivel para sair —
+      // material reprovado virando utilizavel por causa de uma falha no ledger.
+      //
+      // ⚠️ E POR ISSO `retencaoAplicada` NAO E USADO NESTE TIPO, embora ele mexa em coluna de
+      // retencao: aquele mecanismo serve aos ramos que aplicam a retencao FORA do `try` (BLOQUEIO,
+      // QUARENTENA e os de inspecao). Aqui a retencao e baixada DENTRO do claim, junto do fisico,
+      // e quem a devolve e este ramo. Usar os dois compensaria EM DOBRO — a revisao do plano da 45
+      // pegou isso antes de virar codigo: `bloqueada` voltaria a 6 para uma reprovacao de 3.
+      // Etapa 69: vale IGUAL para a `SUCATA` com `doBloqueado` — mesmo claim, mesma compensacao,
+      // e o mesmo motivo para NAO setar `retencaoAplicada` (o cenario (7) de
+      // `sucataBloqueadoMotor.api.test.js` prende a igualdade exata).
+      await dbRun(db, `UPDATE materiais_almoxarifado
+        SET quantidade_atual = quantidade_atual + ?,
+            quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) + ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?`, [quantidade, quantidade, material_id]);
     } else {
       await dbRun(db, `UPDATE materiais_almoxarifado
         SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
@@ -1005,7 +1623,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         const reserva = await dbGet(db, `UPDATE reservas_material_almoxarifado
           SET quantidade_utilizada = quantidade_utilizada + ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ? AND material_id = ? AND status = 'ATIVA'
-            AND (quantidade - COALESCE(quantidade_utilizada,0)) >= ?
+            AND (quantidade - COALESCE(quantidade_utilizada,0)) >= ? - ${EPS}
           RETURNING quantidade, quantidade_utilizada`,
           [quantidade, reserva_id, material_id, quantidade]);
         if (!reserva) {
@@ -1045,8 +1663,15 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         saidaFisicoAplicado = true;
 
         // Reserva zerada não deve seguir ATIVA segurando saldo (reserva zumbi).
-        if (reserva.quantidade - reserva.quantidade_utilizada <= 0) {
+        // Etapa 67 (Fase 5): com tolerancia EPS — a soma de 0,1 dez vezes da 0,9999999999999999, e
+        // `<= 0` deixava a reserva ATIVA para sempre com 1,1e-16 de saldo. A sobra (>= 0) sai do
+        // reservado do material junto, e o reservado que sobra <= EPS vira zero.
+        const sobraReserva = reserva.quantidade - reserva.quantidade_utilizada;
+        if (sobraReserva <= EPS) {
           await dbRun(db, "UPDATE reservas_material_almoxarifado SET status = 'CONSUMIDA', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [reserva_id]);
+          const sobra = Math.max(0, sobraReserva);
+          await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_reservada = ${RESERVADA_MENOS_SQL},
+            updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [sobra, sobra, material_id]);
         }
       } else if (baixandoTerceiro) {
         // Baixa fisico E retencao NO MESMO UPDATE — molde de DECISAO_INSPECAO, e pela mesma razao:
@@ -1070,6 +1695,45 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
             { status: 400 });
         }
         saldoPosterior = rowT.quantidade_atual;
+        saidaFisicoAplicado = true;
+      } else if (baixandoBloqueado) {
+        // Etapa 45 — molde EXATO do bloco acima, com `quantidade_bloqueada` no lugar. As duas
+        // guardas no proprio WHERE, e pelas mesmas duas razoes: nao devolver mais do que a
+        // inspecao reteve, e nao negativar o fisico. `permiteNegativo` NAO se aplica aqui de
+        // proposito — o que esta bloqueado e quantidade conhecida e finita, e "devolvi 40 de uma
+        // reprovacao de 3" e erro de digitacao, nao operacao com saldo negativo.
+        //
+        // ⚠️ E a mensagem diz os DOIS numeros. Com so um deles, o operador nao sabe qual das duas
+        // condicoes falhou — e `bloqueada > atual` e estado alcancavel neste modulo.
+        // ⚠️ O claim tolera EPSILON, e a tolerancia e PAR com a da precedencia em
+        // `nonConformityService.efeitoExecucaoPrevisto` — as duas tem de concordar, ou o conserto
+        // do CRITICAL so muda o sintoma de lugar. Com a precedencia tolerante e o claim cru,
+        // devolver 3.4 de um pool que a aritmetica deixou em 3.3999999999999995 deixaria de
+        // responder "ja havia saido do bloqueio" (200 mentindo) e passaria a estourar no motor,
+        // derrubando a execucao e trancando o documento em PENDENTE. Trocar um defeito silencioso
+        // por um beco nao e conserto.
+        //
+        // O raio e SO este ramo: `baixandoBloqueado` vale para um unico tipo (e, desde a Etapa 69,
+        // para a `SUCATA` cujo chamador declara `doBloqueado` no 4o argumento). Afrouxar por
+        // epsilon todo claim de saida do motor e decisao de outro tamanho, e nao desta etapa.
+        const rowB = await dbGet(db, `UPDATE materiais_almoxarifado
+          SET quantidade_atual = quantidade_atual - ?,
+              quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) - ?,
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND COALESCE(quantidade_bloqueada,0) >= ? - ${EPSILON_DIVERGENCIA}
+            AND quantidade_atual >= ? - ${EPSILON_DIVERGENCIA}
+          RETURNING quantidade_atual`,
+          [quantidade, quantidade, material_id, quantidade, quantidade]);
+        if (!rowB) {
+          // Etapa 69: a literal nomeia a OPERACAO — "Devolucao acima..." numa sucata mandaria o
+          // operador procurar uma devolucao que ninguem pediu. Os dois numeros continuam.
+          const oQue = tipo === 'SUCATA' ? 'Sucateamento' : 'Devolução';
+          throw Object.assign(
+            new Error(`${oQue} acima do que está bloqueado: há ${material.quantidade_bloqueada || 0} `
+              + `${material.unidade} bloqueado(s) (físico: ${material.quantidade_atual})`),
+            { status: 400 });
+        }
+        saldoPosterior = rowB.quantidade_atual;
         saidaFisicoAplicado = true;
       } else {
       const row = await dbGet(db, `UPDATE materiais_almoxarifado
@@ -1138,15 +1802,73 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       // "soma das linhas é a verdade" que `syncMaterialTotals` implementa. Restaurada.
       // loteIdFinal (Etapa 6, Task 3): AJUSTE citando lote define o saldo daquela linha de lote
       // específica; sem lote, loteIdFinal é null e o comportamento é o de sempre.
+      // Etapa 51 (RN-04): checa ANTES de escrever se o total projetado ficaria negativo num material
+      // que não permite — e se as linhas sem lote negativas ("sem localização atribuída") cobrem a
+      // diferença. Só recusa se nem absorvendo o total chega a 0; senão absorve depois do SET.
+      // Etapa 54 (RN-03): numa localização INATIVA o ajuste só reduz ou zera — subir saldo nela
+      // recriaria o estado "inativa e ocupada" que a Etapa 52 fechou (o mapa não mostra).
+      const locAjuste = await dbGet(db, 'SELECT codigo, ativo FROM localizacoes_almoxarifado WHERE id = ?', [localizacao_destino_id]);
+      if (locAjuste && Number(locAjuste.ativo) !== 1) {
+        const atualAqui = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
+          WHERE material_id = ? AND localizacao_id = ? AND lote_id IS ?`, [material_id, localizacao_destino_id, loteIdFinal || null]);
+        // Fase 5: o teto e max(atual, 0) — numa linha NEGATIVA (saida de origem inativa com saldo
+        // negativo permitido), zerar e subir em relacao a ela, e ficaria preso para sempre.
+        if (parseFloat(quantidade) > Math.max(Number(atualAqui.q) || 0, 0) + EPS) {
+          throw Object.assign(new Error(
+            `Localização ${locAjuste.codigo} está inativa — o ajuste só pode reduzir ou zerar o saldo dela`,
+          ), { status: 400 });
+        }
+      }
+      if (!permiteNegativo) {
+        const chave = [material_id, localizacao_destino_id, loteIdFinal || null];
+        const proj = await dbGet(db, `SELECT
+            COALESCE(SUM(CASE WHEN localizacao_id IS ? AND lote_id IS ? THEN 0 ELSE quantidade END), 0) as outras,
+            COALESCE(SUM(CASE WHEN lote_id IS NULL AND quantidade < 0 AND NOT (localizacao_id IS ? AND lote_id IS ?)
+                              THEN -quantidade ELSE 0 END), 0) as absorvivel
+          FROM estoque_saldo_almoxarifado WHERE material_id = ?`,
+        [chave[1], chave[2], chave[1], chave[2], material_id]);
+        const totalProjetado = (Number(proj.outras) || 0) + parseFloat(quantidade);
+        if (totalProjetado < -EPS && totalProjetado + (Number(proj.absorvivel) || 0) < -EPS) {
+          throw Object.assign(new Error(
+            `Ajuste deixaria o saldo do material negativo (${Math.round(totalProjetado * 1e6) / 1e6}). O material não permite saldo negativo.`,
+          ), { status: 400 });
+        }
+      }
       const saldo = await getOrCreateSaldo(db, material_id, localizacao_destino_id, loteIdFinal);
       await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [parseFloat(quantidade), saldo.id]);
+      if (!permiteNegativo) await absorverNegativosSemLote(db, material_id, { excluirId: saldo.id });
       await syncMaterialTotals(db, material_id);
       const atual = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [material_id]);
       saldoPosterior = atual.quantidade_atual;
     } else if (tiposAjuste.includes(tipo)) { // AJUSTE sem localização — define valor absoluto (last-writer-wins é aceitável para ajuste)
-      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [saldoPosterior, material_id]);
+      // Etapa 62 (RN-01): as series ANTES do SET do fisico — uma recusa aqui nao deixa o fisico
+      // mudado; e se algo falhar depois, o catch amplo desfaz as series E restaura o fisico.
+      if (serieAjuste && serieAjusteDelta > 0) {
+        seriesAfetadas = await seriesService.entradaSeries(db, user, {
+          material_id, numeros: seriesEntrada, lote_id: loteIdFinal, localizacao_id: material.localizacao_padrao_id || null, movimentacao_id: null,
+        });
+      } else if (serieAjuste && serieAjusteDelta < 0) {
+        seriesClaim = await seriesService.claimSaidaSeries(db, user, {
+          material_id, serie_ids: serieIdsSaida, lote_id: loteIdFinal, tipo, movimentacao_id: null,
+        });
+      }
+      if (serieAjuste) {
+        // Fase 5 (corrida): o fisico e um VALOR ABSOLUTO e as series mudam pela DIFERENCA — duas abas
+        // (ou um ajuste e uma entrega) lendo as mesmas presentes quebravam o invariante (fisico 4,
+        // presentes 6). So grava se as presentes, JA com as series deste ajuste, batem com o novo
+        // total; senao 409 e o catch amplo desfaz as series. Mesmo padrao da regularizacao.
+        const r = await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND (SELECT COUNT(*) FROM series_almoxarifado WHERE material_id = ? AND status IN ('EM_ESTOQUE','BLOQUEADA')) = ?`,
+        [saldoPosterior, material_id, material_id, saldoPosterior]);
+        if (!r.changes) {
+          throw Object.assign(new Error('as series do material mudaram durante o ajuste — recarregue e tente de novo'), { status: 409 });
+        }
+        ajusteSerieFisicoAnterior = saldoAnterior;
+      } else {
+        await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [saldoPosterior, material_id]);
+      }
     } else {
       // Tipo neutro ao saldo (ex.: RETRABALHO) — achado do review final: este ramo antes caía
       // no "else" de AJUSTE acima e disparava um UPDATE...SET quantidade_atual = <valor lido no
@@ -1220,13 +1942,35 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
             { status: 400 });
         }
         saldoLinhasSaidaParaReverter = claim.linhas;
+      } else if (!loteIdFinal) {
+        // Etapa 51 (RN-01/02): sem lote, a saída drena os ENDEREÇOS com saldo (a origem declarada
+        // ou a padrão primeiro) e só o resto vai para a linha "sem localização atribuída". A
+        // condição é `!loteIdFinal`, e não o `else` inteiro: este ramo também atendia saída COM
+        // lote de material que permite negativo, que segue no ramo de baixo (Fase 2, IMPORTANT 3).
+        saldoLinhasSaidaParaReverter = await claimSaldoSemLote(db, material_id, locSaida, quantidade);
       } else {
-        // Sem lote (ou material que permite saldo negativo): a linha continua sendo criada, porque
+        // Com lote em material que permite saldo negativo: a linha continua sendo criada, porque
         // aqui ela PODE ficar negativa e precisa existir para `syncMaterialTotals` somar.
         const saldo = await getOrCreateSaldo(db, material_id, locSaida, loteIdFinal);
         await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
           [quantidade, saldo.id]);
         saldoLinhasSaidaParaReverter = [{ id: saldo.id, quantidade }];
+      }
+      // Etapa 56 (Fase 5, reproduzido por sonda): a checagem de saldo da origem CONFIRMADA roda antes
+      // do claim, com varios await no meio — duas saidas de 10 confirmadas em A (A:10, B:50) passavam
+      // as duas, e a segunda drenava B gravando codigo_lido_origem = A. Confere DEPOIS do claim que
+      // tudo saiu da origem; se nao, o catch amplo abaixo compensa as linhas e o fisico.
+      const origemConferida = confirmadoOrigem || codigoOrigemEstrita;
+      if (origemConferida && saldoLinhasSaidaParaReverter.length) {
+        const ids = saldoLinhasSaidaParaReverter.map((l) => l.id);
+        const fora = await dbGet(db, `SELECT COUNT(*) as n FROM estoque_saldo_almoxarifado
+          WHERE id IN (${ids.map(() => '?').join(',')}) AND (localizacao_id IS NULL OR localizacao_id <> ?)`,
+        [...ids, localizacao_origem_id]);
+        if (Number(fora.n) > 0) {
+          throw Object.assign(new Error(
+            `O saldo em ${origemConferida} mudou durante a saída e não cobre mais a quantidade — confira e tente de novo`,
+          ), { status: 400 });
+        }
       }
 
       // Serie (Etapa 6b, Task 4): reivindica as series ESPECIFICAS depois que o debito fisico ja
@@ -1270,7 +2014,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       // físico (achado do review round 3 — ver docstring de `syncSaldoLocalizacaoPadrao`).
       // AJUSTE COM localização já escreveu na localização certa acima — chamar isto aqui
       // reescreveria a localização padrão por engano.
-      await syncSaldoLocalizacaoPadrao(db, material_id, loteIdFinal);
+      await syncSaldoLocalizacaoPadrao(db, material_id, loteIdFinal, { drenar: true });
     }
   }
 
@@ -1278,8 +2022,8 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, observacoes,
      usuario_id, usuario_nome, localizacao_origem_id, localizacao_destino_id, lote, lote_id, unidade,
      projeto_id, os_id, cliente_id, documento_vinculado, justificativa, reserva_id, recebimento_id, requisicao_id,
-     centro_custo_id, emergencial, regularizacao_pendente)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+     centro_custo_id, emergencial, regularizacao_pendente, codigo_lido_origem, codigo_lido_destino, motivo_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
     material_id, tipo, quantidade, saldoAnteriorReal, saldoPosterior,
     motivo || null, referencia || null, observacoes || null,
     user.id, user.nome || user.email,
@@ -1287,7 +2031,8 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     projeto_id || null, os_id || null, cliente_id || null,
     documento_vinculado || null, justificativa || null,
     reserva_id || null, recebimento_id || null, requisicao_id || null,
-    centro_custo_id || null, emergencial ? 1 : 0, regularizacaoPendente,
+    centro_custo_id || null, emergencial ? 1 : 0, regularizacaoPendente, confirmadoOrigem, confirmadoDestino,
+    motivo_id || null,
   ]);
   } catch (e) {
     // Compensa ANTES de relançar — o caminho de entrada/saída com série termina aqui dentro
@@ -1308,6 +2053,25 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // abaixo viram no-op nesse caminho, evitando compensar em dobro. `seriesClaim` só fica
     // populado quando o claim teve SUCESSO (se falhou, a atribuição nunca completou), então não há
     // ambiguidade equivalente para ele.
+    // RETENÇÃO — desfaz o delta que os ramos de `BLOQUEIO`/`DESBLOQUEIO`/`QUARENTENA`/
+    // `LIBERACAO_INSPECAO`/`REPROVACAO_INSPECAO`/`DECISAO_INSPECAO` aplicaram lá em cima, FORA
+    // deste `try`. Ver o comentário de `retencaoAplicada` na declaração: sem isto, uma falha no
+    // `INSERT` do ledger (ou em qualquer coisa entre o pool e ele) devolvia erro ao chamador com
+    // o pool **já mexido e sem linha no livro** — e quem chama confia no `throw` para concluir que
+    // nada aconteceu. Foi medido produzindo liberação em dobro na Etapa 44.
+    //
+    // Soma o INVERSO do delta em vez de restaurar o valor lido no topo: o pool é agregado por
+    // material, e restaurar o valor absoluto apagaria o que outra operação tiver feito no meio.
+    // Sem guarda no `WHERE` de propósito — isto é a reversão de algo que JÁ aconteceu, e uma
+    // guarda que recusasse deixaria o estado pior que o inconsistente: deixaria o inconsistente
+    // **e** em silêncio.
+    if (retencaoAplicada) {
+      await dbRun(db, `UPDATE materiais_almoxarifado
+        SET quantidade_bloqueada   = COALESCE(quantidade_bloqueada,0) - ?,
+            quantidade_em_inspecao = COALESCE(quantidade_em_inspecao,0) - ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?`, [retencaoAplicada.bloqueada, retencaoAplicada.emInspecao, material_id]);
+    }
     if (seriesClaim.length > 0) {
       await seriesService.desfazerSaida(db, seriesClaim);
     }
@@ -1341,6 +2105,10 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // bloco é um no-op.
     if (seriesAfetadas.length > 0) {
       await seriesService.desfazerEntrada(db, seriesAfetadas);
+    }
+    if (ajusteSerieFisicoAnterior !== null) {
+      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [ajusteSerieFisicoAnterior, material_id]);
     }
     throw e;
   }
@@ -1426,6 +2194,12 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   if (!motivo) throw Object.assign(new Error('Justificativa obrigatória para cancelamento'), { status: 400 });
   const mov = await dbGet(db, 'SELECT * FROM movimentacoes_almoxarifado WHERE id = ?', [movimentoId]);
   if (!mov) throw Object.assign(new Error('Movimentação não encontrada'), { status: 404 });
+  // Etapa 74 (Fase 5): a movimentacao ja cancelada e recusada AQUI, antes de qualquer efeito — ate a Fase 5 so
+  // o claim (la embaixo) recusava, e o segundo POST de estorno numa ENTRADA_COMPRA ja estornada liberava ANTES
+  // a reserva da chegada de quem esperava (liberarParaEstorno) e so depois respondia "ja cancelada": a
+  // requisicao perdia o material para quem fosse aprovado depois (C121 de volta). Mesma literal do claim, que
+  // continua sendo a guarda da corrida (duas chamadas que passam aqui juntas).
+  if (Number(mov.cancelado) === 1) throw Object.assign(new Error('Movimentação já cancelada'), { status: 400 });
   if (mov.tipo === 'ESTORNO') throw Object.assign(new Error('Estorno não pode ser estornado'), { status: 400 });
   if (['RESERVA', 'LIBERACAO_RESERVA'].includes(mov.tipo)) {
     throw Object.assign(new Error('Use a liberação de reserva para desfazer reservas'), { status: 400 });
@@ -1440,6 +2214,57 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   if (['QUARENTENA', 'LIBERACAO_INSPECAO', 'REPROVACAO_INSPECAO', 'DECISAO_INSPECAO'].includes(mov.tipo)) {
     throw Object.assign(
       new Error('Movimento de inspeção não pode ser estornado pelo livro — use a tela de Inspeções para rever a decisão'),
+      { status: 400 });
+  }
+  // Etapa 44 (achado IMPORTANT da revisão adversarial): a LIBERAÇÃO por não conformidade é um
+  // `DESBLOQUEIO` — tipo que **é** estornável pelo livro, e por isso escapava das duas guardas ao
+  // lado. Estorná-la devolvia a quantidade a `quantidade_bloqueada` e deixava o documento
+  // `DECIDIDA` dizendo "aceito" com o material preso: o furo C57 ressuscitado, e desta vez **sem
+  // saída** — a NC não pode ser redecidida (409) e uma NC nova da mesma inspeção devolve
+  // `JA_LIBERADA`, porque `liberacao_nc_em` continua carimbado.
+  //
+  // Pior: o ramo `BLOQUEIO` do estorno **não tem guarda** contra `quantidade_atual`, então
+  // liberar → consumir → estornar deixa `bloqueada > atual`, ou seja, **disponível negativo** —
+  // exatamente a "retenção sem lastro físico" que o desenho da etapa evitou no caminho normal e
+  // que voltaria por aqui, a dois cliques na tela do livro.
+  //
+  // A recusa casa pelo MOTIVO, e não por `documento_vinculado LIKE 'NC-%'`: o número é dado de
+  // usuário em outros tipos de movimento, e o motivo é escrito por um único ponto do código.
+  // Etapa 45: a devolução ao fornecedor herda a razão da recusa acima, e a herda mais forte.
+  // Estorná-la traria o material de volta ao galpão com o documento dizendo "devolvido" — e **sem
+  // saída**, porque a execução não se registra duas vezes (claim em `execucao_em` e no carimbo da
+  // inspeção). O material voltaria bloqueado, sem ninguém para decidir de novo o que fazer com ele.
+  //
+  // Casa por **tipo**, e não por motivo como a recusa acima: `DEVOLUCAO_FORNECEDOR` é DEDICADO —
+  // só nasce do documento —, então o tipo já é a régua exata. A recusa da liberação teve de casar
+  // por motivo justamente porque `DESBLOQUEIO` é público e nasce também do bloqueio avulso.
+  if (mov.tipo === 'DEVOLUCAO_FORNECEDOR') {
+    throw Object.assign(
+      new Error('Devolução ao fornecedor não pode ser estornada pelo livro — o material voltaria bloqueado com o documento dizendo que foi devolvido'),
+      { status: 400 });
+  }
+  // Etapa 69 (D3/RN-02) — a SUCATA do material reprovado herda a recusa da devolucao, e pela mesma
+  // razao: o estorno comum de SUCATA devolve ao DISPONIVEL (ramo `tiposSaida`), entao estorna-la
+  // liberaria material CONDENADO, com a inspecao carimbada, a NC `EXECUTADA` e o sucateamento
+  // `APROVADO` — sem nenhuma porta (as tres olham o carimbo). Correcao de sucateamento indevido = AJUSTE.
+  //
+  // O discriminador e `referencia = 'SUC-<id>'` + `nao_conformidade_id IS NOT NULL` no sucateamento
+  // (Fase 2): a `referencia` e escrita no MESMO INSERT do livro (atomica com a linha), ao contrario
+  // de `movimentacao_sucata_id`, gravado depois. Nao casa por `motivo`: o `returnService` grava
+  // `SUCATA` com o motivo DIGITADO pelo usuario. A SUCATA do sucateamento COMUM continua estornavel.
+  if (mov.tipo === 'SUCATA' && /^SUC-\d+$/.test(String(mov.referencia || ''))) {
+    const sucId = Number(String(mov.referencia).slice(4));
+    const ligado = await dbGet(db, `SELECT id FROM sucateamentos_almoxarifado
+      WHERE id = ? AND material_id = ? AND nao_conformidade_id IS NOT NULL`, [sucId, mov.material_id]);
+    if (ligado) {
+      throw Object.assign(
+        new Error('Sucateamento de material reprovado não pode ser estornado pelo livro — o material voltaria ao estoque disponível com a não conformidade dizendo que foi sucateado'),
+        { status: 400 });
+    }
+  }
+  if (mov.tipo === 'DESBLOQUEIO' && mov.motivo === MOTIVO_LIBERACAO_NC) {
+    throw Object.assign(
+      new Error('Liberação por não conformidade não pode ser estornada pelo livro — o documento continuaria dizendo "aceito" com o material bloqueado'),
       { status: 400 });
   }
   // Etapa 8b (achado da Task 4, que o plano não previa): mesma recusa, mesmo motivo. O par de
@@ -1498,6 +2323,53 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   const tiposSaida = movementTypes.TIPOS_SAIDA;
   const material = await getMaterial(db, mov.material_id);
 
+  // Etapa 71 (Fase 2, corrige a RN-08/C108 do plano, que estavam ERRADAS): a ENTRADA_COMPRA de nota
+  // cujo item ainda tem quantidade EM INSPECAO nao e estornavel. O plano dizia que o motor ja recusava
+  // (falta de disponivel, "material ja consumido") — so recusava SEM outro estoque do material. Com
+  // outro saldo cobrindo o disponivel (saldo global, regra do CLAUDE.md) o estorno passava, a inspecao
+  // continuava com o retido e depois aprovava o que "nao entrou" (sonda 71r-b). A porta certa e a
+  // inspecao: decidida ela, o estorno segue o caminho normal. Antes do claim: nada foi tocado.
+  //
+  // O item e o do vinculo (T1); sem vinculo (legado), os itens do par recebimento+material ainda sem
+  // dono — conservador: um irmao retido do mesmo material tambem recusa.
+  if (mov.tipo === 'ENTRADA_COMPRA' && mov.recebimento_id) {
+    const retido = await dbGet(db, `SELECT COALESCE(SUM(COALESCE(quantidade_em_inspecao, 0)), 0) AS q
+      FROM recebimentos_material_itens_almoxarifado
+      WHERE recebimento_id = ? AND (movimentacao_entrada_id = ?
+        OR (movimentacao_entrada_id IS NULL AND material_id = ?))`,
+    [mov.recebimento_id, movimentoId, mov.material_id]);
+    const emInspecao = parseFloat(retido && retido.q) || 0;
+    if (emInspecao > EPSILON_DIVERGENCIA) {
+      const qtdTexto = Number(emInspecao.toFixed(6));
+      throw Object.assign(new Error(
+        `Esta entrada tem ${qtdTexto} ${material.unidade || 'un'} em inspeção — decida a inspeção antes de estornar a entrada`),
+      { status: 400 });
+    }
+
+    // Etapa 71, Fase 5 (decisao reversivel, letra B): a entrada cujo item teve QUALQUER inspecao com
+    // REPROVADO tambem nao e estornavel. A reprovacao zera o em_inspecao e passa o retido para
+    // `quantidade_bloqueada` com NC aberta — a guarda acima nao via, e o estorno passava: sem lote o
+    // reprovado saia DUAS vezes (estorno + devolucao/sucata da NC); com lote a NC ficava presa
+    // ("Saldo insuficiente no lote"). O reprovado tem caminho proprio (a NC: devolver/sucatear); o
+    // estorno da entrada inteira debitaria de novo o que ja saiu ou esta bloqueado. Descartado:
+    // estornar so a parte aprovada (o livro tem UMA movimentacao por item; partir o estorno e motor
+    // novo) e liberar o bloqueado no estorno (apagaria a NC aberta). Inspecao so com aprovado
+    // continua estornavel. Mesma resolucao de item da guarda acima (vinculo ou par legado sem dono).
+    const reprovado = await dbGet(db, `SELECT COALESCE(SUM(COALESCE(i.quantidade_reprovada, 0)), 0) AS q
+      FROM inspecoes_recebimento_almoxarifado i
+      JOIN recebimentos_material_itens_almoxarifado ri ON ri.id = i.recebimento_item_id
+      WHERE ri.recebimento_id = ? AND (ri.movimentacao_entrada_id = ?
+        OR (ri.movimentacao_entrada_id IS NULL AND ri.material_id = ?))`,
+    [mov.recebimento_id, movimentoId, mov.material_id]);
+    const qtdReprovada = parseFloat(reprovado && reprovado.q) || 0;
+    if (qtdReprovada > EPSILON_DIVERGENCIA) {
+      throw Object.assign(new Error(
+        `Esta entrada teve ${Number(qtdReprovada.toFixed(6))} ${material.unidade || 'un'} reprovado(s) na inspeção — `
+        + 'o reprovado sai pela não conformidade; esta entrada não pode ser estornada'),
+      { status: 400 });
+    }
+  }
+
   // Serie (Etapa 6b, Task 5): guarda ANTES do claim `cancelado = 1` — antes de marcar a
   // movimentação como cancelada, precisa ficar claro que a reversão é possível. Estornar uma
   // ENTRADA de material com série só é seguro se TODAS as unidades daquela entrada ainda
@@ -1536,6 +2408,52 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
     }
   }
 
+  // Etapa 62 (Fase 2, critico): o estorno do AJUSTE reverte so o fisico — com series, as criadas pelo
+  // ajuste ficavam presentes e as baixadas ficavam BAIXADA, e o invariante quebrava de novo. O livro
+  // nao guarda com seguranca QUAIS series desfazer (uma entrada posterior reativa a BAIXADA e zera o
+  // vinculo), entao: recusa, e o caminho e um NOVO ajuste (que pede as series). Letra B.
+  if (mov.tipo === 'AJUSTE' && material.controle_serie) {
+    throw Object.assign(new Error(
+      'estorno de ajuste de material com serie recusado — faca um novo ajuste (ele pede as series)'),
+      { status: 400 });
+  }
+
+  // Etapa 74 (T3, D8/B374): o estorno da ENTRADA_COMPRA desfaz, antes do claim, a reserva que a propria nota
+  // criou para quem esperava (reservaChegadaService) — so o necessario, da ultima na ordem para a primeira,
+  // so de quem espera sem nada separado. Sem isto a nota que atendeu alguem ficava inestornavel ("material ja
+  // consumido") ate alguem liberar a mao. Se nem assim cabe, nada e tocado e a recusa abaixo e a da 71.
+  // `require` lazy: reservaChegadaService requer este motor no topo. Nao-fatal: a falha cai na recusa de hoje.
+  //
+  // Etapa 74 (Fase 5): duas defesas para a reserva liberada nao se perder num estorno que nao acontece.
+  //  (1) PRE-CHECAGEM do lote, antes de liberar: a recusa da linha do lote (ramo de ENTRADA, `minimo`) vinha
+  //      DEPOIS da liberacao — a requisicao perdia a reserva e o estorno nao acontecia. Mesma condicao e mesma
+  //      literal do ramo (que continua la, para a corrida). So ENTRADA_COMPRA: e o unico tipo que libera.
+  //  (2) RECRIACAO geral: se o estorno falhar por QUALQUER motivo depois de liberar (claim perdido, ledger,
+  //      guarda do ramo), `recriarReservasDoEstorno` recria exatamente o que foi liberado e o status e
+  //      recalculado; a falha original continua sendo a resposta.
+  // Descartado: mover a liberacao para DEPOIS do debito do ramo de entrada (ela existe justamente para o
+  // debito caber no disponivel) e envolver tudo numa transacao (o motor nao tem transacao — Postgres depois).
+  let liberadasNoEstorno = [];
+  let requisicoesDoEstorno = [];
+  if (mov.tipo === 'ENTRADA_COMPRA' && mov.recebimento_id) {
+    const permiteNegativoPre = material.permite_saldo_negativo || (await getConfig(db, 'permite_saldo_negativo_global')) === '1';
+    if (mov.lote_id && !permiteNegativoPre) {
+      const linhaLote = await dbGet(db, `SELECT quantidade FROM estoque_saldo_almoxarifado
+        WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS ?`,
+      [mov.material_id, (mov.localizacao_destino_id || material.localizacao_padrao_id) || null, mov.lote_id]);
+      if (linhaLote && Number(linhaLote.quantidade) < Number(mov.quantidade)) {
+        throw Object.assign(new Error(mensagemLoteNaoComportaEstorno(mov, linhaLote.quantidade)), { status: 400 });
+      }
+    }
+    try {
+      // eslint-disable-next-line global-require
+      liberadasNoEstorno = await require('./reservaChegadaService').liberarParaEstorno(db, user, mov);
+      requisicoesDoEstorno = [...new Set(liberadasNoEstorno.map((l) => l.requisicao_id))];
+    } catch (e) {
+      console.warn(`[almoxarifado] liberacao das reservas da chegada no estorno falhou (movimentacao ${movimentoId}): ${e.message}`);
+    }
+  }
+
   // Claim atômico ANTES de aplicar qualquer efeito inverso (achado do review final: double-cancel
   // race). O UPDATE...WHERE cancelado = 0 é a própria seção crítica sob o lock de linha do SQLite:
   // de duas chamadas concorrentes para o mesmo movimentoId, só uma tem changes = 1 — essa é a
@@ -1544,7 +2462,12 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   const claim = await dbRun(db, `UPDATE movimentacoes_almoxarifado
     SET cancelado = 1, cancelado_por = ?, cancelado_em = CURRENT_TIMESTAMP, cancelamento_motivo = ?, regularizacao_pendente = 0
     WHERE id = ? AND cancelado = 0`, [user.id, motivo, movimentoId]);
-  if (!claim.changes) throw Object.assign(new Error('Movimentação já cancelada'), { status: 400 });
+  if (!claim.changes) {
+    // Etapa 74 (Fase 5): outro estorno ganhou o claim — o que ESTE liberou volta para quem esperava.
+    await recriarReservasDoEstorno(db, user, liberadasNoEstorno, movimentoId);
+    await recalcularStatusAposEstorno(db, requisicoesDoEstorno);
+    throw Object.assign(new Error('Movimentação já cancelada'), { status: 400 });
+  }
 
   let estornoId;
 
@@ -1562,6 +2485,9 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   // cancelamento é bem-sucedido, não há mais claim para tentar de novo).
   let compensarQuantidadeMaterial = null; // delta a devolver em quantidade_atual, se o ledger falhar
   let compensarLinha = null; // { loc, loteId, delta } — delta a reaplicar na linha específica de saldo
+  // Etapa 51 (Fase 5): o estorno de entrada sem lote pode debitar VARIAS linhas (claimSaldoSemLote) —
+  // a compensacao devolve cada uma pelo id.
+  let compensarLinhasClaim = null;
   let compensarSyncLocalizacaoPadrao = null; // { loteId } — reconciliarEstornoSemLinha sincronizou a linha padrão; refazer DEPOIS de restaurar quantidade_atual
   let seriesEntradaRevertidas = []; // afetadas[] de reverterEntrada, para desfazerReverterEntrada
   let seriesSaidaRevertidas = []; // afetadas[] de reverterSaida, para desfazerReverterSaida
@@ -1582,7 +2508,7 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         WHERE id = ? AND (? = 1 OR ${disponivelSql()} >= ?)
         RETURNING quantidade_atual`,
         [mov.quantidade, mov.material_id, permiteNegativo ? 1 : 0, mov.quantidade]);
-      if (!row) throw Object.assign(new Error('Não é possível estornar: saldo disponível insuficiente (material já consumido)'), { status: 400 });
+      if (!row) throw Object.assign(new Error(await mensagemEstornoSemDisponivel(db, mov)), { status: 400 });
       saldoDepois = row.quantidade_atual;
       saldoAntes = saldoDepois + parseFloat(mov.quantidade);
       // A partir daqui quantidade_atual JÁ foi debitado — se qualquer coisa adiante falhar
@@ -1617,20 +2543,33 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       // DELETE de localizacao com SUM(quantidade) das linhas dando zero (net-zero), sem lote nem
       // permite_saldo_negativo envolvidos.
       const loc = mov.localizacao_destino_id || material.localizacao_padrao_id;
+      // Etapa 51 (Fase 5, IMPORTANT): desde que a saída sem lote drena os endereços, a linha desta
+      // entrada pode já ter sido consumida por uma saída de OUTRO lugar do raciocínio — entradas de
+      // 100 em A e em B, saída de 100 que drenou A, estorno da entrada de A ⇒ A:−100 e B:100 com o
+      // físico em 0 (o endereço fantasma que a etapa existe para eliminar). Sem lote e sem negativo,
+      // quando a linha da entrada não comporta a reversão, o estorno debita como uma SAÍDA: a linha
+      // da entrada primeiro, depois as outras com saldo (`claimSaldoSemLote`).
+      if (!mov.lote_id && !permiteNegativo) {
+        const linhaEntrada = await dbGet(db, `SELECT quantidade FROM estoque_saldo_almoxarifado
+          WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS NULL`, [mov.material_id, loc || null]);
+        if (linhaEntrada && Number(linhaEntrada.quantidade) < Number(mov.quantidade) - EPS) {
+          compensarLinhasClaim = await claimSaldoSemLote(db, mov.material_id, loc, Number(mov.quantidade));
+        }
+      }
       const pisoLinha = (mov.lote_id && !permiteNegativo) ? mov.quantidade : null;
-      const r = await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, -mov.quantidade,
-        { minimo: pisoLinha });
+      const r = compensarLinhasClaim
+        ? { aplicado: true, existe: true, viaClaim: true }
+        : await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, -mov.quantidade, { minimo: pisoLinha });
       if (!r.aplicado && r.existe) {
         // A linha existe e não comporta a reversão. `quantidade_atual` já foi debitado logo acima
         // e não há transação aqui — o `catch` deste método devolve o físico agora (fix round 1,
         // Task 5: `compensarQuantidadeMaterial`, setado acima, cobre exatamente este caso; a
         // compensação manual que existia aqui foi removida para não devolver em dobro).
-        throw Object.assign(new Error(
-          `Não é possível estornar: o lote ${mov.lote || mov.lote_id} tem ${r.quantidade} `
-          + `${mov.unidade || ''} nesta localização, menos que os ${mov.quantidade} que a entrada creditou`),
-          { status: 400 });
+        throw Object.assign(new Error(mensagemLoteNaoComportaEstorno(mov, r.quantidade)), { status: 400 });
       }
-      if (r.aplicado) {
+      if (r.aplicado && r.viaClaim) {
+        // a compensacao das N linhas fica em `compensarLinhasClaim`, devolvida no catch.
+      } else if (r.aplicado) {
         // Fix round 1 (Task 5): se o ledger falhar depois, a compensação é o delta oposto na
         // MESMA chave (loc, lote) — espelha exatamente o que este `ajustarSaldoExistente` acabou
         // de aplicar (−mov.quantidade), sem piso (a compensação está devolvendo, não retirando).
@@ -1710,6 +2649,24 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         }
         await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
           [delta, saldoLoc.id]);
+        // Etapa 51 (RN-04; Fase 5, MINOR): o estorno do AJUSTE com localização recalcula o total
+        // pela soma. No AJUSTE de IDA a absorção das linhas sem lote negativas se justifica — é uma
+        // contagem, é verdade física. No ESTORNO não há contagem: absorver faria o livro registrar
+        // uma quantidade que não se moveu (estorno de 50 com 45 sumindo na absorção). Então, se o
+        // total ficaria negativo num material que não permite, RECUSA e devolve a linha.
+        const matEstorno = await getMaterial(db, mov.material_id);
+        const permiteNegEstorno = matEstorno.permite_saldo_negativo
+          || (await getConfig(db, 'permite_saldo_negativo_global')) === '1';
+        if (!permiteNegEstorno) {
+          const tot = await dbGet(db, 'SELECT COALESCE(SUM(quantidade),0) as t FROM estoque_saldo_almoxarifado WHERE material_id = ?',
+            [mov.material_id]);
+          if (Number(tot.t) < -EPS) {
+            await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+              [delta, saldoLoc.id]);
+            throw Object.assign(new Error('Não é possível estornar: o saldo já foi consumido (o estorno deixaria o material negativo)'),
+              { status: 400 });
+          }
+        }
         await syncMaterialTotals(db, mov.material_id);
         const atual = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
         saldoDepois = atual.quantidade_atual;
@@ -1805,6 +2762,12 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS ?`,
         [compensarLinha.delta, mov.material_id, compensarLinha.loc || null, compensarLinha.loteId || null]);
     }
+    if (compensarLinhasClaim) {
+      for (const l of compensarLinhasClaim) {
+        await dbRun(db, `UPDATE estoque_saldo_almoxarifado
+          SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [l.quantidade, l.id]);
+      }
+    }
     if (compensarQuantidadeMaterial) {
       await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
         [compensarQuantidadeMaterial, mov.material_id]);
@@ -1819,6 +2782,10 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
     // voltado. regularizacao_pendente volta ao valor original lido antes do claim.
     await dbRun(db, `UPDATE movimentacoes_almoxarifado SET cancelado = 0, cancelado_por = NULL, cancelado_em = NULL,
       cancelamento_motivo = NULL, regularizacao_pendente = ? WHERE id = ?`, [mov.regularizacao_pendente, movimentoId]);
+    // Etapa 74 (T3 + Fase 5): o estorno nao aconteceu, mas as reservas da chegada ja foram liberadas — recria
+    // o que foi liberado (o fisico ja voltou acima, entao o hold cabe de novo) e o status acompanha.
+    await recriarReservasDoEstorno(db, user, liberadasNoEstorno, movimentoId);
+    await recalcularStatusAposEstorno(db, requisicoesDoEstorno);
     throw err;
   }
 
@@ -1833,6 +2800,25 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
     usuario_id: user.id, usuario_nome: user.nome || user.email, justificativa: motivo,
     dados_novos: { estorno_id: estornoId, ...camposDeOrigem(user) },
   });
+
+  // Etapa 71 (D5/B333) — O PEDIDO DE COMPRA DESCONTA E REABRE. No MOTOR (e nao na rota) porque o
+  // estorno entra por mais de uma porta; DEPOIS do claim e da auditoria do cancelamento, entao roda
+  // uma vez so por movimentacao (o segundo estorno morre no claim, RN-05). Nao-fatal: um estorno de
+  // saldo legitimo nao pode falhar porque a tabela do Compras falhou. `require` lazy porque o
+  // receiptService requer este motor no topo.
+  let pedidoCompra = null;
+  if (mov.tipo === 'ENTRADA_COMPRA' && mov.recebimento_id) {
+    try {
+      // eslint-disable-next-line global-require
+      pedidoCompra = await require('./receiptService').estornarEntradaNoPedido(db, user, mov);
+    } catch (e) {
+      console.warn(`[almoxarifado] desconto do pedido de compra no estorno falhou (movimentacao ${movimentoId}): ${e.message}`);
+    }
+  }
+
+  // Etapa 74 (T3): o status das requisicoes que perderam a reserva da chegada, DEPOIS de o pedido reabrir
+  // (AGUARDANDO_COMPRA conta a compra que volta a vir; antes dele seria AGUARDANDO_ESTOQUE).
+  await recalcularStatusAposEstorno(db, requisicoesDoEstorno);
 
   try {
     await alertService.verificarAlertaPorMaterialId(db, mov.material_id);
@@ -1851,7 +2837,78 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
     console.warn('[almoxarifado-notificacoes] Falha ao suprimir notificacao pós-estorno:', notifErr.message);
   }
 
-  return { success: true, estorno_id: estornoId };
+  // A chave `pedido_compra` so existe quando um pedido foi tocado (aditivo — nenhuma resposta muda).
+  return pedidoCompra
+    ? { success: true, estorno_id: estornoId, pedido_compra: pedidoCompra }
+    : { success: true, estorno_id: estornoId };
+}
+
+/**
+ * Etapa 74 (T3): recalcula o status das requisicoes que perderam a reserva da chegada no estorno. Cada uma no
+ * seu try — o estorno (ou a recusa dele) nunca muda por causa do rotulo. `require` lazy (ver acima).
+ */
+async function recriarReservasDoEstorno(db, user, liberadas, movimentoId) {
+  if (!liberadas || !liberadas.length) return;
+  try {
+    // eslint-disable-next-line global-require
+    await require('./reservaChegadaService').recriarAposEstornoRecusado(db, user, liberadas);
+  } catch (e) {
+    console.warn(`[almoxarifado] recriacao das reservas da chegada apos estorno recusado falhou (movimentacao ${movimentoId}): ${e.message}`);
+  }
+}
+
+/** A recusa da linha do lote no estorno da entrada — uma literal, dois lugares (pre-checagem da Fase 5 e o ramo). */
+function mensagemLoteNaoComportaEstorno(mov, quantidadeLinha) {
+  return `Não é possível estornar: o lote ${mov.lote || mov.lote_id} tem ${quantidadeLinha} `
+    + `${mov.unidade || ''} nesta localização, menos que os ${mov.quantidade} que a entrada creditou`;
+}
+
+/**
+ * Etapa 74 (Fase 5): a recusa do estorno de entrada por falta de DISPONIVEL. Ate a Fase 5 era sempre "material ja
+ * consumido" — mentira quando nada saiu e o que falta esta so RESERVADO (quem ja separou, reserva da aprovacao):
+ * o usuario procurava uma saida que nao existe. Quando o disponivel + o reservado cobrem o estorno, a recusa diz
+ * quem segura (numeros das requisicoes com reserva ATIVA do material; reserva sem requisicao = "reservas
+ * manuais"). Fora disso (consumo real, bloqueio, inspecao, terceiros) fica a literal da 71.
+ */
+async function mensagemEstornoSemDisponivel(db, mov) {
+  const RECUSA_CONSUMIDO = 'Não é possível estornar: saldo disponível insuficiente (material já consumido)';
+  try {
+    const m = await dbGet(db, `SELECT ${disponivelSql()} AS disponivel, COALESCE(quantidade_reservada, 0) AS reservada
+      FROM materiais_almoxarifado WHERE id = ?`, [mov.material_id]);
+    const disp = Number(m && m.disponivel) || 0;
+    const reservada = Number(m && m.reservada) || 0;
+    if (!(reservada > EPS) || disp + reservada < Number(mov.quantidade) - EPS) return RECUSA_CONSUMIDO;
+    const linhas = await dbAll(db, `SELECT rs.requisicao_id, r.numero FROM reservas_material_almoxarifado rs
+      LEFT JOIN requisicoes_almoxarifado r ON r.id = rs.requisicao_id
+      WHERE rs.material_id = ? AND rs.status = 'ATIVA' AND rs.quantidade - COALESCE(rs.quantidade_utilizada, 0) > ${EPS}
+      ORDER BY rs.id`, [mov.material_id]);
+    const nomes = [];
+    let manual = false;
+    for (const l of linhas) {
+      if (!l.requisicao_id) { manual = true; continue; }
+      const n = l.numero || `#${l.requisicao_id}`;
+      if (!nomes.includes(n)) nomes.push(n);
+    }
+    if (manual) nomes.push('reservas manuais');
+    if (!nomes.length) return RECUSA_CONSUMIDO;
+    return `Não é possível estornar: o material está reservado para requisições (${nomes.join(', ')}) — libere as reservas antes de estornar`;
+  } catch (e) {
+    return RECUSA_CONSUMIDO;
+  }
+}
+
+// Etapa 76 (Fase 5): o recalculo do estorno roda SOB A TRAVA por material (`recalcularStatusSobTrava`), como o
+// das portas da 76 e o da 74/75 - fora dela, uma nota do mesmo material que reserva no meio deixava a leitura
+// velha ser gravada (sonda76f). Sem deadlock: o estorno nunca roda dentro de `comLockDoMaterial`.
+async function recalcularStatusAposEstorno(db, requisicaoIds) {
+  for (const id of requisicaoIds || []) {
+    try {
+      // eslint-disable-next-line global-require, no-await-in-loop
+      await require('./reservaChegadaService').recalcularStatusSobTrava(db, id);
+    } catch (e) {
+      console.warn(`[almoxarifado] recalculo do status apos estorno falhou (requisicao ${id}): ${e.message}`);
+    }
+  }
 }
 
 /**
@@ -1866,6 +2923,8 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
  *    tomar 403 no meio da aprovação.
  *  - `opcoes.requisicao_id`/`item_requisicao_id`: vínculo que a entrega usa para achar e consumir
  *    a reserva daquele item (ver requisitionService.entregarRequisicao).
+ *  - `opcoes.recebimento_id` (Etapa 74): a nota cuja chegada criou a reserva (reservaChegadaService) —
+ *    o estorno da entrada desfaz só estas.
  */
 async function criarReserva(db, user, data, opcoes = {}) {
   const { material_id, quantidade, projeto_id, os_id, os_referencia, cliente_id, equipamento, submontagem, observacoes,
@@ -1908,14 +2967,17 @@ async function criarReserva(db, user, data, opcoes = {}) {
     const r = await dbRun(db, `INSERT INTO reservas_material_almoxarifado
       (material_id, quantidade, projeto_id, os_id, os_referencia, cliente_id, equipamento, submontagem,
        solicitante_id, solicitante_nome, observacoes, requisicao_id, item_requisicao_id, origem,
-       data_necessidade, expira_em)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+       data_necessidade, expira_em, recebimento_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
       material_id, qtd, projeto_id || null, os_id || null, os_referencia || null,
       cliente_id || null, equipamento || null, submontagem || null,
       user.id, user.nome || user.email, observacoes || null,
       opcoes.requisicao_id || null, opcoes.item_requisicao_id || null,
       opcoes.requisicao_id ? 'REQUISICAO' : 'MANUAL',
       data_necessidade || opcoes.data_necessidade || null, expiraEm,
+      // Etapa 74 (B372): a nota cuja chegada criou a reserva — só pelo 4º argumento, pelo mesmo motivo
+      // de requisicao_id (a rota POST /reservas repassa o body inteiro como `data`).
+      opcoes.recebimento_id || null,
     ]);
     reservaId = r.lastID;
 
@@ -1962,10 +3024,13 @@ async function liberarReserva(db, user, reservaId, quantidade = null, options = 
   const restante = reserva.quantidade - (reserva.quantidade_utilizada || 0);
   const qtd = quantidade == null ? restante : Number(quantidade);
   if (!(qtd > 0)) throw Object.assign(new Error('Quantidade a liberar deve ser maior que zero'), { status: 400 });
-  if (qtd > restante) {
+  // Etapa 67 (Fase 5): tolerancia EPS nas duas comparacoes. Reserva de 1 consumida em 0,7 tem
+  // saldo 0,30000000000000004; liberar os 0,3 que a tela mostra virava liberacao PARCIAL e deixava
+  // a reserva ATIVA com 4e-17 (a mesma reserva zumbi do consumo fracionado).
+  if (qtd > restante + EPS) {
     throw Object.assign(new Error(`Quantidade acima do saldo da reserva: ${restante}`), { status: 400 });
   }
-  const total = qtd >= restante;
+  const total = qtd >= restante - EPS;
 
   // Reivindica a reserva num UPDATE condicional (padrão do módulo: não há transação aqui).
   // Sem isso duas liberações concorrentes — ou duas rodadas do job de expiração — passariam
@@ -1977,7 +3042,7 @@ async function liberarReserva(db, user, reservaId, quantidade = null, options = 
         quantidade = quantidade - ?,
         liberado_por = ?, liberado_em = CURRENT_TIMESTAMP, motivo_liberacao = ?,
         updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND status = 'ATIVA' AND (quantidade - COALESCE(quantidade_utilizada,0)) >= ?
+    WHERE id = ? AND status = 'ATIVA' AND (quantidade - COALESCE(quantidade_utilizada,0)) >= ? - ${EPS}
     RETURNING id`,
     [total ? statusFinal : 'ATIVA', total ? 0 : qtd, user?.id || null, motivo, reservaId, qtd]);
   if (!claim) {
@@ -1985,8 +3050,8 @@ async function liberarReserva(db, user, reservaId, quantidade = null, options = 
     throw Object.assign(new Error(`Reserva ${String(atual?.status || 'inexistente').toLowerCase()} não pode ser liberada`), { status: 400 });
   }
 
-  await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_reservada = MAX(0, COALESCE(quantidade_reservada,0) - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [qtd, reserva.material_id]);
+  await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_reservada = ${RESERVADA_MENOS_SQL},
+    updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [qtd, qtd, reserva.material_id]);
 
   await registrarMovimentacao(db, user, {
     material_id: reserva.material_id, tipo: 'LIBERACAO_RESERVA', quantidade: qtd,
@@ -2047,6 +3112,15 @@ async function consultarSaldosPorLocalizacao(db, materialId) {
 }
 
 module.exports = {
+  motivoRecusaEndereco,
+  areaEspecialDe,
+  avisoAreaEspecial,
+  resolverAreaEfetiva,
+  carregarArvoreLocalizacoes,
+  areaEfetivaDaLocalizacao,
+  sugerirLocalizacaoEntrada,
+  listarLocalizacoesVazias,
+  contarOcupacaoLocalizacao,
   getConfig,
   getMaterial,
   getSaldoDisponivel,
@@ -2057,6 +3131,10 @@ module.exports = {
   resolveLocalizacaoEntrada,
   resolveLocalizacaoSaida,
   validarLocalizacaoParaMovimento,
+  validarEnderecoExplicito,
+  normalizarCodigoLido,
+  conferirLeitura,
+  materiaisComPadrao,
   registrarMovimentacao,
   cancelarMovimentacao,
   criarReserva,

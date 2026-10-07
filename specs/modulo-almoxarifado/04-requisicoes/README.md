@@ -1,8 +1,46 @@
 # 04 — Requisições de Materiais
 
 > **Status:** 🟢 — Etapa 3 entregue (2026-08-05); ciclo ponta a ponta rascunho→entrega→confirmação→encerramento · **Spec original:** seção 5
+> **Etapa 73 (2026-10-02, `bd753746`, `c47621d9`, `6fc7122a`, `371aa7ec` + Fase 5 `5ea57d03`, `851ef2cf`) — a requisição que espera compra nasce com o status certo, em qualquer porta.** `AGUARDANDO_COMPRA` passa a valer para compra **vinculada a pedido** e ainda a caminho (C116, antes só `PENDENTE`); as três portas de aprovação (`/aprovar`, `/aprovar-valor`, aprovação automática) passam pelo mesmo pós-aprovação — a liberação por valor sem saldo vai a `AGUARDANDO_*` e a automática reserva (C122); o detalhe em espera diz *"Chegou material…"* com quanto dá para separar (o status não muda na chegada, B358); os itens gravam e voltam na ordem do pedido (B363, também a causa do G80). Continua 🟢. Falta (C121, Etapa 74): o que chega não é reservado para quem esperava.
+> **Etapa 61 (2026-09-30, `6ba7429`, `d74e5a8` + fix-round `77d084c`) — a entrega de material com SÉRIE exige as séries, e a exclusão as devolve.** A entrega recebe `serie_ids` por item (N == quantidade, em estoque, de um lote só; o lote da saída vem das séries), validados antes de qualquer baixa; a de um clique de material serializado é recusada com *"… recebidas 0 — entregue escolhendo as series"*. A **exclusão** devolve **por saída**, **líquido das devoluções** (antes, excluir depois de devolver creditava o físico de novo — defeito antigo, valia também para material sem série) e com as séries daquela saída. Item "Registrar lote/série entregue por item" marcado.
 > **Etapa 31 (2026-08-31, `1e6c9a9..67b6758`) — o NÚMERO deste documento mudou de forma, e só ele.** O `REQ-` era montado com os **últimos dígitos** do milissegundo mais um sorteio de 0 a 99, e por isso o carimbo **repetia** a cada **16,7 minutos** (era `slice(-6)`, o pior dos quatro). Agora vem do gerador único `services/almoxarifado/numeroDoc.js` (relógio inteiro em base36 + 8 aleatórios), com retry na colisão. **Nada mais desta feature mudou** — nem status, nem checklist, nem comportamento: o número passa de 12–14 caracteres só com dígitos para 20 com letras, os antigos **não** foram migrados e continuam legíveis (RN-05, testada). Furo **C41** das novidades.
-> **Última atualização:** 2026-08-11 (auditoria spec×código)
+> **Etapa 34 (2026-09-16, `746a106..054f727`) — o painel de detalhe da requisição ganhou ANEXOS.**
+> Bloco "Anexos" no fim do painel, depois dos botões de ação, entidade `requisicao` com o `id` do
+> **detalhe carregado** (não o da URL) — `d5578e6`, `a88d715`, `c5d9e99`. **Só no modo
+> almoxarifado** (decisão **B71**): nas telas cross-módulo `/<modulo>/requisicoes-material` o bloco
+> não aparece. Zero linhas de servidor. A frase "plugar aqui é uma linha", que esta spec repetia
+> desde a Etapa 32, **estava errada** — ver a correção no item de checklist de anexos, que também
+> registra o defeito **pré-existente** descoberto aqui (o clique carrega o detalhe 2x —
+> **fechado na Etapa 35**, `6f6a8b0` + `d484458` + `2817054`).
+> **Etapa 35 (2026-09-16, `6f6a8b0..2d5cd35`) — o clique na linha voltou a carregar o detalhe UMA
+> vez, e fechar o painel passou a ser fechar.** NÃO é feature nova: são dois defeitos
+> pré-existentes desta tela, achados pela revisão da Etapa 34. (1) Abrir o detalhe **pelo clique**
+> disparava **dois** `GET /almoxarifado/requisicoes/:id` — latência dobrada e um piscar de
+> "Carregando" a cada abertura pela lista —, porque `abrirDetalhe` chamava `syncSearchParams`, a
+> URL mudava e o efeito de deep-link reabria o mesmo id. Fechado por **`6f6a8b0`** (flag de
+> navegação interna) + **`d484458`** (cenário de integração dos quatro gestos). (2) O **✕** com o
+> `GET` do detalhe em voo deixava a resposta morta reescrever `?id=` na URL com o painel já
+> fechado, e o F5 do usuário reabria a requisição que ele havia fechado — **`2817054`**. Zero
+> linhas de servidor no range (medido: `git diff --stat` do range restrito a `server/` vem vazio).
+> Detalhe do conserto, das asserções que o travam e do que ficou de fora: no item de checklist de
+> anexos, mais abaixo.
+> **Etapa 47 (2026-09-30, `4f53292` em diante) — a requisição passou a poder exigir N aprovações de
+> regra, e a travada por valor passou a ser cobrada.** O ciclo de status **não mudou**: a pendência
+> de regra é tabela filha, e o status continua `PENDENTE` ou `AGUARDANDO_APROVACAO_VALOR` até o
+> `/aprovar` ou o `/aprovar-valor` — que passam a ser **barrados** enquanto houver pendência aberta.
+> As frases abaixo de que "a tabela configurável fica para demanda real" (em "O que já existe",
+> "Dependências" e "Não entregue") **estavam certas quando escritas e ficaram erradas agora** — ver a
+> feature 06. E o lembrete de hora em hora, que alcançava só `PENDENTE`, passou a alcançar
+> `AGUARDANDO_APROVACAO_VALOR` (dos aprovadores de valor) e ganhou uma segunda fila, por pendência de
+> regra; com pendência aberta, a fila por status não cobra.
+> **Etapa 48 (2026-09-30, `d8631bd` em diante) — a urgência virou lista fechada.** O campo `urgencia`,
+> que era texto livre no servidor, só aceita `NORMAL`, `URGENTE` e `CRITICO`: a criação (as duas rotas)
+> recusa o resto com *"Urgência inválida: <valor>"*, e o `/enviar` do rascunho normaliza a caixa e recusa o
+> que continuar fora. O passado não é reescrito. E a lista ganhou o painel *"Requisições aguardando sua
+> aprovação"* (feature 06).
+> **Última atualização:** 2026-09-30 (Etapa 48); antes: 2026-09-30 (Etapa 47); antes: 2026-09-16 (Etapa 35 — uma carga do detalhe por gesto e ✕ que descarta a
+> resposta em voo; antes: 2026-09-16, Etapa 34 — anexos no painel; antes: 2026-08-11, auditoria
+> spec×código)
 
 ## Objetivo
 
@@ -14,14 +52,14 @@ Fluxo completo: rascunho → aprovação → disponibilidade → reserva → sep
 - Duas APIs: `/api/almoxarifado/requisicoes` (`routes/almoxarifado.js` — `GET`/`POST /requisicoes`, `GET /:id`, e as ações `/enviar`, `/aprovar`, `/rejeitar`, `/aprovar-valor`, `/rejeitar-valor`, `/separacao` (+alias `/separar`), `/liberar-retirada`, `/entregar`, `/confirmar-recebimento`, `/encerrar`, `/copiar`, `/cancelar`, `DELETE` administrativa) e `/api/requisicoes-material` (`routes/requisicoesMaterial.js`, cross-módulo com whitelist por setor e sanitização de campos).
 - Fluxo implementado: criar → aprovar/rejeitar → separação → entregar (parcial ok) → cancelar; delete admin com estorno de estoque.
 - Aprovação por valor (`requisitionValueApprovalService.js`, limite configurável, aprovar-valor/rejeitar-valor).
-- Notificações: e-mail ao almoxarifado na criação, e-mail a Compras para itens sem estoque, lembretes a cada 1 h (`requisitionReminderService.js`, log em `requisicao_lembretes_log`).
+- Notificações: e-mail ao almoxarifado na criação, e-mail a Compras para itens sem estoque, lembretes a cada 1 h (`requisitionReminderService.js`, log em `requisicao_lembretes_log`). **Etapa 47:** alcança também a travada por valor e cada pendência de regra — ver o cabeçalho.
 - Disponibilidade em lote: `POST /requisicoes-material/disponibilidade` + badge no front.
 - Front: `RequisicoesList.js` (1.080 L, ações completas), `RequisicaoForm.js` (industrial), `RequisicaoMaterialCesta.js` (administrativa), configurado para 10 módulos-origem (`requisicoesMaterialConfig.js`).
-- Campos existentes: solicitante, departamento, setor, os_referencia (texto), urgencia, prioridade, data_necessidade, justificativa, projeto_id, cliente_id, equipamento, valor_total; + Etapa 3: `tipo_requisicao`, `centro_custo_id`, `local_entrega`, `recebimento_confirmado_por/em`, `encerrado_por/em`.
+- Campos existentes: solicitante, departamento, setor, os_referencia (texto), urgencia (**lista fechada desde a Etapa 48**: NORMAL/URGENTE/CRITICO), prioridade, data_necessidade, justificativa, projeto_id, cliente_id, equipamento, valor_total; + Etapa 3: `tipo_requisicao`, `centro_custo_id`, `local_entrega`, `recebimento_confirmado_por/em`, `encerrado_por/em`.
 - Testes de serviço: separação/entrega parcial em múltiplas rodadas, exclusão com estorno, lembretes, liberação por valor, filtro por setor.
 - **Etapa 3 (2026-08-05) — item mais importante: entrega e estorno passaram a baixar/estornar estoque pelo motor (`stockService.registrarMovimentacao`)**, fechando o bypass de SQL cru anotado desde a Etapa 1 (`requisitionService.entregarRequisicao/excluirRequisicao`). Ganho: atomicidade (sem race condition entre entregas concorrentes do mesmo material), auditoria (toda baixa/estorno grava linha em `auditoria_log_almoxarifado`), saldo por localização (padrão do material, com bloqueio de localização respeitado) e vínculos estruturados na movimentação (`requisicao_id`, `projeto_id`, `centro_custo_id`; OS continua só como referência em texto — a requisição não tem `os_id`, só `os_referencia`). `maxEntregar` e o GET de detalhe passaram a calcular pelo **disponível** (físico − reservado/bloqueado/inspeção), não mais pelo físico — semântica nova de `saldo_atual` no front.
 - **Etapa 4 (2026-08-06) — mudança que esta spec não contava (registrada na auditoria de 2026-08-11):** a entrega passou a **consumir a reserva da própria requisição**, dividindo a saída entre reserva e excedente sem reserva (`requisitionService.entregarRequisicao`); e separar/entregar somam o hold da própria requisição ao disponível — a própria reserva não barra mais a separação/entrega da requisição dona. Detalhes, decisões e testes na feature 07.
-- Decisões de escopo confirmadas (ver `docs/superpowers/specs/2026-08-05-almoxarifado-etapa3-requisicoes-design.md`): aprovações ficam com regras fixas declarativas em código (tabela configurável fica para demanda real — ver feature 06); tipo de requisição é campo único de fluxo operacional único (fluxos específicos de EPI/ferramenta vêm com as features donas); confirmação de recebimento não é status novo, são campos (`recebimento_confirmado_por/em`) setáveis pelo solicitante em ENTREGUE/PARCIALMENTE_ATENDIDA/ENCERRADA.
+- Decisões de escopo confirmadas (ver `docs/superpowers/specs/2026-08-05-almoxarifado-etapa3-requisicoes-design.md`): aprovações ficam com regras fixas declarativas em código (tabela configurável fica para demanda real — ver feature 06 — **superado pela Etapa 47: a tabela existe**); tipo de requisição é campo único de fluxo operacional único (fluxos específicos de EPI/ferramenta vêm com as features donas); confirmação de recebimento não é status novo, são campos (`recebimento_confirmado_por/em`) setáveis pelo solicitante em ENTREGUE/PARCIALMENTE_ATENDIDA/ENCERRADA.
 
 ## Checklist
 
@@ -32,7 +70,10 @@ Fluxo completo: rascunho → aprovação → disponibilidade → reserva → sep
 
 ### Status faltantes (spec 5.4)
 - [x] `RASCUNHO` (Etapa 3, Task 2 — `salvar_rascunho: true` na criação; rota `POST /:id/enviar` para RASCUNHO→PENDENTE)
-- [x] `AGUARDANDO_ESTOQUE` / `AGUARDANDO_COMPRA` (Etapa 3, Task 2 — setados automaticamente na aprovação quando nenhum item tem disponível > 0; COMPRA quando há solicitação de compra pendente, senão ESTOQUE)
+- [x] `AGUARDANDO_ESTOQUE` / `AGUARDANDO_COMPRA` (Etapa 3, Task 2 — setados automaticamente na aprovação quando nenhum item tem disponível > 0; COMPRA quando há solicitação de compra pendente, senão ESTOQUE). **Etapa 73 (`c47621d9`, C116): "pendente" virou "a caminho"** — a regra contava só a solicitação `PENDENTE`, e a requisição de material com a compra já **vinculada a pedido** nascia `AGUARDANDO_ESTOQUE`. Agora: `AGUARDANDO_COMPRA` quando algum material tem solicitação `PENDENTE` ou `VINCULADO` com `a_caminho > 0` dentro do horizonte (60 dias), pela `purchaseService.posicaoDasSolicitacoes` da Etapa 72 (pedido cancelado/rejeitado e material já completo no pedido não contam; pedido avulso do Compras sem solicitação também não). Vale nas **três** portas de aprovação desde `6fc7122a` (antes só o `/aprovar` calculava: a liberação por valor sem saldo ficava `APROVADO` e a aprovação automática não reservava nem calculava). O status **não** muda quando o material chega (B358) — o detalhe mostra *"Chegou material para esta requisição…"* (`371aa7ec`). **⚠️ Revisto na Etapa 74 (`63e377e1`): a frase anterior deixou de valer** — a nota que dá entrada **reserva** o que chegou para quem esperava e a requisição que ganhou vai a `PARCIALMENTE/TOTALMENTE_RESERVADA`. Setas novas na máquina (`5462b68c`): `AGUARDANDO_* → *_RESERVADA`, `PARCIALMENTE_RESERVADA → TOTALMENTE_RESERVADA` e as de volta para o estorno (`*_RESERVADA → AGUARDANDO_*/APROVADO/PARCIALMENTE_RESERVADA`). O recálculo só parte de {APROVADO, AGUARDANDO_*, *_RESERVADA} e só grava se `validarTransicao` aceitar (B378); `EM_SEPARACAO`/`PARCIALMENTE_ATENDIDA` ganham a reserva e mantêm o status. Ver a spec 07.
+- [x] **`/encerrar` e `/rejeitar-valor` liberam as reservas da requisição** — Etapa 74 (`9af1691a`, B379). Defeito anterior: terminavam a requisição (ENCERRADA/REJEITADO) com a reserva ATIVA presa para sempre; livro: *"Liberação por encerramento de requisição"* / *"Liberação por rejeição de valor da requisição"*.
+- [x] **Painel `GET /dashboard/requisicoes` lista `PARCIALMENTE/TOTALMENTE_RESERVADA` em `abertas`** — Etapa 74 (`00a5ff18`, B376). Antes a reservada sumia do cartão *Requisições Abertas*.
+- [x] **Itens na ordem do pedido** — Etapa 73 (`bd753746`, B363): a criação gravava os itens com `Promise.all` e o `id` do item podia nascer trocado (quem pedia A e B via B e A no detalhe). Agora grava em laço sequencial e o detalhe das duas rotas (`/almoxarifado/requisicoes/:id` e `/requisicoes-material/:id`) ordena por `ir.id`. Itens gravados antes continuam na ordem em que foram gravados.
 - [x] `PARCIALMENTE_RESERVADA` / `TOTALMENTE_RESERVADA` — **backend entregue na Etapa 4 (2026-08-05/06)**: `requisitionStateMachine` é dono das strings, e os status são gravados nas lanes `/aprovar` e `/aprovar-valor` junto com a reserva automática (ver feature 07). **Front só fechou em 2026-08-11 (`92fe236`)**: a Etapa 4 tinha deixado a tela de requisições sem esses status — badge cru, filtro sem as opções, botões "Iniciar Separação"/"Cancelar Requisição" invisíveis, stepper no fallback "Criar" — apesar de o item de front constar completo (ver nota na seção Frontend)
 - [x] `PRONTA_PARA_RETIRADA` (Etapa 3, Task 2 — `PUT /:id/liberar-retirada`, exige ≥1 item separado)
 - [x] `ENCERRADA` (Etapa 3, Task 5 — `PUT /:id/encerrar`, perfil `aprovar_requisicao`, bloqueia novas entregas e registra `encerrado_por/em`)
@@ -42,11 +83,81 @@ Fluxo completo: rascunho → aprovação → disponibilidade → reserva → sep
 - [x] Tipo de requisição (14 tipos — spec 5.1) como campo estruturado (Etapa 3, Task 1 — `tipo_requisicao`, campo único com fluxo operacional único; decisão de escopo: fluxos específicos de EPI/ferramenta vêm com as features donas)
 - [x] Campos: centro de custo, local de entrega (Etapa 3, Task 1 — `centro_custo_id`, `local_entrega`)
 - [ ] Campos: ordem de produção (vínculo estruturado — hoje só via `tipo_requisicao = ORDEM_PRODUCAO`), gestor responsável
-- [ ] Anexos (desenho/documento — `anexos_documento_almoxarifado` já existe) — fora da Etapa 3
+- [x] Anexos (desenho/documento — `anexos_documento_almoxarifado` já existe) — **`d5578e6`** + **`a88d715`** + **`c5d9e99`** (Etapa 34, 2026-09-16): bloco **Anexos** inline no fim do painel de detalhe, **depois** dos botões de ação, entidade `requisicao` com `detalhe.id` (o id do detalhe **carregado**, não o `selectedId` da URL — abrir outra requisição com o painel antigo na tela penduraria o arquivo no registro errado). **Aparece só no modo almoxarifado** (`a88d715`, decisão **B71**): a mesma `RequisicoesList.js` roda em seis módulos (comercial, frota, compras, financeiro, fábrica, engenharia) que não têm permissão do módulo, e ali o bloco pedia `GET /api/almoxarifado/anexos` → 403 "Acesso negado ao módulo" em vermelho dentro do painel, formulário de upload morto e uma linha de auditoria de acesso negado **por painel aberto**. *Era fora da Etapa 3 — deixou de ser.*
+      **Etapa 32 (`e708125..fd71958`): o MECANISMO existe, está testado, e falta SÓ o plug desta
+      tela.** A entidade é `requisicao`, já no mapa fechado do serviço.
+      A `anexos_documento_almoxarifado` era **órfã** — zero leitor, zero escritor, sem índice —,
+      e virou `services/almoxarifado/anexoService.js` (mapa fechado de seis entidades,
+      existência do registro-pai verificada, soft delete, auditoria) mais as rotas
+      `POST/GET/DELETE /almoxarifado/anexos` e `GET /almoxarifado/anexos/:id/arquivo`, esta com
+      **download autenticado** — o arquivo NÃO é servido estaticamente. No client existe o
+      componente genérico `client/src/components/almoxarifado/AnexosDocumento.js`.
+      **Plugar aqui é uma linha** — `<AnexosDocumento entidade="CHAVE" entidadeId={id} />` — mais
+      dois cenários de teste. **Ponto de atenção medido na Etapa 32:** confira QUANDO o `id`
+      existe nesta tela. Na inspeção o plug teve de ir para a aba Histórico, porque a linha só
+      nasce **depois** da decisão — anexar antes penduraria o arquivo num id inexistente.
+
+      **⚠️ Correção da Etapa 34 (2026-09-16, `746a106..054f727`).** O parágrafo acima dizia que
+      **"plugar aqui é uma linha"**; isso **ESTAVA ERRADO**. O certo, medido no design `6ccaf40` e
+      confirmado na execução: esta tela era uma das **duas** (com Recebimentos) que tinham painel
+      onde plugar inline — as outras três (Materiais, Devoluções, item de remessa) não tinham casa
+      nenhuma e precisaram de uma casca de modal (`AnexosModal`, `746a106`) e de um botão por
+      linha. E nem aqui foi uma linha, por **dois** motivos que só a execução mostrou: (1) o corpo
+      do painel vivia dentro do ternário de `loadingDetalhe` (era `RequisicoesList.js:876`; a
+      citação por linha saiu na Etapa 35 — as linhas desta tela se deslocaram **duas** vezes só
+      naquela etapa, então o que vale é o **nome**: o ternário de `loadingDetalhe` que envolvia o
+      corpo do painel), então ele
+      **desmonta a cada refetch** — foco da janela, que é exatamente o que acontece ao FECHAR o
+      diálogo de escolher arquivo; troca de filtro; ação de workflow — e o arquivo recém-escolhido
+      sumia, mais um GET de anexos extra; o bloco teve de sair do ternário (`c5d9e99`); (2) a tela
+      roda em seis módulos sem permissão do almoxarifado, e o bloco precisou do gate por
+      `warehouseMode` (`a88d715`, B71). O texto da Etapa 32 fica acima **de propósito** — o
+      mecanismo que ele descreve continua exato; errada era só a estimativa do custo do plug.
+
+      **Defeito PRÉ-EXISTENTE descoberto ao medir isto (não era da Etapa 34) — ✅ FECHADO NA
+      ETAPA 35 (`6f6a8b0` + `d484458` + `2817054`).** Abrir o detalhe **pelo clique** carregava a
+      requisição **duas vezes**: `abrirDetalhe` chama `syncSearchParams`, que reescreve `?id=` na
+      URL, e isso reacendia o **efeito de deep-link**, que chamava `abrirDetalhe` de novo — dois
+      `GET /almoxarifado/requisicoes/:id` por clique, desde que o deep-link existe. Régua vermelha
+      medida antes do conserto: `Received length: 2`.
+
+      **Como foi consertado** (`6f6a8b0`) — **flag de navegação interna por identidade de query**,
+      não guarda de "mesmo id" no efeito: `navInternaRef` guarda a query **que a própria tela
+      acabou de escrever**, e o efeito de deep-link só ignora o ciclo quando a query atual é
+      **idêntica** à guardada (e aí desarma a flag). Para que a flag nunca seja armada à toa,
+      `syncSearchParams` passou a devolver **`string | null`** — a query escrita, ou `null` quando
+      não houve escrita nenhuma —, e só `abrirDetalhe` usa esse retorno; o efeito de filtros e
+      `fecharDetalhe` continuam chamando `syncSearchParams` e **descartando** o retorno de
+      propósito. O desarme mora **no consumo**, não dentro de `syncSearchParams`: a função tem três
+      chamadores e desarmar ali seria decidir por conta de terceiros.
+      **Descartado:** guarda de "mesmo id" no efeito (quebraria o refetch legítimo por troca de
+      filtro) e `abrirDetalhe(id, { force: false })` no clique (a opção `force` é regra
+      compartilhada por 17 call sites — `force: true` em todos, `force: false` em nenhum).
+      E `fecharDetalhe` passou a **bumpar `detalheFetchSeqRef`** (`2817054`): sem o bump, a
+      resposta do `GET` que já estava em voo quando o usuário apertou o ✕ repunha `detalhe` e
+      reescrevia `?id=` na URL com o painel fechado — o F5 reabria a requisição fechada.
+
+      **Quais asserções travam isto** (`client/src/components/almoxarifado/RequisicoesList.test.js`):
+      (1) no cenário *"RN-02: sem detalhe aberto não consulta anexos; abrir a requisição
+      consulta"*, o helper `cargasDoDetalhe()` com `expect(cargasDoDetalhe()).toHaveLength(1)` —
+      era exatamente essa contagem que valia **2** antes; (2) o cenário de integração de **quatro
+      passos** (`describe('Etapa 35: uma carga por gesto, e fechar é fechar')` → *"integração:
+      clique, foco, troca de filtro e VOLTA do filtro — uma carga por gesto"*), que conta as cargas
+      **por passo** (`0 → 1 → 2 → 3 → 4`) e é o único ponto que prova que a flag **desarma**: uma
+      flag booleana armada pelo refetch por foco (que não escreve na URL) ficaria de pé e engoliria
+      a troca de filtro seguinte, e nada mais na suíte reclamaria; (3) o cenário do ✕ —
+      *"F1: o ✕ descarta a resposta em voo — nada de `id=` na URL depois de fechar"* —, com o `GET`
+      do detalhe **deferido a mão** e a URL lida por uma sonda `useLocation` dentro do
+      `MemoryRouter` (`window.location` não vê o histórico em memória).
+
+      **O que ficou de fora, de propósito:** **back/forward do navegador** nesta tela continua
+      **sem régua** — medi-lo exigiria histórico real, e o `MemoryRouter` da suíte não o fornece.
+      Foi verificado por leitura que back/forward **não** produz transição interna (o
+      `syncSearchParams` navega com `replace: true`), mas isso é raciocínio, não teste.
 - [x] Copiar requisição anterior (Etapa 3, Task 5 — `POST /:id/copiar`, gera novo RASCUNHO fiel com os mesmos itens/tipo/vínculos, sem quantidades entregues)
 - [ ] Importar itens de lista técnica / ordem de produção (depende da feature 22) — fora da Etapa 3
 - [x] Confirmação de recebimento pelo solicitante (fecha o ciclo) (Etapa 3, Task 5 — `PUT /:id/confirmar-recebimento`, só o solicitante, sem bypass de admin; campos `recebimento_confirmado_por/em`)
-- [ ] Registrar lote/série entregue por item — **a dependência caiu (2026-08-11)**: a feature 10 (lotes) foi entregue na Etapa 6 (2026-08-09/10), então o item ficou implementável. Atenção: a entrega por requisição está deliberadamente **isenta** de `controle_lote` (decisão do review final de 2026-08-10 — ver spec 10); registrar lote na entrega exigiria dar à tela um campo de lote
+- [x] Registrar lote/série entregue por item — **ENTREGUE: lote e endereço na Etapa 58 (`cec2b56`, `d18019f`), série na Etapa 61 (`6ba7429`, `d74e5a8` + fix-round `77d084c`)** — a entrega recebe por item `localizacao_origem_id`/`lote_id` e, para material com série, **exige** `serie_ids` (N == quantidade). **O texto abaixo dizia que a entrega estava "deliberadamente isenta"; para a SÉRIE isso estava errado — a isenção quebrava o invariante (físico baixava, série ficava em estoque); ver a correção na spec 10, pendência (a) de série.** Texto original: *a dependência caiu (2026-08-11): a feature 10 (lotes) foi entregue na Etapa 6 (2026-08-09/10), então o item ficou implementável. Atenção: a entrega por requisição está deliberadamente **isenta** de `controle_lote` (decisão do review final de 2026-08-10 — ver spec 10); registrar lote na entrega exigiria dar à tela um campo de lote*
 - [x] Cancelar saldo não utilizado — coberto pelo encerramento (Etapa 3, Task 5: `ENCERRADA` bloqueia novas entregas a partir de ENTREGUE/PARCIALMENTE_ATENDIDA)
 - [ ] Reprogramar saldo pendente (redistribuir/ajustar fino, além do cancelamento simples do encerramento) — fora da Etapa 3
 - [ ] Assinatura digital na retirada (Etapa 15 — mobilidade; deixar campo previsto)
@@ -56,7 +167,7 @@ Fluxo completo: rascunho → aprovação → disponibilidade → reserva → sep
 ### Frontend
 - [x] Novos status no `RequisicoesList.js` + `AlmoxPageHeader.js` (stepper `REQUISICAO_FLOW`) (Etapa 3, Task 6 — badges/filtros dos status e tipos novos, stepper com 6 passos). **Nota (2026-08-11): este item constava completo, mas ficou incompleto depois da Etapa 4** — os status `PARCIALMENTE/TOTALMENTE_RESERVADA` não entraram nas telas (badge cru, filtro sem as opções, botões "Iniciar Separação"/"Cancelar Requisição" invisíveis nesses status, stepper caindo no fallback "Criar"). Fechado em `92fe236`, com teste novo `client/src/components/almoxarifado/RequisicoesList.test.js` (badge, filtro, stepper, botões; controle positivo rodado)
 - [x] Botão "copiar requisição" · confirmação de recebimento pelo solicitante (Etapa 3, Task 6)
-- [ ] Anexos no form — fora da Etapa 3
+- [ ] Anexos no form — fora da Etapa 3, e **continua desmarcado DE PROPÓSITO depois da Etapa 34**. Não é esquecimento: a 34 entregou o bloco de anexos no **painel de detalhe** (item "Anexos (desenho/documento)" acima, `d5578e6`), e anexar **durante a criação** foi cortado com motivo escrito — **RN-01 do design `6ccaf40`: o bloco só existe onde o registro já tem `id`**. No formulário a requisição ainda não foi gravada, então o arquivo seria pendurado num id inexistente. Fazer isso exige upload em duas fases (guardar o arquivo antes do registro e adotá-lo depois) ou um rascunho gravado antes do envio — **mudança de contrato do servidor**, etapa própria. Hoje o caminho é: gravar a requisição, abrir o detalhe, anexar
 
 ## Regras essenciais + testes de API exigidos
 

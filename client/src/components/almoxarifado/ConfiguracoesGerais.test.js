@@ -83,6 +83,26 @@ const RESPOSTA_DO_SERVIDOR = {
   // recebimento, divergencia de inventario). Mesma obrigacao das anteriores — sem fixture
   // valida, o guard client-side veria undefined como NaN e derrubaria os testes de Salvar.
   alerta_eventos_janela_dias: { valor: '7', descricao: 'Janela dos alertas de evento (dias)', id: 19 },
+  // Etapa 43: a janela do alerta de NAO CONFORMIDADE parada. Mesma obrigacao das anteriores —
+  // sem fixture valida aqui, o guard client-side veria undefined como NaN e derrubaria SEIS
+  // testes de Salvar que nem tocam nesta chave (medido: foi exatamente o que aconteceu ao
+  // acrescentar o campo em CAMPOS).
+  alerta_nc_parada_dias: { valor: '7', descricao: 'Alerta de nao conformidade parada (dias)', id: 20 },
+  // Etapa 46 (T3): a janela do alerta de EXECUCAO PENDENTE da NC. Mesma obrigacao das
+  // anteriores, e ela COBROU de novo: acrescentar a chave em `CAMPOS` sem esta linha derrubou
+  // SETE testes de Salvar que nem tocam nela (o guard client-side le `configs[chave]`
+  // undefined, o `Number('')` vira NaN e o submit e barrado). MEDIDO nesta task — a nota da
+  // Etapa 43 acima previa exatamente isso, e a fixture continua sendo a quarta ponta da config
+  // que nenhum plano listou.
+  alerta_nc_execucao_pendente_dias: { valor: '7', descricao: 'Alerta de execucao pendente da NC (dias)', id: 21 },
+  // Etapa 70 (T3): os avisos de entrada do recebimento. Os defaults sao os SEMEADOS no
+  // schema.js (D3 revisto na Fase 2): o da nota nasce '0' (lista compartilhada — ligar e
+  // decisao de quem opera), o do solicitante nasce '1'. Booleana fora da fixture nao derruba o
+  // guard de dias (nao tem prefixo), mas vai no payload como '' — e o PUT recusa '' com
+  // `Configuracao "<chave>" deve ser 0 ou 1` (CHAVES_BOOL), entao a linha e obrigatoria aqui.
+  notificar_recebimento_entrada: { valor: '0', descricao: 'Aviso de entrada de recebimento', id: 22 },
+  notificar_recebimento_solicitante: { valor: '1', descricao: 'Aviso ao solicitante', id: 23 },
+  notificacoes_dest_recebimento: { valor: '', descricao: 'Destinatarios — recebimento', id: 24 },
 };
 
 let container;
@@ -469,4 +489,147 @@ test('a chave de janela dos alertas de evento (Etapa 17) aparece, recusa 0 e ent
   await act(async () => { botao.click(); });
   expect(api.put).toHaveBeenCalledTimes(1);
   expect(api.put.mock.calls[0][1].alerta_eventos_janela_dias).toBe('15');
+});
+
+/**
+ * Etapa 43 — `alerta_nc_parada_dias`: os dias que uma NAO CONFORMIDADE pode ficar ABERTA (sem
+ * decisao) antes de o cartao cobrar. A chave foi semeada em schema.js pela task do servidor e
+ * tem leitor real (`alertRegistry.resolverDias`), mas a tela renderiza a LISTA FIXA `CAMPOS` —
+ * fora dela a chave existe no banco e e INEDITAVEL pela UI. E o mesmo defeito que originou este
+ * arquivo na Etapa 16 e reapareceu na 17; entrou no fechamento da 43 justamente por isso.
+ *
+ * ⚠️ O cenario tambem fixa o limite que o roteiro manual do guia cita: o menor valor aceito e 1.
+ * Nao da para "ver o cartao agora" pondo 0 — o guard recusa antes do submit.
+ */
+test('a chave de dias da nao conformidade parada (Etapa 43) aparece, recusa 0 e entra no payload', async () => {
+  await renderAbaGeral();
+
+  expect(container.textContent).toContain('Alerta de Não Conformidade Parada (dias)');
+  const inputNC = inputDoCampo('Alerta de Não Conformidade Parada (dias)');
+  expect(inputNC).not.toBeNull();
+  // A fixture do servidor manda '7' — a tela mostra o valor gravado, nao um default local.
+  expect(inputNC.value).toBe('7');
+
+  const preencher = (el, valor) => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(el, valor);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const botao = [...container.querySelectorAll('button')]
+    .find(b => /Salvar Configurações/.test(b.textContent));
+
+  await act(async () => { preencher(inputNC, '0'); });
+  await act(async () => { botao.click(); });
+  expect(api.put).not.toHaveBeenCalled();
+  expect(toast.error).toHaveBeenCalledWith(
+    'Configuração "alerta_nc_parada_dias" deve ser um número de dias maior que zero'
+  );
+
+  await act(async () => { preencher(inputNC, '1'); });
+  await act(async () => { botao.click(); });
+  expect(api.put).toHaveBeenCalledTimes(1);
+  expect(api.put.mock.calls[0][1].alerta_nc_parada_dias).toBe('1');
+});
+
+/**
+ * Etapa 46 (T3) — `alerta_nc_execucao_pendente_dias`: os dias que uma NC DECIDIDA pode ficar com
+ * a execucao PENDENTE antes de o cartao novo cobrar. Chave PROPRIA, e nao a reutilizacao da
+ * `alerta_nc_parada_dias` do teste acima: sao dois prazos com dois donos (decidir e da Qualidade,
+ * executar e de Compras e pode depender do fornecedor).
+ *
+ * ⚠️ ESTE CENARIO E A QUARTA PONTA DA CONFIG, e o plano da etapa listou tres (schema, `CAMPOS`,
+ * `COLUNAS_POR_CHAVE`). A quarta e a FIXTURE de `RESPOSTA_DO_SERVIDOR` deste arquivo: sem ela, o
+ * guard client-side de `handleSalvar` le `configs['alerta_nc_execucao_pendente_dias']` undefined,
+ * `Number(undefined)` vira NaN e SETE testes de Salvar que nada tem a ver com esta chave caem.
+ * A nota da Etapa 43 (na fixture, acima) previu; esta task pagou.
+ */
+test('a chave de dias da execucao pendente da NC (Etapa 46) aparece, recusa 0 e entra no payload', async () => {
+  await renderAbaGeral();
+
+  expect(container.textContent).toContain('Alerta de Execução Pendente da NC (dias)');
+  const inputExec = inputDoCampo('Alerta de Execução Pendente da NC (dias)');
+  expect(inputExec).not.toBeNull();
+  // A fixture do servidor manda '7' — a tela mostra o valor gravado, nao um default local.
+  expect(inputExec.value).toBe('7');
+
+  // E o campo da IRMA continua la, com o proprio valor: uma tela que trocasse um rotulo pelo
+  // outro passaria nas assercoes acima e deixaria uma das duas janelas ineditavel.
+  expect(inputDoCampo('Alerta de Não Conformidade Parada (dias)')).not.toBeNull();
+
+  const preencher = (el, valor) => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(el, valor);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const botao = [...container.querySelectorAll('button')]
+    .find(b => /Salvar Configurações/.test(b.textContent));
+
+  await act(async () => { preencher(inputExec, '0'); });
+  await act(async () => { botao.click(); });
+  expect(api.put).not.toHaveBeenCalled();
+  expect(toast.error).toHaveBeenCalledWith(
+    'Configuração "alerta_nc_execucao_pendente_dias" deve ser um número de dias maior que zero'
+  );
+
+  await act(async () => { preencher(inputExec, '30'); });
+  await act(async () => { botao.click(); });
+  expect(api.put).toHaveBeenCalledTimes(1);
+  expect(api.put.mock.calls[0][1].alerta_nc_execucao_pendente_dias).toBe('30');
+  // A irma segue no MESMO payload, com o valor da fixture — o salvar manda o mapa inteiro.
+  expect(api.put.mock.calls[0][1].alerta_nc_parada_dias).toBe('7');
+});
+
+/**
+ * Etapa 70 (T3) — os dois avisos do recebimento que entrou no estoque e a lista de destino do
+ * aviso da nota (receiptNotificationService.js). A tela mostra o valor SEMEADO de cada um (nota
+ * desligada, solicitante ligado) e o Salvar manda '0'/'1' — o PUT recusa qualquer outra coisa
+ * nas booleanas. O valor da nota vai '0' mesmo sem ninguem tocar no switch: e o default de
+ * producao, e a fixture sem esta linha mandaria '' (controle positivo medido na T3).
+ */
+test('os avisos de entrada do recebimento (Etapa 70) mostram o default semeado e entram no payload', async () => {
+  await renderAbaGeral();
+
+  expect(container.textContent).toContain('Avisar Entrada de Recebimento por E-mail');
+  expect(container.textContent).toContain('Avisar o Solicitante quando o Material Chega');
+  expect(container.textContent).toContain('Destinatários — Entrada de Recebimento');
+
+  const switchNota = switchDoCampo('Avisar Entrada de Recebimento por E-mail');
+  const switchSolicitante = switchDoCampo('Avisar o Solicitante quando o Material Chega');
+  const inputDest = inputTextoDoCampo('Destinatários — Entrada de Recebimento');
+  expect(switchNota).not.toBeNull();
+  expect(switchSolicitante).not.toBeNull();
+  expect(inputDest).not.toBeNull();
+  expect(switchNota.checked).toBe(false);
+  expect(switchSolicitante.checked).toBe(true);
+
+  const botao = [...container.querySelectorAll('button')]
+    .find(b => /Salvar Configurações/.test(b.textContent));
+  await act(async () => { botao.click(); });
+  expect(api.put).toHaveBeenCalledTimes(1);
+  let corpo = api.put.mock.calls[0][1];
+  expect(corpo.notificar_recebimento_entrada).toBe('0');
+  expect(corpo.notificar_recebimento_solicitante).toBe('1');
+  expect(corpo.notificacoes_dest_recebimento).toBe('');
+
+  // Liga o da nota, desliga o do solicitante e preenche a lista — cada um vai com o proprio
+  // valor (uma tela que trocasse as chaves passaria no bloco acima, que tem um '0' e um '1').
+  await act(async () => {
+    const setChecked = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked').set;
+    setChecked.call(switchNota, true);
+    switchNota.dispatchEvent(new Event('click', { bubbles: true }));
+  });
+  await act(async () => {
+    const setChecked = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked').set;
+    setChecked.call(switchSolicitante, false);
+    switchSolicitante.dispatchEvent(new Event('click', { bubbles: true }));
+  });
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')
+      .set.call(inputDest, 'compras@gmp.com,almox@gmp.com');
+    inputDest.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await act(async () => { botao.click(); });
+  expect(api.put).toHaveBeenCalledTimes(2);
+  corpo = api.put.mock.calls[1][1];
+  expect(corpo.notificar_recebimento_entrada).toBe('1');
+  expect(corpo.notificar_recebimento_solicitante).toBe('0');
+  expect(corpo.notificacoes_dest_recebimento).toBe('compras@gmp.com,almox@gmp.com');
 });

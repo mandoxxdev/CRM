@@ -12,6 +12,10 @@ import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
 import { TIPO_REQUISICAO_LABELS } from './requisicaoLabels';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import AssinaturaCanvas from './AssinaturaCanvas';
+import CampoCodigoLido from './CampoCodigoLido';
+import { extrairCodigoLido } from '../../utils/codigoLido';
+import AnexosDocumento from './AnexosDocumento';
+import { AprovacoesRegraRequisicao, FilaAprovacoesRegra, FilaAprovacaoSimples } from './AprovacoesRegra';
 import {
   FiPlus, FiRefreshCw, FiEye, FiCheck, FiX, FiPackage,
   FiAlertTriangle, FiClock, FiTruck, FiCheckCircle, FiFilter, FiMap, FiTrash2, FiDollarSign,
@@ -70,6 +74,124 @@ const URGENCIA_INFO = {
   CRITICO: { label: 'Crítico',  cor: 'var(--gmp-error)' },
 };
 
+// Etapa 58 (RN-05): "Sai de" na entrega. As opções vêm de GET /almoxarifado/estoque/:id/saldos —
+// só linhas com endereço e saldo positivo (saldo sem endereço não é lugar de onde ir buscar).
+// O value leva endereço e lote juntos porque o mesmo endereço pode ter dois lotes do material.
+const valorOrigem = (s) => `${s.localizacao_id}:${s.lote_id ?? ''}`;
+const rotuloOrigem = (s) => `${s.localizacao_codigo}${s.lote ? ` — lote ${s.lote}` : ''} (${s.quantidade})`;
+const opcoesOrigem = (rows) => (Array.isArray(rows) ? rows : [])
+  .filter((s) => s.localizacao_id != null && Number(s.quantidade) > 0);
+const lerValorOrigem = (valor) => {
+  if (!valor) return null;
+  const [loc, lote] = String(valor).split(':');
+  const localizacao_origem_id = Number(loc);
+  if (!localizacao_origem_id) return null;
+  return { localizacao_origem_id, lote_id: lote ? Number(lote) : null };
+};
+
+// Etapa 59: a origem planejada na separação só vale enquanto há separado ainda não entregue.
+const temPlanejada = (item) => !!item.origem_separacao_id && getSeparado(item) > getEntregue(item);
+const valorPlanejada = (item) => `${item.origem_separacao_id}:${item.lote_separacao_id ?? ''}`;
+// O servidor só aplica a planejada até o separado ainda não entregue; acima disso é automático.
+const pendenteSeparado = (item) => Math.max(0, getSeparado(item) - getEntregue(item));
+// Opção do "Sai de" quando a busca de saldos falhou num item com planejada: selecionada, não manda
+// chave (o servidor aplica a planejada) — e faz "Qualquer endereço" virar uma troca de verdade.
+const VALOR_PLANEJADA_SEM_SALDOS = '__planejada__';
+
+// Etapa 63 (RN-01/03): a entrega de um item com planejada sai de OUTRO par — outro endereço; o mesmo
+// endereço com outro lote quando a planejada tem lote (planejada sem lote = qualquer lote ali); ou
+// "automático" dito ao servidor (`origem_automatica`). É quando o servidor registra a substituição e a
+// tela pede o motivo. "Qualquer endereço" SEM `automatico` (pré-seleção acima do pendente) e a opção
+// "Planejada da separação" não mandam chave: o servidor aplica a planejada — não é troca.
+const MOTIVO_SUBSTITUICAO_MAX = 500;
+const trocaDaPlanejada = (item, escolha) => {
+  if (!temPlanejada(item) || !escolha || escolha.valor === VALOR_PLANEJADA_SEM_SALDOS) return false;
+  const origem = lerValorOrigem(escolha.valor);
+  if (!origem) return !!escolha.automatico;
+  if (origem.localizacao_origem_id !== Number(item.origem_separacao_id)) return true;
+  return item.lote_separacao_id != null && Number(origem.lote_id || 0) !== Number(item.lote_separacao_id);
+};
+
+// Etapa 65 (RN-04): a régua da SEPARAÇÃO (a do servidor na rodada) — mesmo par só com o mesmo
+// endereço E o mesmo lote (Number(x || 0) dos dois lados: planejada sem lote só casa com a opção sem
+// lote). Vazio/automático é troca: a rodada apaga a planejada e o separado pendente passa a sair
+// automático na entrega. Não é a régua da entrega (`trocaDaPlanejada`: lá planejada sem lote vale
+// qualquer lote do endereço, e há `automatico` e a opção sem saldos).
+// Fase 5 da Etapa 65: a versão "planejada sem lote vale qualquer lote" também na separação foi
+// descartada no servidor (quebrava a entrega de um clique); a tela segue a régua estrita.
+const trocaNaSeparacao = (item, valor) => {
+  if (!temPlanejada(item)) return false;
+  const origem = lerValorOrigem(valor);
+  if (!origem) return true;
+  if (origem.localizacao_origem_id !== Number(item.origem_separacao_id)) return true;
+  return Number(origem.lote_id || 0) !== Number(item.lote_separacao_id || 0);
+};
+// Etapa 65 (Fase 2, CRÍTICO 2): a opção do "Sai de" da separação que é a planejada — o par exato
+// (planejada sem lote = a opção do endereço sem lote; uma opção com lote ali seria troca). Fora das
+// opções (sem saldo lá) = '' (automático).
+// Fase 5 da Etapa 65 (IMPORTANTE): só quando a planejada COBRE a quantidade sugerida — o separado
+// pendente continua no saldo da origem (separar não move estoque), e o servidor recusa "O saldo em A
+// (0) não cobre a quantidade (5)" quando A só tem o que já está na caixa. Não cobre = automático (o
+// aviso de troca aparece, honesto).
+const valorPlanejadaNaSeparacao = (item, rows, qtdSugerida = 0, outrosMesmoMaterial = 0) => {
+  const valor = valorPlanejada(item);
+  if (!(rows || []).some((s) => valorOrigem(s) === valor)) return '';
+  const cobre = maxSeparavelNaTela(item, valor, rows, outrosMesmoMaterial) + 1e-9 >= (Number(qtdSugerida) || 0);
+  return cobre ? valor : '';
+};
+
+// Etapa 61 (RN-04): material com controle de série sai dizendo QUAIS séries saem. As séries vêm de
+// GET /materiais/:id/series?status=EM_ESTOQUE; com um lote escolhido no "Sai de", só as desse lote
+// (o servidor recusa séries de lotes diferentes). O endereço da série é só dica: a transferência
+// não move a série, então ele não filtra.
+const seriesDoLote = (info, loteId) => (info?.series || [])
+  .filter((s) => !loteId || Number(s.lote_id) === Number(loteId));
+
+// Etapa 60 (RN-01/04): o máximo separável que a tela conhece, na mesma régua do servidor:
+// base = min(pendente de separação, saldo − o que OUTROS itens do mesmo material separam nesta
+// rodada); com um "Sai de" escolhido, também a quantidade da opção menos o separado pendente de quem
+// já planejou o mesmo par — aqui só o do próprio item (outras requisições a tela não conhece).
+// O servidor recalcula na hora (é ele quem grava `maximo`/`divergente`); aqui só decide quando
+// pedir o motivo, que é opcional.
+const MOTIVO_DIVERGENCIA_MAX = 500;
+const maxSeparavelNaTela = (item, valorOrigemEscolhida, saldos, outrosMesmoMaterial = 0) => {
+  const pendenteSeparacao = Math.max(0, Number(item.quantidade_solicitada) - getSeparado(item));
+  const livre = Math.max(0, (Number(item.saldo_atual) || 0) - (Number(outrosMesmoMaterial) || 0));
+  const base = Math.min(pendenteSeparacao, livre);
+  if (!valorOrigemEscolhida) return base;
+  const opcao = (saldos || []).find((s) => valorOrigem(s) === valorOrigemEscolhida);
+  if (!opcao) return base;
+  const jaPlanejadoNoPar = temPlanejada(item) && valorPlanejada(item) === valorOrigemEscolhida
+    ? pendenteSeparado(item) : 0;
+  return Math.min(base, Math.max(0, (Number(opcao.quantidade) || 0) - jaPlanejadoNoPar));
+};
+// Etapa 73 (RN-07, B358): dizia "a chegada do material não muda o status". DEIXOU DE VALER na Etapa 74:
+// a nota que chega RESERVA o que entrou livre para quem esperava e a requisição vai a
+// PARCIALMENTE/TOTALMENTE_RESERVADA. AGUARDANDO_COMPRA/ESTOQUE com saldo agora só acontece quando o material
+// chegou por outra porta (ajuste, devolução, inspeção liberada) ou a reserva na chegada falhou.
+// É o detalhe que diz que chegou: por item, o que dá para separar AGORA na régua da tela
+// (`maxSeparavelNaTela`, sem "Sai de"), com os itens do mesmo material dividindo o saldo — o que um
+// item leva sai do livre do seguinte, para 4 que chegaram não virarem 8. Só os itens com algo > 0.
+const separavelAgoraPorItem = (itens) => {
+  const jaContado = {};
+  return (itens || []).reduce((acc, item) => {
+    const outros = jaContado[item.material_id] || 0;
+    const quantidade = maxSeparavelNaTela(item, null, null, outros);
+    jaContado[item.material_id] = outros + quantidade;
+    if (quantidade > 1e-9) acc.push({ item, quantidade: Number(quantidade.toFixed(4)) });
+    return acc;
+  }, []);
+};
+// O que os OUTROS itens do mesmo material estão separando no modal agora (dividem o saldo).
+const separandoOutrosDoMaterial = (itens, item, quantidades) => (itens || [])
+  .filter((i) => i.id !== item.id && Number(i.material_id) === Number(item.material_id))
+  .reduce((s, i) => s + Math.max(0, parseFloat((quantidades || {})[i.id]) || 0), 0);
+// Só abaixo do máximo e acima de zero: quantidade 0 não vai no payload, então não há onde levar o motivo.
+const separacaoDivergente = (qtdDigitada, maximo) => {
+  const q = parseFloat(qtdDigitada) || 0;
+  return q > 0 && q < maximo - 1e-9;
+};
+
 const formatMoeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const RequisicoesList = () => {
@@ -104,6 +226,16 @@ const RequisicoesList = () => {
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
   const loadedDetalheIdRef = useRef(null);
   const detalheFetchSeqRef = useRef(0);
+  // Etapa 35 (RN-01): a query que ESTA tela acabou de escrever na URL, aguardando o efeito de
+  // deep-link consumi-la. Existe porque `abrirDetalhe` chama `syncSearchParams`, que reescreve
+  // `?id=`, e isso reacende o efeito de deep-link — que chamava `abrirDetalhe` de novo: DOIS
+  // `GET /almoxarifado/requisicoes/:id` por clique, desde que o deep-link existe.
+  //
+  // Guarda a STRING, e não um booleano, por um motivo medido: `syncSearchParams` só escreve
+  // quando a query muda, então um booleano armado incondicionalmente (clique na linha já
+  // aberta, refetch por foco da janela) FICARIA armado e engoliria o próximo deep-link legítimo
+  // (back/forward). Com a string, a flag só é consumida pela query que ela mesma escreveu.
+  const navInternaRef = useRef(null);
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
   const [showRejeitar, setShowRejeitar] = useState(false);
@@ -119,7 +251,26 @@ const RequisicoesList = () => {
   const [motivoEncerramento, setMotivoEncerramento] = useState('');
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [quantidadesEntrega, setQuantidadesEntrega] = useState({});
+  // Etapa 58 (RN-05): origem escolhida por item ({ [itemId]: { valor, codigo } }) e as opções por
+  // material. `saldosEntregaSeqRef` descarta a resposta de uma abertura anterior do modal.
+  const [origensEntrega, setOrigensEntrega] = useState({});
+  // Etapa 63 (RN-03): motivo da troca da origem separada, por item (só vai quando há troca).
+  const [motivosSubstituicao, setMotivosSubstituicao] = useState({});
+  const [saldosEntrega, setSaldosEntrega] = useState({});
+  const saldosEntregaSeqRef = useRef(0);
+  const [saldosEntregaFalhos, setSaldosEntregaFalhos] = useState({});
+  // Etapa 61 (RN-04): por material, se exige série e quais estão em estoque
+  // ({ [materialId]: { serializado, series, falhou } } — ausente = ainda carregando) e, por item,
+  // os ids escolhidos. `seriesEntregaSeqRef` descarta a resposta de uma abertura anterior do modal.
+  const [seriesEntrega, setSeriesEntrega] = useState({});
+  const [seriesEscolhidas, setSeriesEscolhidas] = useState({});
+  const seriesEntregaSeqRef = useRef(0);
+  // Etapa 59 (RN-05): de onde o item sai na separação ({ [itemId]: valor "loc:lote" }).
+  const [origensSeparacao, setOrigensSeparacao] = useState({});
   const [quantidadesSeparacao, setQuantidadesSeparacao] = useState({});
+  const [motivosSeparacao, setMotivosSeparacao] = useState({});
+  // Etapa 65 (RN-04): motivo da troca da planejada na separação, por item (só vai quando há troca).
+  const [motivosTrocaSeparacao, setMotivosTrocaSeparacao] = useState({});
   const [entregaAposSeparar, setEntregaAposSeparar] = useState(false);
   const [saving, setSaving] = useState(false);
   // Etapa 15: etapa opcional de assinatura do recebedor. Guarda reqId + numero (e não o
@@ -147,7 +298,9 @@ const RequisicoesList = () => {
     const next = new URLSearchParams(params).toString();
     if (next !== searchParams.toString()) {
       setSearchParams(params, { replace: true });
+      return next;     // escreveu: devolve a query escrita, para quem quiser marcar navegacao interna
     }
+    return null;       // nao escreveu — nada a consumir, e nada a armar
   }, [buildSearchParams, searchParams, setSearchParams]);
 
   useEffect(() => {
@@ -164,6 +317,17 @@ const RequisicoesList = () => {
 
   // Deep-link / browser back-forward: open panel when ?id= changes externally
   useEffect(() => {
+    // Consumo da flag: se a query atual é EXATAMENTE a que esta tela acabou de escrever, o detalhe
+    // já foi carregado pelo clique e um segundo GET é desperdício puro. Este é o ÚNICO ponto de
+    // desarme — e ele só desarma quando CASA. Uma flag que não casa SOBREVIVE ao ciclo do efeito
+    // (medido na Fase 2 da Etapa 35), e é exatamente por isso que armar sem ter escrito é um
+    // defeito de verdade e não um detalhe: a flag velha fica esperando a query voltar a ser aquela
+    // (trocar o filtro e destrocar) para engolir um refetch legítimo. Quem garante que isso não
+    // acontece é o `if (escrita !== null)` do `abrirDetalhe`, não este bloco.
+    if (navInternaRef.current !== null && navInternaRef.current === searchParams.toString()) {
+      navInternaRef.current = null;
+      return;
+    }
     const urlId = searchParams.get('id');
     if (!urlId) {
       if (loadedDetalheIdRef.current != null) {
@@ -184,6 +348,138 @@ const RequisicoesList = () => {
     syncSearchParams(selectedIdRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroStatus, filtroMinha, filtroAprovacoesValor, filtroTipo]);
+
+  // Etapa 58 (RN-05): ao abrir o modal de entrega, busca onde cada material está. A chave é a lista
+  // de materiais entregáveis — fechar o modal zera a chave, então reabrir busca de novo e a sequência
+  // descarta a resposta atrasada da abertura anterior. Falha da busca = só "Qualquer endereço".
+  // Etapa 59 (RN-05): o modal de separação usa a mesma busca e as mesmas opções. A chave leva o
+  // modal ("E:"/"S:") para que passar da separação para a entrega busque de novo e zere as escolhas.
+  const materiaisDoModal = (filtro) => [...new Set((detalhe?.itens || [])
+    .filter(filtro)
+    .map((i) => i.material_id)
+    .filter(Boolean))].join(',');
+  let materiaisEntregaKey = '';
+  if (showEntregar && detalhe) materiaisEntregaKey = `E:${materiaisDoModal((i) => maxQtdEntrega(i) > 0)}`;
+  else if (showSeparar && detalhe) materiaisEntregaKey = `S:${materiaisDoModal((i) => maxQtdSeparacao(i) > 0)}`;
+  useEffect(() => {
+    const seq = ++saldosEntregaSeqRef.current;
+    setSaldosEntrega({});
+    setSaldosEntregaFalhos({});
+    setOrigensEntrega({});
+    setMotivosSubstituicao({});
+    setOrigensSeparacao({});
+    const materiais = materiaisEntregaKey.slice(2);
+    if (!materiais) return;
+    materiais.split(',').forEach(async (materialId) => {
+      let rows = [];
+      let falhou = false;
+      try {
+        const res = await api.get(`/almoxarifado/estoque/${materialId}/saldos`);
+        rows = opcoesOrigem(res?.data);
+      } catch (err) {
+        rows = [];
+        falhou = true;
+      }
+      if (saldosEntregaSeqRef.current !== seq) return;
+      if (falhou) setSaldosEntregaFalhos((prev) => ({ ...prev, [materialId]: true }));
+      setSaldosEntrega((prev) => ({ ...prev, [materialId]: rows }));
+    });
+  }, [materiaisEntregaKey]);
+
+  // Etapa 65 (Fase 2, CRÍTICO 2): o modal de separação abria com "Sai de" automático — a rodada de um
+  // clique apagava a planejada de todo item com separado pendente (e gravava troca). Agora, quando os
+  // saldos chegam, o item com planejada pendente parte dela (se está entre as opções); fora delas,
+  // fica automático como antes. Só a primeira vez por abertura: a chave presente (inclusive '') é
+  // escolha já feita — trocar para "automático" depois não volta para a planejada.
+  useEffect(() => {
+    if (!showSeparar || !detalhe) return;
+    const novas = {};
+    (detalhe.itens || []).forEach((item) => {
+      if (maxQtdSeparacao(item) <= 0 || !temPlanejada(item)) return;
+      if (Object.prototype.hasOwnProperty.call(origensSeparacao, item.id)) return;
+      const rows = saldosEntrega[item.material_id];
+      if (!rows) return;
+      novas[item.id] = valorPlanejadaNaSeparacao(item, rows, quantidadesSeparacao[item.id],
+        separandoOutrosDoMaterial(detalhe.itens, item, quantidadesSeparacao));
+    });
+    if (Object.keys(novas).length) setOrigensSeparacao((prev) => ({ ...novas, ...prev }));
+  }, [showSeparar, detalhe, saldosEntrega, origensSeparacao, quantidadesSeparacao]);
+
+  // Etapa 61 (RN-04): só no modal de entrega. O detalhe da requisição não traz `controle_serie`,
+  // então pergunta ao material (GET /materiais/:id). Falha nessa busca = trata como sem série (não
+  // trava a entrega; se o material exigir, o servidor recusa com a literal que manda escolher).
+  // Falha na busca das séries de um material serializado = nenhuma série para escolher (o
+  // confirmar fica desabilitado e o modal diz por quê).
+  useEffect(() => {
+    const seq = ++seriesEntregaSeqRef.current;
+    setSeriesEntrega({});
+    setSeriesEscolhidas({});
+    if (!materiaisEntregaKey.startsWith('E:')) return;
+    const materiais = materiaisEntregaKey.slice(2);
+    if (!materiais) return;
+    materiais.split(',').forEach(async (materialId) => {
+      let info;
+      try {
+        const res = await api.get(`/almoxarifado/materiais/${materialId}`);
+        if (!Number(res?.data?.controle_serie)) {
+          info = { serializado: false, series: [], falhou: false };
+        } else {
+          try {
+            const r2 = await api.get(`/almoxarifado/materiais/${materialId}/series?status=EM_ESTOQUE`);
+            const rows = Array.isArray(r2?.data) ? r2.data : [];
+            info = { serializado: true, series: rows, falhou: false };
+          } catch (err) {
+            info = { serializado: true, series: [], falhou: true };
+          }
+        }
+      } catch (err) {
+        info = { serializado: false, series: [], falhou: false };
+      }
+      if (seriesEntregaSeqRef.current !== seq) return;
+      setSeriesEntrega((prev) => ({ ...prev, [materialId]: info }));
+    });
+  }, [materiaisEntregaKey]);
+
+  // Etapa 59 (RN-05): na entrega, o "Sai de" de um item com origem planejada na separação vem
+  // pré-selecionado com ela, assim que as opções do material chegam. Se a planejada não está entre
+  // as opções (sem saldo ali), fica "automático" e marcado `automatico` — a entrega então manda
+  // `origem_automatica: true`, senão o servidor aplicaria a planejada e recusaria.
+  // Revisão da Etapa 59: a planejada é estrita e o servidor só a aplica até `separado - entregue`.
+  // Depois de entrega parcial a quantidade entregável pode passar disso; pré-selecionar a planejada
+  // aí mandaria origem estrita para a quantidade inteira e o servidor recusaria. Então, quando a
+  // quantidade passa do pendente separado, fica "Qualquer endereço (automático)" SEM chave nenhuma.
+  // Etapa 63 (Fase 2): este comentário dizia que o servidor "aplica a planejada até o pendente e
+  // completa automático acima" — ERA FALSO até a 63: acima do pendente TUDO saía automático, inclusive
+  // o que estava na caixa separado da planejada. Agora o servidor divide a baixa (o separado pendente
+  // sai da planejada, o excedente automático) e não registra substituição; o modal diz isso na dica
+  // "O separado pendente sai de ...". Só a pré-seleção inicial segue essa regra: mudar a quantidade
+  // depois não mexe na escolha já feita.
+  // Busca que falhou: opção "Planejada da separação" selecionada, sem chave (o servidor aplica a
+  // planejada, como na entrega de um clique) — e "Qualquer endereço" continua sendo uma troca real.
+  useEffect(() => {
+    if (!showEntregar || !detalhe) return;
+    const novas = {};
+    (detalhe.itens || []).forEach((item) => {
+      if (maxQtdEntrega(item) <= 0 || !temPlanejada(item)) return;
+      if (origensEntrega[item.id]) return;
+      const rows = saldosEntrega[item.material_id];
+      if (!rows) return;
+      const qtd = parseFloat(quantidadesEntrega[item.id] ?? maxQtdEntrega(item)) || 0;
+      if (qtd > pendenteSeparado(item)) {
+        novas[item.id] = { valor: '', codigo: '', automatico: false };
+        return;
+      }
+      if (saldosEntregaFalhos[item.material_id]) {
+        novas[item.id] = { valor: VALOR_PLANEJADA_SEM_SALDOS, codigo: '', automatico: false };
+        return;
+      }
+      const valor = valorPlanejada(item);
+      novas[item.id] = rows.some((s) => valorOrigem(s) === valor)
+        ? { valor, codigo: '', automatico: false }
+        : { valor: '', codigo: '', automatico: true };
+    });
+    if (Object.keys(novas).length) setOrigensEntrega((prev) => ({ ...novas, ...prev }));
+  }, [showEntregar, detalhe, saldosEntrega, saldosEntregaFalhos, origensEntrega, quantidadesEntrega]);
 
   const aplicarDetalhe = useCallback((data, id) => {
     setDetalhe(data);
@@ -242,7 +538,12 @@ const RequisicoesList = () => {
       if (fetchSeq !== detalheFetchSeqRef.current) return null;
 
       aplicarDetalhe(res.data, id);
-      if (!fromUrl) syncSearchParams(id);
+      if (!fromUrl) {
+        // Marca a navegação como INTERNA só quando a URL realmente mudou: o efeito de deep-link vai
+        // reacender por causa DESTA escrita, e não há segundo detalhe para buscar.
+        const escrita = syncSearchParams(id);
+        if (escrita !== null) navInternaRef.current = escrita;
+      }
       return res.data;
     } catch {
       if (fetchSeq !== detalheFetchSeqRef.current) return null;
@@ -282,11 +583,33 @@ const RequisicoesList = () => {
     };
   }, [warehouseMode, selectedId, abrirDetalhe]);
 
+  // Fechar é fechar: além de zerar o painel, BUMPA a sequência para descartar a resposta em voo —
+  // senão o GET do clique anterior repõe `detalhe`/`loadedDetalheIdRef` e, pior, o
+  // `syncSearchParams(id)` do sucesso ESCREVE `?id=` de volta na URL depois do ✕ (a URL sem `id=`
+  // faz o `syncSearchParams(null)` daqui não escrever nada, então nada desfaz isso). O painel fica
+  // fechado — `selectedId` é null e nada o repõe —, então a tela não denuncia: só o F5 do usuário,
+  // que reabre a requisição que ele acabou de fechar. Mesma regra do painel de recebimentos.
   const fecharDetalhe = () => {
+    ++detalheFetchSeqRef.current;
     setSelectedId(null);
     setDetalhe(null);
     loadedDetalheIdRef.current = null;
     syncSearchParams(null);
+    // Etapa 36 (RN-19): fechar tem de desligar o "carregando" TAMBEM. O `finally` de `abrirDetalhe`
+    // so desliga a flag quando a sequencia ainda e a dele, entao fechar com um GET em voo a deixava
+    // pendurada em `true` para sempre. O irmao em Recebimentos tinha o mesmo residuo — o plano da
+    // Etapa 35 dizia que este commit (`2817054`) servia de molde exato, mas estava errado: aquele
+    // commit acrescentou o bump da sequencia e o `syncSearchParams(null)` acima, e nao zerou a
+    // flag. O residuo era gemeo, nao moldado.
+    //
+    // SEM CENARIO DE TESTE, e isso e declaracao, nao esquecimento (caso 2 da skill fechar-etapa):
+    // todo consumidor de `loadingDetalhe` nesta tela so renderiza com o painel aberto, e abrir o
+    // painel passa por `abrirDetalhe`, que liga a flag na entrada — logo nao existe sequencia de
+    // gestos em que a flag pendurada apareca no DOM. Qualquer assercao escrita hoje passaria antes
+    // e depois desta linha (o controle positivo e um NO-OP declarado). A linha fica porque a forma
+    // segura e barata e porque o proximo consumidor de `loadingDetalhe` — o botao de atualizar o
+    // detalhe que esta tela ja tem, por exemplo — herdaria o defeito em silencio.
+    setLoadingDetalhe(false);
   };
 
   const handleAprovar = async (id, iniciarSeparacao = false) => {
@@ -358,6 +681,8 @@ const RequisicoesList = () => {
     const qtds = {};
     detalhe.itens.forEach((i) => { qtds[i.id] = maxQtdSeparacao(i); });
     setQuantidadesSeparacao(qtds);
+    setMotivosSeparacao({});
+    setMotivosTrocaSeparacao({});
     setShowSeparar(true);
   };
 
@@ -369,6 +694,28 @@ const RequisicoesList = () => {
         .map((i) => ({
           item_id: i.id,
           quantidade_separada: parseFloat(quantidadesSeparacao[i.id] || 0),
+          // Etapa 59 (RN-01): origem/lote só quando escolhidos; lote só se a linha tem lote.
+          ...(() => {
+            const origem = lerValorOrigem(origensSeparacao[i.id]);
+            if (!origem) return {};
+            return origem.lote_id
+              ? { localizacao_origem_id: origem.localizacao_origem_id, lote_id: origem.lote_id }
+              : { localizacao_origem_id: origem.localizacao_origem_id };
+          })(),
+          // Etapa 60 (RN-01): motivo só quando preenchido e só para item abaixo do máximo separável.
+          ...(() => {
+            const maximo = maxSeparavelNaTela(i, origensSeparacao[i.id], saldosEntrega[i.material_id],
+              separandoOutrosDoMaterial(detalhe.itens, i, quantidadesSeparacao));
+            if (!separacaoDivergente(quantidadesSeparacao[i.id], maximo)) return {};
+            const motivo = String(motivosSeparacao[i.id] || '').trim().slice(0, MOTIVO_DIVERGENCIA_MAX);
+            return motivo ? { motivo_divergencia: motivo } : {};
+          })(),
+          // Etapa 65 (RN-04): o motivo da troca só vai quando a rodada troca a planejada e foi preenchido.
+          ...(() => {
+            if (!trocaNaSeparacao(i, origensSeparacao[i.id])) return {};
+            const motivo = String(motivosTrocaSeparacao[i.id] || '').trim().slice(0, MOTIVO_SUBSTITUICAO_MAX);
+            return motivo ? { motivo_substituicao: motivo } : {};
+          })(),
         }))
         .filter((i) => i.quantidade_separada > 0);
 
@@ -387,13 +734,38 @@ const RequisicoesList = () => {
     }
   };
 
-  const montarItensEntrega = (fonte, qtdMap = quantidadesEntrega) => {
+  // `origens` só vem do modal (handleEntregar). A entrega direta (`direto: true`) não escolhe
+  // origem e segue mandando só item + quantidade, como antes da Etapa 58.
+  const montarItensEntrega = (fonte, qtdMap = quantidadesEntrega, origens = null, seriesMap = null, motivos = null) => {
     if (!fonte?.itens) return [];
     return fonte.itens
-      .map((i) => ({
-        item_id: Number(i.id),
-        quantidade_atendida: parseFloat(qtdMap[i.id] ?? qtdMap[String(i.id)] ?? 0) || 0,
-      }))
+      .map((i) => {
+        const item = {
+          item_id: Number(i.id),
+          quantidade_atendida: parseFloat(qtdMap[i.id] ?? qtdMap[String(i.id)] ?? 0) || 0,
+        };
+        // Etapa 58 (RN-05): as chaves de origem vão SÓ quando escolhidas — "Qualquer endereço"
+        // não manda chave nenhuma (o servidor mantém o comportamento automático de antes).
+        const escolha = origens?.[i.id];
+        const origem = lerValorOrigem(escolha?.valor);
+        if (origem) {
+          item.localizacao_origem_id = origem.localizacao_origem_id;
+          if (origem.lote_id) item.lote_id = origem.lote_id;
+          const codigo = extrairCodigoLido(escolha.codigo);
+          if (codigo) item.codigo_lido_origem = codigo;
+        } else if (escolha?.automatico && temPlanejada(i)) {
+          // Etapa 59 (RN-05): "automático" num item com origem planejada tem de ser dito ao servidor,
+          // senão ele aplica a planejada. Item sem planejada segue sem chave nenhuma (Etapa 58).
+          item.origem_automatica = true;
+        }
+        // Etapa 63 (RN-03): o motivo da troca só vai quando há troca da planejada e foi preenchido.
+        const motivo = String(motivos?.[i.id] ?? '').trim();
+        if (motivo && trocaDaPlanejada(i, escolha)) item.motivo_substituicao = motivo.slice(0, MOTIVO_SUBSTITUICAO_MAX);
+        // Etapa 61 (RN-04): só item de material serializado leva `serie_ids` (ids numéricos).
+        const ids = seriesMap?.[i.id];
+        if (ids?.length) item.serie_ids = ids.map(Number);
+        return item;
+      })
       .filter((i) => i.item_id && i.quantidade_atendida > 0);
   };
 
@@ -427,6 +799,9 @@ const RequisicoesList = () => {
     } catch (err) {
       console.error('[RequisicoesList] Erro ao entregar requisição', err?.response?.data || err);
       toast.error(err.response?.data?.error || 'Erro ao entregar');
+      // Fase 5 (review da Etapa 61): o erro pode ser outra entrega ter levado a série (400/409) —
+      // relê as séries do modal para a lista não oferecer de novo a que já saiu.
+      recarregarSeriesEntrega();
     } finally {
       setSaving(false);
     }
@@ -536,8 +911,80 @@ const RequisicoesList = () => {
     }
   };
 
+  // Etapa 61 (RN-04): as séries que valem para o item — só as do lote escolhido no "Sai de" (trocar
+  // o lote não apaga a escolha, mas as de outro lote deixam de contar e de ir no PUT).
+  // null = material sem controle de série; `carregando` = ainda não se sabe.
+  const seriesDoItem = (item) => {
+    const info = seriesEntrega[item.material_id];
+    if (!info) return { carregando: true };
+    if (!info.serializado) return null;
+    const loteId = lerValorOrigem(origensEntrega[item.id]?.valor)?.lote_id || null;
+    const visiveis = seriesDoLote(info, loteId);
+    const idsVisiveis = new Set(visiveis.map((s) => Number(s.id)));
+    const escolhidas = (seriesEscolhidas[item.id] || []).filter((id) => idsVisiveis.has(id));
+    // Fase 5 (review da Etapa 61): com "Sai de" automático a lista mistura lotes, e o servidor recusa
+    // séries de lotes diferentes (sem lote conta como um lote à parte, como lá).
+    const lotesEscolhidos = new Set(visiveis.filter((s) => escolhidas.includes(Number(s.id)))
+      .map((s) => (s.lote_id ? Number(s.lote_id) : null)));
+    return { visiveis, escolhidas, falhou: info.falhou, lotesMisturados: lotesEscolhidos.size > 1 };
+  };
+
+  // Confirmar só com cada item serializado (com quantidade > 0) tendo EXATAMENTE a quantidade.
+  const entregaSeriesPendente = () => (detalhe?.itens || []).some((i) => {
+    if (maxQtdEntrega(i) <= 0) return false;
+    const qtd = parseFloat(quantidadesEntrega[i.id]) || 0;
+    if (qtd <= 0) return false;
+    const s = seriesDoItem(i);
+    if (!s) return false;
+    if (s.carregando) return true;
+    if (s.lotesMisturados) return true;
+    return s.escolhidas.length !== qtd;
+  });
+
+  const alternarSerie = (itemId, serieId) => {
+    setSeriesEscolhidas((prev) => {
+      const atual = prev[itemId] || [];
+      const id = Number(serieId);
+      return { ...prev, [itemId]: atual.includes(id) ? atual.filter((x) => x !== id) : [...atual, id] };
+    });
+  };
+
+  // Fase 5 (review da Etapa 61): relê as séries EM_ESTOQUE dos materiais serializados do modal e
+  // mantém só as marcações que continuam em estoque. Mesma guarda de sequência do efeito de carga
+  // (fechar/reabrir o modal no meio descarta a resposta). Falha = lista vazia com o aviso de falha.
+  const recarregarSeriesEntrega = () => {
+    const seq = seriesEntregaSeqRef.current;
+    Object.entries(seriesEntrega).forEach(async ([materialId, info]) => {
+      if (!info?.serializado) return;
+      let novo;
+      try {
+        const r = await api.get(`/almoxarifado/materiais/${materialId}/series?status=EM_ESTOQUE`);
+        novo = { serializado: true, series: Array.isArray(r?.data) ? r.data : [], falhou: false };
+      } catch (err) {
+        novo = { serializado: true, series: [], falhou: true };
+      }
+      if (seriesEntregaSeqRef.current !== seq) return;
+      const ids = new Set(novo.series.map((s) => Number(s.id)));
+      const itensDoMaterial = new Set((detalhe?.itens || [])
+        .filter((i) => String(i.material_id) === String(materialId)).map((i) => String(i.id)));
+      setSeriesEntrega((prev) => ({ ...prev, [materialId]: novo }));
+      setSeriesEscolhidas((prev) => {
+        const prox = { ...prev };
+        Object.keys(prox).forEach((itemId) => {
+          if (itensDoMaterial.has(String(itemId))) prox[itemId] = prox[itemId].filter((id) => ids.has(Number(id)));
+        });
+        return prox;
+      });
+    });
+  };
+
   const handleEntregar = async () => {
-    const itens_atendidos = montarItensEntrega(detalhe);
+    const seriesMap = {};
+    (detalhe?.itens || []).forEach((i) => {
+      const s = seriesDoItem(i);
+      if (s && !s.carregando && s.escolhidas.length) seriesMap[i.id] = s.escolhidas;
+    });
+    const itens_atendidos = montarItensEntrega(detalhe, quantidadesEntrega, origensEntrega, seriesMap, motivosSubstituicao);
     await entregarItens(itens_atendidos);
   };
 
@@ -728,6 +1175,13 @@ const RequisicoesList = () => {
     ? requisicoes.filter((r) => r.tipo_requisicao === filtroTipo)
     : requisicoes;
 
+  // Etapa 47 (T7): enquanto houver pendência de regra aberta, o servidor recusa /aprovar e
+  // /aprovar-valor (gate). A tela desabilita os botões e diz POR QUÊ, em vez de deixar o clique
+  // cair num 400.
+  const pendenciasRegraAbertas = Number(detalhe?.pendencias_regra_abertas) || 0;
+  const temPendenciaRegra = pendenciasRegraAbertas > 0;
+  const motivoPendenciaRegra = `Aguardando ${pendenciasRegraAbertas} aprovação(ões) de regra antes da aprovação`;
+
   return (
     <div className="almox-page">
       <AlmoxPageHeader
@@ -749,6 +1203,15 @@ const RequisicoesList = () => {
           </>
         }
       />
+
+      {/* Etapa 47 (T7): o que este usuario pode assinar agora. So no modo almoxarifado. */}
+      {warehouseMode && (
+        <FilaAprovacoesRegra recarregarEm={requisicoes} onAbrir={(id) => abrirDetalhe(id)} />
+      )}
+      {/* Etapa 48 (RN-04): a fila da aprovacao simples, so para quem pode aprovar. */}
+      {warehouseMode && pode('aprovar_requisicao') && (
+        <FilaAprovacaoSimples user={user} recarregarEm={requisicoes} onAbrir={(id) => abrirDetalhe(id)} />
+      )}
 
       {/* Filtros */}
       <div className="almox-filters">
@@ -918,6 +1381,19 @@ const RequisicoesList = () => {
                     Aguardando aprovação de alto valor.
                   </div>
                 )}
+                {/* Etapa 47 (T7): as pendências de regra, com o "Assinar" de quem pode. */}
+                {warehouseMode && (
+                  <AprovacoesRegraRequisicao
+                    requisicao={detalhe}
+                    user={user}
+                    onAssinado={async () => { await abrirDetalhe(detalhe.id, { force: true }); await loadRequisicoes(); }}
+                  />
+                )}
+                {warehouseMode && temPendenciaRegra && ['PENDENTE', 'AGUARDANDO_APROVACAO_VALOR'].includes(detalhe.status) && (
+                  <div className="almox-hint-banner" data-testid="aviso-pendencia-regra" style={{ marginBottom: 16, fontSize: '0.8rem' }}>
+                    {motivoPendenciaRegra}. Quem assina cada regra está no bloco acima.
+                  </div>
+                )}
 
                 {/* Itens */}
                 <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--gmp-text)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
@@ -926,7 +1402,7 @@ const RequisicoesList = () => {
                 {detalhe.itens.map(item => (
                   <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--gmp-border)' }}>
                     {item.foto ? (
-                      <img src={resolveMaterialPhotoUrl(item.foto)} alt={item.material_nome} className="almox-foto-thumb" />
+                      <img src={resolveMaterialPhotoUrl(item.foto)} alt={item.material_nome} className="almox-foto-thumb" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                     ) : (
                       <div className="almox-foto-placeholder"><FiPackage size={16} /></div>
                     )}
@@ -953,6 +1429,13 @@ const RequisicoesList = () => {
                       <div style={{ fontSize: '0.72rem', color: 'var(--gmp-text-light)', lineHeight: 1.5 }}>
                         <div>Solicitado: <strong>{item.quantidade_solicitada}</strong></div>
                         <div>Separado: <strong>{getSeparado(item)}</strong></div>
+                        {/* Etapa 59 (RN-05): de onde foi separado — só enquanto há separado a entregar. */}
+                        {item.origem_separacao_codigo && getSeparado(item) > getEntregue(item) && (
+                          <div data-testid={`separado-de-${item.id}`}>
+                            separado de <strong>{item.origem_separacao_codigo}</strong>
+                            {item.lote_separacao_codigo ? ` — lote ${item.lote_separacao_codigo}` : ''}
+                          </div>
+                        )}
                         <div>Entregue: <strong style={{ color: getEntregue(item) > 0 ? 'var(--gmp-success)' : 'inherit' }}>{getEntregue(item)}</strong></div>
                         {getPendente(item) > 0 && (
                           <div style={{ color: 'var(--gmp-warning)' }}>Pendente: <strong>{getPendente(item)}</strong></div>
@@ -977,15 +1460,48 @@ const RequisicoesList = () => {
                     <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--gmp-text)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
                       Separação{separacoes.length > 0 ? ` (${separacoes.length})` : ''}
                     </div>
-                    {separacoes.map((s) => (
-                      <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--gmp-border)', fontSize: '0.82rem' }}>
-                        <FiPackage size={12} style={{ color: 'var(--gmp-text-light)', flexShrink: 0 }} />
-                        <span style={{ fontWeight: 600 }}>{s.usuario_nome || `Usuário #${s.usuario_id}`}</span>
-                        <span style={{ color: 'var(--gmp-text-light)' }}>
-                          · {formatDate(s.created_at)} · {Number(s.itens_tocados) || 0} {Number(s.itens_tocados) === 1 ? 'item' : 'itens'}
-                        </span>
-                      </div>
-                    ))}
+                    {separacoes.map((s) => {
+                      // Etapa 60 (RN-03): os itens divergentes da rodada, para quem confere. O mesmo item
+                      // pode vir em mais de uma entrada (só pela API); o servidor grava a régua do item
+                      // agregado em cada uma — então uma linha por item, com a soma das quantidades.
+                      const porItem = new Map();
+                      (Array.isArray(s.itens) ? s.itens : []).forEach((e) => {
+                        if (!e) return;
+                        const chave = Number(e.item_id);
+                        const acc = porItem.get(chave);
+                        if (!acc) {
+                          porItem.set(chave, { ...e, quantidade: Number(e.quantidade) || 0 });
+                          return;
+                        }
+                        acc.quantidade += Number(e.quantidade) || 0;
+                        acc.divergente = acc.divergente || e.divergente;
+                        if (acc.maximo == null && e.maximo != null) acc.maximo = e.maximo;
+                        if (!acc.motivo_divergencia && e.motivo_divergencia) acc.motivo_divergencia = e.motivo_divergencia;
+                      });
+                      const divergentes = [...porItem.values()].filter((e) => e.divergente);
+                      return (
+                        <div key={s.id} style={{ padding: '6px 0', borderBottom: '1px solid var(--gmp-border)', fontSize: '0.82rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <FiPackage size={12} style={{ color: 'var(--gmp-text-light)', flexShrink: 0 }} />
+                            <span style={{ fontWeight: 600 }}>{s.usuario_nome || `Usuário #${s.usuario_id}`}</span>
+                            <span style={{ color: 'var(--gmp-text-light)' }}>
+                              · {formatDate(s.created_at)} · {Number(s.itens_tocados) || 0} {Number(s.itens_tocados) === 1 ? 'item' : 'itens'}
+                            </span>
+                          </div>
+                          {divergentes.map((e) => {
+                            const itemDet = (detalhe.itens || []).find((i) => Number(i.id) === Number(e.item_id));
+                            const nome = itemDet?.material_nome || `Item #${e.item_id}`;
+                            const motivo = typeof e.motivo_divergencia === 'string' ? e.motivo_divergencia.trim() : '';
+                            return (
+                              <div key={`${s.id}-${e.item_id}`} data-testid={`divergencia-${s.id}-${e.item_id}`}
+                                style={{ marginLeft: 20, marginTop: 4, fontSize: '0.78rem', color: 'var(--gmp-warning)' }}>
+                                {`${nome}: separou ${e.quantidade} de ${e.maximo}${motivo ? ` — ${motivo}` : ' — sem motivo informado'}`}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
                     {detalhe.conferencia && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', fontSize: '0.82rem', color: 'var(--gmp-success, #2e7d32)' }}>
                         <FiCheckCircle size={13} style={{ flexShrink: 0 }} />
@@ -999,6 +1515,43 @@ const RequisicoesList = () => {
                         Há material crítico separado — outra pessoa do almoxarifado precisa conferir antes de liberar ou entregar.
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Etapa 63 (RN-03): a entrega saiu de outro par que não o separado — o registro.
+                    Etapa 65 (RN-03): a troca feita numa rodada de SEPARAÇÃO não diz "saiu de" — nada
+                    saiu do estoque; diz o que estava separado e de onde veio a nova separação. */}
+                {(Array.isArray(detalhe.substituicoes) ? detalhe.substituicoes : []).length > 0 && (
+                  <div style={{ marginTop: 16 }} data-testid="substituicoes-origem">
+                    <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--gmp-text)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                      Substituições ({detalhe.substituicoes.length})
+                    </div>
+                    {detalhe.substituicoes.map((s) => {
+                      const motivo = typeof s.motivo === 'string' ? s.motivo.trim() : '';
+                      let texto;
+                      if (s.momento === 'SEPARACAO') {
+                        let destino = 'de mais de uma origem';
+                        if (s.saiu_codigo) destino = `de ${s.saiu_codigo}${s.saiu_lote ? ` — lote ${s.saiu_lote}` : ''}`;
+                        else if (s.saiu_lote) destino = `do lote ${s.saiu_lote}`;
+                        else if (Number(s.automatica) === 1) destino = 'sem origem (automática)';
+                        texto = `${s.material_codigo}: ${s.quantidade} já separados de ${s.planejada_codigo}${s.planejada_lote ? ` — lote ${s.planejada_lote}` : ''}`
+                          + ` · nova separação ${destino} — a origem anterior deixou de valer${motivo ? ` · ${motivo}` : ''}`;
+                      } else {
+                        texto = `${s.material_codigo}: ${s.quantidade} — separado de ${s.planejada_codigo}${s.planejada_lote ? ` — lote ${s.planejada_lote}` : ''}`
+                          + ` · saiu de ${s.saiu_codigo || 'automático'}${s.saiu_lote ? ` — lote ${s.saiu_lote}` : ''}`
+                          + `${motivo ? ` · ${motivo}` : ''}`;
+                      }
+                      return (
+                        <div key={s.id} data-testid={`substituicao-${s.id}`} style={{ padding: '6px 0', borderBottom: '1px solid var(--gmp-border)', fontSize: '0.82rem' }}>
+                          <div data-testid={`substituicao-texto-${s.id}`}>
+                            {texto}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
+                            {s.usuario_nome || 'Usuário'} · {formatDate(s.em)}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -1016,6 +1569,7 @@ const RequisicoesList = () => {
                             src={resolveMaterialPhotoUrl(a.arquivo_url)}
                             alt={`Assinatura de ${a.recebedor_nome}`}
                             style={{ width: 72, height: 36, objectFit: 'contain', background: '#fff', border: '1px solid var(--gmp-border)', borderRadius: 6, display: 'block' }}
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
                           />
                         </a>
                         <div>
@@ -1033,7 +1587,8 @@ const RequisicoesList = () => {
                 {warehouseMode && detalhe.status === 'AGUARDANDO_APROVACAO_VALOR' && (souAprovadorValor || isAdmin) && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 20, flexWrap: 'wrap' }}>
                     <button className="btn-almox-primary" style={{ flex: 1, justifyContent: 'center', minWidth: 140 }}
-                      onClick={handleAprovarValor} disabled={saving}>
+                      onClick={handleAprovarValor} disabled={saving || temPendenciaRegra}
+                      title={temPendenciaRegra ? motivoPendenciaRegra : undefined}>
                       <FiCheck size={14} /> Aprovar Liberação
                     </button>
                     <button className="btn-almox-danger" style={{ flex: 1, justifyContent: 'center', minWidth: 100 }}
@@ -1073,13 +1628,13 @@ const RequisicoesList = () => {
                 {warehouseMode && detalhe.status === 'PENDENTE' && (
                   <div style={{ display: 'flex', gap: 8, marginTop: 20, flexWrap: 'wrap' }}>
                     <button className="btn-almox-primary" style={{ flex: 1, justifyContent: 'center', minWidth: 140 }}
-                      onClick={(e) => { if (!bloquearSeNaoPode('aprovar_requisicao', e)) return; handleAprovar(detalhe.id, true); }} disabled={saving}
-                      title="Aprova a requisição e já abre a separação dos materiais">
+                      onClick={(e) => { if (!bloquearSeNaoPode('aprovar_requisicao', e)) return; handleAprovar(detalhe.id, true); }} disabled={saving || temPendenciaRegra}
+                      title={temPendenciaRegra ? motivoPendenciaRegra : 'Aprova a requisição e já abre a separação dos materiais'}>
                       <FiCheck size={14} /> Aprovar e Separar
                     </button>
                     <button className="btn-almox-secondary" style={{ flex: 1, justifyContent: 'center', minWidth: 120 }}
-                      onClick={(e) => { if (!bloquearSeNaoPode('aprovar_requisicao', e)) return; handleAprovar(detalhe.id, false); }} disabled={saving}
-                      title="Aprova a requisição sem iniciar a separação agora">
+                      onClick={(e) => { if (!bloquearSeNaoPode('aprovar_requisicao', e)) return; handleAprovar(detalhe.id, false); }} disabled={saving || temPendenciaRegra}
+                      title={temPendenciaRegra ? motivoPendenciaRegra : 'Aprova a requisição sem iniciar a separação agora'}>
                       <FiCheck size={14} /> Só Aprovar
                     </button>
                     <button className="btn-almox-danger" style={{ flex: 1, justifyContent: 'center', minWidth: 100 }}
@@ -1095,11 +1650,24 @@ const RequisicoesList = () => {
                     </button>
                   </div>
                 )}
-                {warehouseMode && ['APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA'].includes(detalhe.status) && (
+                {warehouseMode && ['APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA'].includes(detalhe.status) && (() => {
+                  // Etapa 73 (RN-07): quem espera e já tem o que separar ouve que chegou — no lugar do
+                  // "sem saldo", que deixaria de ser verdade. Separar não reserva: o saldo é de todos.
+                  const esperando = ['AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA'].includes(detalhe.status);
+                  const chegou = esperando ? separavelAgoraPorItem(detalhe.itens) : [];
+                  return (
                   <div style={{ marginTop: 20 }}>
                     <div className="almox-hint-banner" style={{ marginBottom: 12, fontSize: '0.8rem' }}>
-                      {detalhe.status === 'AGUARDANDO_ESTOQUE' && 'Sem saldo disponível no momento — inicie a separação assim que o estoque for reposto.'}
-                      {detalhe.status === 'AGUARDANDO_COMPRA' && 'Sem saldo disponível — há uma solicitação de compra em andamento para os materiais desta requisição.'}
+                      {chegou.length > 0 && (
+                        <>
+                          Chegou material para esta requisição — já dá para separar. O material ainda não está reservado para ela.
+                          {' '}Dá para separar agora: {chegou.map(({ item, quantidade }) =>
+                            `${quantidade} ${item.unidade || item.material_unidade || ''} de ${item.material_nome}`.replace(/\s+/g, ' ')).join('; ')}.
+                          {' '}O saldo é compartilhado: enquanto não for separado, outra requisição pode separá-lo antes.
+                        </>
+                      )}
+                      {chegou.length === 0 && detalhe.status === 'AGUARDANDO_ESTOQUE' && 'Sem saldo disponível no momento — inicie a separação assim que o estoque for reposto.'}
+                      {chegou.length === 0 && detalhe.status === 'AGUARDANDO_COMPRA' && 'Sem saldo disponível — há uma solicitação de compra em andamento para os materiais desta requisição.'}
                       {detalhe.status === 'APROVADO' && 'Próximo passo: separe os materiais (máximo disponível em estoque) e confirme a entrega.'}
                       {detalhe.status === 'PARCIALMENTE_RESERVADA' && 'Parte dos itens não tinha saldo e ficou sem reserva — separe o que está reservado e acompanhe a reposição do restante.'}
                       {detalhe.status === 'TOTALMENTE_RESERVADA' && 'Todo o saldo desta requisição está reservado — inicie a separação.'}
@@ -1110,7 +1678,8 @@ const RequisicoesList = () => {
                       <FiPackage size={14} /> Iniciar Separação
                     </button>
                   </div>
-                )}
+                  );
+                })()}
                 {warehouseMode && detalhe.status === 'EM_SEPARACAO' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 20 }}>
                     <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
@@ -1147,12 +1716,23 @@ const RequisicoesList = () => {
                       </button>
                     )}
                     {temEntregavel(detalhe.itens) ? (
+                      <>
                       <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
                         onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; handleConfirmarEntrega({ direto: true }); }}
                         disabled={saving || conferenciaPendente}
                         title={conferenciaPendente ? TITLE_CONFERENCIA_PENDENTE : 'Entrega os itens separados e dá baixa no estoque — a movimentação fica registrada no livro'}>
                         <FiTruck size={14} /> {saving ? 'Confirmando...' : 'Confirmar Entrega e Baixar Estoque'}
                       </button>
+                      {/* Etapa 58: a entrega direta (um clique) nao escolhe de onde sai; esta abre o modal com
+                          "Sai de" por item — o mesmo gesto, com a origem, sem mudar o botao principal. */}
+                      <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
+                        data-testid="entregar-escolhendo-origem"
+                        onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; handleConfirmarEntrega({ direto: false }); }}
+                        disabled={saving || conferenciaPendente}
+                        title="Abre a entrega item a item para escolher o endereço (e o lote) de onde cada material sai">
+                        Entregar escolhendo de onde sai…
+                      </button>
+                      </>
                     ) : (
                       <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', textAlign: 'center', padding: '8px 0' }}>
                         Nenhuma quantidade separada disponível para entrega no momento.
@@ -1166,12 +1746,23 @@ const RequisicoesList = () => {
                       Pronta para retirada — aguardando o solicitante buscar o material separado.
                     </div>
                     {temEntregavel(detalhe.itens) ? (
+                      <>
                       <button className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
                         onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; handleConfirmarEntrega({ direto: true }); }}
                         disabled={saving || conferenciaPendente}
                         title={conferenciaPendente ? TITLE_CONFERENCIA_PENDENTE : 'Entrega os itens separados e dá baixa no estoque — a movimentação fica registrada no livro'}>
                         <FiTruck size={14} /> {saving ? 'Confirmando...' : 'Confirmar Entrega e Baixar Estoque'}
                       </button>
+                      {/* Etapa 58: a entrega direta (um clique) nao escolhe de onde sai; esta abre o modal com
+                          "Sai de" por item — o mesmo gesto, com a origem, sem mudar o botao principal. */}
+                      <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
+                        data-testid="entregar-escolhendo-origem"
+                        onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; handleConfirmarEntrega({ direto: false }); }}
+                        disabled={saving || conferenciaPendente}
+                        title="Abre a entrega item a item para escolher o endereço (e o lote) de onde cada material sai">
+                        Entregar escolhendo de onde sai…
+                      </button>
+                      </>
                     ) : (
                       <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', textAlign: 'center', padding: '8px 0' }}>
                         Nenhuma quantidade separada disponível para entrega no momento.
@@ -1276,6 +1867,36 @@ const RequisicoesList = () => {
                     <FiTrash2 size={14} /> Excluir Requisição
                   </button>
                 )}
+              </div>
+            )}
+
+            {/* Etapa 34 — anexos da requisição (desenho, documento). Mesmo molde dos blocos
+                aditivos que leem junto da requisição (Separação, Assinaturas de entrega).
+                FORA do ternário de `loadingDetalhe`, de propósito (achado F2 da revisão da
+                branch), e é a única coisa deste painel que precisa ficar fora: o bloco guarda
+                estado LOCAL do usuário — o arquivo escolhido no input, o tipo e a descrição
+                (`AnexosDocumento.js:110-112`) —, e o corpo do painel desmonta a cada refetch do
+                detalhe (`:270-284` refaz a cada `focus` da janela; trocar filtro também). O
+                cenário real: o usuário escolhe `nf.pdf` no diálogo do SO, fechar o diálogo
+                devolve o foco à janela, o corpo desmonta e "Anexar" responde
+                "Arquivo é obrigatório" — com um segundo GET de anexos de brinde. Aqui fora o
+                `id` não muda durante o refetch (`abrirDetalhe` só zera `detalhe` quando o id
+                MUDA, `:232-234`), então o bloco nunca remonta.
+                Ficar depois do corpo também o põe ABAIXO dos botões de ação, que era um achado
+                MENOR separado da mesma revisão (Recebimentos já estava nessa ordem).
+                `warehouseMode` (achado F1): esta MESMA tela roda em
+                `/comercial/requisicoes-material`, `/frota/…`, `/compras/…`, `/financeiro/…`,
+                `/fabrica/…` e `/engenharia/…` (`App.js` → `RequisicoesMaterialPages.js`), onde
+                `apiPrefix` é `/requisicoes-material` — servido SEM a permissão do módulo
+                almoxarifado, e `GET /almoxarifado/anexos` está atrás de
+                `checkModulePermission('almoxarifado')`: daria 403 em vermelho dentro do painel,
+                formulário de upload morto (o hook de permissões falha ABERTO de propósito) e uma
+                linha de auditoria por abertura de painel.
+                `detalhe.id` e NÃO `selectedId`: o bloco lê o registro carregado, não a URL — e
+                aqui fora o `{detalhe && …}` é o que garante que `detalhe.id` existe. */}
+            {warehouseMode && detalhe && (
+              <div style={{ padding: '0 20px 20px' }}>
+                <AnexosDocumento entidade="requisicao" entidadeId={detalhe.id} titulo="Anexos" />
               </div>
             )}
           </div>
@@ -1404,6 +2025,60 @@ const RequisicoesList = () => {
                     <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
                       Solicitado: {item.quantidade_solicitada} · Já separado: {getSeparado(item)} · Saldo: {item.saldo_atual}
                     </div>
+                    {/* Etapa 59 (RN-05): de onde o separador tirou — opcional. Com origem escolhida, a
+                        entrega sem escolha sai dela (a origem planejada). */}
+                    <div style={{ marginTop: 8 }}>
+                      <label className="almox-label" htmlFor={`separacao-origem-${item.id}`} style={{ fontSize: '0.8rem' }}>Sai de</label>
+                      <select id={`separacao-origem-${item.id}`} className="almox-form-select"
+                        value={origensSeparacao[item.id] || ''}
+                        onChange={e => {
+                          const valor = e.target.value;
+                          setOrigensSeparacao(o => ({ ...o, [item.id]: valor }));
+                        }}>
+                        <option value="">Qualquer endereço (automático)</option>
+                        {(saldosEntrega[item.material_id] || []).map(s => (
+                          <option key={valorOrigem(s)} value={valorOrigem(s)}>{rotuloOrigem(s)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Etapa 65 (RN-04): a rodada troca a planejada do separado pendente — avisa e pede o porquê. */}
+                    {(parseFloat(quantidadesSeparacao[item.id]) || 0) > 0 && trocaNaSeparacao(item, origensSeparacao[item.id]) && (
+                      <div style={{ marginTop: 8 }}>
+                        <div id={`separacao-aviso-troca-${item.id}`} className="almox-hint-banner" style={{ fontSize: '0.75rem' }}>
+                          {`A origem da separação anterior (${item.origem_separacao_codigo}${item.lote_separacao_codigo ? ` — lote ${item.lote_separacao_codigo}` : ''}) deixa de valer: o que já está separado passa a sair automático na entrega.`}
+                        </div>
+                        <label className="almox-label" htmlFor={`separacao-motivo-troca-${item.id}`} style={{ fontSize: '0.8rem', marginTop: 6 }}>Motivo da troca (opcional)</label>
+                        <input id={`separacao-motivo-troca-${item.id}`} className="almox-input" type="text"
+                          maxLength={MOTIVO_SUBSTITUICAO_MAX}
+                          value={motivosTrocaSeparacao[item.id] || ''}
+                          onChange={e => {
+                            const valor = e.target.value;
+                            setMotivosTrocaSeparacao(m => ({ ...m, [item.id]: valor }));
+                          }} />
+                      </div>
+                    )}
+                    {/* Etapa 60 (RN-04): abaixo do máximo separável, pede o porquê — sem obrigar. */}
+                    {separacaoDivergente(
+                      quantidadesSeparacao[item.id],
+                      maxSeparavelNaTela(item, origensSeparacao[item.id], saldosEntrega[item.material_id],
+                        separandoOutrosDoMaterial(detalhe.itens, item, quantidadesSeparacao))
+                    ) && (
+                      <div style={{ marginTop: 8 }}>
+                        <label className="almox-label" htmlFor={`separacao-motivo-${item.id}`} style={{ fontSize: '0.8rem' }}>
+                          Motivo da divergência (opcional)
+                        </label>
+                        <textarea id={`separacao-motivo-${item.id}`} className="almox-textarea" rows={2}
+                          maxLength={MOTIVO_DIVERGENCIA_MAX}
+                          value={motivosSeparacao[item.id] || ''}
+                          onChange={e => {
+                            const valor = e.target.value;
+                            setMotivosSeparacao(m => ({ ...m, [item.id]: valor }));
+                          }} />
+                        <div style={{ fontSize: '0.72rem', color: 'var(--gmp-text-light)', marginTop: 2 }}>
+                          Separando menos que o possível — conte o porquê para quem confere.
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <input className="almox-count-input" type="number" min="0" step="1"
@@ -1461,6 +2136,116 @@ const RequisicoesList = () => {
                         Será entregue: {qtdEntregar} {item.unidade} | Permanecerá pendente: {permanecePendente} {item.unidade}
                       </div>
                     )}
+                    {/* Etapa 58 (RN-05): de onde o item sai — opcional. Com origem escolhida a saída é
+                        estrita no servidor (não completa com outros endereços). */}
+                    <div style={{ marginTop: 8 }}>
+                      <label className="almox-label" htmlFor={`entrega-origem-${item.id}`} style={{ fontSize: '0.8rem' }}>Sai de</label>
+                      <select id={`entrega-origem-${item.id}`} className="almox-form-select"
+                        value={origensEntrega[item.id]?.valor || ''}
+                        onChange={e => {
+                          const valor = e.target.value;
+                          setOrigensEntrega(o => ({
+                            ...o,
+                            [item.id]: { valor, codigo: valor ? (o[item.id]?.codigo || '') : '', automatico: !valor },
+                          }));
+                        }}>
+                        {saldosEntregaFalhos[item.material_id] && temPlanejada(item) && (
+                          <option value={VALOR_PLANEJADA_SEM_SALDOS}>Planejada da separação ({item.origem_separacao_codigo})</option>
+                        )}
+                        <option value="">Qualquer endereço (automático)</option>
+                        {(saldosEntrega[item.material_id] || []).map(s => (
+                          <option key={valorOrigem(s)} value={valorOrigem(s)}>{rotuloOrigem(s)}</option>
+                        ))}
+                      </select>
+                      <CampoCodigoLido
+                        id={`entrega-codigo-lido-${item.id}`}
+                        value={origensEntrega[item.id]?.codigo || ''}
+                        disabled={!lerValorOrigem(origensEntrega[item.id]?.valor)}
+                        onChange={v => setOrigensEntrega(o => ({ ...o, [item.id]: { ...o[item.id], codigo: v } }))}
+                        dica={lerValorOrigem(origensEntrega[item.id]?.valor) ? null :'Para confirmar a leitura, escolha antes de onde o item sai.'}
+                      />
+                      {/* Etapa 63: acima do separado pendente, sem escolha, o servidor divide a baixa. */}
+                      {temPlanejada(item) && qtdEntregar > pendenteSeparado(item) + 1e-9
+                        && !origensEntrega[item.id]?.valor && !origensEntrega[item.id]?.automatico && (
+                        <div id={`entrega-dica-pendente-${item.id}`} style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)', marginTop: 4 }}>
+                          O separado pendente sai de {item.origem_separacao_codigo}{item.lote_separacao_codigo ? ` — lote ${item.lote_separacao_codigo}` : ''}; o restante, automático. Se lá não houver mais o separado, a entrega é recusada — escolha de onde sai.
+                        </div>
+                      )}
+                      {/* Etapa 63 (RN-03): saindo de onde não foi separado, o motivo da troca (opcional). */}
+                      {trocaDaPlanejada(item, origensEntrega[item.id]) && (
+                        <div style={{ marginTop: 8 }}>
+                          <label className="almox-label" htmlFor={`entrega-motivo-troca-${item.id}`} style={{ fontSize: '0.8rem' }}>Motivo da troca (opcional)</label>
+                          <input id={`entrega-motivo-troca-${item.id}`} className="almox-input" type="text"
+                            maxLength={MOTIVO_SUBSTITUICAO_MAX}
+                            value={motivosSubstituicao[item.id] || ''}
+                            onChange={e => setMotivosSubstituicao(m => ({ ...m, [item.id]: e.target.value }))} />
+                          <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)', marginTop: 2 }}>
+                            Saindo de onde não foi separado — conte o porquê.
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {/* Etapa 61 (RN-04): material com controle de série — quais séries saem. */}
+                    {(() => {
+                      const s = seriesDoItem(item);
+                      if (!s) return null;
+                      if (s.carregando) {
+                        return <div style={{ marginTop: 8, fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>Verificando séries do material...</div>;
+                      }
+                      const escolhidasOutros = new Set(detalhe.itens
+                        .filter((o) => o.id !== item.id && Number(o.material_id) === Number(item.material_id))
+                        .flatMap((o) => seriesDoItem(o)?.escolhidas || []));
+                      const bate = s.escolhidas.length === qtdEntregar;
+                      return (
+                        <div id={`entrega-series-${item.id}`} style={{ marginTop: 8 }}>
+                          <div className="almox-label" style={{ fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>Séries que saem</span>
+                            <span id={`entrega-series-contador-${item.id}`}
+                              style={{ color: bate ? 'var(--gmp-success)' : 'var(--gmp-warning)', fontWeight: 600 }}>
+                              {s.escolhidas.length} de {qtdEntregar}
+                            </span>
+                          </div>
+                          {s.falhou ? (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--gmp-error)' }}>
+                              Não foi possível carregar as séries deste material. Feche e abra a entrega de novo.
+                            </div>
+                          ) : s.visiveis.length === 0 ? (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--gmp-warning)' }}>
+                              Nenhuma série em estoque{lerValorOrigem(origensEntrega[item.id]?.valor)?.lote_id ? ' neste lote' : ''}. Regularize as séries do material em Lotes e Séries.
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px' }}>
+                              {s.visiveis.map((serie) => {
+                                const id = Number(serie.id);
+                                const marcada = s.escolhidas.includes(id);
+                                const bloqueada = !marcada && (escolhidasOutros.has(id) || s.escolhidas.length >= qtdEntregar);
+                                return (
+                                  <label key={serie.id} style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                    title={escolhidasOutros.has(id) ? 'Já escolhida em outro item' : undefined}>
+                                    <input type="checkbox" data-serie-id={id} checked={marcada} disabled={bloqueada}
+                                      onChange={() => alternarSerie(item.id, id)} />
+                                    <span>{serie.numero}</span>
+                                    {serie.localizacao_descricao && (
+                                      <span style={{ color: 'var(--gmp-text-light)', fontSize: '0.7rem' }}> · {serie.localizacao_descricao}</span>
+                                    )}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {s.lotesMisturados && (
+                            <div id={`entrega-series-lotes-${item.id}`} role="alert" style={{ fontSize: '0.7rem', color: 'var(--gmp-error)', marginTop: 4 }}>
+                              Escolha séries de um lote só.
+                            </div>
+                          )}
+                          {!bate && qtdEntregar > 0 && (
+                            <div style={{ fontSize: '0.7rem', color: 'var(--gmp-warning)', marginTop: 4 }}>
+                              Escolha exatamente {qtdEntregar} série(s) para entregar {qtdEntregar} {item.unidade}.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div>
                     <input className="almox-count-input" type="number" min="0" step="1"
@@ -1477,7 +2262,7 @@ const RequisicoesList = () => {
             </div>
             <div className="almox-modal-footer">
               <button className="btn-almox-secondary" onClick={() => setShowEntregar(false)}>Cancelar</button>
-              <button className="btn-almox-primary" onClick={handleEntregar} disabled={saving || detalhe.itens.every(i => maxQtdEntrega(i) <= 0)}>
+              <button className="btn-almox-primary" onClick={handleEntregar} disabled={saving || detalhe.itens.every(i => maxQtdEntrega(i) <= 0) || entregaSeriesPendente()}>
                 {saving ? 'Confirmando...' : '✅ Confirmar Entrega'}
               </button>
             </div>

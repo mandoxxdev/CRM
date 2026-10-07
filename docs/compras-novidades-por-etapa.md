@@ -5,11 +5,12 @@
 > roteiro curto para demonstrar ao vivo. Pedido do André em 2026-10-06. O equivalente do
 > almoxarifado é `docs/almoxarifado-novidades-por-etapa.md`.
 >
-> **Onde o desenvolvimento está:** lote de 2026-10-06, branch `main`. Etapas **33 a 38
-> entregues e integradas** (merges `ca8a1364`, `891c960a`, `2bec1eb9`, `a84d2121`, `51d77c21`,
-> `a3b57583`, `a10174c5`; seções abaixo). As nove tasks do lote estão entregues, mais a Etapa 38
-> (resposta à D-35b). O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35**
-> (significado de A/B/C). Design do lote:
+> **Onde o desenvolvimento está:** **2026-10-07 — unificação.** A branch `desenvolvimento-almoxarifado`
+> (Etapas 0–77 do almoxarifado) foi mesclada na `main`; daqui em diante **só existe a `main`**
+> (decisão do André; detalhes e perdas em **B18**). O lote de Compras (Etapas 33–38, seções abaixo)
+> continua valendo, com uma exceção: a Etapa 33 ficou sem objeto e a Etapa 32 da `main` saiu.
+> O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
+> A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
 > `specs/modulo-compras/README.md`.
 
@@ -94,6 +95,20 @@
   compra** (o servidor já exigia; a tela agora diz "Obrigatório."), e voltar para "na própria
   unidade" **limpa** o número gravado (antes ficava um número órfão escondido). **Descartado:**
   tornar o número opcional (mudaria a regra do servidor sem pedido).
+- **B18 — Unificação (2026-10-07): o almoxarifado inteiro entrou na `main`, e o pedido de compra
+  que sobreviveu é o da branch (Etapas 38–41), não o da Etapa 32 da `main`.** Você pediu "todas
+  as melhorias do almoxarifado para a `main`, e daqui em diante só `main`". Os dois pedidos
+  gravavam nas mesmas tabelas com colunas diferentes, e o recebimento contra pedido do
+  almoxarifado (Etapas 37, 42, 71, 72) só entende o da branch. **O que a `main` perde:** o
+  formulário da Etapa 32 — IPI por item, frete, condições de pagamento, via de transporte,
+  snapshot fiscal do fornecedor no pedido, lançamento em lote. **O que ganha no lugar:** pedido
+  gerado da cotação, importação por planilha, atraso por pedido, status automático pelo
+  recebimento, e o recebimento fechando/reabrindo o pedido. A Etapa 33 (entrega no pedido)
+  fica sem objeto — o pedido da branch nunca teve entrega por item. As colunas da Etapa 32
+  continuam no banco, sem leitor. **A ficha do fornecedor da Etapa 34 fica** (vence a da Etapa 40
+  da branch). **Reverter:** `git revert -m 1` do commit de merge devolve a `main` de antes; o
+  histórico da branch continua existindo. Se os campos de IPI/frete/condições fizerem falta,
+  viram pedido para o pedido da branch (etapa própria) — não há como ter os dois.
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.

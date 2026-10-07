@@ -85,12 +85,21 @@ const STATUS_SERIE_INFO = {
   ENTREGUE: { label: 'Entregue', cls: 'concluido' },
   SUCATEADA: { label: 'Sucateada', cls: 'cancelado' },
   ESTORNADA: { label: 'Estornada', cls: 'cancelado' },
+  // Etapa 61 (RN-06): série dada como ausente na regularização — não é presente.
+  BAIXADA: { label: 'Baixada', cls: 'cancelado' },
 };
+
+// Etapa 61 (RN-06): presentes = EM_ESTOQUE + BLOQUEADA (a mesma régua de `contarPresentes` no
+// servidor). Os limites espelham `regularizarSeries`: cadastrar até floor(físico − presentes),
+// baixar até ceil(presentes − físico). O servidor recalcula e é quem decide.
+const STATUS_PRESENTES = ['EM_ESTOQUE', 'BLOQUEADA'];
+const JUSTIFICATIVA_REGULARIZAR_MIN = 5;
+const numerosDigitados = (texto) => [...new Set(String(texto || '').split('\n').map((l) => l.trim()).filter(Boolean))];
 
 const serieStatusInfo = (s) => STATUS_SERIE_INFO[s] || { label: s || '—', cls: 'vazio' };
 
 const LotesAlmoxarifado = () => {
-  const { bloquearSeNaoPode } = useAlmoxPermissoes();
+  const { bloquearSeNaoPode, pode } = useAlmoxPermissoes();
   const [searchParams] = useSearchParams();
 
   const [materiais, setMateriais] = useState([]);
@@ -156,6 +165,21 @@ const LotesAlmoxarifado = () => {
     return () => { cancelado = true; };
   }, [materialId, reloadToken]);
 
+  // Etapa 50 (C71): o resumo físico × atribuído, com a MESMA guarda `cancelado` e o mesmo
+  // `reloadToken`. Falha aqui não derruba a tabela nem dispara o toast dos lotes — o bloco só some.
+  const [resumoLotes, setResumoLotes] = useState(null);
+  useEffect(() => {
+    if (!materialId) { setResumoLotes(null); return undefined; }
+    let cancelado = false;
+    // Fase 5 (M3): zera antes do GET - senao, na troca de material, o bloco mostra o valor do
+    // material ANTERIOR com a unidade do novo enquanto a resposta nao chega.
+    setResumoLotes(null);
+    api.get(`/almoxarifado/materiais/${materialId}/lotes/resumo`)
+      .then((res) => { if (!cancelado) setResumoLotes(res.data || null); })
+      .catch(() => { if (!cancelado) setResumoLotes(null); });
+    return () => { cancelado = true; };
+  }, [materialId, reloadToken]);
+
   // Mesmo molde do efeito de lotes acima, mas só dispara com a aba Séries selecionada — trocar
   // de aba (ou de material) antes da resposta chegar tem de descartá-la pela mesma guarda
   // `cancelado`, senão a resposta atrasada de uma visita anterior pinta a aba/material atual.
@@ -169,6 +193,71 @@ const LotesAlmoxarifado = () => {
       .finally(() => { if (!cancelado) setLoadingSeries(false); });
     return () => { cancelado = true; };
   }, [materialId, aba, reloadToken]);
+
+  // Etapa 61 (RN-06): o material vem do GET por id (a lista do select é carregada uma vez só e
+  // envelhece; aqui o físico e `controle_serie` são relidos a cada Atualizar/ação). Mesma guarda
+  // `cancelado`. Falha = sem aviso (não inventa divergência).
+  const [materialSerie, setMaterialSerie] = useState(null);
+  const [regCadastrar, setRegCadastrar] = useState('');
+  const [regBaixar, setRegBaixar] = useState([]);
+  const [regJustificativa, setRegJustificativa] = useState('');
+  const [regSaving, setRegSaving] = useState(false);
+  const [regErro, setRegErro] = useState('');
+  // Fase 5 (review da Etapa 61): lote opcional das series cadastradas — material com lote e serie
+  // ficava num beco (a entrega filtra pelo lote e a serie sem lote nunca aparecia). Vazio = sem lote.
+  const [regLoteId, setRegLoteId] = useState('');
+  useEffect(() => {
+    setMaterialSerie(null);
+    setRegCadastrar('');
+    setRegLoteId('');
+    setRegBaixar([]);
+    setRegJustificativa('');
+    setRegErro('');
+    if (!materialId || aba !== 'SERIES') return undefined;
+    let cancelado = false;
+    api.get(`/almoxarifado/materiais/${materialId}`)
+      .then((res) => { if (!cancelado) setMaterialSerie(res.data && !Array.isArray(res.data) ? res.data : null); })
+      .catch(() => { if (!cancelado) setMaterialSerie(null); });
+    return () => { cancelado = true; };
+  }, [materialId, aba, reloadToken]);
+
+  const seriesPresentes = series.filter((s) => STATUS_PRESENTES.includes(s.status));
+  const fisicoSerie = Number(materialSerie?.quantidade_atual) || 0;
+  const divergenciaSerie = !!materialSerie && Number(materialSerie.controle_serie) === 1
+    && String(materialSerie.id) === String(materialId) && !loadingSeries
+    && Math.abs(seriesPresentes.length - fisicoSerie) > 1e-9;
+  const maxCadastrar = Math.max(0, Math.floor(fisicoSerie - seriesPresentes.length + 1e-9));
+  // Fase 5: floor nos dois sentidos, como o servidor (ceil deixava baixar 1 com fisico 2,5 e 3
+  // presentes e criava a divergencia inversa).
+  const maxBaixar = Math.max(0, Math.floor(seriesPresentes.length - fisicoSerie + 1e-9));
+  const numerosACadastrar = numerosDigitados(regCadastrar);
+  const regQtd = maxCadastrar > 0 ? numerosACadastrar.length : regBaixar.length;
+  const regMax = maxCadastrar > 0 ? maxCadastrar : maxBaixar;
+  const regJustificativaOk = regJustificativa.trim().length >= JUSTIFICATIVA_REGULARIZAR_MIN;
+  const podeRegularizar = regQtd > 0 && regQtd <= regMax && regJustificativaOk && !regSaving;
+
+  const alternarBaixa = (id) => setRegBaixar((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const regularizarSeries = async () => {
+    if (!podeRegularizar) return;
+    setRegSaving(true);
+    setRegErro('');
+    try {
+      const body = { justificativa: regJustificativa.trim() };
+      if (maxCadastrar > 0) {
+        body.cadastrar = numerosACadastrar;
+        if (regLoteId) body.lote_id = Number(regLoteId);
+      }
+      else body.baixar = regBaixar.map(Number);
+      await api.post(`/almoxarifado/materiais/${materialId}/series/regularizar`, body);
+      toast.success('Séries regularizadas!');
+      loadLotes();
+    } catch (err) {
+      setRegErro(err.response?.data?.error || 'Erro ao regularizar as séries');
+    } finally {
+      setRegSaving(false);
+    }
+  };
 
   const materialSelecionado = materiais.find((m) => m.id === parseInt(materialId, 10));
 
@@ -362,7 +451,11 @@ const LotesAlmoxarifado = () => {
                           {/* Review final da Etapa 6: o arquivo era gravado e NUNCA visualizável —
                               a tela só o lia como booleano. Quem precisasse conferir o certificado
                               do fornecedor tinha de adivinhar o nome do arquivo no servidor. */}
-                          <a href={resolveMaterialPhotoUrl(l.certificado_arquivo)}
+                          {/* Etapa 33: `certificado_url` vem do SERVIDOR, já assinado. Antes esta
+                              linha montava o endereço a partir de `certificado_arquivo` (o nome do
+                              arquivo), e URL montada no client não tem assinatura — o link daria
+                              404 desde que o diretório deixou de ser público. */}
+                          <a href={resolveMaterialPhotoUrl(l.certificado_url)}
                             target="_blank" rel="noopener noreferrer"
                             style={{ color: 'inherit', textDecoration: 'underline' }}
                             title="Abrir o certificado do fornecedor">
@@ -444,6 +537,115 @@ const LotesAlmoxarifado = () => {
           </table>
         )}
       </div>
+      )}
+
+      {/* Etapa 50 (C71): o físico e o "sem lote atribuído". FORA do ternário da tabela — o
+          material legado com controle de lote e sem lote nenhum cai em "Nenhum lote cadastrado",
+          e é justamente o que mais precisa deste bloco (Fase 2 da etapa). */}
+      {aba === 'LOTES' && materialId && resumoLotes && resumoLotes.sem_lote_atribuido !== 0 && (
+        <div data-testid="resumo-sem-lote" className="almox-hint-banner" style={{ marginTop: 12, fontSize: '0.85rem' }}>
+          <div>
+            <strong>Sem lote atribuído:</strong> {resumoLotes.sem_lote_atribuido} {materialSelecionado?.unidade || ''}
+            {' · '}
+            <strong>Físico total do material:</strong> {resumoLotes.fisico} {materialSelecionado?.unidade || ''}
+          </div>
+          <div style={{ marginTop: 4, color: 'var(--gmp-text-light)' }}>
+            O saldo de cada lote é o atribuído a ele. Saídas que não informam lote (como a entrega de
+            requisição) e o ajuste de saldo total não baixam de lote nenhum; entradas sem lote (por
+            exemplo, antes de ligar o controle de lote) também ficam fora dos lotes. Lotes + sem lote
+            atribuído = físico total.
+          </div>
+        </div>
+      )}
+
+      {/* Etapa 61 (RN-06): séries presentes ≠ físico — o aviso e, para quem pode ajustar estoque, o
+          gesto de regularização. Fica fora da tabela: o caso "físico sem nenhuma série" é justamente
+          o de lista vazia. */}
+      {aba === 'SERIES' && divergenciaSerie && (
+        <div id="series-divergencia" style={{ margin: '0 0 12px', padding: 12, borderRadius: 8, background: 'var(--gmp-surface)', border: '1px solid var(--gmp-warning)' }}>
+          <div style={{ fontWeight: 600, color: 'var(--gmp-warning)' }}>
+            Séries presentes: {seriesPresentes.length} · Físico: {fisicoSerie}
+          </div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', marginTop: 4 }}>
+            O número de séries em estoque (em estoque + bloqueadas) não bate com o saldo físico do material.
+            {maxCadastrar > 0 && ' Há unidades sem série: a entrega delas fica travada até cadastrar as séries.'}
+            {maxBaixar > 0 && ' Há séries que não estão mais no estoque: a entrega poderia oferecê-las.'}
+          </div>
+          {pode('ajustar_estoque') && regMax > 0 && (
+            <div id="series-regularizar" style={{ marginTop: 12 }}>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>Regularizar séries</div>
+              {maxCadastrar > 0 ? (
+                <div className="almox-field">
+                  <label className="almox-label" htmlFor="regularizar-cadastrar">
+                    Números de série a cadastrar (um por linha, até {maxCadastrar})
+                  </label>
+                  <textarea id="regularizar-cadastrar" className="almox-textarea" rows={4}
+                    value={regCadastrar} onChange={(e) => setRegCadastrar(e.target.value)} />
+                  <div style={{ fontSize: '0.75rem', color: numerosACadastrar.length > maxCadastrar ? 'var(--gmp-error)' : 'var(--gmp-text-light)' }}>
+                    {numerosACadastrar.length} de até {maxCadastrar}
+                  </div>
+                  <div id="regularizar-cadastrar-dica" style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
+                    Para reativar uma série baixada por engano, informe o número dela.
+                  </div>
+                  {lotes.length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      <label className="almox-label" htmlFor="regularizar-lote">Lote das séries cadastradas</label>
+                      <select id="regularizar-lote" className="almox-select" value={regLoteId}
+                        onChange={(e) => setRegLoteId(e.target.value)}>
+                        <option value="">Sem lote</option>
+                        {lotes.map((l) => <option key={l.id} value={l.id}>{l.codigo}</option>)}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="almox-field">
+                  <div className="almox-label">Séries a baixar como ausentes (até {maxBaixar})</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px' }}>
+                    {seriesPresentes.map((s) => {
+                      const id = Number(s.id);
+                      const marcada = regBaixar.includes(id);
+                      return (
+                        <label key={s.id} style={{ fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <input type="checkbox" data-serie-id={id} checked={marcada}
+                            disabled={!marcada && regBaixar.length >= maxBaixar}
+                            onChange={() => alternarBaixa(id)} />
+                          {s.numero}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{regBaixar.length} de até {maxBaixar}</div>
+                </div>
+              )}
+              <div className="almox-field">
+                <label className="almox-label" htmlFor="regularizar-justificativa">
+                  Justificativa<span className="required">*</span>
+                </label>
+                <textarea id="regularizar-justificativa" className="almox-textarea" rows={2}
+                  value={regJustificativa} onChange={(e) => setRegJustificativa(e.target.value)}
+                  placeholder="Por que as séries estão sendo regularizadas..." />
+                {regJustificativa.length > 0 && !regJustificativaOk && (
+                  <div style={{ fontSize: '0.75rem', color: 'var(--gmp-error)' }}>
+                    A justificativa precisa de pelo menos {JUSTIFICATIVA_REGULARIZAR_MIN} caracteres.
+                  </div>
+                )}
+              </div>
+              {regErro && (
+                <div id="regularizar-erro" role="alert" style={{ fontSize: '0.8rem', color: 'var(--gmp-error)', marginBottom: 8 }}>{regErro}</div>
+              )}
+              <button type="button" id="regularizar-confirmar" className="btn-almox-primary"
+                disabled={!podeRegularizar} onClick={regularizarSeries}>
+                {regSaving ? 'Regularizando...' : 'Regularizar séries'}
+              </button>
+            </div>
+          )}
+          {pode('ajustar_estoque') && regMax === 0 && (
+            <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', marginTop: 8 }}>
+              A diferença é menor que uma unidade — acerte o físico pelo ajuste de estoque.
+            </div>
+          )}
+        </div>
       )}
 
       {/* Tabela — Séries (Task 10) */}

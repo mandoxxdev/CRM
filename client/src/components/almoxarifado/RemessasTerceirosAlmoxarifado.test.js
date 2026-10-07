@@ -56,6 +56,12 @@ const DETALHE_1 = {
   itens: [
     { id: 11, material_id: 101, material_codigo: 'CHP-3MM', material_nome: 'Chapa 3mm', unidade: 'PC',
       quantidade: 30, quantidade_retornada: 10, pendente: 20, peso: 240 },
+    // Etapa 34: o SEGUNDO item existe para que os cenarios de anexo possam provar duas coisas que
+    // uma fixture de um item so nao distingue — que o clipe consulta o item da LINHA (e nao o
+    // primeiro, nem a remessa), e que abrir o painel com N itens nao dispara N requisicoes (RN-02).
+    // `itens_total: 2` em LISTA[0] sempre disse dois; o array e que dizia um.
+    { id: 12, material_id: 102, material_codigo: 'TUB-2', material_nome: 'Tubo 2"',
+      unidade: 'M', quantidade: 5, quantidade_retornada: 0, pendente: 5, peso: null },
   ],
   retornos: [{ id: 5, item_remessa_id: 11, material_codigo: 'CHP-3MM', quantidade: 10, nota_fiscal: 'NF-1' }],
 };
@@ -293,7 +299,9 @@ describe('RemessasTerceirosAlmoxarifado', () => {
     expect(gerarRemessaPDF).toHaveBeenCalled();
     const dados = gerarRemessaPDF.mock.calls[0][0];
     expect(dados.remessa.numero).toBe('REM-1');
-    expect(dados.itens).toHaveLength(1);
+    // Dois, e nao um: `DETALHE_1.itens` ganhou o item 12 na Etapa 34. A assercao continua valendo
+    // o que valia — o PDF recebe os itens CARREGADOS, nao uma lista vazia nem a linha da lista.
+    expect(dados.itens).toHaveLength(2);
     expect(dados.geradoEm).toBeTruthy();
   });
 
@@ -383,5 +391,93 @@ describe('RemessasTerceirosAlmoxarifado', () => {
     await clicar(botao('Adicionar item'));
     expect(container.querySelectorAll('.almox-remessa-novos-itens tbody tr')).toHaveLength(2);
     expect(toast.error).toHaveBeenCalled();
+  });
+});
+
+describe('RemessasTerceirosAlmoxarifado — anexos do item de remessa (Etapa 34)', () => {
+  const URL_ANEXOS = '/almoxarifado/anexos';
+  const chamadasDeAnexo = () => api.get.mock.calls.filter(([u]) => u === URL_ANEXOS);
+  const abrirPainel = async () => {
+    await renderizar();
+    await clicar(botao('Abrir', linhaDe('REM-1')));
+  };
+  const abrirAnexos = async (idItem) => {
+    await act(async () => {
+      container.querySelector(`[data-testid="anexos-item-${idItem}"]`)
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await esperarEfeitos();
+  };
+  const fecharAnexos = async () => {
+    await act(async () => {
+      container.querySelector('[data-testid="anexos-modal"] .almox-modal-close')
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await esperarEfeitos();
+  };
+
+  // O id do ITEM (11), nunca o da remessa (1) — RN-05. `entidade_id: 1` aqui e indistinguivel de
+  // tres defeitos diferentes: `entidadeId={aberta.id}`, `entidadeId={1}` literal, e indice zero.
+  // Em producao esse e o defeito que aparece como 400 numa remessa e silencio noutra: a rota
+  // filtra por `entidade` E `entidade_id`, entao o clipe do item devolveria os anexos de outra
+  // coisa (ou nada) sem erro nenhum na tela.
+  test('o clipe abre o modal de anexos DO item da linha — e nao da remessa', async () => {
+    await abrirPainel();
+    expect(container.querySelector('[data-testid="anexos-item-11"]')).not.toBeNull();
+
+    await abrirAnexos(11);
+
+    expect(container.querySelector('[data-testid="anexos-modal"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="anexos-documento"]')).not.toBeNull();
+    expect(api.get).toHaveBeenCalledWith(URL_ANEXOS,
+      { params: { entidade: 'item_remessa', entidade_id: 11 } });
+    // RN-02: UMA requisicao. `toHaveBeenCalledWith` sozinho aceitaria dez.
+    expect(chamadasDeAnexo()).toHaveLength(1);
+  });
+
+  test('reabrir em outro item consulta o item novo, nao o anterior', async () => {
+    await abrirPainel();
+    await abrirAnexos(11);
+    await fecharAnexos();
+    await abrirAnexos(12);
+    const chamadas = chamadasDeAnexo();
+    expect(chamadas[chamadas.length - 1][1].params).toEqual(
+      { entidade: 'item_remessa', entidade_id: 12 });
+  });
+
+  // RN-02, o negativo que realmente importa nesta tela: o item vive numa tabela de N linhas dentro
+  // do painel, entao um bloco INLINE por linha faria N requisicoes so por abrir a remessa. O
+  // negativo sozinho ficaria verde se o clique em "Abrir" falhasse em silencio e o painel nunca
+  // abrisse — por isso a metade positiva (duas linhas, com clipe) vem antes, e a chamada certa,
+  // depois.
+  test('abrir o painel com dois itens nao consulta anexos; so o clique consulta', async () => {
+    await abrirPainel();
+    expect(linhasDetalhe()).toHaveLength(2);
+    expect(container.querySelector('[data-testid="anexos-item-11"]')).not.toBeNull();
+
+    expect(chamadasDeAnexo()).toHaveLength(0);
+
+    await abrirAnexos(11);
+    expect(api.get).toHaveBeenCalledWith(URL_ANEXOS,
+      { params: { entidade: 'item_remessa', entidade_id: 11 } });
+    expect(chamadasDeAnexo()).toHaveLength(1);
+  });
+
+  // RN-01: item em digitacao nao tem `id`, e sem `id` nao existe registro-pai para anexar. O clipe
+  // na tabela de `itensNovos` seria um botao que abre um modal vazio — ou, pior, um `entidade_id`
+  // undefined indo para a rota. A metade positiva (o clipe existe na tabela do painel) impede que
+  // este cenario fique verde com o clipe ausente das DUAS tabelas.
+  test('a tabela de itens em digitacao NAO tem clipe; a do painel tem', async () => {
+    await abrirPainel();
+    expect(container.querySelector('[data-testid="anexos-item-11"]')).not.toBeNull();
+
+    await clicar(botao('Nova remessa'));
+    preencher(campo('Material'), '101');
+    preencher(campo('Quantidade do item'), '10');
+    await clicar(botao('Adicionar item'));
+    const novos = container.querySelector('.almox-remessa-novos-itens');
+    expect(novos.querySelectorAll('tbody tr')).toHaveLength(1);
+    expect(novos.querySelectorAll('[data-testid^="anexos-item-"]')).toHaveLength(0);
+    expect(chamadasDeAnexo()).toHaveLength(0);
   });
 });

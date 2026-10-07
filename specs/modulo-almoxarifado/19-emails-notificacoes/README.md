@@ -1,7 +1,7 @@
 # 19 — E-mails Automáticos e Fila de Notificações
 
 > **Status:** 🟢 — fila formal com retry/dedupe/histórico, gancho pós-commit por classes, painel com reenvio; cortes declarados (matriz por evento, templates, digest, PDF, grupos) · **Spec original:** seções 14 e 31
-> **Entregue na Etapa 12** (design `c1613c2`, execução `18a8d71..d7fee6c`) · **Última atualização:** 2026-08-24
+> **Entregue na Etapa 12** (design `c1613c2`, execução `18a8d71..d7fee6c`) · **Última atualização:** 2026-10-02 (Etapa 75: o aviso a quem esperava também quando a inspeção ou a NC libera o material retido — `c8c089cb`, `655d75b8`, `18405a2e`) · Antes: 2026-10-01 (Etapa 70: o aviso da nota que entrou no estoque e o aviso a quem esperava o material — `faa8f65..eb6c614`)
 
 ## Objetivo
 
@@ -21,6 +21,24 @@ E-mail imediato em TODA entrada e saída confirmada, com conteúdo mínimo da sp
 - [x] E-mail em **toda entrada confirmada** — `77d1f38` (gancho no motor cobre todas as portas; classes `TIPOS_ENTRADA`)
 - [x] E-mail em **toda saída confirmada** — `77d1f38` — **com exceções DELIBERADAS, decididas em revisão:** RESERVA/remanejos, REMESSA_TERCEIRO/RETORNO_TERCEIRO (retenção; o canal da remessa é o alerta de remessa vencida) e **AJUSTE_INVENTARIO** (`d7fee6c` — só existe em lote: 50 divergências = 50 e-mails num clique, medido; o canal da conferência é a tela/relatório, feature 21)
 - [x] Conteúdo mínimo (spec 14.1) — `77d1f38` + `48426f5` (saldos, lote/séries reais do motor, motivo/justificativa/referência com rótulos próprios, link direto) — **sem comprovante PDF** (corte D3, letra D das novidades); projeto/OS/cliente saem como `#id`, sem resolver nome (desvio declarado da Task 2)
+- [x] **Aviso da nota que entrou no estoque e aviso a quem esperava o material** — **Etapa 70 (2026-10-01):**
+  `5aaa5c1`, `a2db931`, `b90e228`, `585e384` + Fase 5 `f039576`, `b5f51c0`, `e8f503c`. Dois eventos novos na fila:
+  `RECEBIMENTO_ENTRADA` (um por nota processada/aprovada — dedupe `recebimento-entrada-<id>`; lista própria
+  `notificacoes_dest_recebimento` → `notificacoes_dest_compras` → `compras_notificar_emails`; chave
+  `notificar_recebimento_entrada`, **nasce `'0'`**) e `RECEBIMENTO_ENTRADA_REQUISITANTE` (um por requisição que esperava
+  material que entrou livre — dedupe `recebimento-entrada-<id>-req-<req>`; para `usuarios.email` do solicitante; chave
+  `notificar_recebimento_solicitante`, **nasce `'1'`**). O e-mail por movimentação acima **não mudou** e continua ao
+  lado. Os dois eventos estão no filtro do painel. *(Este item completa o "[x] E-mail em toda entrada confirmada" acima,
+  que é por movimentação e não chega a quem pediu o material — ver a correção na spec 08.)*
+- [x] **Aviso ao solicitante quando a inspeção ou a não conformidade libera o material retido** — **Etapa 75
+  (2026-10-02):** `c8c089cb` + Fase 5 `655d75b8`, `18405a2e`. Mesmo evento `RECEBIMENTO_ENTRADA_REQUISITANTE` e mesma
+  chave `notificar_recebimento_solicitante` da 70 (sem toque no cliente); dedupe **por documento** —
+  `inspecao-liberada-<inspecao_id>-req-<req>` e `nc-liberada-<nc_id>-req-<req>` (a chave da 70 engoliria a segunda
+  liberação da mesma nota); assunto *"[Almoxarifado] Material liberado para a sua requisição <REQ>"*, primeira linha que
+  diz a porta, a linha do material com o reservado e a frase L1/L0 da 74. Recebe quem ganhou reserva nesta liberação ou
+  tem saldo livre do material; a requisição de material de cliente sem o projeto do dono não recebe. A revisão do código
+  achou que o "pendente" deste e-mail **e do da chegada (74)** descontava duas vezes o separado na caixa — os dois usam
+  agora a régua da reserva (`faltaDoItem` = pendente de entrega − hold alheio).
 - [ ] Destinatários por tipo de evento como **matriz configurável** — **cortado (D2):** entregue como 4 listas por CLASSE + 1 de compras (`18a8d71`), que cobrem a spec 14.2 com o mecanismo de config validado na Etapa 11; a matriz evento×destino com CRUD é etapa própria se a prática pedir (letra B15)
 - [ ] Grupos de e-mail como cadastro (feature 01) — **não entrou:** depende do cadastro de grupos da feature 01, que não existe; as listas aceitam JSON ou vírgula
 - [x] Disparo **somente após commit** da movimentação — `77d1f38` (gancho após todas as escritas/compensações; recusada não enfileira — provado por sabotagem em 3 rodadas) + supressão no estorno (`48426f5`) e recusa de reenvio de cancelada (`d7fee6c`)
@@ -28,7 +46,7 @@ E-mail imediato em TODA entrada e saída confirmada, com conteúdo mínimo da sp
 ### Backend — fila (spec 31)
 - [x] Tabela da fila com evento, payload, destinatários, status, tentativas, hash de dedupe — `18a8d71`
 - [x] Worker com retry/backoff; alerta ao admin após N falhas — `18a8d71` + claim de envio `a8b9c0e` (dois drenos concorrentes = um e-mail, medido)
-- [x] Controle de duplicidade — `18a8d71` (INSERT OR IGNORE + `changes===0`; réguas por evento: `mov-<id>`, `ferramenta-lembrete-<id>-<dia>`, `lote-vencendo-<id>-<validade>`, `remessa-vencida-<id>-<prazo>`, `solicitacoes-<ids>`, `falha-<id>`)
+- [x] Controle de duplicidade — `18a8d71` (INSERT OR IGNORE + `changes===0`; réguas por evento: `mov-<id>`, `ferramenta-lembrete-<id>-<dia>`, `lote-vencendo-<id>-<validade>`, `remessa-vencida-<id>-<prazo>`, `solicitacoes-<ids>`, `falha-<id>`; desde a Etapa 70 `recebimento-entrada-<id>` e `recebimento-entrada-<id>-req-<req>`; desde a Etapa 75 `inspecao-liberada-<id>-req-<req>` e `nc-liberada-<id>-req-<req>`)
 - [x] Painel de pendentes/falhas + reenvio manual autorizado — `18a8d71` (rotas) + `feba6e2`/`8fdcbe5` (tela)
 - [ ] Modelos configuráveis (template por tipo) — **cortado (D3):** corpo fixo por builder, gravado na fila
 - [ ] Resumo diário opcional (digest) — **cortado (D3)**

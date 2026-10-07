@@ -1,0 +1,1545 @@
+# Etapa 41 — A cotação ganha itens e vira pedido — Plano de implementação
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** a cotação de compra passa a ter linhas (material do catálogo, quantidade, preço) com total somado; um clique em "Gerar pedido" na lista cria o pedido de compra no servidor a partir da cotação (número `PC-…`, itens e preços copiados), grava o vínculo e leva o comprador para a edição do pedido; a mesma cotação não gera dois pedidos; excluir cotação com itens funciona e excluir cotação convertida é recusado com frase.
+
+**Architecture:** tronco (T1) cria a tabela `itens_cotacao` em `schema.js` (chega ao harness por `initSchema`), o `CotacaoItemSchema` com `itens` **opcional** em `CotacaoSchema`, exporta `resolverItens` do serviço de pedido e acrescenta `cotacoes.pedido_id` (core: `ALTER` em `index.js` + stub). T2 (um executor, servidor) põe itens, total derivado, lixeira própria e a conversão em `cotacaoService.js` e nas rotas. T3 (tela da cotação) e T4 (aba Cotações) são galhos de cliente contra o contrato congelado, em worktrees. T5 cruza pela rota e pelo serviço; T6 fecha pela skill `fechar-etapa`.
+
+**Tech Stack:** Express + `sqlite3` (`dbRun`/`dbGet`/`dbAll` de `services/almoxarifado/db.js`), `zod@4` (`z.looseObject`, `validate()`), supertest + runner próprio; React 18 CRA, `react-router-dom` v6, axios (`services/api`), jest sem RTL.
+
+**Spec:** `docs/superpowers/specs/2026-09-22-crm-etapa41-cotacao-itens-pedido-design.md` (D1–D12, RN-F01…RN-F14, contratos §5). **Medições:** `.superpowers/sdd/etapa41-fase0-servidor.md`, `etapa41-fase0-cliente.md` (2026-09-22, contra `820860a`). **BASE:** `7d9e7d7`.
+
+## Global Constraints
+
+- **Linhas citadas** medidas em `820860a`; T1 desloca `schemas.js`, `pedidoCompraService.js` (só `module.exports`), `schema.js`, `index.js`, `testApp.js`; T2 desloca `routes/compras.js` e reescreve `cotacaoService.js`. **Reconte com `grep -n`** antes de editar.
+- **`z.looseObject`**, literal **na construção E no refinamento**, **sem coerção** (`'2'` é recusado; a tela usa `Number()`).
+- **Literais próprias da cotação** (`… do item da cotação …`) — nunca as do pedido; `'Material não encontrado'` é de `resolverItens` e tem **um** dono.
+- **`itens` é opcional** (D2): os 4 cenários que criam cotação só com `{ numero, fornecedor_id }` continuam iguais — (1) de `comprasCotacaoRotas`, (j) de `comprasSchemasFornecedorCotacao`, (A)/(B) de `comprasFornecedorCotacaoIntegracao`.
+- **`valor_total`: duas regras** (D3) — com itens, derivado e o payload ignorado; sem itens, o do payload. Tela e servidor espelham.
+- **`itens_cotacao` em `schema.js`** (chega ao harness sem stub); **`cotacoes.pedido_id` em `index.js` + stub `testApp.js` + `SELECT_LINHA`** (três lugares, D6).
+- **`DELETE /api/compras/cotacoes/:id` registrado ANTES do genérico** (`app.delete('/api/compras/:tipo/:id')`, `:367`) — posição é comportamento.
+- **Gate:** `authenticateToken, checkModulePermission('compras')` em toda rota nova. Nenhum `requirePermission`.
+- **Client:** `data-testid` prefixados `cotacao-`; ids de fixture **770/771/772** (cotações), **7701/7702** (itens), **912** (material), **650** (pedido gerado) — fora do conjunto ocupado; erro de form em `role="alert"`, erro de ação de linha em `toast` (mesmo canal da lixeira); as duas telas novas já estão em `reais` dos Proxies das suas suítes.
+- **Commits:** português, corpo sem acento, um por task, `git add` explícito, mensagem em `…\scratchpad\msg-e41-t<N>.txt`, `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` *(na retomada após o corte de sessão o coordenador trocou para `Claude Opus 5` — T2–T5 e a onda estão assinados assim; a T1 com Fable 5.1)*. Nada de push pelos executores.
+- **Sabotagem:** `md5sum` antes/depois/pós-restauro, âncora `grep -cF` = 1, restauro por cópia do scratchpad, nunca `git checkout --`; `python3` não executa; **heredoc com acento quebra no Bash desta máquina — usar o Write tool**; LF (CR=0 por `perl -ne '$c++ if /\r/'`).
+- **Teste verde de primeira é suspeito:** controle positivo nomeado em cada task.
+
+---
+
+## ⚠️ O modo de falha desta etapa: o verde do harness com FK desligada
+
+Produção liga `PRAGMA foreign_keys = ON` (`sqliteConcurrency.js:50`); o harness roda com FK **desligada**
+(`testApp.js:97`). Com `itens_cotacao.cotacao_id REFERENCES cotacoes(id)`, um `DELETE FROM cotacoes`
+que **não** apague os filhos antes **passa no harness** (deixa órfãos) e **falha com 500 em produção**.
+Nenhuma asserção de status pega isso. Por isso o cenário da lixeira **conta `itens_cotacao` órfãos**, e a
+sabotagem obrigatória é remover o `DELETE` dos filhos e ver esse `COUNT` cair. Mesma lógica para o
+vínculo: `cotacoes.pedido_id REFERENCES pedidos_compra(id)` não dispara no harness quando o pedido é
+apagado — ~~a RN-F12 declara que o `pedido_id` **fica**, e o cenário afirma isso para ninguém "consertar"~~
+*(corrigido no fechamento: a Fase 2 (I2) **inverteu** a RN-F12 — `excluirPedido` libera a cotação com
+`UPDATE … SET pedido_id = NULL` **antes** do `DELETE`; e é justamente essa ordem que o harness não vê
+e a onda teve de provar com a FK ligada — F2, `83a5d71`. Ver §12.1 e §12.5 do design.)*
+**O que o fechamento acrescenta a este aviso:** o harness com FK desligada também é cego para a
+**ordem** dos statements (não só para a ausência do `DELETE` dos filhos), e nenhum `COUNT` pega
+ordem. A régua para isso é um segundo banco com a DDL de produção e `foreign_keys = ON`
+(`comprasCotacaoFkProducao.api.test.js`), com controle positivo dentro do cenário.
+
+### Três regras herdadas
+
+1. Ao medir ausência, teste a régua contra um caso que existe.
+2. Leia **qual** asserção caiu na sabotagem, não o placar.
+3. Marque o plano ao terminar cada task (hash, divergências).
+
+---
+
+## Regras de negócio — `RN-F01…RN-F14` e quem prova cada uma
+
+| RN | Enunciado curto | Prova |
+|---|---|---|
+| RN-F01 | item: `material_id` int > 0 do catálogo, `quantidade` > 0, `valor_unitario` ≥ 0 opcional; literais próprias; material inexistente → 400 sem gravar | T1 (r), T2-itens (4) |
+| RN-F02 | `itens` opcional; sem itens, `valor_total` do payload | T1 (p), T2-itens (3) |
+| RN-F03 | com itens, `valor_total` = Σ e o do payload é ignorado | T2-itens (1)(2), T3 (i)(j) |
+| RN-F04 | `GET /:id`/`POST`/`PUT` devolvem `itens[]` com `codigo/descricao/unidade`; lista devolve `pedido_id`/`pedido_numero`, não itens | T2-itens (6), T2-gerar (1), T4 (j) |
+| RN-F05 | `PUT` substitui as linhas; `PUT` sem `itens` apaga | T2-itens (5), T3 (m) |
+| RN-F06 | `DELETE /cotacoes/:id` próprio: 409 se convertida; senão apaga itens + cotação | T2-itens (7)(8)(10), T2-gerar (7) |
+| RN-F07 | `POST …/gerar-pedido` → `criarPedido`, 201 com o pedido, `pedido_id` e `status='aprovado'` gravados | T2-gerar (1)(8) |
+| RN-F08 | sem itens → 400 | T2-gerar (3) |
+| RN-F09 | `rejeitado`/`cancelado` → 400 | T2-gerar (4) |
+| RN-F10 | segunda conversão → 409 sem pedido novo | T2-gerar (2), T5 |
+| RN-F11 | fornecedor inativo → 400; apagado → 400 | T2-gerar (5) |
+| RN-F12 | o pedido gerado é normal (lista, aux do recebimento, PUT, DELETE); **excluir o pedido LIBERA a cotação** (`pedido_id` volta a NULL, `cotacoes_liberadas` na resposta — Fase 2 I2, o precedente da I1 da 38) | T2-gerar (10), T5 |
+| RN-F15 | cotação convertida **não pode mais ser editada**: `PUT` → 409 `Cotação ⟨numero⟩ já gerou o pedido ⟨PC⟩ — não pode mais ser editada` (Fase 2 I3) | T2-gerar (9) |
+| RN-F13 | tela: busca, linhas, total derivado, campo travado com itens, payload `itens` + `Number()` | T3 (i)–(n) |
+| RN-F14 | aba: coluna Pedido, botão condicional, POST, toast, navigate, erro no toast, export | T4 (j)(k)(l) |
+
+---
+
+## Contratos de API congelados
+
+Idênticos ao design §5. Nomes exatos que os galhos consomem:
+
+**T1 exporta** (`schemas.js`): `CotacaoItemSchema`, `ITENS_COTACAO_INVALIDOS`, `MATERIAL_ITEM_COTACAO_OBRIGATORIO`,
+`QTD_ITEM_COTACAO_INVALIDA`, `VALOR_UNITARIO_ITEM_COTACAO_NEGATIVO`; e `CotacaoSchema` ganha `itens`.
+(`pedidoCompraService.js`): `resolverItens`.
+
+**T2 exporta** (`cotacaoService.js`): `excluirCotacao(db, id)`, `gerarPedidoDaCotacao(db, id, user)`,
+`COTACAO_SEM_ITENS`, `cotacaoStatusNaoGera(status)`, `FORNECEDOR_INATIVO_CONVERSAO`,
+`cotacaoJaGerouPedido(numero, pc)`, `cotacaoJaGerouPedidoExclusao(numero, pc)`,
+`cotacaoJaGerouPedidoEdicao(numero, pc)` (= `${cotacaoJaGerouPedido(numero, pc)} — não pode mais ser editada`),
+`rotuloPedido(c)` (= `c.pedido_numero || `#${c.pedido_id}``), `COTACAO_EXCLUIDA = 'Cotação excluída com sucesso'`.
+**T2 também toca `pedidoCompraService.excluirPedido`** (`:518-544`): antes de apagar o pedido,
+`UPDATE cotacoes SET pedido_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE pedido_id = ?` e a resposta
+ganha `cotacoes_liberadas: N` ao lado de `solicitacoes_liberadas` (Fase 2 I2 — é o precedente da I1 da
+Etapa 38, `liberarSolicitacoesDoPedido :213-252`).
+
+**Rotas** (T2): `POST /api/compras/cotacoes/:id/gerar-pedido` → `201` pedido (`obterPedido`: `{ id, numero, fornecedor_id, fornecedor_nome, valor_total, status, itens[…] }`); `DELETE /api/compras/cotacoes/:id` → `200 { message }`. `GET /api/compras/cotacoes` → linhas com `pedido_id`, `pedido_numero`.
+
+**Client** (T3/T4): design §5.5 verbatim.
+
+---
+
+## Estrutura de arquivos
+
+| Arquivo | Task | Responsabilidade |
+|---|---|---|
+| `server/services/almoxarifado/schema.js` (após `:1339`) | T1 | `itens_cotacao` + índice |
+| `server/index.js` (após `:19256`) | T1 | `ALTER TABLE cotacoes ADD COLUMN pedido_id` |
+| `server/tests/helpers/testApp.js` (`:117-127`) | T1 | `pedido_id INTEGER` no stub |
+| `server/services/compras/schemas.js` (`:203-219`, exports `:236-247`, comentário `:164-167`) | T1 | `CotacaoItemSchema`, `itens`, literais; reescrever o comentário |
+| `server/services/compras/pedidoCompraService.js` (`module.exports :1013-1038`) | T1 | exportar `resolverItens` |
+| `server/tests/api/comprasSchemasFornecedorCotacao.api.test.js` | T1 | (p)–(s) |
+| `server/services/compras/cotacaoService.js` | T2 | itens, total, `excluirCotacao`, `gerarPedidoDaCotacao` |
+| `server/routes/compras.js` (`:316-343` lista; `:345-364` bloco; `:367` genérico) | T2 | `LEFT JOIN` na lista; `DELETE` próprio antes do genérico; `POST …/gerar-pedido` |
+| `server/tests/api/comprasCotacaoItens.api.test.js`, `comprasCotacaoGerarPedido.api.test.js` | T2 | 10 + 8 |
+| `client/src/components/compras/CotacaoForm.js` + `.test.js` | T3 | itens, total (caminho C), +6 cenários |
+| `client/src/components/Compras.js` (`:22`, `:268-278`, `:423-481`) + `Compras.test.js` | T4 | coluna Pedido, botão, `handleGerarPedido`, export, +3 cenários |
+| `server/tests/api/comprasCotacaoPedidoIntegracao.api.test.js` | T5 | A4 |
+| `specs/modulo-compras/README.md:70`, `22-integracoes`, mapa, guia, manual, novidades, planos | T6 | fechamento |
+
+## Sort topológico
+
+| Task | Tipo | Depende | Toca |
+|---|---|---|---|
+| T1 tabela + schema + exports + coluna | **tronco** | — | 6 arquivos acima |
+| T2 servidor (itens, lixeira, conversão) | **tronco** (um executor; worktree `wt-e41-t2`) | T1 | `cotacaoService.js`, `routes/compras.js`, 2 suítes |
+| T3 cliente-form | **galho** (`wt-e41-t3`) | T1 (contrato) | `CotacaoForm.*` |
+| T4 cliente-aba | **galho** (`wt-e41-t4`) | T1 (contrato) | `Compras.js`, `Compras.test.js` |
+| T5 integração | tronco | T2 | teste novo |
+| T6 fechamento | tronco | T5 | docs |
+
+T2, T3, T4 rodam **em paralelo** (três worktrees a partir do commit da T1, junction de `node_modules` —
+provado na 40; `rmdir` da junction **antes** de `git worktree remove`). Arquivos disjuntos → merge limpo
+esperado; ordem de cherry-pick T2 → T3 → T4, suíte inteira depois de cada um. **Conflito previsto:**
+nenhum de código; o **plano** (blocos FECHADA) pode conflitar por adjacência — resolver mantendo os três.
+
+---
+
+### Task 1: `itens_cotacao`, `CotacaoItemSchema`, `resolverItens` exportada e `cotacoes.pedido_id` **(tronco)**
+
+**Files:**
+- Modify: `server/services/almoxarifado/schema.js` (após `:1339`), `server/index.js` (após `:19256`), `server/tests/helpers/testApp.js` (`:117-127`), `server/services/compras/schemas.js` (`:164-167`, `:203-219`, `:236-247`), `server/services/compras/pedidoCompraService.js` (`:1013-1038`)
+- Test: `server/tests/api/comprasSchemasFornecedorCotacao.api.test.js` (+4 cenários, no fim, antes do `console.log` final)
+
+**Interfaces:**
+- Consumes: `dataIsoOpcional`, `textoOpcional`, `CotacaoSchema` existentes; `resolverItens` (`pedidoCompraService.js:290-309`).
+- Produces: os exports listados em "Contratos"; a tabela `itens_cotacao` em todo `createTestApp()`; a coluna `pedido_id` no stub e em produção.
+
+- [x] **Step 1: escrever (p)–(s) e ver vermelho** — em `comprasSchemasFornecedorCotacao.api.test.js`, após o (o):
+
+```js
+  await test('(p) RN-F02 itens ausente -> undefined; [] passa; item minimo passa com valor_unitario undefined', () => {
+    assert.strictEqual(S.CotacaoSchema.safeParse({ numero: 'C', fornecedor_id: 1 }).data.itens, undefined);
+    const r = S.CotacaoSchema.safeParse({ numero: 'C', fornecedor_id: 1, itens: [] });
+    assert.ok(r.success, r.success ? '' : msgs(r));
+    assert.deepStrictEqual(r.data.itens, []);
+    const r2 = S.CotacaoSchema.safeParse({ numero: 'C', fornecedor_id: 1, itens: [{ material_id: 912, quantidade: 2 }] });
+    assert.ok(r2.success, r2.success ? '' : msgs(r2));
+    assert.strictEqual(r2.data.itens[0].valor_unitario, undefined);
+  });
+  await test('(q) itens "abc" -> ITENS_COTACAO_INVALIDOS (a armadilha 2 vale para o tipo do array)', () => {
+    const r = S.CotacaoSchema.safeParse({ numero: 'C', fornecedor_id: 1, itens: 'abc' });
+    assert.ok(!r.success);
+    assert.strictEqual(msgs(r), `itens: ${S.ITENS_COTACAO_INVALIDOS}`);
+    assert.strictEqual(S.ITENS_COTACAO_INVALIDOS, 'itens da cotação devem ser uma lista');
+  });
+  await test('(r) RN-F01 item: material ausente/"3"/0 -> literal; quantidade 0/"2" -> literal; valor_unitario -1 -> literal; caminho itens.0.<campo>', () => {
+    for (const v of [undefined, '3', 0]) {
+      const r = S.CotacaoSchema.safeParse({ numero: 'C', fornecedor_id: 1, itens: [{ material_id: v, quantidade: 1 }] });
+      assert.ok(!r.success, `devia recusar material_id ${JSON.stringify(v)}`);
+      assert.strictEqual(msgs(r), `itens.0.material_id: ${S.MATERIAL_ITEM_COTACAO_OBRIGATORIO}`);
+    }
+    for (const v of [0, '2']) {
+      const r = S.CotacaoSchema.safeParse({ numero: 'C', fornecedor_id: 1, itens: [{ material_id: 912, quantidade: v }] });
+      assert.strictEqual(msgs(r), `itens.0.quantidade: ${S.QTD_ITEM_COTACAO_INVALIDA}`);
+    }
+    const r3 = S.CotacaoSchema.safeParse({ numero: 'C', fornecedor_id: 1, itens: [{ material_id: 912, quantidade: 1, valor_unitario: -1 }] });
+    assert.strictEqual(msgs(r3), `itens.0.valor_unitario: ${S.VALOR_UNITARIO_ITEM_COTACAO_NEGATIVO}`);
+    // o segundo item errado aponta itens.1
+    const r4 = S.CotacaoSchema.safeParse({ numero: 'C', fornecedor_id: 1, itens: [{ material_id: 912, quantidade: 1 }, { material_id: 912, quantidade: 0 }] });
+    assert.strictEqual(msgs(r4), `itens.1.quantidade: ${S.QTD_ITEM_COTACAO_INVALIDA}`);
+  });
+  await test('(s) as literais do item da cotação são DIFERENTES das do item do pedido (um dono por frase)', () => {
+    assert.notStrictEqual(S.MATERIAL_ITEM_COTACAO_OBRIGATORIO, S.MATERIAL_ITEM_OBRIGATORIO);
+    assert.notStrictEqual(S.QTD_ITEM_COTACAO_INVALIDA, S.QTD_ITEM_PEDIDO_INVALIDA);
+    assert.notStrictEqual(S.VALOR_UNITARIO_ITEM_COTACAO_NEGATIVO, S.VALOR_UNITARIO_ITEM_NEGATIVO);
+    assert.ok(/da cotação/.test(S.QTD_ITEM_COTACAO_INVALIDA));
+  });
+```
+
+Rodar: `cd server && node tests/api/comprasSchemasFornecedorCotacao.api.test.js` → (p) cai em `itens` (hoje `looseObject` deixa passar `'abc'`: (q) cai com `success`), (r)(s) caem com `undefined`.
+
+- [x] **Step 2: `schemas.js`** — antes de `CotacaoSchema` (`:211`):
+
+```js
+/**
+ * Etapa 41, Task 1 — o ITEM da cotacao. Mesma forma do `PedidoCompraItemSchema` (material do
+ * catalogo, sem coercao, literal no construtor E no refinamento), com literais PROPRIAS: um grep por
+ * "quantidade do item da cotacao" acha UM dono. `itens` e OPCIONAL na cotacao (D2 do design): a
+ * cotacao de cabecalho — "R$ 1.500 o lote", sem discriminar — e uso real, e os quatro cenarios da
+ * Etapa 40 que criam cotacao so com { numero, fornecedor_id } continuam valendo. Quem exige itens e
+ * a CONVERSAO em pedido (RN-F08), no servico.
+ */
+const ITENS_COTACAO_INVALIDOS = 'itens da cotação devem ser uma lista';
+const MATERIAL_ITEM_COTACAO_OBRIGATORIO = 'material do item da cotação é obrigatório';
+const QTD_ITEM_COTACAO_INVALIDA = 'quantidade do item da cotação deve ser um número maior que zero';
+const VALOR_UNITARIO_ITEM_COTACAO_NEGATIVO = 'valor unitário do item da cotação não pode ser negativo';
+
+const CotacaoItemSchema = z.looseObject({
+  material_id: z.number({ error: MATERIAL_ITEM_COTACAO_OBRIGATORIO }).int(MATERIAL_ITEM_COTACAO_OBRIGATORIO).positive(MATERIAL_ITEM_COTACAO_OBRIGATORIO),
+  quantidade: z.number({ error: QTD_ITEM_COTACAO_INVALIDA }).gt(0, QTD_ITEM_COTACAO_INVALIDA),
+  valor_unitario: z.number({ error: VALOR_UNITARIO_ITEM_COTACAO_NEGATIVO }).min(0, VALOR_UNITARIO_ITEM_COTACAO_NEGATIVO).optional(),
+});
+```
+
+Em `CotacaoSchema`, acrescentar `itens: z.array(CotacaoItemSchema, { error: ITENS_COTACAO_INVALIDOS }).optional(),`.
+Reescrever o comentário `:164-167` (era: *"valor_total e campo de entrada porque nao ha itens de cotacao
+para somar (medido: zero cotacao_itens no sistema)"*) → *"Era verdade ate a Etapa 40. Desde a 41 ha
+`itens_cotacao`: com itens, `valor_total` e DERIVADO no servico e o do payload e ignorado; sem itens,
+continua entrada (D3 da 41)."* Exportar os 5 nomes.
+
+- [x] **Step 3: `pedidoCompraService.js`** — acrescentar `resolverItens` ao `module.exports` (com comentário: *"Etapa 41: reusada por `cotacaoService` — a frase 'Material não encontrado' tem um dono"*).
+
+- [x] **Step 4: DDL** — `schema.js`, após o `CREATE INDEX` de `:1339`:
+
+```js
+  // ── Itens de cotação (Etapa 41, Task 1) ──
+  // Espelho de `itens_pedido_compra` SEM `quantidade_recebida` (cotação não é recebida): `codigo`,
+  // `descricao` e `unidade` copiados do material por `resolverItens` (a tela de edição lê por linha,
+  // como o pedido). `valor_unitario` tem o MESMO nome da linha do pedido de propósito: a conversão
+  // copia sem renomear e o custo médio do recebimento (U1 da Etapa 37) herda o preço da cotação.
+  // Vive AQUI e não em `index.js` (onde está `cotacoes`) porque `initSchema` roda no harness
+  // (`testApp.js:32`): a tabela chega a toda suíte com a DDL de produção, sem stub — a divergência
+  // stub/produção foi a classe de defeito da F1 da Etapa 40.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS itens_cotacao (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cotacao_id INTEGER NOT NULL,
+    material_id INTEGER,
+    codigo TEXT,
+    descricao TEXT,
+    quantidade REAL NOT NULL DEFAULT 1,
+    valor_unitario REAL DEFAULT 0,
+    unidade TEXT DEFAULT 'UN',
+    FOREIGN KEY (cotacao_id) REFERENCES cotacoes(id),
+    FOREIGN KEY (material_id) REFERENCES materiais_almoxarifado(id)
+  )`);
+  await dbRun(db, 'CREATE INDEX IF NOT EXISTS idx_itens_cotacao_cotacao ON itens_cotacao(cotacao_id)');
+```
+
+`index.js`, após `:19256` (o `)` do `CREATE TABLE cotacoes`):
+
+```js
+// Etapa 41: a cotação que virou pedido aponta para ele (1:1). `cotacoes` é core, então a coluna
+// entra pelo mesmo caminho das cinco de `fornecedores` abaixo (erro 'duplicate' ignorado). O stub do
+// harness (`tests/helpers/testApp.js`) ganha a coluna à mão — este arquivo não roda nos testes.
+db.run('ALTER TABLE cotacoes ADD COLUMN pedido_id INTEGER REFERENCES pedidos_compra(id)', (e) => {
+  if (e && e.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar pedido_id em cotacoes:', e.message);
+});
+```
+
+`testApp.js:117-127`: acrescentar `pedido_id INTEGER,` antes de `created_at` (comentário: *"Etapa 41 — vínculo com o pedido gerado; sem FK como o resto do stub"*).
+
+- [x] **Step 5: rodar** — o arquivo (**19 passou**); `comprasCotacaoRotas` (10); `comprasFornecedorCotacaoIntegracao` (3); `comprasPedidoCriar` (13); um `node -e` que abre `createTestApp()` e faz `PRAGMA table_info(itens_cotacao)` (8 colunas) e `PRAGMA table_info(cotacoes)` (11); `npm run test:api` (**191/191**).
+
+- [x] **Step 6: sabotagens**
+
+| # | Sabotagem | Âncora | Cai |
+|---|---|---|---|
+| 1 | `z.array(CotacaoItemSchema, { error: … })` → sem `{ error }` | 1 | **(q)** em inglês |
+| 2 | `.gt(0, QTD_ITEM_COTACAO_INVALIDA)` → `.gte(0, …)` | 1 | **(r)** `quantidade: 0` passou |
+| 3 | `QTD_ITEM_COTACAO_INVALIDA` = a literal do pedido | 1 | **(s)** `notStrictEqual` |
+| 4 | remover `itens:` de `CotacaoSchema` | 1 | **(p)** `[]` vira… passa (looseObject) — **(q)** cai: `'abc'` passa |
+| 5 | `CREATE TABLE IF NOT EXISTS itens_cotacao` sem `cotacao_id` | 1 | o `PRAGMA` do Step 5 (7 colunas) — declare que a suíte de schemas não vê a DDL; a T2 (1) é quem a exercita |
+
+- [x] **Step 7: commit** — `git add server/services/almoxarifado/schema.js server/index.js server/tests/helpers/testApp.js server/services/compras/schemas.js server/services/compras/pedidoCompraService.js server/tests/api/comprasSchemasFornecedorCotacao.api.test.js`. Mensagem em `msg-e41-t1.txt`: por que `itens` é opcional, por que a tabela vive em `schema.js`, por que `pedido_id` toca três lugares, e o descartado (`min(1)`, `index.js`, `cotacao_id` no pedido).
+
+#### ✅ Task 1 FECHADA — `8d81cc5`
+
+**Números reais:** `comprasSchemasFornecedorCotacao` **19/19** (+4: (p)–(s); vermelho antes da implementação:
+16/19 — (q), (r), (s) caíam); `comprasCotacaoRotas` **10/10**; `comprasFornecedorCotacaoIntegracao` **3/3**;
+`comprasPedidoCriar` **13/13**; sonda `PRAGMA` via `createTestApp()`: `itens_cotacao` **8** colunas
+(`id,cotacao_id,material_id,codigo,descricao,quantidade,valor_unitario,unidade`), `cotacoes` **11** (com
+`pedido_id` entre `observacoes` e `created_at` no stub), índice `idx_itens_cotacao_cotacao` presente;
+`npm run test:api` **191/191**. CR=0 nos seis arquivos.
+
+**Sabotagens** (md5 antes = md5 pós-restauro nas cinco; âncora `grep -cF` = 1 em todas; restauro por cópia do
+scratchpad):
+
+| # | Sabotagem | Qual asserção caiu |
+|---|---|---|
+| 1 | `z.array(CotacaoItemSchema)` sem `{ error }` | **(q)** `strictEqual(msgs(r), 'itens: …')` — saiu em inglês; 18/19 |
+| 2 | `.gt(0, …)` → `.gte(0, …)` | **(r)** `quantidade 0 saiu como ""` (passou sem erro); 18/19 |
+| 3 | `QTD_ITEM_COTACAO_INVALIDA = QTD_ITEM_PEDIDO_INVALIDA` | **(s)** `notStrictEqual` da quantidade; 18/19 |
+| 4 | linha `itens:` removida de `CotacaoSchema` | **(q)** `'abc'` passou **e (r)** `material_id undefined` passou; (p) segue verde (looseObject deixa `[]` atravessar), como previsto; 17/19 |
+| 5 | DDL sem `cotacao_id` | a sonda **não chega a contar 7 colunas**: `initSchema` morre em `SQLITE_ERROR: unknown column "cotacao_id" in foreign key definition` (a FK referencia a coluna removida) — mais alto que o previsto no plano. A suíte de schemas segue **19/19**: ela não vê a DDL; a T2 (1) é quem a exercita |
+
+**Divergências plano ↔ código (o código mandou):**
+- O plano previa "(p) cai em `itens`" no vermelho. **(p) já passava antes da implementação**: `looseObject`
+  deixa `itens` atravessar intacto, e `[]`/`[{material_id, quantidade}]`/`valor_unitario undefined` são o que
+  entrou. O vermelho real da T1 foi (q), (r), (s). (s) caiu na asserção do regex `/da cotação/` (as três
+  `notStrictEqual(undefined, literal)` passam com o export ausente), não "com `undefined`".
+- Sabotagem 5: a previsão "7 colunas" pressupunha a DDL criar; com `FOREIGN KEY (cotacao_id)` intacto o
+  SQLite recusa a `CREATE TABLE` inteira. A sonda é sensível de qualquer jeito.
+- Sabotagem 4 derruba (r) além de (q) (o plano só listava (q)).
+- No stub do harness `pedido_id` entrou **antes** de `created_at` (como o plano pedia); em produção o `ALTER`
+  a põe **no fim**. Contagem igual (11); ordem posicional difere — nada no módulo lê por índice.
+- O comentário `:164-167` de `schemas.js` foi reescrito mantendo a frase antiga entre aspas e datando-a
+  ("era verdade até a Etapa 40"), em vez de trocá-la em silêncio (regra 5 do CLAUDE.md).
+
+**Posições novas de linha (para a T2 recontar antes de editar):**
+- `schemas.js`: `ITENS_COTACAO_INVALIDOS :225`, `CotacaoItemSchema :230`, `CotacaoSchema :236`, `itens: :245`,
+  `module.exports :248-281` (os 5 nomes novos ficam em `:276-280`).
+- `pedidoCompraService.js`: `resolverItens :290` (inalterada), `module.exports :1013-1042`, `resolverItens, :1041`.
+- `schema.js`: `CREATE TABLE itens_cotacao :1349-1360`, índice `:1361`; `Devoluções` desceu para `:1363`.
+- `index.js`: `CREATE TABLE cotacoes :19244`, `ALTER … pedido_id :19260-19262`; os `ALTER` de `fornecedores`
+  desceram 6 linhas (`:19275` em diante).
+- `testApp.js`: stub `cotacoes :117-129`, `pedido_id :126`; tudo abaixo desceu 1 linha.
+- `routes/compras.js` **não foi tocado**: lista `:316-343`, bloco `:345-364`, genérico `:367` seguem válidos.
+
+Scratchpad: `msg-e41-t1.txt`, `sonda-e41-t1.js` (a sonda `PRAGMA`, reutilizável pela T2), `sab-e41-t1.sh`,
+`schemas.js.e41t1.bak`, `schema.js.e41t1.bak`.
+
+---
+
+### Task 2: `cotacaoService` com itens, lixeira própria e a conversão **(tronco, um executor, worktree `wt-e41-t2`)**
+
+**Files:**
+- Modify: `server/services/compras/cotacaoService.js` (reescrever), `server/routes/compras.js` (`:316-343` lista, `:345-364` bloco, `:367` genérico), `server/services/compras/pedidoCompraService.js` (`excluirPedido :518-544` — liberar a cotação; Fase 2 I2)
+- Test: `server/tests/api/comprasCotacaoItens.api.test.js` (novo, 10), `server/tests/api/comprasCotacaoGerarPedido.api.test.js` (novo, **10**)
+
+**Interfaces:**
+- Consumes: T1 (`resolverItens`, `CotacaoSchema` com `itens`, coluna `pedido_id`, tabela `itens_cotacao`); `pedidoCompraService.criarPedido(db, dados, user)` (`:320`), `obterPedido(db, id)` (`:393`), `erro`, `assertFornecedor`; `dbAll`.
+- Produces: contrato §5.3/§5.4 do design. **T4 e T5 consomem.**
+
+- [x] **Step 1: escrever `comprasCotacaoItens.api.test.js` e ver vermelho** (cabeçalho no molde de `comprasCotacaoRotas.api.test.js`; `ADMIN` id 100):
+
+```js
+(async () => {
+  const { app, db, close } = await createTestApp({ user: ADMIN });
+  const forn = (await dbRun(db, "INSERT INTO fornecedores (razao_social, status) VALUES ('Forn Itens E41', 'ativo')")).lastID;
+  let seq = 0; const num = () => `COT-E41-I-${String(++seq).padStart(3, '0')}`;
+  async function material(codigo, nome, unidade = 'KG') {
+    return (await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, ativo) VALUES (?,?,?,0,1)`, [codigo, nome, unidade])).lastID;
+  }
+  const mA = await material('MAT-E41-A', 'Chapa A E41');
+  const mB = await material('MAT-E41-B', 'Tubo B E41', 'PC');
+  const post = (c) => request(app).post('/api/compras/cotacoes').send(c);
+  const put = (id, c) => request(app).put(`/api/compras/cotacoes/${id}`).send(c);
+  const get = (id) => request(app).get(`/api/compras/cotacoes/${id}`);
+  const del = (id) => request(app).delete(`/api/compras/cotacoes/${id}`);
+  const itensNoBanco = (id) => dbAll(db, 'SELECT * FROM itens_cotacao WHERE cotacao_id = ? ORDER BY id', [id]);
+  const contaCotacoes = async () => (await dbGet(db, 'SELECT COUNT(*) AS n FROM cotacoes')).n;
+
+  await test('(1) RN-F03/F04 POST com 2 itens -> 201, valor_total = soma, itens com codigo/descricao/unidade do material, na ordem', async () => {
+    const r = await post({ numero: num(), fornecedor_id: forn, itens: [{ material_id: mA, quantidade: 2, valor_unitario: 10 }, { material_id: mB, quantidade: 1, valor_unitario: 5 }] });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual(r.body.valor_total, 25);
+    assert.strictEqual(r.body.itens.length, 2);
+    assert.deepStrictEqual(r.body.itens.map((i) => [i.material_id, i.codigo, i.descricao, i.unidade, i.quantidade, i.valor_unitario]),
+      [[mA, 'MAT-E41-A', 'Chapa A E41', 'KG', 2, 10], [mB, 'MAT-E41-B', 'Tubo B E41', 'PC', 1, 5]]);
+    assert.ok(r.body.itens[0].id < r.body.itens[1].id, 'ordem de lancamento');
+    assert.strictEqual(r.body.pedido_id, null);
+    assert.strictEqual(r.body.pedido_numero, null);
+  });
+  await test('(2) RN-F03 valor_total do payload e IGNORADO quando ha itens', async () => {
+    const r = await post({ numero: num(), fornecedor_id: forn, valor_total: 999, itens: [{ material_id: mA, quantidade: 3, valor_unitario: 1.5 }] });
+    assert.strictEqual(r.status, 201);
+    assert.strictEqual(r.body.valor_total, 4.5, 'devia ignorar 999');
+  });
+  await test('(3) RN-F02 sem itens (ausente e []) -> valor_total do payload; itens = []', async () => {
+    const a = await post({ numero: num(), fornecedor_id: forn, valor_total: 77 });
+    assert.strictEqual(a.body.valor_total, 77); assert.deepStrictEqual(a.body.itens, []);
+    const b = await post({ numero: num(), fornecedor_id: forn, valor_total: 12, itens: [] });
+    assert.strictEqual(b.body.valor_total, 12); assert.deepStrictEqual(b.body.itens, []);
+  });
+  await test('(4) RN-F01 material inexistente -> 400 "Material não encontrado" e NADA gravado (cabecalho inclusive)', async () => {
+    const antes = await contaCotacoes();
+    const r = await post({ numero: num(), fornecedor_id: forn, itens: [{ material_id: mA, quantidade: 1 }, { material_id: 999999, quantidade: 1 }] });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.deepStrictEqual(r.body, { error: 'Material não encontrado' });
+    assert.strictEqual(await contaCotacoes(), antes, 'o cabecalho nao pode ter sido gravado (resolverItens antes do INSERT)');
+  });
+  await test('(5) RN-F05 PUT substitui as linhas (ids novos); PUT sem itens APAGA e volta o total ao do payload', async () => {
+    const a = await post({ numero: num(), fornecedor_id: forn, itens: [{ material_id: mA, quantidade: 2, valor_unitario: 10 }, { material_id: mB, quantidade: 1, valor_unitario: 5 }] });
+    const idsAntes = a.body.itens.map((i) => i.id);
+    const r = await put(a.body.id, { numero: a.body.numero, fornecedor_id: forn, itens: [{ material_id: mB, quantidade: 4, valor_unitario: 2 }] });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(r.body.itens.length, 1); assert.strictEqual(r.body.valor_total, 8);
+    assert.ok(!idsAntes.includes(r.body.itens[0].id), 'DELETE+INSERT: id novo');
+    assert.strictEqual((await itensNoBanco(a.body.id)).length, 1);
+    const r2 = await put(a.body.id, { numero: a.body.numero, fornecedor_id: forn, valor_total: 50 });
+    assert.strictEqual(r2.status, 200);
+    assert.deepStrictEqual(r2.body.itens, []); assert.strictEqual(r2.body.valor_total, 50);
+    assert.strictEqual((await itensNoBanco(a.body.id)).length, 0);
+  });
+  await test('(6) RN-F04 GET /:id devolve itens; a LISTA nao devolve itens mas devolve pedido_id/pedido_numero', async () => {
+    const a = await post({ numero: num(), fornecedor_id: forn, itens: [{ material_id: mA, quantidade: 1 }] });
+    const g = await get(a.body.id);
+    assert.strictEqual(g.body.itens.length, 1);
+    const lista = await request(app).get('/api/compras/cotacoes');
+    const l = lista.body.find((c) => c.id === a.body.id);
+    assert.ok(l, 'na lista');
+    assert.ok(!('itens' in l), 'a lista nao carrega itens');
+    assert.ok('pedido_id' in l && 'pedido_numero' in l, `pedido_id/pedido_numero tem de vir na lista: ${Object.keys(l)}`);
+  });
+  await test('(7) RN-F06 DELETE leva os itens junto (orfaos = 0) e responde a literal', async () => {
+    const a = await post({ numero: num(), fornecedor_id: forn, itens: [{ material_id: mA, quantidade: 1 }, { material_id: mB, quantidade: 1 }] });
+    const r = await del(a.body.id);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.deepStrictEqual(r.body, { message: 'Cotação excluída com sucesso' });
+    assert.strictEqual((await get(a.body.id)).status, 404);
+    // ⚠️ A ASSERCAO QUE IMPORTA: a FK nao dispara no harness (foreign_keys = 0). Sem o DELETE dos
+    // filhos o status seria 200 do mesmo jeito — e producao daria 500. Contar orfaos e a regua.
+    assert.strictEqual((await itensNoBanco(a.body.id)).length, 0, 'itens_cotacao orfaos — o DELETE dos filhos nao rodou');
+  });
+  await test('(8) DELETE de id inexistente -> 404 com a literal da cotacao (nao "Item não encontrado" do generico)', async () => {
+    const r = await del(999999);
+    assert.strictEqual(r.status, 404);
+    assert.deepStrictEqual(r.body, { error: 'Cotação não encontrada' });
+  });
+  await test('(9) o (8) da Etapa 40 continua: DELETE de cotacao SEM pedido -> 200 e a linha some', async () => {
+    const a = await post({ numero: num(), fornecedor_id: forn });
+    assert.strictEqual((await del(a.body.id)).status, 200);
+    assert.strictEqual((await get(a.body.id)).status, 404);
+  });
+  await test('(10) RN-F06 cotacao com pedido_id -> DELETE 409 com numero e PC (e o generico NAO responde mais por cotacoes)', async () => {
+    const ped = await request(app).post('/api/compras/pedidos').send({ fornecedor_id: forn, itens: [{ material_id: mA, quantidade: 1 }] });
+    assert.strictEqual(ped.status, 201, 'fixture pedido');
+    const a = await post({ numero: num(), fornecedor_id: forn });
+    await dbRun(db, 'UPDATE cotacoes SET pedido_id = ? WHERE id = ?', [ped.body.id, a.body.id]);
+    const r = await del(a.body.id);
+    assert.strictEqual(r.status, 409, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, `Cotação ${a.body.numero} já gerou o pedido ${ped.body.numero} — não pode ser excluída`);
+    assert.strictEqual((await get(a.body.id)).status, 200, 'continua la');
+  });
+  await close(); console.log(`\n${passed} passou, ${failed} falhou`); process.exit(failed ? 1 : 0);
+})();
+```
+
+Vermelho esperado: (1) `valor_total` 0 e `itens` undefined; (4) 201; (7) cai na literal (`message` do
+genérico, *"Item excluído com sucesso"*) — a asserção de órfãos só passa a medir depois que o serviço
+grava itens; (8) `Item não encontrado`; (10) 200.
+
+- [x] **Step 2: escrever `comprasCotacaoGerarPedido.api.test.js` e ver vermelho** (`ADMIN` id 101; fixtures: fornecedor ativo `fA`, inativo `fB`, materiais `mA`/`mB`; helper `cotar(itens, extra)`):
+
+```js
+  const gerar = (id) => request(app).post(`/api/compras/cotacoes/${id}/gerar-pedido`).send();
+  const contaPedidos = async () => (await dbGet(db, 'SELECT COUNT(*) AS n FROM pedidos_compra')).n;
+
+  await test('(1) RN-F07 gerar -> 201 pedido PC-, total = soma, 2 linhas com codigo/descricao/unidade e recebida 0; cotacao ganha pedido_id e status aprovado', async () => {
+    const c = await cotar([{ material_id: mA, quantidade: 2, valor_unitario: 10 }, { material_id: mB, quantidade: 1, valor_unitario: 5 }], { status: 'em_analise' });
+    const r = await gerar(c.id);
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.ok(/^PC-/.test(r.body.numero), r.body.numero);
+    assert.strictEqual(r.body.valor_total, 25);
+    assert.strictEqual(r.body.fornecedor_id, fA);
+    assert.deepStrictEqual(r.body.itens.map((i) => [i.material_id, i.quantidade, i.valor_unitario, i.codigo, i.quantidade_recebida]),
+      [[mA, 2, 10, 'MAT-E41-A', 0], [mB, 1, 5, 'MAT-E41-B', 0]]);
+    const g = await get(c.id);
+    assert.strictEqual(g.body.pedido_id, r.body.id);
+    assert.strictEqual(g.body.pedido_numero, r.body.numero);
+    assert.strictEqual(g.body.status, 'aprovado', 'gerar o pedido E aprovar (D7)');
+    // e o pedido e um pedido NORMAL da lista
+    const lista = await request(app).get('/api/compras/pedidos');
+    assert.ok(lista.body.some((p) => p.id === r.body.id));
+  });
+  await test('(2) RN-F10 segunda conversao -> 409 com numero e PC; COUNT(pedidos) inalterado', async () => {
+    const c = await cotar([{ material_id: mA, quantidade: 1 }]);
+    const a = await gerar(c.id); assert.strictEqual(a.status, 201);
+    const antes = await contaPedidos();
+    const r = await gerar(c.id);
+    assert.strictEqual(r.status, 409, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, `Cotação ${c.numero} já gerou o pedido ${a.body.numero}`);
+    assert.strictEqual(await contaPedidos(), antes);
+  });
+  await test('(3) RN-F08 sem itens -> 400 literal, pedido_id continua null', async () => {
+    const c = await cotar([]);
+    const r = await gerar(c.id);
+    assert.strictEqual(r.status, 400); assert.deepStrictEqual(r.body, { error: 'cotação sem itens não pode gerar pedido' });
+    assert.strictEqual((await get(c.id)).body.pedido_id, null);
+  });
+  await test('(4) RN-F09 rejeitado e cancelado -> 400 com o status na frase; em_analise -> 201', async () => {
+    for (const s of ['rejeitado', 'cancelado']) {
+      const c = await cotar([{ material_id: mA, quantidade: 1 }], { status: s });
+      const r = await gerar(c.id);
+      assert.strictEqual(r.status, 400, s); assert.strictEqual(r.body.error, `cotação ${s} não pode gerar pedido`);
+    }
+    const ok = await cotar([{ material_id: mA, quantidade: 1 }], { status: 'em_analise' });
+    assert.strictEqual((await gerar(ok.id)).status, 201);
+  });
+  await test('(5) RN-F11 fornecedor inativo -> 400 literal; reativado -> 201; fornecedor APAGADO -> 400 "Fornecedor não encontrado"', async () => {
+    const c = await cotar([{ material_id: mA, quantidade: 1 }], { fornecedor_id: fB });
+    const r = await gerar(c.id);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, 'Fornecedor inativo — reative-o em Compras → Fornecedores antes de gerar o pedido');
+    await dbRun(db, "UPDATE fornecedores SET status = 'ativo' WHERE id = ?", [fB]);
+    assert.strictEqual((await gerar(c.id)).status, 201);
+    const fC = (await dbRun(db, "INSERT INTO fornecedores (razao_social) VALUES ('Some E41')")).lastID;
+    const c2 = await cotar([{ material_id: mA, quantidade: 1 }], { fornecedor_id: fC });
+    await dbRun(db, 'DELETE FROM fornecedores WHERE id = ?', [fC]);
+    const r2 = await gerar(c2.id);
+    assert.strictEqual(r2.status, 400); assert.deepStrictEqual(r2.body, { error: 'Fornecedor não encontrado' });
+  });
+  await test('(6) 404 para cotacao inexistente', async () => {
+    const r = await gerar(999999); assert.strictEqual(r.status, 404); assert.deepStrictEqual(r.body, { error: 'Cotação não encontrada' });
+  });
+  await test('(7) RN-F06 cotacao convertida -> DELETE 409 com a literal de exclusao', async () => {
+    const c = await cotar([{ material_id: mA, quantidade: 1 }]);
+    const a = await gerar(c.id);
+    const r = await request(app).delete(`/api/compras/cotacoes/${c.id}`);
+    assert.strictEqual(r.status, 409);
+    assert.strictEqual(r.body.error, `Cotação ${c.numero} já gerou o pedido ${a.body.numero} — não pode ser excluída`);
+  });
+  await test('(8) pelo SERVICO: gerarPedidoDaCotacao direto produz o mesmo pedido que a rota', async () => {
+    const c = await cotar([{ material_id: mB, quantidade: 3, valor_unitario: 2 }]);
+    const p = await cotacaoService.gerarPedidoDaCotacao(db, c.id, ADMIN);
+    assert.ok(/^PC-/.test(p.numero)); assert.strictEqual(p.valor_total, 6);
+    assert.strictEqual((await get(c.id)).body.pedido_id, p.id);
+    let e; try { await cotacaoService.gerarPedidoDaCotacao(db, c.id, ADMIN); } catch (x) { e = x; }
+    assert.strictEqual(e && e.status, 409);
+  });
+  await test('(9) RN-F15 cotacao convertida nao pode mais ser editada: PUT -> 409 literal, linha intacta', async () => {
+    const c = await cotar([{ material_id: mA, quantidade: 1, valor_unitario: 10 }]);
+    const a = await gerar(c.id); assert.strictEqual(a.status, 201);
+    const r = await request(app).put(`/api/compras/cotacoes/${c.id}`).send({ numero: c.numero, fornecedor_id: fA, status: 'rejeitado', itens: [{ material_id: mA, quantidade: 99, valor_unitario: 1 }] });
+    assert.strictEqual(r.status, 409, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, `Cotação ${c.numero} já gerou o pedido ${a.body.numero} — não pode mais ser editada`);
+    const g = await get(c.id);
+    assert.strictEqual(g.body.status, 'aprovado'); assert.strictEqual(g.body.itens[0].quantidade, 1); assert.strictEqual(g.body.valor_total, 10);
+  });
+  await test('(10) RN-F12 excluir o pedido gerado LIBERA a cotacao: pedido_id volta a NULL, resposta traz cotacoes_liberadas, e gerar de novo -> 201 com PC novo', async () => {
+    const c = await cotar([{ material_id: mA, quantidade: 1, valor_unitario: 3 }]);
+    const a = await gerar(c.id); assert.strictEqual(a.status, 201);
+    const d = await request(app).delete(`/api/compras/pedidos/${a.body.id}`);
+    assert.strictEqual(d.status, 200, JSON.stringify(d.body));
+    assert.strictEqual(d.body.cotacoes_liberadas, 1, JSON.stringify(d.body));
+    const g = await get(c.id);
+    assert.strictEqual(g.body.pedido_id, null); assert.strictEqual(g.body.pedido_numero, null);
+    const b = await gerar(c.id);
+    assert.strictEqual(b.status, 201, JSON.stringify(b.body));
+    assert.notStrictEqual(b.body.numero, a.body.numero, 'PC novo');
+    // e agora a cotacao volta a ser inexcluivel
+    assert.strictEqual((await request(app).delete(`/api/compras/cotacoes/${c.id}`)).status, 409);
+  });
+```
+
+Acrescente ao (1): `assert.strictEqual(r.body.data_pedido, pedidoCompraService.hojeLocalISO(), 'data_pedido nasce HOJE local (Fase 2 I4) — sem isso nascia NULL')`
+(importe `hojeLocalISO` de `pedidoCompraService`). E no comentário do (5), a metade "fornecedor apagado":
+*"só alcançável no harness (FK desligada) — em produção a FK e a lixeira própria impedem o DELETE (Fase 2 M5); o cenário fica porque é o caminho do serviço"*.
+
+- [x] **Step 3: `cotacaoService.js`** — reescrever (cabeçalho atualizado: o parágrafo *"Nao ha itens…"* vira *"Ate a Etapa 40 nao havia itens… Desde a 41…"*):
+
+```js
+const { dbRun, dbGet, dbAll } = require('../almoxarifado/db');
+const pedidoCompraService = require('./pedidoCompraService');
+const { erro, assertFornecedor, resolverItens } = pedidoCompraService;
+
+const COTACAO_NAO_ENCONTRADA = 'Cotação não encontrada';
+const FORNECEDOR_COM_COTACOES = 'Fornecedor possui cotações — não pode ser excluído';
+const COTACAO_EXCLUIDA = 'Cotação excluída com sucesso';
+const COTACAO_SEM_ITENS = 'cotação sem itens não pode gerar pedido';
+const FORNECEDOR_INATIVO_CONVERSAO = 'Fornecedor inativo — reative-o em Compras → Fornecedores antes de gerar o pedido';
+const STATUS_QUE_NAO_GERA = ['rejeitado', 'cancelado'];
+const numeroDuplicado = (numero) => `Já existe uma cotação com o número ${numero}`;
+const cotacaoStatusNaoGera = (status) => `cotação ${status} não pode gerar pedido`;
+const cotacaoJaGerouPedido = (numero, pc) => `Cotação ${numero} já gerou o pedido ${pc}`;
+const cotacaoJaGerouPedidoExclusao = (numero, pc) => `${cotacaoJaGerouPedido(numero, pc)} — não pode ser excluída`;
+const cotacaoJaGerouPedidoEdicao = (numero, pc) => `${cotacaoJaGerouPedido(numero, pc)} — não pode mais ser editada`;
+// Fase 2 (I1): depois que o pedido e excluido a T2 LIBERA a cotacao (pedido_id volta a NULL), entao
+// `pedido_numero` null so acontece por SQL direto — mesmo assim a frase nao pode dizer "pedido null".
+const rotuloPedido = (c) => c.pedido_numero || `#${c.pedido_id}`;
+
+const SELECT_LINHA = `SELECT c.id, c.numero, c.fornecedor_id, f.razao_social AS fornecedor_nome, c.valor_total,
+  c.data_cotacao, c.validade, c.status, c.observacoes, c.pedido_id, p.numero AS pedido_numero, c.created_at, c.updated_at
+  FROM cotacoes c LEFT JOIN fornecedores f ON f.id = c.fornecedor_id LEFT JOIN pedidos_compra p ON p.id = c.pedido_id`;
+
+async function lerItens(db, cotacaoId) {
+  return dbAll(db, `SELECT id, material_id, codigo, descricao, unidade, quantidade, valor_unitario
+    FROM itens_cotacao WHERE cotacao_id = ? ORDER BY id`, [cotacaoId]);
+}
+async function obterCotacao(db, id) {
+  const linha = await dbGet(db, `${SELECT_LINHA} WHERE c.id = ?`, [id]);
+  if (!linha) throw erro(COTACAO_NAO_ENCONTRADA, 404);
+  linha.itens = await lerItens(db, id);
+  return linha;
+}
+function colunas(dados) { /* igual à 40 */ }
+const somaItens = (itens) => itens.reduce((s, i) => s + Number(i.quantidade) * Number(i.valor_unitario || 0), 0);
+async function gravarItens(db, cotacaoId, resolvidos) {
+  await dbRun(db, 'DELETE FROM itens_cotacao WHERE cotacao_id = ?', [cotacaoId]);
+  for (const it of resolvidos) {
+    await dbRun(db, `INSERT INTO itens_cotacao (cotacao_id, material_id, codigo, descricao, quantidade, valor_unitario, unidade)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`, [cotacaoId, it.material_id, it.codigo, it.descricao, it.quantidade, it.valor_unitario, it.unidade]);
+  }
+}
+async function criarCotacao(db, dados) {
+  const c = colunas(dados);
+  const itens = Array.isArray(dados.itens) ? dados.itens : [];
+  await assertFornecedor(db, c.fornecedor_id);
+  const resolvidos = await resolverItens(db, itens);   // TODOS os materiais antes de qualquer escrita (RN-F01)
+  await assertNumeroLivre(db, c.numero, null);
+  if (resolvidos.length) c.valor_total = somaItens(resolvidos);   // RN-F03
+  let r;
+  try { r = await dbRun(db, `INSERT INTO cotacoes (…)`, […]); } catch (e) { throw traduzUnique(e, c.numero); }
+  await gravarItens(db, r.lastID, resolvidos);
+  return obterCotacao(db, r.lastID);
+}
+async function atualizarCotacao(db, id, dados) {
+  const atual = await obterCotacao(db, id);
+  // RN-F15 (Fase 2, I3): convertida nao se edita — o pedido ja nasceu; mexer na cotacao depois
+  // seria rastro falso (e o status voltaria de 'aprovado' com pedido_id gravado).
+  if (atual.pedido_id != null) throw erro(cotacaoJaGerouPedidoEdicao(atual.numero, rotuloPedido(atual)), 409);
+  const c = colunas(dados);
+  const itens = Array.isArray(dados.itens) ? dados.itens : [];   // RN-F05: sem itens = apaga as linhas
+  await assertFornecedor(db, c.fornecedor_id);
+  const resolvidos = await resolverItens(db, itens);
+  await assertNumeroLivre(db, c.numero, id);
+  if (resolvidos.length) c.valor_total = somaItens(resolvidos);
+  try { await dbRun(db, `UPDATE cotacoes SET … WHERE id = ?`, […]); } catch (e) { throw traduzUnique(e, c.numero); }
+  await gravarItens(db, id, resolvidos);
+  return obterCotacao(db, id);
+}
+async function excluirCotacao(db, id) {
+  const c = await obterCotacao(db, id);
+  if (c.pedido_id != null) throw erro(cotacaoJaGerouPedidoExclusao(c.numero, rotuloPedido(c)), 409);
+  // Filhos PRIMEIRO: a FK nao dispara no harness e dispara em producao (ver o cabecalho do plano da 41).
+  await dbRun(db, 'DELETE FROM itens_cotacao WHERE cotacao_id = ?', [id]);
+  await dbRun(db, 'DELETE FROM cotacoes WHERE id = ?', [id]);
+  return { message: COTACAO_EXCLUIDA };
+}
+async function gerarPedidoDaCotacao(db, id, user) {
+  const c = await obterCotacao(db, id);
+  if (c.pedido_id != null) throw erro(cotacaoJaGerouPedido(c.numero, rotuloPedido(c)), 409);
+  if (STATUS_QUE_NAO_GERA.includes(c.status)) throw erro(cotacaoStatusNaoGera(c.status));
+  if (!c.itens.length) throw erro(COTACAO_SEM_ITENS);
+  await assertFornecedor(db, c.fornecedor_id);   // apagado -> 400 'Fornecedor não encontrado' (so alcancavel no harness — M5)
+  const f = await dbGet(db, 'SELECT status FROM fornecedores WHERE id = ?', [c.fornecedor_id]);
+  if (f && f.status === 'inativo') throw erro(FORNECEDOR_INATIVO_CONVERSAO);   // RN-F11: a PRIMEIRA porta do Compras a olhar status
+  const pedido = await pedidoCompraService.criarPedido(db, {
+    fornecedor_id: c.fornecedor_id,
+    // Fase 2 (I4): `criarPedido` NAO poe default em data_pedido (`camposDoCabecalho` pula undefined,
+    // DDL sem default) — sem esta linha o pedido gerado nascia com data NULL. Mesmo precedente de
+    // `importarPedidos` (:974).
+    data_pedido: pedidoCompraService.hojeLocalISO(),
+    observacoes: c.observacoes,
+    itens: c.itens.map((i) => ({ material_id: i.material_id, quantidade: i.quantidade, valor_unitario: i.valor_unitario })),
+  }, user);
+  // Sem transacao (como o resto ate o Postgres): se este UPDATE falhar, o pedido FICA e a cotacao
+  // fica sem vinculo — declarado na letra G. O erro sobe.
+  await dbRun(db, "UPDATE cotacoes SET pedido_id = ?, status = 'aprovado', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [pedido.id, id]);
+  return pedidoCompraService.obterPedido(db, pedido.id);
+}
+module.exports = { criarCotacao, obterCotacao, atualizarCotacao, excluirCotacao, gerarPedidoDaCotacao,
+  COTACAO_NAO_ENCONTRADA, FORNECEDOR_COM_COTACOES, COTACAO_EXCLUIDA, COTACAO_SEM_ITENS, FORNECEDOR_INATIVO_CONVERSAO,
+  numeroDuplicado, cotacaoStatusNaoGera, cotacaoJaGerouPedido, cotacaoJaGerouPedidoExclusao, cotacaoJaGerouPedidoEdicao, rotuloPedido };
+```
+
+**E em `pedidoCompraService.excluirPedido` (`:518-544`)** — Fase 2 (I2), o precedente da I1 da 38
+(`liberarSolicitacoesDoPedido`): antes do `DELETE` do cabeçalho, liberar a cotação e devolver a contagem:
+
+```js
+  // Etapa 41 (RN-F12): a cotacao que gerou este pedido volta a poder gerar outro — sem isto ela
+  // ficava num beco (nem regenera, nem se exclui), o inverso do que a Etapa 38 fez com a solicitacao.
+  const lib = await dbRun(db, 'UPDATE cotacoes SET pedido_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE pedido_id = ?', [id]);
+  // … (DELETE das linhas e do cabecalho como hoje) …
+  return { message: …, solicitacoes_liberadas: …, cotacoes_liberadas: lib.changes || 0 };
+```
+
+⚠️ **Leia `excluirPedido` inteiro antes** (`:518-544`): a resposta de hoje é `{ message, solicitacoes_liberadas }`
+(cenário (7) de `comprasPedidoEditarExcluir` afirma o shape? confira — se usar `deepStrictEqual`, a chave
+nova o derruba e o cenário precisa de ajuste declarado). O stub de `cotacoes` do harness já tem
+`pedido_id` (T1), então o `UPDATE` não morre em nenhuma suíte.
+
+⚠️ **Ordem das guardas em `gerarPedidoDaCotacao`:** 409 (já gerou) → status → itens → fornecedor. O
+cenário (5) apaga o fornecedor **depois** de criar a cotação; `assertFornecedor` tem de vir **antes** do
+`SELECT status` (senão `f` é `undefined` e o 400 sai errado). Confirme o shape que `criarPedido` devolve
+(`:320-380`) — se devolver `{ id, numero, … }` sem `itens`, `obterPedido` é quem relê. E o `user`: a rota
+passa `req.user` (o gate condicional de `solicitacao_id` não dispara porque não mandamos `solicitacao_id`).
+
+- [x] **Step 4: as rotas** — em `routes/compras.js`:
+
+(a) lista `:316-343`: `SELECT c.*, f.razao_social as fornecedor_nome, p.numero AS pedido_numero FROM cotacoes c LEFT JOIN fornecedores f ON c.fornecedor_id = f.id LEFT JOIN pedidos_compra p ON p.id = c.pedido_id WHERE 1=1` (o `c.*` já traz `pedido_id`).
+
+(b) no bloco `:345-364`, após o `PUT`:
+
+```js
+// Etapa 41 (RN-F07…F11): a conversao. Sem corpo — tudo vem da cotacao; o servico chama
+// `pedidoCompraService.criarPedido` (numero PC- gerado, total derivado, resolverItens), grava o vinculo
+// e devolve o pedido relido. 201 como o POST de pedido.
+app.post('/api/compras/cotacoes/:id/gerar-pedido', authenticateToken, checkModulePermission('compras'), async (req, res) => {
+  try { res.status(201).json(await cotacaoService.gerarPedidoDaCotacao(db, req.params.id, req.user)); }
+  catch (e) { respondeErro(res, e); }
+});
+// Etapa 41 (RN-F06): a lixeira PROPRIA da cotacao, e ela tem de ficar ACIMA do generico
+// `DELETE /api/compras/:tipo/:id` (posicao e comportamento — o mesmo motivo do bloco de pedidos,
+// :189-199). Ate a Etapa 40 o generico apagava `cotacoes` cru; com `itens_cotacao` (FK) isso da 500 em
+// producao e passa no harness deixando orfaos. Aqui: 409 se ja gerou pedido, senao filhos primeiro.
+app.delete('/api/compras/cotacoes/:id', authenticateToken, checkModulePermission('compras'), async (req, res) => {
+  try { res.json(await cotacaoService.excluirCotacao(db, req.params.id)); }
+  catch (e) { respondeErro(res, e); }
+});
+```
+
+E reescrever o comentário `:345-349` (*"Nenhuma e DELETE, entao a posicao… e convencao"*): *"era verdade
+até a 40; desde a 41 o `DELETE /cotacoes/:id` próprio existe e a posição deste bloco (acima do genérico)
+passou a ser comportamento"*. No genérico, ao lado de `'cotacoes': 'cotacoes'` no mapa: comentário
+*"sombreado desde a Etapa 41 pela rota própria — fica no mapa por caracterização, como `pedidos`"*.
+
+- [x] **Step 5: rodar** — os dois arquivos (**10** e **10**); `comprasCotacaoRotas` (10 — o (8) continua 200), `comprasFornecedorCotacaoIntegracao` (3), `comprasFornecedorRotas` (13), `comprasPedidoEditarExcluir` (13 — o `excluirPedido` mudou de resposta), `comprasPedidoCriar` (13); `npm run test:api` (**193/193**); `npm run test:almoxarifado` (42).
+
+- [x] **Step 6: sabotagens**
+
+| # | Sabotagem | Âncora | Cai |
+|---|---|---|---|
+| 1 | `excluirCotacao`: remover `DELETE FROM itens_cotacao` | 1 (a de `excluirCotacao`; `gravarItens` tem outra — use a linha inteira com `[id]`) | **(7)** *"itens_cotacao orfaos"* — o status seguiria 200 |
+| 2 | `criarCotacao`: `resolverItens` **depois** do INSERT | mover a linha | **(4)** `contaCotacoes` mudou |
+| 3 | `gerarPedidoDaCotacao`: remover o `if (c.pedido_id != null)` | 1 | **(2)** 201 e COUNT +1; **(8)** |
+| 4 | `SET pedido_id = ?, status = 'aprovado'` → sem `status` | 1 | **(1)** *"gerar o pedido E aprovar"* |
+| 5 | mover o `app.delete('/api/compras/cotacoes/:id')` para **depois** do genérico | — | **(8)** `Item não encontrado`; **(10)** 200 — é a prova de que a posição é comportamento |
+| 6 | `if (resolvidos.length) c.valor_total = somaItens(resolvidos)` → sempre | 1 | **(3)** total 0 em vez de 77 |
+| 7 | `atualizarCotacao`: remover o `if (atual.pedido_id != null)` | 1 | **(9)** 200 e `status` virou `rejeitado` |
+| 8 | `excluirPedido`: remover o `UPDATE cotacoes SET pedido_id = NULL` | 1 | **(10)** `pedido_id` continua e a segunda geração dá 409 |
+| 9 | `data_pedido: pedidoCompraService.hojeLocalISO()` removido | 1 | **(1)** `data_pedido` null |
+
+- [x] **Step 7: commit** — `git add server/services/compras/cotacaoService.js server/services/compras/pedidoCompraService.js server/routes/compras.js server/tests/api/comprasCotacaoItens.api.test.js server/tests/api/comprasCotacaoGerarPedido.api.test.js` (+ `comprasPedidoEditarExcluir.api.test.js` se o shape da resposta exigiu ajuste). Mensagem em `msg-e41-t2.txt`.
+
+#### ✅ Task 2 FECHADA — `11591ca` (na branch `e41-t2`; o hash será reescrito no cherry-pick para `desenvolvimento-almoxarifado`)
+
+**Números reais:** `comprasCotacaoItens` **10/10** (vermelho antes da implementação: **1/10** — só o (9) passava,
+porque o genérico já apagava a cotação; (1)–(8) e (10) caíam como o plano previa: (1) `valor_total` 0, (4) 201,
+(7) literal do genérico, (8) `Item não encontrado`, (10) 200); `comprasCotacaoGerarPedido` **10/10** (vermelho:
+**0/10**); `comprasCotacaoRotas` **10/10**; `comprasFornecedorCotacaoIntegracao` **3/3**; `comprasFornecedorRotas`
+**13/13**; `comprasPedidoEditarExcluir` **13/13** (12/13 antes do ajuste declarado abaixo); `comprasPedidoCriar`
+**13/13**; `npm run test:api` **193/193**; `npm run test:almoxarifado` **42**. CR=0 nos sete arquivos.
+
+**Sabotagens** (md5 antes = md5 pós-restauro nas nove; âncora `grep -cF` = 1 em todas; restauro por cópia do
+scratchpad; script `sab-e41-t2.sh`):
+
+| # | Sabotagem | Qual asserção caiu |
+|---|---|---|
+| 1 | `excluirCotacao` sem `DELETE FROM itens_cotacao` | **Itens (7)** `'itens_cotacao orfaos — o DELETE dos filhos nao rodou'` — o status seguiu 200, como o cabeçalho do plano avisa; 9/10 |
+| 2 | `criarCotacao`: `resolverItens` movido para DEPOIS do INSERT (com `UPDATE valor_total` para manter (1)(2) verdes) | **Itens (4)** `'o cabecalho nao pode ter sido gravado (resolverItens antes do INSERT)'`; 9/10 |
+| 3 | `gerarPedidoDaCotacao` sem `if (c.pedido_id != null)` | **Gerar (2)** `strictEqual(r.status, 409)` — veio 201 com pedido novo; **(8)** `e.status` 409 (não lançou); 8/10 |
+| 4 | `SET pedido_id = ?, status = 'aprovado'` → sem `status` | **Gerar (1)** `'gerar o pedido E aprovar (D7)'` **e (9)** `g.body.status === 'aprovado'` (o plano só listava (1)); 8/10 |
+| 5 | `app.delete('/api/compras/cotacoes/:id')` movido para DEPOIS do genérico (para o fim do arquivo, antes do `};`) | **Itens (8)** `Item não encontrado`, **(10)** 200 `Item excluído com sucesso`, **e (7)** literal do genérico; **Gerar (7)** e **(10)** (o `DELETE` da cotação convertida deu 200 em vez de 409); 7/10 + 8/10 — a posição é comportamento |
+| 6 | `if (resolvidos.length) c.valor_total = …` → sempre | **Itens (3)** `valor_total` 0 em vez de 77; 9/10 |
+| 7 | `atualizarCotacao` sem `if (atual.pedido_id != null)` | **Gerar (9)** `strictEqual(r.status, 409)` — veio 200 com `status: 'rejeitado'` e `quantidade: 99` gravados; 9/10 |
+| 8 | `excluirPedido`: `UPDATE cotacoes SET pedido_id = NULL` trocado por `cotacoesLiberadas = 1` (para isolar o vínculo da contagem) | **Gerar (10)** `g.body.pedido_id === null` — continuou apontando para o pedido apagado (e a segunda geração daria 409); 9/10 |
+| 9 | `data_pedido: pedidoCompraService.hojeLocalISO()` removido | **Gerar (1)** `'data_pedido nasce HOJE local (Fase 2 I4) — sem isso nascia NULL'`; 9/10 |
+
+**Divergências plano ↔ código (o código mandou):**
+- **`comprasPedidoEditarExcluir` (8) caiu**, e não pelo shape de `excluirPedido` (nenhum cenário faz
+  `deepStrictEqual` da resposta — `cotacoes_liberadas` entrou sem derrubar nada): o (8) usava `cotacoes` como
+  "metade positiva" do genérico e afirmava `'Item excluído com sucesso'`. Desde a 41 o genérico não alcança mais
+  `cotacoes`. Ajuste declarado no próprio cenário: a metade positiva passou a usar `fornecedores` (que o
+  genérico ainda serve) e a cotação continua lá afirmando a literal PRÓPRIA (`'Cotação excluída com sucesso'`)
+  — se o genérico voltar a responder por ela, é essa asserção que acusa.
+- `comprasCotacaoRotas` (cabeçalho e nome do (8)) dizia *"O DELETE continua pelo generico"* — datado como
+  "era verdade até a 40" em vez de apagado (regra 5 do CLAUDE.md). Arquivo adicionado ao commit (não estava
+  no `git add` do Step 7).
+- Sabotagem 4 derruba (9) além de (1); sabotagem 5 derruba Itens (7) e Gerar (7)/(10) além de Itens (8)/(10).
+- Sabotagem 8: o plano dizia "remover o `UPDATE`"; removê-lo inteiro derrubaria (10) já em
+  `cotacoes_liberadas` (1 vs undefined). Troquei por constante `1` para que a asserção que caia seja a do
+  vínculo (`pedido_id === null`), que é a que a RN-F12 protege.
+- `criarPedido` devolve o pedido relido (`relerPedido`) com `itens`; `obterPedido` relê de novo e acrescenta
+  `teve_recebimento` — é o que a rota devolve (contrato §5.4: "pedido (`obterPedido`)"). Sem mudança.
+- Comentário-doc de `excluirPedido` ganhou a frase da liberação da cotação (não estava no plano; sem isso o
+  docblock afirmaria só as solicitações).
+
+**Posições novas de linha (para T4/T5 recontarem antes de editar):**
+- `routes/compras.js`: lista `GET /cotacoes :318` (`LEFT JOIN pedidos_compra` em `:325`), bloco da cotação
+  `:347-391` (`respondeErro :359`, `POST :361`, `GET /:id :366`, `PUT :370`, **`POST …/gerar-pedido :379`**,
+  **`DELETE /cotacoes/:id :387`**), genérico `:393` (`'cotacoes': 'cotacoes'` em `:400`). Tudo abaixo desceu
+  26 linhas em relação a `820860a`.
+- `cotacaoService.js`: literais `:33-46` (`cotacaoJaGerouPedido :40`, `rotuloPedido :46`), `SELECT_LINHA :48`,
+  `lerItens :53`, `obterCotacao :58`, `colunas :66`, `somaItens :88`, `gravarItens :91`, `criarCotacao :99`,
+  `atualizarCotacao :117`, `excluirCotacao :141`, `gerarPedidoDaCotacao :159`, `module.exports :183-187`.
+- `pedidoCompraService.js`: `excluirPedido :537`, `cotacoesLiberadas :556-557`, `cotacoes_liberadas :565`;
+  `module.exports :1024-1053`, `resolverItens, :1052` (desceu 11 linhas).
+
+Scratchpad: `msg-e41-t2.txt`, `sab-e41-t2.sh`, `cotacaoService.js.e41t2.bak`, `pedidoCompraService.js.e41t2.bak`,
+`compras.routes.js.e41t2.bak`.
+
+---
+
+### Task 3: `CotacaoForm` com itens — busca, linhas, total derivado, edição **(galho, worktree `wt-e41-t3`)**
+
+**Files:**
+- Modify: `client/src/components/compras/CotacaoForm.js`, `client/src/components/compras/CotacaoForm.test.js` (+6 → 14)
+
+**Interfaces:**
+- Consumes (mock HTTP): `GET /compras/materiais?search=` → `[{ id, codigo, descricao, unidade }]`; `GET /compras/cotacoes/:id` → linha + `itens[{ id, material_id, codigo, descricao, unidade, quantidade, valor_unitario }]`; `POST`/`PUT /compras/cotacoes` com `itens`.
+- Produces: `data-testid` de §5.5; payload `itens` + `valor_total` só sem itens.
+
+- [x] **Step 1: os cenários (i)–(n) e os ajustes de mock**
+
+Mock: `api.get` ganha `if (url === '/compras/materiais') return Promise.resolve({ data: MATERIAIS })`
+(`MATERIAIS = [{ id: 912, codigo: 'ALM-0912', descricao: 'Chapa Aço 5mm', unidade: 'KG' }]`), e a cotação
+**770** `COTACAO_770 = { ...COTACAO_760, id: 770, numero: 'COT-2026-770', valor_total: 27, itens: [{ id: 7701, material_id: 912, codigo: 'ALM-0912', descricao: 'Chapa Aço 5mm', unidade: 'KG', quantidade: 2, valor_unitario: 10 }, { id: 7702, material_id: 907, codigo: 'ALM-0907', descricao: 'Chapa Aço 3mm', unidade: 'KG', quantidade: 1, valor_unitario: 7 }] }`
+com `if (url === '/compras/cotacoes/770') …`. `COTACAO_760` ganha `itens: []`, `pedido_id: null`,
+`pedido_numero: null`. O `toEqual` do (e) passa a esperar `itens: []` — a 760 não tem itens, então `valor_total` continua
+no payload: **8 chaves** (as 7 de hoje + `itens: []`; Fase 2 M1).
+
+```js
+const chamadasMateriais = () => api.get.mock.calls.filter(([u]) => u === '/compras/materiais');
+async function adicionar912() {
+  digitar(porTestId('cotacao-busca-material'), 'chapa');
+  await clicar(porTestId('cotacao-botao-buscar-material'));
+  await clicar(porTestId('cotacao-adicionar-material-912'));
+}
+test('(i) RN-F13 busca com search, adiciona 912, total soma e o campo Valor total trava com a soma', async () => {
+  await renderizarEm('/compras/cotacoes/nova');
+  digitar(porTestId('cotacao-valor'), '55');           // digitavel enquanto nao ha linha
+  await adicionar912();
+  expect(chamadasMateriais()[0][1]).toEqual({ params: { search: 'chapa' } });
+  expect(porTestId('cotacao-qtd-item-912').value).toBe('1');
+  digitar(porTestId('cotacao-valor-item-912'), '12.5');
+  expect(texto()).toContain('Total: R$ 12,50');
+  expect(porTestId('cotacao-valor').readOnly).toBe(true);
+  expect(porTestId('cotacao-valor').value).toBe('12.5');
+  await clicar(porTestId('cotacao-remover-item-912'));
+  expect(porTestId('cotacao-valor').readOnly).toBe(false);
+  expect(porTestId('cotacao-valor').value).toBe('55');   // volta o digitado
+});
+test('(j) RN-F13 POST com itens em Number() e SEM valor_total', async () => {
+  await renderizarEm('/compras/cotacoes/nova');
+  digitar(porTestId('cotacao-numero'), 'COT-9');
+  await selecionar(porTestId('cotacao-fornecedor'), '312');
+  await adicionar912();
+  digitar(porTestId('cotacao-qtd-item-912'), '3');
+  digitar(porTestId('cotacao-valor-item-912'), '2.5');
+  await submeter();
+  const corpo = api.post.mock.calls[0][1];
+  expect(corpo.itens).toEqual([{ material_id: 912, quantidade: 3, valor_unitario: 2.5 }]);
+  expect('valor_total' in corpo).toBe(false);
+});
+test('(k) RN-F13 sem item -> POST com valor_total digitado e itens []', async () => {
+  await renderizarEm('/compras/cotacoes/nova');
+  digitar(porTestId('cotacao-numero'), 'COT-9');
+  await selecionar(porTestId('cotacao-fornecedor'), '312');
+  digitar(porTestId('cotacao-valor'), '99.9');
+  await submeter();
+  const corpo = api.post.mock.calls[0][1];
+  expect(corpo.valor_total).toBe(99.9);
+  expect(corpo.itens).toEqual([]);
+});
+test('(l) RN-F13 edicao da 770 pre-carrega 2 linhas sem buscar material; campo travado com 27', async () => {
+  await renderizarEm('/compras/cotacoes/editar/770');
+  expect(porTestId('cotacao-qtd-item-912').value).toBe('2');
+  expect(porTestId('cotacao-valor-item-907').value).toBe('7');
+  expect(chamadasMateriais()).toHaveLength(0);
+  expect(porTestId('cotacao-valor').readOnly).toBe(true);
+  expect(texto()).toContain('Total: R$ 27,00');
+});
+test('(m) RN-F05 remover uma linha e salvar -> PUT com 1 item', async () => {
+  await renderizarEm('/compras/cotacoes/editar/770');
+  await clicar(porTestId('cotacao-remover-item-907'));
+  await submeter();
+  const corpo = api.put.mock.calls[0][1];
+  expect(corpo.itens).toEqual([{ material_id: 912, quantidade: 2, valor_unitario: 10 }]);
+  expect('valor_total' in corpo).toBe(false);
+});
+test('(n) 400 de item do servidor vai para role=alert com a literal', async () => {
+  api.post.mockImplementation(() => Promise.reject({ response: { status: 400, data: { error: 'Dados inválidos — itens.0.quantidade: quantidade do item da cotação deve ser um número maior que zero' } } }));
+  await renderizarEm('/compras/cotacoes/nova');
+  digitar(porTestId('cotacao-numero'), 'COT-9');
+  await selecionar(porTestId('cotacao-fornecedor'), '312');
+  await adicionar912();
+  await submeter();
+  expect(alertas()).toContain('itens.0.quantidade: quantidade do item da cotação');
+  expect(toast.error).not.toHaveBeenCalled();
+});
+```
+
+- [x] **Step 2: rodar** — `CI=true npx react-scripts test --watchAll=false src/components/compras/CotacaoForm.test.js`: (i)–(n) caem (`porTestId('cotacao-busca-material')` é `null`), (a)–(h) seguem verdes (o (e) cai até o payload ganhar `itens: []` — é o ajuste previsto).
+
+- [x] **Step 3: a tela** — em `CotacaoForm.js`, imports `useCallback, useMemo` e `FiPlus, FiSearch, FiTrash2`; cópias de `PedidoCompraForm.js`: `formatCurrency` (`:98-100`), `novaLinha` (`:124-125`); estados `itens`, `termoMaterial`, `materiais`, `buscando`; `buscarMateriais` (`:218-229`, `params: { search }`), `adicionarMaterial`, `alterarItem`, `removerItem` (`:231-245`), `total` (`:247-250`). Edição: `setItens((c.itens || []).map((it) => novaLinha({ material_id: it.material_id, codigo: it.codigo || '', descricao: it.descricao || '', unidade: it.unidade || 'UN', quantidade: String(it.quantidade ?? ''), valor_unitario: String(it.valor_unitario ?? '') })))`. Payload:
+
+```js
+    const payload = { numero: numero.trim(), fornecedor_id: Number(fornecedorId), data_cotacao: dataCotacao, validade, status, observacoes,
+      itens: itens.map((it) => ({ material_id: Number(it.material_id), quantidade: Number(it.quantidade), valor_unitario: Number(it.valor_unitario) || 0 })) };
+    if (itens.length === 0) payload.valor_total = Number(valorTotal) || 0;   // D3: duas regras, a tela espelha o servidor
+```
+
+O input `cotacao-valor`: `readOnly={itens.length > 0}` e `value={itens.length > 0 ? String(total) : valorTotal}`
+(o `onChange` continua só setando `valorTotal`; com linhas ele não dispara porque é `readOnly`). O JSX do
+bloco de itens é a cópia de `PedidoCompraForm.js:549-668` com os `data-testid` prefixados (§5.5) e **sem
+`min="0"`** nos inputs de linha (F4 da 40). Aviso de item sem preço (`:674-676`) e `Total` (`:678`).
+Cabeçalho do arquivo: substituir *"Cabecalho so (nao ha itens…)"* por *"Cabecalho + itens desde a 41 (D2/D3/D10)"*.
+
+- [x] **Step 4: rodar** — o arquivo (**14**); `PedidoCompraForm.test.js` (25); `FornecedorForm.test.js` (8); `Compras.test.js` (9); suíte inteira (**51 suítes / 775**); build.
+
+- [x] **Step 5: sabotagens**
+
+| # | Sabotagem | Cai |
+|---|---|---|
+| 1 | `if (itens.length === 0) payload.valor_total = …` → sempre | **(j)** `'valor_total' in corpo` true; **(m)** |
+| 2 | `readOnly={itens.length > 0}` → `false` | **(i)** `readOnly` false; **(l)** |
+| 3 | `params: { search: termoMaterial }` → `{ q: … }` | **(i)** `toEqual` dos params |
+| 4 | edição sem `setItens` | **(l)** `porTestId(...)` null |
+| 5 | `Number(it.quantidade)` → `it.quantidade` | **(j)** `toEqual` (string `'3'`) |
+
+- [x] **Step 6: commit** — `git add client/src/components/compras/CotacaoForm.js client/src/components/compras/CotacaoForm.test.js`. Mensagem em `msg-e41-t3.txt`.
+
+#### ✅ Task 3 FECHADA — `7ecf91f` (hash da worktree `wt-e41-t3`, branch `e41-t3`; **será reescrito no cherry-pick** para `desenvolvimento-almoxarifado`)
+
+**Números (medidos, não previstos):**
+- `CotacaoForm.test.js`: **8 → 14** ((i)–(n) novos; o (e) passa a esperar `itens: []` no `PUT`, 8 chaves). Step 2 vermelho como previsto: 7 caíram ((e) + (i)–(n), `porTestId('cotacao-busca-material')` era `null`), 7 verdes.
+- `PedidoCompraForm.test.js` **25**, `FornecedorForm.test.js` **8**, `Compras.test.js` **9** (42 nas três).
+- Suíte inteira: **51 suítes / 775** — controle: com `git stash` a base dá **769**, então os +6 são desta task.
+- `CI=true npx react-scripts build`: `Compiled successfully`. `npx eslint` nos dois arquivos: limpo (o build não roda ESLint). CR=0 (perl) nos dois arquivos.
+
+**Sabotagens (base md5 `428496a6…`; restauro por cópia do scratchpad; md5 pós-restauro igual à base nas cinco; âncora `grep -cF` = 1 em todas):**
+
+| # | Sabotagem | Caiu | Asserção que caiu |
+|---|---|---|---|
+| 1 | `if (itens.length === 0) payload.valor_total` → sempre | **(j)**, **(m)** | `expect('valor_total' in corpo).toBe(false)` → `Received: true` |
+| 2 | `readOnly={itens.length > 0}` → `{false}` | **(i)**, **(l)** | `expect(...readOnly).toBe(true)` → `Received: false` |
+| 3 | `params: { search: termoMaterial }` → `{ q: … }` | **(i)** | `toEqual({ params: { search: 'chapa' } })` → `- "search"` / `+ "q"` |
+| 4 | edição sem `setItens` (`void(...)`) | **(l)**, **(m)** | `TypeError: Cannot read properties of null (reading 'value')` em `cotacao-qtd-item-912` / `'dispatchEvent'` em `cotacao-remover-item-907` |
+| 5 | `quantidade: Number(it.quantidade)` → `it.quantidade` | **(j)**, **(m)** | `toEqual` dos itens: `- "quantidade": 3` / `+ "quantidade": "3"` (e `2`/`"2"`) |
+
+Cada sabotagem derrubou **só** os cenários previstos na tabela do Step 5 e nenhum outro (12/14 ou 13/14 verdes), e a suíte voltou a 14/14 após o restauro.
+
+**Divergências em relação ao plano (todas aditivas, nenhuma muda contrato):**
+- (i) ganhou duas asserções a mais: `hasAttribute('min')` é `false` em `cotacao-qtd-item-912` e `cotacao-valor-item-912` — o plano pedia "sem `min="0"`" na tela mas nenhum cenário media; agora mede (mesmo motivo do (d) da 40).
+- (j) e (n) ganharam `toast.success` (chamado / não chamado) e (m) o `url` do `PUT`; (l) afirma também `cotacao-valor.value === '27'` — o `value` derivado, não só o `readOnly`.
+- `LITERAL_AVISO_PRECO` da cotação é própria (`'Item sem preço entra na cotação com valor unitário 0.'`), não a do pedido (que fala em custo médio no recebimento — a cotação não recebe). Sem cenário: é texto informativo, não regra.
+- `cotacao-valor` ganha `style={{ background: '#f0f0f0' }}` quando travado (o design §6 diz "fica cinza"); sem cenário.
+- Sem `soStatus`/`disabled` no bloco de itens: a cotação não tem o modo "só status" do pedido. A RN-F15 (cotação convertida não edita) é do servidor (T2, `PUT` → 409) e a literal chega ao `role="alert"` pelo caminho já testado em (f)/(h).
+
+---
+
+### Task 4: aba Cotações — coluna Pedido, botão "Gerar pedido", exportação **(galho, worktree `wt-e41-t4`)**
+
+**Files:**
+- Modify: `client/src/components/Compras.js` (`:268-278` export; `:423-481` `renderCotacoes`; `handleGerarPedido` novo ao lado de `handleDelete :166`), `client/src/components/Compras.test.js` (+3 → 12)
+
+**Interfaces:**
+- Consumes (mock): `GET /compras/cotacoes` → linhas com `pedido_id`, `pedido_numero`; `POST /compras/cotacoes/:id/gerar-pedido` → `201 { id, numero, … }`.
+- Produces: `data-testid="gerar-pedido-${id}"`, coluna Pedido, `Pedido` no export.
+
+- [x] **Step 1: os cenários (j)(k)(l)** — fixtures em `Compras.test.js`:
+
+```js
+const COTACOES_E41 = [
+  { id: 770, numero: 'COT-2026-770', fornecedor_nome: 'Aços Vale Ltda', valor_total: 27, data_cotacao: '2026-09-20', validade: '2026-10-20', status: 'aprovado', pedido_id: null, pedido_numero: null },
+  { id: 771, numero: 'COT-2026-771', fornecedor_nome: 'Parafusos Sul', valor_total: 90, data_cotacao: '2026-09-18', validade: null, status: 'aprovado', pedido_id: 650, pedido_numero: 'PC-2026-650' },
+  { id: 772, numero: 'COT-2026-772', fornecedor_nome: 'Parafusos Sul', valor_total: 1, data_cotacao: '2026-09-18', validade: null, status: 'rejeitado', pedido_id: null, pedido_numero: null },
+];
+let cotacoesDoBanco;   // beforeEach: cotacoesDoBanco = []; e o mock `/compras/cotacoes` devolve cotacoesDoBanco
+```
+
+`api.post` no `beforeEach`: `mockImplementation((url) => url.endsWith('/gerar-pedido') ? Promise.resolve({ data: { id: 650, numero: 'PC-2026-650' } }) : Promise.reject(new Error(`POST inesperado: ${url}`)))`.
+A rota `/compras/pedidos/editar/650` renderiza a tela **REAL** `PedidoCompraForm` (ela já está em
+`reais` do Proxy de `Compras.test.js:41-45` — Fase 2, C1): o (k) prova a navegação pelo `h1`
+*"Editar pedido de compra"* e pelo `GET /compras/pedidos/650`, que a regex do mock (`:133`) resolve a
+partir de `pedidosDoBanco` (a fixture do 650 é posta no cenário).
+
+```js
+test('(j) RN-F14 coluna Pedido: "-" sem pedido, link PC- com pedido; botao Gerar pedido so em 770', async () => {
+  cotacoesDoBanco = COTACOES_E41;
+  await renderizarEm('/compras/cotacoes');
+  expect([...container.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual(['Número', 'Fornecedor', 'Valor Total', 'Data', 'Validade', 'Status', 'Pedido', 'Ações']);
+  expect(celulasDaLinha(0)[6].textContent).toBe('-');
+  const link = celulasDaLinha(1)[6].querySelector('a');
+  expect(link.textContent).toBe('PC-2026-650');
+  expect(link.getAttribute('href')).toBe('/compras/pedidos/editar/650');
+  expect(container.querySelector('[data-testid="gerar-pedido-770"]')).not.toBeNull();
+  expect(container.querySelector('[data-testid="gerar-pedido-771"]')).toBeNull();   // ja tem pedido
+  expect(container.querySelector('[data-testid="gerar-pedido-772"]')).toBeNull();   // rejeitado
+});
+test('(k) RN-F14 clicar em Gerar pedido -> POST na URL certa, toast com PC e numero, navega para a edicao do pedido', async () => {
+  cotacoesDoBanco = COTACOES_E41;
+  pedidosDoBanco = [{ id: 650, numero: 'PC-2026-650', fornecedor_id: 312, fornecedor_nome: 'Aços Vale Ltda', valor_total: 27, status: 'pendente', teve_recebimento: 0, itens: [] }];
+  await renderizarEm('/compras/cotacoes');
+  await clicar(container.querySelector('[data-testid="gerar-pedido-770"]'));
+  expect(api.post.mock.calls).toHaveLength(1);
+  expect(api.post.mock.calls[0][0]).toBe('/compras/cotacoes/770/gerar-pedido');
+  expect(toast.success).toHaveBeenCalledWith('Pedido PC-2026-650 gerado da cotação COT-2026-770');
+  // ⚠️ Fase 2 (C1): `PedidoCompraForm` esta em `reais` do Proxy desta suite (`:41-45`), entao ao
+  // navegar a tela REAL monta — nao ha `data-stub`. A prova de que navegou e o h1 da edicao e o GET
+  // por id (a regex `/compras/pedidos/\d+` do mock `:133` devolve a linha de `pedidosDoBanco`).
+  expect(texto()).toContain('Editar pedido de compra');
+  expect(api.get.mock.calls.filter(([u]) => u === '/compras/pedidos/650')).toHaveLength(1);
+  expect(texto()).not.toContain('Gestão de fornecedores, pedidos e cotações');
+});
+test('(l) RN-F14 409 do servidor -> toast.error com a literal, sem navegar; export tem a coluna Pedido no fim', async () => {
+  cotacoesDoBanco = COTACOES_E41;
+  api.post.mockImplementation(() => Promise.reject({ response: { status: 409, data: { error: 'Cotação COT-2026-770 já gerou o pedido PC-2026-650' } } }));
+  await renderizarEm('/compras/cotacoes');
+  await clicar(container.querySelector('[data-testid="gerar-pedido-770"]'));
+  expect(toast.error).toHaveBeenCalledWith('Cotação COT-2026-770 já gerou o pedido PC-2026-650');
+  expect(texto()).toContain('Gestão de fornecedores, pedidos e cotações');
+  await clicar(botaoPorTexto('Exportar Excel'));
+  const linhas = exportToExcel.mock.calls[0][0];
+  expect(Object.keys(linhas[0])).toEqual(['Número', 'Fornecedor', 'Valor', 'Status', 'Data', 'Validade', 'Pedido']);
+  expect(linhas[1].Pedido).toBe('PC-2026-650');
+  expect(linhas[0].Pedido).toBe('');
+});
+```
+
+⚠️ `celulasDaLinha(i)` existe em `Compras.test.js:177-179`; confira a assinatura de `exportToExcel` mock
+(`:230-238` usa `exportToExcel.mock.calls[0]`) para ler as linhas no índice certo.
+
+- [x] **Step 2: rodar e ver vermelho** — (j) cai no `toEqual` dos `<th>` (7 colunas), (k) `querySelector` null, (l) idem.
+
+- [x] **Step 3: `Compras.js`** — `renderCotacoes`: `<th>Pedido</th>` antes de `<th>Ações</th>`, `colSpan="8"`, célula
+`<td>{cotacao.pedido_id ? <Link to={`/compras/pedidos/editar/${cotacao.pedido_id}`}>{cotacao.pedido_numero}</Link> : '-'}</td>`;
+na `action-buttons`, **antes** do lápis:
+
+```jsx
+                      {!cotacao.pedido_id && !['rejeitado', 'cancelado'].includes(cotacao.status) && (
+                        <button type="button" onClick={() => handleGerarPedido(cotacao)} className="btn-icon" title="Gerar pedido" data-testid={`gerar-pedido-${cotacao.id}`}>
+                          <FiShoppingCart />
+                        </button>
+                      )}
+```
+
+(ícone: confira o que `react-icons/fi` já importa em `:5-9`; `FiShoppingCart` ou `FiFileText`). E:
+
+```js
+  // Etapa 41 (RN-F14): a conversao e do SERVIDOR (D5) — a tela so pede e vai para a edicao do pedido
+  // gerado, onde o comprador confere datas e previsao. Erro no toast: e o mesmo canal da lixeira.
+  const handleGerarPedido = async (cotacao) => {
+    try {
+      const res = await api.post(`/compras/cotacoes/${cotacao.id}/gerar-pedido`);
+      toast.success(`Pedido ${res.data?.numero || ''} gerado da cotação ${cotacao.numero}`.replace('  ', ' '));
+      navigate(`/compras/pedidos/editar/${res.data.id}`);
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Não foi possível gerar o pedido');
+    }
+  };
+```
+
+Export (`:268-278`): `'Pedido': c.pedido_numero || ''` **no fim**.
+
+- [x] **Step 4: rodar** — `Compras.test.js` (**12**); `CotacaoForm.test.js` (8 — o (b) usa o primeiro `a[title="Editar"]`: o botão novo é `<button>`, não colide); `PedidoCompraForm.test.js` (25); suíte inteira; build.
+
+- [x] **Step 5: sabotagens**
+
+| # | Sabotagem | Cai |
+|---|---|---|
+| 1 | condição do botão sem `!cotacao.pedido_id` | **(j)** `gerar-pedido-771` existe |
+| 2 | condição sem o filtro de status | **(j)** `gerar-pedido-772` |
+| 3 | `navigate(...)` removido | **(k)** `texto()` sem *"Editar pedido de compra"* e zero `GET /compras/pedidos/650` |
+| 4 | `toast.error(...)` → `toast.error('Erro')` | **(l)** literal |
+| 5 | `'Pedido'` fora do fim do export | **(l)** `Object.keys` |
+
+- [x] **Step 6: commit** — `git add client/src/components/Compras.js client/src/components/Compras.test.js`. Mensagem em `msg-e41-t4.txt`.
+
+#### ✅ Task 4 FECHADA — `bd224d2` (na branch `e41-t4`; o hash será REESCRITO no cherry-pick para `desenvolvimento-almoxarifado`)
+
+**Números.** `Compras.test.js` 9 → **12** (RED medido antes: (j) no `toEqual` dos `<th>` com 7 colunas,
+(k) e (l) em `dispatchEvent` de `null` — o `data-testid` não existia); `CotacaoForm.test.js` 8,
+`PedidoCompraForm.test.js` 25, `FornecedorForm.test.js` 8; suíte inteira **51 suítes / 772**; build
+`CI=true` → `Compiled successfully`. Nenhum import novo: `FiShoppingCart` já estava em `:5-9`.
+
+**Sabotagens** (md5 do original `1f7d40e0…`, restauro por cópia do scratchpad, md5 pós-restauro
+idêntico nas cinco, CR=0):
+
+| # | Sabotagem | Caiu em | Asserção |
+|---|---|---|---|
+| 1 | condição do botão sem `!cotacao.pedido_id` | (j) | `gerar-pedido-771` `.toBeNull()` — recebeu o `<button>` |
+| 2 | condição sem o filtro de status | (j) | `gerar-pedido-772` `.toBeNull()` — recebeu o `<button>` |
+| 3 | linha do `navigate(...)` removida | (k) | `texto()` `.toContain('Editar pedido de compra')` — a tela continuou na aba (só a lista de cotações no `Received`) |
+| 4 | `toast.error(...)` → `toast.error('Erro')` | (l) | `toHaveBeenCalledWith` — `Expected: "Cotação COT-2026-770 já gerou o pedido PC-2026-650"`, `Received: "Erro"` |
+| 5 | `'Pedido'` movido para o INÍCIO do export | (l) | `Object.keys(linhas[0])` `.toEqual([...])` — `Pedido` na posição 0 |
+
+Dois tropeços do harness, registrados para o próximo: a sabotagem 3 com `perl -pi` e `\Q…\E`
+NÃO aplicou (o `\Q` quota o `\/`; md5 idêntico e a suíte ficou verde — foi o md5 que denunciou, não
+o placar); refeita com `perl -ni` sem `\Q`. A sabotagem 4 com `perl` e `.` sobre `Não`/`possível`
+também não aplicou (o `.` casa um byte, o acento tem dois) — refeita pelo Edit tool.
+
+**Divergências do plano (todas reversíveis):**
+- O link da coluna Pedido cai em `` `#${pedido_id}` `` quando `pedido_numero` vier vazio (mesma regra
+  de `rotuloPedido` do servidor, T2), em vez de renderizar um `<a>` sem texto. O (j) não cobre esse
+  ramo — nenhuma fixture tem `pedido_id` sem `pedido_numero`.
+- O (l) ganhou três asserções além do plano: `toast.success` não chamado, `arquivo === 'cotacoes'` e
+  `linhas.length === 3` (âncoras de que o export mediu a aba certa — precedente do (b)/(h)).
+- `toast` passou a ser importado em `Compras.test.js` (o mock de `react-toastify` já existia; o
+  plano não dizia, mas sem o import o (k)/(l) não compilam).
+- Commit assinado `Co-Authored-By: Claude Opus 5` (instrução do coordenador na retomada; as Global
+  Constraints ainda dizem `Fable 5.1`).
+
+---
+
+### Task 5: a integração que cruza — pela ROTA e pelo SERVIÇO, até o recebimento **(tronco, depois de integrar T2–T4)**
+
+**Files:**
+- Test: `server/tests/api/comprasCotacaoPedidoIntegracao.api.test.js` (novo)
+
+**Interfaces:** consome T1–T2, `POST /api/compras/fornecedores` (payload da tela da 40), `GET /api/almoxarifado/recebimentos-aux/pedidos-compra?pendentes=1` (`extended.js:1116`), `PUT`/`DELETE /api/compras/pedidos/:id`.
+
+- [x] **Step 1: o teste** (`ADMIN` id 102):
+
+```js
+  await test('(A) pela ROTA: fornecedor (tela da 40) -> cotacao com 2 itens -> gerar -> pedido na lista e no aux do recebimento com saldo cheio -> 409 na segunda -> DELETE cotacao 409 -> PUT pedido 200 -> DELETE pedido LIBERA (cotacoes_liberadas 1) -> gera de novo 201 -> exclui tudo', async () => {
+    const f = await request(app).post('/api/compras/fornecedores').send({ razao_social: 'Integração E41', nome_fantasia: '', cnpj: '', contato: '', email: '', telefone: '', endereco: '', grupo_id: '' });
+    assert.strictEqual(f.status, 201);
+    const c = await request(app).post('/api/compras/cotacoes').send({ numero: 'COT-E41-INT', fornecedor_id: f.body.id, data_cotacao: '2026-09-22', validade: '', status: 'em_analise', observacoes: 'frete incluso',
+      itens: [{ material_id: mA, quantidade: 2, valor_unitario: 10 }, { material_id: mB, quantidade: 1, valor_unitario: 5 }] });
+    assert.strictEqual(c.status, 201, JSON.stringify(c.body));
+    assert.strictEqual(c.body.valor_total, 25);
+    const g = await request(app).post(`/api/compras/cotacoes/${c.body.id}/gerar-pedido`).send();
+    assert.strictEqual(g.status, 201, JSON.stringify(g.body));
+    assert.strictEqual(g.body.observacoes, 'frete incluso');
+    // o pedido gerado e um pedido NORMAL: lista de Compras e aux do recebimento da Etapa 37
+    const lista = await request(app).get('/api/compras/pedidos');
+    assert.ok(lista.body.some((p) => p.id === g.body.id && p.valor_total === 25));
+    const aux = await request(app).get('/api/almoxarifado/recebimentos-aux/pedidos-compra?pendentes=1');
+    assert.strictEqual(aux.status, 200, JSON.stringify(aux.body));
+    const noAux = (aux.body || []).find((p) => p.id === g.body.id);
+    assert.ok(noAux, 'o pedido gerado tem de aparecer para o recebimento');
+    assert.strictEqual(noAux.saldo_pendente, 3, `saldo cheio (2+1): ${JSON.stringify(noAux)}`);
+    // segunda conversao
+    const g2 = await request(app).post(`/api/compras/cotacoes/${c.body.id}/gerar-pedido`).send();
+    assert.strictEqual(g2.status, 409);
+    // lixeira da cotacao convertida
+    assert.strictEqual((await request(app).delete(`/api/compras/cotacoes/${c.body.id}`)).status, 409);
+    // o pedido pode ser editado (troca a quantidade) e excluido
+    const put = await request(app).put(`/api/compras/pedidos/${g.body.id}`).send({ fornecedor_id: f.body.id, itens: [{ material_id: mA, quantidade: 5, valor_unitario: 10 }] });
+    assert.strictEqual(put.status, 200, JSON.stringify(put.body));
+    const dp = await request(app).delete(`/api/compras/pedidos/${g.body.id}`);
+    assert.strictEqual(dp.status, 200, JSON.stringify(dp.body));
+    assert.strictEqual(dp.body.cotacoes_liberadas, 1);
+    // RN-F12 (Fase 2, I2): excluir o pedido LIBERA a cotacao — pedido_id volta a NULL, ela pode gerar
+    // de novo e pode ser excluida. Sem isto ela ficava num beco que so SQL resolvia.
+    const depois = await request(app).get(`/api/compras/cotacoes/${c.body.id}`);
+    assert.strictEqual(depois.body.pedido_id, null);
+    assert.strictEqual(depois.body.pedido_numero, null);
+    assert.strictEqual(depois.body.status, 'aprovado', 'o status aprovado FICA (a aprovacao aconteceu; so o vinculo cai) — declarado');
+    const g3 = await request(app).post(`/api/compras/cotacoes/${c.body.id}/gerar-pedido`).send();
+    assert.strictEqual(g3.status, 201);
+    assert.notStrictEqual(g3.body.numero, g.body.numero);
+    assert.strictEqual((await request(app).delete(`/api/compras/pedidos/${g3.body.id}`)).status, 200);
+    assert.strictEqual((await request(app).delete(`/api/compras/cotacoes/${c.body.id}`)).status, 200, 'liberada, a cotacao se exclui com os itens');
+  });
+  await test('(B) pelo SERVICO: criarCotacao com itens + gerarPedidoDaCotacao, e a rota le o mesmo', async () => { /* cria por cotacaoService, gera por cotacaoService, GET /pedidos/:id e GET /cotacoes/:id batem */ });
+  await test('(C) RN-F11 pela rota: inativa pelo PUT da 40 -> gerar 400 literal -> reativa -> 201', async () => { /* PUT /fornecedores/:id com status inativo (7 textos + status) -> gerar 400 -> PUT ativo -> 201 */ });
+```
+
+⚠️ Confira em `extended.js:1116-1136` e `pedidoCompraService`/`receiptService.listarPedidosCompraAux` o nome
+exato do campo de saldo (`saldo_pendente`, design da 37) e se a rota aux exige perfil (gate `auth` só) —
+o `ADMIN` do harness passa por tudo.
+
+- [x] **Step 2: rodar** — 3 verdes (integração). Controle positivo: a sabotagem 3 da T2 (sem o `if (c.pedido_id != null)`) tem de derrubar (A) em *"segunda conversao"* (409 → 201).
+
+- [x] **Step 3: os cinco comandos** — `test:api` **194/194**; almoxarifado 42; 4/3/5; client **51 suítes / 778** (769 + 6 + 3); build.
+
+**Decisões da Fase 2 para a letra B (T6):** "Gerar pedido" **sem** `window.confirm` (a lixeira ao lado
+tem; aqui o ato é reversível — excluir o pedido libera a cotação — Fase 2 M6); `handleDelete` mostra o
+toast fixo *"Item excluído com sucesso"* e ignora a literal nova (M7, não é defeito); `criarCotacao` pelo
+serviço não passa pelo schema (`quantidade` 0 chegaria — M4, mesma classe do pedido, letra G).
+
+- [x] **Step 4: commit** — `git add server/tests/api/comprasCotacaoPedidoIntegracao.api.test.js`. Mensagem em `msg-e41-t5.txt`.
+
+#### ✅ Task 5 FECHADA — `dae1cee` (no tronco `desenvolvimento-almoxarifado`, sobre T1–T4 integradas)
+
+**Números reais:** `comprasCotacaoPedidoIntegracao` **3/3** (verde de primeira, como o plano previa — daí os dois
+controles abaixo); `npm run test:api` **194/194** (193 + este); `npm run test:almoxarifado` **42 passou, 0 falhou**;
+`test:validation` **4 passed**; `test:safealter` **3 passed**; `test:sqlite` **5 passed**; client
+**51 suítes / 778 testes**; `CI=true react-scripts build` **Compiled successfully**. CR=0 no arquivo novo.
+`git status` só com os 3 untracked pré-existentes (`docs/bkp_bancoprod.md`, `server/data/database.sqlite.bak`,
+`server/nodemon.json`), não adicionados.
+
+**Controles positivos** (md5 antes = md5 pós-restauro nos dois arquivos; âncora `grep -cF` = 1; restauro por cópia
+de `cotacaoService.js.e41t5.bak` / `pedidoCompraService.js.e41t5.bak` do scratchpad, nunca `git checkout --`):
+
+| # | Sabotagem | Qual asserção caiu |
+|---|---|---|
+| 1 | `gerarPedidoDaCotacao` sem `if (c.pedido_id != null)` (= sabotagem 3 da T2) | **(A)** `'segunda conversao: {…}'` — `strictEqual(g2.status, 409)` veio **201** com pedido `PC-` novo; **e (B)** `'segunda conversao pelo servico'` (`e.status` 409 → não lançou); 1/3 |
+| 2a | `excluirPedido`: `UPDATE cotacoes SET pedido_id = NULL` trocado por `cotacoesLiberadas = 0` | **(A)** `'cotacoes_liberadas: {"message":…,"solicitacoes_liberadas":0,"cotacoes_liberadas":0}'` (0 vs 1); 2/3 |
+| 2b | idem, trocado por `cotacoesLiberadas = 1` (isola o vínculo da contagem, como a sabotagem 8 da T2) | **(A)** `'pedido_id null depois de excluir o pedido'` — continuou apontando para o pedido apagado (a FK não dispara no harness, é a asserção que a RN-F12 protege); 2/3 |
+
+**Divergências plano ↔ código (nenhuma no código; só no teste, todas a mais):**
+- O (A) do plano foi escrito **verbatim** e ganhou asserções extras que o plano não listava: `itens.length === 2` na
+  criação, `fornecedor_id` e `/^PC-/` no pedido gerado, `quantidade_recebida === 0` no aux, a **literal** do 409 da
+  segunda conversão, `valor_total === 50` depois do `PUT` do pedido, `itens.length === 2` na cotação **depois** da
+  liberação (a exclusão do pedido não toca `itens_cotacao`), `valor_total === 25` no pedido regenerado (**nasce da
+  cotação, não do pedido editado** — é o que distingue "liberar" de "reaproveitar"), `COUNT(itens_cotacao) = 0` e
+  `GET 404` depois da exclusão final (a régua de órfãos do cabeçalho do plano).
+- O (B) do plano estava em prosa; o código faz `deepStrictEqual(rp.body, JSON.parse(JSON.stringify(p)))` — o
+  `JSON.parse(JSON.stringify())` é necessário porque `obterPedido` devolve o objeto do driver e a rota o serializa;
+  sem isso `undefined` vs chave ausente derrubaria por forma, não por conteúdo. Também afirma a lista de cotações
+  (`pedido_numero`, RN-F04) e o 409 pelo serviço.
+- O (C) afirma, além do plano, que `status = 'inativo'` **gravou** (régua do PUT, regra 1 herdada: medir a ausência
+  contra um caso que existe) e que `pedido_id` continua `null` na recusa.
+- `saldo_pendente` e o gate só-`auth` da rota aux: **confirmados** em `extended.js:1116` e
+  `receiptService.js:1463-1472` (`derivarRecebimentoDoPedido`) — o nome do plano estava certo.
+- O `POST /fornecedores` da tela da 40 manda `grupo_id: ''` → o preprocess devolve `null` e o 201 sai; o payload do
+  plano funcionou sem ajuste.
+
+**Fixtures próprias:** `ADMIN` id 102, `COT-E41-INT-001…`, `MAT-E41-INT-A/B`, razões sociais `Integração E41`,
+`Servico E41 INT`, `Inativavel E41 INT` — nenhuma colide com a T2 (`COT-E41-G-*`, `MAT-E41-A/B`, id 101).
+
+Scratchpad: `msg-e41-t5.txt`, `cotacaoService.js.e41t5.bak`, `pedidoCompraService.js.e41t5.bak`.
+
+**Próxima tarefa detalhada:** Task 6 — fechamento pela skill `fechar-etapa`, com a lista de artefatos já escrita no
+bloco da Task 6 abaixo. Pontos de atenção que a T5 deixa para ela: (i) a letra B precisa registrar que o pedido
+regenerado nasce da **cotação** (o `PUT` que o comprador fez no pedido anterior se perde — é o comportamento
+escolhido, reversível se um dia se quiser "reaproveitar"); (ii) `specs/modulo-compras/README.md:70` ("cotação não tem
+filhos") era verdade até a 40; (iii) o guia de usuário pode usar o roteiro do (A) como roteiro manual clicável.
+
+---
+
+### Task 6: fechamento (use a skill `fechar-etapa`)
+
+Os 7 artefatos + planos: novidades (seção da 41; letras **A18** (PRAGMAs pós-boot) e **A19** (órfãos), **B141–B152** (D1–D12), **C** nenhum novo, **D/G** (seção 8 do design + `pedido_id` de pedido apagado + `UPDATE` do vínculo sem transação + `comprasPedidoEditarExcluir:93` frase morta), item em "Onde estamos"); guia (roteiro: criar cotação com 2 itens → gerar pedido → conferir a edição do pedido → voltar e ver a coluna Pedido → tentar de novo pela API → excluir); manual (seção de cotação: itens, total, "Gerar pedido", o que Inativo/rejeitado fazem); `specs/modulo-compras/README.md:70` ("cotação não tem filhos" — **era verdade até a 40**), `22-integracoes` (o "falta para 🟢" desta fatia: o que sobra), mapa; design com "Como foi executado"; este plano com retro e a próxima tarefa (pela ordem do CLAUDE.md — medir); retro nº 4 do plano da 40 (defeito escapado — preencher com o que a Fase 0 da 41 achou de errado no handoff da 40: as 6 correções da seção 11 do design da 41).
+
+#### ✅ Task 6 FECHADA — fechamento (2026-09-22, sobre o tronco `ffba9b9`)
+
+Executada em **três frentes paralelas** depois da onda de correção, cada uma com arquivos disjuntos:
+
+- [x] **Escritor de desenvolvedor (esta frente):** `specs/modulo-compras/README.md` (cabeçalho com a
+  41, 36 rotas medidas por `grep`, serviços/telas/tabelas com o que mudou, a linha da aba Cotações
+  reescrita com hashes, a frase *"⚠️ genérico, sem guarda (cotação não tem filhos)"* riscada com
+  "era verdade até a 40; desde a 41 …", seção *"O que a Etapa 41 mudou na aba Cotações"* com os
+  fatos novos — `itens_cotacao` em `schema.js`, `cotacoes.pedido_id` em três lugares, a corrida
+  achada e fechada, a suíte de FK com DDL de produção); `specs/modulo-almoxarifado/22-integracoes/README.md`
+  (status e "Última atualização" com a 41; item `[x]` *"Cotação com itens e conversão em pedido de
+  compra"* com os 11 hashes; as duas frases da tabela da §15 que ficaram falsas, riscadas à vista;
+  seções 17–19 de contratos; 11 linhas novas na tabela de regras/testes; o "falta para 🟢" da fatia
+  reduzido a comparar cotações); `specs/modulo-almoxarifado/README.md` (parágrafo "Última
+  atualização" da 41 no formato dos anteriores, a 40 empurrada para "Antes:", a linha da feature 22
+  com o trecho da 41 e o "falta para 🟢" atualizado); o design da 41 (§12 com sete correções, cada
+  lugar original marcado *(corrigido no fechamento)* sem apagar); este plano (esta Task 6, a onda,
+  a retro e a Etapa 42); e a retro nº 4 do plano da 40.
+- [x] **Escritor de usuário (frente paralela):** `docs/almoxarifado-novidades-por-etapa.md` (seção da
+  41 com Antes→Agora e cenários com literal; letras **A18/A19**, **B141+**, C, D, G),
+  `docs/almoxarifado-guia-etapas-e-testes.md` (roteiro clicável: criar cotação com 2 itens → gerar
+  pedido → conferir a edição → coluna Pedido → tentar de novo pela API → excluir) e
+  `docs/almoxarifado-manual-do-sistema.md` (seção de cotação: itens, total, "Gerar pedido", o que
+  inativo/rejeitado fazem — sem número de etapa, sem hash).
+- [ ] **Integrador:** os cinco comandos no tronco `ffba9b9` com os números **lidos**, `git status`
+  limpo, re-revisão da onda (uma lente fresca sobre `3032f5a..ffba9b9`) e o commit do fechamento.
+  **Pendente no momento em que esta frente escreveu** — os números desta etapa estão em "ver o
+  commit do fechamento" no mapa e abaixo, de propósito: esta frente **não rodou suíte nenhuma** e
+  não vai inventar placar.
+
+**O que a T5 deixou para cá e onde ficou:** (i) o pedido regenerado nasce da **cotação** (o `PUT`
+do pedido anterior se perde) — letra B, e escrito no item da feature 22 e no §12.1 do design;
+(ii) `specs/modulo-compras/README.md:70` — riscada com "era verdade até a 40"; (iii) o roteiro do
+(A) como roteiro manual — no guia (frente do usuário).
+
+---
+
+## Self-review
+
+**1. Cobertura:** D1 (T1–T5), D2 (T1 (p), T2 (3)), D3 (T2 (2)(3), T3 (i)(j)(k)), D4 (T1 Step 3-4), D5 (T2 gerar + T4), D6 (T1 Step 4, T2 (1)(6)), D7 (T2 gerar (1)(4)), D8 (T2 gerar (5), T5 (C)), D9 (T2 itens (7)(8)(10), sabotagem 5), D10 (T3), D11 (T4), D12 (sort). RN-F01–F14 na tabela com prova. §8 nada implementa.
+
+**2. Placeholders:** o `colunas(dados)` da T2 diz "igual à 40" e o `INSERT`/`UPDATE` estão elididos com `(…)` — **são o código de hoje** em `cotacaoService.js:36-46`, `:63-64`, `:75-77`, que o executor reescreve mantendo as mesmas colunas; os cenários (B)/(C) da T5 estão em prosa com o gesto exato — o executor escreve o código no molde do (A). Nada mais.
+
+**3. Nomes:** `resolverItens`, `CotacaoItemSchema`, as 4 literais, `excluirCotacao`, `gerarPedidoDaCotacao`, `COTACAO_EXCLUIDA`, `cotacaoJaGerouPedido`/`…Exclusao` — iguais no design §5.3, na T1, na T2 e nas asserções; `data-testid` da T3 iguais ao §5.5; `gerar-pedido-${id}` na T4 e no §5.5; `pedido_numero` na lista (T2 (6)) e na T4.
+
+**4. Para a Fase 2 refutar:** (i) `atualizarCotacao` sem `itens` **apaga** — é o que a tela manda (`itens: []` sempre) e o que o (e) da 40 ajustado espera; mas um `PUT` externo só de cabeçalho perde as linhas: decisão D3/RN-F05, confirmar que está na letra B; (ii) `gerarPedidoDaCotacao` passa `observacoes` e **não** passa `data_pedido`/`previsao_entrega` — `criarPedido` põe default? (medir `:320-343`); (iii) o `LEFT JOIN pedidos_compra` na lista e em `SELECT_LINHA` com o alias `p` — o `SELECT c.*` da lista traz `pedido_id` de `cotacoes` e não colide com `p.id`? (iv) a rota aux do recebimento lista pedido com `status` `pendente` — `criarPedido` grava `pendente` por default? (v) RN traçadas até o último gesto: gerar → editar pedido → receber (E37) → o custo médio herda o preço da cotação — cadeia medida na Fase 0 §5, nada a mudar.
+
+---
+
+## Retro de 4 números (preenchida na T6)
+
+*(Preenchida em 2026-09-22, lendo `.superpowers/sdd/2026-09-22-crm-etapa41-cotacao-itens-pedido/progress.md`,
+`etapa41-fase2-revisao.md`, `final-review-rn.md`, `final-review-ux.md`, `fix-wave-brief.md`,
+`fix-wave-report-servidor.md` e `fix-wave-report-cliente.md` — não de memória.)*
+
+1. **Rodadas de correção até verde:** **T1–T5: zero rodadas de correção** — cada task fechou verde no
+   próprio commit, com as sabotagens derrubando o cenário previsto (e, em seis casos, um a mais: T1
+   sab. 4 derrubou (r) além de (q); T2 sab. 4 derrubou (9) além de (1) e sab. 5 derrubou Itens (7) e
+   Gerar (7)/(10) além de Itens (8)/(10); T3 sab. 4 derrubou (m) além de (l)). **Reviews por task:
+   nenhuma** — como na 40, as duas lentes da Fase 5 cobriram `183ac38..e2996ff` (RN) e `3032f5a` (UX)
+   de uma vez. **Fase 5: UMA onda de correção, 6 itens, 6 commits** (`a09dfe8 abb46f4 327d33f
+   d6a1beb 83a5d71 ffba9b9` — o F3 e o F3b no mesmo commit; o F2 em arquivo próprio). Duas sabotagens
+   da onda **não derrubaram nada e viraram achado**: a guarda por `useState` do F4 (trocada por
+   `useRef`) e o `formatCurrency` no `<p>` do F6 (já arredondava — mantido por coerência, declarado).
+   **Re-revisão da onda (2026-09-22): 0 Critical, 1 Important, 4 Minor.** O Important era uma
+   SÉTIMA corrida, mais fina que a da onda: `DELETE /cotacoes/:id` chegando algumas voltas do event
+   loop DEPOIS do `gerar` (não no mesmo tick, que era o único que o (12) exercitava) deixava pedido
+   vivo órfão em 28 de 301 janelas — o comentário do F1 afirmava cobrir essa corrida e não cobria.
+   **Fechado como F7 (`68d4173`)**: `excluirCotacao` reivindica por CAS (`status = cancelado WHERE
+   pedido_id IS NULL`) antes de apagar, e o CAS do `gerar` recusa cancelada; cenário (13) varre
+   d = 0..300 e afirma zero órfãos, caía em d=34 antes. Os 4 Minor ficaram declarados (letra G).
+   Total: **2 rodadas** para a etapa (a onda de seis + o F7) — a 39 e a 40 tiveram 1.
+2. **Achados da revisão (Fase 2 + Fase 5):** **Fase 2 (revisão fresca do plano, antes de codar):
+   1 Critical + 4 Important + 8 Minor, os 13 aplicados ao plano e ao design em `183ac38`** — o
+   Critical (T4 (k) afirmava um `data-stub` que a tela real nunca renderiza) virou prova pelo `h1`
+   e pelo `GET` por id; o I2 (beco da cotação depois de excluir o pedido) **inverteu a RN-F12**; o I3
+   criou a RN-F15; o I4 achou o `data_pedido` NULL que a Fase 0 cliente afirmava preenchido; o I1
+   (`"pedido null"` na literal) virou `rotuloPedido`. **Fase 5 (duas lentes independentes): 1
+   Critical + 4 Important + 7 Minor, todos reais, os Important reproduzidos por sonda; ruído: 0** (UX
+   1C/2I/4M sobre `3032f5a`; RN 0C/2I/3M sobre `183ac38..e2996ff`). **As lentes convergiram no achado
+   mais caro** — a corrida do `gerar-pedido` (UX C1 = RN I1 = RN M3): 6 POSTs → 6 pedidos, medido por
+   sonda nos dois relatórios. Contando por raiz: **6 achados distintos viraram onda** (F1–F6). Dos 7
+   Minor, **cinco seguem abertos e declarados** (letra G): `ALTER … pedido_id` no primeiro boot de
+   banco novo (RN M1); `.replace('  ', ' ')` no toast (UX M1); sem cenário para o aviso de item sem
+   preço e para o fallback `#id` (UX M2); lixeira visível para a convertida (UX M3); h1 da edição do
+   pedido sem o `PC-` (UX M4). Dois viraram onda (RN M2 = F3; RN M3 fechado pelo F1).
+3. **Paralelismo: TRÊS galhos em worktrees (T2 `wt-e41-t2`, T3 `wt-e41-t3`, T4 `wt-e41-t4`, junction
+   de `node_modules`) a partir de `0dad68b`, e mais dois na onda (`e41-fs`, `e41-fc`) a partir de
+   `3032f5a` — ZERO conflitos de merge** nos nove cherry-picks (T4 `84cb19c` → `bd224d2`, T3 `a80c769`
+   → `7ecf91f`, T2 `70d653d` → `11591ca`; onda `05d5740`/`ed01c91`/`385d527` → `a09dfe8`/`abb46f4`/
+   `327d33f`, `42c534f`/`1b8e102`/`b572fc3` → `d6a1beb`/`83a5d71`/`ffba9b9`), suíte inteira rodada
+   depois de cada um. A previsão do plano (conflito só por adjacência nos blocos FECHADA) foi
+   conservadora: nenhum. **O que custou, de novo, foi a sessão:** T2, T3 e T4 foram **cortadas pelo
+   limite de sessão da API logo no início** (worktrees limpas), retomadas via `SendMessage` com
+   contexto preservado — **a segunda vez seguida** (a 40 perdeu cinco agentes de uma vez pelo mesmo
+   motivo; a lição "despachar em lotes menores" escrita no handoff da 40 **não foi aplicada** — os
+   três galhos saíram juntos). O paralelismo em worktree continua barato nesta base; o gargalo
+   segue sendo a sessão.
+4. **Defeito escapado:** *(em branco de propósito — só pode ser preenchido **de fora**, por quem
+   fechar a Etapa 42 olhando para trás, com o que a Fase 0 dela achar de errado no handoff abaixo e
+   no código desta etapa. É o mesmo contrato que a 40 deixou para esta, cumprido na retro nº 4 do
+   plano da 40 neste fechamento.)*
+
+---
+
+## Onda de correção final (BASE `3032f5a`)
+
+Executada em 2026-09-22 a partir de
+`.superpowers/sdd/2026-09-22-crm-etapa41-cotacao-itens-pedido/fix-wave-brief.md`, que consolida
+`final-review-rn.md` (I1, I2, M2, M3) e `final-review-ux.md` (C1, I1, I2). **Dois executores em
+paralelo**, em worktrees (`e41-fs` servidor: F1, F2, F3+F3b; `e41-fc` cliente: F4, F5, F6), um commit
+por item, cherry-pick para o tronco (cliente primeiro, depois servidor — a ordem final no `git log`
+é `a09dfe8 abb46f4 327d33f d6a1beb 83a5d71 ffba9b9`). Relatórios completos em
+`fix-wave-report-servidor.md` e `fix-wave-report-cliente.md`.
+
+- [x] **F1 (RN I1 = UX C1 = RN M3) — a conversão não era atômica: N chamadas concorrentes criavam N
+  pedidos** — `d6a1beb` (wt `42c534f`). `gerarPedidoDaCotacao`: o `UPDATE` do vínculo ganhou `AND
+  pedido_id IS NULL` e virou a guarda (CAS); `changes === 0` → `pedidoCompraService.excluirPedido(db,
+  pedido.id)` (compensação — o perdedor nunca foi apontado, passa com FK ON) → `obterCotacao` relê (404
+  se a cotação sumiu) → 409 com o vencedor. A checagem rápida de `pedido_id != null` continua.
+  Cenários **(11)** (6 `gerar` em `Promise.all` → exatamente 1×201 + 5×409 com o `PC-` do vencedor,
+  `COUNT(pedidos_compra)` +1, `pedido_id` apontando para o único pedido, linhas = itens da cotação, 0
+  órfãos) e **(12)** (`DELETE /cotacoes/:id` × `gerar` → 0 pedidos sem cotação apontando; ramo
+  observado no harness: **200 + 404**, 5 rodadas). **Vermelho antes:** (11) `status:
+  201,201,201,201,201,201`; (12) `200 + 201` com pedido órfão. **Sabotagens:** sem o `AND pedido_id IS
+  NULL` → **(11)** cai no `deepStrictEqual` dos 6 códigos (`201 × 6`) e (12) herda os órfãos; sem a
+  compensação → **(11)** cai em *"os perdedores tem de ser COMPENSADOS (excluirPedido) — sem isso ficam
+  6 pedidos"* (`COUNT +6`) e (12) em *"cotacao apagada: nenhum pedido pode sobrar"*. **Descartado:**
+  fila em memória por id de cotação. **Declarado:** o terceiro entrelaçamento (`excluirCotacao` lê
+  NULL → `gerar` vence → `DELETE` apaga) fica fora do CAS; o (12) acusa se aparecer. Janela entre o CAS
+  perder e o `obterCotacao` reler em que o vencedor poderia ser excluído (409 sairia com `#null`) —
+  sem cenário, anotado.
+- [x] **F2 (RN I2) — a suíte não via a ordem UPDATE → DELETE em `excluirPedido`** — `83a5d71` (wt
+  `1b8e102`). Arquivo próprio **`comprasCotacaoFkProducao.api.test.js`** (3 cenários, **sem**
+  `createTestApp`): segundo `sqlite3.Database(':memory:')` com a DDL de produção **lida em tempo de
+  execução** de `index.js` (`fornecedores`, `pedidos_compra`, `cotacoes`) e `schema.js`
+  (`itens_pedido_compra`, `itens_cotacao`) por um extrator `ddlDe(arquivo, tabela)` que falha alto se a
+  marca sumir; + os dois `ALTER` reais (`pedido_id` com `REFERENCES`, `quantidade_recebida`);
+  `materiais_almoxarifado` mínima; `PRAGMA foreign_keys = ON` afirmado por `PRAGMA foreign_keys` = 1 e
+  `foreign_key_list(cotacoes)`. **Controle positivo dentro de cada cenário:** `UPDATE pedido_id = 999`
+  e `DELETE` cru têm de falhar com `SQLITE_CONSTRAINT`. (1) `excluirPedido` → `cotacoes_liberadas 1`,
+  `pedido_id` NULL, `foreign_key_check` vazio, regenerar dá PC novo; (2) `excluirCotacao` com 2 itens →
+  0 `itens_cotacao`, fk_check vazio; (3) o F1 sob FK ON — 2 `gerar` em `Promise.allSettled` → 1
+  fulfilled + 1 rejected 409, `COUNT +1`. **Sabotagens:** `UPDATE cotacoes SET pedido_id = NULL` movido
+  para **depois** do `DELETE FROM pedidos_compra` → **(1)** cai com `SQLITE_CONSTRAINT: FOREIGN KEY
+  constraint failed` **enquanto `comprasCotacaoGerarPedido` continua 12/12** (o furo I2, reproduzido);
+  sem o `DELETE FROM itens_cotacao` → **(2)** cai com `SQLITE_CONSTRAINT`; `PRAGMA foreign_keys = OFF`
+  no próprio teste → **(1)(2)(3)** caem (*"controle+ … a FK NAO vigiou (passou) — o banco deste teste
+  nao prova nada"*) — o controle do controle. **Divergências do brief:** arquivo próprio (195, não
+  194); DDL lida, não copiada; nenhuma tabela extra além do `ALTER … quantidade_recebida`; o (3) não
+  estava no brief (prova a premissa "passa com FK ON").
+- [x] **F3 (RN M2) — o cabeçalho do pedido gerado não era afirmado** + **F3b (UX I2, metade servidor)
+  — `somaItens` gravava o double cru** — `ffba9b9` (wt `b572fc3`). (1) de `comprasCotacaoGerarPedido`:
+  fixture com `observacoes: 'frete incluso E41'`, afirma `observacoes` igual, `status === 'pendente'` (o
+  DEFAULT do DDL — nada além do contrato viaja para `criarPedido`), `previsao_entrega === null`.
+  `somaItens = Math.round(reduce(...) * 100) / 100`; (2) de `comprasCotacaoItens`: POST 3 × 0,1 → `0.3`;
+  PUT 3 × 0,2 → `0.6` (era `0.6000000000000001` — sem o PUT a sabotagem "round só no criar"
+  passaria). **Vermelho antes:** *"ponto flutuante cru: 0.30000000000000004"*. **Sabotagens:**
+  `status: 'cancelado', previsao_entrega: '2020-01-01'` no payload → **(1)** cai em *"status e o DEFAULT
+  do DDL"*; sem `observacoes` → **(1)** cai em *"observacoes da cotacao vai para o pedido (RN-F07)"*; sem
+  o `Math.round` → **Itens (2)** cai em *"ponto flutuante cru"*. **Declarado:** `criarPedido` (Etapa 38)
+  continua somando cru — pedido gerado de 3 × 0,1 nasce com `pedidos_compra.valor_total` sem
+  arredondar. Letra B.
+- [x] **F4 (UX C1, metade cliente) — o botão "Gerar pedido" aceitava clique repetido em voo** —
+  `a09dfe8` (wt `05d5740`). `Compras.js`: estado `gerandoId` alimenta `disabled={gerandoId ===
+  cotacao.id}`; a guarda de saída cedo é um **`useRef`** (`gerandoRef`), `finally` volta os dois a
+  `null`. Cenário **(m)** em `Compras.test.js`: `api.post` devolve promise pendente; par de cliques no
+  mesmo `act` + terceiro clique após o re-render → `api.post` **1×**, botão `disabled`, ainda na aba;
+  resolve → toast 1× e navega (h1 + `GET /compras/pedidos/650`). **Vermelho antes:** `api.post` length 2.
+  **Sabotagens:** sem `disabled` **e** sem a guarda do ref → **(m)** `api.post` 1 → **2**; só sem
+  `disabled` → **(m)** `botao().disabled` true → **false**; só sem a guarda do ref → **(m)** 1 → **2** (par
+  no mesmo tick). **Divergência do brief, que pedia guarda por estado:** com `if (gerandoId === …)` de
+  `useState`, tirar o `if` ficava **13/13 verde** — entre dois eventos discretos o React já
+  re-renderizou e o botão está `disabled` (o jsdom nem despacha o click), e no mesmo tick o closure lê
+  `null`; um `if` que nenhuma sabotagem derruba é a classe de "trava que não trava" que o projeto
+  proíbe. Reverter = trocar `gerandoRef.current` por `gerandoId` e apagar o par de cliques do (m).
+- [x] **F5 (UX I1) — cotação convertida abria em edição livre e perdia o trabalho no Salvar** —
+  `abb46f4` (wt `ed01c91`). `CotacaoForm.js`: `convertida = c.pedido_id != null` e `pedidoGerado {id,
+  numero}` do `GET /:id`; faixa **`role="status"`** `data-testid="cotacao-convertida"` (âmbar, paleta do
+  `aviso-so-status` do pedido — não a caixa vermelha do erro) com *"Esta cotação já gerou o pedido ⟨PC⟩
+  — não pode mais ser editada"* e `<Link to="/compras/pedidos/editar/⟨id⟩">` (fallback `#id`);
+  `disabled={convertida}` em **13** controles; Salvar **não renderizado**; `handleSubmit` sai cedo.
+  Cenário **(o)** com fixture **771** (`pedido_id: 650`, `pedido_numero: 'PC-2026-650'`, 1 item): faixa +
+  `role` + literal + `href`, `alertas()` vazio, 10 controles `disabled` nomeados **e** varredura de todo
+  `[data-testid^="cotacao-"]` sem nenhum livre (controle `>= 10`), `button[type=submit]` ausente,
+  `submeter()` → `api.put`/`api.post` não chamados. **Vermelho antes:** `porTestId('cotacao-convertida')`
+  null. **Sabotagens:** sem `disabled` no `cotacao-numero` → **(o)** true → **false**; sem `if
+  (convertida) return` → **(o)** `api.put` 0 → **1**; `role="status"` → `"alert"` → **(o)** cai no `role`
+  (a primeira tentativa por `perl` acertou o **comentário** e ficou verde — refeita com âncora de
+  linha inteira); sem os `disabled` das linhas (8 ocorrências) → **(o)** `cotacao-qtd-item-912.disabled`
+  true → **false**. **Não entrou (declarado):** esconder a lixeira da convertida na aba (UX M3); o lápis
+  continua e agora abre a tela travada — o "ver" proposto no I1.
+- [x] **F6 (UX I2, metade cliente) — ponto flutuante no total travado** — `327d33f` (wt `385d527`).
+  `arredondar2 = Math.round((Number(v)||0)*100)/100`; `totalArredondado` no `value` do input travado e
+  no `<p>Total</p>`; **e** no `setValorTotal` da carga do `GET /:id` (cotações gravadas **antes** do F3b
+  continuam no banco com o ruído — sem o round na carga, remover a última linha devolvia o campo
+  digitável com `0.30000000000000004` e `step="0.01"` bloquearia o submit no navegador). Cenário
+  **(p)**: 912 × 3 × 0,1 → controle positivo `String(3*0.1) === '0.30000000000000004'`, `cotacao-valor.value
+  === '0.3'`, `Total: R$ 0,30`, texto sem o ruído; remover → `readOnly` false e `'7'` (o digitado volta);
+  fixture **773** (`valor_total: 0.30000000000000004`, 1 item) → travado `'0.3'`, removido → digitável
+  `'0.3'`. **Vermelho antes:** `'0.30000000000000004'`. **Sabotagens:** `String(total)` no `value` → **(p)**
+  `'0.3'` → `'0.30000000000000004'`; carga do GET sem `arredondar2` → **(p)** edição da 773 cai;
+  `arredondar2` vira identidade → **(p)** cai; `formatCurrency(total)` no `<p>` → **16/16 verde** —
+  `formatCurrency` já arredonda; a troca no `<p>` é coerência, declarada na mensagem do commit.
+
+**Verificação da onda** (executores nas worktrees): servidor `test:api` **195/195** (194 +
+`comprasCotacaoFkProducao`), almoxarifado **42/0**, `comprasCotacaoGerarPedido` 10 → **12**,
+suítes vizinhas 3/10/3/19/13 verdes; cliente `Compras.test.js` **13/13**, `CotacaoForm.test.js`
+**16/16**, suíte inteira **51 suítes / 781** (778 + 3), build **Compiled successfully**; CR = 0 em
+todos os arquivos tocados. **No tronco, medidos pelo integrador em `68d4173`** (esta frente não rodou os cinco comandos e não
+copia os números das worktrees como se fossem do tronco): `test:api` **195/195 arquivos**;
+almoxarifado **42/0**; validation **4/0**; safealter **3/0**; sqlite **5/0**; client **51 suítes /
+781 testes**; build **Compiled successfully**.
+
+**Re-revisão da onda (2026-09-22): 0C · 1I · 4M — o Important virou o F7 `68d4173` (CAS na
+exclusão, cenário (13) varrendo 301 janelas); relatório em `fix-wave-rereview.md`.** (Uma lente
+fresca sobre `3032f5a..ffba9b9`,
+com as sondas originais — `sonda3_corrida.js`, `sonda1b_fk_prod.js`, `sonda-e41-duplo-clique.js`,
+`sonda-e41-ux.test.js` P1/P2/P4 — rodadas contra o código novo, e efeito colateral do conserto
+procurado: a compensação do F1 chamando `excluirPedido` com `solicitacoes_liberadas`/`cotacoes_liberadas`
+0; o `useRef` do F4 não resetando em erro; o `arredondar2` na carga do F6 alterando o `PUT` sem itens
+de uma cotação com 3 casas gravadas).
+
+**Para as letras B e G (o escritor de usuário recebeu o texto):** B — CAS + compensação em vez de
+fila (F1); `criarPedido` segue somando cru (F3b); `useRef` em vez de estado na guarda (F4); faixa
+`role="status"` âmbar em vez da caixa de erro (F5); round também na carga do `GET /:id` (F6); o
+pedido regenerado nasce da cotação (T5); "Gerar pedido" sem `window.confirm` (Fase 2 M6). G — o
+entrelaçamento `excluirCotacao` × `gerar` fora do CAS; o `ALTER … pedido_id` no primeiro boot de banco
+novo (RN M1); `.replace('  ', ' ')` no toast (UX M1); lixeira visível para a convertida (UX M3); h1 da
+edição do pedido sem o `PC-` (UX M4); `criarCotacao` pelo serviço sem schema (Fase 2 M4); a frase
+morta de `comprasPedidoEditarExcluir:93`.
+
+---
+
+## Próxima tarefa detalhada — Etapa 42: o recebimento passa a FECHAR o pedido (status automático + alerta de pedido parcial) — medir antes
+
+**Por que esta, e não outra** (pela ordem do `CLAUDE.md`, sem consultar ninguém):
+
+1. **O "falta para 🟢" da feature 22 nomeado neste fechamento é *comparar cotações*** — e ele exige
+   um "processo de cotação" com N fornecedores por material, entidade que **não existe** e que o
+   design da 41 (D1) descartou explicitamente. Não é alcançável numa etapa sem inventar modelo de
+   dados sem demanda; **descartado** como Etapa 42 (fica declarado no mapa).
+2. **As três fatias do Compras nomeadas na 38/39/40 foram entregues** (pedido, prazo, telas,
+   cotação→pedido). Pelo mapa `specs/modulo-almoxarifado/README.md`, as candidatas 🟡 medidas nos
+   fechamentos anteriores: **05** separação/picking (3 de 13 — lista de separação como entidade, rota
+   de picking, tela de fila: escopo grande, entidade nova), **06** aprovações (o motor configurável
+   está adiado "para demanda real" por decisão do usuário — só sobram dois defeitos pequenos:
+   `limite_aprovacao_auto` morto e o lembrete que não alcança `AGUARDANDO_APROVACAO_VALOR`), **08**
+   recebimento, **21** relatórios (previsto × realizado depende da 22 — bloqueado), **23**
+   perfis/auditoria (exportação XLSX e retenção do log — valor baixo).
+3. **Escolha: feature 08, o item (5) do seu "falta para 🟢", nomeado com dono pela Etapa 39:** *o
+   `processar` da 37 gravar `status = 'recebido'` no pedido quando a situação derivada vira
+   `RECEBIDO`* — e, na mesma etapa, o **follow-up da feature 20** que depende do mesmo dado:
+   exportar `derivarRecebimentoDoPedido` (ou uma fonte sem `LIMIT`) para o alerta **pedido-parcial**
+   existir. **Por quê é a de maior valor alcançável:** as quatro etapas seguidas no Compras
+   construíram a cadeia cotação → pedido → recebimento → custo médio (a sonda e2e da lente RN desta
+   etapa a percorreu inteira: `custo_medio 12.5`, aux `PARCIAL, saldo 4`), e a cadeia termina num
+   pedido que **continua "Atrasado" para sempre** na aba Compras depois de fisicamente recebido, até
+   o comprador lembrar de usar o `PATCH` da 39 à mão — o defeito que a 39 provou por teste e resolveu
+   com uma porta manual, deixando o automático nomeado. É pequeno (uma escrita não-fatal ao lado do
+   acumulador da 37, uma exportação, uma entrada no registro de alertas), tem dado real (o pedido
+   gerado da cotação da 41 é recebível por clique) e fecha o último elo aberto da cadeia que as
+   quatro etapas de Compras abriram. **Descartado:** divergência formal numerada (item (3) da 08 —
+   tabela e fluxo próprios, escopo de etapa inteira sem esse elo fechado); conferência física
+   estruturada (item (2)).
+
+**Contrato que a 42 consome (medido em `ffba9b9` neste fechamento — a Fase 0 tem de reconta linhas):**
+
+- **O acumulador da 37** — `receiptService.js:1260-1270` (`darEntradaEstoque`, dentro do claim
+  `entrada_estoque_em IS NULL`, depois de `entrouFisicamente = true`, **não-fatal** com `warn`):
+  `UPDATE itens_pedido_compra SET quantidade_recebida = COALESCE(quantidade_recebida, 0) + ? WHERE id
+  = ?` por `item.pedido_item_id`. Roda nos **dois** caminhos de entrada física (`processarNota` e
+  `aprovarRecebimento`). É **ali**, e só ali, que o saldo do pedido muda — o gancho do status entra ao
+  lado, com a mesma não-fatalidade e o mesmo motivo (um `throw` travaria a nota com o estoque já
+  creditado).
+- **A régua de situação** — `derivarRecebimentoDoPedido(quantidadePedida, quantidadeRecebida)`,
+  `receiptService.js:1463`, **não exportada** (`module.exports :1640`), usada em `:1530` (aux, por
+  pedido com `SUM`) e `:1579` (itens do pedido). Devolve `situacao_recebimento`
+  (`ABERTO`/`PARCIAL`/`RECEBIDO`) e `saldo_pendente` clampado. A 42 **exporta** e reusa — não copia
+  (mesma regra do `resolverItens` da 41: um dono por régua).
+- **O enum e a régua de atraso do core** — `STATUS_PEDIDO_COMPRA = ['pendente', 'aprovado',
+  'rejeitado', 'em_analise', 'enviado', 'recebido', 'cancelado']` (`schemas.js:60`);
+  `STATUS_PEDIDO_FORA_DO_ATRASO = ['recebido', 'cancelado', 'rejeitado']` e `derivarAtraso`
+  (`pedidoCompraService.js:748-761`) — gravar `'recebido'` **é** o que tira o pedido do atraso na
+  aba e do alerta `PEDIDO_COMPRA_ATRASADO` (`alertRegistry.js:462`, que importa a régua por require
+  lazy). Nenhuma máquina de estados: o `PATCH …/status` da 39 aceita qualquer dos 7, e o gancho
+  automático **não** pode inventar uma.
+- **A porta manual que já existe** — `PATCH /api/compras/pedidos/:id/status` (`19ebf7d`) e a guarda
+  de duas pernas do `PUT`/`DELETE` (`6c21e89`): o automático escreve **só** `status` (como o
+  `PATCH`), nunca passa pelo `PUT` (que faz `DELETE`+`INSERT` das linhas e zeraria
+  `quantidade_recebida`).
+- **O registro de alertas** — `alertRegistry.js` (18 entradas; a de `PEDIDO_COMPRA_ATRASADO` é o
+  molde: colunas **projetadas**, nunca `p.*`; dedupe com o dado que muda; prefixo `[Compras]`;
+  require lazy do módulo core porque o ciclo está a um require de fechar). A fonte de hoje para
+  "parcial" (`listarPedidosCompraAux`) tem `LIMIT 50` e não devolve `previsao_entrega` — a spec 20
+  registra isso como o bloqueio real.
+- **A integração que já existe e a 42 estende** — `recebimentoContraPedidoIntegracao.api.test.js`
+  (`97726c3`) e `comprasCotacaoPedidoIntegracao.api.test.js` (`dae1cee`): a 42 pode partir de um
+  pedido **gerado da cotação** e receber até `RECEBIDO`, afirmando `status = 'recebido'` na lista de
+  Compras e `atrasado = 0` com `previsao_entrega` no passado.
+
+**Pontos de atenção (medir na Fase 0 antes de prometer):**
+
+- **Onde está a fronteira de "recebido":** `RECEBIDO` derivado é `soma_recebida >= total_pedido` por
+  pedido — mas o acumulador soma **por linha** e o `processar` percorre item a item. O gancho tem de
+  decidir **depois** do laço (uma leitura do `SUM` ao fim de `darEntradaEstoque`), não por item, senão
+  um pedido de 2 linhas vira `recebido` na primeira. E o `aprovarRecebimento` (segundo caminho)
+  precisa do mesmo gancho — a 37 já pagou por esquecer esse caminho uma vez.
+- **Reversibilidade:** o pedido que ficou `recebido` e depois tem um recebimento **estornado**/
+  reprocessado — o acumulador não desfaz (é `+ ?` idempotente por claim). Decidir se o gancho só
+  **sobe** para `recebido` (nunca desce) e escrever na letra B; o `PATCH` manual continua sendo a
+  saída para o resto.
+- **Não sobrescrever `cancelado`/`rejeitado`:** se o comprador cancelou o pedido e a nota chega
+  mesmo assim (o aux `?pendentes=1` **não filtra `status`** — G da 38), o gancho não pode ressuscitar
+  o pedido para `recebido` sem decisão. Caminho reversível: só grava quando o status atual ∉
+  {`cancelado`, `rejeitado`}, e registra em B.
+- **Auditoria:** a mudança automática de status é escrita em tabela **core** por um ato do
+  almoxarifado — o `PATCH` da 39 audita? (medir `comprasPedidoStatus.api.test.js`). Se audita, o
+  gancho tem de deixar o mesmo rastro com autor = quem processou a nota.
+- **O alerta pedido-parcial precisa de uma data para o dedupe** (a lição do `PEDIDO_COMPRA_ATRASADO`:
+  só com o id o pedido era calado para sempre). Candidata: `pedido-parcial-<id>-<saldo_pendente>` ou
+  a data do último recebimento — medir o que a régua devolve.
+- **Contrato de não-toque a preservar:** `receiptService.js` é do almoxarifado e as três etapas de
+  Compras (38, 39, 40) o proibiram por contrato; a 42 **toca** (é a feature 08), mas com o mesmo
+  molde do acumulador: dentro do claim, depois da entrada física, não-fatal, com a tabela de compras
+  podendo não existir (`sqlite_master` guard, como `gerarContaPagar`).
+- **Suítes que têm de continuar verdes (números de partida, a confirmar na Fase 0 com o commit do
+  fechamento):** `recebimentoContraPedidoIntegracao`, `comprasPedidoAtraso` (11),
+  `comprasPedidoAtrasoIntegracao` (blocos D / 9a / 9c — **afirmam que receber não muda o atraso
+  sozinho**: a 42 inverte isso de propósito e tem de reescrever esses cenários **dizendo que estavam
+  certos até a 41**), `comprasPedidoStatus` (7), `alertaPedidoAtrasado` (10),
+  `comprasCotacaoPedidoIntegracao` (3), `comprasCotacaoFkProducao` (3).
+- **Despachar em lotes menores:** duas etapas seguidas perderam agentes pelo limite de sessão ao
+  despachar três ou mais de uma vez. Servidor (gancho + exportação + alerta) e cliente (badge
+  "Recebido" e o alerta na central, se houver) são disjuntos — dois galhos, não mais.
+- **Retro nº 4 desta etapa (defeito escapado)** é preenchida pela Fase 0 da 42 olhando para trás —
+  o que a 41 deixou errado no handoff acima e no código.

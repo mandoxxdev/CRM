@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
@@ -9,7 +9,16 @@ import {
   FiArrowRight, FiFileText, FiDollarSign, FiTag,
 } from 'react-icons/fi';
 import EtiquetasPdfModal from './EtiquetasPdfModal';
+import AnexosDocumento from './AnexosDocumento';
+// Etapa 36 (RN-18): usado SÓ para esconder a caixa de autorização de excedente antes do
+// formulário. O hook FALHA ABERTO de propósito (`useAlmoxPermissoes.js`): se o
+// `GET /almoxarifado/minhas-permissoes` não carregar, `pode()` deixa passar. Quem DECIDE é o
+// backend — `conferirRecebimento` checa `autorizar_excedente` por `can()` e devolve 403 com a
+// literal congelada. Consequência declarada e aceita: quem não tem a ação pode ver a caixa por um
+// instante e tomar 403 do servidor; é o desenho, não defeito.
+import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import { montarEtiquetasDoRecebimento } from '../../utils/etiquetasPdf';
+import { quantidadeQueEntra } from '../../utils/quantidadeQueEntra';
 import './Almoxarifado.css';
 
 const STATUS_INFO = {
@@ -33,35 +42,219 @@ const FLOW_STEPS = [
   { label: 'Processado', desc: 'Estoque + Contas a Pagar' },
 ];
 
+// Revisão final (F2): `tipo_recebimento` SAIU daqui e do carregamento de `abrirDetalhe`. Este
+// objeto é espalhado inteiro no `PUT /fiscal` (`salvarFiscal`), e o modal de NF não tem controle
+// nenhum para o tipo — o `<select>` de tipo vive no modal de *novo* recebimento, que usa o `form`.
+// Ecoando a coluna, um registro de acervo com valor fora do enum da RN-11 levava 400 do Zod em
+// TODA gravação fiscal, sem nenhum campo na tela para o operador corrigir. Quem não edita não
+// reenvia: o `COALESCE` do `salvarDadosFiscal` preserva a coluna de quem não manda o campo.
 const EMPTY_FISCAL = {
   nota_fiscal: '', nota_serie: '', data_emissao_nf: '', data_entrada_nf: '',
   cfop_nota: '', cfop_entrada: '', chave_nfe: '',
   fornecedor_nome: '', fornecedor_cnpj: '', pedido_compra_numero: '',
-  tipo_recebimento: 'NOTA_FISCAL',
   base_icms: '', valor_icms: '', valor_produtos: '', frete: '', desconto: '',
   outras_despesas: '', valor_ipi: '', valor_total_nota: '',
 };
 
+// "Não digitei" ≠ "chegou zero": `Number('')` é ZERO, e ler o campo vazio como zero faria a tela
+// declarar uma chegada de zero unidade. Régua única do modal — o aviso de excedente e o payload
+// perguntam a MESMA coisa, e duas expressões disso divergiriam na primeira edição.
+const quantidadeInformada = (valor) => {
+  if (valor === '' || valor == null) return false;
+  return Number.isFinite(Number(valor));
+};
+
+/**
+ * Etapa 37 (fix 1 da T4) — o TETO que a porta aceita para o MATERIAL da linha.
+ *
+ * `saldo_pendente_material` é o saldo AGREGADO POR MATERIAL, e é exatamente o número contra o qual
+ * `assertSaldoDoPedidoPermitido` compara a SOMA das recebidas declaradas no payload. O client LÊ o
+ * campo; não soma as linhas do pedido para chegar nele — isso seria uma segunda definição de
+ * "saldo do pedido", escrita no lado que não decide.
+ *
+ * `saldo_pendente` (o que falta NAQUELA linha) entra só como fallback de resposta antiga: ele
+ * continua EXIBIDO na tela como informação, mas deixou de governar o aviso de excedente (fix 1 da
+ * T5 — ver `avisoAcimaDoSaldo`).
+ */
+const tetoDoMaterial = (linha) => {
+  const doMaterial = Number(linha.saldo_pendente_material);
+  if (Number.isFinite(doMaterial)) return doMaterial;
+  const daLinha = Number(linha.saldo_pendente);
+  return Number.isFinite(daLinha) ? daLinha : 0;
+};
+
+/**
+ * A quantidade com que a linha NASCE no formulário: o que falta nela, limitado ao teto do material.
+ *
+ * O `Math.min` aqui é correto e responde a outra pergunta — é o default de UMA linha, não a régua
+ * do excedente (que é a soma, por material). Nascer no saldo da linha daria, num material cujo
+ * agregado é menor, um default que a porta recusaria com 400; nascer no teto do material daria, num
+ * material com duas linhas pendentes, duas linhas somando o dobro do que cabe.
+ */
+const quantidadeInicialDaLinhaDoPedido = (linha) => {
+  const teto = tetoDoMaterial(linha);
+  const daLinha = Number(linha.saldo_pendente);
+  return Number.isFinite(daLinha) ? Math.min(daLinha, teto) : teto;
+};
+
+/**
+ * Onda de correção da revisão final (F1) — por que a rota de itens NÃO responde "pedido quitado".
+ *
+ * `GET /recebimentos-aux/pedidos-compra/:id/itens` devolve `200 []` em dois casos diferentes, e
+ * ela não tem como distingui-los na resposta sem trocar o contrato (array) que a T5 consome:
+ * - pedido QUITADO: tinha linhas, todas já recebidas;
+ * - pedido SEM LINHAS lançadas no Compras: `COUNT(itens) = 0`. A RN-24 o mantém visível em
+ *   `?pendentes=1` como ABERTO (`pedida > 0` é o que impede 0 de 0 de virar 'RECEBIDO'), então a
+ *   tela O OFERECE — e o `POST` tem, desde a T2, uma literal PRÓPRIA para ele.
+ *
+ * Quem distingue é `quantidade_pedida` da LINHA DO PEDIDO na lista (campo derivado da T4). A frase
+ * do segundo caso é COPIADA do servidor (`receiptService.criarRecebimento`, RN-25) para que a tela
+ * e a porta digam a MESMA coisa — antes dela o operador via "já foi recebido por completo" num
+ * pedido que nunca recebeu nada, e o submit bloqueado impedia a literal certa de chegar até ele.
+ *
+ * Retorna `null` quando há linhas — "há o que receber" é a ausência de motivo, não um terceiro
+ * texto.
+ */
+const mensagemPedidoSemSaldo = (linhas, pedido, pedidoId) => {
+  if (linhas.length) return null;
+  const pedida = pedido ? pedido.quantidade_pedida : null;
+  // `!= null` e não truthy: o fato que interessa é ZERO, e `0` é falsy. Sem o campo, cai no
+  // quitado — afirmar "o Compras não lançou" sem o número seria inventar.
+  if (pedida != null && Number(pedida) === 0) {
+    return `Pedido de compra ${pedido.numero || pedidoId} não tem itens lançados no módulo Compras.`;
+  }
+  return 'Este pedido já foi recebido por completo.';
+};
+
+/*
+ * Etapa 57 (RN-05) — o modal de "Processar nota" escolhe o destino POR ITEM.
+ *
+ * `itensQueVaoEntrar` usa a MESMA regra do servidor (`receiptService.processarNota`,
+ * `quantidadeDoItem` + `entrada_estoque_em`): quantidade = recebida ?? esperada, e só entra o que
+ * tem quantidade > 0 e ainda não entrou. Uma regra diferente aqui ofereceria destino para um item
+ * que o servidor ignora (o destino dele é ignorado sem validar — Fase 2, IMPORTANTE) ou esconderia
+ * um item que vai entrar (recebida vazia/nula com esperada > 0 entra pela esperada).
+ *
+ * ⚠️ Etapa 70 (T0): recebida **0** é "chegou zero" e NÃO entra — antes era `||`, que trocava o 0
+ * pela esperada (aqui e no servidor), e a nota dava entrada no que não chegou.
+ * `quantidadeQueEntra` mora em `utils/quantidadeQueEntra.js` desde a Fase 5 (as etiquetas usam a
+ * mesma régua).
+ */
+const itensQueVaoEntrar = (itens) => (itens || [])
+  .filter((it) => quantidadeQueEntra(it) > 0 && !it.entrada_estoque_em);
+
+/*
+ * As localizações oferecidas como destino: sem as bloqueadas (o motor recusa) e sem os "pais" de
+ * alguma localização ativa (o motor aceita, mas o Mapa esconde o saldo que cai no pai — ver a
+ * Fase 2 do plano). Inativa também sai: o servidor recusaria a nota inteira.
+ */
+const destinosOferecidos = (localizacoes) => {
+  const ativas = (localizacoes || []).filter((l) => l.ativo !== 0 && l.ativo !== false);
+  const pais = new Set(ativas.filter((l) => l.parent_id != null).map((l) => Number(l.parent_id)));
+  return ativas.filter((l) => !Number(l.bloqueada) && !pais.has(Number(l.id)));
+};
+
+/*
+ * O aviso do item enquanto o seletor está em "Padrão do material", lido de
+ * `GET /materiais/:id/sugestao-localizacao` (Etapa 53). `undefined` = a sugestão não carregou
+ * (ou falhou, ex.: material inativo → 400): sem aviso — o servidor recusa com a literal dele.
+ */
+const avisoPadraoDoItem = (sugestao) => {
+  if (sugestao === undefined) return null;
+  const padrao = sugestao?.padrao ?? null;
+  if (!padrao) return 'Sem localização padrão — o saldo entra sem endereço.';
+  if (padrao.recusa) {
+    return `A localização padrão ${padrao.codigo} não recebe este material (${padrao.recusa}) — escolha um destino.`;
+  }
+  if (padrao.inativa) return `A localização padrão ${padrao.codigo} está inativa — escolha um destino.`;
+  return null;
+};
+
 const RecebimentosAlmoxarifado = () => {
+  const { pode } = useAlmoxPermissoes();
   const [recebimentos, setRecebimentos] = useState([]);
   const [materiais, setMateriais] = useState([]);
   const [pedidos, setPedidos] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Etapa 35 (RN-04/RN-05): falha de carga NAO pode virar estado vazio. "Nenhum recebimento
+  // registrado" e indistinguivel de "nao ha recebimento", e o toast some em segundos — no teste
+  // ele e mockado, no navegador o operador ja saiu da tela. Mesma regua que a Etapa 29 aplicou em
+  // `HistoricoInspecoes.js:56`, achado da revisao adversarial de la.
+  const [erro, setErro] = useState(null);
+  // (RN-06) A lista de materiais alimenta a busca do modal de novo recebimento: falhando em
+  // silencio (`catch { /* ignore */ }`), o operador digita um material que existe e conclui que
+  // nao esta cadastrado.
+  const [erroMateriais, setErroMateriais] = useState(null);
   const [filtroStatus, setFiltroStatus] = useState('');
   const [filtroEtapa, setFiltroEtapa] = useState('');
   const [detalhe, setDetalhe] = useState(null);
+  // Etapa 35 (RN-07/RN-08). `selectedId` é a linha que o usuário clicou — setado SINCRONAMENTE,
+  // antes do GET. É ele que sustenta o painel enquanto o detalhe carrega: sem ele o painel teria
+  // de continuar gatilhado por `detalhe`, e anular `detalhe` na troca faria a coluna de 420px
+  // sumir e voltar a cada clique. Molde: `RequisicoesList.js`, o trio `selectedId` /
+  // `loadedDetalheIdRef` / `detalheFetchSeqRef` de `abrirDetalhe`.
+  const [selectedId, setSelectedId] = useState(null);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
+  // `idCarregadoRef`: qual id está REALMENTE dentro de `detalhe`. É a guarda que faz
+  // `setDetalhe(null)` acontecer só na TROCA de linha, nunca no refetch do mesmo id — anular
+  // sempre desmontaria o bloco de anexos e jogaria fora o arquivo já escolhido no input (o fix F2
+  // da Etapa 34, travado pelo cenário (g) da suíte).
+  const idCarregadoRef = useRef(null);
+  // `detalheFetchSeqRef`: dois cliques rápidos deixam duas requisições em voo, e sem contador a
+  // ÚLTIMA A RESPONDER vencia — o painel terminava no registro que o usuário já tinha abandonado.
+  const detalheFetchSeqRef = useRef(0);
   const [saving, setSaving] = useState(false);
+  // Etapa 36 (RN-18): a caixa "Autorizo o recebimento acima do pedido". Estado do PAINEL e não do
+  // item: a autorização vale para o documento (o servidor recebe uma flag por requisição), e
+  // marcar item por item daria a impressão de granularidade que a rota não tem.
+  const [autorizarExcedente, setAutorizarExcedente] = useState(false);
+  // Etapa 36 (RN-16): a recusa da conferência tem de ficar NA TELA, não só no toast. As duas
+  // recusas desta porta são 400 de excedente sem flag e 403 de flag sem permissão, e as duas
+  // trazem literal que explica o que fazer — um toast que some em segundos deixa o operador com
+  // "não salvou" e nenhum motivo. Mesma régua da Etapa 35 para a lista que não carregou (RN-04).
+  const [erroConferencia, setErroConferencia] = useState(null);
+  // Etapa 37 (RN-26): o estado do bloco de itens DO PEDIDO, dentro do modal de novo recebimento.
+  // Separado do `autorizarExcedente` do painel de propósito — são dois documentos e duas portas
+  // diferentes (`POST /recebimentos` × `PUT /recebimentos/:id/conferir`), e uma caixa só faria a
+  // marcação de um viajar para o outro.
+  const [autorizarExcedenteCriacao, setAutorizarExcedenteCriacao] = useState(false);
+  const [carregandoItensPedido, setCarregandoItensPedido] = useState(false);
+  // (F4) `pedidoSeqRef`: `selecionarPedido` é `async` e sai do `onChange` do `<select>`, então duas
+  // escolhas rápidas deixam duas requisições em voo e, sem contador, a ÚLTIMA A RESPONDER vencia —
+  // escolher 313 e depois 312 deixava a tela do 312 dizendo "já foi recebido por completo", com os
+  // itens apagados e o submit bloqueado. Mesmo molde de `detalheFetchSeqRef` (Etapa 35).
+  const pedidoSeqRef = useRef(0);
+  // Três estados e não um: "carregando", "a rota falhou" e "o pedido não tem saldo" são fatos
+  // diferentes, e um só faria a tela dizer "já foi recebido por completo" quando a requisição
+  // caiu — mentindo sobre o pedido para esconder um erro de rede.
+  const [erroItensPedido, setErroItensPedido] = useState(null);
+  // Onda de correção da revisão final (F1): a FRASE, e não um booleano. `200 []` da rota de itens
+  // abriga DOIS fatos — o pedido quitado e o pedido cujas linhas o Compras nunca lançou —, e um
+  // booleano só sabia dizer o primeiro. O segundo é oferecido ao operador de propósito (RN-24 o
+  // mantém ABERTO em `?pendentes=1`), e chamá-lo de "recebido por completo" é mentira: ele nunca
+  // recebeu nada. Enquanto a tela dizia isso, a literal certa do servidor era INALCANÇÁVEL, porque
+  // o submit ficava bloqueado e o POST nunca saía.
+  // `null` = há o que receber; string = não há, e a string É o motivo que vai para o DOM e para o
+  // toast do `handleCriar`.
+  const [avisoPedidoSemSaldo, setAvisoPedidoSemSaldo] = useState(null);
+  // A recusa do POST fica NA TELA, não só no toast: as duas literais desta porta dizem QUEM
+  // autoriza o excedente, e é o número digitado que o operador precisa levar a essa pessoa.
+  const [erroCriacao, setErroCriacao] = useState(null);
   const [showNovo, setShowNovo] = useState(false);
   const [showFiscal, setShowFiscal] = useState(false);
+  // Etapa 57 (RN-05): o modal de "Processar nota". `destinosProc` é { [item_id]: '' | id da
+  // localização } ('' = "Padrão do material"); `sugestoesProc` é { [material_id]: resposta da
+  // sugestão }, e material ausente do mapa = sugestão não carregou/falhou (sem aviso).
+  const [showProcessar, setShowProcessar] = useState(false);
+  const [localizacoesProc, setLocalizacoesProc] = useState([]);
+  const [erroLocalizacoesProc, setErroLocalizacoesProc] = useState(null);
+  const [destinosProc, setDestinosProc] = useState({});
+  const [sugestoesProc, setSugestoesProc] = useState({});
+  const [erroProcessar, setErroProcessar] = useState(null);
+  const processarSeqRef = useRef(0);
   const [buscaMat, setBuscaMat] = useState('');
   const [etiquetas, setEtiquetas] = useState(null);
-  // Etapa 32 — o pedido de compra INTEIRO, para quem vai dar baixa conferir contra o que
-  // chegou sem sair da tela (antes daqui o almoxarife escolhia o pedido no escuro: o select
-  // só mostrava número e fornecedor).
-  const [pedidoDetalhe, setPedidoDetalhe] = useState(null);
-  const [loadingPedido, setLoadingPedido] = useState(false);
   const [fiscalForm, setFiscalForm] = useState(EMPTY_FISCAL);
   const [form, setForm] = useState({
     tipo_recebimento: 'NOTA_FISCAL',
@@ -75,14 +268,20 @@ const RecebimentosAlmoxarifado = () => {
 
   const loadRecebimentos = useCallback(async () => {
     setLoading(true);
+    setErro(null);
     try {
       const params = {};
       if (filtroStatus) params.status = filtroStatus;
       if (filtroEtapa) params.etapa = filtroEtapa;
       const res = await api.get('/almoxarifado/recebimentos', { params });
       setRecebimentos(res.data || []);
-    } catch {
-      toast.error('Erro ao carregar recebimentos');
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Erro ao carregar recebimentos';
+      toast.error(msg);
+      // Zerar a lista e marcar o erro andam juntos: sem o `setRecebimentos([])`, um refresh que
+      // falha deixaria as linhas velhas em memoria passando por frescas (RN-05).
+      setRecebimentos([]);
+      setErro(msg);
     } finally {
       setLoading(false);
     }
@@ -95,28 +294,54 @@ const RecebimentosAlmoxarifado = () => {
   }, [loadRecebimentos]);
 
   const loadMateriais = async () => {
+    setErroMateriais(null);
     try {
       const res = await api.get('/almoxarifado/materiais');
       setMateriais(res.data || []);
-    } catch { /* ignore */ }
+    } catch (err) {
+      setErroMateriais(err.response?.data?.error || 'Erro ao carregar materiais');
+    }
   };
 
   const loadAuxiliares = async () => {
     try {
       const [pRes, fRes] = await Promise.all([
-        api.get('/almoxarifado/recebimentos-aux/pedidos-compra'),
+        // Etapa 37 (RN-24): `pendentes=1` é o filtro que a T4 criou, e ele roda no SQL ANTES do
+        // `LIMIT 50` — sem ele, um banco com 50 pedidos quitados mais novos deixaria o `<select>`
+        // sem o pedido que o operador precisa receber. A lista continua podendo envelhecer (ela é
+        // carregada na montagem da tela), e é por isso que escolher um pedido sem saldo tem de
+        // avisar em vez de oferecer um bloco de itens vazio.
+        api.get('/almoxarifado/recebimentos-aux/pedidos-compra', { params: { pendentes: 1 } }),
         api.get('/almoxarifado/recebimentos-aux/fornecedores'),
       ]);
       setPedidos(pRes.data || []);
       setFornecedores(fRes.data || []);
-    } catch { /* ignore */ }
+    } catch {
+      // Tolerado de propósito (Etapa 35, decisão 5): pedidos de compra e fornecedores alimentam
+      // dois `<select>` OPCIONAIS, e os dois têm entrada manual ao lado — o recebimento pode ser
+      // registrado inteiro sem eles. Um terceiro estado de erro aqui pagaria o custo de uma
+      // superfície nova para uma falha que não bloqueia ninguém. O que era errado era o
+      // `/* ignore */` sem explicação, que fazia parecer esquecimento.
+    }
   };
 
   const abrirDetalhe = async (id) => {
+    const seq = ++detalheFetchSeqRef.current;
+    setSelectedId(id);
     setLoadingDetalhe(true);
+    // Etapa 36: abrir (ou recarregar) o painel zera a autorização de excedente e a recusa da
+    // conferência anterior — senão a caixa marcada no recebimento A viajaria para o B, e a
+    // mensagem de erro de A ficaria acusando o B de algo que não aconteceu nele.
+    setAutorizarExcedente(false);
+    setErroConferencia(null);
+    // Só na TROCA de id (ver `idCarregadoRef`): no refetch do mesmo id o `detalhe` fica de pé e o
+    // bloco de anexos não remonta.
+    if (idCarregadoRef.current !== id) setDetalhe(null);
     try {
       const res = await api.get(`/almoxarifado/recebimentos/${id}`);
+      if (seq !== detalheFetchSeqRef.current) return;   // chegou atrasada: outro clique venceu
       setDetalhe(res.data);
+      idCarregadoRef.current = id;
       setFiscalForm({
         ...EMPTY_FISCAL,
         nota_fiscal: res.data.nota_fiscal || '',
@@ -129,7 +354,7 @@ const RecebimentosAlmoxarifado = () => {
         fornecedor_nome: res.data.fornecedor_nome || '',
         fornecedor_cnpj: res.data.fornecedor_cnpj || '',
         pedido_compra_numero: res.data.pedido_compra_numero || '',
-        tipo_recebimento: res.data.tipo_recebimento || 'NOTA_FISCAL',
+        // `tipo_recebimento` NÃO entra aqui — ver o comentário de `EMPTY_FISCAL` (revisão final F2).
         base_icms: res.data.base_icms ?? '',
         valor_icms: res.data.valor_icms ?? '',
         valor_produtos: res.data.valor_produtos ?? '',
@@ -140,10 +365,39 @@ const RecebimentosAlmoxarifado = () => {
         valor_total_nota: res.data.valor_total_nota ?? '',
       });
     } catch {
+      if (seq !== detalheFetchSeqRef.current) return;
       toast.error('Erro ao carregar recebimento');
+      setSelectedId(null);
+      setDetalhe(null);
+      idCarregadoRef.current = null;
     } finally {
-      setLoadingDetalhe(false);
+      // Só a requisição VENCEDORA desliga o spinner: o `finally` de uma resposta atrasada
+      // apagaria o "carregando" do clique que ainda está em voo.
+      if (seq === detalheFetchSeqRef.current) setLoadingDetalhe(false);
     }
+  };
+
+  // Fechar é fechar: além de zerar o painel, BUMPA a sequência para descartar a resposta em voo —
+  // senão o GET do clique anterior reabriria o painel sozinho depois do ✕.
+  const fecharDetalhe = () => {
+    ++detalheFetchSeqRef.current;
+    setSelectedId(null);
+    setDetalhe(null);
+    idCarregadoRef.current = null;
+    setAutorizarExcedente(false);
+    setErroConferencia(null);
+    // Etapa 36 (RN-19): fechar tem de desligar o "carregando" TAMBEM. O `finally` de `abrirDetalhe`
+    // so desliga a flag quando a sequencia ainda e a dele, entao fechar com um GET em voo a deixava
+    // pendurada em `true` para sempre.
+    //
+    // SEM CENARIO DE TESTE, e isso e declaracao, nao esquecimento (caso 2 da skill fechar-etapa):
+    // todo consumidor de `loadingDetalhe` nesta tela so renderiza com o painel aberto, e abrir o
+    // painel passa por `abrirDetalhe`, que liga a flag na entrada — logo nao existe sequencia de
+    // gestos em que a flag pendurada apareca no DOM. Qualquer assercao escrita hoje passaria antes
+    // e depois desta linha (o controle positivo e um NO-OP declarado). A linha fica porque a forma
+    // segura e barata e porque o proximo consumidor de `loadingDetalhe` — um botao de atualizar o
+    // detalhe, por exemplo — herdaria o defeito em silencio.
+    setLoadingDetalhe(false);
   };
 
   const workflow = async (acao, msg) => {
@@ -205,18 +459,128 @@ const RecebimentosAlmoxarifado = () => {
     }
   };
 
-  const processarNota = async () => {
-    if (!window.confirm('Processar nota fiscal? Isso dará entrada no estoque e gerará contas a pagar.')) return;
+  // Etapa 36 (RN-16) — o PRIMEIRO chamador de `PUT /almoxarifado/recebimentos/:id/conferir`.
+  //
+  // A rota existia completa (gate `receber_material`, gravação por item, disparo do alerta
+  // `DIVERGENCIA_RECEBIMENTO` no fim) e NUNCA teve chamador no client — achado Crítico registrado
+  // em `alertaEventoGanchos.api.test.js`. Sem ela, `quantidade_recebida` nunca diferia de
+  // `quantidade_esperada` por gesto de tela (o modal de criar nasce com as duas iguais), então o
+  // alerta de divergência tinha consumidor, dedupe, e-mail e central, e ZERO produtor alcançável.
+  //
+  // Por que `/conferir` e NÃO `/fiscal` (decisão 8 do desenho da etapa): (1) o `/fiscal` só
+  // renderiza no Faturamento, três transições DEPOIS do gesto real — a divergência só seria
+  // registrável quando o material já tivesse passado pelo almoxarifado e por Compras; (2) o
+  // `/conferir` é a rota que existe para isto, e usar a outra a deixaria morta; (3) o `/conferir`
+  // grava `conferencia_quantidade`, que o `/fiscal` não grava.
+  //
+  // SEM `status` no payload, de propósito: salvar a contagem não avança o workflow. Conferir e
+  // "Finalizar Conferência" continuam sendo dois gestos — avançar o status por dentro do salvar
+  // seria mudança de comportamento invisível para quem só quis corrigir um número.
+  const salvarConferencia = async () => {
+    if (!detalhe) return;
     setSaving(true);
+    setErroConferencia(null);
     try {
-      const res = await api.post(`/almoxarifado/recebimentos/${detalhe.id}/processar`, {});
-      toast.success(res.data.contas_pagar_id
-        ? 'Nota processada — estoque atualizado e conta a pagar gerada!'
-        : 'Nota processada — estoque atualizado!');
+      const itens = (detalhe.itens || []).map((item) => {
+        const recebida = Number(item.quantidade_recebida);
+        // ⚠️ `Number('')` é 0. O input nasce `value={item.quantidade_recebida ?? ''}`, então sem
+        // esta guarda limpar o campo e salvar mandaria `quantidade_recebida: 0` — que o servidor
+        // GRAVA (0 é menor que a esperada, não é excedente, responde 200) e que dispara o alerta
+        // de divergência com "0 recebidos". O campo é OMITIDO quando está vazio: é o caso que o
+        // `COALESCE` do `/conferir` existe para preservar, e o par (omitir aqui + `COALESCE` lá) é
+        // o que faz "não digitei" ser diferente de "chegou zero".
+        const preenchida = item.quantidade_recebida !== '' && item.quantidade_recebida != null
+          && Number.isFinite(recebida);
+        // ⚠️ Fix-round 1: `conferencia_quantidade` sai pela MESMA porta, e não por fora dela.
+        // Mandar o booleano SEMPRE (era o que esta função fazia) deixava o `COALESCE` que a T3 pôs
+        // nessa coluna MORTO para este chamador — o serviço só preserva o valor gravado quando a
+        // chave vem ausente/nula, porque ele converte para 0/1 apenas quando o campo `!= null`.
+        // Dano medido pelo cenário (q): item conferido e marcado `true`; o operador reabre o
+        // painel, limpa (ou nunca digita) o campo daquele item e salva para gravar a contagem de
+        // OUTRO item — a quantidade era preservada pelo COALESCE, mas o `false` que ia junto
+        // DESMARCAVA a conferência anterior, em silêncio. Campo vazio é "não contei este item":
+        // não manda quantidade, e também não manda veredicto sobre ela.
+        return {
+          id: item.id,
+          ...(preenchida ? {
+            quantidade_recebida: recebida,
+            conferencia_quantidade: recebida === Number(item.quantidade_esperada),
+          } : {}),
+        };
+      });
+      await api.put(`/almoxarifado/recebimentos/${detalhe.id}/conferir`, {
+        itens,
+        // A flag só vai quando a caixa está marcada: mandar `false` sempre faria o serviço
+        // exercitar o caminho da autorização (e do 403) em toda conferência normal.
+        ...(autorizarExcedente ? { autorizar_excedente: true } : {}),
+      });
+      toast.success('Conferência salva');
+      // Mesmo molde de `salvarFiscal`: refetch do MESMO id + recarga da lista. O refetch do mesmo
+      // id não anula `detalhe` (guarda `idCarregadoRef`), então o bloco de anexos continua
+      // montado com o arquivo já escolhido no input.
       abrirDetalhe(detalhe.id);
       loadRecebimentos();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Erro ao processar nota');
+      const msg = err.response?.data?.error || 'Erro ao salvar a conferência';
+      toast.error(msg);
+      setErroConferencia(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Etapa 57 (RN-05): "Processar nota" abre o modal em vez do `window.confirm`. As consultas
+  // (localizações e uma sugestão por material) são de melhor esforço: falha não bloqueia o
+  // processamento — o item fica em "Padrão do material", que é o comportamento de antes.
+  const abrirProcessar = () => {
+    const seq = ++processarSeqRef.current;
+    setDestinosProc({});
+    setSugestoesProc({});
+    setErroProcessar(null);
+    setErroLocalizacoesProc(null);
+    setLocalizacoesProc([]);
+    setShowProcessar(true);
+    api.get('/almoxarifado/localizacoes')
+      .then((r) => { if (seq === processarSeqRef.current) setLocalizacoesProc(Array.isArray(r.data) ? r.data : []); })
+      .catch(() => {
+        if (seq === processarSeqRef.current) {
+          setErroLocalizacoesProc('Não foi possível carregar as localizações — os itens entram na padrão do material.');
+        }
+      });
+    const materiaisIds = [...new Set(itensQueVaoEntrar(detalhe?.itens).map((it) => it.material_id))];
+    materiaisIds.forEach((mid) => {
+      api.get(`/almoxarifado/materiais/${mid}/sugestao-localizacao`)
+        .then((r) => {
+          if (seq === processarSeqRef.current) setSugestoesProc((s) => ({ ...s, [mid]: r.data || null }));
+        })
+        .catch(() => { /* sem aviso: o servidor recusa com a literal dele (ex.: material inativo) */ });
+    });
+  };
+
+  const fecharProcessar = () => {
+    processarSeqRef.current += 1;
+    setShowProcessar(false);
+    setErroProcessar(null);
+  };
+
+  const processarNota = async () => {
+    const destinos = itensQueVaoEntrar(detalhe?.itens)
+      .filter((it) => destinosProc[it.id])
+      .map((it) => ({ item_id: it.id, localizacao_id: Number(destinosProc[it.id]) }));
+    setSaving(true);
+    setErroProcessar(null);
+    try {
+      const res = await api.post(`/almoxarifado/recebimentos/${detalhe.id}/processar`, { destinos });
+      toast.success(res.data.contas_pagar_id
+        ? 'Nota processada — estoque atualizado e conta a pagar gerada!'
+        : 'Nota processada — estoque atualizado!');
+      fecharProcessar();
+      abrirDetalhe(detalhe.id);
+      loadRecebimentos();
+    } catch (err) {
+      // A recusa fica NO MODAL (RN-05): a lista "{MAT}: motivo" do servidor diz qual item trocar,
+      // e um toast que some em segundos deixaria o operador sem saber qual.
+      setErroProcessar(err.response?.data?.error || 'Erro ao processar nota');
     } finally {
       setSaving(false);
     }
@@ -244,6 +608,26 @@ const RecebimentosAlmoxarifado = () => {
     setForm((f) => ({ ...f, itens: f.itens.filter((i) => i.material_id !== material_id) }));
   };
 
+  // Etapa 37 (RN-26): trocar a forma de recebimento limpa TUDO o que era do pedido. Sem isto o
+  // aviso de excedente, a recusa da porta e a caixa marcada sobreviveriam à troca para NOTA_FISCAL
+  // e acusariam o documento novo de algo que não aconteceu nele.
+  const limparEstadoDoPedido = () => {
+    setErroItensPedido(null);
+    setAvisoPedidoSemSaldo(null);
+    setErroCriacao(null);
+    setAutorizarExcedenteCriacao(false);
+  };
+
+  /**
+   * Etapa 37 (RN-26) — escolher o pedido CARREGA as linhas com saldo, editáveis.
+   *
+   * Antes, esta função limpava `itens: []` e era o servidor que preenchia os itens com o saldo
+   * inteiro do pedido: o gesto "chegaram 6 dos 10" não existia na tela, e o mais próximo era
+   * registrar cheio e corrigir no `/conferir` — que gravava a esperada errada para sempre.
+   *
+   * O client NÃO refiltra as linhas: quem filtra é a ROTA (só devolve `saldo_pendente > 0`), e uma
+   * segunda peneira aqui criaria duas definições de "linha recebível".
+   */
   const selecionarPedido = async (pedidoId) => {
     const pedido = pedidos.find((p) => String(p.id) === String(pedidoId));
     setForm((f) => ({
@@ -252,29 +636,51 @@ const RecebimentosAlmoxarifado = () => {
       tipo_recebimento: 'PEDIDO_COMPRA',
       fornecedor_nome: pedido?.fornecedor_nome || f.fornecedor_nome,
       fornecedor_cnpj: pedido?.fornecedor_cnpj || f.fornecedor_cnpj,
+      itens: [],
     }));
-    setPedidoDetalhe(null);
+    limparEstadoDoPedido();
+    // Onda de correção da revisão final (F4): a sequência BUMPA sempre, inclusive na volta para
+    // "Selecione o pedido..." — senão a resposta em voo do pedido abandonado repovoaria o bloco.
+    const seq = ++pedidoSeqRef.current;
     if (!pedidoId) return;
-
-    // Rota do ALMOXARIFADO, não a de compras: `/api/compras/pedidos/:id` é guardada por
-    // checkModulePermission('compras') e o almoxarife levaria 403 bem aqui.
-    setLoadingPedido(true);
+    setCarregandoItensPedido(true);
     try {
-      const res = await api.get(`/almoxarifado/recebimentos-aux/pedidos-compra/${pedidoId}`);
-      setPedidoDetalhe(res.data);
-      // O documento vence a lista: o snapshot do fornecedor é o que foi congelado no pedido.
-      const forn = res.data?.fornecedor;
-      if (forn) {
-        setForm((f) => ({
-          ...f,
-          fornecedor_nome: forn.nome || f.fornecedor_nome,
-          fornecedor_cnpj: forn.cnpj || f.fornecedor_cnpj,
-        }));
-      }
-    } catch {
-      toast.error('Não foi possível carregar os dados do pedido');
+      const res = await api.get(`/almoxarifado/recebimentos-aux/pedidos-compra/${pedidoId}/itens`);
+      if (seq !== pedidoSeqRef.current) return;   // chegou atrasada: outra escolha venceu
+      const linhas = res.data || [];
+      // Lista vazia é a informação de que não há o que receber — não é erro (a rota devolve 200).
+      // Qual dos dois motivos, quem diz é a LINHA DO PEDIDO que veio da lista, não a rota de itens:
+      // `quantidade_pedida` (campo derivado da T4) é 0 no pedido sem linhas lançadas. O contrato da
+      // rota de itens continua sendo um ARRAY — trocá-lo por `{ itens, total_linhas }` quebraria a
+      // T5 e os testes dela por um fato que a tela já tem em mãos.
+      // O default é o QUITADO: se `quantidade_pedida` não vier (lista antiga, pedido fora do
+      // `<select>`), afirmar "não tem itens lançados" seria inventar um fato sobre o Compras.
+      setAvisoPedidoSemSaldo(mensagemPedidoSemSaldo(linhas, pedido, pedidoId));
+      setForm((f) => ({
+        ...f,
+        itens: linhas.map((l) => ({
+          pedido_item_id: l.id,
+          material_id: l.material_id,
+          material_nome: l.material_nome || l.descricao || l.codigo,
+          material_codigo: l.material_codigo || l.codigo,
+          unidade: l.unidade,
+          saldo_pendente: l.saldo_pendente,
+          saldo_pendente_material: l.saldo_pendente_material,
+          // Nasce no que falta na linha, limitado ao teto do material (ver
+          // `quantidadeInicialDaLinhaDoPedido`). No caso comum os dois saldos são iguais e isto é
+          // o saldo da linha.
+          quantidade: quantidadeInicialDaLinhaDoPedido(l),
+        })),
+      }));
+    } catch (err) {
+      // (F4) A falha do pedido ABANDONADO também não aparece: ela acusaria o pedido que está na
+      // tela de um erro que não foi dele, e o botão "Tentar de novo" recarregaria o outro.
+      if (seq !== pedidoSeqRef.current) return;
+      setErroItensPedido(err.response?.data?.error || 'Erro ao carregar os itens do pedido');
     } finally {
-      setLoadingPedido(false);
+      // (F4) Só a escolha VENCEDORA desliga o spinner — o `finally` de uma resposta atrasada
+      // apagaria o "carregando" da escolha que ainda está em voo (mesma regra de `abrirDetalhe`).
+      if (seq === pedidoSeqRef.current) setCarregandoItensPedido(false);
     }
   };
 
@@ -304,7 +710,26 @@ const RecebimentosAlmoxarifado = () => {
       toast.error('Selecione o pedido de compra');
       return;
     }
+    // Etapa 37: pedido sem saldo não vai. O `<select>` é alimentado por uma lista carregada na
+    // montagem da tela, então ela pode ter envelhecido — e mandar o POST aqui tomaria o 400
+    // "já foi recebido por completo" do servidor para dizer o que a tela já sabe.
+    // (F1) O toast repete a MESMA frase que está no bloco de itens — as duas razões de "não há o
+    // que receber" são diferentes, e um toast fixo contaria a errada em uma delas.
+    if (form.tipo_recebimento === 'PEDIDO_COMPRA' && avisoPedidoSemSaldo) {
+      toast.error(avisoPedidoSemSaldo);
+      return;
+    }
+    // Etapa 37 (RN-26): as linhas com quantidade INFORMADA. Campo limpo é "esta linha não chegou",
+    // e não "chegou zero" — `Number('')` é 0, e zero passaria pelo servidor como quantidade válida
+    // se a chave fosse enviada (é o mesmo defeito que o fix-round 1 da T5 da Etapa 36 pagou do
+    // outro lado, no `/conferir`).
+    const itensInformados = form.itens.filter((i) => quantidadeInformada(i.quantidade));
+    if (form.tipo_recebimento === 'PEDIDO_COMPRA' && itensInformados.length === 0) {
+      toast.error('Informe a quantidade recebida de ao menos um item do pedido');
+      return;
+    }
     setSaving(true);
+    setErroCriacao(null);
     try {
       const payload = {
         tipo_recebimento: form.tipo_recebimento,
@@ -313,17 +738,32 @@ const RecebimentosAlmoxarifado = () => {
         fornecedor_nome: form.fornecedor_nome || null,
         fornecedor_cnpj: form.fornecedor_cnpj || null,
         observacoes: form.observacoes || null,
-        itens: form.itens.map((i) => ({
-          material_id: i.material_id,
-          quantidade: parseFloat(i.quantidade),
-          quantidade_esperada: parseFloat(i.quantidade),
-          quantidade_recebida: parseFloat(i.quantidade),
-        })),
+        autorizar_excedente: autorizarExcedenteCriacao === true,
+        // Dois mapas e não um, porque os dois caminhos declaram coisas diferentes:
+        // - PEDIDO_COMPRA leva `pedido_item_id` (a LINHA do pedido, que o servidor confere antes
+        //   de aceitar) e NÃO leva `quantidade_esperada`: a esperada nasce do SALDO, no servidor.
+        //   Mandá-la daqui desligaria em silêncio a barreira da Etapa 36, que compara a contagem
+        //   do `/conferir` com a esperada GRAVADA — mandar 99 aceitaria qualquer contagem depois.
+        // - NOTA_FISCAL continua igual: sem pedido não há saldo, e a única referência é o que o
+        //   próprio operador declarou.
+        itens: form.tipo_recebimento === 'PEDIDO_COMPRA'
+          ? itensInformados.map((i) => ({
+            material_id: i.material_id,
+            pedido_item_id: i.pedido_item_id,
+            quantidade: parseFloat(i.quantidade),
+            quantidade_recebida: parseFloat(i.quantidade),
+          }))
+          : form.itens.map((i) => ({
+            material_id: i.material_id,
+            quantidade: parseFloat(i.quantidade),
+            quantidade_esperada: parseFloat(i.quantidade),
+            quantidade_recebida: parseFloat(i.quantidade),
+          })),
       };
       const res = await api.post('/almoxarifado/recebimentos', payload);
       toast.success(`Recebimento ${res.data.numero} registrado!`);
       setShowNovo(false);
-      setPedidoDetalhe(null);
+      limparEstadoDoPedido();
       setForm({
         tipo_recebimento: 'NOTA_FISCAL', pedido_compra_id: '', nota_fiscal: '',
         fornecedor_nome: '', fornecedor_cnpj: '', observacoes: '', itens: [],
@@ -331,7 +771,12 @@ const RecebimentosAlmoxarifado = () => {
       loadRecebimentos();
       abrirDetalhe(res.data.id);
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Erro ao registrar recebimento');
+      const msg = err.response?.data?.error || 'Erro ao registrar recebimento';
+      toast.error(msg);
+      // A recusa fica NA TELA e o formulário NÃO é limpo: as duas literais desta porta dizem quem
+      // autoriza o excedente, e quem tomou 403 precisa levar o número que digitou a essa pessoa.
+      // Limpar aqui faria o operador recomeçar a contagem inteira sem saber por quê.
+      setErroCriacao(msg);
     } finally {
       setSaving(false);
     }
@@ -344,30 +789,97 @@ const RecebimentosAlmoxarifado = () => {
     }));
   };
 
+  // Etapa 36 (RN-17): o aviso de divergência, com as DUAS quantidades e a diferença. A literal é
+  // a MESMA que vai para o manual — não aproximar nem reescrever.
+  // `null` quando o campo está vazio (não é divergência, é "ainda não contei") e quando as
+  // quantidades batem. `Number(diff.toFixed(2))` para que 13 não apareça como
+  // 13.000000000000001, que é o que a subtração de decimais produz.
+  const avisoDivergencia = (item) => {
+    const recebida = Number(item.quantidade_recebida);
+    if (item.quantidade_recebida === '' || item.quantidade_recebida == null
+      || !Number.isFinite(recebida)) return null;
+    const esperada = Number(item.quantidade_esperada);
+    if (!Number.isFinite(esperada) || recebida === esperada) return null;
+    // Revisão final (R7): duas casas era o arredondamento errado no caso pequeno. Com `200.001`
+    // contra `200`, o aviso dizia "Divergência: 0 a mais que o esperado (200)" — a tela afirmando
+    // que a diferença é ZERO enquanto o servidor, que compara os números crus, barra o save com
+    // 400 de excedente. Abaixo de meio centésimo o aviso mostra até QUATRO casas; acima, segue em
+    // duas (que é o que impede `13.000000000000001` de aparecer).
+    const bruto = Math.abs(recebida - esperada);
+    const diff = Number(bruto.toFixed(bruto < 0.005 ? 4 : 2));
+    const sentido = recebida > esperada ? 'a mais' : 'a menos';
+    return (
+      <div style={{ color: 'var(--gmp-error)', fontSize: '0.72rem', marginTop: 4 }}>
+        Divergência: {diff} {sentido} que o esperado ({esperada})
+      </div>
+    );
+  };
+
+  /**
+   * (fix 1 da T5) A SOMA do que o operador digitou para um material, em TODAS as linhas dele.
+   *
+   * É o que o servidor compara: `assertSaldoDoPedidoPermitido` agrupa os itens do payload por
+   * `material_id`, soma a recebida declarada de cada um e mede o total contra o saldo agregado.
+   * Linha com campo vazio não entra (ela não vai no payload), pela mesma régua do `handleCriar`.
+   */
+  const somaDigitadaDoMaterial = (materialId) => form.itens.reduce((soma, i) => (
+    String(i.material_id) === String(materialId) && quantidadeInformada(i.quantidade)
+      ? soma + Number(i.quantidade)
+      : soma
+  ), 0);
+
+  /**
+   * Etapa 37 (RN-26) — o aviso de quantidade acima do SALDO DO PEDIDO DE COMPRA.
+   *
+   * Palavras DIFERENTES do `avisoDivergencia` acima (`Acima do saldo:` em vez de `Divergência:`)
+   * de propósito: são duas medidas distintas — saldo do pedido de compra × quantidade esperada
+   * gravada no item —, e reusar a frase faria o operador ler a mesma coisa para dois fatos
+   * diferentes. A literal é a que vai no manual: não aproximar, não reescrever.
+   *
+   * ⚠️ (fix 1 da T5) A comparação é `soma digitada do MATERIAL > saldo_pendente_material`, e a
+   * condição é do MATERIAL — o aviso sai em todas as linhas dele. Comparando LINHA A LINHA contra
+   * `Math.min(saldo do material, saldo da linha)`, como estava, a tela divergia da porta nos DOIS
+   * sentidos: com duas linhas pendentes (10 e 6, agregado 16), digitar 12 numa delas pedia
+   * autorização de excedente que o servidor não pedia (aceita 12 de 16 com 201) — treinando o
+   * operador a marcar a caixa por reflexo; e com duas linhas de 5 num material cujo agregado é 5,
+   * cada linha "cabia" e a tela ficava calada enquanto o payload somava 10 e tomava 400.
+   */
+  const avisoAcimaDoSaldo = (item) => {
+    const soma = somaDigitadaDoMaterial(item.material_id);
+    const saldo = tetoDoMaterial(item);
+    if (!(soma > saldo)) return null;
+    // Mesmo arredondamento do `avisoDivergencia` (revisão final R7 da Etapa 36): duas casas
+    // impedem `13.000000000000001`, e abaixo de meio centésimo o aviso mostra quatro — senão ele
+    // diria "0 a mais" enquanto o servidor, que compara os números crus, barra o save.
+    const bruto = soma - saldo;
+    const diff = Number(bruto.toFixed(bruto < 0.005 ? 4 : 2));
+    return (
+      <div style={{ color: 'var(--gmp-error)', fontSize: '0.72rem', marginTop: 4 }}>
+        Acima do saldo: {diff} a mais que o saldo do pedido ({saldo})
+      </div>
+    );
+  };
+
+  // A caixa do MODAL segue a mesma regra da caixa do painel: só aparece quando existe DE FATO
+  // linha acima do saldo. E ela é derivada do PRÓPRIO aviso — uma segunda comparação aqui poderia
+  // divergir dele, e a tela mostraria a caixa sem aviso (ou o aviso sem caixa).
+  const temExcedenteNoPedido = form.tipo_recebimento === 'PEDIDO_COMPRA'
+    && form.itens.some((item) => avisoAcimaDoSaldo(item) !== null);
+
+  // A caixa de autorização só aparece quando existe DE FATO item acima do pedido: caixa sempre
+  // visível é formulário, não barreira, e treina o operador a marcá-la por reflexo.
+  const temExcedente = (detalhe?.itens || []).some((item) => {
+    const recebida = Number(item.quantidade_recebida);
+    if (item.quantidade_recebida === '' || item.quantidade_recebida == null
+      || !Number.isFinite(recebida)) return false;
+    return recebida > Number(item.quantidade_esperada);
+  });
+
   const formatDate = (d) => d
     ? new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
     : '—';
 
   const formatMoney = (v) => (v != null && v !== '' ? Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—');
-
-  // RN-12 — o unitario do pedido guarda ate 4 casas (o ERP de origem armazena 4 e imprime 3).
-  // `formatMoney` corta em 2 e faria 2,191 virar "R$ 2,19": quem confere contra a nota do
-  // fornecedor leria divergencia onde nao ha. Aqui o valor aparece como foi comprado.
-  const formatMoneyUnit = (v) => (v != null && v !== ''
-    ? Number(v).toLocaleString('pt-BR', {
-      style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 4,
-    })
-    : '—');
-
-  // Datas do pedido de compra sao DATE puro ('2025-12-16'), nao timestamp. `formatDate` acima
-  // passa pelo `new Date(...)`, que interpreta a string como UTC e, no fuso de Brasilia,
-  // imprime o DIA ANTERIOR ('16/12' vira '15/12'). Aqui a string e fatiada, sem fuso nenhum.
-  const formatDateOnly = (d) => {
-    if (!d) return '—';
-    const iso = String(d).slice(0, 10);
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-    return m ? `${m[3]}/${m[2]}/${m[1]}` : formatDate(d);
-  };
 
   const materiaisFiltrados = buscaMat.length >= 2
     ? materiais.filter((m) =>
@@ -376,9 +888,19 @@ const RecebimentosAlmoxarifado = () => {
     ).slice(0, 6)
     : [];
 
+  // `undefined` e nao `0` quando nao ha detalhe (achado F2 da revisao final da Etapa 35): este e o
+  // 8o consumidor de `detalhe`, e ficou de fora da tabela de 7 do desenho da T4. Como a T4 passou a
+  // ANULAR `detalhe` na troca de linha (RN-07), com `0` a barra de passos desabava para o passo 1
+  // ACESO durante todo o round-trip e pulava de volta quando o detalhe novo chegava — e, na lista
+  // sem nenhuma linha aberta, ela ja acendia "Almoxarifado" sem haver recebimento algum.
+  // `AlmoxPageHeader` faz `idx = currentStep ?? -1`, entao `undefined` = nenhum passo aceso e
+  // nenhum concluido: durante a carga a barra fica NEUTRA em vez de mentir. Molde: `RequisicoesList.js`,
+  // `currentStep={warehouseMode && detalhe ? … : undefined}`.
+  // Descartado: guardar o ultimo passo num ref para "congelar" a barra — mostraria o passo do
+  // recebimento ANTERIOR sob o id novo, que e exatamente a classe de defeito que a RN-07 fechou.
   const currentStep = detalhe
     ? (STATUS_INFO[detalhe.status]?.etapa || 1) - 1
-    : 0;
+    : undefined;
 
   const renderAcoes = () => {
     if (!detalhe) return null;
@@ -403,6 +925,15 @@ const RecebimentosAlmoxarifado = () => {
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
+        {/* Etapa 36 (RN-16): ANTES do botão de workflow, de propósito — salvar a contagem é o
+            gesto anterior a finalizar a conferência. Nos dois status em que o almoxarifado ainda
+            tem o material na mão: `RECEBIDO` (acabou de chegar) e `EM_CONFERENCIA`. */}
+        {['RECEBIDO', 'EM_CONFERENCIA'].includes(s) && (
+          <button type="button" className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
+            onClick={salvarConferencia} disabled={saving}>
+            <FiCheck size={14} /> Salvar Conferência
+          </button>
+        )}
         {s === 'RECEBIDO' && (
           <button type="button" className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
             onClick={() => workflow('iniciar_conferencia', 'Conferência iniciada')} disabled={saving}>
@@ -434,7 +965,7 @@ const RecebimentosAlmoxarifado = () => {
               <FiFileText size={14} /> Preencher Dados da NF (Faturamento)
             </button>
             <button type="button" className="btn-almox-primary" style={{ width: '100%', justifyContent: 'center' }}
-              onClick={processarNota} disabled={saving}>
+              onClick={abrirProcessar} disabled={saving}>
               <FiDollarSign size={14} /> Processar Nota — Estoque + Contas a Pagar
             </button>
           </>
@@ -453,10 +984,15 @@ const RecebimentosAlmoxarifado = () => {
         currentStep={currentStep}
         actions={
           <>
-            <button type="button" className="btn-almox-secondary" onClick={loadRecebimentos}>
+            {/* Etapa 35: o botão era só o ícone — sem texto e sem nome acessível, nenhum leitor
+                de tela o anunciava e nenhum teste conseguia selecioná-lo. Mesmo padrão do refresh
+                do detalhe de requisições, o botão `title="Atualizar detalhe e saldos"` de
+                `RequisicoesList.js` (referência por título, não por linha: o número rotou entre a
+                T3 e a T4 desta mesma etapa). */}
+            <button type="button" className="btn-almox-secondary" title="Atualizar lista" onClick={loadRecebimentos}>
               <FiRefreshCw size={13} />
             </button>
-            <button type="button" className="btn-almox-primary" onClick={() => { setPedidoDetalhe(null); setShowNovo(true); }}>
+            <button type="button" className="btn-almox-primary" onClick={() => setShowNovo(true)}>
               <FiPlus size={14} /> Novo Recebimento
             </button>
           </>
@@ -487,13 +1023,26 @@ const RecebimentosAlmoxarifado = () => {
         </select>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: detalhe ? '1fr 420px' : '1fr', gap: 20 }}>
+      {/* `selectedId` e NÃO `detalhe` (Etapa 35): o painel em carga já precisa da coluna de
+          420px, senão o grid reflui duas vezes a cada clique. */}
+      <div style={{ display: 'grid', gridTemplateColumns: selectedId ? '1fr 420px' : '1fr', gap: 20 }}>
         <div className="almox-table-container">
-          {loading ? <SkeletonTable rows={8} columns={6} /> : recebimentos.length === 0 ? (
+          {/* A ORDEM dos ramos é a regra, não estilo: com o ramo de `erro` DEPOIS do teste de
+              lista vazia, a rede caída volta a renderizar "Nenhum recebimento registrado" e o
+              conserto some. Molde: `HistoricoInspecoes.js:106-116`. */}
+          {loading ? <SkeletonTable rows={8} columns={6} /> : erro ? (
+            <div className="almox-empty">
+              <p>Não foi possível carregar os recebimentos.</p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{erro}</p>
+              <button type="button" className="btn-almox-secondary" onClick={loadRecebimentos}>
+                Tentar de novo
+              </button>
+            </div>
+          ) : recebimentos.length === 0 ? (
             <div className="almox-empty">
               <FiPackage size={40} style={{ opacity: 0.3, display: 'block', margin: '0 auto 12px' }} />
               <p>Nenhum recebimento registrado</p>
-              <button type="button" className="btn-almox-primary" style={{ marginTop: 12 }} onClick={() => { setPedidoDetalhe(null); setShowNovo(true); }}>
+              <button type="button" className="btn-almox-primary" style={{ marginTop: 12 }} onClick={() => setShowNovo(true)}>
                 Registrar primeiro recebimento
               </button>
             </div>
@@ -513,7 +1062,7 @@ const RecebimentosAlmoxarifado = () => {
                 {recebimentos.map((r) => {
                   const st = STATUS_INFO[r.status] || { label: r.status, cls: 'ajuste' };
                   return (
-                    <tr key={r.id} style={{ cursor: 'pointer', background: detalhe?.id === r.id ? 'rgba(79,172,254,0.06)' : '' }}
+                    <tr key={r.id} style={{ cursor: 'pointer', background: selectedId === r.id ? 'rgba(79,172,254,0.06)' : '' }}
                       onClick={() => abrirDetalhe(r.id)}>
                       <td style={{ fontWeight: 700, fontFamily: 'monospace', color: '#4facfe' }}>{r.numero}</td>
                       <td>{r.nota_fiscal || '—'}</td>
@@ -529,18 +1078,25 @@ const RecebimentosAlmoxarifado = () => {
           )}
         </div>
 
-        {detalhe && (
+        {/* Gatilhado por `selectedId`, não por `detalhe` (Etapa 35, RN-07): o painel é do CLIQUE,
+            o conteúdo é do registro carregado. Como `detalhe` agora é nulo enquanto o novo
+            carrega, tudo aqui dentro que desreferencia `detalhe` precisa da própria guarda — o
+            cabeçalho por `?.`, o corpo pelo par `loadingDetalhe || !detalhe`, e o bloco de anexos
+            pelo `{detalhe && …}` do fim. */}
+        {selectedId && (
           <div className="almox-detail-panel">
             <div className="almox-detail-panel-header">
               <div>
-                <div style={{ fontWeight: 700, fontFamily: 'monospace', color: '#4facfe' }}>{detalhe.numero}</div>
-                <span className={`almox-badge almox-badge-${STATUS_INFO[detalhe.status]?.cls || 'ajuste'}`}>
-                  {STATUS_INFO[detalhe.status]?.label || detalhe.status}
-                </span>
+                <div style={{ fontWeight: 700, fontFamily: 'monospace', color: '#4facfe' }}>{detalhe?.numero || '...'}</div>
+                {detalhe && (
+                  <span className={`almox-badge almox-badge-${STATUS_INFO[detalhe.status]?.cls || 'ajuste'}`}>
+                    {STATUS_INFO[detalhe.status]?.label || detalhe.status}
+                  </span>
+                )}
               </div>
-              <button type="button" className="almox-modal-close" onClick={() => setDetalhe(null)}>✕</button>
+              <button type="button" className="almox-modal-close" onClick={fecharDetalhe}>✕</button>
             </div>
-            {loadingDetalhe ? (
+            {loadingDetalhe || !detalhe ? (
               <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /></div>
             ) : (
               <div style={{ padding: 20, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
@@ -570,8 +1126,30 @@ const RecebimentosAlmoxarifado = () => {
                         <div style={{ fontWeight: 600 }}>{item.material_nome}</div>
                         <div style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>{item.material_codigo}</div>
                       </div>
-                      <div style={{ fontWeight: 700 }}>{item.quantidade_recebida || item.quantidade_esperada} {item.unidade}</div>
+                      {/* Etapa 36 (RN-16/RN-17): até aqui o painel mostrava UMA quantidade —
+                          `recebida || esperada` —, e não havia campo nenhum para dizer quanto
+                          chegou de verdade. As duas, agora, porque a conferência é a comparação:
+                          sem a esperada ao lado, "187" não é informação, é um número.
+                          `??` e não `||`: com `||`, uma recebida de `0` (nada chegou) exibia a
+                          ESPERADA, escondendo exatamente o caso mais grave. */}
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontWeight: 700 }}>{item.quantidade_recebida ?? item.quantidade_esperada} {item.unidade}</div>
+                        <div style={{ color: 'var(--gmp-text-light)', fontSize: '0.7rem' }}>Esperada: {item.quantidade_esperada}</div>
+                      </div>
                     </div>
+                    {/* O campo de contagem só nos dois status em que o material está com o
+                        almoxarifado. Depois disso a quantidade já virou base de custo médio e de
+                        conta a pagar, e corrigi-la aqui seria mexer no passado sem trilha. */}
+                    {['RECEBIDO', 'EM_CONFERENCIA'].includes(detalhe.status) && (
+                      <div style={{ marginTop: 6 }}>
+                        <input className="almox-input" type="number" step="0.01" min="0"
+                          title="Qtd. conferida" placeholder="Qtd. conferida"
+                          value={item.quantidade_recebida ?? ''}
+                          style={{ fontSize: '0.75rem', padding: '4px 6px', maxWidth: 160 }}
+                          onChange={(e) => atualizarItemDetalhe(item.id, 'quantidade_recebida', e.target.value)} />
+                        {avisoDivergencia(item)}
+                      </div>
+                    )}
                     {['EM_ENTRADA_NF', 'ENCAMINHADO_FATURAMENTO'].includes(detalhe.status) && (
                       <>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginTop: 6 }}>
@@ -607,10 +1185,10 @@ const RecebimentosAlmoxarifado = () => {
                         </div>
                         {materiais.find((m) => m.id === item.material_id)?.controle_serie === 1 && (() => {
                           const seriesPreenchidas = String(item.series || '').split(/\r?\n/).filter((s) => s.trim()).length;
-                          const quantidadeEsperada = item.quantidade_recebida || item.quantidade_esperada || 0;
+                          const quantidadeEsperada = quantidadeQueEntra(item);
                           return (
                             <div className="almox-field" style={{ gridColumn: '1 / -1', marginTop: 6 }}>
-                              <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Séries (uma por linha) — <span style={{ color: seriesPreenchidas === quantidadeEsperada ? 'var(--gmp-text-light)' : 'var(--gmp-danger)' }}>{seriesPreenchidas}/{quantidadeEsperada}</span></label>
+                              <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Séries (uma por linha) — <span style={{ color: seriesPreenchidas === quantidadeEsperada ? 'var(--gmp-text-light)' : 'var(--gmp-error)' }}>{seriesPreenchidas}/{quantidadeEsperada}</span></label>
                               <textarea className="almox-textarea" rows={2} value={item.series || ''}
                                 style={{ fontSize: '0.75rem', padding: '4px 6px' }}
                                 onChange={(e) => atualizarItemDetalhe(item.id, 'series', e.target.value)} />
@@ -621,13 +1199,72 @@ const RecebimentosAlmoxarifado = () => {
                     )}
                   </div>
                 ))}
+                {/* Etapa 36 (RN-18): a autorização de excedente. `pode(...)` aqui é conveniência
+                    de interface — esconder a caixa de quem não pode marcá-la —, NÃO segurança: o
+                    hook falha aberto e é o `conferirRecebimento` que checa `autorizar_excedente`
+                    por `can()`, devolvendo 403 com a literal que aparece no aviso abaixo. */}
+                {temExcedente && pode('autorizar_excedente') && (
+                  <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.78rem', marginTop: 8 }}>
+                    <input type="checkbox" checked={autorizarExcedente}
+                      onChange={(e) => setAutorizarExcedente(e.target.checked)} />
+                    Autorizo o recebimento acima do pedido
+                  </label>
+                )}
                 {renderAcoes()}
+                {/* A recusa da conferência FICA na tela. As duas literais desta porta dizem QUEM
+                    resolve ("a autorização de excedente é de Compras ou do Administrador", "exige
+                    a permissão autorizar_excedente"), e num toast de cinco segundos elas não
+                    chegam a ser lidas — o operador fica com "não salvou" e nenhum motivo.
+                    (Revisão final, F3: a literal do 400 mandava "marque a autorização de
+                    excedente" — um gesto impossível para o ALMOXARIFE, que não vê a caixa.) */}
+                {erroConferencia && (
+                  <div className="almox-hint-banner" role="alert"
+                    style={{ marginTop: 12, fontSize: '0.8rem', color: 'var(--gmp-error)' }}>
+                    {erroConferencia}
+                  </div>
+                )}
                 {detalhe.contas_pagar_id && (
                   <div className="almox-hint-banner" style={{ marginTop: 12, fontSize: '0.8rem' }}>
                     Conta a pagar #{detalhe.contas_pagar_id} gerada. Verifique em{' '}
                     <Link to="/financeiro/contas-pagar">Contas a Pagar</Link>.
                   </div>
                 )}
+
+              </div>
+            )}
+
+            {/* Etapa 34 — anexos do recebimento (NF digitalizada, certificado, boleto).
+                INLINE, no fim do painel: o painel é o único lugar do client onde o `id` do
+                recebimento existe, e é onde quem acabou de registrar cai
+                (`handleCriar` → `abrirDetalhe(res.data.id)`), com a nota fiscal na mão.
+                FORA do ternário de `loadingDetalhe`, de propósito (achado F2 da revisão da
+                branch): o bloco guarda estado LOCAL do usuário — o arquivo escolhido no input,
+                o tipo e a descrição (`AnexosDocumento.js:110-112`) — e `workflow` (`:151`),
+                `salvarFiscal` (`:195`) e `processarNota` (`:212`) recarregam o detalhe com
+                `abrirDetalhe(detalhe.id)`, que começa em `setLoadingDetalhe(true)`. Dentro do
+                ternário, cada uma dessas ações desmontava o corpo e jogava fora o arquivo já
+                escolhido, com um segundo GET de anexos de brinde; "Anexar" respondia
+                "Arquivo é obrigatório" sem nada na tela explicando. ⚠️ Etapa 35: a frase antiga
+                ("`abrirDetalhe` nunca zera `detalhe`, então o bloco não remonta") FICOU ERRADA —
+                `abrirDetalhe` agora ZERA, quando o id muda (RN-07). A justificativa do F2
+                continua de pé, mas por outro motivo: a guarda `idCarregadoRef.current !== id`.
+                No refetch do MESMO id o `detalhe` não é anulado, o `{detalhe && …}` abaixo segue
+                verdadeiro entre os dois commits e o React reconcilia o mesmo elemento na mesma
+                posição — o bloco continua montado com o arquivo já escolhido (cenário (g), que
+                mede IDENTIDADE de nó, não presença).
+                E esse `{detalhe && …}` é obrigatório agora, não decorativo: o painel passou a ser
+                gatilhado por `selectedId`, então sem ele `detalhe.id` estouraria na troca de
+                linha. Ele é também a régua da RN-07 (cenário (k)) — trocar de linha tira o bloco
+                de cena em vez de deixá-lo oferecendo upload com o `entidade_id` ANTIGO.
+                `detalhe.id` e NÃO o id da linha clicada (`selectedId`): o bloco lê o REGISTRO
+                CARREGADO — `selectedId` aqui anexaria a um detalhe que ainda nem chegou, e
+                `recebimentos[0].id` mostraria os anexos de outro recebimento sem erro na tela.
+                Sem gate novo: quem vê o recebimento vê os anexos dele; anexar/remover
+                continua decidido pelo backend (requirePermission), com a UI barrando antes
+                do formulário pelo próprio hook do componente. */}
+            {detalhe && (
+              <div style={{ padding: '0 20px 20px' }}>
+                <AnexosDocumento entidade="recebimento" entidadeId={detalhe.id} titulo="Anexos" />
               </div>
             )}
           </div>
@@ -635,19 +1272,21 @@ const RecebimentosAlmoxarifado = () => {
       </div>
 
       {showNovo && (
-        <div className="almox-modal-overlay" onClick={() => { setShowNovo(false); setPedidoDetalhe(null); }}>
-          <div className="almox-modal" onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: pedidoDetalhe ? 920 : 560 }}>
+        <div className="almox-modal-overlay" onClick={() => setShowNovo(false)}>
+          <div className="almox-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
             <div className="almox-modal-header">
               <h2>📥 Novo Recebimento — Almoxarifado</h2>
-              <button type="button" className="almox-modal-close" onClick={() => { setShowNovo(false); setPedidoDetalhe(null); }}>✕</button>
+              <button type="button" className="almox-modal-close" onClick={() => setShowNovo(false)}>✕</button>
             </div>
             <form onSubmit={handleCriar}>
               <div className="almox-modal-body">
                 <div className="almox-field almox-form-full">
                   <label className="almox-label">Forma de recebimento</label>
                   <select className="almox-select" value={form.tipo_recebimento}
-                    onChange={(e) => { setPedidoDetalhe(null); setForm((f) => ({ ...f, tipo_recebimento: e.target.value, pedido_compra_id: '', itens: [] })); }}>
+                    onChange={(e) => {
+                      setForm((f) => ({ ...f, tipo_recebimento: e.target.value, pedido_compra_id: '', itens: [] }));
+                      limparEstadoDoPedido();
+                    }}>
                     <option value="NOTA_FISCAL">Somente pela Nota Fiscal</option>
                     <option value="PEDIDO_COMPRA">Por Pedido de Compra</option>
                   </select>
@@ -663,136 +1302,6 @@ const RecebimentosAlmoxarifado = () => {
                         <option key={p.id} value={p.id}>{p.numero} — {p.fornecedor_nome}</option>
                       ))}
                     </select>
-
-                    {loadingPedido && (
-                      <div className="ped-rec-loading">Carregando dados do pedido…</div>
-                    )}
-
-                    {pedidoDetalhe && !loadingPedido && (
-                      <div className="ped-rec-painel">
-                        {/* Fornecedor — do SNAPSHOT do pedido, nao do cadastro de hoje:
-                            o documento e o que foi combinado com o fornecedor. */}
-                        <div className="ped-rec-bloco">
-                          <div className="ped-rec-bloco-titulo">Fornecedor</div>
-                          <div className="ped-rec-forn-nome">{pedidoDetalhe.fornecedor?.nome || '—'}</div>
-                          <div className="ped-rec-grid">
-                            <div><span>CNPJ</span><strong>{pedidoDetalhe.fornecedor?.cnpj || '—'}</strong></div>
-                            <div><span>Inscrição Estadual</span><strong>{pedidoDetalhe.fornecedor?.inscricao_estadual || '—'}</strong></div>
-                            <div><span>Telefone</span><strong>{pedidoDetalhe.fornecedor?.telefone || pedidoDetalhe.fornecedor?.celular || '—'}</strong></div>
-                            <div><span>E-mail</span><strong>{pedidoDetalhe.fornecedor?.email || '—'}</strong></div>
-                            <div className="ped-rec-grid-full">
-                              <span>Endereço</span>
-                              <strong>
-                                {[pedidoDetalhe.fornecedor?.endereco,
-                                  pedidoDetalhe.fornecedor?.municipio,
-                                  pedidoDetalhe.fornecedor?.uf,
-                                  pedidoDetalhe.fornecedor?.cep].filter(Boolean).join(' — ') || '—'}
-                              </strong>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="ped-rec-bloco">
-                          <div className="ped-rec-bloco-titulo">Condições do pedido</div>
-                          <div className="ped-rec-grid">
-                            <div><span>Data do pedido</span><strong>{formatDateOnly(pedidoDetalhe.data_pedido)}</strong></div>
-                            <div><span>Previsão de entrega</span><strong>{formatDateOnly(pedidoDetalhe.previsao_entrega)}</strong></div>
-                            <div><span>Condição de pagamento</span><strong>{pedidoDetalhe.condicao_pagamento || '—'}</strong></div>
-                            <div><span>Frete</span><strong>{pedidoDetalhe.frete_modalidade || '—'}</strong></div>
-                            <div><span>Transportadora</span><strong>{pedidoDetalhe.transportadora || '—'}</strong></div>
-                            <div><span>Via de transporte</span><strong>{pedidoDetalhe.via_transporte || '—'}</strong></div>
-                            <div><span>Contato</span><strong>{pedidoDetalhe.contato || '—'}</strong></div>
-                            <div><span>Status</span><strong>{(pedidoDetalhe.status || '—').toUpperCase()}</strong></div>
-                            <div className="ped-rec-grid-full">
-                              <span>Local de entrega</span>
-                              <strong>{pedidoDetalhe.local_entrega || '—'}</strong>
-                            </div>
-                            {pedidoDetalhe.observacoes && (
-                              <div className="ped-rec-grid-full">
-                                <span>Observações do pedido</span>
-                                <strong>{pedidoDetalhe.observacoes}</strong>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="ped-rec-bloco">
-                          <div className="ped-rec-bloco-titulo">
-                            Itens do pedido ({pedidoDetalhe.itens?.length || 0})
-                          </div>
-                          <div className="ped-rec-tabela-wrap">
-                            <table className="ped-rec-tabela">
-                              <thead>
-                                <tr>
-                                  <th>#</th>
-                                  <th>Código</th>
-                                  <th>Descrição</th>
-                                  <th>NCM</th>
-                                  <th className="num">Qtd</th>
-                                  <th>Un</th>
-                                  <th className="num">Vl. unit.</th>
-                                  <th className="num">Total</th>
-                                  {/* Etapa 33 (RN-33.04): sem coluna "Entrega" por item — a
-                                      previsão é do pedido e está em "Condições do pedido". */}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {(pedidoDetalhe.itens || []).map((it, idx) => (
-                                  <tr key={it.id} className={it.recebivel === false ? 'ped-rec-item-bloqueado' : ''}>
-                                    <td>{it.item_numero || idx + 1}</td>
-                                    <td>{it.codigo || it.material_codigo || '—'}</td>
-                                    <td>
-                                      {it.descricao || it.material_nome || '—'}
-                                      {it.observacao && <div className="ped-rec-item-obs">{it.observacao}</div>}
-                                      {it.recebivel === false && (
-                                        <div className="ped-rec-item-obs ped-rec-alerta-inline">
-                                          sem material do cadastro — não entra na baixa
-                                        </div>
-                                      )}
-                                    </td>
-                                    <td>{it.ncm || '—'}</td>
-                                    <td className="num">{it.quantidade}</td>
-                                    <td>{it.unidade || 'UN'}</td>
-                                    <td className="num">{formatMoneyUnit(it.valor_unitario)}</td>
-                                    <td className="num">{formatMoney(it.valor_linha)}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-
-                          {pedidoDetalhe.itens_sem_material > 0 && (
-                            <div className="ped-rec-alerta">
-                              {pedidoDetalhe.itens_sem_material === 1
-                                ? '1 item do pedido não tem material do cadastro e não será lançado.'
-                                : `${pedidoDetalhe.itens_sem_material} itens do pedido não têm material do cadastro e não serão lançados.`}
-                              {' '}Peça ao Compras para vincular o material antes de dar baixa.
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="ped-rec-totais">
-                          <div><span>Produtos</span><strong>{formatMoney(pedidoDetalhe.totais?.total_produtos)}</strong></div>
-                          <div><span>IPI</span><strong>{formatMoney(pedidoDetalhe.totais?.total_ipi)}</strong></div>
-                          <div><span>ICMS ST</span><strong>{formatMoney(pedidoDetalhe.totais?.total_icms_st)}</strong></div>
-                          <div><span>Frete</span><strong>{formatMoney(pedidoDetalhe.totais?.valor_frete)}</strong></div>
-                          <div><span>Desconto</span><strong>{formatMoney(pedidoDetalhe.totais?.total_desconto)}</strong></div>
-                          <div className="ped-rec-total-geral">
-                            <span>Total do pedido</span>
-                            <strong>{formatMoney(pedidoDetalhe.totais?.total_geral)}</strong>
-                          </div>
-                        </div>
-
-                        {/* O recebimento grava quantidade x valor unitario, SEM IPI — a nota do
-                            fornecedor vira com IPI e a diferenca e esperada. Dizer isso aqui evita
-                            o almoxarife "corrigir" o valor achando que a tela errou. */}
-                        <div className="ped-rec-nota">
-                          A baixa lança <strong>{formatMoney(pedidoDetalhe.totais?.total_produtos)}</strong>{' '}
-                          (quantidade × valor unitário, sem IPI). As quantidades entram cheias e podem
-                          ser ajustadas na conferência.
-                        </div>
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="almox-form-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
@@ -830,6 +1339,14 @@ const RecebimentosAlmoxarifado = () => {
                 {form.tipo_recebimento === 'NOTA_FISCAL' && (
                   <div style={{ marginTop: 16 }}>
                     <label className="almox-label">Materiais recebidos</label>
+                    {erroMateriais && (
+                      <p style={{ fontSize: '0.8rem', color: 'var(--gmp-error)', margin: '0 0 8px' }}>
+                        Não foi possível carregar a lista de materiais.{' '}
+                        <button type="button" className="almox-link-btn" onClick={loadMateriais}>
+                          Tentar de novo
+                        </button>
+                      </p>
+                    )}
                     <div className="almox-search-wrapper" style={{ marginBottom: 8 }}>
                       <FiSearch className="almox-search-icon" />
                       <input className="almox-search-input" placeholder="Buscar material..."
@@ -864,11 +1381,93 @@ const RecebimentosAlmoxarifado = () => {
                     ))}
                   </div>
                 )}
+
+                {/* Etapa 37 (RN-26): as linhas DO PEDIDO, com o saldo, editáveis. Este bloco é o
+                    que faltava para "chegaram 6 dos 10" existir na tela — antes o modal mostrava
+                    só o `<select>`, `handleCriar` mandava `itens: []` e o servidor preenchia o
+                    saldo inteiro. A chave é `pedido_item_id` e NÃO `material_id`: duas linhas do
+                    mesmo material são caso legítimo do pedido de compra, e o material como chave
+                    fundiria as duas (e o React reclamaria de chave repetida). */}
+                {form.tipo_recebimento === 'PEDIDO_COMPRA' && form.pedido_compra_id && (
+                  <div style={{ marginTop: 16 }}>
+                    <label className="almox-label">Itens do pedido</label>
+                    {carregandoItensPedido && (
+                      <p style={{ fontSize: '0.8rem', margin: '0 0 8px' }}>Carregando os itens do pedido...</p>
+                    )}
+                    {/* Falha de carga NÃO pode virar "pedido sem itens" (RN-04/05 da Etapa 35): as
+                        duas telas são indistinguíveis, e aqui a segunda acusaria o pedido. */}
+                    {erroItensPedido && (
+                      <p style={{ fontSize: '0.8rem', color: 'var(--gmp-error)', margin: '0 0 8px' }}>
+                        {erroItensPedido}{' '}
+                        <button type="button" className="almox-link-btn"
+                          onClick={() => selecionarPedido(form.pedido_compra_id)}>
+                          Tentar de novo
+                        </button>
+                      </p>
+                    )}
+                    {/* (F1) A frase vem do ESTADO: "quitado" e "o Compras não lançou as linhas"
+                        são dois fatos, e a segunda é a literal do próprio servidor. */}
+                    {avisoPedidoSemSaldo && (
+                      <p style={{ fontSize: '0.8rem', margin: '0 0 8px' }}>
+                        {avisoPedidoSemSaldo}
+                      </p>
+                    )}
+                    {form.itens.map((item) => (
+                      <div key={item.pedido_item_id}
+                        style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+                        <div style={{ flex: 1, fontSize: '0.85rem' }}>
+                          <strong>{item.material_nome}</strong>
+                          <div style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                            {item.material_codigo} · Saldo pendente: {item.saldo_pendente}
+                          </div>
+                          {avisoAcimaDoSaldo(item)}
+                        </div>
+                        {/* Sem `required`: limpar o campo é "esta linha não chegou", e a linha sai
+                            do payload (nunca como zero). `step="any"` porque saldo de material a
+                            granel é decimal. */}
+                        <input className="almox-count-input" type="number" min="0" step="any"
+                          title="Qtd. recebida do pedido"
+                          data-testid={`qtd-pedido-${item.pedido_item_id}`}
+                          value={item.quantidade ?? ''}
+                          onChange={(e) => setForm((f) => ({
+                            ...f,
+                            itens: f.itens.map((i) => (i.pedido_item_id === item.pedido_item_id
+                              ? { ...i, quantidade: e.target.value } : i)),
+                          }))} />
+                        <span style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{item.unidade}</span>
+                      </div>
+                    ))}
+                    {/* `pode(...)` aqui é conveniência de interface — esconder a caixa de quem não
+                        pode marcá-la —, NÃO segurança: o hook falha aberto de propósito e é o
+                        `POST /recebimentos` que checa a flag por `can()`, devolvendo o 403 que
+                        aparece no aviso abaixo. */}
+                    {temExcedenteNoPedido && pode('autorizar_excedente') && (
+                      <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.78rem', marginTop: 8 }}>
+                        <input type="checkbox" checked={autorizarExcedenteCriacao}
+                          onChange={(e) => setAutorizarExcedenteCriacao(e.target.checked)} />
+                        Autorizo o recebimento acima do pedido
+                      </label>
+                    )}
+                  </div>
+                )}
+
+                {/* A recusa da criação FICA na tela, como a da conferência. As literais desta porta
+                    dizem QUEM autoriza o excedente ("a autorização de excedente é de Compras ou do
+                    Administrador"), e num toast de cinco segundos elas não chegam a ser lidas. */}
+                {erroCriacao && (
+                  <div className="almox-hint-banner" role="alert"
+                    style={{ marginTop: 12, fontSize: '0.8rem', color: 'var(--gmp-error)' }}>
+                    {erroCriacao}
+                  </div>
+                )}
               </div>
               <div className="almox-modal-footer">
-                <button type="button" className="btn-almox-secondary" onClick={() => { setShowNovo(false); setPedidoDetalhe(null); }}>Cancelar</button>
+                <button type="button" className="btn-almox-secondary" onClick={() => setShowNovo(false)}>Cancelar</button>
                 <button type="submit" className="btn-almox-primary"
-                  disabled={saving || (form.tipo_recebimento === 'NOTA_FISCAL' && form.itens.length === 0)}>
+                  disabled={saving
+                    || (form.tipo_recebimento === 'NOTA_FISCAL' && form.itens.length === 0)
+                    || (form.tipo_recebimento === 'PEDIDO_COMPRA'
+                      && (carregandoItensPedido || !!avisoPedidoSemSaldo))}>
                   {saving ? 'Salvando...' : 'Registrar Recebimento'}
                 </button>
               </div>
@@ -965,6 +1564,83 @@ const RecebimentosAlmoxarifado = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Etapa 57 (RN-05): processar a nota escolhendo o destino de cada item */}
+      {showProcessar && detalhe && (
+        <div className="almox-modal-overlay" onClick={() => { if (!saving) fecharProcessar(); }}>
+          <div className="almox-modal" data-testid="modal-processar" onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 760 }}>
+            <div className="almox-modal-header">
+              <h2>Processar nota fiscal</h2>
+              <button type="button" className="almox-modal-close" onClick={fecharProcessar} disabled={saving}>✕</button>
+            </div>
+            <div className="almox-modal-body">
+              <p style={{ marginTop: 0 }}>
+                Processar nota fiscal? Isso dará entrada no estoque e gerará contas a pagar.
+              </p>
+              {erroLocalizacoesProc && (
+                <div className="almox-hint-banner" style={{ marginBottom: 10, fontSize: '0.8rem' }}>{erroLocalizacoesProc}</div>
+              )}
+              {itensQueVaoEntrar(detalhe.itens).length === 0 ? (
+                <p style={{ color: 'var(--text-muted, #666)' }}>Nenhum item com quantidade a dar entrada.</p>
+              ) : (
+                <table className="almox-table">
+                  <thead>
+                    <tr><th>Material</th><th>Quantidade</th><th>Destino</th></tr>
+                  </thead>
+                  <tbody>
+                    {itensQueVaoEntrar(detalhe.itens).map((it) => {
+                      const escolhido = destinosProc[it.id] || '';
+                      const aviso = escolhido ? null
+                        : avisoPadraoDoItem(Object.prototype.hasOwnProperty.call(sugestoesProc, it.material_id)
+                          ? sugestoesProc[it.material_id] : undefined);
+                      return (
+                        <tr key={it.id} data-testid={`processar-item-${it.id}`}>
+                          <td>
+                            <strong>{it.material_codigo}</strong> — {it.material_nome}
+                          </td>
+                          <td>{quantidadeQueEntra(it)} {it.unidade || ''}</td>
+                          <td>
+                            <select className="almox-select" aria-label={`Destino de ${it.material_codigo}`}
+                              data-testid={`destino-item-${it.id}`} value={escolhido} disabled={saving}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setDestinosProc((d) => ({ ...d, [it.id]: v }));
+                              }}>
+                              <option value="">Padrão do material</option>
+                              {destinosOferecidos(localizacoesProc).map((l) => (
+                                <option key={l.id} value={l.id}>{l.endereco_completo || l.codigo}</option>
+                              ))}
+                            </select>
+                            {aviso && (
+                              <div className="almox-hint" data-testid={`aviso-padrao-${it.id}`}
+                                style={{ fontSize: '0.75rem', color: '#b45309', marginTop: 4 }}>
+                                {aviso}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+              {erroProcessar && (
+                <div className="almox-hint-banner" role="alert" style={{ marginTop: 12, fontSize: '0.8rem', color: 'var(--gmp-error)' }}>
+                  {erroProcessar}
+                </div>
+              )}
+            </div>
+            <div className="almox-modal-footer">
+              <button type="button" className="btn-almox-secondary" onClick={fecharProcessar} disabled={saving}>Cancelar</button>
+              <button type="button" className="btn-almox-primary" data-testid="confirmar-processar"
+                onClick={processarNota} disabled={saving}>
+                {saving ? 'Processando...' : 'Confirmar'}
+              </button>
+            </div>
           </div>
         </div>
       )}

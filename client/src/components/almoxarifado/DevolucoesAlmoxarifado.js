@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
-import { FiCornerUpLeft, FiRefreshCw } from 'react-icons/fi';
+import { FiCornerUpLeft, FiPaperclip, FiRefreshCw } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
+import AnexosModal from './AnexosModal';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import './Almoxarifado.css';
 
@@ -69,6 +70,8 @@ const DevolucoesAlmoxarifado = () => {
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(FORM_VAZIO);
+  // Etapa 34: guarda o OBJETO da devolução — o subtítulo do modal mostra material e data.
+  const [anexosDevolucao, setAnexosDevolucao] = useState(null);
 
   const materialSelecionado = materiais.find((m) => m.id === parseInt(form.material_id, 10));
   const saidaSelecionada = saidas.find((s) => String(s.id) === String(form.movimentacao_saida_id));
@@ -205,7 +208,7 @@ const DevolucoesAlmoxarifado = () => {
       </div>
 
       <div className="almox-table-container">
-        {loading ? <SkeletonTable rows={6} columns={8} /> : devolucoes.length === 0 ? (
+        {loading ? <SkeletonTable rows={6} columns={9} /> : devolucoes.length === 0 ? (
           <div className="almox-empty"><p>Nenhuma devolução registrada</p></div>
         ) : (
           <table className="almox-table">
@@ -213,6 +216,7 @@ const DevolucoesAlmoxarifado = () => {
               <tr>
                 <th>Data</th><th>Material</th><th>Qtd</th><th>Motivo</th>
                 <th>Condição</th><th>Destino</th><th>Saída de origem</th><th>Responsável</th>
+                <th aria-label="Ações"></th>
               </tr>
             </thead>
             <tbody>
@@ -229,6 +233,19 @@ const DevolucoesAlmoxarifado = () => {
                     <td><span className={`almox-badge almox-badge-${info.cls}`}>{info.label}</span></td>
                     <td>{d.movimentacao_saida_id ? `#${d.movimentacao_saida_id}` : 'avulsa'}</td>
                     <td>{d.responsavel_nome || '—'}</td>
+                    <td>
+                      {/* Etapa 34 — a primeira coluna de ações desta tela. A devolução é
+                          IMUTÁVEL (não há PUT nem DELETE, e a tabela não tem `status`), então
+                          não existe `somenteLeitura`: anexar em devolução antiga é legítimo, e é
+                          onde o comprovante costuma chegar. Sem gate de permissão, pelo mesmo
+                          motivo da tela de Materiais — quem só tem `visualizar` precisa poder
+                          baixar (B68). */}
+                      <button className="almox-btn-icon" title="Anexos e documentos desta devolução"
+                        data-testid={`anexos-devolucao-${d.id}`}
+                        onClick={() => setAnexosDevolucao(d)}>
+                        <FiPaperclip />
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -236,6 +253,19 @@ const DevolucoesAlmoxarifado = () => {
           </table>
         )}
       </div>
+
+      {/* Anexos da devolução (Etapa 34) — a spec 12 pedia "fotos da devolução". Modal, e não
+          bloco inline, porque esta tela não tem detalhe nenhum: é lista read-only mais o modal
+          de criação, e a linha da lista é o único lugar com o `id`. */}
+      {anexosDevolucao && (
+        <AnexosModal
+          titulo="Anexos da devolução"
+          subtitulo={`${anexosDevolucao.material_codigo} — ${anexosDevolucao.material_nome} · ${formatData(anexosDevolucao.created_at)}`}
+          entidade="devolucao"
+          entidadeId={anexosDevolucao.id}
+          onClose={() => setAnexosDevolucao(null)}
+        />
+      )}
 
       {showModal && (
         <div className="almox-modal-overlay" onClick={() => { if (!saving) setShowModal(false); }}>

@@ -24,7 +24,8 @@ const STATUS_OPCOES = [
   { value: 'FALHA', label: 'Falha' },
 ];
 
-// Espelha os 8 eventos que a fila conhece (RN-01..RN-07 do design) — não é uma varredura
+// Espelha os 10 eventos que a fila conhece (os 8 da Etapa 12 + os 2 do recebimento da
+// Etapa 70) — não é uma varredura
 // dinâmica porque a fila não expõe um endpoint de "eventos distintos"; o filtro é por igualdade
 // exata contra o que a rota aceita em `?evento=`.
 const EVENTO_OPCOES = [
@@ -37,6 +38,11 @@ const EVENTO_OPCOES = [
   { value: 'LOTE_VENCENDO', label: 'Lote vencendo' },
   { value: 'REMESSA_VENCIDA', label: 'Remessa vencida' },
   { value: 'FALHA_NOTIFICACAO', label: 'Aviso de falha' },
+  // Etapa 70: os dois avisos de quando a nota de um recebimento dá entrada no estoque
+  // (receiptNotificationService.js) — o da nota, para a lista, e o de cada requisição, para
+  // quem pediu o material.
+  { value: 'RECEBIMENTO_ENTRADA', label: 'Entrada de recebimento' },
+  { value: 'RECEBIMENTO_ENTRADA_REQUISITANTE', label: 'Aviso ao requisitante' },
 ];
 
 const STATUS_BADGE_CLASS = { PENDENTE: 'almox-badge-baixo', ENVIADO: 'almox-badge-ok', FALHA: 'almox-badge-critico' };

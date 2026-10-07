@@ -1,907 +1,688 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
-import { toast } from 'react-toastify';
-import api from '../../services/api';
-import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../../utils/telefone';
-import {
-  FiPlus, FiTrash2, FiSearch, FiArrowLeft, FiSave, FiEdit2, FiMinus,
-  FiCheck, FiChevronDown, FiChevronUp, FiAlertTriangle, FiLayers,
-} from 'react-icons/fi';
-import './PedidoCompraForm.css';
-
 /**
- * Formulário do pedido de compra (Etapa 32 — G1, G1b e G1c).
+ * Etapa 38, Task 5 (RN-C12) — o formulário de PEDIDO DE COMPRA: criação, edição e importação.
  *
- * G1b fixou a regra da tela: *"todas as opções devem ser botões, não quero o usuário
- * escrevendo nada"*. G1c responde ao e-mail da Gerente de Compras de 15/09/2026, que usou a
- * tela em produção e apontou quatro coisas:
+ * POR QUE ESTA TELA EXISTE: até a Etapa 38 o módulo Compras **não tinha como criar um pedido**.
+ * `Compras.js` já escrevia os dois `<Link>` da aba "Pedidos de Compra" — o botão "Novo Pedido"
+ * (`getNewItemPath`) e o lápis de cada linha (`/compras/pedidos/editar/:id`) — e `App.js` não
+ * declarava rota nenhuma que os casasse: clicar voltava para a própria lista. Com isso, a Etapa 37
+ * inteira (recebimento contra pedido) era inalcançável por clique, em qualquer ambiente, incluindo
+ * produção, onde `COUNT(pedidos_compra)` era 0.
  *
- *  1. IPI precisa de valor livre — a empresa usa alíquotas fora da lista.
- *  2. "G", "M" e "L" sozinhos não se distinguem (resolvido no rótulo, em `opcoesPedido.js`).
- *  3. Mais condições de pagamento, e como cadastrar novas. Resposta: qualquer condição usada
- *     uma vez volta como botão no próximo pedido — não há cadastro a fazer.
- *  4. **O ponto mais pesado**: pedidos com mais de 50 itens eram inviáveis, porque cada item
- *     pedia todos os campos. Daí três mudanças: IPI padrão definido UMA vez para o pedido,
- *     linha de item compacta (o resto fica em "detalhes"), e a inclusão em lote (F2), que é
- *     o fluxo que ela descreveu do Vision.
+ * ⚠️ OS TIPOS SÃO CONTRATO, E É POR ISSO QUE TUDO PASSA POR `Number()`:
+ * os schemas Zod do servidor (`services/compras/schemas.js`) são `z.number()` **sem coerção** —
+ * medido na Task 2: `'5'` responde 400. E `<input type="number">` e `<select>` devolvem **string**.
+ * Sem a coação daqui, a suíte de API ficaria verde e **todo submit real** tomaria 400. As quatro
+ * chaves coagidas: `fornecedor_id`, `material_id`, `quantidade`, `valor_unitario` (e
+ * `solicitacao_id`, quando vem por query).
  *
- * Duas regras de módulo seguem valendo:
- *  - A conta NÃO é feita aqui: os totais vêm de `POST /compras/pedidos/calcular`, o mesmo
- *    `pedidoTotais` que grava.
- *  - Material vem de `/compras/pedidos-aux/materiais`, não de `/almoxarifado/materiais`:
- *    aquele prefixo é guardado por `checkModulePermission('almoxarifado')`.
+ * ⚠️ O QUE O PAYLOAD **NÃO** LEVA, e é decisão, não esquecimento:
+ * - `numero`: é gerado pelo servidor (`inserirComNumeroUnico(db, 'PC', …)`). A tela não tem campo
+ *   de número; ela **diz** que o número é gerado.
+ * - `valor_total`: é derivado da soma das linhas pelo próprio serviço (RN-C04). O total mostrado
+ *   aqui é informação para quem preenche, não dado de entrada.
+ *
+ * ⚠️ AS LINHAS REPETIDAS DO MESMO MATERIAL SÃO LEGÍTIMAS (a importação da Task 4 as cria), então a
+ * chave de React de cada linha é um id LOCAL crescente, nunca o `material_id`. Os `data-testid`
+ * usam o `material_id` por legibilidade da régua — com duas linhas do mesmo material, o seletor
+ * pega a primeira, e isso está dito aqui para ninguém confundir as duas coisas.
+ *
+ * ⚠️ QUEM DECIDE É O BACKEND. A única recusa local é "sem item" (e a literal é **cópia** da do
+ * servidor, para a tela não inventar uma segunda frase para o mesmo fato). Quantidade, preço,
+ * fornecedor inexistente, pedido já recebido e permissão são recusas do servidor, e chegam ao DOM
+ * em `role="alert"` com a literal **dele**.
  */
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import * as XLSX from 'xlsx';
+import { FiArrowLeft, FiPlus, FiSave, FiSearch, FiTrash2, FiUpload } from 'react-icons/fi';
+import api from '../../services/api';
+import { toast } from 'react-toastify';
+import { formatarErroPermissao } from '../../utils/permissaoErro';
+import '../Compras.css';
 
-const LINHA_VAZIA = {
-  material_id: '', material_nome: '', codigo: '', descricao: '', ncm: '',
-  quantidade: 1, unidade: 'UN', valor_unitario: '', ipi_percentual: 0,
-  peso_unitario: '', observacao: '',
-};
-
-const CABECALHO_VAZIO = {
-  numero: '', fornecedor_id: '', status: 'pendente',
-  data_pedido: new Date().toISOString().slice(0, 10),
-  previsao_entrega: '', condicao_pagamento: '', frete_modalidade: '',
-  transportadora: '', transportadora_telefone: '', via_transporte: '',
-  tabela_preco: '', contato: '', observacoes: '', local_entrega: '', local_cobranca: '',
-  total_icms_st: '', valor_frete: '', total_desconto: '',
-};
-
-const TOTAIS_ZERO = {
-  total_produtos: 0, total_ipi: 0, total_icms_st: 0,
-  total_desconto: 0, valor_frete: 0, total_geral: 0,
-};
-
+// Os 7 status do contrato (`STATUS_PEDIDO_COMPRA` do servidor). A ordem é a do schema; os rótulos
+// são os mesmos do filtro de `Compras.js`, para a mesma coisa não ter dois nomes no módulo.
 const STATUS = [
-  { valor: 'pendente', curto: 'Pendente' },
-  { valor: 'aprovado', curto: 'Aprovado' },
-  { valor: 'finalizado', curto: 'Finalizado' },
-  { valor: 'cancelado', curto: 'Cancelado' },
+  { valor: 'pendente', label: 'Pendente' },
+  { valor: 'aprovado', label: 'Aprovado' },
+  { valor: 'rejeitado', label: 'Rejeitado' },
+  { valor: 'em_analise', label: 'Em Análise' },
+  { valor: 'enviado', label: 'Enviado' },
+  { valor: 'recebido', label: 'Recebido' },
+  { valor: 'cancelado', label: 'Cancelado' },
 ];
 
-const moeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-// O unitário guarda até 4 casas (RN-12: o ERP de origem armazena 4 e imprime 3). Cortar em 2
-// aqui faria a tela divergir da nota fiscal do fornecedor.
-const moedaUnit = (v) => Number(v || 0).toLocaleString('pt-BR', {
-  style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 4,
-});
-
-const emDias = (n) => {
-  const d = new Date();
-  d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
-};
-const dataCurta = (iso) => {
-  if (!iso) return '';
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso).slice(0, 10));
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
-};
-
-const valorDe = (o) => (o && typeof o === 'object' ? o.valor : o);
-const rotuloDe = (o) => (o && typeof o === 'object' ? (o.curto || o.valor) : o);
+const LITERAL_SEM_ITEM = 'Inclua ao menos um item no pedido de compra';
+const LITERAL_AVISO_PRECO = 'Sem preço o custo médio do material não é alimentado no recebimento.';
 
 /**
- * Grupo de botões de escolha única — o controle padrão desta tela.
+ * Etapa 39, onda de correção F4 — a faixa do pedido que JÁ TEVE RECEBIMENTO.
  *
- * `permitirOutro` acrescenta um botão que abre um campo: é como a Compras registra um valor
- * que ainda não existe (IPI fora da tabela, condição de pagamento nova). O que for usado uma
- * vez volta como botão no próximo pedido, porque o servidor une a lista fixa ao que já foi
- * gravado — não existe tela de cadastro a manter.
+ * O comprador preenchia o formulário inteiro de um pedido já recebido, clicava em "Salvar pedido"
+ * e só então levava o 400 `… já teve recebimento — não pode mais ser editado` (guarda da Etapa 38,
+ * que existe porque o `PUT` faz DELETE+INSERT das linhas e zeraria `quantidade_recebida`). Pior:
+ * era justamente o pedido preso no beco da RN-D12 — recebido com atraso, marcado "Atrasado" para
+ * sempre — e o gesto que o corrigiria era o único que a tela não deixava completar.
+ *
+ * Agora o `GET /compras/pedidos/:id` devolve `teve_recebimento` (0|1, derivado pelas MESMAS duas
+ * pernas da guarda do servidor) e a tela diz ANTES: o que continua editável é só o status, e o
+ * "Salvar pedido" vira `PATCH …/status`. Quem decide continua sendo o backend — esta faixa evita a
+ * viagem perdida, não substitui a régua.
  */
-const Chips = ({
-  label, opcoes, valor, onChange, obrigatorio, ajuda,
-  permitirOutro, tipoOutro = 'text', sufixoOutro,
-}) => {
-  const conhecido = (opcoes || []).some((o) => String(valorDe(o)) === String(valor ?? ''));
-  const temValor = valor !== '' && valor !== null && valor !== undefined;
-  const [abertoOutro, setAbertoOutro] = useState(false);
-  const outroAtivo = permitirOutro && temValor && !conhecido;
+const LITERAL_SO_STATUS = 'Este pedido já teve recebimento — só o status pode ser alterado';
+const LITERAL_STATUS_ATUALIZADO = 'Status do pedido atualizado';
 
-  return (
-    <div className="pcf-chips-bloco">
-      <span className="pcf-chips-label">
-        {label}{obrigatorio && <em> *</em>}
-        {ajuda && <small>{ajuda}</small>}
-      </span>
-      <div className="pcf-chips">
-        {(opcoes || []).map((o) => {
-          const v = valorDe(o);
-          const ativo = String(valor ?? '') === String(v);
-          return (
-            <button type="button" key={String(v)}
-              className={`pcf-chip${ativo ? ' pcf-chip-ativo' : ''}`}
-              aria-pressed={ativo}
-              // Reclicar no selecionado limpa: sem isto, um campo opcional escolhido por
-              // engano não teria como voltar a vazio sem recarregar a tela.
-              onClick={() => { setAbertoOutro(false); onChange(ativo ? '' : v); }}>
-              {ativo && <FiCheck />}{rotuloDe(o)}
-            </button>
-          );
-        })}
-        {permitirOutro && (
-          <button type="button"
-            className={`pcf-chip${outroAtivo ? ' pcf-chip-ativo' : ''}`}
-            onClick={() => setAbertoOutro((a) => !a)}>
-            {outroAtivo && <FiCheck />}
-            {outroAtivo ? `${valor}${sufixoOutro || ''}` : 'Outro…'}
-          </button>
-        )}
-      </div>
-      {permitirOutro && (abertoOutro || outroAtivo) && (
-        <input className="pcf-input-solto pcf-input-outro" type={tipoOutro}
-          step={tipoOutro === 'number' ? 'any' : undefined}
-          min={tipoOutro === 'number' ? '0' : undefined}
-          autoFocus={abertoOutro}
-          placeholder={tipoOutro === 'number' ? 'Digite o valor' : 'Digite a opção'}
-          value={outroAtivo ? valor : ''}
-          onChange={(e) => onChange(e.target.value)} />
-      )}
-    </div>
-  );
+/**
+ * ── A IMPORTAÇÃO 100% RECUSADA ERA ANUNCIADA EM VERDE (onda de correção, F6 — achado I3/UX) ───
+ *
+ * A porta responde **201 com sucesso parcial** por contrato, inclusive quando `pedidos: []` e todas
+ * as linhas foram para `ignorados`. A tela não distinguia: mostrava `toast.success` escrito
+ * `0 pedido(s) importado(s)`.
+ *
+ * E o caso é o MAIS provável de todos: `CHAVES_CODIGO` aceita só `codigo/código/cod/sku/…`, então
+ * uma planilha com a coluna `Material`, `Item` ou `Cód.` recusa TODAS as linhas. Inclusive — até
+ * este mesmo fix-round — a planilha que o próprio módulo produz: o "Exportar Excel" da aba Pedidos
+ * não tinha coluna de código (corrigido em `Compras.js` na mesma passada), e reimportar o export do
+ * próprio CRM é o primeiro arquivo que qualquer operador vai tentar.
+ */
+const LITERAL_NADA_IMPORTADO = 'Nenhum pedido importado — veja os motivos abaixo';
+
+/**
+ * Teto de renderização da lista de recusas: 5.000 linhas recusadas eram 5.000 `<li>`, e travar a
+ * aba é o resultado do erro mais comum. O resto vira UMA linha que diz quantas ficaram de fora —
+ * para o operador saber que a lista está cortada, em vez de achar que são só 20.
+ */
+const TETO_LISTA = 20;
+const literalRestantes = (n) => `… e mais ${n} linha(s)`;
+
+const formatCurrency = (valor) => new Intl.NumberFormat('pt-BR', {
+  style: 'currency', currency: 'BRL',
+}).format(Number(valor) || 0);
+
+/**
+ * Etapa 39 (D2, RN-D03) — HOJE no fuso de quem clica.
+ *
+ * Era `new Date().toISOString().slice(0, 10)`, que e **UTC**: das 21h a meia-noite no fuso do
+ * Brasil o formulario nascia com a data de AMANHA, e o pedido era gravado com ela. Mesma forma de
+ * `FerramentasAlmoxarifado.js:417-424` (client) e de `hojeLocalISO` (`pedidoCompraService.js:615`,
+ * servidor) — os tres dizem a mesma coisa, e agora dizem do mesmo jeito.
+ */
+const hojeISO = () => {
+  const agora = new Date();
+  return [agora.getFullYear(), String(agora.getMonth() + 1).padStart(2, '0'),
+    String(agora.getDate()).padStart(2, '0')].join('-');
 };
 
+// Mensagem de erro do servidor, com o 403 de perfil já rotulado por `permissaoErro` (o mesmo
+// utilitário que o almoxarifado usa): o 403 condicional do vínculo de solicitação (fix 1 da Task 2)
+// responde `{ error, acao, perfil }`, e mostrar só o `error` esconderia QUAL permissão falta.
+function mensagemDeErro(erro, fallback) {
+  const data = erro?.response?.data;
+  return formatarErroPermissao(data) || data?.error || fallback;
+}
+
+let sequenciaLinha = 0;
+const novaLinha = (dados) => ({ chave: `linha-${(sequenciaLinha += 1)}`, ...dados });
+
 const PedidoCompraForm = () => {
-  const navigate = useNavigate();
   const { id } = useParams();
-  const editando = !!id;
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const edicao = Boolean(id);
 
-  const [cab, setCab] = useState(CABECALHO_VAZIO);
-  const [itens, setItens] = useState([{ ...LINHA_VAZIA }]);
   const [fornecedores, setFornecedores] = useState([]);
-  const [opcoes, setOpcoes] = useState(null);
-  const [totais, setTotais] = useState(TOTAIS_ZERO);
-  const [linhas, setLinhas] = useState([]);
-  const [carregando, setCarregando] = useState(true);
+  const [fornecedorId, setFornecedorId] = useState('');
+  const [numero, setNumero] = useState('');
+  const [dataPedido, setDataPedido] = useState(hojeISO());
+  const [previsaoEntrega, setPrevisaoEntrega] = useState('');
+  const [status, setStatus] = useState('pendente');
+  const [observacoes, setObservacoes] = useState('');
+  const [itens, setItens] = useState([]);
+  const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const [carregando, setCarregando] = useState(edicao);
+  // 0|1 do servidor -> boolean local. Só existe no modo edição (a criação não tem recebimento).
+  const [soStatus, setSoStatus] = useState(false);
 
-  // IPI definido UMA vez para o pedido inteiro: era o campo que mais se repetia item a item.
-  const [ipiPadrao, setIpiPadrao] = useState(0);
-
-  const [editandoNumero, setEditandoNumero] = useState(false);
-  const [maisOpcoes, setMaisOpcoes] = useState(false);
-  const [entregaOutro, setEntregaOutro] = useState(false);
-  const [cobrancaOutro, setCobrancaOutro] = useState(false);
-  const [detalhesAbertos, setDetalhesAbertos] = useState({});
-
-  // Modais
-  const [buscaLinha, setBuscaLinha] = useState(null);
-  const [busca, setBusca] = useState('');
+  const [termoMaterial, setTermoMaterial] = useState('');
   const [materiais, setMateriais] = useState([]);
-  const [escolhendoFornecedor, setEscolhendoFornecedor] = useState(false);
-  const [buscaForn, setBuscaForn] = useState('');
-  const [lote, setLote] = useState(null); // { selecionados: { [id]: qtd } }
+  const [buscando, setBuscando] = useState(false);
 
-  const setCampo = (campo, valor) => setCab((c) => ({ ...c, [campo]: valor }));
+  const [importando, setImportando] = useState(false);
+  const [resultadoImportacao, setResultadoImportacao] = useState(null);
 
-  /* ── carga inicial ──────────────────────────────────────────────── */
+  // `solicitacao_id` só existe no fluxo "Gerar pedido" da Reposição (Task 6). Os três parâmetros
+  // viajam na URL porque **não há porta** que resolva uma solicitação do almoxarifado a partir do
+  // módulo Compras: `GET /api/compras/solicitacoes-compra/:id` é a tabela `solicitacoes_compra` do
+  // CORE, outra tabela, que traria o registro errado em silêncio.
+  const solicitacaoId = params.get('solicitacao');
+
   useEffect(() => {
     let vivo = true;
-    Promise.all([
-      api.get('/compras/fornecedores', { params: { status: 'ativo' } }).then((r) => r.data || []),
-      api.get('/compras/pedidos-aux/opcoes').then((r) => r.data),
-      editando ? api.get(`/compras/pedidos/${id}`).then((r) => r.data) : Promise.resolve(null),
-    ])
-      .then(([forns, ops, pedido]) => {
-        if (!vivo) return;
-        setFornecedores(forns);
-        setOpcoes(ops);
-
-        if (pedido) {
-          setCab({
-            ...CABECALHO_VAZIO,
-            ...Object.fromEntries(Object.keys(CABECALHO_VAZIO)
-              .map((k) => [k, pedido[k] != null ? pedido[k] : CABECALHO_VAZIO[k]])),
-            fornecedor_id: pedido.fornecedor_id || '',
-          });
-          const its = (pedido.itens || []).map((i) => ({
-            ...LINHA_VAZIA, ...i,
-            material_nome: i.material_nome || i.descricao || '',
-            valor_unitario: i.valor_unitario ?? '',
-            ipi_percentual: i.ipi_percentual ?? 0,
-          }));
-          setItens(its);
-          // O IPI padrão do pedido aberto é o que a maioria dos itens usa.
-          if (its.length) {
-            const contagem = {};
-            its.forEach((i) => { contagem[i.ipi_percentual] = (contagem[i.ipi_percentual] || 0) + 1; });
-            const maisUsado = Object.entries(contagem).sort((a, b) => b[1] - a[1])[0][0];
-            setIpiPadrao(Number(maisUsado) || 0);
-          }
-        } else {
-          setCab((c) => ({ ...c, numero: ops.proximo_numero || '' }));
-        }
-      })
-      .catch((e) => {
-        if (!vivo) return;
-        if (editando) {
-          toast.error(e.response?.data?.error || 'Pedido não encontrado');
-          navigate('/compras/pedidos');
-        } else {
-          toast.error('Não foi possível carregar as opções do formulário');
-        }
-      })
-      .finally(() => { if (vivo) setCarregando(false); });
+    api.get('/compras/fornecedores')
+      .then((res) => { if (vivo) setFornecedores(res.data || []); })
+      .catch(() => { if (vivo) setErro('Não foi possível carregar os fornecedores.'); });
     return () => { vivo = false; };
-  }, [id, editando, navigate]);
-
-  /* ── busca de material (debounce), serve aos dois modais ────────── */
-  const buscandoMaterial = buscaLinha !== null || lote !== null;
-  useEffect(() => {
-    if (!buscandoMaterial) return undefined;
-    const t = setTimeout(() => {
-      api.get('/compras/pedidos-aux/materiais', { params: { search: busca || undefined } })
-        .then((r) => setMateriais(r.data || []))
-        .catch(() => setMateriais([]));
-    }, 250);
-    return () => clearTimeout(t);
-  }, [busca, buscandoMaterial]);
-
-  /* ── F2 abre a inclusão em lote ─────────────────────────────────── */
-  // Atalho pedido no e-mail ("com F2 abra esta aba"), que é como o Vision funciona.
-  const semMateriaisRef = useRef(false);
-  useEffect(() => {
-    const aoTeclar = (e) => {
-      if (e.key !== 'F2' || semMateriaisRef.current) return;
-      e.preventDefault();
-      setBusca('');
-      setLote({ selecionados: {} });
-    };
-    window.addEventListener('keydown', aoTeclar);
-    return () => window.removeEventListener('keydown', aoTeclar);
   }, []);
 
-  /* ── totais: SEMPRE do servidor ─────────────────────────────────── */
-  const pedidoRef = useRef();
-  pedidoRef.current = { itens, cab };
-
-  const recalcular = useCallback(() => {
-    const { itens: its, cab: c } = pedidoRef.current;
-    const temValor = its.some((i) => i.quantidade !== '' && i.valor_unitario !== '');
-    if (!temValor) {
-      setTotais({
-        ...TOTAIS_ZERO,
-        valor_frete: Number(c.valor_frete) || 0,
-        total_icms_st: Number(c.total_icms_st) || 0,
-        total_desconto: Number(c.total_desconto) || 0,
-      });
-      setLinhas([]);
+  useEffect(() => {
+    if (!edicao) {
+      // Pré-carga do fluxo da Reposição. Sem consulta nenhuma: a linha da Reposição já tem
+      // `material_id`, `material_nome` e `quantidade`, e o módulo Compras não tem porta de
+      // material por id (a busca é por texto, com LIMIT 50).
+      const materialParam = params.get('material');
+      if (materialParam) {
+        setItens([novaLinha({
+          material_id: Number(materialParam),
+          codigo: params.get('codigo') || '',
+          descricao: params.get('material_nome') || `Material #${materialParam}`,
+          unidade: params.get('unidade') || 'UN',
+          quantidade: params.get('quantidade') || '1',
+          valor_unitario: '',
+        })]);
+      }
       return;
     }
-    api.post('/compras/pedidos/calcular', {
-      total_icms_st: c.total_icms_st, valor_frete: c.valor_frete, total_desconto: c.total_desconto,
-      itens: its.map((i) => ({
-        quantidade: Number(i.quantidade) || 0,
-        valor_unitario: Number(i.valor_unitario) || 0,
-        ipi_percentual: Number(i.ipi_percentual) || 0,
-      })),
-    })
-      .then((r) => { setTotais(r.data.totais); setLinhas(r.data.itens || []); })
-      .catch(() => { /* a tela continua utilizável; o servidor decide no salvar */ });
-  }, []);
+    let vivo = true;
+    setCarregando(true);
+    api.get(`/compras/pedidos/${id}`)
+      .then((res) => {
+        if (!vivo) return;
+        const p = res.data || {};
+        setNumero(p.numero || '');
+        setFornecedorId(p.fornecedor_id == null ? '' : String(p.fornecedor_id));
+        setDataPedido((p.data_pedido || '').slice(0, 10));
+        setPrevisaoEntrega((p.previsao_entrega || '').slice(0, 10));
+        setStatus(p.status || 'pendente');
+        setObservacoes(p.observacoes || '');
+        // `=== 1` estrito: o contrato é NÚMERO 0|1 (o SQLite não tem boolean). Um `Boolean(p.x)`
+        // aceitaria a string '0' de um contrato futuro e travaria o formulário de todo pedido.
+        setSoStatus(p.teve_recebimento === 1);
+        setItens((p.itens || []).map((item) => novaLinha({
+          material_id: item.material_id,
+          codigo: item.codigo || '',
+          descricao: item.descricao || '',
+          unidade: item.unidade || 'UN',
+          quantidade: String(item.quantidade ?? ''),
+          valor_unitario: String(item.valor_unitario ?? ''),
+        })));
+      })
+      .catch((e) => { if (vivo) setErro(mensagemDeErro(e, 'Não foi possível carregar o pedido.')); })
+      .finally(() => { if (vivo) setCarregando(false); });
+    return () => { vivo = false; };
+    // `params` fora das dependências de propósito: a pré-carga por query é da MONTAGEM, e
+    // reexecutá-la a cada troca de query apagaria o que o comprador já digitou.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, edicao]);
 
-  useEffect(() => {
-    const t = setTimeout(recalcular, 350);
-    return () => clearTimeout(t);
-  }, [itens, cab.valor_frete, cab.total_icms_st, cab.total_desconto, recalcular]);
+  const buscarMateriais = useCallback(async () => {
+    setBuscando(true);
+    setErro('');
+    try {
+      const res = await api.get('/compras/materiais', { params: { search: termoMaterial } });
+      setMateriais(res.data || []);
+    } catch (e) {
+      setErro(mensagemDeErro(e, 'Não foi possível buscar materiais.'));
+    } finally {
+      setBuscando(false);
+    }
+  }, [termoMaterial]);
 
-  /* ── itens ──────────────────────────────────────────────────────── */
-  const mudarItem = (idx, campo, valor) =>
-    setItens((l) => l.map((it, i) => (i === idx ? { ...it, [campo]: valor } : it)));
-
-  const somarQtd = (idx, delta) => setItens((l) => l.map((it, i) => {
-    if (i !== idx) return it;
-    return { ...it, quantidade: Math.max(1, (Number(it.quantidade) || 0) + delta) };
-  }));
-
-  /** Converte um material do cadastro em linha de item, já com o IPI padrão do pedido. */
-  const linhaDeMaterial = (m, quantidade = 1) => ({
-    ...LINHA_VAZIA,
-    material_id: m.id,
-    material_nome: m.nome,
-    codigo: m.codigo || '',
-    descricao: m.nome || '',
-    unidade: m.unidade || 'UN',
-    ncm: m.ncm || '',
-    valor_unitario: m.custo_unitario || '',
-    ipi_percentual: ipiPadrao,
-    quantidade,
-  });
-
-  const escolherMaterial = (idx, m) => {
-    setItens((l) => l.map((it, i) => (i === idx
-      ? { ...linhaDeMaterial(m, Number(it.quantidade) || 1), ipi_percentual: it.ipi_percentual }
-      : it)));
-    setBuscaLinha(null);
-    setBusca('');
+  const adicionarMaterial = (material) => {
+    setItens((atuais) => [...atuais, novaLinha({
+      material_id: material.id,
+      codigo: material.codigo || '',
+      descricao: material.descricao || '',
+      unidade: material.unidade || 'UN',
+      quantidade: '1',
+      valor_unitario: '',
+    })]);
   };
 
-  const adicionarLinha = () =>
-    setItens((l) => [...l, { ...LINHA_VAZIA, ipi_percentual: ipiPadrao }]);
-
-  const removerLinha = (idx) =>
-    setItens((l) => (l.length === 1 ? [{ ...LINHA_VAZIA, ipi_percentual: ipiPadrao }] : l.filter((_, i) => i !== idx)));
-
-  /** Aplica o IPI padrão a TODOS os itens — o item pode divergir depois, em "detalhes". */
-  const aplicarIpiPadrao = (v) => {
-    const n = v === '' ? 0 : Number(v) || 0;
-    setIpiPadrao(n);
-    setItens((l) => l.map((it) => ({ ...it, ipi_percentual: n })));
+  const alterarItem = (chave, campo, valor) => {
+    setItens((atuais) => atuais.map((it) => (it.chave === chave ? { ...it, [campo]: valor } : it)));
   };
+  const removerItem = (chave) => setItens((atuais) => atuais.filter((it) => it.chave !== chave));
 
-  /* ── inclusão em lote ───────────────────────────────────────────── */
-  const marcarNoLote = (m) => setLote((lt) => {
-    const sel = { ...lt.selecionados };
-    if (sel[m.id] !== undefined) delete sel[m.id];
-    else sel[m.id] = 1;
-    return { ...lt, selecionados: sel };
-  });
+  const total = useMemo(
+    () => itens.reduce((soma, it) => soma + (Number(it.quantidade) || 0) * (Number(it.valor_unitario) || 0), 0),
+    [itens],
+  );
+  const temItemSemPreco = itens.some((it) => !(Number(it.valor_unitario) > 0));
 
-  const qtdNoLote = (id, valor) => setLote((lt) => ({
-    ...lt, selecionados: { ...lt.selecionados, [id]: valor },
-  }));
-
-  const confirmarLote = () => {
-    const escolhidos = Object.entries(lote.selecionados);
-    if (escolhidos.length === 0) { setLote(null); return; }
-
-    // `materiais` só tem a página atual da busca; o lote pode ter itens marcados numa busca
-    // anterior. Por isso a linha é montada a partir do que está em `materiaisDoLote`.
-    const novas = escolhidos.map(([idMat, qtd]) => {
-      const m = materiaisDoLote.current[idMat];
-      return m ? linhaDeMaterial(m, Number(qtd) || 1) : null;
-    }).filter(Boolean);
-
-    setItens((l) => {
-      // A primeira linha vazia do pedido é substituída, e não empurrada para o fim.
-      const semVaziaInicial = (l.length === 1 && !l[0].material_id) ? [] : l;
-      return [...semVaziaInicial, ...novas];
-    });
-    toast.success(`${novas.length} ${novas.length === 1 ? 'item adicionado' : 'itens adicionados'}`);
-    setLote(null);
-    setBusca('');
-  };
-
-  // Guarda os materiais já vistos, para o lote sobreviver a uma troca de busca.
-  const materiaisDoLote = useRef({});
-  useEffect(() => {
-    materiais.forEach((m) => { materiaisDoLote.current[m.id] = m; });
-  }, [materiais]);
-
-  const escolherFornecedor = (f) => {
-    setCampo('fornecedor_id', f.id);
-    setEscolhendoFornecedor(false);
-    setBuscaForn('');
-  };
-
-  /* ── salvar ─────────────────────────────────────────────────────── */
-  const salvar = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!String(cab.numero).trim()) return toast.error('Informe o número do pedido');
-    if (!cab.fornecedor_id) return toast.error('Escolha o fornecedor');
-    if (itens.some((i) => !i.material_id)) {
-      return toast.error('Todo item precisa de um material do cadastro');
+    setErro('');
+
+    // ── Etapa 39, F4: pedido JÁ RECEBIDO — o "Salvar pedido" é um PATCH de status ─────────────
+    //
+    // Sai ANTES da recusa de "sem item" e antes de montar o payload, e essa ordem é a regra: o
+    // corpo do `PUT` não serve aqui (ele traz `itens`, e mandá-los para uma porta que promete
+    // só-status seria a mentira que o `strip` do Zod conserta no servidor). O que este ramo manda
+    // é `{ status }` e nada mais.
+    if (edicao && soStatus) {
+      setSalvando(true);
+      try {
+        await api.patch(`/compras/pedidos/${id}/status`, { status });
+        toast.success(LITERAL_STATUS_ATUALIZADO);
+        navigate('/compras/pedidos');
+      } catch (err) {
+        setErro(mensagemDeErro(err, 'Não foi possível atualizar o status do pedido.'));
+      } finally {
+        setSalvando(false);
+      }
+      return;
     }
-    if (itens.some((i) => !(Number(i.quantidade) > 0))) {
-      return toast.error('Todo item precisa de uma quantidade maior que zero');
+
+    // A ÚNICA recusa local, e a literal é a do servidor (`inclua ao menos um item no pedido de
+    // compra`, com a inicial maiúscula da frase de tela). Vale a pena ser local porque um pedido
+    // sem linha é o defeito que a Fase 0 mediu em produção: cabeça gravada, item nenhum.
+    if (itens.length === 0) {
+      setErro(LITERAL_SEM_ITEM);
+      return;
     }
+    const payload = {
+      fornecedor_id: Number(fornecedorId),
+      data_pedido: dataPedido,
+      previsao_entrega: previsaoEntrega,
+      status,
+      observacoes,
+      itens: itens.map((it) => ({
+        material_id: Number(it.material_id),
+        quantidade: Number(it.quantidade),
+        valor_unitario: Number(it.valor_unitario) || 0,
+      })),
+    };
+    // Só na criação, e só quando veio pela Reposição: o `PUT` do servidor IGNORA `solicitacao_id`
+    // de propósito (vincular solicitação é ato da criação, e é lá que vive o gate de
+    // `gerenciar_reposicao`), então mandá-lo na edição só daria ruído.
+    if (!edicao && solicitacaoId) payload.solicitacao_id = Number(solicitacaoId);
 
     setSalvando(true);
     try {
-      const payload = {
-        ...cab,
-        fornecedor_id: Number(cab.fornecedor_id),
-        total_icms_st: Number(cab.total_icms_st) || 0,
-        valor_frete: Number(cab.valor_frete) || 0,
-        total_desconto: Number(cab.total_desconto) || 0,
-        itens: itens.map((i, idx) => ({
-          material_id: Number(i.material_id),
-          codigo: i.codigo || null,
-          descricao: i.descricao || null,
-          observacao: i.observacao || null,
-          ncm: i.ncm || null,
-          peso_unitario: Number(i.peso_unitario) || 0,
-          quantidade: Number(i.quantidade) || 0,
-          unidade: i.unidade || 'UN',
-          valor_unitario: Number(i.valor_unitario) || 0,
-          ipi_percentual: Number(i.ipi_percentual) || 0,
-          item_numero: idx + 1,
-        })),
-      };
-      const r = editando
-        ? await api.put(`/compras/pedidos/${id}`, payload)
-        : await api.post('/compras/pedidos', payload);
-      toast.success(`Pedido ${r.data.numero} ${editando ? 'atualizado' : 'criado'}!`);
+      if (edicao) {
+        await api.put(`/compras/pedidos/${id}`, payload);
+        toast.success('Pedido de compra atualizado');
+      } else {
+        const res = await api.post('/compras/pedidos', payload);
+        toast.success(`Pedido ${res.data?.numero || ''} criado`.trim());
+        if (res.data?.vinculo_solicitacao === 'falhou') {
+          toast.warn('O pedido foi criado, mas a solicitação não pôde ser vinculada.');
+        }
+      }
       navigate('/compras/pedidos');
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Erro ao salvar o pedido');
+    } catch (e) {
+      setErro(mensagemDeErro(e, 'Não foi possível salvar o pedido de compra.'));
     } finally {
       setSalvando(false);
     }
   };
 
-  if (carregando) return <div className="pcf-carregando">Carregando…</div>;
-
-  const fornecedorSel = fornecedores.find((f) => String(f.id) === String(cab.fornecedor_id));
-  const ops = opcoes || {};
-  const semMateriais = ops.total_materiais === 0;
-  semMateriaisRef.current = semMateriais;
-
-  const enderecoEmpresa = ops.empresa?.endereco || '';
-  const enderecoFornecedor = fornecedorSel
-    ? [fornecedorSel.endereco, fornecedorSel.cidade, fornecedorSel.estado, fornecedorSel.cep]
-      .filter(Boolean).join(' - ')
-    : '';
-
-  const BotoesLocal = ({ campo, outro, setOutro }) => {
-    const atual = cab[campo] || '';
-    const opcoesLocal = [
-      enderecoEmpresa && { valor: enderecoEmpresa, curto: `${ops.empresa?.nome || 'Nossa empresa'}` },
-      enderecoFornecedor && { valor: enderecoFornecedor, curto: 'Endereço do fornecedor' },
-    ].filter(Boolean);
-    const ehOutro = atual && !opcoesLocal.some((o) => o.valor === atual);
-
-    return (
-      <div className="pcf-chips-bloco">
-        <span className="pcf-chips-label">
-          {campo === 'local_entrega' ? 'Entregar em' : 'Cobrar em'}
-        </span>
-        <div className="pcf-chips">
-          {opcoesLocal.map((o) => (
-            <button type="button" key={o.valor}
-              className={`pcf-chip${atual === o.valor ? ' pcf-chip-ativo' : ''}`}
-              onClick={() => { setOutro(false); setCampo(campo, atual === o.valor ? '' : o.valor); }}>
-              {atual === o.valor && <FiCheck />}{o.curto}
-            </button>
-          ))}
-          <button type="button"
-            className={`pcf-chip${(outro || ehOutro) ? ' pcf-chip-ativo' : ''}`}
-            onClick={() => { setOutro(true); if (!ehOutro) setCampo(campo, ''); }}>
-            Outro endereço
-          </button>
-        </div>
-        {(outro || ehOutro) && (
-          <input className="pcf-input-solto" value={atual}
-            placeholder="Digite o endereço"
-            onChange={(e) => setCampo(campo, e.target.value)} />
-        )}
-        {atual && !outro && !ehOutro && <div className="pcf-escolhido">{atual}</div>}
-      </div>
-    );
+  /**
+   * Importação por planilha — o precedente MEDIDO desta base: o NAVEGADOR lê o `.xlsx` (`XLSX.read`,
+   * igual a `ItensFornecedor.js`) e o servidor recebe **JSON**. Nenhum upload de binário, nenhum
+   * multer novo.
+   *
+   * `sheet_to_json` (e não `aoa_to_sheet` invertido) porque a porta
+   * `POST /api/compras/pedidos/importar` espera **objetos** com o cabeçalho da planilha como chave,
+   * em qualquer grafia — quem normaliza as chaves e escolhe os candidatos é o servidor
+   * (`planilhaCompras.js`). `defval: ''` mantém a célula vazia como chave presente, senão uma
+   * coluna em branco na primeira linha mudaria o formato do objeto linha a linha.
+   */
+  const handleImportar = (e) => {
+    const arquivo = e.target.files?.[0];
+    if (!arquivo) return;
+    const input = e.target;
+    setImportando(true);
+    setErro('');
+    setResultadoImportacao(null);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      let linhas;
+      try {
+        const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        linhas = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      } catch (err) {
+        setErro('Erro ao ler arquivo. Use Excel (.xlsx, .xls) ou CSV.');
+        setImportando(false);
+        input.value = '';
+        return;
+      }
+      if (!linhas.length) {
+        setErro('A planilha não tem nenhuma linha de dados.');
+        setImportando(false);
+        input.value = '';
+        return;
+      }
+      api.post('/compras/pedidos/importar', { linhas })
+        .then((res) => {
+          setResultadoImportacao(res.data || {});
+          const criados = (res.data?.pedidos || []).length;
+          // O 201 pode ser um FRACASSO TOTAL (ver `LITERAL_NADA_IMPORTADO`): quando nada entrou, a
+          // tela diz isso, e em vermelho.
+          if (criados === 0) toast.error(LITERAL_NADA_IMPORTADO);
+          else toast.success(`${criados} pedido(s) importado(s)`);
+        })
+        .catch((err) => {
+          setErro(mensagemDeErro(err, 'Não foi possível importar a planilha.'));
+        })
+        .finally(() => { setImportando(false); input.value = ''; });
+    };
+    reader.readAsArrayBuffer(arquivo);
   };
 
-  const fornecedoresFiltrados = buscaForn.trim().length === 0
-    ? fornecedores
-    : fornecedores.filter((f) => `${f.razao_social} ${f.nome_fantasia || ''} ${f.cnpj || ''}`
-      .toLowerCase().includes(buscaForn.trim().toLowerCase()));
-
-  const itensCompletos = itens.filter((i) => i.material_id).length;
-  const marcadosNoLote = lote ? Object.keys(lote.selecionados).length : 0;
-
   return (
-    <div className="pcf">
-      <form onSubmit={salvar}>
-        <div className="pcf-topo">
-          <div>
-            <button type="button" className="pcf-voltar" onClick={() => navigate('/compras/pedidos')}>
-              <FiArrowLeft /> Voltar
-            </button>
-            <h1>{editando ? `Pedido ${cab.numero}` : 'Novo Pedido de Compra'}</h1>
-          </div>
-          <button type="submit" className="pcf-salvar" disabled={salvando}>
-            <FiSave /> {salvando ? 'Salvando…' : 'Salvar pedido'}
-          </button>
+    <div className="compras">
+      <div className="page-header">
+        <div>
+          <Link to="/compras/pedidos" className="btn-secondary" style={{ marginBottom: 8, display: 'inline-flex' }}>
+            <FiArrowLeft /> Voltar para pedidos
+          </Link>
+          <h1>{edicao ? 'Editar pedido de compra' : 'Novo pedido de compra'}</h1>
+          {edicao ? (
+            <p>Pedido <strong>{numero || `#${id}`}</strong> — o número não é editável.</p>
+          ) : (
+            <p>O número do pedido é gerado pelo sistema.</p>
+          )}
         </div>
-
-        {semMateriais && (
-          <div className="pcf-bloqueio">
-            <FiAlertTriangle />
-            <div>
-              <strong>Nenhum material cadastrado.</strong> Todo item do pedido precisa de um
-              material do cadastro, então não é possível salvar nada ainda.{' '}
-              <Link to="/almoxarifado/materiais">Cadastrar materiais</Link> primeiro.
-            </div>
+        {!edicao && (
+          <div className="header-actions">
+            <label className="btn-secondary" style={{ cursor: importando ? 'wait' : 'pointer' }}>
+              <FiUpload /> {importando ? 'Importando...' : 'Importar planilha'}
+              <input
+                data-testid="importar-planilha"
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleImportar}
+                style={{ display: 'none' }}
+              />
+            </label>
           </div>
         )}
+      </div>
 
-        {/* ── 1. fornecedor e número ────────────────────────────── */}
-        <section className="pcf-bloco">
-          <h2>1. Fornecedor</h2>
+      {erro && (
+        <div
+          role="alert"
+          style={{
+            background: 'rgba(231, 76, 60, 0.12)', color: '#c0392b', border: '1px solid #e74c3c',
+            borderRadius: 8, padding: '10px 14px', marginBottom: 16,
+          }}
+        >
+          {erro}
+        </div>
+      )}
 
-          {fornecedorSel ? (
-            <div className="pcf-forn-card">
-              <div>
-                <strong>{fornecedorSel.razao_social}</strong>
-                <span>
-                  {[fornecedorSel.cnpj, fornecedorSel.cidade, fornecedorSel.estado,
-                    fornecedorSel.telefone].filter(Boolean).join(' · ') || 'sem dados de contato'}
-                </span>
-              </div>
-              <button type="button" className="pcf-trocar"
-                onClick={() => setEscolhendoFornecedor(true)}>Trocar</button>
-            </div>
-          ) : (
-            <button type="button" className="pcf-escolher-grande"
-              onClick={() => setEscolhendoFornecedor(true)}>
-              <FiSearch /> Escolher fornecedor
-            </button>
-          )}
-
-          <div className="pcf-numero-linha">
-            <span className="pcf-chips-label">Número do pedido</span>
-            {editandoNumero ? (
-              <input className="pcf-input-solto pcf-input-numero" autoFocus value={cab.numero}
-                onChange={(e) => setCampo('numero', e.target.value)}
-                onBlur={() => setEditandoNumero(false)} />
+      {resultadoImportacao && (() => {
+        const pedidosCriados = resultadoImportacao.pedidos || [];
+        const ignorados = resultadoImportacao.ignorados || [];
+        const avisos = resultadoImportacao.avisos || [];
+        // Nada criado = fracasso, e a caixa tem de PARECER um fracasso: o verde num "0 pedidos
+        // criados" é o que fazia o operador ir embora achando que a carga funcionou.
+        const nadaCriado = pedidosCriados.length === 0;
+        return (
+          <div
+            data-testid="resultado-importacao"
+            style={{
+              background: nadaCriado ? 'rgba(231, 76, 60, 0.10)' : 'rgba(46, 204, 113, 0.10)',
+              border: `1px solid ${nadaCriado ? '#e74c3c' : '#2ecc71'}`,
+              borderRadius: 8, padding: '10px 14px', marginBottom: 16,
+            }}
+          >
+            <strong>{nadaCriado ? LITERAL_NADA_IMPORTADO : 'Importação concluída'}</strong>
+            <p>
+              {pedidosCriados.length} pedidos criados,{' '}
+              {resultadoImportacao.itens || 0} itens.
+            </p>
+            <ul>
+              {pedidosCriados.map((p) => (
+                <li key={p.id}>{p.numero} — {p.itens} itens</li>
+              ))}
+            </ul>
+            {ignorados.length > 0 ? (
+              <>
+                <strong>Linhas ignoradas</strong>
+                <ul data-testid="ignorados-lista">
+                  {ignorados.slice(0, TETO_LISTA).map((ig, i) => (
+                    <li key={`${ig.linha}-${i}`}>Linha {ig.linha}: {ig.motivo}</li>
+                  ))}
+                </ul>
+                {ignorados.length > TETO_LISTA && (
+                  <p data-testid="ignorados-restantes">{literalRestantes(ignorados.length - TETO_LISTA)}</p>
+                )}
+              </>
             ) : (
-              <span className="pcf-numero">
-                {cab.numero || '—'}
-                <button type="button" onClick={() => setEditandoNumero(true)} title="Alterar número">
-                  <FiEdit2 /> alterar
-                </button>
-              </span>
+              <p>Nenhuma linha ignorada.</p>
             )}
-            {!editando && <small>sugerido pelo sistema, continuando a sua numeração</small>}
+            {/* `avisos` (F3) é IRMÃO de `ignorados`, não substituto: a linha ENTROU no pedido e só
+                o campo ficou em branco — por isso a lista é outra, com o nome do campo. */}
+            {avisos.length > 0 && (
+              <>
+                <strong>Linhas importadas com aviso</strong>
+                <ul data-testid="avisos-lista">
+                  {avisos.slice(0, TETO_LISTA).map((av, i) => (
+                    <li key={`${av.linha}-${av.campo}-${i}`}>Linha {av.linha} ({av.campo}): {av.motivo}</li>
+                  ))}
+                </ul>
+                {avisos.length > TETO_LISTA && (
+                  <p data-testid="avisos-restantes">{literalRestantes(avisos.length - TETO_LISTA)}</p>
+                )}
+              </>
+            )}
           </div>
-        </section>
+        );
+      })()}
 
-        {/* ── 2. itens ──────────────────────────────────────────── */}
-        <section className="pcf-bloco">
-          <div className="pcf-bloco-topo">
-            <h2>2. O que está sendo comprado{itensCompletos > 0 ? ` (${itensCompletos})` : ''}</h2>
-            <div className="pcf-acoes-itens">
-              <button type="button" className="pcf-add pcf-add-destaque" disabled={semMateriais}
-                onClick={() => { setBusca(''); setLote({ selecionados: {} }); }}>
-                <FiLayers /> Adicionar vários <kbd>F2</kbd>
-              </button>
-              <button type="button" className="pcf-add" onClick={adicionarLinha} disabled={semMateriais}>
-                <FiPlus /> Adicionar um
-              </button>
-            </div>
-          </div>
-
-          {/* O IPI é do pedido, não do item: era o campo que mais se repetia em pedidos longos. */}
-          <Chips label="IPI dos itens" ajuda="vale para todos; dá para mudar item a item em “detalhes”"
-            opcoes={(ops.ipi || []).map((v) => ({ valor: v, curto: `${String(v).replace('.', ',')}%` }))}
-            valor={ipiPadrao} onChange={aplicarIpiPadrao}
-            permitirOutro tipoOutro="number" sufixoOutro="%" />
-
-          <div className="pcf-itens-lista">
-            {itens.map((it, idx) => {
-              const aberto = !!detalhesAbertos[idx];
-              const ipiDiverge = Number(it.ipi_percentual) !== Number(ipiPadrao);
-              return (
-                <div key={idx} className={`pcf-item${!it.material_id ? ' pcf-item-vazio' : ''}`}>
-                  <div className="pcf-item-linha">
-                    <span className="pcf-item-num">{idx + 1}</span>
-
-                    {it.material_id ? (
-                      <button type="button" className="pcf-item-material"
-                        onClick={() => { setBuscaLinha(idx); setBusca(''); }}>
-                        <strong>{it.material_nome}</strong>
-                        <small>{it.codigo}{it.ncm ? ` · NCM ${it.ncm}` : ''} · {it.unidade}</small>
-                      </button>
-                    ) : (
-                      <button type="button" className="pcf-item-material pcf-item-material-vazio"
-                        disabled={semMateriais}
-                        onClick={() => { setBuscaLinha(idx); setBusca(''); }}>
-                        <FiSearch /> Escolher material
-                      </button>
-                    )}
-
-                    <div className="pcf-stepper">
-                      <button type="button" onClick={() => somarQtd(idx, -1)} title="Menos um">
-                        <FiMinus />
-                      </button>
-                      <input type="number" min="0" step="any" value={it.quantidade}
-                        aria-label={`Quantidade do item ${idx + 1}`}
-                        onChange={(e) => mudarItem(idx, 'quantidade', e.target.value)} />
-                      <button type="button" onClick={() => somarQtd(idx, 1)} title="Mais um">
-                        <FiPlus />
-                      </button>
-                    </div>
-
-                    <input className="pcf-input-preco" type="number" min="0" step="0.0001"
-                      placeholder="0,00" value={it.valor_unitario}
-                      aria-label={`Preço unitário do item ${idx + 1}`}
-                      onChange={(e) => mudarItem(idx, 'valor_unitario', e.target.value)} />
-
-                    <strong className="pcf-item-total">
-                      {linhas[idx] ? moeda(linhas[idx].valor_linha) : '—'}
-                    </strong>
-
-                    <button type="button" className="pcf-item-detalhes"
-                      title="Unidade, IPI e observações deste item"
-                      onClick={() => setDetalhesAbertos((d) => ({ ...d, [idx]: !d[idx] }))}>
-                      {aberto ? <FiChevronUp /> : <FiChevronDown />}
-                      {ipiDiverge && <em title="IPI diferente do padrão">IPI {it.ipi_percentual}%</em>}
-                    </button>
-
-                    <button type="button" className="pcf-remover" title="Remover item"
-                      onClick={() => removerLinha(idx)}>
-                      <FiTrash2 />
-                    </button>
-                  </div>
-
-                  {aberto && (
-                    <div className="pcf-item-extra">
-                      <Chips label="Unidade" opcoes={ops.unidades || []} valor={it.unidade}
-                        onChange={(v) => mudarItem(idx, 'unidade', v || 'UN')} />
-
-                      <Chips label="IPI deste item" ajuda="em %"
-                        opcoes={(ops.ipi || []).map((v) => ({ valor: v, curto: `${String(v).replace('.', ',')}%` }))}
-                        valor={it.ipi_percentual}
-                        onChange={(v) => mudarItem(idx, 'ipi_percentual', v === '' ? 0 : v)}
-                        permitirOutro tipoOutro="number" sufixoOutro="%" />
-
-                      {/* Etapa 33 (RN-33.01): não há data de entrega por item — a entrega é do
-                          pedido, na seção "3. Entrega". */}
-
-                      <div className="pcf-livres">
-                        <label><span>Descrição no pedido</span>
-                          <input value={it.descricao}
-                            onChange={(e) => mudarItem(idx, 'descricao', e.target.value)} /></label>
-                        <label><span>Observação do item</span>
-                          <input value={it.observacao}
-                            onChange={(e) => mudarItem(idx, 'observacao', e.target.value)} /></label>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* ── 3. entrega ────────────────────────────────────────── */}
-        {/* Etapa 33 (RN-33.02): a entrega é UMA por pedido — previsão + local — e ganha
-            seção própria. Antes os dois viviam dentro de "Condições" e cada item tinha a sua
-            data, que ninguém usava no recebimento. "Cobrar em" fica em "Mais opções". */}
-        <section className="pcf-bloco">
-          <h2>3. Entrega</h2>
-
-          <div className="pcf-chips-bloco">
-            <span className="pcf-chips-label">Previsão de entrega</span>
-            <div className="pcf-chips">
-              {[['Em 7 dias', emDias(7)], ['Em 15 dias', emDias(15)], ['Em 30 dias', emDias(30)],
-                ['Em 45 dias', emDias(45)]].map(([rot, valor]) => (
-                  <button type="button" key={rot}
-                    className={`pcf-chip${cab.previsao_entrega === valor ? ' pcf-chip-ativo' : ''}`}
-                    onClick={() => setCampo('previsao_entrega', cab.previsao_entrega === valor ? '' : valor)}>
-                    {cab.previsao_entrega === valor && <FiCheck />}{rot}
-                  </button>
+      {carregando ? (
+        <div className="loading"><p>Carregando pedido...</p></div>
+      ) : (
+        <form data-testid="form-pedido-compra" onSubmit={handleSubmit} className="module-content">
+          {/* `role="alert"` como as demais mensagens desta tela: o comprador precisa saber POR QUE
+              os campos estão travados antes de tentar mexer neles. */}
+          {soStatus && (
+            <p data-testid="aviso-so-status" role="alert" style={{ color: '#b9770e' }}>
+              {LITERAL_SO_STATUS}
+            </p>
+          )}
+          <div className="filters" style={{ flexWrap: 'wrap', gap: 12 }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              Fornecedor
+              <select
+                data-testid="pedido-fornecedor"
+                value={fornecedorId}
+                onChange={(ev) => setFornecedorId(ev.target.value)}
+                disabled={soStatus}
+                className="filter-select"
+              >
+                <option value="">Selecione o fornecedor</option>
+                {fornecedores.map((f) => (
+                  <option key={f.id} value={f.id}>{f.razao_social}</option>
                 ))}
-              <input type="date" className="pcf-data-input" value={cab.previsao_entrega || ''}
-                onChange={(e) => setCampo('previsao_entrega', e.target.value)} />
-            </div>
-            {cab.previsao_entrega && <div className="pcf-escolhido">{dataCurta(cab.previsao_entrega)}</div>}
-          </div>
-
-          <BotoesLocal campo="local_entrega" outro={entregaOutro} setOutro={setEntregaOutro} />
-        </section>
-
-        {/* ── 4. condições ──────────────────────────────────────── */}
-        <section className="pcf-bloco">
-          <h2>4. Condições</h2>
-
-          <Chips label="Condição de pagamento" opcoes={ops.condicao_pagamento || []}
-            valor={cab.condicao_pagamento}
-            onChange={(v) => setCampo('condicao_pagamento', v)}
-            permitirOutro
-            ajuda="a que você digitar em “Outro” vira botão no próximo pedido" />
-
-          <Chips label="Quem paga o frete" opcoes={ops.frete_modalidade || []}
-            valor={cab.frete_modalidade}
-            onChange={(v) => setCampo('frete_modalidade', v)} />
-
-          <Chips label="Via de transporte" opcoes={ops.via_transporte || []}
-            valor={cab.via_transporte}
-            onChange={(v) => setCampo('via_transporte', v)} permitirOutro />
-        </section>
-
-        {/* ── 5. totais ─────────────────────────────────────────── */}
-        <section className="pcf-bloco">
-          <h2>5. Total</h2>
-          <div className="pcf-encargos">
-            <label><span>Frete (R$)</span>
-              <input type="number" min="0" step="0.01" placeholder="0,00" value={cab.valor_frete}
-                onChange={(e) => setCampo('valor_frete', e.target.value)} /></label>
-            <label><span>Desconto (R$)</span>
-              <input type="number" min="0" step="0.01" placeholder="0,00" value={cab.total_desconto}
-                onChange={(e) => setCampo('total_desconto', e.target.value)} /></label>
-            <label>
-              <span>ICMS ST (R$)</span>
-              <input type="number" min="0" step="0.01" placeholder="0,00" value={cab.total_icms_st}
-                onChange={(e) => setCampo('total_icms_st', e.target.value)} />
-              {/* A Compras informou que este lançamento é do Financeiro, na entrada da NF.
-                  Fica disponível, mas dito que normalmente não é preenchido aqui. */}
-              <small className="pcf-dica">normalmente lançado pelo Financeiro, na entrada da NF</small>
+              </select>
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              Data do pedido
+              <input
+                data-testid="pedido-data"
+                type="date"
+                value={dataPedido}
+                onChange={(ev) => setDataPedido(ev.target.value)}
+                disabled={soStatus}
+              />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              Previsão de entrega
+              <input
+                data-testid="pedido-previsao"
+                type="date"
+                value={previsaoEntrega}
+                onChange={(ev) => setPrevisaoEntrega(ev.target.value)}
+                disabled={soStatus}
+              />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              Status
+              <select
+                data-testid="pedido-status"
+                value={status}
+                onChange={(ev) => setStatus(ev.target.value)}
+                className="filter-select"
+              >
+                {STATUS.map((s) => <option key={s.valor} value={s.valor}>{s.label}</option>)}
+              </select>
             </label>
           </div>
 
-          <div className="pcf-totais">
-            <div><span>Produtos</span><strong>{moeda(totais.total_produtos)}</strong></div>
-            <div><span>IPI</span><strong>{moeda(totais.total_ipi)}</strong></div>
-            <div><span>ICMS ST</span><strong>{moeda(totais.total_icms_st)}</strong></div>
-            <div><span>Frete</span><strong>{moeda(totais.valor_frete)}</strong></div>
-            <div><span>Desconto</span><strong>{moeda(totais.total_desconto)}</strong></div>
-            <div className="pcf-total-geral">
-              <span>Total do pedido</span><strong>{moeda(totais.total_geral)}</strong>
+          <label style={{ display: 'block', margin: '12px 0' }}>
+            Observações
+            <textarea
+              data-testid="pedido-observacoes"
+              value={observacoes}
+              onChange={(ev) => setObservacoes(ev.target.value)}
+              disabled={soStatus}
+              rows={2}
+              style={{ width: '100%' }}
+            />
+          </label>
+
+          <h2>Itens do pedido</h2>
+          <div className="filters" style={{ gap: 8 }}>
+            <div className="search-box">
+              <FiSearch />
+              <input
+                data-testid="busca-material"
+                type="text"
+                disabled={soStatus}
+                placeholder="Buscar material por código ou descrição..."
+                value={termoMaterial}
+                onChange={(ev) => setTermoMaterial(ev.target.value)}
+                onKeyDown={(ev) => {
+                  // Enter no campo busca, e NÃO submete o pedido: um `type="submit"` implícito aqui
+                  // gravaria o pedido no primeiro Enter da busca de material.
+                  if (ev.key === 'Enter') { ev.preventDefault(); buscarMateriais(); }
+                }}
+              />
             </div>
+            {/* A busca é ato do usuário, não da digitação: a porta tem LIMIT 50 e um GET por tecla
+                seria uma consulta por caractere. */}
+            <button
+              data-testid="botao-buscar-material"
+              type="button"
+              className="btn-secondary"
+              onClick={buscarMateriais}
+              disabled={buscando || soStatus}
+            >
+              <FiSearch /> {buscando ? 'Buscando...' : 'Buscar material'}
+            </button>
           </div>
-        </section>
 
-        {/* ── 6. o que quase nunca muda ─────────────────────────── */}
-        <section className="pcf-bloco">
-          <button type="button" className="pcf-mais" onClick={() => setMaisOpcoes((v) => !v)}>
-            {maisOpcoes ? <FiChevronUp /> : <FiChevronDown />} Mais opções
-            <small>transportadora, cobrança, status, observações</small>
-          </button>
-
-          {maisOpcoes && (
-            <div className="pcf-mais-corpo">
-              <Chips label="Status do pedido" opcoes={STATUS} valor={cab.status}
-                onChange={(v) => setCampo('status', v || 'pendente')} />
-
-              <Chips label="Transportadora" opcoes={ops.transportadoras || []}
-                valor={cab.transportadora}
-                onChange={(v) => setCampo('transportadora', v)} permitirOutro />
-
-              {(ops.tabelas_preco || []).length > 0 && (
-                <Chips label="Tabela de preço" opcoes={ops.tabelas_preco} valor={cab.tabela_preco}
-                  onChange={(v) => setCampo('tabela_preco', v)} permitirOutro />
-              )}
-
-              <BotoesLocal campo="local_cobranca" outro={cobrancaOutro} setOutro={setCobrancaOutro} />
-
-              <div className="pcf-livres">
-                <label><span>Telefone da transportadora</span>
-                  <input
-                    value={cab.transportadora_telefone}
-                    /* Mascara compartilhada, e nao uma propria: o telefone da
-                       transportadora vai para o mesmo lugar que os demais, e
-                       dois formatos diferentes no banco quebram a busca. */
-                    onChange={(e) => setCampo('transportadora_telefone', mascararTelefoneDigitando(e.target.value))}
-                    onBlur={(e) => setCampo('transportadora_telefone', mascararTelefoneCompleto(e.target.value))}
-                    inputMode="tel"
-                  /></label>
-                <label><span>Contato no fornecedor</span>
-                  <input value={cab.contato}
-                    onChange={(e) => setCampo('contato', e.target.value)} /></label>
-                <label className="pcf-livre-full"><span>Observações do pedido</span>
-                  <textarea rows="2" value={cab.observacoes}
-                    onChange={(e) => setCampo('observacoes', e.target.value)} /></label>
-              </div>
+          {materiais.length > 0 && (
+            <div className="table-container">
+              <table className="data-table">
+                <thead>
+                  <tr><th>Código</th><th>Descrição</th><th>Unidade</th><th>Ações</th></tr>
+                </thead>
+                <tbody>
+                  {materiais.map((m) => (
+                    <tr key={m.id}>
+                      <td>{m.codigo}</td>
+                      <td>{m.descricao}</td>
+                      <td>{m.unidade}</td>
+                      <td>
+                        <button
+                          data-testid={`adicionar-material-${m.id}`}
+                          type="button"
+                          disabled={soStatus}
+                          className="btn-icon"
+                          title="Adicionar ao pedido"
+                          onClick={() => adicionarMaterial(m)}
+                        >
+                          <FiPlus />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
-        </section>
 
-        <div className="pcf-rodape">
-          <button type="submit" className="pcf-salvar" disabled={salvando}>
-            <FiSave /> {salvando ? 'Salvando…' : 'Salvar pedido'}
-          </button>
-        </div>
-      </form>
-
-      {/* ── inclusão em lote (F2) ───────────────────────────────── */}
-      {lote && (
-        <div className="pcf-modal-overlay" onClick={() => setLote(null)}>
-          <div className="pcf-modal pcf-modal-largo" onClick={(e) => e.stopPropagation()}>
-            <div className="pcf-modal-topo">
-              <h3>Adicionar vários itens</h3>
-              <button type="button" onClick={() => setLote(null)}>✕</button>
-            </div>
-            <div className="pcf-modal-busca">
-              <FiSearch />
-              <input autoFocus placeholder="Buscar por código ou nome…"
-                value={busca} onChange={(e) => setBusca(e.target.value)} />
-            </div>
-            <div className="pcf-lote-lista">
-              {materiais.length === 0 && (
-                <div className="pcf-busca-vazio">
-                  {semMateriais
-                    ? 'Nenhum material cadastrado no almoxarifado ainda.'
-                    : 'Nenhum material encontrado com esse termo.'}
-                </div>
-              )}
-              {materiais.map((m) => {
-                const marcado = lote.selecionados[m.id] !== undefined;
-                return (
-                  <div key={m.id} className={`pcf-lote-item${marcado ? ' pcf-lote-marcado' : ''}`}>
-                    <button type="button" className="pcf-lote-check" onClick={() => marcarNoLote(m)}>
-                      {marcado ? <FiCheck /> : <FiPlus />}
-                    </button>
-                    <button type="button" className="pcf-lote-nome" onClick={() => marcarNoLote(m)}>
-                      <strong>{m.codigo}</strong> {m.nome}
-                      <small>{m.unidade}{m.ncm ? ` · NCM ${m.ncm}` : ''}
-                        {m.custo_unitario ? ` · último custo ${moedaUnit(m.custo_unitario)}` : ''}</small>
-                    </button>
-                    {marcado && (
-                      <input className="pcf-lote-qtd" type="number" min="1" step="any"
-                        aria-label={`Quantidade de ${m.codigo}`}
-                        value={lote.selecionados[m.id]}
-                        onChange={(e) => qtdNoLote(m.id, e.target.value)} />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            <div className="pcf-modal-rodape">
-              <span>
-                {marcadosNoLote === 0 ? 'Nenhum item marcado'
-                  : `${marcadosNoLote} ${marcadosNoLote === 1 ? 'item marcado' : 'itens marcados'}`}
-              </span>
-              <button type="button" className="pcf-salvar" disabled={marcadosNoLote === 0}
-                onClick={confirmarLote}>
-                <FiPlus /> Adicionar ao pedido
-              </button>
-            </div>
+          <div className="table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Código</th><th>Descrição</th><th>Unidade</th>
+                  <th>Quantidade</th><th>Valor unitário</th><th>Subtotal</th><th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itens.length === 0 ? (
+                  <tr><td colSpan="7" className="no-data">Nenhum item adicionado</td></tr>
+                ) : itens.map((it) => (
+                  <tr key={it.chave}>
+                    <td>{it.codigo || '-'}</td>
+                    <td>{it.descricao || '-'}</td>
+                    <td>{it.unidade}</td>
+                    <td>
+                      <input
+                        data-testid={`qtd-item-${it.material_id}`}
+                        type="number"
+                        disabled={soStatus}
+                        min="0"
+                        step="any"
+                        value={it.quantidade}
+                        onChange={(ev) => alterarItem(it.chave, 'quantidade', ev.target.value)}
+                        style={{ width: 90 }}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        data-testid={`valor-item-${it.material_id}`}
+                        type="number"
+                        disabled={soStatus}
+                        min="0"
+                        step="any"
+                        value={it.valor_unitario}
+                        onChange={(ev) => alterarItem(it.chave, 'valor_unitario', ev.target.value)}
+                        style={{ width: 110 }}
+                      />
+                    </td>
+                    <td>{formatCurrency((Number(it.quantidade) || 0) * (Number(it.valor_unitario) || 0))}</td>
+                    <td>
+                      <button
+                        data-testid={`remover-item-${it.material_id}`}
+                        type="button"
+                        disabled={soStatus}
+                        className="btn-icon btn-danger"
+                        title="Remover item"
+                        onClick={() => removerItem(it.chave)}
+                      >
+                        <FiTrash2 />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
-      )}
 
-      {/* ── escolher UM material ────────────────────────────────── */}
-      {buscaLinha !== null && (
-        <div className="pcf-modal-overlay" onClick={() => setBuscaLinha(null)}>
-          <div className="pcf-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="pcf-modal-topo">
-              <h3>Escolher material — item {buscaLinha + 1}</h3>
-              <button type="button" onClick={() => setBuscaLinha(null)}>✕</button>
-            </div>
-            <div className="pcf-modal-busca">
-              <FiSearch />
-              <input autoFocus placeholder="Buscar por código ou nome…"
-                value={busca} onChange={(e) => setBusca(e.target.value)} />
-            </div>
-            <div className="pcf-busca-lista">
-              {materiais.length === 0 && (
-                <div className="pcf-busca-vazio">
-                  {semMateriais
-                    ? 'Nenhum material cadastrado no almoxarifado ainda.'
-                    : 'Nenhum material encontrado com esse termo.'}
-                </div>
-              )}
-              {materiais.map((m) => (
-                <button type="button" key={m.id} className="pcf-busca-item"
-                  onClick={() => escolherMaterial(buscaLinha, m)}>
-                  <strong>{m.codigo}</strong> {m.nome}
-                  <small>{m.unidade}{m.ncm ? ` · NCM ${m.ncm}` : ''}
-                    {m.custo_unitario ? ` · último custo ${moedaUnit(m.custo_unitario)}` : ''}</small>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+          {/* O aviso do preço 0 — medido na Fase 2: o recebimento da Etapa 37 herda o preço da
+              linha do pedido e só manda `custo_unitario` para o motor quando `> 0`. Preço 0 no
+              pedido = custo médio NÃO alimentado. O pedido sem preço continua aceito (é decisão);
+              o que não pode é o comprador não saber o que está deixando de acontecer. */}
+          {temItemSemPreco && itens.length > 0 && (
+            <p style={{ color: '#b9770e' }}>{LITERAL_AVISO_PRECO}</p>
+          )}
 
-      {escolhendoFornecedor && (
-        <div className="pcf-modal-overlay" onClick={() => setEscolhendoFornecedor(false)}>
-          <div className="pcf-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="pcf-modal-topo">
-              <h3>Escolher fornecedor</h3>
-              <button type="button" onClick={() => setEscolhendoFornecedor(false)}>✕</button>
-            </div>
-            {fornecedores.length > 8 && (
-              <div className="pcf-modal-busca">
-                <FiSearch />
-                <input autoFocus placeholder="Buscar por nome ou CNPJ…"
-                  value={buscaForn} onChange={(e) => setBuscaForn(e.target.value)} />
-              </div>
-            )}
-            <div className="pcf-busca-lista">
-              {fornecedoresFiltrados.length === 0 && (
-                <div className="pcf-busca-vazio">Nenhum fornecedor ativo encontrado.</div>
-              )}
-              {fornecedoresFiltrados.map((f) => (
-                <button type="button" key={f.id} className="pcf-busca-item"
-                  onClick={() => escolherFornecedor(f)}>
-                  <strong>{f.razao_social}</strong>
-                  <small>{[f.cnpj, f.cidade, f.estado].filter(Boolean).join(' · ')}</small>
-                </button>
-              ))}
-            </div>
+          <p><strong>Total: {formatCurrency(total)}</strong></p>
+
+          <div className="header-actions">
+            <button type="submit" className="btn-premium" disabled={salvando}>
+              <FiSave /> {salvando ? 'Salvando...' : 'Salvar pedido'}
+            </button>
           </div>
-        </div>
+        </form>
       )}
     </div>
   );

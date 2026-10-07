@@ -2,7 +2,26 @@
 
 > **Status:** 🟢 Etapa 4 completa — backend (2026-08-05) e tela (2026-08-06) ·
 > **Spec original:** seção 7
-> **Última atualização:** 2026-08-11 (auditoria spec×código)
+> **Última atualização:** 2026-10-02 (**Etapa 76** — liberar à mão (tela Reservas, total ou parcial) ou a reserva vencer
+> (`processar-expiracao`) recalcula o status da requisição dona, pela régua da 74 e sob a trava por material de todos os
+> materiais dela; a revisão estendeu a trava ao recálculo da chegada/liberação e do estorno; `4f51cdbd`, `a3f3195f`,
+> `66aa8e31`, `6d7c09cc`, Fase 5 `eb642441`. Continua 🟢; fora: o liberado não é redistribuído (C135), a saída
+> genérica que consome reserva de requisição (C136) e quem pode liberar reserva alheia (C137) — Etapa 77.)
+> Antes: 2026-10-02 (**Etapa 75** — a inspeção que aprova e a não conformidade que aceita reservam o
+> que liberaram para quem esperava, pelo mesmo miolo da 74 com o teto de cada porta; o solicitante é avisado; a conta
+> do "quanto falta" dos dois e-mails passou a ser a da reserva; a distribuição de um material é serializada (trava em
+> processo); `1b2a6959`, `f149977b`, `c4d9212c`, `c8c089cb`, `82b7fd75`, Fase 5 `655d75b8`/`936179b2`/`18405a2e`.
+> Continua 🟢; ~~falta liberar à mão / expirar recalcular o status — C127, Etapa 76~~ (*paga na Etapa 76*).)
+> Antes: 2026-10-02 (**Etapa 74** — a nota que dá entrada reserva o que chegou para quem esperava, na
+> ordem da fila de separação; o status acompanha a reserva (setas novas); o estorno da entrada solta só o necessário;
+> `/encerrar` e `/rejeitar-valor` passam a liberar reservas; `5462b68c`, `63e377e1`, `21f9306b`, `9af1691a`,
+> `00a5ff18`, `6792c8e0`, Fase 5 `65d9bc8f`/`eaef9ed1`. A linha da tabela de regras sobre a aprovação por valor sem
+> saldo **estava errada** desde a Etapa 73 — corrigida à vista. Continua 🟢; a inspeção que libera o retido ainda não
+> reserva — C126, Etapa 75.)
+> Antes: 2026-10-02 (**Etapa 73** — a aprovação automática passou a reservar como as outras duas
+> portas; a linha "Reserva automática ao aprovar requisição" estava errada para ela e foi corrigida à vista;
+> `6fc7122a`, Fase 5 `5ea57d03`/`851ef2cf`. Continua 🟢; falta reservar o que chega para quem esperava — C121, Etapa 74.)
+> Antes: 2026-08-11 (auditoria spec×código)
 > **Design da etapa:** `docs/superpowers/specs/2026-08-05-almoxarifado-etapa4-reservas-design.md`
 
 > ⚠️ **Correção de uma afirmação errada que estava aqui.** Este arquivo dizia
@@ -38,6 +57,52 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
 
 ### Backend
 - [x] Reserva automática ao aprovar requisição (liga 04→07; status `PARCIALMENTE/TOTALMENTE_RESERVADA`) — `6690c1a`
+  > ⚠️ **Esta linha estava errada até a Etapa 73** — corrigida à vista, não apagada. Valia para o `/aprovar` (Etapa 4) e o
+  > `/aprovar-valor` (Task 6), **não** para a terceira porta: a **aprovação automática** (`tentarAprovacaoAutomatica`,
+  > configuração `aprovacao_automatica`) gravava `APROVADO` com e sem saldo e **não reservava nada** (C122). Desde
+  > `6fc7122a` as três portas passam pela mesma `requisitionService.prepararPosAprovacao`: reserva + status
+  > (`*_RESERVADA` ou `AGUARDANDO_*`), com o gate de regras conferido antes de reservar. Fase 5 (`5ea57d03`, `851ef2cf`):
+  > o perdedor de duas aprovações simultâneas pelo último saldo deixa de ficar `APROVADO` sem reserva (recalcula), a
+  > falha no meio da reserva desfaz as próprias reservas (a automática fica `PENDENTE`, 201) e a reserva desconta o hold
+  > ATIVO que o item já tem (idempotente). Não reserva o que **chega** para quem esperava — C121, Etapa 74.
+- [x] **Reserva na chegada para quem esperava (Etapa 74, C121)** — base `5462b68c` (coluna
+  `reservas_material_almoxarifado.recebimento_id`, setas novas na máquina, `requisitionService.compararPrioridade`),
+  reserva `63e377e1` (`reservaChegadaService.reservarChegadaParaQuemEspera`, gancho nos dois `concluir*` do recebimento,
+  antes do aviso da 70), e-mail `21f9306b`, estorno + `/encerrar` + `/rejeitar-valor` `9af1691a`, painel `00a5ff18`,
+  integração `6792c8e0`, revisão do código `65d9bc8f` (estorno repetido/recusado não leva a reserva — recriação) e
+  `eaef9ed1` (recusa diz quem segura o reservado). **Escopo:** só a **nota de compra** (processar e aprovar direto); a
+  ordem é a da fila de separação; o teto é o que entrou livre desta nota; candidatas = `PODE_SEPARAR` (EM_SEPARACAO
+  inclusa); puladas a de liberação por valor bloqueante e a de material de cliente sem o projeto do dono; o status só é
+  recalculado (pela máquina) em quem ficou com reserva desta chamada. **Fica de fora:** ~~a inspeção que libera o retido
+  (C126, Etapa 75)~~ (*paga na Etapa 75 — item abaixo*); entradas que não são nota; ~~recalcular status ao liberar à
+  mão/expirar (C127)~~ (*paga na Etapa 76 — item abaixo*); backfill (B377).
+- [x] **Reserva na liberação da inspeção e da não conformidade (Etapa 75, C126)** — miolo único com teto injetado e a
+  retomada que não reconta o inspecionado `1b2a6959` (`distribuirParaQuemEspera`, `NOT EXISTS` na linha da inspeção —
+  B390), a inspeção `f149977b` (`reservarLiberacaoParaQuemEspera` + gancho em `decidirInspecao`, só com aprovado > 0),
+  a não conformidade `c4d9212c` (gancho em `decidirNaoConformidade`, só com efeito `LIBERADA`), o aviso ao solicitante
+  `c8c089cb` (mesmo evento da 70, dedupe por documento), integração `82b7fd75`, revisão do código `655d75b8` (régua
+  única `faltaDoItem` nos dois avisos — B393), `936179b2` (trava por material em processo — B394) e `18405a2e` (o aviso
+  segue a regra do dono — B395). **Escopo:** duas portas — a decisão da inspeção (a parte aprovada) e a NC que aceita
+  (`ACEITAR`/`ACEITAR_SOB_DESVIO`); teto = o que a decisão liberou, limitado ao disponível; a reserva leva o
+  `recebimento_id` da nota (o estorno da entrada a solta pela B374); dono = quem decidiu, pelo sistema (QUALIDADE não tem
+  `reservar`); best-effort — a decisão nunca cai por causa da reserva; respostas inalteradas. **Fica de fora:** o
+  desbloqueio avulso e o estorno de bloqueio avulso (B383); a aprovação no mesmo instante da decisão inverte a fila
+  (C131 — o `/aprovar` não passa pela trava); a trava vale para um processo só (C132, Postgres troca por trava no
+  banco); backfill (B391).
+- [x] **`/encerrar` e `/rejeitar-valor` liberam as reservas da requisição** — `9af1691a` (defeito anterior: terminavam a
+  requisição com a reserva ATIVA presa; as do passado: A38 (1)).
+- [x] **Liberar à mão ou a reserva vencer recalcula o status da requisição (Etapa 76, C127)** — base `4f51cdbd`
+  (`reservaChegadaService.recalcularStatusSobTrava` — a régua `recalcularStatusDeReserva` da 74 sob a trava por material
+  de **todos** os materiais da requisição, em ordem crescente — e `recalcularRequisicoesDasReservas`, que nunca lança),
+  a rota `a3f3195f` (gancho em `POST /reservas/:id/liberar`, depois da liberação, best-effort), o job `66aa8e31` (gancho
+  em `reservationService.processarExpiracao`, depois do lote, uma vez por requisição, só das que venceram; `require`
+  lazy por causa do ciclo), integração `6d7c09cc`, revisão do código `eb642441` (o recálculo da chegada/liberação 74/75
+  e o do estorno também passam pela trava — B398). **Escopo:** duas portas (liberar à mão, total ou parcial; vencer);
+  liberar tudo → `APROVADO`, parte → `PARCIALMENTE_RESERVADA`; `EM_SEPARACAO`/`PARCIALMENTE_ATENDIDA` não mudam; nenhuma
+  seta nova; respostas e cliente inalterados (B399). **Fica de fora:** redistribuir o liberado para quem esperava (B397 —
+  C135); a saída genérica que consome reserva de requisição (C136) e o perfil `PRODUCAO` que libera reserva alheia (C137)
+  — candidatos da Etapa 77; a inversão inspeção × aprovar (C131 — custo medido, B403); o passado (B404, A40); aviso ao
+  solicitante que perdeu a reserva.
 - [ ] Reserva por lote específico / número de série — **fora da Etapa 4**. Atualização (2026-08-11): a dependência de **lote** caiu — a feature 10 (lotes) foi entregue na Etapa 6 (2026-08-09/10), então reserva por lote ficou implementável; número de série continua dependendo da 6b
 - [x] Data de necessidade na reserva (`data_necessidade`) — `6690c1a`. **Prioridade** ficou fora: sem demanda concreta, `data_necessidade` cobre o ordenamento útil
 - [x] Expiração automática (`POST /reservas/processar-expiracao` + config `reserva_dias_validade`) — `6690c1a`. **Opt-in**: sem a config e sem `expira_em` explícito a reserva não expira, senão as reservas manuais existentes começariam a ser liberadas sozinhas. Alerta por e-mail fica com a feature 20
@@ -113,7 +178,38 @@ Os nomes abaixo são os reais — copiáveis para localizar o caso.
 | Cancelar não mexe em reserva manual de terceiro | `reservaCicloIntegracao` · *cancelar NÃO mexe em reserva manual de outro dono do mesmo material* |
 | Idempotência: liberar/consumir reserva já finalizada → 400 | `reservaConsumo` · *consumir reserva já CONSUMIDA → 400* · `reservaTransferenciaExpiracao` · *liberar reserva já liberada → 400 (idempotência)* · *expiração é idempotente: rodar de novo não libera nem desconta duas vezes* |
 | Aprovação **por valor** também reserva | `reservaPontasFaltantes` · *[aprovar-valor] com saldo total reserva os itens e derruba o disponível* |
-| Aprovação por valor sem saldo continua APROVADO (regressão) | `reservaPontasFaltantes` · *[aprovar-valor] sem saldo nenhum continua APROVADO e não cria reserva (regressão)* |
+| ~~Aprovação por valor sem saldo continua APROVADO (regressão)~~ — **esta linha estava errada desde a Etapa 73** (corrigida à vista, não apagada): o teste foi renomeado e a regra mudou (B359). O certo: **aprovação por valor sem saldo vai a AGUARDANDO_ESTOQUE/COMPRA e não cria reserva** | `reservaPontasFaltantes` · *[aprovar-valor] sem saldo nenhum vai a AGUARDANDO_ESTOQUE e não cria reserva (Etapa 73; era APROVADO)* |
+| **Etapa 74** — a nota reserva o que chegou livre para quem esperava (`recebimento_id`, origem REQUISICAO, dono = quem processou); status `*_RESERVADA` | `recebimentoReservaChegada` · *[RN-01] nota de 4 pelas seis portas: UMA reserva ATIVA de 4 para o item de R1…* |
+| A ordem é a da fila de separação (urgência → necessidade → mais antiga) | `recebimentoReservaChegada` · *[RN-02] R1 NORMAL (6, antes) e R2 URGENTE (3, depois)…* · *[RN-02] mesma urgencia…* |
+| Retido para inspeção não se reserva; só o que **esta** nota trouxe livre | `recebimentoReservaChegada` · *[RN-03]…* · *[RN-04] so o que ESTA nota trouxe…* · *[RN-04] saldo livre previo…* |
+| A aprovação automática criada depois não toma | `recebimentoReservaChegada` · *[RN-05] aprovacao automatica ligada…* |
+| O status acompanha pela máquina; EM_SEPARACAO ganha sem mudar status; terminais não ganham | `recebimentoReservaChegada` · *[RN-06]…* (três cenários) |
+| Pulada: liberação por valor bloqueante; material de cliente sem o projeto do dono | `recebimentoReservaChegada` · *[Fase 2] candidata com avaliacao de valor…* · *[RN-14 revista] material de cliente…* |
+| Idempotente; corrida no meio desfaz o excesso; cancelada no meio desfeita | `recebimentoReservaChegada` · *[RN-08]…* (três) · *[Fase 2] corrida no meio…* · *[RN-09] cancelada entre a leitura e a reserva…* |
+| O estorno da entrada solta só o necessário, da última na ordem, e só de quem não separou | `recebimentoReservaChegadaEstorno` · *[RN-11]…* · *[RN-11, Fase 2]…* |
+| O estorno que não acontece não leva a reserva (repetido, lote, falha depois, corrida) | `recebimentoReservaChegadaEstorno` · *[Fase 5]…* (quatro) |
+| A recusa do estorno diz quem segura o material reservado | `recebimentoReservaChegadaEstorno` · *[Fase 5] recusa por material RESERVADO (nao consumido) diz quem segura…* |
+| `/encerrar` e `/rejeitar-valor` liberam as reservas | `recebimentoReservaChegadaEstorno` · *[Fase 2] /encerrar…* · *[Fase 2] /rejeitar-valor…* |
+| Ponta a ponta | `recebimentoReservaChegadaIntegracao` (11 cenários, pelas rotas) |
+| **Etapa 75** — a inspeção que aprova reserva o aprovado para quem esperava, na ordem da fila (resposta inalterada) | `inspecaoReservaLiberacao` · *[RN-01] quem esperava fica com o que a inspecao aprovou…* · *[RN-02] R1 NORMAL (6, antes) e R2 URGENTE (3, depois)…* |
+| Só o que esta decisão liberou — nunca o reprovado nem saldo alheio | `inspecaoReservaLiberacao` · *[RN-03]…* (três: 3/1, entrada manual 1/3, reprovação total) |
+| A NC que aceita reserva; as outras decisões e o `SEM_BLOQUEIO` não | `ncReservaLiberacao` · *[RN-04]…* |
+| Best-effort; uma vez por decisão; a Qualidade reserva pelo sistema | `inspecaoReservaLiberacao` · *[RN-06]…* · *[RN-07]…* · *[RN-08]…* · `ncReservaLiberacao` · *[RN-06]…* · *[RN-07]…* |
+| O desbloqueio avulso não reserva (declarado) | `inspecaoReservaLiberacao` · *[RN-11] desbloqueio avulso do reprovado NAO reserva…* |
+| A retomada da nota não reconta o item inspecionado (B390) | `reservaLiberacaoBase` · *[RN-07/D8]…* (serviço e rota) |
+| O e-mail da liberação diz a verdade (L1/L0, dedupe por documento, toggle) | `inspecaoReservaLiberacaoAviso` · *[RN-09]…* (oito) · *[Fase 2] resultado PARCIAL…* |
+| Régua única do "quanto falta" nos dois e-mails (B393) | `reservaLiberacaoRevisaoFase5` · *[regua 75]…* · *[regua 74]…* · *[regua = miolo]…* |
+| Duas liberações (ou duas notas) do mesmo material ao mesmo tempo não zeram a fila (B394) | `reservaLiberacaoRevisaoFase5` · corridas 75 e 74 (5 rodadas) · *[corrida] o lock solta quando a distribuicao LANCA…* |
+| O e-mail segue a regra do dono (B395) | `reservaLiberacaoRevisaoFase5` · *[dono 75]…* · *[dono 74]…* |
+| Ponta a ponta (perfis reais: a Qualidade decide) | `inspecaoReservaLiberacaoIntegracao` (13 cenários, pelas rotas) |
+| **Etapa 76** — liberar à mão tudo → `APROVADO`; parte → `PARCIALMENTE_RESERVADA`; resposta inalterada | `reservaLiberarRecalculaStatus` · *[RN-01]…* · *[RN-02]…* (três) |
+| A reserva vencida recalcula, uma vez por requisição, depois do lote; a que falhou não é recalculada | `reservaExpiracaoRecalculaStatus` · *[RN-03]…* (quatro) |
+| Fora do conjunto não muda (EM_SEPARACAO, PARCIALMENTE_ATENDIDA); reserva manual não toca requisição | `reservaLiberarRecalculaStatus` · *[RN-04]…* (três) · `reservaExpiracaoRecalculaStatus` · *[RN-04]…* (três) |
+| Best-effort: o recálculo nunca derruba a liberação nem o job | `reservaLiberarRecalculaStatus` · *[RN-05]…* · `reservaExpiracaoRecalculaStatus` · *[RN-05]…* · `reservaRecalculoBase` · *(e)…* |
+| O recálculo roda sob a trava (corrida com a nota do mesmo material; dois materiais; dois itens do mesmo material não travam) | `reservaRecalculoBase` · *(f)…* · *(g)…* · *(i)…* · `reservaLiberarRecalculaStatus` · *[RN-07]…* |
+| O recálculo da chegada/liberação e do estorno também sob a trava (B398) | `reservaRecalculoRevisaoFase5` · *(a)…* · *(b)…* · *(c)…* |
+| Perfil inalterado (QUALIDADE não libera; job só ADMINISTRADOR); transferir não recalcula (declarado) | `reservaLiberarRecalculaStatus` · *[RN-06]…* · *[RN-08]…* · `reservaExpiracaoRecalculaStatus` · *[RN-06]…* |
+| Ponta a ponta (liberar, nota, vencer, separar, entregar — perfis reais) | `reservaRecalculoIntegracao` (7 cenários, pelas rotas) |
 | Excluir requisição libera as reservas dela | `reservaPontasFaltantes` · *excluir requisição libera as reservas dela e devolve ao disponível* |
 | Excluir não toca reserva manual de terceiro | `reservaPontasFaltantes` · *excluir NÃO mexe em reserva manual de outro dono do mesmo material* |
 

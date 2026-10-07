@@ -16,6 +16,7 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import LotesAlmoxarifado from './LotesAlmoxarifado';
 import api from '../../services/api';
+import { toast } from 'react-toastify';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -285,9 +286,20 @@ describe('LotesAlmoxarifado', () => {
   // modal.
   // Review final da Etapa 6: nao basta AFIRMAR que ha certificado — ele tem de ser abrivel. Antes
   // o arquivo era gravado e nunca visualizavel: a tela so o lia como booleano.
-  test('lote com certificado ja anexado oferece um link para abrir o arquivo', async () => {
+  // ⚠️ Etapa 33: o fixture e a asserção MUDARAM, e a mudança é o ponto.
+  // Antes o fixture trazia `certificado_arquivo` (o NOME do arquivo) e o teste exigia
+  // `href === '/api/uploads/almoxarifado/certificado-123.pdf'` — ou seja, congelava como contrato
+  // que a tela MONTA o endereço a partir do nome. Desde a Etapa 33 o diretório exige assinatura e
+  // só o servidor a emite: uma URL montada aqui daria 404. A tela passou a consumir
+  // `certificado_url`, que vem pronto e assinado, e o teste passou a exigir que a **query seja
+  // preservada** — é isso que reprova se alguém voltar a mutilar a URL no helper.
+  test('lote com certificado ja anexado oferece um link para abrir o arquivo ASSINADO', async () => {
+    const URL_ASSINADA = '/api/uploads/almoxarifado/certificado-123.pdf?exp=99999999999&sig=abc123def456abc123def456abc12345';
     lotesDoBanco = [{
-      ...LOTE_ATIVO, certificado_arquivo: 'certificado-123.pdf', certificado_em: '2026-08-01T10:00:00Z',
+      ...LOTE_ATIVO,
+      certificado_arquivo: 'certificado-123.pdf',
+      certificado_url: URL_ASSINADA,
+      certificado_em: '2026-08-01T10:00:00Z',
     }];
     await renderizar();
     await selecionarMaterial();
@@ -295,8 +307,23 @@ describe('LotesAlmoxarifado', () => {
 
     const link = linhas()[0].querySelector('a[href*="certificado-123.pdf"]');
     expect(link).toBeTruthy();
-    expect(link.getAttribute('href')).toBe('/api/uploads/almoxarifado/certificado-123.pdf');
+    // Igualdade EXATA: a query não pode ser cortada, reordenada nem re-encodada no caminho.
+    expect(link.getAttribute('href')).toBe(URL_ASSINADA);
     expect(link.getAttribute('target')).toBe('_blank');
+  });
+
+  // Metade negativa do contrato novo, e ela não existia: com `certificado_arquivo` presente mas
+  // SEM `certificado_url`, a tela não pode inventar um link. Sem este cenário, um componente que
+  // voltasse a montar a URL a partir do nome passaria no teste acima (o `href*=` casaria) e só
+  // quebraria na tela do usuário, com 404.
+  test('lote com certificado mas SEM url assinada nao inventa link', async () => {
+    lotesDoBanco = [{
+      ...LOTE_ATIVO, certificado_arquivo: 'certificado-123.pdf', certificado_em: '2026-08-01T10:00:00Z',
+    }];
+    await renderizar();
+    await selecionarMaterial();
+    const link = linhas()[0].querySelector('a[href*="uploads/almoxarifado"]');
+    expect(link).toBeNull();
   });
 
   test('lote sem certificado nao afirma ter um anexado', async () => {
@@ -650,5 +677,125 @@ describe('LotesAlmoxarifado — deep-link (destino dos QRs) e etiquetas', () => 
     await clicarAcao(0, 'etiqueta');
     expect(container.querySelector('.almox-modal-header h2').textContent).toBe('Imprimir etiquetas');
     expect(container.textContent).toMatch(/1 etiqueta/);
+  });
+});
+
+// ─── Etapa 50 (C71): o físico e o "sem lote atribuído" ─────────────────────────────────────
+describe('Etapa 50: resumo fisico x atribuido', () => {
+  let resumoDoBanco;
+  let resumoFalha;
+  beforeEach(() => {
+    resumoDoBanco = { fisico: 70, soma_lotes: 100, sem_lote_atribuido: -30 };
+    resumoFalha = false;
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [MATERIAL] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/lotes`) return Promise.resolve({ data: lotesDoBanco });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/lotes/resumo`) {
+        return resumoFalha ? Promise.reject(new Error('falhou')) : Promise.resolve({ data: resumoDoBanco });
+      }
+      return Promise.resolve({ data: [] });
+    });
+  });
+  const bloco = () => container.querySelector('[data-testid="resumo-sem-lote"]');
+
+  test('residuo -30: o bloco mostra sem lote e fisico, com o texto, e a tabela continua', async () => {
+    await renderizar();
+    await selecionarMaterial();
+    expect(bloco().textContent).toContain('Sem lote atribuído: -30 PC');
+    expect(bloco().textContent).toContain('Físico total do material: 70 PC');
+    expect(bloco().textContent).toContain('O saldo de cada lote é o atribuído a ele');
+    expect(linhas().length).toBe(4);
+  });
+
+  test('residuo 0: o bloco NAO aparece — a tela fica igual a de antes (metade positiva: a tabela esta la)', async () => {
+    resumoDoBanco = { fisico: 63, soma_lotes: 63, sem_lote_atribuido: 0 };
+    await renderizar();
+    await selecionarMaterial();
+    expect(bloco()).toBeNull();
+    expect(linhas().length).toBe(4);
+  });
+
+  test('LEGADO sem lote nenhum: "Nenhum lote cadastrado" E o bloco com o fisico inteiro', async () => {
+    lotesDoBanco = [];
+    resumoDoBanco = { fisico: 40, soma_lotes: 0, sem_lote_atribuido: 40 };
+    await renderizar();
+    await selecionarMaterial();
+    expect(container.textContent).toContain('Nenhum lote cadastrado para este material');
+    expect(bloco()).not.toBeNull();
+    expect(bloco().textContent).toContain('Sem lote atribuído: 40 PC');
+  });
+
+  test('falha no resumo: a tabela continua e NAO ha toast de erro dos lotes', async () => {
+    resumoFalha = true;
+    await renderizar();
+    await selecionarMaterial();
+    expect(bloco()).toBeNull();
+    expect(linhas().length).toBe(4);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  test('Fase 5: na aba Series o bloco NAO aparece', async () => {
+    await renderizar();
+    await selecionarMaterial();
+    expect(bloco()).not.toBeNull();
+    const btnSeries = [...container.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Séries');
+    await act(async () => { btnSeries.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await esperarEfeitos();
+    expect(bloco()).toBeNull();
+  });
+
+  test('Fase 5: resposta ATRASADA do material anterior nao pinta o bloco do novo', async () => {
+    let liberarA;
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [MATERIAL, MATERIAL_2] });
+      if (url.endsWith('/lotes')) return Promise.resolve({ data: [] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/lotes/resumo`) {
+        return new Promise((r) => { liberarA = () => r({ data: { fisico: 70, soma_lotes: 100, sem_lote_atribuido: -30 } }); });
+      }
+      if (url === `/almoxarifado/materiais/${MATERIAL_2.id}/lotes/resumo`) {
+        return Promise.resolve({ data: { fisico: 5, soma_lotes: 5, sem_lote_atribuido: 0 } });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await selecionarMaterial(MATERIAL.id);
+    await selecionarMaterial(MATERIAL_2.id);
+    await act(async () => { liberarA(); });
+    await esperarEfeitos();
+    expect(bloco()).toBeNull();
+  });
+
+  test('Fase 5 (M3): enquanto o NOVO material nao responde, o bloco do anterior nao fica na tela', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [MATERIAL, MATERIAL_2] });
+      if (url.endsWith('/lotes')) return Promise.resolve({ data: [] });
+      if (url === `/almoxarifado/materiais/${MATERIAL.id}/lotes/resumo`) {
+        return Promise.resolve({ data: { fisico: 70, soma_lotes: 100, sem_lote_atribuido: -30 } });
+      }
+      if (url === `/almoxarifado/materiais/${MATERIAL_2.id}/lotes/resumo`) return new Promise(() => {}); // nunca responde
+      return Promise.resolve({ data: [] });
+    });
+    await renderizar();
+    await selecionarMaterial(MATERIAL.id);
+    expect(bloco()).not.toBeNull(); // a metade positiva: o A tinha bloco
+    await selecionarMaterial(MATERIAL_2.id);
+    expect(bloco()).toBeNull();
+  });
+
+  test('Fase 5: "Atualizar" busca o resumo de novo e mostra o valor novo', async () => {
+    await renderizar();
+    await selecionarMaterial();
+    expect(bloco().textContent).toContain('Sem lote atribuído: -30 PC');
+    resumoDoBanco = { fisico: 60, soma_lotes: 100, sem_lote_atribuido: -40 };
+    const atualizar = [...container.querySelectorAll('button')].find((b) => b.textContent.includes('Atualizar'));
+    await act(async () => { atualizar.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await esperarEfeitos();
+    expect(bloco().textContent).toContain('Sem lote atribuído: -40 PC');
+  });
+
+  test('sem material selecionado: nenhum GET de resumo', async () => {
+    await renderizar();
+    await esperarEfeitos();
+    expect(api.get.mock.calls.filter(([u]) => String(u).endsWith('/lotes/resumo'))).toEqual([]);
   });
 });

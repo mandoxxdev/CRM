@@ -55,11 +55,16 @@ export const CustosViagens = page(() => import('../components/CustosViagens'));
 export const OrdensServicoComercial = page(() => import('../components/OrdensServicoComercial'));
 export const OSComercialForm = page(() => import('../components/OSComercialForm'));
 export const Compras = page(() => import('../components/Compras'));
-export const PedidoCompraForm = page(() => import('../components/compras/PedidoCompraForm'));
-export const FornecedorForm = page(() => import('../components/compras/FornecedorForm'));
 export const ComprasSolicitacoesCompra = page(() => import('../components/ComprasSolicitacoesCompra'));
+// Etapa 38, Task 5: a tela de criacao/edicao de pedido de compra. Entra aqui, e nao por import
+// direto no App.js, para seguir o code-splitting de todas as outras paginas do modulo.
+export const PedidoCompraForm = page(() => import('../components/compras/PedidoCompraForm'));
+// Etapa 40, Task 4: a tela de fornecedor — mesmo motivo do PedidoCompraForm acima.
+export const FornecedorForm = page(() => import('../components/compras/FornecedorForm'));
 export const GruposFornecedores = page(() => import('../components/GruposFornecedores'));
 export const FornecedoresDoGrupo = page(() => import('../components/FornecedoresDoGrupo'));
+// Etapa 40, Task 5: a tela de criacao/edicao de cotacao, pelo mesmo code-splitting das outras.
+export const CotacaoForm = page(() => import('../components/compras/CotacaoForm'));
 export const ItensFornecedor = page(() => import('../components/ItensFornecedor'));
 export const Financeiro = page(() => import('../components/Financeiro'));
 export const Fabrica = shell(() => import('../components/Fabrica'), 'operacional');
@@ -136,6 +141,7 @@ export const MovimentacoesAlmoxarifado = page(() => import('../components/almoxa
 export const ConferenciaEstoque = page(() => import('../components/almoxarifado/ConferenciaEstoque'));
 export const RequisicoesList = page(() => import('../components/almoxarifado/RequisicoesList'));
 export const RequisicaoForm = page(() => import('../components/almoxarifado/RequisicaoForm'));
+export const FilaSeparacao = page(() => import('../components/almoxarifado/FilaSeparacao'));
 export const RequisicoesMaterialNovaPage = page(
   () => import('../components/almoxarifado/RequisicoesMaterialPages').then((m) => ({
     default: m.RequisicoesMaterialNovaPage,
@@ -152,6 +158,7 @@ export const RecebimentosAlmoxarifado = page(() => import('../components/almoxar
 export const ScannerAlmoxarifado = page(() => import('../components/almoxarifado/ScannerAlmoxarifado'));
 export const ReservasAlmoxarifado = page(() => import('../components/almoxarifado/ReservasAlmoxarifado'));
 export const InspecoesAlmoxarifado = page(() => import('../components/almoxarifado/InspecoesAlmoxarifado'));
+export const NaoConformidadesAlmoxarifado = page(() => import('../components/almoxarifado/NaoConformidadesAlmoxarifado'));
 export const LotesAlmoxarifado = page(() => import('../components/almoxarifado/LotesAlmoxarifado'));
 export const DevolucoesAlmoxarifado = page(() => import('../components/almoxarifado/DevolucoesAlmoxarifado'));
 export const MateriaisClienteAlmoxarifado = page(() => import('../components/almoxarifado/MateriaisClienteAlmoxarifado'));

@@ -162,12 +162,23 @@ Quando um teste novo passa de primeira, rode um **controle positivo**: quebre a 
 propósito e confirme que o teste **fica vermelho**. Regras do harness de sabotagem, todas
 aprendidas por falha silenciosa aqui:
 
-- **Use `python3`, nunca `python`.** O binário é `/usr/bin/python3`; o alias `python` **não
-  existe**, e um heredoc chamando `python` vira **no-op silencioso** — foi assim que quatro
-  sabotagens da Etapa 8b "passaram" sem sabotar nada. A versão anterior desta regra dizia
-  "`python` não existe nesta máquina" e **mandava evitar a ferramenta mais confiável
-  disponível**; a revisão adversarial da Etapa 22 pegou isso usando `python3` sem problema
-  algum. O erro real era o alias, não a linguagem.
+- **Antes de qualquer sabotagem por script, prove que o interpretador existe.** O que importa
+  não é a linguagem, é que o binário **execute**: um heredoc para um comando que não existe (ou
+  que é só um alias) vira **no-op silencioso** — foi assim que quatro sabotagens da Etapa 8b
+  "passaram" sem sabotar nada (alias `python`), e foi assim de novo na Etapa 35, pela causa
+  oposta: **na máquina Windows deste projeto, `python3` no Git Bash é o alias da Microsoft
+  Store** (`AppData/Local/Microsoft/WindowsApps/python3`), que imprime *"Python was not found;
+  run without arguments to install from the Microsoft Store…"* e **não executa nada**. A versão
+  anterior desta regra dizia "use `python3`, nunca `python`" — **estava certa no princípio e
+  errada nesta máquina**. Caminho padrão aqui: `perl -0pi -e` (`/usr/bin/perl` existe) ou `sed`,
+  com âncora contada e `md5sum` (abaixo). Se for usar um interpretador, `command -v` e uma
+  execução trivial (`perl -e 'print 1'`) **antes** da sabotagem.
+- **Nunca restaure com `git checkout -- <arquivo>` enquanto houver conserto ainda não
+  commitado nesse arquivo.** As sabotagens rodam **antes** do commit da task, então o
+  `checkout` descarta a sabotagem **e o conserto** juntos — e o `git diff --stat` vazio, que
+  esta regra manda exigir, passa a ser **erro**, não sucesso. Achado da T5 da Etapa 35. Restaure
+  por `perl`/`sed` inverso ou por cópia de segurança no scratchpad, e confira que o `md5sum`
+  volta ao valor **pós-conserto**, não ao de HEAD.
 - Conte a âncora antes de aplicar `sed`: `grep -cF '<ancora>' arquivo` **tem de dar exatamente 1**.
   Se der 0 ou mais de 1, **aborte** — já houve sabotagem aplicada na tabela errada por casar a 1ª
   de 4 ocorrências.

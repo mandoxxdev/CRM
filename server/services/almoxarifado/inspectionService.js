@@ -29,6 +29,16 @@ const alertRegistry = require('./alertRegistry');
 // ter duas reguas para o mesmo fato.
 const { avaliarMedida, paraNumeroFinito } = require('./toleranciaInspecao');
 const { calibracaoVigente } = require('./toolService');
+// Etapa 43 (T3, RN-07): a regua de "isto e divergencia de verdade" tem dono unico desde a Etapa
+// 10b. `EPSILON_DIVERGENCIA` para a derivacao em JS e `divergenciaRealSql` para a mesma derivacao
+// dentro do SQL da fila — um `!= 0` aqui documentaria como divergente quem contou CERTO (7e-16 de
+// ruido de IEEE-754 em material fracionado).
+const { EPSILON_DIVERGENCIA, divergenciaRealSql } = require('./divergencia');
+// Etapa 43 (T3, D4/D9): a NC da inspecao reprovada. Require de TOPO porque foi MEDIDO que nao ha
+// ciclo (`nonConformityService` so requer db/divergencia/numeroDoc/audit). Pelo OBJETO do modulo,
+// NAO desestruturado, pelo mesmo motivo do `notificationQueueService` acima: o teste de
+// nao-fatalidade monkeypatcha `abrirNaoConformidadeDeInspecao` em tempo de execucao.
+const nonConformityService = require('./nonConformityService');
 
 const ENCAMINHAMENTOS = ['DEVOLVER', 'ANALISE_ENGENHARIA', 'SUBSTITUICAO'];
 
@@ -224,6 +234,20 @@ async function decidirInspecao(db, user, itemId, data = {}) {
     ? (medidasResolvidas.some((m) => !m.conforme) ? 1 : 0)
     : (data.divergencia_dimensional ? 1 : 0);
 
+  // Etapa 43 (RN-07 / D3) — `divergencia_quantidade` passa a ser DERIVADA do item, e o payload e
+  // IGNORADO. Ate aqui era `data.divergencia_quantidade ? 1 : 0`: uma coluna que a spec descrevia
+  // como FATO e que era so um checkbox, ao lado de `conforme` e `divergencia_dimensional`, que ja
+  // eram derivados — a mesma classe de defeito do `reserva_id` da feature 07. O item ja esta
+  // carregado aqui, com as duas quantidades ao lado; nao havia razao para perguntar a opiniao de
+  // quem inspecionou sobre um numero que o banco sabe.
+  // `quantidade_recebida` nula e 0 e nao 1: ninguem conferiu ainda, e "nao conferido" nao e
+  // "divergente" (mesma RN-03 do gancho do recebimento).
+  // As outras tres flags (`certificado_ausente`, `dano_fisico`, `material_incorreto`) continuam
+  // AUTO-DECLARADAS de proposito: ninguem as calcula, elas sao observacao de quem olhou a peca.
+  const divergenciaQuantidade = item.quantidade_recebida == null
+    ? 0
+    : (Math.abs(Number(item.quantidade_recebida) - Number(item.quantidade_esperada)) > EPSILON_DIVERGENCIA ? 1 : 0);
+
   // Fase 1 — reivindica o retido do ITEM. E o guarda real contra decidir o mesmo item duas
   // vezes (inclusive concorrente): a segunda tentativa le quantidade_em_inspecao=0 e este UPDATE
   // nao casa, ANTES de tocar no saldo do material.
@@ -272,7 +296,7 @@ async function decidirInspecao(db, user, itemId, data = {}) {
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
     itemId,
     reprovada === 0 ? 1 : 0,
-    data.divergencia_quantidade ? 1 : 0, divergenciaDimensional,
+    divergenciaQuantidade, divergenciaDimensional,
     data.certificado_ausente ? 1 : 0, data.dano_fisico ? 1 : 0, data.material_incorreto ? 1 : 0,
     data.acao || null, user.id, user.nome || user.email, data.observacoes || null,
     aprovada, reprovada, data.encaminhamento || null,
@@ -321,6 +345,41 @@ async function decidirInspecao(db, user, itemId, data = {}) {
     }
   }
 
+  // Etapa 43 (T3, D4/D9) — o DOCUMENTO da reprovacao, DEPOIS do INSERT e DEPOIS do aviso: a
+  // posicao e a mesma do gancho do recebimento (D4), para que uma falha do gancho novo nao possa
+  // afetar o e-mail que ja existia. Nao fatal pelo mesmo motivo do aviso acima: os dois claims e o
+  // INSERT ja aconteceram, e um `throw` aqui devolveria erro para uma decisao que JA moveu saldo —
+  // o inspetor decidiria de novo e a segunda tentativa seria recusada por "item ja decidido".
+  // UMA NC por inspecao, com o `tipo` pela prioridade declarada do D9: quem decide isso e o
+  // servico, nao este ponto de chamada.
+  if (reprovada > 0) {
+    try {
+      await nonConformityService.abrirNaoConformidadeDeInspecao(db, user, ins.lastID);
+    } catch (e) {
+      console.warn('[almoxarifado-nc] Falha ao abrir nao conformidade pos-inspecao '
+        + `(inspecao ${ins.lastID}): ${e.message}`);
+    }
+  }
+
+  // Etapa 75 (T1, C126, D5/B387) — a parte APROVADA vai para quem esperava (na ordem da fila), pelo mesmo
+  // miolo da reserva na chegada (74), com o teto desta decisão. Depois do aviso e da NC, antes do
+  // `return`: os dois claims e o INSERT já aconteceram, então nada aqui pode desfazer a decisão — o
+  // `aposLiberacaoSemFalhar` nunca lança, e o `try` abaixo cobre até a falha de carga do módulo. Resposta
+  // inalterada. `require` lazy: o reservaChegadaService puxa o motor e a requisição; carga fria medida
+  // nas duas ordens (reservaLiberacaoBase). Sem efeito quando nada foi aprovado (a guarda só evita a
+  // chamada — o serviço também devolve vazio com quantidade 0).
+  if (aprovada > 1e-9) {
+    try {
+      const reservaChegadaService = require('./reservaChegadaService');
+      await reservaChegadaService.aposLiberacaoSemFalhar(db, user, {
+        origem: 'INSPECAO', documento_id: ins.lastID, documento_numero: null,
+        material_id: item.material_id, quantidade: aprovada, recebimento_id: item.recebimento_id,
+      });
+    } catch (e) {
+      console.warn(`[almoxarifado-reservas] reserva na liberacao falhou (INSPECAO ${ins.lastID}): ${e.message}`);
+    }
+  }
+
   // `divergencia_dimensional` volta no retorno DE PROPOSITO (campo novo, aditivo): com medidas ela
   // pode ser o contrario do que o payload mandou, e sem ela quem chamou nao teria como saber que a
   // marcacao manual foi ignorada — a tela mostraria uma coisa e o banco guardaria outra, que e
@@ -330,6 +389,11 @@ async function decidirInspecao(db, user, itemId, data = {}) {
     quantidade_aprovada: aprovada,
     quantidade_reprovada: reprovada,
     divergencia_dimensional: divergenciaDimensional,
+    // Etapa 43 (RN-07, aditivo de contrato): o valor DERIVADO volta na resposta pelo mesmo motivo
+    // da dimensional — ele pode ser o contrario do que o payload mandou, e sem ele a tela mostraria
+    // uma coisa e o banco guardaria outra. Nome congelado: e o que o toast de
+    // `InspecoesAlmoxarifado.js:237` le.
+    divergencia_quantidade: divergenciaQuantidade,
     medidas_registradas: medidasResolvidas ? medidasResolvidas.length : 0,
   };
 }
@@ -385,10 +449,22 @@ async function desbloquearMaterial(db, user, materialId, data = {}) {
  * material que virou critico DEPOIS de outro recebimento nao aparece so por o material ter saldo
  * em quarentena de outro item; e um item decidido (mesmo parcialmente) sai da fila porque
  * decidirInspecao sempre baixa o retido do item por inteiro numa unica decisao.
+ *
+ * Etapa 43 (T3, D3): a fila passa a devolver `quantidade_esperada`, `quantidade_recebida` e a
+ * flag `divergencia_quantidade` JA DERIVADA NO SERVIDOR. A tela LE a flag; ela NAO recalcula —
+ * pre-visualizar a divergencia no client exigiria uma segunda copia da regua, o que a nota da B60
+ * ja vetou por escrito. Sem estes tres campos a caixa somente-leitura da tela nasceria desmarcada,
+ * ou seja, MENTINDO quando ha divergencia.
+ * A derivacao usa `divergenciaRealSql` (a propria regua, importada) em vez de um `!= 0` escrito
+ * aqui: `10.0000000001 - 10` viraria "divergente" e a tela acusaria quem contou certo.
  */
 async function listarInspecoesPendentes(db, filtros = {}) {
   let sql = `SELECT ri.id as item_id, ri.recebimento_id, ri.material_id,
       ri.quantidade_em_inspecao as quantidade_retida,
+      ri.quantidade_esperada, ri.quantidade_recebida,
+      CASE WHEN ri.quantidade_recebida IS NULL THEN 0
+           WHEN ${divergenciaRealSql('ri.quantidade_recebida - ri.quantidade_esperada')} THEN 1
+           ELSE 0 END AS divergencia_quantidade,
       m.codigo as material_codigo, m.nome as material_nome, m.unidade as material_unidade,
       r.numero as recebimento_numero, r.nota_fiscal, r.created_at as data_entrada
     FROM recebimentos_material_itens_almoxarifado ri

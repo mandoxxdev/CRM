@@ -135,8 +135,15 @@ let seq = 0;
     const res = await enviarFoto(matId, 'primeira.png');
     assert.strictEqual(res.status, 200, `esperava 200, veio ${res.status}: ${JSON.stringify(res.body)}`);
     assert.ok(res.body.foto, 'resposta sem `foto`');
-    assert.strictEqual(res.body.foto_url, `/api/uploads/almoxarifado/${res.body.foto}`,
+    // ⚠️ Etapa 33: esta asserção era `strictEqual(foto_url, '/api/uploads/almoxarifado/' + foto)`,
+    // e a igualdade EXATA deixou de valer — a URL agora carrega `?exp=&sig=`, porque o mount
+    // legado parou de ser público (furo C42). O que o cenário guarda continua o mesmo: a resposta
+    // aponta para o arquivo que acabou de ser gravado. A presença de `exp` e `sig` entra como
+    // asserção própria, senão a etapa poderia devolver URL crua e este teste não notaria.
+    assert.ok(res.body.foto_url.startsWith(`/api/uploads/almoxarifado/${res.body.foto}?`),
       `foto_url fora do contrato: ${JSON.stringify(res.body)}`);
+    assert.match(res.body.foto_url, /[?&]exp=\d+/, 'foto_url sem exp');
+    assert.match(res.body.foto_url, /[?&]sig=[0-9a-f]{32}/, 'foto_url sem assinatura');
     assert.deepStrictEqual(Object.keys(res.body).sort(), ['foto', 'foto_url'],
       `a forma da resposta mudou: ${JSON.stringify(res.body)}`);
 

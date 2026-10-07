@@ -26,13 +26,25 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Chromium para Puppeteer (PDF de propostas e OS) - Alpine usa apk, nao apt
+#
+# `tzdata` (Etapa 39, onda de correcao F1): a musl do Alpine NAO embute base de fusos. Sem este
+# pacote, o `ENV TZ` abaixo e ignorado em silencio e o processo volta para UTC - o sintoma some do
+# log e nao some do produto. As DUAS linhas, nunca uma so.
 RUN apk add --no-cache \
     chromium \
     nss \
     freetype \
     harfbuzz \
     ca-certificates \
-    ttf-freefont
+    ttf-freefont \
+    tzdata
+
+# Fuso do negocio no processo inteiro: sem isto o contêiner roda em UTC e todo `new Date()` local
+# do servidor pula para o dia seguinte as 21h BRT. NAO afeta `date('now')` do SQLite (sempre UTC) e
+# NAO e do que a regua de atraso depende - `hojeLocalISO` recorta o dia por `Intl` com o fuso
+# constante, exatamente para nao depender de configuracao de deploy. Isto aqui e o cinto; o
+# suspensorio esta no codigo.
+ENV TZ=America/Sao_Paulo
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium

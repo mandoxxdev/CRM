@@ -1,6 +1,14 @@
 # 15 — Retalhos, Sobras e Sucatas
 
-> **Status:** 🟢 — **Etapa 9 entregue (2026-08-16, `b727c0a..4ba94e2` + commits de documentação).**
+> **Status:** 🟢 — **+ Etapa 69 (2026-10-01): o material REPROVADO na inspeção vai para o sucateamento** — a não
+> conformidade decidida Sucatear ganha *Solicitar sucateamento* (`POST /nao-conformidades/:id/solicitar-sucateamento`,
+> gate `movimentar`), o sucateamento ligado à NC (`nao_conformidade_id`) passa pelas mesmas duas assinaturas e a segunda
+> baixa a `SUCATA` **do bloqueado** (`doBloqueado` no motor, físico e bloqueado juntos), com o estorno pelo livro
+> recusado — `99bbce4`, `db8fa69`, `419b5a7`, `ff4d8e9`, `b3c75e5`, `7c0676c` + fix-round `c517248`/`827d655`. O
+> sucateamento **comum** (do disponível) **não mudou** — e a medição achou que, na reprovação parcial, ele baixa material
+> bom no lugar do reprovado (furo **C96** das novidades, decisão **B307**). O item novo do checklist abaixo; a feature
+> continua 🟢 (o único `[ ]` segue sendo o e-mail, da feature 19).
+> **Antes — Etapa 9 entregue (2026-08-16, `b727c0a..4ba94e2` + commits de documentação).**
 > Retalho é estoque de verdade (material normal no motor + anexo dimensional), sucateamento é
 > processo com dupla aprovação segregada e baixa pelo motor, tela `/almoxarifado/sobras` com as
 > duas visões, etiqueta de retalho com QR. O único item do checklist fora do escopo é o e-mail —
@@ -67,6 +75,12 @@ assinatura). A pré-checagem de disponível existe, e fica, na **solicitação**
 - Tipos de localização preveem área de sucata e de retalhos ("transferir para área de sucata" é
   `TRANSFERENCIA` para uma localização desse tipo — já existia desde a Etapa 7, não foi duplicado
   no processo).
+  ⚠️ **Correção (Etapa 68): esta linha ESTAVA ERRADA.** `TIPOS_LOCALIZACAO` não tinha nenhum dos dois
+  tipos (medido na Fase 0 da Etapa 68: 13 rótulos, nenhum de sucata nem de retalho). O que existia
+  desde a Etapa 7 era só a `TRANSFERENCIA` para qualquer endereço. **A Etapa 68 criou `Área de
+  sucata`** (`14cc17a`) e fez o sucateamento aprovado baixar dela quando o saldo ali cobre a
+  quantidade inteira (`e79d8b5`). **`Área de retalhos` continua não existindo, por decisão (B286):**
+  retalho é estoque aproveitável comum, guardado em endereço normal — o tipo seria só rótulo.
 
 ## Checklist
 
@@ -88,6 +102,18 @@ assinatura). A pré-checagem de disponível existe, e fica, na **solicitação**
 - [x] Registro de venda ou descarte com comprovante anexo (multipart no molde do certificado de lote, VENDIDA exige valor) — `bc34819`
 - [x] Relatório financeiro de sucata lendo o **livro** (inclui devolução-destino-sucata; valoração pelo custo atual com nota de limitação; vendas reais somadas; total por classificação) — `bc34819`
 - [ ] E-mail no sucateamento — **fora do escopo da Etapa 9, declarado no design (decisão 16)**: vai para a **feature 19** junto com os demais e-mails do módulo (mesmo padrão das etapas 8/8b/8c). Não é esquecimento; está desmarcado porque não foi entregue aqui
+- [x] **Sucatear o material REPROVADO na inspeção** (item novo, Etapa 69 — a cadeia "quarentena → inspeção → reprovar →
+      sucatear" da especificação original, seção 19) — motor `99bbce4` (`SUCATA` com `doBloqueado`: baixa físico e
+      `quantidade_bloqueada` no mesmo UPDATE; recusa *"Sucateamento acima do que está bloqueado: há ⟨b⟩ ⟨un⟩
+      bloqueado(s) (físico: ⟨a⟩)"*; estorno recusado por `referencia = 'SUC-'||id` + `nao_conformidade_id`), lado da NC
+      `db8fa69` (viabilidade pura `sucateamentoDoReprovadoPrevisto`, `/executar` de SUCATEAR que recusa ensinando, as
+      três portas sobre o bloqueado olhando os três carimbos da inspeção), sucateamento e rota `419b5a7` (solicitação
+      derivada da inspeção, segunda assinatura baixando do bloqueado com compensação, origem pela área de sucata — com
+      lote — ou pelo endereço de entrada), telas `ff4d8e9` (NC) e `b3c75e5` (selo *Origem: NC-…* na fila), integração
+      `7c0676c`, fix-round `c517248` (o lote do reprovado é conferido antes) e `827d655` (material de cliente recusa
+      ensinando). **Escopo:** a quantidade reprovada inteira, do lote da inspeção; série recusada; material de cliente
+      só pela API (a janela não tem OS/projeto). **O sucateamento comum NÃO mudou** (decisão **B307**): na reprovação
+      parcial ele continua aceitando e baixando do disponível — fixado por teste e avisado (**C96**, consulta **A33**).
 
 ### Frontend
 - [x] Tela de sobras/retalhos: consulta por material/dimensão/status, gerar retalho (dois modos + atalho criar material), editar, etiqueta, extrato, selo de proprietário — `e27abe8`
@@ -101,6 +127,9 @@ assinatura). A pré-checagem de disponível existe, e fica, na **solicitação**
 | Retalho herda lote/corrida do original | `retalho referencia lote original` (`retalhoGeracao.api.test.js`) | ✅ `15dd000` |
 | Sucateamento sem dupla aprovação falha | `sucatear sem aprovacao falha` (`sucateamentoAprovacao.api.test.js` + recusa da v2 em `sucataDedicada.api.test.js`) | ✅ `d5821ac`/`a30ce6f` |
 | Sucata sai do estoque disponível | `material sucateado fora do disponivel` (`sucateamentoAprovacao.api.test.js`) | ✅ `a30ce6f` |
+| A sucata do reprovado baixa do **bloqueado** (físico e bloqueado juntos), recusa acima do bloqueado e não se estorna pelo livro | `sucataBloqueadoMotor.api.test.js` (10 cenários) | ✅ `99bbce4` |
+| Solicitar pela NC deriva material/quantidade/lote, as duas assinaturas baixam do bloqueado, compensação na falha | `sucateamentoReprovado.api.test.js` (16) e, ponta a ponta pelas rotas com sete usuários, `sucateamentoReprovadoIntegracao.api.test.js` (12) | ✅ `419b5a7`, `7c0676c`, `c517248`, `827d655` |
+| O sucateamento **comum** na reprovação parcial continua baixando do disponível (comportamento declarado, **B307**) | cenário (10) de `sucateamentoReprovadoIntegracao.api.test.js` | ✅ `7c0676c` (fixado) |
 
 Arquivos de teste criados pela etapa: `sobras.api.test.js`, `retalhoTipo.api.test.js`,
 `retalhoGeracao.api.test.js`, `retalhoRotas.api.test.js`, `sucataDedicada.api.test.js`,
@@ -126,7 +155,9 @@ client: `SobrasAlmoxarifado.test.js` + casos novos em `etiquetasPdf.test.js`.
   não declara `exigeLote` porque o payload não tem campo "lote do retalho" (decisão do cliente de
   2026-08-10: a exigência vale só onde existe COMO informar). Mesma família dos quatro fluxos
   internos isentos da spec 10.
-- **Estorno da baixa SUCATA não reconcilia o processo** (decisão de deferir, review final): estornar
+- **Estorno da baixa SUCATA não reconcilia o processo** — *(desde a Etapa 69 vale só para o sucateamento
+  **comum**: a sucata do reprovado, ligada a uma não conformidade, tem o estorno pelo livro **recusado** — `99bbce4`,
+  decisão B298)* — (decisão de deferir, review final): estornar
   a movimentação pelo livro deixa o sucateamento em APROVADO/VENDIDA apontando para uma movimentação
   cancelada, e o relatório continua somando o `valor_venda` de uma sucata cuja baixa foi desfeita —
   divergência silenciosa entre processo e livro; reconciliar é design da 9b.

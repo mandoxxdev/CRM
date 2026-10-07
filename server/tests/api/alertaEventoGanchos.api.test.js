@@ -331,6 +331,20 @@ async function conferenciaContada(app, db, { qtdSistema, contada }) {
     const doGancho = (await filaPorHash(db, hashReceb))[0];
     assert.ok(doGancho, 'setup: o gancho enfileirou');
     await dbRun(db, 'DELETE FROM fila_notificacoes_almoxarifado WHERE id = ?', [doGancho.id]);
+    // ⚠️ ATUALIZADO NA ETAPA 43 (T4, D6), e o motivo fica A VISTA porque a mudanca e de PAPEL, nao
+    // de forma: a partir da 43 o cartao/varredura de `DIVERGENCIA_RECEBIMENTO` EXCLUI o item que ja
+    // virou `NC-…` (senao o mesmo item aparece em dois avisos e o usuario aprende a ignorar os
+    // dois). O gancho da T3 abriu a NC no mesmo `PUT /fiscal` acima, entao sem este DELETE a
+    // varredura corretamente NAO regeneraria nada e a assercao de RN-01 mediria a exclusao em vez
+    // do dedupe.
+    //
+    // Apagar a NC nao enfraquece o cenario: ele passa a medir o estado EXATO em que a varredura e
+    // rede de seguranca — o gancho de NC (nao fatal) falhou, a quantidade divergente ficou gravada
+    // SEM documento, e a varredura do dia seguinte tem de cobrar com o MESMO hash e o MESMO corpo
+    // do aviso do ato. O contrato de RN-01 (gancho e rede contam a MESMA historia) continua
+    // inteiro; o cenario A1 logo acima, que e o que a Etapa 17 pagou, nao foi tocado.
+    await dbRun(db, `DELETE FROM nao_conformidades_almoxarifado
+      WHERE referencia_tipo = 'RECEBIMENTO_ITEM' AND referencia_id = ?`, [itemId]);
     await queueService.varrerAlertasRegistrados(db);
     const daVarredura = (await filaPorHash(db, hashReceb))[0];
     assert.ok(daVarredura, 'a varredura tem de gerar o MESMO hash do gancho (RN-01)');

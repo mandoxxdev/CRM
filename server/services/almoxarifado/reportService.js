@@ -1,9 +1,10 @@
 const { dbAll, dbGet } = require('./db');
-const { disponivelSql } = require('./availabilitySql');
+const { disponivelSql, COLUNAS_RETENCAO } = require('./availabilitySql');
 const { valorEstoqueSql, custoUnitarioSql } = require('./custoSql');
 const { divergenciaRealSql } = require('./divergencia');
 const { consumoJanelaSql, consumoJanelaParams } = require('./consumoSql');
 const { TIPOS_SAIDA, TIPOS_DEVOLUCAO } = require('./movementTypes');
+const { residualSemLote } = require('./lotService');
 
 async function relatorioEstoqueAtual(db) {
   // Etapa 8, Task 1 (classe A): relatorio de posicao do estoque PROPRIO. valor_total somando
@@ -15,6 +16,110 @@ async function relatorioEstoqueAtual(db) {
     FROM materiais_almoxarifado m
     WHERE m.ativo = 1 AND m.proprietario_cliente_id IS NULL
     ORDER BY m.categoria, m.nome`);
+}
+
+// ── Etapa 49 — relatórios de saldo ─────────────────────────────────────────────────────────
+// As três chaves INCLUEM material de cliente (coluna Cliente): lote, série e retenção de material
+// de cliente são justamente o que o almoxarife precisa ver. O que `relatorioEstoqueAtual` exclui é
+// a VALORIZAÇÃO, e nenhuma destas valoriza (desenho da etapa, seção 6).
+const CLIENTE_SQL = 'COALESCE(cl.nome_fantasia, cl.razao_social)';
+const EPS_SALDO = 1e-9;
+
+/**
+ * RN-01 (corrigida na Fase 2): saldo ATRIBUÍDO por lote, mais a linha "Sem lote atribuído".
+ * Os fluxos isentos de lote (entrega de requisição, AJUSTE absoluto, internos) gravam na linha
+ * `lote_id NULL` de estoque_saldo — o saldo de um lote NÃO é o que está na prateleira. A invariante
+ * que vale é a do material inteiro: Σ linhas = quantidade_atual. Por isso a linha residual
+ * (`quantidade_atual − Σ lotes`, PODE ser negativa) e a coluna do físico total.
+ */
+async function relatorioSaldoPorLote(db) {
+  const lotes = await dbAll(db, `SELECT m.id as material_id, m.codigo as material_codigo, m.nome as material_nome,
+      ${CLIENTE_SQL} as cliente, m.quantidade_atual as fisico_material,
+      l.id as lote_id, l.codigo as lote, l.data_validade as validade, l.status as status_lote,
+      SUM(s.quantidade) as quantidade
+    FROM estoque_saldo_almoxarifado s
+    JOIN lotes_almoxarifado l ON l.id = s.lote_id
+    JOIN materiais_almoxarifado m ON m.id = s.material_id
+    LEFT JOIN clientes cl ON cl.id = m.proprietario_cliente_id
+    WHERE m.ativo = 1
+    GROUP BY s.material_id, l.id
+    ORDER BY m.nome, l.codigo`);
+
+  const porMaterial = new Map();
+  for (const l of lotes) {
+    if (!porMaterial.has(l.material_id)) porMaterial.set(l.material_id, { base: l, soma: 0, linhas: [] });
+    const g = porMaterial.get(l.material_id);
+    g.soma += Number(l.quantidade) || 0;
+    // Fase 5 (I1): |saldo| e não saldo > 0 — com `permite_saldo_negativo` o motor deixa um lote
+    // negativar de propósito, e escondê-lo enquanto ele entra na conta fazia a tela somar 10 com o
+    // físico em 5. Só o lote EXATAMENTE zerado some.
+    if (Math.abs(Number(l.quantidade) || 0) > EPS_SALDO) g.linhas.push(l);
+  }
+
+  // Fase 5 (I2): material com controle de lote que NUNCA teve lote (o legado que ganhou o controle
+  // depois de já ter estoque) não tinha linha nenhuma — enquanto o de lote zerado aparecia com o
+  // residual. Os dois estão no mesmo estado; entram os dois, com o físico inteiro sem lote.
+  const semLoteNenhum = await dbAll(db, `SELECT m.id as material_id, m.codigo as material_codigo,
+      m.nome as material_nome, ${CLIENTE_SQL} as cliente, m.quantidade_atual as fisico_material
+    FROM materiais_almoxarifado m
+    LEFT JOIN clientes cl ON cl.id = m.proprietario_cliente_id
+    WHERE m.ativo = 1 AND m.controle_lote = 1 AND ABS(COALESCE(m.quantidade_atual, 0)) > ${EPS_SALDO}
+      AND NOT EXISTS (SELECT 1 FROM estoque_saldo_almoxarifado s JOIN lotes_almoxarifado l ON l.id = s.lote_id
+                      WHERE s.material_id = m.id)
+    ORDER BY m.nome`);
+  for (const m of semLoteNenhum) {
+    porMaterial.set(m.material_id, { base: m, soma: 0, linhas: [] });
+  }
+
+  const saida = [];
+  for (const { base, soma, linhas } of porMaterial.values()) {
+    // Etapa 50: a conta do residuo e a da tela de Lotes (lotService.residualSemLote) - fonte unica.
+    const semLote = residualSemLote(base.fisico_material, soma);
+    for (const l of linhas) {
+      saida.push({
+        material_codigo: l.material_codigo, material_nome: l.material_nome, cliente: l.cliente,
+        lote: l.lote, validade: l.validade, status_lote: l.status_lote,
+        quantidade: l.quantidade, fisico_material: l.fisico_material,
+      });
+    }
+    if (semLote !== 0) {
+      saida.push({
+        material_codigo: base.material_codigo, material_nome: base.material_nome, cliente: base.cliente,
+        lote: 'Sem lote atribuído', validade: null, status_lote: null,
+        quantidade: semLote, fisico_material: base.fisico_material,
+      });
+    }
+  }
+  return saida;
+}
+
+/** RN-02: uma linha por série PRESENTE — a lista de presentes é a do serviço de séries. */
+async function relatorioSeriesEmEstoque(db) {
+  const { STATUS_PRESENTES } = require('./seriesService');
+  return dbAll(db, `SELECT m.codigo as material_codigo, m.nome as material_nome, ${CLIENTE_SQL} as cliente,
+      s.numero, s.status, l.codigo as lote
+    FROM series_almoxarifado s
+    JOIN materiais_almoxarifado m ON m.id = s.material_id
+    LEFT JOIN lotes_almoxarifado l ON l.id = s.lote_id
+    LEFT JOIN clientes cl ON cl.id = m.proprietario_cliente_id
+    WHERE s.status IN (${STATUS_PRESENTES.map(() => '?').join(',')})
+    ORDER BY m.nome, s.numero`, STATUS_PRESENTES);
+}
+
+/**
+ * RN-03: saldos comprometidos. Colunas e filtro montados de COLUNAS_RETENCAO (a mesma lista que
+ * define o disponível) — e o registro tem um teste que exige `colunas ⊇ COLUNAS_RETENCAO`, porque
+ * as colunas dele são estáticas (desenho, seção 6).
+ */
+async function relatorioSaldosComprometidos(db) {
+  const retidas = COLUNAS_RETENCAO.map((c) => `COALESCE(m.${c},0) as ${c}`).join(', ');
+  const algumaRetida = COLUNAS_RETENCAO.map((c) => `COALESCE(m.${c},0) > 0`).join(' OR ');
+  return dbAll(db, `SELECT m.codigo as material_codigo, m.nome as material_nome, ${CLIENTE_SQL} as cliente,
+      m.quantidade_atual as fisico, ${retidas}, ${disponivelSql('m')} as disponivel
+    FROM materiais_almoxarifado m
+    LEFT JOIN clientes cl ON cl.id = m.proprietario_cliente_id
+    WHERE m.ativo = 1 AND (${algumaRetida})
+    ORDER BY m.nome`);
 }
 
 async function relatorioAbaixoMinimo(db) {
@@ -64,17 +169,265 @@ async function relatorioMateriaisBloqueados(db) {
     WHERE ativo = 1 AND COALESCE(quantidade_bloqueada,0) > 0 ORDER BY nome`);
 }
 
+/**
+ * Etapa 49 (RN-05): grupos de movimento para o filtro do histórico. O filtro `tipo` é EXATO sobre
+ * texto livre — "entradas" são 8 tipos, e quem digitasse ENTRADA via só um deles. As listas vêm de
+ * movementTypes (fonte única do motor); AJUSTE e TRANSFERENCIA não têm lista lá e são por nome.
+ */
+const GRUPOS_MOVIMENTO = {
+  ENTRADA: { tipos: () => require('./movementTypes').TIPOS_ENTRADA },
+  SAIDA: { tipos: () => TIPOS_SAIDA },
+  DEVOLUCAO: { tipos: () => TIPOS_DEVOLUCAO },
+  AJUSTE: { like: 'AJUSTE%' },
+  TRANSFERENCIA: { tipos: () => ['TRANSFERENCIA'] },
+};
+
+/**
+ * Etapa 67 (RN-05/RN-07): a regua UNICA do "numero de ajustes" — consumida pelo bloco `ajustes`
+ * do `indicadores` e pela chave `ajustes-por-motivo` (T2), para os dois numeros nao divergirem.
+ * Exige `movimentacoes_almoxarifado` com alias `mv` e JOIN em `materiais_almoxarifado` com
+ * alias `m` (ou os aliases passados). O grupo e o mesmo AJUSTE do historico (`LIKE 'AJUSTE%'`:
+ * AJUSTE, AJUSTE_POSITIVO, AJUSTE_NEGATIVO, AJUSTE_INVENTARIO); `cancelado = 0` tira a original
+ * estornada e o ESTORNO nao casa o LIKE; material de cliente fora (D9); material INATIVADO conta
+ * (e fato do livro — o numero nao pode cair ao inativar). A janela/periodo fica com quem chama.
+ */
+function ajustesWhereSql(mv = 'mv', m = 'm') {
+  return `${mv}.cancelado = 0 AND ${mv}.tipo LIKE '${GRUPOS_MOVIMENTO.AJUSTE.like}'`
+    + ` AND ${m}.proprietario_cliente_id IS NULL`;
+}
+
+/**
+ * Etapa 67 (RN-04): requisicao VIVA para os blocos de requisicao do `indicadores` — nao excluida
+ * (`ativo`, a correcao do C89) e fora dos status que nunca foram pedido valido.
+ */
+function REQUISICAO_VIVA_SQL(r = 'r') {
+  return `COALESCE(${r}.ativo, 1) = 1 AND ${r}.status NOT IN ('RASCUNHO', 'CANCELADO', 'REJEITADO')`;
+}
+
+/** D12: percentual com 2 casas, ou null quando nao ha denominador (a tela mostra "—", nunca 0%). */
+function percentualOuNull(parte, total) {
+  return total > 0 ? Number((100 * parte / total).toFixed(2)) : null;
+}
+
 async function relatorioHistoricoMovimentacoes(db, filters = {}) {
-  let sql = `SELECT m.*, ma.nome as material_nome, ma.codigo as material_codigo
+  // Etapa 49 (RN-04): usuário e centro de custo — o mesmo JOIN da rota /movimentacoes, para a
+  // coluna mostrar código e nome, e não o id.
+  let sql = `SELECT m.*, ma.nome as material_nome, ma.codigo as material_codigo,
+      CASE WHEN cc.id IS NULL THEN NULL ELSE cc.codigo || ' — ' || cc.nome END as centro_custo
     FROM movimentacoes_almoxarifado m
-    JOIN materiais_almoxarifado ma ON m.material_id = ma.id WHERE m.cancelado = 0`;
+    JOIN materiais_almoxarifado ma ON m.material_id = ma.id
+    LEFT JOIN centros_custo_almoxarifado cc ON m.centro_custo_id = cc.id
+    WHERE m.cancelado = 0`;
   const params = [];
   if (filters.material_id) { sql += ' AND m.material_id = ?'; params.push(filters.material_id); }
   if (filters.tipo) { sql += ' AND m.tipo = ?'; params.push(filters.tipo); }
+  if (filters.grupo) {
+    const g = GRUPOS_MOVIMENTO[String(filters.grupo).toUpperCase()];
+    if (!g) {
+      throw Object.assign(new Error(
+        `Grupo de movimento inválido: ${filters.grupo} (use ENTRADA, SAIDA, AJUSTE, DEVOLUCAO ou TRANSFERENCIA)`,
+      ), { status: 400 });
+    }
+    if (g.like) { sql += ' AND m.tipo LIKE ?'; params.push(g.like); } else {
+      const tipos = g.tipos();
+      sql += ` AND m.tipo IN (${tipos.map(() => '?').join(',')})`;
+      params.push(...tipos);
+    }
+  }
+  if (filters.usuario) {
+    // ESCAPE: % e _ digitados valem como texto, não como curinga.
+    const termo = String(filters.usuario).replace(/[\\%_]/g, (c) => `\\${c}`);
+    sql += " AND m.usuario_nome LIKE ? ESCAPE '\\'";
+    params.push(`%${termo}%`);
+  }
+  if (filters.centro_custo_id) { sql += ' AND m.centro_custo_id = ?'; params.push(filters.centro_custo_id); }
+  // Etapa 66 (T3): filtro pelo id do cadastro, nunca pelo nome — o texto livre com o mesmo nome
+  // nao entra, e renomear o motivo nao tira as linhas antigas do filtro. Vazio = sem filtro.
+  const motivoBruto = filters.motivo_id;
+  if (motivoBruto !== undefined && motivoBruto !== null && String(motivoBruto).trim() !== '') {
+    if (!/^\d+$/.test(String(motivoBruto).trim()) || Number(motivoBruto) <= 0) {
+      throw Object.assign(new Error('Parâmetro "motivo_id" deve ser um número inteiro positivo'), { status: 400 });
+    }
+    sql += ' AND m.motivo_id = ?';
+    params.push(Number(motivoBruto));
+  }
   if (filters.data_inicio) { sql += ' AND DATE(m.created_at) >= ?'; params.push(filters.data_inicio); }
   if (filters.data_fim) { sql += ' AND DATE(m.created_at) <= ?'; params.push(filters.data_fim); }
   sql += ' ORDER BY m.created_at DESC LIMIT 500';
   return dbAll(db, sql, params);
+}
+
+/**
+ * Etapa 67 (T2, RN-06/RN-07): "Ajustes por motivo" — quantos lancamentos de ajuste por motivo,
+ * pela MESMA regua do bloco `ajustes` do `indicadores` (`ajustesWhereSql`): grupo AJUSTE do
+ * historico, sem os estornados, sem material de cliente, com material inativado.
+ *
+ * Tres baldes, nesta ordem de decisao:
+ *   - `motivo_id` preenchido -> origem 'Cadastro', agrupado pelo ID e mostrado pelo nome ATUAL do
+ *     cadastro (+ ' (desativado)'): renomear junta as linhas antigas. O livro (`mv.motivo`) guarda
+ *     o nome do momento e continua assim — por isso o nome vem do JOIN, nunca de `mv.motivo`;
+ *   - AJUSTE_INVENTARIO -> origem 'Inventário' (o cadastro nao serve a tipo dedicado);
+ *   - o resto -> origem 'Texto livre', motivo 'Sem motivo do cadastro', mesmo que o texto digitado
+ *     seja igual ao nome de um motivo (agrupar por texto juntaria coisas que o cadastro separa).
+ * Conta LANCAMENTOS e materiais distintos, nunca soma quantidade (unidades diferentes; o AJUSTE
+ * grava o saldo final). Datas pelo DIA (UTC), sem validacao — mesmo molde do historico (data
+ * invalida devolve vazio). Sem CTE: a varredura do registro so captura SELECT.
+ */
+async function relatorioAjustesPorMotivo(db, filters = {}) {
+  const params = [];
+  let filtro = '';
+  const materialBruto = filters.material_id;
+  if (materialBruto !== undefined && materialBruto !== null && String(materialBruto).trim() !== '') {
+    if (!/^\d+$/.test(String(materialBruto).trim()) || Number(materialBruto) <= 0) {
+      throw Object.assign(new Error('Parâmetro "material_id" deve ser um número inteiro positivo'), { status: 400 });
+    }
+    filtro += ' AND mv.material_id = ?';
+    params.push(Number(materialBruto));
+  }
+  if (filters.data_inicio) { filtro += ' AND DATE(mv.created_at) >= ?'; params.push(filters.data_inicio); }
+  if (filters.data_fim) { filtro += ' AND DATE(mv.created_at) <= ?'; params.push(filters.data_fim); }
+  const rows = await dbAll(db, `
+    SELECT
+      CASE WHEN mv.motivo_id IS NOT NULL THEN 'Cadastro'
+           WHEN mv.tipo = 'AJUSTE_INVENTARIO' THEN 'Inventário'
+           ELSE 'Texto livre' END AS origem,
+      mv.motivo_id AS motivo_id,
+      CASE WHEN mv.motivo_id IS NOT NULL
+             THEN COALESCE(mm.nome, 'Motivo #' || mv.motivo_id)
+                  || CASE WHEN COALESCE(mm.ativo, 1) = 0 THEN ' (desativado)' ELSE '' END
+           WHEN mv.tipo = 'AJUSTE_INVENTARIO' THEN 'Ajuste de conferência de inventário'
+           ELSE 'Sem motivo do cadastro' END AS motivo,
+      COUNT(*) AS ajustes,
+      COUNT(DISTINCT mv.material_id) AS materiais,
+      MAX(mv.created_at) AS ultimo_em
+    FROM movimentacoes_almoxarifado mv
+    JOIN materiais_almoxarifado m ON m.id = mv.material_id
+    LEFT JOIN motivos_movimentacao_almoxarifado mm ON mm.id = mv.motivo_id
+    WHERE ${ajustesWhereSql('mv', 'm')}${filtro}
+    GROUP BY 1, 2, 3
+    ORDER BY ajustes DESC, motivo`, params);
+  return rows.map((r) => ({ ...r, ajustes: Number(r.ajustes) || 0, materiais: Number(r.materiais) || 0 }));
+}
+
+/**
+ * Etapa 67 (T3): CNPJ sem pontuacao (ponto, barra, hifen, espaco) e em maiusculas — nao "so
+ * digitos": o CNPJ alfanumerico (2026) tem letras, e o SQLite nao tem regex para tirar o resto.
+ */
+function cnpjNormalizadoSql(r = 'r') {
+  return `UPPER(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(COALESCE(${r}.fornecedor_cnpj, '')), '.', ''), '/', ''), '-', ''), ' ', ''))`;
+}
+
+/**
+ * Etapa 67 (T3, D8 revisto na Fase 2): a CHAVE do fornecedor no recebimento — CNPJ normalizado,
+ * senao `fornecedor_id`, senao o nome digitado (trim + espacos duplos colapsados + lower, que no
+ * SQLite so dobra ASCII), senao "sem". O CNPJ vem primeiro porque o pedido grava `fornecedor_id` e a
+ * NF avulsa so nome + CNPJ — pelo id, o mesmo fornecedor sairia em duas linhas. Le o SNAPSHOT do
+ * recebimento, sem JOIN no cadastro core (o harness e uma base sem Compras nao tem o mesmo dado).
+ */
+function chaveFornecedorSql(r = 'r') {
+  const cnpj = cnpjNormalizadoSql(r);
+  return `CASE WHEN ${cnpj} <> '' THEN 'cnpj:' || ${cnpj}
+    WHEN ${r}.fornecedor_id IS NOT NULL THEN 'id:' || ${r}.fornecedor_id
+    WHEN TRIM(COALESCE(${r}.fornecedor_nome, '')) <> ''
+      THEN 'nome:' || LOWER(REPLACE(REPLACE(TRIM(${r}.fornecedor_nome), '  ', ' '), '  ', ' '))
+    ELSE 'sem' END`;
+}
+
+/**
+ * Etapa 67 (T3, RN-08/RN-09/RN-10, D6-D9): "Qualidade por fornecedor" — divergencia de recebimento
+ * e indice de rejeicao, uma linha por fornecedor (chaveFornecedorSql), periodo pelo DIA de
+ * `r.data_recebimento` (UTC; data invalida devolve vazio, como o historico).
+ *
+ * CONFERIDO = o recebimento teve a conferencia FINALIZADA (auditoria FINALIZAR_CONFERENCIA, que so
+ * o gesto "Finalizar Conferencia" do workflow escreve) e o item tem quantidade recebida. Fase 2,
+ * critico 2, medido na T3: todo item NASCE com `quantidade_recebida` (o INSERT grava
+ * o informado ou a esperada — desde a Etapa 70 T0 o 0 informado fica 0, antes o `|| qtd` o
+ * trocava pela esperada); `conferencia_quantidade` nao serve porque a tela grava
+ * `recebida === esperada` (o divergente fica 0, igual ao default); status >= CONFERIDO_ALMOX nao
+ * serve porque o /aprovar e o `encaminhar_compras` saem de RECEBIDO pulando a conferencia.
+ *
+ * Divergencia: a MESMA regua do alerta DIVERGENCIA_RECEBIMENTO (divergenciaRealSql, ε 1e-9) sobre
+ * o estado ATUAL do item, uma vez por item — as NCs de quantidade (varias por item ao longo do
+ * tempo) nao somam. Esperada = a gravada no item: no recebimento de pedido e o SALDO da linha, entao
+ * entrega parcial combinada conta como falta (declarado na nota). Rejeicao: inspecoes decididas
+ * (com quantidade) e as com reprovada > ε — contadas por SUBCONSULTA por item, nunca JOIN item x
+ * inspecao na agregacao (RN-10: o item com duas inspecoes contaria duas vezes nos itens). NC,
+ * devolucao ao fornecedor e status REPROVADO do recebimento nao entram (D7). Material de cliente
+ * fora (D9): recebimento so de material de cliente nao gera linha (M-2).
+ *
+ * Toda coluna sai do SQL (a varredura do registro mede por TEMP VIEW): percentuais com
+ * ROUND(100.0 * x / NULLIF(y, 0), 2) — NULL sem denominador (D12). Sem CTE (a varredura so captura
+ * SELECT). O nome exibido e o do recebimento mais recente do grupo: MAX sobre um carimbo de
+ * largura fixa (data + id) concatenado ao nome, recortado depois.
+ */
+async function relatorioQualidadeFornecedores(db, filters = {}) {
+  const params = [];
+  let filtro = '';
+  if (filters.data_inicio) { filtro += ' AND DATE(r.data_recebimento) >= ?'; params.push(filters.data_inicio); }
+  if (filters.data_fim) { filtro += ' AND DATE(r.data_recebimento) <= ?'; params.push(filters.data_fim); }
+  const cnpj = cnpjNormalizadoSql('r');
+  const rows = await dbAll(db, `
+    SELECT
+      SUBSTR(MAX(x.carimbo || x.nome_exibido), 32) AS fornecedor,
+      SUBSTR(MAX(x.carimbo || x.agrupamento), 32) AS agrupado_por,
+      COUNT(DISTINCT x.recebimento_id) AS recebimentos,
+      SUM(x.conferido) AS itens_conferidos,
+      SUM(x.conferido * x.divergente) AS itens_divergentes,
+      SUM(x.conferido * x.falta) AS itens_com_falta,
+      SUM(x.conferido * x.sobra) AS itens_com_sobra,
+      ROUND(100.0 * SUM(x.conferido * x.divergente) / NULLIF(SUM(x.conferido), 0), 2) AS percentual_divergencia,
+      SUM(x.inspecoes) AS inspecoes,
+      SUM(x.inspecoes_com_reprovacao) AS inspecoes_com_reprovacao,
+      ROUND(100.0 * SUM(x.inspecoes_com_reprovacao) / NULLIF(SUM(x.inspecoes), 0), 2) AS indice_rejeicao
+    FROM (
+      SELECT
+        ${chaveFornecedorSql('r')} AS chave,
+        printf('%-19.19s%012d', COALESCE(r.data_recebimento, ''), r.id) AS carimbo,
+        COALESCE(NULLIF(TRIM(r.fornecedor_nome), ''),
+          CASE WHEN ${cnpj} <> '' THEN 'CNPJ ' || ${cnpj}
+               WHEN r.fornecedor_id IS NOT NULL THEN 'Fornecedor #' || r.fornecedor_id
+               ELSE 'Sem fornecedor' END) AS nome_exibido,
+        -- Fase 5 (C): a chave da linha em texto legivel. Tres linhas "ACME" (CNPJ / cadastro sem
+        -- CNPJ / nome digitado) eram indistinguiveis. O CNPJ sai como veio (o do mais recente).
+        CASE WHEN ${cnpj} <> '' THEN 'CNPJ ' || TRIM(r.fornecedor_cnpj)
+             WHEN r.fornecedor_id IS NOT NULL THEN 'Cadastro #' || r.fornecedor_id
+             WHEN TRIM(COALESCE(r.fornecedor_nome, '')) <> '' THEN 'Nome digitado'
+             ELSE 'Sem CNPJ, cadastro ou nome' END AS agrupamento,
+        ri.recebimento_id AS recebimento_id,
+        CASE WHEN ri.quantidade_recebida IS NOT NULL AND EXISTS (
+               SELECT 1 FROM auditoria_log_almoxarifado a
+               WHERE a.entidade = 'recebimento' AND a.entidade_id = r.id AND a.acao = 'FINALIZAR_CONFERENCIA')
+             THEN 1 ELSE 0 END AS conferido,
+        CASE WHEN ri.quantidade_recebida IS NOT NULL
+               AND ${divergenciaRealSql('ri.quantidade_recebida - ri.quantidade_esperada')} THEN 1 ELSE 0 END AS divergente,
+        CASE WHEN ri.quantidade_recebida - ri.quantidade_esperada < -${EPS_SALDO} THEN 1 ELSE 0 END AS falta,
+        CASE WHEN ri.quantidade_recebida - ri.quantidade_esperada > ${EPS_SALDO} THEN 1 ELSE 0 END AS sobra,
+        (SELECT COUNT(*) FROM inspecoes_recebimento_almoxarifado i
+          WHERE i.recebimento_item_id = ri.id
+            AND (i.quantidade_aprovada IS NOT NULL OR i.quantidade_reprovada IS NOT NULL)) AS inspecoes,
+        (SELECT COUNT(*) FROM inspecoes_recebimento_almoxarifado i
+          WHERE i.recebimento_item_id = ri.id AND i.quantidade_reprovada > ${EPS_SALDO}) AS inspecoes_com_reprovacao
+      FROM recebimentos_material_itens_almoxarifado ri
+      JOIN recebimentos_material_almoxarifado r ON r.id = ri.recebimento_id
+      JOIN materiais_almoxarifado m ON m.id = ri.material_id
+      WHERE m.proprietario_cliente_id IS NULL${filtro}
+    ) x
+    GROUP BY x.chave
+    ORDER BY fornecedor, x.chave`, params);
+  const n = (v) => Number(v) || 0;
+  return rows.map((r) => ({
+    fornecedor: r.fornecedor,
+    agrupado_por: r.agrupado_por,
+    recebimentos: n(r.recebimentos),
+    itens_conferidos: n(r.itens_conferidos),
+    itens_divergentes: n(r.itens_divergentes),
+    itens_com_falta: n(r.itens_com_falta),
+    itens_com_sobra: n(r.itens_com_sobra),
+    percentual_divergencia: r.percentual_divergencia === null ? null : Number(r.percentual_divergencia),
+    inspecoes: n(r.inspecoes),
+    inspecoes_com_reprovacao: n(r.inspecoes_com_reprovacao),
+    indice_rejeicao: r.indice_rejeicao === null ? null : Number(r.indice_rejeicao),
+  }));
 }
 
 // Revisao final da Etapa 10b: (1) so conferencia CONCLUIDO — sem o filtro, este relatorio
@@ -137,11 +490,37 @@ async function relatorioEPIPorColaborador(db) {
 // deixava a solicitacao vinculada invisivel na tela inteira (Fase 2). Renomear tocaria o
 // dispatcher de relatorios (routes/almoxarifado/extended.js) a toa; o nome ficou desatualizado
 // de proposito.
+//
+// Etapa 72, T3 (RN-10): com a T1 a VINCULADO nao fecha mais na nota parcial, entao a aba precisa
+// dizer quanto ja chegou. Cada linha ganha tres campos ADITIVOS, lidos da FONTE UNICA por
+// solicitacao (`purchaseService.posicaoDasSolicitacoes`, a mesma que a sugestao soma) — nunca uma
+// terceira conta aqui: `quantidade - recebido do par` por linha diverge da sugestao quando ha duas
+// solicitacoes no mesmo par (tests/api/relatorioSolicitacoesChegou.api.test.js, teste 2).
+//   - recebido_no_pedido = recebido_atribuido (o que o LIVRO de atribuicao deu a esta solicitacao,
+//     Fase 5; ate ela era o recebido do par rateado em ordem de id; null em PENDENTE ou par sem
+//     linha). Nao e o recebido do par inteiro (Fase 2 do plano da 72);
+//   - a_caminho, pedido_encerrado: como a fonte devolve.
+// Export e tela de Relatorios nao mudam: projetam `colunas` do reportRegistry (declarado no plano).
+// require tardio: purchaseService nao importa este arquivo hoje, mas o par de services nao deve
+// virar ciclo por acidente.
 async function relatorioSolicitacoesCompraPendentes(db) {
-  return dbAll(db, `SELECT s.*, m.nome as material_nome, m.codigo as material_codigo
+  const linhas = await dbAll(db, `SELECT s.*, m.nome as material_nome, m.codigo as material_codigo
     FROM solicitacoes_compra_almoxarifado s
     JOIN materiais_almoxarifado m ON s.material_id = m.id
     WHERE s.status IN ('PENDENTE','VINCULADO') ORDER BY s.created_at`);
+  if (!linhas.length) return linhas;
+  const { posicaoDasSolicitacoes } = require('./purchaseService');
+  const posicoes = new Map((await posicaoDasSolicitacoes(db, { solicitacao_ids: linhas.map((l) => l.id) }))
+    .map((p) => [p.solicitacao_id, p]));
+  return linhas.map((l) => {
+    const p = posicoes.get(l.id);
+    return {
+      ...l,
+      recebido_no_pedido: p ? p.recebido_atribuido : null,
+      a_caminho: p ? p.a_caminho : null,
+      pedido_encerrado: p ? p.pedido_encerrado : false,
+    };
+  });
 }
 
 /**
@@ -373,9 +752,62 @@ async function relatorioIndicadores(db, query = {}) {
     SELECT AVG((julianday(data_entrega) - julianday(created_at)) * 24) AS media_horas,
            COUNT(*) AS total_consideradas
     FROM requisicoes_almoxarifado
-    WHERE data_entrega IS NOT NULL`);
+    WHERE data_entrega IS NOT NULL AND COALESCE(ativo, 1) = 1`);
+  // Etapa 67 (C89): o `ativo` acima. O DELETE /requisicoes/:id estorna as entregas e grava
+  // ativo=0 SEM limpar data_entrega — a entrega desfeita continuava no tempo medio do dashboard.
   const totalConsideradas = Number(atendimento.total_consideradas) || 0;
   const mediaHoras = totalConsideradas > 0 ? Number((atendimento.media_horas || 0).toFixed(2)) : 0;
+
+  // ── Etapa 67 (RN-01/RN-02, D1-D3): requisicoes NO PRAZO. Ancora no PRAZO (date da ──
+  // data_necessidade) dentro de [hoje - janela, hoje], dia UTC como o alerta REQUISICAO_ATRASADA.
+  // No prazo = entrega COMPLETA (data_entrega so existe nela) ate o dia do prazo. Prazo de hoje
+  // ainda sem entrega fica fora do denominador (o dia nao acabou) e e contado em
+  // em_aberto_no_dia. Sem prazo legivel por date() (NULL, '', DD/MM/AAAA legado): fora, contado
+  // em sem_data_valida entre as CRIADAS na janela. Tabela derivada no FROM, nao CTE (a varredura
+  // do registro so captura SELECT).
+  const noPrazo = await dbGet(db, `
+    SELECT
+      COALESCE(SUM(CASE WHEN x.dn >= date('now', '-' || ? || ' days') AND x.dn <= date('now')
+                         AND NOT (x.dn = date('now') AND x.de IS NULL) THEN 1 ELSE 0 END), 0) AS consideradas,
+      COALESCE(SUM(CASE WHEN x.dn >= date('now', '-' || ? || ' days') AND x.dn <= date('now')
+                         AND x.de IS NOT NULL AND x.de <= x.dn THEN 1 ELSE 0 END), 0) AS no_prazo,
+      COALESCE(SUM(CASE WHEN x.dn = date('now') AND x.de IS NULL THEN 1 ELSE 0 END), 0) AS em_aberto_no_dia,
+      COALESCE(SUM(CASE WHEN x.dn IS NULL AND x.created_at >= datetime('now', '-' || ? || ' days')
+                         THEN 1 ELSE 0 END), 0) AS sem_data_valida
+    FROM (
+      SELECT date(r.data_necessidade) AS dn, date(r.data_entrega) AS de, r.created_at
+      FROM requisicoes_almoxarifado r
+      WHERE ${REQUISICAO_VIVA_SQL('r')}
+    ) x`, [janela, janela, janela]);
+  const npConsideradas = Number(noPrazo.consideradas) || 0;
+  const npNoPrazo = Number(noPrazo.no_prazo) || 0;
+
+  // ── Etapa 67 (RN-03, D4): requisicoes INTEGRAIS. Das finalizadas na janela (ENTREGUE/ ──
+  // ENCERRADA, ancora COALESCE(data_entrega, encerrado_em)), integral = data_entrega preenchida:
+  // o motor so grava data_entrega quando TODOS os itens chegaram na quantidade pedida, e item nao
+  // tem cancelamento nem reducao. Entregue e depois encerrada conta UMA vez (e uma linha so).
+  const integrais = await dbGet(db, `
+    SELECT COUNT(*) AS consideradas,
+           COALESCE(SUM(CASE WHEN r.data_entrega IS NOT NULL THEN 1 ELSE 0 END), 0) AS integrais,
+           COALESCE(SUM(CASE WHEN r.data_entrega IS NULL THEN 1 ELSE 0 END), 0) AS encerradas_incompletas
+    FROM requisicoes_almoxarifado r
+    WHERE ${REQUISICAO_VIVA_SQL('r')} AND r.status IN ('ENTREGUE', 'ENCERRADA')
+      AND COALESCE(r.data_entrega, r.encerrado_em) >= datetime('now', '-' || ? || ' days')`, [janela]);
+  const inConsideradas = Number(integrais.consideradas) || 0;
+  const inIntegrais = Number(integrais.integrais) || 0;
+
+  // ── Etapa 67 (RN-05, D9): numero de AJUSTES na janela, pela regua unica ajustesWhereSql ──
+  // (a mesma da chave ajustes-por-motivo). Conta LANCAMENTOS, nunca soma quantidade: o AJUSTE
+  // grava o saldo final (absoluto), nao a diferenca.
+  const ajustesRows = await dbAll(db, `
+    SELECT mv.tipo AS tipo, COUNT(*) AS total
+    FROM movimentacoes_almoxarifado mv
+    JOIN materiais_almoxarifado m ON m.id = mv.material_id
+    WHERE ${ajustesWhereSql('mv', 'm')}
+      AND mv.created_at >= datetime('now', '-' || ? || ' days')
+    GROUP BY mv.tipo
+    ORDER BY mv.tipo`, [janela]);
+  const porTipo = ajustesRows.map((r) => ({ tipo: r.tipo, total: Number(r.total) || 0 }));
 
   return {
     janela_dias: janela,
@@ -387,6 +819,21 @@ async function relatorioIndicadores(db, query = {}) {
     },
     valor_por_grupo: valorPorGrupoRows.map((r) => ({ categoria: r.categoria, valor: Number(r.valor) || 0 })),
     atendimento_requisicoes: { media_horas: mediaHoras, total_consideradas: totalConsideradas },
+    requisicoes_no_prazo: {
+      percentual: percentualOuNull(npNoPrazo, npConsideradas),
+      no_prazo: npNoPrazo,
+      fora_do_prazo: npConsideradas - npNoPrazo,
+      consideradas: npConsideradas,
+      em_aberto_no_dia: Number(noPrazo.em_aberto_no_dia) || 0,
+      sem_data_valida: Number(noPrazo.sem_data_valida) || 0,
+    },
+    requisicoes_integrais: {
+      percentual: percentualOuNull(inIntegrais, inConsideradas),
+      integrais: inIntegrais,
+      encerradas_incompletas: Number(integrais.encerradas_incompletas) || 0,
+      consideradas: inConsideradas,
+    },
+    ajustes: { total: porTipo.reduce((s, r) => s + r.total, 0), por_tipo: porTipo },
   };
 }
 
@@ -469,4 +916,8 @@ module.exports = {
   relatorioConsumoPeriodo, relatorioFerramentasEmprestadas, relatorioEPIPorColaborador,
   relatorioSolicitacoesCompraPendentes, relatorioSucataFinanceiro, relatorioIndicadores,
   relatorioCustoProjeto,
+  // Etapa 67: regua unica dos ajustes (consumida pela chave ajustes-por-motivo)
+  ajustesWhereSql, relatorioAjustesPorMotivo, relatorioQualidadeFornecedores,
+  // Etapa 49
+  relatorioSaldoPorLote, relatorioSeriesEmEstoque, relatorioSaldosComprometidos,
 };

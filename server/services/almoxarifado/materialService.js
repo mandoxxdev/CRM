@@ -79,6 +79,19 @@ function formatLocalizacaoLabel(loc, parent) {
  * de materiais (POST/PUT). locId e null quando o FK nao foi informado; locText e null quando a
  * localizacao nao existe mais (FK orfao).
  */
+/**
+ * Etapa 54 (RN-05): a padrão escolhida no cadastro tem de existir e estar ativa. A entrada sem
+ * destino cai nela — e o motor não recusa a padrão (só o destino informado), porque os fluxos sem
+ * campo de destino travariam. A porta é aqui: `resolveLocalizacaoFromFk` aceitava qualquer id.
+ */
+async function validarLocalizacaoPadrao(db, localizacaoPadraoId) {
+  const id = localizacaoPadraoId ? parseInt(localizacaoPadraoId, 10) : null;
+  if (!id) return;
+  const row = await dbGet(db, 'SELECT codigo, ativo FROM localizacoes_almoxarifado WHERE id = ?', [id]);
+  if (!row) throw erro('Localização padrão não encontrada', 400);
+  if (Number(row.ativo) !== 1) throw erro(`Localização padrão ${row.codigo} está inativa`, 400);
+}
+
 async function resolveLocalizacaoFromFk(db, localizacaoPadraoId) {
   const id = localizacaoPadraoId ? parseInt(localizacaoPadraoId, 10) : null;
   if (!id) return { locId: null, locText: null };
@@ -165,6 +178,8 @@ async function createMaterial(db, user, data) {
   } catch (e) {
     throw erro(e.message, 400);
   }
+
+  await validarLocalizacaoPadrao(db, localizacao_padrao_id);
 
   let locId; let locText;
   try {
@@ -275,6 +290,6 @@ async function createMaterial(db, user, data) {
 }
 
 module.exports = {
-  bool01, validateFamiliaAtiva, validateSubfamilia, resolveLocalizacaoFromFk,
+  bool01, validateFamiliaAtiva, validateSubfamilia, resolveLocalizacaoFromFk, validarLocalizacaoPadrao,
   proximoCodigo, createMaterial, TENTATIVAS_CODIGO_AUTO,
 };

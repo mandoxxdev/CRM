@@ -71,6 +71,44 @@ function erro(msg, status = 400) {
  * copiar o bloco da perna do almoxarifado e esquecer de trocar uma das colunas faria a perna de
  * gestao conferir a si mesma e nunca fechar o processo.
  */
+/**
+ * Etapa 68 (D6 revisto na Fase 2) — a origem da SUCATA quando o material ja foi transferido para a
+ * area de sucata (spec 19: "Transferir para area de sucata → Registrar venda ou descarte").
+ * Devolve o id de UMA localizacao cuja area EFETIVA e SUCATA (tipo proprio ou do ancestral mais
+ * proximo), ativa, nao bloqueada, com saldo SEM LOTE que cobre a quantidade INTEIRA — a de maior
+ * saldo, empate pelo menor id —, ou null (o comportamento de hoje: sem origem).
+ *
+ * So quando cobre tudo, e o chamador manda `origemEstrita`: com dreno parcial a origem nao-estrita
+ * gravava "saiu de S" com parte vinda de P, e o estorno devolvia tudo para S (sonda68-d6). Saldo
+ * espalhado em duas posicoes da area: nenhuma cobre sozinha → hoje (declarado). Bloqueada fica fora
+ * porque o motor recusa origem bloqueada e a aprovacao travaria; inativa fica fora por decisao.
+ * Material com lote: nao chega aqui (a saida com lote nao drena por endereco — B204/C72).
+ * Descartados: drenar so a area (recusaria o descarte de material nao transferido) e dividir em dois
+ * movimentos (mais regra no motor por um caso raro).
+ */
+async function origemAreaDeSucata(db, materialId, quantidade, { loteId = null } = {}) {
+  // Etapa 69 (Fase 2): `loteId` so e passado pelo caminho do REPROVADO (`doBloqueado`): com lote e o
+  // reprovado transferido para a area, a baixa sai da area — o saldo daquele LOTE na posicao tem de
+  // cobrir. O sucateamento comum continua chamando sem lote (`lote_id IS NULL`, a B289 de antes).
+  const linhas = await dbAll(db, `SELECT s.localizacao_id id, SUM(s.quantidade) q
+      FROM estoque_saldo_almoxarifado s
+      JOIN localizacoes_almoxarifado l ON l.id = s.localizacao_id
+     WHERE s.material_id = ? AND s.lote_id IS ? AND s.localizacao_id IS NOT NULL
+       AND l.ativo = 1 AND COALESCE(l.bloqueada, 0) = 0
+     GROUP BY s.localizacao_id
+    HAVING SUM(s.quantidade) > 0
+     ORDER BY q DESC, s.localizacao_id`, [materialId, loteId || null]);
+  if (!linhas.length) return null;
+  const arvore = await stockService.carregarArvoreLocalizacoes(db);
+  const EPS = 1e-9; // mesma tolerancia do motor (quantidade e REAL no SQLite)
+  for (const l of linhas) {
+    if (Number(l.q) + EPS < Number(quantidade)) continue;
+    const area = stockService.resolverAreaEfetiva(arvore, l.id);
+    if (area && area.chave === 'SUCATA') return Number(l.id);
+  }
+  return null;
+}
+
 const PERNAS = {
   almoxarifado: {
     acao: 'aprovar_sucateamento',
@@ -209,14 +247,32 @@ async function solicitar(db, user, payload = {}) {
       + 'material que esta comprometido com outra OS.');
   }
 
+  return inserirSolicitacao(db, user, {
+    material, loteId, sobraId, quantidade, classificacao, pesoEstimado, projetoOrigemId, osOrigemId,
+    justificativa, observacoes, ncId: null,
+  }, { disponivel_na_solicitacao: disponivel });
+}
+
+/**
+ * Etapa 69 — a ESCRITA da solicitacao, extraida de `solicitar` sem mudar o que ela grava, para a
+ * solicitacao do REPROVADO (`solicitarDoReprovado`) usar o mesmo INSERT e a mesma auditoria. As
+ * RECUSAS nao vem para ca: cada porta tem as suas (o comum olha o disponivel; o reprovado, a NC).
+ * `extraAuditoria` entra em `dados_novos` (o comum grava `disponivel_na_solicitacao`; o reprovado,
+ * a NC, a inspecao e `bloqueado_na_solicitacao`).
+ */
+async function inserirSolicitacao(db, user, linha, extraAuditoria = {}) {
+  const {
+    material, loteId, sobraId, quantidade, classificacao, pesoEstimado, projetoOrigemId, osOrigemId,
+    justificativa, observacoes, ncId,
+  } = linha;
   const ins = await dbRun(db, `INSERT INTO sucateamentos_almoxarifado
     (material_id, lote_id, sobra_id, quantidade, classificacao, peso_estimado,
      projeto_origem_id, os_origem_id, justificativa, status, solicitante_id, solicitante_nome,
-     observacoes)
-    VALUES (?,?,?,?,?,?,?,?,?,'SOLICITADO',?,?,?)`, [
+     observacoes, nao_conformidade_id)
+    VALUES (?,?,?,?,?,?,?,?,?,'SOLICITADO',?,?,?,?)`, [
     material.id, ouNulo(loteId), ouNulo(sobraId), quantidade, ouNulo(classificacao),
     ouNulo(pesoEstimado), ouNulo(projetoOrigemId), ouNulo(osOrigemId), justificativa,
-    user.id, nomeDoUsuario(user), ouNulo(observacoes),
+    user.id, nomeDoUsuario(user), ouNulo(observacoes), ncId || null,
   ]);
 
   await registrarAuditoria(db, {
@@ -235,12 +291,83 @@ async function solicitar(db, user, payload = {}) {
       peso_estimado: ouNulo(pesoEstimado),
       projeto_origem_id: ouNulo(projetoOrigemId),
       os_origem_id: ouNulo(osOrigemId),
-      disponivel_na_solicitacao: disponivel,
+      ...extraAuditoria,
     },
     justificativa,
   });
 
   return obter(db, ins.lastID);
+}
+
+/** Etapa 69 — a colisao do indice unico parcial `ux_sucateamento_nc_solicitado`, e SO dela. */
+const ehColisaoSolicitadoDaNc = (e) => /UNIQUE constraint failed:[^\n]*sucateamentos_almoxarifado\.nao_conformidade_id/i
+  .test(String((e && e.message) || ''));
+
+/**
+ * Etapa 69 (RN-04, D1) — SOLICITAR o sucateamento do material REPROVADO de uma NC de inspecao
+ * decidida SUCATEAR. A porta e a NC, e nao `POST /sucateamentos`: material, quantidade (a reprovada
+ * INTEIRA — D4) e lote sao DERIVADOS da inspecao, nunca do payload. Nao move estoque: a baixa e a
+ * segunda assinatura, do BLOQUEADO (`aprovar`, `doBloqueado`).
+ *
+ * As recusas sao as do contrato, NA ORDEM: os niveis 1-17 sao `sucateamentoDoReprovadoPrevisto`
+ * (a MESMA funcao que o `/executar` de SUCATEAR consulta — as duas portas nao divergem), o 18 e a
+ * guarda do dono com o tipo REAL da baixa, e o 19 a justificativa (a rota ja recusa no Zod; aqui
+ * para o chamador direto). Pre-checagem do SOLICITADO aberto para a MENSAGEM; o indice unico
+ * parcial e a GARANTIA contra duas solicitacoes concorrentes.
+ */
+async function solicitarDoReprovado(db, user, ncId, payload = {}) {
+  if (!user || !user.id) throw erro('Usuario responsavel obrigatorio');
+  const ncs = require('./nonConformityService');
+  const id = Number(ncId);
+  const doc = Number.isInteger(id) && id > 0
+    ? await dbGet(db, 'SELECT * FROM nao_conformidades_almoxarifado WHERE id = ?', [id]) : null;
+
+  // As leituras so no caminho automatico de inspecao — a NC manual nao chega a ler a inspecao alheia
+  // para a qual aponta (mesmo criterio de `registrarExecucao`); a precedencia a recusa no nivel 6.
+  let insp = null; let material = null; let lote = null; let aberto = null;
+  if (doc && doc.aberto_automaticamente && doc.origem === 'INSPECAO' && doc.referencia_tipo === 'INSPECAO') {
+    insp = await ncs.getInspecao(db, doc.referencia_id);
+    if (insp && insp.material_id) {
+      material = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [insp.material_id]);
+      lote = await ncs.carregarLoteDoReprovado(db, insp, material);
+    }
+    aberto = await ncs.sucateamentoAbertoDaNc(db, doc.id);
+  }
+  const previsto = ncs.sucateamentoDoReprovadoPrevisto(doc, insp, material, lote, aberto);
+  if (previsto.efeito === 'RECUSA') throw erro(previsto.mensagem, previsto.status);
+
+  const {
+    classificacao = null, peso_estimado: pesoEstimado = null,
+    projeto_origem_id: projetoOrigemId = null, os_origem_id: osOrigemId = null, observacoes = null,
+  } = payload;
+  // (18) a guarda do dono, com o tipo REAL da baixa — material de cliente exige OS/projeto do dono.
+  await ownerRules.assertSaidaPermitida(db, material, 'SUCATA', {
+    os_id: osOrigemId || undefined, projeto_id: projetoOrigemId || undefined });
+  // (19) a literal de hoje do `solicitar`.
+  const justificativa = (payload.justificativa || '').toString().trim();
+  if (!justificativa) {
+    throw erro('Justificativa e obrigatoria para sucatear: a baixa SUCATA exige o motivo escrito, '
+      + 'e ele fica no livro de movimentacoes como a unica explicacao de por que o material sumiu '
+      + 'do patrimonio.');
+  }
+
+  try {
+    return await inserirSolicitacao(db, user, {
+      material, loteId: previsto.lote_id, sobraId: null, quantidade: previsto.quantidade, classificacao,
+      pesoEstimado, projetoOrigemId, osOrigemId, justificativa, observacoes, ncId: doc.id,
+    }, {
+      nao_conformidade_id: doc.id,
+      nao_conformidade_numero: doc.numero,
+      inspecao_id: insp.id,
+      // O bloqueado e um POOL por material: entre esta solicitacao e a segunda assinatura a baixa
+      // pode consumir o bloqueio de OUTRA inspecao (declarado na letra C). Este numero e o rastro.
+      bloqueado_na_solicitacao: Number(material.quantidade_bloqueada) || 0,
+    });
+  } catch (e) {
+    if (!ehColisaoSolicitadoDaNc(e)) throw e;
+    const outro = await ncs.sucateamentoAbertoDaNc(db, doc.id);
+    throw erro(`Já existe um sucateamento solicitado para esta não conformidade (SUC-${outro ? outro.id : '?'}) — aprove ou rejeite esse antes`, 409);
+  }
 }
 
 /**
@@ -260,7 +387,7 @@ async function solicitar(db, user, payload = {}) {
  * duas apagaria a assinatura de alguem que nao errou nada, e obrigaria o processo a recomecar do
  * zero por um saldo que mudou.
  */
-async function compensarAssinatura(db, user, id, perna, motivo) {
+async function compensarAssinatura(db, user, id, perna, motivo, causa = null) {
   await dbRun(db, `UPDATE sucateamentos_almoxarifado
        SET ${perna.colId} = NULL, ${perna.colNome} = NULL, ${perna.colEm} = NULL,
            status = 'SOLICITADO', updated_at = CURRENT_TIMESTAMP
@@ -275,9 +402,125 @@ async function compensarAssinatura(db, user, id, perna, motivo) {
     usuario_id: user?.id,
     usuario_nome: nomeDoUsuario(user),
     dados_novos: { perna: perna.rotulo, status: 'SOLICITADO' },
-    justificativa: `compensacao automatica: a baixa SUCATA foi recusada pelo motor (${motivo}), `
+    // Etapa 69 (Fase 2): no sucateamento do reprovado a recusa pode vir de ANTES do motor (NC
+    // cancelada, claim da inspecao perdido) — `causa` diz a causa real em vez de culpar o motor.
+    justificativa: `compensacao automatica: ${causa || 'a baixa SUCATA foi recusada pelo motor'} (${motivo}), `
       + `entao a assinatura da perna ${perna.rotulo} foi desfeita e o processo voltou a SOLICITADO`,
   }).catch(() => {});
+}
+
+/** Etapa 69 — o motivo da `SUCATA` do reprovado: o que a torna legivel no livro sem cruzar tabela. */
+const MOTIVO_SUCATA_REPROVADO = 'Sucateamento de material reprovado';
+
+/** Etapa 69 — a causa do claim da inspecao perdido, relida dos carimbos (Fase 2). */
+const CLAIM_INSPECAO_PERDIDO = {
+  SUCATEADA: 'O material desta inspeção já foi sucateado — a assinatura foi desfeita',
+  DEVOLVIDA: 'O material desta inspeção já havia sido devolvido ao fornecedor — a assinatura foi desfeita',
+  LIBERADA: 'O material desta inspeção já havia sido liberado por outra não conformidade — a assinatura foi desfeita',
+};
+
+/**
+ * Etapa 69 (RN-05, RN-06, RN-09) — a segunda assinatura de um sucateamento LIGADO a NC: baixa a
+ * `SUCATA` do BLOQUEADO. A ordem e o contrato, e cada falha desfaz o que ja fez:
+ *
+ *   1. rele a NC: CANCELADA -> 400 (o cancelamento entre as pernas; a 1a perna ja recusa antes)
+ *   2. claim da INSPECAO nos TRES carimbos -> 0 linhas = 409 com a causa relida
+ *   3. origem (D9): area de sucata que cobre tudo NAQUELE lote (estrita) > endereco de entrada do
+ *      item (nao estrita, o helper da 57) > sem origem; e o motor com `doBloqueado`
+ *   4. qualquer falha de 1-3: `sucateamento_em` volta a NULL (so se ESTA chamada carimbou — o
+ *      carimbo de outro caminho nao e nosso) e `compensarAssinatura`; o erro original sobe
+ *
+ * O que vem DEPOIS do motor (movimentacao no sucateamento e a execucao na NC) NAO compensa: a baixa
+ * valeu, e desfazer a assinatura a deixaria orfa — a mesma inversao deliberada da 45.
+ */
+async function baixarReprovado(db, user, atual, perna) {
+  const ncs = require('./nonConformityService');
+  let inspId = null;
+  let carimbou = false;
+  try {
+    const doc = await dbGet(db, 'SELECT * FROM nao_conformidades_almoxarifado WHERE id = ?', [atual.nao_conformidade_id]);
+    if (!doc) throw erro('Não conformidade não encontrada', 404);
+    if (doc.status === 'CANCELADA') {
+      throw Object.assign(erro(`A não conformidade ${doc.numero} foi cancelada — o sucateamento não baixa material de documento cancelado`),
+        { causa: 'a nao conformidade foi cancelada' });
+    }
+    inspId = doc.referencia_id;
+    const claimInsp = await dbRun(db, `UPDATE inspecoes_recebimento_almoxarifado
+       SET sucateamento_em = CURRENT_TIMESTAMP
+     WHERE id = ? AND sucateamento_em IS NULL AND devolucao_fornecedor_em IS NULL AND liberacao_nc_em IS NULL`, [inspId]);
+    if (!claimInsp.changes) {
+      const agora = await dbGet(db, `SELECT liberacao_nc_em, devolucao_fornecedor_em, sucateamento_em
+        FROM inspecoes_recebimento_almoxarifado WHERE id = ?`, [inspId]);
+      const saiu = ncs.retencaoDaInspecaoJaSaiu(agora);
+      throw Object.assign(erro(CLAIM_INSPECAO_PERDIDO[saiu]
+        || 'O material desta inspeção já saiu do estoque por outro caminho — a assinatura foi desfeita', 409),
+      { causa: 'o material desta inspecao ja saiu do estoque por outro caminho' });
+    }
+    carimbou = true;
+
+    const insp = await ncs.getInspecao(db, inspId);
+    const origemArea = await origemAreaDeSucata(db, atual.material_id, atual.quantidade, { loteId: atual.lote_id });
+    const origem = origemArea ? { id: origemArea }
+      : await ncs.origemDaEntradaDaInspecao(db, insp, doc, atual.material_id, atual.lote_id);
+    const mov = await stockService.registrarMovimentacao(db, user, {
+      material_id: atual.material_id,
+      tipo: 'SUCATA',
+      quantidade: atual.quantidade,
+      lote_id: atual.lote_id || undefined,
+      localizacao_origem_id: origem ? origem.id : undefined,
+      os_id: atual.os_origem_id || undefined,
+      projeto_id: atual.projeto_origem_id || undefined,
+      justificativa: atual.justificativa,
+      motivo: MOTIVO_SUCATA_REPROVADO,
+      documento_vinculado: doc.numero,
+      // `SUC-<id>` + `nao_conformidade_id` e o discriminador da recusa do ESTORNO no motor (D3).
+      referencia: `SUC-${atual.id}`,
+    }, { exigeLote: true, exigeSerie: true, doBloqueado: true, origemEstrita: !!origemArea });
+    return { mov, doc };
+  } catch (e) {
+    if (carimbou) {
+      await dbRun(db, `UPDATE inspecoes_recebimento_almoxarifado SET sucateamento_em = NULL
+        WHERE id = ? AND sucateamento_em IS NOT NULL`, [inspId]);
+    }
+    await compensarAssinatura(db, user, atual.id, perna, e.message, e.causa || null);
+    throw e;
+  }
+}
+
+/**
+ * Etapa 69 (RN-05, D7) — registra na NC que a execucao aconteceu, DEPOIS da baixa. `COALESCE` nos
+ * tres campos de execucao: a NC legada ja `EXECUTADA` sem movimentacao (o `/executar` de antes
+ * registrava SUCATEAR sem mover) preserva quem e quando registrou; a movimentacao e o que faltava.
+ * `status <> 'CANCELADA'` no WHERE (Fase 2). A trilha `NC_EXECUTADA` NAO e fatal: a baixa valeu.
+ */
+async function registrarExecucaoDaNc(db, user, atual, doc, mov) {
+  await dbRun(db, `UPDATE nao_conformidades_almoxarifado SET
+      execucao_estado = 'EXECUTADA', execucao_em = COALESCE(execucao_em, CURRENT_TIMESTAMP),
+      execucao_por_id = COALESCE(execucao_por_id, ?), execucao_por_nome = COALESCE(execucao_por_nome, ?),
+      execucao_movimentacao_id = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND execucao_movimentacao_id IS NULL AND status <> 'CANCELADA'`,
+  [user.id, nomeDoUsuario(user), mov.id, doc.id]);
+  try {
+    await registrarAuditoria(db, {
+      entidade: 'nao_conformidade',
+      entidade_id: doc.id,
+      acao: 'NC_EXECUTADA',
+      usuario_id: user.id,
+      usuario_nome: nomeDoUsuario(user),
+      dados_anteriores: { execucao_estado: doc.execucao_estado },
+      dados_novos: {
+        execucao_estado: 'EXECUTADA',
+        decisao: doc.decisao,
+        efeito_saldo: 'SUCATEADA',
+        quantidade: atual.quantidade,
+        movimentacao_id: mov.id,
+        sucateamento_id: atual.id,
+      },
+      justificativa: `Sucateamento SUC-${atual.id} aprovado nas duas pernas`,
+    });
+  } catch (e) {
+    console.warn(`[sucateamento] baixa do SUC-${atual.id} feita, mas a trilha da NC falhou: ${e.message}`);
+  }
 }
 
 /**
@@ -353,6 +596,18 @@ async function aprovar(db, user, id, pernaNome) {
       + 'assinatura com dois carimbos. A segunda assinatura tem de ser de outra pessoa.', 403);
   }
 
+  // Etapa 69 (Fase 2, D8) — sucateamento LIGADO a NC cancelada: a assinatura que NAO fecha (a outra
+  // perna ainda vazia) recusa ANTES do claim, sem nada a desfazer. A que fecha tem a mesma checagem
+  // DEPOIS do claim, dentro do `try` que compensa (passo 1 do contrato) — e o caso da corrida e do
+  // cancelamento entre as duas pernas.
+  if (atual.nao_conformidade_id && atual[outra.colId] === null) {
+    const docNc = await dbGet(db, 'SELECT status FROM nao_conformidades_almoxarifado WHERE id = ?',
+      [atual.nao_conformidade_id]);
+    if (!docNc || docNc.status === 'CANCELADA') {
+      throw erro('A não conformidade foi cancelada — recuse este sucateamento.');
+    }
+  }
+
   // ── A BARREIRA 3 SE REPETE NO WHERE, e a repeticao e o que a torna real (fix round 1) ────────
   //
   // Achado do review, e e um TOCTOU classico: a checagem acima le a linha e decide; o claim escreve
@@ -389,13 +644,25 @@ async function aprovar(db, user, id, pernaNome) {
   const fechou = claim.status === 'APROVADO';
   let movimentacao = null;
 
-  if (fechou) {
+  let docNc = null;
+  if (fechou && atual.nao_conformidade_id) {
+    // Etapa 69 — o sucateamento LIGADO a NC baixa do BLOQUEADO. Os passos 1-4 do contrato (NC,
+    // claim da inspecao, origem, motor) e as compensacoes moram em `baixarReprovado`.
+    ({ mov: movimentacao, doc: docNc } = await baixarReprovado(db, user, atual, perna));
+    await dbRun(db, `UPDATE sucateamentos_almoxarifado
+       SET movimentacao_sucata_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    [movimentacao.id, id]);
+    await registrarExecucaoDaNc(db, user, atual, docNc, movimentacao);
+  } else if (fechou) {
     try {
+      // Etapa 68 (D6 revisto): DENTRO do try — erro de banco aqui ainda compensa a assinatura.
+      const origemSucata = atual.lote_id ? null : await origemAreaDeSucata(db, atual.material_id, atual.quantidade);
       movimentacao = await stockService.registrarMovimentacao(db, user, {
         material_id: atual.material_id,
         tipo: 'SUCATA',
         quantidade: atual.quantidade,
         lote_id: atual.lote_id || undefined,
+        localizacao_origem_id: origemSucata || undefined,
         // O vinculo da SOLICITACAO vai junto: para material de cliente ele e o que a guarda do dono
         // exige (e ja foi validado la), e para material nosso ele e o que amarra a sucata ao
         // trabalho de onde ela saiu no extrato.
@@ -417,7 +684,9 @@ async function aprovar(db, user, id, pernaNome) {
         // contagem de series. Declarando, o mesmo caso vira uma recusa limpa do motor seguida de
         // compensacao. Custo no caminho legitimo: zero, porque material serializado nao chega aqui.
         // Como sempre neste modulo, no 4o argumento e nunca no body (stockService.js:569-607).
-      }, { exigeLote: true, exigeSerie: true });
+        // Etapa 68: `origemEstrita` so com a origem da area — o motor confere que o saldo nela cobre
+        // e nao drena outros enderecos. Sem origem, nada muda (o motor baixa como sempre baixou).
+      }, { exigeLote: true, exigeSerie: true, origemEstrita: !!origemSucata });
     } catch (e) {
       await compensarAssinatura(db, user, id, perna, e.message);
       // Re-lanca o erro ORIGINAL do motor, sem mascarar: "Saldo insuficiente. Disponivel: 20 UN" e
@@ -618,11 +887,13 @@ async function listar(db, filters = {}) {
   let sql = `SELECT s.*,
       m.codigo AS material_codigo, m.nome AS material_nome, m.unidade AS material_unidade,
       m.proprietario_cliente_id, cli.razao_social AS proprietario_cliente_nome,
-      l.codigo AS lote_codigo
+      l.codigo AS lote_codigo,
+      nc.numero AS nao_conformidade_numero
     FROM sucateamentos_almoxarifado s
     JOIN materiais_almoxarifado m ON s.material_id = m.id
     LEFT JOIN clientes cli ON cli.id = m.proprietario_cliente_id
     LEFT JOIN lotes_almoxarifado l ON l.id = s.lote_id
+    LEFT JOIN nao_conformidades_almoxarifado nc ON nc.id = s.nao_conformidade_id
     WHERE 1=1`;
   const params = [];
   if (filters.status) { sql += ' AND s.status = ?'; params.push(filters.status); }
@@ -634,4 +905,6 @@ async function listar(db, filters = {}) {
 module.exports = {
   PERNAS, ACOES_APROVACAO,
   solicitar, aprovar, rejeitar, cancelar, registrarDestino, listar, obter,
+  // Etapa 69
+  solicitarDoReprovado, MOTIVO_SUCATA_REPROVADO,
 };

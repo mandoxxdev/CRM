@@ -19593,59 +19593,7 @@ db.run(`CREATE TABLE IF NOT EXISTS pedidos_compra (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (fornecedor_id) REFERENCES fornecedores(id)
-)`, (errCreate) => {
-  // G5 (lote de outubro): os ALTERs abaixo eram db.run soltos e, em banco NOVO, chegavam antes
-  // deste CREATE ("no such table: pedidos_compra" no primeiro boot, medido no container). Mesma
-  // correcao que fornecedores recebeu na Etapa 34: rodar no callback do CREATE. A const
-  // COLUNAS_PEDIDO_COMPRA_E32 e declarada logo abaixo, mas este callback so executa depois que o
-  // arquivo inteiro ja rodou — nao ha TDZ.
-  if (errCreate) { console.error('Erro ao criar pedidos_compra:', errCreate.message); return; }
-  COLUNAS_PEDIDO_COMPRA_E32.forEach((col) => {
-    db.run(`ALTER TABLE pedidos_compra ADD COLUMN ${col}`, (e) => {
-      if (e && e.message.indexOf('duplicate') === -1) {
-        console.error(`Erro ao adicionar ${col.split(' ')[0]} em pedidos_compra:`, e.message);
-      }
-    });
-  });
-});
-
-// ── Etapa 32: pedido de compra completo (documento que vai ao fornecedor) ──
-// O pedido precisa carregar o que o ERP atual imprime: dados complementares, os cinco
-// totalizadores e o snapshot fiscal do fornecedor.
-//
-// O prefixo `snap_` NÃO é enfeite: receiptService faz
-// `SELECT p.*, f.razao_social as fornecedor_nome, f.cnpj as fornecedor_cnpj` em três pontos.
-// Colunas chamadas `fornecedor_nome`/`fornecedor_cnpj` aqui viriam no `p.*` e seriam
-// SOBRESCRITAS pelo alias do JOIN na mesma linha — o snapshot morreria em silêncio justo na
-// leitura que o recebimento usa. Ver RN-06 do plano da Etapa 32.
-const COLUNAS_PEDIDO_COMPRA_E32 = [
-  'condicao_pagamento TEXT',
-  'frete_modalidade TEXT',
-  'transportadora TEXT',
-  'transportadora_telefone TEXT',
-  'via_transporte TEXT',
-  'tabela_preco TEXT',
-  'contato TEXT',
-  'local_entrega TEXT',
-  'local_cobranca TEXT',
-  'total_produtos REAL DEFAULT 0',
-  'total_ipi REAL DEFAULT 0',
-  'total_icms_st REAL DEFAULT 0',
-  'total_desconto REAL DEFAULT 0',
-  'valor_frete REAL DEFAULT 0',
-  'snap_fornecedor_nome TEXT',
-  'snap_fornecedor_cnpj TEXT',
-  'snap_fornecedor_ie TEXT',
-  'snap_fornecedor_endereco TEXT',
-  'snap_fornecedor_municipio TEXT',
-  'snap_fornecedor_uf TEXT',
-  'snap_fornecedor_cep TEXT',
-  'snap_fornecedor_telefone TEXT',
-  'snap_fornecedor_email TEXT',
-];
-// (os ALTERs de COLUNAS_PEDIDO_COMPRA_E32 rodam no callback do CREATE TABLE pedidos_compra, acima — G5.)
-
-// (IE, celular e telefone_vendedor de fornecedores: ver ALTERS_FORNECEDORES, no CREATE da tabela.)
+)`);
 
 db.run(`CREATE TABLE IF NOT EXISTS cotacoes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -19659,7 +19607,18 @@ db.run(`CREATE TABLE IF NOT EXISTS cotacoes (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (fornecedor_id) REFERENCES fornecedores(id)
-)`);
+)`, (errCreate) => {
+  if (errCreate) { console.error('Erro ao criar cotacoes:', errCreate.message); return; }
+  // Etapa 41: a cotação que virou pedido aponta para ele (1:1). `cotacoes` é core, então a coluna
+  // entra pelo mesmo caminho das de `fornecedores` acima (erro 'duplicate' ignorado). O stub do
+  // harness (`tests/helpers/testApp.js`) ganha a coluna à mão — este arquivo não roda nos testes.
+  // Integracao main+branch: o ALTER era um db.run solto e, em banco NOVO, chegava antes deste CREATE
+  // ("no such table: cotacoes" no primeiro boot, medido na integracao). Roda no callback do CREATE,
+  // como fornecedores (Etapa 34 da main) e os_itens/familias_produto (G6) passaram a fazer.
+  db.run('ALTER TABLE cotacoes ADD COLUMN pedido_id INTEGER REFERENCES pedidos_compra(id)', (e) => {
+    if (e && e.message.indexOf('duplicate') === -1) console.error('Erro ao adicionar pedido_id em cotacoes:', e.message);
+  });
+});
 
 // Grupos de fornecedores homologados (ex.: Insumos, Peças, Serviços)
 db.run(`CREATE TABLE IF NOT EXISTS grupos_compras (
@@ -20367,425 +20326,27 @@ db.run(`CREATE TABLE IF NOT EXISTS oee_registros (
 )`);
 
 // ========== ROTAS MÓDULO COMPRAS ==========
-// Fornecedores
-// Lista de fornecedores: G2 (lote de outubro) — saiu daqui para routes/compras/fornecedores.js
-// (projecao nomeada, sem planilha_*). Registrado abaixo junto do GET /:id, POST e PUT.
-
-// Pedidos de Compra
-// Pedido de compra (Etapa 32) — saiu daqui para `routes/compras/pedidos.js`, que o harness
-// de testes consegue montar. REGISTRADO AQUI, e não no rodapé junto dos outros módulos, por
-// um motivo concreto: precisa vir ANTES do `app.delete('/api/compras/:tipo/:id')` genérico
-// logo abaixo, senão o DELETE do módulo nunca roda.
-require('./routes/compras/pedidos')(app, db, authenticateToken, checkModulePermission);
-// Ficha do fornecedor (Etapa 34) — POST/PUT saíram daqui para `routes/compras/fornecedores.js`
-// (onde o harness os monta) e GET /:id nasceu lá. Só GET/POST/PUT: a posição em relação ao
-// DELETE genérico abaixo é inócua — o DELETE /fornecedores/:id continua no genérico.
+// Ficha do fornecedor (main, Etapa 34 + G2): `routes/compras/fornecedores.js` traz a lista com
+// projecao nomeada (sem planilha_*), GET /:id, POST e PUT com as 13 colunas + telefone_vendedor.
+// REGISTRADO ANTES de `routes/compras.js` de proposito: no Express a primeira rota registrada
+// vence, entao estas sombreiam a lista/GET :id/POST/PUT de fornecedor da Etapa 40 (que seguem
+// no arquivo da branch, intocadas, mas nunca respondem). Decisao B18 da integracao.
 require('./routes/compras/fornecedores')(app, db, authenticateToken, checkModulePermission);
-
-// Cotações
-app.get('/api/compras/cotacoes', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const { search, status } = req.query;
-  let query = `SELECT c.*, f.razao_social as fornecedor_nome 
-               FROM cotacoes c 
-               LEFT JOIN fornecedores f ON c.fornecedor_id = f.id 
-               WHERE 1=1`;
-  const params = [];
-
-  if (search) {
-    query += ' AND (c.numero LIKE ? OR f.razao_social LIKE ?)';
-    const searchTerm = `%${search}%`;
-    params.push(searchTerm, searchTerm);
-  }
-  if (status) {
-    query += ' AND c.status = ?';
-    params.push(status);
-  }
-
-  query += ' ORDER BY c.created_at DESC';
-
-  db.all(query, params, (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    res.json(rows);
-  });
-});
-
-// Delete genérico
-app.delete('/api/compras/:tipo/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const { tipo, id } = req.params;
-  // 'pedidos' SAIU daqui na Etapa 32: o pedido tem filhos (itens) e regra de bloqueio
-  // (RN-08 — recebimento ou solicitação vinculada), e o DELETE cru desta rota genérica
-  // apagaria o cabeçalho deixando os itens órfãos, ou estouraria FK em produção.
-  // Quem responde por DELETE /api/compras/pedidos/:id é routes/compras/pedidos.js,
-  // registrado ANTES desta rota.
-  const tables = {
-    'fornecedores': 'fornecedores',
-    'cotacoes': 'cotacoes'
-  };
-
-  // Validação de input
-  if (!tipo || !id) {
-    return res.status(400).json({ error: 'Tipo e ID são obrigatórios' });
-  }
-
-  // Validar que o ID é numérico
-  const idNum = parseInt(id);
-  if (isNaN(idNum) || idNum <= 0) {
-    return res.status(400).json({ error: 'ID inválido' });
-  }
-
-  const table = tables[tipo];
-  if (!table) {
-    return res.status(400).json({ error: 'Tipo inválido' });
-  }
-
-  // Usar prepared statement para prevenir SQL injection
-  db.run(`DELETE FROM ${table} WHERE id = ?`, [idNum], function(err) {
-    if (err) {
-      console.error('Erro ao deletar:', err);
-      return res.status(500).json({ error: 'Erro ao excluir item' });
-    }
-    if (this.changes === 0) {
-      return res.status(404).json({ error: 'Item não encontrado' });
-    }
-    res.json({ message: 'Item excluído com sucesso' });
-  });
-});
-
-// ---------- Grupos de fornecedores homologados (Compras) ----------
-app.get('/api/compras/grupos', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  db.all('SELECT * FROM grupos_compras WHERE ativo = 1 ORDER BY COALESCE(numero, 999) ASC, ordem ASC, nome ASC', [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows || []);
-  });
-});
-app.get('/api/compras/grupos/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const id = req.params.id;
-  db.get('SELECT * FROM grupos_compras WHERE id = ? AND ativo = 1', [id], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!row) return res.status(404).json({ error: 'Grupo não encontrado' });
-    res.json(row);
-  });
-});
-app.post('/api/compras/grupos', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const body = req.body || {};
-  const nome = (body.nome || '').trim();
-  if (!nome) return res.status(400).json({ error: 'Nome do grupo é obrigatório' });
-  const numero = parseInt(body.numero, 10);
-  const ordem = parseInt(body.ordem, 10) || 0;
-  db.run('INSERT INTO grupos_compras (nome, numero, ordem, ativo) VALUES (?, ?, ?, 1)', [nome, isNaN(numero) || numero < 10 ? 10 : numero, ordem], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.status(201).json({ id: this.lastID, nome, numero: isNaN(numero) || numero < 10 ? 10 : numero, ordem });
-  });
-});
-app.put('/api/compras/grupos/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const id = req.params.id;
-  const body = req.body || {};
-  const nome = (body.nome || '').trim();
-  if (!nome) return res.status(400).json({ error: 'Nome do grupo é obrigatório' });
-  const numero = parseInt(body.numero, 10);
-  const ordem = parseInt(body.ordem, 10) || 0;
-  db.run('UPDATE grupos_compras SET nome = ?, numero = ?, ordem = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [nome, isNaN(numero) || numero < 10 ? 10 : numero, ordem, id], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    if (this.changes === 0) return res.status(404).json({ error: 'Grupo não encontrado' });
-    res.json({ id, nome, numero: isNaN(numero) || numero < 10 ? 10 : numero, ordem });
-  });
-});
-app.delete('/api/compras/grupos/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const id = req.params.id;
-  db.run('UPDATE grupos_compras SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    if (this.changes === 0) return res.status(404).json({ error: 'Grupo não encontrado' });
-    res.json({ message: 'Grupo desativado' });
-  });
-});
-app.post('/api/compras/grupos/:id/foto', authenticateToken, checkModulePermission('compras'), uploadGrupoCompras.single('foto'), (req, res) => {
-  const id = req.params.id;
-  if (!req.file || !req.file.filename) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
-  const filename = req.file.filename;
-  db.get('SELECT * FROM grupos_compras WHERE id = ?', [id], (err, grupo) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!grupo) return res.status(404).json({ error: 'Grupo não encontrado' });
-    const oldFoto = grupo.foto;
-    db.run('UPDATE grupos_compras SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], (updateErr) => {
-      if (updateErr) return res.status(500).json({ error: updateErr.message });
-      if (oldFoto) {
-        const oldPath = path.join(uploadsGruposComprasDir, oldFoto);
-        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-      }
-      res.json({ foto: filename, url: '/api/uploads/grupos-compras/' + filename });
-    });
-  });
-});
-app.post('/api/compras/grupos/:id/foto-base64', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  try {
-    const id = req.params.id;
-    const b64 = req.body && req.body.foto_base64;
-    if (!b64 || typeof b64 !== 'string') return res.status(400).json({ error: 'foto_base64 é obrigatório' });
-    const match = b64.match(/^data:image\/(\w+);base64,(.+)$/);
-    let ext = '.jpg';
-    let buf = b64;
-    if (match) {
-      ext = match[1] === 'jpeg' ? '.jpg' : '.' + match[1];
-      buf = Buffer.from(match[2], 'base64');
-    } else {
-      buf = Buffer.from(b64, 'base64');
-    }
-    if (!fs.existsSync(uploadsGruposComprasDir)) fs.mkdirSync(uploadsGruposComprasDir, { recursive: true });
-    const filename = 'grupo_compras_' + id + '_' + Date.now() + ext;
-    const filePath = path.join(uploadsGruposComprasDir, filename);
-    fs.writeFile(filePath, buf, (err) => {
-      if (err) return res.status(500).json({ error: 'Erro ao salvar arquivo: ' + err.message });
-      db.get('SELECT * FROM grupos_compras WHERE id = ?', [id], (dbErr, grupo) => {
-        if (dbErr) return res.status(500).json({ error: dbErr.message });
-        if (!grupo) return res.status(404).json({ error: 'Grupo não encontrado' });
-        const oldFoto = grupo.foto;
-        db.run('UPDATE grupos_compras SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], (upErr) => {
-          if (upErr) return res.status(500).json({ error: upErr.message });
-          if (oldFoto) {
-            const oldPath = path.join(uploadsGruposComprasDir, oldFoto);
-            if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-          }
-          res.json({ foto: filename, url: '/api/uploads/grupos-compras/' + filename });
-        });
-      });
-    });
-  } catch (e) {
-    console.error('Erro foto-base64 grupo compras:', e);
-    res.status(500).json({ error: e.message || 'Erro ao processar foto' });
-  }
-});
-
-// Fornecedores de um grupo (homologados no grupo)
-app.get('/api/compras/grupos/:grupoId/fornecedores', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const grupoId = req.params.grupoId;
-  db.all('SELECT * FROM fornecedores WHERE grupo_id = ? AND status = ? ORDER BY razao_social', [grupoId, 'ativo'], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows || []);
-  });
-});
-
-// Criar/atualizar/ler fornecedor: Etapa 34 — moram em routes/compras/fornecedores.js (registrado
-// acima, ao lado do pedidos.js). Saíram daqui porque o harness não carrega o index.js e nenhum
-// teste os alcançava — o POST não gravava endereço e o PUT ignorava `grupo_id: null`.
-
-app.post('/api/compras/fornecedores/:id/foto', authenticateToken, checkModulePermission('compras'), uploadFornecedor.single('foto'), (req, res) => {
-  const id = req.params.id;
-  if (!req.file || !req.file.filename) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
-  const filename = req.file.filename;
-  db.get('SELECT * FROM fornecedores WHERE id = ?', [id], (err, fornecedor) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!fornecedor) return res.status(404).json({ error: 'Fornecedor não encontrado' });
-    const oldFoto = fornecedor.foto;
-    db.run('UPDATE fornecedores SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], (updateErr) => {
-      if (updateErr) return res.status(500).json({ error: updateErr.message });
-      if (oldFoto) {
-        const oldPath = path.join(uploadsFornecedoresDir, oldFoto);
-        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-      }
-      res.json({ foto: filename, url: '/api/uploads/fornecedores/' + filename });
-    });
-  });
-});
-app.post('/api/compras/fornecedores/:id/foto-base64', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  try {
-    const id = req.params.id;
-    const b64 = req.body && req.body.foto_base64;
-    if (!b64 || typeof b64 !== 'string') return res.status(400).json({ error: 'foto_base64 é obrigatório' });
-    const match = b64.match(/^data:image\/(\w+);base64,(.+)$/);
-    let ext = '.jpg';
-    let buf = b64;
-    if (match) {
-      ext = match[1] === 'jpeg' ? '.jpg' : '.' + match[1];
-      buf = Buffer.from(match[2], 'base64');
-    } else {
-      buf = Buffer.from(b64, 'base64');
-    }
-    if (!fs.existsSync(uploadsFornecedoresDir)) fs.mkdirSync(uploadsFornecedoresDir, { recursive: true });
-    const filename = 'fornecedor_' + id + '_' + Date.now() + ext;
-    const filePath = path.join(uploadsFornecedoresDir, filename);
-    fs.writeFile(filePath, buf, (err) => {
-      if (err) return res.status(500).json({ error: 'Erro ao salvar arquivo: ' + err.message });
-      db.get('SELECT * FROM fornecedores WHERE id = ?', [id], (dbErr, fornecedor) => {
-        if (dbErr) return res.status(500).json({ error: dbErr.message });
-        if (!fornecedor) return res.status(404).json({ error: 'Fornecedor não encontrado' });
-        const oldFoto = fornecedor.foto;
-        db.run('UPDATE fornecedores SET foto = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [filename, id], (upErr) => {
-          if (upErr) return res.status(500).json({ error: upErr.message });
-          if (oldFoto) {
-            const oldPath = path.join(uploadsFornecedoresDir, oldFoto);
-            if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
-          }
-          res.json({ foto: filename, url: '/api/uploads/fornecedores/' + filename });
-        });
-      });
-    });
-  } catch (e) {
-    console.error('Erro foto-base64 fornecedor:', e);
-    res.status(500).json({ error: e.message || 'Erro ao processar foto' });
-  }
-});
-
-// Itens padrão / lista de preços do fornecedor
-app.get('/api/compras/fornecedores/:fornecedorId/itens', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const fornecedorId = req.params.fornecedorId;
-  db.all('SELECT * FROM itens_fornecedor WHERE fornecedor_id = ? ORDER BY descricao', [fornecedorId], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows || []);
-  });
-});
-app.post('/api/compras/fornecedores/:fornecedorId/itens', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const fornecedorId = req.params.fornecedorId;
-  const body = req.body || {};
-  const codigo = (body.codigo || '').trim();
-  const descricao = (body.descricao || '').trim();
-  const unidade = (body.unidade || 'UN').trim();
-  const preco = parseFloat(body.preco);
-  const observacoes = (body.observacoes || '').trim();
-  if (!descricao) return res.status(400).json({ error: 'Descrição é obrigatória' });
-  db.run('INSERT INTO itens_fornecedor (fornecedor_id, codigo, descricao, unidade, preco, observacoes) VALUES (?, ?, ?, ?, ?, ?)',
-    [fornecedorId, codigo || null, descricao, unidade || 'UN', isNaN(preco) ? 0 : preco, observacoes || null], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.status(201).json({ id: this.lastID, fornecedor_id: parseInt(fornecedorId, 10), codigo, descricao, unidade, preco: isNaN(preco) ? 0 : preco, observacoes: observacoes || null });
-  });
-});
-app.put('/api/compras/fornecedores/:fornecedorId/itens/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const { fornecedorId, id } = req.params;
-  const body = req.body || {};
-  const codigo = (body.codigo || '').trim();
-  const descricao = (body.descricao || '').trim();
-  const unidade = (body.unidade || 'UN').trim();
-  const preco = parseFloat(body.preco);
-  const observacoes = (body.observacoes || '').trim();
-  if (!descricao) return res.status(400).json({ error: 'Descrição é obrigatória' });
-  db.run('UPDATE itens_fornecedor SET codigo = ?, descricao = ?, unidade = ?, preco = ?, observacoes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND fornecedor_id = ?',
-    [codigo || null, descricao, unidade || 'UN', isNaN(preco) ? 0 : preco, observacoes || null, id, fornecedorId], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    if (this.changes === 0) return res.status(404).json({ error: 'Item não encontrado' });
-    res.json({ message: 'Item atualizado' });
-  });
-});
-app.delete('/api/compras/fornecedores/:fornecedorId/itens/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const { fornecedorId, id } = req.params;
-  db.run('DELETE FROM itens_fornecedor WHERE id = ? AND fornecedor_id = ?', [id, fornecedorId], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    if (this.changes === 0) return res.status(404).json({ error: 'Item não encontrado' });
-    res.json({ message: 'Item excluído' });
-  });
-});
-
-// Salvar planilha do fornecedor (para visualização no software)
-app.post('/api/compras/fornecedores/:fornecedorId/planilha', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const fornecedorId = req.params.fornecedorId;
-  const body = req.body || {};
-  const nome = (body.nome || body.nomeArquivo || '').trim() || 'planilha';
-  const linhas = body.linhas || body.rows || [];
-  if (!Array.isArray(linhas)) {
-    return res.status(400).json({ error: 'Envie "linhas" com array de linhas (array de arrays)' });
-  }
-  const planilhaDados = JSON.stringify(linhas);
-  db.run(
-    'UPDATE fornecedores SET planilha_dados = ?, planilha_nome = ?, planilha_atualizado_em = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [planilhaDados, nome, fornecedorId],
-    function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      if (this.changes === 0) return res.status(404).json({ error: 'Fornecedor não encontrado' });
-      res.json({ message: 'Planilha salva', nome, linhas: linhas.length });
-    }
-  );
-});
-
-// Obter planilha salva do fornecedor (para visualização no software)
-app.get('/api/compras/fornecedores/:fornecedorId/planilha', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const fornecedorId = req.params.fornecedorId;
-  db.get('SELECT planilha_dados, planilha_nome, planilha_atualizado_em FROM fornecedores WHERE id = ?', [fornecedorId], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!row) return res.status(404).json({ error: 'Fornecedor não encontrado' });
-    let linhas = [];
-    if (row.planilha_dados) {
-      try {
-        linhas = JSON.parse(row.planilha_dados);
-      } catch (_) {}
-    }
-    res.json({ nome: row.planilha_nome || null, linhas, atualizado_em: row.planilha_atualizado_em || null });
-  });
-});
-
-// Importar itens do fornecedor via planilha (JSON de linhas ou arquivo)
-// Aceita qualquer formato: o backend tenta achar descrição, código, unidade e preço em várias chaves possíveis
-function normalizarCampo(s) {
-  if (s == null || s === '') return '';
-  return String(s).trim();
-}
-function parsePrecoBackend(val) {
-  if (val == null || val === '') return 0;
-  if (typeof val === 'number' && !isNaN(val)) return val;
-  const s = String(val).trim().replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
-  const n = parseFloat(s);
-  return isNaN(n) ? 0 : n;
-}
-function extrairDoRow(row, ...candidatos) {
-  for (const k of candidatos) {
-    const v = row[k];
-    if (v != null && String(v).trim() !== '') return String(v).trim();
-  }
-  return '';
-}
-function extrairPrecoDoRow(row) {
-  const chavesPreco = ['preco', 'preço', 'valor', 'valor unitario', 'valor unitário', 'price', 'vlr', 'preco unitario', 'preço unitário', 'valor unit', 'preco unit', 'valor_unitario', 'preco_unitario'];
-  for (const k of chavesPreco) {
-    const v = row[k];
-    if (v != null && v !== '') {
-      const n = parsePrecoBackend(v);
-      if (!isNaN(n)) return n;
-    }
-  }
-  for (const k of Object.keys(row || {})) {
-    const v = row[k];
-    if (v == null || v === '') continue;
-    if (typeof v === 'number' && !isNaN(v)) return v;
-    const n = parsePrecoBackend(v);
-    if (!isNaN(n)) return n;
-  }
-  return 0;
-}
-function extrairDescricaoDoRow(row) {
-  const desc = extrairDoRow(row, 'descricao', 'descrição', 'descricao_produto', 'descricao produto', 'produto', 'item', 'nome', 'designacao', 'designação', 'material', 'especificacao', 'denominacao', 'nome do produto', 'desc');
-  if (desc) return desc;
-  for (const k of Object.keys(row || {})) {
-    const v = row[k];
-    if (v == null) continue;
-    const s = String(v).trim();
-    if (s === '') continue;
-    if (isNaN(parsePrecoBackend(v))) return s;
-  }
-  return '';
-}
-app.post('/api/compras/fornecedores/:fornecedorId/itens/importar', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const fornecedorId = req.params.fornecedorId;
-  const body = req.body || {};
-  const linhas = body.linhas || body.rows || [];
-  if (!Array.isArray(linhas) || linhas.length === 0) {
-    return res.status(400).json({ error: 'Envie "linhas" ou "rows" com array de objetos (qualquer formato de planilha)' });
-  }
-  let inseridos = 0;
-  const next = (i) => {
-    if (i >= linhas.length) return res.json({ message: 'Importação concluída', inseridos });
-    const row = linhas[i];
-    const descricao = extrairDescricaoDoRow(row);
-    if (!descricao) return next(i + 1);
-    const codigo = extrairDoRow(row, 'codigo', 'código', 'cod', 'sku', 'referencia', 'referência', 'ref') || null;
-    const unidade = (extrairDoRow(row, 'unidade', 'und', 'um', 'un', 'unid') || 'UN').trim();
-    const preco = extrairPrecoDoRow(row);
-    db.run('INSERT INTO itens_fornecedor (fornecedor_id, codigo, descricao, unidade, preco) VALUES (?, ?, ?, ?, ?)',
-      [fornecedorId, codigo, descricao, unidade || 'UN', preco], function(err) {
-        if (err) return res.status(500).json({ error: err.message });
-        inseridos++;
-        next(i + 1);
-      });
-  };
-  next(0);
+// Etapa 38: as 23 rotas de `/api/compras/*` que ficavam AQUI (e os 5 helpers de leitura de
+// planilha que elas usam) foram para `server/routes/compras.js`, VERBATIM e na mesma ORDEM.
+// Motivo: este arquivo nao e carregavel por teste (require-lo sobe o servidor), entao ZERO testes
+// batiam no modulo Compras e o harness so monta registradores. A ordem de registro e contrato —
+// o DELETE generico sombreia o de grupos, e isso esta caracterizado em
+// `tests/api/comprasPedidosRotas.api.test.js`.
+// NAO se mexeram: as 3 rotas de `/api/compras/solicitacoes-compra` (`:18465`, `:18500`, `:18525`),
+// que operam a tabela core `solicitacoes_compra`; e as instancias de multer (`:807`, `:826`), que
+// fecham sobre os diretorios de upload deste arquivo — elas entram por DI, junto dos diretorios,
+// para que o arquivo continue sendo gravado exatamente onde era.
+require('./routes/compras')(app, db, authenticateToken, checkModulePermission, {
+  uploadGrupoCompras,
+  uploadFornecedor,
+  uploadsGruposComprasDir,
+  uploadsFornecedoresDir,
 });
 
 // ========== ROTAS MÓDULO FINANCEIRO ==========

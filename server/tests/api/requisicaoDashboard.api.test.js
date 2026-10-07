@@ -88,6 +88,22 @@ async function criarRequisicao(db, { status, itens, solicitanteId = 1 }) {
     assert.ok(esperado.n >= 2, 'sanity: deveria haver ao menos as 2 requisições recém-criadas');
   });
 
+  // Etapa 74 (T4, RN-13, D10/B376): a reserva na chegada leva a requisicao a PARCIALMENTE/TOTALMENTE_RESERVADA no
+  // momento em que o material chega — e a lista "abertas" nao tinha os dois: a requisicao sumia do painel.
+  await test('[dashboard, Etapa 74 RN-13] TOTALMENTE_RESERVADA e PARCIALMENTE_RESERVADA aparecem em "abertas", na ordem de sempre', async () => {
+    // As abertas dos testes de cima saem do caminho (LIMIT 5): este teste mede so as duas novas.
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET status = 'CANCELADO' WHERE status <> 'ENCERRADA' AND status <> 'ENTREGUE'");
+    const { id: total } = await criarRequisicao(db, { status: 'TOTALMENTE_RESERVADA', itens: [{ material_id: matId }] });
+    const { id: parcial } = await criarRequisicao(db, { status: 'PARCIALMENTE_RESERVADA', itens: [{ material_id: matId }] });
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET urgencia = 'URGENTE' WHERE id = ?", [parcial]);
+    const res = await request(app).get('/api/almoxarifado/dashboard/requisicoes');
+    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    const ids = res.body.abertas.map((r) => Number(r.id));
+    assert.deepStrictEqual(ids, [parcial, total], `urgencia primeiro, depois criacao: ${JSON.stringify(ids)}`);
+    assert.deepStrictEqual(Object.keys(res.body).sort(),
+      ['abertas', 'requisicoesEmitidas', 'requisicoesEncerradas', 'requisicoesPendentes', 'requisicoesUrgentes']);
+  });
+
   await close();
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);

@@ -1,7 +1,7 @@
 # 03 — Motor de Estoque (saldos, movimentações, livro, saídas)
 
 > **Status:** 🟢 — Etapa 1 entregue (2026-08-04): motor v2 com regra crítica/emergencial/centro de custo/custo médio, livro com filtros e extrato do item, estorno com motivo (backend + tela). A validação de vencido/lote reprovado que dependia da feature 10 foi entregue na Etapa 6, Task 3 (ver [10-lotes-series-etiquetas](../10-lotes-series-etiquetas/README.md)). · **Spec original:** seções 7 (fórmula de saldo), 13 (saídas), 30 (livro de movimentações)
-> **Última atualização:** 2026-08-13 (**Etapa 8c — `RETORNO_TRANSFORMACAO`, e o custo médio
+> **Última atualização:**  2026-09-30 (**Etapa 62 — o AJUSTE de material com série pede as séries; por endereço e o estorno recusados**; ver a seção "Etapa 62" no fim; antes: **Etapa 51 — a saída sem lote baixa o ENDEREÇO de onde o material sai**; ver a seção "Etapa 51" no fim; o motor continua 🟢). Anterior: 2026-08-13 (**Etapa 8c — `RETORNO_TRANSFORMACAO`, e o custo médio
 > deixando de ter um alimentador só.** Três mudanças deste motor, detalhadas abaixo: (1) o tipo
 > novo `RETORNO_TRANSFORMACAO` (`9c7ec75`), **entrada com custo**, dedicado (fora da rota genérica)
 > e presente nos **dois** ramos do motor — tem linha própria na tabela de efeitos, em "Tipos de
@@ -498,3 +498,55 @@ total que aquela tabela realmente lastreia. Cobertura: `ajusteLocalizacao.api.te
 Nota de linhagem: o defeito atingia `quantidade_reservada` desde a Etapa 4, mas **nunca alcançou
 produção** — em `main` a função não tem chamador; quem a chama chegou nesta branch. Não há dado
 a reparar.
+
+## Etapa 51 (2026-09-30) — a saída sem lote baixa o endereço de onde o material sai
+
+Commits `606f1d0` (motor) e (Fase 5 `5fdc68a`). Detalhe na spec **02**, seção "Entregue na
+Etapa 51", e no desenho `docs/superpowers/specs/2026-09-30-almoxarifado-etapa51-saida-por-localizacao-design.md`.
+
+O que mudou **neste motor** (`stockService.js`):
+
+- **`claimSaldoSemLote`** — a saída **sem lote** (`!loteIdFinal`) drena as linhas sem lote com saldo, a localização
+  resolvida primeiro, depois as maiores; o resto vai para a linha da localização resolvida (ou sem endereço), que
+  pode ficar negativa. É a regra que `claimSaldoDoLote` já aplicava ao lote, com uma diferença deliberada: relê a
+  linha quando o débito condicional não casa, em vez de pular (pular recriava o fantasma sob concorrência). Saída
+  **com** lote não mudou.
+- **`syncSaldoLocalizacaoPadrao({ drenar })`** — o AJUSTE de saldo total sem endereço, para baixo, drena os endereços
+  antes de negativar. `drenar` só no AJUSTE de ida: a função serve também à reconciliação de estorno.
+- **`absorverNegativosSemLote`** — o AJUSTE com endereço que deixaria o físico negativo (material que não permite)
+  sobe as linhas sem lote negativas antes; recusa se não bastar, checando **antes** de escrever.
+- **Estorno de ENTRADA** sem lote, sem negativo, cuja linha não comporta a reversão: debita como saída
+  (`claimSaldoSemLote`) e compensa as N linhas pelo id.
+- **Estorno de AJUSTE com endereço** que deixaria o físico negativo: **recusa** (no estorno não há contagem —
+  absorver faria o livro registrar quantidade que não se moveu).
+
+**Invariante que continua valendo:** a soma das linhas de um material é igual a `quantidade_atual` (o
+`saidaPorLocalizacao.api.test.js` confere em todos os cenários). **O que passou a valer:** em material **sem lote**
+que não permite negativo, um endereço não fica com saldo que não existe.
+
+## Etapa 62 (2026-09-30) — o AJUSTE de material com série diz quais séries entram ou saem
+
+`327703d` (motor), `b242545` (tela), fix-round `1080491`. Fecha o **C82** das novidades. O motor continua 🟢.
+
+- [x] **AJUSTE/AJUSTE_INVENTARIO de valor absoluto em material com série**, quando o chamador declara `exigeSerie`
+  (v1 e v2 declaram): o novo total tem de ser inteiro; as séries da diferença são **novo − séries presentes** (não
+  novo − físico — assim o legado divergente fecha); sobe → `series` (números novos, entram como a entrada); desce →
+  `serie_ids` (ficam `BAIXADA`); zero → nenhuma série. Validado antes de qualquer efeito (e antes da auditoria do
+  ajuste de material de cliente). Recusas literais: `material com controle de serie exige quantidade inteira`,
+  `material com controle de serie: o ajuste {sobe|baixa} N serie(s) (fisico novo X, series presentes P) — informe N serie(s) (recebidas n)`,
+  `material com controle de serie: o ajuste nao muda as series (presentes P) — nao informe series`, `serie X ja esta em estoque`.
+- [x] **Por endereço, recusado:** `material com controle de serie: ajuste por endereco nao e suportado — ajuste o total do material (sem endereco)`
+  — com endereço o total muda diferente da linha (absorção, legado).
+- [x] **Corrida:** o físico (valor absoluto) só é gravado se as séries presentes, já com as deste ajuste, baterem com o
+  novo total (`UPDATE ... WHERE (SELECT COUNT presentes) = ?`); senão 409 `as series do material mudaram durante o ajuste — recarregue e tente de novo`
+  e o catch amplo desfaz as séries. O catch amplo agora também **restaura o físico** se algo falhar depois.
+- [x] **Estorno de AJUSTE de material com série recusado:** `estorno de ajuste de material com serie recusado — faca um novo ajuste (ele pede as series)`
+  — inclusive de ajuste antigo. AJUSTE de material sem série continua estornável.
+- **Fica de fora (declarado):** a guarda de total negativo do ajuste com série não é alcançada (a primeira validação do
+  motor recusa antes); séries `BLOQUEADA` não descem pelo ajuste; o ramo `AJUSTE_INVENTARIO → BAIXADA` do claim não é
+  alcançado (o inventário não declara `exigeSerie`).
+- Testes: `server/tests/api/ajusteComSerie.api.test.js` (11 cenários; 10 sabotagens vermelhas, a da corrida estável).
+
+**Invariante:** `COUNT(série EM_ESTOQUE + BLOQUEADA) == quantidade_atual` passa a ser mantido também pelo AJUSTE; o
+único escritor que ainda o quebra é o **inventário** (não sabe quais peças contou) — ele devolve `series_a_regularizar`
+(ver a feature 17).

@@ -175,6 +175,89 @@ const COLUNAS_POR_CHAVE = {
         .join('; ') || '—',
     },
   ],
+  // Etapa 39 (RN-D09): a linha crua vem de `pedidos_compra`, então o fallback genérico mostraria
+  // `id` e `status` crus — e nenhum deles é a história do alerta. Espelha as cinco linhas do corpo
+  // do e-mail, menos o `Status` (que o cartão já qualifica: o alerta só existe para pedido ainda
+  // não recebido).
+  //
+  // ⚠️ CORREÇÃO (Etapa 42, T4): este comentário dizia que a linha vem de `pedidos_compra`
+  // **`SELECT p.*`**, e citava `fornecedor_id`/`valor_total` como o que o fallback mostraria.
+  // Isso é FALSO desde a onda F3 da Etapa 39, que trocou o `p.*` por colunas nomeadas
+  // (`alertRegistry.js`, entrada `PEDIDO_COMPRA_ATRASADO`: `p.id, p.numero, p.status,
+  // p.previsao_entrega, f.razao_social AS fornecedor_nome`) exatamente para valor de pedido e
+  // observação de negociação pararem de viajar para a central, cujo gate (`ver_alertas`) não
+  // inclui `checkModulePermission('compras')`. A frase fica corrigida À VISTA, com a data, em vez
+  // de apagada em silêncio — regra 5 do CLAUDE.md, e esta base já foi enganada duas vezes por
+  // afirmação removida sem rastro.
+  PEDIDO_COMPRA_ATRASADO: [
+    { titulo: 'Pedido', render: (l) => l.numero || `#${l.id}` },
+    { titulo: 'Fornecedor', render: (l) => l.fornecedor_nome || '—' },
+    { titulo: 'Previsão', render: (l) => (l.previsao_entrega ? formatData(l.previsao_entrega) : '—') },
+    { titulo: 'Dias de atraso', render: (l) => (l.dias_atraso ?? '—') },
+  ],
+  // Etapa 42 (RN-E09), a 13a chave. A linha vem de `situacaoDosPedidosCompra` (receiptService,
+  // T1): { id, numero, status, previsao_entrega, fornecedor_nome, quantidade_pedida,
+  // quantidade_recebida, saldo_pendente, situacao_recebimento }. Sem esta entrada o fallback
+  // genérico desenharia os 6 primeiros campos NA ORDEM DO OBJETO — `id` e `status` crus incluídos
+  // — e a história do alerta (quanto foi pedido, quanto chegou, quanto falta) sumiria.
+  //
+  // Contrato congelado 2.6 do plano da etapa: 6 colunas, nesta ordem, e NENHUMA coluna crua.
+  // `situacao_recebimento` fica fora de propósito: o cartão só existe para pedido PARCIAL, então
+  // uma coluna repetindo "PARCIAL" em toda linha é ruído; e `status` fica fora pelo mesmo motivo
+  // do cartão irmão (o `status` do core não é a régua do alerta — quem decide é a situação).
+  //
+  // ⚠️ Os rótulos são CURTOS e de propósito DIFERENTES das frases do corpo do e-mail (o e-mail
+  // diz "Quantidade pedida:", aqui é "Pedida"). É o mesmo precedente do `PEDIDO_COMPRA_ATRASADO`
+  // (`Previsão`/`Dias de atraso` no cartão, frases inteiras no e-mail) — a tabela precisa de
+  // cabeçalho que caiba na coluna. Não unificar com as literais do `alertRegistry`.
+  PEDIDO_COMPRA_PARCIAL: [
+    { titulo: 'Pedido', render: (l) => l.numero || `#${l.id}` },
+    { titulo: 'Fornecedor', render: (l) => l.fornecedor_nome || '—' },
+    { titulo: 'Pedida', render: (l) => formatNum(l.quantidade_pedida) },
+    { titulo: 'Recebida', render: (l) => formatNum(l.quantidade_recebida) },
+    { titulo: 'Saldo pendente', render: (l) => formatNum(l.saldo_pendente) },
+    // A população do parcial NÃO filtra previsão (a do atrasado filtra), então a linha chega com
+    // `previsao_entrega` null — o guarda evita "Invalid Date" na célula.
+    { titulo: 'Previsão', render: (l) => (l.previsao_entrega ? formatData(l.previsao_entrega) : '—') },
+  ],
+  // Etapa 43 (T4, D6), a 14a chave. A linha vem de `listarNaoConformidadesParadas`
+  // (alertRegistry): { id, numero, origem, tipo, status, created_at, material_id,
+  // material_codigo, material_nome, material_unidade, recebimento_id, recebimento_numero,
+  // nota_fiscal, quantidade_esperada, quantidade_recebida, divergencia, dias_parada }. Sem esta
+  // entrada o fallback genérico desenharia os 6 primeiros campos NA ORDEM DO OBJETO — `id`,
+  // `status` e `material_id` crus incluídos — e a pergunta do cartão ("que documento está parado,
+  // há quanto tempo, de qual material") sumiria.
+  //
+  // `status` fica de fora de propósito, como nos dois cartões irmãos: a população deste alerta é
+  // só `ABERTA`, então uma coluna repetindo "ABERTA" em toda linha é ruído. `dias_parada` é
+  // INTEIRO derivado no servidor (CAST do julianday) — a tela não recalcula idade (lição G6).
+  NAO_CONFORMIDADE_ABERTA: [
+    { titulo: 'NC', render: (l) => l.numero || `#${l.id}` },
+    { titulo: 'Material', render: (l) => (l.material_codigo ? `${l.material_codigo} — ${l.material_nome}` : '—') },
+    { titulo: 'Tipo', render: (l) => l.tipo || '—' },
+    { titulo: 'Origem', render: (l) => l.origem || '—' },
+    { titulo: 'Dias parada', render: (l) => (l.dias_parada ?? '—') },
+    // A NC aberta à mão pode não ter recebimento (o SQL da T1 congela `recebimento_id` quando há
+    // um, e deixa nulo quando não há) — o guarda evita a célula "null (NF null)".
+    { titulo: 'Recebimento', render: (l) => `${l.recebimento_numero || '—'}${l.nota_fiscal ? ` (NF ${l.nota_fiscal})` : ''}` },
+  ],
+  // ── Etapa 46 (T3): a 15ª chave. Ela entra AQUI e não no fechamento da etapa porque o fallback
+  // `colunasGenericas` é declarado de propósito — nada quebra sem esta entrada, o cartão apenas
+  // aparece com os nomes CRUS das 6 primeiras colunas da primeira linha (`id`, `numero`, `origem`,
+  // `tipo`, `status`, `decisao`), sem material e sem o "decidida há". Ou seja: é decisão a tomar
+  // agora, não defeito a descobrir na revisão adversarial.
+  //
+  // As colunas espelham a ordem do corpo do e-mail do MESMO alerta, e a diferença em relação à
+  // irmã `NAO_CONFORMIDADE_ABERTA` é justamente o que este cartão cobra: a DECISÃO tomada e o
+  // tempo desde ela — não a idade do documento.
+  NAO_CONFORMIDADE_EXECUCAO_PENDENTE: [
+    { titulo: 'NC', render: (l) => l.numero || `#${l.id}` },
+    { titulo: 'Material', render: (l) => (l.material_codigo ? `${l.material_codigo} — ${l.material_nome}` : '—') },
+    { titulo: 'Decisão', render: (l) => l.decisao || '—' },
+    { titulo: 'Decidida em', render: (l) => formatData(l.decidido_em) },
+    { titulo: 'Decidida há', render: (l) => (l.dias_pendente ?? '—') },
+    { titulo: 'Recebimento', render: (l) => `${l.recebimento_numero || '—'}${l.nota_fiscal ? ` (NF ${l.nota_fiscal})` : ''}` },
+  ],
 };
 
 // Alerta que o registro do servidor ganhar amanhã e esta tabela ainda não conhecer não pode

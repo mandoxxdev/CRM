@@ -191,13 +191,26 @@ async function aprovarValor(db, requisicaoId, user) {
     throw err;
   }
 
-  await dbRun(db,
+  // Etapa 47 (RN-11): a liberação por valor leva direto a APROVADO, então sem o gate ela
+  // contornaria todas as regras. Pré-checagem pela MENSAGEM; guarda no WHERE pela GARANTIA, e
+  // `changes` conferido — antes este UPDATE devolvia sucesso mesmo sem mudar nada (9.7/C1).
+  // `require` aqui dentro: o serviço de regras importa este módulo.
+  const approvalRulesService = require('./approvalRulesService');
+  await approvalRulesService.exigirSemPendenciaAberta(db, reqRow);
+
+  const upd = await dbRun(db,
     `UPDATE requisicoes_almoxarifado
      SET status = 'APROVADO', aprovador_valor_id = ?, aprovador_valor_nome = ?,
          data_aprovacao_valor = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP,
          ultimo_lembrete_enviado = NULL, rejeicao_valor_motivo = NULL
-     WHERE id = ?`,
-    [user.id, user.nome || user.email, requisicaoId]);
+     WHERE id = ? AND status = ? AND ${approvalRulesService.GATE_SQL}`,
+    [user.id, user.nome || user.email, requisicaoId, STATUS_AGUARDANDO]);
+  if (!upd.changes) {
+    const msgGate = await approvalRulesService.mensagemGateAtual(db, requisicaoId);
+    const err = new Error(msgGate || 'Apenas requisições aguardando aprovação de valor podem ser liberadas');
+    err.status = 400;
+    throw err;
+  }
 
   const atualizado = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
   notificarSolicitanteValor(db, atualizado, 'aprovado').catch((err) => {
@@ -410,5 +423,6 @@ module.exports = {
   listarAguardandoAprovacao,
   notificarAprovadoresValor,
   notificarSolicitanteValor,
+  getEmailsAprovadores,
   formatMoeda,
 };

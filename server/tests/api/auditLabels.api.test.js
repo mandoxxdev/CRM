@@ -225,8 +225,11 @@ function verbosDeTransicao() {
     const uniao = [...new Set([...literais, ...dinamicosMovimentacao,
       ...dinamicosRecebimento, ...dinamicosConferencia])];
     assert.ok(uniao.length >= 68, `uniao caiu para ${uniao.length}: alguma fonte parou de ser lida`);
-    assert.ok(dinamicosMovimentacao.length >= 18 && new Set(dinamicosMovimentacao).size === 18,
-      'movementTypes deixou de ter os 18 tipos');
+    // Etapa 45: 18 -> 19 com DEVOLUCAO_FORNECEDOR. O numero e EXATO de proposito (o comentario do
+    // teste das entidades, logo abaixo, explica a diferenca): tipo novo tem de passar por aqui,
+    // porque cada um deles vira a acao da trilha e precisa de rotulo.
+    assert.ok(dinamicosMovimentacao.length >= 19 && new Set(dinamicosMovimentacao).size === 19,
+      'movementTypes deixou de ter os 19 tipos');
 
     const semRotulo = uniao.filter((v) => labels.rotularAcao(v) === v);
     assert.deepStrictEqual(semRotulo, [],

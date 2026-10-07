@@ -53,8 +53,22 @@ const TIPOS_ENTRADA = ['ENTRADA', 'ENTRADA_COMPRA', 'ENTRADA_MANUAL', 'ENTRADA_D
  * saida de verdade; o que os diferencia e que a quantidade que eles baixam esta RETIDA em
  * `quantidade_em_terceiros`, nao disponivel.
  */
+/*
+ * `DEVOLUCAO_FORNECEDOR` (Etapa 45) fecha o trio de nomes parecidos, e e saida de verdade: o
+ * material reprovado sai do predio de volta para quem o entregou. O que o diferencia dos outros e
+ * de ONDE ele sai — a quantidade esta RETIDA em `quantidade_bloqueada`, nao disponivel, pela mesma
+ * razao que `PERDA_TERCEIRO`/`CONSUMO_TERCEIRO` saem de `quantidade_em_terceiros`.
+ *
+ * ⚠️ E UM EFEITO DERIVADO QUE PRECISOU SER DECIDIDO, nao herdado: `clienteEstoqueService.js:43`
+ * monta `TIPOS_CONSUMO` a partir DESTA lista menos `DEVOLUCAO_CLIENTE`, entao acrescentar um tipo
+ * de saida aqui muda a posicao por cliente em SILENCIO.
+ * A decisao foi tomada LA, com a razao escrita, e ela contrariou o que o plano desta etapa dizia:
+ * `DEVOLUCAO_FORNECEDOR` FICA na conta de consumo, porque ficar de fora nao o separa — o torna
+ * invisivel, e a equacao da tela deixa de fechar. Ver o comentario de `TIPOS_CONSUMO`.
+ */
 const TIPOS_SAIDA = ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA',
-  'AJUSTE_NEGATIVO', 'SUCATA', 'PERDA', 'DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO'];
+  'AJUSTE_NEGATIVO', 'SUCATA', 'PERDA', 'DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO',
+  'DEVOLUCAO_FORNECEDOR'];
 
 /**
  * Tipos de DEVOLUCAO — Etapa 14, Task 3 (RN-05, emenda I3 da Fase 2). Subconjunto de

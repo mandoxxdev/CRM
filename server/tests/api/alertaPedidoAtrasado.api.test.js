@@ -1,0 +1,367 @@
+/**
+ * Etapa 39, Task 4 (RN-D09, RN-D10, RN-D11, RN-D13) — a entrada PEDIDO_COMPRA_ATRASADO do
+ * registro de alertas.
+ *
+ * ⚠️ TODA assercao filtra a fila por `evento`, NUNCA por total global (nota de cabecalho de
+ * alertaRegistro.api.test.js:6-8): materiais/ferramentas semeados sem movimentacao caem
+ * AUTOMATICAMENTE em outros alertas do registro, e um contador global mediria o alerta errado.
+ *
+ * ⚠️ NENHUMA DATA LITERAL. Todas derivam de `hojeLocalISO()`, a MESMA funcao que a rota e a
+ * entrada usam — um fixture '2026-09-15' escrito a mao e atrasado hoje e nao e amanha (R3).
+ *
+ * ⚠️ PRIMEIRA entrada do registro que le tabelas CORE (`pedidos_compra`, `fornecedores`): as 11
+ * anteriores so leem `*_almoxarifado`. Mesmo handle, mesmo arquivo SQLite — decisao de
+ * arquitetura declarada na letra B do doc de novidades.
+ *
+ * Executar: cd server && node tests/api/alertaPedidoAtrasado.api.test.js
+ */
+const assert = require('assert');
+const crypto = require('crypto');
+const request = require('supertest');
+const { createTestApp } = require('../helpers/testApp');
+const { dbRun, dbAll } = require('../../services/almoxarifado/db');
+const queueService = require('../../services/almoxarifado/notificationQueueService');
+const alertRegistry = require('../../services/almoxarifado/alertRegistry');
+const { hojeLocalISO } = require('../../services/compras/pedidoCompraService');
+
+let passed = 0; let failed = 0;
+function test(name, fn) {
+  return fn().then(() => { passed++; console.log(`  ✓ ${name}`); })
+    .catch((e) => { failed++; console.error(`  ✗ ${name}: ${e.message}`); });
+}
+
+const ADMIN = { id: 71, nome: 'Admin E39 T4', role: 'admin', is_superadmin: 1, email: 'admin@test.com' };
+
+function hashDedupe(evento, dedupeChave) {
+  return crypto.createHash('sha256').update(`${evento}|${dedupeChave}`).digest('hex');
+}
+
+// hoje + N dias, em data LOCAL, pela MESMA regua do servidor. Nao usa toISOString (UTC).
+function diasDeHoje(n) {
+  const [a, m, d] = hojeLocalISO().split('-').map(Number);
+  const dt = new Date(a, m - 1, d + n);
+  return [dt.getFullYear(), String(dt.getMonth() + 1).padStart(2, '0'),
+    String(dt.getDate()).padStart(2, '0')].join('-');
+}
+
+async function setConfig(db, chave, valor) {
+  await dbRun(db, `UPDATE configuracoes_almoxarifado SET valor = ? WHERE chave = ?`, [valor, chave]);
+}
+
+async function filaPorEvento(db, evento) {
+  return dbAll(db, `SELECT * FROM fila_notificacoes_almoxarifado WHERE evento = ? ORDER BY id ASC`, [evento]);
+}
+
+function resultadoDe(resultados, chave) {
+  const r = resultados.find((x) => x.chave === chave);
+  assert.ok(r, `varredura nao devolveu entrada para ${chave}: ${JSON.stringify(resultados)}`);
+  return r;
+}
+
+(async () => {
+  const { app, db, close } = await createTestApp({ user: ADMIN });
+  await setConfig(db, 'alertas_estoque_emails', 'compras@gmp.ind.br');
+  await setConfig(db, 'alertas_estoque_notificar_email', '1');
+
+  const forn = await dbRun(db, `INSERT INTO fornecedores (razao_social, cnpj)
+    VALUES ('Acos Vale E39','79.779.779/0001-79')`);
+
+  let seq = 0;
+  async function novoPedido({ previsao, status = 'pendente', semFornecedor = false }) {
+    seq += 1;
+    const numero = `PC-E39T4-${String(seq).padStart(3, '0')}`;
+    const p = await dbRun(db, `INSERT INTO pedidos_compra
+        (numero, fornecedor_id, previsao_entrega, status) VALUES (?,?,?,?)`,
+    [numero, semFornecedor ? null : forn.lastID, previsao, status]);
+    return { id: p.lastID, numero, previsao, status };
+  }
+
+  const previsaoP1 = diasDeHoje(-1);
+  let P1; let P6;
+
+  // ── (1) RN-D09: cinco pedidos, UM alerta ────────────────────────────────────────────────────
+  await test('(1) RN-D09 cinco pedidos e UM alerta; o SEXTO, sem fornecedor, tambem entra (LEFT JOIN, R9)', async () => {
+    P1 = await novoPedido({ previsao: previsaoP1, status: 'pendente' });
+    await novoPedido({ previsao: diasDeHoje(5), status: 'pendente' });        // P2 no prazo
+    await novoPedido({ previsao: null, status: 'pendente' });                 // P3 sem previsao
+    await novoPedido({ previsao: diasDeHoje(-3), status: 'recebido' });       // P4 fora da regua
+    await novoPedido({ previsao: diasDeHoje(-4), status: 'cancelado' });      // P5 fora da regua
+
+    await queueService.varrerAlertasRegistrados(db);
+    const fila = await filaPorEvento(db, 'PEDIDO_COMPRA_ATRASADO');
+    assert.strictEqual(fila.length, 1, `esperava 1 alerta, veio ${fila.length}: `
+      + JSON.stringify(fila.map((l) => l.assunto)));
+    assert.strictEqual(JSON.parse(fila[0].payload).pedido_compra_id, P1.id,
+      `o alerta saiu para outro pedido: ${fila[0].payload}`);
+    assert.strictEqual(JSON.parse(fila[0].payload).dias_atraso, 1, fila[0].payload);
+
+    // METADE QUE MEDE O DANO: pedido ORFAO de fornecedor tambem atrasa (R9). Um `JOIN` no lugar
+    // do `LEFT JOIN` o faria sumir do alerta em silencio.
+    // (divergencia declarada do brief: ele escrevia o sexto pedido dentro deste mesmo cenario e
+    // mantinha `1` nos cenarios seguintes — com o sexto enfileirado, a fila passa a ter DUAS
+    // linhas e (2)/(4)/(5) contam 2. O numero certo e o medido, nao o escrito.)
+    P6 = await novoPedido({ previsao: diasDeHoje(-2), status: 'pendente', semFornecedor: true });
+    await queueService.varrerAlertasRegistrados(db);
+    const fila2 = await filaPorEvento(db, 'PEDIDO_COMPRA_ATRASADO');
+    assert.strictEqual(fila2.length, 2, `pedido sem fornecedor tinha de entrar: veio ${fila2.length} linha(s)`);
+    const doOrfao = fila2.find((l) => JSON.parse(l.payload).pedido_compra_id === P6.id);
+    assert.ok(doOrfao, 'o pedido sem fornecedor nao gerou alerta (JOIN no lugar de LEFT JOIN?)');
+    assert.ok(/^Fornecedor: -$/m.test(doOrfao.corpo_texto),
+      `corpo do orfao tinha de trazer 'Fornecedor: -': ${JSON.stringify(doOrfao.corpo_texto)}`);
+  });
+
+  // ── (2) RN-D10: a segunda varredura e DUPLICADA ─────────────────────────────────────────────
+  await test('(2) RN-D10 segunda varredura nao cresce a fila e o hash de dedupe e pedido-atrasado-<id>-<previsao>', async () => {
+    const r = resultadoDe(await queueService.varrerAlertasRegistrados(db), 'PEDIDO_COMPRA_ATRASADO');
+    assert.deepStrictEqual({ enfileiradas: r.enfileiradas, duplicadas: r.duplicadas },
+      { enfileiradas: 0, duplicadas: 2 }, JSON.stringify(r));
+    const fila = await filaPorEvento(db, 'PEDIDO_COMPRA_ATRASADO');
+    assert.strictEqual(fila.length, 2, `2a varredura nao pode duplicar: ${fila.length} linha(s)`);
+
+    const doP1 = fila.find((l) => JSON.parse(l.payload).pedido_compra_id === P1.id);
+    // Onda de correcao F2: a `previsao_entrega` entra na chave. O cenario (9) mede o PORQUE.
+    assert.strictEqual(doP1.hash_dedupe,
+      hashDedupe('PEDIDO_COMPRA_ATRASADO', `pedido-atrasado-${P1.id}-${previsaoP1}`),
+      'dedupe deveria ser pedido-atrasado-<id>-<previsao_entrega>');
+    // Metade negativa: a chave ANTIGA (so o id) nao pode mais ser a gravada — sem esta linha, um
+    // `dedupeChave` que voltasse ao formato antigo so derrubaria a assercao acima se o hash mudasse
+    // por acidente, e o cenario (9) e quem provaria o dano. Aqui fica explicito.
+    assert.notStrictEqual(doP1.hash_dedupe,
+      hashDedupe('PEDIDO_COMPRA_ATRASADO', `pedido-atrasado-${P1.id}`),
+      'o dedupe voltou a ser so o id do pedido — prazo renegociado nunca mais alertaria');
+  });
+
+  // ── (3) RN-D09: assunto e corpo ─────────────────────────────────────────────────────────────
+  await test('(3) RN-D09 assunto com prefixo [Compras] e corpo com pedido, fornecedor, previsao, atraso e status', async () => {
+    const fila = await filaPorEvento(db, 'PEDIDO_COMPRA_ATRASADO');
+    const doP1 = fila.find((l) => JSON.parse(l.payload).pedido_compra_id === P1.id);
+    assert.strictEqual(doP1.assunto, `[Compras] Pedido de compra atrasado — ${P1.numero}`,
+      `assunto literal divergiu: ${JSON.stringify(doP1.assunto)}`);
+    // O documento e de COMPRAS e a lista de destinatarios e compartilhada — o prefixo e o que
+    // deixa o leitor filtrar (D5, descartado (e)).
+    assert.ok(!doP1.assunto.includes('[Almoxarifado]'), `prefixo errado: ${doP1.assunto}`);
+
+    const corpo = doP1.corpo_texto;
+    for (const linha of [
+      `Pedido: ${P1.numero}`,
+      'Fornecedor: Acos Vale E39',
+      `Previsão de entrega: ${previsaoP1}`,
+      'Atraso: 1 dia(s)',
+      'Status: pendente',
+    ]) {
+      assert.ok(corpo.includes(linha), `corpo nao contem ${JSON.stringify(linha)}: ${JSON.stringify(corpo)}`);
+    }
+  });
+
+  // ── (4) RN-D09: a central monta o cartao ────────────────────────────────────────────────────
+  await test('(4) RN-D09 a central tem o cartao novo, sem erro, e as 11 entradas anteriores continuam la', async () => {
+    const { alertas } = await alertRegistry.montarCentral(db);
+    const cartao = alertas.find((a) => a.chave === 'PEDIDO_COMPRA_ATRASADO');
+    assert.ok(cartao, 'a central nao tem o cartao novo');
+    // ⚠️ E ESTA a assercao que acusa um `{}` capturado mid-load (R9b): com o require quebrado,
+    // `derivarAtraso` vem undefined, o `listar` lanca e o cartao vem `erro: true` — a central NAO
+    // quebra (try/catch por entrada, R8), entao sem isto o defeito seria mudo.
+    assert.strictEqual(cartao.erro, undefined, `listar lancou: ${cartao.erro_mensagem}`);
+    assert.strictEqual(cartao.total, 2, `esperava 2 pedidos atrasados na central, veio ${cartao.total}`);
+    assert.strictEqual(cartao.titulo, 'Pedido de compra atrasado');
+    assert.strictEqual(cartao.dias, null, 'a entrada nao tem janela de dias (configDias: null)');
+    // Metade positiva: a entrada nova nao derrubou nenhuma das anteriores.
+    //
+    // ⚠️ 12 -> 13 na Etapa 42, T3 (o mesmo gesto que a Etapa 39 fez ao virar 11 -> 12): a entrada
+    // `PEDIDO_COMPRA_PARCIAL` e a 13a do registro. O numero LITERAL fica de proposito — trocado por
+    // `ALERT_REGISTRY.length` esta linha viraria uma tautologia e pararia de medir "nenhuma anterior
+    // caiu", que e a unica coisa que ela existe para dizer. Quem acrescentar a 15a atualiza aqui.
+    // 13 -> 14 na Etapa 43, T4: a entrada `NAO_CONFORMIDADE_ABERTA` — e ela foi acrescentada aqui
+    // exatamente pelo caminho que este comentario manda.
+    // 14 -> 15 na Etapa 46, T3: `NAO_CONFORMIDADE_EXECUCAO_PENDENTE`, pelo mesmo caminho.
+    // (O molde do numero DINAMICO, para quem quer o outro contrato, e
+    // `alertaRegistro.api.test.js:260`, que compara a varredura com `ALERT_REGISTRY.length` porque
+    // ali o que se mede e "uma entrada de resultado por entrada do registro", nao o total.)
+    assert.strictEqual(alertas.length, 15, `a central tem ${alertas.length} cartoes`);
+  });
+
+  // ── (5) RN-D11: os ids do alerta sao os MESMOS ids de atrasado=1 na rota ────────────────────
+  await test('(5) RN-D11 a regua do alerta e a MESMA da tela (inclusive o rejeitado vencido, que fica fora dos dois)', async () => {
+    // O `rejeitado` vencido e o que pega a lista de status escrita DUAS vezes: uma segunda regua
+    // em SQL (`status NOT IN ('recebido','cancelado')`) o deixaria entrar no alerta e nao na rota.
+    await novoPedido({ previsao: diasDeHoje(-6), status: 'rejeitado' });
+
+    const daRota = (await request(app).get('/api/compras/pedidos'))
+      .body.filter((p) => p.atrasado === 1).map((p) => p.id).sort((a, b) => a - b);
+    const entrada = alertRegistry.ALERT_REGISTRY.find((e) => e.chave === 'PEDIDO_COMPRA_ATRASADO');
+    assert.ok(entrada, 'ALERT_REGISTRY nao tem PEDIDO_COMPRA_ATRASADO');
+    const doAlerta = (await entrada.listar(db, { dias: null })).map((l) => l.id).sort((a, b) => a - b);
+
+    assert.deepStrictEqual(doAlerta, daRota, 'a regua do alerta divergiu da regua da tela');
+    // Metade positiva: os dois conjuntos nao estao vazios (dois conjuntos vazios sao iguais).
+    assert.deepStrictEqual(daRota, [P1.id, P6.id].sort((a, b) => a - b),
+      `a rota deveria acusar exatamente P1 e P6 atrasados, veio ${JSON.stringify(daRota)}`);
+  });
+
+  // ── (6) RN-D09: e-mail desligado ────────────────────────────────────────────────────────────
+  await test('(6) RN-D09 com o toggle mestre desligado nao sai alerta, e o motivo e declarado; religando, volta', async () => {
+    await setConfig(db, 'alertas_estoque_notificar_email', 'false');
+    const antes = (await filaPorEvento(db, 'PEDIDO_COMPRA_ATRASADO')).length;
+    const desligado = resultadoDe(await queueService.varrerAlertasRegistrados(db), 'PEDIDO_COMPRA_ATRASADO');
+    assert.strictEqual(desligado.motivo, 'email desligado', JSON.stringify(desligado));
+    assert.strictEqual((await filaPorEvento(db, 'PEDIDO_COMPRA_ATRASADO')).length, antes,
+      'com e-mail desligado a fila nao pode crescer');
+
+    // Metade positiva no MESMO test(): religar devolve a entrada ao resultado — e ela vem
+    // DUPLICADA, porque os dois pedidos ja foram avisados (RN-D10 de novo).
+    await setConfig(db, 'alertas_estoque_notificar_email', '1');
+    const religado = resultadoDe(await queueService.varrerAlertasRegistrados(db), 'PEDIDO_COMPRA_ATRASADO');
+    assert.strictEqual(religado.motivo, undefined, JSON.stringify(religado));
+    assert.deepStrictEqual({ enfileiradas: religado.enfileiradas, duplicadas: religado.duplicadas },
+      { enfileiradas: 0, duplicadas: 2 }, JSON.stringify(religado));
+  });
+
+  // ── (7) RN-D13: o gerador roda no Job B, SEM usuario ────────────────────────────────────────
+  await test('(7) RN-D13 o listar da entrada e chamado sem req e sem user — o Job B nao tem nenhum dos dois', async () => {
+    const entrada = alertRegistry.ALERT_REGISTRY.find((e) => e.chave === 'PEDIDO_COMPRA_ATRASADO');
+    const linhas = await entrada.listar(db, { dias: null });
+    assert.ok(Array.isArray(linhas), 'listar tem de devolver array');
+    // Metade positiva: chamado sem req ele continua acusando os dois atrasados.
+    assert.strictEqual(linhas.length, 2, `esperava 2 linhas, veio ${linhas.length}`);
+  });
+
+  // ── (8) R9b: controle de ciclo, processo FRIO ───────────────────────────────────────────────
+  await test('(8) R9b o alertRegistry carrega de um processo FRIO e traz a entrada nova', async () => {
+    // Processo NOVO, cache de modulos vazio, e o alertRegistry como PRIMEIRO require: e a ordem
+    // de carga que um require de topo da regua tornaria arriscada. `{}` mid-load nao lanca — ele
+    // devolve um objeto vazio, e o modo de falha e silencioso.
+    const { execFileSync } = require('child_process');
+    const saida = execFileSync(process.execPath, ['-e', `
+      const r = require('./services/almoxarifado/alertRegistry');
+      const e = r.ALERT_REGISTRY.find((x) => x.chave === 'PEDIDO_COMPRA_ATRASADO');
+      console.log(JSON.stringify({ total: r.ALERT_REGISTRY.length, tem: !!e, listar: typeof (e && e.listar) }));
+    `], { cwd: require('path').join(__dirname, '..', '..'), encoding: 'utf8' });
+    const medido = JSON.parse(saida.trim().split('\n').pop());
+    // ⚠️ 12 -> 13 na Etapa 42, T3: a entrada `PEDIDO_COMPRA_PARCIAL` entrou no registro e ela
+    // tambem requer `receiptService` de forma LAZY. O total literal continua aqui pelo mesmo motivo
+    // da linha :169 — na carga a FRIO o que se mede e que o require lazy segurou o ciclo INTEIRO
+    // (`receiptService.js:31` requer este registro no topo), e um `ALERT_REGISTRY.length` no lugar
+    // do numero compararia o processo frio consigo mesmo. 13 -> 14 na Etapa 43, T4; 14 -> 15 na
+    // Etapa 46, T3 (`NAO_CONFORMIDADE_EXECUCAO_PENDENTE`, SQL proprio e nenhum require novo).
+    assert.deepStrictEqual(medido, { total: 15, tem: true, listar: 'function' },
+      `carga a frio devolveu ${saida.trim()}`);
+  });
+
+  // ── (9) F2: prazo RENEGOCIADO e furado de novo volta a alertar ──────────────────────────────
+  await test('(9) F2 prazo renegociado que vence de novo gera um SEGUNDO alerta (e a chave antiga segue duplicada)', async () => {
+    // ── O DEFEITO QUE ESTE CENARIO EXISTE PARA PEGAR (I2 das duas revisoes finais) ─────────────
+    // Com `dedupeChave = pedido-atrasado-<id>`, o `hash_dedupe` do primeiro aviso ficava gravado
+    // num indice UNIQUE e o `INSERT OR IGNORE` do `enfileirar` devolvia DUPLICADA para sempre:
+    // o comprador recebia o alerta, ligava para o fornecedor, renegociava o prazo — e quando o
+    // prazo NOVO vencia, nenhum e-mail saia, nunca mais, por mais prazos que aquele pedido
+    // quebrasse. Nao ha expurgo da fila, entao o silencio era permanente.
+    //
+    // O gesto do meio e o PUT REAL (`/api/compras/pedidos/:id`), nao um UPDATE a mao: renegociar
+    // e exatamente o que o comprador faz pela tela, e e o PUT que prova que a porta permite (nao
+    // ha recebimento neste pedido) e que a previsao nova chega gravada.
+    const mat = await dbRun(db, `INSERT INTO materiais_almoxarifado
+      (codigo, nome, unidade, quantidade_atual, ativo) VALUES ('E39-F2-001','Chapa renegociada','UN',0,1)`);
+
+    const previsaoVelha = diasDeHoje(-10);
+    const PR = await novoPedido({ previsao: previsaoVelha, status: 'pendente' });
+
+    // 1a varredura: o pedido novo entra, os que ja foram avisados repetem DUPLICADA.
+    const v1 = resultadoDe(await queueService.varrerAlertasRegistrados(db), 'PEDIDO_COMPRA_ATRASADO');
+    assert.strictEqual(v1.enfileiradas, 1, `1a varredura devia enfileirar 1: ${JSON.stringify(v1)}`);
+    const doPR = (await filaPorEvento(db, 'PEDIDO_COMPRA_ATRASADO'))
+      .filter((l) => JSON.parse(l.payload).pedido_compra_id === PR.id);
+    assert.strictEqual(doPR.length, 1, `esperava 1 linha na fila para o pedido renegociado, veio ${doPR.length}`);
+
+    // ── RENEGOCIACAO pela porta real: prazo novo, ainda no FUTURO ──────────────────────────────
+    const previsaoNova = diasDeHoje(-1);
+    const corpo = (previsao) => ({
+      fornecedor_id: forn.lastID,
+      previsao_entrega: previsao,
+      status: 'pendente',
+      itens: [{ material_id: mat.lastID, quantidade: 2, valor_unitario: 7 }],
+    });
+    const futuro = await request(app).put(`/api/compras/pedidos/${PR.id}`).send(corpo(diasDeHoje(30)));
+    assert.strictEqual(futuro.status, 200, `PUT de renegociacao falhou: ${JSON.stringify(futuro.body)}`);
+    // Saiu da regua — metade positiva de que a renegociacao de fato tirou o pedido do atraso.
+    const saiu = resultadoDe(await queueService.varrerAlertasRegistrados(db), 'PEDIDO_COMPRA_ATRASADO');
+    assert.strictEqual(saiu.enfileiradas, 0, `com previsao no futuro nada pode ser enfileirado: ${JSON.stringify(saiu)}`);
+
+    // ── O PRAZO NOVO VENCE ────────────────────────────────────────────────────────────────────
+    const vencido = await request(app).put(`/api/compras/pedidos/${PR.id}`).send(corpo(previsaoNova));
+    assert.strictEqual(vencido.status, 200, `PUT do prazo vencido falhou: ${JSON.stringify(vencido.body)}`);
+
+    const v2 = resultadoDe(await queueService.varrerAlertasRegistrados(db), 'PEDIDO_COMPRA_ATRASADO');
+    assert.strictEqual(v2.enfileiradas, 1,
+      `o prazo renegociado e furado tinha de gerar um SEGUNDO aviso: ${JSON.stringify(v2)}`);
+
+    const linhas = (await filaPorEvento(db, 'PEDIDO_COMPRA_ATRASADO'))
+      .filter((l) => JSON.parse(l.payload).pedido_compra_id === PR.id);
+    assert.strictEqual(linhas.length, 2,
+      `o pedido renegociado tinha de ter 2 linhas na fila (uma por prazo), veio ${linhas.length}`);
+    assert.deepStrictEqual(
+      linhas.map((l) => l.hash_dedupe).sort(),
+      [hashDedupe('PEDIDO_COMPRA_ATRASADO', `pedido-atrasado-${PR.id}-${previsaoVelha}`),
+        hashDedupe('PEDIDO_COMPRA_ATRASADO', `pedido-atrasado-${PR.id}-${previsaoNova}`)].sort(),
+      'as duas linhas tinham de ser uma por prazo prometido',
+    );
+
+    // ⚠️ A METADE QUE IMPEDE O CONSERTO DE VIRAR "avisa todo dia": a chave ANTIGA continua
+    // duplicando. Uma varredura a mais, com a MESMA previsao, nao pode enfileirar nada — e este e
+    // o objetivo declarado da RN-D10 que a correcao tinha de preservar inteiro.
+    const v3 = resultadoDe(await queueService.varrerAlertasRegistrados(db), 'PEDIDO_COMPRA_ATRASADO');
+    assert.strictEqual(v3.enfileiradas, 0,
+      `pedido que segue atrasado no MESMO prazo nao pode ser relembrado: ${JSON.stringify(v3)}`);
+    assert.ok(v3.duplicadas >= 1, `esperava duplicadas na varredura seguinte: ${JSON.stringify(v3)}`);
+  });
+
+  // ── (10) F3: a central nao carrega coluna de pedido que a entrada nao usa ───────────────────
+  await test('(10) F3 o cartao da central nao leva valor_total nem observacoes do pedido (e leva numero)', async () => {
+    // ── O DEFEITO QUE ESTE CENARIO EXISTE PARA PEGAR (I1 da revisao de UX) ─────────────────────
+    // `montarCentral` devolve as linhas CRUAS na resposta de `/almoxarifado/alertas/central`, e o
+    // gate dessa rota e `requirePermission('ver_alertas')` — SEM `checkModulePermission('compras')`.
+    // Com `SELECT p.*`, um ALMOXARIFE (403 em `GET /api/compras/pedidos`) recebia `valor_total` e
+    // `observacoes` do pedido na aba Network. A tela desenha 4 colunas; o payload nao.
+    //
+    // ⚠️ O FIXTURE PRECISA TER OS CAMPOS PREENCHIDOS, senao este cenario e vazio: com
+    // `valor_total` NULL e `observacoes` NULL o `SELECT p.*` ainda TRARIA as chaves, mas quem
+    // lesse o teste acharia que ele mede ausencia de dado e nao ausencia de coluna.
+    const SIGILO = 'Desconto de 12% negociado com o dono — nao repassar';
+    await dbRun(db, 'UPDATE pedidos_compra SET valor_total = ?, observacoes = ? WHERE id = ?',
+      [98765.43, SIGILO, P1.id]);
+
+    const resp = await request(app).get('/api/almoxarifado/alertas/central');
+    assert.strictEqual(resp.status, 200, `central respondeu ${resp.status}: ${JSON.stringify(resp.body)}`);
+    const cartao = (resp.body.alertas || []).find((a) => a.chave === 'PEDIDO_COMPRA_ATRASADO');
+    assert.ok(cartao, 'a central nao trouxe o cartao PEDIDO_COMPRA_ATRASADO');
+    assert.strictEqual(cartao.erro, undefined, `listar lancou: ${cartao.erro_mensagem}`);
+    assert.ok(cartao.linhas.length > 0, 'fixture vazia: este cenario nao mediria nada');
+
+    const doP1 = cartao.linhas.find((l) => l.id === P1.id);
+    assert.ok(doP1, `o pedido ${P1.numero} sumiu do cartao`);
+
+    // O DANO: nenhuma linha pode carregar coluna que a entrada nao usa.
+    for (const l of cartao.linhas) {
+      for (const coluna of ['valor_total', 'observacoes', 'fornecedor_id', 'created_at', 'updated_at']) {
+        assert.ok(!(coluna in l),
+          `a central esta levando \`${coluna}\` de pedidos_compra: ${JSON.stringify(l)}`);
+      }
+    }
+    // E a prova de que o vazamento seria REAL e nao teorico: o texto sigiloso nao aparece em
+    // lugar nenhum da resposta inteira (nem numa chave que este loop nao conheca).
+    assert.ok(!JSON.stringify(resp.body).includes(SIGILO),
+      'a observacao do pedido apareceu no corpo da central');
+
+    // METADE POSITIVA: as colunas que o cartao DESENHA continuam chegando — sem isto, uma
+    // projecao que esquecesse `numero` deixaria a tela mostrando `#id` e a suite verde.
+    for (const campo of ['id', 'numero', 'status', 'previsao_entrega', 'fornecedor_nome',
+      'atrasado', 'dias_atraso']) {
+      assert.ok(campo in doP1, `a projecao derrubou o campo \`${campo}\`: ${JSON.stringify(doP1)}`);
+    }
+    assert.strictEqual(doP1.numero, P1.numero, `numero divergiu: ${JSON.stringify(doP1.numero)}`);
+    assert.strictEqual(doP1.fornecedor_nome, 'Acos Vale E39', JSON.stringify(doP1.fornecedor_nome));
+  });
+
+  await close();
+  console.log(`\n${passed} passed, ${failed} failed`);
+  process.exit(failed > 0 ? 1 : 0);
+})();

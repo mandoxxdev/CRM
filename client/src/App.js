@@ -46,11 +46,12 @@ import {
   OrdensServicoComercial,
   OSComercialForm,
   Compras,
+  ComprasSolicitacoesCompra,
   PedidoCompraForm,
   FornecedorForm,
-  ComprasSolicitacoesCompra,
   GruposFornecedores,
   FornecedoresDoGrupo,
+  CotacaoForm,
   ItensFornecedor,
   Financeiro,
   Fabrica,
@@ -104,6 +105,7 @@ import {
   ConferenciaEstoque,
   RequisicoesList,
   RequisicaoForm,
+  FilaSeparacao,
   RequisicoesMaterialNovaPage,
   RequisicoesMaterialListaPage,
   ConfiguracoesAlmoxarifado,
@@ -112,6 +114,7 @@ import {
   ScannerAlmoxarifado,
   ReservasAlmoxarifado,
   InspecoesAlmoxarifado,
+  NaoConformidadesAlmoxarifado,
   LotesAlmoxarifado,
   DevolucoesAlmoxarifado,
   MateriaisClienteAlmoxarifado,
@@ -215,7 +218,15 @@ const PrivateRoute = ({ children }) => {
   return <ModuleLoading module="sistema" compact />;
 };
 
-function AppRoutes() {
+/**
+ * A tabela de rotas, exportada de proposito (Etapa 38, Task 5).
+ *
+ * Ela e EXPORTADA porque a regua das rotas novas depende de exercitar esta tabela: um teste que
+ * montasse a tela solta passaria com `App.js` sem rota nenhuma declarada — foi exatamente esse o
+ * furo da aba "Pedidos de Compra" do modulo Compras, cujos dois `<Link>` existiam sem rota que os
+ * casasse. Consumidor: `components/compras/PedidoCompraForm.test.js`.
+ */
+export function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
@@ -346,22 +357,22 @@ function AppRoutes() {
         <Route path="pedidos" element={
           <Compras />
         } />
-        {/* Sem estas duas, `pedidos/novo` e `pedidos/editar/:id` caem no `path="*"` acima e
-            re-renderizam a LISTA — era por isso que clicar em "Novo Pedido" nao fazia nada. */}
+        {/* Etapa 38, Task 5: as duas rotas que faltavam. `Compras.js` ja escrevia os dois `<Link>`
+            — o botao "Novo Pedido" (`/compras/pedidos/novo`) e o lapis de cada linha
+            (`/compras/pedidos/editar/:id`) — e nao havia rota que os casasse: clicar voltava para a
+            propria lista, e com isso a criacao de pedido (e a Etapa 37 inteira, que recebe contra
+            pedido) era inalcancavel por clique. `editar/:id` e nao `:id` de proposito: e o caminho
+            que o `<Link>` existente ja aponta, e `:id` casaria tambem `/novo`. */}
         <Route path="pedidos/novo" element={
           <PedidoCompraForm />
         } />
         <Route path="pedidos/editar/:id" element={
           <PedidoCompraForm />
         } />
-        {/* Etapa 34: mesmo caso do pedido — sem estas duas, "Novo Fornecedor" e o lapis da
-            lista caiam no `path="*"` e mostravam a propria lista. */}
-        <Route path="fornecedores/novo" element={
-          <FornecedorForm />
-        } />
-        <Route path="fornecedores/editar/:id" element={
-          <FornecedorForm />
-        } />
+        {/* Etapa 40 (branch) e Etapa 34 (main) criaram as MESMAS duas rotas — os dois caminhos da
+            aba Fornecedores que caiam no `*`. Mantida uma copia so; o FornecedorForm e o da Etapa 34. */}
+        <Route path="fornecedores/novo" element={<FornecedorForm />} />
+        <Route path="fornecedores/editar/:id" element={<FornecedorForm />} />
         <Route path="cotacoes" element={
           <Compras />
         } />
@@ -374,6 +385,9 @@ function AppRoutes() {
         <Route path="fornecedores-homologados/fornecedor/:fornecedorId" element={
           <ItensFornecedor />
         } />
+        {/* Etapa 40, Task 5: os dois caminhos da aba Cotações que caiam no `*` */}
+        <Route path="cotacoes/nova" element={<CotacaoForm />} />
+        <Route path="cotacoes/editar/:id" element={<CotacaoForm />} />
         <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="compras" />} />
         <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="compras" />} />
       </Route>
@@ -513,11 +527,17 @@ function AppRoutes() {
             <RequisicaoForm />
           </RequisicoesMaterialProvider>
         } />
+        {/* Etapa 64: a fila de separacao do almoxarife (so leitura; gate separar_emitir no servidor). */}
+        <Route path="fila-separacao" element={<FilaSeparacao />} />
         <Route path="requisicoes-material" element={<RequisicoesMaterialListaPage moduloKey="almoxarifado" />} />
         <Route path="requisicoes-material/nova" element={<RequisicoesMaterialNovaPage moduloKey="almoxarifado" />} />
         <Route path="recebimentos" element={<RecebimentosAlmoxarifado />} />
         <Route path="reservas" element={<ReservasAlmoxarifado />} />
         <Route path="inspecoes" element={<InspecoesAlmoxarifado />} />
+        {/* Etapa 43: a divergencia/reprovacao virou documento numerado. Sem adminOnly e sem
+            rota protegida — o GET da listagem e so `auth` (leitura), e quem barra a DECISAO e o
+            requirePermission('decidir_nao_conformidade') do servidor. */}
+        <Route path="nao-conformidades" element={<NaoConformidadesAlmoxarifado />} />
         <Route path="lotes" element={<LotesAlmoxarifado />} />
         <Route path="devolucoes" element={<DevolucoesAlmoxarifado />} />
         <Route path="materiais-cliente" element={<MateriaisClienteAlmoxarifado />} />

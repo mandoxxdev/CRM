@@ -80,3 +80,40 @@ describe('ExtratoMaterialModal — selo de propriedade', () => {
     expect(container.querySelector('.almox-badge-cliente')).toBeNull();
   });
 });
+
+/**
+ * Etapa 66, RN-08 — o extrato mostrava só `motivo`; bloqueio, inventário e estorno guardam o
+ * porquê em `justificativa`, que ficava escondida. Aparece abaixo quando existe e difere do
+ * motivo; igual não repete.
+ */
+describe('ExtratoMaterialModal — justificativa no histórico (Etapa 66, RN-08)', () => {
+  async function renderizarCom(movimentacoes) {
+    api.get.mockImplementation((url) => {
+      if (url === `/almoxarifado/materiais/${MATERIAL_BASE.id}/extrato`) {
+        return Promise.resolve({
+          data: { material: MATERIAL_BASE, saldos_localizacao: [], movimentacoes, reservas: [] },
+        });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await act(async () => {
+      root.render(<ExtratoMaterialModal materialId={MATERIAL_BASE.id} onClose={fechar} />);
+    });
+  }
+  const mov = (over) => ({
+    id: 1, tipo: 'BLOQUEIO', quantidade: 3, saldo_anterior: 40, saldo_posterior: 40,
+    created_at: '2026-10-01T10:00:00Z', cancelado: 0, ...over,
+  });
+  const contar = (txt) => (container.querySelector('.almox-table').textContent.split(txt).length - 1);
+
+  test('mostra a justificativa diferente do motivo', async () => {
+    await renderizarCom([mov({ motivo: 'Bloqueio', justificativa: 'lote com ferrugem' })]);
+    expect(contar('Bloqueio')).toBe(1);
+    expect(contar('lote com ferrugem')).toBe(1);
+  });
+
+  test('não repete quando a justificativa é igual ao motivo', async () => {
+    await renderizarCom([mov({ tipo: 'AJUSTE', motivo: 'contagem', justificativa: 'contagem' })]);
+    expect(contar('contagem')).toBe(1);
+  });
+});

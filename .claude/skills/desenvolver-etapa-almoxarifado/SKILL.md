@@ -81,10 +81,21 @@ O plano é o ponto único de falha do fluxo: contrato congelado errado faz todos
 construírem em cima do erro em paralelo. Nesta base, cinco tasks seguidas já acharam defeito em
 código que o plano trazia pronto.
 
-Despache **um agente fresco** (sem o contexto de quem escreveu) com o plano + a spec e três
+Despache **um agente fresco** (sem o contexto de quem escreveu) com o plano + a spec e **quatro**
 perguntas: os contratos cobrem os casos de erro e as mensagens literais? As RN batem com a
-spec? Cada `galho` é independente de verdade (critério da Fase 3)? Corrija o plano antes de
-executar. Uma passada só — isto é seguro barato, não um loop.
+spec? Cada `galho` é independente de verdade (critério da Fase 3)? **E cada RN foi traçada até o
+último gesto do usuário?** Corrija o plano antes de executar. Uma passada só — isto é seguro
+barato, não um loop.
+
+**A quarta pergunta existe porque faltou na Etapa 36.** A Fase 2 dela pegou 17 achados, os 7
+gates de task aprovaram, a suíte inteira estava verde — e a revisão FINAL achou um **Critical**:
+o recebimento cujo excedente foi autorizado na conferência tomava 400 ao salvar os dados fiscais
+e nunca mais era processado. Cada porta estava certa **sozinha**; ninguém tinha seguido o
+documento de *conferir → fiscal → processar*. Regra: para cada RN, o revisor da Fase 2 escreve o
+fluxo completo (**cada gesto de tela e cada rota que vem DEPOIS** do que a RN muda) e pergunta,
+em cada passo, "isto ainda aceita o que o passo anterior aceitou?". Um gesto posterior que recusa
+o que um anterior autorizou é achado que **trava**, não silencioso. A Fase 2 da Etapa 37 fez isso
+e pegou o mesmo padrão renascendo na porta nova.
 
 ## Fase 3 — Executar: tronco sequencial, galhos paralelos
 

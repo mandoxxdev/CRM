@@ -6,9 +6,14 @@ const fs = require('fs');
 const multer = require('multer');
 const XLSX = require('xlsx');
 const { canConfigureAlmox, isSystemAdmin } = require('../../services/systemPermissions');
-const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, SETORES_REQUISICAO } = require('../../services/almoxarifado/schema');
+const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, AREAS_ESPECIAIS, SETORES_REQUISICAO } = require('../../services/almoxarifado/schema');
 const { requirePermission, can, getPerfilFromUser, ACAO_PERFIS, PERFIS } = require('../../services/almoxarifado/permissions');
 const { dbAll, dbGet, dbRun } = require('../../services/almoxarifado/db');
+// Etapa 33: a URL de arquivo e minada no ponto unico do modulo, nunca montada aqui.
+const { enrichMaterialRows } = require('../../services/almoxarifado/materialPhoto');
+// Etapa 33 (fix-round da revisao adversarial): a extensao gravada vem do MIME ACEITO, nunca do
+// nome que o cliente mandou — ver o cabecalho de urlUpload.js.
+const { extensaoSegura } = require('../../services/almoxarifado/urlUpload');
 const { disponivelSql } = require('../../services/almoxarifado/availabilitySql');
 // Etapa 27, Task 2: a MESMA conversao numerica que a regua da tolerancia aplica a medida, reusada
 // no CRUD do plano de proposito. Ela existe porque `Number(null)`, `Number('')` e `Number([])` sao
@@ -17,7 +22,7 @@ const { disponivelSql } = require('../../services/almoxarifado/availabilitySql')
 // reprovar depois, por comparacao com NaN.
 const { paraNumeroFinito } = require('../../services/almoxarifado/toleranciaInspecao');
 const { validate, formatZodError } = require('../../services/almoxarifado/validation');
-const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema, OcorrenciaSchema, AssinaturaEntregaFormSchema } = require('../../services/almoxarifado/schemas');
+const { CentroCustoSchema, AlmoxarifadoSchema, MovimentacaoSchema, RegularizacaoSchema, CancelamentoSchema, DevolucaoClienteSchema, RemessaTerceiroSchema, RetornoRemessaSchema, TransformacaoRemessaSchema, EncerramentoRemessaSchema, CancelamentoRemessaSchema, SobraUpdateSchema, GerarRetalhoSchema, SucateamentoCreateSchema, SucateamentoDoReprovadoSchema, SucateamentoDestinoFormSchema, FerramentaCreateSchema, FerramentaUpdateSchema, EmprestimoSchema, DevolucaoEmprestimoSchema, CalibracaoSchema, JustificativaSchema, ManutencaoSchema, ManutencaoConcluirSchema, OcorrenciaSchema, AssinaturaEntregaFormSchema, AnexoCreateSchema, RecebimentoCreateSchema, RecebimentoFiscalSchema, TIPOS_MOVIMENTO_ROTA } = require('../../services/almoxarifado/schemas');
 // Etapa 20 (C1): a limpeza do upload orfao SAIU deste arquivo para um modulo compartilhado —
 // era uma `function` local do closure de `registerExtendedRoutes` e `routes/almoxarifado.js`
 // (rota de foto de material) nao a alcancava. Importada com ALIAS de proposito: o nome
@@ -44,13 +49,26 @@ const stockService = require('../../services/almoxarifado/stockService');
 const lotService = require('../../services/almoxarifado/lotService');
 const seriesService = require('../../services/almoxarifado/seriesService');
 const reservationService = require('../../services/almoxarifado/reservationService');
+// Etapa 76 (T1, C127): o recálculo do status depois de liberar à mão. Pelo OBJETO do módulo (os testes
+// fazem monkeypatch de `recalcularRequisicoesDasReservas`/`recalcularStatusSobTrava`).
+const reservaChegadaService = require('../../services/almoxarifado/reservaChegadaService');
 const receiptService = require('../../services/almoxarifado/receiptService');
 const inspectionService = require('../../services/almoxarifado/inspectionService');
+// Etapa 43: a nao conformidade numerada. O servico ja valida enum, id e estado, e lanca com
+// `.status` + a mensagem literal do contrato — as rotas abaixo NAO revalidam nada (duplicar a
+// regua e como a mensagem literal se parte em duas).
+const nonConformityService = require('../../services/almoxarifado/nonConformityService');
 const returnService = require('../../services/almoxarifado/returnService');
+// Etapa 66: cadastro de motivos de movimentacao — a regra (nome normalizado, tipos, ativo 0|1) e
+// as mensagens literais moram no servico.
+const motivoMovimentacaoService = require('../../services/almoxarifado/motivoMovimentacao');
 const scrapService = require('../../services/almoxarifado/scrapService');
 const scrapDisposalService = require('../../services/almoxarifado/scrapDisposalService');
 const toolService = require('../../services/almoxarifado/toolService');
 const deliverySignatureService = require('../../services/almoxarifado/deliverySignatureService');
+// Etapa 32: anexos de documento. O servico NAO toca em disco — quem grava e o multer daqui, quem
+// apaga o orfao e o `limparUploadOrfaoEm`.
+const anexoService = require('../../services/almoxarifado/anexoService');
 const reportService = require('../../services/almoxarifado/reportService');
 const sectorMaterialService = require('../../services/almoxarifado/sectorMaterialService');
 const purchaseService = require('../../services/almoxarifado/purchaseService');
@@ -109,7 +127,7 @@ async function runInitSchemaWithRetry(db, retries = 3) {
   }
 }
 
-module.exports = function registerExtendedRoutes(app, db, authenticateToken, uploadsAlmoxDir) {
+module.exports = function registerExtendedRoutes(app, db, authenticateToken, uploadsAlmoxDir, uploadsAnexosDir) {
   runInitSchemaWithRetry(db).catch((e) => console.error('Falha definitiva schema almoxarifado v3:', e.message));
 
   const auth = authenticateToken;
@@ -135,7 +153,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     storage: multer.diskStorage({
       destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
       filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
+        const ext = extensaoSegura(file.mimetype); // NUNCA do originalname — ver urlUpload.js
         cb(null, `comprovante-sucata-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
       },
     }),
@@ -148,7 +166,10 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
 
   // ── Metadata ──
   app.get('/api/almoxarifado/meta/tipos-material', auth, (req, res) => {
-    res.json({ tipos: TIPOS_MATERIAL_ENUM, setores: SETORES_REQUISICAO, localizacoes_tipos: TIPOS_LOCALIZACAO });
+    // Etapa 68 (D2): `areas_especiais` e aditivo, na ordem em que os tipos aparecem na lista.
+    const areas_especiais = TIPOS_LOCALIZACAO.filter((t) => AREAS_ESPECIAIS[t])
+      .map((t) => ({ tipo: t, chave: AREAS_ESPECIAIS[t].chave, descricao: AREAS_ESPECIAIS[t].descricao }));
+    res.json({ tipos: TIPOS_MATERIAL_ENUM, setores: SETORES_REQUISICAO, localizacoes_tipos: TIPOS_LOCALIZACAO, areas_especiais });
   });
 
   // ── Categorias de material (Etapa 26) ──────────────────────────────────────────────────────
@@ -259,6 +280,45 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
         dados_novos: { ativo: 0 },
       }, 'exclusao de categoria');
       res.json({ success: true });
+    } catch (e) { handleError(res, e); }
+  });
+
+  // ── Motivos de movimentação (Etapa 66, T1) ─────────────────────────────────────────────────
+  //
+  // Molde: o CRUD de categorias logo acima (GET so com `auth`, escrita com `configurar`, soft
+  // delete idempotente). A REGRA mora em `motivoMovimentacao.js` — estas rotas so traduzem HTTP e
+  // nao revalidam nada. O GET fica aberto a qualquer usuario do modulo (D5): o ALMOXARIFE precisa
+  // da lista na tela de movimentacao.
+  app.get('/api/almoxarifado/motivos-movimentacao', auth, async (req, res) => {
+    try {
+      res.json(await motivoMovimentacaoService.listarMotivos(db, {
+        todos: req.query.todos === '1',
+        tipo: req.query.tipo === undefined ? undefined : String(req.query.tipo),
+      }));
+    } catch (e) { handleError(res, e); }
+  });
+
+  // Fonte unica dos tipos a que um motivo pode servir (os 15 da rota generica). A aba de
+  // Configuracoes desenha os checkboxes daqui, em vez de uma terceira copia da lista na tela.
+  app.get('/api/almoxarifado/motivos-movimentacao/tipos', auth, (req, res) => {
+    res.json(TIPOS_MOVIMENTO_ROTA);
+  });
+
+  app.post('/api/almoxarifado/motivos-movimentacao', auth, requirePermission('configurar'), async (req, res) => {
+    try {
+      res.status(201).json(await motivoMovimentacaoService.criarMotivo(db, req.body, autorDe(req)));
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.put('/api/almoxarifado/motivos-movimentacao/:id', auth, requirePermission('configurar'), async (req, res) => {
+    try {
+      res.json(await motivoMovimentacaoService.atualizarMotivo(db, req.params.id, req.body || {}, autorDe(req)));
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.delete('/api/almoxarifado/motivos-movimentacao/:id', auth, requirePermission('configurar'), async (req, res) => {
+    try {
+      res.json(await motivoMovimentacaoService.desativarMotivo(db, req.params.id, autorDe(req)));
     } catch (e) { handleError(res, e); }
   });
 
@@ -737,7 +797,10 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   app.get('/api/almoxarifado/estoque', auth, async (req, res) => {
     try {
       const rows = await stockService.consultarEstoque(db, req.query);
-      res.json(rows);
+      // Etapa 33 (fix-round): devolvia `foto` CRU. Nenhuma tela atual renderiza a foto do estoque,
+      // entao nao ha defeito visivel hoje — mas a primeira que renderizar receberia '' do helper, e
+      // o defeito apareceria longe daqui. Assinar na fonte fecha a mina. Achado da revisao.
+      res.json(enrichMaterialRows(rows));
     } catch (e) { handleError(res, e); }
   });
 
@@ -872,11 +935,28 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
 
   app.post('/api/almoxarifado/reservas/:id/liberar', auth, requirePermission('reservar'), async (req, res) => {
     try {
+      // Etapa 77 (T0, C137): reserva de origem REQUISICAO so sai por quem pediu a requisicao ou por
+      // `liberar_reserva_requisicao` (ADMINISTRADOR, ALMOXARIFE). Antes do estado: o nao-dono toma 403
+      // mesmo com a reserva ja liberada. Manual e inexistente passam direto (404/400 sao do motor).
+      await reservationService.assertPodeLiberarReserva(db, req.user, req.params.id);
       const result = await stockService.liberarReserva(db, req.user, req.params.id, req.body.quantidade, {
         motivo: req.body.motivo || req.body.motivo_liberacao || null,
       });
+      // Etapa 76 (T1, D1/B396 + D5/B400): a requisição dona acompanha — sem isto ela continuava "Totalmente
+      // Reservada" sem nada seguro (C127). Sob a trava dos materiais dela (T0); best-effort: o saldo já voltou
+      // ao disponível e a resposta é a de sempre (D4). O liberado NÃO é redistribuído para a fila (D2).
+      try {
+        await reservaChegadaService.recalcularRequisicoesDasReservas(db, [result.reserva_id], 'liberacao manual da reserva');
+      } catch (e) {
+        console.warn(`[almoxarifado-reservas] recalculo do status apos liberacao manual da reserva falhou (reserva ${result.reserva_id}): ${e.message}`);
+      }
       res.json(result);
-    } catch (e) { handleError(res, e); }
+    } catch (e) {
+      // O 403 da Etapa 77 sai com `acao` e SEM `perfil` (molde do /rejeitar): com `perfil`, o
+      // interceptor do axios trocaria a regra ("so quem pediu...") por "Solicite acesso".
+      if (e.acao) return res.status(403).json({ error: e.message, acao: e.acao });
+      handleError(res, e);
+    }
   });
 
   // Transferência entre projetos/OS — troca de dono, sem tocar em saldo. `reservar_outra_os`
@@ -959,7 +1039,10 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
-  app.post('/api/almoxarifado/recebimentos', auth, requirePermission('receber_material'), async (req, res) => {
+  // Etapa 36 (RN-11): `validate` DEPOIS do `requirePermission` — 403 antes de 400, como nas rotas
+  // de `configurar` (`:478`). Inverter deixaria um usuario sem perfil descobrir a forma do payload.
+  app.post('/api/almoxarifado/recebimentos', auth, requirePermission('receber_material'),
+    validate(RecebimentoCreateSchema), async (req, res) => {
     try {
       const result = await receiptService.criarRecebimento(db, req.user, req.body);
       res.status(201).json(result);
@@ -1018,6 +1101,118 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
+  // ── Não conformidade numerada (Etapa 43, features 08 + 09) ──
+  //
+  // As quatro portas do documento `NC-…`. A regra que vale para todas: quem valida enum, id,
+  // referência e estado é `nonConformityService`, que lança erro com `.status` (400/404/409) e a
+  // mensagem literal do contrato; o `handleError` de :77 só repassa. Revalidar aqui criaria uma
+  // SEGUNDA cópia da régua e a mensagem literal passaria a existir em dois lugares — que é
+  // exatamente como as duas se separam na primeira mudança.
+  //
+  // Autorização em DUAS larguras de propósito (D8): abrir é largo (quem vê o problema abre),
+  // decidir é estreito (quem responde pela qualidade). Ler é só `auth`, molde de
+  // `/inspecoes/pendentes` acima — quem abre a tela do módulo lê o documento.
+
+  app.post('/api/almoxarifado/nao-conformidades', auth, requirePermission('registrar_nao_conformidade'), async (req, res) => {
+    try {
+      // A rota chama `abrirNaoConformidadeManual`, que e uma LISTA BRANCA de quatro campos, em vez
+      // de entregar `req.body` cru a `abrirNaoConformidade`: achado 6 da revisao adversarial,
+      // reproduzido. Com o corpo cru, um `fato` forjado no payload gravava o documento apontando
+      // para o material ERRADO, com numeros que contradiziam o item; e `fato` junto de um
+      // `referencia_id` inexistente devolvia 201 no lugar do 404, porque o fato pronto DESLIGA a
+      // unica validacao de existencia que havia. `aberto_automaticamente` tambem vinha do corpo,
+      // entao um documento humano podia se declarar automatico na listagem e na trilha.
+      // O "fato congelado" existe para ser confiavel; forjavel pela porta HTTP ele nao serve.
+      const nc = await nonConformityService.abrirNaoConformidadeManual(db, req.user, req.body || {});
+      // `null` NAO e erro do servico: e a idempotencia da RN-08 dizendo que ja existe uma NC
+      // ABERTA identica (indice parcial composto). Os ganchos automaticos da T3 ignoram esse
+      // `null`; a porta MANUAL o traduz em 409, porque aqui houve uma pessoa pedindo um documento
+      // novo e devolver 201 com o documento antigo faria parecer que o pedido dela criou algo.
+      if (!nc) {
+        return res.status(409).json({ error: 'Já existe uma não conformidade aberta para este item e tipo' });
+      }
+      res.status(201).json(nc);
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.get('/api/almoxarifado/nao-conformidades', auth, async (req, res) => {
+    try {
+      // `listarNaoConformidades` devolve ARRAY (molde de `listarHistorico`/`listarAnexos`); quem
+      // embrulha em `{ itens }` e esta rota, porque o contrato da tela da T5 pede um objeto — e
+      // objeto e o que permite acrescentar `total` depois sem quebrar quem ja consome.
+      // `req.query` passa inteiro: `limite` e clampado no servico SEM erro (teto 500) e filtro
+      // fora do enum nao e 400, e filtro que nao casa nada — mesma regua de `/inspecoes/pendentes`.
+      const itens = await nonConformityService.listarNaoConformidades(db, req.query);
+      res.json({ itens });
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.get('/api/almoxarifado/nao-conformidades/:id', auth, async (req, res) => {
+    try {
+      // Id nao numerico e 404, e nao 400: `obterNaoConformidade` devolve `null` tanto para 'abc'
+      // quanto para um id que nao existe, porque para quem chama nao ha diferenca entre as duas
+      // coisas. Sem isso o SQLite coagiria o texto em silencio (mesmo motivo de
+      // `/inspecoes/:id/medidas` acima).
+      const nc = await nonConformityService.obterNaoConformidade(db, req.params.id);
+      if (!nc) return res.status(404).json({ error: 'Não conformidade não encontrada' });
+      res.json(nc);
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.post('/api/almoxarifado/nao-conformidades/:id/decidir', auth, requirePermission('decidir_nao_conformidade'), async (req, res) => {
+    try {
+      // `requirePermission` ANTES de qualquer leitura do corpo: 403 antes de 400, como nas rotas
+      // de `configurar` (:478) e de `POST /recebimentos` (:973). Invertido, um perfil sem
+      // permissao descobriria a forma do payload e a existencia da NC pelo codigo de erro.
+      res.json(await nonConformityService.decidirNaoConformidade(db, req.user, req.params.id, req.body || {}));
+    } catch (e) { handleError(res, e); }
+  });
+
+  // Etapa 45 (RN-02) — REGISTRAR QUE O ENCAMINHAMENTO FOI EXECUTADO. Rota separada de `/decidir`
+  // porque sao dois gestos: decidir `DEVOLVER` e intencao, e o material so sai do predio quando
+  // alguem embala e chama a transportadora. Ver o cabecalho de `registrarExecucao`.
+  //
+  // `executar_encaminhamento` inclui COMPRAS, que NAO esta em `decidir_nao_conformidade` — e e a
+  // diferenca que da razao a esta rota existir. O que impede a soma das duas acoes de COMPRAS
+  // (`registrar_nao_conformidade` + esta) de virar porta para apagar estoque e a RN-06, dentro do
+  // servico, e NAO o gate: ver o comentario da acao em permissions.js.
+  //
+  // O corpo tem UM campo (`observacoes`), e o servico o le por nome — nada de `req.body` cru,
+  // pelo mesmo achado 6 que fez a abertura manual passar por lista branca.
+  app.post('/api/almoxarifado/nao-conformidades/:id/executar', auth, requirePermission('executar_encaminhamento'), async (req, res) => {
+    try {
+      // Etapa 69 (Fase 2): `motivo_sem_baixa` e o SEGUNDO campo da lista branca — o registro sem
+      // baixa de um SUCATEAR com lote fora de ATIVO exige o motivo explicito.
+      res.json(await nonConformityService.registrarExecucao(db, req.user, req.params.id, {
+        observacoes: (req.body || {}).observacoes,
+        motivo_sem_baixa: (req.body || {}).motivo_sem_baixa,
+      }));
+    } catch (e) { handleError(res, e); }
+  });
+
+  // Etapa 69 (RN-04, D1, D11) — SOLICITAR o sucateamento do material REPROVADO desta NC. Rota da NC,
+  // e nao campo novo em `POST /sucateamentos`: material, quantidade (a reprovada inteira) e lote sao
+  // DERIVADOS da inspecao, e o Zod do caminho comum teria de afrouxar para isso. Gate `movimentar`
+  // (ADMINISTRADOR, ALMOXARIFE), o mesmo do sucateamento comum: a QUALIDADE decide, o almoxarifado
+  // solicita, almoxarifado + gestao assinam. `validate` DEPOIS do gate (403 antes de 400). A
+  // colisao do UNIQUE parcial vira 409 dentro do servico (o chamador direto recebe o mesmo).
+  app.post('/api/almoxarifado/nao-conformidades/:id/solicitar-sucateamento', auth, requirePermission('movimentar'),
+    validate(SucateamentoDoReprovadoSchema), async (req, res) => {
+      try { res.status(201).json(await scrapDisposalService.solicitarDoReprovado(db, req.user, req.params.id, req.body)); }
+      catch (e) { handleError(res, e); }
+    });
+
+  // Etapa 46 — a SAIDA do documento preso. Gate PROPRIO: nao e `decidir_nao_conformidade` (anular
+  // nao e decidir, e a decisao fica preservada) nem `executar_encaminhamento` (senao o COMPRAS
+  // limparia a propria fila). Ver o comentario de `cancelar_nao_conformidade` em permissions.js.
+  app.post('/api/almoxarifado/nao-conformidades/:id/cancelar', auth, requirePermission('cancelar_nao_conformidade'), async (req, res) => {
+    try {
+      res.json(await nonConformityService.cancelarNaoConformidade(db, req.user, req.params.id, {
+        motivo: (req.body || {}).motivo,
+      }));
+    } catch (e) { handleError(res, e); }
+  });
+
   app.post('/api/almoxarifado/materiais/:id/bloquear', auth, requirePermission('ajustar_estoque'), async (req, res) => {
     try { res.json(await inspectionService.bloquearMaterial(db, req.user, req.params.id, req.body)); }
     catch (e) { handleError(res, e); }
@@ -1048,6 +1243,41 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
+  // Etapa 53: sugestao de localizacao para ENTRADA - so oferece, o motor decide. Gate `auth`, como o mapa.
+  app.get('/api/almoxarifado/materiais/:id/sugestao-localizacao', auth, async (req, res) => {
+    try {
+      res.json(await stockService.sugerirLocalizacaoEntrada(db, Number(req.params.id)));
+    } catch (e) { handleError(res, e); }
+  });
+
+  // Etapa 68 (RN-04, D8) — o aviso de area especial do DESTINO escolhido na tela de Movimentacoes.
+  // So `auth`, como a sugestao (B216): e informacao para quem ja esta montando o movimento, e quem
+  // decide e o motor (que nao recusa por area — D1). Area EFETIVA pela arvore (posicao dentro da
+  // area). Ordem: 404 da localizacao, depois 404 do material; inativos respondem normal (o motor e
+  // quem recusa destino inativo — Etapa 54). Sem material_id, MATERIAIS_CLIENTE responde aviso null.
+  app.get('/api/almoxarifado/localizacoes/:id/aviso-area', auth, async (req, res) => {
+    try {
+      const loc = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [Number(req.params.id)]);
+      if (!loc) return res.status(404).json({ error: 'Localização não encontrada' });
+      const mid = req.query.material_id;
+      let material = null;
+      if (mid !== undefined && mid !== '') {
+        material = await dbGet(db, 'SELECT id, codigo, proprietario_cliente_id FROM materiais_almoxarifado WHERE id = ?', [Number(mid)]);
+        if (!material) return res.status(404).json({ error: 'Material não encontrado' });
+      }
+      const area = await stockService.areaEfetivaDaLocalizacao(db, loc.id);
+      res.json({ area, aviso: stockService.avisoAreaEspecial({ ...loc, area_especial: area }, material) });
+    } catch (e) { handleError(res, e); }
+  });
+
+  // Etapa 50 (C71): o fisico e o 'sem lote atribuido' do material. Rota NOVA: a /lotes continua array,
+  // porque quatro seletores de lote a consomem com com_saldo=1.
+  app.get('/api/almoxarifado/materiais/:id/lotes/resumo', auth, requirePermission('visualizar'), async (req, res) => {
+    try {
+      res.json(await lotService.resumoLotesDoMaterial(db, Number(req.params.id)));
+    } catch (e) { handleError(res, e); }
+  });
+
   app.put('/api/almoxarifado/lotes/:id/status', auth, requirePermission('inspecionar'), async (req, res) => {
     try {
       const { status, justificativa } = req.body || {};
@@ -1061,6 +1291,15 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     try {
       const series = await seriesService.listarSeriesDoMaterial(db, Number(req.params.id), { status: req.query.status });
       res.json(series);
+    } catch (e) { handleError(res, e); }
+  });
+
+  // Etapa 61 (RN-06): regularizar as series de um material (cadastrar para fisico sem serie; baixar
+  // series "fantasma"). Mesmo gate do ajuste de estoque — e um acerto de inventario das series.
+  app.post('/api/almoxarifado/materiais/:id/series/regularizar', auth, requirePermission('ajustar_estoque'), async (req, res) => {
+    try {
+      const { cadastrar, baixar, justificativa, lote_id } = req.body || {};
+      res.json(await seriesService.regularizarSeries(db, req.user, req.params.id, { cadastrar, baixar, justificativa, lote_id }));
     } catch (e) { handleError(res, e); }
   });
 
@@ -1080,11 +1319,16 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
 
   app.post('/api/almoxarifado/recebimentos/:id/workflow', auth, requirePermission('receber_material'), async (req, res) => {
     try {
-      res.json(await receiptService.avancarWorkflow(db, req.user, req.params.id, req.body.acao));
+      res.json(await receiptService.avancarWorkflow(db, req.user, req.params.id, req.body.acao, {
+        localizacao_id: req.body.localizacao_id, destinos: req.body.destinos,
+      }));
     } catch (e) { handleError(res, e); }
   });
 
-  app.put('/api/almoxarifado/recebimentos/:id/fiscal', auth, requirePermission('receber_material'), async (req, res) => {
+  // Etapa 36 (RN-11): a SEGUNDA porta de escrita de `tipo_recebimento` — sem este `validate` a
+  // regra valeria so no POST e o campo voltaria a aceitar qualquer string por aqui.
+  app.put('/api/almoxarifado/recebimentos/:id/fiscal', auth, requirePermission('receber_material'),
+    validate(RecebimentoFiscalSchema), async (req, res) => {
     try {
       res.json(await receiptService.salvarDadosFiscal(db, req.user, req.params.id, req.body));
     } catch (e) { handleError(res, e); }
@@ -1102,18 +1346,28 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     } catch (e) { handleError(res, e); }
   });
 
-  // Etapa 32 — o pedido INTEIRO (fornecedor, condicoes, itens com NCM/valores, totais) para a
-  // tela de recebimento. A rota equivalente de compras (`GET /api/compras/pedidos/:id`) e
-  // guardada por `checkModulePermission('compras')`, que o almoxarife nao tem: ele levaria 403
-  // no meio do lancamento. Por isso mora aqui, guardada so por `auth`, como as irmas acima.
-  // 404 com a MESMA literal usada em purchaseService/receiptService/routes-compras.
-  app.get('/api/almoxarifado/recebimentos-aux/pedidos-compra/:id', auth, async (req, res) => {
+  // Resposta: `[{ id, material_id, material_nome, material_codigo, codigo, descricao, unidade,
+  //               quantidade, quantidade_recebida, saldo_pendente, saldo_pendente_material,
+  //               valor_unitario }]`, so linhas com `saldo_pendente > 0`. `id` e o id da LINHA do
+  // pedido. ⚠️ O client limita a digitacao por `saldo_pendente_material` (o teto que a porta
+  // aceita), NAO por `saldo_pendente` (o que falta naquela linha): eles divergem quando o pedido
+  // tem duas linhas do mesmo material e uma recebeu a mais, e foi esse o furo que o fix 1 fechou.
+  //
+  // Etapa 37 (RN-24): as LINHAS do pedido com saldo, que a tela de recebimento carrega ao escolher
+  // o pedido no `<select>` — ate aqui ela limpava `itens: []` e o recebimento PARCIAL era
+  // impossivel pela tela, embora o manual 14.1 prometesse os itens "ja preenchidos".
+  // Gate: so `auth`, ESPELHANDO as outras duas `-aux` (medido, nao suposto: nenhuma delas tem
+  // `requirePermission`). A camada do modulo cobre estas rotas pelo `app.use` de
+  // `routes/almoxarifado.js:282-285`; quem abre a tela de recebimento le o saldo do pedido.
+  // Registrada COLADA na rota de lista para que nenhuma `/pedidos-compra/:id` futura capture este
+  // caminho antes (o Express casa na ordem de registro).
+  app.get('/api/almoxarifado/recebimentos-aux/pedidos-compra/:id/itens', auth, async (req, res) => {
     try {
-      const pedido = await receiptService.getPedidoCompraParaRecebimento(
-        db, parseInt(req.params.id, 10)
-      );
-      if (!pedido) return res.status(404).json({ error: 'Pedido de compra não encontrado' });
-      res.json(pedido);
+      const itens = await receiptService.listarItensPedidoCompraAux(db, req.params.id);
+      // `null` e "o pedido nao existe" — a MESMA literal do POST. Pedido quitado devolve `[]` com
+      // 200 de proposito: nao e erro, e a informacao de que nao ha o que receber.
+      if (itens === null) return res.status(404).json({ error: 'Pedido de compra não encontrado' });
+      res.json(itens);
     } catch (e) { handleError(res, e); }
   });
 
@@ -1369,7 +1623,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     storage: multer.diskStorage({
       destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
       filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
+        const ext = extensaoSegura(file.mimetype); // NUNCA do originalname — ver urlUpload.js
         cb(null, `calibracao-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
       },
     }),
@@ -1457,7 +1711,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     storage: multer.diskStorage({
       destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
       filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
+        const ext = extensaoSegura(file.mimetype); // NUNCA do originalname — ver urlUpload.js
         cb(null, `ocorrencia-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
       },
     }),
@@ -1496,6 +1750,132 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     catch (e) { handleError(res, e); }
   });
 
+  // ── Anexos de documento (Etapa 32) ────────────────────────────────────────────
+  // Gravacao FLAT em uploadsAnexosDir — o diretorio IRMAO de uploads/almoxarifado (D1 do
+  // design). NAO trocar por subpasta de uploadsAlmoxDir: `express.static(root)` serve as
+  // subpastas de root tambem, e o anexo viraria publico pelos dois mounts de
+  // routes/almoxarifado.js:~236-237, que nao passam por auth nenhuma. O diretorio chega como 5o
+  // PARAMETRO desta funcao, pelo mesmo motivo do 4o: re-derivar de config/paths.js apontaria
+  // para o diretorio de producao enquanto os testes rodam.
+  const uploadAnexo = multer({
+    storage: multer.diskStorage({
+      destination: (req, file, cb) => {
+        // `mkdirSync` aqui, alem do boot — achado da revisao adversarial. O diretorio e criado no
+        // registro das rotas; se sumir DEPOIS (rotacao de disco, container efemero, limpeza), o
+        // multer dava ENOENT e a rota devolvia **400 com o caminho absoluto do servidor no corpo**
+        // — erro de infra vestido de erro do cliente, com path disclosure de brinde. Recriar custa
+        // um syscall por upload e nao pode falhar de forma interessante.
+        try { fs.mkdirSync(uploadsAnexosDir, { recursive: true }); } catch (e) { /* ja existe */ }
+        cb(null, uploadsAnexosDir);
+      },
+      filename: (req, file, cb) => {
+        // A extensao vem do MIME ACEITO, e nao de `path.extname(file.originalname)` — achado da
+        // revisao adversarial, e a diferenca e concreta: o `fileFilter` confia no `Content-Type`
+        // que o cliente manda, entao `fatura-nov.exe` declarado como `application/pdf` passava e
+        // ia para o disco COMO `.exe`. Duas consequencias medidas: executavel no volume
+        // persistente, que o backup do modulo leva inteiro; e o `<a download>` do componente
+        // salvando `fatura-nov.exe` na maquina de quem clica em "Baixar" numa linha rotulada
+        // "Nota fiscal". Derivar do mime nao valida conteudo (magic bytes seria o passo
+        // seguinte), mas garante que nada executavel encoste no disco.
+        const porMime = {
+          'application/pdf': '.pdf',
+          'image/jpeg': '.jpg', 'image/jpg': '.jpg',
+          'image/png': '.png', 'image/webp': '.webp',
+        };
+        const ext = porMime[String(file.mimetype || '').toLowerCase()] || '.bin';
+        cb(null, `anexo-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+      },
+    }),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (/^(application\/pdf|image\/(jpeg|jpg|png|webp))$/i.test(file.mimetype)) return cb(null, true);
+      cb(new Error('Anexo deve ser PDF ou imagem'));
+    },
+  });
+
+  // Ordem canonica (D3 da Etapa 9b): auth -> requirePermission -> multer -> safeParse manual.
+  // O gate e UMA acao so, entao vai na PORTA: o 403 sai antes de o multer gravar qualquer coisa
+  // — precedente medido em permissoesRotas.api.test.js:515-534 e coberto aqui pela RN-04.
+  app.post('/api/almoxarifado/anexos', auth, requirePermission('anexar_documento'),
+    (req, res, next) => uploadAnexo.single('arquivo')(req, res, (err) => {
+      // O erro do fileFilter e do limite chegam como excecao do multer, nao como 400 do Zod.
+      // Sem este wrapper o `next(err)` cai no handler de erro do Express e vira 500 com stack.
+      // O `limparUploadOrfaoEm` daqui e defesa em profundidade e NO-OP no caminho normal: o
+      // multer ja apaga o parcial sozinho e nunca seta `req.file` nos caminhos de erro.
+      if (!err) return next();
+      limparUploadOrfaoEm(req, uploadsAnexosDir);
+      const msg = err.code === 'LIMIT_FILE_SIZE' ? 'Arquivo excede o limite de 10 MB' : err.message;
+      return res.status(400).json({ error: msg });
+    }),
+    async (req, res) => {
+      if (!req.file) return res.status(400).json({ error: 'Arquivo é obrigatório' });
+      const parsed = AnexoCreateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        limparUploadOrfaoEm(req, uploadsAnexosDir);
+        return res.status(400).json({ error: `Dados inválidos — ${formatZodError(parsed.error)}` });
+      }
+      try {
+        res.status(201).json(await anexoService.registrarAnexo(db, req.user, parsed.data, req.file));
+      } catch (e) {
+        limparUploadOrfaoEm(req, uploadsAnexosDir);
+        handleError(res, e);
+      }
+    });
+
+  app.get('/api/almoxarifado/anexos', auth, requirePermission('visualizar'), async (req, res) => {
+    try { res.json(await anexoService.listarAnexos(db, req.query)); }
+    catch (e) { handleError(res, e); }
+  });
+
+  app.get('/api/almoxarifado/anexos/:id/arquivo', auth, requirePermission('visualizar'), async (req, res) => {
+    try {
+      const anexo = await anexoService.getAnexoParaDownload(db, req.params.id);
+      // `basename` e a guarda de travessia: mesmo que a coluna seja adulterada por outra via,
+      // o caminho nunca sai de uploadsAnexosDir.
+      const arquivo = path.join(uploadsAnexosDir, path.basename(anexo.arquivo_path));
+      // Linha viva com arquivo ausente e estado ESPERADO (restore de banco sem restore de
+      // uploads), nao erro de programa — 404 proprio, e nao o 500 do sendFile.
+      if (!fs.existsSync(arquivo)) {
+        return res.status(404).json({ error: 'Arquivo do anexo não encontrado' });
+      }
+      // `|| 'application/octet-stream'` e nao `if (mime)` — sem o default, `mime_type` nulo (linha
+      // legada ou importada) deixava o `sendFile` adivinhar pela EXTENSAO do disco, e um `.html`
+      // saia como `text/html`. O `attachment` ja impede render, mas o nosniff fecha a porta que
+      // sobra: o app nao manda esse header em lugar nenhum (nao ha helmet no index.js).
+      // BAIXAR deixa rastro — e isto e o controle compensatorio da B68, nao zelo. A decisao da
+      // etapa e que QUALQUER pessoa com acesso ao modulo baixa QUALQUER anexo; a revisao
+      // adversarial mediu a consequencia que faltava dizer: os ids sao sequenciais, entao um laco
+      // `GET /anexos/1..N/arquivo` leva o acervo inteiro sem conhecer documento nenhum. Numa
+      // decisao desenhada assim, a trilha e a unica coisa que separa "aberto" de "aberto e
+      // invisivel" — sem ela nao ha prevencao NEM deteccao. Custo: uma linha de auditoria por
+      // download, numa tabela que nada expurga (retencao e corte declarado da feature 23).
+      // Reversivel apagando este bloco; registrado na letra B.
+      auditar(db, {
+        entidade: 'anexo', entidade_id: anexo.id, acao: 'BAIXAR_ANEXO', ...autorDe(req),
+        dados_novos: { nome_original: anexo.nome_original },
+      }, 'download de anexo');
+      res.type(anexo.mime_type || 'application/octet-stream');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      // RFC 5987, e nao so `filename="..."` — achado da revisao adversarial, ACOPLADO ao mojibake
+      // do `nome_original`. `res.setHeader` recusa qualquer caractere fora de \x20-\x7e\x80-\xff,
+      // entao "Relatório – dimensional.pdf" (travessao U+2013), nome em chines ou com emoji dava
+      // **500 "Invalid character in header content"**. Nao era alcancavel antes porque o latin1 do
+      // busboy segurava por acidente; corrigir a gravacao sozinha teria trocado "nome errado na
+      // tela" por "download quebrado". `filename` ASCII para o cliente burro, `filename*` UTF-8
+      // para o resto — e o encodeURIComponent tambem mata a injecao de header por CR/LF.
+      const nomeAnexo = String(anexo.nome_original || 'anexo');
+      const asciiSeguro = nomeAnexo.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '') || 'anexo';
+      res.setHeader('Content-Disposition',
+        `attachment; filename="${asciiSeguro}"; filename*=UTF-8''${encodeURIComponent(nomeAnexo)}`);
+      res.sendFile(arquivo);
+    } catch (e) { handleError(res, e); }
+  });
+
+  app.delete('/api/almoxarifado/anexos/:id', auth, requirePermission('remover_anexo'), async (req, res) => {
+    try { res.json(await anexoService.removerAnexo(db, req.user, req.params.id)); }
+    catch (e) { handleError(res, e); }
+  });
+
   // ── Assinatura digital da entrega de requisicao (Etapa 15, Task 1 — contrato C1) ─────────────
   // Upload CLONE de uploadFotoOcorrencia (acima): gravacao FLAT em uploadsAlmoxDir com prefixo
   // `assinatura-`, SEM subpasta (D3: o multer nao cria diretorio — ENOENT no primeiro upload).
@@ -1505,7 +1885,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     storage: multer.diskStorage({
       destination: (req, file, cb) => cb(null, uploadsAlmoxDir),
       filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
+        const ext = extensaoSegura(file.mimetype); // NUNCA do originalname — ver urlUpload.js
         cb(null, `assinatura-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
       },
     }),
@@ -1852,35 +2232,9 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
   // ── Localizações vazias (sem estoque) ──
   app.get('/api/almoxarifado/localizacoes/vazias', auth, async (req, res) => {
     try {
-      const sql = `
-        SELECT l.*, a.codigo as almoxarifado_codigo, p.codigo as parent_codigo
-        FROM localizacoes_almoxarifado l
-        LEFT JOIN almoxarifados a ON l.almoxarifado_id = a.id
-        LEFT JOIN localizacoes_almoxarifado p ON l.parent_id = p.id
-        WHERE l.ativo = 1
-        AND NOT EXISTS (
-          SELECT 1 FROM estoque_saldo_almoxarifado s
-          WHERE s.localizacao_id = l.id AND s.quantidade > 0
-        )
-        ORDER BY l.setor, l.parent_id, l.subgrupo, l.codigo
-      `;
-      const rows = await dbAll(db, sql);
-
-      // Build endereco_completo for each location
-      const enriched = rows.map(row => {
-        const parts = [];
-        if (row.almoxarifado_codigo) parts.push(row.almoxarifado_codigo);
-        if (row.setor) parts.push(row.setor);
-        if (row.parent_codigo) parts.push(row.parent_codigo);
-        if (row.codigo) parts.push(row.codigo);
-
-        return {
-          ...row,
-          endereco_completo: parts.join(' / ')
-        };
-      });
-
-      res.json(enriched);
+      // Etapa 52 (RN-01/02): a regra de "vazia" e a do mapa (stockService.OCUPACAO_SQL), e o
+      // endereco completo vem montado no SQL - fonte unica com a chave 'localizacoes-vazias'.
+      res.json(await stockService.listarLocalizacoesVazias(db));
     } catch (e) { handleError(res, e); }
   });
 
@@ -1922,6 +2276,16 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     // o alerta MATERIAL_SEM_ENDERECO, senao relatorio e alerta de mesmo nome divergiriam
     // (achado Critico 2 da revisao do plano da etapa). Comportamento identico ao anterior.
     'materiais-sem-endereco': (db) => alertRegistry.listarMateriaisSemEndereco(db),
+    // Etapa 52: localizacoes vazias, pela regra de ocupacao do mapa.
+    'localizacoes-vazias': (db) => stockService.listarLocalizacoesVazias(db),
+    // Etapa 49: saldo por lote (atribuido + 'Sem lote atribuido'), series presentes, saldos comprometidos.
+    'saldo-por-lote': reportService.relatorioSaldoPorLote,
+    'series-em-estoque': reportService.relatorioSeriesEmEstoque,
+    'saldos-comprometidos': reportService.relatorioSaldosComprometidos,
+    // Etapa 67 (T2): ajustes por motivo, pela regua unica do bloco `ajustes` do indicadores.
+    'ajustes-por-motivo': (db, q) => reportService.relatorioAjustesPorMotivo(db, q),
+    // Etapa 67 (T3): divergencia e rejeicao por fornecedor (snapshot do recebimento).
+    'qualidade-fornecedores': (db, q) => reportService.relatorioQualidadeFornecedores(db, q),
   };
 
   // Exposto SO para o teste de paridade (relatoriosRegistro.api.test.js) inspecionar o PAR

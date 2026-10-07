@@ -7,10 +7,13 @@ const { disponivelSql } = require('./availabilitySql');
 const { custoUnitarioSql } = require('./custoSql');
 const valueApprovalService = require('./requisitionValueApprovalService');
 const stockService = require('./stockService');
+const lotService = require('./lotService');
 // Sem ciclo: reservationService importa db/audit/stockService, nunca este arquivo.
 const reservationService = require('./reservationService');
+const { can } = require('./permissions'); // Etapa 64: posso_conferir na fila
 const {
   PODE_SEPARAR, PODE_ENTREGAR, STATUS_PARCIALMENTE_RESERVADA, STATUS_TOTALMENTE_RESERVADA,
+  calcularStatusPosAprovacao,
 } = require('./requisitionStateMachine');
 
 function num(v) {
@@ -77,8 +80,12 @@ function normalizarItem(item) {
   };
 }
 
+// Etapa 67 (M-1): epsilon de ponto flutuante, o mesmo 1e-9 do resto do modulo. Sem ele, dez
+// entregas de 0,1 somam 0,9999999999999999 contra solicitada 1: a requisicao ficava
+// PARCIALMENTE_ATENDIDA para sempre, sem data_entrega, e o indicador a contava como nao integral.
+// E epsilon, nao tolerancia: 0,9 de 1 continua parcial.
 function todosItensCompletos(itens) {
-  return itens.every((i) => getEntregue(i) >= num(i.quantidade_solicitada));
+  return itens.every((i) => getEntregue(i) >= num(i.quantidade_solicitada) - 1e-9);
 }
 
 /**
@@ -143,6 +150,10 @@ async function saldoDisponivelParaItem(db, item) {
  * As reservas são criadas uma a uma (`criarReserva` relê o disponível a cada chamada), então
  * dois itens do MESMO material não reservam o mesmo saldo duas vezes.
  *
+ * Etapa 73 (Fase 5): idempotente — o hold ATIVO que o item já tem conta como reservado (só o que
+ * falta é reservado, e o status considera o item seguro). Uma falha fora do try de um item (ex.: a
+ * leitura do saldo) desfaz as reservas desta chamada e relança.
+ *
  * Falha de reserva de um item não derruba a aprovação: a decisão de aprovar já foi tomada e é
  * independente de haver saldo (é justamente o caso AGUARDANDO_ESTOQUE). Um item que não
  * conseguiu reservar conta como não reservado — no pior caso a requisição fica
@@ -152,42 +163,116 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}) {
   const itens = await carregarItensRequisicao(db, requisicaoId);
   const reservas = [];
   let algumFaltou = false;
+  let algumSeguro = false; // algum item com hold: criado agora OU ja existente (Etapa 73, Fase 5)
 
-  for (const item of itens) {
-    const pendente = pendenteEntrega(item);
-    if (pendente <= 0) continue; // item já atendido não precisa de hold
+  try {
+    for (const item of itens) {
+      const pendente = pendenteEntrega(item);
+      if (pendente <= 0) continue; // item já atendido não precisa de hold
 
-    // eslint-disable-next-line no-await-in-loop
-    const { disponivel } = await saldoDisponivelParaItem(db, item);
-    const aReservar = Math.min(pendente, Math.max(0, disponivel));
-    if (aReservar <= 0) { algumFaltou = true; continue; }
-
-    try {
+      // Etapa 73 (Fase 5, MENOR): desconta a reserva ATIVA que o item JA tem. Uma aprovacao que falhou
+      // no meio podia deixar o hold de um item; o /aprovar seguinte reservava o mesmo item de novo
+      // (duas reservas de 4 para um item de 4). `disponivel` ja soma o hold do proprio item de volta,
+      // entao o livre de verdade e `disponivel - reservado_para_item`.
       // eslint-disable-next-line no-await-in-loop
-      const r = await stockService.criarReserva(db, user, {
-        material_id: item.material_id,
-        quantidade: aReservar,
-        projeto_id: reqRow.projeto_id || null,
-        os_id: reqRow.os_id || null,
-        os_referencia: reqRow.os_referencia || null,
-        cliente_id: reqRow.cliente_id || null,
-        observacoes: `Reserva automática da requisição ${reqRow.numero || requisicaoId}`,
-      }, {
-        sistema: true,
-        requisicao_id: Number(requisicaoId),
-        item_requisicao_id: item.id,
-        motivo: `Reserva automática requisição ${reqRow.numero || requisicaoId}`,
-      });
-      reservas.push({ item_id: item.id, reserva_id: r.id, quantidade: aReservar });
-      if (aReservar < pendente) algumFaltou = true;
-    } catch (e) {
-      console.warn(`[almoxarifado-reservas] Falha ao reservar item ${item.id} da requisição ${requisicaoId}: ${e.message}`);
-      algumFaltou = true;
+      const { disponivel, reservado_para_item: jaReservado } = await saldoDisponivelParaItem(db, item);
+      const falta = pendente - jaReservado;
+      if (jaReservado > 0) algumSeguro = true;
+      if (falta <= 1e-9) continue; // o item ja esta todo seguro
+      const aReservar = Math.min(falta, Math.max(0, disponivel - jaReservado));
+      if (aReservar <= 0) { algumFaltou = true; continue; }
+
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const r = await stockService.criarReserva(db, user, {
+          material_id: item.material_id,
+          quantidade: aReservar,
+          projeto_id: reqRow.projeto_id || null,
+          os_id: reqRow.os_id || null,
+          os_referencia: reqRow.os_referencia || null,
+          cliente_id: reqRow.cliente_id || null,
+          observacoes: `Reserva automática da requisição ${reqRow.numero || requisicaoId}`,
+        }, {
+          sistema: true,
+          requisicao_id: Number(requisicaoId),
+          item_requisicao_id: item.id,
+          motivo: `Reserva automática requisição ${reqRow.numero || requisicaoId}`,
+        });
+        reservas.push({ item_id: item.id, reserva_id: r.id, quantidade: aReservar });
+        algumSeguro = true;
+        if (aReservar < falta) algumFaltou = true;
+      } catch (e) {
+        console.warn(`[almoxarifado-reservas] Falha ao reservar item ${item.id} da requisição ${requisicaoId}: ${e.message}`);
+        algumFaltou = true;
+      }
     }
+  } catch (e) {
+    // Etapa 73 (Fase 5, MENOR): uma falha FORA do try da reserva (a leitura do saldo do item, uma
+    // falha de banco) saia daqui com as reservas dos itens anteriores ja criadas e ninguem sabendo
+    // delas: reserva orfa com a requisicao PENDENTE. Desfaz as desta chamada e relanca — quem chama
+    // decide (o /aprovar responde erro; a aprovacao automatica deixa a requisicao PENDENTE).
+    await desfazerReservas(db, user, reservas);
+    throw e;
   }
 
-  if (reservas.length === 0) return { status: null, reservas };
+  if (!algumSeguro) return { status: null, reservas };
   return { status: algumFaltou ? STATUS_PARCIALMENTE_RESERVADA : STATUS_TOTALMENTE_RESERVADA, reservas };
+}
+
+/**
+ * Etapa 73 (T2, D3/B359) — O POS-APROVACAO, UMA FUNCAO SO PARA AS TRES PORTAS (`/aprovar`,
+ * `/aprovar-valor` e a aprovacao automatica do `POST /requisicoes`/`/enviar`).
+ *
+ * Ate a 73 so o `/aprovar` fazia as duas coisas; a liberacao por valor reservava mas ficava APROVADO
+ * sem saldo, e a aprovacao automatica gravava APROVADO sem reservar nada (C122) — o mesmo fato com
+ * tres status conforme a porta.
+ *
+ * A ORDEM E A REGRA: o status pos-aprovacao e calculado ANTES de reservar. Depois de reservar, o
+ * disponivel do material ja caiu e o calculo diria AGUARDANDO_* para quem acabou de reservar tudo.
+ * Se algo foi reservado, o status de reserva vence; se nada, fica o calculado (APROVADO quando
+ * algum item tinha disponivel e a reserva falhou; AGUARDANDO_COMPRA/AGUARDANDO_ESTOQUE sem saldo).
+ *
+ * Etapa 73 (Fase 5, IMPORTANTE): "se nada, fica o calculado" estava errado sob corrida. Duas
+ * aprovacoes simultaneas disputando as ultimas unidades calculavam APROVADO as duas (havia saldo
+ * quando calcularam); uma reservava tudo e a outra gravava APROVADO sem reserva e sem saldo (8 de 8
+ * rodadas na sonda da revisao, nas tres portas). Agora, se nada ficou seguro e o calculado era
+ * APROVADO (que supoe saldo), o status e RECALCULADO com o disponivel relido — a mesma
+ * `calcularStatusPosAprovacao`. Nao ha reserva desta chamada a descontar (nada foi reservado), entao
+ * a releitura diz a verdade: AGUARDANDO_* se o saldo sumiu; APROVADO se ainda ha saldo e a reserva
+ * falhou por outro motivo (o comportamento de antes).
+ *
+ * Uma falha no meio da reserva (ex.: SQLITE_BUSY lendo o saldo de um item) LANCA, ja com as reservas
+ * desta chamada desfeitas (reservarItensAprovacao).
+ *
+ * Nao grava o status — quem chama grava num UPDATE guardado e, se perder, chama `desfazerReservas`.
+ * @returns {Promise<{status: string, reservas: Array<{item_id, reserva_id, quantidade}>}>}
+ */
+async function prepararPosAprovacao(db, requisicaoId, user, reqRow = {}) {
+  const statusPos = await calcularStatusPosAprovacao(db, requisicaoId);
+  const reserva = await reservarItensAprovacao(db, requisicaoId, user, reqRow);
+  if (reserva.status) return { status: reserva.status, reservas: reserva.reservas };
+  const status = statusPos === 'APROVADO' ? await calcularStatusPosAprovacao(db, requisicaoId) : statusPos;
+  return { status, reservas: reserva.reservas };
+}
+
+/**
+ * Devolve SO as reservas que a chamada criou (perdeu o UPDATE guardado). Nao
+ * `liberarReservasDaRequisicao`: ela soltaria tambem as de uma aprovacao concorrente que venceu
+ * (Etapa 47, 9.7/C1). Cada uma no seu try — uma falha nao deixa as outras presas.
+ */
+async function desfazerReservas(db, user, reservas = []) {
+  for (const r of reservas) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await stockService.liberarReserva(db, user, r.reserva_id, null, {
+        statusFinal: 'LIBERADA',
+        motivo: 'Aprovação recusada — reserva desfeita',
+        motivoMovimentacao: 'Liberação por aprovação recusada',
+      });
+    } catch (relErr) {
+      console.warn('[almoxarifado-aprovar] Falha ao desfazer reserva', r.reserva_id, '—', relErr.message);
+    }
+  }
 }
 
 /** Molde: scrapDisposalService.js — nome para a trilha e para a rodada. */
@@ -322,6 +407,134 @@ async function conferirSeparacao(db, requisicaoId, user) {
   };
 }
 
+/** Etapa 63 (RN-03): as substituicoes da origem separada, com os codigos, para o detalhe. */
+/**
+ * Etapa 64 — a fila de separação do almoxarife. SÓ LEITURA: não muda regra de separar/entregar, e de
+ * propósito NÃO chama `verificarBloqueioLiberacao` (ela ESCREVE: muda status e notifica). Uma consulta
+ * de requisições + UMA de itens (sem N+1) + uma de separadores.
+ *
+ * `etapas` (Fase 2: uma etapa só escondia as outras):
+ *  - SEPARAR           — em PODE_SEPARAR e algum item SEPARÁVEL AGORA (maxSeparar > 0; o pendente
+ *                        sozinho punha no topo requisição aguardando compra que o separar recusa);
+ *  - AGUARDANDO_SALDO  — algum item com pendente e nada separável (falta estoque);
+ *  - CONFERIR          — material crítico separado sem conferência, em EM_SEPARACAO (o claim só confere ali);
+ *  - REABRIR_SEPARACAO — o mesmo fora de EM_SEPARACAO (a conferência e a entrega recusam; separar de novo reabre);
+ *  - ENTREGAR          — em PODE_ENTREGAR, algo separado e não entregue, sem conferência pendente;
+ *  - APROVACAO_VALOR   — no lugar de SEPARAR/ENTREGAR quando a requisição precisa de aprovação de valor e não
+ *                        tem (pelo que está GRAVADO — a avaliação ao vivo continua sendo a do separar/entregar).
+ */
+async function listarFilaSeparacao(db, user) {
+  const statusFila = [...new Set([...PODE_SEPARAR, ...PODE_ENTREGAR])];
+  const reqs = await dbAll(db, `SELECT r.id, r.numero, r.status, r.urgencia, r.data_necessidade, r.solicitante_nome,
+      r.setor, r.created_at, r.conferido_por_id, r.requer_aprovacao_valor, r.data_aprovacao_valor
+    FROM requisicoes_almoxarifado r
+    WHERE COALESCE(r.ativo, 1) = 1 AND r.status IN (${statusFila.map(() => '?').join(',')})`, statusFila);
+  if (!reqs.length) return [];
+  const ids = reqs.map((r) => r.id);
+  const marcas = ids.map(() => '?').join(',');
+  const itens = await dbAll(db, `SELECT ir.*, ma.codigo as material_codigo, ma.nome as material_nome, ma.unidade,
+      ma.material_critico,
+      (${disponivelSql('ma')} + ${RESERVADO_PARA_ITEM_SQL}) as saldo_disponivel,
+      lsep.codigo as origem_separacao_codigo, ltsep.codigo as lote_separacao_codigo
+    FROM itens_requisicao_almoxarifado ir
+    JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
+    LEFT JOIN localizacoes_almoxarifado lsep ON lsep.id = ir.origem_separacao_id
+    LEFT JOIN lotes_almoxarifado ltsep ON ltsep.id = ir.lote_separacao_id
+    WHERE ir.requisicao_id IN (${marcas})`, ids);
+  const separadores = await dbAll(db, `SELECT requisicao_id, usuario_id, MAX(usuario_nome) as usuario_nome
+    FROM separacoes_requisicao_almoxarifado WHERE requisicao_id IN (${marcas})
+    GROUP BY requisicao_id, usuario_id`, ids);
+  const podeConferirPerfil = can(user, 'conferir_separacao');
+  const fila = [];
+  for (const r of reqs) {
+    const doReq = itens.filter((i) => i.requisicao_id === r.id);
+    const podeSep = PODE_SEPARAR.includes(r.status);
+    // Fase 5: avaliacao de valor AO VIVO pela parte SO-LEITURA (avaliarRequisicaoValor) — o gravado nunca
+    // coincide com um status separavel (quem grava o flag muda o status junto), e o risco real era o
+    // limite baixar ou o custo subir depois: a fila dizia Separar e o separar recusava com 403.
+    // eslint-disable-next-line no-await-in-loop
+    const avaliacaoValor = r.data_aprovacao_valor ? null : await valueApprovalService.avaliarRequisicaoValor(db, r.id);
+    const bloqueioValor = !!(avaliacaoValor && avaliacaoValor.requer_aprovacao_valor);
+    const linhas = doReq.map((i) => {
+      const aSeparar = pendenteSeparacao(i);
+      const separavel = podeSep ? maxSeparar(i, num(i.saldo_disponivel)) : 0;
+      return {
+        item_id: i.id, material_id: i.material_id, material_codigo: i.material_codigo, material_nome: i.material_nome,
+        unidade: i.unidade, a_separar: aSeparar, separavel, a_entregar: Math.max(0, getSeparado(i) - getEntregue(i)),
+        // Fase 5 (critico): a separacao NAO reserva — o separado de A pode ter saido por B. Entregavel agora
+        // e o separado limitado ao disponivel; sem isso a fila dizia "Entregar" e a entrega recusava.
+        entregavel: Math.min(Math.max(0, getSeparado(i) - getEntregue(i)), Math.max(0, num(i.saldo_disponivel))),
+        disponivel: num(i.saldo_disponivel), origem_separacao_codigo: i.origem_separacao_codigo || null,
+        lote_separacao_codigo: i.lote_separacao_codigo || null, material_critico: Number(i.material_critico) === 1,
+      };
+    });
+    const etapas = [];
+    if (podeSep && linhas.some((l) => l.separavel > 1e-9)) etapas.push(bloqueioValor ? 'APROVACAO_VALOR' : 'SEPARAR');
+    if (podeSep && linhas.some((l) => l.a_separar > 1e-9 && l.separavel <= 1e-9)) etapas.push('AGUARDANDO_SALDO');
+    const conferenciaPendente = conferenciaObrigatoria(doReq) && !r.conferido_por_id;
+    // Fase 5 (critico): REABRIR so onde separar de novo e possivel (PODE_SEPARAR); em PRONTA_PARA_RETIRADA nao
+    // ha transicao de volta — CONFERENCIA_SEM_SAIDA, nao acionavel (o administrador resolve).
+    if (conferenciaPendente) {
+      etapas.push(r.status === 'EM_SEPARACAO' ? 'CONFERIR'
+        : PODE_SEPARAR.includes(r.status) ? 'REABRIR_SEPARACAO' : 'CONFERENCIA_SEM_SAIDA');
+    }
+    if (PODE_ENTREGAR.includes(r.status) && linhas.some((l) => l.a_entregar > 1e-9) && !conferenciaPendente) {
+      if (linhas.some((l) => l.entregavel > 1e-9)) {
+        if (!etapas.includes('APROVACAO_VALOR')) etapas.push(bloqueioValor ? 'APROVACAO_VALOR' : 'ENTREGAR');
+      } else if (!etapas.includes('AGUARDANDO_SALDO')) {
+        etapas.push('AGUARDANDO_SALDO');
+      }
+    }
+    if (!etapas.length) continue;
+    const quemSeparou = separadores.filter((s) => s.requisicao_id === r.id)
+      .map((s) => ({ id: s.usuario_id, nome: s.usuario_nome }));
+    fila.push({
+      id: r.id, numero: r.numero, status: r.status, urgencia: r.urgencia, data_necessidade: r.data_necessidade || null,
+      solicitante_nome: r.solicitante_nome, setor: r.setor, created_at: r.created_at,
+      etapas, acionavel: etapas.some((e) => ['SEPARAR', 'CONFERIR', 'REABRIR_SEPARACAO', 'ENTREGAR'].includes(e)),
+      conferencia_pendente: conferenciaPendente, separadores: quemSeparou,
+      posso_conferir: conferenciaPendente && r.status === 'EM_SEPARACAO' && podeConferirPerfil
+        && !quemSeparou.some((s) => Number(s.id) === Number(user?.id)),
+      itens: linhas.filter((l) => l.a_separar > 1e-9 || l.a_entregar > 1e-9),
+    });
+  }
+  // Ordem (RN-02): o que dá para fazer agora primeiro; depois a prioridade (compararPrioridade).
+  fila.sort((a, b) => (Number(b.acionavel) - Number(a.acionavel)) || compararPrioridade(a, b));
+  return fila;
+}
+
+/**
+ * Etapa 74 (T0, D3/B369) — QUEM É PRIMEIRO, uma função só. Extraída da ordem da fila de separação da 64
+ * (que continua igual: a fila soma o "acionável" na frente) e usada também pela reserva na chegada
+ * (reservaChegadaService): a fila e a reserva não podem discordar sobre quem leva o material.
+ * Urgência (UPPER — há legado em minúsculo: CRITICO 1, URGENTE 2, o resto 3) → data de necessidade
+ * (sem data por último) → a mais ANTIGA primeiro (FIFO) → id.
+ * `a`/`b`: { urgencia, data_necessidade, created_at, id }.
+ */
+const RANK_URGENCIA = { CRITICO: 1, URGENTE: 2 };
+function compararPrioridade(a, b) {
+  const rank = (x) => RANK_URGENCIA[String(x.urgencia || '').toUpperCase()] || 3;
+  const dataNec = (x) => (x.data_necessidade ? String(x.data_necessidade) : null);
+  return (rank(a) - rank(b))
+    || ((dataNec(a) === null) - (dataNec(b) === null))
+    || String(dataNec(a) || '').localeCompare(String(dataNec(b) || ''))
+    || String(a.created_at || '').localeCompare(String(b.created_at || ''))
+    || (a.id - b.id);
+}
+
+async function listarSubstituicoes(db, requisicaoId) {
+  return dbAll(db, `SELECT s.id, s.item_id, s.material_id, m.codigo as material_codigo, s.quantidade,
+      lp.codigo as planejada_codigo, ltp.codigo as planejada_lote, ls.codigo as saiu_codigo, lts.codigo as saiu_lote,
+      s.automatica, s.motivo, s.usuario_nome, s.created_at as em, COALESCE(s.momento, 'ENTREGA') as momento
+    FROM substituicoes_origem_requisicao s
+    JOIN materiais_almoxarifado m ON m.id = s.material_id
+    LEFT JOIN localizacoes_almoxarifado lp ON lp.id = s.localizacao_planejada_id
+    LEFT JOIN lotes_almoxarifado ltp ON ltp.id = s.lote_planejado_id
+    LEFT JOIN localizacoes_almoxarifado ls ON ls.id = s.localizacao_saida_id
+    LEFT JOIN lotes_almoxarifado lts ON lts.id = s.lote_saida_id
+    WHERE s.requisicao_id = ? ORDER BY s.id`, [requisicaoId]);
+}
+
 /** Rodadas de separação de uma requisição, em ordem (Etapa 28, RN-02/RN-09). */
 async function listarSeparacoes(db, requisicaoId) {
   const rows = await dbAll(db, `SELECT id, usuario_id, usuario_nome, itens_tocados, itens_json, created_at
@@ -363,6 +576,56 @@ async function listarSeparacoes(db, requisicaoId) {
  * laço antigo gravava item a item e lançava 400 no meio, deixando `quantidade_separada` alterada
  * sem rodada — sem dono, sem trilha, e sem limpar a conferência de uma caixa que mudou.
  */
+/**
+ * Etapa 58/59 — a regra ÚNICA de "este item pode sair desta origem/lote nesta quantidade", usada
+ * pela entrega e pela separação. Lança com a mensagem SEM o prefixo do material (quem chama prefixa).
+ * `pedidoPorOrigem` acumula o que a mesma chamada já pediu do mesmo material/origem/lote.
+ */
+async function checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qty, pedidoPorOrigem) {
+  if (lidoNorm && !origemId) {
+    throw Object.assign(new Error('Para confirmar a origem pela leitura, informe a localização de origem'), { status: 400 });
+  }
+  let codigoOrigem = null;
+  if (origemId) {
+    const loc = await stockService.validarEnderecoExplicito(db, origemId, 'origem');
+    await stockService.validarLocalizacaoParaMovimento(db, origemId, { tipo_material: item.tipo_material }, 'origem');
+    codigoOrigem = loc.codigo;
+    if (lidoNorm) await stockService.conferirLeitura(db, lidoNorm, origemId, 'origem');
+  }
+  let loteCodigo = null;
+  if (loteId) {
+    const lote = await dbGet(db, 'SELECT * FROM lotes_almoxarifado WHERE id = ?', [loteId]);
+    if (!lote || Number(lote.material_id) !== Number(item.material_id)) {
+      throw Object.assign(new Error('Lote não pertence a este material'), { status: 400 });
+    }
+    // Etapa 58 (Fase 5): status e vencimento com as literais do motor.
+    if (lote.status !== 'ATIVO') {
+      throw Object.assign(new Error(`Lote ${lote.codigo} esta ${String(lote.status).toLowerCase()} e nao pode ser utilizado`), { status: 400 });
+    }
+    if (lotService.isVencido(lote) && !lotService.vencimentoLiberado(lote)) {
+      throw Object.assign(new Error(`Lote ${lote.codigo} vencido em ${lote.data_validade} nao pode sair para consumo. `
+        + 'Libere o vencimento do lote (PUT /api/almoxarifado/lotes/:id/liberar-vencimento) com justificativa, '
+        + 'ou baixe por SUCATA/PERDA ou corrija por AJUSTE.'), { status: 400 });
+    }
+    loteCodigo = lote.codigo;
+  }
+  const onde = origemId ? 'AND localizacao_id = ?' : '';
+  const s = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
+    WHERE material_id = ? AND lote_id IS ? ${onde}`, [item.material_id, loteId, ...(origemId ? [origemId] : [])]);
+  // Dois itens do MESMO material saindo do mesmo endereço/lote somam (Etapa 58, Fase 5).
+  const chave = `${item.material_id}|${origemId}|${loteId}`;
+  const jaPedido = pedidoPorOrigem.get(chave) || 0;
+  pedidoPorOrigem.set(chave, jaPedido + qty);
+  const saldo = (Number(s.q) || 0) - jaPedido;
+  if (saldo + 1e-9 < qty) {
+    throw Object.assign(new Error(origemId
+      ? `O saldo em ${codigoOrigem} (${Math.round(saldo * 1e6) / 1e6}) não cobre a quantidade (${qty}) — a saída tiraria de outros endereços`
+      : `Saldo insuficiente no lote ${loteCodigo}. Disponível: ${Math.round(saldo * 1e6) / 1e6} ${item.unidade || ''}`.trim()),
+    { status: 400 });
+  }
+  return codigoOrigem;
+}
+
 async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
   if (!user?.id) {
     const err = new Error('Separação exige usuário identificado');
@@ -394,6 +657,27 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
   // "quem separou não confere" (RN-03) ficava apoiada numa rodada que nunca foi gravada. A
   // separação é tudo ou nada: ou todas as entradas cabem, ou nenhuma é gravada.
   const validados = []; // [{ item, qty, novaSeparada }] — só item existente com qty > 0
+  const pedidoSeparacao = new Map();
+  const reguaDivergencia = new Map(); // Etapa 60: item.id -> { maxInicial, origens, saldoOrigem, total, motivo }
+  // Etapa 59 (Fase 5): o separado ainda nao entregue de TODOS os itens com origem planejada continua
+  // fisicamente la — entra no acumulado desde o inicio. Antes so o do proprio item contava (mesmoPar):
+  // dois itens do mesmo material no mesmo par passavam a separacao e a entrega de um clique recusava
+  // um deles; e a mesma entrada duas vezes no payload contava o pendente em dobro.
+  // Etapa 65 (Fase 2, critico): o RETRATO da planejada antes da rodada — o `item` e mutado em memoria no
+  // laco abaixo, e o pendente "antes" lido dali gravava troca falsa no "A e depois B" sem planejada.
+  const planejadaAntes = new Map(); // item.id -> { origemId, loteId, pend }
+  for (const it of itens) {
+    const pend = Math.max(0, getSeparado(it) - getEntregue(it));
+    if (it.origem_separacao_id && pend > 1e-9) {
+      planejadaAntes.set(it.id, {
+        origemId: Number(it.origem_separacao_id), loteId: it.lote_separacao_id ? Number(it.lote_separacao_id) : null, pend,
+      });
+    }
+    if (it.origem_separacao_id && pend > 1e-9) {
+      const k = `${it.material_id}|${Number(it.origem_separacao_id)}|${it.lote_separacao_id ? Number(it.lote_separacao_id) : null}`;
+      pedidoSeparacao.set(k, (pedidoSeparacao.get(k) || 0) + pend);
+    }
+  }
   for (const entrada of itensSeparados) {
     const item = itens.find((i) => Number(i.id) === Number(entrada.item_id));
     if (!item) continue;
@@ -407,6 +691,14 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
     // eslint-disable-next-line no-await-in-loop
     const { disponivel: estoque } = await saldoDisponivelParaItem(db, item);
     const max = maxSeparar(item, estoque);
+    // Etapa 60 (RN-01): a regua da divergencia e o maximo separavel NA HORA, do item AGREGADO (o mesmo
+    // item duas vezes no payload nao vira duas reguas) — guardado no 1o encontro, antes da mutacao.
+    if (!reguaDivergencia.has(item.id)) {
+      reguaDivergencia.set(item.id, {
+        maxInicial: max, pend: pendenteSeparacao(item), estoque: num(estoque), material_id: item.material_id,
+        origens: new Set(), saldoOrigem: null, total: 0, motivo: null, motivoTroca: null,
+      });
+    }
 
     if (qty > max) {
       const err = new Error(
@@ -418,18 +710,99 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
     }
 
     // Só em memória: o mesmo item duas vezes no payload é validado contra o acumulado, como antes.
+    // Etapa 59 (RN-01/02): a origem de onde o separador tirou. O saldo nela tem de cobrir esta rodada
+    // somada ao separado pendente de quem ja planejou o mesmo par (semeado no acumulado acima).
+    const origemId = entrada.localizacao_origem_id ? Number(entrada.localizacao_origem_id) : null;
+    const loteId = entrada.lote_id ? Number(entrada.lote_id) : null;
+    const pendenteAntes = Math.max(0, getSeparado(item) - getEntregue(item));
+    // Etapa 65 (Fase 5): o par exato. A Fase 2 tinha alinhado "planejada sem lote vale qualquer lote"
+    // com a entrega, mas so a COMPARACAO da troca da entrega pensa assim — o saldo da origem e o motor
+    // leem (A, sem lote) como "o saldo sem lote em A", e a entrega de um clique de (A, —) + (A, L1)
+    // passou a ser recusada. Volta o par exato: (A, —) -> (A, L1) apaga a planejada e registra a troca.
+    const mesmoPar = Number(item.origem_separacao_id || 0) === Number(origemId || 0)
+      && Number(item.lote_separacao_id || 0) === Number(loteId || 0);
+    // Etapa 60 (RN-01/02): acumula a rodada do item para a regua. Com UMA origem na rodada, o separavel
+    // e tambem limitado ao saldo nela menos o ja comprometido (Fase 2: "Sai de" e uma origem por
+    // rodada — 4 em A e 6 em B nao e divergencia na rodada de A).
+    const regua = reguaDivergencia.get(item.id);
+    regua.origens.add(`${origemId}|${loteId}`);
+    regua.total += qty;
+    if (!regua.motivo && typeof entrada.motivo_divergencia === 'string' && entrada.motivo_divergencia.trim()) {
+      regua.motivo = entrada.motivo_divergencia.trim().slice(0, 500);
+    }
+    if ((origemId || loteId) && regua.saldoOrigem === null) {
+      // Fase 5: tambem lote sem endereco (o saldo do lote limita), e o separado ainda nao entregue de
+      // OUTRAS requisicoes no mesmo par — senao quem separa tudo o que esta livre sai "divergente".
+      const onde = origemId ? 'AND localizacao_id = ?' : '';
+      // eslint-disable-next-line no-await-in-loop
+      const so = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) as q FROM estoque_saldo_almoxarifado
+        WHERE material_id = ? AND lote_id IS ? ${onde}`, [item.material_id, loteId, ...(origemId ? [origemId] : [])]);
+      // eslint-disable-next-line no-await-in-loop
+      const outras = origemId ? await dbGet(db, `SELECT COALESCE(SUM(MAX(COALESCE(ir.quantidade_separada,0) - COALESCE(ir.quantidade_entregue,0), 0)), 0) as q
+        FROM itens_requisicao_almoxarifado ir JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
+        WHERE ir.material_id = ? AND ir.origem_separacao_id = ? AND ir.lote_separacao_id IS ?
+          AND ir.requisicao_id <> ? AND COALESCE(r.ativo, 1) = 1`, [item.material_id, origemId, loteId, requisicaoId]) : { q: 0 };
+      regua.saldoOrigem = (Number(so.q) || 0) - (Number(outras.q) || 0)
+        - (pedidoSeparacao.get(`${item.material_id}|${origemId}|${loteId}`) || 0);
+    }
+    if (origemId || loteId) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await checarOrigemItem(db, item, { origemId, loteId, lidoNorm: null }, qty, pedidoSeparacao);
+      } catch (e) {
+        const err = new Error(`${item.material_nome}: ${e.message}`);
+        err.status = e.status || 400;
+        throw err;
+      }
+    }
+    // Rodada com origem diferente (ou sem origem) sobre separado pendente de outra: mista -> nula.
+    const planejada = pendenteAntes > 1e-9 && !mesmoPar ? { origemId: null, loteId: null }
+      // Fase 5: lote sem endereco nao vira planejada (a entrega exige o endereco, e ficaria preso).
+      : { origemId: origemId || null, loteId: origemId ? loteId : null };
+    // Etapa 65 (RN-01): o motivo da troca — o primeiro nao vazio do item na rodada (so texto; <= 500).
+    if (!regua.motivoTroca && typeof entrada.motivo_substituicao === 'string' && entrada.motivo_substituicao.trim()) {
+      regua.motivoTroca = entrada.motivo_substituicao.trim().slice(0, 500);
+    }
+    item.origem_separacao_id = planejada.origemId;
+    item.lote_separacao_id = planejada.loteId;
     const novaSeparada = getSeparado(item) + qty;
     item.quantidade_separada = novaSeparada;
-    validados.push({ item, qty, novaSeparada });
+    validados.push({ item, qty, novaSeparada, origemId, loteId, planejada });
   }
 
   // PASSADA 2 — gravar. Daqui em diante nenhuma entrada pode falhar por regra de negócio.
+  // Etapa 60 (RN-01/02): so REGISTRO — a divergencia nao recusa (Fase 2: o parcial legitimo, em varias
+  // viagens ou por origem, e da spec 05). O motivo e opcional; a tela pede quando fica abaixo.
+  const divergenciaPorItem = new Map();
+  // Fase 5: dois itens do MESMO material dividem o disponivel na rodada — o que um separa sai do
+  // separavel do outro (10 livres, 6 + 4: nenhum dos dois e divergente).
+  const totalPorMaterial = new Map();
+  for (const r of reguaDivergencia.values()) {
+    totalPorMaterial.set(r.material_id, (totalPorMaterial.get(r.material_id) || 0) + r.total);
+  }
+  for (const [itemId, r] of reguaDivergencia) {
+    const outros = totalPorMaterial.get(r.material_id) - r.total;
+    const base = Math.min(r.pend, Math.max(0, r.estoque - outros));
+    const umaChave = r.origens.size === 1 && r.saldoOrigem !== null;
+    const maximo = umaChave ? Math.min(base, Math.max(0, r.saldoOrigem)) : base;
+    const divergente = r.total < maximo - 1e-9;
+    divergenciaPorItem.set(itemId, {
+      // Fase 5: o motivo nunca e descartado — a regua da tela pode diferir da do servidor, e o texto
+      // de quem separou vale mesmo quando o servidor nao ve divergencia.
+      maximo: Math.round(maximo * 1e6) / 1e6, divergente, motivo_divergencia: r.motivo,
+    });
+  }
+
   const tocados = []; // [{ item_id, material_id, quantidade }]
-  for (const { item, qty, novaSeparada } of validados) {
-    // eslint-disable-next-line no-await-in-loop
-    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada = ? WHERE id = ?',
-      [novaSeparada, item.id]);
-    tocados.push({ item_id: item.id, material_id: item.material_id, quantidade: qty });
+  for (const { item, qty, novaSeparada, origemId, loteId, planejada } of validados) {
+    await dbRun(db, `UPDATE itens_requisicao_almoxarifado SET quantidade_separada = ?,
+        origem_separacao_id = ?, lote_separacao_id = ? WHERE id = ?`,
+    [novaSeparada, planejada.origemId, planejada.loteId, item.id]);
+    tocados.push({
+      item_id: item.id, material_id: item.material_id, quantidade: qty,
+      ...(origemId ? { localizacao_origem_id: origemId } : {}), ...(loteId ? { lote_id: loteId } : {}),
+      ...divergenciaPorItem.get(item.id),
+    });
   }
 
   let rodadaId = null;
@@ -442,6 +815,32 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
       VALUES (?, ?, ?, ?, ?)`,
       [requisicaoId, user.id, nomeDoUsuario(user), tocados.length, JSON.stringify(tocados)]);
     rodadaId = ins.lastID;
+
+    // Etapa 65 (RN-01): a TROCA na separacao — item que antes da rodada tinha planejada com separado
+    // pendente e termina a rodada sem ela. Detectada sobre o retrato e a regua (so entradas com
+    // quantidade > 0), gravada DEPOIS da rodada (separacao_id); rodada recusada na passada 1 nao chega
+    // aqui. Separacao nao move estoque: sem movimentacao_ids. Best-effort como a auditoria da rodada
+    // (a rodada ja esta gravada; recusar agora deixaria o separado sem a resposta) — letra B.
+    for (const [itemId, r] of reguaDivergencia) {
+      const antes = planejadaAntes.get(itemId);
+      const item = itens.find((i) => i.id === itemId);
+      if (!antes || !item || item.origem_separacao_id) continue;
+      const pares = [...r.origens].map((k) => k.split('|').map((x) => (x === 'null' ? null : Number(x))));
+      const umPar = pares.length === 1 ? pares[0] : null;
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await dbRun(db, `INSERT INTO substituicoes_origem_requisicao
+          (requisicao_id, item_id, material_id, quantidade, localizacao_planejada_id, lote_planejado_id,
+           localizacao_saida_id, lote_saida_id, automatica, movimentacao_ids, motivo, usuario_id, usuario_nome,
+           momento, separacao_id)
+          VALUES (?,?,?,?,?,?,?,?,?,NULL,?,?,?,'SEPARACAO',?)`,
+        [requisicaoId, itemId, item.material_id, antes.pend, antes.origemId, antes.loteId,
+          umPar ? umPar[0] : null, umPar ? umPar[1] : null, umPar && !umPar[0] && !umPar[1] ? 1 : 0,
+          r.motivoTroca || null, user.id, nomeDoUsuario(user), rodadaId]);
+      } catch (e) {
+        console.warn(`[almoxarifado-separacao] Falha ao registrar a troca de origem do item ${itemId} na rodada ${rodadaId}: ${e.message}`);
+      }
+    }
 
     // RN-07 como COMPARE-AND-CLEAR (fix-round 1, F4). Reler a conferência e limpar só se a linha
     // ainda for a relida (`WHERE conferido_por_id IS ?`): se alguém conferiu entre a releitura e o
@@ -497,7 +896,10 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
         dados_novos: {
           rodada_id: rodadaId,
           itens_tocados: tocados.length,
-          itens: tocados.map((t) => ({ item_id: t.item_id, quantidade: t.quantidade })),
+          itens: tocados.map((t) => ({
+            item_id: t.item_id, quantidade: t.quantidade,
+            maximo: t.maximo, divergente: t.divergente, motivo_divergencia: t.motivo_divergencia,
+          })),
         },
       });
     } catch (e) {
@@ -558,6 +960,119 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
       const err = new Error(`${item.material_nome}: material crítico só sai depois de separado e conferido — ${qty} excede `
         + `o separado ainda não entregue (${naCaixa}). Separe o restante e peça a segunda conferência.`);
       err.status = 400;
+      throw err;
+    }
+  }
+
+  // Etapa 58 (RN-01/02) + 59 (RN-03): origem, lote e leitura POR ITEM, validados ANTES de qualquer
+  // baixa. Item sem origem no payload usa a origem PLANEJADA na separação — só até o separado ainda
+  // não entregue (acima disso, o que sai nunca foi separado dali: automático) e nunca quando a tela
+  // pede automático explicitamente (`origem_automatica: true` — a saída quando a planejada não serve
+  // mais; Fase 2, crítico 1). Qualquer falha da PLANEJADA diz o que fazer.
+  // Etapa 61 (RN-01): material com SERIE diz QUAIS series saem — antes de qualquer baixa. Sem isto a
+  // entrega baixava o fisico e deixava as series EM_ESTOQUE (sonda: fisico 1, series presentes 3), e
+  // a serie entregue podia sair de novo. A de um clique (sem series) cai aqui, com a saida na literal.
+  const seriesPorItem = new Map(); // item.id -> { ids, loteSeries }
+  const seriesUsadas = new Set();
+  for (const item of itens) {
+    const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
+    const qty = entrada ? num(entrada.quantidade_atendida) : 0;
+    if (qty <= 0) continue;
+    const mat = await dbGet(db, 'SELECT controle_serie FROM materiais_almoxarifado WHERE id = ?', [item.material_id]);
+    if (!mat || !Number(mat.controle_serie)) continue;
+    const falha = (msg) => Object.assign(new Error(`${item.material_nome}: ${msg}`), { status: 400 });
+    if (!Number.isInteger(qty)) throw falha('material com controle de serie exige quantidade inteira');
+    const ids = Array.isArray(entrada.serie_ids)
+      ? entrada.serie_ids.map(Number).filter((x) => Number.isInteger(x) && x > 0) : [];
+    if (ids.length !== qty) {
+      throw falha(`material com controle de serie: informe ${qty} serie(s) para ${qty} unidade(s) — recebidas ${ids.length}`
+        + (ids.length === 0 ? ' — entregue escolhendo as series' : ''));
+    }
+    if (new Set(ids).size !== ids.length || ids.some((x) => seriesUsadas.has(x))) {
+      throw falha('serie repetida na entrega');
+    }
+    const rows = await dbAll(db, `SELECT id, numero, material_id, status, lote_id FROM series_almoxarifado
+      WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+    for (const x of ids) {
+      const s = rows.find((r) => r.id === x);
+      if (!s || Number(s.material_id) !== Number(item.material_id) || s.status !== 'EM_ESTOQUE') {
+        throw falha(`serie ${s ? s.numero : x} nao esta em estoque deste material`);
+      }
+    }
+    // Fase 2: o lote vem das series (sem lote explicito, o claim aceitava series de qualquer lote e o
+    // fisico drenava pelo ramo sem lote — o saldo por lote e o lote das series se separavam).
+    const lotes = new Set(rows.map((r) => (r.lote_id ? Number(r.lote_id) : null)));
+    if (lotes.size > 1) throw falha('escolha series de um lote so');
+    ids.forEach((x) => seriesUsadas.add(x));
+    seriesPorItem.set(item.id, { ids, loteSeries: [...lotes][0] || null });
+  }
+
+  const origemPorItem = new Map();
+  const pedidoPorOrigem = new Map();
+  const substituicoes = new Map(); // Etapa 63: item.id -> substituicao da origem separada
+  for (const item of itens) {
+    const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
+    const qty = entrada ? num(entrada.quantidade_atendida) : 0;
+    if (qty <= 0) continue;
+    let origemId = entrada.localizacao_origem_id ? Number(entrada.localizacao_origem_id) : null;
+    let loteId = entrada.lote_id ? Number(entrada.lote_id) : null;
+    const lido = entrada.codigo_lido_origem;
+    const semEscolha = !origemId && !loteId && (lido === undefined || lido === null || lido === '');
+    let planejada = false;
+    const pendenteSep = Math.max(0, getSeparado(item) - getEntregue(item));
+    // Etapa 63 (Fase 2, critico): a planejada vale para o separado PENDENTE mesmo quando a entrega
+    // passa dele — antes, acima do pendente TUDO saia automatico, inclusive o que estava na caixa
+    // tirado de A (o livro dizia "saiu de B"). A baixa se divide: o pendente sai da planejada, o
+    // excedente (nunca separado) automatico.
+    let qtdComOrigem = qty;
+    if (semEscolha && entrada.origem_automatica !== true && item.origem_separacao_id && pendenteSep > 1e-9) {
+      origemId = Number(item.origem_separacao_id);
+      loteId = item.lote_separacao_id ? Number(item.lote_separacao_id) : null;
+      planejada = true;
+      qtdComOrigem = Math.min(qty, pendenteSep);
+    }
+    // Etapa 61: o lote das series escolhidas vale como lote da saida (e tem de bater com o escolhido).
+    const infoSeries = seriesPorItem.get(item.id);
+    const loteSeries = infoSeries?.loteSeries || null;
+    // Fase 5: tambem series SEM lote com lote escolhido (antes a checagem nem rodava e a recusa vinha
+    // do claim do motor, generica); e, quando o lote e o da origem PLANEJADA, a mensagem diz isso.
+    if (infoSeries && loteId && loteSeries !== loteId) {
+      const err = new Error(planejada
+        ? `${item.material_nome}: a origem da separação não serve mais (as series escolhidas nao sao do lote dela) — entregue escolhendo de onde sai`
+        : `${item.material_nome}: as series escolhidas nao sao do lote escolhido`);
+      err.status = 400;
+      throw err;
+    }
+    if (loteSeries) loteId = loteSeries;
+    // Etapa 63 (RN-01): SUBSTITUICAO — o item tinha separado pendente com origem planejada e a entrega
+    // nao sai dela (origem no payload que difere, ou automatico pedido). Planejada sem lote = qualquer
+    // lote: so o endereco conta. Comparado DEPOIS do lote derivado das series. So registro (aditivo).
+    if (item.origem_separacao_id && pendenteSep > 1e-9 && !planejada) {
+      const planOrigem = Number(item.origem_separacao_id);
+      const planLote = item.lote_separacao_id ? Number(item.lote_separacao_id) : null;
+      const automatica = entrada.origem_automatica === true && !origemId;
+      const outroPar = automatica || Number(origemId || 0) !== planOrigem || (planLote !== null && Number(loteId || 0) !== planLote);
+      if (outroPar) {
+        const mot = typeof entrada.motivo_substituicao === 'string' ? entrada.motivo_substituicao.trim().slice(0, 500) : '';
+        substituicoes.set(item.id, {
+          planOrigem, planLote, saiuOrigem: origemId || null, saiuLote: loteId || null, automatica,
+          quantidade: Math.min(qty, pendenteSep), motivo: mot || null,
+        });
+      }
+    }
+    if (!origemId && !loteId && semEscolha && !loteSeries) continue;
+    try {
+      const lidoNorm = stockService.normalizarCodigoLido(lido);
+      await checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qtdComOrigem, pedidoPorOrigem);
+      origemPorItem.set(item.id, { origemId, loteId, lido: lidoNorm, qtdComOrigem });
+    } catch (e) {
+      let msg = `${item.material_nome}: ${e.message}`;
+      if (planejada) {
+        const loc = await dbGet(db, 'SELECT codigo FROM localizacoes_almoxarifado WHERE id = ?', [origemId]);
+        msg = `${item.material_nome}: a origem da separação (${loc ? loc.codigo : origemId}) não serve mais (${e.message}) — entregue escolhendo de onde sai`;
+      }
+      const err = new Error(msg);
+      err.status = e.status || 400;
       throw err;
     }
   }
@@ -626,15 +1141,47 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
       ? [{ quantidade: restante, reserva_id: undefined }, ...baixasReserva]
       : baixasReserva;
 
+    // Etapa 63: com a planejada so para parte (o separado pendente), a baixa se divide em pedacos
+    // "com origem" (estrita) e "automaticos". Sem divisao, cada baixa e um pedaco so.
+    const qtdOrigemItem = origemPorItem.has(item.id) ? origemPorItem.get(item.id).qtdComOrigem : 0;
+    const pedacos = [];
+    let comOrigemRestante = qtdOrigemItem;
+    for (const b of baixas) {
+      let q = b.quantidade;
+      if (comOrigemRestante > 1e-9) {
+        const parte = Math.min(q, comOrigemRestante);
+        pedacos.push({ ...b, quantidade: parte, comOrigem: true });
+        comOrigemRestante -= parte;
+        q -= parte;
+      }
+      if (q > 1e-9) pedacos.push({ ...b, quantidade: q, comOrigem: false });
+    }
+    const movimentosDoItem = [];
+
     let entregueAcumulado = getEntregue(item);
-    for (const baixa of baixas) {
+    // Etapa 61 (RN-02): as series se dividem entre as baixas, em ordem (a 1a baixa leva as primeiras).
+    const seriesRestantes = [...(seriesPorItem.get(item.id)?.ids || [])];
+    // Etapa 63 (Fase 5): o registro sai num finally — se um pedaco do item falhar depois de outro ja
+    // baixado, o livro mostra a saida e a troca nao pode ficar sem registro.
+    try {
+    for (const baixa of pedacos) {
       try {
         // eslint-disable-next-line no-await-in-loop
-        await stockService.registrarMovimentacao(db, user, {
+        const mov = await stockService.registrarMovimentacao(db, user, {
           material_id: item.material_id,
           tipo: 'SAIDA',
           quantidade: baixa.quantidade,
           reserva_id: baixa.reserva_id,
+          ...(seriesPorItem.has(item.id) ? { serie_ids: seriesRestantes.splice(0, baixa.quantidade) } : {}),
+          ...(baixa.comOrigem ? {
+            localizacao_origem_id: origemPorItem.get(item.id).origemId || undefined,
+            lote_id: origemPorItem.get(item.id).loteId || undefined,
+            codigo_lido_origem: origemPorItem.get(item.id).lido || undefined,
+          } : {}),
+          // Etapa 63 (Fase 5, critico): o pedaco AUTOMATICO de um item com serie leva o lote das series —
+          // sem ele o fisico drenava pelo ramo sem lote e as series do lote L saiam (o defeito que a
+          // Fase 2 da Etapa 61 fechou, reaberto pela divisao da baixa).
+          ...(!baixa.comOrigem && seriesPorItem.get(item.id)?.loteSeries ? { lote_id: seriesPorItem.get(item.id).loteSeries } : {}),
           motivo: `Requisição ${reqRow.numero}`,
           referencia: reqRow.os_referencia || reqRow.numero,
           justificativa: `Entrega requisição ${reqRow.numero}`,
@@ -642,7 +1189,8 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
           projeto_id: reqRow.projeto_id || undefined,
           cliente_id: reqRow.cliente_id || undefined,
           centro_custo_id: reqRow.centro_custo_id || undefined,
-        });
+        }, { origemEstrita: baixa.comOrigem && !!origemPorItem.get(item.id)?.origemId, exigeSerie: true });
+        movimentosDoItem.push(mov.id);
       } catch (e) {
         const err = new Error(`${item.material_nome}: ${e.message}`);
         err.status = e.status;
@@ -655,7 +1203,33 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
         'UPDATE itens_requisicao_almoxarifado SET quantidade_entregue=?, quantidade_atendida=?, quantidade_separada=? WHERE id=?',
         [entregueAcumulado, entregueAcumulado, Math.max(getSeparado(item), entregueAcumulado), item.id]);
     }
+    } finally {
 
+    // Etapa 63 (RN-01/02): o registro da substituicao, DEPOIS das baixas do item (um por item por
+    // entrega, com os ids das movimentacoes). O lote que saiu vem do LIVRO (no automatico o motor
+    // escolhe). Sem transacao: se um item seguinte falhar, este fica baixado E registrado.
+    if (substituicoes.has(item.id) && movimentosDoItem.length) {
+      const s = substituicoes.get(item.id);
+      // eslint-disable-next-line no-await-in-loop
+      const lotes = await dbAll(db, `SELECT DISTINCT lote_id FROM movimentacoes_almoxarifado
+        WHERE id IN (${movimentosDoItem.map(() => '?').join(',')})`, movimentosDoItem);
+      const loteSaida = s.saiuLote || (lotes.length === 1 ? lotes[0].lote_id : null);
+      // eslint-disable-next-line no-await-in-loop
+      await dbRun(db, `INSERT INTO substituicoes_origem_requisicao
+        (requisicao_id, item_id, material_id, quantidade, localizacao_planejada_id, lote_planejado_id,
+         localizacao_saida_id, lote_saida_id, automatica, movimentacao_ids, motivo, usuario_id, usuario_nome)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [requisicaoId, item.id, item.material_id, s.quantidade, s.planOrigem, s.planLote,
+        s.saiuOrigem, loteSaida, s.automatica ? 1 : 0, JSON.stringify(movimentosDoItem), s.motivo,
+        user.id, nomeDoUsuario(user)]);
+    }
+    }
+
+    // Etapa 59 (RN-04): entregue todo o separado, a origem planejada nao vale mais.
+    if (item.origem_separacao_id && Math.max(getSeparado(item), entregueAcumulado) - entregueAcumulado <= 1e-9) {
+      // eslint-disable-next-line no-await-in-loop
+      await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET origem_separacao_id = NULL, lote_separacao_id = NULL WHERE id = ?', [item.id]);
+    }
     entregas.push({ item_id: item.id, quantidade: qtyEntregar });
   }
 
@@ -704,16 +1278,89 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
   // exclusão ficava incompleta).
   const motivo = justificativa?.trim() || 'Excluída pelo administrador';
 
-  for (const item of itens) {
-    const qtyEstorno = getEntregue(item);
-    if (qtyEstorno <= 0) continue;
-
+  // Etapa 58 (Fase 2, crítico 3 + Fase 5): o estorno devolve POR SAÍDA — mesmo lote, e para a origem
+  // dela se ela ainda aceita receber este material (ativa, não bloqueada, tipo permitido); senão a
+  // padrão. Agrupado por MATERIAL (dois itens do mesmo material dividem as saídas do livro). Se o
+  // livro não soma o entregue (dado antigo, saída estornada à parte), cai no estorno de antes.
+  // TODAS as partes são validadas antes da primeira ENTRADA (Fase 5): uma recusa no meio deixava
+  // parte creditada com a requisição ativa, e a nova tentativa creditava de novo.
+  const partes = [];
+  const materiais = [...new Set(itens.filter((i) => getEntregue(i) > 0).map((i) => i.material_id))];
+  for (const materialId of materiais) {
+    const doMaterial = itens.filter((i) => i.material_id === materialId && getEntregue(i) > 0);
+    const totalEntregue = doMaterial.reduce((s, i) => s + getEntregue(i), 0);
+    // eslint-disable-next-line no-await-in-loop
+    const material = await dbGet(db, 'SELECT id, localizacao_padrao_id, tipo_material, controle_serie FROM materiais_almoxarifado WHERE id = ?', [materialId]);
+    // Etapa 61 (Fase 5): POR SAÍDA e LÍQUIDO das devoluções. Por grupo (origem, lote) e sem descontar
+    // as devoluções, excluir depois de devolver tudo creditava o físico DE NOVO (a devolução já
+    // tinha devolvido; e as séries reativadas perdem o vínculo com a saída, então o caso caía no
+    // ramo "legado" e entrava sem série); e uma saída legada misturada com uma nova no mesmo grupo
+    // travava a exclusão para sempre. Cada saída: o que falta devolver dela; material com série,
+    // as séries dela ainda ENTREGUE (legada: nenhuma — o de antes; número diferente: recusa).
+    // eslint-disable-next-line no-await-in-loop
+    const saidas = await dbAll(db, `SELECT m.id, m.localizacao_origem_id as origem, m.lote_id, m.quantidade as q,
+        COALESCE((SELECT SUM(d.quantidade) FROM devolucoes_material_almoxarifado d WHERE d.movimentacao_saida_id = m.id), 0) as devolvida
+      FROM movimentacoes_almoxarifado m
+      WHERE m.requisicao_id = ? AND m.material_id = ? AND m.tipo = 'SAIDA' AND COALESCE(m.cancelado, 0) = 0
+      ORDER BY m.id`, [requisicaoId, materialId]);
+    const somaLivro = saidas.reduce((s, g) => s + (Number(g.q) || 0), 0);
+    const nome = doMaterial[0].material_nome;
+    if (saidas.length && Math.abs(somaLivro - totalEntregue) < 1e-9) {
+      for (const g of saidas) {
+        const liquido = (Number(g.q) || 0) - (Number(g.devolvida) || 0);
+        if (liquido <= 1e-9) continue;
+        let destino = g.origem || undefined;
+        if (destino) {
+          // eslint-disable-next-line no-await-in-loop
+          const loc = await dbGet(db, 'SELECT * FROM localizacoes_almoxarifado WHERE id = ?', [destino]);
+          if (!loc || Number(loc.ativo) !== 1 || stockService.motivoRecusaEndereco(loc, material, 'destino')) destino = undefined;
+        }
+        let series;
+        if (Number(material.controle_serie)) {
+          // eslint-disable-next-line no-await-in-loop
+          const sr = await dbAll(db, `SELECT numero FROM series_almoxarifado
+            WHERE status = 'ENTREGUE' AND movimentacao_saida_id = ?`, [g.id]);
+          if (sr.length && Math.abs(sr.length - liquido) > 1e-9) {
+            const err = new Error(`${nome}: as series desta entrega nao batem com o que falta devolver — use a devolucao`);
+            err.status = 400;
+            throw err;
+          }
+          if (sr.length) series = sr.map((s) => s.numero);
+        }
+        partes.push({ material, nome, quantidade: liquido, destino, lote_id: g.lote_id || undefined, series });
+      }
+    } else {
+      // Livro que não soma o entregue (dado antigo): o estorno de antes — líquido do que já foi
+      // devolvido citando as saídas desta requisição.
+      // eslint-disable-next-line no-await-in-loop
+      const dev = await dbGet(db, `SELECT COALESCE(SUM(d.quantidade), 0) as q FROM devolucoes_material_almoxarifado d
+        JOIN movimentacoes_almoxarifado m ON m.id = d.movimentacao_saida_id
+        WHERE m.requisicao_id = ? AND m.material_id = ?`, [requisicaoId, materialId]);
+      const liquido = totalEntregue - (Number(dev.q) || 0);
+      if (liquido > 1e-9) partes.push({ material, nome, quantidade: liquido, destino: undefined, lote_id: undefined });
+    }
+  }
+  for (const parte of partes) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await stockService.validarLocalizacaoParaMovimento(db,
+        stockService.resolveLocalizacaoEntrada(parte.material, parte.destino), parte.material, 'destino');
+    } catch (e) {
+      const err = new Error(`${parte.nome}: ${e.message}`);
+      err.status = e.status || 400;
+      throw err;
+    }
+  }
+  for (const parte of partes) {
     try {
       // eslint-disable-next-line no-await-in-loop
       await stockService.registrarMovimentacao(db, user, {
-        material_id: item.material_id,
+        material_id: parte.material.id,
         tipo: 'ENTRADA',
-        quantidade: qtyEstorno,
+        quantidade: parte.quantidade,
+        localizacao_destino_id: parte.destino,
+        lote_id: parte.lote_id,
+        ...(parte.series ? { series: parte.series } : {}),
         motivo: `Estorno exclusão requisição ${reqRow.numero}`,
         referencia: reqRow.os_referencia || reqRow.numero,
         justificativa: justificativa || motivo,
@@ -721,14 +1368,15 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
         projeto_id: reqRow.projeto_id || undefined,
         cliente_id: reqRow.cliente_id || undefined,
         centro_custo_id: reqRow.centro_custo_id || undefined,
-      });
+      }, parte.series ? { exigeSerie: true } : {});
     } catch (e) {
-      const err = new Error(`${item.material_nome}: ${e.message}`);
+      const err = new Error(`${parte.nome}: ${e.message}`);
       err.status = e.status;
       throw err;
     }
-
-    estornos.push({ material_id: item.material_id, quantidade: qtyEstorno });
+  }
+  for (const item of itens) {
+    if (getEntregue(item) > 0) estornos.push({ material_id: item.material_id, quantidade: getEntregue(item) });
   }
 
   await dbRun(db,
@@ -755,6 +1403,9 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
 }
 
 module.exports = {
+  listarFilaSeparacao,
+  compararPrioridade, // Etapa 74 (T0): a ordem unica da fila e da reserva na chegada
+  listarSubstituicoes,
   num,
   getEntregue,
   getSeparado,
@@ -767,6 +1418,8 @@ module.exports = {
   carregarItensRequisicao,
   saldoDisponivelParaItem,
   reservarItensAprovacao,
+  prepararPosAprovacao, // Etapa 73
+  desfazerReservas, // Etapa 73
   separarRequisicao,
   entregarRequisicao,
   excluirRequisicao,

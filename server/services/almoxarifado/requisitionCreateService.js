@@ -14,12 +14,14 @@ const sectorMaterialService = require('./sectorMaterialService');
 const requisitionNotificationService = require('./requisitionNotificationService');
 const purchaseNotifyService = require('./requisitionPurchaseNotifyService');
 const valueApprovalService = require('./requisitionValueApprovalService');
+const approvalRulesService = require('./approvalRulesService');
 // Etapa 31: `gerarNumeroReq` SUMIU daqui. Ela era o milissegundo fatiado em DECIMAL (os seis
 // ultimos digitos) mais 2 digitos aleatorios — esse carimbo repetia a cada 16,7 MINUTOS (o pior
 // dos quatro), e duas requisicoes criadas nesse intervalo, no mesmo offset de ms, disputavam 100
 // sufixos. Era exportada mas nao importada em lugar nenhum, entao remove-la nao mexe em contrato
 // de ninguem.
 const { inserirComNumeroUnico } = require('./numeroDoc');
+const { TIPOS_URGENCIA } = require('./schema');
 
 /**
  * Dispara as notificações pós-criação (e-mail solicitantes/almoxarifado + alerta de
@@ -63,6 +65,14 @@ async function dispararNotificacoesCriacao(db, requisicaoId, solicitanteEmail = 
     console.warn('[requisitionCreateService] Falha ao notificar Compras:', err.message);
   });
 
+  // Etapa 47 (RN-09): as regras de aprovação, ANTES do valor. Falha é logada e NÃO abre a porta:
+  // sem `regras_avaliadas_em` o gate de aprovação fica fechado e `/aprovar` reavalia (9.7/C2).
+  try {
+    await approvalRulesService.avaliarRequisicao(db, requisicaoId);
+  } catch (regraErr) {
+    console.warn('[requisitionCreateService] Falha ao avaliar regras de aprovação:', regraErr.message);
+  }
+
   let avaliacaoValor;
   try {
     avaliacaoValor = await valueApprovalService.aplicarAvaliacaoNaCriacao(db, requisicaoId);
@@ -72,6 +82,26 @@ async function dispararNotificacoesCriacao(db, requisicaoId, solicitanteEmail = 
   }
 
   return avaliacaoValor;
+}
+
+const FORMATO_DATA_NECESSIDADE = 'data_necessidade deve estar no formato AAAA-MM-DD';
+
+/**
+ * Etapa 67: `data_necessidade` e o PRAZO do indicador "% no prazo". Vazio, null ou ausente = sem
+ * prazo (NULL). Qualquer outra coisa tem de ser AAAA-MM-DD de um dia que EXISTE — o regex sozinho
+ * deixaria passar 2026-02-30, que o `date()` do SQLite normaliza para outro dia em vez de recusar.
+ * O legado ja gravado (DD/MM/AAAA) continua no banco e o relatorio o conta em `sem_data_valida`.
+ */
+function normalizarDataNecessidade(valor) {
+  if (valor === undefined || valor === null || valor === '') return null;
+  const recusa = () => Object.assign(new Error(FORMATO_DATA_NECESSIDADE), { status: 400 });
+  if (typeof valor !== 'string') throw recusa();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valor);
+  if (!m) throw recusa();
+  const [ano, mes, dia] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const d = new Date(Date.UTC(ano, mes - 1, dia));
+  if (d.getUTCFullYear() !== ano || d.getUTCMonth() !== mes - 1 || d.getUTCDate() !== dia) throw recusa();
+  return valor;
 }
 
 /**
@@ -132,6 +162,21 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
 
   const setorFinal = departamento || setor || null;
 
+  // Etapa 48 (RN-01): lista fechada, ANTES de qualquer escrita (o `ensureSetoresRequisicao` abaixo
+  // já escreve). Vazio/ausente continuam sendo NORMAL. Comparação EXATA: 'urgente' é recusado —
+  // aceitar variações seria reabrir a lista por outro caminho.
+  const urgenciaFinal = (urgencia === undefined || urgencia === null || urgencia === '') ? 'NORMAL' : urgencia;
+  if (!TIPOS_URGENCIA.includes(urgenciaFinal)) {
+    const err = new Error(`Urgência inválida: ${urgencia}`);
+    err.status = 400;
+    throw err;
+  }
+
+  // Etapa 67 (Fase 2, critico 1): o "% no prazo" compara date(data_necessidade) — texto que o
+  // SQLite nao le (DD/MM/AAAA, "amanha") sumia calado do indicador. Recusa ANTES de qualquer
+  // escrita, aqui no servico (unico escritor da coluna: as duas rotas de criacao passam por ele).
+  const dataNecessidadeFinal = normalizarDataNecessidade(data_necessidade);
+
   if (setorFinal) {
     await sectorMaterialService.ensureSetoresRequisicao(db);
   }
@@ -169,19 +214,26 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
     [
       num, user.id, user.nome || user.email,
       setorFinal, setorFinal, osFinal,
-      urgencia || 'NORMAL', observacoes || null, justificativa_urgencia || null,
+      urgenciaFinal, observacoes || null, justificativa_urgencia || null,
       modulo_origem || null, statusInicial,
       tipo_requisicao || 'CONSUMO', centro_custo_id || null, local_entrega || null,
       projeto_id || null, cliente_id || null, equipamento || null,
-      prioridade || 'NORMAL', data_necessidade || null, justificativa || null,
+      prioridade || 'NORMAL', dataNecessidadeFinal, justificativa || null,
     ]));
 
   const reqId = insertResult.lastID;
 
-  await Promise.all(itens.map((item) => dbRun(db,
-    `INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada, observacoes)
-     VALUES (?,?,?,?)`,
-    [reqId, item.material_id, item.quantidade, item.observacoes || null])));
+  // Etapa 73 (T0, G80): um item por vez, NA ORDEM do payload. Era Promise.all(itens.map(INSERT)) e o
+  // node-sqlite3 nao garante a ordem de execucao de comandos paralelos na mesma conexao: o id do
+  // item saia trocado (medido: 16-17 de 20 requisicoes de 5 itens) e o detalhe, que segue o id,
+  // mostrava B antes de A para quem pediu A e B.
+  for (const item of itens) {
+    // eslint-disable-next-line no-await-in-loop
+    await dbRun(db,
+      `INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada, observacoes)
+       VALUES (?,?,?,?)`,
+      [reqId, item.material_id, item.quantidade, item.observacoes || null]);
+  }
 
   if (isRascunho || skipNotificacoes) {
     return { id: reqId, numero, status: statusInicial };
@@ -201,4 +253,4 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
 module.exports = {
   // Exportada para a rota /enviar cobrar a MESMA regra no envio do rascunho — duas
   // cópias da condição divergiriam e o rascunho viraria a porta dos fundos da RN-A.
-  exigirOS, createRequisicao, dispararNotificacoesCriacao };
+  exigirOS, createRequisicao, dispararNotificacoesCriacao, FORMATO_DATA_NECESSIDADE };

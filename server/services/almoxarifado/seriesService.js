@@ -7,7 +7,8 @@
 const { dbGet, dbAll, dbRun } = require('./db');
 const { registrarAuditoria } = require('./audit');
 
-const STATUS_SERIE = ['EM_ESTOQUE', 'BLOQUEADA', 'ENTREGUE', 'SUCATEADA', 'ESTORNADA'];
+// Etapa 61: BAIXADA = serie dada como ausente na regularizacao (nao presente; ver regularizarSeries).
+const STATUS_SERIE = ['EM_ESTOQUE', 'BLOQUEADA', 'ENTREGUE', 'SUCATEADA', 'ESTORNADA', 'BAIXADA'];
 const STATUS_PRESENTES = ['EM_ESTOQUE', 'BLOQUEADA'];
 
 function erro(msg, status = 400) {
@@ -141,7 +142,9 @@ async function claimSaidaSeries(db, user, { material_id, serie_ids, lote_id = nu
   if (unicos.size !== lista.length) {
     throw erro('serie_ids repetidos na lista informada');
   }
-  const statusDestino = ['SUCATA', 'PERDA'].includes(tipo) ? 'SUCATEADA' : 'ENTREGUE';
+  // Etapa 62: a descida de um AJUSTE baixa a serie (BAIXADA, nao presente) — nao foi entregue a ninguem.
+  const statusDestino = ['AJUSTE', 'AJUSTE_INVENTARIO'].includes(tipo) ? 'BAIXADA'
+    : ['SUCATA', 'PERDA'].includes(tipo) ? 'SUCATEADA' : 'ENTREGUE';
   const claimed = [];
   try {
     for (const id of lista) {
@@ -322,6 +325,115 @@ async function mudarStatusSerie(db, user, serieId, novoStatus, justificativa) {
   return linha;
 }
 
+/**
+ * Etapa 61 (RN-06) — regulariza o invariante `COUNT(serie presente) == quantidade_atual` que as
+ * entregas anteriores a esta etapa quebraram (o fisico baixava e a serie ficava EM_ESTOQUE) e o
+ * estoque legado criado sem linhas de serie. Dois sentidos, e NUNCA cria divergencia nova:
+ *  - `cadastrar` numeros de serie para fisico que nao tem serie — no maximo `fisico − presentes`;
+ *  - `baixar` series "fantasma" (presentes mas ausentes) — no maximo `presentes − fisico`, status BAIXADA.
+ * Sem movimentacao de estoque (o fisico ja esta certo); justificativa obrigatoria; auditado por serie.
+ */
+async function regularizarSeries(db, user, materialId, { cadastrar = [], baixar = [], justificativa, lote_id: loteBruto } = {}) {
+  const just = String(justificativa || '').trim();
+  if (just.length < 5) throw erro('justificativa obrigatoria (minimo 5 caracteres)');
+  const material = await dbGet(db, 'SELECT id, codigo, quantidade_atual, controle_serie FROM materiais_almoxarifado WHERE id = ?', [materialId]);
+  if (!material) throw erro('material nao encontrado', 404);
+  if (!Number(material.controle_serie)) throw erro('material sem controle de serie');
+  const numeros = Array.isArray(cadastrar) ? [...new Set(cadastrar.map((s) => String(s).trim()).filter(Boolean))] : [];
+  const ids = Array.isArray(baixar) ? [...new Set(baixar.map(Number).filter((x) => Number.isInteger(x) && x > 0))] : [];
+  if (!numeros.length && !ids.length) throw erro('informe series para cadastrar ou para baixar');
+  // Fase 5: lote opcional para o que se cadastra — material com lote e serie ficava num beco (a
+  // entrega filtra pelo lote e a serie cadastrada sem lote nunca aparecia).
+  const loteId = loteBruto ? Number(loteBruto) : null;
+  if (loteId) {
+    const lote = await dbGet(db, 'SELECT id, material_id FROM lotes_almoxarifado WHERE id = ?', [loteId]);
+    if (!lote || Number(lote.material_id) !== Number(materialId)) throw erro('lote nao pertence a este material');
+  }
+  const fisico = Number(material.quantidade_atual) || 0;
+  const presentes = await contarPresentes(db, materialId);
+  // Fase 5: floor nos DOIS sentidos — com fisico fracionario (2,5 e 3 presentes), ceil deixava baixar
+  // 1 e criava a divergencia inversa (2 presentes contra 2,5). Serie e unidade inteira.
+  if (numeros.length) {
+    const max = Math.max(0, Math.floor(fisico - presentes + 1e-9));
+    if (numeros.length > max) {
+      throw erro(`cadastrar ${numeros.length} serie(s) passaria o fisico (${fisico}) — presentes ${presentes}, cadastre no maximo ${max}`);
+    }
+    for (const numero of numeros) {
+      const existente = await getSeriePorNumero(db, materialId, numero);
+      if (existente && existente.status !== 'BAIXADA') throw erro(`serie ${numero} ja existe neste material`);
+    }
+  }
+  if (ids.length) {
+    const max = Math.max(0, Math.floor(presentes - fisico + 1e-9));
+    if (ids.length > max) {
+      throw erro(`baixar ${ids.length} serie(s) deixaria menos series que o fisico (${fisico}) — presentes ${presentes}, baixe no maximo ${max}`);
+    }
+    const rows = await dbAll(db, `SELECT id, numero, material_id, status FROM series_almoxarifado WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+    for (const x of ids) {
+      const s = rows.find((r) => r.id === x);
+      if (!s || Number(s.material_id) !== Number(materialId) || !STATUS_PRESENTES.includes(s.status)) {
+        throw erro(`serie ${s ? s.numero : x} nao esta presente neste material`);
+      }
+    }
+  }
+  // Fase 5: cada escrita e UMA instrucao com o limite no proprio WHERE (duas abas nao passam juntas
+  // do limite), e uma falha no meio desfaz o que esta chamada ja escreveu — a auditoria so e gravada
+  // depois, quando tudo entrou. Nao ha transacao neste modulo; e o padrao dele (desfazerEntrada/Saida).
+  const PRESENTES_SQL = `(SELECT COUNT(*) FROM series_almoxarifado WHERE material_id = ? AND status IN ('EM_ESTOQUE','BLOQUEADA'))`;
+  const feitas = [];
+  const desfazer = async () => {
+    for (const f of feitas.reverse()) {
+      if (f.tipo === 'insert') await dbRun(db, 'DELETE FROM series_almoxarifado WHERE id = ?', [f.id]);
+      else await dbRun(db, 'UPDATE series_almoxarifado SET status = ?, status_motivo = ?, lote_id = ? WHERE id = ?', [f.status, f.motivo, f.lote_id, f.id]);
+    }
+  };
+  try {
+    for (const numero of numeros) {
+      const existente = await getSeriePorNumero(db, materialId, numero);
+      if (existente) {
+        // Fase 5: a BAIXADA por engano volta por aqui (antes: "ja existe", sem saida).
+        const r = await dbRun(db, `UPDATE series_almoxarifado SET status = 'EM_ESTOQUE', status_motivo = ?, lote_id = COALESCE(?, lote_id),
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND status = 'BAIXADA' AND ${PRESENTES_SQL} < ?`, [just, loteId, existente.id, materialId, fisico]);
+        if (!r.changes) throw erro(`serie ${numero}: o limite mudou ou ela ja foi reativada — recarregue`, 409);
+        feitas.push({ tipo: 'update', id: existente.id, numero, status: 'BAIXADA', motivo: existente.status_motivo, lote_id: existente.lote_id, para: 'EM_ESTOQUE', de: 'BAIXADA' });
+        continue;
+      }
+      let r;
+      try {
+        r = await dbRun(db, `INSERT INTO series_almoxarifado (material_id, numero, status, status_motivo, lote_id, created_por)
+          SELECT ?, ?, 'EM_ESTOQUE', ?, ?, ? WHERE ${PRESENTES_SQL} < ?`,
+        [materialId, numero, just, loteId, user?.id || null, materialId, fisico]);
+      } catch (e) {
+        if (String(e.message).includes('UNIQUE')) throw erro(`serie ${numero} ja existe neste material`, 409);
+        throw e;
+      }
+      if (!r.changes) throw erro('o limite de series mudou durante a regularizacao — recarregue', 409);
+      feitas.push({ tipo: 'insert', id: r.lastID, numero, para: 'EM_ESTOQUE', de: null });
+    }
+    for (const x of ids) {
+      const antes = await getSerie(db, x);
+      const r = await dbRun(db, `UPDATE series_almoxarifado SET status = 'BAIXADA', status_motivo = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND status IN ('EM_ESTOQUE','BLOQUEADA') AND ${PRESENTES_SQL} > ?`, [just, x, materialId, fisico]);
+      if (!r.changes) throw erro('status da serie ou o limite mudou durante a regularizacao — recarregue', 409);
+      feitas.push({ tipo: 'update', id: x, numero: antes.numero, status: antes.status, motivo: antes.status_motivo, lote_id: antes.lote_id, para: 'BAIXADA', de: antes.status });
+    }
+  } catch (e) {
+    await desfazer();
+    throw e;
+  }
+  for (const a of feitas) {
+    await registrarAuditoria(db, {
+      entidade: 'serie', entidade_id: a.id, acao: 'REGULARIZACAO_SERIES',
+      usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
+      dados_anteriores: a.de ? { status: a.de } : null,
+      dados_novos: { numero: a.numero, status: a.para, material_id: Number(materialId), ...(loteId && a.para === 'EM_ESTOQUE' ? { lote_id: loteId } : {}) },
+      justificativa: just,
+    });
+  }
+  return { cadastradas: numeros.length, baixadas: ids.length, presentes: await contarPresentes(db, materialId), fisico };
+}
+
 async function contarPresentes(db, materialId) {
   const r = await dbGet(db, `
     SELECT COUNT(*) AS n FROM series_almoxarifado
@@ -331,6 +443,7 @@ async function contarPresentes(db, materialId) {
 
 module.exports = {
   STATUS_SERIE,
+  regularizarSeries,
   STATUS_PRESENTES,
   getSerie,
   getSeriePorNumero,
