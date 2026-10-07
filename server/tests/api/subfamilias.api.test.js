@@ -1,7 +1,7 @@
 const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
-const { dbGet } = require('../../services/almoxarifado/db');
+const { dbGet, dbRun } = require('../../services/almoxarifado/db');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -371,6 +371,32 @@ async function criarMaterialReq(app, body) {
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));
     const row = await dbGet(db, 'SELECT ativo FROM familias_material_almoxarifado WHERE id = ?', [sub37.id]);
     assert.strictEqual(Number(row.ativo), 0, 'sub deveria ter sido inativada');
+  });
+
+  await test('[F1 revisão E37] PUT de material cuja subfamília foi INATIVADA depois (mesmo subfamilia_id) → 200; trocar para outra sub inativa → 400', async () => {
+    const stamp = String(Date.now()).slice(-5);
+    const raiz = await criarFamilia(app, 'Raiz F1 ' + stamp, { codigo: 'RF1' + stamp });
+    const sub = await criarFamilia(app, 'Sub F1 ' + stamp, { parent_id: raiz.id });
+    const outraSub = await criarFamilia(app, 'Outra Sub F1 ' + stamp, { parent_id: raiz.id });
+    const criado = await criarMaterialReq(app, { codigo: 'MAT-F1-' + stamp, nome: 'Material F1', familia_id: raiz.id, subfamilia_id: sub.id, categoria: 'OUTROS', unidade: 'UN' });
+    assert.strictEqual(criado.status, 201, JSON.stringify(criado.body));
+    const matId = criado.body.id;
+    // Simula o dado de ANTES da 37: a sub foi inativada com itens (o DELETE antigo deixava).
+    await dbRun(db, 'UPDATE familias_material_almoxarifado SET ativo = 0 WHERE id = ?', [sub.id]);
+    await dbRun(db, 'UPDATE familias_material_almoxarifado SET ativo = 0 WHERE id = ?', [outraSub.id]);
+    // O form manda o MESMO subfamilia_id que leu: vinculo preservado, nao e valor novo -> 200.
+    const mesma = await request(app).put('/api/almoxarifado/materiais/' + matId).send({ nome: 'Material F1 renomeado', familia_id: raiz.id, subfamilia_id: sub.id });
+    assert.strictEqual(mesma.status, 200, 'PUT com a mesma sub (inativada depois) deveria passar: ' + JSON.stringify(mesma.body));
+    const row = await dbGet(db, 'SELECT nome, subfamilia_id FROM materiais_almoxarifado WHERE id = ?', [matId]);
+    assert.strictEqual(row.nome, 'Material F1 renomeado');
+    assert.strictEqual(Number(row.subfamilia_id), Number(sub.id), 'o vinculo com a sub inativa e preservado, nao apagado');
+    // Trocar para OUTRA sub inativa e valor novo -> continua recusado.
+    const troca = await request(app).put('/api/almoxarifado/materiais/' + matId).send({ nome: 'x', familia_id: raiz.id, subfamilia_id: outraSub.id });
+    assert.strictEqual(troca.status, 400, JSON.stringify(troca.body));
+    assert.ok(/Subfamília inválida/.test(troca.body.error), troca.body.error);
+    // Limpar (null) continua permitido.
+    const limpa = await request(app).put('/api/almoxarifado/materiais/' + matId).send({ nome: 'x', familia_id: raiz.id, subfamilia_id: null });
+    assert.strictEqual(limpa.status, 200, JSON.stringify(limpa.body));
   });
 
   await close();

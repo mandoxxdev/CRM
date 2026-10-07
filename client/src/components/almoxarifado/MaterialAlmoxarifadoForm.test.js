@@ -542,3 +542,58 @@ describe('MaterialAlmoxarifadoForm — RN-37.07: ?subfamilia_id na URL', () => {
     expect(api.post.mock.calls[0][1].subfamilia_id).toBeNull();
   });
 });
+
+describe('MaterialAlmoxarifadoForm — revisão da Etapa 37 (F1): subfamília em EDIÇÃO', () => {
+  const MATERIAL_COM_SUB_ATIVA = { ...MATERIAL_DO_CLIENTE, id: 80, familia_id: 5, subfamilia_id: 6 };
+  const MATERIAL_COM_SUB_INATIVA = { ...MATERIAL_DO_CLIENTE, id: 81, familia_id: 5, subfamilia_id: 9 };
+  const mockComMateriais = () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/clientes') return Promise.resolve({ data: [CLIENTE_UM, CLIENTE_DOIS] });
+      if (url === '/almoxarifado/familias') return Promise.resolve({ data: FAMILIAS });
+      if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
+      if (url === '/almoxarifado/materiais/80') return Promise.resolve({ data: MATERIAL_COM_SUB_ATIVA });
+      if (url === '/almoxarifado/materiais/81') return Promise.resolve({ data: MATERIAL_COM_SUB_INATIVA });
+      return Promise.resolve({ data: [] });
+    });
+  };
+  const selectSub = () => [...container.querySelectorAll('select')].find((s) => [...s.options].some((o) => o.textContent === '— nenhuma —'));
+
+  test('sub ATIVA (6): o select mostra 6 e o PUT preserva subfamilia_id 6 (fecha a sabotagem iv da revisão)', async () => {
+    mockComMateriais();
+    await renderizarEdicao(80);
+    expect(selectSub().value).toBe('6');
+    expect(selectSub().disabled).toBe(false);
+    await act(async () => { container.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+    await esperarEfeitos();
+    expect(api.put).toHaveBeenCalled();
+    expect(api.put.mock.calls[0][1].subfamilia_id).toBe(6);
+  });
+
+  test('sub INATIVADA depois (9, fora da lista): o select diz "(subfamília inativa)", fica habilitado e o PUT preserva 9', async () => {
+    mockComMateriais();
+    await renderizarEdicao(81);
+    const sel = selectSub();
+    expect(sel.value).toBe('9');
+    expect(sel.disabled).toBe(false);
+    expect([...sel.options].some((o) => /subfamília inativa/.test(o.textContent))).toBe(true);
+    expect(container.textContent).not.toMatch(/não tem subfamílias cadastradas/);
+    await act(async () => { container.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+    await esperarEfeitos();
+    expect(api.put).toHaveBeenCalled();
+    expect(api.put.mock.calls[0][1].subfamilia_id).toBe(9);
+  });
+
+  test('sub inativada: o usuário consegue LIMPAR (— nenhuma —) e o PUT manda null', async () => {
+    mockComMateriais();
+    await renderizarEdicao(81);
+    const sel = selectSub();
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+      setter.call(sel, '');
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(async () => { container.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+    await esperarEfeitos();
+    expect(api.put.mock.calls[0][1].subfamilia_id).toBeNull();
+  });
+});

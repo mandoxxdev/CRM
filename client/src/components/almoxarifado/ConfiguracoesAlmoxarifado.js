@@ -493,6 +493,9 @@ const TabFamilias = () => {
 
   const raizes = familias.filter(ehRaiz).sort(porNome);
   const subsDe = (raizId) => familias.filter(f => !ehRaiz(f) && String(f.parent_id) === String(raizId)).sort(porNome);
+  // F3 da revisao da Etapa 37: sub cujo pai NAO esta na lista (raiz inativada por fora, so com
+  // UPDATE direto — as rotas recusam) sumiria da arvore em silencio. Aparece num bloco proprio.
+  const orfas = familias.filter(f => !ehRaiz(f) && !raizes.some(r => String(r.id) === String(f.parent_id))).sort(porNome);
   const pai = parentForm ? familias.find(f => String(f.id) === String(parentForm)) : null;
 
   const loadFamilias = async () => {
@@ -736,6 +739,27 @@ const TabFamilias = () => {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {orfas.length > 0 && (
+            <div className="almox-familia-orfas" style={{ background: 'rgba(249,168,37,0.08)', border: '1px solid rgba(249,168,37,0.4)', borderRadius: 12, padding: '12px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, marginBottom: 6 }}>
+                <FiAlertTriangle size={16} color="#f9a825" /> Subfamílias sem família ativa ({orfas.length})
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', marginBottom: 8 }}>
+                A família destas subfamílias está inativa. Reative a família ou inative a subfamília.
+              </div>
+              {orfas.map(sub => (
+                <div key={sub.id} className="almox-subfamilia-row" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '4px 0' }}>
+                  <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#4facfe', fontSize: '0.8rem' }}>{sub.codigo}</span>
+                  <span style={{ fontWeight: 500 }}>{sub.nome}</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>família: {sub.parent_nome || sub.parent_id}</span>
+                  <span style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+                    <button type="button" className="almox-btn-icon" title="Editar" onClick={() => handleEditar(sub)}><FiEdit2 size={14} /></button>
+                    <button type="button" className="almox-btn-icon danger" title="Inativar" onClick={() => handleInativar(sub)}><FiTrash2 size={14} /></button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           {raizes.map(fam => {
             const expandida = !!expandidas[fam.id];
             const subs = subsDe(fam.id);

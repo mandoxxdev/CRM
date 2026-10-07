@@ -567,8 +567,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       }
     }
 
-    const subfamiliaOmitted = req.body.subfamilia_id === undefined;
-    if (merged.subfamilia_id && (!subfamiliaOmitted || familiaChanged)) {
+    // Revisao da Etapa 37 (F1): o form SEMPRE manda subfamilia_id (o mesmo valor que leu), entao
+    // "informado explicitamente" revalidava um vinculo preservado — e um material cuja subfamilia
+    // foi inativada (todas as inativadas pelo DELETE furado de antes da 37) ficava ineditavel com
+    // 400. "Novo de fato" = o valor MUDOU em relacao ao gravado, ou a familia mudou.
+    const subfamiliaChanged = String(merged.subfamilia_id || '') !== String(current.subfamilia_id || '');
+    if (merged.subfamilia_id && (subfamiliaChanged || familiaChanged)) {
       try {
         await validateSubfamilia(merged.subfamilia_id, merged.familia_id);
       } catch (errSub) {

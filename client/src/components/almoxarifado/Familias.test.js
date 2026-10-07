@@ -294,3 +294,27 @@ describe('TabFamilias — RN-37.02 (g): criar família raiz continua igual', () 
     expect(toast.success).toHaveBeenCalledWith('Família criada!');
   });
 });
+
+describe('TabFamilias — revisão da Etapa 37 (F3): subfamília cujo pai não está na lista', () => {
+  test('aparece no bloco "Subfamílias sem família ativa", não como cartão nem dentro de uma raiz', async () => {
+    const ORFA = { id: 9, codigo: 'RAO-SUB', nome: 'Sub Orfa', descricao: '', parent_id: 13, parent_nome: 'Raiz Orfa', tipo_uso: 'ambos', ativo: 1, qtd_itens: 0 };
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/familias') return Promise.resolve({ data: [...FAMILIAS, ORFA] });
+      return Promise.resolve({ data: [] });
+    });
+    await renderAbaFamilias();
+    const bloco = container.querySelector('.almox-familia-orfas');
+    expect(bloco).not.toBeNull();
+    expect(bloco.textContent).toMatch(/Subfamílias sem família ativa \(1\)/);
+    expect(bloco.textContent).toMatch(/RAO-SUB/);
+    expect(bloco.textContent).toMatch(/Raiz Orfa/);
+    // continua com os 2 cartões de raiz, e a órfã não está em nenhum deles
+    expect(cartoes().length).toBe(2);
+    expect(cartoes().every((c) => !c.textContent.includes('RAO-SUB'))).toBe(true);
+  });
+
+  test('[controle] sem órfã o bloco não existe', async () => {
+    await renderAbaFamilias();
+    expect(container.querySelector('.almox-familia-orfas')).toBeNull();
+  });
+});

@@ -397,6 +397,12 @@ const MaterialAlmoxarifadoForm = () => {
     if (!form.familia_id) return [];
     return familias.filter(f => String(f.parent_id) === String(form.familia_id));
   }, [familias, form.familia_id]);
+  // F1 da revisao da Etapa 37: id gravado que nao esta entre as subs ATIVAS da familia (so em
+  // edicao, e so depois de a lista chegar — antes disso a ausencia e por carregamento).
+  const subfamiliaInativa = useMemo(() => {
+    if (!isEdit || !form.subfamilia_id || familias.length === 0) return null;
+    return subfamiliasDisponiveis.some(s => String(s.id) === String(form.subfamilia_id)) ? null : form.subfamilia_id;
+  }, [isEdit, form.subfamilia_id, familias.length, subfamiliasDisponiveis]);
 
   const handleFamiliaChange = (familiaId) => {
     setForm(f => ({ ...f, familia_id: familiaId, subfamilia_id: '' }));
@@ -617,16 +623,23 @@ const MaterialAlmoxarifadoForm = () => {
                     className="almox-form-select"
                     value={form.subfamilia_id}
                     onChange={e => set('subfamilia_id', e.target.value)}
-                    disabled={!form.familia_id || subfamiliasDisponiveis.length === 0}
+                    disabled={!form.familia_id || (subfamiliasDisponiveis.length === 0 && !subfamiliaInativa)}
                   >
                     <option value="">— nenhuma —</option>
+                    {/* F1 da revisao da Etapa 37: em edicao, a sub gravada pode ter sido INATIVADA
+                        (o GET de familias so traz ativas). Sem esta opcao o select dizia
+                        "— nenhuma —" mas o PUT mandava o id antigo, e o usuario nao tinha como
+                        ver nem limpar. A opcao diz a verdade e deixa o select habilitado. */}
+                    {subfamiliaInativa && (
+                      <option value={String(subfamiliaInativa)}>(subfamília inativa)</option>
+                    )}
                     {subfamiliasDisponiveis.map(sub => (
                       <option key={sub.id} value={String(sub.id)}>
                         {sub.codigo} — {sub.nome}
                       </option>
                     ))}
                   </select>
-                  {form.familia_id && subfamiliasDisponiveis.length === 0 && (
+                  {form.familia_id && subfamiliasDisponiveis.length === 0 && !subfamiliaInativa && (
                     <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
                       Esta família não tem subfamílias cadastradas.
                     </small>
