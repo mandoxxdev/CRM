@@ -27,6 +27,9 @@ const { getClausulasHelices } = require('./clausulasHelices');
  */
 function migrarAceitaParaAprovada() {
   db.all("SELECT id, numero_proposta FROM propostas WHERE status = 'aceita'", [], (err, linhas) => {
+    // G6: em banco NOVO esta consulta sai no listen, antes de o CREATE TABLE propostas (dentro
+    // de initializeDatabase) ter executado — "no such table" aqui so quer dizer "nada a migrar".
+    if (err && /no such table/i.test(String(err.message))) return;
     if (err) return console.error('❌ Erro ao migrar propostas aceitas:', err.message);
     if (!linhas || !linhas.length) return;
     const hoje = new Date().toISOString().split('T')[0];
@@ -1179,9 +1182,15 @@ function initializeDatabase(onReadyCallback) {
   )`, (err) => {
     if (err) {
       console.error('❌ Erro ao criar tabela usuarios:', err);
-    } else {
-      console.log('✅ Tabela usuarios criada/verificada');
+      return;
     }
+    console.log('✅ Tabela usuarios criada/verificada');
+    // G6: em banco NOVO o seed do admin corria antes do ALTER que cria is_superadmin (lista de
+    // colunas mais abaixo) e falhava com "no column named is_superadmin" — o admin inicial nao
+    // nascia e ninguem conseguia entrar ate o segundo boot. A coluna e garantida AQUI, no
+    // callback do CREATE, e o seed so roda depois; em banco existente o ALTER responde
+    // "duplicate column" e segue.
+    db.run('ALTER TABLE usuarios ADD COLUMN is_superadmin INTEGER DEFAULT 0', () => seedAdminInicial());
   });
 
   // Clientes
@@ -1509,11 +1518,8 @@ function initializeDatabase(onReadyCallback) {
     else if (!errAc) console.log('✅ Coluna acessorios adicionada em proposta_itens');
   });
 
-  db.run('ALTER TABLE familias_produto ADD COLUMN clausulas_modelo_id INTEGER', (errFam) => {
-    const jaExiste = errFam && String(errFam.message || '').indexOf('duplicate column') !== -1;
-    if (errFam && !jaExiste) console.error('❌ Erro ao adicionar clausulas_modelo_id:', errFam.message);
-    else if (!errFam) console.log('✅ Coluna clausulas_modelo_id adicionada em familias_produto');
-  });
+  // (clausulas_modelo_id de familias_produto: G6 — o ALTER roda no callback do CREATE TABLE
+  // familias_produto, mais abaixo; aqui ele era emitido ANTES do CREATE e falhava em banco novo.)
 
   db.run(`CREATE TABLE IF NOT EXISTS proposta_variaveis_manuais (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2013,8 +2019,14 @@ function initializeDatabase(onReadyCallback) {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`, (err) => {
-    if (err) console.error('Erro ao criar tabela familias_produto:', err);
-    else console.log('✅ Tabela familias_produto verificada');
+    if (err) { console.error('Erro ao criar tabela familias_produto:', err); return; }
+    console.log('✅ Tabela familias_produto verificada');
+    // G6: era emitido antes do CREATE (mais acima no arquivo) e falhava no primeiro boot.
+    db.run('ALTER TABLE familias_produto ADD COLUMN clausulas_modelo_id INTEGER', (errFam) => {
+      const jaExiste = errFam && String(errFam.message || '').indexOf('duplicate column') !== -1;
+      if (errFam && !jaExiste) console.error('❌ Erro ao adicionar clausulas_modelo_id:', errFam.message);
+      else if (!errFam) console.log('✅ Coluna clausulas_modelo_id adicionada em familias_produto');
+    });
   });
 
   db.run('ALTER TABLE familias_produto ADD COLUMN codigo INTEGER', (err) => {
@@ -2130,7 +2142,9 @@ function initializeDatabase(onReadyCallback) {
     else console.log('✅ Tabela familia_variaveis verificada');
   });
 
-  // Criar usuário admin padrão na primeira inicialização do banco (env ou secrets em server/data)
+  // Criar usuário admin padrão na primeira inicialização do banco (env ou secrets em server/data).
+  // G6: virou funcao, chamada do callback do CREATE TABLE usuarios (ver acima).
+  function seedAdminInicial() {
   const resolvedSeed = resolveSeedAdminCredentials(PERSISTENT_DATA_DIR);
   const seedAdminEmail =
     process.env.SEED_ADMIN_EMAIL || (resolvedSeed && resolvedSeed.email) || 'admin@gmp.com.br';
@@ -2162,6 +2176,7 @@ function initializeDatabase(onReadyCallback) {
       }
     );
   });
+  }
 
   // Remover usuário "administrator" se existir (nome exato ou similar)
   db.all('SELECT id, nome, email FROM usuarios WHERE LOWER(nome) = ? OR LOWER(nome) LIKE ?', 
@@ -19978,13 +19993,16 @@ db.run(`CREATE TABLE IF NOT EXISTS os_itens (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (os_id) REFERENCES ordens_servico(id) ON DELETE CASCADE
-)`);
-
-// Adicionar coluna codigo_produto se não existir
-db.run(`ALTER TABLE os_itens ADD COLUMN codigo_produto TEXT`, (err) => {
-  if (err && !err.message.includes('duplicate column name')) {
-    console.error('Erro ao adicionar coluna codigo_produto:', err);
-  }
+)`, (errCreate) => {
+  if (errCreate) { console.error('Erro ao criar os_itens:', errCreate.message); return; }
+  // G6 (lote de outubro): o ALTER era um db.run solto e, em banco NOVO, chegava antes do CREATE
+  // ("no such table: os_itens" no primeiro boot). Roda no callback do CREATE, como fornecedores
+  // e pedidos_compra passaram a fazer (F3 da Etapa 34, G5).
+  db.run(`ALTER TABLE os_itens ADD COLUMN codigo_produto TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.error('Erro ao adicionar coluna codigo_produto:', err);
+    }
+  });
 });
 
 // Tabela de Status de Fabricação

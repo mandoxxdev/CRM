@@ -137,11 +137,18 @@
   novo). Mesma correção da Etapa 34: os `ALTER` rodam no callback do `CREATE`. Prova: container
   em volume novo sem **nenhum** erro de `fornecedores` nem de `pedidos_compra` no boot (antes eram
   5 + 5). Em banco já existente (produção) nunca aconteceu — nada a fazer no deploy.
-- **G6** O mesmo log do volume novo mostra que a classe de defeito **existe em outros módulos**,
-  fora de Compras: `os_itens.codigo_produto` (Operacional), `propostas` (migração de aceitas) e
-  `familias_produto.clausulas_modelo_id` (Comercial) — 3 erros no primeiro boot de banco novo,
-  todos curados no segundo boot. Não tocado (não é Compras); a correção é a mesma de G5, tabela a
-  tabela.
+- **G6 — corrigido em 2026-10-07 (prova com `node index.js` contra pasta de dados nova, sem
+  Docker).** A classe de defeito do G5 existia em outros módulos: `os_itens.codigo_produto`
+  (Operacional), `propostas` (migração de "aceita"), `familias_produto.clausulas_modelo_id`
+  (Comercial) — e um **quarto, mais sério, que o log do container tinha escondido**: o **admin
+  inicial não era criado no primeiro boot** (`no column named is_superadmin`), ou seja, numa
+  instalação nova ninguém conseguia entrar até reiniciar o servidor. Os quatro passaram a rodar
+  no callback do `CREATE` da própria tabela (ou a tratar "banco novo" como "nada a migrar").
+  Medido: antes 3 `no such table` + 1 `no column named`; depois **0 e 0**, "Admin inicial criado"
+  no primeiro boot, segundo boot sem erro. Em banco existente (o seu `npm run dev`) nada muda.
+  Fica um aviso pré-existente e inofensivo: `WAL mode unavailable: cannot change into wal mode
+  from within a transaction` (o `PRAGMA` roda dentro de uma transação; o WAL entra no boot
+  seguinte) — **G12**.
 - **G7** A lista de módulos do sistema existe em **quatro** lugares (`modulosMeta.js`,
   `TipoSelecao.todosModulos`, `MODULE_ADMIN_KEYS` no servidor, `DEFAULT_MODULOS_TIPO`). A Etapa 36
   usou a do cliente (`modulosMeta.js`) e **não** criou uma quinta; unificar é etapa própria.
