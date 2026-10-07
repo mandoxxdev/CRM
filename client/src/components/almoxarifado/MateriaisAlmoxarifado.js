@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
@@ -90,7 +90,20 @@ const MateriaisAlmoxarifado = () => {
       const params = {};
       if (search) params.search = search;
       if (categoria) params.categoria = categoria;
-      if (familiaFilter) params.familia_id = familiaFilter;
+      // Etapa 37 (RN-37.06): o material grava `familia_id` = raiz e `subfamilia_id` = filha, então
+      // mandar `familia_id=<sub>` devolvia zero linhas (parecia estoque vazio). Derivado de
+      // `familias` na hora da busca, sem state novo — o reset de "Limpar filtros" continua valendo.
+      // Ressalva aceita no plano: `?familia_id=<sub>` na URL antes da lista carregar manda só
+      // `familia_id` (zero linhas até mexer no filtro).
+      if (familiaFilter) {
+        const fam = familias.find(f => String(f.id) === String(familiaFilter));
+        if (fam && fam.parent_id !== null && fam.parent_id !== undefined) {
+          params.familia_id = fam.parent_id;
+          params.subfamilia_id = fam.id;
+        } else {
+          params.familia_id = familiaFilter;
+        }
+      }
       if (statusFilter) params.status = statusFilter;
       const res = await api.get('/almoxarifado/materiais', { params });
       setMateriais(res.data);
@@ -145,6 +158,16 @@ const MateriaisAlmoxarifado = () => {
       setSavingMov(false);
     }
   };
+
+  // Etapa 37 (RN-37.06): raízes por nome, cada uma seguida das suas subfamílias (por nome).
+  const arvoreFamilias = useMemo(() => {
+    const porNome = (a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR');
+    const ehRaiz = (f) => f.parent_id === null || f.parent_id === undefined;
+    return familias.filter(ehRaiz).sort(porNome).flatMap(raiz => [
+      raiz,
+      ...familias.filter(f => !ehRaiz(f) && String(f.parent_id) === String(raiz.id)).sort(porNome),
+    ]);
+  }, [familias]);
 
   const getStatus = (m) => {
     if (m.quantidade_atual === 0) return { label: 'Zerado', cls: 'zerado' };
@@ -201,7 +224,12 @@ const MateriaisAlmoxarifado = () => {
         </select>
         <select className="almox-select" value={familiaFilter} onChange={e => setFamiliaFilter(e.target.value)}>
           <option value="">Todas famílias</option>
-          {familias.map(f => <option key={f.id} value={f.id}>{f.codigo} — {f.nome}</option>)}
+          {/* RN-37.06: a árvore — raiz por nome, cada uma seguida das subs dela ("— ⟨código⟩ ⟨nome⟩"). */}
+          {arvoreFamilias.map(f => (
+            <option key={f.id} value={f.id}>
+              {f.parent_id !== null && f.parent_id !== undefined ? `— ${f.codigo} ${f.nome}` : `${f.codigo} — ${f.nome}`}
+            </option>
+          ))}
         </select>
         <select className="almox-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="">Todos status</option>

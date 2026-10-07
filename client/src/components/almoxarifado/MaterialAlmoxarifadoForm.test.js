@@ -40,6 +40,11 @@ jest.mock('../../context/AuthContext', () => ({
 }));
 
 const FAMILIA = { id: 5, codigo: 'CHP', nome: 'Chapas', parent_id: null, ativo: 1 };
+// Etapa 37 (RN-37.07): uma sub DA raiz 5 e uma sub de OUTRA raiz (7, que nem está na lista) —
+// a segunda é o caso "S fora de R" que a URL pode trazer e o form tem de ignorar.
+const SUB_DE_CHAPAS = { id: 6, codigo: 'CHP-FIN', nome: 'Chapas finas', parent_id: 5, ativo: 1 };
+const SUB_DE_OUTRA = { id: 8, codigo: 'TUB-RED', nome: 'Tubos redondos', parent_id: 7, ativo: 1 };
+const FAMILIAS = [FAMILIA, SUB_DE_CHAPAS, SUB_DE_OUTRA];
 // Cliente de id 1 de propósito: é o valor que uma comparação `=== 1` (o padrão das flags deste
 // formulário) trataria como "ligado" e faria o select cair no ramo errado.
 const CLIENTE_UM = { id: 1, razao_social: 'Cliente Alfa LTDA', nome_fantasia: 'Alfa' };
@@ -75,7 +80,7 @@ beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   api.get.mockImplementation((url) => {
     if (url === '/clientes') return Promise.resolve({ data: [CLIENTE_UM, CLIENTE_DOIS] });
-    if (url === '/almoxarifado/familias') return Promise.resolve({ data: [FAMILIA] });
+    if (url === '/almoxarifado/familias') return Promise.resolve({ data: FAMILIAS });
     if (url === '/almoxarifado/proximo-codigo') return Promise.resolve({ data: { codigo: 'CHP-999' } });
     if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
     if (url === '/almoxarifado/materiais/78') return Promise.resolve({ data: MATERIAL_CATEGORIA_LEGADA });
@@ -99,10 +104,10 @@ async function esperarEfeitos() {
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
 }
 
-async function renderizarNovo() {
+async function renderizarNovo(query = '?familia_id=5') {
   await act(async () => {
     root.render(
-      <MemoryRouter initialEntries={['/almoxarifado/materiais/novo?familia_id=5']}>
+      <MemoryRouter initialEntries={[`/almoxarifado/materiais/novo${query}`]}>
         <Routes><Route path="/almoxarifado/materiais/novo" element={<MaterialAlmoxarifadoForm />} /></Routes>
       </MemoryRouter>,
     );
@@ -485,5 +490,55 @@ describe('MaterialAlmoxarifadoForm — RN-35.03: a classe ABC tem legenda', () =
     // O select continua lá, com as três classes.
     const select = campoPorRotulo(/^Classe ABC$/).querySelector('select');
     expect([...select.querySelectorAll('option')].map((o) => o.value)).toEqual(['', 'A', 'B', 'C']);
+  });
+});
+
+/**
+ * Etapa 37 (RN-37.07) — `/almoxarifado/materiais/novo?familia_id=R&subfamilia_id=S` abre o form
+ * com família R E subfamília S selecionadas. É o link "Adicionar item" da subfamília (aba
+ * Famílias, T2); até aqui o form só lia `?familia_id`, e o material nascia sem subfamília.
+ *
+ * A metade perigosa é "S fora de R → ignorada": a exibição do <select> JÁ parece certa hoje
+ * (mostra "— nenhuma —" porque S não está nas opções), mas o state guardaria S e o submit
+ * mandaria `subfamilia_id: 8` → 400 "Subfamília inválida". Por isso as asserções são no PAYLOAD,
+ * não no que o select exibe — a exibição aprovaria a implementação errada.
+ */
+const selectSubfamilia = () => campoPorRotulo(/^Subfamília$/).querySelector('select');
+
+describe('MaterialAlmoxarifadoForm — RN-37.07: ?subfamilia_id na URL', () => {
+  test('(i) ?familia_id=5&subfamilia_id=6 (sub da raiz) → select mostra 6 e o POST manda subfamilia_id: 6', async () => {
+    await renderizarNovo('?familia_id=5&subfamilia_id=6');
+    // Metade positiva: a sub da raiz é opção do select e está selecionada.
+    expect([...selectSubfamilia().options].map((o) => o.value)).toContain('6');
+    expect(selectSubfamilia().value).toBe('6');
+    await preencherObrigatorios();
+    await submeter();
+    expect(api.post).toHaveBeenCalled();
+    const payload = api.post.mock.calls[0][1];
+    expect(payload.familia_id).toBe(5);
+    expect(payload.subfamilia_id).toBe(6);
+  });
+
+  test('(ii) ?familia_id=5&subfamilia_id=8 (sub de OUTRA raiz) → o POST manda subfamilia_id: null, sem erro', async () => {
+    await renderizarNovo('?familia_id=5&subfamilia_id=8');
+    // A sub 8 não é filha de 5: nem aparece como opção...
+    expect([...selectSubfamilia().options].map((o) => o.value)).not.toContain('8');
+    await preencherObrigatorios();
+    await submeter();
+    // ...e, o que importa, NÃO vai no payload (hoje iria: o state guarda o que veio da URL).
+    expect(api.post).toHaveBeenCalled();
+    const payload = api.post.mock.calls[0][1];
+    expect(payload.familia_id).toBe(5);
+    expect(payload.subfamilia_id).toBeNull();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  test('(iii) [não-regressão] só ?familia_id=5 → subfamilia_id: null e a sub continua escolhível', async () => {
+    await renderizarNovo();
+    expect(selectSubfamilia().value).toBe('');
+    expect([...selectSubfamilia().options].map((o) => o.value)).toContain('6');
+    await preencherObrigatorios();
+    await submeter();
+    expect(api.post.mock.calls[0][1].subfamilia_id).toBeNull();
   });
 });

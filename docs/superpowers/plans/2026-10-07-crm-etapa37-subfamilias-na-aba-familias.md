@@ -116,7 +116,7 @@ Implementar em `routes/almoxarifado.js` (`:2253-2257`, `:2269-2274`, `:2282-2289
 `:2423`). Rodar `subfamilias`, `materialCompleto`, `materialServiceCriacao`, `conferenciaEscopo`
 (lê famílias) → verde.
 
-**T2 — galho (client, aba Famílias):** RN-37.01–37.04, 37.08. Teste primeiro, **novo**
+**T2 — galho (client, aba Famílias):** ✅ `49d1c24e` (branch `c37b`). RN-37.01–37.04, 37.08. Teste primeiro, **novo**
 `client/src/components/almoxarifado/Familias.test.js` (montagem como `ConfiguracoesGerais.test.js`,
 em `/almoxarifado/configuracoes?tab=familias`, `useAuth` mockado como ADMINISTRADOR; `api.get` com
 fixture de 2 raízes (uma com 2 subs, uma sem) + `/familias/:id/itens`): (a) só raízes viram
@@ -136,7 +136,7 @@ expande a raiz; (2) celular (328px úteis): a linha da sub usa `flexWrap: 'wrap'
 linha própria, e a área expandida da sub tem `paddingLeft: 24` (não os 48 da raiz, `:652`) — senão
 sobram ~86px para código+nome.
 
-**T3 — galho (client, Materiais):** RN-37.06 (filtro) e RN-37.07 (form).
+**T3 — galho (client, Materiais):** ✅ `bbabe37c` (branch `c37b`). RN-37.06 (filtro) e RN-37.07 (form).
 - Form (`MaterialAlmoxarifadoForm.js`): `subfamilia_id: searchParams.get('subfamilia_id') || ''`
   em `:89`. A revisão traçou os efeitos: o valor **sobrevive** (não há `useEffect` que zere a sub —
   `:385-390` é só o handler do `onChange`); quando `familias` chega, o select mostra S. Mas "S fora
@@ -191,7 +191,7 @@ item de subfamílias; índice; retro.
 - Rodadas de correção até verde: **T1: 0** — os 8 cenários novos ficaram vermelhos exatamente nos
   4 pontos previstos (sub com `qtd_itens` 0; itens vazio; `?subfamilia_id=` ignorado devolvendo
   os 5 materiais do arquivo; DELETE da sub com item respondendo 200) e as 5 edições da tabela de
-  contratos os fecharam de primeira (31/0). Nenhuma suíte vizinha quebrou. _T2/T3: preencher._
+  contratos os fecharam de primeira (31/0). Nenhuma suíte vizinha quebrou.
 - Achados da revisão: _preencher_ (reais vs. ruído). **T1:** o achado do DELETE (`:2423`) era
   real e o controle positivo confirmou (200 antes, 400 depois). A linha "(d) material sem sub não
   entra na contagem de S" rendeu mais do que parecia: é o único cenário que cai em **três**
@@ -199,6 +199,30 @@ item de subfamílias; índice; retro.
 - Paralelismo: _preencher_. **T1:** feita na worktree `CRM-wt-c37` (branch `c37`) sem tocar em
   `client/`; T2/T3 consomem o contrato congelado — nenhuma mudança de contrato foi necessária
   (o único desvio é interno: a constante `QTD_ITENS_FAMILIA_SUBQUERY`, invisível à API).
+- Rodadas de correção até verde: **T2 (executor B): 1 rodada** — o pai travado
+  foi escrito como `<input readOnly>` e o teste (b)/(c) lia `textContent`; trocado por texto
+  (o plano dizia "pai mostrado, não editável" — texto é mais honesto que input desabilitado).
+  **T3 (executor B): 0 rodadas** — verde na primeira implementação.
+- Achados da revisão (continuação): **Executor B:** os dois cuidados da revisão para a T2
+  eram reais — (e2) prova que clicar numa ação da sub **não** dispara `GET /familias/1/itens`
+  (a sub-lista é irmã do cabeçalho); o `flexWrap` + `paddingLeft: 24` entraram como dito. Na T3,
+  o aviso "afirmar o payload, não o select" também era real: o cenário (ii) **passa antes** da
+  implementação (o form nem lia `?subfamilia_id`), e só fica vermelho com a leitura da URL sem
+  a limpeza — é a sabotagem 3 que prova que ele guarda alguma coisa. Ruído: nenhum.
+- Paralelismo: T2 e T3 rodaram na worktree `c37b` (derivada de `main`) com **zero linhas de
+  servidor** — o `api` é mockado com a forma congelada da tabela "Contratos". T2 e T3 tocam
+  arquivos disjuntos (`ConfiguracoesAlmoxarifado.js` vs. `MateriaisAlmoxarifado.js` +
+  `MaterialAlmoxarifadoForm.js`) e foram commitadas em sequência na mesma branch.
+- Sabotagens (executor B, 4/4 detectadas, restauro por edição): (1) POST sem `parent_id` →
+  (b)/(b2) vermelhos; (2) subs como cartões irmãos (`familias.map` em vez de `raizes.map`) →
+  (a) vermelho; (3) limpeza do `subfamilia_id` fora da raiz removida → (ii) vermelho; (4) params
+  do filtro sem `subfamilia_id` → "escolher a sub" vermelho.
+- Decisões pelo caminho reversível (executor B): o cartão da raiz vai cabeçalho → itens da raiz
+  expandidos → sub-lista (a sub-lista fica sempre visível no rodapé do cartão, com o botão "Nova
+  subfamília" e o título "Subfamílias (N)"); a sub expande pelo próprio chevron (título "Itens da
+  subfamília"), não pela linha inteira — menos superfície clicável ao lado das ações.
+  Classes `almox-familia-card`, `almox-familia-cabecalho` e `almox-subfamilia-row` existem para
+  o teste achar a estrutura (não há CSS atrelado).
 - Defeito escapado: preencher na etapa seguinte.
 
 ## Como foi executado

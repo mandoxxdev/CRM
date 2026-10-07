@@ -455,18 +455,45 @@ const TabTiposMaterial = () => {
 };
 
 /* ===================== TAB FAMÍLIAS DE MATERIAL ===================== */
+/**
+ * Etapa 37 (RN-37.01 a 37.04, 37.08): a aba desenha a árvore de DOIS níveis que o servidor já
+ * conhecia desde a Etapa 2 (`parent_id`, `validateParentFamilia`). Até aqui a lista era plana —
+ * subfamília aparecia como cartão irmão da raiz, sem indicação, e criar uma "só via API".
+ *
+ *  - Só RAÍZES viram cartões; as subfamílias ficam numa sub-lista DENTRO do cartão da raiz,
+ *    irmã do cabeçalho clicável (e não dentro dele): o cabeçalho inteiro expande/colapsa a raiz
+ *    e as ações da sub não podem disparar isso.
+ *  - "Nova subfamília" no cartão da raiz reutiliza o MESMO formulário com o pai TRAVADO
+ *    (`parentForm`). O POST leva `parent_id`; o PUT NÃO leva (o servidor preserva o pai quando a
+ *    chave é omitida). Descartado: um <select> de pai no formulário — deixaria promover/rebaixar
+ *    ou mover entre raízes por engano; o servidor cobre esses casos e a UI não precisa expô-los
+ *    nesta etapa (reversível).
+ *  - A contagem (`qtd_itens`) e os itens da sub vêm do servidor (T1): aqui só se exibe.
+ *  - "Adicionar item" da sub leva `familia_id=<raiz>&subfamilia_id=<sub>` — o form de material
+ *    grava `familia_id` = raiz e `subfamilia_id` = filha, e o código vem do prefixo da raiz.
+ */
+const FORM_FAMILIA_VAZIO = { nome: '', descricao: '', codigo: '', tipo_uso: 'ambos' };
+const ehRaiz = (f) => f.parent_id === null || f.parent_id === undefined;
+const porNome = (a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR');
+
 const TabFamilias = () => {
   const [familias, setFamilias] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editando, setEditando] = useState(null);
-  const [form, setForm] = useState({ nome: '', descricao: '', codigo: '', tipo_uso: 'ambos' });
+  // id da raiz-pai quando o formulário é de SUBFAMÍLIA (nova ou em edição); null = família raiz.
+  const [parentForm, setParentForm] = useState(null);
+  const [form, setForm] = useState(FORM_FAMILIA_VAZIO);
   const [expandidas, setExpandidas] = useState({});
   const [itensPorFamilia, setItensPorFamilia] = useState({});
   const [loadingItens, setLoadingItens] = useState({});
 
   useEffect(() => { loadFamilias(); }, []);
+
+  const raizes = familias.filter(ehRaiz).sort(porNome);
+  const subsDe = (raizId) => familias.filter(f => !ehRaiz(f) && String(f.parent_id) === String(raizId)).sort(porNome);
+  const pai = parentForm ? familias.find(f => String(f.id) === String(parentForm)) : null;
 
   const loadFamilias = async () => {
     setLoading(true);
@@ -493,9 +520,25 @@ const TabFamilias = () => {
   };
 
   const resetForm = () => {
-    setForm({ nome: '', descricao: '', codigo: '', tipo_uso: 'ambos' });
+    setForm(FORM_FAMILIA_VAZIO);
     setEditando(null);
+    setParentForm(null);
     setShowForm(false);
+  };
+
+  const handleNovaRaiz = () => {
+    setForm(FORM_FAMILIA_VAZIO);
+    setEditando(null);
+    setParentForm(null);
+    setShowForm(true);
+  };
+
+  // RN-37.02: mesmo formulário, pai travado na raiz do cartão onde o botão foi clicado.
+  const handleNovaSub = (raiz) => {
+    setForm(FORM_FAMILIA_VAZIO);
+    setEditando(null);
+    setParentForm(raiz.id);
+    setShowForm(true);
   };
 
   const handleEditar = (fam) => {
@@ -506,23 +549,28 @@ const TabFamilias = () => {
       tipo_uso: fam.tipo_uso || 'ambos',
     });
     setEditando(fam.id);
+    setParentForm(ehRaiz(fam) ? null : fam.parent_id);
     setShowForm(true);
   };
+
+  const rotulo = parentForm ? 'Subfamília' : 'Família';
 
   const handleSalvar = async () => {
     if (!form.nome.trim()) { toast.error('Nome é obrigatório'); return; }
     setSaving(true);
     try {
       if (editando) {
+        // RN-37.03: SEM `parent_id` — o servidor preserva o pai quando a chave é omitida.
         await api.put(`/almoxarifado/familias/${editando}`, {
           nome: form.nome,
           descricao: form.descricao,
           tipo_uso: form.tipo_uso,
         });
-        toast.success('Família atualizada!');
+        toast.success(`${rotulo} atualizada!`);
       } else {
-        await api.post('/almoxarifado/familias', form);
-        toast.success('Família criada!');
+        // RN-37.02: `parent_id` só quando é subfamília; raiz continua com as 4 chaves de sempre.
+        await api.post('/almoxarifado/familias', parentForm ? { ...form, parent_id: parentForm } : form);
+        toast.success(`${rotulo} criada!`);
       }
       resetForm();
       loadFamilias();
@@ -531,14 +579,79 @@ const TabFamilias = () => {
     } finally { setSaving(false); }
   };
 
+  // RN-37.04: o servidor recusa sub com itens ativos e raiz com subs ativas — a literal do 400
+  // vai para o toast (antes a tela já fazia isso para a raiz; agora vale para as duas).
   const handleInativar = async (fam) => {
-    if (!window.confirm(`Inativar a família "${fam.nome}"? Novos itens não poderão ser cadastrados.`)) return;
+    const tipo = ehRaiz(fam) ? 'família' : 'subfamília';
+    if (!window.confirm(`Inativar a ${tipo} "${fam.nome}"? Novos itens não poderão ser cadastrados.`)) return;
     try {
       await api.delete(`/almoxarifado/familias/${fam.id}`);
-      toast.success('Família inativada');
+      toast.success(ehRaiz(fam) ? 'Família inativada' : 'Subfamília inativada');
       loadFamilias();
     } catch (err) { toast.error(err.response?.data?.error || 'Erro ao inativar'); }
   };
+
+  // Tabela de itens de uma família/subfamília expandida — a mesma para os dois níveis.
+  const renderItens = (fam, linkNovo) => {
+    const itens = itensPorFamilia[fam.id] || [];
+    if (loadingItens[fam.id]) {
+      return <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>Carregando itens...</div>;
+    }
+    if (itens.length === 0) {
+      return (
+        <div style={{ fontSize: '0.85rem', color: 'var(--gmp-text-light)' }}>
+          Nenhum item nesta {ehRaiz(fam) ? 'família' : 'subfamília'}.{' '}
+          <Link to={linkNovo} style={{ color: '#4facfe' }}>Cadastrar primeiro item</Link>
+        </div>
+      );
+    }
+    return (
+      <table className="almox-table" style={{ fontSize: '0.85rem' }}>
+        <thead>
+          <tr>
+            <th>Código</th>
+            <th>Nome</th>
+            <th>Saldo</th>
+            <th>Localização</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {itens.map(item => (
+            <tr key={item.id}>
+              <td><span style={{ fontFamily: 'monospace', color: '#4facfe' }}>{item.codigo}</span></td>
+              <td>{item.nome}</td>
+              <td>{item.quantidade_atual} {item.unidade}</td>
+              <td style={{ color: 'var(--gmp-text-light)', fontSize: '0.8rem' }}>
+                {prefixarAlmoxarifado(item.localizacao, item.almoxarifado_codigo) || '—'}
+              </td>
+              <td>
+                <Link to={`/almoxarifado/materiais/editar/${item.id}`} className="almox-btn-icon" title="Editar">
+                  <FiEdit2 size={13} />
+                </Link>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  };
+
+  const seloTipoUso = (fam) => fam.tipo_uso && fam.tipo_uso !== 'ambos' && (
+    <span style={{
+      fontSize: '0.7rem', padding: '2px 8px', borderRadius: 20, fontWeight: 600,
+      background: fam.tipo_uso === 'administrativo' ? 'rgba(46,204,113,0.12)' : 'rgba(229,152,0,0.12)',
+      color: fam.tipo_uso === 'administrativo' ? '#27ae60' : '#e59800',
+    }}>
+      {fam.tipo_uso === 'administrativo' ? 'ADM' : 'IND'}
+    </span>
+  );
+
+  const seloContagem = (fam) => (
+    <span style={{ fontSize: '0.75rem', background: 'rgba(79,172,254,0.1)', color: '#4facfe', padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>
+      {fam.qtd_itens || 0} {fam.qtd_itens === 1 ? 'item' : 'itens'}
+    </span>
+  );
 
   return (
     <div>
@@ -548,7 +661,7 @@ const TabFamilias = () => {
       </p>
 
       {!showForm && (
-        <button className="btn-almox-primary" style={{ marginBottom: 20 }} onClick={() => setShowForm(true)}>
+        <button className="btn-almox-primary" style={{ marginBottom: 20 }} onClick={handleNovaRaiz}>
           <FiPlus size={14} /> Nova Família
         </button>
       )}
@@ -556,9 +669,22 @@ const TabFamilias = () => {
       {showForm && (
         <div style={{ background: 'var(--gmp-surface)', border: '1px solid rgba(79,172,254,0.25)', borderRadius: 12, padding: 24, marginBottom: 24 }}>
           <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 18 }}>
-            {editando ? '✏️ Editar Família' : '➕ Nova Família de Material'}
+            {editando
+              ? `✏️ Editar ${rotulo}`
+              : pai
+                ? `➕ Nova subfamília de ${pai.codigo} — ${pai.nome}`
+                : '➕ Nova Família de Material'}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            {pai && (
+              <div className="almox-field" style={{ gridColumn: '1 / -1' }}>
+                <label className="almox-label">Subfamília de:</label>
+                {/* Pai TRAVADO (RN-37.02/03) — informação, não campo. Mover entre raízes fica fora da tela. */}
+                <div style={{ fontFamily: 'monospace', fontWeight: 700, color: '#4facfe', fontSize: '0.85rem', padding: '8px 12px', background: 'var(--gmp-bg)', border: '1px solid var(--gmp-border)', borderRadius: 8 }}>
+                  {pai.codigo} — {pai.nome}
+                </div>
+              </div>
+            )}
             <div className="almox-field">
               <label className="almox-label">Nome<span className="required">*</span></label>
               <input className="almox-input" value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
@@ -594,7 +720,7 @@ const TabFamilias = () => {
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn-almox-primary" onClick={handleSalvar} disabled={saving}>
-              <FiSave size={14} /> {saving ? 'Salvando...' : 'Salvar Família'}
+              <FiSave size={14} /> {saving ? 'Salvando...' : `Salvar ${rotulo}`}
             </button>
             <button className="btn-almox-secondary" onClick={resetForm}>Cancelar</button>
           </div>
@@ -610,12 +736,15 @@ const TabFamilias = () => {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {familias.map(fam => {
+          {raizes.map(fam => {
             const expandida = !!expandidas[fam.id];
-            const itens = itensPorFamilia[fam.id] || [];
+            const subs = subsDe(fam.id);
+            const linkNovoRaiz = `/almoxarifado/materiais/novo?familia_id=${fam.id}`;
             return (
-              <div key={fam.id} style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, overflow: 'hidden' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', cursor: 'pointer' }}
+              <div key={fam.id} className="almox-familia-card" style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, overflow: 'hidden' }}>
+                {/* Cabeçalho INTEIRO clicável (expande/colapsa a raiz). A sub-lista fica FORA dele,
+                    como irmã dentro do cartão — senão clicar numa ação da sub expandiria a raiz. */}
+                <div className="almox-familia-cabecalho" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', cursor: 'pointer' }}
                   onClick={() => toggleExpand(fam.id)}>
                   <button type="button" className="almox-btn-icon" style={{ pointerEvents: 'none' }}>
                     {expandida ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
@@ -624,23 +753,13 @@ const TabFamilias = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                       <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#4facfe', fontSize: '0.85rem' }}>{fam.codigo}</span>
                       <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{fam.nome}</span>
-                      <span style={{ fontSize: '0.75rem', background: 'rgba(79,172,254,0.1)', color: '#4facfe', padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>
-                        {fam.qtd_itens || 0} {fam.qtd_itens === 1 ? 'item' : 'itens'}
-                      </span>
-                      {fam.tipo_uso && fam.tipo_uso !== 'ambos' && (
-                        <span style={{
-                          fontSize: '0.7rem', padding: '2px 8px', borderRadius: 20, fontWeight: 600,
-                          background: fam.tipo_uso === 'administrativo' ? 'rgba(46,204,113,0.12)' : 'rgba(229,152,0,0.12)',
-                          color: fam.tipo_uso === 'administrativo' ? '#27ae60' : '#e59800',
-                        }}>
-                          {fam.tipo_uso === 'administrativo' ? 'ADM' : 'IND'}
-                        </span>
-                      )}
+                      {seloContagem(fam)}
+                      {seloTipoUso(fam)}
                     </div>
                     {fam.descricao && <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', marginTop: 4 }}>{fam.descricao}</div>}
                   </div>
                   <div style={{ display: 'flex', gap: 6 }} onClick={e => e.stopPropagation()}>
-                    <Link to={`/almoxarifado/materiais/novo?familia_id=${fam.id}`} className="btn-almox-secondary" style={{ fontSize: '0.75rem', padding: '6px 12px' }}>
+                    <Link to={linkNovoRaiz} className="btn-almox-secondary" style={{ fontSize: '0.75rem', padding: '6px 12px' }}>
                       <FiPlus size={12} /> Adicionar item
                     </Link>
                     <button className="almox-btn-icon" onClick={() => handleEditar(fam)} title="Editar"><FiEdit2 size={13} /></button>
@@ -650,45 +769,58 @@ const TabFamilias = () => {
 
                 {expandida && (
                   <div style={{ borderTop: '1px solid var(--gmp-border)', padding: '12px 18px 16px 48px', background: 'var(--gmp-bg)' }}>
-                    {loadingItens[fam.id] ? (
-                      <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>Carregando itens...</div>
-                    ) : itens.length === 0 ? (
-                      <div style={{ fontSize: '0.85rem', color: 'var(--gmp-text-light)' }}>
-                        Nenhum item nesta família.{' '}
-                        <Link to={`/almoxarifado/materiais/novo?familia_id=${fam.id}`} style={{ color: '#4facfe' }}>Cadastrar primeiro item</Link>
-                      </div>
-                    ) : (
-                      <table className="almox-table" style={{ fontSize: '0.85rem' }}>
-                        <thead>
-                          <tr>
-                            <th>Código</th>
-                            <th>Nome</th>
-                            <th>Saldo</th>
-                            <th>Localização</th>
-                            <th></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {itens.map(item => (
-                            <tr key={item.id}>
-                              <td><span style={{ fontFamily: 'monospace', color: '#4facfe' }}>{item.codigo}</span></td>
-                              <td>{item.nome}</td>
-                              <td>{item.quantidade_atual} {item.unidade}</td>
-                              <td style={{ color: 'var(--gmp-text-light)', fontSize: '0.8rem' }}>
-                                {prefixarAlmoxarifado(item.localizacao, item.almoxarifado_codigo) || '—'}
-                              </td>
-                              <td>
-                                <Link to={`/almoxarifado/materiais/editar/${item.id}`} className="almox-btn-icon" title="Editar">
-                                  <FiEdit2 size={13} />
-                                </Link>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
+                    {renderItens(fam, linkNovoRaiz)}
                   </div>
                 )}
+
+                {/* RN-37.01: a sub-lista — indentada 24px com borda à esquerda, irmã do cabeçalho. */}
+                <div className="almox-subfamilias" style={{ borderTop: '1px solid var(--gmp-border)', padding: '10px 18px 12px 24px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: subs.length ? 8 : 0 }}>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--gmp-text-light)' }}>
+                      Subfamílias{subs.length ? ` (${subs.length})` : ''}
+                    </span>
+                    <button type="button" className="btn-almox-secondary" style={{ fontSize: '0.75rem', padding: '4px 10px' }} onClick={() => handleNovaSub(fam)}>
+                      <FiPlus size={12} /> Nova subfamília
+                    </button>
+                  </div>
+                  {subs.length === 0 ? (
+                    <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', opacity: 0.8 }}>Nenhuma subfamília</div>
+                  ) : (
+                    <div style={{ borderLeft: '2px solid rgba(79,172,254,0.25)', display: 'flex', flexDirection: 'column' }}>
+                      {subs.map(sub => {
+                        const subExpandida = !!expandidas[sub.id];
+                        const linkNovoSub = `/almoxarifado/materiais/novo?familia_id=${fam.id}&subfamilia_id=${sub.id}`;
+                        return (
+                          <div key={sub.id} className="almox-subfamilia-row">
+                            {/* `flexWrap` de propósito: no celular (328px úteis) as ações caem numa linha própria. */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '6px 0 6px 12px' }}>
+                              <button type="button" className="almox-btn-icon" title="Itens da subfamília" onClick={() => toggleExpand(sub.id)}>
+                                {subExpandida ? <FiChevronDown size={13} /> : <FiChevronRight size={13} />}
+                              </button>
+                              <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#4facfe', fontSize: '0.8rem' }}>{sub.codigo}</span>
+                              <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{sub.nome}</span>
+                              {seloContagem(sub)}
+                              {seloTipoUso(sub)}
+                              <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
+                                <Link to={linkNovoSub} className="btn-almox-secondary" style={{ fontSize: '0.72rem', padding: '4px 10px' }}>
+                                  <FiPlus size={12} /> Adicionar item
+                                </Link>
+                                <button className="almox-btn-icon" onClick={() => handleEditar(sub)} title="Editar"><FiEdit2 size={13} /></button>
+                                <button className="almox-btn-icon danger" onClick={() => handleInativar(sub)} title="Inativar"><FiTrash2 size={13} /></button>
+                              </div>
+                            </div>
+                            {sub.descricao && <div style={{ fontSize: '0.72rem', color: 'var(--gmp-text-light)', paddingLeft: 42, marginTop: -4, marginBottom: 4 }}>{sub.descricao}</div>}
+                            {subExpandida && (
+                              <div style={{ background: 'var(--gmp-bg)', padding: '10px 12px 12px', paddingLeft: 24, marginBottom: 6 }}>
+                                {renderItens(sub, linkNovoSub)}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}

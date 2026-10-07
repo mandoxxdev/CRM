@@ -86,7 +86,9 @@ const MaterialAlmoxarifadoForm = () => {
     categoria: '',
     unidade: 'UN',
     familia_id: searchParams.get('familia_id') || '',
-    subfamilia_id: '',
+    // Etapa 37 (RN-37.07): o link "Adicionar item" da subfamília (aba Famílias) traz os dois.
+    // Se a sub da URL não for filha da família da URL, `loadFamilias` zera — ver lá.
+    subfamilia_id: searchParams.get('subfamilia_id') || '',
     localizacao_padrao_id: '',
     quantidade_atual: '',
     quantidade_minima: '',
@@ -168,7 +170,21 @@ const MaterialAlmoxarifadoForm = () => {
     setLoadingFamilias(true);
     try {
       const res = await api.get('/almoxarifado/familias');
-      setFamilias(res.data || []);
+      const lista = res.data || [];
+      setFamilias(lista);
+      // RN-37.07: "S fora de R → ignorada" NÃO acontece sozinho. O <select> exibiria "— nenhuma —"
+      // (S não está nas opções) enquanto o state guardaria S e o submit mandaria `subfamilia_id: S`
+      // → 400 "Subfamília inválida". A limpeza é AQUI, com a lista em mãos — não num
+      // `useEffect([familias])` sem guarda, que rodaria com a lista vazia e apagaria o S válido
+      // antes da resposta chegar. Só no cadastro: na edição a sub vem do próprio material.
+      if (!isEdit) {
+        setForm(f => {
+          if (!f.subfamilia_id) return f;
+          const filhaDaFamilia = lista.some(x => String(x.id) === String(f.subfamilia_id)
+            && String(x.parent_id) === String(f.familia_id));
+          return filhaDaFamilia ? f : { ...f, subfamilia_id: '' };
+        });
+      }
     } catch (err) {
       const status = err.response?.status;
       if (status === 403) {
