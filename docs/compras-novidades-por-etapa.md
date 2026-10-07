@@ -121,10 +121,12 @@
 - **G1** O `DELETE` genérico de `/api/compras/:tipo/:id` continua sombreando `grupos` (400 'Tipo
   inválido') — não consertado (escopo da aba Grupos). Em `main` ele mora no `index.js`, fora do
   harness — não há teste que o caracterize.
-- **G2** `GET /api/compras/fornecedores` é `SELECT *` e devolve `planilha_dados` (a planilha
-  inteira em JSON) para quatro telas que não a leem (`Compras.js`, `PedidoCompraForm.js`,
-  `FornecedoresDoGrupo.js`, `ItensFornecedor.js`). Só custo de payload; a projeção nomeada do
-  `GET /:id` da Etapa 34 é o modelo para a lista numa etapa posterior.
+- **G2 — corrigido em 2026-10-07, depois da Etapa 38.** `GET /api/compras/fornecedores` era
+  `SELECT *` e devolvia `planilha_dados` (a planilha de preços inteira em JSON) para quatro telas
+  que não a leem (`Compras.js`, `PedidoCompraForm.js`, `FornecedoresDoGrupo.js`,
+  `ItensFornecedor.js`). A lista saiu do `index.js` para o módulo de fornecedor com a mesma
+  projeção nomeada do `GET /:id`; busca, filtro de status e ordenação iguais. Visível para o
+  usuário só como velocidade (a lista e o formulário de pedido deixam de baixar as planilhas).
 - **G3** `client/.env.production` tem `CI=false` e `DISABLE_ESLINT_PLUGIN=true`: o build de produção
   **não** cai por warning de lint — a regra "CI=true faz warning virar erro" do `CLAUDE.md` vale
   para o comando de verificação que rodamos, não para o deploy. `Compras.js` (8 warnings) e

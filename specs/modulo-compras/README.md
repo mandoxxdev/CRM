@@ -44,4 +44,5 @@ Documento de apresentação: `docs/compras-novidades-por-etapa.md`.
 Tela de cotação (`/compras/cotacoes/nova` e `/editar/:id` são caminhos mortos — os de fornecedor
 deixaram de ser na Etapa 34); itens de cotação;
 conversão cotação → pedido; perfis de ação no core (só `checkModulePermission('compras')`);
-paginação; projeção nomeada na lista de fornecedores (`SELECT *` carrega `planilha_dados`, G2).
+paginação. ~~Projeção nomeada na lista de fornecedores (`SELECT *` carrega `planilha_dados`, G2)~~
+— **feito em 2026-10-07** (a lista mora em `routes/compras/fornecedores.js`, sem `planilha_*`).
