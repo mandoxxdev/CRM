@@ -463,6 +463,10 @@ const MaterialAlmoxarifadoForm = () => {
         // "ausente" da coerção do servidor e o PUT PRESERVARIA o dono antigo, que é o oposto do
         // que o usuário pediu ao escolher "GMP (estoque próprio)".
         proprietario_cliente_id: form.proprietario_cliente_id ? Number(form.proprietario_cliente_id) : null,
+        // Revisão da 38: sem unidade de compra a frase some da tela, mas o número digitado antes
+        // continuava no state e viajava no payload (número órfão; no PUT, '' preservaria o antigo).
+        // null explícito limpa nos dois casos — mesmo padrão dos FKs acima.
+        fator_conversao_compra: form.unidade_compra ? form.fator_conversao_compra : null,
       };
       delete payload.localizacao;
 
@@ -925,9 +929,11 @@ const MaterialAlmoxarifadoForm = () => {
                     `unidade_compra` + `fator_conversao_compra` (RN-38.03): coluna e Zod ficam. */}
                 <div className="almox-field">
                   <label className="almox-label">Como é comprado</label>
+                  {/* Revisão da 38: a própria unidade de medida não é opção ("1 UN contém [] UN"
+                      não faz sentido — a opção vazia já é esse caso). */}
                   <select className="almox-form-select" value={form.unidade_compra} onChange={e => set('unidade_compra', e.target.value)}>
                     <option value="">— na própria unidade de medida ({form.unidade}) —</option>
-                    {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+                    {UNIDADES.filter(u => u !== form.unidade).map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
                   {form.unidade_compra && (
                     <>
@@ -937,11 +943,12 @@ const MaterialAlmoxarifadoForm = () => {
                           value={form.fator_conversao_compra}
                           onChange={e => set('fator_conversao_compra', e.target.value)}
                           aria-label={`Quantidade de ${form.unidade} em 1 ${form.unidade_compra}`}
+                          aria-required="true"
                           data-testid="material-qtd-por-compra" />
                         {' '}{form.unidade}
                       </p>
                       <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
-                        O estoque conta sempre em {form.unidade}. Este número é só informação para quem compra.
+                        Obrigatório. O estoque conta sempre em {form.unidade}; este número é só informação para quem compra.
                       </small>
                     </>
                   )}

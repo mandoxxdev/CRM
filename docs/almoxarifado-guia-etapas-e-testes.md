@@ -1,6 +1,7 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
 > Atualizado em 2026-08-31 · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> **Nota de 2026-10-07 (linha `main`):** esta cópia do guia recebeu só as correções das Etapas 35, 37 e 38 do lote de Compras (unidades do material, subfamílias) — as seções dessas etapas estão em `docs/compras-novidades-por-etapa.md`. A versão completa e mais nova do guia vive na branch `desenvolvimento-almoxarifado`.
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 31) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20.
 
@@ -624,7 +625,7 @@ Visão única de tudo que mudou. Os detalhes e roteiros de teste de cada linha e
 | 2 | Configurações | Um almoxarifado implícito | **Multi-almoxarifado** (os dados antigos migraram para o "ALM-GERAL") |
 | 2 | Configurações / Motor | Localização sem restrições | Localização pode ser **bloqueada** ou restrita a tipos de material — o motor recusa movimento que contrarie |
 | 2 | Configurações | Famílias em lista simples | Famílias com **subfamílias** (um nível) |
-| 2 | Materiais | Formulário com poucos campos | Formulário em **6 seções** (técnicos, reposição, controles, ABC, unidades compra/consumo com fator) |
+| 2 | Materiais | Formulário com poucos campos | Formulário em **6 seções** (técnicos, reposição, controles, ABC, unidade de compra — desde a Etapa 38 perguntada como "1 CX contém 12 UN") |
 | 2 | Materiais | Edição sem rastro | Criação/edição de material grava **auditoria** (campo a campo, de/para) |
 | 2 | Backend | Sem consulta de posições vazias / sem endereço | APIs `/localizacoes/vazias` e materiais sem endereço (ainda sem tela) |
 | 3 | Requisições | Aceitava item com quantidade 0 ou negativa | **Bloqueado** nas duas rotas de criação |
@@ -735,7 +736,7 @@ Vá em **Almoxarifado → Movimentações**.
 | Só existia um almoxarifado implícito | Multi-almoxarifado: você pode cadastrar vários almoxarifados, que representam **áreas físicas de alocação dentro do mesmo site** (ex.: galpão, mezanino, área externa) — **não** filiais. Todas as localizações que já existiam foram automaticamente vinculadas a um almoxarifado chamado "ALM-GERAL" — nada se perdeu. O saldo do material continua sendo **um só**, somado em todas as áreas: o almoxarifado serve para você achar onde o item está fisicamente, não para separar estoques |
 | Localizações não tinham restrição | Uma localização agora pode ser **bloqueada** (impede entrada/saída ali) ou restrita a certos **tipos de material** — e o motor de estoque recusa a movimentação se você tentar contrariar isso |
 | Famílias de material eram uma lista simples | Famílias podem ter **subfamílias** (um nível abaixo) |
-| Formulário de material tinha poucos campos | Formulário reorganizado em 6 seções com todos os campos técnicos: Identificação, Classificação, Dados Técnicos, Estoque e Reposição, Controles, Unidades e Custos (inclui classe ABC, unidade de compra/consumo com fator de conversão) |
+| Formulário de material tinha poucos campos | Formulário reorganizado em 6 seções com todos os campos técnicos: Identificação, Classificação, Dados Técnicos, Estoque e Reposição, Controles, Unidades e Custos (inclui classe ABC e "Como é comprado" — a unidade de consumo saiu na Etapa 35 e o "fator" virou frase na 38) |
 | Editar um material não deixava rastro | Toda criação/edição de material grava auditoria (o que mudou, de que valor para que valor) |
 | Não havia como consultar posições vazias ou materiais sem endereço | Duas consultas novas no backend (`/localizacoes/vazias` e relatório de materiais sem endereço) — **ainda sem tela própria**, ver Pendências abaixo |
 
@@ -746,7 +747,7 @@ Vá em **Almoxarifado → Movimentações**.
 1. Vá em **Almoxarifado → Materiais → Novo Material**. Confira as 6 seções: Identificação, Classificação, Dados Técnicos, Estoque e Reposição, Controles, Unidades e Custos.
 2. Preencha só os campos obrigatórios (Código, Nome, Família) e deixe tudo o mais em branco. Salve — deve salvar normalmente (os campos novos são opcionais).
 3. Em "Classificação", escolha uma Família e veja o select "Subfamília" habilitar. Se a família não tiver subfamílias cadastradas, aparece o aviso "Esta família não tem subfamílias cadastradas" (veja nota abaixo).
-4. Em "Unidades e Custos", escolha uma "Unidade de Compra" (ex.: CX) sem preencher o "Fator de Conversão (Compra)" e tente salvar. **Caso de erro esperado**: o sistema pede o fator antes de enviar.
+4. Em "Unidades e Custos", em **"Como é comprado"** escolha CX e deixe vazio o número da frase "1 CX contém [ ] UN"; tente salvar. **Caso de erro esperado**: *"Informe quantas UN há em 1 CX"*. ~~(Era: "Unidade de Compra" + "Fator de Conversão (Compra)" — rótulos que saíram na Etapa 38, porque o time não entendia "fator".)~~
 
    > ~~Nota honesta: **criar uma subfamília ainda não tem tela própria** — hoje só é possível via chamada direta à API.~~ **Era verdade até a Etapa 37 (2026-10-07, linha `main`):** a aba *Famílias* (Configurações → Almoxarifado → Famílias, ou `/almoxarifado/configuracoes?tab=familias`) ganhou o botão **"Nova subfamília"** em cada cartão de família raiz, e a lista mostra as subfamílias dentro da raiz. Roteiro em `docs/compras-novidades-por-etapa.md`, seção "Etapa 37".
 

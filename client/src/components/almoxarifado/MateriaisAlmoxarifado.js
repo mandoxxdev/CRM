@@ -79,14 +79,16 @@ const MateriaisAlmoxarifado = () => {
     } catch { /* ignore */ }
   };
 
-  // Etapa 38 (RN-38.05, G11 da 37): `familias` entra nas deps porque `loadMateriais` deriva
-  // `subfamilia_id` dela — com `?familia_id=<sub>` na URL antes da lista chegar, o closure
-  // agendado tinha `familias = []` e mandava só `familia_id=<sub>` (zero linhas). A chegada da
-  // lista reagenda a busca (o clearTimeout descarta a anterior), então não dobra chamada.
+  // Etapa 38 (RN-38.05, G11 da 37): a chegada de `familias` reagenda a busca, porque
+  // `loadMateriais` deriva `subfamilia_id` dela — com `?familia_id=<sub>` na URL antes da lista
+  // chegar, o closure agendado tinha `familias = []` e mandava só `familia_id=<sub>` (zero
+  // linhas). Revisão da 38: só importa quando há filtro de família — sem filtro, a chave fica
+  // constante e a lista chegando depois dos 300 ms NÃO dispara um segundo GET.
+  const familiasKey = familiaFilter ? familias.length : 0;
   useEffect(() => {
     const t = setTimeout(loadMateriais, 300);
     return () => clearTimeout(t);
-  }, [search, categoria, familiaFilter, statusFilter, familias]);
+  }, [search, categoria, familiaFilter, statusFilter, familiasKey]);
 
   const loadMateriais = async () => {
     setLoading(true);
@@ -97,8 +99,6 @@ const MateriaisAlmoxarifado = () => {
       // Etapa 37 (RN-37.06): o material grava `familia_id` = raiz e `subfamilia_id` = filha, então
       // mandar `familia_id=<sub>` devolvia zero linhas (parecia estoque vazio). Derivado de
       // `familias` na hora da busca, sem state novo — o reset de "Limpar filtros" continua valendo.
-      // Ressalva aceita no plano: `?familia_id=<sub>` na URL antes da lista carregar manda só
-      // `familia_id` (zero linhas até mexer no filtro).
       if (familiaFilter) {
         const fam = familias.find(f => String(f.id) === String(familiaFilter));
         if (fam && fam.parent_id !== null && fam.parent_id !== undefined) {

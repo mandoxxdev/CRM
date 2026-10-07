@@ -498,12 +498,12 @@ describe('MaterialAlmoxarifadoForm — RN-38: a unidade de compra vira frase, se
     expect(input).not.toBeNull();
     expect(input.getAttribute('aria-label')).toBe('Quantidade de UN em 1 CX');
     expect(textoDaTela()).toMatch(/1 CX contém/);
-    expect(textoDaTela()).toMatch(/O estoque conta sempre em UN\. Este número é só informação para quem compra\./);
+    expect(textoDaTela()).toMatch(/O estoque conta sempre em UN; este número é só informação para quem compra./);
     // A frase é montada com o que está escolhido, não texto fixo.
     preencher(selectUnidadeMedida(), 'M');
     preencher(selectUnidadeCompra(), 'ROLO');
     expect(textoDaTela()).toMatch(/1 ROLO contém/);
-    expect(textoDaTela()).toMatch(/O estoque conta sempre em M\./);
+    expect(textoDaTela()).toMatch(/O estoque conta sempre em M;/);
     expect(inputQtdPorCompra().getAttribute('aria-label')).toBe('Quantidade de M em 1 ROLO');
     preencher(selectUnidadeMedida(), 'UN');
     preencher(selectUnidadeCompra(), 'CX');
@@ -529,7 +529,7 @@ describe('MaterialAlmoxarifadoForm — RN-38: a unidade de compra vira frase, se
     expect(selectUnidadeCompra().value).toBe('ROLO');
     expect(inputQtdPorCompra().value).toBe('50');
     expect(textoDaTela()).toMatch(/1 ROLO contém/);
-    expect(textoDaTela()).toMatch(/O estoque conta sempre em M\./);
+    expect(textoDaTela()).toMatch(/O estoque conta sempre em M;/);
     expect(textoDaTela()).not.toMatch(/fator|convers/i);
     await submeter();
     expect(api.put).toHaveBeenCalledTimes(1);
@@ -683,5 +683,36 @@ describe('MaterialAlmoxarifadoForm — revisão da Etapa 37 (F1): subfamília em
     await act(async () => { container.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
     await esperarEfeitos();
     expect(api.put.mock.calls[0][1].subfamilia_id).toBeNull();
+  });
+});
+
+describe('MaterialAlmoxarifadoForm — revisão da Etapa 38 (número órfão, própria unidade, obrigatório)', () => {
+  test('voltar "Como é comprado" para a própria unidade depois de digitar 12 → o POST manda fator_conversao_compra null (não 12 órfão)', async () => {
+    await renderizarNovo();
+    await preencherObrigatorios();
+    preencher(selectUnidadeCompra(), 'CX');
+    preencher(inputQtdPorCompra(), '12');
+    preencher(selectUnidadeCompra(), '');
+    expect(inputQtdPorCompra()).toBeNull();
+    await submeter();
+    expect(api.post).toHaveBeenCalled();
+    const payload = api.post.mock.calls[0][1];
+    expect(payload.unidade_compra).toBe('');
+    expect(payload.fator_conversao_compra).toBeNull();
+  });
+
+  test('o select "Como é comprado" não oferece a própria unidade de medida', async () => {
+    await renderizarNovo();
+    preencher(selectUnidadeMedida(), 'M');
+    const opcoes = [...selectUnidadeCompra().options].map((o) => o.value);
+    expect(opcoes).not.toContain('M');
+    expect(opcoes).toContain('CX');
+  });
+
+  test('o número da frase é marcado como obrigatório (aria-required) e a nota diz "Obrigatório"', async () => {
+    await renderizarNovo();
+    preencher(selectUnidadeCompra(), 'CX');
+    expect(inputQtdPorCompra().getAttribute('aria-required')).toBe('true');
+    expect(container.textContent).toMatch(/Obrigatório\. O estoque conta sempre em/);
   });
 });
