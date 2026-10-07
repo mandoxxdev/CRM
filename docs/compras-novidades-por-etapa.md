@@ -5,10 +5,10 @@
 > roteiro curto para demonstrar ao vivo. Pedido do André em 2026-10-06. O equivalente do
 > almoxarifado é `docs/almoxarifado-novidades-por-etapa.md`.
 >
-> **Onde o desenvolvimento está:** lote de 2026-10-06, branch `main`. Etapas **33, 34, 35 e 36
-> entregues e integradas** (merges `ca8a1364`, `891c960a`, `2bec1eb9`, `a84d2121`; seções abaixo).
-> Etapa **37** (categorias por família) só especificada — depende da decisão **D-36a** do bloco
-> abaixo. Design do lote:
+> **Onde o desenvolvimento está:** lote de 2026-10-06, branch `main`. Etapas **33 a 37
+> entregues e integradas** (merges `ca8a1364`, `891c960a`, `2bec1eb9`, `a84d2121`, `51d77c21`,
+> `a3b57583`; seções abaixo). As nove tasks do lote estão todas entregues; o que sobra para o
+> P.O. é **D-37** (categoria depende de família?), **D-35** e **D-35b**. Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
 > `specs/modulo-compras/README.md`.
 
@@ -72,6 +72,23 @@
 - **B12 — Etapa 36: o botão Voltar do navegador volta de MÓDULO, não de aba.** Trocar de módulo
   entra no histórico; trocar de aba interna não (senão cada aba viraria um passo do Voltar).
   Reverter = uma linha (`push` ↔ `replace`).
+- **B13 — Etapa 37: a árvore é desenhada na própria aba Famílias** (cartão da raiz com as
+  subfamílias dentro), e "Nova subfamília" é um botão no cartão da raiz, com o pai travado.
+  **Descartado:** um seletor de "família pai" no formulário de família nova — permitiria promover
+  ou rebaixar famílias por engano; o servidor cobre esses casos e a tela não precisa expô-los.
+- **B14 — Etapa 37: mover uma subfamília para outra raiz, ou transformar raiz ↔ subfamília,
+  continua só pela API.** A tela não oferece; o PUT preserva o vínculo. Reversível quando houver
+  um caso real.
+- **B15 — Etapa 37: o servidor ganhou três toques para a subfamília ser honesta** — contagem de
+  itens por subfamília (era sempre 0), itens ao expandir a subfamília (era vazio) e o filtro de
+  Materiais por subfamília (devolvia nada) — e **uma correção de defeito**: inativar uma
+  subfamília com itens passava, e os itens dela ficavam ineditáveis; agora é recusado com a mesma
+  mensagem que a família raiz já recebia. **Descartado:** entregar só a tela e deixar "0 itens"
+  numa subfamília cheia.
+- **B16 — Etapa 37 (revisão): material cuja subfamília foi inativada antes desta versão volta a
+  ser editável.** O servidor passou a revalidar a subfamília só quando ela **muda**; o cadastro
+  mostra "(subfamília inativa)" e deixa manter ou limpar. **Descartado:** apagar o vínculo em
+  silêncio ao editar (era o único jeito de salvar antes — e apagava dado sem avisar).
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -123,6 +140,13 @@
 - **G8** As abas da Etapa 36 usam um componente `Tabs` reutilizável novo; as outras seis barras de
   abas do sistema (Admin, Compras/Financeiro, Minha Conta, OS comercial, Operacional, e a barra
   interna do almoxarifado) continuam cada uma com o próprio CSS. Migrar é etapa própria.
+- **G10** Material gravado **pela API** com a subfamília no lugar da família (`familia_id = <sub>`;
+  nenhuma tela faz isso): a subfamília conta e lista, a raiz não, e o filtro de Materiais não o
+  acha. Correção apontada: `validateFamiliaAtiva` recusar subfamília como família em material
+  **novo** ("use a subfamília"). Não feito — sem consumidor real.
+- **G11** `?familia_id=<id de subfamília>` digitado na URL de Materiais antes de a lista de famílias
+  carregar manda só `familia_id` e devolve zero linhas até mexer no filtro. Nenhum link do sistema
+  gera essa URL. Correção: incluir `familias` nas dependências da busca (um GET a mais).
 - **G9** `canConfigureModule` diverge entre cliente e servidor: o cliente aceita `role === 'admin'`,
   o servidor só superadmin/admin de módulo. A Etapa 36 não cria porta de servidor, então nada ficou
   mais frouxo — mas a divergência existe desde antes e precisa fechar quando o core ganhar perfis.
@@ -135,6 +159,71 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 37 — Subfamílias cadastráveis na aba Famílias (2026-10-07)
+
+**Em uma frase.** A aba **Famílias** (Configurações → Almoxarifado) virou uma **árvore**: cada
+família raiz mostra as suas subfamílias dentro do cartão, com o botão **"Nova subfamília"** — a
+árvore de classificação que a task 2 pedia, na forma que você escolheu (D-36a, opção ii).
+
+### O que há de novo (visível para o usuário)
+- **Só famílias raiz como cartões**; dentro de cada um, a lista "Subfamílias (N)" com código,
+  nome, selo de tipo de uso, contagem de itens e ações (editar, inativar, expandir itens,
+  adicionar item). Raiz sem subfamília mostra "Nenhuma subfamília".
+- **"Nova subfamília"** no cartão da raiz abre o formulário com o pai travado ("Subfamília de:
+  ROL — Rolamentos"); nome, código (opcional — o sistema gera), descrição e tipo de uso.
+- **Contagem honesta:** a subfamília mostra quantos materiais estão nela (antes seria sempre 0,
+  porque o material grava a família raiz); a raiz continua mostrando o total, incluindo os das
+  subfamílias.
+- **Expandir a subfamília** mostra os itens dela (antes viria vazio).
+- **"Adicionar item" na subfamília** abre o cadastro de material já com família **e** subfamília
+  selecionadas.
+- **Materiais → filtro por família** passou a listar a árvore (raiz; "— subfamília" indentada) e
+  filtrar de verdade por subfamília (antes escolher uma subfamília devolvia lista vazia).
+- **Defeito corrigido:** inativar uma subfamília que tinha itens **passava** — a subfamília sumia
+  e os materiais dela ficavam ineditáveis (erro "Subfamília inválida"). Agora é recusado com a
+  mesma mensagem da família raiz: *"Não é possível remover: família possui N item(ns) ativo(s)"*.
+
+### Por baixo do capô
+- O servidor já tinha a hierarquia (`parent_id`, máximo 2 níveis, bloqueios) desde a Etapa 2 do
+  almoxarifado, com 23 cenários de teste; faltava a tela. Esta etapa acrescentou **4 toques** no
+  servidor (contagem por subfamília, itens da subfamília, filtro `?subfamilia_id=`, `DELETE`
+  contando itens da subfamília) e 8 cenários novos (31 no total).
+- Client: `TabFamilias` desenha a árvore e reutiliza o formulário; `MateriaisAlmoxarifado` deriva
+  os parâmetros do filtro da própria lista de famílias; `MaterialAlmoxarifadoForm` lê
+  `?subfamilia_id` e ignora uma subfamília que não seja filha da família (sem erro).
+- Nenhuma permissão nova: criar/editar/inativar família continua exigindo administrador do
+  almoxarifado (superadmin, admin do módulo ou perfil ADMINISTRADOR).
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| Criar subfamília: **só pela API** (o guia dizia isso com todas as letras) | Botão "Nova subfamília" no cartão da família |
+| Subfamílias apareciam como cartões irmãos das raízes, sem indicação | Árvore: subfamílias dentro da raiz |
+| Subfamília sempre com "0 itens" e expandindo vazio | Contagem e itens reais da subfamília |
+| Filtrar Materiais por subfamília devolvia nada | Filtra de verdade |
+| Inativar subfamília com itens passava e quebrava a edição dos materiais | Recusado com a mensagem certa |
+
+### Roteiro de teste manual (clicável)
+1. **Administrativo → Configurações → Almoxarifado → Famílias** (ou Almoxarifado → Configurações →
+   Famílias). Veja que só famílias raiz são cartões; abra o cartão **Rolamentos**.
+2. Clique **"Nova subfamília"** no cartão: o formulário mostra "Subfamília de: ROL — Rolamentos".
+   Digite nome "Rolamentos de esferas", salve. Ela aparece **dentro** de Rolamentos, com "0 itens".
+3. Na linha da subfamília, clique **"Adicionar item"**: o cadastro de material abre com Família =
+   Rolamentos e Subfamília = Rolamentos de esferas já escolhidas. Preencha nome e salve.
+4. Volte a **Configurações → Almoxarifado → Famílias**: a subfamília mostra **"1 item"** e Rolamentos
+   somou 1 no total. Clique no chevron da subfamília: o material aparece.
+5. Tente **inativar** a subfamília (lixeira): recusado — *"Não é possível remover: família possui 1
+   item(ns) ativo(s)"*. Tente inativar **Rolamentos**: recusado por ter subfamília ativa.
+6. **Almoxarifado → Materiais**, filtro de família: escolha "— ROL… Rolamentos de esferas": só o
+   material do passo 3 aparece. Limpe o filtro.
+7. Edite o material do passo 3: a subfamília continua selecionada e salva sem erro.
+
+### O que a etapa NÃO cobre
+- Mover uma subfamília para outra família, ou transformar família ↔ subfamília pela tela (B14).
+- A pergunta "categoria depende de família?" (**D-37**, P.O.).
+- "Materiais por setor" (aba de Configurações) continua listando famílias planas.
+- `PUT ativo:0` direto pela API não checa itens (a tela não usa esse caminho).
 
 ## Etapa 36 — Configurações com uma aba por módulo (2026-10-07)
 

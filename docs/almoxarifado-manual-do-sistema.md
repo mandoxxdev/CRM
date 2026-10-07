@@ -142,7 +142,18 @@ Regras que o sistema aplica:
 
 No formulário, o campo **Subfamília** só se habilita depois que a Família é escolhida, e lista apenas as filhas daquela família. Se a família não tiver nenhuma, aparece o aviso *"Esta família não tem subfamílias cadastradas."*
 
-As famílias são mantidas em **Almoxarifado → Configurações → aba "Famílias"**, cada uma com um tipo de uso (administrativo, industrial ou ambos).
+As famílias são mantidas em **Almoxarifado → Configurações → aba "Famílias"** (desde a Etapa 36 também em **Administrativo → Configurações → Almoxarifado → Famílias**), cada uma com um tipo de uso (administrativo, industrial ou ambos).
+
+**Subfamílias (Etapa 37, 2026-10-07).** A aba mostra só as famílias raiz como cartões; dentro de cada cartão ficam as subfamílias dela, com código, contagem de itens e ações próprias. Para criar uma, clique **"Nova subfamília"** no cartão da família: o formulário abre com o pai travado ("Nova subfamília de ⟨CÓDIGO⟩ — ⟨nome⟩") e pede nome, código (opcional — o sistema gera), descrição e tipo de uso. Regras que o sistema aplica na tela:
+
+| Situação | Resultado |
+|---|---|
+| Inativar uma família que tem subfamílias ativas | Recusado: *"Não é possível remover: família possui N subfamília(s) ativa(s)"* |
+| Inativar uma subfamília que tem itens ativos | Recusado: *"Não é possível remover: família possui N item(ns) ativo(s)"* — antes da Etapa 37 a inativação passava e os itens ficavam ineditáveis |
+| Contagem "N itens" de uma subfamília | Conta os materiais cadastrados **nela**; a contagem da raiz inclui os das subfamílias |
+| "Adicionar item" numa subfamília | Abre o cadastro de material já com família **e** subfamília escolhidas |
+
+O que a tela **não** faz: mover uma subfamília para outra família, ou transformar família em subfamília (e vice-versa) — só pela API.
 
 Além da família existe o campo **Categoria**, uma classificação de apoio escolhida num **catálogo mantido pela própria empresa** — Aço carbono, Aço inox, Chapas, Tubos, Perfis estruturais, Componentes usinados, Rolamentos, Elementos de fixação, Solda e consumíveis e assim por diante. O catálogo é editado em **Almoxarifado → Configurações → aba "Categorias"** (logo abaixo), e é a **mesma lista** que alimenta o cadastro de material, o filtro da listagem de materiais e o filtro de escopo da conferência de estoque.
 

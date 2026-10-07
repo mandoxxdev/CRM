@@ -192,11 +192,11 @@ item de subfamílias; índice; retro.
   4 pontos previstos (sub com `qtd_itens` 0; itens vazio; `?subfamilia_id=` ignorado devolvendo
   os 5 materiais do arquivo; DELETE da sub com item respondendo 200) e as 5 edições da tabela de
   contratos os fecharam de primeira (31/0). Nenhuma suíte vizinha quebrou.
-- Achados da revisão: _preencher_ (reais vs. ruído). **T1:** o achado do DELETE (`:2423`) era
+- Achados da revisão (consolidado): revisão do PLANO — 1 achado real que mudava contrato (DELETE de sub com itens passava) + 5 correções, 0 ruído; revisão ADVERSARIAL do código — F1 Major real (material com sub inativada ineditável), F3 Minor real, F2/F4 Minor declarados como dívida (G10/G11), 0 ruído; 4/5 sabotagens pegas e a 5ª virou o teste que faltava. **T1:** o achado do DELETE (`:2423`) era
   real e o controle positivo confirmou (200 antes, 400 depois). A linha "(d) material sem sub não
   entra na contagem de S" rendeu mais do que parecia: é o único cenário que cai em **três**
   sabotagens diferentes (qtd_itens, itens, filtro), porque afirma o lado negativo das três rotas.
-- Paralelismo: _preencher_. **T1:** feita na worktree `CRM-wt-c37` (branch `c37`) sem tocar em
+- Paralelismo: 2 executores em paralelo (servidor × client) a partir do mesmo commit, contrato congelado, zero retrabalho; conflito só na retro deste plano. **T1:** feita na worktree `CRM-wt-c37` (branch `c37`) sem tocar em
   `client/`; T2/T3 consomem o contrato congelado — nenhuma mudança de contrato foi necessária
   (o único desvio é interno: a constante `QTD_ITENS_FAMILIA_SUBQUERY`, invisível à API).
 - Rodadas de correção até verde: **T2 (executor B): 1 rodada** — o pai travado
@@ -223,8 +223,35 @@ item de subfamílias; índice; retro.
   subfamília"), não pela linha inteira — menos superfície clicável ao lado das ações.
   Classes `almox-familia-card`, `almox-familia-cabecalho` e `almox-subfamilia-row` existem para
   o teste achar a estrutura (não há CSS atrelado).
-- Defeito escapado: preencher na etapa seguinte.
+- Defeito escapado: a ser preenchido na etapa seguinte (a revisão adversarial desta etapa pegou F1 antes do push — não escapou).
 
 ## Como foi executado
 
-_Preencher no fechamento, com o que foi medido de verdade._
+Dois executores em paralelo a partir de `34aa5e1e`: A (servidor, worktree `c37`, T1 `0777d1b3`)
+e B (client, worktree `c37b`, T2 `49d1c24e` → T3 `bbabe37c`). Merges em `main`: `51d77c21` (T1)
+e `a3b57583` (T2+T3; conflito só no bloco da retro deste plano, resolvido mantendo as duas metades
+— nenhum arquivo de código conflitou).
+
+**Integração medida em `main` (`a3b57583`):** client **54 suítes / 789 testes** (baseline 53/771
+→ +1 suíte `Familias`, +18 testes); `CI=true npx react-scripts build` "Compiled successfully.";
+servidor `test:api` **172/172** arquivos (`subfamilias` passou de 23 para 31 cenários),
+`test:almoxarifado` 48/0, `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 5/0.
+Revisão adversarial (Fase 5) na worktree `review37` — resultado na seção abaixo.
+
+## Revisão adversarial (2026-10-07) e onda de correção
+
+Revisor fresco, worktree `review37`, servidor REAL pelo harness. Fluxo inteiro (criar raiz → sub →
+material → contagens → itens → filtro → DELETE recusado → inativar material → DELETE passa)
+**sustentou** de ponta a ponta; `?ativo=0`/`all` intactos. **Sabotagens: 5 feitas, 4 pegas** —
+a que escapou (iv: limpeza do `subfamilia_id` rodando também em edição) virou achado.
+
+| # | Sev. | Achado reproduzido | Correção (onda, em `main`) | Prova |
+|---|---|---|---|---|
+| F1 | Major | Material cuja subfamília foi **inativada depois** (todas as inativadas pelo DELETE furado de antes da 37, ou por `PUT ativo:0`): o form lê o id, o select mostra "— nenhuma —" (desabilitado se não há outra sub), o PUT manda o id e `validateSubfamilia` recusa (400) — **material ineditável**. O servidor revalidava sempre que `subfamilia_id` vinha no corpo, e o form sempre manda | Servidor (`routes/almoxarifado.js`, PUT materiais): revalida só quando o valor **mudou** em relação ao gravado ou a família mudou. Form: opção "(subfamília inativa)" com o id gravado, select habilitado, pode manter ou limpar | `subfamilias.api.test.js` cenário F1 (32/32; sabotagem da condição antiga → 1 vermelho); `MaterialAlmoxarifadoForm.test.js` +3 (sub ativa preservada no PUT — fecha a sabotagem iv —, sub inativa mostrada e preservada, limpar manda `null`; sabotagem → 1 vermelho) |
+| F3 | Minor | Sub cujo pai está inativo (só por `UPDATE` direto — as rotas recusam) sumia da aba em silêncio | Bloco "Subfamílias sem família ativa (N)" com editar/inativar | `Familias.test.js` +2 (sabotagem → 1 vermelho) |
+| F2 | Minor | Material gravado **pela API** com `familia_id = <sub>` (nenhuma tela gera): a sub conta e lista, a raiz não, e o filtro de Materiais (`familia_id=R&subfamilia_id=S`) não o acha | **Não corrigido** — registrado como **G10** com a correção (recusar sub em `validateFamiliaAtiva` para material novo) | — |
+| F4 | Minor | `?familia_id=<sub>` na URL de Materiais antes de a lista chegar manda só `familia_id` (zero linhas até mexer no filtro); nenhum link gera essa URL | **Não corrigido** — declarado no plano; **G11** | — |
+
+Refutados pelo revisor: subquery `OR` × `?ativo=`; `familia_nome` dos itens da sub; `parseInt('')`
+no `parent_id` (vira `null` antes — e o teste do client pina `parent_id` da raiz); ação da sub
+expandindo a raiz; corrida na limpeza de `loadFamilias`.

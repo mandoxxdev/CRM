@@ -748,7 +748,7 @@ Vá em **Almoxarifado → Movimentações**.
 3. Em "Classificação", escolha uma Família e veja o select "Subfamília" habilitar. Se a família não tiver subfamílias cadastradas, aparece o aviso "Esta família não tem subfamílias cadastradas" (veja nota abaixo).
 4. Em "Unidades e Custos", escolha uma "Unidade de Compra" (ex.: CX) sem preencher o "Fator de Conversão (Compra)" e tente salvar. **Caso de erro esperado**: o sistema pede o fator antes de enviar.
 
-   > Nota honesta: **criar uma subfamília ainda não tem tela própria** — hoje só é possível via chamada direta à API. O que existe na interface é o *select* de subfamília dentro do formulário de material (que já funciona, mas só mostra subfamílias que alguém cadastrou por fora).
+   > ~~Nota honesta: **criar uma subfamília ainda não tem tela própria** — hoje só é possível via chamada direta à API.~~ **Era verdade até a Etapa 37 (2026-10-07, linha `main`):** a aba *Famílias* (Configurações → Almoxarifado → Famílias, ou `/almoxarifado/configuracoes?tab=familias`) ganhou o botão **"Nova subfamília"** em cada cartão de família raiz, e a lista mostra as subfamílias dentro da raiz. Roteiro em `docs/compras-novidades-por-etapa.md`, seção "Etapa 37".
 
 **B) Gestão de Almoxarifados**
 
@@ -4617,7 +4617,7 @@ antes**.
 ## Pendências conhecidas (sem tela ainda)
 
 - Consulta de "posições vazias" e "materiais sem endereço": a API já existe, mas não há tela para usá-la.
-- Criar subfamílias: só via API, sem formulário na interface.
+- ~~Criar subfamílias: só via API, sem formulário na interface.~~ **Resolvido na Etapa 37 (2026-10-07):** botão "Nova subfamília" na aba Famílias.
 - Reservas de estoque: **completo na Etapa 4** — backend, tela (Almoxarifado → Reservas) e as duas rotas que escapavam do hold (liberação por valor e exclusão de requisição). Sem pendência.
 - Anexos na requisição (desenho/documento) e assinatura digital na retirada: ainda não implementados.
 - Importar itens de uma lista técnica ou ordem de produção na requisição: ainda não implementado (depende da integração com Engenharia/Produção).
