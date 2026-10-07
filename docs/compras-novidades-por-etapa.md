@@ -125,7 +125,12 @@
   nem totais** — mantém a decisão da Etapa 42 (quem recebe não vê preço).
 - **B23 — Etapa 39: `observacoes` do pedido também fica fora do painel do recebimento** (a rota
   tem o gate do módulo, que alcança produção; o alerta de pedido já classifica a observação como
-  "negociação com o fornecedor"). Reverter = uma chave na projeção.
+  "negociação com o fornecedor"). Reverter = uma chave na projeção. `tabela_preco` também fica
+  fora do painel (a palavra "preço" não entra na tela de quem recebe).
+- **B24 — Etapa 39: no `PUT` do pedido, encargo ausente mantém o gravado e `''` zera** (mesma
+  regra dos outros campos do cabeçalho; a Etapa 32 zerava sempre).
+- **B25 — Etapa 39: `peso_unitario` do item fica `NULL` quando o material não tem peso** (não
+  inventa 0); NCM e peso enviados vazios pela tela significam "o do material".
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -214,7 +219,75 @@
 
 ## Etapa 39 — O pedido de compra ganha o documento da Etapa 32 (2026-10-07)
 
-_Em execução — seção escrita no fechamento da etapa._
+**Em uma frase.** O pedido de compra voltou a carregar **tudo o que o documento da GMP leva ao
+fornecedor** — condições comerciais, IPI por item, frete/desconto/ICMS-ST, os seis totais e os
+dados fiscais do fornecedor congelados no pedido — sobre o pedido que já conversa com o
+recebimento, sem abrir mão do número automático e do fechamento automático.
+
+### O que há de novo (visível para o usuário)
+- **Compras → Pedidos → Novo / Editar**, seção **3. Condições**: condição de pagamento, quem paga o
+  frete, via de transporte, transportadora e telefone, tabela de preço, contato, *Entregar em* e
+  *Cobrar em* — tudo em **botões**; o que você digitar em "Outro" vira botão no próximo pedido.
+- **Por item**: IPI % (botões 0 / 3,25 / 5 / 6,5 / 10 / 15 ou "Outro"), NCM e peso (vêm do
+  cadastro do material, editáveis), observação do item. Há um IPI padrão do pedido para preencher
+  todas as linhas de uma vez.
+- **Bloco 4. Total**: frete, desconto e ICMS-ST, e os seis totais (produtos, IPI, ICMS-ST,
+  desconto, frete, **total geral**) — calculados **pelo servidor** enquanto você digita; o
+  navegador não soma. O total geral é o que a lista de pedidos mostra.
+- **Fornecedor congelado no pedido**: ao criar o pedido, nome, CNPJ, IE, endereço, telefone,
+  celular e e-mail do fornecedor são gravados **naquele momento**. Mudar o cadastro do fornecedor
+  depois não altera o pedido; trocar o fornecedor do pedido congela o novo.
+- **Recebimento contra pedido**: ao escolher o pedido, aparece o painel **Fornecedor** e
+  **Condições** (pagamento, frete, transportadora, via, contato, entregar em) — **sem preços, sem
+  totais e sem observações** (quem recebe não vê negociação).
+- Cotação → pedido, importação por planilha e número automático continuam como estavam; pedidos
+  vindos deles nascem com IPI 0 e sem encargos.
+
+### Por baixo do capô
+- As 24 colunas da Etapa 32 em `pedidos_compra` (9 condições, 5 totais, 10 de snapshot) e 5 em
+  `itens_pedido_compra` (`item_numero`, `ncm`, `peso_unitario`, `ipi_percentual`, `observacao`)
+  voltam ao código **com os mesmos nomes** (produção já as tinha); `data_entrega` por item não
+  volta (Etapa 33).
+- `pedidoTotais.js` restaurado **byte a byte** com os 22 testes sobre o pedido real 28433;
+  `opcoesPedido.js` restaurado sem o "próximo número". **A cotação passou a usar a mesma conta**
+  (antes arredondava a soma e o pedido arredondava por linha — com preço de 4 casas divergiam em
+  centavos sem nenhum teste pegar).
+- `POST /api/compras/pedidos/calcular` (prévia, tolerante a campo vazio), `GET
+  /api/compras/pedidos-aux/opcoes`, `GET /api/almoxarifado/recebimentos-aux/pedidos-compra/:id`
+  (projeção sem valores). `GET /pedidos/:id` ganha `itens[].valor_linha/ipi_linha`, `totais` e
+  `fornecedor{…, origem}`; a lista ganha `total_geral` e `total_itens`.
+- Snapshot gravado **no serviço** (vale para cotação e importação) e reescrito quando o fornecedor
+  muda ou quando um pedido antigo sem snapshot é editado.
+
+### Antes → Agora
+| Antes (depois do merge) | Agora |
+|---|---|
+| Pedido = fornecedor, datas, status, observações, itens com quantidade e preço | + condições comerciais, IPI por item, encargos, seis totais, fornecedor congelado |
+| Total = soma crua `qtd × unit` no navegador | Conta do documento (arredondada por linha, com IPI e encargos) feita pelo servidor; `valor_total` = total geral |
+| Cotação e pedido arredondavam diferente | Uma calculadora só |
+| Recebimento mostrava só os itens com saldo | + painel Fornecedor e Condições (sem preço) |
+
+### Roteiro de teste manual (clicável)
+1. **Compras → Pedidos → Novo Pedido.** Escolha o fornecedor. Em **3. Condições** clique "30 dias",
+   "CIF", "Rodoviário"; em transportadora clique "Outro" e digite "Transp. Teste".
+2. Adicione 2 itens: A (2 × 50,00) e B (3 × 10,00). No item A, abra os detalhes e clique **IPI
+   10 %**. Veja NCM e peso virem do cadastro.
+3. Em **4. Total**, digite frete 50,00. Confira: produtos 130,00 · IPI 10,00 · frete 50,00 ·
+   **total geral 190,00** (o número apareceu sem você somar). Salve.
+4. Volte à lista: o pedido mostra **R$ 190,00**. Abra de novo: "Transp. Teste" agora é um botão.
+5. **Compras → Fornecedores**: edite o fornecedor e troque o nome fantasia. Abra o pedido: o nome
+   gravado **não mudou**.
+6. **Almoxarifado → Recebimentos → Novo (contra pedido)**: escolha o pedido; aparece o painel com
+   Fornecedor e Condições — e **não** aparece preço nem total. Receba 1 unidade de A.
+7. **Almoxarifado → Materiais → A → extrato/custo**: o custo médio ficou 50,00 (sem IPI).
+8. Receba o resto: o pedido fica **Recebido** sozinho e não pode mais ser editado (só o status).
+
+### O que a etapa NÃO cobre
+- **O documento impresso** (PDF/HTML no formato do ERP) — a Etapa 32 nunca o fez; é a **Etapa 40**
+  (G14).
+- Coluna "IPI %" no export para Excel; a reimportação ignora IPI/frete (G13).
+- Importação por planilha com colunas de IPI/NCM.
+- Número digitado pelo comprador e os 4 status da Etapa 32 (B19).
 
 ## Etapa 38 — "1 CX contém 12 UN": a unidade de compra vira frase (2026-10-07)
 

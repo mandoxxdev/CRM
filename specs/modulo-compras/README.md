@@ -55,6 +55,13 @@ na `main` (decisão **B18**, `docs/compras-novidades-por-etapa.md`) ficou assim:
 | 35, 36, 37, 38 | Material (unidades/ABC, "1 CX contém 12 UN"), Configurações por módulo, subfamílias na aba Famílias | **Reaplicadas** por cima das telas desta branch |
 | G2, G6 | Lista de fornecedores sem `planilha_*`; primeiro boot em banco novo | **Ficam** (G5 era sobre as colunas da Etapa 32 — removido junto) |
 
+**Depois da unificação (linha única, `main`):**
+
+| Etapa | Tema | Status |
+|---|---|---|
+| 39 | O pedido de compra ganha o **documento da Etapa 32** sobre o pedido atual: as 24 colunas de cabeçalho e 5 de linha voltam; `pedidoTotais.js` (22 testes) e `opcoesPedido.js` restaurados; snapshot fiscal gravado no serviço e reescrito quando o fornecedor muda; `POST /pedidos/calcular`, `GET /pedidos-aux/opcoes`, `GET /almoxarifado/recebimentos-aux/pedidos-compra/:id` (sem preço); form com condições/IPI/totais; **a cotação passa a usar a mesma conta** (`somaItens` por `pedidoTotais`). Regras de ciclo de vida continuam as do pedido atual (B19) | 🟡 integrada, em verificação (2026-10-07): T1 `98e12861`, `ea0936cc`, `c052a37e`, `d259377f`, `6a21c4ea` (merge `d01ad23f`); T2 `202fd4d9` (merge `afcd1be7`); T3 `a3ecbdcd` (merge `1cc47af8`). Plano: `docs/superpowers/plans/2026-10-07-crm-etapa39-pedido-ganha-o-documento-da-etapa32.md` |
+| 40 | O **documento impresso** do pedido (PDF/HTML no formato do ERP, `GET /pedidos/:id/impressao`) — a task que a Etapa 32 deixou "a fazer" | 🔴 próxima |
+
 A partir da unificação, **o desenvolvimento é na `main`**; o índice da linha `main`
 (Etapas 32–38) está em `docs/compras-novidades-por-etapa.md` e nos planos
 `docs/superpowers/plans/2026-10-0[67]-crm-etapa3[3-8]-*.md`.
