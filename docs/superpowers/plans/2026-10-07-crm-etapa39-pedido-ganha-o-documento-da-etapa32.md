@@ -116,7 +116,7 @@
 | `GET /api/compras/pedidos` (lista) | + `total_geral` (= `valor_total`), `total_itens` | — |
 | `POST /api/compras/pedidos/calcular` | `{itens, total_icms_st?, valor_frete?, total_desconto?}` → `{itens, totais}` | 400 Zod |
 | `GET /api/compras/pedidos-aux/opcoes` | objeto RN-39.06 | — |
-| `GET /api/almoxarifado/recebimentos-aux/pedidos-compra/:id` | `{id, numero, status, data_pedido, previsao_entrega, fornecedor{…}, condicoes{…}, observacoes}` — **sem** itens/valores | 404 literal existente |
+| `GET /api/almoxarifado/recebimentos-aux/pedidos-compra/:id` | `{id, numero, status, data_pedido, previsao_entrega, fornecedor{nome, cnpj, ie, endereco, municipio, uf, cep, telefone, celular, email, origem}, condicoes{as 9}}` — **sem** itens/valores/totais/`observacoes` (B23; esta linha dizia `observacoes` e estava errada — a RN-39.08 manda) | 404 literal existente |
 
 ## Tasks
 
@@ -137,6 +137,42 @@ invariante de 40 pedidos, RN-11 com o recebimento real) e não-regressão: `comp
 resolvedor de snapshot). Cenário de teste: PRODUCAO vê condições e fornecedor, **não** vê
 `valor_unitario`, `totais` nem `observacoes`. `/opcoes.empresa`: o harness não cria a tabela
 `configuracoes` core — o teste cria a tabela localmente ou afirma o fallback, senão prova nada.
+
+**T1 — FEITA (branch `c39`, 4 commits por assunto):**
+- [x] `98e12861` schema: `ALTERS_PEDIDOS_COMPRA` (24) no callback do CREATE em `index.js`; `safeAlter`
+  das 5 colunas de linha em `schema.js`; stub do harness com as 24. Boot em pasta nova
+  (`CRM_DATA_DIR` limpo, `PORT=3996`): **0** `no such table|no column named`; `PRAGMA table_info`:
+  `pedidos_compra` 34 colunas, `itens_pedido_compra` 14.
+- [x] `ea0936cc` `pedidoTotais.js` **byte a byte** igual a `b3abc723` (`cmp`), 22/22 de primeira;
+  `opcoesPedido.js` sem `proximo_numero` e sem `total_materiais`; script `test:pedido-totais`.
+  Controle positivo: `arred2` a 1 casa → **10 passaram, 12 falharam** (tirar só o `EPSILON` **não**
+  derruba nenhum caso — nenhum dos 22 passa por 1,005; registrado).
+- [x] `c052a37e` serviço + `schemas.js` + `routes/compras.js` (`/calcular`, `/pedidos-aux/opcoes`,
+  lista com `total_itens`/`total_geral`) + `cotacaoService.somaItens` pela calculadora +
+  `comprasPedidoDocumento.api.test.js` (27 cenários neste commit).
+- [x] `d259377f` `GET /recebimentos-aux/pedidos-compra/:id` em `extended.js` via
+  `lerPedidoParaRecebimento` + 2 cenários (29 no total).
+- Placar: `comprasPedidoDocumento` **29/29**; `pedidoTotais` **22/22**; as 18 suítes de pedido/cotação/
+  recebimento/atraso/alerta já existentes **todas verdes** (13, 13, 7, 13, 10, 10, 8, 5, 2, 10, 36, 11,
+  9, 10, 12, 3, 7, 1). `npm run test:api` inteiro: ver o relatório da T4 (rodado no fechamento da T1).
+- Sabotagens executadas contra a suíte nova, cada uma restaurada por `git checkout --`: snapshot não
+  reescrito no legado editado → 28/1; NCM sempre do material → 28/1; `somaItens` antigo (soma
+  arredondada) → 28/1; painel devolvendo `observacoes`/`valor_total` → 28/1; `valor_total` =
+  `total_produtos` → 24/5; snapshot não gravado no POST → 25/4; `item_numero` invertido → 25/4;
+  `item_numero` do payload nas **duas** camadas → 28/1 (na camada do INSERT sozinha **não** derruba:
+  `resolverItens` já descarta a chave — a proteção é dupla, e isso está no comentário).
+- Decisões pelo caminho reversível (para a letra B do doc de novidades, T4):
+  **B23** o painel `-aux` **não** devolve `observacoes` (a tabela de contratos dizia que sim; corrigida);
+  **B24** `PUT` com encargo **ausente** mantém o gravado (mesma regra de `camposDoCabecalho`), `''`
+  zera — a 32 zerava sempre; **B25** `peso_unitario` da linha é `REAL` sem default (NULL = "não
+  informado" → o do material; a 32 tinha `DEFAULT 0`, e 0 é um peso); **B26** `opcoes` sai sem
+  `total_materiais` (a tela da 38 tem busca própria) e com as chaves no plural do contrato.
+- Divergências do plano, declaradas: nenhuma de comportamento. A cotação `1 × 1.005 × 2` **não**
+  divergia com o código antigo (soma arredondada 2,01 = soma crua 2,01) — o cenário prende o
+  **novo** invariante (2,02 nos dois) e fica vermelho se `somaItens` voltar a arredondar a soma.
+- Pendência para T4 (fora da T1 por escopo): `docs/compras-novidades-por-etapa.md` (B19–B26),
+  `specs/modulo-compras/README.md`, manual.
+
 **T2 — galho (client, form):** RN-39.07 em `PedidoCompraForm.js` + `PedidoCompraForm.test.js`
 (cenários: opções carregadas em chips; "Outro" vira valor; IPI por item; NCM/peso do material;
 `/calcular` chamado com debounce e totais exibidos; POST com as chaves novas; edição carrega;
@@ -183,7 +219,12 @@ ERP (a task que a 32 deixou "a fazer").
 - Ordem das linhas: hoje `ORDER BY id`; com `item_numero` gravado, `ORDER BY item_numero, id`.
 
 ## Retro (preencher no fechamento)
-- Rodadas de correção até verde: _preencher_
+- Rodadas de correção até verde: **T1 — 1 rodada**, e no **teste**, não no código: o cenário "PUT
+  trocando fornecedor" voltava o pedido ao TECNOPAR por `PUT` **antes** de restaurar o nome do
+  cadastro, e o snapshot novo congelou "RENOMEADA" — que é exatamente o B21 funcionando. Ordem da
+  fixture invertida, 29/29. Nenhuma suíte antiga quebrou na primeira rodada (o `valor_total` de
+  pedido sem IPI/encargos é mesmo o mesmo até o centavo, como a Fase 0 previu).
+  _T2/T3/T4: preencher._
 - Achados da revisão: _preencher_ (reais vs. ruído)
-- Paralelismo: _preencher_
+- Paralelismo: T1 rodou sozinha na worktree `c39` (servidor); T2/T3 _preencher_.
 - Defeito escapado: preencher na etapa seguinte.

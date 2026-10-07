@@ -27,9 +27,13 @@
  *    Descartado: `numero` digitado com 409 na colisao (devolve ao comprador um erro que ele nao
  *    tem como resolver sozinho e reintroduz a colisao que a Etapa 31 fechou).
  *
- * 2. **`valor_total` e DERIVADO** da soma `quantidade × valor_unitario`, num `UPDATE` apos os
- *    itens. A lista de Compras mostra esse numero em destaque; aceita-lo do payload faria a tela
- *    exibir um total que nao bate com item nenhum. Descartado: confiar no payload.
+ * 2. **`valor_total` e DERIVADO**, num `UPDATE` apos os itens. A lista de Compras mostra esse
+ *    numero em destaque; aceita-lo do payload faria a tela exibir um total que nao bate com item
+ *    nenhum. Descartado: confiar no payload.
+ *    ⚠️ Esta frase dizia "da soma `quantidade × valor_unitario`" ate a Etapa 39 — era verdade e
+ *    DEIXOU de ser: a conta agora e a de `pedidoTotais.js` (RN-39.02: linha arredondada a 2 casas
+ *    ANTES de somar, IPI por linha, ICMS-ST + frete − desconto) e `valor_total` e o espelho de
+ *    `total_geral`. Para pedido sem IPI e sem encargos o numero e o mesmo ate o centavo.
  *
  * 3. **`quantidade_recebida` NAO e escrita aqui — nem como `0`.** E a coluna da Etapa 37, que so se
  *    move dentro do claim de `darEntradaEstoque` (decisao 5 de la). Ela nasce `0` pelo DEFAULT do
@@ -109,6 +113,9 @@ const { inserirComNumeroUnico } = require('../almoxarifado/numeroDoc');
 const purchaseService = require('../almoxarifado/purchaseService');
 const { can, getPerfilFromUser } = require('../almoxarifado/permissions');
 const { registrarAuditoria } = require('../almoxarifado/audit');
+// Etapa 39 (RN-39.02): a conta do documento e a de `pedidoTotais.js` — implementador UNICO da
+// RN-03/04/05 da Etapa 32, restaurado IGUAL de `b3abc723` com os 22 testes. Ninguem soma por fora.
+const { calcularTotaisPedido } = require('./pedidoTotais');
 
 /** Molde de erro traduzido (mesmo `erro()` dos servicos do almoxarifado: a rota le `.status`). */
 const erro = (msg, status = 400) => Object.assign(new Error(msg), { status });
@@ -125,8 +132,61 @@ const erroPermissao = (user, acao) => Object.assign(
   { status: 403, acao, perfil: getPerfilFromUser(user) },
 );
 
-/** Colunas do cabecalho que o payload pode preencher — `numero` e `valor_total` NAO estao aqui. */
-const COLUNAS_CABECALHO = ['data_pedido', 'previsao_entrega', 'status', 'observacoes'];
+/**
+ * Colunas do cabecalho que o payload pode preencher — `numero` e `valor_total` NAO estao aqui.
+ * Etapa 39 (RN-39.01): as 9 condicoes comerciais do documento da Etapa 32 entram na MESMA lista e
+ * pela MESMA regra de `camposDoCabecalho` (ausente nao mexe; `''` grava vazio; `null` nao mexe).
+ */
+const CONDICOES_COMERCIAIS = [
+  'condicao_pagamento', 'frete_modalidade', 'transportadora', 'transportadora_telefone',
+  'via_transporte', 'tabela_preco', 'contato', 'local_entrega', 'local_cobranca',
+];
+const COLUNAS_CABECALHO = ['data_pedido', 'previsao_entrega', 'status', 'observacoes', ...CONDICOES_COMERCIAIS];
+
+/**
+ * Etapa 39 (RN-39.02) — os 3 encargos que entram na conta de `pedidoTotais` e sao gravados como
+ * colunas. Numericos, `Number(x) || 0` (o schema ja converteu `''`/`null` em 0 na porta HTTP; quem
+ * chama o servico direto — cotacao, importacao — nao os manda e cai em 0).
+ */
+const ENCARGOS = ['total_icms_st', 'valor_frete', 'total_desconto'];
+const encargosDoPayload = (dados, atual = {}) => Object.fromEntries(ENCARGOS.map((c) => [
+  c,
+  // AUSENTE no `PUT` mantem o gravado (mesma regra de `camposDoCabecalho`); presente sobrescreve.
+  dados[c] === undefined ? (Number(atual[c]) || 0) : (Number(dados[c]) || 0),
+]));
+
+/**
+ * Etapa 39 (RN-39.04, B21) — o SNAPSHOT fiscal do fornecedor: 10 colunas `snap_fornecedor_*`
+ * gravadas a partir de `fornecedores` no momento da emissao. Pedido e DOCUMENTO: mudar o cadastro
+ * em 2027 nao pode reescrever o pedido de 2025. Mapa `coluna do pedido -> coluna do fornecedor`.
+ * `celular` e novo em relacao a 32 (la vinha do JOIN vivo mesmo com snapshot — um pedido impresso
+ * depois da troca de celular do vendedor mostraria o numero novo).
+ */
+const SNAPSHOT_FORNECEDOR = {
+  snap_fornecedor_nome: 'razao_social',
+  snap_fornecedor_cnpj: 'cnpj',
+  snap_fornecedor_ie: 'inscricao_estadual',
+  snap_fornecedor_endereco: 'endereco',
+  snap_fornecedor_municipio: 'cidade',
+  snap_fornecedor_uf: 'estado',
+  snap_fornecedor_cep: 'cep',
+  snap_fornecedor_telefone: 'telefone',
+  snap_fornecedor_celular: 'celular',
+  snap_fornecedor_email: 'email',
+};
+const COLUNAS_SNAPSHOT = Object.keys(SNAPSHOT_FORNECEDOR);
+
+/** Le o fornecedor e devolve `{ snap_fornecedor_nome: …, … }` pronto para o INSERT/UPDATE. */
+async function lerSnapshotFornecedor(db, fornecedorId) {
+  const f = await dbGet(db, `SELECT ${[...new Set(Object.values(SNAPSHOT_FORNECEDOR))].join(', ')}
+    FROM fornecedores WHERE id = ?`, [fornecedorId]);
+  const snap = {};
+  for (const [col, origem] of Object.entries(SNAPSHOT_FORNECEDOR)) snap[col] = (f && f[origem]) || null;
+  return snap;
+}
+
+/** Um pedido "tem snapshot" quando nome OU cnpj foram gravados (mesma regua da leitura). */
+const temSnapshot = (p) => !!(p && (p.snap_fornecedor_nome || p.snap_fornecedor_cnpj));
 
 /** As duas colunas `DATE` do cabecalho — ver `camposDoCabecalho`. */
 const COLUNAS_DATA = ['data_pedido', 'previsao_entrega'];
@@ -260,19 +320,126 @@ async function assertFornecedor(db, fornecedorId) {
 }
 
 /**
+ * O `SELECT` do cabecalho com o cadastro VIVO do fornecedor em aliases `forn_*` (Etapa 39).
+ * Prefixo de proposito: `f.razao_social AS fornecedor_nome` continua (contrato afirmado em
+ * `comprasPedidoEditarExcluir:194` e lido por `PedidoCompraForm.js:200`), mas os demais campos do
+ * JOIN NAO podem colidir com as colunas `snap_fornecedor_*` que vem em `p.*`.
+ */
+const SQL_PEDIDO = `SELECT p.*, f.razao_social AS fornecedor_nome,
+    f.razao_social       AS forn_razao_social,
+    f.cnpj               AS forn_cnpj,
+    f.inscricao_estadual AS forn_ie,
+    f.endereco           AS forn_endereco,
+    f.cidade             AS forn_cidade,
+    f.estado             AS forn_estado,
+    f.cep                AS forn_cep,
+    f.telefone           AS forn_telefone,
+    f.celular            AS forn_celular,
+    f.email              AS forn_email
+  FROM pedidos_compra p
+  LEFT JOIN fornecedores f ON p.fornecedor_id = f.id
+  WHERE p.id = ?`;
+
+/**
+ * RN-39.03/RN-39.04 — o bloco `fornecedor` da leitura: o SNAPSHOT vence; ausente (pedido anterior a
+ * esta etapa, nunca editado) cai no cadastro vivo com `origem: 'cadastro'`. Resolvido AQUI, uma
+ * vez, para os DOIS leitores (`relerPedido` do comprador e `lerPedidoParaRecebimento` do
+ * almoxarife): quem consome recebe o bloco pronto e nao decide nada. Esta funcao e o UNICO
+ * implementador da resolucao snapshot x cadastro — revisao do plano: T3 nao pode criar um segundo.
+ */
+function montarFornecedor(p) {
+  if (temSnapshot(p)) {
+    return {
+      id: p.fornecedor_id,
+      nome: p.snap_fornecedor_nome,
+      cnpj: p.snap_fornecedor_cnpj,
+      ie: p.snap_fornecedor_ie,
+      endereco: p.snap_fornecedor_endereco,
+      municipio: p.snap_fornecedor_municipio,
+      uf: p.snap_fornecedor_uf,
+      cep: p.snap_fornecedor_cep,
+      telefone: p.snap_fornecedor_telefone,
+      celular: p.snap_fornecedor_celular,
+      email: p.snap_fornecedor_email,
+      origem: 'snapshot',
+    };
+  }
+  return {
+    id: p.fornecedor_id,
+    nome: p.forn_razao_social || null,
+    cnpj: p.forn_cnpj || null,
+    ie: p.forn_ie || null,
+    endereco: p.forn_endereco || null,
+    municipio: p.forn_cidade || null,
+    uf: p.forn_estado || null,
+    cep: p.forn_cep || null,
+    telefone: p.forn_telefone || null,
+    celular: p.forn_celular || null,
+    email: p.forn_email || null,
+    origem: 'cadastro',
+  };
+}
+
+/** Tira do cabecalho as colunas cruas de JOIN (`forn_*`) e de snapshot (`snap_fornecedor_*`). */
+function semColunasCruas(p) {
+  const limpo = {};
+  for (const k of Object.keys(p)) {
+    if (!k.startsWith('forn_') && !k.startsWith('snap_fornecedor_')) limpo[k] = p[k];
+  }
+  return limpo;
+}
+
+/**
  * Le o pedido com o `fornecedor_nome` e as linhas, no formato que a rota devolve e a tela consome.
- * `ORDER BY id` nas linhas: a ordem em que foram lancadas e a que o comprador digitou.
+ *
+ * Etapa 39 (RN-39.03): alem do que ja devolvia, cada linha ganha `item_numero`, `ncm`,
+ * `peso_unitario`, `ipi_percentual`, `observacao` e os DERIVADOS `valor_linha`/`ipi_linha`; o
+ * pedido ganha `totais{…}` (recalculados por `pedidoTotais` sobre as linhas lidas — a mesma conta
+ * que gravou, entao um pedido legado sem totais gravados nao sai com NaN) e `fornecedor{…}`
+ * (`montarFornecedor`). As 10 colunas cruas `snap_fornecedor_*` NAO saem na resposta.
+ * `ORDER BY item_numero, id`: a posicao que o comprador digitou; pedido legado sem `item_numero`
+ * (NULL ordena primeiro no SQLite, todos iguais) cai no `id`, que era a ordem de antes.
  */
 async function relerPedido(db, pedidoId) {
-  const pedido = await dbGet(db, `SELECT p.*, f.razao_social as fornecedor_nome
-    FROM pedidos_compra p
-    LEFT JOIN fornecedores f ON p.fornecedor_id = f.id
-    WHERE p.id = ?`, [pedidoId]);
+  const pedido = await dbGet(db, SQL_PEDIDO, [pedidoId]);
   if (!pedido) return null;
-  pedido.itens = await dbAll(db, `SELECT id, material_id, codigo, descricao, quantidade,
-      valor_unitario, unidade, quantidade_recebida
-    FROM itens_pedido_compra WHERE pedido_id = ? ORDER BY id`, [pedidoId]);
-  return pedido;
+  const linhas = await dbAll(db, `SELECT id, material_id, codigo, descricao, quantidade,
+      valor_unitario, unidade, quantidade_recebida,
+      item_numero, ncm, peso_unitario, ipi_percentual, observacao
+    FROM itens_pedido_compra WHERE pedido_id = ? ORDER BY item_numero, id`, [pedidoId]);
+  const { itens, totais } = calcularTotaisPedido(linhas, encargosDoPayload({}, pedido));
+  return {
+    ...semColunasCruas(pedido),
+    fornecedor: montarFornecedor(pedido),
+    itens,
+    totais,
+  };
+}
+
+/**
+ * Etapa 39 (RN-39.08, B22/B23) — a PROJECAO do pedido para o painel do RECEBIMENTO:
+ * `{ id, numero, status, data_pedido, previsao_entrega, fornecedor{…}, condicoes{…} }`.
+ *
+ * SEM `valor_unitario`, SEM `totais`, SEM `observacoes`, de proposito e com dono: a rota que a
+ * consome (`GET /almoxarifado/recebimentos-aux/pedidos-compra/:id`) tem so o gate do modulo, que
+ * alcanca PRODUCAO/CONSULTA — a Etapa 42 tirou o preco das `-aux` exatamente por isso, e
+ * `alertRegistry.js:751-760` classifica `observacoes` do pedido como negociacao com fornecedor,
+ * mesma classe. Quem recebe precisa saber de QUEM e COMO chega (fornecedor fiscal, transportadora,
+ * condicao, local de entrega), nao QUANTO custa. `null` quando o pedido nao existe — a rota
+ * responde o 404 com a literal existente.
+ */
+async function lerPedidoParaRecebimento(db, pedidoId) {
+  const p = await dbGet(db, SQL_PEDIDO, [pedidoId]);
+  if (!p) return null;
+  return {
+    id: p.id,
+    numero: p.numero,
+    status: p.status,
+    data_pedido: p.data_pedido,
+    previsao_entrega: p.previsao_entrega,
+    fornecedor: montarFornecedor(p),
+    condicoes: Object.fromEntries(CONDICOES_COMERCIAIS.map((c) => [c, p[c] == null ? null : p[c]])),
+  };
 }
 
 /**
@@ -292,8 +459,16 @@ async function resolverItens(db, itens) {
   const resolvidos = [];
   for (const item of itens) {
     const material = await dbGet(db,
-      'SELECT id, codigo, nome, descricao, unidade FROM materiais_almoxarifado WHERE id = ?', [item.material_id]);
+      'SELECT id, codigo, nome, descricao, unidade, ncm, peso_unitario FROM materiais_almoxarifado WHERE id = ?', [item.material_id]);
     if (!material) throw erro('Material não encontrado');
+    // Etapa 39 (RN-39.01): `ncm` e `peso_unitario` NASCEM do material; so valor PREENCHIDO na linha
+    // sobrescreve (`''`/`null`/ausente = o do cadastro). `ipi_percentual` e 0 por padrao e
+    // `observacao` e texto livre da linha. `item_numero` NAO e resolvido aqui: e a POSICAO, atribuida
+    // por `inserirLinhasDoPedido` — um `item_numero` vindo do payload e ignorado por construcao.
+    // A cotacao reusa esta funcao e o INSERT dela lista colunas explicitas, entao as chaves novas
+    // nao a alcancam (conferido: `cotacaoService.gravarItens`).
+    const ncmInformado = item.ncm != null && String(item.ncm).trim() !== '';
+    const pesoInformado = item.peso_unitario != null && item.peso_unitario !== '' && Number.isFinite(Number(item.peso_unitario));
     resolvidos.push({
       material_id: material.id,
       codigo: material.codigo || null,
@@ -301,9 +476,48 @@ async function resolverItens(db, itens) {
       unidade: material.unidade || 'UN',
       quantidade: item.quantidade,
       valor_unitario: item.valor_unitario == null ? 0 : item.valor_unitario,
+      ncm: ncmInformado ? String(item.ncm).trim() : (material.ncm || null),
+      peso_unitario: pesoInformado ? Number(item.peso_unitario) : (material.peso_unitario == null ? null : material.peso_unitario),
+      ipi_percentual: Number(item.ipi_percentual) || 0,
+      observacao: item.observacao == null || item.observacao === '' ? null : String(item.observacao),
     });
   }
   return resolvidos;
+}
+
+/**
+ * Etapa 39 — grava as linhas do pedido com `item_numero` = POSICAO (1..n), nunca do payload.
+ * UMA funcao para o `POST` e o `PUT` de proposito: duas listas de colunas divergiriam na primeira
+ * edicao (e foi assim que `ncm`/`ipi` sumiram no merge B18 sem ninguem notar).
+ *
+ * ⚠️ `quantidade_recebida` NAO esta na lista de colunas (decisao 3 do cabecalho): nasce 0 pelo
+ * DEFAULT do DDL da Etapa 37. Nao "simplifique" o INSERT incluindo a coluna.
+ */
+async function inserirLinhasDoPedido(db, pedidoId, itensResolvidos) {
+  for (let i = 0; i < itensResolvidos.length; i++) {
+    const item = itensResolvidos[i];
+    await dbRun(db, `INSERT INTO itens_pedido_compra
+      (pedido_id, material_id, codigo, descricao, quantidade, valor_unitario, unidade,
+       item_numero, ncm, peso_unitario, ipi_percentual, observacao)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [pedidoId, item.material_id, item.codigo, item.descricao, item.quantidade, item.valor_unitario, item.unidade,
+      i + 1, item.ncm, item.peso_unitario, item.ipi_percentual, item.observacao]);
+  }
+}
+
+/**
+ * Etapa 39 (RN-39.02, RN-10 da 32) — grava os 5 totais e `valor_total` = `total_geral`.
+ * `valor_total` continua sendo a coluna que a lista de Compras (`Compras.js`) le; sem o espelho todo
+ * pedido novo apareceria como R$ 0,00 la. Devolve os totais para quem quiser afirmar.
+ */
+async function gravarTotais(db, pedidoId, itensResolvidos, encargos) {
+  const { totais } = calcularTotaisPedido(itensResolvidos, encargos);
+  await dbRun(db, `UPDATE pedidos_compra
+    SET total_produtos = ?, total_ipi = ?, total_icms_st = ?, total_desconto = ?, valor_frete = ?, valor_total = ?
+    WHERE id = ?`,
+  [totais.total_produtos, totais.total_ipi, totais.total_icms_st, totais.total_desconto, totais.valor_frete,
+    totais.total_geral, pedidoId]);
+  return totais;
 }
 
 /**
@@ -334,6 +548,12 @@ async function criarPedido(db, dados, user) {
   const colunas = ['numero', 'fornecedor_id'];
   const valores = [null, dados.fornecedor_id];
   for (const [col, valor] of camposDoCabecalho(dados)) { colunas.push(col); valores.push(valor); }
+  // Etapa 39 (RN-39.04): o SNAPSHOT fiscal entra no MESMO INSERT do cabecalho — e no SERVICO, nao
+  // na rota como a 32 fazia, para que a cotacao (`gerarPedidoDaCotacao`) e a importacao por
+  // planilha, que chamam `criarPedido` direto, tambem emitam pedido com o fiscal congelado.
+  for (const [col, valor] of Object.entries(await lerSnapshotFornecedor(db, dados.fornecedor_id))) {
+    colunas.push(col); valores.push(valor);
+  }
 
   // O `numero` e gerado DENTRO do retry (Etapa 31): o `fn` contem APENAS o INSERT do cabecalho, e
   // nada e escrito entre a geracao e ele — se o UNIQUE recusar, a tentativa seguinte repete o
@@ -344,20 +564,18 @@ async function criarPedido(db, dados, user) {
   });
   const pedidoId = resultado.lastID;
 
-  // ⚠️ O LACO QUE A ETAPA INTEIRA EXISTE PARA GARANTIR. O modo de falha desta etapa e o `201 ok`
-  // com o pedido VAZIO: sem estas linhas a porta responde criado e o recebimento nao encontra nada
-  // para receber. `quantidade_recebida` NAO esta na lista de colunas, de proposito (decisao 3 do
+  // ⚠️ O LACO QUE A ETAPA INTEIRA EXISTE PARA GARANTIR (vive em `inserirLinhasDoPedido` desde a
+  // Etapa 39, compartilhado com o `PUT`). O modo de falha desta etapa e o `201 ok` com o pedido
+  // VAZIO: sem estas linhas a porta responde criado e o recebimento nao encontra nada para
+  // receber. `quantidade_recebida` NAO esta na lista de colunas, de proposito (decisao 3 do
   // cabecalho) — ela nasce 0 pelo DEFAULT do DDL da Etapa 37.
-  for (const item of itensResolvidos) {
-    await dbRun(db, `INSERT INTO itens_pedido_compra
-      (pedido_id, material_id, codigo, descricao, quantidade, valor_unitario, unidade)
-      VALUES (?,?,?,?,?,?,?)`,
-    [pedidoId, item.material_id, item.codigo, item.descricao, item.quantidade, item.valor_unitario, item.unidade]);
-  }
+  await inserirLinhasDoPedido(db, pedidoId, itensResolvidos);
 
-  // `valor_total` DERIVADO — a soma das linhas que acabaram de entrar, nunca o do payload.
-  const total = itensResolvidos.reduce((soma, i) => soma + (i.quantidade * i.valor_unitario), 0);
-  await dbRun(db, 'UPDATE pedidos_compra SET valor_total = ? WHERE id = ?', [total, pedidoId]);
+  // `valor_total` DERIVADO — nunca o do payload. Etapa 39 (RN-39.02): a conta e a de
+  // `pedidoTotais` (linha arredondada ANTES de somar, IPI por linha, encargos) e `valor_total` e o
+  // espelho de `total_geral`. Pedido sem IPI e sem encargos (cotacao, importacao) da o MESMO
+  // numero de antes ate o centavo — o que muda e so alem da 2a casa (ex. 49 x 0.1063).
+  await gravarTotais(db, pedidoId, itensResolvidos, encargosDoPayload(dados));
 
   const pedido = await relerPedido(db, pedidoId);
 
@@ -507,7 +725,10 @@ async function alterarStatusPedido(db, pedidoId, status, user = null) {
  * seguro exatamente porque a regua acima ja garantiu que **nao havia** recebimento nenhum.
  */
 async function atualizarPedido(db, pedidoId, dados) {
-  const pedido = await dbGet(db, 'SELECT id, numero FROM pedidos_compra WHERE id = ?', [pedidoId]);
+  // Etapa 39 (RN-39.04): o `SELECT` passa a ler `fornecedor_id` atual, o snapshot e os encargos —
+  // e o que decide se o snapshot e reescrito e o que preserva um encargo ausente no payload.
+  const pedido = await dbGet(db, `SELECT id, numero, fornecedor_id, snap_fornecedor_nome, snap_fornecedor_cnpj,
+    total_icms_st, valor_frete, total_desconto FROM pedidos_compra WHERE id = ?`, [pedidoId]);
   if (!pedido) throw erro(PEDIDO_NAO_ENCONTRADO, 404);
 
   const linhaRecebida = await linhaComRecebimento(db, pedido.id);
@@ -520,8 +741,15 @@ async function atualizarPedido(db, pedidoId, dados) {
   const sets = ['fornecedor_id = ?'];
   const valores = [dados.fornecedor_id];
   for (const [col, valor] of camposDoCabecalho(dados)) { sets.push(`${col} = ?`); valores.push(valor); }
-  const total = itensResolvidos.reduce((soma, i) => soma + (i.quantidade * i.valor_unitario), 0);
-  sets.push('valor_total = ?'); valores.push(total);
+  // Etapa 39 (B21): o snapshot e REESCRITO se o fornecedor mudou (a 32 nunca reescrevia — um pedido
+  // editado para outro fornecedor imprimiria o fiscal do antigo) OU se esta nulo (pedido legado
+  // editado deixa de ficar `origem:'cadastro'` para sempre). Editar sem trocar o fornecedor NAO
+  // toca o snapshot: renomear o fornecedor entre a emissao e a edicao nao altera o documento.
+  if (Number(dados.fornecedor_id) !== Number(pedido.fornecedor_id) || !temSnapshot(pedido)) {
+    for (const [col, valor] of Object.entries(await lerSnapshotFornecedor(db, dados.fornecedor_id))) {
+      sets.push(`${col} = ?`); valores.push(valor);
+    }
+  }
   sets.push('updated_at = CURRENT_TIMESTAMP');
   valores.push(pedido.id);
   await dbRun(db, `UPDATE pedidos_compra SET ${sets.join(', ')} WHERE id = ?`, valores);
@@ -529,12 +757,10 @@ async function atualizarPedido(db, pedidoId, dados) {
   // SUBSTITUICAO, nao merge: a tela manda a lista inteira e um `UPDATE` linha a linha exigiria que
   // o client mandasse os ids e acertasse o que sumiu — e um item removido na tela ficaria no banco.
   await dbRun(db, 'DELETE FROM itens_pedido_compra WHERE pedido_id = ?', [pedido.id]);
-  for (const item of itensResolvidos) {
-    await dbRun(db, `INSERT INTO itens_pedido_compra
-      (pedido_id, material_id, codigo, descricao, quantidade, valor_unitario, unidade)
-      VALUES (?,?,?,?,?,?,?)`,
-    [pedido.id, item.material_id, item.codigo, item.descricao, item.quantidade, item.valor_unitario, item.unidade]);
-  }
+  await inserirLinhasDoPedido(db, pedido.id, itensResolvidos);
+  // Etapa 39 (RN-39.02): os totais pela mesma conta do `POST`; encargo AUSENTE no payload mantem o
+  // gravado (`encargosDoPayload`), presente sobrescreve.
+  await gravarTotais(db, pedido.id, itensResolvidos, encargosDoPayload(dados, pedido));
 
   return relerPedido(db, pedido.id);
 }
@@ -1077,4 +1303,10 @@ module.exports = {
   // linhas da cotacao ganham `codigo`/`descricao`/`unidade` copiados do material pela MESMA regra
   // do pedido (a conversao copia sem renomear).
   resolverItens,
+  // Etapa 39: a projecao do pedido para o painel do recebimento (rota `-aux` em `extended.js`) e
+  // o resolvedor UNICO de snapshot x cadastro.
+  lerPedidoParaRecebimento,
+  montarFornecedor,
+  CONDICOES_COMERCIAIS,
+  COLUNAS_SNAPSHOT,
 };

@@ -111,11 +111,69 @@ const dataIsoOpcional = (msg) => z.preprocess(
  * preco da linha quando o payload omite e o `custo_unitario` so viaja quando `> 0`, entao o custo
  * medio do material deixa de ser alimentado. Quem avisa e a tela (Task 5); aqui nao se recusa.
  */
+/**
+ * ── Etapa 39 (RN-39.01) — o DOCUMENTO do pedido: as chaves da Etapa 32 voltam, todas OPCIONAIS ──
+ *
+ * Por item: `ipi_percentual` (0–100, literal propria nos DOIS lugares — armadilha 2), `ncm`
+ * (string ate 10, o NCM tem 8 digitos e a tela pode mandar com pontos), `peso_unitario` (>= 0)
+ * e `observacao`. `''` e `null` em `ncm`/`peso_unitario` PASSAM e viram `null` — e o contrato da
+ * RN-39.01: "ausente/vazio = o do material", e quem resolve isso e `resolverItens`, nao o schema.
+ * `''`/`null` em `ipi_percentual` viram `undefined` (-> 0 no servico): o chip "0" e o campo vazio
+ * sao o mesmo gesto. `item_numero` NAO esta aqui de proposito: e a posicao, atribuida pelo
+ * servidor; o `looseObject` o deixa passar e o servico o IGNORA (cenario proprio no teste).
+ *
+ * No cabecalho: as 9 condicoes comerciais como `textoOpcional` (trim, `''` passa — limpar um campo
+ * pela tela e grava-lo vazio, mesma regra de `observacoes`) e os 3 encargos como numero >= 0, com
+ * `''`/`null` -> 0 (o `<input type="number">` limpo manda `''`, e frete limpo e frete zero).
+ *
+ * ⚠️ Continua SEM coercao de string numerica (`'6.5'` e recusado), pela mesma razao do cabecalho
+ * deste arquivo: o formulario coage com `Number()` antes do POST.
+ */
+const IPI_PERCENTUAL_INVALIDO = 'ipi_percentual deve estar entre 0 e 100';
+const PESO_UNITARIO_NEGATIVO = 'peso_unitario não pode ser negativo';
+const NCM_INVALIDO = 'ncm deve ter no máximo 10 caracteres';
+const ENCARGO_NEGATIVO = (campo) => `${campo} não pode ser negativo`;
+
+const vazioParaNull = (v) => (v === '' || v === undefined ? null : v);
+const vazioParaUndefined = (v) => (v === '' || v === null ? undefined : v);
+
+const ipiPercentualOpcional = z.preprocess(
+  vazioParaUndefined,
+  z.number({ error: IPI_PERCENTUAL_INVALIDO }).min(0, IPI_PERCENTUAL_INVALIDO).max(100, IPI_PERCENTUAL_INVALIDO).optional(),
+);
+const pesoUnitarioOpcional = z.preprocess(
+  vazioParaNull,
+  z.union([z.null(), z.number({ error: PESO_UNITARIO_NEGATIVO }).min(0, PESO_UNITARIO_NEGATIVO)], { error: PESO_UNITARIO_NEGATIVO }),
+).optional();
+const ncmOpcional = z.preprocess(
+  (v) => (v == null || v === '' ? null : String(v).trim()),
+  z.union([z.null(), z.string().max(10, NCM_INVALIDO)], { error: NCM_INVALIDO }),
+).optional();
+const encargoOpcional = (campo) => z.preprocess(
+  (v) => (v === '' || v === null ? 0 : v),
+  z.number({ error: ENCARGO_NEGATIVO(campo) }).min(0, ENCARGO_NEGATIVO(campo)),
+).optional();
+
 const PedidoCompraItemSchema = z.looseObject({
   material_id: z.number({ error: MATERIAL_ITEM_OBRIGATORIO }).int(MATERIAL_ITEM_OBRIGATORIO).positive(MATERIAL_ITEM_OBRIGATORIO),
   quantidade: z.number({ error: QTD_ITEM_PEDIDO_INVALIDA }).gt(0, QTD_ITEM_PEDIDO_INVALIDA),
   valor_unitario: z.number({ error: VALOR_UNITARIO_ITEM_NEGATIVO }).min(0, VALOR_UNITARIO_ITEM_NEGATIVO).optional(),
+  // Etapa 39 (RN-39.01)
+  ipi_percentual: ipiPercentualOpcional,
+  ncm: ncmOpcional,
+  peso_unitario: pesoUnitarioOpcional,
+  observacao: z.preprocess((v) => (v == null ? null : String(v)), z.string().nullable()).optional(),
 });
+
+/** As 9 condicoes comerciais do cabecalho (Etapa 32, de volta na 39). Mesma lista do servico. */
+const CONDICOES_COMERCIAIS = [
+  'condicao_pagamento', 'frete_modalidade', 'transportadora', 'transportadora_telefone',
+  'via_transporte', 'tabela_preco', 'contato', 'local_entrega', 'local_cobranca',
+];
+const textoCabecalhoOpcional = z.preprocess(
+  (v) => (v == null ? null : String(v).trim()),
+  z.string().nullable(),
+).optional();
 
 const PedidoCompraCreateSchema = z.looseObject({
   fornecedor_id: z.number({ error: FORNECEDOR_PEDIDO_OBRIGATORIO }).int(FORNECEDOR_PEDIDO_OBRIGATORIO).positive(FORNECEDOR_PEDIDO_OBRIGATORIO),
@@ -125,6 +183,49 @@ const PedidoCompraCreateSchema = z.looseObject({
   data_pedido: dataIsoOpcional(DATA_PEDIDO_INVALIDA),
   previsao_entrega: dataIsoOpcional(PREVISAO_ENTREGA_INVALIDA),
   itens: z.array(PedidoCompraItemSchema, { error: ITENS_PEDIDO_VAZIO }).min(1, ITENS_PEDIDO_VAZIO),
+  // Etapa 39 (RN-39.01): condicoes comerciais e encargos, todos opcionais.
+  ...Object.fromEntries(CONDICOES_COMERCIAIS.map((c) => [c, textoCabecalhoOpcional])),
+  total_icms_st: encargoOpcional('total_icms_st'),
+  valor_frete: encargoOpcional('valor_frete'),
+  total_desconto: encargoOpcional('total_desconto'),
+});
+
+/**
+ * Etapa 39 (RN-39.05) — o corpo de `POST /api/compras/pedidos/calcular`: CALCULADORA, nao porta de
+ * gravacao, e por isso um schema TOLERANTE proprio em vez do `PedidoCompraCreateSchema`.
+ *
+ * O motivo e de tela: o formulario chama `/calcular` num debounce a cada tecla, e limpar o campo
+ * quantidade para digitar outro numero manda `quantidade: ''` — com o schema de gravacao isso daria
+ * 400 a cada tecla e o bloco "Total" piscaria erro enquanto o comprador digita. Aqui: `itens` que
+ * nao e array vira `[]`; `quantidade`, `valor_unitario` e os 3 encargos aceitam qualquer coisa e o
+ * que nao e numero finito >= 0 vira 0 (`''`, `null`, `'abc'`, negativo); `material_id` e opcional
+ * e nao e validado (a previa nao resolve material). A UNICA recusa e `ipi_percentual` fora de
+ * 0–100, com a MESMA literal da gravacao — um IPI de 101% nao e "ainda digitando", e errado, e a
+ * previa que o aceitasse mostraria um total que o POST depois recusa.
+ */
+const numeroTolerante = z.preprocess((v) => {
+  if (v === '' || v === null || v === undefined) return 0;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}, z.number());
+
+const ipiTolerante = z.preprocess((v) => {
+  if (v === '' || v === null || v === undefined) return 0;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}, z.number({ error: IPI_PERCENTUAL_INVALIDO }).min(0, IPI_PERCENTUAL_INVALIDO).max(100, IPI_PERCENTUAL_INVALIDO));
+
+const PedidoCalcularItemSchema = z.looseObject({
+  quantidade: numeroTolerante,
+  valor_unitario: numeroTolerante,
+  ipi_percentual: ipiTolerante,
+});
+
+const PedidoCalcularSchema = z.looseObject({
+  itens: z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(PedidoCalcularItemSchema)),
+  total_icms_st: numeroTolerante,
+  valor_frete: numeroTolerante,
+  total_desconto: numeroTolerante,
 });
 
 /**
@@ -258,6 +359,12 @@ module.exports = {
   STATUS_PEDIDO_INVALIDO,
   PREVISAO_ENTREGA_INVALIDA,
   DATA_PEDIDO_INVALIDA,
+  // Etapa 39 (RN-39.01/RN-39.05): o documento do pedido e a calculadora.
+  PedidoCalcularSchema,
+  CONDICOES_COMERCIAIS,
+  IPI_PERCENTUAL_INVALIDO,
+  PESO_UNITARIO_NEGATIVO,
+  NCM_INVALIDO,
   // Etapa 40, Task 1 — os 13 nomes que T2 (fornecedor), T3 (cotacao) e T6 importam.
   FornecedorSchema,
   CotacaoSchema,

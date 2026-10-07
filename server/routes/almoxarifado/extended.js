@@ -53,6 +53,9 @@ const reservationService = require('../../services/almoxarifado/reservationServi
 // fazem monkeypatch de `recalcularRequisicoesDasReservas`/`recalcularStatusSobTrava`).
 const reservaChegadaService = require('../../services/almoxarifado/reservaChegadaService');
 const receiptService = require('../../services/almoxarifado/receiptService');
+// Etapa 39 (RN-39.08): o painel do pedido no recebimento le a projecao do modulo CORE Compras
+// (`lerPedidoParaRecebimento`) — um unico resolvedor de snapshot x cadastro, nao uma copia aqui.
+const pedidoCompraService = require('../../services/compras/pedidoCompraService');
 const inspectionService = require('../../services/almoxarifado/inspectionService');
 // Etapa 43: a nao conformidade numerada. O servico ja valida enum, id e estado, e lanca com
 // `.status` + a mensagem literal do contrato — as rotas abaixo NAO revalidam nada (duplicar a
@@ -1368,6 +1371,27 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       // 200 de proposito: nao e erro, e a informacao de que nao ha o que receber.
       if (itens === null) return res.status(404).json({ error: 'Pedido de compra não encontrado' });
       res.json(itens);
+    } catch (e) { handleError(res, e); }
+  });
+
+  // Etapa 39 (RN-39.08, B22/B23): o PAINEL do pedido no recebimento — `{ id, numero, status,
+  // data_pedido, previsao_entrega, fornecedor{nome, cnpj, ie, endereco, municipio, uf, cep,
+  // telefone, celular, email, origem}, condicoes{condicao_pagamento, frete_modalidade,
+  // transportadora, transportadora_telefone, via_transporte, tabela_preco, contato, local_entrega,
+  // local_cobranca} }`. SEM itens, SEM `valor_unitario`, SEM `totais`, SEM `observacoes`: esta rota
+  // tem so `auth` + o gate do modulo (`routes/almoxarifado.js:282-285`), que alcanca PRODUCAO e
+  // CONSULTA — a Etapa 42 tirou o preco das `-aux` por isso, e `observacoes` do pedido e negociacao
+  // com fornecedor (`alertRegistry.js:751-760`), mesma classe. A projecao vem de
+  // `pedidoCompraService.lerPedidoParaRecebimento` (modulo CORE lendo a propria tabela), que e o
+  // implementador UNICO da resolucao snapshot x cadastro — nao ha segundo resolvedor aqui.
+  // Registrada DEPOIS de `/:id/itens` (ordem de registro e comportamento no Express: antes dela,
+  // `/7/itens` nao casaria `/:id`, mas a ordem fica explicita para quem ler). 404 com a MESMA
+  // literal da rota de itens e do POST.
+  app.get('/api/almoxarifado/recebimentos-aux/pedidos-compra/:id', auth, async (req, res) => {
+    try {
+      const pedido = await pedidoCompraService.lerPedidoParaRecebimento(db, req.params.id);
+      if (!pedido) return res.status(404).json({ error: 'Pedido de compra não encontrado' });
+      res.json(pedido);
     } catch (e) { handleError(res, e); }
   });
 

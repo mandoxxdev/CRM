@@ -1755,6 +1755,18 @@ async function initSchema(db) {
   // `NOT NULL` sem default faria o ALTER FALHAR em banco de producao com linhas.
   const itensPedidoCols = [
     'quantidade_recebida REAL DEFAULT 0',
+    // Etapa 39 (B20): as 5 colunas de LINHA do documento que a Etapa 32 da main tinha e o merge
+    // B18 descartou — producao ja as tem fisicamente com estes nomes (o `safeAlter` ignora o
+    // duplicate). `item_numero` e a posicao 1..n atribuida pelo servidor (RN-39.01); `ncm` e
+    // `peso_unitario` nascem do material e podem ser sobrescritos por linha; `ipi_percentual`
+    // alimenta `ipi_linha` em `pedidoTotais.js`. `data_entrega` por item NAO volta (decisao da
+    // Etapa 33: a entrega e do pedido, `previsao_entrega`). Vivem aqui e nao em `index.js` porque
+    // `initSchema` roda no harness — chegam a toda suite sem stub.
+    'item_numero INTEGER',
+    'ncm TEXT',
+    'peso_unitario REAL',
+    'ipi_percentual REAL DEFAULT 0',
+    'observacao TEXT',
   ];
   for (const col of itensPedidoCols) await safeAlter(db, `ALTER TABLE itens_pedido_compra ADD COLUMN ${col}`);
   // Indice em `pedido_id`: a tabela nao tinha NENHUM indice, e a partir desta etapa toda leitura

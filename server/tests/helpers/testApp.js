@@ -114,7 +114,34 @@ async function createTestApp(options = {}) {
     status TEXT DEFAULT 'pendente',
     observacoes TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    -- Etapa 39 (B20): as 24 colunas de ALTERS_PEDIDOS_COMPRA do index.js (9 condicoes, 5 totais,
+    -- 10 snap_fornecedor_*). Mesma forma de producao; sem elas o INSERT do servico morreria aqui
+    -- com "no column named" — erro que nao existe em producao.
+    condicao_pagamento TEXT,
+    frete_modalidade TEXT,
+    transportadora TEXT,
+    transportadora_telefone TEXT,
+    via_transporte TEXT,
+    tabela_preco TEXT,
+    contato TEXT,
+    local_entrega TEXT,
+    local_cobranca TEXT,
+    total_produtos REAL DEFAULT 0,
+    total_ipi REAL DEFAULT 0,
+    total_icms_st REAL DEFAULT 0,
+    total_desconto REAL DEFAULT 0,
+    valor_frete REAL DEFAULT 0,
+    snap_fornecedor_nome TEXT,
+    snap_fornecedor_cnpj TEXT,
+    snap_fornecedor_ie TEXT,
+    snap_fornecedor_endereco TEXT,
+    snap_fornecedor_municipio TEXT,
+    snap_fornecedor_uf TEXT,
+    snap_fornecedor_cep TEXT,
+    snap_fornecedor_telefone TEXT,
+    snap_fornecedor_email TEXT,
+    snap_fornecedor_celular TEXT
   )`);
 
   // `cotacoes` é tabela CORE (`server/index.js:19244`). Entra no harness na Etapa 40 porque a

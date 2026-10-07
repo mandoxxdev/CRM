@@ -47,6 +47,28 @@ function ddlDe(arquivo, tabela) {
   assert.ok(fim > ini, `fim da DDL de ${tabela} nao encontrado em ${arquivo}`);
   return src.slice(ini, fim + 1);
 }
+/**
+ * Etapa 39: os ALTERs de PRODUCAO, lidos do array que os declara (`ALTERS_FORNECEDORES` e
+ * `ALTERS_PEDIDOS_COMPRA` em `index.js`, `itensPedidoCols` em `schema.js`). Ate a 39 este banco so
+ * aplicava os `CREATE` e um ALTER a mao (`quantidade_recebida`) — e passou a nao ser mais "a forma de
+ * producao" no instante em que os servicos tocaram colunas que la nascem de ALTER (`snap_fornecedor_*`,
+ * `inscricao_estadual`/`celular`, `item_numero`/`ncm`/…): os tres cenarios morriam com
+ * `no such column`, um erro que NAO existe em producao. Linhas de comentario sao descartadas antes de
+ * extrair as literais, para um `'` dentro de um comentario nao virar coluna.
+ */
+function altersDe(arquivo, nomeDoArray) {
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', arquivo), 'utf8');
+  const ini = src.indexOf(`${nomeDoArray} = [`);
+  assert.ok(ini >= 0, `array ${nomeDoArray} nao encontrado em ${arquivo}`);
+  const fim = src.indexOf('];', ini);
+  const corpo = src.slice(ini, fim).split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
+  const colunas = (corpo.match(/'([^']+)'/g) || []).map((s) => s.slice(1, -1));
+  assert.ok(colunas.length > 0, `array ${nomeDoArray} vazio em ${arquivo}`);
+  return colunas;
+}
+async function aplicarAlters(db, tabela, colunas) {
+  for (const col of colunas) await dbRun(db, `ALTER TABLE ${tabela} ADD COLUMN ${col}`);
+}
 const fkFalhou = (e) => e && /SQLITE_CONSTRAINT.*FOREIGN KEY/.test(e.message);
 /** Roda um SQL cru que a FK TEM de recusar — o controle positivo de cada cenario. */
 async function deveFalharPorFk(db, sql, params, rotulo) {
@@ -58,15 +80,22 @@ const fkCheck = (db) => dbAll(db, 'PRAGMA foreign_key_check');
 (async () => {
   const db = new sqlite3.Database(':memory:');
   await dbRun(db, ddlDe('index.js', 'fornecedores'));
+  // grupos_compras antes dos ALTERs: `grupo_id INTEGER REFERENCES grupos_compras(id)` com FK ON exige a tabela.
+  await dbRun(db, ddlDe('index.js', 'grupos_compras'));
+  await aplicarAlters(db, 'fornecedores', altersDe('index.js', 'ALTERS_FORNECEDORES'));
   await dbRun(db, ddlDe('index.js', 'pedidos_compra'));
+  // Etapa 39: as 24 colunas do documento (condicoes, totais, snap_fornecedor_*), como em producao.
+  await aplicarAlters(db, 'pedidos_compra', altersDe('index.js', 'ALTERS_PEDIDOS_COMPRA'));
   await dbRun(db, ddlDe('index.js', 'cotacoes'));
   // O mesmo ALTER de `index.js` (Etapa 41): e ELE que poe a FK `cotacoes.pedido_id -> pedidos_compra`.
   await dbRun(db, 'ALTER TABLE cotacoes ADD COLUMN pedido_id INTEGER REFERENCES pedidos_compra(id)');
+  // Minima, mas com as colunas que `resolverItens` LE (Etapa 39: `ncm`, `peso_unitario`).
   await dbRun(db, `CREATE TABLE materiais_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT, codigo TEXT UNIQUE NOT NULL, nome TEXT NOT NULL,
-    descricao TEXT, unidade TEXT DEFAULT 'UN', ativo INTEGER DEFAULT 1)`);
+    descricao TEXT, unidade TEXT DEFAULT 'UN', ativo INTEGER DEFAULT 1, ncm TEXT, peso_unitario REAL)`);
   await dbRun(db, ddlDe('services/almoxarifado/schema.js', 'itens_pedido_compra'));
-  await dbRun(db, 'ALTER TABLE itens_pedido_compra ADD COLUMN quantidade_recebida REAL DEFAULT 0');
+  // `quantidade_recebida` (Etapa 37) + as 5 colunas de linha da 39, do MESMO array do `safeAlter`.
+  await aplicarAlters(db, 'itens_pedido_compra', altersDe('services/almoxarifado/schema.js', 'itensPedidoCols'));
   await dbRun(db, ddlDe('services/almoxarifado/schema.js', 'itens_cotacao'));
   await dbRun(db, 'PRAGMA foreign_keys = ON');
   assert.strictEqual((await dbGet(db, 'PRAGMA foreign_keys')).foreign_keys, 1, 'PRAGMA foreign_keys nao ligou');

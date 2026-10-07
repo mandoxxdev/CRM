@@ -228,7 +228,8 @@ async function colunas(db, tabela) {
       const depois = await colunas(dbMigrado, 'itens_pedido_compra');
       assert.ok(depois.includes('quantidade_recebida'),
         `banco migrado nao ganhou a coluna — colunas: ${depois.join(', ')}`);
-      assert.strictEqual(depois.length, 9, `8 + 1 = 9 colunas, achei ${depois.length}`);
+      // Etapa 39: +5 colunas de linha (item_numero, ncm, peso_unitario, ipi_percentual, observacao) via safeAlter.
+      assert.strictEqual(depois.length, 14, `8 + 1 + 5 = 14 colunas, achei ${depois.length}`);
       const idx = (await dbAll(dbMigrado, 'PRAGMA index_list(itens_pedido_compra)')).map((i) => i.name);
       assert.ok(idx.includes('idx_itens_pedido_compra_pedido'), 'banco migrado nao ganhou o indice');
     } finally {
