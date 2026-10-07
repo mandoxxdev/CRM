@@ -19581,6 +19581,40 @@ db.run(`CREATE TABLE IF NOT EXISTS fornecedores (
   });
 });
 
+// Etapa 39 (B20): o DOCUMENTO do pedido de compra — as 24 colunas que a Etapa 32 da main tinha e o
+// merge B18 descartou (producao JA as tem fisicamente, com estes mesmos nomes; o ALTER e no-op la e
+// cria em banco novo). Tres grupos: 9 condicoes comerciais do cabecalho (o que o fornecedor le no
+// papel), 5 totais gravados por `pedidoTotais.js` (RN-39.02 — `valor_total` continua sendo o
+// espelho de `total_geral`) e 10 `snap_fornecedor_*` (RN-39.04: o fiscal do fornecedor congelado
+// na emissao; `celular` e NOVA em relacao a 32 — B21). Mesmo padrao de `ALTERS_FORNECEDORES`:
+// no callback do CREATE (G6), 'duplicate' ignorado. O stub do harness (`tests/helpers/testApp.js`)
+// ganha as mesmas colunas a mao — este arquivo nao roda nos testes.
+const ALTERS_PEDIDOS_COMPRA = [
+  'condicao_pagamento TEXT',
+  'frete_modalidade TEXT',
+  'transportadora TEXT',
+  'transportadora_telefone TEXT',
+  'via_transporte TEXT',
+  'tabela_preco TEXT',
+  'contato TEXT',
+  'local_entrega TEXT',
+  'local_cobranca TEXT',
+  'total_produtos REAL DEFAULT 0',
+  'total_ipi REAL DEFAULT 0',
+  'total_icms_st REAL DEFAULT 0',
+  'total_desconto REAL DEFAULT 0',
+  'valor_frete REAL DEFAULT 0',
+  'snap_fornecedor_nome TEXT',
+  'snap_fornecedor_cnpj TEXT',
+  'snap_fornecedor_ie TEXT',
+  'snap_fornecedor_endereco TEXT',
+  'snap_fornecedor_municipio TEXT',
+  'snap_fornecedor_uf TEXT',
+  'snap_fornecedor_cep TEXT',
+  'snap_fornecedor_telefone TEXT',
+  'snap_fornecedor_email TEXT',
+  'snap_fornecedor_celular TEXT',
+];
 db.run(`CREATE TABLE IF NOT EXISTS pedidos_compra (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   numero TEXT UNIQUE,
@@ -19593,7 +19627,16 @@ db.run(`CREATE TABLE IF NOT EXISTS pedidos_compra (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (fornecedor_id) REFERENCES fornecedores(id)
-)`);
+)`, (errCreate) => {
+  if (errCreate) { console.error('Erro ao criar pedidos_compra:', errCreate.message); return; }
+  ALTERS_PEDIDOS_COMPRA.forEach((col) => {
+    db.run(`ALTER TABLE pedidos_compra ADD COLUMN ${col}`, (e) => {
+      if (e && e.message.indexOf('duplicate') === -1) {
+        console.error(`Erro ao adicionar ${col.split(' ')[0]} em pedidos_compra:`, e.message);
+      }
+    });
+  });
+});
 
 db.run(`CREATE TABLE IF NOT EXISTS cotacoes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
