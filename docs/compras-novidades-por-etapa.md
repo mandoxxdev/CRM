@@ -93,9 +93,10 @@
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
   Trocar é editar a constante `LEGENDA_ABC` em `MaterialAlmoxarifadoForm.js`.
-- **D-35b** — O fator de conversão é só informação (o sistema não converte quantidades ao receber
-  ou requisitar; o manual já dizia isso). Deve passar a converter? Se sim, é regra do motor de
-  estoque, etapa própria na branch do almoxarifado.
+- **D-35b — RESPONDIDA em 2026-10-07 pelo André: NÃO converte.** O time achou as legendas
+  confusas e não entendeu como funcionava. Resposta na **Etapa 38**: a tela deixa de falar em
+  "fator de conversão" e passa a perguntar em frase — *"Como é comprado: 1 CX contém [12] UN"* —
+  com a nota "o estoque conta sempre em UN". Mesma coluna no banco; só muda como se pergunta.
 - **D-36a — RESPONDIDA em 2026-10-07 pelo André: opção (ii), subfamílias na aba Famílias.**
   (Era: família × categoria — hoje a **família pertence a uma categoria** (`familia.categoria_id`)
   e a task 2 pedia o inverso.) Executada como **Etapa 37** — a aba *Famílias* ganha a árvore
