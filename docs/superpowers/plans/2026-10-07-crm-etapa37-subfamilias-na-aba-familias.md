@@ -64,8 +64,10 @@
   manda `{nome, descricao, tipo_uso}` (sem `parent_id` — o servidor preserva, `subfamilias.api.test.js:157`).
   Toast "Subfamília atualizada!".
 - **RN-37.04** Inativar subfamília: `window.confirm` com o nome, `DELETE /almoxarifado/familias/:id`;
-  o 400 do servidor ("possui N item(ns) ativo(s)") vai para toast como hoje. Inativar uma raiz com
-  subfamílias ativas: o servidor recusa com a literal existente — a tela **mostra** a literal.
+  o servidor passa a **recusar** subfamília com itens ativos (conta `familia_id = ? OR subfamilia_id
+  = ?` — hoje deixava passar e tornava os materiais dela ineditáveis), e o 400 ("possui N item(ns)
+  ativo(s)") vai para toast. Inativar uma raiz com subfamílias ativas: o servidor recusa com a
+  literal existente — a tela **mostra** a literal.
 - **RN-37.05** `GET /almoxarifado/familias` devolve `qtd_itens` certo para subfamília (materiais
   ativos com `subfamilia_id = f.id`); para raiz continua `familia_id = f.id` (inclui os das subs,
   como hoje). `GET /almoxarifado/familias/:id/itens` de uma subfamília devolve os materiais com
@@ -84,24 +86,31 @@
 
 | Rota | Mudança | Resposta |
 |---|---|---|
-| `GET /api/almoxarifado/familias[?ativo=…]` | `qtd_itens`: `CASE WHEN f.parent_id IS NULL THEN COUNT(familia_id=f.id) ELSE COUNT(subfamilia_id=f.id)` (materiais ativos) | mesmas chaves de hoje (`f.*`, `parent_nome`, `qtd_itens`) |
-| `GET /api/almoxarifado/familias/:id/itens` | se a família é subfamília, `WHERE m.subfamilia_id = ? AND m.ativo = 1`; senão como hoje | mesma projeção |
-| `GET /api/almoxarifado/materiais?subfamilia_id=N` | novo filtro `AND m.subfamilia_id = ?` (combinável com `familia_id`) | mesma projeção |
-| `POST`/`PUT`/`DELETE /familias` | **inalterados** | — |
+| `GET /api/almoxarifado/familias[?ativo=…]` **e** `GET /familias/:id` | `qtd_itens` = subquery correlacionada `COUNT(*) … WHERE m.ativo = 1 AND (m.familia_id = f.id OR m.subfamilia_id = f.id)` — as **duas** rotas têm a mesma subquery (`:2253-2257` e `:2269-2274`), manter iguais. (Revisão: a forma `OR` vale para raiz — `subfamilia_id = R` nunca ocorre — e, para sub, também conta material gravado pela API com `familia_id = S` direto, que o `CASE` deixaria fora.) | mesmas chaves de hoje (`f.*`, `parent_nome`, `qtd_itens`) |
+| `GET /api/almoxarifado/familias/:id/itens` | `WHERE (m.familia_id = ? OR m.subfamilia_id = ?) AND m.ativo = 1` com `[id, id]` — uma query só, sem `db.get` prévio; a projeção (`familia_nome` da raiz) continua certa | mesma projeção |
+| `GET /api/almoxarifado/materiais?subfamilia_id=N` | `subfamilia_id` entra na desestruturação de `req.query` (`:304`) e o `AND m.subfamilia_id = ?` (`parseInt`) logo após o bloco de `familia_id` (`:348-351`); a rota faz um único `db.all` (`:362`), sem `COUNT` separado | mesma projeção |
+| `DELETE /api/almoxarifado/familias/:id` | ⚠️ **muda** (achado da revisão do plano): a contagem de itens ativos (`:2423`) vira `(familia_id = ? OR subfamilia_id = ?)`. Hoje `DELETE /familias/S` com itens **passa** (eles têm `familia_id = R`), a sub some da árvore e todo material dela fica ineditável (400 "Subfamília inválida" em `validateSubfamilia`, que exige `ativo = 1`) | 400 com a literal existente `Não é possível remover: família possui N item(ns) ativo(s)` |
+| `POST`/`PUT /familias` | **inalterados** (`PUT ativo:0` não checa itens — a tela não usa; declarado em "não cobre") | — |
 
 Front: `TabFamilias` (`ConfiguracoesAlmoxarifado.js`), `MateriaisAlmoxarifado.js` (filtro),
 `MaterialAlmoxarifadoForm.js` (`?subfamilia_id`).
 
 ## Tasks
 
-**T1 — tronco (servidor, pequeno):** RN-37.05, 37.06. Teste primeiro em
-`server/tests/api/subfamilias.api.test.js` (acrescentar ao fim, mesmo runner): (a) material com
-`familia_id=R, subfamilia_id=S` → `GET /familias` traz `qtd_itens` 1 em R **e** 1 em S (hoje S = 0
-— controle positivo); (b) `GET /familias/S/itens` traz o material (hoje vazio); `GET /familias/R/itens`
-continua trazendo; (c) `GET /materiais?subfamilia_id=S` traz só ele; `?subfamilia_id=outra` vazio;
-(d) material sem subfamília não entra na contagem de S. Implementar em `routes/almoxarifado.js`
-(`:2251-2267`, `:2281-2294`, `:348-350`). Rodar `subfamilias`, `materialCompleto`,
-`materialServiceCriacao`, `conferenciaEscopo` (lê famílias) → verde.
+**T1 — tronco (servidor, pequeno):** RN-37.04 (metade servidor), 37.05, 37.06. Teste primeiro em
+`server/tests/api/subfamilias.api.test.js` (acrescentar ao fim, mesmo runner). ⚠️ O arquivo é
+sequencial com estado compartilhado — ao chegar no fim, `subA` já tem **2** materiais; os cenários
+novos criam **raiz e sub próprias** (como os testes de `:157` em diante fazem). Cenários: (a)
+material com `familia_id=R, subfamilia_id=S` → `GET /familias` traz `qtd_itens` 1 em R **e** 1 em S
+(hoje S = 0 — controle positivo), e `GET /familias/S` idem; (b) `GET /familias/S/itens` traz o
+material com `familia_nome` da raiz (hoje vazio); `GET /familias/R/itens` continua trazendo; (c)
+`GET /materiais?subfamilia_id=S` traz só ele; `?subfamilia_id=outra` vazio; combinado com
+`familia_id=R` idem; (d) material sem subfamília não entra na contagem de S; **(e) `DELETE
+/familias/S` com o material ativo → 400 com a literal "possui 1 item(ns) ativo(s)" e a sub continua
+`ativo = 1`** (hoje 200 — controle positivo); depois de inativar o material, o DELETE passa.
+Implementar em `routes/almoxarifado.js` (`:2253-2257`, `:2269-2274`, `:2282-2289`, `:304` + `:348-351`,
+`:2423`). Rodar `subfamilias`, `materialCompleto`, `materialServiceCriacao`, `conferenciaEscopo`
+(lê famílias) → verde.
 
 **T2 — galho (client, aba Famílias):** RN-37.01–37.04, 37.08. Teste primeiro, **novo**
 `client/src/components/almoxarifado/Familias.test.js` (montagem como `ConfiguracoesGerais.test.js`,
@@ -116,13 +125,38 @@ R" e sem campo de pai editável; salvar → `POST /almoxarifado/familias` com `p
 (g) criar família **raiz** continua igual (POST sem `parent_id`). Implementar em `TabFamilias`:
 `raizes = familias.filter(parent_id == null)`, `subsDe(id)`, estado `parentForm` (id da raiz ou
 null), form reutilizado; estilo inline no padrão da aba (sub-lista indentada 24px com borda
-esquerda `rgba(79,172,254,.25)`).
+esquerda `rgba(79,172,254,.25)`). ⚠️ Dois cuidados da revisão: (1) o cabeçalho do cartão da raiz
+é **inteiro clicável** (`:618-619`, expande/colapsa) e as ações param a propagação (`:642`) — a
+sub-lista fica **fora** desse div (irmã dele, dentro do cartão), senão clicar numa ação da sub
+expande a raiz; (2) celular (328px úteis): a linha da sub usa `flexWrap: 'wrap'` com as ações numa
+linha própria, e a área expandida da sub tem `paddingLeft: 24` (não os 48 da raiz, `:652`) — senão
+sobram ~86px para código+nome.
 
-**T3 — galho (client, Materiais):** RN-37.06 (filtro) e RN-37.07 (form). Testes: em
-`MaterialAlmoxarifadoForm.test.js` acrescentar "abre com `?familia_id=R&subfamilia_id=S`
-selecionados" e "S fora de R é ignorada"; em `MateriaisAlmoxarifado.test.js` (existe? se não,
-criar mínimo) "o filtro lista a árvore e escolher uma sub manda `subfamilia_id`". T2 e T3 tocam
-arquivos disjuntos; T3 só consome o contrato de T1 (mock do `api` no teste).
+**T3 — galho (client, Materiais):** RN-37.06 (filtro) e RN-37.07 (form).
+- Form (`MaterialAlmoxarifadoForm.js`): `subfamilia_id: searchParams.get('subfamilia_id') || ''`
+  em `:89`. A revisão traçou os efeitos: o valor **sobrevive** (não há `useEffect` que zere a sub —
+  `:385-390` é só o handler do `onChange`); quando `familias` chega, o select mostra S. Mas "S fora
+  de R → ignorada" **não acontece sozinho**: o select exibe "— nenhuma —" e o submit manda `S` →
+  400. Passo explícito: em `loadFamilias` (`:170-171`), depois do `setFamilias`, se `!isEdit` e o
+  `subfamilia_id` atual não estiver em `lista.filter(f => String(f.parent_id) === familia_id)`,
+  zerar. **Não** fazer num `useEffect([familias])` sem guarda — rodaria com a lista vazia e
+  apagaria o S válido antes da resposta. Testes em `MaterialAlmoxarifadoForm.test.js`: a fixture
+  (`:42`) só tem a raiz 5 — acrescentar `{id: 6, parent_id: 5}` e `{id: 8, parent_id: 7}` (sub de
+  outra raiz); criar variante de `renderizarNovo` (`:102-111`) com `?familia_id=5&subfamilia_id=6`:
+  (i) o select de subfamília mostra 6 e o `POST` manda `subfamilia_id: 6`; (ii) com
+  `?familia_id=5&subfamilia_id=8` o `POST` manda `subfamilia_id: null` — **afirmar o payload**, não o
+  que o select exibe (a exibição já parece certa hoje e aprovaria a implementação errada).
+- Filtro (`MateriaisAlmoxarifado.js`): o `<select>` guarda `String(f.id)` (`:204`) e `GET /familias`
+  já traz `parent_id`. Em `loadMateriais` (`:90-94`): `const fam = familias.find(f => String(f.id) ===
+  familiaFilter)`; `fam?.parent_id` → `params.familia_id = fam.parent_id; params.subfamilia_id = fam.id`;
+  senão `params.familia_id = familiaFilter`. **Sem state novo** (o reset `:213` e a condição `:212`
+  continuam valendo). Options: raízes por nome, cada uma seguida das subs com rótulo "— ⟨código⟩ ⟨nome⟩".
+  Teste em `MateriaisAlmoxarifado.test.js` (existe): mock de `/almoxarifado/familias` com raiz + sub,
+  escolher a sub → `api.get('/almoxarifado/materiais', { params: { familia_id: R, subfamilia_id: S } })`;
+  limpar o filtro → sem as duas chaves. Ressalva aceita: `?familia_id=<sub>` vindo da URL antes da
+  lista carregar manda só `familia_id` (zero linhas até mexer no filtro).
+T2 e T3 tocam arquivos disjuntos; T3 só consome o contrato de T1 (mock do `api` no teste). Mocks
+existentes de `GET /almoxarifado/familias` conferidos pela revisão: nenhum quebra.
 
 **T4 — integração e fechamento:** merge; suíte inteira (5 do servidor + jest + build); seção da
 Etapa 37 no `docs/compras-novidades-por-etapa.md` (roteiro: Configurações → Almoxarifado →
@@ -134,7 +168,16 @@ item de subfamílias; índice; retro.
 ## Pontos de atenção
 - `qtd_itens` da raiz **inclui** os materiais das subs (eles têm `familia_id` = raiz). Não "corrigir"
   isso: é o total da família, e é o que "Adicionar item"/código por prefixo assumem.
-- Gate dos testes de servidor: usuário com `is_superadmin` (como `subfamilias.api.test.js` faz).
+- Gate: `denyUnlessAlmoxAdmin` → `canConfigureAlmox` → `canConfigureModule` do servidor aceita
+  superadmin, `admin_modulos` com almoxarifado **ou `perfil_almoxarifado === 'ADMINISTRADOR'`**
+  (`systemPermissions.js:72-83`) — a frase "só `is_superadmin` passa" da Fase 0 estava mais
+  estrita que o real. Nos testes, `is_superadmin` (como o arquivo já usa) ou o perfil — os dois
+  passam no harness. `role:'admin'` sozinho vê a aba (client) e toma 403 ao salvar (G9).
+- O form de material, ao salvar, navega para `/almoxarifado/materiais` (`:461`), não de volta à
+  aba — o roteiro diz "voltar a Configurações → Almoxarifado → Famílias".
+- "Não cobre" (declarar no fechamento): mover sub entre raízes / raiz ↔ sub pela tela; `PUT
+  ativo:0` sem checar itens (a tela não usa); `TabMateriaisPorSetor` (`:3089-3107`) continua
+  listando famílias planas (sub como irmã); `?familia_id=<sub>` na URL de Materiais antes da lista.
 - `ConferenciaEstoque.js:705` filtra só raízes no escopo — não tocar.
 - `window.confirm` no teste: `jest.spyOn(window, 'confirm')`.
 - Não existe Zod de família — validação à mão na rota, como hoje; não criar.
