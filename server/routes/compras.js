@@ -57,8 +57,17 @@ const fs = require('fs');
 // NAO por copia (decisao 7 do design) — duplicar o formatador daria dois "Dados invalidos" que
 // divergiriam na primeira edicao.
 const { validate } = require('../services/almoxarifado/validation');
-const { PedidoCompraCreateSchema, PedidoStatusSchema, FornecedorSchema, CotacaoSchema } = require('../services/compras/schemas');
+const {
+  PedidoCompraCreateSchema, PedidoStatusSchema, FornecedorSchema, CotacaoSchema,
+  // Etapa 39 (RN-39.05): o schema TOLERANTE da calculadora — nunca o de gravacao (ver `/calcular`).
+  PedidoCalcularSchema,
+} = require('../services/compras/schemas');
 const pedidoCompraService = require('../services/compras/pedidoCompraService');
+// Etapa 39 (RN-39.02/RN-39.05/RN-39.06): a conta do documento e as opcoes do formulario, ambas da
+// Etapa 32 da main, restauradas apos o merge B18. `calcularTotaisPedido` e o implementador UNICO da
+// conta — a calculadora chama a MESMA funcao que `criarPedido` grava, e o teste afirma previa == gravado.
+const { calcularTotaisPedido } = require('../services/compras/pedidoTotais');
+const { carregarOpcoes } = require('../services/compras/opcoesPedido');
 // Etapa 40, Task 3: a cotacao ganha servico proprio (D9 do design), no molde do pedido.
 const cotacaoService = require('../services/compras/cotacaoService');
 // Etapa 38, Task 4: os 5 leitores de planilha sairam do escopo deste registrador para
@@ -112,9 +121,14 @@ app.get('/api/compras/fornecedores', authenticateToken, checkModulePermission('c
 // Pedidos de Compra
 app.get('/api/compras/pedidos', authenticateToken, checkModulePermission('compras'), (req, res) => {
   const { search, status } = req.query;
-  let query = `SELECT p.*, f.razao_social as fornecedor_nome 
-               FROM pedidos_compra p 
-               LEFT JOIN fornecedores f ON p.fornecedor_id = f.id 
+  // Etapa 39 (contrato da lista): `total_itens` (subquery) e `total_geral` (= `valor_total`, o
+  // espelho da RN-10) entram SEM renomear nada — `Compras.js` (lista e export) le `valor_total` e
+  // `fornecedor_nome`, e os dois continuam como estavam.
+  let query = `SELECT p.*, f.razao_social as fornecedor_nome,
+                      (SELECT COUNT(*) FROM itens_pedido_compra i WHERE i.pedido_id = p.id) AS total_itens,
+                      p.valor_total AS total_geral
+               FROM pedidos_compra p
+               LEFT JOIN fornecedores f ON p.fornecedor_id = f.id
                WHERE 1=1`;
   const params = [];
 
@@ -308,6 +322,45 @@ app.post('/api/compras/pedidos/importar', authenticateToken, checkModulePermissi
 app.get('/api/compras/materiais', authenticateToken, checkModulePermission('compras'), async (req, res) => {
   try {
     res.json(await pedidoCompraService.buscarMateriais(db, req.query.search));
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+/**
+ * Etapa 39 (RN-39.05) — a PREVIA dos totais, para o formulario mostrar o valor ANTES de salvar.
+ *
+ * Existe para que o navegador NAO reimplemente a conta (RN-14 da Etapa 32): `pedidoTotais` e o
+ * implementador unico da RN-03/04/05 e a ordem do arredondamento e normativa (cada linha arredonda
+ * antes de somar); uma segunda copia em JS do navegador divergiria em centavos do que o servidor
+ * grava — o comprador veria um total na tela e outro depois de salvar. O teste do documento afirma
+ * previa === gravado em 40 pedidos aleatorios.
+ *
+ * ⚠️ `validate(PedidoCalcularSchema)`, o schema TOLERANTE, e NAO o `PedidoCompraCreateSchema`: e
+ * calculadora, nao porta de gravacao. O form chama isto num debounce a cada tecla, e limpar o
+ * campo quantidade manda `''` — com o Zod de gravacao daria 400 a cada tecla. So `ipi_percentual`
+ * fora de 0–100 recusa (mesma literal da gravacao). Nao escreve nada.
+ *
+ * POSICAO: junto das outras de pedido, acima do generico `/:tipo/:id` (`POST` nao sofre o
+ * sombreamento, mas manter o bloco de pedido junto e contrato desde a Task 3 da 38).
+ */
+app.post('/api/compras/pedidos/calcular', authenticateToken, checkModulePermission('compras'),
+  validate(PedidoCalcularSchema), (req, res) => {
+    const { itens, totais } = calcularTotaisPedido(req.body.itens, req.body);
+    res.json({ itens, totais });
+  });
+
+/**
+ * Etapa 39 (RN-39.06) — as OPCOES do formulario de pedido, numa chamada so: listas fixas (6
+ * modalidades de frete SEFAZ, 14 condicoes, 5 vias, 14 unidades, IPI sugerido) UNIDAS ao `DISTINCT`
+ * do que ja foi usado (o que o comprador digita em "Outro" vira botao no proximo pedido) + dados da
+ * empresa. Sem `proximo_numero` (era do numero digitado da 32; desde a 38 o numero e gerado, B19).
+ * `pedidos-aux` tem DOIS segmentos e nao colide com o generico `DELETE /:tipo/:id` (metodo
+ * diferente) — mas fica no bloco de pedido pelo mesmo contrato de posicao das demais.
+ */
+app.get('/api/compras/pedidos-aux/opcoes', authenticateToken, checkModulePermission('compras'), async (req, res) => {
+  try {
+    res.json(await carregarOpcoes(db));
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
   }
