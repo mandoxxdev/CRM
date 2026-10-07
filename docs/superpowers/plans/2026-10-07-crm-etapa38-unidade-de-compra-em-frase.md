@@ -38,7 +38,7 @@
   última chamada de `GET /almoxarifado/materiais` tem `{ familia_id: 1, subfamilia_id: 3 }`.
 
 ## Tasks (um executor, client)
-- **T1** — `MaterialAlmoxarifadoForm.test.js`: **substituir** as asserções que citam "Fator de
+- [x] **T1** (`f98fc160`) — `MaterialAlmoxarifadoForm.test.js`: **substituir** as asserções que citam "Fator de
   convers" (`:381`, `:400`, `:434`) pelas de RN-38 e acrescentar: (a) `container.textContent` não
   casa `/fator|convers/i` com e sem unidade de compra; (b) escolher CX → aparece "contém" e o input
   `material-qtd-por-compra`; digitar 12 → POST com `fator_conversao_compra: 12` e `unidade_compra: 'CX'`;
@@ -46,14 +46,44 @@
   ROLO/50 → input vale "50" e a frase mostra "1 ROLO contém" e "M"; (e) CX sem número → toast
   "Informe quantas UN há em 1 CX" e nenhum POST. Vermelho → implementar → verde → sabotagem (voltar
   o rótulo "Fator de conversão"; tirar a validação) → vermelho → restaurar **por edição**.
-- **T2** — RN-38.05 em `MateriaisAlmoxarifado.js` + teste em `MateriaisAlmoxarifado.test.js`.
-- **T3** — `docs/almoxarifado-manual-do-sistema.md` §2.3: trocar o parágrafo do fator pela frase
+- [x] **T2** (`0c890f24`) — RN-38.05 em `MateriaisAlmoxarifado.js` + teste em `MateriaisAlmoxarifado.test.js`.
+- [x] **T3** (hash no commit de fechamento) — `docs/almoxarifado-manual-do-sistema.md` §2.3: trocar o parágrafo do fator pela frase
   ("Como é comprado: 1 CX contém 12 UN — informação para quem compra; o estoque conta em UN").
   Marcar este plano com hashes; retro curta. **Não** tocar no doc de novidades (integrador).
 - Jest inteiro do client + `CI=true build` no fim; citar números.
 
-## Retro (preencher no fechamento)
-- Rodadas de correção até verde: _preencher_
-- Achados da revisão: _preencher_
-- Paralelismo: _preencher_
+## Execução (branch `c38`, worktree `CRM-wt-c38`, 2026-10-07)
+- **T1 `f98fc160`** — vermelho confirmado antes de implementar: 7 falhas / 24 ok (31). Verde 31/31.
+  Sabotagens: rótulo "Fator de conversão" de volta → **7 falhas** (o seletor por rótulo cai junto
+  com a RN-38.01); validação RN-38.04 removida → **1 falha** (só a (e)). Restaurado por edição.
+  CSS novo: `.almox-frase-compra` + `.almox-input-inline` (o `.almox-input` tem `width: 100%`;
+  sem a classe a frase quebrava em três linhas).
+- **T2 `0c890f24`** — vermelho confirmado (`familia_id: "3"` em vez de raiz+sub). Verde 16/16.
+  Sabotagem (tirar `familias` das deps) → **1 falha**. Restaurado por edição.
+- **T3** — manual §2.3 reescrito (título "Unidades: como o estoque conta e como o item é
+  comprado"; linha da tabela de seções em §2.1 também); este plano. Hash: o do commit que fecha.
+- **Jest inteiro do client: 54 suítes / 799 testes** (baseline 794 → +5: o bloco RN-38 tem 5
+  testes no lugar dos 2 do RN-35.02; +2 do RN-38.05). **`CI=true build`: "Compiled successfully"**,
+  exit 0. Zero linhas de servidor (`git diff main --stat -- server/` vazio).
+
+### Divergências do plano (decididas pelo caminho reversível)
+- **RN-38.03 diz "número"; o payload manda string.** O form sempre mandou o que o `<input>` tem
+  (`'12'`), e `numFromForm` no servidor (`schemas.js:296`) coage. Converter no client seria mudar o
+  payload — e o plano manda não mudar. O teste assere `Number(payload.fator_conversao_compra) === 12`.
+  Se um dia o Zod deixar de coagir, é uma linha no submit.
+- **A antiga ajuda "Quantas UN há em 1 CX. Obrigatório e maior que zero." saiu** — a frase já diz
+  isso; o "obrigatório" sobrevive no toast da RN-38.04.
+- **O teste da RN-38.05 espera em dois `act`**: dentro de um `act` o React só aplica os updates no
+  fim; num `act` único de 700ms a render da chegada das famílias saía tarde demais para reagendar o
+  debounce. Não é defeito da tela — a primeira rodada vermelha com o `act` único enganou por 1
+  rodada (o teste continuava vermelho depois da correção certa).
+
+## Retro
+- Rodadas de correção até verde: **T1 zero** (verde na primeira implementação após o vermelho);
+  **T2 uma** — o erro estava no teste (espera num `act` só), não na correção.
+- Achados da revisão: a revisão adversarial roda no fechamento do integrador. Achado próprio: o
+  sabotador do rótulo derruba 7 testes e não 1, porque `selectUnidadeCompra()` busca pelo rótulo —
+  é o preço de prender o texto que o usuário lê, e está registrado no cabeçalho do helper.
+- Paralelismo: nenhum — T1→T2→T3 num executor só, como o plano previa (uma tela, um arquivo
+  vizinho, um doc).
 - Defeito escapado: preencher na etapa seguinte.

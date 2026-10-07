@@ -79,10 +79,14 @@ const MateriaisAlmoxarifado = () => {
     } catch { /* ignore */ }
   };
 
+  // Etapa 38 (RN-38.05, G11 da 37): `familias` entra nas deps porque `loadMateriais` deriva
+  // `subfamilia_id` dela — com `?familia_id=<sub>` na URL antes da lista chegar, o closure
+  // agendado tinha `familias = []` e mandava só `familia_id=<sub>` (zero linhas). A chegada da
+  // lista reagenda a busca (o clearTimeout descarta a anterior), então não dobra chamada.
   useEffect(() => {
     const t = setTimeout(loadMateriais, 300);
     return () => clearTimeout(t);
-  }, [search, categoria, familiaFilter, statusFilter]);
+  }, [search, categoria, familiaFilter, statusFilter, familias]);
 
   const loadMateriais = async () => {
     setLoading(true);

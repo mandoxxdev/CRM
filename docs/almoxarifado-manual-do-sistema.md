@@ -117,7 +117,7 @@ O formulário é dividido em sete blocos, sempre nesta ordem:
 | Dados Técnicos | Fabricante, Código no Fabricante, Marca, Modelo, Norma Técnica, Material Construtivo, Peso Unitário (kg), Dimensões, NCM, Aplicação, Especificações Técnicas, Observações Gerais |
 | Estoque e Reposição | Unidade de Medida, Saldo Inicial (ou Quantidade Atual, ao editar), Estoque Mínimo, Estoque Máximo, Ponto de Reposição, Lote Econômico, Localização no estoque |
 | Controles | as sete opções descritas em 2.7 |
-| Unidades e Custos | Classe ABC (com legenda), Custo Unitário (R$), Unidade de Compra, Fator de conversão, Fornecedor Principal, Código no Fornecedor |
+| Unidades e Custos | Classe ABC (com legenda), Custo Unitário (R$), Como é comprado (com a frase "1 CX contém 12 UN"), Fornecedor Principal, Código no Fornecedor |
 
 Ao lado do formulário há ainda o campo **Foto do Produto** (JPG, PNG ou WEBP, até 10 MB). Cada material guarda **uma** foto: enviar outra substitui a anterior, e a imagem substituída é removida do servidor logo depois que a nova está gravada — nunca antes, de modo que uma falha ao remover a velha jamais custe a nova. A troca fica registrada no histórico do cadastro (ver 2.9). Se a foto for enviada para um material que não existe, o sistema responde `Material não encontrado` e **descarta o arquivo** — não fica imagem sem dono no servidor.
 
@@ -185,22 +185,22 @@ O código é **único em todo o sistema** e é ele que aparece grande na etiquet
 
 **Como é informado.** O campo aceita digitação livre — você pode ignorar a sugestão e usar a codificação da sua engenharia. O que o sistema garante é a unicidade: se o código digitado já existe, o cadastro é recusado com *"Código já existe"*. Isso é proposital: quem digitou um código quer saber que ele está ocupado, não receber outro em silêncio.
 
-### 2.3 Unidades e fator de conversão
+### 2.3 Unidades: como o estoque conta e como o item é comprado
 
 São dois campos de unidade, com papéis distintos:
 
 - **Unidade de Medida** — a unidade em que o saldo é contado e mostrada em toda tela de estoque. É a unidade de referência.
-- **Unidade de Compra** — como o fornecedor vende (caixa, rolo, tambor). Só se preenche quando é diferente da unidade de medida.
+- **Como é comprado** — a unidade em que o fornecedor vende (caixa, rolo, tambor). A opção padrão é *"— na própria unidade de medida (UN) —"* (a tela nomeia a unidade escolhida acima), e é o caso normal da maioria dos itens.
 
-Quando a Unidade de Compra é informada, o **Fator de conversão** diz **quantas unidades de medida há em 1 unidade de compra**. A própria tela monta o exemplo com o que você digitou: unidade de medida UN, unidade de compra CX, fator 12 → *"1 CX = 12 UN"*. Um rolo de 50 metros de cabo fica unidade M, compra ROLO, fator 50 → *"1 ROLO = 50 M"*.
+Quando você escolhe uma unidade de compra diferente, a tela mostra, logo abaixo, a frase que a pessoa diria, com o número dentro dela: **1 CX contém [ 12 ] UN**. Um rolo de 50 metros de cabo fica unidade M, comprado em ROLO: **1 ROLO contém [ 50 ] M**. Abaixo da frase, a tela avisa: *"O estoque conta sempre em UN. Este número é só informação para quem compra."*
 
 A regra é condicional e vale em ambos os sentidos, criação e edição:
 
-> Se **Unidade de Compra** estiver preenchida, o **Fator de conversão** é obrigatório e precisa ser **maior que zero**. Preencher a unidade e deixar o fator em branco, em zero ou negativo faz o cadastro ser recusado.
+> Se **Como é comprado** estiver preenchido, o **número da frase** é obrigatório e precisa ser **maior que zero**. Escolher a unidade e deixar o número em branco ou em zero faz o cadastro ser recusado na própria tela, com a mensagem *"Informe quantas UN há em 1 CX"* (com as unidades que você escolheu).
 
-O contrário é permitido: informar só a Unidade de Medida e deixar a compra vazia é o caso normal da maioria dos itens.
+**O número é só informação.** Ele registra a equivalência para quem faz o pedido de compra e para quem lê a ficha. Nenhuma entrada ou saída é convertida: ao receber 2 caixas de um material cuja frase diz "1 CX contém 12 UN", você lança **24 UN**, não "2 CX". Foi decisão do cliente (resposta à dúvida D-35b em `compras-novidades-por-etapa.md`): o sistema **não converte**, e a tela deixou de usar a expressão "fator de conversão", que o time não entendeu.
 
-**O fator é informativo.** Ele registra a equivalência para quem faz o pedido de compra e para quem lê a ficha — e a tela diz isso embaixo do campo: *"Informativo: as entradas e saídas são lançadas na unidade de medida; o sistema não converte sozinho."* Ao receber 2 caixas de um material cujo fator é 12, você lança **24 UN**, não "2 CX". Se o recebimento deve passar a converter pelo fator, isso é uma regra nova do motor de estoque (dúvida D-35b em `compras-novidades-por-etapa.md`), não um ajuste de tela.
+> **Como era até a Etapa 37.** O mesmo número aparecia num campo chamado *Fator de conversão*, com a ajuda "Quantas UN há em 1 CX" e o exemplo "1 CX = 12 UN" — a Etapa 38 trocou o campo pela frase e tirou a palavra "fator" da tela. Nada mudou no que é gravado: é a mesma coluna, com o mesmo valor; material cadastrado antes aparece com a frase montada a partir do que já estava salvo.
 
 > **Unidade de Consumo saiu da tela (Etapa 35).** Até a Etapa 35 havia um terceiro campo, *Unidade de Consumo*, com o seu próprio fator. O sistema nunca usou os dois para nada além de gravar e mostrar, e a dupla de fatores dava a impressão de que havia conversão em curso. As colunas continuam no banco: material que já tinha unidade de consumo gravada não perde o valor ao ser editado (a tela simplesmente não manda mais o campo, e o servidor preserva o que estava).
 

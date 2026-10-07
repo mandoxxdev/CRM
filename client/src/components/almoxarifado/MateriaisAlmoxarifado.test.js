@@ -361,3 +361,57 @@ describe('MateriaisAlmoxarifado — RN-37.06: filtrar por subfamília', () => {
     expect(params).not.toHaveProperty('subfamilia_id');
   });
 });
+
+/**
+ * Etapa 38 (RN-38.05 — G11 da Etapa 37). A ressalva aceita na 37 era: `?familia_id=<sub>` na URL
+ * ANTES de `familias` chegar manda só `familia_id=<sub>` (zero linhas até mexer no filtro). O
+ * motivo é o closure: o `setTimeout(loadMateriais, 300)` guarda a função da render em que o
+ * efeito rodou, com `familias = []`; a lista chegar depois não reagenda nada porque `familias`
+ * não estava nas dependências. Com `familias` nas deps, a chegada da lista reagenda a busca e a
+ * última chamada já vai com `{ familia_id: raiz, subfamilia_id: sub }`.
+ *
+ * O mock das famílias responde com ATRASO (50ms) de propósito: com resposta imediata o cenário
+ * ainda falha (o closure é da primeira render), mas o atraso é o que acontece na rede e deixa a
+ * corrida explícita.
+ */
+describe('MateriaisAlmoxarifado — RN-38.05: ?familia_id=<sub> na URL rebusca quando as famílias chegam', () => {
+  beforeEach(() => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [MATERIAL_NOSSO] });
+      if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
+      if (url === '/almoxarifado/familias') {
+        return new Promise((resolve) => setTimeout(() => resolve({ data: [SUB_ESF, RAIZ_PAR, RAIZ_ROL] }), 50));
+      }
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  async function renderizarComUrl(query) {
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={[`/almoxarifado/materiais${query}`]}>
+          <MateriaisAlmoxarifado />
+        </MemoryRouter>,
+      );
+    });
+    // Dois `act` de propósito: dentro de um `act` o React enfileira os updates e só os aplica no
+    // fim dele — num `act` único de 700ms a chegada das famílias seria renderizada tarde demais
+    // para reagendar o debounce antes da asserção. O primeiro deixa as famílias chegarem (50ms) e
+    // aplica a render; o segundo cobre o debounce reagendado (300ms) com folga.
+    await act(async () => { await new Promise((r) => setTimeout(r, 100)); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+  }
+
+  test('a última busca leva familia_id da raiz E subfamilia_id da sub, sem mexer no filtro', async () => {
+    await renderizarComUrl('?familia_id=3');
+    expect(filtroFamilia().value).toBe('3');
+    expect(ultimaBusca()).toEqual({ params: { familia_id: 1, subfamilia_id: 3 } });
+  });
+
+  test('[controle] ?familia_id=<raiz> continua mandando só familia_id', async () => {
+    await renderizarComUrl('?familia_id=1');
+    const { params } = ultimaBusca();
+    expect(String(params.familia_id)).toBe('1');
+    expect(params).not.toHaveProperty('subfamilia_id');
+  });
+});

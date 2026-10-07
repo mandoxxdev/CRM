@@ -435,10 +435,11 @@ const MaterialAlmoxarifadoForm = () => {
       toast.error('Selecione a categoria do material');
       return;
     }
-    // Fatores de conversão (Etapa 2, Task 4): espelha no cliente a invariante que o servidor
-    // valida via superRefine — evita um round-trip só para descobrir que faltou o fator.
+    // Etapa 2 (Task 4): espelha no cliente a invariante que o servidor valida via superRefine —
+    // evita um round-trip só para descobrir que faltou o número. Etapa 38 (RN-38.04): a mensagem
+    // fala como a tela ("quantas UN há em 1 CX"), sem a palavra "fator", que o time não entendeu.
     if (form.unidade_compra && !(Number(form.fator_conversao_compra) > 0)) {
-      toast.error('Informe um fator de conversão maior que zero');
+      toast.error(`Informe quantas ${form.unidade} há em 1 ${form.unidade_compra}`);
       return;
     }
     setSaving(true);
@@ -916,41 +917,33 @@ const MaterialAlmoxarifadoForm = () => {
                   <input className="almox-input" type="number" min="0" step="0.01"
                     value={form.custo_unitario} onChange={e => set('custo_unitario', e.target.value)} placeholder="0,00" />
                 </div>
+                {/* Etapa 38 (RN-38.01/02): o time não entendeu "fator de conversão" (resposta do
+                    André à D-35b: o sistema NÃO converte, e as legendas da Etapa 35 confundiram).
+                    A tela deixa de usar a palavra: o campo é a pergunta "Como é comprado" e, se a
+                    resposta é uma unidade diferente, a frase que a pessoa diria — "1 CX contém
+                    [ 12 ] UN" — com o número dentro dela. O state e o payload continuam sendo
+                    `unidade_compra` + `fator_conversao_compra` (RN-38.03): coluna e Zod ficam. */}
                 <div className="almox-field">
-                  <label className="almox-label">Unidade de Compra</label>
+                  <label className="almox-label">Como é comprado</label>
                   <select className="almox-form-select" value={form.unidade_compra} onChange={e => set('unidade_compra', e.target.value)}>
-                    <option value="">— igual à unidade de medida —</option>
+                    <option value="">— na própria unidade de medida ({form.unidade}) —</option>
                     {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
-                </div>
-                {/* Etapa 35 (RN-35.02): o fator PARECIA operar e não opera — o servidor só grava e
-                    devolve; nenhuma entrada ou saída é convertida (o manual já dizia isso). A tela
-                    agora explica o que o número é, monta o exemplo com o que está digitado e diz
-                    que é informativo. Os campos de CONSUMO saíram (RN-35.01): só o CRUD os lia. */}
-                <div className="almox-field">
-                  <label className="almox-label">
-                    Fator de conversão
-                    {form.unidade_compra && <span className="required">*</span>}
-                  </label>
-                  <input className="almox-input" type="number" min="0" step="0.0001"
-                    value={form.fator_conversao_compra} onChange={e => set('fator_conversao_compra', e.target.value)}
-                    placeholder="Ex.: 12 (1 CX = 12 UN)" />
-                  {form.unidade_compra ? (
+                  {form.unidade_compra && (
                     <>
-                      <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
-                        Quantas {form.unidade} há em 1 {form.unidade_compra}. Obrigatório e maior que zero.
-                      </small>
-                      <p className="almox-help">
-                        {Number(form.fator_conversao_compra) > 0 && (
-                          <strong>1 {form.unidade_compra} = {form.fator_conversao_compra} {form.unidade}. </strong>
-                        )}
-                        Informativo: as entradas e saídas são lançadas na unidade de medida; o sistema não converte sozinho.
+                      <p className="almox-help almox-frase-compra">
+                        1 {form.unidade_compra} contém{' '}
+                        <input className="almox-input almox-input-inline" type="number" min="0" step="0.0001"
+                          value={form.fator_conversao_compra}
+                          onChange={e => set('fator_conversao_compra', e.target.value)}
+                          aria-label={`Quantidade de ${form.unidade} em 1 ${form.unidade_compra}`}
+                          data-testid="material-qtd-por-compra" />
+                        {' '}{form.unidade}
                       </p>
+                      <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                        O estoque conta sempre em {form.unidade}. Este número é só informação para quem compra.
+                      </small>
                     </>
-                  ) : (
-                    <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
-                      Só se aplica quando a unidade de compra é diferente da unidade de medida.
-                    </small>
                   )}
                 </div>
                 <div className="almox-field">
