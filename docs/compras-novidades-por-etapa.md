@@ -79,12 +79,18 @@
 - **D-35b** — O fator de conversão é só informação (o sistema não converte quantidades ao receber
   ou requisitar; o manual já dizia isso). Deve passar a converter? Se sim, é regra do motor de
   estoque, etapa própria na branch do almoxarifado.
-- **D-36a** — Família × categoria: hoje a **família pertence a uma categoria** (`familia.categoria_id`).
-  A task 2 pede o inverso (categorias dentro da família). Qual é a árvore certa? Minha recomendação:
-  primeiro dar à aba *Famílias* a criação de **subfamílias** (o campo já existe no banco, falta a
-  tela) e perguntar ao P.O. se categoria depende mesmo de família.
-- **D-36b** — Configurações por módulo: embutir a tela atual de configurações do almoxarifado numa
-  aba "Almoxarifado" de `/configuracoes` (minha recomendação) ou mover as 13 abas?
+- **D-36a — RESPONDIDA em 2026-10-07 pelo André: opção (ii), subfamílias na aba Famílias.**
+  (Era: família × categoria — hoje a **família pertence a uma categoria** (`familia.categoria_id`)
+  e a task 2 pedia o inverso.) Executada como **Etapa 37** — a aba *Famílias* ganha a árvore
+  família → subfamília cadastrável; a pergunta "categoria depende de família?" fica para o P.O.
+  como **D-37** abaixo, sem bloquear nada.
+- **D-37** — Para o P.O.: a categoria do material deve depender da família (lista de categorias
+  diferente por família)? Hoje são independentes (categoria é um catálogo único; a família tem
+  uma categoria "padrão" que nada usa). Se sim, é uma etapa de modelo de dados; se não, a árvore
+  da Etapa 37 já atende.
+- **D-36b** — (respondida pelo caminho reversível na Etapa 36, B8) Configurações por módulo:
+  embutir a tela atual de configurações do almoxarifado numa aba "Almoxarifado" de
+  `/configuracoes` — foi o que se fez; mover as abas foi descartado.
 - **D-36c** — Quem vê a aba Almoxarifado dentro de Configurações: só admin do sistema ou também o
   administrador do almoxarifado?
 

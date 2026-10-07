@@ -32,7 +32,7 @@
 | 34 | Ficha do fornecedor: tela própria, 2 telefones, CNPJ/CEP, CSS | 🟢 2026-10-06 (`d151751c` rotas+coluna, `a294c3d4` CEP, `977c6022` tela, `25397815`; merge `891c960a`) — `server/routes/compras/fornecedores.js`, `server/routes/cep.js`, `FornecedorForm.js`, `utils/cnpj.js`; o "Remover do grupo" passou a remover | design do lote §4 · `…plans/2026-10-06-crm-etapa34-ficha-do-fornecedor.md` |
 | 35 | Cadastro de material: unidades e classe ABC (tela do almoxarifado) | 🟢 2026-10-06 (`0e7c0a36`, `fba88f1d`) — só client + manual; candidato a cherry-pick para a branch do almoxarifado (B4) | design do lote §5 · `…plans/2026-10-06-crm-etapa35-material-unidades-e-abc.md` |
 | 36 | Configurações com uma aba por módulo (`/configuracoes`; almoxarifado e produção embutidos; `Tabs` reutilizável) | 🟢 2026-10-07 (`724cbbdd` Tabs, `74c30cd4` Configuracoes, `127425bc` embedded; merges `2bec1eb9`, `a84d2121`) — zero linhas de servidor | design do lote §6 · `…plans/2026-10-06-crm-etapa36-configuracoes-por-modulo.md` |
-| 37 | Categorias por família (árvore cadastrável em Configurações → Almoxarifado) | 🔴 espera a decisão **D-36a** (o modelo atual é família → categoria, o inverso do pedido) | design do lote §6 (original) |
+| 37 | Subfamílias cadastráveis na aba Famílias (Configurações → Almoxarifado) — a árvore família → subfamília que a task 2 pedia, pela opção (ii) da D-36a escolhida pelo André em 2026-10-07 | 🟡 em execução (2026-10-07) | `…plans/2026-10-07-crm-etapa37-subfamilias-na-aba-familias.md` |
 
 Design do lote: `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`.
 Documento de apresentação: `docs/compras-novidades-por-etapa.md`.
