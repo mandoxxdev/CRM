@@ -507,6 +507,25 @@
 }
 .almox-help strong { color: var(--gmp-text); font-weight: 600; }
 
+/* Etapa 38 — "1 CX contém [ 12 ] UN": o numero fica DENTRO da frase, em vez de um campo com
+   rotulo "fator de conversao" (que o time nao entendeu). O input inline nao pode herdar o
+   width: 100% do .almox-input, senao a frase quebra em tres linhas. */
+.almox-frase-compra {
+  margin-top: 8px;
+  font-size: 0.875rem;
+  color: var(--gmp-text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.almox-input.almox-input-inline {
+  width: 6em;
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  text-align: center;
+}
+
 .almox-legenda-abc {
   margin: 4px 0 0;
   padding: 0;

@@ -366,8 +366,8 @@ describe('MaterialAlmoxarifadoForm — RN-04: categoria fora do catálogo aparec
  *    preserva chave omitida — então a prova é no PAYLOAD: a chave não pode existir (nem como '').
  *    Controle positivo registrado no plano: antes da implementação o (b) falha porque o state
  *    nasce com `unidade_consumo: ''` e o spread `...form` leva a chave.
- *  - RN-35.02: o fator parecia operar e não opera (o manual já dizia "o sistema não converte").
- *    A tela passa a explicar: exemplo vivo "1 CX = 12 UN" e a frase informativa.
+ *  - RN-35.02 (exemplo vivo "1 CX = 12 UN" + "o sistema não converte sozinho") foi SUBSTITUÍDA
+ *    pela Etapa 38: o time não entendeu "fator"; o bloco RN-38 abaixo é o que prende a tela hoje.
  *  - RN-35.03: a legenda A/B/C vem da constante exportada LEGENDA_ABC (o manual cita a mesma).
  */
 // Localiza um <select>/<input> pelo rótulo visível da seção, igual a categoriaSelect(): funciona
@@ -377,8 +377,10 @@ function campoPorRotulo(regex) {
     .find((d) => regex.test(d.querySelector('.almox-label')?.textContent.trim() || ''));
 }
 const selectUnidadeMedida = () => campoPorRotulo(/^Unidade de Medida$/i).querySelector('select');
-const selectUnidadeCompra = () => campoPorRotulo(/^Unidade de Compra$/i).querySelector('select');
-const inputFator = () => campoPorRotulo(/^Fator de convers/i).querySelector('input');
+// Etapa 38 (RN-38.02): o rótulo deixou de ser "Unidade de Compra" — é a pergunta que a pessoa faz.
+const selectUnidadeCompra = () => campoPorRotulo(/^Como é comprado$/i).querySelector('select');
+// Etapa 38: o número vive DENTRO da frase "1 CX contém [ 12 ] UN", não num campo com rótulo.
+const inputQtdPorCompra = () => container.querySelector('[data-testid="material-qtd-por-compra"]');
 const rotulos = () => [...container.querySelectorAll('.almox-label')].map((l) => l.textContent.trim());
 
 // Material gravado ANTES da etapa, com unidade de consumo preenchida pela API/tela antiga.
@@ -394,10 +396,11 @@ describe('MaterialAlmoxarifadoForm — RN-35.01: unidade de consumo sai da tela 
   test('(a) nao existe mais "Unidade de Consumo" nem "Fator de Conversão (Consumo)"', async () => {
     await renderizarNovo();
     const labels = rotulos();
-    // Metade positiva: a seção continua lá, com as unidades que ficaram.
+    // Metade positiva: a seção continua lá, com as unidades que ficaram (Etapa 38 renomeou a
+    // de compra para "Como é comprado" e tirou o rótulo "Fator de conversão" — RN-38.01/02).
     expect(labels).toContain('Unidade de Medida');
-    expect(labels).toContain('Unidade de Compra');
-    expect(labels.some((l) => /^Fator de convers/i.test(l))).toBe(true);
+    expect(labels).toContain('Como é comprado');
+    expect(labels.some((l) => /fator|convers/i.test(l))).toBe(false);
     // Metade negativa.
     expect(labels).not.toContain('Unidade de Consumo');
     expect(labels.some((l) => /Consumo\)/i.test(l))).toBe(false);
@@ -431,7 +434,7 @@ describe('MaterialAlmoxarifadoForm — RN-35.01: unidade de consumo sai da tela 
     // Metade positiva: o que a tela ainda mostra foi carregado do GET.
     expect(selectUnidadeMedida().value).toBe('M');
     expect(selectUnidadeCompra().value).toBe('ROLO');
-    expect(inputFator().value).toBe('50');
+    expect(inputQtdPorCompra().value).toBe('50');
     await submeter();
     expect(api.put).toHaveBeenCalled();
     const payload = api.put.mock.calls[0][1];
@@ -441,34 +444,119 @@ describe('MaterialAlmoxarifadoForm — RN-35.01: unidade de consumo sai da tela 
   });
 });
 
-describe('MaterialAlmoxarifadoForm — RN-35.02: o fator de conversão se explica na tela', () => {
-  test('(d) escolher CX e digitar 12 mostra "1 CX = 12 UN"; apagar o fator some com o exemplo', async () => {
+/**
+ * Etapa 38 (RN-38.01 a RN-38.04) — "1 CX contém 12 UN": a unidade de compra vira frase.
+ *
+ * Origem: o André respondeu à D-35b que o sistema NÃO deve converter e que o time achou as
+ * legendas confusas — "fator de conversão" é linguagem de sistema. A coluna e o Zod ficam; a
+ * etapa muda só COMO a tela pergunta. O que este bloco prende:
+ *
+ *  - RN-38.01: nenhum texto da tela contém "fator" nem "conversão" (com e sem unidade de compra).
+ *  - RN-38.02: rótulo "Como é comprado", opção vazia "— na própria unidade de medida (⟨UN⟩) —";
+ *    escolher uma unidade mostra a frase com o número DENTRO (input inline com aria-label e
+ *    data-testid) e a nota "O estoque conta sempre em ⟨UN⟩…". Sem unidade escolhida, nada disso
+ *    aparece — nem a antiga "Só se aplica…".
+ *  - RN-38.03: o payload não muda — a chave continua `fator_conversao_compra` e `unidade_compra`.
+ *    O form manda o que o input tem (string, como a Etapa 35 já mandava); `numFromForm` no
+ *    servidor coage. Por isso a asserção compara via Number(), não `toBe(12)` cru.
+ *  - RN-38.04: sem o número, toast "Informe quantas ⟨UN⟩ há em 1 ⟨CX⟩" e nenhum POST.
+ *
+ * Controle positivo (vermelho antes da implementação): (a) falha porque o rótulo "Fator de
+ * conversão" está na tela; (b)/(d)/(e) falham porque o input `material-qtd-por-compra` não existe.
+ */
+describe('MaterialAlmoxarifadoForm — RN-38: a unidade de compra vira frase, sem "fator"', () => {
+  const textoDaTela = () => container.textContent;
+
+  test('(a) RN-38.01: nenhum texto da tela diz "fator" ou "conversão", com e sem unidade de compra', async () => {
     await renderizarNovo();
-    expect(selectUnidadeMedida().value).toBe('UN');
-    // Antes de escolher a unidade de compra não há exemplo (o placeholder é atributo, não texto).
-    expect(container.textContent).not.toMatch(/1 CX = 12 UN/);
+    // Metade positiva: a seção e o campo renomeado estão lá.
+    expect(textoDaTela()).toMatch(/Unidades e Custos/);
+    expect(rotulos()).toContain('Como é comprado');
+    expect(textoDaTela()).not.toMatch(/fator|convers/i);
     preencher(selectUnidadeCompra(), 'CX');
-    preencher(inputFator(), '12');
-    expect(container.textContent).toMatch(/1 CX = 12 UN/);
-    // O exemplo é montado com o que está digitado — não é texto fixo com "UN".
-    preencher(selectUnidadeMedida(), 'M');
-    preencher(selectUnidadeCompra(), 'ROLO');
-    preencher(inputFator(), '50');
-    expect(container.textContent).toMatch(/1 ROLO = 50 M/);
-    expect(container.textContent).not.toMatch(/1 CX = 12 UN/);
-    preencher(inputFator(), '');
-    expect(container.textContent).not.toMatch(/1 ROLO = 50 M/);
-    expect(container.textContent).not.toMatch(/1 ROLO = /);
+    expect(textoDaTela()).toMatch(/contém/);
+    expect(textoDaTela()).not.toMatch(/fator|convers/i);
   });
 
-  test('(e) a frase "o sistema não converte sozinho" aparece quando há unidade de compra', async () => {
+  test('(b) RN-38.02: a opção vazia nomeia a unidade de medida e acompanha a troca dela', async () => {
     await renderizarNovo();
-    expect(container.textContent).not.toMatch(/o sistema não converte sozinho/i);
+    const vazia = () => selectUnidadeCompra().querySelector('option[value=""]').textContent.trim();
+    expect(selectUnidadeMedida().value).toBe('UN');
+    expect(vazia()).toBe('— na própria unidade de medida (UN) —');
+    preencher(selectUnidadeMedida(), 'M');
+    expect(vazia()).toBe('— na própria unidade de medida (M) —');
+    // Sem unidade de compra: nem frase, nem input, nem a antiga "Só se aplica".
+    expect(inputQtdPorCompra()).toBeNull();
+    expect(textoDaTela()).not.toMatch(/contém/);
+    expect(textoDaTela()).not.toMatch(/Só se aplica/i);
+  });
+
+  test('(c) RN-38.02/03: escolher CX mostra "1 CX contém [ ] UN" e a nota; digitar 12 vai como fator_conversao_compra', async () => {
+    await renderizarNovo();
     preencher(selectUnidadeCompra(), 'CX');
-    expect(container.textContent).toMatch(/o sistema não converte sozinho/i);
-    expect(container.textContent).toMatch(/Informativo/);
-    // A ajuda do rótulo nomeia as duas unidades escolhidas.
-    expect(container.textContent).toMatch(/Quantas UN há em 1 CX/);
+    const input = inputQtdPorCompra();
+    expect(input).not.toBeNull();
+    expect(input.getAttribute('aria-label')).toBe('Quantidade de UN em 1 CX');
+    expect(textoDaTela()).toMatch(/1 CX contém/);
+    expect(textoDaTela()).toMatch(/O estoque conta sempre em UN\. Este número é só informação para quem compra\./);
+    // A frase é montada com o que está escolhido, não texto fixo.
+    preencher(selectUnidadeMedida(), 'M');
+    preencher(selectUnidadeCompra(), 'ROLO');
+    expect(textoDaTela()).toMatch(/1 ROLO contém/);
+    expect(textoDaTela()).toMatch(/O estoque conta sempre em M\./);
+    expect(inputQtdPorCompra().getAttribute('aria-label')).toBe('Quantidade de M em 1 ROLO');
+    preencher(selectUnidadeMedida(), 'UN');
+    preencher(selectUnidadeCompra(), 'CX');
+    preencher(inputQtdPorCompra(), '12');
+    await preencherObrigatorios();
+    await submeter();
+    expect(api.post).toHaveBeenCalledTimes(1);
+    const payload = api.post.mock.calls[0][1];
+    expect(payload.unidade_compra).toBe('CX');
+    expect(Number(payload.fator_conversao_compra)).toBe(12);
+    expect(payload).not.toHaveProperty('qtd_por_compra');
+  });
+
+  test('(d) RN-38.03: editar material com ROLO/50 mostra "1 ROLO contém [50] M"', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/clientes') return Promise.resolve({ data: [CLIENTE_UM] });
+      if (url === '/almoxarifado/familias') return Promise.resolve({ data: [FAMILIA] });
+      if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
+      if (url === '/almoxarifado/materiais/79') return Promise.resolve({ data: MATERIAL_COM_CONSUMO });
+      return Promise.resolve({ data: [] });
+    });
+    await renderizarEdicao(79);
+    expect(selectUnidadeCompra().value).toBe('ROLO');
+    expect(inputQtdPorCompra().value).toBe('50');
+    expect(textoDaTela()).toMatch(/1 ROLO contém/);
+    expect(textoDaTela()).toMatch(/O estoque conta sempre em M\./);
+    expect(textoDaTela()).not.toMatch(/fator|convers/i);
+    await submeter();
+    expect(api.put).toHaveBeenCalledTimes(1);
+    const payload = api.put.mock.calls[0][1];
+    expect(payload.unidade_compra).toBe('ROLO');
+    expect(Number(payload.fator_conversao_compra)).toBe(50);
+  });
+
+  test('(e) RN-38.04: CX sem número (vazio ou zero) → toast "Informe quantas UN há em 1 CX" e nenhum POST', async () => {
+    await renderizarNovo();
+    await preencherObrigatorios();
+    preencher(selectUnidadeCompra(), 'CX');
+    await submeter();
+    expect(api.post).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('Informe quantas UN há em 1 CX');
+    expect(toast.error.mock.calls.flat().join(' ')).not.toMatch(/fator|convers/i);
+    toast.error.mockClear();
+    preencher(inputQtdPorCompra(), '0');
+    await submeter();
+    expect(api.post).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('Informe quantas UN há em 1 CX');
+    // Controle: com o número, o POST sai e a mensagem não aparece.
+    toast.error.mockClear();
+    preencher(inputQtdPorCompra(), '12');
+    await submeter();
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(toast.error).not.toHaveBeenCalled();
   });
 });
 
