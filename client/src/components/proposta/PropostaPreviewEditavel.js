@@ -20,6 +20,7 @@ import {
 } from './clausulasInlineEditor';
 import { nomeArquivoPdfProposta } from '../../utils/nomeArquivoPdf';
 import { aplicarMascaraNoNoEditavel } from '../../utils/telefoneContentEditable';
+import { resolveFotoPropostaUrl } from '../../utils/resolveUploadAssinadoUrl';
 import './PropostaPreviewEditavel.css';
 
 const CAMPOS_EDITAVEIS = [
@@ -582,7 +583,6 @@ export default function PropostaPreviewEditavel() {
       return;
     }
     const win = doc.defaultView;
-    const base = String(api.defaults.baseURL || '/api').replace(/\/$/, '');
     try {
       if (acao.tipo === 'geometria') {
         for (const g of acao.fotos) await aplicarGeometriaFoto(doc, g);
@@ -614,7 +614,8 @@ export default function PropostaPreviewEditavel() {
           if (win && Array.isArray(win.__FOTOS_PROPOSTA)) {
             win.__FOTOS_PROPOSTA.push({
               id: data.id, pagina: data.pagina, x: data.pos_x, y: data.pos_y, largura: data.largura,
-              src: `${base}/uploads/proposta-fotos/${encodeURIComponent(data.arquivo)}`,
+              // Etapa 82 (RN-82.04): o `url` ASSINADO devolvido pela API, nunca montado pelo nome (daria 404).
+              src: resolveFotoPropostaUrl(data.url),
             });
           }
         }
@@ -644,7 +645,6 @@ export default function PropostaPreviewEditavel() {
     }
     const win = doc.defaultView;
     const paginaDestino = paginaEmVista(doc).indice;
-    const base = String(api.defaults.baseURL || '/api').replace(/\/$/, '');
     const novas = [];
     for (const origemId of copiadas) {
       try {
@@ -673,7 +673,8 @@ export default function PropostaPreviewEditavel() {
           x: f.pos_x,
           y: f.pos_y,
           largura: f.largura,
-          src: `${base}/uploads/proposta-fotos/${encodeURIComponent(f.arquivo)}`,
+          // Etapa 82 (RN-82.04): o `url` ASSINADO devolvido pela API, nunca montado pelo nome (daria 404).
+          src: resolveFotoPropostaUrl(f.url),
         });
       });
       win.aplicarFotosProposta();
@@ -1182,7 +1183,6 @@ export default function PropostaPreviewEditavel() {
       // se não estiverem disponíveis (preview antigo em cache), cai no reload completo.
       const doc = iframeRef.current?.contentDocument;
       const win = iframeRef.current?.contentWindow;
-      const base = String(api.defaults.baseURL || '/api').replace(/\/$/, '');
       if (doc && win && Array.isArray(win.__FOTOS_PROPOSTA) && typeof win.aplicarFotosProposta === 'function') {
         novas.forEach((f) => {
           win.__FOTOS_PROPOSTA.push({
@@ -1191,7 +1191,8 @@ export default function PropostaPreviewEditavel() {
             x: f.pos_x != null ? f.pos_x : 20,
             y: f.pos_y != null ? f.pos_y : 60,
             largura: f.largura != null ? f.largura : 80,
-            src: `${base}/uploads/proposta-fotos/${encodeURIComponent(f.arquivo)}`,
+            // Etapa 82 (RN-82.04): o `url` ASSINADO devolvido pela API, nunca montado pelo nome (daria 404).
+            src: resolveFotoPropostaUrl(f.url),
           });
         });
         win.aplicarFotosProposta();
