@@ -1,8 +1,8 @@
 # Etapa 91 — a inversão inspeção × Aprovar (C131, feature 07 com a 09, a 08 e a 04)
 
-> Status: **Fase 2 — plano revisto (0 bloqueantes, 6 importantes, 10 menores; ver a seção "Fase 2 — revisão do plano"
-> no fim, que vale sobre o texto), nada de código commitado.** Próximo passo: **T0**. HEAD de partida: `5197b418`
-> (main, árvore limpa); plano da Fase 1 em `14855ab7`.
+> Status: **T0–T6 feitas; Fase 5 (revisão adversarial) feita — 4 achados reais, 5 mutações mortas, 0 regressões; ver a
+> seção "Fase 5 — revisão adversarial" no fim.** Próximo passo: **T7 (fechamento)**, com a lista "Para a T7" da Fase 5.
+> HEAD de partida: `5197b418` (main, árvore limpa); plano da Fase 1 em `14855ab7`; Fase 2 em `43f18ef5`.
 > Origem: "Próxima tarefa detalhada — Etapa 91" de
 > `docs/superpowers/plans/2026-10-02-almoxarifado-etapa77-reserva-requisicao-so-pela-requisicao.md:711-755`, o aviso
 > **C131** (`docs/almoxarifado-novidades-por-etapa.md:7049`) e a **B403** (`:5512`, que deixou a C131 "para depois" na 76).
@@ -149,14 +149,17 @@ seguro: `purchaseService` não requer o `rcs` e a compensação de `darEntradaEs
    distribuição). Uma `SAIDA` avulsa pela v2 **sem** `reserva_id`, uma reserva **manual** (`POST /reservas`) ou uma
    separação no meio da janela continuam levando o saldo livre (não pegam a trava). Declarado (letra D (91)); o conserto
    de raiz — o item crítico **entrar retido** num movimento só — muda o motor e fica como candidata.
-5. **A janela da QUARENTENA é intermitente (~10%) na sonda** — não serve como vermelho reprodutível. A T2 usa o
+5. **A janela da QUARENTENA é intermitente (~10%) na sonda** *(**incompleto — Fase 5, achado F4:** com SMTP configurado
+   e o material abaixo do mínimo a janela era o tempo do SMTP, 19/21; depois do F3, ~11 comandos SQL — ver "F4
+   medido")* — não serve como vermelho reprodutível. A T2 usa o
    **portão limitado** (abaixo), que segura a continuação da nota depois do `ENTRADA_COMPRA` até a aprovação responder:
    sem a trava, inverte 100%; com a trava, a aprovação espera e o portão abre pelo tempo.
 6. **NC: o material só é conhecido depois do Passo 1** (`efeitoPrevisto`), então a seção crítica da NC começa no claim
    da NC (Passo 2), e só quando `previsto.efeito === 'LIBERAVEL'` — não "no começo da porta".
 7. **Confirmado (não é dúvida):** nenhuma rota troca o `material_id` de um item de requisição depois de criado (`grep
    "SET material_id"` em `services`/`routes` → 0), então ler os materiais da requisição **antes** de pegar a trava é
-   estável; e nenhuma porta de liberação chama outra porta (o `abrirNaoConformidadeDeInspecao` só abre, não decide — sem
+   estável *(**errado — Fase 5, achado F1:** estável para troca, não para item **novo**; a requisição nasce `PENDENTE`
+   antes dos itens. Consertado em `723c58fd`)*; e nenhuma porta de liberação chama outra porta (o `abrirNaoConformidadeDeInspecao` só abre, não decide — sem
    reentrada na trava da inspeção).
 
 ## Decisões reversíveis (letra B do documento de novidades; última usada: B418)
@@ -763,3 +766,126 @@ acima foram corrigidos **no lugar** (marcados "corrigido na Fase 2, achado N"). 
 
 **Contagem do peso:** o achado 8 veio sem peso do revisor e foi contado como **menor** (só declara limitações, não muda
 task). **Nada descartado.**
+
+## Fase 5 — revisão adversarial (2026-10-08): 4 achados reais + 5 mutações sobreviventes + 5 menores; 0 regressões
+
+Três revisores frescos sobre o HEAD `6618180d`, lentes distintas: **concorrência, bordas e fila** (sondas
+`sonda91f-c-*` — bordas SO=1..4, quarentena, smtpfalha, mix), **regras e rotas** (`sonda91f-r-*` — auto, cancelcorrida,
+perf) e **mutação** ("este teste passaria com a feature quebrada?" — árvores `r91*/` no scratchpad, com a suíte inteira
+rodada por mutação). Regra da skill: achado só virou conserto **depois de reproduzido** como teste vermelho; cada teste
+novo tem controle positivo (mutação aplicada → vermelho → restauro por cópia com md5 conferido, base LF, `perl -0pi`
+com âncora contada = 1, backups `e91-f5-*.bak`; script `e91-f5-ctl.sh`). Sondas e números antes/depois:
+`e91-f5-sondas-antes.txt`, `e91-f5-sondas-depois.txt`, `e91-f5-janela.txt`.
+
+**Sem regressão (medido):** `sonda91f-c-mix` N=20 (cinco portas concorrentes, vários materiais, ordem embaralhada) → ok
+20/20, deadlock 0, fila errada 0, material travado no fim 0 — antes e depois dos consertos; exceção dentro da seção da
+aprovação (SO=4) → 500 e a trava solta (a nova tentativa responde 200 `TOTALMENTE_RESERVADA`); nota com material inativo →
+400 e nenhum material fica travado; nenhuma das portas da T1/T2 mudou de resposta.
+
+### Achados e destino
+
+| # | peso | achado (reproduzido em) | destino |
+|---|---|---|---|
+| F3 | **GRAVE** | O alerta de estoque mínimo rodava **dentro** da seção da trava: `registrarMovimentacao` aguardava `verificarAlertaPorMaterialId` → `transporter.sendMail`. SMTP de 3 s → a nota 3048 ms e um `/aprovar` concorrente do mesmo material **3032 ms** (bordas SO=3); SMTP falhando em 1 s → três aprovações do mesmo material em fila, 1048/2063/3079 ms, 3 tentativas de SMTP (a falha não marca, cada movimento tenta de novo — smtpfalha); transporter sem prazo (padrão do nodemailer: 2 min de conexão, 10 min de socket). | **Consertado em `14cf6df7`** (B429). Teste `alertaForaDaTrava` 4 casos, vermelho antes 3/4. Depois: `/aprovar` 27 ms; smtpfalha 1035/39/43 ms com **1** tentativa. |
+| F4 | IMPORTANTE | A janela ENTRADA_COMPRA → QUARENTENA do crítico era **mais larga que a declarada** (§6.4/§6.5 diziam "~10%, intermitente"): com o gatilho no `INSERT` do `ENTRADA_COMPRA`, saída avulsa v2 e reserva manual levaram o material retido **4/4** (disponível −4); e com SMTP configurado e o material abaixo do mínimo a janela **era o tempo do SMTP** (o F3 estava no meio dela). | **Medida e declarada** (B430, C145, A42 ampliada) — ver "F4 medido" abaixo. |
+| F1 | IMPORTANTE | `comTravaDaRequisicao` lia os materiais **antes** de travar; a requisição nasce `PENDENTE` antes dos itens, então um `/aprovar` no meio da criação reservava o 2º material **sem a trava dele** (bordas SO=1). **O plano estava errado:** §6.7 "Confirmado (não é dúvida): … ler os materiais da requisição antes de pegar a trava é estável" vale para **troca** de material, não para item **novo**. | **Consertado em duas rodadas** (B431): `2d6987a7` (reler dentro da trava) **não bastava** — um caso novo, item gravado depois da releitura e antes da leitura dos itens a reservar, ficou vermelho com ele; `723c58fd` põe a prova em quem reserva (`materiaisForaDaSecao` → 409 `TRAVA_INCOMPLETA`, refaz, limite 3). Comentário que afirmava a estabilidade corrigido em `455eda9b`. Resíduo declarado (C146). |
+| F2 | IMPORTANTE | Reenvio depois de o cliente desistir, em `POST /requisicoes` com aprovação automática esperando a trava → **requisição duplicada** (SO=2: duas gravadas, `201/TOTALMENTE_RESERVADA` e `201/AGUARDANDO_ESTOQUE`). | **Declarado** (B432, C147) — não é trivial (precisa de chave de idempotência do cliente). |
+| M-a1 | mutação | O `UPDATE` guardado da aprovação **automática** fora da trava sobrevivia à suíte (o RN-05 (f) da T1 só prendia o `/aprovar`). | **Morta** por teste em `d98b73c9` (`[91 F5 RN-05 (f) automatica]` — a sonda `probeAuto` virou teste pela rota). |
+| M-a2 | mutação | O `desfazerReservas` da automática que perde, fora da trava. | **Morta** em `d98b73c9`. **Dano medido** (por isso testado, não declarado — B433): uma 2ª aprovação do mesmo material que esperava a trava entrava antes da devolução, lia disponível 0 e ficava `AGUARDANDO_ESTOQUE` com os 4 parados (C135 por corrida). |
+| M-b | mutação | O `UPDATE` guardado do `/aprovar-valor` fora da trava. | **Morta** em `d98b73c9`. Resultado final coincide (a guarda `status='APROVADO'` e o recálculo seguram); o que denuncia é o portão abrir pela inspeção, não pelo prazo. |
+| M-c | mutação | O `desfazerReservas` do `/aprovar` que perde, fora da trava. | **Morta** em `d98b73c9` (mesmo dano do M-a2; testado em vez de declarado "baixo impacto"). |
+| M-d | mutação | D(77): a recusa restrita a alguns tipos (o teste da T4 só passava ENTRADA/AJUSTE/DEVOLUCAO/TRANSFERENCIA). | **Morta** em `d98b73c9`: laço pelo serviço em **todo** tipo de `TIPOS_MOVIMENTO` fora de `TIPOS_SAIDA` (menos RESERVA/LIBERACAO_RESERVA/ESTORNO) → 400 M1 e nada muda; e nenhuma saída recebe a M1. |
+| M-e | mutação | A chave da trava sem `Number()` (`'5'` e `5` seriam duas travas). | **Morta** em `d98b73c9` (`comLockDoMaterial('900005')` × `(900005)` e `travado('900005')`). |
+| m1 | menor | C141 × aprovação (cancelamento pelos outros módulos caindo entre a reserva e o `UPDATE` do `/aprovar`): **inofensivo** — `/aprovar` 400 *"Transição inválida: CANCELADO → APROVADO"*, cancelamento 200, a reserva `LIBERADA` uma vez, `r=0`, uma `LIBERACAO_RESERVA` — mas com log **enganoso**: *"[almoxarifado-aprovar] Falha ao desfazer reserva 1 — Reserva liberada não pode ser liberada"* (o desfazer do perdedor acha a reserva que o cancelamento já soltou). | Declarado (C148). |
+| m2 | menor | C141: o `antes` da auditoria (`dados_anteriores.status`) é lido **antes** do `UPDATE` e sem estar no mesmo comando — uma transição no meio grava na trilha um status anterior que já não era o de verdade. Só trilha. | Declarado (C148). |
+| m3 | menor | **A C141 conserta menos do que parece:** a tela dos outros módulos (`client/src/components/almoxarifado/RequisicoesList.js:1835-1837`, fora do modo almoxarifado) mostra **Cancelar Requisição** para `AGUARDANDO_ESTOQUE`, `AGUARDANDO_COMPRA`, `PARCIALMENTE_RESERVADA` e `TOTALMENTE_RESERVADA`, que a rota recusa com 400 *"não pode ser cancelada"* — e as reservadas são justamente as que seguram reserva. | Declarado (C149); decisão de contrato da outra porta (B426) — candidata à 92. |
+| m4 | menor | Desempenho: as aprovações esperam atrás de uma nota grande (nota de 300 materiais: 507 ms sozinha; o `/aprovar` de um material da nota esperou 410 ms; de material fora dela, 9 ms). | Declarado (C150, junto do m5). |
+| m5 | menor | A trava não tem prazo de aquisição (confirma o que "O que fica de fora" já declarava): trava presa 3 s → o `/aprovar` não respondeu; respondeu 3010 ms depois de soltar. | Já declarado (D(91)); número medido vai para a C150. |
+
+### F4 medido (sonda `e91-f5-janela.js`, gesto disparado a 0..N ms do início da nota, um material novo por deslocamento)
+
+| cenário | largura (comandos SQL entre o crédito do físico e a QUARENTENA) | saída v2 com disponível negativo | reserva manual com disponível negativo |
+|---|---|---|---|
+| antes do F3, sem SMTP | 15 | 0/41 (0..40 ms) | 1/41 |
+| antes do F3, **SMTP de 1 s, material abaixo do mínimo** | 29 (+ o tempo do SMTP) | **19/21** (0..20 ms) | **18/21** |
+| depois do F3, sem SMTP | 11 | 1/41 (no deslocamento de 2 ms) | 2/41 (2 e 3 ms) |
+| depois do F3, SMTP de 1 s, abaixo do mínimo | 11 | 1/21 | 0/21 |
+| gatilho determinístico no `INSERT` do `ENTRADA_COMPRA` (depois do F3) | — | 4/4 | 4/4 (`/aprovar`: **0/4**, espera a trava) |
+
+Leitura: o "mais largo que o declarado" era **o SMTP dentro da janela** (o F3); com ele fora, a janela volta a ~11 comandos
+(uma faixa de ~1–3 ms) — e continua aberta só contra quem **não** pega a trava (saída avulsa, reserva manual,
+separação), como o §6.4 já declarava. **Decisão (B430): declarar, não fechar nesta etapa.** As três formas de fechar
+foram medidas contra o critério "contido e seguro" e nenhuma passa: (1) a guarda no ramo `QUARENTENA` do motor
+(`stockService.js:1458`) recusando quando o disponível ficaria negativo faria a nota **falhar depois da entrada física**
+— o material fica livre **e** sem inspeção, e a nota travada (pior que hoje); (2) creditar o crítico direto em inspeção
+num movimento só muda o motor (`ENTRADA_COMPRA`, a sincronização do físico, o estorno e o livro) — não é contido;
+(3) pôr a trava na v2, na reserva manual e na separação abre três portas novas na trava (escopo da D(91)). Os três ficam
+como candidatas da 92.
+
+**Letra A (a confirmar no fechamento como A42 ampliada)** — a consulta da A42 ganha a coluna do material retido **sem
+lastro físico** (o que a saída avulsa na janela deixa: `q=0 i=4`):
+
+```sql
+SELECT m.id, m.codigo, m.nome, m.material_critico,
+       m.quantidade_atual, m.quantidade_reservada, m.quantidade_bloqueada,
+       m.quantidade_em_inspecao, COALESCE(m.quantidade_em_terceiros, 0) AS em_terceiros,
+       CASE WHEN m.quantidade_atual + 1e-9 < COALESCE(m.quantidade_em_inspecao, 0) + COALESCE(m.quantidade_bloqueada, 0)
+            THEN 1 ELSE 0 END AS retido_sem_lastro
+FROM materiais_almoxarifado m
+WHERE COALESCE(m.permite_saldo_negativo, 0) = 0
+  AND (m.quantidade_atual - COALESCE(m.quantidade_reservada, 0) - COALESCE(m.quantidade_bloqueada, 0)
+       - COALESCE(m.quantidade_em_inspecao, 0) - COALESCE(m.quantidade_em_terceiros, 0) < -1e-9
+       OR m.quantidade_atual + 1e-9 < COALESCE(m.quantidade_em_inspecao, 0) + COALESCE(m.quantidade_bloqueada, 0))
+ORDER BY m.codigo;
+```
+
+`retido_sem_lastro = 1`: material que saiu da prateleira **sem ter sido inspecionado** — a inspeção desses itens vai
+liberar saldo que não existe; conferir com a Qualidade antes de decidir a inspeção. O resto, como na A42.
+
+### Decisões reversíveis (para a letra B no fechamento; continuam a sequência B419–B428)
+
+- **B429 (F3) — o alerta de mínimo roda depois de soltar a trava, ainda aguardado pela requisição; um envio em voo por
+  material; prazos no SMTP.** `travaPorMaterial` abre um contexto (`AsyncLocalStorage`) na seção mais de fora;
+  `adiarParaDepoisDaSecao` empilha o alerta, que roda depois do `soltar()`; fora de seção, nada muda (síncrono).
+  `alertService`: material com alerta de mínimo em envio faz o concorrente desistir (o adiamento abriu a corrida do
+  segundo e-mail, que a trava serializava); prazos 15 s/15 s/20 s (os do `sendEmail` do CRM). Semântica mantida: uma vez
+  e marcado; na falha não marca e o próximo tenta. **Descartados:** dispara-e-esquece (`setImmediate`) — medido: 317/319,
+  3 casos em 2 arquivos (`alertasNovos`, `notificacaoJornada`) leem o estado/fila do alerta logo depois da resposta;
+  enfileirar o alerta de mínimo na fila de notificações — muda canal, modelo e reenvio do alerta; passar uma pendência
+  explícita pelas seis portas até o motor — mexe em todas as assinaturas.
+- **B430 (F4) — a janela da QUARENTENA fica declarada** (números e opções acima). Reverter = escolher uma das três
+  candidatas.
+- **B431 (F1) — a prova da trava mora em quem reserva.** `reservarItensAprovacao` confere, antes de reservar qualquer
+  item, que a seção segura todos os materiais (`materiaisForaDaSecao`, que olha o contexto de quem pergunta — não o
+  `Map`); se não, `TRAVA_INCOMPLETA` (409), e `comTravaDaRequisicao` refaz a seção com o conjunto maior, até 3 vezes;
+  na 3ª o 409 sobe com a literal *"A requisição ganhou itens enquanto era aprovada (ainda está sendo gravada); tente
+  aprovar de novo."*. **Descartados:** só reler dentro da trava (`2d6987a7` — medido insuficiente); seguir sem conferir
+  na última tentativa (era reservar sem a trava). Na aprovação automática a recusa é engolida pelo `try` de hoje (fica
+  `PENDENTE`, 201) — sem efeito prático: a automática roda depois de a criação gravar todos os itens.
+- **B432 (F2) — o reenvio duplicado fica declarado.** Conserto de verdade é idempotência por chave do cliente (o
+  cliente manda um id da tentativa; a rota recusa o repetido) — cliente e servidor, não é desta fase. **Descartado:**
+  deduplicar por (solicitante, itens, janela de tempo) — bloquearia pedidos idênticos legítimos.
+- **B433 (M-a2/M-c) — o desfazer do perdedor fora da trava foi testado, não declarado "baixo impacto"**: o dano
+  (2ª aprovação `AGUARDANDO_ESTOQUE` com 4 parados) é medível e o teste é barato.
+
+### Para a T7 (fechamento) — o que entra nos documentos
+
+- Letra **B**: B429–B433 (acima), além das B419–B428.
+- Letra **C** (continua C142–C144): **C145** a janela da QUARENTENA medida (tabela acima; só contra quem não pega a
+  trava); **C146** aprovar uma requisição **ainda sendo gravada** aprova só os itens já gravados (corrida da criação,
+  anterior à 91; desde a Fase 5 nunca reserva sem a trava); **C147** F2 (reenvio duplica com aprovação automática);
+  **C148** o log enganoso e o `antes` da auditoria na corrida C141 × aprovação; **C149** a tela dos outros módulos mostra
+  Cancelar em status que a rota recusa; **C150** desempenho (aprovação espera a nota grande; trava sem prazo de
+  aquisição, 3010 ms medidos).
+- Letra **A**: A42 **ampliada** (consulta acima).
+- **Spec/plano errados, dizer que estavam:** §6.7 deste plano ("ler os materiais antes de pegar a trava é estável") e o
+  §6.4/§6.5 ("janela ~10%, intermitente" — com SMTP era o tempo do SMTP).
+- Retro: rodadas de correção até verde — F3 **1**, F1 **2** (o detector de esteira não disparou: nenhum teste falhou em 3
+  rodadas seguidas); achados reais 4 + 5 mutações + 5 menores, ruído 0 (todos reproduzidos); defeito escapado — a
+  preencher na etapa seguinte.
+
+### Commits da Fase 5
+
+`14cf6df7` (F3) · `2d6987a7` (F1, rodada 1 — insuficiente) · `d98b73c9` (testes das mutações) · `723c58fd` (F1, rodada 2) ·
+`455eda9b` (comentário de `comTravaDaRequisicao`). Suítes no fim: test:api **321/321**, almoxarifado **44/0**,
+validation **4/0**, safealter **3/0**, sqlite **5/0**. Cliente não mudou (nem suíte nem build rodados).
