@@ -92,6 +92,19 @@ Acesso ao módulo (`checkModulePermission`) permite **abrir** as telas. Perfil
 é chão de fábrica. Quem decide é sempre o backend; `GET /almoxarifado/minhas-permissoes` existe
 só para a UI barrar antes do formulário, e falha **aberto** de propósito.
 
+## Trava por material do almoxarifado — quem mexe em saldo livre passa por ela
+
+Desde a Etapa 91, `services/almoxarifado/travaPorMaterial.js` (um `Map` só, em memória — premissa de
+**um** processo, C132) serializa as seis portas que disputam o disponível de um material: as três que
+**liberam** (nota, inspeção, não conformidade que aceita — do movimento do motor até a distribuição
+para quem espera) e as três que **aprovam** (`/aprovar`, `/aprovar-valor`, aprovação automática —
+`requisitionService.comTravaDaRequisicao`). Regras que já custaram deadlock ou fila invertida:
+a trava **não é reentrante**; vários materiais só por `comLockDosMateriais` (ordem crescente);
+recálculo de status (76), aviso (75) e alerta de mínimo (`adiarParaDepoisDaSecao`) rodam **depois**
+de soltar; quem reserva confere a seção (`materiaisForaDaSecao` → 409 `TRAVA_INCOMPLETA`). Porta
+nova que ponha saldo no disponível ou o leia para reservar **tem de pegar a trava** — senão a C131
+volta. Saída avulsa, reserva manual e separação **não** pegam (declarado, D (91)).
+
 ## Regra de negócio: almoxarifado é área física, não filial
 
 Os almoxarifados são áreas de alocação dentro do **mesmo site** — o cliente tem uma filial só.
