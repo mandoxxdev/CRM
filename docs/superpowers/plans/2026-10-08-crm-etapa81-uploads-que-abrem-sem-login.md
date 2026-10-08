@@ -31,39 +31,7 @@ comprovante e cotação aceitam qualquer tipo `:802`, `:747`; chat aceita MIME *
   Word) o cabeçalho cru dava 500/`ERR_INVALID_CHAR` (revisão do plano, F3). OS inexistente, sem `pdf_url` ou arquivo ausente → **404 `{ error: 'PDF da
   OS não encontrado' }`**. Sem token → 401.
 - **RN-81.02** `GET /api/proposta-template/contrato-anexo/:arquivo` (**authenticateToken**, o mesmo da
-  `POST` `:10968`): `path.basename(arquivo)` tem de casar `^contrato_[\w.\- ]+# Etapa 81 — arquivos enviados que abrem sem login (`/api/uploads/*` e `/uploads/ordens-servico`)
-
-> Origem: próxima tarefa do plano da 80. Baseline (`fc7c59f9`): `test:api` 299/299; client 86
-> suítes / 1338 testes; build limpo.
-
-## Fase 0 — medição (2026-10-08; tabela completa por pasta no relatório da varredura, resumida aqui)
-17 montagens `express.static` sem login. Nenhuma rota sem login devolve nome de arquivo, então o
-vazamento depende de **adivinhar o nome**. Todas servem qualquer extensão na origem do CRM, **sem
-`nosniff` nem CSP** — um `.html`/`.svg` enviado vira XSS armazenado (filtros que deixam passar:
-logo aceita SVG `index.js:983`; base64 de grupo/fornecedor/grupo-compras sem lista de extensões
-`index.js:3912`, `routes/compras.js:737,869`; extensão do nome original `index.js:932,951`;
-comprovante e cotação aceitam qualquer tipo `:802`, `:747`; chat aceita MIME **ou** extensão
-`routes/chat.js:35`).
-
-| Pasta | Conteúdo | Nome | Quem lê sem header | Decisão |
-|---|---|---|---|---|
-| `/uploads/ordens-servico` (`index.js:22077`) | **PDF da OS** (cliente, itens, valores) | `OS_<numero>_<ms>.pdf` — **muito adivinhável** | `OSDetalhesForm.js:230-231` (`window.open`), `:601` (`<a href>`), ambos com `:5000` fixo; `OSComercialForm.js:275` lê `pdf_url` | **T1/T2**: rota autenticada + blob; tirar a montagem |
-| `/api/uploads/contrato` (`:17974`) | modelo de contrato da empresa | `contrato_<ms>_<orig>` | `<a href>` em `ConfigTemplateProposta.js:632`, `PreviewPropostaEditavel.js:701` | **T1/T2**: rota autenticada + blob; tirar a montagem |
-| `/api/uploads/cotacoes` (`:17941`) | cotação de fornecedor (preços) | `cotacao_<propostaId>_<ms>_<orig>` | **ninguém** (client usa `GET /api/propostas/:id/cotacao` autenticada) | **T1**: só apagar a montagem |
-| `/api/uploads/comprovantes-viagens` (`:17080`) | comprovantes de despesa (dado pessoal) | `comprovante_<id>_<ms>_<orig>` | **ninguém** (client usa a rota autenticada `:17167`) | **T1**: só apagar a montagem |
-| `chat`, `proposta-fotos`, `avatares` | sensível/moderado; renderizados por `<img>` | chat: ~30 bits aleatórios | `<img>` e `srcDoc` | **fora** — exigem URL assinada (precedente `routes/almoxarifado.js:254-276`); Etapa 82 |
-| produtos, famílias, grupos, grupos-compras, fornecedores, materiais-escritório, logos | catálogo / público por natureza | variado | muitos `<img>` | **ficam públicas** + cabeçalhos seguros (T1) |
-| headers, footers, covers | legado sem leitor vivo | — | ninguém (só templates mortos) | ficam (cabeçalhos seguros); remoção é limpeza à parte |
-
-## Regras
-- **RN-81.01** `GET /api/operacional/ordens-servico/:id/pdf` (**authenticateToken**, o mesmo gate da
-  `POST …/gerar-pdf` `:21444`): lê `pdf_url` da OS, usa só o `path.basename`, `sendFile` de
-  `uploadsOSDir` com `Content-Type: application/pdf` e `Content-Disposition` **montado pelo encoder**
-  (`require('content-disposition')(basename, { type: 'inline' })`, dependência do Express) — o
-  `numero_os` é texto livre (`:21350`): com `"` ou caractere acima de U+00FF (travessão colado do
-  Word) o cabeçalho cru dava 500/`ERR_INVALID_CHAR` (revisão do plano, F3). OS inexistente, sem `pdf_url` ou arquivo ausente → **404 `{ error: 'PDF da
-  OS não encontrado' }`**. Sem token → 401.
- (casa todo nome
+  `POST` `:10968`): `path.basename(arquivo)` tem de casar `^contrato_[\w.\- ]+$` (casa todo nome
   real: o multer `:1170-1173` troca o que não é `[A-Za-z0-9_-]` por `_` desde o primeiro commit),
   **ser o `contrato_anexo_url` de alguma linha de `proposta_template`** (contrato removido em
   "Remover contrato" só zera a coluna e deixa o arquivo — sem esta regra continuaria baixável, B36)
