@@ -251,6 +251,59 @@ const semBase64 = (html) => html.replace(/data:image\/[a-z]+;base64,[A-Za-z0-9+/
     assert.strictEqual(r.body.empresa.nome, 'GMP INDUSTRIAIS');
   });
 
+  /* ── 6. snapshot, totais com encargo, nome do arquivo ─────────────────────────────────────── */
+  console.log('\nRN-78.07 / RN-78.02 / RN-78.05 — snapshot, totais com desconto e frete, nome do arquivo');
+  await test('o documento imprime o SNAPSHOT do fornecedor: renomear o cadastro depois nao muda o papel', async () => {
+    await dbRun(db, `UPDATE fornecedores SET razao_social = 'NOME NOVO DO CADASTRO SA', cnpj = '11.111.111/0001-11'
+      WHERE id = ?`, [tecnopar]);
+    try {
+      const r = await getHtml(pedidoId);
+      assert.strictEqual(r.status, 200);
+      assert.ok(r.text.includes('TECNOPAR FIXADORES LTDA'), 'nome do snapshot');
+      assert.ok(r.text.includes('54.984.382/0001-64'), 'CNPJ do snapshot');
+      assert.ok(!r.text.includes('NOME NOVO DO CADASTRO SA'), 'nome vivo nao pode aparecer');
+      assert.ok(!r.text.includes('11.111.111/0001-11'), 'CNPJ vivo nao pode aparecer');
+    } finally {
+      await dbRun(db, `UPDATE fornecedores SET razao_social = 'TECNOPAR FIXADORES LTDA', cnpj = '54.984.382/0001-64'
+        WHERE id = ?`, [tecnopar]);
+    }
+  });
+  await test('totais com desconto E frete: cada rotulo fica com o SEU valor, na ordem do §3.6', async () => {
+    const outro = await request(app).post('/api/compras/pedidos').send({ ...corpo, total_desconto: 5.25, valor_frete: 10 });
+    assert.strictEqual(outro.status, 201, JSON.stringify(outro.body));
+    const r = await getHtml(outro.body.id);
+    assert.strictEqual(r.status, 200);
+    const par = (rotulo, valor) => new RegExp(`<th>${rotulo}</th>\\s*<td class="r">${valor}</td>`);
+    const linhas = [
+      ['Total dos produtos', '198,70'], ['Total do IPI', '12,91'], ['Total ICMS-ST', '1,50'],
+      ['Total desconto', '5,25'], ['Frete', '10,00'],
+    ];
+    let ultimo = -1;
+    for (const [rotulo, valor] of linhas) {
+      const m = r.text.match(par(rotulo, valor));
+      assert.ok(m, `${rotulo} -> ${valor}`);
+      assert.ok(m.index > ultimo, `${rotulo} fora de ordem`);
+      ultimo = m.index;
+    }
+    const geral = r.text.match(/<th>Total geral<\/th>\s*<td class="r">R\$ ([^<]*)<\/td>/);
+    assert.ok(geral && geral.index > ultimo, 'total geral por ultimo');
+    assert.strictEqual(geral[1], '217,86', '198,70 + 12,91 + 1,50 + 10,00 - 5,25');
+  });
+  await test('Content-Disposition saneado: aspas, CR/LF e espacos do numero nao chegam ao header', async () => {
+    await dbRun(db, 'UPDATE pedidos_compra SET numero = ? WHERE id = ?', ['PC "78"\r\nX-Injetado: 1 fim', pedidoId]);
+    try {
+      const r = await getPdf(pedidoId);
+      assert.strictEqual(r.status, 200);
+      const cd = r.headers['content-disposition'];
+      assert.strictEqual(cd, 'attachment; filename="pedido-compra-PC_78_X-Injetado_1_fim.pdf"');
+      assert.ok(!/[\r\n]/.test(cd), 'sem CR/LF');
+      assert.strictEqual((cd.match(/"/g) || []).length, 2, 'so as aspas que delimitam o nome');
+      assert.strictEqual(r.headers['x-injetado'], undefined, 'nenhum header injetado');
+    } finally {
+      await dbRun(db, 'UPDATE pedidos_compra SET numero = ? WHERE id = ?', [numero, pedidoId]);
+    }
+  });
+
   /* ── controle positivo ────────────────────────────────────────────────────────────────────── */
   console.log('\nControle positivo');
   await test('a varredura de vazamento pega um HTML sabotado', async () => {

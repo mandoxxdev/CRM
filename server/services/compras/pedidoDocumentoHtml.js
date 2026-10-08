@@ -29,8 +29,8 @@
  * - `fornecedor.origem`: snapshot e cadastro imprimem igual, sem selo (RN-78.07) — o fornecedor
  *   nao precisa saber de onde o CRM leu o proprio CNPJ dele.
  *
- * FORMATACAO (RN-78.03): pt-BR com 2 casas; o UNITARIO com as casas necessarias (min 2, max 4 —
- * B31). A RN-12 da Etapa 32 mediu que o ERP imprime 3 casas fixas e por isso `qtd x unit` NAO fecha
+ * FORMATACAO (RN-78.03): pt-BR com 2 casas; o UNITARIO com as casas necessarias (min 2, ate 6 —
+ * B31; o "max 4" original nao fechava a linha, ver `formatarUnitario`). A RN-12 da Etapa 32 mediu que o ERP imprime 3 casas fixas e por isso `qtd x unit` NAO fecha
  * com o total da linha em 6 das 24 linhas do 28433 (`49 x 0,106 = 5,194` vs `5,21`); aqui o papel
  * tem de fechar, entao `0,1063` sai inteiro e `85,11` nao ganha zeros.
  *
@@ -90,25 +90,36 @@ function formatarValor(valor, casas = 2) {
   return n === null ? VAZIO : ptBR(n, casas);
 }
 
-/** Unitario com as casas NECESSARIAS: minimo 2, maximo 4 (B31). */
+/**
+ * Teto de casas do unitario e da quantidade. 6 e o que cabe sem ruido de ponto flutuante em valores
+ * de pedido (o `toFixed(6)` de `1.23456` e `1.234560`, nunca `1.2345600000001`).
+ */
+const CASAS_MAX = 6;
+
+/**
+ * Unitario com as casas NECESSARIAS: minimo 2, ate 6 (B31). O "max 4" original do plano estava
+ * errado: `valor_linha` e `arred2(qtd x unit)` com o unitario INTEIRO (`pedidoTotais.js`), entao
+ * `1000 x 1,23456` imprimia `1,2346` ao lado de `1.234,56` — o papel nao fechava (RN-78.03).
+ */
 function formatarUnitario(valor) {
   const n = numeroOuNulo(valor);
   if (n === null) return VAZIO;
-  // Arredonda na 4a casa e corta os zeros a direita, mas nunca abaixo de 2.
-  let casas = 4;
-  const dec = n.toFixed(4).split('.')[1];
+  // Arredonda na 6a casa e corta os zeros a direita, mas nunca abaixo de 2.
+  let casas = CASAS_MAX;
+  const dec = n.toFixed(CASAS_MAX).split('.')[1];
   while (casas > 2 && dec[casas - 1] === '0') casas -= 1;
   return ptBR(n, casas);
 }
 
-/** Quantidade: inteira sem casas, fracionada com ate 3. */
+/** Quantidade: inteira sem casas, fracionada com ate 6 (com 3, `0.0004` imprimia "0"). */
 function formatarQuantidade(valor) {
   const n = numeroOuNulo(valor);
   if (n === null) return VAZIO;
   if (Number.isInteger(n)) return ptBR(n, 0);
-  let fixo = n.toFixed(3);
+  let fixo = n.toFixed(CASAS_MAX);
   while (fixo.endsWith('0')) fixo = fixo.slice(0, -1);
-  return ptBR(n, fixo.split('.')[1].length);
+  const casas = (fixo.split('.')[1] || '').length;
+  return ptBR(n, casas);
 }
 
 /* ── datas ────────────────────────────────────────────────────────────────────────────────── */
@@ -168,9 +179,12 @@ function logoBase64() {
 /* ── blocos ───────────────────────────────────────────────────────────────────────────────── */
 function enderecoCompleto(e) {
   const linha1 = texto(e.endereco);
-  const cidadeUf = [e.cidade, e.estado].map((v) => (v == null ? '' : String(v).trim())).filter(Boolean).join(' - ');
-  const linha2 = [cidadeUf, (e.cep == null ? '' : String(e.cep).trim()) ? `CEP ${escapar(String(e.cep).trim())}` : '']
-    .filter(Boolean).map((v, i) => (i === 0 ? escapar(v) : v));
+  // Cada parte e escapada UMA vez, aqui. (A versao anterior escapava "o indice 0" da lista ja
+  // filtrada: sem cidade/UF o CEP virava o indice 0 e saia escapado duas vezes — "A&amp;amp;B".)
+  const limpo = (v) => (v == null ? '' : String(v).trim());
+  const cidadeUf = [e.cidade, e.estado].map(limpo).filter(Boolean).join(' - ');
+  const cep = limpo(e.cep);
+  const linha2 = [cidadeUf ? escapar(cidadeUf) : '', cep ? `CEP ${escapar(cep)}` : ''].filter(Boolean);
   return linha2.length ? `${linha1}<br>${linha2.join(' - ')}` : linha1;
 }
 
@@ -203,12 +217,17 @@ function blocoFornecedor(f) {
     </section>`;
 }
 
-function blocoComplementares(p) {
+/**
+ * `descontoImpresso` e o `totais.total_desconto` (o arred2 de `pedidoTotais.js`), o MESMO valor do
+ * quadro de totais. Ler `p.total_desconto` cru aqui imprimia 1.005 como "1,00" num bloco e "1,01"
+ * no outro — dois descontos diferentes no mesmo papel.
+ */
+function blocoComplementares(p, descontoImpresso) {
   return `
     <section class="bloco">
       <h2>Dados complementares</h2>
       <table class="dados">
-        <tr><th>Desconto</th><td>${formatarValor(p.total_desconto == null ? 0 : p.total_desconto)}</td>
+        <tr><th>Desconto</th><td>${formatarValor(descontoImpresso == null ? 0 : descontoImpresso)}</td>
             <th>Condição de pagamento</th><td>${texto(p.condicao_pagamento)}</td></tr>
         <tr><th>Transportadora</th><td>${texto(p.transportadora)}</td>
             <th>Telefone da transportadora</th><td>${texto(p.transportadora_telefone)}</td></tr>
@@ -311,6 +330,9 @@ const CSS = `
     html, body { margin: 0; padding: 0; }
     body { font-family: Arial, Helvetica, sans-serif; font-size: 9pt; color: #111; background: #fff; }
     h1 { font-size: 13pt; margin: 0; letter-spacing: .02em; }
+    h1 .numero { display: block; font-size: 11pt; }
+    .numero { white-space: nowrap; }
+    .nowrap { white-space: nowrap; }
     h2 { font-size: 9pt; margin: 0 0 3px 0; padding: 2px 6px; background: #e8e8e8; border: 1px solid #bbb; border-bottom: 0; text-transform: uppercase; }
     .bloco { margin-bottom: 8px; }
     .cabecalho { display: flex; align-items: stretch; gap: 10px; border: 1px solid #bbb; padding: 6px; margin-bottom: 8px; }
@@ -318,7 +340,7 @@ const CSS = `
     .cabecalho .logo img { max-width: 150px; max-height: 60px; }
     .cabecalho .logo .nome { font-weight: bold; font-size: 12pt; }
     .cabecalho .emitente { flex: 1 1 auto; font-size: 8.5pt; line-height: 1.35; }
-    .cabecalho .identificacao { flex: 0 0 215px; border-left: 1px solid #bbb; padding-left: 8px; font-size: 8.5pt; line-height: 1.5; }
+    .cabecalho .identificacao { flex: 0 0 235px; border-left: 1px solid #bbb; padding-left: 8px; font-size: 8.5pt; line-height: 1.5; }
     .cabecalho .identificacao .campo b { display: inline-block; min-width: 118px; }
     table { width: 100%; border-collapse: collapse; }
     table.dados th, table.dados td { border: 1px solid #bbb; padding: 2px 6px; vertical-align: top; text-align: left; }
@@ -390,13 +412,13 @@ function gerarHTMLPedidoCompra({ pedido, empresa, impressao } = {}) {
       <div class="campo"><b>Data do pedido:</b> ${formatarData(p.data_pedido)}</div>
       <div class="campo"><b>Situação:</b> ${rotuloStatus(p.status)}</div>
       <div class="campo"><b>Previsão de entrega:</b> ${formatarData(p.previsao_entrega)}</div>
-      <div class="campo"><b>Emissão:</b> ${emissao}</div>
+      <div class="campo"><b>Emissão:</b> <span class="nowrap">${emissao}</span></div>
       <div class="campo"><b>Usuário:</b> ${usuario}</div>
     </div>
   </header>
 ${blocoFornecedor(fornecedor)}
 ${blocoEmpresa(e, 'Dados para faturamento')}
-${blocoComplementares(p)}
+${blocoComplementares(p, totais.total_desconto)}
 ${blocoItens(itens)}
 ${blocoTotais(totais)}
 ${blocoRodape(p, e)}

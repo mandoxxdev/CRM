@@ -78,9 +78,15 @@
   **total geral** em destaque); **rodapé** (local de entrega, local de cobrança, a nota legal se
   configurada, linhas de assinatura "Depto. Compras" / "Diretoria").
 - **RN-78.03** Formatação: valores `pt-BR` com 2 casas; **valor unitário com as casas necessárias
-  (mín. 2, máx. 4)** — a RN-12 da 32 mediu que o ERP imprime 3 casas fixas e por isso `qtd × unit`
+  (mín. 2, até 6; zeros à direita além da 2ª caem)** — a RN-12 da 32 mediu que o ERP imprime 3 casas fixas e por isso `qtd × unit`
   **não fecha** com o total da linha em 6 das 24 linhas do pedido real (`49 × 0,106 = 5,194` vs
-  `5,21`); aqui o papel tem de fechar (B31, descarta as 3 casas fixas); `% IPI` com 2; peso com
+  `5,21`); aqui o papel tem de fechar (B31, descarta as 3 casas fixas). ⚠️ **Esta RN dizia
+  "máx. 4" e estava errada** (achado da revisão adversarial, corrigido no fix-round): o
+  `valor_linha` é `arred2(qtd × unit)` com o unitário na precisão gravada (`pedidoTotais.js:37`),
+  então um unitário de 5 casas cortado em 4 repete o erro do ERP — `1000 × 1,23456` imprimia
+  `1,2346` ao lado de `1.234,56` (com `1,2346` daria `1.234,60`). O teto 6 é o que `toFixed`
+  representa sem ruído de ponto flutuante. **Quantidade** fracionada também vai até 6 (com 3,
+  `0,0004` imprimia "0"). `% IPI` com 2; peso com
   3; datas `DD/MM/AAAA`; campo vazio ou `null` imprime "—". Sem nenhum `undefined`/`null`/`NaN`
   no HTML (teste varre a string, passando o shape com `null`, como vem de um pedido pré-39).
 - **RN-78.04** Empresa: `empresa_nome, cnpj, ie, endereco, cidade, estado, cep, telefone, email`

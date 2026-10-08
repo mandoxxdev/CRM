@@ -21,7 +21,7 @@ const t = (nome, fn) => {
   catch (e) { console.error('  FALHA ' + nome + ': ' + e.message); }
 };
 
-const { gerarHTMLPedidoCompra, formatarValor, formatarUnitario, formatarData, formatarDataHora } =
+const { gerarHTMLPedidoCompra, formatarValor, formatarUnitario, formatarQuantidade, formatarData, formatarDataHora } =
   require('../services/compras/pedidoDocumentoHtml');
 
 /* ── fixture: o shape de `obterPedido` (Etapa 39) com os numeros do 28433 ─────────────────── */
@@ -90,13 +90,26 @@ t('valor nulo/invalido imprime "—" (nunca NaN)', () => {
   assert.strictEqual(formatarValor(undefined), '—');
   assert.strictEqual(formatarValor('abc'), '—');
 });
-t('unitario com as casas necessarias: min 2, max 4 (B31 — descarta as 3 fixas do ERP)', () => {
+t('unitario com as casas necessarias: min 2, max 6 (B31 — descarta as 3 fixas do ERP)', () => {
   assert.strictEqual(formatarUnitario(85.11), '85,11');
   assert.strictEqual(formatarUnitario(2.191), '2,191');
   assert.strictEqual(formatarUnitario(0.1063), '0,1063');
   assert.strictEqual(formatarUnitario(5), '5,00');
   assert.strictEqual(formatarUnitario(1.5), '1,50');
-  assert.strictEqual(formatarUnitario(0.10630001), '0,1063', 'arredonda na 4a casa');
+  assert.strictEqual(formatarUnitario(0.10630001), '0,1063', 'zeros alem da 2a casa caem');
+});
+t('unitario com 5 e 6 casas sai inteiro (o "max 4" do plano nao fechava a linha) e arredonda na 6a', () => {
+  assert.strictEqual(formatarUnitario(1.23456), '1,23456');
+  assert.strictEqual(formatarUnitario(0.123456), '0,123456');
+  assert.strictEqual(formatarUnitario(0.1234567), '0,123457', 'arredonda na 6a casa');
+  assert.strictEqual(formatarUnitario(1234.5), '1.234,50');
+});
+t('quantidade fracionada ate 6 casas: 0.0004 nao vira "0"', () => {
+  assert.strictEqual(formatarQuantidade(0.0004), '0,0004');
+  assert.strictEqual(formatarQuantidade(1.123456), '1,123456');
+  assert.strictEqual(formatarQuantidade(2.5), '2,5');
+  assert.strictEqual(formatarQuantidade(13), '13');
+  assert.strictEqual(formatarQuantidade(1000), '1.000');
 });
 t('datas DD/MM/AAAA e DD/MM/AAAA HH:mm', () => {
   assert.strictEqual(formatarData('2025-12-16'), '16/12/2025');
@@ -189,6 +202,16 @@ t('§3.5 unitario com 4 casas fecha a linha: 49 x 0,1063 = 5,21 (RN-12 da 32)', 
   assert.ok(html.includes('5,21'));
   assert.ok(!html.includes('0,106<'), 'nao e truncado em 3');
 });
+t('§3.5 linha com unitario de 5 casas FECHA no papel: 1000 x 1,23456 = 1.234,56', () => {
+  const html = gerar({
+    itens: [{ item_numero: 1, codigo: 'X-1', descricao: 'CHAPA', ncm: null, peso_unitario: null,
+      quantidade: 1000, unidade: 'KG', valor_unitario: 1.23456, ipi_percentual: 0, observacao: null }],
+    totais: undefined,
+  });
+  assert.ok(html.includes('>1,23456<'), 'unitario inteiro');
+  assert.ok(html.includes('>1.234,56<'), 'linha = arred2(1000 x 1,23456)');
+  assert.ok(!html.includes('>1,2346<'), 'nao corta na 4a casa');
+});
 t('§3.6 totais: produtos, IPI, ICMS-ST, desconto, frete e o total geral em destaque', () => {
   const html = gerar();
   for (const r of ['Total dos produtos', 'Total do IPI', 'ICMS', 'Desconto', 'Frete', 'Total geral']) {
@@ -208,6 +231,20 @@ t('§3.7 rodape: local de entrega, local de cobranca, assinaturas', () => {
   assert.ok(html.includes('Mesmo endereço'));
   assert.ok(/Local de entrega/i.test(html) && /Local de cobrança/i.test(html));
   assert.ok(html.includes('Depto. Compras') && html.includes('Diretoria'));
+});
+
+t('§3.4 x §3.6 o desconto imprime o MESMO valor nos dois blocos (1.005 -> 1,01, o arred2 dos totais)', () => {
+  const descontoComplementar = (html) => (html.match(/<th>Desconto<\/th><td>([^<]*)<\/td>/) || [])[1];
+  const descontoTotais = (html) => (html.match(/<th>Total desconto<\/th><td class="r">([^<]*)<\/td>/) || [])[1];
+  // legado: sem totais, a conta e refeita por calcularTotaisPedido
+  const legado = gerar({ total_desconto: 1.005, totais: undefined });
+  assert.strictEqual(descontoTotais(legado), '1,01');
+  assert.strictEqual(descontoComplementar(legado), '1,01', 'dados complementares = totais (legado)');
+  // com totais gravados (o shape de obterPedido): o cabecalho cru 1.005, os totais 1.01
+  const gravado = gerar({ total_desconto: 1.005,
+    totais: { total_produtos: 198.70, total_ipi: 12.91, total_icms_st: 0, total_desconto: 1.01, valor_frete: 0, total_geral: 210.60 } });
+  assert.strictEqual(descontoTotais(gravado), '1,01');
+  assert.strictEqual(descontoComplementar(gravado), '1,01', 'dados complementares = totais (gravado)');
 });
 
 /* ── nota legal ────────────────────────────────────────────────────────────────────────────── */
@@ -262,6 +299,39 @@ t('descricao, observacao, fornecedor e usuario sao escapados (<b> vira texto, nu
   assert.ok(html.includes('FORN &lt;b&gt;X&lt;/b&gt;'));
   assert.ok(!html.includes('<img src=x>'));
   assert.ok(html.includes('X&lt;1&gt;'));
+});
+t('empresa (nome, endereco, cidade, UF, CEP, CNPJ, IE, nota), numero, status desconhecido e municipio/UF sao escapados', () => {
+  const html = gerar({
+    numero: 'PC-<1>&"2"',
+    status: '<b>estranho</b>',
+    fornecedor: { ...pedido28433().fornecedor, municipio: 'S<A>O', uf: 'S&P' },
+  }, {
+    nome: 'GMP <Ind> & Cia', cnpj: '12<34>', ie: 'IE&1', endereco: 'Rua <A>', cidade: 'C<id>', estado: 'S"P',
+    cep: '09<8>', telefone: '(11) <1>', email: 'a&b@x', nota_pedido_compra: 'Nota <script>x</script>',
+  });
+  for (const cru of ['<Ind>', '<34>', '<A>', '<id>', '<8>', '<1>', '<b>estranho', '<script>x', 'S<A>O']) {
+    assert.ok(!html.includes(cru), `cru: ${cru}`);
+  }
+  assert.ok(html.includes('GMP &lt;Ind&gt; &amp; Cia'), 'nome da empresa');
+  assert.ok(html.includes('CNPJ 12&lt;34&gt; &middot; IE IE&amp;1'), 'cnpj e ie no cabecalho');
+  assert.ok(html.includes('Rua &lt;A&gt;<br>C&lt;id&gt; - S&quot;P - CEP 09&lt;8&gt;'), 'endereco, cidade, UF e CEP');
+  assert.ok(html.includes('a&amp;b@x'), 'email');
+  assert.ok(html.includes('Nota &lt;script&gt;x&lt;/script&gt;'), 'nota legal');
+  assert.ok(html.includes('PC-&lt;1&gt;&amp;&quot;2&quot;'), 'numero');
+  assert.ok(html.includes('&lt;b&gt;estranho&lt;/b&gt;'), 'status desconhecido sai escapado');
+  assert.ok(html.includes('S&lt;A&gt;O / S&amp;P'), 'municipio / UF do fornecedor');
+});
+t('CEP sem cidade/UF e escapado UMA vez so ("A&B" -> "A&amp;B", nunca "A&amp;amp;B")', () => {
+  const html = gerar({}, { ...EMPRESA, cidade: '', estado: '', cep: 'A&B' });
+  assert.ok(html.includes('CEP A&amp;B'));
+  assert.ok(!html.includes('&amp;amp;'), 'escape duplo');
+});
+t('cabecalho: o numero e a emissao nao quebram linha (nowrap)', () => {
+  const html = gerar();
+  assert.ok(/\.numero\s*\{[^}]*white-space:\s*nowrap/.test(html), '.numero nowrap');
+  assert.ok(html.includes('<span class="numero">PC-2025-0028</span>'));
+  assert.ok(/\.nowrap\s*\{[^}]*white-space:\s*nowrap/.test(html), '.nowrap definido');
+  assert.ok(html.includes('<b>Emissão:</b> <span class="nowrap">07/10/2026 14:33</span>'), 'emissao nowrap');
 });
 t('e pura: duas chamadas com a mesma entrada dao a mesma string', () => {
   assert.strictEqual(gerar(), gerar());
