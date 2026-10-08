@@ -312,7 +312,8 @@ let pdfsGerados = 0;
 let timerOciosoPdf = null;
 
 // Etapa 80 (B32) — FILA SERIAL do Chromium compartilhado: no maximo UMA geracao de PDF usa o
-// navegador por vez, somando os dois chamadores (rota da proposta e gerarPdfDeHtml). Antes, sem
+// navegador por vez, somando os chamadores (rota da proposta, gerarPdfDeHtml e, desde a Etapa 87,
+// a rota do PDF da OS — o unico puppeteer.launch do arquivo e o de obterNavegadorPdf). Antes, sem
 // fila: (1) a reciclagem disparada por um PDF matava outro no meio do page.pdf ("Target closed");
 // (2) o erro de um fechava o navegador do outro; (3) dois chamadores com navegadorPdf === null
 // lancavam DOIS Chromium e o primeiro nunca era fechado (prova "antes": 33 Chromium vivos e 7 de
@@ -21361,8 +21362,7 @@ app.delete('/api/operacional/ordens-servico/:id', authenticateToken, checkModule
 // Gerar PDF da OS usando Puppeteer (POST para gerar e salvar)
 app.post('/api/operacional/ordens-servico/:id/gerar-pdf', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  let browser = null;
-  
+
   try {
     // Buscar OS completa
     const os = await new Promise((resolve, reject) => {
@@ -21786,149 +21786,75 @@ app.post('/api/operacional/ordens-servico/:id/gerar-pdf', authenticateToken, asy
       throw new Error(`Erro ao gerar HTML: ${error.message}`);
     }
     
-    // Iniciar Puppeteer
-    try {
-      browser = await puppeteer.launch({
-        ...getPuppeteerLaunchOptions(),
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--disable-gpu'
-        ]
-      });
-    } catch (error) {
-      console.error('Erro ao iniciar Puppeteer:', error);
-      throw new Error(`Erro ao iniciar Puppeteer: ${error.message}`);
-    }
-    
-    let page;
-    try {
-      page = await browser.newPage();
-    } catch (error) {
-      console.error('Erro ao criar nova página:', error);
-      await browser.close();
-      throw new Error(`Erro ao criar página: ${error.message}`);
-    }
-    
-    // Configurar viewport
-    await page.setViewport({
-      width: 1200,
-      height: 1600,
-      deviceScaleFactor: 2
-    });
-    
-    // Configurar URL base para recursos
-    const baseURL = process.env.API_URL || `http://localhost:${PORT}`;
-    
-    // Interceptar requisições para converter URLs relativas em absolutas
-    await page.setRequestInterception(true);
-    page.on('request', (request) => {
-      const url = request.url();
-      console.log(`🌐 [PDF] Requisição: ${url}`);
-      
-      // Se for URL relativa, converter para absoluta
-      if (url.startsWith('/')) {
-        const absoluteUrl = `${baseURL}${url}`;
-        console.log(`🔗 [PDF] Convertendo URL relativa: ${url} -> ${absoluteUrl}`);
-        request.continue({ url: absoluteUrl });
-      } 
-      // Se for URL de uploads/produtos ou Logo, garantir que seja absoluta
-      else if (url.includes('uploads/produtos') || url.includes('Logo_MY') || url.includes('Logo')) {
-        const absoluteUrl = url.startsWith('http') ? url : `${baseURL}${url.startsWith('/') ? url : '/' + url}`;
-        console.log(`🔗 [PDF] Convertendo URL de recurso: ${url} -> ${absoluteUrl}`);
-        request.continue({ url: absoluteUrl });
-      } 
-      else {
-        request.continue();
+    // Etapa 87 (B35): o PDF da OS usa o MESMO Chromium da proposta, na FILA (enfileirarPdf). Antes
+    // a rota lancava um Chromium proprio por PDF (~2 s de launch), fora da fila: dois PDFs de OS, ou
+    // uma OS junto com propostas, punham varios Chromium de pe ao mesmo tempo — a pressao de memoria
+    // que a Etapa 80 tirou da proposta. Dados, imagens em base64 e gerarHTMLOS ficam ANTES da fila;
+    // arquivo, UPDATE e resposta DEPOIS (fora), para disco e banco nao segurarem os outros PDFs.
+    // Opcoes de viewport (DSF 2) e de page.pdf iguais as de antes: a saida nao muda. Sairam a
+    // interceptacao de requests (so logava: o HTML nao tem URL relativa, tudo vem em base64), o
+    // networkidle0, os timers de 10 s por imagem e o sleep fixo de 2 s — no lugar, a mesma espera
+    // da proposta (fontes + imagens decodificadas + dois quadros).
+    // O erro fecha o navegador DENTRO da tarefa e relanca (como a proposta): no catch externo a vez
+    // ja pode ser de outro PDF.
+    const tEnfileirou = Date.now();
+    const pdfBuffer = await enfileirarPdf(async () => {
+      const tPdf = { inicio: Date.now(), marca: Date.now(), etapas: [`fila=${Date.now() - tEnfileirou}ms`] };
+      const marcarPdf = (nome) => { tPdf.etapas.push(`${nome}=${Date.now() - tPdf.marca}ms`); tPdf.marca = Date.now(); };
+      const navegadorJaEstavaDePe = !!navegadorPdf;
+      let browser = null;
+      try {
+        browser = await obterNavegadorPdf();
+        marcarPdf(navegadorJaEstavaDePe ? 'navegador(reuso)' : 'navegador(abriu)');
+        const page = await browser.newPage();
+        marcarPdf('novaAba');
+        await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 2 });
+
+        await page.setContent(html, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
+        marcarPdf('carregarHTML');
+
+        await page.evaluate(async () => {
+          if (document.fonts && document.fonts.ready) await document.fonts.ready;
+          await Promise.all(Array.from(document.images).map((img) => (
+            img.complete ? Promise.resolve() : new Promise((r) => {
+              img.addEventListener('load', r, { once: true });
+              img.addEventListener('error', r, { once: true });
+            })
+          )));
+        });
+        await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+        marcarPdf('fontes+imagens');
+
+        const pdfResult = await page.pdf({
+          format: 'A4',
+          printBackground: true,
+          margin: {
+            top: '15mm',
+            right: '15mm',
+            bottom: '15mm',
+            left: '15mm'
+          },
+          preferCSSPageSize: true,
+          displayHeaderFooter: false,
+          scale: 1.0
+        });
+        marcarPdf('renderizarPDF');
+        const buf = Buffer.from(pdfResult);
+        console.log(`[PDF] OS ${id} em ${Date.now() - tPdf.inicio}ms | itens=${osItens.length} html=${(Buffer.byteLength(html) / 1024 / 1024).toFixed(2)}MB pdf=${(buf.length / 1024).toFixed(0)}KB | ${tPdf.etapas.join(' ')}`);
+
+        // Fecha a ABA, nao o navegador: ele fica de pe para o proximo PDF (ver obterNavegadorPdf).
+        await page.close();
+        browser = null;
+        pdfsGerados += 1;
+        agendarFechamentoOcioso();
+        return buf;
+      } catch (error) {
+        if (browser) {
+          await fecharNavegadorPdf('erro na geração');
+        }
+        throw error;
       }
     });
-    
-    // Carregar HTML
-    try {
-      await page.setContent(html, {
-        waitUntil: ['load', 'domcontentloaded', 'networkidle0'],
-        timeout: 60000
-      });
-    } catch (error) {
-      console.error('Erro ao carregar HTML no Puppeteer:', error);
-      await browser.close();
-      throw new Error(`Erro ao carregar HTML: ${error.message}`);
-    }
-    
-    // Aguardar imagens carregarem
-    try {
-      const imagesInfo = await page.evaluate(() => {
-        const images = Array.from(document.images);
-        console.log(`📊 Total de imagens encontradas no HTML: ${images.length}`);
-        images.forEach((img, index) => {
-          console.log(`🖼️ Imagem ${index + 1}: src="${img.src}", complete: ${img.complete}, naturalWidth: ${img.naturalWidth}`);
-        });
-        return Promise.all(
-          images.map((img, index) => {
-            if (img.complete && img.naturalWidth > 0) {
-              console.log(`✅ Imagem ${index + 1} já carregada`);
-              return Promise.resolve();
-            }
-            return new Promise((resolve) => {
-              img.onload = () => {
-                console.log(`✅ Imagem ${index + 1} carregada: ${img.src}`);
-                resolve();
-              };
-              img.onerror = () => {
-                console.warn(`❌ Erro ao carregar imagem ${index + 1}: ${img.src}`);
-                resolve(); // Não falhar se imagem não carregar
-              };
-              setTimeout(() => {
-                console.warn(`⏱️ Timeout imagem ${index + 1}: ${img.src}`);
-                resolve();
-              }, 10000); // Timeout de 10s
-            });
-          })
-        );
-      });
-      console.log(`✅ Processamento de imagens concluído`);
-    } catch (err) {
-      console.warn('Erro ao aguardar imagens:', err.message);
-      // Continuar mesmo se houver erro com imagens
-    }
-    
-    // Aguardar renderização (Puppeteer 22+ não tem waitForTimeout)
-    try {
-      await new Promise(r => setTimeout(r, 2000));
-    } catch (error) {
-      console.warn('Erro ao aguardar timeout:', error.message);
-    }
-    
-    // Gerar PDF
-    let pdfBuffer;
-    try {
-      pdfBuffer = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        margin: {
-          top: '15mm',
-          right: '15mm',
-          bottom: '15mm',
-          left: '15mm'
-        },
-        preferCSSPageSize: true,
-        displayHeaderFooter: false,
-        scale: 1.0
-      });
-    } catch (error) {
-      console.error('Erro ao gerar PDF:', error);
-      await browser.close();
-      throw new Error(`Erro ao gerar PDF: ${error.message}`);
-    }
-    
-    try {
-      await browser.close();
-    } catch (error) {
-      console.warn('Erro ao fechar browser:', error.message);
-    }
-    browser = null;
     
     // Garantir que o diretório existe
     if (!fs.existsSync(uploadsOSDir)) {
@@ -21968,17 +21894,10 @@ app.post('/api/operacional/ordens-servico/:id/gerar-pdf', authenticateToken, asy
       id: id
     });
     
-    // Fechar browser se ainda estiver aberto
-    if (browser) {
-      try {
-        await browser.close();
-      } catch (closeError) {
-        console.error('Erro ao fechar browser:', closeError);
-      }
-    }
-    
+    // Etapa 87: nada de fechar navegador aqui — o erro de geracao ja fechou o compartilhado DENTRO
+    // da fila; fechar neste ponto derrubaria o navegador de quem estiver com a vez agora.
     if (!res.headersSent) {
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'Erro ao gerar PDF',
         message: process.env.NODE_ENV === 'development' ? error.message : 'Erro ao gerar PDF. Verifique os logs do servidor.',
         details: process.env.NODE_ENV === 'development' ? {

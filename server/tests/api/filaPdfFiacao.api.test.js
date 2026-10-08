@@ -101,19 +101,20 @@ test('controle: o analisador acusa uma chamada fora da fila (fonte sintetica)', 
   assert.strictEqual(fora[0].linha, 4);
 });
 
-test('acha os 3 blocos da fila (ocioso, gerarPdfDeHtml, rota da proposta)', () => {
-  assert.strictEqual(blocos.length, 3, `blocos enfileirarPdf( = ${blocos.length}`);
+// Etapa 87 (B35): a rota do PDF da OS entrou na fila — eram 3 blocos, 2 obter, 4 fechar.
+test('acha os 4 blocos da fila (ocioso, gerarPdfDeHtml, rota da proposta, rota da OS)', () => {
+  assert.strictEqual(blocos.length, 4, `blocos enfileirarPdf( = ${blocos.length}`);
 });
 
-test('obterNavegadorPdf e chamado 2x (proposta + gerarPdfDeHtml), as duas dentro da fila', () => {
+test('obterNavegadorPdf e chamado 3x (proposta + gerarPdfDeHtml + OS), todas dentro da fila', () => {
   const obter = chamadas.filter((c) => c.nome === 'obterNavegadorPdf');
-  assert.strictEqual(obter.length, 2, JSON.stringify(obter));
+  assert.strictEqual(obter.length, 3, JSON.stringify(obter));
   obter.forEach((c) => assert.strictEqual(c.onde, 'fila', `obterNavegadorPdf fora da fila na linha ${c.linha}`));
 });
 
-test('fecharNavegadorPdf e chamado 4x e nenhuma fora da fila (reciclagem, ocioso, 2 erros)', () => {
+test('fecharNavegadorPdf e chamado 5x e nenhuma fora da fila (reciclagem, ocioso, 3 erros)', () => {
   const fechar = chamadas.filter((c) => c.nome === 'fecharNavegadorPdf');
-  assert.strictEqual(fechar.length, 4, JSON.stringify(fechar));
+  assert.strictEqual(fechar.length, 5, JSON.stringify(fechar));
   const fora = fechar.filter((c) => !c.ok);
   assert.deepStrictEqual(fora.map((c) => c.linha), [],
     'fecharNavegadorPdf fora da fila — fecha o navegador de quem esta gerando (B32)');
@@ -165,12 +166,50 @@ test('RN-80.03: ninguem fecha o navegadorPdf direto; page.pdf e agendarFechament
     return out;
   };
   const agendar = naFila('\\bagendarFechamentoOcioso\\(');
-  assert.strictEqual(agendar.length, 2, JSON.stringify(agendar));
+  assert.strictEqual(agendar.length, 3, JSON.stringify(agendar));
   assert.deepStrictEqual(agendar.filter((c) => !c.ok).map((c) => c.linha), [], 'agendarFechamentoOcioso fora da fila');
-  // 3 page.pdf no arquivo: proposta + gerarPdfDeHtml (na fila) + a rota da OS (Chromium proprio,
-  // fora do escopo — B35). Exatamente 2 dentro da fila.
+  // 3 page.pdf no arquivo (proposta, gerarPdfDeHtml, rota da OS) e os 3 dentro da fila. Ate a
+  // Etapa 87 a OS tinha Chromium proprio e ficava fora (B35).
   const pdfs = naFila('\\bpage\\.pdf\\(');
-  assert.strictEqual(pdfs.filter((c) => c.ok).length, 2, 'page.pdf do navegador compartilhado fora da fila: ' + JSON.stringify(pdfs));
+  assert.strictEqual(pdfs.length, 3, JSON.stringify(pdfs));
+  assert.deepStrictEqual(pdfs.filter((c) => !c.ok).map((c) => c.linha), [], 'page.pdf fora da fila');
+});
+
+// Etapa 87 (RN-87.01): o unico Chromium do servidor e o de obterNavegadorPdf. Sem este teste, uma
+// rota nova (ou a OS de volta) podia abrir navegador proprio e fechar com browser.close() sem
+// passar por nenhuma das reguas acima.
+test('RN-87.01: um unico puppeteer.launch( no arquivo, dentro de obterNavegadorPdf; nenhum browser.close(', () => {
+  const launches = []; let m; const r = /\bpuppeteer\.launch\(/g;
+  while ((m = r.exec(fonte))) { if (!emComentario(fonte, m.index)) launches.push(m.index); }
+  assert.strictEqual(launches.length, 1, `puppeteer.launch( = ${launches.length} (linhas ${launches.map((i) => linhaDe(fonte, i)).join(', ')})`);
+  assert.ok(launches[0] > corpoObter[0] && launches[0] < corpoObter[1], 'puppeteer.launch( fora de obterNavegadorPdf');
+  const fechaDireto = []; const rc = /\bbrowser\.close\(/g;
+  while ((m = rc.exec(fonte))) { if (!emComentario(fonte, m.index)) fechaDireto.push(linhaDe(fonte, m.index)); }
+  assert.deepStrictEqual(fechaDireto, [], 'browser.close( fecha o navegador compartilhado por fora de fecharNavegadorPdf');
+});
+
+// Etapa 87 (RN-87.01/02/03): a rota da OS tem UM bloco na fila com o navegador, o page.pdf e o
+// fechamento por erro; arquivo, UPDATE e resposta ficam DEPOIS (fora), para nao segurar a fila
+// com disco e banco. O contrato de erro (500 'Erro ao gerar PDF') continua na rota.
+test('rota da OS: navegador e page.pdf na fila; arquivo, UPDATE pdf_url e resposta fora; fila= medida', () => {
+  const ini = fonte.indexOf("app.post('/api/operacional/ordens-servico/:id/gerar-pdf'");
+  assert.ok(ini > 0, 'rota gerar-pdf da OS sumiu');
+  const fim = fechamento(fonte, ini + 'app.post'.length);
+  const rota = [ini, fim];
+  const blocosRota = blocos.filter(([a, b]) => a > rota[0] && b < rota[1]);
+  assert.strictEqual(blocosRota.length, 1, `blocos enfileirarPdf( na rota da OS = ${blocosRota.length}`);
+  const [a, b] = blocosRota[0];
+  const posicoes = (txt) => {
+    const out = []; let i = fonte.indexOf(txt, rota[0]);
+    while (i > 0 && i < rota[1]) { if (!emComentario(fonte, i)) out.push(i); i = fonte.indexOf(txt, i + 1); }
+    assert.ok(out.length > 0, `${txt} sumiu da rota da OS`);
+    return out;
+  };
+  const dentro = (i) => i > a && i < b;
+  ['obterNavegadorPdf(', 'page.pdf(', "fecharNavegadorPdf('erro na geração')", 'agendarFechamentoOcioso(', 'fila=${']
+    .forEach((txt) => posicoes(txt).forEach((i) => assert.ok(dentro(i), `${txt} fora da fila na linha ${linhaDe(fonte, i)}`)));
+  ['writeFileSync(', 'UPDATE ordens_servico SET pdf_url', 'res.json(', "error: 'Erro ao gerar PDF'", 'gerarHTMLOS(']
+    .forEach((txt) => posicoes(txt).forEach((i) => assert.ok(!dentro(i), `${txt} dentro da fila na linha ${linhaDe(fonte, i)} — segura a fila`)));
 });
 
 test('RN-80.07: obterNavegadorPdf lanca com protocolTimeout: 60000', () => {
