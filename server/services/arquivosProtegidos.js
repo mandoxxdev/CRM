@@ -28,8 +28,14 @@ function arquivoNaPasta(dir, nome) {
   try { return fs.statSync(alvo).isFile() ? alvo : null; } catch (_) { return null; }
 }
 
+// Achado da revisao adversarial: sem `cacheControl: false` o sendFile poe `Cache-Control: public,
+// max-age=0` — `public` deixa proxy/cache compartilhado guardar um arquivo que so sai com login.
+const CABECALHOS_PROTEGIDOS = { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' };
+
 function enviar(res, alvo, headers, erro) {
-  res.sendFile(alvo, { headers, dotfiles: 'allow' }, (err) => {
+  res.sendFile(alvo, {
+    headers: { ...CABECALHOS_PROTEGIDOS, ...headers }, cacheControl: false, dotfiles: 'allow',
+  }, (err) => {
     if (err && !res.headersSent) res.status(404).json({ error: erro });
   });
 }

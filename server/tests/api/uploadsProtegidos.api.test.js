@@ -114,10 +114,12 @@ let criarServirPdfOs; let criarServirContratoAnexo;
 try {
   ({ criarServirPdfOs, criarServirContratoAnexo } = require('../../services/arquivosProtegidos'));
 } catch (e) { console.error('services/arquivosProtegidos nao carregou:', e.message); }
+const { cabecalhosUploadSeguro, cabecalhosUploadLogo } = require('../../services/almoxarifado/urlUpload');
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'c81-uploads-'));
 const dirOS = path.join(tmp, 'ordens-servico'); fs.mkdirSync(dirOS);
 const dirContrato = path.join(tmp, 'contrato'); fs.mkdirSync(dirContrato);
+const dirLogos = path.join(tmp, 'logos'); fs.mkdirSync(dirLogos);
 const fora = path.join(tmp, 'segredo.pdf'); fs.writeFileSync(fora, '%PDF-segredo-fora-da-pasta');
 
 const db = new sqlite3.Database(':memory:');
@@ -146,7 +148,14 @@ async function preparar() {
   await run('INSERT INTO proposta_template_config VALUES (1, ?)', ['contrato_1700_Modelo_GMP.docx']);
   await run('INSERT INTO proposta_template_config VALUES (2, ?)', [null]); // "Remover contrato" zera
 
+  // logo SVG com <style> (o caso real: exportado do Illustrator/Inkscape) e <script> (o ataque)
+  fs.writeFileSync(path.join(dirLogos, 'logo.svg'),
+    '<svg xmlns="http://www.w3.org/2000/svg"><style>.a{fill:red}</style><script>alert(1)</script>'
+    + '<rect class="a" width="10" height="10"/></svg>');
+
   app = express();
+  app.use('/logos', express.static(dirLogos, { setHeaders: cabecalhosUploadLogo || (() => {}) }));
+  app.use('/outros', express.static(dirLogos, { setHeaders: cabecalhosUploadSeguro }));
   if (!criarServirPdfOs) return;
   app.get('/pdf/:id', criarServirPdfOs({ db, uploadsOSDir: dirOS }));
   app.get('/contrato/:arquivo', criarServirContratoAnexo({ db, uploadsContratoDir: dirContrato }));
@@ -196,6 +205,37 @@ test('RN-81.02: contrato atual -> 200 attachment com o arquivo', async () => {
   assert.strictEqual(corpo(r), 'PK-docx-atual');
   assert.match(r.headers['content-disposition'], /^attachment; filename="contrato_1700_Modelo_GMP\.docx"/);
   assert.match(r.headers['content-type'], /officedocument\.wordprocessingml/);
+});
+
+// Achado da revisao adversarial: o sendFile do Express poe `Cache-Control: public, max-age=0` —
+// `public` autoriza proxy/cache compartilhado a guardar o PDF (cliente, valores) que so sai com
+// login. E sem nosniff o navegador podia farejar o contrato como outro tipo.
+for (const [url, oque] of [['/pdf/1', 'PDF da OS'], ['/contrato/contrato_1700_Modelo_GMP.docx', 'contrato']]) {
+  test(`revisao: ${oque} sai com Cache-Control private, no-store e nosniff`, async () => {
+    const r = await binario(request(app).get(url));
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.headers['cache-control'], 'private, no-store');
+    assert.strictEqual(r.headers['x-content-type-options'], 'nosniff');
+  });
+}
+
+const CSP_ESTRITA = "default-src 'none'; sandbox";
+const CSP_LOGO = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox";
+
+test('revisao: logo SVG sai com CSP que permite <style> inline e data: — script continua bloqueado', async () => {
+  const r = await request(app).get('/logos/logo.svg');
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.headers['content-security-policy'], CSP_LOGO);
+  assert.ok(!/script-src/.test(r.headers['content-security-policy']), 'CSP do logo libera script');
+  assert.strictEqual(r.headers['x-content-type-options'], 'nosniff');
+  assert.match(r.headers['cache-control'], /^private/);
+});
+
+test('revisao: as outras montagens continuam com a CSP estrita', async () => {
+  const r = await request(app).get('/outros/logo.svg');
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.headers['content-security-policy'], CSP_ESTRITA);
+  assert.strictEqual(r.headers['x-content-type-options'], 'nosniff');
 });
 
 test('RN-81.02: contrato removido (arquivo no disco, coluna zerada) -> 404', async () => {
@@ -259,8 +299,17 @@ test('RN-81.03: nenhuma montagem estatica serve as pastas protegidas (nem com ou
 
 test('RN-81.04: toda montagem estatica sob /api/uploads usa setHeaders: cabecalhosUploadSeguro', () => {
   const sob = MONTAGENS.filter((x) => x.caminho && x.caminho.startsWith('/api/uploads/'));
-  const sem = sob.filter((x) => !/setHeaders\s*:/.test(x.opcoes) || !/cabecalhosUploadSeguro/.test(x.opcoes));
+  const sem = sob.filter((x) => !/setHeaders\s*:/.test(x.opcoes)
+    || !/cabecalhosUpload(Seguro|Logo)\b/.test(x.opcoes));
   assert.deepStrictEqual(sem.map((x) => `${x.arq}:${x.linha} ${x.caminho}`), []);
+});
+
+test('revisao: so /api/uploads/logos usa a CSP do logo; as demais ficam na estrita', () => {
+  const sob = MONTAGENS.filter((x) => x.caminho && x.caminho.startsWith('/api/uploads/'));
+  const comLogo = sob.filter((x) => /cabecalhosUploadLogo\b/.test(x.opcoes)).map((x) => x.caminho);
+  assert.deepStrictEqual(comLogo, ['/api/uploads/logos']);
+  const logos = sob.find((x) => x.caminho === '/api/uploads/logos');
+  assert.match(logos.opcoes, /setHeaders:\s*cabecalhosUploadLogo\s*\}/);
 });
 
 test('RN-81.04: a lista medida de montagens publicas sob /api/uploads (13 + almoxarifado assinada)', () => {
@@ -292,6 +341,50 @@ const ROTAS = [
   ['/api/proposta-template/contrato-anexo/:arquivo', 'servirContratoAnexo',
     'criarServirContratoAnexo({ db, uploadsContratoDir })'],
 ];
+/**
+ * Toda chamada `app.<x>(` / `router.<x>(` cujo PRIMEIRO argumento e a string `caminho`, em todas
+ * as fontes (index.js + routes). Achado da revisao: o teste antigo so olhava linhas que comecam
+ * com `app.get('<caminho>'` — um `app.use('<caminho>', servirPdfOs)` registrado ANTES (sem login)
+ * passava despercebido e o Express o atenderia primeiro.
+ */
+function registrosDoCaminho(caminho) {
+  const esc = caminho.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  const re = new RegExp(String.raw`\b(app|router)\.(get|use|all|post|put|patch|delete|head|options)\(\s*(['"` + '`' + String.raw`])` + esc + String.raw`\3`, 'g');
+  const out = [];
+  for (const { arq, src } of FONTES) {
+    let m;
+    while ((m = re.exec(src))) {
+      if (emComentario(src, m.index)) continue;
+      const ini = m.index + m[1].length + 1 + m[2].length;
+      out.push({ arq, linha: linhaDe(src, m.index), bloco: src.slice(m.index, fechamento(src, ini) + 1) });
+    }
+  }
+  return out;
+}
+
+test('controle: registrosDoCaminho acha app.use/router.get e ignora comentario e prefixo (fonte sintetica)', () => {
+  const salvo = FONTES.splice(0, FONTES.length, { arq: 'sint.js', src: [
+    "app.use('/api/x/:id/pdf', servir);",
+    'router.get("/api/x/:id/pdf", authenticateToken, servir);',
+    "// app.get('/api/x/:id/pdf', servir);",
+    "app.get('/api/x/:id/pdfs', servir);",
+    'app.all(`/api/x/:id/pdf`, servir);',
+  ].join('\n') });
+  try {
+    assert.deepStrictEqual(registrosDoCaminho('/api/x/:id/pdf').map((x) => x.linha), [1, 2, 5]);
+  } finally { FONTES.splice(0, FONTES.length, ...salvo); }
+});
+
+for (const [caminho, handler] of ROTAS) {
+  test(`revisao: ${caminho} em UM registro so (app/router, qualquer verbo, index.js + routes), com authenticateToken`, () => {
+    const regs = registrosDoCaminho(caminho);
+    assert.strictEqual(regs.length, 1,
+      `registros: ${regs.map((x) => `${x.arq}:${x.linha} ${x.bloco}`).join(' | ')}`);
+    assert.strictEqual(regs[0].arq, 'index.js');
+    assert.strictEqual(regs[0].bloco, `app.get('${caminho}', authenticateToken, ${handler})`);
+  });
+}
+
 for (const [caminho, handler, fabrica] of ROTAS) {
   test(`RN-81.01/02: GET ${caminho} registrada uma vez, com authenticateToken, servida pelo handler testado`, () => {
     const alvo = `app.get('${caminho}'`;

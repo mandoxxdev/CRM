@@ -96,6 +96,18 @@ function cabecalhosUploadSeguro(res) {
   res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
 }
 
+/**
+ * So para /api/uploads/logos (achado da revisao adversarial da Etapa 81). A CSP vale tambem para o
+ * documento SVG carregado por <img>: com `default-src 'none'` o <style> interno de um logo SVG
+ * (o que Illustrator/Inkscape exportam) e bloqueado e o logo aparece sem cor/forma. Libera so
+ * estilo inline e imagem data: — script continua bloqueado (sem script-src, e o sandbox fica).
+ */
+const CSP_UPLOAD_LOGO = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox";
+function cabecalhosUploadLogo(res) {
+  cabecalhosUploadSeguro(res);
+  res.setHeader('Content-Security-Policy', CSP_UPLOAD_LOGO);
+}
+
 function criarAssinadorUpload(segredoRaiz) {
   if (!segredoRaiz) throw new Error('urlUpload: segredo obrigatorio');
 
@@ -169,5 +181,6 @@ function criarAssinadorUpload(segredoRaiz) {
 
 module.exports = {
   criarAssinadorUpload, derivarSegredoUpload, extensaoSegura, cabecalhosUploadSeguro,
+  cabecalhosUploadLogo, CSP_UPLOAD_LOGO,
   MINUTOS_VALIDADE, PREFIXO,
 };

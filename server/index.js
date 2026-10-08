@@ -277,7 +277,7 @@ const {
 } = require('./config/paths');
 const { gerarHTMLPropostaPremiumV2, substituirPlaceholdersProposta } = require('./templates/propostaPremiumV2');
 // Etapa 81: nosniff + CSP sandbox nos estaticos de /api/uploads (um .html enviado nao executa script).
-const { cabecalhosUploadSeguro } = require('./services/almoxarifado/urlUpload');
+const { cabecalhosUploadSeguro, cabecalhosUploadLogo } = require('./services/almoxarifado/urlUpload');
 const { criarServirPdfOs, criarServirContratoAnexo } = require('./services/arquivosProtegidos');
 
 // Opções de launch do Puppeteer: usar Chrome/Chromium do sistema quando o bundle não existir (ex.: Linux em servidor)
@@ -17952,8 +17952,9 @@ app.use('/api/uploads/proposta-fotos', express.static(uploadsPropostaFotosDir, {
 app.use('/api/uploads/materiais-escritorio', express.static(uploadsMateriaisEscritorioDir, { setHeaders: cabecalhosUploadSeguro }));
 
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE LOGOS ==========
-// Servir arquivos estáticos de logos
-app.use('/api/uploads/logos', express.static(uploadsLogosDir, { setHeaders: cabecalhosUploadSeguro }));
+// Servir arquivos estáticos de logos. CSP propria: o logo pode ser SVG com <style> interno, que a
+// CSP estrita bloquearia (logo sem cor); script continua bloqueado (urlUpload.cabecalhosUploadLogo).
+app.use('/api/uploads/logos', express.static(uploadsLogosDir, { setHeaders: cabecalhosUploadLogo }));
 app.use('/api/uploads/avatares', express.static(uploadsAvataresDir, { setHeaders: cabecalhosUploadSeguro }));
 
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE IMAGENS DE CABEÇALHO ==========
