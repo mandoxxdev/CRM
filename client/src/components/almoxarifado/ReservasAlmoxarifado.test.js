@@ -10,6 +10,7 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import ReservasAlmoxarifado from './ReservasAlmoxarifado';
 import api from '../../services/api';
 
@@ -22,12 +23,30 @@ jest.mock('react-toastify', () => ({
   toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn() },
 }));
 
-// Permissões liberadas: o alvo aqui é o comportamento da tela, e o gate real é do servidor.
+// Permissões controláveis POR TESTE (Etapa 77, RN-10). O padrão do beforeEach é tudo liberado:
+// o alvo dos casos antigos é o comportamento da tela, e o gate real é do servidor. As variáveis
+// têm prefixo `mock` porque a fábrica do jest.mock é içada e só pode citar nomes assim.
+let mockPermissoes;
 jest.mock('../../hooks/useAlmoxPermissoes', () => ({
-  useAlmoxPermissoes: () => ({
-    perfil: 'ADMINISTRADOR', pode: () => true, bloquearSeNaoPode: () => true, loading: false,
-  }),
+  useAlmoxPermissoes: () => mockPermissoes,
 }));
+
+// useAuth lança fora do AuthProvider; a tela lê o user.id para saber se é quem pediu a requisição.
+let mockUser;
+jest.mock('../../context/AuthContext', () => ({
+  useAuth: () => ({ user: mockUser }),
+}));
+
+/** Permissões em que `negadas` devolvem false — `bloquearSeNaoPode` segue o `pode`, como o hook. */
+function permissoes(negadas = []) {
+  const pode = jest.fn((acao) => !negadas.includes(acao));
+  return {
+    perfil: negadas.length ? 'PRODUCAO' : 'ADMINISTRADOR',
+    pode,
+    bloquearSeNaoPode: jest.fn((acao) => pode(acao)),
+    loading: false,
+  };
+}
 
 jest.mock('./ExtratoMaterialModal', () => ({
   __esModule: true,
@@ -60,6 +79,8 @@ let reservasDoBanco;
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   reservasDoBanco = [RESERVA_PARCIAL];
+  mockPermissoes = permissoes();
+  mockUser = { id: 1, nome: 'Admin' };
   // Implementações aqui, não na fábrica do jest.mock: clearAllMocks apaga implementações e só
   // o primeiro teste teria dados.
   api.get.mockImplementation((url) => {
@@ -214,5 +235,82 @@ describe('ReservasAlmoxarifado', () => {
     // convida o usuário a reservar saldo que já está reservado.
     expect(api.get).toHaveBeenCalledWith('/almoxarifado/estoque');
     expect(api.get).not.toHaveBeenCalledWith('/almoxarifado/materiais');
+  });
+});
+
+// Etapa 77 (C137): a reserva de requisição só é liberada por quem PEDIU a requisição, pelo
+// almoxarife ou pelo administrador. O servidor decide (403); a tela só não abre o modal para
+// quem vai morrer no 403 — e diz a REGRA, não o "Solicite acesso" genérico.
+describe('[RN-10] Liberar reserva de requisição — de quem é', () => {
+  const MSG = 'Só quem pediu a requisição, o almoxarife ou o administrador liberam esta reserva';
+  // Pedida pelo usuário 99, aprovada por outro (o `solicitante_id` da reserva é o APROVADOR — a
+  // tela não pode usá-lo como dono).
+  const RESERVA_DA_REQ = {
+    ...RESERVA_PARCIAL, requisicao_numero: 'REQ-2026-0007', requisicao_solicitante_id: 99,
+    solicitante_id: 1,
+  };
+  const modalAberto = () => container.querySelector('.almox-modal');
+
+  test('(a) não é quem pediu e não tem liberar_reserva_requisicao: toast com a regra, modal não abre', async () => {
+    reservasDoBanco = [RESERVA_DA_REQ];
+    mockUser = { id: 1 };       // é o solicitante_id da RESERVA (aprovador), não o da requisição
+    mockPermissoes = permissoes(['liberar_reserva_requisicao']);
+    await renderizar();
+    await clicarAcao(0, 'Liberar');
+    expect(mockPermissoes.pode).toHaveBeenCalledWith('liberar_reserva_requisicao');
+    expect(modalAberto()).toBeNull();
+    expect(toast.error).toHaveBeenCalledWith(MSG);
+  });
+
+  test('(b) quem pediu a requisição, sem liberar_reserva_requisicao: o modal abre', async () => {
+    reservasDoBanco = [RESERVA_DA_REQ];
+    mockUser = { id: 99 };
+    mockPermissoes = permissoes(['liberar_reserva_requisicao']);
+    await renderizar();
+    await clicarAcao(0, 'Liberar');
+    expect(modalAberto()).not.toBeNull();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  test('(b2) com liberar_reserva_requisicao (almoxarife) sem ter pedido: o modal abre', async () => {
+    reservasDoBanco = [RESERVA_DA_REQ];
+    mockUser = { id: 1 };
+    mockPermissoes = permissoes([]);
+    await renderizar();
+    await clicarAcao(0, 'Liberar');
+    expect(modalAberto()).not.toBeNull();
+  });
+
+  test('(b3) quem pediu mas não tem reservar: barrado pelo gate de reservar (duas camadas)', async () => {
+    reservasDoBanco = [RESERVA_DA_REQ];
+    mockUser = { id: 99 };
+    mockPermissoes = permissoes(['reservar', 'liberar_reserva_requisicao']);
+    await renderizar();
+    await clicarAcao(0, 'Liberar');
+    expect(mockPermissoes.bloquearSeNaoPode).toHaveBeenCalledWith('reservar', expect.anything());
+    expect(modalAberto()).toBeNull();
+  });
+
+  test('(b4) reserva manual: só o gate de reservar, como antes', async () => {
+    reservasDoBanco = [{ ...RESERVA_EXPIRADA, id: 4, status: 'ATIVA', saldo: 3, requisicao_numero: null,
+      requisicao_solicitante_id: null }];
+    mockUser = { id: 1 };
+    mockPermissoes = permissoes(['liberar_reserva_requisicao']);
+    await renderizar();
+    await clicarAcao(0, 'Liberar');
+    expect(modalAberto()).not.toBeNull();
+    expect(mockPermissoes.pode).not.toHaveBeenCalledWith('liberar_reserva_requisicao');
+  });
+
+  test('(c) com o número da requisição: a coluna e o modal mostram REQ-…, não o id', async () => {
+    reservasDoBanco = [RESERVA_DA_REQ];
+    mockUser = { id: 99 };
+    await renderizar();
+    expect(textoDaLinha(0)).toContain('REQ-2026-0007');
+    expect(textoDaLinha(0)).not.toContain('#55');
+    await clicarAcao(0, 'Liberar');
+    const modal = modalAberto().textContent;
+    expect(modal).toContain('requisição REQ-2026-0007');
+    expect(modal).not.toContain('#55');
   });
 });
