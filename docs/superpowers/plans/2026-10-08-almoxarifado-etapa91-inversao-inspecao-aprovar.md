@@ -1,7 +1,8 @@
 # Etapa 91 — a inversão inspeção × Aprovar (C131, feature 07 com a 09, a 08 e a 04)
 
-> Status: **Fase 1 — plano escrito, nada de código commitado.** Próximo passo: **Fase 2** (revisão do plano por agente
-> fresco, ver "Próximo passo" no fim). HEAD de partida: `5197b418` (main, árvore limpa).
+> Status: **Fase 2 — plano revisto (0 bloqueantes, 6 importantes, 10 menores; ver a seção "Fase 2 — revisão do plano"
+> no fim, que vale sobre o texto), nada de código commitado.** Próximo passo: **T0**. HEAD de partida: `5197b418`
+> (main, árvore limpa); plano da Fase 1 em `14855ab7`.
 > Origem: "Próxima tarefa detalhada — Etapa 91" de
 > `docs/superpowers/plans/2026-10-02-almoxarifado-etapa77-reserva-requisicao-so-pela-requisicao.md:711-755`, o aviso
 > **C131** (`docs/almoxarifado-novidades-por-etapa.md:7049`) e a **B403** (`:5512`, que deixou a C131 "para depois" na 76).
@@ -230,8 +231,11 @@ Os testes levam o prefixo `[91 RN-xx]` no nome; o manual cita o mesmo ID.
   `/enviar` de um rascunho com aprovação automática — cada uma **não responde** enquanto a trava está presa (150 ms) e,
   com 4 postos no material **enquanto** presa e a trava solta, responde com a reserva de 4 (`TOTALMENTE_RESERVADA`).
   (e) Requisição com dois materiais `{m1, m2}`, trava presa só em `m2` → também espera. (f) O `UPDATE` guardado fica
-  dentro: a aprovação de R3 (sem saldo) é pausada logo depois de `prepararPosAprovacao` (portão limitado) e a inspeção
-  de 4 é disparada nesse instante → a inspeção espera, R3 já está `AGUARDANDO_ESTOQUE` quando ela distribui, e R3 leva
+  dentro: a aprovação de R3 (sem saldo) é pausada **na emissão do próprio `UPDATE requisicoes_almoxarifado SET
+  status=?, aprovador_id…`** — o `db.run` embrulhado retém o comando e só o emite por `portao.then(() => origRun(sql,
+  params, cb))` (técnica de `reservaRecalculoRevisaoFase5.api.test.js:110-118`), portão limitado; pausar no retorno de
+  `prepararPosAprovacao` não serve, porque esse ponto fica sob a trava com ou sem o `UPDATE` dentro (corrigido na Fase 2,
+  achado 9) — e a inspeção de 4 é disparada nesse instante → a inspeção espera, R3 já está `AGUARDANDO_ESTOQUE` quando ela distribui, e R3 leva
   4 (sem R1 na fila). (g) Aprovação perdedora (dois `/aprovar` do mesmo R ao mesmo tempo) → um 200, um 400 com a
   mensagem de hoje, **uma** reserva só, nenhuma trava sobrando.
 - **RN-06 (sem corrida, nada muda — inclusive o que está declarado)** — (a) aprovação **depois** de a liberação
@@ -241,14 +245,21 @@ Os testes levam o prefixo `[91 RN-xx]` no nome; o manual cita o mesmo ID.
 - **RN-07 (sem deadlock: a trava não reentra, a ordem é crescente, a exceção solta)** — cada chamada embrulhada num
   prazo de 5 s (`comPrazo`, que **falha** o teste em vez de pendurar). (a) Nota com dois itens do **mesmo** material →
   responde. (b) Requisição com dois itens do mesmo material aprovada → responde. (c) Nota `{A, B}` processada ao mesmo
-  tempo que a aprovação de uma requisição `{B, A}` e uma inspeção em `A` → as três respondem. (d) Depois de cada
-  cenário, `travaPorMaterial.travado(m) === false` para todo material tocado. (e) Uma exceção **dentro** da seção
+  tempo que a aprovação de uma requisição `{B, A}` e uma inspeção em `A` → as três respondem. *(corrigido na Fase 2,
+  achado 10)* A rodada monta **a intercalação que trava quando a ordem não é crescente**: a inspeção segura `A` primeiro
+  (portão limitado no `DECISAO_INSPECAO`); a nota pede `A` e espera; a aprovação pega `B` e então pede `A`. Com a ordem
+  crescente a aprovação pede `A` antes de `B` e ninguém fica em ciclo. (d) Depois de cada
+  cenário, `travaPorMaterial.travado(m) === false` para todo material tocado (aqui vale: ninguém mais espera no fim do
+  cenário). (e) Uma exceção **dentro** da seção
   (inspeção do mesmo item duas vezes → 400 *"Item já foi decidido por outra inspeção"*; nota com item inválido → 400 de
   `darEntradaEstoque`; NC com o motor patcheado para falhar → 500 com rollback) solta a trava: o próximo `/aprovar` do
   material responde.
 - **RN-08 (o recálculo e o aviso rodam depois de soltar a trava)** — na inspeção (RN-01) e na nota (RN-03), o espião em
-  `rcs.recalcularStatusSobTrava` é chamado para R1 com `travaPorMaterial.travado(m) === false` no momento da chamada, e
-  R1 termina `TOTALMENTE_RESERVADA` (o recálculo da 76 rodou); na inspeção, o espião em
+  `rcs.recalcularStatusSobTrava` é chamado para R1 **depois de a seção da própria porta ter terminado** — prova por
+  marcador: um espião na `fn` passada a `trava.comLockDoMaterial`/`comLockDosMateriais` pela porta grava "seção saiu"
+  quando ela resolve, e o recálculo tem de ver o marcador já gravado. Alternativa aceita: rodar a RN-08 **sem ninguém
+  esperando** a trava, e só então afirmar `travado(m) === false`. *(corrigido na Fase 2, achado 7: `travado(m)` é `true`
+  enquanto alguém **espera**, então sob concorrência daria falso vermelho)*. R1 termina `TOTALMENTE_RESERVADA` (o recálculo da 76 rodou); na inspeção, o espião em
   `receiptNotificationService.avisarLiberacao` recebe o resultado com a reserva de R1 **e** o `status` já recalculado.
 - **RN-09 (contratos que não mudam e costuras que continuam mordendo)** — os corpos de resposta de `/aprovar`,
   `/aprovar-valor`, `POST /requisicoes`, `/enviar`, `/inspecionar`, `/nao-conformidades/:id/decidir`,
@@ -262,7 +273,12 @@ Os testes levam o prefixo `[91 RN-xx]` no nome; o manual cita o mesmo ID.
   requisição'`, uma linha de auditoria `CANCELAMENTO` com `dados_anteriores.status = 'APROVADO'`. (b) De `PENDENTE` com
   reserva → o mesmo. (c) Outro usuário (não S) → **400** *"Requisição não encontrada ou não pode ser cancelada"*
   (inalterado), reserva `ATIVA`. (d) `TOTALMENTE_RESERVADA` → o mesmo 400 (declarado). (e)
-  `stockService.liberarReserva` patcheado para falhar → **200**, `CANCELADO`, o `console.warn` com a literal L2.
+  *(corrigido na Fase 2, achado 1)* Dois casos: (e1) `stockService.liberarReserva` patcheado para falhar → **200**,
+  `CANCELADO`, reserva **ainda `ATIVA`**, o warn de hoje do serviço (`[almoxarifado-reservas] Falha ao liberar
+  reserva …`) **e** o warn **L2b** da rota (porque `erros.length > 0`); (e2)
+  `reservationService.liberarReservasDaRequisicao` patcheado para **lançar** → **200**, `CANCELADO`, warn **L2**. O
+  texto anterior (só e1, esperando L2) era impossível: `liberarReservasDaRequisicao` engole a falha de cada reserva e
+  devolve `{ liberadas, erros }` (`reservationService.js:225-246`) — nem L2 nem 500 aconteceriam.
 - **RN-11 (D(77) — `reserva_id` só numa saída)** — pela v2 (ALMOXARIFE) com o `reserva_id` de uma reserva de
   requisição: `ENTRADA`, `AJUSTE`, `DEVOLUCAO` → **400 com a literal M1**; nada mudou (sem linha nova no livro do
   material, saldo igual, reserva `ATIVA` intocada). Com uma reserva **manual** → o mesmo 400. Pela `/transferencias`
@@ -282,7 +298,8 @@ Os testes levam o prefixo `[91 RN-xx]` no nome; o manual cita o mesmo ID.
   `*SemFalhar` de quem chama): `` `distribuicao sob trava chamada sem a trava do material ${materialId}` ``. Aparece no log
   dentro das literais de hoje (*"[recebimento] reserva na chegada falhou (recebimento X): L1"*, *"[almoxarifado-reservas]
   reserva na liberacao falhou (INSPECAO X): L1"*).
-- **L2** (C141, `console.warn`): `` `[requisicoes-material] liberacao das reservas no cancelamento falhou (requisicao ${id}): ${e.message}` ``
+- **L2** (C141, `console.warn`, a chamada **lançou**): `` `[requisicoes-material] liberacao das reservas no cancelamento falhou (requisicao ${id}): ${e.message}` ``
+- **L2b** (C141, `console.warn`, a chamada **voltou com `erros.length > 0`** — corrigido na Fase 2, achado 1): `` `[requisicoes-material] liberacao das reservas no cancelamento deixou ${erros.length} reserva(s) presa(s) (requisicao ${id}): ${erros.map((x) => `${x.id}: ${x.erro}`).join('; ')}` ``
 - **L3** (C141, `console.warn`): `` `[requisicoes-material] auditoria do cancelamento falhou (requisicao ${id}): ${e.message}` ``
 - Nenhuma literal **de resposta** muda na Opção A (as rotas respondem igual — RN-09).
 
@@ -352,7 +369,10 @@ Dentro de `requisitionService.comTravaDaRequisicao(db, id, async () => { … })`
   `prepararPosAprovacao` desconta o hold existente). Dentro: releitura de `reqRow`, `prepararPosAprovacao`, o `UPDATE …
   AND status='APROVADO'`, o `desfazerReservas` de quem perde e a releitura do status. Fora: auditoria e resposta.
 - **`tentarAprovacaoAutomatica`:** dentro: `prepararPosAprovacao` (com o try/warn de hoje), o `UPDATE` (try/warn), o
-  `desfazerReservas` nas duas perdas. Retorno inalterado.
+  `desfazerReservas` nas duas perdas. Retorno inalterado. *(corrigido na Fase 2, achado 2)* O `SELECT` de materiais e a
+  espera da trava de `comTravaDaRequisicao` também ficam **dentro de um try**: falha ali → `return null` (a requisição
+  fica `PENDENTE`, 201), mantendo a regra da Etapa 73 Fase 5 ("falha vira PENDENTE 201",
+  `routes/almoxarifado.js:3290-3311`) — nunca um 500 para requisição já criada.
 
 ### As três portas de liberação (T2)
 
@@ -360,7 +380,11 @@ Dentro de `requisitionService.comTravaDaRequisicao(db, id, async () => { … })`
   (antes); `const pend = rcs.novaPendencia()`; `trava.comLockDoMaterial(item.material_id, async () => { claim do item
   → DECISAO_INSPECAO (com a compensação de hoje) → INSERT → medidas → alerta → NC → se aprovada > 0:
   rcs.aposLiberacaoSemFalhar(db, user, ctx, { sobTrava: true, pendencia: pend }) → return <corpo de hoje> })` e, num
-  `finally` em volta, `await rcs.concluirPendencia(db, user, pend)`. O `require('./reservaChegadaService')` continua
+  `finally` em volta, `await rcs.concluirPendencia(db, user, pend)`. *(corrigido na Fase 2, achado 15 — vale para as
+  três portas de liberação)* A forma é literalmente `try { return await trava.comLockDoMaterial(m, async () => { … }) }
+  finally { await rcs.concluirPendencia(db, user, pend) }` (na nota, `comLockDosMateriais(mats, …)`): o `finally` fica
+  **fora** da função passada à trava. Um `finally` **dentro** da `fn` roda com a trava presa e, se a distribuição tocou
+  alguma requisição, o recálculo pede a mesma trava → deadlock. O `require('./reservaChegadaService')` continua
   preguiçoso (com o try de carga de hoje); `travaPorMaterial` no topo.
 - **NC** (`nonConformityService.decidirNaoConformidade`): quando `previsto.efeito === 'LIBERAVEL'`, a seção começa no
   claim da NC (Passo 2) e vai até `aposLiberacaoSemFalhar(…, { sobTrava, pendencia })`, com a auditoria dentro;
@@ -382,6 +406,13 @@ passa por `comLockDosMateriais` (crescente); nada pega trava segurando outra for
 rodam fora. **Proibido** chamar, de dentro de uma seção: `recalcularStatusSobTrava`, `recalcularRequisicoesDasReservas`,
 `cancelarMovimentacao`, as variantes **sem** `sobTrava`, ou outra porta.
 
+**Nota para o comentário de cabeçalho da T2** *(acrescentado na Fase 2, achado 16)*: (i) qualquer monkeypatch futuro
+que encaminhe `(db, user, id)` **sem** o `opcoes` para o original faz a porta cair na variante sem `sobTrava`, que pede a
+trava de novo de dentro da seção → reentrada (deadlock). Hoje nenhum dos 12 arquivos de §6.1 faz isso (os patches de
+`reservarChegadaParaQuemEspera` em `recebimentoReservaChegada.api.test.js:380,490` substituem a função inteira, sem
+encaminhar). (ii) a guarda L1 (`travado(m)`) é **defesa, não prova**: `travado(m)` é `true` também quando **outro**
+segura ou espera a trava, então uma chamada `sobTrava` sem a trava pode passar pela guarda sob concorrência.
+
 ### Motor — `stockService.registrarMovimentacao` (T4, D(77))
 
 Logo depois de `const consumindoReserva = …` (`:1021`), antes do bloco da C136 e de qualquer escrita (tipo, material e
@@ -397,8 +428,9 @@ Comentário: `RESERVA`/`LIBERACAO_RESERVA` são os lançamentos internos (`:3008
 
 `async`. (1) `antes = SELECT status, numero FROM requisicoes_almoxarifado WHERE id = ? AND solicitante_id = ?` (só para
 a trilha); (2) o `UPDATE` guardado **de hoje, sem mudar uma vírgula** (`WHERE id=? AND solicitante_id=? AND status IN
-('PENDENTE','APROVADO')`); `changes === 0` → 400 de hoje; (3) `try { await
-reservationService.liberarReservasDaRequisicao(db, req.user, id, 'Requisição cancelada') } catch → warn L2`; (4) `try {
+('PENDENTE','APROVADO')`); `changes === 0` → 400 de hoje; (3) `try { const { erros } = await
+reservationService.liberarReservasDaRequisicao(db, req.user, id, 'Requisição cancelada'); if (erros.length > 0) warn
+L2b } catch → warn L2` (corrigido na Fase 2, achado 1: a função engole a falha por reserva — `reservationService.js:225-246`); (4) `try {
 await registrarAuditoria(db, { entidade: 'requisicao', entidade_id: Number(id), acao: 'CANCELAMENTO', usuario_id,
 usuario_nome, dados_anteriores: { status: antes?.status }, dados_novos: { status: 'CANCELADO', numero: antes?.numero, via:
 'requisicoes-material' }, justificativa: null }) } catch → warn L3`; (5) `res.json({ success: true })`. Requires novos no
@@ -427,7 +459,12 @@ libera (77); as respostas de todas as rotas tocadas (B387, B399); o motor na Op�
    que a aprovação disparada **responder** ou **400 ms**, o que vier primeiro. Sem a trava nova, a aprovação roda inteira
    com a liberação parada no portão → inversão **determinística**; com a trava, a aprovação espera a trava, o portão
    abre pelo tempo, a liberação termina e a aprovação lê disponível 0. **O portão nunca espera sem prazo** (com a trava,
-   esperar a aprovação sem prazo seria deadlock do próprio teste).
+   esperar a aprovação sem prazo seria deadlock do próprio teste). *(corrigido na Fase 2, achado 11)* Cada rodada
+   afirma que o gatilho disparou **exatamente uma vez** (contador), e, na versão consertada, que o portão abriu **pelo
+   tempo** (registro `abriuPor: 'prazo'` vs `'aprovacao'`) — é isso que prova que a aprovação esperou a trava; um portão
+   que abriu porque a aprovação respondeu, na versão consertada, é rodada sem valor. O regex do gatilho tolera espaço e
+   quebra de linha: a sincronização do físico é `SET\n      quantidade_atual = ?` (`stockService.js:151-152`) — usar
+   `/SET\s+quantidade_atual\s*=\s*\?/`, e o mesmo `\s+`/`\s*` nos outros dois.
 4. **Modos por porta:** `conc-lib1` e `conc-apr1` (`Promise.all`, como a sonda) e `janela` (gatilho + portão); N=4
    rodadas por modo, material novo por rodada. Tudo restaurado no `finally` (`db.*`, middleware desligado por header
    ausente, monkeypatches).
@@ -446,13 +483,18 @@ Scratchpad com nome único (`msg-e91-t0.txt`…). Executores **não** marcam est
   usá-lo (um `Map` só); `novaPendencia`/`concluirPendencia`; as opções `sobTrava`/`pendencia` nos três nomes; o teto da
   liberação lido sob a trava no caminho sem opção. **Nenhuma porta muda** nesta task. Teste novo
   `server/tests/api/travaPorMaterial.api.test.js`: (1) FIFO por material, materiais diferentes não esperam; (2)
-  `comLockDosMateriais([3,1,3])` pega 1 e 3 uma vez cada, em ordem crescente (registro da ordem); lista vazia chama
+  `comLockDosMateriais([900003,900001,900003])` pega 900001 e 900003 uma vez cada (ids trocados na Fase 2), em ordem crescente (registro da ordem); lista vazia chama
   `fn`; (3) exceção em `fn` solta e relança; `travado` volta a `false`; (4) **mesmo `Map`:** o teste segura
   `travaPorMaterial.comLockDoMaterial(m)` e chama `rcs.recalcularStatusSobTrava(R)` e `rcs.reservarLiberacaoParaQuemEspera`
   (sem opção) → **não resolvem** em 150 ms; resolvem depois de soltar; (5) **teto sob a trava:** segura `m` com
   disponível 0, chama `reservarLiberacaoParaQuemEspera` (sem opção, quantidade 4), põe 4 no material **enquanto** segura
-  e solta → reserva 4 para R1 (hoje: 0 — **vermelho antes**); (6) `sobTrava` **sem** a trava → `reservarChegadaSemFalhar`
-  engole e loga L1 (o `rcs` chamado direto lança L1); (7) `sobTrava` **com** a trava: `reservas` iguais às do caminho sem
+  e solta → reserva 4 para R1 (hoje: 0 — **vermelho antes**). *(corrigido na Fase 2, achado 14)* O teste só põe os 4
+  **depois** de a chamada ter chegado ao ponto em que leria o teto: espera o primeiro destes dois marcadores — o
+  `SELECT` do disponível do material resolvido (espião em `db.get`, caminho do s2) **ou** a chamada enfileirada na trava
+  (espião em `trava.comLockDoMaterial`, caminho consertado). Sem isso, no s2 o teto pode ser lido **depois** de o teste
+  pôr os 4 e o controle passaria por tempo. (6) `sobTrava` **sem** a trava → o `rcs` chamado direto lança L1. A metade
+  "`reservarChegadaSemFalhar` engole e loga L1" **sai da T0 e vai para a T2** (corrigido na Fase 2, achado 5): na T0
+  nenhuma porta muda, e `reservarChegadaSemFalhar` só passa `sobTrava` a partir da T2; (7) `sobTrava` **com** a trava: `reservas` iguais às do caminho sem
   opção num cenário espelho, `status` vazio até `concluirPendencia`, preenchido depois; `concluirPendencia` com o
   recálculo patcheado para lançar → não lança, warn com a literal `falhaRecalculo` de hoje.
   **Medir antes e depois, sem edição:** os 12 arquivos de §6.1, `reservaLiberacaoBase` (carga fria nas duas ordens —
@@ -460,8 +502,11 @@ Scratchpad com nome único (`msg-e91-t0.txt`…). Executores **não** marcam est
   `ncReservaLiberacao`, `test:almoxarifado`.
   **Controles positivos (e por que cada um consegue cair — G85):** (s1) `rcs` volta a ter `Map` próprio → **cai (4)**
   (o recálculo não espera a trava do teste). (s2) teto lido antes de pegar a trava (o código de hoje) → **cai (5)** com 0.
-  (s3) `comLockDosMateriais` sem `DISTINCT` → **cai (2)** por prazo (o 3 é pego duas vezes; `comPrazo`). (s4) sem o
-  `soltar()` no caminho de exceção → **cai (3)**. (s5) a guarda L1 removida → **cai (6)** (distribui sem trava). (s6)
+  (s3) `comLockDosMateriais` sem `DISTINCT` → **cai (2)** por prazo (o 3 é pego duas vezes; `comPrazo`). *(corrigido na
+  Fase 2, achado 14)* O s3 deixa o material pendurado **para sempre** no `Map` compartilhado do processo; por isso (2) usa
+  ids que nenhum outro caso toca (`900001`, `900003` em vez de `1`, `3`). (s4) sem o
+  `soltar()` no caminho de exceção → **cai (3)**. (s5) a guarda L1 removida → **cai (6)** (distribui sem trava; (6) roda com o material **sem ninguém** segurando ou
+  esperando — ver a nota do cabeçalho da T2 sobre `travado`). (s6)
   `concluirPendencia` sem o try por requisição → **cai (7)** (lança).
 - [ ] **T1 (tronco) — as três portas de aprovação seguram a trava de todos os materiais.** `comTravaDaRequisicao` + as
   três portas (contrato acima). Teste novo `server/tests/api/aprovacaoEsperaTrava.api.test.js`: **RN-05 (a)–(g)** pelas
@@ -473,16 +518,25 @@ Scratchpad com nome único (`msg-e91-t0.txt`…). Executores **não** marcam est
   `reservaRecalculoIntegracao`.
   **Controles positivos:** (s1) `/aprovar` sem a trava → **cai (a)** e (g) continua verde (o `UPDATE` guardado é que
   serializa dois `/aprovar`). (s2) idem `/aprovar-valor` → só (b). (s3) idem automática → (c) e (d). (s4) trava só do
-  **primeiro** material → **cai (e)**. (s5) `UPDATE` guardado fora da trava → **cai (f)**. (s6) a porta chamando uma
-  cópia local de `prepararPosAprovacao` → **cai** `requisicaoPosAprovacaoPortas` (o patch da `:152` deixa de morder) —
-  costura.
+  **primeiro** material → **cai (e)**. (s5) `UPDATE` guardado fora da trava → **cai (f)** — só porque (f) segura a **emissão** do `UPDATE` (ver RN-05 (f),
+  corrigido na Fase 2, achado 9); com a pausa no retorno de `prepararPosAprovacao` o s5 não cairia. (s6) a porta
+  chamando uma cópia local de `prepararPosAprovacao` → **cai** `requisicaoPosAprovacaoPortas` (o patch da `:152` deixa
+  de morder) — costura. *(corrigido na Fase 2, achado 12)* O patch da `:152` só passa por `/aprovar-valor`
+  (`requisicaoPosAprovacaoPortas.api.test.js:150-159`, `aprovarValor(id)`); o s6 aplicado em `/aprovar` ou na aprovação
+  automática **não** cairia nesse arquivo. Por isso o teste novo da T1 acrescenta dois casos que patcheiam
+  `requisitionService.prepararPosAprovacao` pelo objeto e afirmam que o patch **mordeu** — um por `/aprovar`, um por
+  `POST /requisicoes` com aprovação automática — e o s6 é aplicado e medido nas três portas, uma de cada vez.
   *Nota:* com só a T1, a C131 **continua invertida** (é a medição da B403); a RN-01–04 é da T2.
 - [ ] **T2 (tronco) — as três portas de liberação seguram a trava do movimento até a distribuição.** Inspeção, NC e as
   duas conclusões da nota (contrato acima). Teste novo `server/tests/api/filaLiberacaoAprovacaoCorrida.api.test.js`:
-  **RN-01, RN-02, RN-03, RN-04, RN-06, RN-07, RN-08** e RN-09 para as rotas de liberação. **Escrito e rodado ANTES da
-  implementação, com a T1 já feita** → vermelho medido em cada porta e modo (esperado: invertida em `conc-lib1`,
-  `conc-apr1` e `janela` — a Fase 0 mediu 8/8; RN-04 invertida 4/4 com o portão; RN-07 e RN-06 verdes já — controle de
-  que o teste não é vermelho por outra razão).
+  **RN-01, RN-02, RN-03, RN-04, RN-06, RN-07, RN-08** e RN-09 para as rotas de liberação, mais o caso que saiu da T0
+  (Fase 2, achado 5): `reservarChegadaSemFalhar` com `sobTrava` **sem** a trava (material sem ninguém segurando ou
+  esperando) → engole e loga L1 dentro da literal de hoje. **Escrito e rodado ANTES da
+  implementação, com a T1 já feita** → vermelho medido em cada porta e modo. *(corrigido na Fase 2, achado 6)* **Não prever** o resultado por modo: a
+  Fase 0 mediu 8/8 **sem** a T1; com a T1 já feita a aprovação pega a trava, e em `conc-apr1` ela pode terminar antes de
+  a liberação mexer no saldo (R3 já `AGUARDANDO_ESTOQUE` quando a distribuição roda → fila certa por ordem de chegada).
+  Registrar o número medido de cada porta × modo; o vermelho obrigatório é o modo `janela` (portão) e a RN-04 com o
+  portão. RN-07 e RN-06 verdes já — controle de que o teste não é vermelho por outra razão.
   **Medir antes e depois, sem edição:** os 12 de §6.1, `naoConformidadeLiberacao`, `naoConformidadeLiberacaoRotas`,
   `inspecaoReservaLiberacaoIntegracao`, `recebimentoReservaChegadaIntegracao`, `recebimentoAvisoEntrada*`,
   `alertaEventoGanchos`, `test:almoxarifado`; `git diff --stat -- server/services/almoxarifado/stockService.js` **vazio**.
@@ -490,7 +544,9 @@ Scratchpad com nome único (`msg-e91-t0.txt`…). Executores **não** marcam est
   da seção) → **cai só RN-01**. (s2) NC sem a trava → **só RN-02**. (s3) nota sem a trava → **RN-03 e RN-04**. (s4)
   `/aprovar` sem a trava da T1 (as liberações com) → **caem RN-01–RN-04** no modo `janela`: prova das **duas metades**
   (a liberação parada no portão segura a trava, mas a aprovação não pede). (s5) `concluirPendencia` chamado **dentro** da
-  seção → **cai RN-07** por prazo (a trava não reentra) e RN-08. (s6) a nota trava só os materiais **livres** (sem os
+  seção → **cai RN-07** por prazo (a trava não reentra) e RN-08. *(corrigido na Fase 2, achado 13)* Em RN-07 (a)/(b) o
+  s5 só cai se a distribuição **tocou** alguma requisição (sem tocada o recálculo não pede trava): (a) e (b) montam uma
+  requisição **esperando** o material. (s6) a nota trava só os materiais **livres** (sem os
   críticos) → **cai só RN-04**. (s7) o middleware de usuário desligado → **caem as asserções de perfil** de RN-01–03.
   **Costuras (s-costura), uma a uma:** (c1) `reservarChegadaSemFalhar` chamando uma função interna em vez de
   `reservaChegadaService.reservarChegadaParaQuemEspera` → caem os casos *"banco caiu 74"* e o do patch vazio de
@@ -500,7 +556,12 @@ Scratchpad com nome único (`msg-e91-t0.txt`…). Executores **não** marcam est
   `naoConformidadeLiberacao`. Costura que **não** cair é achado (o patch já não mordia antes) — registrar, não esconder.
   *Declarado redundante (não é controle):* a ordem crescente em `comLockDosMateriais` quando **todos** os chamadores
   passam por ela (qualquer ordem consistente não trava); o controle (s-ordem) "sem ordenar" é **medido** em RN-07 (c) —
-  se não cair 3/3, vira declarado redundante com o número medido.
+  se não cair 3/3, vira declarado redundante com o número medido. *(corrigido na Fase 2, achado 10)* Tirar o `sort` de
+  `comLockDosMateriais` **não** consegue cair: os dois chamadores já entregam a lista ordenada pelo SQL (`ORDER BY
+  material_id` em `comTravaDaRequisicao` e no `SELECT` da nota; o recálculo em `reservaChegadaService.js:257`). O
+  (s-ordem) passa a ser: **um** chamador invertido explicitamente (a aprovação com `ORDER BY material_id DESC` **e** sem
+  o `sort` em `comLockDosMateriais`) com a intercalação de RN-07 (c) (inspeção segura `A`, nota espera `A`, aprovação
+  pega `B` e espera `A`) → cai por prazo.
 - [ ] **T3 — integração das duas metades, pela ROTA e pelo SERVIÇO (A × 74 × 75 × 76).** Teste novo
   `server/tests/api/filaTravaIntegracao.api.test.js`, perfis reais, técnica de corrida acima:
   **Jornada pela rota:** material crítico M. S1 (PRODUCAO) cria R1 (4 M) pela rota; GESTOR aprova → `AGUARDANDO_ESTOQUE`.
@@ -508,7 +569,9 @@ Scratchpad com nome único (`msg-e91-t0.txt`…). Executores **não** marcam est
   GESTOR aprovando R3 **na janela da QUARENTENA** → R3 0 `AGUARDANDO_ESTOQUE`, M `q4 r0 i4`. S4 cria R4 pela rota
   (`PENDENTE`). QUALIDADE aprova os 4 com o GESTOR aprovando R4 **na janela do `DECISAO_INSPECAO`** → R1 4
   `TOTALMENTE_RESERVADA` (recálculo da 76), R3 0, R4 0; o aviso da liberação (espião) diz "reservado" para R1.
-  ALMOXARIFE separa e entrega R1 pela rota → `ENTREGUE`, a reserva `CONSUMIDA` (a marca da 77 compõe).
+  ALMOXARIFE separa R1, **outra pessoa do almoxarifado faz a segunda conferência** (M é crítico: sem ela a entrega dá
+  400 de `assertConferidaSeObrigatorio`, `requisitionService.js:299`, chamado em `:945` — corrigido na Fase 2, achado 4)
+  e o ALMOXARIFE entrega R1 pela rota → `ENTREGUE`, a reserva `CONSUMIDA` (a marca da 77 compõe).
   **Pelo serviço:** `inspectionService.decidirInspecao` (serviço, QUALIDADE) ∥ `PUT /aprovar` (rota) e
   `receiptService.processarNota` (serviço) ∥ `POST /requisicoes` com aprovação automática (rota) → fila certa: prova que
   a trava das portas de serviço e a das rotas é **o mesmo `Map`** atravessando módulos.
@@ -531,7 +594,9 @@ Scratchpad com nome único (`msg-e91-t0.txt`…). Executores **não** marcam est
   **Medir antes e depois:** os 10 arquivos que usam `/api/requisicoes-material` (`grep -ln requisicoes-material
   tests/api/*.js`), `saldoEmTerceiros` (varre este arquivo).
   **Controles:** (s1) sem a chamada de `liberarReservasDaRequisicao` → **cai (a)/(b)**. (s2) a liberação sem try (a falha
-  vira 500) → **cai (e)**. (s3) o `UPDATE` sem `solicitante_id` → **cai (c)**. (s4) sem a auditoria → cai a asserção da
+  vira 500) → **cai (e2)** — o teste patcheia a própria `liberarReservasDaRequisicao` para lançar (corrigido na Fase 2,
+  achado 1: patchear `liberarReserva` nunca chega ao try da rota). (s2b) sem o ramo `erros.length > 0` → **cai (e1)**
+  (o warn L2b some). (s3) o `UPDATE` sem `solicitante_id` → **cai (c)**. (s4) sem a auditoria → cai a asserção da
   trilha em (a).
 - [ ] **T6 — integração cruzando os galhos: A × C141 × D(77) × 76 × 77, pela rota.** Acrescenta ao
   `filaTravaIntegracao.api.test.js`:
@@ -542,12 +607,16 @@ Scratchpad com nome único (`msg-e91-t0.txt`…). Executores **não** marcam est
   M2 e, **no instante em que `rcs.concluirPendencia` começa** (espião — a distribuição já reservou 4 para R5, a trava já
   foi solta, o recálculo ainda não rodou: R5 está `APROVADO` com hold 4), S5 cancela por `PUT
   /api/requisicoes-material/:id/cancelar` → 200; **R5 `CANCELADO` sem reserva `ATIVA`, M2 `r=0`** (sem a T5, a reserva
-  ficaria presa: o recálculo não toca requisição cancelada). É a janela que a própria Opção A abre entre soltar a trava
-  e recalcular — e a C141 a fecha.
+  ficaria presa: o recálculo não toca requisição cancelada). *(corrigido na Fase 2, achado 3)* Essa janela entre soltar
+  a trava e recalcular **não é nova**: hoje o recálculo já roda no `finally` de `reservarChegadaParaQuemEspera`
+  **depois** de `distribuirParaQuemEspera` ter soltado a trava (`reservaChegadaService.js:175-178`). A Opção A a
+  **mantém** (D5) e a jornada B prova que a C141 a fecha para o cancelamento pelos outros módulos.
   **Jornada C (D(77) × 75):** no fim da jornada A da T3, o ALMOXARIFE manda `ENTRADA` de 2 pela v2 citando o
   `reserva_id` da reserva **da liberação da inspeção** (origem `REQUISICAO`, `recebimento_id`) → 400 M1, nada mudou.
   **Controles:** (s1) da T5 → cai a jornada B no "sem reserva ATIVA"; (s1) da T4 → cai a jornada C; (s5) da T2
-  (`concluirPendencia` dentro da seção) → a jornada B não chega ao cancelamento (prazo).
+  (`concluirPendencia` dentro da seção) → o cancelamento **passa** (a rota da C141 não pega a trava), o que cai é a
+  **nota**, que não responde em 5 s (`comPrazo`: o recálculo pede a trava que a própria seção segura) — corrigido na
+  Fase 2, achado 13.
 - [ ] **T7 — fechamento (skill `fechar-etapa`).** Spec 07 (a C131 resolvida; **corrigir dizendo que estava errada** se
   algum texto afirma que "a trava por material serializa as liberações" como garantia contra a aprovação — a trava da 75
   nunca cobriu a aprovação); spec 09 (a decisão da inspeção e a NC seguram a trava do material); spec 08 (a nota segura
@@ -568,7 +637,8 @@ Scratchpad com nome único (`msg-e91-t0.txt`…). Executores **não** marcam est
    `requisitionService`, `rcs`). Um `Map` por módulo passaria em todo teste de unidade de cada porta e falharia só
    quando uma porta de um módulo encontra a de outro — por isso há cenário **pela rota** (as seis portas HTTP) **e pelo
    serviço** (`decidirInspecao`/`processarNota` chamados direto contra rotas de aprovação).
-2. **A Opção A abre uma janela nova** entre soltar a trava e recalcular (D5): só a jornada B mostra que um gesto nessa
+2. **A Opção A mantém a janela** entre soltar a trava e recalcular (D5; ela já existe hoje,
+   `reservaChegadaService.js:175-178` — "abre uma janela nova" estava errado, corrigido na Fase 2, achado 3): só a jornada B mostra que um gesto nessa
    janela (o cancelamento pelos outros módulos) não deixa reserva presa — e que isso depende da C141.
 3. **As etapas 74–77 compõem com a trava:** recálculo da 76 depois da seção, aviso da 75 com o status certo, entrega com
    a marca da 77, D(77) contra a reserva nascida na liberação da 75.
@@ -585,6 +655,17 @@ Scratchpad com nome único (`msg-e91-t0.txt`…). Executores **não** marcam est
 - **Cancelar requisição já reservada pelos outros módulos** (400 de hoje): contrato da outra porta (B426).
 - **O estorno da entrada × distribuição concorrente:** não medido nesta etapa; o estorno não pega a trava das portas
   (só a do recálculo). Candidata a sonda.
+- *(acrescentados na Fase 2, achado 8)* **Estorno × aprovação tem a forma da C131:** `liberarParaEstorno`
+  (`reservaChegadaService.js:483`, chamado em `stockService.js:2473`) solta a reserva da chegada **fora de qualquer
+  trava**; uma aprovação no meio leva o saldo liberado e, se o estorno for recusado depois,
+  `recriarAposEstornoRecusado` (`:547-575`) não acha disponível e só loga o warn. Limitação **(91)** em D; candidata.
+- **A trava não tem prazo de aquisição:** uma porta pode esperar indefinidamente; o cliente desiste em 30 s
+  (`client/src/services/api.js:39`), o servidor ainda conclui (200 "fantasma") e o reenvio do usuário dá 400 (já
+  aprovada/decidida). Limitação **(91)** em D.
+- **O `UPDATE` da separação para `EM_SEPARACAO` não tem guarda de status** (`requisitionService.js:862`, `:874`, `:881`
+  — `WHERE id=?` [`AND conferido_por_id IS ?`]): uma separação em voo pode **ressuscitar** uma requisição que a C141 acabou
+  de cancelar. A mesma corrida já existe hoje com o cancelamento do almoxarifado — não é introduzida pela etapa.
+  Candidata.
 
 ## Letra A — consulta para produção (a confirmar no fechamento como **A42**)
 
@@ -615,4 +696,32 @@ reserva nascida sob a trava? → o estorno da nota depois da inspeção ainda so
 RN-05 (b) → a requisição liberada por valor que esperou a trava sai com o status certo e a trilha `APROVACAO_VALOR`? ;
 RN-10 → a requisição cancelada pelos outros módulos some da fila de separação e o material volta ao disponível sem ir
 para quem espera (C135)?) **e a quinta da G85: cada controle positivo acima consegue cair pelo caminho que o plano diz?**
-— em especial (s4) da T2 (as duas metades) e as costuras c1–c4. Depois, T0.
+— em especial (s4) da T2 (as duas metades) e as costuras c1–c4. Depois, T0. **(Fase 2 feita — ver a seção abaixo;
+o próximo passo é a T0.)**
+
+## Fase 2 — revisão do plano (2026-10-08): 0 bloqueantes, 6 importantes, 10 menores → plano revisto (vale sobre o texto acima)
+
+Revisor fresco sobre o HEAD `14855ab7`. Cada achado foi conferido no código antes de entrar aqui; os pontos do texto
+acima foram corrigidos **no lugar** (marcados "corrigido na Fase 2, achado N"). Nenhum achado ficou sem confirmação.
+
+| # | peso | achado (conferido em) | mudança no plano |
+|---|---|---|---|
+| 1 | IMPORTANTE | RN-10 (e) / T5 (s2) impossíveis: `liberarReservasDaRequisicao` engole a falha por reserva e devolve `{ liberadas, erros }` (`reservationService.js:225-246`); patchear `stockService.liberarReserva` nunca dá L2 nem 500. | Literal nova **L2b** (rota loga quando `erros.length > 0`); RN-10 (e) vira (e1) `liberarReserva` falha → 200 + L2b, reserva ATIVA, e (e2) `liberarReservasDaRequisicao` lança → 200 + L2; contrato da rota passo (3); T5 (s2) patcheia a própria função, (s2b) novo. |
+| 2 | menor | Na automática, o `SELECT` de materiais e a espera da trava ficariam dentro do try de `tentarAprovacaoAutomatica` (`routes/almoxarifado.js:3273-3311`) sem contrato para a falha. | Contrato: falha ali → `return null` (PENDENTE 201, regra da Etapa 73 Fase 5). |
+| 3 | menor | A janela "soltar a trava → recalcular" não é nova: hoje o recálculo já roda no `finally` depois de a distribuição soltar a trava (`reservaChegadaService.js:175-178`). | Texto da T6 jornada B e do §2 de "Teste de integração" corrigidos ("mantém", não "abre"). |
+| 4 | menor | Entregar material crítico exige a segunda conferência (`assertConferidaSeObrigatorio`, `requisitionService.js:299`, chamado em `:945`) — sem ela a jornada da T3 dá 400. | Passo de conferência por outra pessoa do almoxarifado na jornada A da T3. |
+| 5 | menor | T0 teste (6): na T0 nenhuma porta muda, então só dá para provar o `rcs` direto lançando L1. | A metade "`reservarChegadaSemFalhar` engole e loga L1" foi para a T2. |
+| 6 | menor | Prever "invertida em todos os modos" antes da T2 é errado com a T1 feita (`conc-apr1` pode sair certo por ordem de chegada). | T2 mede e registra por porta × modo; vermelho obrigatório só no `janela` e na RN-04. |
+| 7 | IMPORTANTE | RN-08 falharia sob concorrência: `travado(m)` é `true` também enquanto alguém **espera** (contrato do módulo). | RN-08 prova por marcador "a seção da porta terminou" (espião na `fn` passada à trava), ou roda sem ninguém esperando. |
+| 8 | menor | Faltava declarar: estorno × aprovação com a forma da C131 (`liberarParaEstorno` `rcs:483` fora de trava; `recriarAposEstornoRecusado` `:547-575` não acha saldo); trava sem prazo de aquisição (cliente desiste em 30 s, `client/src/services/api.js:39` → 200 fantasma, reenvio 400); `UPDATE` da separação para `EM_SEPARACAO` sem guarda de status (`requisitionService.js:862/874/881`) ressuscita requisição cancelada (corrida já existente no cancelamento do almoxarifado). | Três itens novos em "O que fica de fora", limitação (91) em D. |
+| 9 | IMPORTANTE | T1 (s5) não cairia: pausar no retorno de `prepararPosAprovacao` fica sob a trava com ou sem o `UPDATE` dentro. | RN-05 (f) segura a **emissão** do `UPDATE requisicoes_almoxarifado SET status=?…` com `portao.then(() => origRun(...))` (técnica de `reservaRecalculoRevisaoFase5.api.test.js:110-118`); T1 (s5) explicado. |
+| 10 | IMPORTANTE | O controle de ordem não cairia: os chamadores já fazem `ORDER BY material_id` no SQL (`reservaChegadaService.js:257`; contrato de `comTravaDaRequisicao` e da nota). | (s-ordem) inverte explicitamente um chamador (aprovação `DESC` + sem `sort`); RN-07 (c) monta a intercalação que trava (inspeção segura A; nota espera A; aprovação pega B e espera A). |
+| 11 | IMPORTANTE | Rodadas com portão limitado sem prova: faltava afirmar que o gatilho disparou uma vez e que o portão abriu **pelo prazo** na versão consertada; o regex não toleraria `SET\n      quantidade_atual = ?` (`stockService.js:151-152`). | Técnica dos testes, item 3: contador = 1, `abriuPor: 'prazo'`, regex com `\s+`/`\s*`. |
+| 12 | menor | T1 (s6) só cobre `/aprovar-valor` (o patch de `requisicaoPosAprovacaoPortas.api.test.js:150-159` passa só por `aprovarValor`). | Teste da T1 ganha patches de `prepararPosAprovacao` por `/aprovar` e pela automática; s6 medido nas três portas. |
+| 13 | menor | T2 (s5) só cai em RN-07 (a)/(b) se a distribuição tocou alguma requisição; T6 (s5): o cancelamento passa, o que cai é a nota pelo prazo. | RN-07 (a)/(b) com requisição esperando; texto do T6 (s5) corrigido. |
+| 14 | menor | T0 teste (5) podia passar no s2 por tempo; o s3 deixa material travado para sempre no `Map` compartilhado. | (5) espera o marcador (teto lido ou chamada enfileirada) antes de pôr o saldo; (2) usa ids `900001`/`900003`. |
+| 15 | IMPORTANTE | Posição do `finally`: um `finally` dentro da `fn` da trava roda com a trava presa → deadlock quando há requisição tocada. | Contrato da T2: `try { await trava.comLockDosMateriais(mats, () => …) } finally { await concluirPendencia(…) }`, explícito para as três portas. |
+| 16 | menor | Monkeypatch futuro que encaminhe `(db,user,id)` sem `opcoes` reentra na trava (nenhum dos 12 arquivos faz hoje — os de `recebimentoReservaChegada.api.test.js:380,490` substituem a função inteira); a guarda L1 é defesa, não prova. | Nota para o comentário de cabeçalho da T2, logo após o invariante de ordem; (s5) da T0 roda sem ninguém na trava. |
+
+**Contagem do peso:** o achado 8 veio sem peso do revisor e foi contado como **menor** (só declara limitações, não muda
+task). **Nada descartado.**
