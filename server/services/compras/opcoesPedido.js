@@ -125,7 +125,42 @@ async function enderecoDaEmpresa(db) {
   }
 }
 
-/** Tudo o que a tela precisa para desenhar os botões, numa chamada só (RN-39.06). */
+/**
+ * Etapa 78 (RN-78.04) — a empresa INTEIRA para o documento impresso do pedido de compra.
+ *
+ * Chaves de `configuracoes` (`empresa_*`) -> `{ nome, cnpj, ie, endereco, cidade, estado, cep,
+ * telefone, email, nota_pedido_compra }`. Sempre o shape completo, sempre string: chave ausente
+ * (base antiga, sem o seed da IE) ou `NULL` vem `''`, nunca `undefined` — o gerador imprime "—".
+ * Tolera "no such table" como `enderecoDaEmpresa`: o harness NAO cria `configuracoes` (o teste da
+ * 39 afirma o fallback de `/opcoes` por escrito), entao aqui o fallback e tudo vazio.
+ *
+ * ⚠️ NAO substitui `enderecoDaEmpresa`: o `empresa` de `/opcoes` continua `{ nome, endereco }`
+ * (o form da 39 le esse shape). Duas leituras da mesma tabela com propositos diferentes.
+ */
+const CHAVES_EMPRESA = ['nome', 'cnpj', 'ie', 'endereco', 'cidade', 'estado', 'cep', 'telefone', 'email', 'nota_pedido_compra'];
+
+async function lerEmpresa(db) {
+  const empresa = Object.fromEntries(CHAVES_EMPRESA.map((k) => [k, '']));
+  let rows = [];
+  try {
+    rows = await dbAll(
+      db,
+      `SELECT chave, valor FROM configuracoes WHERE chave IN (${CHAVES_EMPRESA.map(() => '?').join(',')})`,
+      CHAVES_EMPRESA.map((k) => `empresa_${k}`),
+    );
+  } catch (e) {
+    if (!/no such table/i.test(e.message || '')) throw e;
+    return empresa;
+  }
+  for (const r of rows) {
+    const k = String(r.chave).slice('empresa_'.length);
+    if (k in empresa) empresa[k] = r.valor == null ? '' : String(r.valor).trim();
+  }
+  return empresa;
+}
+
+/** Tudo o que a tela precisa
+ para desenhar os botões, numa chamada só (RN-39.06). */
 async function carregarOpcoes(db) {
   const [pagamento, frete, via, transportadoras, tabelas, unidadesEmUso, empresa] =
     await Promise.all([
@@ -165,4 +200,5 @@ module.exports = {
   UNIDADES,
   IPI_SUGERIDO,
   EMPRESA_PADRAO,
+  lerEmpresa,
 };
