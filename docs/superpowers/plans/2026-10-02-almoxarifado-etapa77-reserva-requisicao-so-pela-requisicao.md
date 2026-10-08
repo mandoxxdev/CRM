@@ -375,7 +375,16 @@ Ordem topológica: **T0 → T1 → T3 → T4**, com **T2 (galho)** em paralelo a
   (s7) **`listarReservas` sem o JOIN** → cai RN-08.
   *Declarado redundante (não é controle):* o `Number()` na comparação do dono — os dois lados são inteiros hoje, nenhum
   teste o derruba (Surpresa 6).
-- [ ] **T1 (tronco) — a saída genérica não consome reserva de requisição (C136).** Pelo contrato do motor e a marca na
+- [x] **T1 — FEITA em `4c7dc181` (2026-10-08).** Teste novo `reservaRequisicaoSoPelaEntrega` 15/15 (vermelho antes:
+  10 falhas — RN-01 inteiro tomava 201 e consumia, RN-03 (a)(b)(c) consumiam, RN-04 "já LIBERADA" dava a mensagem de
+  status). Os 11 medidos antes verdes sem edição; `test:almoxarifado` 44/0 antes e depois. Controles: s1 → RN-01 todo +
+  RN-03 (a)(b)(c) + RN-04 LIBERADA; s2 → RN-02 + RN-03 (d) + 4 de fora (`requisicaoReservaAutomatica` 2,
+  `entregaOrigemPorItem` 1, `recebimentoReservaChegadaIntegracao` 4, `inspecaoReservaLiberacaoIntegracao` 3); s3 → RN-02 +
+  os mesmos 4, RN-03 (d) verde; s4 → só RN-03 (c); s5 → só RN-03 (b); s6 → RN-01 na "nada mudou" (+ RN-03 (a)(b)(c) e
+  RN-04 LIBERADA, mais que o previsto); s7 → só RN-04 "outro material". Divergências: RN-03 (b) põe as duas formas do s5
+  no `params`; a M1 usa o id lido do banco (mesmo valor). Suítes: test:api 312/312, almoxarifado 44/0, validation 4/0,
+  safealter 3/0, sqlite 5/0.
+  Enunciado original: **T1 (tronco) — a saída genérica não consome reserva de requisição (C136).** Pelo contrato do motor e a marca na
   entrega. Teste novo `server/tests/api/reservaRequisicaoSoPelaEntrega.api.test.js`: RN-01 **pela rota v2** (os quatro
   tipos + parcial + a metade manual), RN-02 **pela rota de entrega**, RN-03 **pelo serviço** (a–d), RN-04.
   **Medir antes (e depois, sem edição):** os que usam `reserva_id` na saída (§2: `reservaConsumo`,
@@ -400,7 +409,13 @@ Ordem topológica: **T0 → T1 → T3 → T4**, com **T2 (galho)** em paralelo a
   status HTTP.
   (s7) **a leitura sem `AND material_id = ?`** → **cai RN-04** "reserva de requisição de outro material" (sai M1 em vez da
   mensagem de hoje).
-- [ ] **T2 (galho, paralelo à T1, worktree) — a tela Reservas.** Contra o contrato: coluna e modal com
+- [x] **T2 — FEITA em `db2e294c` (worktree `e77b`, merge `bdeefda4`, 2026-10-08).** 6 casos novos de RN-10 ((a), (b),
+  (b2) com a ação sem ser dono, (b3) dono sem `reservar` barrado pela primeira camada, (b4) manual, (c)); os 10 de hoje
+  sem edição; (a) e (c) vermelhos contra o componente antigo. Controles: s1 → só (b); s2 → só (a); s3 → só o caso
+  existente do `#55`. Cliente 93 suítes / 1388 testes (antes 1382), build limpo. Divergência (segue a Fase 2): o (a)
+  afirma `pode('liberar_reserva_requisicao')` + o toast com a literal da tela, não `bloquearSeNaoPode` (que mostraria o
+  "Solicite acesso" genérico); a coluna mostra o número sozinho (já começa com `REQ-`), `REQ #<id>` só no fallback.
+  Enunciado original: **T2 (galho, paralelo à T1, worktree) — a tela Reservas.** Contra o contrato: coluna e modal com
   `requisicao_numero ?? '#' + requisicao_id`; `useAuth()` para o `user.id`; o **Liberar** de reserva de requisição:
   `if (Number(user?.id) !== Number(r.requisicao_solicitante_id) && !bloquearSeNaoPode('liberar_reserva_requisicao', e))
   return;` — manual continua `bloquearSeNaoPode('reservar', e)`. Testes novos em `ReservasAlmoxarifado.test.js` (RN-10):
