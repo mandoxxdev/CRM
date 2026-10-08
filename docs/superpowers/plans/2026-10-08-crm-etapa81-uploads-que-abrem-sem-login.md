@@ -101,3 +101,48 @@ e `responseType: 'blob'`; erro 404 em blob → toast com a mensagem. Controle po
 - Fora do escopo (Etapa 82): URL assinada para chat, proposta-fotos e avatares; corrigir os filtros
   de upload (SVG no logo, extensões do base64 e do nome original) — o RN-81.04 já neutraliza a
   execução, os filtros são a segunda camada.
+
+## Estado e fechamento (2026-10-08) — 🟢
+- T1 ✅ `de1f9bb8` (merge `cf721b00`): divergências — handlers em `server/services/arquivosProtegidos.js`
+  (para o teste executá-los de verdade); a tabela é **`proposta_template_config`** (o plano dizia
+  `proposta_template` — **estava errado**); as pastas públicas são **13**, não 15 (o plano errou a
+  contagem); no Windows o `gerar-pdf` já falhava com `"` no `numero_os` (nome de arquivo proibido),
+  pré-existente. T2 ✅ `9b3a1c97` (merge `640f0d3e`): "VER PDF" também abre a aba no clique;
+  estado `pdfGerado` para o botão aparecer após a primeira geração.
+- Plano corrompido pelo script de correção (`$\`` no texto de substituição) e reparado em
+  `5cecbde1` — quem percebeu foi o executor da T1.
+- Prova real: URLs antigas sem token → não é o arquivo; rotas novas sem token 401, com Bearer 200
+  (`%PDF`); contrato removido 404; OS com travessão/aspas 200; `.html` público com `nosniff` +
+  `sandbox`.
+- Revisão adversarial: nenhum furo nos handlers nem leitor quebrado. Corrigido (`52fe8195`,
+  `defcf287`): `Cache-Control: public` herdado do `sendFile` nas rotas protegidas → `private,
+  no-store` + `nosniff`; régua de registro só via `app.get` (um `app.use` sem login passava) →
+  qualquer registro em `index.js`/`routes/*.js`; CSP estrita podia tirar estilo de SVG de logo →
+  CSP própria do logo; duplo clique no VER PDF; aba fechada durante a geração; 4 mutações que
+  passavam nos testes. Registrado (B36): sem gate de módulo na OS; cópias de modelo mantêm contrato.
+
+## Retro
+- Rodadas de correção até verde: **1** (onda da revisão).
+- Achados: revisão do plano 8 (2 que travariam: popup bloqueado, componente com axios/alert);
+  revisão do código 4 reais + 4 lacunas de teste; 0 ruído.
+- Paralelismo: **2 galhos** (servidor/client em worktrees) contra contrato congelado; sem retrabalho.
+- Defeito escapado: preencher na etapa seguinte.
+
+## Próxima tarefa detalhada — Etapa 82: URL assinada para chat, fotos da proposta e avatares
+- **Pastas:** `/api/uploads/chat` (`routes/chat.js:20`, imagens do chat interno — sensível; nome
+  `chat-<ms>-<random 1e9>`), `/api/uploads/proposta-fotos` (`index.js:~17946`, fotos soltas da
+  proposta; `foto_<ms>_<orig>`), `/api/uploads/avatares` (`:~17954`, `avatar_<userId>_<ms>` — o mais
+  adivinhável).
+- **Precedente a reusar:** `services/almoxarifado/urlUpload.js` (`criarAssinadorUpload`: HMAC do nome
+  + validade, middleware que devolve 404) montado em `routes/almoxarifado.js:254-276`; o servidor
+  **assina ao devolver** a URL (`materialPhotoUrl`) e o client usa como veio.
+- **Onde assinar:** chat — ao listar mensagens (`anexo_url`) e no evento de socket
+  (`services/chatSocket.js:75` `resolveMediaUrl` no client); proposta-fotos — no template V2 quando
+  `forPdfServer=false` (`propostaPremiumV2.js:109`) e nas respostas das rotas `/fotos` usadas em
+  `PropostaPreviewEditavel.js:617,676,1194`; avatares — onde o usuário é serializado (`Layout.js:551`,
+  `MinhaConta.js:11` leem).
+- **Cuidado:** a URL assinada expira (15 min no almoxarifado) — tela aberta por horas mostra imagem
+  quebrada; o almoxarifado aceitou isso, medir se o chat aguenta (talvez validade maior).
+- Junto: filtros de upload — logo aceita SVG (`index.js:~983`), base64 sem lista de extensões
+  (`:~3912`, `routes/compras.js:737,869`), extensão do nome original (`:~932,951`), chat aceita MIME
+  **ou** extensão (`routes/chat.js:35`) → usar `extensaoSegura` (`urlUpload.js:65-85`).

@@ -16,7 +16,9 @@
 > (A5 fechado, B34).
 > **2026-10-08 — Etapa 80 entregue:** os PDFs (proposta e pedido de compra) passam por uma **fila**
 > — acabou o PDF que falhava "do nada" e o Chromium que vazava memória (B32 resolvido, B35).
-> Próxima: medir os arquivos enviados que abrem sem login (`/api/uploads/*`).
+> **2026-10-08 — Etapa 81 entregue:** o **PDF da OS**, o **contrato**, as **cotações** e os
+> **comprovantes de viagem** deixaram de abrir sem login; os arquivos públicos (fotos, logos) não
+> executam mais código (B36). Próxima: URL assinada para chat, fotos da proposta e avatares.
 > O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
 > A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
@@ -172,6 +174,17 @@
   fila — um PDF gerado nesse instante falhava com "Target closed". A medição da 80 achou mais
   três corridas (erro de um derrubando o outro, Chromium aberto em dobro e nunca fechado, e o
   fechamento por ociosidade no meio de uma geração).
+- **B36 — Etapa 81: PDF da OS e contrato só saem por rota com login; cotações e comprovantes perderam
+  o endereço público (ninguém usava).** Escolhido: só login (`authenticateToken`), o mesmo das rotas
+  vizinhas — **descartado** exigir o módulo Operacional no PDF da OS (a ficha da OS já abre só com
+  login, `GET /ordens-servico/:id`; mudar seria outra etapa). Contrato: só baixa o que está em uso
+  em algum modelo; **limite conhecido:** modelos copiados por "salvar como" guardam o contrato
+  antigo, que continua baixável por quem tem login. Fotos de produto/família/grupo, logos e
+  similares **continuam públicas** (são mostradas por `<img>` em muitas telas) mas passam a ir com
+  `nosniff` + CSP `sandbox` — um `.html` disfarçado não roda mais como página do CRM; para o
+  logo, a CSP libera estilos (SVG com `<style>`) e segue bloqueando script (cabeçalho medido; a
+  renderização do SVG não foi vista num navegador). Link antigo salvo de PDF de OS
+  (`/uploads/ordens-servico/...`) passa a abrir a tela inicial do sistema em vez do PDF.
 - **B35 — Etapa 80: uma fila serial (um PDF por vez no Chromium compartilhado).** Escolhido por ser
   a menor mudança que elimina as quatro corridas de uma vez. Custo medido: com 16 downloads
   simultâneos o mais lento levou ~9 s (antes ~3 s — mas antes eram 29–33 Chromium abertos e 7 PDFs
@@ -288,6 +301,60 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 81 — Arquivos enviados só com login (2026-10-08)
+
+**Em uma frase.** O PDF da OS (cliente, itens, valores), o modelo de contrato, as cotações de
+fornecedor e os comprovantes de viagem abriam por um endereço direto **sem login** — e o nome do
+PDF da OS era fácil de adivinhar (`OS_<número>_<hora>.pdf`); agora só saem para quem está logado.
+
+### O que há de novo (visível para o usuário)
+- **OS → Ver PDF / Gerar PDF**: funcionam como antes, mas o PDF vem pela rota com login. A aba nova
+  abre **no clique** (o Chrome bloqueava aba aberta depois de uma geração demorada); se você fechar
+  a aba enquanto gera, aparece "PDF gerado — clique em VER PDF". Clicar duas vezes não abre duas abas.
+- **Configurações → Modelo de proposta → contrato anexo** e o **preview da proposta**: o link do
+  contrato virou botão que baixa o arquivo (com login).
+- Um contrato **removido** deixa de ser baixável, mesmo que o arquivo continue no servidor.
+- Nada muda nas fotos de produto, logos etc. — continuam aparecendo em todas as telas.
+
+### Por baixo do capô
+- Rotas novas com login: `GET /api/operacional/ordens-servico/:id/pdf` e
+  `GET /api/proposta-template/contrato-anexo/:arquivo` (`server/services/arquivosProtegidos.js`):
+  só o nome do arquivo é usado (nada de `../`), o contrato tem de estar em uso em algum modelo,
+  resposta `private, no-store` + `nosniff`, nome do arquivo codificado (número de OS com travessão
+  ou aspas não derruba mais o download).
+- Saíram 4 montagens públicas: `/uploads/ordens-servico`, `/api/uploads/contrato`, `cotacoes`,
+  `comprovantes-viagens`. As 13 pastas públicas restantes ganharam `nosniff` + CSP `sandbox`.
+- Client: `utils/baixarArquivoProtegido.js` (download por blob com a mensagem de erro do servidor).
+- Testes: `uploadsProtegidos.api.test.js` (29: handlers de verdade + régua no código: cada rota
+  registrada **uma** vez e com login, nenhuma montagem das pastas protegidas, cabeçalhos em todas
+  as públicas), `OSDetalhesForm.test.js` (10), `ContratoAnexoDownload.test.js` (5).
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| `/uploads/ordens-servico/OS_<n>_<hora>.pdf` abria o PDF sem login | Não abre; o PDF sai por `/api/.../pdf` com login |
+| Contrato, cotação e comprovante com endereço público | Só pelas rotas com login |
+| Contrato removido continuava baixável | 404 "Contrato não encontrado" |
+| `.html` enviado como foto rodava como página do CRM | Servido com `nosniff` + CSP `sandbox` |
+| "Ver PDF" com `:5000` fixo no código | Rota relativa ao servidor |
+
+### Roteiro de teste manual (clicável)
+1. **Operacional → OS** de uma OS com PDF: **Ver PDF** abre o PDF numa aba. **Gerar PDF** de novo:
+   a aba abre logo e o PDF aparece quando termina.
+2. Numa **aba anônima**, cole
+   `http://<servidor>:5000/uploads/ordens-servico/OS_<número>_<algo>.pdf` de um PDF antigo: não
+   abre o PDF.
+3. **Configurações → Modelo de proposta**: clique no contrato anexo — baixa. Clique **Remover
+   contrato** e tente baixar pelo preview de uma proposta: "Contrato não encontrado".
+4. Fotos de produto e logos continuam aparecendo nas listas e na proposta.
+
+### O que a etapa NÃO cobre
+- Chat, fotos soltas da proposta e avatares continuam com endereço público (nomes difíceis de
+  adivinhar no chat; os outros mais fáceis) — exigem **URL assinada** (Etapa 82).
+- Os filtros de upload que aceitam SVG/extensão livre (o cabeçalho já impede a execução; o filtro é
+  a segunda camada) — Etapa 82.
+- Exigir o módulo Operacional para o PDF da OS (B36).
 
 ## Etapa 80 — Um PDF por vez: acabou o PDF que falhava sem motivo (2026-10-08)
 
