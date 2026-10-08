@@ -129,3 +129,41 @@ caminho de avatar → 404; base64 `data:image/html` → 400), revisão adversari
 - `html_rendered` passa a guardar URLs assinadas que vencem — é dado morto (nada lê), registrar
   "proibido reusar" no comentário do PUT.
 - Notificações/e-mail não carregam essas URLs (medido).
+
+## Fechamento (2026-10-08) — 🟢
+- T2 ✅ `1653296f` (merge `bd339000`): divergências — dentro do mesmo balde de 1 h a rota de
+  renovação devolve a mesma URL (por desenho); 404 também para mensagem apagada e id inválido.
+- T3 ✅ `65a17770` + `f15ffe8d` (merge `c66eae79`): divergências — `services/uploadsAssinadosCrm.js`
+  e `services/imagemUpload.js` novos (testáveis); template sem assinador cai para base64 (não URL
+  crua); menu lateral sem iniciais (a foto que falha some; iniciais só em Minha Conta,
+  `AvatarUsuario.js`); mensagens de erro das rotas de família unificadas; teste do editor por
+  leitura de fonte (o jsdom não roda o `srcDoc`).
+- Integração: `test:api` 304/304, client 93/1373, build limpo.
+- Revisão adversarial: nenhuma brecha na assinatura nem caminho sem assinatura. Corrigido
+  (`5066bffc`, `0af3b4d5`): validade do chat em 15 min e chave repetida passavam em todos os testes
+  → configurações reais afirmadas e domínios distintos; renovação no chat não se recuperava de uma
+  segunda expiração nem de falha de rede → id sai do `Set` no `onLoad` e em erro de rede (404
+  continua uma vez só). Registrado: os outros 10 multers de imagem (próxima etapa).
+
+## Retro
+- Rodadas de correção até verde: **1**.
+- Achados: revisão do plano 9 reais (5 que quebrariam fluxo: recarga da conversa perdendo rolagem,
+  laço com arquivo apagado, lightbox sem recuperação, `/api/api`, `foto_src` velho); revisão do
+  código 2 mutações sobreviventes + 1 recuperação incompleta; 0 ruído.
+- Paralelismo: **2 galhos** (chat ‖ fotos+avatares+filtros) depois do tronco; sem retrabalho.
+- Lição repetida da 80: teste de configuração tem de afirmar **o valor real**, não uma cópia local.
+- Defeito escapado: preencher na etapa seguinte.
+
+## Próxima tarefa detalhada — Etapa 83: os outros 10 uploads de imagem pelo tipo real
+- **Onde** (medido na revisão, `server/index.js:~818-1137` e `:~5196-5210`): multers de produtos,
+  materiais de escritório, famílias, esquemático, grupos (multipart — o base64 já foi), logos, logo
+  do cliente, header, footer e capa. Hoje: regex solto (`/jpeg|jpg|png|.../` só precisa *conter*) e
+  extensão do `originalname`.
+- **Como:** reusar `services/imagemUpload.js` (T3 da 82) — filtro ancorado nas chaves do mapa do
+  `extensaoSegura` e extensão por `extensaoSegura(file.mimetype)`. **Logo SVG**: decidir em B (hoje
+  aceito, com CSP própria da 81) — medir em produção `ls uploads/logos/*.svg` antes; recomendação:
+  manter aceito no logo da empresa (só lá) e recusar nos outros.
+- **Também:** o multer morto `uploadChat` em `index.js:~715-731` (aceita qualquer tipo, ninguém usa) —
+  remover.
+- **Teste:** ampliar `imagemUploadFiltros.api.test.js`; régua por fonte: nenhum `multer.diskStorage`
+  de imagem com `path.extname(file.originalname)`.

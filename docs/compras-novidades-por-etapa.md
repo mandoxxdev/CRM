@@ -18,7 +18,10 @@
 > — acabou o PDF que falhava "do nada" e o Chromium que vazava memória (B32 resolvido, B35).
 > **2026-10-08 — Etapa 81 entregue:** o **PDF da OS**, o **contrato**, as **cotações** e os
 > **comprovantes de viagem** deixaram de abrir sem login; os arquivos públicos (fotos, logos) não
-> executam mais código (B36). Próxima: URL assinada para chat, fotos da proposta e avatares.
+> executam mais código (B36).
+> **2026-10-08 — Etapa 82 entregue:** imagens do **chat**, **fotos da proposta** e **avatares** só
+> abrem com endereço assinado que vence (B37); uploads de imagem por base64 recusam formato fora da
+> lista. Próxima: os outros 10 uploads de imagem que ainda confiam na extensão do nome do arquivo.
 > O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
 > A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
@@ -174,6 +177,15 @@
   fila — um PDF gerado nesse instante falhava com "Target closed". A medição da 80 achou mais
   três corridas (erro de um derrubando o outro, Chromium aberto em dobro e nunca fechado, e o
   fechamento por ociosidade no meio de uma geração).
+- **B37 — Etapa 82: imagens do chat, fotos da proposta e avatares com endereço assinado, validade
+  pela vida da tela.** Chat **8 h**, fotos da proposta **12 h**, avatar **24 h** (o mesmo do login);
+  cada pasta com chave própria (assinatura de uma não abre outra). O banco não muda — a assinatura é
+  feita na hora de devolver o endereço. Descartado: 15 min para todas (o chat carrega a imagem só
+  quando rola até ela; com 15 min, conversa aberta há uma hora mostraria imagem quebrada); trocar
+  todo `<img>` por download com login (muito mais telas mexidas). **Limites aceitos:** editor de
+  proposta aberto há mais de 12 h perde as fotos na próxima repaginação (recarregar resolve); no
+  chat, a imagem vencida é renovada sozinha, uma vez por falha. Formatos: só jpeg/png/gif/webp por
+  base64 e nos 4 uploads convertidos; `image/pjpeg` (IE antigo) passou a ser recusado; HEIC já era.
 - **B36 — Etapa 81: PDF da OS e contrato só saem por rota com login; cotações e comprovantes perderam
   o endereço público (ninguém usava).** Escolhido: só login (`authenticateToken`), o mesmo das rotas
   vizinhas — **descartado** exigir o módulo Operacional no PDF da OS (a ficha da OS já abre só com
@@ -301,6 +313,59 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 82 — Imagens do chat, fotos da proposta e avatares com endereço que vence (2026-10-08)
+
+**Em uma frase.** As imagens do chat interno, as fotos soltas da proposta e as fotos de perfil
+abriam por um endereço fixo sem login — o do avatar era o mais fácil de adivinhar
+(`avatar_<id do usuário>_<hora>`); agora o servidor entrega um endereço **assinado** que vence, e o
+endereço cru não abre mais.
+
+### O que há de novo (visível para o usuário)
+- Para quem usa o sistema, **nada muda na tela**: chat, preview da proposta, menu lateral e Minha
+  Conta mostram as imagens como antes.
+- **Chat**: se a conversa ficar aberta tanto tempo que o endereço de uma imagem vença, a imagem se
+  renova sozinha quando aparece (sem recarregar a conversa nem perder a rolagem). Funciona também na
+  imagem ampliada.
+- **Minha Conta**: ao trocar ou remover a foto, o menu atualiza na hora; se a foto não carregar,
+  aparecem as iniciais em vez do ícone de imagem quebrada.
+- Grupos, famílias, fornecedores e grupos de compras: imagem em formato estranho (SVG, ícone, HTML
+  disfarçado) é recusada com **"Formato de imagem não suportado"**.
+
+### Por baixo do capô
+- O assinador do almoxarifado virou genérico (`criarAssinadorUpload(segredo, { prefixo, dominio,
+  minutos, baldeMinutos })`), com a **pasta na chave**; o almoxarifado continua idêntico.
+- Chat: `mapMessage` assina o anexo (REST, envio e socket); rota nova `GET /api/chat/mensagens/:id/anexo`
+  (só participante) para renovar. Fotos: as rotas `/fotos` devolvem `url` assinado e o preview V2
+  recebe um assinador injetado (o PDF continua com a imagem embutida). Avatar: campo novo
+  `foto_src` (sempre presente) no login, `/auth/me` e Minha Conta.
+- Filtros: `services/imagemUpload.js` decide formato pelo tipo real da imagem, não pelo nome.
+- Testes novos: `urlUploadParametrizada` (6), `chatAnexoAssinado` (15, rota de verdade),
+  `fotosAvataresAssinados` (18), `imagemUploadFiltros` (15) e 6 arquivos no client. A revisão provou
+  que dava para pôr a validade do chat em 15 min ou repetir a chave de outra pasta sem nenhum teste
+  falhar — agora as configurações reais são afirmadas.
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| `/api/uploads/avatares/avatar_<id>_<hora>.png` abria sem login | 404 sem assinatura |
+| Imagem do chat e foto da proposta com endereço fixo | Endereço assinado (8 h / 12 h) |
+| Uma chave de assinatura só (almoxarifado) | Uma chave por pasta |
+| `data:image/svg+xml` / sem prefixo virava `.jpg` no disco | 400 "Formato de imagem não suportado" |
+
+### Roteiro de teste manual (clicável)
+1. **Chat**: envie uma imagem numa conversa; ela aparece normalmente; clique para ampliar.
+2. Clique com o botão direito na imagem → "Copiar endereço da imagem"; apague tudo depois de `.png`
+   (o `?exp=...&sig=...`) e abra numa aba anônima: **não abre**.
+3. **Minha Conta**: troque a foto — o menu lateral muda na hora; remova — aparecem as iniciais.
+4. **Proposta → preview editável**: cole uma foto; ela aparece e continua lá depois de mudar de página.
+5. **Compras → Grupos**: tente enviar um arquivo `.svg` renomeado: "Formato de imagem não suportado".
+
+### O que a etapa NÃO cobre
+- Os outros **10 uploads de imagem** (produtos, materiais de escritório, famílias, esquemático,
+  grupos por multipart, logos, logo do cliente, header, footer, capa) ainda escolhem a extensão
+  pelo nome do arquivo — o cabeçalho da Etapa 81 já impede a execução; é a próxima etapa.
+- Logo em SVG continua aceito (B36).
 
 ## Etapa 81 — Arquivos enviados só com login (2026-10-08)
 
