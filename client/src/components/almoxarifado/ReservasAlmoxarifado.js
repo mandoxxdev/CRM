@@ -5,6 +5,7 @@ import { FiPlus, FiRefreshCw, FiUnlock, FiShuffle, FiClock } from 'react-icons/f
 import { SkeletonTable } from '../SkeletonLoader';
 import ExtratoMaterialModal from './ExtratoMaterialModal';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
+import { useAuth } from '../../context/AuthContext';
 import './Almoxarifado.css';
 
 /**
@@ -46,8 +47,18 @@ const FORM_VAZIO = {
 
 const hoje = () => new Date().toISOString().slice(0, 10);
 
+// Número da requisição (REQ-…) quando o GET /reservas o trouxe (Etapa 77); senão o id, como
+// antes. Mostrar o id fazia o usuário procurar "#55" numa tela que lista por número.
+const requisicaoLabel = (r) => r.requisicao_numero ?? `#${r.requisicao_id ?? '—'}`;
+
+// Texto próprio da tela, não o "Solicite acesso" genérico do bloquearSeNaoPode: a regra aqui é
+// sobre DE QUEM é a requisição, e pedir acesso não resolve (Etapa 77, C137).
+export const MSG_LIBERAR_RESERVA_REQUISICAO =
+  'Só quem pediu a requisição, o almoxarife ou o administrador liberam esta reserva';
+
 const ReservasAlmoxarifado = () => {
   const { pode, bloquearSeNaoPode } = useAlmoxPermissoes();
+  const { user } = useAuth();
 
   const [reservas, setReservas] = useState([]);
   const [materiais, setMateriais] = useState([]);
@@ -154,6 +165,21 @@ const ReservasAlmoxarifado = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Gate do Liberar antes do modal (Etapa 77, RN-10). Duas camadas, como no servidor:
+  // `reservar` para tocar em reserva; e, se a reserva é de requisição, ser quem PEDIU a
+  // requisição (`requisicao_solicitante_id` — não `solicitante_id`, que nela é o aprovador) ou
+  // ter `liberar_reserva_requisicao`. Quem decide é o backend (403); isto só evita digitar o
+  // motivo para morrer no servidor, e falha aberto como o hook.
+  const podeAbrirLiberar = (r, e) => {
+    if (!bloquearSeNaoPode('reservar', e)) return false;
+    if (r.origem !== 'REQUISICAO') return true;
+    if (Number(user?.id) === Number(r.requisicao_solicitante_id)) return true;
+    if (pode('liberar_reserva_requisicao')) return true;
+    if (e?.preventDefault) e.preventDefault();
+    toast.error(MSG_LIBERAR_RESERVA_REQUISICAO);
+    return false;
   };
 
   const abrirLiberar = (r) => {
@@ -350,7 +376,8 @@ const ReservasAlmoxarifado = () => {
                     </td>
                     <td>
                       <span className={`almox-badge almox-badge-${daRequisicao ? 'ajuste' : 'vazio'}`}>
-                        {daRequisicao ? `REQ #${r.requisicao_id ?? '—'}` : 'MANUAL'}
+                        {/* O número já começa com o prefixo (REQ-…); só o fallback pelo id leva "REQ ". */}
+                        {daRequisicao ? (r.requisicao_numero ?? `REQ ${requisicaoLabel(r)}`) : 'MANUAL'}
                       </span>
                       <div style={{ fontSize: '0.8rem', marginTop: 4 }}>
                         {destino || <span style={{ color: 'var(--gmp-text-light)' }}>—</span>}
@@ -378,7 +405,7 @@ const ReservasAlmoxarifado = () => {
                         {ativa && saldo > 0 ? (
                           <>
                             <button className="almox-btn-icon" title="Liberar (devolve o saldo ao disponível)"
-                              onClick={(e) => { if (!bloquearSeNaoPode('reservar', e)) return; abrirLiberar(r); }}>
+                              onClick={(e) => { if (!podeAbrirLiberar(r, e)) return; abrirLiberar(r); }}>
                               <FiUnlock />
                             </button>
                             <button className="almox-btn-icon" title="Transferir para outro projeto/OS (não move saldo)"
@@ -515,7 +542,7 @@ const ReservasAlmoxarifado = () => {
               </p>
               {liberarTarget.origem === 'REQUISICAO' && (
                 <div className="almox-badge almox-badge-baixo" style={{ display: 'block', padding: '8px 10px', marginBottom: 12, lineHeight: 1.4 }}>
-                  Esta reserva pertence à requisição #{liberarTarget.requisicao_id ?? '—'}. Liberar
+                  Esta reserva pertence à requisição {requisicaoLabel(liberarTarget)}. Liberar
                   devolve o saldo ao disponível geral e a entrega dessa requisição volta a disputar
                   estoque com as demais.
                 </div>
