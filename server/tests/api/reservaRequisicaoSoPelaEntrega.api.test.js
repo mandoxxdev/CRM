@@ -24,6 +24,9 @@ const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet } = require('../../services/almoxarifado/db');
 const stockService = require('../../services/almoxarifado/stockService');
+const { TIPOS_SAIDA } = require('../../services/almoxarifado/movementTypes');
+const { TIPOS_MOVIMENTO_ROTA } = require('../../services/almoxarifado/schemas');
+const { REGRAS_VINCULO } = require('../../services/almoxarifado/movementRules');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -96,12 +99,18 @@ process.on('exit', (code) => {
 
   // ══════════════ RN-01 — a saida generica (v2) nao consome reserva de requisicao ══════════════
 
-  const casos = [
-    ['SAIDA', {}],
-    ['PERDA', {}],
-    ['AJUSTE_NEGATIVO', {}],
-    ['SAIDA_PRODUCAO', { projeto_id: 7 }],
-  ];
+  // Fase 5 (sobrevivente 1): a lista era escrita a mao com QUATRO tipos — restringir a recusa do motor a
+  // eles (`['SAIDA','PERDA','AJUSTE_NEGATIVO','SAIDA_PRODUCAO'].includes(tipo)`) ficava verde, e
+  // SAIDA_MONTAGEM/SAIDA_ASSISTENCIA consumiam a reserva da requisicao pela v2. Agora a lista e DERIVADA:
+  // todo tipo de saida do motor (TIPOS_SAIDA) que a v2 aceita (TIPOS_MOVIMENTO_ROTA, que ja tira os
+  // dedicados e as retencoes); o vinculo obrigatorio de cada um vem de REGRAS_VINCULO.
+  const tiposSaidaV2 = TIPOS_SAIDA.filter((t) => TIPOS_MOVIMENTO_ROTA.includes(t));
+  // Guarda da guarda: se o import quebrar e vier vazio, o loop passaria provando nada.
+  for (const t of ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO', 'PERDA']) {
+    assert.ok(tiposSaidaV2.includes(t), `${t} sumiu da lista derivada: ${JSON.stringify(tiposSaidaV2)}`);
+  }
+  const casos = tiposSaidaV2.map((tipo) => [tipo,
+    REGRAS_VINCULO[tipo] && REGRAS_VINCULO[tipo].vinculo === 'os_ou_projeto' ? { projeto_id: 7 } : {}]);
   for (const [tipo, extra] of casos) {
     // eslint-disable-next-line no-await-in-loop
     await test(`[RN-01] v2 ${tipo}${extra.projeto_id ? ' + projeto' : ''} com o reserva_id da requisicao: 400 M1, nada mudou`, async () => {

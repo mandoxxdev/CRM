@@ -140,6 +140,17 @@ process.on('exit', (code) => {
 
   await test('[jornada 1] material com 10: S (sem perfil -> PRODUCAO) cria R(6), o GESTOR aprova -> TOTALMENTE_RESERVADA, reserva origem REQUISICAO', async () => {
     j.m = await material('E77T3-M1', 10);
+    // Fase 5 (sobrevivente 4): uma requisicao RASCUNHO avulsa com dois itens, de outro material, descola o
+    // id da requisicao do id do item — sem isto os dois andavam juntos e a jornada 8 passava com o JOIN
+    // da listagem feito por `r.item_requisicao_id`.
+    const mAv = await material('E77T3-AV', 1);
+    const av = (await dbRun(db, `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status, urgencia, created_at, ativo)
+      VALUES ('REQ-E77T3-AV', ?, ?, 'RASCUNHO', 'NORMAL', '2026-09-01 10:00:00', 1)`, [SOL.id, SOL.nome])).lastID;
+    for (let i = 0; i < 2; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada, quantidade_separada, quantidade_entregue, quantidade_atendida)
+        VALUES (?,?,1,0,0,0)`, [av, mAv]);
+    }
     j.R = await aprovada(j.m, 6);
     assert.strictEqual(j.R.status, 'TOTALMENTE_RESERVADA');
     const rs = await reservasDe(j.R.id);
@@ -148,6 +159,7 @@ process.on('exit', (code) => {
     assert.deepStrictEqual([j.res.status, j.res.origem, Number(j.res.quantidade)], ['ATIVA', 'REQUISICAO', 6]);
     // A coluna da reserva e o APROVADOR (Surpresa 2) — quem pediu e S, na requisicao.
     assert.strictEqual(Number(j.res.solicitante_id), GES.id);
+    assert.notStrictEqual(Number(j.res.item_requisicao_id), Number(j.R.id), 'pre-condicao: id do item e da requisicao tinham de divergir');
     assert.deepStrictEqual(await mat(j.m), { q: 10, r: 6 });
   });
 
