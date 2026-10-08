@@ -426,7 +426,14 @@ Ordem topológica: **T0 → T1 → T3 → T4**, com **T2 (galho)** em paralelo a
   **Controles positivos:** (s1) sem o ramo do dono → **cai (b)** (o mock de `bloquearSeNaoPode` devolve `false` para a
   ação). (s2) gate de requisição trocado de volta para `'reservar'` → **cai (a)** (a asserção é sobre o **nome** da ação
   passada ao mock, que devolve `true` para `reservar`). (s3) sem o fallback `#<id>` → **cai o caso existente** de `:160`.
-- [ ] **T3 — integração cruzando T0 × T1 × a 76, pelas rotas e pelo serviço.** Teste novo
+- [x] **T3 — FEITA em `6476f63d` (2026-10-08).** 12 casos pelas rotas, perfis reais, verdes de primeira (esperado
+  depois de T0/T1). Controles: (s1) da T1 → jornada 2 e chegada 2 caem com 201 (+7 em cascata); (s1) da T0 com PRODUCAO
+  → jornada 3 cai com 200 (ENGENHARIA continua 403 — mede perfil a perfil); (s2) da T0 → jornada 7 cai com 403; **(s3)
+  da T1 a mais** (entrega sem a marca) → jornada 9 e chegada 3 caem com 400 M1 prefixado — a prova do ponto 1 da seção
+  abaixo. Texto do plano a acertar: R termina `ENTREGUE` (o "ATENDIDA/terminal"); a parte da chegada também entra pelas
+  rotas (a reserva nasce no serviço da 74 dentro do `processar`). Suítes: test:api 313/313, almoxarifado 44/0,
+  validation 4/0, safealter 3/0, sqlite 5/0.
+  Enunciado original: **T3 — integração cruzando T0 × T1 × a 76, pelas rotas e pelo serviço.** Teste novo
   `server/tests/api/reservaRequisicaoPortaIntegracao.api.test.js`, perfis reais (molde `reservaRecalculoIntegracao`):
   **jornada pela rota** — S (sem perfil → PRODUCAO) cria R(6) pela rota; GESTOR aprova (`TOTALMENTE_RESERVADA`);
   ALMOXARIFE tenta a v2 `SAIDA` com o `reserva_id` → 400 M1, nada mudou; **outro** PRODUCAO tenta liberar → 403 M2;
