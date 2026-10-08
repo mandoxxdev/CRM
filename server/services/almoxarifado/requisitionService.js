@@ -677,6 +677,9 @@ async function checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qty, p
   return codigoOrigem;
 }
 
+/** Etapa 92 (T0): o 400 da separacao fora de PODE_SEPARAR — na leitura e na reivindicacao (S1). */
+const MSG_STATUS_SEPARAR = 'Requisição deve estar aprovada, aguardando estoque/compra, em separação ou parcialmente atendida para separar';
+
 async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
   if (!user?.id) {
     const err = new Error('Separação exige usuário identificado');
@@ -691,9 +694,7 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
     throw err;
   }
   if (!PODE_SEPARAR.includes(reqRow.status)) {
-    const err = new Error(
-      'Requisição deve estar aprovada, aguardando estoque/compra, em separação ou parcialmente atendida para separar'
-    );
+    const err = new Error(MSG_STATUS_SEPARAR);
     err.status = 400;
     throw err;
   }
@@ -844,93 +845,121 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
     });
   }
 
-  const tocados = []; // [{ item_id, material_id, quantidade }]
-  for (const { item, qty, novaSeparada, origemId, loteId, planejada } of validados) {
-    await dbRun(db, `UPDATE itens_requisicao_almoxarifado SET quantidade_separada = ?,
-        origem_separacao_id = ?, lote_separacao_id = ? WHERE id = ?`,
-    [novaSeparada, planejada.origemId, planejada.loteId, item.id]);
-    tocados.push({
-      item_id: item.id, material_id: item.material_id, quantidade: qty,
-      ...(origemId ? { localizacao_origem_id: origemId } : {}), ...(loteId ? { lote_id: loteId } : {}),
-      ...divergenciaPorItem.get(item.id),
-    });
+  // Etapa 92 (T0, B436): a separacao REIVINDICA a requisicao antes de gravar qualquer coisa. Antes, o
+  // status so era gravado no fim, com `WHERE id=?` sem guarda: um cancelamento que entrasse entre a
+  // leitura e esse UPDATE respondia 200 e a separacao passava por cima — a requisicao "ressuscitava"
+  // em EM_SEPARACAO com a reserva ja solta (sonda da Fase 0: 50/50 e 10/10). Guardar so o UPDATE do fim
+  // nao basta: a rodada (append-only) ja estaria gravada numa cancelada. Perdeu -> o 400 de sempre (S1).
+  const claim = await dbRun(db, `UPDATE requisicoes_almoxarifado
+      SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
+    WHERE id=? AND status IN (${PODE_SEPARAR.map(() => '?').join(',')})`, [requisicaoId, ...PODE_SEPARAR]);
+  if (!claim.changes) {
+    console.info(`[almoxarifado-separacao] Requisicao ${requisicaoId} saiu de ${reqRow.status} antes da separacao gravar — recusada`);
+    const err = new Error(MSG_STATUS_SEPARAR);
+    err.status = 400;
+    throw err;
   }
 
+  const tocados = []; // [{ item_id, material_id, quantidade }]
   let rodadaId = null;
   let conferenciaAnterior = null;
+  // Etapa 92 (Fase 2, RN-09): gravacao que falha depois da reivindicacao, SEM rodada inserida, devolve o
+  // status lido — senao a requisicao ficava presa em EM_SEPARACAO e quem pediu perdia o Cancelar (e, de
+  // PARCIALMENTE_ATENDIDA, o Encerrar). Com a rodada gravada nao devolve: EM_SEPARACAO e o estado certo.
+  try {
+    for (const { item, qty, novaSeparada, origemId, loteId, planejada } of validados) {
+      await dbRun(db, `UPDATE itens_requisicao_almoxarifado SET quantidade_separada = ?,
+          origem_separacao_id = ?, lote_separacao_id = ? WHERE id = ?`,
+      [novaSeparada, planejada.origemId, planejada.loteId, item.id]);
+      tocados.push({
+        item_id: item.id, material_id: item.material_id, quantidade: qty,
+        ...(origemId ? { localizacao_origem_id: origemId } : {}), ...(loteId ? { lote_id: loteId } : {}),
+        ...divergenciaPorItem.get(item.id),
+      });
+    }
 
-  if (tocados.length > 0) {
-    // RN-02: a rodada é append-only — nunca UPDATE/DELETE aqui.
-    const ins = await dbRun(db, `INSERT INTO separacoes_requisicao_almoxarifado
-      (requisicao_id, usuario_id, usuario_nome, itens_tocados, itens_json)
-      VALUES (?, ?, ?, ?, ?)`,
-      [requisicaoId, user.id, nomeDoUsuario(user), tocados.length, JSON.stringify(tocados)]);
-    rodadaId = ins.lastID;
+    if (tocados.length > 0) {
+      // RN-02: a rodada é append-only — nunca UPDATE/DELETE aqui.
+      const ins = await dbRun(db, `INSERT INTO separacoes_requisicao_almoxarifado
+        (requisicao_id, usuario_id, usuario_nome, itens_tocados, itens_json)
+        VALUES (?, ?, ?, ?, ?)`,
+        [requisicaoId, user.id, nomeDoUsuario(user), tocados.length, JSON.stringify(tocados)]);
+      rodadaId = ins.lastID;
 
-    // Etapa 65 (RN-01): a TROCA na separacao — item que antes da rodada tinha planejada com separado
-    // pendente e termina a rodada sem ela. Detectada sobre o retrato e a regua (so entradas com
-    // quantidade > 0), gravada DEPOIS da rodada (separacao_id); rodada recusada na passada 1 nao chega
-    // aqui. Separacao nao move estoque: sem movimentacao_ids. Best-effort como a auditoria da rodada
-    // (a rodada ja esta gravada; recusar agora deixaria o separado sem a resposta) — letra B.
-    for (const [itemId, r] of reguaDivergencia) {
-      const antes = planejadaAntes.get(itemId);
-      const item = itens.find((i) => i.id === itemId);
-      if (!antes || !item || item.origem_separacao_id) continue;
-      const pares = [...r.origens].map((k) => k.split('|').map((x) => (x === 'null' ? null : Number(x))));
-      const umPar = pares.length === 1 ? pares[0] : null;
-      try {
+      // Etapa 65 (RN-01): a TROCA na separacao — item que antes da rodada tinha planejada com separado
+      // pendente e termina a rodada sem ela. Detectada sobre o retrato e a regua (so entradas com
+      // quantidade > 0), gravada DEPOIS da rodada (separacao_id); rodada recusada na passada 1 nao chega
+      // aqui. Separacao nao move estoque: sem movimentacao_ids. Best-effort como a auditoria da rodada
+      // (a rodada ja esta gravada; recusar agora deixaria o separado sem a resposta) — letra B.
+      for (const [itemId, r] of reguaDivergencia) {
+        const antes = planejadaAntes.get(itemId);
+        const item = itens.find((i) => i.id === itemId);
+        if (!antes || !item || item.origem_separacao_id) continue;
+        const pares = [...r.origens].map((k) => k.split('|').map((x) => (x === 'null' ? null : Number(x))));
+        const umPar = pares.length === 1 ? pares[0] : null;
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await dbRun(db, `INSERT INTO substituicoes_origem_requisicao
+            (requisicao_id, item_id, material_id, quantidade, localizacao_planejada_id, lote_planejado_id,
+             localizacao_saida_id, lote_saida_id, automatica, movimentacao_ids, motivo, usuario_id, usuario_nome,
+             momento, separacao_id)
+            VALUES (?,?,?,?,?,?,?,?,?,NULL,?,?,?,'SEPARACAO',?)`,
+          [requisicaoId, itemId, item.material_id, antes.pend, antes.origemId, antes.loteId,
+            umPar ? umPar[0] : null, umPar ? umPar[1] : null, umPar && !umPar[0] && !umPar[1] ? 1 : 0,
+            r.motivoTroca || null, user.id, nomeDoUsuario(user), rodadaId]);
+        } catch (e) {
+          console.warn(`[almoxarifado-separacao] Falha ao registrar a troca de origem do item ${itemId} na rodada ${rodadaId}: ${e.message}`);
+        }
+      }
+
+      // RN-07 como COMPARE-AND-CLEAR (fix-round 1, F4). Reler a conferência e limpar só se a linha
+      // ainda for a relida (`WHERE conferido_por_id IS ?`): se alguém conferiu entre a releitura e o
+      // UPDATE, `changes` vem 0, relê-se e repete-se. Antes, a "releitura imediatamente antes do
+      // UPDATE" era só uma janela menor — a conferência que entrasse nela era apagada com
+      // `dados_anteriores: null`, e a mutação "usar o reqRow inicial" não derrubava teste nenhum.
+      let limpou = false;
+      for (let tentativa = 0; tentativa < 3 && !limpou; tentativa++) {
         // eslint-disable-next-line no-await-in-loop
-        await dbRun(db, `INSERT INTO substituicoes_origem_requisicao
-          (requisicao_id, item_id, material_id, quantidade, localizacao_planejada_id, lote_planejado_id,
-           localizacao_saida_id, lote_saida_id, automatica, movimentacao_ids, motivo, usuario_id, usuario_nome,
-           momento, separacao_id)
-          VALUES (?,?,?,?,?,?,?,?,?,NULL,?,?,?,'SEPARACAO',?)`,
-        [requisicaoId, itemId, item.material_id, antes.pend, antes.origemId, antes.loteId,
-          umPar ? umPar[0] : null, umPar ? umPar[1] : null, umPar && !umPar[0] && !umPar[1] ? 1 : 0,
-          r.motivoTroca || null, user.id, nomeDoUsuario(user), rodadaId]);
-      } catch (e) {
-        console.warn(`[almoxarifado-separacao] Falha ao registrar a troca de origem do item ${itemId} na rodada ${rodadaId}: ${e.message}`);
+        const conf = await dbGet(db,
+          'SELECT conferido_por_id, conferido_por_nome, conferido_em FROM requisicoes_almoxarifado WHERE id = ?',
+          [requisicaoId]);
+        conferenciaAnterior = conf && conf.conferido_por_id != null
+          ? { usuario_id: conf.conferido_por_id, usuario_nome: conf.conferido_por_nome, em: conf.conferido_em }
+          : null;
+        // eslint-disable-next-line no-await-in-loop
+        const upd = await dbRun(db,
+          `UPDATE requisicoes_almoxarifado
+             SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL,
+                 conferido_por_id=NULL, conferido_por_nome=NULL, conferido_em=NULL
+           WHERE id=? AND conferido_por_id IS ?`,
+          [requisicaoId, conferenciaAnterior ? conferenciaAnterior.usuario_id : null]);
+        limpou = upd.changes > 0;
+      }
+      if (!limpou) {
+        // Três corridas seguidas na MESMA linha: o estado seguro (limpa) prevalece sobre o rastro —
+        // a última conferência a entrar fica fora de dados_anteriores, e isso fica avisado.
+        console.warn(`[almoxarifado-separacao] Requisição ${requisicaoId}: a conferência mudou 3 vezes durante a rodada ${rodadaId}; limpando sem compare.`);
+        await dbRun(db,
+          `UPDATE requisicoes_almoxarifado
+             SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL,
+                 conferido_por_id=NULL, conferido_por_nome=NULL, conferido_em=NULL
+           WHERE id=?`,
+          [requisicaoId]);
       }
     }
-
-    // RN-07 como COMPARE-AND-CLEAR (fix-round 1, F4). Reler a conferência e limpar só se a linha
-    // ainda for a relida (`WHERE conferido_por_id IS ?`): se alguém conferiu entre a releitura e o
-    // UPDATE, `changes` vem 0, relê-se e repete-se. Antes, a "releitura imediatamente antes do
-    // UPDATE" era só uma janela menor — a conferência que entrasse nela era apagada com
-    // `dados_anteriores: null`, e a mutação "usar o reqRow inicial" não derrubava teste nenhum.
-    let limpou = false;
-    for (let tentativa = 0; tentativa < 3 && !limpou; tentativa++) {
-      // eslint-disable-next-line no-await-in-loop
-      const conf = await dbGet(db,
-        'SELECT conferido_por_id, conferido_por_nome, conferido_em FROM requisicoes_almoxarifado WHERE id = ?',
-        [requisicaoId]);
-      conferenciaAnterior = conf && conf.conferido_por_id != null
-        ? { usuario_id: conf.conferido_por_id, usuario_nome: conf.conferido_por_nome, em: conf.conferido_em }
-        : null;
-      // eslint-disable-next-line no-await-in-loop
-      const upd = await dbRun(db,
-        `UPDATE requisicoes_almoxarifado
-           SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL,
-               conferido_por_id=NULL, conferido_por_nome=NULL, conferido_em=NULL
-         WHERE id=? AND conferido_por_id IS ?`,
-        [requisicaoId, conferenciaAnterior ? conferenciaAnterior.usuario_id : null]);
-      limpou = upd.changes > 0;
+    // (Etapa 92: o `else` que gravava EM_SEPARACAO no "Iniciar Separacao" sem quantidade saiu — a
+    // reivindicacao acima ja gravou o status e zerou o lembrete.)
+  } catch (e) {
+    if (rodadaId == null && reqRow.status !== 'EM_SEPARACAO') {
+      try {
+        await dbRun(db, `UPDATE requisicoes_almoxarifado SET status=?, updated_at=CURRENT_TIMESTAMP
+          WHERE id=? AND status='EM_SEPARACAO'`, [reqRow.status, requisicaoId]);
+        console.warn(`[almoxarifado-separacao] Requisicao ${requisicaoId}: gravacao falhou depois da reivindicacao; status devolvido a ${reqRow.status}: ${e.message}`);
+      } catch (eDesfazer) {
+        console.error(`[almoxarifado-separacao] Requisicao ${requisicaoId}: falhou ao devolver o status ${reqRow.status} depois de ${e.message}: ${eDesfazer.message}`);
+      }
     }
-    if (!limpou) {
-      // Três corridas seguidas na MESMA linha: o estado seguro (limpa) prevalece sobre o rastro —
-      // a última conferência a entrar fica fora de dados_anteriores, e isso fica avisado.
-      console.warn(`[almoxarifado-separacao] Requisição ${requisicaoId}: a conferência mudou 3 vezes durante a rodada ${rodadaId}; limpando sem compare.`);
-      await dbRun(db,
-        `UPDATE requisicoes_almoxarifado
-           SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL,
-               conferido_por_id=NULL, conferido_por_nome=NULL, conferido_em=NULL
-         WHERE id=?`,
-        [requisicaoId]);
-    }
-  } else {
-    await dbRun(db,
-      `UPDATE requisicoes_almoxarifado SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
-      [requisicaoId]);
+    throw e;
   }
 
   // RN-04: rastro pós-escrita, best-effort (decisão da Etapa 19: falha de log não desfaz o ato).

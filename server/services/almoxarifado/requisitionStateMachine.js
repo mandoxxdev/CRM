@@ -90,6 +90,15 @@ const PODE_SEPARAR = ['APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA',
 const PODE_ENTREGAR = ['EM_SEPARACAO', 'PRONTA_PARA_RETIRADA', 'PARCIALMENTE_ATENDIDA'];
 
 /**
+ * Etapa 92 (B434, C149): os status em que quem pediu cancela pela rota dos outros modulos
+ * (`PUT /api/requisicoes-material/:id/cancelar`). E a lista da tela fora do modo almoxarifado
+ * (`client/src/components/almoxarifado/requisicaoLabels.js`, STATUS_CANCELAVEIS_OUTROS_MODULOS),
+ * conferida por teste (RN-07); subconjunto do que TRANSICOES deixa ir a CANCELADO.
+ */
+const CANCELAVEIS_OUTROS_MODULOS = Object.freeze(['PENDENTE', 'APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA',
+  'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA']);
+
+/**
  * Valida uma transição de status conforme TRANSICOES. Toda mudança de status de
  * requisição deve passar por aqui (design: "Toda mudança de status passa pelo validador;
  * transição inválida → 400").
@@ -187,6 +196,7 @@ module.exports = {
   STATUS_TOTALMENTE_RESERVADA,
   PODE_SEPARAR,
   PODE_ENTREGAR,
+  CANCELAVEIS_OUTROS_MODULOS,
   validarTransicao,
   calcularStatusPosAprovacao,
 };
