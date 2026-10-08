@@ -1019,6 +1019,18 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   // Consumo de reserva: só quando a saída cita `reserva_id`. RESERVA/LIBERACAO_RESERVA também
   // carregam reserva_id, mas não consomem nada — são o lançamento da própria reserva.
   const consumindoReserva = !!reserva_id && tiposSaida.includes(tipo);
+  // Etapa 91 (T4, D(77), B427): `reserva_id` so vale numa saida que consome a reserva. Ate aqui uma
+  // ENTRADA/AJUSTE/DEVOLUCAO pela v2 (ou uma TRANSFERENCIA pela `/transferencias`, que repassa o body
+  // cru) gravava a coluna no livro e deixava a reserva intocada — o livro dizia que o movimento "era da
+  // reserva" sem nada ter acontecido com ela. Vale para QUALQUER origem de reserva (requisicao ou
+  // manual). Excecao: RESERVA/LIBERACAO_RESERVA sao os lancamentos internos de `criarReserva` e
+  // `liberarReserva` (a v2 nem os aceita — TIPOS_RETENCAO); o estorno nao passa por aqui e nao grava a
+  // coluna (`cancelarMovimentacao`). Fica DEPOIS da validacao de tipo e de material (inexistente,
+  // inativo) — precedencia preservada — e ANTES de qualquer escrita.
+  if (reserva_id != null && reserva_id !== '' && !tiposSaida.includes(tipo)
+      && !['RESERVA', 'LIBERACAO_RESERVA'].includes(tipo)) {
+    throw Object.assign(new Error(`reserva_id só vale numa saída que consome a reserva — o tipo ${tipo} não consome reserva; tire o reserva_id do movimento`), { status: 400 });
+  }
   // Etapa 77 (C136, B407/B408): a reserva de origem REQUISICAO so sai pela ENTREGA da propria
   // requisicao. Ate a 76 o claim abaixo nao olhava a origem: a `POST /movimentacoes/v2` (SAIDA,
   // PERDA, AJUSTE_NEGATIVO, SAIDA_PRODUCAO) consumia a reserva da requisicao e a requisicao seguia
