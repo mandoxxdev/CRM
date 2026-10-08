@@ -1189,7 +1189,13 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
           projeto_id: reqRow.projeto_id || undefined,
           cliente_id: reqRow.cliente_id || undefined,
           centro_custo_id: reqRow.centro_custo_id || undefined,
-        }, { origemEstrita: baixa.comOrigem && !!origemPorItem.get(item.id)?.origemId, exigeSerie: true });
+        }, {
+          origemEstrita: baixa.comOrigem && !!origemPorItem.get(item.id)?.origemId,
+          exigeSerie: true,
+          // Etapa 77 (C136): a marca que deixa o motor consumir a reserva de origem REQUISICAO
+          // DESTA requisicao — sem ela o motor recusa (a reserva da requisicao so sai pela entrega).
+          requisicaoDaEntrega: requisicaoId,
+        });
         movimentosDoItem.push(mov.id);
       } catch (e) {
         const err = new Error(`${item.material_nome}: ${e.message}`);

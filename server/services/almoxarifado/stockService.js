@@ -1019,6 +1019,29 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   // Consumo de reserva: só quando a saída cita `reserva_id`. RESERVA/LIBERACAO_RESERVA também
   // carregam reserva_id, mas não consomem nada — são o lançamento da própria reserva.
   const consumindoReserva = !!reserva_id && tiposSaida.includes(tipo);
+  // Etapa 77 (C136, B407/B408): a reserva de origem REQUISICAO so sai pela ENTREGA da propria
+  // requisicao. Ate a 76 o claim abaixo nao olhava a origem: a `POST /movimentacoes/v2` (SAIDA,
+  // PERDA, AJUSTE_NEGATIVO, SAIDA_PRODUCAO) consumia a reserva da requisicao e a requisicao seguia
+  // TOTALMENTE_RESERVADA com entregue 0 — uma segunda porta de entrega sem separacao, conferencia,
+  // assinatura nem retirada. A excecao e a marca `opcoes.requisicaoDaEntrega` — 4o argumento,
+  // NUNCA do body/params (molde de `doBloqueado`: a `/transferencias` repassa o body cru e o
+  // proximo chamador pode por qualquer coisa em `params`) — e tem de ser a requisicao DONA da
+  // reserva. O unico que marca e `requisitionService.entregarRequisicao`.
+  // Leitura ANTES de qualquer escrita, sem claim: `origem` e `requisicao_id` nunca mudam depois de
+  // criados. `AND material_id = ?` preserva a precedencia de hoje (reserva de outro material sai
+  // com "Reserva nao encontrada para este material", no claim); qualquer status (inclusive
+  // LIBERADA/CONSUMIDA) recusa com M1 — a regra e "nunca por esta porta", nao "nao agora".
+  if (consumindoReserva) {
+    const rvReq = await dbGet(db, `SELECT rs.id, rs.origem, rs.requisicao_id, rq.numero
+      FROM reservas_material_almoxarifado rs
+      LEFT JOIN requisicoes_almoxarifado rq ON rq.id = rs.requisicao_id
+      WHERE rs.id = ? AND rs.material_id = ?`, [reserva_id, material_id]);
+    if (rvReq && rvReq.origem === 'REQUISICAO' && rvReq.requisicao_id != null
+        && Number(opcoes.requisicaoDaEntrega) !== Number(rvReq.requisicao_id)) {
+      const numeroReq = rvReq.numero || `#${rvReq.requisicao_id}`;
+      throw Object.assign(new Error(`A reserva ${rvReq.id} é da requisição ${numeroReq} — o material reservado para ela só sai pela entrega da requisição (tela Requisições), não por movimentação avulsa`), { status: 400 });
+    }
+  }
   // Saida que consome o que esta RETIDO em quantidade_em_terceiros. Mesmo papel de
   // `consumindoReserva`: a quantidade nao esta no disponivel (o disponivel justamente a exclui),
   // entao a guarda do disponivel nao pode barra-la; a validacao real acontece contra a propria
