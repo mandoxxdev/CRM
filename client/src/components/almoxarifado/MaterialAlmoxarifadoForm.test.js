@@ -724,33 +724,104 @@ describe('MaterialAlmoxarifadoForm — revisão da Etapa 38 (número órfão, pr
  * (máximo 10 MB)" / 400 do filtro, e a tela precisa repassar.
  */
 describe('MaterialAlmoxarifadoForm — Etapa 86: falha da foto mostra a mensagem do servidor', () => {
+  // O `files` do jsdom e somente-leitura e `value = ''` nao o esvazia; aqui o input se comporta
+  // como o do navegador: atribuir '' ao value LIMPA a lista (e o que o form faz para nao reenviar).
   async function escolherFoto() {
     const input = container.querySelector('input[type="file"]');
     const arquivo = new File([new Uint8Array([137, 80, 78, 71])], 'grande.png', { type: 'image/png' });
-    Object.defineProperty(input, 'files', { value: [arquivo], configurable: true });
+    let arquivos = [arquivo];
+    Object.defineProperty(input, 'files', { get: () => arquivos, configurable: true });
+    Object.defineProperty(input, 'value', {
+      get: () => (arquivos.length ? 'C:\\fakepath\\grande.png' : ''),
+      set: (v) => { if (v === '') arquivos = []; },
+      configurable: true,
+    });
     await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })); });
     await esperarEfeitos();
+    // o FileReader do preview termina em outra volta do loop
+    await esperarEfeitos();
+    return input;
   }
 
-  test('413 JSON do servidor → toast com o motivo e mantém "o material foi criado"', async () => {
-    api.post.mockImplementation((url) => (url.endsWith('/foto')
-      ? Promise.reject({ response: { status: 413, data: { error: 'Arquivo grande demais (máximo 10 MB)' } } })
-      : Promise.resolve({ data: { id: 99 } })));
+  const fotoRecusada413 = (url) => (url.endsWith('/foto')
+    ? Promise.reject({ response: { status: 413, data: { error: 'Arquivo grande demais (máximo 10 MB)' } } })
+    : Promise.resolve({ data: { id: 99 } }));
+  const chamadasFoto = () => api.post.mock.calls.filter(([url]) => url.endsWith('/foto'));
+
+  test('EDIÇÃO, 413 JSON → "Foto não pôde ser salva: <motivo>", sem dizer que o material foi criado', async () => {
+    api.post.mockImplementation(fotoRecusada413);
     await renderizarEdicao(77);
     await escolherFoto();
     expect(api.post).toHaveBeenCalledWith('/almoxarifado/materiais/77/foto', expect.any(FormData), expect.anything());
     expect(toast.error).toHaveBeenCalledTimes(1);
-    const msg = String(toast.error.mock.calls[0][0]);
-    expect(msg).toMatch(/Arquivo grande demais \(máximo 10 MB\)/);
-    expect(msg).toMatch(/o material foi criado/);
+    expect(toast.error).toHaveBeenCalledWith('Foto não pôde ser salva: Arquivo grande demais (máximo 10 MB)');
   });
 
-  test('corpo que não é JSON (HTML de proxy) → o texto de antes, sem lixo', async () => {
+  test('EDIÇÃO, corpo que não é JSON (HTML de proxy) → "Foto não pôde ser salva", sem lixo', async () => {
     api.post.mockImplementation((url) => (url.endsWith('/foto')
       ? Promise.reject({ response: { status: 502, data: '<html><body>Bad Gateway</body></html>' } })
       : Promise.resolve({ data: { id: 99 } })));
     await renderizarEdicao(77);
     await escolherFoto();
-    expect(toast.error).toHaveBeenCalledWith('Foto não pôde ser salva, mas o material foi criado');
+    expect(toast.error).toHaveBeenCalledWith('Foto não pôde ser salva');
+  });
+
+  const FOTO_ANTIGA = 'https://cdn.exemplo/foto-antiga.png';
+  const srcPreview = () => container.querySelector('img.almox-foto-preview').getAttribute('src');
+  async function renderizarEdicaoComFoto() {
+    const getPadrao = api.get.getMockImplementation();
+    api.get.mockImplementation((url) => (url === '/almoxarifado/materiais/80'
+      ? Promise.resolve({ data: { ...MATERIAL_DO_CLIENTE, id: 80, foto: FOTO_ANTIGA } })
+      : getPadrao(url)));
+    await renderizarEdicao(80);
+    expect(srcPreview()).toBe(FOTO_ANTIGA);
+  }
+
+  test('EDIÇÃO, upload recusado DEPOIS de o preview local pintar → o preview volta para a foto ANTERIOR', async () => {
+    // A ordem real: ler o arquivo local e mais rapido que o upload. O preview pinta a foto nova
+    // (data:) e SO DEPOIS o servidor recusa — a tela tem de desfazer.
+    let recusar;
+    api.post.mockImplementation((url) => (url.endsWith('/foto')
+      ? new Promise((resolve, reject) => { recusar = reject; })
+      : Promise.resolve({ data: { id: 99 } })));
+    await renderizarEdicaoComFoto();
+    await escolherFoto();
+    expect(srcPreview()).toMatch(/^data:/);
+    await act(async () => { recusar({ response: { status: 413, data: { error: 'Arquivo grande demais (máximo 10 MB)' } } }); });
+    await esperarEfeitos();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(srcPreview()).toBe(FOTO_ANTIGA);
+  });
+
+  test('EDIÇÃO, upload recusado ANTES de o FileReader terminar → o FileReader atrasado não repinta a recusada', async () => {
+    api.post.mockImplementation(fotoRecusada413);
+    await renderizarEdicaoComFoto();
+    await escolherFoto();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(srcPreview()).toBe(FOTO_ANTIGA);
+  });
+
+  test('EDIÇÃO, foto recusada → o input é limpo e o "Salvar" NÃO reenvia a foto (sem segundo toast)', async () => {
+    api.post.mockImplementation(fotoRecusada413);
+    await renderizarEdicao(77);
+    const input = await escolherFoto();
+    expect(input.files.length).toBe(0);
+    await submeter();
+    await esperarEfeitos();
+    expect(api.put).toHaveBeenCalled();
+    expect(chamadasFoto()).toHaveLength(1);
+    expect(toast.error).toHaveBeenCalledTimes(1);
+  });
+
+  test('CADASTRO, foto recusada depois de criar → mantém "mas o material foi criado: <motivo>"', async () => {
+    api.post.mockImplementation(fotoRecusada413);
+    await renderizarNovo();
+    await preencherObrigatorios();
+    await escolherFoto();
+    expect(chamadasFoto()).toHaveLength(0); // no cadastro a foto so sobe depois do POST do material
+    await submeter();
+    await esperarEfeitos();
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/materiais/99/foto', expect.any(FormData), expect.anything());
+    expect(toast.error).toHaveBeenCalledWith('Foto não pôde ser salva, mas o material foi criado: Arquivo grande demais (máximo 10 MB)');
   });
 });

@@ -51,6 +51,8 @@ const MaterialAlmoxarifadoForm = () => {
   const [searchParams] = useSearchParams();
   const isEdit = !!id;
   const fileInputRef = useRef();
+  // Conta as escolhas de foto: o FileReader de uma escolha cuja foto foi RECUSADA nao repinta o preview.
+  const fotoTentativaRef = useRef(0);
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -493,7 +495,9 @@ const MaterialAlmoxarifadoForm = () => {
     }
   };
 
-  const uploadFoto = async (materialId, file) => {
+  // `edicao`: { previewAnterior } quando o upload e o IMEDIATO da edicao (handleFotoChange);
+  // ausente no upload pendente do cadastro (handleSubmit, depois de o material ser criado).
+  const uploadFoto = async (materialId, file, edicao = null) => {
     setUploadingFoto(true);
     try {
       const fd = new FormData();
@@ -507,10 +511,21 @@ const MaterialAlmoxarifadoForm = () => {
       // (máximo 10 MB)", 400 do filtro de formato). Mostra o motivo quando ele vier; corpo que nao
       // e JSON (proxy, HTML) cai no texto de antes.
       const motivo = typeof err?.response?.data?.error === 'string' ? err.response.data.error.trim() : '';
-      toast.error(motivo
-        ? `Foto não pôde ser salva, mas o material foi criado: ${motivo}`
-        : 'Foto não pôde ser salva, mas o material foi criado');
+      // Revisao adversarial da 86: na EDICAO o material ja existia — "o material foi criado" era
+      // falso. E a foto recusada nao pode continuar na tela como se tivesse sido salva: o preview
+      // volta para a foto anterior (invalidando o FileReader ainda pendente, senao ele repintaria a
+      // recusada depois) e o input e limpo, senao o "Salvar" enviaria o MESMO arquivo de novo e o
+      // usuario veria um segundo toast.
+      const base = edicao ? 'Foto não pôde ser salva' : 'Foto não pôde ser salva, mas o material foi criado';
+      toast.error(motivo ? `${base}: ${motivo}` : base);
+      if (edicao) {
+        fotoTentativaRef.current += 1;
+        setFotoPreview(edicao.previewAnterior);
+      }
     } finally {
+      // Na edicao o upload ja foi feito (ou recusado) aqui; deixar o arquivo no input faria o
+      // handleSubmit envia-lo outra vez.
+      if (edicao && fileInputRef.current) fileInputRef.current.value = '';
       setUploadingFoto(false);
     }
   };
@@ -518,12 +533,17 @@ const MaterialAlmoxarifadoForm = () => {
   const handleFotoChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const previewAnterior = fotoPreview;
+    fotoTentativaRef.current += 1;
+    const tentativa = fotoTentativaRef.current;
     const reader = new FileReader();
-    reader.onload = (ev) => setFotoPreview(ev.target.result);
+    reader.onload = (ev) => {
+      if (fotoTentativaRef.current === tentativa) setFotoPreview(ev.target.result);
+    };
     reader.readAsDataURL(file);
 
     if (isEdit && id) {
-      uploadFoto(id, file);
+      uploadFoto(id, file, { previewAnterior });
     }
   };
 
