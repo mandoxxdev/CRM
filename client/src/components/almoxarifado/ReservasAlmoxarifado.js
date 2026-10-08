@@ -421,10 +421,15 @@ const ReservasAlmoxarifado = () => {
                               onClick={(e) => { if (!podeAbrirLiberar(r, e)) return; abrirLiberar(r); }}>
                               <FiUnlock />
                             </button>
-                            <button className="almox-btn-icon" title="Transferir para outro projeto/OS (não move saldo)"
-                              onClick={(e) => { if (!bloquearSeNaoPode('reservar_outra_os', e)) return; abrirTransferir(r); }}>
-                              <FiShuffle />
-                            </button>
+                            {/* Reserva de requisição não se transfere: o servidor recusa com 400 (o
+                                destino dela é a requisição). O botão some em vez de abrir um modal
+                                que morre no servidor. */}
+                            {!daRequisicao && (
+                              <button className="almox-btn-icon" title="Transferir para outro projeto/OS (não move saldo)"
+                                onClick={(e) => { if (!bloquearSeNaoPode('reservar_outra_os', e)) return; abrirTransferir(r); }}>
+                                <FiShuffle />
+                              </button>
+                            )}
                           </>
                         ) : (
                           <span style={{ color: 'var(--gmp-text-light)' }}>—</span>

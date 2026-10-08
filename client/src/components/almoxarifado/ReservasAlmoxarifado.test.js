@@ -72,6 +72,11 @@ const RESERVA_LIBERADA = {
   requisicao_id: null, motivo_liberacao: 'Projeto cancelado',
 };
 
+// Reserva MANUAL ativa: a única que se transfere (Etapa 77, F2 — reserva de requisição toma 400).
+const RESERVA_MANUAL_ATIVA = {
+  ...RESERVA_PARCIAL, id: 5, origem: 'MANUAL', requisicao_id: null,
+};
+
 let container;
 let root;
 let reservasDoBanco;
@@ -207,6 +212,8 @@ describe('ReservasAlmoxarifado', () => {
   });
 
   test('transferir de projeto para OS limpa o projeto anterior em vez de acumular dono', async () => {
+    // Fixture MANUAL desde a Etapa 77 (F2): reserva de requisição não se transfere.
+    reservasDoBanco = [RESERVA_MANUAL_ATIVA];
     await renderizar();
     await clicarAcao(0, 'Transferir');
     preencher(campoPorLabel('Projeto'), '');          // tira o projeto 7
@@ -216,17 +223,31 @@ describe('ReservasAlmoxarifado', () => {
     // O servidor trata `undefined` como "manter" e string vazia como "limpar". Se a tela
     // enviasse só o campo preenchido, a reserva ficaria com projeto E OS — dono duplo, e o
     // relatório por projeto seguiria contando material que já é de outra OS.
-    expect(api.put).toHaveBeenCalledWith('/almoxarifado/reservas/1/transferir', {
+    expect(api.put).toHaveBeenCalledWith('/almoxarifado/reservas/5/transferir', {
       projeto_id: '', os_id: 42, os_referencia: '', cliente_id: '',
     });
   });
 
   test('transferir sem destino nenhum não chama a API', async () => {
+    reservasDoBanco = [RESERVA_MANUAL_ATIVA];
     await renderizar();
     await clicarAcao(0, 'Transferir');
     preencher(campoPorLabel('Projeto'), '');
     await clicarBotaoModal('Transferir');
     expect(api.put).not.toHaveBeenCalled();
+  });
+
+  // Etapa 77 (F2): o servidor recusa transferir reserva de requisição com 400. A tela não oferece
+  // o botão — e a metade positiva: a manual da mesma lista continua com Transferir, e a de
+  // requisição continua com Liberar (a linha não ficou sem ações).
+  test('reserva de requisição não oferece Transferir; a manual oferece', async () => {
+    reservasDoBanco = [RESERVA_PARCIAL, RESERVA_MANUAL_ATIVA];
+    await renderizar();
+    const titulos = (i) => [...linhas()[i].querySelectorAll('.almox-btn-icon')].map((b) => b.getAttribute('title') || '');
+    expect(titulos(0).some((t) => t.includes('Liberar'))).toBe(true);
+    expect(titulos(0).some((t) => t.includes('Transferir'))).toBe(false);
+    expect(titulos(1).some((t) => t.includes('Liberar'))).toBe(true);
+    expect(titulos(1).some((t) => t.includes('Transferir'))).toBe(true);
   });
 
   test('o disponível vem de /estoque, que é quem calcula o saldo disponível', async () => {
