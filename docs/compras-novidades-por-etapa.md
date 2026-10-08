@@ -21,7 +21,10 @@
 > executam mais código (B36).
 > **2026-10-08 — Etapa 82 entregue:** imagens do **chat**, **fotos da proposta** e **avatares** só
 > abrem com endereço assinado que vence (B37); uploads de imagem por base64 recusam formato fora da
-> lista. Próxima: os outros 10 uploads de imagem que ainda confiam na extensão do nome do arquivo.
+> lista.
+> **2026-10-08 — Etapa 83 entregue:** todos os uploads de imagem decidem o formato pelo **tipo real**
+> da imagem; formato errado mostra **"Formato de imagem não suportado"** em vez de "Erro interno do
+> servidor" (B38). Próxima: o login que ainda aceita o token na URL (`?token=`).
 > O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
 > A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
@@ -177,6 +180,13 @@
   fila — um PDF gerado nesse instante falhava com "Target closed". A medição da 80 achou mais
   três corridas (erro de um derrubando o outro, Chromium aberto em dobro e nunca fechado, e o
   fechamento por ociosidade no meio de uma geração).
+- **B38 — Etapa 83: os 14 uploads de imagem decidem a extensão pelo tipo real; formato errado vira
+  400 com mensagem clara.** SVG continua aceito **só no logo da empresa** (pode já haver logo vetorial
+  em produção; tem CSP própria). Descartado: recusar SVG também no logo da empresa. Efeito colateral
+  aceito: ao recusar foto de família/grupo, a tela tenta de novo pelo outro caminho (base64), que
+  recusa com a mesma mensagem — duas tentativas, mesma mensagem. Passam a ser recusados formatos de
+  navegador muito antigo (`pjpeg`, `x-png`), `apng` e os do Citrix; passa a ser aceito o `.jfif` do
+  Windows (gravado `.jpg`). A mensagem clara vale também para os 4 uploads convertidos na 82.
 - **B37 — Etapa 82: imagens do chat, fotos da proposta e avatares com endereço assinado, validade
   pela vida da tela.** Chat **8 h**, fotos da proposta **12 h**, avatar **24 h** (o mesmo do login);
   cada pasta com chave própria (assinatura de uma não abre outra). O banco não muda — a assinatura é
@@ -313,6 +323,51 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 83 — Todo upload de imagem pelo tipo real (2026-10-08)
+
+**Em uma frase.** Dez telas de upload de imagem (produto, material de escritório, família,
+esquemático, grupo, logo da empresa, logo do cliente, header, footer, capa) gravavam o arquivo com a
+extensão que o **nome** dizia — agora o servidor olha o tipo real da imagem, e quem manda um
+formato errado vê uma mensagem clara.
+
+### O que há de novo (visível para o usuário)
+- Enviar um arquivo que não é imagem (ou um SVG fora do logo da empresa) mostra **"Formato de
+  imagem não suportado"** — antes aparecia "Erro interno do servidor".
+- A foto salva pelo Windows como `.jfif` passa a ser aceita.
+- **Esquemático da família**: o envio direto passou a funcionar — antes era sempre recusado por um
+  defeito antigo, e a tela disfarçava enviando de novo por outro caminho.
+- Fotos de produto com transparência (PNG com nome `.jpg`) não perdem mais o fundo transparente na
+  otimização.
+
+### Por baixo do capô
+- Os 10 multers passam por `services/imagemUpload.js` (formato pelo tipo, extensão pelo tipo, miolo
+  do nome preservado); a exceção do SVG fica só no logo da empresa, fora do mapa compartilhado.
+- Erro de formato marcado e convertido em 400 por um middleware próprio, registrado depois das rotas
+  de upload e antes do handler global; a recusa vai para o log (`[upload] formato recusado`).
+- Removido o multer morto do chat antigo (aceitava qualquer arquivo; ninguém usava).
+- Régua no `imagemUploadFiltros.api.test.js` (26): todo `multer.diskStorage` do `index.js` está na
+  lista de imagem ou de documento; nos de imagem, o nome gravado termina com a extensão segura.
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| `foto.html` com tipo `image/png` gravado `.html` | gravado `.png` |
+| SVG aceito como foto de produto | recusado: "Formato de imagem não suportado" |
+| Formato errado → "Erro interno do servidor" | → "Formato de imagem não suportado" |
+| Esquemático por envio direto sempre recusado | funciona |
+
+### Roteiro de teste manual (clicável)
+1. **Produtos → editar → foto**: envie um JPEG normal — aparece. Envie um `.svg` — "Formato de
+   imagem não suportado".
+2. **Famílias → editar → esquemático**: envie um PNG — aparece.
+3. **Configurações → Modelo de proposta → logo**: um SVG continua aceito.
+4. Salve uma imagem da internet no Windows (vira `.jfif`) e envie como foto de produto — aceita.
+
+### O que a etapa NÃO cobre
+- Arquivo grande demais ainda mostra "Erro interno do servidor" (limite de tamanho do upload) —
+  não é formato, fica registrado.
+- Logo da empresa em SVG continua aceito (B38).
 
 ## Etapa 82 — Imagens do chat, fotos da proposta e avatares com endereço que vence (2026-10-08)
 

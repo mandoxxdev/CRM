@@ -104,3 +104,31 @@ hoje. Controles positivos por sabotagem. **Prova real:** servidor em `CRM_DATA_D
   passar pelo middleware de erro **real** (exportado) para provar o 400 em vez do 500.
 - Otimização de imagem de produto (`.original` ao lado, `index.js:~18048`) depende da extensão —
   conferir que o fluxo continua (o `.original` é nome + sufixo).
+
+## Fechamento (2026-10-08) — 🟢
+- Revisão adversarial: nenhum defeito de comportamento. Corrigido (`8c4fb6e7`): storage que declarava a
+  extensão segura mas gravava com a do nome passava na régua; middleware registrado antes das rotas
+  (recusa voltaria a 500) passava; a recusa não ia mais para o log. Registrado: os 4 multers da 82
+  também passaram de 500 a 400 (mesmo filtro); `LIMIT_FILE_SIZE` continua 500 (fora do escopo); os
+  routers montados depois do middleware (almoxarifado, chat…) não usam `filtroImagemMulter`.
+
+## Retro
+- Rodadas de correção até verde: **1**.
+- Achados: revisão do plano 5 (2 bloqueantes: a mensagem "que a rota já usa" nunca chegava ao usuário
+  — **o plano estava errado**; a exceção do SVG não cabia no mapa compartilhado); revisão do código 2
+  mutações sobreviventes + 1 comentário falso; bônus: o esquemático multipart nunca funcionou
+  (`cb(null)` sem `true`).
+- Paralelismo: nenhum (task única).
+- Defeito escapado: preencher na etapa seguinte.
+
+## Próxima tarefa detalhada — Etapa 84: o login ainda aceita o token na URL (`?token=`)
+- **O que existe:** `authenticateToken` (`server/index.js:~3001-3003`) aceita `req.query.token` além do
+  header `Authorization`. Token em URL vaza em log de proxy/servidor, histórico do navegador e
+  cabeçalho `Referer`. A Etapa 21 já tratou isso no backup (`?token=` com aviso de depreciação,
+  `services/backupAuth.js`); o almoxarifado recusou de propósito (`urlUpload.js:8-20`).
+- **Medir antes:** quem manda `?token=` hoje — `grep -rn "token=" client/src` (downloads por `<a href>`,
+  `window.open`, `EventSource`, socket.io `auth`/`query`), scripts em `server/*.js` e integrações. O
+  socket do chat pode passar o token pela query do handshake (`services/chat/socket.js`) — esse é
+  outro caminho, não o `authenticateToken`.
+- **Desenho provável:** se ninguém usa, remover o `req.query.token` do `authenticateToken` (com teste que
+  prova 401 com `?token=` válido); se alguém usa, migrar esse chamador para blob/header primeiro.
