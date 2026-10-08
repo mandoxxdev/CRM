@@ -59,6 +59,52 @@ compartilhado para errar, e não resolve 3 sozinho; descartado pool de navegador
   no `page.pdf`; 60 s é folga larga). Reversível (B35).
 
 ## Tasks
+> **Estado (2026-10-08): T1 FEITA.** `4395f406` (override `PDF_RECICLAR_APOS`, sozinho, antes da
+> prova "antes") e `11b3a305` (fila + fiação + 2 testes). Suítes: `test:api` **299/299** (297 + os
+> 2 novos), `test:almoxarifado` 44/0, `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite`
+> 5/0; client 86 suítes / 1338 testes. Primeiro boot em `CRM_DATA_DIR` vazio: 0
+> `no such table|no column named`.
+>
+> **Prova real** (banco vazio, `PDF_RECICLAR_APOS=2`, 2 propostas + 2 pedidos pela API, metade
+> `/propostas/:id/pdf` e metade `/compras/pedidos/:id/documento.pdf`, Bearer; Chromium raiz =
+> `Get-CimInstance` com `--headless` + `\.cache\puppeteer\` e sem `--type=`, amostrado a cada
+> 150 ms; mesma sequência de rodadas no mesmo servidor, antes e depois):
+>
+> | rodada | antes: 200 `%PDF` | antes: Chromium raiz (máx) | depois: 200 `%PDF` | depois: Chromium raiz (máx) |
+> |---|---|---|---|---|
+> | 8 simultâneos (frio) | 8/8 | **8** (8 vivos ao fim) | 8/8 | 1 |
+> | 8 simultâneos (de novo) | 8/8 | **15** | 8/8 | 1 |
+> | 16 simultâneos | 16/16 | **29** | 16/16 | 1 |
+> | 16 escalonados 200 ms | **12/16** (4×500: "Target closed", "Navigating frame was detached") | 33 | 16/16 | 1 |
+> | 16 escalonados 400 ms | **13/16** (3×500: "Printing failed") | 33 | 16/16 | 1 |
+>
+> Log: antes 12 reciclagens e 7 `Erro ao gerar PDF`; depois 31 reciclagens, 0 erros, 0 "caiu".
+> **Controle positivo honesto:** as rajadas simultâneas **não** derrubaram nenhum PDF antes (cada
+> chamador lançava o próprio Chromium — corrida 3, o vazamento); as falhas das corridas 1/2 só
+> apareceram com chegadas escalonadas, que reaproveitam o mesmo navegador. Ao matar o node os
+> Chromium vazados morreram junto (0 depois do kill, nos dois). Custo medido da fila: com 16
+> simultâneos o último download levou ~8,9 s (antes, sem fila, o mais lento levou 3,1 s — mas vazando
+Chromium).
+>
+> **Sabotagens (todas vermelhas, restauradas por edição, md5 conferido, CR=0):** fila —
+> S1 tarefas concorrentes (concorrência medida = 5), S2 erro envenena a fila, S3 retorno não
+> propaga; fiação — F1 catch externo da proposta volta a fechar o navegador, F2
+> `obterNavegadorPdf` fora da fila em `gerarPdfDeHtml`, F3 ociosidade fecha direto, F4 tarefa não
+> cancela o temporizador, F5 sem `protocolTimeout`, F6 chamada solta depois de um
+> `enfileirarPdf` vazio. O teste de fiação também ficou vermelho (7/8) contra o `index.js` sem a
+> fiação (stash).
+>
+> **Divergências do plano:** (a) `enfileirarPdf` não é a fila crua (`criarFilaSerial()`), e sim
+> uma função que envolve a fila e faz `clearTimeout(timerOciosoPdf)` antes de **toda** tarefa —
+> um ponto só para a RN-80.06 em vez de repetir em cada chamador; (b) o analisador da fiação
+> aceita, além dos blocos `enfileirarPdf(`, o corpo de `obterNavegadorPdf` (a reciclagem), que só
+> é alcançável de dentro da fila; (c) a variável externa `let browser` da rota da proposta foi
+> apagada (a tarefa usa a sua). **Achado, não corrigido (RN-80.05):** o rótulo
+> `navegador(reuso|abriu)` é decidido **antes** de `obterNavegadorPdf`, então uma reciclagem
+> aparece como `navegador(reuso)=~250ms` (já era assim antes da fila: 0 "abriu" nas 31
+> reciclagens do depois). Próximo: fechamento da etapa (skill `fechar-etapa`; B35 com a decisão
+> e a rota da OS fora do escopo).
+
 **T1 (única, tronco):**
 1. `server/services/filaPdf.js` (puro): `criarFilaSerial()` → `enfileirar(fn)` que devolve a promessa
    do resultado de `fn`, rodando uma de cada vez em ordem de chegada; erro de `fn` rejeita só a sua
