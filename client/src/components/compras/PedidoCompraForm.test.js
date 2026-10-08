@@ -1482,3 +1482,68 @@ describe('RN-39', () => {
     expect(chamadasPut(418)).toHaveLength(0);
   });
 });
+
+// ═══ Etapa 78 (RN-78.06) — o botao "Documento (PDF)" no rodape do formulario ════════════════
+//
+// O rodape `.header-actions` fica DENTRO do `<form>`: um `<button>` sem `type="button"` e um
+// botao de submit, e o clique salvaria o pedido (PUT em edicao; PATCH de status no modo "so
+// status"). E o que o (s) e o (s2) medem — a sabotagem util e tirar o `type`. Na criacao (sem
+// `id`) nao ha documento a imprimir: o botao nao existe (s3).
+describe('Etapa 78 — Documento (PDF) no formulario', () => {
+  let cliquesNoLink;
+  beforeEach(() => {
+    window.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
+    window.URL.revokeObjectURL = jest.fn();
+    cliquesNoLink = [];
+    jest.spyOn(window.HTMLAnchorElement.prototype, 'click').mockImplementation(function registrar() {
+      cliquesNoLink.push(this.download);
+    });
+    const anterior = api.get.getMockImplementation();
+    api.get.mockImplementation((url, opcoes) => (url === '/compras/pedidos/418/documento.pdf'
+      ? Promise.resolve({ data: new Blob(['%PDF-1.4']), headers: {} })
+      : anterior(url, opcoes)));
+  });
+  afterEach(() => { window.HTMLAnchorElement.prototype.click.mockRestore(); });
+
+  const chamadasDocumento = () => api.get.mock.calls.filter(([url]) => url === '/compras/pedidos/418/documento.pdf');
+
+  test('(s) em edicao o botao existe, e type="button", baixa por blob e NAO submete o pedido', async () => {
+    await renderizarEm('/compras/pedidos/editar/418');
+    const botao = botaoPorTexto('Documento (PDF)');
+    expect(botao).toBeDefined();
+    expect(botao.getAttribute('type')).toBe('button');
+    expect(container.querySelector('form[data-testid="form-pedido-compra"]').contains(botao)).toBe(true);
+
+    await clicar(botao);
+
+    expect(chamadasDocumento()).toHaveLength(1);
+    expect(chamadasDocumento()[0][1]).toEqual({ responseType: 'blob' });
+    expect(cliquesNoLink).toEqual(['pedido-compra-PC-2026-418.pdf']); // fallback: o numero do form
+    // A METADE QUE MEDE O DANO: nada foi salvo.
+    expect(chamadasPut(418)).toHaveLength(0);
+    expect(chamadasPost()).toHaveLength(0);
+    expect(chamadasPatchStatus(418)).toHaveLength(0);
+    expect(texto()).toContain('Editar pedido de compra'); // nao navegou
+  });
+
+  test('(s2) no modo "so status" o botao continua la e o clique nao dispara o PATCH', async () => {
+    detalhe418 = PEDIDO_418_RECEBIDO;
+    await renderizarEm('/compras/pedidos/editar/418');
+    expect(alertas()).toContain(LITERAL_SO_STATUS); // ancora: e o modo so status
+    const botao = botaoPorTexto('Documento (PDF)');
+    expect(botao).toBeDefined();
+    expect(botao.disabled).toBe(false);
+
+    await clicar(botao);
+
+    expect(chamadasDocumento()).toHaveLength(1);
+    expect(chamadasPatchStatus(418)).toHaveLength(0);
+    expect(chamadasPut(418)).toHaveLength(0);
+  });
+
+  test('(s3) na criacao (/novo) nao ha botao de documento', async () => {
+    await renderizarEm('/compras/pedidos/novo');
+    expect(texto()).toContain('Novo pedido de compra');
+    expect(botaoPorTexto('Documento (PDF)')).toBeUndefined();
+  });
+});
