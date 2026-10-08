@@ -106,7 +106,25 @@ test('extended /anexos continua com a mensagem PROPRIA (400 "Arquivo excede o li
   assert.strictEqual(r.body.error, 'Arquivo excede o limite de 10 MB');
 });
 
-test('JSON malformado numa rota do modulo -> 400 "JSON inválido no corpo da requisição" (nunca o texto do parser)', async () => {
+// O antigo "JSON malformado numa rota do modulo" nao provava nada do Router: o `express.json` roda
+// ANTES de qualquer rota (no `app`), entao o 400 dele chegaria ao handler com ou sem `rotasModulos`.
+// O que prova o Router e uma rota registrada nele DEPOIS dos handlers (como a extended e o chat) —
+// e o controle, a mesma rota no `app`, que cai no finalhandler.
+test('rota registrada TARDE no rotasModulos (depois dos handlers) -> erro dela chega ao handler: JSON', async () => {
+  ctx.rotasModulos.get('/api/almoxarifado/__erro-tardio-86', (req, res, next) => next(erroComMensagemUsuario('Erro tardio do modulo', 422)));
+  const r = await quieto(() => request(ctx.app).get('/api/almoxarifado/__erro-tardio-86'));
+  assert.strictEqual(r.status, 422, r.text.slice(0, 200));
+  ehJson(r);
+  assert.deepStrictEqual(r.body, { error: 'Erro tardio do modulo' });
+});
+
+test('controle: a MESMA rota tardia no `app` (sem Router) cai no finalhandler -> nao JSON', async () => {
+  ctx.app.get('/api/almoxarifado/__erro-tardio-86-app', (req, res, next) => next(erroComMensagemUsuario('Erro tardio do modulo', 422)));
+  const r = await quieto(() => request(ctx.app).get('/api/almoxarifado/__erro-tardio-86-app'));
+  assert.doesNotMatch(String(r.headers['content-type'] || ''), /application\/json/, 'sem o Router o erro nao deveria virar JSON');
+});
+
+test('JSON malformado (body-parser, antes de qualquer rota) -> 400 "JSON inválido no corpo da requisição"', async () => {
   const r = await quieto(() => request(ctx.app).post('/api/almoxarifado/materiais')
     .set('Content-Type', 'application/json').send('{"nome": "x",}'));
   assert.strictEqual(r.status, 400, r.text.slice(0, 200));
@@ -139,10 +157,22 @@ function appComErro(err) {
   return app;
 }
 
-test('SQLITE_BUSY -> 503 (como antes)', async () => {
-  const r = await quieto(() => request(appComErro(new Error('SQLITE_BUSY: database is locked'))).get('/api/x'));
+const CORPO_503 = {
+  error: 'Banco de dados temporariamente ocupado. Tente novamente em alguns segundos.',
+  retryAfter: 2,
+};
+
+test('SQLITE_BUSY so pelo code (mensagem neutra) -> 503 com o texto exato', async () => {
+  const err = Object.assign(new Error('falha ao gravar'), { code: 'SQLITE_BUSY' });
+  const r = await quieto(() => request(appComErro(err)).get('/api/x'));
   assert.strictEqual(r.status, 503);
-  assert.strictEqual(r.body.retryAfter, 2);
+  assert.deepStrictEqual(r.body, CORPO_503);
+});
+
+test('"database is locked" so pela mensagem (sem code) -> 503 com o texto exato', async () => {
+  const r = await quieto(() => request(appComErro(new Error('database is locked'))).get('/api/x'));
+  assert.strictEqual(r.status, 503);
+  assert.deepStrictEqual(r.body, CORPO_503);
 });
 
 test('erro sem status -> 500 "Erro interno do servidor"; message so em development', async () => {
@@ -170,9 +200,83 @@ test('erroComMensagemUsuario -> 400 com a mensagem; statusCode tambem e respeita
   let r = await quieto(() => request(appComErro(erroComMensagemUsuario('Formato X recusado'))).get('/api/x'));
   assert.strictEqual(r.status, 400);
   assert.deepStrictEqual(r.body, { error: 'Formato X recusado' });
-  r = await quieto(() => request(appComErro(Object.assign(new Error('x'), { statusCode: 404 }))).get('/api/x'));
-  assert.strictEqual(r.status, 404);
+  r = await quieto(() => request(appComErro(Object.assign(new Error('x'), { statusCode: 422 }))).get('/api/x'));
+  assert.strictEqual(r.status, 422);
   assert.deepStrictEqual(r.body, { error: 'Requisição inválida' });
+});
+
+test('404 de terceiro sem ENOENT -> 404 "Recurso não encontrado" (nao "Requisição inválida")', async () => {
+  const r = await quieto(() => request(appComErro(Object.assign(new Error('Not Found'), { statusCode: 404 }))).get('/api/x'));
+  assert.strictEqual(r.status, 404);
+  assert.deepStrictEqual(r.body, { error: 'Recurso não encontrado' });
+});
+
+test('res.sendFile de arquivo ausente (ENOENT, como extended.js anexos) -> 404 "Arquivo não encontrado", sem Content-Disposition', async () => {
+  const app = express();
+  app.get('/api/baixar', (req, res) => {
+    res.setHeader('Content-Disposition', 'attachment; filename="relatorio.pdf"');
+    res.sendFile(require('path').join(require('os').tmpdir(), `nao-existe-${Date.now()}-${Math.random()}.pdf`));
+  });
+  app.use('/api', tratarErroGlobalApi);
+  const r = await quieto(() => request(app).get('/api/baixar'));
+  assert.strictEqual(r.status, 404, r.text.slice(0, 200));
+  ehJson(r);
+  assert.deepStrictEqual(r.body, { error: 'Arquivo não encontrado' });
+  assert.strictEqual(r.headers['content-disposition'], undefined, `content-disposition: ${r.headers['content-disposition']}`);
+});
+
+test('401 de terceiro (sem mensagemUsuario) NAO passa -> 500 generico (o client deslogaria)', async () => {
+  const r = await quieto(() => request(appComErro(Object.assign(new Error('Unauthorized'), { status: 401 }))).get('/api/x'));
+  assert.strictEqual(r.status, 500);
+  assert.strictEqual(r.body.error, 'Erro interno do servidor');
+});
+
+test('403 de terceiro (sem mensagemUsuario) NAO passa -> 500 generico', async () => {
+  const r = await quieto(() => request(appComErro(Object.assign(new Error('Forbidden'), { statusCode: 403 }))).get('/api/x'));
+  assert.strictEqual(r.status, 500);
+  assert.strictEqual(r.body.error, 'Erro interno do servidor');
+});
+
+test('403 do NOSSO codigo (erroComMensagemUsuario) passa com a mensagem', async () => {
+  const r = await quieto(() => request(appComErro(erroComMensagemUsuario('Sem permissão para X', 403))).get('/api/x'));
+  assert.strictEqual(r.status, 403);
+  assert.deepStrictEqual(r.body, { error: 'Sem permissão para X' });
+});
+
+test('urlencoded acima do parameterLimit (parameters.too.many) -> 413 "Requisição grande demais"', async () => {
+  const app = express();
+  app.use(express.urlencoded({ extended: false, parameterLimit: 2 }));
+  app.post('/api/x', (req, res) => res.json({ ok: true }));
+  app.use('/api', tratarErroGlobalApi);
+  const r = await quieto(() => request(app).post('/api/x').type('form').send('a=1&b=2&c=3&d=4'));
+  assert.strictEqual(r.status, 413, r.text.slice(0, 200));
+  ehJson(r);
+  assert.deepStrictEqual(r.body, { error: 'Requisição grande demais' });
+});
+
+test('status 500 explicito nao e tratado como 4xx -> 500 generico', async () => {
+  const orig = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = 'production';
+    const err = Object.assign(new Error('falha interna'), { status: 500, mensagemUsuario: 'nao deve sair' });
+    const r = await quieto(() => request(appComErro(err)).get('/api/x'));
+    assert.strictEqual(r.status, 500);
+    assert.deepStrictEqual(r.body, { error: 'Erro interno do servidor' });
+  } finally { if (orig === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = orig; }
+});
+
+test('headersSent -> delega ao next(err) (nao tenta responder de novo)', async () => {
+  const erro = new Error('quebrou no meio do stream');
+  let recebido = null;
+  const app = express();
+  app.get('/api/x', (req, res, next) => { res.status(200); res.write('parcial'); next(erro); });
+  app.use('/api', tratarErroGlobalApi);
+  // eslint-disable-next-line no-unused-vars
+  app.use((err, req, res, next) => { recebido = err; res.end(); });
+  const r = await quieto(() => request(app).get('/api/x'));
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.text, 'parcial');
+  assert.strictEqual(recebido, erro, 'o erro tem de seguir adiante pelo next(err)');
 });
 
 test('mensagemUsuario SEM status 4xx nao vira 4xx (o 500 continua generico)', async () => {
