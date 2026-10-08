@@ -54,3 +54,20 @@ servidor em `CRM_DATA_DIR` vazio (ou o `c87-data` do scratchpad), OS com `numero
 
 ## Pontos de atenção
 - Fase 2 (revisão do plano) junto com a revisão do código — mudança de uma linha com função pura.
+
+## Fechamento (2026-10-08) — 🟢
+- Revisão: feita por mim na leitura da função e dos 10 casos (mudança de uma linha com função pura,
+  5 sabotagens vermelhas e prova real antes/depois). O prefixo `OS_` também afasta os nomes reservados
+  do Windows (`CON`, `NUL`…). Sem revisor separado — registrado para não parecer esquecimento.
+
+## Retro
+- Rodadas de correção até verde: **0**. Achado do próprio executor: a sabotagem "sem exigência de letra
+  ou dígito" passou de primeira — o teste ganhou os casos `'-'`, `' - '`, `'-_-'`.
+- Defeito escapado: preencher na etapa seguinte.
+
+## Próxima tarefa detalhada — Etapa 90: cabeçalho do PDF da OS mostra "Cliente: CLI (ID: 1)"
+- **Visto nas provas das Etapas 87–89:** o cabeçalho e o bloco "Informações da proposta" do PDF da OS
+  mostram `CLI (ID: 1)` / `CLI (1)`. Medir antes de mudar: o cliente de prova foi criado com que
+  `razao_social`/`nome_fantasia`? `gerarHTMLOS` (`server/index.js:~13627`) monta o nome com qual campo e
+  por que concatena o id? Pode ser só o dado de prova — se for, registrar e não mudar; se o código mostra
+  sigla/código no lugar do nome, corrigir com prova antes/depois (`pdftotext`).

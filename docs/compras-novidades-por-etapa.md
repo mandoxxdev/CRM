@@ -34,7 +34,9 @@
 > **2026-10-08 — Etapa 87 entregue:** o **PDF da OS** usa o mesmo Chromium dos outros PDFs — sai
 > **igual** e cerca de **10× mais rápido** (4,7 s → 0,45 s); nunca mais de um Chromium aberto (B42).
 > **2026-10-08 — Etapa 88 entregue:** o PDF da OS numera **cada página** ("Página 2 de 6") e não corta
-> mais um item no meio (B43). Próxima: número de OS com aspas ou barra quebra a geração do PDF.
+> mais um item no meio (B43).
+> **2026-10-08 — Etapa 89 entregue:** número de OS com barra, aspas ou acento não quebra mais o PDF
+> (B44). Próxima: medir por que o cabeçalho do PDF da OS mostra "Cliente: CLI (ID: 1)".
 > O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
 > A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
@@ -190,6 +192,11 @@
   fila — um PDF gerado nesse instante falhava com "Target closed". A medição da 80 achou mais
   três corridas (erro de um derrubando o outro, Chromium aberto em dobro e nunca fechado, e o
   fechamento por ociosidade no meio de uma geração).
+- **B44 — Etapa 89: só o nome do arquivo do PDF da OS é limpo; o número da OS fica como foi digitado.**
+  Com `/`, `"` ou `:` no número, o Windows recusava o nome do arquivo e o usuário via "Erro ao gerar
+  PDF" (o PDF até era gerado). Agora o arquivo vira `OS_OS_1_2_A_<hora>.pdf` e o documento continua
+  mostrando `OS 1/2 "A"`. Acento perde só a marca ("Manutenção" → `Manutencao`). Descartado: proibir esses
+  caracteres no cadastro da OS (mudaria dado e tela; OS antigas já podem tê-los).
 - **B43 — Etapa 88: o rodapé "Página X de Y" do PDF da OS vem do navegador que gera o PDF.** Antes era
   um texto no fim do documento com o total **estimado** pela quantidade de itens ("Página 1 de 1" num
   PDF de 3 páginas, só na última). Agora sai em toda página com os números reais, 10px cinza
@@ -371,6 +378,32 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 89 — Número de OS com barra ou aspas não quebra mais o PDF (2026-10-08)
+
+**Em uma frase.** Uma OS numerada como `OS 1/2 "A"` dava "Erro ao gerar PDF" — o número ia cru para o
+nome do arquivo e o Windows recusava; agora o nome do arquivo é limpo e o PDF sai normalmente, com o
+número original no documento.
+
+### O que há de novo (visível para o usuário)
+- **OS → Gerar PDF** funciona com qualquer número de OS (barra, aspas, dois-pontos, acento).
+- O documento mostra o número exatamente como foi digitado.
+
+### Por baixo do capô
+- `nomeArquivoPdfOs` em `services/pdfOs.js` (troca o que não é letra/dígito/`.`/`-` por `_`, tira acento,
+  limita a 80 caracteres, cai no id da OS se sobrar nada). Teste `pdfOsNomeArquivo.api.test.js` (10).
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| `numero_os = 'OS 1/2 "A"'` → 500 "Erro ao gerar PDF" | 200, arquivo `OS_OS_1_2_A_<hora>.pdf`, documento com `OS 1/2 "A"` |
+
+### Roteiro de teste manual (clicável)
+1. **Operacional → OS → editar** o número para `OS 1/2 "A"` → **Gerar PDF**: o PDF abre e mostra o número
+   como digitado.
+
+### O que a etapa NÃO cobre
+- PDFs que falharam antes não existem — é só gerar de novo.
 
 ## Etapa 88 — PDF da OS com "Página X de Y" em toda página (2026-10-08)
 
