@@ -193,8 +193,11 @@ const ChatPage = () => {
   const typingTimeoutRef = useRef(null);
   const activeIdRef = useRef(null);
   const skipScrollRef = useRef(false);
-  // Etapa 82 (RN-82.03): ids de mensagem cujo anexo ja tentamos reassinar nesta sessao da tela.
-  // Uma tentativa por id: arquivo apagado no servidor nao vira laco de onError -> GET -> onError.
+  // Etapa 82 (RN-82.03): ids de mensagem cujo anexo ja tentamos reassinar e que AINDA NAO voltaram a
+  // carregar. Uma tentativa por FALHA: arquivo apagado no servidor nao vira laco de onError -> GET ->
+  // onError. O id sai do Set quando a imagem carrega (`onLoad`) ou quando o pedido de reassinar cai
+  // por rede - sem isso, a imagem reassinada uma vez nao se recuperava de um segundo vencimento
+  // (tela aberta 16 h+) nem de uma primeira tentativa com a rede fora (revisao adversarial da 82).
   const anexosReassinadosRef = useRef(new Set());
 
   const activeConversa = conversas.find((c) => c.id === activeId);
@@ -214,9 +217,16 @@ const ChatPage = () => {
       if (!nova) return;
       setMensagens((prev) => prev.map((m) => (m.id === msgId ? { ...m, anexo_url: nova } : m)));
     } catch (e) {
-      // 404 (apagada / sem acesso) ou rede: a imagem fica quebrada; nao ha nova tentativa.
+      // Resposta HTTP (404: apagada / sem acesso): a imagem fica quebrada e o id continua no Set -
+      // nao ha nova tentativa. Sem resposta (rede): libera o id para o proximo `onError` tentar.
+      if (!e?.response) anexosReassinadosRef.current.delete(msgId);
       console.error(e);
     }
+  }, []);
+
+  // Carregou: a URL atual vale, entao a proxima falha (novo vencimento) pode reassinar de novo.
+  const anexoCarregou = useCallback((msgId) => {
+    anexosReassinadosRef.current.delete(msgId);
   }, []);
 
   const scrollToBottom = useCallback(() => {
@@ -645,6 +655,7 @@ const ChatPage = () => {
                               alt={m.anexo_nome || 'Imagem'}
                               className="chat-image-thumb"
                               loading="lazy"
+                              onLoad={() => anexoCarregou(m.id)}
                               onError={() => reassinarAnexo(m.id)}
                             />
                           </button>
@@ -743,6 +754,7 @@ const ChatPage = () => {
             src={lightboxUrl}
             alt="Imagem ampliada"
             onClick={(e) => e.stopPropagation()}
+            onLoad={() => anexoCarregou(lightboxMsgId)}
             onError={() => reassinarAnexo(lightboxMsgId)}
           />
         </div>

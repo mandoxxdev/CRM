@@ -7,8 +7,10 @@
  * rola para o fim e marca como lida).
  *
  * O que se prova:
- *  - uma chamada por id de mensagem por sessao: segundo `onError` do mesmo id (arquivo apagado,
- *    URL nova tambem falha) NAO chama de novo — sem laco;
+ *  - uma chamada por FALHA: segundo `onError` do mesmo id sem a imagem ter carregado no meio
+ *    (arquivo apagado, URL nova tambem falha) NAO chama de novo — sem laco;
+ *  - mas a imagem que carregou (`onLoad`) volta a poder reassinar num segundo vencimento, e um
+ *    pedido que caiu por rede libera a proxima tentativa; 404 da rota nunca libera;
  *  - so a mensagem que falhou muda; a outra imagem continua com a URL dela;
  *  - a lista de mensagens NAO e recarregada;
  *  - o lightbox mostra a URL reassinada e compartilha o mesmo `Set` com a miniatura;
@@ -155,4 +157,53 @@ test('rota responde 404: a imagem fica como esta e nao ha segunda tentativa', as
   expect(chamadasDe('/chat/mensagens/10/anexo')).toBe(1);
   expect(miniatura('a.png').getAttribute('src')).toBe(`http://srv${URL_10}`);
   expect(chamadasDe('/chat/conversas/1/mensagens')).toBe(1);
+});
+
+async function carregar(img) {
+  await act(async () => { img.dispatchEvent(new Event('load')); });
+}
+
+test('carregou depois de reassinar: um segundo vencimento (16 h+) reassina de novo', async () => {
+  const SEGUNDA_10 = '/api/uploads/chat/chat-10.png?exp=1999&sig=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+  await abrirConversa();
+  await carregar(miniatura('a.png'));
+
+  await falhar(miniatura('a.png'));
+  expect(chamadasDe('/chat/mensagens/10/anexo')).toBe(1);
+  expect(miniatura('a.png').getAttribute('src')).toBe(`http://srv${NOVA_10}`);
+  await carregar(miniatura('a.png'));
+
+  // A URL reassinada tambem vence com a tela aberta: tenta de novo e troca para a segunda.
+  respostaAnexo[10] = () => Promise.resolve({ data: { anexo_url: SEGUNDA_10 } });
+  await falhar(miniatura('a.png'));
+  expect(chamadasDe('/chat/mensagens/10/anexo')).toBe(2);
+  expect(miniatura('a.png').getAttribute('src')).toBe(`http://srv${SEGUNDA_10}`);
+
+  // Sem carregar entre as falhas continua uma tentativa por falha (sem laco).
+  await falhar(miniatura('a.png'));
+  expect(chamadasDe('/chat/mensagens/10/anexo')).toBe(2);
+  expect(chamadasDe('/chat/conversas/1/mensagens')).toBe(1);
+});
+
+test('pedido de reassinar caiu por rede: o proximo onError tenta de novo', async () => {
+  respostaAnexo[10] = () => Promise.reject(new Error('Network Error'));
+  await abrirConversa();
+  await falhar(miniatura('a.png'));
+  expect(chamadasDe('/chat/mensagens/10/anexo')).toBe(1);
+  expect(miniatura('a.png').getAttribute('src')).toBe(`http://srv${URL_10}`);
+
+  respostaAnexo[10] = () => Promise.resolve({ data: { anexo_url: NOVA_10 } });
+  await falhar(miniatura('a.png'));
+  expect(chamadasDe('/chat/mensagens/10/anexo')).toBe(2);
+  expect(miniatura('a.png').getAttribute('src')).toBe(`http://srv${NOVA_10}`);
+});
+
+test('404 da rota mesmo depois de ter carregado uma vez: para ali, sem laco', async () => {
+  await abrirConversa();
+  await carregar(miniatura('a.png'));
+  respostaAnexo[10] = () => Promise.reject(Object.assign(new Error('404'), { response: { status: 404 } }));
+  await falhar(miniatura('a.png'));
+  await falhar(miniatura('a.png'));
+  await falhar(miniatura('a.png'));
+  expect(chamadasDe('/chat/mensagens/10/anexo')).toBe(1);
 });
