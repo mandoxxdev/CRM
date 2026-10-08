@@ -49,7 +49,10 @@
  * @param {Function} authenticateToken       middleware de auth (DI: o harness injeta um stub)
  * @param {Function} checkModulePermission   fabrica de middleware de permissao de modulo
  * @param {object} uploads  { uploadGrupoCompras, uploadFornecedor,
- *                            uploadsGruposComprasDir, uploadsFornecedoresDir }
+ *                            uploadsGruposComprasDir, uploadsFornecedoresDir,
+ *                            gerarPdfDeHtml? } — Etapa 78: `gerarPdfDeHtml(html, opcoes) -> Buffer`
+ *                            (o Chromium da proposta, definido no `index.js`); sem ele o
+ *                            `/documento.pdf` responde 503 e o `/documento` (HTML) segue de pe.
  */
 const path = require('path');
 const fs = require('fs');
@@ -67,7 +70,13 @@ const pedidoCompraService = require('../services/compras/pedidoCompraService');
 // Etapa 32 da main, restauradas apos o merge B18. `calcularTotaisPedido` e o implementador UNICO da
 // conta — a calculadora chama a MESMA funcao que `criarPedido` grava, e o teste afirma previa == gravado.
 const { calcularTotaisPedido } = require('../services/compras/pedidoTotais');
-const { carregarOpcoes } = require('../services/compras/opcoesPedido');
+const { carregarOpcoes, lerEmpresa } = require('../services/compras/opcoesPedido');
+// Etapa 78 (RN-78.02): o documento impresso do pedido — funcao PURA, a rota so junta os dados.
+const {
+  gerarHTMLPedidoCompra,
+  formatarDataHora,
+  escapar: escaparHtml,
+} = require('../services/compras/pedidoDocumentoHtml');
 // Etapa 40, Task 3: a cotacao ganha servico proprio (D9 do design), no molde do pedido.
 const cotacaoService = require('../services/compras/cotacaoService');
 // Etapa 38, Task 4: os 5 leitores de planilha sairam do escopo deste registrador para
@@ -89,6 +98,8 @@ const {
   uploadFornecedor,
   uploadsGruposComprasDir,
   uploadsFornecedoresDir,
+  // Etapa 78 (RN-78.05): HTML -> PDF pelo Chromium do `index.js`; ausente -> 503 na rota do PDF.
+  gerarPdfDeHtml,
 } = uploads;
 
 // ========== ROTAS MÓDULO COMPRAS ==========
@@ -224,6 +235,80 @@ app.get('/api/compras/pedidos/:id', authenticateToken, checkModulePermission('co
     res.json(await pedidoCompraService.obterPedido(db, req.params.id));
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+/**
+ * Etapa 78 (RN-78.01, RN-78.05) — o DOCUMENTO IMPRESSO do pedido de compra: o que a GMP emite ao
+ * fornecedor. Duas portas sobre a MESMA montagem: `/documento` (HTML — pre-visualizacao e teste) e
+ * `/documento.pdf` (o PDF que o client baixa por blob, Bearer — nunca `?token=`, B27).
+ *
+ * Os dados: `obterPedido` (Etapa 39 — o snapshot do fornecedor, os totais gravados) + `lerEmpresa`
+ * (configuracoes; sem a tabela, tudo "—"). O HTML e da funcao PURA `gerarHTMLPedidoCompra`.
+ * O usuario e a hora da impressao vem DAQUI (`req.user`, relogio do servidor — `TZ` no Dockerfile).
+ *
+ * "Folha X/Y" e "Impresso por" vao no `footerTemplate` do Puppeteer: CSS INLINE e `font-size`
+ * explicito (o `<style>` do documento nao chega ao rodape) e o usuario ESCAPADO (o template e HTML).
+ *
+ * `gerarPdfDeHtml` vem injetado pelo `index.js` (o Chromium da proposta). Ausente (harness antigo,
+ * registrador montado sem a chave) -> 503, e o HTML continua de pe. Falha do Chromium -> 500
+ * `{error}` sem stack (o `index.js` ja derrubou o navegador).
+ *
+ * POSICAO: `/pedidos/:id/documento` tem TRES segmentos — o generico `DELETE /:tipo/:id` nao o
+ * alcanca (e metodo diferente) — mas fica junto das rotas de pedido pelo contrato de posicao.
+ */
+async function montarDocumentoPedido(req) {
+  const [pedido, empresa] = await Promise.all([
+    pedidoCompraService.obterPedido(db, req.params.id),
+    lerEmpresa(db),
+  ]);
+  const usuario = (req.user && (req.user.nome || req.user.email || req.user.username)) || '';
+  const dataHora = new Date();
+  const html = gerarHTMLPedidoCompra({ pedido, empresa, impressao: { usuario, dataHora } });
+  return { pedido, html, usuario, dataHora };
+}
+
+function rodapePedidoCompra(usuario, dataHora) {
+  return '<div style="width:100%; font-family: Arial, Helvetica, sans-serif; font-size: 8px; '
+    + 'color: #444; padding: 0 12mm; display: flex; justify-content: space-between;">'
+    + '<span>Folha <span class="pageNumber"></span>/<span class="totalPages"></span></span>'
+    + `<span>Impresso por ${escaparHtml(usuario) || '—'} em ${formatarDataHora(dataHora)}</span>`
+    + '</div>';
+}
+
+app.get('/api/compras/pedidos/:id/documento', authenticateToken, checkModulePermission('compras'), async (req, res) => {
+  try {
+    const { html } = await montarDocumentoPedido(req);
+    res.type('text/html; charset=utf-8').send(html);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+app.get('/api/compras/pedidos/:id/documento.pdf', authenticateToken, checkModulePermission('compras'), async (req, res) => {
+  let doc;
+  try {
+    doc = await montarDocumentoPedido(req);
+  } catch (e) {
+    return res.status(e.status || 500).json({ error: e.message });
+  }
+  if (typeof gerarPdfDeHtml !== 'function') {
+    return res.status(503).json({ error: 'Geração de PDF indisponível' });
+  }
+  const nomeArquivo = `pedido-compra-${String(doc.pedido.numero || doc.pedido.id).replace(/[^\w.-]+/g, '_')}.pdf`;
+  try {
+    const pdf = await gerarPdfDeHtml(doc.html, {
+      nomeArquivo,
+      headerTemplate: '<span></span>',
+      footerTemplate: rodapePedidoCompra(doc.usuario, doc.dataHora),
+      margin: { top: '12mm', right: '12mm', bottom: '12mm', left: '12mm' },
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivo}"`);
+    res.end(pdf);
+  } catch (e) {
+    console.error('[PDF] pedido de compra', req.params.id, e);
+    res.status(500).json({ error: `Erro ao gerar o PDF do pedido: ${e.message || 'erro desconhecido'}` });
   }
 });
 

@@ -222,6 +222,11 @@ async function createTestApp(options = {}) {
     uploadFornecedor: uploadComprasStub,
     uploadsGruposComprasDir: uploadsComprasDir,
     uploadsFornecedoresDir: uploadsComprasDir,
+    // Etapa 78: o Chromium e FALSO aqui — o harness prova a fiacao do `/documento.pdf` (status,
+    // headers, nome, o HTML e as opcoes entregues), nunca a renderizacao. Devolve `%PDF-FAKE\n` +
+    // o HTML + `\n%OPCOES%` + as opcoes em JSON, para o teste afirmar o rodape que a rota montou.
+    // A prova com Chromium de verdade e o curl da T3 (registrada no plano da etapa).
+    gerarPdfDeHtml: async (html, opcoes) => Buffer.from(`%PDF-FAKE\n${html}\n%OPCOES%${JSON.stringify(opcoes || {})}`),
   });
 
   // O registrador principal agenda a extended num callback do sqlite
