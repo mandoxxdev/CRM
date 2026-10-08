@@ -36,7 +36,9 @@
 > **2026-10-08 — Etapa 88 entregue:** o PDF da OS numera **cada página** ("Página 2 de 6") e não corta
 > mais um item no meio (B43).
 > **2026-10-08 — Etapa 89 entregue:** número de OS com barra, aspas ou acento não quebra mais o PDF
-> (B44). Próxima: medir por que o cabeçalho do PDF da OS mostra "Cliente: CLI (ID: 1)".
+> (B44).
+> **2026-10-08 — Etapa 90 (só medição):** o PDF e as telas da OS mostram o cliente **abreviado de
+> propósito** (3 letras + código) — não mudei nada; ficou a pergunta **D-90**.
 > O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
 > A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
@@ -296,6 +298,11 @@
   e a task 2 pedia o inverso.) Executada como **Etapa 37** — a aba *Famílias* ganha a árvore
   família → subfamília cadastrável; a pergunta "categoria depende de família?" fica para o P.O.
   como **D-37** abaixo, sem bloquear nada.
+- **D-90** — Para você/P.O.: o PDF e as telas da OS mostram o cliente **abreviado** — 3 primeiras
+  letras da razão social + o código ("Cliente: CLI (ID: 1)"). É assim desde o primeiro commit e é igual
+  em `OSDetalhesForm`, `PreviewOSEditavel` e no PDF, então parece **proposital** (não expor o nome do
+  cliente no chão de fábrica). Se for, nada a fazer; se a OS deve mostrar o nome inteiro, é uma troca
+  pequena nos três lugares.
 - **D-78** — Para o P.O.: qual é o **texto legal** que o pedido de compra do ERP imprime no rodapé
   (a nota sobre crédito de ICMS)? Cole em Configurações → Geral → Empresa → "Nota legal do pedido
   de compra". E o documento precisa do **código do fornecedor** ("3797 - TECNOPAR")? O cadastro não

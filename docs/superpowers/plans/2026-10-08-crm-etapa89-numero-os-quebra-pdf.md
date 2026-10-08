@@ -71,3 +71,10 @@ servidor em `CRM_DATA_DIR` vazio (ou o `c87-data` do scratchpad), OS com `numero
   `razao_social`/`nome_fantasia`? `gerarHTMLOS` (`server/index.js:~13627`) monta o nome com qual campo e
   por que concatena o id? Pode ser só o dado de prova — se for, registrar e não mudar; se o código mostra
   sigla/código no lugar do nome, corrigir com prova antes/depois (`pdftotext`).
+
+> **Etapa 90 — resultado da medição (2026-10-08):** não é o dado de prova (o cliente se chama
+> "Cliente Prova 87"): `gerarHTMLOS` mostra `razao_social.substring(0, 3).toUpperCase() + ' (ID: ' + id + ')'`
+> (`server/index.js:14258` e `:14355`), e as telas fazem o mesmo (`client/src/components/OSDetalhesForm.js:560`,
+> `PreviewOSEditavel.js:334`) — desde o commit inicial `7f8d11e0`. Coerente demais para ser acidente:
+> parece proposital (cliente não exposto no chão de fábrica). **Nada mudado**; pergunta D-90 no doc de
+> novidades.
