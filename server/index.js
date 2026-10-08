@@ -218,7 +218,7 @@ const puppeteer = require('puppeteer');
 const { criarFilaSerial } = require('./services/filaPdf');
 const { fecharNavegadorComPrazo } = require('./services/filaPdf');
 const { resolverAssetDoClient } = require('./services/assetsDoClient');
-const { CSS_PAGE_OS, opcoesPdfOs } = require('./services/pdfOs');
+const { CSS_PAGE_OS, opcoesPdfOs, nomeArquivoPdfOs } = require('./services/pdfOs');
 const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
@@ -21842,7 +21842,8 @@ app.post('/api/operacional/ordens-servico/:id/gerar-pdf', authenticateToken, asy
     }
     
     // Salvar PDF
-    const pdfPath = path.join(uploadsOSDir, `OS_${os.numero_os || id}_${Date.now()}.pdf`);
+    // Etapa 89 (RN-89.01): numero_os e texto livre; cru, `/` ou `"` davam ENOENT/nome invalido e 500.
+    const pdfPath = path.join(uploadsOSDir, nomeArquivoPdfOs(os.numero_os, id, Date.now()));
     fs.writeFileSync(pdfPath, pdfBuffer);
     
     // Salvar URL no banco (sem o prefixo /api/ pois será adicionado pelo frontend)

@@ -48,4 +48,33 @@ function opcoesPdfOs() {
   };
 }
 
-module.exports = { MARGEM_INFERIOR_OS_MM, CSS_PAGE_OS, rodapePaginasOs, opcoesPdfOs };
+/** Tamanho maximo da parte do numero no nome do arquivo (RN-89.01). */
+const MAX_NUMERO_NOME_PDF_OS = 80;
+
+/** Troca tudo fora de [A-Za-z0-9._-] por `_`, sem `.`/`_` nas pontas (acento perde so a marca). */
+function sanearParteNome(valor) {
+  return String(valor == null ? '' : valor)
+    .normalize('NFD').replace(/\p{M}/gu, '')
+    .replace(/[^A-Za-z0-9._-]+/g, '_')
+    .replace(/^[._]+/, '')
+    .slice(0, MAX_NUMERO_NOME_PDF_OS)
+    .replace(/[._]+$/, '');
+}
+
+/**
+ * Etapa 89 (B44, RN-89.01..02) — nome do arquivo do PDF da OS: `OS_<numero saneado>_<ms>.pdf`.
+ *
+ * O `numero_os` e texto livre. Cru no `path.join`, `/` ou `\` criavam pasta inexistente (ENOENT) e
+ * `"`, `:`, `*`, `?`, `<`, `>`, `|` sao recusados pelo Windows — o PDF ja renderizado se perdia e o
+ * usuario via 500. Saneia SO o nome do arquivo: o numero no banco e no documento nao muda. Sem
+ * nada aproveitavel (vazio, null, so simbolos), usa o `id` da OS.
+ */
+function nomeArquivoPdfOs(numeroOs, id, agoraMs) {
+  const numero = sanearParteNome(numeroOs);
+  const parte = /[A-Za-z0-9]/.test(numero) ? numero : (sanearParteNome(id) || 'sem_numero');
+  return `OS_${parte}_${Number(agoraMs) || 0}.pdf`;
+}
+
+module.exports = {
+  MARGEM_INFERIOR_OS_MM, CSS_PAGE_OS, rodapePaginasOs, opcoesPdfOs, MAX_NUMERO_NOME_PDF_OS, nomeArquivoPdfOs,
+};

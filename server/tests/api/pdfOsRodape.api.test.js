@@ -102,7 +102,9 @@ test('rota gerar-pdf da OS: page.pdf(opcoesPdfOs()) e sem displayHeaderFooter: f
   assert.strictEqual(chamadas.length, 1, `page.pdf( na rota = ${chamadas.length}`);
   assert.ok(/page\.pdf\(opcoesPdfOs\(\)\)/.test(rota), 'a rota nao usa opcoesPdfOs()');
   assert.ok(!/displayHeaderFooter:\s*false/.test(rota), 'displayHeaderFooter: false voltou na rota');
-  assert.ok(/const \{ CSS_PAGE_OS, opcoesPdfOs \} = require\('\.\/services\/pdfOs'\);/.test(fonte), 'require de services/pdfOs');
+  // Etapa 89: o mesmo require ganhou nomeArquivoPdfOs — exige os dois nomes, sem fixar a lista.
+  const req = fonte.match(/const \{([^}]*)\} = require\('\.\/services\/pdfOs'\);/);
+  assert.ok(req && /\bCSS_PAGE_OS\b/.test(req[1]) && /\bopcoesPdfOs\b/.test(req[1]), 'require de services/pdfOs');
 });
 
 console.log(`\n${passed} passaram, ${failed} falharam`);
