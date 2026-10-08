@@ -1,5 +1,23 @@
 const { dbRun, dbGet, dbAll } = require('./db');
+const path = require('path');
 const { sanitizeMessageContent } = require('./sanitize');
+
+// Etapa 82 (RN-82.03): assinador de modulo das imagens do chat, configurado no `registerChatRoutes`.
+// O banco continua guardando `/api/uploads/chat/<arquivo>`; a assinatura e feita NA SAIDA, em
+// `mapMessage` -- o unico ponto por onde passam REST, a resposta do POST da imagem e o socket.
+// Sem assinador configurado (testes de servico que nao montam a rota) a URL sai como esta gravada.
+let assinadorChat = null;
+function configurarAssinadorChat(assinador) {
+  assinadorChat = assinador || null;
+}
+
+function assinarAnexoChat(anexoUrl) {
+  if (!anexoUrl) return anexoUrl;
+  if (!assinadorChat) return anexoUrl;
+  // `basename` do valor gravado: o nome do arquivo e o que entra no HMAC, e uma linha antiga com
+  // caminho diferente continua apontando para o mesmo arquivo da pasta do chat.
+  return assinadorChat.assinar(path.posix.basename(String(anexoUrl)));
+}
 
 function mapMessage(row) {
   if (!row) return row;
@@ -9,7 +27,7 @@ function mapMessage(row) {
     usuario_id: row.usuario_id,
     conteudo: row.conteudo,
     tipo: row.tipo,
-    anexo_url: row.anexo_url,
+    anexo_url: assinarAnexoChat(row.anexo_url),
     anexo_nome: row.anexo_nome,
     anexo_tamanho: row.anexo_tamanho,
     created_at: row.created_at,
@@ -309,6 +327,23 @@ async function sendImageMessage(db, conversaId, userId, { url, nome, tamanho, le
   return fetchMessageById(db, lastID);
 }
 
+// Etapa 82 (RN-82.03): reassina o anexo de UMA mensagem, para a tela recuperar uma URL vencida sem
+// recarregar a conversa. Devolve `null` em todo caso de "nao ha o que mostrar" -- mensagem
+// inexistente, apagada, de conversa da qual o usuario nao participa, ou sem anexo -- para a rota
+// responder o MESMO 404 nos quatro: quem nao participa nao aprende que a mensagem existe.
+async function getMessageAttachment(db, messageId, userId) {
+  if (!Number.isInteger(messageId) || messageId <= 0) return null;
+  const row = await dbGet(
+    db,
+    `SELECT m.anexo_url FROM chat_mensagens m
+     JOIN chat_participantes cp ON cp.conversa_id = m.conversa_id AND cp.usuario_id = ?
+     WHERE m.id = ? AND m.deletado = 0`,
+    [userId, messageId]
+  );
+  if (!row || !row.anexo_url) return null;
+  return assinarAnexoChat(row.anexo_url);
+}
+
 async function softDeleteMessage(db, conversaId, messageId, userId) {
   if (!(await isParticipant(db, conversaId, userId))) throw new Error('Acesso negado');
   const msg = await dbGet(
@@ -369,4 +404,7 @@ module.exports = {
   markAsRead,
   listChatUsers,
   isParticipant,
+  getMessageAttachment,
+  configurarAssinadorChat,
+  assinarAnexoChat,
 };

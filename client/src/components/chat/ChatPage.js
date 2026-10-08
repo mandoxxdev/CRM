@@ -183,7 +183,9 @@ const ChatPage = () => {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
   const [imageFile, setImageFile] = useState(null);
-  const [lightboxUrl, setLightboxUrl] = useState(null);
+  // O lightbox guarda o ID da mensagem, nao a URL: se a URL for reassinada (onError), o lightbox
+  // aberto passa a mostrar a nova sem ser reaberto.
+  const [lightboxMsgId, setLightboxMsgId] = useState(null);
 
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
@@ -191,8 +193,31 @@ const ChatPage = () => {
   const typingTimeoutRef = useRef(null);
   const activeIdRef = useRef(null);
   const skipScrollRef = useRef(false);
+  // Etapa 82 (RN-82.03): ids de mensagem cujo anexo ja tentamos reassinar nesta sessao da tela.
+  // Uma tentativa por id: arquivo apagado no servidor nao vira laco de onError -> GET -> onError.
+  const anexosReassinadosRef = useRef(new Set());
 
   const activeConversa = conversas.find((c) => c.id === activeId);
+  const lightboxMsg = lightboxMsgId != null ? mensagens.find((m) => m.id === lightboxMsgId) : null;
+  const lightboxUrl = lightboxMsg?.anexo_url ? resolveMediaUrl(lightboxMsg.anexo_url) : null;
+
+  // Etapa 82 (RN-82.03): a URL da imagem e assinada e vence (8 h). A tela fica aberta horas sem
+  // refetch e a miniatura e `lazy`, entao uma imagem abaixo da dobra pode ser pedida ja vencida.
+  // Em vez de recarregar a conversa (descartaria as paginas antigas, rolaria para o fim e marcaria
+  // como lida), pede a URL nova SO daquela mensagem e troca SO o `anexo_url` dela no estado.
+  const reassinarAnexo = useCallback(async (msgId) => {
+    if (msgId == null || anexosReassinadosRef.current.has(msgId)) return;
+    anexosReassinadosRef.current.add(msgId);
+    try {
+      const res = await api.get(`/chat/mensagens/${msgId}/anexo`);
+      const nova = res?.data?.anexo_url;
+      if (!nova) return;
+      setMensagens((prev) => prev.map((m) => (m.id === msgId ? { ...m, anexo_url: nova } : m)));
+    } catch (e) {
+      // 404 (apagada / sem acesso) ou rede: a imagem fica quebrada; nao ha nova tentativa.
+      console.error(e);
+    }
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -612,7 +637,7 @@ const ChatPage = () => {
                           <button
                             type="button"
                             className="chat-image-thumb-wrap"
-                            onClick={() => setLightboxUrl(resolveMediaUrl(m.anexo_url))}
+                            onClick={() => setLightboxMsgId(m.id)}
                             aria-label="Ampliar imagem"
                           >
                             <img
@@ -620,6 +645,7 @@ const ChatPage = () => {
                               alt={m.anexo_nome || 'Imagem'}
                               className="chat-image-thumb"
                               loading="lazy"
+                              onError={() => reassinarAnexo(m.id)}
                             />
                           </button>
                         )}
@@ -709,11 +735,16 @@ const ChatPage = () => {
       )}
 
       {lightboxUrl && (
-        <div className="chat-lightbox" onClick={() => setLightboxUrl(null)} role="dialog" aria-label="Visualizar imagem">
-          <button type="button" className="chat-lightbox-close" onClick={() => setLightboxUrl(null)} aria-label="Fechar">
+        <div className="chat-lightbox" onClick={() => setLightboxMsgId(null)} role="dialog" aria-label="Visualizar imagem">
+          <button type="button" className="chat-lightbox-close" onClick={() => setLightboxMsgId(null)} aria-label="Fechar">
             <FiX />
           </button>
-          <img src={lightboxUrl} alt="Imagem ampliada" onClick={(e) => e.stopPropagation()} />
+          <img
+            src={lightboxUrl}
+            alt="Imagem ampliada"
+            onClick={(e) => e.stopPropagation()}
+            onError={() => reassinarAnexo(lightboxMsgId)}
+          />
         </div>
       )}
     </div>

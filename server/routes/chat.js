@@ -8,10 +8,22 @@ const express = require('express');
 const multer = require('multer');
 const chatService = require('../services/chat/chatService');
 // Etapa 81: nosniff + CSP sandbox — um arquivo enviado ao chat nao executa script na origem do CRM.
-const { cabecalhosUploadSeguro } = require('../services/almoxarifado/urlUpload');
+// Etapa 82: o mesmo modulo assina a URL (RN-82.02) e da a extensao pelo MIME (RN-82.03). O
+// `cabecalhosUploadSeguro` fica NESTA linha do require: a regua da 81 (uploadsProtegidos) a procura.
+const { cabecalhosUploadSeguro, criarAssinadorUpload, extensaoSegura } = require('../services/almoxarifado/urlUpload');
+const { resolveJwtSecret } = require('../services/runtimeSecrets');
 
-const IMAGE_MIMES = /^image\/(jpeg|jpg|png|gif|webp)$/i;
-const IMAGE_EXTS = /\.(jpe?g|png|gif|webp)$/i;
+// Etapa 82 (RN-82.03): o filtro aceita SO os MIMEs de imagem que o `extensaoSegura` conhece, e a
+// extensao gravada sai do MIME. Antes era MIME **ou** extensao, com a extensao do nome original:
+// `Content-Type: image/png` + `filename="x.html"` gravava `.html` (servido sob CSP sandbox desde a
+// 81, mas ainda um .html na pasta). A lista do mapa evita o `.bin` de `image/pjpeg`/`x-png`.
+const MIMES_IMAGEM_CHAT = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']);
+
+// Validade por pasta (B37): a tela do chat fica aberta horas sem refetch e a miniatura e `lazy` —
+// 15 min quebraria imagem abaixo da dobra. 8 h com balde de 1 h; o `onError` da tela reassina.
+const ASSINATURA_CHAT = Object.freeze({
+  prefixo: '/api/uploads/chat', dominio: 'chat-uploads-v1', minutos: 480, baldeMinutos: 60,
+});
 
 module.exports = function registerChatRoutes(app, db, authenticateToken, chatSocket, PERSISTENT_DATA_DIR) {
   const uploadsChatDir = path.join(PERSISTENT_DATA_DIR, 'uploads', 'chat');
@@ -19,12 +31,24 @@ module.exports = function registerChatRoutes(app, db, authenticateToken, chatSoc
     fs.mkdirSync(uploadsChatDir, { recursive: true });
   }
 
-  app.use('/api/uploads/chat', express.static(uploadsChatDir, { setHeaders: cabecalhosUploadSeguro }));
+  // RN-82.02: so serve com assinatura valida; sem/errada/expirada/de outra pasta -> 404, como o
+  // almoxarifado. O assinador e de MODULO no chatService porque `mapMessage` (REST, POST e socket)
+  // e quem assina na saida.
+  const assinadorChat = criarAssinadorUpload(resolveJwtSecret(PERSISTENT_DATA_DIR), ASSINATURA_CHAT);
+  chatService.configurarAssinadorChat(assinadorChat);
+  app.use('/api/uploads/chat', assinadorChat.middleware, express.static(uploadsChatDir, {
+    index: false,
+    dotfiles: 'deny',
+    setHeaders: cabecalhosUploadSeguro,
+  }));
+  // FECHO: o static chama `next()` quando o arquivo nao existe; assinatura valida de nome
+  // inexistente desceria para o proximo handler em vez de 404.
+  app.use('/api/uploads/chat', (req, res) => res.status(404).end());
 
   const storageChat = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsChatDir),
     filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase();
+      const ext = extensaoSegura(file.mimetype);
       cb(null, `chat-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
     },
   });
@@ -33,8 +57,7 @@ module.exports = function registerChatRoutes(app, db, authenticateToken, chatSoc
     storage: storageChat,
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase();
-      if (IMAGE_MIMES.test(file.mimetype) || IMAGE_EXTS.test(ext)) {
+      if (MIMES_IMAGEM_CHAT.has(String(file.mimetype || '').toLowerCase())) {
         return cb(null, true);
       }
       cb(new Error('Formato não permitido. Use JPG, PNG, WebP ou GIF (máx. 10MB).'));
@@ -183,6 +206,19 @@ module.exports = function registerChatRoutes(app, db, authenticateToken, chatSoc
       }
     }
   );
+
+  // RN-82.03: reassina o anexo de uma mensagem (URL vencida na tela aberta ha horas). Mensagem
+  // inexistente, apagada, de conversa alheia ou sem anexo: o MESMO 404, para nao confirmar que existe.
+  app.get('/api/chat/mensagens/:id/anexo', authenticateToken, async (req, res) => {
+    try {
+      const anexoUrl = await chatService.getMessageAttachment(db, Number(req.params.id), req.user.id);
+      if (!anexoUrl) return res.status(404).json({ error: 'Mensagem não encontrada' });
+      res.json({ anexo_url: anexoUrl });
+    } catch (e) {
+      console.error('[chat] reassinar anexo:', e);
+      res.status(500).json({ error: 'Erro ao buscar anexo' });
+    }
+  });
 
   app.put('/api/chat/conversas/:id/lida', authenticateToken, async (req, res) => {
     try {
