@@ -66,3 +66,29 @@ de páginas (ou diferença explicada); e deixar os PDFs no scratchpad para eu ol
 ## Pontos de atenção
 - O rodapé do Puppeteer não herda o CSS do documento (lição da 78): estilo inline.
 - `preferCSSPageSize: true` faz o `@page` mandar no tamanho/margem — testar de verdade, não supor.
+
+## Fechamento (2026-10-08) — 🟢
+- Conferência visual (eu, nas 6 páginas renderizadas da OS de 12 itens): rodapé em toda página,
+  itens inteiros, assinaturas na última.
+- Revisão adversarial: nenhum defeito confirmado; `gerarHTMLOS` só é usado pela rota do PDF. Corrigido
+  em `d0adb583`: fonte do rodapé 8px → 10px (o comentário dizia 8pt); 4 mutações que passavam
+  (`@page :first`, estimativa com outra palavra, margem de 2 mm, rodapé escondido por estilo); CSS
+  morto `.page-number` removido. Registrado: nenhum teste renderiza o PDF (uma troca de versão do
+  Chromium que mude a regra das margens passaria) — a prova é a geração real.
+
+## Retro
+- Rodadas de correção até verde: **1**.
+- Achados: 1 cosmético real (fonte), 4 mutações sobreviventes, 1 CSS morto; 0 ruído.
+- Paralelismo: nenhum.
+- Defeito escapado: preencher na etapa seguinte.
+
+## Próxima tarefa detalhada — Etapa 89: número de OS com caractere especial quebra o PDF
+- **O que existe:** a rota `gerar-pdf` grava `OS_${numero_os || id}_${Date.now()}.pdf` (`server/index.js:~21939`)
+  com o `numero_os` cru — texto livre (`:~21350`, a sugestão `OS-001` é editável). Com `/` dá ENOENT
+  (pasta inexistente); com `"`, `:`, `*`, `?`, `<`, `>`, `|` o Windows recusa o nome — o usuário
+  vê "Erro ao gerar PDF" depois de o PDF ter sido gerado na fila. Medido na Etapa 81 (prova real com
+  `"` falhou no Windows).
+- **Desenho provável:** sanear só o **nome do arquivo** (`numero_os` continua como está no banco e no
+  documento): trocar `[^\w.-]` por `_`, como o nome do PDF do pedido de compra
+  (`server/routes/compras.js:~298`), com teste puro e prova real com `numero_os = 'OS 1/2 "A"'`. Conferir
+  que o `GET /:id/pdf` (Etapa 81) acha o arquivo pelo `pdf_url` gravado (ele usa `basename`).

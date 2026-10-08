@@ -33,7 +33,8 @@
 > módulos chegam à tela como **mensagem em português**, não mais como página HTML de erro (B41).
 > **2026-10-08 — Etapa 87 entregue:** o **PDF da OS** usa o mesmo Chromium dos outros PDFs — sai
 > **igual** e cerca de **10× mais rápido** (4,7 s → 0,45 s); nunca mais de um Chromium aberto (B42).
-> Próxima: o rodapé do PDF da OS diz "Página 1 de 1" mesmo com 3 páginas.
+> **2026-10-08 — Etapa 88 entregue:** o PDF da OS numera **cada página** ("Página 2 de 6") e não corta
+> mais um item no meio (B43). Próxima: número de OS com aspas ou barra quebra a geração do PDF.
 > O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
 > A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
@@ -189,6 +190,14 @@
   fila — um PDF gerado nesse instante falhava com "Target closed". A medição da 80 achou mais
   três corridas (erro de um derrubando o outro, Chromium aberto em dobro e nunca fechado, e o
   fechamento por ociosidade no meio de uma geração).
+- **B43 — Etapa 88: o rodapé "Página X de Y" do PDF da OS vem do navegador que gera o PDF.** Antes era
+  um texto no fim do documento com o total **estimado** pela quantidade de itens ("Página 1 de 1" num
+  PDF de 3 páginas, só na última). Agora sai em toda página com os números reais, 10px cinza
+  centralizado. Para caber o rodapé, cada página perdeu 10 mm embaixo — efeito colateral bom: um item
+  que não cabe mais inteiro no fim da página começa na seguinte, em vez de ser cortado no meio.
+  Medido: OS de 3 e de 12 itens mantiveram o total de páginas (3 e 6). Descartado: corrigir a
+  estimativa (continuaria estimativa); paginar em JS como a proposta (muito maior). PDFs já gerados
+  antes continuam com o texto antigo até serem gerados de novo.
 - **B42 — Etapa 87: o PDF da OS entrou na fila do Chromium compartilhado com as mesmas configurações
   de página.** Saíram a interceptação de requisições (só registrava no log), a espera de "rede parada"
   e a espera fixa de 2 s — o HTML da OS já leva logo e fotos embutidos. Resultado medido: arquivo
@@ -362,6 +371,32 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 88 — PDF da OS com "Página X de Y" em toda página (2026-10-08)
+
+**Em uma frase.** O PDF da OS dizia "Página 1 de 1" mesmo tendo 3 ou 6 páginas, e só na última folha;
+agora cada página tem o número certo no rodapé.
+
+### O que há de novo (visível para o usuário)
+- **OS → Gerar PDF**: rodapé "Página 1 de 6", "Página 2 de 6"… em toda folha.
+- Um item (foto + especificações) não é mais cortado entre duas páginas: se não cabe, começa na seguinte.
+
+### Por baixo do capô
+- `services/pdfOs.js`: o `@page` da OS (margem inferior de 10 mm) e as opções do `page.pdf` com o rodapé
+  do Chromium; `gerarHTMLOS` não estima mais páginas. Teste `pdfOsRodape.api.test.js` (6), que a revisão
+  reforçou contra 4 jeitos de esconder ou quebrar o rodapé sem nenhum teste falhar.
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| "Página 1 de 1" só na última folha (PDF de 3 ou 6 páginas) | "Página X de Y" real em toda folha |
+| Item podia ser cortado entre páginas | Item inteiro na página seguinte |
+
+### Roteiro de teste manual (clicável)
+1. **Operacional → OS** com vários itens → **Gerar PDF**: confira o rodapé de cada página.
+
+### O que a etapa NÃO cobre
+- PDFs de OS gerados antes continuam com o rodapé antigo até serem gerados de novo.
 
 ## Etapa 87 — PDF da OS 10× mais rápido, na fila dos PDFs (2026-10-08)
 
