@@ -1,7 +1,7 @@
 # Etapa 77 — a reserva de uma requisição só sai pela requisição (C136 + C137, feature 07 com a 04 e a 23)
 
-> Status: **ETAPA FECHADA (2026-10-08).** T0–T3, Fase 5 (`a5245acc`, `198f09f4`) e T4 (código `2201eb1f` + o commit de
-> documentos seguinte). Ver "T4 — fechamento" e a **Próxima tarefa detalhada — Etapa 91** no fim. *(Antes: "T0–T3 feitas
+> Status: **ETAPA FECHADA (2026-10-08).** T0–T3, Fase 5 (`a5245acc`, `198f09f4`) e T4 (código `2201eb1f` + documentos
+> `6b03642d`). Ver "T4 — fechamento" e a **Próxima tarefa detalhada — Etapa 91** no fim. *(Antes: "T0–T3 feitas
 > e Fase 5 fechada — falta a T4"; e antes ainda "Fase 1 — nada commitado".)*
 > Origem: "Próxima tarefa detalhada — Etapa 77" de
 > `docs/superpowers/plans/2026-10-02-almoxarifado-etapa76-liberar-expirar-recalcula-status.md:632-684` e os avisos
@@ -453,8 +453,8 @@ Ordem topológica: **T0 → T1 → T3 → T4**, com **T2 (galho)** em paralelo a
   `reserva_id` → 400 M1 (a reserva da chegada é reserva de requisição); a entrega de R2 a consome.
   **Controles:** (s1) da T1 → cai a v2 da jornada e a da reserva de chegada; (s1) da T0 com PRODUCAO concedido → cai o
   "outro PRODUCAO → 403"; (s2) da T0 → cai "S libera 2".
-- [x] **T4 — FEITA (2026-10-08): código `2201eb1f` (a tela esconde o Transferir em reserva de requisição) + o commit de
-  documentos seguinte.** O que cada documento recebeu, as divergências e a verificação: seção "T4 — fechamento" no fim.
+- [x] **T4 — FEITA (2026-10-08): código `2201eb1f` (a tela esconde o Transferir em reserva de requisição) + documentos
+  `6b03642d`.** O que cada documento recebeu, as divergências e a verificação: seção "T4 — fechamento" no fim.
   A "Etapa 78" abaixo saiu como **Etapa 91** (numeração única desde 2026-10-07).
   Enunciado original: **T4 — fechamento** (skill `fechar-etapa`): spec 07 (a linha *"Consumo contra reserva: saída com `reserva_id`
   valida contra a própria reserva"* (`07-reservas/README.md:47`) ganha a exceção **dizendo que estava incompleta** — ela
@@ -635,7 +635,7 @@ metade positiva: Liberar na linha de requisição, Liberar + Transferir na manua
 md5 `37a3dd93…` conferido igual ao pós-conserto, LF (0 CR). Cliente 93 suítes / 1394 testes (antes 1393), build
 *Compiled successfully*.
 
-**Documentos (commit de fechamento, o seguinte a `2201eb1f`):**
+**Documentos — `6b03642d` (o hash foi escrito pelo commit seguinte; um commit não contém o próprio hash):**
 - `docs/almoxarifado-novidades-por-etapa.md` — seção **Etapa 77** (abertura, Antes → Agora, 8 regras com a literal de
   cada recusa lida do código, NÃO cobre, o que a revisão encontrou); **A41** (com a remediação corrigida da Fase 5) e o
   cabeçalho da letra A de quarenta para quarenta e um; **B407–B414** (D1–D8) + **B415** (F1, dono só enquanto se
