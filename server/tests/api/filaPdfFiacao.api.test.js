@@ -52,7 +52,10 @@ const linhaDe = (src, idx) => src.slice(0, idx).split('\n').length;
 /** Linha de comentario (`//`, ` * ` de JSDoc) ou depois de `//` na mesma linha. */
 function emComentario(src, idx) {
   const antes = src.slice(src.lastIndexOf('\n', idx) + 1, idx);
-  return /^\s*(\/\/|\*|\/\*)/.test(antes) || antes.includes('//');
+  // Revisao da Etapa 80 (P3): `//` dentro de string ('http://x') nao e comentario — sem tirar as
+  // strings antes, `const u = 'http://x'; await fecharNavegadorPdf()` era pulada calada.
+  const semStrings = antes.replace(/(['"`])(?:\\.|(?!\1).)*\1/g, '');
+  return /^\s*(\/\/|\*|\/\*)/.test(antes) || semStrings.includes('//');
 }
 
 /** Analisa a fiacao; devolve { blocos, chamadas: [{nome, linha, ok, onde}] }. */
@@ -131,6 +134,43 @@ test('RN-80.06: toda tarefa da fila comeca cancelando o temporizador de ociosida
   const iClear = corpo.indexOf('clearTimeout(timerOciosoPdf)');
   const iTarefa = corpo.indexOf('tarefa()');
   assert.ok(iClear > 0 && iTarefa > iClear, 'clearTimeout(timerOciosoPdf) tem de vir antes de rodar a tarefa');
+});
+
+// Revisao da Etapa 80 (F1): sem este teste, trocar o corpo de enfileirarPdf por
+// `clearTimeout(...); return tarefa();` (sem fila nenhuma) deixava a suite inteira verde.
+test('RN-80.01: enfileirarPdf passa DE FATO pela fila serial de services/filaPdf', () => {
+  assert.ok(/const \{ criarFilaSerial \} = require\('\.\/services\/filaPdf'\)/.test(fonte),
+    'index.js parou de importar criarFilaSerial de services/filaPdf');
+  assert.ok(/const filaPdfSerial = criarFilaSerial\(\);/.test(fonte), 'filaPdfSerial nao e mais uma criarFilaSerial()');
+  const def = fonte.indexOf('function enfileirarPdf(');
+  const corpo = fonte.slice(def, fechamento(fonte, fonte.indexOf('{', def)));
+  assert.ok(/return filaPdfSerial\(/.test(corpo), 'enfileirarPdf nao devolve filaPdfSerial(...) — a tarefa roda fora da fila');
+  const iFila = corpo.indexOf('filaPdfSerial(');
+  assert.ok(corpo.indexOf('tarefa()') > iFila, 'tarefa() tem de rodar DENTRO do filaPdfSerial(...)');
+});
+
+// Revisao da Etapa 80 (F2): fechar o navegador por outro caminho que nao fecharNavegadorPdf, ou
+// tirar page.pdf/agendarFechamentoOcioso da tarefa, passava pelo scanner das duas funcoes.
+test('RN-80.03: ninguem fecha o navegadorPdf direto; page.pdf e agendarFechamentoOcioso so dentro da fila', () => {
+  assert.ok(!/navegadorPdf\s*(\?\.|\.)\s*close\s*\(/.test(fonte), 'navegadorPdf.close() direto — use fecharNavegadorPdf dentro da fila');
+  assert.ok(!/navegadorPdf\s*&&\s*navegadorPdf\.close/.test(fonte), 'navegadorPdf && navegadorPdf.close() direto');
+  const naFila = (re) => {
+    const out = []; let m; const r = new RegExp(re, 'g');
+    while ((m = r.exec(fonte))) {
+      if (emComentario(fonte, m.index)) continue;
+      const antes = fonte.slice(fonte.lastIndexOf('\n', m.index) + 1, m.index);
+      if (/function\s+$/.test(antes)) continue;
+      out.push({ linha: linhaDe(fonte, m.index), ok: blocos.some(([a, b]) => m.index > a && m.index < b) });
+    }
+    return out;
+  };
+  const agendar = naFila('\\bagendarFechamentoOcioso\\(');
+  assert.strictEqual(agendar.length, 2, JSON.stringify(agendar));
+  assert.deepStrictEqual(agendar.filter((c) => !c.ok).map((c) => c.linha), [], 'agendarFechamentoOcioso fora da fila');
+  // 3 page.pdf no arquivo: proposta + gerarPdfDeHtml (na fila) + a rota da OS (Chromium proprio,
+  // fora do escopo — B35). Exatamente 2 dentro da fila.
+  const pdfs = naFila('\\bpage\\.pdf\\(');
+  assert.strictEqual(pdfs.filter((c) => c.ok).length, 2, 'page.pdf do navegador compartilhado fora da fila: ' + JSON.stringify(pdfs));
 });
 
 test('RN-80.07: obterNavegadorPdf lanca com protocolTimeout: 60000', () => {
