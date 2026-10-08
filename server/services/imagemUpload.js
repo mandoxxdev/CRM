@@ -153,8 +153,10 @@ function multerComLimiteNoErro(multerLib) {
 /**
  * Middleware de erro do Express: LIMIT_FILE_SIZE -> 413 `{ error: mensagemArquivoGrande(...) }`.
  * Registrado no index.js junto do `tratarErroFormatoImagem` (depois de todas as rotas com multer e
- * antes do handler global do `/api`); qualquer outro erro segue adiante. Routers montados DEPOIS do
- * handler global (almoxarifado, chat...) nao chegam aqui — ver o plano da Etapa 85.
+ * antes do handler global do `/api`); qualquer outro erro segue adiante. Desde a Etapa 86 os modulos
+ * montados por ultimo (almoxarifado/extended, frotas, producao, todolist, chat...) registram no
+ * Router `rotasModulos`, montado logo ANTES destes handlers — entao o erro deles CHEGA aqui, mesmo
+ * das rotas registradas depois do `listen` (extended, chat). Ate a 85 nao chegava.
  */
 // eslint-disable-next-line no-unused-vars
 function tratarArquivoGrandeDemais(err, req, res, next) {

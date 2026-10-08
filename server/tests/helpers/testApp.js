@@ -200,10 +200,14 @@ async function createTestApp(options = {}) {
   // Etapa 86 (RN-86.01): o mesmo desenho do `index.js` — os registradores tardios recebem um Router
   // montado no `app`, e os tres handlers de erro sao montados (abaixo) ANTES de a extended registrar
   // (ela registra num callback do sqlite). Rota adicionada ao Router depois continua rodando na
-  // posicao do Router, entao o erro dela chega aos handlers. Aqui o Router vem antes de Compras
-  // (em producao vem depois) — a ordem relativa almoxarifado -> Compras do harness nao muda.
+  // posicao do Router, entao o erro dela chega aos handlers.
+  // O Router e CRIADO aqui (o almoxarifado registra nele antes de Compras, como sempre fez — o
+  // initSchema dele roda primeiro), mas so e MONTADO no `app` depois de Compras (abaixo), como em
+  // producao (`index.js`: Compras ~:20418-20429, `app.use(rotasModulos)` ~:23111). A posicao de
+  // casamento e a do `app.use`, nao a do registro: uma rota do modulo que colidisse com uma de
+  // Compras perderia aqui do mesmo jeito que perde em producao. (Revisao adversarial da 86: o
+  // harness montava o Router ANTES de Compras e este comentario dizia que a ordem "nao mudava".)
   const rotasModulos = express.Router();
-  app.use(rotasModulos);
   require('../../routes/almoxarifado')(rotasModulos, db, fakeAuth, dataDir, fakeCheckModulePermission);
   require('../../routes/requisicoesMaterial')(rotasModulos, db, fakeAuth);
   // Etapa 34 (main) — compras/fornecedores: lista com projecao nomeada (G2), GET /:id, POST e PUT
@@ -236,6 +240,10 @@ async function createTestApp(options = {}) {
     gerarPdfDeHtml: async (html, opcoes) => Buffer.from(`%PDF-FAKE\n${html}\n%OPCOES%${JSON.stringify(opcoes || {})}`),
   });
 
+  // Etapa 86: o Router dos modulos montado DEPOIS de Compras e imediatamente antes dos handlers —
+  // a mesma posicao do `index.js`.
+  app.use(rotasModulos);
+
   // Etapa 86: os MESMOS tres handlers de erro do `index.js`, na mesma ordem e no mesmo `/api`,
   // montados ANTES do roundtrip abaixo — a extended registra depois deles, como em producao.
   const { tratarArquivoGrandeDemais, tratarErroFormatoImagem } = require('../../services/imagemUpload');
@@ -253,6 +261,9 @@ async function createTestApp(options = {}) {
   return {
     app,
     db,
+    // Etapa 86 (fix-round): o Router dos modulos, para o teste registrar uma rota TARDIA nele (como
+    // a extended e o chat fazem) e provar que o erro dela chega aos handlers pela posicao do Router.
+    rotasModulos,
     // Exposto para os testes que precisam inspecionar o que o multer gravou (ou NÃO
     // gravou) em disco — ex.: permissoesRotas.api.test.js prova que um 403 na rota de
     // foto acontece ANTES do upload, sem deixar arquivo órfão.

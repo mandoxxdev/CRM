@@ -283,11 +283,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   // ⚠️ O MOUNT LEGADO `/uploads/almoxarifado` (sem `/api`) FOI REMOVIDO — nao esqueca dele aqui.
   //
-  // Ele existia desde a Etapa 2 e, em PRODUCAO, ja estava morto: `server/index.js` registra o
-  // catch-all do SPA (`app.get('*')`) ANTES deste modulo, e a lista de prefixos que ele deixa
-  // passar (`:23222-23228`) tem `/api`, `/health`, `/logo`, `/cabecalho` e `/Logo_` — **nao tem
-  // `/uploads`**. Ou seja: `/uploads/almoxarifado/x.png` nunca chegava aqui; devolvia o index.html
-  // do React com 200.
+  // Ele existia desde a Etapa 2 e, em PRODUCAO, estava morto ATE A ETAPA 85: `server/index.js`
+  // registrava o catch-all do SPA (`app.get('*')`) ANTES deste modulo, e a lista de prefixos que ele
+  // deixa passar tem `/api`, `/health`, `/logo`, `/cabecalho` e `/Logo_` — **nao tem `/uploads`**.
+  // Ou seja: `/uploads/almoxarifado/x.png` nunca chegava aqui; devolvia o index.html do React com 200.
+  //
+  // ⚠️ ISSO MUDOU NA ETAPA 86: este registrador agora recebe o Router `rotasModulos`, montado no
+  // `index.js` ANTES do catch-all do SPA. Um mount fora de `/api` registrado aqui SERIA alcancavel
+  // (o Router casa antes do `app.get('*')`). Ou seja, o "morto por acidente" acabou — NAO
+  // reintroduza o mount sem `/api`: ele serviria arquivo sem a exigencia de assinatura do de cima.
   //
   // Isso foi medido na revisao adversarial da Etapa 33, e derrubou uma afirmacao que ESTE
   // COMENTARIO fazia: dizia que "este modulo e registrado ANTES" do build do client. E o
