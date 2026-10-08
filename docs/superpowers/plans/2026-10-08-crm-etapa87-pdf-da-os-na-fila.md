@@ -9,6 +9,11 @@
   **imagens viram data URL antes do navegador** (disco em `uploadsProdutosDir`, ou fetch HTTP ao próprio
   servidor com 5 s, `:21667-21763`); `gerarHTMLOS` (`:13627`) embute o logo em base64 (`:13661-13668`),
   sem `<script>`, `<link>`, `url()` nem web font; `@page { size: A4; margin: 0 }`.
+  > **Correção (fix-round da revisão, `1a069f88`): a frase acima estava ERRADA para produção.** O logo
+  > era lido só de `client/public/Logo_MY.jpg`; a imagem Docker só leva `client/build`
+  > (`Dockerfile`: `COPY --from=client-builder /app/client/build`), então **em produção o logo nunca
+  > foi base64** — caía no fallback por URL e o Chromium o buscava pela rede **dentro da fila**. Só
+  > em dev (com `client/public`) era base64. Corrigido: agora é base64 nos dois (ver "Fix-round").
 - Navegador **próprio**: `puppeteer.launch` (`:21791-21800`, sem `protocolTimeout`), viewport 1200×1600
   DSF 2 (`:21816`), `setRequestInterception` (`:21826-21846`) que **não faz nada útil** (a URL do
   request já é absoluta; só loga), `setContent` com `networkidle0` (`:21850`), espera de imagens com
@@ -83,6 +88,53 @@ uma OS com 3+ itens (um com imagem de produto): gerar o PDF **antes** (código a
 comparar páginas, tamanho e texto (e ver as duas primeiras páginas como imagem, se houver como
 renderizar; senão registrar); depois PDF de proposta + PDF da OS concorrentes → ambos 200 e no máximo 1
 Chromium raiz do servidor (contagem por `Get-CimInstance Win32_Process`, como na 80).
+
+## Fix-round da revisão adversarial (2026-10-08)
+> **Estado: FEITO** em `38275637` (close com prazo), `1a069f88` (logo em produção), `1329e0ab` (réguas).
+
+1. **Réguas (`1329e0ab`).** Cinco mutações passavam 12/12 no `filaPdfFiacao`; agora cada uma fica
+   vermelha (controle positivo por Edit no `index.js`, restaurado por Edit, 0 CR; régua final **18/18**):
+   | mutação | teste que pega |
+   |---|---|
+   | M1 apagar `await page.close()` — na proposta, no `gerarPdfDeHtml` e na OS (uma de cada vez) | "M1/M5": `<bloco>: await page.close() aparece 0x` |
+   | M5 `browser = null` antes do `page.pdf` (duplicado **e** movido) | "M1/M5": `browser = null antes do await page.close()` |
+   | M2 `require("puppeteer").launch(`, `const {launch}=puppeteer`, `puppeteer.connect(`; e `require('pupp' + 'eteer').launch(` | "M2": `puppeteer` fora da importação/obter; `launch(/connect(` fora do único |
+   | M3 `enfileirarPdf(` sem `await` | "M3" (exceção enumerada: o ocioso no `setTimeout`) |
+   | M4 `{ const nb = navegadorPdf; if (nb) await nb.close(); }` na rota **e** dentro do `obterNavegadorPdf`; `b.close()` no fechar | "M4": ocorrências de `navegadorPdf` enumeradas (declaração, 2 no fechar, 7 no obter, 2 `!!navegadorPdf` na fila); sem `.close(` no fechar/obter |
+   | deadlock: `gerarPdfDeHtml(` ou `enfileirarPdf(` dentro do bloco da OS | "deadlock" |
+   A ordem por bloco é `page.pdf( → await page.close() → pdfsGerados += 1 → agendarFechamentoOcioso()`,
+   exatamente uma vez cada; há controle sintético do ciclo da aba. Limite: régua de texto — uma
+   grafia nova (ex.: outro módulo que abra Chromium) ainda escapa; o comportamento da fila é testado em
+   `filaPdf.api.test.js`.
+2. **Close com prazo (`38275637`).** `fecharNavegadorPdf` fazia `await b.close()`, que espera o processo
+   do Chromium sair — e roda **dentro da fila**: um close pendurado travaria todos os PDFs até reiniciar.
+   Agora `fecharNavegadorComPrazo` (`services/filaPdf.js`, 10 s, `FECHAR_NAVEGADOR_PRAZO_MS`): estourado,
+   `navegador.process().kill('SIGKILL')`, `console.warn` e a fila segue; o log final ganha
+   `[fechou|erro|prazo]`. Testes de comportamento com navegador falso (close que nunca resolve → `prazo`
+   em ~80 ms e kill; a tarefa seguinte da fila roda; close normal/rejeitado/síncrono; sem `process()`),
+   mais um vigia `beforeExit` no arquivo (promessa pendurada sem timer saía com código 0 sem resumo).
+   Controles: sem o `race` → 2 vermelhos + vigia com exit 1; sem o `kill` → vermelho.
+3. **Logo em produção (`1a069f88`).** `gerarHTMLOS` usa `resolveClientAsset('Logo_MY.jpg')` (build
+   primeiro, public depois — a mesma ordem da rota `/Logo_MY.jpg`); a lógica foi para
+   `services/assetsDoClient.js`, testada com pastas temporárias (`assetsDoClient.api.test.js`: só build =
+   produção, só public, os dois, nenhum, vários nomes, e texto do `gerarHTMLOS`). `client/build/Logo_MY.jpg`
+   existe (o CRA copia `public/`) e é idêntico ao de `public` — por isso o PDF não muda em dev.
+   Controles: resolvedor só com public → 4 vermelhos; caminho antigo no `gerarHTMLOS` → vermelho.
+4. **Prova real** (`c87-data` existente, porta 5984, mesmo banco da T1): 3× `gerar-pdf` da OS → **200**,
+   `%PDF`, 717/479/461 ms, **3 páginas**, **614379 bytes** — igual ao PDF "depois" da T1 fora 8 bytes
+   (as datas); log `Logo carregado como base64 (55444 bytes)`. Servidor morto; 0 Chromium órfão.
+5. **Suítes:** `test:api` **309/309** (+1 arquivo: `assetsDoClient`), `filaPdf` 10/0, `filaPdfFiacao` 18/0,
+   `test:almoxarifado` 44/0, `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 5/0. Client intocado.
+
+**Registrado e aceito (não corrigido):**
+- Em `NODE_ENV=development` o `message` do 500 perdeu os prefixos que o código antigo acrescentava por
+  passo (`Erro ao iniciar Puppeteer: …`, `Erro ao criar página: …`, `Erro ao carregar HTML: …`,
+  `Erro ao gerar PDF: …`); agora vem o `error.message` cru. Em produção a resposta é a mesma
+  (`'Erro ao gerar PDF. Verifique os logs do servidor.'`) e o log por passo (`marcarPdf`) diz onde parou.
+- Pré-existente, fora do escopo: o rodapé do PDF da OS mostra **"Página 1 de 1"** mesmo quando o PDF tem
+  várias páginas: é um `<div class="page-number">Página 1 de ${totalPages}</div>` único no HTML, com
+  `totalPages = ceil((itens + 5) / 20)` estimado por item (3 itens → 1; o PDF da prova tem 3 páginas).
+  Igual antes e depois da Etapa 87; numerar de verdade pede `displayHeaderFooter` ou contador CSS.
 
 ## Pontos de atenção
 - Revisão do plano (Fase 2) feita junto com a revisão do código: a medição acima já é a da varredura
