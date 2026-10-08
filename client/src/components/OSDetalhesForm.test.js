@@ -212,3 +212,77 @@ test('(f) bloqueador de pop-up na geracao: toast manda clicar em VER PDF, e o bo
   expect(toast.error).not.toHaveBeenCalled();
   expect(botao('VER PDF')).toBeDefined();
 });
+
+// ── revisao adversarial da Etapa 81 ────────────────────────────────────────────────────
+
+function pdfAdiado() {
+  const download = adiado();
+  api.get.mockImplementation((url) => {
+    if (url === '/operacional/ordens-servico/77/itens') return Promise.resolve({ data: [] });
+    if (url === URL_PDF) return download.promessa;
+    return Promise.reject(new Error(`GET inesperado: ${url}`));
+  });
+  return download;
+}
+const blobPdf = () => ({ data: new Blob(['%PDF-1.4'], { type: 'application/pdf' }), headers: {} });
+
+test('(g) VER PDF: window.open acontece ANTES de o download resolver (ativacao do clique)', async () => {
+  const download = pdfAdiado();
+  await montar(OS_COM_PDF);
+
+  await act(async () => { botao('VER PDF').click(); });
+
+  expect(window.open).toHaveBeenCalledWith('', '_blank');
+  expect(api.get).toHaveBeenCalledWith(URL_PDF, { responseType: 'blob' });
+  expect(janela.location.href).toBe('');
+
+  await act(async () => { download.resolve(blobPdf()); });
+  await esperar(() => janela.location.href !== '');
+  expect(janela.location.href).toBe('blob:mock-pdf-os');
+});
+
+test('(h) a URL blob NAO e revogada no mesmo tique em que a aba navega (a aba ainda nao carregou)', async () => {
+  pdfResolve();
+  await montar(OS_COM_PDF);
+
+  await act(async () => { botao('VER PDF').click(); });
+  await esperar(() => janela.location.href !== '');
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+  expect(window.URL.revokeObjectURL).not.toHaveBeenCalled();
+});
+
+test('(i) duplo clique em VER PDF: um download e uma aba so; o botao fica desabilitado enquanto baixa', async () => {
+  const download = pdfAdiado();
+  await montar(OS_COM_PDF);
+
+  await act(async () => { botao('VER PDF').click(); botao('VER PDF').click(); });
+  await act(async () => { botao('VER PDF').click(); });
+
+  expect(botao('VER PDF').disabled).toBe(true);
+  expect(api.get.mock.calls.filter(([url]) => url === URL_PDF)).toHaveLength(1);
+  expect(window.open).toHaveBeenCalledTimes(1);
+
+  await act(async () => { download.resolve(blobPdf()); });
+  await esperar(() => janela.location.href !== '');
+  await esperar(() => !botao('VER PDF').disabled);
+});
+
+test('(j) Gerar PDF com a aba fechada pelo usuario durante a geracao: toast manda clicar em VER PDF', async () => {
+  pdfResolve();
+  const geracao = adiado();
+  api.post.mockImplementation(() => geracao.promessa);
+  await montar(OS_SEM_PDF);
+
+  await act(async () => { botao('GERAR PDF').click(); });
+  janela.closed = true; // o usuario fechou a aba em branco enquanto o Puppeteer gerava
+  await act(async () => { geracao.resolve({ data: { pdf_url: '/uploads/ordens-servico/OS_x.pdf' } }); });
+  await esperar(() => toast.success.mock.calls.length > 0);
+
+  expect(toast.success).toHaveBeenCalledWith('PDF gerado — clique em VER PDF');
+  expect(toast.success).not.toHaveBeenCalledWith('PDF gerado e salvo com sucesso!');
+  expect(janela.location.href).toBe('');
+  expect(api.get).not.toHaveBeenCalledWith(URL_PDF, expect.anything());
+  expect(toast.error).not.toHaveBeenCalled();
+  expect(botao('VER PDF')).toBeDefined();
+});

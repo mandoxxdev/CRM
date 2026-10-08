@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { toast } from 'react-toastify';
@@ -17,6 +17,10 @@ const OSDetalhesForm = ({ os, onClose, isFromComercial = false }) => {
   // A prop `os` nao e recarregada depois de "Gerar PDF": sem isto o "VER PDF" nao apareceria na
   // primeira geracao, e o toast do bloqueador de pop-up mandaria clicar num botao inexistente.
   const [pdfGerado, setPdfGerado] = useState(false);
+  // Revisao adversarial da Etapa 81: duplo clique em "VER PDF" abria duas abas e baixava duas vezes.
+  // O state desabilita o botao; o ref barra o 2o clique que chega antes do re-render.
+  const [abrindoPdf, setAbrindoPdf] = useState(false);
+  const abrindoPdfRef = useRef(false);
 
   useEffect(() => {
     if (os) {
@@ -222,17 +226,22 @@ const OSDetalhesForm = ({ os, onClose, isFromComercial = false }) => {
   const urlPdfOS = () => `/operacional/ordens-servico/${os.id}/pdf`;
 
   const handleVerPDF = async () => {
-    if (!os || !os.id) return;
+    if (!os || !os.id || abrindoPdfRef.current) return;
     const janela = window.open('', '_blank');
     if (!janela) {
       toast.error('Permita pop-ups para abrir o PDF da OS.');
       return;
     }
+    abrindoPdfRef.current = true;
+    setAbrindoPdf(true);
     try {
       await abrirPdfProtegidoNaJanela(api, urlPdfOS(), janela, { mensagemPadrao: LITERAL_ERRO_PDF_OS });
     } catch (error) {
       janela.close();
       toast.error(error.message);
+    } finally {
+      abrindoPdfRef.current = false;
+      setAbrindoPdf(false);
     }
   };
 
@@ -256,8 +265,9 @@ const OSDetalhesForm = ({ os, onClose, isFromComercial = false }) => {
         throw new Error('Erro ao gerar PDF');
       }
       setPdfGerado(true);
-      if (!janela) {
-        // Bloqueador de pop-up: o PDF esta salvo, o botao "VER PDF" abre por um clique novo.
+      if (!janela || janela.closed) {
+        // Bloqueador de pop-up, ou o usuario fechou a aba em branco durante a geracao (revisao
+        // adversarial): o PDF esta salvo, o botao "VER PDF" abre por um clique novo.
         toast.success('PDF gerado — clique em VER PDF');
         return;
       }
@@ -630,7 +640,7 @@ const OSDetalhesForm = ({ os, onClose, isFromComercial = false }) => {
             <button
               type="button"
               onClick={handleVerPDF}
-              disabled={loading}
+              disabled={loading || abrindoPdf}
               className="btn-secondary"
               style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
             >

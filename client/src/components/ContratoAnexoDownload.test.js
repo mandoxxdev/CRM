@@ -137,6 +137,28 @@ describe('ConfigTemplateProposta', () => {
     expect(window.alert).toHaveBeenCalledWith('Erro: Contrato não encontrado');
     expect(cliques).toEqual([]);
   });
+
+  test('(e) nome com espaco (arquivo legado) vai codificado na URL — encodeURIComponent, nao cru', async () => {
+    // O multer atual troca espaco por `_`, mas o servidor aceita espaco no nome (NOME_CONTRATO)
+    // para arquivos gravados antes: cru, o espaco quebraria a URL / casaria outro arquivo.
+    const comEspaco = 'contrato_1759900000000_Contrato Padrao.docx';
+    axios.get.mockImplementation((url) => {
+      if (url === '/api/proposta-template') return Promise.resolve({ data: { formato_numero_proposta: 'PROPOSTA {numero}', contrato_anexo_url: comEspaco } });
+      return Promise.resolve({ data: [] });
+    });
+    api.get.mockImplementation(() => Promise.resolve({ data: new Blob(['PK-docx']), headers: {} }));
+    await act(async () => {
+      root.render(<MemoryRouter><ConfigTemplateProposta /></MemoryRouter>);
+    });
+    await esperar(() => !!botao(comEspaco));
+
+    await act(async () => { botao(comEspaco).click(); });
+    await esperar(() => cliques.length > 0);
+
+    expect(api.get).toHaveBeenCalledWith(
+      '/proposta-template/contrato-anexo/contrato_1759900000000_Contrato%20Padrao.docx', { responseType: 'blob' });
+    expect(cliques).toEqual([{ download: comEspaco, href: 'blob:mock-contrato' }]);
+  });
 });
 
 describe('PreviewPropostaEditavel', () => {
