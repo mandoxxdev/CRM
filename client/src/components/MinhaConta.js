@@ -3,12 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { FiArrowLeft, FiUser, FiLock, FiCamera, FiTrash2, FiSave } from 'react-icons/fi';
 import api from '../services/api';
+import AvatarUsuario from './AvatarUsuario';
 import { useAuth } from '../context/AuthContext';
 import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../utils/telefone';
 import './MinhaConta.css';
-
-const avatarUrl = (filename) =>
-  filename ? `${api.defaults.baseURL}/uploads/avatares/${filename}` : null;
 
 export default function MinhaConta() {
   const navigate = useNavigate();
@@ -93,7 +91,7 @@ export default function MinhaConta() {
     setEnviandoFoto(true);
     try {
       const { data } = await api.post('/conta/foto', fd);
-      setConta((c) => ({ ...c, foto_url: data.foto_url }));
+      setConta((c) => ({ ...c, foto_url: data.foto_url, foto_src: data.foto_src || null }));
       toast.success('Foto atualizada!');
       await refreshUser();
     } catch (err) {
@@ -109,7 +107,7 @@ export default function MinhaConta() {
     setEnviandoFoto(true);
     try {
       await api.delete('/conta/foto');
-      setConta((c) => ({ ...c, foto_url: null }));
+      setConta((c) => ({ ...c, foto_url: null, foto_src: null }));
       toast.success('Foto removida');
       await refreshUser();
     } catch (err) {
@@ -151,9 +149,14 @@ export default function MinhaConta() {
 
       <div className="conta-perfil-resumo">
         <div className="conta-avatar-wrap">
-          {conta?.foto_url
-            ? <img className="conta-avatar" src={avatarUrl(conta.foto_url)} alt="Foto de perfil" />
-            : <div className="conta-avatar conta-avatar-placeholder">{iniciais}</div>}
+          {/* Etapa 82 (RN-82.05): foto_src (URL ASSINADA da API), nunca montada pelo nome
+              foto_url (daria 404). Imagem que falha da lugar as iniciais. */}
+          <AvatarUsuario
+            fotoSrc={conta?.foto_src}
+            className="conta-avatar"
+            alt="Foto de perfil"
+            fallback={<div className="conta-avatar conta-avatar-placeholder">{iniciais}</div>}
+          />
           <button
             className="conta-avatar-btn"
             onClick={() => fileRef.current?.click()}

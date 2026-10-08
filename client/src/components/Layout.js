@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { canConfigureModule, canAccessAdministrativoConfig } from '../utils/systemPermissions';
 import { identificarAtalho } from '../utils/atalhosTeclado';
 import api from '../services/api';
+import AvatarUsuario from './AvatarUsuario';
 import { fetchUserPermissions, getCachedUserPermissions, getEffectiveUser, seedPermissionsFromAuthUser } from '../services/permissionsCache';
 import { bypassModuleRestrictions, isSystemAdmin } from '../utils/systemPermissions';
 import { MODULOS_META, modulosDoUsuario, nivelAcessoUsuario } from '../constants/modulosMeta';
@@ -545,13 +546,13 @@ const Layout = () => {
         </nav>
         <div className="sidebar-footer">
           <div className="user-info">
-            {user?.foto_url && (
-              <img
-                className="user-avatar-mini"
-                src={`${api.defaults.baseURL}/uploads/avatares/${user.foto_url}`}
-                alt={user?.nome || 'Perfil'}
-              />
-            )}
+            {/* Etapa 82 (RN-82.05): foto_src e a URL ASSINADA (a pasta exige ?exp=&sig=). Se ela
+                falhar (vencida no localStorage com /auth/me fora do ar), some e fica como "sem foto". */}
+            <AvatarUsuario
+              fotoSrc={user?.foto_src}
+              className="user-avatar-mini"
+              alt={user?.nome || 'Perfil'}
+            />
             {sidebarOpen && (
               <div className="user-info-text">
                 <div className="user-name">{user?.nome}</div>
