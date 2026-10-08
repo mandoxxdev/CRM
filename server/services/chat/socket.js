@@ -15,16 +15,12 @@ function tokenDoHandshake(handshake) {
     || null;
 }
 
-function initChatSocket(httpServer, db, jwtSecret) {
-  const io = new Server(httpServer, {
-    cors: {
-      origin: true,
-      credentials: true,
-    },
-    path: '/socket.io',
-  });
-
-  io.use((socket, next) => {
+/**
+ * Middleware do `io.use`: exportado para o teste exercitar com sockets falsos (a regua por fonte
+ * deixava passar `socket.handshake['query']` e `socket.request._query`).
+ */
+function criarAuthSocket(jwtSecret) {
+  return function authSocket(socket, next) {
     const token = tokenDoHandshake(socket.handshake);
 
     if (!token) {
@@ -36,7 +32,19 @@ function initChatSocket(httpServer, db, jwtSecret) {
       socket.user = user;
       next();
     });
+  };
+}
+
+function initChatSocket(httpServer, db, jwtSecret) {
+  const io = new Server(httpServer, {
+    cors: {
+      origin: true,
+      credentials: true,
+    },
+    path: '/socket.io',
   });
+
+  io.use(criarAuthSocket(jwtSecret));
 
   io.on('connection', (socket) => {
     const userId = socket.user.id;
@@ -95,4 +103,4 @@ function initChatSocket(httpServer, db, jwtSecret) {
   };
 }
 
-module.exports = { initChatSocket, tokenDoHandshake };
+module.exports = { initChatSocket, tokenDoHandshake, criarAuthSocket };

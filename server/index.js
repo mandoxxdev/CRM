@@ -247,7 +247,7 @@ const {
 } = require('./services/runtimeSecrets');
 const { deveIncluirNoBackup, backupMaisRecente } = require('./services/backupPackage');
 const { validarTokenBackup } = require('./services/backupAuth');
-const { tokenDaRequisicao, ERRO_TOKEN_NA_URL } = require('./services/tokenDaRequisicao');
+const { criarAuthenticateToken } = require('./services/authenticateToken');
 const {
   mascararValorConfig,
   podeGravarSegredo,
@@ -2931,26 +2931,14 @@ function dbAllWithRetry(sql, params = [], callback, maxRetries = 3) {
 // Authentication Middleware
 // Etapa 84 (B39): so header (Bearer ou X-Auth-Token). `?token=` vazava a sessao em URL/logs e
 // agora recebe 401 TOKEN_NA_URL; o aviso usa req.path, nunca a URL com a query (que tem o token).
-function authenticateToken(req, res, next) {
-  const { token, motivo } = tokenDaRequisicao(req);
-
-  if (motivo === 'TOKEN_NA_URL') {
-    console.warn(`[auth] token na URL recusado: ${req.method} ${req.baseUrl || ''}${req.path}`);
-    return res.status(401).json(ERRO_TOKEN_NA_URL);
-  }
-
-  if (!token) {
-    return res.status(401).json({ error: 'Token não fornecido', code: 'NO_TOKEN' });
-  }
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(401).json({ error: 'Token inválido ou expirado' });
-    }
-    req.user = user;
-    enrichUserFromDb(db)(req, res, next);
-  });
-}
+// O corpo vive em services/authenticateToken.js para o teste exercitar o middleware de verdade.
+// `enrich` le o `db` na hora do pedido: `db` e atribuido depois, no callback de abertura do sqlite.
+// Nenhuma referencia a authenticateToken antecede esta linha (era declaracao de funcao, com
+// hoisting; agora e const), e as rotas abaixo a recebem ja definida.
+const authenticateToken = criarAuthenticateToken({
+  jwtSecret: JWT_SECRET,
+  enrich: (req, res, next) => enrichUserFromDb(db)(req, res, next),
+});
 
 // Middleware para verificar permissões de módulo (considera grupo E permissões diretas do usuário)
 function checkModulePermission(requiredModule) {

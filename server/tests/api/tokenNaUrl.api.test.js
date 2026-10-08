@@ -1,9 +1,10 @@
 /**
  * Etapa 84 — o login deixa de aceitar o JWT na URL (`?token=`).
  *
- * Teste de funcao pura + fiacao por FONTE: `server/index.js` abre banco em disco e faz `listen`
- * no import, entao nao ha harness HTTP do core (mesmo precedente de backupExposicao.api.test.js).
- * A prova HTTP real (servidor em CRM_DATA_DIR vazio) esta registrada no plano da etapa.
+ * Funcao pura + o middleware de verdade (fabrica `services/authenticateToken.js` num mini-app
+ * express + supertest; o `index.js` abre banco e faz `listen` no import, por isso a fabrica) + uma
+ * checagem curta de fonte de que o index.js usa a fabrica. A prova HTTP real (servidor em
+ * CRM_DATA_DIR vazio) esta registrada no plano da etapa.
  *
  *   RN-84.01 `authenticateToken` le so `Authorization: Bearer` e `X-Auth-Token`.
  *   RN-84.02 so `?token=` -> motivo TOKEN_NA_URL (401 com corpo literal, aviso sem query string).
@@ -68,32 +69,96 @@ test('corpo do 401 e literal', () => {
   assert.deepStrictEqual(ERRO_TOKEN_NA_URL, { error: 'Envie o token no cabeçalho Authorization', code: 'TOKEN_NA_URL' });
 });
 
-// ── Fiacao por fonte ─────────────────────────────────────────────────────────────────
+// ── Middleware de verdade: mini-app express + supertest ─────────────────────────────────
+// A regua por fonte que estava aqui deixava passar tres mutacoes (revisao adversarial da 84):
+// `const { query: q } = req` + `jwt.verify(q.token ...)`; NO_TOKEN checado antes do ramo
+// TOKEN_NA_URL; e `res.status(200).json(ERRO_TOKEN_NA_URL)`. Aqui o middleware roda de verdade.
+
+const express = require('express');
+const request = require('supertest');
+const jwt = require('jsonwebtoken');
+const { criarAuthenticateToken } = require('../../services/authenticateToken');
+
+const SEGREDO = 'segredo-de-teste-c84';
+const valido = jwt.sign({ id: 42, email: 'x@y.z' }, SEGREDO, { expiresIn: '1h' });
+const invalido = jwt.sign({ id: 42 }, 'outro-segredo');
+
+let enrichChamadas = 0;
+const app = express();
+app.get('/api/eco', criarAuthenticateToken({
+  jwtSecret: SEGREDO,
+  enrich: (req, res, next) => { enrichChamadas++; req.user.enriquecido = true; next(); },
+}), (req, res) => res.json({ ok: true, user: req.user }));
+
+const avisos = [];
+const warnOriginal = console.warn;
+function capturandoAvisos() { avisos.length = 0; console.warn = (...a) => avisos.push(a.join(' ')); }
+function soltaAvisos() { console.warn = warnOriginal; }
+
+const testesHttp = [];
+function testHttp(name, fn) { testesHttp.push([name, fn]); }
+
+testHttp('Bearer valido -> 200, req.user do JWT e enrich chamado', async () => {
+  const antes = enrichChamadas;
+  const r = await request(app).get('/api/eco').set('Authorization', `Bearer ${valido}`);
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.body.user.id, 42);
+  assert.strictEqual(r.body.user.enriquecido, true);
+  assert.strictEqual(enrichChamadas, antes + 1, 'enrich nao foi chamado uma vez');
+});
+
+testHttp('X-Auth-Token valido -> 200', async () => {
+  const r = await request(app).get('/api/eco').set('X-Auth-Token', valido);
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.body.user.id, 42);
+});
+
+testHttp('so ?token=<valido> -> 401 com corpo literal, enrich NAO chamado, 1 aviso sem o token (RN-84.02)', async () => {
+  const antes = enrichChamadas;
+  capturandoAvisos();
+  let r;
+  try { r = await request(app).get(`/api/eco?token=${valido}`); } finally { soltaAvisos(); }
+  assert.strictEqual(r.status, 401);
+  assert.deepStrictEqual(r.body, { error: 'Envie o token no cabeçalho Authorization', code: 'TOKEN_NA_URL' });
+  assert.strictEqual(enrichChamadas, antes, 'a query autenticou');
+  assert.strictEqual(avisos.length, 1, `esperava 1 aviso, veio ${avisos.length}`);
+  assert.ok(avisos[0].includes('GET') && avisos[0].includes('/api/eco'), `aviso sem metodo/caminho: ${avisos[0]}`);
+  assert.ok(!avisos[0].includes(valido) && !avisos[0].includes('token='), 'o aviso vazou o token');
+});
+
+testHttp('Bearer valido + ?token=lixo -> 200 (o header manda, RN-84.03)', async () => {
+  const r = await request(app).get('/api/eco?token=lixo').set('Authorization', `Bearer ${valido}`);
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.body.user.id, 42);
+});
+
+testHttp('nada -> 401 NO_TOKEN', async () => {
+  const r = await request(app).get('/api/eco');
+  assert.strictEqual(r.status, 401);
+  assert.deepStrictEqual(r.body, { error: 'Token não fornecido', code: 'NO_TOKEN' });
+});
+
+testHttp('Bearer invalido -> 401 Token inválido ou expirado', async () => {
+  const r = await request(app).get('/api/eco').set('Authorization', `Bearer ${invalido}`);
+  assert.strictEqual(r.status, 401);
+  assert.deepStrictEqual(r.body, { error: 'Token inválido ou expirado' });
+});
+
+// ── Fiacao por fonte (curta): o index.js usa a fabrica, nao uma copia propria ───────────
 
 const fonte = fs.readFileSync(path.join(__dirname, '..', '..', 'index.js'), 'utf8');
-const inicio = fonte.indexOf('function authenticateToken(');
-const fim = fonte.indexOf('\nfunction ', inicio + 1);
-const corpo = inicio >= 0 && fim > inicio ? fonte.slice(inicio, fim) : '';
 
-test('authenticateToken foi encontrado na fonte (regua nao e vazia)', () => {
-  assert.ok(corpo.length > 100, 'corpo de authenticateToken nao encontrado em index.js');
-  assert.ok(/jwt\.verify\(/.test(corpo), 'recorte nao contem jwt.verify — recorte errado');
+test('index.js monta authenticateToken com criarAuthenticateToken (JWT_SECRET + enrichUserFromDb(db))', () => {
+  assert.ok(/const authenticateToken = criarAuthenticateToken\(\{\s*jwtSecret: JWT_SECRET,\s*enrich: \(req, res, next\) => enrichUserFromDb\(db\)\(req, res, next\),\s*\}\);/.test(fonte),
+    'authenticateToken do index.js nao vem da fabrica');
+  assert.ok(!/function authenticateToken\(/.test(fonte), 'index.js voltou a ter um authenticateToken proprio');
 });
 
-test('authenticateToken chama tokenDaRequisicao(req)', () => {
-  assert.ok(/tokenDaRequisicao\(req\)/.test(corpo), 'authenticateToken nao usa tokenDaRequisicao');
-});
-
-test('authenticateToken nao le req.query.token (RN-84.01)', () => {
-  assert.ok(!/req\.query/.test(corpo), 'authenticateToken ainda le req.query');
-});
-
-test('authenticateToken responde TOKEN_NA_URL com ERRO_TOKEN_NA_URL e avisa sem query string', () => {
-  assert.ok(/TOKEN_NA_URL/.test(corpo), 'sem ramo TOKEN_NA_URL');
-  assert.ok(/ERRO_TOKEN_NA_URL/.test(corpo), 'nao usa o corpo literal exportado');
-  assert.ok(/console\.warn\([^)]*req\.method[^)]*req\.path/.test(corpo), 'aviso sem metodo e req.path');
-  assert.ok(!/req\.(originalUrl|url)\b/.test(corpo), 'aviso usa URL com query string (vazaria o token)');
-});
-
-console.log(`\ntokenNaUrl: ${passed} passaram, ${failed} falharam`);
-process.exit(failed ? 1 : 0);
+(async () => {
+  for (const [name, fn] of testesHttp) {
+    try { await fn(); passed++; console.log(`  ✓ ${name}`); }
+    catch (e) { failed++; console.error(`  ✗ ${name}: ${e.message}`); }
+  }
+  console.log(`\ntokenNaUrl: ${passed} passaram, ${failed} falharam`);
+  process.exit(failed ? 1 : 0);
+})();
