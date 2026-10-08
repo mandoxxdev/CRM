@@ -605,7 +605,10 @@ Scratchpad com nome único (`msg-e91-t0.txt`…). Executores **não** marcam est
   a trava das portas de serviço e a das rotas é **o mesmo `Map`** atravessando módulos.
   **Controles:** (s1) da T2 (inspeção sem trava) → cai a etapa R4 da jornada e o par de serviço da inspeção; (s3) da T2
   → cai a etapa da QUARENTENA e o par da nota; (s1) da T1 → cai a etapa R4.
-- [ ] **T4 (tronco — muda o motor) — D(77): `reserva_id` só numa saída.** Contrato do motor acima. Teste novo
+- [x] **T4 — FEITA em `d24715c9`.** `reservaIdSoEmSaida` 11 casos (vermelho antes 6/11: v2 ENTRADA/AJUSTE/DEVOLUCAO,
+  manual e `/transferencias` davam 201). Controles s1–s5 caíram (s2 sem a isenção de `RESERVA` derruba 51 arquivos; s3
+  sem a de `LIBERACAO_RESERVA`, 16). São **23** arquivos que passam `reserva_id`, não 22. test:api 318/318.
+  Enunciado original: **T4 (tronco — muda o motor) — D(77): `reserva_id` só numa saída.** Contrato do motor acima. Teste novo
   `server/tests/api/reservaIdSoEmSaida.api.test.js`: **RN-11** inteira, pela v2, pela `/transferencias` e pelo serviço.
   **Medir antes (o impacto da recusa) e depois, sem edição:** todos os testes que passam `reserva_id`
   (`grep -ln reserva_id tests/api/*.js` → 22 arquivos hoje; os de §2 da 77 + os da 74–77) e `test:almoxarifado`; e
@@ -616,7 +619,10 @@ Scratchpad com nome único (`msg-e91-t0.txt`…). Executores **não** marcam est
   que a isenção é necessária. (s3) sem a isenção de `LIBERACAO_RESERVA` → cai a metade positiva da liberação. (s4) a
   recusa só para reserva de **requisição** → cai o caso da reserva manual. (s5) a checagem **antes** da validação de tipo →
   cai a precedência (tipo inválido com `reserva_id` daria M1).
-- [ ] **T5 (galho por regra; executado em sequência por causa do SQLite) — C141.** Contrato da rota acima. Teste novo
+- [x] **T5 — FEITA em `6eedb920`.** `requisicaoCancelarOutrosModulosReserva` 6 casos (vermelho antes 4/6: reserva ficava
+  `ATIVA`). Controles s1, s2, s2b, s3, s4 caíram. L3 (falha da auditoria) implementado mas **sem teste** — a rota pega
+  `registrarAuditoria` por desestruturação (contrato), o teste não consegue trocá-la. test:api 319/319.
+  Enunciado original: **T5 (galho por regra; executado em sequência por causa do SQLite) — C141.** Contrato da rota acima. Teste novo
   `server/tests/api/requisicaoCancelarOutrosModulosReserva.api.test.js`: **RN-10 (a)–(e)**. **Vermelho antes:** (a) e (b)
   (reserva continua `ATIVA` — medido na Fase 0) e a auditoria ausente.
   **Medir antes e depois:** os 10 arquivos que usam `/api/requisicoes-material` (`grep -ln requisicoes-material
@@ -626,7 +632,11 @@ Scratchpad com nome único (`msg-e91-t0.txt`…). Executores **não** marcam est
   achado 1: patchear `liberarReserva` nunca chega ao try da rota). (s2b) sem o ramo `erros.length > 0` → **cai (e1)**
   (o warn L2b some). (s3) o `UPDATE` sem `solicitante_id` → **cai (c)**. (s4) sem a auditoria → cai a asserção da
   trilha em (a).
-- [ ] **T6 — integração cruzando os galhos: A × C141 × D(77) × 76 × 77, pela rota.** Acrescenta ao
+- [x] **T6 — FEITA em `c53703c4`.** Jornada C (ENTRADA citando a reserva da liberação → 400 M1, nada muda) e jornada B
+  (cancelar na janela do `concluirPendencia` → `CANCELADO`, nenhuma reserva `ATIVA`). Controles: s1 da T5 → só B; s1 da
+  T4 → só C; s5 da T2 → o cancelamento passa e a nota estoura os 5 s (derruba também o "serviço 7" da T3). 3 execuções
+  seguidas 8/8. test:api 319/319.
+  Enunciado original: **T6 — integração cruzando os galhos: A × C141 × D(77) × 76 × 77, pela rota.** Acrescenta ao
   `filaTravaIntegracao.api.test.js`:
   **Jornada B (A × C141 × 76 × 77):** material não crítico M2 com 4 (v2 `ENTRADA`). S5 (sem perfil) cria R5 por `POST
   /api/requisicoes-material`; GESTOR aprova → `TOTALMENTE_RESERVADA`; S5 libera a própria reserva inteira
