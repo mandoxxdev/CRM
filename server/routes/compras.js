@@ -56,6 +56,8 @@
  */
 const path = require('path');
 const fs = require('fs');
+// Etapa 82 (RN-82.06): tipo da imagem base64 so pelo mapa do extensaoSegura.
+const { decodificarImagemBase64 } = require('../services/imagemUpload');
 // Etapa 38: os primeiros Zod do modulo core Compras. `validate` vem do almoxarifado por `require`,
 // NAO por copia (decisao 7 do design) — duplicar o formatador daria dois "Dados invalidos" que
 // divergiriam na primeira edicao.
@@ -730,15 +732,12 @@ app.post('/api/compras/grupos/:id/foto-base64', authenticateToken, checkModulePe
     const id = req.params.id;
     const b64 = req.body && req.body.foto_base64;
     if (!b64 || typeof b64 !== 'string') return res.status(400).json({ error: 'foto_base64 é obrigatório' });
-    const match = b64.match(/^data:image\/(\w+);base64,(.+)$/);
-    let ext = '.jpg';
-    let buf = b64;
-    if (match) {
-      ext = match[1] === 'jpeg' ? '.jpg' : '.' + match[1];
-      buf = Buffer.from(match[2], 'base64');
-    } else {
-      buf = Buffer.from(b64, 'base64');
-    }
+    // Etapa 82 (RN-82.06): tipo so pelo mapa do extensaoSegura. Antes `data:image/html` gravava
+    // `.html` e o texto sem prefixo era decodificado cru e salvo como `.jpg` (svg+xml caia ali).
+    const img = decodificarImagemBase64(b64);
+    if (img.erro) return res.status(400).json({ error: img.erro });
+    const ext = img.ext;
+    const buf = img.buf;
     if (!fs.existsSync(uploadsGruposComprasDir)) fs.mkdirSync(uploadsGruposComprasDir, { recursive: true });
     const filename = 'grupo_compras_' + id + '_' + Date.now() + ext;
     const filePath = path.join(uploadsGruposComprasDir, filename);
@@ -862,15 +861,12 @@ app.post('/api/compras/fornecedores/:id/foto-base64', authenticateToken, checkMo
     const id = req.params.id;
     const b64 = req.body && req.body.foto_base64;
     if (!b64 || typeof b64 !== 'string') return res.status(400).json({ error: 'foto_base64 é obrigatório' });
-    const match = b64.match(/^data:image\/(\w+);base64,(.+)$/);
-    let ext = '.jpg';
-    let buf = b64;
-    if (match) {
-      ext = match[1] === 'jpeg' ? '.jpg' : '.' + match[1];
-      buf = Buffer.from(match[2], 'base64');
-    } else {
-      buf = Buffer.from(b64, 'base64');
-    }
+    // Etapa 82 (RN-82.06): tipo so pelo mapa do extensaoSegura. Antes `data:image/html` gravava
+    // `.html` e o texto sem prefixo era decodificado cru e salvo como `.jpg` (svg+xml caia ali).
+    const img = decodificarImagemBase64(b64);
+    if (img.erro) return res.status(400).json({ error: img.erro });
+    const ext = img.ext;
+    const buf = img.buf;
     if (!fs.existsSync(uploadsFornecedoresDir)) fs.mkdirSync(uploadsFornecedoresDir, { recursive: true });
     const filename = 'fornecedor_' + id + '_' + Date.now() + ext;
     const filePath = path.join(uploadsFornecedoresDir, filename);

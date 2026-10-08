@@ -277,7 +277,10 @@ const {
 } = require('./config/paths');
 const { gerarHTMLPropostaPremiumV2, substituirPlaceholdersProposta } = require('./templates/propostaPremiumV2');
 // Etapa 81: nosniff + CSP sandbox nos estaticos de /api/uploads (um .html enviado nao executa script).
-const { cabecalhosUploadSeguro, cabecalhosUploadLogo } = require('./services/almoxarifado/urlUpload');
+const { cabecalhosUploadSeguro, cabecalhosUploadLogo, extensaoSegura } = require('./services/almoxarifado/urlUpload');
+// Etapa 82 (RN-82.04/05/06): URL assinada de fotos da proposta/avatares e tipo de imagem pelo mapa.
+const { criarAssinadoresCrm } = require('./services/uploadsAssinadosCrm');
+const { decodificarImagemBase64, filtroImagemMulter } = require('./services/imagemUpload');
 const { criarServirPdfOs, criarServirContratoAnexo } = require('./services/arquivosProtegidos');
 
 // Opções de launch do Puppeteer: usar Chrome/Chromium do sistema quando o bundle não existir (ex.: Linux em servidor)
@@ -458,6 +461,9 @@ const app = express();
 const httpServer = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = resolveJwtSecret(PERSISTENT_DATA_DIR);
+// Etapa 82: assinadores de /api/uploads/proposta-fotos (12 h) e /api/uploads/avatares (24 h). O
+// segredo raiz e o do JWT, como no almoxarifado; a chave de cada pasta e DERIVADA com dominio proprio.
+const assinadoresCrm = criarAssinadoresCrm(JWT_SECRET);
 
 // Soft-delete de propostas: registros legados sem coluna ativo continuam visíveis
 const SQL_PROPOSTA_ATIVA = '(ativo IS NULL OR ativo = 1)';
@@ -932,18 +938,15 @@ const storageGruposCompras = multer.diskStorage({
   destination: (req, file, cb) => { cb(null, uploadsGruposComprasDir); },
   filename: (req, file, cb) => {
     const unique = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname) || '.jpg';
+    // Etapa 82 (RN-82.06): extensao pelo MIME aceito, nunca pelo nome original.
+    const ext = extensaoSegura(file.mimetype);
     cb(null, 'grupo_compras_' + unique + ext);
   }
 });
 const uploadGrupoCompras = multer({
   storage: storageGruposCompras,
   limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowed = /jpeg|jpg|png|gif|webp/;
-    if (allowed.test(file.mimetype)) return cb(null, true);
-    cb(new Error('Apenas imagens (JPEG, PNG, GIF, WEBP)'));
-  }
+  fileFilter: filtroImagemMulter('Apenas imagens (JPEG, PNG, GIF, WEBP)'),
 });
 
 const storageFornecedor = multer.diskStorage({
@@ -951,18 +954,15 @@ const storageFornecedor = multer.diskStorage({
   filename: (req, file, cb) => {
     const id = req.params.id || 'temp';
     const unique = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname) || '.jpg';
+    // Etapa 82 (RN-82.06): extensao pelo MIME aceito, nunca pelo nome original.
+    const ext = extensaoSegura(file.mimetype);
     cb(null, 'fornecedor_' + id + '_' + unique + ext);
   }
 });
 const uploadFornecedor = multer({
   storage: storageFornecedor,
   limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowed = /jpeg|jpg|png|gif|webp/;
-    if (allowed.test(file.mimetype)) return cb(null, true);
-    cb(new Error('Apenas imagens (JPEG, PNG, GIF, WEBP)'));
-  }
+  fileFilter: filtroImagemMulter('Apenas imagens (JPEG, PNG, GIF, WEBP)'),
 });
 
 // Storage específico para logos
@@ -1006,7 +1006,8 @@ const storageAvatar = multer.diskStorage({
   filename: (req, file, cb) => {
     const userId = req.user?.id || 'x';
     const timestamp = Date.now();
-    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    // Etapa 82 (RN-82.06): extensao pelo MIME aceito, nunca pelo nome original.
+    const ext = extensaoSegura(file.mimetype);
     cb(null, `avatar_${userId}_${timestamp}${ext}`);
   }
 });
@@ -1014,13 +1015,7 @@ const storageAvatar = multer.diskStorage({
 const uploadAvatar = multer({
   storage: storageAvatar,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|webp/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    if (mimetype && extname) return cb(null, true);
-    cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'));
-  }
+  fileFilter: filtroImagemMulter('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'),
 });
 
 // Storage específico para logos de clientes
@@ -1150,21 +1145,16 @@ const uploadCover = multer({
 const storagePropostaFoto = multer.diskStorage({
   destination: (req, file, cb) => { cb(null, uploadsPropostaFotosDir); },
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext);
+    // Etapa 82 (RN-82.06): a extensao vem do MIME aceito; o nome original so empresta o miolo.
+    const name = path.basename(file.originalname, path.extname(file.originalname));
+    const ext = extensaoSegura(file.mimetype);
     cb(null, `foto_${Date.now()}_${name.replace(/[^a-zA-Z0-9]/g, '_')}${ext}`);
   }
 });
 const uploadPropostaFoto = multer({
   storage: storagePropostaFoto,
   limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|webp/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    if (mimetype && extname) return cb(null, true);
-    cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'));
-  }
+  fileFilter: filtroImagemMulter('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'),
 });
 
 // Storage para contrato anexo (Word / PDF)
@@ -3440,6 +3430,10 @@ function buildAuthUserPayload(db, user, callback) {
           flag_compras: !!user.flag_compras,
           flag_ti: !!user.flag_ti,
           foto_url: user.foto_url || null,
+          // Etapa 82 (RN-82.05): /api/uploads/avatares exige assinatura; o client usa foto_src.
+          // SEMPRE presente (null sem foto): o mergeUserPermissions do client manteria o valor
+          // velho do localStorage se a chave sumisse.
+          foto_src: assinadoresCrm.fotoSrcAvatar(user.foto_url),
           telefone: user.telefone || null,
           pode_editar_conta: user.pode_editar_conta == null ? 1 : (isTruthyFlag(user.pode_editar_conta) ? 1 : 0),
           perfil_almoxarifado: moduleContext?.perfil_almoxarifado || null,
@@ -3514,7 +3508,8 @@ app.get('/api/conta', authenticateToken, requireContaAcesso, (req, res) => {
           FROM usuarios WHERE id = ?`, [req.user.id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!row) return res.status(404).json({ error: 'Usuário não encontrado' });
-    res.json(row);
+    // Etapa 82 (RN-82.05): foto_url continua o nome; foto_src e a URL assinada (null sem foto).
+    res.json({ ...row, foto_src: assinadoresCrm.fotoSrcAvatar(row.foto_url) });
   });
 });
 
@@ -3568,7 +3563,10 @@ app.post('/api/conta/foto', authenticateToken, requireContaAcesso, uploadAvatar.
   const filename = req.file.filename;
   db.run('UPDATE usuarios SET foto_url = ? WHERE id = ?', [filename, req.user.id], (err) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json({ message: 'Foto atualizada com sucesso', foto_url: filename, url: `/api/uploads/avatares/${filename}` });
+    // Etapa 82 (RN-82.05): a URL crua daria 404 (a pasta exige assinatura) — `url` e `foto_src`
+    // saem assinadas.
+    const fotoSrc = assinadoresCrm.fotoSrcAvatar(filename);
+    res.json({ message: 'Foto atualizada com sucesso', foto_url: filename, foto_src: fotoSrc, url: fotoSrc });
   });
 });
 
@@ -3576,7 +3574,7 @@ app.post('/api/conta/foto', authenticateToken, requireContaAcesso, uploadAvatar.
 app.delete('/api/conta/foto', authenticateToken, requireContaAcesso, (req, res) => {
   db.run('UPDATE usuarios SET foto_url = NULL WHERE id = ?', [req.user.id], (err) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json({ message: 'Foto removida com sucesso' });
+    res.json({ message: 'Foto removida com sucesso', foto_url: null, foto_src: null });
   });
 });
 
@@ -3908,15 +3906,12 @@ app.post('/api/grupos/:id/foto-base64', authenticateToken, (req, res) => {
     var id = req.params.id;
     var b64 = req.body && req.body.foto_base64;
     if (!b64 || typeof b64 !== 'string') return res.status(400).json({ error: 'foto_base64 é obrigatório' });
-    var match = b64.match(/^data:image\/(\w+);base64,(.+)$/);
-    var ext = '.jpg';
-    var buf = b64;
-    if (match) {
-      ext = match[1] === 'jpeg' ? '.jpg' : '.' + match[1];
-      buf = Buffer.from(match[2], 'base64');
-    } else {
-      buf = Buffer.from(b64, 'base64');
-    }
+    // Etapa 82 (RN-82.06): tipo so pelo mapa do extensaoSegura. Antes `data:image/html` gravava
+    // `.html` e o texto sem prefixo era decodificado cru e salvo como `.jpg` (svg+xml caia ali).
+    var img = decodificarImagemBase64(b64);
+    if (img.erro) return res.status(400).json({ error: img.erro });
+    var ext = img.ext;
+    var buf = img.buf;
     if (!fs.existsSync(uploadsGruposDir)) fs.mkdirSync(uploadsGruposDir, { recursive: true });
     var filename = 'grupo_' + id + '_' + Date.now() + ext;
     var filePath = path.join(uploadsGruposDir, filename);
@@ -5169,13 +5164,11 @@ app.post('/api/familias/:id/foto-base64', authenticateToken, (req, res) => {
     var id = req.params.id;
     var b64 = req.body && req.body.foto_base64;
     if (!b64 || typeof b64 !== 'string') return res.status(400).json({ error: 'Nenhuma imagem enviada' });
-    var match = b64.match(/^data:image\/(\w+);base64,(.+)$/);
-    if (!match) return res.status(400).json({ error: 'Formato de imagem inválido. Use data:image/...;base64,...' });
-    var ext = (match[1] === 'jpeg' || match[1] === 'jpg') ? '.jpg' : '.' + match[1];
-    if (!/^(jpeg|jpg|png|gif|webp)$/i.test(match[1])) return res.status(400).json({ error: 'Apenas imagens JPEG, PNG, GIF, WEBP' });
-    var base64Data = match[2].replace(/\s/g, '');
-    var buf;
-    try { buf = Buffer.from(base64Data, 'base64'); } catch (e) { return res.status(400).json({ error: 'Base64 inválido' }); }
+    // Etapa 82 (RN-82.06): tipo so pelo mapa do extensaoSegura (mesma regra das outras rotas base64).
+    var img = decodificarImagemBase64(b64);
+    if (img.erro) return res.status(400).json({ error: img.erro });
+    var ext = img.ext;
+    var buf = img.buf;
     if (buf.length > 10 * 1024 * 1024) return res.status(400).json({ error: 'Imagem muito grande (máx. 10MB)' });
     if (!fs.existsSync(uploadsFamiliasDir)) fs.mkdirSync(uploadsFamiliasDir, { recursive: true });
     var filename = 'foto_' + id + '_' + Date.now() + ext;
@@ -5253,17 +5246,11 @@ app.post('/api/familias/:id/esquematico-base64', authenticateToken, (req, res) =
     var id = req.params.id;
     var b64 = req.body && req.body.esquematico_base64;
     if (!b64 || typeof b64 !== 'string') return res.status(400).json({ error: 'Nenhuma imagem enviada' });
-    var match = b64.match(/^data:image\/(\w+);base64,(.+)$/);
-    if (!match) return res.status(400).json({ error: 'Formato de imagem inválido. Use data:image/...;base64,...' });
-    var ext = (match[1] === 'jpeg' || match[1] === 'jpg') ? '.jpg' : '.' + match[1];
-    if (!/^(jpeg|jpg|png|gif|webp)$/i.test(match[1])) return res.status(400).json({ error: 'Apenas imagens JPEG, PNG, GIF, WEBP' });
-    var base64Data = match[2].replace(/\s/g, '');
-    var buf;
-    try {
-      buf = Buffer.from(base64Data, 'base64');
-    } catch (e) {
-      return res.status(400).json({ error: 'Base64 inválido' });
-    }
+    // Etapa 82 (RN-82.06): tipo so pelo mapa do extensaoSegura (mesma regra das outras rotas base64).
+    var img = decodificarImagemBase64(b64);
+    if (img.erro) return res.status(400).json({ error: img.erro });
+    var ext = img.ext;
+    var buf = img.buf;
     if (buf.length > 10 * 1024 * 1024) return res.status(400).json({ error: 'Imagem muito grande (máx. 10MB)' });
     if (!fs.existsSync(uploadsFamiliasDir)) fs.mkdirSync(uploadsFamiliasDir, { recursive: true });
     var filename = 'esquematico_' + id + '_' + Date.now() + ext;
@@ -6669,12 +6656,15 @@ app.delete('/api/propostas/:id/clausulas/:clausulaId', authenticateToken, (req, 
 });
 
 // ========== FOTOS AVULSAS DA PROPOSTA (posicionadas livremente no preview/PDF) ==========
+// Etapa 82 (RN-82.04): /api/uploads/proposta-fotos exige assinatura. Toda resposta destas rotas
+// leva, alem de `arquivo` (o nome, como no banco), um `url` assinado RELATIVO — o client usa esse
+// `url` e NUNCA monta o endereco pelo nome (sem assinatura daria 404).
 // GET /api/propostas/:id/fotos — lista fotos ativas
 app.get('/api/propostas/:id/fotos', authenticateToken, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   db.all('SELECT * FROM proposta_fotos WHERE proposta_id = ? AND ativo = 1 ORDER BY id ASC', [req.params.id], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json({ fotos: rows || [] });
+    res.json({ fotos: (rows || []).map(assinadoresCrm.comUrlFotoProposta) });
   });
 });
 
@@ -6702,7 +6692,7 @@ app.post('/api/propostas/:id/fotos', authenticateToken, uploadPropostaFoto.singl
       db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (_, u) => {
         registrarEdicaoLog(id, usuarioId, u?.nome || 'N/A', 'foto_adicionada', 'foto', novoId, null, req.file.filename);
       });
-      res.status(201).json({ id: novoId, arquivo: req.file.filename, pagina, pos_x: 20, pos_y: 60, largura: 80 });
+      res.status(201).json(assinadoresCrm.comUrlFotoProposta({ id: novoId, arquivo: req.file.filename, pagina, pos_x: 20, pos_y: 60, largura: 80 }));
     }
   );
 });
@@ -6735,7 +6725,7 @@ app.post('/api/propostas/:id/fotos/:fotoId/duplicar', authenticateToken, (req, r
         db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (_, u) => {
           registrarEdicaoLog(id, usuarioId, u?.nome || 'N/A', 'foto_adicionada', 'foto', novoId, null, foto.arquivo);
         });
-        res.status(201).json({ id: novoId, arquivo: foto.arquivo, pagina, pos_x, pos_y, largura });
+        res.status(201).json(assinadoresCrm.comUrlFotoProposta({ id: novoId, arquivo: foto.arquivo, pagina, pos_x, pos_y, largura }));
       }
     );
   });
@@ -6760,7 +6750,7 @@ app.post('/api/propostas/:id/fotos/:fotoId/restaurar', authenticateToken, (req, 
       [pagina, pos_x, pos_y, largura, fotoId, id],
       (err2) => {
         if (err2) return res.status(500).json({ error: err2.message });
-        res.json({ id: Number(fotoId), arquivo: foto.arquivo, pagina, pos_x, pos_y, largura });
+        res.json(assinadoresCrm.comUrlFotoProposta({ id: Number(fotoId), arquivo: foto.arquivo, pagina, pos_x, pos_y, largura }));
       }
     );
   });
@@ -8717,6 +8707,7 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
     cliente_contato, cliente_telefone, cliente_email,
     oportunidade_id, tipo_proposta, expira_em,
       idioma, moeda, incoterm, unidade_negocio,
+      // Etapa 82: html_rendered e DADO MORTO — proibido reusar (as fotos dele tem URL assinada que vence).
       html_rendered,
       probabilidade, data_fechamento
   } = req.body;
@@ -9954,7 +9945,10 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
                 templateConfig,
                 requestBaseURL,
                 false,
-                omitPrintBar
+                omitPrintBar,
+                // Etapa 82 (RN-82.04): o template e modulo puro, sem o segredo; no preview as fotos
+                // saem com URL assinada (12 h). O PDF (forPdfServer=true) segue em base64.
+                { assinarFotoProposta: assinadoresCrm.assinarFotoProposta }
               );
             } catch (genError) {
               console.error('Erro ao gerar HTML da proposta:', genError);
@@ -10327,6 +10321,8 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
     const requestBaseURL = process.env.API_URL || ((req.protocol || 'http') + '://' + (req.get('host') || req.headers.host || 'localhost:5000'));
     let html;
     const usouSnapshot = proposta.html_rendered && String(proposta.html_rendered).trim().length > 0;
+    // Etapa 82: PROIBIDO reusar html_rendered. Ele guarda o HTML do preview, cujas fotos saem com
+    // URL assinada que VENCE (12 h) — e dado morto; o PDF sempre regenera (fotos em base64).
     const sempreRegenerarParaPdf = true;
     if (usouSnapshot && !sempreRegenerarParaPdf) {
       html = proposta.html_rendered;
@@ -17946,7 +17942,14 @@ app.use('/api/assets/fonts', express.static(propostaFontsStaticDir, { maxAge: '3
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE IMAGENS DE PRODUTOS ==========
 // Servir arquivos estáticos de imagens de produtos
 app.use('/api/uploads/produtos', express.static(uploadsProdutosDir, { setHeaders: cabecalhosUploadSeguro }));
-app.use('/api/uploads/proposta-fotos', express.static(uploadsPropostaFotosDir, { setHeaders: cabecalhosUploadSeguro }));
+// Etapa 82 (RN-82.02): so com assinatura (`?exp=&sig=`, 12 h) — sem/errada/vencida -> 404, como o
+// almoxarifado. As URLs saem das rotas /fotos e do preview V2 (assinadoresCrm.assinarFotoProposta).
+app.use('/api/uploads/proposta-fotos', assinadoresCrm.fotoProposta.middleware, express.static(uploadsPropostaFotosDir, {
+  index: false, dotfiles: 'deny', setHeaders: cabecalhosUploadSeguro,
+}));
+// FECHO obrigatorio: o static chama next() quando o arquivo nao existe; sem isto uma assinatura
+// valida para um nome inexistente desceria para o proximo handler em vez de dar 404.
+app.use('/api/uploads/proposta-fotos', (req, res) => res.status(404).end());
 
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE IMAGENS DE MATERIAIS (ESCRITÓRIO) ==========
 app.use('/api/uploads/materiais-escritorio', express.static(uploadsMateriaisEscritorioDir, { setHeaders: cabecalhosUploadSeguro }));
@@ -17955,7 +17958,11 @@ app.use('/api/uploads/materiais-escritorio', express.static(uploadsMateriaisEscr
 // Servir arquivos estáticos de logos. CSP propria: o logo pode ser SVG com <style> interno, que a
 // CSP estrita bloquearia (logo sem cor); script continua bloqueado (urlUpload.cabecalhosUploadLogo).
 app.use('/api/uploads/logos', express.static(uploadsLogosDir, { setHeaders: cabecalhosUploadLogo }));
-app.use('/api/uploads/avatares', express.static(uploadsAvataresDir, { setHeaders: cabecalhosUploadSeguro }));
+// Etapa 82 (RN-82.02/05): so com assinatura (24 h, a vida do JWT); a URL e o `foto_src` do usuario.
+app.use('/api/uploads/avatares', assinadoresCrm.avatares.middleware, express.static(uploadsAvataresDir, {
+  index: false, dotfiles: 'deny', setHeaders: cabecalhosUploadSeguro,
+}));
+app.use('/api/uploads/avatares', (req, res) => res.status(404).end());
 
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE IMAGENS DE CABEÇALHO ==========
 // Servir arquivos estáticos de imagens de cabeçalho

@@ -34,7 +34,10 @@ function substituirPlaceholdersProposta(html, proposta, itens, totais) {
 // - Paginação dinâmica simples (medição de altura real) com suporte a:
 //   - .avoid-break (move bloco inteiro)
 //   - tabelas longas (quebra por linhas com thead repetido)
-function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = null, baseURLOverride = null, forPdfServer = false, omitPrintBar = false) {
+// `opcoes.assinarFotoProposta(nome)` (Etapa 82, RN-82.04): devolve a URL RELATIVA assinada da foto
+// avulsa. O template e modulo puro, sem o segredo — quem chama injeta. Sem ela, as fotos saem em
+// base64 mesmo no preview (nunca uma URL sem assinatura, que daria 404).
+function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = null, baseURLOverride = null, forPdfServer = false, omitPrintBar = false, opcoes = {}) {
   try {
     if (!proposta) throw new Error('Proposta não fornecida');
     if (!Array.isArray(itens)) itens = [];
@@ -99,14 +102,19 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
     // Fotos avulsas da proposta: subidas no preview editável e posicionadas livremente
     // sobre as páginas (posição/tamanho em MM, aplicadas por script APÓS a paginação —
     // são overlays position:absolute, então não interferem na medição de altura do
-    // paginador). No PDF embeda base64 (Puppeteer roda offline); no preview usa URL.
+    // paginador). No PDF embeda base64 (Puppeteer roda offline); no preview usa URL ASSINADA
+    // (Etapa 82: a pasta exige ?exp=&sig=). Sem ?t= — a assinatura ja muda a cada balde de 1 h e o
+    // arquivo de um nome nunca muda (upload novo = nome novo).
+    const assinarFotoProposta = (!forPdfServer && opcoes && typeof opcoes.assinarFotoProposta === 'function')
+      ? opcoes.assinarFotoProposta : null;
     const fotosProposta = (Array.isArray(config.fotos_proposta) ? config.fotos_proposta : [])
       .map((f) => {
         const arquivo = String((f && f.arquivo) || '').trim();
         if (!arquivo) return null;
-        const src = forPdfServer
-          ? fileToDataUrl(path.join(uploadsPropostaFotosDir, arquivo))
-          : `${baseURL}/api/uploads/proposta-fotos/${encodeURIComponent(arquivo)}?t=${ts}`;
+        const assinada = assinarFotoProposta ? assinarFotoProposta(arquivo) : null;
+        const src = assinada
+          ? `${baseURL}${assinada}`
+          : fileToDataUrl(path.join(uploadsPropostaFotosDir, arquivo));
         if (!src) return null;
         return {
           id: f.id,
