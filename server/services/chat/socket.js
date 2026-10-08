@@ -2,6 +2,19 @@ const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const chatService = require('./chatService');
 
+/**
+ * Etapa 84 (RN-84.05): o token do handshake vem so do `auth` (o que o client manda,
+ * `client/src/services/chatSocket.js`) ou do header `Authorization: Bearer`. A query do handshake
+ * NAO e lida: no transporte polling ela vira URL (`/socket.io/?token=...`) e o token vazaria em log
+ * de proxy e de servidor — o mesmo motivo de o `authenticateToken` ter deixado de aceitar `?token=`.
+ */
+function tokenDoHandshake(handshake) {
+  const h = handshake || {};
+  return (h.auth && h.auth.token)
+    || (h.headers && h.headers.authorization && h.headers.authorization.replace(/^Bearer\s+/i, ''))
+    || null;
+}
+
 function initChatSocket(httpServer, db, jwtSecret) {
   const io = new Server(httpServer, {
     cors: {
@@ -12,10 +25,7 @@ function initChatSocket(httpServer, db, jwtSecret) {
   });
 
   io.use((socket, next) => {
-    const token =
-      socket.handshake.auth?.token ||
-      socket.handshake.headers?.authorization?.replace(/^Bearer\s+/i, '') ||
-      socket.handshake.query?.token;
+    const token = tokenDoHandshake(socket.handshake);
 
     if (!token) {
       return next(new Error('Token não fornecido'));
@@ -85,4 +95,4 @@ function initChatSocket(httpServer, db, jwtSecret) {
   };
 }
 
-module.exports = { initChatSocket };
+module.exports = { initChatSocket, tokenDoHandshake };
