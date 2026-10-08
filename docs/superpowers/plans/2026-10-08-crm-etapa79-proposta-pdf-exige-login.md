@@ -37,6 +37,23 @@
   continuar verde sem tocar nela.
 
 ## Tasks
+> **Estado (2026-10-08): T1 FEITA — `b786f506`.** As duas rotas ganharam `authenticateToken`; o
+> comentário "liberada sem autenticação" foi reescrito nas duas (o da `/pdf` explica o porquê; o da
+> `/premium` aponta para ele — o mesmo texto existia acima das duas, não só em `:10020`).
+> Teste `propostaPdfExigeLogin.api.test.js` 4/4. Controles positivos, todos **vermelhos**: (1) no
+> código antigo — 1/4, "novas abertas: [GET /api/propostas/:id/pdf, GET /api/propostas/:id/premium]";
+> (2) tirando o middleware só do `/pdf` — 2/4, "novas abertas: [GET /api/propostas/:id/pdf]";
+> (3) acrescentando `  app.get('/api/xyz', …)` indentada — 3/4, "novas abertas: [GET /api/xyz]";
+> restauro por Edit, 4/4. Base LF, 0 CR.
+> **Prova real** (`CRM_DATA_DIR` vazio, `PORT=5997`, cliente 1 e proposta 1 criados por
+> `POST /api/clientes` e `POST /api/propostas`): sem token `/premium` e `/pdf` →
+> `401 {"error":"Token não fornecido","code":"NO_TOKEN"}`; Bearer inválido → `401 {"error":"Token
+> inválido ou expirado"}`; com Bearer `/premium` → `200 text/html` (100626 bytes, com "PROPOSTA PROVA
+> C79" e "CLIENTE PROVA C79"), `/pdf` → `200 application/pdf` (828196 bytes, começa com `%PDF-1.4`),
+> `/999/pdf` → `404 {"error":"Proposta não encontrada"}`.
+> Suítes: `test:api` 297/297 (296 + o novo); `test:almoxarifado` 44/0; `test:validation` 4/0,
+> `test:safealter` 3/0, `test:sqlite` 5/0; client 86 suítes / 1338 testes (sem tocar no client).
+
 **T1 (única, tronco):** `index.js` — acrescentar `authenticateToken` nas duas rotas e reescrever
 o comentário de `:10020` (dizendo por que o "liberada sem autenticação" caiu). Teste
 `server/tests/api/propostaPdfExigeLogin.api.test.js`, no padrão de `backupExposicao.api.test.js`:
