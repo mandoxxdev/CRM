@@ -198,6 +198,223 @@ function portaoLimitado(p, rotulo) {
     assert.strictEqual(trava.travado(B), false);
   });
 
+  // ══════════════ (a1) aprovacao automatica: o UPDATE guardado fica dentro ══════════════
+  await test('[91 F5 RN-05 (f) automatica] POST /requisicoes com aprovacao automatica: com a EMISSAO do UPDATE guardado segura, a inspecao espera; R ja AGUARDANDO_ESTOQUE quando ela distribui e leva 4', async () => {
+    await cfg('inspecao_material_critico', '1');
+    try {
+      const { m, item } = await quatroEmInspecao();
+      await cfg('aprovacao_automatica', '1');
+      const origRun = db.run;
+      let disparos = 0; let abriuPor = null; let pInsp = null;
+      db.run = function (sql, params, cb) {
+        if (disparos === 0 && /aprovador_nome='Sistema \(autom/.test(String(sql))) {
+          disparos += 1;
+          pInsp = como('QUAL').post(`${API}/recebimentos/itens/${item}/inspecionar`, { quantidade_aprovada: 4, quantidade_reprovada: 0 });
+          portaoLimitado(pInsp, 'inspecao').then((por) => { abriuPor = por; origRun.call(db, sql, params, cb); });
+          return this;
+        }
+        return origRun.call(this, sql, params, cb);
+      };
+      let ra;
+      try {
+        ra = await comPrazo(como('SOL').post(`${API}/requisicoes`, { os_referencia: 'OS-91F5', itens: [{ material_id: m, quantidade: 4 }] }), 5000, 'POST /requisicoes');
+      } finally { db.run = origRun; await cfg('aprovacao_automatica', '0'); }
+      const ri = await comPrazo(pInsp || Promise.reject(new Error('o gatilho nao disparou')), 5000, 'inspecao');
+      assert.strictEqual(disparos, 1);
+      assert.strictEqual(ra.status, 201, JSON.stringify(ra.body));
+      assert.strictEqual(ri.status, 201, JSON.stringify(ri.body));
+      assert.strictEqual(abriuPor, 'prazo', 'o portao abriu porque a inspecao respondeu: ela nao esperou a trava da aprovacao automatica');
+      assert.strictEqual(await holdDe(ra.body.id), 4, 'R ainda PENDENTE quando a inspecao distribuiu: os 4 ficaram parados');
+      assert.strictEqual(await st(ra.body.id), 'TOTALMENTE_RESERVADA');
+      assert.deepStrictEqual(await mat(m), [4, 4, 0]);
+      assert.strictEqual(trava.travado(m), false);
+    } finally { await cfg('inspecao_material_critico', '0'); }
+  });
+
+  /**
+   * (a2)/(c): R perde o UPDATE guardado (cancelada no instante da emissao) e desfaz a propria reserva. No
+   * instante em que o desfazer comeca, R2 (do mesmo material) e aprovada. Certo: R2 espera a trava, o
+   * portao abre pelo PRAZO, o desfazer devolve os 4 e R2 os leva. Com o desfazer fora da trava, R2 entra
+   * antes da devolucao, le disponivel 0 e fica AGUARDANDO_ESTOQUE com os 4 parados.
+   */
+  async function perdedorDesfazDentro({ reSql, idDe, disparaPerdedor, afirmaPerdedor }) {
+    const m = await material(); await sobe(m, 4);
+    const R2 = await reqDireta('PENDENTE', [[m, 4]], '2026-09-02 11:00:00');
+    const ctx = { m, R2, pR2: null, abriuPor: null, idPerdedor: null };
+    const origRun = db.run;
+    let cancelou = false;
+    db.run = function (sql, params, cb) {
+      if (!cancelou && reSql.test(String(sql)) && Array.isArray(params)) {
+        cancelou = true;
+        ctx.idPerdedor = idDe(params);
+        return origRun.call(db, "UPDATE requisicoes_almoxarifado SET status = 'CANCELADO' WHERE id = ?", [ctx.idPerdedor],
+          () => origRun.call(db, sql, params, cb));
+      }
+      return origRun.call(this, sql, params, cb);
+    };
+    const origDesfazer = requisitionService.desfazerReservas;
+    requisitionService.desfazerReservas = async (...a) => {
+      if (!ctx.pR2) {
+        ctx.pR2 = como('GESTOR').put(`${API}/requisicoes/${R2}/aprovar`);
+        ctx.abriuPor = await portaoLimitado(ctx.pR2, 'aprovacao');
+      }
+      return origDesfazer(...a);
+    };
+    let rP;
+    try {
+      rP = await comPrazo(disparaPerdedor(m), 5000, 'o perdedor');
+    } finally {
+      db.run = origRun;
+      requisitionService.desfazerReservas = origDesfazer;
+    }
+    const r2 = await comPrazo(ctx.pR2 || Promise.reject(new Error('o desfazer do perdedor nao rodou')), 5000, 'R2');
+    afirmaPerdedor(rP, ctx);
+    assert.strictEqual(r2.status, 200, JSON.stringify(r2.body));
+    assert.strictEqual(ctx.abriuPor, 'prazo', `R2 respondeu antes de o perdedor devolver a reserva (${r2.body.status}): o desfazer rodou fora da trava`);
+    assert.strictEqual(r2.body.status, 'TOTALMENTE_RESERVADA', JSON.stringify(r2.body));
+    assert.strictEqual(await holdDe(R2), 4);
+    assert.strictEqual(await holdDe(ctx.idPerdedor), 0, 'o perdedor ficou com reserva');
+    assert.deepStrictEqual(await mat(m), [4, 4, 0]);
+    assert.strictEqual(trava.travado(m), false);
+  }
+
+  // ══════════════ (a2) aprovacao automatica que perde: o desfazer fica dentro ══════════════
+  await test('[91 F5 RN-05 (g) automatica] a aprovacao automatica que perde o UPDATE desfaz a reserva DENTRO da trava: a aprovacao concorrente do mesmo material espera e leva os 4', async () => {
+    await cfg('aprovacao_automatica', '1');
+    try {
+      await perdedorDesfazDentro({
+        reSql: /aprovador_nome='Sistema \(autom/,
+        idDe: (params) => Number(params[1]),
+        disparaPerdedor: (m) => como('SOL').post(`${API}/requisicoes`, { os_referencia: 'OS-91F5', itens: [{ material_id: m, quantidade: 4 }] }),
+        afirmaPerdedor: (rP, ctx) => {
+          assert.strictEqual(rP.status, 201, JSON.stringify(rP.body));
+          assert.strictEqual(rP.body.id, ctx.idPerdedor);
+        },
+      });
+    } finally { await cfg('aprovacao_automatica', '0'); }
+  });
+
+  // ══════════════ (c) /aprovar que perde: o desfazer fica dentro ══════════════
+  await test('[91 F5 RN-05 (g) desfazer] o /aprovar que perde o UPDATE desfaz a reserva DENTRO da trava: 400 de hoje, e a aprovacao concorrente do mesmo material espera e leva os 4', async () => {
+    let R;
+    await perdedorDesfazDentro({
+      reSql: /UPDATE requisicoes_almoxarifado SET status=\?,\s*aprovador_id=\?/,
+      idDe: (params) => Number(params[3]),
+      disparaPerdedor: async (m) => {
+        R = await reqDireta('PENDENTE', [[m, 4]], '2026-09-02 10:00:00');
+        return como('GESTOR').put(`${API}/requisicoes/${R}/aprovar`);
+      },
+      afirmaPerdedor: (rP, ctx) => {
+        assert.strictEqual(ctx.idPerdedor, R, 'o UPDATE cancelado era o de R (R2 so aprova depois)');
+        assert.strictEqual(rP.status, 400, JSON.stringify(rP.body));
+        assert.strictEqual(rP.body.error, 'Transição inválida: CANCELADO → APROVADO');
+      },
+    });
+  });
+
+  // ══════════════ (b) /aprovar-valor: o UPDATE guardado fica dentro ══════════════
+  await test('[91 F5 RN-05 (f) valor] /aprovar-valor: com a EMISSAO do UPDATE guardado segura, a inspecao espera a trava; R sai TOTALMENTE_RESERVADA com os 4', async () => {
+    await cfg('inspecao_material_critico', '1');
+    await cfg('liberacao_valor_ativo', '1');
+    await cfg('liberacao_valor_limite', '100');
+    await cfg('liberacao_valor_aprovadores', JSON.stringify([USERS.APRV.id]));
+    try {
+      const { m, item } = await quatroEmInspecao({ custo: 100 });
+      const R = await criar([[m, 4]]);
+      assert.strictEqual(R.status, 'AGUARDANDO_APROVACAO_VALOR', `premissa: valor alto ${JSON.stringify(R)}`);
+      const origRun = db.run;
+      let disparos = 0; let abriuPor = null; let pInsp = null;
+      db.run = function (sql, params, cb) {
+        if (disparos === 0 && /UPDATE requisicoes_almoxarifado SET status=\?, updated_at=CURRENT_TIMESTAMP WHERE id=\? AND status='APROVADO'/.test(String(sql))
+          && Array.isArray(params) && Number(params[1]) === R.id) {
+          disparos += 1;
+          pInsp = como('QUAL').post(`${API}/recebimentos/itens/${item}/inspecionar`, { quantidade_aprovada: 4, quantidade_reprovada: 0 });
+          portaoLimitado(pInsp, 'inspecao').then((por) => { abriuPor = por; origRun.call(db, sql, params, cb); });
+          return this;
+        }
+        return origRun.call(this, sql, params, cb);
+      };
+      let rv;
+      try {
+        rv = await comPrazo(como('APRV').put(`${API}/requisicoes/${R.id}/aprovar-valor`), 5000, '/aprovar-valor');
+      } finally { db.run = origRun; }
+      const ri = await comPrazo(pInsp || Promise.reject(new Error('o gatilho nao disparou')), 5000, 'inspecao');
+      assert.strictEqual(disparos, 1);
+      assert.strictEqual(rv.status, 200, JSON.stringify(rv.body));
+      assert.strictEqual(ri.status, 201, JSON.stringify(ri.body));
+      assert.strictEqual(abriuPor, 'prazo', 'o portao abriu porque a inspecao respondeu: ela nao esperou a trava do /aprovar-valor');
+      assert.strictEqual(await st(R.id), 'TOTALMENTE_RESERVADA');
+      assert.strictEqual(await holdDe(R.id), 4);
+      assert.deepStrictEqual(await mat(m), [4, 4, 0]);
+      assert.strictEqual(trava.travado(m), false);
+    } finally {
+      await cfg('liberacao_valor_ativo', '0');
+      await cfg('inspecao_material_critico', '0');
+    }
+  });
+
+  // ══════════════ (d) D(77): todo tipo que nao e saida, pelo servico ══════════════
+  await test('[91 F5 RN-11 todos os tipos] pelo servico, TODO tipo fora de TIPOS_SAIDA (exceto RESERVA/LIBERACAO_RESERVA) com reserva_id -> 400 M1, nada muda; nenhum tipo de saida recebe M1', async () => {
+    const m = await material(); await sobe(m, 10);
+    const rv = (await dbRun(db, `INSERT INTO reservas_material_almoxarifado (material_id, quantidade, quantidade_utilizada, status, origem, solicitante_id)
+      VALUES (?, 2, 0, 'ATIVA', 'MANUAL', ?)`, [m, USERS.ALMOX.id])).lastID;
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_reservada = 2 WHERE id = ?', [m]);
+    const M1 = (tipo) => `reserva_id só vale numa saída que consome a reserva — o tipo ${tipo} não consome reserva; tire o reserva_id do movimento`;
+    const livro = async () => (await dbGet(db, 'SELECT COUNT(*) n FROM movimentacoes_almoxarifado WHERE material_id = ?', [m])).n;
+    const foto = async () => JSON.stringify([await mat(m), await livro(), await dbGet(db, 'SELECT status, quantidade, quantidade_utilizada FROM reservas_material_almoxarifado WHERE id = ?', [rv])]);
+    const naoSaida = TIPOS_MOVIMENTO.filter((t) => !movementTypes.TIPOS_SAIDA.includes(t)
+      && !['RESERVA', 'LIBERACAO_RESERVA', 'ESTORNO'].includes(t));
+    assert.ok(naoSaida.length >= 15, `premissa: a lista de tipos nao saida tem ${naoSaida.length}`);
+    const antes = await foto();
+    const errados = [];
+    for (const tipo of naoSaida) {
+      let erro = null;
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await stockService.registrarMovimentacao(db, { ...USERS.ALMOX }, {
+          material_id: m, tipo, quantidade: 1, reserva_id: rv, motivo: 'teste 91f5', justificativa: 'teste 91f5', recebimento_id: 1,
+        });
+      } catch (e) { erro = e; }
+      if (!erro || erro.status !== 400 || erro.message !== M1(tipo)) errados.push(`${tipo}: ${erro ? `${erro.status} ${erro.message}` : 'ACEITOU'}`);
+    }
+    assert.deepStrictEqual(errados, [], `tipos sem a recusa M1: ${errados.join(' | ')}`);
+    assert.strictEqual(await foto(), antes, 'algum tipo recusado mexeu no material, no livro ou na reserva');
+    // a metade de la: nenhum tipo de SAIDA recebe a M1 (pode falhar por outra regra, nunca por esta)
+    for (const tipo of movementTypes.TIPOS_SAIDA) {
+      let msg = '';
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await stockService.registrarMovimentacao(db, { ...USERS.ALMOX }, {
+          material_id: m, tipo, quantidade: 1, reserva_id: rv, motivo: 'teste 91f5', justificativa: 'teste 91f5',
+        });
+      } catch (e) { msg = e.message; }
+      assert.ok(!msg.startsWith('reserva_id só vale numa saída'), `a saida ${tipo} recebeu a M1`);
+    }
+  });
+
+  // ══════════════ (e) chave da trava normalizada ══════════════
+  await test('[91 F5 trava chave] comLockDoMaterial(\'900005\') e comLockDoMaterial(900005) sao a MESMA trava; travado(\'900005\') ve as duas', async () => {
+    const h = (() => {
+      let soltar; let pegou;
+      const dentro = new Promise((r) => { pegou = r; });
+      const fim = trava.comLockDoMaterial('900005', () => new Promise((r) => { soltar = r; pegou(); }));
+      return { dentro, fim, soltar: () => soltar() };
+    })();
+    await comPrazo(h.dentro, 5000, 'segurar \'900005\'');
+    let entrou = false;
+    const p = trava.comLockDoMaterial(900005, async () => { entrou = true; });
+    const estado = await estadoEm(p, 100);
+    const travadoTexto = trava.travado('900005');
+    const travadoNumero = trava.travado(900005);
+    h.soltar();
+    await comPrazo(Promise.all([h.fim, p]), 5000, 'as duas secoes');
+    assert.strictEqual(estado, 'pendente', 'a chave numerica entrou com a textual presa: duas travas');
+    assert.ok(travadoTexto && travadoNumero, `travado('900005')=${travadoTexto} travado(900005)=${travadoNumero}`);
+    assert.strictEqual(entrou, true);
+    assert.strictEqual(trava.travado('900005'), false);
+    assert.strictEqual(trava.travado(900005), false);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   await close();
   process.exit(failed ? 1 : 0);
