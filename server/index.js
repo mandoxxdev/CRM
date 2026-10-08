@@ -336,6 +336,63 @@ async function obterNavegadorPdf() {
   return navegadorPdf;
 }
 
+/**
+ * Etapa 78 (RN-78.05) — HTML -> PDF pelo MESMO Chromium da proposta, para quem nao e a proposta
+ * (hoje: o documento impresso do pedido de compra, injetado em `routes/compras.js`).
+ *
+ * POR QUE AQUI e nao em `services/`: o ciclo de vida do navegador (`navegadorPdf`, `pdfsGerados`,
+ * `timerOciosoPdf`) e estado de modulo deste arquivo; extrair a funcao exigiria mover o ciclo
+ * inteiro. E POR QUE nao reusa o trecho da rota da proposta: ela pagina em JS, usa `margin: 0` e
+ * `displayHeaderFooter: false`, cronometra e grava snapshot — extrair mudaria o comportamento
+ * dela. Aqui o fluxo e o mesmo (newPage -> setViewport -> setContent -> fontes/imagens -> pdf ->
+ * fecha a ABA -> conta -> agenda ocioso), com rodape do Puppeteer.
+ *
+ * `opcoes`: `{ footerTemplate, headerTemplate, margin }` (o chamador monta o rodape). Defaults: A4,
+ * margem 12mm (a MESMA do `@page` do documento — margem 0 apaga o rodape), cabecalho vazio
+ * (sem ele o Chromium imprime data+titulo).
+ *
+ * ⚠️ No erro DERRUBA o navegador, como a proposta: aba pendurada contamina os PDFs seguintes.
+ * ⚠️ B32 (risco pre-existente, agora com dois chamadores): a reciclagem apos 20 PDFs nao e
+ * serializada — um PDF em andamento quando outro dispara a reciclagem morre com "Target closed".
+ */
+async function gerarPdfDeHtml(html, opcoes = {}) {
+  let page = null;
+  try {
+    const browser = await obterNavegadorPdf();
+    page = await browser.newPage();
+    await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 1 });
+    await page.setContent(html, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
+    await page.evaluate(async () => {
+      if (document.fonts && document.fonts.ready) await document.fonts.ready;
+      await Promise.all(Array.from(document.images).map((img) => (
+        img.complete ? Promise.resolve() : new Promise((r) => {
+          img.addEventListener('load', r, { once: true });
+          img.addEventListener('error', r, { once: true });
+        })
+      )));
+    });
+    const resultado = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      preferCSSPageSize: true,
+      displayHeaderFooter: true,
+      headerTemplate: opcoes.headerTemplate || '<span></span>',
+      footerTemplate: opcoes.footerTemplate || '<span></span>',
+      margin: opcoes.margin || { top: '12mm', right: '12mm', bottom: '12mm', left: '12mm' },
+    });
+    // Puppeteer >=22 devolve Uint8Array.
+    const buffer = Buffer.from(resultado);
+    await page.close();
+    page = null;
+    pdfsGerados += 1;
+    agendarFechamentoOcioso();
+    return buffer;
+  } catch (error) {
+    await fecharNavegadorPdf('erro na geração');
+    throw error;
+  }
+}
+
 function getPuppeteerLaunchOptions() {
   const opts = { headless: true, timeout: 30000 };
   const envPath = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_PATH || process.env.CHROMIUM_PATH;
@@ -485,7 +542,10 @@ setInterval(() => {
 }, 60 * 60 * 1000); // A cada hora
 
 // Middleware
-app.use(cors());
+// Etapa 78 (B30): `exposedHeaders` para o axios do client LER o `Content-Disposition` (nome do PDF)
+// quando a tela e servida de outra origem (dev por IP). Sem isto o header chega mas fica invisivel
+// ao JS cross-origin, e o download cai no nome de fallback. Nao muda quem pode chamar a API.
+app.use(cors({ exposedHeaders: ['Content-Disposition'] }));
 app.use(express.json({ limit: '15mb' }));
 
 // Rate limiting para todas as rotas da API
@@ -2269,7 +2329,13 @@ function inicializarConfiguracoesPadrao(callback) {
     { chave: 'empresa_telefone', valor: '', tipo: 'text', categoria: 'empresa', descricao: 'Telefone' },
     { chave: 'empresa_email', valor: '', tipo: 'text', categoria: 'empresa', descricao: 'Email' },
     { chave: 'empresa_site', valor: 'https://gmp.ind.br', tipo: 'text', categoria: 'empresa', descricao: 'Site' },
-    
+    // Etapa 78 (B28/B29, RN-78.04): o documento impresso do pedido de compra le a empresa daqui —
+    // nada fiscal fixo no codigo. Nascem VAZIAS: IE vazia imprime "—"; nota vazia = bloco ausente
+    // (o texto legal de ICMS que o ERP imprime e a D-78, nao se inventa). `INSERT OR IGNORE` a
+    // cada boot: base antiga ganha as duas chaves sem sobrescrever o que o Andre preencher.
+    { chave: 'empresa_ie', valor: '', tipo: 'text', categoria: 'empresa', descricao: 'Inscrição Estadual' },
+    { chave: 'empresa_nota_pedido_compra', valor: '', tipo: 'text', categoria: 'empresa', descricao: 'Nota legal do pedido de compra' },
+
     // Sistema
     { chave: 'moeda', valor: 'BRL', tipo: 'text', categoria: 'sistema', descricao: 'Moeda padrão' },
     { chave: 'fuso_horario', valor: 'America/Sao_Paulo', tipo: 'text', categoria: 'sistema', descricao: 'Fuso horário' },
@@ -20390,6 +20456,8 @@ require('./routes/compras')(app, db, authenticateToken, checkModulePermission, {
   uploadFornecedor,
   uploadsGruposComprasDir,
   uploadsFornecedoresDir,
+  // Etapa 78 (RN-78.05): o documento impresso do pedido de compra sai pelo Chromium da proposta.
+  gerarPdfDeHtml,
 });
 
 // ========== ROTAS MÓDULO FINANCEIRO ==========
