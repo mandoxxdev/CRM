@@ -26,11 +26,45 @@
 > - **Divergências do plano:** (1) com `res.headersSent` o global delega ao finalhandler (antes
 >   tentava responder de novo); (2) `mensagemUsuario` só vale com status 4xx — sem status continua
 >   500 genérico (testado); (3) o 413 de corpo usa o `err.limit` do body-parser (sai "máximo 15 MB"
->   em produção, sem número fixo no código); (4) no harness o Router vem antes de Compras (em produção
->   depois) — a ordem almoxarifado → Compras do harness não muda.
+>   em produção, sem número fixo no código); (4) ~~no harness o Router vem antes de Compras (em produção
+>   depois) — a ordem almoxarifado → Compras do harness não muda~~ **ERRADO** (revisão adversarial): a
+>   posição de casamento é a do `app.use`, e ela mudava — corrigido no fix-round (`6bc0e4b6`), abaixo.
 > - **T2:** toast "Foto não pôde ser salva, mas o material foi criado: ⟨motivo⟩"; corpo não-JSON →
->   texto antigo. 2 testes; controle positivo (texto fixo) → 1 vermelho. O mesmo texto "foi criado"
->   aparece na edição (onde o upload é imediato) — mantido pela RN, candidato a ajuste.
+>   texto antigo. 2 testes; controle positivo (texto fixo) → 1 vermelho. ~~O mesmo texto "foi criado"
+>   aparece na edição (onde o upload é imediato) — mantido pela RN, candidato a ajuste.~~ Ajustado no
+>   fix-round (`09d195a3`): na edição o texto é "Foto não pôde ser salva: ⟨motivo⟩".
+> - **Fix-round da revisão adversarial (2026-10-08)** — `6bc0e4b6`, `ad169d71`, `09d195a3`:
+>   - `6bc0e4b6` **harness na ordem de produção:** o Router é criado e recebe os registros no mesmo
+>     ponto (almoxarifado antes de Compras, como sempre), mas o `app.use(rotasModulos)` foi para
+>     **depois de Compras**, logo antes dos três handlers. `test:api` 308/308 sem outra mudança —
+>     nenhum teste dependia da ordem antiga. `ctx.rotasModulos` exposto. Comentários que a 86 tornou
+>     falsos: `routes/almoxarifado.js` (o Router roda ANTES do catch-all do SPA, então um mount fora de
+>     `/api` ali **seria alcançável** — virou aviso para não reintroduzir o mount legado sem
+>     assinatura) e `services/imagemUpload.js` (os módulos **chegam** ao `tratarArquivoGrandeDemais`).
+>   - `ad169d71` **handler global:** 401/403 de terceiro (sem `mensagemUsuario`) → **500 genérico** (o
+>     client trata 401 como sessão expirada); 404 → "Arquivo não encontrado" (ENOENT, ex.:
+>     `res.sendFile` dos anexos) ou "Recurso não encontrado", e o `Content-Disposition` já posto é
+>     removido antes do JSON; `parameters.too.many` → 413 "Requisição grande demais".
+>     `errosModulosJson` 15 → **26**: os acima + 403 nosso passa, `status = 500` não vira 4xx,
+>     `headersSent` → `next(err)`, 503 texto exato, SQLITE_BUSY só pelo `code` e "database is locked"
+>     só pela mensagem (separados). O teste "JSON malformado numa rota do módulo" **não provava o
+>     Router** (o body-parser roda antes de qualquer rota): ficou com nome honesto, e a prova passou a
+>     ser uma rota registrada **tarde** no `rotasModulos` (422 JSON) + controle da mesma rota no `app`.
+>   - `09d195a3` **foto na edição:** toast "Foto não pôde ser salva: ⟨motivo⟩"; preview volta para a
+>     foto anterior; contador de tentativas impede o FileReader atrasado de repintar a recusada; input
+>     limpo depois do upload imediato (sucesso ou falha) — o "Salvar" não reenvia nem dá segundo toast.
+>     Cadastro mantém "mas o material foi criado: ⟨motivo⟩". 2 testes reescritos + 4 novos.
+>   - **Controles positivos** (sabotagem por Edit → vermelho → restauro por Edit; LF, 0 CR): servidor
+>     lote 1 (sem ramo ENOENT, sem guarda 401/403, sem `parameters.too.many`, `<= 500`, texto do 503
+>     trocado) → exatamente os 7 alvos vermelhos; lote 2 (sem `removeHeader`, sem `headersSent`, sem
+>     `code === 'SQLITE_BUSY'`, Router montado depois dos handlers) → os 4 alvos vermelhos (+ os 6 de
+>     multer, que também dependem do Router); lote 3 (sem "database is locked") → 1 vermelho. Client
+>     lote A (texto fixo "foi criado", sem revert, sem limpar input) → 4 vermelhos — e revelou que o
+>     teste de preview original passava SEM o revert (a guarda do FileReader bastava naquela ordem):
+>     virou o teste da guarda, e entrou o da ordem real (preview pinta, depois o servidor recusa);
+>     lote B (sem guarda do FileReader, cadastro sem "foi criado") → 2 vermelhos.
+>   - Números: `test:api` **308/308**; `test:almoxarifado` 44/0; `tests/chat.test.js` 4/0; client
+>     **93 suítes / 1382 testes**; build `CI=true` "Compiled successfully".
 
 ## Fase 0 — medição (2026-10-08)
 - `server/index.js`: `tratarErroFormatoImagem` (`:23105`), `tratarArquivoGrandeDemais` (`:23109`) e o
