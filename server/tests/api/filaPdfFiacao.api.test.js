@@ -223,5 +223,208 @@ test('rota da proposta: snapshot e resposta HTTP ficam FORA da fila; espera medi
   assert.strictEqual(dentro('fila=${Date.now() - tEnfileirou}ms'), true, 'a marca fila= tem de ser medida no inicio da tarefa');
 });
 
+// ---------------------------------------------------------------------------------------------
+// Etapa 87 — fix-round da revisao adversarial. Cinco mutacoes passavam 12/12 nas reguas acima:
+//   M1 apagar `await page.close()` de um bloco (a aba vaza; so a contagem global de page.pdf via);
+//   M2 abrir Chromium por outra grafia: `require("puppeteer").launch(`, `const {launch}=puppeteer`,
+//      `puppeteer.connect(` (a regua so procurava `puppeteer.launch(`);
+//   M3 `enfileirarPdf(` sem await/return (a tarefa roda, mas a rota segue sem o PDF e o erro some);
+//   M4 fechar por apelido: `{ const nb = navegadorPdf; if (nb) await nb.close(); }` (a regua so
+//      procurava `navegadorPdf.close`);
+//   M5 `browser = null` antes do page.pdf (o catch deixa de fechar o navegador no erro).
+// E um deadlock nao tinha regua: chamar gerarPdfDeHtml( de dentro de uma tarefa da fila.
+// ---------------------------------------------------------------------------------------------
+
+/** Indices (fora de comentario) de `re` em [a, b). */
+function ocorrencias(src, re, a = 0, b = src.length) {
+  const out = []; let m; const r = new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`);
+  while ((m = r.exec(src))) {
+    if (m.index < a) continue;
+    if (m.index >= b) break;
+    if (!emComentario(src, m.index)) out.push(m.index);
+  }
+  return out;
+}
+
+/** [abre, fecha] do corpo da funcao `assinatura` (ex.: 'async function obterNavegadorPdf('). */
+function corpoDe(src, assinatura) {
+  const def = src.indexOf(assinatura);
+  if (def < 0) throw new Error(`${assinatura} sumiu`);
+  const abre = src.indexOf('{', fechamento(src, def + assinatura.length - 1));
+  return [abre, fechamento(src, abre)];
+}
+
+/** As tarefas da fila que geram PDF (as que tem page.pdf), cada uma com um nome legivel. */
+function blocosDeGeracao(src, blocosDaFila) {
+  const corpoHtml = corpoDe(src, 'async function gerarPdfDeHtml(');
+  const iRotaOs = src.indexOf("app.post('/api/operacional/ordens-servico/:id/gerar-pdf'");
+  return blocosDaFila
+    .filter(([a, b]) => ocorrencias(src, /\bpage\.pdf\(/, a, b).length > 0)
+    .map(([a, b]) => {
+      let nome = 'rota da proposta';
+      if (a > corpoHtml[0] && b < corpoHtml[1]) nome = 'gerarPdfDeHtml';
+      else if (iRotaOs > 0 && a > iRotaOs && a < fechamento(src, iRotaOs + 'app.post'.length)) nome = 'rota da OS';
+      return { nome, a, b, linha: linhaDe(src, a) };
+    });
+}
+
+/**
+ * M1/M5 — por bloco de geracao: exatamente um de cada, NESTA ordem:
+ * page.pdf( -> await page.close() -> pdfsGerados += 1 -> agendarFechamentoOcioso().
+ * `browser`: so `let browser = null` / `[const ]browser = await obterNavegadorPdf()` / no maximo um
+ * `browser = null` DEPOIS do page.close() (antes, o catch nao fecha o navegador no erro).
+ * Devolve a lista de problemas (vazia = ok) — usada no controle sintetico e no index.js.
+ */
+function problemasDoCicloDaAba(src, bloco) {
+  const { nome, a, b } = bloco; const probs = [];
+  const passos = [
+    ['page.pdf(', /\bpage\.pdf\(/],
+    ['await page.close()', /\bawait\s+page\.close\(\s*\)/],
+    ['pdfsGerados += 1', /\bpdfsGerados\s*\+=\s*1\b/],
+    ['agendarFechamentoOcioso()', /\bagendarFechamentoOcioso\(\s*\)/],
+  ];
+  const pos = passos.map(([txt, re]) => {
+    const oc = ocorrencias(src, re, a, b);
+    if (oc.length !== 1) probs.push(`${nome}: ${txt} aparece ${oc.length}x (esperado 1)`);
+    return oc[0];
+  });
+  for (let i = 1; i < pos.length; i++) {
+    if (pos[i] !== undefined && pos[i - 1] !== undefined && !(pos[i] > pos[i - 1])) {
+      probs.push(`${nome}: ${passos[i][0]} tem de vir DEPOIS de ${passos[i - 1][0]}`);
+    }
+  }
+  const iClose = pos[1];
+  ocorrencias(src, /\bbrowser\s*=(?!=)/, a, b).forEach((i) => {
+    const linha = src.slice(src.lastIndexOf('\n', i) + 1, src.indexOf('\n', i));
+    const depois = src.slice(i, src.indexOf('\n', i));
+    const antes = src.slice(src.lastIndexOf('\n', i) + 1, i);
+    if (/^\s*let\s+$/.test(antes) && /^browser\s*=\s*null\s*;/.test(depois)) return;
+    if (/^\s*(const\s+)?$/.test(antes) && /^browser\s*=\s*await\s+obterNavegadorPdf\(\)\s*;/.test(depois)) return;
+    if (/^\s*$/.test(antes) && /^browser\s*=\s*null\s*;\s*$/.test(depois)) {
+      if (!(iClose !== undefined && i > iClose)) probs.push(`${nome}: browser = null antes do await page.close() (linha ${linhaDe(src, i)})`);
+      return;
+    }
+    probs.push(`${nome}: atribuicao a browser nao prevista na linha ${linhaDe(src, i)}: ${linha.trim()}`);
+  });
+  const nulos = ocorrencias(src, /^\s*browser\s*=\s*null\s*;/m, a, b).length;
+  if (nulos > 1) probs.push(`${nome}: browser = null aparece ${nulos}x`);
+  return probs;
+}
+
+const geracao = blocosDeGeracao(fonte, blocos);
+
+test('controle: o ciclo da aba acusa page.close() ausente e browser = null antes do page.pdf (fonte sintetica)', () => {
+  const ok = [
+    'async function gerarPdfDeHtml() {}',
+    'x(enfileirarPdf(async () => {',
+    '  let browser = null;',
+    '  try {',
+    '  browser = await obterNavegadorPdf();',
+    '  const r = await page.pdf({});',
+    '  await page.close();',
+    '  browser = null;',
+    '  pdfsGerados += 1;',
+    '  agendarFechamentoOcioso(); } catch (e) { } }));',
+  ];
+  const blocoDe = (src) => blocosDeGeracao(src, analisar(src).blocos)[0];
+  const src = ok.join('\n');
+  assert.deepStrictEqual(problemasDoCicloDaAba(src, blocoDe(src)), []);
+  const semClose = ok.filter((l) => !l.includes('page.close')).join('\n');
+  assert.ok(problemasDoCicloDaAba(semClose, blocoDe(semClose)).some((p) => p.includes('await page.close() aparece 0x')));
+  const nuloCedo = [...ok.slice(0, 5), '  browser = null;', ...ok.slice(5)].join('\n');
+  assert.ok(problemasDoCicloDaAba(nuloCedo, blocoDe(nuloCedo)).some((p) => p.includes('antes do await page.close()')));
+  const foraDeOrdem = [...ok.slice(0, 6), ok[8], ok[6], ok[7], ok[9]].join('\n');
+  assert.ok(problemasDoCicloDaAba(foraDeOrdem, blocoDe(foraDeOrdem)).some((p) => p.includes('tem de vir DEPOIS')));
+});
+
+test('M1/M5: cada bloco de geracao (proposta, gerarPdfDeHtml, OS) fecha a aba, conta e agenda o ocioso, nesta ordem', () => {
+  assert.deepStrictEqual(geracao.map((g) => g.nome).sort(), ['gerarPdfDeHtml', 'rota da OS', 'rota da proposta'],
+    `blocos de geracao achados: ${JSON.stringify(geracao.map((g) => [g.nome, g.linha]))}`);
+  const probs = geracao.flatMap((g) => problemasDoCicloDaAba(fonte, g));
+  assert.deepStrictEqual(probs, []);
+});
+
+test('M2: Chromium so por obterNavegadorPdf — nenhum outro uso de puppeteer, .launch( ou .connect(', () => {
+  // `puppeteer` (minusculo, como substring: pega puppeteer-core) fora de comentario: so a
+  // importacao do topo (2x na mesma linha) e o puppeteer.launch( dentro de obterNavegadorPdf.
+  const imp = fonte.indexOf("const puppeteer = require('puppeteer');");
+  assert.ok(imp > 0, "a importacao const puppeteer = require('puppeteer'); sumiu");
+  const usos = ocorrencias(fonte, /puppeteer/);
+  const iLaunch = fonte.indexOf('puppeteer.launch(', corpoObter[0]);
+  const permitidos = [imp + 'const '.length, imp + "const puppeteer = require('".length, iLaunch];
+  const extras = usos.filter((i) => !permitidos.includes(i)).map((i) => linhaDe(fonte, i));
+  assert.deepStrictEqual(extras, [], 'puppeteer usado fora da importacao e de obterNavegadorPdf (outro Chromium?)');
+  assert.strictEqual(usos.length, 3, `ocorrencias de puppeteer = ${usos.length}`);
+  assert.ok(iLaunch > corpoObter[0] && iLaunch < corpoObter[1], 'puppeteer.launch( saiu de obterNavegadorPdf');
+  // Qualquer launch/connect por outra grafia (apelido, require inline, colchete).
+  const lancadores = ocorrencias(fonte, /(\blaunch|\bconnect)\s*\(|\[\s*['"`](launch|connect)['"`]\s*\]/);
+  assert.deepStrictEqual(lancadores.map((i) => linhaDe(fonte, i)), [linhaDe(fonte, iLaunch)],
+    'launch(/connect( fora do unico puppeteer.launch( de obterNavegadorPdf');
+});
+
+test('M3: toda chamada de enfileirarPdf( e await/return (so o ocioso, no setTimeout, e dispara-e-esquece)', () => {
+  const corpoAgendar = corpoDe(fonte, 'function agendarFechamentoOcioso(');
+  const soltas = [];
+  ocorrencias(fonte, /\benfileirarPdf\(/).forEach((i) => {
+    const antes = fonte.slice(fonte.lastIndexOf('\n', i) + 1, i);
+    if (/function\s+$/.test(antes)) return; // a definicao
+    if (/\b(await|return)\s+$/.test(antes)) return;
+    const ocioso = i > corpoAgendar[0] && i < corpoAgendar[1]
+      && fonte.startsWith("enfileirarPdf(() => fecharNavegadorPdf('ocioso'))", i);
+    if (!ocioso) soltas.push(linhaDe(fonte, i));
+  });
+  assert.deepStrictEqual(soltas, [], 'enfileirarPdf( sem await/return — o resultado e o erro da tarefa se perdem');
+  // gerarPdfDeHtml injetado nas rotas: tambem esperado.
+  const rotas = fs.readdirSync(path.join(__dirname, '../../routes')).filter((f) => f.endsWith('.js'));
+  rotas.forEach((f) => {
+    const src = fs.readFileSync(path.join(__dirname, '../../routes', f), 'utf8');
+    ocorrencias(src, /\bgerarPdfDeHtml\(/).forEach((i) => {
+      const antes = src.slice(src.lastIndexOf('\n', i) + 1, i);
+      assert.ok(/\b(await|return)\s+$/.test(antes) || /function\s+$/.test(antes),
+        `routes/${f}:${linhaDe(src, i)} chama gerarPdfDeHtml( sem await/return`);
+    });
+  });
+});
+
+test('M4: navegadorPdf so no ciclo de vida (declaracao, fechar, obter) e nas leituras !!navegadorPdf', () => {
+  const corpoFechar = corpoDe(fonte, 'async function fecharNavegadorPdf(');
+  const dentro = ([a, b]) => (i) => i > a && i < b;
+  const usos = ocorrencias(fonte, /\bnavegadorPdf\b/);
+  const noFechar = usos.filter(dentro(corpoFechar));
+  const noObter = usos.filter(dentro(corpoObter));
+  const resto = usos.filter((i) => !noFechar.includes(i) && !noObter.includes(i));
+  const linhaToda = (i) => fonte.slice(fonte.lastIndexOf('\n', i) + 1, fonte.indexOf('\n', i)).trim();
+  // fecharNavegadorPdf: pega e zera — e so (o fechamento vai pelo helper com prazo).
+  assert.deepStrictEqual(noFechar.map(linhaToda), ['const b = navegadorPdf;', 'navegadorPdf = null;'],
+    'fecharNavegadorPdf mexe em navegadorPdf de um jeito nao previsto');
+  assert.strictEqual(noObter.length, 7, `obterNavegadorPdf: navegadorPdf ${noObter.length}x (esperado 7)`);
+  assert.deepStrictEqual(ocorrencias(fonte, /\.close\(/, corpoObter[0], corpoObter[1]).map((i) => linhaDe(fonte, i)), [],
+    'obterNavegadorPdf chama .close( direto — a reciclagem fecha por fecharNavegadorPdf');
+  const outros = resto.map(linhaToda);
+  assert.deepStrictEqual(outros, [
+    'let navegadorPdf = null;',
+    'const navegadorJaEstavaDePe = !!navegadorPdf;',
+    'const navegadorJaEstavaDePe = !!navegadorPdf;',
+  ], 'navegadorPdf usado fora do ciclo de vida (apelido para fechar/usar o navegador por fora?)');
+  resto.slice(1).forEach((i) => assert.ok(blocos.some(([a, b]) => i > a && i < b), `!!navegadorPdf fora da fila na linha ${linhaDe(fonte, i)}`));
+  // O fechamento e com prazo (close pendurado travaria a fila): helper, sem .close( direto.
+  const corpo = fonte.slice(corpoFechar[0], corpoFechar[1]);
+  assert.ok(/await fecharNavegadorComPrazo\(b,/.test(corpo), 'fecharNavegadorPdf nao fecha pelo fecharNavegadorComPrazo');
+  assert.deepStrictEqual(ocorrencias(fonte, /\.close\(/, corpoFechar[0], corpoFechar[1]).map((i) => linhaDe(fonte, i)), [],
+    'fecharNavegadorPdf chama .close( direto — sem prazo, um close pendurado trava a fila');
+  assert.ok(/const \{ fecharNavegadorComPrazo \} = require\('\.\/services\/filaPdf'\)/.test(fonte), 'fecharNavegadorComPrazo nao vem de services/filaPdf');
+});
+
+test('deadlock: nenhuma tarefa da fila chama gerarPdfDeHtml( nem abre outro enfileirarPdf(', () => {
+  const chamadasHtml = ocorrencias(fonte, /\bgerarPdfDeHtml\(/).filter((i) => {
+    const antes = fonte.slice(fonte.lastIndexOf('\n', i) + 1, i);
+    return !/function\s+$/.test(antes);
+  });
+  const naFila = chamadasHtml.filter((i) => blocos.some(([a, b]) => i > a && i < b)).map((i) => linhaDe(fonte, i));
+  assert.deepStrictEqual(naFila, [], 'gerarPdfDeHtml( dentro de uma tarefa da fila — ela espera a si mesma (deadlock)');
+  const aninhados = blocos.filter(([a]) => blocos.some(([x, y]) => a > x && a < y)).map(([a]) => linhaDe(fonte, a));
+  assert.deepStrictEqual(aninhados, [], 'enfileirarPdf( dentro de outra tarefa da fila (deadlock)');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
