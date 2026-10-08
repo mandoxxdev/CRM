@@ -539,7 +539,17 @@ Scratchpad com nome único (`msg-e91-t0.txt`…). Executores **não** marcam est
   `requisitionService.prepararPosAprovacao` pelo objeto e afirmam que o patch **mordeu** — um por `/aprovar`, um por
   `POST /requisicoes` com aprovação automática — e o s6 é aplicado e medido nas três portas, uma de cada vez.
   *Nota:* com só a T1, a C131 **continua invertida** (é a medição da B403); a RN-01–04 é da T2.
-- [ ] **T2 (tronco) — as três portas de liberação seguram a trava do movimento até a distribuição.** Inspeção, NC e as
+- [x] **T2 — FEITA em `e472f26c` (2026-10-08).** Vermelho antes (com a T1 feita), 4 rodadas por modo: inspeção, NC e
+  nota **INVERTIDA 4/4** em conc-lib1, conc-apr1 e janela (janela abriu pela resposta da aprovação, nunca por prazo);
+  RN-04: R3 reservou o retido 4/4, disponível −4. Controles s1–s7, s-ordem e as costuras c1–c4 caíram (as quatro
+  costuras morderam). Divergências: o gatilho da nota é o crédito físico (`SET quantidade_atual = quantidade_atual + ?`),
+  o regex do plano disparava 0/8; conc-apr1 também invertia com a T1; s4 caiu em todos os modos; s5 não derruba RN-07(b)
+  (aprovação não chama `concluirPendencia`); **um teste fora da lista mudou**: `recebimentoProcessamentoConcorrente`
+  ("DONO: processamento longo perde a marca vencida") travava — o gancho esperava B processar a mesma nota de dentro da
+  entrada de A, que agora segura a trava; em produção só custa tempo (a retomada de marca vencida espera a trava e A
+  perde a marca com 409 como antes); o gancho passou a esperar só B pegar a marca, asserções iguais, 11/11. 29 arquivos
+  medidos antes/depois sem edição. test:api 316/316, almoxarifado 44/0, validation 4/0, safealter 3/0, sqlite 5/0.
+  Enunciado original: **T2 (tronco) — as três portas de liberação seguram a trava do movimento até a distribuição.** Inspeção, NC e as
   duas conclusões da nota (contrato acima). Teste novo `server/tests/api/filaLiberacaoAprovacaoCorrida.api.test.js`:
   **RN-01, RN-02, RN-03, RN-04, RN-06, RN-07, RN-08** e RN-09 para as rotas de liberação, mais o caso que saiu da T0
   (Fase 2, achado 5): `reservarChegadaSemFalhar` com `sobTrava` **sem** a trava (material sem ninguém segurando ou
@@ -574,7 +584,13 @@ Scratchpad com nome único (`msg-e91-t0.txt`…). Executores **não** marcam est
   (s-ordem) passa a ser: **um** chamador invertido explicitamente (a aprovação com `ORDER BY material_id DESC` **e** sem
   o `sort` em `comLockDosMateriais`) com a intercalação de RN-07 (c) (inspeção segura `A`, nota espera `A`, aprovação
   pega `B` e espera `A`) → cai por prazo.
-- [ ] **T3 — integração das duas metades, pela ROTA e pelo SERVIÇO (A × 74 × 75 × 76).** Teste novo
+- [x] **T3 — FEITA em `22e79982` (2026-10-08).** `filaTravaIntegracao` 6 casos: jornada com material crítico (R3 aprovada
+  na janela da QUARENTENA, R4 na da DECISAO_INSPECAO → R1 `TOTALMENTE_RESERVADA`, aviso e e-mail "reservado", separada,
+  conferida, entregue, reserva `CONSUMIDA`) + dois pares serviço × rota. Verde de primeira (escrito depois da T2) —
+  controles: s1 da T2 → jornada 4/5 e serviço 6; s3 da T2 → jornada 3/4/5 e serviço 7; s1 da T1 → jornada 3/4/5 e serviço
+  6 (mais largo que o previsto: o `/aprovar` é a aprovação das duas janelas). R3 criada por `/api/requisicoes-material`
+  com setor Comercial (setor industrial recusa material sem família). test:api 317/317, almoxarifado 44/0.
+  Enunciado original: **T3 — integração das duas metades, pela ROTA e pelo SERVIÇO (A × 74 × 75 × 76).** Teste novo
   `server/tests/api/filaTravaIntegracao.api.test.js`, perfis reais, técnica de corrida acima:
   **Jornada pela rota:** material crítico M. S1 (PRODUCAO) cria R1 (4 M) pela rota; GESTOR aprova → `AGUARDANDO_ESTOQUE`.
   S3 (sem perfil) cria R3 (4 M) por `POST /api/requisicoes-material` → `PENDENTE`. ALMOXARIFE processa a nota de 4 com o
