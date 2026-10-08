@@ -716,3 +716,41 @@ describe('MaterialAlmoxarifadoForm — revisão da Etapa 38 (número órfão, pr
     expect(container.textContent).toMatch(/Obrigatório\. O estoque conta sempre em/);
   });
 });
+
+/**
+ * Etapa 86 (RN-86.04): a falha da foto mostra o motivo do servidor. Antes o `catch` ignorava o
+ * erro e dizia sempre "Foto não pôde ser salva, mas o material foi criado" — e o servidor nem
+ * mandava JSON nessas rotas (500 HTML do finalhandler). Agora manda 413 "Arquivo grande demais
+ * (máximo 10 MB)" / 400 do filtro, e a tela precisa repassar.
+ */
+describe('MaterialAlmoxarifadoForm — Etapa 86: falha da foto mostra a mensagem do servidor', () => {
+  async function escolherFoto() {
+    const input = container.querySelector('input[type="file"]');
+    const arquivo = new File([new Uint8Array([137, 80, 78, 71])], 'grande.png', { type: 'image/png' });
+    Object.defineProperty(input, 'files', { value: [arquivo], configurable: true });
+    await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })); });
+    await esperarEfeitos();
+  }
+
+  test('413 JSON do servidor → toast com o motivo e mantém "o material foi criado"', async () => {
+    api.post.mockImplementation((url) => (url.endsWith('/foto')
+      ? Promise.reject({ response: { status: 413, data: { error: 'Arquivo grande demais (máximo 10 MB)' } } })
+      : Promise.resolve({ data: { id: 99 } })));
+    await renderizarEdicao(77);
+    await escolherFoto();
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/materiais/77/foto', expect.any(FormData), expect.anything());
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    const msg = String(toast.error.mock.calls[0][0]);
+    expect(msg).toMatch(/Arquivo grande demais \(máximo 10 MB\)/);
+    expect(msg).toMatch(/o material foi criado/);
+  });
+
+  test('corpo que não é JSON (HTML de proxy) → o texto de antes, sem lixo', async () => {
+    api.post.mockImplementation((url) => (url.endsWith('/foto')
+      ? Promise.reject({ response: { status: 502, data: '<html><body>Bad Gateway</body></html>' } })
+      : Promise.resolve({ data: { id: 99 } })));
+    await renderizarEdicao(77);
+    await escolherFoto();
+    expect(toast.error).toHaveBeenCalledWith('Foto não pôde ser salva, mas o material foi criado');
+  });
+});

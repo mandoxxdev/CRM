@@ -502,8 +502,14 @@ const MaterialAlmoxarifadoForm = () => {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setFotoPreview(resolveMaterialPhotoUrl(res.data.foto_url));
-    } catch {
-      toast.error('Foto não pôde ser salva, mas o material foi criado');
+    } catch (err) {
+      // Etapa 86 (RN-86.04): o servidor agora responde JSON tambem aqui (413 "Arquivo grande demais
+      // (máximo 10 MB)", 400 do filtro de formato). Mostra o motivo quando ele vier; corpo que nao
+      // e JSON (proxy, HTML) cai no texto de antes.
+      const motivo = typeof err?.response?.data?.error === 'string' ? err.response.data.error.trim() : '';
+      toast.error(motivo
+        ? `Foto não pôde ser salva, mas o material foi criado: ${motivo}`
+        : 'Foto não pôde ser salva, mas o material foi criado');
     } finally {
       setUploadingFoto(false);
     }
