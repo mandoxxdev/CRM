@@ -39,6 +39,9 @@ const { EPSILON_DIVERGENCIA, divergenciaRealSql } = require('./divergencia');
 // NAO desestruturado, pelo mesmo motivo do `notificationQueueService` acima: o teste de
 // nao-fatalidade monkeypatcha `abrirNaoConformidadeDeInspecao` em tempo de execucao.
 const nonConformityService = require('./nonConformityService');
+// Etapa 91 (T2, D1/B419): a trava por material (modulo sem nenhum `require` — sem ciclo). Pelo OBJETO
+// do modulo: os testes espiam `trava.comLockDoMaterial`.
+const trava = require('./travaPorMaterial');
 
 const ENCAMINHAMENTOS = ['DEVOLVER', 'ANALISE_ENGENHARIA', 'SUBSTITUICAO'];
 
@@ -248,6 +251,38 @@ async function decidirInspecao(db, user, itemId, data = {}) {
     ? 0
     : (Math.abs(Number(item.quantidade_recebida) - Number(item.quantidade_esperada)) > EPSILON_DIVERGENCIA ? 1 : 0);
 
+  // Etapa 91 (T2, D1/B419, C131) — A SECAO CRITICA DA INSPECAO. Do claim do item ate a distribuicao
+  // para quem esperava, sob a trava do material: uma aprovacao (que espera a mesma trava desde a T1)
+  // nao cai mais entre o DECISAO_INSPECAO, que poe o aprovado no disponivel, e a distribuicao — antes
+  // ela levava o material da fila (8/8 rodadas na Fase 0). Validacoes, medidas e flags ficam ANTES
+  // (fora): nao tocam saldo. A secao e longa de proposito (D6/B424): INSERT, medidas, alerta e NC
+  // continuam na ordem de hoje; so operacoes do MESMO material esperam.
+  // O recalculo da 76 e o aviso da 75 rodam DEPOIS de soltar (D5/B423): `concluirPendencia` no
+  // `finally` FORA da funcao passada a trava (Fase 2, achado 15) — dentro, o recalculo pediria a trava
+  // que a propria secao segura (nao reentrante: deadlock).
+  // Nunca chamar de dentro desta secao: `recalcularStatusSobTrava`, `recalcularRequisicoesDasReservas`,
+  // `cancelarMovimentacao`, as variantes SEM `sobTrava` do `reservaChegadaService` ou outra porta. Um
+  // monkeypatch que encaminhe `(db, user, ctx)` sem as `opcoes` cai na variante sem `sobTrava`, que pede
+  // a trava de novo daqui de dentro (deadlock); a guarda L1 (`travado`) e defesa, nao prova.
+  const reserva = { rcs: null, pendencia: null };
+  try {
+    return await trava.comLockDoMaterial(item.material_id, () => decidirInspecaoSobTrava(db, user, itemId, item, {
+      retido, aprovada, reprovada, data, medidasResolvidas, divergenciaDimensional, divergenciaQuantidade,
+    }, reserva));
+  } finally {
+    if (reserva.rcs && reserva.pendencia) await reserva.rcs.concluirPendencia(db, user, reserva.pendencia);
+  }
+}
+
+/**
+ * Etapa 91 (T2) — o corpo de `decidirInspecao` do claim do item ate a distribuicao, extraido sem mudar
+ * uma linha de efeito: so roda sob a trava do material (quem chama e `decidirInspecao`). `reserva`
+ * devolve a quem chama o modulo e a pendencia para o `concluirPendencia` depois de soltar.
+ */
+async function decidirInspecaoSobTrava(db, user, itemId, item, calc, reserva) {
+  const {
+    retido, aprovada, reprovada, data, medidasResolvidas, divergenciaDimensional, divergenciaQuantidade,
+  } = calc;
   // Fase 1 — reivindica o retido do ITEM. E o guarda real contra decidir o mesmo item duas
   // vezes (inclusive concorrente): a segunda tentativa le quantidade_em_inspecao=0 e este UPDATE
   // nao casa, ANTES de tocar no saldo do material.
@@ -368,13 +403,17 @@ async function decidirInspecao(db, user, itemId, data = {}) {
   // inalterada. `require` lazy: o reservaChegadaService puxa o motor e a requisição; carga fria medida
   // nas duas ordens (reservaLiberacaoBase). Sem efeito quando nada foi aprovado (a guarda só evita a
   // chamada — o serviço também devolve vazio com quantidade 0).
+  // Etapa 91 (T2, D7/B425): o MESMO nome pelo objeto do modulo, agora com `{ sobTrava, pendencia }` — a
+  // distribuicao roda aqui, sob a trava que esta secao ja segura; o recalculo e o aviso ficam na pendencia.
   if (aprovada > 1e-9) {
     try {
       const reservaChegadaService = require('./reservaChegadaService');
+      reserva.rcs = reservaChegadaService;
+      reserva.pendencia = reservaChegadaService.novaPendencia();
       await reservaChegadaService.aposLiberacaoSemFalhar(db, user, {
         origem: 'INSPECAO', documento_id: ins.lastID, documento_numero: null,
         material_id: item.material_id, quantidade: aprovada, recebimento_id: item.recebimento_id,
-      });
+      }, { sobTrava: true, pendencia: reserva.pendencia });
     } catch (e) {
       console.warn(`[almoxarifado-reservas] reserva na liberacao falhou (INSPECAO ${ins.lastID}): ${e.message}`);
     }

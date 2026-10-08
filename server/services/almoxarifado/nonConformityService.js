@@ -50,6 +50,9 @@ const { dbRun, dbGet, dbAll } = require('./db');
 const { EPSILON_DIVERGENCIA } = require('./divergencia');
 const { inserirComNumeroUnico } = require('./numeroDoc');
 const { registrarAuditoria } = require('./audit');
+// Etapa 91 (T2, D1/B419): a trava por material (modulo sem nenhum `require` — o cabecalho acima continua
+// valendo: sem ciclo). Pelo OBJETO do modulo: os testes espiam `trava.comLockDoMaterial`.
+const trava = require('./travaPorMaterial');
 
 const NC_ORIGENS = ['RECEBIMENTO', 'INSPECAO'];
 const NC_REFERENCIA_TIPOS = ['RECEBIMENTO_ITEM', 'INSPECAO'];
@@ -911,6 +914,38 @@ async function decidirNaoConformidade(db, user, ncId, dados = {}) {
   }
   const previsto = efeitoPrevisto(atual, insp, material, dados.decisao);
 
+  // Etapa 91 (T2, D1/B419, C131) — quando a decisao LIBERA, a secao critica vai do claim da NC (Passo 2)
+  // ate a distribuicao para quem esperava, sob a trava do material: uma aprovacao (que espera a mesma
+  // trava desde a T1) nao cai mais entre o DESBLOQUEIO e a distribuicao (8/8 invertida na Fase 0). O
+  // material so e conhecido depois do Passo 1 (`efeitoPrevisto`), por isso a secao nao comeca no topo
+  // (§6.6 do plano). Os outros efeitos nao movem saldo e seguem sem trava. O recalculo da 76 e o aviso
+  // da 75 rodam DEPOIS de soltar: `concluirPendencia` no `finally` FORA da funcao passada a trava (Fase 2,
+  // achado 15). Proibido de dentro da secao: recalculo, `cancelarMovimentacao`, as variantes sem
+  // `sobTrava`, outra porta (a trava nao e reentrante).
+  const reserva = { rcs: null, pendencia: null };
+  let liberacao;
+  if (previsto.efeito === 'LIBERAVEL') {
+    try {
+      liberacao = await trava.comLockDoMaterial(previsto.material_id,
+        () => decidirEExecutar(db, user, id, atual, insp, previsto, dados, justificativa, reserva));
+    } finally {
+      if (reserva.rcs && reserva.pendencia) await reserva.rcs.concluirPendencia(db, user, reserva.pendencia);
+    }
+  } else {
+    liberacao = await decidirEExecutar(db, user, id, atual, insp, previsto, dados, justificativa, reserva);
+  }
+
+  const nc = await obterNaoConformidade(db, id);
+  return { ...nc, liberacao };
+}
+
+/**
+ * Etapa 91 (T2) — os Passos 2 a 4, a trilha e a distribuicao de `decidirNaoConformidade`, extraidos sem
+ * mudar uma linha de efeito. Quando `previsto.efeito === 'LIBERAVEL'` roda sob a trava do material (quem
+ * chama segura); a distribuicao vai com `{ sobTrava, pendencia }` e `reserva` devolve o modulo e a
+ * pendencia para o `concluirPendencia` depois de soltar. Devolve a `liberacao`.
+ */
+async function decidirEExecutar(db, user, id, atual, insp, previsto, dados, justificativa, reserva) {
   // ── Passo 2: o claim da DECISAO. E o serializador, e vem ANTES de qualquer efeito de saldo ──
   // `AND status = 'ABERTA'` no UPDATE, e nao so no SELECT acima: e o claim que faz duas decisoes
   // simultaneas nao se sobrescreverem (mesmo molde do claim de `decidirInspecao`).
@@ -962,21 +997,25 @@ async function decidirNaoConformidade(db, user, ncId, dados = {}) {
   // da 44 — lá a liberação É a decisão; aqui a reserva é efeito): nada aqui pode desfazer a decisão nem
   // virar 500 — o `aposLiberacaoSemFalhar` nunca lança e o `try` cobre a carga do módulo. Resposta
   // inalterada. `require` lazy, como o do stockService acima.
+  // Etapa 91 (T2, D7/B425): `LIBERADA` so sai de `executarLiberacao`, que so roda com `LIBERAVEL` — ou
+  // seja, aqui a secao SEMPRE segura a trava do material. O mesmo nome pelo objeto do modulo, com
+  // `{ sobTrava, pendencia }`: o recalculo e o aviso vao para a pendencia.
   if (liberacao.efeito === 'LIBERADA') {
     try {
       const reservaChegadaService = require('./reservaChegadaService');
+      reserva.rcs = reservaChegadaService;
+      reserva.pendencia = reservaChegadaService.novaPendencia();
       await reservaChegadaService.aposLiberacaoSemFalhar(db, user, {
         origem: 'NAO_CONFORMIDADE', documento_id: id, documento_numero: atual.numero,
         material_id: liberacao.material_id, quantidade: liberacao.quantidade,
         recebimento_id: atual.recebimento_id || insp?.recebimento_id || null,
-      });
+      }, { sobTrava: true, pendencia: reserva.pendencia });
     } catch (e) {
       console.warn(`[almoxarifado-reservas] reserva na liberacao falhou (NAO_CONFORMIDADE ${id}): ${e.message}`);
     }
   }
 
-  const nc = await obterNaoConformidade(db, id);
-  return { ...nc, liberacao };
+  return liberacao;
 }
 
 /**

@@ -190,17 +190,31 @@ const resultado = (p) => p.then((v) => ({ ok: v }), (e) => ({ erro: e.message, s
     const r = await recebimentoCom(db, [{ material_id: m, qtd: 4, lote: 'L-DONO-1' }]);
     const original = lotService.criarOuObterLote;
     let resB; let disparou = false;
+    // Etapa 91 (T2): A agora segura a trava dos materiais da nota de `darEntradaEstoque` ate a
+    // distribuicao. Antes, este gancho ESPERAVA B terminar de dentro da entrada de A — com a trava, B
+    // espera A (mesmo material) e A esperava B: deadlock do proprio teste (o processo saia sem placar).
+    // O cenario continua o mesmo: o gancho so espera B ASSUMIR a marca vencida (o claim vem antes da
+    // trava); B fica na fila da trava, A segue, perde a marca (409) e solta; B termina a nota.
     lotService.criarOuObterLote = async (d, u, p) => {
       if (!disparou) {
         disparou = true;
         await envelhecerMarca(r); // A esta em voo ha mais de 10 min
-        resB = await resultado(receiptService.processarNota(db, { ...ADMIN, nome: 'B' }, r));
+        const marcaDeA = (await recRow(db, r)).processando_em;
+        resB = resultado(receiptService.processarNota(db, { ...ADMIN, nome: 'B' }, r));
+        const t0 = Date.now();
+        // eslint-disable-next-line no-await-in-loop
+        while ((await recRow(db, r)).processando_em === marcaDeA) {
+          if (Date.now() - t0 > 5000) throw new Error('B nao assumiu a marca em 5 s');
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise((ok) => { setTimeout(ok, 5); });
+        }
       }
       return original(d, u, p);
     };
     let resA; let msgs;
     try {
       ({ valor: resA, msgs } = await capturarWarn(() => resultado(receiptService.processarNota(db, { ...ADMIN, nome: 'A' }, r))));
+      resB = await resB;
     } finally {
       lotService.criarOuObterLote = original;
     }

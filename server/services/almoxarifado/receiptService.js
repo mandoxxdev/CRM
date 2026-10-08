@@ -57,6 +57,9 @@ const receiptNotificationService = require('./receiptNotificationService');
 // o servico requer stockService/requisitionService/receiptNotificationService, nenhum requer este arquivo
 // no topo. Pelo OBJETO do modulo pelo mesmo motivo dos de cima (o teste da RN-07 monkeypatcha).
 const reservaChegadaService = require('./reservaChegadaService');
+// Etapa 91 (T2, D1/B419): a trava por material (modulo sem nenhum `require`). Pelo OBJETO do modulo: os
+// testes espiam `trava.comLockDosMateriais` / `comLockDoMaterial`.
+const trava = require('./travaPorMaterial');
 
 /**
  * Etapa 70 (T2, D6, RN-05): o gancho do aviso, DEPOIS do UPDATE de status terminal e do
@@ -80,10 +83,15 @@ async function avisarEntradaConfirmadaSemFalhar(db, user, recebimentoId) {
  * "ainda nao esta reservado" a quem acabou de ganhar). Best-effort, o molde do aviso: a nota ja entrou e
  * ja esta PROCESSADO/APROVADO; uma falha so vira `console.warn` com a literal do contrato. Roda dentro do
  * claim do processamento (Etapa 70 T0b): o perdedor de dois cliques toma 409 antes.
+ *
+ * Etapa 91 (T2, D7/B425): roda DENTRO da secao da nota (quem chama ja segura a trava de todos os
+ * materiais dela) e chama O MESMO nome pelo objeto do modulo (costura da 74: os testes trocam
+ * `reservarChegadaParaQuemEspera`), agora com `{ sobTrava: true, pendencia }` — o recalculo da 76 vai
+ * para a pendencia e roda depois de soltar. Sem a trava, a variante lanca L1, que cai no warn de hoje.
  */
-async function reservarChegadaSemFalhar(db, user, recebimentoId) {
+async function reservarChegadaSemFalhar(db, user, recebimentoId, pendencia) {
   try {
-    await reservaChegadaService.reservarChegadaParaQuemEspera(db, user, recebimentoId);
+    await reservaChegadaService.reservarChegadaParaQuemEspera(db, user, recebimentoId, { sobTrava: true, pendencia });
   } catch (e) {
     console.warn(`[recebimento] reserva na chegada falhou (recebimento ${recebimentoId}): ${e.message}`);
   }
@@ -1696,8 +1704,58 @@ async function processarNota(db, user, recebimentoId, { localizacao_id, destinos
   }
 }
 
+/**
+ * Etapa 91 (T2, D1/B419, C131 + C142) — os materiais de TODOS os itens da nota (superconjunto
+ * inofensivo: item sem quantidade ou ja entrado tambem trava). `DISTINCT` + `ORDER BY` e a
+ * `comLockDosMateriais` ordena de novo (crescente) — a ordem unica que impede ciclo com a aprovacao,
+ * que pega varios materiais tambem. Os criticos entram: e o que fecha a janela ENTRADA_COMPRA ->
+ * QUARENTENA (C142) contra a aprovacao.
+ */
+async function materiaisDaNota(db, recebimentoId) {
+  const rows = await dbAll(db, `SELECT DISTINCT material_id FROM recebimentos_material_itens_almoxarifado
+    WHERE recebimento_id = ? AND material_id IS NOT NULL ORDER BY material_id`, [recebimentoId]);
+  return rows.map((r) => r.material_id);
+}
+
+/**
+ * Etapa 91 (T2) — a secao critica da nota: do `darEntradaEstoque` (o ENTRADA_COMPRA poe o material no
+ * disponivel; a QUARENTENA, se critico, o tira) ate a distribuicao para quem esperava, sob a trava de
+ * todos os materiais da nota. Uma aprovacao (que espera a mesma trava desde a T1) nao cai mais entre os
+ * dois (8/8 invertida na Fase 0; a janela da QUARENTENA deixava disponivel -4). A secao e longa de
+ * proposito (D6/B424): conta a pagar, UPDATE, auditoria e `fecharSolicitacoesDoPedido` continuam na
+ * ordem de hoje; so operacoes dos MESMOS materiais esperam. O recalculo da 76 roda DEPOIS de soltar
+ * (`concluirPendencia` no `finally` FORA da funcao passada a trava — Fase 2, achado 15: dentro, ele
+ * pediria a trava que a secao segura; nao reentrante, deadlock), e o aviso da 70 depois dele, so no
+ * sucesso, como antes. O 409 de `aindaDonoDoProcessamento` e as recusas de `darEntradaEstoque` saem
+ * de dentro da secao: a trava solta no `finally` dela.
+ * Proibido de dentro da secao: recalculo, `cancelarMovimentacao`, as variantes sem `sobTrava`, outra
+ * porta. Um monkeypatch de `reservarChegadaParaQuemEspera` que encaminhe `(db, user, id)` SEM as
+ * `opcoes` ao original cai na variante sem `sobTrava`, que pede a trava de novo daqui (deadlock); a
+ * guarda L1 e defesa, nao prova (`travado` tambem e true se OUTRO segura ou espera).
+ */
+async function comSecaoDaNota(db, user, recebimentoId, corpo) {
+  const mats = await materiaisDaNota(db, recebimentoId);
+  const pendencia = reservaChegadaService.novaPendencia();
+  let resultado;
+  try {
+    resultado = await trava.comLockDosMateriais(mats, () => corpo(pendencia));
+  } finally {
+    await reservaChegadaService.concluirPendencia(db, user, pendencia);
+  }
+  // Etapa 70 (T2): o aviso da nota e o de quem esperava o material — o ultimo passo, depois do
+  // recalculo (o aviso le o banco).
+  await avisarEntradaConfirmadaSemFalhar(db, user, recebimentoId);
+  return resultado;
+}
+
 /** O corpo de `processarNota` depois do claim (Etapa 70, T0b) — so ela chama. */
-async function concluirProcessamentoNota(db, user, rec, recebimentoId, { localizacao_id, destinos }, marca) {
+async function concluirProcessamentoNota(db, user, rec, recebimentoId, opts, marca) {
+  return comSecaoDaNota(db, user, recebimentoId,
+    (pendencia) => concluirProcessamentoNotaSobTrava(db, user, rec, recebimentoId, opts, marca, pendencia));
+}
+
+/** Etapa 91 (T2): o corpo de hoje de `concluirProcessamentoNota`, sob a trava (sem o aviso, que sai depois). */
+async function concluirProcessamentoNotaSobTrava(db, user, rec, recebimentoId, { localizacao_id, destinos }, marca, pendencia) {
   await darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id, destinos });
   // Etapa 70, Fase 5: a conta a pagar e o ponto IRREVERSIVEL — so sai se a marca ainda e minha. Se
   // outra execucao assumiu (a minha venceu no meio de um processamento longo), ELA termina a nota:
@@ -1739,9 +1797,8 @@ async function concluirProcessamentoNota(db, user, rec, recebimentoId, { localiz
   }
 
   // Etapa 74 (T1): antes do aviso, o que entrou livre fica reservado para quem esperava (C121).
-  await reservarChegadaSemFalhar(db, user, recebimentoId);
-  // Etapa 70 (T2): o aviso da nota e o de quem esperava o material — o ultimo passo.
-  await avisarEntradaConfirmadaSemFalhar(db, user, recebimentoId);
+  // Etapa 91 (T2): sob a trava; o aviso sai em `comSecaoDaNota`, depois de soltar e recalcular.
+  await reservarChegadaSemFalhar(db, user, recebimentoId, pendencia);
 
   return { success: true, status: STATUS.PROCESSADO, contas_pagar_id: contasPagarId };
 }
@@ -1768,6 +1825,12 @@ async function aprovarRecebimento(db, user, recebimentoId, opts = {}) {
 
 /** O ramo direto de `aprovarRecebimento` depois do claim (Etapa 70, T0b) — so ela chama. */
 async function concluirAprovacaoDireta(db, user, rec, recebimentoId, opts) {
+  return comSecaoDaNota(db, user, recebimentoId,
+    (pendencia) => concluirAprovacaoDiretaSobTrava(db, user, rec, recebimentoId, opts, pendencia));
+}
+
+/** Etapa 91 (T2): o corpo de hoje de `concluirAprovacaoDireta`, sob a trava (sem o aviso, que sai depois). */
+async function concluirAprovacaoDiretaSobTrava(db, user, rec, recebimentoId, opts, pendencia) {
   await darEntradaEstoque(db, user, rec, recebimentoId, opts);
   await dbRun(db, `UPDATE recebimentos_material_almoxarifado
     SET status = 'APROVADO', etapa_atual = 'CONCLUIDO', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
@@ -1788,11 +1851,9 @@ async function concluirAprovacaoDireta(db, user, rec, recebimentoId, opts) {
   }
 
   // Etapa 74 (T1): a mesma reserva na chegada no ramo direto, antes do aviso.
-  await reservarChegadaSemFalhar(db, user, recebimentoId);
-
-  // Etapa 70 (T2): o mesmo aviso no ramo direto. O ramo que DELEGA para processarNota nao chega
-  // aqui — o aviso ja saiu la.
-  await avisarEntradaConfirmadaSemFalhar(db, user, recebimentoId);
+  // Etapa 91 (T2): sob a trava. O mesmo aviso do ramo direto (Etapa 70, T2) sai em `comSecaoDaNota`,
+  // depois de soltar e recalcular; o ramo que DELEGA para processarNota nao chega aqui.
+  await reservarChegadaSemFalhar(db, user, recebimentoId, pendencia);
 
   return { success: true };
 }
