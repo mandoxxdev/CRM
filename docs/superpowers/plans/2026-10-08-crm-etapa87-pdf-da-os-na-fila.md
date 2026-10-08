@@ -143,3 +143,26 @@ Chromium raiz do servidor (contagem por `Get-CimInstance Win32_Process`, como na
   `launch` ~2 s, sem sleep de 2 s, sem `networkidle0`).
 - Fora do escopo: `numero_os` com `"` quebra o nome do arquivo no Windows; a rota não tem
   `checkModulePermission`.
+
+## Fechamento (2026-10-08) — 🟢
+
+## Retro
+- Rodadas de correção até verde: **1**.
+- Achados da revisão (que também fez a do plano): 0 defeitos de execução; 5 mutações sobreviventes na
+  régua (uma trazia de volta o B32); o plano afirmava "logo sempre em base64" — **errado em produção**;
+  fechamento do navegador sem prazo (pré-existente, agora com mais um chamador); 0 ruído.
+- Paralelismo: nenhum.
+- Lição: prova "antes/depois" byte a byte é a melhor régua de "saída igual" — fazer sempre que a etapa
+  promete não mudar um documento.
+- Defeito escapado: preencher na etapa seguinte.
+
+## Próxima tarefa detalhada — Etapa 88: rodapé "Página X de Y" certo no PDF da OS
+- **O que existe:** `gerarHTMLOS` (`server/index.js:~13627`) escreve o rodapé "Página 1 de 1" num `div`
+  único, com o total **estimado pela quantidade de itens** — o PDF de prova da 87 tem 3 páginas e diz
+  "1 de 1". O `page.pdf` da OS usa `displayHeaderFooter: false`, margens de 15 mm e `@page { margin: 0 }`.
+- **Desenho provável:** o mesmo da Etapa 78 — `displayHeaderFooter: true` com `footerTemplate`
+  (`<span class="pageNumber">`/`<span class="totalPages">`, CSS inline com `font-size`) e
+  `headerTemplate: '<span></span>'`; tirar o `div` do rodapé. ⚠️ Lição da 78: `@page { margin: 0 }` no
+  CSS **apaga** o rodapé do Puppeteer — a margem inferior tem de existir no `@page`. Isso muda o PDF
+  (de propósito): prova antes/depois por imagem/texto (`pdftotext` existe no mingw64), conferindo que
+  só o rodapé mudou e que nada empurrou conteúdo para uma página a mais.

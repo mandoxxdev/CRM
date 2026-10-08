@@ -31,7 +31,9 @@
 > N MB)"** em vez de "Erro interno do servidor" (B40).
 > **2026-10-08 — Etapa 86 entregue:** erros do **almoxarifado, chat, frotas, produção** e demais
 > módulos chegam à tela como **mensagem em português**, não mais como página HTML de erro (B41).
-> Próxima: o PDF da OS entra na fila do Chromium compartilhado (B35).
+> **2026-10-08 — Etapa 87 entregue:** o **PDF da OS** usa o mesmo Chromium dos outros PDFs — sai
+> **igual** e cerca de **10× mais rápido** (4,7 s → 0,45 s); nunca mais de um Chromium aberto (B42).
+> Próxima: o rodapé do PDF da OS diz "Página 1 de 1" mesmo com 3 páginas.
 > O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
 > A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
@@ -187,6 +189,14 @@
   fila — um PDF gerado nesse instante falhava com "Target closed". A medição da 80 achou mais
   três corridas (erro de um derrubando o outro, Chromium aberto em dobro e nunca fechado, e o
   fechamento por ociosidade no meio de uma geração).
+- **B42 — Etapa 87: o PDF da OS entrou na fila do Chromium compartilhado com as mesmas configurações
+  de página.** Saíram a interceptação de requisições (só registrava no log), a espera de "rede parada"
+  e a espera fixa de 2 s — o HTML da OS já leva logo e fotos embutidos. Resultado medido: arquivo
+  idêntico byte a byte (tirando a data) e de 4,7 s para 0,45 s. Também: fechar o Chromium tem prazo
+  de 10 s (antes podia travar a fila para sempre) e o logo da OS passa a ir embutido também em
+  produção (lá o arquivo só existe no `client/build`). Descartado: reaproveitar o gerador do pedido de
+  compra (mudaria o PDF do pedido). Aceito: em desenvolvimento, a mensagem de erro detalhada do PDF da
+  OS perdeu os prefixos por etapa.
 - **B41 — Etapa 86: os módulos montados por último passam por um "bloco" (Router) que fica antes do
   tratamento de erro.** Parte do almoxarifado e o chat registram as rotas depois que o servidor já
   está no ar — por isso mover o tratamento para o fim não bastaria. Escolhido: um Router dos módulos
@@ -352,6 +362,44 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 87 — PDF da OS 10× mais rápido, na fila dos PDFs (2026-10-08)
+
+**Em uma frase.** O PDF da OS abria um navegador interno novo a cada geração (~580 MB de memória) e
+esperava 2 segundos fixos; agora usa o mesmo navegador da proposta e do pedido de compra, na mesma
+fila — sai igual, em menos de meio segundo.
+
+### O que há de novo (visível para o usuário)
+- **OS → Gerar PDF**: o mesmo documento de antes, em **~0,5 s** (antes ~4,7 s).
+- Gerar PDF de OS e de proposta ao mesmo tempo não abre dois navegadores no servidor (menos risco de
+  o servidor cair por falta de memória).
+
+### Por baixo do capô
+- A rota de PDF da OS ganhou um bloco próprio na fila (`enfileirarPdf` + `obterNavegadorPdf`), com as
+  mesmas opções de página; saíram o `puppeteer.launch` próprio, cinco `browser.close`, a interceptação
+  de requisições, o `networkidle0` e o sleep de 2 s.
+- `fecharNavegadorComPrazo` (`services/filaPdf.js`): fechar o navegador tem prazo de 10 s, depois mata o
+  processo. `resolveClientAsset` (`services/assetsDoClient.js`): o logo é achado em `client/build` ou
+  `client/public`.
+- Régua `filaPdfFiacao.api.test.js` (18): um único `launch`, cada bloco fecha a aba e conta o PDF, toda
+  chamada da fila é aguardada, ninguém fecha o navegador por apelido.
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| PDF da OS: ~4,7 s, navegador próprio | ~0,45 s, navegador compartilhado |
+| Proposta + OS juntas: até 2 navegadores | no máximo 1 |
+| Fechar o navegador podia travar a fila | prazo de 10 s |
+| Logo da OS buscado pela rede em produção | embutido no PDF |
+
+### Roteiro de teste manual (clicável)
+1. **Operacional → OS → Gerar PDF**: o PDF abre quase na hora, com logo, itens e imagens como antes.
+2. Gere um PDF de proposta e, logo em seguida, o da OS: os dois saem.
+
+### O que a etapa NÃO cobre
+- O rodapé do PDF da OS diz "Página 1 de 1" mesmo quando o documento tem mais páginas (defeito antigo,
+  igual antes e depois) — próxima etapa.
+- A rota de gerar o PDF da OS não exige o módulo Operacional (só login).
 
 ## Etapa 86 — Erros dos módulos viram mensagem (2026-10-08)
 
