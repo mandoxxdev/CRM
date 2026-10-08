@@ -9,6 +9,9 @@
 > (Etapas 0–77 do almoxarifado) foi mesclada na `main`; daqui em diante **só existe a `main`**
 > (decisão do André; detalhes e perdas em **B18**). O lote de Compras (Etapas 33–38, seções abaixo)
 > continua valendo, com uma exceção: a Etapa 33 ficou sem objeto e a Etapa 32 da `main` saiu.
+> **2026-10-08 — Etapa 78 entregue:** o pedido de compra sai em **PDF no formato do documento da
+> GMP** (botão "Documento (PDF)" na lista e no formulário). Antes de emitir o primeiro, preencha os
+> dados da empresa (**A4**). Próxima: fechar o furo do PDF da proposta sem login (**A5**).
 > O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
 > A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
@@ -153,12 +156,21 @@
 - **B30 — Etapa 78: o servidor passou a expor o cabeçalho `Content-Disposition` para o navegador**
   (`cors exposedHeaders`), senão em desenvolvimento por IP o nome do arquivo não chegava. O client
   tem fallback `pedido-compra-⟨número⟩.pdf` de qualquer jeito.
-- **B31 — Etapa 78: o valor unitário sai com as casas necessárias (2 a 4), não com 3 fixas como o
-  ERP** — a Etapa 32 mediu que com 3 casas fixas `quantidade × unitário` **não fecha** com o total
-  da linha em 6 das 24 linhas do pedido real; no papel da GMP a conta fecha.
+- **B31 — Etapa 78: o valor unitário sai com as casas necessárias (mínimo 2, até 6), não com 3
+  fixas como o ERP** — a Etapa 32 mediu que com 3 casas fixas `quantidade × unitário` **não fecha**
+  com o total da linha em 6 das 24 linhas do pedido real; no papel da GMP a conta fecha.
+  ⚠️ **O plano dizia "até 4" e estava errado:** o total da linha usa o preço gravado inteiro, e o
+  campo aceita qualquer número de casas — com 1,23456 × 1000 o papel mostrava 1,2346 e 1.234,56 (a
+  revisão pegou; corrigido em `6e5267b6`). A quantidade também vai até 6 casas (0,0004 saía "0").
 - **B32 — Etapa 78 (risco aceito, pré-existente): o Chromium compartilhado é reciclado a cada 20
   PDFs sem fila** — se um pedido estiver sendo gerado exatamente nesse instante, ele falha com
   "Target closed" e o usuário clica de novo. Fila/mutex é etapa própria.
+- **B33 — Etapa 78: o botão "Documento (PDF)" do formulário imprime o pedido SALVO, não o que está
+  na tela.** Se você mudou um preço e não salvou, o PDF sai com o valor antigo. Escolhido porque o
+  documento enviado ao fornecedor tem de ser o que está gravado (o mesmo que a lista e o
+  recebimento enxergam). Descartado: gerar o PDF a partir da tela sem salvar (o fornecedor
+  receberia um pedido que não existe no sistema). Reversível: dá para desabilitar o botão enquanto
+  houver alteração não salva, se confundir alguém.
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -255,9 +267,71 @@
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
 
-## Etapa 78 — O documento impresso do pedido de compra (2026-10-07)
+## Etapa 78 — O documento impresso do pedido de compra (2026-10-08)
 
-_Em execução — seção escrita no fechamento da etapa._
+**Em uma frase.** O pedido de compra agora **sai em PDF no formato do documento que a GMP manda ao
+fornecedor** — cabeçalho da empresa, fornecedor, faturamento, condições, itens, os seis totais e
+assinaturas — com um clique, pronto para anexar no e-mail.
+
+### O que há de novo (visível para o usuário)
+- **Compras → Pedidos**: cada linha da lista tem o botão **"Documento (PDF)"**; o mesmo botão
+  aparece no formulário de um pedido já salvo (inclusive quando só o status pode mudar). O arquivo
+  baixa com o nome `pedido-compra-⟨número⟩.pdf`.
+- **O documento:** logo e dados da GMP; número, datas, situação, emissão e quem emitiu; **Dados do
+  fornecedor** (os congelados no pedido — mudar o cadastro depois não muda o papel); **Dados para
+  faturamento**; **Dados complementares** (pagamento, frete, transportadora, via, contato,
+  observações); a tabela de itens (material, descrição e observação, NCM, peso, quantidade,
+  unidade, valor unitário, IPI %, total); os totais (produtos, IPI, ICMS-ST, desconto, frete,
+  **total geral**); local de entrega/cobrança; linhas de assinatura "Depto. Compras" e "Diretoria";
+  a nota legal, se configurada.
+- **Pedido longo:** a tabela continua na folha seguinte **repetindo o cabeçalho das colunas**, e
+  toda folha tem no rodapé **"Folha X/Y · Impresso por ⟨usuário⟩ em ⟨data hora⟩"**.
+- **A conta fecha no papel:** o valor unitário sai com as casas que tiver (mínimo 2, até 6), então
+  quantidade × unitário bate com o total da linha (o ERP imprimia 3 casas fixas e não batia — B31).
+- **Configurações → Geral → Empresa** ganhou **Inscrição Estadual** e **Nota legal do pedido de
+  compra** (texto livre que sai no fim do documento; vazio = não imprime).
+
+### Por baixo do capô
+- `server/services/compras/pedidoDocumentoHtml.js`: função **pura** que recebe pedido, empresa e
+  quem imprime e devolve o HTML — testada sem navegador (30 testes, incluindo que **todo** texto
+  digitado é escapado: nada que alguém escreva numa observação vira código dentro do Chromium).
+- `GET /api/compras/pedidos/:id/documento` (HTML) e `/documento.pdf` (PDF, `attachment`), atrás
+  do login e do módulo Compras, como o resto dos pedidos. Pedido inexistente: 404 "Pedido de compra
+  não encontrado". O número vai saneado para o nome do arquivo.
+- O PDF sai **do mesmo Chromium que já gera a proposta** (`gerarPdfDeHtml` ao lado de
+  `obterNavegadorPdf` no `index.js`): A4, margens de 12 mm, rodapé numerado. Em erro, fecha o
+  navegador (como a proposta) para não contaminar o próximo PDF.
+- Dados da empresa lidos das configurações (`lerEmpresa`); as duas chaves novas nascem vazias no
+  primeiro boot. O servidor passou a expor `Content-Disposition` ao navegador (B30); o client tem
+  um nome de arquivo de reserva de qualquer jeito.
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| O pedido existia só na tela; para mandar ao fornecedor, refazia-se no ERP | Botão "Documento (PDF)" na lista e no formulário |
+| — | PDF A4 no layout do documento da GMP, com cabeçalho repetido e "Folha X/Y" |
+| ERP imprimia unitário com 3 casas e a conta da linha não fechava | Unitário com as casas necessárias: a conta fecha |
+| IE da empresa fixa no código da proposta | IE e nota legal editáveis em Configurações → Empresa |
+
+### Roteiro de teste manual (clicável)
+1. **Configurações → Geral → Empresa:** preencha CNPJ, **Inscrição Estadual**, CEP, telefone,
+   e-mail; escreva algo em **Nota legal do pedido de compra**. Salve.
+2. **Compras → Pedidos:** num pedido com IPI e frete (o do roteiro da Etapa 39 serve), clique
+   **Documento (PDF)**. O arquivo `pedido-compra-PC-….pdf` baixa.
+3. Abra o PDF: cabeçalho com os dados do passo 1; fornecedor; itens; **total geral igual ao da
+   lista**; assinaturas; a nota legal no fim; "Folha 1/1 · Impresso por ⟨você⟩" no rodapé.
+4. Edite o cadastro do fornecedor (troque o telefone) e baixe de novo: o PDF **continua** com o
+   telefone antigo (é o congelado no pedido).
+5. Abra o pedido em edição e clique **Documento (PDF)** no rodapé: baixa **sem salvar nem mudar
+   nada** no pedido.
+6. Num pedido com 30+ itens: a segunda folha repete o cabeçalho da tabela e mostra "Folha 2/N".
+
+### O que a etapa NÃO cobre
+- **Enviar por e-mail** direto do sistema — hoje baixa e anexa.
+- **Código do produto no fornecedor** e o texto legal oficial de ICMS — dependem do P.O. (**D-78**).
+- O PDF imprime o pedido **salvo** (B33).
+- Fila para o Chromium compartilhado (B32).
+- O PDF da proposta continua sem exigir login (**A5**) — próxima etapa.
 
 ## Etapa 39 — O pedido de compra ganha o documento da Etapa 32 (2026-10-07)
 
@@ -325,8 +399,8 @@ recebimento, sem abrir mão do número automático e do fechamento automático.
 8. Receba o resto: o pedido fica **Recebido** sozinho e não pode mais ser editado (só o status).
 
 ### O que a etapa NÃO cobre
-- **O documento impresso** (PDF/HTML no formato do ERP) — a Etapa 32 nunca o fez; é a **Etapa 78**
-  (G14).
+- **O documento impresso** (PDF/HTML no formato do ERP) — a Etapa 32 nunca o fez; **entregue na
+  Etapa 78** (G14).
 - Coluna "IPI %" no export para Excel; a reimportação ignora IPI/frete (G13).
 - Importação por planilha com colunas de IPI/NCM.
 - Número digitado pelo comprador e os 4 status da Etapa 32 (B19).

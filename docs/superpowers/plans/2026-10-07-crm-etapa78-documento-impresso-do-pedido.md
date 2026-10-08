@@ -137,6 +137,15 @@
 
 ## Tasks
 
+> **Estado (2026-10-08): 🟢 todas feitas.** T1 ✅ `be62b9f6` (HTML puro), `a01ef932` (lerEmpresa,
+> seed, `gerarPdfDeHtml`, cors), `e263afd7` (rotas, harness, `comprasPedidoImpresso.api.test.js`) —
+> merge `ff57b804`. Divergências: URL das opções é `/pedidos-aux/opcoes`; `gerarPdfDeHtml` ficou
+> **ao lado** da proposta (não extraído para `services/pdfDeHtml.js` — mudaria o comportamento da
+> proposta); 2 commits em vez de 3 (hunks do `index.js` inseparáveis sem add interativo). T2 ✅
+> `661ef423` — merge `85a969c1` (o "81/81 verde" do primeiro executor era falso: faltava chamar o
+> fallback do nome; o executor morreu no meio da sabotagem). T3 ✅ suíte inteira, PDF real (abaixo),
+> revisão, onda `6e5267b6` + `51bb00fe`, documentação.
+
 **T1 — tronco (servidor):** `pedidoDocumentoHtml.js` (puro; lê `server/assets/proposta/logo-gmp.png`
 em base64 por conta própria — `assetProposta` da proposta é closure local; CSS do documento:
 `thead { display: table-header-group }`, `tr { break-inside: avoid }`, `.avoid-break` em totais e
@@ -195,8 +204,38 @@ Etapa 78 no `docs/compras-novidades-por-etapa.md` (+ D-78, B26–B29); índice; 
 - O logo em base64 pesa ~dezenas de kB por PDF — aceitável (a proposta faz igual).
 - Puppeteer no Windows do André já funciona (proposta); no harness nunca é chamado.
 
-## Retro (preencher no fechamento)
-- Rodadas de correção até verde: _preencher_
-- Achados da revisão: _preencher_
-- Paralelismo: _preencher_
+## Prova real (T3)
+- Servidor em `CRM_DATA_DIR` vazio, pedido de 45 itens criado pela API, `curl` com Bearer: 200
+  `application/pdf`, `attachment; filename="pedido-compra-PC-….pdf"`, `Access-Control-Expose-Headers`
+  presente, `%PDF-1.4`, 272 kB, **3 folhas**. Conferido visualmente: cabeçalho da tabela repetido
+  nas folhas 2 e 3, rodapé "Folha X/3 · Impresso por Administrador em …" em todas, totais e
+  assinaturas na última. Achado visual corrigido: número `PC-…` quebrava no hífen e a emissão
+  quebrava a hora (`6e5267b6`, conferido no render do Chromium).
+- Primeiro boot em pasta vazia: 0 "no such table|no column named"; as 2 chaves nascem com
+  categoria `empresa`.
+
+## Retro
+- Rodadas de correção até verde: **1** (onda única da revisão). Os dois executores originais
+  morreram por limite de API e foram retomados.
+- Achados da revisão: **2 bugs reais** (unitário cortado em 4 casas não fechava a linha — **a RN-78.03
+  do plano estava errada**; desconto com dois valores no mesmo papel), 1 cosmético real (CEP
+  escapado duas vezes), 1 visual achado na prova real (cabeçalho), 1 plausível tratado
+  (`revokeObjectURL` síncrono), 1 decisão registrada (B33). 7 lacunas de teste → 4 fechadas com
+  controle positivo; a do gate de módulo não é testável no harness (no-op) e a do clique mockado
+  ficou.
+- Paralelismo: **2 galhos** (servidor e client em worktrees) contra contrato congelado; nenhum
+  retrabalho entre eles.
 - Defeito escapado: preencher na etapa seguinte.
+
+## Próxima tarefa detalhada — Etapa 79: o PDF da proposta exige login (A5)
+- **O furo:** `GET /api/propostas/:id/pdf` em `server/index.js` (perto de `:9954`; procure a
+  string da rota) **não tem `authenticateToken`** — qualquer um com o id baixa a proposta comercial
+  (preços, cliente).
+- **Antes de mudar, medir quem chama:** `grep -rn "propostas/.*pdf" client/src` — se o client abre
+  por `window.open`/`<a href>` (sem header), pôr o middleware quebra o botão. Nesse caso trocar o
+  client para o padrão desta etapa (`api.get(..., { responseType: 'blob' })` + `<a download>`,
+  como `client/src/utils/baixarDocumentoPedido.js`), **nunca** `?token=` na URL.
+- Teste de rota: 401 sem token; 200 `application/pdf` com token (fake de PDF no harness, como o
+  `gerarPdfDeHtml` do `testApp.js`, se a rota for extraível; senão provar só o 401 e registrar).
+- Registrar na letra B do doc de novidades o que foi escolhido (ex.: também exigir o módulo
+  comercial?) e o que foi descartado.
