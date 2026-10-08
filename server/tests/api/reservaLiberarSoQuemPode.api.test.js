@@ -44,10 +44,15 @@ const SEM_RESERVAR = {
   CONSULTA: { id: 7708, nome: 'Con 77L', role: 'user', perfil_almoxarifado: 'CONSULTA' },
   QUALIDADE: { id: 7710, nome: 'Qua 77L', role: 'user', perfil_almoxarifado: 'QUALIDADE' },
 };
+// Fase 5: admin de SISTEMA sem perfil do modulo (nao e superadmin) — so o `can()` o promove a ADMINISTRADOR.
+const ADMIN_SISTEMA = { id: 7711, nome: 'AdmSis 77L', role: 'admin', email: 'as77l@t.com' };
+const GESTOR_T = SEM_RESERVAR.GESTOR; // tem `reservar_outra_os` (o gate do /transferir)
 const API = '/api/almoxarifado';
 const ACAO = 'liberar_reserva_requisicao';
 const CHAVES_OK = ['quantidade_liberada', 'reserva_id', 'status', 'success'];
 const M2 = (numero) => `Sem permissão para liberar a reserva da requisição ${numero}: só quem pediu a requisição, o almoxarife ou o administrador liberam`;
+// Fase 5 (F1): o dono, depois que a separacao comecou.
+const M3 = (numero) => `Sem permissão para liberar a reserva da requisição ${numero}: ela já está em separação — só o almoxarife ou o administrador liberam agora`;
 let seq = 0;
 let terminou = false;
 process.on('exit', (code) => {
@@ -74,9 +79,9 @@ process.on('exit', (code) => {
     const R = (await dbRun(db, `INSERT INTO requisicoes_almoxarifado
         (numero, solicitante_id, solicitante_nome, status, urgencia, created_at, ativo)
       VALUES (?, ?, ?, 'PENDENTE', 'NORMAL', '2026-09-01 10:00:00', 1)`, [numero, solicitante.id, solicitante.nome])).lastID;
-    await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado
+    const itemId = (await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado
       (requisicao_id, material_id, quantidade_solicitada, quantidade_separada, quantidade_entregue, quantidade_atendida)
-      VALUES (?,?,?,0,0,0)`, [R, m, q]);
+      VALUES (?,?,?,0,0,0)`, [R, m, q])).lastID;
     setUser({ ...ADMIN });
     const ap = await request(app).put(`${API}/requisicoes/${R}/aprovar`).send({});
     assert.strictEqual(ap.status, 200, JSON.stringify(ap.body));
@@ -84,7 +89,7 @@ process.on('exit', (code) => {
     assert.ok(r, 'a aprovacao tinha de criar a reserva');
     assert.strictEqual(r.origem, 'REQUISICAO');
     assert.strictEqual(await st(R), 'TOTALMENTE_RESERVADA');
-    return { m, R, numero, r };
+    return { m, R, numero, r, itemId };
   };
   const st = async (id) => (await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [id])).status;
   const reserva = (id) => dbGet(db, 'SELECT * FROM reservas_material_almoxarifado WHERE id = ?', [id]);
@@ -143,6 +148,119 @@ process.on('exit', (code) => {
     const lib = await liberarComo(ADM_PERFIL, r.id);
     assert.strictEqual(lib.status, 200, JSON.stringify(lib.body));
     assert.strictEqual((await reserva(r.id)).status, 'LIBERADA');
+  });
+
+  // Fase 5 (sobrevivente 3): o admin de SISTEMA (role admin, sem perfil do modulo) so passa porque o
+  // `can()` consulta `getPerfilFromUser`, que o promove a ADMINISTRADOR. Trocar o `can()` por uma
+  // lista literal de perfis (`['ADMINISTRADOR','ALMOXARIFE'].includes(user.perfil_almoxarifado)`)
+  // passava em todo o resto do arquivo — este caso existe para isso cair.
+  await test('[RN-05] (e) admin de SISTEMA (role admin, sem perfil do modulo) que nao pediu libera: 200', async () => {
+    const { R, r } = await reqAprovada();
+    assert.strictEqual(ADMIN_SISTEMA.perfil_almoxarifado, undefined);
+    const lib = await liberarComo(ADMIN_SISTEMA, r.id);
+    assert.strictEqual(lib.status, 200, `o admin de sistema foi barrado: ${lib.status} ${JSON.stringify(lib.body)}`);
+    assert.strictEqual((await reserva(r.id)).status, 'LIBERADA');
+    assert.strictEqual(await st(R), 'APROVADO');
+  });
+
+  // ══════════════ Fase 5 — F1: o dono so libera enquanto o /cancelar ainda aceitaria ══════════════
+  //
+  // A excecao do dono existe porque liberar a reserva da propria requisicao e a desistencia PARCIAL que o
+  // /cancelar ja lhe da inteira. Depois que a separacao comecou o /cancelar recusa (a maquina nao tem
+  // EM_SEPARACAO -> CANCELADO) — e a liberacao continuava aceita: o material separado voltava ao
+  // disponivel, outra reserva o prometia, e a entrega morria em "Maximo: 0" (sonda da revisao).
+  const separar = (alvo, q) => as(ALMOXARIFE, () => request(app).put(`${API}/requisicoes/${alvo.R}/separacao`)
+    .send({ itens_separados: [{ item_id: alvo.itemId, quantidade_separada: q }] }).then((x) => x));
+  const entregar = (alvo, q) => as(ALMOXARIFE, () => request(app).put(`${API}/requisicoes/${alvo.R}/entregar`)
+    .send({ itens_atendidos: [{ item_id: alvo.itemId, quantidade_atendida: q }] }).then((x) => x));
+  const matR = (m) => dbGet(db, 'SELECT quantidade_atual AS atual, COALESCE(quantidade_reservada,0) AS reservada FROM materiais_almoxarifado WHERE id = ?', [m]);
+
+  for (const [estado, prepara] of [
+    ['EM_SEPARACAO', async () => {}],
+    ['PRONTA_PARA_RETIRADA', async (alvo) => {
+      const lr = await as(ALMOXARIFE, () => request(app).put(`${API}/requisicoes/${alvo.R}/liberar-retirada`).send({}).then((x) => x));
+      assert.strictEqual(lr.status, 200, `liberar-retirada: ${JSON.stringify(lr.body)}`);
+    }],
+  ]) {
+    // eslint-disable-next-line no-await-in-loop
+    await test(`[F1] o dono (sem a acao) com a requisicao ${estado}: 403 M3, reserva intacta, e a entrega ainda sai`, async () => {
+      const alvo = await reqAprovada(6);
+      const sep = await separar(alvo, 6);
+      assert.strictEqual(sep.status, 200, `separacao: ${JSON.stringify(sep.body)}`);
+      await prepara(alvo);
+      assert.strictEqual(await st(alvo.R), estado);
+      // A premissa da regra: o /cancelar do dono recusa neste status.
+      const canc = await as(SOL, () => request(app).put(`${API}/requisicoes/${alvo.R}/cancelar`).send({ motivo: 'x' }).then((x) => x));
+      assert.strictEqual(canc.status, 400, `o /cancelar aceitou em ${estado}: ${JSON.stringify(canc.body)}`);
+      const lib = await liberarComo(SOL, alvo.r.id);
+      assert.strictEqual(lib.status, 403, `o dono liberou com a requisicao ${estado}: ${lib.status} ${JSON.stringify(lib.body)}`);
+      assert.deepStrictEqual(lib.body, { error: M3(alvo.numero), acao: ACAO });
+      const depois = await reserva(alvo.r.id);
+      assert.deepStrictEqual([depois.status, Number(depois.quantidade)], ['ATIVA', 6]);
+      assert.deepStrictEqual(await matR(alvo.m), { atual: 6, reservada: 6 });
+      assert.strictEqual(await st(alvo.R), estado);
+      assert.strictEqual(await liberacoes(alvo.r.id), 0, 'nenhuma LIBERACAO_RESERVA no livro');
+      // Outro PRODUCAO nao consegue prometer o separado de novo (o disponivel continua 0)...
+      const man = await as(PRODUCAO, () => request(app).post(`${API}/reservas`).send({ material_id: alvo.m, quantidade: 6, projeto_id: 9 }).then((x) => x));
+      assert.notStrictEqual(man.status, 201, `o separado foi reprometido: ${JSON.stringify(man.body)}`);
+      // ...e a entrega da requisicao sai inteira.
+      const ent = await entregar(alvo, 6);
+      assert.strictEqual(ent.status, 200, `a entrega falhou: ${JSON.stringify(ent.body)}`);
+      assert.strictEqual((await reserva(alvo.r.id)).status, 'CONSUMIDA');
+    });
+  }
+
+  await test('[F1] metade positiva: com a requisicao EM_SEPARACAO o ALMOXARIFE e o ADMINISTRADOR (perfil) ainda liberam: 200', async () => {
+    for (const u of [ALMOXARIFE, ADM_PERFIL]) {
+      // eslint-disable-next-line no-await-in-loop
+      const alvo = await reqAprovada(6);
+      // eslint-disable-next-line no-await-in-loop
+      assert.strictEqual((await separar(alvo, 6)).status, 200);
+      // eslint-disable-next-line no-await-in-loop
+      const lib = await liberarComo(u, alvo.r.id);
+      assert.strictEqual(lib.status, 200, `${u.perfil_almoxarifado} foi barrado em EM_SEPARACAO: ${JSON.stringify(lib.body)}`);
+      // eslint-disable-next-line no-await-in-loop
+      assert.strictEqual((await reserva(alvo.r.id)).status, 'LIBERADA');
+    }
+  });
+
+  await test('[F1] nao-dono sem a acao com a requisicao EM_SEPARACAO: continua M2 (nao M3)', async () => {
+    const alvo = await reqAprovada(6);
+    assert.strictEqual((await separar(alvo, 6)).status, 200);
+    const lib = await liberarComo(PRODUCAO, alvo.r.id);
+    assert.strictEqual(lib.status, 403, JSON.stringify(lib.body));
+    assert.deepStrictEqual(lib.body, { error: M2(alvo.numero), acao: ACAO });
+  });
+
+  // ══════════════ Fase 5 — F2: reserva de requisicao nao muda de dono ══════════════
+  //
+  // `PUT /reservas/:id/transferir` (gate `reservar_outra_os`: ADMINISTRADOR, GESTOR) re-apontava a reserva
+  // da requisicao para outra OS/projeto: ela continuava origem REQUISICAO, presa a requisicao, mas dizendo
+  // que o material era de outra obra (sonda da revisao: 200, `projeto_id = 999`). A reserva da requisicao
+  // pertence a requisicao — mudar o destino e mudar a requisicao, nao a reserva.
+  const transferirComo = (u, id, body) => as(u, () => request(app).put(`${API}/reservas/${id}/transferir`)
+    .send({ motivo: 'teste 77', ...body }).then((x) => x));
+
+  await test('[F2] GESTOR transferindo a reserva da requisicao para outra OS/projeto: 400, nada muda', async () => {
+    const { r } = await reqAprovada();
+    const t = await transferirComo(GESTOR_T, r.id, { projeto_id: 999, os_referencia: 'OS-OUTRA' });
+    assert.strictEqual(t.status, 400, `transferiu a reserva da requisicao: ${t.status} ${JSON.stringify(t.body)}`);
+    const q = await dbGet(db, 'SELECT numero FROM requisicoes_almoxarifado WHERE id = ?', [r.requisicao_id]);
+    assert.deepStrictEqual(t.body, { error: `A reserva ${r.id} é da requisição ${q.numero} e não pode ser transferida para outra OS ou projeto` });
+    const depois = await reserva(r.id);
+    assert.deepStrictEqual(
+      [depois.status, depois.projeto_id, depois.os_id, depois.os_referencia, depois.cliente_id],
+      [r.status, r.projeto_id, r.os_id, r.os_referencia, r.cliente_id],
+    );
+  });
+
+  await test('[F2] metade positiva: a reserva MANUAL continua transferivel pelo GESTOR (200)', async () => {
+    const m = await material(10);
+    const cria = await request(app).post(`${API}/reservas`).send({ material_id: m, quantidade: 2, projeto_id: 7 });
+    assert.strictEqual(cria.status, 201, JSON.stringify(cria.body));
+    const t = await transferirComo(GESTOR_T, cria.body.id, { projeto_id: 999 });
+    assert.strictEqual(t.status, 200, JSON.stringify(t.body));
+    assert.strictEqual(Number((await reserva(cria.body.id)).projeto_id), 999);
   });
 
   // ══════════════ RN-06 — a lista NEGATIVA ══════════════
@@ -219,7 +337,20 @@ process.on('exit', (code) => {
   // ══════════════ RN-08 — a listagem diz de quem e ══════════════
 
   await test('[RN-08] GET /reservas: a de requisicao traz requisicao_numero e requisicao_solicitante_id; a manual, os dois null', async () => {
-    const { numero, r } = await reqAprovada();
+    // Fase 5 (sobrevivente 4): ate aqui cada requisicao do arquivo tinha UM item, entao o id da requisicao e
+    // o do item andavam juntos e um JOIN por `r.item_requisicao_id` passava. Tres itens a mais numa
+    // requisicao avulsa descolam os dois contadores antes da requisicao deste caso.
+    const avulsa = (await dbRun(db, `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status, urgencia, created_at, ativo)
+      VALUES (?, ?, ?, 'RASCUNHO', 'NORMAL', '2026-09-01 10:00:00', 1)`, [`REQ-E77L-AV-${++seq}`, SOL.id, SOL.nome])).lastID;
+    const mAv = await material(1);
+    for (let i = 0; i < 3; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada, quantidade_separada, quantidade_entregue, quantidade_atendida)
+        VALUES (?,?,1,0,0,0)`, [avulsa, mAv]);
+    }
+    const { R, numero, r } = await reqAprovada();
+    assert.ok(r.item_requisicao_id != null, 'a reserva da aprovacao tinha de citar o item');
+    assert.notStrictEqual(Number(r.item_requisicao_id), Number(R), 'pre-condicao: id do item e da requisicao tinham de divergir');
     const m = await material(10);
     const cria = await request(app).post(`${API}/reservas`).send({ material_id: m, quantidade: 2, projeto_id: 7 });
     assert.strictEqual(cria.status, 201, JSON.stringify(cria.body));
@@ -232,6 +363,9 @@ process.on('exit', (code) => {
     assert.strictEqual(Number(daReq.requisicao_solicitante_id), SOL.id);
     assert.strictEqual(manual.requisicao_numero, null);
     assert.strictEqual(manual.requisicao_solicitante_id, null);
+    // Fase 5 (F1): o status da requisicao, para a tela saber se o dono ainda libera.
+    assert.strictEqual(daReq.requisicao_status, 'TOTALMENTE_RESERVADA');
+    assert.strictEqual(manual.requisicao_status, null);
     for (const k of ['id', 'material_id', 'status', 'origem', 'requisicao_id', 'solicitante_id', 'material_codigo', 'material_nome', 'material_unidade', 'saldo']) {
       assert.ok(k in daReq, `a chave de hoje ${k} sumiu`);
     }

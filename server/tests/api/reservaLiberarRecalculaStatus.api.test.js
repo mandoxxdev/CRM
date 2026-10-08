@@ -286,13 +286,19 @@ process.on('exit', (code) => {
 
   // ══════════════ RN-08 ══════════════
 
-  await test('RN-08 transferir (declarado): 200, requisicao_id mantido, status inalterado (o hold continua)', async () => {
+  // Etapa 77, Fase 5 (F2): este caso afirmava 200 — a 76 DECLAROU que transferir reserva de requisicao era
+  // aceito (so conferia que o status da requisicao nao mudava). A revisao da 77 mostrou o defeito: a reserva
+  // seguia presa a requisicao (e consumida pela entrega dela) dizendo que o material era de outra OS. Agora
+  // e 400; o que este caso protegia (requisicao_id mantido, status inalterado, hold continua) segue igual.
+  await test('RN-08 transferir reserva de requisicao: 400 desde a Etapa 77 (F2), requisicao_id mantido, status inalterado (o hold continua)', async () => {
     const m = await material(4);
     const R = await reqPend([[m, 4]]);
     await aprovar(R);
     const [r] = await reservas(R);
     const t = await request(app).put(`${API}/reservas/${r.id}/transferir`).send({ os_referencia: 'OS-76L' });
-    assert.strictEqual(t.status, 200, JSON.stringify(t.body));
+    assert.strictEqual(t.status, 400, JSON.stringify(t.body));
+    assert.strictEqual((await reserva(r.id)).os_referencia, r.os_referencia);
+    assert.strictEqual((await reserva(r.id)).status, 'ATIVA');
     assert.strictEqual(Number((await reserva(r.id)).requisicao_id), R);
     assert.strictEqual(await st(R), 'TOTALMENTE_RESERVADA');
   });

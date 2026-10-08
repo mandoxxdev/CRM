@@ -9,6 +9,7 @@ const { dbAll, dbGet, dbRun } = require('./db');
 const { registrarAuditoria } = require('./audit');
 const stockService = require('./stockService');
 const { can } = require('./permissions');
+const { validarTransicao } = require('./requisitionStateMachine');
 
 const CAMPOS_DONO = ['projeto_id', 'os_id', 'os_referencia', 'cliente_id'];
 
@@ -24,11 +25,14 @@ const CAMPOS_DONO = ['projeto_id', 'os_id', 'os_referencia', 'cliente_id'];
 // e o dono — na reserva de origem REQUISICAO ele e QUEM APROVOU (o `user` da aprovacao), e na da
 // chegada/inspecao e a Qualidade/o sistema. Quem decide se pode liberar e `requisicao_solicitante_id`.
 // O nome do solicitante fica de fora de proposito: a tela nao precisa e a listagem nao tem gate de perfil.
+// Fase 5 (F1): + `requisicao_status` (aditivo, `null` na manual) — o dono so libera enquanto a requisicao
+// ainda se cancela (`assertPodeLiberarReserva`); sem o status a tela abriria o Liberar para morrer em 403.
 async function listarReservas(db, filters = {}) {
   let sql = `SELECT r.*,
       m.codigo as material_codigo, m.nome as material_nome, m.unidade as material_unidade,
       (r.quantidade - COALESCE(r.quantidade_utilizada, 0)) as saldo,
-      rq.numero as requisicao_numero, rq.solicitante_id as requisicao_solicitante_id
+      rq.numero as requisicao_numero, rq.solicitante_id as requisicao_solicitante_id,
+      rq.status as requisicao_status
     FROM reservas_material_almoxarifado r
     JOIN materiais_almoxarifado m ON r.material_id = m.id
     LEFT JOIN requisicoes_almoxarifado rq ON rq.id = r.requisicao_id
@@ -56,6 +60,18 @@ async function listarReservas(db, filters = {}) {
 async function transferirReserva(db, user, reservaId, data = {}) {
   const reserva = await dbGet(db, 'SELECT * FROM reservas_material_almoxarifado WHERE id = ?', [reservaId]);
   if (!reserva) throw Object.assign(new Error('Reserva não encontrada'), { status: 404 });
+  // Etapa 77, Fase 5 (F2): a reserva de origem REQUISICAO pertence a requisicao — re-aponta-la para outra
+  // OS/projeto a deixava presa a requisicao (e consumida pela entrega dela) dizendo que o material era de
+  // outra obra. Mudar o destino e mudar a requisicao, nao a reserva. Antes do status: a regra e "nunca por
+  // esta porta", como a M1 do motor.
+  if (reserva.origem === 'REQUISICAO' && reserva.requisicao_id != null) {
+    const rq = await dbGet(db, 'SELECT numero FROM requisicoes_almoxarifado WHERE id = ?', [reserva.requisicao_id]);
+    const numero = (rq && rq.numero) || `#${reserva.requisicao_id}`;
+    throw Object.assign(
+      new Error(`A reserva ${reserva.id} é da requisição ${numero} e não pode ser transferida para outra OS ou projeto`),
+      { status: 400 },
+    );
+  }
   if (reserva.status !== 'ATIVA') {
     throw Object.assign(
       new Error(`Somente reserva ATIVA pode ser transferida (status atual: ${reserva.status})`),
@@ -257,10 +273,22 @@ async function assertPodeLiberarReserva(db, user, reservaId) {
   const r = await dbGet(db, 'SELECT id, origem, requisicao_id FROM reservas_material_almoxarifado WHERE id = ?', [reservaId]);
   if (!r) return;
   if (r.origem !== 'REQUISICAO' || r.requisicao_id == null) return;
-  const q = await dbGet(db, 'SELECT numero, solicitante_id FROM requisicoes_almoxarifado WHERE id = ?', [r.requisicao_id]);
-  if (q && Number(user?.id) === Number(q.solicitante_id)) return;
+  const q = await dbGet(db, 'SELECT numero, solicitante_id, status FROM requisicoes_almoxarifado WHERE id = ?', [r.requisicao_id]);
+  const ehDono = !!q && Number(user?.id) === Number(q.solicitante_id);
+  // Etapa 77, Fase 5 (F1): a excecao do dono e a desistencia PARCIAL que o /cancelar lhe da inteira — entao
+  // so vale enquanto o /cancelar aceitaria (a maquina permite `status -> CANCELADO`). Depois que a separacao
+  // comecou (EM_SEPARACAO, PRONTA_PARA_RETIRADA...) o /cancelar recusa, e a liberacao pelo dono devolvia o
+  // material JA SEPARADO ao disponivel: outra reserva o prometia e a entrega morria em "Maximo: 0". A regra
+  // e derivada da maquina de estados (nao de uma lista a mao) para nao divergir do /cancelar.
+  if (ehDono && validarTransicao(q.status, 'CANCELADO').ok) return;
   if (can(user, 'liberar_reserva_requisicao')) return;
   const numero = (q && q.numero) || `#${r.requisicao_id}`;
+  if (ehDono) {
+    throw Object.assign(
+      new Error(`Sem permissão para liberar a reserva da requisição ${numero}: ela já está em separação — só o almoxarife ou o administrador liberam agora`),
+      { status: 403, acao: 'liberar_reserva_requisicao' },
+    );
+  }
   throw Object.assign(
     new Error(`Sem permissão para liberar a reserva da requisição ${numero}: só quem pediu a requisição, o almoxarife ou o administrador liberam`),
     { status: 403, acao: 'liberar_reserva_requisicao' },

@@ -56,6 +56,16 @@ const requisicaoLabel = (r) => r.requisicao_numero ?? `#${r.requisicao_id ?? '�
 export const MSG_LIBERAR_RESERVA_REQUISICAO =
   'Só quem pediu a requisição, o almoxarife ou o administrador liberam esta reserva';
 
+// Etapa 77, Fase 5 (F1): quem pediu só libera enquanto a requisição ainda se cancela — depois que
+// a separação começa, liberar devolvia o material separado ao disponível e a entrega morria. É a
+// lista de status que a máquina do servidor deixa ir para CANCELADO (o teste compara as duas).
+export const STATUS_DONO_LIBERA_RESERVA = [
+  'RASCUNHO', 'PENDENTE', 'AGUARDANDO_APROVACAO_VALOR', 'APROVADO', 'AGUARDANDO_ESTOQUE',
+  'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA',
+];
+export const MSG_LIBERAR_RESERVA_EM_SEPARACAO =
+  'Esta requisição já está em separação — só o almoxarife ou o administrador liberam a reserva agora';
+
 const ReservasAlmoxarifado = () => {
   const { pode, bloquearSeNaoPode } = useAlmoxPermissoes();
   const { user } = useAuth();
@@ -175,10 +185,13 @@ const ReservasAlmoxarifado = () => {
   const podeAbrirLiberar = (r, e) => {
     if (!bloquearSeNaoPode('reservar', e)) return false;
     if (r.origem !== 'REQUISICAO') return true;
-    if (Number(user?.id) === Number(r.requisicao_solicitante_id)) return true;
+    const ehDono = Number(user?.id) === Number(r.requisicao_solicitante_id);
+    // Sem `requisicao_status` (servidor antigo) a tela falha aberto, como o hook.
+    const aindaCancela = r.requisicao_status == null || STATUS_DONO_LIBERA_RESERVA.includes(r.requisicao_status);
+    if (ehDono && aindaCancela) return true;
     if (pode('liberar_reserva_requisicao')) return true;
     if (e?.preventDefault) e.preventDefault();
-    toast.error(MSG_LIBERAR_RESERVA_REQUISICAO);
+    toast.error(ehDono ? MSG_LIBERAR_RESERVA_EM_SEPARACAO : MSG_LIBERAR_RESERVA_REQUISICAO);
     return false;
   };
 

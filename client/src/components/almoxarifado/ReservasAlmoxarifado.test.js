@@ -11,7 +11,7 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import ReservasAlmoxarifado from './ReservasAlmoxarifado';
+import ReservasAlmoxarifado, { STATUS_DONO_LIBERA_RESERVA } from './ReservasAlmoxarifado';
 import api from '../../services/api';
 
 jest.mock('../../services/api', () => ({
@@ -300,6 +300,50 @@ describe('[RN-10] Liberar reserva de requisição — de quem é', () => {
     await clicarAcao(0, 'Liberar');
     expect(modalAberto()).not.toBeNull();
     expect(mockPermissoes.pode).not.toHaveBeenCalledWith('liberar_reserva_requisicao');
+  });
+
+  // Etapa 77, Fase 5 (F1): o dono só libera enquanto a requisição ainda se cancela. Depois que a
+  // separação começou o servidor devolve 403 — a tela não abre o modal para isso.
+  const MSG_SEPARACAO = 'Esta requisição já está em separação — só o almoxarife ou o administrador liberam a reserva agora';
+  test.each(['EM_SEPARACAO', 'PRONTA_PARA_RETIRADA'])(
+    '(d) quem pediu, sem liberar_reserva_requisicao, com a requisição %s: toast da separação, modal não abre',
+    async (status) => {
+      reservasDoBanco = [{ ...RESERVA_DA_REQ, requisicao_status: status }];
+      mockUser = { id: 99 };
+      mockPermissoes = permissoes(['liberar_reserva_requisicao']);
+      await renderizar();
+      await clicarAcao(0, 'Liberar');
+      expect(modalAberto()).toBeNull();
+      expect(toast.error).toHaveBeenCalledWith(MSG_SEPARACAO);
+    },
+  );
+
+  test('(d2) quem pediu, com a requisição TOTALMENTE_RESERVADA (ainda se cancela): o modal abre', async () => {
+    reservasDoBanco = [{ ...RESERVA_DA_REQ, requisicao_status: 'TOTALMENTE_RESERVADA' }];
+    mockUser = { id: 99 };
+    mockPermissoes = permissoes(['liberar_reserva_requisicao']);
+    await renderizar();
+    await clicarAcao(0, 'Liberar');
+    expect(modalAberto()).not.toBeNull();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  test('(d3) com liberar_reserva_requisicao e a requisição EM_SEPARACAO: o modal abre', async () => {
+    reservasDoBanco = [{ ...RESERVA_DA_REQ, requisicao_status: 'EM_SEPARACAO' }];
+    mockUser = { id: 1 };
+    mockPermissoes = permissoes([]);
+    await renderizar();
+    await clicarAcao(0, 'Liberar');
+    expect(modalAberto()).not.toBeNull();
+  });
+
+  test('(d4) a lista de status em que o dono libera é a do servidor: os que a máquina deixa ir para CANCELADO', () => {
+    // eslint-disable-next-line global-require, import/no-unresolved
+    const { TRANSICOES } = require('../../../../server/services/almoxarifado/requisitionStateMachine');
+    const doServidor = Object.keys(TRANSICOES).filter((s) => TRANSICOES[s].includes('CANCELADO'));
+    // Guarda da guarda: import quebrado viria vazio e o toEqual compararia nada com nada.
+    expect(doServidor).toContain('TOTALMENTE_RESERVADA');
+    expect([...STATUS_DONO_LIBERA_RESERVA].sort()).toEqual([...doServidor].sort());
   });
 
   test('(c) com o número da requisição: a coluna e o modal mostram REQ-…, não o id', async () => {
