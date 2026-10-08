@@ -60,7 +60,8 @@ function erroFormatoImagem(mensagem) {
  * `fileFilter` de multer: so MIME do mapa. O nome original nao e consultado (nem para a extensao).
  * `mimesExtras`: excecao LOCAL de um multer (hoje so o logo da empresa aceita `image/svg+xml`) —
  * de proposito fora do mapa do `extensaoSegura`, que e compartilhado com almoxarifado e chat.
- * A recusa sai com `codigo: 'FORMATO_IMAGEM'`; a mensagem fica no log, a resposta e sempre a literal.
+ * A recusa sai com `codigo: 'FORMATO_IMAGEM'`; a mensagem do filtro vai para o log (console.warn do
+ * `tratarErroFormatoImagem`) e a resposta e sempre a literal `MSG_FORMATO_NAO_SUPORTADO`.
  */
 function filtroImagemMulter(mensagem, { mimesExtras = [] } = {}) {
   const extras = mimesExtras.map((m) => String(m).toLowerCase());
@@ -73,11 +74,14 @@ function filtroImagemMulter(mensagem, { mimesExtras = [] } = {}) {
 
 /**
  * Middleware de erro do Express: recusa de formato do `fileFilter` -> 400 com a mensagem literal.
- * Registrado no index.js ANTES do handler global do `/api`; qualquer outro erro segue adiante.
+ * Registrado no index.js DEPOIS de todas as rotas com multer de imagem e ANTES do handler global do
+ * `/api`; qualquer outro erro segue adiante. Loga a mensagem especifica do filtro (o handler global
+ * antigo fazia console.error; sem este warn a recusa sumiria do log).
  */
 // eslint-disable-next-line no-unused-vars
 function tratarErroFormatoImagem(err, req, res, next) {
   if (err && err.codigo === CODIGO_FORMATO_IMAGEM) {
+    console.warn('[upload] formato recusado:', err.message, req.method, req.originalUrl);
     return res.status(400).json({ error: MSG_FORMATO_NAO_SUPORTADO });
   }
   return next(err);

@@ -288,6 +288,10 @@ function appComMiddlewareReal(dir) {
 
 test('83: middleware real -> recusa de formato vira 400 literal (antes caia no global = 500); nada gravado', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'c83-mw-'));
+  // A mensagem especifica do filtro vai para o log (console.warn) — capturada aqui, sem poluir a saida.
+  const warnOriginal = console.warn;
+  const avisos = [];
+  console.warn = (...args) => avisos.push(args);
   try {
     const app = appComMiddlewareReal(dir);
     for (const contentType of ['image/svg+xml', 'text/html', 'image/pjpeg']) {
@@ -297,10 +301,17 @@ test('83: middleware real -> recusa de formato vira 400 literal (antes caia no g
       assert.deepStrictEqual(r.body, { error: 'Formato de imagem não suportado' });
     }
     assert.deepStrictEqual(fs.readdirSync(dir), []);
-    // Controle: outro erro NAO e engolido pelo middleware — segue para o global (500).
+    assert.strictEqual(avisos.length, 3, `esperado 1 warn por recusa: ${JSON.stringify(avisos)}`);
+    assert.deepStrictEqual(avisos[0], ['[upload] formato recusado:',
+      'Apenas imagens são permitidas (jpeg, jpg, png, gif, webp)', 'POST', '/api/up']);
+    // Controle: outro erro NAO e engolido pelo middleware — segue para o global (500), sem warn.
     const outro = await request(app).post('/api/explode');
     assert.strictEqual(outro.status, 500);
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+    assert.strictEqual(avisos.length, 3);
+  } finally {
+    console.warn = warnOriginal;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('83: foto.html com image/png grava produto_<id>_<ms>_foto.png; foto.jfif image/jpeg -> _foto.jpg (miolo sem extensao)', async () => {
@@ -389,6 +400,40 @@ test('83 (RN-83.02): todo multer.diskStorage do index.js esta numa lista; nos de
   assert.ok(STORAGES_DOCUMENTO.some((st) => blocoStorage(st).includes('const ext = path.extname(file.originalname)')));
 });
 
+/**
+ * Expressao do nome gravado: o argumento do `cb(null, ...)` da funcao `filename:` — ou, quando ele e
+ * a variavel `filename`, o lado direito do `const filename = ...;`.
+ */
+function expressaoNomeGravado(st) {
+  const bs = blocoStorage(st);
+  const corpo = bs.slice(bs.indexOf('filename: (req, file, cb) =>'));
+  assert.ok(corpo.length < bs.length, `${st}: funcao filename nao encontrada`);
+  const cbs = [...corpo.matchAll(/\bcb\(null, (.+)\);/g)].map((m) => m[1]);
+  assert.strictEqual(cbs.length, 1, `${st}: esperado 1 cb(null, ...) no filename, achou ${cbs.length}`);
+  let expr = cbs[0];
+  if (expr === 'filename') {
+    const m = corpo.match(/const filename = (.+);/);
+    assert.ok(m, `${st}: cb(null, filename) sem const filename`);
+    expr = m[1];
+  }
+  return { corpo, expr };
+}
+
+test('83 (mutacao A): nos 14 storages de imagem o nome gravado TERMINA com a ext segura; extname(originalname) so no miolo', () => {
+  const MIOLO = 'path.basename(file.originalname, path.extname(file.originalname))';
+  for (const st of STORAGES_IMAGEM) {
+    const { corpo, expr } = expressaoNomeGravado(st);
+    // Declarar `const ext = extensaoSegura(...)` nao basta: o nome tem de USAR `ext`, e no fim.
+    assert.ok(/\$\{ext\}`$/.test(expr) || /\+ ext$/.test(expr), `${st}: nome gravado nao termina com a ext segura: ${expr}`);
+    assert.ok(!expr.includes('extname(file.originalname)'), `${st}: nome gravado usa extname(originalname): ${expr}`);
+    // Fora do miolo `basename(originalname, extname(originalname))`, nada na funcao le a extensao do nome.
+    assert.ok(!corpo.split(MIOLO).join('').includes('extname(file.originalname)'), `${st}: extname(originalname) fora do miolo`);
+  }
+  // Controle positivo: a mutacao A (`${ext}` -> `${path.extname(file.originalname)}`) e pega por ambas as checagens.
+  const mutante = '`produto_${produtoId}_${timestamp}_${name.replace(/[^a-zA-Z0-9]/g, \'_\')}${path.extname(file.originalname)}`';
+  assert.ok(!/\$\{ext\}`$/.test(mutante) && mutante.includes('extname(file.originalname)'));
+});
+
 test('83: todo multer( de storage de imagem usa filtroImagemMulter', () => {
   const multers = [...fonteIndex.matchAll(/const (\w+) = multer\(\{\n\s*storage: (\w+),/g)];
   assert.strictEqual(multers.length, fonteIndex.split(' = multer({').length - 1, 'multer( fora do padrao');
@@ -403,6 +448,25 @@ test('83: middleware de formato registrado no /api ANTES do handler global (que 
   assert.ok(iMw > 0, 'tratarErroFormatoImagem nao registrado');
   assert.ok(iGlobal > 0, 'handler global nao encontrado (a regua ficou cega)');
   assert.ok(iMw < iGlobal, 'middleware registrado depois do global: a recusa vira 500');
+  assert.strictEqual(fonteIndex.split('tratarErroFormatoImagem);').length - 1, 1, 'registrado mais de uma vez');
+  // Mutacao B: registrado ANTES das rotas, o Express nunca o alcanca depois do erro do multer (error
+  // middleware so pega erro de quem foi registrado antes dele) e a recusa volta a ser 500. Tem de vir
+  // DEPOIS do ultimo uso de qualquer um dos 14 multers de imagem.
+  const multersImagem = [...fonteIndex.matchAll(/const (\w+) = multer\(\{\n\s*storage: (\w+),/g)]
+    .filter((m) => STORAGES_IMAGEM.includes(m[2])).map((m) => m[1]);
+  assert.strictEqual(multersImagem.length, 14, `multers de imagem: ${multersImagem.length}`);
+  const iCompras = fonteIndex.indexOf("require('./routes/compras')(app,");
+  assert.ok(iCompras > 0, 'montagem de routes/compras nao encontrada');
+  let iUltimoUso = -1;
+  for (const up of multersImagem) {
+    const usos = [`${up}.single(`, `${up}.array(`, `${up}.fields(`].map((s) => fonteIndex.lastIndexOf(s));
+    // uploadGrupoCompras/uploadFornecedor sao usados em routes/compras.js: o "uso" e a montagem.
+    if (new RegExp(`\\n  ${up},\\n`).test(fonteIndex.slice(iCompras, fonteIndex.indexOf('});', iCompras)))) usos.push(iCompras);
+    const ultimo = Math.max(...usos);
+    assert.ok(ultimo > 0, `${up}: nenhum uso encontrado (a regua ficou cega)`);
+    iUltimoUso = Math.max(iUltimoUso, ultimo);
+  }
+  assert.ok(iMw > iUltimoUso, `middleware registrado antes da ultima rota com multer de imagem (idx ${iUltimoUso}): a recusa vira 500`);
   assert.match(fonteIndex, /const \{ decodificarImagemBase64, filtroImagemMulter, tratarErroFormatoImagem \} = require\('\.\/services\/imagemUpload'\);/);
 });
 
