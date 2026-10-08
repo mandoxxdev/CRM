@@ -28,8 +28,10 @@
 > **2026-10-08 — Etapa 84 entregue:** o login e o chat deixaram de aceitar o token **no endereço**
 > (`?token=`), que vazava em log e histórico (B39).
 > **2026-10-08 — Etapa 85 entregue:** arquivo grande demais mostra **"Arquivo grande demais (máximo
-> N MB)"** em vez de "Erro interno do servidor" (B40). Próxima: erros dos módulos montados por último
-> (almoxarifado, chat, frotas…) caem numa página HTML de erro em vez de uma mensagem.
+> N MB)"** em vez de "Erro interno do servidor" (B40).
+> **2026-10-08 — Etapa 86 entregue:** erros do **almoxarifado, chat, frotas, produção** e demais
+> módulos chegam à tela como **mensagem em português**, não mais como página HTML de erro (B41).
+> Próxima: o PDF da OS entra na fila do Chromium compartilhado (B35).
 > O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
 > A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
@@ -185,6 +187,16 @@
   fila — um PDF gerado nesse instante falhava com "Target closed". A medição da 80 achou mais
   três corridas (erro de um derrubando o outro, Chromium aberto em dobro e nunca fechado, e o
   fechamento por ociosidade no meio de uma geração).
+- **B41 — Etapa 86: os módulos montados por último passam por um "bloco" (Router) que fica antes do
+  tratamento de erro.** Parte do almoxarifado e o chat registram as rotas depois que o servidor já
+  está no ar — por isso mover o tratamento para o fim não bastaria. Escolhido: um Router dos módulos
+  montado antes dos três tratadores. Mensagens: só aparece ao usuário texto escrito pelo **nosso**
+  código (ex.: "Certificado deve ser PDF ou imagem"); erro de biblioteca vira mensagem em português
+  ("JSON inválido no corpo da requisição", "Requisição grande demais", "Upload inválido", "Arquivo não
+  encontrado"); 401/403 vindos de biblioteca viram 500 (o client trataria 401 como sessão expirada).
+  Descartado: mover os tratadores para o fim; repetir os tratadores no fim. **Escolha pequena para
+  você arbitrar:** na edição de material, depois que a foto sobe com sucesso o campo de arquivo é
+  limpo (para o "Salvar" não enviar de novo) — uma linha para desfazer.
 - **B40 — Etapa 85: arquivo acima do limite → 413 com o limite na mensagem.** 413 (e não 400) para as
   telas de família/grupo **não** reenviarem o mesmo arquivo grande por base64. O limite vem do próprio
   upload (cada um tem o seu: 5, 10, 15, 20 ou 40 MB) — sem limite conhecido, a mensagem sai sem
@@ -340,6 +352,46 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 86 — Erros dos módulos viram mensagem (2026-10-08)
+
+**Em uma frase.** Quando algo dava errado no almoxarifado (foto de material grande demais,
+certificado em formato errado, assinatura de requisição pesada…), a tela recebia uma página HTML de
+erro e mostrava um texto genérico; agora recebe a mensagem certa, em português.
+
+### O que há de novo (visível para o usuário)
+- **Almoxarifado**: foto de material de 11 MB → "Arquivo grande demais (máximo 10 MB)"; assinatura de
+  requisição de 3 MB → "máximo 2 MB"; certificado de lote em `.txt` → "Certificado deve ser PDF ou
+  imagem"; calibração, ocorrência e destino de sucata idem.
+- **Foto do material**: se não puder ser salva, aparece o motivo. Na **edição**, o aviso não diz mais
+  "o material foi criado", a foto anterior volta e o "Salvar" não tenta enviar de novo.
+- Dados malformados enviados ao servidor respondem "JSON inválido no corpo da requisição".
+
+### Por baixo do capô
+- `rotasModulos` (Router) em `server/index.js`: almoxarifado (+ as ~90 rotas que registram depois),
+  requisições, frotas, produção, todolist, WhatsApp e chat passam por ele, antes dos tratadores.
+- `services/errosApi.js` (`tratarErroGlobalApi`, `erroComMensagemUsuario`): o tratador global saiu do
+  `index.js` e virou módulo — o ambiente de testes usa o mesmo, na mesma ordem da produção.
+- Os uploads do almoxarifado e do chat passaram a informar o limite no erro (Etapa 85).
+- Testes: `errosModulosJson.api.test.js` (26, rotas de verdade do almoxarifado, inclusive as que
+  registram depois), réguas de posição reescritas, 6 testes novos na tela do material.
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| Foto de material grande → página HTML 500 → "Foto não pôde ser salva" | 413 "Arquivo grande demais (máximo 10 MB)" na tela |
+| Certificado em formato errado → HTML 500 | 400 "Certificado deve ser PDF ou imagem" |
+| JSON malformado → 500 "Erro interno do servidor" | 400 "JSON inválido no corpo da requisição" |
+| Edição de material com foto recusada dizia "material foi criado" | "Foto não pôde ser salva: <motivo>" e a foto anterior volta |
+
+### Roteiro de teste manual (clicável)
+1. **Almoxarifado → Materiais → editar → foto**: envie uma imagem de mais de 10 MB — aparece o motivo;
+   a foto anterior continua.
+2. **Almoxarifado → Lotes → certificado**: envie um `.txt` — "Certificado deve ser PDF ou imagem".
+3. **Chat**: envie uma imagem grande — continua a mensagem do chat.
+
+### O que a etapa NÃO cobre
+- O PDF da OS ainda abre um Chromium próprio (B35) — próxima etapa.
 
 ## Etapa 85 — Arquivo grande demais com mensagem clara (2026-10-08)
 

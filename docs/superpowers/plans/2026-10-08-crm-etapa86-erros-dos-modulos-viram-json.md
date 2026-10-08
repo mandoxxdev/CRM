@@ -155,3 +155,26 @@ assinatura de requisição 3 MB → 413 "máximo 2 MB"; JSON malformado → 400;
   handler isolado.
 - Em produção as rotas dos módulos passam a rodar antes do middleware de cache e do SPA (`:23159+`) —
   todas são `/api`, sem colisão; efeito desprezível (medido na revisão do plano).
+
+## Fechamento (2026-10-08) — 🟢
+
+## Retro
+- Rodadas de correção até verde: **1**.
+- Achados: revisão do plano 2 defeitos de desenho (`expose` mandaria inglês ao usuário e perderia a
+  mensagem dos filtros) + tratador global precisava virar módulo; revisão do código 0 defeitos para o
+  usuário, 2 comentários falsos, 1 afirmação errada no harness (ordem diferente da produção), 404 com
+  texto errado, 401/403 de biblioteca, toast enganoso na edição, lacunas de teste; 0 ruído.
+- Paralelismo: nenhum (T2 do client pequena, sequencial).
+- Defeito escapado: preencher na etapa seguinte.
+
+## Próxima tarefa detalhada — Etapa 87: o PDF da OS entra na fila do Chromium (B35)
+- **O que existe:** `POST /api/operacional/ordens-servico/:id/gerar-pdf` (`server/index.js:~21444`) faz
+  `puppeteer.launch` próprio a cada pedido (`~:21873`) e fecha ao fim — um segundo Chromium (~580 MB)
+  fora da fila serial da Etapa 80, sem `protocolTimeout`; tem `networkidle0` (`~:21883`), espera fixa de
+  2 s (`~:21931`) e interceptação de requisições para imagens (`~:21920`).
+- **Desenho provável:** usar `enfileirarPdf` + `obterNavegadorPdf` (a mesma aba-por-geração da proposta),
+  mantendo a interceptação e o HTML da OS; medir antes se o `networkidle0` e a espera de 2 s são
+  necessários (a proposta trocou esperas fixas por esperar fontes/imagens). Régua: o
+  `filaPdfFiacao.api.test.js` passa a exigir 3 `page.pdf` dentro da fila e nenhum `puppeteer.launch` fora
+  de `obterNavegadorPdf`. Prova real: PDF da OS gerado, e um PDF de proposta + um de OS concorrentes
+  sem erro e com 1 Chromium.
