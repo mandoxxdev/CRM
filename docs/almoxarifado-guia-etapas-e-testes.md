@@ -1,22 +1,29 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-02 (Etapa 76) · Branch: `desenvolvimento-almoxarifado` · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-08 (Etapa 77) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 76) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 77) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-02 (Etapa 76 ENTREGUE · Etapa 77 começando)
+> ## Onde o desenvolvimento está — 2026-10-08 (Etapa 77 ENTREGUE · próxima do almoxarifado: Etapa 91)
 >
-> **O desenvolvimento parou aqui: Etapa 76 fechada, Etapa 77 começando — 2026-10-02.** A **Etapa 76 (liberar ou deixar
+> **O desenvolvimento parou aqui: Etapa 77 fechada — 2026-10-08.** A **Etapa 77 (a reserva de uma requisição só sai
+> pela requisição)**: uma saída pela API de movimentações que cita a reserva de uma requisição é recusada — o material
+> dela só sai pela entrega; e liberar à mão a reserva de uma requisição passou a ser de **quem pediu** (enquanto ela
+> ainda pode ser cancelada), do **almoxarife** ou do **administrador**. A tela **Reservas** mostra o número da
+> requisição, barra o **Liberar** antes do formulário para quem não pode e não oferece **Transferir** numa reserva de
+> requisição. **Próxima etapa do almoxarifado: 91 — a inversão inspeção × Aprovar** (aviso **C131**; ver *"Próxima
+> tarefa detalhada"* no plano da Etapa 77). *Por que 91 e não 78:* desde a unificação de 2026-10-07 a numeração de
+> etapas é uma só para todos os módulos, e as 78 a 90 foram do lote de Compras/núcleo (`docs/compras-novidades-por-etapa.md`).
+>
+> **Etapas 1 a 20 e 22 a 77 completas.**
+>
+> **Etapa 76, 2026-10-02.** A **Etapa 76 (liberar ou deixar
 > vencer a reserva de uma requisição atualiza o status dela)**: liberar à mão na tela **Reservas** (tudo ou parte) ou a
 > reserva vencer pelo **Processar expiração** passa a recalcular o status da requisição dona — liberou tudo, **Aprovado**;
 > parte, **Parcialmente Reservada**. A revisão estendeu ao recálculo da chegada, da inspeção e do estorno a espera pela
 > trava do material, e corrigiu o executor da suíte de testes, que podia contar como verde um arquivo que pendurasse.
-> **Próxima etapa, já começando: 77 — a reserva de uma requisição só sai pela requisição** (uma saída avulsa pela API
-> pode gastar a reserva de uma requisição sem ela saber, e qualquer usuário sem perfil libera reserva alheia; ver
-> *"Próxima tarefa detalhada"* no plano da Etapa 76).
->
-> **Etapas 1 a 20 e 22 a 76 completas.**
+> ~~**Próxima etapa, já começando: 77 — a reserva de uma requisição só sai pela requisição**~~ *(feita — acima)*.
 >
 > **Etapa 75, 2026-10-02.** A **Etapa 75 (o material que a
 > inspeção libera fica com quem esperava)**: material crítico entra retido para inspeção e não é reservado na chegada;
@@ -5553,10 +5560,75 @@ R1 fica **Totalmente Reservada**. Crie e aprove **R2** (4 de M): fica **Aguard. 
 
 - **O material liberado não vai para quem esperava** — fica solto; uma requisição aprovada depois pode levá-lo (aviso
   **C135**).
-- **Uma saída avulsa pela API pode gastar a reserva de uma requisição** sem ela saber (aviso **C136**), e **qualquer
-  usuário sem perfil pode liberar a reserva de outra pessoa** (aviso **C137**) — próxima etapa.
+- ~~**Uma saída avulsa pela API pode gastar a reserva de uma requisição** sem ela saber (aviso **C136**), e **qualquer
+  usuário sem perfil pode liberar a reserva de outra pessoa** (aviso **C137**) — próxima etapa.~~ *(Feito na Etapa 77 —
+  seção abaixo.)*
 - **As requisições que já mentiam antes do deploy** não são corrigidas sozinhas (consulta **A40**).
 - **O solicitante não recebe e-mail** quando a reserva dele é liberada ou vence.
+
+---
+
+## Etapa 77 — A reserva de uma requisição só sai pela requisição (ENTREGUE — 2026-10-08)
+
+**O que mudou, em uma frase:** o material reservado para uma requisição só sai pela **entrega** dela, e a reserva só é
+liberada à mão por **quem pediu** a requisição (enquanto ela ainda pode ser cancelada), pelo **almoxarife** ou pelo
+**administrador**.
+
+**O problema que ela resolve.** Uma saída lançada pela API de movimentações podia gastar a reserva de uma requisição — o
+material saía e a requisição continuava **Totalmente Reservada** sem ter recebido nada. E qualquer pessoa que pode
+reservar (inclusive quem não tem perfil, que entra como **Produção**) liberava a reserva da requisição de outra pessoa.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Saída pela API citando a reserva de uma requisição: aceita, a requisição não sabia | Recusada — a reserva da requisição só sai pela entrega |
+| Produção, Engenharia ou sem perfil liberavam a reserva da requisição de outra pessoa | Só quem pediu, o almoxarife ou o administrador |
+| Quem pediu liberava mesmo com a separação começada | Só enquanto a requisição ainda pode ser cancelada |
+| Gestor transferia a reserva de uma requisição para outra OS/projeto | Recusado; o botão **Transferir** sumiu dessas linhas |
+| A tela **Reservas** mostrava *"REQ #55"* (código interno) | Mostra o número (**REQ-…**) |
+| **Liberar** abria o formulário para quem ia ser barrado | A tela barra antes e diz a regra |
+
+### Roteiro de teste manual (≈15 min)
+
+**Preparação.** Um material **M** com **4** em estoque. Quatro usuários: **Paula** (Produção ou sem perfil), **Pedro**
+(outro Produção), **Ana** (Almoxarife) e um **Gestor**. Paula cria a requisição **R1** (4 de M) em **Requisições
+(almox.)**; o Gestor aprova: R1 fica **Totalmente Reservada**.
+
+1. **O número na tela.** Entre como Ana, abra **Almoxarifado → Reservas**: a linha da reserva de R1 mostra o número da
+   requisição (**REQ-…**), não *"REQ #⟨número interno⟩"*. A linha **não** tem o botão de setas (**Transferir**).
+2. **Quem não pediu não libera.** Entre como Pedro, **Reservas**, clique no cadeado (**Liberar**) da reserva de R1: o
+   aviso diz *"Só quem pediu a requisição, o almoxarife ou o administrador liberam esta reserva"* e o formulário não abre.
+3. **Quem pediu libera.** Entre como Paula, clique **Liberar**: o formulário abre com *"Esta reserva pertence à
+   requisição REQ-…"*. **Quantidade a liberar** = 2, **Motivo**, **Liberar**: em **Requisições (almox.)**, R1 está
+   **Parcialmente Reservada**.
+4. **Com a separação começada, quem pediu não libera mais.** Entre como Ana e inicie a separação de R1 (**Em
+   Separação**). Volte como Paula e clique **Liberar**: o aviso diz *"Esta requisição já está em separação — só o
+   almoxarife ou o administrador liberam a reserva agora"*. Entre como Ana: ela libera normalmente.
+5. **A reserva manual continua como era.** Como Ana (ou um usuário da Engenharia), **Nova Reserva** de 1 de M; a linha é
+   **MANUAL** e tem o botão **Transferir**. Pedro consegue liberá-la (é a regra de sempre — aviso **C139** das
+   novidades).
+6. **O Gestor não libera.** Como Gestor, clique **Liberar** numa reserva: *"Sem permissão para reservar material — seu
+   perfil é Gestor. Solicite acesso a um administrador."* (ele solta tudo pelo **Encerrar Requisição**).
+7. **A entrega continua consumindo.** Como Ana, separe e entregue R1 em **Requisições (almox.)**: na tela **Reservas**
+   (filtro **Todos os status**), a reserva de R1 está **Consumida**.
+8. **A saída avulsa (só para quem testa a API).** Com o token de um Almoxarife, `POST
+   /api/almoxarifado/movimentacoes/v2` com o material, `tipo: "SAIDA"`, a quantidade e o `reserva_id` de uma reserva de
+   requisição ativa → **400** *"A reserva ⟨id⟩ é da requisição ⟨REQ-…⟩ — o material reservado para ela só sai pela
+   entrega da requisição (tela Requisições), não por movimentação avulsa"*. Com uma reserva **manual** → aceita.
+
+### O que esta etapa NÃO cobre
+
+- **A reserva manual de outra pessoa** continua liberável por quem pode reservar (aviso **C139**).
+- **Quem pediu a requisição por outro módulo** sem a permissão de reservar (Compras, Gestor, Consulta, Qualidade) não
+  libera a própria reserva — o caminho é cancelar a requisição (aviso **C140**).
+- **Cancelar pela tela de requisições dos outros módulos** (Comercial, Frota, Compras, Financeiro, Operacional) uma
+  requisição **Aprovado** não solta a reserva dela (aviso **C141**) — cancele pela tela do almoxarifado.
+- **As saídas avulsas de antes do deploy** que gastaram reserva de requisição não são desfeitas (consulta **A41**).
+- **Perda e Ajuste negativo** continuam consumindo reserva **manual**; e a saída que não cita reserva, num material que
+  aceita saldo negativo, ainda pode levar o reservado.
+- **O solicitante não recebe e-mail** quando o almoxarife libera a reserva dele.
+- **A inversão inspeção × Aprovar** (aviso **C131**) — próxima etapa do almoxarifado, a **91**.
 
 ---
 

@@ -1,7 +1,8 @@
 # Etapa 77 — a reserva de uma requisição só sai pela requisição (C136 + C137, feature 07 com a 04 e a 23)
 
-> Status: **T0–T3 feitas e Fase 5 (revisão adversarial) fechada em `a5245acc` + `198f09f4` (2026-10-08) — falta a T4
-> (fechamento).** Ver a seção "Fase 5" no fim. *(O status antigo dizia "Fase 1 — nada commitado".)*
+> Status: **ETAPA FECHADA (2026-10-08).** T0–T3, Fase 5 (`a5245acc`, `198f09f4`) e T4 (código `2201eb1f` + o commit de
+> documentos seguinte). Ver "T4 — fechamento" e a **Próxima tarefa detalhada — Etapa 91** no fim. *(Antes: "T0–T3 feitas
+> e Fase 5 fechada — falta a T4"; e antes ainda "Fase 1 — nada commitado".)*
 > Origem: "Próxima tarefa detalhada — Etapa 77" de
 > `docs/superpowers/plans/2026-10-02-almoxarifado-etapa76-liberar-expirar-recalcula-status.md:632-684` e os avisos
 > **C136**/**C137** de `docs/almoxarifado-novidades-por-etapa.md:6971-6984` (com a **B402**, `:5468`, que deixou a C136
@@ -452,7 +453,10 @@ Ordem topológica: **T0 → T1 → T3 → T4**, com **T2 (galho)** em paralelo a
   `reserva_id` → 400 M1 (a reserva da chegada é reserva de requisição); a entrega de R2 a consome.
   **Controles:** (s1) da T1 → cai a v2 da jornada e a da reserva de chegada; (s1) da T0 com PRODUCAO concedido → cai o
   "outro PRODUCAO → 403"; (s2) da T0 → cai "S libera 2".
-- [ ] **T4 — fechamento** (skill `fechar-etapa`): spec 07 (a linha *"Consumo contra reserva: saída com `reserva_id`
+- [x] **T4 — FEITA (2026-10-08): código `2201eb1f` (a tela esconde o Transferir em reserva de requisição) + o commit de
+  documentos seguinte.** O que cada documento recebeu, as divergências e a verificação: seção "T4 — fechamento" no fim.
+  A "Etapa 78" abaixo saiu como **Etapa 91** (numeração única desde 2026-10-07).
+  Enunciado original: **T4 — fechamento** (skill `fechar-etapa`): spec 07 (a linha *"Consumo contra reserva: saída com `reserva_id`
   valida contra a própria reserva"* (`07-reservas/README.md:47`) ganha a exceção **dizendo que estava incompleta** — ela
   valia para reserva de requisição também, e isso era a C136; tabela de testes com os três arquivos novos; a linha da
   rota `POST /reservas/:id/liberar (reservar)` (`:43`) ganha "+ dono ou `liberar_reserva_requisicao` para reserva de
@@ -478,7 +482,8 @@ Ordem topológica: **T0 → T1 → T3 → T4**, com **T2 (galho)** em paralelo a
 - **PERDA/AJUSTE_NEGATIVO consumindo reserva manual** (Surpresa 4): pode ser legítimo; limitação declarada.
 - **GESTOR liberar reserva de requisição** (D4): sem porta.
 - **Corrigir o passado** (D8): a A41 acha.
-- **C131**: Etapa 78.
+- **C131**: ~~Etapa 78~~ **Etapa 91** *(corrigido no fechamento: desde a unificação de 2026-10-07 a numeração de etapas é
+  única e as 78–90 foram do lote de Compras/núcleo)*.
 - **Avisar o solicitante quando a reserva dele é liberada por outro**: nenhuma porta avisa hoje (o mesmo "fora" da 76).
 - *(acrescentado na Fase 5 — a revisão mediu, o plano não declarava)* **Saída avulsa SEM `reserva_id` em material
   com `permite_saldo_negativo` leva o estoque reservado da requisição** (sonda P5 de `sonda77f-b.js`): a C136 fecha a
@@ -617,4 +622,134 @@ Arquivos de teste: `reservaLiberarSoQuemPode` 22/22 (antes 15), `reservaRequisic
 esconder o botão é candidata, não feito: o teste de tela `transferir de projeto para OS` usa fixture de requisição);
 B nova para a regra "dono só enquanto se cancela" (descartado: lista de status à mão no servidor) e para F2.
 
-**Próximo passo: T4 (fechamento)** com a skill `fechar-etapa`.
+~~**Próximo passo: T4 (fechamento)** com a skill `fechar-etapa`.~~ *(Feito — abaixo.)*
+
+## T4 — fechamento (2026-10-08): o que cada documento recebeu
+
+**Código (passo 0, antes dos documentos) — `2201eb1f`:** a tela Reservas não mostra mais **Transferir** em reserva de
+`origem === 'REQUISICAO'` (o servidor recusa com 400 desde a F2). Decidido esconder (B417; descartado desabilitar com
+tooltip — não é permissão, é regra da reserva). Os dois testes de transferir usavam a fixture de requisição e passaram
+para `RESERVA_MANUAL_ATIVA` (id 5); caso novo *"reserva de requisição não oferece Transferir; a manual oferece"* (com a
+metade positiva: Liberar na linha de requisição, Liberar + Transferir na manual). Controle positivo: guarda trocada por
+`true` → cai o caso novo **na asserção da linha de requisição** (esperado `false`, veio `true`); restaurado por Edit,
+md5 `37a3dd93…` conferido igual ao pós-conserto, LF (0 CR). Cliente 93 suítes / 1394 testes (antes 1393), build
+*Compiled successfully*.
+
+**Documentos (commit de fechamento, o seguinte a `2201eb1f`):**
+- `docs/almoxarifado-novidades-por-etapa.md` — seção **Etapa 77** (abertura, Antes → Agora, 8 regras com a literal de
+  cada recusa lida do código, NÃO cobre, o que a revisão encontrou); **A41** (com a remediação corrigida da Fase 5) e o
+  cabeçalho da letra A de quarenta para quarenta e um; **B407–B414** (D1–D8) + **B415** (F1, dono só enquanto se
+  cancela), **B416** (F2, não se transfere), **B417** (o botão escondido), **B418** (403 sem `perfil` e textos próprios da
+  tela — Fase 2); **B402** marcada "SUBSTITUÍDA PELA B407"; **C136** e **C137** ✅ resolvidos (texto original preservado);
+  **C139** (manual alheia — Surpresa 5), **C140** (o que muda para quem integra, para quem libera e para quem pede por
+  outro módulo; inclui "o estorno não reativa a reserva"), **C141** (F3, com consulta para achar); D **(77)** (Surpresa 4,
+  P5, P7, GESTOR, quem pede por outro módulo, passado, sem aviso); F **(77)**; "Onde estamos" com a Etapa 77 e a próxima
+  **Etapa 91**; ponteiro no cabeçalho do documento.
+- `specs/modulo-almoxarifado/07-reservas/README.md` — status/última atualização; a linha **"Consumo contra reserva"**
+  ganhou a correção à vista (**estava incompleta**: valia para reserva de requisição, e isso era a C136; e o estorno não
+  reativa); as rotas `liberar` (+ dono ou ação nova) e `transferir` (reserva de requisição → 400); item de checklist da
+  Etapa 77 com os hashes; transferência "só reserva manual"; tela 10 → 22 casos; 11 linhas novas na tabela de testes
+  (os três arquivos novos + F1/F2); a linha da 76 "transferir não recalcula" riscada (o RN-08 virou 400); a contagem
+  "51 casos em 5 arquivos" (da Etapa 4, envelhecida) saiu, dita.
+- `specs/modulo-almoxarifado/23-perfis-seguranca-auditoria/README.md` — bloco "Etapa 77" (a ação nova no mapa, as três
+  camadas na liberação, 403 sem `perfil`, GESTOR fora, lista negativa por controle positivo, B54 intocada).
+- `specs/modulo-almoxarifado/README.md` — última atualização; linhas **07** e **23**.
+- `docs/almoxarifado-guia-etapas-e-testes.md` — cabeçalho "onde parou" (Etapa 77 entregue, próxima 91, o porquê do
+  número); seção da Etapa 77 (Antes → Agora, roteiro de 8 passos, NÃO cobre); o "NÃO cobre" da 76 riscado.
+- `docs/almoxarifado-manual-do-sistema.md` — 5.5 (linha nova na tabela + a leitura da regra por identidade); 9.2
+  (**reescrito**: "Consumida volta a Ativa quando a saída é estornada" era falso — medido na Fase 5, P1); 9.2 o número
+  da requisição na tela; 9.4 (a reserva de requisição só sai pela entrega, com a literal M1); 9.5 (não se transfere, com
+  a literal); 9.6 (quem libera, os status em que o dono libera, as duas literais da tela e as duas da integração).
+
+**Numeração (registrada nos documentos):** desde a unificação de 2026-10-07 a numeração de etapas é uma só para todos os
+módulos e as Etapas 78 a 90 foram do lote de Compras/núcleo (`docs/compras-novidades-por-etapa.md`, B18). Por isso a
+"Próxima tarefa detalhada — Etapa 78" que a T4 previa sai como **Etapa 91**, e a linha "C131: Etapa 78" de "O que fica
+de fora" foi corrigida.
+
+## Divergências do plano (registradas, não escondidas)
+
+1. **O Transferir da tela** — a Fase 5 o deixou como "candidata, não feito"; virou o passo 0 do fechamento (`2201eb1f`),
+   porque o servidor já recusava e a tela oferecia um modal que morria em 400.
+2. **O manual também estava errado** sobre o estorno (9.2: *"Uma reserva Consumida volta a Ativa quando a saída que a
+   consumiu é estornada"*) — o mesmo erro que a Fase 5 achou no plano. Conferido no código: `cancelarMovimentacao` não
+   tem ramo de reserva para estorno de saída; o único `SET status = 'ATIVA'` do motor (`stockService.js:1587`) é a
+   compensação de uma falha **dentro da mesma** `registrarMovimentacao`. Reescrito no manual; dito na seção da etapa
+   nas novidades e na spec 07.
+3. **Doze B, não oito:** as quatro a mais são F1 (B415), F2 (B416), o botão (B417) e a Fase 2 do 403 sem `perfil` (B418)
+   — esta última a Fase 2 mandava "para a letra B" e o plano não lhe dava número.
+4. **Três C, não dois:** além dos dois previstos (C139 manual alheia, C140 o que muda), a F3 virou **C141**.
+5. **Contrato de API (CLAUDE.md, decidido sem perguntar, reversível):** `GET /reservas` ganhou `requisicao_status` além
+   das duas chaves congeladas (Fase 5) — aditivo; registrado na B413.
+
+## Verificação final (2026-10-08, depois do passo 0; os documentos não tocam código)
+
+- `cd server && npm run test:api` → **313/313 arquivos OK**.
+- `npm run test:almoxarifado` → **44 passou, 0 falhou**.
+- `npm run test:validation` → **4 passed, 0 failed**; `test:safealter` → **3 passed, 0 failed**; `test:sqlite` →
+  **5 passed, 0 failed**.
+- `cd client && CI=true npx react-scripts test --watchAll=false` → **93 suítes / 1394 testes**, todos passando.
+- `CI=true npx react-scripts build` → *Compiled successfully*.
+- Arquivos da etapa, rodados um a um: `reservaLiberarSoQuemPode` 22/0, `reservaRequisicaoSoPelaEntrega` 17/0,
+  `reservaRequisicaoPortaIntegracao` 12/0, `reservaLiberarRecalculaStatus` 13/0.
+
+## Retro — 4 números
+
+1. **Rodadas de correção até verde:** 1 (o fix-round da Fase 5), mais o passo 0 do fechamento (uma sobra declarada da
+   Fase 5, não um defeito novo).
+2. **Achados da revisão — reais × ruído:** Fase 2: 8 (0 críticos, 4 importantes, 4 menores), 0 ruído — dois deles
+   (o 403 reescrito pelo interceptor e o controle s4 que não caía) teriam passado verdes. Fase 5: 5 (1 importante, 1
+   médio, 2 sobreviventes de mutação, 1 lacuna) + 4 correções do próprio plano, 0 ruído.
+3. **Paralelismo:** um galho real (T2, só cliente, em worktree, contra o contrato congelado) em paralelo à T1 no tronco;
+   integrado por merge (`bdeefda4`), sem retrabalho registrado. T0/T1 em sequência no mesmo agente (os dois sabotam o mesmo SQLite —
+   G84).
+4. **Defeito que escapou de etapa anterior:** dois. (a) A Etapa 76 tinha prendido como contrato (RN-08) que transferir
+   reserva de requisição respondia 200 — o teste afirmava o defeito; a F2 o inverteu. (b) O manual dizia que o
+   estorno reativa a reserva — falso, e o plano desta etapa herdou o erro. **Lição:** um teste que
+   "declara" um comportamento não o torna certo; e afirmação de manual sobre efeito de estorno precisa de sonda, não de
+   leitura.
+
+## Próxima tarefa detalhada — Etapa 91: a inversão inspeção × Aprovar (C131, feature 07 com a 09 e a 04)
+
+*(Numerada 91, não 78: numeração única desde a unificação de 2026-10-07 — ver acima.)*
+
+**O problema (medido duas vezes).** Material crítico entra retido; R1 espera 4. A inspeção aprova 4 e, no mesmo
+instante, R3 é aprovada pelo **Aprovar**: R3 leva os 4 e R1 fica com nada — oito de oito na Etapa 75, seis de seis na 76
+(`sonda76-c131.js`), também com a trava por material. A ordem medida é sempre `APROVAR.criarReserva → INSPECAO.entra
+liberacao → INSPECAO.sai reservas=0`: o saldo fica livre no movimento `DECISAO_INSPECAO` do motor, **antes** de a
+distribuição pegar a trava.
+
+**Por que esta (valor × esforço).** É a última inversão de fila conhecida da família reserva/chegada (74–77); as outras
+candidatas são menores e podem andar junto se a Fase 0 confirmar que cabem: **C141** (o cancelar dos outros módulos não
+solta reserva — trocar a rota `PUT /api/requisicoes-material/:id/cancelar`, `server/routes/requisicoesMaterial.js:338`,
+para passar pelo `reservationService.liberarReservasDaRequisicao`), **C139** (reserva manual alheia — decisão de regra) e
+recusar `reserva_id` em tipos não-saída (D (77)). Alternativa declarada pela B403: deixar a C131 para a migração
+Postgres, onde a trava vira `SELECT … FOR UPDATE` — a Fase 0 deve medir o custo das duas e escolher (letra B).
+
+**Fase 0 — medir antes de prometer:**
+1. Reproduzir pelas rotas (com usuários reais por perfil: a Qualidade decide, o Gestor aprova) a inversão na
+   **inspeção**, na **não conformidade** que aceita e na **nota** (a nota já reserva dentro do `concluir*` — medir se a
+   janela existe nela também, entre o `ENTRADA_COMPRA` e `reservarChegadaParaQuemEspera`, `receiptService.js:86`).
+2. As seis portas: liberação — `receiptService` (`:86`), `inspectionService.decidirInspecao` (`:374`,
+   `aposLiberacaoSemFalhar`), `nonConformityService.decidirNaoConformidade` (`:968`); aprovação — `PUT
+   /requisicoes/:id/aprovar` (`routes/almoxarifado.js:3437`), `PUT /requisicoes/:id/aprovar-valor` (`:3577`),
+   `tentarAprovacaoAutomatica` (`:3273`), as três chamando `requisitionService.prepararPosAprovacao`
+   (`requisitionService.js:250`).
+3. A trava: `reservaChegadaService.comLockDoMaterial(materialId, fn)` (`:221`) — **não reentrante** (pegar duas vezes o
+   mesmo material trava para sempre); `recalcularStatusSobTrava` (`:255`) é o único que pega várias, em ordem crescente
+   com `DISTINCT`. Uma aprovação que pega a trava de **todos** os materiais da requisição e depois chama algo que pega a
+   trava de novo (a distribuição, o recálculo) **se trava** — medir a pilha de chamadas antes de desenhar.
+
+**Contrato que a etapa consome (não reabrir):** a distribuição (`distribuirParaQuemEspera`, a ordem da fila de
+separação, o teto de cada porta, os pulos por valor e por dono); o recálculo da 76 sob a trava; a recusa da C136 no motor
+(`registrarMovimentacao`, marca `requisicaoDaEntrega`); a regra de quem libera da 77 (`assertPodeLiberarReserva`); as
+respostas das rotas de aprovar e decidir (B387, B399 — sem chave nova sem dizer na letra C).
+
+**Pontos de atenção:**
+- **A trava teria de começar ANTES do movimento do motor** que põe o saldo no disponível, nas três portas de liberação,
+  e envolver o motor — o motor hoje não sabe da trava; não chamar `comLockDoMaterial` de dentro de algo que já roda sob
+  ela (G84 + a não-reentrância).
+- **Premissa de um processo só** (C132): a trava é em memória. Qualquer desenho novo herda a premissa — dizer no código e
+  na letra C.
+- **Teste de corrida precisa saber falhar:** a inversão é sistemática (8/8, 6/6), então o teste vermelho é reprodutível
+  — exigir o vermelho antes, com o controle positivo de tirar a trava nova e ver a inversão voltar.
+- **Sabotagem concorrente contamina a suíte** (memória do projeto): um agente por vez sabotando produção no mesmo SQLite.

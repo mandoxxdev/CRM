@@ -11,6 +11,10 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
+> **Onde o desenvolvimento está (2026-10-08):** Etapa 77 fechada — ver "Onde estamos e o que vem a seguir", no fim. A
+> próxima etapa do almoxarifado é a **91**: desde a unificação de 2026-10-07 a numeração é uma só para todos os
+> módulos, e as 78 a 90 foram usadas pelo lote de Compras/núcleo (`docs/compras-novidades-por-etapa.md`, **B18**).
+>
 > Fontes: `docs/almoxarifado-guia-etapas-e-testes.md` (roteiros de teste manual de cada
 > etapa), `specs/modulo-almoxarifado/README.md` (status por feature) e os planos em
 > `docs/superpowers/plans/`. Atualizado em **2026-09-28 (Etapa 43)**.
@@ -107,7 +111,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Quarenta itens para rodar em produção ANTES do deploy — trinta e sete são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Quarenta e um itens para rodar em produção ANTES do deploy — trinta e oito são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-08 (Etapa 77) de quarenta para quarenta e um**, com a **A41** — as saídas avulsas pela API que já gastaram a reserva de uma requisição antes desta versão, que o deploy não desfaz.)*
 
 *(**Atualizado em 2026-10-02 (Etapa 76) de trinta e nove para quarenta**, com a **A40** — as requisições que hoje dizem *Totalmente/Parcialmente Reservada* sem nada reservado de verdade (deixadas assim por liberações à mão e vencimentos de antes desta versão), que o deploy não corrige sozinho.)*
 
@@ -1418,7 +1424,40 @@ SELECT r.numero, ir.id AS item_id,
   vai mais precisar dele).
 
 
-### B. Decisões de negócio — B1 a B406; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A41 (NOVA, da Etapa 77 — as saídas avulsas que já gastaram a reserva de uma requisição).** A partir desta etapa, uma
+saída pela API de movimentações que cita a reserva de uma requisição é **recusada** (**B407**). As que aconteceram antes
+do deploy **não** são desfeitas (**B414**). A entrega da requisição grava a requisição no movimento; a saída avulsa não —
+é assim que a consulta as separa. Somente leitura:
+
+```sql
+SELECT m.id, m.created_at, m.tipo, m.quantidade, m.usuario_nome, rs.id AS reserva_id, rq.numero, rq.status
+FROM movimentacoes_almoxarifado m
+JOIN reservas_material_almoxarifado rs ON rs.id = m.reserva_id
+LEFT JOIN requisicoes_almoxarifado rq ON rq.id = rs.requisicao_id
+WHERE rs.origem = 'REQUISICAO'
+  AND m.tipo IN ('SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO',
+                 'SUCATA', 'PERDA', 'DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO',
+                 'DEVOLUCAO_FORNECEDOR')
+  AND m.requisicao_id IS NULL
+  AND COALESCE(m.cancelado, 0) = 0
+ORDER BY m.created_at;
+```
+
+**Como ler o resultado:**
+- **Vazia** — nada a fazer (o banco de desenvolvimento não tem nenhuma reserva de requisição; o tamanho real só em
+  produção).
+- **Com linhas** — cada linha é material que saiu "pela requisição" sem a requisição saber: ela ainda mostra o item
+  pendente. Conferir se a requisição foi atendida de outro jeito. Se **não** foi: estornar a saída avulsa
+  (**Movimentações** → seta curva) e, **logo em seguida**, separar e entregar pela requisição. **Atenção:** o estorno
+  **não** devolve a reserva — o material volta ao **disponível** e a reserva continua *Consumida* (medido na revisão);
+  entre o estorno e a separação o material fica desprotegido (outra saída ou reserva pode levá-lo) e a requisição diz
+  *Totalmente Reservada* sem nada reservado. Por isso os dois gestos juntos.
+- Só tipos de **saída** entram: uma entrada ou um ajuste lançado com o número de uma reserva guarda o número sem
+  consumi-la, e daria falso positivo.
+
+### B. Decisões de negócio — B1 a B418; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-08 de B406 para B418**, com as doze da Etapa 77 — oito do plano, três da revisão do código e da do plano, e uma do fechamento; a **B402** foi substituída pela **B407**.)*
 
 *(**Atualizado em 2026-10-02 de B395 para B406**, com as onze da Etapa 76 — e a **B406**, o incidente do arquivo de backup que foi para o repositório por engano.)*
 
@@ -5465,7 +5504,7 @@ liberação por causa de um rótulo.
 fato venceram.** **Descartados:** recalcular a cada reserva dentro do lote (a primeira veria a segunda ainda ativa);
 recalcular as que falharam ao vencer (continuam ativas — inútil).
 
-**B402 (NOVA, da Etapa 76) — a saída genérica que consome a reserva de uma requisição fica de fora** (**C136**). É
+**B402 (NOVA, da Etapa 76; ⚠️ SUBSTITUÍDA PELA B407 na Etapa 77 — a saída genérica passou a ser recusada) — a saída genérica que consome a reserva de uma requisição fica de fora** (**C136**). É
 decisão de contrato (a saída genérica pode usar reserva de requisição?), não de rótulo. **Descartados agora:**
 recalcular depois do consumo (o rótulo ficaria certo e o material continuaria saindo sem a requisição saber); recusar
 já (muda o contrato da movimentação sem medir quem usa). Candidata da Etapa 77.
@@ -5489,6 +5528,89 @@ com host do servidor e usuário SSH — sem senhas) entrou por engano no commit 
 empurrado; removido do topo em `1e84729e` e excluído localmente (`.git/info/exclude`). Continua no histórico do branch.
 **Escolhido:** remover do topo (reversível). **Descartado:** reescrever o histórico com force push (destrutivo, decisão
 do dono do repositório — recomendado se o repositório for público ou compartilhado).
+
+**B407 (NOVA, da Etapa 77; substitui a B402) — a saída genérica que cita a reserva de uma requisição é recusada, e a
+recusa mora no motor de estoque.** Qualquer saída que consome uma reserva de origem *requisição* só é aceita quando é a
+**entrega da própria requisição** — a entrega passa uma marca interna (não vem do que o cliente envia) e o motor confere
+que ela é a da requisição dona da reserva; qualquer outra toma **400** com a mensagem que ensina o caminho (Etapa 77,
+regra 1). A reserva **manual** continua consumível pela saída genérica. **Descartados:** (a) aceitar e descontar da
+requisição como entrega parcial — seria uma segunda porta de entrega que pula a separação, a segunda conferência do
+material crítico, a assinatura e a retirada; (b) recusar só na rota da API — o motor ficaria aberto ao próximo chamador
+(celular, integração); (c) confiar num campo "requisição" enviado junto — viria do mesmo pacote que o cliente monta;
+(d) recusar só o tipo *Saída* — medido: Perda, Ajuste negativo e Saída para produção também consumiam. (`4c7dc181`,
+`198f09f4`)
+
+**B408 (NOVA, da Etapa 77) — a recusa é uma leitura antes de qualquer escrita, e vale em qualquer status da reserva.**
+A origem e a requisição de uma reserva nunca mudam depois de criadas, então ler antes não abre corrida. Reserva
+inexistente ou de outro material continua com a mensagem de sempre (*"Reserva não encontrada para este material"*);
+reserva de requisição já liberada, vencida ou consumida também toma a recusa nova (a regra é "nunca por esta porta").
+**Descartado:** pôr a condição na própria baixa da reserva (a recusa sairia com a mensagem genérica de saldo e não
+ensinaria o caminho).
+
+**B409 (NOVA, da Etapa 77) — liberar à mão a reserva de uma requisição: quem pediu a requisição, ou a permissão nova
+*liberar a reserva de uma requisição* (Administrador e Almoxarife).** A permissão de reservar continua exigida antes
+(duas camadas: abrir a tela, agir — e agora *sobre o quê*). O dono é **quem pediu a requisição**, não o "solicitante"
+gravado na reserva (que é quem aprovou). **Descartados:** (a) só "reservar + ser quem pediu", sem permissão nova — o
+almoxarife perderia a liberação das reservas que não pediu, que é o ofício dele; (b) reaproveitar *aprovar requisição*
+— daria ao Gestor uma permissão sem porta (B410) e amarraria aprovar a liberar; (c) só a permissão, sem o dono — quem
+pediu perderia a desistência parcial que o **Cancelar** já lhe dá inteira; (d) trocar o perfil padrão de quem não tem
+perfil de Produção para Consulta (**B54**) — decisão de negócio aberta, mudaria o módulo inteiro para fechar uma porta.
+(`413dec88`)
+
+**B410 (NOVA, da Etapa 77) — o Gestor fica fora da permissão nova.** A rota de liberar exige a permissão de reservar, que
+o Gestor não tem — listá-lo seria configuração morta. Ele solta tudo pelo **Encerrar Requisição**. **Reversível:**
+incluí-lo exige mudar o gate da rota ("reservar **ou** liberar reserva de requisição"), não só a tabela.
+
+**B411 (NOVA, da Etapa 77) — a checagem de quem libera fica na rota de liberar, não na liberação do motor.** A liberação
+do motor tem oito chamadores do próprio sistema (cancelar, excluir, encerrar, rejeitar por valor, vencimento, desfazer a
+aprovação perdedora, desfazer a reserva da chegada, estorno da entrada), todos legítimos sem dono nem perfil.
+**Descartado:** checar no motor (cada um desses precisaria de uma exceção).
+
+**B412 (NOVA, da Etapa 77) — a reserva manual não muda.** Quem pode reservar continua liberando a reserva manual de
+qualquer pessoa (**C139**). **Descartado agora:** "só quem criou a manual libera" — mudaria o que Produção e Engenharia
+fazem hoje sem medir uso; candidata.
+
+**B413 (NOVA, da Etapa 77; ampliada na revisão) — a listagem de reservas diz de quem é a requisição, e a tela usa.** A
+listagem ganhou três informações (só acréscimo; vazias na reserva manual): o **número** da requisição, **quem a pediu** e
+o **status** dela. A tela mostra o número (coluna e modal; o código interno só quando o número não vier) e barra o
+**Liberar** antes do formulário para quem não é o dono nem tem a permissão (e, para o dono, quando a requisição já não se
+cancela — **B415**); sem o status (servidor antigo) a tela deixa o dono passar e o servidor decide. **Descartados:**
+tela intocada (o barrado só saberia depois de digitar o motivo); mostrar o **nome** de quem pediu (a tela não precisa —
+menos dado pessoal numa listagem que qualquer usuário do módulo lê). (`413dec88`, `db2e294c`, `a5245acc`)
+
+**B414 (NOVA, da Etapa 77) — sem corrigir o passado.** Saídas avulsas que já consumiram reserva de requisição ficam
+como estão; a **A41** as acha. **Descartado:** estornar automaticamente no deploy (estorno de movimento alheio, sem
+ninguém conferir se a requisição foi atendida de outro jeito).
+
+**B415 (NOVA, da Etapa 77, revisão do código) — quem pediu só libera enquanto a requisição ainda pode ser cancelada.**
+Medido na revisão: com a requisição **Em Separação**, o **Cancelar** do dono já era recusado, mas a liberação da reserva
+pelo dono passava — o material separado voltava ao disponível, outra pessoa o reservava e a entrega morria em *"Máximo:
+0"*. Agora o dono sem a permissão nova toma **403** com a mensagem da separação; almoxarife e administrador continuam
+liberando. A regra é **derivada da máquina de status** (o dono libera enquanto a requisição pode ir para *Cancelado*) —
+o mesmo critério do **Cancelar**. **Descartado:** uma lista de status escrita à mão no servidor (divergiria do
+**Cancelar** na primeira mudança da máquina). A tela tem a mesma lista para barrar antes, e um teste a compara com a do
+servidor. (`a5245acc`)
+
+**B416 (NOVA, da Etapa 77, revisão do código) — reserva de requisição não se transfere.** Medido: o Gestor
+re-apontava a reserva de uma requisição para outra OS ou projeto — ela continuava presa à requisição (e seria consumida
+pela entrega dela) dizendo que o material era de outra obra. Agora **400** (Etapa 77, regra 6). A reserva manual
+continua transferível. **Contrato da Etapa 76 que mudou:** um teste da 76 afirmava que a transferência de reserva de
+requisição respondia 200 — foi editado para 400, com o comentário do porquê (o que ele protegia — a requisição, o
+status e o saldo seguro — continua afirmado). **Descartado:** permitir e desligar a reserva da requisição (a requisição
+perderia o material sem ninguém decidir isso nela). (`a5245acc`)
+
+**B417 (NOVA, da Etapa 77, fechamento) — a tela não oferece Transferir em reserva de requisição.** O botão some nessas
+linhas (a reserva manual continua com ele). **Descartado:** botão desabilitado com explicação ao passar o mouse — o
+padrão da tela é botão visível com bloqueio no clique para **permissão**; aqui não é permissão de ninguém, é regra da
+reserva, e "sumir" é o mesmo tratamento que a reserva não ativa já recebe. (`2201eb1f`)
+
+**B418 (NOVA, da Etapa 77, revisão do plano) — a recusa da liberação não diz "solicite acesso".** O tratamento padrão
+de "sem permissão" do sistema reescreve a mensagem para *"Sem permissão para … — seu perfil é X. Solicite acesso a um
+administrador."* — e aqui a regra é **de quem é a requisição**: pedir acesso não resolve. Por isso a recusa da
+liberação sai sem o perfil (o mesmo molde do **Rejeitar** da requisição) e a tela usa textos próprios (*"Só quem pediu a
+requisição, o almoxarife ou o administrador liberam esta reserva"*; *"Esta requisição já está em separação — só o
+almoxarife ou o administrador liberam a reserva agora"*). **Descartado:** o molde padrão (a mensagem certa nunca
+chegaria à tela).
 
 
 ### C. Furos e mudanças de número que quem opera precisa saber
@@ -6968,7 +7090,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      separar. **O que fazer:** depois de liberar à mão uma reserva que outra requisição esperava, separar logo quem
      esperava (ou aprovar com cuidado as que chegarem depois).
 
-136. **NOVO, da Etapa 76 (medido, não corrigido — candidato da Etapa 77) — uma saída avulsa pode gastar a reserva de
+136. **✅ RESOLVIDO NA ETAPA 77 (`4c7dc181`; revisão `198f09f4`) — a saída avulsa não gasta mais a reserva de uma
+     requisição.** A saída pela API que cita a reserva de uma requisição é recusada com *"A reserva ⟨id⟩ é da requisição
+     ⟨número⟩ — o material reservado para ela só sai pela entrega da requisição (tela Requisições), não por movimentação
+     avulsa"*, em todo tipo de saída (**B407**, **B408**); a entrega da requisição continua consumindo. O passado: **A41**.
+     O texto original, para o histórico:
+     **NOVO, da Etapa 76 (medido, não corrigido — candidato da Etapa 77) — uma saída avulsa pode gastar a reserva de
      uma requisição sem ela saber.** Uma saída feita **pela API** de movimentações citando o número da reserva de uma
      requisição é aceita (a tela **Movimentações** não oferece citar reserva — o caminho é de integração): a reserva fica **consumida**, o material sai — e a requisição continua **Totalmente
      Reservada** com o item **ainda pendente** (nada foi entregue a ela). Depois ela separa de novo, do disponível. É
@@ -6976,7 +7103,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      regra — a saída avulsa pode usar reserva de requisição? (**B402**). **O que fazer:** até a Etapa 77, integrações
      não devem citar reserva de requisição em saída avulsa; entregar sempre pela própria requisição.
 
-137. **NOVO, da Etapa 76 (anterior, da Etapa 4; não corrigido) — qualquer usuário sem perfil libera a reserva de
+137. **✅ RESOLVIDO NA ETAPA 77 (`413dec88`, tela `db2e294c`; revisão `a5245acc`) — liberar a reserva de uma requisição
+     passou a ser de quem pediu, do almoxarife ou do administrador.** Produção, Engenharia e quem não tem perfil tomam
+     *"Sem permissão para liberar a reserva da requisição ⟨número⟩: só quem pediu a requisição, o almoxarife ou o
+     administrador liberam"*; quem pediu só libera enquanto a requisição se cancela (**B409**, **B415**). A reserva
+     **manual** continua como era (**C139**). O texto original, para o histórico:
+     **NOVO, da Etapa 76 (anterior, da Etapa 4; não corrigido) — qualquer usuário sem perfil libera a reserva de
      qualquer requisição.** Liberar reserva exige a permissão *reservar*, que o perfil **Produção** tem — e quem não tem
      perfil cai em **Produção**. Então qualquer usuário do módulo pode liberar, pela tela **Reservas**, a reserva da
      requisição de outra pessoa (desde a Etapa 76, isso também muda o status dela). É decisão de perfil da Etapa 4.
@@ -6989,6 +7121,49 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      (2) O mesmo quando **Processar expiração** vence reservas de requisições. (3) As respostas da API não mudaram
      (**B399**). **O que fazer:** integrações que liam *Totalmente Reservada* como estável até a separação devem aceitar
      *Aprovado* depois de uma liberação.
+
+139. **NOVO, da Etapa 77 (anterior, da Etapa 4; declarado, não corrigido) — a reserva MANUAL de uma pessoa pode ser
+     liberada por qualquer outra que possa reservar.** A Etapa 77 fechou isso para a reserva de **requisição** (**C137**);
+     a reserva **manual** (criada na própria tela **Reservas**) continua como sempre: a Engenharia reserva para o projeto
+     dela, e um usuário de **Produção** — ou sem perfil, que entra como Produção — pode liberá-la (medido). Decisão
+     (**B412**): a regra da reserva manual não se reabre sem medir quem usa. **O que fazer:** se isso não é o desejado,
+     decidir se a reserva manual só deve ser liberada por quem a criou (o sistema já grava quem criou) — é uma regra
+     pequena, candidata.
+
+140. **NOVO, da Etapa 77 — o que muda para quem libera reserva, para quem pede requisição e para quem integra.**
+     (1) **Integrações:** uma saída pela API de movimentações (`/movimentacoes/v2`) que cita a reserva de uma requisição
+     passa a tomar **400** *"A reserva ⟨id⟩ é da requisição ⟨número⟩ — o material reservado para ela só sai pela
+     entrega da requisição (tela Requisições), não por movimentação avulsa"*. Citar reserva **manual** continua aceito.
+     (2) **Produção, Engenharia e quem não tem perfil** deixam de liberar a reserva da requisição **de outra pessoa**
+     (**403**); quem **pediu** a requisição libera a dela enquanto ela ainda pode ser cancelada, e depois que a separação
+     começa só o **almoxarife** ou o **administrador** liberam. Depois desta etapa, o único jeito de alguém de Produção
+     soltar material reservado por outro é a reserva **manual** (**C139**). (3) **Quem pede requisição por outro módulo**
+     (Comercial, Frota, Compras, Financeiro…) sem a permissão de reservar — perfis Compras, Gestor, Consulta, ou
+     Qualidade — **não** libera a reserva da própria requisição na tela **Reservas** (*"Sem permissão para reservar
+     material — seu perfil é ⟨perfil⟩. Solicite acesso a um administrador."*): o caminho dele é **cancelar** a requisição
+     (pela tela do almoxarifado enquanto o **C141** estiver aberto). (4) **Transferir** a reserva de uma requisição para
+     outra OS ou projeto passa a tomar **400**, e a tela não mostra mais o botão nessas linhas. (5) A listagem de reservas
+     (`GET /reservas`) ganhou três chaves — o número, quem pediu e o status da requisição (`requisicao_numero`,
+     `requisicao_solicitante_id`, `requisicao_status`; vazias na manual); as de antes não mudaram. (6) **Estornar uma
+     saída que consumiu reserva não devolve a reserva**: o material volta ao disponível e a reserva continua *Consumida*
+     (medido na revisão; o manual dizia o contrário e foi corrigido). **O que fazer:** avisar o almoxarifado de que liberar
+     reserva de requisição passou a ser dele e de quem pediu; integrações que citam reserva em saída avulsa devem entregar
+     pela requisição (`PUT /requisicoes/:id/entregar`).
+
+141. **NOVO, da Etapa 77 (achado da revisão; não corrigido) — cancelar uma requisição *Aprovado* pela tela de
+     requisições de outro módulo não solta a reserva dela.** As telas **Requisições de material** dos módulos Comercial,
+     Frota, Compras, Financeiro e Operacional cancelam por um caminho próprio que só muda o status (aceita *Pendente* e
+     *Aprovado*, só para quem pediu) — sem soltar as reservas. O cancelamento pela tela do **almoxarifado** solta. A
+     janela é estreita: só a requisição *Aprovado* que ainda tem reserva ativa (a reservada costuma estar *Parcialmente/
+     Totalmente Reservada*, que esse caminho não cancela). Se acontecer, a reserva fica ativa presa a uma requisição
+     cancelada, segurando saldo. **O que fazer:** para achar, somente leitura:
+     ```sql
+     SELECT rs.id AS reserva_id, rq.numero, rs.quantidade - COALESCE(rs.quantidade_utilizada, 0) AS saldo_preso
+       FROM reservas_material_almoxarifado rs JOIN requisicoes_almoxarifado rq ON rq.id = rs.requisicao_id
+      WHERE rs.status = 'ATIVA' AND rq.status = 'CANCELADO';
+     ```
+     Cada linha: o almoxarife libera a reserva na tela **Reservas** (motivo "requisição cancelada"). Candidata: o
+     cancelamento dos outros módulos passar pelo mesmo serviço do almoxarifado.
 
 
 
@@ -7850,7 +8025,23 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(76) Sem tela nova e sem informação nova na resposta** — a liberação e o vencimento respondem como antes; o status
   novo aparece ao reabrir a lista de requisições (**B399**).
 - **(76) A saída avulsa que gasta reserva de requisição e o perfil que libera reserva alheia** ficam para a Etapa 77
-  (**C136**, **C137**); a inversão inspeção × **Aprovar** também (**C131**, **B403**).
+  (**C136**, **C137**); a inversão inspeção × **Aprovar** também (**C131**, **B403**). *(Etapa 77: C136 e C137
+  resolvidos; a C131 continua — candidata da Etapa 91.)*
+- **(77) Perda, Ajuste negativo e as outras saídas da API continuam consumindo reserva MANUAL** — pode ser legítimo ("o
+  material reservado para o projeto se perdeu"); a recusa nova é só para reserva de **requisição**.
+- **(77) A saída que NÃO cita a reserva, num material que aceita saldo negativo, leva o reservado de uma requisição** —
+  medido: material com 4, reserva de 4 de uma requisição, saída de 4 sem citar a reserva → aceita (fica físico 0,
+  reservado 4); a separação depois é recusada com *"Máximo: 0"*. É a regra do saldo negativo (nada barra a saída de
+  quem aceita negativo), não desta etapa.
+- **(77) Entrada e ajuste aceitam o número de uma reserva sem consumi-la** — a API grava o número no movimento e não
+  mexe na reserva; por isso a **A41** olha só saídas. Recusar o número fora de saída é candidata.
+- **(77) O Gestor não libera reserva de requisição** (**B410**) — solta tudo pelo **Encerrar Requisição**.
+- **(77) Quem pede requisição por outro módulo sem a permissão de reservar não libera a própria reserva** — cancela a
+  requisição (**C140 (3)**).
+- **(77) O passado não é corrigido** — as saídas avulsas que já consumiram reserva de requisição ficam (**B414**,
+  **A41**).
+- **(77) Sem aviso a quem perdeu a reserva** — liberar a reserva de uma requisição (agora só o dono, o almoxarife ou o
+  administrador) não manda e-mail ao solicitante.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -8529,6 +8720,19 @@ revisão 3. O que **só o navegador** prova:
    **Processar expiração**: o toast diz *"⟨n⟩ reserva(s) expirada(s) e devolvida(s) ao disponível"*, e a requisição
    dona vira **Aprovado**.
 4. **O painel.** O cartão **📋 Requisições Abertas** do painel mostra a requisição com o status novo.
+
+**(77) Nenhum clique foi dado nesta etapa.** Os testes provam o servidor pela rota (com usuários reais por perfil) e
+pelo serviço — quem libera 22, a saída avulsa 17, a jornada ponta a ponta 12 — e a tela **Reservas** pelos testes de
+componente (22 casos, sem navegador). O que **só o navegador** prova:
+
+1. **O número na tela.** Na tela **Reservas**, a coluna da reserva de uma requisição mostra o número (**REQ-…**), e o
+   modal do **Liberar** diz *"Esta reserva pertence à requisição REQ-…"*.
+2. **Quem não pediu.** Logado como um usuário **Produção** que não pediu a requisição, o cadeado mostra o toast *"Só quem
+   pediu a requisição, o almoxarife ou o administrador liberam esta reserva"* e o formulário não abre.
+3. **Quem pediu, com a separação começada.** Com a requisição **Em Separação**, quem pediu vê *"Esta requisição já está
+   em separação — só o almoxarife ou o administrador liberam a reserva agora"*; antes da separação, o formulário abre.
+4. **O Transferir.** A linha da reserva de requisição não tem o botão de setas; a da reserva manual tem.
+5. **A saída avulsa** não tem clique — é chamada de API (Etapa 77, regra 1).
 
 
 
@@ -18223,9 +18427,133 @@ chegada, da inspeção e do estorno ainda rodava fora da trava (medido: *Totalme
 verde sem placar (**G86**, pago; a guarda rodada nos 291 arquivos não achou nenhum teste vazio escondido).
 
 
+## Etapa 77 — A reserva de uma requisição só sai pela requisição (2026-10-08)
+
+Quando uma requisição é aprovada com saldo, o sistema separa no estoque o material dela — a **reserva**. Até aqui,
+essa reserva podia sair por portas que a requisição não via: uma saída lançada **pela API de movimentações** citando a
+reserva a consumia e o material saía, mas a requisição continuava **Totalmente Reservada** sem ter recebido nada (e
+depois separava de novo, do disponível); e qualquer pessoa com permissão de reservar — inclusive quem não tem perfil
+definido, que o sistema trata como **Produção** — podia **liberar** a reserva da requisição de outra pessoa na tela
+**Reservas**. Agora o material reservado para uma requisição **só sai pela entrega dela**, e a reserva só é liberada à
+mão por **quem pediu** a requisição (enquanto ela ainda pode ser cancelada), pelo **almoxarife** ou pelo
+**administrador**. A tela **Reservas** passou a mostrar o **número** da requisição (antes, o código interno) e não
+oferece mais **Transferir** numa reserva de requisição.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Uma saída pela API de movimentações citando a reserva de uma requisição era aceita: a reserva ficava consumida e a requisição continuava **Totalmente Reservada** sem ter recebido nada (**C136**) | Recusada com a mensagem que ensina o caminho; a reserva de requisição só é consumida pela **entrega** da própria requisição (**B407**, **B408**) |
+| Qualquer usuário de **Produção**, da **Engenharia** ou sem perfil liberava a reserva da requisição de outra pessoa (**C137**) | Só **quem pediu** a requisição, o **almoxarife** ou o **administrador** (**B409**, **B410**) |
+| Quem pediu liberava a reserva mesmo depois de a separação começar — o material já separado voltava ao disponível, outra pessoa o reservava e a entrega morria em *"Máximo: 0"* (achado da revisão) | Quem pediu libera só enquanto a requisição ainda pode ser cancelada; depois, só o almoxarife ou o administrador (**B415**) |
+| O **Gestor** transferia a reserva de uma requisição para outra OS ou projeto — ela continuava presa à requisição dizendo que o material era de outra obra (achado da revisão) | Recusado; e a tela **Reservas** não mostra mais o botão **Transferir** nessas linhas (**B416**, **B417**) |
+| A coluna e o modal da tela **Reservas** diziam *"REQ #55"* — o código interno, que ninguém acha na lista de requisições | Mostram o número da requisição (**REQ-…**) (**B413**) |
+| O botão **Liberar** abria o formulário para quem ia tomar "sem permissão" depois de digitar o motivo | A tela barra antes e diz a regra — não o "Solicite acesso" genérico, porque aqui pedir acesso não resolve (**B413**, **B418**) |
+
+### As regras, com o cenário exato
+
+Preparação: um material **M** com **4** em estoque. **Paula** (perfil **Produção**, ou sem perfil) cria a requisição
+**R1** de 4 de M; o **Gestor** aprova: R1 fica **Totalmente Reservada** e aparece na tela **Reservas** com a reserva de
+4. Tenha também **Pedro** (outro usuário **Produção**), **Ana** (**Almoxarife**) e um usuário da **Engenharia**.
+
+**1. A saída avulsa não gasta a reserva da requisição.** A tela **Movimentações** não oferece citar reserva — este é o
+caminho de integração. Com um usuário Almoxarife, `POST /api/almoxarifado/movimentacoes/v2` com o material M, `tipo`
+**SAIDA**, `quantidade` 4 (ou 1) e `reserva_id` = a reserva de R1 → **400**:
+*"A reserva ⟨id⟩ é da requisição ⟨REQ-…⟩ — o material reservado para ela só sai pela entrega da requisição (tela
+Requisições), não por movimentação avulsa"*. Nada mudou: a reserva continua ativa com 4, R1 continua **Totalmente
+Reservada**, o extrato do material não ganhou linha. Vale para **todo** tipo de saída que a API aceita (Saída, Saída
+para produção, montagem, assistência, Perda, Ajuste negativo) e para a reserva já liberada ou consumida (a regra é
+"nunca por esta porta", não "não agora"). **Metade positiva:** a mesma saída citando uma reserva **manual** (criada na
+própria tela **Reservas**) continua sendo aceita e consome a reserva, como sempre.
+
+**2. A entrega da requisição continua consumindo.** Em **Requisições (almox.)**, Ana separa e entrega R1: a reserva fica
+**Consumida** e a saída gravada cita a reserva **e** a requisição. Entregar mais do que o reservado
+continua dividindo: a parte reservada consome a reserva, o excedente sai do disponível.
+
+**3. Quem não pediu não libera.** Pedro, na tela **Reservas**, clica no cadeado (**Liberar**) da reserva de R1: o toast
+diz *"Só quem pediu a requisição, o almoxarife ou o administrador liberam esta reserva"* e o formulário **não abre**. O
+mesmo para a Engenharia. Pela API (`POST /api/almoxarifado/reservas/⟨id⟩/liberar`) a resposta é **403**:
+*"Sem permissão para liberar a reserva da requisição ⟨REQ-…⟩: só quem pediu a requisição, o almoxarife ou o
+administrador liberam"* — e a reserva continua intacta.
+
+**4. Quem pediu libera a da própria requisição.** Paula clica **Liberar**: o modal abre com *"Esta reserva pertence à
+requisição ⟨REQ-…⟩. Liberar devolve o saldo ao disponível geral e a entrega dessa requisição volta a disputar estoque
+com as demais."*; **Quantidade a liberar** = 2, **Motivo**, **Liberar** → R1 vira **Parcialmente Reservada** (a régua da
+Etapa 76 continua valendo). Ana (Almoxarife) e o Administrador também liberam, sem ter pedido.
+
+**5. Depois que a separação começa, quem pediu não libera mais.** Ana inicia a separação de R1 (**Em Separação**). Paula
+clica **Liberar**: o toast diz *"Esta requisição já está em separação — só o almoxarife ou o administrador liberam a
+reserva agora"*. Pela API: **403** *"Sem permissão para liberar a reserva da requisição ⟨REQ-…⟩: ela já está em
+separação — só o almoxarife ou o administrador liberam agora"*. Ana ainda libera. A regra é a mesma do **Cancelar**: o
+dono pode desistir (de tudo, cancelando; de parte, liberando) enquanto a requisição se cancela.
+
+**6. Reserva de requisição não se transfere.** Na tela **Reservas**, a linha da reserva de R1 não tem o botão de setas
+(**Transferir**); uma reserva manual da mesma lista tem. Pela API (`PUT /api/almoxarifado/reservas/⟨id⟩/transferir`,
+com o Gestor): **400** *"A reserva ⟨id⟩ é da requisição ⟨REQ-…⟩ e não pode ser transferida para outra OS ou projeto"*.
+Mudar o destino do material é mudar a requisição, não a reserva.
+
+**7. A reserva manual não mudou.** A Engenharia cria uma reserva manual; Pedro a libera → aceito (**C139** — é a regra de
+sempre, declarada).
+
+**8. Quem não tem a permissão de reservar continua barrado antes.** Um usuário **Gestor**, **Compras**, **Consulta** ou
+**Qualidade** que clica **Liberar** recebe *"Sem permissão para reservar material — seu perfil é ⟨perfil⟩. Solicite
+acesso a um administrador."* — mesmo que tenha pedido a requisição por outro módulo; o caminho dele é **cancelar** a
+requisição (**C140**).
+
+### O que esta etapa NÃO cobre
+
+1. **A reserva manual alheia** — quem pode reservar continua liberando a reserva manual de outra pessoa (**C139**,
+   **B412**).
+2. **Perda e Ajuste negativo consumindo reserva manual** — continuam aceitos (pode ser legítimo: "o material reservado
+   para o projeto se perdeu").
+3. **A saída que não cita a reserva, num material que aceita saldo negativo**, ainda leva o estoque reservado de uma
+   requisição — é a regra do saldo negativo, não desta etapa.
+4. **O passado** — as saídas avulsas que já consumiram reserva de requisição ficam como estão; a consulta **A41** as acha
+   (**B414**).
+5. **O cancelamento pelas telas de requisição dos outros módulos** (Comercial, Frota, Compras, Financeiro, Operacional)
+   não solta a reserva de uma requisição **Aprovado** (**C141**).
+6. **O Gestor liberar reserva de requisição** — ele não tem a permissão de reservar; solta tudo pelo **Encerrar
+   Requisição** (**B410**).
+7. **Aviso a quem perdeu a reserva** — o solicitante não recebe e-mail quando o almoxarife libera a reserva dele.
+8. **A inversão inspeção × Aprovar** (**C131**) — continua; é a candidata da próxima etapa do almoxarifado (**Etapa 91**).
+
+### O que a revisão encontrou
+
+A medição reproduziu os dois avisos pelas rotas: a saída avulsa consumia a reserva por **quatro** tipos de saída, não só
+*Saída*; e o usuário sem perfil, a Produção e a Engenharia liberavam a reserva da requisição de outra pessoa. Mediu
+também uma armadilha: na reserva de requisição, o "solicitante" gravado na reserva é **quem aprovou**, não quem pediu —
+implementar "o solicitante libera" lendo esse campo daria a liberação ao aprovador e a negaria a quem pediu. A revisão do
+**plano** achou que a mensagem nova nunca chegaria à tela (o tratamento genérico de "sem permissão" a reescreveria para
+"Solicite acesso") e que quem pede requisição por outro módulo sem a permissão de reservar não liberaria a própria
+reserva — as duas resolvidas antes de executar (**B418**, **C140**). A revisão do **código**, executando, achou: quem
+pediu liberava a reserva com a separação já começada (o material separado voltava ao disponível e a entrega morria —
+corrigido, **B415**); o Gestor transferia a reserva de uma requisição para outra obra (corrigido, **B416**); dois testes
+que passavam sem provar o que diziam (os tipos de saída e a coluna do número da requisição — reforçados); e **duas
+afirmações erradas do próprio plano**, corrigidas à vista nele: que estornar a saída avulsa antiga "reativa a reserva"
+(não reativa — o material volta ao disponível e a reserva continua consumida; ver **A41**) e que a consulta **A41** podia
+contar todo tipo de movimento (entradas e ajustes guardam o número da reserva sem consumi-la — ela passou a olhar só as
+saídas). O **manual do sistema** dizia a mesma coisa errada sobre o estorno (*"Uma reserva Consumida volta a Ativa
+quando a saída que a consumiu é estornada"*) — **estava errado** e foi reescrito. No fechamento, a tela deixou de
+oferecer o **Transferir** que o servidor passou a recusar (**B417**).
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 77 entregue (2026-10-08):** **a reserva de uma requisição só sai pela requisição.** Uma saída pela API de
+  movimentações que cita a reserva de uma requisição é recusada — o material dela só sai pela entrega (**C136**
+  resolvido). Liberar à mão a reserva de uma requisição passou a ser de **quem pediu** (enquanto a requisição ainda pode
+  ser cancelada), do **almoxarife** ou do **administrador** — Produção, Engenharia e quem não tem perfil não liberam mais
+  a reserva alheia (**C137** resolvido). A revisão fechou também a liberação pelo dono com a separação começada e a
+  transferência de reserva de requisição para outra obra; a tela **Reservas** mostra o número da requisição, barra o
+  **Liberar** antes do formulário e não oferece **Transferir** nessas linhas. **O que é seu:** a consulta **A41**; as
+  decisões **B407 a B418** (a **B402** foi substituída pela **B407**); os avisos **C139 a C141** (o **C140** muda o que
+  integrações e quem pede requisição por outro módulo veem; o **C141** é um furo novo do cancelamento pelos outros
+  módulos); as limitações **(77)** em D e as verificações **(77)** em F. **Próxima: Etapa 91 — a inversão inspeção ×
+  Aprovar (C131) — ver o plano da Etapa 77.** *(Por que 91 e não 78: desde a unificação de 2026-10-07 a numeração de
+  etapas é uma só para todos os módulos, e as Etapas 78 a 90 foram as do Compras/núcleo — ver
+  `docs/compras-novidades-por-etapa.md`, **B18**.)*
 
 - **Etapa 76 entregue (2026-10-02):** **liberar ou deixar vencer a reserva de uma requisição atualiza o status dela.**
   A liberação pela tela **Reservas** e o **Processar expiração** recalculam o status da requisição dona: liberou tudo,
@@ -18234,8 +18562,9 @@ verde sem placar (**G86**, pago; a guarda rodada nos 291 arquivos não achou nen
   testes, que podia contar como verde um arquivo que pendurasse (**G86**). **O que é seu:** a consulta **A40**; as
   decisões **B396 a B406** (a **B406** é o incidente do arquivo de backup no repositório — o histórico do branch ainda o
   contém); os avisos **C135 a C138** (o **C136** e o **C137** são a próxima etapa); as limitações **(76)** em D e as
-  verificações **(76)** em F. **Próxima: Etapa 77 — a reserva de uma requisição só sai pela requisição (a saída avulsa
-  que gasta reserva de requisição, C136, e quem pode liberar reserva alheia, C137) — ver o plano da Etapa 76.**
+  verificações **(76)** em F. ~~**Próxima: Etapa 77 — a reserva de uma requisição só sai pela requisição (a saída avulsa
+  que gasta reserva de requisição, C136, e quem pode liberar reserva alheia, C137) — ver o plano da Etapa 76.**~~
+  *(Feita — Etapa 77.)*
 
 - **Etapa 75 entregue (2026-10-02):** **o material que a inspeção libera fica com quem esperava.** A inspeção que aprova
   e a não conformidade que aceita reservam o que liberaram para quem esperava, na ordem da fila de separação, e o

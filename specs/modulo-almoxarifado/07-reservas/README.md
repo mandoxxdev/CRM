@@ -2,7 +2,15 @@
 
 > **Status:** 🟢 Etapa 4 completa — backend (2026-08-05) e tela (2026-08-06) ·
 > **Spec original:** seção 7
-> **Última atualização:** 2026-10-02 (**Etapa 76** — liberar à mão (tela Reservas, total ou parcial) ou a reserva vencer
+> **Última atualização:** 2026-10-08 (**Etapa 77** — a reserva de origem `REQUISICAO` só é consumida pela entrega da
+> própria requisição (o motor recusa a saída genérica com 400, C136) e só é liberada à mão por quem pediu a requisição —
+> enquanto ela se cancela — ou pela ação nova `liberar_reserva_requisicao` [ADMINISTRADOR, ALMOXARIFE] (C137); reserva de
+> requisição não se transfere; `GET /reservas` diz número, solicitante e status da requisição; a tela mostra o número,
+> barra o Liberar antes do modal e esconde o Transferir nessas linhas. `413dec88`, `4c7dc181`, `db2e294c` (merge
+> `bdeefda4`), `6476f63d`, Fase 5 `a5245acc`/`198f09f4`, fechamento `2201eb1f`. Continua 🟢. **A linha "Consumo contra
+> reserva" de "O que já existe" estava incompleta** — corrigida à vista abaixo. Fora: a reserva manual alheia (C139), o
+> cancelamento pelos outros módulos que não solta a reserva (C141), a C131 — Etapa 91.)
+> Antes: 2026-10-02 (**Etapa 76** — liberar à mão (tela Reservas, total ou parcial) ou a reserva vencer
 > (`processar-expiracao`) recalcula o status da requisição dona, pela régua da 74 e sob a trava por material de todos os
 > materiais dela; a revisão estendeu a trava ao recálculo da chegada/liberação e do estorno; `4f51cdbd`, `a3f3195f`,
 > `66aa8e31`, `6d7c09cc`, Fase 5 `eb642441`. Continua 🟢; fora: o liberado não é redistribuído (C135), a saída
@@ -40,13 +48,24 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
 - Tabela `reservas_material_almoxarifado` (`schema.js:569`): material, quantidade, quantidade_utilizada, projeto_id, os_id, cliente_id, equipamento, submontagem, status.
 - Rotas (`routes/almoxarifado/extended.js`) — 5, sob `/api/almoxarifado`:
   `GET /reservas` (filtros `status`/`material_id`/`projeto_id` + campo derivado `saldo`) ·
-  `POST /reservas` (`reservar`) · `POST /reservas/:id/liberar` (`reservar`) ·
-  `PUT /reservas/:id/transferir` (`reservar_outra_os`) ·
+  `POST /reservas` (`reservar`) · `POST /reservas/:id/liberar` (`reservar`; **+ desde a Etapa 77, para reserva de
+  requisição: ser quem pediu a requisição — enquanto ela se cancela — ou ter `liberar_reserva_requisicao`**, checado
+  por `reservationService.assertPodeLiberarReserva`, `413dec88`/`a5245acc`) ·
+  `PUT /reservas/:id/transferir` (`reservar_outra_os`; **reserva de requisição → 400 desde a Etapa 77**, `a5245acc`) ·
   `POST /reservas/processar-expiracao` (`configurar`).
 - `quantidade_reservada` no material e no saldo por localização; mapa 2D exibe reservas.
 - **Consumo contra reserva** (`0e37dea`): saída com `reserva_id` valida contra a própria reserva
   (não contra o disponível), reivindica a reserva em UPDATE condicional, baixa físico+reservado
   juntos e marca `CONSUMIDA` ao zerar. Sem transação no serviço → compensação explícita.
+  > ⚠️ **Esta linha estava incompleta até a Etapa 77** — corrigida à vista, não apagada. Ela valia **também para reserva
+  > de requisição**: qualquer saída da `POST /movimentacoes/v2` (SAIDA, SAIDA_PRODUCAO, PERDA, AJUSTE_NEGATIVO…) citando o
+  > `reserva_id` de uma reserva de origem `REQUISICAO` a consumia, e a requisição seguia `TOTALMENTE_RESERVADA` com
+  > entregue 0 — era a **C136**. Desde `4c7dc181` (+ `198f09f4`) o motor recusa com 400 *"A reserva ⟨id⟩ é da requisição
+  > ⟨número⟩ — o material reservado para ela só sai pela entrega da requisição (tela Requisições), não por movimentação
+  > avulsa"*; a exceção é a marca `requisicaoDaEntrega` no 4º argumento de `registrarMovimentacao`, passada só por
+  > `requisitionService.entregarRequisicao` e conferida contra o `requisicao_id` da reserva. A reserva **manual** continua
+  > consumível pela v2. **E o estorno não reativa a reserva** (medido na Fase 5 da 77): `cancelarMovimentacao` não tem
+  > ramo de reserva para estorno de saída — o material volta ao disponível e a reserva fica `CONSUMIDA`.
 - **Reserva na aprovação** (`6690c1a`): `requisitionService.reservarItensAprovacao`; status
   `PARCIALMENTE_RESERVADA`/`TOTALMENTE_RESERVADA` na máquina de estados.
 - `reservationService.js`: listagem com filtros, transferência, expiração e
@@ -101,18 +120,33 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
   liberar tudo → `APROVADO`, parte → `PARCIALMENTE_RESERVADA`; `EM_SEPARACAO`/`PARCIALMENTE_ATENDIDA` não mudam; nenhuma
   seta nova; respostas e cliente inalterados (B399). **Fica de fora:** redistribuir o liberado para quem esperava (B397 —
   C135); a saída genérica que consome reserva de requisição (C136) e o perfil `PRODUCAO` que libera reserva alheia (C137)
-  — candidatos da Etapa 77; a inversão inspeção × aprovar (C131 — custo medido, B403); o passado (B404, A40); aviso ao
-  solicitante que perdeu a reserva.
+  — candidatos da Etapa 77 (*pagos na Etapa 77 — item abaixo*); a inversão inspeção × aprovar (C131 — custo medido,
+  B403); o passado (B404, A40); aviso ao solicitante que perdeu a reserva.
+- [x] **A reserva de uma requisição só sai pela requisição (Etapa 77, C136 + C137)** — quem libera `413dec88` (ação
+  `liberar_reserva_requisicao` = `[ADMINISTRADOR, ALMOXARIFE]` em `permissions.js`; `reservationService.assertPodeLiberarReserva`
+  chamada pela rota antes de `stockService.liberarReserva`; 403 `{ error, acao }` **sem `perfil`** — B418; `GET /reservas` +
+  `requisicao_numero`, `requisicao_solicitante_id`), a recusa no motor `4c7dc181` (leitura antes de qualquer escrita;
+  marca `requisicaoDaEntrega` só pelo 4º argumento), a tela `db2e294c` (merge `bdeefda4`), a integração `6476f63d`, a
+  revisão do código `a5245acc` (F1: o dono só libera enquanto `validarTransicao(status, 'CANCELADO').ok` — senão 403 com
+  a mensagem da separação; F2: `transferirReserva` recusa origem `REQUISICAO` com 400; `GET /reservas` + `requisicao_status`)
+  e `198f09f4` (RN-01 derivado de `TIPOS_SAIDA ∩ TIPOS_MOVIMENTO_ROTA`; a jornada 8 descola os ids), o fechamento
+  `2201eb1f` (a tela esconde o Transferir em reserva de requisição). **Escopo:** reserva de origem `REQUISICAO` (inclui a
+  da chegada/liberação 74/75); qualquer status da reserva recusa na v2 (B408); o dono é
+  `requisicoes_almoxarifado.solicitante_id`, **não** `reservas.solicitante_id` (que nela é o aprovador). **Fica de fora:**
+  a reserva manual alheia (B412 — C139); PERDA/AJUSTE_NEGATIVO consumindo reserva manual (limitação); a saída **sem**
+  `reserva_id` em material com `permite_saldo_negativo` leva o reservado (limitação); tipos não-saída gravam `reserva_id`
+  sem consumir (candidata); o GESTOR liberar reserva de requisição (B410); o cancelamento por
+  `/api/requisicoes-material/:id/cancelar` não solta reserva (C141); o passado (B414, A41); a C131 (Etapa 91).
 - [ ] Reserva por lote específico / número de série — **fora da Etapa 4**. Atualização (2026-08-11): a dependência de **lote** caiu — a feature 10 (lotes) foi entregue na Etapa 6 (2026-08-09/10), então reserva por lote ficou implementável; número de série continua dependendo da 6b
 - [x] Data de necessidade na reserva (`data_necessidade`) — `6690c1a`. **Prioridade** ficou fora: sem demanda concreta, `data_necessidade` cobre o ordenamento útil
 - [x] Expiração automática (`POST /reservas/processar-expiracao` + config `reserva_dias_validade`) — `6690c1a`. **Opt-in**: sem a config e sem `expira_em` explícito a reserva não expira, senão as reservas manuais existentes começariam a ser liberadas sozinhas. Alerta por e-mail fica com a feature 20
-- [x] Transferência de reserva entre projetos (`PUT /reservas/:id/transferir`, `reservar_outra_os`) — `6690c1a`
+- [x] Transferência de reserva entre projetos (`PUT /reservas/:id/transferir`, `reservar_outra_os`) — `6690c1a`. **Só reserva manual desde a Etapa 77** (`a5245acc`): reserva de requisição → 400 *"A reserva ⟨id⟩ é da requisição ⟨número⟩ e não pode ser transferida para outra OS ou projeto"*; a tela não mostra o botão nessas linhas (`2201eb1f`)
 - [x] Bloqueio de consumo por outro projeto — consequência do consumo contra reserva, com teste explícito — `0e37dea`
 - [x] Consulta "quem reservou" (histórico por material) — `43cd367`. A tela filtra por material com status "Todos", mostrando solicitante, destino e o consumido de cada reserva; o extrato do material traz as ativas
 - [x] Reserva parcial com registro do atendido (`quantidade_utilizada`) — `0e37dea`
 
 ### Frontend
-- [x] **Tela de reservas** (`ReservasAlmoxarifado.js`, rota `/almoxarifado/reservas`, menu "Reservas") — `43cd367`. Lista com filtros de status/material/projeto, criação, liberação total ou parcial com motivo, transferência entre projetos/OS e o botão do job de expiração (só `configurar`). Testes: `client/src/components/almoxarifado/ReservasAlmoxarifado.test.js` (10 casos)
+- [x] **Tela de reservas** (`ReservasAlmoxarifado.js`, rota `/almoxarifado/reservas`, menu "Reservas") — `43cd367`. Lista com filtros de status/material/projeto, criação, liberação total ou parcial com motivo, transferência entre projetos/OS e o botão do job de expiração (só `configurar`). Testes: `client/src/components/almoxarifado/ReservasAlmoxarifado.test.js` (10 casos na Etapa 4; **22** depois da Etapa 77 — RN-10, F1 e o Transferir ausente em reserva de requisição, `db2e294c`/`a5245acc`/`2201eb1f`)
 - [x] Indicador de reservas no detalhe do material (`ExtratoMaterialModal`) — `43cd367`. A tabela de reservas ativas passou a mostrar saldo, origem (REQ #id ou MANUAL) e os prazos, além de quem reservou e o vínculo que já tinha
 - ⚠️ **Ressalva (auditoria de 2026-08-11) — a Etapa 4 constava completa com um buraco de front na tela vizinha.** O item de tela desta spec cobria a tela de **reservas**, que estava ok; mas os status `PARCIALMENTE/TOTALMENTE_RESERVADA` que esta feature introduziu **não existiam na tela de requisições**: `RequisicoesList.js` mostrava o badge cru, o filtro não tinha as opções e os botões "Iniciar Separação"/"Cancelar Requisição" ficavam invisíveis nesses status; `AlmoxPageHeader.js` caía no fallback "Criar" do stepper. Corrigido em `92fe236`, com teste novo `client/src/components/almoxarifado/RequisicoesList.test.js` (badge, filtro, stepper, botões; controle positivo rodado)
 
@@ -153,7 +187,7 @@ A máquina de estados ganhou `PARCIALMENTE/TOTALMENTE_RESERVADA` como destinos d
 
 ## Regras essenciais + testes de API exigidos
 
-Todos em `server/tests/api/` (**51 casos** em 5 arquivos), rodam com `npm run test:api`.
+Todos em `server/tests/api/`, rodam com `npm run test:api`. *(Esta linha dizia "**51 casos** em 5 arquivos" — a contagem da Etapa 4, que envelheceu a cada etapa; saiu daqui. Os três arquivos da Etapa 77, medidos no fechamento: `reservaLiberarSoQuemPode` 22, `reservaRequisicaoSoPelaEntrega` 17, `reservaRequisicaoPortaIntegracao` 12.)*
 Os nomes abaixo são os reais — copiáveis para localizar o caso.
 
 | Regra | Arquivo · teste |
@@ -208,8 +242,19 @@ Os nomes abaixo são os reais — copiáveis para localizar o caso.
 | Best-effort: o recálculo nunca derruba a liberação nem o job | `reservaLiberarRecalculaStatus` · *[RN-05]…* · `reservaExpiracaoRecalculaStatus` · *[RN-05]…* · `reservaRecalculoBase` · *(e)…* |
 | O recálculo roda sob a trava (corrida com a nota do mesmo material; dois materiais; dois itens do mesmo material não travam) | `reservaRecalculoBase` · *(f)…* · *(g)…* · *(i)…* · `reservaLiberarRecalculaStatus` · *[RN-07]…* |
 | O recálculo da chegada/liberação e do estorno também sob a trava (B398) | `reservaRecalculoRevisaoFase5` · *(a)…* · *(b)…* · *(c)…* |
-| Perfil inalterado (QUALIDADE não libera; job só ADMINISTRADOR); transferir não recalcula (declarado) | `reservaLiberarRecalculaStatus` · *[RN-06]…* · *[RN-08]…* · `reservaExpiracaoRecalculaStatus` · *[RN-06]…* |
+| Perfil inalterado (QUALIDADE não libera; job só ADMINISTRADOR); ~~transferir não recalcula (declarado)~~ — desde a Etapa 77 a transferência de reserva de requisição é **400** (o RN-08 foi editado, com o porquê) | `reservaLiberarRecalculaStatus` · *[RN-06]…* · *RN-08 transferir reserva de requisicao: 400 desde a Etapa 77 (F2)…* · `reservaExpiracaoRecalculaStatus` · *[RN-06]…* |
 | Ponta a ponta (liberar, nota, vencer, separar, entregar — perfis reais) | `reservaRecalculoIntegracao` (7 cenários, pelas rotas) |
+| **Etapa 77** — a v2 com o `reserva_id` de uma reserva de requisição: 400 M1 e nada mudou, em todo tipo de saída da v2 e no parcial; a manual pela v2 consome | `reservaRequisicaoSoPelaEntrega` · *[RN-01] v2 ⟨tipo⟩ com o reserva_id da requisicao: 400 M1, nada mudou* · *[RN-01] v2 SAIDA parcial…* · *[RN-01] metade positiva: reserva MANUAL pela v2 -> 201 CONSUMIDA…* |
+| A entrega da própria requisição continua consumindo (e divide com o excedente) | `reservaRequisicaoSoPelaEntrega` · *[RN-02] entrega pela rota (ALMOXARIFE)…* · *[RN-02] entrega maior que a reserva…* |
+| A marca é do 4º argumento e da requisição certa; o `params` não abre | `reservaRequisicaoSoPelaEntrega` · *[RN-03] (a)…* a *(d)…* |
+| Precedência: inexistente / outro material → a mensagem de hoje; já LIBERADA → M1 | `reservaRequisicaoSoPelaEntrega` · *[RN-04]…* (três) |
+| Quem libera reserva de requisição: quem pediu (sem perfil, parte), ALMOXARIFE, ADMINISTRADOR de perfil e admin de sistema | `reservaLiberarSoQuemPode` · *[RN-05] (a)…* a *(e)…* |
+| A lista negativa: sem perfil, PRODUCAO e ENGENHARIA que não pediram → 403 M2; GESTOR/COMPRAS/CONSULTA/QUALIDADE → 403 `reservar`; o mapa; o aprovador não é o dono; permissão antes do estado | `reservaLiberarSoQuemPode` · *[RN-06] (a)…* a *(g)…* |
+| O dono só libera enquanto a requisição se cancela (F1); almoxarife/administrador ainda liberam; não-dono continua M2 | `reservaLiberarSoQuemPode` · *[F1] o dono (sem a acao) com a requisicao ⟨estado⟩: 403 M3…* · *[F1] metade positiva…* · *[F1] nao-dono…* |
+| Reserva de requisição não se transfere; a manual sim (F2) | `reservaLiberarSoQuemPode` · *[F2] GESTOR transferindo a reserva da requisicao…: 400, nada muda* · *[F2] metade positiva…* |
+| A reserva manual não mudou; o job de expiração vence reserva de requisição como antes | `reservaLiberarSoQuemPode` · *[RN-07]…* (duas) |
+| `GET /reservas` diz número e solicitante da requisição; `minhas-permissoes` traz a ação nova | `reservaLiberarSoQuemPode` · *[RN-08]…* · *[RN-09]…* |
+| Ponta a ponta (v2 recusada, liberar por perfil, dono libera parte, entrega consome, reserva da chegada — perfis reais) | `reservaRequisicaoPortaIntegracao` (12 cenários, pelas rotas) |
 | Excluir requisição libera as reservas dela | `reservaPontasFaltantes` · *excluir requisição libera as reservas dela e devolve ao disponível* |
 | Excluir não toca reserva manual de terceiro | `reservaPontasFaltantes` · *excluir NÃO mexe em reserva manual de outro dono do mesmo material* |
 

@@ -877,6 +877,7 @@ A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de
 | Cancelar não conformidade (encerrar a cobrança da execução de um documento decidido) | ● | – | – | – | – | – | ● | – |
 | Reservar | ● | ● | – | ● | ● | – | – | – |
 | Reservar para outra OS | ● | – | – | – | – | ● | – | – |
+| Liberar a reserva de uma requisição que não foi você que pediu | ● | ● | – | – | – | – | – | – |
 | Inventariar | ● | ● | – | – | – | ● | – | – |
 | Gerenciar reposição e compras (sugestões, gerar/vincular/cancelar solicitação, verificar mínimos, contexto do material) | ● | – | ● | – | – | ● | – | – |
 | Ver a central de alertas | ● | ● | ● | – | – | ● | – | – |
@@ -889,7 +890,8 @@ As leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
   de propósito — dá para autorizar um perfil só para ferramentas, sem abrir movimentação de
   material, se um dia isso for pedido.
 - **Ajustar material de cliente é mais restrito que ajustar o estoque próprio.** O Gestor ajusta o saldo da GMP; **apenas o Administrador** ajusta o saldo de material que pertence a um cliente. O motivo é direto: aquele número é o que o cliente vai conferir e cobrar.
-- **Reservar para outra OS** é separado de **Reservar**. Qualquer requisitante reserva material para a própria ordem; transferir uma reserva de uma OS para outra é decisão de priorização, e fica com o Administrador e o Gestor.
+- **Reservar para outra OS** é separado de **Reservar**. Qualquer requisitante reserva material para a própria ordem; transferir uma reserva de uma OS para outra é decisão de priorização, e fica com o Administrador e o Gestor. A reserva que nasceu de uma **requisição** não se transfere — ela pertence à requisição (9.5).
+- **Liberar a reserva de uma requisição** exige, além de **Reservar**, ser **quem pediu a requisição** — e só enquanto ela ainda pode ser cancelada — ou ter esta permissão própria, que é do **Administrador** e do **Almoxarife** (9.6). É a única regra do módulo que olha **quem é a pessoa**, e não só o perfil: o perfil Produção reserva e libera as reservas manuais, mas não solta o material que foi separado para a requisição de outra pessoa. O **Gestor** não a tem porque não tem **Reservar** (a rota de liberar exige as duas); ele solta tudo de uma requisição pelo **Encerrar Requisição**.
 - **Inspecionar** é o que autoriza aprovar, reprovar e liberar material da quarentena, e também mudar a situação de um lote ou de uma série, e liberar vencimento. Pertence ao Administrador, ao Almoxarife e ao **Qualidade**.
 - **Gerenciar plano de inspeção** é o que autoriza cadastrar, editar e desativar as características a medir de um material, com o valor nominal e a tolerância (15.2.1). Pertence ao Administrador, ao **Qualidade** e à **Engenharia** — quem especifica tolerância. **Ler** o plano é liberado a qualquer usuário do módulo, porque quem inspeciona precisa saber o que medir. É permissão **separada de Configurar** de propósito: *Configurar* é só do Administrador, e prendê-la ali deixaria a qualidade sem cadastrar o que ela mesma mede.
 - **O perfil Qualidade tem seis ações, e todas são da mesma família: decidir qualidade.** Ele existe justamente para que a área de qualidade não precise pedir ao almoxarifado que decida por ela, nem receber um perfil largo. São elas: **Inspecionar** (aprovar, reprovar, liberar da quarentena, mudar situação de lote e de série, liberar vencimento); **Gerenciar plano de inspeção** (15.2.1), o cadastro das características a medir e das tolerâncias — não faria sentido a qualidade não poder cadastrar o que ela mesma vai medir; e as quatro da não conformidade, **Registrar não conformidade**, **Decidir não conformidade**, **Registrar a execução do encaminhamento** e **Cancelar não conformidade** (15b), sendo que **decidir** e **cancelar** são dele e do Administrador, e de mais ninguém. Fora dessas seis, ele é leitura. Consequência que quem for usá-lo precisa saber: **os botões "Bloquear Material" e "Desbloquear Material" da tela de Inspeções não são dele** — eles mexem em saldo e pertencem a **Ajustar estoque** (Administrador e Gestor). Clicando neles, o Qualidade recebe:
@@ -1739,7 +1741,7 @@ Outras recusas: sem o perfil, *"Sem permissão para reservar"*; quantidade zero 
 | **LIBERADA** | Alguém soltou (manualmente, ou por cancelamento/exclusão da requisição) |
 | **EXPIRADA** | O prazo venceu e o processamento de expiração a soltou |
 
-Uma reserva **Consumida volta a Ativa** quando a saída que a consumiu é estornada — o material voltou ao estoque, e o hold que existia por trás dele volta a existir. É a única volta atrás possível; Liberada e Expirada são estados finais.
+**Consumida, Liberada e Expirada são estados finais.** Estornar a saída que consumiu uma reserva devolve o material ao **disponível**, não à reserva: a reserva continua *Consumida* e o material volta solto, sem hold. Se aquele material ainda era de uma requisição, separe e entregue pela requisição logo depois do estorno — entre os dois gestos outra saída ou reserva pode levá-lo.
 
 Na tela, cada linha mostra **três números diferentes** e é preciso saber ler os três:
 
@@ -1747,7 +1749,7 @@ Na tela, cada linha mostra **três números diferentes** e é preciso saber ler 
 - **Consumido** — o que a entrega já baixou;
 - **Saldo** — `Reservado − Consumido`, o que **ainda** está preso. É este que importa.
 
-Reservas nascidas de requisição aparecem com a etiqueta **REQ #número**; as feitas à mão aparecem como **MANUAL**.
+Reservas nascidas de requisição aparecem com o **número da requisição** (por exemplo, **REQ-2026-0007**); as feitas à mão aparecem como **MANUAL**.
 
 ### 9.3 Reserva automática na aprovação
 
@@ -1845,6 +1847,12 @@ O que é validado, tudo no mesmo momento e de forma indivisível:
 
 Ao consumir, o físico **e** o reservado baixam juntos, no mesmo instante. **Reserva que zera vira CONSUMIDA automaticamente** — não fica ATIVA segurando saldo nenhum.
 
+**A reserva de uma requisição só é consumida pela entrega dessa requisição.** A tela **Movimentações** não oferece citar reserva — citar é coisa de integração. Uma saída avulsa (qualquer tipo de saída: Saída, Saída para produção, montagem ou assistência, Perda, Ajuste negativo) que cita a reserva de uma requisição é **recusada antes de qualquer efeito**, com:
+
+> *A reserva ⟨id⟩ é da requisição ⟨número⟩ — o material reservado para ela só sai pela entrega da requisição (tela Requisições), não por movimentação avulsa*
+
+Vale para a reserva em qualquer status — ativa, liberada, vencida ou já consumida: a regra é "nunca por esta porta", não "não agora". Reserva inexistente ou de outro material continua com *"Reserva não encontrada para este material"*. O motivo: a entrega da requisição é que passa pela separação, pela conferência do material crítico, pela assinatura e pela retirada, e é ela que marca o item como entregue — uma saída avulsa levaria o material e a requisição continuaria esperando por ele. A reserva **manual** continua consumível por qualquer saída que a cite.
+
 **Na entrega de requisição isso é automático e pode ser dividido:** se a entrega pedir mais do que a reserva tem, o excedente sai pelo caminho normal (validado contra o disponível) e a parte reservada é consumida citando a reserva. O excedente é processado **primeiro**, porque é o único que disputa saldo com o resto da empresa — se vai falhar, falha antes de mexer na reserva.
 
 ### 9.5 Transferência de reserva entre projetos
@@ -1853,6 +1861,7 @@ O ícone de setas troca o **destino** da reserva (projeto, OS, referência de OS
 
 **Nenhum saldo é tocado — de propósito.** A quantidade continua no estoque e continua reservada; muda só para quem o hold aponta. Liberar e reservar de novo seria pior: abriria uma janela em que outra saída poderia levar o material no meio do caminho.
 
+- **Reserva de requisição não se transfere** → *"A reserva ⟨id⟩ é da requisição ⟨número⟩ e não pode ser transferida para outra OS ou projeto"*. Ela pertence à requisição e é consumida pela entrega dela; mudar o destino do material é mudar a requisição. Na tela, o ícone de setas nem aparece nessas linhas. Esta recusa vem antes da de status.
 - **Só reserva ATIVA** pode ser transferida → *"Somente reserva ATIVA pode ser transferida (status atual: CONSUMIDA)"*. Liberada e Expirada já devolveram o saldo (transferir daria a impressão de que o novo projeto tem material separado); Consumida é fato passado — reescrever o dono falsificaria o consumo já registrado.
 - É preciso informar ao menos um destino → *"Informe ao menos um destino: projeto_id, os_id, os_referencia ou cliente_id"*.
 - Exige o perfil **reservar para outra OS** (Administrador e Gestor), mais restrito que o de reservar.
@@ -1866,7 +1875,22 @@ Liberar devolve ao disponível o que a reserva ainda segura. Pode ser **total** 
 - Não se libera mais do que resta → *"Quantidade acima do saldo da reserva: 6"*.
 - Quantidade zero ou negativa → *"Quantidade a liberar deve ser maior que zero"*.
 - **A tela exige o motivo** antes de enviar (*"Informe o motivo da liberação"*), e ele fica gravado junto com **quem liberou e quando** — na própria reserva e no livro.
-- Ao liberar uma reserva nascida de requisição, a tela avisa antes: *"Esta reserva pertence à requisição #N. Liberar devolve o saldo ao disponível geral e a entrega dessa requisição volta a disputar estoque com as demais."*
+- Ao liberar uma reserva nascida de requisição, a tela avisa antes: *"Esta reserva pertence à requisição ⟨número⟩. Liberar devolve o saldo ao disponível geral e a entrega dessa requisição volta a disputar estoque com as demais."*
+
+**Quem libera a reserva de uma requisição.** Além da permissão **Reservar**, a reserva nascida de uma requisição só é liberada à mão por:
+
+1. **quem pediu a requisição** — enquanto ela ainda pode ser cancelada (*Rascunho*, *Pendente*, *Aguard. Aprov. Valor*, *Aprovado*, *Aguard. Estoque*, *Aguard. Compra*, *Parcialmente Reservada*, *Totalmente Reservada*). É a desistência parcial: o **Cancelar** desiste de tudo, liberar a reserva desiste de parte; as duas valem nos mesmos status. Depois que a separação começa (*Em Separação*, *Pronta p/ Retirada*…), o material já está separado na caixa, e soltá-lo faria a entrega falhar;
+2. **o Almoxarife** ou **o Administrador**, em qualquer status.
+
+"Quem pediu" é o solicitante **da requisição**. Na tela, a coluna **Solicitante** de uma reserva de requisição mostra em nome de quem a reserva foi **criada** — quem aprovou a requisição, ou, na reserva feita na chegada do material, quem processou a nota ou decidiu a inspeção (9.3b, 9.3c) — não é essa pessoa que decide.
+
+Quem não se encaixa é barrado. Pela tela, antes de abrir o formulário:
+
+> *Só quem pediu a requisição, o almoxarife ou o administrador liberam esta reserva*
+
+> *Esta requisição já está em separação — só o almoxarife ou o administrador liberam a reserva agora* (para quem pediu, depois que a separação começou)
+
+Pela integração, a recusa é *"Sem permissão para liberar a reserva da requisição ⟨número⟩: só quem pediu a requisição, o almoxarife ou o administrador liberam"* ou *"Sem permissão para liberar a reserva da requisição ⟨número⟩: ela já está em separação — só o almoxarife ou o administrador liberam agora"*. Quem não tem **Reservar** (Gestor, Compras, Consulta, Qualidade) é barrado antes, pela permissão, mesmo que tenha pedido a requisição — o caminho dele é **cancelar** a requisição. A **reserva manual** não tem essa regra: quem tem **Reservar** libera qualquer uma.
 
 **Liberação automática:** **cancelar**, **excluir**, **encerrar** (**Encerrar Requisição**) ou **rejeitar a liberação por valor** de uma requisição solta todas as reservas ativas dela. Isso é essencial porque a expiração é opcional (9.7) — sem essa liberação, o saldo ficaria preso a uma requisição morta para sempre. No livro, o motivo diz qual foi o gesto (por exemplo, *"Liberação por encerramento de requisição"*, *"Liberação por rejeição de valor da requisição"*).
 
