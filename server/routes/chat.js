@@ -7,6 +7,8 @@ const fs = require('fs');
 const express = require('express');
 const multer = require('multer');
 const chatService = require('../services/chat/chatService');
+// Etapa 81: nosniff + CSP sandbox — um arquivo enviado ao chat nao executa script na origem do CRM.
+const { cabecalhosUploadSeguro } = require('../services/almoxarifado/urlUpload');
 
 const IMAGE_MIMES = /^image\/(jpeg|jpg|png|gif|webp)$/i;
 const IMAGE_EXTS = /\.(jpe?g|png|gif|webp)$/i;
@@ -17,7 +19,7 @@ module.exports = function registerChatRoutes(app, db, authenticateToken, chatSoc
     fs.mkdirSync(uploadsChatDir, { recursive: true });
   }
 
-  app.use('/api/uploads/chat', express.static(uploadsChatDir));
+  app.use('/api/uploads/chat', express.static(uploadsChatDir, { setHeaders: cabecalhosUploadSeguro }));
 
   const storageChat = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadsChatDir),

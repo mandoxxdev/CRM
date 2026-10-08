@@ -276,6 +276,9 @@ const {
   uploadsPropostaFotosDir,
 } = require('./config/paths');
 const { gerarHTMLPropostaPremiumV2, substituirPlaceholdersProposta } = require('./templates/propostaPremiumV2');
+// Etapa 81: nosniff + CSP sandbox nos estaticos de /api/uploads (um .html enviado nao executa script).
+const { cabecalhosUploadSeguro } = require('./services/almoxarifado/urlUpload');
+const { criarServirPdfOs, criarServirContratoAnexo } = require('./services/arquivosProtegidos');
 
 // Opções de launch do Puppeteer: usar Chrome/Chromium do sistema quando o bundle não existir (ex.: Linux em servidor)
 // ---------------------------------------------------------------------------
@@ -10985,7 +10988,7 @@ app.post('/api/proposta-template/contrato-anexo', authenticateToken, uploadContr
         res.json({
           message: 'Contrato anexo enviado com sucesso',
           filename: req.file.filename,
-          url: `/api/uploads/contrato/${req.file.filename}`
+          url: `/api/proposta-template/contrato-anexo/${req.file.filename}`
         });
       }
     );
@@ -15032,10 +15035,10 @@ app.delete('/api/aprovacoes/:id', authenticateToken, (req, res) => {
 });
 
 // Servir fotos de famílias
-app.use('/api/uploads/familias-produtos', express.static(uploadsFamiliasDir));
-app.use('/api/uploads/grupos-produtos', express.static(uploadsGruposDir));
-app.use('/api/uploads/grupos-compras', express.static(uploadsGruposComprasDir));
-app.use('/api/uploads/fornecedores', express.static(uploadsFornecedoresDir));
+app.use('/api/uploads/familias-produtos', express.static(uploadsFamiliasDir, { setHeaders: cabecalhosUploadSeguro }));
+app.use('/api/uploads/grupos-produtos', express.static(uploadsGruposDir, { setHeaders: cabecalhosUploadSeguro }));
+app.use('/api/uploads/grupos-compras', express.static(uploadsGruposComprasDir, { setHeaders: cabecalhosUploadSeguro }));
+app.use('/api/uploads/fornecedores', express.static(uploadsFornecedoresDir, { setHeaders: cabecalhosUploadSeguro }));
 
 // ========== ROTAS DE PRODUTOS ==========
 app.get('/api/produtos', authenticateToken, (req, res) => {
@@ -17076,8 +17079,8 @@ app.post('/api/custos-viagens/:id/duplicar', authenticateToken, (req, res) => {
 });
 
 // ========== ROTAS DE COMPROVANTES DE VIAGENS ==========
-// Servir arquivos estáticos de comprovantes
-app.use('/api/uploads/comprovantes-viagens', express.static(uploadsComprovantesDir));
+// Etapa 81: sem montagem estatica — comprovante (dado pessoal) so sai pela rota autenticada
+// GET /api/custos-viagens/:id/comprovante/:anexo_id.
 
 // Upload de comprovante
 app.post('/api/custos-viagens/:id/comprovante', authenticateToken, uploadComprovante.single('arquivo'), (req, res) => {
@@ -17937,25 +17940,25 @@ app.use('/api/assets/proposta', express.static(propostaAssetsStaticDir, { maxAge
 app.use('/api/assets/fonts', express.static(propostaFontsStaticDir, { maxAge: '365d', immutable: true }));
 
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE COTAÇÕES ==========
-// Servir arquivos estáticos de uploads
-app.use('/api/uploads/cotacoes', express.static(uploadsDir));
+// Etapa 81: sem montagem estatica — a cotacao (precos de fornecedor) so sai pela rota
+// autenticada GET /api/propostas/:id/cotacao.
 
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE IMAGENS DE PRODUTOS ==========
 // Servir arquivos estáticos de imagens de produtos
-app.use('/api/uploads/produtos', express.static(uploadsProdutosDir));
-app.use('/api/uploads/proposta-fotos', express.static(uploadsPropostaFotosDir));
+app.use('/api/uploads/produtos', express.static(uploadsProdutosDir, { setHeaders: cabecalhosUploadSeguro }));
+app.use('/api/uploads/proposta-fotos', express.static(uploadsPropostaFotosDir, { setHeaders: cabecalhosUploadSeguro }));
 
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE IMAGENS DE MATERIAIS (ESCRITÓRIO) ==========
-app.use('/api/uploads/materiais-escritorio', express.static(uploadsMateriaisEscritorioDir));
+app.use('/api/uploads/materiais-escritorio', express.static(uploadsMateriaisEscritorioDir, { setHeaders: cabecalhosUploadSeguro }));
 
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE LOGOS ==========
 // Servir arquivos estáticos de logos
-app.use('/api/uploads/logos', express.static(uploadsLogosDir));
-app.use('/api/uploads/avatares', express.static(uploadsAvataresDir));
+app.use('/api/uploads/logos', express.static(uploadsLogosDir, { setHeaders: cabecalhosUploadSeguro }));
+app.use('/api/uploads/avatares', express.static(uploadsAvataresDir, { setHeaders: cabecalhosUploadSeguro }));
 
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE IMAGENS DE CABEÇALHO ==========
 // Servir arquivos estáticos de imagens de cabeçalho
-app.use('/api/uploads/headers', express.static(uploadsHeaderDir));
+app.use('/api/uploads/headers', express.static(uploadsHeaderDir, { setHeaders: cabecalhosUploadSeguro }));
 
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE IMAGENS DE RODAPÉ ==========
 // Servir arquivos estáticos de imagens de rodapé com headers para evitar cache
@@ -17965,13 +17968,22 @@ app.use('/api/uploads/footers', (req, res, next) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   next();
-}, express.static(uploadsFooterDir));
+}, express.static(uploadsFooterDir, {
+  // Etapa 81: o setHeaders roda DEPOIS do middleware acima e o cabecalhosUploadSeguro poe
+  // Cache-Control proprio — o no-store do rodape e reaplicado depois dele, senao se perde.
+  setHeaders: (res) => {
+    cabecalhosUploadSeguro(res);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  },
+}));
 
 // ========== ROTAS DE UPLOAD E DOWNLOAD DE IMAGEM DE CAPA ==========
-app.use('/api/uploads/covers', express.static(uploadsCoverDir));
+app.use('/api/uploads/covers', express.static(uploadsCoverDir, { setHeaders: cabecalhosUploadSeguro }));
 
-// Contrato anexo (Word/PDF) – download para anexar à proposta
-app.use('/api/uploads/contrato', express.static(uploadsContratoDir));
+// Contrato anexo (Word/PDF) – download para anexar à proposta. Etapa 81: sai so com login e so
+// se for o contrato_anexo_url de alguma linha (services/arquivosProtegidos.js, RN-81.02).
+const servirContratoAnexo = criarServirContratoAnexo({ db, uploadsContratoDir });
+app.get('/api/proposta-template/contrato-anexo/:arquivo', authenticateToken, servirContratoAnexo);
 
 // Chat uploads servidos em server/routes/chat.js
 
@@ -22072,9 +22084,10 @@ app.post('/api/operacional/ordens-servico/:id/gerar-pdf', authenticateToken, asy
   }
 });
 
-// Servir PDFs de OS
-// Rota para servir PDFs de OS (sem /api/ no caminho para evitar duplicação)
-app.use('/uploads/ordens-servico', express.static(uploadsOSDir));
+// PDF da OS — Etapa 81: saiu a montagem estatica /uploads/ordens-servico (abria sem login, nome
+// adivinhavel). O pdf_url gravado continua o mesmo; a rota acha o arquivo pelo basename dele.
+const servirPdfOs = criarServirPdfOs({ db, uploadsOSDir });
+app.get('/api/operacional/ordens-servico/:id/pdf', authenticateToken, servirPdfOs);
 
 // Itens da OS
 app.get('/api/operacional/os-itens/:os_id', authenticateToken, (req, res) => {
