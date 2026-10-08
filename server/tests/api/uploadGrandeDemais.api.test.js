@@ -164,7 +164,9 @@ test('85: o multer do index.js e o embrulhado (e nao ha outro require de multer 
 
 test('85: middleware de tamanho registrado uma vez, DEPOIS da ultima rota com multer e ANTES do global', () => {
   const iMw = fonteIndex.indexOf("app.use('/api', tratarArquivoGrandeDemais);");
-  const iGlobal = fonteIndex.indexOf("app.use('/api', (err, req, res, next) => {");
+  // Etapa 86: o global virou modulo (services/errosApi.js); o texto inline que esta regua procurava
+  // sumiu — acha o registro dele.
+  const iGlobal = fonteIndex.indexOf("app.use('/api', tratarErroGlobalApi);");
   assert.ok(iMw > 0, 'tratarArquivoGrandeDemais nao registrado');
   assert.ok(iGlobal > 0, 'handler global nao encontrado (a regua ficou cega)');
   assert.ok(iMw < iGlobal, 'middleware registrado depois do global: o LIMIT_FILE_SIZE vira 500');
@@ -189,12 +191,54 @@ test('85: middleware de tamanho registrado uma vez, DEPOIS da ultima rota com mu
   assert.ok(iMw > iUltimoUso, `middleware registrado antes da ultima rota com multer (idx ${iUltimoUso}): o erro dela vira 500`);
 });
 
-test('85 (RN-85.03): chat e o anexo do almoxarifado continuam com a mensagem propria', () => {
+// Etapa 86: a RN-85.03 foi REVISTA e este teste INVERTIDO. Antes afirmava que chat/extended NAO
+// usavam o embrulho; agora os tres arquivos de rotas tardias com multer usam (o LIMIT_FILE_SIZE
+// deles chega ao tratarArquivoGrandeDemais pelo rotasModulos), e o chat e o /anexos continuam com
+// a mensagem propria no callback inline.
+test('86 (RN-85.03 revista): multers tardios embrulhados; chat e /anexos continuam com a mensagem propria', () => {
   const chat = fs.readFileSync(path.join(SERVER, 'routes', 'chat.js'), 'utf8');
   const ext = fs.readFileSync(path.join(SERVER, 'routes', 'almoxarifado', 'extended.js'), 'utf8');
+  const almox = fs.readFileSync(path.join(SERVER, 'routes', 'almoxarifado.js'), 'utf8');
   assert.match(chat, /err\.code === 'LIMIT_FILE_SIZE'/);
+  assert.match(chat, /'Imagem muito grande\. Máximo 10MB\.'/);
   assert.match(ext, /'Arquivo excede o limite de 10 MB'/);
-  assert.ok(!/multerComLimiteNoErro/.test(chat + ext), 'chat/almoxarifado nao foram tocados por esta etapa');
+  for (const [nome, fonte] of [['chat.js', chat], ['extended.js', ext], ['almoxarifado.js', almox]]) {
+    assert.ok(/\nconst multer = multerComLimiteNoErro\(require\('multer'\)\);\n/.test(fonte), `${nome}: multer sem o embrulho`);
+    assert.strictEqual(fonte.split("require('multer')").length - 1, 1, `${nome}: require('multer') extra (cru)`);
+  }
+});
+
+// Etapa 86 (RN-86.01): os tres handlers registrados UMA vez, nesta ordem, depois do Router dos
+// modulos; e todo registrador `require('./routes/...')(` depois do Router recebe `rotasModulos`.
+test('86 (RN-86.01): handlers uma vez, em ordem, depois de app.use(rotasModulos); registradores tardios no Router', () => {
+  const iRotas = fonteIndex.indexOf('app.use(rotasModulos);');
+  assert.ok(iRotas > 0, 'app.use(rotasModulos) nao encontrado (a regua ficou cega)');
+  assert.strictEqual(fonteIndex.split('app.use(rotasModulos);').length - 1, 1, 'rotasModulos montado mais de uma vez');
+  assert.ok(/\nconst rotasModulos = express\.Router\(\);\napp\.use\(rotasModulos\);\n/.test(fonteIndex), 'rotasModulos nao e um express.Router montado logo apos a criacao');
+  const linhas = ["app.use('/api', tratarErroFormatoImagem);", "app.use('/api', tratarArquivoGrandeDemais);", "app.use('/api', tratarErroGlobalApi);"];
+  let anterior = iRotas;
+  for (const l of linhas) {
+    assert.strictEqual(fonteIndex.split(l).length - 1, 1, `${l} registrado ${fonteIndex.split(l).length - 1} vezes`);
+    const i = fonteIndex.indexOf(l);
+    assert.ok(i > anterior, `${l} fora de ordem (ou antes do app.use(rotasModulos))`);
+    anterior = i;
+  }
+  // Nenhum outro registro de handler de erro global no index.js (nem a versao inline antiga).
+  assert.strictEqual(fonteIndex.split('tratarErroGlobalApi').length - 1, 2, 'tratarErroGlobalApi: require + 1 registro');
+  assert.ok(!fonteIndex.includes('(err, req, res, next) =>'), 'handler de erro inline no index.js');
+  const depois = fonteIndex.slice(iRotas);
+  const regs = [...depois.matchAll(/require\('\.\/routes\/([\w/]+)'\)\((\w+)/g)];
+  const nomes = regs.map((m) => m[1]);
+  for (const esperado of ['modulosTipoConfig', 'requisicoesMaterial', 'almoxarifado', 'frotas', 'producao', 'todolist', 'whatsappGateway', 'chat']) {
+    assert.ok(nomes.includes(esperado), `registrador ${esperado} nao encontrado depois do Router (a regua ficou cega)`);
+  }
+  for (const [, nome, arg] of regs) assert.strictEqual(arg, 'rotasModulos', `routes/${nome} registrado em ${arg}, nao no rotasModulos`);
+  // O chat registra dentro do `.then` do initChatSchema: confere que e o require de dentro dele.
+  const iThen = fonteIndex.indexOf('initChatSchema(db)');
+  assert.ok(iThen > iRotas && fonteIndex.indexOf("require('./routes/chat')(rotasModulos,", iThen) > iThen, 'chat fora do rotasModulos');
+  // A extended recebe o `app` do almoxarifado (que agora e o Router) — nada de require('express')() nela.
+  const almox = fs.readFileSync(path.join(SERVER, 'routes', 'almoxarifado.js'), 'utf8');
+  assert.ok(/require\('\.\/almoxarifado\/extended'\)\(app, db,/.test(almox), 'extended nao recebe o app (Router) do almoxarifado');
 });
 
 (async () => {

@@ -209,6 +209,7 @@ const archiver = require('archiver');
 // Etapa 83 (RN-83.01): os demais multers de imagem tambem; a recusa vira 400 pelo tratarErroFormatoImagem.
 // Etapa 85 (RN-85.01/02): o require sobe para ca porque o `multer` abaixo ja depende dele.
 const { decodificarImagemBase64, filtroImagemMulter, multerComLimiteNoErro, tratarArquivoGrandeDemais, tratarErroFormatoImagem } = require('./services/imagemUpload');
+const { tratarErroGlobalApi } = require('./services/errosApi');
 // Etapa 85 (RN-85.02): o MulterError LIMIT_FILE_SIZE nao carrega o limite; o embrulho anexa
 // `err.limiteBytes` (limits.fileSize de quem recusou) para o tratarArquivoGrandeDemais responder
 // 413 "Arquivo grande demais (máximo N MB)". Todo multer deste arquivo e criado por este `multer`.
@@ -23100,35 +23101,25 @@ app.get('/api/auditoria/logs', authenticateToken, (req, res) => {
 });
 
 // ========== MIDDLEWARE DE TRATAMENTO DE ERROS ==========
+// Etapa 86 (RN-86.01): Router dos modulos montado AQUI, imediatamente antes dos tres handlers.
+// Os registradores tardios (modulosTipoConfig, requisicoesMaterial, almoxarifado -> extended,
+// frotas, producao, todolist, whatsappGateway, chat) recebem `rotasModulos` no lugar de `app`:
+// rota adicionada ao Router depois — o extended registra num callback do sqlite e o chat no
+// `.then` do initChatSchema, ambos depois do `listen` — continua rodando na POSICAO do Router,
+// entao o erro dela chega aos handlers abaixo (antes caia no finalhandler: 500 text/html).
+const rotasModulos = express.Router();
+app.use(rotasModulos);
 // Etapa 83 (RN-83.01): recusa de formato do fileFilter dos multers de imagem -> 400 com a mensagem
 // literal. Tem de vir ANTES do handler abaixo, que responderia 500 "Erro interno do servidor".
 app.use('/api', tratarErroFormatoImagem);
 // Etapa 85 (RN-85.01): arquivo acima do limits.fileSize -> 413 "Arquivo grande demais (máximo N MB)".
 // Mesma posicao: depois da ultima rota com multer, antes do handler global (que responderia 500).
-// Routers montados mais abaixo (almoxarifado, chat...) NAO passam por aqui — ver plano da Etapa 85.
+// Etapa 86: os routers dos modulos passam por aqui pelo `rotasModulos` (montado logo acima).
 app.use('/api', tratarArquivoGrandeDemais);
 
-// Middleware para tratar erros de banco de dados (deve ser o último antes do listen)
-app.use('/api', (err, req, res, next) => {
-  if (err && (err.message && (err.message.includes('database is locked') || 
-                               err.message.includes('SQLITE_BUSY')) ||
-              err.code === 'SQLITE_BUSY')) {
-    console.warn('⚠️ Erro de lock no banco de dados:', err.message);
-    return res.status(503).json({ 
-      error: 'Banco de dados temporariamente ocupado. Tente novamente em alguns segundos.',
-      retryAfter: 2
-    });
-  }
-  // Se não for erro de banco, passar para o próximo handler
-  if (err) {
-    console.error('❌ Erro na API:', err);
-    return res.status(500).json({ 
-      error: 'Erro interno do servidor',
-      message: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  }
-  next();
-});
+// Etapa 86 (RN-86.01/03): handler global saiu para services/errosApi.js (o harness monta o mesmo).
+// SQLITE_BUSY -> 503; 4xx do proprio erro preservado com mensagem em portugues; resto -> 500.
+app.use('/api', tratarErroGlobalApi);
 
 // ========== INICIAR SERVIDOR ==========
 // Servir arquivos estáticos do React em produção
@@ -23222,7 +23213,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // ── Tipo de módulo (administrativo / industrial) ─────────────────────────────
-require('./routes/modulosTipoConfig')(app, db, authenticateToken);
+require('./routes/modulosTipoConfig')(rotasModulos, db, authenticateToken);
 if (db) {
   const { ensureModulosTipoConfig } = require('./services/modulosTipoConfigService');
   ensureModulosTipoConfig(db).catch((err) =>
@@ -23230,22 +23221,22 @@ if (db) {
 }
 
 // ── Requisições de material (cross-módulo — qualquer usuário autenticado) ───
-require('./routes/requisicoesMaterial')(app, db, authenticateToken);
+require('./routes/requisicoesMaterial')(rotasModulos, db, authenticateToken);
 
 // ── Módulo Almoxarifado ──────────────────────────────────────────────────────
-require('./routes/almoxarifado')(app, db, authenticateToken, PERSISTENT_DATA_DIR, checkModulePermission);
+require('./routes/almoxarifado')(rotasModulos, db, authenticateToken, PERSISTENT_DATA_DIR, checkModulePermission);
 
 // ── Módulo Frotas ────────────────────────────────────────────────────────────
-require('./routes/frotas')(app, db, authenticateToken, checkModulePermission);
+require('./routes/frotas')(rotasModulos, db, authenticateToken, checkModulePermission);
 
 // Módulo Produção (MES) — GMP Industriais
-require('./routes/producao')(app, db, authenticateToken, checkModulePermission);
+require('./routes/producao')(rotasModulos, db, authenticateToken, checkModulePermission);
 
 // ── Módulo TODOLIST ──────────────────────────────────────────────────────────
-require('./routes/todolist')(app, db, authenticateToken, checkModulePermission);
+require('./routes/todolist')(rotasModulos, db, authenticateToken, checkModulePermission);
 
 // Adaptador de WhatsApp (recebe {to,message} do alertService e envia via Z-API/Meta)
-require('./routes/whatsappGateway')(app);
+require('./routes/whatsappGateway')(rotasModulos);
 
 // ── Módulo Chat Interno ──────────────────────────────────────────────────────
 let chatSocket = null;
@@ -23259,7 +23250,7 @@ function initChatModule() {
       if (chatModuleRegistered) return;
       const { initChatSocket } = require('./services/chat/socket');
       chatSocket = initChatSocket(httpServer, db, JWT_SECRET);
-      require('./routes/chat')(app, db, authenticateToken, chatSocket, PERSISTENT_DATA_DIR);
+      require('./routes/chat')(rotasModulos, db, authenticateToken, chatSocket, PERSISTENT_DATA_DIR);
       chatModuleRegistered = true;
       console.log('✅ Módulo Chat interno inicializado (REST + Socket.io)');
     })

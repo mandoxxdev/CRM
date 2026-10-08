@@ -3,7 +3,13 @@
  */
 const path = require('path');
 const fs = require('fs');
-const multer = require('multer');
+// Etapa 86 (RN-86.02): multer embrulhado — o LIMIT_FILE_SIZE leva `limiteBytes` e vira 413
+// "Arquivo grande demais (máximo N MB)" no tratarArquivoGrandeDemais do index.js (via rotasModulos).
+const { multerComLimiteNoErro } = require('../../services/imagemUpload');
+const multer = multerComLimiteNoErro(require('multer'));
+// Etapa 86 (RN-86.02): recusa do fileFilter com `status = 400` e `mensagemUsuario` — o handler
+// global (services/errosApi.js) responde 400 com ESTE texto (sem isso, 500 generico).
+const { erroComMensagemUsuario } = require('../../services/errosApi');
 const XLSX = require('xlsx');
 const { canConfigureAlmox, isSystemAdmin } = require('../../services/systemPermissions');
 const { initSchema, TIPOS_MATERIAL_ENUM, TIPOS_LOCALIZACAO, AREAS_ESPECIAIS, SETORES_REQUISICAO } = require('../../services/almoxarifado/schema');
@@ -163,7 +169,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
       if (/^(application\/pdf|image\/(jpeg|jpg|png|webp))$/i.test(file.mimetype)) return cb(null, true);
-      cb(new Error('Comprovante deve ser PDF ou imagem'));
+      cb(erroComMensagemUsuario('Comprovante deve ser PDF ou imagem'));
     },
   });
 
@@ -1654,7 +1660,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
       if (/^(application\/pdf|image\/(jpeg|jpg|png|webp))$/i.test(file.mimetype)) return cb(null, true);
-      cb(new Error('Certificado deve ser PDF ou imagem'));
+      cb(erroComMensagemUsuario('Certificado deve ser PDF ou imagem'));
     },
   });
 
@@ -1742,7 +1748,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
       if (/^(application\/pdf|image\/(jpeg|jpg|png|webp))$/i.test(file.mimetype)) return cb(null, true);
-      cb(new Error('Foto deve ser PDF ou imagem'));
+      cb(erroComMensagemUsuario('Foto deve ser PDF ou imagem'));
     },
   });
 
@@ -1813,7 +1819,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
       if (/^(application\/pdf|image\/(jpeg|jpg|png|webp))$/i.test(file.mimetype)) return cb(null, true);
-      cb(new Error('Anexo deve ser PDF ou imagem'));
+      cb(erroComMensagemUsuario('Anexo deve ser PDF ou imagem'));
     },
   });
 
@@ -1916,7 +1922,7 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     limits: { fileSize: 2 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
       if (/^image\/(jpeg|jpg|png|webp)$/i.test(file.mimetype)) return cb(null, true);
-      cb(new Error('Assinatura deve ser imagem (PNG, JPEG ou WebP)'));
+      cb(erroComMensagemUsuario('Assinatura deve ser imagem (PNG, JPEG ou WebP)'));
     },
   });
 

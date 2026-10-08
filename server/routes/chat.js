@@ -5,7 +5,10 @@
 const path = require('path');
 const fs = require('fs');
 const express = require('express');
-const multer = require('multer');
+// Etapa 86 (RN-85.03 revista): multer embrulhado como os do index.js. O callback inline da rota de
+// imagem continua recebendo o erro e respondendo a mensagem propria ("Imagem muito grande...").
+const { multerComLimiteNoErro } = require('../services/imagemUpload');
+const multer = multerComLimiteNoErro(require('multer'));
 const chatService = require('../services/chat/chatService');
 // Etapa 81: nosniff + CSP sandbox — um arquivo enviado ao chat nao executa script na origem do CRM.
 // Etapa 82: o mesmo modulo assina a URL (RN-82.02) e da a extensao pelo MIME (RN-82.03). O

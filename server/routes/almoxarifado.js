@@ -5,7 +5,13 @@
 
 const path = require('path');
 const fs = require('fs');
-const multer = require('multer');
+// Etapa 86 (RN-86.02): multer embrulhado — o LIMIT_FILE_SIZE leva `limiteBytes` e vira 413
+// "Arquivo grande demais (máximo N MB)" no tratarArquivoGrandeDemais do index.js (via rotasModulos).
+const { multerComLimiteNoErro } = require('../services/imagemUpload');
+const multer = multerComLimiteNoErro(require('multer'));
+// Etapa 86 (RN-86.02): recusa do fileFilter com `status = 400` e `mensagemUsuario` — o handler
+// global (services/errosApi.js) responde 400 com ESTE texto (sem isso, 500 generico).
+const { erroComMensagemUsuario } = require('../services/errosApi');
 const { z } = require('zod');
 const alertService = require('../services/almoxarifado/alertService');
 const notificationQueueService = require('../services/almoxarifado/notificationQueueService');
@@ -226,7 +232,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
       if (/^image\/(jpeg|jpg|png|gif|webp)$/i.test(file.mimetype)) return cb(null, true);
-      cb(new Error('Apenas imagens são permitidas'));
+      cb(erroComMensagemUsuario('Apenas imagens são permitidas'));
     }
   });
 
@@ -243,7 +249,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
       if (/^(application\/pdf|image\/(jpeg|jpg|png|webp))$/i.test(file.mimetype)) return cb(null, true);
-      cb(new Error('Certificado deve ser PDF ou imagem'));
+      cb(erroComMensagemUsuario('Certificado deve ser PDF ou imagem'));
     },
   });
 

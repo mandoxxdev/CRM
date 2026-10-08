@@ -446,11 +446,17 @@ test('83: todo multer( de storage de imagem usa filtroImagemMulter', () => {
 
 test('83: middleware de formato registrado no /api ANTES do handler global (que responde 500)', () => {
   const iMw = fonteIndex.indexOf("app.use('/api', tratarErroFormatoImagem);");
-  const iGlobal = fonteIndex.indexOf("app.use('/api', (err, req, res, next) => {");
+  // Etapa 86: o global saiu do index.js para services/errosApi.js; a regua da 83 procurava o texto
+  // inline `app.use('/api', (err, req, res, next) => {` e ficaria cega. Agora acha o registro dele.
+  const iGlobal = fonteIndex.indexOf("app.use('/api', tratarErroGlobalApi);");
   assert.ok(iMw > 0, 'tratarErroFormatoImagem nao registrado');
   assert.ok(iGlobal > 0, 'handler global nao encontrado (a regua ficou cega)');
   assert.ok(iMw < iGlobal, 'middleware registrado depois do global: a recusa vira 500');
   assert.strictEqual(fonteIndex.split('tratarErroFormatoImagem);').length - 1, 1, 'registrado mais de uma vez');
+  assert.ok(!fonteIndex.includes("app.use('/api', (err, req, res, next) => {"), 'handler global inline voltou ao index.js');
+  // Etapa 86: o Router dos modulos vem ANTES dos handlers (senao as rotas dele nao chegam a eles).
+  const iRotas = fonteIndex.indexOf('app.use(rotasModulos);');
+  assert.ok(iRotas > 0 && iRotas < iMw, 'app.use(rotasModulos) ausente ou depois do tratarErroFormatoImagem');
   // Mutacao B: registrado ANTES das rotas, o Express nunca o alcanca depois do erro do multer (error
   // middleware so pega erro de quem foi registrado antes dele) e a recusa volta a ser 500. Tem de vir
   // DEPOIS do ultimo uso de qualquer um dos 14 multers de imagem.

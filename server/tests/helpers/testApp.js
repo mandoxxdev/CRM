@@ -197,8 +197,15 @@ async function createTestApp(options = {}) {
   // (requirePermission por perfil) roda o código REAL das rotas extended.
   const fakeCheckModulePermission = () => (req, res, next) => next();
 
-  require('../../routes/almoxarifado')(app, db, fakeAuth, dataDir, fakeCheckModulePermission);
-  require('../../routes/requisicoesMaterial')(app, db, fakeAuth);
+  // Etapa 86 (RN-86.01): o mesmo desenho do `index.js` — os registradores tardios recebem um Router
+  // montado no `app`, e os tres handlers de erro sao montados (abaixo) ANTES de a extended registrar
+  // (ela registra num callback do sqlite). Rota adicionada ao Router depois continua rodando na
+  // posicao do Router, entao o erro dela chega aos handlers. Aqui o Router vem antes de Compras
+  // (em producao vem depois) — a ordem relativa almoxarifado -> Compras do harness nao muda.
+  const rotasModulos = express.Router();
+  app.use(rotasModulos);
+  require('../../routes/almoxarifado')(rotasModulos, db, fakeAuth, dataDir, fakeCheckModulePermission);
+  require('../../routes/requisicoesMaterial')(rotasModulos, db, fakeAuth);
   // Etapa 34 (main) — compras/fornecedores: lista com projecao nomeada (G2), GET /:id, POST e PUT
   // da ficha do fornecedor. Montado ANTES de `routes/compras.js`, na MESMA ordem do `index.js`:
   // no Express a primeira rota registrada vence, entao estas sombreiam a lista/GET :id/POST/PUT
@@ -228,6 +235,14 @@ async function createTestApp(options = {}) {
     // A prova com Chromium de verdade e o curl da T3 (registrada no plano da etapa).
     gerarPdfDeHtml: async (html, opcoes) => Buffer.from(`%PDF-FAKE\n${html}\n%OPCOES%${JSON.stringify(opcoes || {})}`),
   });
+
+  // Etapa 86: os MESMOS tres handlers de erro do `index.js`, na mesma ordem e no mesmo `/api`,
+  // montados ANTES do roundtrip abaixo — a extended registra depois deles, como em producao.
+  const { tratarArquivoGrandeDemais, tratarErroFormatoImagem } = require('../../services/imagemUpload');
+  const { tratarErroGlobalApi } = require('../../services/errosApi');
+  app.use('/api', tratarErroFormatoImagem);
+  app.use('/api', tratarArquivoGrandeDemais);
+  app.use('/api', tratarErroGlobalApi);
 
   // O registrador principal agenda a extended num callback do sqlite
   // (almoxarifado.js:1663). Roundtrip no sqlite: garante que a extended
