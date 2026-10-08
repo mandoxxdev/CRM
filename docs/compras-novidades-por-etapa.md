@@ -26,8 +26,10 @@
 > da imagem; formato errado mostra **"Formato de imagem não suportado"** em vez de "Erro interno do
 > servidor" (B38).
 > **2026-10-08 — Etapa 84 entregue:** o login e o chat deixaram de aceitar o token **no endereço**
-> (`?token=`), que vazava em log e histórico (B39). Próxima: arquivo grande demais mostra mensagem
-> clara em vez de "Erro interno do servidor".
+> (`?token=`), que vazava em log e histórico (B39).
+> **2026-10-08 — Etapa 85 entregue:** arquivo grande demais mostra **"Arquivo grande demais (máximo
+> N MB)"** em vez de "Erro interno do servidor" (B40). Próxima: erros dos módulos montados por último
+> (almoxarifado, chat, frotas…) caem numa página HTML de erro em vez de uma mensagem.
 > O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
 > A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
@@ -183,6 +185,12 @@
   fila — um PDF gerado nesse instante falhava com "Target closed". A medição da 80 achou mais
   três corridas (erro de um derrubando o outro, Chromium aberto em dobro e nunca fechado, e o
   fechamento por ociosidade no meio de uma geração).
+- **B40 — Etapa 85: arquivo acima do limite → 413 com o limite na mensagem.** 413 (e não 400) para as
+  telas de família/grupo **não** reenviarem o mesmo arquivo grande por base64. O limite vem do próprio
+  upload (cada um tem o seu: 5, 10, 15, 20 ou 40 MB) — sem limite conhecido, a mensagem sai sem
+  número. Efeito: as telas de **produto** e **proposta** já tinham um aviso próprio de "arquivo grande"
+  que nunca aparecia (o servidor dava 500) — agora aparece, com os mesmos números do servidor.
+  **Fora:** os módulos montados por último (almoxarifado, chat…) — próxima etapa.
 - **B39 — Etapa 84: o login e o socket do chat só aceitam o token no cabeçalho.** O `?token=` no
   endereço vazava o token em log de proxy, histórico do navegador e `Referer`; ninguém no sistema o
   usava (medido: telas, scripts, integrações). Pedido só com `?token=` recebe "Envie o token no
@@ -332,6 +340,35 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 85 — Arquivo grande demais com mensagem clara (2026-10-08)
+
+**Em uma frase.** Enviar um arquivo maior que o limite (foto de produto, avatar, logo, anexo de
+proposta…) mostrava "Erro interno do servidor"; agora mostra **"Arquivo grande demais (máximo N MB)"**.
+
+### O que há de novo (visível para o usuário)
+- Foto de produto de 11 MB → "Arquivo grande demais (máximo 10 MB)"; avatar de 6 MB → "máximo 5 MB".
+- Produto e proposta mostram o aviso que já existia na tela e nunca aparecia.
+- Chat continua com a mensagem dele ("Imagem muito grande. Máximo 10MB.").
+
+### Por baixo do capô
+- `multerComLimiteNoErro` (`services/imagemUpload.js`) embrulha o `require('multer')` do `index.js`: os
+  18 uploads com limite passam a anexar o limite ao erro; `tratarArquivoGrandeDemais` responde 413 e
+  registra no log. Teste `uploadGrandeDemais.api.test.js` (11) com multer de verdade.
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| Arquivo acima do limite → 500 "Erro interno do servidor" | 413 "Arquivo grande demais (máximo N MB)" |
+
+### Roteiro de teste manual (clicável)
+1. **Produtos → editar → foto**: envie uma imagem de mais de 10 MB — aviso de arquivo grande.
+2. **Minha Conta → foto**: imagem de mais de 5 MB — "Arquivo grande demais (máximo 5 MB)".
+
+### O que a etapa NÃO cobre
+- Almoxarifado e os outros módulos montados por último: o erro de arquivo grande ainda vira uma página
+  HTML de erro 500 (próxima etapa).
+- Outros erros de upload (campo com nome errado etc.) continuam 500.
 
 ## Etapa 84 — O token sai do endereço (2026-10-08)
 

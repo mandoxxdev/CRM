@@ -81,3 +81,31 @@ depois (ex.: anexo do almoxarifado acima do limite).
 ## Pontos de atenção
 - Em produção o proxy pode cortar antes (413 do nginx, HTML) — o `ProdutoForm` já trata; os outros
   clients mostram `error.response.data.error` (que no 413 do nginx é vazio) — registrar, não é escopo.
+
+## Fechamento (2026-10-08) — 🟢
+- Revisão adversarial: **nenhum defeito** (o embrulho preserva a API do multer, o callback inline
+  continua recebendo o erro, compras também ganha o 413). Efeito registrado: os avisos de 413 já
+  existentes em `ProdutoForm.js:590` e `PropostaForm.js:772` eram código morto e agora aparecem (com os
+  mesmos números do servidor). Plausíveis registrados: outros erros de limite do multer
+  (`LIMIT_UNEXPECTED_FILE`…) seguem 500; régua de posição não acha multer declarado numa linha só.
+- **A Fase 0 estava incompleta** (9 multers listados; são 18) — o executor achou; a solução pelo
+  `require` cobre todos e os futuros.
+
+## Retro
+- Rodadas de correção até verde: **0**.
+- Achados: medição incompleta (9 vs 18) e o achado maior — **erros dos routers montados depois do
+  handler global caem no handler padrão do Express** (500 HTML, com stack fora de produção).
+- Paralelismo: nenhum.
+- Defeito escapado: preencher na etapa seguinte.
+
+## Próxima tarefa detalhada — Etapa 86: erros dos routers montados por último viram JSON
+- **O que existe:** `server/index.js` registra `tratarErroFormatoImagem`, `tratarArquivoGrandeDemais` e o
+  handler global (`:~23104-23115`) **antes** de montar almoxarifado, requisições, frotas, produção,
+  todolist, chat (`:~23228+`). Erro que esses routers passam com `next(err)` (ou que o multer deles
+  lança) cai no *finalhandler* do Express: **500 `text/html`**, com stack em dev.
+- **Medir antes:** cada router tem handler próprio? (`extended.js:1831` trata um; `chat.js:179` trata o
+  dele). O que o client faz com HTML no corpo (`error.response.data.error` vira `undefined`).
+- **Desenho provável:** registrar de novo os três middlewares (formato, tamanho, global) **depois** da
+  última montagem — ou mover os três para o fim. Cuidado com rotas registradas tardiamente por
+  callback assíncrono (o chat é montado depois de `initChatSchema`): o handler tem de ficar depois
+  dele também. Régua de posição + prova real (foto de material 11 MB no almoxarifado → 413 JSON).
