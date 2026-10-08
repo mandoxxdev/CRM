@@ -121,9 +121,13 @@ test('validade: fotos 12 h (+ balde de 1 h), avatares 24 h (+ 1 h)', () => {
   assert.ok(ef >= 12 * 3600 - 2 && ef <= 13 * 3600, `fotos: ${ef}s`);
   const ea = exp(ass.fotoSrcAvatar('a.png')) - agora();
   assert.ok(ea >= 24 * 3600 - 2 && ea <= 25 * 3600, `avatares: ${ea}s`);
-  assert.deepStrictEqual(
-    [PASTAS.fotoProposta.dominio, PASTAS.avatares.dominio, PASTAS.fotoProposta.minutos, PASTAS.avatares.minutos],
-    ['proposta-fotos-v1', 'avatares-v1', 720, 1440]);
+  // Config inteira (revisao adversarial da 82): o balde de 60 nao era afirmado em lugar nenhum.
+  assert.deepStrictEqual({ ...PASTAS.fotoProposta }, {
+    prefixo: '/api/uploads/proposta-fotos', dominio: 'proposta-fotos-v1', minutos: 720, baldeMinutos: 60,
+  });
+  assert.deepStrictEqual({ ...PASTAS.avatares }, {
+    prefixo: '/api/uploads/avatares', dominio: 'avatares-v1', minutos: 1440, baldeMinutos: 60,
+  });
 });
 
 test('valor gravado com caminho vira so o nome (nao assina outra coisa)', () => {
@@ -231,6 +235,12 @@ test('fiacao: foto_src em buildAuthUserPayload, GET /api/conta e POST /api/conta
   const postFoto = fonteIndex.slice(iPost, fonteIndex.indexOf('\n});', iPost));
   assert.match(postFoto, /const fotoSrc = assinadoresCrm\.fotoSrcAvatar\(filename\);/);
   assert.match(postFoto, /foto_src: fotoSrc/);
+  // DELETE devolve `foto_src: null` explicito: sem a chave, o `mergeUserPermissions` do client
+  // manteria o `foto_src` velho do localStorage e o avatar removido continuaria na tela.
+  const iDel = fonteIndex.indexOf("app.delete('/api/conta/foto',");
+  assert.ok(iDel >= 0, 'rota DELETE /api/conta/foto nao encontrada');
+  const delFoto = fonteIndex.slice(iDel, fonteIndex.indexOf('\n});', iDel));
+  assert.match(delFoto, /res\.json\(\{[^}]*foto_url: null, foto_src: null \}\)/);
 });
 
 test('fiacao: GET/POST /fotos, /duplicar e /restaurar devolvem url assinada', () => {

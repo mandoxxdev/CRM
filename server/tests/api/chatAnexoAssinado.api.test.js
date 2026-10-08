@@ -29,7 +29,12 @@ process.env.JWT_SECRET = 'segredo-de-teste-chat-82';
 const { initChatSchema } = require('../../services/chat/schema');
 const { dbRun } = require('../../services/chat/db');
 const registerChatRoutes = require('../../routes/chat');
-const { criarAssinadorUpload } = require('../../services/almoxarifado/urlUpload');
+const { criarAssinadorUpload, DOMINIO_PADRAO } = require('../../services/almoxarifado/urlUpload');
+const { PASTAS } = require('../../services/uploadsAssinadosCrm');
+
+// A config REAL da rota (revisao adversarial da 82): uma copia local aqui deixava trocar o dominio
+// ou a validade em routes/chat.js sem nenhum teste ficar vermelho.
+const { ASSINATURA_CHAT } = registerChatRoutes;
 
 let passou = 0, falhou = 0;
 const testes = [];
@@ -131,20 +136,42 @@ test('assinatura de outra pasta (almoxarifado, mesmo segredo raiz) no caminho do
   const q = almox.assinar(arquivoGravado).split('?')[1];
   const r = await request(app).get(`/api/uploads/chat/${arquivoGravado}?${q}`);
   assert.strictEqual(r.status, 404);
-  // E a assinatura de uma pasta com o MESMO prefixo e outro dominio tambem nao vale.
-  const outro = criarAssinadorUpload(process.env.JWT_SECRET, {
-    prefixo: '/api/uploads/chat', dominio: 'avatares-uploads-v1', minutos: 480, baldeMinutos: 60,
-  });
-  const r2 = await request(app).get(outro.assinar(arquivoGravado));
-  assert.strictEqual(r2.status, 404);
+  // E a assinatura com o MESMO prefixo e o dominio REAL de outra pasta (avatares, fotos da
+  // proposta) tambem nao vale.
+  for (const pasta of [PASTAS.avatares, PASTAS.fotoProposta]) {
+    // Validade do CHAT de proposito: com a da pasta (24 h / 12 h) o `exp` passaria do teto do chat
+    // e o 404 viria do teto, nao do dominio - o teste ficaria verde com dominio colidido.
+    const outro = criarAssinadorUpload(process.env.JWT_SECRET, { ...ASSINATURA_CHAT, dominio: pasta.dominio });
+    const r2 = await request(app).get(outro.assinar(arquivoGravado));
+    assert.strictEqual(r2.status, 404, pasta.dominio);
+  }
 });
 
 test('assinatura valida de nome inexistente -> 404 (fecho final, nao desce)', async () => {
-  const chat = criarAssinadorUpload(process.env.JWT_SECRET, {
-    prefixo: '/api/uploads/chat', dominio: 'chat-uploads-v1', minutos: 480, baldeMinutos: 60,
-  });
+  // Assinador com a config REAL do chat: o controle prova que ele abre o arquivo existente, entao o
+  // 404 do inexistente vem do fecho final, e nao da assinatura recusada no middleware.
+  const chat = criarAssinadorUpload(process.env.JWT_SECRET, ASSINATURA_CHAT);
+  assert.strictEqual((await request(app).get(chat.assinar(arquivoGravado))).status, 200, 'controle: assinatura real abre');
   const r = await request(app).get(chat.assinar('nao-existe.png'));
   assert.strictEqual(r.status, 404);
+});
+
+test('config real do chat: dominio chat-uploads-v1, 480 min, balde de 60', () => {
+  assert.deepStrictEqual({ ...ASSINATURA_CHAT }, {
+    prefixo: '/api/uploads/chat', dominio: 'chat-uploads-v1', minutos: 480, baldeMinutos: 60,
+  });
+});
+
+test('a anexo_url emitida pela rota vale entre 8 h e 9 h', () => {
+  const exp = Number(/exp=(\d+)/.exec(urlAssinada)[1]);
+  const ef = exp - Math.floor(Date.now() / 1000);
+  assert.ok(ef >= 8 * 3600 - 5 && ef <= 9 * 3600, `validade emitida: ${ef}s`);
+});
+
+test('os quatro dominios (almox, chat, fotos, avatares) sao dois a dois diferentes', () => {
+  const doms = [DOMINIO_PADRAO, ASSINATURA_CHAT.dominio, PASTAS.fotoProposta.dominio, PASTAS.avatares.dominio];
+  assert.deepStrictEqual(doms, ['almoxarifado-uploads-v1', 'chat-uploads-v1', 'proposta-fotos-v1', 'avatares-v1']);
+  assert.strictEqual(new Set(doms).size, 4, doms.join(', '));
 });
 
 test('reassinar: participante recebe URL nova que funciona', async () => {

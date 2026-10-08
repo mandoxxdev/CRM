@@ -257,3 +257,8 @@ module.exports = function registerChatRoutes(app, db, authenticateToken, chatSoc
     }
   });
 };
+
+// Revisao adversarial da 82: exportada para o teste afirmar a config REAL (dominio, 480 min,
+// balde de 60). Antes o teste montava a sua propria copia e trocar aqui para 15 min ou para o
+// dominio de outra pasta deixava a suite verde.
+module.exports.ASSINATURA_CHAT = ASSINATURA_CHAT;
