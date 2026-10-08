@@ -22,10 +22,13 @@ const CSS_PAGE_OS = `@page {
       margin: 0 0 ${MARGEM_INFERIOR_OS_MM}mm 0;
     }`;
 
-/** Rodape da OS: "Pagina X de Y", centralizado, cinza, 8px (o texto antigo era 8pt #999). */
+/**
+ * Rodape da OS: "Pagina X de Y", centralizado, cinza. 10px (~7,5pt): o texto antigo era 8pt; com
+ * 8px (~6pt) o rodape do Chromium saia miudo demais (revisao da Etapa 88).
+ */
 function rodapePaginasOs() {
   return '<div style="width:100%; text-align:center; font-family: \'Segoe UI\', Tahoma, Geneva, Verdana, sans-serif; '
-    + 'font-size: 8px; color: #999;">'
+    + 'font-size: 10px; color: #999;">'
     + 'Página <span class="pageNumber"></span> de <span class="totalPages"></span>'
     + '</div>';
 }

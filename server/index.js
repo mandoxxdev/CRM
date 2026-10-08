@@ -14002,11 +14002,6 @@ function gerarHTMLOS(os, osItens = []) {
     .page-break {
       page-break-before: always;
     }
-    .page-number {
-      text-align: center;
-      font-size: 8pt;
-      margin-top: 10px;
-    }
     .itens-list-planilha {
       display: flex;
       flex-direction: column;
@@ -14222,12 +14217,6 @@ function gerarHTMLOS(os, osItens = []) {
       padding-top: 5px;
       text-align: center;
       font-size: 8pt;
-    }
-    .page-number {
-      text-align: center;
-      font-size: 8pt;
-      color: #999;
-      margin-top: 20px;
     }
     .preview-os-observacoes {
       margin-top: 24px;

@@ -38,7 +38,11 @@ function problemasDoHtmlOs(src) {
   if (/totalPages/.test(corpo)) probs.push('gerarHTMLOS ainda estima totalPages');
   if (/class="page-number"/.test(corpo)) probs.push('div .page-number voltou ao HTML');
   if (!/\$\{CSS_PAGE_OS\}/.test(corpo)) probs.push('gerarHTMLOS nao usa o @page de services/pdfOs');
-  if (/@page\s*\{/.test(corpo)) probs.push('gerarHTMLOS tem @page proprio (o de services/pdfOs e o que tem a margem do rodape)');
+  // Revisao da 88: `@page :first { margin: 0 }` (padrao copiavel da proposta) apagaria o rodape da
+  // pagina 1 e escapava do `/@page\s*\{/`; qualquer @page proprio e recusado.
+  if (/@page[\s:{]/.test(corpo)) probs.push('gerarHTMLOS tem @page proprio (o de services/pdfOs e o que tem a margem do rodape)');
+  // Revisao da 88: a estimativa podia voltar com outra palavra ("Folha 1 de ${n}", "Pag. 1/${n}").
+  if (/\b(folha|p[áa]g\.?)\s*\d+\s*(de|\/)\s*\$\{/i.test(corpo)) probs.push('contagem de paginas estimada voltou com outro texto');
   return probs;
 }
 
@@ -72,17 +76,20 @@ test('RN-88.01: opcoes do page.pdf da OS ligam o rodape com pageNumber/totalPage
 
 test('rodape: estilo INLINE com font-size explicito, centralizado e cinza (nao herda o CSS do documento)', () => {
   const r = rodapePaginasOs();
-  assert.ok(/style="[^"]*font-size:\s*8px/.test(r), 'font-size 8px inline');
+  assert.ok(/style="[^"]*font-size:\s*10px/.test(r), 'font-size 10px inline');
   assert.ok(/style="[^"]*text-align:\s*center/.test(r), 'centralizado');
   assert.ok(/style="[^"]*color:\s*#999/.test(r), 'cinza #999');
+  // Revisao da 88: um estilo que esconde o rodape passava (o teste so olhava tamanho/cor/alinhamento).
+  assert.ok(!/display:\s*none|visibility:\s*hidden|opacity:\s*0(?![.\d])/.test(r), 'rodape escondido pelo estilo');
 });
 
 test('margem inferior do @page = a do page.pdf, e > 0 (@page margin 0 apaga o rodape — Etapa 78)', () => {
-  assert.ok(MARGEM_INFERIOR_OS_MM > 0);
+  // Revisao da 88: `> 0` deixava passar 1-2 mm, que cortam o texto de 10px — exigir espaco real.
+  assert.ok(MARGEM_INFERIOR_OS_MM >= 8, `margem inferior ${MARGEM_INFERIOR_OS_MM}mm corta o rodape`);
   const m = CSS_PAGE_OS.match(/margin:\s*0\s+0\s+(\d+(?:\.\d+)?)mm\s+0\s*;/);
   assert.ok(m, `@page sem margem inferior: ${CSS_PAGE_OS}`);
   assert.strictEqual(Number(m[1]), MARGEM_INFERIOR_OS_MM);
-  assert.ok(/size:\s*A4/.test(CSS_PAGE_OS));
+  assert.ok(/size:\s*A4\s*;/.test(CSS_PAGE_OS), 'size: A4 (retrato) exato');
   assert.strictEqual(opcoesPdfOs().margin.bottom, `${MARGEM_INFERIOR_OS_MM}mm`);
 });
 
