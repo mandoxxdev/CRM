@@ -81,3 +81,30 @@ positivo: tirar o middleware de uma das duas → vermelho.
 - Se em produção alguém usa a URL crua (favorito, link colado em e-mail), passa a ver 401. Não há
   nenhum gerador desse link no código; reversível (B34).
 - Não confundir com `/pdf-anexo` (já autenticada).
+
+## Fechamento (2026-10-08)
+- Revisão: a do plano (Fase 2) achou o erro real da etapa — a régua dizia 5 rotas legítimas, eram
+  7 (regex ancorada na coluna 0 perdia a `app-version` indentada); corrigido antes de executar.
+  O diff final é de 2 linhas de middleware + comentário; a prova real (401/200) foi a revisão do
+  código.
+- Docs: A5 resolvido, B34, seção da Etapa 79 no `docs/compras-novidades-por-etapa.md`, linha 79
+  no índice.
+
+## Retro
+- Rodadas de correção até verde: **0** (1 correção de plano antes de executar).
+- Achados: 1 real na revisão do plano (allowlist 5→7), 1 inventário (7º chamador), 0 ruído.
+- Paralelismo: nenhum (task única).
+- Defeito escapado: preencher na etapa seguinte.
+
+## Próxima tarefa detalhada — Etapa 80: fila no Chromium compartilhado dos PDFs (B32)
+- **O risco:** `obterNavegadorPdf` (`server/index.js`, perto de `:312`) recicla o navegador a cada
+  20 PDFs e fecha no erro (`fecharNavegadorPdf`). Agora há **dois chamadores** — a rota
+  `/api/propostas/:id/pdf` e `gerarPdfDeHtml` (pedido de compra, Etapa 78). Se A está em
+  `page.pdf` quando B dispara a reciclagem ou fecha por erro, A morre com "Target closed".
+- **Desenho mínimo:** uma fila de uma posição (promessa encadeada, `let filaPdf = Promise.resolve()`)
+  pela qual as duas gerações passam; reciclagem e fechamento só entre gerações. Sem dependência nova.
+- **Como provar sem Chromium no harness:** extrair a fila para `server/services/filaPdf.js` (pura:
+  `enfileirar(fn)`), testar ordem e isolamento de erro (uma tarefa que lança não trava as
+  seguintes) com funções falsas; prova real: 5 PDFs concorrentes (proposta + pedido) com `curl &`
+  todos 200 `%PDF`.
+- Medir antes: a rota da proposta tem caminhos de `return` antes do `page.close()`? (aba pendurada).

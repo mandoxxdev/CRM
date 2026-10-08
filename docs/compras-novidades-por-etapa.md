@@ -11,7 +11,9 @@
 > continua valendo, com uma exceção: a Etapa 33 ficou sem objeto e a Etapa 32 da `main` saiu.
 > **2026-10-08 — Etapa 78 entregue:** o pedido de compra sai em **PDF no formato do documento da
 > GMP** (botão "Documento (PDF)" na lista e no formulário). Antes de emitir o primeiro, preencha os
-> dados da empresa (**A4**). Próxima: fechar o furo do PDF da proposta sem login (**A5**).
+> dados da empresa (**A4**).
+> **2026-10-08 — Etapa 79 entregue:** o PDF e o preview da proposta passaram a **exigir login**
+> (A5 fechado, B34). Próxima: fila no Chromium compartilhado dos PDFs (B32).
 > O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
 > A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
@@ -33,10 +35,11 @@
   **Configurações → Geral → Empresa** — CNPJ, CEP, telefone, e-mail (o seed deixa vazios) e a
   **Inscrição Estadual** nova (hoje a IE `799.890.695.115` só existe fixa no template da proposta).
   Sem isso o cabeçalho do pedido sai com "—" nesses campos.
-- **A5 (achado colateral da Etapa 78, não corrigido):** `GET /api/propostas/:id/pdf` **não tem
-  autenticação** (`index.js:9954-9955`, "rota liberada sem autenticação") — qualquer um com o id
-  baixa a proposta. Fechar é uma linha (`authenticateToken`), mas pode quebrar algum link externo
-  que dependa disso; decida.
+- **A5 — ✅ RESOLVIDO na Etapa 79 (`b786f506`):** `GET /api/propostas/:id/pdf` **e também**
+  `/premium` (o HTML da proposta — a medição da 79 achou a segunda) respondiam sem login; com ids
+  sequenciais, qualquer um com o endereço do servidor baixava todas as propostas. Agora exigem
+  login. **Ação sua só se** alguém da empresa abria a proposta por um link cru salvo (favorito,
+  e-mail): esse link passa a pedir login — o sistema nunca gerou esse link, então não deve haver.
 
 ### B. Decisões que eu tomei e você pode reverter
 - **B1 — Esta frente vive em `main`, e `main` tem OUTRO pedido de compra.** A branch
@@ -165,6 +168,12 @@
 - **B32 — Etapa 78 (risco aceito, pré-existente): o Chromium compartilhado é reciclado a cada 20
   PDFs sem fila** — se um pedido estiver sendo gerado exatamente nesse instante, ele falha com
   "Target closed" e o usuário clica de novo. Fila/mutex é etapa própria.
+- **B34 — Etapa 79: o PDF e o preview da proposta exigem só login, o mesmo que a tela da
+  proposta** (`GET /api/propostas/:id`). Quem já via a proposta continua vendo. Descartado:
+  exigir também o módulo Comercial (`checkModulePermission`) — mudaria quem tem acesso hoje e não
+  era o furo. Descartado: manter a rota aberta "para link direto" — nenhum lugar do sistema gera
+  esse link; os 7 botões já mandam o login. Fora do escopo, registrado: o `authenticateToken`
+  aceita `?token=` na URL (token em log de proxy); fica para uma etapa de segurança.
 - **B33 — Etapa 78: o botão "Documento (PDF)" do formulário imprime o pedido SALVO, não o que está
   na tela.** Se você mudou um preço e não salvou, o PDF sai com o valor antigo. Escolhido porque o
   documento enviado ao fornecedor tem de ser o que está gravado (o mesmo que a lista e o
@@ -267,6 +276,46 @@
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
 
+## Etapa 79 — A proposta comercial só abre com login (2026-10-08)
+
+**Em uma frase.** O PDF e o "Ver proposta" deixaram de responder para quem não está logado — antes,
+quem soubesse o endereço do servidor baixava qualquer proposta (cliente, itens, preços) trocando o
+número na URL.
+
+### O que há de novo (visível para o usuário)
+- **Nada muda para quem usa o sistema logado:** "Ver proposta", "Gerar PDF", o preview editável e
+  o download na lista funcionam como antes.
+- Quem tentar abrir `…/api/propostas/⟨número⟩/pdf` ou `/premium` sem login recebe **"Token não
+  fornecido"** em vez da proposta.
+- Se a sessão expirou, clicar em "Gerar PDF" leva ao login (antes gerava assim mesmo).
+
+### Por baixo do capô
+- `authenticateToken` nas duas rotas do `server/index.js` — o mesmo gate da rota que a tela usa
+  para ler a proposta. O comentário antigo ("liberada sem autenticação para abertura direta via
+  link") foi reescrito explicando por que caiu.
+- Teste novo `propostaPdfExigeLogin.api.test.js`: além das duas rotas, uma **régua** — a lista de
+  rotas `/api` do `index.js` sem login tem de ser exatamente as 7 legítimas (saúde, login,
+  versão, backup com token próprio…). Uma rota nova aberta por engano derruba a suíte.
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| `/api/propostas/1/pdf` sem login → PDF da proposta | → 401 "Token não fornecido" |
+| `/api/propostas/1/premium` sem login → HTML completo | → 401 |
+| Nenhum teste sobre rotas abertas | Régua: só as 7 legítimas podem ficar sem login |
+
+### Roteiro de teste manual (clicável)
+1. Logado, **Comercial → Propostas**: abra uma proposta, clique **Ver proposta** e **Gerar PDF** —
+   ambos funcionam.
+2. Numa **aba anônima**, cole `http://⟨servidor⟩:5000/api/propostas/1/pdf`: aparece
+   `{"error":"Token não fornecido"}` — antes baixava o PDF.
+
+### O que a etapa NÃO cobre
+- Exigir o módulo Comercial para abrir a proposta (B34).
+- Token na URL (`?token=`) ainda é aceito pelo login do servidor (B34).
+- Os arquivos estáticos em `/api/uploads/*` (fotos, anexos de contrato) continuam sem login —
+  é outra medição, não feita aqui.
+
 ## Etapa 78 — O documento impresso do pedido de compra (2026-10-08)
 
 **Em uma frase.** O pedido de compra agora **sai em PDF no formato do documento que a GMP manda ao
@@ -331,7 +380,7 @@ assinaturas — com um clique, pronto para anexar no e-mail.
 - **Código do produto no fornecedor** e o texto legal oficial de ICMS — dependem do P.O. (**D-78**).
 - O PDF imprime o pedido **salvo** (B33).
 - Fila para o Chromium compartilhado (B32).
-- O PDF da proposta continua sem exigir login (**A5**) — próxima etapa.
+- O PDF da proposta continuava sem exigir login (**A5**) — fechado na Etapa 79.
 
 ## Etapa 39 — O pedido de compra ganha o documento da Etapa 32 (2026-10-07)
 
