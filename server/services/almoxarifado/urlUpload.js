@@ -21,7 +21,11 @@
 const crypto = require('crypto');
 
 const MINUTOS_VALIDADE = 15;
+const BALDE_MINUTOS = 5;
 const PREFIXO = '/api/uploads/almoxarifado';
+// Etapa 82 (RN-82.01): o dominio entra na derivacao da chave. Cada pasta assinada tem o seu, entao
+// uma assinatura de `chat/x.png` NAO vale em `avatares/x.png` mesmo com o mesmo segredo raiz.
+const DOMINIO_PADRAO = 'almoxarifado-uploads-v1';
 
 // O `sig` e conferido por FORMATO antes de virar buffer, e isso nao e zelo — e correcao de um
 // defeito medido: `sig.length` conta CARACTERES e `crypto.timingSafeEqual` compara BYTES. Um `sig`
@@ -42,9 +46,9 @@ const HEX32 = /^[0-9a-f]{32}$/;
  * `exp` no futuro. Sem exportar, o teste duplicaria a string de dominio e as duas copias
  * divergiriam na primeira mudanca.
  */
-function derivarSegredoUpload(segredoRaiz) {
+function derivarSegredoUpload(segredoRaiz, dominio = DOMINIO_PADRAO) {
   return crypto.createHash('sha256')
-    .update(`${segredoRaiz}:almoxarifado-uploads-v1`)
+    .update(`${segredoRaiz}:${dominio}`)
     .digest();
 }
 
@@ -108,11 +112,36 @@ function cabecalhosUploadLogo(res) {
   res.setHeader('Content-Security-Policy', CSP_UPLOAD_LOGO);
 }
 
-function criarAssinadorUpload(segredoRaiz) {
+/**
+ * Etapa 82 (RN-82.01): parametrizado por pasta. SEM opcoes = o almoxarifado de sempre, byte a byte
+ * (mesmo prefixo, mesmo dominio, 15 min + balde de 5, teto de 20) — as URLs ja emitidas e os testes
+ * da Etapa 33 nao mudam.
+ *
+ * Com `prefixo` informado, `dominio` e OBRIGATORIO: se caisse no padrao, uma pasta nova assinaria
+ * com a chave do almoxarifado em silencio e a assinatura de uma valeria na outra (revisao do plano).
+ *
+ * `minutos` e a validade minima; `baldeMinutos` o arredondamento do `exp` (estabilidade de URL para
+ * o cache). A validade efetiva fica entre `minutos` e `minutos + baldeMinutos`, e o teto do
+ * `verificar` acompanha essa soma.
+ */
+function criarAssinadorUpload(segredoRaiz, opcoes = {}) {
   if (!segredoRaiz) throw new Error('urlUpload: segredo obrigatorio');
+  const {
+    prefixo, dominio, minutos = MINUTOS_VALIDADE, baldeMinutos = BALDE_MINUTOS,
+  } = opcoes || {};
+  if (prefixo !== undefined && !dominio) {
+    throw new Error('urlUpload: dominio obrigatorio quando o prefixo e informado');
+  }
+  for (const [rotulo, v] of [['minutos', minutos], ['baldeMinutos', baldeMinutos]]) {
+    if (!Number.isInteger(v) || v <= 0) throw new Error(`urlUpload: ${rotulo} deve ser inteiro positivo`);
+  }
+  const prefixoUrl = prefixo === undefined ? PREFIXO : String(prefixo).replace(/\/+$/, '');
+  const balde = baldeMinutos * 60;
+  const validade = minutos * 60;
+  const teto = (minutos + baldeMinutos) * 60;
 
   // Achado da revisao adversarial — ver o cabecalho de `derivarSegredoUpload`.
-  const segredo = derivarSegredoUpload(segredoRaiz);
+  const segredo = derivarSegredoUpload(segredoRaiz, dominio || DOMINIO_PADRAO);
 
   // O NOME DO ARQUIVO entra no HMAC. Sem ele, uma assinatura valida para `material-1.png` serviria
   // para `assinatura-9.png` — o erro classico deste padrao, e o unico motivo da RN-02 existir.
@@ -129,13 +158,13 @@ function criarAssinadorUpload(segredoRaiz) {
   function assinar(filename) {
     const nome = String(filename || '').trim();
     if (!nome) return null;
-    // `exp` em BALDE de 5 minutos, e nao `agora + 900` cru: sem isso o `exp` muda a cada segundo,
+    // `exp` em BALDE (5 minutos no almoxarifado), e nao `agora + 900` cru: sem isso o `exp` muda a cada segundo,
     // toda carga de lista gera URLs ineditas e o cache do navegador nunca reaproveita nada —
     // regressao de performance justamente na tela de N imagens que motivou este desenho. Com o
     // balde, a URL do mesmo arquivo e estavel por 5 min e a validade efetiva fica entre 15 e 20.
     const agora = Math.floor(Date.now() / 1000);
-    const exp = Math.ceil(agora / 300) * 300 + MINUTOS_VALIDADE * 60;
-    return `${PREFIXO}/${encodeURIComponent(nome)}?exp=${exp}&sig=${calcular(nome, exp)}`;
+    const exp = Math.ceil(agora / balde) * balde + validade;
+    return `${prefixoUrl}/${encodeURIComponent(nome)}?exp=${exp}&sig=${calcular(nome, exp)}`;
   }
 
   function verificar(filename, exp, sig) {
@@ -144,10 +173,11 @@ function criarAssinadorUpload(segredoRaiz) {
     // Nao era exploravel (trocar o exp invalida o sig), mas o guard nao expressava a intencao.
     if (!/^[0-9]{1,10}$/.test(String(exp))) return false;
     const n = Number(exp);
-    // TETO: nenhuma URL pode viver mais que a janela do balde (15 a 20 min). Se algum dia algo
-    // minar um exp distante, ele nao vira acesso perpetuo.
+    // TETO: nenhuma URL pode viver mais que a janela do balde (15 a 20 min no almoxarifado;
+    // `minutos + baldeMinutos` em geral). Se algum dia algo minar um exp distante, ele nao vira
+    // acesso perpetuo.
     const agora = Math.floor(Date.now() / 1000);
-    if (n < agora || n > agora + (MINUTOS_VALIDADE + 5) * 60) return false;
+    if (n < agora || n > agora + teto) return false;
     if (typeof sig !== 'string' || !HEX32.test(sig)) return false;
     const esperado = calcular(filename, exp);
     const recebido = Buffer.from(sig, 'utf8');
@@ -176,11 +206,14 @@ function criarAssinadorUpload(segredoRaiz) {
     return next();
   }
 
-  return { assinar, verificar, middleware, MINUTOS_VALIDADE };
+  return {
+    assinar, verificar, middleware,
+    MINUTOS_VALIDADE: minutos, BALDE_MINUTOS: baldeMinutos, PREFIXO: prefixoUrl,
+  };
 }
 
 module.exports = {
   criarAssinadorUpload, derivarSegredoUpload, extensaoSegura, cabecalhosUploadSeguro,
   cabecalhosUploadLogo, CSP_UPLOAD_LOGO,
-  MINUTOS_VALIDADE, PREFIXO,
+  MINUTOS_VALIDADE, BALDE_MINUTOS, PREFIXO, DOMINIO_PADRAO,
 };
