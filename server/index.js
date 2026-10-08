@@ -218,6 +218,7 @@ const puppeteer = require('puppeteer');
 const { criarFilaSerial } = require('./services/filaPdf');
 const { fecharNavegadorComPrazo } = require('./services/filaPdf');
 const { resolverAssetDoClient } = require('./services/assetsDoClient');
+const { CSS_PAGE_OS, opcoesPdfOs } = require('./services/pdfOs');
 const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
@@ -13697,9 +13698,8 @@ function gerarHTMLOS(os, osItens = []) {
       global.baseURLForPDF = logoBaseURL;
     }
 
-    // Calcular número de páginas (estimativa)
-    const totalPages = Math.max(1, Math.ceil((osItens.length + 5) / 20));
-
+    // Etapa 88 (RN-88.03): sem estimativa de paginas aqui — o rodape "Pagina X de Y" e do
+    // Chromium (services/pdfOs). O @page tambem vem de la: precisa da margem inferior do rodape.
     let html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -13707,10 +13707,7 @@ function gerarHTMLOS(os, osItens = []) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ordem de Serviço ${os.numero_os || ''}</title>
   <style>
-    @page {
-      size: A4;
-      margin: 0;
-    }
+    ${CSS_PAGE_OS}
     * {
       margin: 0;
       padding: 0;
@@ -14598,8 +14595,6 @@ function gerarHTMLOS(os, osItens = []) {
       </div>
     </div>
   </div>
-
-  <div class="page-number">Página 1 de ${totalPages}</div>
 </body>
 </html>`;
 
@@ -21830,19 +21825,10 @@ app.post('/api/operacional/ordens-servico/:id/gerar-pdf', authenticateToken, asy
         await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
         marcarPdf('fontes+imagens');
 
-        const pdfResult = await page.pdf({
-          format: 'A4',
-          printBackground: true,
-          margin: {
-            top: '15mm',
-            right: '15mm',
-            bottom: '15mm',
-            left: '15mm'
-          },
-          preferCSSPageSize: true,
-          displayHeaderFooter: false,
-          scale: 1.0
-        });
+        // Etapa 88 (RN-88.01): rodape "Pagina X de Y" do Chromium em toda pagina. As opcoes e o
+        // `@page` do gerarHTMLOS vem juntos de services/pdfOs (margem inferior no @page, senao o
+        // rodape some — licao da Etapa 78).
+        const pdfResult = await page.pdf(opcoesPdfOs());
         marcarPdf('renderizarPDF');
         const buf = Buffer.from(pdfResult);
         console.log(`[PDF] OS ${id} em ${Date.now() - tPdf.inicio}ms | itens=${osItens.length} html=${(Buffer.byteLength(html) / 1024 / 1024).toFixed(2)}MB pdf=${(buf.length / 1024).toFixed(0)}KB | ${tPdf.etapas.join(' ')}`);
