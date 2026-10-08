@@ -33,6 +33,9 @@ const requisitionService = require('./requisitionService');
 const valueApprovalService = require('./requisitionValueApprovalService');
 const ownerRules = require('./ownerRules');
 const receiptNotificationService = require('./receiptNotificationService');
+// Etapa 91 (T0, D4/B422): a trava por material mora num modulo sem dependencias, com UM `Map` para o
+// processo inteiro — a fila da 75/76 e a das portas que aprovam/liberam (T1/T2) sao a mesma.
+const trava = require('./travaPorMaterial');
 
 const { QTD_DO_ITEM_SQL, faltaDoItem } = receiptNotificationService;
 
@@ -140,12 +143,57 @@ async function recalcularStatusDeReserva(db, requisicaoId) {
 }
 
 /**
+ * Etapa 91 (T0, D5/B423, D7/B425) — o que fica para DEPOIS de soltar a trava. Quem segura a trava
+ * (as portas da T2, ou as variantes sem opcao abaixo) distribui com `sobTrava` e empilha aqui o recalculo
+ * da 76 (`distribuicoes`) e o aviso da 75 (`avisos`); `concluirPendencia` roda os dois FORA da secao.
+ * Dentro nao pode: a trava nao e reentrante e o recalculo pega os materiais da requisicao tocada —
+ * possivelmente menores que o segurado (quebraria a ordem crescente).
+ */
+function novaPendencia() {
+  return { distribuicoes: [], avisos: [] };
+}
+
+/**
+ * NUNCA lanca (o recalculo tem o try por requisicao de `recalcularTocadas`; o aviso, o try de hoje).
+ * Ordem dos efeitos preservada: distribuicao (ja feita) -> recalculo -> aviso (o aviso ve o status
+ * recalculado). Chamar SEMPRE depois de soltar a trava: `try { await trava.comLock...(m, fn) } finally {
+ * await rcs.concluirPendencia(db, user, pend) }` — o `finally` FORA da `fn`.
+ */
+async function concluirPendencia(db, user, pendencia) {
+  if (!pendencia) return;
+  for (const { acc, rotulos } of pendencia.distribuicoes || []) {
+    // eslint-disable-next-line no-await-in-loop
+    await recalcularTocadas(db, acc, rotulos);
+  }
+  for (const { ctx, resultado } of pendencia.avisos || []) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await receiptNotificationService.avisarLiberacao(db, user, ctx, resultado);
+    } catch (e) {
+      console.warn(`[almoxarifado-reservas] aviso da liberacao falhou (${ctx && ctx.origem} ${ctx && ctx.documento_id}): ${e.message}`);
+    }
+  }
+}
+
+/** Literal L1 (defesa): a variante `sobTrava` chamada sem a trava do material. */
+function erroSemTrava(materialId) {
+  return new Error(`distribuicao sob trava chamada sem a trava do material ${materialId}`);
+}
+
+/**
+ * @param {object} [opcoes] Etapa 91 (T0, D7/B425): `{ sobTrava, pendencia }`.
+ *   - sem `sobTrava`: pega a trava de TODOS os materiais livres da nota (`comLockDosMateriais`,
+ *     crescente), distribui e, depois de soltar, recalcula (pendencia propria) — o recalculo continua
+ *     acontecendo mesmo se a distribuicao lancar, como antes.
+ *   - com `sobTrava`: quem chama JA segura a trava de todos os materiais da nota. Lanca L1 se algum nao
+ *     estiver travado (defesa, nao prova: `travado` tambem e true se OUTRO segura ou espera); registra o
+ *     recalculo em `opcoes.pendencia` e NAO recalcula — o `status` e preenchido pelo `concluirPendencia`.
  * @returns {Promise<{reservas: Array<{requisicao_id, item_id, material_id, reserva_id, quantidade}>,
  *   status: Array<{requisicao_id, de, para}>}>}
  * Lança só em erro de banco fora do try por item (quem chama engole) — e, mesmo então, o status das
- * requisições já tocadas é recalculado antes de relançar.
+ * requisições já tocadas é recalculado antes de relançar (sem opcao; com `sobTrava`, pelo concluir).
  */
-async function reservarChegadaParaQuemEspera(db, user, recebimentoId) {
+async function reservarChegadaParaQuemEspera(db, user, recebimentoId, opcoes = {}) {
   const resultado = { reservas: [], status: [] };
   const rec = await dbGet(db, 'SELECT id, numero FROM recebimentos_material_almoxarifado WHERE id = ?', [recebimentoId]);
   if (!rec) return resultado;
@@ -168,13 +216,24 @@ async function reservarChegadaParaQuemEspera(db, user, recebimentoId) {
 
   const rotulos = rotulosDaChegada(rec);
   const acc = { tocadas: new Set(), resultado };
-  try {
+  const sobTrava = !!(opcoes && opcoes.sobTrava);
+  const pend = sobTrava ? opcoes.pendencia : novaPendencia();
+  if (pend) pend.distribuicoes.push({ acc, rotulos });
+  const distribuir = async () => {
     for (const [materialId, livre] of livrePorMaterial) {
+      if (sobTrava && !trava.travado(materialId)) throw erroSemTrava(materialId);
       // eslint-disable-next-line no-await-in-loop
-      await distribuirParaQuemEspera(db, user, materialId, livre, rotulos, acc);
+      await distribuirSemLock(db, user, materialId, livre, rotulos, acc);
     }
+  };
+  if (sobTrava) {
+    await distribuir();
+    return resultado;
+  }
+  try {
+    await trava.comLockDosMateriais([...livrePorMaterial.keys()], distribuir);
   } finally {
-    await recalcularTocadas(db, acc, rotulos);
+    await concluirPendencia(db, user, pend);
   }
   return resultado;
 }
@@ -185,8 +244,8 @@ async function reservarChegadaParaQuemEspera(db, user, recebimentoId) {
  * (sonda76f-tocadas): este recálculo roda no `finally`, DEPOIS de a distribuição soltar a trava; fora
  * dela, a nota lia hold 8, o operador liberava a reserva antiga pela tela (hold 4, o recálculo da rota lia
  * PARCIALMENTE == atual e não gravava) e o UPDATE atrasado da nota gravava TOTALMENTE_RESERVADA com metade.
- * Sem deadlock: quem chama já saiu de `distribuirParaQuemEspera` (a trava não é reentrante — nunca chamar
- * isto de dentro de `comLockDoMaterial`).
+ * Sem deadlock: quem chama já soltou a trava (a trava não é reentrante — nunca chamar isto de dentro de
+ * `trava.comLockDoMaterial`). Etapa 91 (T0): chamado só pelo `concluirPendencia`, depois de soltar.
  */
 async function recalcularTocadas(db, acc, rotulos) {
   for (const id of acc.tocadas) {
@@ -216,23 +275,9 @@ async function recalcularTocadas(db, acc, rotulos) {
  * PREMISSA: o app é UM processo Node e o SQLite UMA conexão — um lock em memória basta. Com mais de um
  * processo (ou na migração para Postgres) isto vira `SELECT ... FOR UPDATE` na linha do material ou um
  * advisory lock por `material_id` dentro da transação.
+ * Etapa 91 (T0, D4/B422): a trava saiu para `travaPorMaterial.js` (um `Map` so, o mesmo das portas de
+ * aprovacao e liberacao); o corpo de `comLockDoMaterial` foi movido sem mudanca.
  */
-const filaPorMaterial = new Map();
-async function comLockDoMaterial(materialId, fn) {
-  const chave = Number(materialId);
-  const anterior = filaPorMaterial.get(chave) || Promise.resolve();
-  let soltar;
-  const minha = new Promise((resolve) => { soltar = resolve; });
-  const cauda = anterior.then(() => minha);
-  filaPorMaterial.set(chave, cauda);
-  await anterior;
-  try {
-    return await fn();
-  } finally {
-    soltar();
-    if (filaPorMaterial.get(chave) === cauda) filaPorMaterial.delete(chave);
-  }
-}
 
 /**
  * Etapa 76 (T0, D3/B398) — o recálculo do status SOB A TRAVA de todos os materiais da requisição.
@@ -256,9 +301,8 @@ async function recalcularStatusSobTrava(db, requisicaoId) {
   const mats = (await dbAll(db, `SELECT DISTINCT material_id FROM itens_requisicao_almoxarifado
     WHERE requisicao_id = ? AND material_id IS NOT NULL ORDER BY material_id`, [requisicaoId]))
     .map((x) => Number(x.material_id));
-  const recalcular = () => module.exports.recalcularStatusDeReserva(db, requisicaoId);
-  const aninhar = (i) => (i >= mats.length ? recalcular() : comLockDoMaterial(mats[i], () => aninhar(i + 1)));
-  return aninhar(0);
+  // Etapa 91 (T0): `comLockDosMateriais` faz o mesmo aninhamento (DISTINCT, crescente) no modulo da trava.
+  return trava.comLockDosMateriais(mats, () => module.exports.recalcularStatusDeReserva(db, requisicaoId));
 }
 
 /**
@@ -291,10 +335,6 @@ async function recalcularRequisicoesDasReservas(db, reservaIds, rotulo) {
     }
   }
   return mudaram;
-}
-
-async function distribuirParaQuemEspera(db, user, materialId, teto, rotulos, acc) {
-  return comLockDoMaterial(materialId, () => distribuirSemLock(db, user, materialId, teto, rotulos, acc));
 }
 
 async function distribuirSemLock(db, user, materialId, teto, rotulos, acc) {
@@ -418,24 +458,41 @@ function rotulosDaLiberacao(ctx, recNumero) {
  * @param {object} ctx { origem: 'INSPECAO'|'NAO_CONFORMIDADE', documento_id, documento_numero, material_id,
  *   quantidade, recebimento_id }
  * @param {object} [resultado] acumulador preenchido no lugar (Fase 2: quem chama vê o parcial se lançar).
+ * @param {object} [opcoes] Etapa 91 (T0, D7/B425): `{ sobTrava, pendencia }`.
+ *   - sem `sobTrava`: pega a trava do material e le o teto (`min(quantidade, disponivel)`) DENTRO dela —
+ *     ate a 91 era lido FORA (achado da Fase 0 da 91: uma aprovacao no meio fazia o teto dar 0 e a
+ *     distribuicao nem chegava a trava); depois de soltar, recalcula. Retorno inalterado.
+ *   - com `sobTrava`: quem chama ja segura a trava do material (L1 se nao); le o teto, distribui, registra
+ *     o recalculo em `opcoes.pendencia` e NAO recalcula.
  * @returns {Promise<{reservas: Array, status: Array}>} Lança só em erro fora do try por item — e, mesmo então,
  *   o status das requisições já tocadas é recalculado antes de relançar.
  */
-async function reservarLiberacaoParaQuemEspera(db, user, ctx, resultado = { reservas: [], status: [] }) {
+async function reservarLiberacaoParaQuemEspera(db, user, ctx, resultado = { reservas: [], status: [] }, opcoes = {}) {
   const quantidade = num(ctx && ctx.quantidade);
   if (!(quantidade > EPS) || !ctx.material_id) return resultado;
-  const material = await dbGet(db, `SELECT id, ${disponivelSql()} AS disponivel FROM materiais_almoxarifado WHERE id = ?`, [ctx.material_id]);
-  if (!material) return resultado;
-  const rec = ctx.recebimento_id
-    ? await dbGet(db, 'SELECT numero FROM recebimentos_material_almoxarifado WHERE id = ?', [ctx.recebimento_id])
-    : null;
-  const teto = Math.min(quantidade, Math.max(0, num(material.disponivel)));
-  const rotulos = rotulosDaLiberacao(ctx, rec ? rec.numero : ctx.recebimento_id);
-  const acc = { tocadas: new Set(), resultado };
+  const sobTrava = !!(opcoes && opcoes.sobTrava);
+  const pend = sobTrava ? opcoes.pendencia : novaPendencia();
+  const distribuir = async () => {
+    if (sobTrava && !trava.travado(ctx.material_id)) throw erroSemTrava(ctx.material_id);
+    const material = await dbGet(db, `SELECT id, ${disponivelSql()} AS disponivel FROM materiais_almoxarifado WHERE id = ?`, [ctx.material_id]);
+    if (!material) return;
+    const rec = ctx.recebimento_id
+      ? await dbGet(db, 'SELECT numero FROM recebimentos_material_almoxarifado WHERE id = ?', [ctx.recebimento_id])
+      : null;
+    const teto = Math.min(quantidade, Math.max(0, num(material.disponivel)));
+    const rotulos = rotulosDaLiberacao(ctx, rec ? rec.numero : ctx.recebimento_id);
+    const acc = { tocadas: new Set(), resultado };
+    if (pend) pend.distribuicoes.push({ acc, rotulos });
+    await distribuirSemLock(db, user, material.id, teto, rotulos, acc);
+  };
+  if (sobTrava) {
+    await distribuir();
+    return resultado;
+  }
   try {
-    await distribuirParaQuemEspera(db, user, material.id, teto, rotulos, acc);
+    await trava.comLockDoMaterial(ctx.material_id, distribuir);
   } finally {
-    await recalcularTocadas(db, acc, rotulos);
+    await concluirPendencia(db, user, pend);
   }
   return resultado;
 }
@@ -446,14 +503,23 @@ async function reservarLiberacaoParaQuemEspera(db, user, ctx, resultado = { rese
  * módulo (monkeypatch dos testes). Fase 2: na falha devolve o resultado PARCIAL (o que de fato ficou
  * reservado antes de a falha escapar) — o aviso (T3) diz a verdade a partir dele.
  */
-async function aposLiberacaoSemFalhar(db, user, ctx) {
+async function aposLiberacaoSemFalhar(db, user, ctx, opcoes = {}) {
   const resultado = { reservas: [], status: [] };
   let r = resultado;
+  const sobTrava = !!(opcoes && opcoes.sobTrava);
   try {
-    r = (await module.exports.reservarLiberacaoParaQuemEspera(db, user, ctx, resultado)) || resultado;
+    r = (await (sobTrava
+      ? module.exports.reservarLiberacaoParaQuemEspera(db, user, ctx, resultado, opcoes)
+      : module.exports.reservarLiberacaoParaQuemEspera(db, user, ctx, resultado))) || resultado;
   } catch (e) {
     console.warn(`[almoxarifado-reservas] reserva na liberacao falhou (${ctx && ctx.origem} ${ctx && ctx.documento_id}): ${e.message}`);
     r = resultado;
+  }
+  // Etapa 91 (T0, D5/B423): sob a trava o aviso NAO sai daqui — vai para a pendencia e o
+  // `concluirPendencia` o manda depois do recalculo (o aviso ve o status ja recalculado).
+  if (sobTrava) {
+    if (opcoes.pendencia) opcoes.pendencia.avisos.push({ ctx, resultado: r });
+    return r;
   }
   // T3 (D7/B389): o solicitante é avisado com o que DE FATO ficou reservado. Pelo objeto do módulo
   // (monkeypatch dos testes); a falha do aviso nunca derruba a decisão nem a reserva.
@@ -577,6 +643,8 @@ module.exports = {
   reservarChegadaParaQuemEspera,
   reservarLiberacaoParaQuemEspera,
   aposLiberacaoSemFalhar,
+  novaPendencia, // Etapa 91 (T0)
+  concluirPendencia, // Etapa 91 (T0)
   recalcularStatusDeReserva,
   recalcularStatusSobTrava,
   recalcularRequisicoesDasReservas,
