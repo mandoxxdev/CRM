@@ -23,4 +23,36 @@ function criarFilaSerial() {
   };
 }
 
-module.exports = { criarFilaSerial };
+/**
+ * Etapa 87 (fix-round da revisao) — fecha o navegador com PRAZO.
+ *
+ * `browser.close()` do Puppeteer espera o processo do Chromium sair; se ele nao sai (travado,
+ * zumbi), a promessa nunca resolve. Como `fecharNavegadorPdf` roda DENTRO da fila serial, um
+ * close pendurado seguraria a fila para sempre: nenhum PDF (proposta, pedido, OS) sairia mais ate
+ * reiniciar o servidor. Aqui o close corre contra um prazo; estourado, mata o processo filho
+ * (`navegador.process().kill('SIGKILL')`) e devolve — a fila segue.
+ *
+ * Devolve 'fechou' | 'erro' (close rejeitou: ja estava morto) | 'prazo' (matou o processo).
+ * O temporizador NAO usa unref: com unref, um processo sem outra referencia sairia antes do prazo
+ * e o kill nunca aconteceria.
+ */
+async function fecharNavegadorComPrazo(navegador, { prazoMs = 10000, aoEstourar } = {}) {
+  let timer = null;
+  const prazo = new Promise((resolve) => { timer = setTimeout(() => resolve('prazo'), prazoMs); });
+  const fechou = Promise.resolve()
+    .then(() => navegador.close())
+    .then(() => 'fechou', () => 'erro');
+  const resultado = await Promise.race([fechou, prazo]);
+  clearTimeout(timer);
+  if (resultado === 'prazo') {
+    let matou = false;
+    try {
+      const proc = typeof navegador.process === 'function' ? navegador.process() : null;
+      if (proc && typeof proc.kill === 'function') { proc.kill('SIGKILL'); matou = true; }
+    } catch (_) { /* processo ja sumiu */ }
+    if (typeof aoEstourar === 'function') aoEstourar({ prazoMs, matou });
+  }
+  return resultado;
+}
+
+module.exports = { criarFilaSerial, fecharNavegadorComPrazo };

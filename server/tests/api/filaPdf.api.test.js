@@ -12,7 +12,7 @@
  *   O valor de retorno de cada tarefa chega a quem enfileirou.
  */
 const assert = require('assert');
-const { criarFilaSerial } = require('../../services/filaPdf');
+const { criarFilaSerial, fecharNavegadorComPrazo } = require('../../services/filaPdf');
 
 let passed = 0; let failed = 0;
 async function test(name, fn) {
@@ -20,6 +20,10 @@ async function test(name, fn) {
   catch (e) { failed++; console.error(`  ✗ ${name}: ${e.message}`); }
 }
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+// Etapa 87 (fix-round): se uma promessa ficar pendente sem timer vivo, o Node esvazia o loop e sai
+// com codigo 0 SEM imprimir o resumo — teste "verde" que nao rodou. O fim normal chama
+// process.exit (que nao dispara beforeExit); chegar aqui e travamento.
+process.on('beforeExit', () => { console.error(`  ✗ a suite saiu sem terminar (promessa pendurada) — ${passed} passed`); process.exit(1); });
 
 (async () => {
   await test('roda uma tarefa por vez (concorrencia maxima = 1) e em ordem de chegada', async () => {
@@ -86,6 +90,67 @@ const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
     const t = () => async () => { emCurso += 1; maximo = Math.max(maximo, emCurso); await esperar(20); emCurso -= 1; };
     await Promise.all([f1(t()), f2(t())]);
     assert.strictEqual(maximo, 2);
+  });
+
+  // Etapa 87 (fix-round da revisao): b.close() do Puppeteer pode nunca resolver (espera o processo
+  // sair). Rodando dentro da fila, isso travaria todos os PDFs seguintes. Comportamento real com
+  // navegador falso — nao regex.
+  const navegadorFalso = (close) => {
+    const kills = [];
+    return { kills, close, process: () => ({ kill: (sinal) => kills.push(sinal) }) };
+  };
+
+  await test('fecharNavegadorComPrazo: close que nunca resolve -> devolve "prazo" no prazo e mata com SIGKILL', async () => {
+    const nav = navegadorFalso(() => new Promise(() => {}));
+    let aviso = null;
+    const t0 = Date.now();
+    // Vigia: sem ele, um helper que espera o close para sempre deixaria o Node sair com codigo 0
+    // (promessa pendente sem timer vivo) e o teste "passaria" sem rodar.
+    const r = await Promise.race([
+      fecharNavegadorComPrazo(nav, { prazoMs: 80, aoEstourar: (info) => { aviso = info; } }),
+      esperar(2000).then(() => "TRAVOU"),
+    ]);
+    const ms = Date.now() - t0;
+    assert.strictEqual(r, 'prazo');
+    assert.ok(ms >= 70 && ms < 1000, `levou ${ms}ms (prazo 80)`);
+    assert.deepStrictEqual(nav.kills, ['SIGKILL']);
+    assert.deepStrictEqual(aviso, { prazoMs: 80, matou: true });
+  });
+
+  await test('fecharNavegadorComPrazo: a fila segue depois de um close pendurado', async () => {
+    const enfileirar = criarFilaSerial();
+    const nav = navegadorFalso(() => new Promise(() => {}));
+    const fechar = enfileirar(() => fecharNavegadorComPrazo(nav, { prazoMs: 50 }));
+    const seguinte = enfileirar(() => 'gerou');
+    const r = await Promise.race([seguinte, esperar(2000).then(() => "TRAVOU")]);
+    assert.strictEqual(r, "gerou", "a tarefa seguinte nao rodou: o close pendurado segurou a fila");
+    assert.strictEqual(await fechar, "prazo");
+  });
+
+  await test('fecharNavegadorComPrazo: close normal -> "fechou", sem kill nem aviso', async () => {
+    const nav = navegadorFalso(async () => { await esperar(5); });
+    let avisou = false;
+    const r = await fecharNavegadorComPrazo(nav, { prazoMs: 500, aoEstourar: () => { avisou = true; } });
+    assert.strictEqual(r, 'fechou');
+    assert.deepStrictEqual(nav.kills, []);
+    assert.strictEqual(avisou, false);
+  });
+
+  await test('fecharNavegadorComPrazo: close que rejeita ou lanca sincrono -> "erro", sem kill', async () => {
+    const n1 = navegadorFalso(async () => { throw new Error('Target closed'); });
+    assert.strictEqual(await fecharNavegadorComPrazo(n1, { prazoMs: 500 }), 'erro');
+    const n2 = navegadorFalso(() => { throw new Error('sincrono'); });
+    assert.strictEqual(await fecharNavegadorComPrazo(n2, { prazoMs: 500 }), 'erro');
+    assert.deepStrictEqual([...n1.kills, ...n2.kills], []);
+  });
+
+  await test('fecharNavegadorComPrazo: prazo estourado sem process() (ou process() null) -> "prazo", matou=false', async () => {
+    let aviso = null;
+    const r = await fecharNavegadorComPrazo({ close: () => new Promise(() => {}) }, { prazoMs: 30, aoEstourar: (i) => { aviso = i; } });
+    assert.strictEqual(r, 'prazo');
+    assert.deepStrictEqual(aviso, { prazoMs: 30, matou: false });
+    const r2 = await fecharNavegadorComPrazo({ close: () => new Promise(() => {}), process: () => null }, { prazoMs: 30 });
+    assert.strictEqual(r2, 'prazo');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

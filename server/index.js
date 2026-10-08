@@ -216,6 +216,7 @@ const { tratarErroGlobalApi } = require('./services/errosApi');
 const multer = multerComLimiteNoErro(require('multer'));
 const puppeteer = require('puppeteer');
 const { criarFilaSerial } = require('./services/filaPdf');
+const { fecharNavegadorComPrazo } = require('./services/filaPdf');
 const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
@@ -307,6 +308,7 @@ const PDFS_ANTES_DE_RECICLAR = (() => {
   return Number.isInteger(n) && n >= 1 ? n : 20;
 })();
 const OCIOSO_ATE_FECHAR_MS = 5 * 60 * 1000;
+const FECHAR_NAVEGADOR_PRAZO_MS = 10000;
 let navegadorPdf = null;
 let pdfsGerados = 0;
 let timerOciosoPdf = null;
@@ -347,8 +349,15 @@ async function fecharNavegadorPdf(motivo) {
   navegadorPdf = null;
   pdfsGerados = 0;
   if (!b) return;
-  try { await b.close(); } catch (_) { /* já morreu; nada a fazer */ }
-  console.log(`[PDF] navegador encerrado (${motivo})`);
+  // Etapa 87 (fix-round): close com prazo. Este fechamento roda DENTRO da fila; um b.close()
+  // pendurado (o Puppeteer espera o processo sair) travaria todos os PDFs seguintes para sempre.
+  // Estourado o prazo, o helper mata o processo do Chromium (SIGKILL) e a fila segue.
+  const resultado = await fecharNavegadorComPrazo(b, {
+    prazoMs: FECHAR_NAVEGADOR_PRAZO_MS,
+    aoEstourar: ({ prazoMs, matou }) => console.warn(
+      `[PDF] navegador nao fechou em ${prazoMs}ms (${motivo}); ${matou ? 'processo morto com SIGKILL' : 'sem processo para matar'}`),
+  });
+  console.log(`[PDF] navegador encerrado (${motivo}) [${resultado}]`);
 }
 
 async function obterNavegadorPdf() {
