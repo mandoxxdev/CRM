@@ -270,11 +270,34 @@ async function prepararPosAprovacao(db, requisicaoId, user, reqRow = {}) {
  * @returns {Promise<*>} o retorno de `fn`.
  */
 async function comTravaDaRequisicao(db, requisicaoId, fn) {
-  const mats = (await dbAll(db, `SELECT DISTINCT material_id FROM itens_requisicao_almoxarifado
+  // Etapa 91 (Fase 5, achado F1): "ler antes de travar e estavel" valia para TROCA de material, nao para
+  // item NOVO. A requisicao nasce PENDENTE antes dos itens (`requisitionCreateService`: cabecalho, depois
+  // um item por vez), entao um `/aprovar` que caia no meio da criacao lia {A}, travava so A e
+  // `prepararPosAprovacao` reservava B — gravado nesse meio-tempo — sem a trava de B. Agora o conjunto e
+  // RELIDO dentro da trava; se apareceu material novo, solta e tenta de novo com o conjunto novo (ordem
+  // crescente preservada: nunca se pede trava segurando outra fora de `comLockDosMateriais`). Limitado a
+  // TENTATIVAS_TRAVA_REQUISICAO: na ultima segue com o que tem (o comportamento de antes) — a criacao
+  // grava poucos itens e termina; um laco sem fim seria pior que a janela.
+  const lerMateriais = async () => (await dbAll(db, `SELECT DISTINCT material_id FROM itens_requisicao_almoxarifado
     WHERE requisicao_id = ? AND material_id IS NOT NULL ORDER BY material_id`, [requisicaoId]))
     .map((x) => Number(x.material_id));
-  return travaPorMaterial.comLockDosMateriais(mats, fn);
+  let mats = await lerMateriais();
+  for (let tentativa = 1; ; tentativa += 1) {
+    const ultima = tentativa >= TENTATIVAS_TRAVA_REQUISICAO;
+    const travados = mats;
+    // eslint-disable-next-line no-await-in-loop
+    const r = await travaPorMaterial.comLockDosMateriais(travados, async () => {
+      if (!ultima) {
+        const agora = await lerMateriais();
+        if (agora.some((m) => !travados.includes(m))) return { refazer: agora };
+      }
+      return { valor: await fn() };
+    });
+    if (!r.refazer) return r.valor;
+    mats = r.refazer;
+  }
 }
+const TENTATIVAS_TRAVA_REQUISICAO = 3;
 
 /**
  * Devolve SO as reservas que a chamada criou (perdeu o UPDATE guardado). Nao
