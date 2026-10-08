@@ -217,6 +217,7 @@ const multer = multerComLimiteNoErro(require('multer'));
 const puppeteer = require('puppeteer');
 const { criarFilaSerial } = require('./services/filaPdf');
 const { fecharNavegadorComPrazo } = require('./services/filaPdf');
+const { resolverAssetDoClient } = require('./services/assetsDoClient');
 const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
@@ -13668,9 +13669,12 @@ function gerarHTMLOS(os, osItens = []) {
     
     // Tentar carregar logo como base64 para garantir que apareça
     let logoGMP = '';
-    const publicLogoMYPath = path.join(__dirname, '..', 'client', 'public', 'Logo_MY.jpg');
+    // Etapa 87 (fix-round): build primeiro, public depois (resolveClientAsset). Lia so de
+    // client/public, que nao existe na imagem Docker de producao (so client/build): em producao o
+    // logo caia no fallback por URL e o Chromium o buscava pela rede dentro da fila de PDFs.
+    const publicLogoMYPath = resolveClientAsset('Logo_MY.jpg');
     try {
-      if (fs.existsSync(publicLogoMYPath)) {
+      if (publicLogoMYPath) {
         const logoBuffer = fs.readFileSync(publicLogoMYPath);
         const logoBase64 = logoBuffer.toString('base64');
         const logoExtension = path.extname(publicLogoMYPath).substring(1) || 'jpg';
@@ -17906,18 +17910,10 @@ app.get('/api/proposta-template/contrato-anexo/:arquivo', authenticateToken, ser
 // Resolve um asset do client priorizando client/build (produção — o CRA copia o
 // public/ para dentro do build/ no npm run build), com fallback para client/public
 // (dev local). Corrige 404 em prod, onde a imagem Docker só contém client/build.
+// Etapa 87 (fix-round): a logica mora em services/assetsDoClient.js (testada com pastas
+// temporarias) e o PDF da OS (gerarHTMLOS) usa este mesmo resolvedor para o logo.
 function resolveClientAsset(...names) {
-  const bases = [
-    path.join(__dirname, '..', 'client', 'build'),
-    path.join(__dirname, '..', 'client', 'public'),
-  ];
-  for (const base of bases) {
-    for (const name of names) {
-      const candidate = path.join(base, name);
-      if (fs.existsSync(candidate)) return candidate;
-    }
-  }
-  return null;
+  return resolverAssetDoClient(path.join(__dirname, '..', 'client'), ...names);
 }
 
 // Servir logo.png (prioriza build; fallback public para dev local)
