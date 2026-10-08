@@ -101,6 +101,13 @@
   pré-filtram jpeg/jpg/png/gif/webp).
 
 ## Tasks
+> Estado: **T1 feita (`4ef91c01`)** — `criarAssinadorUpload(segredoRaiz, { prefixo, dominio, minutos,
+> baldeMinutos } = {})`; o objeto devolvido expõe `MINUTOS_VALIDADE`, `BALDE_MINUTOS` e `PREFIXO` da
+> instância; o módulo exporta também `BALDE_MINUTOS` e `DOMINIO_PADRAO`. `minutos`/`baldeMinutos`
+> não inteiros positivos lançam. Teste `urlUploadParametrizada.api.test.js` (6); controles: domínio
+> ignorado → 2 vermelhos, teto fixo em 20 min → 2 vermelhos. `test:api` 301/301, `test:almoxarifado`
+> 44/44. Próximo: T2 e T3 em paralelo.
+
 **T1 — tronco:** RN-82.01 em `urlUpload.js` + testes (os atuais verdes sem mudança; novos: opções,
 domínio isolado entre pastas, teto acompanha a validade). Controle positivo: chave sem domínio →
 assinatura cruzada passa → vermelho.
