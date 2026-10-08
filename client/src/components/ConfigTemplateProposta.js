@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import api from '../services/api';
+import { baixarContratoAnexo } from '../utils/baixarArquivoProtegido';
 import { FiSave, FiUpload, FiX, FiSettings, FiSearch, FiFileText, FiTrash2, FiEdit2, FiCopy } from 'react-icons/fi';
 import './ConfigTemplateProposta.css';
 
@@ -287,6 +289,16 @@ A ordem atual desta família será substituída.`;
       alert('Erro: ' + (error.response?.data?.error || error.message));
     } finally {
       setUploadingContrato(false);
+    }
+  };
+
+  // Etapa 81 (RN-81.05): o contrato so sai pela rota autenticada (`api` com Bearer, so nesta
+  // chamada — o resto da tela segue em axios cru); erro por alert(), como o resto desta tela.
+  const handleBaixarContrato = async () => {
+    try {
+      await baixarContratoAnexo(api, config.contrato_anexo_url);
+    } catch (error) {
+      alert('Erro: ' + error.message);
     }
   };
 
@@ -629,9 +641,9 @@ A ordem atual desta família será substituída.`;
             {(config.contrato_anexo_url) && (
               <div style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                 <FiFileText style={{ fontSize: '20px', color: '#1a4d7a' }} />
-                <a href={`/api/uploads/contrato/${config.contrato_anexo_url}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1a4d7a' }}>
+                <button type="button" onClick={handleBaixarContrato} title="Baixar contrato" style={{ color: '#1a4d7a', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textDecoration: 'underline', font: 'inherit' }}>
                   {config.contrato_anexo_url}
-                </a>
+                </button>
                 <button type="button" onClick={handleRemoveContrato} className="btn-remove-image" disabled={saving}>
                   <FiTrash2 /> Remover contrato
                 </button>
