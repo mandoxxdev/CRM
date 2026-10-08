@@ -9552,7 +9552,8 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
 
 // ========== ROTA PARA GERAR PROPOSTA PREMIUM ==========
 // v2026-03: header/footer fixos com imagens do módulo; preview sempre regenera HTML (sem snapshot); fallback template.
-// IMPORTANTE: rota liberada sem autenticação para permitir abertura direta via link/PDF.
+// Exige login (Etapa 79) - ver o comentario da rota /pdf abaixo, que explica por que o antigo
+// "liberada sem autenticacao" caiu nas duas.
 // Proteções para evitar 502: timeout de resposta, guarda de resposta única, não exige dbReady.
 const PREMIUM_ROUTE_TIMEOUT_MS = 30000; // 30s — evita que o proxy (Coolify/Traefik) devolva 502 por timeout
 
@@ -9680,7 +9681,7 @@ function resolverTemplateConfig(rows, familiaTemplate) {
   return { ...preferida, variaveis_proposta_por_familia: mapa };
 }
 
-app.get('/api/propostas/:id/premium', (req, res) => {
+app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
   let responseSent = false;
   let timeoutId = null;
 
@@ -10017,8 +10018,14 @@ app.get('/api/propostas/:id/premium', (req, res) => {
 
 // ========== ROTA PARA GERAR PDF (Puppeteer = igual ao preview) ==========
 // Usa o mesmo HTML do "Ver proposta" e gera o PDF no servidor com Puppeteer, assim o PDF fica idêntico ao preview.
-// IMPORTANTE: rota liberada sem autenticação para permitir abertura direta via link/PDF.
-app.get('/api/propostas/:id/pdf', async (req, res) => {
+// Exige login (Etapa 79). Ate entao esta rota e a /premium eram "liberadas sem autenticacao para
+// permitir abertura direta via link/PDF" (bd836d2d) - mas nenhum chamador usa link cru: os 7 pontos
+// do client passam por api.get (Bearer pelo interceptor) e o window.open abre um blob ja baixado;
+// nada no servidor (e-mail, WhatsApp) gera link para elas. Como os ids sao sequenciais, qualquer um
+// com a URL do servidor baixava TODAS as propostas (cliente, itens, precos, condicoes) trocando o
+// numero. O gate e o mesmo de GET /api/propostas/:id (so authenticateToken): quem le a proposta em
+// JSON le o PDF. Teste: tests/api/propostaPdfExigeLogin.api.test.js.
+app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
   const { id } = req.params;
   
   if (!id || isNaN(parseInt(id))) {
