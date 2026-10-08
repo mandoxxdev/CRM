@@ -208,6 +208,7 @@ const fs = require('fs');
 const archiver = require('archiver');
 const multer = require('multer');
 const puppeteer = require('puppeteer');
+const { criarFilaSerial } = require('./services/filaPdf');
 const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
@@ -298,9 +299,32 @@ let navegadorPdf = null;
 let pdfsGerados = 0;
 let timerOciosoPdf = null;
 
+// Etapa 80 (B32) — FILA SERIAL do Chromium compartilhado: no maximo UMA geracao de PDF usa o
+// navegador por vez, somando os dois chamadores (rota da proposta e gerarPdfDeHtml). Antes, sem
+// fila: (1) a reciclagem disparada por um PDF matava outro no meio do page.pdf ("Target closed");
+// (2) o erro de um fechava o navegador do outro; (3) dois chamadores com navegadorPdf === null
+// lancavam DOIS Chromium e o primeiro nunca era fechado (prova "antes": 33 Chromium vivos e 7 de
+// 48 PDFs com 500). Reciclagem, fechamento por erro e por ociosidade agora acontecem so ENTRE
+// geracoes, porque rodam dentro da vez de quem os disparou.
+//
+// Toda chamada de obterNavegadorPdf/fecharNavegadorPdf tem de estar dentro de enfileirarPdf(...)
+// (teste de fiacao: tests/api/filaPdfFiacao.api.test.js). Cada tarefa comeca cancelando o
+// temporizador de ociosidade, para o navegador nunca fechar por ociosidade durante uma geracao.
+// ⚠️ NUNCA chamar enfileirarPdf (nem gerarPdfDeHtml) de dentro de uma tarefa da fila esperando o
+// resultado: a interna so roda quando a externa terminar, e a externa espera a interna (deadlock).
+const filaPdfSerial = criarFilaSerial();
+function enfileirarPdf(tarefa) {
+  return filaPdfSerial(() => {
+    clearTimeout(timerOciosoPdf);
+    return tarefa();
+  });
+}
+
 function agendarFechamentoOcioso() {
   clearTimeout(timerOciosoPdf);
-  timerOciosoPdf = setTimeout(() => { fecharNavegadorPdf('ocioso'); }, OCIOSO_ATE_FECHAR_MS);
+  // O fechamento por ociosidade tambem entra na fila (RN-80.06): o setTimeout dispara fora de
+  // qualquer geracao e nao pode fechar o navegador debaixo de quem acabou de pegar a vez.
+  timerOciosoPdf = setTimeout(() => { enfileirarPdf(() => fecharNavegadorPdf('ocioso')); }, OCIOSO_ATE_FECHAR_MS);
   if (timerOciosoPdf.unref) timerOciosoPdf.unref(); // não segura o processo no ar
 }
 
@@ -328,6 +352,10 @@ async function obterNavegadorPdf() {
   if (!navegadorPdf) {
     navegadorPdf = await puppeteer.launch({
       ...getPuppeteerLaunchOptions(),
+      // RN-80.07: com a fila, uma geracao travada segura TODAS as seguintes. O padrao do
+      // Puppeteer (180 s por chamada de protocolo) vale para evaluate/newPage/close, que nao tem
+      // timeout proprio; 60 s e folga larga (a proposta mais pesada medida: ~1,3 s no page.pdf).
+      protocolTimeout: 60000,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -357,45 +385,48 @@ async function obterNavegadorPdf() {
  * (sem ele o Chromium imprime data+titulo).
  *
  * ⚠️ No erro DERRUBA o navegador, como a proposta: aba pendurada contamina os PDFs seguintes.
- * ⚠️ B32 (risco pre-existente, agora com dois chamadores): a reciclagem apos 20 PDFs nao e
- * serializada — um PDF em andamento quando outro dispara a reciclagem morre com "Target closed".
+ * Etapa 80 (B32 resolvido): roda INTEIRA dentro de enfileirarPdf — a reciclagem e o fechamento
+ * por erro so acontecem entre geracoes, nunca no meio do PDF de outro chamador.
+ * ⚠️ Nunca chamar gerarPdfDeHtml de dentro de uma tarefa da fila (deadlock: ver enfileirarPdf).
  */
 async function gerarPdfDeHtml(html, opcoes = {}) {
-  let page = null;
-  try {
-    const browser = await obterNavegadorPdf();
-    page = await browser.newPage();
-    await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 1 });
-    await page.setContent(html, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
-    await page.evaluate(async () => {
-      if (document.fonts && document.fonts.ready) await document.fonts.ready;
-      await Promise.all(Array.from(document.images).map((img) => (
-        img.complete ? Promise.resolve() : new Promise((r) => {
-          img.addEventListener('load', r, { once: true });
-          img.addEventListener('error', r, { once: true });
-        })
-      )));
-    });
-    const resultado = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      preferCSSPageSize: true,
-      displayHeaderFooter: true,
-      headerTemplate: opcoes.headerTemplate || '<span></span>',
-      footerTemplate: opcoes.footerTemplate || '<span></span>',
-      margin: opcoes.margin || { top: '12mm', right: '12mm', bottom: '12mm', left: '12mm' },
-    });
-    // Puppeteer >=22 devolve Uint8Array.
-    const buffer = Buffer.from(resultado);
-    await page.close();
-    page = null;
-    pdfsGerados += 1;
-    agendarFechamentoOcioso();
-    return buffer;
-  } catch (error) {
-    await fecharNavegadorPdf('erro na geração');
-    throw error;
-  }
+  return enfileirarPdf(async () => {
+    let page = null;
+    try {
+      const browser = await obterNavegadorPdf();
+      page = await browser.newPage();
+      await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 1 });
+      await page.setContent(html, { waitUntil: ['load', 'domcontentloaded'], timeout: 60000 });
+      await page.evaluate(async () => {
+        if (document.fonts && document.fonts.ready) await document.fonts.ready;
+        await Promise.all(Array.from(document.images).map((img) => (
+          img.complete ? Promise.resolve() : new Promise((r) => {
+            img.addEventListener('load', r, { once: true });
+            img.addEventListener('error', r, { once: true });
+          })
+        )));
+      });
+      const resultado = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        preferCSSPageSize: true,
+        displayHeaderFooter: true,
+        headerTemplate: opcoes.headerTemplate || '<span></span>',
+        footerTemplate: opcoes.footerTemplate || '<span></span>',
+        margin: opcoes.margin || { top: '12mm', right: '12mm', bottom: '12mm', left: '12mm' },
+      });
+      // Puppeteer >=22 devolve Uint8Array.
+      const buffer = Buffer.from(resultado);
+      await page.close();
+      page = null;
+      pdfsGerados += 1;
+      agendarFechamentoOcioso();
+      return buffer;
+    } catch (error) {
+      await fecharNavegadorPdf('erro na geração');
+      throw error;
+    }
+  });
 }
 
 function getPuppeteerLaunchOptions() {
@@ -10044,7 +10075,6 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
     });
   }
   
-  let browser = null;
   try {
     const proposta = await new Promise((resolve, reject) => {
       db.get(`
@@ -10305,77 +10335,95 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
       throw new Error('HTML da proposta está vazio');
     }
     
-    // Cronometragem por etapa, impressa no log do servidor. Sem isto, "o PDF esta lento" e
-    // um relato sem numero: nao da para saber se o tempo esta no navegador, no peso das
-    // imagens embutidas ou na renderizacao. Uma linha por PDF, barata.
-    const tPdf = { inicio: Date.now(), marca: Date.now(), etapas: [] };
-    const marcarPdf = (nome) => { tPdf.etapas.push(`${nome}=${Date.now() - tPdf.marca}ms`); tPdf.marca = Date.now(); };
     // Peso do HTML e quantas imagens embutidas ele carrega: e o principal suspeito quando a
     // proposta tem muitas fotos, porque cada uma viaja em base64 dentro do documento.
     const imagensEmbutidas = (html.match(/data:image\//g) || []).length;
     const htmlMb = (Buffer.byteLength(html) / 1024 / 1024).toFixed(2);
-    const navegadorJaEstavaDePe = !!navegadorPdf;
+    // Etapa 80: de obterNavegadorPdf ate agendarFechamentoOcioso tudo roda na FILA do Chromium
+    // (enfileirarPdf). O cronometro e "navegador(reuso|abriu)" sao medidos DENTRO da vez, e a
+    // espera na fila sai separada em fila=<ms> — senao o log culpa o navegador pela fila. O erro
+    // fecha o navegador DENTRO da tarefa (e relanca): no catch externo a vez ja pode ser de outro
+    // PDF, e fechar ali derrubaria o navegador dele.
+    const tEnfileirou = Date.now();
+    const pdfBuffer = await enfileirarPdf(async () => {
+      // Cronometragem por etapa, impressa no log do servidor. Sem isto, "o PDF esta lento" e
+      // um relato sem numero: nao da para saber se o tempo esta no navegador, no peso das
+      // imagens embutidas ou na renderizacao. Uma linha por PDF, barata.
+      const tPdf = { inicio: Date.now(), marca: Date.now(), etapas: [`fila=${Date.now() - tEnfileirou}ms`] };
+      const marcarPdf = (nome) => { tPdf.etapas.push(`${nome}=${Date.now() - tPdf.marca}ms`); tPdf.marca = Date.now(); };
+      const navegadorJaEstavaDePe = !!navegadorPdf;
+      let browser = null;
+      try {
+        browser = await obterNavegadorPdf();
+        marcarPdf(navegadorJaEstavaDePe ? 'navegador(reuso)' : 'navegador(abriu)');
+        const page = await browser.newPage();
+        marcarPdf('novaAba');
+        // deviceScaleFactor 1, e não 2: o PDF sai vetorial, então 2x só dobra o trabalho de
+        // rasterizar sem mudar o resultado. Medido: mesmas páginas, mesmo texto, mesmo tamanho
+        // de arquivo (922 KB nos dois), com o page.pdf caindo de 1279 ms para 857 ms.
+        await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 1 });
 
-    browser = await obterNavegadorPdf();
-    marcarPdf(navegadorJaEstavaDePe ? 'navegador(reuso)' : 'navegador(abriu)');
-    const page = await browser.newPage();
-    marcarPdf('novaAba');
-    // deviceScaleFactor 1, e não 2: o PDF sai vetorial, então 2x só dobra o trabalho de
-    // rasterizar sem mudar o resultado. Medido: mesmas páginas, mesmo texto, mesmo tamanho
-    // de arquivo (922 KB nos dois), com o page.pdf caindo de 1279 ms para 857 ms.
-    await page.setViewport({ width: 1200, height: 1600, deviceScaleFactor: 1 });
+        await page.setContent(html, {
+          // Com imagens embedadas em base64, não precisamos depender de networkidle0 (evita travas no primeiro PDF)
+          waitUntil: ['load', 'domcontentloaded'],
+          timeout: 60000
+        });
+        marcarPdf('carregarHTML');
 
-    await page.setContent(html, {
-      // Com imagens embedadas em base64, não precisamos depender de networkidle0 (evita travas no primeiro PDF)
-      waitUntil: ['load', 'domcontentloaded'],
-      timeout: 60000
-    });
-    marcarPdf('carregarHTML');
+        // Aqui havia três esperas fixas somando 2350 ms — 37% do tempo total do PDF, gastas
+        // "por garantia" sem observar nada. Agora espera-se o que de fato precisa estar pronto
+        // antes de paginar: as fontes (o paginador MEDE altura de texto, e medir com a fonte
+        // errada quebra a quebra de página) e as imagens decodificadas. Na prática leva ~5 ms.
+        await page.evaluate(async () => {
+          if (document.fonts && document.fonts.ready) await document.fonts.ready;
+          await Promise.all(Array.from(document.images).map((img) => (
+            img.complete ? Promise.resolve() : new Promise((r) => {
+              img.addEventListener('load', r, { once: true });
+              img.addEventListener('error', r, { once: true });
+            })
+          )));
+        });
 
-    // Aqui havia três esperas fixas somando 2350 ms — 37% do tempo total do PDF, gastas
-    // "por garantia" sem observar nada. Agora espera-se o que de fato precisa estar pronto
-    // antes de paginar: as fontes (o paginador MEDE altura de texto, e medir com a fonte
-    // errada quebra a quebra de página) e as imagens decodificadas. Na prática leva ~5 ms.
-    await page.evaluate(async () => {
-      if (document.fonts && document.fonts.ready) await document.fonts.ready;
-      await Promise.all(Array.from(document.images).map((img) => (
-        img.complete ? Promise.resolve() : new Promise((r) => {
-          img.addEventListener('load', r, { once: true });
-          img.addEventListener('error', r, { once: true });
-        })
-      )));
-    });
+        marcarPdf('fontes+imagens');
 
-    marcarPdf('fontes+imagens');
+        await page.evaluate(function() {
+          if (typeof window.paginateProposalContent === 'function') window.paginateProposalContent();
+        });
+        marcarPdf('paginar');
 
-    await page.evaluate(function() {
-      if (typeof window.paginateProposalContent === 'function') window.paginateProposalContent();
-    });
-    marcarPdf('paginar');
-
-    await page.evaluate(() => { window.dispatchEvent(new Event('beforeprint')); });
-    // Dois quadros de layout, em vez de 450 ms cravados: dá ao navegador a chance de
-    // aplicar o que o beforeprint mudou, e devolve assim que estiver aplicado.
-    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+        await page.evaluate(() => { window.dispatchEvent(new Event('beforeprint')); });
+        // Dois quadros de layout, em vez de 450 ms cravados: dá ao navegador a chance de
+        // aplicar o que o beforeprint mudou, e devolve assim que estiver aplicado.
+        await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
     
-    const pdfResult = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      preferCSSPageSize: true,
-      displayHeaderFooter: false,
-      margin: { top: '0', right: '0', bottom: '0', left: '0' },
-      scale: 1.0
-    });
-    marcarPdf('renderizarPDF');
-    // Puppeteer >=22 retorna Uint8Array; converter para Buffer antes de res.end().
-    const pdfBuffer = Buffer.from(pdfResult);
-    console.log(`[PDF] proposta ${id} em ${Date.now() - tPdf.inicio}ms | html=${htmlMb}MB imagens=${imagensEmbutidas} pdf=${(pdfBuffer.length / 1024).toFixed(0)}KB | ${tPdf.etapas.join(' ')}`);
+        const pdfResult = await page.pdf({
+          format: 'A4',
+          printBackground: true,
+          preferCSSPageSize: true,
+          displayHeaderFooter: false,
+          margin: { top: '0', right: '0', bottom: '0', left: '0' },
+          scale: 1.0
+        });
+        marcarPdf('renderizarPDF');
+        // Puppeteer >=22 retorna Uint8Array; converter para Buffer antes de res.end().
+        const pdfBuffer = Buffer.from(pdfResult);
+        console.log(`[PDF] proposta ${id} em ${Date.now() - tPdf.inicio}ms | html=${htmlMb}MB imagens=${imagensEmbutidas} pdf=${(pdfBuffer.length / 1024).toFixed(0)}KB | ${tPdf.etapas.join(' ')}`);
 
-    // Fecha a ABA, não o navegador: ele fica de pé para o próximo PDF (ver obterNavegadorPdf).
-    await page.close();
-    browser = null;
-    pdfsGerados += 1;
-    agendarFechamentoOcioso();
+        // Fecha a ABA, não o navegador: ele fica de pé para o próximo PDF (ver obterNavegadorPdf).
+        await page.close();
+        browser = null;
+        pdfsGerados += 1;
+        agendarFechamentoOcioso();
+        return pdfBuffer;
+      } catch (error) {
+        // Falhou no meio: derruba o navegador compartilhado em vez de reaproveita-lo. Uma aba
+        // pendurada ou um Chromium em estado ruim contaminaria todos os PDFs seguintes.
+        if (browser) {
+          await fecharNavegadorPdf('erro na geração');
+        }
+        throw error;
+      }
+    });
 
     // Snapshot: gravar HTML/CSS (e checksum se a coluna existir) para reprodução futura
     if (!usouSnapshot && html) {
@@ -10410,11 +10458,8 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
     res.end(pdfBuffer);
     
   } catch (error) {
-    // Falhou no meio: derruba o navegador compartilhado em vez de reaproveitá-lo. Uma aba
-    // pendurada ou um Chromium em estado ruim contaminaria todos os PDFs seguintes.
-    if (browser) {
-      await fecharNavegadorPdf('erro na geração');
-    }
+    // Etapa 80: o navegador ja foi derrubado DENTRO da tarefa da fila, se o erro foi na geracao.
+    // Fechar aqui seria fechar o navegador de quem ja pegou a vez seguinte.
     console.error('Erro ao gerar PDF (Puppeteer):', error);
     console.error('Stack:', error.stack);
     if (!res.headersSent) {
