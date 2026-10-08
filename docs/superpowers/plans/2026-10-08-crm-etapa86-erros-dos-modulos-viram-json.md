@@ -3,6 +3,35 @@
 > Origem: próxima tarefa do plano da 85. Baseline (`7b025038`): `test:api` 307/307; client 93
 > suítes / 1376 testes; build limpo.
 
+> **Estado (2026-10-08): T1 ✅ `bf8d27fe`, T2 ✅ `82d1290e`.** Falta o fechamento (skill
+> `fechar-etapa`: novidades/B41, guia, mapa). Números: `test:api` **308/308**; `test:almoxarifado`
+> 44/0; validation 4/0, safealter 3/0, sqlite 5/0; `tests/chat.test.js` 4/0; client **93 suítes /
+> 1378 testes**; build `CI=true` limpo.
+> - **T1:** `rotasModulos` montado logo antes dos três handlers; os 8 registradores tardios (chat no
+>   `.then`) recebem o Router. Global em `services/errosApi.js` (`tratarErroGlobalApi`,
+>   `erroComMensagemUsuario`); filtros do almoxarifado/extended com `status 400` + `mensagemUsuario`;
+>   multers de `almoxarifado.js`/`extended.js`/`chat.js` embrulhados. Teste novo
+>   `errosModulosJson.api.test.js` (15). **Suíte inteira com o harness novo: nenhum teste dependia do
+>   HTML/500** — só quebraram as 3 réguas da 83/85 (procuravam o global inline), reescritas; a da
+>   RN-85.03 foi invertida. Controles positivos (todos vermelhos, restauro por edição, hash conferido):
+>   almoxarifado de volta ao `app`; chat no `app`; handler expondo `err.message`; filtro do
+>   certificado sem `mensagemUsuario`; harness sem Router (extended 413/400 → HTML); `extended` com
+>   multer cru; global antes do Router.
+> - **Prova real** (`CRM_DATA_DIR` vazio, porta 5986, primeiro boot: 0 "no such table|no column
+>   named"): foto de material 11 MB → 413 JSON "máximo 10 MB"; assinatura 3 MB → 413 "máximo 2 MB";
+>   certificado `.txt` → 400 "Certificado deve ser PDF ou imagem"; JSON malformado (módulo e core) →
+>   400 "JSON inválido no corpo da requisição"; chat 11 MB → 400 "Imagem muito grande. Máximo 10MB.";
+>   `GET /api/frotas/meta`, `/api/producao/meta`, `/api/almoxarifado/materiais` → 200; socket do chat
+>   conecta com token no `auth` (recusa só-query/sem token, como na 84).
+> - **Divergências do plano:** (1) com `res.headersSent` o global delega ao finalhandler (antes
+>   tentava responder de novo); (2) `mensagemUsuario` só vale com status 4xx — sem status continua
+>   500 genérico (testado); (3) o 413 de corpo usa o `err.limit` do body-parser (sai "máximo 15 MB"
+>   em produção, sem número fixo no código); (4) no harness o Router vem antes de Compras (em produção
+>   depois) — a ordem almoxarifado → Compras do harness não muda.
+> - **T2:** toast "Foto não pôde ser salva, mas o material foi criado: ⟨motivo⟩"; corpo não-JSON →
+>   texto antigo. 2 testes; controle positivo (texto fixo) → 1 vermelho. O mesmo texto "foi criado"
+>   aparece na edição (onde o upload é imediato) — mantido pela RN, candidato a ajuste.
+
 ## Fase 0 — medição (2026-10-08)
 - `server/index.js`: `tratarErroFormatoImagem` (`:23105`), `tratarArquivoGrandeDemais` (`:23109`) e o
   handler global (`:23112-23131`: SQLITE_BUSY → 503; resto → 500 `{ error: 'Erro interno do servidor' }`)
