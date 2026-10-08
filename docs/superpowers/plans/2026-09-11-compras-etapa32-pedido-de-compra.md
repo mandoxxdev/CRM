@@ -151,6 +151,10 @@ produção roda com `PRAGMA foreign_keys = ON` (`sqliteConcurrency.js:50`) e o h
 (`testApp.js:18`) — sem isso o teste fica verde e a produção dá 500.
 
 ### `GET /api/compras/pedidos/:id/impressao?token=<jwt>`
+> ⚠️ **OBSOLETO (anotado na Etapa 84, 2026-10-08):** esta rota nunca chegou ao código atual e o
+> `authenticateToken` **não aceita mais `?token=`** (B39). O documento impresso do pedido é o PDF da
+> Etapa 78 (`GET /api/compras/pedidos/:id/documento.pdf`, baixado por blob com Bearer).
+
 `200 text/html`, aberto em aba nova. `authenticateToken` aceita `?token=` (`index.js:2915-2917`).
 
 ## Tasks

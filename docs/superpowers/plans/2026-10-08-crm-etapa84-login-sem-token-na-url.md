@@ -99,3 +99,30 @@ aviso **sem** o token; `/api/backup?token=` com `BACKUP_TOKEN` definido continua
 ## Pontos de atenção
 - Fase 2 (revisão do plano) feita junto com a revisão do código: mudança de 3 linhas, consumidores
   medidos acima. Registrado aqui para não parecer esquecimento.
+
+## Fechamento (2026-10-08) — 🟢
+- Revisão adversarial (que também fez o papel da revisão do plano): nenhum consumidor quebra.
+  Achado real: os testes do login eram regex sobre a fonte — três mutações passavam (`const { query: q }
+  = req` trazendo o `?token=` de volta, ordem dos checks, status 200). Corrigido em `6f16510d`:
+  middleware virou fábrica e é testado por comportamento (express + supertest; socket com sockets
+  falsos). Plano antigo da Etapa 32 marcado obsoleto onde documentava `/impressao?token=`.
+
+## Retro
+- Rodadas de correção até verde: **1**.
+- Achados: 1 de medição (o socket aceitava `?token=` — a Fase 0 mediu só **quem manda**, não **quem
+  aceita**), 3 mutações sobreviventes nos testes, 1 doc obsoleto; 0 ruído.
+- Lição: ao fechar uma porta, medir **todos os leitores** da credencial (`jwt.verify`), não só os
+  remetentes; e teste de autenticação por regex na fonte não prova nada — executar o middleware.
+- Paralelismo: nenhum.
+- Defeito escapado: preencher na etapa seguinte.
+
+## Próxima tarefa detalhada — Etapa 85: arquivo grande demais com mensagem clara
+- **O que existe:** os multers têm `limits.fileSize` (5–15 MB, `server/index.js:861-1079`, `:5103`;
+  `routes/almoxarifado.js:226,243`; `routes/chat.js:58`). O `MulterError LIMIT_FILE_SIZE` cai no
+  handler global → **500 "Erro interno do servidor"**; só o chat trata (`routes/chat.js:179`).
+- **Desenho:** estender o `tratarErroFormatoImagem` (`services/imagemUpload.js`, Etapa 83) — ou um
+  irmão — para `err.code === 'LIMIT_FILE_SIZE'` → **413 `{ error: 'Arquivo grande demais (máximo N MB)' }`**
+  (o N vem do `limits` do multer que recusou, se der para obter; senão mensagem sem número). Medir
+  antes: os routers montados depois do middleware (almoxarifado, chat) têm handler próprio?; o que
+  os clients fazem com 413 (`ModalFamiliaForm`/`ModalGrupoForm` reenviam por base64 em 400 —
+  e em 413?).

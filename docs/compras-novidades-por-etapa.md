@@ -24,7 +24,10 @@
 > lista.
 > **2026-10-08 — Etapa 83 entregue:** todos os uploads de imagem decidem o formato pelo **tipo real**
 > da imagem; formato errado mostra **"Formato de imagem não suportado"** em vez de "Erro interno do
-> servidor" (B38). Próxima: o login que ainda aceita o token na URL (`?token=`).
+> servidor" (B38).
+> **2026-10-08 — Etapa 84 entregue:** o login e o chat deixaram de aceitar o token **no endereço**
+> (`?token=`), que vazava em log e histórico (B39). Próxima: arquivo grande demais mostra mensagem
+> clara em vez de "Erro interno do servidor".
 > O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
 > A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
@@ -180,6 +183,12 @@
   fila — um PDF gerado nesse instante falhava com "Target closed". A medição da 80 achou mais
   três corridas (erro de um derrubando o outro, Chromium aberto em dobro e nunca fechado, e o
   fechamento por ociosidade no meio de uma geração).
+- **B39 — Etapa 84: o login e o socket do chat só aceitam o token no cabeçalho.** O `?token=` no
+  endereço vazava o token em log de proxy, histórico do navegador e `Referer`; ninguém no sistema o
+  usava (medido: telas, scripts, integrações). Pedido só com `?token=` recebe "Envie o token no
+  cabeçalho Authorization" e um aviso no log (sem o token). Descartado: aceitar por um tempo com
+  aviso (como o backup, Etapa 21 — lá havia rotina automática provável; aqui não). O **backup**
+  continua aceitando `?token=` com o seu token próprio.
 - **B38 — Etapa 83: os 14 uploads de imagem decidem a extensão pelo tipo real; formato errado vira
   400 com mensagem clara.** SVG continua aceito **só no logo da empresa** (pode já haver logo vetorial
   em produção; tem CSP própria). Descartado: recusar SVG também no logo da empresa. Efeito colateral
@@ -323,6 +332,39 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 84 — O token sai do endereço (2026-10-08)
+
+**Em uma frase.** O servidor aceitava o token de login também **no endereço** (`…?token=…`) — e
+endereço fica gravado em log, histórico e cabeçalho `Referer`; agora o login e o chat só aceitam o
+token no cabeçalho, que é como todas as telas já mandavam.
+
+### O que há de novo (visível para o usuário)
+- **Nada muda para quem usa o sistema** — todas as telas e o chat já mandavam o token no cabeçalho.
+- Quem colar um endereço com `?token=` recebe "Envie o token no cabeçalho Authorization".
+- O backup por endereço (`/api/backup?token=…`, com o token do backup) continua como estava.
+
+### Por baixo do capô
+- `services/authenticateToken.js` (`criarAuthenticateToken`) e `services/tokenDaRequisicao.js`: o
+  login lê só `Authorization: Bearer` e `X-Auth-Token`; o aviso de recusa vai ao log sem a query.
+- Chat: `criarAuthSocket` em `services/chat/socket.js` lê só o `auth` do handshake e o cabeçalho.
+- Testes **por comportamento** (`tokenNaUrl` 16, `chatSocketTokenNaUrl` 11): a revisão provou que a
+  primeira versão, que só lia o código, deixava voltar o login por `?token=` sem nenhum teste falhar.
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| `/api/auth/me?token=<jwt>` → 200 | → 401 `TOKEN_NA_URL` |
+| Socket do chat com token na query → conectava | → recusado "Token não fornecido" |
+| Testes do login liam o código-fonte | Testes executam o middleware de verdade |
+
+### Roteiro de teste manual (clicável)
+1. Use o sistema normalmente (propostas, compras, chat): nada muda.
+2. (Técnico) Copie o token do `localStorage` e abra `http://<servidor>:5000/api/auth/me?token=<token>`
+   numa aba: aparece `{"error":"Envie o token no cabeçalho Authorization"...}`.
+
+### O que a etapa NÃO cobre
+- O backup continua aceitando o token dele no endereço (B39; Etapa 21).
 
 ## Etapa 83 — Todo upload de imagem pelo tipo real (2026-10-08)
 
