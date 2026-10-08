@@ -32,6 +32,8 @@ const seriesService = require('./seriesService');
 // lazy) — sem ciclo. Ele so requer alertService de forma LAZY (dentro de enfileirarMovimentacao/
 // processarFila), entao carregar este require aqui, no topo, nao fecha ciclo nenhum.
 const notificationQueueService = require('./notificationQueueService');
+// Etapa 91 (Fase 5, F3): a trava nao requer nada do app — sem ciclo. Pelo objeto (os testes a espiam).
+const trava = require('./travaPorMaterial');
 
 async function getConfig(db, chave) {
   const row = await dbGet(db, 'SELECT valor FROM configuracoes_almoxarifado WHERE chave = ?', [chave]);
@@ -2185,14 +2187,20 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     justificativa,
   });
 
-  try {
-    // saldo_anterior (Etapa 12, revisao final C1): e a evidencia de "transicao observada" do
-    // alerta de zerado — sem ela, a primeira zeragem de material recem-conhecido pela maquina
-    // era engolida como se fosse estado pre-existente.
-    await alertService.verificarAlertaPorMaterialId(db, material_id, { saldo_anterior: saldoAnteriorReal });
-  } catch (alertErr) {
-    console.warn('[almoxarifado-alertas] Falha ao verificar alerta pós-movimentação:', alertErr.message);
-  }
+  const verificarAlerta = async () => {
+    try {
+      // saldo_anterior (Etapa 12, revisao final C1): e a evidencia de "transicao observada" do
+      // alerta de zerado — sem ela, a primeira zeragem de material recem-conhecido pela maquina
+      // era engolida como se fosse estado pre-existente.
+      await alertService.verificarAlertaPorMaterialId(db, material_id, { saldo_anterior: saldoAnteriorReal });
+    } catch (alertErr) {
+      console.warn('[almoxarifado-alertas] Falha ao verificar alerta pós-movimentação:', alertErr.message);
+    }
+  };
+  // Etapa 91 (Fase 5, F3): dentro de uma secao da trava por material (as seis portas da 91) o alerta —
+  // e o `sendMail` dele — roda DEPOIS de a trava ser solta; um SMTP lento segurava a fila inteira do
+  // material. Fora de secao, sincrono como sempre (ver `travaPorMaterial.adiarParaDepoisDaSecao`).
+  if (!trava.adiarParaDepoisDaSecao(verificarAlerta)) await verificarAlerta();
 
   // Etapa 12 (RN-04, D8): notificacao pos-commit — todas as escritas do motor ja tiveram
   // sucesso; movimentacao que falha em qualquer guarda nunca chega aqui. O gancho mora no

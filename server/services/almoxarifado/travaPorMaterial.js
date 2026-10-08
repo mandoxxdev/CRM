@@ -6,7 +6,7 @@
  * requisicao mais nova caia entre o movimento do motor que poe saldo no disponivel e a distribuicao para
  * quem esperava, e levava o material (fila invertida, 8/8 rodadas). A Opcao A (B419) poe a mesma trava nas
  * seis portas — tres que liberam (nota, inspecao, NC que aceita) e tres que aprovam (`/aprovar`,
- * `/aprovar-valor`, aprovacao automatica). Por isso a trava saiu para um modulo SEM NENHUM `require`: o
+ * `/aprovar-valor`, aprovacao automatica). Por isso a trava saiu para um modulo SEM NENHUM `require` do app (so `async_hooks`, do Node — F3): o
  * `requisitionService` precisa dela e `reservaChegadaService -> requisitionService` ja existe (ciclo).
  * Descartado: um `Map` por modulo — as portas nao esperariam o recalculo da 76.
  *
@@ -24,13 +24,63 @@
  * `reservaChegadaService`, ou outra porta.
  */
 
+// Etapa 91 (Fase 5, F3): o unico `require` do modulo e do proprio Node (sem ciclo possivel).
+const { AsyncLocalStorage } = require('async_hooks');
+
 const filaPorMaterial = new Map();
 
 /**
+ * Etapa 91 (Fase 5, achado F3) — o que NAO pode rodar com a trava presa. O motor chamava o alerta de
+ * estoque minimo (e com ele o `sendMail` do SMTP) no fim de cada movimento; desde a 91 as seis portas
+ * chamam o motor DENTRO da secao, e um SMTP lento segurava a fila inteira do material (medido: SMTP de
+ * 3 s -> um `/aprovar` concorrente do mesmo material esperou 3032 ms; SMTP falhando em 1 s -> tres
+ * aprovacoes em fila, 1/2/3 s, porque a falha nao marca e cada movimento tenta de novo). Agora a secao
+ * mais de fora carrega um contexto (`AsyncLocalStorage`); `adiarParaDepoisDaSecao` empilha a tarefa ali e
+ * ela roda DEPOIS de a trava ser solta — ainda aguardada pela requisicao que segurava a trava, entao quem
+ * le o efeito logo depois da resposta continua vendo-o (descartado o "dispara e esquece": derrubou 3
+ * casos em 2 arquivos que leem a fila/estado do alerta logo depois da resposta — medido).
+ * Fora de secao devolve `false` e quem chamou roda a tarefa na hora, como sempre.
+ */
+const secaoAtual = new AsyncLocalStorage();
+
+/** Dentro de uma secao ATIVA: empilha `tarefa` para depois de soltar a trava e devolve `true`. */
+function adiarParaDepoisDaSecao(tarefa) {
+  const secao = secaoAtual.getStore();
+  if (!secao || !secao.ativa) return false;
+  secao.adiadas.push(tarefa);
+  return true;
+}
+
+async function rodarAdiadas(secao) {
+  for (const tarefa of secao.adiadas) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await tarefa();
+    } catch (e) {
+      console.warn(`[almoxarifado-trava] tarefa adiada para depois da secao falhou: ${e.message}`);
+    }
+  }
+}
+
+/**
  * FIFO por `Number(materialId)`. Solta no `finally` (uma excecao de `fn` solta a trava e e relancada).
- * Corpo = o da Etapa 75 (Fase 5), movido do `reservaChegadaService`.
+ * Corpo = o da Etapa 75 (Fase 5), movido do `reservaChegadaService`. A secao mais de fora (a primeira
+ * trava pega neste contexto assincrono) abre o contexto das tarefas adiadas e as roda depois de soltar
+ * (Fase 5, F3); as aninhadas (`comLockDosMateriais`) usam o mesmo contexto.
  */
 async function comLockDoMaterial(materialId, fn) {
+  const externa = secaoAtual.getStore();
+  if (externa && externa.ativa) return segurarTrava(materialId, fn);
+  const secao = { ativa: true, adiadas: [] };
+  try {
+    return await secaoAtual.run(secao, () => segurarTrava(materialId, fn));
+  } finally {
+    secao.ativa = false; // promessa que escape da secao e termine depois nao empilha mais nada aqui
+    await rodarAdiadas(secao);
+  }
+}
+
+async function segurarTrava(materialId, fn) {
   const chave = Number(materialId);
   const anterior = filaPorMaterial.get(chave) || Promise.resolve();
   let soltar;
@@ -70,4 +120,4 @@ function travado(materialId) {
   return filaPorMaterial.has(Number(materialId));
 }
 
-module.exports = { comLockDoMaterial, comLockDosMateriais, travado };
+module.exports = { comLockDoMaterial, comLockDosMateriais, travado, adiarParaDepoisDaSecao };

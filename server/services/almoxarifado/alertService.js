@@ -15,6 +15,16 @@ const ESTADO_ABAIXO = 'ABAIXO';
 const ESTADO_COM_SALDO = 'COM_SALDO';
 const ESTADO_ZERADO = 'ZERADO';
 const PASSWORD_MASK = '********';
+/** Etapa 91 (Fase 5, F3): prazos do SMTP (ms) — ver `enviarEmail`. */
+const SMTP_TIMEOUTS = { connectionTimeout: 15000, greetingTimeout: 15000, socketTimeout: 20000 };
+/**
+ * Etapa 91 (Fase 5, F3): materiais com um alerta de MINIMO em envio neste processo. Desde que o motor
+ * adia o alerta para depois da secao da trava, dois movimentos do mesmo material podem avaliar o alerta
+ * ao mesmo tempo (antes a trava os serializava): o segundo via o estado ainda nao marcado e mandava o
+ * segundo e-mail. Quem encontra o material aqui desiste — se o envio em curso falhar, nada e marcado e o
+ * PROXIMO movimento tenta de novo (a regra de sempre). Premissa C132: um processo so.
+ */
+const alertaMinimoEmEnvio = new Set();
 
 const SMTP_CONFIG_KEYS = {
   host: 'alertas_smtp_host',
@@ -422,11 +432,18 @@ async function enviarEmail(db, destinatarios, assunto, html, text, options = {})
     return { enviados: 0, erros: ['SMTP não configurado'] };
   }
 
+  // Etapa 91 (Fase 5, F3): prazos explicitos. O padrao do nodemailer espera 2 min pela conexao e 10 min
+  // pelo socket — com o SMTP fora do ar, cada movimento de material abaixo do minimo (a falha nao marca,
+  // entao todos tentam de novo) ficava pendurado bem depois de o cliente desistir (30 s). Os mesmos
+  // numeros do `sendEmail` do CRM (index.js).
   const transporter = nodemailer.createTransport({
     host: smtp.host,
     port: smtp.port,
     secure: smtp.secure,
     auth: smtp.user ? { user: smtp.user, pass: smtp.pass } : undefined,
+    connectionTimeout: SMTP_TIMEOUTS.connectionTimeout,
+    greetingTimeout: SMTP_TIMEOUTS.greetingTimeout,
+    socketTimeout: SMTP_TIMEOUTS.socketTimeout,
   });
 
   const ccList = Array.isArray(options.cc)
@@ -719,6 +736,23 @@ async function processarAlertaMaterial(db, material, opts = {}) {
     }
   }
 
+  // Etapa 91 (Fase 5, F3): um alerta de minimo deste material ja em envio (ver `alertaMinimoEmEnvio`) —
+  // desiste em vez de mandar o segundo e-mail. `has` e `add` no mesmo tick (sem await no meio).
+  const chaveEmEnvio = Number(material.id);
+  if (!teste) {
+    if (alertaMinimoEmEnvio.has(chaveEmEnvio)) {
+      return { material_id: material.id, enviado: false, motivo: 'alerta deste material já em envio' };
+    }
+    alertaMinimoEmEnvio.add(chaveEmEnvio);
+  }
+  try {
+    return await enviarAlertaMaterial(db, material, settings, teste);
+  } finally {
+    if (!teste) alertaMinimoEmEnvio.delete(chaveEmEnvio);
+  }
+}
+
+async function enviarAlertaMaterial(db, material, settings, teste) {
   const msg = buildMensagem(material, teste, settings.appUrl);
   const resultado = {
     material_id: material.id,
