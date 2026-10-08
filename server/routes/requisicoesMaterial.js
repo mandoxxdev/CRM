@@ -18,6 +18,10 @@ const {
 
 const { enrichMaterialRow } = require('../services/almoxarifado/materialPhoto');
 const requisitionService = require('../services/almoxarifado/requisitionService');
+// Etapa 91 (T5, C141): o cancelamento por aqui solta as reservas e grava a trilha, como o do almoxarifado.
+const reservationService = require('../services/almoxarifado/reservationService');
+const { registrarAuditoria } = require('../services/almoxarifado/audit');
+const { dbRun, dbGet } = require('../services/almoxarifado/db');
 const { disponivelSql } = require('../services/almoxarifado/availabilitySql');
 const requisitionCreateService = require('../services/almoxarifado/requisitionCreateService');
 const alertService = require('../services/almoxarifado/alertService');
@@ -335,32 +339,52 @@ module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticat
 
 
 
-  app.put('/api/requisicoes-material/:id/cancelar', (req, res) => {
-
-    db.run(
-
-      `UPDATE requisicoes_almoxarifado SET status='CANCELADO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
+  // Etapa 91 (T5, C141, B426): a rota so fazia o UPDATE guardado — a reserva ATIVA da requisicao ficava
+  // presa (de APROVADO, ou de PENDENTE na janela da aprovacao), e presa para sempre: o recalculo da 76 nao
+  // toca requisicao cancelada e a expiracao e opt-in. Agora, como o cancelamento do almoxarifado
+  // (routes/almoxarifado.js, PUT /requisicoes/:id/cancelar), solta as reservas e grava a trilha — as duas
+  // best-effort: o cancelamento ja esta efetivado e e o que o usuario pediu. O UPDATE guardado, os status
+  // aceitos e a resposta sao os de antes (cancelar requisicao ja reservada por aqui continua 400 — B426).
+  // `reservationService.liberarReservasDaRequisicao` e chamada PELO OBJETO (costura dos testes) e engole a
+  // falha de cada reserva, devolvendo `{ liberadas, erros }`: por isso ha dois warns — L2 (lancou) e L2b
+  // (voltou com reserva presa). Este arquivo e varrido pelo `saldoEmTerceiros`: nada de conta de disponivel.
+  app.put('/api/requisicoes-material/:id/cancelar', async (req, res) => {
+    const id = req.params.id;
+    let antes = null;
+    try {
+      // So para a trilha (o status de ANTES; depois do UPDATE ja e CANCELADO).
+      antes = await dbGet(db, 'SELECT status, numero FROM requisicoes_almoxarifado WHERE id = ? AND solicitante_id = ?', [id, req.user.id]);
+      const r = await dbRun(db,
+        `UPDATE requisicoes_almoxarifado SET status='CANCELADO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
 
        WHERE id=? AND solicitante_id=? AND status IN ('PENDENTE','APROVADO')`,
-
-      [req.params.id, req.user.id],
-
-      function (err) {
-
-        if (err) return res.status(500).json({ error: err.message });
-
-        if (this.changes === 0) {
-
-          return res.status(400).json({ error: 'Requisição não encontrada ou não pode ser cancelada' });
-
-        }
-
-        res.json({ success: true });
-
+        [req.params.id, req.user.id]);
+      if (r.changes === 0) {
+        return res.status(400).json({ error: 'Requisição não encontrada ou não pode ser cancelada' });
       }
-
-    );
-
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    try {
+      const { erros } = await reservationService.liberarReservasDaRequisicao(db, req.user, id, 'Requisição cancelada');
+      if (erros.length > 0) {
+        console.warn(`[requisicoes-material] liberacao das reservas no cancelamento deixou ${erros.length} reserva(s) presa(s) (requisicao ${id}): ${erros.map((x) => `${x.id}: ${x.erro}`).join('; ')}`);
+      }
+    } catch (e) {
+      console.warn(`[requisicoes-material] liberacao das reservas no cancelamento falhou (requisicao ${id}): ${e.message}`);
+    }
+    try {
+      await registrarAuditoria(db, {
+        entidade: 'requisicao', entidade_id: Number(id), acao: 'CANCELAMENTO',
+        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+        dados_anteriores: { status: antes?.status },
+        dados_novos: { status: 'CANCELADO', numero: antes?.numero, via: 'requisicoes-material' },
+        justificativa: null,
+      });
+    } catch (e) {
+      console.warn(`[requisicoes-material] auditoria do cancelamento falhou (requisicao ${id}): ${e.message}`);
+    }
+    res.json({ success: true });
   });
 
 
