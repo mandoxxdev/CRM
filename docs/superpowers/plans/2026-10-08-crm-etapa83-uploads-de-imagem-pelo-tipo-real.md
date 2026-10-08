@@ -56,6 +56,36 @@
   transparência); clones copiam a extensão do nome gravado (`:5048`, `:15568`) — sem efeito.
 
 ## Tasks
+> **Estado (2026-10-08): T1 feita — `099da718`.** Re-medição: 18 `multer.diskStorage(` no `index.js`
+> (14 de imagem, 4 de documento: `storage`, `storagePropostaPdf`, `storageComprovantes`,
+> `storageContrato`); os 10 da lista conferiam. Os 10 passam por `filtroImagemMulter` + extensão
+> por `extensaoSegura(file.mimetype)`; `uploadLogo` com `mimesExtras: [MIME_SVG_LOGO_EMPRESA]` e
+> `.svg` local no storage (mapa compartilhado sem SVG). Recusa: erro `codigo: 'FORMATO_IMAGEM'` +
+> `tratarErroFormatoImagem` (exportado de `services/imagemUpload.js`) registrado em `/api` antes do
+> handler global → 400 literal. `uploadChat`/`storageChat` removidos (e o import do `uploadsChatDir`,
+> que só eles usavam; a pasta continua criada por `config/paths.js`).
+> **Achado (não estava no plano):** o `fileFilter` do esquemático chamava `cb(null)` sem o `true` ao
+> aceitar — o multer descartava o arquivo, o multipart do esquemático **sempre** dava 400 "Nenhuma
+> imagem enviada" e o `ModalFamiliaForm` caía no fallback base64. Agora o multipart funciona.
+> **Client medido:** família/grupo/cliente pré-filtram jpeg/jpg/png/gif/webp; produto, material de
+> escritório e logo da empresa usam `accept="image/*"` (SVG/BMP já eram recusados nos dois
+> primeiros; nada que era aceito passa a ser recusado além do listado nos Pontos de atenção).
+> **Testes:** `imagemUploadFiltros.api.test.js` 25/25 (10 novos: filtro marcado, SVG local, middleware
+> real 400 + controle 500 de outro erro, `foto.html`→`.png` e `foto.jfif`→`_foto.jpg`, os 10
+> multers por fonte, SVG só no logo, régua RN-83.02 com completude, todo multer de imagem com o
+> filtro, registro antes do global, `uploadChat` sumiu). Sabotagens, todas vermelhas e restauradas
+> por Edit: regex solto no produto (2 vermelhos), extensão do nome no cover (2), SVG no
+> `EXTENSAO_POR_MIME` (11), middleware desligado (500 ≠ 400) e registro removido (2),
+> `diskStorage` novo sem lista (1), miolo por `basename(originalname, ext)` no header (1).
+> **Prova real** (porta 5992, `CRM_DATA_DIR` vazio, 0 `no such table|no column named`): produto
+> `foto.html` `image/png` → `produto_1_<ms>_foto.png`; produto `x.svg` → 400 literal, nada gravado;
+> JPEG 2400px como `equipamento.jfif` → `.jpg` + `.jpg.original` ao lado; logo da empresa SVG →
+> `logo_<ms>_marca.svg`; JPEG aceito em logo da empresa, material de escritório, família,
+> esquemático (multipart), grupo, logo do cliente e cabeçalho; SVG no logo do cliente → 400;
+> rodapé com `application/octet-stream` → 400; capa `capa.html` `image/png` → `.png`.
+> Suítes: `test:api` 304/304; `test:almoxarifado` 44/0; validation 4/0, safealter 3/0, sqlite 5/0;
+> client 93 suítes / 1376 testes (inalterado); build limpo.
+
 **T1 (única, tronco):** re-medir a lista (grep de `multer(` e `diskStorage` no `index.js`), aplicar
 RN-83.01–03, remover `uploadChat`, ampliar `server/tests/api/imagemUploadFiltros.api.test.js` (filtro
 de cada multer por nome/config exportada ou por fonte — afirmar o mecanismo), régua RN-83.02. Rotas
