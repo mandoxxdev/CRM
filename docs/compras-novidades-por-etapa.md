@@ -26,6 +26,14 @@
 - **A3** — O deploy desta versão em banco **já existente** não exige nada. Em banco **novo** o
   primeiro boot deixou de falhar nos `ALTER` de `fornecedores` (F3 — estava assim desde a Etapa 32
   para `grupo_id`/`planilha_*`/`foto`; o container local mostrou o erro).
+- **A4 (Etapa 78) — Ação sua antes de emitir o primeiro pedido em PDF:** preencher
+  **Configurações → Geral → Empresa** — CNPJ, CEP, telefone, e-mail (o seed deixa vazios) e a
+  **Inscrição Estadual** nova (hoje a IE `799.890.695.115` só existe fixa no template da proposta).
+  Sem isso o cabeçalho do pedido sai com "—" nesses campos.
+- **A5 (achado colateral da Etapa 78, não corrigido):** `GET /api/propostas/:id/pdf` **não tem
+  autenticação** (`index.js:9954-9955`, "rota liberada sem autenticação") — qualquer um com o id
+  baixa a proposta. Fechar é uma linha (`authenticateToken`), mas pode quebrar algum link externo
+  que dependa disso; decida.
 
 ### B. Decisões que eu tomei e você pode reverter
 - **B1 — Esta frente vive em `main`, e `main` tem OUTRO pedido de compra.** A branch
@@ -131,6 +139,26 @@
   regra dos outros campos do cabeçalho; a Etapa 32 zerava sempre).
 - **B25 — Etapa 39: `peso_unitario` do item fica `NULL` quando o material não tem peso** (não
   inventa 0); NCM e peso enviados vazios pela tela significam "o do material".
+- **B26 — Etapa 78: o documento do pedido é um PDF gerado no servidor**, pelo mesmo Chromium que
+  gera a proposta. **Descartado:** PDF no navegador (o documento vai ao fornecedor e tem de sair
+  igual em qualquer máquina) e `window.print` (sem controle de página).
+- **B27 — Etapa 78: o download exige login (Bearer) e o módulo Compras**, como todo PDF do app.
+  **Descartado:** token na URL (`?token=`), que o app rejeita de propósito (vaza em histórico/logs).
+- **B28 — Etapa 78: os dados da empresa no cabeçalho vêm de Configurações → Geral → Empresa**, que
+  ganhou o campo **Inscrição Estadual**. Antes a IE da GMP estava fixa no código do template da
+  proposta. **Descartado:** copiar o bloco fixo.
+- **B29 — Etapa 78: a nota legal do rodapé (ICMS) não foi inventada** — é um campo novo em
+  Configurações ("Nota legal do pedido de compra"); vazio, o bloco não é impresso. O texto exato
+  que o ERP imprime hoje é a **D-78**.
+- **B30 — Etapa 78: o servidor passou a expor o cabeçalho `Content-Disposition` para o navegador**
+  (`cors exposedHeaders`), senão em desenvolvimento por IP o nome do arquivo não chegava. O client
+  tem fallback `pedido-compra-⟨número⟩.pdf` de qualquer jeito.
+- **B31 — Etapa 78: o valor unitário sai com as casas necessárias (2 a 4), não com 3 fixas como o
+  ERP** — a Etapa 32 mediu que com 3 casas fixas `quantidade × unitário` **não fecha** com o total
+  da linha em 6 das 24 linhas do pedido real; no papel da GMP a conta fecha.
+- **B32 — Etapa 78 (risco aceito, pré-existente): o Chromium compartilhado é reciclado a cada 20
+  PDFs sem fila** — se um pedido estiver sendo gerado exatamente nesse instante, ele falha com
+  "Target closed" e o usuário clica de novo. Fila/mutex é etapa própria.
 
 ### D. Dúvidas para você (ou para o P.O.)
 - **D-35** — O que A, B e C significam **para a GMP**? A legenda atual é a definição genérica.
@@ -144,6 +172,10 @@
   e a task 2 pedia o inverso.) Executada como **Etapa 37** — a aba *Famílias* ganha a árvore
   família → subfamília cadastrável; a pergunta "categoria depende de família?" fica para o P.O.
   como **D-37** abaixo, sem bloquear nada.
+- **D-78** — Para o P.O.: qual é o **texto legal** que o pedido de compra do ERP imprime no rodapé
+  (a nota sobre crédito de ICMS)? Cole em Configurações → Geral → Empresa → "Nota legal do pedido
+  de compra". E o documento precisa do **código do fornecedor** ("3797 - TECNOPAR")? O cadastro não
+  tem esse código; se precisar, é coluna nova.
 - **D-37** — Para o P.O.: a categoria do material deve depender da família (lista de categorias
   diferente por família)? Hoje são independentes (categoria é um catálogo único; a família tem
   uma categoria "padrão" que nada usa). Se sim, é uma etapa de modelo de dados; se não, a árvore
@@ -200,7 +232,7 @@
   frete, repetido em cada linha de item, e a reimportação ignora essa coluna — um pedido
   exportado e reimportado nasce com valor menor. Coluna "IPI %" no export fica para depois.
 - **G14** (Etapa 39) O documento impresso do pedido (PDF/HTML no formato do ERP) **ainda não
-  existe** — a Etapa 32 deixou "a fazer" e a 39 porta só o conteúdo. É a **Etapa 40**.
+  existe** — a Etapa 32 deixou "a fazer" e a 39 porta só o conteúdo. É a **Etapa 78** (numeração unificada; o plano da 39 a chamava de "40").
 - **G15** (Etapa 39, achado da revisão) Pedido criado **antes** da 39 com preço unitário de 3+
   casas (ex.: `0,105`) mostra dois totais até ser salvo de novo: a lista mostra o valor gravado cru
   (`0,315`) e a tela do pedido mostra o recalculado por linha (`0,33`); o primeiro salvar grava o
@@ -222,6 +254,10 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 78 — O documento impresso do pedido de compra (2026-10-07)
+
+_Em execução — seção escrita no fechamento da etapa._
 
 ## Etapa 39 — O pedido de compra ganha o documento da Etapa 32 (2026-10-07)
 
@@ -289,7 +325,7 @@ recebimento, sem abrir mão do número automático e do fechamento automático.
 8. Receba o resto: o pedido fica **Recebido** sozinho e não pode mais ser editado (só o status).
 
 ### O que a etapa NÃO cobre
-- **O documento impresso** (PDF/HTML no formato do ERP) — a Etapa 32 nunca o fez; é a **Etapa 40**
+- **O documento impresso** (PDF/HTML no formato do ERP) — a Etapa 32 nunca o fez; é a **Etapa 78**
   (G14).
 - Coluna "IPI %" no export para Excel; a reimportação ignora IPI/frete (G13).
 - Importação por planilha com colunas de IPI/NCM.

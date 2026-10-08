@@ -9,7 +9,7 @@
 > decisão da Etapa 33), a calculadora `pedidoTotais.js` (22 testes), as opções que aprendem com o
 > uso (`opcoesPedido.js`), o snapshot fiscal (RN-06) e o painel do pedido no recebimento. A
 > impressão do documento **nunca existiu** (task G2 da 32 ficou "a fazer") — não entra aqui, vira
-> a Etapa 40.
+> a Etapa 78 (numeração unificada depois do merge; "40" já existe na linha da branch).
 > Fonte: design e plano da 32 (`docs/superpowers/{specs,plans}/2026-09-11-compras-etapa32-*`),
 > código em `b3abc723:` (último commit da `main` antes do merge). Medição completa em
 > `.superpowers`-like no scratchpad desta sessão; o resumo está na seção "Fase 0" abaixo.
@@ -224,7 +224,7 @@ precisa do ramo novo; sem ele `res.data` lança e o painel tem de falhar sem der
   `selecionarPedido`).
 **T4 — integração/fechamento:** suíte inteira; `docs/compras-novidades-por-etapa.md` (seção 39 +
 B19–B22); `specs/modulo-compras/README.md`; manual (seção do pedido: o que o documento tem, RN-11);
-retro. **Próxima (Etapa 40):** `GET /pedidos/:id/impressao` — o documento em PDF/HTML no formato do
+retro. **Próxima (Etapa 78, numeração unificada):** `GET /pedidos/:id/impressao` — o documento em PDF/HTML no formato do
 ERP (a task que a 32 deixou "a fazer").
 
 ## Pontos de atenção
