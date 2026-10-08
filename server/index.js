@@ -266,7 +266,6 @@ const {
   uploadsFornecedoresDir,
   uploadsLogosDir,
   uploadsAvataresDir,
-  uploadsChatDir,
   uploadsHeaderDir,
   uploadsFooterDir,
   uploadsCoverDir,
@@ -280,7 +279,8 @@ const { gerarHTMLPropostaPremiumV2, substituirPlaceholdersProposta } = require('
 const { cabecalhosUploadSeguro, cabecalhosUploadLogo, extensaoSegura } = require('./services/almoxarifado/urlUpload');
 // Etapa 82 (RN-82.04/05/06): URL assinada de fotos da proposta/avatares e tipo de imagem pelo mapa.
 const { criarAssinadoresCrm } = require('./services/uploadsAssinadosCrm');
-const { decodificarImagemBase64, filtroImagemMulter } = require('./services/imagemUpload');
+// Etapa 83 (RN-83.01): os demais multers de imagem tambem; a recusa vira 400 pelo tratarErroFormatoImagem.
+const { decodificarImagemBase64, filtroImagemMulter, tratarErroFormatoImagem } = require('./services/imagemUpload');
 const { criarServirPdfOs, criarServirContratoAnexo } = require('./services/arquivosProtegidos');
 
 // Opções de launch do Puppeteer: usar Chrome/Chromium do sistema quando o bundle não existir (ex.: Linux em servidor)
@@ -711,29 +711,6 @@ const VARIAVEIS_BASE_DEFAULT = [
   'PESO ESTIMADO DA BOTOEIRA [kg]', 'PESO ESTIMADO DO SUPORTE DA BOTOEIRA [kg]', 'PESO TOTAL ESTIMADO [kg]',
   'DIMENSÕES GERAIS ESTIMADAS (Larg. × Comp. × Alt) [m]'
 ];
-// Configurar multer para uploads de chat
-const storageChat = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsChatDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, `chat-${uniqueSuffix}${ext}`);
-  }
-});
-
-const uploadChat = multer({
-  storage: storageChat,
-  limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB máximo
-  },
-  fileFilter: (req, file, cb) => {
-    // Permitir todos os tipos de arquivo
-    cb(null, true);
-  }
-});
-
 // Configurar multer para upload de arquivos (limite 40MB)
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -822,8 +799,9 @@ const storageProdutos = multer.diskStorage({
   filename: (req, file, cb) => {
     const produtoId = req.params.id || 'temp';
     const timestamp = Date.now();
-    const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext);
+    // Etapa 83 (RN-83.01/03): extensao pelo MIME aceito; o nome original so empresta o miolo.
+    const name = path.basename(file.originalname, path.extname(file.originalname));
+    const ext = extensaoSegura(file.mimetype);
     const filename = `produto_${produtoId}_${timestamp}_${name.replace(/[^a-zA-Z0-9]/g, '_')}${ext}`;
     cb(null, filename);
   }
@@ -834,17 +812,7 @@ const uploadProduto = multer({
   limits: {
     fileSize: 10 * 1024 * 1024 // 10MB
   },
-  fileFilter: (req, file, cb) => {
-    // Aceitar apenas imagens
-    const allowedTypes = /jpeg|jpg|png|gif|webp/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    if (mimetype && extname) {
-      cb(null, true);
-    } else {
-      cb(new Error('Apenas imagens são permitidas (jpeg, jpg, png, gif, webp)'));
-    }
-  }
+  fileFilter: filtroImagemMulter('Apenas imagens são permitidas (jpeg, jpg, png, gif, webp)'),
 });
 
 // Storage específico para fotos de materiais de escritório
@@ -855,8 +823,9 @@ const storageMateriaisEscritorio = multer.diskStorage({
   filename: (req, file, cb) => {
     const materialId = req.params.id || 'temp';
     const timestamp = Date.now();
-    const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext);
+    // Etapa 83 (RN-83.01/03): extensao pelo MIME aceito; o nome original so empresta o miolo.
+    const name = path.basename(file.originalname, path.extname(file.originalname));
+    const ext = extensaoSegura(file.mimetype);
     const filename = `material_escritorio_${materialId}_${timestamp}_${name.replace(/[^a-zA-Z0-9]/g, '_')}${ext}`;
     cb(null, filename);
   }
@@ -867,16 +836,7 @@ const uploadMaterialEscritorioFoto = multer({
   limits: {
     fileSize: 10 * 1024 * 1024
   },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|webp/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    if (mimetype && extname) {
-      cb(null, true);
-    } else {
-      cb(new Error('Apenas imagens são permitidas (jpeg, jpg, png, gif, webp)'));
-    }
-  }
+  fileFilter: filtroImagemMulter('Apenas imagens são permitidas (jpeg, jpg, png, gif, webp)'),
 });
 
 // Storage para fotos de famílias de produtos
@@ -887,8 +847,9 @@ const storageFamilias = multer.diskStorage({
   filename: (req, file, cb) => {
     const familiaId = req.params.id || 'temp';
     const timestamp = Date.now();
-    const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext);
+    // Etapa 83 (RN-83.01/03): extensao pelo MIME aceito; o nome original so empresta o miolo.
+    const name = path.basename(file.originalname, path.extname(file.originalname));
+    const ext = extensaoSegura(file.mimetype);
     const filename = `familia_${familiaId}_${timestamp}_${name.replace(/[^a-zA-Z0-9]/g, '_')}${ext}`;
     cb(null, filename);
   }
@@ -897,16 +858,7 @@ const storageFamilias = multer.diskStorage({
 const uploadFamilia = multer({
   storage: storageFamilias,
   limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|webp/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    if (mimetype && extname) {
-      return cb(null, true);
-    } else {
-      cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'));
-    }
-  }
+  fileFilter: filtroImagemMulter('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'),
 });
 
 // Storage para fotos de grupos de produtos
@@ -917,21 +869,16 @@ const storageGrupos = multer.diskStorage({
   filename: (req, file, cb) => {
     const grupoId = req.params.id || 'temp';
     const timestamp = Date.now();
-    const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext);
+    // Etapa 83 (RN-83.01/03): extensao pelo MIME aceito; o nome original so empresta o miolo.
+    const name = path.basename(file.originalname, path.extname(file.originalname));
+    const ext = extensaoSegura(file.mimetype);
     cb(null, `grupo_${grupoId}_${timestamp}_${name.replace(/[^a-zA-Z0-9]/g, '_')}${ext}`);
   }
 });
 const uploadGrupo = multer({
   storage: storageGrupos,
   limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|webp/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    if (mimetype && extname) return cb(null, true);
-    cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'));
-  }
+  fileFilter: filtroImagemMulter('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'),
 });
 
 const storageGruposCompras = multer.diskStorage({
@@ -965,6 +912,11 @@ const uploadFornecedor = multer({
   fileFilter: filtroImagemMulter('Apenas imagens (JPEG, PNG, GIF, WEBP)'),
 });
 
+// Etapa 83 (RN-83.01, B38): SVG so no logo da empresa (o template legado usa logo vetorial e a pasta
+// de logos ja tem CSP propria, Etapa 81). Excecao LOCAL a este multer: NAO entra no mapa do
+// extensaoSegura, que e compartilhado com almoxarifado, chat e os demais multers de imagem.
+const MIME_SVG_LOGO_EMPRESA = 'image/svg+xml';
+
 // Storage específico para logos
 const storageLogos = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -972,8 +924,9 @@ const storageLogos = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const timestamp = Date.now();
-    const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext);
+    // Etapa 83 (RN-83.01/03): extensao pelo MIME aceito; o nome original so empresta o miolo.
+    const name = path.basename(file.originalname, path.extname(file.originalname));
+    const ext = String(file.mimetype || '').toLowerCase() === MIME_SVG_LOGO_EMPRESA ? '.svg' : extensaoSegura(file.mimetype);
     const filename = `logo_${timestamp}_${name.replace(/[^a-zA-Z0-9]/g, '_')}${ext}`;
     cb(null, filename);
   }
@@ -984,18 +937,7 @@ const uploadLogo = multer({
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB
   },
-  fileFilter: (req, file, cb) => {
-    // Aceitar apenas imagens
-    const allowedTypes = /jpeg|jpg|png|gif|webp|svg/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    
-    if (mimetype && extname) {
-      return cb(null, true);
-    } else {
-      cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP, SVG)'));
-    }
-  }
+  fileFilter: filtroImagemMulter('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP, SVG)', { mimesExtras: [MIME_SVG_LOGO_EMPRESA] }),
 });
 
 // Storage específico para fotos de perfil (avatares)
@@ -1026,8 +968,9 @@ const storageClienteLogo = multer.diskStorage({
   filename: (req, file, cb) => {
     const clienteId = req.params.id || 'temp';
     const timestamp = Date.now();
-    const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext);
+    // Etapa 83 (RN-83.01/03): extensao pelo MIME aceito; o nome original so empresta o miolo.
+    const name = path.basename(file.originalname, path.extname(file.originalname));
+    const ext = extensaoSegura(file.mimetype);
     const filename = `cliente_${clienteId}_${timestamp}_${name.replace(/[^a-zA-Z0-9]/g, '_')}${ext}`;
     cb(null, filename);
   }
@@ -1038,18 +981,7 @@ const uploadClienteLogo = multer({
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB
   },
-  fileFilter: (req, file, cb) => {
-    // Aceitar apenas imagens
-    const allowedTypes = /jpeg|jpg|png|gif|webp/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    
-    if (mimetype && extname) {
-      return cb(null, true);
-    } else {
-      cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'));
-    }
-  }
+  fileFilter: filtroImagemMulter('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'),
 });
 
 // Storage específico para imagens de cabeçalho
@@ -1059,8 +991,9 @@ const storageHeader = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const timestamp = Date.now();
-    const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext);
+    // Etapa 83 (RN-83.01/03): extensao pelo MIME aceito; o nome original so empresta o miolo.
+    const name = path.basename(file.originalname, path.extname(file.originalname));
+    const ext = extensaoSegura(file.mimetype);
     const filename = `header_${timestamp}_${name.replace(/[^a-zA-Z0-9]/g, '_')}${ext}`;
     cb(null, filename);
   }
@@ -1071,18 +1004,7 @@ const uploadHeader = multer({
   limits: {
     fileSize: 10 * 1024 * 1024 // 10MB
   },
-  fileFilter: (req, file, cb) => {
-    // Aceitar apenas imagens
-    const allowedTypes = /jpeg|jpg|png|gif|webp/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    
-    if (mimetype && extname) {
-      return cb(null, true);
-    } else {
-      cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'));
-    }
-  }
+  fileFilter: filtroImagemMulter('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'),
 });
 
 // Storage específico para imagens de rodapé
@@ -1092,8 +1014,9 @@ const storageFooter = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const timestamp = Date.now();
-    const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext);
+    // Etapa 83 (RN-83.01/03): extensao pelo MIME aceito; o nome original so empresta o miolo.
+    const name = path.basename(file.originalname, path.extname(file.originalname));
+    const ext = extensaoSegura(file.mimetype);
     const filename = `footer_${timestamp}_${name.replace(/[^a-zA-Z0-9]/g, '_')}${ext}`;
     cb(null, filename);
   }
@@ -1104,18 +1027,7 @@ const uploadFooter = multer({
   limits: {
     fileSize: 10 * 1024 * 1024 // 10MB
   },
-  fileFilter: (req, file, cb) => {
-    // Aceitar apenas imagens
-    const allowedTypes = /jpeg|jpg|png|gif|webp/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    
-    if (mimetype && extname) {
-      return cb(null, true);
-    } else {
-      cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'));
-    }
-  }
+  fileFilter: filtroImagemMulter('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'),
 });
 
 // Storage específico para imagem de CAPA (onda azul)
@@ -1123,8 +1035,9 @@ const storageCover = multer.diskStorage({
   destination: (req, file, cb) => { cb(null, uploadsCoverDir); },
   filename: (req, file, cb) => {
     const timestamp = Date.now();
-    const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext);
+    // Etapa 83 (RN-83.01/03): extensao pelo MIME aceito; o nome original so empresta o miolo.
+    const name = path.basename(file.originalname, path.extname(file.originalname));
+    const ext = extensaoSegura(file.mimetype);
     const filename = `cover_${timestamp}_${name.replace(/[^a-zA-Z0-9]/g, '_')}${ext}`;
     cb(null, filename);
   }
@@ -1132,13 +1045,7 @@ const storageCover = multer.diskStorage({
 const uploadCover = multer({
   storage: storageCover,
   limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|webp/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    if (mimetype && extname) return cb(null, true);
-    cb(new Error('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'));
-  }
+  fileFilter: filtroImagemMulter('Apenas imagens são permitidas (JPEG, JPG, PNG, GIF, WEBP)'),
 });
 
 // Storage para FOTOS AVULSAS da proposta (posicionadas livremente no preview/PDF)
@@ -5197,18 +5104,15 @@ const storageFamiliaEsquematico = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadsFamiliasDir),
   filename: (req, file, cb) => {
     const familiaId = req.params.id || 'temp';
-    const ext = path.extname(file.originalname) || '.png';
+    // Etapa 83 (RN-83.01): extensao pelo MIME aceito, nunca pelo nome original.
+    const ext = extensaoSegura(file.mimetype);
     cb(null, `esquematico_${familiaId}_${Date.now()}${ext}`);
   }
 });
 const uploadFamiliaEsquematico = multer({
   storage: storageFamiliaEsquematico,
   limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowed = /jpeg|jpg|png|gif|webp/;
-    const ok = allowed.test(path.extname(file.originalname).toLowerCase()) && allowed.test(file.mimetype);
-    cb(ok ? null : new Error('Apenas imagens (JPEG, PNG, GIF, WEBP)'));
-  }
+  fileFilter: filtroImagemMulter('Apenas imagens (JPEG, PNG, GIF, WEBP)'),
 });
 
 // GET esquemático: servir imagem da família (evita 404 quando algo solicita essa URL)
@@ -23203,6 +23107,10 @@ app.get('/api/auditoria/logs', authenticateToken, (req, res) => {
 });
 
 // ========== MIDDLEWARE DE TRATAMENTO DE ERROS ==========
+// Etapa 83 (RN-83.01): recusa de formato do fileFilter dos multers de imagem -> 400 com a mensagem
+// literal. Tem de vir ANTES do handler abaixo, que responderia 500 "Erro interno do servidor".
+app.use('/api', tratarErroFormatoImagem);
+
 // Middleware para tratar erros de banco de dados (deve ser o último antes do listen)
 app.use('/api', (err, req, res, next) => {
   if (err && (err.message && (err.message.includes('database is locked') || 

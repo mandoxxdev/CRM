@@ -43,14 +43,47 @@ function decodificarImagemBase64(texto) {
   return { ext: extensaoSegura(mime), buf, mime };
 }
 
-/** `fileFilter` de multer: so MIME do mapa. O nome original nao e consultado (nem para a extensao). */
-function filtroImagemMulter(mensagem) {
+/**
+ * Codigo do erro de formato lancado pelo `fileFilter`. Sem ele o erro caia no handler global do
+ * `/api` (index.js), que responde 500 "Erro interno do servidor" — o usuario nunca via a mensagem de
+ * formato (Etapa 83, RN-83.01). `tratarErroFormatoImagem` converte so este codigo em 400.
+ */
+const CODIGO_FORMATO_IMAGEM = 'FORMATO_IMAGEM';
+
+function erroFormatoImagem(mensagem) {
+  const err = new Error(mensagem || MSG_FORMATO_NAO_SUPORTADO);
+  err.codigo = CODIGO_FORMATO_IMAGEM;
+  return err;
+}
+
+/**
+ * `fileFilter` de multer: so MIME do mapa. O nome original nao e consultado (nem para a extensao).
+ * `mimesExtras`: excecao LOCAL de um multer (hoje so o logo da empresa aceita `image/svg+xml`) —
+ * de proposito fora do mapa do `extensaoSegura`, que e compartilhado com almoxarifado e chat.
+ * A recusa sai com `codigo: 'FORMATO_IMAGEM'`; a mensagem fica no log, a resposta e sempre a literal.
+ */
+function filtroImagemMulter(mensagem, { mimesExtras = [] } = {}) {
+  const extras = mimesExtras.map((m) => String(m).toLowerCase());
   return (req, file, cb) => {
-    if (ehMimeImagemAceito(file && file.mimetype)) return cb(null, true);
-    return cb(new Error(mensagem || 'Apenas imagens (JPEG, PNG, GIF, WEBP)'));
+    const mime = String((file && file.mimetype) || '').toLowerCase();
+    if (ehMimeImagemAceito(mime) || extras.includes(mime)) return cb(null, true);
+    return cb(erroFormatoImagem(mensagem || 'Apenas imagens (JPEG, PNG, GIF, WEBP)'));
   };
 }
 
+/**
+ * Middleware de erro do Express: recusa de formato do `fileFilter` -> 400 com a mensagem literal.
+ * Registrado no index.js ANTES do handler global do `/api`; qualquer outro erro segue adiante.
+ */
+// eslint-disable-next-line no-unused-vars
+function tratarErroFormatoImagem(err, req, res, next) {
+  if (err && err.codigo === CODIGO_FORMATO_IMAGEM) {
+    return res.status(400).json({ error: MSG_FORMATO_NAO_SUPORTADO });
+  }
+  return next(err);
+}
+
 module.exports = {
-  decodificarImagemBase64, ehMimeImagemAceito, filtroImagemMulter, MSG_FORMATO_NAO_SUPORTADO,
+  CODIGO_FORMATO_IMAGEM, decodificarImagemBase64, ehMimeImagemAceito, erroFormatoImagem,
+  filtroImagemMulter, MSG_FORMATO_NAO_SUPORTADO, tratarErroFormatoImagem,
 };

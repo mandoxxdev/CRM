@@ -22,7 +22,8 @@ const multer = require('multer');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const {
-  decodificarImagemBase64, ehMimeImagemAceito, filtroImagemMulter, MSG_FORMATO_NAO_SUPORTADO,
+  CODIGO_FORMATO_IMAGEM, decodificarImagemBase64, ehMimeImagemAceito, filtroImagemMulter, MSG_FORMATO_NAO_SUPORTADO,
+  tratarErroFormatoImagem,
 } = require('../../services/imagemUpload');
 const { extensaoSegura } = require('../../services/almoxarifado/urlUpload');
 
@@ -228,8 +229,186 @@ test('fiacao: os 4 multers (grupos-compras, fornecedores, avatar, foto da propos
 
 test('fiacao: index.js importa extensaoSegura de urlUpload e o filtro/decodificador de imagemUpload', () => {
   assert.match(fonteIndex, /const \{ cabecalhosUploadSeguro, cabecalhosUploadLogo, extensaoSegura \} = require\('\.\/services\/almoxarifado\/urlUpload'\);/);
-  assert.match(fonteIndex, /const \{ decodificarImagemBase64, filtroImagemMulter \} = require\('\.\/services\/imagemUpload'\);/);
+  // Etapa 83: o mesmo require ganhou o tratarErroFormatoImagem.
+  assert.match(fonteIndex, /const \{ decodificarImagemBase64, filtroImagemMulter, tratarErroFormatoImagem \} = require\('\.\/services\/imagemUpload'\);/);
   assert.match(fonteCompras, /const \{ decodificarImagemBase64 \} = require\('\.\.\/services\/imagemUpload'\);/);
+});
+
+// ── 4. Etapa 83 — os outros 10 multers de imagem, o erro 400 e a regua do index.js inteiro ──
+
+test('83: o filtro marca a recusa com codigo FORMATO_IMAGEM (e aceita so o mapa)', async () => {
+  const filtro = filtroImagemMulter('msg do log');
+  const chamar = (mimetype) => new Promise((resolve) => filtro({}, { mimetype, originalname: 'x.png' }, (err, ok) => resolve({ err, ok })));
+  for (const m of ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/jpg', 'IMAGE/JPEG']) {
+    const r = await chamar(m);
+    assert.ok(!r.err && r.ok === true, m);
+  }
+  for (const m of ['image/svg+xml', 'image/pjpeg', 'image/x-png', 'image/apng', 'image/x-citrix-jpeg', 'text/html', '', undefined]) {
+    const r = await chamar(m);
+    assert.ok(r.err, `${m}: aceito`);
+    assert.strictEqual(r.err.codigo, CODIGO_FORMATO_IMAGEM, String(m));
+    assert.strictEqual(r.err.message, 'msg do log');
+  }
+  assert.strictEqual(CODIGO_FORMATO_IMAGEM, 'FORMATO_IMAGEM');
+});
+
+test('83: SVG e excecao LOCAL (mimesExtras) — fora do mapa compartilhado do extensaoSegura', async () => {
+  // O mapa e compartilhado com almoxarifado, chat e os multers da 82: SVG nele abriria todos.
+  assert.strictEqual(extensaoSegura('image/svg+xml'), '.bin');
+  assert.ok(!ehMimeImagemAceito('image/svg+xml'));
+  const comSvg = filtroImagemMulter('x', { mimesExtras: ['image/svg+xml'] });
+  const semSvg = filtroImagemMulter('x');
+  const r1 = await new Promise((res) => comSvg({}, { mimetype: 'image/svg+xml' }, (err, ok) => res({ err, ok })));
+  const r2 = await new Promise((res) => semSvg({}, { mimetype: 'image/svg+xml' }, (err, ok) => res({ err, ok })));
+  assert.ok(!r1.err && r1.ok === true, 'logo da empresa deveria aceitar SVG');
+  assert.ok(r2.err && r2.err.codigo === CODIGO_FORMATO_IMAGEM, 'sem a excecao, SVG tem de ser recusado');
+});
+
+/** App com o middleware de erro REAL (exportado) antes de um "global" que responde 500 como o do index.js. */
+function appComMiddlewareReal(dir) {
+  const up = multer({
+    storage: multer.diskStorage({
+      destination: (req, file, cb) => cb(null, dir),
+      filename: (req, file, cb) => {
+        const name = path.basename(file.originalname, path.extname(file.originalname));
+        const ext = extensaoSegura(file.mimetype);
+        cb(null, `produto_1_${Date.now()}_${name.replace(/[^a-zA-Z0-9]/g, '_')}${ext}`);
+      },
+    }),
+    fileFilter: filtroImagemMulter('Apenas imagens são permitidas (jpeg, jpg, png, gif, webp)'),
+  });
+  const app = express();
+  app.post('/api/up', up.single('imagem'), (req, res) => res.json({ arquivo: req.file && req.file.filename }));
+  app.post('/api/explode', (req, res, next) => next(new Error('outro erro qualquer')));
+  app.use('/api', tratarErroFormatoImagem);
+  // eslint-disable-next-line no-unused-vars
+  app.use('/api', (err, req, res, next) => res.status(500).json({ error: 'Erro interno do servidor' }));
+  return app;
+}
+
+test('83: middleware real -> recusa de formato vira 400 literal (antes caia no global = 500); nada gravado', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'c83-mw-'));
+  try {
+    const app = appComMiddlewareReal(dir);
+    for (const contentType of ['image/svg+xml', 'text/html', 'image/pjpeg']) {
+      const r = await request(app).post('/api/up')
+        .attach('imagem', Buffer.from('<svg onload="alert(1)"/>'), { filename: 'x.svg', contentType });
+      assert.strictEqual(r.status, 400, `${contentType}: ${r.status} ${JSON.stringify(r.body)}`);
+      assert.deepStrictEqual(r.body, { error: 'Formato de imagem não suportado' });
+    }
+    assert.deepStrictEqual(fs.readdirSync(dir), []);
+    // Controle: outro erro NAO e engolido pelo middleware — segue para o global (500).
+    const outro = await request(app).post('/api/explode');
+    assert.strictEqual(outro.status, 500);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('83: foto.html com image/png grava produto_<id>_<ms>_foto.png; foto.jfif image/jpeg -> _foto.jpg (miolo sem extensao)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'c83-mw-'));
+  try {
+    const app = appComMiddlewareReal(dir);
+    const r1 = await request(app).post('/api/up').attach('imagem', PNG, { filename: 'foto.html', contentType: 'image/png' });
+    assert.strictEqual(r1.status, 200, JSON.stringify(r1.body));
+    assert.match(r1.body.arquivo, /^produto_1_\d+_foto\.png$/);
+    const r2 = await request(app).post('/api/up').attach('imagem', PNG, { filename: 'foto.jfif', contentType: 'image/jpeg' });
+    assert.match(r2.body.arquivo, /^produto_1_\d+_foto\.jpg$/, 'miolo nao pode virar foto_jfif nem foto_jpeg');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// Listas EXPLICITAS (RN-83.02). Um storage novo no index.js tem de entrar numa delas, senao a regua
+// de completude abaixo fica vermelha — e quem o adicionar decide de que lado ele esta.
+const STORAGES_IMAGEM = [
+  'storageProdutos', 'storageMateriaisEscritorio', 'storageFamilias', 'storageGrupos',
+  'storageGruposCompras', 'storageFornecedor', 'storageLogos', 'storageAvatar', 'storageClienteLogo',
+  'storageHeader', 'storageFooter', 'storageCover', 'storagePropostaFoto', 'storageFamiliaEsquematico',
+];
+const STORAGES_DOCUMENTO = ['storage', 'storagePropostaPdf', 'storageComprovantes', 'storageContrato'];
+
+// [multer, storage, prefixo do nome gravado (RN-83.03: inalterado), tem miolo do nome original]
+const MULTERS_83 = [
+  ['uploadProduto', 'storageProdutos', '`produto_${produtoId}_${timestamp}_', true],
+  ['uploadMaterialEscritorioFoto', 'storageMateriaisEscritorio', '`material_escritorio_${materialId}_${timestamp}_', true],
+  ['uploadFamilia', 'storageFamilias', '`familia_${familiaId}_${timestamp}_', true],
+  ['uploadGrupo', 'storageGrupos', '`grupo_${grupoId}_${timestamp}_', true],
+  ['uploadLogo', 'storageLogos', '`logo_${timestamp}_', true],
+  ['uploadClienteLogo', 'storageClienteLogo', '`cliente_${clienteId}_${timestamp}_', true],
+  ['uploadHeader', 'storageHeader', '`header_${timestamp}_', true],
+  ['uploadFooter', 'storageFooter', '`footer_${timestamp}_', true],
+  ['uploadCover', 'storageCover', '`cover_${timestamp}_', true],
+  ['uploadFamiliaEsquematico', 'storageFamiliaEsquematico', '`esquematico_${familiaId}_${Date.now()}', false],
+];
+
+test('83: os 10 multers — filtroImagemMulter, sem regex solto, extensao pelo MIME, prefixo e miolo preservados', () => {
+  const MIOLO = 'const name = path.basename(file.originalname, path.extname(file.originalname));';
+  for (const [up, st, prefixo, temMiolo] of MULTERS_83) {
+    const bu = blocoMulter(up);
+    assert.match(bu, new RegExp(`storage: ${st},`), up);
+    assert.match(bu, /fileFilter: filtroImagemMulter\(/, up);
+    assert.ok(!/allowed(Types)?\s*=\s*\/|\.test\(file\.mimetype\)|\.test\(path\.extname/.test(bu), `${up}: regex solto ainda presente`);
+    const bs = blocoStorage(st);
+    if (up === 'uploadLogo') {
+      assert.match(bs, /const ext = String\(file\.mimetype \|\| ''\)\.toLowerCase\(\) === MIME_SVG_LOGO_EMPRESA \? '\.svg' : extensaoSegura\(file\.mimetype\);/, st);
+    } else {
+      assert.match(bs, /const ext = extensaoSegura\(file\.mimetype\);/, st);
+    }
+    assert.ok(bs.includes(prefixo), `${st}: prefixo ${prefixo} mudou`);
+    if (temMiolo) {
+      assert.ok(bs.includes(MIOLO), `${st}: miolo nao vem de basename(originalname, extname(originalname))`);
+      assert.ok(!/path\.basename\(file\.originalname, ext\)/.test(bs), `${st}: miolo pela extensao do MIME gera foto_jpeg`);
+    }
+  }
+});
+
+test('83: SVG so no uploadLogo (mimesExtras local); nenhum outro multer/storage fala de svg', () => {
+  assert.match(fonteIndex, /const MIME_SVG_LOGO_EMPRESA = 'image\/svg\+xml';/);
+  assert.match(blocoMulter('uploadLogo'), /filtroImagemMulter\([^\n]*\{ mimesExtras: \[MIME_SVG_LOGO_EMPRESA\] \}\)/);
+  for (const [up, st] of MULTERS_83.filter(([u]) => u !== 'uploadLogo')) {
+    assert.ok(!/svg|mimesExtras/i.test(blocoMulter(up)), `${up}: aceita SVG`);
+    assert.ok(!/svg/i.test(blocoStorage(st)), `${st}: grava .svg`);
+  }
+  const fonteUrlUpload = fs.readFileSync(path.join(SERVER, 'services', 'almoxarifado', 'urlUpload.js'), 'utf8');
+  const mapa = fonteUrlUpload.slice(fonteUrlUpload.indexOf('const EXTENSAO_POR_MIME'), fonteUrlUpload.indexOf('});', fonteUrlUpload.indexOf('const EXTENSAO_POR_MIME')));
+  assert.ok(mapa.length > 0 && !/svg/i.test(mapa), 'SVG entrou no mapa compartilhado');
+});
+
+test('83 (RN-83.02): todo multer.diskStorage do index.js esta numa lista; nos de imagem a extensao nao vem do nome', () => {
+  const total = fonteIndex.split('multer.diskStorage(').length - 1;
+  const nomes = [...fonteIndex.matchAll(/const (\w+) = multer\.diskStorage\(/g)].map((m) => m[1]);
+  assert.strictEqual(nomes.length, total, 'ha multer.diskStorage( fora do padrao "const X = multer.diskStorage("');
+  assert.ok(total >= 18, `so ${total} storages — a varredura esta lendo o arquivo certo?`);
+  const listados = [...STORAGES_IMAGEM, ...STORAGES_DOCUMENTO];
+  assert.deepStrictEqual(nomes.filter((n) => !listados.includes(n)), [], 'storage novo sem lista (imagem ou documento?)');
+  assert.deepStrictEqual(listados.filter((n) => !nomes.includes(n)), [], 'storage listado sumiu do index.js');
+  for (const st of STORAGES_IMAGEM) {
+    const bs = blocoStorage(st);
+    assert.ok(!bs.includes('const ext = path.extname(file.originalname)'), `${st}: extensao ainda vem do nome`);
+    assert.match(bs, /const ext = [^\n]*extensaoSegura\(file\.mimetype\);/, st);
+  }
+  // Controle do scanner: os de documento AINDA usam a extensao do nome — se a busca nao achasse
+  // isso, ela tambem nao acharia o defeito num storage de imagem.
+  assert.ok(STORAGES_DOCUMENTO.some((st) => blocoStorage(st).includes('const ext = path.extname(file.originalname)')));
+});
+
+test('83: todo multer( de storage de imagem usa filtroImagemMulter', () => {
+  const multers = [...fonteIndex.matchAll(/const (\w+) = multer\(\{\n\s*storage: (\w+),/g)];
+  assert.strictEqual(multers.length, fonteIndex.split(' = multer({').length - 1, 'multer( fora do padrao');
+  const deImagem = multers.filter((m) => STORAGES_IMAGEM.includes(m[2]));
+  assert.strictEqual(deImagem.length, STORAGES_IMAGEM.length);
+  for (const [, up] of deImagem) assert.match(blocoMulter(up), /fileFilter: filtroImagemMulter\(/, up);
+});
+
+test('83: middleware de formato registrado no /api ANTES do handler global (que responde 500)', () => {
+  const iMw = fonteIndex.indexOf("app.use('/api', tratarErroFormatoImagem);");
+  const iGlobal = fonteIndex.indexOf("app.use('/api', (err, req, res, next) => {");
+  assert.ok(iMw > 0, 'tratarErroFormatoImagem nao registrado');
+  assert.ok(iGlobal > 0, 'handler global nao encontrado (a regua ficou cega)');
+  assert.ok(iMw < iGlobal, 'middleware registrado depois do global: a recusa vira 500');
+  assert.match(fonteIndex, /const \{ decodificarImagemBase64, filtroImagemMulter, tratarErroFormatoImagem \} = require\('\.\/services\/imagemUpload'\);/);
+});
+
+test('83: o multer morto uploadChat sumiu (o chat usa o de routes/chat.js)', () => {
+  assert.ok(!/\buploadChat\b|\bstorageChat\b/.test(fonteIndex));
+  assert.match(fs.readFileSync(path.join(SERVER, 'routes', 'chat.js'), 'utf8'), /multer/);
 });
 
 (async () => {
