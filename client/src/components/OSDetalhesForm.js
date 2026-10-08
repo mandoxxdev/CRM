@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { toast } from 'react-toastify';
+import { abrirPdfProtegidoNaJanela, LITERAL_ERRO_PDF_OS } from '../utils/baixarArquivoProtegido';
 import { FiX, FiSave, FiFileText, FiHash, FiTag, FiAlertCircle, FiCalendar, FiUser, FiTrendingUp, FiArrowLeft, FiDownload, FiExternalLink } from 'react-icons/fi';
 import './PreviewOSEditavel.css';
 import './OSDetalhesForm.css';
@@ -13,6 +14,9 @@ const OSDetalhesForm = ({ os, onClose, isFromComercial = false }) => {
   const [editandoItem, setEditandoItem] = useState(null);
   const [itemEditandoIndex, setItemEditandoIndex] = useState(null);
   const [proposta, setProposta] = useState(null);
+  // A prop `os` nao e recarregada depois de "Gerar PDF": sem isto o "VER PDF" nao apareceria na
+  // primeira geracao, e o toast do bloqueador de pop-up mandaria clicar num botao inexistente.
+  const [pdfGerado, setPdfGerado] = useState(false);
 
   useEffect(() => {
     if (os) {
@@ -212,30 +216,56 @@ const OSDetalhesForm = ({ os, onClose, isFromComercial = false }) => {
     }
   };
 
+  // Etapa 81 (RN-81.05): o PDF da OS so sai por `GET /operacional/ordens-servico/:id/pdf`
+  // (autenticada). A aba e aberta NO CLIQUE, antes de qualquer espera — aberta depois, cai fora da
+  // janela de ativacao do navegador e o bloqueador de pop-up a engole (revisao do plano, F8).
+  const urlPdfOS = () => `/operacional/ordens-servico/${os.id}/pdf`;
+
+  const handleVerPDF = async () => {
+    if (!os || !os.id) return;
+    const janela = window.open('', '_blank');
+    if (!janela) {
+      toast.error('Permita pop-ups para abrir o PDF da OS.');
+      return;
+    }
+    try {
+      await abrirPdfProtegidoNaJanela(api, urlPdfOS(), janela, { mensagemPadrao: LITERAL_ERRO_PDF_OS });
+    } catch (error) {
+      janela.close();
+      toast.error(error.message);
+    }
+  };
+
   const handleGerarPDF = async () => {
     if (!os || !os.id) {
       toast.error('OS não encontrada');
       return;
     }
 
+    const janela = window.open('', '_blank');
     setLoading(true);
     try {
-      const response = await api.post(`/operacional/ordens-servico/${os.id}/gerar-pdf`);
-      
-      if (response.data && response.data.pdf_url) {
-        toast.success('PDF gerado e salvo com sucesso!');
-        
-        // Opcional: abrir o PDF em nova aba
-        // Usar URL direta sem /api/ duplicado
-        const pdfUrlPath = response.data.pdf_url.startsWith('/') ? response.data.pdf_url : '/' + response.data.pdf_url;
-        const pdfUrl = `${window.location.protocol}//${window.location.hostname}:5000${pdfUrlPath}`;
-        window.open(pdfUrl, '_blank');
-      } else {
-        toast.error('Erro ao gerar PDF');
+      let response;
+      try {
+        response = await api.post(`/operacional/ordens-servico/${os.id}/gerar-pdf`);
+      } catch (error) {
+        console.error('Erro ao gerar PDF:', error);
+        throw new Error(error.response?.data?.error || 'Erro ao gerar PDF');
       }
+      if (!response.data || !response.data.pdf_url) {
+        throw new Error('Erro ao gerar PDF');
+      }
+      setPdfGerado(true);
+      if (!janela) {
+        // Bloqueador de pop-up: o PDF esta salvo, o botao "VER PDF" abre por um clique novo.
+        toast.success('PDF gerado — clique em VER PDF');
+        return;
+      }
+      await abrirPdfProtegidoNaJanela(api, urlPdfOS(), janela, { mensagemPadrao: LITERAL_ERRO_PDF_OS });
+      toast.success('PDF gerado e salvo com sucesso!');
     } catch (error) {
-      console.error('Erro ao gerar PDF:', error);
-      toast.error(error.response?.data?.error || 'Erro ao gerar PDF');
+      if (janela) janela.close();
+      toast.error(error.message);
     } finally {
       setLoading(false);
     }
@@ -596,16 +626,16 @@ const OSDetalhesForm = ({ os, onClose, isFromComercial = false }) => {
           <button className="btn-secondary" onClick={handleClose} disabled={loading}>
             FECHAR
           </button>
-          {os.pdf_url ? (
-            <a
-              href={`${window.location.protocol}//${window.location.hostname}:5000${os.pdf_url.startsWith('/') ? os.pdf_url : '/' + os.pdf_url}`}
-              target="_blank"
-              rel="noopener noreferrer"
+          {(os.pdf_url || pdfGerado) ? (
+            <button
+              type="button"
+              onClick={handleVerPDF}
+              disabled={loading}
               className="btn-secondary"
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
             >
               <FiExternalLink /> VER PDF
-            </a>
+            </button>
           ) : null}
           <button 
             className="btn-secondary" 

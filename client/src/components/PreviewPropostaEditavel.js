@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
+import { baixarContratoAnexo } from '../utils/baixarArquivoProtegido';
 import { FiX, FiSave, FiDownload, FiEdit2 } from 'react-icons/fi';
 import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../utils/telefone';
 import './PreviewPropostaEditavel.css';
@@ -156,6 +157,16 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: o
       else alert('Erro ao salvar alterações: ' + msg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Etapa 81 (RN-81.05): o contrato so sai pela rota autenticada; erro por alert(), como o resto
+  // deste arquivo.
+  const handleBaixarContrato = async () => {
+    try {
+      await baixarContratoAnexo(api, contratoAnexoUrl);
+    } catch (error) {
+      alert('Erro: ' + error.message);
     }
   };
 
@@ -697,15 +708,14 @@ const PreviewPropostaEditavel = ({ proposta, formData, itens, onClose, onSave: o
             <FiDownload /> {loading ? 'Abrindo...' : 'Gerar PDF (navegador)'}
           </button>
           {contratoAnexoUrl && (
-            <a
-              href={`${(api.defaults.baseURL || '').replace(/\/api\/?$/, '') || ''}/api/uploads/contrato/${contratoAnexoUrl}`}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              type="button"
+              onClick={handleBaixarContrato}
               className="btn-secondary"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', textDecoration: 'none' }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
               <FiDownload /> Baixar contrato (anexo)
-            </a>
+            </button>
           )}
         </div>
       </div>
