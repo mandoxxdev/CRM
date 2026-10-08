@@ -1,7 +1,7 @@
 # Etapa 91 — a inversão inspeção × Aprovar (C131, feature 07 com a 09, a 08 e a 04)
 
-> Status: **T0–T6 feitas; Fase 5 (revisão adversarial) feita — 4 achados reais, 5 mutações mortas, 0 regressões; ver a
-> seção "Fase 5 — revisão adversarial" no fim.** Próximo passo: **T7 (fechamento)**, com a lista "Para a T7" da Fase 5.
+> Status: **ETAPA FECHADA (2026-10-08) — T0–T7 feitas; Fase 5 (revisão adversarial) feita — 4 achados reais, 5 mutações
+> mortas, 0 regressões.** Ver "Fechamento (T7)" e a **"Próxima tarefa detalhada — Etapa 92"** no fim deste plano.
 > HEAD de partida: `5197b418` (main, árvore limpa); plano da Fase 1 em `14855ab7`; Fase 2 em `43f18ef5`.
 > Origem: "Próxima tarefa detalhada — Etapa 91" de
 > `docs/superpowers/plans/2026-10-02-almoxarifado-etapa77-reserva-requisicao-so-pela-requisicao.md:711-755`, o aviso
@@ -658,7 +658,10 @@ Scratchpad com nome único (`msg-e91-t0.txt`…). Executores **não** marcam est
   (`concluirPendencia` dentro da seção) → o cancelamento **passa** (a rota da C141 não pega a trava), o que cai é a
   **nota**, que não responde em 5 s (`comPrazo`: o recálculo pede a trava que a própria seção segura) — corrigido na
   Fase 2, achado 13.
-- [ ] **T7 — fechamento (skill `fechar-etapa`).** Spec 07 (a C131 resolvida; **corrigir dizendo que estava errada** se
+- [x] **T7 — FEITA (2026-10-08), ver "Fechamento (T7)" no fim** (commits na seção). Divergência: a lista "Para a T7"
+  da Fase 5 vale sobre este enunciado (letras até **B433**, **C151**, **A42 ampliada**); o achado da T1 (dois
+  `/aprovar` simultâneos) ganhou letra própria, **C151**.
+  Enunciado original: **T7 — fechamento (skill `fechar-etapa`).** Spec 07 (a C131 resolvida; **corrigir dizendo que estava errada** se
   algum texto afirma que "a trava por material serializa as liberações" como garantia contra a aprovação — a trava da 75
   nunca cobriu a aprovação); spec 09 (a decisão da inspeção e a NC seguram a trava do material); spec 08 (a nota segura
   a trava dos materiais dela; a janela da QUARENTENA); spec 04 (as três aprovações esperam a trava; o cancelamento pelos
@@ -889,3 +892,99 @@ liberar saldo que não existe; conferir com a Qualidade antes de decidir a inspe
 `14cf6df7` (F3) · `2d6987a7` (F1, rodada 1 — insuficiente) · `d98b73c9` (testes das mutações) · `723c58fd` (F1, rodada 2) ·
 `455eda9b` (comentário de `comTravaDaRequisicao`). Suítes no fim: test:api **321/321**, almoxarifado **44/0**,
 validation **4/0**, safealter **3/0**, sqlite **5/0**. Cliente não mudou (nem suíte nem build rodados).
+
+## Fechamento (T7) — 2026-10-08
+
+**O que cada artefato recebeu** (skill `fechar-etapa`):
+
+1. `docs/almoxarifado-novidades-por-etapa.md` — seção da Etapa 91 (abertura em linguagem de usuário, Antes → Agora,
+   cenários com a mensagem literal lida do código, o que não cobre, o que a revisão encontrou); **A42 ampliada**;
+   **B419–B433** (a **B403** marcada substituída pela **B419**); **C131** e **C141** ✅ resolvidos (texto original
+   mantido para o histórico); **C132** com as seis portas; **C142–C150** (lista "Para a T7"); **C151** — letra própria
+   do achado da T1 (dois `/aprovar` simultâneos da mesma requisição com saldo terminavam 8/8 `AGUARDANDO_ESTOQUE` sem
+   reserva; resolvido em `78933bef`); limitações **(91)** em D; verificações **(91)** em F; "Onde estamos" com a 91 e a
+   próxima (92); cabeçalho do documento.
+2. Specs `07`, `09`, `08`, `04`, `03` — status, checklist com hash, o que ficou de fora com o porquê, e as afirmações
+   erradas corrigidas **à vista** (C131 "para depois"/"para a migração de banco"; a trava da 75 nunca cobriu a
+   aprovação).
+3. Mapa `specs/modulo-almoxarifado/README.md` — linhas das features tocadas e o cabeçalho apontando a 92.
+4. Guia `docs/almoxarifado-guia-etapas-e-testes.md` — seção da etapa, roteiro de duas abas, o que não cobre, cabeçalho.
+5. Este plano — T7 marcada, retro, próxima tarefa detalhada.
+6. Verificação final — números abaixo (lidos da saída, não presumidos).
+7. Manual `docs/almoxarifado-manual-do-sistema.md` — comportamento enxertado nas seções temáticas (aprovação espera a
+   entrada/inspeção/não conformidade do mesmo material; a mensagem de requisição ainda sendo gravada; o cancelamento
+   pelas telas dos outros módulos solta a reserva; `reserva_id` só em saída; o alerta de mínimo depois do movimento).
+
+Mais: `CLAUDE.md` ganhou a seção "Trava por material do almoxarifado" (as seis portas, não reentrante, ordem crescente,
+o que roda depois de soltar, e que porta nova que mexe em saldo livre tem de pegar a trava).
+
+**Spec/plano errados, ditos:** §6.7 deste plano ("Confirmado (não é dúvida): … ler os materiais antes de pegar a trava é
+estável" — errado para item **novo**, F1) e §6.5 ("janela ~10%, intermitente" — incompleto: com SMTP era o tempo do
+SMTP, F4) — os dois marcados no lugar; a T0 achou **18** arquivos com monkeypatch, não 12; a T4 achou **23** arquivos
+que passam `reserva_id`, não 22; o gatilho da nota da T2 era o crédito físico (`SET quantidade_atual = quantidade_atual
++ ?`), não a sincronização (o regex do plano disparava 0/8). Nas specs, o que cada uma dizia de errado está nelas, no
+formato "dizia X; estava errado; o certo é Y".
+
+**Verificação final (HEAD `00fc3ccd` + só documentação):** server `npm run test:api` **321/321** arquivos (mais lento `filaLiberacaoAprovacaoCorrida`, 7.8 s); `test:almoxarifado` **44 passou, 0 falhou**; `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **5/0**; cliente `CI=true npx react-scripts test --watchAll=false` **93/93** suítes, **1394/1394** testes; `CI=true npx react-scripts build` **Compiled successfully** (saída 0). Rodadas sobre o HEAD `00fc3ccd`; os commits do fechamento só tocam documentação e `CLAUDE.md`.
+
+**Retro (4 números):** rodadas de correção até verde — T0–T6 **1** cada; Fase 5: F3 **1**, F1 **2** (o detector de
+esteira não disparou). Achados reais na revisão adversarial **4** + **5** mutações sobreviventes mortas + **5** menores;
+ruído **0** (todos reproduzidos antes de virar conserto). Achados fora do plano durante a execução: **1** de produção (o
+da T1, C151) e **1** teste fora da lista que mudou (T2, `recebimentoProcessamentoConcorrente`, gancho — asserções
+iguais). Defeito escapado: a preencher na etapa seguinte.
+
+### Commits do fechamento
+
+`f659eff7` (novidades, specs 07/09/08/04/03 e mapa, guia, manual) · `688d4459` (`CLAUDE.md`) · o commit deste plano (T7 marcada, retro, próxima tarefa).
+
+## Próxima tarefa detalhada — Etapa 92: o cancelamento pelos outros módulos aceita o que a tela oferece (C149)
+
+**Por que esta (ordem do CLAUDE.md, medida antes de prometer):** das candidatas declaradas pela Fase 5 e por "O que fica
+de fora", é a única que é **defeito visível para o usuário hoje** e que deixa **material preso**: a tela de requisições
+dos outros módulos (`client/src/components/almoxarifado/RequisicoesList.js:1835-1837`, fora do modo almoxarifado)
+mostra **Cancelar Requisição** para `PENDENTE`, `APROVADO`, `AGUARDANDO_ESTOQUE`, `AGUARDANDO_COMPRA`,
+`PARCIALMENTE_RESERVADA` e `TOTALMENTE_RESERVADA` e chama `PUT /api/requisicoes-material/:id/cancelar`
+(`RequisicoesList.js:994-997`), que só aceita `PENDENTE`/`APROVADO` (`server/routes/requisicoesMaterial.js:356-364`) e
+responde 400 *"Requisição não encontrada ou não pode ser cancelada"* — justamente nas reservadas, que seguram saldo. E
+o **C140 (3)** diz a quem pede por outro módulo sem a permissão de reservar que "o caminho é cancelar": nas reservadas,
+não há caminho nenhum. A máquina de estados já permite `CANCELADO` a partir de todos esses status
+(`server/services/almoxarifado/requisitionStateMachine.js:40-65`), e o cancelamento do almoxarifado já os aceita
+(`server/routes/almoxarifado.js:4013-4023`, `validarTransicao`). A liberação das reservas no cancelamento dos outros
+módulos **já existe** (T5, `6eedb920`). Comparadas: **C145** (janela da QUARENTENA contra saída avulsa/reserva
+manual/separação) — as três formas de fechar foram medidas na Fase 5 e nenhuma é contida (B430), é etapa de motor;
+**C147** (chave de idempotência) — cliente + servidor em todas as rotas de criação, e o dano medido é uma requisição
+duplicada visível (cancelável); **C150** — desempenho, sem queixa de uso.
+
+**Decisão reversível a registrar (letra B):** aceitar na rota os status que a tela oferece (escolhido) × esconder o
+botão nesses status (descartado: deixa quem pediu sem caminho — o C140 (3) manda cancelar — e a reserva presa até o
+almoxarife encerrar). Reverte a parte "cancelar requisição já reservada pelos outros módulos fica de fora" da **B426**.
+
+**Contrato (a congelar na Fase 1):**
+- `PUT /api/requisicoes-material/:id/cancelar` — só o solicitante (`solicitante_id = req.user.id`, como hoje); status
+  aceitos = **exatamente** a lista da tela fora do modo almoxarifado (constante única, citada nos dois lados ou testada
+  contra a tela); `UPDATE … WHERE id=? AND solicitante_id=? AND status = ?` com o status **lido** (compare-and-set: fecha
+  também a metade da **C148** do `antes` da auditoria — o `dados_anteriores.status` passa a ser o status que o `UPDATE`
+  de fato trocou; perdeu → reler e tentar uma vez, depois 400 de hoje). Resposta inalterada (`{ success: true }`),
+  literal de recusa inalterada para `EM_SEPARACAO` em diante, `RASCUNHO` e `AGUARDANDO_APROVACAO_VALOR` (fora da tela).
+- Liberação das reservas e auditoria: as de hoje (L2/L2b/L3, best-effort, `liberarReservasDaRequisicao` pelo objeto).
+- O material liberado volta ao disponível **solto** (B397/C135 — não redistribui); dizer isso no C da etapa.
+
+**Pontos de atenção (medidos agora, não reabrir sem medir):**
+1. **Corrida com a separação:** os `UPDATE` para `EM_SEPARACAO` em `server/services/almoxarifado/requisitionService.js`
+   (`:913`, `:925`, `:932`) **não têm guarda de status** (`WHERE id=?`) — com as reservadas canceláveis por mais uma
+   porta, uma separação em voo pode **ressuscitar** a requisição cancelada (já declarado em "O que fica de fora" para o
+   cancelamento do almoxarifado). A 92 deve guardar esses `UPDATE` (`AND status IN (<os de onde se separa>)`, perdeu →
+   400/409 com literal) — medir primeiro com sonda (cancelar no instante do `UPDATE` da separação).
+2. O cancelamento do almoxarifado (`routes/almoxarifado.js:4023`) também faz `UPDATE … WHERE id=?` sem guarda — mesma
+   corrida; decidir se entra na 92 (recomendado: sim, é o mesmo conserto).
+3. Trava: o cancelamento **não** precisa da trava das seis portas (soltar reserva não toma saldo de ninguém — a jornada
+   B da T6 provou a janela do `concluirPendencia`), mas o log enganoso da **C148** (o `/aprovar` perdedor desfaz uma
+   reserva que o cancelamento já soltou) continua; tratar ou declarar.
+4. Cliente: o botão já existe; teste de componente para os seis status fora do modo almoxarifado (hoje
+   `RequisicoesList.test.js:164,176` só cobrem o modo almoxarifado/admin). Sem mudança de tela esperada.
+5. Testes a medir antes/depois: `requisicaoCancelarOutrosModulosReserva`, `filaTravaIntegracao` (jornada B), os que
+   usam `/api/requisicoes-material` (`grep -ln requisicoes-material server/tests/api/*.js`) e `saldoEmTerceiros` (varre a
+   rota).
+
+**O que está pronto e não se reabre:** a trava das seis portas (T0–T2, F1), a liberação no cancelamento (T5), a recusa
+D(77) no motor (T4), o alerta fora da seção (F3).
