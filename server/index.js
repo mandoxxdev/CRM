@@ -206,7 +206,13 @@ const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
 const archiver = require('archiver');
-const multer = require('multer');
+// Etapa 83 (RN-83.01): os demais multers de imagem tambem; a recusa vira 400 pelo tratarErroFormatoImagem.
+// Etapa 85 (RN-85.01/02): o require sobe para ca porque o `multer` abaixo ja depende dele.
+const { decodificarImagemBase64, filtroImagemMulter, multerComLimiteNoErro, tratarArquivoGrandeDemais, tratarErroFormatoImagem } = require('./services/imagemUpload');
+// Etapa 85 (RN-85.02): o MulterError LIMIT_FILE_SIZE nao carrega o limite; o embrulho anexa
+// `err.limiteBytes` (limits.fileSize de quem recusou) para o tratarArquivoGrandeDemais responder
+// 413 "Arquivo grande demais (máximo N MB)". Todo multer deste arquivo e criado por este `multer`.
+const multer = multerComLimiteNoErro(require('multer'));
 const puppeteer = require('puppeteer');
 const { criarFilaSerial } = require('./services/filaPdf');
 const nodemailer = require('nodemailer');
@@ -280,8 +286,6 @@ const { gerarHTMLPropostaPremiumV2, substituirPlaceholdersProposta } = require('
 const { cabecalhosUploadSeguro, cabecalhosUploadLogo, extensaoSegura } = require('./services/almoxarifado/urlUpload');
 // Etapa 82 (RN-82.04/05/06): URL assinada de fotos da proposta/avatares e tipo de imagem pelo mapa.
 const { criarAssinadoresCrm } = require('./services/uploadsAssinadosCrm');
-// Etapa 83 (RN-83.01): os demais multers de imagem tambem; a recusa vira 400 pelo tratarErroFormatoImagem.
-const { decodificarImagemBase64, filtroImagemMulter, tratarErroFormatoImagem } = require('./services/imagemUpload');
 const { criarServirPdfOs, criarServirContratoAnexo } = require('./services/arquivosProtegidos');
 
 // Opções de launch do Puppeteer: usar Chrome/Chromium do sistema quando o bundle não existir (ex.: Linux em servidor)
@@ -23099,6 +23103,10 @@ app.get('/api/auditoria/logs', authenticateToken, (req, res) => {
 // Etapa 83 (RN-83.01): recusa de formato do fileFilter dos multers de imagem -> 400 com a mensagem
 // literal. Tem de vir ANTES do handler abaixo, que responderia 500 "Erro interno do servidor".
 app.use('/api', tratarErroFormatoImagem);
+// Etapa 85 (RN-85.01): arquivo acima do limits.fileSize -> 413 "Arquivo grande demais (máximo N MB)".
+// Mesma posicao: depois da ultima rota com multer, antes do handler global (que responderia 500).
+// Routers montados mais abaixo (almoxarifado, chat...) NAO passam por aqui — ver plano da Etapa 85.
+app.use('/api', tratarArquivoGrandeDemais);
 
 // Middleware para tratar erros de banco de dados (deve ser o último antes do listen)
 app.use('/api', (err, req, res, next) => {

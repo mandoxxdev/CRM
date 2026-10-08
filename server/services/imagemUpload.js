@@ -87,7 +87,87 @@ function tratarErroFormatoImagem(err, req, res, next) {
   return next(err);
 }
 
+/**
+ * Etapa 85 (RN-85.01/02) — arquivo acima do `limits.fileSize` do multer.
+ *
+ * ── O DEFEITO ────────────────────────────────────────────────────────────────────────────────
+ *
+ * O `MulterError` LIMIT_FILE_SIZE passava pelo `tratarErroFormatoImagem` (que so trata o codigo
+ * de formato) e caia no handler global do `/api`: 500 "Erro interno do servidor". O usuario que
+ * mandava uma foto de 11 MB nao tinha como saber que o problema era o tamanho.
+ *
+ * O multer 2.x NAO poe o limite no erro (so `code`, `field` e 'File too large' — ver
+ * node_modules/multer/lib/multer-error.js), entao o N da mensagem vem de um embrulho: o index.js
+ * cria os multers por `multerComLimiteNoErro(require('multer'))`, que intercepta o erro de cada
+ * middleware (`single/array/fields/any/none`) e anexa `err.limiteBytes = limits.fileSize`. Sem
+ * `limiteBytes` (multer nao embrulhado) a mensagem sai sem numero — nao se inventa limite.
+ *
+ * 413 e nao 400 de proposito: os modais de familia/grupo/fornecedor reenviam a foto por base64
+ * quando recebem 400, e o base64 do mesmo arquivo grande tambem seria recusado.
+ */
+const CODIGO_LIMITE_TAMANHO = 'LIMIT_FILE_SIZE';
+const MSG_ARQUIVO_GRANDE = 'Arquivo grande demais';
+
+function formatarNumeroBr(n) {
+  const arred = Math.round(n * 10) / 10;
+  return String(arred).replace('.', ',');
+}
+
+/** "Arquivo grande demais (máximo 10 MB)"; abaixo de 1 MB em KB; limite invalido -> sem numero. */
+function mensagemArquivoGrande(limiteBytes) {
+  if (typeof limiteBytes !== 'number' || !Number.isFinite(limiteBytes) || limiteBytes <= 0) return MSG_ARQUIVO_GRANDE;
+  const mb = limiteBytes / (1024 * 1024);
+  const texto = mb >= 1 ? `${formatarNumeroBr(mb)} MB` : `${formatarNumeroBr(limiteBytes / 1024)} KB`;
+  return `${MSG_ARQUIVO_GRANDE} (máximo ${texto})`;
+}
+
+const METODOS_MULTER = ['single', 'array', 'fields', 'any', 'none'];
+
+/**
+ * Recebe o modulo `multer` e devolve uma fabrica com a mesma assinatura (e os mesmos estaticos:
+ * diskStorage, memoryStorage, MulterError) cujos middlewares anexam `limiteBytes` ao erro
+ * LIMIT_FILE_SIZE. O resto do comportamento do multer fica intocado.
+ */
+function multerComLimiteNoErro(multerLib) {
+  function criar(opcoes) {
+    const instancia = multerLib(opcoes);
+    const limite = opcoes && opcoes.limits ? opcoes.limits.fileSize : undefined;
+    for (const metodo of METODOS_MULTER) {
+      if (typeof instancia[metodo] !== 'function') continue;
+      const original = instancia[metodo].bind(instancia);
+      instancia[metodo] = (...args) => {
+        const mw = original(...args);
+        return (req, res, next) => mw(req, res, (err) => {
+          if (err && err.code === CODIGO_LIMITE_TAMANHO && err.limiteBytes == null && limite != null) {
+            err.limiteBytes = limite;
+          }
+          return next(err);
+        });
+      };
+    }
+    return instancia;
+  }
+  return Object.assign(criar, multerLib);
+}
+
+/**
+ * Middleware de erro do Express: LIMIT_FILE_SIZE -> 413 `{ error: mensagemArquivoGrande(...) }`.
+ * Registrado no index.js junto do `tratarErroFormatoImagem` (depois de todas as rotas com multer e
+ * antes do handler global do `/api`); qualquer outro erro segue adiante. Routers montados DEPOIS do
+ * handler global (almoxarifado, chat...) nao chegam aqui — ver o plano da Etapa 85.
+ */
+// eslint-disable-next-line no-unused-vars
+function tratarArquivoGrandeDemais(err, req, res, next) {
+  if (err && err.code === CODIGO_LIMITE_TAMANHO) {
+    const mensagem = mensagemArquivoGrande(err.limiteBytes);
+    console.warn('[upload] arquivo grande demais:', req.method, req.originalUrl, `limite=${err.limiteBytes}`);
+    return res.status(413).json({ error: mensagem });
+  }
+  return next(err);
+}
+
 module.exports = {
-  CODIGO_FORMATO_IMAGEM, decodificarImagemBase64, ehMimeImagemAceito, erroFormatoImagem,
-  filtroImagemMulter, MSG_FORMATO_NAO_SUPORTADO, tratarErroFormatoImagem,
+  CODIGO_FORMATO_IMAGEM, CODIGO_LIMITE_TAMANHO, decodificarImagemBase64, ehMimeImagemAceito, erroFormatoImagem,
+  filtroImagemMulter, mensagemArquivoGrande, MSG_ARQUIVO_GRANDE, MSG_FORMATO_NAO_SUPORTADO, multerComLimiteNoErro,
+  tratarArquivoGrandeDemais, tratarErroFormatoImagem,
 };

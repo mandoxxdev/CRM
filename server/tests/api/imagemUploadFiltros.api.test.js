@@ -230,7 +230,9 @@ test('fiacao: os 4 multers (grupos-compras, fornecedores, avatar, foto da propos
 test('fiacao: index.js importa extensaoSegura de urlUpload e o filtro/decodificador de imagemUpload', () => {
   assert.match(fonteIndex, /const \{ cabecalhosUploadSeguro, cabecalhosUploadLogo, extensaoSegura \} = require\('\.\/services\/almoxarifado\/urlUpload'\);/);
   // Etapa 83: o mesmo require ganhou o tratarErroFormatoImagem.
-  assert.match(fonteIndex, /const \{ decodificarImagemBase64, filtroImagemMulter, tratarErroFormatoImagem \} = require\('\.\/services\/imagemUpload'\);/);
+  // Etapa 85: o require ganhou multerComLimiteNoErro/tratarArquivoGrandeDemais e subiu no arquivo.
+  assert.ok(/const \{ decodificarImagemBase64, filtroImagemMulter, [\w, ]*tratarErroFormatoImagem \} = require\('\.\/services\/imagemUpload'\);/
+    .test(fonteIndex), 'require do imagemUpload sem tratarErroFormatoImagem');
   assert.match(fonteCompras, /const \{ decodificarImagemBase64 \} = require\('\.\.\/services\/imagemUpload'\);/);
 });
 
@@ -467,7 +469,9 @@ test('83: middleware de formato registrado no /api ANTES do handler global (que 
     iUltimoUso = Math.max(iUltimoUso, ultimo);
   }
   assert.ok(iMw > iUltimoUso, `middleware registrado antes da ultima rota com multer de imagem (idx ${iUltimoUso}): a recusa vira 500`);
-  assert.match(fonteIndex, /const \{ decodificarImagemBase64, filtroImagemMulter, tratarErroFormatoImagem \} = require\('\.\/services\/imagemUpload'\);/);
+  // Etapa 85: o require ganhou multerComLimiteNoErro/tratarArquivoGrandeDemais e subiu no arquivo.
+  assert.ok(/const \{ decodificarImagemBase64, filtroImagemMulter, [\w, ]*tratarErroFormatoImagem \} = require\('\.\/services\/imagemUpload'\);/
+    .test(fonteIndex), 'require do imagemUpload sem tratarErroFormatoImagem');
 });
 
 test('83: o multer morto uploadChat sumiu (o chat usa o de routes/chat.js)', () => {
