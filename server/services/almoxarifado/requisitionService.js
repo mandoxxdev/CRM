@@ -270,8 +270,9 @@ async function prepararPosAprovacao(db, requisicaoId, user, reqRow = {}) {
  * `UPDATE` guardado (+ o `desfazerReservas` de quem perde). Sem isto a aprovacao lia o saldo livre no meio
  * de uma liberacao (C131: a requisicao mais nova levava o que ia para quem esperava). O `UPDATE` fica
  * dentro: fora, uma distribuicao no meio veria a requisicao ainda PENDENTE (nao candidata) e deixaria a
- * sobra parada. Os materiais sao lidos ANTES de pegar a trava — estavel: nenhuma rota troca o
- * `material_id` de um item depois de criado. `ORDER BY` + `comLockDosMateriais` (DISTINCT, crescente):
+ * sobra parada. Os materiais sao lidos ANTES de pegar a trava — estavel para TROCA (nenhuma rota troca o
+ * `material_id` de um item depois de criado), mas NAO para item novo: a Fase 5 achou o furo (F1) e quem
+ * reserva confere a trava (ver o comentario no corpo). `ORDER BY` + `comLockDosMateriais` (DISTINCT, crescente):
  * a ordem unica que impede ciclo com a nota (varios materiais). Nao reentrante: `fn` nunca pode pedir
  * a trava de novo (recalculo da 76, distribuicao sem `sobTrava`, outra porta).
  * @returns {Promise<*>} o retorno de `fn`.
