@@ -24,6 +24,13 @@
  *   6. `inspectionService.decidirInspecao` (QUALIDADE) ∥ `PUT /aprovar` (rota) na janela -> fila certa.
  *   7. `receiptService.processarNota` (ALMOXARIFE) ∥ `POST /requisicoes` com aprovacao automatica (rota) na
  *      janela -> fila certa.
+ * T6 (cruzando os galhos):
+ *   Jornada C (D(77) x 75), logo depois do passo 5: ENTRADA pela v2 citando o reserva_id da reserva nascida
+ *      na liberacao da inspecao -> 400 M1 (T4), nada mudou.
+ *   Jornada B (A x C141 x 76 x 77), no fim: R5 (S5, /api/requisicoes-material) aprovada, liberada pelo dono
+ *      (76: APROVADO), SAIDA avulsa; uma nota de 4 distribui para R5 e S5 cancela pelos outros modulos no
+ *      instante em que `concluirPendencia` comeca (a trava ja solta, o recalculo nao rodou — janela que JA
+ *      existia antes da Opcao A, Fase 2 achado 3) -> R5 CANCELADO sem reserva ATIVA (T5).
  * Cada janela afirma: o gatilho disparou exatamente uma vez e o portao abriu PELO PRAZO (a aprovacao esperou
  * a trava que a liberacao segurava) — portao aberto porque a aprovacao respondeu e a inversao.
  *
@@ -38,6 +45,7 @@ const trava = require('../../services/almoxarifado/travaPorMaterial');
 const inspectionService = require('../../services/almoxarifado/inspectionService');
 const receiptService = require('../../services/almoxarifado/receiptService');
 const receiptNotificationService = require('../../services/almoxarifado/receiptNotificationService');
+const reservaChegadaService = require('../../services/almoxarifado/reservaChegadaService');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -50,6 +58,7 @@ const USERS = {
   S1: { id: 9131, nome: 'Solicitante 1 91t3', email: 's1-91t3@t.com' }, // sem perfil -> PRODUCAO
   S3: { id: 9132, nome: 'Solicitante 3 91t3', email: 's3-91t3@t.com' },
   S4: { id: 9133, nome: 'Solicitante 4 91t3', email: 's4-91t3@t.com' },
+  S5: { id: 9138, nome: 'Solicitante 5 91t6', email: 's5-91t6@t.com' }, // T6 jornada B (sem perfil)
   GESTOR: { id: 9134, nome: 'Gestor 91t3', perfil_almoxarifado: 'GESTOR', email: 'g91t3@t.com' },
   QUAL: { id: 9135, nome: 'Qualidade 91t3', perfil_almoxarifado: 'QUALIDADE', email: 'q91t3@t.com' },
   ALM1: { id: 9136, nome: 'Almoxarife 1 91t3', perfil_almoxarifado: 'ALMOXARIFE', email: 'a1-91t3@t.com' },
@@ -58,6 +67,8 @@ const USERS = {
 const API = '/api/almoxarifado';
 const PRAZO_PORTAO = 400;
 const { FRASE_TUDO_RESERVADO: L1 } = receiptNotificationService;
+// T6 jornada C: a literal M1 da T4 (D(77)).
+const M1_91 = (tipo) => `reserva_id só vale numa saída que consome a reserva — o tipo ${tipo} não consome reserva; tire o reserva_id do movimento`;
 
 const RE_DECISAO = /UPDATE\s+materiais_almoxarifado\s+SET\s+quantidade_em_inspecao\s*=\s*COALESCE\(\s*quantidade_em_inspecao\s*,\s*0\s*\)\s*-\s*\?/;
 // O credito do fisico do ENTRADA_COMPRA (o material sem localizacao nao passa pela sincronizacao `= ?`).
@@ -267,6 +278,23 @@ const dormir = (ms) => new Promise((r) => { setTimeout(r, ms); });
     assert.strictEqual(await hold(j.R4), 0);
   });
 
+  // ══════════════ T6 jornada C (D(77) x 75): a reserva nascida na liberacao nao vira coluna de ENTRADA ══════════════
+  await test('[91 T6 jornada C] ALMOXARIFE manda ENTRADA de 2 pela v2 citando o reserva_id da reserva da liberacao da inspecao (REQUISICAO, com recebimento_id) -> 400 M1, nada mudou', async () => {
+    assert.ok(j.reservaR1, 'premissa: a jornada A deixou a reserva da liberacao de R1');
+    const rv = await dbGet(db, 'SELECT * FROM reservas_material_almoxarifado WHERE id = ?', [j.reservaR1]);
+    assert.strictEqual(rv.origem, 'REQUISICAO');
+    assert.ok(rv.recebimento_id, 'premissa: a reserva veio da liberacao (B386)');
+    const livro = async () => Number((await dbGet(db, 'SELECT COUNT(*) n FROM movimentacoes_almoxarifado WHERE material_id = ?', [j.M])).n);
+    const antes = { mat: await mat(j.M), livro: await livro(), rv: [rv.status, Number(rv.quantidade), Number(rv.quantidade_utilizada || 0)] };
+    const s = await comPrazo(como('ALM1').post(`${API}/movimentacoes/v2`, {
+      material_id: j.M, tipo: 'ENTRADA', quantidade: 2, reserva_id: j.reservaR1, motivo: 'teste 91 T6', justificativa: 'teste 91 T6',
+    }), 5000, 'v2 ENTRADA com reserva_id');
+    assert.strictEqual(s.status, 400, `ENTRADA citando a reserva da liberacao aceita: ${s.status} ${JSON.stringify(s.body)}`);
+    assert.strictEqual(s.body.error, M1_91('ENTRADA'));
+    const rv2 = await dbGet(db, 'SELECT * FROM reservas_material_almoxarifado WHERE id = ?', [j.reservaR1]);
+    assert.deepStrictEqual({ mat: await mat(j.M), livro: await livro(), rv: [rv2.status, Number(rv2.quantidade), Number(rv2.quantidade_utilizada || 0)] }, antes);
+  });
+
   // ══════════════ Pelo SERVICO contra a ROTA: o mesmo Map atravessando modulos ══════════════
   await test('[91 T3 servico 6] inspectionService.decidirInspecao (QUALIDADE, servico) x PUT /aprovar (rota) na janela: a requisicao antiga leva os 4', async () => {
     const M = await material(true);
@@ -317,6 +345,67 @@ const dormir = (ms) => new Promise((r) => { setTimeout(r, ms); });
     assert.strictEqual(apr.body.status, 'AGUARDANDO_ESTOQUE', desc);
     assert.strictEqual(abriuPor, 'prazo', `o portao abriu por '${abriuPor}' (${desc})`);
     assert.strictEqual(trava.travado(M), false);
+  });
+
+  // ══════════════ T6 jornada B (A x C141 x 76 x 77): o cancelamento pelos outros modulos na janela soltar-a-trava -> recalcular ══════════════
+  // A janela entre a secao da nota soltar a trava e o `concluirPendencia` recalcular NAO e nova (ja existia no
+  // `finally` de `reservarChegadaParaQuemEspera`; a Opcao A a mantem — D5, Fase 2 achado 3). O gesto nela: S5
+  // cancela R5 pelos outros modulos depois de a distribuicao ter reservado 4 para R5. Sem a C141 a reserva
+  // ficaria presa: o recalculo nao toca requisicao cancelada.
+  await test('[91 T6 jornada B] R5 (S5, /api/requisicoes-material) aprovada, liberada pelo dono (76: APROVADO), SAIDA avulsa; nota de 4 e S5 cancela no instante em que concluirPendencia comeca -> 200, R5 CANCELADO sem reserva ATIVA, M2 r=0', async () => {
+    const M2 = await material(false);
+    const ent = await comPrazo(como('ALM1').post(`${API}/movimentacoes/v2`, {
+      material_id: M2, tipo: 'ENTRADA', quantidade: 4, motivo: 'teste 91 T6', justificativa: 'teste 91 T6' }), 5000, 'v2 ENTRADA');
+    assert.strictEqual(ent.status, 201, JSON.stringify(ent.body));
+    const cr = await comPrazo(como('S5').post('/api/requisicoes-material', {
+      setor: 'Comercial', urgencia: 'NORMAL', os_referencia: 'OS-91T6', itens: [{ material_id: M2, quantidade: 4 }],
+    }), 5000, 'POST /api/requisicoes-material');
+    assert.strictEqual(cr.status, 201, JSON.stringify(cr.body));
+    const R5 = cr.body.id;
+    const a = await comPrazo(aprovar(R5), 5000, '/aprovar R5');
+    assert.strictEqual(a.status, 200, JSON.stringify(a.body));
+    assert.strictEqual(a.body.status, 'TOTALMENTE_RESERVADA', JSON.stringify(a.body));
+    const rv = (await reservas(R5)).find((x) => x.status === 'ATIVA');
+    const lib = await comPrazo(como('S5').post(`${API}/reservas/${rv.id}/liberar`, { motivo: 'teste 91 T6' }), 5000, 'liberar a reserva (dono)');
+    assert.strictEqual(lib.status, 200, JSON.stringify(lib.body));
+    assert.strictEqual(await st(R5), 'APROVADO', 'o recalculo da 76 (com saldo, sem reserva — B405)');
+    assert.strictEqual(await hold(R5), 0);
+    const sai = await comPrazo(como('ALM1').post(`${API}/movimentacoes/v2`, {
+      material_id: M2, tipo: 'SAIDA', quantidade: 4, motivo: 'teste 91 T6', justificativa: 'teste 91 T6' }), 5000, 'v2 SAIDA');
+    assert.strictEqual(sai.status, 201, JSON.stringify(sai.body));
+    assert.deepStrictEqual(Object.values(await mat(M2)).map(Number), [0, 0, 0, 0]);
+    assert.strictEqual(await st(R5), 'APROVADO');
+
+    const { r } = await criarNota(M2, 4);
+    const origConcluir = reservaChegadaService.concluirPendencia;
+    let janela = null;
+    reservaChegadaService.concluirPendencia = async (dbx, u, pend) => {
+      if (!janela) {
+        janela = { hold: await hold(R5), st: await st(R5), travado: trava.travado(M2) };
+        janela.cancel = await comPrazo(como('S5').put(`/api/requisicoes-material/${R5}/cancelar`), 5000, 'PUT /api/requisicoes-material/:id/cancelar');
+      }
+      return origConcluir(dbx, u, pend);
+    };
+    let p;
+    try {
+      p = await comPrazo(como('ALM1').post(`${API}/recebimentos/${r}/processar`), 5000, 'processar a nota de M2');
+    } catch (e) {
+      // Legivel no controle (s5) da T2: o cancelamento passa (nao pega a trava); quem nao responde e a nota.
+      const jn = janela && { hold: janela.hold, st: janela.st, travado: janela.travado, cancel: janela.cancel && janela.cancel.status };
+      throw new Error(`${e.message} (janela: ${JSON.stringify(jn)})`);
+    } finally { reservaChegadaService.concluirPendencia = origConcluir; }
+    assert.strictEqual(p.status, 200, JSON.stringify(p.body));
+    assert.ok(janela, 'o espiao de concluirPendencia nao rodou');
+    assert.deepStrictEqual([janela.hold, janela.st, janela.travado], [4, 'APROVADO', false],
+      `premissa da janela: a distribuicao ja reservou 4 para R5, a trava ja foi solta, o recalculo nao rodou: ${JSON.stringify(janela)}`);
+    assert.strictEqual(janela.cancel.status, 200, JSON.stringify(janela.cancel.body));
+    assert.deepStrictEqual(janela.cancel.body, { success: true });
+    assert.strictEqual(await st(R5), 'CANCELADO');
+    const ativas = (await reservas(R5)).filter((x) => x.status === 'ATIVA');
+    assert.deepStrictEqual(ativas.map((x) => x.id), [], `reserva presa na requisicao cancelada: ${JSON.stringify(ativas)}`);
+    const mm = await mat(M2);
+    assert.deepStrictEqual([mm.q, mm.r], [4, 0], `M2 q=${mm.q} r=${mm.r}`);
+    assert.strictEqual(trava.travado(M2), false);
   });
 
   receiptNotificationService.avisarLiberacao = origAviso;
