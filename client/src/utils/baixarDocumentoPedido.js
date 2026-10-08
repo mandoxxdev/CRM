@@ -85,7 +85,8 @@ export async function baixarDocumentoPedido(api, { id, numero }) {
     a.click();
     a.remove();
   } finally {
-    URL.revokeObjectURL(url);
+    // Adiado: revogar no mesmo tique do click() aborta o download em alguns navegadores.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   }
   return { nome };
 }

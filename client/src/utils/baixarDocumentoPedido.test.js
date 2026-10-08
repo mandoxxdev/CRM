@@ -51,6 +51,10 @@ test('(a) GET com responseType blob e o nome do cabecalho Content-Disposition', 
   expect(api.get).toHaveBeenCalledWith('/compras/pedidos/418/documento.pdf', { responseType: 'blob' });
   expect(resultado).toEqual({ nome: 'pedido-compra-PC-2026-418.pdf' });
   expect(cliques).toEqual([{ download: 'pedido-compra-PC-2026-418.pdf', href: 'blob:mock-url' }]);
+  // Revogar a URL no mesmo tique do click() aborta o download em alguns navegadores: o revoke e
+  // ADIADO (setTimeout 0) — nao pode ter acontecido ainda, e acontece no proximo tique.
+  expect(window.URL.revokeObjectURL).not.toHaveBeenCalled();
+  await new Promise((resolve) => setTimeout(resolve, 0));
   expect(window.URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
 });
 
