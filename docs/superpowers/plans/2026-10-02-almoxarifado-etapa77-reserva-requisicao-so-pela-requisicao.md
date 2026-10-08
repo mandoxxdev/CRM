@@ -1,7 +1,7 @@
 # Etapa 77 — a reserva de uma requisição só sai pela requisição (C136 + C137, feature 07 com a 04 e a 23)
 
-> Status: **Fase 1 (plano escrito, 2026-10-02) — falta a Fase 2 (revisão do plano por agente fresco).** Nenhum código
-> de produção escrito, nada commitado.
+> Status: **T0–T3 feitas e Fase 5 (revisão adversarial) fechada em `a5245acc` + `198f09f4` (2026-10-08) — falta a T4
+> (fechamento).** Ver a seção "Fase 5" no fim. *(O status antigo dizia "Fase 1 — nada commitado".)*
 > Origem: "Próxima tarefa detalhada — Etapa 77" de
 > `docs/superpowers/plans/2026-10-02-almoxarifado-etapa76-liberar-expirar-recalcula-status.md:632-684` e os avisos
 > **C136**/**C137** de `docs/almoxarifado-novidades-por-etapa.md:6971-6984` (com a **B402**, `:5468`, que deixou a C136
@@ -306,9 +306,15 @@ if (consumindoReserva) {
 ### O que não muda (contratos que não se reabrem)
 
 O recálculo da 76 (`recalcularStatusSobTrava`, as duas portas, respostas); a reserva na chegada/liberação (74/75) e a
-trava; a entrega consumindo a reserva do item (só ganha a marca); o estorno (B374/B381/B382) — inclusive o estorno de
-uma saída avulsa antiga que consumiu reserva de requisição (reativa a reserva, como hoje); a reserva manual (criar,
+trava; a entrega consumindo a reserva do item (só ganha a marca); o estorno (B374/B381/B382); a reserva manual (criar,
 liberar, transferir, consumir pela v2); `processar-expiracao`; `transferir`; `getPerfilFromUser`; `reservar`.
+
+> **Correção da Fase 5 — esta seção estava ERRADA.** Ela dizia que o estorno de uma saída avulsa antiga que consumiu
+> reserva de requisição "reativa a reserva, como hoje". **Falso:** `cancelarMovimentacao` (`stockService.js:2216`) não
+> tem ramo de reserva para estorno de SAÍDA (só o da ENTRADA_COMPRA da 74). Medido (sonda P1 de `sonda77f-b.js`): depois
+> do estorno a reserva continua `CONSUMIDA` (util 4/4), o material volta a atual 4 com **reservada 0**, e a requisição
+> continua `TOTALMENTE_RESERVADA` sem hold nenhum. Também deixou de ser verdade que `transferir` "não muda": desde a
+> Fase 5 (F2) reserva de requisição não se transfere.
 
 ## Tasks
 
@@ -474,6 +480,20 @@ Ordem topológica: **T0 → T1 → T3 → T4**, com **T2 (galho)** em paralelo a
 - **Corrigir o passado** (D8): a A41 acha.
 - **C131**: Etapa 78.
 - **Avisar o solicitante quando a reserva dele é liberada por outro**: nenhuma porta avisa hoje (o mesmo "fora" da 76).
+- *(acrescentado na Fase 5 — a revisão mediu, o plano não declarava)* **Saída avulsa SEM `reserva_id` em material
+  com `permite_saldo_negativo` leva o estoque reservado da requisição** (sonda P5 de `sonda77f-b.js`): a C136 fecha a
+  porta de quem **cita** a reserva; quem não cita passa pela guarda do disponível, e o material que aceita saldo
+  negativo não tem guarda. Medido: material com 4, reserva de 4 da requisição, a v2 `SAIDA` de 4 **sem** `reserva_id`
+  → 201, atual 0 / reservada 4, reserva `ATIVA`, R `TOTALMENTE_RESERVADA`; a separação depois → 400 *"Máximo: 0"*.
+  Limitação declarada (letra D no fechamento): é a regra de `permite_saldo_negativo`, não desta etapa.
+- *(Fase 5)* **Tipos que não são saída guardam `reserva_id` sem consumir** (sonda P7): `ENTRADA` e `AJUSTE` pela
+  v2 com o `reserva_id` de uma reserva de requisição → 201 e a coluna fica gravada no movimento (o motor só consome
+  quando `tiposSaida.includes(tipo)`; para os outros a coluna é só texto). Não move a reserva — por isso a A41
+  filtra por `TIPOS_SAIDA` (correção abaixo); recusar `reserva_id` em não-saída fica de fora (candidata).
+- *(Fase 5)* **F3 — `PUT /api/requisicoes-material/:id/cancelar` cancela uma requisição `APROVADO` sem soltar as
+  reservas** (achado da revisão; a porta do almoxarifado, `/api/almoxarifado/requisicoes/:id/cancelar`, solta
+  pelo `liberarReservasDaRequisicao`). Janela estreita (só o status `APROVADO` com reserva `ATIVA`) — vira **item C
+  na T4**, não correção nesta etapa.
 
 ## Letra A — consulta para produção (a confirmar no fechamento como **A41**)
 
@@ -486,7 +506,10 @@ FROM movimentacoes_almoxarifado m
 JOIN reservas_material_almoxarifado rs ON rs.id = m.reserva_id
 LEFT JOIN requisicoes_almoxarifado rq ON rq.id = rs.requisicao_id
 WHERE rs.origem = 'REQUISICAO'
-  AND m.tipo NOT IN ('RESERVA', 'LIBERACAO_RESERVA', 'ESTORNO')
+  -- Fase 5: TIPOS_SAIDA (movementTypes.js:69-71), nao "tudo menos RESERVA/LIBERACAO/ESTORNO"
+  AND m.tipo IN ('SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO',
+                 'SUCATA', 'PERDA', 'DEVOLUCAO_CLIENTE', 'PERDA_TERCEIRO', 'CONSUMO_TERCEIRO',
+                 'DEVOLUCAO_FORNECEDOR')
   AND m.requisicao_id IS NULL
   AND COALESCE(m.cancelado, 0) = 0
 ORDER BY m.created_at;
@@ -494,7 +517,16 @@ ORDER BY m.created_at;
 
 (Banco local medido: **0** reservas de requisição — sem amostra aqui.) O que fazer com o resultado: cada linha é
 material que saiu "pela requisição" sem ela saber — conferir se a requisição foi atendida de outro jeito; se não,
-estornar a saída avulsa (o estorno reativa a reserva) e entregar pela requisição.
+estornar a saída avulsa e entregar pela requisição.
+**Correção da Fase 5 — o texto antigo dizia "(o estorno reativa a reserva)": era FALSO.** Medido (sonda P1): o estorno
+devolve o material ao **disponível** (atual 4, reservada 0) e a reserva continua `CONSUMIDA`; não há porta que recrie a
+reserva de requisição para uma requisição já `TOTALMENTE_RESERVADA` (o `/aprovar` só sai de `PENDENTE`). O que funciona
+hoje, medido: estornar a saída avulsa e, **logo em seguida**, separar e entregar pela requisição (`PUT
+/requisicoes/:id/separacao` + `/entregar`) → 200, `ENTREGUE`, a baixa sai do disponível. Entre o estorno e a separação o
+material fica **desprotegido** (outra saída ou reserva pode levá-lo) e a requisição diz `TOTALMENTE_RESERVADA` sem hold —
+por isso os dois gestos juntos. A query também passou a filtrar `m.tipo IN (TIPOS_SAIDA)` (era "tudo menos RESERVA,
+LIBERACAO_RESERVA, ESTORNO"): `ENTRADA` e `AJUSTE` pela v2 gravam `reserva_id` sem consumir (sonda P7: 201, coluna
+gravada) e seriam falsos positivos.
 *(Colunas conferidas no schema: `usuario_nome` em `schema.js:392`, `cancelado` em `schema.js:1267`.)*
 
 ## Próximo passo
@@ -530,3 +562,59 @@ consegue cair, pelo caminho que o plano diz?** Depois, T0.
 - **Paralelismo**: T2 (só `client/`) roda em paralelo com a T1 (só `server/`) na árvore principal — arquivos e
   suítes disjuntos (o teste do client só lê `permissions.js`, que a T1 não toca); a T2 começa DEPOIS do commit da T0.
   Commits: cada agente adiciona só os seus arquivos; se o git acusar `index.lock`, espere e repita.
+
+## Fase 5 — revisão adversarial do código (2026-10-08): 1 importante, 1 médio, 2 sobreviventes, 1 lacuna + 4 correções do plano → 1 rodada até verde
+
+Revisores frescos com sondas executadas (scratchpad: `sonda77a-1.js`, `sonda77f-a.js`, `sonda77f-b.js`,
+`r77/mut/tests/api/zzProbe77.api.test.js`). Cada achado reproduzido como teste **vermelho antes** da correção.
+
+- **F1 (importante) — o dono liberava a reserva depois que a separação começou.** Sonda: R(6) aprovada, separada
+  (`EM_SEPARACAO`); o `/cancelar` do dono → 400, mas `POST /reservas/:id/liberar` do dono → **200**, material
+  atual 6 / reservada 0, outro PRODUCAO reserva os 6 (201) e a entrega → 400 *"Máximo: 0"*. Correção em
+  `assertPodeLiberarReserva`: a exceção do dono só vale enquanto `validarTransicao(status, 'CANCELADO').ok` (a máquina
+  de estados, não uma lista à mão — o mesmo critério do `/cancelar`); fora disso o dono sem a ação toma 403 `{ error:
+  M3, acao: 'liberar_reserva_requisicao' }`, M3 = `` `Sem permissão para liberar a reserva da requisição ${numero}: ela
+  já está em separação — só o almoxarife ou o administrador liberam agora` `` (fallback `#<id>`). ALMOXARIFE/ADMINISTRADOR
+  inalterados; não-dono continua M2. Cliente: `GET /reservas` ganha `requisicao_status` (aditivo, `null` na manual) e
+  a tela só abre o Liberar para o dono quando o status está em `STATUS_DONO_LIBERA_RESERVA` (exportada; o teste (d4)
+  compara com `TRANSICOES` do servidor — drift derruba); fora disso, toast próprio *"Esta requisição já está em
+  separação — só o almoxarife ou o administrador liberam a reserva agora"*; sem o status (servidor antigo) falha aberto.
+  Vermelho antes: `[F1]` EM_SEPARACAO e PRONTA_PARA_RETIRADA → 200 (19/3 com o F2); cliente (d)×2 + (d4) → 18/3.
+- **F2 (médio) — `PUT /reservas/:id/transferir` re-apontava reserva de requisição** para outra OS/projeto (GESTOR →
+  200, `projeto_id = 999`, origem `REQUISICAO` mantida). Correção em `transferirReserva`: origem `REQUISICAO` → 400
+  `` `A reserva ${id} é da requisição ${numero} e não pode ser transferida para outra OS ou projeto` ``, antes do status.
+  Manual segue transferível (metade positiva). **Contrato declarado da 76 que muda:** `reservaLiberarRecalculaStatus`
+  RN-08 afirmava 200 — editado para 400 com o comentário do porquê (o que ele protegia — `requisicao_id`, status e hold
+  — continua afirmado).
+- **Sobrevivente 1 — RN-01 cobria 4 tipos.** Restringir a recusa do motor a SAIDA/PERDA/AJUSTE_NEGATIVO/SAIDA_PRODUCAO
+  ficava verde. Agora o loop é derivado (`TIPOS_SAIDA ∩ TIPOS_MOVIMENTO_ROTA`, vínculo de `REGRAS_VINCULO`; guarda da
+  guarda com os 6 tipos). Mutação aplicada → caem SAIDA_MONTAGEM e SAIDA_ASSISTENCIA com 201.
+- **Sobrevivente 2 — JOIN por `r.item_requisicao_id`** passava porque os ids andavam juntos. RN-08 (T0) e a jornada 8
+  (T3) ganham requisição avulsa com itens extras antes + pré-condição `item_requisicao_id !== requisicao_id`. Mutação →
+  cai RN-08 (T0) e a jornada 8 (T3).
+- **Lacuna — RN-05 (e)**: admin de **sistema** (`role: 'admin'`, sem perfil do módulo) libera → 200. Mutação `can()` →
+  lista literal de perfis → cai só ele.
+- **Correções do plano (o plano estava errado — ver as notas no lugar):** (a) "O que não muda" e a remediação da A41
+  diziam que o estorno da saída avulsa reativa a reserva — falso (P1); (b) a A41 passou a filtrar `TIPOS_SAIDA` (P7);
+  (c) "O que fica de fora" ganhou P5 (saída sem `reserva_id` em material com saldo negativo leva o reservado) e os
+  não-saída que gravam `reserva_id`; (d) **F3** (`/api/requisicoes-material/:id/cancelar` cancela `APROVADO` sem soltar
+  reservas) declarado como **item C para a T4**.
+
+**Controles positivos (sabotagem `perl -0pi`, âncora contada = 1, backup `e77-f5-*.bak`, restauro por cópia, md5
+conferido):** servidor — c1 (dono sem a condição de status) → caem os dois `[F1]` com 200; c2 (sem o ramo M3) → os dois
+`[F1]` no `deepStrictEqual` do corpo (sai M2); c3 (sem a guarda do transferir) → `[F2]` com 200. Cliente — cc1 (dono
+sem `aindaCancela`) → caem os dois (d); cc2 (`RASCUNHO` fora da lista) → cai só (d4). As metades positivas (ALMOXARIFE e
+ADMINISTRADOR em `EM_SEPARACAO`, manual transferível, RN-05 (a)) ficaram verdes em todos.
+
+**Commits:** `a5245acc` (F1 + F2 + RN-05 (e) + RN-08 descolado + cliente), `198f09f4` (RN-01 derivado + jornada 8).
+**Suítes depois:** test:api 313/313 arquivos; test:almoxarifado 44/0; validation 4/0; safealter 3/0; sqlite 5/0;
+cliente 93 suítes / 1393 testes (antes 1388, +5); `CI=true` build *Compiled successfully*.
+Arquivos de teste: `reservaLiberarSoQuemPode` 22/22 (antes 15), `reservaRequisicaoSoPelaEntrega` 17/17 (antes 15),
+`reservaRequisicaoPortaIntegracao` 12/12, `reservaLiberarRecalculaStatus` 13/13.
+
+**Para a T4 (além do que já está listado nela):** C novo **F3**; D (limitação) P5; o não-saída gravando `reserva_id`
+(candidata); a tela ainda oferece **Transferir** em reserva de requisição (o servidor recusa com 400 que ensina —
+esconder o botão é candidata, não feito: o teste de tela `transferir de projeto para OS` usa fixture de requisição);
+B nova para a regra "dono só enquanto se cancela" (descartado: lista de status à mão no servidor) e para F2.
+
+**Próximo passo: T4 (fechamento)** com a skill `fechar-etapa`.
