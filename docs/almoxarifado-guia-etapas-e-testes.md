@@ -1,22 +1,34 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-08 (Etapa 77) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-08 (Etapa 91) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20 e 22 a 77) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77 e 91) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-08 (Etapa 77 ENTREGUE · próxima do almoxarifado: Etapa 91)
+> ## Onde o desenvolvimento está — 2026-10-08 (Etapa 91 ENTREGUE · próxima do almoxarifado: Etapa 92)
 >
-> **O desenvolvimento parou aqui: Etapa 77 fechada — 2026-10-08.** A **Etapa 77 (a reserva de uma requisição só sai
+> **O desenvolvimento parou aqui: Etapa 91 fechada — 2026-10-08.** A **Etapa 91 (a fila não se inverte quando a
+> aprovação cai no meio de uma liberação)**: a aprovação de uma requisição (o **Aprovar**, o **Aprovar Liberação** por
+> valor e a aprovação automática) passa a **esperar** a entrada de nota, a decisão de inspeção ou a não conformidade
+> aceita que estiver em andamento com os mesmos materiais — quem esperava primeiro fica com o material, mesmo quando a
+> Qualidade e o Gestor clicam ao mesmo tempo (aviso **C131** resolvido; **C142** resolvido contra a aprovação — a saída
+> avulsa e a reserva manual no mesmo instante continuam, **C145**). O cancelamento pelas telas
+> **Minhas Requisições** dos outros módulos passou a soltar a reserva (**C141** resolvido); a API de movimentações
+> recusa o número de reserva num movimento que não é saída; e o e-mail do alerta de estoque mínimo não segura mais as
+> outras operações do material. **Próxima etapa do almoxarifado: 92 — o cancelamento pelos outros módulos aceita o que a
+> tela oferece** (aviso **C149**: a tela **Minhas Requisições** mostra **Cancelar Requisição** para requisições
+> reservadas ou em espera, e o servidor recusa; ver *"Próxima tarefa detalhada"* no plano da Etapa 91).
+> *Numeração:* desde a unificação de 2026-10-07 a numeração de etapas é uma só para todos os módulos — as 78 a 90 foram
+> do lote de Compras/núcleo (`docs/compras-novidades-por-etapa.md`, **B18**); por isso, depois da 77, vieram a 91 e a 92.
+>
+> **Etapas 1 a 20, 22 a 77 e 91 completas.**
+>
+> **Etapa 77, 2026-10-08.** A **Etapa 77 (a reserva de uma requisição só sai
 > pela requisição)**: uma saída pela API de movimentações que cita a reserva de uma requisição é recusada — o material
 > dela só sai pela entrega; e liberar à mão a reserva de uma requisição passou a ser de **quem pediu** (enquanto ela
 > ainda pode ser cancelada), do **almoxarife** ou do **administrador**. A tela **Reservas** mostra o número da
 > requisição, barra o **Liberar** antes do formulário para quem não pode e não oferece **Transferir** numa reserva de
-> requisição. **Próxima etapa do almoxarifado: 91 — a inversão inspeção × Aprovar** (aviso **C131**; ver *"Próxima
-> tarefa detalhada"* no plano da Etapa 77). *Por que 91 e não 78:* desde a unificação de 2026-10-07 a numeração de
-> etapas é uma só para todos os módulos, e as 78 a 90 foram do lote de Compras/núcleo (`docs/compras-novidades-por-etapa.md`).
->
-> **Etapas 1 a 20 e 22 a 77 completas.**
+> requisição. ~~**Próxima etapa do almoxarifado: 91 — a inversão inspeção × Aprovar**~~ *(feita — acima)*.
 >
 > **Etapa 76, 2026-10-02.** A **Etapa 76 (liberar ou deixar
 > vencer a reserva de uma requisição atualiza o status dela)**: liberar à mão na tela **Reservas** (tudo ou parte) ou a
@@ -5507,9 +5519,9 @@ e um da **Qualidade** decide a inspeção. Crie **R2** (urgência **Normal**, 4 
 
 ### O que esta etapa NÃO cobre
 
-- **Aprovar uma requisição no exato instante** em que a inspeção é decidida pode inverter a fila — a aprovada leva antes
+- ~~**Aprovar uma requisição no exato instante** em que a inspeção é decidida pode inverter a fila — a aprovada leva antes
   de quem esperava (aviso **C131** das novidades). Na prática: não aprove requisições daquele material enquanto a
-  Qualidade decide a inspeção dele.
+  Qualidade decide a inspeção dele.~~ *(Feito na Etapa 91 — a aprovação espera a inspeção; seção mais abaixo.)*
 - **Desbloquear Material** (o desbloqueio avulso da tela **Inspeções**) devolve ao estoque sem reservar para ninguém.
 - ~~**Liberar à mão uma reserva de requisição, ou ela vencer**, ainda não muda o status da requisição (aviso **C127**) — é
   a próxima etapa.~~ *(Feito na Etapa 76 — seção abaixo.)*
@@ -5622,13 +5634,117 @@ reservar (inclusive quem não tem perfil, que entra como **Produção**) liberav
 - **A reserva manual de outra pessoa** continua liberável por quem pode reservar (aviso **C139**).
 - **Quem pediu a requisição por outro módulo** sem a permissão de reservar (Compras, Gestor, Consulta, Qualidade) não
   libera a própria reserva — o caminho é cancelar a requisição (aviso **C140**).
-- **Cancelar pela tela de requisições dos outros módulos** (Comercial, Frota, Compras, Financeiro, Operacional) uma
-  requisição **Aprovado** não solta a reserva dela (aviso **C141**) — cancele pela tela do almoxarifado.
+- ~~**Cancelar pela tela de requisições dos outros módulos** (Comercial, Frota, Compras, Financeiro, Operacional) uma
+  requisição **Aprovado** não solta a reserva dela (aviso **C141**) — cancele pela tela do almoxarifado.~~ *(Feito na
+  Etapa 91 — seção abaixo.)*
 - **As saídas avulsas de antes do deploy** que gastaram reserva de requisição não são desfeitas (consulta **A41**).
 - **Perda e Ajuste negativo** continuam consumindo reserva **manual**; e a saída que não cita reserva, num material que
   aceita saldo negativo, ainda pode levar o reservado.
 - **O solicitante não recebe e-mail** quando o almoxarife libera a reserva dele.
-- **A inversão inspeção × Aprovar** (aviso **C131**) — próxima etapa do almoxarifado, a **91**.
+- ~~**A inversão inspeção × Aprovar** (aviso **C131**) — próxima etapa do almoxarifado, a **91**.~~ *(Feito na Etapa 91 —
+  seção abaixo.)*
+
+---
+
+## Etapa 91 — A fila não se inverte quando a aprovação cai no meio de uma liberação (ENTREGUE — 2026-10-08)
+
+**O que mudou, em uma frase:** aprovar uma requisição passa a **esperar** a entrada de nota, a decisão de inspeção ou a
+não conformidade aceita que estiver acontecendo com os mesmos materiais — então quem esperava primeiro fica com o
+material, mesmo quando a Qualidade (ou o recebimento) e o Gestor clicam ao mesmo tempo.
+
+**O problema que ela resolve.** Desde as Etapas 74 e 75, o material que chega (pela nota) ou é liberado (pela inspeção
+ou pela não conformidade aceita) é reservado para quem esperava, na ordem da fila. Mas se o Gestor aprovava uma
+requisição **mais nova** do mesmo material exatamente enquanto isso acontecia, a aprovação pegava o saldo que acabara de
+ficar livre — a mais nova levava tudo, e a que esperava ficava sem nada (aviso **C131**: medido oito de oito vezes). Com
+material crítico havia ainda um instante, entre a entrada da nota e a retenção para inspeção, em que a aprovação podia
+reservar o material que ia para a inspeção, deixando o disponível **negativo** (aviso **C142**). E cancelar pela tela
+**Minhas Requisições** dos outros módulos deixava a reserva presa (aviso **C141**).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Inspeção aprovada e **Aprovar** no mesmo instante: a requisição mais nova levava o material (**C131**) | A aprovação espera a inspeção terminar; quem esperava fica com o material (**B419**) |
+| O mesmo com a não conformidade **Aceitar** e com o **Processar Nota** | O mesmo: as três liberações e as três formas de aprovar respeitam a fila |
+| Material crítico: uma aprovação no meio da entrada podia reservar o que ia para a inspeção (disponível negativo, **C142**) | A aprovação espera a nota inteira; o disponível não fica negativo por ela |
+| Dois **Aprovar** da mesma requisição ao mesmo tempo, com saldo, podiam deixá-la **Aguard. Estoque** sem reserva nenhuma e o saldo solto (**C151**) | Fica **Totalmente Reservada**, com uma reserva só |
+| Aprovar uma requisição que ainda estava sendo gravada podia reservar um item sem esperar a fila dele | Recusa com *"A requisição ganhou itens enquanto era aprovada (ainda está sendo gravada); tente aprovar de novo."* (**B431**) |
+| Cancelar em **Minhas Requisições** (Comercial, Compras, Financeiro, Fábrica, Frota) uma requisição com reserva deixava a reserva presa (**C141**) | Solta a reserva e grava o cancelamento na **Auditoria** (**B426**) |
+| A API de movimentações aceitava o número de uma reserva numa entrada, ajuste ou devolução (o livro dizia que o movimento era da reserva) | **400** — o número de reserva só vale numa saída que consome a reserva (**B427**) |
+| Um servidor de e-mail lento no alerta de estoque mínimo segurava a nota e as aprovações do mesmo material (segundos, e sem prazo) | O alerta sai depois de o movimento terminar, com prazo de conexão; um alerta por material de cada vez (**B429**) |
+
+### Roteiro de teste manual (≈20 min)
+
+**Atenção, antes de começar:** o que esta etapa corrige acontece quando dois cliques caem **no mesmo instante** (frações
+de segundo). Clicando à mão, quase sempre um termina antes de o outro começar — e nesse caso o resultado já era certo
+antes desta etapa. O roteiro serve para conferir que **o resultado é sempre o da fila**, qualquer que seja a ordem em
+que os cliques caírem; a prova do instante exato é dos testes automáticos (que forçam a coincidência), não do navegador.
+
+**Preparação.** Duas janelas do navegador (uma normal e uma anônima), para ter dois usuários logados ao mesmo tempo:
+**Janela A** com um usuário da **Qualidade** (no passo 3, o **Almoxarife**) e **Janela B** com um **Gestor**. Um material
+**M** com a caixa **Material crítico** marcada, **sem saldo**, com fornecedor e um pedido de compra de 4. Paula cria
+**R1** (4 de M) em **Requisições (almox.)**; o Gestor aprova: **Aguard. Compra**. Processe a nota de 4 de M
+(**Recebimentos**, até **Processar Nota**): o item vai para **Inspeções**, aba **Pendentes**. **Depois**, Pedro cria
+**R3** (4 de M) — fica **Pendente**.
+
+1. **Inspeção × Aprovar.** Na Janela A, em **Inspeções**, abra a decisão do item de M: **Quantidade aprovada** 4,
+   observação — **não salve ainda**. Na Janela B, em **Requisições (almox.)**, abra R3 com o **Aprovar** à vista.
+   Clique **Salvar** (A) e **Aprovar** (B) o mais junto possível. Resultado, em **Requisições (almox.)**: **R1
+   Totalmente Reservada** (4) e **R3 sem reserva** (*Aguard. Estoque*), qualquer que tenha sido a ordem. Na tela
+   **Reservas**, a reserva de R1 diz *"Reserva na liberação da inspeção — recebimento ⟨REC⟩ — requisição ⟨R1⟩"*. Se o
+   **Aprovar** caiu durante a inspeção, ele demora um pouco mais para responder — é a espera.
+2. **Não conformidade × Aprovar.** Repita a preparação com outro material crítico, mas na inspeção **reprove** os 4
+   (abre a não conformidade); crie R3 depois. Na Janela A, em **Não Conformidades**, escolha **Aceitar** (sem
+   registrar); na Janela B, abra R3. Clique **Registrar decisão** e **Aprovar** juntos. Resultado: R1 **Totalmente
+   Reservada**, R3 sem reserva.
+3. **Nota × Aprovar.** Um material **não** crítico, sem saldo, com R1 aprovada esperando (**Aguard. Compra**) e R3
+   **Pendente** criada depois. Janela A com o **Almoxarife** pronto para o **Processar Nota** de 4; Janela B com o
+   Gestor no **Aprovar** de R3. Clique juntos. Resultado: R1 **Totalmente Reservada** (*"Reserva na chegada do
+   recebimento ⟨REC⟩ — requisição ⟨R1⟩"*), R3 sem reserva.
+4. **Material crítico: o disponível não fica negativo.** Material crítico **sem ninguém esperando** e R3 **Pendente**
+   de 4. Processe a nota de 4 (Janela A) e aprove R3 (Janela B) juntos. Resultado: R3 sem reserva (*Aguard. Estoque*, ou
+   *Aguard. Compra* se o **Aprovar** foi atendido antes da nota, com o pedido ainda aberto);
+   em **Estoque**, o material tem 4 físicos, 4 em inspeção e **disponível 0** (nunca negativo).
+5. **Sem corrida, nada muda.** Aprove R3 **depois** de a inspeção responder: o resultado é o mesmo do passo 1 (já era
+   assim antes).
+6. **Cancelar pela tela de outro módulo solta a reserva.** Com um usuário sem perfil do almoxarifado, em **Comercial →
+   Minhas Requisições**, abra uma requisição **sua** **Pendente** ou **Aprovado**, clique **Cancelar Requisição** →
+   *"Cancelar esta requisição?"* → **OK**: toast *"Requisição cancelada"*. Em **Almoxarifado → Auditoria**, a requisição
+   tem a linha do cancelamento com o status anterior. Se ela tinha reserva, a tela **Reservas** (filtro **Todos os
+   status**) mostra a reserva **Liberada** com o motivo *"Requisição cancelada"*. *(Uma requisição só segura reserva em
+   **Aprovado** por um instante — normalmente ela já está *Parcialmente/Totalmente Reservada*, que esta tela ainda não
+   cancela; ver o passo 7. A liberação da reserva nesse caso é provada pelos testes automáticos.)*
+7. **O que a tela ainda oferece e o servidor recusa (aviso C149 — é a próxima etapa).** Na mesma tela, uma requisição
+   sua **Totalmente Reservada** (ou *Aguard. Estoque*) ainda mostra **Cancelar Requisição**; clicar dá o toast
+   *"Requisição não encontrada ou não pode ser cancelada"* e nada muda. Para cancelá-la hoje: pela tela do almoxarifado.
+8. **A API de movimentações (só para quem testa a API).** Com o token de um Almoxarife, `POST
+   /api/almoxarifado/movimentacoes/v2` com `tipo: "ENTRADA"` (ou `AJUSTE`, `DEVOLUCAO`) e um `reserva_id` qualquer →
+   **400** *"reserva_id só vale numa saída que consome a reserva — o tipo ENTRADA não consome reserva; tire o reserva_id
+   do movimento"*; nada muda no estoque nem na reserva. Uma **SAIDA** com o `reserva_id` de uma reserva **manual**
+   continua aceita.
+
+### O que esta etapa NÃO cobre
+
+- **A saída avulsa, a reserva manual e a separação** feitas no mesmo instante de uma nota, inspeção ou não conformidade
+  do material **não esperam** — só as aprovações esperam. No material crítico, uma saída avulsa ou uma reserva manual
+  disparada no instante (alguns milésimos de segundo) entre a entrada da nota e a retenção para inspeção ainda pode
+  deixar o disponível negativo (aviso **C145**, decisão **B430**; a consulta **A42** acha o rastro).
+- **Cancelar pela tela dos outros módulos uma requisição reservada ou em espera** continua recusado, embora a tela mostre
+  o botão (aviso **C149**) — é a **Etapa 92**.
+- **Reenviar uma requisição** com aprovação automática ligada, depois de a tela desistir de esperar, pode gravá-la
+  **duas vezes** (aviso **C147**, decisão **B432**).
+- **A espera não tem limite de tempo:** a aprovação de um material que está numa nota muito grande espera a nota
+  inteira (medido: ~0,4 s numa nota de 300 materiais); se algo segurar muito tempo, a tela desiste em 30 s e o servidor
+  ainda conclui (aviso **C150**).
+- **Mais de um servidor** (ou o Postgres): a espera vale para um processo só (aviso **C132**).
+- **Aprovar uma requisição ainda sendo gravada** aprova só os itens já gravados, ou pede para aprovar de novo (aviso
+  **C146**).
+- **O estorno da entrada no mesmo instante de uma aprovação** não foi tratado (limitação **(91)** em D das novidades).
+- **Nenhum clique foi dado** no fechamento desta etapa (verificações **(91)** em F das novidades).
+
+Tudo o que é decisão ou aviso desta etapa está nas novidades: decisões **B419 a B433** (a **B403** foi substituída pela
+**B419**), avisos **C131** e **C141** resolvidos e **C142 a C151**, a consulta **A42** (materiais com disponível
+negativo ou retido sem lastro físico), as limitações **(91)** em D e as verificações **(91)** em F.
 
 ---
 

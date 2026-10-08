@@ -2,7 +2,18 @@
 
 > **Status:** 🟢 Etapa 4 completa — backend (2026-08-05) e tela (2026-08-06) ·
 > **Spec original:** seção 7
-> **Última atualização:** 2026-10-08 (**Etapa 77** — a reserva de origem `REQUISICAO` só é consumida pela entrega da
+> **Última atualização:** 2026-10-08 (**Etapa 91** — a fila não se inverte mais quando uma aprovação cai no meio de uma
+> liberação (**C131 resolvida**, Opção A, **B419**, que substitui a **B403**): uma trava por material, num módulo próprio
+> com **um** `Map` só (`travaPorMaterial`), vai do movimento do motor que põe saldo no disponível até a distribuição nas
+> três portas que liberam (nota, inspeção, não conformidade que aceita) e envolve `prepararPosAprovacao` + o `UPDATE`
+> guardado + o desfazer de quem perde nas três que aprovam (`/aprovar`, `/aprovar-valor`, automática); fecha também a
+> janela ENTRADA_COMPRA → QUARENTENA contra quem pega a trava (C142); o recálculo da 76 e o aviso da 75 rodam **depois**
+> de soltar a trava (B423); o cancelamento pelos outros módulos solta as reservas (**C141 resolvida**, B426); o motor
+> recusa `reserva_id` em movimento que não é saída (D(77), B427). `8a72c801`, `78933bef`, `e472f26c`, `22e79982`,
+> `d24715c9`, `6eedb920`, `c53703c4`, Fase 5 `14cf6df7`/`2d6987a7`/`d98b73c9`/`723c58fd`/`455eda9b`. Continua 🟢. **Três
+> afirmações desta spec estavam erradas e foram corrigidas à vista** (o "Antes" da Etapa 75 abaixo, o item da 75 e o da
+> 76 no checklist). Fora: C139, C145, C147, C149 (Etapa 92), C132 — ver o item da Etapa 91 no checklist.)
+> Antes: 2026-10-08 (**Etapa 77** — a reserva de origem `REQUISICAO` só é consumida pela entrega da
 > própria requisição (o motor recusa a saída genérica com 400, C136) e só é liberada à mão por quem pediu a requisição —
 > enquanto ela se cancela — ou pela ação nova `liberar_reserva_requisicao` [ADMINISTRADOR, ALMOXARIFE] (C137); reserva de
 > requisição não se transfere; `GET /reservas` diz número, solicitante e status da requisição; a tela mostra o número,
@@ -18,7 +29,11 @@
 > Antes: 2026-10-02 (**Etapa 75** — a inspeção que aprova e a não conformidade que aceita reservam o
 > que liberaram para quem esperava, pelo mesmo miolo da 74 com o teto de cada porta; o solicitante é avisado; a conta
 > do "quanto falta" dos dois e-mails passou a ser a da reserva; a distribuição de um material é serializada (trava em
-> processo); `1b2a6959`, `f149977b`, `c4d9212c`, `c8c089cb`, `82b7fd75`, Fase 5 `655d75b8`/`936179b2`/`18405a2e`.
+> processo) *(⚠️ **Etapa 91 — isto dizia "a distribuição de um material é serializada" sem dizer contra quem; lido como
+> garantia da fila, estava errado:** a trava da 75 serializava só as **distribuições** entre si — nenhuma porta de
+> aprovação a pegava, e o saldo ficava livre no movimento do motor **antes** de a distribuição pegar a trava, então um
+> `/aprovar` no meio levava o material de quem esperava, 8/8 (C131). O certo, desde a Etapa 91: a trava cobre do movimento
+> do motor até a distribuição **e** as três portas de aprovação — B419.)*; `1b2a6959`, `f149977b`, `c4d9212c`, `c8c089cb`, `82b7fd75`, Fase 5 `655d75b8`/`936179b2`/`18405a2e`.
 > Continua 🟢; ~~falta liberar à mão / expirar recalcular o status — C127, Etapa 76~~ (*paga na Etapa 76*).)
 > Antes: 2026-10-02 (**Etapa 74** — a nota que dá entrada reserva o que chegou para quem esperava, na
 > ordem da fila de separação; o status acompanha a reserva (setas novas); o estorno da entrada solta só o necessário;
@@ -106,8 +121,8 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
   `recebimento_id` da nota (o estorno da entrada a solta pela B374); dono = quem decidiu, pelo sistema (QUALIDADE não tem
   `reservar`); best-effort — a decisão nunca cai por causa da reserva; respostas inalteradas. **Fica de fora:** o
   desbloqueio avulso e o estorno de bloqueio avulso (B383); a aprovação no mesmo instante da decisão inverte a fila
-  (C131 — o `/aprovar` não passa pela trava); a trava vale para um processo só (C132, Postgres troca por trava no
-  banco); backfill (B391).
+  (C131 — o `/aprovar` não passa pela trava) *(**resolvida na Etapa 91** — item abaixo)*; a trava vale para um processo
+  só (C132, Postgres troca por trava no banco); backfill (B391).
 - [x] **`/encerrar` e `/rejeitar-valor` liberam as reservas da requisição** — `9af1691a` (defeito anterior: terminavam a
   requisição com a reserva ATIVA presa; as do passado: A38 (1)).
 - [x] **Liberar à mão ou a reserva vencer recalcula o status da requisição (Etapa 76, C127)** — base `4f51cdbd`
@@ -121,7 +136,12 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
   seta nova; respostas e cliente inalterados (B399). **Fica de fora:** redistribuir o liberado para quem esperava (B397 —
   C135); a saída genérica que consome reserva de requisição (C136) e o perfil `PRODUCAO` que libera reserva alheia (C137)
   — candidatos da Etapa 77 (*pagos na Etapa 77 — item abaixo*); a inversão inspeção × aprovar (C131 — custo medido,
-  B403); o passado (B404, A40); aviso ao solicitante que perdeu a reserva.
+  B403) *(⚠️ **Etapa 91 — a B403 dizia que consertar exigia a trava antes do movimento nas três portas que liberam e em
+  todos os materiais nas três que aprovam, e a deixava "para depois" — para a migração de banco, segundo a letra D (75).
+  O diagnóstico estava certo; o adiamento para o Postgres estava errado:** `FOR UPDATE` sozinho não conserta, porque a
+  inversão é **entre** comandos (o movimento do motor, depois a distribuição), e o Postgres exigiria a mesma
+  reestruturação. Feita na Etapa 91 com a trava em memória — **B419 substitui a B403**, B421 descarta esperar o
+  Postgres; item abaixo)*; o passado (B404, A40); aviso ao solicitante que perdeu a reserva.
 - [x] **A reserva de uma requisição só sai pela requisição (Etapa 77, C136 + C137)** — quem libera `413dec88` (ação
   `liberar_reserva_requisicao` = `[ADMINISTRADOR, ALMOXARIFE]` em `permissions.js`; `reservationService.assertPodeLiberarReserva`
   chamada pela rota antes de `stockService.liberarReserva`; 403 `{ error, acao }` **sem `perfil`** — B418; `GET /reservas` +
@@ -136,7 +156,41 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
   a reserva manual alheia (B412 — C139); PERDA/AJUSTE_NEGATIVO consumindo reserva manual (limitação); a saída **sem**
   `reserva_id` em material com `permite_saldo_negativo` leva o reservado (limitação); tipos não-saída gravam `reserva_id`
   sem consumir (candidata); o GESTOR liberar reserva de requisição (B410); o cancelamento por
-  `/api/requisicoes-material/:id/cancelar` não solta reserva (C141); o passado (B414, A41); a C131 (Etapa 91).
+  `/api/requisicoes-material/:id/cancelar` não solta reserva (C141) *(paga na Etapa 91 — item abaixo)*; o passado (B414,
+  A41); a C131 (Etapa 91) *(paga — item abaixo)*; tipos não-saída gravando `reserva_id` *(pago na Etapa 91 — D(77))*.
+- [x] **A fila não se inverte mais com uma aprovação no meio de uma liberação (Etapa 91, C131 + C142 + C141 + D(77))**
+  — o módulo da trava `8a72c801` (`services/almoxarifado/travaPorMaterial.js`, sem nenhum `require`, **um** `Map` só:
+  `comLockDoMaterial` FIFO e não reentrante, `comLockDosMateriais` com `Number()`/`DISTINCT`/ordem crescente, `travado`;
+  o `reservaChegadaService` passou a usá-lo — a fila da 75/76 e a das portas são a **mesma**, B422; as variantes
+  `{ sobTrava, pendencia }` nos três nomes exportados e `novaPendencia`/`concluirPendencia`, B425; o teto da liberação
+  passou a ser lido **sob** a trava — era lido fora); as três portas de aprovação `78933bef`
+  (`requisitionService.comTravaDaRequisicao` em volta de `prepararPosAprovacao` + `UPDATE` guardado + `desfazerReservas`
+  de quem perde; auditoria e resposta fora; na automática, falha da trava → `PENDENTE` 201); as três portas de liberação
+  `e472f26c` (inspeção: do claim do item até a distribuição; NC que aceita: do claim da NC até a distribuição; nota: a
+  trava de **todos** os materiais dela, inclusive os críticos — o que fecha a janela `ENTRADA_COMPRA` → `QUARENTENA`
+  contra quem pega a trava, C142; recálculo da 76 e aviso da 75 **depois** de soltar, B423); integração rota × serviço
+  `22e79982`; D(77) no motor `d24715c9`; C141 `6eedb920` (o cancelamento pelos outros módulos solta as reservas por
+  `reservationService.liberarReservasDaRequisicao` e grava a trilha `CANCELAMENTO`, B426); integração cruzada `c53703c4`;
+  revisão adversarial: o alerta de estoque mínimo sai da seção da trava e o SMTP ganha prazo `14cf6df7` (F3, B429 — com o
+  SMTP de 3 s um `/aprovar` concorrente esperava 3032 ms; depois, 27 ms), a prova de que a seção segura todos os
+  materiais da requisição `2d6987a7` + `723c58fd` (F1, B431 — `materiaisForaDaSecao` em `reservarItensAprovacao`; senão
+  409 `TRAVA_INCOMPLETA` *"A requisição ganhou itens enquanto era aprovada (ainda está sendo gravada); tente aprovar de
+  novo."*, refeito até 3 vezes), testes que matam as cinco mutações sobreviventes `d98b73c9` (B433) e o comentário
+  corrigido `455eda9b`. Achado ao medir a T1 (**C151**, pago em `78933bef`): sem a trava, dois `/aprovar` simultâneos da
+  mesma requisição com saldo terminavam **8/8 em `AGUARDANDO_ESTOQUE` sem reserva** e com o saldo livre (quem reservou
+  perdia o `UPDATE` guardado para quem recalculou e desfazia a própria reserva); com a trava, 8/8
+  `TOTALMENTE_RESERVADA`. ⚠️ **O plano da etapa estava errado num ponto que esta spec repetiria:** *"ler os materiais da
+  requisição antes de pegar a trava é estável"* — **estava errado**: vale para **troca** de material, não para item
+  **novo** (a requisição nasce `PENDENTE` antes dos itens); o certo é a prova em quem reserva (F1, acima). **Escopo:** as
+  seis portas acima, um processo Node. Respostas de todas as rotas inalteradas (RN-09). **Fica de fora (com o porquê):**
+  a reserva manual alheia (**C139**, B428 — regra sem dado de uso); a janela da QUARENTENA contra quem **não** pega a
+  trava — saída avulsa, reserva manual, separação (**C145**, B430 — as três formas de fechar mexem no motor ou abrem
+  portas novas na trava); o reenvio que duplica a requisição com aprovação automática (**C147**, B432 — precisa de chave
+  de idempotência do cliente); a tela dos outros módulos oferece **Cancelar** em status reservados que a rota recusa
+  (**C149** — contrato da outra porta, B426; **Etapa 92**); mais de um processo (**C132** — premissa escrita no
+  módulo); estorno × aprovação com a forma da C131 (`liberarParaEstorno` fora de trava — candidata, D (91)); o `UPDATE`
+  da separação para `EM_SEPARACAO` sem guarda de status, que pode ressuscitar requisição cancelada (anterior à etapa —
+  candidata, D (91)); trava sem prazo de aquisição (C150, D (91)).
 - [ ] Reserva por lote específico / número de série — **fora da Etapa 4**. Atualização (2026-08-11): a dependência de **lote** caiu — a feature 10 (lotes) foi entregue na Etapa 6 (2026-08-09/10), então reserva por lote ficou implementável; número de série continua dependendo da 6b
 - [x] Data de necessidade na reserva (`data_necessidade`) — `6690c1a`. **Prioridade** ficou fora: sem demanda concreta, `data_necessidade` cobre o ordenamento útil
 - [x] Expiração automática (`POST /reservas/processar-expiracao` + config `reserva_dias_validade`) — `6690c1a`. **Opt-in**: sem a config e sem `expira_em` explícito a reserva não expira, senão as reservas manuais existentes começariam a ser liberadas sozinhas. Alerta por e-mail fica com a feature 20
@@ -255,6 +309,16 @@ Os nomes abaixo são os reais — copiáveis para localizar o caso.
 | A reserva manual não mudou; o job de expiração vence reserva de requisição como antes | `reservaLiberarSoQuemPode` · *[RN-07]…* (duas) |
 | `GET /reservas` diz número e solicitante da requisição; `minhas-permissoes` traz a ação nova | `reservaLiberarSoQuemPode` · *[RN-08]…* · *[RN-09]…* |
 | Ponta a ponta (v2 recusada, liberar por perfil, dono libera parte, entrega consome, reserva da chegada — perfis reais) | `reservaRequisicaoPortaIntegracao` (12 cenários, pelas rotas) |
+| **Etapa 91** — a trava por material: FIFO, ordem crescente sem repetir, exceção solta, **mesmo `Map`** do recálculo, teto lido sob a trava, guarda L1, `concluirPendencia` nunca lança | `travaPorMaterial` · *(1)…* a *(7b)…* |
+| As três portas de aprovação esperam a trava de **todos** os materiais e leem o saldo dentro dela; o `UPDATE` guardado fica dentro; dois `/aprovar` simultâneos → um 200, um 400, uma reserva (C151) | `aprovacaoEsperaTrava` · *[91 RN-05 (a)]…* a *(g)…* · *[91 costura]…* · *[91 Fase 2 achado 2]…* |
+| Inspeção, NC que aceita e nota × `/aprovar`, nos três encaixes (concorrente nas duas ordens e na janela do motor): R1 (antiga) leva os 4, R3 0 (C131) | `filaLiberacaoAprovacaoCorrida` · *[91 RN-01/02/03] … × /aprovar (⟨modo⟩)…* |
+| Janela da QUARENTENA: a aprovação no meio não reserva o retido; disponível nunca negativo (C142) | `filaLiberacaoAprovacaoCorrida` · *[91 RN-04] janela da QUARENTENA…* |
+| Sem corrida nada muda (inclusive o salto sequencial declarado); sem deadlock; exceção solta; recálculo depois da seção; respostas inalteradas | `filaLiberacaoAprovacaoCorrida` · *[91 RN-06 (a)/(b)]…* · *[91 RN-07 (a)/(b)/(c)/(e)]…* · *[91 RN-08]…* · *[91 RN-09]…* · *[91 L1]…* |
+| `reserva_id` só numa saída: 400 M1 pela v2, `/transferencias` e serviço; `RESERVA`/`LIBERACAO_RESERVA` isentos; precedência | `reservaIdSoEmSaida` · *[91 RN-11]…* |
+| O cancelamento pelos outros módulos solta as reservas e grava a trilha (C141); recusas de hoje inalteradas | `requisicaoCancelarOutrosModulosReserva` · *[91 RN-10]…* |
+| O alerta de estoque mínimo roda depois de soltar a trava; SMTP com prazo (F3) | `alertaForaDaTrava` · *[91 F5-F3 (a)…(d)]…* |
+| Item gravado no meio da aprovação nunca é reservado sem a trava (F1); mutações da revisão mortas | `travaRevisaoFase5` · *[91 F5-F1]…* · *[91 F5 RN-05 (f)/(g)…]…* · *[91 F5 RN-11 todos os tipos]…* · *[91 F5 trava chave]…* |
+| Ponta a ponta (jornada com material crítico, pares serviço × rota, D(77) × 75, C141 × 76 × 77 — perfis reais) | `filaTravaIntegracao` · *[91 T3 jornada 1-2…5]…* · *[91 T3 servico 6/7]…* · *[91 T6 jornada B/C]…* |
 | Excluir requisição libera as reservas dela | `reservaPontasFaltantes` · *excluir requisição libera as reservas dela e devolve ao disponível* |
 | Excluir não toca reserva manual de terceiro | `reservaPontasFaltantes` · *excluir NÃO mexe em reserva manual de outro dono do mesmo material* |
 

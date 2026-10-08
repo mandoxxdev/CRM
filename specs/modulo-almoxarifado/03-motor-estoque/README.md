@@ -1,7 +1,7 @@
 # 03 — Motor de Estoque (saldos, movimentações, livro, saídas)
 
 > **Status:** 🟢 — Etapa 1 entregue (2026-08-04): motor v2 com regra crítica/emergencial/centro de custo/custo médio, livro com filtros e extrato do item, estorno com motivo (backend + tela). A validação de vencido/lote reprovado que dependia da feature 10 foi entregue na Etapa 6, Task 3 (ver [10-lotes-series-etiquetas](../10-lotes-series-etiquetas/README.md)). · **Spec original:** seções 7 (fórmula de saldo), 13 (saídas), 30 (livro de movimentações)
-> **Última atualização:**  2026-09-30 (**Etapa 62 — o AJUSTE de material com série pede as séries; por endereço e o estorno recusados**; ver a seção "Etapa 62" no fim; antes: **Etapa 51 — a saída sem lote baixa o ENDEREÇO de onde o material sai**; ver a seção "Etapa 51" no fim; o motor continua 🟢). Anterior: 2026-08-13 (**Etapa 8c — `RETORNO_TRANSFORMACAO`, e o custo médio
+> **Última atualização:** 2026-10-08 (**Etapa 91 — `reserva_id` só numa saída que consome a reserva (D(77)); o alerta de estoque mínimo roda depois de soltar a trava por material**; ver a seção "Etapa 91" no fim; o motor continua 🟢). Antes: 2026-09-30 (**Etapa 62 — o AJUSTE de material com série pede as séries; por endereço e o estorno recusados**; ver a seção "Etapa 62" no fim; antes: **Etapa 51 — a saída sem lote baixa o ENDEREÇO de onde o material sai**; ver a seção "Etapa 51" no fim; o motor continua 🟢). Anterior: 2026-08-13 (**Etapa 8c — `RETORNO_TRANSFORMACAO`, e o custo médio
 > deixando de ter um alimentador só.** Três mudanças deste motor, detalhadas abaixo: (1) o tipo
 > novo `RETORNO_TRANSFORMACAO` (`9c7ec75`), **entrada com custo**, dedicado (fora da rota genérica)
 > e presente nos **dois** ramos do motor — tem linha própria na tabela de efeitos, em "Tipos de
@@ -80,6 +80,7 @@ Um único caminho de movimentação, transacional, com livro imutável (estorno 
   > `(locX, lote)` e grava `quantidade_atual − outras = 0 − 10 = −10` — num material que não
   > permite saldo negativo. Registrado como pendência nomeada, abaixo.
 - **Vínculo estruturado** na movimentação: `projeto_id`, `os_id`, `centro_custo_id` (+ `centros_custo_almoxarifado`), `cliente_id`, `requisicao_id`, `reserva_id`, `recebimento_id`, `documento_vinculado`, `justificativa`. Regra por tipo (`avaliarRegrasVinculo`/`REGRAS_VINCULO`) decide o que é obrigatório.
+  > ⚠️ **Etapa 91 — esta linha punha `reserva_id` na lista de vínculos de qualquer movimentação, como os outros; estava errado para ele:** uma `ENTRADA`, um `AJUSTE` ou uma `DEVOLUCAO` pela v2 (e qualquer tipo pela `/transferencias`, que repassa o body cru) aceitavam o `reserva_id`, gravavam a coluna no livro e deixavam a reserva intocada — o livro dizia que o movimento "era da reserva" sem nada ter acontecido com ela (D(77)). O certo, desde `d24715c9`: `reserva_id` só vale num tipo de saída (que consome a reserva) e nos lançamentos internos `RESERVA`/`LIBERACAO_RESERVA`; nos outros, 400 *"reserva_id só vale numa saída que consome a reserva — o tipo ⟨tipo⟩ não consome reserva; tire o reserva_id do movimento"* (B427). Ver a seção "Etapa 91".
 - **Rota v1 legada:** `POST /movimentacoes` (`routes/almoxarifado.js`, handler `app.post('/api/almoxarifado/movimentacoes', ...)` — sem número de linha de propósito: esta spec já citou `:573` e a rota andou para `:752`; número de linha em spec envelhece entre dois commits) — 4 tipos, sem lote/localização; delega para `stockService.registrarMovimentacao` desde a Etapa 0 (grava auditoria). A tela de Movimentações posta em `/movimentacoes/v2` desde a Etapa 1; a entrada/saída rápida de `MateriaisAlmoxarifado.js` ainda usa a rota v1 (que delega ao mesmo motor — migrar quando a tela for retrabalhada).
 - Testes de serviço: entrada/saída, saldo negativo bloqueado, transferência, bloqueio, material inativo (em `almoxarifado.test.js`); testes de API de estorno, regras de vínculo, livro/extrato (`server/tests/api/`).
 - Concorrência SQLite tratada (`services/sqliteConcurrency.js` — WAL + retry BUSY).
@@ -550,3 +551,26 @@ que não permite negativo, um endereço não fica com saldo que não existe.
 **Invariante:** `COUNT(série EM_ESTOQUE + BLOQUEADA) == quantidade_atual` passa a ser mantido também pelo AJUSTE; o
 único escritor que ainda o quebra é o **inventário** (não sabe quais peças contou) — ele devolve `series_a_regularizar`
 (ver a feature 17).
+
+## Etapa 91 (2026-10-08) — `reserva_id` só numa saída; o alerta de mínimo sai da seção da trava
+
+**D(77) — a recusa mora no motor** (`d24715c9`, B427). Em `registrarMovimentacao`, depois da validação de tipo e de material
+(inexistente, inativo — a precedência das mensagens de hoje foi preservada) e **antes** de qualquer escrita: `reserva_id`
+preenchido num tipo que não está em `TIPOS_SAIDA`, exceto `RESERVA`/`LIBERACAO_RESERVA` (os lançamentos internos de
+`criarReserva`/`liberarReserva`; a v2 nem os aceita), → 400 *"reserva_id só vale numa saída que consome a reserva — o
+tipo ⟨tipo⟩ não consome reserva; tire o reserva_id do movimento"*. Vale para qualquer origem de reserva (requisição ou
+manual) e para toda porta: v2, `/transferencias` e chamador de serviço. O estorno não passa por aqui e não grava a coluna.
+A v1 `/movimentacoes` nunca carregou `reserva_id`. Testes: `reservaIdSoEmSaida` (vermelho antes: v2 ENTRADA/AJUSTE/
+DEVOLUCAO, manual e `/transferencias` davam 201) e, na Fase 5, `travaRevisaoFase5` *[91 F5 RN-11 todos os tipos]* — o
+laço por **todo** tipo de `TIPOS_MOVIMENTO` fora de `TIPOS_SAIDA` (menos `RESERVA`/`LIBERACAO_RESERVA`/`ESTORNO`) recusa e
+nenhuma saída recebe a mensagem (`d98b73c9`).
+
+**O alerta de estoque mínimo roda depois de soltar a trava por material** (`14cf6df7`, F3, B429). O motor aguardava
+`verificarAlertaPorMaterialId` (e o `sendMail` dele) ao fim de cada movimento; desde a Etapa 91 as portas que liberam
+material chamam o motor **dentro** da seção da trava, então um SMTP lento segurava a fila inteira do material (SMTP de
+3 s → o `/aprovar` concorrente esperava 3032 ms). Agora, dentro de uma seção (`travaPorMaterial.adiarParaDepoisDaSecao`,
+um contexto `AsyncLocalStorage` aberto na seção mais de fora), o alerta é empilhado e roda depois do `soltar()`, ainda
+aguardado pela requisição; fora de seção, nada muda (síncrono). `alertService`: um alerta de mínimo em envio por material
+(o concorrente desiste) e prazos no transporter (conexão 15 s, saudação 15 s, socket 20 s). Teste: `alertaForaDaTrava`
+(4 casos, vermelho antes 3/4). **Fora do motor nada mudou na Etapa 91** — as tasks da trava não tocaram
+`stockService.js` (medido por `git diff --stat` em cada uma); só a T4 e o F3.

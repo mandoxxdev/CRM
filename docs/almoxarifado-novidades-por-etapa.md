@@ -11,9 +11,11 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-08):** Etapa 77 fechada — ver "Onde estamos e o que vem a seguir", no fim. A
-> próxima etapa do almoxarifado é a **91**: desde a unificação de 2026-10-07 a numeração é uma só para todos os
-> módulos, e as 78 a 90 foram usadas pelo lote de Compras/núcleo (`docs/compras-novidades-por-etapa.md`, **B18**).
+> **Onde o desenvolvimento está (2026-10-08):** Etapa 91 fechada (a aprovação não passa mais na frente de quem
+> esperava o material — **C131** resolvido) — ver "Onde estamos e o que vem a seguir", no fim. A próxima etapa do
+> almoxarifado é a **92** — o cancelamento pelos outros módulos aceita o que a tela oferece (**C149**). Desde a
+> unificação de 2026-10-07 a numeração é uma só para todos os módulos, e as 78 a 90 foram usadas pelo lote de
+> Compras/núcleo (`docs/compras-novidades-por-etapa.md`, **B18**) — por isso a etapa depois da 77 foi a 91.
 >
 > Fontes: `docs/almoxarifado-guia-etapas-e-testes.md` (roteiros de teste manual de cada
 > etapa), `specs/modulo-almoxarifado/README.md` (status por feature) e os planos em
@@ -111,7 +113,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Quarenta e um itens para rodar em produção ANTES do deploy — trinta e oito são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Quarenta e dois itens para rodar em produção ANTES do deploy — trinta e nove são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-08 (Etapa 91) de quarenta e um para quarenta e dois**, com a **A42** — os materiais com disponível negativo ou com material retido na inspeção sem lastro na prateleira, o rastro que a janela da quarentena (**C142**, **C145**) e qualquer outra corrida podem ter deixado antes desta versão.)*
 
 *(**Atualizado em 2026-10-08 (Etapa 77) de quarenta para quarenta e um**, com a **A41** — as saídas avulsas pela API que já gastaram a reserva de uma requisição antes desta versão, que o deploy não desfaz.)*
 
@@ -1455,7 +1459,46 @@ ORDER BY m.created_at;
 - Só tipos de **saída** entram: uma entrada ou um ajuste lançado com o número de uma reserva guarda o número sem
   consumi-la, e daria falso positivo.
 
-### B. Decisões de negócio — B1 a B418; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A42 (NOVA, da Etapa 91 — materiais com disponível negativo, ou com material retido sem lastro na prateleira).** Antes
+desta versão, uma aprovação que caísse no instante entre a entrada da nota de um material **crítico** e a ida dele para a
+inspeção reservava o material que ia ser inspecionado (**C142**): o disponível ficava **negativo**. A Etapa 91 fechou isso
+contra a aprovação e a distribuição; uma saída avulsa ou uma reserva manual nesse mesmo instante ainda pode levar o
+material (**C145**, medido). Esta consulta acha o rastro das duas — e de qualquer outra corrida que tenha passado do
+saldo. Somente leitura:
+
+```sql
+SELECT m.id, m.codigo, m.nome, m.material_critico,
+       m.quantidade_atual, m.quantidade_reservada, m.quantidade_bloqueada,
+       m.quantidade_em_inspecao, COALESCE(m.quantidade_em_terceiros, 0) AS em_terceiros,
+       CASE WHEN m.quantidade_atual + 1e-9 < COALESCE(m.quantidade_em_inspecao, 0) + COALESCE(m.quantidade_bloqueada, 0)
+            THEN 1 ELSE 0 END AS retido_sem_lastro
+FROM materiais_almoxarifado m
+WHERE COALESCE(m.permite_saldo_negativo, 0) = 0
+  AND (m.quantidade_atual - COALESCE(m.quantidade_reservada, 0) - COALESCE(m.quantidade_bloqueada, 0)
+       - COALESCE(m.quantidade_em_inspecao, 0) - COALESCE(m.quantidade_em_terceiros, 0) < -1e-9
+       OR m.quantidade_atual + 1e-9 < COALESCE(m.quantidade_em_inspecao, 0) + COALESCE(m.quantidade_bloqueada, 0))
+ORDER BY m.codigo;
+```
+
+*(Conferida no fechamento contra o esquema real do módulo, montado em memória pelo mesmo harness dos testes: roda sem
+erro; uma coluna trocada de propósito faz o banco recusar — controle positivo. O banco de desenvolvimento não tem dados,
+então o tamanho real só em produção.)*
+
+**Como ler o resultado:**
+- **Vazia** — nada a fazer.
+- **Linha com `retido_sem_lastro = 0`** (disponível negativo) — a reserva **ativa** mais nova sobre o material é a
+  candidata a ter levado o que foi para a inspeção. Conferir com a Qualidade e, se for o caso, liberá-la pela tela
+  **Reservas** (quem pediu a requisição, o almoxarife ou o administrador — regra da Etapa 77).
+- **Linha com `retido_sem_lastro = 1`** — saiu da prateleira material que **ainda não tinha sido inspecionado** (o que
+  uma saída avulsa na janela deixa: físico 0, em inspeção 4). A inspeção desses itens vai liberar saldo que não existe:
+  **conferir com a Qualidade antes de decidir a inspeção** e ajustar o estoque pelo inventário se o material de fato
+  saiu.
+- *(A conta do disponível fica escrita à mão **só aqui, no documento**: a regra do código que proíbe replicá-la vale
+  para o código, não para a consulta de conferência.)*
+
+### B. Decisões de negócio — B1 a B433; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-08 de B418 para B433**, com as quinze da Etapa 91 — dez do plano (**B419** a **B428**) e cinco da revisão adversarial do código (**B429** a **B433**); a **B403** foi substituída pela **B419**.)*
 
 *(**Atualizado em 2026-10-08 de B406 para B418**, com as doze da Etapa 77 — oito do plano, três da revisão do código e da do plano, e uma do fechamento; a **B402** foi substituída pela **B407**.)*
 
@@ -5509,7 +5552,7 @@ decisão de contrato (a saída genérica pode usar reserva de requisição?), n�
 recalcular depois do consumo (o rótulo ficaria certo e o material continuaria saindo sem a requisição saber); recusar
 já (muda o contrato da movimentação sem medir quem usa). Candidata da Etapa 77.
 
-**B403 (NOVA, da Etapa 76) — a inversão inspeção × Aprovar (C131) fica para depois.** Medido: pôr o **Aprovar** na
+**B403 (NOVA, da Etapa 76; ⚠️ SUBSTITUÍDA PELA B419 na Etapa 91 — a trava passou a cobrir as seis portas) — a inversão inspeção × Aprovar (C131) fica para depois.** Medido: pôr o **Aprovar** na
 trava **não** resolve — em seis de seis rodadas o **Aprovar** reserva antes de a inspeção começar a distribuir, porque o
 saldo já ficou livre no movimento da inspeção. Consertar exige a trava **antes** desse movimento nas três portas que
 liberam (nota, inspeção, não conformidade) e em **todos** os materiais nas três portas de aprovação.
@@ -5611,6 +5654,107 @@ liberação sai sem o perfil (o mesmo molde do **Rejeitar** da requisição) e a
 requisição, o almoxarife ou o administrador liberam esta reserva"*; *"Esta requisição já está em separação — só o
 almoxarife ou o administrador liberam a reserva agora"*). **Descartado:** o molde padrão (a mensagem certa nunca
 chegaria à tela).
+
+**B419 (NOVA, da Etapa 91 — substitui a B403) — a fila não se inverte mais: a mesma trava por material segura quem
+libera e quem aprova.** O material que fica livre por uma **nota**, por uma **inspeção que aprova** ou por uma **não
+conformidade que aceita** passa a ser distribuído a quem esperava **antes** que qualquer aprovação do mesmo material
+possa ler o saldo: a trava começa antes do movimento de estoque que põe o material no disponível e só termina depois da
+distribuição. E as três formas de aprovar (**Aprovar**, **Aprovar Liberação** por valor e a aprovação automática)
+seguram a trava de **todos** os materiais da requisição enquanto reservam e gravam o novo status. As **duas metades**
+são necessárias (medido: só a da aprovação deixava a fila invertida, que era a B403; só a da liberação deixava o
+aprovador ler o saldo livre). A nota trava todos os materiais dela — inclusive os críticos, o que fecha a janela da
+quarentena contra a aprovação (**C142**). **Escolhido** porque fecha a C131 e a C142 sem mexer no motor de estoque.
+(`78933bef`, `e472f26c`)
+
+**B420 (NOVA, da Etapa 91) — descartada a "aprovação que respeita a fila".** A alternativa era a aprovação reservar só o
+que sobra depois de quem está à frente. Muda uma regra que vale **sem** corrida: hoje, se R1 espera 4 e entram 4 por
+uma entrada avulsa (que não distribui), a aprovação de R3 depois leva os 4; com a alternativa, os 4 ficariam **parados**
+— nada os entrega a R1 (**B397**, **C135**). E não fecharia a janela da quarentena. Um teste prende que a regra de hoje
+não mudou (Etapa 91, cenário 9). **Para reabrir:** decidir que a aprovação distribui para quem espera à frente — o que
+desfaz o gesto da liberação à mão (**B397**).
+
+**B421 (NOVA, da Etapa 91) — descartado "deixar para o Postgres".** A trava de linha do banco sozinha não resolve: cada
+comando já é atômico, e a inversão acontecia **entre** comandos (o movimento de estoque, depois a distribuição). No
+Postgres o trabalho de onde a trava começa e termina é o mesmo — só a primitiva muda. Adiar deixaria a C131 e a C142
+abertas até a migração sem economizar nada.
+
+**B422 (NOVA, da Etapa 91) — uma fila só para a trava, num lugar só.** A trava por material saiu para um módulo próprio,
+com uma única fila de espera por material para o sistema inteiro — a das liberações das Etapas 75/76 e a das aprovações
+são **a mesma**. **Descartados:** uma fila por parte do sistema (as aprovações não esperariam o recálculo da Etapa 76);
+expor a trava a partir do serviço da distribuição (criaria dependência circular entre serviços). (`8a72c801`)
+
+**B423 (NOVA, da Etapa 91) — o recálculo do status (Etapa 76) e o e-mail da liberação (Etapa 75) rodam depois de soltar
+a trava.** A trava não pode ser pega duas vezes pela mesma operação, e o recálculo pega a trava dos materiais da
+requisição tocada. A ordem dos efeitos não mudou: distribuição → recálculo → aviso. **Descartado:** recalcular dentro
+sem trava (já medido na Etapa 76: o status gravado sairia velho). (`e472f26c`)
+
+**B424 (NOVA, da Etapa 91) — a seção travada é longa e a ordem dos efeitos não muda.** Na inspeção, a trava cobre também o
+registro da inspeção, as medidas, o alerta de reprovado e a abertura da não conformidade; na nota, a conta a pagar, a
+mudança de situação, a trilha e o fechamento das solicitações de compra. Só operações do **mesmo material** esperam.
+**Descartado:** reordenar os efeitos para encurtar a trava — mudaria a ordem que os testes das Etapas 17, 43 e 70
+prendem. (`e472f26c`)
+
+**B425 (NOVA, da Etapa 91) — as portas de distribuição continuam com o mesmo nome; "já estou com a trava" virou uma
+opção.** **Descartado:** funções novas para o caminho travado — os testes que trocam essas funções para simular falhas
+deixariam de morder **em silêncio** (o teste vazio que esta base já pagou três vezes). (`e472f26c`)
+
+**B426 (NOVA, da Etapa 91) — o cancelamento pelos outros módulos solta as reservas (C141).** Cancelar pela tela de
+requisições do Comercial, Frota, Compras, Financeiro ou Operacional passa a soltar a reserva ativa e a gravar a trilha
+*Cancelamento*, como o cancelamento do almoxarifado; as duas coisas não derrubam o cancelamento se falharem (ele já foi
+feito e é o que o usuário pediu — fica um aviso no log). **Mantidos:** os status aceitos (*Pendente* e *Aprovado*), quem
+pode (só quem pediu) e a resposta. **Descartado nesta etapa:** aceitar cancelar requisição já reservada por essa porta —
+muda o contrato da outra tela; é a candidata da Etapa 92 (**C149**). (`6eedb920`)
+
+**B427 (NOVA, da Etapa 91) — o número de uma reserva só vale numa saída que a consome.** Uma entrada, ajuste, devolução,
+transferência ou qualquer movimento que não é saída, lançado pela API citando uma reserva, é recusado — vale para
+reserva de requisição **e** manual (o número no movimento era coluna mentirosa: gravado e sem efeito — D (77)). A recusa
+mora no motor, então vale para a API de movimentações, para as transferências e para qualquer integração futura. Os
+lançamentos internos de reserva e de liberação continuam gravando o número. **Descartados:** recusar só na API de
+movimentações (as transferências repassam o pedido cru); recusar só para reserva de requisição. (`d24715c9`)
+
+**B428 (NOVA, da Etapa 91) — a reserva manual alheia (C139) continua de fora.** O código seria pequeno, mas muda o que
+Produção e Engenharia fazem hoje sem dado de uso (**B412**). Continua candidata.
+
+**B429 (NOVA, da Etapa 91, revisão do código) — o alerta de estoque mínimo sai de dentro da trava, e o envio de e-mail
+ganha prazo.** A revisão mediu um problema **grave** criado pela trava: o e-mail de estoque mínimo era enviado **dentro**
+da seção travada. Com o servidor de e-mail lento (3 s), a nota levava 3 s e um **Aprovar** do mesmo material esperava
+**3032 ms**; com o servidor de e-mail falhando, três aprovações em fila levavam 1, 2 e 3 s e cada uma tentava mandar o
+e-mail de novo. E o envio não tinha prazo nenhum (o padrão da biblioteca é 2 min para conectar e 10 min sem resposta).
+**Escolhido:** o alerta roda **logo depois** de soltar a trava (ainda dentro do mesmo pedido, então a resposta continua
+saindo depois do alerta); um envio em andamento por material (o segundo desiste, para não mandar dois e-mails); prazos de
+15 s para conectar, 15 s de saudação e 20 s sem resposta (os do e-mail do CRM). Depois: o **Aprovar** levou 27 ms; com o
+e-mail falhando, 1035/39/43 ms e **uma** tentativa. A regra do alerta não mudou (uma vez por material, marcado ao enviar;
+na falha não marca e o próximo tenta). **Descartados:** disparar o alerta "e esquecer" (medido: três testes de dois
+arquivos leem o estado do alerta logo depois da resposta); mandar o alerta pela fila de notificações (muda canal, modelo
+e reenvio); passar uma lista de pendências por todas as portas até o motor. (`14cf6df7`)
+
+**B430 (NOVA, da Etapa 91, revisão do código) — a janela da quarentena contra quem NÃO pega a trava fica declarada.** A
+saída avulsa, a reserva manual e a separação feitas no instante entre a entrada do material crítico e a ida dele para a
+inspeção ainda levam o material retido (**C145**, números medidos lá). As três formas de fechar foram medidas e nenhuma é
+contida e segura: (1) recusar a ida para a inspeção quando o disponível ficaria negativo faria a nota falhar **depois**
+da entrada física — material livre, sem inspeção e a nota travada (pior que hoje); (2) dar entrada do crítico direto em
+inspeção, num movimento só, muda o motor (entrada, sincronização, estorno e livro); (3) pôr a trava na saída avulsa, na
+reserva manual e na separação abre três portas novas na trava. **Para reverter:** escolher uma das três — candidatas.
+
+**B431 (NOVA, da Etapa 91, revisão do código) — a prova da trava mora em quem reserva.** A revisão achou que a aprovação
+lia os materiais da requisição **antes** de pegar a trava — e a requisição nasce *Pendente* antes de os itens serem
+gravados, então um **Aprovar** no meio da criação reservava o segundo material **sem a trava dele**. Um primeiro conserto
+(reler os materiais dentro da trava) **não bastou** — a revisão montou o caso em que o item chega depois da releitura e
+ele ficou vermelho. O conserto final: antes de reservar qualquer item, a aprovação confere que segura a trava de
+**todos** os materiais; se não, refaz a trava com o conjunto maior, até 3 vezes; na terceira, responde **409** *"A
+requisição ganhou itens enquanto era aprovada (ainda está sendo gravada); tente aprovar de novo."*. **Descartados:** só
+reler (medido insuficiente); seguir sem conferir na última tentativa (seria reservar sem a trava). Na aprovação
+automática a recusa vira *Pendente* (201), como qualquer falha dela — sem efeito prático, porque a automática roda depois
+de a criação gravar todos os itens. (`2d6987a7`, `723c58fd`; comentário corrigido em `455eda9b`)
+
+**B432 (NOVA, da Etapa 91, revisão do código) — o pedido duplicado por reenvio fica declarado (C147).** Conserto de verdade
+é uma chave de idempotência mandada pela tela (o servidor recusa a tentativa repetida) — mexe em cliente e servidor.
+**Descartado:** deduplicar por (quem pediu, itens, janela de tempo) — bloquearia pedidos idênticos legítimos.
+
+**B433 (NOVA, da Etapa 91, revisão do código) — o desfazer da aprovação que perde fica dentro da trava, e testado.** A
+revisão mostrou que tirar da trava a devolução da reserva de uma aprovação que perdeu não derrubava teste nenhum. O dano
+foi medido (uma segunda aprovação do mesmo material entrava antes da devolução, lia disponível 0 e ficava *Aguardando
+estoque* com 4 parados — o **C135** por corrida), então virou teste em vez de ser declarado "baixo impacto". (`d98b73c9`)
 
 
 ### C. Furos e mudanças de número que quem opera precisa saber
@@ -7046,7 +7190,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      a **liberação por valor** bloquearia (**B380**) perde o lugar naquela nota: o material vai para a próxima da fila, e
      quando o valor for liberado ela só leva o que sobrou.
 
-131. **NOVO, da Etapa 75 (medido, não corrigido) — a inspeção e uma aprovação no mesmo instante invertem a fila, sempre.**
+131. **✅ RESOLVIDO NA ETAPA 91 (`78933bef`, `e472f26c`; Fase 5 `2d6987a7`, `723c58fd`) — a aprovação no mesmo instante
+     da nota, da inspeção ou da não conformidade não inverte mais a fila.** A mesma trava por material passou a segurar
+     as seis portas: as três que liberam material (do movimento de estoque até a distribuição a quem esperava) e as três
+     que aprovam (enquanto reservam e gravam o status) (**B419**). Medido pelas rotas, com o usuário certo em cada
+     pedido, nos três encaixes (liberação primeiro, aprovação primeiro, aprovação no instante exato do movimento):
+     antes, **invertida 4 de 4** em todos; agora R1 leva os 4 e R3 fica *Aguardando estoque*. A C131 dizia "só a
+     inspeção"; a medição da Etapa 91 mostrou que a **nota** e a **não conformidade que aceita** invertiam igual. O
+     passado: a **A39 (2)** continua achando. O texto original, para o histórico:
+     **NOVO, da Etapa 75 (medido, não corrigido) — a inspeção e uma aprovação no mesmo instante invertem a fila, sempre.**
      R1 esperava 4; a inspeção aprova 4 e, no mesmo instante, R3 é aprovada pelo **Aprovar**: **R3 leva os 4** (fica
      *Totalmente Reservada*) e R1 fica com nada (*Aguardando estoque*). Medido oito de oito vezes, também depois da trava
      por material (**B394**): o **Aprovar** não passa pela distribuição de quem esperava, então a trava não o alcança. É
@@ -7061,7 +7213,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 132. **NOVO, da Etapa 75 (declarado) — a trava por material vale para um processo só.** As liberações do mesmo material
      esperam umas pelas outras (**B394**) por uma fila na memória do servidor. Se o sistema passar a rodar em **mais de um
      processo** (dois servidores, ou o modo *cluster*), ou quando migrar para Postgres, a fila precisa virar uma trava no
-     banco — senão a corrida que zerava a fila volta. Registrado no código e no plano da migração.
+     banco — senão a corrida que zerava a fila volta. Registrado no código e no plano da migração. *(**Etapa 91:**
+     desde a Etapa 91 a mesma trava segura as seis portas (três que liberam, três que aprovam) — por isso a premissa de
+     um processo só vale agora também para a ordem da fila de aprovação (**C131**). E o alerta de estoque mínimo roda
+     **depois** de soltar a trava, para um servidor de e-mail lento não segurar as aprovações do material (**B429**).)*
 
 133. **NOVO, da Etapa 75 (declarado, anteriores e raros) — três janelas pequenas da liberação.** (1) Entre a decisão da
      inspeção zerar o retido e gravar a linha da inspeção, o item parece livre e não inspecionado — uma nota retomada
@@ -7150,7 +7305,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      reserva de requisição passou a ser dele e de quem pediu; integrações que citam reserva em saída avulsa devem entregar
      pela requisição (`PUT /requisicoes/:id/entregar`).
 
-141. **NOVO, da Etapa 77 (achado da revisão; não corrigido) — cancelar uma requisição *Aprovado* pela tela de
+141. **✅ RESOLVIDO NA ETAPA 91 (`6eedb920`) — cancelar pela tela de requisições de outro módulo solta a reserva.** O
+     cancelamento pelos módulos Comercial, Frota, Compras, Financeiro e Operacional passou a soltar a reserva ativa (a
+     liberação grava *"Liberação por cancelamento de requisição"* no extrato do material) e a gravar a trilha
+     *Cancelamento* com o status de antes (**B426**). **O que continua:** essa porta só cancela requisição *Pendente* ou
+     *Aprovado* — a tela oferece **Cancelar Requisição** também para *Aguardando estoque/compra* e *Parcialmente/
+     Totalmente Reservada*, e a resposta é **400** *"Requisição não encontrada ou não pode ser cancelada"* (**C149** —
+     candidata da Etapa 92). A consulta abaixo continua valendo para as reservas presas **antes** do deploy. O texto
+     original, para o histórico:
+     **NOVO, da Etapa 77 (achado da revisão; não corrigido) — cancelar uma requisição *Aprovado* pela tela de
      requisições de outro módulo não solta a reserva dela.** As telas **Requisições de material** dos módulos Comercial,
      Frota, Compras, Financeiro e Operacional cancelam por um caminho próprio que só muda o status (aceita *Pendente* e
      *Aprovado*, só para quem pediu) — sem soltar as reservas. O cancelamento pela tela do **almoxarifado** solta. A
@@ -7164,6 +7327,121 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      ```
      Cada linha: o almoxarife libera a reserva na tela **Reservas** (motivo "requisição cancelada"). Candidata: o
      cancelamento dos outros módulos passar pelo mesmo serviço do almoxarifado.
+
+142. **NOVO e ✅ RESOLVIDO NA ETAPA 91 (`e472f26c`) — contra a aprovação e a distribuição — a janela entre a entrada
+     do material crítico e a ida dele para a inspeção.** Achado na medição da Etapa 91. A nota de um material **crítico**
+     faz dois movimentos: a entrada (o material sobe e fica, por um instante, **livre**) e depois a ida para a inspeção
+     (que soma no "em inspeção" **sem conferir o disponível**). Uma aprovação no meio reservava os 4 que iam ser
+     inspecionados: material com físico 4, reservado 4 e em inspeção 4 — **disponível −4**; e se a Qualidade depois
+     reprovasse os 4, a requisição ficava *Totalmente Reservada* com material reprovado. Agora a nota segura a trava de
+     **todos** os materiais dela, inclusive os críticos, então a aprovação e a distribuição esperam a nota terminar (medido:
+     4 de 4 rodadas reservavam o retido antes; 0 agora). **O que continua:** quem **não** pega a trava (saída avulsa,
+     reserva manual, separação) ainda pode cair nessa janela (**C145**). **O que fazer:** rodar a **A42** antes do deploy.
+
+143. **NOVO, da Etapa 91 — o que muda para quem opera.** (1) A aprovação (**Aprovar**, **Aprovar Liberação** e a
+     aprovação automática) de uma requisição **espera** terminar a nota, a inspeção ou a não conformidade do **mesmo
+     material** que esteja em andamento naquele instante — normalmente milissegundos; numa nota grande, até meio segundo
+     (**C150**). Materiais diferentes não esperam. (2) O resultado muda só na corrida: quem esperava há mais tempo fica
+     com o material, e a requisição aprovada no mesmo instante fica *Aguardando estoque*. (3) Aprovar uma requisição no
+     exato momento em que ela ainda está sendo gravada pode responder **409** *"A requisição ganhou itens enquanto era
+     aprovada (ainda está sendo gravada); tente aprovar de novo."* — basta aprovar de novo (**B431**, **C146**).
+     (4) O e-mail de estoque mínimo continua saindo, uma vez por material, mas não segura mais as aprovações (**B429**).
+     **O que fazer:** nada; se alguém perguntar por que a aprovação "demorou um pouco" logo depois de uma nota grande, é
+     a fila.
+
+144. **NOVO, da Etapa 91 — o que muda para quem integra.** (1) Pela API de movimentações (`/movimentacoes/v2`) e pelas
+     transferências (`/transferencias`), um movimento que **não é saída** (entrada, ajuste, devolução, transferência…)
+     citando o número de uma reserva — de requisição ou manual — passa a tomar **400** *"reserva_id só vale numa saída que
+     consome a reserva — o tipo ⟨tipo⟩ não consome reserva; tire o reserva_id do movimento"*, e nada é gravado
+     (**B427**). As saídas continuam como na Etapa 77. (2) O cancelamento pela API dos outros módulos
+     (`PUT /api/requisicoes-material/:id/cancelar`) passa a soltar as reservas da requisição e a gravar a trilha
+     *Cancelamento* (com `via: 'requisicoes-material'` nos dados novos); a resposta (`{ success: true }`) e a recusa de
+     hoje não mudaram (**B426**). (3) As respostas de todas as rotas de aprovação e de liberação têm as **mesmas chaves**
+     de antes (testado); a única resposta nova é o **409** da C143 (3). **O que fazer:** integrações que gravavam o número
+     da reserva em entrada ou ajuste devem tirá-lo.
+
+145. **NOVO, da Etapa 91 (medido e declarado — B430) — a janela da quarentena continua aberta para quem não pega a
+     trava.** Uma **saída avulsa**, uma **reserva manual** ou uma **separação** feitas no instante entre a entrada de um
+     material crítico e a ida dele para a inspeção podem levar o material que ia ser inspecionado. Medido pela revisão
+     (gesto disparado de 0 a N ms depois do início da nota, um material novo por tentativa):
+
+     | cenário | saída avulsa deixou disponível negativo | reserva manual deixou disponível negativo |
+     |---|---|---|
+     | antes do conserto do alerta (**B429**), sem servidor de e-mail | 0 de 41 | 1 de 41 |
+     | antes do conserto do alerta, e-mail de 1 s e material abaixo do mínimo | **19 de 21** | **18 de 21** |
+     | depois do conserto, sem servidor de e-mail | 1 de 41 | 2 de 41 |
+     | depois do conserto, e-mail de 1 s e material abaixo do mínimo | 1 de 21 | 0 de 21 |
+     | gesto disparado exatamente na entrada (depois do conserto) | 4 de 4 | 4 de 4 (o **Aprovar**: **0 de 4** — espera a trava) |
+
+     Leitura: a janela era larga por causa do e-mail de estoque mínimo dentro dela (pago pela **B429**); hoje é de uns
+     poucos milissegundos. **O que fazer:** em material crítico, não lançar saída avulsa nem reserva manual enquanto a
+     nota dele está sendo processada; a **A42** acha o rastro (`retido_sem_lastro = 1`).
+
+146. **NOVO, da Etapa 91 (anterior à etapa; declarado) — aprovar uma requisição que ainda está sendo gravada aprova só os
+     itens já gravados.** A requisição nasce *Pendente* um instante antes de os itens serem gravados. Um **Aprovar** nesse
+     instante aprova com os itens que já existem; os que chegam depois ficam na requisição aprovada sem reserva. Desde a
+     revisão da Etapa 91, a aprovação **nunca** reserva sem a trava do material (**B431**): se a requisição ganhar itens
+     durante a aprovação três vezes seguidas, a resposta é o **409** da C143 (3). **O que fazer:** nada no uso normal (a
+     tela só mostra a requisição depois de gravada); é corrida de integração.
+
+147. **NOVO, da Etapa 91 (achado da revisão; declarado — B432) — reenviar o pedido de uma requisição com aprovação
+     automática pode duplicá-la.** Se a aprovação automática esperar a trava (uma nota grande do mesmo material em
+     andamento) e a tela desistir de esperar (30 s), o usuário clica de novo e o servidor grava **duas** requisições —
+     medido: a primeira *Totalmente Reservada*, a segunda *Aguardando estoque*. **O que fazer:** se aparecer requisição em
+     dobro, cancelar a mais nova. Conserto: chave de idempotência mandada pela tela (cliente e servidor).
+
+148. **NOVO, da Etapa 91 (achado da revisão; declarado) — dois efeitos inofensivos da corrida entre o cancelamento pelos
+     outros módulos e uma aprovação.** (1) Quando o cancelamento cai entre a reserva e a gravação do **Aprovar**, o
+     resultado está certo (o **Aprovar** responde *"Transição inválida: CANCELADO → APROVADO"*, o cancelamento 200, a
+     reserva liberada uma vez só) — mas o log diz *"[almoxarifado-aprovar] Falha ao desfazer reserva ⟨id⟩ — Reserva
+     liberada não pode ser liberada"*, o que parece erro e não é (o cancelamento já a tinha soltado). (2) A trilha do
+     cancelamento pelos outros módulos lê o "status de antes" um instante antes de cancelar; se a requisição mudar de
+     status nesse instante, a trilha grava o anterior errado. Só trilha; o cancelamento em si é guardado. **O que
+     fazer:** não tratar essa linha de log como incidente.
+
+149. **NOVO, da Etapa 91 (achado da revisão; declarado — candidata da Etapa 92) — a tela de requisições dos outros
+     módulos oferece Cancelar em status que a API recusa.** Fora do modo almoxarifado, a tela mostra **Cancelar
+     Requisição** para *Pendente*, *Aprovado*, *Aguardando estoque*, *Aguardando compra*, *Parcialmente Reservada* e
+     *Totalmente Reservada*; a API dessa porta só aceita *Pendente* e *Aprovado* — nos outros quatro o usuário toma
+     *"Requisição não encontrada ou não pode ser cancelada"*. E as reservadas são justamente as que seguram material:
+     quem pediu por outro módulo **não consegue desistir** delas (a Etapa 77 disse que o caminho dele era cancelar —
+     **C140 (3)**). **O que fazer:** até a Etapa 92, o almoxarife cancela pela tela do almoxarifado a pedido de quem pediu.
+
+150. **NOVO, da Etapa 91 (medido e declarado) — o custo da trava.** (1) As aprovações de um material esperam a nota que
+     está dando entrada nele: uma nota de 300 materiais levou 507 ms sozinha; o **Aprovar** de um material dela esperou
+     410 ms; o de um material fora dela, 9 ms. (2) A trava não tem prazo para ser pega: com uma trava presa de propósito
+     por 3 s, o **Aprovar** só respondeu 3010 ms depois — se algo segurar a trava muito tempo, a tela desiste em 30 s, o
+     servidor ainda conclui (a aprovação acontece) e o reenvio do usuário toma 400 *"Transição inválida: ⟨status⟩ → APROVADO"* (D (91)). **O que fazer:**
+     nada no uso normal; se uma aprovação "não responder" e depois aparecer aprovada, é este caso.
+
+151. **NOVO e ✅ RESOLVIDO NA ETAPA 91 (`78933bef`) — dois Aprovar simultâneos da mesma requisição deixavam-na sem
+     reserva.** Achado ao medir a Etapa 91, anterior a ela (desde a revisão da Etapa 73, que pôs a guarda no status).
+     Com saldo para a requisição, dois cliques de **Aprovar** no mesmo instante (dois aprovadores, ou um duplo clique que
+     chegasse junto): o primeiro reservava os 4; o segundo, sem ver a reserva ainda gravada no status, calculava
+     *Aguardando estoque* e gravava o status **primeiro**; o primeiro perdia a gravação e **desfazia a própria reserva**.
+     Resultado medido: **8 de 8** vezes a requisição terminava *Aguardando estoque*, **sem reserva**, com o material
+     livre no estoque (e uma aprovação depois levava). Agora as duas aprovações passam pela trava da requisição: **8 de
+     8** *Totalmente Reservada*, com **uma** reserva, e a segunda responde 400 *"Transição inválida: ⟨status⟩ →
+     APROVADO"*. **O que fazer:** achar as que podem ter sido vítimas antes do deploy — somente leitura:
+     ```sql
+     SELECT rq.id, rq.numero, rq.created_at, m.codigo, m.nome,
+            i.quantidade_solicitada - COALESCE(i.quantidade_atendida, 0) AS falta,
+            m.quantidade_atual - COALESCE(m.quantidade_reservada, 0) - COALESCE(m.quantidade_bloqueada, 0)
+              - COALESCE(m.quantidade_em_inspecao, 0) - COALESCE(m.quantidade_em_terceiros, 0) AS disponivel
+     FROM requisicoes_almoxarifado rq
+     JOIN itens_requisicao_almoxarifado i ON i.requisicao_id = rq.id
+     JOIN materiais_almoxarifado m ON m.id = i.material_id
+     WHERE rq.status = 'AGUARDANDO_ESTOQUE'
+       AND NOT EXISTS (SELECT 1 FROM reservas_material_almoxarifado rs
+                        WHERE rs.requisicao_id = rq.id AND rs.status = 'ATIVA')
+       AND m.quantidade_atual - COALESCE(m.quantidade_reservada, 0) - COALESCE(m.quantidade_bloqueada, 0)
+           - COALESCE(m.quantidade_em_inspecao, 0) - COALESCE(m.quantidade_em_terceiros, 0) > 1e-9
+     ORDER BY rq.created_at;
+     ```
+     *(Conferida no fechamento contra o esquema real, em memória, com controle positivo — uma coluna trocada faz o banco
+     recusar; sem dados para medir o tamanho.)* Cada linha é uma requisição esperando estoque com material **livre** do
+     item. Nem toda é vítima deste defeito — o material pode ter entrado depois por uma entrada avulsa, que não distribui
+     (**C135**). Em qualquer caso, o almoxarife pode separar a requisição com o que há.
 
 
 
@@ -8014,6 +8292,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   não se aplica: cada liberação é de um material só).
 - **(75) A aprovação no mesmo instante da inspeção inverte a fila** — o **Aprovar** não passa pela distribuição de quem
   esperava (**C131**); sem trava entre a decisão da Qualidade e a aprovação — fica para a migração de banco.
+  *(Etapa 91: resolvido — C131, sem esperar a migração (**B419**, **B421**).)*
 - **(75) Sem tela nova e sem informação nova na resposta** — a inspeção e a não conformidade respondem como antes; a
   reserva aparece na tela **Reservas** e na fila de separação (**B387**).
 - **(76) O liberado não é redistribuído** — liberar à mão ou vencer devolve o material ao disponível solto; quem
@@ -8026,7 +8305,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   novo aparece ao reabrir a lista de requisições (**B399**).
 - **(76) A saída avulsa que gasta reserva de requisição e o perfil que libera reserva alheia** ficam para a Etapa 77
   (**C136**, **C137**); a inversão inspeção × **Aprovar** também (**C131**, **B403**). *(Etapa 77: C136 e C137
-  resolvidos; a C131 continua — candidata da Etapa 91.)*
+  resolvidos; a C131 continua — candidata da Etapa 91.)* *(Etapa 91: resolvido — C131.)*
 - **(77) Perda, Ajuste negativo e as outras saídas da API continuam consumindo reserva MANUAL** — pode ser legítimo ("o
   material reservado para o projeto se perdeu"); a recusa nova é só para reserva de **requisição**.
 - **(77) A saída que NÃO cita a reserva, num material que aceita saldo negativo, leva o reservado de uma requisição** —
@@ -8034,7 +8313,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   reservado 4); a separação depois é recusada com *"Máximo: 0"*. É a regra do saldo negativo (nada barra a saída de
   quem aceita negativo), não desta etapa.
 - **(77) Entrada e ajuste aceitam o número de uma reserva sem consumi-la** — a API grava o número no movimento e não
-  mexe na reserva; por isso a **A41** olha só saídas. Recusar o número fora de saída é candidata.
+  mexe na reserva; por isso a **A41** olha só saídas. Recusar o número fora de saída é candidata. *(Etapa 91:
+  resolvido — o número de reserva fora de saída é recusado (**B427**, **C144**).)*
 - **(77) O Gestor não libera reserva de requisição** (**B410**) — solta tudo pelo **Encerrar Requisição**.
 - **(77) Quem pede requisição por outro módulo sem a permissão de reservar não libera a própria reserva** — cancela a
   requisição (**C140 (3)**).
@@ -8042,6 +8322,28 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   **A41**).
 - **(77) Sem aviso a quem perdeu a reserva** — liberar a reserva de uma requisição (agora só o dono, o almoxarife ou o
   administrador) não manda e-mail ao solicitante.
+- **(91) Saída avulsa, reserva manual e separação não pegam a trava** — feitas no instante em que uma nota, inspeção ou
+  não conformidade do mesmo material está liberando saldo, levam o saldo livre como sempre levaram. A trava cobre quem
+  **distribui** e quem **aprova** (**C145**).
+- **(91) A janela da quarentena não foi fechada na raiz** — o material crítico ainda entra livre por um instante antes
+  de ir para a inspeção; o conserto de raiz (entrar já retido, num movimento só) muda o motor e é candidata (**B430**).
+- **(91) Um processo só** — a trava é uma fila na memória do servidor; com dois servidores, modo *cluster* ou Postgres,
+  precisa virar trava no banco (**C132**).
+- **(91) Cancelar pelos outros módulos uma requisição já reservada continua recusado** (400) — só *Pendente* e
+  *Aprovado* (**B426**, **C149** — candidata da Etapa 92).
+- **(91) Estorno da entrada × aprovação tem a forma da C131** — o estorno solta a reserva da chegada fora da trava;
+  uma aprovação no meio pode levar o saldo solto, e se o estorno for recusado depois a reserva não é recriada (só um
+  aviso no log). Não medido nesta etapa; candidata.
+- **(91) A trava não tem prazo para ser pega** — a tela desiste em 30 s, o servidor ainda conclui a aprovação (uma
+  resposta "fantasma"), e o reenvio do usuário toma 400 *"Transição inválida: ⟨status⟩ → APROVADO"* (**C150**).
+- **(91) A separação não confere o status ao gravar *Em Separação*** — uma separação em andamento pode **ressuscitar**
+  uma requisição que acabou de ser cancelada (pela tela do almoxarifado ou, desde a Etapa 91, pelos outros módulos). A
+  corrida já existia com o cancelamento do almoxarifado; não foi introduzida pela etapa. Candidata (pré-requisito da
+  Etapa 92).
+- **(91) A falha da trilha no cancelamento pelos outros módulos não tem teste** — o aviso no log está no código, mas o
+  teste não consegue simular a falha da gravação da trilha por essa rota.
+- **(91) A reserva manual alheia continua de fora** (**C139**, **B428**).
+- **(91) O pedido duplicado por reenvio com aprovação automática** fica declarado (**C147**, **B432**).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -8733,6 +9035,28 @@ componente (22 casos, sem navegador). O que **só o navegador** prova:
    em separação — só o almoxarife ou o administrador liberam a reserva agora"*; antes da separação, o formulário abre.
 4. **O Transferir.** A linha da reserva de requisição não tem o botão de setas; a da reserva manual tem.
 5. **A saída avulsa** não tem clique — é chamada de API (Etapa 77, regra 1).
+
+**(91) Nenhum clique foi dado nesta etapa, e o cliente não mudou.** Os testes provam o servidor pela rota (com o
+usuário certo em **cada** pedido simultâneo — Qualidade, Gestor, Almoxarife, solicitante — e cada rodada confere quem
+agiu) e pelo serviço. Números medidos em cada task: a trava em si 8 casos; as três formas de aprovar esperando a trava
+9; a corrida liberação × aprovação nas três portas (12 cenários, cada um com 4 rodadas por encaixe); a jornada de ponta
+a ponta 8 (6 da integração + as duas jornadas cruzadas), rodada 3 vezes seguidas 8/8; o número de reserva fora de
+saída 11; o cancelamento pelos outros módulos 6; o alerta fora da trava 4; os casos da revisão adversarial 9. O que
+**só o navegador** prova:
+
+1. **A fila na corrida, com duas abas.** Material crítico M com 4 em inspeção; R1 (mais antiga) *Aguardando estoque*
+   pedindo 4; R3 (mais nova) *Pendente* pedindo 4. Aba 1 logada como **Qualidade** na tela **Inspeções**, com a
+   decisão de aprovar os 4 preenchida; aba 2 como **Gestor** em **Requisições**, no detalhe de R3. Clicar os dois
+   botões o mais junto possível: R1 fica **Totalmente Reservada**, R3 **Aguardando estoque** — em qualquer ordem. (Na
+   mão, a corrida raramente acontece; o que o clique prova é que nada trava e as duas telas respondem.)
+2. **O cancelamento pelos outros módulos.** Logado como quem pediu uma requisição pela tela de requisições do
+   **Comercial** (ou Frota, Compras…), com a requisição em *Aprovado* e uma reserva ativa (situação de janela — montada
+   pela API): **Cancelar Requisição** → a requisição vira *Cancelado* e, na tela **Reservas**, a reserva aparece
+   *Liberada*.
+3. **A mesma tela em *Totalmente Reservada*** mostra **Cancelar Requisição** e o toast diz *"Requisição não encontrada
+   ou não pode ser cancelada"* (**C149** — o que a Etapa 92 vai mudar).
+4. **O 409 de requisição ainda sendo gravada** não tem clique prático — a tela só mostra a requisição depois de gravada
+   (**C146**).
 
 
 
@@ -18511,11 +18835,13 @@ requisição (**C140**).
 4. **O passado** — as saídas avulsas que já consumiram reserva de requisição ficam como estão; a consulta **A41** as acha
    (**B414**).
 5. **O cancelamento pelas telas de requisição dos outros módulos** (Comercial, Frota, Compras, Financeiro, Operacional)
-   não solta a reserva de uma requisição **Aprovado** (**C141**).
+   não solta a reserva de uma requisição **Aprovado** (**C141**). *(Etapa 91: resolvido — C141; essa porta continua
+   aceitando só *Pendente* e *Aprovado* — **C149**.)*
 6. **O Gestor liberar reserva de requisição** — ele não tem a permissão de reservar; solta tudo pelo **Encerrar
    Requisição** (**B410**).
 7. **Aviso a quem perdeu a reserva** — o solicitante não recebe e-mail quando o almoxarife libera a reserva dele.
 8. **A inversão inspeção × Aprovar** (**C131**) — continua; é a candidata da próxima etapa do almoxarifado (**Etapa 91**).
+   *(Etapa 91: resolvido — C131.)*
 
 ### O que a revisão encontrou
 
@@ -18537,9 +18863,153 @@ quando a saída que a consumiu é estornada"*) — **estava errado** e foi reesc
 oferecer o **Transferir** que o servidor passou a recusar (**B417**).
 
 
+## Etapa 91 — A aprovação não passa mais na frente de quem esperava o material (2026-10-08)
+
+*(Por que 91 e não 78: desde a unificação de 2026-10-07 a numeração de etapas é uma só para todos os módulos, e as
+Etapas 78 a 90 foram as do Compras/núcleo — ver `docs/compras-novidades-por-etapa.md`, **B18**.)*
+
+Desde as Etapas 74 e 75, quando chega material — pela nota, pela inspeção que aprova o material crítico ou pela não
+conformidade que aceita —, o sistema o reserva para quem esperava, na ordem da fila de separação. Mas havia um furo de
+tempo: se um gestor **aprovasse** outra requisição do mesmo material **no mesmo instante** em que a Qualidade aprovava a
+inspeção (ou o almoxarife processava a nota), a requisição recém-aprovada levava o material e a que esperava há dias
+continuava esperando — e isso acontecia **sempre** que os dois cliques coincidiam. Agora quem libera material e quem
+aprova requisição entram numa **fila por material**: a aprovação espera a liberação terminar de entregar a quem
+esperava, e só então lê o que sobrou. Com isso fecharam também três furos menores: o material crítico que ia para a
+inspeção podia ser reservado no meio do caminho (disponível negativo); dois cliques de **Aprovar** na mesma requisição
+deixavam-na sem reserva; e cancelar pela tela de requisições de outro módulo deixava a reserva presa. Para quem
+integra, o número de uma reserva passou a ser recusado em movimento que não é saída.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A Qualidade aprova a inspeção (ou o almoxarife processa a nota, ou a Qualidade aceita a não conformidade) e o Gestor aprova uma requisição **mais nova** do mesmo material no mesmo instante → a mais nova leva o material, sempre (**C131**) | A aprovação espera a liberação terminar: quem esperava há mais tempo fica com o material; a mais nova fica *Aguardando estoque* (**B419**) |
+| Uma aprovação no instante entre a entrada de um material **crítico** e a ida dele para a inspeção reservava o material que ia ser inspecionado — disponível negativo (**C142**, achado novo) | A nota segura a fila de todos os materiais dela, inclusive os críticos; a aprovação espera. A **A42** acha o rastro do passado |
+| Dois **Aprovar** simultâneos na mesma requisição com saldo deixavam-na *Aguardando estoque* **sem reserva** e com o material livre, em 8 de 8 tentativas (**C151**, achado novo) | *Totalmente Reservada* com uma reserva; o segundo clique toma 400 |
+| Cancelar uma requisição *Aprovado* pela tela de requisições do Comercial, Frota, Compras, Financeiro ou Operacional deixava a reserva ativa presa (**C141**) | A reserva é liberada e a trilha *Cancelamento* é gravada (**B426**) |
+| Uma entrada, ajuste ou devolução pela API citando o número de uma reserva era aceita e gravava um número sem efeito (D (77)) | Recusada com a mensagem que diz o porquê (**B427**) |
+| *(achado da revisão)* O e-mail de estoque mínimo era enviado com a fila presa: um servidor de e-mail lento segurava as aprovações do material (3 s cada) | O e-mail sai logo depois de soltar a fila, com prazo para desistir; a aprovação concorrente levou 27 ms (**B429**) |
+| *(achado da revisão)* Um **Aprovar** no instante em que a requisição ainda estava sendo gravada reservava o segundo material fora da fila | A aprovação confere que segura a fila de todos os materiais antes de reservar; se a requisição continuar ganhando itens, responde 409 (**B431**) |
+
+### As regras, com o cenário exato
+
+Preparação: um material **crítico** **M** (exige inspeção) e um material comum **N**, os dois com estoque zero. **Paula**
+(Produção) cria **R1** pedindo 4 de M; o **Gestor** aprova → R1 fica *Aguardando estoque*. Depois **Pedro** cria **R3**
+pedindo 4 de M e deixa *Pendente*. Uma nota de 4 de M foi processada pelo **Almoxarife** (o material está **em
+inspeção**). Tenha também a **Qualidade** logada em outra aba.
+
+**1. Inspeção × Aprovar, no mesmo instante.** Aba 1, **Qualidade**, tela **Inspeções**: aprovar os 4 de M. Aba 2,
+**Gestor**, **Requisições**: **Aprovar** R3. Clicar os dois juntos (ou em qualquer ordem): **R1** fica **Totalmente
+Reservada** com os 4 e **R3** fica **Aguardando estoque**. As duas telas respondem com sucesso (a inspeção registrada, a
+aprovação aceita). Antes da etapa, com os cliques coincidindo, era o contrário: R3 com os 4 e R1 esperando. *(Na mão, a
+coincidência exata é rara — os testes a produzem de propósito, nos três encaixes, 4 rodadas cada.)*
+
+**2. Não conformidade que aceita × Aprovar.** O mesmo, com os 4 **reprovados** na inspeção (abre a não conformidade) e a
+Qualidade decidindo **Aceitar** na tela **Não conformidades** enquanto o Gestor aprova R3: R1 com os 4, R3 *Aguardando
+estoque*.
+
+**3. Nota × Aprovar.** O mesmo com o material comum **N**: R1 esperando 4 de N, R3 *Pendente*; o Almoxarife processa a
+nota de 4 de N enquanto o Gestor aprova R3: R1 com os 4, R3 *Aguardando estoque*.
+
+**4. A janela da quarentena.** Material crítico **M2** sem ninguém esperando; R3 *Pendente* pede 4 de M2. O Almoxarife
+processa a nota de 4 de M2 e o Gestor aprova R3 no mesmo instante: R3 fica **Aguardando estoque** (nada reservado), o
+material fica com 4 **em inspeção** e disponível **0** — nunca negativo. Se a Qualidade depois reprovar os 4, R3
+continua com 0.
+
+**5. Dois Aprovar na mesma requisição.** R5 pede 4 de um material com 4 livres. Dois Gestores (ou duas abas) clicam
+**Aprovar** juntos: um recebe sucesso e R5 fica **Totalmente Reservada** com **uma** reserva de 4; o outro recebe
+*"Transição inválida: TOTALMENTE_RESERVADA → APROVADO"*.
+
+**6. A requisição ainda sendo gravada.** Só acontece por integração (a tela não mostra a requisição antes de gravá-la):
+um **Aprovar** pela API enquanto os itens dela continuam sendo gravados, três vezes seguidas, responde **409** *"A
+requisição ganhou itens enquanto era aprovada (ainda está sendo gravada); tente aprovar de novo."* — nada é reservado e a
+requisição continua *Pendente*.
+
+**7. O cancelamento pelos outros módulos solta a reserva.** Uma requisição pedida pela tela do **Comercial**, em
+*Aprovado* com reserva ativa de 4 (situação de janela — montada pela API): quem pediu clica **Cancelar Requisição** →
+*Cancelado*; na tela **Reservas** a reserva aparece **Liberada**, o extrato do material ganha a linha *"Liberação por
+cancelamento de requisição"*, e a trilha da requisição mostra *Cancelamento* com o status anterior. Outra pessoa
+tentando cancelar, ou a requisição já *Totalmente Reservada*: *"Requisição não encontrada ou não pode ser cancelada"*
+(a segunda é a **C149**).
+
+**8. Número de reserva só em saída.** Com um usuário Almoxarife, `POST /api/almoxarifado/movimentacoes/v2` com `tipo`
+**ENTRADA** (ou AJUSTE, DEVOLUCAO…) e `reserva_id` de qualquer reserva → **400** *"reserva_id só vale numa saída que
+consome a reserva — o tipo ENTRADA não consome reserva; tire o reserva_id do movimento"*; nada é gravado e a reserva
+fica intacta. O mesmo pela `/transferencias`. **Metade positiva:** uma **SAIDA** citando reserva manual continua aceita e
+consumindo; citando reserva de requisição, continua a recusa da Etapa 77.
+
+**9. O que NÃO mudou, de propósito.** R1 esperando 4; o Almoxarife lança uma **entrada avulsa** de 4 em
+**Movimentações** (entrada avulsa não distribui a quem espera — Etapa 74); o Gestor aprova R3 **depois** → **R3 leva os
+4**. Isto não é corrida, é a regra de sempre (**B397**, **C135**); mudar é decisão (**B420**).
+
+**10. O e-mail de estoque mínimo não segura mais as aprovações.** Com o servidor de e-mail configurado e um material
+abaixo do mínimo, processar a nota dele e aprovar uma requisição do mesmo material: a aprovação responde na hora; o
+e-mail de mínimo sai **uma** vez, logo depois.
+
+### O que esta etapa NÃO cobre
+
+1. **Saída avulsa, reserva manual e separação** no instante exato de uma liberação não entram na fila (**C145**,
+   **B430**).
+2. **O conserto de raiz da quarentena** (o material crítico entrar já retido) — candidata.
+3. **Mais de um servidor** — a fila vive na memória de um processo só (**C132**).
+4. **Cancelar pelos outros módulos uma requisição já reservada** — continua recusado (**C149**; Etapa 92).
+5. **Estorno da entrada × aprovação** — tem a forma da C131 e não foi medido (D (91)).
+6. **Prazo para esperar a fila** — não há; a tela desiste em 30 s (**C150**).
+7. **O pedido duplicado por reenvio** com aprovação automática (**C147**).
+8. **A reserva manual alheia** (**C139**, **B428**).
+9. **A separação ressuscitar requisição cancelada** — anterior à etapa (D (91)).
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0) mostrou que a inversão não era só da inspeção: a **nota** e a **não conformidade** invertiam a fila
+igual, 8 de 8 vezes em cada encaixe; e achou a janela da quarentena (**C142**). A **revisão do plano** (0 bloqueantes, 6
+importantes, 10 menores) corrigiu antes de executar, entre outros: um caso de falha do cancelamento que era impossível
+(a função engole a falha de cada reserva — virou duas mensagens de log), controles positivos que não conseguiam cair
+(a prova da ordem crescente e a do status gravado dentro da fila), e o lugar do recálculo (dentro da fila travaria para sempre). **Na execução:** a T0 achou **18** arquivos de teste
+que trocam funções do serviço, não 12 como o plano contava; a T1 achou o **C151** (dois **Aprovar** simultâneos deixavam
+a requisição sem reserva — o plano previa que esse caso continuaria verde sem a trava, e ele caiu); a T2 teve de mudar
+**um** teste fora da lista (o do processamento concorrente da mesma nota: o gancho esperava que outro processamento da
+**mesma** nota entrasse enquanto o primeiro segurava a fila — agora ele espera a fila; em produção só custa tempo, e o
+primeiro continua perdendo a marca com 409 como antes; as asserções não mudaram).
+
+A **revisão adversarial do código** (três revisores, executando) achou **4 problemas reais** e **5 mutações** que a
+suíte deixava passar, sem nenhuma regressão (cinco portas concorrentes em 20 rodadas: 0 travamentos, 0 fila errada):
+- **Grave — o e-mail de estoque mínimo dentro da fila** (**B429**, consertado): um servidor de e-mail lento segurava
+  todas as aprovações do material.
+- **A janela da quarentena era mais larga que a declarada** (**C145**, medida e declarada): o plano dizia
+  "intermitente, ~10%" — **estava incompleto**: com o servidor de e-mail configurado e o material abaixo do mínimo, a
+  janela **era o tempo do e-mail** (19 de 21 saídas avulsas pegavam o material). Com o e-mail fora da fila, voltou a
+  poucos milissegundos.
+- **A aprovação lia os materiais antes de pegar a fila** (**B431**, consertado em duas rodadas): o plano afirmava,
+  como "confirmado, não é dúvida", que ler os materiais da requisição antes de pegar a trava era estável — **estava
+  errado**: vale para troca de material, não para item **novo** (a requisição nasce antes dos itens). O primeiro
+  conserto (reler dentro) não bastou; o segundo pôs a prova em quem reserva.
+- **O pedido duplicado por reenvio** (**C147**, declarado).
+- **Cinco mutações** sobreviviam (a gravação e a devolução da aprovação automática fora da fila; a gravação da
+  aprovação por valor fora da fila; a devolução do **Aprovar** que perde fora da fila; a recusa do número de reserva
+  só em alguns tipos; a fila tratando "5" e 5 como materiais diferentes) — **todas mortas por teste** (**B433**).
+- **Cinco menores declarados:** o log enganoso e a trilha da corrida cancelamento × aprovação (**C148**); a tela dos
+  outros módulos oferecendo Cancelar onde a API recusa (**C149**); o custo da fila numa nota grande e a falta de prazo
+  (**C150**).
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 91 entregue (2026-10-08):** **a aprovação não passa mais na frente de quem esperava o material.** Quem libera
+  material (a nota, a inspeção que aprova, a não conformidade que aceita) e quem aprova requisição (o **Aprovar**, o
+  **Aprovar Liberação** e a aprovação automática) entram numa fila por material: a aprovação feita no mesmo instante
+  espera a liberação entregar a quem esperava (**C131** resolvido — e a medição mostrou que a nota e a não conformidade
+  invertiam igual). Fecharam junto: a janela em que o material crítico a caminho da inspeção podia ser reservado
+  (**C142**), dois **Aprovar** simultâneos que deixavam a requisição sem reserva (**C151**), o cancelamento pelas telas
+  dos outros módulos que deixava reserva presa (**C141** resolvido), e o número de reserva em movimento que não é saída
+  (recusado). A revisão adversarial tirou o e-mail de estoque mínimo de dentro da fila (um servidor de e-mail lento
+  segurava as aprovações) e fechou a aprovação de requisição ainda sendo gravada. **O que é seu:** a consulta **A42**; as
+  decisões **B419 a B433** (a **B403** foi substituída pela **B419**); os avisos **C142 a C151** (com o **C131** e o
+  **C141** resolvidos; o **C143** e o **C144** mudam o que quem opera e quem integra veem; o **C149** é a próxima etapa);
+  as limitações **(91)** em D e as verificações **(91)** em F. **Próxima: Etapa 92 — o cancelamento pelos outros
+  módulos aceita o que a tela oferece (C149) — ver o plano da Etapa 91.**
 
 - **Etapa 77 entregue (2026-10-08):** **a reserva de uma requisição só sai pela requisição.** Uma saída pela API de
   movimentações que cita a reserva de uma requisição é recusada — o material dela só sai pela entrega (**C136**
@@ -18550,9 +19020,9 @@ oferecer o **Transferir** que o servidor passou a recusar (**B417**).
   **Liberar** antes do formulário e não oferece **Transferir** nessas linhas. **O que é seu:** a consulta **A41**; as
   decisões **B407 a B418** (a **B402** foi substituída pela **B407**); os avisos **C139 a C141** (o **C140** muda o que
   integrações e quem pede requisição por outro módulo veem; o **C141** é um furo novo do cancelamento pelos outros
-  módulos); as limitações **(77)** em D e as verificações **(77)** em F. **Próxima: Etapa 91 — a inversão inspeção ×
-  Aprovar (C131) — ver o plano da Etapa 77.** *(Por que 91 e não 78: desde a unificação de 2026-10-07 a numeração de
-  etapas é uma só para todos os módulos, e as Etapas 78 a 90 foram as do Compras/núcleo — ver
+  módulos); as limitações **(77)** em D e as verificações **(77)** em F. ~~**Próxima: Etapa 91 — a inversão inspeção ×
+  Aprovar (C131) — ver o plano da Etapa 77.**~~ *(Feita — Etapa 91.)* *(Por que 91 e não 78: desde a unificação de
+  2026-10-07 a numeração de etapas é uma só para todos os módulos, e as Etapas 78 a 90 foram as do Compras/núcleo — ver
   `docs/compras-novidades-por-etapa.md`, **B18**.)*
 
 - **Etapa 76 entregue (2026-10-02):** **liberar ou deixar vencer a reserva de uma requisição atualiza o status dela.**

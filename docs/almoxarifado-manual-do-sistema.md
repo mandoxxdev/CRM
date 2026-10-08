@@ -253,7 +253,7 @@ Desde a Etapa 35 a legenda fica ao lado do campo, na própria tela (constante `L
 
 - Um material entra na condição "crítico" quando **Estoque Mínimo é maior que zero** *e* **Saldo Atual é menor ou igual ao Estoque Mínimo**. Material com mínimo zerado nunca é crítico — zero significa "não controlado por mínimo", não "mínimo é zero".
 - É essa mesma condição que alimenta o KPI **Estoque Crítico** do Dashboard, a lista dos dez itens mais críticos (ordenados pela razão saldo ÷ mínimo, do menor para o maior) e o filtro de estoque baixo na lista de Materiais.
-- O **alerta por e-mail** não é enviado a cada movimentação: ele dispara na **travessia da fronteira**, quando o material estava acima do mínimo e passa a estar no mínimo ou abaixo. Enquanto continuar abaixo, não repete. Quando a reposição levar o saldo de volta para acima do mínimo, o estado é reiniciado e um novo alerta poderá ser enviado na próxima queda. O destinatário é configurado em **Configurações → Configurações Gerais**, campo "E-mail para Alertas de Estoque".
+- O **alerta por e-mail** não é enviado a cada movimentação: ele dispara na **travessia da fronteira**, quando o material estava acima do mínimo e passa a estar no mínimo ou abaixo. Enquanto continuar abaixo, não repete. Quando a reposição levar o saldo de volta para acima do mínimo, o estado é reiniciado e um novo alerta poderá ser enviado na próxima queda. O destinatário é configurado em **Configurações → Configurações Gerais**, campo "E-mail para Alertas de Estoque". O envio do e-mail não segura o resto do sistema: quando a queda acontece numa entrada de nota, ou numa decisão de inspeção ou de não conformidade, o e-mail sai **depois** que a operação termina de distribuir o material — as outras operações do mesmo material não esperam o servidor de e-mail. Um alerta por material de cada vez: se dois movimentos do mesmo material cruzarem o mínimo enquanto o primeiro e-mail ainda está sendo enviado, sai um só. A conexão com o servidor de e-mail tem prazo — 15 segundos para conectar, 15 para a resposta inicial do servidor e 20 sem resposta durante o envio; estourado o prazo, o envio falha, o alerta não é dado como enviado e o próximo movimento do material que ainda estiver no mínimo ou abaixo tenta de novo.
 - A **sugestão de compra** mora na tela **Reposição e Compras** (21b), com régua própria — o
   mínimo é o **chão** dela: material abaixo do mínimo sempre aparece sugerido. Existe também
   uma verificação automática mais antiga (restrita ao Administrador, em rota de configuração)
@@ -1552,6 +1552,7 @@ Regras:
 - **Confirmar recebimento** é o testemunho do **próprio solicitante** de que o material chegou às mãos dele. **Não há atalho de administrador**: *"Apenas o solicitante pode confirmar o recebimento"*. Só vale nos status Entregue, Parcialmente Atendida e Encerrada (*"Confirmação de recebimento não permitida no status EM_SEPARACAO"*), e só uma vez (*"Recebimento já confirmado"*).
 - **Encerrar** fecha a requisição de vez: cancela o saldo pendente e nenhuma entrega futura é aceita. Parte de Entregue ou Parcialmente Atendida, e exige o perfil de aprovação — *"Sem permissão para encerrar requisições"*. O motivo é opcional — contraste deliberado com a rejeição, onde ele é obrigatório. Encerrar **libera as reservas** que a requisição ainda segurava (no livro, *"Liberação por encerramento de requisição"*) — inclusive a que a nota reservou para ela na chegada (9.3b). **Rejeitar** a liberação por valor (8.3) também libera (*"Liberação por rejeição de valor da requisição"*).
 - **Cancelar** é do solicitante (ou de administrador do sistema): sem permissão, *"Sem permissão"*; em status que não aceita, *"Não é possível cancelar neste status"*. Cancelar **libera as reservas** daquela requisição.
+- **Cancelar pela tela Minhas Requisições dos outros módulos** (Comercial, Compras, Financeiro, Fábrica, Frota) segue uma regra mais estreita: só **quem pediu** cancela, e só a requisição **Pendente** ou **Aprovado**. Em qualquer outro status — inclusive as *Parcialmente/Totalmente Reservada*, *Aguard. Estoque* e *Aguard. Compra*, para as quais essa tela também mostra o botão **Cancelar Requisição** — a recusa é *"Requisição não encontrada ou não pode ser cancelada"* e nada muda; essas se cancelam pela tela de requisições do almoxarifado. O cancelamento aceito **libera as reservas** que a requisição ainda segurava (no livro, *"Liberação por cancelamento de requisição"*; na reserva, o motivo *"Requisição cancelada"*) e fica registrado na **Auditoria**, com o status que a requisição tinha antes. O material liberado volta ao disponível solto — não é redistribuído para quem esperava (o mesmo da liberação à mão, 9.6).
 - **Excluir** uma requisição **estorna as entregas já feitas** (devolve ao estoque, com linha no livro) e **libera as reservas** que ela ainda segurava. A devolução é **por saída**, e só do que **ainda não voltou**: o que já foi devolvido pela Devolução citando aquela saída é descontado, então excluir depois de devolver não credita o estoque duas vezes. Cada quantidade volta ao **lote** de onde saiu e ao **endereço** de onde saiu, se esse endereço ainda pode receber o material (ativo, não bloqueado, com o tipo do material permitido); senão, vai para o endereço padrão. Material com número de série volta **com as mesmas séries** que saíram (voltam a Em estoque); se as séries daquela saída não batem com o que falta devolver, a exclusão é recusada com *"Chapa 3mm: as series desta entrega nao batem com o que falta devolver — use a devolucao"*. Tudo é conferido antes da primeira devolução — se o padrão também não puder receber, a exclusão é recusada com a mensagem do endereço, e nada volta. Numa requisição antiga cujo histórico de saídas não fecha com o total entregue, o estorno é feito numa entrada só, no endereço padrão e sem lote, descontado o que já foi devolvido. É restrito a administradores do almoxarifado ou super administrador: *"Apenas administradores do Almoxarifado ou Super Administrador podem excluir requisições"*.
 
 ### 7.7 Anexos da requisição
@@ -1683,7 +1684,7 @@ Existe ainda uma configuração de **aprovação automática** (**Configuraçõe
 
 **Ela faz o mesmo que a aprovação comum depois de aprovar:** reserva o saldo disponível (9.3) e grava **Totalmente Reservada**, **Parcialmente Reservada**, ou — sem saldo nenhum — **Aguard. Compra** / **Aguard. Estoque** (7.1). A reserva fica no nome de quem criou ou enviou a requisição. Por integração, a resposta da criação ou do envio traz o status gravado e a indicação de aprovação automática.
 
-Se duas requisições disputam o último saldo ao mesmo tempo, a que fica sem nada é gravada esperando (*Aguard. Compra* ou *Aguard. Estoque*), nunca *Aprovado* sem reserva. Se a aprovação automática falhar no meio (por exemplo, o banco ocupado), nada fica reservado: a requisição continua **Pendente** e é aprovada pela forma comum.
+Se duas requisições disputam o último saldo ao mesmo tempo, a que fica sem nada é gravada esperando (*Aguard. Compra* ou *Aguard. Estoque*), nunca *Aprovado* sem reserva. A aprovação automática também espera a nota, a inspeção ou a não conformidade em andamento dos mesmos materiais (9.3d). Se a tela desistir de esperar a gravação (30 segundos), confira na lista se a requisição foi gravada **antes** de enviar de novo: um segundo envio grava uma segunda requisição. Se a aprovação automática falhar no meio (por exemplo, o banco ocupado), nada fica reservado: a requisição continua **Pendente** e é aprovada pela forma comum.
 
 Três ressalvas:
 
@@ -1805,7 +1806,7 @@ a distribuir = mínimo(o que ENTROU LIVRE desta nota, disponível do material na
 
 **A reserva criada.** É uma reserva de requisição comum — a entrega a consome como qualquer outra (9.4). Na tela **Reservas** ela aparece no nome de **quem processou a nota**, com a observação *"Reserva na chegada do recebimento ⟨REC⟩ — requisição ⟨REQ⟩"*. Se a configuração de dias de validade estiver ligada, ela nasce com validade (9.7).
 
-**Nunca derruba a nota.** Se a reserva falhar por qualquer motivo, a nota fica **Processado** do mesmo jeito; quem esperava pode separar o que estiver disponível. Duas notas do mesmo material processadas ao mesmo tempo — ou uma nota e uma decisão de inspeção do mesmo material — não disputam: a distribuição de um material espera a anterior do mesmo material terminar, e cada requisição fica com o que lhe cabe. Como defesa, o que falta é relido antes de cada reserva, e o que passar do pendente é desfeito (*"Reserva na chegada acima do pendente — excesso desfeito"*).
+**Nunca derruba a nota.** Se a reserva falhar por qualquer motivo, a nota fica **Processado** do mesmo jeito; quem esperava pode separar o que estiver disponível. Duas notas do mesmo material processadas ao mesmo tempo — ou uma nota e uma decisão de inspeção do mesmo material — não disputam: a distribuição de um material espera a anterior do mesmo material terminar, e cada requisição fica com o que lhe cabe. Uma aprovação de requisição do mesmo material, no mesmo instante, também espera a nota terminar (9.3d). Como defesa, o que falta é relido antes de cada reserva, e o que passar do pendente é desfeito (*"Reserva na chegada acima do pendente — excesso desfeito"*).
 
 **O e-mail.** O aviso ao solicitante (21c) diz, em cada material, *"reservado para a sua requisição: N"* quando houve reserva, e termina com uma de três frases (21c.1). Quem esperava e não ficou com nada — nem há saldo livre do material — **não** recebe o aviso daquela nota.
 
@@ -1832,7 +1833,22 @@ Saldo que já estava no estoque (de ajuste, de outra nota, de uma entrada manual
 
 **O e-mail.** O solicitante de cada requisição que ganhou reserva — ou que ainda tem saldo livre do material para separar — recebe *"Material liberado para a sua requisição"* (21c.1), uma vez por decisão.
 
-**O que NÃO reserva:** **Desbloquear Material** (o desbloqueio avulso da tela **Inspeções**) e o estorno de um bloqueio avulso — são ajustes de prateleira, sem documento; o material volta ao disponível para quem chegar primeiro. E uma requisição aprovada **no exato instante** em que a inspeção é decidida pode levar o material antes de quem esperava: o **Aprovar** não passa pela distribuição de quem esperava.
+**O que NÃO reserva:** **Desbloquear Material** (o desbloqueio avulso da tela **Inspeções**) e o estorno de um bloqueio avulso — são ajustes de prateleira, sem documento; o material volta ao disponível para quem chegar primeiro.
+
+**Aprovação no mesmo instante.** Uma requisição aprovada enquanto a inspeção (ou a não conformidade) do material está sendo decidida espera a decisão terminar e leva só o que sobrou depois de quem esperava (9.3d).
+
+### 9.3d A aprovação espera quem está liberando o mesmo material — a fila não se inverte
+
+Três operações põem material no disponível e o distribuem para quem esperava: o processamento da nota (9.3b), a decisão da inspeção e a não conformidade aceita (9.3c). Três formas de aprovar tiram do disponível: **Só Aprovar**, **Aprovar Liberação** e a aprovação automática (9.3). As seis passam por uma mesma fila, por material:
+
+- Enquanto uma nota, uma inspeção ou uma não conformidade de um material está em andamento — do lançamento que põe o material no estoque até a reserva para quem esperava —, a aprovação de qualquer requisição que tenha esse material **espera** ela terminar e só então lê o disponível. Por isso quem esperava fica com o material, e a requisição aprovada naquele instante leva só o que sobrou — o mesmo resultado de uma aprovação feita um momento depois.
+- A aprovação espera por **todos** os materiais da requisição; a nota segura **todos** os materiais dela. Operações de materiais diferentes não esperam umas pelas outras.
+- Na entrada de material crítico (14.6), a espera cobre a operação inteira — a entrada e a retenção para inspeção —, então uma aprovação nunca reserva o que está indo para a inspeção.
+- Duas aprovações da mesma requisição ao mesmo tempo: uma vence e reserva; a outra é recusada — em geral com *"Transição inválida: ⟨status⟩ → APROVADO"* — e não reserva nada.
+- A espera costuma ser de frações de segundo; atrás de uma nota com centenas de materiais, a aprovação de um material dela espera a nota inteira. A espera não tem limite de tempo: se a tela desistir de esperar (30 segundos), o servidor ainda conclui a aprovação — reabra a requisição antes de aprovar de novo.
+- **Requisição ainda sendo gravada.** Se a aprovação chegar enquanto os itens da requisição ainda estão sendo gravados, ela pode ser recusada com *"A requisição ganhou itens enquanto era aprovada (ainda está sendo gravada); tente aprovar de novo."* — nada foi reservado; basta aprovar de novo. Na aprovação automática, esse caso deixa a requisição **Pendente**, para a aprovação comum.
+
+**O que não entra nessa fila:** a saída avulsa (tela **Movimentações** ou integração), a reserva manual (tela **Reservas**) e a separação. Elas usam o disponível do momento em que são lançadas, sem esperar a nota, a inspeção ou a não conformidade do material. A fila também vale para **um** servidor do sistema: com mais de um servidor atendendo ao mesmo tempo, as operações de servidores diferentes não esperam umas pelas outras.
 
 ### 9.4 Consumo contra reserva
 
@@ -1852,6 +1868,12 @@ Ao consumir, o físico **e** o reservado baixam juntos, no mesmo instante. **Res
 > *A reserva ⟨id⟩ é da requisição ⟨número⟩ — o material reservado para ela só sai pela entrega da requisição (tela Requisições), não por movimentação avulsa*
 
 Vale para a reserva em qualquer status — ativa, liberada, vencida ou já consumida: a regra é "nunca por esta porta", não "não agora". Reserva inexistente ou de outro material continua com *"Reserva não encontrada para este material"*. O motivo: a entrega da requisição é que passa pela separação, pela conferência do material crítico, pela assinatura e pela retirada, e é ela que marca o item como entregue — uma saída avulsa levaria o material e a requisição continuaria esperando por ele. A reserva **manual** continua consumível por qualquer saída que a cite.
+
+**Citar reserva só vale numa saída que a consome.** Um movimento que não é saída — entrada, ajuste (o que não é o negativo), devolução, transferência e os demais — e cita o número de uma reserva (de requisição ou manual) é **recusado antes de qualquer efeito**: nada muda no estoque, no livro nem na reserva. A mensagem:
+
+> *reserva_id só vale numa saída que consome a reserva — o tipo ⟨tipo⟩ não consome reserva; tire o reserva_id do movimento*
+
+Os lançamentos que o próprio sistema grava ao criar e ao liberar uma reserva continuam citando-a. Um tipo de movimento inválido, um material inexistente ou inativo recebem as mensagens deles antes desta.
 
 **Na entrega de requisição isso é automático e pode ser dividido:** se a entrega pedir mais do que a reserva tem, o excedente sai pelo caminho normal (validado contra o disponível) e a parte reservada é consumida citando a reserva. O excedente é processado **primeiro**, porque é o único que disputa saldo com o resto da empresa — se vai falhar, falha antes de mexer na reserva.
 
@@ -2800,7 +2822,7 @@ Ao processar a nota, além de somar a quantidade ao saldo do material, o sistema
 
 ### 14.6 Item que exige inspeção entra retido — não é barrado
 
-Material marcado como **crítico** no cadastro, com a configuração "Exigir inspeção para materiais críticos no recebimento" ligada, **entra no estoque normalmente** e, no mesmo momento, é **retido para inspeção**.
+Material marcado como **crítico** no cadastro, com a configuração "Exigir inspeção para materiais críticos no recebimento" ligada, **entra no estoque normalmente** e, na mesma operação do recebimento, é **retido para inspeção**.
 
 Isso é deliberado: o material está fisicamente no galpão desde que o caminhão descarregou. Negar a entrada faria o sistema afirmar que não existe algo que existe, e a inspeção passaria a decidir sobre um saldo que ainda não tinha entrado.
 
@@ -2815,6 +2837,8 @@ O efeito prático:
 | Aparece na fila de Inspeções Pendentes | Sim | Não |
 
 O item retido aparece na tela **Inspeções Pendentes** com a quantidade retida, o recebimento de origem, a nota fiscal e **há quantos dias está esperando**.
+
+**A entrada e a retenção são dois lançamentos seguidos da mesma operação.** As aprovações de requisição esperam a operação inteira (9.3d) e nunca reservam o que vai ser retido. Uma saída avulsa ou uma reserva manual lançada exatamente entre os dois lançamentos — uma fração de segundo — não espera: pode usar a quantidade que em seguida fica retida, e o material passa a mostrar disponível **negativo** (e, se a saída levou o material, mais quantidade retida do que físico). Quando um material crítico aparecer com disponível negativo, confira com a Qualidade antes de decidir a inspeção dele: aprovar esses itens libera um saldo que já saiu da prateleira.
 
 ### 14.7 Anexos do recebimento
 

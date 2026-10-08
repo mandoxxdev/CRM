@@ -153,7 +153,7 @@
 > linha do pedido. Mais **6 Minor** (`e253ad2` corrida do `<select>`; `93cce5e` os dois contratos que
 > a suíte exercitava sem afirmar; `e0f8b18` o hash da T6; `13ad237` `var(--gmp-danger)`, que **nunca
 > existiu** — só `--gmp-error` —, e por isso os avisos saíam na cor herdada).
-> **Última atualização:** 2026-10-02 (**Etapa 71** — o estorno da entrada da nota desconta a linha do pedido e reabre o pedido que o automático fechou; régua única por material; NF relançável depois de todas as entradas estornadas; estorno recusado com material em inspeção ou reprovado; a feature vai a 🟢 com a conferência física estruturada como corte); antes: 2026-10-01 (**Etapa 70** — aviso de entrada da nota e ao solicitante); antes: 2026-09-30 (**Etapa 57** — o destino por item no processamento da nota, e a devolução ao fornecedor saindo do endereço de entrada; antes: 2026-09-16, Etapa 37 — saldo do pedido, recebimento parcial pela tela,
+> **Última atualização:** 2026-10-08 (**Etapa 91** — a nota segura a trava de todos os materiais dela do `ENTRADA_COMPRA` até a reserva na chegada; corrigida à vista a descrição da quarentena da Etapa 5, que estava errada; a feature continua 🟢); antes: 2026-10-02 (**Etapa 71** — o estorno da entrada da nota desconta a linha do pedido e reabre o pedido que o automático fechou; régua única por material; NF relançável depois de todas as entradas estornadas; estorno recusado com material em inspeção ou reprovado; a feature vai a 🟢 com a conferência física estruturada como corte); antes: 2026-10-01 (**Etapa 70** — aviso de entrada da nota e ao solicitante); antes: 2026-09-30 (**Etapa 57** — o destino por item no processamento da nota, e a devolução ao fornecedor saindo do endereço de entrada; antes: 2026-09-16, Etapa 37 — saldo do pedido, recebimento parcial pela tela,
 > acumulador na entrada física e a situação derivada; antes: 2026-09-16, Etapa 36 — enum, NF duplicada, barreira de excedente,
 > quantidade conferida na tela e a régua do workflow; antes: 2026-09-16, Etapa 35 — erro de carga visível, painel que não mente e
 > barra de etapas neutra; antes: 2026-09-16, Etapa 34 — anexos no painel + primeira suíte da tela;
@@ -185,6 +185,13 @@ Todos os tipos de entrada da spec, conferência documental e física estruturada
   `quantidade_em_inspecao` juntos, via movimentação `QUARENTENA` vinculada ao recebimento
   (`recebimento_id`) — fora do disponível, mas dentro do físico. Item comum continua entrando
   direto no disponível, sem mudança (`4db5e11`).
+  > ⚠️ **Etapa 91 — isto dizia "sobe o físico e `quantidade_em_inspecao` juntos, via movimentação `QUARENTENA`"; estava
+  > errado:** são **dois** movimentos do motor em sequência — `ENTRADA_COMPRA` (o físico sobe e o material fica **livre**)
+  > e depois `QUARENTENA` (soma em `quantidade_em_inspecao`, sem guarda de disponível). Entre os dois há uma janela em que
+  > o material crítico está no disponível: uma aprovação no meio reservava o que ia para a inspeção (disponível −4; **C142**).
+  > O certo, desde a Etapa 91 (`e472f26c`): a nota segura a trava de **todos** os materiais dela durante os dois
+  > movimentos, e as aprovações e a distribuição esperam; a janela continua aberta só contra quem **não** pega a trava —
+  > saída avulsa, reserva manual, separação — com ~11 comandos SQL de largura depois do F3 (**C145**, B430).
 - **Etapa 6 (2026-08-09):** **é aqui que o lote nasce.** Antes, `RecebimentosAlmoxarifado.js` não
   mencionava lote em lugar nenhum, embora a coluna `lote TEXT` existisse no item e o backend a
   repassasse ao motor — ou seja, o ponto em que um lote naturalmente nasce (a NF do fornecedor) era
@@ -999,6 +1006,25 @@ que aprova e a NC que aceita reservam o liberado — spec 07 e 09. Do lado do re
 a nota for retomada depois de falhar no meio, a reserva da chegada não conta como livre o item que já tem inspeção
 registrada (`1b2a6959`, B390); e o e-mail da chegada passou a usar o pendente de entrega menos o hold alheio — a mesma
 régua da reserva (`655d75b8`, B393) — e a seguir a regra do dono (`18405a2e`, B395).)*
+
+## Etapa 91 (2026-10-08) — a nota segura a trava dos materiais dela até a distribuição
+
+Não é item novo desta feature (a fila mora na 07), mas a seção crítica começa aqui. `concluirProcessamentoNota` e
+`concluirAprovacaoDireta` leem os materiais de **todos** os itens da nota (`SELECT DISTINCT material_id … ORDER BY
+material_id`) e rodam, sob `travaPorMaterial.comLockDosMateriais`, de `darEntradaEstoque` (o `ENTRADA_COMPRA` e, no
+crítico, a `QUARENTENA`) até a reserva na chegada (`reservarChegadaSemFalhar` → `reservarChegadaParaQuemEspera(…, {
+sobTrava, pendencia })`), passando pela conta a pagar, o `UPDATE` da situação, a auditoria e
+`fecharSolicitacoesDoPedido` (`e472f26c`). O recálculo da 76 roda depois de soltar (`concluirPendencia` no `finally` de
+fora) e o aviso da 70 depois dele, só no sucesso. Um `/aprovar` do mesmo material espera: a nota × aprovação não
+inverte mais a fila (**C131**), e a janela `ENTRADA_COMPRA` → `QUARENTENA` fecha contra quem pega a trava (**C142** —
+ver a correção no item da Etapa 5 acima). O alerta de estoque mínimo, que o motor aguardava dentro da seção (com SMTP de
+3 s, o `/aprovar` concorrente esperava 3032 ms), roda depois de soltar, e o SMTP do alerta ganhou prazo (`14cf6df7`,
+B429). Teste que mudou: `recebimentoProcessamentoConcorrente` ("DONO: processamento longo perde a marca vencida") — o
+gancho esperava B processar a nota de dentro da entrada de A, que agora segura a trava; passou a esperar só B pegar a
+marca, asserções iguais. **Fica de fora:** a janela contra saída avulsa, reserva manual e separação (**C145**); a aprovação
+espera atrás de uma nota grande — nota de 300 materiais, 507 ms; `/aprovar` de material dela, 410 ms (**C150**); estorno
+da entrada × aprovação (`liberarParaEstorno` fora de trava — D (91)). Detalhes: spec 07 e as novidades (B419–B433,
+C142–C151).
 
 ## Regras essenciais + testes de API exigidos
 
