@@ -287,7 +287,12 @@ const { gerarHTMLPropostaPremiumV2, substituirPlaceholdersProposta } = require('
 // vive para sempre — e reciclado depois de PDFS_ANTES_DE_RECICLAR e derrubado quando fica
 // ocioso, para nao segurar memoria a toa entre um orcamento e outro. Isso importa aqui:
 // ja investigamos queda do banco por pressao de memoria neste servidor.
-const PDFS_ANTES_DE_RECICLAR = 20;
+// Override por env (PDF_RECICLAR_APOS, inteiro >= 1) so para a prova real reciclar com poucos
+// PDFs (Etapa 80); valor ausente ou invalido cai no default 20.
+const PDFS_ANTES_DE_RECICLAR = (() => {
+  const n = Number(process.env.PDF_RECICLAR_APOS);
+  return Number.isInteger(n) && n >= 1 ? n : 20;
+})();
 const OCIOSO_ATE_FECHAR_MS = 5 * 60 * 1000;
 let navegadorPdf = null;
 let pdfsGerados = 0;
