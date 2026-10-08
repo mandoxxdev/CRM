@@ -247,6 +247,7 @@ const {
 } = require('./services/runtimeSecrets');
 const { deveIncluirNoBackup, backupMaisRecente } = require('./services/backupPackage');
 const { validarTokenBackup } = require('./services/backupAuth');
+const { tokenDaRequisicao, ERRO_TOKEN_NA_URL } = require('./services/tokenDaRequisicao');
 const {
   mascararValorConfig,
   podeGravarSegredo,
@@ -2928,14 +2929,14 @@ function dbAllWithRetry(sql, params = [], callback, maxRetries = 3) {
 }
 
 // Authentication Middleware
+// Etapa 84 (B39): so header (Bearer ou X-Auth-Token). `?token=` vazava a sessao em URL/logs e
+// agora recebe 401 TOKEN_NA_URL; o aviso usa req.path, nunca a URL com a query (que tem o token).
 function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  let token = authHeader && authHeader.split(' ')[1];
-  if (!token && req.headers['x-auth-token']) {
-    token = req.headers['x-auth-token'];
-  }
-  if (!token && req.query && req.query.token) {
-    token = req.query.token;
+  const { token, motivo } = tokenDaRequisicao(req);
+
+  if (motivo === 'TOKEN_NA_URL') {
+    console.warn(`[auth] token na URL recusado: ${req.method} ${req.baseUrl || ''}${req.path}`);
+    return res.status(401).json(ERRO_TOKEN_NA_URL);
   }
 
   if (!token) {

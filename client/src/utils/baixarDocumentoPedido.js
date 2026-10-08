@@ -7,7 +7,8 @@
  *
  * Por que blob + `<a download>` e não `window.open`/`?token=`: a autenticação deste app é por
  * Bearer no header (interceptor de `services/api.js`), que uma navegação crua não envia. O servidor
- * até aceita `?token=` como fallback, mas isso vazaria o token em URL/histórico/logs — e nenhum
+ * aceitava `?token=` como fallback até a Etapa 84 (hoje: 401 TOKEN_NA_URL), porque vazaria o token
+ * em URL/histórico/logs — e nenhum
  * outro download do app faz isso (`RelatoriosAlmoxarifado.js`, `PropostasList.js`). B27 do plano.
  *
  * Quem nomeia o arquivo é o SERVIDOR (`Content-Disposition`); o fallback existe porque em dev por

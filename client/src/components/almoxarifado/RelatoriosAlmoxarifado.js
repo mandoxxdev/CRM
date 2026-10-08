@@ -31,9 +31,9 @@ import './Almoxarifado.css';
  * CustosViagens.js): `api.get(..., { responseType: 'blob' })` + link temporário com
  * `URL.createObjectURL`. NÃO um `window.location.href`/anchor apontando direto pra rota: a
  * autenticação deste app é por Bearer token em header (services/api.js interceptor), que uma
- * navegação crua do browser não envia (o servidor até aceita `?token=` como fallback —
- * `authenticateToken` em server/index.js — mas isso vazaria o token na URL/histórico/logs, e
- * nenhum outro download do app faz isso). Usar a mesma instância do axios garante o header
+ * navegação crua do browser não envia (o servidor aceitava `?token=` como fallback até a
+ * Etapa 84, que o removeu: hoje responde 401 TOKEN_NA_URL — vazaria o token na URL/histórico/logs,
+ * e nenhum outro download do app faz isso). Usar a mesma instância do axios garante o header
  * certo, mantém o download testável por mock e não abre uma exceção de segurança nova.
  */
 

@@ -8,8 +8,8 @@
  *
  * ── POR QUE NAO `?token=` ────────────────────────────────────────────────────────────────────
  *
- * `authenticateToken` (server/index.js:2874) ACEITA o JWT na query string, e usa-lo seria a
- * correcao de menor esforco. Esta base ja recusou esse caminho, com raciocinio escrito, em
+ * `authenticateToken` (server/index.js) ACEITAVA o JWT na query string (removido na Etapa 84: hoje
+ * responde 401 TOKEN_NA_URL), e usa-lo seria a correcao de menor esforco. Esta base ja recusou esse caminho, com raciocinio escrito, em
  * `client/src/components/almoxarifado/RelatoriosAlmoxarifado.js:34-37`: vazaria o token na URL, no
  * historico do navegador, no `Referer` e no log do nginx, e nenhum download do app faz isso.
  * O JWT daqui nao expira em minutos e abre o CRM INTEIRO.
