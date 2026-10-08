@@ -71,7 +71,7 @@ async function rodarAdiadas(secao) {
 async function comLockDoMaterial(materialId, fn) {
   const externa = secaoAtual.getStore();
   if (externa && externa.ativa) return segurarTrava(materialId, fn);
-  const secao = { ativa: true, adiadas: [] };
+  const secao = { ativa: true, adiadas: [], materiais: new Set() };
   try {
     return await secaoAtual.run(secao, () => segurarTrava(materialId, fn));
   } finally {
@@ -88,12 +88,28 @@ async function segurarTrava(materialId, fn) {
   const cauda = anterior.then(() => minha);
   filaPorMaterial.set(chave, cauda);
   await anterior;
+  const secao = secaoAtual.getStore();
+  if (secao) secao.materiais.add(chave);
   try {
     return await fn();
   } finally {
     soltar();
     if (filaPorMaterial.get(chave) === cauda) filaPorMaterial.delete(chave);
   }
+}
+
+/**
+ * Etapa 91 (Fase 5, achado F1): dos `materialIds`, os que a secao ATUAL nao segura. Fora de secao devolve
+ * `[]` (quem chama fora de uma trava nao e cobrado). Ao contrario de `travado`, e prova: olha o contexto
+ * de quem pergunta, nao o `Map` compartilhado (onde o `true` pode ser de outro).
+ */
+function materiaisForaDaSecao(materialIds) {
+  const secao = secaoAtual.getStore();
+  if (!secao || !secao.ativa) return [];
+  return [...new Set((materialIds || []).filter((x) => x != null && x !== '').map(Number)
+    .filter((x) => Number.isFinite(x)))]
+    .filter((m) => !secao.materiais.has(m))
+    .sort((a, b) => a - b);
 }
 
 /**
@@ -120,4 +136,6 @@ function travado(materialId) {
   return filaPorMaterial.has(Number(materialId));
 }
 
-module.exports = { comLockDoMaterial, comLockDosMateriais, travado, adiarParaDepoisDaSecao };
+module.exports = {
+  comLockDoMaterial, comLockDosMateriais, travado, adiarParaDepoisDaSecao, materiaisForaDaSecao,
+};

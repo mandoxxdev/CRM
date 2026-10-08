@@ -198,6 +198,77 @@ function portaoLimitado(p, rotulo) {
     assert.strictEqual(trava.travado(B), false);
   });
 
+  /** Grava itens novos em R no instante em que a aprovacao, JA DENTRO da trava de A, le os itens a reservar. */
+  const ITENS_SQL = /JOIN materiais_almoxarifado ma ON ir\.material_id = ma\.id\s+WHERE ir\.requisicao_id = \?/;
+  function itemChegaNaLeitura(R, A, novos) {
+    const origAll = db.all;
+    const reg = { disparos: 0, dentroDaTrava: [] };
+    db.all = function (sql, params, cb) {
+      if (ITENS_SQL.test(String(sql)) && Array.isArray(params) && Number(params[0]) === R && novos.length > 0) {
+        reg.disparos += 1;
+        reg.dentroDaTrava.push(trava.travado(A)); // so a secao da aprovacao segura A
+        const m = novos.shift();
+        return db.run(`INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada,
+          quantidade_separada, quantidade_entregue, quantidade_atendida) VALUES (?,?,?,0,0,0)`, [R, m, 4],
+        () => origAll.call(db, sql, params, cb));
+      }
+      return origAll.call(this, sql, params, cb);
+    };
+    reg.restaurar = () => { db.all = origAll; };
+    return reg;
+  }
+
+  await test('[91 F5-F1 (b)] o 2o item chega DEPOIS de a aprovacao pegar a trava e antes de ler os itens a reservar: ainda assim espera a trava do 2o material', async () => {
+    const A = await material(); const B = await material();
+    await sobe(A, 4); await sobe(B, 4);
+    const hB = segurar(B);
+    await comPrazo(hB.dentro, 5000, 'segurar B');
+    const R = await reqDireta('PENDENTE', [[A, 4]]);
+    const reg = itemChegaNaLeitura(R, A, [B]);
+    let p; let estado; let holdBPreso;
+    try {
+      p = como('GESTOR').put(`${API}/requisicoes/${R}/aprovar`);
+      estado = await estadoEm(p, 400);
+      holdBPreso = await holdDe(R, B);
+    } finally {
+      reg.restaurar();
+      hB.soltar();
+    }
+    const r = await comPrazo(p, 5000, '/aprovar');
+    await comPrazo(hB.fim, 5000, 'trava do teste');
+    assert.ok(reg.disparos >= 1 && reg.dentroDaTrava[0] === true, `o gancho tem de disparar dentro da secao: ${JSON.stringify(reg)}`);
+    assert.strictEqual(holdBPreso, 0, 'reservou B com a trava de B presa por outro');
+    assert.strictEqual(estado, 'pendente', `o /aprovar respondeu com a trava de B presa: ${r.status} ${JSON.stringify(r.body)}`);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(r.body.status, 'TOTALMENTE_RESERVADA', JSON.stringify(r.body));
+    assert.strictEqual(await holdDe(R, A), 4);
+    assert.strictEqual(await holdDe(R, B), 4);
+    assert.strictEqual(trava.travado(A), false);
+    assert.strictEqual(trava.travado(B), false);
+  });
+
+  await test('[91 F5-F1 (c)] a requisicao ganha material novo a CADA tentativa: 409 com a literal, nada reservado, R continua PENDENTE, nenhuma trava sobrando', async () => {
+    const A = await material(); await sobe(A, 4);
+    const novos = [];
+    for (let i = 0; i < 8; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      const m = await material(); await sobe(m, 4); novos.push(m);
+    }
+    const todos = [A, ...novos];
+    const R = await reqDireta('PENDENTE', [[A, 4]]);
+    const reg = itemChegaNaLeitura(R, A, novos);
+    let r;
+    try {
+      r = await comPrazo(como('GESTOR').put(`${API}/requisicoes/${R}/aprovar`), 5000, '/aprovar');
+    } finally { reg.restaurar(); }
+    assert.strictEqual(r.status, 409, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, 'A requisição ganhou itens enquanto era aprovada (ainda está sendo gravada); tente aprovar de novo.');
+    assert.ok(reg.disparos >= 3, `tres tentativas leem os itens: ${reg.disparos}`);
+    assert.strictEqual(await holdDe(R), 0, 'reservou algo');
+    assert.strictEqual(await st(R), 'PENDENTE');
+    for (const m of todos) assert.strictEqual(trava.travado(m), false, `material ${m} ficou travado`);
+  });
+
   // ══════════════ (a1) aprovacao automatica: o UPDATE guardado fica dentro ══════════════
   await test('[91 F5 RN-05 (f) automatica] POST /requisicoes com aprovacao automatica: com a EMISSAO do UPDATE guardado segura, a inspecao espera; R ja AGUARDANDO_ESTOQUE quando ela distribui e leva 4', async () => {
     await cfg('inspecao_material_critico', '1');

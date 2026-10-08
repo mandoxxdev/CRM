@@ -163,6 +163,13 @@ async function saldoDisponivelParaItem(db, item) {
  */
 async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}) {
   const itens = await carregarItensRequisicao(db, requisicaoId);
+  // Etapa 91 (Fase 5, F1): dentro de uma secao da trava (as tres portas de aprovacao), todo material a
+  // reservar tem de estar travado por ELA — conferido antes de reservar qualquer item, entao a recusa nao
+  // deixa nada para desfazer. Fora de secao nao cobra nada (ver `comTravaDaRequisicao`).
+  const foraDaTrava = travaPorMaterial.materiaisForaDaSecao(itens.map((i) => i.material_id));
+  if (foraDaTrava.length > 0) {
+    throw Object.assign(new Error(MSG_TRAVA_INCOMPLETA), { status: 409, code: 'TRAVA_INCOMPLETA', materiais: foraDaTrava });
+  }
   const reservas = [];
   let algumFaltou = false;
   let algumSeguro = false; // algum item com hold: criado agora OU ja existente (Etapa 73, Fase 5)
@@ -273,31 +280,30 @@ async function comTravaDaRequisicao(db, requisicaoId, fn) {
   // Etapa 91 (Fase 5, achado F1): "ler antes de travar e estavel" valia para TROCA de material, nao para
   // item NOVO. A requisicao nasce PENDENTE antes dos itens (`requisitionCreateService`: cabecalho, depois
   // um item por vez), entao um `/aprovar` que caia no meio da criacao lia {A}, travava so A e
-  // `prepararPosAprovacao` reservava B — gravado nesse meio-tempo — sem a trava de B. Agora o conjunto e
-  // RELIDO dentro da trava; se apareceu material novo, solta e tenta de novo com o conjunto novo (ordem
-  // crescente preservada: nunca se pede trava segurando outra fora de `comLockDosMateriais`). Limitado a
-  // TENTATIVAS_TRAVA_REQUISICAO: na ultima segue com o que tem (o comportamento de antes) — a criacao
-  // grava poucos itens e termina; um laco sem fim seria pior que a janela.
-  const lerMateriais = async () => (await dbAll(db, `SELECT DISTINCT material_id FROM itens_requisicao_almoxarifado
+  // `prepararPosAprovacao` reservava B — gravado nesse meio-tempo — sem a trava de B. Reler o conjunto
+  // dentro da trava NAO basta (medido: o item pode chegar depois da releitura e antes da leitura dos itens
+  // que vao ser reservados). Por isso a prova mora em quem reserva: `reservarItensAprovacao` confere, nos
+  // itens que acabou de ler e ANTES de reservar qualquer um, se a secao segura todos os materiais
+  // (`travaPorMaterial.materiaisForaDaSecao`); se nao, lanca `TRAVA_INCOMPLETA` sem ter reservado nada.
+  // Aqui a secao e solta e refeita com o conjunto maior (sempre por `comLockDosMateriais`: ordem crescente
+  // preservada). Limitado a TENTATIVAS_TRAVA_REQUISICAO: na ultima o 409 sobe — nunca uma reserva sem a
+  // trava, e nunca um laco sem fim.
+  let mats = (await dbAll(db, `SELECT DISTINCT material_id FROM itens_requisicao_almoxarifado
     WHERE requisicao_id = ? AND material_id IS NOT NULL ORDER BY material_id`, [requisicaoId]))
     .map((x) => Number(x.material_id));
-  let mats = await lerMateriais();
   for (let tentativa = 1; ; tentativa += 1) {
-    const ultima = tentativa >= TENTATIVAS_TRAVA_REQUISICAO;
-    const travados = mats;
-    // eslint-disable-next-line no-await-in-loop
-    const r = await travaPorMaterial.comLockDosMateriais(travados, async () => {
-      if (!ultima) {
-        const agora = await lerMateriais();
-        if (agora.some((m) => !travados.includes(m))) return { refazer: agora };
-      }
-      return { valor: await fn() };
-    });
-    if (!r.refazer) return r.valor;
-    mats = r.refazer;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      return await travaPorMaterial.comLockDosMateriais(mats, fn);
+    } catch (e) {
+      if (!e || e.code !== 'TRAVA_INCOMPLETA' || tentativa >= TENTATIVAS_TRAVA_REQUISICAO) throw e;
+      mats = [...new Set([...mats, ...e.materiais])];
+    }
   }
 }
 const TENTATIVAS_TRAVA_REQUISICAO = 3;
+/** Etapa 91 (Fase 5, F1): literal do 409 quando a requisicao ganha material novo a cada tentativa. */
+const MSG_TRAVA_INCOMPLETA = 'A requisição ganhou itens enquanto era aprovada (ainda está sendo gravada); tente aprovar de novo.';
 
 /**
  * Devolve SO as reservas que a chamada criou (perdeu o UPDATE guardado). Nao
