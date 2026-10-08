@@ -159,3 +159,40 @@ conta o Chrome do próprio André e cada Chromium são vários processos.
 - `page.setContent` tem timeout de 60 s e `page.pdf` o default de 30 s: uma geração travada segura a
   fila no máximo por esse tempo. Registrar; não inventar timeout novo.
 - Não mudar `PREMIUM_ROUTE_TIMEOUT_MS` nem nada da `/premium` (não usa o Chromium).
+
+## Fechamento (2026-10-08)
+- Revisão adversarial do código: **nenhum bug de execução**; 1 achado real e grave **no teste** —
+  F1: trocar o corpo de `enfileirarPdf` por `clearTimeout + tarefa()` (sem fila) deixava as duas
+  suítes verdes; F2: `navegadorPdf.close()` direto passava; P3: chamada depois de `//` dentro de
+  string era tratada como comentário. Corrigido em `f2e55444` (3 sabotagens vermelhas). Plausíveis
+  registrados em B35: o limite de ~60 s é por passo, não por geração; fila sem limite e sem
+  reação a cliente desconectado.
+- Achado e não corrigido (já existia antes): o rótulo `navegador(reuso|abriu)` do log é decidido
+  antes de a reciclagem acontecer — uma reciclagem aparece como "reuso".
+
+## Retro
+- Rodadas de correção até verde: **1** (onda do teste de fiação).
+- Achados: revisão do plano 5 reais (corrida 4 do temporizador, Chromium próprio da OS, limite de
+  tempo errado no plano, teste fora do runner, prova "antes" impossível sem o override); revisão
+  do código 3 reais no teste + 4 plausíveis registrados; 0 ruído.
+- Paralelismo: nenhum (task única, motor compartilhado).
+- Lição: **teste de fiação por texto tem de afirmar o mecanismo, não só a vizinhança** — o scanner
+  provava "as chamadas estão dentro de `enfileirarPdf(`" e ninguém provava que `enfileirarPdf`
+  enfileira.
+- Defeito escapado: preencher na etapa seguinte.
+
+## Próxima tarefa detalhada — Etapa 81: arquivos enviados que abrem sem login (`/api/uploads/*`)
+- **O que medir primeiro:** `server/index.js` monta ~15 pastas com `app.use('/api/uploads/<x>',
+  express.static(...))` **sem** `authenticateToken` (`:15035-15038`, `:17080`, `:17941-17974`):
+  famílias, grupos, grupos-compras, **fornecedores**, **comprovantes-viagens**, **cotacoes**,
+  produtos, proposta-fotos, materiais-escritório, logos, avatares, headers, footers, covers,
+  **contrato**. Para cada uma: que dado vai lá (foto de catálogo é pública por natureza;
+  comprovante de viagem, cotação de fornecedor e contrato não), e **como o nome do arquivo é
+  gerado** (multer `filename`: timestamp + random? nome original?) — nome adivinhável + sem login =
+  vazamento; nome aleatório longo = risco baixo.
+- **Restrição dura:** o HTML da proposta (preview e PDF via `setContent`) e o `<img src>` das telas
+  carregam várias dessas pastas **sem** header de autorização — pôr `authenticateToken` na pasta
+  quebra imagem. Precedente para arquivo sensível: `routes/almoxarifado.js:~266` usa **URL
+  assinada** (`assinadorUpload`) — o caminho provável para comprovantes/cotações/contratos.
+- Antes de mudar qualquer coisa, a etapa entrega a **tabela medida** (pasta, conteúdo, gerador do
+  nome, quem lê sem header) e decide por pasta, registrando na letra B.

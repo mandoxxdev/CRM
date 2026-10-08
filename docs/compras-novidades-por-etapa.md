@@ -13,7 +13,10 @@
 > GMP** (botão "Documento (PDF)" na lista e no formulário). Antes de emitir o primeiro, preencha os
 > dados da empresa (**A4**).
 > **2026-10-08 — Etapa 79 entregue:** o PDF e o preview da proposta passaram a **exigir login**
-> (A5 fechado, B34). Próxima: fila no Chromium compartilhado dos PDFs (B32).
+> (A5 fechado, B34).
+> **2026-10-08 — Etapa 80 entregue:** os PDFs (proposta e pedido de compra) passam por uma **fila**
+> — acabou o PDF que falhava "do nada" e o Chromium que vazava memória (B32 resolvido, B35).
+> Próxima: medir os arquivos enviados que abrem sem login (`/api/uploads/*`).
 > O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
 > A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
@@ -165,9 +168,19 @@
   ⚠️ **O plano dizia "até 4" e estava errado:** o total da linha usa o preço gravado inteiro, e o
   campo aceita qualquer número de casas — com 1,23456 × 1000 o papel mostrava 1,2346 e 1.234,56 (a
   revisão pegou; corrigido em `6e5267b6`). A quantidade também vai até 6 casas (0,0004 saía "0").
-- **B32 — Etapa 78 (risco aceito, pré-existente): o Chromium compartilhado é reciclado a cada 20
-  PDFs sem fila** — se um pedido estiver sendo gerado exatamente nesse instante, ele falha com
-  "Target closed" e o usuário clica de novo. Fila/mutex é etapa própria.
+- **B32 — ✅ RESOLVIDO na Etapa 80:** o Chromium compartilhado era reciclado a cada 20 PDFs sem
+  fila — um PDF gerado nesse instante falhava com "Target closed". A medição da 80 achou mais
+  três corridas (erro de um derrubando o outro, Chromium aberto em dobro e nunca fechado, e o
+  fechamento por ociosidade no meio de uma geração).
+- **B35 — Etapa 80: uma fila serial (um PDF por vez no Chromium compartilhado).** Escolhido por ser
+  a menor mudança que elimina as quatro corridas de uma vez. Custo medido: com 16 downloads
+  simultâneos o mais lento levou ~9 s (antes ~3 s — mas antes eram 29–33 Chromium abertos e 7 PDFs
+  com erro). Também: uma geração travada segura a fila no máximo ~60 s por passo
+  (`protocolTimeout`, antes 180 s). Descartado: contar abas em uso e adiar a reciclagem (mais
+  estado para errar, não resolve o Chromium em dobro); pool de navegadores (memória). **Fora do
+  escopo:** a rota de PDF da **OS** abre um Chromium próprio por pedido (não causa as corridas,
+  mas pode somar um segundo Chromium); a fila não tem limite de tamanho nem desiste quando quem
+  pediu já fechou a aba — aceitável com poucos usuários simultâneos.
 - **B34 — Etapa 79: o PDF e o preview da proposta exigem só login, o mesmo que a tela da
   proposta** (`GET /api/propostas/:id`). Quem já via a proposta continua vendo. Descartado:
   exigir também o módulo Comercial (`checkModulePermission`) — mudaria quem tem acesso hoje e não
@@ -275,6 +288,48 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 80 — Um PDF por vez: acabou o PDF que falhava sem motivo (2026-10-08)
+
+**Em uma frase.** A proposta e o pedido de compra geram PDF no mesmo navegador interno; quando
+duas pessoas geravam ao mesmo tempo, às vezes um falhava e o servidor acumulava navegadores
+abertos comendo memória — agora os pedidos de PDF entram numa fila e saem um de cada vez.
+
+### O que há de novo (visível para o usuário)
+- **"Gerar PDF" da proposta e "Documento (PDF)" do pedido não falham mais por concorrência.** Antes,
+  com vários PDFs seguidos, aparecia às vezes "Erro ao gerar PDF: Target closed" e era preciso
+  clicar de novo.
+- Com muita gente gerando junto, o PDF pode **demorar alguns segundos a mais** (espera a vez).
+- Menos risco de o servidor cair por falta de memória: medido, antes chegava a **33 navegadores**
+  abertos ao mesmo tempo; agora nunca mais de **1**.
+
+### Por baixo do capô
+- `server/services/filaPdf.js`: fila serial pura (uma tarefa por vez, em ordem; o erro de uma não
+  trava as seguintes). No `index.js`, `enfileirarPdf` embrulha **todo** o trecho que usa o
+  navegador nos dois chamadores; reciclagem, fechamento por erro e por ociosidade rodam só entre
+  gerações. `protocolTimeout: 60000` no lançamento.
+- `PDF_RECICLAR_APOS` (variável de ambiente, padrão 20) — só para a prova conseguir reciclar com
+  poucos PDFs.
+- Testes: `filaPdf.api.test.js` (ordem, concorrência máxima medida = 1, erro isolado) e
+  `filaPdfFiacao.api.test.js` (lê o `index.js`: nada usa ou fecha o navegador fora da fila — a
+  revisão provou que a primeira versão passava **com a fila removida** e o teste foi reforçado).
+
+### Antes → Agora
+| Antes (prova real, 16 PDFs) | Agora (mesma prova) |
+|---|---|
+| até 4 de 16 com erro 500 ("Target closed", "Printing failed") | 16 de 16 OK |
+| até 33 navegadores abertos | no máximo 1 |
+| mais lento ~3 s | mais lento ~9 s (espera na fila) |
+
+### Roteiro de teste manual (clicável)
+1. Abra duas abas logadas: numa, **Comercial → Propostas → Gerar PDF**; na outra, **Compras →
+   Pedidos → Documento (PDF)** — clique nas duas quase juntas, algumas vezes seguidas.
+2. Todos os PDFs baixam; nenhum "Erro ao gerar PDF".
+3. (Técnico) No log do servidor, cada PDF de proposta mostra `fila=⟨ms⟩` — o tempo que esperou a vez.
+
+### O que a etapa NÃO cobre
+- O PDF da **OS** (abre um navegador próprio, fora da fila — B35).
+- Limite de tamanho da fila e desistir quando quem pediu fechou a aba (B35).
 
 ## Etapa 79 — A proposta comercial só abre com login (2026-10-08)
 
