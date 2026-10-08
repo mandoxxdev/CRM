@@ -479,7 +479,12 @@ a suíte"). Sabotagem por `perl -0pi` com âncora contada = 1, backup `e91-<task
 cópia com md5 conferido, um controle de cada vez (base **LF** — nunca `\r\n`; `python3` indisponível no Git Bash).
 Scratchpad com nome único (`msg-e91-t0.txt`…). Executores **não** marcam este plano; o fio principal marca.
 
-- [ ] **T0 (tronco) — o módulo da trava e as variantes "já sob a trava".** Cria `travaPorMaterial.js`; o `rcs` passa a
+- [x] **T0 — FEITA em `8a72c801` (2026-10-08).** `travaPorMaterial.js` + `rcs` refatorado; teste `travaPorMaterial` 8
+  casos (vermelho antes: 6/8). Controles s1–s6 caíram como previsto (s1 derrubou também (5)(7)(7b)). 22 arquivos medidos
+  antes/depois sem edição (os que fazem monkeypatch são **18**, não 12 — o plano contou baixo). `distribuirParaQuemEspera`
+  removida (sem chamador); a distribuição da nota sem opções trava todos os materiais livres da nota de uma vez. test:api
+  314/314, almoxarifado 44/0.
+  Enunciado original: **T0 (tronco) — o módulo da trava e as variantes "já sob a trava".** Cria `travaPorMaterial.js`; o `rcs` passa a
   usá-lo (um `Map` só); `novaPendencia`/`concluirPendencia`; as opções `sobTrava`/`pendencia` nos três nomes; o teto da
   liberação lido sob a trava no caminho sem opção. **Nenhuma porta muda** nesta task. Teste novo
   `server/tests/api/travaPorMaterial.api.test.js`: (1) FIFO por material, materiais diferentes não esperam; (2)
@@ -508,7 +513,14 @@ Scratchpad com nome único (`msg-e91-t0.txt`…). Executores **não** marcam est
   `soltar()` no caminho de exceção → **cai (3)**. (s5) a guarda L1 removida → **cai (6)** (distribui sem trava; (6) roda com o material **sem ninguém** segurando ou
   esperando — ver a nota do cabeçalho da T2 sobre `travado`). (s6)
   `concluirPendencia` sem o try por requisição → **cai (7)** (lança).
-- [ ] **T1 (tronco) — as três portas de aprovação seguram a trava de todos os materiais.** `comTravaDaRequisicao` + as
+- [x] **T1 — FEITA em `78933bef` (2026-10-08).** `comTravaDaRequisicao` + as três portas; teste `aprovacaoEsperaTrava` 9
+  casos (vermelho antes: 8/9). Controles s1–s6 caíram; **o plano errou o s1**: (g) também cai — achado novo: sem a trava,
+  dois `/aprovar` simultâneos da mesma requisição com estoque terminavam **8/8 em `AGUARDANDO_ESTOQUE` sem reserva**
+  (quem reservou perdia o UPDATE com guarda para quem recalculou e desfazia a própria reserva — `sonda91-t1-g.js`); com a
+  trava, 8/8 `TOTALMENTE_RESERVADA`. Vai para a letra das novidades no fechamento. Falha da trava na aprovação automática
+  reusa o log existente ("Falha ao aprovar automaticamente…; fica PENDENTE"). test:api 315/315, almoxarifado 44/0,
+  validation 4/0, safealter 3/0, sqlite 5/0.
+  Enunciado original: **T1 (tronco) — as três portas de aprovação seguram a trava de todos os materiais.** `comTravaDaRequisicao` + as
   três portas (contrato acima). Teste novo `server/tests/api/aprovacaoEsperaTrava.api.test.js`: **RN-05 (a)–(g)** pelas
   rotas, com perfis reais (GESTOR, aprovador de valor, solicitante sem perfil), e RN-09 para as quatro rotas de
   aprovação. **Vermelho antes:** (a)–(e) respondem com a trava presa (medido na Fase 0: nenhuma porta pega a trava) e
