@@ -3287,29 +3287,42 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // Agora prepararPosAprovacao desfaz as proprias reservas antes de lancar, e aqui a falha vira
     // "a aprovacao automatica nao aconteceu": a requisicao fica PENDENTE (201) e o /aprovar manual
     // aprova depois. O mesmo para o UPDATE que falha (desfaz o que reservou).
-    let pos;
+    //
+    // Etapa 91 (T1, D1/B419): tudo isto SOB A TRAVA de todos os materiais da requisicao
+    // (`requisitionService.comTravaDaRequisicao`, pelo objeto) — a aprovacao espera a nota, a inspecao
+    // ou a NC do mesmo material terminar de distribuir, e le o saldo dentro da trava (C131). A leitura
+    // dos materiais e a espera da trava tambem ficam num try (Fase 2, achado 2): falhou ali, a
+    // requisicao fica PENDENTE (201), como qualquer outra falha desta porta — nunca 500.
     try {
-      pos = await requisitionService.prepararPosAprovacao(db, requisicaoId, user, reqRow);
+      return await requisitionService.comTravaDaRequisicao(db, requisicaoId, async () => {
+        let pos;
+        try {
+          pos = await requisitionService.prepararPosAprovacao(db, requisicaoId, user, reqRow);
+        } catch (e) {
+          console.warn(`[almoxarifado-aprovacao-automatica] Falha ao aprovar automaticamente a requisição ${requisicaoId}; fica PENDENTE: ${e.message}`);
+          return null;
+        }
+        let upd;
+        try {
+          upd = await dbRun(db,
+            `UPDATE requisicoes_almoxarifado SET status=?, aprovador_nome='Sistema (automático)', data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
+             WHERE id=? AND status='PENDENTE' AND ${approvalRulesService.GATE_SQL}`,
+            [pos.status, requisicaoId]);
+        } catch (e) {
+          console.warn(`[almoxarifado-aprovacao-automatica] Falha ao gravar a aprovação automática da requisição ${requisicaoId}; fica PENDENTE: ${e.message}`);
+          await requisitionService.desfazerReservas(db, user, pos.reservas);
+          return null;
+        }
+        if (!upd.changes) {
+          await requisitionService.desfazerReservas(db, user, pos.reservas);
+          return null;
+        }
+        return { status: pos.status, reservas: pos.reservas };
+      });
     } catch (e) {
       console.warn(`[almoxarifado-aprovacao-automatica] Falha ao aprovar automaticamente a requisição ${requisicaoId}; fica PENDENTE: ${e.message}`);
       return null;
     }
-    let upd;
-    try {
-      upd = await dbRun(db,
-        `UPDATE requisicoes_almoxarifado SET status=?, aprovador_nome='Sistema (automático)', data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
-         WHERE id=? AND status='PENDENTE' AND ${approvalRulesService.GATE_SQL}`,
-        [pos.status, requisicaoId]);
-    } catch (e) {
-      console.warn(`[almoxarifado-aprovacao-automatica] Falha ao gravar a aprovação automática da requisição ${requisicaoId}; fica PENDENTE: ${e.message}`);
-      await requisitionService.desfazerReservas(db, user, pos.reservas);
-      return null;
-    }
-    if (!upd.changes) {
-      await requisitionService.desfazerReservas(db, user, pos.reservas);
-      return null;
-    }
-    return { status: pos.status, reservas: pos.reservas };
   }
 
   // POST /api/almoxarifado/requisicoes — criar requisição
@@ -3488,34 +3501,44 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // concorrentes). A janela invertida — reserva criada com a requisição ainda PENDENTE — é
       // inofensiva: a reserva já segura o saldo e carrega requisicao_id, então a entrega a
       // encontra normalmente depois.
-      const reserva = await requisitionService.prepararPosAprovacao(db, req.params.id, req.user, reqRow);
-      const statusFinal = reserva.status;
+      //
+      // Etapa 91 (T1, D1/B419): `prepararPosAprovacao`, o UPDATE guardado e o desfazer de quem perde
+      // rodam SOB A TRAVA de todos os materiais da requisicao. Sem ela, a aprovacao caia entre o
+      // movimento do motor que poe saldo no disponivel (nota, inspecao, NC) e a distribuicao para quem
+      // esperava, e a requisicao mais nova levava o material (C131, fila invertida). O UPDATE fica
+      // dentro: fora, a distribuicao veria esta requisicao ainda PENDENTE e deixaria a sobra parada.
+      // Auditoria e resposta ficam FORA (nao mexem no saldo; corpo inalterado).
+      const out = await requisitionService.comTravaDaRequisicao(db, req.params.id, async () => {
+        const reserva = await requisitionService.prepararPosAprovacao(db, req.params.id, req.user, reqRow);
+        const statusFinal = reserva.status;
 
-      // A GARANTIA: status ainda PENDENTE e o gate das regras, no mesmo UPDATE. `status='PENDENTE'`
-      // fecha também o achado anterior à etapa — dois /aprovar simultâneos respondiam 200 os dois
-      // e o segundo reservava de novo.
-      const upd = await dbRun(db,
-        `UPDATE requisicoes_almoxarifado SET status=?, aprovador_id=?, aprovador_nome=?, data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
-         WHERE id=? AND status='PENDENTE' AND ${approvalRulesService.GATE_SQL}`,
-        [statusFinal, req.user.id, req.user.nome || req.user.email, req.params.id]);
-      if (!upd.changes) {
-        // Perdeu: devolve SÓ as reservas que ESTA chamada criou. Não `liberarReservasDaRequisicao`
-        // — ela soltaria também as de um /aprovar concorrente que venceu (9.7/C1).
-        await requisitionService.desfazerReservas(db, req.user, reserva.reservas);
-        const atual = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
-        const msgGate = await approvalRulesService.mensagemGateAtual(db, req.params.id);
-        return res.status(400).json({
-          error: msgGate || `Transição inválida: ${atual?.status} → APROVADO`,
-        });
-      }
+        // A GARANTIA: status ainda PENDENTE e o gate das regras, no mesmo UPDATE. `status='PENDENTE'`
+        // fecha também o achado anterior à etapa — dois /aprovar simultâneos respondiam 200 os dois
+        // e o segundo reservava de novo.
+        const upd = await dbRun(db,
+          `UPDATE requisicoes_almoxarifado SET status=?, aprovador_id=?, aprovador_nome=?, data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
+           WHERE id=? AND status='PENDENTE' AND ${approvalRulesService.GATE_SQL}`,
+          [statusFinal, req.user.id, req.user.nome || req.user.email, req.params.id]);
+        if (!upd.changes) {
+          // Perdeu: devolve SÓ as reservas que ESTA chamada criou. Não `liberarReservasDaRequisicao`
+          // — ela soltaria também as de um /aprovar concorrente que venceu (9.7/C1).
+          await requisitionService.desfazerReservas(db, req.user, reserva.reservas);
+          const atual = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+          const msgGate = await approvalRulesService.mensagemGateAtual(db, req.params.id);
+          return { venceu: false, erro400: msgGate || `Transição inválida: ${atual?.status} → APROVADO` };
+        }
+        return { venceu: true, statusFinal, reservas: reserva.reservas };
+      });
+      if (!out.venceu) return res.status(400).json({ error: out.erro400 });
+      const { statusFinal } = out;
 
       await registrarAuditoria(db, {
         entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'APROVACAO',
         usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
-        dados_novos: { status: statusFinal, reservas: reserva.reservas },
+        dados_novos: { status: statusFinal, reservas: out.reservas },
       });
 
-      res.json({ success: true, status: statusFinal, reservas: reserva.reservas });
+      res.json({ success: true, status: statusFinal, reservas: out.reservas });
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
     }
@@ -3595,22 +3618,29 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // e grava o status calculado. O UPDATE ganhou guarda (`status = 'APROVADO'`): antes era sem
       // guarda e sobrescrevia quem mexesse na requisição entre o serviço e aqui. Perdendo, desfaz as
       // reservas desta chamada e responde o status RELIDO (Fase 2 da 73), não o calculado.
-      const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
-      const pos = await requisitionService.prepararPosAprovacao(db, req.params.id, req.user, reqRow);
-      result.reservas = pos.reservas;
-      if (pos.status !== 'APROVADO') {
-        const upd = await dbRun(db,
-          `UPDATE requisicoes_almoxarifado SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='APROVADO'`,
-          [pos.status, req.params.id]);
-        if (upd.changes) {
-          result.status = pos.status;
-        } else {
-          await requisitionService.desfazerReservas(db, req.user, pos.reservas);
-          const atual = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
-          result.status = atual?.status;
-          result.reservas = [];
+      //
+      // Etapa 91 (T1, D1/B419): a releitura, `prepararPosAprovacao`, o UPDATE guardado e o desfazer de
+      // quem perde rodam SOB A TRAVA de todos os materiais da requisicao (C131 — ver o /aprovar).
+      // `aprovarValor` continua FORA: grava APROVADO, e nessa janela a requisicao ja e candidata da
+      // distribuicao — inofensivo, `prepararPosAprovacao` desconta o hold que o item ja tiver.
+      await requisitionService.comTravaDaRequisicao(db, req.params.id, async () => {
+        const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+        const pos = await requisitionService.prepararPosAprovacao(db, req.params.id, req.user, reqRow);
+        result.reservas = pos.reservas;
+        if (pos.status !== 'APROVADO') {
+          const upd = await dbRun(db,
+            `UPDATE requisicoes_almoxarifado SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='APROVADO'`,
+            [pos.status, req.params.id]);
+          if (upd.changes) {
+            result.status = pos.status;
+          } else {
+            await requisitionService.desfazerReservas(db, req.user, pos.reservas);
+            const atual = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+            result.status = atual?.status;
+            result.reservas = [];
+          }
         }
-      }
+      });
 
       await registrarAuditoria(db, {
         entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'APROVACAO_VALOR',

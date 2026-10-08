@@ -10,6 +10,8 @@ const stockService = require('./stockService');
 const lotService = require('./lotService');
 // Sem ciclo: reservationService importa db/audit/stockService, nunca este arquivo.
 const reservationService = require('./reservationService');
+// Etapa 91 (T1): a trava por material (modulo sem nenhum require — sem ciclo).
+const travaPorMaterial = require('./travaPorMaterial');
 const { can } = require('./permissions'); // Etapa 64: posso_conferir na fila
 const {
   PODE_SEPARAR, PODE_ENTREGAR, STATUS_PARCIALMENTE_RESERVADA, STATUS_TOTALMENTE_RESERVADA,
@@ -253,6 +255,25 @@ async function prepararPosAprovacao(db, requisicaoId, user, reqRow = {}) {
   if (reserva.status) return { status: reserva.status, reservas: reserva.reservas };
   const status = statusPos === 'APROVADO' ? await calcularStatusPosAprovacao(db, requisicaoId) : statusPos;
   return { status, reservas: reserva.reservas };
+}
+
+/**
+ * Etapa 91 (T1, D1/B419) — a trava de TODOS os materiais da requisicao, para as tres portas de aprovacao
+ * (`/aprovar`, `/aprovar-valor`, aprovacao automatica) segurarem em volta de `prepararPosAprovacao` E do
+ * `UPDATE` guardado (+ o `desfazerReservas` de quem perde). Sem isto a aprovacao lia o saldo livre no meio
+ * de uma liberacao (C131: a requisicao mais nova levava o que ia para quem esperava). O `UPDATE` fica
+ * dentro: fora, uma distribuicao no meio veria a requisicao ainda PENDENTE (nao candidata) e deixaria a
+ * sobra parada. Os materiais sao lidos ANTES de pegar a trava — estavel: nenhuma rota troca o
+ * `material_id` de um item depois de criado. `ORDER BY` + `comLockDosMateriais` (DISTINCT, crescente):
+ * a ordem unica que impede ciclo com a nota (varios materiais). Nao reentrante: `fn` nunca pode pedir
+ * a trava de novo (recalculo da 76, distribuicao sem `sobTrava`, outra porta).
+ * @returns {Promise<*>} o retorno de `fn`.
+ */
+async function comTravaDaRequisicao(db, requisicaoId, fn) {
+  const mats = (await dbAll(db, `SELECT DISTINCT material_id FROM itens_requisicao_almoxarifado
+    WHERE requisicao_id = ? AND material_id IS NOT NULL ORDER BY material_id`, [requisicaoId]))
+    .map((x) => Number(x.material_id));
+  return travaPorMaterial.comLockDosMateriais(mats, fn);
 }
 
 /**
@@ -1426,6 +1447,7 @@ module.exports = {
   reservarItensAprovacao,
   prepararPosAprovacao, // Etapa 73
   desfazerReservas, // Etapa 73
+  comTravaDaRequisicao, // Etapa 91 (T1)
   separarRequisicao,
   entregarRequisicao,
   excluirRequisicao,
