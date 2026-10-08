@@ -63,11 +63,12 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import {
-  FiArrowLeft, FiCheck, FiChevronDown, FiChevronUp, FiPlus, FiSave, FiSearch, FiTrash2, FiUpload,
+  FiArrowLeft, FiCheck, FiChevronDown, FiChevronUp, FiPlus, FiPrinter, FiSave, FiSearch, FiTrash2, FiUpload,
 } from 'react-icons/fi';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { formatarErroPermissao } from '../../utils/permissaoErro';
+import { baixarDocumentoPedido } from '../../utils/baixarDocumentoPedido';
 import { mascararTelefoneCompleto, mascararTelefoneDigitando } from '../../utils/telefone';
 import '../Compras.css';
 import './PedidoCompraForm.css';
@@ -348,6 +349,8 @@ const PedidoCompraForm = () => {
   const [carregando, setCarregando] = useState(edicao);
   // 0|1 do servidor -> boolean local. Só existe no modo edição (a criação não tem recebimento).
   const [soStatus, setSoStatus] = useState(false);
+  // Etapa 78 (RN-78.06): "Documento (PDF)" em voo — trava o botão enquanto o servidor gera o PDF.
+  const [baixandoDocumento, setBaixandoDocumento] = useState(false);
 
   // Etapa 39: o documento.
   const [opcoes, setOpcoes] = useState(OPCOES_VAZIAS);
@@ -558,6 +561,22 @@ const PedidoCompraForm = () => {
   const temItemSemPreco = itens.some((it) => !(Number(it.valor_unitario) > 0));
   const fornecedorSel = fornecedores.find((f) => String(f.id) === String(fornecedorId)) || null;
   const ipiOpcoes = (opcoes.ipi_sugerido || []).map((v) => ({ valor: v, curto: ipiRotulo(v) }));
+
+  // Etapa 78 (RN-78.06): o documento que a GMP emite ao fornecedor, do pedido GRAVADO (`id`). O
+  // que está na tela e ainda não foi salvo não entra — por isso só existe em edição, e inclusive
+  // no modo "só status" (o pedido recebido continua sendo um pedido a imprimir). O botão é
+  // `type="button"` porque mora DENTRO do `<form>`: sem isso o clique seria um submit.
+  const handleDocumento = async () => {
+    if (!edicao || baixandoDocumento) return;
+    setBaixandoDocumento(true);
+    try {
+      await baixarDocumentoPedido(api, { id, numero });
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBaixandoDocumento(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1251,6 +1270,17 @@ const PedidoCompraForm = () => {
           </section>
 
           <div className="header-actions">
+            {edicao && (
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleDocumento}
+                disabled={baixandoDocumento}
+                title="Baixar o pedido de compra em PDF, como vai para o fornecedor"
+              >
+                <FiPrinter /> {baixandoDocumento ? 'Gerando PDF...' : 'Documento (PDF)'}
+              </button>
+            )}
             <button type="submit" className="btn-premium" disabled={salvando}>
               <FiSave /> {salvando ? 'Salvando...' : 'Salvar pedido'}
             </button>

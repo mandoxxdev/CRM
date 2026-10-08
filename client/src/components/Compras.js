@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { toast } from 'react-toastify';
-import { 
-  FiPlus, FiSearch, FiEdit, FiTrash2, FiDownload, 
+import {
+  FiPlus, FiSearch, FiEdit, FiTrash2, FiDownload,
   FiShoppingCart, FiPackage, FiFileText, FiDollarSign,
-  FiFilter, FiCalendar, FiTrendingUp, FiTrendingDown
+  FiFilter, FiCalendar, FiTrendingUp, FiTrendingDown, FiPrinter
 } from 'react-icons/fi';
 import { exportToExcel } from '../utils/exportExcel';
+import { baixarDocumentoPedido } from '../utils/baixarDocumentoPedido';
 import { SkeletonTable } from './SkeletonLoader';
 import './Compras.css';
 import './Loading.css';
@@ -51,6 +52,10 @@ const Compras = () => {
   // re-render e o closure do estado ainda le `null`, so o ref ve o primeiro.
   const [gerandoId, setGerandoId] = useState(null);
   const gerandoRef = useRef(null);
+  // Etapa 78 (RN-78.06): id do pedido cujo "Documento (PDF)" esta em voo — trava o botao da linha
+  // enquanto o Chromium do servidor gera o arquivo (um segundo clique abriria outra aba no
+  // navegador compartilhado da proposta, de graca).
+  const [documentoId, setDocumentoId] = useState(null);
   // Etapa 40 (RN-E16): ao trocar de aba, `<Compras/>` NAO remonta (as tres rotas renderizam o
   // mesmo elemento e o React Router v6 preserva o state). Um `filterStatus='inativo'` vindo da aba
   // Fornecedores iria em `GET /compras/cotacoes?status=inativo` (lista vazia) enquanto o select,
@@ -192,6 +197,22 @@ const Compras = () => {
   // gerado, onde o comprador confere datas e previsao. Erro no toast: e o mesmo canal da lixeira,
   // e pela mesma razao — a literal e a do servidor (409 `Cotação X já gerou o pedido Y`, 400 sem
   // itens / fornecedor inativo); o fallback fica para o erro sem corpo (rede, 500 sem JSON).
+  // Etapa 78 (RN-78.06): o documento impresso do pedido. O util faz o GET por blob, nomeia pelo
+  // `Content-Disposition` (fallback `pedido-compra-<numero>.pdf` com o numero DA LINHA) e ja
+  // traduz o erro que chega embrulhado em Blob — o toast diz a literal do servidor ("Pedido de
+  // compra não encontrado"), nao a generica.
+  const handleDocumento = async (pedido) => {
+    if (documentoId) return;
+    setDocumentoId(pedido.id);
+    try {
+      await baixarDocumentoPedido(api, { id: pedido.id, numero: pedido.numero });
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setDocumentoId(null);
+    }
+  };
+
   // Sem `window.confirm` (Fase 2, M6): a acao e reversivel — excluir o pedido LIBERA a cotacao
   // (RN-F12), entao um confirm aqui so cobraria um clique a mais de quem ja escolheu o botao.
   //
@@ -444,6 +465,19 @@ const Compras = () => {
                       <Link to={`/compras/pedidos/editar/${pedido.id}`} className="btn-icon" title="Editar">
                         <FiEdit />
                       </Link>
+                      {/* Etapa 78 (RN-78.06): o documento que a GMP emite ao fornecedor. Download
+                          por blob + `<a download>` (`utils/baixarDocumentoPedido.js`) — nunca
+                          `?token=` na URL nem `window.open` (B27). */}
+                      <button
+                        type="button"
+                        onClick={() => handleDocumento(pedido)}
+                        disabled={documentoId === pedido.id}
+                        className="btn-icon"
+                        title="Documento (PDF)"
+                        aria-label={`Documento (PDF) do pedido ${pedido.numero || pedido.id}`}
+                      >
+                        <FiPrinter />
+                      </button>
                       <button
                         onClick={() => handleDelete(pedido.id, 'pedidos')}
                         className="btn-icon btn-danger"

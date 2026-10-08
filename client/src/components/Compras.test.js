@@ -504,3 +504,85 @@ test('(m) F4 cliques repetidos em Gerar pedido com o POST em voo -> 1 POST, bota
   expect(texto()).toContain('Editar pedido de compra');
   expect(api.get.mock.calls.filter(([u]) => u === '/compras/pedidos/650')).toHaveLength(1);
 }, 10000);
+
+// ═══ Etapa 78 (RN-78.06) — o botao "Documento (PDF)" da linha do pedido ═════════════════════
+//
+// O download e por BLOB (`responseType: 'blob'`) + `<a download>`, como todo PDF do app — nunca
+// `?token=` na URL (vazaria o token em historico/logs) nem `window.open` (a navegacao crua nao
+// leva o Bearer). O nome vem do `Content-Disposition`; sem ele (dev por IP, CORS sem
+// `exposedHeaders`), o fallback `pedido-compra-<numero>.pdf` com o numero DA LINHA.
+//
+// jsdom nao implementa `URL.createObjectURL` (medido) e o `<a>` nao e inserido na arvore do
+// React — por isso o stub e o spy no `click()` do proprio HTMLAnchorElement, onde `this.download`
+// e o nome que o navegador usaria.
+describe('Etapa 78 — Documento (PDF) na lista', () => {
+  let cliquesNoLink;
+  beforeEach(() => {
+    window.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
+    window.URL.revokeObjectURL = jest.fn();
+    cliquesNoLink = [];
+    jest.spyOn(window.HTMLAnchorElement.prototype, 'click').mockImplementation(function registrar() {
+      cliquesNoLink.push(this.download);
+    });
+  });
+  afterEach(() => { window.HTMLAnchorElement.prototype.click.mockRestore(); });
+
+  const botaoDocumento = () => container.querySelector('button[title="Documento (PDF)"]');
+  const chamadasDocumento = () => api.get.mock.calls.filter(([u]) => u === '/compras/pedidos/419/documento.pdf');
+
+  test('(h) clicar baixa por blob com o nome do cabecalho, sem navegar e sem ?token=', async () => {
+    pedidosDoBanco = [PEDIDO_419_NO_PRAZO];
+    const anterior = api.get.getMockImplementation();
+    api.get.mockImplementation((url, opcoes) => (url === '/compras/pedidos/419/documento.pdf'
+      ? Promise.resolve({
+        data: new Blob(['%PDF-1.4'], { type: 'application/pdf' }),
+        headers: { 'content-disposition': 'attachment; filename="pedido-compra-PC-2026-419.pdf"' },
+      })
+      : anterior(url, opcoes)));
+    await renderizarEm('/compras/pedidos');
+
+    expect(botaoDocumento()).not.toBeNull();
+    await clicar(botaoDocumento());
+
+    expect(chamadasDocumento()).toHaveLength(1);
+    expect(chamadasDocumento()[0][1]).toEqual({ responseType: 'blob' });
+    expect(cliquesNoLink).toEqual(['pedido-compra-PC-2026-419.pdf']);
+    expect(toast.error).not.toHaveBeenCalled();
+    // A URL pedida nao carrega token nenhum (B27): o Bearer vai no header pelo interceptor.
+    expect(chamadasDocumento()[0][0]).not.toContain('token');
+  }, 10000);
+
+  test('(h2) sem o cabecalho o nome e o fallback com o numero da linha', async () => {
+    pedidosDoBanco = [PEDIDO_419_NO_PRAZO];
+    const anterior = api.get.getMockImplementation();
+    api.get.mockImplementation((url, opcoes) => (url === '/compras/pedidos/419/documento.pdf'
+      ? Promise.resolve({ data: new Blob(['%PDF-1.4']), headers: {} })
+      : anterior(url, opcoes)));
+    await renderizarEm('/compras/pedidos');
+
+    await clicar(botaoDocumento());
+
+    expect(cliquesNoLink).toEqual(['pedido-compra-PC-2026-419.pdf']);
+  }, 10000);
+
+  test('(h3) o 404 chega como BLOB e o toast diz a literal do servidor, nao a generica', async () => {
+    pedidosDoBanco = [PEDIDO_419_NO_PRAZO];
+    const anterior = api.get.getMockImplementation();
+    const erro = new Error('Request failed with status code 404');
+    erro.response = {
+      status: 404,
+      data: new Blob([JSON.stringify({ error: 'Pedido de compra não encontrado' })], { type: 'application/json' }),
+    };
+    api.get.mockImplementation((url, opcoes) => (url === '/compras/pedidos/419/documento.pdf'
+      ? Promise.reject(erro)
+      : anterior(url, opcoes)));
+    await renderizarEm('/compras/pedidos');
+
+    await clicar(botaoDocumento());
+    await esperarEfeitos(); // o FileReader do jsdom e assincrono
+
+    expect(toast.error).toHaveBeenCalledWith('Pedido de compra não encontrado');
+    expect(cliquesNoLink).toHaveLength(0);
+    expect(texto()).toContain('PC-2026-419'); // a lista continua de pe
+  }, 10000);
+});

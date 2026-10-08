@@ -330,6 +330,17 @@ const Configuracoes = () => {
                   onChange={(e) => handleChange('empresa', 'empresa_cnpj', e.target.value)}
                 />
               </div>
+              {/* Etapa 78 (RN-78.04, B28): a IE sai do codigo fixo do template da proposta e vira
+                  configuracao — o documento do pedido de compra a imprime no cabecalho. O PUT faz
+                  upsert, entao o campo funciona mesmo num banco sem o seed da chave. */}
+              <div className="config-item">
+                <label>Inscrição Estadual</label>
+                <input
+                  type="text"
+                  value={configs.empresa?.empresa_ie || ''}
+                  onChange={(e) => handleChange('empresa', 'empresa_ie', e.target.value)}
+                />
+              </div>
               <div className="config-item full-width">
                 <label>Endereço</label>
                 <input
@@ -388,6 +399,18 @@ const Configuracoes = () => {
                   value={configs.empresa?.empresa_site || ''}
                   onChange={(e) => handleChange('empresa', 'empresa_site', e.target.value)}
                 />
+              </div>
+              {/* Etapa 78 (RN-78.04, B29): a nota legal (ICMS) do rodape do pedido de compra NAO e
+                  inventada pelo sistema — e o texto que o ERP imprime hoje (D-78), digitado aqui.
+                  Vazia por padrao: o documento nao imprime o bloco. */}
+              <div className="config-item full-width">
+                <label>Nota legal do pedido de compra</label>
+                <textarea
+                  rows={3}
+                  value={configs.empresa?.empresa_nota_pedido_compra || ''}
+                  onChange={(e) => handleChange('empresa', 'empresa_nota_pedido_compra', e.target.value)}
+                />
+                <small className="config-help">texto impresso no rodapé do pedido de compra; vazio = não imprime</small>
               </div>
             </div>
           </div>

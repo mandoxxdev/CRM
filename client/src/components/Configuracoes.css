@@ -182,6 +182,31 @@
   font-family: monospace;
 }
 
+/* Etapa 78 (RN-78.04): a textarea da nota legal do pedido de compra segue o visual dos inputs
+   da aba; a ajuda curta embaixo diz o que a chave faz e o que o vazio significa. */
+.config-item textarea {
+  padding: 0.875rem;
+  border: 2px solid var(--gmp-border);
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+  transition: all 0.3s ease;
+  background: var(--gmp-surface);
+  color: var(--gmp-text);
+}
+
+.config-item textarea:focus {
+  outline: none;
+  border-color: var(--gmp-primary);
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+}
+
+.config-item .config-help {
+  font-size: 0.8rem;
+  color: var(--gmp-text-light);
+}
+
 .configuracoes-loading {
   display: flex;
   flex-direction: column;

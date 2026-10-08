@@ -422,3 +422,44 @@ test('acessibilidade: em modulo embutido (sem barra interna) o painel e rotulado
     expect(container.querySelector(`#${t.getAttribute('aria-controls')}`)).not.toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// Etapa 78 (RN-78.04): a aba Empresa ganha "Inscrição Estadual" e a nota legal do pedido de compra
+// ---------------------------------------------------------------------------------------------
+//
+// O `GET /configuracoes` do fixture NAO traz as duas chaves, de proposito: o `PUT /configuracoes/
+// :chave` faz upsert, entao os campos tem de funcionar num banco sem o seed novo — nascem vazios
+// e salvam por tecla como os outros da aba.
+test('(c2) Empresa: Inscricao Estadual salva por PUT /configuracoes/empresa_ie e a nota legal por /empresa_nota_pedido_compra', async () => {
+  await render();
+
+  const rotuloIe = [...container.querySelectorAll('label')].find(l => l.textContent.trim() === 'Inscrição Estadual');
+  expect(rotuloIe).toBeDefined();
+  const inputIe = rotuloIe.parentElement.querySelector('input');
+  expect(inputIe.value).toBe('');
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(inputIe, '799.890.695.115');
+    inputIe.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  expect(api.put).toHaveBeenCalledTimes(1);
+  expect(api.put.mock.calls[0][0]).toBe('/configuracoes/empresa_ie');
+  expect(api.put.mock.calls[0][1]).toMatchObject({ valor: '799.890.695.115', categoria: 'empresa' });
+
+  const rotuloNota = [...container.querySelectorAll('label')].find(l => l.textContent.trim() === 'Nota legal do pedido de compra');
+  expect(rotuloNota).toBeDefined();
+  const textarea = rotuloNota.parentElement.querySelector('textarea');
+  expect(textarea).not.toBeNull();
+  expect(textarea.value).toBe('');
+  // A ajuda diz o que a chave faz E o que o vazio significa (RN-78.04: vazia -> o bloco nao sai).
+  expect(rotuloNota.parentElement.textContent).toContain('texto impresso no rodapé do pedido de compra; vazio = não imprime');
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set.call(textarea, 'Mercadoria sujeita a ICMS-ST.');
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  expect(api.put).toHaveBeenCalledTimes(2);
+  expect(api.put.mock.calls[1][0]).toBe('/configuracoes/empresa_nota_pedido_compra');
+  expect(api.put.mock.calls[1][1]).toMatchObject({ valor: 'Mercadoria sujeita a ICMS-ST.', categoria: 'empresa' });
+  // O valor digitado FICA no campo (o estado local acompanha o PUT).
+  expect(textarea.value).toBe('Mercadoria sujeita a ICMS-ST.');
+  expect(inputIe.value).toBe('799.890.695.115');
+});
