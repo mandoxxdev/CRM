@@ -1,6 +1,6 @@
 # Etapa 96 — o motor grava a quantidade arredondada e não recusa o que existe por ponto flutuante (C176, feature 03 com a 05 e a 07)
 
-> Status: **PLANO (Fase 1) + Fase 2 (revisão) — 2026-10-09.** Nenhuma task executada. Próximo passo: **T0** — ver
+> Status: **EM EXECUÇÃO — 2026-10-09: Fase 2 `e2a2f2d7`; T0 `82836975`, T1 `8bb43f60` feitas (seção "Execução" no fim); próximo T2, T3 e T4.** Próximo passo: **T0** — ver
 > "Fase 2 — revisão do plano" (vale sobre o texto) e "Próximo passo" no fim.
 > HEAD de partida: `30b7793a` (main, árvore limpa, sem push).
 > Origem: "Próxima tarefa detalhada — Etapa 96" no fim de
@@ -413,7 +413,7 @@ das colunas do material — mesma regra, claims sobre as mesmas colunas; T3: a r
 **consome** o helper (`qtd` para o relatório) e as tabelas — galho, em worktree com junction (memória "worktree com
 junction"). T2 e T3 **não** vão em paralelo: as duas sabotam o motor que as outras leem (memória "sabotagem concorrente").
 
-- [ ] **T0 (tronco) — o helper e o disponível arredondado (B480, B481, B482, B486).** Contrato "O helper". Testes
+- [x] `82836975` **T0 (tronco) — o helper e o disponível arredondado (B480, B481, B482, B486).** Contrato "O helper". Testes
   unitários do helper no arquivo da T1 (`[96 RN-00]` — `qtd(0.1+0.2) === 0.3`, `qtd(-0.0000005) === -0.000001`,
   `qtd(0.0000004) === 0`, `cabe(1, 0.9999999999999999)`, `!cabe(0.200001, 0.2)`, `qtdSql('a + ?')`) e a RN-02 "colunas
   limpas" (sonda 9) pela rota — só a parte que `disponivelSql` + `getSaldoDisponivel` resolvem. **Vermelho antes:** RN-02
@@ -431,7 +431,7 @@ junction"). T2 e T3 **não** vão em paralelo: as duas sabotam o motor que as ou
   (s2) `qtd` por `Math.round(x * 1e6) / 1e6` → cai `Q.qtd(0.0000005) === 0`; (s3) sem o `−0 → 0` → cai
   `Object.is(Q.qtd(-0.0000004), 0)`; (s4) sem a validação (`Number(x)` direto) → cai `Q.qtd(null)` `NaN`; (s5)
   `getSaldoDisponivel` sem `Q.qtd` → cai RN-02 legado `SAIDA` 1 sem origem (a pré-checagem `:~1389` recusa).
-- [ ] **T1 (tronco) — o motor (`stockService.js`): gravação, porta, claims, mensagens (B480, B482, B484, B485).**
+- [x] `8bb43f60` **T1 (tronco) — o motor (`stockService.js`): gravação, porta, claims, mensagens (B480, B482, B484, B485).**
   Contrato "Gravação", "Recusa" e M1–M9, Z1. **RN-01** (menos a parte de T2/T3), **RN-02**, **RN-03**, **RN-04**,
   **RN-05** nas portas do motor (saída, ajuste, perda, transferência, lote, endereço, reserva criar/liberar, bloqueio
   pelo motor, consumo de reserva, baixa de terceiro). A varredura do código-fonte da RN-01 cobre `stockService.js`.
@@ -716,3 +716,29 @@ localização e 0,0000004 vira 0 e **zera** o endereço — aceitável ou recusa
 `quantidade > 0` do `claimSaldoSemLote`; (4) `custo_medio` — a T1 diz que não muda; a Fase 2 confere a leitura de
 `:1801-1803` e `:2133`; (5) a T4 em worktree: o teste da CLI copia o banco — conferir que não depende de nada que a T1–T3
 mudam (senão vira tronco). Corrigir o plano, **depois** executar T0.~~
+
+## Execução (2026-10-09)
+
+Baseline `test:api` 331/331 (3989 ✓). T0 → 332/332 (4000); T1 → 332/332 (4029); `test:almoxarifado` 44/0; no fim da T1
+4/0, 3/0, 5/0. A Fase 2 re-mediu o I6: `toFixed(6)` discorda do `ROUND` do SQLite ~40/20 000 nos meios exatos (0 nos
+aleatórios), `Math.round` ~9 500 — o helper usa `toFixed(6)`; o caso `qtd(-0.0000005) === -0.000001` do plano **estava
+errado** (o SQLite dá 0). Recontagem: 18 claims SQL + 12 checagens JS = 30 recusas.
+
+- **T0 `82836975`** — `quantidade.js` (namespace `Q`), `disponivelSql` com `ROUND(…, 6)`, `getSaldoDisponivel` por `Q.qtd`.
+  Vermelho antes: 6 pela rota (colunas limpas, extrato, legado). Controles s1 → 6; s2 (`Math.round`) → o caso
+  0.0000005; s3 → o `-0`; s4 → `qtd(null)` 0; s5 → 2.
+- **T1 `8bb43f60`** — 60 escritas por `Q.qtdSql`, 15 claims + o piso de `ajustarSaldoExistente` com folga, a porta arredonda
+  depois de validar o cru, K1 e R1–R5, livro e mensagens com o número arredondado; a varredura lista as 7 `SET col = ?`
+  absolutas. Vermelho antes: 22 (as guardas RN-03 passaram antes, previsto). Controles s1a, s1b, s1c/s1d (ROUND **e**
+  folga juntos: 7 e 5), s2, s3, s5, s6, s7 (folga 1e-6: 7, inclusive RN-03), s8 (K1), s9–s12 caíram cada um na sua.
+  **Divergências:** s1e (claim da linha sem lote sem folga) não derruba nada — a quantidade é a lida da própria linha,
+  folga redundante; s1c só sem folga (ROUND mantido) não derruba (confirma o I2); s4 não caía com 0,7+0,2+0,1 (o `SUM`
+  do SQLite 3.44 compensa a 1 exato) — teste trocado para 0,1+0,2; s11 não caía com uma linha de lote torta (o próprio
+  motor regrava arredondado) — teste remontado com 0,1+0,2 em dois endereços; o RN-03 com 0,2000005 estava errado
+  (`toFixed` dá 0,2) — agora 0,2000006 recusado e 0,2000004 aceito como 0,2. Testes antigos mudados ("mudado na Etapa
+  96"): `filaTravaIntegracao` e `filaLiberacaoAprovacaoCorrida` (regex do gancho não reconhecia `ROUND((`, 13 caíam);
+  `encaminhamentoExecucao` (17) tinha virado vazio — agora escreve o resíduo legado direto e cai com o epsilon sabotado;
+  os dois `Fase5/B` de `relatoriosIndicadoresSpec27` (controles invertidos + caso legado); `separacaoTetoFisicoIntegracao`
+  (`-0` → `+ 0`). Técnica 3 medida antes/depois por sabotagem do epsilon: só `encaminhamentoExecucao` perdeu a deriva.
+  **Atenção da T3:** `relatoriosIndicadoresSpec27.api.test.js:457` espera `quantidade_entregue` ≠ 1 — cai quando a T3
+  arredondar a coluna.
