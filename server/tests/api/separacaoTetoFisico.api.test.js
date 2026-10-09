@@ -13,7 +13,8 @@
  * da entrada solta (movimentacoes/v2 ENTRADA — sem reserva; a reserva na chegada e so da nota, D4 da 74); ALMOX e
  * ALMOX2 (ALMOXARIFE) separam, conferem, liberam e entregam. Material comum (exceto onde dito), custo 0,1.
  *
- * T0: RN-01, RN-02, RN-04, RN-06 (a)(b)(c) e os indices (B478). Casos `[95 RN-xx]`.
+ * T0: RN-01, RN-02, RN-04, RN-06 (a)(b)(c) e os indices (B478). T0b: RN-07 (a segunda rodada da entrega, B477).
+ * Casos `[95 RN-xx]`.
  * Plano: docs/superpowers/plans/2026-10-09-almoxarifado-etapa95-separacao-limitada-ao-fisico.md
  *
  * Executar: cd server && node tests/api/separacaoTetoFisico.api.test.js
@@ -396,6 +397,48 @@ const S2 = (nome, q, max, pend, disp) => `${nome}: não é possível separar ${q
     assert.strictEqual(await reservaAtiva(b.R), 0);
     recusa(await separar(b.R, [[b.ids[0], 3]]), S2(nomes.get(m), 3, 2, 4, 2));
     ok(await separar(b.R, [[b.ids[0], 2]]), 'o hold de R1 cobre a caixa dela — os 2 que entraram continuam livres');
+  });
+
+  // ───────────────────────────── RN-07 (T0b, B477) ─────────────────────────────
+  // P3: R2 (pede 6, reserva 2, separa 2, entrega 2 — PARCIALMENTE_ATENDIDA, fisico 0) e R1 (pede 4, sem reserva,
+  // entrada solta de 4, separa 4). A "segunda rodada" de R2 entregava pelo disponivel + reserva, que contava a caixa
+  // sem reserva de R1 como livre.
+  const montarP3 = async (r1Separa) => {
+    const m = await material(2);
+    const b = await req([[m, 6]]); await aprovar(b.R);
+    assert.strictEqual(await reservaAtiva(b.R), 2, 'premissa: R2 reservou 2');
+    ok(await separar(b.R, [[b.ids[0], 2]])); ok(await entregar(b.R, [[b.ids[0], 2]]));
+    assert.strictEqual((await reqRow(b.R)).status, 'PARCIALMENTE_ATENDIDA', 'premissa');
+    const a = await req([[m, 4]]); await aprovar(a.R);
+    await entrar(m, 4);
+    if (r1Separa) ok(await separar(a.R, [[a.ids[0], 4]]));
+    return { m, a, b };
+  };
+
+  await test('[95 RN-07] P3: a segunda rodada de R2 nao leva a caixa sem reserva de R1 (400); R1 entrega a propria caixa', async () => {
+    const { m, a, b } = await montarP3(true);
+    const e = await entregar(b.R, [[b.ids[0], 4]]);
+    recusa(e, `${nomes.get(m)}: não é possível entregar 4 PC. Máximo: 0 (pendente: 4, disponível: 4)`);
+    ok(await entregar(a.R, [[a.ids[0], 4]]), 'R1 entrega a propria caixa');
+    assert.strictEqual((await reqRow(a.R)).status, 'ENTREGUE');
+  });
+
+  await test('[95 RN-07] controle: sem a caixa de R1 (R1 nao separou), a mesma segunda rodada de R2 entrega 4', async () => {
+    const { b } = await montarP3(false);
+    ok(await entregar(b.R, [[b.ids[0], 4]]));
+    assert.strictEqual((await reqRow(b.R)).status, 'ENTREGUE');
+  });
+
+  await test('[95 RN-07] parcial: R1 com 3 na caixa de 4 livres -> a segunda rodada de R2 entrega so 1 (2 recusado)', async () => {
+    const m = await material(2);
+    const b = await req([[m, 6]]); await aprovar(b.R);
+    ok(await separar(b.R, [[b.ids[0], 2]])); ok(await entregar(b.R, [[b.ids[0], 2]]));
+    const a = await req([[m, 4]]); await aprovar(a.R);
+    await entrar(m, 4);
+    ok(await separar(a.R, [[a.ids[0], 3]]));
+    recusa(await entregar(b.R, [[b.ids[0], 2]]), `${nomes.get(m)}: não é possível entregar 2 PC. Máximo: 1 (pendente: 4, disponível: 4)`);
+    ok(await entregar(b.R, [[b.ids[0], 1]]));
+    ok(await entregar(a.R, [[a.ids[0], 3]]), 'R1 entrega a propria caixa');
   });
 
   // ───────────────────────────── B478 ─────────────────────────────

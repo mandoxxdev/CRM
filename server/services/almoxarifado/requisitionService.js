@@ -53,15 +53,26 @@ function maxSeparar(item, estoque) {
   return Math.min(pendenteSeparacao(item), num(estoque));
 }
 
-function maxEntregar(item, estoque) {
+function maxEntregar(item, estoque, teto) {
   const pendente = pendenteEntrega(item);
   if (pendente <= 0) return 0;
   const separadoDisponivel = Math.max(0, getSeparado(item) - getEntregue(item));
   // Segunda rodada após entrega parcial: separado já foi consumido, mas pendente permanece
   if (getEntregue(item) > 0 && separadoDisponivel < pendente) {
-    return Math.min(pendente, num(estoque));
+    // Etapa 95 (T0b, B477): a parte ALEM da propria caixa e limitada ao teto do item (tetoSeparacao) — o
+    // `disponivel + reserva` conta a caixa sem reserva de OUTRA requisicao como livre, e a segunda rodada levava o
+    // fisico dela (P3: a dona da caixa ficava presa com o separado na mao, "Maximo: 0"). A entrega da propria caixa
+    // continua pelo `estoque`. Sem `teto` (chamador que nao o calcula), a conta de antes.
+    const alemDaCaixa = (teto === undefined || teto === null) ? Infinity : separadoDisponivel + num(teto);
+    return Math.min(pendente, num(estoque), alemDaCaixa);
   }
   return Math.min(pendente, separadoDisponivel, num(estoque));
+}
+
+/** Etapa 95 (T0b, B477): o teto do item para a entrega, a partir da leitura fresca de saldoDisponivelParaItem. */
+function tetoDaLeitura(item, saldo) {
+  return tetoSeparacao(saldo.disponivel - saldo.reservado_para_item, saldo.reservado_para_item,
+    getSeparado(item) - getEntregue(item), saldo.caixa_outros_itens);
 }
 
 function normalizarItem(item) {
@@ -1324,8 +1335,9 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     if (qty <= 0) continue;
     algoAEntregar = true;
     // eslint-disable-next-line no-await-in-loop
-    const { disponivel } = await saldoDisponivelParaItem(db, item);
-    const max = maxEntregar(item, disponivel);
+    const saldo = await saldoDisponivelParaItem(db, item);
+    const { disponivel } = saldo;
+    const max = maxEntregar(item, disponivel, tetoDaLeitura(item, saldo)); // Etapa 95 (T0b, B477)
     if (qty > max) {
       const err = new Error(
         `${item.material_nome}: não é possível entregar ${qty} ${item.unidade || ''}. `
@@ -1357,8 +1369,9 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     // Etapa 4: o disponível soma o hold da própria requisição — o que a aprovação reservou é
     // desta requisição e não pode barrá-la.
     // eslint-disable-next-line no-await-in-loop
-    const { disponivel, reservado_para_item: reservadoItem } = await saldoDisponivelParaItem(db, item);
-    const max = maxEntregar(item, disponivel);
+    const saldo = await saldoDisponivelParaItem(db, item);
+    const { disponivel, reservado_para_item: reservadoItem } = saldo;
+    const max = maxEntregar(item, disponivel, tetoDaLeitura(item, saldo)); // Etapa 95 (T0b, B477)
 
     if (qtyEntregar > max) {
       const err = new Error(
