@@ -556,6 +556,50 @@ const S = (c, un, lista) => ` — ${c} ${un} estão separados para ${lista}${S_F
     assert.strictEqual((await estornar(x.r.id, { compensacao: true })).status, 200, 'a compensacao do mesmo evento');
   });
 
+  await test('[97 F5-2] devolucao com duas pernas (SUCATA e QUARENTENA) x separacao entre as pernas: a separacao espera a devolucao inteira — 0/5 com caixa + bloqueado > fisico, por destino', async () => {
+    // Fase 5 (item 2): as pernas (ENTRADA_DEVOLUCAO + SUCATA/BLOQUEIO) pegavam a trava uma de cada vez; uma separacao
+    // entre elas separava os 4 creditados e a segunda perna os levava (SUCATA: fisico 0 com caixa 4; QUARENTENA:
+    // bloqueado 4 + caixa 4 sobre fisico 4) — a entrega ficava presa em "Maximo: 0". Igual na base (20/20). Gancho: a
+    // escrita do livro da ENTRADA_DEVOLUCAO termina e o retorno dela fica parado; a separacao e disparada ali.
+    const origRun = db.run;
+    const placar = {};
+    try {
+      for (const destino of ['SUCATA', 'QUARENTENA']) {
+        let errados = 0; const disparos = [];
+        for (let i = 0; i < 5; i++) {
+          const m = await material(0); // eslint-disable-line no-await-in-loop
+          const a = await req([[m, 4]]); await aprovar(a.R); // eslint-disable-line no-await-in-loop
+          let parou; const parada = new Promise((r) => { parou = r; });
+          let liberar; const liberado = new Promise((r) => { liberar = r; });
+          let n = 0;
+          db.run = function ganchoE97F5(sql, params, cb) {
+            if (/INSERT INTO movimentacoes_almoxarifado/.test(sql) && Array.isArray(params) && params.includes('ENTRADA_DEVOLUCAO')) {
+              n++;
+              if (n === 1) return origRun.call(db, sql, params, function depois(...x) { parou(); liberado.then(() => cb.apply(this, x)); });
+            }
+            return origRun.call(db, sql, params, cb);
+          };
+          const dev = como('ADMIN').post(`${API}/devolucoes`, { material_id: m, quantidade: 4, destino, motivo: 'e97 f5', observacoes: 'e97 f5' });
+          await parada; // eslint-disable-line no-await-in-loop
+          const sep = requisitionService.separarRequisicao(db, a.R, [{ item_id: a.ids[0], quantidade_separada: 4 }], { ...USERS.ALMOX })
+            .then(() => 200, (e) => e.status || 500);
+          await dormir(30); // eslint-disable-line no-await-in-loop
+          liberar();
+          const [d] = await Promise.all([dev, sep]); // eslint-disable-line no-await-in-loop
+          db.run = origRun;
+          disparos.push(n);
+          assert.strictEqual(d.status, 201, `devolucao ${destino}: ${JSON.stringify(d.body)}`);
+          const mt = await dbGet(db, 'SELECT quantidade_atual q, COALESCE(quantidade_bloqueada,0) b FROM materiais_almoxarifado WHERE id=?', [m]); // eslint-disable-line no-await-in-loop
+          const { caixa } = await caixaSql.lerCaixa(db, m); // eslint-disable-line no-await-in-loop
+          if (caixa + mt.b > mt.q + 1e-9) errados++;
+        }
+        assert.deepStrictEqual(disparos, [1, 1, 1, 1, 1], `${destino}: o gancho disparou uma vez por rodada`);
+        placar[destino] = errados;
+      }
+    } finally { db.run = origRun; }
+    assert.deepStrictEqual(placar, { SUCATA: 0, QUARENTENA: 0 }, `rodadas com caixa + bloqueado > fisico (de 5): ${JSON.stringify(placar)}`);
+  });
+
   await test('[97 I-3] (Fase 2) duas SAIDAs concorrentes pelo motor travado SERIALIZAM: a segunda le o resultado da primeira', async () => {
     const m = await material(0); await entrar(m, 10);
     // C = o claim do fisico (as duas tentam); L = a linha do livro (so a vencedora grava). Sob a trava a perdedora

@@ -4,6 +4,8 @@ const lotService = require('./lotService');
 const { registrarAuditoria } = require('./audit');
 // Etapa 96 (C176): a regra unica de quantidade (namespace — Fase 2, I3).
 const Q = require('./quantidade');
+// Etapa 97 (Fase 5, item 2): as duas pernas da devolucao (QUARENTENA, SUCATA) sob uma trava do material.
+const trava = require('./travaPorMaterial');
 // Sem ciclo: nem alertService nem notificationQueueService requerem este arquivo (Etapa 12,
 // Task 3, RN-06 — aviso de devolucao em ESTADO_PARCIAL). stockService (acima) ja carregou os
 // dois por completo antes desta linha rodar, entao aqui e so cache-hit.
@@ -196,7 +198,16 @@ async function registrarDevolucao(db, user, data) {
   // buraco e GERAL: qualquer erro do motor depois do INSERT deixa a linha, e a lista de erros do
   // motor cresce sem este arquivo ficar sabendo. Perseguir cada um deles com mais uma checagem
   // seria correr atras de um alvo que se move.
-  try {
+  // Etapa 97 (Fase 5, item 2): os destinos de DUAS pernas (QUARENTENA: ENTRADA_DEVOLUCAO + BLOQUEIO; SUCATA:
+  // ENTRADA_DEVOLUCAO + SUCATA) rodam sob UMA trava do material. Antes cada perna pegava a trava sozinha (o motor, B494):
+  // uma separacao entre as duas separava o que a entrada acabou de creditar e a segunda perna o levava — SUCATA: fisico 0
+  // com caixa 4; QUARENTENA: bloqueado 4 + caixa 4 sobre fisico 4 —, e a entrega ficava presa em "Maximo: 0" (igual na
+  // base, 20/20). O "par soma zero" da perna SUCATA (Fase 2, I-4) so vale sem nada entre as pernas; a trava garante isso.
+  // O motor, chamado aqui dentro, roda direto (`naTravaDoMaterial`: a secao segura o material). `naTravaDoMaterial` e nao
+  // `comLockDoMaterial`: fora de secao (a rota, unico chamador) e a mesma coisa; chamado de dentro de uma secao que ja
+  // segura o material nao espera a si mesmo. O `catch` (compensacao) roda FORA da trava. Destinos de uma perna so
+  // (ESTOQUE, RETRABALHO): a trava do proprio motor basta.
+  const pernas = async () => {
     if (destinoFinal === 'ESTOQUE' || destinoFinal === 'QUARENTENA') {
       await registrarMovimentacao(db, user, {
         material_id, tipo: 'ENTRADA_DEVOLUCAO', quantidade,
@@ -249,6 +260,10 @@ async function registrarDevolucao(db, user, data) {
         lote_id: loteFinalId, referencia,
       });
     }
+  };
+  try {
+    if (destinoFinal === 'QUARENTENA' || destinoFinal === 'SUCATA') await trava.naTravaDoMaterial(material_id, pernas);
+    else await pernas();
   } catch (e) {
     // A PERGUNTA QUE DECIDE: alguma movimentacao chegou ao LIVRO? Contar linhas por `referencia`
     // responde exatamente isso — `DEV-<id>` e unica por devolucao, e o motor grava o ledger por
