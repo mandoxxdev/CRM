@@ -1,7 +1,8 @@
 # Etapa 96 — o motor grava a quantidade arredondada e não recusa o que existe por ponto flutuante (C176, feature 03 com a 05 e a 07)
 
-> Status: **EM EXECUÇÃO — 2026-10-09: Fase 2 `e2a2f2d7`; T0 `82836975`, T1 `8bb43f60`, T2 `290ae5dc`, T3 `f26e53db`, T4 `5b5abba7` feitas (seção "Execução" no fim); próximo T5 e Fase 5.** Próximo passo: **T0** — ver
-> "Fase 2 — revisão do plano" (vale sobre o texto) e "Próximo passo" no fim.
+> Status: **FECHADA — 2026-10-09.** Fase 2 `e2a2f2d7`; T0 `82836975`, T1 `8bb43f60`, T2 `290ae5dc`, T3 `f26e53db`,
+> T4 `5b5abba7`, T5 `8f33584f`; Fase 5 `e25454b5`, `2adcd51c`, `8d7c331d`, `983f006c`, `2d0bbfe9`; fechamento (T6)
+> `71211f15`. Ver "Execução", "Fase 5", "Fechamento" e **"Próxima tarefa detalhada — Etapa 97"** no fim.
 > HEAD de partida: `30b7793a` (main, árvore limpa, sem push).
 > Origem: "Próxima tarefa detalhada — Etapa 96" no fim de
 > `docs/superpowers/plans/2026-10-09-almoxarifado-etapa95-separacao-limitada-ao-fisico.md`; o item **C176** da letra C de
@@ -479,9 +480,9 @@ junction"). T2 e T3 **não** vão em paralelo: as duas sabotam o motor que as ou
   `estoque_saldo_almoxarifado` → cai "acha a linha de endereço". **(Fase 2, I7)** A prova da CLI: o teste faz `VACUUM INTO '<tmp>/database.sqlite'` do banco da suíte (o nome que
   `index.js:~1106` monta sobre `CRM_DATA_DIR`) e roda o script com `CRM_DATA_DIR=<tmp>`. A T4 nasce **depois do commit
   da T0** (consome `Q.qtd`); o `arredondado` do relatório vem do `ROUND` do SQL (B482 revista).
-- [ ] **T5 (integração — cruza T1, T2, T3 e T4).** Ver a seção abaixo. **Controles:** com a T1 revertida (s1 da T1) →
+- [x] `8f33584f` **T5 (integração — cruza T1, T2, T3 e T4).** Ver a seção abaixo. **Controles:** com a T1 revertida (s1 da T1) →
   cai I1; com a T3 revertida (s1 da T3) → cai I3; com a T2 revertida (s1 da T2) → cai I2.
-- [ ] **T6 — fechamento (skill `fechar-etapa`).** Novidades (seção da 96; **C176** marcado resolvido, dizendo que o
+- [x] `71211f15` **T6 — fechamento (skill `fechar-etapa`).** Novidades (seção da 96; **C176** marcado resolvido, dizendo que o
   defeito era mais largo e que a razão da recomendação estava errada; **C177–C181**; **B480–B488**; **A47**; D (96); F
   (96)); specs 03 (motor: a gravação e a folga), 05 (o item e a entrega), 07 (a aprovação no legado); mapa; guia
   (cabeçalho, seção da 96 com roteiro clicável: entrada em KG fracionada e a saída inteira, a requisição de 1 depois da
@@ -703,8 +704,8 @@ simétrico no SQLite; `claimSaldoSemLote` lê `quantidade > 0` e não muda).
 
 ## Próximo passo
 
-**(Fase 2 feita — ver a seção acima.) Próximo: T0**, depois T1, T2, T3 (T4 em worktree depois do commit da T0), T5,
-T6. ~~**Fase 2** — um agente fresco (sem este contexto) com este plano, a spec 03 (motor), a 05 e a 07, e as quatro perguntas
+**Etapa fechada (2026-10-09). Próximo: Etapa 97 — ver "Próxima tarefa detalhada — Etapa 97" no fim.** ~~(Fase 2 feita —
+ver a seção acima.) Próximo: T0, depois T1, T2, T3 (T4 em worktree depois do commit da T0), T5, T6.~~ ~~**Fase 2** — um agente fresco (sem este contexto) com este plano, a spec 03 (motor), a 05 e a 07, e as quatro perguntas
 da skill (contratos com erro e literal; RN × spec; independência real do galho T4; **cada RN traçada até o último
 gesto** — entrada → transferência → reserva → saída; aprovar → separar → entregar → encerrar; bloquear → desbloquear;
 enviar → retornar → encerrar remessa; inventário aberto → concluir). Pontos que a Fase 2 deve atacar em especial:
@@ -764,3 +765,192 @@ errado** (o SQLite dá 0). Recontagem: 18 claims SQL + 12 checagens JS = 30 recu
   `VACUUM INTO`; livro intacto; inventário aberto sobre o torto fecha sem movimento novo). Controles s1–s5 caíram.
   **Divergência:** a B483 diz "15 colunas"; o contrato e a A47 têm **14** — o texto da B483 estava errado.
 - **Contagem:** `test:api` 335/335 (4071 ✓); `test:almoxarifado` 44/0; 4/0, 3/0, 5/0.
+- **T5 `8f33584f`** — `quantidadeArredondadaIntegracao.api.test.js` **7** casos (I1–I6 + serviço): cada jornada termina
+  com o saldo pela rota **igual** à conta do teste (micro-unidades inteiras, igualdade estrita — só uma tolerância de
+  1e-6 aceitaria `0.9999999999999999`), o livro **encadeado** (`saldo_anterior` = `saldo_posterior` anterior, sem
+  resíduo, o último = físico), as linhas somando o físico e a A47 vazia para o material. Controles (um de cada vez,
+  âncora = 1, restauro por cópia com md5, CR = 0) caíram cada um na sua: **c1** (entrada sem `qtdSql` → I1, I3, I4),
+  **c1b** (linha da entrada → I1), **c2** (pré-checagem do envio sem `Q.cabe` → I2), **c2b** (`quantidade_retornada`
+  sem `qtdSql` → I2), **c3** (soma da separação sem `Q.qtd` → I3, I4), **c4** (a consulta com `ABS > 1e-12` → I5 e os
+  dois I6), **c5** (livro sem `Q.qtd` → I2–I6). **Divergências:** (1) o **I3 do plano estava errado** — separava 0,7 +
+  0,3 e entregava 0,5 + 0,5, somas **exatas** em ponto flutuante (não derivam): o controle da T3 seria vazio; trocado
+  por 0,7 + 0,2 + 0,1 e 0,1 + 0,2 + 0,7; (2) o legado montado **só na coluna do material** (sem linha de saldo) faz a
+  saída criar a linha "sem localização" −1 com físico 0 — medido **igual com estoque limpo**: é a regra da Etapa 51,
+  não da 96 (registrado como **C183**); o teste monta o legado como o motor antigo gravava (coluna e linha); (3) o
+  físico legado fica torto até o primeiro gesto que o **grava** — bloquear, remessa e retorno não gravam o físico (o
+  ajuste do inventário grava); sem prender gesto (B483, **C177**); (4) o I2 foi **estendido** (segunda remessa de duas
+  linhas 0,4 + 0,2 contra 0,6 livre) para o controle da T2 morder — com uma linha só a pré-checagem não era alcançada
+  com resíduo. `test:api` 336/336 (4078 ✓); `test:almoxarifado` 44/0; 4/0, 3/0, 5/0.
+
+## Fase 5 — revisão adversarial (2026-10-09)
+
+Dois revisores frescos, executando (sondas `e96rv1-*` e `e96rv2-*` no scratchpad). Cada achado conferido contra o
+código pelo fio principal antes do conserto; cada commit da Fase 5 teve `test:api` rodado **no seu estado**:
+`e25454b5` 4082 ✓, `2adcd51c` 4090, `8d7c331d` 4094, `983f006c` 4103, `2d0bbfe9` 4104 (sempre 336/336;
+`test:almoxarifado` 44/0).
+
+**Sem achado (atacado pelo revisor do motor, executando):** a folga **não** inventa estoque — o pedido e o `SET`
+arredondados devolvem as colunas à grade de 1e-6 (nenhum pedido que não cabe passa; grandezas até 1,2e9 conferidas);
+nenhuma escrita crua de coluna de quantidade sobrou (varredura do arquivo inteiro, multilinha — a que virou o teste do
+`983f006c`); `-0` não aparece gravado nem na resposta; o script com o servidor **rodando**: 300 mil linhas em 319 ms,
+**0** `SQLITE_BUSY` (a instrução continua "servidor parado" — escrita direta no banco).
+
+**Achados, com o commit que fechou:**
+
+1. **R1 (importante, regressão da própria 96) → `e25454b5`.** A separação e a entrega passaram a arredondar, mas o item
+   guardava o **solicitado cru**: uma requisição de 0,3333333 (ou 1,0000004, ou o 1/3 legado de uma conversão) era
+   separada e entregue em 0,333333 e **travava** em `PARCIALMENTE_ATENDIDA` com pendente 0, fora da fila, e a reserva
+   ficava `ATIVA` (zumbi: 0,3333333333 de quantidade, 0,333333 utilizada). Antes da 96 fechava `ENTREGUE`. Conserto: a
+   criação grava `Q.qtd`; o que arredonda a zero recebe a recusa que o schema já dá (*"Dados inválidos —
+   itens.⟨n⟩.quantidade: quantidade deve ser maior que zero"* — nenhuma literal nova); `todosItensCompletos` com
+   `Q.cabe` sobre o solicitado arredondado (cobre o legado); a separação arredonda o pedido; a reserva é marcada
+   `CONSUMIDA` quando `Q.qtd(sobra) <= 0`; `COLUNAS_LEGADO` 14 → **15** (`quantidade_solicitada`). Descartado: recusar
+   mais de 6 casas (B482).
+2. **R2 (importante, regressão da própria 96) → `2adcd51c`.** (a) Motor: três reservas legadas de 1/3 contra o reservado
+   1 — cada liberação subtrai 0,333333 e o reservado, gravado arredondado, termina em **0,000001 sem nenhuma reserva
+   `ATIVA`**; a `SAIDA` de 1 com físico 1 era recusada (*"Disponível: 0.999999"*). Conserto: `RESERVADA_MENOS_SQL` zera
+   o que sobra abaixo de 0,0001 quando o material não tem reserva `ATIVA` (**B489**). Descartados: subtrair o saldo cru
+   (fecha em 0,000001 do mesmo jeito) e zerar sem limite (apagaria o hold de uma `criarReserva` concorrente — o hold
+   sobe o reservado antes do `INSERT`, sem transação). (b) Script: arredondar cada coluna sozinha quebrava "soma das
+   linhas = físico" e "soma das reservas ativas = reservado". Conserto: recalcular os agregados das fontes **só onde a
+   invariante valia no cru** (**B490**). Descartados: reconciliar material que já divergia; distribuir o resto entre
+   as linhas.
+3. **R3 (menor) → `8d7c331d`.** `getSaldoDisponivel` recalculava em JS (`toFixed`) e o claim lê o `ROUND` do SQL: nos
+   meios exatos (76 em 100 000) a reserva de 0,0011 passava e a `SAIDA` de 0,0011 era recusada sobre o mesmo legado
+   0,0010995 — violava a regra da B482. Conserto: `getSaldoDisponivel(material, db)` avalia `disponivelSql()` sobre o
+   mesmo retrato. Junto: as mensagens cruas do estorno de `BLOQUEIO` e da inspeção que não fecha. E **`2d0bbfe9`**: a
+   do estorno de `ENTRADA` de lote — **fora da lista** da revisão, achada pelo controle da guarda do piso de
+   `ajustarSaldoExistente`.
+4. **Testes — sabotagens que passavam verde → `983f006c`.** (a) As **7 guardas de folga** sem teste (sabotadas juntas,
+   a suíte ficava 335/335): a pré-checagem do bloqueado (com colunas **limpas**, a `:1407` da revisão — físico 0,3,
+   bloqueado 0,1, `SAIDA` 0,2), `LIBERACAO_INSPECAO`, `RETORNO_TERCEIRO`, as duas folgas do claim de `PERDA_TERCEIRO`,
+   o estorno de `BLOQUEIO` e o piso de `ajustarSaldoExistente` — um caso por guarda; 7 sabotagens, 8 quedas. (b) A
+   varredura da RN-01 era regex **por linha** (excluía a linha inteira com `Q.qtdSql`, não via escrita em duas linhas,
+   não via `COALESCE(a, col, 0) + ?`, lista de colunas à mão sem `quantidade_atendida`, e `requisitionService` fora):
+   reescrita em `server/tests/helpers/varreduraQuantidade.js` — arquivo inteiro, multilinha, colunas de
+   `COLUNAS_LEGADO`, `services/almoxarifado` inteiro, **11 formas cruas** como controle positivo e 3 falsos positivos
+   que não podem ser acusados; controles no código real (a escrita de `quantidade_atendida` desembrulhada e a do
+   reservado em duas linhas) caíram na linha certa. (c) `RESERVADA_MENOS_SQL` sem `Q.qtdSql` passava verde. (d) O
+   `[Fase5/B]` legado de `relatoriosIndicadoresSpec27` tinha ficado **vazio** (legado abaixo, o motor arredonda e a
+   sobra dá 0) — trocado pelo legado **acima** (1.0000000000000002).
+
+**Resíduo declarado (C182):** legado no meio exato da 7ª casa (0,0010995): a `SAIDA` de 0,0011 passa e grava físico
+−0,000001; a reserva de 0,0011 continua impossível de consumir pela `SAIDA` com `reserva_id` (como antes da 96). O
+script cura (grava 0,0011). Nenhuma folga corrige sem aceitar estoque que não existe.
+
+## Fechamento (2026-10-09)
+
+**T6 `71211f15`** — novidades (seção da 96; **A47** com 15 colunas, re-executada no fechamento — sonda
+`fecha96-a47-sonda.js`: cobre exatamente `COLUNAS_LEGADO`, vazia no banco limpo, acha as 12 tortas das quatro tabelas
+montáveis e nada do 1,5, coluna trocada o banco recusa; **B480–B490**; **C176** resolvido; **C177–C183**; D (96); F
+(96)); specs 03, 05, 07 e mapa; guia (cabeçalho, seção, roteiro); manual (22.1b, 7.2, cuidados ponto 5).
+
+**Letras:** o plano reservou B480–B488, C177–C181, A47. Usadas: **A47**; **B480–B488** do plano e **B489** (o reservado
+sem reserva ativa zera abaixo de 0,0001) e **B490** (o script recalcula os agregados das fontes) da Fase 5 — letras
+novas por serem regra nova; **emendas** à vista na **B482** (o solicitado da requisição; a pré-checagem pelo SQL), na
+**B483** (as colunas: o texto dizia "15" quando eram 14 — `5b5abba7` —, e agora são 15 de verdade — `e25454b5`) e na
+**B485** (três mensagens); **C177–C181** do plano, **C182** (o meio exato) e **C183** (o legado só na coluna do material
+cria a linha "sem localização" −1 — comportamento da Etapa 51, medido igual com estoque limpo; foi para C e não E
+porque muda o que quem opera vê). Próximas livres: **B491**, **C184**, **A48**.
+
+**Verificação final (rodada no HEAD `7f45ecef`, o código de `2d0bbfe9`; o fechamento é só documentação):** `test:api`
+**336/336** arquivos (**4104** ✓ por `grep -c "✓"`); `test:almoxarifado` **44/0**; `test:validation` **4/0**;
+`test:safealter` **3/0**; `test:sqlite` **5/0**; cliente **95** suítes / **1463** testes; `CI=true react-scripts build`
+*Compiled successfully*. Os cinco arquivos da 96 rodados sozinhos: 55, 19, 17, 16 e 7 (114).
+
+**Retro.** Rodadas de correção da Fase 5: **1** (R1, R2, R3 e testes, sem segunda volta). Achados reais: **3 de código**
+(R1, R2, R3) + **4 de teste** (guardas, varredura, reservado, `[Fase5/B]`) + **3 mensagens** cruas (duas na R3, uma em
+`2d0bbfe9`); ruído **0** (nenhum achado descartado como falso). Defeitos **introduzidos pela própria etapa** e pegos na
+Fase 5: **2** (R1, R2) — os dois pelo mesmo mecanismo: arredondar um lado de uma conta que fecha contra um valor cru
+(o solicitado; o reservado contra reservas de 1/3). Lição: ao arredondar uma coluna, procurar **todas as contas que a
+comparam com outra** e a outra também tem de estar na grade — a varredura de escrita não acha isso. O plano errou o I3
+(somas exatas que não derivam) — o controle positivo pegou. A Fase 2 tinha pegado o bloqueante (K1) que a T1 teria
+criado.
+
+## Próxima tarefa detalhada — Etapa 97: a saída avulsa (e as outras portas do motor) leva o material que está na caixa sem reserva
+
+> Medido em 2026-10-09 no HEAD `7f45ecef` (código da 96 fechado em `2d0bbfe9`). Sonda `e97f0-s1-caixa-portas.js`,
+> saída `e97f0-s1-caixa-portas.out`, no scratchpad da sessão (harness `e95-h.js`: `testApp` com `requirePermission` real,
+> usuário por header). A `e96f0-s2-avulsa-caixa.js` (5/8) ficou coberta e ampliada por esta.
+
+**Origem:** B466 (iv) e D (95), D (96). Separar não mexe no estoque, e o motor não sabe o que é caixa. O separado **sem
+reserva** fica retido pela conta da 95 (separação, fila, aprovação, entrega), mas para todos os outros gestos continua
+contando como livre.
+
+**Montagem (estado novo por porta):** material PC com físico 0; S pede 4, ADMIN aprova (*Aprovado*, sem reserva);
+`ENTRADA` 4 avulsa; ALMOX separa 4 → *Em Separação*, reservas `[]`, físico 4, reservado 0 — caixa sem reserva 4.
+
+**Placar: 9 de 9 portas ERRADO; controle CERTO** (o placar cru da sonda é 10/12 ERRADO, 2 CERTO; dois descartados,
+abaixo).
+
+| porta (ADMIN) | resposta | estado depois | A entrega os 4? |
+|---|---|---|---|
+| `SAIDA` 4 (`/movimentacoes/v2`) | **201** | físico 0 | **400** *"⟨material⟩: não é possível entregar 4 PC. Máximo: 0 (pendente: 4, disponível: 0)"*; fila `AGUARDANDO_SALDO` |
+| `AJUSTE_NEGATIVO` 4 | **201** | físico 0 | 400, mesma literal |
+| `AJUSTE` para 0 com localização | **201** | físico 0 | 400, mesma literal |
+| `AJUSTE` para 1 sem localização | **201** (`motivoRecusaAjustePorRetencao` não conhece caixa) | físico 1 | 400 *"… Máximo: 1 (pendente: 4, disponível: 1)"* |
+| `PERDA` 4 | **201** | físico 0 | 400 *"Máximo: 0"* |
+| remessa a terceiro 4 (criar + enviar) | **200** | em terceiros 4 | 400 *"Máximo: 0"* |
+| `POST /materiais/:id/bloquear` 4 | **200** | bloqueado 4 | 400 *"Máximo: 0"* |
+| `POST /reservas` 4 (manual) | **201** | reservado 4 | 400 *"Máximo: 0"* — a reserva manual tomou a caixa |
+| parcial: reserva 2, caixa 4, `SAIDA` 2 | **201** | físico 2, reservado 2 | 400 *"Máximo: 2 (pendente: 4, disponível: 2)"* |
+| **controle:** caixa coberta pela reserva (reserva 4, separa 4), `SAIDA` 4 | **400** *"Saldo insuficiente. Disponível: 0 PC"* | intacto | 200 `ENTREGUE` |
+
+**Descartados do placar:** `SAIDA_PRODUCAO` (o 400 veio da regra de OS — *"SAIDA_PRODUCAO exige vínculo com OS ou
+projeto…"* —, não da caixa); `POST /sucateamentos` 4 → 201 é só a **solicitação**, sem baixa, e A entrega 200 em
+seguida (a baixa, depois das duas aprovações e do destino, lê `disponivelSql` em `scrapDisposalService.js:203`/`:243`
+— **não medida até o fim**; pela leitura leva a caixa igual). `TRANSFERENCIA` 4 → 201 não muda o físico e A entrega
+200 (só entra se a caixa ganhar endereço — não ganha). `DEVOLUCAO_FORNECEDOR` (pela NC) não medida.
+
+**Onde a caixa sem reserva teria de entrar (lido no HEAD):** o disponível do motor — `availabilitySql.js:34`
+(`COLUNAS_RETENCAO`), `:55` (`disponivelSql`), `stockService.js:56` (`getSaldoDisponivel`, que desde a Fase 5 avalia o
+próprio `disponivelSql`); as recusas do motor — a pré-checagem `:1423-1426` (M1) e a do bloqueado `:1431-1435`, os
+claims `:1554` (envio a terceiro pelo motor), `:1724` (consumo de reserva), `:1815` (saída comum), `:2590` (estorno),
+`:3029` (`criarReserva`, M8 em `:3033`), `motivoRecusaAjustePorRetencao` `:95`; fora do motor — `thirdPartyService.js:205`
+(pré-checagem do envio) e os claims dele, `scrapDisposalService.js:203`/`:243`, o bloqueio avulso (`inspectionService.js:463`
+→ `registrarMovimentacao` `BLOQUEIO`). **O helper existe:** `requisitionService.caixaSemReservaSql(materialExpr,
+exclusao)` (`:152`, exportado em `:1814`; lê `STATUS_COM_CAIXA` de `requisitionStateMachine.js:109`; índice da B478),
+lido hoje pela separação, aprovação, fila e detalhe sempre **por fora** do `disponivelSql` (a 95 subtrai a caixa depois,
+em `tetoSeparacao` `:172`).
+
+**A decisão de produto (B491), pelo caminho reversível:**
+- **(a) Recomendada — recusar nas portas avulsas, sem mexer no `disponivelSql`:** um `disponivelLivreDeCaixaSql()` novo
+  (`disponivelSql` − `caixaSemReservaSql`) na pré-checagem e nos claims de `SAIDA`, `AJUSTE_NEGATIVO`, `PERDA`, envio a
+  terceiro, bloqueio, `criarReserva` e na guarda de retenção do `AJUSTE`. Mensagem: a literal de sempre (*"Saldo
+  insuficiente. Disponível: ⟨d⟩"*) com o número já sem a caixa — ou literal que nomeie a caixa (decidir na B491).
+- **(b) Descartar — a caixa dentro do `disponivelSql`:** os 15 leitores mudam juntos; a 95 contaria a caixa duas vezes
+  (`tetoSeparacao` já subtrai `caixa_sem_reserva_outros`), a aprovação idem (B469), relatórios e fila mudam de número; e
+  a **entrega da própria requisição seria recusada** (a parte sem reserva da entrega é uma `SAIDA` sem `reserva_id` —
+  `requisitionService.js:1495` — que passa pela pré-checagem `:1423` e pelo claim `:1815` e veria a própria caixa).
+- **(c) Só avisar** — não protege: a entrega continua presa, que é o defeito medido.
+
+**Contrato provável:** `registrarMovimentacao` aceita um contexto que **exclui a caixa da própria requisição**
+(`requisicao_id`/item — a cláusula `exclusao` de `caixaSemReservaSql`), senão a entrega sem reserva cai na própria
+régua; as portas avulsas (sem `requisicao_id`) descontam a caixa inteira; `POST /reservas` e a remessa idem; o `AJUSTE`
+abaixo de retido + caixa recusa com a literal R1 de hoje, com a caixa somada. Nenhuma rota nova; o 400 tem a mesma
+forma, com número menor em *"Disponível"*.
+
+**Pontos de atenção:**
+1. **Trava:** `registrarMovimentacao` **não** pega a trava por material — só as portas da 91/93/95 (nota, inspeção, NC,
+   aprovação, separação, entrega; `travaPorMaterial.js`). Uma saída avulsa simultânea a uma separação lê a caixa antes
+   de ela ser gravada. Ou a 97 põe a saída avulsa sob a trava (a entrega já chama o motor **dentro** da trava — usar
+   um "sob trava" explícito, molde `reservaChegadaService` `sobTrava`, para não dar deadlock), ou declara a corrida e
+   mede N de N.
+2. **Ajuste e inventário:** separar não tira da prateleira, então quem conta acha o material da caixa lá; um
+   `AJUSTE_INVENTARIO` que zera depois de uma contagem que deixou a caixa de fora é o mesmo defeito — decidir se a
+   caixa entra na guarda do ajuste e do inventário (o `AJUSTE_INVENTARIO` **não** foi medido).
+3. **Reserva manual × caixa:** hoje toma a caixa (201); a aprovação da 95 já não toma (B469) — igualar.
+4. **Caixa parcialmente coberta** (reserva 2, caixa 4): a régua é a de `caixaSemReservaSql` (`max(0, caixa − reserva
+   do item)`); o caso parcial da sonda vira teste.
+5. A literal e o número passam por `Q.qtd`; a comparação por `Q.cabe`/`FOLGA_SQL` (96). O SQL novo só lê — entra na
+   varredura da RN-01 só se escrever coluna de quantidade.
+6. **Custo:** `caixaSemReservaSql` dentro de cada claim do motor é uma subconsulta por gesto; o índice da B478 cobre —
+   medir a suíte e um laço de mil saídas.
+
+**O que não reabrir:** da **96**, o arredondamento e a folga (`Q.qtd`, `Q.cabe`, `FOLGA_SQL`, `disponivelSql` com
+`ROUND`), o `RESERVADA_MENOS_SQL` com resíduo e o script; da **95**, a separação limitada ao físico, `tetoSeparacao`, a
+retenção por status (B473), a B469 e as travas da separação e da entrega (B476, B479); a chegada e a inspeção que dão
+primeiro a quem tem caixa (B475, C173); o saldo global por material (almoxarifado é área física — `CLAUDE.md`): não
+propor caixa por endereço.
+
+**Letras livres para a 97:** **B491**, **C184**, **A48** (conferir no documento antes de usar).
