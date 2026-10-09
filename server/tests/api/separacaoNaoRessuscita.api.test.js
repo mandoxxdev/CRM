@@ -327,6 +327,44 @@ const comPrazo = (p, ms, rotulo) => Promise.race([
     await test(`[92 RN-04] rota outros ${status}: a separacao inteira no instante do UPDATE do cancelamento -> separacao 200, cancelamento 400 R1, EM_SEPARACAO, reserva ATIVA`, () => ordemInversa('outros', status));
   }
 
+
+  // ══════════════ T2 (C153, B437) — o cancelamento do almoxarifado com compare-and-set ══════════════
+  for (const status of ['APROVADO', 'TOTALMENTE_RESERVADA']) {
+    // eslint-disable-next-line no-await-in-loop
+    await test(`[92 RN-04] rota almox ${status}: a separacao inteira no instante do UPDATE do cancelamento -> separacao 200, cancelamento 400 R2, EM_SEPARACAO, reserva ATIVA`, () => ordemInversa('almox', status));
+  }
+
+  await test('[92 RN-04] (b) rota almox: TOTALMENTE -> PARCIALMENTE no instante do UPDATE -> 200, CANCELADO, trilha PARCIALMENTE_RESERVADA (a nova tentativa)', async () => {
+    const ctx = await montar('TOTALMENTE_RESERVADA', { reservar: true });
+    let emissoes = 0;
+    const origRunLocal = db.run;
+    // Por cima do gancho geral: conta as emissoes e troca o status na primeira (simula o recalculo da 76).
+    db.run = function (sql, ...rest) {
+      if (RE_CANCELADO.test(String(sql))) {
+        emissoes++;
+        if (emissoes === 1) {
+          origRun('UPDATE requisicoes_almoxarifado SET status = ? WHERE id = ?', ['PARCIALMENTE_RESERVADA', ctx.R],
+            () => origRunLocal.call(db, sql, ...rest));
+          return this;
+        }
+      }
+      return origRunLocal.call(db, sql, ...rest);
+    };
+    let c;
+    try {
+      c = await comPrazo(como('S').put(rotaCancelar('almox', ctx.R)), 10000, 'cancelamento');
+    } finally { db.run = origRunLocal; }
+    assert.strictEqual(c.status, 200, `cancelamento: ${c.status} ${JSON.stringify(c.body)}`);
+    assert.deepStrictEqual(c.body, { success: true });
+    assert.strictEqual(emissoes, 2, `UPDATE emitido ${emissoes} vez(es)`);
+    assert.strictEqual(await st(ctx.R), 'CANCELADO');
+    const tc = await trilha(ctx.R, 'CANCELAMENTO');
+    assert.strictEqual(tc.length, 1);
+    assert.strictEqual(JSON.parse(tc[0].dados_anteriores).status, 'PARCIALMENTE_RESERVADA', 'a trilha tem de gravar o status que o UPDATE trocou');
+    assert.strictEqual(Number(tc[0].usuario_id), USERS.S.id);
+    assert.strictEqual((await reserva(ctx.rid)).status, 'LIBERADA');
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed > 0 ? 1 : 0);

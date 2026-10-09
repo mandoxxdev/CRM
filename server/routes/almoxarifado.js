@@ -4010,47 +4010,64 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   });
 
   // PUT /api/almoxarifado/requisicoes/:id/cancelar — cancelar
-  app.put('/api/almoxarifado/requisicoes/:id/cancelar',(req, res) => {
+  //
+  // Etapa 92 (T2, C153, B437): o UPDATE era `WHERE id=?` sem guarda — a separacao inteira que rodasse
+  // entre a leitura e o UPDATE era sobrescrita: EM_SEPARACAO -> CANCELADO (a maquina proibe), com o
+  // material separado na caixa de uma requisicao cancelada e a reserva solta (sonda da Fase 0: 10/10).
+  // Agora compare-and-set contra o status lido; perdeu -> rele, valida a transicao DE NOVO (o relido pode
+  // ser EM_SEPARACAO) e tenta uma vez mais; esgotou -> 400 R2. A trilha grava o status que o UPDATE
+  // trocou. Resposta, 403/404 e literais inalterados. Virou `async`: o laco de duas tentativas nao cabia
+  // no callback aninhado.
+  app.put('/api/almoxarifado/requisicoes/:id/cancelar', async (req, res) => {
     const { motivo } = req.body;
-    db.get(`SELECT * FROM requisicoes_almoxarifado WHERE id = ?`, [req.params.id], (err, r) => {
-      if (err) return res.status(500).json({ error: err.message });
+    const id = req.params.id;
+    let r;
+    let trocado = null;
+    try {
+      r = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [id]);
       if (!r) return res.status(404).json({ error: 'Não encontrada' });
       if (r.solicitante_id !== req.user.id && !isSystemAdmin(req.user)) {
         return res.status(403).json({ error: 'Sem permissão' });
       }
-      const check = requisitionStateMachine.validarTransicao(r.status, 'CANCELADO');
-      if (!check.ok) return res.status(400).json({ error: 'Não é possível cancelar neste status' });
-      db.run(`UPDATE requisicoes_almoxarifado SET status='CANCELADO', rejeicao_motivo=?, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
-        [motivo || null, req.params.id],
-        function (err2) {
-          if (err2) return res.status(500).json({ error: err2.message });
-          // Cancelar sem soltar as reservas deixaria o hold preso: como a expiração é opt-in
-          // por config, na prática ficaria preso para sempre — a mesma armadilha de saldo
-          // reservado inutilizável que a Etapa 4 fecha no consumo. Best-effort: falha aqui não
-          // desfaz o cancelamento, que é a ação que o usuário pediu.
-          // Etapa 18 (RN-07): a requisicao cancelada nao deixava rastro — `rejeicao_motivo` guarda
-          // o motivo, mas nao QUEM cancelou nem de QUAL status. `r` foi lido antes do UPDATE, entao
-          // `r.status` ainda e o status anterior (o gravado ja e 'CANCELADO' — o literal do modulo
-          // e CANCELADO, nao CANCELADA).
-          //
-          // A auditoria e encadeada na MESMA promessa, antes do `.finally` que responde: a rota e
-          // callback aninhado e converte-la para `async` seria reescrever um handler que funciona
-          // so para pendurar um log. Como o primeiro `.catch` ja absorveu a falha da liberacao de
-          // reservas, o `.catch` de baixo so ve erro de auditoria — e nenhum dos dois impede o
-          // `res.json`, porque o cancelamento ja esta efetivado.
-          reservationService.liberarReservasDaRequisicao(db, req.user, req.params.id, motivo || 'Requisição cancelada')
-            .catch((e) => console.warn('Liberação de reservas no cancelamento:', e.message))
-            .then(() => audit.registrarAuditoria(db, {
-              entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'CANCELAMENTO',
-              usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
-              dados_anteriores: { status: r.status },
-              dados_novos: { status: 'CANCELADO', numero: r.numero },
-              justificativa: motivo || null,
-            }))
-            .catch((errAudit) => console.error('[almoxarifado] Falha ao registrar auditoria de cancelamento de requisição:', errAudit.message))
-            .finally(() => res.json({ success: true }));
-        });
-    });
+      for (let tentativa = 0; tentativa < 2 && !trocado; tentativa++) {
+        if (tentativa > 0) {
+          // eslint-disable-next-line no-await-in-loop
+          r = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [id]);
+          if (!r) break;
+        }
+        if (!requisitionStateMachine.validarTransicao(r.status, 'CANCELADO').ok) break;
+        // eslint-disable-next-line no-await-in-loop
+        const upd = await dbRun(db, `UPDATE requisicoes_almoxarifado SET status='CANCELADO', rejeicao_motivo=?, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
+          WHERE id=? AND status=?`, [motivo || null, id, r.status]);
+        if (upd.changes > 0) trocado = r.status;
+      }
+      if (!trocado) return res.status(400).json({ error: 'Não é possível cancelar neste status' });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    // Cancelar sem soltar as reservas deixaria o hold preso: como a expiração é opt-in
+    // por config, na prática ficaria preso para sempre — a mesma armadilha de saldo
+    // reservado inutilizável que a Etapa 4 fecha no consumo. Best-effort: falha aqui não
+    // desfaz o cancelamento, que é a ação que o usuário pediu.
+    // Etapa 18 (RN-07): a trilha diz QUEM cancelou e de QUAL status (desde a 92, o que o UPDATE trocou).
+    // Nenhuma das duas falhas impede o `res.json`: o cancelamento ja esta efetivado.
+    try {
+      await reservationService.liberarReservasDaRequisicao(db, req.user, id, motivo || 'Requisição cancelada');
+    } catch (e) {
+      console.warn('Liberação de reservas no cancelamento:', e.message);
+    }
+    try {
+      await audit.registrarAuditoria(db, {
+        entidade: 'requisicao', entidade_id: Number(id), acao: 'CANCELAMENTO',
+        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+        dados_anteriores: { status: trocado },
+        dados_novos: { status: 'CANCELADO', numero: r.numero },
+        justificativa: motivo || null,
+      });
+    } catch (errAudit) {
+      console.error('[almoxarifado] Falha ao registrar auditoria de cancelamento de requisição:', errAudit.message);
+    }
+    return res.json({ success: true });
   });
 
   // DELETE /api/almoxarifado/requisicoes/:id — exclusão administrativa (soft delete + estorno)
