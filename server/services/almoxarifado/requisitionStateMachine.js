@@ -74,7 +74,9 @@ const TRANSICOES = {
   // sem esta seta, separar 4 e entregar 4 depois de o limite baixar saia ENTREGUE sem aprovacao. A com
   // material separado fica de fora pelo predicado (alcadaDeValorAindaVale), nao pela seta.
   EM_SEPARACAO: ['PRONTA_PARA_RETIRADA', 'PARCIALMENTE_ATENDIDA', 'ENTREGUE', 'AGUARDANDO_APROVACAO_VALOR'],
-  PRONTA_PARA_RETIRADA: ['PARCIALMENTE_ATENDIDA', 'ENTREGUE'],
+  // Etapa 98 (B504): a devolucao a prateleira muda a caixa que a liberacao atestou — a PRONTA volta a EM_SEPARACAO
+  // (sem a seta, a Pronta esvaziada ficava presa: separar, entregar e encerrar recusavam e ela sumia da fila).
+  PRONTA_PARA_RETIRADA: ['PARCIALMENTE_ATENDIDA', 'ENTREGUE', 'EM_SEPARACAO'],
   PARCIALMENTE_ATENDIDA: ['EM_SEPARACAO', 'ENTREGUE', 'ENCERRADA'],
   ENTREGUE: ['ENCERRADA'],
 };

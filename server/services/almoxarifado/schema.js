@@ -2460,6 +2460,29 @@ async function initSchema(db) {
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`);
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_substituicoes_req ON substituicoes_origem_requisicao(requisicao_id)`);
+  // Etapa 98 (B507): a devolucao da caixa a prateleira (append-only, molde da substituicoes_origem_requisicao). Tabela
+  // propria e nao rodada negativa em separacoes_requisicao_almoxarifado: os leitores somam as rodadas, e a barreira
+  // "quem separou nao confere" passaria a barrar quem devolveu. Nenhum UPDATE/DELETE no codigo.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS devolucoes_caixa_requisicao (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requisicao_id INTEGER NOT NULL,
+    item_id INTEGER NOT NULL,
+    material_id INTEGER NOT NULL,
+    quantidade REAL NOT NULL,
+    separado_antes REAL NOT NULL,
+    separado_depois REAL NOT NULL,
+    entregue REAL NOT NULL DEFAULT 0,
+    localizacao_planejada_id INTEGER,
+    lote_planejado_id INTEGER,
+    motivo TEXT NOT NULL,
+    status_antes TEXT,
+    status_depois TEXT,
+    conferencia_limpa INTEGER NOT NULL DEFAULT 0,
+    usuario_id INTEGER NOT NULL,
+    usuario_nome TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_devolucoes_caixa_req ON devolucoes_caixa_requisicao(requisicao_id)`);
   // Etapa 65: a troca tambem na SEPARACAO (sem movimentacao). O legado e a entrega viram 'ENTREGA'.
   // Numa linha SEPARACAO, lote_saida_id e o lote SEPARADO na rodada, nao um lote que saiu do estoque —
   // a rastreabilidade por lote filtra o momento.
