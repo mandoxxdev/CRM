@@ -263,7 +263,9 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}) {
       // material — o separado ainda nao entregue, que o disponivel do motor conta como livre. Antes a aprovacao
       // reservava a caixa de outra requisicao e a dona dela nao entregava mais o que separou (M3). A caixa do PROPRIO
       // item nao entra (Fase 2, B2): a reserva nova a cobre, e desconta-la reservava de menos (P5b: 2 em vez de 6).
-      const aReservar = Math.min(falta, Math.max(0, disponivel - jaReservado - caixaOutros));
+      // Etapa 95 (Fase 5): arredondado a 1e-6, como o teto da separacao (B471/I2). Sem isso fisico 0,3 com 0,1 na
+      // caixa de outra reservava 0.19999999999999998 para um pedido de 0,2 e deixava PARCIALMENTE_RESERVADA.
+      const aReservar = Math.min(falta, Math.round(Math.max(0, disponivel - jaReservado - caixaOutros) * 1e6) / 1e6);
       if (aReservar <= 0) { algumFaltou = true; continue; }
 
       try {
