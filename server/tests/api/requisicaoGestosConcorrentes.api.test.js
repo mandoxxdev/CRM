@@ -45,6 +45,7 @@ const USERS = {
   ADMIN: { id: 1, nome: 'Adm 93', role: 'admin', is_superadmin: 1, email: 'a93@t.com' },
   S: { id: 9301, nome: 'Solic 93', role: 'user', email: 's93@t.com' }, // sem perfil = PRODUCAO
   ALMOX: { id: 9302, nome: 'Almox 93', role: 'user', email: 'x93@t.com', perfil_almoxarifado: PERFIS.ALMOXARIFE },
+  ADMIN2: { id: 2, nome: 'Adm2 93', role: 'admin', is_superadmin: 1, email: 'b93@t.com' },
   ALMOX2: { id: 9303, nome: 'Almox2 93', role: 'user', email: 'y93@t.com', perfil_almoxarifado: PERFIS.ALMOXARIFE },
 };
 // Literais congeladas (plano, Contrato).
@@ -858,10 +859,16 @@ const esperarFila = async (R, ms = 3000) => {
     assert.strictEqual(Number(at.s), 4, 'quantidade_separada nao cai abaixo do entregue');
   });
 
-  // ── RN-08 (d)(d')(d'')(d''') — a exclusao confere ativo e status no UPDATE final (T5, B447 com a Fase 2 I1) ──
+  // ── RN-08 (d)(d')(d'')(d''')(d4) — a exclusao confere SO ativo no UPDATE final (T5, B447; mudado na Fase 5) ──
+  // Mudado na Fase 5 — a regra estava errada: o UPDATE final conferia `ativo` E o status lido. A exclusao nao tem
+  // regra de status (spec 04), e num processo so o /aprovar-valor (fora da trava) muda o status na janela do estorno:
+  // a exclusao estornava, perdia o UPDATE, respondia 409 E409 com o modal aberto, e o segundo clique estornava de
+  // novo (q=6 para 4 reais — sonda e93rv1-a). Agora o UPDATE confere so `COALESCE(ativo,1)=1`; perder so acontece
+  // se outro processo/escrita direta EXCLUIU (ativo=0): com estorno -> 409 E409 + E1; sem -> 404 N0. A nova
+  // tentativa e a E409N sairam (nao ha mais perda por status). A trilha grava o status relido logo antes do UPDATE.
   const E409 = 'A requisição mudou enquanto era excluída; o estorno pode já ter sido feito — confira o estoque e o histórico antes de excluir de novo.';
-  const E409N = 'A requisição mudou enquanto era excluída e nada foi estornado; recarregue e tente de novo.';
-  const E1 = (R, n) => `[almoxarifado-exclusao] Requisicao ${R}: UPDATE final perdeu (ativo/status mudou) depois do estorno de ${n} parte(s) — conferir a consulta A44 (c)`;
+  const E1 = (R, n) => `[almoxarifado-exclusao] Requisicao ${R}: UPDATE final perdeu (ja excluida) depois do estorno de ${n} parte(s) — conferir a consulta A44 (c)`;
+  const RE_ESTORNO = /INSERT\s+INTO\s+movimentacoes_almoxarifado/;
   // (`entregue4`, da RN-04 acima: ENTREGUE com 4, q=0)
   await test('[93 RN-08] (d) exclusao de uma ENTREGUE (ha estorno): no UPDATE final um escritor fora da trava poe ativo=0 -> 409 E409; E1 1 vez; UPDATE emitido 1 vez (sem nova tentativa: estornaria de novo); o estorno da 1a passada esta no livro', async () => {
     desarmar();
@@ -882,7 +889,8 @@ const esperarFila = async (R, ms = 3000) => {
     assert.strictEqual((await trilhaDe(x.R, 'EXCLUSAO')).length, 0, 'sem trilha EXCLUSAO (a rota so audita no sucesso)');
   });
 
-  await test("[93 RN-08] (d') (Fase 2, I1) exclusao de TOTALMENTE_RESERVADA sem entrega (nada a estornar): o escritor troca o status (ativo 1) -> a nova tentativa vence: 200; CANCELADO, ativo=0; UPDATE emitido 2 vezes; nenhum E1", async () => {
+  // Mudado na Fase 5 — a regra estava errada: antes perdia, relia e vencia na 2a emissao.
+  await test("[93 RN-08] (d') exclusao de TOTALMENTE_RESERVADA sem entrega: no UPDATE final o escritor troca o status (ativo 1) -> 200 na 1a emissao (o UPDATE nao confere status); CANCELADO, ativo=0; UPDATE emitido 1 vez; nenhum E1", async () => {
     desarmar();
     const x = await montar();
     const g = armarEscritor(RE.EXCL, () => raw("UPDATE requisicoes_almoxarifado SET status = 'PARCIALMENTE_RESERVADA' WHERE id = ?", [x.R]));
@@ -891,35 +899,44 @@ const esperarFila = async (R, ms = 3000) => {
     try { ex = await comPrazo(excluir('ADMIN', x.R), 8000, 'exclusao'); } finally { er.restaurar(); desarmar(); }
     assert.ok(!g.erro, g.erro && g.erro.message);
     assert.strictEqual(ex.status, 200, `exclusao: ${ex.status} ${JSON.stringify(ex.body)}`);
-    assert.strictEqual(g.emitidos, 2, `UPDATE final emitido ${g.emitidos} vez(es)`);
+    assert.strictEqual(g.emitidos, 1, `UPDATE final emitido ${g.emitidos} vez(es)`);
+    assert.ok(/WHERE\s+id\s*=\s*\?\s+AND\s+COALESCE\(ativo,\s*1\)\s*=\s*1\s*$/.test(g.sqls[0].trim()), `o UPDATE final confere mais que ativo: ${g.sqls[0]}`);
     const f = await foto(x);
     assert.strictEqual(f.status, 'CANCELADO'); assert.strictEqual(f.ativo, 0);
     assert.strictEqual(f.reserva, 'LIBERADA');
     assert.strictEqual(er.linhas.filter((l) => l.startsWith('[almoxarifado-exclusao]')).length, 0, 'nenhum E1');
+    assert.strictEqual((await trilhaDe(x.R, 'EXCLUSAO')).length, 1);
+  });
+
+  // Mudado na Fase 5 — a regra estava errada: este caso era "sem estorno, perde duas vezes -> 409 E409N" (a E409N
+  // saiu). Agora e o achado A em miniatura: COM estorno, o status muda durante o estorno.
+  await test("[93 RN-08] (d'') exclusao de uma ENTREGUE: durante o estorno um escritor fora da trava ENCERRA (ativa) -> 200, CANCELADO/ativo=0, UM estorno (q=4), UPDATE emitido 1 vez, nenhum E1; a trilha grava ENCERRADA (o status relido antes do UPDATE, nao o do inicio); a 2a exclusao -> 404 N0 e nao estorna de novo", async () => {
+    desarmar();
+    const x = await entregue4();
+    const gEst = armarEscritor(RE_ESTORNO, () => raw("UPDATE requisicoes_almoxarifado SET status = 'ENCERRADA' WHERE id = ?", [x.R]));
+    const g = armarEscritor(RE.EXCL, () => null, 0);
+    const er = capturar('error');
+    let ex;
+    try { ex = await comPrazo(excluir('ADMIN', x.R), 8000, 'exclusao'); } finally { er.restaurar(); desarmar(); }
+    assert.ok(!gEst.erro, gEst.erro && gEst.erro.message);
+    assert.strictEqual(gEst.disparos, 1, `o escritor disparou ${gEst.disparos} vez(es)`);
+    assert.strictEqual(ex.status, 200, `exclusao: ${ex.status} ${JSON.stringify(ex.body)}`);
+    assert.strictEqual(g.emitidos, 1, `UPDATE final emitido ${g.emitidos} vez(es)`);
+    assert.strictEqual(er.linhas.filter((l) => l.startsWith('[almoxarifado-exclusao]')).length, 0, `nenhum E1: ${JSON.stringify(er.linhas)}`);
+    let f = await foto(x);
+    assert.strictEqual(f.status, 'CANCELADO'); assert.strictEqual(f.ativo, 0);
+    assert.strictEqual(f.estornos.length, 1); assert.strictEqual(f.q, 4);
     const tx = await trilhaDe(x.R, 'EXCLUSAO');
     assert.strictEqual(tx.length, 1);
-    assert.strictEqual(JSON.parse(tx[0].dados_anteriores).status, 'PARCIALMENTE_RESERVADA', 'a trilha grava o status que o UPDATE trocou');
+    assert.strictEqual(JSON.parse(tx[0].dados_anteriores).status, 'ENCERRADA', `dados_anteriores ${tx[0].dados_anteriores} (o status do inicio, nao o relido antes do UPDATE)`);
+    const ex2 = await excluir('ADMIN', x.R);
+    assert.strictEqual(ex2.status, 404, `2a exclusao: ${ex2.status} ${JSON.stringify(ex2.body)}`);
+    assert.strictEqual(ex2.body.error, N0);
+    f = await foto(x);
+    assert.strictEqual(f.estornos.length, 1, 'a 2a exclusao estornou de novo'); assert.strictEqual(f.q, 4);
   });
 
-  await test("[93 RN-08] (d'') (Fase 2, I1) sem estorno, o escritor troca o status nas DUAS emissoes -> 409 E409N; ativo=1; nenhuma ENTRADA; UPDATE emitido 2 vezes", async () => {
-    desarmar();
-    const x = await montar();
-    const g = armarEscritor(RE.EXCL, (n) => raw('UPDATE requisicoes_almoxarifado SET status = ? WHERE id = ?',
-      [n === 1 ? 'PARCIALMENTE_RESERVADA' : 'TOTALMENTE_RESERVADA', x.R]), 2);
-    const ex = await comPrazo(excluir('ADMIN', x.R), 8000, 'exclusao');
-    desarmar();
-    assert.ok(!g.erro, g.erro && g.erro.message);
-    assert.strictEqual(ex.status, 409, `exclusao: ${ex.status} ${JSON.stringify(ex.body)}`);
-    assert.strictEqual(ex.body.error, E409N);
-    assert.strictEqual(g.emitidos, 2, `UPDATE final emitido ${g.emitidos} vez(es) — o teto e uma nova tentativa so`);
-    const f = await foto(x);
-    assert.strictEqual(f.ativo, 1);
-    assert.strictEqual(f.status, 'TOTALMENTE_RESERVADA');
-    assert.strictEqual(f.movs, '', 'nenhuma ENTRADA/SAIDA');
-    assert.strictEqual(f.reserva, 'ATIVA');
-  });
-
-  await test("[93 RN-08] (d''') (Fase 2, I1) sem estorno, o escritor poe ativo=0 -> a releitura ve ativo=0 -> 404 N0; UPDATE emitido 1 vez", async () => {
+  await test("[93 RN-08] (d''') sem estorno, o escritor poe ativo=0 -> 404 N0; UPDATE emitido 1 vez", async () => {
     desarmar();
     const x = await montar();
     const g = armarEscritor(RE.EXCL, () => raw('UPDATE requisicoes_almoxarifado SET ativo = 0 WHERE id = ?', [x.R]));
@@ -929,6 +946,44 @@ const esperarFila = async (R, ms = 3000) => {
     assert.strictEqual(ex.status, 404, `exclusao: ${ex.status} ${JSON.stringify(ex.body)}`);
     assert.strictEqual(ex.body.error, N0);
     assert.strictEqual(g.emitidos, 1);
+  });
+
+  // Fase 5 (achado A, sonda e93rv1-a): o cenario do revisor pela ROTA, num processo so. Parcialmente atendida com 2
+  // entregues vai a AGUARDANDO_APROVACAO_VALOR (custo subiu); o admin exclui e o /aprovar-valor (fora da trava) roda
+  // inteiro no instante do UPDATE final. Antes: estorno, 409 E409, modal aberto, 2o clique estornava de novo (q=6).
+  const liberacaoValor = async (ativo) => {
+    for (const [k, v] of [['liberacao_valor_ativo', ativo ? '1' : '0'], ['liberacao_valor_limite', ativo ? '10' : '0']]) {
+      // eslint-disable-next-line no-await-in-loop
+      await dbRun(db, 'INSERT OR REPLACE INTO configuracoes_almoxarifado (chave, valor) VALUES (?, ?)', [k, v]);
+    }
+  };
+  await test('[93 RN-08] (d4) (Fase 5, achado A) pela rota: no UPDATE final da exclusao o /aprovar-valor roda inteiro -> exclusao 200 com UM estorno (q=4), CANCELADO/ativo=0; a 2a exclusao -> 404 e q continua 4', async () => {
+    desarmar();
+    const x = await montar();
+    let ex; let g;
+    try {
+      assert.strictEqual((await separar('ALMOX', x.R, x.item, 4)).status, 200);
+      const e2 = await entregar('ALMOX', x.R, x.item, 2);
+      assert.strictEqual(e2.body.status, 'PARCIALMENTE_ATENDIDA', JSON.stringify(e2.body));
+      await dbRun(db, 'UPDATE materiais_almoxarifado SET custo_unitario = 100 WHERE id = ?', [x.m]);
+      await liberacaoValor(true);
+      const e1 = await entregar('ALMOX', x.R, x.item, 1);
+      assert.strictEqual(e1.status, 403, `premissa: a entrega cai na aprovacao por valor: ${e1.status} ${JSON.stringify(e1.body)}`);
+      assert.strictEqual((await foto(x)).status, 'AGUARDANDO_APROVACAO_VALOR');
+      g = armarAguardando(RE.EXCL, () => como('ADMIN2').put(`${API}/requisicoes/${x.R}/aprovar-valor`));
+      ex = await comPrazo(excluir('ADMIN', x.R), 8000, 'exclusao');
+    } finally { desarmar(); await liberacaoValor(false); }
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(g.disparos, 1);
+    assert.strictEqual(g.resposta.status, 200, `aprovar-valor: ${g.resposta.status} ${JSON.stringify(g.resposta.body)}`);
+    assert.strictEqual(ex.status, 200, `exclusao: ${ex.status} ${JSON.stringify(ex.body)}`);
+    let f = await foto(x);
+    assert.strictEqual(f.status, 'CANCELADO'); assert.strictEqual(f.ativo, 0);
+    assert.strictEqual(f.estornos.length, 1); assert.strictEqual(f.q, 4, `q ${f.q}`);
+    const ex2 = await excluir('ADMIN', x.R);
+    assert.strictEqual(ex2.status, 404, `2a exclusao: ${ex2.status} ${JSON.stringify(ex2.body)}`);
+    f = await foto(x);
+    assert.strictEqual(f.estornos.length, 1); assert.strictEqual(f.q, 4, `q ${f.q} (estornou de novo)`);
   });
 
   // ── RN-08 (e)(e') — o encerramento confere o status lido (T5, B448 com a Fase 2 I3) ──

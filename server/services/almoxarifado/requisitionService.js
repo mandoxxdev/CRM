@@ -1569,41 +1569,33 @@ async function excluirSemTrava(db, requisicaoId, user, justificativa, alertServi
     if (getEntregue(item) > 0) estornos.push({ material_id: item.material_id, quantidade: getEntregue(item) });
   }
 
-  // Etapa 93 (T5, B447 + Fase 2 I1): o UPDATE final confere ativo e o status lido. Antes era `WHERE id=?`: quem
-  // mudasse a requisicao no meio da exclusao era atropelado sem aviso. Perdeu:
-  //  - HOUVE estorno -> 409 E409, SEM nova tentativa: refazer a exclusao estornaria de novo (C157). E1 aponta
-  //    a A44 (c), que acha o estorno que ficou sem a exclusao gravada.
-  //  - NAO houve estorno -> rele: ja excluida -> 404 de sempre; senao UMA nova tentativa com o status relido
-  //    (num processo so, /aprovar, o cancelamento e a expiracao mudam o status fora da trava por requisicao —
-  //    recusar seria recusar uma exclusao legitima que nao mexeu em estoque); perdeu de novo -> 409 E409N.
-  let statusLido = reqRow.status;
-  for (let tentativa = 0; ; tentativa++) {
-    // eslint-disable-next-line no-await-in-loop
-    const upd = await dbRun(db,
-      `UPDATE requisicoes_almoxarifado
-       SET ativo=0, status='CANCELADO', rejeicao_motivo=?, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
-       WHERE id=? AND COALESCE(ativo, 1) = 1 AND status=?`,
-      [motivo, requisicaoId, statusLido]);
-    if (upd.changes > 0) break;
+  // Etapa 93 (T5, B447; mudado na Fase 5 — a regra estava errada): o UPDATE final confere SO `ativo`. Antes
+  // conferia tambem o status lido no inicio, e a exclusao nao tem regra de status (spec 04): num processo so o
+  // /aprovar-valor, o /aprovar e o cancelamento mudam o status FORA da trava por requisicao, na janela do estorno
+  // — a exclusao estornava, perdia o UPDATE, respondia 409 com o modal aberto, e o segundo clique estornava DE NOVO
+  // (q=6 para 4 reais, sonda e93rv1-a). Agora so perde quem foi EXCLUIDO por fora (outro processo, escrita direta;
+  // dentro do processo a trava serializa as exclusoes): com estorno feito -> E1 + 409 E409, sem nova tentativa
+  // (refazer estornaria de novo; E1 aponta a A44 (c)); sem estorno -> o 404 de sempre. A nova tentativa e a E409N
+  // da Fase 2 sairam: sem perda por status nao ha o que tentar de novo. O status para a trilha e relido logo antes
+  // do UPDATE (residual declarado: um escritor exatamente entre esta leitura e o UPDATE fica fora da trilha da
+  // exclusao — a trilha dele registra o proprio gesto).
+  const atual = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
+  const statusLido = atual ? atual.status : reqRow.status;
+  const upd = await dbRun(db,
+    `UPDATE requisicoes_almoxarifado
+     SET ativo=0, status='CANCELADO', rejeicao_motivo=?, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
+     WHERE id=? AND COALESCE(ativo, 1) = 1`,
+    [motivo, requisicaoId]);
+  if (upd.changes === 0) {
     if (partes.length > 0) {
-      console.error(`[almoxarifado-exclusao] Requisicao ${requisicaoId}: UPDATE final perdeu (ativo/status mudou) depois do estorno de ${partes.length} parte(s) — conferir a consulta A44 (c)`);
+      console.error(`[almoxarifado-exclusao] Requisicao ${requisicaoId}: UPDATE final perdeu (ja excluida) depois do estorno de ${partes.length} parte(s) — conferir a consulta A44 (c)`);
       const err = new Error('A requisição mudou enquanto era excluída; o estorno pode já ter sido feito — confira o estoque e o histórico antes de excluir de novo.');
       err.status = 409;
       throw err;
     }
-    // eslint-disable-next-line no-await-in-loop
-    const relido = await dbGet(db, 'SELECT status, COALESCE(ativo, 1) AS ativo FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
-    if (!relido || Number(relido.ativo) !== 1) {
-      const err = new Error('Requisição não encontrada');
-      err.status = 404;
-      throw err;
-    }
-    if (tentativa >= 1) {
-      const err = new Error('A requisição mudou enquanto era excluída e nada foi estornado; recarregue e tente de novo.');
-      err.status = 409;
-      throw err;
-    }
-    statusLido = relido.status;
+    const err = new Error('Requisição não encontrada');
+    err.status = 404;
+    throw err;
   }
 
   // Task 6 — a exclusão deixava o hold preso. O /cancelar solta as reservas desde a Etapa 4;
@@ -1625,7 +1617,7 @@ async function excluirSemTrava(db, requisicaoId, user, justificativa, alertServi
   // lia antes de chamar o servico — com a fila, o status gravado podia ser o de antes do gesto que estava na
   // frente. Nao enumeravel: o JSON das duas rotas (`res.json(result)`) nao muda de forma.
   Object.defineProperty(resultado, 'anterior', {
-    // (T5: o status que o UPDATE trocou — o relido, se a nova tentativa venceu.)
+    // (Fase 5: o status relido logo antes do UPDATE final, nao o do inicio — o estorno leva tempo.)
     value: { id: reqRow.id, numero: reqRow.numero, status: statusLido }, enumerable: false,
   });
   return resultado;
