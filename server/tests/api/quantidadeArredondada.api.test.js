@@ -12,7 +12,10 @@
  * nunca pelo motor — depois da T1 o motor nao produz mais deriva, e um teste que a fabricasse pelo motor ficaria vazio.
  *
  * T0: RN-00 (o helper) e a parte da RN-02 que o disponivel arredondado resolve (colunas limpas; o legado na SAIDA sem
- * origem, na reserva manual e na aprovacao — Fase 2, I2). Casos `[96 RN-xx]`.
+ * origem, na reserva manual e na aprovacao — Fase 2, I2).
+ * T1: o motor (stockService.js) — RN-01 (grava arredondado; varredura do codigo-fonte), RN-02 nas portas de coluna
+ * crua (origem, lote, transferencia, desbloqueio), o estorno (Fase 2, K1 e I1), RN-03 (a folga nao inventa estoque),
+ * RN-04 (a porta arredonda) e RN-05 (a mensagem diz o numero arredondado). Casos `[96 RN-xx]`.
  * Plano: docs/superpowers/plans/2026-10-09-almoxarifado-etapa96-motor-quantidade-arredondada.md
  *
  * Executar: cd server && node tests/api/quantidadeArredondada.api.test.js
@@ -170,6 +173,326 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(rs.map((r) => [r.quantidade, r.status]), [[1, 'ATIVA']]);
     const st = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [cr.body.id]);
     assert.strictEqual(st.status, 'TOTALMENTE_RESERVADA');
+  });
+
+  // ─────────────────────────── T1: o motor (stockService.js) ───────────────────────────
+  let nloc = 0;
+  const loc = async () => { const c = `E96L-${++nloc}-${++seq}`; return (await dbRun(db, 'INSERT INTO localizacoes_almoxarifado (codigo, descricao, ativo) VALUES (?,?,1)', [c, c])).lastID; };
+  const linha = async (m, l, lote = null) => (await dbGet(db, 'SELECT quantidade q FROM estoque_saldo_almoxarifado WHERE material_id=? AND localizacao_id IS ? AND lote_id IS ?', [m, l, lote]))?.q;
+  const ultimaMov = (m) => dbGet(db, 'SELECT * FROM movimentacoes_almoxarifado WHERE material_id=? ORDER BY id DESC LIMIT 1', [m]);
+  const movOk = async (m, tipo, q, extra = {}, esperado = 201) => {
+    const r = await mov(m, tipo, q, extra);
+    assert.strictEqual(r.status, esperado, `${tipo} ${q}: ${JSON.stringify(r.body)}`);
+    return r;
+  };
+  const desbloquear = (m, q) => como('ADMIN').post(`${API}/materiais/${m}/desbloquear`, { quantidade: q, motivo: 'e96', justificativa: 'teste da etapa 96' });
+  const retrato = async (m) => JSON.stringify({
+    m: await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id=?', [m]),
+    l: await dbAll(db, 'SELECT id, localizacao_id, lote_id, quantidade FROM estoque_saldo_almoxarifado WHERE material_id=? ORDER BY id', [m]),
+    v: (await dbGet(db, 'SELECT COUNT(*) n FROM movimentacoes_almoxarifado WHERE material_id=?', [m])).n,
+    r: await dbAll(db, 'SELECT id, quantidade, quantidade_utilizada, status FROM reservas_material_almoxarifado WHERE material_id=? ORDER BY id', [m]),
+  });
+
+  // RN-01 — o motor grava a quantidade arredondada
+  await test('[96 RN-01] 0,7 + 0,2 + 0,1 por ENTRADA -> fisico 1, o livro diz 1 e a tela diz 1', async () => {
+    const m = await material(0);
+    for (const q of [0.7, 0.2, 0.1]) await entrar(m, q);
+    assert.strictEqual((await mat(m)).quantidade_atual, 1);
+    assert.strictEqual((await ultimaMov(m)).saldo_posterior, 1);
+    const g = await como('ADMIN').get(`${API}/materiais/${m}`);
+    assert.strictEqual(g.status, 200, JSON.stringify(g.body));
+    assert.strictEqual(g.body.quantidade_atual, 1);
+  });
+  await test('[96 RN-01] a linha do endereco e a do lote gravam 1 (0,7 + 0,2 + 0,1)', async () => {
+    const A = await loc();
+    const m = await material(0);
+    for (const q of [0.7, 0.2, 0.1]) await movOk(m, 'ENTRADA', q, { localizacao_destino_id: A });
+    assert.strictEqual(await linha(m, A), 1);
+    assert.strictEqual((await mat(m)).quantidade_atual, 1);
+    const ml = await material(0);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_lote = 1 WHERE id = ?', [ml]);
+    for (const q of [0.7, 0.2, 0.1]) await movOk(ml, 'ENTRADA', q, { lote: 'L96' });
+    const lt = await dbGet(db, 'SELECT id FROM lotes_almoxarifado WHERE material_id = ?', [ml]);
+    assert.ok(lt, 'premissa: o lote existe');
+    const soma = await dbGet(db, 'SELECT SUM(quantidade) q FROM estoque_saldo_almoxarifado WHERE material_id = ? AND lote_id = ?', [ml, lt.id]);
+    assert.strictEqual(soma.q, 1);
+    assert.strictEqual((await mat(ml)).quantidade_atual, 1);
+  });
+  await test('[96 RN-01] dez entradas de 0,1 -> 1; 0,3 - 0,1 -> 0,2; 0,7 - 0,6 -> 0,1', async () => {
+    const a = await material(0);
+    for (let i = 0; i < 10; i++) await entrar(a, 0.1);
+    assert.strictEqual((await mat(a)).quantidade_atual, 1);
+    const b = await material(0);
+    await entrar(b, 0.3); await movOk(b, 'SAIDA', 0.1);
+    assert.strictEqual((await mat(b)).quantidade_atual, 0.2);
+    const c = await material(0);
+    await entrar(c, 0.7); await movOk(c, 'SAIDA', 0.6);
+    assert.strictEqual((await mat(c)).quantidade_atual, 0.1);
+    assert.strictEqual((await ultimaMov(c)).saldo_posterior, 0.1);
+  });
+  await test('[96 RN-01] tres reservas 0,7 + 0,2 + 0,1 -> reservado 1 (sem livre fantasma); bloquear 0,7 + 0,2 + 0,1 -> bloqueado 1', async () => {
+    const m = await material(0);
+    await entrar(m, 1);
+    for (const q of [0.7, 0.2, 0.1]) assert.strictEqual((await reservar(m, q)).status, 201);
+    assert.strictEqual((await mat(m)).quantidade_reservada, 1);
+    const fantasma = await mov(m, 'SAIDA', 1e-7);
+    assert.strictEqual(fantasma.status, 400, `a saida do livre fantasma passou: ${JSON.stringify(fantasma.body)}`);
+    const b = await material(0);
+    await entrar(b, 1);
+    for (const q of [0.7, 0.2, 0.1]) assert.strictEqual((await bloquear(b, q)).status, 200);
+    assert.strictEqual((await mat(b)).quantidade_bloqueada, 1);
+  });
+  await test('[96 RN-01] AJUSTE sem localizacao: a linha padrao calculada em JS grava sem residuo (1 - 0,7 -> 0,3)', async () => {
+    const A = await loc();
+    const m = await material(0);
+    await movOk(m, 'ENTRADA', 0.7, { localizacao_destino_id: A });
+    await movOk(m, 'AJUSTE', 1);
+    const outras = await dbAll(db, 'SELECT quantidade q FROM estoque_saldo_almoxarifado WHERE material_id = ? AND localizacao_id IS NOT ? ORDER BY id', [m, A]);
+    assert.deepStrictEqual(outras.map((r) => r.q), [0.3]);
+    assert.strictEqual((await mat(m)).quantidade_atual, 1);
+  });
+  await test('[96 RN-01] AJUSTE com localizacao recalcula o total pela soma das linhas: 0,1 + 0,2 em dois enderecos -> total 0,3', async () => {
+    // a SUM do SQLite 3.44 compensa a soma (0,7 + 0,2 + 0,1 da 1), mas 0,1 + 0,2 da 0.30000000000000004 — medido.
+    const A = await loc(); const B = await loc(); const D = await loc();
+    const m = await material(0);
+    await movOk(m, 'ENTRADA', 0.1, { localizacao_destino_id: A });
+    await movOk(m, 'ENTRADA', 0.2, { localizacao_destino_id: B });
+    await movOk(m, 'AJUSTE', 0, { localizacao_destino_id: D }); // a contagem "aqui nao tem nada" dispara a soma
+    assert.strictEqual((await mat(m)).quantidade_atual, 0.3);
+    assert.strictEqual((await ultimaMov(m)).saldo_posterior, 0.3);
+  });
+  await test('[96 RN-01] varredura: nenhuma escrita incremental de quantidade em stockService.js fora de Q.qtdSql (com controle do padrao)', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const COL = '(quantidade(?:_atual|_reservada|_bloqueada|_em_inspecao|_em_terceiros|_utilizada|_retornada|_recebida|_entregue|_separada)?)';
+    const cru = new RegExp(`\\b${COL}\\s*=\\s*(?:MAX\\(0,\\s*)?(?:COALESCE\\(\\1,\\s*0\\)|\\1)\\s*[+-]\\s*\\?`, 'g');
+    const culpados = (texto) => texto.split('\n').map((l, i) => [i + 1, l])
+      .filter(([, l]) => { cru.lastIndex = 0; return cru.test(l) && !/Q\.qtdSql\(/.test(l) && !/^\s*(\*|\/\/)/.test(l); });
+    // controle positivo: o padrao acha a escrita crua (e a embrulhada nao)
+    assert.strictEqual(culpados("await dbRun(db, 'UPDATE t SET quantidade = quantidade - ?, x = 1 WHERE id = ?');").length, 1);
+    assert.strictEqual(culpados('SET quantidade_reservada = MAX(0, COALESCE(quantidade_reservada,0) - ?),').length, 1);
+    assert.strictEqual(culpados("SET quantidade = ${Q.qtdSql('quantidade - ?')},").length, 0);
+    const fonte = fs.readFileSync(path.join(__dirname, '../../services/almoxarifado/stockService.js'), 'utf8');
+    assert.deepStrictEqual(culpados(fonte), [], 'escritas cruas');
+    // e o padrao acha alguma coisa no arquivo de verdade (as embrulhadas) — senao a varredura nao varreu
+    const embrulhadas = fonte.split('\n').filter((l) => /Q\.qtdSql\('(?:MAX\(0, )?(?:COALESCE\()?quantidade/.test(l)).length;
+    assert.ok(embrulhadas >= 50, `so ${embrulhadas} escritas embrulhadas — a varredura esta lendo o arquivo certo?`);
+    // (Fase 2, I4) as escritas ABSOLUTAS (`SET col = ?`) gravam um numero calculado em JS: lista nominal com o 1o
+    // parametro de cada uma. `saldos.total` vem do ROUND da soma no SQL; `parseFloat(quantidade)` e `saldoPosterior`
+    // vem da quantidade ja arredondada na porta; as outras passam por Q.qtd. Uma escrita absoluta nova muda a lista.
+    const absolutas = [];
+    const reAbs = /SET\s+(quantidade\w*)\s*=\s*\?[^[]*?\[\s*([^,\]]+)/g;
+    let mm;
+    while ((mm = reAbs.exec(fonte))) {
+      const inicioLinha = fonte.lastIndexOf('\n', mm.index) + 1;
+      if (/^\s*(\*|\/\/)/.test(fonte.slice(inicioLinha, mm.index))) continue;
+      absolutas.push([mm[1], mm[2].trim()]);
+    }
+    assert.deepStrictEqual(absolutas, [
+      ['quantidade_atual', 'saldos.total'], ['quantidade', 'Q.qtd(novaLinha)'], ['quantidade', 'parseFloat(quantidade)'],
+      ['quantidade_atual', 'saldoPosterior'], ['quantidade_atual', 'saldoPosterior'],
+      ['quantidade_atual', 'Q.qtd(ajusteSerieFisicoAnterior)'], ['quantidade_atual', 'Q.qtd(mov.saldo_anterior)'],
+    ]);
+  });
+
+  // RN-02 — o pedido que cabe passa, inclusive no legado escrito direto
+  const legadoNaLinha = async (extra = {}) => {
+    const A = await loc();
+    const m = await material(0);
+    if (extra.lote) await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_lote = 1 WHERE id = ?', [m]);
+    await movOk(m, 'ENTRADA', 1, extra.lote ? { lote: extra.lote, localizacao_destino_id: A } : { localizacao_destino_id: A });
+    await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = ? WHERE material_id = ?', [TORTO, m]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ? WHERE id = ?', [TORTO, m]);
+    assert.strictEqual(await linha(m, A, extra.lote ? (await dbGet(db, 'SELECT id FROM lotes_almoxarifado WHERE material_id=?', [m])).id : null), TORTO, 'premissa: linha torta');
+    return { m, A };
+  };
+  await test('[96 RN-02] legado torto na linha: SAIDA 1 com origem no endereco -> 201, linha 0 e fisico 0 (nao -1,1e-16)', async () => {
+    const { m, A } = await legadoNaLinha();
+    await movOk(m, 'SAIDA', 1, { localizacao_origem_id: A });
+    assert.strictEqual(await linha(m, A), 0);
+    assert.strictEqual((await mat(m)).quantidade_atual, 0);
+    assert.strictEqual((await ultimaMov(m)).saldo_posterior, 0);
+  });
+  await test('[96 RN-02] legado torto: SAIDA 1 sem origem deixa o fisico 0 (nao -1,1e-16)', async () => {
+    const m = await legado();
+    await movOk(m, 'SAIDA', 1);
+    assert.strictEqual((await mat(m)).quantidade_atual, 0);
+  });
+  await test('[96 RN-02] legado torto na linha: TRANSFERENCIA 1 de A para B -> 201, A 0 e B 1', async () => {
+    const { m, A } = await legadoNaLinha();
+    const B = await loc();
+    await movOk(m, 'TRANSFERENCIA', 1, { localizacao_origem_id: A, localizacao_destino_id: B });
+    assert.strictEqual(await linha(m, A), 0);
+    assert.strictEqual(await linha(m, B), 1);
+  });
+  await test('[96 RN-02] legado torto no lote: SAIDA 1 do lote -> 201', async () => {
+    const { m } = await legadoNaLinha({ lote: 'L96T' });
+    const lt = await dbGet(db, 'SELECT id FROM lotes_almoxarifado WHERE material_id = ?', [m]);
+    await movOk(m, 'SAIDA', 1, { lote_id: lt.id });
+    assert.strictEqual((await mat(m)).quantidade_atual, 0);
+  });
+  await test('[96 RN-02] legado torto: AJUSTE_NEGATIVO 1 e PERDA 1 -> 201', async () => {
+    for (const tipo of ['AJUSTE_NEGATIVO', 'PERDA']) {
+      const m = await legado();
+      await movOk(m, tipo, 1);
+      assert.strictEqual((await mat(m)).quantidade_atual, 0, tipo);
+    }
+  });
+  await test('[96 RN-02] legado torto no bloqueado: desbloquear 1 -> 200, bloqueado 0', async () => {
+    const m = await material(0);
+    await entrar(m, 1);
+    assert.strictEqual((await bloquear(m, 1)).status, 200);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = ? WHERE id = ?', [TORTO, m]);
+    const d = await desbloquear(m, 1);
+    assert.strictEqual(d.status, 200, JSON.stringify(d.body));
+    assert.strictEqual((await mat(m)).quantidade_bloqueada, 0);
+  });
+  await test('[96 RN-02] (Fase 2, K1) estornar AJUSTE 0,7 -> 1 depois de SAIDA 0,7 -> 200, a linha de A 0', async () => {
+    const A = await loc();
+    const m = await material(0);
+    await movOk(m, 'ENTRADA', 0.7, { localizacao_destino_id: A });
+    const aj = await movOk(m, 'AJUSTE', 1, { localizacao_destino_id: A });
+    await movOk(m, 'SAIDA', 0.7, { localizacao_origem_id: A });
+    assert.strictEqual(await linha(m, A), 0.3, 'premissa: a linha ficou 0,3 limpa');
+    const idAjuste = (await dbGet(db, "SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'AJUSTE'", [m])).id;
+    assert.ok(aj && idAjuste);
+    const c = await como('ADMIN').post(`${API}/movimentacoes/${idAjuste}/cancelar`, { motivo: 'teste da etapa 96' });
+    assert.strictEqual(c.status, 200, JSON.stringify(c.body));
+    assert.strictEqual(await linha(m, A), 0);
+    assert.strictEqual((await mat(m)).quantidade_atual, 0);
+    const est = await ultimaMov(m);
+    assert.deepStrictEqual([est.tipo, est.saldo_anterior, est.saldo_posterior], ['ESTORNO', 0.3, 0]);
+  });
+  await test('[96 RN-02] (Fase 2, I1) estorno de TRANSFERENCIA com o destino torto -> 200', async () => {
+    const A = await loc(); const B = await loc();
+    const m = await material(0);
+    await movOk(m, 'ENTRADA', 1, { localizacao_destino_id: A });
+    await movOk(m, 'TRANSFERENCIA', 1, { localizacao_origem_id: A, localizacao_destino_id: B });
+    await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = ? WHERE material_id = ? AND localizacao_id = ?', [TORTO, m, B]);
+    const t = await dbGet(db, "SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'TRANSFERENCIA'", [m]);
+    const c = await como('ADMIN').post(`${API}/movimentacoes/${t.id}/cancelar`, { motivo: 'teste da etapa 96' });
+    assert.strictEqual(c.status, 200, JSON.stringify(c.body));
+    assert.strictEqual(await linha(m, B), 0);
+    assert.strictEqual(await linha(m, A), 1);
+  });
+  await test('[96 RN-02] (Fase 2, I1) AJUSTE sem localizacao para o total retido exato (reservado 0,1 + bloqueado 0,2) -> 201', async () => {
+    const m = await material(0);
+    await entrar(m, 1);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_reservada = 0.1, quantidade_bloqueada = 0.2 WHERE id = ?', [m]);
+    assert.notStrictEqual(0.1 + 0.2, 0.3, 'premissa: a soma das retencoes e torta neste runtime');
+    await movOk(m, 'AJUSTE', 0.3);
+    assert.strictEqual((await mat(m)).quantidade_atual, 0.3);
+  });
+
+  // RN-03 — a folga nao inventa estoque
+  await test('[96 RN-03] fisico 0,2 limpo: SAIDA 0,200001 -> 400 "Saldo insuficiente. Disponivel: 0.2 PC", nada gravado', async () => {
+    const m = await material(0); await entrar(m, 0.2);
+    const antes = await retrato(m);
+    const r = await mov(m, 'SAIDA', 0.200001);
+    assert.strictEqual(r.status, 400); assert.strictEqual(r.body.error, 'Saldo insuficiente. Disponível: 0.2 PC');
+    assert.strictEqual(await retrato(m), antes);
+  });
+  await test('[96 RN-03] reserva 0,200001 com 0,2 -> 400 "Saldo disponivel insuficiente: 0.2", nada gravado', async () => {
+    const m = await material(0); await entrar(m, 0.2);
+    const antes = await retrato(m);
+    const r = await reservar(m, 0.200001);
+    assert.strictEqual(r.status, 400); assert.strictEqual(r.body.error, 'Saldo disponível insuficiente: 0.2');
+    assert.strictEqual(await retrato(m), antes);
+  });
+  await test('[96 RN-03] desbloquear 0,200001 com bloqueado 0,2 -> 400, nada gravado', async () => {
+    const m = await material(0); await entrar(m, 1);
+    assert.strictEqual((await bloquear(m, 0.2)).status, 200);
+    const antes = await retrato(m);
+    const r = await desbloquear(m, 0.200001);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, 'Quantidade bloqueada insuficiente: 0.2');
+    assert.strictEqual(await retrato(m), antes);
+  });
+  await test('[96 RN-03] transferencia 0,200001 de um endereco com 0,2 -> 400 "Saldo insuficiente na localizacao de origem", nada gravado', async () => {
+    const A = await loc(); const B = await loc();
+    const m = await material(0);
+    await movOk(m, 'ENTRADA', 0.2, { localizacao_destino_id: A });
+    const antes = await retrato(m);
+    const r = await mov(m, 'TRANSFERENCIA', 0.200001, { localizacao_origem_id: A, localizacao_destino_id: B });
+    assert.strictEqual(r.status, 400); assert.strictEqual(r.body.error, 'Saldo insuficiente na localização de origem');
+    // a transferencia pode criar a linha de destino vazia antes de recusar? o retrato diz se mudou
+    assert.strictEqual(await retrato(m), antes);
+  });
+  await test('[96 RN-03] a porta arredonda antes da folga: SAIDA 0,2000006 com 0,2 -> 400 (vira 0,200001); 0,2000004 -> 201 (vira 0,2)', async () => {
+    const m = await material(0); await entrar(m, 0.2);
+    const r = await mov(m, 'SAIDA', 0.2000006);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    await movOk(m, 'SAIDA', 0.2000004);
+    assert.strictEqual((await mat(m)).quantidade_atual, 0);
+    assert.strictEqual((await ultimaMov(m)).quantidade, 0.2, 'o livro diz o numero que o saldo moveu');
+  });
+
+  // RN-04 — a quantidade pedida e arredondada na porta
+  await test('[96 RN-04] ENTRADA 1,0000004 -> fisico 1 e a movimentacao com quantidade 1', async () => {
+    const m = await material(0);
+    await movOk(m, 'ENTRADA', 1.0000004);
+    assert.strictEqual((await mat(m)).quantidade_atual, 1);
+    const u = await ultimaMov(m);
+    assert.deepStrictEqual([u.quantidade, u.saldo_anterior, u.saldo_posterior], [1, 0, 1]);
+  });
+  await test('[96 RN-04] ENTRADA 0,0000004 -> 400 "material_id, tipo e quantidade sao obrigatorios", nada gravado', async () => {
+    const m = await material(0);
+    const antes = await retrato(m);
+    const r = await mov(m, 'ENTRADA', 0.0000004);
+    assert.strictEqual(r.status, 400); assert.strictEqual(r.body.error, 'material_id, tipo e quantidade são obrigatórios');
+    assert.strictEqual(await retrato(m), antes);
+  });
+  await test('[96 RN-04] POST /reservas 0,0000004 -> 400 "Quantidade da reserva deve ser maior que zero"', async () => {
+    const m = await material(0); await entrar(m, 1);
+    const r = await reservar(m, 0.0000004);
+    assert.strictEqual(r.status, 400); assert.strictEqual(r.body.error, 'Quantidade da reserva deve ser maior que zero');
+  });
+  await test('[96 RN-04] (Fase 2, menor) AJUSTE 0,0000004: com localizacao zera a linha; sem localizacao cai na Z1', async () => {
+    const A = await loc();
+    const m = await material(0);
+    await movOk(m, 'ENTRADA', 0.5, { localizacao_destino_id: A });
+    await movOk(m, 'AJUSTE', 0.0000004, { localizacao_destino_id: A });
+    assert.strictEqual(await linha(m, A), 0);
+    assert.strictEqual((await mat(m)).quantidade_atual, 0);
+    const n = await material(0); await entrar(n, 0.5);
+    const r = await mov(n, 'AJUSTE', 0.0000004);
+    assert.strictEqual(r.status, 400); assert.strictEqual(r.body.error, 'material_id, tipo e quantidade são obrigatórios');
+    assert.strictEqual((await mat(n)).quantidade_atual, 0.5);
+  });
+  await test('[96 RN-04] (Fase 2, menor) pelo servico: quantidade null, \'\' e true -> Z1, nunca 0 ou 1', async () => {
+    const stockService = require('../../services/almoxarifado/stockService');
+    const m = await material(0); await entrar(m, 5);
+    for (const q of [null, '', true]) {
+      await assert.rejects(() => stockService.registrarMovimentacao(db, { ...USERS.ADMIN }, { material_id: m, tipo: 'SAIDA', quantidade: q, motivo: 'e96' }),
+        (e) => e.status === 400 && e.message === 'material_id, tipo e quantidade são obrigatórios', `quantidade ${JSON.stringify(q)}`);
+    }
+    assert.strictEqual((await mat(m)).quantidade_atual, 5);
+  });
+
+  // RN-05 — a mensagem mostra o numero arredondado
+  await test('[96 RN-05] legado torto e pedido que NAO cabe: as literais dizem 1, nao 0.9999999999999999', async () => {
+    const m = await legado();
+    const s = await mov(m, 'SAIDA', 2);
+    assert.strictEqual(s.status, 400); assert.strictEqual(s.body.error, 'Saldo insuficiente. Disponível: 1 PC');
+    const r = await reservar(m, 2);
+    assert.strictEqual(r.status, 400); assert.strictEqual(r.body.error, 'Saldo disponível insuficiente: 1');
+    const b = await material(0); await entrar(b, 1);
+    assert.strictEqual((await bloquear(b, 1)).status, 200);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = ? WHERE id = ?', [TORTO, b]);
+    const d = await desbloquear(b, 2);
+    assert.strictEqual(d.status, 400); assert.strictEqual(d.body.error, 'Quantidade bloqueada insuficiente: 1');
+  });
+  await test('[96 RN-05] o lote em dois enderecos (0,1 + 0,2, colunas limpas) que nao cabe: "Saldo insuficiente no lote L96M. Disponivel: 0.3 PC"', async () => {
+    // a soma das linhas do lote e uma SUM do SQLite: 0,1 + 0,2 da 0.30000000000000004 sem o Q.qtd na mensagem
+    const A = await loc(); const B = await loc();
+    const m = await material(0);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_lote = 1 WHERE id = ?', [m]);
+    await movOk(m, 'ENTRADA', 0.1, { lote: 'L96M', localizacao_destino_id: A });
+    await movOk(m, 'ENTRADA', 0.2, { lote: 'L96M', localizacao_destino_id: B });
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 5 WHERE id = ?', [m]); // o material cabe; o lote nao
+    const lt = await dbGet(db, 'SELECT id FROM lotes_almoxarifado WHERE material_id = ?', [m]);
+    const r = await mov(m, 'SAIDA', 2, { lote_id: lt.id });
+    assert.strictEqual(r.status, 400); assert.strictEqual(r.body.error, 'Saldo insuficiente no lote L96M. Disponível: 0.3 PC');
   });
 
   terminou = true;

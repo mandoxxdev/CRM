@@ -49,14 +49,15 @@ const N = 4;
 const PRAZO_PORTAO = 400;
 let seq = 0;
 
-// Regex do gatilho, tolerante a espaco e quebra de linha (Fase 2, achado 11).
-const RE_DECISAO = /UPDATE\s+materiais_almoxarifado\s+SET\s+quantidade_em_inspecao\s*=\s*COALESCE\(\s*quantidade_em_inspecao\s*,\s*0\s*\)\s*-\s*\?/;
-const RE_DESBLOQUEIO = /UPDATE\s+materiais_almoxarifado\s+SET\s+quantidade_bloqueada\s*=\s*COALESCE\(\s*quantidade_bloqueada\s*,\s*0\s*\)\s*-\s*\?/;
+// Regex do gatilho, tolerante a espaco e quebra de linha (Fase 2, achado 11). Mudado na Etapa 96: o motor grava
+// `col = ROUND((expr), 6)` — os gatilhos aceitam o embrulho opcional.
+const RE_DECISAO = /UPDATE\s+materiais_almoxarifado\s+SET\s+quantidade_em_inspecao\s*=\s*(?:ROUND\(\(\s*)?COALESCE\(\s*quantidade_em_inspecao\s*,\s*0\s*\)\s*-\s*\?/;
+const RE_DESBLOQUEIO = /UPDATE\s+materiais_almoxarifado\s+SET\s+quantidade_bloqueada\s*=\s*(?:ROUND\(\(\s*)?COALESCE\(\s*quantidade_bloqueada\s*,\s*0\s*\)\s*-\s*\?/;
 // Nota: o credito do fisico do ENTRADA_COMPRA (stockService, ramo de entrada: `SET\n quantidade_atual =
 // quantidade_atual + ?`, com ou sem custo; o id do material e o ultimo parametro). O plano previa a sincronizacao
 // `SET quantidade_atual = ?`, mas ela so roda quando o material tem linha de saldo por localizacao — medido antes da
 // T2: sem localizacao o gatilho com a regex do plano nunca disparava (0 de 8 rodadas).
-const RE_SYNC = /UPDATE\s+materiais_almoxarifado\s+SET\s+quantidade_atual\s*=\s*quantidade_atual\s*\+\s*\?/;
+const RE_SYNC = /UPDATE\s+materiais_almoxarifado\s+SET\s+quantidade_atual\s*=\s*(?:ROUND\(\(\s*)?quantidade_atual\s*\+\s*\?/;
 // Onde o material_id esta nos parametros de cada comando (stockService: DECISAO [q, reprov, id, q]; DESBLOQUEIO [q, id, q]; sync [total, id]).
 function materialDoComando(re, ps) {
   if (re === RE_DECISAO) return ps[2];

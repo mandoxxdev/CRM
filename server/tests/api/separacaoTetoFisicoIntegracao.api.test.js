@@ -55,7 +55,9 @@ const API = '/api/almoxarifado';
 const S2 = (nome, q, max, pend, disp) => `${nome}: não é possível separar ${q} PC. Máximo: ${max} (pendente: ${pend}, disponível: ${disp})`;
 const ENT = (nome, q, max, pend, disp) => `${nome}: não é possível entregar ${q} PC. Máximo: ${max} (pendente: ${pend}, disponível: ${disp})`;
 const RE_UPDATE_SEPARADO = /UPDATE itens_requisicao_almoxarifado SET quantidade_separada = \?/;
-const arred = (x) => Math.round(Number(x) * 1e6) / 1e6;
+// Mudado na Etapa 96: `+ 0` tira o -0 — o motor passou a gravar o fisico arredondado (0, nao -5,5e-17), e o esperado
+// calculado do livro do teste (0,3 - 0.30000000000000004) arredondava para -0, que o deepStrictEqual distingue de 0.
+const arred = (x) => (Math.round(Number(x) * 1e6) / 1e6) + 0;
 
 // A46 (plano, "Letra A") — o texto das consultas sem mudar uma virgula (so sem o ';'); o teste filtra por material
 // por fora.

@@ -70,9 +70,10 @@ const { FRASE_TUDO_RESERVADO: L1 } = receiptNotificationService;
 // T6 jornada C: a literal M1 da T4 (D(77)).
 const M1_91 = (tipo) => `reserva_id só vale numa saída que consome a reserva — o tipo ${tipo} não consome reserva; tire o reserva_id do movimento`;
 
-const RE_DECISAO = /UPDATE\s+materiais_almoxarifado\s+SET\s+quantidade_em_inspecao\s*=\s*COALESCE\(\s*quantidade_em_inspecao\s*,\s*0\s*\)\s*-\s*\?/;
+// Mudado na Etapa 96: o motor grava `col = ROUND((expr), 6)` — os gatilhos aceitam o embrulho opcional.
+const RE_DECISAO = /UPDATE\s+materiais_almoxarifado\s+SET\s+quantidade_em_inspecao\s*=\s*(?:ROUND\(\(\s*)?COALESCE\(\s*quantidade_em_inspecao\s*,\s*0\s*\)\s*-\s*\?/;
 // O credito do fisico do ENTRADA_COMPRA (o material sem localizacao nao passa pela sincronizacao `= ?`).
-const RE_CREDITO = /UPDATE\s+materiais_almoxarifado\s+SET\s+quantidade_atual\s*=\s*quantidade_atual\s*\+\s*\?/;
+const RE_CREDITO = /UPDATE\s+materiais_almoxarifado\s+SET\s+quantidade_atual\s*=\s*(?:ROUND\(\(\s*)?quantidade_atual\s*\+\s*\?/;
 function materialDoComando(re, ps) { return re === RE_DECISAO ? ps[2] : ps[ps.length - 1]; }
 
 function comPrazo(p, ms, rotulo) {

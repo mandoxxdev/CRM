@@ -582,6 +582,11 @@ async function erroDe(fn) {
 
     const r1 = await executar(ncsFracionarias[0].ncId);
     assert.strictEqual(r1.execucao.efeito, 'BAIXADA', JSON.stringify(r1.execucao));
+    // Mudado na Etapa 96: o motor passou a gravar o bloqueado ARREDONDADO — a primeira devolucao deixava
+    // 3.3999999999999995 e agora deixa 3,4 exato, e o cenario parou de exercitar a regua (medido: com
+    // EPSILON_DIVERGENCIA = 0 este caso passava). O residuo que o motor antigo deixava (o legado) e escrito direto.
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = ? WHERE id = ?', [3.3999999999999995, materialId]);
+    assert.ok(Number((await saldos(materialId)).quantidade_bloqueada) < 3.4, 'premissa: o legado ficou abaixo de 3,4');
 
     const r2 = await executar(ncsFracionarias[1].ncId);
     assert.strictEqual(r2.execucao.efeito, 'BAIXADA',

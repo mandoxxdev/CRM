@@ -477,7 +477,28 @@ let seq = 0;
       await entregar(r.id, [[r.itens[0], 0.1]]);
     }
     const res = await reservaDoItem(r.itens[0]);
-    assert.notStrictEqual(res.quantidade_utilizada, 1, 'controle: a utilizada NAO e 1 exato (senao o teste nao prova o epsilon)');
+    // Mudado na Etapa 96: o motor grava a utilizada ARREDONDADA — dez de 0,1 dao 1 exato, e a deriva que o EPS desta
+    // fase cobria nao nasce mais pelo motor. O controle antigo ("a utilizada NAO e 1") virou o contrario; o legado
+    // torto (gravado antes da 96) e o caso seguinte, montado por escritor direto.
+    assert.strictEqual(res.quantidade_utilizada, 1, 'a utilizada e 1 exato (Etapa 96: o motor grava arredondado)');
+    assert.strictEqual(res.status, 'CONSUMIDA', `reserva zumbi: ${JSON.stringify(res)}`);
+    assert.strictEqual(await reservadoDo(m), 0, 'sobra de ponto flutuante ficou presa no reservado do material');
+  });
+
+  await test('[Fase5/B] (legado, Etapa 96) utilizada e reservado tortos escritos direto: a ultima entrega de 0,1 fecha CONSUMIDA e zera o reservado', async () => {
+    const m = await material({ saldo: 5 });
+    const r = await criarAprovada([[m, 1]], null);
+    await separar(r.id, [[r.itens[0], 1]]);
+    for (let i = 0; i < 9; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      await entregar(r.id, [[r.itens[0], 0.1]]);
+    }
+    const res9 = await reservaDoItem(r.itens[0]);
+    // o estado que o motor antigo deixava depois de nove entregas de 0,1
+    await dbRun(db, 'UPDATE reservas_material_almoxarifado SET quantidade_utilizada = ? WHERE id = ?', [0.8999999999999999, res9.id]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_reservada = ? WHERE id = ?', [0.10000000000000009, m]);
+    await entregar(r.id, [[r.itens[0], 0.1]]);
+    const res = await reservaDoItem(r.itens[0]);
     assert.strictEqual(res.status, 'CONSUMIDA', `reserva zumbi: ${JSON.stringify(res)}`);
     assert.strictEqual(await reservadoDo(m), 0, 'sobra de ponto flutuante ficou presa no reservado do material');
   });
@@ -492,7 +513,9 @@ let seq = 0;
       assert.strictEqual(s.status, 201, `saida ${i + 1}: ${JSON.stringify(s.body)}`);
     }
     const row = await dbGet(db, 'SELECT status, quantidade_utilizada FROM reservas_material_almoxarifado WHERE id = ?', [resId]);
-    assert.notStrictEqual(row.quantidade_utilizada, 0.3, 'controle: 0,1+0,1+0,1 nao da 0,3 exato');
+    // Mudado na Etapa 96: o motor grava a utilizada arredondada — 0,1 + 0,1 + 0,1 da 0,3 exato (o controle antigo
+    // "nao da 0,3 exato" virou o contrario; o legado torto e coberto pelo caso "(legado, Etapa 96)" acima).
+    assert.strictEqual(row.quantidade_utilizada, 0.3, '0,1+0,1+0,1 da 0,3 exato (Etapa 96)');
     assert.strictEqual(row.status, 'CONSUMIDA', JSON.stringify(row));
     assert.strictEqual(await reservadoDo(m), 0);
   });

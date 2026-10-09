@@ -82,16 +82,16 @@ async function getSaldoDisponivel(material) {
  */
 function motivoRecusaAjustePorRetencao(material, novoTotal) {
   const retido = COLUNAS_RETENCAO.reduce((soma, col) => soma + (material[col] || 0), 0);
-  if (novoTotal >= retido) return null;
+  if (Q.cabe(retido, novoTotal)) return null; // Etapa 96 (Fase 2, I1): a retencao e uma soma
   const LABELS = {
     quantidade_reservada: 'reservada', quantidade_bloqueada: 'bloqueada',
     quantidade_em_inspecao: 'em inspeção', quantidade_em_terceiros: 'em terceiros',
   };
   const partes = COLUNAS_RETENCAO
     .filter((col) => (material[col] || 0) > 0)
-    .map((col) => `${LABELS[col]}: ${material[col]}`);
-  return `Ajuste para ${novoTotal} ${material.unidade} deixaria o disponível negativo `
-    + `(${partes.join(', ')}, mínimo aceitável: ${retido} ${material.unidade}). Resolva a `
+    .map((col) => `${LABELS[col]}: ${Q.qtd(material[col])}`);
+  return `Ajuste para ${Q.qtd(novoTotal)} ${material.unidade} deixaria o disponível negativo `
+    + `(${partes.join(', ')}, mínimo aceitável: ${Q.qtd(retido)} ${material.unidade}). Resolva a `
     + 'retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo.';
 }
 
@@ -142,8 +142,9 @@ function motivoRecusaAjustePorRetencao(material, novoTotal) {
  * delas.
  */
 async function syncMaterialTotals(db, materialId) {
+  // Etapa 96: a soma das linhas e gravada arredondada (0,7 + 0,2 + 0,1 em tres linhas nao vira 0.9999999999999999).
   const saldos = await dbGet(db, `
-    SELECT COALESCE(SUM(quantidade),0) as total
+    SELECT ${Q.qtdSql('COALESCE(SUM(quantidade),0)')} as total
     FROM estoque_saldo_almoxarifado WHERE material_id = ?`, [materialId]);
 
   // Contagem de linhas em vez de exigir total > 0: zerar todas as localizações de um material
@@ -224,9 +225,9 @@ async function ajustarSaldoExistente(db, materialId, localizacaoId, loteId, delt
   const chave = [materialId, localizacaoId || null, loteId || null];
   const params = [delta, ...chave];
   let sql = `UPDATE estoque_saldo_almoxarifado
-    SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP
+    SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP
     WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS ?`;
-  if (minimo != null) { sql += ' AND quantidade >= ?'; params.push(minimo); }
+  if (minimo != null) { sql += ` AND quantidade >= ? ${Q.FOLGA_SQL}`; params.push(minimo); }
   sql += ' RETURNING id';
 
   const linha = await dbGet(db, sql, params);
@@ -285,7 +286,7 @@ async function ajustarSaldoExistente(db, materialId, localizacaoId, loteId, delt
  * Devolve `{ ok: true }` ou `{ ok: false, disponivel }` com o saldo agregado real do lote — o
  * mesmo número que a tela mostra.
  */
-const EPS = 1e-9; // tolerância de ponto flutuante: quantidade é REAL no SQLite
+const EPS = Q.QTD_FOLGA; // tolerância de ponto flutuante: quantidade é REAL no SQLite (Etapa 96: a mesma folga do helper)
 
 /**
  * Etapa 67 (Fase 5): `quantidade_reservada` do material menos `?`, com a sobra de ponto flutuante
@@ -293,8 +294,8 @@ const EPS = 1e-9; // tolerância de ponto flutuante: quantidade é REAL no SQLit
  * no material e a reserva ATIVA com 1,1e-16 de saldo: lixo que segura disponivel e mantem uma
  * reserva zumbi. Usa DOIS placeholders com o mesmo valor (a conta aparece duas vezes).
  */
-const RESERVADA_MENOS_SQL = `CASE WHEN COALESCE(quantidade_reservada,0) - ? <= ${EPS} THEN 0
-  ELSE COALESCE(quantidade_reservada,0) - ? END`;
+const RESERVADA_MENOS_SQL = Q.qtdSql(`CASE WHEN COALESCE(quantidade_reservada,0) - ? <= ${EPS} THEN 0
+  ELSE COALESCE(quantidade_reservada,0) - ? END`);
 
 async function claimSaldoDoLote(db, materialId, loteId, locPreferida, quantidade) {
   const linhas = await dbAll(db, `
@@ -309,25 +310,25 @@ async function claimSaldoDoLote(db, materialId, loteId, locPreferida, quantidade
     if (restante <= EPS) break;
     const take = Math.min(restante, linha.quantidade);
     const claim = await dbGet(db, `UPDATE estoque_saldo_almoxarifado
-      SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND quantidade >= ?
+      SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND quantidade >= ? ${Q.FOLGA_SQL}
       RETURNING id`, [take, linha.id, take]);
     // Não casou = outra saída concorrente levou o saldo desta linha entre o SELECT e o UPDATE.
     // Não é erro por si: segue para a próxima linha do lote e só falha se o total não fechar.
     if (!claim) continue;
     aplicados.push({ id: linha.id, quantidade: take });
-    restante -= take;
+    restante = Q.qtd(restante - take);
   }
 
   if (restante > EPS) {
     for (const a of aplicados) {
       await dbRun(db, `UPDATE estoque_saldo_almoxarifado
-        SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         [a.quantidade, a.id]);
     }
     const total = await dbGet(db, `SELECT COALESCE(SUM(quantidade),0) as total
       FROM estoque_saldo_almoxarifado WHERE material_id = ? AND lote_id IS ?`, [materialId, loteId]);
-    return { ok: false, disponivel: total.total };
+    return { ok: false, disponivel: Q.qtd(total.total) };
   }
   return { ok: true, linhas: aplicados };
 }
@@ -372,12 +373,12 @@ async function claimSaldoSemLote(db, materialId, locPreferida, quantidade) {
       if (disponivel <= EPS) break;
       const take = Math.min(restante, disponivel);
       const claim = await dbGet(db, `UPDATE estoque_saldo_almoxarifado
-        SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND quantidade >= ?
+        SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND quantidade >= ? ${Q.FOLGA_SQL}
         RETURNING id`, [take, linha.id, take]);
       if (claim) {
         aplicados.push({ id: linha.id, quantidade: take });
-        restante -= take;
+        restante = Q.qtd(restante - take);
         break;
       }
     }
@@ -386,7 +387,7 @@ async function claimSaldoSemLote(db, materialId, locPreferida, quantidade) {
   if (restante > EPS) {
     const saldo = await getOrCreateSaldo(db, materialId, locPreferida, null);
     await dbRun(db, `UPDATE estoque_saldo_almoxarifado
-      SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [restante, saldo.id]);
+      SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [restante, saldo.id]);
     aplicados.push({ id: saldo.id, quantidade: restante });
   }
   return aplicados;
@@ -415,7 +416,7 @@ async function absorverNegativosSemLote(db, materialId, { excluirId = null } = {
   for (const n of negativas) {
     if (deficit <= EPS) break;
     const sobe = Math.min(deficit, -Number(n.quantidade));
-    await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
       [sobe, n.id]);
     deficit -= sobe;
   }
@@ -462,14 +463,14 @@ async function syncSaldoLocalizacaoPadrao(db, materialId, loteId = null, { drena
     for (const p of positivas) {
       if (novaLinha >= -EPS) break;
       const tira = Math.min(-novaLinha, Number(p.quantidade));
-      await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         [tira, p.id]);
       novaLinha += tira;
     }
   }
   await dbRun(db,
     'UPDATE estoque_saldo_almoxarifado SET quantidade = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [novaLinha, saldo.id]);
+    [Q.qtd(novaLinha), saldo.id]); // Etapa 96 (Fase 2, I4): calculada em JS, gravada absoluta
 }
 
 /**
@@ -962,12 +963,16 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   // logo abaixo com a mensagem de hoje. Ver services/almoxarifado/motivoMovimentacao.js.
   params = await motivoMovimentacao.resolverMotivoDoCadastro(db, params);
   const {
-    material_id, tipo, quantidade, motivo, motivo_id, referencia, observacoes,
+    material_id, tipo, quantidade: quantidadeCrua, motivo, motivo_id, referencia, observacoes,
     localizacao_origem_id, localizacao_destino_id, lote, lote_id, projeto_id, os_id, cliente_id,
     documento_vinculado, justificativa, reserva_id, recebimento_id, requisicao_id, centro_custo_id,
     emergencial, custo_unitario: custoInformado, quantidade_reprovada,
   } = params;
 
+  // Etapa 96 (B482): a quantidade pedida e arredondada a 1e-6 AQUI, na porta — o livro e o saldo dizem o mesmo
+  // numero (ENTRADA 1,0000004 grava 1, nao 1.0000004). `Q.qtd` nao inventa numero: null/''/booleano viram NaN e caem
+  // na recusa de sempre logo abaixo (Fase 2, M1). O que arredonda a 0 cai na recusa de zero de cada porta.
+  const quantidade = quantidadeCrua === undefined || quantidadeCrua === null ? quantidadeCrua : Q.qtd(quantidadeCrua);
   if (!user?.id) throw Object.assign(new Error('Usuário responsável obrigatório'), { status: 400 });
   // quantidade 0 só é aceita para AJUSTE com localização (zera aquela localização e recalcula
   // o total do material — espelha o superRefine de MovimentacaoSchema) OU para AJUSTE_INVENTARIO
@@ -1390,7 +1395,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // acontece contra a propria coluna, atomicamente, no claim mais abaixo.
     if (!consumindoReserva && !baixandoTerceiro && !baixandoBloqueado) {
       const disponivel = await getSaldoDisponivel(material);
-      if (disponivel < quantidade && !permiteNegativo) {
+      if (!Q.cabe(quantidade, disponivel) && !permiteNegativo) {
         throw Object.assign(new Error(`Saldo insuficiente. Disponível: ${disponivel} ${material.unidade}`), { status: 400 });
       }
     }
@@ -1399,7 +1404,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // Aplicada a ele, ela proibiria exatamente a operacao que ele e.
     if (!baixandoBloqueado && (material.quantidade_bloqueada || 0) > 0 && tiposSaida.includes(tipo)) {
       const dispSemBloqueio = material.quantidade_atual - (material.quantidade_bloqueada || 0);
-      if (quantidade > dispSemBloqueio && !permiteNegativo) {
+      if (!Q.cabe(quantidade, dispSemBloqueio) && !permiteNegativo) {
         throw Object.assign(new Error('Material bloqueado não pode ser utilizado'), { status: 400 });
       }
     }
@@ -1432,18 +1437,18 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // nada). Semântica preservada: assim como antes, não olha `permiteNegativo` — TRANSFERENCIA
     // sempre exigiu saldo suficiente na origem, mesmo em material que permite saldo negativo.
     const claimOrigem = await dbGet(db, `UPDATE estoque_saldo_almoxarifado
-      SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND quantidade >= ?
+      SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND quantidade >= ? ${Q.FOLGA_SQL}
       RETURNING id`, [quantidade, saldoOrigem.id, quantidade]);
     if (!claimOrigem) {
       throw Object.assign(new Error('Saldo insuficiente na localização de origem'), { status: 400 });
     }
     const saldoDestino = await getOrCreateSaldo(db, material_id, localizacao_destino_id, loteIdFinal);
-    await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
       [quantidade, saldoDestino.id]);
     saldoPosterior = saldoAnterior;
   } else if (tipo === 'BLOQUEIO') {
-    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
       [quantidade, material_id]);
     retencaoAplicada = { bloqueada: quantidade, emInspecao: 0 };
     saldoPosterior = saldoAnterior;
@@ -1451,19 +1456,19 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // Guarda no WHERE em vez de MAX(0,...): saturar em silencio devolve ao disponivel menos do
     // que o pedido sem ninguem saber, e foi exatamente o bug corrigido em liberarReserva.
     const claim = await dbGet(db, `UPDATE materiais_almoxarifado
-      SET quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) - ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND COALESCE(quantidade_bloqueada,0) >= ?
+      SET quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) - ?')}, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND COALESCE(quantidade_bloqueada,0) >= ? ${Q.FOLGA_SQL}
       RETURNING id`, [quantidade, material_id, quantidade]);
     if (!claim) {
       throw Object.assign(
-        new Error(`Quantidade bloqueada insuficiente: ${material.quantidade_bloqueada || 0}`),
+        new Error(`Quantidade bloqueada insuficiente: ${Q.qtd(material.quantidade_bloqueada || 0)}`),
         { status: 400 });
     }
     retencaoAplicada = { bloqueada: -quantidade, emInspecao: 0 };
     saldoPosterior = saldoAnterior;
   } else if (tipo === 'QUARENTENA') {
     await dbRun(db, `UPDATE materiais_almoxarifado
-      SET quantidade_em_inspecao = COALESCE(quantidade_em_inspecao,0) + ?, updated_at = CURRENT_TIMESTAMP
+      SET quantidade_em_inspecao = ${Q.qtdSql('COALESCE(quantidade_em_inspecao,0) + ?')}, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`, [quantidade, material_id]);
     retencaoAplicada = { bloqueada: 0, emInspecao: quantidade };
     saldoPosterior = saldoAnterior;
@@ -1474,14 +1479,14 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // spec 09 cobra sai justamente deste UPDATE nao casar na segunda vez.
     const bloqueiaTambem = tipo === 'REPROVACAO_INSPECAO' ? quantidade : 0;
     const claim = await dbGet(db, `UPDATE materiais_almoxarifado
-      SET quantidade_em_inspecao = COALESCE(quantidade_em_inspecao,0) - ?,
-          quantidade_bloqueada   = COALESCE(quantidade_bloqueada,0) + ?,
+      SET quantidade_em_inspecao = ${Q.qtdSql('COALESCE(quantidade_em_inspecao,0) - ?')},
+          quantidade_bloqueada   = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) + ?')},
           updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND COALESCE(quantidade_em_inspecao,0) >= ?
+      WHERE id = ? AND COALESCE(quantidade_em_inspecao,0) >= ? ${Q.FOLGA_SQL}
       RETURNING id`, [quantidade, bloqueiaTambem, material_id, quantidade]);
     if (!claim) {
       throw Object.assign(
-        new Error(`Quantidade em inspeção insuficiente: ${material.quantidade_em_inspecao || 0}`),
+        new Error(`Quantidade em inspeção insuficiente: ${Q.qtd(material.quantidade_em_inspecao || 0)}`),
         { status: 400 });
     }
     retencaoAplicada = { bloqueada: bloqueiaTambem, emInspecao: -quantidade };
@@ -1502,14 +1507,14 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         { status: 400 });
     }
     const claim = await dbGet(db, `UPDATE materiais_almoxarifado
-      SET quantidade_em_inspecao = COALESCE(quantidade_em_inspecao,0) - ?,
-          quantidade_bloqueada   = COALESCE(quantidade_bloqueada,0) + ?,
+      SET quantidade_em_inspecao = ${Q.qtdSql('COALESCE(quantidade_em_inspecao,0) - ?')},
+          quantidade_bloqueada   = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) + ?')},
           updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND COALESCE(quantidade_em_inspecao,0) >= ?
+      WHERE id = ? AND COALESCE(quantidade_em_inspecao,0) >= ? ${Q.FOLGA_SQL}
       RETURNING id`, [quantidade, reprovadaQtd, material_id, quantidade]);
     if (!claim) {
       throw Object.assign(
-        new Error(`Quantidade em inspeção insuficiente: ${material.quantidade_em_inspecao || 0}`),
+        new Error(`Quantidade em inspeção insuficiente: ${Q.qtd(material.quantidade_em_inspecao || 0)}`),
         { status: 400 });
     }
     retencaoAplicada = { bloqueada: reprovadaQtd, emInspecao: -quantidade };
@@ -1519,8 +1524,8 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // criaria retencao sem lastro fisico. `disponivelSql()` (sem alias) porque o UPDATE e de tabela
     // unica — e usar o helper garante que a conta e A MESMA das outras leituras do disponivel.
     const claim = await dbGet(db, `UPDATE materiais_almoxarifado
-      SET quantidade_em_terceiros = COALESCE(quantidade_em_terceiros,0) + ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND ${disponivelSql()} >= ?
+      SET quantidade_em_terceiros = ${Q.qtdSql('COALESCE(quantidade_em_terceiros,0) + ?')}, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND ${disponivelSql()} >= ? ${Q.FOLGA_SQL}
       RETURNING id`, [quantidade, material_id, quantidade]);
     if (!claim) {
       throw Object.assign(
@@ -1533,12 +1538,12 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // devolveria ao disponivel menos do que o pedido sem ninguem saber. E a mensagem DIZ o numero
     // — sem ele o operador tem de adivinhar quanto ainda esta no terceiro (licao da Etapa 7).
     const claim = await dbGet(db, `UPDATE materiais_almoxarifado
-      SET quantidade_em_terceiros = COALESCE(quantidade_em_terceiros,0) - ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND COALESCE(quantidade_em_terceiros,0) >= ?
+      SET quantidade_em_terceiros = ${Q.qtdSql('COALESCE(quantidade_em_terceiros,0) - ?')}, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND COALESCE(quantidade_em_terceiros,0) >= ? ${Q.FOLGA_SQL}
       RETURNING id`, [quantidade, material_id, quantidade]);
     if (!claim) {
       throw Object.assign(
-        new Error(`Retorno acima do que está no terceiro: ainda há ${material.quantidade_em_terceiros || 0} ${material.unidade} lá fora`),
+        new Error(`Retorno acima do que está no terceiro: ainda há ${Q.qtd(material.quantidade_em_terceiros || 0)} ${material.unidade} lá fora`),
         { status: 400 });
     }
     saldoPosterior = saldoAnterior;
@@ -1593,11 +1598,11 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       // NENHUMA saída física real ter ocorrido — reserva de outra OS perdida, e o disponível do
       // material inflado (quantidade_reservada a menos do que deveria).
       await dbRun(db, `UPDATE materiais_almoxarifado
-        SET quantidade_atual = quantidade_atual + ?,
-            quantidade_reservada = COALESCE(quantidade_reservada,0) + ?,
+        SET quantidade_atual = ${Q.qtdSql('quantidade_atual + ?')},
+            quantidade_reservada = ${Q.qtdSql('COALESCE(quantidade_reservada,0) + ?')},
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?`, [quantidade, quantidade, material_id]);
-      await dbRun(db, 'UPDATE reservas_material_almoxarifado SET quantidade_utilizada = MAX(0, quantidade_utilizada - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      await dbRun(db, `UPDATE reservas_material_almoxarifado SET quantidade_utilizada = ${Q.qtdSql('MAX(0, quantidade_utilizada - ?)')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         [quantidade, reserva_id]);
       // A reserva só vira CONSUMIDA dentro desta mesma chamada, quando zera — reverter para
       // ATIVA aqui é seguro porque o claim atômico do topo já exigiu status = 'ATIVA' para a
@@ -1609,8 +1614,8 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       // exato do saldo orfao, e igualmente errado: o material voltaria ao disponivel como se nunca
       // tivesse ido para o terceiro.
       await dbRun(db, `UPDATE materiais_almoxarifado
-        SET quantidade_atual = quantidade_atual + ?,
-            quantidade_em_terceiros = COALESCE(quantidade_em_terceiros,0) + ?,
+        SET quantidade_atual = ${Q.qtdSql('quantidade_atual + ?')},
+            quantidade_em_terceiros = ${Q.qtdSql('COALESCE(quantidade_em_terceiros,0) + ?')},
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?`, [quantidade, quantidade, material_id]);
     } else if (baixandoBloqueado) {
@@ -1627,13 +1632,13 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       // e o mesmo motivo para NAO setar `retencaoAplicada` (o cenario (7) de
       // `sucataBloqueadoMotor.api.test.js` prende a igualdade exata).
       await dbRun(db, `UPDATE materiais_almoxarifado
-        SET quantidade_atual = quantidade_atual + ?,
-            quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) + ?,
+        SET quantidade_atual = ${Q.qtdSql('quantidade_atual + ?')},
+            quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) + ?')},
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?`, [quantidade, quantidade, material_id]);
     } else {
       await dbRun(db, `UPDATE materiais_almoxarifado
-        SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        SET quantidade_atual = ${Q.qtdSql('quantidade_atual + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         [quantidade, material_id]);
     }
     saidaFisicoAplicado = false;
@@ -1662,7 +1667,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         // UPDATE condicional impede que duas entregas concorrentes consumam o mesmo saldo
         // reservado. `saldo` da reserva = quantidade - quantidade_utilizada.
         const reserva = await dbGet(db, `UPDATE reservas_material_almoxarifado
-          SET quantidade_utilizada = quantidade_utilizada + ?, updated_at = CURRENT_TIMESTAMP
+          SET quantidade_utilizada = ${Q.qtdSql('quantidade_utilizada + ?')}, updated_at = CURRENT_TIMESTAMP
           WHERE id = ? AND material_id = ? AND status = 'ATIVA'
             AND (quantidade - COALESCE(quantidade_utilizada,0)) >= ? - ${EPS}
           RETURNING quantidade, quantidade_utilizada`,
@@ -1671,7 +1676,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
           const atual = await dbGet(db, 'SELECT quantidade, quantidade_utilizada, status FROM reservas_material_almoxarifado WHERE id = ? AND material_id = ?', [reserva_id, material_id]);
           if (!atual) throw Object.assign(new Error('Reserva não encontrada para este material'), { status: 400 });
           if (atual.status !== 'ATIVA') throw Object.assign(new Error(`Reserva ${atual.status.toLowerCase()} não pode ser consumida`), { status: 400 });
-          const saldoReserva = atual.quantidade - (atual.quantidade_utilizada || 0);
+          const saldoReserva = Q.qtd(atual.quantidade - (atual.quantidade_utilizada || 0));
           throw Object.assign(new Error(`Quantidade acima do saldo da reserva: ${saldoReserva} ${material.unidade}`), { status: 400 });
         }
 
@@ -1687,17 +1692,17 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         // aparece somada, e trocar essa ordem faria a guarda comparar números invertidos em
         // silêncio.
         const rowRes = await dbGet(db, `UPDATE materiais_almoxarifado
-          SET quantidade_atual = quantidade_atual - ?,
-              quantidade_reservada = MAX(0, COALESCE(quantidade_reservada,0) - ?),
+          SET quantidade_atual = ${Q.qtdSql('quantidade_atual - ?')},
+              quantidade_reservada = ${Q.qtdSql('MAX(0, COALESCE(quantidade_reservada,0) - ?)')},
               updated_at = CURRENT_TIMESTAMP
-          WHERE id = ? AND (? = 1 OR (${disponivelSql()} + ?) >= ?)
+          WHERE id = ? AND (? = 1 OR (${disponivelSql()} + ?) >= ? ${Q.FOLGA_SQL})
           RETURNING quantidade_atual`,
           [quantidade, quantidade, material_id, permiteNegativo ? 1 : 0, quantidade, quantidade]);
         if (!rowRes) {
           // Não há transação neste serviço (padrão do módulo: UPDATE condicional único).
           // Compensa a reivindicação acima à mão para não deixar a reserva consumida sem a
           // baixa correspondente de estoque.
-          await dbRun(db, 'UPDATE reservas_material_almoxarifado SET quantidade_utilizada = MAX(0, quantidade_utilizada - ?) WHERE id = ?', [quantidade, reserva_id]);
+          await dbRun(db, `UPDATE reservas_material_almoxarifado SET quantidade_utilizada = ${Q.qtdSql('MAX(0, quantidade_utilizada - ?)')} WHERE id = ?`, [quantidade, reserva_id]);
           throw Object.assign(new Error(`Saldo físico insuficiente para consumir a reserva. Disponível: ${await getSaldoDisponivel(material)} ${material.unidade}`), { status: 400 });
         }
         saldoPosterior = rowRes.quantidade_atual;
@@ -1723,16 +1728,16 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         // terceiro e uma quantidade conhecida e finita; "perdi 40 de uma remessa de 30" e erro de
         // digitacao, nao operacao com saldo negativo.
         const rowT = await dbGet(db, `UPDATE materiais_almoxarifado
-          SET quantidade_atual = quantidade_atual - ?,
-              quantidade_em_terceiros = COALESCE(quantidade_em_terceiros,0) - ?,
+          SET quantidade_atual = ${Q.qtdSql('quantidade_atual - ?')},
+              quantidade_em_terceiros = ${Q.qtdSql('COALESCE(quantidade_em_terceiros,0) - ?')},
               updated_at = CURRENT_TIMESTAMP
-          WHERE id = ? AND COALESCE(quantidade_em_terceiros,0) >= ? AND quantidade_atual >= ?
+          WHERE id = ? AND COALESCE(quantidade_em_terceiros,0) >= ? ${Q.FOLGA_SQL} AND quantidade_atual >= ? ${Q.FOLGA_SQL}
           RETURNING quantidade_atual`,
           [quantidade, quantidade, material_id, quantidade, quantidade]);
         if (!rowT) {
           throw Object.assign(
-            new Error(`Baixa acima do que está no terceiro: há ${material.quantidade_em_terceiros || 0} `
-              + `${material.unidade} nessa situação (físico: ${material.quantidade_atual})`),
+            new Error(`Baixa acima do que está no terceiro: há ${Q.qtd(material.quantidade_em_terceiros || 0)} `
+              + `${material.unidade} nessa situação (físico: ${Q.qtd(material.quantidade_atual)})`),
             { status: 400 });
         }
         saldoPosterior = rowT.quantidade_atual;
@@ -1758,8 +1763,8 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         // para a `SUCATA` cujo chamador declara `doBloqueado` no 4o argumento). Afrouxar por
         // epsilon todo claim de saida do motor e decisao de outro tamanho, e nao desta etapa.
         const rowB = await dbGet(db, `UPDATE materiais_almoxarifado
-          SET quantidade_atual = quantidade_atual - ?,
-              quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) - ?,
+          SET quantidade_atual = ${Q.qtdSql('quantidade_atual - ?')},
+              quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) - ?')},
               updated_at = CURRENT_TIMESTAMP
           WHERE id = ? AND COALESCE(quantidade_bloqueada,0) >= ? - ${EPSILON_DIVERGENCIA}
             AND quantidade_atual >= ? - ${EPSILON_DIVERGENCIA}
@@ -1770,16 +1775,16 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
           // operador procurar uma devolucao que ninguem pediu. Os dois numeros continuam.
           const oQue = tipo === 'SUCATA' ? 'Sucateamento' : 'Devolução';
           throw Object.assign(
-            new Error(`${oQue} acima do que está bloqueado: há ${material.quantidade_bloqueada || 0} `
-              + `${material.unidade} bloqueado(s) (físico: ${material.quantidade_atual})`),
+            new Error(`${oQue} acima do que está bloqueado: há ${Q.qtd(material.quantidade_bloqueada || 0)} `
+              + `${material.unidade} bloqueado(s) (físico: ${Q.qtd(material.quantidade_atual)})`),
             { status: 400 });
         }
         saldoPosterior = rowB.quantidade_atual;
         saidaFisicoAplicado = true;
       } else {
       const row = await dbGet(db, `UPDATE materiais_almoxarifado
-        SET quantidade_atual = quantidade_atual - ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND (? = 1 OR ${disponivelSql()} >= ?)
+        SET quantidade_atual = ${Q.qtdSql('quantidade_atual - ?')}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND (? = 1 OR ${disponivelSql()} >= ? ${Q.FOLGA_SQL})
         RETURNING quantidade_atual`,
         [quantidade, material_id, permiteNegativo ? 1 : 0, quantidade]);
       if (!row) {
@@ -1802,7 +1807,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       }
       if (custoInformado && custoInformado > 0) {
         const row = await dbGet(db, `UPDATE materiais_almoxarifado SET
-            quantidade_atual = quantidade_atual + ?,
+            quantidade_atual = ${Q.qtdSql('quantidade_atual + ?')},
             custo_medio = CASE WHEN quantidade_atual > 0
               THEN ROUND(((quantidade_atual * ${custoUnitarioSql()}) + (? * ?)) / (quantidade_atual + ?), 4)
               ELSE ? END,
@@ -1823,7 +1828,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       } else {
         // entrada sem custo informado: comportamento atual (só quantidade), inalterado
         const row = await dbGet(db, `UPDATE materiais_almoxarifado
-          SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP
+          SET quantidade_atual = ${Q.qtdSql('quantidade_atual + ?')}, updated_at = CURRENT_TIMESTAMP
           WHERE id = ? RETURNING quantidade_atual`, [quantidade, material_id]);
         saldoPosterior = row.quantidade_atual;
         entradaCreditoAplicado = { quantidade: parseFloat(quantidade), custoAplicado: false, saldoLinhaId: null };
@@ -1920,8 +1925,8 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
 
     // saldo_anterior derivado do valor real pós-update (não da leitura pré-corrida):
     // entrada: anterior = posterior - qtd; saída: anterior = posterior + qtd; ajuste: mantém a leitura inicial.
-    if (tiposEntrada.includes(tipo)) saldoAnteriorReal = saldoPosterior - parseFloat(quantidade);
-    else if (tiposSaida.includes(tipo)) saldoAnteriorReal = saldoPosterior + parseFloat(quantidade);
+    if (tiposEntrada.includes(tipo)) saldoAnteriorReal = Q.qtd(saldoPosterior - parseFloat(quantidade));
+    else if (tiposSaida.includes(tipo)) saldoAnteriorReal = Q.qtd(saldoPosterior + parseFloat(quantidade));
     else saldoAnteriorReal = saldoAnterior;
 
     const locEntrada = tiposEntrada.includes(tipo) ? resolveLocalizacaoEntrada(material, localizacao_destino_id) : null;
@@ -1947,7 +1952,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // saída RECUSADA.
     if (tiposEntrada.includes(tipo)) {
       const saldo = await getOrCreateSaldo(db, material_id, locEntrada, loteIdFinal);
-      await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         [quantidade, saldo.id]);
       // fix round 1: guarda a linha para o catch amplo poder reverter esta linha especifica se o
       // INSERT do ledger falhar depois — `entradaCreditoAplicado` so existe quando serieObrigatoria
@@ -1993,7 +1998,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         // Com lote em material que permite saldo negativo: a linha continua sendo criada, porque
         // aqui ela PODE ficar negativa e precisa existir para `syncMaterialTotals` somar.
         const saldo = await getOrCreateSaldo(db, material_id, locSaida, loteIdFinal);
-        await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
           [quantidade, saldo.id]);
         saldoLinhasSaidaParaReverter = [{ id: saldo.id, quantidade }];
       }
@@ -2038,7 +2043,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
           // essas variáveis) tentaria reverter de novo o que esta compensação local já reverteu.
           for (const l of saldoLinhasSaidaParaReverter) {
             await dbRun(db, `UPDATE estoque_saldo_almoxarifado
-              SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+              SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
               [l.quantidade, l.id]);
           }
           saldoLinhasSaidaParaReverter = [];
@@ -2065,7 +2070,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
      projeto_id, os_id, cliente_id, documento_vinculado, justificativa, reserva_id, recebimento_id, requisicao_id,
      centro_custo_id, emergencial, regularizacao_pendente, codigo_lido_origem, codigo_lido_destino, motivo_id)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
-    material_id, tipo, quantidade, saldoAnteriorReal, saldoPosterior,
+    material_id, tipo, quantidade, Q.qtd(saldoAnteriorReal), Q.qtd(saldoPosterior),
     motivo || null, referencia || null, observacoes || null,
     user.id, user.nome || user.email,
     localizacao_origem_id || null, localizacao_destino_id || null, loteCodigoFinal, loteIdFinal, material.unidade,
@@ -2108,8 +2113,8 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // **e** em silêncio.
     if (retencaoAplicada) {
       await dbRun(db, `UPDATE materiais_almoxarifado
-        SET quantidade_bloqueada   = COALESCE(quantidade_bloqueada,0) - ?,
-            quantidade_em_inspecao = COALESCE(quantidade_em_inspecao,0) - ?,
+        SET quantidade_bloqueada   = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) - ?')},
+            quantidade_em_inspecao = ${Q.qtdSql('COALESCE(quantidade_em_inspecao,0) - ?')},
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?`, [retencaoAplicada.bloqueada, retencaoAplicada.emInspecao, material_id]);
     }
@@ -2118,7 +2123,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     }
     for (const l of saldoLinhasSaidaParaReverter) {
       await dbRun(db, `UPDATE estoque_saldo_almoxarifado
-        SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         [l.quantidade, l.id]);
     }
     await reverterFisicoDaSaida();
@@ -2127,18 +2132,18 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // [+ custo médio], (3) linha de saldo; reverte (3), (2), depois (1).
     if (entradaCreditoAplicado) {
       if (entradaCreditoAplicado.saldoLinhaId) {
-        await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
           [entradaCreditoAplicado.quantidade, entradaCreditoAplicado.saldoLinhaId]);
       }
       if (entradaCreditoAplicado.custoAplicado) {
         // Restaura os valores EXATOS de antes (não só subtrai a quantidade) — o UPDATE de crédito
         // recalculou custo_medio/custo_unitario juntos com quantidade_atual num único statement.
         await dbRun(db, `UPDATE materiais_almoxarifado
-          SET quantidade_atual = quantidade_atual - ?, custo_medio = ?, custo_unitario = ?, updated_at = CURRENT_TIMESTAMP
+          SET quantidade_atual = ${Q.qtdSql('quantidade_atual - ?')}, custo_medio = ?, custo_unitario = ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?`,
           [entradaCreditoAplicado.quantidade, entradaCreditoAplicado.custoMedioAnterior, entradaCreditoAplicado.custoUnitarioAnterior, material_id]);
       } else {
-        await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_atual = ${Q.qtdSql('quantidade_atual - ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
           [entradaCreditoAplicado.quantidade, material_id]);
       }
     }
@@ -2149,7 +2154,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     }
     if (ajusteSerieFisicoAnterior !== null) {
       await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [ajusteSerieFisicoAnterior, material_id]);
+        [Q.qtd(ajusteSerieFisicoAnterior), material_id]);
     }
     throw e;
   }
@@ -2241,6 +2246,8 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
   if (!motivo) throw Object.assign(new Error('Justificativa obrigatória para cancelamento'), { status: 400 });
   const mov = await dbGet(db, 'SELECT * FROM movimentacoes_almoxarifado WHERE id = ?', [movimentoId]);
   if (!mov) throw Object.assign(new Error('Movimentação não encontrada'), { status: 404 });
+  // Etapa 96 (Fase 2, M3): o livro antigo pode guardar a quantidade torta — o estorno reverte o numero arredondado.
+  mov.quantidade = Q.qtd(mov.quantidade);
   // Etapa 74 (Fase 5): a movimentacao ja cancelada e recusada AQUI, antes de qualquer efeito — ate a Fase 5 so
   // o claim (la embaixo) recusava, e o segundo POST de estorno numa ENTRADA_COMPRA ja estornada liberava ANTES
   // a reserva da chegada de quem esperava (liberarParaEstorno) e so depois respondia "ja cancelada": a
@@ -2551,8 +2558,8 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       // saldo_posterior do livro coerente mesmo sob concorrência.
       const permiteNegativo = material.permite_saldo_negativo || (await getConfig(db, 'permite_saldo_negativo_global')) === '1';
       const row = await dbGet(db, `UPDATE materiais_almoxarifado
-        SET quantidade_atual = quantidade_atual - ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND (? = 1 OR ${disponivelSql()} >= ?)
+        SET quantidade_atual = ${Q.qtdSql('quantidade_atual - ?')}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND (? = 1 OR ${disponivelSql()} >= ? ${Q.FOLGA_SQL})
         RETURNING quantidade_atual`,
         [mov.quantidade, mov.material_id, permiteNegativo ? 1 : 0, mov.quantidade]);
       if (!row) throw Object.assign(new Error(await mensagemEstornoSemDisponivel(db, mov)), { status: 400 });
@@ -2643,7 +2650,7 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       // mal-definida após movimentos intermediários; corrigir via nova entrada com custo. Ver
       // specs/modulo-almoxarifado/03-motor-estoque/README.md.
     } else if (tiposSaida.includes(mov.tipo)) {
-      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_atual = ${Q.qtdSql('quantidade_atual + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         [mov.quantidade, mov.material_id]);
       saldoDepois = saldoAntes + parseFloat(mov.quantidade);
       // Fix round 1 (Task 5): a partir daqui quantidade_atual JÁ foi creditado — se algo adiante
@@ -2689,12 +2696,14 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         // SÓ a localização por esse delta e recalculamos o total a partir da soma real
         // (`syncMaterialTotals` — restaurada no review round 3, decisão de negócio do cliente:
         // ver o comentário no ramo forward de registrarMovimentacao).
-        const delta = mov.saldo_posterior - mov.saldo_anterior;
+        // Etapa 96 (Fase 2, K1): o delta e uma DIFERENCA calculada em JS (1 - 0,7 = 0.30000000000000004) — sem arredondar
+        // e sem folga, a linha 0,3 limpa recusava o estorno.
+        const delta = Q.qtd(mov.saldo_posterior - mov.saldo_anterior);
         const saldoLoc = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, mov.lote_id);
-        if (saldoLoc.quantidade - delta < 0) {
+        if (!Q.cabe(delta, saldoLoc.quantidade)) {
           throw Object.assign(new Error('Não é possível estornar: a localização não comporta a reversão (saldo já consumido)'), { status: 400 });
         }
-        await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
           [delta, saldoLoc.id]);
         // Etapa 51 (RN-04; Fase 5, MINOR): o estorno do AJUSTE com localização recalcula o total
         // pela soma. No AJUSTE de IDA a absorção das linhas sem lote negativas se justifica — é uma
@@ -2708,7 +2717,7 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
           const tot = await dbGet(db, 'SELECT COALESCE(SUM(quantidade),0) as t FROM estoque_saldo_almoxarifado WHERE material_id = ?',
             [mov.material_id]);
           if (Number(tot.t) < -EPS) {
-            await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
               [delta, saldoLoc.id]);
             throw Object.assign(new Error('Não é possível estornar: o saldo já foi consumido (o estorno deixaria o material negativo)'),
               { status: 400 });
@@ -2720,8 +2729,8 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       } else {
         // AJUSTE sem localização — comportamento original: SET absoluto do total do material.
         await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-          [mov.saldo_anterior, mov.material_id]);
-        saldoDepois = mov.saldo_anterior;
+          [Q.qtd(mov.saldo_anterior), mov.material_id]);
+        saldoDepois = Q.qtd(mov.saldo_anterior);
         await syncSaldoLocalizacaoPadrao(db, mov.material_id, mov.lote_id);
       }
     } else if (mov.tipo === 'AJUSTE_INVENTARIO') {
@@ -2736,11 +2745,11 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       // mov.lote_id (Etapa 6, Task 3): estorna a MESMA linha de lote que a transferência moveu.
       const origem = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_origem_id, mov.lote_id);
       const destino = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, mov.lote_id);
-      if (destino.quantidade < mov.quantidade) {
+      if (!Q.cabe(mov.quantidade, destino.quantidade)) {
         throw Object.assign(new Error('Não é possível estornar: o destino não tem mais o saldo transferido'), { status: 400 });
       }
-      await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, destino.id]);
-      await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, origem.id]);
+      await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [mov.quantidade, destino.id]);
+      await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [mov.quantidade, origem.id]);
     } else if (mov.tipo === 'BLOQUEIO') {
       // Guarda condicional em vez de MAX(0,...) — mesma correção do ramo DESBLOQUEIO de
       // registrarMovimentacao (achado do review final). Com a saturação, estornar um BLOQUEIO
@@ -2749,8 +2758,8 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       // bloqueio vivo por trás, a dois cliques na tela do livro. Recusando aqui, o BLOQUEIO
       // continua vivo — e o catch abaixo desfaz o claim, então ele não fica preso como cancelado.
       const claim = await dbGet(db, `UPDATE materiais_almoxarifado
-        SET quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) - ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND COALESCE(quantidade_bloqueada,0) >= ?
+        SET quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) - ?')}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND COALESCE(quantidade_bloqueada,0) >= ? ${Q.FOLGA_SQL}
         RETURNING id`, [mov.quantidade, mov.material_id, mov.quantidade]);
       if (!claim) {
         throw Object.assign(new Error(
@@ -2758,7 +2767,7 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
           { status: 400 });
       }
     } else if (mov.tipo === 'DESBLOQUEIO') {
-      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = COALESCE(quantidade_bloqueada,0) + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [mov.quantidade, mov.material_id]);
+      await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [mov.quantidade, mov.material_id]);
     }
 
     const r = await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
@@ -2766,7 +2775,7 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
        usuario_id, usuario_nome, localizacao_origem_id, localizacao_destino_id, lote, lote_id, unidade,
        projeto_id, os_id, cliente_id, documento_vinculado, justificativa, centro_custo_id)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
-      mov.material_id, 'ESTORNO', mov.quantidade, saldoAntes, saldoDepois,
+      mov.material_id, 'ESTORNO', mov.quantidade, Q.qtd(saldoAntes), Q.qtd(saldoDepois),
       `Estorno mov. #${movimentoId}`, mov.referencia, null,
       user.id, user.nome || user.email,
       mov.localizacao_destino_id, mov.localizacao_origem_id, mov.lote, mov.lote_id, mov.unidade,
@@ -2805,18 +2814,18 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
     }
     if (compensarLinha) {
       await dbRun(db, `UPDATE estoque_saldo_almoxarifado
-        SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP
+        SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP
         WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS ?`,
         [compensarLinha.delta, mov.material_id, compensarLinha.loc || null, compensarLinha.loteId || null]);
     }
     if (compensarLinhasClaim) {
       for (const l of compensarLinhasClaim) {
         await dbRun(db, `UPDATE estoque_saldo_almoxarifado
-          SET quantidade = quantidade + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [l.quantidade, l.id]);
+          SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [l.quantidade, l.id]);
       }
     }
     if (compensarQuantidadeMaterial) {
-      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_atual = ${Q.qtdSql('quantidade_atual + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         [compensarQuantidadeMaterial, mov.material_id]);
     }
     if (compensarSyncLocalizacaoPadrao) {
@@ -2980,7 +2989,7 @@ async function criarReserva(db, user, data, opcoes = {}) {
   if (!sistema && !can(user, 'reservar')) throw Object.assign(new Error('Sem permissão para reservar'), { status: 403 });
 
   const material = await getMaterial(db, material_id);
-  const qtd = Number(quantidade);
+  const qtd = Q.qtd(quantidade); // Etapa 96 (B482): arredondada na porta; 0,0000004 vira 0 e cai na recusa abaixo
   if (!(qtd > 0)) throw Object.assign(new Error('Quantidade da reserva deve ser maior que zero'), { status: 400 });
 
   // Hold atômico: o próprio UPDATE valida o disponível sob o lock de linha do SQLite (mesmo
@@ -2988,8 +2997,8 @@ async function criarReserva(db, user, data, opcoes = {}) {
   // passarem e `quantidade_reservada` ficaria acima do físico — e reserva acima do físico é
   // reserva IMPOSSÍVEL de consumir, porque a baixa contra reserva também exige saldo físico.
   const hold = await dbGet(db, `UPDATE materiais_almoxarifado
-    SET quantidade_reservada = COALESCE(quantidade_reservada,0) + ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND ${disponivelSql()} >= ?
+    SET quantidade_reservada = ${Q.qtdSql('COALESCE(quantidade_reservada,0) + ?')}, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND ${disponivelSql()} >= ? ${Q.FOLGA_SQL}
     RETURNING id`, [qtd, material_id, qtd]);
   if (!hold) {
     const atual = await getMaterial(db, material_id);
@@ -3036,7 +3045,7 @@ async function criarReserva(db, user, data, opcoes = {}) {
   } catch (e) {
     // Não há transação neste serviço (padrão do módulo: UPDATE condicional único), então o hold
     // acima é compensado à mão — senão o material ficaria com saldo reservado sem reserva viva.
-    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_reservada = MAX(0, COALESCE(quantidade_reservada,0) - ?), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_reservada = ${Q.qtdSql('MAX(0, COALESCE(quantidade_reservada,0) - ?)')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
       [qtd, material_id]);
     if (reservaId) await dbRun(db, 'DELETE FROM reservas_material_almoxarifado WHERE id = ?', [reservaId]);
     throw e;
@@ -3068,8 +3077,8 @@ async function liberarReserva(db, user, reservaId, quantidade = null, options = 
     throw Object.assign(new Error(`Reserva ${String(reserva.status).toLowerCase()} não pode ser liberada`), { status: 400 });
   }
 
-  const restante = reserva.quantidade - (reserva.quantidade_utilizada || 0);
-  const qtd = quantidade == null ? restante : Number(quantidade);
+  const restante = Q.qtd(reserva.quantidade - (reserva.quantidade_utilizada || 0));
+  const qtd = quantidade == null ? restante : Q.qtd(quantidade);
   if (!(qtd > 0)) throw Object.assign(new Error('Quantidade a liberar deve ser maior que zero'), { status: 400 });
   // Etapa 67 (Fase 5): tolerancia EPS nas duas comparacoes. Reserva de 1 consumida em 0,7 tem
   // saldo 0,30000000000000004; liberar os 0,3 que a tela mostra virava liberacao PARCIAL e deixava
@@ -3086,7 +3095,7 @@ async function liberarReserva(db, user, reservaId, quantidade = null, options = 
   // material tem reservado; liberação total preserva a quantidade original como histórico.
   const claim = await dbGet(db, `UPDATE reservas_material_almoxarifado
     SET status = ?,
-        quantidade = quantidade - ?,
+        quantidade = ${Q.qtdSql('quantidade - ?')},
         liberado_por = ?, liberado_em = CURRENT_TIMESTAMP, motivo_liberacao = ?,
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ? AND status = 'ATIVA' AND (quantidade - COALESCE(quantidade_utilizada,0)) >= ? - ${EPS}
