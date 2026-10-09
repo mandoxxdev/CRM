@@ -268,25 +268,25 @@ process.on('exit', (code) => {
   });
 
   // ─────────────────────────── a varredura do codigo-fonte ───────────────────────────
-  await test('[96 RN-01] varredura: nenhuma escrita incremental de quantidade nos servicos da T2 fora de Q.qtdSql (com controle do padrao)', async () => {
-    const COL = '(quantidade(?:_atual|_reservada|_bloqueada|_em_inspecao|_em_terceiros|_utilizada|_retornada|_recebida|_entregue|_separada)?)';
-    const cru = new RegExp(`\\b${COL}\\s*=\\s*(?:MAX\\(0,\\s*)?(?:COALESCE\\(\\1,\\s*0\\)|\\1)\\s*[+-]\\s*\\?`, 'g');
-    const culpados = (texto) => texto.split('\n').map((l, i) => [i + 1, l.trim()])
-      .filter(([, l]) => { cru.lastIndex = 0; return cru.test(l) && !/Q\.qtdSql\(/.test(l) && !/^\s*(\*|\/\/)/.test(l); });
-    assert.strictEqual(culpados('SET quantidade_retornada = COALESCE(quantidade_retornada,0) + ?').length, 1, 'controle do padrao');
-    assert.strictEqual(culpados('SET quantidade_recebida = MAX(0, COALESCE(quantidade_recebida, 0) - ?)').length, 1, 'controle do padrao');
-    assert.strictEqual(culpados("SET quantidade_retornada = ${Q.qtdSql('COALESCE(quantidade_retornada,0) + ?')}").length, 0);
-    const arquivos = ['inspectionService.js', 'thirdPartyService.js', 'receiptService.js', 'scrapDisposalService.js', 'returnService.js'];
+  await test('[96 RN-01] varredura: nenhuma escrita incremental de quantidade nos servicos da T2 e na requisicao fora de Q.qtdSql (com controle do padrao)', async () => {
+    // Mudado na Etapa 96 Fase 5 (testes 2): o helper tests/helpers/varreduraQuantidade.js (arquivo inteiro, so o trecho
+    // de Q.qtdSql excluido) e requisitionService.js na lista (as 5 escritas da entrega e da separacao).
+    const V = require('../helpers/varreduraQuantidade');
+    assert.strictEqual(V.escritasCruas('SET quantidade_retornada = COALESCE(quantidade_retornada,0) + ?').length, 1, 'controle do padrao');
+    assert.strictEqual(V.escritasCruas('SET quantidade_recebida = MAX(0, COALESCE(quantidade_recebida, 0) - ?)').length, 1, 'controle do padrao');
+    assert.strictEqual(V.escritasCruas("SET quantidade_retornada = ${Q.qtdSql('COALESCE(quantidade_retornada,0) + ?')}").length, 0);
+    const arquivos = ['inspectionService.js', 'thirdPartyService.js', 'receiptService.js', 'scrapDisposalService.js', 'returnService.js',
+      'requisitionService.js'];
     const achados = {}; let embrulhadas = 0;
     for (const a of arquivos) {
       const fonte = fs.readFileSync(path.join(__dirname, '../../services/almoxarifado', a), 'utf8');
-      const c = culpados(fonte);
+      const c = V.escritasCruas(fonte);
       if (c.length) achados[a] = c;
-      embrulhadas += fonte.split('\n').filter((l) => /Q\.qtdSql\('(?:MAX\(0, )?(?:COALESCE\()?quantidade/.test(l)).length;
+      embrulhadas += V.embrulhadas(fonte);
     }
     assert.deepStrictEqual(achados, {}, 'escritas cruas');
-    // as 10 escritas da T2 (inspecao 2, recebimento 3, terceiros 5) — senao a varredura nao varreu
-    assert.ok(embrulhadas >= 10, `so ${embrulhadas} escritas embrulhadas — a varredura esta lendo os arquivos certos?`);
+    // as 10 escritas da T2 (inspecao 2, recebimento 3, terceiros 5) e as 5 da requisicao — senao a varredura nao varreu
+    assert.ok(embrulhadas >= 15, `so ${embrulhadas} escritas embrulhadas — a varredura esta lendo os arquivos certos?`);
   });
 
   // ─────────────────────────── Fase 5 — a mensagem da inspecao diz o numero arredondado ───────────────────────────

@@ -264,19 +264,33 @@ process.on('exit', (code) => {
   await test('[96 RN-01] varredura: nenhuma escrita incremental de quantidade em stockService.js fora de Q.qtdSql (com controle do padrao)', async () => {
     const fs = require('fs');
     const path = require('path');
-    const COL = '(quantidade(?:_atual|_reservada|_bloqueada|_em_inspecao|_em_terceiros|_utilizada|_retornada|_recebida|_entregue|_separada)?)';
-    const cru = new RegExp(`\\b${COL}\\s*=\\s*(?:MAX\\(0,\\s*)?(?:COALESCE\\(\\1,\\s*0\\)|\\1)\\s*[+-]\\s*\\?`, 'g');
-    const culpados = (texto) => texto.split('\n').map((l, i) => [i + 1, l])
-      .filter(([, l]) => { cru.lastIndex = 0; return cru.test(l) && !/Q\.qtdSql\(/.test(l) && !/^\s*(\*|\/\/)/.test(l); });
-    // controle positivo: o padrao acha a escrita crua (e a embrulhada nao)
-    assert.strictEqual(culpados("await dbRun(db, 'UPDATE t SET quantidade = quantidade - ?, x = 1 WHERE id = ?');").length, 1);
-    assert.strictEqual(culpados('SET quantidade_reservada = MAX(0, COALESCE(quantidade_reservada,0) - ?),').length, 1);
-    assert.strictEqual(culpados("SET quantidade = ${Q.qtdSql('quantidade - ?')},").length, 0);
+    // Mudado na Etapa 96 Fase 5 (testes 2): a regex por linha virou tests/helpers/varreduraQuantidade.js — arquivo
+    // inteiro, so o trecho dentro de Q.qtdSql(...) excluido, colunas de COLUNAS_LEGADO, qualquer forma da escrita.
+    const V = require('../helpers/varreduraQuantidade');
+    // controles positivos: cada forma da escrita crua e achada (e a embrulhada, o WHERE e o JS nao)
+    const formas = [
+      "await dbRun(db, 'UPDATE t SET quantidade = quantidade - ?, x = 1 WHERE id = ?');",
+      'SET quantidade_reservada = MAX(0, COALESCE(quantidade_reservada,0) - ?),',
+      'SET quantidade_atual =\n  quantidade_atual - ? WHERE id = ?', // em duas linhas
+      "SET quantidade_atual = ${Q.qtdSql('quantidade_atual + ?')}, quantidade_reservada = quantidade_reservada + ? WHERE", // ao lado de uma embrulhada
+      'SET quantidade_reservada = IFNULL(quantidade_reservada, 0) + ?',
+      'SET quantidade_reservada = COALESCE( quantidade_reservada, 0.0) + ?',
+      'SET quantidade_atual = ? + quantidade_atual',
+      'SET quantidade_atual = (quantidade_atual - ?)',
+      'SET quantidade_atendida = COALESCE(quantidade_entregue, quantidade_atendida, 0) + ?',
+      'SET quantidade_atual = quantidade_atual - ${q}',
+      'set quantidade = quantidade - ?',
+    ];
+    for (const x of formas) assert.strictEqual(V.escritasCruas(x).length, 1, `a forma nao foi achada: ${x}`);
+    for (const x of ["SET quantidade = ${Q.qtdSql('quantidade - ?')}, x = 1", 'WHERE quantidade >= ? - 1e-9 AND quantidade_atual = ?',
+      'item.quantidade_separada = novaSeparada - outra;']) {
+      assert.deepStrictEqual(V.escritasCruas(x), [], `falso positivo: ${x}`);
+    }
+    assert.ok(V.COLUNAS.includes('quantidade_atendida') && V.COLUNAS.includes('quantidade_solicitada'), V.COLUNAS.join());
     const fonte = fs.readFileSync(path.join(__dirname, '../../services/almoxarifado/stockService.js'), 'utf8');
-    assert.deepStrictEqual(culpados(fonte), [], 'escritas cruas');
-    // e o padrao acha alguma coisa no arquivo de verdade (as embrulhadas) — senao a varredura nao varreu
-    const embrulhadas = fonte.split('\n').filter((l) => /Q\.qtdSql\('(?:MAX\(0, )?(?:COALESCE\()?quantidade/.test(l)).length;
-    assert.ok(embrulhadas >= 50, `so ${embrulhadas} escritas embrulhadas — a varredura esta lendo o arquivo certo?`);
+    assert.deepStrictEqual(V.escritasCruas(fonte), [], 'escritas cruas');
+    // e o arquivo de verdade tem as embrulhadas — senao a varredura nao varreu
+    assert.ok(V.embrulhadas(fonte) >= 50, `so ${V.embrulhadas(fonte)} escritas embrulhadas — a varredura esta lendo o arquivo certo?`);
     // (Fase 2, I4) as escritas ABSOLUTAS (`SET col = ?`) gravam um numero calculado em JS: lista nominal com o 1o
     // parametro de cada uma. `saldos.total` vem do ROUND da soma no SQL; `parseFloat(quantidade)` e `saldoPosterior`
     // vem da quantidade ja arredondada na porta; as outras passam por Q.qtd. Uma escrita absoluta nova muda a lista.
@@ -293,6 +307,24 @@ process.on('exit', (code) => {
       ['quantidade_atual', 'saldoPosterior'], ['quantidade_atual', 'saldoPosterior'],
       ['quantidade_atual', 'Q.qtd(ajusteSerieFisicoAnterior)'], ['quantidade_atual', 'Q.qtd(mov.saldo_anterior)'],
     ]);
+  });
+
+  await test('[96 RN-01] (Fase 5) varredura de services/almoxarifado inteiro: nenhuma escrita incremental de quantidade fora de Q.qtdSql', async () => {
+    const fs = require('fs');
+    const path = require('path');
+    const V = require('../helpers/varreduraQuantidade');
+    const dir = path.join(__dirname, '../../services/almoxarifado');
+    const achados = {}; let total = 0;
+    const arquivos = fs.readdirSync(dir).filter((a) => a.endsWith('.js'));
+    for (const a of arquivos) {
+      const fonte = fs.readFileSync(path.join(dir, a), 'utf8');
+      const c = V.escritasCruas(fonte);
+      if (c.length) achados[a] = c;
+      total += V.embrulhadas(fonte);
+    }
+    assert.deepStrictEqual(achados, {}, 'escritas cruas');
+    assert.ok(arquivos.includes('requisitionService.js') && arquivos.length >= 40, arquivos.join());
+    assert.ok(total >= 75, `so ${total} escritas embrulhadas no diretorio`);
   });
 
   // RN-02 — o pedido que cabe passa, inclusive no legado escrito direto
@@ -570,6 +602,78 @@ process.on('exit', (code) => {
     const c = await como('ADMIN').post(`${API}/movimentacoes/${b.id}/cancelar`, { motivo: 'teste da etapa 96' });
     assert.strictEqual(c.status, 400, JSON.stringify(c.body));
     assert.strictEqual(c.body.error, 'Não é possível estornar: o bloqueio já foi desfeito (quantidade bloqueada: 0.2)');
+  });
+
+  // ─────────────────────────── Fase 5, testes 1 — as guardas de folga que ninguem testava ───────────────────────────
+  // A revisao sabotou as sete juntas e a suite ficou 335/335. Um caso por guarda, cada um com o legado escrito direto
+  // (ou, na pre-checagem do bloqueado, colunas LIMPAS cuja diferenca sai torta), derrubado pela sabotagem da sua guarda.
+  const stockServiceF5 = require('../../services/almoxarifado/stockService');
+  const motorF5 = (p) => stockServiceF5.registrarMovimentacao(db, { ...USERS.ADMIN }, { motivo: 'e96 f5', justificativa: 'teste da etapa 96', ...p });
+  await test('[96 RN-02] (Fase 5) pre-checagem do bloqueado, colunas LIMPAS: fisico 0,3 e bloqueado 0,1 -> SAIDA 0,2 -> 201', async () => {
+    const m = await material(0); await entrar(m, 0.3);
+    assert.strictEqual((await bloquear(m, 0.1)).status, 200);
+    const s = await mov(m, 'SAIDA', 0.2);
+    assert.strictEqual(s.status, 201, JSON.stringify(s.body));
+    assert.deepStrictEqual({ ...(await mat(m)) }, { quantidade_atual: 0.1, quantidade_reservada: 0, quantidade_bloqueada: 0.1 });
+  });
+  await test('[96 RN-02] (Fase 5) LIBERACAO_INSPECAO de 1 com em_inspecao legado 0.9999… -> passa, em_inspecao 0', async () => {
+    const m = await material(0); await entrar(m, 1);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_em_inspecao = ? WHERE id = ?', [TORTO, m]);
+    await motorF5({ material_id: m, tipo: 'LIBERACAO_INSPECAO', quantidade: 1 });
+    assert.strictEqual((await dbGet(db, 'SELECT quantidade_em_inspecao q FROM materiais_almoxarifado WHERE id = ?', [m])).q, 0);
+  });
+  await test('[96 RN-02] (Fase 5) RETORNO_TERCEIRO de 1 com em_terceiros legado 0.9999… -> passa, em_terceiros 0', async () => {
+    const m = await material(0); await entrar(m, 1);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_em_terceiros = ? WHERE id = ?', [TORTO, m]);
+    await motorF5({ material_id: m, tipo: 'RETORNO_TERCEIRO', quantidade: 1 });
+    assert.strictEqual((await dbGet(db, 'SELECT quantidade_em_terceiros q FROM materiais_almoxarifado WHERE id = ?', [m])).q, 0);
+  });
+  await test('[96 RN-02] (Fase 5) PERDA_TERCEIRO de 1 com em_terceiros e fisico legados 0.9999… -> passa (as duas folgas do claim), os dois 0', async () => {
+    const m = await material(0); await entrar(m, 1);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_em_terceiros = ?, quantidade_atual = ? WHERE id = ?', [TORTO, TORTO, m]);
+    await motorF5({ material_id: m, tipo: 'PERDA_TERCEIRO', quantidade: 1 });
+    const r = await dbGet(db, 'SELECT quantidade_em_terceiros t, quantidade_atual a FROM materiais_almoxarifado WHERE id = ?', [m]);
+    assert.deepStrictEqual([r.t, r.a], [0, 0]);
+  });
+  await test('[96 RN-02] (Fase 5) PERDA_TERCEIRO de 1 com SO o fisico legado 0.9999… (em_terceiros 1 limpo) -> passa', async () => {
+    const m = await material(0); await entrar(m, 1);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_em_terceiros = 1, quantidade_atual = ? WHERE id = ?', [TORTO, m]);
+    await motorF5({ material_id: m, tipo: 'PERDA_TERCEIRO', quantidade: 1 });
+    const r = await dbGet(db, 'SELECT quantidade_em_terceiros t, quantidade_atual a FROM materiais_almoxarifado WHERE id = ?', [m]);
+    assert.deepStrictEqual([r.t, r.a], [0, 0]);
+  });
+  await test('[96 RN-02] (Fase 5) estornar o BLOQUEIO de 1 com o bloqueado legado 0.9999… -> 200, bloqueado 0', async () => {
+    const m = await material(0); await entrar(m, 2);
+    assert.strictEqual((await bloquear(m, 1)).status, 200);
+    const b = await ultimaMov(m);
+    assert.strictEqual(b.tipo, 'BLOQUEIO', 'premissa: a ultima movimentacao e o BLOQUEIO');
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = ? WHERE id = ?', [TORTO, m]);
+    const c = await como('ADMIN').post(`${API}/movimentacoes/${b.id}/cancelar`, { motivo: 'teste da etapa 96' });
+    assert.strictEqual(c.status, 200, JSON.stringify(c.body));
+    assert.strictEqual((await mat(m)).quantidade_bloqueada, 0);
+  });
+  await test('[96 RN-02] (Fase 5) piso de ajustarSaldoExistente: estornar a ENTRADA de 1 com a linha do LOTE legada 0.9999… -> 200, linha 0', async () => {
+    const A = await loc();
+    const m = await material(0);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_lote = 1 WHERE id = ?', [m]);
+    await movOk(m, 'ENTRADA', 1, { lote: 'L96F5', localizacao_destino_id: A });
+    const e = await ultimaMov(m);
+    assert.ok(e.lote_id, 'premissa: a entrada tem lote');
+    await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = ? WHERE material_id = ?', [TORTO, m]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ? WHERE id = ?', [TORTO, m]);
+    const c = await como('ADMIN').post(`${API}/movimentacoes/${e.id}/cancelar`, { motivo: 'teste da etapa 96' });
+    assert.strictEqual(c.status, 200, JSON.stringify(c.body));
+    assert.strictEqual(await linha(m, A, e.lote_id), 0);
+  });
+
+  // ─────────────────────────── Fase 5, testes 3 — RESERVADA_MENOS_SQL grava arredondado ───────────────────────────
+  await test('[96 RN-01] (Fase 5) reserva 0,3, liberar 0,1 -> o reservado do material e 0,2 (RESERVADA_MENOS_SQL arredonda), nao 0.19999999999999998', async () => {
+    const m = await material(0); await entrar(m, 1);
+    const r = await reservar(m, 0.3);
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    const l = await como('ADMIN').post(`${API}/reservas/${r.body.id}/liberar`, { quantidade: 0.1, motivo: 'e96 f5' });
+    assert.strictEqual(l.status, 200, JSON.stringify(l.body));
+    assert.strictEqual((await mat(m)).quantidade_reservada, 0.2);
   });
 
   terminou = true;

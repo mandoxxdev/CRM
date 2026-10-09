@@ -489,19 +489,19 @@ let seq = 0;
     assert.strictEqual(await reservadoDo(m), 0, 'sobra de ponto flutuante ficou presa no reservado do material');
   });
 
-  await test('[Fase5/B] (legado, Etapa 96) utilizada e reservado tortos escritos direto: a ultima entrega de 0,1 fecha CONSUMIDA e zera o reservado', async () => {
+  // Mudado na Etapa 96 Fase 5 (testes 4): o legado ABAIXO (utilizada 0.8999999999999999) ficou vazio — o motor arredonda
+  // a utilizada (0,9 + 0,1 = 1 exato) e a sobra da 0, entao a comparacao sem a tolerancia (`<= 0`) passava 29/0. O legado
+  // ACIMA nao fica vazio: a reserva escrita 1.0000000000000002 consumida em 1 sobra 2,2e-16 — so a tolerancia (a sobra
+  // arredondada, Fase 5 R1) a fecha; sem ela a reserva fica ATIVA (zumbi) com o reservado preso.
+  await test('[Fase5/B] (legado, Etapa 96) reserva e reservado tortos ACIMA escritos direto (1.0000000000000002): entregar 1 fecha CONSUMIDA e zera o reservado', async () => {
     const m = await material({ saldo: 5 });
     const r = await criarAprovada([[m, 1]], null);
     await separar(r.id, [[r.itens[0], 1]]);
-    for (let i = 0; i < 9; i++) {
-      // eslint-disable-next-line no-await-in-loop
-      await entregar(r.id, [[r.itens[0], 0.1]]);
-    }
-    const res9 = await reservaDoItem(r.itens[0]);
-    // o estado que o motor antigo deixava depois de nove entregas de 0,1
-    await dbRun(db, 'UPDATE reservas_material_almoxarifado SET quantidade_utilizada = ? WHERE id = ?', [0.8999999999999999, res9.id]);
-    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_reservada = ? WHERE id = ?', [0.10000000000000009, m]);
-    await entregar(r.id, [[r.itens[0], 0.1]]);
+    const res0 = await reservaDoItem(r.itens[0]);
+    await dbRun(db, 'UPDATE reservas_material_almoxarifado SET quantidade = ? WHERE id = ?', [1.0000000000000002, res0.id]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_reservada = ? WHERE id = ?', [1.0000000000000002, m]);
+    assert.notStrictEqual((await reservaDoItem(r.itens[0])).quantidade, 1, 'premissa: a reserva ficou torta');
+    await entregar(r.id, [[r.itens[0], 1]]);
     const res = await reservaDoItem(r.itens[0]);
     assert.strictEqual(res.status, 'CONSUMIDA', `reserva zumbi: ${JSON.stringify(res)}`);
     assert.strictEqual(await reservadoDo(m), 0, 'sobra de ponto flutuante ficou presa no reservado do material');
