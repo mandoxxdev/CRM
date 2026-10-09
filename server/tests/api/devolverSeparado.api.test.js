@@ -503,6 +503,28 @@ process.on('exit', (code) => {
     assert.strictEqual(r2.status, 200, JSON.stringify(r2.body)); assert.strictEqual(r2.body.status, 'AGUARDANDO_APROVACAO_VALOR');
   });
 
+  // Fase 5 (revisor 2, S3b): a seta aplicada tambem aos status de pre-separacao passava verde — so 4 dos 8 status com
+  // caixa que nao sao PRONTA tinham caso. Todos: o status fica igual, na resposta, no banco e na trilha.
+  await test('[98 RN-03] (Fase 5) cada status de STATUS_COM_CAIXA que nao e PRONTA: devolver 1 -> 200 e o status fica igual (resposta, banco, trilha)', async () => {
+    const outros = maquina.STATUS_COM_CAIXA.filter((s) => s !== 'PRONTA_PARA_RETIRADA');
+    assert.strictEqual(outros.length, 8, `premissa: ${JSON.stringify(outros)}`);
+    const errados = [];
+    for (const st of outros) {
+      // eslint-disable-next-line no-await-in-loop
+      const c = await montagem();
+      // eslint-disable-next-line no-await-in-loop
+      await dbRun(db, 'UPDATE requisicoes_almoxarifado SET status = ? WHERE id = ?', [st, c.R]);
+      // eslint-disable-next-line no-await-in-loop
+      const r = await devolver(c.R, [[c.ids[0], 1]]);
+      // eslint-disable-next-line no-await-in-loop
+      const t = await trilha(c.R);
+      // eslint-disable-next-line no-await-in-loop
+      const medido = [r.status, r.body.status, await status(c.R), t.length && t[0].status_antes, t.length && t[0].status_depois];
+      if (JSON.stringify(medido) !== JSON.stringify([200, st, st, st, st])) errados.push({ st, medido });
+    }
+    assert.deepStrictEqual(errados, []);
+  });
+
   await test('[98 RN-03] esvaziada a EM_SEPARACAO com o limite de valor abaixo do custo, separar de novo -> 403 V403b (a alcada vale de novo)', async () => {
     const chaves = ['liberacao_valor_ativo', 'liberacao_valor_limite', 'liberacao_valor_aprovadores'];
     const antes = await dbAll(db, `SELECT chave, valor FROM configuracoes_almoxarifado WHERE chave IN (${chaves.map(() => '?').join(',')})`, chaves);
@@ -562,6 +584,49 @@ process.on('exit', (code) => {
     assert.strictEqual(r.status, 200); assert.strictEqual(r.body.conferencia_limpa, true);
     assert.strictEqual((await req1(c.R)).conferido_por_id, null);
     assert.ok((await etapas(c.R)).includes('REABRIR_SEPARACAO'), `fila: ${JSON.stringify(await etapas(c.R))}`);
+  });
+
+  // Fase 5 (revisor 2, sonda e98rv2-pronta-conf): a limpeza a partir de PRONTA nao tinha teste — pular a limpeza quando o
+  // status lido e PRONTA passava verde. Na PRONTA a seta (B504) roda ANTES da limpeza: sem a limpeza, a EM_SEPARACAO
+  // resultante ficaria com a conferencia da caixa antiga e o liberar passaria.
+  await test('[98 RN-04] (Fase 5) PRONTA conferida: devolver 1 -> EM_SEPARACAO, conferido_por_id null, liberar 400 C3, entregar 400 C3; reconferir -> liberar 200', async () => {
+    const c = await montagem({ critico: 1 });
+    assert.strictEqual((await conferir(c.R)).status, 200);
+    assert.strictEqual((await liberar(c.R)).status, 200);
+    assert.deepStrictEqual([(await req1(c.R)).status, (await req1(c.R)).conferido_por_id], ['PRONTA_PARA_RETIRADA', USERS.ALMOX2.id]);
+    const r = await devolver(c.R, [[c.ids[0], 1]]);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.deepStrictEqual([r.body.status, r.body.conferencia_limpa], ['EM_SEPARACAO', true]);
+    assert.deepStrictEqual(await req1(c.R), { status: 'EM_SEPARACAO', conferido_por_id: null, ativo: 1 });
+    await recusa(liberar(c.R), 400, C3);
+    await recusa(entregar(c.R, [[c.ids[0], 1]]), 400, C3);
+    assert.strictEqual((await conferir(c.R)).status, 200);
+    assert.strictEqual((await liberar(c.R)).status, 200);
+  });
+
+  // Fase 5 (revisor 2, S4b/S4c): o dados_novos da auditoria era lido so em pedacos (itens.length) — gravar o separado de
+  // antes no lugar do de depois, ou o status de antes no de depois com conferencia_limpa false, passava verde.
+  await test('[98 RN-07] (Fase 5) a auditoria DEVOLUCAO_CAIXA de uma chamada, inteira: dados_novos e dados_anteriores (PRONTA conferida, dois itens)', async () => {
+    const m1 = await material(0, 1); const m2 = await material(0);
+    const b = await req([[m1, 3], [m2, 2]]); await aprovar(b.R); await entrar(m1, 3); await entrar(m2, 2);
+    assert.strictEqual((await separar(b.R, [[b.ids[0], 3], [b.ids[1], 2]])).status, 200);
+    assert.strictEqual((await conferir(b.R)).status, 200);
+    assert.strictEqual((await liberar(b.R)).status, 200);
+    const conf = await dbGet(db, 'SELECT conferido_por_nome, conferido_em FROM requisicoes_almoxarifado WHERE id=?', [b.R]);
+    assert.strictEqual((await devolver(b.R, [[b.ids[0], 1], [b.ids[1], 2]], 'ALMOX', '  caiu  ')).status, 200);
+    const aud = await auditorias(b.R);
+    assert.strictEqual(aud.length, 1);
+    assert.deepStrictEqual(JSON.parse(aud[0].dados_novos), {
+      motivo: 'caiu', status_antes: 'PRONTA_PARA_RETIRADA', status_depois: 'EM_SEPARACAO', conferencia_limpa: true,
+      itens: [
+        { item_id: b.ids[0], material_id: m1, quantidade: 1, separado_antes: 3, separado_depois: 2 },
+        { item_id: b.ids[1], material_id: m2, quantidade: 2, separado_antes: 2, separado_depois: 0 },
+      ],
+    });
+    assert.deepStrictEqual(JSON.parse(aud[0].dados_anteriores), {
+      conferencia: { usuario_id: USERS.ALMOX2.id, usuario_nome: conf.conferido_por_nome, em: conf.conferido_em },
+    });
+    assert.strictEqual(aud[0].usuario_id, USERS.ALMOX.id);
   });
 
   await test('[98 RN-04] sem conferencia gravada: conferencia_limpa false e nenhuma conferencia em dados_anteriores', async () => {

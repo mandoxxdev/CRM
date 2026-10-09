@@ -43,8 +43,10 @@ jest.mock('../../context/AuthContext', () => ({
   useAuth: () => ({ user: { id: 99, nome: 'Almoxarife Teste', role: 'user' } }),
 }));
 
+// Fase 5 (revisor 2): mutavel — o modo do solicitante (warehouseMode false) tambem e testado; volta a true no beforeEach.
+let mockWarehouseMode = true;
 jest.mock('./RequisicoesMaterialContext', () => ({
-  useRequisicoesMaterialContext: () => ({ warehouseMode: true, basePath: '', setor: null }),
+  useRequisicoesMaterialContext: () => ({ warehouseMode: mockWarehouseMode, basePath: '', setor: null }),
 }));
 
 const ITEM = {
@@ -75,12 +77,14 @@ let requisicao;
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   mockBloquear.mockImplementation(() => true);
+  mockWarehouseMode = true;
   api.get.mockImplementation((url) => {
-    if (url === '/almoxarifado/requisicoes') {
+    // o modo do solicitante le por /requisicoes-material (apiPrefix de RequisicoesList)
+    if (url === '/almoxarifado/requisicoes' || url === '/requisicoes-material') {
       const { itens, ...linha } = requisicao;
       return Promise.resolve({ data: [linha] });
     }
-    if (url === '/almoxarifado/requisicoes/55') return Promise.resolve({ data: requisicao });
+    if (url === '/almoxarifado/requisicoes/55' || url === '/requisicoes-material/55') return Promise.resolve({ data: requisicao });
     if (url === '/almoxarifado/configuracoes/liberacao-valor') return Promise.resolve({ data: { souAprovador: false } });
     return Promise.resolve({ data: [] });
   });
@@ -167,6 +171,15 @@ describe('Etapa 98 — Devolver à prateleira (o botão)', () => {
       expect(botaoDevolverItem(1)).toBeFalsy();
     });
 
+  // Fase 5 (revisor 2): tirar o `warehouseMode &&` do botão passava verde — o mock fixava true.
+  test('[98 F5] fora do modo almoxarifado (tela do solicitante), item com caixa: o botão não aparece', async () => {
+    mockWarehouseMode = false;
+    requisicao = montar({ status: 'EM_SEPARACAO' }, [{ quantidade_separada: 4 }]);
+    await renderizar();
+    expect(container.textContent).toContain('Chapa 3mm');
+    expect(botaoDevolverItem(1)).toBeFalsy();
+  });
+
   test('[98 T4] passa por bloquearSeNaoPode(separar_emitir) antes de abrir; recusado, o modal não abre', async () => {
     requisicao = montar();
     await renderizar();
@@ -249,6 +262,18 @@ describe('Etapa 98 — Devolver à prateleira (o modal)', () => {
     expect(modal()).toBeFalsy();
     expect(getsDe('/almoxarifado/requisicoes/55')).toBeGreaterThan(detalheAntes);
     expect(getsDe('/almoxarifado/requisicoes')).toBeGreaterThan(listaAntes);
+  });
+
+  // Fase 5 (revisor 2): 0,7 − 0,4 em ponto flutuante é 0,29999999999999993 — a caixa arredonda (caixaDoItem).
+  test('[98 F5] fração: separado 0,7 e entregue 0,4 -> "Na caixa: 0.3 PC", padrão 0.3, máx. 0.3', async () => {
+    requisicao = montar({}, [{ quantidade_separada: 0.7, quantidade_entregue: 0.4, quantidade_atendida: 0.4 }]);
+    await renderizar();
+    await abrirModal();
+    expect(modal().textContent).toContain('Na caixa: 0.3 PC');
+    expect(inputQtd().value).toBe('0.3');
+    expect(inputQtd().getAttribute('max')).toBe('0.3');
+    digitar(campoMotivo(), 'sobra');
+    expect(confirmar().disabled).toBe(false);
   });
 
   test('[98 T4] fração: a quantidade vai como número', async () => {

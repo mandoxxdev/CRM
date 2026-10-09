@@ -271,6 +271,40 @@ const E190_OUTRA_LEGADO = (nome) => ` — o disponível de ${nome} está negativ
     assert.strictEqual(e.body.error, BASE(nome, 1, 2) + E190_OUTRA_LEGADO(nome));
   });
 
+  // Fase 5 (revisor 2, S12): a regra do motor na leitura fresca do LACO (a segunda chamada de saldoDisponivelParaItem,
+  // depois da previa e da alcada) nao tinha teste — `const { disponivel } = saldo;` ali passava verde. O gancho deixa a
+  // previa ler o material sem bloqueio e bloqueia 1 (escrita direta, como um escritor fora da trava) imediatamente antes
+  // da leitura do laco: so a re-checagem do laco ve o disponivel negativo e recusa com a E190, antes de qualquer baixa.
+  await test('[98 RN-12] (Fase 5) a re-checagem do laco: bloqueio 1 entre a previa e a leitura do laco -> 400 E190 do laco, nada baixado', async () => {
+    const c = await comReserva();
+    const nome = await nomeDe(c.m);
+    const antes = await retrato(c);
+    const orig = db.get;
+    let leituras = 0; let disparou = false;
+    db.get = function gancho(sql, ...args) {
+      if (/as caixa_outras_requisicoes/.test(sql) && /as permite_negativo/.test(sql)) { // saldoDisponivelParaItem
+        leituras++;
+        if (leituras === 2) {
+          disparou = true;
+          const self = this;
+          db.run('UPDATE materiais_almoxarifado SET quantidade_bloqueada = 1 WHERE id = ?', [c.m],
+            () => orig.call(self, sql, ...args));
+          return self;
+        }
+      }
+      return orig.call(this, sql, ...args);
+    };
+    let e;
+    try { e = await entregar(c.R, [[c.ids[0], 1]]); } finally { db.get = orig; }
+    assert.ok(disparou, `o gancho nao chegou a segunda leitura (leituras: ${leituras})`);
+    assert.strictEqual(leituras, 2, 'previa + laco, um item');
+    assert.strictEqual(e.status, 400, JSON.stringify(e.body));
+    assert.strictEqual(e.body.error, BASE(nome, 1, 4) + E190_COM(nome, '1 PC bloqueados'));
+    const depois = await retrato(c);
+    assert.deepStrictEqual(depois.mat, { ...antes.mat, quantidade_bloqueada: 1 });
+    assert.deepStrictEqual([depois.mov, depois.res, depois.item], [antes.mov, antes.res, antes.item], 'a recusa do laco baixou algo');
+  });
+
   await test('[98 RN-12] retencoes em ordem: bloqueado e em inspecao (escritor de legado) nas ⟨partes⟩', async () => {
     const c = await comReserva();
     const nome = await nomeDe(c.m);
