@@ -2,7 +2,8 @@
 
 > **Status:** 🟢 Etapa 4 completa — backend (2026-08-05) e tela (2026-08-06) ·
 > **Spec original:** seção 7
-> **Última atualização:** 2026-10-09 (**Etapa 95** — a aprovação não reserva mais o material que está na caixa sem
+> **Última atualização:** 2026-10-09 (**Etapa 96** — a reserva grava arredondado a 6 casas e o claim de `criarReserva` compara com folga de 1e-9: no legado torto (físico `0.9999…`) a aprovação de uma requisição de 1 volta a reservar **1** (*Totalmente Reservada* — fecha a ressalva do `6e0fae83`, C179); o reservado sem reserva `ATIVA` não guarda resíduo abaixo de 0,0001 (Fase 5, R2, `2adcd51c`). Range `604b37b1..2d0bbfe9`. Continua 🟢. Ver o item da Etapa 96 no checklist.)
+> Antes: 2026-10-09 (**Etapa 95** — a aprovação não reserva mais o material que está na caixa sem
 > reserva de outra requisição (**B469**, `9237af2c`; a reserva arredondada a 1e-6, `6e0fae83`): reserva `min(falta,
 > max(0, disponível − já reservado − caixa sem reserva dos outros itens))` — antes reservava os 4 que estavam separados
 > por outra requisição e a dona da caixa ficava presa (M3). Declarados: a aprovada pode ficar *Aprovado* sem reserva
@@ -272,6 +273,22 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
   já tem caixa sem reserva, decisão da 75 (**C173**, B475; quem espera perde a garantia, não o separável); o motor não
   conhece caixa — uma saída avulsa ainda leva o físico da caixa sem reserva (B466 iv). Consulta **A46** (b) acha a
   aprovação que reservou a caixa de outra no legado.
+- [x] **A reserva com quantidade decimal (Etapa 96, C176/C179)** — `82836975` (o disponível arredondado destrava a
+  reserva manual e a aprovação no legado), `8bb43f60` (`criarReserva`/`liberarReserva` e as linhas da reserva gravam por
+  `Q.qtdSql`; claim com folga; *"Saldo disponível insuficiente: ⟨n⟩"* com o número arredondado), `f26e53db` (a reserva
+  da requisição consumida na entrega fracionada), `2adcd51c` (Fase 5, R2). **Antes:** três reservas 0,7 + 0,2 + 0,1
+  deixavam `quantidade_reservada = 0.9999999999999999` e um livre fantasma de 1,1e-16; no legado torto a aprovação de 1
+  ficava *Aprovado* sem reserva (o `6e0fae83` da 95 tinha trocado *Parcialmente Reservada* com 0,9999… por nenhuma
+  reserva — piorou a garantia, não o gesto: a entrega já ficava presa antes, C179). **Agora:** reservado 1; aprovação →
+  *Totalmente Reservada* com reserva 1; reserva 0,200001 com 0,2 → 400 *"Saldo disponível insuficiente: 0.2"*; reserva
+  que arredonda a 0 → 400 *"Quantidade da reserva deve ser maior que zero"*. **R2 (regressão da própria 96, Fase 5):**
+  três reservas legadas de 1/3 contra o reservado 1 — cada liberação subtraía 0,333333 e o reservado terminava em
+  0,000001 sem reserva `ATIVA` (a `SAIDA` de 1 recusada com *"Disponível: 0.999999"*); agora `RESERVADA_MENOS_SQL` zera o
+  que sobra abaixo de 0,0001 quando o material não tem mais reserva `ATIVA`. Descartados: subtrair o saldo cru da reserva
+  (fecha em 0,000001 do mesmo jeito) e zerar sem limite (o hold de `criarReserva` sobe o reservado antes do `INSERT`, sem
+  transação — uma liberação concorrente apagaria o hold inteiro; com o limite, no máximo um hold < 0,0001). **Fica de
+  fora:** o legado no meio exato (0,0010995) — a reserva de 0,0011 continua impossível de consumir pela `SAIDA` com
+  `reserva_id` (como antes); o script de normalização cura.
 - [ ] Reserva por lote específico / número de série — **fora da Etapa 4**. Atualização (2026-08-11): a dependência de **lote** caiu — a feature 10 (lotes) foi entregue na Etapa 6 (2026-08-09/10), então reserva por lote ficou implementável; número de série continua dependendo da 6b
 - [x] Data de necessidade na reserva (`data_necessidade`) — `6690c1a`. **Prioridade** ficou fora: sem demanda concreta, `data_necessidade` cobre o ordenamento útil
 - [x] Expiração automática (`POST /reservas/processar-expiracao` + config `reserva_dias_validade`) — `6690c1a`. **Opt-in**: sem a config e sem `expira_em` explícito a reserva não expira, senão as reservas manuais existentes começariam a ser liberadas sozinhas. Alerta por e-mail fica com a feature 20
@@ -408,6 +425,7 @@ Os nomes abaixo são os reais — copiáveis para localizar o caso.
 | Excluir requisição libera as reservas dela | `reservaPontasFaltantes` · *excluir requisição libera as reservas dela e devolve ao disponível* |
 | Excluir não toca reserva manual de terceiro | `reservaPontasFaltantes` · *excluir NÃO mexe em reserva manual de outro dono do mesmo material* |
 | **Etapa 95** — a aprovação não reserva a caixa sem reserva de outros itens (de outra requisição ou da mesma); a própria caixa não desconta; arredondada a 1e-6; sem caixa nenhuma reserva como antes | `separacaoTetoFisico` · *[95 RN-05] M3 pela rota…* · *[95 RN-05] fisico 6 com a mesma caixa de 4…* · *[95 RN-05] pelo servico…* · *[95 RN-05] guarda: sem caixa nenhuma…* · *[95 RN-05] P5b (Fase 2, B2)…* · *[95 Fase 5] (T8) aprovacao com a caixa do IRMAO…* · *[95 Fase 5] aprovacao decimal…* · `separacaoTetoFisicoIntegracao` · *[95 T4 I2]…* · *[95 T4 I6] corrida…* |
+| **Etapa 96** — reserva decimal: reservado arredondado, aprovação no legado reserva 1, folga não inventa, resíduo de 1/3 zera sem reserva ativa (e só sem) | `quantidadeArredondada` · *[96 RN-01] tres reservas 0,7 + 0,2 + 0,1 -> reservado 1…* · *[96 RN-02] legado torto: aprovar a requisicao de 1 reserva 1…* · *[96 RN-02] legado torto: POST /reservas 1 -> 201* · *[96 RN-03] reserva 0,200001 com 0,2…* · *[96 RN-04] POST /reservas 0,0000004…* · *[96 RN-02] (Fase 5, R2) liberar tres reservas legadas de 1/3…* · *[96 RN-02] (Fase 5, R2) consumir pela SAIDA…* · *[96 RN-03] (Fase 5, R2) o residuo so some sem reserva ATIVA…* · *[96 RN-01] (Fase 5) reserva 0,3, liberar 0,1…* |
 | **Etapa 95** — a liberação da 75 distribui como antes; quem espera separa os livres e não mais (C173) | `separacaoTetoFisico` · *[95 RN-06 (c)] L1…* |
 
 ## Dependências

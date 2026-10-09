@@ -1,7 +1,7 @@
 # 03 — Motor de Estoque (saldos, movimentações, livro, saídas)
 
 > **Status:** 🟢 — Etapa 1 entregue (2026-08-04): motor v2 com regra crítica/emergencial/centro de custo/custo médio, livro com filtros e extrato do item, estorno com motivo (backend + tela). A validação de vencido/lote reprovado que dependia da feature 10 foi entregue na Etapa 6, Task 3 (ver [10-lotes-series-etiquetas](../10-lotes-series-etiquetas/README.md)). · **Spec original:** seções 7 (fórmula de saldo), 13 (saídas), 30 (livro de movimentações)
-> **Última atualização:** 2026-10-08 (**Etapa 91 — `reserva_id` só numa saída que consome a reserva (D(77)); o alerta de estoque mínimo roda depois de soltar a trava por material**; ver a seção "Etapa 91" no fim; o motor continua 🟢). Antes: 2026-09-30 (**Etapa 62 — o AJUSTE de material com série pede as séries; por endereço e o estorno recusados**; ver a seção "Etapa 62" no fim; antes: **Etapa 51 — a saída sem lote baixa o ENDEREÇO de onde o material sai**; ver a seção "Etapa 51" no fim; o motor continua 🟢). Anterior: 2026-08-13 (**Etapa 8c — `RETORNO_TRANSFORMACAO`, e o custo médio
+> **Última atualização:** 2026-10-09 (**Etapa 96 — o motor grava a quantidade arredondada a 6 casas e as recusas comparam com folga de 1e-9 (C176 resolvido)**; ver a seção "Etapa 96" no fim; o motor continua 🟢). Antes: 2026-10-08 (**Etapa 91 — `reserva_id` só numa saída que consome a reserva (D(77)); o alerta de estoque mínimo roda depois de soltar a trava por material**; ver a seção "Etapa 91" no fim; o motor continua 🟢). Antes: 2026-09-30 (**Etapa 62 — o AJUSTE de material com série pede as séries; por endereço e o estorno recusados**; ver a seção "Etapa 62" no fim; antes: **Etapa 51 — a saída sem lote baixa o ENDEREÇO de onde o material sai**; ver a seção "Etapa 51" no fim; o motor continua 🟢). Anterior: 2026-08-13 (**Etapa 8c — `RETORNO_TRANSFORMACAO`, e o custo médio
 > deixando de ter um alimentador só.** Três mudanças deste motor, detalhadas abaixo: (1) o tipo
 > novo `RETORNO_TRANSFORMACAO` (`9c7ec75`), **entrada com custo**, dedicado (fora da rota genérica)
 > e presente nos **dois** ramos do motor — tem linha própria na tabela de efeitos, em "Tipos de
@@ -92,6 +92,8 @@ Estoque físico − bloqueado − quarentena/inspeção − reservado − EM TER
 ```
 
 Colunas existem; falta garantir que TODAS as operações (saída, reserva, inspeção, bloqueio) mantêm a fórmula e que consultas/relatórios usam "disponível" onde a spec exige.
+
+*(Etapa 96: `availabilitySql.disponivelSql()` devolve `ROUND((…), 6)` — a diferença de colunas limpas (0,3 − 0,1) saía `0.19999999999999998` e recusava a saída de 0,2; e `getSaldoDisponivel(material, db)` avalia o **mesmo** SQL, não uma conta própria em JS (Fase 5, R3). Ver a seção "Etapa 96".)*
 
 ### A quarta retenção e a fonte única — Etapa 8b (2026-08-12, `0a01124`)
 
@@ -257,6 +259,7 @@ quarentena, apontando para a tela de Remessas. **Contraste deliberado:**
   > O que **de fato** não existe é uma **tela** para chamar essa rota: a mensagem de erro do motor
   > cita o endpoint HTTP para um operador que só tem navegador. Registrado como pendência (a) em
   > [10-lotes-series-etiquetas](../10-lotes-series-etiquetas/README.md).
+- [x] **Quantidade arredondada a 6 casas e folga de 1e-9 nas recusas (Etapa 96, C176)** — helper `quantidade.js` `82836975`; motor `8bb43f60`; outros escritores `290ae5dc`; requisição `f26e53db`; legado `5b5abba7`; integração `8f33584f`; Fase 5 `e25454b5`, `2adcd51c`, `8d7c331d`, `983f006c`, `2d0bbfe9`. Ver a seção "Etapa 96" no fim.
 - [ ] (futuro) avaliar reversão de custo médio quando o estorno for da última entrada com custo
 - [x] `permite_saldo_negativo` respeitado (default: bloquear; guarda atômica em `registrarMovimentacao` e em `cancelarMovimentacao`)
 - [x] Centro de custo como vínculo (`centros_custo_almoxarifado`, `CentroCustoSchema`, rota `/centros-custo`)
@@ -574,3 +577,76 @@ aguardado pela requisição; fora de seção, nada muda (síncrono). `alertServi
 (o concorrente desiste) e prazos no transporter (conexão 15 s, saudação 15 s, socket 20 s). Teste: `alertaForaDaTrava`
 (4 casos, vermelho antes 3/4). **Fora do motor nada mudou na Etapa 91** — as tasks da trava não tocaram
 `stockService.js` (medido por `git diff --stat` em cada uma); só a T4 e o F3.
+
+## Etapa 96 (2026-10-09) — o motor grava a quantidade arredondada e não recusa o que existe por ponto flutuante
+
+Plano: `docs/superpowers/plans/2026-10-09-almoxarifado-etapa96-motor-quantidade-arredondada.md` (`604b37b1`, Fase 2 `e2a2f2d7`). Range `604b37b1..2d0bbfe9`. Feature 03 com a 05 e a 07. **C176**
+resolvido.
+
+**O que estava errado (Fase 0, medido no HEAD `30b7793a`):** o motor gravava `col = col ± ?` cru e comparava `>= ?`
+sem folga. Entradas 0,7 + 0,2 + 0,1 gravavam `0.9999999999999999` no material, na linha do endereço e na do lote; daí
+a `SAIDA` de 1 (sem origem, com origem, do lote), a `TRANSFERENCIA`, a reserva manual, o desbloqueio e a remessa a
+terceiro recusavam o que existia (6/13 portas, sonda 6); três reservas 0,7 + 0,2 + 0,1 deixavam um livre fantasma de
+1,1e-16 que aceitava saída de 1e-16. E **com colunas limpas** (sonda 9): físico 0,3 e reservado 0,1 → `SAIDA` 0,2 → 400
+*"Saldo insuficiente. Disponível: 0.19999999999999998 PC"* — o disponível é uma diferença, e a diferença de dois números
+limpos já sai torta.
+
+**A regra (lida no código, `server/services/almoxarifado/quantidade.js`, importada como `Q`):** `Q.qtd(x)` =
+`Number(x.toFixed(6))`, `−0 → 0`, `null`/`''`/booleano/não-finito → `NaN`; `Q.cabe(pedido, disponível)` = `pedido <=
+disponível + 1e-9`; `Q.qtdSql(expr)` = `ROUND((expr), 6)`; `Q.FOLGA_SQL` = `- 1e-9`. A porta do motor arredonda a
+quantidade **depois** de validar o cru (o que arredonda a 0 cai na recusa de zero de sempre); toda escrita incremental
+de quantidade de estoque passa por `Q.qtdSql`, as absolutas por `Q.qtd`, o livro (`saldo_anterior`/`saldo_posterior`,
+inclusive o do estorno) por `Q.qtd`; `syncMaterialTotals` grava `ROUND(SUM(…), 6)`; os claims SQL ganham
+`Q.FOLGA_SQL` e as checagens em JS `Q.cabe` (18 + 12 = 30 recusas — o plano dizia "17 + 7", **estava errado**,
+corrigido na Fase 2). As mensagens mantêm a literal; só o número interpolado sai por `Q.qtd` (B485). `EPS` do motor
+é `Q.QTD_FOLGA` (o mesmo 1e-9).
+
+**Entregue:**
+- [x] **T0 — o helper e o disponível arredondado** — `82836975` (B480, B481, B482, B486): `quantidade.js`,
+  `disponivelSql` com `ROUND`, `getSaldoDisponivel` por `Q.qtd`. A T0 sozinha destravou a `SAIDA` sem origem, a reserva
+  manual e a aprovação no legado (Fase 2, I2).
+- [x] **T1 — o motor** — `8bb43f60`: 60 escritas por `Q.qtdSql`, 15 claims + o piso de `ajustarSaldoExistente` com
+  folga, a porta arredonda, o estorno de `AJUSTE` com localização (K1 — sem a correção a gravação limpa **criava** um
+  gesto preso: *"Não é possível estornar: a localização não comporta a reversão (saldo já consumido)"*), as recusas
+  R1–R5, as 7 `SET col = ?` absolutas, o livro do estorno.
+- [x] **T2 — os outros escritores das colunas do material** — `290ae5dc`: terceiros, inspeção, recebimento,
+  sucateamento e devolução; o `pendente` da remessa arredondado (legado 0,999… deixava a remessa em `RETORNO_PARCIAL`
+  para sempre).
+- [x] **T4 — o legado** — `5b5abba7`: `quantidadeLegado.js` (`listarTortos`, `normalizar`) e
+  `server/scripts/normalizar-quantidades-almoxarifado.js` (sem `--aplicar` só lista; com, normaliza numa transação).
+  Consulta **A47**. Nada roda no boot (B483); o livro não é tocado (B484).
+- [x] **T5 — integração** — `8f33584f` (`quantidadeArredondadaIntegracao.api.test.js`, I1–I6 + serviço).
+- [x] **Fase 5 (revisão adversarial)** — `2adcd51c` (R2: `RESERVADA_MENOS_SQL` zera o reservado que sobra abaixo de
+  0,0001 quando o material não tem mais reserva `ATIVA` — três reservas legadas de 1/3 deixavam 0,000001 fantasma e a
+  `SAIDA` de 1 recusada; o script recalcula os agregados das fontes onde a invariante valia no cru); `8d7c331d` (R3:
+  `getSaldoDisponivel(material, db)` avalia `disponivelSql()` — JS e SQL discordavam no meio exato; mensagens do
+  estorno de BLOQUEIO e da inspeção arredondadas); `2d0bbfe9` (a do estorno de ENTRADA de lote); `983f006c` (testes:
+  as 7 guardas de folga, a varredura da RN-01 reescrita em `server/tests/helpers/varreduraQuantidade.js` — arquivo
+  inteiro, multilinha, colunas de `COLUNAS_LEGADO`, 11 formas cruas como controle positivo; o reservado arredondado).
+  `e25454b5` (R1) está na feature 05.
+
+**Spec que estava errada, dita à vista:** a "Fórmula de disponibilidade" acima não dizia nada sobre precisão — e o
+disponível calculado como diferença de colunas limpas recusava o que existia; a nota da Etapa 96 está lá. O item
+"Saldo anterior/posterior corretos e sequenciais" da tabela de regras valia só em inteiro: em decimal o livro gravava
+`0.8999999999999999` / `0.9999999999999999` (sonda 8); desde `8bb43f60` grava arredondado e o I1–I6 da T5 prendem o
+livro encadeado sem resíduo.
+
+**Fica de fora (declarado, com o porquê):**
+- **A saída avulsa que leva a caixa sem reserva** (B466 iv) — o motor não conhece caixa; **Etapa 97**.
+- **O livro histórico** não é reescrito (B484) — é rastro.
+- **Os 19 remendos de leitura** (`Math.round(…*1e6)/1e6`, `toFixed(6)`) ficam (B487) — redundantes, não errados.
+- **Precisão por unidade de medida** (B481) — 1e-6 para tudo.
+- **A tela** (`step="1"` em Movimentações/Requisição/separação/entrega, C181; formatador, B488).
+- **O legado no meio exato** (ex.: 0,0010995): a `SAIDA` de 0,0011 passa e grava físico −0,000001; a reserva de 0,0011
+  continua impossível de consumir pela `SAIDA` com `reserva_id` (como antes). O script cura. Nenhuma folga corrige sem
+  aceitar estoque que não existe.
+- **O físico legado torto** fica torto até o primeiro gesto que o grava (bloquear, remessa e retorno não gravam o
+  físico); não prende gesto.
+- **Legado só na coluna do material** (sem linha de saldo): a saída cria a linha "sem localização" −1 — comportamento da
+  Etapa 51, medido igual com estoque limpo na T5.
+
+**Testes:** `quantidadeArredondada.api.test.js` (55), `quantidadeArredondadaServicos` (19),
+`quantidadeArredondadaRequisicao` (17), `quantidadeLegado` (16), `quantidadeArredondadaIntegracao` (7) — contagem
+por `grep -c "await test("`. Mudados com "mudado na Etapa 96": `filaTravaIntegracao`, `filaLiberacaoAprovacaoCorrida`,
+`encaminhamentoExecucao` (tinha virado vazio), `relatoriosIndicadoresSpec27`, `separacaoTetoFisicoIntegracao`.
+`test:api` 336/336 (4104 ✓) no `2d0bbfe9`.

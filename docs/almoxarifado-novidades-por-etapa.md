@@ -11,10 +11,11 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-09):** Etapa 95 fechada (a separação não aceita mais do que existe na
-> prateleira — o separado ainda não entregue fica retido para quem separou, na separação, na fila, na tela e na
-> aprovação; **C169** resolvido) — ver "Onde estamos e o que vem a seguir", no fim. A próxima etapa do almoxarifado é a
-> **96** — o motor grava a quantidade arredondada e não recusa o que existe por ponto flutuante (**C176**). Desde a unificação de 2026-10-07 a
+> **Onde o desenvolvimento está (2026-10-09):** Etapa 96 fechada (o estoque não recusa mais o que existe por causa de
+> uma casa decimal — toda quantidade é guardada arredondada a 6 casas e "o pedido cabe?" compara com uma folga mínima;
+> **C176** resolvido) — ver "Onde estamos e o que vem a seguir", no fim. A próxima etapa do almoxarifado é a **97** — a
+> saída avulsa (e o ajuste, a perda, a remessa, o bloqueio e a reserva manual) não leva o material que está na caixa
+> sem reserva de uma requisição (**D (95)**, **D (96)**). Desde a unificação de 2026-10-07 a
 > numeração é uma só para todos os módulos, e as 78 a 90 foram usadas pelo lote de Compras/núcleo
 > (`docs/compras-novidades-por-etapa.md`, **B18**) — por isso a etapa depois da 77 foi a 91.
 >
@@ -114,7 +115,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Quarenta e seis itens para rodar em produção ANTES do deploy — quarenta e três são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Quarenta e sete itens para rodar em produção ANTES do deploy — quarenta e quatro são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-09 (Etapa 96) de quarenta e seis para quarenta e sete**, com a **A47** — as quantidades gravadas com resíduo de ponto flutuante antes desta versão (`0.9999999999999999` no lugar de 1); opcional: nada fica preso, só a tela mostra o número torto.)*
 
 *(**Atualizado em 2026-10-09 (Etapa 95) de quarenta e cinco para quarenta e seis**, com a **A46** — os materiais com mais separado na caixa (ou mais prometido) do que existe na prateleira, que a separação e a aprovação deixavam acontecer antes desta versão.)*
 
@@ -1720,7 +1723,79 @@ de desenvolvimento não tem dados, então o tamanho real só em produção.)*
   o material à dona da caixa, e a aprovada fica *Aprovado*, sem reserva, até entrar material.
 - Com a versão nova, separar onde a caixa já passa do físico é **recusado** — é esperado; a A46 diz onde.
 
-### B. Decisões de negócio — B1 a B479; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A47 (NOVA, da Etapa 96 — quantidades gravadas com resíduo de ponto flutuante).** Antes desta versão o motor de
+estoque gravava a conta crua do computador: entradas de 0,7 + 0,2 + 0,1 ficavam `0.9999999999999999`, e 0,3 − 0,1
+ficava `0.19999999999999998` (**C176**). A versão nova grava arredondado a 6 casas e compara com uma folga — **o que já
+está gravado torto não prende mais gesto nenhum** —, mas o número antigo continua aparecendo torto na tela até a
+primeira movimentação que regrave aquela coluna. **Nada aqui é obrigatório.** Somente leitura:
+
+```sql
+SELECT 'materiais_almoxarifado' AS tabela, id, codigo AS ref, 'quantidade_atual' AS coluna, quantidade_atual AS valor
+  FROM materiais_almoxarifado WHERE quantidade_atual <> ROUND(quantidade_atual, 6)
+UNION ALL SELECT 'materiais_almoxarifado', id, codigo, 'quantidade_reservada', quantidade_reservada
+  FROM materiais_almoxarifado WHERE quantidade_reservada <> ROUND(quantidade_reservada, 6)
+UNION ALL SELECT 'materiais_almoxarifado', id, codigo, 'quantidade_bloqueada', quantidade_bloqueada
+  FROM materiais_almoxarifado WHERE quantidade_bloqueada <> ROUND(quantidade_bloqueada, 6)
+UNION ALL SELECT 'materiais_almoxarifado', id, codigo, 'quantidade_em_inspecao', quantidade_em_inspecao
+  FROM materiais_almoxarifado WHERE quantidade_em_inspecao <> ROUND(quantidade_em_inspecao, 6)
+UNION ALL SELECT 'materiais_almoxarifado', id, codigo, 'quantidade_em_terceiros', quantidade_em_terceiros
+  FROM materiais_almoxarifado WHERE quantidade_em_terceiros <> ROUND(quantidade_em_terceiros, 6)
+UNION ALL SELECT 'estoque_saldo_almoxarifado', id, material_id, 'quantidade', quantidade
+  FROM estoque_saldo_almoxarifado WHERE quantidade <> ROUND(quantidade, 6)
+UNION ALL SELECT 'reservas_material_almoxarifado', id, material_id, 'quantidade', quantidade
+  FROM reservas_material_almoxarifado WHERE quantidade <> ROUND(quantidade, 6)
+UNION ALL SELECT 'reservas_material_almoxarifado', id, material_id, 'quantidade_utilizada', quantidade_utilizada
+  FROM reservas_material_almoxarifado WHERE quantidade_utilizada <> ROUND(quantidade_utilizada, 6)
+UNION ALL SELECT 'itens_requisicao_almoxarifado', id, requisicao_id, 'quantidade_solicitada', quantidade_solicitada
+  FROM itens_requisicao_almoxarifado WHERE quantidade_solicitada <> ROUND(quantidade_solicitada, 6)
+UNION ALL SELECT 'itens_requisicao_almoxarifado', id, requisicao_id, 'quantidade_separada', quantidade_separada
+  FROM itens_requisicao_almoxarifado WHERE quantidade_separada <> ROUND(quantidade_separada, 6)
+UNION ALL SELECT 'itens_requisicao_almoxarifado', id, requisicao_id, 'quantidade_entregue', quantidade_entregue
+  FROM itens_requisicao_almoxarifado WHERE quantidade_entregue <> ROUND(quantidade_entregue, 6)
+UNION ALL SELECT 'itens_requisicao_almoxarifado', id, requisicao_id, 'quantidade_atendida', quantidade_atendida
+  FROM itens_requisicao_almoxarifado WHERE quantidade_atendida <> ROUND(quantidade_atendida, 6)
+UNION ALL SELECT 'itens_remessa_terceiro_almoxarifado', id, remessa_id, 'quantidade_retornada', quantidade_retornada
+  FROM itens_remessa_terceiro_almoxarifado WHERE quantidade_retornada <> ROUND(quantidade_retornada, 6)
+UNION ALL SELECT 'recebimentos_material_itens_almoxarifado', id, recebimento_id, 'quantidade_recebida', quantidade_recebida
+  FROM recebimentos_material_itens_almoxarifado WHERE quantidade_recebida <> ROUND(quantidade_recebida, 6)
+UNION ALL SELECT 'recebimentos_material_itens_almoxarifado', id, recebimento_id, 'quantidade_em_inspecao', quantidade_em_inspecao
+  FROM recebimentos_material_itens_almoxarifado WHERE quantidade_em_inspecao <> ROUND(quantidade_em_inspecao, 6)
+ORDER BY tabela, coluna, id;
+```
+
+*(Conferida no fechamento contra o esquema real do módulo, montado em memória pelo mesmo harness dos testes: com o texto
+acima sem mudar uma vírgula, a consulta cobre **exatamente** as 15 colunas que a rotina de normalização trata (a
+comparação é feita pelo nome, contra a lista do código); num banco limpo devolve **nada**; com 12 colunas tortas
+escritas à mão em quatro tabelas (material, linha de endereço, reserva, item de requisição) devolve **as 12**, as mesmas
+que a rotina acha, e nada do material com 1,5; com uma coluna trocada de propósito o banco **recusa**. As colunas da
+remessa e do recebimento só rodaram vazias. **A lista tinha 14 colunas no plano** — a revisão do código somou o
+solicitado do item da requisição (**B483**, emendada). O banco de desenvolvimento não tem dados, então o tamanho real só
+em produção.)*
+
+**Como ler o resultado:**
+- **Vazia** — nada a fazer.
+- **Com linhas** — cada linha é um número guardado com resíduo (`0.9999999999999999`, `0.30000000000000004`). Nenhum
+  gesto fica preso por ele (a folga, **B480**); só a tela mostra o número torto até a primeira movimentação daquele
+  material regravar a coluna. **Para limpar de uma vez**, o suporte roda a rotina de normalização (**B483**, **B490**),
+  com o servidor parado:
+
+  ```
+  cd server && node scripts/normalizar-quantidades-almoxarifado.js            # so lista; nada gravado
+  cd server && node scripts/normalizar-quantidades-almoxarifado.js --aplicar  # grava ROUND(col, 6)
+  ```
+
+  Sem `--aplicar` ela imprime uma linha por coluna (`tabela.coluna: N linha(s)`, com `id ⟨n⟩: ⟨valor⟩ -> ⟨arredondado⟩`)
+  e termina com *"Nada gravado. Rode com --aplicar para normalizar."*; com `--aplicar`, *"Normalizado."*. Onde o total
+  do material batia com a soma das linhas de endereço (ou o reservado com a soma das reservas ativas), o total é
+  **recalculado da fonte** e a rotina imprime *"⟨tabela⟩.⟨coluna⟩ recalculado da ⟨fonte⟩: N material(is)"*; onde já
+  divergia, só arredonda (a divergência é outro defeito e não se apaga calada). Rodar de novo não muda nada. O livro de
+  movimentações **não** é tocado (é rastro, **B484**).
+- **Um caso raro** (**C182**): valor antigo exatamente no meio da 7ª casa (ex.: `0.0010995`). Rodar a rotina antes de
+  movimentar esse material evita um estoque de −0,000001.
+
+### B. Decisões de negócio — B1 a B490; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-09 de B479 para B490**, com as onze da Etapa 96 — nove do plano (**B480** a **B488**; a **B482** e a **B488** corrigidas à vista na revisão do plano) e duas da revisão adversarial do código (**B489** e **B490**, as duas sobre regressões da própria etapa); a revisão do código também **emendou** a **B482** (o solicitado da requisição e a pré-checagem pelo SQL), a **B483** (15 colunas — o texto dizia 15 quando eram 14) e a **B485** (três mensagens).)*
 
 *(**Atualizado em 2026-10-09 de B465 para B479**, com as catorze da Etapa 95 — treze do plano (**B466** a **B478**; **B477** e **B478** nasceram na revisão do plano, que também **inverteu** a **B476** e corrigiu à vista a **B469** e a **B470**) e uma da revisão adversarial do código (**B479**, letra nova e não emenda: é a trava da entrega e precisa ser achável pela letra; o arredondamento da aprovação, também da revisão, entrou como emenda na **B469**).)*
 
@@ -6386,6 +6461,100 @@ opostas, com separar, aprovar, entregar e fila ao mesmo tempo); a corrida: 0 de 
 segunda rodada — a primeira rodada também baixa o físico que a separação alheia lê, e dois caminhos de trava na mesma
 função seriam mais um lugar para errar a ordem. O `CLAUDE.md` diz quem pega a trava (`0b6132ae`). (`582844e8`)
 
+**B480 (NOVA, da Etapa 96) — uma regra só para quantidade: arredonda a 6 casas ao gravar e compara com folga ao
+recusar (as duas coisas).** Um módulo único de quantidade é usado pelo motor e por todos os serviços que escrevem as
+mesmas colunas (terceiros, inspeção, recebimento, sucateamento, devolução, requisição). Gravar: toda escrita incremental
+de quantidade de estoque, as escritas absolutas calculadas em JS, o total sincronizado da soma das linhas e o par
+saldo anterior/posterior do livro passam pelo arredondamento. Recusar: as 30 guardas de saldo (18 comparações no banco
+e 12 em JS — **a Fase 0 contou 17 + 7 e estava errado**; a revisão do plano achou as outras seis) comparam com folga de
+1e-9: o pedido igual ao disponível passa, mesmo quando o disponível é a **diferença** de duas colunas limpas (0,3 − 0,1).
+**Descartados:** (i) só arredondar a gravação — a medição mostrou o disponível torto com as colunas limpas (não
+consertaria nem dado novo); (ii) só a folga — destrava os gestos, mas a tela, o livro e um "livre fantasma" de 1e-16
+continuariam; (iii) guardar inteiro em micro-unidades — migração de 30+ colunas, irreversível na prática (o lugar disso é
+a migração para o Postgres); (iv) biblioteca decimal — dependência nova e toda a aritmética reescrita; (v) folga
+espalhada linha a linha, como a base fez 19 vezes — é a deriva que esta etapa fecha. Reversível: desligar é o módulo
+devolver o número cru e a folga zero. (`82836975`, `8bb43f60`, `290ae5dc`, `f26e53db`)
+
+**B481 (NOVA, da Etapa 96) — a precisão é 6 casas para o módulo inteiro, não por unidade de medida.** O cadastro de
+unidades não tem regra de casas e o recebimento aceita frações arbitrárias (conversões). 6 casas já era a régua de 19
+lugares do módulo. **Descartado:** casas por unidade (UN 0, KG 3…) — coluna nova, migração e a regra de quem pode mudar,
+sem pedido. (`82836975`)
+
+**B482 (NOVA, da Etapa 96; corrigida à vista na revisão do plano e emendada na revisão do código) — a quantidade pedida é
+arredondada a 6 casas ao entrar (não recusa); se arredondar a zero, vale a recusa de "zero" de cada porta.** O livro e o
+saldo passam a dizer o mesmo número (antes, uma entrada de 0,0000004 gravava 4e-7). **O texto do plano dizia que o
+arredondamento seria "simétrico em zero, como o do banco" — estava errado:** nenhuma implementação em JS concorda 100%
+com o arredondamento do SQLite nos meios exatos (`ROUND(0.0000005, 6)` dá 0 no banco). Escolhido o `toFixed(6)` (o que
+mais concorda: 0 discordâncias em 20 000 valores aleatórios, ~40 em 20 000 meios exatos) e a **regra**: nunca arredondar o
+mesmo valor cru dos dois lados e comparar — quando JS e banco precisam do mesmo número, um lê o que o outro gravou.
+**Emenda da revisão do código (Fase 5):** (1) a **criação da requisição** também passou a gravar o solicitado
+arredondado — sem isso uma requisição de 0,3333333 era separada e entregue em 0,333333 e **travava** em *Parcialmente
+Atendida* com a reserva presa (regressão da própria etapa, **R1**); um item que arredonda a zero recebe a recusa de
+quantidade inválida que o formulário já dá (*"Dados inválidos — itens.⟨n⟩.quantidade: quantidade deve ser maior que
+zero"*), sem literal nova (`e25454b5`); (2) a pré-checagem de saldo do motor passou a ler o disponível pelo **mesmo SQL**
+do claim, em vez de recalcular em JS — nos meios exatos os dois discordavam (a reserva de 0,0011 passava e a saída de
+0,0011 era recusada sobre o mesmo saldo), violando a regra acima (**R3**, `8d7c331d`). **Descartado:** recusar quantidade
+com mais de 6 casas — conversões de unidade produzem frações legítimas (1/3 de caixa) e a recusa pareceria erro de
+digitação que o operador não fez. (`8bb43f60`, `e25454b5`, `8d7c331d`)
+
+**B483 (NOVA, da Etapa 96; emendada na revisão do código) — o legado: consulta (A47) e rotina opcional; nada roda
+sozinho no boot.** A rotina lista por padrão e só grava com `--aplicar`, escrevendo o valor arredondado onde a coluna
+difere dele (idempotente). Com a folga (**B480**) o legado **não prende gesto nenhum** — a normalização só limpa o
+número exibido, e a primeira escrita nova de cada coluna já grava limpo. **A contagem de colunas, contada honestamente:**
+o texto do plano desta letra dizia **"15 colunas"** quando o contrato e a consulta listavam **14** — o texto estava
+errado (`5b5abba7`); a revisão do código somou o **solicitado do item da requisição** (**R1**), e agora são **15** de
+verdade (`e25454b5`). Medido na revisão: a rotina com o servidor rodando processou 300 mil linhas em 319 ms sem nenhum
+`SQLITE_BUSY`; a instrução continua "servidor parado", por ser escrita direta no banco. **Descartados:** (i) normalizar
+no primeiro boot — decisão de dado tomada sem o administrador, em toda instância, e desnecessária para destravar;
+(ii) só a consulta, sem rotina — o administrador escreveria o `UPDATE` à mão em 15 colunas. (`5b5abba7`, `e25454b5`)
+
+**B484 (NOVA, da Etapa 96) — o livro histórico não é reescrito.** As movimentações já gravadas guardam saldo
+anterior/posterior tortos; as novas gravam arredondado. A rotina **não** toca o livro (é rastro: reescrever apaga a
+prova). **Descartado:** normalizar o livro junto. (`5b5abba7`)
+
+**B485 (NOVA, da Etapa 96; estendida na revisão do código) — as mensagens de recusa mantêm a literal; só o número sai
+arredondado.** Nenhuma literal nova. A lista do plano (M1–M9, T1, T2, S1, E1, Z1, e R1–R5 da revisão do plano) ganhou na
+revisão do código três mensagens que ainda interpolavam número cru: o estorno de **bloqueio** (*"quantidade bloqueada:
+⟨n⟩"*), a inspeção que não fecha (*"Aprovado + reprovado (⟨n⟩)"*) (`8d7c331d`) e o estorno de **entrada de lote** (*"o
+lote ⟨l⟩ tem ⟨n⟩ ⟨un⟩ nesta localização"*), achada pelo controle de outra guarda, fora da lista da revisão
+(`2d0bbfe9`). (`8bb43f60`, `290ae5dc`, `f26e53db`, `8d7c331d`, `2d0bbfe9`)
+
+**B486 (NOVA, da Etapa 96) — o disponível do módulo sai arredondado do banco.** A expressão única do disponível
+(físico − retenções) devolve o valor arredondado a 6 casas; os 15 arquivos que a leem (tela, fila, relatórios, claims)
+recebem o número limpo. **Descartado:** arredondar em cada leitor (a deriva espalhada de novo). (`82836975`)
+
+**B487 (NOVA, da Etapa 96) — os 19 arredondamentos de leitura que já existiam ficam.** Com a gravação limpa viram
+redundantes, não errados. **Descartado:** removê-los agora (multiplica o diff e a superfície de sabotagem sem defeito
+medido).
+
+**B488 (NOVA, da Etapa 96; corrigida à vista na revisão do plano) — a tela não muda.** Com o servidor mandando números
+limpos, as 7 telas que exibiam o saldo cru mostram 1 em vez de `0.9999999999999999`. **O texto dizia que o servidor já
+mandaria limpo a fila e o detalhe da requisição — estava errado:** com colunas limpas (separa 0,3, entrega 0,1) o
+entregável saía `0.19999999999999998`, porque o servidor subtraía em JS; o servidor passou a arredondar esses números
+(`f26e53db`). **Descartados:** formatador nas 7 telas (apresentação, não o defeito); o `step="1"` dos campos de quantidade
+é produto (**C181**).
+
+**B489 (NOVA, da Etapa 96, revisão do código) — o reservado sem nenhuma reserva ativa não guarda sobra abaixo de
+0,0001.** **Regressão da própria etapa (R2):** três reservas antigas de 1/3 (`0.3333333333333333`) contra o reservado 1 —
+cada liberação subtraía 0,333333 e o reservado, gravado arredondado, terminava em **0,000001 sem nenhuma reserva
+ativa**; a saída de 1 com físico 1 era recusada (*"Disponível: 0.999999"*). Antes da etapa a conta crua fechava em
+5,5e-17 e o corte de 1e-9 zerava. O mesmo pelo consumo das três reservas pela saída. **Escolhido:** na liberação e no
+consumo total, quando o material não tem mais reserva ativa, a sobra abaixo de 0,0001 vira 0. **Descartados:** subtrair
+o saldo cru da reserva (com o reservado arredondado a cada passo fecha em 0,000001 do mesmo jeito); zerar sem limite ou
+recalcular pela soma das reservas a cada liberação — a criação da reserva sobe o reservado **antes** de gravar a reserva,
+sem transação, e uma liberação concorrente apagaria o hold inteiro; com o limite, a corrida apaga no máximo um hold menor
+que 0,0001. (`2adcd51c`; o teste que prende o arredondamento do reservado veio em `983f006c`)
+
+**B490 (NOVA, da Etapa 96, revisão do código) — a rotina de normalização recalcula o total do material da fonte onde
+ele batia.** **Achado da revisão (R2):** arredondar cada coluna sozinha quebrava as invariantes — três linhas de endereço
+de 1/3 e o total 1 viravam linhas que somam 0,999999 com total 1 (uma saída deixava linha em −0,000001); três reservas de
+1/3 e o reservado 1 deixavam o mesmo 0,000001 fantasma. **Escolhido:** onde a invariante valia **antes** (com folga de
+1e-9), o total sai da fonte — físico = soma das linhas arredondadas; reservado = soma dos saldos das reservas ativas
+arredondados —, medido no valor cru, antes de gravar, na mesma transação; a rotina imprime uma linha por total
+recalculado. **Descartados:** reconciliar todo material com linha (sobrescreveria divergência real, que é outro defeito
+e não se apaga calada — o teste prende que o material com linhas 1 e total 5 só é arredondado); distribuir o resto entre
+as linhas (inventa em qual endereço fica o 0,000001; o material perde 1e-6, a precisão do módulo, **B481**). (`2adcd51c`)
+
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -8296,7 +8465,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      status que retêm a caixa (**B473**); o único caminho até lá com material separado é o legado da **A45**
      (*Aguardando aprovação de valor* → *Pendente*). Declarado.
 
-176. **NOVO, achado no teste de integração da Etapa 95 (anterior a ela) — o motor de estoque grava 0,3 − 0,1 como
+176. **NOVO, achado no teste de integração da Etapa 95 (anterior a ela), e ✅ RESOLVIDO NA ETAPA 96 — o motor de estoque grava 0,3 − 0,1 como
      0,19999999999999998.** Medido: estoque **0,3** e uma baixa de **0,1** pelo motor → o estoque do material fica
      gravado `0.19999999999999998`, não 0,2, e a consulta do material devolve o número cru. A separação, a fila e a aprovação desta etapa arredondam a 6 casas e não são
      afetadas; o motor (entradas, saídas, ajustes) grava sem arredondar. **Não corrigido nesta etapa** (o motor está
@@ -8311,6 +8480,59 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      medido** contra o estado anterior; a Etapa 96 mede e fecha os dois.)* **O que fazer até a Etapa 96:** reconhecer a
      mensagem com um número de muitas casas e chamar quem administra — o número torto só se corrige no banco. **É a
      Etapa 96.**
+     *(✅ **Resolvido na Etapa 96** (`82836975`, `8bb43f60`, `290ae5dc`, `f26e53db`; revisão `e25454b5`, `2adcd51c`,
+     `8d7c331d`, `2d0bbfe9`). O defeito era **mais largo** do que este item dizia: derivavam também as linhas de
+     endereço e de lote, o reservado, o bloqueado e o item da requisição (este **com o estoque limpo** — **C178**), e o
+     disponível saía torto como **diferença de duas colunas limpas** (físico 0,3 e reservado 0,1 → saída de 0,2
+     recusada). E a recomendação da 95 ("arredondar a gravação e dar folga") estava certa **pela razão errada**: ela dizia
+     que só arredondar a gravação "não salva o legado" — não salva **nem dado novo**. E a frase "a separação, a fila e a
+     aprovação desta etapa arredondam a 6 casas e não são afetadas" **estava errada**: o separado do item era somado sem
+     arredondar e prendia a entrega com o estoque limpo (**C178**). A ressalva sobre a aprovação foi medida (**C179**). O "o que fazer" acima deixa de valer depois do deploy; o legado parado na tela, a **A47**.)*
+
+177. **NOVO, da Etapa 96 — o que muda para quem opera.** (1) Os saldos aparecem limpos (1, não `0.9999999999999999`)
+     — o dado novo já sai assim; o **legado** fica torto na tela até a primeira movimentação que regrave aquela coluna
+     (bloquear, enviar remessa e receber retorno **não** regravam o estoque físico — o número torto fica até uma
+     entrada, saída ou ajuste) ou até a rotina de normalização (**A47**). (2) As recusas *"Saldo insuficiente"* com o
+     número igual ao pedido deixam de acontecer — em todas as portas: saída (com ou sem endereço, de lote), ajuste,
+     perda, transferência, reserva, bloqueio e desbloqueio, remessa e retorno, inspeção, sucateamento, devolução, entrega
+     (**B480**). (3) Quantidade digitada com mais de 6 casas é guardada com 6; a que arredonda a zero recebe a recusa de
+     zero de cada porta (**B482**). (4) As mensagens de recusa mostram o número arredondado, com a mesma literal
+     (**B485**). (5) O reservado de um material sem reserva ativa zera sozinho uma sobra menor que 0,0001 (**B489**).
+     **O que fazer:** rodar a **A47** depois do deploy e decidir se normaliza (opcional — nada fica preso).
+
+178. **NOVO, da Etapa 96 (medido na Fase 0), e ✅ RESOLVIDO NELA (`f26e53db`) — o item da requisição prendia a entrega
+     com o estoque limpo.** Físico **1** exato, requisição de 1 aprovada, separar em três vezes 0,7 + 0,2 + 0,1 → o
+     separado ficava `0.9999999999999999` e entregar 1 era recusado (*"… Máximo: 0.9999999999999999 (pendente: 1,
+     disponível: 1)"*); e separar 1 e entregar em três vezes deixava **2,8e-17** de físico — um material "com saldo" que
+     não existe. Agora o separado e o entregue gravam arredondado e a entrega compara com folga.
+
+179. **NOVO, da Etapa 96 (medido na Fase 0) — a ressalva do arredondamento da aprovação da Etapa 95, medida, e ✅
+     RESOLVIDA (`82836975`, `8bb43f60`).** No estoque já torto, a aprovação passou de *Parcialmente Reservada* (reserva
+     `0.9999…`) para *Aprovado* **sem reserva** com a correção da 95 (`6e0fae83`) — piorou a **garantia** (entre aprovar
+     e separar, outro gesto podia levar o material), **não o gesto**: a entrega já ficava presa antes. Agora a aprovação
+     reserva 1 (*Totalmente Reservada*) e a entrega passa.
+
+180. **NOVO, da Etapa 96 (medido na Fase 0) — o bloqueio aceitava 1 com físico `0.9999…`, e o "livre fantasma" de
+     1e-16 aceitava saída de 1e-16.** Registrados para ninguém achar que o bloqueio "tem folga de propósito": a folga é
+     de 1e-9 e nunca aceita o que não existe (0,200001 contra 0,2 é recusado). Somem com a gravação arredondada.
+
+181. **NOVO, da Etapa 96 — a tela não deixa digitar decimal na separação, na entrega, na requisição e na movimentação**
+     (campo de quantidade com passo 1; lido no código, **não** medido em navegador). Material em KG, metro ou litro só
+     movimenta fração pela nota (o recebimento aceita duas casas) ou por integração. Produto, fora da etapa (**B488**).
+
+182. **NOVO, da Etapa 96 (revisão do código) — o legado gravado exatamente no meio da 7ª casa.** Um saldo antigo como
+     `0.0010995` é lido como 0,0011 pelo banco: a saída de 0,0011 passa e grava o físico **−0,000001**; e uma reserva de
+     0,0011 sobre ele continua impossível de consumir pela saída que cita a reserva (já era assim antes). Nenhuma folga
+     corrige isso sem aceitar estoque que não existe. **O que fazer:** se a **A47** listar valores com a 7ª casa igual
+     a 5, rodar a rotina de normalização antes de movimentar o material (ela grava 0,0011); um estoque em −0,000001 se
+     corrige com um ajuste.
+
+183. **NOVO, da Etapa 96 (medido na integração; comportamento da Etapa 51, não desta) — legado só no total do material,
+     sem linha de endereço.** Quando o total do material tem saldo e não existe nenhuma linha de endereço (dado anterior
+     à distribuição por endereço), uma saída cria a linha *sem localização atribuída* com **−1** e o total vai a 0 —
+     medido igual com o estoque limpo, então não é efeito do arredondamento. Registrado porque a integração da 96 o
+     encontrou ao montar o legado; o teste monta o legado como o motor antigo gravava (total e linha). **O que fazer:**
+     nada novo — é a regra da Etapa 51 (o saldo sem endereço aparece como "sem localização atribuída").
 
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -9284,8 +9506,22 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   **a caixa em *Pendente*** (**C175**) e **o legado sem gesto limpo** (**C174**) — declarados.
 - **(95) Sem teste que os derrube, sozinhos:** a prévia e o laço da entrega leem o mesmo teto e se cobrem (sabotar um só
   deixa tudo verde — só os dois juntos derrubam, **B477**).
-- **(95) O arredondamento do motor** (**C176**) — fora da etapa.
+- **(95) O arredondamento do motor** (**C176**) — fora da etapa. *(✅ Resolvido na Etapa 96.)*
 - **(95) Um processo só** — as travas por requisição e por material moram na memória do servidor, como antes (**C132**).
+- **(96) A saída avulsa ainda leva o material que está na caixa sem reserva** — e, medido no fechamento, também o
+  ajuste, a perda, a remessa a terceiro, o bloqueio e a reserva manual (9 de 9 portas). **Etapa 97.**
+- **(96) A tela não deixa digitar decimal** nos campos de quantidade da separação, entrega, requisição e movimentação
+  (**C181**), e **não ganhou formatador** (**B488**) — o servidor manda o número limpo.
+- **(96) Os 19 arredondamentos de leitura antigos ficam** (**B487**); **o livro histórico não é reescrito** (**B484**);
+  **a normalização não roda sozinha** (**B483**); **a precisão não é por unidade de medida** (**B481**).
+- **(96) O legado no meio exato da 7ª casa** (**C182**) — declarado; a rotina cura.
+- **(96) O que a devolução guarda:** o registro da devolução ainda guarda a quantidade crua recebida (o motor arredonda o
+  que move) — fora do contrato.
+- **(96) Sucateamento e devolução ao fornecedor** não foram medidos pela porta própria (o processo de sucateamento e a
+  não conformidade); a guarda do sucateamento recebeu a folga e o motor também.
+- **(96) Camadas redundantes, sem teste que as derrube sozinhas:** a prévia da entrega sem folga, o máximo da entrega sem
+  arredondar, a soma da fila sem arredondar e o resto da divisão da entrega — cada uma coberta por outra; só juntas
+  derrubam. E o claim da linha sem lote sem folga (a quantidade é a lida da própria linha).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -10070,6 +10306,21 @@ recusa" em doze estados, a segunda rodada, a corrida separar × aprovar e o cont
    (pendente: 4, disponível: 0)"* e o modal fica aberto.
 3. **Dois itens do mesmo material** (requisição criada por integração — o formulário não repete material) — o
    modal abre com 4 e 0.
+
+**(96) Nenhum clique foi dado nesta etapa.** Os testes provam o servidor pela rota (quem pede, o administrador que
+aprova e dá entrada, o almoxarife que movimenta, separa e entrega) e pelo serviço; a tela não mudou. Números lidos no
+fechamento (cada arquivo rodado sozinho): o motor **55** casos (o módulo de quantidade, a gravação, a folga, a porta,
+as mensagens, o legado, as guardas e a varredura do código da revisão), os serviços de fora do motor **19**, a
+requisição **17**, o legado e a rotina **16** e a integração **7** (quatro jornadas pela rota e pelo serviço, a
+normalização no meio e a CLI) — **114**, dentro dos 336 arquivos da suíte. O
+que **só o navegador** prova:
+
+1. **A tela mostra o número limpo.** Depois de três entradas de 0,7 + 0,2 + 0,1 kg pela nota, a lista de materiais, o
+   detalhe, o extrato e o painel mostram **1** (e não `0.9999999999999999`).
+2. **O legado na tela.** Num banco com dado antigo (**A47** com linhas): o material mostra o número torto até a primeira
+   movimentação; depois, limpo. Depois da rotina com `--aplicar`, limpo sem movimentar.
+3. **A requisição de 1 kg** aprovada, separada e entregue pela tela sobre o estoque formado por entradas fracionadas —
+   *Entregue*, estoque 0.
 
 
 
@@ -20406,7 +20657,7 @@ O detalhe de R6 não oferece entregar nada; por integração, R6 entregar 4 sem 
 4. **A chegada e a liberação da inspeção** dão primeiro a quem já tem caixa sem reserva (decisão da Etapa 75 — **C173**).
 5. **O status pós-aprovação** de quem fica sem reserva por causa da caixa de outra (**C172**, cosmético).
 6. **O motor grava 0,3 − 0,1 como 0,19999999999999998** no estoque do material (**C176**) — anterior à etapa, achado no
-   teste de integração.
+   teste de integração. *(✅ Resolvido na Etapa 96.)*
 
 ### O que a revisão encontrou
 
@@ -20431,9 +20682,121 @@ achou:
 - **Nove sabotagens passavam verde** (sete com a suíte inteira verde) — viraram teste (`42e08faf`).
 - **Um defeito do motor, fora da etapa:** 0,3 − 0,1 gravado como 0,19999999999999998 (**C176**).
 
+## Etapa 96 — O estoque não recusa mais o que existe por causa de uma casa decimal (2026-10-09)
+
+Material que se compra em quilo, metro ou litro entra em frações: uma nota de 0,7 kg, outra de 0,2, outra de 0,1. O
+computador soma frações com um resíduo minúsculo — 0,7 + 0,2 + 0,1 dava **0,9999999999999999**, não 1 —, e o sistema
+gravava esse número como estava. Daí em diante, uma saída de 1 kg era recusada com *"Saldo insuficiente. Disponível:
+0.9999999999999999"*, a requisição de 1 kg era aprovada sem reserva, separada, e a **entrega ficava presa** — o material
+estava na prateleira e o sistema dizia que não. O mesmo acontecia com estoque e reserva "redondos" (0,3 em estoque, 0,1
+reservado: a saída de 0,2 era recusada) e até ao separar uma requisição em três vezes. Agora toda quantidade é guardada
+com até **6 casas decimais**, arredondada, e o sistema compara "o pedido cabe?" com uma folga mínima — **o pedido igual
+ao que existe passa; o que não existe continua recusado.**
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Entradas de 0,7 + 0,2 + 0,1 → estoque **0,9999999999999999**; saída de 1 → *"Saldo insuficiente. Disponível: 0.9999999999999999 PC"* (**C176**) | Estoque **1**; a saída de 1 passa e deixa **0** (**B480**) |
+| Estoque 0,3 e reserva 0,1, os dois "redondos": saída de 0,2 → recusada (*"Disponível: 0.19999999999999998"*) | Passa (**B480**, **B486**) |
+| Requisição de 1 sobre o estoque formado por frações: aprovada **sem reserva**; separar passava; **entregar era recusado** e a requisição ficava *Em Separação* (**C179**) | Aprovada *Totalmente Reservada* (reserva 1), separada, entregue — *Entregue*, estoque 0 |
+| Estoque 1 exato, separar em três vezes (0,7 + 0,2 + 0,1) → entregar 1 recusado (*"Máximo: 0.9999999999999999"*) (**C178**) | Entrega (**B480**) |
+| Entregar em três vezes deixava **2,8e-17** de estoque fantasma | Estoque **0** |
+| Linhas de endereço e de lote, reservado e bloqueado derivavam igual; a transferência, a saída por endereço ou por lote, o desbloqueio e a remessa a terceiro recusavam o que existia | Gravam limpo e passam |
+| Quantidade com mais de 6 casas entrava crua (0,0000004 virava estoque 4e-7) | Arredondada a 6 casas na entrada; a que arredonda a zero recebe a recusa de zero de cada porta (**B482**) |
+| As telas mostravam `0.9999999999999999` | Mostram **1** — o servidor manda o número limpo (**B488**); o dado antigo, até a primeira movimentação ou a rotina de normalização (**A47**) |
+| As mensagens de recusa traziam o número cru | Mesma mensagem, número arredondado (**B485**) |
+
+### As regras, com o cenário exato
+
+**A regra.** Toda quantidade é arredondada a 6 casas quando entra e quando é gravada (estoque, endereço, lote, reservado,
+bloqueado, em inspeção, em terceiros, reservas, os números do item da requisição, o livro de movimentações). O pedido é
+recusado só se for maior que o disponível **mais 0,000000001** — muito menor que a menor quantidade guardável
+(0,000001): a folga nunca aceita o que não existe.
+
+Preparação: material **Fio de cobre** em **KG**. As entradas fracionadas vão **pela conferência da nota** (o campo
+*Qtd. conferida* aceita duas casas; não clicado nesta etapa — **F (96)**) ou por integração — os campos de quantidade da tela de movimentação, da requisição e da separação só aceitam
+inteiro (**C181**). **Paula** (sem perfil) pede; o **Gestor** aprova; o **Almoxarife** separa e entrega.
+
+**1. A nota em frações e a saída inteira.** Três entradas de **0,7**, **0,2** e **0,1** kg. O material mostra **1**. Uma
+saída de **1** → aceita; o estoque fica **0** (não −0,0000000000000001).
+
+**2. A folga não inventa estoque.** Estoque **0,2**. Saída de **0,200001** → *"Saldo insuficiente. Disponível: 0.2 KG"*,
+nada gravado. Reserva manual de 0,200001 → *"Saldo disponível insuficiente: 0.2"*. Saída de **0,2** → aceita.
+
+**3. O disponível como diferença.** Estoque **0,3**, reserva manual de **0,1** (tela **Reservas**). Saída de **0,2** →
+aceita (antes: recusada com *"Disponível: 0.19999999999999998"*).
+
+**4. A requisição de 1 kg depois da nota em frações.** Com o estoque do cenário 1 (1 kg, formado por 0,7 + 0,2 + 0,1),
+Paula pede **1**; o Gestor aprova → *Totalmente Reservada*. O Almoxarife separa 1 e entrega 1 → *"Requisição entregue
+por completo! Estoque baixado."* — *Entregue*, estoque **0**, reserva consumida.
+
+**5. Separar e entregar em parcelas** (por integração, pelo passo 1 da tela). Estoque 1, requisição de 1: separar 0,7,
+depois 0,2, depois 0,1 → separado **1**; entregar 1 → *Entregue*. Ou separar 1 e entregar 0,1 + 0,2 + 0,7 → *Entregue*,
+estoque **0**, entregue **1**.
+
+**6. Mais de 6 casas.** Entrada de **1,0000004** → estoque **1**, a movimentação registra **1**. Entrada de
+**0,0000004** (arredonda a zero) → *"material_id, tipo e quantidade são obrigatórios"*, nada gravado. Reserva de
+0,0000004 → *"Quantidade da reserva deve ser maior que zero"*. Requisição com um item de 0,0000004 (por integração) →
+*"Dados inválidos — itens.0.quantidade: quantidade deve ser maior que zero"* (o número é a posição do item na lista,
+contando do 0). Requisição de **0,3333333** → o item é gravado **0,333333**; separar e entregar 0,333333 → *Entregue*.
+
+**7. O dado antigo (só com banco de produção ou montado à mão).** Um material gravado antes desta versão com
+`0.9999999999999999`: a saída de 1 **passa** (a folga), e a recusa de um pedido que não cabe mostra o número arredondado
+(*"Saldo insuficiente. Disponível: 1 KG"* para uma saída de 2). A **A47** lista o que ficou torto; a rotina de
+normalização limpa (**B483**, **B490**).
+
+### O que esta etapa NÃO cobre
+
+1. **A saída avulsa que leva o material da caixa sem reserva** — e, medido no fechamento, o ajuste, a perda, a remessa,
+   o bloqueio e a reserva manual também levam (9 de 9). É a **Etapa 97**.
+2. **A tela:** os campos de quantidade com passo 1 (**C181**) e um formatador de número (**B488**).
+3. **O livro histórico** não é reescrito (**B484**); **a normalização não roda sozinha** (**B483**).
+4. **Precisão por unidade de medida** (**B481**).
+5. **O legado no meio exato da 7ª casa** (**C182**) — a rotina cura.
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0) mostrou o defeito **mais largo** do que a Etapa 95 dizia: 6 de 13 portas do motor recusavam o que
+existia (saída com endereço e de lote, transferência, reserva, remessa, desbloqueio); as linhas de endereço e de lote, o
+reservado e o bloqueado derivavam; o item da requisição prendia a entrega **com o estoque limpo** (**C178**); e o
+disponível saía torto como diferença de duas colunas limpas — o que mostrou que a razão dada pela 95 para a
+recomendação estava errada (**C176**). A **revisão do plano** (1 bloqueante, 7 importantes, 5 menores) pegou antes de
+executar: o estorno de um ajuste com endereço que a gravação limpa **travaria** (o bloqueante); seis recusas fora da
+lista (30, não 24); o nome do arredondamento colidindo com variáveis do código; escritas invisíveis à varredura; a fila e
+o detalhe mandando número cru; o arredondamento do JS discordando do banco nos meios exatos.
+
+A **revisão adversarial do código** (dois revisores, executando) confirmou que a folga **não inventa estoque** (pedido e
+gravação arredondados devolvem as colunas à grade; grandezas até 1,2 bilhão), que não sobrou escrita crua (varredura do
+arquivo inteiro, em várias linhas) e que a rotina de normalização roda 300 mil linhas em 319 ms sem travar o banco, e
+achou:
+- **Requisição com mais de 6 casas travava em *Parcialmente Atendida*** com reserva presa — **introduzido pela própria
+  etapa**, consertado (**B482** emendada, `e25454b5`).
+- **Liberar reservas antigas de 1/3 deixava 0,000001 reservado sem reserva nenhuma**, e a rotina de normalização quebrava
+  "soma das linhas = estoque" — **introduzido pela própria etapa**, consertado (**B489**, **B490**, `2adcd51c`).
+- **A pré-checagem e o claim discordavam nos meios exatos** — consertado (`8d7c331d`), mais três mensagens com número
+  cru (`8d7c331d`, `2d0bbfe9`).
+- **Sabotagens que passavam verde** — sete guardas de folga sem teste, a varredura do código que não via escrita em duas
+  linhas, o reservado sem arredondar e um teste antigo que tinha ficado vazio — viraram teste (`983f006c`).
+- **Um resíduo declarado:** o legado no meio exato da 7ª casa (**C182**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 96 entregue (2026-10-09):** **o estoque não recusa mais o que existe por causa de uma casa decimal.** Toda
+  quantidade é guardada arredondada a 6 casas, e "o pedido cabe?" compara com uma folga mínima: entradas fracionadas
+  (0,7 + 0,2 + 0,1) dão 1 e a saída de 1 passa; estoque e reserva "redondos" (0,3 − 0,1) não recusam mais 0,2; a
+  requisição de 1 kg aprovada sobre estoque fracionado reserva, separa e **entrega**; separar e entregar em parcelas
+  fecha (**C176** resolvido, mais largo do que dizia; **C178** e **C179** resolvidos). A tela mostra o número limpo sem
+  mudar. A revisão do código pegou duas regressões da própria etapa (a requisição de 1/3 travada e o reservado
+  fantasma — **B489**, **B490**) e as consertou. **O que é seu:** a consulta **A47** (opcional — nada fica preso) e a
+  rotina de normalização; as decisões **B480 a B490** (a **B482** e a **B488** corrigidas à vista na revisão do plano;
+  a **B482**, a **B483** e a **B485** emendadas na revisão do código — a **B483** dizia "15 colunas" quando eram 14, e
+  agora são 15); os avisos **C177 a C183** (o **C177** muda o que quem opera vê; o **C182** é o resíduo do meio exato);
+  as limitações **(96)** em D e as verificações **(96)** em F. **Próxima: Etapa 97 — a saída avulsa (e o ajuste, a
+  perda, a remessa, o bloqueio e a reserva manual) não leva o material que está na caixa sem reserva — ver o plano da
+  Etapa 96.**
 
 - **Etapa 95 entregue (2026-10-09):** **a separação não aceita mais do que existe na prateleira.** O separado ainda não
   entregue fica retido para quem separou: a requisição não separa além do estoque (**C169** resolvido), duas
@@ -20445,7 +20808,7 @@ achou:
   status — não excluir quem já entregou); as decisões **B466 a B479** (a **B476** invertida na revisão do plano; a
   **B469** e a **B470** corrigidas à vista); os avisos **C170 a C176** (o **C170** muda o que quem opera vê; o **C171**, o
   que quem integra vê; o **C176** é um defeito do motor, fora da etapa); as limitações **(95)** em D e as verificações
-  **(95)** em F. **Próxima: Etapa 96 — o motor grava a quantidade arredondada e não recusa o que existe por ponto flutuante (**C176**) — ver o plano da Etapa 95.**
+  **(95)** em F. ~~**Próxima: Etapa 96 — o motor grava a quantidade arredondada e não recusa o que existe por ponto flutuante (C176) — ver o plano da Etapa 95.**~~ *(Feita — Etapa 96.)*
 
 - **Etapa 94 entregue (2026-10-09):** **a alçada de valor vale até o começo da separação.** Custo ou limite que mudam
   depois de separado algo não devolvem mais a requisição em separação, pronta ou parcialmente atendida a *Aguardando

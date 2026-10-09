@@ -1074,7 +1074,7 @@ Por padrão, **uma saída maior que o disponível é recusada**, e o sistema diz
 
 > *"Saldo insuficiente. Disponível: 8 UN"*
 
-Isso vale para todo tipo de saída, e a recusa acontece no servidor — não adianta a tela deixar digitar.
+Isso vale para todo tipo de saída, e a recusa acontece no servidor — não adianta a tela deixar digitar. Pedir exatamente o que existe sempre passa, mesmo em quantidade fracionada (três entradas de 0,7, 0,2 e 0,1 permitem a saída de 1); as quantidades têm seis casas decimais e a regra completa de arredondamento e comparação está em 22.1b.
 
 Permitir saldo negativo é uma decisão **global**, tomada em **Configurações → Configurações Gerais**, na opção *Permitir Saída com Saldo Negativo*. Ela é restrita ao Administrador do módulo e vale para **todos** os materiais — não há como liberar saldo negativo para um material só.
 
@@ -1466,7 +1466,7 @@ Os status e as passagens permitidas entre eles são fixos; qualquer tentativa fo
 ### 7.2 Criação — o que o sistema valida
 
 - **Ao menos um item** → *"Dados inválidos — itens: Inclua ao menos um item"*.
-- **Quantidade maior que zero** em cada item → *"Dados inválidos — itens.0.quantidade: quantidade deve ser maior que zero"* (o número é a posição do item na lista). Vale igual para "Salvar Rascunho" e para "Enviar".
+- **Quantidade maior que zero** em cada item → *"Dados inválidos — itens.0.quantidade: quantidade deve ser maior que zero"* (o número é a posição do item na lista). Vale igual para "Salvar Rascunho" e para "Enviar". A quantidade é gravada **arredondada a seis casas decimais** (22.1b): um pedido de 0,3333333 é gravado 0,333333 — e é esse número que a separação e a entrega precisam alcançar para a requisição fechar **Entregue**. Uma quantidade que arredonda a zero (0,0000004) recebe a mesma recusa de quantidade maior que zero, sem gravar nada.
 - **Material existente e ativo** → *"Material(is) inexistente(s) ou inativo(s): MAT-001, MAT-007"*.
 - **Tipo da requisição** — 14 opções: Consumo, Ordem de Produção, Ordem de Serviço, Projeto, Montagem, Instalação Externa, Assistência Técnica, Manutenção, Desenvolvimento, Administrativo, Emergencial, Ferramenta, EPI e Material do Cliente. Sem escolha, assume **Consumo**.
 - **Urgência** — três opções, e só elas: **Normal** (*"Normal — atendimento padrão"*), **Urgente** (*"⚠️ Urgente — linha parada"*) e **Crítico** (*"🔴 Crítico — risco de segurança"*). Sem escolha, assume **Normal**. Urgente e Crítico pedem justificativa na tela (*"Justifique a urgência para requisições urgentes/críticas"*). Qualquer outro valor — inclusive a mesma palavra escrita de outro jeito, como *"urgente"* — é recusado, sem gravar nada: *"Urgência inválida: urgente"*. Um rascunho salvo com a urgência escrita de outro jeito tem a forma corrigida quando é **enviado** (*"critico"* vira Crítico); se for outra palavra, o envio é recusado com a mesma frase e ele continua rascunho.
@@ -5933,7 +5933,36 @@ Consequências:
 - **As três primeiras retenções não tiram nada do patrimônio nem da contagem.** O material está lá.
 - **A quarta tira da contagem**, porque não está lá (13.2).
 - **O consumo contra uma reserva não é bloqueado pela própria reserva.** Quem reservou pode consumir: na hora do consumo, a parte reservada que está sendo usada é somada de volta antes da comparação (9.4).
+
 - **Valor do estoque usa a quantidade física, não o disponível** — material reservado, bloqueado ou em inspeção continua sendo patrimônio e continua valendo dinheiro.
+
+### 22.1b Quantidades: seis casas decimais
+
+**Toda quantidade do almoxarifado é guardada com no máximo seis casas decimais.** A régua vale para o módulo inteiro, para qualquer unidade de medida — não há precisão diferente por unidade (UN, KG, M, L contam todas até o milionésimo).
+
+**A quantidade digitada é arredondada a seis casas ao entrar**, em toda movimentação, reserva e requisição. Uma entrada de 1,0000004 grava **1** — no saldo e na linha do livro de movimentações, que passam a dizer o mesmo número; 0,3333333 grava 0,333333. Quantidade com mais de seis casas **não é recusada**, porque conversões de unidade produzem frações legítimas (um terço de caixa); ela é guardada com seis.
+
+**Tudo que o sistema grava sai arredondado a seis casas:** o físico, o reservado, o bloqueado, o em inspeção e o em terceiros do material; o saldo de cada endereço e de cada lote; a reserva e o quanto dela já foi usado; o solicitado, o separado e o entregue de cada item de requisição; o retornado da remessa; o recebido da nota; e o saldo antes e depois de cada linha do livro. Três entradas de 0,7, 0,2 e 0,1 deixam o estoque em **1**; uma baixa de 0,1 sobre 0,3 deixa **0,2**. O disponível (22.1) também é arredondado a seis casas depois da subtração.
+
+**Ao comparar, o pedido igual ao que existe sempre passa — e nunca passa mais do que existe.** Toda verificação de saldo (saída, transferência, reserva, bloqueio e desbloqueio, envio e retorno de terceiro, inspeção, separação, entrega, devolução, estorno) aceita o pedido quando ele é **menor ou igual** ao disponível com uma margem de um bilionésimo (0,000000001) — só o bastante para absorver o resíduo que o computador deixa ao somar decimais. A margem é menor que meia unidade da sexta casa: com 0,2 disponível, uma saída de **0,200001** é recusada:
+
+> *"Saldo insuficiente. Disponível: 0.2 PC"*
+
+e uma reserva de 0,200001, com *"Saldo disponível insuficiente: 0.2"*. As mensagens de recusa mostram sempre o número arredondado, com ponto decimal.
+
+**Quantidade que arredonda a zero** (0,0000004, por exemplo) é tratada como zero, e cada porta dá a recusa de quantidade inválida que já dava:
+
+| Onde | O que aparece |
+|---|---|
+| Movimentação | *"material_id, tipo e quantidade são obrigatórios"* |
+| Reserva | *"Quantidade da reserva deve ser maior que zero"* |
+| Item de requisição | *"Dados inválidos — itens.0.quantidade: quantidade deve ser maior que zero"* (o número é a posição do item) |
+
+A exceção é o **Ajuste com localização**, em que zero é um valor legítimo: um ajuste de 0,0000004 num endereço **zera** aquele endereço.
+
+**O reservado não guarda sobra.** Quando a última reserva ativa de um material é liberada ou consumida, o que sobrar no reservado do material abaixo de 0,0001 é zerado — é resíduo de arredondamento de reservas antigas com muitas casas (três reservas de um terço contra um reservado de 1), não material retido.
+
+**Quantidades antigas com resíduo.** Um saldo gravado antes desta regra pode estar guardado como 0,9999999999999999 em vez de 1. Ele **não impede gesto nenhum** — a comparação com margem aceita o pedido de 1 —, mas aparece com muitas casas na tela até a primeira movimentação do material, que regrava o número arredondado. Para limpar de uma vez, ver 23, ponto 5.
 
 ### 22.2 Custo médio ponderado
 
@@ -6068,7 +6097,7 @@ Note que **peças e sobras entram os dois** no peso que voltou: o rendimento med
 
 ## 23. Cuidados na operação
 
-Quatro pontos que valem para o dia a dia e que não se deduzem das telas. Nenhum deles impede o trabalho — todos dizem **por qual caminho** fazer.
+Cinco pontos que valem para o dia a dia e que não se deduzem das telas. Nenhum deles impede o trabalho — todos dizem **por qual caminho** fazer.
 
 **1. A conferência de estoque é a ferramenta da contagem física — use-a para isso.** A
 homologação de uma conferência com ajustes vira uma movimentação de verdade no livro: o saldo do
@@ -6091,6 +6120,17 @@ sistema aplica e audita.
 | **Em poder de terceiros** | receber o retorno, encerrar com destino ou cancelar a remessa (17.5 a 17.7) |
 
 Com as retenções resolvidas, o ajuste por localização também fica seguro e o disponível volta a fechar.
+
+**5. Quantidades antigas com muitas casas (0,9999999999999999 no lugar de 1) se limpam com a rotina de normalização — que é opcional e é o administrador quem manda rodar.** Elas não prendem gesto nenhum (22.1b) e cada material se limpa sozinho na primeira movimentação; a rotina serve para limpar de uma vez o que está parado. O suporte tem uma **consulta de conferência** que lista cada quantidade guardada com resíduo — material, endereço, reserva, item de requisição, remessa e nota —, com o valor de hoje. A **rotina de normalização que o suporte roda**:
+
+- **por padrão só lista** — mostra, por tipo de quantidade, quantos registros mudariam e de que valor para que valor, e **não grava nada**; só grava quando o administrador manda **aplicar**;
+- roda **com o servidor parado**, como qualquer escrita direta no banco, e grava tudo ou nada;
+- **arredonda a seis casas** cada quantidade com resíduo;
+- onde o total do material **batia** com a soma dos seus endereços (ou o reservado com a soma das reservas ativas), **recalcula o total a partir deles**, para que continuem batendo depois do arredondamento — três endereços de um terço viram 0,333333 cada e o total vira **0,999999**, não 1; onde o total **já não batia** antes, só arredonda (a divergência é outro problema e não é apagada calada — ela continua para o inventário);
+- **não reescreve o livro de movimentações** — o histórico guarda os números como foram registrados;
+- rodar de novo não muda nada.
+
+Um caso raro fica de fora da margem e só a rotina resolve: um saldo antigo guardado exatamente no meio da sétima casa (0,0010995, por exemplo) aceita a saída de 0,0011 e deixa o estoque em **−0,000001**. Rodar a rotina antes de movimentar esse material evita (ela grava 0,0011); se já aconteceu, um Ajuste corrige o −0,000001.
 
 ---
 

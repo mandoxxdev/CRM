@@ -1,13 +1,23 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-09 (Etapa 95) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-09 (Etapa 96) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91, 92, 93, 94 e 95) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77 e 91 a 96) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-09 (Etapa 95 ENTREGUE · próxima do almoxarifado: Etapa 96)
+> ## Onde o desenvolvimento está — 2026-10-09 (Etapa 96 ENTREGUE · próxima do almoxarifado: Etapa 97)
 >
-> **O desenvolvimento parou aqui: Etapa 95 fechada — 2026-10-09.** A **Etapa 95 (a separação não aceita mais do que
+> **O desenvolvimento parou aqui: Etapa 96 fechada — 2026-10-09.** A **Etapa 96 (o estoque guarda a quantidade
+> arredondada e não recusa o que existe)**: entradas fracionadas de 0,7 + 0,2 + 0,1 kg somam **1** (não mais
+> *0,9999999999999999*), e a saída, a reserva, a aprovação e a entrega de exatamente o que existe deixam de ser
+> recusadas (aviso **C176** resolvido) — inclusive no material, no endereço, no lote, no reservado, no bloqueado, na
+> remessa a terceiro e no separado da requisição. Toda quantidade é guardada com até 6 casas; um milionésimo a mais
+> continua recusado. O dado antigo torto se limpa no primeiro movimento ou por uma rotina opcional do administrador
+> (consulta **A47**). A tela continua só com inteiro em Movimentações e Requisições (**C181**). **Próxima etapa do
+> almoxarifado: 97 — a saída avulsa ainda leva o material que está na caixa (separado e não entregue) de uma
+> requisição** (ver *"Próxima tarefa detalhada"* no plano da Etapa 96).
+>
+> **Etapa 95, 2026-10-09.** A **Etapa 95 (a separação não aceita mais do que
 > existe na prateleira)**: o material separado e ainda não entregue (a "caixa") deixa de ser oferecido de novo. Pedindo
 > 6 com 4 em estoque, separados os 4, mais 2 são recusados com *"Parafuso: não é possível separar 2 PC. Máximo: 0
 > (pendente: 2, disponível: 0)"* (aviso **C169** resolvido); duas requisições sem reserva não separam mais os mesmos 4;
@@ -15,8 +25,7 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > o mesmo número (com zero, **"Aguardando saldo"**). A aprovação não reserva mais o que está na caixa sem reserva de
 > outra requisição, e a entrega "sem separar" depois de uma entrega parcial não leva mais a caixa de outra. Separação,
 > entrega e aprovação do mesmo material passam a acontecer uma depois da outra. A saída avulsa ainda pode levar o
-> material da caixa (ver *"O que esta etapa NÃO cobre"*). **Próxima etapa do almoxarifado: 96** (ver *"Próxima tarefa
-> detalhada"* no plano da Etapa 95).
+> material da caixa (ver *"O que esta etapa NÃO cobre"*). ~~**Próxima etapa do almoxarifado: 96**~~ *(Feita — Etapa 96.)*
 >
 > **Etapa 94, 2026-10-09.** A **Etapa 94 (a alçada de valor vale até o começo
 > da separação)**: o custo do material que sobe ou o limite da liberação por valor que muda **depois** de começada a
@@ -6224,6 +6233,105 @@ prateleira de verdade. A regra completa está no manual, seção 10.2.
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor e tela)
 provam, escrito para você conferir à mão.
+
+## Etapa 96 — O estoque guarda a quantidade arredondada e não recusa o que existe (ENTREGUE — 2026-10-09)
+
+**O que mudou, em uma frase:** quantidades fracionadas (kg, metro, litro) somam e subtraem certo — 0,7 + 0,2 + 0,1 é
+**1**, não *0,9999999999999999* — e o sistema não recusa mais uma saída, uma reserva ou uma entrega de exatamente o que
+existe.
+
+**O problema que ela resolve.** O computador guarda número decimal em binário, e algumas contas saem com um resíduo
+minúsculo: três entradas de 0,7, 0,2 e 0,1 kg deixavam o estoque gravado como *0,9999999999999999*; um estoque de 0,3
+com 0,1 reservado dava disponível *0,19999999999999998*. Como as recusas comparavam o pedido com esse número, a saída
+de 1 kg era recusada com *"Saldo insuficiente. Disponível: 0.9999999999999999 KG"*, a aprovação de uma requisição de 1
+ficava sem reserva e, separado o 1, a entrega era recusada e a requisição ficava presa em *Em Separação* (aviso
+**C176**). O mesmo acontecia com o endereço, o lote, o reservado, o bloqueado, a remessa a terceiro e o separado de uma
+requisição — inclusive com o estoque limpo, só por separar em três rodadas de 0,7 + 0,2 + 0,1.
+
+**A regra agora.** Toda quantidade é guardada com **até 6 casas decimais**: a quantidade digitada é arredondada a 6
+casas ao entrar (1,0000004 vira 1) e cada saldo é gravado arredondado. Na hora de recusar, o sistema aceita o pedido
+que **cabe** no que existe, desprezando só o resíduo do computador — nunca aceita um milionésimo a mais: com 0,2 kg, 0,2
+passa e 0,200001 é recusado. Uma quantidade que arredonda a zero (0,0000004) é recusada como quantidade zero. As
+mensagens de recusa são as mesmas de sempre, com o número arredondado. O dado antigo gravado torto deixa de prender
+qualquer gesto e se limpa sozinho no primeiro movimento do material; para limpar o que está parado, o administrador
+tem uma consulta e uma rotina opcional (abaixo).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Entradas de 0,7 + 0,2 + 0,1 kg: o estoque mostrava *0.9999999999999999* | Mostra **1** (o endereço, o lote e o extrato também) |
+| Saída de 1 kg sobre esse estoque: *"Saldo insuficiente. Disponível: 0.9999999999999999 KG"* | Passa; o estoque fica **0** |
+| Estoque 0,3 com 0,1 reservado: saída de 0,2 recusada (*"Disponível: 0.19999999999999998"*) | Passa |
+| Requisição de 1 sobre o estoque torto: aprovada **sem reserva**; separava 1 e a entrega era recusada (*"Máximo: 0.9999999999999999"*) | Aprovada **Totalmente Reservada**; separa, entrega, **Entregue**, estoque 0 |
+| Separar em três rodadas (0,7 + 0,2 + 0,1) e entregar 1: recusado com o estoque limpo | Entrega; o separado é 1 |
+| Entregar 1 em três rodadas deixava um estoque fantasma de *0,000000000000000028* | Estoque **0** |
+| Bloquear, desbloquear, remeter ao terceiro e receber de volta em frações recusavam o número exato | Passam |
+| Quantidade com mais de 6 casas (0,0000004) entrava e o livro dizia uma coisa e o saldo outra | Arredondada a 6 casas; o que vira zero é recusado |
+| O dado antigo torto ficava torto para sempre | Some no primeiro movimento do material, ou pela rotina do administrador |
+
+### Roteiro de teste manual (≈20 min)
+
+**Limite da tela, antes de começar:** o campo **Quantidade** de **Movimentações**, o de **Nova Requisição** e o da
+separação/entrega só aceitam **número inteiro** (aviso **C181** — não mudou nesta etapa). Fração entra pela tela só
+pela **conferência da nota** (**Recebimentos**, campo **"Qtd. conferida"**, duas casas) ou por integração. O roteiro usa
+a conferência; quem tiver acesso à API pode dar as três entradas por `POST /api/almoxarifado/movimentacoes/v2`.
+
+**Preparação (como Administrador).** Cadastre o material **Arame** com unidade **KG**, comum (não crítico), estoque 0.
+Deixe a liberação por valor desligada (**Configurações → Liberação por Valor**).
+
+1. **Três frações somam 1.** Em **Recebimentos → Novo Recebimento**, forma **Somente pela Nota Fiscal**, uma nota de **1** KG de Arame;
+   **Iniciar Conferência (Almoxarifado)** e, em **"Qtd. conferida"**, **0,7**; siga até **Processar Nota**. Repita com
+   **0,2** e com **0,1** (três notas). Abra o Arame em **Materiais**: estoque **1** (não *0,9999999999999999*); o
+   **Extrato** mostra o saldo depois de cada entrada: 0,7 · 0,9 · 1.
+2. **A saída inteira passa.** **Movimentações → Saída** de **1** KG de Arame → registrada; estoque **0**.
+   *(Antes desta etapa: "Saldo insuficiente. Disponível: 0.9999999999999999 KG".)*
+3. **A requisição de 1 depois da nota em kg.** Repita o passo 1 (três notas: 0,7, 0,2, 0,1). Um usuário pede **1** KG
+   de Arame (**Nova Requisição**); o Administrador aprova → **Totalmente Reservada** (na tela **Reservas**, uma reserva
+   de **1**). O Almoxarife abre a requisição → **Iniciar Separação** (1) → **📦 Confirmar Separação** → **Confirmar
+   Entrega e Baixar Estoque** → *"Requisição entregue por completo! Estoque baixado."* → **Entregue**; estoque **0**,
+   reserva **Consumida**. *(Antes: aprovada sem reserva e a entrega recusada com "Máximo: 0.9999999999999999".)*
+4. **A folga não inventa estoque (por integração).** Com **0,2** KG de Arame em estoque, uma saída de **0,200001** →
+   400 *"Saldo insuficiente. Disponível: 0.2 KG"*; uma reserva (`POST /api/almoxarifado/reservas`) de 0,200001 → 400
+   *"Saldo disponível insuficiente: 0.2"*. Nada é gravado. Uma saída de **0,2** passa e o estoque fica 0.
+
+**Procedimento do administrador para o dado antigo (opcional).** Depois do deploy, o dado gravado torto antes desta
+versão não prende gesto nenhum — só aparece com muitas casas na tela até o material se movimentar. Para achá-lo:
+a consulta **A47** de `docs/almoxarifado-novidades-por-etapa.md`, ou a rotina que só lista:
+
+```
+cd server && node scripts/normalizar-quantidades-almoxarifado.js
+```
+
+Ela imprime uma linha por coluna (`tabela.coluna: N linha(s)`, com cada valor e o arredondado) e termina com *"Nada
+gravado. Rode com --aplicar para normalizar."*. Para gravar, **com o servidor parado** (como qualquer escrita direta no
+banco):
+
+```
+cd server && node scripts/normalizar-quantidades-almoxarifado.js --aplicar
+```
+
+Termina com *"Normalizado."*; rodar de novo dá 0 linhas. Ela arredonda cada coluna a 6 casas e, onde o total do
+material batia com a soma dos endereços (ou o reservado com a soma das reservas ativas), recalcula o total a partir
+deles — para não deixar 0,000001 de diferença. **Não** toca o livro de movimentações (é rastro), e **não** recalcula o total do
+material que já divergia da soma dos endereços — esse só é arredondado (a divergência é outro problema, que não se apaga
+calado).
+
+### O que esta etapa NÃO cobre
+
+- **A tela continua só com inteiro** em Movimentações, Nova Requisição, separação e entrega (aviso **C181**); fração
+  entra pela nota ou por integração.
+- **Saída avulsa que leva o material da caixa** (separado e não entregue) — o motor não conhece caixa; é a **Etapa 97**.
+- **O livro antigo não é reescrito** — as movimentações já gravadas continuam com o saldo torto no extrato; as novas
+  saem limpas.
+- **Precisão por unidade de medida** — 6 casas para tudo (KG, UN, M…); não há "UN só inteiro".
+- **Dado antigo exatamente no meio da 7ª casa** (ex.: 0,0010995): uma saída de 0,0011 passa e o estoque fica em
+  −0,000001; a rotina do administrador cura. É raríssimo e não há folga que resolva sem aceitar o que não existe.
+- **O físico antigo torto continua torto** depois de bloquear, remeter ou receber de terceiro — esses gestos não
+  regravam o físico; ele se limpa na primeira entrada, saída ou ajuste (ou pela rotina).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
+escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
 
 ## Etapa 72 — A solicitação de compra só fecha quando o material dela chega (ENTREGUE — 2026-10-02)
