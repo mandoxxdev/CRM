@@ -220,7 +220,7 @@ async function decidirInspecao(db, user, itemId, data = {}) {
   // valida com um erro que pareceria aleatorio.
   if (Math.abs((aprovada + reprovada) - retido) > 1e-6) {
     throw Object.assign(
-      new Error(`Aprovado + reprovado (${aprovada + reprovada}) tem de fechar com o retido (${retido})`),
+      new Error(`Aprovado + reprovado (${Q.qtd(aprovada + reprovada)}) tem de fechar com o retido (${retido})`),
       { status: 400 });
   }
   if (data.encaminhamento && !ENCAMINHAMENTOS.includes(data.encaminhamento)) {

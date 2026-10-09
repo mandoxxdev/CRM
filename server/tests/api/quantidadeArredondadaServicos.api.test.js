@@ -289,6 +289,18 @@ process.on('exit', (code) => {
     assert.ok(embrulhadas >= 10, `so ${embrulhadas} escritas embrulhadas — a varredura esta lendo os arquivos certos?`);
   });
 
+  // ─────────────────────────── Fase 5 — a mensagem da inspecao diz o numero arredondado ───────────────────────────
+  await test('[96 RN-05] (Fase 5) inspecao que nao fecha: "Aprovado + reprovado (0.3) tem de fechar com o retido (1)", nao 0.30000000000000004', async () => {
+    const m = await material(0);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 1, quantidade_em_inspecao = ? WHERE id = ?', [TORTO, m]);
+    const rec = (await dbRun(db, 'INSERT INTO recebimentos_material_almoxarifado (numero, nota_fiscal) VALUES (?, ?)', [`REC-E96F5-${seq}`, `NF-E96F5-${seq}`])).lastID;
+    const it = (await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado (recebimento_id, material_id, quantidade_esperada,
+        quantidade_recebida, quantidade_em_inspecao) VALUES (?, ?, 1, 1, ?)`, [rec, m, TORTO])).lastID;
+    const r = await post(`${API}/recebimentos/itens/${it}/inspecionar`, { quantidade_aprovada: 0.1, quantidade_reprovada: 0.2 });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, 'Aprovado + reprovado (0.3) tem de fechar com o retido (1)');
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed ? 1 : 0);

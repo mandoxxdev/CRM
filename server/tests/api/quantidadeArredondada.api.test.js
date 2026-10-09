@@ -542,6 +542,36 @@ process.on('exit', (code) => {
     assert.strictEqual((await mat(m)).quantidade_reservada, 0.00005);
   });
 
+  // ─────────────────────────── Fase 5, R3 — o disponivel da pre-checagem e o do claim ───────────────────────────
+  // getSaldoDisponivel recalculava em JS (toFixed) e discordava do ROUND do SQLite no meio exato: legado 0,0010995 dava
+  // 0,001099 aqui e 0,0011 no claim — a reserva de 0,0011 passava, a SAIDA de 0,0011 era recusada.
+  const MEIO = 0.0010995;
+  await test('[96 RN-05] (Fase 5, R3) legado no meio exato (0,0010995): a recusa diz o numero do claim (0,0011), nao o do JS (0,001099)', async () => {
+    const m = await legado(MEIO);
+    const s = await mov(m, 'SAIDA', 0.002);
+    assert.strictEqual(s.status, 400, JSON.stringify(s.body));
+    assert.strictEqual(s.body.error, 'Saldo insuficiente. Disponível: 0.0011 PC');
+    const r = await reservar(m, 0.002);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, 'Saldo disponível insuficiente: 0.0011');
+  });
+  await test('[96 RN-02] (Fase 5, R3) legado no meio exato: a SAIDA de 0,0011 concorda com a reserva de 0,0011 (as duas passam)', async () => {
+    const m1 = await legado(MEIO);
+    assert.strictEqual((await reservar(m1, 0.0011)).status, 201, 'premissa: o claim da reserva aceita 0,0011');
+    const m2 = await legado(MEIO);
+    const s = await mov(m2, 'SAIDA', 0.0011);
+    assert.strictEqual(s.status, 201, JSON.stringify(s.body));
+  });
+  await test('[96 RN-05] (Fase 5) estorno de BLOQUEIO com o bloqueado torto abaixo do bloqueio -> 400 "(quantidade bloqueada: 0.2)"', async () => {
+    const m = await material(0); await entrar(m, 1);
+    assert.strictEqual((await bloquear(m, 0.3)).status, 200);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = ? WHERE id = ?', [0.20000000000000004, m]);
+    const b = await dbGet(db, "SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'BLOQUEIO'", [m]);
+    const c = await como('ADMIN').post(`${API}/movimentacoes/${b.id}/cancelar`, { motivo: 'teste da etapa 96' });
+    assert.strictEqual(c.status, 400, JSON.stringify(c.body));
+    assert.strictEqual(c.body.error, 'Não é possível estornar: o bloqueio já foi desfeito (quantidade bloqueada: 0.2)');
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed ? 1 : 0);

@@ -53,9 +53,21 @@ async function getMaterial(db, materialId) {
  * colunas mora la, e nao aqui, para esta funcao e as 13 queries que fazem a mesma conta nao
  * poderem divergir — divergirem foi o que a Etapa 8b teve de consertar.
  */
-async function getSaldoDisponivel(material) {
+async function getSaldoDisponivel(material, db = null) {
   // Etapa 96 (B485/B486): arredondado como o `disponivelSql` — a pre-checagem da saida e as mensagens de recusa
   // dizem o mesmo numero que o claim compara (0,3 - 0,1 da 0,2, nao 0.19999999999999998).
+  // Etapa 96 (Fase 5, R3): e o numero vem do PROPRIO SQL do claim. Recalculado em JS (toFixed) ele discordava do ROUND
+  // do SQLite nos meios exatos (I6; 76/100 000): legado 0,0010995 dava 0,001099 aqui e 0,0011 no claim — a reserva de
+  // 0,0011 passava pelo SQL, a SAIDA de 0,0011 era recusada pela pre-checagem, e a reserva ficava impossivel de consumir.
+  // A regra da B482 ("nunca arredondar o mesmo cru dos dois lados e comparar") vale aqui: o motor passa o `db` e a
+  // conta e `disponivelSql()` sobre os valores do mesmo retrato do material. Sem `db` (so os testes antigos chamam
+  // assim) fica a conta em JS de antes.
+  if (db) {
+    const cols = ['quantidade_atual', ...COLUNAS_RETENCAO];
+    const r = await dbGet(db, `SELECT ${disponivelSql()} AS d FROM (SELECT ${cols.map((c) => `? AS ${c}`).join(', ')})`,
+      cols.map((c) => (c === 'quantidade_atual' ? (material[c] ?? 0) : (material[c] ?? null))));
+    return r && r.d ? r.d : 0; // ROUND(-1e-16) do SQLite e -0
+  }
   return Q.qtd(COLUNAS_RETENCAO.reduce(
     (saldo, coluna) => saldo - (material[coluna] || 0),
     material.quantidade_atual,
@@ -1408,7 +1420,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // que levou TODO o saldo do material seria impossivel (disponivel = 0). A validacao real
     // acontece contra a propria coluna, atomicamente, no claim mais abaixo.
     if (!consumindoReserva && !baixandoTerceiro && !baixandoBloqueado) {
-      const disponivel = await getSaldoDisponivel(material);
+      const disponivel = await getSaldoDisponivel(material, db);
       if (!Q.cabe(quantidade, disponivel) && !permiteNegativo) {
         throw Object.assign(new Error(`Saldo insuficiente. Disponível: ${disponivel} ${material.unidade}`), { status: 400 });
       }
@@ -1543,7 +1555,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       RETURNING id`, [quantidade, material_id, quantidade]);
     if (!claim) {
       throw Object.assign(
-        new Error(`Saldo disponível insuficiente para enviar ao terceiro: ${await getSaldoDisponivel(material)} ${material.unidade}`),
+        new Error(`Saldo disponível insuficiente para enviar ao terceiro: ${await getSaldoDisponivel(material, db)} ${material.unidade}`),
         { status: 400 });
     }
     saldoPosterior = saldoAnterior; // o material continua sendo nosso: quantidade_atual nao muda
@@ -1717,7 +1729,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
           // Compensa a reivindicação acima à mão para não deixar a reserva consumida sem a
           // baixa correspondente de estoque.
           await dbRun(db, `UPDATE reservas_material_almoxarifado SET quantidade_utilizada = ${Q.qtdSql('MAX(0, quantidade_utilizada - ?)')} WHERE id = ?`, [quantidade, reserva_id]);
-          throw Object.assign(new Error(`Saldo físico insuficiente para consumir a reserva. Disponível: ${await getSaldoDisponivel(material)} ${material.unidade}`), { status: 400 });
+          throw Object.assign(new Error(`Saldo físico insuficiente para consumir a reserva. Disponível: ${await getSaldoDisponivel(material, db)} ${material.unidade}`), { status: 400 });
         }
         saldoPosterior = rowRes.quantidade_atual;
         saidaFisicoAplicado = true;
@@ -1804,7 +1816,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         RETURNING quantidade_atual`,
         [quantidade, material_id, permiteNegativo ? 1 : 0, quantidade]);
       if (!row) {
-        throw Object.assign(new Error(`Saldo insuficiente. Disponível: ${await getSaldoDisponivel(material)} ${material.unidade}`), { status: 400 });
+        throw Object.assign(new Error(`Saldo insuficiente. Disponível: ${await getSaldoDisponivel(material, db)} ${material.unidade}`), { status: 400 });
       }
       saldoPosterior = row.quantidade_atual;
       saidaFisicoAplicado = true;
@@ -2779,7 +2791,7 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         RETURNING id`, [mov.quantidade, mov.material_id, mov.quantidade]);
       if (!claim) {
         throw Object.assign(new Error(
-          `Não é possível estornar: o bloqueio já foi desfeito (quantidade bloqueada: ${material.quantidade_bloqueada || 0})`),
+          `Não é possível estornar: o bloqueio já foi desfeito (quantidade bloqueada: ${Q.qtd(material.quantidade_bloqueada || 0)})`),
           { status: 400 });
       }
     } else if (mov.tipo === 'DESBLOQUEIO') {
@@ -3018,7 +3030,7 @@ async function criarReserva(db, user, data, opcoes = {}) {
     RETURNING id`, [qtd, material_id, qtd]);
   if (!hold) {
     const atual = await getMaterial(db, material_id);
-    throw Object.assign(new Error(`Saldo disponível insuficiente: ${await getSaldoDisponivel(atual)}`), { status: 400 });
+    throw Object.assign(new Error(`Saldo disponível insuficiente: ${await getSaldoDisponivel(atual, db)}`), { status: 400 });
   }
 
   // Vencimento da reserva. `expira_em` explícito manda; senão, é calculado a partir da config
