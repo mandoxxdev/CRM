@@ -1226,3 +1226,66 @@ describe('Etapa 92: Cancelar Requisição nos outros módulos (RN-06)', () => {
     expect(botaoPorTexto('Cancelar Requisição')).toBeFalsy();
   });
 });
+
+// Etapa 93 (Fase 5, achado A): a exclusao que toma 409 (a requisicao mudou durante a exclusao) ou 404 (outra pessoa
+// ja excluiu) FECHA o modal e recarrega a lista e o detalhe. Antes o modal ficava aberto com a justificativa, e o
+// segundo clique em "Confirmar Exclusao" mandava a exclusao de novo (com o 409, o servidor estornava de novo).
+describe('Etapa 93 (Fase 5): exclusao que perde a corrida fecha o modal e recarrega', () => {
+  const clicar = async (botao) => {
+    await act(async () => { botao.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+  };
+  const escrever = (el, valor) => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+    act(() => {
+      setter.call(el, valor);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+  const chamadas = (url) => api.get.mock.calls.filter(([u]) => u === url).length;
+  const abrirEConfirmar = async () => {
+    await renderizar();
+    await clicar(botaoPorTexto('Excluir Requisição'));
+    const ta = container.querySelector('textarea[placeholder="Informe o motivo da exclusão..."]');
+    expect(ta).toBeTruthy();
+    escrever(ta, 'motivo do teste');
+    const antesLista = chamadas('/almoxarifado/requisicoes');
+    const antesDetalhe = chamadas('/almoxarifado/requisicoes/55');
+    await clicar(botaoPorTexto('Confirmar Exclusão'));
+    await act(async () => {});
+    return { antesLista, antesDetalhe };
+  };
+  const modalAberto = () => !!botaoPorTexto('Confirmar Exclusão');
+
+  test('409: toast com o erro, modal FECHADO, lista e detalhe recarregados', async () => {
+    detalheDoBanco = baseRequisicao('ENTREGUE');
+    const E409 = 'A requisição mudou enquanto era excluída; o estorno pode já ter sido feito — confira o estoque e o histórico antes de excluir de novo.';
+    api.delete.mockRejectedValue({ response: { status: 409, data: { error: E409 } } });
+    const { antesLista, antesDetalhe } = await abrirEConfirmar();
+    expect(api.delete).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith(E409);
+    expect(modalAberto()).toBe(false);
+    expect(chamadas('/almoxarifado/requisicoes')).toBeGreaterThan(antesLista);
+    expect(chamadas('/almoxarifado/requisicoes/55')).toBe(antesDetalhe + 1);
+  });
+
+  test('404: toast com o erro, modal FECHADO, lista recarregada e detalhe fechado', async () => {
+    detalheDoBanco = baseRequisicao('TOTALMENTE_RESERVADA');
+    api.delete.mockRejectedValue({ response: { status: 404, data: { error: 'Requisição não encontrada' } } });
+    const { antesLista, antesDetalhe } = await abrirEConfirmar();
+    expect(toast.error).toHaveBeenCalledWith('Requisição não encontrada');
+    expect(modalAberto()).toBe(false);
+    expect(chamadas('/almoxarifado/requisicoes')).toBeGreaterThan(antesLista);
+    expect(chamadas('/almoxarifado/requisicoes/55')).toBe(antesDetalhe);
+    expect(botaoPorTexto('Excluir Requisição')).toBeFalsy();
+  });
+
+  test('400 (recusa do estorno): o modal continua aberto com a justificativa, nada recarrega', async () => {
+    detalheDoBanco = baseRequisicao('ENTREGUE');
+    api.delete.mockRejectedValue({ response: { status: 400, data: { error: 'Chapa 3mm: endereco bloqueado' } } });
+    const { antesLista } = await abrirEConfirmar();
+    expect(toast.error).toHaveBeenCalledWith('Chapa 3mm: endereco bloqueado');
+    expect(modalAberto()).toBe(true);
+    expect(container.querySelector('textarea[placeholder="Informe o motivo da exclusão..."]').value).toBe('motivo do teste');
+    expect(chamadas('/almoxarifado/requisicoes')).toBe(antesLista);
+  });
+});

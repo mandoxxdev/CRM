@@ -1030,6 +1030,22 @@ const RequisicoesList = () => {
       loadRequisicoes();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao excluir requisição');
+      // Etapa 93 (Fase 5, achado A): 409 (a requisicao mudou durante a exclusao — o estorno pode ja ter sido
+      // feito) e 404 (outra pessoa ja excluiu) fecham o modal e recarregam. Antes o modal ficava aberto com a
+      // justificativa preenchida e o segundo clique em "Confirmar Exclusao" mandava a exclusao de novo sobre um
+      // estado que a tela nao mostrava (com o 409, estornava de novo). Os demais erros (400 de validacao do
+      // estorno) mantem o modal: corrigir e tentar de novo e o gesto certo.
+      const status = err.response?.status;
+      if (status === 409 || status === 404) {
+        setShowExcluir(false);
+        setExcluirTarget(null);
+        setJustificativaExclusao('');
+        loadRequisicoes();
+        if (selectedId === targetId) {
+          if (status === 404) fecharDetalhe();
+          else abrirDetalhe(targetId, { force: true });
+        }
+      }
     } finally {
       setSaving(false);
     }
