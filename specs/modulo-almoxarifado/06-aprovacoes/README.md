@@ -1,7 +1,14 @@
 # 06 — Motor de Aprovações
 
 > **Status:** 🟡 — segregação/emergencial/rejeição justificada/auditoria entregues (Etapa 3, 2026-08-05); **regras configuráveis com N aprovações, avaliador no envio, gate nas duas lanes, lembrete por pendência e as duas telas entregues na Etapa 47 (2026-09-30)**. **Etapa 48 (2026-09-30): urgência e material de cliente como critério, urgência como lista fechada, e a fila da lane simples.** Falta para 🟢: **material fora da lista técnica** (depende da feature 22, que não existe) e **dupla aprovação de ajuste** (espera a decisão **B11**) — nenhum dos dois cabe numa etapa sem essas dependências · **Spec original:** seção 6
-> **Última atualização:** 2026-09-30 (**fechamento da Etapa 48** — ver "Etapa 48" abaixo; e **duas frases da
+> **Última atualização:** 2026-10-09 (**Etapa 94** — a alçada de valor (liberação por valor) vale até o começo da
+> separação: só é reavaliada — e só bloqueia e grava *Aguardando aprovação de valor* — numa requisição em status
+> anterior à separação ou em *Em Separação* vazia, sem nada separado nem entregue; o atalho por fora da máquina de
+> estados (o **C68** da Etapa 47) virou seis setas (B454); a gravação confere o status lido (409 V1, B456). Esta spec
+> nunca disse onde a alçada é reconferida, e o manual (8.3, item 3) atribuía o re-bloqueio a "itens alterados" —
+> **estava errado**, ver o bloco "Etapa 94" em "O que já existe". `a758d39d`, `7b66807f`, `19e294fc`, `9cafb842`,
+> `79a766e9`, Fase 5 `ad5fcd7f`, `c729b784`, `469fda3b`. **Continua 🟡** pelos mesmos dois motivos — ver o mapa.)
+> Antes: 2026-09-30 (**fechamento da Etapa 48** — ver "Etapa 48" abaixo; e **duas frases da
 > seção da Etapa 47 estavam erradas** depois da revisão do código dela — corrigidas ali, à vista).
 > Antes: 2026-09-30 (**fechamento da Etapa 47** — as duas correções desta spec, ditas no formato
 > "dizia X; estava errado; o certo é Y").
@@ -38,6 +45,47 @@ Motor de aprovação configurável por tipo de material, valor, quantidade, proj
   - **Critérios novos em `regras_aprovacao`:** `urgencia` (igualdade, mesma literal para valor fora da lista) e `material_cliente` (algum material com `proprietario_cliente_id`, somado por material; `0`/`false` não conta como critério).
   - **PUT da regra:** campo **ausente** mantém o valor atual; `null` explícito limpa (B199).
   - **Fila da lane simples:** painel *"Requisições aguardando sua aprovação"* — recorte de `GET /requisicoes?status=PENDENTE` (sem rota nova): de outra pessoa, sem pendência de regra aberta, só no modo almoxarifado e só com `pode('aprovar_requisicao')`. A requisição com `regras_avaliadas_em` nulo **fica**, marcada *"regras ainda não avaliadas — a aprovação vai conferir"* (B198).
+- **Etapa 94 (2026-10-09) — a alçada de valor vale até o começo da separação.** Plano:
+  `docs/superpowers/plans/2026-10-09-almoxarifado-etapa94-alcada-de-valor-ate-a-separacao.md`.
+  - **Onde é conferida:** `requisitionValueApprovalService.verificarBloqueioLiberacao`, chamada na separação
+    (*Iniciar*/*Confirmar Separação*) e na entrega — nesta, só depois das recusas da própria entrega (quantidade acima do
+    máximo, nada informado; Fase 5, B464), o que na prática faz a entrega nunca gravar a alçada (com algo separado ela
+    não vale; numa *Em Separação* vazia a entrega recusa antes). A liberação para retirada não confere.
+  - **Quando vale:** `requisitionStateMachine.alcadaDeValorAindaVale(status, itens)` — o status tem seta para
+    `AGUARDANDO_APROVACAO_VALOR` (os cinco anteriores à separação — `APROVADO`, `AGUARDANDO_ESTOQUE`,
+    `AGUARDANDO_COMPRA`, `PARCIALMENTE_RESERVADA`, `TOTALMENTE_RESERVADA` — e `EM_SEPARACAO`; `PENDENTE` tem a seta
+    mas não separa e fica de fora) **e** nenhum item tem quantidade separada nem entregue > 0 (entregue =
+    `COALESCE(quantidade_entregue, quantidade_atendida)`). Valendo, recalcula o valor (quantidade **solicitada** × custo
+    atual do material — o custo médio quando > 0, senão o custo do cadastro), grava `valor_total` e, acima do limite e
+    sem aprovação de valor dada, grava *Aguardando aprovação de valor*, avisa os aprovadores e responde 403 *"Valor total
+    (R$ …) excede o limite de liberação automática (R$ …). Aprovação de alto valor necessária."* Não valendo, devolve a
+    linha sem ler custo e sem gravar nada — nem status, nem `valor_total`, nem `requer_aprovacao_valor`, nem e-mail
+    (B453, B455): o valor gravado fica o da última avaliação.
+  - **Já aprovada por valor** (`data_aprovacao_valor` preenchida) nunca volta a travar — inalterado.
+  - **Gatilhos reais da reavaliação:** o custo do material subir (entrada com custo maior → o custo médio sobe; o custo
+    do cadastro quando o custo médio é zero) e a configuração (limite baixado, alçada ligada depois). Nenhuma tela ou
+    rota altera os itens depois da criação.
+  - **Risco aceito (C167):** com material separado ou entregue, a requisição segue e é entregue mesmo que o custo tenha
+    subido acima do limite depois. O controle de valor fica na aprovação e no começo da separação.
+  - **A gravação confere o status lido** (`WHERE id = ? AND status = ?`, B456): separar e cancelar no mesmo instante
+    ressuscitavam a cancelada em *Aguardando aprovação de valor* (10/10 sem gancho, C164), e aprovar por valor depois
+    reservava de novo. Perdeu → **409** *"A requisição mudou de status enquanto a alçada de valor era conferida (agora
+    CANCELADO); recarregue e confira antes de separar."* (o status vem com o código cru), sem e-mail.
+  - **Uma regra só em três lugares:** a porta (a verificação acima), a fila de separação (mostra *Aguardando aprovação de
+    valor* só enquanto a alçada vale — antes mostrava numa requisição em separação, pronta ou parcialmente atendida, C165,
+    B457) e a reserva na chegada (`reservaChegadaService.bloqueadaPorValor`, B461) usam o mesmo predicado.
+  - **O 403 da alçada traz `code: 'AGUARDANDO_APROVACAO_VALOR'`** nas rotas `/separar`, `/separacao` e `/entregar`
+    (Fase 5, B465), e a tela trata esse 403 como o 409: fecha o modal de separação e recarrega. O contrato do plano dizia
+    que as duas mensagens de 403 já traziam o `code` — **estava errado**: as rotas mandavam só `{ error }`.
+  - **Estava errado, dito à vista (C166):** o manual (`docs/almoxarifado-manual-do-sistema.md`, 8.3, item 3) dizia que a
+    requisição volta a travar se o valor subir "(itens alterados)". Isto dizia que o gatilho eram itens alterados;
+    **estava errado** — nenhuma tela ou rota altera item depois da criação; o certo é que os gatilhos são o custo do
+    material e a configuração da alçada, e que desde a Etapa 94 só valem **antes** de começar a separação. Esta spec não
+    dizia em lugar nenhum onde a alçada é reconferida; o caminho real — gravar *Aguardando aprovação de valor* por fora da
+    máquina, **de qualquer status**, inclusive com material separado ou entregue — estava só na letra C (o **C68** da
+    Etapa 47, "mudança de máquina de estados, etapa própria"). Agora é seta da máquina (B454) e não alcança mais a
+    requisição com material na caixa (B453). **O lembrete** da requisição que volta a aguardar valor depois de aprovada
+    continua de fora: a régua do lembrete (`data_aprovacao IS NULL`) não muda (C68/A25).
 
 ## Checklist
 
@@ -51,6 +99,7 @@ Motor de aprovação configurável por tipo de material, valor, quantidade, proj
 - [x] Urgência como lista fechada (`TIPOS_URGENCIA`), recusada na criação e no envio do rascunho — `d8631bd` (Etapa 48, T1) + (Fase 5 `731a13a`: o envio normalizando e recusando)
 - [x] Critérios de **urgência** e **material de cliente** nas regras — `68563a5` (Etapa 48, T2); PUT com campo ausente preservando — (Fase 5 `731a13a`)
 - [x] Integração dos critérios novos pela segunda rota, com auto-aprovação, fila de regras e a requisição não avaliada — `integracaoRegrasUrgenciaCliente.api.test.js` (`410fece`, Etapa 48, T5)
+- [x] **A alçada de valor vale até o começo da separação (Etapa 94, C163 + C164 + C165 + C166; o C68 da Etapa 47)** — o predicado `alcadaDeValorAindaVale` e as seis setas para `AGUARDANDO_APROVACAO_VALOR` `a758d39d` (B453, B454, B455, B462; com material separado ou entregue a verificação devolve sem ler custo nem gravar; reescrita declarada do `[93 RN-08] (d4)`, B459); a gravação confere o status lido `7b66807f` (B456; 409 V1, sem e-mail); a fila de separação e a reserva na chegada com o mesmo predicado, e a etapa `RETOMAR_SEPARACAO` para o legado `19e294fc` (B457, B460, B461); a tela — *Reabrir separação* e o 409 que fecha o modal e recarrega `9cafb842` (B460, B463); integração pela rota e pelo serviço `79a766e9` (jornadas A–G + A45, 10/10). Fase 5: `ad5fcd7f` (B464 — a entrega que não entrega nada não chega à gravação da alçada), `c729b784` (B465 — o 403 da alçada fecha o modal e recarrega; as rotas passam a mandar o `code`), `469fda3b` (testes para quatro sabotagens que passavam verde). Testes: `alcadaValorDepoisDaSeparacao.api.test.js` (RN-01…RN-05 + `[94 F5]`), `alcadaValorDepoisDaSeparacaoIntegracao.api.test.js`, `client/src/components/almoxarifado/RequisicoesReabrirSeparacao.test.js`. **Fica de fora:** o lembrete da requisição que volta a aguardar valor depois de aprovada (C68/A25 continuam — a seta nova não muda a régua do lembrete, e não há queixa de uso); guarda em reprovar/cancelar para o legado que o desvio já deixou com caixa (a consulta **A45** o acha e diz o que fazer); reavaliar só o saldo a entregar; os cancelamentos na trava por requisição (B450); mais de um processo (C132). Nenhum clique no navegador foi dado nesta etapa.
 - [x] Segregação: solicitante não aprova a própria requisição (Etapa 3, Task 4 — nas duas lanes, aprovar e aprovar-valor; rejeitar a própria continua permitido, é desistência)
 - [x] Requisição emergencial exige justificativa (Etapa 3, Task 1 — `RequisicaoSchema.superRefine`, validado na criação nas 2 rotas)
 - [x] Material de cliente exige autorização específica (feature 13) — **ENTREGUE na Etapa 8 (2026-08-12), e este item ficou `[ ]` por 17 dias descrevendo um estado que já tinha mudado.** A ação dedicada existe: `ajustar_material_cliente: [ADMINISTRADOR]` (`permissions.js:34`), verificada **dentro do motor** (`stockService.js:692`), com guarda de dono na saída. **A frase "fora da Etapa 3" ESTAVA CERTA quando escrita e ficou ERRADA depois** — esta spec não foi reaberta quando a 13 entregou. Fica dito em vez de apenas marcado
@@ -117,6 +166,7 @@ ela.** Escrita sem leitor, na forma mais cara.
 | Rejeição exige justificativa (aprovação simples) | `[rejeitar] sem motivo -> 400` + `motivo vazio -> 400` (`requisicaoAprovacao.api.test.js`) |
 | Rejeição exige justificativa (aprovação por valor) | `[rejeitar-valor] sem motivo -> 400` (`requisicaoAprovacao.api.test.js`) |
 | Decisão de aprovação/rejeição é auditada | `[aprovar] decisão auditada (acao APROVACAO)` + `[rejeitar] decisão auditada (acao REJEICAO, justificativa=motivo)` (`requisicaoAprovacao.api.test.js`) |
+| A alçada de valor vale até o começo da separação; com material separado ou entregue não reavalia nem grava; a gravação confere o status | `alcadaValorDepoisDaSeparacao.api.test.js` (`[94 RN-01]`…`[94 RN-05]`, `[94 F5]`) + `alcadaValorDepoisDaSeparacaoIntegracao.api.test.js` (jornadas A–G, A45) |
 | Decisão de aprovação é imutável (sem rota de editar/excluir) | não coberto por teste de API dedicado nesta etapa |
 
 ## Dependências

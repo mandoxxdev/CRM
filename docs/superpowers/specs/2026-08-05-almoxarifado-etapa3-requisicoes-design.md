@@ -15,13 +15,34 @@
 
 ## Máquina de estados (módulo `requisitionStateMachine.js`, padrão do movementRules)
 
+> **Posto em dia no fechamento da Etapa 94 (2026-10-09).** `server/services/almoxarifado/requisitionStateMachine.js`
+> diz que `TRANSICOES` é "cópia literal" deste diagrama — e o diagrama **já estava atrasado**: não tinha as setas de
+> reserva da Etapa 4 (`APROVADO` e `AGUARDANDO_APROVACAO_VALOR` → `PARCIALMENTE/TOTALMENTE_RESERVADA`; os dois status de
+> reserva → `EM_SEPARACAO` | `CANCELADO`), nem as da Etapa 74 (`AGUARDANDO_ESTOQUE/COMPRA` → `*_RESERVADA` na chegada da
+> nota; `PARCIALMENTE` ↔ `TOTALMENTE_RESERVADA` e `*_RESERVADA` → `AGUARDANDO_*`/`APROVADO` no estorno da entrada), e
+> agora também não teria as seis da Etapa 94 (→ `AGUARDANDO_APROVACAO_VALOR`, a alçada de valor reavaliada antes da
+> separação; a `EM_SEPARACAO` só vale vazia — o predicado `alcadaDeValorAindaVale` exclui a com material separado).
+> O diagrama abaixo é a `TRANSICOES` do código em 2026-10-09; o original (Etapa 3) está no histórico do git deste arquivo.
+
 ```
 RASCUNHO → PENDENTE (enviar) | CANCELADO
 PENDENTE → APROVADO | REJEITADO | AGUARDANDO_APROVACAO_VALOR | CANCELADO
-AGUARDANDO_APROVACAO_VALOR → PENDENTE/APROVADO (aprovar-valor) | REJEITADO | CANCELADO
+AGUARDANDO_APROVACAO_VALOR → PENDENTE | APROVADO | REJEITADO | CANCELADO
+                           | PARCIALMENTE_RESERVADA | TOTALMENTE_RESERVADA            (Etapa 4: aprovar-valor reserva)
 APROVADO → EM_SEPARACAO | AGUARDANDO_ESTOQUE | AGUARDANDO_COMPRA | CANCELADO
+         | PARCIALMENTE_RESERVADA | TOTALMENTE_RESERVADA                              (Etapa 4)
+         | AGUARDANDO_APROVACAO_VALOR                                                 (Etapa 94)
 AGUARDANDO_ESTOQUE/AGUARDANDO_COMPRA → EM_SEPARACAO | CANCELADO
+         | PARCIALMENTE_RESERVADA | TOTALMENTE_RESERVADA                              (Etapa 74: reserva na chegada)
+         | AGUARDANDO_APROVACAO_VALOR                                                 (Etapa 94)
+PARCIALMENTE_RESERVADA → EM_SEPARACAO | CANCELADO                                     (Etapa 4)
+         | TOTALMENTE_RESERVADA | AGUARDANDO_ESTOQUE | AGUARDANDO_COMPRA | APROVADO    (Etapa 74)
+         | AGUARDANDO_APROVACAO_VALOR                                                 (Etapa 94)
+TOTALMENTE_RESERVADA → EM_SEPARACAO | CANCELADO                                       (Etapa 4)
+         | PARCIALMENTE_RESERVADA | AGUARDANDO_ESTOQUE | AGUARDANDO_COMPRA | APROVADO  (Etapa 74)
+         | AGUARDANDO_APROVACAO_VALOR                                                 (Etapa 94)
 EM_SEPARACAO → PRONTA_PARA_RETIRADA | PARCIALMENTE_ATENDIDA | ENTREGUE
+         | AGUARDANDO_APROVACAO_VALOR                                (Etapa 94; só vazia, pelo predicado)
 PRONTA_PARA_RETIRADA → PARCIALMENTE_ATENDIDA | ENTREGUE
 PARCIALMENTE_ATENDIDA → EM_SEPARACAO | ENTREGUE | ENCERRADA
 ENTREGUE → ENCERRADA

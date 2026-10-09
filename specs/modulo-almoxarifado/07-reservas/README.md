@@ -2,7 +2,14 @@
 
 > **Status:** 🟢 Etapa 4 completa — backend (2026-08-05) e tela (2026-08-06) ·
 > **Spec original:** seção 7
-> **Última atualização:** 2026-10-09 (**Etapa 93** — dois gestos do almoxarife na mesma requisição acontecem um depois
+> **Última atualização:** 2026-10-09 (**Etapa 94** — a alçada de valor vale até o começo da separação: a requisição com
+> material separado ou entregue não vai mais a *Aguardando aprovação de valor*, então reprovar por valor ou cancelar não
+> solta mais a reserva com material na caixa, e aprovar por valor não devolve mais *Reservada* com material entregue
+> (**C163**); separar × cancelar no mesmo instante não ressuscita a cancelada, e aprovar por valor depois não reserva de
+> novo (**C164**, 409 V1); a reserva na chegada usa o mesmo predicado — a requisição em separação com material na caixa
+> recebe a reserva da nota mesmo com o valor acima do limite (**B461**; antes a chegada a pulava). `a758d39d`,
+> `7b66807f`, `19e294fc`, `79a766e9`. Consulta **A45**. Continua 🟢. Ver o item da Etapa 94 no checklist.)
+> Antes: 2026-10-09 (**Etapa 93** — dois gestos do almoxarife na mesma requisição acontecem um depois
 > do outro (trava por requisição, B443 — **outra** trava, não a por material): liberar para retirada no instante de uma
 > rodada nova de material crítico não prende mais a requisição em *Pronta para retirada* com a reserva **ativa** (**C158**,
 > 3c — nenhum gesto a tirava dali, só a exclusão); duas entregas simultâneas consomem a reserva uma vez e o item soma as
@@ -230,6 +237,18 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
   reservas e a trilha só depois do `UPDATE` que venceu); `92d995a0` (RN-08 (c'') separa 2 e afirma separado 4).
   **Fica de fora:** prazo para pegar a trava (como a C150); C139, C145, C147, C150, C132 (premissa de um processo — com
   mais de um vira `SELECT … FOR UPDATE` na linha da requisição).
+- [x] **A reserva não fica mais solta com material separado na caixa, nem é refeita para a cancelada (Etapa 94, C163 +
+  C164 + B461)** — `a758d39d` (a alçada de valor só vale sem nada separado nem entregue — B453: a requisição com caixa
+  não vai mais a *Aguardando aprovação de valor*, de onde `/rejeitar-valor` ou o cancelamento liberavam a reserva com o
+  material separado, e `/aprovar-valor` devolvia `*_RESERVADA` com material entregue); `7b66807f` (a gravação da alçada
+  confere o status lido — B456: separar × cancelar deixava a cancelada, já com a reserva `LIBERADA`, em *Aguardando
+  aprovação de valor*, e o `/aprovar-valor` depois **reservava de novo**; agora 409 V1, final `CANCELADO` e
+  `/aprovar-valor` → 400, nenhuma reserva nova); `19e294fc` (`reservaChegadaService.bloqueadaPorValor` usa o mesmo
+  predicado `alcadaDeValorAindaVale` — B461: a `EM_SEPARACAO` com material na caixa e o valor acima do limite ganha a
+  reserva da nota, antes era pulada embora a porta a deixe separar; sem caixa a alçada ainda vale e a chegada continua
+  pulando — `[94 RN-05] (e)` com o controle); integração `79a766e9` (jornadas A–G; a A até a reserva `CONSUMIDA`, a E até
+  `CANCELADO` com o `/aprovar-valor` recusado; A45 e A43 (a) vazias). **Fica de fora:** guarda em reprovar/cancelar para o legado que o desvio já deixou com caixa (a **A45**
+  o acha e diz o que fazer com cada linha); os cancelamentos na trava por requisição (B450).
 - [ ] Reserva por lote específico / número de série — **fora da Etapa 4**. Atualização (2026-08-11): a dependência de **lote** caiu — a feature 10 (lotes) foi entregue na Etapa 6 (2026-08-09/10), então reserva por lote ficou implementável; número de série continua dependendo da 6b
 - [x] Data de necessidade na reserva (`data_necessidade`) — `6690c1a`. **Prioridade** ficou fora: sem demanda concreta, `data_necessidade` cobre o ordenamento útil
 - [x] Expiração automática (`POST /reservas/processar-expiracao` + config `reserva_dias_validade`) — `6690c1a`. **Opt-in**: sem a config e sem `expira_em` explícito a reserva não expira, senão as reservas manuais existentes começariam a ser liberadas sozinhas. Alerta por e-mail fica com a feature 20
@@ -311,7 +330,7 @@ Os nomes abaixo são os reais — copiáveis para localizar o caso.
 | Retido para inspeção não se reserva; só o que **esta** nota trouxe livre | `recebimentoReservaChegada` · *[RN-03]…* · *[RN-04] so o que ESTA nota trouxe…* · *[RN-04] saldo livre previo…* |
 | A aprovação automática criada depois não toma | `recebimentoReservaChegada` · *[RN-05] aprovacao automatica ligada…* |
 | O status acompanha pela máquina; EM_SEPARACAO ganha sem mudar status; terminais não ganham | `recebimentoReservaChegada` · *[RN-06]…* (três cenários) |
-| Pulada: liberação por valor bloqueante; material de cliente sem o projeto do dono | `recebimentoReservaChegada` · *[Fase 2] candidata com avaliacao de valor…* · *[RN-14 revista] material de cliente…* |
+| Pulada: liberação por valor bloqueante (*Etapa 94: só enquanto a alçada de valor ainda vale — com material na caixa não pula, B461*); material de cliente sem o projeto do dono | `recebimentoReservaChegada` · *[Fase 2] candidata com avaliacao de valor…* · *[RN-14 revista] material de cliente…* · `alcadaValorDepoisDaSeparacao` · *[94 RN-05] (e) chegada…* |
 | Idempotente; corrida no meio desfaz o excesso; cancelada no meio desfeita | `recebimentoReservaChegada` · *[RN-08]…* (três) · *[Fase 2] corrida no meio…* · *[RN-09] cancelada entre a leitura e a reserva…* |
 | O estorno da entrada solta só o necessário, da última na ordem, e só de quem não separou | `recebimentoReservaChegadaEstorno` · *[RN-11]…* · *[RN-11, Fase 2]…* |
 | O estorno que não acontece não leva a reserva (repetido, lote, falha depois, corrida) | `recebimentoReservaChegadaEstorno` · *[Fase 5]…* (quatro) |

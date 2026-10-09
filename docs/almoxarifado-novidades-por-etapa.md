@@ -11,10 +11,11 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-09):** Etapa 93 fechada (dois gestos na mesma requisição — separar, liberar
-> para retirada, entregar, excluir, encerrar — acontecem um depois do outro; duas entregas não deixam mais sair material
-> a mais, duas exclusões não estornam duas vezes, e a excluída não volta a *Em Separação*) — ver "Onde estamos e o que vem
-> a seguir", no fim. A próxima etapa do almoxarifado é a **94** — a alçada de valor reavaliada depois de começar a separação não devolve a requisição em separação ou parcialmente atendida a *Aguardando aprovação de valor* (medido sem corrida). Desde a unificação de 2026-10-07 a
+> **Onde o desenvolvimento está (2026-10-09):** Etapa 94 fechada (a alçada de valor vale até o começo da
+> separação — custo ou limite que mudam depois de separado algo não devolvem mais a requisição em separação, pronta ou
+> parcialmente atendida a *Aguardando aprovação de valor*; separar e cancelar juntos não ressuscitam a cancelada) — ver
+> "Onde estamos e o que vem a seguir", no fim. A próxima etapa do almoxarifado é a **95** — a separação aceita mais do
+> que existe na prateleira (**C169**, medido sem corrida). Desde a unificação de 2026-10-07 a
 > numeração é uma só para todos os módulos, e as 78 a 90 foram usadas pelo lote de Compras/núcleo
 > (`docs/compras-novidades-por-etapa.md`, **B18**) — por isso a etapa depois da 77 foi a 91.
 >
@@ -114,7 +115,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Quarenta e quatro itens para rodar em produção ANTES do deploy — quarenta e um são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Quarenta e cinco itens para rodar em produção ANTES do deploy — quarenta e dois são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-09 (Etapa 94) de quarenta e quatro para quarenta e cinco**, com a **A45** — as requisições com material separado ou entregue que a alçada de valor levou a *Aguardando aprovação de valor* (e as que daí foram reprovadas, canceladas ou aprovadas) antes desta versão.)*
 
 *(**Atualizado em 2026-10-09 (Etapa 93) de quarenta e três para quarenta e quatro**, com a **A44** — as cinco marcas que dois gestos na mesma requisição, no mesmo instante, podem ter deixado: excluídas que voltaram a outro status, item com menos entregue do que saiu, estorno dobrado ou faltando, requisição toda entregue parada fora de *Entregue* e crítico liberado sem a segunda conferência.)*
 
@@ -1606,7 +1609,59 @@ tamanho real só em produção.)*
 - **Linha em (e)** — **não entregar** até alguém conferir a caixa; não há gesto que a devolva a *Em Separação* —
   corrigir à mão para *Em Separação* e pedir a segunda conferência.
 
-### B. Decisões de negócio — B1 a B452; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A45 (NOVA, da Etapa 94 — requisições com material separado ou entregue que a alçada de valor tirou do fluxo).** Antes
+desta versão, quando o custo de um material subia (uma entrada com custo maior) ou o limite da alçada baixava (ou a
+alçada era ligada) **depois** de começada a separação, o próximo **Separar** ou **Entregar** levava a requisição a
+*Aguardando aprovação de valor* com material na caixa ou já entregue (**C163**). Daí: **reprovar** ou **cancelar** soltava
+a reserva com o material fisicamente separado; **aprovar por valor** devolvia uma *Totalmente Reservada* com material
+separado (e às vezes já entregue) que a tela não sabia mais separar nem entregar. O deploy não desfaz o que já aconteceu.
+Somente leitura:
+
+```sql
+-- (a) aguardando valor, reprovadas ou canceladas com material separado ou entregue (o desvio, ou o que ele deixou)
+SELECT rq.id, rq.numero, rq.status, i.id AS item_id,
+       COALESCE(i.quantidade_separada,0) - COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0) AS na_caixa,
+       COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0) AS entregue
+  FROM requisicoes_almoxarifado rq JOIN itens_requisicao_almoxarifado i ON i.requisicao_id = rq.id
+ WHERE COALESCE(rq.ativo,1) = 1 AND rq.status IN ('AGUARDANDO_APROVACAO_VALOR','REJEITADO','CANCELADO')
+   AND (COALESCE(i.quantidade_separada,0) > 1e-9 OR COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0) > 1e-9)
+ ORDER BY rq.id;
+-- (b) "aprovada/reservada" com material separado ou entregue (a aprovação por valor depois do desvio)
+SELECT rq.id, rq.numero, rq.status, i.id AS item_id, COALESCE(i.quantidade_separada,0) AS separado,
+       COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0) AS entregue
+  FROM requisicoes_almoxarifado rq JOIN itens_requisicao_almoxarifado i ON i.requisicao_id = rq.id
+ WHERE COALESCE(rq.ativo,1) = 1
+   AND rq.status IN ('APROVADO','AGUARDANDO_ESTOQUE','AGUARDANDO_COMPRA','PARCIALMENTE_RESERVADA','TOTALMENTE_RESERVADA')
+   AND (COALESCE(i.quantidade_separada,0) > 1e-9 OR COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0) > 1e-9)
+ ORDER BY rq.id;
+```
+
+*(Conferida duas vezes contra o esquema real do módulo, montado em memória pelo mesmo harness dos testes. Na medição da
+etapa e no teste de integração (controle positivo): a (a) **acha** a *Em Separação* levada a *Aguardando*, a *Parcialmente
+Atendida* levada a *Aguardando* e reprovada, e a *Pronta para retirada* levada a *Aguardando* e cancelada; a (b) acha a
+*Parcialmente Atendida* levada a *Aguardando* e aprovada por valor; **nenhuma** das duas acha a *Reservada* que vai a
+*Aguardando* sem nada na caixa (o caso de projeto), o fluxo normal até *Entregue*, a *Em Separação* sem o custo subir, nem
+a *Reservada* reprovada sem caixa; e com uma coluna trocada de propósito o banco **recusa** as duas. A cancelada que uma
+separação no mesmo instante "ressuscitava" em *Aguardando* (**C164**) **já** é achada pela **A43 (a)** — a A45 não a
+repete. A (a) **se sobrepõe** à **A43 (b)** nas canceladas com material na caixa — não somar as duas. A régua do entregue
+é a mesma do sistema (o entregue, ou o atendido em dado antigo). O banco de desenvolvimento não tem dados, então o tamanho
+real só em produção.)*
+
+**Como ler o resultado** (ninguém corrige por script — cada linha pede olhar o físico, **B458**):
+- **As duas vazias** — nada a fazer.
+- **Linha em (a) com *Aguardando aprovação de valor*** — o aprovador de valor **aprova** (a requisição volta a
+  *Reservada*) e segue a (b).
+- **Linha em (a) com *Rejeitado* ou *Cancelado*** — devolver à prateleira o que está na caixa (`na_caixa`); o que já foi
+  entregue saiu de fato (nada a estornar) — conferir com quem recebeu.
+- **Linha em (b)** — na fila de separação ela aparece com **Reabrir separação** (se ainda falta separar, com **Separar**):
+  abrir a requisição → **Iniciar Separação** → **📦 Reabrir separação** (nesta versão não há mais o 403) → *Em Separação* →
+  entregar o que está na caixa. Se depois disso não se quer mais o resto, a requisição *Parcialmente Atendida* pode
+  ser **Encerrada**.
+- **Falso positivo possível** em dado anterior à máquina de estados (Etapa 3) — conferir a trilha da requisição.
+
+### B. Decisões de negócio — B1 a B465; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-09 de B452 para B465**, com as treze da Etapa 94 — onze do plano (**B453** a **B463**; **B460** a **B463** da revisão do plano) e duas da revisão adversarial do código (**B464**, que corrige a **B456** à vista, e **B465**).)*
 
 *(**Atualizado em 2026-10-09 de B442 para B452**, com as dez da Etapa 93 — nove do plano (**B443** a **B451**) e uma da revisão adversarial do código (**B452**, que muda a **B447**; a **B450** ganhou a reprovação por valor).)*
 
@@ -6048,6 +6103,117 @@ não tem); recarregar em qualquer erro (perderia a justificativa digitada num er
 declarado:** uma troca de status exatamente entre a releitura e a gravação final fica fora da trilha da exclusão (a
 trilha de quem trocou a registra). (`588c9862`, `2721c17c`)
 
+**B453 (NOVA, da Etapa 94) — a alçada de valor vale até o começo da separação.** **Escolhido:** a alçada só é
+reavaliada — recalcula o valor, bloqueia e grava *Aguardando aprovação de valor* — quando (1) o status tem seta para
+*Aguardando aprovação de valor* na máquina de estados (*Aprovado*, *Aguardando estoque*, *Aguardando compra*,
+*Parcialmente* e *Totalmente Reservada* e *Em Separação* — **B454**, **B462**) **e** (2) nenhum item tem nada separado nem
+entregue. Fora disso a verificação devolve a requisição sem tocar em nada (**B455**). **Por quê:** a aprovação (e a
+alçada avaliada nela e no começo da separação) é a decisão sobre gastar; com o material na caixa ou já entregue o gasto
+aconteceu — reavaliar ali não tinha gesto coerente para o aprovador (aprovar desmontava o status, reprovar soltava a
+reserva do material separado). E o custo médio sobe por **nota de outro pedido** — um fato que não é da requisição.
+**Reversível:** um retorno antecipado e seis setas; nenhuma migração, nenhum dado reescrito. **Risco aceito (C167):** uma
+requisição cujo custo passa do limite **depois** de começada a separação é entregue sem aprovação de valor.
+**Descartados:** (a) reavaliar só o saldo a entregar — ainda precisaria de um status para onde ir no meio do fluxo, e o
+valor do saldo muda a cada entrega parcial (a mesma requisição travaria e destravaria sozinha); (b) recusar com 403 sem
+trocar o status, com o **Aprovar por valor** aceitando outros status — contrato novo em duas portas e na tela, e a
+requisição separada ficaria parada sem status que dissesse por quê; (c) manter a troca e fazer reprovar/cancelar
+recusarem com caixa — a requisição fica num status fora da máquina; (d) o retorno preservar a caixa (coluna nova
+"status antes da alçada") — muito mais superfície para o mesmo fim; (e) "ainda não há rodada de separação" como critério
+— *Iniciar Separação* sem quantidade põe *Em Separação* sem rodada, e a rodada não diz se há material na caixa; (f) "só a
+seta", como a Etapa 93 sugeriu — nenhum status de separação tinha a seta, e a regra literal desligaria a alçada também
+antes da separação. (`a758d39d`)
+
+**B454 (NOVA, da Etapa 94) — as setas para *Aguardando aprovação de valor* entram na máquina de estados.** *Aprovado*,
+*Aguardando estoque*, *Aguardando compra*, *Parcialmente Reservada* e *Totalmente Reservada* (e *Em Separação*, **B462**)
+ganham o destino; a regra da **B453** é "a máquina tem a seta **e** nada na caixa" — uma fonte só, usada pela separação,
+pela fila e pela reserva na chegada. É o atalho do **C68** (Etapa 47) virando transição de projeto. **Não muda:** o
+lembrete por e-mail continua só para a requisição que nasceu aguardando valor (a **A25** e o **C68** seguem abertos nessa
+parte). **Descartado:** uma lista própria no serviço de valor (segunda fonte de verdade — era exatamente o que a fila
+tinha). (`a758d39d`)
+
+**B455 (NOVA, da Etapa 94) — depois da separação a verificação não lê o custo nem grava nada.** Nem status, nem o valor
+total, nem a marca de "requer aprovação", nem e-mail, nem log. O valor total gravado fica o da última avaliação.
+**Descartados:** um aviso no log (sugestão da Etapa 93) — sem leitor nem gesto; regravar o valor total — a lista
+mostraria um valor acima do limite numa requisição liberada, pintado de "atenção", sem nada que alguém possa fazer.
+(`a758d39d`)
+
+**B456 (NOVA, da Etapa 94) — a gravação da alçada confere o status lido; perdeu → 409, sem e-mail, sem nova
+tentativa.** A troca para *Aguardando aprovação de valor* só grava se o status ainda é o lido no começo da verificação;
+perdeu → **409** *"A requisição mudou de status enquanto a alçada de valor era conferida (agora ⟨status⟩); recarregue e
+confira antes de separar."*, e a notificação aos aprovadores só sai se a gravação venceu. Fecha a cancelada
+"ressuscitada" (**C164**). **Por que 409 e sem nova tentativa:** a verificação roda antes de qualquer gravação da
+separação, então repetir é seguro, e a janela é de milissegundos. O 409 também sai — inofensivo — quando o recálculo de
+reserva (Etapa 76) ou o **Aprovar** mudam o status nessa janela: nada foi gravado, tentar de novo é o certo.
+**Descartados:** nova tentativa com o status relido (o relido mais provável é *Cancelado*); o 403 de valor sobre a
+cancelada (mentiria — ela não está aguardando valor); pôr os cancelamentos na fila por requisição (**B450**: reabre a
+ordem das travas). *(⚠️ **O texto original desta decisão dizia "só a separação alcança este caminho (a entrega lê sempre
+status pós-separação)". Estava errado** desde a **B462**: com a sexta seta, uma entrega numa *Em Separação* **vazia** com
+o limite baixado chegava a gravar a alçada — 403, status trocado e e-mail aos aprovadores — antes de a própria entrega
+recusar. A revisão do código achou; o certo, desde a **B464**, é: a entrega só chega à verificação depois das próprias
+recusas, e na prática nunca grava a alçada.)* (`7b66807f`)
+
+**B457 (NOVA, da Etapa 94) — a fila de separação usa a mesma regra.** A fila só avalia a alçada ao vivo quando a
+**B453** diz que ela ainda vale. **Descartado:** deixar como estava — a fila mostrava *Aguardando aprovação de valor*
+numa requisição em separação, pronta ou parcialmente atendida, onde a porta entrega (**C165**). (`19e294fc`)
+
+**B458 (NOVA, da Etapa 94) — o legado não é consertado por script nem por guarda nova.** As requisições já desviadas
+(**A45**) continuam onde estão; a regra nova as **destrava**: aprovar por valor (vira *Reservada* com caixa) → **Reabrir
+separação** (**B460**; agora sem 403 — há caixa) → *Em Separação* → entregar. As já reprovadas ou canceladas com caixa:
+devolver o material à prateleira. **Descartados:** script de correção (cada linha pede decisão física, como a **B451**);
+recusar reprovar/cancelar com caixa (contrato novo em duas portas só para o legado — e nenhuma requisição nova chega mais
+a *Aguardando* com caixa). *(O caminho "medido" desta decisão foi medido pela API; pela tela ele não existia quando tudo
+já estava separado — a revisão do plano achou, e a **B460** dá o gesto à tela.)*
+
+**B459 (NOVA, da Etapa 94) — o teste da Etapa 93 que montava *Aguardando* com entregue é reescrito, não apagado.** Ele
+usava o desvio como premissa (custo sobe numa *Parcialmente Atendida* → entregar → 403) para provar que exclusão ×
+aprovação por valor estorna uma vez só. Depois desta etapa esse estado só existe como **legado**: o teste o monta direto
+no banco e a asserção (um estorno só) continua provada. **Descartado:** apagar — a corrida sobre o legado continua
+possível em produção. (`a758d39d`)
+
+**B460 (NOVA, da Etapa 94, revisão do plano) — o legado com tudo separado ganha o gesto na tela.** Num status anterior à
+separação, com algum item separado e ainda não entregue e nada mais a separar, o modal de separação habilita o botão com
+zero e o rótulo vira **"📦 Reabrir separação"** (aviso: *"Todo o material desta requisição já está separado. Confirme para
+reabrir a separação e seguir para a entrega."*); a fila de separação mostra **Reabrir separação** (acionável). A regra é
+uma só, dos dois lados, conferida por teste. **Reversível:** um ramo na tela e uma etapa a mais na fila.
+**Descartados:** só declarar e depender da API ou do administrador — o desvio deixou requisições em produção (**A45
+(b)**) que ninguém tiraria pela tela; reusar a etapa *Separar de novo para conferir* (o rótulo é da conferência de
+material crítico e mentiria aqui). (`19e294fc`, `9cafb842`)
+
+**B461 (NOVA, da Etapa 94, revisão do plano) — a reserva na chegada usa a mesma regra.** A nota que chega e reserva para
+quem espera (Etapa 74) tinha uma terceira cópia da regra de valor, que rodava também sobre requisições *Em Separação* e
+*Parcialmente Atendidas*: com o limite baixado, a requisição em separação com 2 de 4 separados ficava **sem** a reserva da
+nota. Agora pula só quando a alçada ainda vale. **Descartado:** deixar como estava (terceira fonte divergente da porta).
+*(A frase do plano "a chegada só avalia requisições aguardando, antes da separação" estava errada; corrigida lá.)*
+(`19e294fc`)
+
+**B462 (NOVA, da Etapa 94, revisão do plano) — a sexta seta: *Em Separação* → *Aguardando aprovação de valor*.** Sem
+ela, *Iniciar Separação* sem quantidade (valor abaixo do limite) → o limite baixa → separar 4 → entregar 4 saía
+*Entregue* **sem aprovação** — a alçada contornada por um clique. A *Em Separação* com material separado fica de fora pela
+regra "nada na caixa". **Descartado:** declarar (o atalho é um gesto que qualquer almoxarife faz). (`a758d39d`)
+
+**B463 (NOVA, da Etapa 94, revisão do plano) — o 409 na separação fecha o modal e recarrega.** Antes só aparecia o
+aviso, com o modal aberto mostrando um estado que já não existia. Agora, num **409**, o modal de separação fecha e o
+detalhe e a lista recarregam; os outros erros mantêm o modal. Fecha também o residual da Etapa 93 em que o 409 da
+separação concorrente deixava o modal aberto (D (93)). **Descartado:** só o aviso. (`9cafb842`)
+
+**B464 (NOVA, da Etapa 94, revisão do código) — a entrega só confere a alçada depois das próprias recusas.** Com a
+sexta seta (**B462**), um **Entregar** numa *Em Separação* **vazia** com o limite baixado respondia o 403 de valor,
+gravava *Aguardando aprovação de valor* e mandava e-mail aos aprovadores — por uma entrega que a própria entrega
+recusaria (nada separado: *"Máximo: 0"*; ou nada informado: *"Informe ao menos uma quantidade maior que zero para
+entregar"*). Agora a entrega faz primeiro as contas dela (só leitura) e só depois confere a alçada; na prática a entrega
+nunca grava a alçada. **Descartado:** tirar a verificação da entrega — fica como defesa caso a separação deixe passar
+algo. *(Tirá-la deixava a suíte inteira verde: com a **B464** ela é defesa em profundidade, sem teste que a derrube — dito
+aqui de propósito.)* Corrige a **B456**. (`ad5fcd7f`)
+
+**B465 (NOVA, da Etapa 94, revisão do código) — o 403 da alçada de valor fecha o modal de separação e recarrega.** O
+403 que leva a requisição a *Aguardando aprovação de valor* deixava o modal aberto com o status velho. Agora as rotas de
+separação e de entrega mandam, **só** nesse 403, o código `AGUARDANDO_APROVACAO_VALOR` no corpo, e a tela o trata como o
+409 (fecha e recarrega); um 403 de permissão mantém o modal. *(O contrato do plano dizia que os dois 403 de valor já
+traziam o código — **estava errado**: as rotas mandavam só a mensagem.)* **Descartados:** tratar todo 403 como mudança
+de status (o de permissão não muda nada e o modal fechado esconderia a mensagem); reconhecer pelo texto (quebra na
+primeira revisão da mensagem). **Lacuna declarada:** a lista branca da rota (outro código de erro não sai) não tem teste —
+nenhum erro alcançável pela rota traz outro código hoje. (`c729b784`)
+
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -7009,6 +7175,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
     mentiria — ela não está "aguardando há N dias" desde o pedido), e o aprovador de valor só a vê pelo
     filtro *Aprovações de valor*. **Consulta A25** mede quantas existem. **Não foi consertado nesta
     etapa** porque é mudança de máquina de estados, anterior a ela.
+    *(**Etapa 94:** o atalho virou passagem oficial da máquina de estados (**B454**) e vale só **antes** de começar a
+    separação — com material separado ou entregue a alçada não volta (**B453**). O lembrete continua de fora: a requisição
+    que volta a aguardar valor depois de aprovada ainda não recebe o lembrete, e a **A25** continua valendo.)*
 
 69. **NOVO, da Etapa 47 — o lembrete de requisição contou a espera 3 horas A MENOS desde que
     existe.** A hora gravada pelo banco é universal; o lembrete a lia como hora do servidor (UTC-3).
@@ -7850,6 +8019,61 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      *"[almoxarifado-exclusao] Requisicao ⟨id⟩: UPDATE final perdeu (ja excluida) depois do estorno de ⟨n⟩ parte(s) —
      conferir a consulta A44 (c)"* (esta é erro — pede a A44). **O que fazer:** integrações tratam os 409 como "recarregue
      e confira", **nunca** como "repita" — na exclusão, repetir estornaria de novo.
+
+163. **NOVO e ✅ RESOLVIDO NA ETAPA 94 (`a758d39d`) — custo ou limite que mudavam depois de começada a separação tiravam
+     a requisição do fluxo.** Medido na Etapa 94: com uma entrada de custo maior, o custo do cadastro mudado, o limite
+     baixado ou a alçada ligada **depois** de separar, o próximo **Separar** ou **Entregar** levava a requisição a
+     *Aguardando aprovação de valor* com material na caixa ou já entregue (5 de 7 gestos, nos quatro gatilhos). Daí
+     **reprovar** ou **cancelar** soltavam a reserva do material fisicamente separado, e **aprovar por valor** devolvia uma
+     *Totalmente Reservada* com material separado e entregue, que só saía por um gesto que ninguém adivinha. Agora a
+     alçada vale só até o começo da separação (**B453**). **O que fazer:** rodar a **A45**.
+
+164. **NOVO e ✅ RESOLVIDO NA ETAPA 94 (`7b66807f`) — separar e cancelar no mesmo instante "ressuscitavam" a cancelada em
+     *Aguardando aprovação de valor*.** Com o valor acima do limite, a separação lia o status, o cancelamento gravava
+     *Cancelado* (respondendo "cancelada"), e a separação gravava *Aguardando aprovação de valor* por cima — **10 de 10
+     sem atraso nenhum**; aprovar por valor depois **reservava de novo** o material. Agora a gravação confere o status e
+     quem perdeu recebe o 409 (**B456**). **O que fazer:** a **A43 (a)** já lista essas requisições.
+
+165. **NOVO e ✅ RESOLVIDO NA ETAPA 94 (`19e294fc`) — a fila de separação dizia *Aguardando aprovação de valor* numa
+     requisição em separação, pronta ou parcialmente atendida** (3 de 3 depois do custo subir) — onde a separação e a
+     entrega passam a aceitar. Agora a fila usa a mesma regra (**B457**). **O que fazer:** nada.
+
+166. **NOVO, da Etapa 94 — o manual dizia que a requisição volta a travar se o valor subir "(itens alterados)".**
+     **Estava errado:** nenhuma tela nem rota altera os itens de uma requisição depois de criada. O que faz o valor subir
+     é o **custo** do material (uma entrada com custo maior sobe o custo médio; o custo do cadastro, quando o médio é
+     zero) e a **configuração** da alçada (limite baixado, alçada ligada). Corrigido no manual (8.3). **O que fazer:**
+     nada — é para quem apresentou com a frase antiga.
+
+167. **NOVO, da Etapa 94 — o que muda para quem opera (risco aceito).** (1) Depois de começada a separação (algo separado
+     ou entregue), a alta de custo ou a mudança do limite **não param mais** a requisição: ela pode ser entregue acima do
+     limite se o custo subiu depois de separada, e o valor mostrado fica o da última avaliação (**B453**, **B455**). O
+     controle de valor fica na aprovação e no começo da separação. (2) Uma *Em Separação* **sem nada separado** (o
+     *Iniciar Separação* sem quantidade) ainda passa pela alçada (**B462**). (3) Na separação, o 403 de valor e o 409
+     fecham o modal e recarregam a tela (**B463**, **B465**). (4) A fila mostra **Reabrir separação** nas requisições
+     antigas que a **A45 (b)** acha (**B460**). **O que fazer:** saber que o sistema **não avisa** a alta de custo
+     depois da separação — nem o valor da requisição a acompanha. Se a empresa quiser esse aviso, é decisão nova (B).
+
+168. **NOVO, da Etapa 94 — o que muda para quem integra.** (1) A separação (`PUT /api/almoxarifado/requisicoes/:id/separacao`
+     e o alias `/separar`) pode responder **409** *"A requisição mudou de status enquanto a alçada de valor era conferida
+     (agora ⟨status⟩); recarregue e confira antes de separar."* — recarregar e tentar de novo. (2) O 403 da alçada de
+     valor na separação e na entrega (`/entregar`) passa a trazer `code: 'AGUARDANDO_APROVACAO_VALOR'` no corpo (antes
+     só `error`); os outros erros continuam só com `error`. (3) A entrega deixa, na prática, de responder o 403 *"Valor
+     total (…) excede o limite de liberação automática (…)"* (**B464**). (4) A fila de separação
+     (`GET /api/almoxarifado/fila-separacao`) tem a etapa nova `RETOMAR_SEPARACAO` (acionável; o cliente antigo mostra o
+     nome cru). (5) A máquina de estados aceita seis transições novas para `AGUARDANDO_APROVACAO_VALOR` (dos cinco status
+     antes da separação e de `EM_SEPARACAO`). **O que fazer:** integrações que separam tratam o 409 como "recarregue e
+     tente de novo".
+
+169. **NOVO, achado na revisão do código da Etapa 94 (anterior a ela) — a separação aceita mais do que existe na
+     prateleira.** Medido em `main`: material com **4** em estoque, requisição pede **6**; aprovar reserva 4
+     (*Parcialmente Reservada*); separar 4 → a fila mostra **2 separáveis**; separar mais 2 → **aceita** — **6 separados
+     para 4 físicos** (o mesmo partindo de *Parcialmente Reservada*). A entrega barra pelo estoque (entregar 6 → *"…
+     Máximo: 4 (pendente: 6, disponível: 4)"*); entregar 4 → *Parcialmente Atendida*, estoque 0, e o item fica com **2
+     "na caixa" que não existem** — a fila e a tela oferecem entregá-los. Causa provável: o disponível do item soma de
+     volta a reserva da própria requisição (que já cobre o que foi separado) sem descontar o separado ainda não
+     entregue. **Não corrigido nesta etapa** (fora do escopo dela). **O que fazer até a Etapa 95:** ao separar o resto de
+     uma requisição com separação parcial, conferir a prateleira; não confiar no "separável" da fila quando a
+     requisição pediu mais do que havia em estoque. Próxima etapa (**95**).
 
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -8783,16 +9007,31 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   Candidata da migração para Postgres.
 - **(93) A alçada de valor reavaliada depois de começar a separação** tira a requisição da máquina: uma *Em Separação*
   ou *Parcialmente Atendida* cujo custo subiu volta a *Aguardando aprovação de valor*, e reprovar ou cancelar daí deixa
-  material na caixa com a reserva solta (medido no fechamento, sem corrida). Candidata da **Etapa 94**.
+  material na caixa com a reserva solta (medido no fechamento, sem corrida). Candidata da **Etapa 94**. *(Etapa 94: resolvido — a alçada vale
+  até o começo da separação, **B453**; ver **C163** e a **A45**.)*
 - **(93) Aprovação por valor, conferência e os dois cancelamentos ficam fora da fila** (**B450**) — cada um confere o
   status ao gravar, mas não foram analisados um a um contra a exclusão (a reprovação por valor foi, e ganhou a guarda).
 - **(93) A fila não tem prazo** — como a por material (**C150**); uma entrega lenta segura só a sua requisição.
 - **(93) Residuais que só um escritor fora da fila alcança:** a separação que responde 409 deixa a janela aberta e, de
-  *Parcialmente Atendida*, um novo **Separar** grava a mesma caixa de novo; se o status virou *Pronta para retirada*, a
+  *Parcialmente Atendida*, um novo **Separar** grava a mesma caixa de novo; *(Etapa 94: o 409 na separação fecha a janela e
+  recarrega — **B463**.)* se o status virou *Pronta para retirada*, a
   conferência limpa deixa a requisição presa como no **C158** (**B444**); a entrega que responde 200 com o status
   *Cancelado* mostra *"Requisição entregue por completo! Estoque baixado."* e oferece a assinatura, que recusa (**B446**);
   uma troca de status exatamente entre a releitura e a gravação final da exclusão fica fora da trilha dela (**B452**).
 - **(93) C145, C147, C150, C139** — como na 92; nenhuma muda com esta etapa.
+- **(94) O lembrete por e-mail da requisição que volta a aguardar valor depois de aprovada** — a seta nova (**B454**) não
+  muda a régua do lembrete (só a que nasceu aguardando valor); cobrá-la pede outra frase ("voltou a aguardar
+  liberação"). Sem queixa de uso; o **C68** e a **A25** continuam nessa parte. Candidata.
+- **(94) Reprovar ou cancelar uma requisição antiga com material na caixa** — sem guarda nova (**B458**); só o legado chega
+  lá, e a **A45** orienta.
+- **(94) Reavaliar só o saldo a entregar** — descartado (**B453 (a)**).
+- **(94) Um processo só** — os cancelamentos continuam fora da fila por requisição (**B450**); a conferência de status da
+  gravação da alçada (**B456**) já vale para o dia de dois servidores.
+- **(94) Sem teste que as derrube:** a verificação da alçada na entrega (defesa em profundidade, **B464**); a lista branca
+  do código no 403 das rotas (**B465**); e zerar o "separar e entregar" no 409 da tela — esse caminho é inalcançável pela
+  tela (o botão **Completar Entrega** só aparece quando há o que entregar, e aí abre a entrega direto).
+- **(94) A separação aceita mais do que existe na prateleira** (**C169**) — anterior à etapa; **Etapa 95**.
+- **(94) C145, C147, C150, C139** e os residuais **(93)** — como na 93; nenhum muda com esta etapa.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -9543,6 +9782,23 @@ navegador** prova:
    e a linha some. O extrato mostra **uma** entrada de estorno.
 3. **Liberar × rodada nova de crítico** — na mão a coincidência é rara; o clique prova só que nada trava e que quem
    perdeu vê a mensagem dele.
+
+**(94) Nenhum clique foi dado nesta etapa.** Os testes provam o servidor pela rota (com o usuário certo em cada pedido —
+quem pediu, o administrador que aprova, o aprovador de valor e o almoxarife) e pelo serviço; a tela por teste de
+componente, sem navegador. Números lidos no fechamento: as regras da alçada depois da separação **38** casos — os quatro
+gatilhos por rota contra os gestos depois da separação, os seis status antes da separação, a máquina, a corrida
+separar × cancelar e a fila; a integração **10** jornadas (do custo que sobe no meio até *Entregue*, o caminho de
+projeto, limite e alçada ligada no meio, o serviço chamado direto, a corrida, o legado com **Reabrir separação**, a *Em
+Separação* vazia e o controle positivo da **A45**); a tela — o **Reabrir separação**, o 409 e o 403 de valor fechando o
+modal. O que **só o navegador** prova:
+
+1. **A entrega depois do custo subir.** Material com custo 1, requisição de 4 aprovada, separar 4, entregar 2; em
+   **Movimentações**, uma entrada do mesmo material com custo **1000**; voltar e entregar os 2 → *"Requisição entregue por
+   completo! Estoque baixado."* — a requisição fica *Entregue* e o aprovador de valor não recebe e-mail.
+2. **O caminho de projeto.** Outra requisição aprovada; a entrada cara **antes** de separar; a fila mostra *Aguardando
+   aprovação de valor*; **Iniciar Separação** → o aviso *"Valor total (…) excede o limite de liberação automática (…).
+   Aprovação de alto valor necessária."*, o modal **fecha** e o detalhe mostra *Aguard. Aprov. Valor*.
+3. **Reabrir separação** — só com dado antigo (a **A45 (b)**); numa base de teste, montar o estado à mão no banco.
 
 
 
@@ -19661,7 +19917,7 @@ servidor, escrita direta no banco) — não há clique que as produza:
 2. **Aprovação por valor, conferência e cancelamentos** ficam fora da fila (**B450**); a reprovação por valor ganhou a
    guarda, as outras não foram analisadas uma a uma contra a exclusão.
 3. **A alçada de valor reavaliada depois de começar a separação** tira a requisição da máquina (medido no fechamento) —
-   **Etapa 94**.
+   **Etapa 94**. *(Feita — Etapa 94.)*
 4. **Prazo para esperar a fila** — não há (**C150**).
 5. **Residuais que só um escritor por fora alcança** (D (93)).
 6. **C145, C147, C150, C139** — como na Etapa 92.
@@ -19688,9 +19944,130 @@ A **revisão adversarial do código** (dois revisores, executando) reproduziu **
   lida tarde; dois 403 do encerramento; o anterior da conferência na trilha da separação; a soma do item da entrega) —
   viraram teste (`92d995a0`).
 
+## Etapa 94 — A alçada de valor vale até o começo da separação (2026-10-09)
+
+Quando a empresa liga a **liberação por valor**, uma requisição acima do limite espera o aprovador antes de ser separada.
+O problema era o que acontecia **depois**: se o custo do material subia (bastava a nota de **outro** pedido entrar mais
+cara) ou alguém baixava o limite enquanto a requisição já estava sendo separada ou entregue em partes, o próximo
+**Separar** ou **Entregar** a devolvia a *Aguardando aprovação de valor* — com o material na caixa ou já entregue. Dali
+nenhum gesto dava certo: **reprovar** ou **cancelar** soltava a reserva do material que estava fisicamente separado (outra
+pessoa podia pegá-lo), e **aprovar** devolvia a requisição a *Reservada*, onde a tela não sabia mais separar nem entregar.
+Agora a alçada é uma decisão de **antes do gasto**: ela vale enquanto nada foi separado nem entregue; com material na
+caixa, a requisição segue até a entrega. De quebra, separar e cancelar no mesmo instante não "ressuscitam" mais a
+cancelada, a fila de separação para de dizer *Aguardando aprovação de valor* para quem já está em separação, e as
+requisições que ficaram presas antes desta versão ganham um botão para sair: **Reabrir separação**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Custo subiu (ou o limite baixou, ou a alçada foi ligada) depois de separar: **Entregar** respondia o 403 de valor e a requisição *Parcialmente Atendida* ia a *Aguardando aprovação de valor* com 2 entregues e 2 na caixa (**C163**) | A entrega acontece normalmente e a requisição vai a *Entregue*; nenhum e-mail ao aprovador; o valor mostrado não muda (**B453**, **B455**) |
+| Daí, **Reprovar** ou **Cancelar** soltava a reserva do material separado; **Aprovar** devolvia *Totalmente Reservada* com material entregue | A requisição com material na caixa não chega mais a *Aguardando aprovação de valor* |
+| Custo alto **antes** de separar: separar → 403 e *Aguardando aprovação de valor* — mas por um atalho fora da máquina de estados (**C68**) | O mesmo comportamento, agora como passagem oficial da máquina (**B454**) — e vale também na *Em Separação* ainda vazia (**B462**) |
+| Separar e cancelar no mesmo instante, com o valor acima do limite: a cancelada voltava a *Aguardando aprovação de valor*, e aprovar depois reservava de novo (**C164**, 10 de 10) | O cancelamento vence; a separação recebe o 409 *"A requisição mudou de status enquanto a alçada de valor era conferida (agora CANCELADO); recarregue e confira antes de separar."* (**B456**) |
+| A fila de separação mostrava *Aguardando aprovação de valor* numa requisição em separação, pronta ou parcialmente atendida (**C165**) | Mostra **Entregar** (**B457**) |
+| A nota que chegava não reservava para a requisição em separação cujo valor tinha passado do limite | Reserva normalmente (**B461**) |
+| Requisição antiga já presa (*Reservada* com tudo separado): sumia da fila e o botão **Confirmar Separação** ficava desabilitado | A fila mostra **Reabrir separação**; o modal habilita **📦 Reabrir separação** e leva a *Em Separação* (**B460**) |
+| Na separação, um 409 ou o 403 de valor deixavam o modal aberto mostrando o status velho | O modal fecha e a tela recarrega; um 403 de permissão mantém o modal (**B463**, **B465**) |
+| O manual dizia que a requisição volta a travar se o valor subir "(itens alterados)" | Nenhuma tela altera item depois de criado; o que reavalia é o **custo** e a **configuração** — manual corrigido (**C166**) |
+
+### As regras, com o cenário exato
+
+Preparação: em **Configurações** do almoxarifado, aba **Liberação por Valor**, alçada **ligada**, limite **R$ 10,00** e um
+aprovador de valor (**Ana**). Um material **M** com **8** em estoque e custo **R$ 1,00**. **Paula** (sem perfil no
+almoxarifado) cria **R1** pedindo **4** de M (R$ 4,00, abaixo do limite); o **Gestor** aprova → R1 **Totalmente
+Reservada**.
+
+**1. O custo sobe depois de separar — a entrega segue.** O **Almoxarife** separa os 4 (*Em Separação*) e entrega 2 (*"Entrega
+parcial registrada. Saldo pendente permanece em aberto."* → *Parcialmente Atendida*). Em **Movimentações**, uma entrada de
+**1** unidade de M com custo **R$ 1.000,00** (o custo médio vai a R$ 143,71 e R1 passaria a R$ 574,86). A fila de separação mostra R1 com
+**Entregar** (não *Aguardando aprovação de valor*). Entregar os 2 → *"Requisição entregue por completo! Estoque baixado."*
+— R1 **Entregue**, a reserva consumida, a Ana **não** recebe e-mail, e o valor de R1 continua R$ 4,00.
+
+**2. O custo sobe antes de separar — o caminho de projeto.** Uma R2 igual, de um material novo **M2** nas mesmas condições
+(8 em estoque, R$ 1,00), aprovada; a entrada de 1 unidade de M2 a R$ 1.000,00 **antes** de separar.
+A fila mostra R2 com **Aguardando aprovação de valor**. **Iniciar Separação** → **📦 Confirmar Separação** com 4 → *"Valor
+total (R$ 448,00) excede o limite de liberação automática (R$ 10,00). Aprovação de alto valor necessária."* — o modal
+**fecha**, o detalhe recarrega com *Aguard. Aprov. Valor* e a Ana recebe o e-mail. A Ana aprova → R2 volta a
+*Totalmente Reservada* (uma reserva só); separar 4 e entregar 4 → *Entregue*. *(Os valores dependem do custo médio do
+material no momento — com 8 a R$ 1,00 e uma entrada de 1 a R$ 1.000,00, o custo médio é R$ 112,00.)*
+
+**3. A *Em Separação* vazia ainda passa pela alçada.** Uma R3 de 4 de um material a R$ 1,00, aprovada; **Iniciar Separação** sem quantidade (R3 vai a *Em
+Separação* sem nada separado); o administrador baixa o limite para **R$ 1,00**; **Ajustar Separação** com 4 → a mesma mensagem do cenário 2
+com *"(R$ 4,00) excede o limite de liberação automática (R$ 1,00)"* e R3 vai a *Aguard. Aprov. Valor*. Sem isso, um
+clique em **Iniciar Separação** antes de o limite baixar contornaria a alçada.
+
+**4. Com material na caixa, a alçada não volta — nem pela configuração.** Uma R4 com os 4 separados e liberada para
+retirada (*Pronta para retirada*); baixar o limite para R$ 1,00 (ou desligar e religar a alçada); entregar os 4 →
+*Entregue*.
+
+**5. A requisição que aguarda valor continua bloqueada.** Com R2 em *Aguard. Aprov. Valor*, a tela não oferece
+**Iniciar Separação** nem **Entregar** — só a liberação ou a reprovação por valor. Por integração, a separação recusa com
+*"Requisição deve estar aprovada, aguardando estoque/compra, em separação ou parcialmente atendida para separar"* e a
+entrega com *"Requisição deve estar em separação, pronta para retirada ou parcialmente atendida"* (o status é conferido
+antes da alçada; a mensagem *"Requisição aguardando aprovação de valor (…)"* fica como salvaguarda e não aparece por
+nenhuma das duas portas).
+
+**6. Separar × cancelar no mesmo instante (raro).** Com o valor acima do limite, o almoxarife separa enquanto Paula
+cancela. O cancelamento vence (*Cancelado*, reserva solta); a separação recebe *"A requisição mudou de status enquanto a
+alçada de valor era conferida (agora CANCELADO); recarregue e confira antes de separar."*, o modal fecha e a tela
+recarrega. *(Na mão a coincidência exata é rara — o teste a produz de propósito.)*
+
+**7. Reabrir separação (só em dado antigo).** A **A45 (b)** acha as requisições antigas em *Reservada* com tudo separado.
+Na fila elas aparecem com **Reabrir separação**; no detalhe, **Iniciar Separação** abre o modal com *"Todo o material desta
+requisição já está separado. Confirme para reabrir a separação e seguir para a entrega."* e o botão **📦 Reabrir
+separação** → *"Separação registrada!"*, a requisição vai a *Em Separação* e daí se entrega. Na versão nova não há clique
+que produza esse estado.
+
+### O que esta etapa NÃO cobre
+
+1. **O lembrete por e-mail da requisição que volta a aguardar valor depois de aprovada** — continua só para a que nasceu
+   aguardando (**C68**, **A25**).
+2. **Avisar a alta de custo depois da separação** — a requisição é entregue acima do limite sem aviso (**C167**, risco
+   aceito).
+3. **Guarda em reprovar/cancelar para a requisição antiga com caixa** — a **A45** orienta (**B458**).
+4. **Mais de um servidor** — como na 93 (**C132**).
+5. **A separação que aceita mais do que existe na prateleira** (**C169**) — anterior a esta etapa, achada na revisão;
+   é a **Etapa 95**.
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0) reproduziu o desvio por **quatro gatilhos reais pela rota** (entrada com custo, custo do cadastro,
+limite baixado, alçada ligada depois) — 5 de 7 gestos errados em cada —, a cancelada ressuscitada (10 de 10 sem atraso) e
+a fila dizendo *Aguardando aprovação de valor* (3 de 3); e desmentiu a Etapa 93 em oito pontos (o principal: o defeito
+**não** era só sequencial — havia a corrida com o cancelamento). A **revisão do plano** (1 bloqueante, 3 importantes, 5
+menores) pegou antes de executar: o legado não tinha gesto pela tela (**B460**), a reserva na chegada era uma terceira
+cópia da regra (**B461**), a *Em Separação* vazia escaparia da alçada por um clique (**B462**) e o 409 deixaria o modal
+aberto (**B463**).
+
+A **revisão adversarial do código** (dois revisores, executando) não achou nada crítico nas regras e na concorrência — as
+seis passagens novas não abrem nada em nenhum chamador, não há beco sem saída, e 30 rodadas de corrida natural não
+deixaram estado ruim — e achou:
+- **A entrega numa *Em Separação* vazia gravava a alçada antes de recusar** (introduzido pela própria etapa, com a sexta
+  passagem): 403, status trocado e e-mail aos aprovadores por uma entrega que seria recusada — consertado (**B464**,
+  `ad5fcd7f`); a **B456** dizia "só a separação alcança" e estava errada.
+- **O 403 de valor deixava o modal aberto** — consertado (**B465**, `c729b784`); o contrato dizia que as rotas mandavam o
+  código do erro, e não mandavam.
+- **Quatro sabotagens passavam verde** (testes faltando) — viraram teste (`469fda3b`); uma quinta é inalcançável pela
+  tela e ficou declarada (D (94)).
+- **Um defeito antigo, fora da etapa:** a separação aceita mais do que existe na prateleira (**C169**) — a próxima etapa.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 94 entregue (2026-10-09):** **a alçada de valor vale até o começo da separação.** Custo ou limite que mudam
+  depois de separado algo não devolvem mais a requisição em separação, pronta ou parcialmente atendida a *Aguardando
+  aprovação de valor* (**C163**); separar e cancelar no mesmo instante não ressuscitam a cancelada (**C164**); a fila de
+  separação diz **Entregar** onde dizia *Aguardando aprovação de valor* (**C165**); a nota que chega reserva para quem está
+  em separação; o atalho fora da máquina de estados virou passagem oficial (**C68**); e as requisições antigas presas
+  ganham **Reabrir separação**. O manual dizia "itens alterados" e estava errado (**C166**). A revisão do código pegou a
+  entrega gravando a alçada antes de recusar (**B464**) e o modal que ficava aberto no 403 de valor (**B465**), e achou um
+  defeito antigo: a separação aceita mais do que existe na prateleira (**C169**). **O que é seu:** a consulta **A45**; as
+  decisões **B453 a B465** (a **B456** corrigida à vista pela **B464**); os avisos **C163 a C169** (o **C167** muda o que
+  quem opera vê — risco aceito: entrega acima do limite se o custo subiu depois de separar; o **C168**, o que quem integra
+  vê; o **C169** é a próxima etapa); as limitações **(94)** em D e as verificações **(94)** em F. **Próxima: Etapa 95 — a
+  separação aceita mais do que existe na prateleira (C169) — ver o plano da Etapa 94.**
 
 - **Etapa 93 entregue (2026-10-09):** **dois gestos na mesma requisição acontecem um depois do outro.** Separar,
   liberar para retirada, entregar, excluir e encerrar entram numa fila da requisição: duas entregas juntas não deixam
@@ -19700,8 +20077,8 @@ A **revisão adversarial do código** (dois revisores, executando) reproduziu **
   defeito que a própria etapa tinha posto (a exclusão estornando de novo no segundo clique — **B452**) e a reprovação por
   valor gravando por cima da exclusão. **O que é seu:** a consulta **A44**; as decisões **B443 a B452** (a **B447** foi
   mudada pela **B452**); os avisos **C156 a C162** (o **C161** muda o que quem opera vê; o **C162**, o que quem integra
-  vê); as limitações **(93)** em D e as verificações **(93)** em F. **Próxima: Etapa 94 — a alçada de valor reavaliada depois de começar a separação não devolve a requisição em separação ou parcialmente atendida a *Aguardando aprovação de valor* (medido sem corrida) — ver o plano da
-  Etapa 93.**
+  vê); as limitações **(93)** em D e as verificações **(93)** em F. ~~**Próxima: Etapa 94 — a alçada de valor reavaliada depois de começar a separação não devolve a requisição em separação ou parcialmente atendida a *Aguardando aprovação de valor* (medido sem corrida) — ver o plano da
+  Etapa 93.**~~ *(Feita — Etapa 94.)*
 
 - **Etapa 92 entregue (2026-10-08):** **quem pediu por outro módulo consegue desistir da requisição reservada.** O
   **Cancelar Requisição** das telas de requisição do Comercial, Compras, Financeiro, Fábrica e Frota passou a funcionar

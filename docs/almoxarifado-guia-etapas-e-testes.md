@@ -1,13 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-09 (Etapa 93) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-09 (Etapa 94) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91, 92 e 93) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91, 92, 93 e 94) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-09 (Etapa 93 ENTREGUE · próxima do almoxarifado: Etapa 94)
+> ## Onde o desenvolvimento está — 2026-10-09 (Etapa 94 ENTREGUE · próxima do almoxarifado: Etapa 95)
 >
-> **O desenvolvimento parou aqui: Etapa 93 fechada — 2026-10-09.** A **Etapa 93 (dois gestos na mesma requisição não
+> **O desenvolvimento parou aqui: Etapa 94 fechada — 2026-10-09.** A **Etapa 94 (a alçada de valor vale até o começo
+> da separação)**: o custo do material que sobe ou o limite da liberação por valor que muda **depois** de começada a
+> separação não tiram mais da máquina a requisição *Em Separação* com material separado, *Pronta p/ Retirada* ou
+> *Parcialmente Atendida* — ela segue até a entrega, sem cair em *Aguard. Aprov. Valor* com material na caixa e sem
+> e-mail ao aprovador (aviso **C163** resolvido; o risco aceito é o **C167**). Antes de começar a separação a alçada
+> continua valendo, como sempre. Separar e cancelar a mesma requisição no mesmo instante não ressuscitam mais a
+> cancelada em *Aguard. Aprov. Valor* (**C164**). A **Fila de separação** não diz mais *"Aguardando aprovação de valor"*
+> para requisição em separação (**C165**), e o dado antigo que o defeito deixou ganhou o chip e o botão **"Reabrir
+> separação"**. Na tela, a separação que cai na aprovação de valor (ou num conflito) fecha a janela e recarrega.
+> **Próxima etapa do almoxarifado: 95 — a separação aceita mais que o físico (aviso C169)** (ver *"Próxima tarefa
+> detalhada"* no plano da Etapa 94).
+>
+> **Etapa 93, 2026-10-09.** A **Etapa 93 (dois gestos na mesma requisição não
 > passam um por cima do outro)**: separar, liberar para retirada, entregar, excluir e encerrar a **mesma** requisição ao
 > mesmo tempo (duas abas, dois almoxarifes) passam a acontecer **um depois do outro** — o segundo espera o primeiro e
 > decide pelo estado novo. Acabaram a entrega dupla que deixava o item com menos entregue do que saiu (e deixava sair a
@@ -15,7 +27,7 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > voltava a *Em Separação* escondida da lista, o material crítico liberado sem a segunda conferência (**C158**), a
 > requisição toda entregue parada fora de *Entregue* (**C159**) e a encerrada que voltava a aberta (**C160**). Na tela,
 > uma exclusão recusada por *"Requisição não encontrada"* (ou pelo aviso de conflito) agora fecha a janela e recarrega a
-> lista. **Próxima etapa do almoxarifado: 94 — a alçada de valor reavaliada depois de começar a separação não devolve a requisição em separação ou parcialmente atendida a *Aguardando aprovação de valor* (medido sem corrida)** (ver *"Próxima tarefa detalhada"* no plano da Etapa 93).
+> lista. ~~**Próxima etapa do almoxarifado: 94 — a alçada de valor reavaliada depois de começar a separação não devolve a requisição em separação ou parcialmente atendida a *Aguardando aprovação de valor* (medido sem corrida)**~~ *(Feita — Etapa 94.)* (ver *"Próxima tarefa detalhada"* no plano da Etapa 93).
 >
 > **Etapa 92, 2026-10-08.** A **Etapa 92 (quem pediu por outro módulo
 > consegue desistir da requisição reservada)**: o **Cancelar Requisição** das telas **Minhas Requisições** dos outros
@@ -40,9 +52,9 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > tela oferece**~~ *(Feita — Etapa 92.)* (aviso **C149**: a tela **Minhas Requisições** mostra **Cancelar Requisição** para requisições
 > reservadas ou em espera, e o servidor recusa; ver *"Próxima tarefa detalhada"* no plano da Etapa 91).
 > *Numeração:* desde a unificação de 2026-10-07 a numeração de etapas é uma só para todos os módulos — as 78 a 90 foram
-> do lote de Compras/núcleo (`docs/compras-novidades-por-etapa.md`, **B18**); por isso, depois da 77, vieram a 91, a 92 e a 93.
+> do lote de Compras/núcleo (`docs/compras-novidades-por-etapa.md`, **B18**); por isso, depois da 77, vieram a 91, a 92, a 93 e a 94.
 >
-> **Etapas 1 a 20, 22 a 77, 91, 92 e 93 completas.**
+> **Etapas 1 a 20, 22 a 77, 91, 92, 93 e 94 completas.**
 >
 > **Etapa 77, 2026-10-08.** A **Etapa 77 (a reserva de uma requisição só sai
 > pela requisição)**: uma saída pela API de movimentações que cita a reserva de uma requisição é recusada — o material
@@ -5931,8 +5943,118 @@ roteiro confere é que, **qualquer** que seja a ordem, o resultado é um dos doi
 - **Avisos que só aparecem se alguém mexer na requisição por fora do sistema no mesmo instante** (escrita direta no
   banco, outro processo): a separação pode avisar *"A requisição mudou de status durante a separação…"* e a janela de
   separação continua aberta; a entrega pode responder *"Requisição entregue por completo!"* sobre uma requisição que foi
-  cancelada por fora. Com a fila, nenhum gesto da tela chega a esses casos.
+  cancelada por fora. Com a fila, nenhum gesto da tela chega a esses casos. *(Mudou na Etapa 94: esse aviso, como todo
+  conflito da separação, agora fecha a janela de separação e recarrega a requisição e a lista — ver a seção da Etapa 94.)*
 - **C145, C147, C150, C139** — como na Etapa 92.
+
+## Etapa 94 — A alçada de valor vale até o começo da separação (ENTREGUE — 2026-10-09)
+
+**O que mudou, em uma frase:** a liberação por valor (a alçada) é conferida **até o começo da separação**; depois que
+há material separado ou entregue, uma alta de custo do material ou uma mudança no limite não devolvem mais a requisição
+a *Aguard. Aprov. Valor* — ela segue até a entrega.
+
+**O problema que ela resolve.** O sistema recalculava o valor da requisição (quantidade solicitada × custo atual do
+material) a cada tentativa de separar ou entregar. Se nesse meio tempo tinha entrado material mais caro (o custo médio
+sobe) ou alguém baixou o limite ou ligou a alçada, a requisição ia para *Aguard. Aprov. Valor* **mesmo já em
+separação, pronta para retirada ou parcialmente atendida** — com material na caixa ou já entregue, e com e-mail ao
+aprovador (aviso **C163**). Dali: aprovar por valor a devolvia a *Totalmente Reservada* com material já entregue;
+reprovar ou cancelar soltavam a reserva do material que estava separado. E separar e cancelar a mesma requisição no
+mesmo instante podiam ressuscitar a cancelada em *Aguard. Aprov. Valor* (aviso **C164**).
+
+**A regra agora.** A alçada é conferida ao **separar** quando a requisição está *Aprovado*, *Aguard. Estoque*, *Aguard.
+Compra*, *Parcialmente Reservada*, *Totalmente Reservada* ou *Em Separação* **e nenhum item tem nada separado nem
+entregue**. Com algum material separado ou entregue, a alçada não é mais conferida: o valor mostrado na requisição fica
+o da última avaliação, e a requisição pode sair acima do limite se o custo subiu depois de começada a separação — é o
+risco aceito (aviso **C167**); o controle de valor fica na aprovação e no começo da separação. Requisição já aprovada
+por valor nunca volta a travar. O que reavalia o valor é o **custo** do material (entrada com custo maior; o custo do
+cadastro, quando o custo médio é zero) e a **configuração** (limite baixado, alçada ligada depois) — nenhuma tela altera
+os itens de uma requisição depois de criada (o manual dizia "itens alterados": estava errado, aviso **C166**).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Separou 4, entregou 2, entrou material mais caro: a entrega do resto era recusada com *"Valor total (…) excede o limite…"*, a requisição ia para *Aguard. Aprov. Valor* com 2 entregues e o aprovador recebia e-mail (**C163**) | A entrega do resto sai normal; a requisição fica **Entregue**; nenhum e-mail; o valor mostrado continua o da aprovação (**B453**, **B455**) |
+| O mesmo com a requisição *Em Separação* com material na caixa, ou *Pronta p/ Retirada*, depois de o limite baixar ou a alçada ser ligada | Segue até a entrega; a alçada não é conferida |
+| Aprovar por valor a requisição que tinha caído assim a devolvia a *Totalmente Reservada* com material entregue; reprovar ou cancelar soltavam a reserva do material separado | A requisição não cai mais assim. O que já ficou assim no banco é o **legado** (abaixo, passo 4) |
+| Separar e cancelar juntos, com o valor acima do limite: a cancelada voltava a *Aguard. Aprov. Valor* e aprovar por valor depois reservava de novo (**C164**) | A cancelada continua *Cancelado*; a separação é recusada com o aviso de conflito e ninguém recebe e-mail (**B456**) |
+| A **Fila de separação** mostrava *"Aguardando aprovação de valor"* numa requisição em separação, pronta ou parcialmente atendida (**C165**) | Só antes de começar a separação (**B457**) |
+| A requisição antiga com tudo separado num status anterior à separação sumia da fila, e o **Confirmar Separação** ficava desabilitado — presa | Chip **"Reabrir separação"** na fila e botão **"📦 Reabrir separação"** na janela de separação (**B460**) |
+| A nota que chega pulava, na reserva para quem espera, a requisição em separação com material na caixa e valor acima do limite | Ela recebe a reserva (**B461**) |
+| A separação que caía na aprovação de valor (ou num conflito) deixava a janela de separação aberta, mostrando o status velho | A janela fecha e a requisição e a lista recarregam; a mensagem aparece no aviso (**B463**, **B465**) |
+
+### Roteiro de teste manual (≈25 min)
+
+**Preparação (como Administrador).**
+- **Almoxarifado → Configurações → Liberação por Valor:** ligue **Habilitar liberação por valor**, **Valor máximo
+  liberação automática (R$)** = **10**, e marque em **Aprovadores de alto valor** um usuário **Vera** (que não seja quem
+  pede). Salve.
+- Três materiais comuns (não críticos), **M**, **N** e **P**. Para cada um, em **Movimentações**, registre uma
+  **Entrada** de **10** com **Custo unitário (R$)** = **1,00**. Cada requisição de 4 vale **R$ 4,00** — abaixo do limite.
+- Usuários: **Sílvio** pede (qualquer usuário com acesso), o **Administrador** aprova, **Ana** (Almoxarife) separa e
+  entrega, **Vera** libera por valor.
+
+1. **(a) Custo que sobe no meio da entrega não trava mais.** Sílvio cria **R1** pedindo **4 de M** e envia (fica
+   *Pendente* — R$ 4,00 não passa de R$ 10,00). O Administrador aprova (**Só Aprovar**) → *Totalmente Reservada*. Ana,
+   em **Requisições (almox.)**, abre R1 → **Iniciar Separação** → 4 → **📦 Confirmar Separação** (*"Separação
+   registrada!"*) → **Entregar escolhendo de onde sai…** com **2** → *"Entrega parcial registrada. Saldo pendente
+   permanece em aberto."* (R1 *Parcialmente Atendida*). Agora, em **Movimentações**, registre uma **Entrada** de **1** de
+   M com **Custo unitário (R$)** = **1000** — o custo médio de M sobe para R$ 112,00 e R1 "valeria" R$ 448,00. Na **Fila
+   de separação**, R1 aparece com **Entregar** (não *"Aguardando aprovação de valor"*). Ana abre R1 → **Completar
+   Entrega** com os 2 restantes → *"Requisição entregue por completo! Estoque baixado."*. **Confira:** R1 **Entregue**,
+   item com 4 entregues, o valor no detalhe continua **R$ 4,00**, e Vera **não** recebeu e-mail de liberação por valor.
+   *(Antes desta etapa: a entrega era recusada e R1 ia para* Aguard. Aprov. Valor *com 2 já entregues.)*
+2. **(b) Custo que sobe antes de separar continua travando (o caminho de projeto).** Sílvio cria **R2** pedindo **4 de
+   N**; o Administrador aprova → *Totalmente Reservada*. **Antes de separar**, registre em **Movimentações** uma
+   **Entrada** de **1** de N com **Custo unitário (R$)** = **1000** (o custo médio de N vai a R$ 91,82). Na **Fila de
+   separação**, R2 mostra **Aguardando aprovação de valor** no lugar de *Separar*. Ana abre R2 → **Iniciar Separação**
+   → 4 → **📦 Confirmar Separação**. Resultado: aviso de erro *"Valor total (R$ 367,27) excede o limite de liberação
+   automática (R$ 10,00). Aprovação de alto valor necessária."*, a janela de separação **fecha sozinha**, e o detalhe e a
+   lista recarregam com R2 em **Aguard. Aprov. Valor**; nada foi separado; Vera recebe o e-mail de liberação por valor (com o envio de e-mail configurado).
+   (O valor exato depende do estoque e do custo na hora; o que importa é o texto e o status.) Vera abre R2 → **Aprovar
+   Liberação** → *"Liberação por valor aprovada! O almoxarifado pode prosseguir."* → R2 volta a **Totalmente
+   Reservada**. Ana separa 4 (agora aceito, sem pedir de novo — aprovada por valor não volta a travar) e entrega 4 → R2
+   **Entregue**.
+3. **(c) A separação começada sem quantidade ainda é "antes do gasto".** Sílvio cria **R3** pedindo **4 de P**; o
+   Administrador aprova. Ana abre R3 → **Iniciar Separação**, **apague as quantidades (deixe 0 em todos os itens)** →
+   **📦 Confirmar Separação** → *"Separação registrada!"*, R3 *Em Separação* sem nada separado. O Administrador baixa o
+   **Valor máximo liberação automática (R$)** para **1** e salva. Ana abre R3 → **Ajustar Separação** → 4 → **📦
+   Confirmar Separação** → *"Valor total (R$ 4,00) excede o limite de liberação automática (R$ 1,00). Aprovação de alto
+   valor necessária."*; a janela fecha e R3 aparece em **Aguard. Aprov. Valor**. Vera aprova a liberação → R3 *Totalmente
+   Reservada* → Ana separa 4 e entrega 4 → **Entregue**. Volte o limite para **10** ao terminar.
+4. **(d) O legado — "Reabrir separação".** Só existe em **dados antigos**: requisições que o defeito desta etapa deixou
+   em *Aguard. Aprov. Valor*, *Rejeitada* ou *Cancelado* com material separado ou entregue, ou que foram aprovadas por
+   valor depois disso e ficaram *Totalmente Reservada* (ou outro status anterior à separação) com o material já na caixa.
+   **Não há clique que produza isso na versão nova** — para testar é preciso um banco antigo (ou uma cópia da produção).
+   Quem tem acesso ao banco reconhece essas requisições pela consulta **A45** de `docs/almoxarifado-novidades-por-etapa.md`
+   (a parte (a) lista as que estão aguardando valor, rejeitadas ou canceladas com material separado ou entregue; a (b),
+   as "aprovadas/reservadas" com material separado ou entregue). Na tela, o sinal é uma requisição *Totalmente Reservada*
+   (ou *Aprovado*, *Aguard. Estoque/Compra*, *Parcialmente Reservada*) com quantidade separada nos itens. O que fazer:
+   - Se ela está em **Aguard. Aprov. Valor**: o aprovador libera (**Aprovar Liberação**) e ela cai no caso de baixo.
+   - Na **Fila de separação** ela aparece com o chip **"Reabrir separação"**. O almoxarife clica **Abrir** →
+     **Iniciar Separação**: a janela mostra *"Todo o material desta requisição já está separado. Confirme para reabrir a
+     separação e seguir para a entrega."* e o botão **📦 Reabrir separação** (habilitado) → *"Separação registrada!"*,
+     a requisição vai para **Em Separação** sem separar nada de novo e sem passar pela alçada → **Entregar** o que falta
+     (ou o Administrador **encerra**, se não se quer mais).
+   - Se ela está **Rejeitada** ou **Cancelado** com material na caixa: devolva à prateleira o que está separado; o que
+     já foi entregue saiu de fato (nada a estornar) — confira com quem recebeu.
+
+### O que esta etapa NÃO cobre
+
+- **O lembrete por e-mail** da requisição que já tinha sido aprovada e volta a aguardar valor (alçada ligada ou custo
+  que subiu antes de começar a separação) — continua sem lembrete repetido; aparece no filtro de aprovações de valor.
+- **Uma guarda em reprovar ou cancelar a requisição com material na caixa** — só o legado chega lá; a consulta **A45**
+  orienta o que fazer com cada uma.
+- **Reavaliar só o saldo que falta entregar** — a alçada olha o valor da requisição inteira (quantidade solicitada ×
+  custo atual), e só até o começo da separação.
+- **Mais de um servidor rodando ao mesmo tempo** — como na Etapa 93.
+- **A separação aceita mais que o físico** (aviso **C169**, defeito antigo encontrado nesta etapa): pedindo 6 com 4 em
+  estoque, separar 4 e depois mais 2 é aceito — 6 separados para 4 que existem; a entrega para em 4 e sobram 2 "na
+  caixa" que não existem. É a **Etapa 95**.
+- **C145, C147, C150, C139** — como na Etapa 93.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor e tela)
+provam, escrito para você conferir à mão.
 
 
 ## Etapa 72 — A solicitação de compra só fecha quando o material dela chega (ENTREGUE — 2026-10-02)
