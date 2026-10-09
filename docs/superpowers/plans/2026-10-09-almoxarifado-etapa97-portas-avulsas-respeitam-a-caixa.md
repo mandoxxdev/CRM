@@ -1,7 +1,10 @@
 # Etapa 97 — as portas avulsas do motor não levam o material que está na caixa sem reserva de uma requisição (B466 iv, feature 03 com a 05 e a 07)
 
-> Status: **EM EXECUÇÃO — 2026-10-09: Fase 2 `4a9cf5c1`; T0 `9ace72b2`, T1 `65dc74b2` feitas (seção "Execução" no fim).** Próximo: **T2**, depois T3, T4 — **o plano foi revisto na Fase 2**
-> (seção "Fase 2 — revisão do plano", antes de "Próximo passo"; ela vale sobre o texto acima). Nenhuma task marcada.
+> Status: **FECHADA — 2026-10-09.** Fase 2 `4a9cf5c1`; T0 `9ace72b2`, T1 `65dc74b2`, T2 `9dbf11c0`, T3 `3046eb4a`; Fase 5
+> `3251b014`, `3810f79a`, `c427bf6d`, `3fc39310`; fechamento `13949b14` (seções "Execução", "Fase 5 — revisão
+> adversarial", "Fechamento" e **"Próxima tarefa detalhada — Etapa 98"** no fim). **O plano foi revisto na Fase 2**
+> (seção "Fase 2 — revisão do plano"; ela vale sobre o texto acima) **e a Fase 5 achou um texto dele errado** (a I-4:
+> "o par soma zero" só vale sem concorrência — corrigido à vista onde aparece).
 > HEAD de partida: `b15640f3` (main, árvore limpa, sem push).
 > Origem: "Próxima tarefa detalhada — Etapa 97" no fim de
 > `docs/superpowers/plans/2026-10-09-almoxarifado-etapa96-motor-quantidade-arredondada.md`; B466 (iv) e D (95), D (96).
@@ -348,7 +351,7 @@ parcial e por teste que lê `Object.keys(require(caixaSql))`.
   recusa M9. Mais estrito que o bloqueio avulso (conta o reservado): o estorno corrige o livro, não é retenção de
   qualidade — declarado.
 - **(Fase 2, I-4) `cancelarMovimentacao(db, user, id, motivo, opcoes = {})`:** `opcoes.compensacao === true` mantém a
-  régua de hoje no estorno de entrada (par do mesmo evento, soma zero). Conferidos os chamadores: `scrapService.js:143`
+  régua de hoje no estorno de entrada (par do mesmo evento, soma zero — **só sem concorrência; ver Fase 5, achado 2**). Conferidos os chamadores: `scrapService.js:143`
   (`compensarRetalho` estorna a `ENTRADA_RETALHO` recém-creditada) e `thirdPartyService.js:768` (`compensarTransformacao`
   estorna os créditos das peças) passam `{ compensacao: true }` — sem isso, no legado (caixa > físico) a compensação
   recusaria e deixaria retalho/peça fantasma (o `.catch` engole); `scrapService.js:149` e `thirdPartyService.js:776`
@@ -462,7 +465,7 @@ serviço). T4 fecha.
   `DESBLOQUEIO`; (s10) estorno do `AJUSTE` sem a guarda → cai B-2 `AJUSTE` (as duas formas) e o r1b; (s11) a perna
   `SUCATA` sem a opção → cai I-4 (devolução 400 com a entrada gravada); (s12) a flag passando por cima da caixa → cai
   RN-07 `SAIDA` 4 → 400; (s13) a guarda do bloqueio contando o reservado → cai RN-08 "bloquear 4 com reserva 4 → 200".
-- [ ] **T2 (galho, serial) — as portas fora do motor (B493, B496).** Contrato "Fora do motor", M2b, M6, M7. **RN-01**
+- [x] `9dbf11c0` **T2 (galho, serial) — as portas fora do motor (B493, B496).** Contrato "Fora do motor", M2b, M6, M7. **RN-01**
   pela rota (bloquear, remessa criar + enviar, sucateamento solicitado, inventário), **RN-08** pela rota, **RN-09**.
   **Vermelho antes:** RN-08 rota, RN-09, RN-01 sucateamento (a recusa tem de vir **na solicitação**) e as literais M2b/M7.
   **Controles:** (s1) `bloquearMaterial` sem a opção → cai RN-08 pela rota; (s2) a pré-checagem da remessa sem a caixa →
@@ -470,7 +473,7 @@ serviço). T4 fecha.
   cai RN-01 sucateamento; (s4) a pré-validação do inventário sem a caixa → o motor recusa o segundo item **depois** de
   ajustar o primeiro — cai a asserção "nenhum item ajustado" da RN-09. **(Fase 2, menor 3:)** a conclusão do inventário
   inteira em `comLockDosMateriais`.
-- [ ] **T3 (tronco, integração) — o fluxo inteiro pela rota e pelo serviço.** Cenário único, **pela rota**: S pede 4,
+- [x] `3046eb4a` **T3 (tronco, integração) — o fluxo inteiro pela rota e pelo serviço.** Cenário único, **pela rota**: S pede 4,
   ADMIN aprova, `ENTRADA` 4, ALMOX separa 4 → `SAIDA` avulsa 4 (400 M1+S) → `PERDA` 4 (400) → bloquear 4 (400) →
   `POST /reservas` 4 (400) → conferência conta 0 (400) → A entrega 4 (**200**, *Entregue*) → agora a `SAIDA` de 1 de uma
   `ENTRADA` nova passa (201, a caixa sumiu). Segundo cenário, **pelo serviço** (`stockService.registrarMovimentacao` e
@@ -481,7 +484,7 @@ serviço). T4 fecha.
   conta 0" do primeiro cenário (e o bloquear). **(Fase 2, menor 1:)** as asserções de recusa exigem a literal **inteira**
   — na conferência, com o prefixo *"Ajuste bloqueado:"* da pré-validação; sem isso o (s3) passaria com a recusa do motor
   (400, sem o prefixo) e o controle ficaria vazio.
-- [ ] **T4 — fechamento (skill `fechar-etapa`).** Novidades (B491–B498, C184–C189, A48), specs 03 (motor: a régua da
+- [x] `13949b14` **T4 — fechamento (skill `fechar-etapa`).** Novidades (B491–B498, C184–C189, A48), specs 03 (motor: a régua da
   caixa nas portas avulsas, a trava no motor), 05 (a caixa protegida também das portas avulsas — fecha a B466 iv), 07
   (reserva manual não toma a caixa — iguala a B469), 14 (remessa), 15 (sucateamento), 17 (inventário: a caixa na guarda
   do ajuste), **09 (inspeção: o bloqueio avulso ganha guarda que não conta o reservado) e 12 (devoluções: a perna
@@ -654,7 +657,8 @@ contrato antigo → `suite-trava.out`, 4 min 8 s). Cada achado foi conferido con
    para isso) para continuarem provando o claim; e um caso novo provando que pelo motor travado elas serializam.
 4. **I-4 — a perna `SUCATA` da devolução quebra no legado (reproduzido, `r2` (a)).** `returnService.js:222-240` grava a
    `ENTRADA_DEVOLUCAO` e depois a `SUCATA` sem opção; com caixa > físico a `SUCATA` recusa e a devolução fica pela
-   metade. **Escolhido:** a perna leva `{ parDaDevolucao: true }` no 4º argumento (régua de hoje — o par soma zero).
+   metade. **Escolhido:** a perna leva `{ parDaDevolucao: true }` no 4º argumento (régua de hoje — o par soma zero; **estava errado sob concorrência: uma separação entre as duas pernas levava a caixa
+   — Fase 5, achado 2, `3810f79a`: as duas pernas passaram a correr sob uma trava do material**).
    Conferidas as compensações por estorno de entrada: `scrapService.js:143` e `thirdPartyService.js:768` estornam
    **entradas** do mesmo evento (mesmo problema → `cancelarMovimentacao` ganha `opcoes.compensacao`); `scrapService.js:149`
    e `thirdPartyService.js:776` estornam saída/consumo (crédito, sem guarda) — não precisam.
@@ -681,7 +685,8 @@ arquivos com os protótipos) e pela troca explícita da M1 para o livre.
 
 ## Próximo passo
 
-**Fase 2 feita (ver a seção acima). Próximo: T0, depois T1, T2, T3, T4.** ~~**Fase 2** — um agente fresco (sem este contexto) com este plano, a spec 03 (motor), a 05, a 07, a 14, a 15 e a 17, e as
+~~**Fase 2 feita (ver a seção acima). Próximo: T0, depois T1, T2, T3, T4.**~~ **Etapa fechada — próximo: a Etapa 98
+(seção "Próxima tarefa detalhada — Etapa 98", no fim).** ~~**Fase 2** — um agente fresco (sem este contexto) com este plano, a spec 03 (motor), a 05, a 07, a 14, a 15 e a 17, e as
 quatro perguntas da skill (contratos com erro e literal; RN × spec; independência real da T2; **cada RN traçada até o
 último gesto** — separar → porta avulsa → entregar → encerrar; aprovar → reservar → separar → entregar; inventário aberto
 → contar → concluir; remessa criar → enviar → retornar; bloquear → desbloquear; sucatear → assinar → assinar → destino).
@@ -714,4 +719,160 @@ Cada commit com a suíte rodada no seu estado.
   `saidaPorLocalizacao (17)` mudava de texto sem caixa — contra a RN-04); (3) a recusa do claim da saída citava um
   disponível velho — agora relê o material; (4) o caso da RN-03 "a aprovação de C reserva 2" não cai com o s3 — caem os
   dois da 95; (5) a mensagem do commit da T1 tem um acento ("asserçoes"). **Para a T2:** `inspectionService.bloquearMaterial`
-  ainda não passa `{ bloqueioAvulso: true }` — o motor tem a guarda, a tela não a aciona.
+  ainda não passa `{ bloqueioAvulso: true }` — o motor tem a guarda, a tela não a aciona. *(Feito na T2.)*
+- **T2 `9dbf11c0`** — o bloqueio avulso liga `{ bloqueioAvulso: true }` (a guarda **sem contar o reservado** — I-5; a
+  devolução para quarentena fica sem a opção, e um teste prende o 201); a remessa lê o livre de caixa e põe o sufixo S
+  **dentro do fragmento do material**; o sucateamento recusa **na solicitação**; o inventário lê a caixa na
+  pré-validação e a conclusão inteira roda em `comLockDosMateriais` (menor 3). **Vermelho antes: 7** (RN-08 rota,
+  remessa M2b, sucateamento ×2, inventário, RN-09, trava). **Controles s1–s5**, cada um caiu no seu (s5 =
+  `comLockDosMateriais` removido → cai o teste da trava). **Divergências:** (1) o **s2** (remessa sem a caixa na
+  pré-checagem) caiu pela pré-checagem do **outro** material da remessa, não pelo claim M2 do motor que o plano
+  previa — a literal M2b cai mesmo assim, e o controle valeu pela asserção certa; (2) `disponivel_na_solicitacao` do
+  sucateamento grava o **livre de caixa** (o número que a recusa usou) — só auditoria, nenhuma regra o lê.
+  `test:api` 337/337 (4144 ✓).
+- **T3 `3046eb4a`** — `portasAvulsasCaixaIntegracao.api.test.js`, **9** testes: **C1** pela rota com a literal
+  **inteira** em cada porta (v2, v1, PERDA, bloquear, `POST /reservas`, remessa, sucateamento e a conferência com o
+  prefixo *"Ajuste bloqueado:"*), nada muda, a A48 vazia depois de cada porta, A entrega, a conferência conclui, a
+  `ENTRADA` nova sai; **C2** a corrida 0/10 pelo serviço **e** pela rota, e a entrega dentro da própria seção não espera;
+  **C3** o caso legítimo (entregar 2 + encerrar → `PERDA` 2; tudo perdido: ALMOXARIFE 403, ADMIN exclui, `PERDA` 4);
+  **C4** a s5 inteira com a **A48** (acha A e B; A entrega a própria caixa; acha só B; o ADMIN exclui B; vazia). A A48
+  roda com o texto que vai para produção, e a lista de status confere com `STATUS_COM_CAIXA`. Passou de primeira (9/9) —
+  por isso os controles: **s1** (sem a trava) → C2 10/10 errado pelo serviço e pela rota; **s2** (sem a exceção da
+  entrega) → caem todas as entregas, inclusive C4; **s3** (T2 inteira desfeita) → cai C1. **Divergência:** o s3 caiu
+  no **bloquear** (o primeiro passo da T2 na jornada), **antes** da conferência — a asserção que o plano queria provar
+  (menor 1: a literal com *"Ajuste bloqueado:"*) não rodou; por isso o **s3b** (só a rota do inventário desfeita) foi
+  rodado e caiu **na conferência** (o motor recusa sem o prefixo). `test:api` 338/338 (4153 ✓).
+
+## Fase 5 — revisão adversarial (2026-10-09)
+
+Dois revisores frescos, executando (sondas no scratchpad, `e97rv2-*`), um nas **travas e no motor**, outro na
+**autorização e nos fluxos legítimos**. O que **confirmaram**:
+
+- **Travas: sem deadlock nem trava presa.** 30 rodadas com laço em ordem trocada, `comLockDosMateriais` com o motor
+  dentro, seções cruzadas, exceção no meio, fluxo vazado (a B-1); inventários concorrentes 0/10.
+- **As marcas não são forjáveis** (`requisicaoDaEntrega`, `bloqueioAvulso`, `parDaDevolucao`, `compensacao` só pelo 4º
+  argumento ou pelas opções do estorno — nada do body).
+- **Os fluxos legítimos com caixa passam** (entrega, aprovação, chegada, consumo de reserva, transferência, devolução).
+- **Desempenho:** mil `SAIDA` com 300 caixas abertas 1,2 → 1,6 s; 200 `AJUSTE` 0,26 → 1,2 s — aceitável (o índice da
+  B478 cobre a subconsulta).
+- **Autorização:** o sufixo não expõe nada novo (o número e a quantidade da requisição já aparecem nas listagens de quem
+  movimenta; nunca o solicitante); nenhuma rota mudou de checagem; o GESTOR ainda retém o reservado (I-5).
+
+**Achados (e o hash que fechou cada um):**
+
+1. **Importante — regressão da própria 97.** No legado (caixa > físico, o que a A48 acha) o **ajuste para cima** era
+   recusado (`AJUSTE` 0→2 com 4 na caixa: 400; antes da 97, 201), e a conferência que contava 2 com sistema 0 recusava
+   o inventário **inteiro**. → `3251b014`: `stockService.caixaParaGuardaDoAjuste` — a caixa entra no retido só quando o
+   novo total é **menor** que o atual; o que melhora o estado não é recusado. Uma função para o motor e para a rota do
+   inventário (D1 da Etapa 10). Testes `[97 F5-1]` (dois). Letra **B499**.
+2. **Importante — igual na base (20/20).** A devolução com destino `SUCATA` ou `QUARENTENA` chama o motor duas vezes,
+   cada perna com a sua trava (B494): uma separação entre as duas pernas separava o que a entrada acabou de creditar, e
+   a segunda perna o levava (caixa sem físico). → `3810f79a`: as duas pernas sob `naTravaDoMaterial`; o `catch`
+   (compensação) fora. **A I-4 deste plano estava errada:** *"o par soma zero"* só vale sem concorrência — corrigido à
+   vista acima. **Declarado, não corrigido:** as compensações do retalho e da transformação (`compensacao: true`) só
+   levariam a caixa depois de uma falha no meio **mais** uma separação concorrente do material recém-creditado — e
+   `cancelarMovimentacao` não pode rodar dentro de seção (invariante da 91). Teste `[97 F5-2]`. Letras **B500**, **C192**.
+3. **Pré-existente (9/9).** Duas conclusões simultâneas da conferência davam 200/200 e gravavam dois
+   `AJUSTE_INVENTARIO` por item (e duas auditorias). → `c427bf6d`: compare-and-set `UPDATE … SET status='CONCLUIDO'
+   WHERE id=? AND status='ABERTO'` **dentro** da trava, **depois** da pré-validação e antes de aplicar; sem ajustes, o
+   `UPDATE` final é o compare-and-set; falha no meio devolve `ABERTO`; a perdedora recebe *"Conferência não está aberta
+   (status atual: CONCLUIDO)"*. Testes `[97 F5-3]` (dois). Letras **B501**, **C191**.
+4. **Menor, declarado.** Bloquear material **reservado e já separado** (a reserva da requisição cobre a caixa) prende a
+   entrega em *"Máximo: 0"* sem nomear o bloqueio — a guarda da B496 não conta o reservado, de propósito. O comentário
+   da B496 vale só para caixa **sem** reserva. Letra **C190** (aberta; candidata a etapa).
+5. **Testes que faltavam** → `3fc39310` (só testes; cada um provado pela sabotagem do revisor, que antes passava
+   **338/338**): **A** — as quatro portas não-`SAIDA` com trava própria (reserva manual e os estornos de entrada, de
+   `AJUSTE` e de `DESBLOQUEIO`) sabotadas **juntas** deixavam a suíte verde; agora uma corrida por porta (`[97 F5-A]`),
+   10/10 errado com a sabotagem de cada uma; **B** — a guarda da caixa no `WHERE` do claim da `SAIDA` estava **morta**
+   sob a trava; corrida pelo `registrarMovimentacaoSemTrava` com o claim parado (`[97 F5-B]`); **C** — o filtro de
+   `lerCaixa` (só requisições com caixa > 1e-9) sem teste: a terceira requisição aprovada e não separada na RN-02;
+   **D** — o `[97 T2]` do inventário segurava só o segundo material (`slice(-1)` passava): agora roda segurando o
+   segundo e o primeiro.
+
+**Suíte em cada commit da Fase 5:** `3251b014` — a mensagem do commit não cita o placar (só os controles; não
+reconstruído de memória); `3810f79a` 338/338 (4156 ✓), almox 44/0; `c427bf6d` 338/338
+(4158 ✓), 44/0; `3fc39310` 338/338 (4163 ✓), 44/0, 4/0, 3/0, 5/0.
+
+**Retro:** 1 rodada de correção. Achados reais **8** — 3 de código (1, 2, 3) + 4 de teste (A, B, C, D) + 1 declarado
+(4); ruído **0**. Defeito introduzido pela própria etapa e pego na Fase 5: **1** (o ajuste para cima — achado 1).
+
+## Fechamento (2026-10-09) — `13949b14`
+
+Skill `fechar-etapa`, os 7 artefatos: novidades (seção da Etapa 97 com Antes → Agora e dez cenários com a literal lida
+do código; **A48**; **B491–B501**; **C184–C192**; **D (97)**, **F (97)**; B466, D (95), D (96), o cenário 5 da Etapa 64
+e os "não cobre" da 95 e da 96 anotados como resolvidos), specs 03, 05, 07, 09, 12, 14, 15, 17 e o mapa, guia do usuário
+(cabeçalho: 97 fechada, próxima 98; seção com roteiro clicável e o procedimento da A48), manual do sistema (a regra
+enxertada nas seções de saída, ajuste, perda, bloqueio, remessa, sucateamento, inventário, reserva manual, devolução e
+entrega; a fila por material corrigida onde dizia que a saída avulsa e a reserva manual não esperavam).
+
+**Letras:** reservadas B491–B498, C184–C189, A48 — conferidas no documento antes de escrever (últimas: B490, C183, A47).
+As três decisões da Fase 5 viraram **letras novas** (**B499** o ajuste que aumenta não é recusado pela caixa; **B500** as
+duas pernas da devolução sob uma trava; **B501** o compare-and-set da conclusão), e não emendas, porque cada uma é regra
+nova achada pelo próprio defeito. Os achados viraram **C190** (aberto), **C191** e **C192** (resolvidos na etapa). A
+**B498** ficou à vista como **invertida** (texto riscado + "estava errado"); a **B494** e a **B496** como corrigidas na
+revisão do plano. Próximas livres: **B502**, **C193**, **A49**.
+
+**A48:** o texto do plano foi rodado sem mudar uma vírgula pelo teste de integração (`[97 T3 C4]` e `[97 T3] fim`) —
+acha A e B no legado, só B depois da entrega de A, vazia depois de excluir B e no fim de todas as jornadas; a lista de
+status confere com `STATUS_COM_CAIXA` (`[97 T3]`). Conferido no fechamento: o texto do teste é idêntico ao do plano
+(comparação byte a byte, 1657 caracteres).
+
+**Verificação final** (rodada no fechamento, sobre `3fc39310` — o fechamento só mexe em documentação): `test:api`
+**338/338** (4163 ✓, `grep -c "✓"`), `test:almoxarifado` **44/0**, `test:validation` **4/0**, `test:safealter`
+**3/0**, `test:sqlite` **5/0**; cliente **95** suítes / **1463** testes; `CI=true` build *"Compiled successfully."*.
+
+## Próxima tarefa detalhada — Etapa 98: devolver da caixa à prateleira (B497, C189)
+
+**Por que esta** (ordem do `CLAUDE.md`): é a candidata que esta etapa nomeou (B497 (i)) e a única que fecha de uma vez
+o que ficou aberto em quatro letras — **C189** (com tudo perdido só o administrador solta a requisição), **C174/C170**
+(o legado da A46 sem gesto limpo), **C188** (o legado da A48) e o caminho da **C190** (o material bloqueado na caixa).
+Os outros candidatos medidos são menores ou de outra natureza: **C190** sozinho (nomear o bloqueio na recusa da entrega
+— uma literal, cabe como task da 98); `maxEntregar` sem honrar `permite_saldo_negativo` (D (97) — nenhuma requisição
+fica presa por isso, a flag só não ajuda); **C145/C147/C150/C139** (residuais da 91 e da 77, declarados; nenhum muda
+com a 97).
+
+**Fase 0 já medida no fechamento (refazer antes de prometer):**
+- **O gesto não existe.** As escritas de `quantidade_separada` são só duas: a separação (`requisitionService.js:1015`,
+  que só **soma** — `if (!(qty > 0)) continue`, `:868`) e a entrega (`:1524`, `MAX(separado, entregue + q)`). Nenhuma
+  rota diminui o separado (`grep -n "SET quantidade_separada\|quantidade_separada = "`). A s3 da 97 mediu: separar 0 não
+  reabre (L6), *Em Separação* não cancela nem encerra (L1, L2).
+- **A máquina de estados:** `EM_SEPARACAO → [PRONTA_PARA_RETIRADA, PARCIALMENTE_ATENDIDA, ENTREGUE,
+  AGUARDANDO_APROVACAO_VALOR]` (`requisitionStateMachine.js:76`) — **não há volta** a *Aprovado*/*Reservada* quando o
+  separado zera. A 98 decide (B nova) e mede.
+- **A trilha:** `separacoes_requisicao_almoxarifado` (append-only: `itens_json`, autor) — a devolução precisa de rodada
+  própria ou de tabela própria (molde `substituicoes_origem_requisicao`, Etapa 63).
+
+**Contrato provável (a Fase 1 confirma):**
+- `PUT /api/almoxarifado/requisicoes/:id/devolver-separado` (gate `separar_emitir` — ADMINISTRADOR, ALMOXARIFE),
+  body `{ itens: [{ item_id, quantidade, motivo }] }`; motivo **obrigatório** (é o que distingue de um erro de
+  digitação); `quantidade ≤ separado − entregue` do item (o que está na caixa), arredondada (`Q.qtd`), > 0.
+- Efeito: `quantidade_separada -= q` (por `Q.qtdSql`, com claim no `WHERE` — `quantidade_separada − entregue >= q`);
+  **não move estoque** (o material nunca saiu da prateleira; é o livro da requisição que muda); a origem planejada
+  (`origem_separacao_id`/`lote_separacao_id`) zera quando o pendente zera; uma linha de trilha com autor, motivo e
+  quantidade. Depois disso a caixa sem reserva cai e as portas avulsas (97) liberam — a `PERDA` do material quebrado
+  passa **sem** o administrador.
+- Status: com separado − entregue = 0 em todos os itens e nada entregue → volta ao status anterior à separação (o mesmo
+  recálculo da aprovação: reservada/aprovado); com algo entregue → *Parcialmente Atendida* (que já encerra). Transição
+  nova na máquina = decisão B, à vista.
+- Literal de recusa (a definir na Fase 1): quantidade acima da caixa do item, requisição fora de *Em Separação* /
+  *Pronta para retirada* / *Parcialmente Atendida*, motivo vazio.
+- Tela: botão por item no detalhe da requisição em separação (*"Devolver à prateleira"*), modal com quantidade e motivo
+  — `RequisicoesList`/detalhe; a fila de separação recalcula sozinha (lê o separado).
+
+**Pontos de atenção:**
+- **Travas:** requisição → material (a ordem permitida, `CLAUDE.md`/91); o gesto é da família separar/entregar/excluir
+  (a fila por requisição da 93) **e** muda a caixa de um material (a trava por material, como a separação).
+- **A reserva do item:** se a reserva da requisição cobre a caixa, devolver à prateleira não mexe na reserva (o material
+  continua prometido à requisição, só deixa de estar separado). Medir os dois casos (com e sem reserva).
+- **Material crítico / segunda conferência** (Etapa 28): devolver depois de conferido — a conferência continua valendo
+  para o que ficou? Medir `quantidade_conferida`/flags do item.
+- **A alçada de valor** (94) e a **fila** (64): o separado muda os números da fila e da prévia; conferir que a
+  `PRONTA_PARA_RETIRADA` sem nada separado não fica na fila de "Entregar".
+- **Série e lote:** separação com série/lote planejado (Etapas 59, 61) — devolver precisa soltar a série planejada?
+- **C190:** depois do gesto, o material bloqueado na caixa sai da caixa; a recusa da entrega com bloqueio pode ganhar
+  um sufixo que nomeia o bloqueio (task opcional da 98).
+
+**O que já está pronto e não se reabre:** a régua das portas avulsas (`caixaSql.livreDeCaixaSql`, B491), o sufixo
+(`sufixoCaixa` — a 98 pode acrescentar a terceira saída "devolva à prateleira" ao texto **dele**, mudando a literal à
+vista nos testes da 97), a trava no motor (`naTravaDoMaterial`, B494), `tetoSeparacao`/`maxEntregar` (95), a A46 e a
+A48 (a 98 só muda o "como ler" delas para citar o gesto novo), o compare-and-set da conferência (B501).
