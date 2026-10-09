@@ -1,6 +1,7 @@
 # Etapa 98 — devolver da caixa à prateleira: o almoxarife tira da caixa de uma requisição o que não vai sair (B497, C189; com o C190)
 
-> Status: **EM EXECUÇÃO — 2026-10-09: Fase 2 `a16ea09f`; T0 `0aafb939`, T1 `9e0bb225` feitas (seção "Execução" no fim). Próximo: T2/T3 (serial) e T4 (paralelo)**. A Fase 2 (seção "Fase 2 —
+> Status: **FECHADA — 2026-10-09: T0–T5 feitas, Fase 5 (`084ded25`, `cc130a86`, `b7fc06a0`) e o fechamento `4f54bfd9` (seções "Execução", "Fase 5" e "Fechamento" no fim). Próxima: Etapa 99 — ver "Próxima tarefa detalhada — Etapa 99" no fim.**
+> Antes: **EM EXECUÇÃO — 2026-10-09: Fase 2 `a16ea09f`; T0 `0aafb939`, T1 `9e0bb225` feitas.** A Fase 2 (seção "Fase 2 —
 > revisão do plano", antes de "Próximo passo") achou 2 bloqueantes, 5 importantes e 6 menores; os pontos afetados estão
 > marcados **"(corrigido na Fase 2)"** e a seção vale sobre o texto acima. Nenhuma task executada.
 > HEAD de partida: `6e61cb27` (main, árvore limpa, sem push).
@@ -472,12 +473,12 @@ o contrato congelado (mock só na fronteira HTTP) — pode rodar em paralelo com
   removido → cai RN-08 "S → 403" (trocar por `movimentar` **não** serve de controle: `movimentar` tem os mesmos dois perfis,
   `permissions.js:25` — o teste passaria com o gate trocado; medido na Fase 1). **Guardas (passam antes, provam que nada vizinho muda):** a
   separação, a entrega e a conferência da 28 (`test:api` inteiro antes e depois).
-- [ ] **T2 (galho, serial) — o sufixo S98 (B508).** Contrato "O sufixo". **RN-11.** **Vermelho antes:** RN-11 (a literal
+- [x] `672bb151` **T2 (galho, serial) — o sufixo S98 (B508).** Contrato "O sufixo". **RN-11.** **Vermelho antes:** RN-11 (a literal
   nova). **Edição declarada:** `portasAvulsasCaixa.api.test.js` e `portasAvulsasCaixaIntegracao.api.test.js` — a
   constante da literal S passa a S98 (comentário *"mudado na Etapa 98 (B508)"*); nenhuma outra asserção muda.
   **Controles:** (s1) a função de antes → cai RN-11 e os dois testes editados; (s2) S98 sempre (sem o `''` sem caixa) → cai
   "byte a byte sem caixa" (RN-04 da 97).
-- [ ] **T3 (galho, serial) — o C190 (B509) e a A49.** Contrato "O C190", E190. **RN-12**, com a A49 rodada pelo teste com o
+- [x] `55bc2165` **T3 (galho, serial) — o C190 (B509) e a A49.** Contrato "O C190", E190. **RN-12**, com a A49 rodada pelo teste com o
   texto do plano (como a A48 na 97). **Vermelho antes:** a fila (ENTREGAR), o detalhe (3), a literal E190 (hoje a recusa
   é a do motor). **Guardas:** sem bloqueio a entrega byte a byte; `permite_saldo_negativo` com bloqueio passa como hoje.
   **Controles:** (s1) `entregavelPeloMotor` devolvendo `disp + r` sempre → cai a fila/detalhe e a E190 (volta a recusa
@@ -485,7 +486,7 @@ o contrato congelado (mock só na fronteira HTTP) — pode rodar em paralelo com
   `permiteNegativo` → cai a guarda da flag; (s4) a E190 sem ⟨partes⟩ → cai a literal inteira. **Medir sem edição:**
   `filaSeparacao*`, `separacaoTetoFisico*`, `quantidadeArredondada*`, `entregaSerie*` — se algum montar disponível
   negativo e esperar a recusa do motor, registrar e ajustar só a literal (nunca a regra).
-- [ ] **T4 (galho, cliente — paralelo com T2/T3) — a tela.** No detalhe da requisição em modo almoxarifado, na linha do item
+- [x] `4941c9d9` (cherry-pick de `8e6be5ab`) **T4 (galho, cliente — paralelo com T2/T3) — a tela.** No detalhe da requisição em modo almoxarifado, na linha do item
   com caixa > 0 e status em `STATUS_COM_CAIXA` (lista importada de `requisicaoLabels.js`, conferida contra o servidor por
   teste — molde RN-07 da 92; **corrigido na Fase 2:** o teste de paridade é do **servidor**,
   `server/tests/api/devolverListaTelaRota.api.test.js` no molde de `cancelarListaTelaRota.api.test.js` — lê o arquivo do
@@ -509,7 +510,7 @@ o contrato congelado (mock só na fronteira HTTP) — pode rodar em paralelo com
   condicionais; o 400 do servidor vira toast; o histórico renderiza. **Controles:** (s1) sem o filtro de caixa > 0 → cai
   "não aparece sem caixa"; (s2) sem o motivo obrigatório → cai "Devolver desabilitado"; (s3) a lista de status local
   diferente da do servidor → cai o teste de paridade. `CI=true` build.
-- [ ] **T5 (tronco, integração) — o documento até o último gesto, pela rota e pelo serviço.** **C1 pela rota:** S pede 4;
+- [x] `de77a6eb` + `a70107ca` **T5 (tronco, integração) — o documento até o último gesto, pela rota e pelo serviço.** **C1 pela rota:** S pede 4;
   aprova; entra 4; ALMOX separa 4; ALMOX libera para retirada; `PERDA` 2 → 400 **S98**; ALMOX devolve 2 (motivo
   "quebrou") → *Em Separação*; `PERDA` 2 → 201; ALMOX entrega 2 → *Parcialmente Atendida*; nova `ENTRADA` 2; ALMOX separa
   2; ALMOX entrega 2 → *Entregue*; a trilha tem 1 devolução, o livro 1 `PERDA` e 2 `SAIDA`; a A48 vazia em
@@ -526,7 +527,7 @@ o contrato congelado (mock só na fronteira HTTP) — pode rodar em paralelo com
   `travaPorMaterial.comLockDoMaterial` **uma vez por material** e **não** chama `registrarMovimentacao` (não move estoque). **Controles:** (s1) desfazer a seta (T0) → cai C1 no passo *Pronta*; (s2) desfazer o
   compare-and-clear (T1) → cai C2; (s3) desfazer T3 → cai C4 (fila); (s4) desfazer T2 → cai C1 no primeiro `PERDA`
   (literal). Cada asserção de recusa com a literal **inteira**.
-- [ ] **T6 — fechamento (skill `fechar-etapa`).** Novidades (B502–B511, C193–C198, A49; B497 e C189 anotados como
+- [x] `4f54bfd9` **T6 — fechamento (skill `fechar-etapa`).** Novidades (B502–B511, C193–C198, A49; B497 e C189 anotados como
   resolvidos; C190 **corrigido à vista** — "prende em *Máximo: 0* sem nomear" estava incompleto: com bloqueio parcial a
   prévia anunciava 3 e o motor recusava tudo; C188 e a leitura da A46/A48 ganham "ou devolva à prateleira"; **(Fase 2)**
   o **C174** marcado resolvido e o *"não há gesto de devolver da caixa"* da spec 05 (`:559-561`) corrigido **dizendo que
@@ -612,7 +613,9 @@ ORDER BY rq.numero, ma.codigo;
 ```
 
 Saída por linha: liberar reserva **deste material** — da própria requisição se o item tiver reserva, senão de **outra**
-requisição do material (corrigido na Fase 2) — (ALMOXARIFE/ADMINISTRADOR), ou desbloquear. A lista
+requisição do material (corrigido na Fase 2) — (ALMOXARIFE/ADMINISTRADOR), ou desbloquear. **(Texto superado na Fase 5 —
+vale o da seção "Fechamento": "desta requisição" só quando reserva do item + `disponivel_material` > 0; senão
+"outra" reserva, de outra requisição **ou manual**, ou desbloquear.)** A lista
 de status é `PODE_ENTREGAR` (`requisitionStateMachine.js:99`) — mudou lá, muda aqui. Opcional: nada roda sozinho.
 
 ---
@@ -773,3 +776,220 @@ ERRADO" da sonda eram expectativas erradas da própria sonda — fila sem `SEPAR
   RN-02b espera só o status virar `CANCELADO` — esperar o cancelamento inteiro travava o teste (o cancelamento libera
   reservas sob a trava por material que a devolução segura; em produção não há deadlock, termina quando a devolução solta);
   (4) um s3 mais fraco (só o compare) é pego só pela asserção de `dados_anteriores.conferencia` na auditoria.
+- **T2 `672bb151`** — `caixaSql.sufixoCaixa` com o S98; os testes **RN-11** em `devolverSeparado.api.test.js`; nos dois
+  testes da 97 (`portasAvulsasCaixa`, `portasAvulsasCaixaIntegracao`) só a constante `S_FIM`, com o comentário "Mudado
+  na Etapa 98 (B508)". Vermelho antes 3/4 (o "sem caixa" é guarda). Controles: s1 (a função de antes) → RN-11 ×3,
+  `portasAvulsasCaixa` ×17, a integração da 97 ×6; s2 (S98 sempre) → o teste direto e a RN-04 da 97 ×4. **Divergências:**
+  (1) o teste "sem caixa" pela rota é só **guarda** — o chamador da `SAIDA` só pede o sufixo quando há caixa, então o
+  `''` só se prova pelo teste direto da função; (2) a primeira tentativa do s1 quebrou a sintaxe do arquivo (erro, não
+  controle) e foi refeita. `test:api` 339/339 (4198).
+- **T3 `55bc2165`** — `entregavelPeloMotor` na prévia e no laço da entrega, na fila e no detalhe (no detalhe só o
+  argumento `estoque` de `maxEntregar`); a E190 com as formas; o disponível vem do `disponivelSql` (nenhuma subtração à
+  mão); o motor inalterado. `entregaDisponivelNegativo.api.test.js` com 11 casos, a A49 rodada com o texto do plano (acha
+  antes, não acha depois; não acha reserva sem bloqueio nem caixa sem reserva com sobra; coluna errada → o banco recusa).
+  Vermelho antes 6/10. Controles: s1 → 5; s2 → 2 (inclui a fila); s3 → 3; s4 → 4; s2b → 2; s3b → 1. **Divergência (o
+  fechamento destaca — B514):** a regra "permite negativo" usa a flag do material **OU** a configuração
+  `permite_saldo_negativo_global` (`permiteNegativoSql`) — é o que o motor de fato lê (`stockService`: `material.
+  permite_saldo_negativo || getConfig('permite_saldo_negativo_global') === '1'`); o plano nomeava só a do material, e
+  seguir o plano faria a prévia dizer 0 e recusar uma entrega que o motor deixaria sair. A **A49 mantém o texto do plano**
+  (só a flag do material) — a ressalva está na A49 do documento de novidades. `test:api` 341/341 (4212).
+- **T4 `4941c9d9`** (worktree, cherry-pick de `8e6be5ab` — o hash da worktree não vale; `4941c9d9` conferido com
+  `merge-base --is-ancestor`) — botão **"Devolver à prateleira"** por item com caixa > 0 em `STATUS_COM_CAIXA` (gate
+  `separar_emitir`), o modal (quantidade padrão = a caixa, `step="any"`, motivo obrigatório até 500, os três avisos
+  condicionais), o histórico *"Devolvido à prateleira (n)"*, o botão **"Separar de novo para conferir"** (B-1 da Fase 2),
+  o *title* do "Ajustar Separação" corrigido, `STATUS_COM_CAIXA` exportado de `requisicaoLabels.js`, a paridade
+  `devolverListaTelaRota.api.test.js`. Cliente 95/1463 → 96/1496, build ok; `test:api` 340/340. Vermelho antes:
+  paridade 2/3; jest 25/33. Controles s1–s4: s1 sem o filtro caixa > 0, s2 sem o motivo obrigatório,
+  s3 a lista do cliente com um status trocado (cai a paridade), s4 o botão da B-1 sempre visível. **Divergências (B515):** o 409 fecha o modal e recarrega (molde da B463), o 400 mantém; o
+  "Separar de novo para conferir" chama `/separar` (o resto da tela usa o alias `/separacao` — mesmo handler); o motivo
+  é limitado a 500 também na tela.
+- **T5 `de77a6eb` + `a70107ca`** (cabeçalho do `devolverSeparado` listando a T2 e apontando T3 e T5) —
+  `devolverSeparadoIntegracao.api.test.js` com 10 casos: C1, C1b, C2, C2b, C3, C3b, C4, C4b e C5 (o liberar parado por
+  gancho e o espião de `comLockDoMaterial`/`registrarMovimentacao`). Controles: s1 (sem o passo (6) da devolução) → C1,
+  C1b, C5; s2 (sem o compare-and-clear) → C2, C2b; s3 (sem a T3) → C4, C4b; s4 (sem a T2) → C1, C3b; s5 e s6 → o espião;
+  s7 → C5. **Divergência — o plano estava errado:** o s1 do plano ("desfazer a seta (T0)") **não sabe falhar** — a
+  devolução grava o status direto, por compare-and-set, sem `validarTransicao`; só o RN-00 da T0 prende a seta na
+  máquina; o que derruba a jornada é tirar o passo (6) da T1. `test:api` 342/342 (4222).
+- **T6 `4f54bfd9`** — o fechamento (seção abaixo).
+
+## Fase 5 — revisão adversarial (2026-10-09)
+
+Dois revisores frescos, executando sondas (`e98rv1-*`, `e98rv2-*` no scratchpad), sobre `a70107ca`.
+
+**Regras e corridas (revisor 1).** Devolver × entregar da mesma requisição: 10/10 coerentes (a trava por requisição
+serializa; nenhum estado com entregue > separado). Devolver × devolver: 10/10 — um 200 e o outro D7 (a pré-validação lê a
+caixa já diminuída). Crítico em *Pronta*: devolver limpa a conferência e leva a *Em Separação*, coerente. Sem deadlock:
+nenhum caminho pega a trava do material e depois a da requisição. **Não sondado:** devolver × conferir — mesma classe
+da separação × conferência da Etapa 28 (o claim da conferência e o compare-and-clear da devolução).
+
+**Autorização (revisor 2).** Sem exposição nova: `devolucoes_caixa` no detalhe é da mesma classe de `separacoes`
+(nomes de quem agiu, já visíveis ali); a rota dos outros módulos (`/api/requisicoes-material/:id`) não devolve o campo.
+O gate da rota (`separar_emitir`) e o da tela (`bloquearSeNaoPode('separar_emitir')`) concordam.
+
+**Achados e o hash que fechou cada um:**
+
+1. **(importante) *Pronta para Retirada* com a caixa vazia presa** (revisor 1, `e98rv1-a` S1, `e98rv1-c`) — o `PUT
+   /liberar-retirada` contava `quantidade_separada > 0`: separado 2, entregue 2 (entrega parcial + "separar de novo",
+   com ou sem devolução) virava *Pronta* sem nada a retirar, e dali entregar, encerrar, separar e devolver recusavam e
+   ela sumia da fila. **A B504 estava incompleta** — ela afirmava que, com a seta, a *Pronta* vazia não existiria; a
+   causa é **anterior à 98** (reproduzida sem devolução), a 98 só abria mais um caminho até ela. → **`084ded25`**: o
+   liberar conta a caixa (`ROUND(separado − entregue, 6) > 1e-9`) e recusa com a literal que já existia, *"Nenhum item
+   separado"*; o botão da tela segue `caixaDoItem > 0`. (**B512**, **C199**.)
+2. **(menor) a E190 mandava liberar a própria reserva quando isso não destrava** (revisor 1, `e98rv1-a` S2: R1 reserva
+   1, R3 reserva 3, físico 4, bloqueio 1 → disponível −1; R1 liberava a própria reserva, continuava presa e perdia a
+   prioridade) **e (3) dizia "(de outra requisição)" com reserva MANUAL** (`e98rv1-b` B1). → **`cc130a86`**: "desta
+   requisição" só quando reserva do item + disponível do material > folga — liberar x da própria reserva soma x ao
+   disponível e tira x da reserva, então o entregável só muda se sobrar reserva depois de cobrir o déficit; senão *"… até
+   liberar outra reserva deste material ou desbloquear"*. A regra que o revisor sugeriu ("reserva ≥ |disponível|")
+   ainda falhava o S2 — provado por sabotagem. (**B513**.)
+4. **Testes que faltavam (6)** (revisor 2, sabotagens que passavam verde) → **`b7fc06a0`**: a conferência limpa ao
+   devolver de *Pronta*; a auditoria `DEVOLUCAO_CAIXA` conferida por `deepStrictEqual`; o botão fora do modo
+   almoxarifado; a re-checagem do C190 no **segundo laço** da entrega (montada com gancho — sem ela o motor vazava
+   *"Saldo físico insuficiente para consumir a reserva"*); a seta não aplicada aos 8 status não-*Pronta*; frações na tela.
+5. **Fora da rodada, registrado como C novo (C200):** `conferir-separacao` (`requisitionService.js:~568`) conta
+   `quantidade_separada > 0` e pode confirmar uma caixa vazia — não medido como estado preso na Fase 5. (A Fase 0 da 99
+   reproduziu: 200 sobre separado 2 = entregue 2; a rodada seguinte limpa e o liberar recusa — dano baixo.)
+
+**Retro:** 1 rodada de correção. Achados reais: **3 de código** (1, 2, 3) **+ 6 de teste**; ruído: **0**. Defeito
+introduzido pela própria etapa e pego na Fase 5: **0** — o achado 1 era anterior (a 98 abriu mais um caminho até ele).
+Suítes depois da Fase 5: `test:api` 342/342 (4232 ✓), almox 44/0, cliente 96/1500.
+
+## Fechamento (T6, 2026-10-09) — `4f54bfd9`
+
+Skill `fechar-etapa`, os 7 artefatos: novidades (seção da 98; **A49** com o texto dos testes — igual ao do plano,
+conferido no fechamento por comparação dos três textos; **B502–B515**; **C193–C200**; D (98); F (98); resolvidos à vista
+**B497**, **C189**, **C174**; o **C190** corrigido à vista — "prende em *Máximo: 0* sem nomear" estava incompleto; o
+"como ler" da A46 e da A48 e o C188 com "devolver à prateleira"); specs 04, 05 (o *"não há gesto de devolver da caixa"*
+do bloco da 95 corrigido **dizendo que estava desatualizado**), 07, 09, 23 e o mapa (nenhuma cor muda; a 05 continua
+🟡); guia (cabeçalho, seção com roteiro, a barreira "quem separou não confere" na equipe de dois, a A49); manual (10.2b
+novo, 10.1–10.6, 7.1, 7.5, 9.6, 5.5, 15.3, o sufixo nas cinco ocorrências).
+
+**Letras:** o plano reservou B502–B511, C193–C198, A49 (confirmadas: últimas antes da etapa B501, C192, A48). O
+fechamento acrescentou, como **letras novas e não emendas**: **B512** (o liberar exige caixa; a B504 marcada
+incompleta), **B513** (qual saída a E190 nomeia — a B509 decide *que* nomeia), **B514** (a flag global, decisão tomada
+na T3 no lugar do plano, com o descartado), **B515** (o modal da T4); **C199** (a *Pronta* vazia presa, anterior,
+resolvida) e **C200** (conferir com caixa vazia, aberto). Próximas livres: **B516**, **C201**, **A50**.
+
+**Verificação (sobre `b7fc06a0`; o fechamento só mexe em documentação):** `test:api` 342/342 arquivos (4232 ✓ por
+`grep -c "✓"`; os da etapa: `devolverSeparado` 40, `entregaDisponivelNegativo` 16, `devolverSeparadoIntegracao` 10,
+`devolverListaTelaRota` 3), `test:almoxarifado` 44/0, `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 5/0;
+cliente 96 suítes / 1500 testes; `CI=true` build ok.
+
+**A A49, saída por linha (texto atualizado na Fase 5 — vale sobre a "Letra A" acima):** se a reserva do item **desta**
+requisição for maior que o déficit (reserva do item + `disponivel_material` > 0), liberar dela o déficit; senão, liberar
+**outra** reserva deste material (de outra requisição ou manual) ou desbloquear — liberar a reserva da própria requisição
+quando ela não cobre o déficit não destrava nada (corrigido na Fase 5). (ALMOXARIFE/ADMINISTRADOR.) **A A49 não mostra a
+reserva do item** — acrescentar a coluna exigiria atualizar a cópia da consulta nos dois testes; quem decide a saída abre
+o detalhe da requisição.
+
+## Próxima tarefa detalhada — Etapa 99
+
+**Tema: a porta da separação recusa o que não é separável (C197) — e a conferência recusa a caixa vazia (C200).**
+Hoje a separação responde **200** a quantidade negativa, a quantidade não numérica, a item que não é da requisição e a
+fração de material com série; os quatro reivindicam o status (*Aguardando Estoque* / *Parcialmente Atendida* → *Em
+Separação*) sem separar nada, e a fração deixa uma caixa que a entrega recusa. A devolução da 98 já recusa os mesmos
+casos com literal (B511) — a 99 dá à porta de entrada a régua da porta de saída.
+
+### Por que este, e não os outros (ordem do CLAUDE.md)
+
+1. **"Falta para 🟢" das features tocadas (04, 05, 07):** a 04 e a 07 estão 🟢. A 05 é 🟡 com itens estruturais (lista
+   de separação como entidade, rota de picking, kits) que são etapa grande sem demanda medida; entre os achados
+   **medidos** da 05, o C197 é o único que faz o sistema **mentir sucesso** ("200, nada aconteceu") e **mudar status**
+   por entrada inválida — e o único que fabrica um estado que trava a entrega (caixa fracionária de série).
+2. **O mapa inteiro, as 🟡 fora de 04/05/07** (lido o "falta para 🟢" de cada uma):
+   - **00** (fundação), **01** (cadastros: tabela de conversões, `controle_validade`/`controle_serie`/`controle_corrida`
+     mortas no cadastro): sem defeito operacional medido; conversões de unidade é feature nova sem pedido.
+   - **06** (aprovações): o que falta é **bloqueado por dependência** declarada — material fora da lista técnica →
+     Engenharia (feature 22 inexistente) e dupla aprovação de ajuste (B11, decisão de negócio).
+   - **21** (relatórios): previsto × realizado depende da 22; PDF é corte D; o resto é de features donas.
+   - **22** (integrações): os bloqueios são **entidades inexistentes** (BOM/Engenharia, OP, centro de custo); o único
+     alcançável (comparar cotações) foi descartado pelo design da 41 (D1).
+   - **23** (perfis/auditoria): o que falta é decisão de negócio (gate ADMIN-only B33 b, B41 em aberto, retenção,
+     exportação XLSX do log) — nada que quebre a operação.
+   **Conclusão:** nenhuma 🟡 fora de 04/05/07 tem item alcançável de maior valor operacional; os que sobram são
+   dependência inexistente ou decisão do André. O trabalho continua na 05 **por medição, não por inércia**.
+3. **Os outros candidatos, e por que ficam atrás:**
+   - **C200 (conferir com a caixa vazia)** — reproduzido (abaixo), mas **inofensivo medido**: a conferência sobre caixa
+     vazia é limpa pela rodada seguinte (V1b) e não libera nada (o liberar já exige caixa > 0, B512). Entra **junto**
+     (mesma régua da B512, uma linha), não como etapa.
+   - **C195** (*Em Separação* vazia não cancela por quem pediu) — lacuna real, mas há saída (o administrador exclui) e
+     abre seta nova `EM_SEPARACAO → CANCELADO` com recálculo de reserva — etapa própria, depois.
+   - **A barreira "quem separou não confere" na equipe de dois (C198)** — decisão de processo (B505 (ii)), não defeito;
+     o terceiro confere.
+   - **`maxEntregar` × `permite_saldo_negativo`** — a 98 já alinhou prévia, fila e detalhe ao motor (B514, flag global
+     incluída); nada medido aberto.
+   - **C139** (reserva manual liberada por qualquer um que reserva) — decisão de negócio (B412). **C145** (janela da
+     quarentena) — milissegundos depois da B429, A42 acha. **C147** (reenvio duplica requisição com aprovação
+     automática) — exige chave de idempotência cliente+servidor, rara (30 s de trava). **C150** (custo da trava) —
+     medido e aceito. Nenhum supera o C197 em frequência × dano.
+
+### O que a medição mostrou (Fase 0, HEAD `b7fc06a0`, harness `e98-h.js`, `requirePermission` real)
+
+Sondas no scratchpad: `e99-sonda-s1-separacao-porta.js` (`.out`), `e99-sonda-s2-conferir-vazia.js`,
+`e99-sonda-s2b-conferir-vazia.js`.
+
+**s1 — a porta da separação: 5/7 ERRADO, controles 2/2 CERTO, controle do detector ERRADO de propósito.**
+
+| linha | medido hoje | certo |
+|---|---|---|
+| N1 *Aguardando Estoque* (entrou 4), separar **−2** | **200**, separado 0, status vira **EM_SEPARACAO** | 400 com literal, status intacto |
+| N2 *Parcialmente Atendida* (separou 4, entregou 2), separar **−1** | **200**, separado 4, status vira **EM_SEPARACAO** | 400, continua *Parcialmente Atendida* |
+| N3 separar **`'abc'`** | **200**, separado 0, status **EM_SEPARACAO** | 400 |
+| N4 material com série, separar **1,5** | **200**, separado 1,5; entregar 1,5 → 400 *"material com controle de serie exige quantidade inteira"* | 400 na separação |
+| N5 `item_id` 999999 | **200**, status **EM_SEPARACAO** | 400 |
+| controle: separar 2 | 200, separado 2 | CERTO |
+| controle: série, separar 2 inteiras | 200 | CERTO |
+
+**s2/s2b — a conferência com a caixa vazia (C200): 1 ERRADO reproduzido, 3 CERTO.**
+- **V3 (o defeito):** crítico, separa 4, ALMOX2 confere, entrega 2, devolve 2 (limpa a conferência) → *Parcialmente
+  Atendida*, separado 2 = entregue 2; `PUT /separar []` → *Em Separação*; ALMOX2 **confere → 200** (conta
+  `quantidade_separada > 0`, não a caixa). Controle: devolvendo tudo sem entregar (separado 0) → 400 *"Nenhum item
+  separado"*.
+- **Dano medido (V1b, V2): baixo.** A rodada seguinte limpa a conferência (o crítico não sai atestado por nada) e o
+  liberar recusa *"Nenhum item separado"* (B512). Achado colateral (V1): `PUT /separar []` **não** limpa a conferência
+  anterior — a conferência gravada antes da entrega parcial continua sobre a caixa 0 até a próxima rodada (é o contrato
+  da Etapa 28 RN-02: "sem item efetivo a caixa não mudou: a conferência FICA"; não reabrir).
+
+### Contrato provável
+
+- **`PUT /api/almoxarifado/requisicoes/:id/separar`** (e o alias `/separacao`), `separarSemTrava`
+  (`requisitionService.js:~908-942`, o laço `if (!item) continue` / `if (!(qty > 0)) continue`). Antes de **qualquer**
+  escrita e **antes da reivindicação do status** (tudo ou nada, molde D5 → D6 → D4 da 98):
+  - **0 continua pulado em silêncio** — o cliente filtra `> 0`, mas `separacaoComDono.api.test.js:221` (`rZero`) e o
+    "Iniciar Separação" com quantidades zeradas são contrato da 28 (RN-02). `[]` continua levando a *Em Separação*
+    (é o "Separar de novo para conferir" da 98).
+  - **Literais candidatas (molde B511):** `Item ⟨item_id⟩ não pertence a esta requisição`;
+    `⟨material⟩: informe uma quantidade maior que zero para separar` (negativa ou não numérica — decidir se
+    não numérica tem literal própria); `⟨material⟩: material com controle de série exige quantidade inteira na
+    separação` (a régua da entrega, `requisitionService.js:~1330`, que lê `controle_serie` do material).
+  - **Mudança de contrato à vista:** `separacaoComDono.api.test.js:~229` (`rFantasma`: item inexistente → 200 sem
+    rodada) passa a 400 — editar com comentário "mudado na Etapa 99", como a 98 fez com a S98.
+- **`PUT /requisicoes/:id/conferir-separacao`** (`conferirSeparacao`, `requisitionService.js:~566`): a contagem passa a
+  `ROUND(separado − COALESCE(entregue, atendida), 6) > 1e-9` — a **mesma** consulta da B512 no liberar —, literal de
+  sempre *"Nenhum item separado"* (sem contrato de erro novo). O claim (`claimConferencia`) não muda.
+
+### Pontos de atenção
+
+- **Quem mais chama `separarRequisicao`:** `grep -rn "separarRequisicao\|/separar\b\|/separacao\b"` em `server/` e
+  `client/src` — a mobilidade (feature 24) e testes que montam com quantidade 0/negativa. Rodar `test:api` inteiro
+  **antes** de editar e listar quem cai.
+- **A ordem importa:** a recusa tem de vir antes de `UPDATE … status = 'EM_SEPARACAO'` (`:~1070`) — senão N2 recusa mas
+  deixa a *Parcialmente Atendida* reaberta (o controle tem de olhar o **status** depois do 400, não só o código).
+- **Série:** decidir se `quantidade_separada` inteira vale para o **acumulado** (separado total) ou só para a rodada —
+  1 + 0,5 em duas rodadas. Medir: a entrega exige inteiro no que **entrega**; a regra mais simples é "a rodada é
+  inteira" (o acumulado de inteiros é inteiro). A caixa fracionária de **legado** sai pela devolução da 98 (B510).
+- **Controle positivo obrigatório** para cada recusa nova e para a régua da conferência (sabotar a **posição** — tirar
+  o `ROUND`, como na B512, cai só o caso de resto 1e-10).
+- **Cliente:** o modal de separação já filtra `> 0` e usa `step` livre; para série, avaliar `step="1"` no campo quando
+  `controle_serie` (o detalhe traz o material?). Teste jest só se a tela mudar.
+
+### O que já está pronto e não reabrir
+
+O teto de separação (95), o arredondamento `Q.qtd` (96), as portas avulsas e o sufixo (97/98), a devolução à prateleira
+e suas literais (98, B502–B511), o liberar que exige caixa (B512), a E190 (B509/B513), a barreira "quem separou não
+confere" (28, B505 (ii)), o contrato `[]`/0 da 28 (RN-02) e a conferência que **fica** quando nenhum item é efetivo.
+
+### Letras
+
+Próximas livres: **B516**, **C201**, **A50**. Candidata a A: requisições com caixa fracionária em material com série
+(`controle_serie = 1 AND separado − entregue` não inteiro) — a saída é devolver a fração à prateleira (98).
