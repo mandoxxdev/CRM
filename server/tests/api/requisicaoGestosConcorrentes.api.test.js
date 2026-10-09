@@ -510,6 +510,29 @@ const esperarFila = async (R, ms = 3000) => {
     assert.ok(!trava.requisicoesTravadas().includes(k));
   });
 
+  // Fase 5 (item 1, sonda e93rv2-trava): quem solta so tira a chave do Map se ainda for a CAUDA. Sem essa guarda
+  // (`fila.delete(chave)` incondicional), A soltando com B na fila apagava a cauda de B, e C chegava sem fila e rodava
+  // junto com B — dois gestos dentro da mesma requisicao. A (d) acima nao via: C ja estava na fila quando A soltou.
+  await test("[93 RN-09] (d') unidade: A segura, B na fila, A solta; C chega com B rodando -> C so roda depois de B (nunca 2 dentro)", async () => {
+    const k = 930003; const dentro = new Set(); let maxDentro = 0; const ordem = [];
+    const entra = (n) => { dentro.add(n); ordem.push(n); maxDentro = Math.max(maxDentro, dentro.size); };
+    let soltarA; let soltarB;
+    const pA = trava.serializarNaRequisicao(k, () => new Promise((r) => { entra('A'); soltarA = () => { dentro.delete('A'); r(); }; }));
+    const pB = trava.serializarNaRequisicao(k, () => new Promise((r) => { entra('B'); soltarB = () => { dentro.delete('B'); r(); }; }));
+    await new Promise((r) => setTimeout(r, 5));
+    soltarA(); await pA;
+    await new Promise((r) => setTimeout(r, 5));
+    assert.deepStrictEqual(ordem, ['A', 'B'], 'B roda depois de A');
+    const pC = trava.serializarNaRequisicao(k, async () => { entra('C'); dentro.delete('C'); });
+    await new Promise((r) => setTimeout(r, 5));
+    assert.deepStrictEqual(ordem, ['A', 'B'], `C rodou com B dentro (ordem ${ordem.join(',')})`);
+    assert.strictEqual(trava.esperandoNaRequisicao(k), 1, 'C esperando atras de B');
+    soltarB(); await Promise.all([pB, pC]);
+    assert.deepStrictEqual(ordem, ['A', 'B', 'C']);
+    assert.strictEqual(maxDentro, 1, `${maxDentro} gestos dentro ao mesmo tempo`);
+    assert.ok(!trava.requisicoesTravadas().includes(k), 'a chave saiu do Map');
+  });
+
   // ════════════════════════════════════════════════════════════════════════════════════════════════
   // T1 (B443/B449): liberar para retirada e encerrar seguram a mesma trava, nas rotas.
   const RE_LIB = /SET\s+status\s*=\s*'PRONTA_PARA_RETIRADA'/;
@@ -679,6 +702,11 @@ const esperarFila = async (R, ms = 3000) => {
     const ts = await trilhaDe(x.R, 'SEPARACAO');
     assert.strictEqual(ts.length, 2, `trilha SEPARACAO ${ts.length}`);
     assert.strictEqual(JSON.parse(ts[1].dados_novos).rodada_id, f.rodadas[1].id, 'a trilha e da rodada 2');
+    // Fase 5 (item 5): a conferencia que a rodada 2 limpou (ALMOX2) esta em dados_anteriores — perder por status nao
+    // apaga o rastro (sabotagem `conferenciaAnterior = null` passava verde).
+    const antA = JSON.parse(ts[1].dados_anteriores || 'null');
+    assert.ok(antA && antA.conferencia, `dados_anteriores ${ts[1].dados_anteriores}`);
+    assert.strictEqual(Number(antA.conferencia.usuario_id), USERS.ALMOX2.id);
     const w3 = w.linhas.filter((l) => l === W3(x.R, 'PRONTA_PARA_RETIRADA', f.rodadas[1].id));
     assert.strictEqual(w3.length, 1, `W3 ${w3.length} vez(es): ${JSON.stringify(w.linhas)}`);
     assert.strictEqual(g.emitidos, 1, `CAC emitido ${g.emitidos} vez(es)`);
@@ -799,6 +827,72 @@ const esperarFila = async (R, ms = 3000) => {
     assert.strictEqual((await trilhaDe(x.R, 'LIBERACAO_RETIRADA')).length, 0);
   });
 
+  // Fase 5 (item 2, sonda e93rv2-lib): a marca de rodada e lida ANTES do reqRow. Um escritor que grava rodada nova e
+  // limpa a conferencia DEPOIS do reqRow (aqui: no COUNT de separados, um db.get) deixa o reqRow com a conferencia
+  // velha — a barreira passaria; so a marca lida antes faz o UPDATE perder, reler e recusar. Sabotagem "ler a marca
+  // na hora do UPDATE" passava verde: os casos acima disparam o escritor no proprio UPDATE.
+  const origGet = db.get;
+  let escritoresGet = [];
+  db.get = function (sql, ...rest) {
+    const s = String(sql);
+    for (const g of escritoresGet) {
+      if (g.disparos < g.vezes && g.re.test(s)) {
+        g.disparos++;
+        Promise.resolve().then(() => g.escrever(g.disparos)).catch((e) => { g.erro = e; })
+          .then(() => origGet.call(db, sql, ...rest));
+        return this;
+      }
+    }
+    return origGet.call(this, sql, ...rest);
+  };
+  const armarEscritorGet = (re, escrever, vezes = 1) => {
+    const g = { re, escrever, vezes, disparos: 0 }; escritoresGet.push(g); return g;
+  };
+  await test("[93 RN-08] (b''') liberacao de critico conferido: o escritor grava rodada nova e limpa a conferencia no COUNT de separados (depois do reqRow, antes da barreira) -> 400 BARREIRA; EM_SEPARACAO; sem trilha LIBERACAO_RETIRADA", async () => {
+    desarmar();
+    const x = await montar({ critico: true });
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 1)).status, 200);
+    const cf = await conferir('ALMOX2', x.R);
+    assert.strictEqual(cf.status, 200, JSON.stringify(cf.body));
+    const g = armarEscritorGet(/COUNT\(\*\)\s+as\s+n\s+FROM\s+itens_requisicao_almoxarifado\s+WHERE\s+requisicao_id\s*=\s*\?\s+AND\s+quantidade_separada\s*>\s*0/, async () => {
+      await rodadaAlheia(x.R);
+      await raw('UPDATE itens_requisicao_almoxarifado SET quantidade_separada = 2 WHERE id = ?', [x.item]);
+      await raw(`UPDATE requisicoes_almoxarifado SET conferido_por_id = NULL, conferido_por_nome = NULL,
+        conferido_em = NULL WHERE id = ?`, [x.R]);
+    });
+    let lib;
+    try { lib = await comPrazo(liberar('ALMOX2', x.R), 8000, 'liberar'); } finally { escritoresGet = []; }
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(g.disparos, 1, `o escritor disparou ${g.disparos} vez(es)`);
+    assert.strictEqual(lib.status, 400, `liberar: ${lib.status} ${JSON.stringify(lib.body)} (critico liberado sem a 2a conferencia)`);
+    assert.strictEqual(lib.body.error, BARREIRA);
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'EM_SEPARACAO', `status ${f.status}`);
+    assert.strictEqual(f.conferido, null);
+    assert.strictEqual((await trilhaDe(x.R, 'LIBERACAO_RETIRADA')).length, 0);
+  });
+
+  // Fase 5 (item 3, sonda e93rv2-enc403): o 403 do encerramento fica FORA da trava (T1) — recusar nao espera a fila
+  // nem le a requisicao. Sabotagem "mover o can(...) para dentro da trava" passava verde.
+  const C0_403 = 'Sem permissão para encerrar requisições';
+  await test('[93 T1] encerrar sem permissao (PRODUCAO) numa requisicao INEXISTENTE -> 403 (nao 404: a permissao vem antes da leitura)', async () => {
+    const r = await encerrar('S', 93999001);
+    assert.strictEqual(r.status, 403, `encerrar: ${r.status} ${JSON.stringify(r.body)}`);
+    assert.strictEqual(r.body.error, C0_403);
+  });
+  await test('[93 T1] encerrar sem permissao (PRODUCAO) com a trava da requisicao PRESA -> 403 sem esperar a fila', async () => {
+    const x = await montar();
+    let soltar;
+    const segura = trava.serializarNaRequisicao(x.R, () => new Promise((r) => { soltar = r; }));
+    let r;
+    try {
+      r = await comPrazo(encerrar('S', x.R), 2000, 'o 403 esperou a fila da trava');
+    } finally { soltar(); await segura; }
+    assert.strictEqual(r.status, 403, `encerrar: ${r.status} ${JSON.stringify(r.body)}`);
+    assert.strictEqual(r.body.error, C0_403);
+    assert.strictEqual(trava.esperandoNaRequisicao(x.R), 0);
+  });
+
   // ── RN-08 (c)(c')(c'') — a entrega confere o status no UPDATE final e grava o item relativo (T4, B446) ──
   const W4 = (R, st, novo) => `[almoxarifado-entrega] Requisicao ${R}: status mudou para ${st} durante a entrega; baixas feitas, status nao regravado (seria ${novo})`;
 
@@ -868,10 +962,13 @@ const esperarFila = async (R, ms = 3000) => {
     assert.strictEqual(g.emitidos, 1, `UPDATE final emitido ${g.emitidos} vez(es)`);
   });
 
-  await test("[93 RN-08] (c'') (Fase 2, M4) entrega de 2: no UPDATE do ITEM um escritor fora da trava soma 2 a quantidade_entregue -> o item termina com 4 (a gravacao e relativa), nao 2", async () => {
+  await test("[93 RN-08] (c'') (Fase 2, M4) entrega de 2 com 2 separados: no UPDATE do ITEM um escritor fora da trava soma 2 a quantidade_entregue -> o item termina com 4 (a gravacao e relativa), nao 2; separado acompanha o entregue (4)", async () => {
     desarmar();
     const x = await montar({ estoque: 8 });
-    assert.strictEqual((await separar('ALMOX', x.R, x.item, 4)).status, 200);
+    // Fase 5 (item 6): separa 2, nao 4 — com 4 separados o `quantidade_separada` final nao distinguia o MAX sobre o
+    // acumulado do MAX sobre a baixa so (sabotagem `MAX(COALESCE(quantidade_separada,0), ?)` passava verde). O
+    // revisor sugeriu separar 1, mas a entrega de 2 com 1 separado e recusada antes do UPDATE (o escritor nao dispara).
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 2)).status, 200);
     const g = armarEscritor(RE.ITEM_ENT, () => raw(`UPDATE itens_requisicao_almoxarifado
       SET quantidade_entregue = COALESCE(quantidade_entregue,0) + 2, quantidade_atendida = COALESCE(quantidade_entregue,0) + 2 WHERE id = ?`, [x.item]));
     const ent = await comPrazo(entregar('ALMOX', x.R, x.item, 2), 8000, 'entrega');
