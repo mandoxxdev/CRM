@@ -2,6 +2,8 @@ const { dbRun, dbAll, dbGet } = require('./db');
 const { registrarMovimentacao } = require('./stockService');
 const lotService = require('./lotService');
 const { registrarAuditoria } = require('./audit');
+// Etapa 96 (C176): a regra unica de quantidade (namespace — Fase 2, I3).
+const Q = require('./quantidade');
 // Sem ciclo: nem alertService nem notificationQueueService requerem este arquivo (Etapa 12,
 // Task 3, RN-06 — aviso de devolucao em ESTADO_PARCIAL). stockService (acima) ja carregou os
 // dois por completo antes desta linha rodar, entao aqui e so cache-hit.
@@ -40,11 +42,15 @@ async function validarSaidaOriginal(db, { movimentacaoSaidaId, materialId, quant
   const { devolvida } = await dbGet(db,
     `SELECT COALESCE(SUM(quantidade),0) AS devolvida FROM devolucoes_material_almoxarifado
       WHERE movimentacao_saida_id = ?`, [movimentacaoSaidaId]);
-  const restante = saida.quantidade - devolvida;
-  if (Number(quantidade) > restante) {
+  // Etapa 96 (C176, Fase 2 I1): o restante e uma DIFERENCA (0,3 - 0,1 = 0.19999999999999998) — arredondado, e a
+  // comparacao com folga; a mensagem diz os numeros arredondados (R2).
+  const restante = Q.qtd(saida.quantidade - devolvida);
+  // `>` com a folga, e nao `!Q.cabe`: quantidade nao numerica (NaN) continua passando daqui para a recusa de sempre do
+  // motor, em vez de virar "acima do entregue".
+  if (Q.qtd(quantidade) > restante + Q.QTD_FOLGA) {
     // A mensagem DIZ o numero: sem ele o operador tem de adivinhar quanto ainda pode devolver.
-    throw erro400(`Devolução acima do entregue: a saída ${movimentacaoSaidaId} entregou ${saida.quantidade}, `
-      + `já foram devolvidos ${devolvida} e restam ${restante}`);
+    throw erro400(`Devolução acima do entregue: a saída ${movimentacaoSaidaId} entregou ${Q.qtd(saida.quantidade)}, `
+      + `já foram devolvidos ${Q.qtd(devolvida)} e restam ${restante}`);
   }
   return saida;
 }

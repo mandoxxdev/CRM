@@ -15,6 +15,8 @@ const { dbRun, dbGet, dbAll } = require('./db');
 const { TIPOS_RECEBIMENTO } = require('./schema');
 const [TIPO_NOTA_FISCAL, TIPO_PEDIDO_COMPRA] = TIPOS_RECEBIMENTO;
 const { registrarAuditoria } = require('./audit');
+// Etapa 96 (C176): a regra unica de quantidade (namespace — Fase 2, I3).
+const Q = require('./quantidade');
 // (Etapa 42, onda de correcao) O epsilon vem de `divergencia.js`, que existe desde a Etapa 10b como
 // dono unico de "isto e zero para efeito pratico" — reescrever o literal aqui seria a segunda
 // definicao, e a divergencia entre as duas apareceria na primeira edicao de uma delas.
@@ -1533,7 +1535,7 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id,
         if (item.pedido_item_id) {
           try {
             await dbRun(db, `UPDATE itens_pedido_compra
-                SET quantidade_recebida = COALESCE(quantidade_recebida, 0) + ?
+                SET quantidade_recebida = ${Q.qtdSql('COALESCE(quantidade_recebida, 0) + ?')}
               WHERE id = ?`, [qtd, item.pedido_item_id]);
           } catch (ePedido) {
             console.warn(`[recebimento] soma no saldo do pedido de compra falhou (item ${item.id}, `
@@ -1556,7 +1558,7 @@ async function darEntradaEstoque(db, user, rec, recebimentoId, { localizacao_id,
           // tinha como saber quanto DESTE item especifico esta retido — inferia de
           // quantidade_recebida, que conferirRecebimento pode sobrescrever sem guarda de status.
           await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado
-            SET quantidade_em_inspecao = COALESCE(quantidade_em_inspecao,0) + ? WHERE id = ?`,
+            SET quantidade_em_inspecao = ${Q.qtdSql('COALESCE(quantidade_em_inspecao,0) + ?')} WHERE id = ?`,
             [qtd, item.id]);
         }
       } catch (e) {
@@ -2365,7 +2367,7 @@ async function estornarEntradaNoPedido(db, user, mov) {
 
   // (1) A LINHA — aritmetica atomica, piso em 0 (D1).
   await dbRun(db, `UPDATE itens_pedido_compra
-      SET quantidade_recebida = MAX(0, COALESCE(quantidade_recebida, 0) - ?)
+      SET quantidade_recebida = ${Q.qtdSql('MAX(0, COALESCE(quantidade_recebida, 0) - ?)')}
     WHERE id = ?`, [qtd, linha.id]);
   if (recebidaAntes + EPSILON_DIVERGENCIA < qtd) {
     console.warn(`[recebimento] estorno da movimentacao ${mov.id}: linha do pedido ${linha.id} tinha `

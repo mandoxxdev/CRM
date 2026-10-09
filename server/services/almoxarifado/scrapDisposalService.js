@@ -49,6 +49,8 @@ const { dbRun, dbAll, dbGet } = require('./db');
 const { registrarAuditoria } = require('./audit');
 const { can, getPerfilFromUser } = require('./permissions');
 const { disponivelSql } = require('./availabilitySql');
+// Etapa 96 (C176): a regra unica de quantidade (namespace — Fase 2, I3).
+const Q = require('./quantidade');
 const stockService = require('./stockService');
 const ownerRules = require('./ownerRules');
 const lotService = require('./lotService');
@@ -183,7 +185,9 @@ async function solicitar(db, user, payload = {}) {
     projeto_origem_id: projetoOrigemId = null, os_origem_id: osOrigemId = null,
     observacoes = null,
   } = payload;
-  const quantidade = Number(payload.quantidade);
+  // Etapa 96 (C176, B482): arredondada a 1e-6 na entrada, como a porta do motor — a solicitacao guarda o numero que a
+  // baixa vai mover. `Q.qtd` nao inventa numero (null, '', booleano -> NaN, recusado abaixo).
+  const quantidade = Q.qtd(payload.quantidade);
   const justificativa = (payload.justificativa || '').toString().trim();
 
   if (!(quantidade > 0)) throw erro('quantidade a sucatear deve ser maior que zero');
@@ -240,9 +244,9 @@ async function solicitar(db, user, payload = {}) {
     os_id: osOrigemId || undefined, projeto_id: projetoOrigemId || undefined });
 
   const disponivel = Number(material.disponivel);
-  if (quantidade > disponivel) {
+  if (!Q.cabe(quantidade, disponivel)) { // Etapa 96: com folga
     throw erro(`Saldo disponivel insuficiente para sucatear ${material.codigo}: disponivel `
-      + `${disponivel} ${material.unidade || ''}, solicitado ${quantidade}. O disponivel ja desconta `
+      + `${Q.qtd(disponivel)} ${material.unidade || ''}, solicitado ${quantidade}. O disponivel ja desconta `
       + 'reservado, bloqueado, em inspecao e em poder de terceiros — sucatear alem dele apagaria '
       + 'material que esta comprometido com outra OS.');
   }

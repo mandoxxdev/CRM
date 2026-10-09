@@ -21,6 +21,8 @@ const ownerRules = require('./ownerRules');
 const transformCost = require('./transformCost');
 const sm = require('./thirdPartyStateMachine');
 const { inserirComNumeroUnico } = require('./numeroDoc');
+// Etapa 96 (C176): a regra unica de quantidade — namespace, porque este arquivo tem `const qtd` local (Fase 2, I3).
+const Q = require('./quantidade');
 
 const DESTINOS_ENCERRAMENTO = ['PERDA_NO_TERCEIRO', 'CONSUMIDO_NO_PROCESSO'];
 /** destino do encerramento -> tipo de movimento que o executa (Task 4). */
@@ -232,12 +234,13 @@ async function enviarRemessa(db, user, remessaId) {
   const problemas = [];
   for (const m of pedidoPorMaterial.values()) {
     if (!m.ativo) { problemas.push(`${m.codigo}: material inativo`); continue; }
-    if (Number(m.disponivel) < m.pedido) {
+    // Etapa 96: com folga — duas linhas 0,1 + 0,2 somam 0.30000000000000004 e recusavam o 0,3 que existe.
+    if (!Q.cabe(m.pedido, m.disponivel)) {
       // A mensagem DIZ o numero: sem ele o operador tem de adivinhar quanto falta (licao da Etapa 7).
       // E quando o material aparece em varias linhas, DIZ ISSO tambem — senao o operador olha uma
       // linha de 60, ve 100 disponiveis e conclui que o sistema esta errado.
-      problemas.push(`${m.codigo}: disponivel ${m.disponivel} ${m.unidade}, `
-        + `a remessa pede ${m.pedido}${m.linhas > 1 ? ` em ${m.linhas} linhas` : ''}`);
+      problemas.push(`${m.codigo}: disponivel ${Q.qtd(m.disponivel)} ${m.unidade}, `
+        + `a remessa pede ${Q.qtd(m.pedido)}${m.linhas > 1 ? ` em ${m.linhas} linhas` : ''}`);
     }
   }
   if (problemas.length) {
@@ -380,15 +383,17 @@ async function validarRetornoDoItem(db, { remessaId, itemRemessaId, quantidade, 
   // `quantidade_em_terceiros` do material deixaria um item devolver o que o outro mandou, e o
   // documento passaria a discordar do saldo — e a Etapa 8c, que rastreia resultado POR ITEM
   // enviado, herdaria o desalinhamento.
-  const restante = Number(item.quantidade) - Number(item.quantidade_retornada || 0);
-  if (qtd > restante) {
+  // Etapa 96 (C176): o pendente e uma DIFERENCA — arredondado, e a comparacao com folga (0,5 - 0.30000000000000004
+  // dava 0.19999999999999996 e recusava o 0,2 que esta no terceiro).
+  const restante = Q.qtd(Number(item.quantidade) - Number(item.quantidade_retornada || 0));
+  if (!Q.cabe(qtd, restante)) {
     // A mensagem DIZ os numeros: sem eles o operador tem de adivinhar (licao da Etapa 7). E quando
     // o item aparece em varias linhas do MESMO recebimento, diz isso tambem — senao o operador
     // olha uma linha de 60, ve 100 no terceiro e conclui que o sistema esta errado (foi o que a
     // Task 5 aprendeu no envio).
-    throw erro(`Retorno acima do enviado: o item ${item.material_codigo} enviou ${item.quantidade} `
-      + `${item.unidade}, ja retornaram ${item.quantidade_retornada || 0} e ainda estao no terceiro `
-      + `${restante} — este recebimento pede ${qtd}${linhas > 1 ? ` em ${linhas} linhas` : ''}`);
+    throw erro(`Retorno acima do enviado: o item ${item.material_codigo} enviou ${Q.qtd(item.quantidade)} `
+      + `${item.unidade}, ja retornaram ${Q.qtd(Number(item.quantidade_retornada || 0))} e ainda estao no terceiro `
+      + `${restante} — este recebimento pede ${Q.qtd(qtd)}${linhas > 1 ? ` em ${linhas} linhas` : ''}`);
   }
   return item;
 }
@@ -438,20 +443,22 @@ async function registrarRetorno(db, user, remessaId, data) {
     const item = await validarRetornoDoItem(db, {
       remessaId,
       itemRemessaId: linha.item_remessa_id,
-      quantidade: Number(linha.quantidade) + acumulado,
+      quantidade: Q.qtd(linha.quantidade) + acumulado, // Etapa 96: o mesmo numero que o claim usa
       materialId: linha.material_id,
       linhas: linhasPorItem.get(chave) || 1,
     });
-    jaPedido.set(chave, acumulado + Number(linha.quantidade));
+    jaPedido.set(chave, acumulado + Q.qtd(linha.quantidade));
     validados.push({ item, linha });
   }
 
   // ── 2. Efeito item a item ──
   for (const { item, linha } of validados) {
-    const qtd = Number(linha.quantidade);
+    // Etapa 96 (C176): a quantidade arredondada ANTES do claim (servico sem a porta do motor — Fase 2, M4) e o claim
+    // com folga; a coluna grava arredondado.
+    const qtd = Q.qtd(linha.quantidade);
     const claim = await dbGet(db, `UPDATE itens_remessa_terceiro_almoxarifado
-      SET quantidade_retornada = COALESCE(quantidade_retornada,0) + ?
-      WHERE id = ? AND (quantidade - COALESCE(quantidade_retornada,0)) >= ?
+      SET quantidade_retornada = ${Q.qtdSql('COALESCE(quantidade_retornada,0) + ?')}
+      WHERE id = ? AND (quantidade - COALESCE(quantidade_retornada,0)) >= ? ${Q.FOLGA_SQL}
       RETURNING id`, [qtd, item.id, qtd]);
     if (!claim) {
       // Corrida com outro recebimento concorrente do mesmo item: a pre-checagem passou, o claim
@@ -485,7 +492,7 @@ async function registrarRetorno(db, user, remessaId, data) {
       // Sem transacao: devolve o claim, senao o item ficaria com quantidade_retornada maior que o
       // que voltou de verdade e o pendente encolheria sem o saldo ter sido liberado.
       await dbRun(db, `UPDATE itens_remessa_terceiro_almoxarifado
-        SET quantidade_retornada = MAX(0, COALESCE(quantidade_retornada,0) - ?) WHERE id = ?`, [qtd, item.id]);
+        SET quantidade_retornada = ${Q.qtdSql('MAX(0, COALESCE(quantidade_retornada,0) - ?)')} WHERE id = ?`, [qtd, item.id]);
       throw e;
     }
   }
@@ -494,7 +501,8 @@ async function registrarRetorno(db, user, remessaId, data) {
   const { pendente } = await dbGet(db, `SELECT
       COALESCE(SUM(quantidade - COALESCE(quantidade_retornada,0)), 0) AS pendente
     FROM itens_remessa_terceiro_almoxarifado WHERE remessa_id = ?`, [remessaId]);
-  const novoStatus = Number(pendente) <= 0 ? 'ENCERRADA' : 'RETORNO_PARCIAL';
+  // Etapa 96: o pendente arredondado — residuo de ponto flutuante no legado nao deixa a remessa aberta para sempre.
+  const novoStatus = Q.qtd(Number(pendente)) <= 0 ? 'ENCERRADA' : 'RETORNO_PARCIAL';
   const t = sm.validarTransicao(remessa.status, novoStatus);
   if (!t.ok) throw erro(t.erro);
   await dbRun(db, `UPDATE remessas_terceiro_almoxarifado
@@ -513,7 +521,7 @@ async function registrarRetorno(db, user, remessaId, data) {
     dados_novos: {
       status: novoStatus,
       resultados: validados.length,
-      pendente_total: Number(pendente),
+      pendente_total: Q.qtd(Number(pendente)),
       nota_fiscal: data.nota_fiscal || null,
     },
   }).catch(() => {});
@@ -523,7 +531,7 @@ async function registrarRetorno(db, user, remessaId, data) {
     remessa_id: Number(remessaId),
     status: novoStatus,
     resultados: validados.length,
-    pendente_total: Number(pendente),
+    pendente_total: Q.qtd(Number(pendente)),
   };
 }
 
@@ -767,11 +775,11 @@ async function compensarTransformacao(db, user, { creditos, custosAnteriores, mo
   if (movConsumo && movConsumo.id) {
     await stockService.cancelarMovimentacao(db, user, movConsumo.id, motivo).catch(() => {});
     await dbRun(db, `UPDATE materiais_almoxarifado
-      SET quantidade_em_terceiros = COALESCE(quantidade_em_terceiros,0) + ?, updated_at = CURRENT_TIMESTAMP
+      SET quantidade_em_terceiros = ${Q.qtdSql('COALESCE(quantidade_em_terceiros,0) + ?')}, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`, [consumida, item.material_id]).catch(() => {});
   }
   await dbRun(db, `UPDATE itens_remessa_terceiro_almoxarifado
-    SET quantidade_retornada = MAX(0, COALESCE(quantidade_retornada,0) - ?) WHERE id = ?`,
+    SET quantidade_retornada = ${Q.qtdSql('MAX(0, COALESCE(quantidade_retornada,0) - ?)')} WHERE id = ?`,
   [consumida, item.id]);
 }
 
@@ -833,7 +841,7 @@ async function registrarTransformacao(db, user, remessaId, data) {
   for (const linha of itens) {
     const chave = Number(linha.item_remessa_id);
     const acumulado = jaPedido.get(chave) || 0;
-    const consumida = Number(linha.quantidade_consumida);
+    const consumida = Q.qtd(linha.quantidade_consumida); // Etapa 96: servico sem a porta do motor (Fase 2, M4)
     // materialId OMITIDO: ver o docstring. O teto e sobre a unidade do ENVIADO.
     const item = await validarRetornoDoItem(db, {
       remessaId,
@@ -898,9 +906,10 @@ async function registrarTransformacao(db, user, remessaId, data) {
   for (const v of validados) {
     const { item, linha, consumida, materialOrigem, rateio } = v;
 
+    // Etapa 96 (C176): `consumida` ja chega arredondada da pre-checagem; o claim com folga e a coluna arredondada.
     const claim = await dbGet(db, `UPDATE itens_remessa_terceiro_almoxarifado
-      SET quantidade_retornada = COALESCE(quantidade_retornada,0) + ?
-      WHERE id = ? AND (quantidade - COALESCE(quantidade_retornada,0)) >= ?
+      SET quantidade_retornada = ${Q.qtdSql('COALESCE(quantidade_retornada,0) + ?')}
+      WHERE id = ? AND (quantidade - COALESCE(quantidade_retornada,0)) >= ? ${Q.FOLGA_SQL}
       RETURNING id`, [consumida, item.id, consumida]);
     if (!claim) {
       // Corrida com outro documento concorrente do mesmo item: a pre-checagem passou, o claim nao.
@@ -1014,7 +1023,8 @@ async function registrarTransformacao(db, user, remessaId, data) {
   const { pendente } = await dbGet(db, `SELECT
       COALESCE(SUM(quantidade - COALESCE(quantidade_retornada,0)), 0) AS pendente
     FROM itens_remessa_terceiro_almoxarifado WHERE remessa_id = ?`, [remessaId]);
-  const novoStatus = Number(pendente) <= 0 ? 'ENCERRADA' : 'RETORNO_PARCIAL';
+  // Etapa 96: o pendente arredondado — residuo de ponto flutuante no legado nao deixa a remessa aberta para sempre.
+  const novoStatus = Q.qtd(Number(pendente)) <= 0 ? 'ENCERRADA' : 'RETORNO_PARCIAL';
   const t = sm.validarTransicao(remessa.status, novoStatus);
   if (!t.ok) throw erro(t.erro);
   await dbRun(db, `UPDATE remessas_terceiro_almoxarifado
@@ -1034,7 +1044,7 @@ async function registrarTransformacao(db, user, remessaId, data) {
       status: novoStatus,
       transformacoes: efetivados.length,
       resultados: efetivados.reduce((a, e) => a + e.resultados, 0),
-      pendente_total: Number(pendente),
+      pendente_total: Q.qtd(Number(pendente)),
       nota_fiscal: data.nota_fiscal || null,
       custo: efetivados,
       rendimento: rendimentos,
@@ -1047,7 +1057,7 @@ async function registrarTransformacao(db, user, remessaId, data) {
     status: novoStatus,
     transformacoes: efetivados.length,
     resultados: efetivados.reduce((a, e) => a + e.resultados, 0),
-    pendente_total: Number(pendente),
+    pendente_total: Q.qtd(Number(pendente)),
     custo: efetivados,
     rendimento: rendimentos,
   };

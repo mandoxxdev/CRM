@@ -28,6 +28,8 @@ const alertRegistry = require('./alertRegistry');
 // consulta em outro lugar", toolService.js:55): duas definicoes de "calibracao vigente" e como
 // ter duas reguas para o mesmo fato.
 const { avaliarMedida, paraNumeroFinito } = require('./toleranciaInspecao');
+// Etapa 96 (C176): a regra unica de quantidade (namespace — Fase 2, I3).
+const Q = require('./quantidade');
 const { calibracaoVigente } = require('./toolService');
 // Etapa 43 (T3, RN-07): a regua de "isto e divergencia de verdade" tem dono unico desde a Etapa
 // 10b. `EPSILON_DIVERGENCIA` para a derivacao em JS e `divergenciaRealSql` para a mesma derivacao
@@ -187,7 +189,9 @@ async function decidirInspecao(db, user, itemId, data = {}) {
     'SELECT * FROM recebimentos_material_itens_almoxarifado WHERE id = ?', [itemId]);
   if (!item) throw Object.assign(new Error('Item não encontrado'), { status: 404 });
 
-  const retido = item.quantidade_em_inspecao || 0;
+  // Etapa 96 (C176, Fase 2 M4): o retido arredondado — e o numero que o claim do item, o livro (DECISAO_INSPECAO) e o
+  // material passam a dizer. O claim do item compara com folga (o legado torto guarda 0.9999999999999999 e o retido e 1).
+  const retido = Q.qtd(item.quantidade_em_inspecao || 0) || 0;
   // Item sem retido (nunca reteve, ou ja foi decidido antes): recusa ANTES de qualquer efeito —
   // sem isto, 0/0 passava a guarda de fechamento e gravava uma inspecao vazia sobre nada.
   if (retido <= 0) {
@@ -287,8 +291,8 @@ async function decidirInspecaoSobTrava(db, user, itemId, item, calc, reserva) {
   // vezes (inclusive concorrente): a segunda tentativa le quantidade_em_inspecao=0 e este UPDATE
   // nao casa, ANTES de tocar no saldo do material.
   const claimItem = await dbGet(db, `UPDATE recebimentos_material_itens_almoxarifado
-    SET quantidade_em_inspecao = quantidade_em_inspecao - ?
-    WHERE id = ? AND COALESCE(quantidade_em_inspecao,0) >= ?
+    SET quantidade_em_inspecao = ${Q.qtdSql('quantidade_em_inspecao - ?')}
+    WHERE id = ? AND COALESCE(quantidade_em_inspecao,0) >= ? ${Q.FOLGA_SQL}
     RETURNING id`, [retido, itemId, retido]);
   if (!claimItem) {
     throw Object.assign(new Error('Item já foi decidido por outra inspeção'), { status: 400 });
@@ -317,7 +321,7 @@ async function decidirInspecaoSobTrava(db, user, itemId, item, calc, reserva) {
     // devolve o retido ao item para nao deixar saldo no limbo (nem preso, nem contabilizado
     // duas vezes numa proxima tentativa).
     await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado
-      SET quantidade_em_inspecao = quantidade_em_inspecao + ? WHERE id = ?`, [retido, itemId]);
+      SET quantidade_em_inspecao = ${Q.qtdSql('quantidade_em_inspecao + ?')} WHERE id = ?`, [retido, itemId]);
     throw e;
   }
 
