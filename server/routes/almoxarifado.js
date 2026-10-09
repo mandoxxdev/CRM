@@ -3285,10 +3285,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           let assinaturas;
           let separacoes;
           let substituicoes; // Etapa 63 (RN-03)
+          let devolucoesCaixa; // Etapa 98 (T1, RN-07)
           try {
             assinaturas = await deliverySignatureService.listarAssinaturas(db, req.params.id);
             separacoes = await requisitionService.listarSeparacoes(db, req.params.id);
             substituicoes = await requisitionService.listarSubstituicoes(db, req.params.id);
+            devolucoesCaixa = await requisitionService.listarDevolucoesCaixa(db, req.params.id);
           } catch (e) {
             return res.status(500).json({ error: e.message });
           }
@@ -3303,6 +3305,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             assinaturas_entrega: assinaturas,
             separacoes,
             substituicoes,
+            devolucoes_caixa: devolucoesCaixa, // Etapa 98 (aditivo)
             conferencia,
             conferencia_obrigatoria: requisitionService.conferenciaObrigatoria(itens || []),
           });
@@ -3841,6 +3844,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   app.put('/api/almoxarifado/requisicoes/:id/separacao', requireSepararEmitir, handleSeparacao);
   // Alias conforme especificação
   app.put('/api/almoxarifado/requisicoes/:id/separar', requireSepararEmitir, handleSeparacao);
+
+  // Etapa 98 (T1, B502/B503): devolver da caixa a prateleira — o inverso do separar, no mesmo balcao e com o mesmo
+  // gate (`separar_emitir`: ADMINISTRADOR, ALMOXARIFE). O 403 sai antes de ler a requisicao. Descartado: acao de perfil
+  // propria (hoje seriam os mesmos perfis; reversivel numa linha).
+  app.put('/api/almoxarifado/requisicoes/:id/devolver-separado', requireSepararEmitir, (req, res) => {
+    requisitionService.devolverSeparado(db, req.params.id, req.body || {}, req.user)
+      .then((r) => res.json(r))
+      .catch((e) => res.status(e.status || 500).json({ error: e.message }));
+  });
 
   // PUT /api/almoxarifado/requisicoes/:id/liberar-retirada — libera para retirada
   // (EM_SEPARACAO -> PRONTA_PARA_RETIRADA), exige ao menos 1 item com quantidade separada.

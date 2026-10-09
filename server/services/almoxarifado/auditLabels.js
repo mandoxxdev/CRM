@@ -155,6 +155,7 @@ const GRUPOS_ACAO = congelarGrupos([
   { rotulo: 'Separação', verbos: ['SEPARACAO'] },
   { rotulo: 'Conferência da separação', verbos: ['CONFERENCIA_SEPARACAO'] },
   { rotulo: 'Liberação para retirada', verbos: ['LIBERACAO_RETIRADA'] },
+  { rotulo: 'Devolução à prateleira', verbos: ['DEVOLUCAO_CAIXA'] }, // Etapa 98 (T1)
 
   // Recebimento de material — os 5 verbos de transicao (receiptService, `acao.toUpperCase()`)
   // e o PROCESSAR_NOTA, que e gravado por outro caminho (processarNota).

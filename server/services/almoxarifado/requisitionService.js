@@ -21,6 +21,7 @@ const {
   PODE_SEPARAR, PODE_ENTREGAR, STATUS_PARCIALMENTE_RESERVADA, STATUS_TOTALMENTE_RESERVADA,
   calcularStatusPosAprovacao, validarTransicao,
   alcadaDeValorAindaVale, separacaoAReabrir, // Etapa 94 (T2)
+  STATUS_COM_CAIXA, // Etapa 98 (T1): a regua da devolucao a prateleira
 } = require('./requisitionStateMachine');
 
 function num(v) {
@@ -1779,6 +1780,211 @@ async function excluirSemTrava(db, requisicaoId, user, justificativa, alertServi
   return resultado;
 }
 
+// ── Etapa 98 (T1): devolver da caixa a prateleira (B502, B503, B505, B506, B511) ─────────────────────────────────────
+// O material separado e ainda nao entregue (a "caixa") so saia pela entrega: quebrou ou se perdeu na caixa, o
+// almoxarife nao tinha gesto e so o administrador soltava, excluindo a requisicao (B497, C189). A devolucao DIMINUI o
+// separado sem mover estoque — a separacao nunca moveu (Fase 0, s1 F): e o livro da requisicao que muda. Descartados:
+// devolver como movimentacao (creditaria o que nunca foi debitado) e "separar negativo" pela rota da separacao (que
+// acumula, reivindica o status e grava a rodada que a barreira da 28 le).
+
+/** Etapa 98: as recusas do gesto (literais congeladas no plano). */
+function erroDevolucao(status, msg) {
+  const err = new Error(msg);
+  err.status = status;
+  return err;
+}
+
+/**
+ * Etapa 98 (T1): `PUT /requisicoes/:id/devolver-separado`. Sob as mesmas duas travas da separacao e da entrega (ordem
+ * requisicao -> material): um liberar para retirada ou uma entrega da mesma requisicao terminam antes (RN-10 a), e a
+ * porta avulsa ou a separacao de outra requisicao do mesmo material leem a caixa ja diminuida (RN-10 b, c).
+ */
+function devolverSeparado(db, requisicaoId, dados, user) {
+  return travaPorRequisicao.serializarNaRequisicao(requisicaoId,
+    () => comTravaDaRequisicao(db, requisicaoId, () => devolverSemTrava(db, requisicaoId, dados, user)));
+}
+
+const MSG_D409 = 'A caixa desta requisição mudou enquanto a devolução era registrada; recarregue e confira antes de devolver de novo.';
+
+async function devolverSemTrava(db, requisicaoId, dados, user) {
+  const { motivo, itens: entradas } = dados || {};
+  // (1) D-1: devolver e ato com dono (a trilha exige usuario_id).
+  if (!user?.id) throw erroDevolucao(400, 'Devolução à prateleira exige usuário identificado');
+  // (2) D0 / D1.
+  const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
+  if (!reqRow || Number(reqRow.ativo ?? 1) === 0) throw erroDevolucao(404, 'Requisição não encontrada');
+  if (!STATUS_COM_CAIXA.includes(reqRow.status)) {
+    throw erroDevolucao(400, `Só é possível devolver à prateleira o que está separado numa requisição em andamento (status atual: ${reqRow.status})`);
+  }
+  // (3) TODAS as recusas antes da primeira escrita — tudo ou nada (RN-02). B511: o que a separacao pula em silencio
+  // (quantidade <= 0, nao numerica, item repetido) aqui e 400: e um gesto de TIRAR, com motivo.
+  if (typeof motivo !== 'string' || !motivo.trim()) throw erroDevolucao(400, 'Informe o motivo da devolução à prateleira');
+  const motivoLimpo = motivo.trim().slice(0, 500);
+  if (!Array.isArray(entradas) || entradas.length === 0) {
+    throw erroDevolucao(400, 'Informe ao menos um item para devolver à prateleira');
+  }
+  const itens = await carregarItensRequisicao(db, requisicaoId);
+  const pedidos = []; // [{ item, qty }]
+  const vistos = new Set();
+  // Fase 2 (menor 1): por entrada D5 -> D6 -> D4; o D7 so com todas validas (o caso "o segundo acima da caixa"
+  // nao pode ter escrito o primeiro).
+  for (const entrada of entradas) {
+    const idBruto = entrada && entrada.item_id;
+    const id = Number(idBruto);
+    const item = Number.isInteger(id) ? itens.find((i) => Number(i.id) === id) : null;
+    if (!item) throw erroDevolucao(400, `Item ${idBruto} não pertence a esta requisição`);
+    if (vistos.has(item.id)) throw erroDevolucao(400, `Item ${idBruto} repetido na devolução`);
+    vistos.add(item.id);
+    const qty = Q.qtd(entrada.quantidade);
+    if (!(qty > 0)) {
+      throw erroDevolucao(400, `${item.material_nome}: informe uma quantidade maior que zero para devolver à prateleira`);
+    }
+    pedidos.push({ item, qty });
+  }
+  for (const { item, qty } of pedidos) {
+    const separado = Q.qtd(getSeparado(item));
+    const entregue = Q.qtd(getEntregue(item));
+    const naCaixa = Q.qtd(Math.max(0, separado - entregue));
+    if (!Q.cabe(qty, naCaixa)) {
+      throw erroDevolucao(400, `${item.material_nome}: não é possível devolver ${qty} ${item.unidade || ''} à prateleira. `
+        + `Na caixa: ${naCaixa} (separado: ${separado}, entregue: ${entregue})`);
+    }
+  }
+
+  // (4) O claim por item: a caixa ainda cabe E a requisicao ainda esta ativa com caixa. A trava por requisicao segura
+  // os gestos do modulo; quem escreve FORA dela (o cancelamento pelos outros modulos, escritores de legado) cai aqui.
+  // Fase 2 (I-1): o claim que perde SAI do laco — a trilha, a limpeza e a auditoria dos itens ja escritos rodam
+  // antes do 409 (molde da B444), senao o item 1 ficava devolvido sem rastro.
+  const statusCaixa = STATUS_COM_CAIXA.map(() => '?').join(',');
+  const escritos = [];
+  let perdeu = false;
+  for (const { item, qty } of pedidos) {
+    // eslint-disable-next-line no-await-in-loop
+    const claim = await dbRun(db, `UPDATE itens_requisicao_almoxarifado SET quantidade_separada = ${Q.qtdSql('quantidade_separada - ?')}
+      WHERE id = ? AND requisicao_id = ?
+        AND ROUND(COALESCE(quantidade_separada, 0) - COALESCE(quantidade_entregue, quantidade_atendida, 0), ${Q.QTD_CASAS}) >= ? ${Q.FOLGA_SQL}
+        AND EXISTS (SELECT 1 FROM requisicoes_almoxarifado r WHERE r.id = ? AND COALESCE(r.ativo, 1) = 1
+                      AND r.status IN (${statusCaixa}))`,
+    [qty, item.id, requisicaoId, qty, requisicaoId, ...STATUS_COM_CAIXA]);
+    if (!claim.changes) { perdeu = true; break; }
+    // eslint-disable-next-line no-await-in-loop
+    const depois = await dbGet(db, `SELECT quantidade_separada, quantidade_entregue, quantidade_atendida
+      FROM itens_requisicao_almoxarifado WHERE id = ?`, [item.id]);
+    escritos.push({
+      item, qty, separadoAntes: Q.qtd(getSeparado(item)), separadoDepois: Q.qtd(getSeparado(depois)),
+      entregue: Q.qtd(getEntregue(depois)),
+      origemAntes: item.origem_separacao_id ?? null, loteAntes: item.lote_separacao_id ?? null,
+    });
+  }
+  if (escritos.length === 0) {
+    if (perdeu) throw erroDevolucao(409, MSG_D409);
+    return { success: true, status: reqRow.status, conferencia_limpa: false, devolucoes: [] }; // inalcancavel: D3
+  }
+
+  // (5) A origem/lote planejados zeram so quando a CAIXA do item zera (Fase 0, P7) — com resto, ele continua la.
+  for (const e of escritos) {
+    // eslint-disable-next-line no-await-in-loop
+    await dbRun(db, `UPDATE itens_requisicao_almoxarifado SET origem_separacao_id = NULL, lote_separacao_id = NULL
+      WHERE id = ? AND COALESCE(quantidade_separada, 0) - COALESCE(quantidade_entregue, quantidade_atendida, 0) <= ${Q.QTD_FOLGA}`,
+    [e.item.id]);
+  }
+  // (6) B504: a PRONTA volta a EM_SEPARACAO (a liberacao atestou uma caixa que mudou). Compare-and-set: so age se
+  // ainda PRONTA (no caminho do 409 tambem — Fase 2, I-1).
+  await dbRun(db, `UPDATE requisicoes_almoxarifado SET status = 'EM_SEPARACAO', updated_at = CURRENT_TIMESTAMP,
+      ultimo_lembrete_enviado = NULL WHERE id = ? AND status = 'PRONTA_PARA_RETIRADA'`, [requisicaoId]);
+  // (7) B505: a segunda conferencia atesta o conteudo de uma caixa; a caixa mudou -> limpa, em qualquer status.
+  // Compare-and-clear (molde F4 da 28): so limpa a conferencia relida; tres corridas -> limpa sem compare.
+  let conferenciaAnterior = null;
+  let limpou = false;
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    // eslint-disable-next-line no-await-in-loop
+    const conf = await dbGet(db, 'SELECT conferido_por_id, conferido_por_nome, conferido_em FROM requisicoes_almoxarifado WHERE id = ?',
+      [requisicaoId]);
+    if (!conf || conf.conferido_por_id == null) break;
+    conferenciaAnterior = { usuario_id: conf.conferido_por_id, usuario_nome: conf.conferido_por_nome, em: conf.conferido_em };
+    // eslint-disable-next-line no-await-in-loop
+    const upd = await dbRun(db, `UPDATE requisicoes_almoxarifado
+        SET conferido_por_id = NULL, conferido_por_nome = NULL, conferido_em = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND conferido_por_id IS ?`, [requisicaoId, conf.conferido_por_id]);
+    if (upd.changes > 0) { limpou = true; break; }
+    conferenciaAnterior = null;
+  }
+  if (!limpou && conferenciaAnterior === null) {
+    const resto = await dbGet(db, 'SELECT conferido_por_id FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
+    if (resto && resto.conferido_por_id != null) {
+      console.warn(`[almoxarifado-devolucao] Requisicao ${requisicaoId}: a conferencia mudou 3 vezes durante a devolucao; limpando sem compare.`);
+      await dbRun(db, `UPDATE requisicoes_almoxarifado SET conferido_por_id = NULL, conferido_por_nome = NULL, conferido_em = NULL
+        WHERE id = ?`, [requisicaoId]);
+      limpou = true;
+    }
+  }
+  const agora = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
+  const statusDepois = agora ? agora.status : null;
+
+  // (8) A trilha (B507): a tabela E o rastro — escrita antes da resposta, sem catch que engula.
+  for (const e of escritos) {
+    // eslint-disable-next-line no-await-in-loop
+    await dbRun(db, `INSERT INTO devolucoes_caixa_requisicao
+      (requisicao_id, item_id, material_id, quantidade, separado_antes, separado_depois, entregue,
+       localizacao_planejada_id, lote_planejado_id, motivo, status_antes, status_depois, conferencia_limpa,
+       usuario_id, usuario_nome)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [requisicaoId, e.item.id, e.item.material_id, e.qty, e.separadoAntes, e.separadoDepois, e.entregue,
+      e.origemAntes, e.loteAntes, motivoLimpo, reqRow.status, statusDepois, limpou ? 1 : 0, user.id, nomeDoUsuario(user)]);
+  }
+  // (9) Auditoria best-effort (Etapa 19: falha de log nao desfaz o ato).
+  try {
+    await registrarAuditoria(db, {
+      entidade: 'requisicao',
+      entidade_id: Number(requisicaoId),
+      acao: 'DEVOLUCAO_CAIXA',
+      usuario_id: user.id,
+      usuario_nome: nomeDoUsuario(user),
+      dados_anteriores: limpou && conferenciaAnterior ? { conferencia: conferenciaAnterior } : undefined,
+      dados_novos: {
+        motivo: motivoLimpo, status_antes: reqRow.status, status_depois: statusDepois, conferencia_limpa: limpou,
+        itens: escritos.map((e) => ({
+          item_id: e.item.id, material_id: e.item.material_id, quantidade: e.qty,
+          separado_antes: e.separadoAntes, separado_depois: e.separadoDepois,
+        })),
+      },
+    });
+  } catch (e) {
+    console.warn(`[almoxarifado-devolucao] Falha ao auditar a devolucao da requisicao ${requisicaoId}: ${e.message}`);
+  }
+  if (perdeu) throw erroDevolucao(409, MSG_D409);
+
+  return {
+    success: true,
+    status: statusDepois,
+    conferencia_limpa: limpou,
+    devolucoes: escritos.map((e) => ({
+      item_id: e.item.id,
+      material_id: e.item.material_id,
+      quantidade: e.qty,
+      separado_antes: e.separadoAntes,
+      separado_depois: e.separadoDepois,
+      caixa_depois: Q.qtd(Math.max(0, e.separadoDepois - e.entregue)),
+      // B506: a reserva do item nao muda — a resposta a diz para a tela avisar (C194).
+      reserva_do_item: Q.qtd(num(e.item.reservado_para_item)),
+    })),
+  };
+}
+
+/** Etapa 98 (T1, RN-07): as devolucoes da caixa de uma requisicao, em ordem — a forma congelada na Fase 2 (I-5). */
+async function listarDevolucoesCaixa(db, requisicaoId) {
+  const rows = await dbAll(db, `SELECT d.id, d.item_id, d.material_id, m.codigo AS material_codigo, d.quantidade,
+      d.separado_antes, d.separado_depois, d.entregue, lp.codigo AS localizacao_planejada_codigo,
+      lt.codigo AS lote_planejado_codigo, d.motivo, d.status_antes, d.status_depois, d.conferencia_limpa,
+      d.usuario_id, d.usuario_nome, d.created_at
+    FROM devolucoes_caixa_requisicao d
+    JOIN materiais_almoxarifado m ON m.id = d.material_id
+    LEFT JOIN localizacoes_almoxarifado lp ON lp.id = d.localizacao_planejada_id
+    LEFT JOIN lotes_almoxarifado lt ON lt.id = d.lote_planejado_id
+    WHERE d.requisicao_id = ? ORDER BY d.id`, [requisicaoId]);
+  return rows.map((r) => ({ ...r, conferencia_limpa: Number(r.conferencia_limpa) === 1 }));
+}
+
 module.exports = {
   listarFilaSeparacao,
   compararPrioridade, // Etapa 74 (T0): a ordem unica da fila e da reserva na chegada
@@ -1810,4 +2016,7 @@ module.exports = {
   assertConferidaSeObrigatorio,
   claimConferencia,
   conferirSeparacao,
+  // Etapa 98 (T1)
+  devolverSeparado,
+  listarDevolucoesCaixa,
 };
