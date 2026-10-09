@@ -1,7 +1,8 @@
 # Etapa 95 — a separação não aceita mais do que existe na prateleira: o separado ainda não entregue fica retido para quem separou (C169, D (60), features 05 com a 04 e a 07)
 
-> Status: **PLANO (Fases 0 e 1) — 2026-10-09.** Nenhuma task executada. Próximo passo: **Fase 2** (revisão do plano por
-> agente fresco — ver "Próximo passo" no fim).
+> Status: **PLANO (Fases 0, 1 e 2) — 2026-10-09.** Nenhuma task executada. A **Fase 2** foi feita (2 bloqueantes, 5
+> importantes, 3 menores — seção "Fase 2 — revisão do plano" antes de "Próximo passo", **vale sobre o texto acima**).
+> Próximo passo: **T0**.
 > HEAD de partida: `616999be` (main, árvore limpa, sem push).
 > Origem: "Próxima tarefa detalhada — Etapa 95" no fim de
 > `docs/superpowers/plans/2026-10-09-almoxarifado-etapa94-alcada-de-valor-ate-a-separacao.md`; o item **169** da letra C
@@ -12,7 +13,7 @@
 >
 > **Numeração:** etapa única para todos os módulos (esta é a **95**). Letras do documento do almoxarifado, conferidas em
 > 2026-10-09: última **B465** (`:6208`), último item C **169** (`:8067`), última **A45** (`:1612`). Esta etapa usa
-> **B466–B476**, **C170–C173** e **A46**.
+> **B466–B478**, **C170–C175** e **A46** (B477, B478, C174 e C175 nasceram na Fase 2).
 
 **Escopo desta etapa (o que a Fase 0 reproduziu — e só isso):**
 1. **A regra (uma conta só):** o que um item pode separar agora é o que existe na prateleira **para ele** — o disponível
@@ -29,9 +30,11 @@
    livre), conferidas com controle positivo e negativo.
 
 **Fora (declarado, ver "O que fica de fora"):** a entrega (continua pelo disponível + reserva do item; a "segunda
-rodada" da Etapa 3 que entrega sem separar continua); a reserva na chegada e na liberação da inspeção (74/75) e o
-recálculo (76); `calcularStatusPosAprovacao`; o motor (`disponivelSql`, `criarReserva`, saídas avulsas); trava por
-material na separação; o legado que já tem caixa acima do físico (a A46 acha; ninguém corrige sozinho).
+rodada" da Etapa 3 que entrega sem separar continua — **exceto a parte além da própria caixa, que passa a respeitar o
+teto: corrigido na Fase 2, I4/B477**); a reserva na chegada e na liberação da inspeção (74/75) e o
+recálculo (76); `calcularStatusPosAprovacao`; o motor (`disponivelSql`, `criarReserva`, saídas avulsas); ~~trava por
+material na separação~~ **(corrigido na Fase 2, B1: a separação pega a trava por material — B476 invertida)**; o
+legado que já tem caixa acima do físico (a A46 acha; ninguém corrige sozinho).
 
 ---
 
@@ -93,7 +96,7 @@ Fase 5 da 60 dividiu o disponível só na **régua da divergência**, não no te
 
 | cenário | resultado |
 |---|---|
-| **E1** `maxEntregar` "segunda rodada" (`requisitionService.js:55-63`): pede 6, físico 6 (reserva 6), separa 2, entrega 2, **entrega 4 sem separar** | **200 `ENTREGUE`**; o detalhe já oferecia `quantidade_entregavel` 4. **Intencional**: o comentário da Etapa 28 (`:1114-1119`, F2) diz *"para material comum é o comportamento desejado (reposição chegou, entrega direta, sem nova rodada)"*. Registrado como CERTO (é a regra escrita); **não se mexe** |
+| **E1** `maxEntregar` "segunda rodada" (`requisitionService.js:55-63`): pede 6, físico 6 (reserva 6), separa 2, entrega 2, **entrega 4 sem separar** | **200 `ENTREGUE`**; o detalhe já oferecia `quantidade_entregavel` 4. **Intencional**: o comentário da Etapa 28 (`:1114-1119`, F2) diz *"para material comum é o comportamento desejado (reposição chegou, entrega direta, sem nova rodada)"*. Registrado como CERTO (é a regra escrita); **não se mexe** — *(Fase 2: o E1 continua 200, a própria reserva cobre; o que muda é a segunda rodada levar a caixa sem reserva de OUTRA requisição — P3, B477)* |
 | E2 o mesmo com material **crítico** | 400 *"material crítico só sai depois de separado e conferido — 4 excede o separado ainda não entregue (0)…"* — CERTO |
 | **E3** C169 em material **crítico**: pede 6, físico 4, separa 4, confere (ALMOX2), separa +2 | **200** (ERRADO); a rodada nova limpa a conferência (D3 da 28 — certo). A conferência **não protege**: o conferente vê 6 na caixa para 4 físicos |
 | O1 controle 59/60: separa 4 **de A** (todo o saldo), +2 **de A** | 400 *"O saldo em ⟨A⟩ (0) não cobre a quantidade (2) — a saída tiraria de outros endereços"* — CERTO: **com origem no mesmo par a régua da 59 já barra** |
@@ -156,7 +159,7 @@ sai do disponível — a separação não reserva; D (60)"* em `:102` fica obsol
 | fila (64) | `:507`, `:534` (`separavel`), `:540` (`entregavel`), `:541` (`disponivel`) | separável/entregável/disponível | `separavel` **muda** (T1); `entregavel` e `disponivel` **não** (B472) |
 | detalhe | `routes/almoxarifado.js:3197-3207` (SQL próprio — **quarta cópia** do "reservado para o item") → `normalizarItem` (`requisitionService.js:66-86`) | `saldo_atual`, `quantidade_entregavel` | **ganha** `saldo_separavel` e `quantidade_separavel` (T1); `saldo_atual` não muda |
 | aprovação | `reservarItensAprovacao` `:190-193` | `aReservar = min(falta, disponível − jáReservado)` | **muda** (T2) |
-| entrega (prévia B464 e laço) | `:1260`, `:1293` | `maxEntregar` | **não muda** (B470) |
+| entrega (prévia B464 e laço) | `:1260`, `:1293` | `maxEntregar` | ~~**não muda** (B470)~~ **muda só a segunda rodada além da própria caixa** (B477 — corrigido na Fase 2, I4) |
 | chegada/liberação/estorno (74/75) | `reservaChegadaService.js:348, 483, 557` (`disponivelSql` direto) | teto da distribuição | **não muda** (B475) |
 | cliente | `RequisicoesList.js:52-55` (`maxQtdSeparacao`), `:160-170` (`maxSeparavelNaTela`), `:494`, `:685` (pré-preenchimento) | `saldo_atual` | **muda** (T3) |
 
@@ -165,8 +168,9 @@ sai do disponível — a separação não reserva; D (60)"* em `:102` fica obsol
 ## Decisões reversíveis (letra B do documento de novidades; última usada: B465)
 
 - **B466 — a regra: o separado sem reserva fica retido para quem separou, na separação e na aprovação.** Teto do item =
-  `disponível do material + reserva ativa do item − (separado − entregue do item) − caixa sem reserva dos outros itens`,
-  separável = `min(pendente de separação, max(0, teto))`. É a conta física (o que está na prateleira e não é de ninguém
+  `disponível do material + reserva ativa do item − (separado − entregue do item) − caixa sem reserva dos outros itens`
+  **(forma corrigida na Fase 2, I1 — a conta certa está em "Regras de negócio": a reserva do item cobre a caixa dele
+  antes de a caixa sem reserva dos outros entrar)**, separável = `min(pendente de separação, max(0, teto))`. É a conta física (o que está na prateleira e não é de ninguém
   mais) e fecha C1–C7, M2–M5, E3 e O1'. **Descartados:** (i) **só o próprio item** (a conta candidata da 94,
   `disponível + reservado_para_item − (separado − entregue)`) — fecha C1–C7, mas deixa M2, M4 e M5 (8 separados para 4
   físicos por outro caminho) e M3; (ii) **separar exige reserva** — quebra o caminho legítimo da requisição aprovada sem
@@ -186,19 +190,30 @@ sai do disponível — a separação não reserva; D (60)"* em `:102` fica obsol
   **de antes da rodada** (mapa `separadoAntes`, molde do `planejadaAntes` da 65), porque a régua já subtrai os outros
   itens da rodada (`totalPorMaterial`) — com o teto em memória, subtrairia duas vezes. **Descartado:** régua com o teto
   em memória (os dois testes da 60 caem: medido no protótipo).
-- **B469 — a aprovação não reserva a caixa sem reserva de ninguém.** `aReservar = min(falta, max(0, disponível do
-  material − caixa sem reserva de TODOS os itens ativos do material))` (inclui o próprio item: com caixa sem reserva, a
-  caixa já cobre parte do pendente). Fecha o M3. **Descartado:** declarar e deixar — a dona da caixa fica presa até
+- **B469 — a aprovação não reserva a caixa sem reserva de OUTRO item.** `aReservar = min(falta, max(0, disponível do
+  material − jáReservado − caixa sem reserva dos OUTROS itens ativos do material))` (exclusão `ix.id <> item.id`)
+  **(corrigido na Fase 2, B2):** ~~(inclui o próprio item: com caixa sem reserva, a caixa já cobre parte do
+  pendente)~~ — **errado, reproduzido:** a reserva nova *cobre* a caixa do próprio item (a caixa sem reserva é
+  `max(0, caixa − reserva)`), então descontar a própria caixa reservava de menos e o item ficava sem separar o que
+  reservou (P5b: pede 6, caixa 4 sem reserva, físico 6 → reservava 2, o item ficava com separável 0 e outra
+  requisição reservava os 2 livres). Fecha o M3. **Descartado:** declarar e deixar — a dona da caixa fica presa até
   chegar material (a entrega dela recusa *"Máximo: 0"*), sem nenhum aviso.
-- **B470 — a entrega não muda.** Continua `maxEntregar(item, disponível + reserva do item)` e o motor valida
+- **B470 — a entrega não muda (exceto a B477, Fase 2).** Continua `maxEntregar(item, disponível + reserva do item)` e o motor valida
   atomicamente; a "segunda rodada" da Etapa 3 (entregar sem separar depois de uma entrega parcial, só material comum)
   continua (E1). **Descartado:** entrega pelo livre real (descontando a caixa sem reserva das outras) — no legado com
   caixa dupla (M2 antigo: R1 e R2 com 4 cada para 4 físicos) **as duas** passariam a recusar e ninguém entregaria; hoje
-  a primeira entrega. A entrega nunca cria caixa fantasma (ela baixa o físico pelo motor); o defeito nasce na separação.
+  a primeira entrega. ~~A entrega nunca cria caixa fantasma (ela baixa o físico pelo motor); o defeito nasce na
+  separação.~~ **Errado (corrigido na Fase 2, I4, reproduzido e igual na `main`):** a segunda rodada (entregue > 0,
+  sem caixa própria) entrega pelo `disponível + reserva`, que conta a caixa sem reserva de outra requisição como livre
+  — leva o físico dela e cria a caixa fantasma dela (P3: R1 separa 4 sem reserva, físico 4; R2 com 2 de 6 entregues
+  entrega 4 sem separar → 200; R1 entrega a própria caixa → 400 *"Máximo: 0"*). Ver B477.
 - **B471 — a mensagem de recusa não muda de forma; o `disponível` dela passa a ser o teto do item.** *"⟨material⟩: não é
   possível separar ⟨q⟩ ⟨un⟩. Máximo: ⟨max⟩ (pendente: ⟨p⟩, disponível: ⟨teto⟩)"* — no C1, *"Máximo: 0 (pendente: 2,
   disponível: 0)"* (hoje diria *"disponível: 4"*, e 4 são a caixa dela). **Descartado:** acrescentar *"(na caixa: n)"* —
-  muda a literal que testes e integrações casam; fica para quando houver queixa.
+  muda a literal que testes e integrações casam; fica para quando houver queixa. **(Fase 2, I2, reproduzido):** o teto é
+  arredondado a 1e-6 (`Math.round(x * 1e6) / 1e6`, a régua do resto do módulo) e a porta compara
+  `qty > max + 1e-9` — sem isso físico 0,3 com caixa de outra 0,1 dava teto `0.19999999999999998`, a fila oferecia
+  esse número e separar 0,2 tomava 400 *"Máximo: 0.19999999999999998"*.
 - **B472 — contrato aditivo no detalhe; a fila muda só o `separavel`.** O item do `GET /api/almoxarifado/requisicoes/:id`
   ganha `saldo_separavel` (o teto, sem o limite do pendente) e `quantidade_separavel` (`min(pendente de separação,
   saldo_separavel)`), molde do `quantidade_entregavel`; `saldo_atual` **não muda** (a entrega da tela e o "Saldo:"
@@ -210,7 +225,9 @@ sai do disponível — a separação não reserva; D (60)"* em `:102` fica obsol
   Cancelada, reprovada, entregue, encerrada ou excluída **não retêm** — a caixa delas volta à prateleira sem movimento (é
   o que o resto do sistema já supõe: a reserva é solta no cancelamento). Constante exportada da máquina de estados
   (`STATUS_COM_CAIXA`), não lista escrita à mão em dois lugares. **Descartado:** só `ativo` (como a régua da origem da
-  59, `:836-839`) — uma cancelada com caixa reteria para sempre.
+  59, `:836-839`) — uma cancelada com caixa reteria para sempre. **(Fase 2, M3):** `PENDENTE` fica fora de propósito
+  (a separação só acontece depois de aprovar); uma requisição com caixa que volte a `PENDENTE` (a seta
+  `AGUARDANDO_APROVACAO_VALOR → PENDENTE`, legado da A45) **não retém** a caixa — declarado (C175).
 - **B474 — o teto vem antes da régua da origem; os dois testes da 59 mudam de cenário, não de mensagem.** Com o material
   só na origem, a recusa sai pelo teto (*"Máximo: 3…"*) e não pela origem. Os testes ganham saldo em outro endereço,
   para seguirem provando a régua da origem com a mesma mensagem. **Descartado:** conferir a origem antes do teto — a
@@ -220,11 +237,33 @@ sai do disponível — a separação não reserva; D (60)"* em `:102` fica obsol
   (*"o disponível contava a caixa como livre"*) deixa de valer **para a separação e a aprovação**, não para a
   distribuição — reabrir é etapa própria (C173). **Descartado:** `falta = pendente − max(hold, caixa)` aqui — muda o
   e-mail da 70/75 e a ordem de quem leva, sem queixa medida.
-- **B476 — sem trava por material na separação.** A conta nova é leitura dentro da trava **por requisição** (93); duas
-  separações de requisições diferentes do mesmo material no mesmo instante ainda podem ler o mesmo livre (residual, como
-  hoje). O ponto 6 da 94 mandou não pegar a trava por material aqui; mantido. **Descartado:** pegar a trava por material
-  (ordem requisição → material é permitida, `requisitionService.js:16`) — muda a fila de espera de todas as separações
-  por um caso que pede escritor concorrente; fica declarado em D.
+- **B476 — (INVERTIDA na Fase 2, B1) a separação pega a trava por material, dentro da trava por requisição.**
+  `separarRequisicao` = `serializarNaRequisicao(R, () => comTravaDaRequisicao(db, R, () => separarSemTrava(...)))` —
+  ordem requisição → material, a permitida (`requisitionService.js:16`; CLAUDE.md). **Por quê:** com a B466 a separação
+  passa a **ler o físico para limitar a caixa que a aprovação lê para reservar** — entra no "o leia para reservar" da
+  regra da trava. Sem a trava, o revisor reproduziu **10/10** separar × separar (duas requisições sem reserva, físico 4,
+  as duas 200: 8 na caixa) **sem gancho nenhum**, e **5/5** separar × aprovar com atraso no claim (a aprovação reserva
+  a caixa que acabou de ser separada — o M3 pela corrida). Com a trava: **0/10 e 0/5**, `test:api` com os mesmos 3
+  vermelhos do protótipo, sem deadlock; `verificarBloqueioLiberacao` (chamada dentro) não pega trava nenhuma (sem
+  reentrância). A **D (91)** ("saída avulsa, reserva manual e separação não pegam") perde a separação no fechamento
+  (T5), e o **CLAUDE.md** muda na T0 (commit próprio). ~~**Descartado:** pegar a trava por material — muda a fila de
+  espera de todas as separações por um caso que pede escritor concorrente; fica declarado em D.~~ **Descartado agora:**
+  manter sem trava (a B476 original) — o caso não pede gancho, acontece com dois cliques. Custo aceito: separações de
+  requisições com material em comum passam a esperar uma pela outra (seções curtas — só leitura e `UPDATE` de item).
+- **B477 — (NOVA, Fase 2, I4) a segunda rodada da entrega não leva a caixa de outra requisição.** No ramo da segunda
+  rodada de `maxEntregar` (entregue > 0 e caixa própria menor que o pendente), a parte **além da própria caixa** é
+  limitada ao teto do item: `max = min(pendente, disponível + reserva, caixa própria + teto)`; a entrega da própria
+  caixa continua por `disponível + reserva` (correção mínima). O teto vem de `saldoDisponivelParaItem` (coluna
+  `caixa_outros_itens`); chamador sem a coluna (o detalhe antes da T1) mantém a conta de hoje. O E1 continua 200 (a
+  própria reserva cobre). **Descartados:** (i) entrega inteira pelo teto — a entrega da própria caixa no legado com
+  caixa dupla passaria a recusar as duas (o motivo da B470); (ii) declarar — a dona da caixa fica presa com o
+  material separado na mão, sem aviso, igual ao M3.
+- **B478 — (NOVA, Fase 2, I3) dois índices.** `CREATE INDEX IF NOT EXISTS idx_itens_req_almox_material ON
+  itens_requisicao_almoxarifado(material_id)` e `idx_reservas_almox_item_req ON
+  reservas_material_almoxarifado(item_requisicao_id)` no `schema.js`, depois dos `ALTER` das colunas que cobrem (a prova
+  de primeiro boot). Medido pelo revisor (`e95rv-sonda-custo*.js`, 6 mil itens, 3 mil reservas): a fila com o
+  fragmento novo ~40× mais lenta sem índice, de volta à ordem de hoje com os dois. **Descartado:** sem índice (o custo
+  cresce com o histórico de itens, que nunca é apagado).
 
 ---
 
@@ -233,14 +272,22 @@ sai do disponível — a separação não reserva; D (60)"* em `:102` fica obsol
 Os testes levam o prefixo `[95 RN-xx]`; o manual cita pelo conteúdo. **"Caixa" de um item** = `max(0, separado −
 entregue)` (entregue = `COALESCE(quantidade_entregue, quantidade_atendida)`, a régua de `getEntregue`). **"Caixa sem
 reserva"** de um item = `max(0, caixa − reserva ATIVA de origem REQUISICAO do item)`. **"Teto"** do item X =
-`disponível do material + reserva do X − caixa do X − Σ caixa sem reserva dos outros itens` (B473 diz quais contam).
+`max(0, r − c) + max(0, disp − csrOutros − max(0, c − r))`, com `disp` = disponível do material (o do motor, **sem**
+a reserva do X), `r` = reserva ativa do X, `c` = caixa do X, `csrOutros` = Σ caixa sem reserva dos outros itens (B473
+diz quais contam); arredondado a 1e-6 (B471). **(Corrigido na Fase 2, I1, reproduzido):** a forma anterior,
+`disp + r − c − csrOutros`, punha a caixa sem reserva de outra contra a **reserva** do X — P4: R1 com 4 na caixa sem
+reserva, R3 reservou 4 (físico 8), uma saída avulsa leva 4 (o motor não conhece caixa): físico 4, R3 ficava com
+separável 0 tendo reserva 4. Com a forma certa: `4 + max(0, 0 − 4 − 0) = 4`. Quando `c ≥ r` as duas formas coincidem.
 **"Separável"** = `min(pendente de separação, max(0, teto))`.
 
 - **RN-01 (a separação não passa do que existe para o item)** — separar acima do separável → **400** S2 (literal abaixo),
   nada gravado (nem item, nem rodada, nem status, nem conferência). Cenários (os da sonda 1 e 2, pela **rota**): C1
   (+2 → 400 *"Máximo: 0 (pendente: 2, disponível: 0)"*), C2 (+2 → 400 *"Máximo: 1 (pendente: 3, disponível: 1)"*; +1 →
   200), C3, C4, C5, C6 (+1 → 200; +2 → 400), C7 (+2 → 200; +3 → 400); M2 (R2 separar 4 → 400 *"Máximo: 0 (pendente: 4,
-  disponível: 0)"*), M5; E3 (crítico: +2 → 400, `conferido_por_id` intacto). **Guardas (passam antes):** K1–K3, M1, M6.
+  disponível: 0)"*), M5; E3 (crítico: +2 → 400, `conferido_por_id` intacto). **Guardas (passam antes):** K1–K3, M1, M6. **(Fase 2):**
+  P4 (I1) → R3 separar 4 → 200; decimal (I2): físico 0,3, caixa sem reserva de outra 0,1 → separar 0,2 → 200 e 0,3 →
+  400; P1 (B1): duas requisições sem reserva, físico 4, separam 4 **ao mesmo tempo** → exatamente uma 200; K4 (guarda):
+  R1 com reserva 4 e 4 na caixa, físico 8 → R2 separar 4 → 200 (a caixa coberta pela reserva não desconta duas vezes).
 - **RN-02 (a rodada divide o material entre os seus itens)** — M4: uma rodada com dois itens do mesmo material sem
   reserva, físico 4, 4 + 4 → 400 no **segundo** item (*"Máximo: 0 (pendente: 4, disponível: 0)"*), nada gravado; 2 + 2 →
   200. O mesmo item duas vezes no payload (4 + 1 com teto 4) → 400 na segunda entrada. Com reserva por item (cada item
@@ -256,10 +303,22 @@ reserva"** de um item = `max(0, caixa − reserva ATIVA de origem REQUISICAO do 
   aprovada → **nenhuma** reserva, status pós-aprovação de sempre (`calcularStatusPosAprovacao` — ver C172); R1 entrega 4
   → 200 `ENTREGUE`. Físico 6 com a mesma caixa → R2 reserva **2** (hoje 4 — também vermelho). **Guarda:** sem caixa nenhuma,
   a aprovação reserva como hoje (K1–K3). **Pelo serviço:** `reservarItensAprovacao` direto devolve `reservas: []` no M3.
+  **(Fase 2, B2):** a **própria** caixa sem reserva não desconta — P5b (legado A45: pede 6, 4 na caixa sem reserva,
+  físico 6, aprovado por valor) → reserva **6** (`TOTALMENTE_RESERVADA`), o item separa os 2 que faltam (200) e outra
+  requisição que peça 2 reserva 0.
 - **RN-06 (o que não muda — guardas)** — (a) entrega: C1 depois da rodada recusada, entregar 4 → 200
   `PARCIALMENTE_ATENDIDA`, físico 0, item 4/4 (sem fantasma); E1 (segunda rodada sem separar) → 200 como hoje; E2
   (crítico) → 400 como hoje. (b) origem: O1 (mesmo par) → a mesma mensagem da 59. (c) a liberação da 75 no L1 distribui
-  como hoje (B475). (d) o detalhe mantém `saldo_atual` e `quantidade_entregavel` com os valores de hoje.
+  como hoje (B475) — **(Fase 2)** e R2 separa os 2 livres pela porta (200): o hold que R1 ganhou cobre a caixa dela,
+  não some do livre duas vezes. (d) o detalhe mantém `saldo_atual` e `quantidade_entregavel` com os valores de hoje
+  **(corrigido na Fase 2, I4: exceto o `quantidade_entregavel` da segunda rodada além da própria caixa, que segue a
+  porta da entrega — B477)**.
+- **RN-07 (NOVA, Fase 2, I4/B477 — a segunda rodada da entrega não leva a caixa de outra)** — P3 pela rota: R2 (pede 6,
+  reserva 2, separa 2, entrega 2) e R1 (pede 4, sem reserva, entrada de 4, separa 4) → R2 entregar 4 sem separar →
+  **400** *"⟨material⟩: não é possível entregar 4 ⟨un⟩. Máximo: 0 (pendente: 4, disponível: 4)"* (a literal de hoje,
+  `requisitionService.js:1262-1265`; o `disponível` continua o `disponível + reserva`) e R1 entrega os 4 → 200
+  `ENTREGUE`. **Controle (passa antes):** sem a caixa de R1 (R1 não separou), a mesma entrega de R2 → 200. E1 e E2
+  continuam como a RN-06 (a).
 
 ---
 
@@ -282,20 +341,34 @@ do teto onde já estavam depois do `maxSeparar`.
   rq.status IN STATUS_COM_CAIXA ⟨exclusao⟩), 0)`. A reserva do item reaproveita a subconsulta de `RESERVADO_PARA_ITEM_SQL`
   (mesmos filtros: `ATIVA`, `REQUISICAO`, `item_requisicao_id`, `material_id`). **Nada de subtração à mão do disponível**
   — a regra de `availabilitySql.js` (o teste `saldoEmTerceiros` varre).
-- `tetoSeparacao(disponivelComReserva, caixaDoItem, caixaSemReservaOutros)` — **pura**: `max(0, disponivelComReserva −
-  caixaSemReservaOutros − max(0, caixaDoItem))`. Exportada (o cliente não a importa; o teste a usa).
+- ~~`tetoSeparacao(disponivelComReserva, caixaDoItem, caixaSemReservaOutros)`~~ **(assinatura corrigida e congelada na
+  Fase 2, I1/I2 — a T1 depende dela):** `tetoSeparacao(disponivel, reservaDoItem, caixaDoItem, caixaSemReservaOutros)`
+  — **pura**: `arred6(max(0, r − c) + max(0, disp − csrOutros − max(0, c − r)))`, com `disp` = disponível do material
+  **sem** a reserva do item (`saldo_disponivel − reservado_para_item`), `arred6(x) = Math.round(x * 1e6) / 1e6`, e
+  `c` limitado a `max(0, c)`. Exportada (o cliente não a importa; o teste a usa).
 - `saldoDisponivelParaItem(db, item)` devolve, além de `disponivel` e `reservado_para_item` (inalterados — a entrega os
-  usa), `caixa_outras_requisicoes` (exclusão `AND ix.requisicao_id <> ?`) e `caixa_todos` (sem exclusão).
-- **Porta:** na passada 1, para cada entrada: `teto = tetoSeparacao(disponivel, caixa do item EM MEMÓRIA,
-  caixa_outras_requisicoes + Σ caixa sem reserva EM MEMÓRIA dos outros itens desta requisição do mesmo material)` (a
-  reserva de cada item vem de `reservado_para_item` de `carregarItensRequisicao`); `max = maxSeparar(item, teto)`; a
-  régua da 60 guarda o mesmo cálculo com o separado de **antes** da rodada (B468). A leitura continua fresca
-  (`saldoDisponivelParaItem`) dentro da trava por requisição.
+  usa), `caixa_outras_requisicoes` (exclusão `AND ix.requisicao_id <> ?`) e ~~`caixa_todos` (sem exclusão)~~
+  `caixa_outros_itens` (exclusão `AND ix.id <> ?` — **corrigido na Fase 2, B2**; a aprovação e a entrega usam esta).
+  **(Fase 2, M2):** lança erro se o item vier sem `requisicao_id` ou sem `id` — nada de `|| 0` (uma exclusão por 0
+  contaria a caixa da própria requisição como de outra, em silêncio).
+- **Porta:** na passada 1, para cada entrada: `teto = tetoSeparacao(disponivel − reservado_para_item,
+  reservado_para_item, caixa do item EM MEMÓRIA, caixa_outras_requisicoes + Σ caixa sem reserva EM MEMÓRIA dos outros
+  itens desta requisição do mesmo material)` (a reserva dos outros itens vem de `reservado_para_item` de
+  `carregarItensRequisicao`; a do item, da leitura fresca); `max = maxSeparar(item, teto)`; recusa se
+  `qty > max + 1e-9` (I2); a régua da 60 guarda o mesmo cálculo com o separado de **antes** da rodada (B468). A leitura
+  continua fresca (`saldoDisponivelParaItem`) — **(corrigido na Fase 2, B1/B476)** dentro das **duas** travas: a por
+  requisição (93) por fora e a por material dos itens (`comTravaDaRequisicao`, 91) por dentro.
+- **(Fase 2, I3/B478):** os dois índices no `schema.js`.
+- **(Fase 2, I4/B477) — a entrega:** `maxEntregar(item, estoque, teto)` — o terceiro argumento é opcional; no ramo da
+  segunda rodada, com `teto` número, `min(pendente, estoque, caixa própria + teto)`; sem ele, a conta de hoje. A prévia
+  da B464 e o laço da entrega passam o teto calculado com `caixa_outros_itens`.
 
 ### A fila — `listarFilaSeparacao` (T1)
 
-`separavel = podeSep ? maxSeparar(i, tetoSeparacao(i.saldo_disponivel, caixa de i, i.caixa_outros)) : 0`, com
-`caixaSemReservaSql('ir.material_id', 'AND ix.id <> ir.id')` como coluna da consulta de itens (uma consulta, sem N+1).
+`separavel = podeSep ? maxSeparar(i, tetoSeparacao(i.saldo_disponivel − i.reservado_para_item, i.reservado_para_item,
+caixa de i, i.caixa_outros)) : 0` **(assinatura da Fase 2, I1)**, com `caixaSemReservaSql('ir.material_id', 'AND ix.id
+<> ir.id')` e `RESERVADO_PARA_ITEM_SQL as reservado_para_item` como colunas da consulta de itens (uma consulta, sem
+N+1).
 `disponivel`, `entregavel`, `a_separar`, `a_entregar` e as regras de `etapas` **inalteradas** (a etapa sai da conta nova
 sozinha: `separavel` 0 com `a_separar` > 0 → `AGUARDANDO_SALDO`, `:547`). Itens do mesmo material na mesma requisição
 mostram cada um o seu teto (não divididos — como hoje; a porta divide — ver "O que fica de fora").
@@ -303,13 +376,18 @@ mostram cada um o seu teto (não divididos — como hoje; a porta divide — ver
 ### O detalhe — `GET /api/almoxarifado/requisicoes/:id` (T1)
 
 `routes/almoxarifado.js:3197` ganha a coluna `caixaSemReservaSql('ir.material_id', 'AND ix.id <> ir.id') as
-caixa_sem_reserva_outros`; `normalizarItem` acrescenta `saldo_separavel = tetoSeparacao(saldo_atual, caixa,
-caixa_sem_reserva_outros)` e `quantidade_separavel = min(pendenteSeparacao, saldo_separavel)` **só quando a coluna
-veio** (chamador sem ela não ganha os campos — o cliente cai no `saldo_atual`). Aditivo; nenhum campo existente muda.
+caixa_sem_reserva_outros`; `normalizarItem` acrescenta `saldo_separavel = tetoSeparacao(saldo_atual −
+quantidade_reservada_item, quantidade_reservada_item, caixa, caixa_sem_reserva_outros)` **(assinatura da Fase 2, I1; a
+reserva do item já vem na coluna `quantidade_reservada_item` do detalhe)** e `quantidade_separavel =
+min(pendenteSeparacao, saldo_separavel)` **só quando a coluna veio** (chamador sem ela não ganha os campos — o cliente
+cai no `saldo_atual`). Aditivo; nenhum campo existente muda — **exceto (Fase 2, I4/B477)** o `quantidade_entregavel`
+da segunda rodada além da própria caixa, que passa o teto ao `maxEntregar` quando a coluna veio (a tela não pode
+oferecer o que a entrega passa a recusar).
 
 ### A aprovação — `reservarItensAprovacao` (T2)
 
-`aReservar = min(falta, max(0, disponivel − jaReservado − caixa_todos))` (B469). O resto (idempotência da 73,
+`aReservar = min(falta, max(0, disponivel − jaReservado − caixa_outros_itens))` (B469 — **corrigido na Fase 2, B2**: era
+`caixa_todos`, que incluía a própria caixa e reservava de menos). O resto (idempotência da 73,
 `algumSeguro`, desfazer na falha, a trava por material da 91) **inalterado**. As três portas de aprovação
 (`/aprovar`, `/aprovar-valor`, a automática) passam por aqui — nenhuma muda.
 
@@ -324,9 +402,11 @@ veio** (chamador sem ela não ganha os campos — o cliente cai no `saldo_atual`
 
 ### O que não muda
 
-Entrega (`maxEntregar`, a prévia da B464, o laço, o motor); `saldo_atual` e `quantidade_entregavel`; a régua da origem
+Entrega (`maxEntregar` — **exceto a B477, Fase 2** —, a prévia da B464, o laço, o motor); `saldo_atual` e
+`quantidade_entregavel` (exceto a B477); a régua da origem
 (59) e a mensagem dela; a reserva na chegada/liberação/estorno (74/75) e o recálculo (76); `calcularStatusPosAprovacao`;
-`disponivelSql`; a trava por requisição (93) e por material (91); a alçada (94); as rotas, permissões e gates.
+`disponivelSql`; os módulos das travas por requisição (93) e por material (91) — **a separação passa a pegar a por
+material (B476, Fase 2)**; a alçada (94); as rotas, permissões e gates.
 
 ---
 
@@ -344,13 +424,13 @@ Entrega (`maxEntregar`, a prévia da B464, o laço, o motor); `saldo_atual` e `q
 
 ## Tasks
 
-**Ordem topológica: T0 → T2 → T1 → T3 → T4 → T5.** T0 e T2 são **tronco** (T0: a conta e a porta — regra compartilhada;
-T2: a reserva da aprovação — regra da 07). T1 é **galho** (só consome o fragmento e a função da T0) e T3 é **galho de
+**Ordem topológica: T0 → T0b → T2 → T1 → T3 → T4 → T5** (a **T0b** nasceu na Fase 2, I4). T0, T0b e T2 são **tronco**
+(T0: a conta e a porta — regra compartilhada; T0b: a entrega lê a mesma conta; T2: a reserva da aprovação — regra da 07). T1 é **galho** (só consome o fragmento e a função da T0) e T3 é **galho de
 cliente** (contra o contrato congelado; pode rodar **em paralelo** com T2/T1 — não toca o SQLite). T1 é executada na
 árvore principal, **depois** da T2: edita o mesmo arquivo e sabota o mesmo serviço (memória "sabotagem concorrente
 contamina a suíte"). Executores **não** marcam este plano; o fio principal marca.
 
-- [ ] **T0 (tronco) — a conta única e a porta da separação (B466, B468, B471, B473, B474).** Contrato "A conta" e S2.
+- [ ] **T0 (tronco) — a conta única e a porta da separação (B466, B468, B471, B473, B474; Fase 2: B476, B478).** Contrato "A conta" e S2.
   Teste novo: **RN-01**, **RN-02**, **RN-04**, **RN-06 (a)(b)**. Reescritas declaradas: o caso "Fase 5 (critico)" de
   `filaSeparacao` (estado por escritor direto + o caso da recusa vai para RN-01) e os dois de `separacaoOrigemPorItem`
   (B474); o comentário `separacaoDivergencia.api.test.js:102`. **Vermelho antes:** RN-01 (todos os ERRADO da sonda 1 e 2
@@ -363,22 +443,37 @@ contamina a suíte"). Executores **não** marcam este plano; o fio principal mar
   cai RN-02 "o mesmo item duas vezes" (4 + 1 → 200); (s5) régua da 60 com o teto em memória → caem os dois "Fase 5" de
   `separacaoDivergencia` (máximo 3 em vez de 7/4 — medido no protótipo) — controle da B468; (s6) `STATUS_COM_CAIXA` sem
   `PRONTA_PARA_RETIRADA` → cai um caso RN-01 com R1 liberada para retirada (caixa 4) e R2 separando (inclua-o); (s7)
-  `caixaSemReservaSql` sem descontar a reserva do item → cai a guarda K1 (reserva 4, separou 2: o teto zera — o
-  separado coberto pela própria reserva contado duas vezes).
+  `caixaSemReservaSql` sem descontar a reserva do item → ~~cai a guarda K1 (reserva 4, separou 2: o teto zera — o
+  separado coberto pela própria reserva contado duas vezes)~~ **(corrigido na Fase 2, conferência do fio):** o teto não lê a caixa sem reserva do **próprio** item (usa `r` e `c` direto), então o s7 não
+  derruba o K1 — derruba a guarda **K4** (R1 com reserva 4 e 4 na caixa, físico 8: R2 separar 4 → 400 em vez de 200).
+  **Novos da Fase 2:** (s8) sem a trava por material (B476) → cai o P1 (as duas 200 — controle medido pelo revisor:
+  10/10 sem a trava); (s9) o teto na forma antiga (`disp + r − c − csrOutros`) → cai o P4 (R3 separar 4 → 400); (s10)
+  sem o arredondamento do teto → cai o decimal (separar 0,2 → 400). **E (Fase 2, I3)** os dois índices de B478 (sem
+  controle de sabotagem: o teste confere `PRAGMA index_list` nas duas tabelas). **Commit próprio** do `CLAUDE.md`
+  (regra da trava: a separação entra em "o leia para reservar"; sai da lista do "não pegam").
+- [ ] **T0b (tronco, NOVA na Fase 2, I4) — a segunda rodada da entrega não leva a caixa de outra (B477).** Contrato "A
+  conta" (a entrega). **RN-07** pela rota e o E1/E2 da RN-06 (a). **Vermelho antes:** P3 (R2 entrega 4 → 200; R1
+  entrega a própria caixa → 400). **Guardas (passam antes):** o controle da RN-07 (sem a caixa de R1 → 200), E1, E2.
+  **Medir:** `separacaoFluxoCompleto`, `reservaConsumo`, `reservaRequisicaoSoPelaEntrega`, `requisicaoGestosConcorrentes*`.
+  **Controles:** (s1) sem o terceiro argumento na prévia **e** no laço → cai a RN-07 (200); (s2) só na prévia → cai a
+  RN-07 pelo laço (a mensagem sai do laço — prova que os dois lugares leem a conta).
 - [ ] **T2 (tronco) — a aprovação não reserva a caixa de outra (B469).** Contrato "A aprovação". **RN-05** (rota e
   serviço). **Vermelho antes:** M3 (reserva 4; R1 entrega 400) e "físico 6 com a mesma caixa → reserva 2" (hoje reserva 4).
   **Guarda (passa antes):** sem caixa nenhuma → reserva como hoje. **Medir:** `reservaAprovacao*`,
   `aprovacaoReserva*`, `filaLiberacaoAprovacaoCorrida`, `recebimentoReservaChegada*`, `requisicaoGestosConcorrentes*`
-  (grep pelo nome no início da task — os nomes aqui são aproximados). **Controles:** (s1) `aReservar` sem `− caixa_todos`
-  → cai RN-05 M3 (reserva 4; entrega 400); (s2) `caixa_todos` trocado por `caixa_outras_requisicoes` → cai o caso
-  "própria caixa sem reserva re-aprovada" (inclua-o: legado aprovado por valor com caixa, A45 — reserva só o que a caixa
-  não cobre).
+  (grep pelo nome no início da task — os nomes aqui são aproximados). **Controles:** (s1) `aReservar` sem `− caixa_outros_itens`
+  (Fase 2: era `caixa_todos`) → cai RN-05 M3 (reserva 4; entrega 400); ~~(s2) `caixa_todos` trocado por `caixa_outras_requisicoes` → cai o caso
+  "própria caixa sem reserva re-aprovada" (… reserva só o que a caixa não cobre)~~ **(corrigido na Fase 2, B2 — o
+  controle estava invertido):** (s2) `caixa_outros_itens` trocado pela soma de **todos** os itens (sem exclusão, a
+  forma anterior da B469) → cai o P5b da RN-05 (reserva 2 em vez de 6; o item separa 0).
 - [ ] **T1 (galho) — a fila e o detalhe dizem o que a porta aceita (B472).** Contrato "A fila" e "O detalhe". **RN-03**,
   **RN-06 (d)**. **Vermelho antes:** RN-03 em C1–C7, M2, M5 (fila e detalhe acima do que a porta aceita depois da T0).
   **Medir:** `filaSeparacao`, `filaTravaIntegracao`, os testes do detalhe (`requisicoes*`). **Controles:** (s1) fila com
   o `saldo_disponivel` cru → cai RN-03 C1 na fila (2 em vez de 0) e `etapas` com `SEPARAR`; (s2) `normalizarItem` sem
   `quantidade_separavel` → cai RN-03 no detalhe; (s3) a coluna da fila com exclusão `ix.requisicao_id <> ir.requisicao_id`
-  (perde os outros itens da mesma requisição) → cai RN-03 M5 na fila (4 em vez de 0).
+  (perde os outros itens da mesma requisição) → cai RN-03 M5 na fila (4 em vez de 0). **(Fase 2):** RN-03 inclui o P4
+  (fila e detalhe 4) e o decimal (0,2, não `0.19999999999999998`); (s4) `normalizarItem` sem o teto no `maxEntregar` →
+  cai o `quantidade_entregavel` do P3 no detalhe (4 em vez de 0 — B477).
 - [ ] **T3 (galho de cliente) — a tela usa o número do servidor.** Contrato "A tela". Testes de componente: (a) detalhe
   C1 (`saldo_atual` 4, `saldo_separavel` 0, separado 4 de 6) → o item não aparece entre os separáveis do modal e
   **"Confirmar Separação"** fica desabilitado (como no "nada a separar" de hoje); (b) C2 (`saldo_separavel` 1) → o input
@@ -387,8 +482,9 @@ contamina a suíte"). Executores **não** marcam este plano; o fio principal mar
   **Controles:** (s1) `maxQtdSeparacao` lendo só `saldo_atual` → caem (a)(b); (s2) pré-preenchimento sem dividir → cai
   (c); (s3) sem o `??` → cai (d). **Medir:** `RequisicoesList.test.js`, `RequisicoesSeparacaoDivergencia`,
   `RequisicoesSeparacaoOrigem`, `RequisicoesReabrirSeparacao`, `RequisicoesTrocaSeparacao`; `CI=true` build.
-- [ ] **T4 (integração — cruza T0, T1, T2 e o contrato da T3).** Ver a seção abaixo. **Controle:** rodar o arquivo com a
-  T2 revertida (s1 da T2) → cai I2; com a T1 revertida (s1 da T1) → cai a asserção de fila do I1.
+- [ ] **T4 (integração — cruza T0, T0b, T1, T2 e o contrato da T3).** Ver a seção abaixo. **Controle:** rodar o arquivo com a
+  T2 revertida (s1 da T2) → cai I2; com a T1 revertida (s1 da T1) → cai a asserção de fila do I1; **(Fase 2)** com a
+  T0b revertida (s1 da T0b) → cai o I5.
 - [ ] **T5 — fechamento (skill `fechar-etapa`).** Novidades (seção da 95; **C169** marcado resolvido com o hash;
   **C170–C173**; **B466–B476**; **A46**; a **D (60)** riscada à vista com a etapa; D (95); F (95)); specs 05 (a pendência
   do C169 fechada; o "Fica de fora" da 60 sobre o livre riscado), 07 (a aprovação e a caixa sem reserva), 04 (o detalhe
@@ -416,7 +512,9 @@ requisição) deixa cada task verde sozinha e a tela oferecendo o que a porta re
   mesmos números que as rotas do I1/I2 no mesmo estado.
 - **I4 — a fila nunca oferece o que a porta recusa (propriedade):** para cada estado montado nos cenários C1–C7, M2,
   M4, M5 (sem as rodadas de prova), `separar(fila.separavel)` → 200 e, num estado idêntico remontado, `separar(fila
-  .separavel + 1)` → 400.
+  .separavel + 1)` → 400. **(Fase 2):** mais P4 e o decimal.
+- **I5 (NOVO, Fase 2, I4/B477) — o detalhe e a entrega concordam na segunda rodada:** P3 pela rota —
+  `quantidade_entregavel` de R2 no detalhe 0, entregar 4 → 400, R1 entrega 4 → 200 `ENTREGUE`.
 
 ## Avisos (letra C) — a registrar no fechamento
 
@@ -425,27 +523,41 @@ requisição) deixa cada task verde sozinha e a tela oferecendo o que a porta re
 - **C170 — o que muda para quem opera.** A separação recusa o que está na caixa de outra requisição (B467 — o cenário 5
   da 64 deixa de valer); o separável da fila e da tela pode cair para 0 em requisição que antes mostrava "Separar"; a
   mensagem passa a mostrar o teto no `disponível` (B471). **O que fazer:** rodar a **A46** antes do deploy e resolver as
-  caixas fantasma (devolver o separado que não existe: *Ajustar Separação* não reduz — a correção é do administrador,
-  ver a A46).
+  caixas fantasma — ~~(devolver o separado que não existe: *Ajustar Separação* não reduz — a correção é do
+  administrador, ver a A46)~~ **(corrigido na Fase 2, I5 — por status, porque a exclusão ESTORNA o entregue):**
+  `PARCIALMENTE_ATENDIDA` → **Encerrar** (o entregue fica, a caixa deixa de reter — B473); `EM_SEPARACAO` ou
+  `PRONTA_PARA_RETIRADA` com entregue **0** → **excluir** (não há entregue a estornar; a requisição é refeita);
+  `EM_SEPARACAO` com entregue **> 0** e sem físico → **não há gesto limpo** (excluir estornaria o que já saiu;
+  `EM_SEPARACAO` não tem seta para `ENCERRADA`) — declarado na **C174**. Não mandar excluir quem já entregou.
 - **C171 — o que muda para quem integra.** Detalhe com `saldo_separavel` e `quantidade_separavel` (aditivo); fila
   `separavel` menor; o 400 S2 com outro número; a aprovação reserva menos quando há caixa sem reserva do material.
 - **C172 — a aprovação com a caixa de outra pode dar *Aprovado* sem reserva.** `calcularStatusPosAprovacao` ainda lê o
   disponível do motor (que conta a caixa sem reserva como livre): no I2, R2 fica *Aprovado* sem reserva e a fila a
   mostra *Aguardando saldo*. Cosmético e declarado (não escolhe `AGUARDANDO_ESTOQUE`/`COMPRA`).
 - **C173 — a chegada e a liberação dão primeiro a quem já tem caixa sem reserva** (L1; decisão da 75, B475). Quem
-  espera pode ficar sem a reserva enquanto a requisição com caixa ganha um hold que não precisa. Reabrir é etapa própria.
+  espera fica sem a **reserva** (o status e o e-mail da 70/75 continuam dizendo que espera) enquanto a requisição com
+  caixa ganha um hold sobre o que já separou **(texto corrigido na Fase 2, M1):** ~~um hold que não precisa~~ — pela
+  conta nova o hold cobre a caixa dela (não soma), então o material **não** some do livre: quem espera ainda separa
+  os que entraram pela porta (RN-06 (c)). O que se perde é a garantia (a reserva), não o separável. Reabrir é etapa
+  própria.
+- **C174 (NOVO, Fase 2, I5) — `EM_SEPARACAO` com entregue > 0 e caixa fantasma não tem gesto limpo.** Excluir estorna
+  o que já foi entregue; `EM_SEPARACAO` não encerra. A A46 lista; o administrador decide (entregar o que existir e
+  encerrar depois de `PARCIALMENTE_ATENDIDA`, ou aceitar o estorno). Produto novo ("devolver da caixa") fica fora.
+- **C175 (NOVO, Fase 2, M3) — caixa em requisição que voltou a `PENDENTE` não retém.** `STATUS_COM_CAIXA` não tem
+  `PENDENTE` (B473); o único caminho é o legado da A45 (`AGUARDANDO_APROVACAO_VALOR → PENDENTE`). Declarado.
 
 ## O que fica de fora (declarado — e por quê)
 
 - **A entrega** (B470) — inclusive a "segunda rodada" sem separar (Etapa 3; E1) e a entrega de uma requisição levando o
-  físico que outra separou **sem** reserva no legado (M2 antigo). A A46 acha o legado.
+  físico que outra separou **sem** reserva no legado (M2 antigo). A A46 acha o legado. **(Fase 2, I4):** a segunda
+  rodada **além da própria caixa** entra (B477, T0b); o resto da entrega continua fora.
 - **Corrigir o legado** — nenhuma etapa reduz `quantidade_separada` (não há gesto de "devolver da caixa"); a A46 lista e
   o administrador decide (excluir/refazer a requisição). Um gesto de "desfazer separação" é produto novo.
 - **A chegada, a liberação, o estorno (74/75), o recálculo (76)** — B475, C173.
 - **`calcularStatusPosAprovacao`** — C172.
 - **O motor** (`disponivelSql`, `criarReserva`, saídas avulsas, transferência, inventário): uma saída avulsa (movimentação
   manual) ainda pode levar o físico que está na caixa sem reserva — o motor não conhece caixa (B466 iv).
-- **Trava por material na separação** — B476.
+- ~~**Trava por material na separação** — B476.~~ **(Corrigido na Fase 2, B1: entra — a B476 foi invertida.)**
 - **A fila e a tela não dividem o separável entre itens do mesmo material da mesma requisição na linha da fila** — a
   porta divide (RN-02) e o modal pré-preenche dividindo (T3); a linha da fila mostra o teto de cada item.
 - **"(na caixa: n)" na mensagem** — B471.
@@ -523,9 +635,82 @@ que estava na caixa de outra. O fechamento confere de novo contra o esquema e es
 10. **"Contrato: o 400 existente; decidir o `disponível` da mensagem"** — decidido (B471); e a ordem da recusa muda dois
     testes da 59 (B474) — a 94 não previa testes antigos caindo.
 
+## Fase 2 — revisão do plano (2026-10-09): 2 bloqueantes, 5 importantes, 3 menores → plano revisto (vale sobre o texto acima)
+
+Revisor fresco (plano + specs 05/07 + o protótipo da Fase 0), com sondas no scratchpad (`e95rv-sonda-a.js` — P1 a
+P6; `e95rv-sonda-b.js` — P4, P5b e P2 com ordem; `e95rv-sonda-c.js` — P2 com gancho; `e95rv-sonda-custo.js` e
+`-custo-idx.js`; saídas `e95rv-*.out`, cada uma contra a `main` e contra o protótipo; `e95rv-testapi-trava.out` — a
+suíte com o protótipo **mais** a trava). Cada achado foi conferido contra o código pelo fio principal antes de entrar
+(`requisitionService.js:55-63` `maxEntregar`, `:129-145` `saldoDisponivelParaItem`, `:190-193` a aprovação, `:283`
+`comTravaDaRequisicao`, `:711-714` a trava por requisição da separação; `schema.js` sem índice em
+`itens_requisicao_almoxarifado(material_id)` nem em `reservas_material_almoxarifado(item_requisicao_id)`; a máquina de
+estados `:78` — só `PARCIALMENTE_ATENDIDA` tem seta para `ENCERRADA`). Os pontos afetados acima estão marcados
+**"(corrigido na Fase 2)"** ou **"(Fase 2)"**. Decisões novas: **B477, B478**; **B469** e **B470** corrigidas; **B476
+invertida**. Avisos novos: **C174, C175**. RN nova: **RN-07**. Task nova: **T0b**.
+
+**Bloqueantes**
+
+1. **B1 — a corrida separar × separar não pede gancho (reproduzido 10/10 sem gancho; separar × aprovar 5/5 com
+   atraso no claim).** A conta nova é lida dentro da trava **por requisição**; duas requisições diferentes do mesmo
+   material leem o mesmo livre e as duas separam (8 na caixa para 4) — o protótipo **não** fecha isso (P1 10/10 nos
+   dois). A B476 dizia "residual, pede escritor concorrente": errado, são dois cliques. **Decidido: inverter a B476** —
+   a separação pega a trava por material (`comTravaDaRequisicao`) **dentro** da por requisição (ordem requisição →
+   material). Medido pelo revisor: com a trava, **0/10** e **0/5**; `test:api` com os mesmos 3 vermelhos do protótipo
+   (`e95rv-testapi-trava.out`, 327/329); sem deadlock; `verificarBloqueioLiberacao` (chamada dentro) não pega trava.
+   Entra na T0 (controle s8 e o P1 na RN-01); o **CLAUDE.md** muda na T0 em commit próprio (a separação passa a ler o
+   físico para limitar a caixa que a aprovação lê para reservar → entra em "o leia para reservar"); a **D (91)** perde
+   a separação no fechamento.
+2. **B2 — a aprovação com `caixa_todos` reserva de menos (reproduzido, regressão do protótipo).** P5b (legado A45:
+   pede 6, 4 na caixa sem reserva, físico 6): a `main` reserva 6; o protótipo reserva **2**
+   (`PARCIALMENTE_RESERVADA`) — e então a caixa sem reserva do item fica 2, o separável dele 0 e **outra** requisição
+   reserva os 2 livres (`e95rv-sonda-b-proto.out`). A reserva nova **cobre** a caixa do próprio item; descontá-la é
+   contar duas vezes. **Corrigido:** `caixa_outros_itens` (exclusão `ix.id <> item.id`); apagada da B469 a frase
+   "inclui o próprio item"; o controle (s2) da T2 **estava invertido** (quem cai é a soma de todos no P5b, não o
+   contrário).
+
+**Importantes**
+
+1. **I1 — o teto punha a caixa de outra contra a reserva do item (reproduzido, regressão).** P4: R1 com 4 na caixa
+   sem reserva, R3 reservou 4 (físico 8), uma saída avulsa leva 4 (o motor não conhece caixa — B466 iv): na `main` R3
+   separa 4 (200); no protótipo **0** (fila `AGUARDANDO_SALDO`, separar 4 → 400) — quem tem a reserva fica preso.
+   **Corrigido:** `teto = max(0, r − c) + max(0, disp − csrOutros − max(0, c − r))`; a assinatura recebe `r` separado
+   e foi **congelada na T0** (a T1 depende dela); a fila ganha a coluna `reservado_para_item` e o detalhe usa a
+   `quantidade_reservada_item` que já tem. P4 vira caso da RN-01 e controle (s9) da T0.
+2. **I2 — ponto flutuante no teto (reproduzido).** Físico 0,3, caixa de outra 0,1: o protótipo oferecia
+   `0.19999999999999998` e recusava 0,2. **Corrigido:** teto arredondado a 1e-6 e a porta compara `qty > max + 1e-9`;
+   caso decimal na RN-01 e (s10) na T0; o arredondamento entra na B471.
+3. **I3 — custo da fila (medido ~40×).** O fragmento é uma subconsulta correlacionada por linha de item, sem índice
+   em `itens_requisicao_almoxarifado(material_id)` nem em `reservas_material_almoxarifado(item_requisicao_id)`.
+   **Corrigido:** B478, os dois `CREATE INDEX IF NOT EXISTS` na T0 (no `schema.js`, depois dos `ALTER` que criam as
+   colunas — a prova de primeiro boot).
+4. **I4 — a segunda rodada da entrega leva a caixa de outra (reproduzido, igual na `main`).** `maxEntregar`
+   (`requisitionService.js:58-60`), com entregue > 0 e caixa própria menor que o pendente, entrega pelo
+   `disponível + reserva` — que conta a caixa sem reserva de outra requisição como livre (P3: R2 entrega 4 sem separar
+   → 200, R1 entrega a própria caixa → 400). A B470 dizia "a entrega nunca cria caixa fantasma": **errado**, corrigido
+   à vista. **Decidido: correção mínima, B477** — nesse ramo, só a parte além da própria caixa é limitada ao teto; a
+   entrega da própria caixa continua por `disponível + reserva`. **Em task nova de tronco, a T0b** (depois da T0, antes
+   da T2): é a entrega, outro assunto e outro commit, e lê a conta que a T0 congela; a T1 leva o mesmo teto ao
+   `quantidade_entregavel` do detalhe. RN-07, I5 na T4.
+5. **I5 — o "o que fazer" da C170/A46 mandava excluir quem já entregou.** A exclusão **estorna** o entregue
+   (`excluirSemTrava`, Etapa 58). **Corrigido** por status: `PARCIALMENTE_ATENDIDA` → Encerrar; `EM_SEPARACAO` /
+   `PRONTA_PARA_RETIRADA` com entregue 0 → excluir; `EM_SEPARACAO` com entregue > 0 e sem físico → sem gesto limpo,
+   declarado (**C174**).
+
+**Menores**
+
+1. **M1** — o texto da C173 dizia "um hold que não precisa"; pela conta nova o hold cobre a caixa (não soma), e quem
+   espera ainda separa o que entrou. Corrigido o texto; a RN-06 (c) ganha a asserção.
+2. **M2** — o protótipo passava `item.requisicao_id || 0` à exclusão: um item sem `requisicao_id` contaria a própria
+   requisição como "outra" em silêncio. **Corrigido:** o contrato lança erro se faltar.
+3. **M3** — `STATUS_COM_CAIXA` não tem `PENDENTE`. Declarado (B473, **C175**): só o legado da A45 chega lá com caixa.
+
+**Ajuste do fio ao conferir (não era achado do revisor):** o controle (s7) da T0 dizia que cairia o K1; com o teto
+lendo `r` e `c` do próprio item direto, a caixa sem reserva do **próprio** item não entra na conta — o s7 derruba a
+nova guarda **K4** (a caixa de outra coberta pela reserva dela). Corrigido na T0.
+
 ## Próximo passo
 
-**Fase 2** — um agente fresco (sem este contexto) com este plano, a spec 05 e a 07, e as quatro perguntas da skill
+**(Fase 2 feita — ver a seção acima.) Próximo: T0**, depois T0b, T2, T1. ~~**Fase 2** — um agente fresco (sem este contexto) com este plano, a spec 05 e a 07, e as quatro perguntas da skill
 (contratos com erro e literal; RN × spec; independência real dos galhos; **cada RN traçada até o último gesto** —
 separar → conferir → liberar → entregar → encerrar/excluir, e aprovar → separar → entregar para a RN-05). Pontos que a
 Fase 2 deve atacar em especial: (1) o legado com caixa acima do físico depois da etapa — a porta passa a recusar, mas
@@ -535,4 +720,4 @@ Fase 2 deve atacar em especial: (1) o legado com caixa acima do físico depois d
 a RN-05 nas três portas de aprovação e no `prepararPosAprovacao` (o `calcularStatusPosAprovacao` com a caixa — C172);
 (4) a consulta da fila: custo do `caixaSemReservaSql` por linha de item (subconsulta correlacionada dupla) — medir com
 a base da suíte e dizer se precisa de índice; (5) `saldoEmTerceiros` — o fragmento novo não pode "escrever a subtração à
-mão" (rodar o teste). Corrigir o plano, **depois** executar T0.
+mão" (rodar o teste). Corrigir o plano, **depois** executar T0.~~
