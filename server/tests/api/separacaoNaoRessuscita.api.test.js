@@ -40,7 +40,8 @@ const USERS = {
 const S1 = 'Requisição deve estar aprovada, aguardando estoque/compra, em separação ou parcialmente atendida para separar';
 const R1 = 'Requisição não encontrada ou não pode ser cancelada';
 const I2 = (id, status) => `[almoxarifado-separacao] Requisicao ${id} saiu de ${status} antes da separacao gravar — recusada`;
-const RE_EM_SEPARACAO = /SET\s+status\s*=\s*'EM_SEPARACAO'/;
+const W2 = (id, status, msg) => `[almoxarifado-separacao] Requisicao ${id}: gravacao falhou depois da reivindicacao; status devolvido a ${status}: ${msg}`;
+const RE_EM_SEPARACAO =/SET\s+status\s*=\s*'EM_SEPARACAO'/;
 const RE_UPDATE_ITEM = /UPDATE\s+itens_requisicao_almoxarifado\s+SET\s+quantidade_separada\s*=/;
 const RE_COMPARE_AND_CLEAR = /SET\s+status\s*=\s*'EM_SEPARACAO'[\s\S]*conferido_por_id\s*=\s*NULL[\s\S]*WHERE\s+id\s*=\s*\?\s+AND\s+conferido_por_id\s+IS\s+\?/;
 let seq = 0;
@@ -213,8 +214,8 @@ const comPrazo = (p, ms, rotulo) => Promise.race([
         await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada = 1, quantidade_entregue = 1, quantidade_atendida = 1 WHERE id = ?', [ctx.item]);
       }
       const g = armarFalha(RE_UPDATE_ITEM, 'falha injetada 92T0');
-      let sep;
-      const ow = console.warn; console.warn = () => {};
+      let sep; const avisos = [];
+      const ow = console.warn; console.warn = (...a) => { avisos.push(a.map(String).join(' ')); };
       try {
         sep = await comPrazo(como('ALMOX').put(`/api/almoxarifado/requisicoes/${ctx.R}/separar`, {
           itens_separados: [{ item_id: ctx.item, quantidade_separada: 1 }],
@@ -225,6 +226,9 @@ const comPrazo = (p, ms, rotulo) => Promise.race([
       assert.strictEqual(sep.body.error, 'falha injetada 92T0');
       assert.strictEqual(await st(ctx.R), status, 'o status nao voltou (requisicao presa em EM_SEPARACAO)');
       assert.strictEqual((await rodadas(ctx.R)).length, 0);
+      // W2 (literal do contrato) uma vez: o status foi devolvido e isso fica avisado.
+      const w2 = W2(ctx.R, status, 'falha injetada 92T0');
+      assert.strictEqual(avisos.filter((l) => l === w2).length, 1, `sem a linha W2 "${w2}": ${JSON.stringify(avisos)}`);
       if (status === 'APROVADO') {
         const c = await como('S').put(rotaCancelar('outros', ctx.R));
         assert.strictEqual(c.status, 200, `S nao conseguiu cancelar: ${c.status} ${JSON.stringify(c.body)}`);
@@ -363,6 +367,78 @@ const comPrazo = (p, ms, rotulo) => Promise.race([
     assert.strictEqual(JSON.parse(tc[0].dados_anteriores).status, 'PARCIALMENTE_RESERVADA', 'a trilha tem de gravar o status que o UPDATE trocou');
     assert.strictEqual(Number(tc[0].usuario_id), USERS.S.id);
     assert.strictEqual((await reserva(ctx.rid)).status, 'LIBERADA');
+  });
+
+  // ══════════════ Fase 5 — RN-04 (c) e RN-09 (d) ══════════════
+  await test('[92 RN-04] (c) rota almox: TOTALMENTE -> PARCIALMENTE -> TOTALMENTE no instante do UPDATE -> 400 R2 (teto de 2 tentativas), sem trilha, reserva ATIVA', async () => {
+    const ctx = await montar('TOTALMENTE_RESERVADA', { reservar: true });
+    let emissoes = 0;
+    const origRunLocal = db.run;
+    // Cada emissao troca o status antes de o UPDATE rodar: a primeira para PARCIALMENTE, a segunda de volta.
+    db.run = function (sql, ...rest) {
+      if (RE_CANCELADO.test(String(sql))) {
+        emissoes++;
+        if (emissoes <= 2) {
+          const novo = emissoes === 1 ? 'PARCIALMENTE_RESERVADA' : 'TOTALMENTE_RESERVADA';
+          origRun('UPDATE requisicoes_almoxarifado SET status = ? WHERE id = ?', [novo, ctx.R],
+            () => origRunLocal.call(db, sql, ...rest));
+          return this;
+        }
+      }
+      return origRunLocal.call(db, sql, ...rest);
+    };
+    let c;
+    try {
+      c = await comPrazo(como('S').put(rotaCancelar('almox', ctx.R)), 10000, 'cancelamento');
+    } finally { db.run = origRunLocal; }
+    assert.strictEqual(c.status, 400, `cancelamento: ${c.status} ${JSON.stringify(c.body)}`);
+    assert.strictEqual(c.body.error, R2);
+    assert.strictEqual(emissoes, 2, `UPDATE emitido ${emissoes} vez(es) — o teto e uma nova tentativa so`);
+    assert.strictEqual(await st(ctx.R), 'TOTALMENTE_RESERVADA');
+    assert.strictEqual((await trilha(ctx.R, 'CANCELAMENTO')).length, 0);
+    assert.strictEqual((await reserva(ctx.rid)).status, 'ATIVA');
+  });
+
+  await test('[92 RN-09] (d) TOTALMENTE_RESERVADA: B reivindica e trava no UPDATE do item; A separa inteira (200, rodada); a gravacao de B falha -> o desfazer de B NAO devolve o status, EM_SEPARACAO, e S nao cancela (400 R1)', async () => {
+    const ctx = await montar('TOTALMENTE_RESERVADA', { reservar: true });
+    let sepA = null; let erroA = null; let armado = true; let disparos = 0;
+    const origRunLocal = db.run;
+    db.run = function (sql, ...rest) {
+      if (armado && RE_UPDATE_ITEM.test(String(sql))) {
+        armado = false; disparos++;
+        const cb = rest.find((x) => typeof x === 'function');
+        comPrazo(como('ALMOX').put(`/api/almoxarifado/requisicoes/${ctx.R}/separar`, {
+          itens_separados: [{ item_id: ctx.item, quantidade_separada: 1 }],
+        }), 10000, 'separacao A no gancho')
+          .then((x) => { sepA = x; }, (e) => { erroA = e; })
+          .then(() => cb && cb.call({}, new Error('falha injetada 92F5d')));
+        return this;
+      }
+      return origRunLocal.call(db, sql, ...rest);
+    };
+    let sepB; const avisos = [];
+    const ow = console.warn; console.warn = (...a) => { avisos.push(a.map(String).join(' ')); };
+    try {
+      sepB = await comPrazo(como('ALMOX').put(`/api/almoxarifado/requisicoes/${ctx.R}/separar`, {
+        itens_separados: [{ item_id: ctx.item, quantidade_separada: 1 }],
+      }), 15000, 'separacao B');
+    } finally { db.run = origRunLocal; console.warn = ow; }
+    assert.strictEqual(disparos, 1, `o gancho disparou ${disparos} vez(es)`);
+    assert.ok(!erroA, `a separacao A lancou: ${erroA && erroA.message}`);
+    assert.ok(sepA, 'a separacao A nao rodou');
+    assert.strictEqual(sepA.status, 200, `separacao A: ${sepA.status} ${JSON.stringify(sepA.body)}`);
+    assert.strictEqual(sepB.status, 500, `separacao B: ${sepB.status} ${JSON.stringify(sepB.body)}`);
+    assert.strictEqual(sepB.body.error, 'falha injetada 92F5d');
+    assert.strictEqual(await st(ctx.R), 'EM_SEPARACAO', 'o desfazer de B devolveu o status sobre a rodada de A');
+    const rs = await rodadas(ctx.R);
+    assert.strictEqual(rs.length, 1, `rodadas: ${rs.length}`);
+    assert.strictEqual(Number(rs[0].id), Number(sepA.body.rodada_id), 'a rodada e a de A');
+    assert.strictEqual(avisos.filter((l) => /status devolvido/.test(l)).length, 0, `W2 sem ter devolvido: ${JSON.stringify(avisos)}`);
+    const c = await como('S').put(rotaCancelar('outros', ctx.R));
+    assert.strictEqual(c.status, 400, `S cancelou com material na caixa: ${c.status} ${JSON.stringify(c.body)}`);
+    assert.strictEqual(c.body.error, R1);
+    assert.strictEqual(await st(ctx.R), 'EM_SEPARACAO');
+    assert.strictEqual((await reserva(ctx.rid)).status, 'ATIVA');
   });
 
   terminou = true;

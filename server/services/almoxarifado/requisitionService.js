@@ -698,6 +698,15 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
     throw err;
   }
 
+  // Etapa 92 (Fase 5): a ultima rodada da requisicao, lida ANTES do status (`reqRow`) e da reivindicacao.
+  // O desfazer da RN-09 so devolve o status lido se nenhuma rodada entrou depois desta — uma separacao
+  // concorrente que reivindicou (EM_SEPARACAO esta em PODE_SEPARAR) e gravou a sua rodada venceu, e
+  // devolver o status lido apagaria o EM_SEPARACAO dela: a requisicao voltava a ser cancelavel com
+  // material na caixa (revisao da Fase 4, reproduzido). Lida antes do `reqRow`, nao so antes da
+  // reivindicacao: rodada gravada entre as duas leituras ficaria abaixo da marca, com o `reqRow` velho.
+  const ultimaRodadaAntes = Number((await dbGet(db,
+    'SELECT COALESCE(MAX(id), 0) AS m FROM separacoes_requisicao_almoxarifado WHERE requisicao_id = ?',
+    [requisicaoId])).m) || 0;
   const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
   if (!reqRow) {
     const err = new Error('Requisição não encontrada');
@@ -861,6 +870,7 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
   // leitura e esse UPDATE respondia 200 e a separacao passava por cima — a requisicao "ressuscitava"
   // em EM_SEPARACAO com a reserva ja solta (sonda da Fase 0: 50/50 e 10/10). Guardar so o UPDATE do fim
   // nao basta: a rodada (append-only) ja estaria gravada numa cancelada. Perdeu -> o 400 de sempre (S1).
+  // (Fase 5: `ultimaRodadaAntes`, lida no topo, e a marca do desfazer da RN-09 — ver o catch abaixo.)
   const claim = await dbRun(db, `UPDATE requisicoes_almoxarifado
       SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
     WHERE id=? AND status IN (${PODE_SEPARAR.map(() => '?').join(',')})`, [requisicaoId, ...PODE_SEPARAR]);
@@ -963,9 +973,13 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
   } catch (e) {
     if (rodadaId == null && reqRow.status !== 'EM_SEPARACAO') {
       try {
-        await dbRun(db, `UPDATE requisicoes_almoxarifado SET status=?, updated_at=CURRENT_TIMESTAMP
-          WHERE id=? AND status='EM_SEPARACAO'`, [reqRow.status, requisicaoId]);
-        console.warn(`[almoxarifado-separacao] Requisicao ${requisicaoId}: gravacao falhou depois da reivindicacao; status devolvido a ${reqRow.status}: ${e.message}`);
+        // Fase 5: so devolve se ninguem gravou rodada depois da nossa reivindicacao (ver ultimaRodadaAntes).
+        // A guarda nao devolveu -> nada de status e nada de W2 (W2 diz "status devolvido"); o erro sobe igual.
+        const devolveu = await dbRun(db, `UPDATE requisicoes_almoxarifado SET status=?, updated_at=CURRENT_TIMESTAMP
+          WHERE id=? AND status='EM_SEPARACAO'
+            AND NOT EXISTS (SELECT 1 FROM separacoes_requisicao_almoxarifado WHERE requisicao_id=? AND id > ?)`,
+        [reqRow.status, requisicaoId, requisicaoId, ultimaRodadaAntes]);
+        if (devolveu.changes > 0) console.warn(`[almoxarifado-separacao] Requisicao ${requisicaoId}: gravacao falhou depois da reivindicacao; status devolvido a ${reqRow.status}: ${e.message}`);
       } catch (eDesfazer) {
         console.error(`[almoxarifado-separacao] Requisicao ${requisicaoId}: falhou ao devolver o status ${reqRow.status} depois de ${e.message}: ${eDesfazer.message}`);
       }
