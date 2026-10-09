@@ -1,7 +1,8 @@
 # Etapa 98 — devolver da caixa à prateleira: o almoxarife tira da caixa de uma requisição o que não vai sair (B497, C189; com o C190)
 
-> Status: **Fases 0 e 1 feitas — 2026-10-09 (este plano). Próximo passo: Fase 2** (revisão do plano por agente fresco —
-> ver "Próximo passo" no fim). Nenhuma task executada.
+> Status: **Fases 0, 1 e 2 feitas — 2026-10-09. Próximo passo: Fase 3 (T0, depois T1)**. A Fase 2 (seção "Fase 2 —
+> revisão do plano", antes de "Próximo passo") achou 2 bloqueantes, 5 importantes e 6 menores; os pontos afetados estão
+> marcados **"(corrigido na Fase 2)"** e a seção vale sobre o texto acima. Nenhuma task executada.
 > HEAD de partida: `6e61cb27` (main, árvore limpa, sem push).
 > Origem: "Próxima tarefa detalhada — Etapa 98" no fim de
 > `docs/superpowers/plans/2026-10-09-almoxarifado-etapa97-portas-avulsas-respeitam-a-caixa.md`; B497 (i), C189, C190.
@@ -125,7 +126,7 @@ A sonda escreve o gesto à mão, sem mexer no código: `quantidade_separada = RO
 | s4e (a) ALMOX libera 1 da reserva | entrega 3 → **200** | CERTO — a saída que existe |
 | s4e (b) devolver 1 à prateleira (protótipo) e entregar 3 | 400 (a reserva continua 4 sobre 3 livres) | CERTO = **devolver não resolve o C190** |
 | s4c controle: desbloquear 1 | entrega 4 → 200 | CERTO |
-| C190-4 controle: caixa **sem** reserva, bloquear 1 | 400 (a guarda da B496) — o C190 só existe com a caixa **coberta** | CERTO |
+| C190-4 controle: caixa **sem** reserva, bloquear 1 | 400 (a guarda da B496) — ~~o C190 só existe com a caixa **coberta**~~ **estava incompleta (corrigido na Fase 2):** o C190 também existe **sem** reserva no item quando a reserva de **outra** requisição ocupa o físico (físico 6; R2 sem saldo separou 2; R1 reserva 4; bloquear 3 → **200**; R2 entrega 1 → 400 *"Máximo: -1"*; detalhe `quantidade_entregavel` −1; a saída é liberar a reserva de R1 ou desbloquear — sonda `e98rv-a.js` B) | CERTO (a guarda) / ERRADO (a conclusão) |
 | S1 série: separar 2 de material com série | as séries continuam `EM_ESTOQUE` — a separação não planeja série (a série é escolhida na entrega, Etapa 61) | CERTO — devolver não tem série a soltar |
 | s4b (b) separar **1,5** de material com série | **200**, separado 1,5; entregar 1,5 → 400 *"material com controle de serie exige quantidade inteira"* | ERRADO — pré-existente (C197) |
 | L1 separar com LA e lote L | grava `origem_separacao_id` LA e `lote_separacao_id` L | CERTO |
@@ -226,7 +227,9 @@ depois de liberar da reserva o bloqueado, **vazia** (acha e não acha).
   **nada** dele sai pela entrega (nem o excedente, nem o consumo da reserva). Então: `entregavelPeloMotor` = 0 nesse
   caso, senão o de hoje — usado pela prévia da entrega (antes de qualquer baixa, literal **E190**), pela fila
   (`entregavel`; a etapa vira AGUARDANDO_SALDO) e pelo detalhe (`quantidade_entregavel`). A recusa nomeia as retenções
-  > 0 do material e a saída medida (s4e a: liberar da reserva o que está retido, ou desbloquear). **Descartados:** (i)
+  > 0 do material e a saída medida (s4e a: liberar da reserva o que está retido, ou desbloquear) — **(corrigido na Fase
+  2)** a saída depende da reserva do item: com reserva, a desta requisição; sem, a reserva de **outra** requisição do
+  material (E190, duas formas). **Descartados:** (i)
   **só a literal na recusa do motor** — a fila continuaria dizendo ENTREGAR e o detalhe "3" (s4d); (ii) **a guarda do
   bloqueio avulso contar a caixa coberta** — a qualidade perde reter o reservado (a I-5 da 97 decidiu o contrário, com o
   GESTOR sem `liberar_reserva_requisicao`); (iii) **o motor consumir a reserva com o disponível negativo** — abriria a
@@ -257,7 +260,14 @@ Fase 0 (`montarCaixa`): S pede 4, aprova, entra 4, ALMOX separa 4.
   numérica (D4); item de outra requisição (D5); item repetido (D6); quantidade acima da caixa — inclusive o já entregue
   (separou 4, entregou 3, devolver 2 → D7 com *"Na caixa: 1 (separado: 4, entregue: 3)"*); status fora de
   `STATUS_COM_CAIXA` (*Entregue*, *Encerrada*, *Cancelado*, *Pendente* → D1); requisição excluída (`ativo = 0`) ou
-  inexistente → 404 D0. Dois itens, o segundo acima da caixa → 400 D7 e o **primeiro também intacto**.
+  inexistente → 404 D0. Dois itens, o segundo acima da caixa → 400 D7 e o **primeiro também intacto**. **Ordem das
+  recusas por entrada (corrigido na Fase 2):** D2, D3, depois por entrada D5 → D6 → D4 (D4 vale **depois** de `Q.qtd`;
+  D5 também para `item_id` não numérico), e só com todas válidas D7.
+- **RN-02b (o 409 no meio do laço — Fase 2, importante 3)** — legado com **dois** itens com caixa num status pré-separação
+  cancelável pelos outros módulos (escritor de legado, como a 97); gancho depois do **primeiro** claim cancela a requisição
+  pela rota dos outros módulos (`PUT /api/requisicoes-material/:id/cancelar`, fora da trava por requisição) → a devolução
+  responde **409 D409**; o item 1 fica devolvido **com** a linha de `devolucoes_caixa_requisicao` e a auditoria; o item 2
+  intacto (separado e trilha).
 - **RN-03 (o status)** — *Em Separação* com resto na caixa: fica. *Em Separação* esvaziada sem entrega: fica (*vazia*;
   fila SEPARAR; separar 4 de novo → 200). *Pronta para Retirada*: devolver 1 → **200** e o status vira *Em Separação*
   (devolver tudo também); entregar o resto → 200. *Parcialmente Atendida*: fica; encerrar → 200. Legado pré-separação
@@ -267,7 +277,10 @@ Fase 0 (`montarCaixa`): S pede 4, aprova, entra 4, ALMOX separa 4.
 - **RN-04 (a conferência)** — crítico separado por ALMOX, conferido por ALMOX2; ALMOX2 devolve 1 → 200 e
   `conferido_por_id` NULL; entregar 3 → 400 literal C3 da 28; ALMOX (separou) confere → 403; ALMOX2 (devolveu) confere →
   **200**; entregar 3 → 200. Em *Parcialmente Atendida* com crítico na caixa: devolver limpa a conferência e a fila
-  mostra REABRIR_SEPARACAO. A auditoria leva a conferência apagada em `dados_anteriores` (molde da rodada).
+  **inclui** REABRIR_SEPARACAO (`etapas.includes('REABRIR_SEPARACAO')` — a fila traz também SEPARAR, medido; corrigido
+  na Fase 2). **A saída (Fase 2, bloqueante 1):** `PUT /separar` com `itens_separados: []` → *Em Separação* (sem rodada)
+  → ALMOX2 confere → 200 → entrega 1 → 200 (sonda `e98rv-a.js` A); na tela, o botão novo da T4 *"Separar de novo para
+  conferir"*. A auditoria leva a conferência apagada em `dados_anteriores` (molde da rodada).
 - **RN-05 (a reserva não muda)** — montagem **com** reserva (4): devolver 4 → 200; reserva ativa continua 4; caixa sem
   reserva 0; a resposta traz `reserva_do_item: 4` por item; `PERDA` 4 → 400 *"Saldo insuficiente. Disponível: 0 PC"*;
   ALMOX libera a reserva → `PERDA` 4 → **201**; fila oferecia SEPARAR antes da liberação.
@@ -287,8 +300,12 @@ Fase 0 (`montarCaixa`): S pede 4, aprova, entra 4, ALMOX separa 4.
   perdido → devolver 4 → *Em Separação* vazia → `PERDA` 4 → 201. Legado da A48 (caixa 4, físico 0): devolver 4 → a A48
   esvazia.
 - **RN-10 (as travas)** — a devolução roda sob `serializarNaRequisicao` → `comTravaDaRequisicao` (ordem requisição →
-  material): (a) com a entrega da mesma requisição parada por gancho depois de ler a caixa, a devolução **espera** e lê o
-  estado novo (devolver o que a entrega levou → 400 D7); (b) com a trava do material presa, a `PERDA` avulsa espera a
+  material): (a) ~~com a entrega da mesma requisição parada por gancho~~ **(corrigido na Fase 2: a entrega também segura a
+  trava por material, então o controle não sabia falhar)** com o **liberar para retirada** da mesma requisição (só a trava
+  por requisição, `routes/almoxarifado.js:~3852`) parado por gancho **depois de contar os separados** (`:~3876`), a
+  devolução de 4 **espera**; o liberar grava *Pronta*; a devolução lê *Pronta*, devolve → 200 `status: 'EM_SEPARACAO'` —
+  **nunca** *Pronta para Retirada* com caixa 0 (a corrida real: o liberar contou, a devolução esvaziou, o liberar gravou
+  *Pronta* vazia — a guarda dele é a marca de rodada, e a devolução não grava rodada); (b) com a trava do material presa, a `PERDA` avulsa espera a
   devolução e passa depois (a caixa caiu); (c) a separação de **outra** requisição do mesmo material espera a devolução e,
   depois, separa o que a devolução soltou (teto da 95). Cada caso 0/10 rodadas com estado errado.
 - **RN-11 (o sufixo)** — a montagem e uma `SAIDA` avulsa de 4 → 400 M1 + **S98** (literal inteira); sem caixa, a recusa
@@ -297,7 +314,10 @@ Fase 0 (`montarCaixa`): S pede 4, aprova, entra 4, ALMOX separa 4.
   `entregavel` 0); o detalhe `quantidade_entregavel` 0; entregar 1 → 400 **E190** (literal inteira, *antes* de qualquer
   baixa — nenhuma movimentação, nada consumido da reserva); ALMOX libera 1 da reserva → entregar 3 → 200. Bloqueio 4 →
   E190 com *"4 PC bloqueados"*. Sem bloqueio → a entrega de hoje (byte a byte). Com `permite_saldo_negativo` → o de hoje
-  (o motor passa). A A49 acha a requisição antes da liberação e não acha depois.
+  (o motor passa). A A49 acha a requisição antes da liberação e não acha depois. **Sem reserva no item (Fase 2,
+  bloqueante 2):** físico 6; R2 aprovada sem saldo separa 2 (sem reserva); R1 pede 4 e a aprovação reserva 4; ADMIN
+  bloqueia 3 → 200; R2: fila AGUARDANDO_SALDO, detalhe `quantidade_entregavel` **0** (hoje −1), entregar 1 → 400 **E190
+  na forma sem reserva**; ALMOX libera a reserva de R1 → R2 entrega 2 → 200; a A49 acha R2 antes e não acha depois.
 
 ---
 
@@ -312,10 +332,13 @@ Fase 0 (`montarCaixa`): S pede 4, aprova, entra 4, ALMOX separa 4.
   `serializarNaRequisicao(id, () => comTravaDaRequisicao(db, id, () => devolverSemTrava(...)))`. Exportado; a rota só
   chama o serviço (`.then(res.json)`, `.catch(e.status || 500, { error })`).
 - **Ordem, dentro das travas:** (1) `user.id` (D-1); (2) lê a requisição ativa (D0) e o status em `STATUS_COM_CAIXA` (D1);
-  (3) motivo (D2), itens (D3–D6), quantidades contra a caixa de cada item (D7) — **todas** antes da primeira escrita;
+  (3) motivo (D2), itens (D3), por entrada D5 → D6 → D4 (D4 depois de `Q.qtd`; D5 também para `item_id` não numérico),
+  e por fim as quantidades contra a caixa de cada item (D7) — **todas** antes da primeira escrita (ordem corrigida na Fase 2);
   (4) por item, o claim `UPDATE itens_requisicao_almoxarifado SET quantidade_separada = Q.qtdSql('quantidade_separada - ?')
   WHERE id = ? AND requisicao_id = ? AND Q.qtd(separado − entregue) >= ? − folga AND EXISTS (requisição ativa em
-  STATUS_COM_CAIXA)`; sem linha → 409 D409 (os itens anteriores ficam devolvidos **com** a trilha deles); (5) origem/lote
+  STATUS_COM_CAIXA)`; sem linha → **(corrigido na Fase 2)** sai do laço, roda (5)–(9) **para os itens já escritos** ((6)
+  é compare-and-set: só age se ainda *Pronta*) e **só então** lança o 409 D409 (molde da B444: a trilha antes do 409) —
+  antes o texto prometia a trilha dos anteriores mas a ordem (8) depois do laço a perdia (RN-02b); (5) origem/lote
   nulos no item cuja caixa zerou; (6) `PRONTA_PARA_RETIRADA → EM_SEPARACAO` por compare-and-set (`WHERE id=? AND
   status='PRONTA_PARA_RETIRADA'`); (7) compare-and-clear da conferência (3 tentativas, molde `:1077`; sem conferência,
   nada); (8) as linhas de `devolucoes_caixa_requisicao`; (9) auditoria best-effort.
@@ -354,7 +377,10 @@ CREATE INDEX IF NOT EXISTS idx_devolucoes_caixa_req ON devolucoes_caixa_requisic
 
 Em `schema.js`, logo depois de `substituicoes_origem_requisicao`. Append-only: nenhum `UPDATE`/`DELETE` no código.
 `requisitionService.listarDevolucoesCaixa(db, requisicaoId)` (com `material_codigo`, os códigos de localização/lote
-planejados) e o detalhe devolve `devolucoes_caixa` (aditivo — nenhum campo existente muda).
+planejados) e o detalhe devolve `devolucoes_caixa` (aditivo — nenhum campo existente muda). **A linha, congelada (Fase 2,
+importante 7)** — em ordem de `id`: `{ id, item_id, material_id, material_codigo, quantidade, separado_antes,
+separado_depois, entregue, localizacao_planejada_codigo, lote_planejado_codigo, motivo, status_antes, status_depois,
+conferencia_limpa, usuario_id, usuario_nome, created_at }` (`conferencia_limpa` booleano; quantidades em `Q.qtd`).
 
 ### A máquina (T0)
 
@@ -373,16 +399,25 @@ outra seta. `STATUS_COM_CAIXA`, `PODE_SEPARAR`, `PODE_ENTREGAR` não mudam.
   `permiteNegativo ? disp + r : (disp < −folga ? 0 : disp + r)`; `disponivelDoMaterial` = o disponível do motor **sem** a
   reserva do item (`saldoDisponivelParaItem.disponivel − reservado_para_item`; na fila `saldo_disponivel −
   reservado_para_item`; no detalhe `estoque − reservaItem`). O resultado entra onde hoje entra o `estoque` de
-  `maxEntregar` (prévia e laço da entrega, `normalizarItem`) e o `saldo_disponivel` do `entregavel` da fila. As consultas
+  `maxEntregar` (prévia e laço da entrega, `normalizarItem`) e o `saldo_disponivel` do `entregavel` da fila.
+  **(Fase 2, menores)** No detalhe, `entregavelPeloMotor` substitui **só o argumento** `estoque` de
+  `maxEntregar(item, estoque, teto)` (`requisitionService.js:~101`) — `teto` (separável) e `saldo_atual` ficam
+  intactos. E a T3 **não** monta a subtração do disponível à mão (`quantidade_atual − reservada − …`): usa o disponível
+  que as consultas já trazem pelo `disponivelSql` (o `saldoEmTerceiros.api.test.js` varre o código-fonte e cai). As consultas
   passam a trazer `ma.permite_saldo_negativo` e as retenções (`quantidade_bloqueada`, `quantidade_em_inspecao`,
   `quantidade_em_terceiros`).
 - **E190** (prévia da entrega, quando o disponível do material é negativo e o pedido > 0): a literal de hoje (`⟨material⟩:
   não é possível entregar ⟨q⟩ ⟨un⟩. Máximo: 0 (pendente: ⟨p⟩, disponível: 0)`) + o sufixo `` — o disponível de
   ⟨material⟩ está negativo (⟨partes⟩): nada dele sai pela entrega até liberar da reserva desta requisição o que está
-  retido, ou desbloquear`` — ⟨partes⟩ = as retenções > 0 na ordem *"⟨b⟩ ⟨un⟩ bloqueados"*, *"⟨i⟩ ⟨un⟩ em inspeção"*,
+  retido, ou desbloquear`` (**com reserva do item > 0**) — ⟨partes⟩ = as retenções > 0 na ordem *"⟨b⟩ ⟨un⟩ bloqueados"*, *"⟨i⟩ ⟨un⟩ em inspeção"*,
   *"⟨t⟩ ⟨un⟩ em terceiros"*, separadas por vírgula; sem retenção > 0 (reserva maior que o físico, legado) ⟨partes⟩ =
   *"reservado além do físico"* e o fim *"…até liberar da reserva desta requisição o que passa do físico"*. Sem o disponível
   negativo: byte a byte a literal de hoje.
+- **E190, forma sem reserva no item (corrigido na Fase 2, bloqueante 2)** — com `reserva do item` = 0 o fim manda a um
+  gesto que existe: `` — o disponível de ⟨material⟩ está negativo (⟨partes⟩): nada dele sai pela entrega até liberar
+  reserva deste material (de outra requisição) ou desbloquear``; sem retenção > 0, ⟨partes⟩ = *"reservado além do
+  físico"* e o fim ``…até liberar reserva deste material (de outra requisição)``. Sem esta forma, o almoxarife de R2
+  (sonda `e98rv-a.js` B) era mandado liberar "a reserva desta requisição", que não existe.
 - O motor **não muda** (o claim `:1830` continua a regra; a 98 só faz a prévia, a fila e o detalhe dizerem a mesma coisa).
 
 ### O que não muda
@@ -421,13 +456,18 @@ o contrato congelado (mock só na fronteira HTTP) — pode rodar em paralelo com
   a seta. **Controles:** (s1) sem o `CREATE` → cai "a tabela existe"; (s2) sem a seta → cai `validarTransicao`. **Medir
   sem edição:** `test:api` inteiro (os testes que leem `TRANSICOES` — `alcadaValorDepoisDaSeparacao` `:340`, `:484`;
   cliente `RequisicoesReabrirSeparacao` (e), `ReservasAlmoxarifado` `:363` — iteram as chaves, não as setas de *Pronta*).
-- [ ] **T1 (tronco) — o gesto: serviço e rota (B502, B503, B505, B506, B511).** Contrato da rota, D-1…D409.
+- [ ] **T1 (tronco) — o gesto: serviço e rota (B502, B503, B505, B506, B511).** Contrato da rota, D-1…D409. **(Fase 2)**
+  Acrescenta `{ rotulo: 'Devolução à prateleira', verbos: ['DEVOLUCAO_CAIXA'] }` em `services/almoxarifado/auditLabels.js`
+  (~:156, junto dos verbos da Etapa 28) — sem ele cai `auditLabels.api.test.js` (`:216-237`, "TODO verbo gravavel tem
+  rotulo"). **RN-02b** pela rota.
   **RN-01, RN-02, RN-03, RN-04, RN-05, RN-06, RN-07** pela rota **e** RN-01/RN-02 pelo serviço; **RN-08**; **RN-10** (a), (b),
   (c) pelo serviço. **Vermelho antes:** todos (a rota e o serviço não existem — 404 do Express / `TypeError`). **Controles:**
   (s1) o claim sem `separado − entregue >= q` → cai RN-02 "acima da caixa, inclusive o já entregue" (o separado fica
   menor que o entregue); (s2) sem a seta/compare-and-set da *Pronta* → cai RN-03 *Pronta*; (s3) sem o compare-and-clear →
   cai RN-04 "entregar 3 → 400"; (s4) validar item a item **dentro** do laço de escrita → cai RN-02 "o primeiro também
-  intacto"; (s5) sem `serializarNaRequisicao` → cai RN-10 (a) (gancho: a devolução escreve no meio da entrega); (s6) sem
+  intacto"; (s5) sem `serializarNaRequisicao` → cai RN-10 (a) (**corrigido na Fase 2:** gancho no **liberar para
+  retirada**, que só segura a trava por requisição — com a entrega o controle não sabia falhar, porque ela segura também a
+  trava por material); (s5b, Fase 2) o 409 lançado no claim **antes** de (5)–(9) → cai RN-02b "item 1 com trilha"; (s6) sem
   `comTravaDaRequisicao` → cai RN-10 (c); (s7) origem nula sempre → cai RN-06 "parcial mantém LA"; (s8) gate
   removido → cai RN-08 "S → 403" (trocar por `movimentar` **não** serve de controle: `movimentar` tem os mesmos dois perfis,
   `permissions.js:25` — o teste passaria com o gate trocado; medido na Fase 1). **Guardas (passam antes, provam que nada vizinho muda):** a
@@ -447,7 +487,10 @@ o contrato congelado (mock só na fronteira HTTP) — pode rodar em paralelo com
   negativo e esperar a recusa do motor, registrar e ajustar só a literal (nunca a regra).
 - [ ] **T4 (galho, cliente — paralelo com T2/T3) — a tela.** No detalhe da requisição em modo almoxarifado, na linha do item
   com caixa > 0 e status em `STATUS_COM_CAIXA` (lista importada de `requisicaoLabels.js`, conferida contra o servidor por
-  teste — molde RN-07 da 92): botão **"Devolver à prateleira"** (`bloquearSeNaoPode('separar_emitir', e)` antes de abrir).
+  teste — molde RN-07 da 92; **corrigido na Fase 2:** o teste de paridade é do **servidor**,
+  `server/tests/api/devolverListaTelaRota.api.test.js` no molde de `cancelarListaTelaRota.api.test.js` — lê o arquivo do
+  cliente, extrai `export const STATUS_COM_CAIXA` de `requisicaoLabels.js`, compara **como conjunto** com o do
+  `requisitionStateMachine` e confere 9 status): botão **"Devolver à prateleira"** (`bloquearSeNaoPode('separar_emitir', e)` antes de abrir).
   Modal **"Devolver à prateleira — ⟨material⟩"**: *"Na caixa: ⟨c⟩ ⟨un⟩"*; campo **Quantidade** (padrão = a caixa, máx. a
   caixa, `step="any"`); campo **Motivo (obrigatório)**; texto fixo *"O material volta para a prateleira de onde foi
   separado — não há movimentação de estoque. Se quebrou ou se perdeu, dê a baixa (Perda) depois."*; com
@@ -457,7 +500,11 @@ o contrato congelado (mock só na fronteira HTTP) — pode rodar em paralelo com
   Sucesso: toast *"Devolvido à prateleira"* e recarrega o detalhe; erro: o `error` do servidor no toast. Bloco
   **"Devolvido à prateleira"** no histórico do detalhe (lê `devolucoes_caixa`: data, usuário, material, quantidade, motivo).
   O *title* do "Ajustar Separação" passa a *"Separa mais quantidade — para tirar da caixa, use Devolver à prateleira no
-  item"* (o **rótulo** não muda: três testes o clicam). Testes jest (`RequisicoesDevolverPrateleira.test.js`) com mock na
+  item"* (o **rótulo** não muda: três testes o clicam). **(Fase 2, bloqueante 1)** Em *Parcialmente Atendida* com
+  `conferencia_obrigatoria && !conferencia`, botão **"Separar de novo para conferir"** (`bloquearSeNaoPode('separar_emitir',
+  e)`) que chama `PUT /almoxarifado/requisicoes/:id/separar` com `{ itens_separados: [] }` e recarrega o detalhe (vira
+  *Em Separação*, onde o "Conferir separação" já existe) — hoje a tela de *Parcialmente Atendida* só tem "Completar
+  Entrega" (cai no C3) e "Encerrar"; teste jest próprio (aparece só nessa condição; o PUT leva `itens_separados: []`). Testes jest (`RequisicoesDevolverPrateleira.test.js`) com mock na
   fronteira HTTP: o botão aparece/não aparece por status e caixa; o PUT leva o body do contrato; os três avisos
   condicionais; o 400 do servidor vira toast; o histórico renderiza. **Controles:** (s1) sem o filtro de caixa > 0 → cai
   "não aparece sem caixa"; (s2) sem o motivo obrigatório → cai "Devolver desabilitado"; (s3) a lista de status local
@@ -467,17 +514,23 @@ o contrato congelado (mock só na fronteira HTTP) — pode rodar em paralelo com
   "quebrou") → *Em Separação*; `PERDA` 2 → 201; ALMOX entrega 2 → *Parcialmente Atendida*; nova `ENTRADA` 2; ALMOX separa
   2; ALMOX entrega 2 → *Entregue*; a trilha tem 1 devolução, o livro 1 `PERDA` e 2 `SAIDA`; a A48 vazia em
   cada passo. **C2 crítico pela rota:** separa (ALMOX), confere (ALMOX2), ALMOX2 devolve 1 → conferência limpa → entrega
-  400 C3 → ALMOX2 confere → entrega 3 → 200. **C3 com reserva pela rota:** devolve 4 → `PERDA` 400 → ALMOX libera a reserva
+  400 C3 → ALMOX2 confere → entrega 3 → 200. **C2b (Fase 2, bloqueante 1) crítico em *Parcialmente Atendida* pela
+  rota:** separa 4, ALMOX2 confere, entrega 2, devolve 1 → fila inclui REABRIR_SEPARACAO, entrega 1 → 400 C3; `PUT
+  /separar` com `[]` → *Em Separação*; ALMOX2 confere → 200; entrega 1 → 200. **C3 com reserva pela rota:** devolve 4 → `PERDA` 400 → ALMOX libera a reserva
   → `PERDA` 201 → a requisição *Em Separação* vazia na fila (AGUARDANDO_SALDO). **C4 o C190 pela rota:** reserva 4 cobre a
   caixa; bloqueia 1; fila AGUARDANDO_SALDO; entrega 400 E190; libera 1 da reserva; entrega 3 → 200; a A49 acha antes e
   não acha depois. **C5 pelo serviço** (`requisitionService.devolverSeparado` e `entregarRequisicao` direto, sem `app`):
-  a RN-10 (a) com gancho 0/10 e a devolução dentro de uma seção que já segura o material **não** espera a si mesma (a
-  composição das travas). **Controles:** (s1) desfazer a seta (T0) → cai C1 no passo *Pronta*; (s2) desfazer o
+  a RN-10 (a) com gancho **no liberar para retirada** 0/10 (corrigido na Fase 2) e ~~a devolução dentro de uma seção que
+  já segura o material **não** espera a si mesma~~ **(corrigido na Fase 2: impossível — `comLockDosMateriais` não é
+  reentrante, nenhum chamador entra nela de dentro de uma seção)** um espião prova que a devolução pega
+  `travaPorMaterial.comLockDoMaterial` **uma vez por material** e **não** chama `registrarMovimentacao` (não move estoque). **Controles:** (s1) desfazer a seta (T0) → cai C1 no passo *Pronta*; (s2) desfazer o
   compare-and-clear (T1) → cai C2; (s3) desfazer T3 → cai C4 (fila); (s4) desfazer T2 → cai C1 no primeiro `PERDA`
   (literal). Cada asserção de recusa com a literal **inteira**.
 - [ ] **T6 — fechamento (skill `fechar-etapa`).** Novidades (B502–B511, C193–C198, A49; B497 e C189 anotados como
   resolvidos; C190 **corrigido à vista** — "prende em *Máximo: 0* sem nomear" estava incompleto: com bloqueio parcial a
-  prévia anunciava 3 e o motor recusava tudo; C188 e a leitura da A46/A48 ganham "ou devolva à prateleira"), specs **05**
+  prévia anunciava 3 e o motor recusava tudo; C188 e a leitura da A46/A48 ganham "ou devolva à prateleira"; **(Fase 2)**
+  o **C174** marcado resolvido e o *"não há gesto de devolver da caixa"* da spec 05 (`:559-561`) corrigido **dizendo que
+  a spec estava desatualizada**; a barreira "quem separou não confere" anotada junto da C198 e no guia), specs **05**
   (o gesto; a seta; a conferência), **04** (o status *Pronta* → *Em Separação*; o detalhe com `devolucoes_caixa`),
   **07** (a reserva não muda na devolução; o C190 e a liberação como saída), **09** (o C190 visto da qualidade), **23**
   (a ação `separar_emitir` cobre a devolução), o mapa; guia do usuário (Antes → Agora: *"quebrou na caixa? só o
@@ -494,7 +547,7 @@ Cada porta certa sozinha não prova o documento: a devolução muda a caixa que 
 o último gesto (separar → liberar → tentar a baixa → **devolver** → baixar → entregar o resto → separar de novo →
 entregar → *Entregue*) e cruza T0 (seta), T1 (gesto), T2 (literal que manda devolver) e T3 (entrega que diz a verdade).
 A RN-10 depende de **fiação** (as duas travas compostas): só o cenário pela rota **e** pelo serviço prova que a devolução
-espera a entrega e não espera a si mesma.
+espera o liberar para retirada (trava por requisição) e pega a trava de cada material uma vez (corrigido na Fase 2).
 
 ---
 
@@ -514,7 +567,9 @@ espera a entrega e não espera a si mesma.
   "Iniciar Separação", reabre *Parcialmente Atendida* para *Em Separação* — s2 Q4) e aceita **fração** de material com
   série (s4b b), que a entrega depois recusa — a devolução da 98 é a saída desta.
 - **C198** — quem devolve **pode** conferir a caixa (B505 (ii)); a barreira "quem separou não confere" continua por
-  rodada de separação.
+  rodada de separação. **(Fase 2)** Consequência a registrar também no guia: numa equipe de **dois** almoxarifes em que
+  **os dois** separaram rodadas da mesma requisição com crítico, **ninguém** confere (a barreira barra os dois) — o
+  terceiro (outro almoxarife ou o administrador) confere. Pré-existente (28), não criada pela 98.
 
 ---
 
@@ -535,7 +590,8 @@ espera a entrega e não espera a si mesma.
 **A49 — requisições com material na caixa que a entrega não consegue tirar (o C190).** Itens com caixa > 0 em *Em
 Separação*, *Pronta para Retirada* ou *Parcialmente Atendida* cujo material (sem `permite_saldo_negativo`) tem o
 disponível do motor negativo — hoje a fila mostra *Entregar* e a entrega recusa qualquer quantidade. Medida na s5 (acha
-X, não acha Y nem Z; vazia depois da liberação).
+X, não acha Y nem Z; vazia depois da liberação). **(corrigido na Fase 2)** Também acha a caixa **sem** reserva no item
+quando a reserva de outra requisição ocupa o físico (sonda `e98rv-a.js` B: R2 achada, disponível −1).
 
 ```sql
 SELECT rq.numero, rq.status, ma.codigo,
@@ -555,7 +611,8 @@ WHERE COALESCE(rq.ativo, 1) = 1
 ORDER BY rq.numero, ma.codigo;
 ```
 
-Saída por linha: liberar da reserva da requisição o que está retido (ALMOXARIFE/ADMINISTRADOR), ou desbloquear. A lista
+Saída por linha: liberar reserva **deste material** — da própria requisição se o item tiver reserva, senão de **outra**
+requisição do material (corrigido na Fase 2) — (ALMOXARIFE/ADMINISTRADOR), ou desbloquear. A lista
 de status é `PODE_ENTREGAR` (`requisitionStateMachine.js:99`) — mudou lá, muda aqui. Opcional: nada roda sozinho.
 
 ---
@@ -589,7 +646,96 @@ de status é `PODE_ENTREGAR` (`requisitionStateMachine.js:99`) — mudou lá, mu
 
 ---
 
-## Próximo passo: Fase 2
+## Fase 2 — revisão do plano (2026-10-09): 2 bloqueantes, 5 importantes, 6 menores → plano revisto (vale sobre o texto acima)
+
+Revisor fresco (plano + specs 04/05/07/09/23 + plano da 97), com sondas executadas no scratchpad: `e98rv-a.js` (harness
+`e98-h.js`; protótipo do gesto como a s3, sem mexer no código). Cada achado foi conferido contra o código pelo fio
+principal no HEAD `d1679eaa`: `client/src/components/almoxarifado/RequisicoesList.js` `:~930-942`
+(`handleCompletarEntrega`), `:~1734-1760` (botões de *Em Separação*; "Conferir separação" só lá), `:~1824-1846`
+(*Parcialmente Atendida*: só "Completar Entrega"/"Encerrar"); `requisitionService.js` `:793` e `:1191` (separar e
+entregar: as duas travas), `:994-998` (a reivindicação da separação vazia → *Em Separação*), `:~101` (`maxEntregar`
+no detalhe); `routes/almoxarifado.js` `:~3852` (liberar: **só** a trava por requisição) e `:~3876` (conta os
+separados); `routes/requisicoesMaterial.js:359` (cancelar pelos outros módulos: sem trava, sem olhar a caixa);
+`travaPorMaterial.js:166`; `auditLabels.js:~156`; `auditLabels.api.test.js:216-237`;
+`cancelarListaTelaRota.api.test.js` (molde da paridade); `requisicaoLabels.js` (sem `STATUS_COM_CAIXA` hoje);
+`requisitionStateMachine.js:109` (`STATUS_COM_CAIXA`, 9 status). Os pontos afetados acima estão marcados **"(corrigido
+na Fase 2)"** ou **"(Fase 2, …)"**. Nenhuma letra nova; **E190** ganha a forma sem reserva.
+
+Resultado da sonda (rodada de novo pelo fio principal): `e98rv-a: 2/4 ERRADO, 2 CERTO` — os dois ERRADO são do
+**detector** (esperado escrito à mão a mais: a fila traz `["SEPARAR","REABRIR_SEPARACAO"]` e não só o segundo; o
+bloqueio responde 200 e não 201); a medida sustenta os dois bloqueantes.
+
+**Bloqueantes**
+
+1. **B-1 — a conferência limpa em *Parcialmente Atendida* fica sem saída na tela (reproduzido, A).** Crítico separado
+   por ALMOX, conferido por ALMOX2, entregue 2 → *Parcialmente Atendida*; devolver 1 limpa a conferência (B505); a fila
+   inclui `REABRIR_SEPARACAO`; entrega 1 → 400 C3. A tela de *Parcialmente Atendida* só oferece "Completar Entrega" (que
+   cai no C3) e "Encerrar"; "Conferir separação" só aparece em *Em Separação*. Pela API a saída existe: `PUT /separar`
+   com `[]` → *Em Separação* → ALMOX2 confere 200 → entrega 1 200. **Escolhido (a):** a T4 ganha, em *Parcialmente
+   Atendida* com `conferencia_obrigatoria && !conferencia`, o botão *"Separar de novo para conferir"* (`PUT /separar` com
+   `itens_separados: []`); teste jest e o passo C2b na T5. **Descartado (b):** mudar o status na devolução (a
+   *Parcialmente Atendida* devolvida viraria *Em Separação*) — mexe na B504 e faz o "Encerrar" sumir para quem só quer
+   encerrar.
+2. **B-2 — a E190 e a A49 mandam liberar a reserva "desta" requisição, mas o C190 existe sem reserva no item
+   (reproduzido, B).** Físico 6; R2 aprovada sem saldo separa 2 (caixa sem reserva); R1 pede 4 e a aprovação reserva 4;
+   ADMIN bloqueia 3 → 200 (a guarda da B496 não conta o reservado); R2: fila AGUARDANDO_SALDO, detalhe
+   `quantidade_entregavel` **−1**, entrega 1 → 400 *"Máximo: -1 (pendente: 2, disponível: -1)"*; a A49 acha R2. A saída
+   é liberar a reserva de **R1** (200) → R2 entrega 2 → 200 — R2 não tem reserva a liberar. **Escolhido:** o fim da E190
+   ramifica pela reserva do item (com reserva > 0: o texto de antes; sem: *"…até liberar reserva deste material (de outra
+   requisição) ou desbloquear"*, literal fixada no contrato); a A49 generalizada; cenário novo na RN-12; a linha C190-4
+   da s4 corrigida **dizendo que estava incompleta**. O `entregavelPeloMotor` da T3 já leva o −1 do detalhe a 0.
+
+**Importantes**
+
+3. **I-1 — o 409 no meio do laço perdia a trilha e a limpeza.** O contrato prometia "os itens anteriores ficam devolvidos
+   **com** a trilha", mas a ordem punha (5)–(9) depois do laço: o claim que falha no item 2 lançava com o item 1 já
+   escrito, sem linha de `devolucoes_caixa_requisicao`, sem auditoria e sem limpar a conferência. **Escolhido:** no claim
+   que falha, sair do laço, rodar (5)–(9) para os itens já escritos e só então lançar o D409 (molde da B444). O (6)
+   entra junto porque é compare-and-set (só age se ainda *Pronta*) — o pedido do fio principal listava (5)(7)(8)(9); com
+   o (6) a *Pronta* cuja caixa mudou não fica atestada (B504). **RN-02b** nova; controle (s5b).
+4. **I-2 — o controle (s5) da T1 não sabia falhar.** A entrega segura também a trava por material
+   (`comTravaDaRequisicao`), então tirar `serializarNaRequisicao` da devolução ainda a serializava com a entrega. **A
+   corrida real:** o **liberar para retirada** segura só a trava por requisição; ele conta os separados (`:~3876`), a
+   devolução esvazia, o liberar grava *Pronta* vazia (a guarda dele é a marca de **rodada**, e a devolução não grava
+   rodada). **Escolhido:** RN-10 (a), (s5) e a C5 da T5 usam o liberar parado por gancho.
+5. **I-3 — o segundo cenário da C5 era impossível.** "A devolução dentro de uma seção que já segura o material não espera
+   a si mesma": `comLockDosMateriais` não é reentrante e nenhum chamador a chama de dentro de uma seção. **Escolhido:** um
+   espião prova `comLockDoMaterial` uma vez por material e nenhum `registrarMovimentacao`.
+6. **I-4 — o verbo novo sem rótulo derruba a suíte.** `auditLabels.api.test.js` (`:216-237`) exige rótulo para todo verbo
+   gravável. **Escolhido:** a T1 acrescenta `{ rotulo: 'Devolução à prateleira', verbos: ['DEVOLUCAO_CAIXA'] }` em
+   `auditLabels.js` (~:156).
+7. **I-5 — a linha da trilha e a paridade não estavam congeladas.** **Escolhido:** a linha de `devolucoes_caixa` fica
+   `{ id, item_id, material_id, material_codigo, quantidade, separado_antes, separado_depois, entregue,
+   localizacao_planejada_codigo, lote_planejado_codigo, motivo, status_antes, status_depois, conferencia_limpa, usuario_id,
+   usuario_nome, created_at }`; a paridade `STATUS_COM_CAIXA` é teste do **servidor** no molde de
+   `cancelarListaTelaRota.api.test.js` (lê o arquivo do cliente; nome `STATUS_COM_CAIXA` em `requisicaoLabels.js`;
+   compara como conjunto; 9 status). Descartado: teste jest com a lista do servidor copiada (o CRA não importa de fora de
+   `src/` — seria a mesma lista escrita duas vezes).
+
+**Menores**
+
+1. Ordem das recusas: D2, D3, e por entrada D5 → D6 → D4 → (todas válidas) D7; D4 vale **depois** de `Q.qtd` (0,0000001
+   arredonda a 0 → D4); D5 também para `item_id` não numérico.
+2. RN-04 usa `includes('REABRIR_SEPARACAO')` — a fila traz também `SEPARAR` (medido).
+3. Na T3, `entregavelPeloMotor` substitui **só** o argumento `estoque` de `maxEntregar` (`requisitionService.js:~101`);
+   `teto` e `saldo_atual` intactos (o separável do detalhe não muda).
+4. A T3 não monta a subtração do disponível à mão: o `saldoEmTerceiros.api.test.js` varre o código-fonte.
+5. A T6 marca resolvidos o **C174** e o *"não há gesto de devolver da caixa"* da spec 05 (`:559-561`), dizendo que a spec
+   estava desatualizada.
+6. A barreira "quem separou não confere" com equipe de dois que separaram → ninguém confere: registrada junto da C198 e
+   no guia (pré-existente, 28).
+
+**Os pontos que o "Próximo passo" pediu:** (a) a seta `PRONTA → EM_SEPARACAO` — nenhum leitor achado que trate *Em
+Separação* como "nunca liberada" além do que a T0 mede (`test:api` inteiro); (b) o compare-and-clear fora de *Em
+Separação* — **criava** a CONFERENCIA_SEM_SAIDA na tela (B-1); (c) o `EXISTS` do status — vira o 409 da RN-02b (I-1);
+(d) a E190 e o `maxEntregar` — menor 3 e B-2; (e) o espelho do cliente — I-5.
+
+---
+
+## Próximo passo
+
+**Fase 2 feita (seção acima). Próximo: Fase 3 — T0, depois T1, conforme o plano revisto.** O texto abaixo é o pedido
+que foi feito à Fase 2 (histórico).
 
 Um agente **fresco** (sem este contexto) com este plano, as specs 04, 05, 07, 09 e 23, o plano da 97 (régua, sufixo, trava
 no motor) e as quatro perguntas da skill: (1) os contratos cobrem os casos de erro com literal? (2) as RN batem com as
