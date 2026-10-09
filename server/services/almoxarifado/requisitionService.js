@@ -1179,9 +1179,16 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
  * Mantido no parâmetro só para não quebrar as duas rotas que ainda o passam
  * (routes/almoxarifado.js, routes/requisicoesMaterial.js).
  */
+// Etapa 95 (Fase 5): a entrega tambem pega, POR DENTRO da trava por requisicao, a trava por MATERIAL dos itens
+// (`comTravaDaRequisicao`), na mesma ordem da separacao (requisicao -> material). Desde a B477 a segunda rodada le o
+// teto (o fisico menos a caixa sem reserva dos outros) para decidir quanto sai — e a separacao de OUTRA requisicao do
+// mesmo material le o mesmo livre. So com a trava por requisicao, as duas liam juntas e passavam (10/10 sem gancho:
+// R2 entregava 4 e R1 separava os mesmos 4, ficando com a caixa fantasma e presa). Sem reentrancia: o corpo so chama o
+// motor (`registrarMovimentacao` adia o alerta para depois da secao) e `verificarBloqueioLiberacao`, que nao travam.
+// Descartado: travar so o ramo da segunda rodada — a primeira tambem baixa o fisico que a separacao alheia le.
 function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertService) {
   return travaPorRequisicao.serializarNaRequisicao(requisicaoId,
-    () => entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertService));
+    () => comTravaDaRequisicao(db, requisicaoId, () => entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertService)));
 }
 
 async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertService) { // eslint-disable-line no-unused-vars
