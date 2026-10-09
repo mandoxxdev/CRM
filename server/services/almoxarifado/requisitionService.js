@@ -899,6 +899,9 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
   const tocados = []; // [{ item_id, material_id, quantidade }]
   let rodadaId = null;
   let conferenciaAnterior = null;
+  // Etapa 93 (T2, B444): o status que a requisicao tinha quando o compare-and-clear perdeu por STATUS (um
+  // escritor fora da trava por requisicao a tirou de EM_SEPARACAO depois da rodada). null = nao saiu.
+  let statusMudou = null;
   // Etapa 92 (Fase 2, RN-09): gravacao que falha depois da reivindicacao, SEM rodada inserida, devolve o
   // status lido — senao a requisicao ficava presa em EM_SEPARACAO e quem pediu perdia o Cancelar (e, de
   // PARCIALMENTE_ATENDIDA, o Encerrar). Com a rodada gravada nao devolve: EM_SEPARACAO e o estado certo.
@@ -953,8 +956,13 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
       // UPDATE, `changes` vem 0, relê-se e repete-se. Antes, a "releitura imediatamente antes do
       // UPDATE" era só uma janela menor — a conferência que entrasse nela era apagada com
       // `dados_anteriores: null`, e a mutação "usar o reqRow inicial" não derrubava teste nenhum.
+      // Etapa 93 (T2, B444): o compare-and-clear tambem confere o STATUS. Antes regravava EM_SEPARACAO por
+      // cima de quem tirou a requisicao dali no meio da rodada (excluida, liberada, entregue: Fase 0 1a/1b/1c,
+      // 5/5). A condicao nova vai DEPOIS de `conferido_por_id IS ?` — o teste RN-09 (c) da 92 casa o WHERE por
+      // regex nessa ordem. Perdeu por status -> nao regrava o status, limpa a conferencia mesmo assim (D3 da 28:
+      // a rodada nova nao herda a conferencia da velha), W3, e o 409 X1 sai DEPOIS da trilha da rodada.
       let limpou = false;
-      for (let tentativa = 0; tentativa < 3 && !limpou; tentativa++) {
+      for (let tentativa = 0; tentativa < 3 && !limpou && !statusMudou; tentativa++) {
         // eslint-disable-next-line no-await-in-loop
         const conf = await dbGet(db,
           'SELECT conferido_por_id, conferido_por_nome, conferido_em FROM requisicoes_almoxarifado WHERE id = ?',
@@ -967,11 +975,22 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
           `UPDATE requisicoes_almoxarifado
              SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL,
                  conferido_por_id=NULL, conferido_por_nome=NULL, conferido_em=NULL
-           WHERE id=? AND conferido_por_id IS ?`,
+           WHERE id=? AND conferido_por_id IS ? AND status='EM_SEPARACAO'`,
           [requisicaoId, conferenciaAnterior ? conferenciaAnterior.usuario_id : null]);
         limpou = upd.changes > 0;
+        if (!limpou) {
+          // eslint-disable-next-line no-await-in-loop
+          const agora = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
+          if (agora && agora.status !== 'EM_SEPARACAO') {
+            statusMudou = agora.status;
+            // eslint-disable-next-line no-await-in-loop
+            await dbRun(db, `UPDATE requisicoes_almoxarifado
+                SET conferido_por_id=NULL, conferido_por_nome=NULL, conferido_em=NULL WHERE id=?`, [requisicaoId]);
+            console.warn(`[almoxarifado-separacao] Requisicao ${requisicaoId}: saiu de EM_SEPARACAO (agora ${statusMudou}) depois da rodada ${rodadaId}; conferencia limpa, status nao regravado`);
+          }
+        }
       }
-      if (!limpou) {
+      if (!limpou && !statusMudou) {
         // Três corridas seguidas na MESMA linha: o estado seguro (limpa) prevalece sobre o rastro —
         // a última conferência a entrar fica fora de dados_anteriores, e isso fica avisado.
         console.warn(`[almoxarifado-separacao] Requisição ${requisicaoId}: a conferência mudou 3 vezes durante a rodada ${rodadaId}; limpando sem compare.`);
@@ -979,7 +998,7 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
           `UPDATE requisicoes_almoxarifado
              SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL,
                  conferido_por_id=NULL, conferido_por_nome=NULL, conferido_em=NULL
-           WHERE id=?`,
+           WHERE id=? AND status='EM_SEPARACAO'`,
           [requisicaoId]);
       }
     }
@@ -1025,6 +1044,14 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
     } catch (e) {
       console.warn(`[almoxarifado-separacao] Falha ao auditar a rodada ${rodadaId} da requisição ${requisicaoId}: ${e.message}`);
     }
+  }
+
+  // Etapa 93 (T2, B444): 409 e nao 200 — o 200 diria status EM_SEPARACAO (mentira) e a tela mostraria
+  // "Separacao registrada!"; o 409 vira toast. Depois da trilha: a rodada existe e e append-only.
+  if (statusMudou) {
+    const err = new Error(`A requisição mudou de status durante a separação (agora ${statusMudou}); a rodada ficou registrada — confira a caixa antes de separar de novo.`);
+    err.status = 409;
+    throw err;
   }
 
   return {

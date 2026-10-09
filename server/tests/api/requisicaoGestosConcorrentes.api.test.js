@@ -612,6 +612,101 @@ const esperarFila = async (R, ms = 3000) => {
     afirmarFila(g);
   });
 
+  // ════════════════════════════════════════════════════════════════════════════════════════════════
+  // RN-08 (T2..T5): cada porta confere o status lido. Escritor FORA da trava, simulado por SQL direto no
+  // gancho (aguardavel: nao pega trava) — com a trava, nenhum gesto alcanca estes caminhos.
+  // `armarEscritor(re, escrever, vezes)`: nas `vezes` primeiras emissoes do SQL que casa `re`, roda
+  // `escrever()` (SQL direto, sem passar pelo gancho) e so entao emite o comando retido. `g.emitidos` conta
+  // TODAS as emissoes que casam, `g.sqls` guarda o texto.
+  const raw = (sql, params = []) => new Promise((ok, ko) => origRun(sql, params, function (e) { return e ? ko(e) : ok(this); }));
+  const armarEscritor = (re, escrever, vezes = 1) => {
+    const g = { re, escrever, escritor: true, vezes, disparos: 0, emitidos: 0, sqls: [] };
+    ganchos.push(g); return g;
+  };
+  // (o laco do gancho acima so conhece `armado`; o escritor tem o seu proprio despacho)
+  const runComGancho = db.run;
+  db.run = function (sql, ...rest) {
+    const s = String(sql);
+    for (const g of ganchos) {
+      if (g.escritor && g.re.test(s)) {
+        g.emitidos++; g.sqls.push(s);
+        if (g.disparos < g.vezes) {
+          g.disparos++;
+          const n = g.disparos;
+          Promise.resolve().then(() => g.escrever(n)).catch((e) => { g.erro = e; })
+            .then(() => origRun(sql, ...rest));
+          return this;
+        }
+      }
+    }
+    return runComGancho.call(this, sql, ...rest);
+  };
+  const capturar = (nivel) => {
+    const orig = console[nivel]; const linhas = [];
+    console[nivel] = (...a) => { linhas.push(a.map(String).join(' ')); };
+    return { linhas, restaurar: () => { console[nivel] = orig; } };
+  };
+  const trilhaDe = (R, acao) => dbAll(db, `SELECT usuario_id, dados_anteriores, dados_novos FROM auditoria_log_almoxarifado
+    WHERE entidade = 'requisicao' AND entidade_id = ? AND acao = ? ORDER BY id`, [R, acao]);
+
+  // ── RN-08 (a)(a') — o compare-and-clear da separacao (T2, B444) ──
+  const X1 = (st) => `A requisição mudou de status durante a separação (agora ${st}); a rodada ficou registrada — confira a caixa antes de separar de novo.`;
+  const W3 = (R, st, rod) => `[almoxarifado-separacao] Requisicao ${R}: saiu de EM_SEPARACAO (agora ${st}) depois da rodada ${rod}; conferencia limpa, status nao regravado`;
+
+  await test('[93 RN-08] (a) separacao: no compare-and-clear um escritor fora da trava poe PRONTA_PARA_RETIRADA -> 409 X1; rodada e separado gravados; status NAO regravado; conferencia limpa; trilha SEPARACAO da rodada; W3 1 vez; CAC emitido 1 vez com AND status', async () => {
+    desarmar();
+    const x = await montar({ critico: true });
+    // rodada 1 (ALMOX) conferida por ALMOX2: ha conferencia previa a limpar
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 1)).status, 200);
+    const cf = await conferir('ALMOX2', x.R);
+    assert.strictEqual(cf.status, 200, JSON.stringify(cf.body));
+    assert.strictEqual(Number((await foto(x)).conferido), USERS.ALMOX2.id, 'premissa: conferida');
+    const g = armarEscritor(RE.CAC, () => raw("UPDATE requisicoes_almoxarifado SET status = 'PRONTA_PARA_RETIRADA' WHERE id = ?", [x.R]));
+    const w = capturar('warn');
+    let sep;
+    try { sep = await comPrazo(separar('ALMOX', x.R, x.item, 1), 8000, 'separacao'); } finally { w.restaurar(); desarmar(); }
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(g.disparos, 1, `o escritor disparou ${g.disparos} vez(es)`);
+    assert.strictEqual(sep.status, 409, `separacao: ${sep.status} ${JSON.stringify(sep.body)}`);
+    assert.strictEqual(sep.body.error, X1('PRONTA_PARA_RETIRADA'));
+    const f = await foto(x);
+    assert.strictEqual(f.rodadas.length, 2, 'a rodada 2 ficou gravada (append-only)');
+    assert.strictEqual(Number(f.rodadas[1].usuario_id), USERS.ALMOX.id);
+    assert.strictEqual(f.sep, 2, 'quantidade_separada gravada');
+    assert.strictEqual(f.status, 'PRONTA_PARA_RETIRADA', `status ${f.status} (o compare-and-clear regravou EM_SEPARACAO)`);
+    assert.strictEqual(f.conferido, null, `conferido_por_id ${f.conferido} (a conferencia da rodada velha ficou)`);
+    const ts = await trilhaDe(x.R, 'SEPARACAO');
+    assert.strictEqual(ts.length, 2, `trilha SEPARACAO ${ts.length}`);
+    assert.strictEqual(JSON.parse(ts[1].dados_novos).rodada_id, f.rodadas[1].id, 'a trilha e da rodada 2');
+    const w3 = w.linhas.filter((l) => l === W3(x.R, 'PRONTA_PARA_RETIRADA', f.rodadas[1].id));
+    assert.strictEqual(w3.length, 1, `W3 ${w3.length} vez(es): ${JSON.stringify(w.linhas)}`);
+    assert.strictEqual(g.emitidos, 1, `CAC emitido ${g.emitidos} vez(es)`);
+    assert.ok(/conferido_por_id\s+IS\s+\?\s+AND\s+status\s*=\s*'EM_SEPARACAO'/.test(g.sqls[0]), `o CAC sem AND status: ${g.sqls[0]}`);
+  });
+
+  await test("[93 RN-08] (a') separacao: no compare-and-clear o escritor so troca a CONFERENCIA (status continua EM_SEPARACAO) -> o laco de hoje: 200, conferencia anterior em dados_anteriores, limpa", async () => {
+    desarmar();
+    const x = await montar();
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 1)).status, 200);
+    const g = armarEscritor(RE.CAC, () => raw(`UPDATE requisicoes_almoxarifado SET conferido_por_id = ?, conferido_por_nome = ?,
+      conferido_em = CURRENT_TIMESTAMP WHERE id = ?`, [USERS.ALMOX2.id, USERS.ALMOX2.nome, x.R]));
+    const sep = await comPrazo(separar('ALMOX', x.R, x.item, 1), 8000, 'separacao');
+    desarmar();
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(g.disparos, 1);
+    assert.strictEqual(sep.status, 200, `separacao: ${sep.status} ${JSON.stringify(sep.body)}`);
+    assert.strictEqual(sep.body.status, 'EM_SEPARACAO');
+    assert.strictEqual(g.emitidos, 2, `CAC emitido ${g.emitidos} vez(es) — perdeu pela conferencia, releu e limpou`);
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'EM_SEPARACAO');
+    assert.strictEqual(f.conferido, null);
+    const ts = await trilhaDe(x.R, 'SEPARACAO');
+    assert.strictEqual(ts.length, 2);
+    const ant = JSON.parse(ts[1].dados_anteriores || 'null');
+    assert.ok(ant && ant.conferencia, `dados_anteriores ${ts[1].dados_anteriores}`);
+    assert.strictEqual(Number(ant.conferencia.usuario_id), USERS.ALMOX2.id);
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed ? 1 : 0);
