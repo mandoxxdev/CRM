@@ -1,6 +1,6 @@
 # Etapa 93 — dois gestos na mesma requisição ao mesmo tempo: separar, liberar, entregar, excluir e encerrar não passam um por cima do outro (D (92), feature 04 com a 05 e a 07)
 
-> Status: **Fases 0, 1 e 2 feitas (2026-10-09) — plano revisto, nenhuma task executada.** Próximo: **T0**. A Fase 2
+> Status: **EM EXECUÇÃO (2026-10-09) — T0 `fa4ae85c` e T1 `034076ff` feitas** (seção "Execução" no fim). Próximo: **T2**. A Fase 2 (`ed48dc13`)
 > (1 bloqueante, 4 importantes, 6 menores) está em "Fase 2 — revisão do plano" no fim e **vale sobre o texto acima**;
 > os pontos afetados estão marcados **"(corrigido na Fase 2)"** ou **"(Fase 2)"**.
 > HEAD de partida: `7f45ecef` (main, árvore limpa, sem push).
@@ -489,7 +489,7 @@ principal**: T2, T4 e T5 editam `requisitionService.js`, T3 e T5 editam o mesmo 
 produção nos controles com a suíte batendo no mesmo SQLite (G84). Nenhum galho em paralelo nesta etapa (não há task de
 cliente). Executores **não** marcam este plano; o fio principal marca.
 
-- [ ] **T0 (tronco) — a trava por requisição nas três portas do serviço.** Contrato "Módulo" e "As portas" (separar,
+- [x] `fa4ae85c` **T0 (tronco) — a trava por requisição nas três portas do serviço.** Contrato "Módulo" e "As portas" (separar,
   entregar, excluir). Teste novo `server/tests/api/requisicaoGestosConcorrentes.api.test.js`: **RN-01**, **RN-03**,
   **RN-04**, **RN-05**, **RN-06**, **RN-07 (a)**, **RN-09** (a)–(d). **Vermelho antes:** RN-01 (a) (5/5 `ativo=0`
   `EM_SEPARACAO`), RN-01 (b), RN-03 (a)(b)(c), RN-04 (a)(b)(c), RN-05 (a)(b), RN-06, RN-07 (a) — e, antes do módulo existir, todas
@@ -516,7 +516,7 @@ cliente). Executores **não** marcam este plano; o fio principal marca.
   a rota do almoxarifado auditar com ele — **RN-01 (c)**; controle (s7) a rota volta a usar o `antes` lido fora → cai
   RN-01 (c) (`TOTALMENTE_RESERVADA`). **(Fase 2, M5)** o cabeçalho do módulo novo diz que
   `requisitionService.comTravaDaRequisicao` é a trava por material.
-- [ ] **T1 (galho de T0) — a trava na liberação e no encerramento.** Contrato "As portas" (rotas). Acrescenta ao
+- [x] `034076ff` **T1 (galho de T0) — a trava na liberação e no encerramento.** Contrato "As portas" (rotas). Acrescenta ao
   `requisicaoGestosConcorrentes`: **RN-02** (a)–(d) e **RN-07 (b)**. **Vermelho antes:** RN-02 (a)(b)(c)(d), RN-07 (b) —
   todos 5/5 na Fase 0. **Medir:** os 6 de liberar e os 8 de encerrar. **Controles:** (s1) liberar sem a trava → caem
   RN-02 (b)(c)(d) (gancho no `UPDATE` da liberação); RN-02 (a) **também cai** (a liberação disparada no CAC não espera a
@@ -765,3 +765,23 @@ caixa?; e a **ordem de travas**: algum caminho das cinco portas chama, hoje, có
 (`liberarReservasDaRequisicao` na exclusão e no encerramento → recálculo da 76 → `comLockDoMaterial`)? Se sim, a ordem
 requisição → material tem de estar escrita e nenhum caminho da trava por material pode chegar às cinco portas — conferir
 por leitura **e** por sonda. Corrigir o plano e só então a T0.
+
+## Execução (2026-10-09)
+
+Baseline: `test:api` 325/325 (3818), `test:almoxarifado` 44/0. Depois da T0: 326/326 (3837); depois da T1: 326/326
+(3842), 44/0, `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 5/0.
+
+- **T0 `fa4ae85c`** — `travaPorRequisicao.js` (fila por requisição; exporta também `requisicoesTravadas()`, só
+  diagnóstico do teste — **fora do contrato**, divergência); separar, entregar e excluir dentro dela; a exclusão devolve o
+  status lido dentro da trava (propriedade fora do JSON) e a rota audita com ele (I2). `[92 RN-09] (d)` reescrito (B1).
+  Teste novo `requisicaoGestosConcorrentes.api.test.js`; a asserção "entrou na fila" no fim de cada caso, para que sem a
+  trava o caso caia no desfecho. Vermelho antes: 16/19 (os sem gancho 10/10 cada: 2 entregues para 4 saídas; estorno 8);
+  RN-09 (a)–(c) passaram antes (guardas). Controles: s1 → 15 no desfecho; s2 (entrega sem trava) → RN-03, RN-05 (a)(b),
+  RN-06, RN-07 (a); s3 (exclusão sem trava) → RN-01 (a)(b)(c), RN-04 (a)(b)(c), RN-05 (a)(b) — **divergência:** s2/s3
+  derrubam todo par em que a porta participa, não só os listados; s4 (chave não normalizada) → RN-03 (d) e RN-09 (d)
+  — **divergência:** o plano previa RN-05/RN-06 pela rota × serviço, que nenhum caso cruzava; criado o RN-03 (d) (rota +
+  serviço com id numérico); s5 (sem `finally`) → RN-09 (b) por prazo; s6 (técnica da 92) → RN-03 (a)(b)(d) por deadlock;
+  s7 (rota lendo fora da trava) → RN-01 (c) (trilha `TOTALMENTE_RESERVADA`); s8 (sem `NOT EXISTS`) → `[92 RN-09] (d)`.
+- **T1 `034076ff`** — corpo de liberar e encerrar dentro da trava (o 403 do encerrar fica fora, para não esperar a fila
+  para recusar). Vermelho antes: RN-02 (a)–(d) e RN-07 (b), no desfecho. Controles: s1 → as quatro RN-02; s2 → RN-07 (b);
+  s3 só declarado, como o plano diz.
