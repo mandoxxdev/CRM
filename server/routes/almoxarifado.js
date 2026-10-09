@@ -26,6 +26,9 @@ const { disponivelSql } = require('../services/almoxarifado/availabilitySql');
 const { valorEstoqueSql, custoUnitarioSql } = require('../services/almoxarifado/custoSql');
 const requisitionCreateService = require('../services/almoxarifado/requisitionCreateService');
 const requisitionStateMachine = require('../services/almoxarifado/requisitionStateMachine');
+// Etapa 93 (T1, B443): a trava POR REQUISICAO (nao e a por material) — liberar e encerrar seguram a mesma que
+// separar/entregar/excluir (no servico). Nao reentrante: nada daqui chama aquelas tres por dentro.
+const travaPorRequisicao = require('../services/almoxarifado/travaPorRequisicao');
 const valueApprovalService = require('../services/almoxarifado/requisitionValueApprovalService');
 const approvalRulesService = require('../services/almoxarifado/approvalRulesService');
 const { TIPOS_URGENCIA, TIPOS_LOCALIZACAO } = require('../services/almoxarifado/schema');
@@ -3784,44 +3787,49 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // (EM_SEPARACAO -> PRONTA_PARA_RETIRADA), exige ao menos 1 item com quantidade separada.
   app.put('/api/almoxarifado/requisicoes/:id/liberar-retirada', requireSepararEmitir, async (req, res) => {
     try {
-      const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
-      if (!reqRow) return res.status(404).json({ error: 'Requisição não encontrada' });
+      // Etapa 93 (T1, B443): da leitura a trilha dentro da trava por requisicao — uma entrega, exclusao ou rodada
+      // nova da mesma requisicao espera e le PRONTA_PARA_RETIRADA (antes: a 3c liberava a rodada 2 de critico
+      // sem conferencia e prendia a requisicao com a reserva).
+      await travaPorRequisicao.serializarNaRequisicao(req.params.id, async () => {
+        const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+        if (!reqRow) return res.status(404).json({ error: 'Requisição não encontrada' });
 
-      const check = requisitionStateMachine.validarTransicao(reqRow.status, 'PRONTA_PARA_RETIRADA');
-      if (!check.ok) return res.status(400).json({ error: check.erro });
+        const check = requisitionStateMachine.validarTransicao(reqRow.status, 'PRONTA_PARA_RETIRADA');
+        if (!check.ok) return res.status(400).json({ error: check.erro });
 
-      const separados = await dbGet(db,
-        `SELECT COUNT(*) as n FROM itens_requisicao_almoxarifado WHERE requisicao_id = ? AND quantidade_separada > 0`,
-        [req.params.id]);
-      if (!separados || separados.n === 0) {
-        return res.status(400).json({ error: 'Nenhum item separado' });
-      }
+        const separados = await dbGet(db,
+          `SELECT COUNT(*) as n FROM itens_requisicao_almoxarifado WHERE requisicao_id = ? AND quantidade_separada > 0`,
+          [req.params.id]);
+        if (!separados || separados.n === 0) {
+          return res.status(400).json({ error: 'Nenhum item separado' });
+        }
 
-      // Etapa 28 (RN-06): material crítico SEPARADO exige a segunda conferência antes de sair. A
-      // mesma função guarda a outra saída (entregarRequisicao) — a entrega sai direto de
-      // EM_SEPARACAO, então a barreira só aqui seria opcional.
-      const itens = await requisitionService.carregarItensRequisicao(db, req.params.id);
-      requisitionService.assertConferidaSeObrigatorio(reqRow, itens);
+        // Etapa 28 (RN-06): material crítico SEPARADO exige a segunda conferência antes de sair. A
+        // mesma função guarda a outra saída (entregarRequisicao) — a entrega sai direto de
+        // EM_SEPARACAO, então a barreira só aqui seria opcional.
+        const itens = await requisitionService.carregarItensRequisicao(db, req.params.id);
+        requisitionService.assertConferidaSeObrigatorio(reqRow, itens);
 
-      await dbRun(db,
-        `UPDATE requisicoes_almoxarifado SET status='PRONTA_PARA_RETIRADA', updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-        [req.params.id]);
+        await dbRun(db,
+          `UPDATE requisicoes_almoxarifado SET status='PRONTA_PARA_RETIRADA', updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+          [req.params.id]);
 
-      // Etapa 28 (RN-08, D4): a liberação passa a auditar — pós-escrita, best-effort, como o resto
-      // do módulo (Etapa 19: falha de log não derruba o ato). `audit.registrarAuditoria` (namespace)
-      // para ser alcançável por stub, como as chamadas novas desde a Etapa 18.
-      try {
-        await audit.registrarAuditoria(db, {
-          entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'LIBERACAO_RETIRADA',
-          usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
-          dados_anteriores: { status: reqRow.status },
-          dados_novos: { status: 'PRONTA_PARA_RETIRADA', conferido_por_id: reqRow.conferido_por_id ?? null },
-        });
-      } catch (e) {
-        console.warn(`[almoxarifado-liberacao] Falha ao auditar a liberação da requisição ${req.params.id}: ${e.message}`);
-      }
+        // Etapa 28 (RN-08, D4): a liberação passa a auditar — pós-escrita, best-effort, como o resto
+        // do módulo (Etapa 19: falha de log não derruba o ato). `audit.registrarAuditoria` (namespace)
+        // para ser alcançável por stub, como as chamadas novas desde a Etapa 18.
+        try {
+          await audit.registrarAuditoria(db, {
+            entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'LIBERACAO_RETIRADA',
+            usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+            dados_anteriores: { status: reqRow.status },
+            dados_novos: { status: 'PRONTA_PARA_RETIRADA', conferido_por_id: reqRow.conferido_por_id ?? null },
+          });
+        } catch (e) {
+          console.warn(`[almoxarifado-liberacao] Falha ao auditar a liberação da requisição ${req.params.id}: ${e.message}`);
+        }
 
-      res.json({ success: true, status: 'PRONTA_PARA_RETIRADA' });
+        res.json({ success: true, status: 'PRONTA_PARA_RETIRADA' });
+      });
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
     }
@@ -3915,35 +3923,39 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         return res.status(403).json({ error: 'Sem permissão para encerrar requisições' });
       }
 
-      const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
-      if (!reqRow) return res.status(404).json({ error: 'Requisição não encontrada' });
+      // Etapa 93 (T1, B443): o 403 fica FORA (nao espera a fila para recusar); da leitura a trilha, dentro da trava
+      // por requisicao — a entrega em curso termina antes (antes: a 7a devolvia a encerrada a PARCIALMENTE_ATENDIDA).
+      await travaPorRequisicao.serializarNaRequisicao(req.params.id, async () => {
+        const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+        if (!reqRow) return res.status(404).json({ error: 'Requisição não encontrada' });
 
-      const check = requisitionStateMachine.validarTransicao(reqRow.status, 'ENCERRADA');
-      if (!check.ok) return res.status(400).json({ error: check.erro });
+        const check = requisitionStateMachine.validarTransicao(reqRow.status, 'ENCERRADA');
+        if (!check.ok) return res.status(400).json({ error: check.erro });
 
-      const { motivo } = req.body;
+        const { motivo } = req.body;
 
-      await dbRun(db,
-        `UPDATE requisicoes_almoxarifado SET status='ENCERRADA', encerrado_por=?, encerrado_em=CURRENT_TIMESTAMP,
-         updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-        [req.user.id, req.params.id]);
+        await dbRun(db,
+          `UPDATE requisicoes_almoxarifado SET status='ENCERRADA', encerrado_por=?, encerrado_em=CURRENT_TIMESTAMP,
+           updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+          [req.user.id, req.params.id]);
 
-      // Etapa 74 (T3, Fase 2): ENCERRADA e terminal ("nenhuma entrega futura") — o hold que sobrou (da aprovacao ou
-      // da chegada) volta ao disponivel. Best-effort, o molde do cancelamento: o encerramento ja aconteceu.
-      try {
-        await reservationService.liberarReservasDaRequisicao(db, req.user, req.params.id, 'Requisição encerrada',
-          { motivoMovimentacao: 'Liberação por encerramento de requisição' });
-      } catch (relErr) {
-        console.warn('[almoxarifado] Liberação de reservas no encerramento:', relErr.message);
-      }
+        // Etapa 74 (T3, Fase 2): ENCERRADA e terminal ("nenhuma entrega futura") — o hold que sobrou (da aprovacao ou
+        // da chegada) volta ao disponivel. Best-effort, o molde do cancelamento: o encerramento ja aconteceu.
+        try {
+          await reservationService.liberarReservasDaRequisicao(db, req.user, req.params.id, 'Requisição encerrada',
+            { motivoMovimentacao: 'Liberação por encerramento de requisição' });
+        } catch (relErr) {
+          console.warn('[almoxarifado] Liberação de reservas no encerramento:', relErr.message);
+        }
 
-      await registrarAuditoria(db, {
-        entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'ENCERRAMENTO',
-        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
-        justificativa: motivo || null, dados_novos: { status: 'ENCERRADA' },
+        await registrarAuditoria(db, {
+          entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'ENCERRAMENTO',
+          usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+          justificativa: motivo || null, dados_novos: { status: 'ENCERRADA' },
+        });
+
+        res.json({ success: true, status: 'ENCERRADA' });
       });
-
-      res.json({ success: true, status: 'ENCERRADA' });
     } catch (e) {
       res.status(e.status || 500).json({ error: e.message });
     }

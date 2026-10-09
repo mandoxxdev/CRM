@@ -17,7 +17,7 @@
  * `esperandoNaRequisicao(R) === 1` — "o segundo entrou na fila" — e so entao emite o comando retido. Afirmar
  * a fila e o que prova a serializacao.
  *
- * RN-01, RN-03..RN-07 (a) e RN-09. A T1 acrescenta RN-02 e RN-07 (b) NO FIM; a T2..T5 a RN-08.
+ * RN-01, RN-03..RN-07 (a) e RN-09 (T0); RN-02 e RN-07 (b) no fim (T1); a T2..T5 acrescentam a RN-08.
  * Plano: docs/superpowers/plans/2026-10-09-almoxarifado-etapa93-gestos-concorrentes-mesma-requisicao.md
  *
  * Executar: cd server && node tests/api/requisicaoGestosConcorrentes.api.test.js
@@ -507,6 +507,109 @@ const esperarFila = async (R, ms = 3000) => {
     await assert.rejects(trava.serializarNaRequisicao(k, async () => { throw new Error('x93'); }), /x93/);
     assert.strictEqual(await trava.serializarNaRequisicao(k, async () => 'depois'), 'depois');
     assert.ok(!trava.requisicoesTravadas().includes(k));
+  });
+
+  // ════════════════════════════════════════════════════════════════════════════════════════════════
+  // T1 (B443/B449): liberar para retirada e encerrar seguram a mesma trava, nas rotas.
+  const RE_LIB = /SET\s+status\s*=\s*'PRONTA_PARA_RETIRADA'/;
+  const liberar = (k, R) => como(k).put(`${API}/requisicoes/${R}/liberar-retirada`);
+  const encerrar = (k, R) => como(k).put(`${API}/requisicoes/${R}/encerrar`, {});
+  const ordemDe = (acoes, lista) => acoes.filter((a) => lista.includes(a)).join(',');
+
+  // ── RN-02 — liberar x separacao, entrega, exclusao ──
+  await test('[93 RN-02] (a) (1b) no compare-and-clear da rodada 2 (EM_SEPARACAO), liberar (ALMOX2) espera: separacao 200; liberar 200 depois; PRONTA_PARA_RETIRADA, trilha SEPARACAO,SEPARACAO,LIBERACAO_RETIRADA', async () => {
+    desarmar();
+    const x = await montar();
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 2)).status, 200);
+    const g = armarFila(RE.CAC, x.R, () => liberar('ALMOX2', x.R));
+    const sep = await separar('ALMOX', x.R, x.item, 1);
+    await afirmarSerializado(g);
+    desarmar();
+    assert.strictEqual(sep.status, 200, `separacao: ${sep.status} ${JSON.stringify(sep.body)}`);
+    assert.strictEqual(g.resposta.status, 200, `liberar: ${g.resposta.status} ${JSON.stringify(g.resposta.body)}`);
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'PRONTA_PARA_RETIRADA', `status ${f.status} (a liberacao sumiu sob a rodada)`);
+    assert.strictEqual(ordemDe(f.acoes, ['SEPARACAO', 'LIBERACAO_RETIRADA']), 'SEPARACAO,SEPARACAO,LIBERACAO_RETIRADA');
+    const lib = f.trilha.find((t) => t.acao === 'LIBERACAO_RETIRADA');
+    assert.strictEqual(Number(lib.usuario_id), USERS.ALMOX2.id, 'a liberacao e de ALMOX2');
+    afirmarFila(g);
+  });
+
+  await test('[93 RN-02] (b) (3a) pede 1, separado 1; no UPDATE da liberacao, a entrega de tudo espera: liberar 200; entrega 200 ENTREGUE depois; final ENTREGUE, reserva CONSUMIDA', async () => {
+    desarmar();
+    const x = await montar({ pede: 1 });
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 1)).status, 200);
+    const g = armarFila(RE_LIB, x.R, () => entregar('ALMOX2', x.R, x.item, 1));
+    const lib = await liberar('ALMOX', x.R);
+    await afirmarSerializado(g);
+    desarmar();
+    assert.strictEqual(lib.status, 200, `liberar: ${lib.status} ${JSON.stringify(lib.body)}`);
+    assert.strictEqual(g.resposta.status, 200, `entrega: ${g.resposta.status} ${JSON.stringify(g.resposta.body)}`);
+    assert.strictEqual(g.resposta.body.status, 'ENTREGUE');
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'ENTREGUE', `status ${f.status} (presa em PRONTA com tudo entregue)`);
+    assert.strictEqual(f.reserva, 'CONSUMIDA');
+    afirmarFila(g);
+  });
+
+  await test('[93 RN-02] (c) (3b) no UPDATE da liberacao, a exclusao espera: liberar 200; exclusao 200 depois; CANCELADO, ativo=0', async () => {
+    desarmar();
+    const x = await montar();
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 2)).status, 200);
+    const g = armarFila(RE_LIB, x.R, () => excluir('ADMIN', x.R));
+    const lib = await liberar('ALMOX', x.R);
+    await afirmarSerializado(g);
+    desarmar();
+    assert.strictEqual(lib.status, 200, `liberar: ${lib.status} ${JSON.stringify(lib.body)}`);
+    assert.strictEqual(g.resposta.status, 200, `exclusao: ${g.resposta.status} ${JSON.stringify(g.resposta.body)}`);
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'CANCELADO', `status ${f.status} ativo ${f.ativo}`);
+    assert.strictEqual(f.ativo, 0);
+    assert.strictEqual(ordemDe(f.acoes, ['LIBERACAO_RETIRADA', 'EXCLUSAO']), 'LIBERACAO_RETIRADA,EXCLUSAO');
+    afirmarFila(g);
+  });
+
+  await test('[93 RN-02] (d) (3c) critico: rodada 1 de ALMOX conferida por ALMOX2; no UPDATE da liberacao, a rodada 2 espera: liberar 200; separacao 400 S1; PRONTA, conferido ALMOX2, separado 1, 1 rodada', async () => {
+    desarmar();
+    const x = await montar({ critico: true });
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 1)).status, 200);
+    const cf = await conferir('ALMOX2', x.R);
+    assert.strictEqual(cf.status, 200, JSON.stringify(cf.body));
+    const g = armarFila(RE_LIB, x.R, () => separar('ALMOX', x.R, x.item, 1));
+    const lib = await liberar('ALMOX2', x.R);
+    await afirmarSerializado(g);
+    desarmar();
+    assert.strictEqual(lib.status, 200, `liberar: ${lib.status} ${JSON.stringify(lib.body)}`);
+    assert.strictEqual(g.resposta.status, 400, `rodada 2: ${g.resposta.status} ${JSON.stringify(g.resposta.body)}`);
+    assert.strictEqual(g.resposta.body.error, S1);
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'PRONTA_PARA_RETIRADA');
+    assert.strictEqual(Number(f.conferido), USERS.ALMOX2.id, `conferido_por_id ${f.conferido} (rodada nao conferida liberada)`);
+    assert.strictEqual(f.sep, 1);
+    assert.strictEqual(f.rodadas.length, 1);
+    afirmarFila(g);
+  });
+
+  // ── RN-07 (b) — entrega x encerrar (7a, C160) ──
+  await test('[93 RN-07] (b) (7a) de PARCIALMENTE_ATENDIDA, no UPDATE final da entrega (1), encerrar (ADMIN) espera: entrega 200; encerrar 200 depois; ENCERRADA, reserva LIBERADA', async () => {
+    desarmar();
+    const x = await montar();
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 4)).status, 200);
+    const e0 = await entregar('ALMOX', x.R, x.item, 1);
+    assert.strictEqual(e0.body.status, 'PARCIALMENTE_ATENDIDA', JSON.stringify(e0.body));
+    const g = armarFila(RE.ENT, x.R, () => encerrar('ADMIN', x.R));
+    const ent = await entregar('ALMOX', x.R, x.item, 1);
+    await afirmarSerializado(g);
+    desarmar();
+    assert.strictEqual(ent.status, 200, `entrega: ${ent.status} ${JSON.stringify(ent.body)}`);
+    assert.strictEqual(g.resposta.status, 200, `encerrar: ${g.resposta.status} ${JSON.stringify(g.resposta.body)}`);
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'ENCERRADA', `status ${f.status} (a encerrada voltou a aberta)`);
+    assert.strictEqual(f.reserva, 'LIBERADA');
+    assert.strictEqual(f.ent, 2);
+    const enc = f.trilha.find((t) => t.acao === 'ENCERRAMENTO');
+    assert.ok(enc, 'trilha ENCERRAMENTO'); assert.strictEqual(Number(enc.usuario_id), USERS.ADMIN.id);
+    afirmarFila(g);
   });
 
   terminou = true;
