@@ -102,8 +102,13 @@ function permiteNegativoSql(alias) {
 
 /**
  * Etapa 98 (T3, E190): a recusa da entrega quando o disponivel do material esta negativo nomeia as retencoes e a
- * saida medida (s4e da Fase 0): com reserva no item, liberar da reserva desta requisicao o que esta retido, ou
- * desbloquear; sem reserva no item (Fase 2, B-2), liberar a reserva deste material de OUTRA requisicao, ou desbloquear.
+ * saida medida (s4e da Fase 0): quando a reserva do item cobre o deficit, liberar da reserva desta requisicao o que esta
+ * retido, ou desbloquear; senao (sem reserva no item — Fase 2, B-2 — ou com reserva que nao cobre), liberar OUTRA
+ * reserva deste material, ou desbloquear.
+ * Fase 5 (revisor 1): "cobre" e reserva do item + disponivel do material > folga. Liberar x da propria reserva soma x ao
+ * disponivel e tira x da reserva — o entregavel (disp + r, com disp >= 0) nao muda; so destrava quando sobra reserva
+ * depois de zerar o deficit (e98rv1-a S2: reserva 1, disponivel -1 — R1 liberava a propria, continuava presa e perdia a
+ * prioridade). "Outra reserva" e nao "(de outra requisição)": a reserva que ocupa o fisico pode ser MANUAL (e98rv1-b B1).
  * Sem retencao > 0 (reserva maior que o fisico, legado) a parte e "reservado alem do fisico". Le a linha de
  * `saldoDisponivelParaItem`; fora do caso (disponivel nao negativo, ou o motor permite) devolve '' — a recusa fica
  * byte a byte a de antes.
@@ -113,15 +118,15 @@ function sufixoDisponivelNegativo(nomeMaterial, unidade, saldo) {
   const qu = (q) => [Q.qtd(q), unidade].filter((x) => x !== undefined && x !== null && x !== '').join(' ');
   const partes = [[saldo.bloqueada, 'bloqueados'], [saldo.em_inspecao, 'em inspeção'], [saldo.em_terceiros, 'em terceiros']]
     .filter(([q]) => num(q) > Q.QTD_FOLGA).map(([q, rotulo]) => `${qu(num(q))} ${rotulo}`);
-  const comReserva = num(saldo.reservado_para_item) > Q.QTD_FOLGA;
+  const destaRequisicao = num(saldo.reservado_para_item) + num(saldo.disponivel_material) > Q.QTD_FOLGA; // Fase 5
   const inicio = ` — o disponível de ${nomeMaterial} está negativo`;
   if (!partes.length) {
     return `${inicio} (reservado além do físico): nada dele sai pela entrega até `
-      + (comReserva ? 'liberar da reserva desta requisição o que passa do físico' : 'liberar reserva deste material (de outra requisição)');
+      + (destaRequisicao ? 'liberar da reserva desta requisição o que passa do físico' : 'liberar outra reserva deste material');
   }
   return `${inicio} (${partes.join(', ')}): nada dele sai pela entrega até `
-    + (comReserva ? 'liberar da reserva desta requisição o que está retido, ou desbloquear'
-      : 'liberar reserva deste material (de outra requisição) ou desbloquear');
+    + (destaRequisicao ? 'liberar da reserva desta requisição o que está retido, ou desbloquear'
+      : 'liberar outra reserva deste material ou desbloquear');
 }
 
 /** Etapa 95 (T0b, B477): o teto do item para a entrega, a partir da leitura fresca de saldoDisponivelParaItem. */

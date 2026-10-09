@@ -74,8 +74,9 @@ const R403 = (rodada) => `Quem separou não confere: você registrou a rodada de
 const BASE = (nome, q, p) => `${nome}: não é possível entregar ${q} PC. Máximo: 0 (pendente: ${p}, disponível: 0)`;
 const E190_COM = (nome, partes) => ` — o disponível de ${nome} está negativo (${partes}): nada dele sai pela entrega até `
   + 'liberar da reserva desta requisição o que está retido, ou desbloquear';
-const E190_SEM = (nome, partes) => ` — o disponível de ${nome} está negativo (${partes}): nada dele sai pela entrega até `
-  + 'liberar reserva deste material (de outra requisição) ou desbloquear';
+// Fase 5: a forma sem reserva (ou com reserva que nao cobre o deficit) diz "outra reserva" — pode ser MANUAL.
+const E190_OUTRA = (nome, partes) => ` — o disponível de ${nome} está negativo (${partes}): nada dele sai pela entrega até `
+  + 'liberar outra reserva deste material ou desbloquear';
 
 // A48 (97) e A49 (98): o texto dos planos, sem mudanca — e o que vai para producao.
 const A48 = `SELECT ma.id AS material_id, ma.codigo,
@@ -422,7 +423,7 @@ ORDER BY rq.numero, ma.codigo;`;
     assert.strictEqual((await detalhe(r2.R)).itens[0].quantidade_entregavel, 0);
     assert.strictEqual((await a49(r2.numero)).length, 1, 'a A49 acha R2');
     const nome = await nomeDe(m);
-    recusou(await entregar(r2.R, [[r2.ids[0], 1]]), 400, BASE(nome, 1, 2) + E190_SEM(nome, '3 PC bloqueados'), 'R2 entrega com bloqueio');
+    recusou(await entregar(r2.R, [[r2.ids[0], 1]]), 400, BASE(nome, 1, 2) + E190_OUTRA(nome, '3 PC bloqueados'), 'R2 entrega com bloqueio');
     await liberarReserva(r1.R);
     ok(await entregar(r2.R, [[r2.ids[0], 2]]), 200, 'R2 entrega 2');
     assert.strictEqual(await statusReq(r2.R), 'ENTREGUE');

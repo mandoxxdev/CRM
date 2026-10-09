@@ -62,8 +62,13 @@ const E190_COM = (nome, partes) => ` — o disponível de ${nome} está negativo
   + 'liberar da reserva desta requisição o que está retido, ou desbloquear';
 const E190_COM_LEGADO = (nome) => ` — o disponível de ${nome} está negativo (reservado além do físico): nada dele sai pela `
   + 'entrega até liberar da reserva desta requisição o que passa do físico';
-const E190_SEM = (nome, partes) => ` — o disponível de ${nome} está negativo (${partes}): nada dele sai pela entrega até `
-  + 'liberar reserva deste material (de outra requisição) ou desbloquear';
+// Fase 5 (revisor 1, e98rv1-a S2 e e98rv1-b B1): sem reserva no item, OU com reserva que nao cobre o deficit
+// (reserva do item + disponivel <= 0: liberar dela nao muda o que sai), a saida e OUTRA reserva — de outra requisicao
+// ou MANUAL (o "(de outra requisição)" de antes mentia com a manual) — ou desbloquear.
+const E190_OUTRA = (nome, partes) => ` — o disponível de ${nome} está negativo (${partes}): nada dele sai pela entrega até `
+  + 'liberar outra reserva deste material ou desbloquear';
+const E190_OUTRA_LEGADO = (nome) => ` — o disponível de ${nome} está negativo (reservado além do físico): nada dele sai pela `
+  + 'entrega até liberar outra reserva deste material';
 
 (async () => {
   console.log('\n=== Etapa 98 T3: a entrega com o disponivel do material negativo (C190) ===\n');
@@ -176,14 +181,94 @@ const E190_SEM = (nome, partes) => ` — o disponível de ${nome} está negativo
     assert.deepStrictEqual(await a49(c.numero), []);
   });
 
-  await test('[98 RN-12] bloqueio 4: E190 com "4 PC bloqueados"; entregar 4 tambem recusa com a mesma forma', async () => {
+  // Fase 5: era E190_COM ("liberar da reserva desta requisição") — com reserva 4 e deficit 4, liberar a propria reserva
+  // leva o disponivel a 0 e a reserva a 0: nada sai. Mandava a uma saida que nao destrava (o S2 do revisor 1).
+  await test('[98 RN-12] (Fase 5) bloqueio 4 sobre reserva 4: a reserva nao cobre o deficit -> E190 "outra reserva"; liberar a propria nao destrava; desbloquear destrava', async () => {
     const c = await comReserva();
     const nome = await nomeDe(c.m);
     await bloquear(c.m, 4);
     const e = await entregar(c.R, [[c.ids[0], 4]]);
     assert.strictEqual(e.status, 400, JSON.stringify(e.body));
-    assert.strictEqual(e.body.error, BASE(nome, 4, 4) + E190_COM(nome, '4 PC bloqueados'));
+    assert.strictEqual(e.body.error, BASE(nome, 4, 4) + E190_OUTRA(nome, '4 PC bloqueados'));
     assert.strictEqual((await detalheItem(c.R, c.ids[0])).quantidade_entregavel, 0);
+    const d = await como('ADMIN').post(`${API}/materiais/${c.m}/desbloquear`, { quantidade: 4, motivo: 'e98c', justificativa: 'teste da etapa 98 F5' });
+    assert.strictEqual(d.status, 200, JSON.stringify(d.body));
+    assert.strictEqual((await entregar(c.R, [[c.ids[0], 4]])).status, 200);
+  });
+
+  // Fase 5 (revisor 1, e98rv1-a S2): R1 reserva 1, R3 reserva 3, fisico 4, bloqueio 1 -> disponivel -1. A E190 de R1
+  // mandava "liberar da reserva desta requisição": R1 liberava a propria reserva, continuava presa (0 + 0) e perdia a
+  // prioridade. A saida e "desta" so quando reserva do item + disponivel > folga; aqui 1 + (-1) = 0.
+  await test('[98 RN-12] (Fase 5) reserva do item = deficit (1 e -1): E190 "outra reserva"; liberar a propria reserva NAO destrava; liberar 1 da reserva de R3 destrava', async () => {
+    const m = await material(0);
+    const nome = await nomeDe(m);
+    await entrar(m, 4);
+    const r1 = await req([[m, 1]]); await aprovar(r1.R);
+    const r3 = await req([[m, 3]]); await aprovar(r3.R);
+    await separar(r1.R, [[r1.ids[0], 1]]);
+    await bloquear(m, 1);
+    const e = await entregar(r1.R, [[r1.ids[0], 1]]);
+    assert.strictEqual(e.status, 400, JSON.stringify(e.body));
+    assert.strictEqual(e.body.error, BASE(nome, 1, 1) + E190_OUTRA(nome, '1 PC bloqueados'));
+    // a prova de que "desta requisição" mentia: liberada a propria reserva, a entrega continua recusada
+    await liberarReserva(r1.R, 1);
+    const e2 = await entregar(r1.R, [[r1.ids[0], 1]]);
+    assert.strictEqual(e2.status, 400, JSON.stringify(e2.body));
+    await liberarReserva(r3.R, 1);
+    const ok = await entregar(r1.R, [[r1.ids[0], 1]]);
+    assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
+  });
+
+  await test('[98 RN-12] (Fase 5) a fronteira: reserva do item 2 e deficit 1 (2 + (-1) > 0) -> E190 "desta requisição"; liberar 1 da propria destrava 1', async () => {
+    const m = await material(0);
+    const nome = await nomeDe(m);
+    await entrar(m, 4);
+    const r1 = await req([[m, 2]]); await aprovar(r1.R);
+    const r3 = await req([[m, 2]]); await aprovar(r3.R);
+    await separar(r1.R, [[r1.ids[0], 2]]);
+    await bloquear(m, 1);
+    const e = await entregar(r1.R, [[r1.ids[0], 1]]);
+    assert.strictEqual(e.status, 400, JSON.stringify(e.body));
+    assert.strictEqual(e.body.error, BASE(nome, 1, 2) + E190_COM(nome, '1 PC bloqueados'));
+    await liberarReserva(r1.R, 1);
+    const ok = await entregar(r1.R, [[r1.ids[0], 1]]);
+    assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
+  });
+
+  // Fase 5 (revisor 1, e98rv1-b B1): sem reserva no item e a unica reserva do material e MANUAL — a E190 dizia "(de outra
+  // requisição)". Agora "outra reserva deste material" vale para as duas origens.
+  await test('[98 RN-12] (Fase 5) sem reserva no item e o deficit e de reserva MANUAL: E190 "outra reserva" (sem "de outra requisição"); liberar a manual destrava', async () => {
+    const m = await material(0);
+    const nome = await nomeDe(m);
+    const r2 = await req([[m, 2]]); await aprovar(r2.R);
+    await entrar(m, 6);
+    await separar(r2.R, [[r2.ids[0], 2]]);
+    const man = await como('ADMIN').post(`${API}/reservas`, { material_id: m, quantidade: 4, observacoes: 'e98c manual' });
+    assert.strictEqual(man.status, 201, JSON.stringify(man.body));
+    await bloquear(m, 3);
+    const origens = await dbAll(db, "SELECT origem FROM reservas_material_almoxarifado WHERE material_id=? AND status='ATIVA'", [m]);
+    assert.deepStrictEqual(origens.map((o) => o.origem), ['MANUAL'], 'premissa: so a reserva manual');
+    const e = await entregar(r2.R, [[r2.ids[0], 1]]);
+    assert.strictEqual(e.status, 400, JSON.stringify(e.body));
+    assert.strictEqual(e.body.error, BASE(nome, 1, 2) + E190_OUTRA(nome, '3 PC bloqueados'));
+    assert.ok(!/de outra requisição/.test(e.body.error), e.body.error);
+    const rid = (await dbGet(db, "SELECT id FROM reservas_material_almoxarifado WHERE material_id=? AND status='ATIVA'", [m])).id;
+    const l = await como('ADMIN').post(`${API}/reservas/${rid}/liberar`, { motivo: 'e98c manual' });
+    assert.strictEqual(l.status, 200, JSON.stringify(l.body));
+    assert.strictEqual((await entregar(r2.R, [[r2.ids[0], 2]])).status, 200);
+  });
+
+  await test('[98 RN-12] (Fase 5) legado sem retencao e sem reserva no item: E190 "reservado alem do fisico" e "liberar outra reserva deste material"', async () => {
+    const m = await material(0);
+    const nome = await nomeDe(m);
+    const r2 = await req([[m, 2]]); await aprovar(r2.R);
+    await entrar(m, 6);
+    await separar(r2.R, [[r2.ids[0], 2]]);
+    const r1 = await req([[m, 4]]); await aprovar(r1.R); // reserva 4
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 3 WHERE id=?', [m]); // escritor de legado: 3 - 4 = -1
+    const e = await entregar(r2.R, [[r2.ids[0], 1]]);
+    assert.strictEqual(e.status, 400, JSON.stringify(e.body));
+    assert.strictEqual(e.body.error, BASE(nome, 1, 2) + E190_OUTRA_LEGADO(nome));
   });
 
   await test('[98 RN-12] retencoes em ordem: bloqueado e em inspecao (escritor de legado) nas ⟨partes⟩', async () => {
@@ -261,7 +346,7 @@ const E190_SEM = (nome, partes) => ` — o disponível de ${nome} está negativo
     assert.deepStrictEqual((await a49(r2.numero)).map((l) => [l.na_caixa, l.disponivel_material]), [[2, -1]]);
     const e = await entregar(r2.R, [[r2.ids[0], 1]]);
     assert.strictEqual(e.status, 400, JSON.stringify(e.body));
-    assert.strictEqual(e.body.error, BASE(nome, 1, 2) + E190_SEM(nome, '3 PC bloqueados'));
+    assert.strictEqual(e.body.error, BASE(nome, 1, 2) + E190_OUTRA(nome, '3 PC bloqueados'));
     await liberarReserva(r1.R);
     const ok = await entregar(r2.R, [[r2.ids[0], 2]]);
     assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
