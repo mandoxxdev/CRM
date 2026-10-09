@@ -17,7 +17,7 @@ const travaPorRequisicao = require('./travaPorRequisicao');
 const { can } = require('./permissions'); // Etapa 64: posso_conferir na fila
 const {
   PODE_SEPARAR, PODE_ENTREGAR, STATUS_PARCIALMENTE_RESERVADA, STATUS_TOTALMENTE_RESERVADA,
-  calcularStatusPosAprovacao,
+  calcularStatusPosAprovacao, validarTransicao,
 } = require('./requisitionStateMachine');
 
 function num(v) {
@@ -1356,10 +1356,18 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
       }
 
       entregueAcumulado += baixa.quantidade;
+      // Etapa 93 (T4, Fase 2 M4): gravacao RELATIVA. Antes gravava o acumulado ABSOLUTO lido no comeco da
+      // entrega: uma segunda entrega concorrente (fora da trava por requisicao) perdia a sua parte no item
+      // — 4 saidas e entregue 2, e a tela oferecia entregar "o que faltava" (C156, 10/10 sem gancho). No
+      // SQLite o lado direito do SET le os valores ANTIGOS da linha. COALESCE com quantidade_atendida como o
+      // getEntregue (dado antigo com entregue NULL).
       // eslint-disable-next-line no-await-in-loop
       await dbRun(db,
-        'UPDATE itens_requisicao_almoxarifado SET quantidade_entregue=?, quantidade_atendida=?, quantidade_separada=? WHERE id=?',
-        [entregueAcumulado, entregueAcumulado, Math.max(getSeparado(item), entregueAcumulado), item.id]);
+        `UPDATE itens_requisicao_almoxarifado SET quantidade_entregue = COALESCE(quantidade_entregue, quantidade_atendida, 0) + ?,
+            quantidade_atendida = COALESCE(quantidade_entregue, quantidade_atendida, 0) + ?,
+            quantidade_separada = MAX(COALESCE(quantidade_separada, 0), COALESCE(quantidade_entregue, quantidade_atendida, 0) + ?)
+          WHERE id=?`,
+        [baixa.quantidade, baixa.quantidade, baixa.quantidade, item.id]);
     }
     } finally {
 
@@ -1401,14 +1409,33 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   const completo = todosItensCompletos(itensAtualizados);
   const novoStatus = completo ? 'ENTREGUE' : 'PARCIALMENTE_ATENDIDA';
 
-  if (completo) {
-    await dbRun(db,
-      `UPDATE requisicoes_almoxarifado SET status=?, data_entrega=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
-      [novoStatus, requisicaoId]);
-  } else {
-    await dbRun(db,
-      `UPDATE requisicoes_almoxarifado SET status=?, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=?`,
-      [novoStatus, requisicaoId]);
+  // Etapa 93 (T4, B446): o UPDATE final confere o status lido. Antes era `WHERE id=?`: quem mudasse o status
+  // no meio da entrega (fora da trava por requisicao) era atropelado — a excluida voltava a ENTREGUE, a
+  // encerrada a PARCIALMENTE_ATENDIDA. Perdeu -> rele: ativa e a transicao valendo (ex. liberada no meio:
+  // PRONTA -> ENTREGUE) -> UMA nova tentativa; senao nao grava status, W4, e responde 200 com o status real.
+  // 200 e nao 409: as baixas ja sairam do estoque; um 409 faria a tela dizer "erro" e o almoxarife entregar
+  // de novo — e a entrega repetida baixa de novo.
+  let statusLido = reqRow.status;
+  let gravou = false;
+  for (let tentativa = 0; tentativa < 2 && !gravou; tentativa++) {
+    // eslint-disable-next-line no-await-in-loop
+    const upd = completo
+      ? await dbRun(db,
+        `UPDATE requisicoes_almoxarifado SET status=?, data_entrega=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=? AND status=?`,
+        [novoStatus, requisicaoId, statusLido])
+      : await dbRun(db,
+        `UPDATE requisicoes_almoxarifado SET status=?, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL WHERE id=? AND status=?`,
+        [novoStatus, requisicaoId, statusLido]);
+    if (upd.changes > 0) { gravou = true; break; }
+    // eslint-disable-next-line no-await-in-loop
+    const relido = await dbGet(db, 'SELECT status, COALESCE(ativo, 1) AS ativo FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
+    if (!relido) break;
+    statusLido = relido.status;
+    if (Number(relido.ativo) !== 1 || !validarTransicao(relido.status, novoStatus).ok) break;
+  }
+  if (!gravou) {
+    console.warn(`[almoxarifado-entrega] Requisicao ${requisicaoId}: status mudou para ${statusLido} durante a entrega; baixas feitas, status nao regravado (seria ${novoStatus})`);
+    return { success: true, status: statusLido, parcial: !completo, entregas };
   }
 
   return { success: true, status: novoStatus, parcial: !completo, entregas };

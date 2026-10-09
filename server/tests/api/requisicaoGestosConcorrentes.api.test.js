@@ -771,6 +771,93 @@ const esperarFila = async (R, ms = 3000) => {
     assert.strictEqual((await trilhaDe(x.R, 'LIBERACAO_RETIRADA')).length, 0);
   });
 
+  // ── RN-08 (c)(c')(c'') — a entrega confere o status no UPDATE final e grava o item relativo (T4, B446) ──
+  const W4 = (R, st, novo) => `[almoxarifado-entrega] Requisicao ${R}: status mudou para ${st} durante a entrega; baixas feitas, status nao regravado (seria ${novo})`;
+
+  await test('[93 RN-08] (c) entrega: no UPDATE final um escritor fora da trava poe PRONTA_PARA_RETIRADA -> a nova tentativa vence (PRONTA -> ENTREGUE vale): 200 ENTREGUE; UPDATE emitido 2 vezes', async () => {
+    desarmar();
+    const x = await montar();
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 4)).status, 200);
+    const g = armarEscritor(RE.ENT, () => raw("UPDATE requisicoes_almoxarifado SET status = 'PRONTA_PARA_RETIRADA' WHERE id = ?", [x.R]));
+    const w = capturar('warn');
+    let ent;
+    try { ent = await comPrazo(entregar('ALMOX2', x.R, x.item, 4), 8000, 'entrega'); } finally { w.restaurar(); desarmar(); }
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(g.disparos, 1);
+    assert.strictEqual(ent.status, 200, `entrega: ${ent.status} ${JSON.stringify(ent.body)}`);
+    assert.strictEqual(ent.body.status, 'ENTREGUE');
+    assert.strictEqual(g.emitidos, 2, `UPDATE final emitido ${g.emitidos} vez(es) — perdeu para PRONTA e tentou de novo`);
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'ENTREGUE', `status ${f.status}`);
+    assert.strictEqual(f.ent, 4); assert.strictEqual(f.saidas, 4);
+    assert.strictEqual(w.linhas.filter((l) => l.startsWith('[almoxarifado-entrega]')).length, 0, 'sem W4: a nova tentativa venceu');
+  });
+
+  await test("[93 RN-08] (c') entrega: no UPDATE final o escritor EXCLUI (ativo=0, CANCELADO) -> 200 { status: 'CANCELADO' }; status nao regravado; SAIDA gravada; W4 1 vez; UPDATE emitido 1 vez", async () => {
+    desarmar();
+    const x = await montar();
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 4)).status, 200);
+    const g = armarEscritor(RE.ENT, () => raw("UPDATE requisicoes_almoxarifado SET ativo = 0, status = 'CANCELADO' WHERE id = ?", [x.R]));
+    const w = capturar('warn');
+    let ent;
+    try { ent = await comPrazo(entregar('ALMOX2', x.R, x.item, 4), 8000, 'entrega'); } finally { w.restaurar(); desarmar(); }
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(g.disparos, 1);
+    assert.strictEqual(ent.status, 200, `entrega: ${ent.status} ${JSON.stringify(ent.body)}`);
+    assert.strictEqual(ent.body.status, 'CANCELADO', `status da resposta ${ent.body.status}`);
+    assert.strictEqual(ent.body.parcial, false);
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'CANCELADO', `status ${f.status} (a entrega regravou por cima da exclusao)`);
+    assert.strictEqual(f.ativo, 0);
+    assert.strictEqual(f.saidas, 4, 'as baixas sairam (declarado: nao se estorna no meio)');
+    assert.strictEqual(f.ent, 4);
+    const w4 = w.linhas.filter((l) => l === W4(x.R, 'CANCELADO', 'ENTREGUE'));
+    assert.strictEqual(w4.length, 1, `W4 ${w4.length} vez(es): ${JSON.stringify(w.linhas)}`);
+    assert.strictEqual(g.emitidos, 1, `UPDATE final emitido ${g.emitidos} vez(es) — CANCELADO -> ENTREGUE nao vale, sem nova tentativa`);
+  });
+
+  // Acrescentado na execucao (controle s4 da T4): com o escritor EXCLUINDO, a guarda de `ativo` ja segura a
+  // nova tentativa e tirar o validarTransicao nao derrubava nada. Aqui a requisicao continua ativa e a
+  // transicao relida nao vale (ENCERRADA -> PARCIALMENTE_ATENDIDA): so o validarTransicao impede regravar.
+  await test("[93 RN-08] (c''') entrega parcial: no UPDATE final o escritor ENCERRA (ativa) -> 200 { status: 'ENCERRADA' }; status nao regravado (a encerrada nao volta a aberta, 7a fora da trava); W4 1 vez; UPDATE emitido 1 vez", async () => {
+    desarmar();
+    const x = await montar();
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 4)).status, 200);
+    const g = armarEscritor(RE.ENT, () => raw("UPDATE requisicoes_almoxarifado SET status = 'ENCERRADA' WHERE id = ?", [x.R]));
+    const w = capturar('warn');
+    let ent;
+    try { ent = await comPrazo(entregar('ALMOX2', x.R, x.item, 1), 8000, 'entrega'); } finally { w.restaurar(); desarmar(); }
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(g.disparos, 1);
+    assert.strictEqual(ent.status, 200, `entrega: ${ent.status} ${JSON.stringify(ent.body)}`);
+    assert.strictEqual(ent.body.status, 'ENCERRADA', `status da resposta ${ent.body.status}`);
+    assert.strictEqual(ent.body.parcial, true);
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'ENCERRADA', `status ${f.status} (a encerrada voltou a aberta)`);
+    assert.strictEqual(f.ent, 1); assert.strictEqual(f.saidas, 1);
+    const w4 = w.linhas.filter((l) => l === W4(x.R, 'ENCERRADA', 'PARCIALMENTE_ATENDIDA'));
+    assert.strictEqual(w4.length, 1, `W4 ${w4.length} vez(es): ${JSON.stringify(w.linhas)}`);
+    assert.strictEqual(g.emitidos, 1, `UPDATE final emitido ${g.emitidos} vez(es)`);
+  });
+
+  await test("[93 RN-08] (c'') (Fase 2, M4) entrega de 2: no UPDATE do ITEM um escritor fora da trava soma 2 a quantidade_entregue -> o item termina com 4 (a gravacao e relativa), nao 2", async () => {
+    desarmar();
+    const x = await montar({ estoque: 8 });
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 4)).status, 200);
+    const g = armarEscritor(RE.ITEM_ENT, () => raw(`UPDATE itens_requisicao_almoxarifado
+      SET quantidade_entregue = COALESCE(quantidade_entregue,0) + 2, quantidade_atendida = COALESCE(quantidade_entregue,0) + 2 WHERE id = ?`, [x.item]));
+    const ent = await comPrazo(entregar('ALMOX', x.R, x.item, 2), 8000, 'entrega');
+    desarmar();
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(g.disparos, 1);
+    assert.strictEqual(ent.status, 200, `entrega: ${ent.status} ${JSON.stringify(ent.body)}`);
+    const f = await foto(x);
+    assert.strictEqual(f.ent, 4, `quantidade_entregue ${f.ent} (a gravacao absoluta apagou a do escritor)`);
+    const at = await dbGet(db, 'SELECT quantidade_atendida a, quantidade_separada s FROM itens_requisicao_almoxarifado WHERE id = ?', [x.item]);
+    assert.strictEqual(Number(at.a), 4, 'quantidade_atendida acompanha');
+    assert.strictEqual(Number(at.s), 4, 'quantidade_separada nao cai abaixo do entregue');
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed ? 1 : 0);
