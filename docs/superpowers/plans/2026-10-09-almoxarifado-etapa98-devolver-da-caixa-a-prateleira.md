@@ -1,6 +1,6 @@
 # Etapa 98 — devolver da caixa à prateleira: o almoxarife tira da caixa de uma requisição o que não vai sair (B497, C189; com o C190)
 
-> Status: **Fases 0, 1 e 2 feitas — 2026-10-09. Próximo passo: Fase 3 (T0, depois T1)**. A Fase 2 (seção "Fase 2 —
+> Status: **EM EXECUÇÃO — 2026-10-09: Fase 2 `a16ea09f`; T0 `0aafb939`, T1 `9e0bb225` feitas (seção "Execução" no fim). Próximo: T2/T3 (serial) e T4 (paralelo)**. A Fase 2 (seção "Fase 2 —
 > revisão do plano", antes de "Próximo passo") achou 2 bloqueantes, 5 importantes e 6 menores; os pontos afetados estão
 > marcados **"(corrigido na Fase 2)"** e a seção vale sobre o texto acima. Nenhuma task executada.
 > HEAD de partida: `6e61cb27` (main, árvore limpa, sem push).
@@ -448,7 +448,7 @@ mesma árvore** depois da T1 (as duas sabotam `requisitionService`/`caixaSql`, l
 o contrato congelado (mock só na fronteira HTTP) — pode rodar em paralelo com T2/T3 numa worktree (junction de
 `node_modules`, memória). T5 é a integração (cruza T1, T2, T3 pela rota **e** pelo serviço). T6 fecha.
 
-- [ ] **T0 (tronco) — a tabela e a seta (B504, B507).** Contrato "A tabela" e "A máquina". Testes `[98 RN-00]`: a tabela
+- [x] `0aafb939` **T0 (tronco) — a tabela e a seta (B504, B507).** Contrato "A tabela" e "A máquina". Testes `[98 RN-00]`: a tabela
   existe com as colunas (`PRAGMA table_info`) e o índice; `validarTransicao('PRONTA_PARA_RETIRADA','EM_SEPARACAO').ok`;
   as setas de *Pronta* para *Parcialmente Atendida*/*Entregue* continuam; `liberar-retirada` de *Em Separação* continua
   200 e de *Pronta* continua 400 (*"Transição inválida: PRONTA_PARA_RETIRADA → PRONTA_PARA_RETIRADA"*). **Prova de primeiro
@@ -456,7 +456,7 @@ o contrato congelado (mock só na fronteira HTTP) — pode rodar em paralelo com
   a seta. **Controles:** (s1) sem o `CREATE` → cai "a tabela existe"; (s2) sem a seta → cai `validarTransicao`. **Medir
   sem edição:** `test:api` inteiro (os testes que leem `TRANSICOES` — `alcadaValorDepoisDaSeparacao` `:340`, `:484`;
   cliente `RequisicoesReabrirSeparacao` (e), `ReservasAlmoxarifado` `:363` — iteram as chaves, não as setas de *Pronta*).
-- [ ] **T1 (tronco) — o gesto: serviço e rota (B502, B503, B505, B506, B511).** Contrato da rota, D-1…D409. **(Fase 2)**
+- [x] `9e0bb225` **T1 (tronco) — o gesto: serviço e rota (B502, B503, B505, B506, B511).** Contrato da rota, D-1…D409. **(Fase 2)**
   Acrescenta `{ rotulo: 'Devolução à prateleira', verbos: ['DEVOLUCAO_CAIXA'] }` em `services/almoxarifado/auditLabels.js`
   (~:156, junto dos verbos da Etapa 28) — sem ele cai `auditLabels.api.test.js` (`:216-237`, "TODO verbo gravavel tem
   rotulo"). **RN-02b** pela rota.
@@ -751,3 +751,25 @@ uma CONFERENCIA_SEM_SAIDA nova? (c) **o claim com `EXISTS` do status** — a cor
 `maxEntregar` da 95** — a segunda rodada (`alemDaCaixa`) com o disponível negativo; o `quantidade_separavel` do detalhe
 não muda (só o entregável)? (e) **o cliente** — `requisicaoLabels.js` **não** exporta lista com caixa (lido: só `STATUS_CANCELAVEIS_*` e
 `STATUS_PRE_SEPARACAO`); a T4 cria o espelho de `STATUS_COM_CAIXA` com teste de paridade — o espelho está certo? Corrigir o plano, **depois** executar T0.
+
+## Execução (2026-10-09)
+
+Baseline `test:api` 338/338 (4163 ✓), almox 44/0. T0 → 339/339 (4168); T1 → 339/339 (4194); 44/0; no fim 4/0, 3/0, 5/0.
+Cada commit com a suíte rodada no seu estado. A Fase 2 re-rodou `e98rv-a.js`: os dois bloqueantes reproduzem (os "2/4
+ERRADO" da sonda eram expectativas erradas da própria sonda — fila sem `SEPARAR`; 201 onde o bloqueio responde 200).
+
+- **T0 `0aafb939`** — tabela `devolucoes_caixa_requisicao` e a seta `PRONTA_PARA_RETIRADA → EM_SEPARACAO`. Vermelho antes
+  3/5 (tabela, índice, seta; 2 guardas). Controles s1 (sem CREATE) → tabela e índice; s2 (sem seta) → `validarTransicao`.
+  Primeiro boot em `CRM_DATA_DIR` vazio, duas vezes: 0 "no such table", tabela (17 colunas) e índice criados. Os testes da
+  T0 moram em `devolverSeparado.api.test.js` (o plano não nomeava arquivo).
+- **T1 `9e0bb225`** — `PUT /requisicoes/:id/devolver-separado` (serviço, rota, `devolucoes_caixa` no detalhe, rótulo
+  `DEVOLUCAO_CAIXA`). Vermelho antes 25/25. Controles: s2 → RN-03 Pronta e RN-10 (a); s3 → RN-04 ×2; s4 → RN-02 ×3; s5 (sem
+  `serializarNaRequisicao`) → RN-10 (a), o liberar parado; s5b (409 antes da trilha) → RN-02b; s6 (sem trava por material)
+  → RN-10 (b)(c); s7 → RN-06; s8 (sem gate) → RN-08; rótulo removido → `auditLabels`.
+  **Divergências:** (1) o s1 do plano apontava para teste que não sabia falhar (a pré-validação D7 pega antes do claim) —
+  criado teste de claim direto (escritor de fora grava entregue 3 entre a leitura e o claim → 409, separado fica 4); a
+  primeira tentativa do s1 quebrou o bind (erro SQL, não controle) e foi refeita; (2) o caminho do 409 roda também o passo
+  (6) (compare-and-set: só age se ainda *Pronta*; sem ele a *Pronta* com caixa mudada ficaria atestada); (3) o gancho da
+  RN-02b espera só o status virar `CANCELADO` — esperar o cancelamento inteiro travava o teste (o cancelamento libera
+  reservas sob a trava por material que a devolução segura; em produção não há deadlock, termina quando a devolução solta);
+  (4) um s3 mais fraco (só o compare) é pego só pela asserção de `dados_anteriores.conferencia` na auditoria.
