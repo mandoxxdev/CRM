@@ -11,7 +11,9 @@
  * Usuarios reais por header (molde 92-97): S sem perfil (PRODUCAO) cria pela rota; ADMIN superadmin aprova e
  * movimenta; ALMOX e ALMOX2 (ALMOXARIFE) separam, conferem, liberam e entregam.
  *
- * T0: RN-00 (a tabela e a seta). T1: RN-01..RN-08, RN-02b, RN-10 (o gesto). Casos `[98 RN-xx]`.
+ * T0: RN-00 (a tabela e a seta). T1: RN-01..RN-08, RN-02b, RN-10 (o gesto). T2: RN-11 (o sufixo S98 da porta
+ * avulsa). Casos `[98 RN-xx]`. Fora deste arquivo: T3/RN-12 (o C190) em `entregaDisponivelNegativo.api.test.js`; T5 (a
+ * integracao, cada documento ate o ultimo gesto) em `devolverSeparadoIntegracao.api.test.js`.
  * Plano: docs/superpowers/plans/2026-10-09-almoxarifado-etapa98-devolver-da-caixa-a-prateleira.md
  *
  * Executar: cd server && node tests/api/devolverSeparado.api.test.js
