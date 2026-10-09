@@ -11,11 +11,12 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-08):** Etapa 91 fechada (a aprovação não passa mais na frente de quem
-> esperava o material — **C131** resolvido) — ver "Onde estamos e o que vem a seguir", no fim. A próxima etapa do
-> almoxarifado é a **92** — o cancelamento pelos outros módulos aceita o que a tela oferece (**C149**). Desde a
-> unificação de 2026-10-07 a numeração é uma só para todos os módulos, e as 78 a 90 foram usadas pelo lote de
-> Compras/núcleo (`docs/compras-novidades-por-etapa.md`, **B18**) — por isso a etapa depois da 77 foi a 91.
+> **Onde o desenvolvimento está (2026-10-08):** Etapa 92 fechada (quem pediu por outro módulo consegue cancelar a
+> requisição reservada — **C149** resolvido; a separação e o cancelamento no mesmo instante não "ressuscitam" mais a
+> requisição) — ver "Onde estamos e o que vem a seguir", no fim. A próxima etapa do almoxarifado é a **93** — as
+> gravações da separação depois do começo, da liberação para retirada e da exclusão administrativa conferem o status
+> (D (92)). Desde a unificação de 2026-10-07 a numeração é uma só para todos os módulos, e as 78 a 90 foram usadas pelo
+> lote de Compras/núcleo (`docs/compras-novidades-por-etapa.md`, **B18**) — por isso a etapa depois da 77 foi a 91.
 >
 > Fontes: `docs/almoxarifado-guia-etapas-e-testes.md` (roteiros de teste manual de cada
 > etapa), `specs/modulo-almoxarifado/README.md` (status por feature) e os planos em
@@ -113,7 +114,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Quarenta e dois itens para rodar em produção ANTES do deploy — trinta e nove são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Quarenta e três itens para rodar em produção ANTES do deploy — quarenta são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-08 (Etapa 92) de quarenta e dois para quarenta e três**, com a **A43** — as requisições que uma separação "ressuscitou" depois de canceladas, e as canceladas com material separado na caixa, deixadas pela corrida separação × cancelamento antes desta versão.)*
 
 *(**Atualizado em 2026-10-08 (Etapa 91) de quarenta e um para quarenta e dois**, com a **A42** — os materiais com disponível negativo ou com material retido na inspeção sem lastro na prateleira, o rastro que a janela da quarentena (**C142**, **C145**) e qualquer outra corrida podem ter deixado antes desta versão.)*
 
@@ -1496,7 +1499,47 @@ então o tamanho real só em produção.)*
 - *(A conta do disponível fica escrita à mão **só aqui, no documento**: a regra do código que proíbe replicá-la vale
   para o código, não para a consulta de conferência.)*
 
-### B. Decisões de negócio — B1 a B433; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A43 (NOVA, da Etapa 92 — requisições "ressuscitadas" e canceladas com material na caixa).** Antes desta versão, um
+cancelamento e uma separação no mesmo instante podiam terminar com a requisição **cancelada** de volta a *Em Separação*
+sem reserva (quem pediu ouviu "cancelada"), ou com a requisição *Cancelado* com material separado na caixa (o
+cancelamento do almoxarifado passava por cima da separação — **C153**). O deploy não desfaz o que já aconteceu. Somente
+leitura:
+
+```sql
+-- (a) ressuscitadas: têm trilha de cancelamento e não estão canceladas (não existe saída de CANCELADO)
+SELECT rq.id, rq.numero, rq.status, MAX(a.created_at) AS cancelada_em
+  FROM requisicoes_almoxarifado rq
+  JOIN auditoria_log_almoxarifado a ON a.entidade = 'requisicao' AND a.entidade_id = rq.id AND a.acao = 'CANCELAMENTO'
+ WHERE rq.status <> 'CANCELADO' AND COALESCE(rq.ativo, 1) = 1
+ GROUP BY rq.id, rq.numero, rq.status ORDER BY rq.id;
+-- (b) canceladas com material separado ainda na caixa (o cancelamento passou por cima da separação)
+SELECT rq.id, rq.numero, i.id AS item_id, m.codigo,
+       COALESCE(i.quantidade_separada, 0) - COALESCE(i.quantidade_entregue, 0) AS na_caixa
+  FROM requisicoes_almoxarifado rq
+  JOIN itens_requisicao_almoxarifado i ON i.requisicao_id = rq.id
+  JOIN materiais_almoxarifado m ON m.id = i.material_id
+ WHERE rq.status = 'CANCELADO' AND COALESCE(rq.ativo, 1) = 1
+   AND COALESCE(i.quantidade_separada, 0) - COALESCE(i.quantidade_entregue, 0) > 1e-9
+ ORDER BY rq.id;
+```
+
+*(Conferida na medição da etapa contra o esquema real do módulo, montado em memória pelo mesmo harness dos testes, com
+controle positivo: uma requisição ressuscitada e uma cancelada com material na caixa, produzidas pelas duas corridas
+medidas, aparecem cada uma na sua consulta; uma cancelada sem corrida não aparece; uma coluna trocada de propósito faz o
+banco recusar. O banco de desenvolvimento não tem dados, então o tamanho real só em produção.)*
+
+**Como ler o resultado:**
+- **As duas vazias** — nada a fazer.
+- **Linha em (a)** — a requisição está em separação **sem reserva**, e quem pediu ouviu "cancelada". Falar com quem
+  pediu: se ainda quer o material, a separação segue normalmente; se não, o almoxarife devolve o separado à prateleira e
+  a requisição fica como está (*Em Separação* não se cancela) — encerrar pela entrega parcial ou excluir pela ação
+  administrativa.
+- **Linha em (b)** — o material está fora da prateleira numa requisição cancelada: devolver à prateleira. Nada a corrigir
+  no saldo (separar não move estoque).
+
+### B. Decisões de negócio — B1 a B442; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-08 de B433 para B442**, com as nove da Etapa 92 — oito do plano (**B434** a **B441**) e uma da revisão adversarial do código (**B442**); a **B434** reverte uma parte da **B426**.)*
 
 *(**Atualizado em 2026-10-08 de B418 para B433**, com as quinze da Etapa 91 — dez do plano (**B419** a **B428**) e cinco da revisão adversarial do código (**B429** a **B433**); a **B403** foi substituída pela **B419**.)*
 
@@ -5703,7 +5746,8 @@ requisições do Comercial, Frota, Compras, Financeiro ou Operacional passa a so
 *Cancelamento*, como o cancelamento do almoxarifado; as duas coisas não derrubam o cancelamento se falharem (ele já foi
 feito e é o que o usuário pediu — fica um aviso no log). **Mantidos:** os status aceitos (*Pendente* e *Aprovado*), quem
 pode (só quem pediu) e a resposta. **Descartado nesta etapa:** aceitar cancelar requisição já reservada por essa porta —
-muda o contrato da outra tela; é a candidata da Etapa 92 (**C149**). (`6eedb920`)
+muda o contrato da outra tela; é a candidata da Etapa 92 (**C149**). (`6eedb920`) *(**Etapa 92:** a parte "cancelar já reservada fica de fora" foi
+**revertida** pela **B434** — a porta dos outros módulos aceita os seis status da tela.)*
 
 **B427 (NOVA, da Etapa 91) — o número de uma reserva só vale numa saída que a consome.** Uma entrada, ajuste, devolução,
 transferência ou qualquer movimento que não é saída, lançado pela API citando uma reserva, é recusado — vale para
@@ -5755,6 +5799,82 @@ de a criação gravar todos os itens. (`2d6987a7`, `723c58fd`; comentário corri
 revisão mostrou que tirar da trava a devolução da reserva de uma aprovação que perdeu não derrubava teste nenhum. O dano
 foi medido (uma segunda aprovação do mesmo material entrava antes da devolução, lia disponível 0 e ficava *Aguardando
 estoque* com 4 parados — o **C135** por corrida), então virou teste em vez de ser declarado "baixo impacto". (`d98b73c9`)
+
+
+**B434 (NOVA, da Etapa 92) — quem pediu por outro módulo cancela nos seis status em que a tela mostra o botão (C149).**
+Escolhido: a porta dos outros módulos aceita *Pendente*, *Aprovado*, *Aguardando estoque*, *Aguardando compra*,
+*Parcialmente Reservada* e *Totalmente Reservada* — só para quem pediu — e solta as reservas como já fazia (B426).
+**Descartado:** esconder o botão nesses quatro status — deixaria quem pediu sem caminho (o **C140 (3)** manda cancelar)
+e o material preso até o almoxarife cancelar. **Reverte** a parte "cancelar já reservada fica de fora" da **B426**.
+**Para reverter:** voltar a lista a *Pendente*/*Aprovado* e esconder o botão nos outros quatro. (`dd7e84a7`)
+
+**B435 (NOVA, da Etapa 92) — o cancelamento pelos outros módulos só grava se o status ainda é o que leu, com uma nova
+tentativa.** Perdeu (o recálculo de reserva trocou *Totalmente* ↔ *Parcialmente*, ou a separação começou) → relê e tenta
+**uma** vez mais; perdeu de novo → a recusa de sempre. A trilha grava o status que o cancelamento de fato trocou (fecha
+a **C148 (2)**). **Descartados:** aceitar qualquer status da lista sem comparar com o lido (a trilha podia mentir, e uma
+troca no meio passaria sem ninguém saber); tentar sem limite (uma corrida contínua prenderia a rota). **Consequência
+declarada:** com o status trocando duas vezes seguidas no instante, a rota recusa uma requisição que **é** cancelável —
+basta tentar de novo (**C155**). (`dd7e84a7`)
+
+**B436 (NOVA, da Etapa 92) — a separação reivindica a requisição antes de gravar (D (91)).** Depois de validar tudo e
+**antes** da primeira gravação, a separação passa a requisição para *Em Separação* só se ela ainda está num status de
+onde se separa; se perdeu (foi cancelada no meio), responde a mensagem de sempre e **nada** é gravado. Depois disso o
+cancelamento não passa (não existe *Em Separação* → *Cancelado*). **Descartados:** guardar só a gravação final do
+status (a rodada de separação já estaria gravada numa cancelada, e a rodada não se apaga); desfazer a rodada ao perder;
+uma resposta 409 com texto novo (nenhuma tela distingue). **Corrigido pela revisão do plano:** o plano aceitava que uma
+falha de banco depois de reivindicar deixasse a requisição *Em Separação* — mas quem pediu perderia o **Cancelar** (e,
+vinda de *Parcialmente Atendida*, o **Encerrar**); a separação passou a **devolver** o status lido quando a rodada não
+chegou a ser gravada (regra RN-09). **Corrigido pela revisão do código:** essa devolução podia apagar a separação de
+**outra** pessoa que venceu no mesmo instante (5 de 5 na sonda) — agora só devolve se nenhuma rodada nova entrou desde
+que ela começou (`f3b2b4fb`). **Residuais declarados** (D (92)): item gravado antes da falha continua com a quantidade
+separada (o motor não tem transação); o status devolvido é o da primeira leitura; o lembrete zerado não volta; um
+**Iniciar Separação** sem quantidade concorrente não grava rodada e a guarda não o vê. (`6a0b529c`, `f3b2b4fb`)
+
+**B437 (NOVA, da Etapa 92) — o cancelamento pela tela do almoxarifado ganha a mesma comparação (C153).** Só grava se o
+status ainda é o lido; perdeu → relê, confere de novo se o status novo se cancela, uma nova tentativa; perdeu de novo,
+ou o status novo não se cancela → *"Não é possível cancelar neste status"*. Respostas, permissões e mensagens
+inalteradas. **Descartado:** deixar para outra etapa — é o mesmo conserto da mesma corrida (10 de 10 medido), e a
+reivindicação da separação sozinha não fecha a ordem inversa. (`0187982e`; o teto de duas tentativas testado em
+`f3b2b4fb`)
+
+**B438 (NOVA, da Etapa 92) — o desfazer da aprovação que perde não acusa falha quando a reserva já foi solta
+(C148 (1)).** Antes de soltar, confere o status da reserva; se ela já não está ativa (o cancelamento a soltou), grava uma
+linha **informativa** no log em vez do aviso de falha. A falha **real** (reserva ativa que não solta) continua no aviso
+de sempre. **Corrigido pela revisão do código:** a leitura nova ficou fora da proteção de cada reserva — uma falha nela
+abortava o laço e deixava as reservas seguintes presas; agora uma leitura que falha vale "não sei" e segue para a
+liberação (`9f79c7ca`; descartado: avisar e pular — prenderia esta reserva por causa de uma leitura). **Residual
+declarado:** a leitura e a liberação não são um passo só — um cancelamento exatamente entre as duas ainda produz o aviso
+enganoso (a janela encolheu de "a aprovação inteira" para um instante). **Descartados:** reconhecer o caso pelo texto do
+erro de outro serviço; só declarar (5 de 5 na corrida medida). (`a4237edb`, `9f79c7ca`)
+
+**B439 (NOVA, da Etapa 92) — nas telas dos outros módulos, o botão Cancelar é só de quem pediu (C152).** No modo
+almoxarifado continua quem pediu **ou** o administrador do sistema. **Descartado:** a porta dos outros módulos aceitar o
+administrador — alargaria **quem** cancela por uma porta que nunca teve dono além do solicitante, e o administrador tem a
+tela do almoxarifado. A revisão achou que nenhum teste do servidor prendia isso; agora prende (super administrador e
+papel administrador, nos seis status → recusa). (`6ece630d`, `8d1a9050`)
+
+**B440 (NOVA, da Etapa 92) — a lista de status da tela e a da porta dos outros módulos são conferidas por teste.** A
+tela e o servidor têm cada um a sua lista, e um teste lê a da tela e compara com a do servidor (mesmos status, mesma
+ordem, e cada um se cancela pela máquina de estados). **Descartados:** importar uma da outra (a tela não importa de fora
+dela); a lista escrita à mão no teste (seria a mesma mentira dos dois lados). (`6ece630d`)
+
+**B441 (NOVA, da Etapa 92) — o material solto pelo cancelamento volta ao disponível solto, e o cancelamento não entra na
+fila por material.** Cancelar uma *Totalmente Reservada* devolve o material ao disponível **sem** reservar para quem
+espera — quem leva é a próxima nota, inspeção, não conformidade ou aprovação (**B397**, **C135**). E o cancelamento não
+pega a trava por material: a trava existe para quem **distribui** (a C131 eram duas distribuições vendo o mesmo livre);
+soltar só **aumenta** o disponível, e quem reserva sob a trava, no pior caso, vê menos do que há — nunca mais. A
+liberação manual, a expiração e o cancelamento do almoxarifado já soltavam assim. **Corrigido pela revisão do plano:** a
+justificativa citava a regra do CLAUDE.md errado — pela letra de então ("ponha saldo no disponível **ou** o leia para
+reservar"), o cancelamento cairia na regra; a regra foi apertada para "ponha saldo no disponível **e distribua**"
+(`7e59853d`). **Descartado:** distribuir no cancelamento (seria a sétima porta da trava). **Para reverter:** chamar a
+distribuição no fim do cancelamento, dentro da trava dos materiais da requisição.
+
+**B442 (NOVA, da Etapa 92, revisão do código) — na tela do almoxarifado, o botão Cancelar segue a regra do servidor.** A
+tela mostrava o botão para o administrador do módulo Almoxarifado (marcado no cadastro do usuário) que não pediu a
+requisição; a porta do almoxarifado só aceita quem pediu ou o administrador do sistema (super administrador ou papel
+administrador) — o clique dava *"Sem permissão"*. Anterior à etapa (a Etapa 92 o cristalizava num teste). **Escolhido:** a
+tela usa a mesma regra do servidor. **Descartado:** o servidor passar a aceitar o administrador do módulo — mais gente
+cancelando requisição alheia, decisão de autorização que ninguém pediu. (`627dc667`)
 
 
 ### C. Furos e mudanças de número que quem opera precisa saber
@@ -7296,7 +7416,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      (Comercial, Frota, Compras, Financeiro…) sem a permissão de reservar — perfis Compras, Gestor, Consulta, ou
      Qualidade — **não** libera a reserva da própria requisição na tela **Reservas** (*"Sem permissão para reservar
      material — seu perfil é ⟨perfil⟩. Solicite acesso a um administrador."*): o caminho dele é **cancelar** a requisição
-     (pela tela do almoxarifado enquanto o **C141** estiver aberto). (4) **Transferir** a reserva de uma requisição para
+     (pela tela do almoxarifado enquanto o **C141** estiver aberto). *(Etapa 92: pela tela dele
+     mesmo, em todo status em que o botão aparece — **C149** resolvido.)* (4) **Transferir** a reserva de uma requisição para
      outra OS ou projeto passa a tomar **400**, e a tela não mostra mais o botão nessas linhas. (5) A listagem de reservas
      (`GET /reservas`) ganhou três chaves — o número, quem pediu e o status da requisição (`requisicao_numero`,
      `requisicao_solicitante_id`, `requisicao_status`; vazias na manual); as de antes não mudaram. (6) **Estornar uma
@@ -7311,7 +7432,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      *Cancelamento* com o status de antes (**B426**). **O que continua:** essa porta só cancela requisição *Pendente* ou
      *Aprovado* — a tela oferece **Cancelar Requisição** também para *Aguardando estoque/compra* e *Parcialmente/
      Totalmente Reservada*, e a resposta é **400** *"Requisição não encontrada ou não pode ser cancelada"* (**C149** —
-     candidata da Etapa 92). A consulta abaixo continua valendo para as reservas presas **antes** do deploy. O texto
+     candidata da Etapa 92) *(Etapa 92: resolvido — a porta aceita os seis status, **B434**)*. A consulta abaixo continua valendo para as reservas presas **antes** do deploy. O texto
      original, para o histórico:
      **NOVO, da Etapa 77 (achado da revisão; não corrigido) — cancelar uma requisição *Aprovado* pela tela de
      requisições de outro módulo não solta a reserva dela.** As telas **Requisições de material** dos módulos Comercial,
@@ -7390,7 +7511,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      medido: a primeira *Totalmente Reservada*, a segunda *Aguardando estoque*. **O que fazer:** se aparecer requisição em
      dobro, cancelar a mais nova. Conserto: chave de idempotência mandada pela tela (cliente e servidor).
 
-148. **NOVO, da Etapa 91 (achado da revisão; declarado) — dois efeitos inofensivos da corrida entre o cancelamento pelos
+148. **✅ RESOLVIDO NA ETAPA 92 — as duas metades.** (1) `a4237edb` + `9f79c7ca`: o desfazer da aprovação que perde
+     confere a reserva antes de soltar; se o cancelamento já a soltou, o log diz *"[almoxarifado-aprovar] Reserva ⟨id⟩
+     ja estava LIBERADA — nada a desfazer"* (informativo) em vez da falha — que ainda pode aparecer numa janela de um
+     instante (**B438**). (2) `dd7e84a7`: a trilha grava o status que o cancelamento de fato trocou (**B435**). O texto
+     original, para o histórico:
+     **NOVO, da Etapa 91 (achado da revisão; declarado) — dois efeitos inofensivos da corrida entre o cancelamento pelos
      outros módulos e uma aprovação.** (1) Quando o cancelamento cai entre a reserva e a gravação do **Aprovar**, o
      resultado está certo (o **Aprovar** responde *"Transição inválida: CANCELADO → APROVADO"*, o cancelamento 200, a
      reserva liberada uma vez só) — mas o log diz *"[almoxarifado-aprovar] Falha ao desfazer reserva ⟨id⟩ — Reserva
@@ -7399,7 +7525,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      status nesse instante, a trilha grava o anterior errado. Só trilha; o cancelamento em si é guardado. **O que
      fazer:** não tratar essa linha de log como incidente.
 
-149. **NOVO, da Etapa 91 (achado da revisão; declarado — candidata da Etapa 92) — a tela de requisições dos outros
+149. **✅ RESOLVIDO NA ETAPA 92 (`dd7e84a7`, tela `6ece630d`) — a porta dos outros módulos aceita os seis status em
+     que a tela mostra Cancelar.** Quem pediu cancela *Pendente*, *Aprovado*, *Aguardando estoque*, *Aguardando compra*,
+     *Parcialmente Reservada* e *Totalmente Reservada*, e a reserva é solta (**B434**); a lista da tela e a da porta são
+     conferidas por teste (**B440**). O texto original, para o histórico:
+     **NOVO, da Etapa 91 (achado da revisão; declarado — candidata da Etapa 92) — a tela de requisições dos outros
      módulos oferece Cancelar em status que a API recusa.** Fora do modo almoxarifado, a tela mostra **Cancelar
      Requisição** para *Pendente*, *Aprovado*, *Aguardando estoque*, *Aguardando compra*, *Parcialmente Reservada* e
      *Totalmente Reservada*; a API dessa porta só aceita *Pendente* e *Aprovado* — nos outros quatro o usuário toma
@@ -7443,6 +7573,54 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      item. Nem toda é vítima deste defeito — o material pode ter entrado depois por uma entrada avulsa, que não distribui
      (**C135**). Em qualquer caso, o almoxarife pode separar a requisição com o que há.
 
+
+152. **NOVO e ✅ RESOLVIDO NA ETAPA 92 (`6ece630d`; tela do almoxarifado `627dc667`) — o administrador que não pediu via
+     Cancelar Requisição e o clique dava erro.** Achado na medição da Etapa 92. Nas telas de requisição dos outros
+     módulos, o botão aparecia para quem pediu **ou** para o administrador (super administrador, administrador do módulo
+     ou papel administrador) — mas aquela porta só cancela para quem pediu, e o administrador tomava *"Requisição não
+     encontrada ou não pode ser cancelada"*. Agora o botão aparece só para quem pediu (**B439**); o administrador cancela
+     pela tela do almoxarifado. A revisão achou o mesmo padrão **dentro** da tela do almoxarifado: o administrador só do
+     módulo Almoxarifado (marcado no cadastro do usuário, sem ser administrador do sistema) via o botão na requisição alheia e tomava *"Sem permissão"* — a
+     tela agora segue a regra do servidor (**B442**). **O que fazer:** nada.
+
+153. **NOVO e ✅ RESOLVIDO NA ETAPA 92 (`0187982e`) — o cancelamento pela tela do almoxarifado passava por cima de uma
+     separação que acabara de começar.** Achado na medição da Etapa 92 (10 de 10, com o cancelamento atrasado de
+     propósito até a separação terminar): o cancelamento lia *Aprovado* (ou *Totalmente Reservada*), a separação
+     gravava inteira no meio, e o cancelamento gravava *Cancelado* por cima — uma requisição **cancelada** com material
+     separado na caixa e a reserva solta (a passagem *Em Separação* → *Cancelado*, que o sistema proíbe, feita sem
+     conferir). Agora o cancelamento só grava se o status ainda é o que leu (**B437**). **O que fazer:** rodar a **A43
+     (b)** — acha as canceladas com material na caixa deixadas antes do deploy.
+
+154. **NOVO, da Etapa 92 — o que muda para quem opera.** (1) **Quem pediu por outro módulo** (Comercial, Compras,
+     Financeiro, Fábrica, Frota) passa a cancelar também a requisição *Aguardando estoque*, *Aguardando compra*,
+     *Parcialmente Reservada* e *Totalmente Reservada*; a reserva é solta e o material volta ao disponível **solto** — não
+     vai para quem esperava (**B441**, como a liberação à mão — **C135**). Depois de um cancelamento desses, separar logo
+     quem esperava o mesmo material. (2) **O administrador não vê mais** o botão **Cancelar Requisição** nas telas dos
+     outros módulos (cancela pela tela do almoxarifado); e na tela do almoxarifado o administrador **só do módulo** não o
+     vê na requisição de outra pessoa — nos dois casos o clique já dava erro. (3) **Separação e cancelamento no mesmo
+     instante:** um vence, e o outro recebe a mensagem de sempre (*"Requisição deve estar aprovada, aguardando
+     estoque/compra, em separação ou parcialmente atendida para separar"* na separação; *"Requisição não encontrada ou
+     não pode ser cancelada"* ou *"Não é possível cancelar neste status"* no cancelamento). (4) **A solicitação de compra**
+     aberta para uma requisição *Aguardando compra* **continua aberta** depois do cancelamento — ela é do material, não
+     da requisição (é assim também no cancelamento do almoxarifado). **O que fazer:** avisar Compras de que, quando quem
+     pediu desiste de uma *Aguardando compra*, a solicitação daquele material pode não ser mais necessária — quem compra
+     decide.
+
+155. **NOVO, da Etapa 92 — o que muda para quem integra.** (1) `PUT /api/requisicoes-material/:id/cancelar` aceita os seis
+     status (`PENDENTE`, `APROVADO`, `AGUARDANDO_ESTOQUE`, `AGUARDANDO_COMPRA`, `PARCIALMENTE_RESERVADA`,
+     `TOTALMENTE_RESERVADA`), só para quem pediu; a resposta (`{ success: true }`) e a recusa (**400** *"Requisição não
+     encontrada ou não pode ser cancelada"*) não mudaram. (2) A separação (`PUT /api/almoxarifado/requisicoes/:id/separacao`
+     e o alias `/separar`) pode responder **400** *"Requisição deve estar aprovada, aguardando estoque/compra, em separação
+     ou parcialmente atendida para separar"* quando a requisição foi cancelada no mesmo instante — antes respondia 200 e a
+     requisição "ressuscitava". (3) Com o status trocando **duas vezes** durante o cancelamento (o recálculo de reserva
+     no mesmo instante, duas vezes), as duas portas recusam uma requisição que **é** cancelável (**B435**, **B437**) —
+     tentar de novo. (4) A trilha *Cancelamento* grava em `dados_anteriores.status` o status que o cancelamento de fato
+     trocou. (5) Linhas novas de log: *"[almoxarifado-aprovar] Reserva ⟨id⟩ ja estava ⟨status⟩ — nada a desfazer"*
+     (informativa — **B438**), *"[almoxarifado-separacao] Requisicao ⟨id⟩ saiu de ⟨status⟩ antes da separacao gravar —
+     recusada"* (informativa) e *"[almoxarifado-separacao] Requisicao ⟨id⟩: gravacao falhou depois da reivindicacao;
+     status devolvido a ⟨status⟩: ⟨erro⟩"* (aviso — uma falha de banco no meio da separação). A linha *"Falha ao desfazer
+     reserva"* ainda pode aparecer numa janela de um instante (**B438**). **O que fazer:** integrações que cancelam
+     devem tratar a recusa como "tente de novo" quando a requisição ainda aparece num dos seis status.
 
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -8330,7 +8508,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(91) Um processo só** — a trava é uma fila na memória do servidor; com dois servidores, modo *cluster* ou Postgres,
   precisa virar trava no banco (**C132**).
 - **(91) Cancelar pelos outros módulos uma requisição já reservada continua recusado** (400) — só *Pendente* e
-  *Aprovado* (**B426**, **C149** — candidata da Etapa 92).
+  *Aprovado* (**B426**, **C149** — candidata da Etapa 92). *(Etapa 92: resolvido — **B434**.)*
 - **(91) Estorno da entrada × aprovação tem a forma da C131** — o estorno solta a reserva da chegada fora da trava;
   uma aprovação no meio pode levar o saldo solto, e se o estorno for recusado depois a reserva não é recriada (só um
   aviso no log). Não medido nesta etapa; candidata.
@@ -8339,11 +8517,35 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(91) A separação não confere o status ao gravar *Em Separação*** — uma separação em andamento pode **ressuscitar**
   uma requisição que acabou de ser cancelada (pela tela do almoxarifado ou, desde a Etapa 91, pelos outros módulos). A
   corrida já existia com o cancelamento do almoxarifado; não foi introduzida pela etapa. Candidata (pré-requisito da
-  Etapa 92).
+  Etapa 92). *(Etapa 92: resolvido — a separação reivindica a requisição antes de gravar, **B436**; o que sobrou está
+  nos itens (92) abaixo.)*
 - **(91) A falha da trilha no cancelamento pelos outros módulos não tem teste** — o aviso no log está no código, mas o
   teste não consegue simular a falha da gravação da trilha por essa rota.
 - **(91) A reserva manual alheia continua de fora** (**C139**, **B428**).
 - **(91) O pedido duplicado por reenvio com aprovação automática** fica declarado (**C147**, **B432**).
+- **(92) A exclusão administrativa no instante de uma separação com quantidade** — a separação limpa a conferência e
+  regrava *Em Separação* depois de gravar a rodada, sem conferir o status; uma exclusão que caia nesse meio termina
+  com a requisição **excluída** (escondida da lista) de volta a *Em Separação* (achado da revisão, reproduzido; anterior
+  à etapa). Não corrigido: quando a guarda perderia, a rodada já está gravada, e consertar exige decidir o que fazer com
+  ela. A **A43** não acha esse caso (a requisição excluída fica fora das duas consultas) — a consulta vem com a Etapa 93.
+  Candidata da **Etapa 93**.
+- **(92) Liberar para retirada ou entregar no mesmo instante de uma separação da mesma requisição** — as mesmas
+  gravações da separação (e a da liberação para retirada) não conferem o status; dois almoxarifes na mesma requisição.
+  Não medido. Candidata da Etapa 93.
+- **(92) O desfazer da separação que falha, residuais** (**B436**): item gravado antes da falha continua com a
+  quantidade separada (motor sem transação); o status devolvido é o da primeira leitura (uma troca *Totalmente* ↔
+  *Parcialmente* no mesmo instante volta ao velho, e o próximo recálculo corrige); o lembrete zerado não volta; um
+  **Iniciar Separação** sem quantidade concorrente não grava rodada e a guarda não o vê. Exigem falha de banco **e**
+  corrida no mesmo instante.
+- **(92) A guarda "só devolve se ainda está *Em Separação*" do desfazer não tem teste que a derrube** — tirá-la não
+  derruba nada (a revisão provou; a guarda nova de "nenhuma rodada depois" cobre os casos medidos). Mantida, declarada.
+- **(92) O aviso enganoso do desfazer da aprovação ainda pode aparecer** numa janela de um instante (**B438**).
+- **(92) O material solto pelo cancelamento não vai para quem esperava** (**B441**, **C154**).
+- **(92) Cancelar *Aguardando aprovação de valor* pelos outros módulos** — a tela não oferece; sem queixa de uso. (A
+  tela do almoxarifado também não mostra o botão nesse status — anterior à etapa; o servidor do almoxarifado aceita por
+  integração.)
+- **(92) Duas trocas de status no instante do cancelamento** → recusa sobre uma requisição cancelável (**C155**).
+- **(92) C145, C147, C150, C139** — como na 91; nenhuma muda com esta etapa.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -9054,9 +9256,27 @@ saída 11; o cancelamento pelos outros módulos 6; o alerta fora da trava 4; os 
    pela API): **Cancelar Requisição** → a requisição vira *Cancelado* e, na tela **Reservas**, a reserva aparece
    *Liberada*.
 3. **A mesma tela em *Totalmente Reservada*** mostra **Cancelar Requisição** e o toast diz *"Requisição não encontrada
-   ou não pode ser cancelada"* (**C149** — o que a Etapa 92 vai mudar).
+   ou não pode ser cancelada"* (**C149** — o que a Etapa 92 vai mudar). *(Etapa 92: mudou — a requisição é
+   cancelada; ver o (92) abaixo.)*
 4. **O 409 de requisição ainda sendo gravada** não tem clique prático — a tela só mostra a requisição depois de gravada
    (**C146**).
+
+**(92) Nenhum clique foi dado nesta etapa.** Os testes provam o servidor pela rota (com o usuário certo em **cada**
+pedido simultâneo — quem pediu, o almoxarife, o gestor — e cada cenário confere quem agiu) e pelo serviço; a tela por
+teste de componente, sem navegador. Números lidos no fechamento: a separação que não ressuscita, o cancelamento que não
+passa por cima e o desfazer que falha 33; o cancelamento pelos outros módulos 43 (dos quais 37 da Etapa 92 — os seis
+status, os outros nove, só quem pediu, o administrador, o status que muda no meio); o desfazer da aprovação 4; a lista
+da tela contra a da porta 4; a jornada de integração 7; a tela 52 casos novos. O que **só o navegador** prova:
+
+1. **Cancelar a reservada pela tela de outro módulo.** Logado como quem pediu, em **Comercial → Minhas Requisições**,
+   uma requisição sua **Totalmente Reservada**: **Cancelar Requisição** → *"Cancelar esta requisição?"* → **OK** →
+   toast *"Requisição cancelada"*, a requisição vira *Cancelado* e, na tela **Reservas** (filtro **Todos os status**), a
+   reserva aparece *Liberada*.
+2. **O administrador que não pediu**, na mesma tela, não vê o botão.
+3. **Na tela do almoxarifado**, um administrador do módulo Almoxarifado que não é administrador do sistema e não
+   pediu a requisição não vê **Cancelar Requisição**; o administrador do sistema vê.
+4. **Separação × cancelamento com duas abas** — na mão a coincidência é rara; o clique prova só que nada trava e que a
+   tela mostra a mensagem de quem perdeu.
 
 
 
@@ -18952,12 +19172,13 @@ e-mail de mínimo sai **uma** vez, logo depois.
    **B430**).
 2. **O conserto de raiz da quarentena** (o material crítico entrar já retido) — candidata.
 3. **Mais de um servidor** — a fila vive na memória de um processo só (**C132**).
-4. **Cancelar pelos outros módulos uma requisição já reservada** — continua recusado (**C149**; Etapa 92).
+4. **Cancelar pelos outros módulos uma requisição já reservada** — continua recusado (**C149**; Etapa 92). *(Resolvido
+   na Etapa 92.)*
 5. **Estorno da entrada × aprovação** — tem a forma da C131 e não foi medido (D (91)).
 6. **Prazo para esperar a fila** — não há; a tela desiste em 30 s (**C150**).
 7. **O pedido duplicado por reenvio** com aprovação automática (**C147**).
 8. **A reserva manual alheia** (**C139**, **B428**).
-9. **A separação ressuscitar requisição cancelada** — anterior à etapa (D (91)).
+9. **A separação ressuscitar requisição cancelada** — anterior à etapa (D (91)). *(Resolvido na Etapa 92.)*
 
 ### O que a revisão encontrou
 
@@ -18993,9 +19214,128 @@ suíte deixava passar, sem nenhuma regressão (cinco portas concorrentes em 20 r
   (**C150**).
 
 
+## Etapa 92 — Quem pediu por outro módulo consegue desistir da requisição reservada (2026-10-08)
+
+Quem pede material pelas telas de requisição do Comercial, Compras, Financeiro, Fábrica ou Frota via o botão
+**Cancelar Requisição** também nas requisições *Aguardando estoque*, *Aguardando compra*, *Parcialmente Reservada* e
+*Totalmente Reservada* — e clicar dava erro. Justamente as reservadas são as que seguram material: quem desistia não
+conseguia soltá-lo, e ele ficava parado até alguém do almoxarifado cancelar a pedido. Agora o botão funciona nos seis
+status em que aparece, e a reserva é solta. Para abrir essa porta com segurança, a etapa fechou antes uma corrida
+antiga: um cancelamento e uma separação no mesmo instante podiam terminar com **as duas telas dizendo "feito"** — a
+requisição "cancelada" voltava a *Em Separação* sem reserva, ou a cancelada ficava com material separado na caixa.
+Agora, quando os dois cliques coincidem, um vence e o outro recebe a recusa de sempre. E o botão deixou de aparecer para
+quem não podia usá-lo (o administrador que não pediu, nas telas dos outros módulos; o administrador só do módulo, na
+tela do almoxarifado, para a requisição de outra pessoa).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Cancelar Requisição** pelas telas dos outros módulos numa requisição *Aguardando estoque/compra* ou *Parcialmente/Totalmente Reservada* → *"Requisição não encontrada ou não pode ser cancelada"*, e o material continuava reservado (**C149**) | Cancelada; a reserva é solta e o material volta ao disponível (**B434**) |
+| Separação e cancelamento no mesmo instante: o cancelamento respondia "cancelada", a separação respondia "separada", e a requisição terminava *Em Separação* sem reserva (medido: 50 de 50 pela tela do almoxarifado, 10 de 10 pela dos outros módulos — D (91)) | O cancelamento vence: a separação recusa com a mensagem de sempre e **nada** é gravado (**B436**) |
+| Cancelar pela tela do almoxarifado no instante em que a separação gravava → cancelava uma requisição já *Em Separação*, com material na caixa e a reserva solta (**C153**, achado da medição, 10 de 10) | A separação vence: o cancelamento recusa com *"Não é possível cancelar neste status"* (**B437**) |
+| A trilha do cancelamento pelos outros módulos podia gravar o status anterior errado, se ele mudasse no instante (**C148 (2)**) | Grava o status que o cancelamento de fato trocou (**B435**) |
+| Na corrida **Aprovar** × cancelamento, o log dizia *"Falha ao desfazer reserva … Reserva liberada não pode ser liberada"* — parecia incidente e não era (**C148 (1)**) | Uma linha informativa diz que a reserva já estava liberada (**B438**) |
+| O administrador que não pediu via **Cancelar Requisição** nas telas dos outros módulos e tomava erro (**C152**, achado da medição) | Não vê o botão; cancela pela tela do almoxarifado (**B439**) |
+| *(achado da revisão)* Na tela do almoxarifado, o administrador **só do módulo** via **Cancelar Requisição** na requisição de outra pessoa e tomava *"Sem permissão"* | Não vê o botão — a tela segue a regra do servidor (**B442**) |
+| *(achado da revisão)* Uma separação que falhasse no banco depois de começar podia desfazer, por cima, a separação de outra pessoa feita no mesmo instante — e a requisição voltava a poder ser cancelada com material na caixa | Só desfaz o que é dela: se alguém separou depois, não mexe (**B436**) |
+
+### As regras, com o cenário exato
+
+Preparação: um material **M** com 4 em estoque. **Paula** (usuário sem perfil no almoxarifado, com acesso ao Comercial)
+cria em **Comercial → Minhas Requisições** a requisição **R1** pedindo 4 de M; o **Gestor** aprova → R1 fica
+**Totalmente Reservada**. **Pedro** cria **R2** pedindo 4 de M e o Gestor aprova → R2 fica **Aguardando estoque** (os 4
+estão com R1).
+
+**1. Cancelar a requisição reservada pela tela de outro módulo.** Paula, em **Comercial → Minhas Requisições**, abre R1
+→ **Cancelar Requisição** → *"Cancelar esta requisição?"* → **OK**: toast *"Requisição cancelada"*, R1 **Cancelado**. Na
+tela **Reservas** (filtro **Todos os status**) a reserva de R1 aparece **Liberada** com o motivo *"Requisição
+cancelada"*; o extrato de M ganha a linha *"Liberação por cancelamento de requisição"*; em **Auditoria**, R1 tem o
+*Cancelamento* com o status anterior *Totalmente Reservada*.
+
+**2. O material volta solto — não vai para quem esperava.** Logo depois do passo 1: M tem **4 disponíveis** e R2
+**continua Aguardando estoque, sem reserva**. Quem leva os 4 é quem separar ou for aprovado primeiro. É a mesma regra da
+liberação à mão (**C135**, **B441**) — não é defeito.
+
+**3. Os seis status, e só eles.** Pela tela dos outros módulos, o botão aparece e cancela em *Pendente*, *Aprovado*,
+*Aguardando estoque*, *Aguardando compra*, *Parcialmente Reservada* e *Totalmente Reservada*. Em *Em Separação*,
+*Pronta p/ Retirada*, *Parcialmente Atendida* e nos finais o botão não aparece; pela API, a recusa é *"Requisição não
+encontrada ou não pode ser cancelada"* e nada muda.
+
+**4. Só quem pediu.** Um administrador (ou qualquer outra pessoa) que abre R1 pela tela do Comercial **não vê** o botão.
+Pela API, a recusa é a mesma do passo 3, a reserva fica ativa e o status não muda. O administrador cancela pela tela de
+requisições do almoxarifado.
+
+**5. Separação × cancelamento no mesmo instante.** Com uma R1 nova (Totalmente Reservada), o **Almoxarife** separa 1 de R1 na tela do almoxarifado enquanto Paula
+cancela pelo Comercial. Se o cancelamento chega primeiro: toast *"Requisição cancelada"*, e a separação recusa com
+*"Requisição deve estar aprovada, aguardando estoque/compra, em separação ou parcialmente atendida para separar"* —
+nenhuma quantidade separada, nenhuma rodada. Se a separação chega primeiro: R1 fica **Em Separação** e o cancelamento
+recusa com *"Requisição não encontrada ou não pode ser cancelada"*. *(Na mão, a coincidência exata é rara — os testes a
+produzem de propósito, nos dois sentidos e pelas duas telas de cancelamento.)*
+
+**6. O mesmo pela tela do almoxarifado.** Um administrador do sistema cancela R1 pela tela de requisições do
+almoxarifado enquanto o Almoxarife separa: se a separação chega primeiro, o cancelamento recusa com *"Não é possível cancelar neste status"* e R1 continua
+**Em Separação**, com a reserva ativa.
+
+**7. Na tela do almoxarifado, quem vê o Cancelar.** O botão aparece para **quem pediu** e para o **administrador do
+sistema** (super administrador ou papel administrador). Um administrador **só do módulo** Almoxarifado (marcado no
+cadastro do usuário, sem ser administrador do sistema) que não pediu a requisição **não vê** o botão — antes via, e o clique dava *"Sem
+permissão"*.
+
+### O que esta etapa NÃO cobre
+
+1. **A exclusão administrativa no instante de uma separação** — a requisição excluída pode terminar *Em Separação*,
+   escondida da lista (achado da revisão, anterior à etapa; D (92)). Candidata da **Etapa 93**.
+2. **Liberar para retirada ou entregar no mesmo instante de uma separação da mesma requisição** (dois almoxarifes na mesma
+   requisição) — as gravações da separação depois do começo não conferem o status; não medido (D (92)). Etapa 93.
+3. **Redistribuir o material solto pelo cancelamento** para quem esperava (**B441**).
+4. **Cancelar *Aguardando aprovação de valor* pelos outros módulos** — a tela não oferece (e a do almoxarifado também
+   não mostra o botão nesse status; só por integração).
+5. **A solicitação de compra aberta por uma requisição *Aguardando compra*** continua aberta depois do cancelamento — ela
+   é do material, não da requisição (**C154**).
+6. **C145, C147, C150, C139** — como na Etapa 91.
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0) confirmou a **C149** status por status (quatro dos seis status da tela davam erro, e as duas
+reservadas seguravam o material) e mediu a corrida da separação: com o cancelamento caindo no instante, **50 de 50**
+requisições "ressuscitavam" pela tela do almoxarifado e **10 de 10** pela dos outros módulos — sem gancho nenhum, 8 de
+70 e 4 de 70 tentativas reais. Achou duas coisas que ninguém tinha visto: o cancelamento do almoxarifado passava **por
+cima** de uma separação (**C153**, 10 de 10) e o administrador via um botão que só dava erro (**C152**). A **revisão do
+plano** (0 bloqueantes, 4 importantes, 8 menores) corrigiu antes de executar: a justificativa de o cancelamento não pegar
+a trava citava o CLAUDE.md errado (**B441**); uma jornada do teste de integração não chegava a *Entregue*; uma falha de
+banco depois de a separação começar prenderia a requisição em *Em Separação*, e quem pediu perderia o **Cancelar** (virou
+a regra RN-09); e uma task que se dizia "só da tela" também mexia no servidor.
+
+A **revisão adversarial do código** (dois revisores, executando) reproduziu **7 achados**, nenhum bloqueante:
+- **O desfazer da RN-09 apagava a separação concorrente que venceu** (introduzido pela própria etapa; 5 de 5 na sonda,
+  0 de 5 depois) — consertado: só desfaz se ninguém separou depois (**B436**, `f3b2b4fb`).
+- **A leitura nova do desfazer da aprovação podia abortar o laço** e deixar reservas presas — consertado (**B438**,
+  `9f79c7ca`).
+- **Nenhum teste prendia que o administrador não cancela pelos outros módulos** — virou teste (**B439**, `8d1a9050`).
+- **A mensagem do desfazer da RN-09 e o teto de tentativas do cancelamento do almoxarifado sem teste** — viraram teste
+  (`f3b2b4fb`); a guarda "só desfaz se ainda está *Em Separação*" continua sem teste que a derrube (declarado, D (92)).
+- **O administrador do módulo via Cancelar na tela do almoxarifado e tomava *"Sem permissão"*** (anterior) — consertado
+  (**B442**, `627dc667`).
+- **A exclusão administrativa durante a separação** (anterior) — declarada (D (92)), candidata da Etapa 93.
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 92 entregue (2026-10-08):** **quem pediu por outro módulo consegue desistir da requisição reservada.** O
+  **Cancelar Requisição** das telas de requisição do Comercial, Compras, Financeiro, Fábrica e Frota passou a funcionar
+  nos seis status em que aparece — inclusive *Aguardando estoque/compra* e *Parcialmente/Totalmente Reservada* —, e a
+  reserva é solta (**C149** resolvido). Antes de abrir essa porta, a etapa fechou a corrida antiga em que um
+  cancelamento e uma separação no mesmo instante "ressuscitavam" a requisição cancelada (medido: 50 de 50) e a inversa,
+  em que o cancelamento do almoxarifado passava por cima da separação (**C153**); a trilha do cancelamento passou a
+  dizer o status certo e o log da corrida aprovar × cancelar deixou de acusar falha à toa (**C148** resolvido). O botão
+  deixou de aparecer para quem só tomava erro (**C152**, **B442**). **O que é seu:** a consulta **A43**; as decisões
+  **B434 a B442** (a **B434** reverte uma parte da **B426**); os avisos **C152 a C155** (o **C154** muda o que quem
+  opera vê; o **C155**, o que quem integra vê); as limitações **(92)** em D e as verificações **(92)** em F. **Próxima:
+  Etapa 93 — as gravações da separação depois do começo, da liberação para retirada e da exclusão administrativa
+  conferem o status (D (92)) — ver o plano da Etapa 92.**
 
 - **Etapa 91 entregue (2026-10-08):** **a aprovação não passa mais na frente de quem esperava o material.** Quem libera
   material (a nota, a inspeção que aprova, a não conformidade que aceita) e quem aprova requisição (o **Aprovar**, o
@@ -19008,8 +19348,8 @@ suíte deixava passar, sem nenhuma regressão (cinco portas concorrentes em 20 r
   segurava as aprovações) e fechou a aprovação de requisição ainda sendo gravada. **O que é seu:** a consulta **A42**; as
   decisões **B419 a B433** (a **B403** foi substituída pela **B419**); os avisos **C142 a C151** (com o **C131** e o
   **C141** resolvidos; o **C143** e o **C144** mudam o que quem opera e quem integra veem; o **C149** é a próxima etapa);
-  as limitações **(91)** em D e as verificações **(91)** em F. **Próxima: Etapa 92 — o cancelamento pelos outros
-  módulos aceita o que a tela oferece (C149) — ver o plano da Etapa 91.**
+  as limitações **(91)** em D e as verificações **(91)** em F. ~~**Próxima: Etapa 92 — o cancelamento pelos outros
+  módulos aceita o que a tela oferece (C149) — ver o plano da Etapa 91.**~~ *(Feita — Etapa 92.)*
 
 - **Etapa 77 entregue (2026-10-08):** **a reserva de uma requisição só sai pela requisição.** Uma saída pela API de
   movimentações que cita a reserva de uma requisição é recusada — o material dela só sai pela entrega (**C136**

@@ -2,7 +2,13 @@
 
 > **Status:** 🟢 Etapa 4 completa — backend (2026-08-05) e tela (2026-08-06) ·
 > **Spec original:** seção 7
-> **Última atualização:** 2026-10-08 (**Etapa 91** — a fila não se inverte mais quando uma aprovação cai no meio de uma
+> **Última atualização:** 2026-10-08 (**Etapa 92** — o cancelamento pelos outros módulos solta a reserva em **seis**
+> status (`PENDENTE`, `APROVADO`, `AGUARDANDO_*`, `*_RESERVADA` — antes só os dois primeiros; **C149 resolvida**, B434),
+> com *compare-and-set* contra o status lido; o material solto volta ao disponível **solto**, sem distribuir e sem a
+> trava por material (B441 — o CLAUDE.md foi apertado para "ponha saldo no disponível **e distribua**", `7e59853d`);
+> o desfazer da aprovação que perde não acusa falha quando a reserva já foi solta (C148 (1), B438). `dd7e84a7`,
+> `a4237edb`, `0187982e`, `3f84ecaa`, Fase 5 `9f79c7ca`. Continua 🟢. Ver o item da Etapa 92 no checklist.)
+> Antes: 2026-10-08 (**Etapa 91** — a fila não se inverte mais quando uma aprovação cai no meio de uma
 > liberação (**C131 resolvida**, Opção A, **B419**, que substitui a **B403**): uma trava por material, num módulo próprio
 > com **um** `Map` só (`travaPorMaterial`), vai do movimento do motor que põe saldo no disponível até a distribuição nas
 > três portas que liberam (nota, inspeção, não conformidade que aceita) e envolve `prepararPosAprovacao` + o `UPDATE`
@@ -187,10 +193,25 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
   trava — saída avulsa, reserva manual, separação (**C145**, B430 — as três formas de fechar mexem no motor ou abrem
   portas novas na trava); o reenvio que duplica a requisição com aprovação automática (**C147**, B432 — precisa de chave
   de idempotência do cliente); a tela dos outros módulos oferece **Cancelar** em status reservados que a rota recusa
-  (**C149** — contrato da outra porta, B426; **Etapa 92**); mais de um processo (**C132** — premissa escrita no
+  (**C149** — contrato da outra porta, B426; **Etapa 92**) *(paga na Etapa 92 — item abaixo)*; mais de um processo (**C132** — premissa escrita no
   módulo); estorno × aprovação com a forma da C131 (`liberarParaEstorno` fora de trava — candidata, D (91)); o `UPDATE`
   da separação para `EM_SEPARACAO` sem guarda de status, que pode ressuscitar requisição cancelada (anterior à etapa —
-  candidata, D (91)); trava sem prazo de aquisição (C150, D (91)).
+  candidata, D (91)) *(paga na Etapa 92 — item abaixo)*; trava sem prazo de aquisição (C150, D (91)).
+- [x] **O cancelamento pelos outros módulos solta a reserva nos seis status da tela, sem passar por cima da separação
+  (Etapa 92, C149 + C148 + C153)** — `dd7e84a7` (a rota aceita `CANCELAVEIS_OUTROS_MODULOS`, *compare-and-set* contra o
+  status lido + uma nova tentativa; liberação por `reservationService.liberarReservasDaRequisicao` e trilha como na 91,
+  agora com o status que o `UPDATE` trocou — B434/B435); `0187982e` (o cancelamento do almoxarifado com o mesmo
+  *compare-and-set* — B437); `6a0b529c` (a separação reivindica antes de gravar: a reserva solta pelo cancelamento não
+  fica mais com material separado sem dono — B436); `a4237edb` + Fase 5 `9f79c7ca` (`desfazerReservas` lê o status da
+  reserva **dentro** do `try`; já não `ATIVA` → `console.info` *"[almoxarifado-aprovar] Reserva ⟨id⟩ ja estava ⟨status⟩ —
+  nada a desfazer"*; leitura que falha segue para o `liberarReserva` — B438); integração `3f84ecaa` (jornada A: o
+  recálculo **real** da 76 troca `TOTALMENTE → PARCIALMENTE` no instante do cancelamento, que relê e vence com a trilha
+  certa; jornada C: a distribuição da 74 × o cancelamento de uma `AGUARDANDO_ESTOQUE` — a RN-09 da 74 desfaz a reserva
+  nascida para a cancelada, e o controle que desliga a releitura a deixa `ATIVA` presa; jornada D: o solto não vai para
+  quem espera — RN-08, B441). **Decisão registrada:** o cancelamento **não** pega a trava por material — soltar só aumenta
+  o livre; a regra do CLAUDE.md dizia "ponha saldo no disponível **ou** o leia" e pela letra o pegaria; foi apertada para
+  "**e distribua**" (`7e59853d`, B441). **Fica de fora:** redistribuir o solto (B441); o W1 numa janela de um instante
+  (B438); C139, C145, C147, C150, C132 como na 91.
 - [ ] Reserva por lote específico / número de série — **fora da Etapa 4**. Atualização (2026-08-11): a dependência de **lote** caiu — a feature 10 (lotes) foi entregue na Etapa 6 (2026-08-09/10), então reserva por lote ficou implementável; número de série continua dependendo da 6b
 - [x] Data de necessidade na reserva (`data_necessidade`) — `6690c1a`. **Prioridade** ficou fora: sem demanda concreta, `data_necessidade` cobre o ordenamento útil
 - [x] Expiração automática (`POST /reservas/processar-expiracao` + config `reserva_dias_validade`) — `6690c1a`. **Opt-in**: sem a config e sem `expira_em` explícito a reserva não expira, senão as reservas manuais existentes começariam a ser liberadas sozinhas. Alerta por e-mail fica com a feature 20
@@ -316,6 +337,11 @@ Os nomes abaixo são os reais — copiáveis para localizar o caso.
 | Sem corrida nada muda (inclusive o salto sequencial declarado); sem deadlock; exceção solta; recálculo depois da seção; respostas inalteradas | `filaLiberacaoAprovacaoCorrida` · *[91 RN-06 (a)/(b)]…* · *[91 RN-07 (a)/(b)/(c)/(e)]…* · *[91 RN-08]…* · *[91 RN-09]…* · *[91 L1]…* |
 | `reserva_id` só numa saída: 400 M1 pela v2, `/transferencias` e serviço; `RESERVA`/`LIBERACAO_RESERVA` isentos; precedência | `reservaIdSoEmSaida` · *[91 RN-11]…* |
 | O cancelamento pelos outros módulos solta as reservas e grava a trilha (C141); recusas de hoje inalteradas | `requisicaoCancelarOutrosModulosReserva` · *[91 RN-10]…* |
+| **Etapa 92** — os seis status pelos outros módulos, só quem pediu (o administrador não), o status que muda no meio (*compare-and-set*, teto de uma nova tentativa) | `requisicaoCancelarOutrosModulosReserva` · *[92 RN-01] (a)…(d), (c')…* · *[92 RN-02] (a)…(c)…* |
+| A separação não ressuscita a cancelada; o cancelamento não sobrescreve a separação; a falha depois de reivindicar | `separacaoNaoRessuscita` · *[92 RN-03]…* · *[92 RN-04] (a)…(c)…* · *[92 RN-09] (a)…(d)…* |
+| O desfazer da aprovação que perde não acusa falha à toa; a falha real continua; a leitura que falha não aborta | `aprovarPerdedorReservaJaSolta` · *[92 RN-05] (a)…(d)…* |
+| A lista da tela é a lista da porta | `cancelarListaTelaRota` · *[92 RN-07]…* |
+| Ponta a ponta (76 real, separação × as duas portas, entrega da 77, distribuição da 74, o solto não redistribui, `/aprovar`) | `cancelarOutrosModulosIntegracao` · *[92 T5 A…E, servico]…* |
 | O alerta de estoque mínimo roda depois de soltar a trava; SMTP com prazo (F3) | `alertaForaDaTrava` · *[91 F5-F3 (a)…(d)]…* |
 | Item gravado no meio da aprovação nunca é reservado sem a trava (F1); mutações da revisão mortas | `travaRevisaoFase5` · *[91 F5-F1]…* · *[91 F5 RN-05 (f)/(g)…]…* · *[91 F5 RN-11 todos os tipos]…* · *[91 F5 trava chave]…* |
 | Ponta a ponta (jornada com material crítico, pares serviço × rota, D(77) × 75, C141 × 76 × 77 — perfis reais) | `filaTravaIntegracao` · *[91 T3 jornada 1-2…5]…* · *[91 T3 servico 6/7]…* · *[91 T6 jornada B/C]…* |

@@ -1,13 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-08 (Etapa 91) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-08 (Etapa 92) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77 e 91) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 e 92) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-08 (Etapa 91 ENTREGUE · próxima do almoxarifado: Etapa 92)
+> ## Onde o desenvolvimento está — 2026-10-08 (Etapa 92 ENTREGUE · próxima do almoxarifado: Etapa 93)
 >
-> **O desenvolvimento parou aqui: Etapa 91 fechada — 2026-10-08.** A **Etapa 91 (a fila não se inverte quando a
+> **O desenvolvimento parou aqui: Etapa 92 fechada — 2026-10-08.** A **Etapa 92 (quem pediu por outro módulo
+> consegue desistir da requisição reservada)**: o **Cancelar Requisição** das telas **Minhas Requisições** dos outros
+> módulos passou a funcionar nos seis status em que aparece — inclusive *Aguard. Estoque/Compra* e *Parcialmente/
+> Totalmente Reservada* —, e a reserva é solta (aviso **C149** resolvido). Um cancelamento e uma separação no mesmo
+> instante não terminam mais com as duas telas dizendo "feito": um vence e o outro recebe a recusa de sempre (avisos
+> **C153** e D (91) resolvidos). O botão deixou de aparecer para quem só tomava erro (o administrador que não pediu, na
+> tela dos outros módulos; o administrador só do módulo Almoxarifado, que não é administrador do sistema, na tela do
+> almoxarifado). **Próxima etapa do almoxarifado: 93 — as gravações da separação depois do começo, da liberação para
+> retirada e da exclusão administrativa conferem o status** (a exclusão no mesmo instante de uma separação deixa a
+> requisição excluída de volta a *Em Separação*; ver *"Próxima tarefa detalhada"* no plano da Etapa 92).
+>
+> **Etapa 91, 2026-10-08.** A **Etapa 91 (a fila não se inverte quando a
 > aprovação cai no meio de uma liberação)**: a aprovação de uma requisição (o **Aprovar**, o **Aprovar Liberação** por
 > valor e a aprovação automática) passa a **esperar** a entrada de nota, a decisão de inspeção ou a não conformidade
 > aceita que estiver em andamento com os mesmos materiais — quem esperava primeiro fica com o material, mesmo quando a
@@ -15,13 +26,13 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > avulsa e a reserva manual no mesmo instante continuam, **C145**). O cancelamento pelas telas
 > **Minhas Requisições** dos outros módulos passou a soltar a reserva (**C141** resolvido); a API de movimentações
 > recusa o número de reserva num movimento que não é saída; e o e-mail do alerta de estoque mínimo não segura mais as
-> outras operações do material. **Próxima etapa do almoxarifado: 92 — o cancelamento pelos outros módulos aceita o que a
-> tela oferece** (aviso **C149**: a tela **Minhas Requisições** mostra **Cancelar Requisição** para requisições
+> outras operações do material. ~~**Próxima etapa do almoxarifado: 92 — o cancelamento pelos outros módulos aceita o que a
+> tela oferece**~~ *(Feita — Etapa 92.)* (aviso **C149**: a tela **Minhas Requisições** mostra **Cancelar Requisição** para requisições
 > reservadas ou em espera, e o servidor recusa; ver *"Próxima tarefa detalhada"* no plano da Etapa 91).
 > *Numeração:* desde a unificação de 2026-10-07 a numeração de etapas é uma só para todos os módulos — as 78 a 90 foram
 > do lote de Compras/núcleo (`docs/compras-novidades-por-etapa.md`, **B18**); por isso, depois da 77, vieram a 91 e a 92.
 >
-> **Etapas 1 a 20, 22 a 77 e 91 completas.**
+> **Etapas 1 a 20, 22 a 77, 91 e 92 completas.**
 >
 > **Etapa 77, 2026-10-08.** A **Etapa 77 (a reserva de uma requisição só sai
 > pela requisição)**: uma saída pela API de movimentações que cita a reserva de uma requisição é recusada — o material
@@ -5717,6 +5728,7 @@ que os cliques caírem; a prova do instante exato é dos testes automáticos (qu
 7. **O que a tela ainda oferece e o servidor recusa (aviso C149 — é a próxima etapa).** Na mesma tela, uma requisição
    sua **Totalmente Reservada** (ou *Aguard. Estoque*) ainda mostra **Cancelar Requisição**; clicar dá o toast
    *"Requisição não encontrada ou não pode ser cancelada"* e nada muda. Para cancelá-la hoje: pela tela do almoxarifado.
+   *(Desde a Etapa 92 isto mudou: o botão cancela — ver o roteiro da Etapa 92.)*
 8. **A API de movimentações (só para quem testa a API).** Com o token de um Almoxarife, `POST
    /api/almoxarifado/movimentacoes/v2` com `tipo: "ENTRADA"` (ou `AJUSTE`, `DEVOLUCAO`) e um `reserva_id` qualquer →
    **400** *"reserva_id só vale numa saída que consome a reserva — o tipo ENTRADA não consome reserva; tire o reserva_id
@@ -5730,7 +5742,7 @@ que os cliques caírem; a prova do instante exato é dos testes automáticos (qu
   disparada no instante (alguns milésimos de segundo) entre a entrada da nota e a retenção para inspeção ainda pode
   deixar o disponível negativo (aviso **C145**, decisão **B430**; a consulta **A42** acha o rastro).
 - **Cancelar pela tela dos outros módulos uma requisição reservada ou em espera** continua recusado, embora a tela mostre
-  o botão (aviso **C149**) — é a **Etapa 92**.
+  o botão (aviso **C149**) — é a **Etapa 92**. *(Resolvido na Etapa 92.)*
 - **Reenviar uma requisição** com aprovação automática ligada, depois de a tela desistir de esperar, pode gravá-la
   **duas vezes** (aviso **C147**, decisão **B432**).
 - **A espera não tem limite de tempo:** a aprovação de um material que está numa nota muito grande espera a nota
@@ -5747,6 +5759,72 @@ Tudo o que é decisão ou aviso desta etapa está nas novidades: decisões **B41
 negativo ou retido sem lastro físico), as limitações **(91)** em D e as verificações **(91)** em F.
 
 ---
+
+## Etapa 92 — Quem pediu por outro módulo consegue desistir da requisição reservada (ENTREGUE — 2026-10-08)
+
+**O que mudou, em uma frase:** o **Cancelar Requisição** das telas **Minhas Requisições** dos outros módulos passou a
+funcionar em todos os status em que aparece — inclusive nas requisições reservadas, que seguram material —, e um
+cancelamento e uma separação no mesmo instante não terminam mais com as duas telas dizendo "feito".
+
+**O problema que ela resolve.** A tela **Minhas Requisições** do Comercial, Compras, Financeiro, Fábrica e Frota mostrava
+**Cancelar Requisição** em *Pendente*, *Aprovado*, *Aguard. Estoque*, *Aguard. Compra*, *Parcialmente Reservada* e
+*Totalmente Reservada* — mas só cancelava as duas primeiras; nas outras quatro dava *"Requisição não encontrada ou não
+pode ser cancelada"* (aviso **C149**). As reservadas ficavam segurando o material até alguém do almoxarifado cancelar. E,
+desde sempre, uma separação que caísse no mesmo instante de um cancelamento podia "ressuscitar" a requisição cancelada
+(*Em Separação*, sem reserva) — ou, pela tela do almoxarifado, o cancelamento passava por cima da separação e deixava
+material separado numa requisição cancelada (aviso **C153**). Abrir o cancelamento das reservadas sem fechar isso
+deixaria a corrida mais frequente.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Cancelar Requisição** em *Aguard. Estoque/Compra* ou *Parcialmente/Totalmente Reservada* pela tela de outro módulo: erro, e a reserva continuava (**C149**) | Cancela e solta a reserva (**B434**) |
+| Separação e cancelamento no mesmo instante: as duas telas diziam sucesso e a requisição cancelada voltava a *Em Separação* sem reserva | O cancelamento vence; a separação recusa e não grava nada (**B436**) |
+| Cancelar pela tela do almoxarifado enquanto a separação gravava cancelava a requisição já separada (**C153**) | A separação vence; o cancelamento recusa com *"Não é possível cancelar neste status"* (**B437**) |
+| O administrador que não pediu via **Cancelar Requisição** na tela de outro módulo e tomava erro (**C152**) | Não vê o botão (**B439**) |
+| Na tela do almoxarifado, o administrador **só do módulo** Almoxarifado (sem ser administrador do sistema) via **Cancelar Requisição** na requisição de outra pessoa e tomava *"Sem permissão"* | Não vê o botão (**B442**) |
+| A **Auditoria** do cancelamento podia mostrar o status anterior errado, numa corrida | Mostra o status que o cancelamento trocou (**B435**) |
+
+### Roteiro de teste manual (≈15 min)
+
+**Preparação.** Um material **M** com 4 em estoque. Um usuário **Paula** sem perfil no almoxarifado, com acesso ao
+**Comercial**. Um **Gestor** que aprova. Um **Almoxarife**.
+
+1. **Cancelar a reservada.** Paula, em **Comercial → Minhas Requisições**, cria **R1** pedindo 4 de M. O Gestor aprova
+   (em **Almoxarifado → Requisições (almox.)**) → R1 **Totalmente Reservada**. De volta como Paula, abra R1: o botão
+   **Cancelar Requisição** está lá. Clique → *"Cancelar esta requisição?"* → **OK** → toast *"Requisição cancelada"*; R1
+   aparece **Cancelado**.
+2. **A reserva saiu.** Em **Almoxarifado → Reservas**, filtro **Todos os status**: a reserva de R1 está **Liberada**, com
+   o motivo *"Requisição cancelada"*. No extrato de M, a linha *"Liberação por cancelamento de requisição"*. Em
+   **Auditoria**, R1 tem o **Cancelamento** com o status anterior *Totalmente Reservada*.
+3. **O material volta solto.** Antes do passo 1, crie também **R2** (outro usuário, 4 de M) e aprove → *Aguard.
+   Estoque*. Depois do cancelamento de R1: M tem 4 disponíveis e **R2 continua Aguard. Estoque, sem reserva** — é o
+   esperado (o cancelamento não distribui; separe R2 se ela deve levar os 4).
+4. **Os outros status.** Repita o passo 1 com requisições em *Aguard. Estoque* (sem saldo) e *Parcialmente Reservada*
+   (saldo para parte): o botão aparece e cancela. Com uma requisição já **Em Separação** (o Almoxarife iniciou a
+   separação), o botão **não** aparece.
+5. **O administrador.** Logado como administrador, abra uma requisição de Paula ainda cancelável (*Pendente* ou reservada) pela tela **Comercial → Minhas Requisições**: o
+   botão **não** aparece. Na tela **Almoxarifado → Requisições (almox.)**, o administrador do sistema **vê** o botão;
+   um administrador só do módulo Almoxarifado (marcado no cadastro do usuário) que não é administrador do sistema
+   **não vê** (na
+   requisição de outra pessoa).
+6. **Separação × cancelamento (opcional, duas janelas).** Janela A: o Almoxarife com a separação de uma requisição
+   *Totalmente Reservada* de Paula aberta (quantidade 1). Janela B: Paula com **Cancelar Requisição** à vista. Clique os
+   dois juntos. Resultado: **ou** *Cancelado* e a separação recusada com *"Requisição deve estar aprovada, aguardando
+   estoque/compra, em separação ou parcialmente atendida para separar"* (nada separado), **ou** *Em Separação* e o
+   cancelamento recusado com *"Requisição não encontrada ou não pode ser cancelada"*. **Nunca** os dois com sucesso. (Na
+   mão a coincidência é rara; os testes automáticos a forçam.)
+
+### O que esta etapa NÃO cobre
+
+- **A exclusão administrativa no mesmo instante de uma separação** pode deixar a requisição excluída de volta a *Em
+  Separação*, escondida da lista — e liberar para retirada ou entregar no mesmo instante de uma separação da mesma
+  requisição não foi medido. É a **Etapa 93**.
+- **O material solto pelo cancelamento não vai para quem esperava** (**B441**) — mesma regra da liberação à mão.
+- **Cancelar *Aguard. Aprov. Valor*** — nenhuma das duas telas mostra o botão nesse status (só por integração).
+- **A solicitação de compra** aberta para uma *Aguard. Compra* continua aberta depois do cancelamento (aviso **C154**).
+- **C145, C147, C150, C139** — como na Etapa 91.
 
 ## Etapa 72 — A solicitação de compra só fecha quando o material dela chega (ENTREGUE — 2026-10-02)
 
