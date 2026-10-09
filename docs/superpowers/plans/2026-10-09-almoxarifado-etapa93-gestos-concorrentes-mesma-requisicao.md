@@ -1,6 +1,6 @@
 # Etapa 93 — dois gestos na mesma requisição ao mesmo tempo: separar, liberar, entregar, excluir e encerrar não passam um por cima do outro (D (92), feature 04 com a 05 e a 07)
 
-> Status: **EM EXECUÇÃO (2026-10-09) — T0 `fa4ae85c` e T1 `034076ff` feitas** (seção "Execução" no fim). Próximo: **T2**. A Fase 2 (`ed48dc13`)
+> Status: **EM EXECUÇÃO (2026-10-09) — T0 `fa4ae85c`, T1 `034076ff`, T2 `908ee2a1`, T3 `03c147cb`, T4 `8e0d7509`, T5 `2ac57af0` feitas** (seção "Execução" no fim). Próximo: **T6** e a Fase 5. A Fase 2 (`ed48dc13`)
 > (1 bloqueante, 4 importantes, 6 menores) está em "Fase 2 — revisão do plano" no fim e **vale sobre o texto acima**;
 > os pontos afetados estão marcados **"(corrigido na Fase 2)"** ou **"(Fase 2)"**.
 > HEAD de partida: `7f45ecef` (main, árvore limpa, sem push).
@@ -523,7 +523,7 @@ cliente). Executores **não** marcam este plano; o fio principal marca.
   separação: lê `EM_SEPARACAO`, grava `PRONTA`, e o CAC regrava `EM_SEPARACAO` — o defeito 1b). (s2) encerrar sem a
   trava → cai RN-07 (b). (s3) o 403 do encerrar movido para dentro da trava → nenhum teste de regra cai; **declarado**
   (é desempenho, não regra) — não é controle que prove algo, fica de fora.
-- [ ] **T2 (galho) — o *compare-and-clear* confere o status; 409 X1 (B444).** Acrescenta **RN-08 (a)(a')**. **Vermelho
+- [x] `908ee2a1` **T2 (galho) — o *compare-and-clear* confere o status; 409 X1 (B444).** Acrescenta **RN-08 (a)(a')**. **Vermelho
   antes:** RN-08 (a) (200 e status regravado `EM_SEPARACAO` — o defeito). **Medir:** os 30 de separação — em especial
   `separacaoNaoRessuscita` RN-09 (c)/(d) (a regex `RE_COMPARE_AND_CLEAR` tem de continuar casando), `separacaoComDono`
   `[RN-07] compare-and-clear`, `segundaConferencia`. **Controles:** (s1) sem `AND status` nos dois `UPDATE` → cai RN-08
@@ -531,18 +531,18 @@ cliente). Executores **não** marcam este plano; o fio principal marca.
   `conferido_por_id` NULL (montar o caso com conferência prévia). (s3) o 409 lançado **antes** da trilha → cai a
   asserção "trilha `SEPARACAO` 1". (s4) a condição nova **antes** de `conferido_por_id IS ?` → cai o RN-09 (c) da 92
   ("gancho disparou") — controle de que a ordem da condição importa (dito no plano para ninguém "arrumar").
-- [ ] **T3 (galho) — a liberação confere status e marca de rodada (B445).** Acrescenta **RN-08 (b)(b')(b'')**.
+- [x] `03c147cb` **T3 (galho) — a liberação confere status e marca de rodada (B445).** Acrescenta **RN-08 (b)(b')(b'')**.
   **Vermelho antes:** (b) (200 sobre `ENTREGUE`), (b') (200 com crítico não conferido), (b'') (200). **Controles:** (s1)
   sem `AND status=?` → cai (b). (s2) sem o `NOT EXISTS` da marca → cai (b') (libera). (s3) laço de 1 → cai (b')
   (responde L1 em vez da literal da barreira). (s4) laço sem teto → cai (b'') (vence na 3ª).
-- [ ] **T4 (galho) — a entrega confere o status no `UPDATE` final (B446).** Acrescenta **RN-08 (c)(c')**. **Vermelho
+- [x] `8e0d7509` **T4 (galho) — a entrega confere o status no `UPDATE` final (B446).** Acrescenta **RN-08 (c)(c')**. **Vermelho
   antes:** (c') (status regravado `ENTREGUE` sobre `CANCELADO`). (c) passa antes (o `UPDATE` sem guarda grava `ENTREGUE`
   por cima de `PRONTA` — o desfecho certo por acaso); fica como guarda da nova tentativa — **o vermelho dela é o s2**.
   **Controles:** (s1) sem `AND status=?` → cai (c'). (s2) sem a nova tentativa → cai (c) (status `PRONTA`, W4). (s3) 409
   no lugar do 200 → cai (c') no código. (s4) a nova tentativa sem `validarTransicao` → cai (c') (regrava sobre
   `CANCELADO` — a releitura venceria). **(Fase 2, M4)** Acrescenta RN-08 (c''); vermelho antes: o item termina com 2.
   (s5) volta o `SET quantidade_entregue=?` absoluto → cai (c'').
-- [ ] **T5 (galho) — a exclusão e o encerramento conferem o status (B447, B448).** Acrescenta **RN-08 (d)(e)**.
+- [x] `2ac57af0` **T5 (galho) — a exclusão e o encerramento conferem o status (B447, B448).** Acrescenta **RN-08 (d)(e)**.
   **Vermelho antes:** (d) (200 e `UPDATE` regravado), (e) segunda metade (200 sobre `EM_SEPARACAO`). **Controles:** (s1)
   exclusão sem `AND COALESCE(ativo,1)=1` → cai (d). (s2) exclusão com nova tentativa → cai (d) (emitido 2 vezes). (s3)
   encerrar sem `AND status=?` → cai (e) (`ENCERRADA` sobre `EM_SEPARACAO`). (s4) liberar reservas **antes** de conferir
@@ -785,3 +785,22 @@ Baseline: `test:api` 325/325 (3818), `test:almoxarifado` 44/0. Depois da T0: 326
 - **T1 `034076ff`** — corpo de liberar e encerrar dentro da trava (o 403 do encerrar fica fora, para não esperar a fila
   para recusar). Vermelho antes: RN-02 (a)–(d) e RN-07 (b), no desfecho. Controles: s1 → as quatro RN-02; s2 → RN-07 (b);
   s3 só declarado, como o plano diz.
+- **T2–T5** (um executor, em sequência). `test:api` 326/326: 3842 → T2 3844 → T3 3847 → T4 3851 → T5 3858;
+  `test:almoxarifado` 44/0 sempre; no fim 4/0, 3/0, 5/0. Casos novos em `requisicaoGestosConcorrentes` (24 → 40), escritor
+  fora da trava por SQL no gancho (helper `armarEscritor`, que conta as emissões).
+- **T2 `908ee2a1`** — vermelho: RN-08 (a) (200 em vez de 409); (a') passou antes (guarda). Controles: s1 → (a) no **código**
+  (200), não no status final como o plano dizia; s2 → (a) em `conferido_por_id`; s3 → (a) na trilha (1 ≠ 2); s4 (condição
+  antes de `conferido_por_id IS ?`) → `[92 RN-09] (c)` "gancho disparou 0" — prova que o teste da 92 segue exercendo.
+- **T3 `03c147cb`** — vermelho: (b)(b')(b'') 200. Controles: s1 → (b); s2 → (b')(b''); s3 → (b') **e também** (b)(b'')
+  (divergência, a mais); s4 → (b'') vence na 3ª.
+- **T4 `8e0d7509`** — vermelho: (c)(c')(c'') e (c''') — **divergência:** o plano previa (c) passando antes; cai porque o
+  teste conta 2 emissões. **s4 (retentativa sem revalidar a transição) não derrubou (c')** — a guarda de `ativo` já
+  barra a excluída; criado **RN-08 (c''')** (o escritor encerra mantendo ativa → só a transição barra), vermelho antes e
+  derrubado pelo s4. s1 → (c)(c'); s2 → (c); s3 → (c'); s5 (gravação absoluta) → (c'') 2≠4. **Divergência de contrato:**
+  a gravação relativa usa `COALESCE(quantidade_entregue, quantidade_atendida, 0)` (como o código já lê entregue em linha
+  antiga), não `COALESCE(quantidade_entregue,0)`.
+- **T5 `2ac57af0`** — vermelho: os sete casos (o plano previa quatro; (d') e a 1ª metade de (e) caem na contagem de
+  emissões). Controles: s1 → (d)(d'''); s2 → (d) com **404**, não "emitido 2 vezes" (o escritor põe `ativo=0` e a releitura
+  vê); s3 → (e)/(e') os três; s4 → (e)(e') (`LIBERADA`); s5 → (d')(d''); s6 → (e') com corpo `{}`. **Decisão além do
+  plano:** a trilha da exclusão grava como "anterior" o status que o `UPDATE` de fato trocou (o relido, se a retentativa
+  venceu), como a trilha do cancelamento da 92; testado em (d').
