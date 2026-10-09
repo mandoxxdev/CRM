@@ -961,6 +961,13 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
       // 5/5). A condicao nova vai DEPOIS de `conferido_por_id IS ?` — o teste RN-09 (c) da 92 casa o WHERE por
       // regex nessa ordem. Perdeu por status -> nao regrava o status, limpa a conferencia mesmo assim (D3 da 28:
       // a rodada nova nao herda a conferencia da velha), W3, e o 409 X1 sai DEPOIS da trilha da rodada.
+      // O caminho de quem perdeu por STATUS (B444), comum ao laco e a ultima tentativa (Fase 5, item 4).
+      const saiuDeEmSeparacao = async (agora) => {
+        statusMudou = agora;
+        await dbRun(db, `UPDATE requisicoes_almoxarifado
+            SET conferido_por_id=NULL, conferido_por_nome=NULL, conferido_em=NULL WHERE id=?`, [requisicaoId]);
+        console.warn(`[almoxarifado-separacao] Requisicao ${requisicaoId}: saiu de EM_SEPARACAO (agora ${statusMudou}) depois da rodada ${rodadaId}; conferencia limpa, status nao regravado`);
+      };
       let limpou = false;
       for (let tentativa = 0; tentativa < 3 && !limpou && !statusMudou; tentativa++) {
         // eslint-disable-next-line no-await-in-loop
@@ -981,25 +988,27 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
         if (!limpou) {
           // eslint-disable-next-line no-await-in-loop
           const agora = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
-          if (agora && agora.status !== 'EM_SEPARACAO') {
-            statusMudou = agora.status;
-            // eslint-disable-next-line no-await-in-loop
-            await dbRun(db, `UPDATE requisicoes_almoxarifado
-                SET conferido_por_id=NULL, conferido_por_nome=NULL, conferido_em=NULL WHERE id=?`, [requisicaoId]);
-            console.warn(`[almoxarifado-separacao] Requisicao ${requisicaoId}: saiu de EM_SEPARACAO (agora ${statusMudou}) depois da rodada ${rodadaId}; conferencia limpa, status nao regravado`);
-          }
+          // eslint-disable-next-line no-await-in-loop
+          if (agora && agora.status !== 'EM_SEPARACAO') await saiuDeEmSeparacao(agora.status);
         }
       }
       if (!limpou && !statusMudou) {
         // Três corridas seguidas na MESMA linha: o estado seguro (limpa) prevalece sobre o rastro —
         // a última conferência a entrar fica fora de dados_anteriores, e isso fica avisado.
         console.warn(`[almoxarifado-separacao] Requisição ${requisicaoId}: a conferência mudou 3 vezes durante a rodada ${rodadaId}; limpando sem compare.`);
-        await dbRun(db,
+        const ultima = await dbRun(db,
           `UPDATE requisicoes_almoxarifado
              SET status='EM_SEPARACAO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL,
                  conferido_por_id=NULL, conferido_por_nome=NULL, conferido_em=NULL
            WHERE id=? AND status='EM_SEPARACAO'`,
           [requisicaoId]);
+        // Etapa 93 (Fase 5, item 4): esta ultima tentativa tambem confere `changes`. Sem isso, um escritor que
+        // tirasse a requisicao de EM_SEPARACAO bem aqui fazia a separacao responder 200 EM_SEPARACAO sem X1 e
+        // deixava a conferencia da rodada velha (sonda e93rv2-fallback). Perdeu -> o caminho da B444 (W3, 409 X1).
+        if (ultima.changes === 0) {
+          const agora = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
+          if (agora && agora.status !== 'EM_SEPARACAO') await saiuDeEmSeparacao(agora.status);
+        }
       }
     }
     // (Etapa 92: o `else` que gravava EM_SEPARACAO no "Iniciar Separacao" sem quantidade saiu — a

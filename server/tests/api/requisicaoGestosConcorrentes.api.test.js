@@ -708,6 +708,33 @@ const esperarFila = async (R, ms = 3000) => {
     assert.strictEqual(Number(ant.conferencia.usuario_id), USERS.ALMOX2.id);
   });
 
+  // Fase 5 (item 4, sonda e93rv2-fallback): a ULTIMA tentativa ("limpando sem compare") nao conferia `changes`. Com o
+  // escritor trocando a conferencia nas 3 tentativas e pondo CANCELADO na 4a emissao, respondia 200 EM_SEPARACAO sem
+  // X1 e deixava a conferencia velha na requisicao.
+  await test("[93 RN-08] (a'') separacao: o escritor troca a CONFERENCIA nas 3 tentativas e poe CANCELADO na 4a emissao (a ultima, sem compare) -> 409 X1; status CANCELADO (nao regravado); conferencia limpa; W3 1 vez; trilha SEPARACAO da rodada; CAC emitido 4 vezes", async () => {
+    desarmar();
+    const x = await montar();
+    const g = armarEscritor(RE.CAC, (n) => (n < 4
+      ? raw(`UPDATE requisicoes_almoxarifado SET conferido_por_id = ?, conferido_por_nome = ?, conferido_em = CURRENT_TIMESTAMP
+          WHERE id = ?`, [9700 + n, `Conf ${n}`, x.R])
+      : raw("UPDATE requisicoes_almoxarifado SET status = 'CANCELADO' WHERE id = ?", [x.R])), 4);
+    const w = capturar('warn');
+    let sep;
+    try { sep = await comPrazo(separar('ALMOX', x.R, x.item, 1), 8000, 'separacao'); } finally { w.restaurar(); desarmar(); }
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(g.disparos, 4, `o escritor disparou ${g.disparos} vez(es)`);
+    assert.strictEqual(g.emitidos, 4, `CAC emitido ${g.emitidos} vez(es)`);
+    assert.strictEqual(sep.status, 409, `separacao: ${sep.status} ${JSON.stringify(sep.body)}`);
+    assert.strictEqual(sep.body.error, X1('CANCELADO'));
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'CANCELADO', `status ${f.status}`);
+    assert.strictEqual(f.conferido, null, `conferido_por_id ${f.conferido} (a conferencia velha ficou)`);
+    assert.strictEqual(f.rodadas.length, 1);
+    const w3 = w.linhas.filter((l) => l === W3(x.R, 'CANCELADO', f.rodadas[0].id));
+    assert.strictEqual(w3.length, 1, `W3 ${w3.length} vez(es): ${JSON.stringify(w.linhas)}`);
+    assert.strictEqual((await trilhaDe(x.R, 'SEPARACAO')).length, 1, 'a trilha da rodada gravada');
+  });
+
   // ── RN-08 (b)(b')(b'') — a liberacao confere o status lido e a marca de rodada (T3, B445) ──
   const L1 = 'A requisição mudou enquanto era liberada para retirada; recarregue e confira antes de liberar.';
   const BARREIRA = 'Esta requisição tem material crítico separado e ainda não passou pela segunda '
