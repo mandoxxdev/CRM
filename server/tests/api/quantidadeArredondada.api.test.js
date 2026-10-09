@@ -676,6 +676,22 @@ process.on('exit', (code) => {
     assert.strictEqual((await mat(m)).quantidade_reservada, 0.2);
   });
 
+  // ─────────────────────────── Fase 5 — a recusa do estorno da entrada de lote diz o numero arredondado ───────────────────────────
+  // Achada no controle da guarda do piso de ajustarSaldoExistente (a mensagem dizia "tem 0.9999999999999999 PC").
+  await test('[96 RN-05] (Fase 5) estornar a ENTRADA de lote com a linha torta abaixo -> "tem 0.3 PC nesta localizacao, menos que os 1", sem 0.30000000000000004', async () => {
+    const A = await loc();
+    const m = await material(0);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_lote = 1 WHERE id = ?', [m]);
+    await movOk(m, 'ENTRADA', 1, { lote: 'L96F5M', localizacao_destino_id: A });
+    const e = await ultimaMov(m);
+    await dbRun(db, 'UPDATE estoque_saldo_almoxarifado SET quantidade = ? WHERE material_id = ?', [0.30000000000000004, m]);
+    // o material continua com 1 (a recusa do material viria antes); so a linha do lote ficou abaixo
+    await dbRun(db, 'UPDATE movimentacoes_almoxarifado SET quantidade = ? WHERE id = ?', [1.0000000000000002, e.id]); // livro legado
+    const c = await como('ADMIN').post(`${API}/movimentacoes/${e.id}/cancelar`, { motivo: 'teste da etapa 96' });
+    assert.strictEqual(c.status, 400, JSON.stringify(c.body));
+    assert.strictEqual(c.body.error, 'Não é possível estornar: o lote L96F5M tem 0.3 PC nesta localização, menos que os 1 que a entrada creditou');
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed ? 1 : 0);

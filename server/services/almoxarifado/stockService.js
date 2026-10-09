@@ -2943,7 +2943,7 @@ async function recriarReservasDoEstorno(db, user, liberadas, movimentoId) {
 
 /** A recusa da linha do lote no estorno da entrada — uma literal, dois lugares (pre-checagem da Fase 5 e o ramo). */
 function mensagemLoteNaoComportaEstorno(mov, quantidadeLinha) {
-  return `Não é possível estornar: o lote ${mov.lote || mov.lote_id} tem ${quantidadeLinha} `
+  return `Não é possível estornar: o lote ${mov.lote || mov.lote_id} tem ${Q.qtd(quantidadeLinha)} `
     + `${mov.unidade || ''} nesta localização, menos que os ${mov.quantidade} que a entrada creditou`;
 }
 
