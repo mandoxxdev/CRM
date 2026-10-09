@@ -931,7 +931,9 @@ formato "dizia X; estava errado; o certo é Y".
 esteira não disparou). Achados reais na revisão adversarial **4** + **5** mutações sobreviventes mortas + **5** menores;
 ruído **0** (todos reproduzidos antes de virar conserto). Achados fora do plano durante a execução: **1** de produção (o
 da T1, C151) e **1** teste fora da lista que mudou (T2, `recebimentoProcessamentoConcorrente`, gancho — asserções
-iguais). Defeito escapado: a preencher na etapa seguinte.
+iguais). Defeito escapado: a preencher na etapa seguinte. *(Preenchido na Etapa 92: **0** — os achados novos da 92
+(C152, C153, B442 e a exclusão administrativa durante a separação) são anteriores à 91; a C149 e a C148 eram
+declaradas.)*
 
 ### Commits do fechamento
 

@@ -1,8 +1,9 @@
 # Etapa 92 — o cancelamento pelos outros módulos aceita o que a tela oferece (C149, feature 04 com a 05 e a 07)
 
-> Status: **EM EXECUÇÃO — 2026-10-08.** Fase 2 feita (`6d0442aa`). **T0 `6a0b529c`, T1 `dd7e84a7`, T2 `0187982e`,
-> T3 `a4237edb`, T4 `6ece630d`, T5 `3f84ecaa` feitas** (seção "Execução" no fim). Fase 5: 2 revisores, 8 achados
-> reproduzidos; correção do cliente `627dc667` (A2), correção do servidor em andamento. Depois: T6.
+> Status: **FECHADA — 2026-10-08.** Fase 2 `6d0442aa`; **T0 `6a0b529c`, T1 `dd7e84a7`, T2 `0187982e`, T3 `a4237edb`,
+> T4 `6ece630d`, T5 `3f84ecaa`**; Fase 5 (2 revisores, **7** achados reproduzidos — o texto anterior dizia 8):
+> `627dc667`, `f3b2b4fb`, `9f79c7ca`, `8d1a9050`; **T6** fechamento `30f289e1` + `CLAUDE.md` `7e59853d`. Próxima:
+> **Etapa 93** — ver "Próxima tarefa detalhada" no fim.
 > HEAD de partida: `d271721e` (main, árvore limpa).
 > Origem: "Próxima tarefa detalhada — Etapa 92" de
 > `docs/superpowers/plans/2026-10-08-almoxarifado-etapa91-inversao-inspecao-aprovar.md:940-993`, os avisos **C140 (3)**,
@@ -544,7 +545,7 @@ no scratchpad, restauro por cópia com md5 conferido, um controle de cada vez (b
   por status). **(s-RN09)** a releitura de `distribuirSemLock` (`reservaChegadaService.js:394-401`) desligada → cai a
   jornada C (reserva `ATIVA` presa em R4) — é o controle de que a jornada C exercita a janela de verdade (se não cair, o
   espião está no lugar errado). (s1) da T3 → cai a jornada E.
-- [ ] **T6 — fechamento (skill `fechar-etapa`).** Novidades: seção da Etapa 92; **B434–B441** (a **B426** ganha "a parte
+- [x] `30f289e1`, `7e59853d` **T6 — fechamento (skill `fechar-etapa`).** *(Feita — ver "Fechamento (T6)" no fim.)* Novidades: seção da Etapa 92; **B434–B441** (a **B426** ganha "a parte
   'cancelar já reservada fica de fora' foi revertida pela B434"); **C149** ✅ resolvido (texto original mantido); **C148**
   ✅ (as duas metades); **C152** (o administrador que não pediu via o botão — resolvido pela B439); **C153** (o
   cancelamento do almoxarifado sobrescrevia a separação — resolvido); **C154** (o que muda para quem opera: quem pediu por
@@ -657,7 +658,7 @@ entrar; os pontos afetados acima estão marcados **"(corrigido na Fase 2)"** ou 
 
 ## Próximo passo
 
-**(Fase 2 feita — ver a seção acima.)** Próximo: T0.
+**(Fase 2 feita — ver a seção acima.)** ~~Próximo: T0.~~ *(Etapa fechada — ver "Fechamento (T6)" no fim.)*
 
 ~~Fase 2: um agente fresco~~ (texto original:) Fase 2: um agente fresco recebe este plano + as specs `04`, `05`, `07` e responde as quatro perguntas da skill (contratos
 com casos de erro e literais; RN × spec; galhos independentes de verdade; **cada RN seguida até o último gesto do
@@ -710,7 +711,10 @@ T2 322/322 (3789), T3 323/323 (3792) — cada delta é exatamente o dos casos no
   /recebimentos/:id/processar` como o plano dizia (**plano errado**); em A a trilha foi posta antes da contagem de
   emissões para o s2 cair onde o plano previa; o s1 da T2 para no "cancelamento 200" e não chega à entrega.
 
-## Fase 5 — revisão adversarial (2026-10-08): 2 revisores, 8 achados reproduzidos, 0 bloqueantes
+## Fase 5 — revisão adversarial (2026-10-08): 2 revisores, 7 achados reproduzidos, 0 bloqueantes
+
+*(O título dizia "8 achados reproduzidos" — **estava errado**: o item 8 abaixo é a lista do que foi lido e sondado sem
+achado.)*
 
 Lentes: (1) correção das RN e concorrência; (2) autorização + "este teste passaria com a feature quebrada?". Sondas em
 worktrees próprias (`CRM-e92rv1`, `CRM-e92rv2`) em `a4237edb`, removidas.
@@ -736,3 +740,150 @@ worktrees próprias (`CRM-e92rv1`, `CRM-e92rv2`) em `a4237edb`, removidas.
    está gravada quando a guarda perderia; corrigir exige desfazer a rodada).
 8. Não refutados (lidos e sondados): compare-and-set das T1/T2 (trilha conta a verdade), cancelamento × distribuição da
    74, cancelamento × `/aprovar`/aprovação de valor, literais S1/I1/I2/W2/R1/R2, autorização das duas rotas.
+
+**Rodada de correção da Fase 5 (2026-10-08) — o que cada achado virou** (registrado pelo fio principal a partir dos
+relatos dos executores; hashes conferidos com `git merge-base --is-ancestor`):
+
+- **Achado 1 — corrigido em `f3b2b4fb`.** `ultimaRodadaAntes = COALESCE(MAX(id),0)` das rodadas da requisição, lido
+  **antes da leitura de `reqRow`** — não só antes da reivindicação, como o pedido dizia: uma rodada gravada entre as duas
+  leituras ficaria abaixo da marca com o `reqRow` velho (**divergência do pedido, correta**). O `UPDATE` de devolução
+  ganha `AND NOT EXISTS (SELECT 1 FROM separacoes_requisicao_almoxarifado WHERE requisicao_id=? AND id > ?)`; quando a
+  guarda não devolve, nada de W2 e o erro original sobe. Vermelho antes: **RN-09 (d)** (`TOTALMENTE_RESERVADA` em vez de
+  `EM_SEPARACAO`); a sonda do revisor 5/5 → 0/5; controle `NOT EXISTS` neutralizado (`AND 0`) → cai RN-09 (d).
+  **Residual declarado:** um "Iniciar Separação" sem quantidade concorrente não grava rodada — a guarda não o vê.
+- **Achado 4 — W2 afirmado em `f3b2b4fb`.** RN-09 (a) passa a afirmar a linha W2 exata uma vez (controle: trocar o texto
+  → cai nos dois status de RN-09 (a)). **A guarda `AND status='EM_SEPARACAO'` do desfazer continua sem asserção** —
+  removê-la não derruba nada. Declarado (D (92)).
+- **Achado 2 — corrigido em `9f79c7ca`.** A leitura do status mora dentro do `try` de cada reserva, com `.catch(() =>
+  null)`: leitura que falha vale "desconhecido" e segue para o `liberarReserva`. **Descartado:** W1 + `continue` (prenderia
+  a reserva por causa de uma leitura). Vermelho antes: **RN-05 (d)** (*"desfazerReservas lancou: falha injetada"*);
+  controle: tirar o `.catch` → cai.
+- **Achado 3 — guarda de regressão em `8d1a9050`.** **RN-01 (c')**: superadmin e `role admin` (não S) nos seis status →
+  400 R1, nada muda. Passou antes (a regra não mudou); controles: a leitura e o `UPDATE` aceitando superadmin → caem os
+  6 do superadmin; aceitando `role admin` → caem os 6 do `role admin`.
+- **Achado 5 — guarda de regressão em `f3b2b4fb`.** **RN-04 (c)**: `TOTALMENTE → PARCIALMENTE → TOTALMENTE` no gancho →
+  400 R2, 2 emissões, sem trilha, reserva `ATIVA`. Passou antes; controle `tentativa < 2` → `< 50` em
+  `routes/almoxarifado.js` → cai (200).
+- **Achado 6 — corrigido em `627dc667`** (B442), descrito acima. **Divergência de texto:** o comentário do commit diz que
+  "o admin do módulo **e o perfil ADMINISTRADOR**" tomavam 403; quem via o botão era quem passa em
+  `canDeleteAlmoxRequisicao` (superadmin, `admin_modulos` almoxarifado, `role admin`) — o perfil ADMINISTRADOR sozinho
+  nunca o via. Os documentos do fechamento dizem "administrador do módulo".
+- **Achado 7 — não corrigido, declarado** em D (92); é a base da **Etapa 93** (abaixo).
+- **Contagem:** o título desta seção dizia "8 achados reproduzidos" — **são 7**; o item 8 é a lista do que foi lido e
+  sondado **sem** achado.
+
+Depois da rodada: `test:api` **325/325** (3818 ✓), cliente **93/1446**, build ok.
+
+## Fechamento (T6) — 2026-10-08
+
+**O que cada artefato recebeu** (skill `fechar-etapa`):
+
+1. `docs/almoxarifado-novidades-por-etapa.md` — seção da Etapa 92 (abertura em linguagem de usuário, Antes → Agora,
+   sete cenários com a mensagem literal lida do código, o que não cobre, o que a revisão encontrou); **A43**;
+   **B434–B442** (a **B426** anotada: a parte "cancelar já reservada fica de fora" revertida pela **B434**); **C148** e
+   **C149** ✅ resolvidas (texto original mantido); **C152** e **C153** (novas e resolvidas); **C154** (quem opera) e
+   **C155** (quem integra); **C140 (3)**, **C141**, as duas linhas de D (91) e o item 3 de F (91) marcados; limitações
+   **(92)** em D, verificações **(92)** em F; "Onde estamos" com a 92 e a próxima (93); cabeçalho do documento.
+2. Specs `04` (status, item novo do checklist com hash, o "→ cancelar" corrigido **à vista** — a frase "o dos outros
+   módulos só aceita `PENDENTE`/`APROVADO`" deixou de valer, e o "→ cancelar" omitia que nenhum cancelamento conferia o
+   status ao gravar), `05` (a reivindicação; dito que a spec era **omissa**, não errada), `07` (o cancelamento solta
+   reserva nos seis status; a B441 e o CLAUDE.md).
+3. Mapa `specs/modulo-almoxarifado/README.md` — linhas 04, 05, 07 e o cabeçalho apontando a 93.
+4. Guia `docs/almoxarifado-guia-etapas-e-testes.md` — seção da etapa com roteiro clicável (Comercial → Minhas
+   Requisições, *Totalmente Reservada*, **Cancelar Requisição** → *Cancelado*, a reserva *Liberada* na tela **Reservas**),
+   o que não cobre, cabeçalho.
+5. Este plano — T6 marcada, a rodada da Fase 5 registrada, retro, próxima tarefa detalhada.
+6. Verificação final — números abaixo.
+7. Manual `docs/almoxarifado-manual-do-sistema.md` — 7.6 (o cancelamento pelos outros módulos nos seis status e só por
+   quem pediu; quem vê o botão na tela do almoxarifado; cancelar × separar: um vence; a solicitação de compra continua
+   aberta) e 10.2 (a separação passa a requisição para *Em Separação* antes de gravar; a falha no meio devolve o status
+   sem apagar a separação de outra pessoa).
+
+Mais: `CLAUDE.md` apertado (B441): *"Porta nova que ponha saldo no disponível **e distribua**, ou o leia para reservar,
+tem de pegar a trava"*, com a frase de que soltar reserva sem distribuir (liberação manual, expiração, os dois
+cancelamentos) não pega.
+
+**Divergências do plano, ditas:**
+- O manual cita as regras **pelo conteúdo**, não pelo ID (`RN-xx`): o manual não tem nenhum ID de regra e a skill proíbe
+  nome de código nele — a linha "o manual cita o mesmo ID" (Regras de negócio) e o "(RN-01…RN-09 citados)" da T6 não
+  foram seguidos à letra.
+- "Cancelar *Aguardando aprovação de valor* pelos outros módulos — quem pediu pede ao almoxarifado" (O que fica de fora):
+  **incompleto** — a tela do almoxarifado também não mostra o botão nesse status (`STATUS_CANCELAVEIS_ALMOXARIFADO` é
+  `RASCUNHO` + os seis); só por integração. Corrigido nos documentos.
+- A **A43** não acha o achado 7 (a requisição excluída tem `ativo=0` e fica fora das duas consultas) — a consulta vem com
+  a 93.
+- O roteiro do guia pedia "a reserva some da tela **Reservas**": com o filtro **Todos os status** ela aparece
+  *Liberada* — escrito assim.
+
+**Verificação final (HEAD `8d1a9050` + só documentação e `CLAUDE.md`):** server `npm run test:api` **325/325** arquivos (3818 ✓; mais
+lento `anexoDocumento`, 8.2 s); `test:almoxarifado` **44 passou, 0 falhou**; `test:validation` **4/0**; `test:safealter`
+**3/0**; `test:sqlite` **5/0**; cliente `CI=true npx react-scripts test --watchAll=false` **93/93** suítes, **1446/1446**
+testes; `CI=true npx react-scripts build` **Compiled successfully** (saída 0). Os commits do fechamento só tocam documentação e `CLAUDE.md`.
+
+**Retro (4 números):** rodadas de correção até verde — T0–T5 **1** cada; Fase 5 **1** rodada (servidor + cliente). Achados
+reais na revisão adversarial **7** reproduzidos (o título da Fase 5 dizia 8), ruído **0**; **6** tratados (3 consertos,
+2 guardas de regressão, 1 asserção — com a guarda do desfazer ainda sem asserção) e **1** declarado (achado 7). Paralelismo:
+T4 em worktree em paralelo com a T5 e com os revisores — **0** retrabalho, só o cherry-pick no lugar do ff. Defeito
+escapado: a preencher na etapa seguinte. **Defeito escapado da 91, medido nesta etapa: 0** — os achados novos da 92
+(C152, C153, B442, achado 7) são anteriores à 91; o único defeito introduzido e pego aqui foi o achado 1, da Fase 2 desta
+etapa, pego pela Fase 5.
+
+### Commits do fechamento
+
+`30f289e1` (novidades, specs 04/05/07 e mapa, guia, manual) · `7e59853d` (`CLAUDE.md`) · o commit deste plano (T6
+marcada, Fase 5 registrada, retro, próxima tarefa).
+
+## Próxima tarefa detalhada — Etapa 93: as gravações de status depois da reivindicação da separação, da liberação para retirada, da entrega e da exclusão administrativa conferem o status (D (92))
+
+**Por que esta (ordem do CLAUDE.md, medida antes de prometer):** as features tocadas — 04 e 07 🟢; a 05 continua 🟡 com
+"o que falta" de **produto** (lista de separação como entidade, rota de picking, troca de série, kits — sem demanda
+medida). Entre as candidatas declaradas, esta é a única que é **defeito de integridade reproduzido**: o achado 7 da Fase
+5 (a exclusão administrativa no instante da separação com quantidade termina com a requisição **excluída** — `ativo=0` —
+de volta a `EM_SEPARACAO`, escondida da lista, com material na caixa). Comparadas: **C145** (janela da QUARENTENA contra
+quem não pega a trava) — as três formas de fechar mexem no motor ou abrem portas novas na trava (B430); **C147** (chave
+de idempotência) — cliente + servidor em todas as rotas de criação, e o dano é uma requisição duplicada **visível e
+cancelável**; **C150** — desempenho, sem queixa de uso; **C139** — regra sem dado de uso (B412/B428).
+
+**Medido agora, no código (Fase 0 rápida — leitura; a sonda é da Fase 0 da 93):**
+- O *compare-and-clear* da conferência, **depois** da rodada gravada, regrava o status sem guarda:
+  `requisitionService.js:955-962` (`UPDATE … SET status='EM_SEPARACAO', …, conferido_por_*=NULL WHERE id=? AND
+  conferido_por_id IS ?`) e o fallback depois de 3 corridas `:966-972` (`WHERE id=?`).
+- A exclusão administrativa (`requisitionService.excluirRequisicao`, `:1379`) lê com `COALESCE(ativo,1)=1` mas grava
+  `UPDATE … SET ativo=0, status='CANCELADO' … WHERE id=?` (`:1499-1501`) sem conferir o status lido.
+- A liberação para retirada (`routes/almoxarifado.js:3785-3808`) valida a transição na leitura e grava
+  `SET status='PRONTA_PARA_RETIRADA' … WHERE id=?` sem guarda.
+- A entrega (`requisitionService.entregarRequisicao`, `:1032`) grava `SET status=? … WHERE id=?` (`:1364`, `:1368`) sem
+  guarda.
+
+**Contrato (a congelar na Fase 1, depois da sonda):**
+- *Compare-and-clear* da separação: `… WHERE id=? AND status='EM_SEPARACAO' AND conferido_por_id IS ?` (e o fallback com
+  `AND status='EM_SEPARACAO'`). `changes` 0 → reler: se o status saiu de `EM_SEPARACAO`, **parar** (a rodada já está
+  gravada e é *append-only*) e decidir a resposta — **decisão reversível a registrar (letra B)**: 200 com o status real
+  e um aviso no log (a rodada vale, quem venceu manda no status) × 409 com literal novo (*"A requisição mudou de status
+  durante a separação (agora ⟨status⟩); a rodada ficou registrada — confira a caixa"*). Recomendação: 409 — quem separou
+  precisa saber que a caixa ficou numa requisição que não está mais em separação.
+- Exclusão administrativa: `UPDATE … WHERE id=? AND COALESCE(ativo,1)=1 AND status=?` com o lido; perdeu → reler e
+  tentar uma vez (molde B435/B437); a regra de **quais** status se excluem não muda.
+- Liberação para retirada: `AND status=?` com o lido; perdeu → 400 com `validarTransicao` sobre o relido (literal de
+  hoje).
+- Entrega: `AND status=?` com o lido no `UPDATE` de status final; perdeu → medir antes o que já foi baixado (a entrega
+  move estoque **antes** de gravar o status — a guarda no fim não basta, como a da separação não bastava; avaliar
+  reivindicar como a T0 da 92).
+- **A44** — consulta de produção: requisições com `COALESCE(ativo,1)=0 AND status <> 'CANCELADO'` (excluídas que
+  voltaram a outro status); conferir na Fase 0 contra o esquema real, com controle positivo.
+
+**Pontos de atenção:**
+1. **Medir primeiro** (técnica da 92: gancho no `db.run` por regex com `\s+`, contador de emissões, `x-teste-usuario`,
+   `comPrazo`): exclusão × *compare-and-clear*; liberar-retirada entre a reivindicação e o *compare-and-clear* (a
+   barreira de material crítico — `assertConferidaSeObrigatorio` — lê os itens antes da rodada nova); entrega × separação
+   nos dois sentidos. Só promete o conserto do que a sonda reproduzir.
+2. A RN-09 da 92 (`separacaoNaoRessuscita`, casos (c) e (d)) faz falhar o *compare-and-clear* — a guarda nova não pode
+   mudar o desfecho de (c) (rodada gravada → nada devolvido).
+3. Testes a medir antes/depois: os 28 arquivos de separação (lista em §4 deste plano), `requisicaoEntregaMotor`
+   (`[excluir]`), `reservaPontasFaltantes`, `requisicaoCicloFinal`, os de liberar-retirada (`grep -ln liberar-retirada
+   server/tests/api/*.js`), `cancelarOutrosModulosIntegracao`.
+4. Sabotagem só na árvore principal, um controle de cada vez (G84); base LF.
+
+**O que está pronto e não se reabre:** a reivindicação da separação e a devolução com a marca de rodada (T0 + Fase 5);
+o *compare-and-set* dos dois cancelamentos (T1, T2); `desfazerReservas` (T3 + Fase 5); as regras do botão Cancelar
+(T4, B442); a regra da trava no CLAUDE.md (B441).
