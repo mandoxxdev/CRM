@@ -93,6 +93,9 @@ async function segurarTrava(materialId, fn) {
   try {
     return await fn();
   } finally {
+    // Etapa 97 (T0, Fase 2 B-1): o `Set` diz o que a secao SEGURA AGORA, nao o que ja segurou — `naTravaDoMaterial`
+    // decide por ele (um fluxo vazado da secao que ja soltou `m` tem de esperar `m` como qualquer outro).
+    if (secao) secao.materiais.delete(chave);
     soltar();
     if (filaPorMaterial.get(chave) === cauda) filaPorMaterial.delete(chave);
   }
@@ -129,6 +132,30 @@ async function comLockDosMateriais(materialIds, fn) {
 }
 
 /**
+ * Etapa 97 (T0, B494; forma da Fase 2, B-1) — roda `fn` sob a trava do material SE a secao do contexto nao a segura.
+ * E o embrulho do motor (`registrarMovimentacao`, `criarReserva`, a escrita curta do estorno): a porta avulsa chamada
+ * fora de secao passa a esperar a separacao, a entrega e a aprovacao do mesmo material (s4b da Fase 0: solto 10/10
+ * ERRADO, sob a trava 0/10). Os testes, nesta ordem:
+ *   - a secao do contexto SEGURA `m` agora (`secao.materiais.has(m)`) -> `fn()` (a entrega, a aprovacao, a nota chamam
+ *     o motor de dentro; a trava nao e reentrante — pedir de novo esperaria a si mesma);
+ *   - secao ATIVA que nao segura `m` -> `fn()` (como antes da 97; nao aninha fora de `comLockDosMateriais` — invariante);
+ *   - fora de secao, ou secao ja FECHADA que nao segura `m` -> `comLockDoMaterial` (pelo objeto, os testes espiam).
+ * Por que `has` ANTES de `ativa` (Fase 2, B-1): um fluxo nascido dentro de outra secao reaproveita o objeto da mae
+ * (`comLockDoMaterial`, ramo `externa.ativa`); quando a mae fecha, `ativa` vira `false` e o filho — que segura `m` —
+ * pediria a trava que ele mesmo segura: preso para sempre (sonda r3; caiam `aprovacaoEsperaTrava` RN-05 (f) e quatro
+ * casos de `travaRevisaoFase5`). Material nulo ou nao finito -> `fn()` (a recusa de material invalido e a do motor).
+ */
+async function naTravaDoMaterial(materialId, fn) {
+  if (materialId === null || materialId === undefined || materialId === '') return fn();
+  const m = Number(materialId);
+  if (!Number.isFinite(m)) return fn();
+  const secao = secaoAtual.getStore();
+  if (secao && secao.materiais.has(m)) return fn();
+  if (secao && secao.ativa) return fn();
+  return module.exports.comLockDoMaterial(m, fn);
+}
+
+/**
  * `true` enquanto alguem SEGURA ou ESPERA a trava do material. Introspeccao para os testes e para a
  * guarda L1 das variantes `sobTrava` — defesa, nao prova: sob concorrencia o `true` pode vir de OUTRO.
  */
@@ -138,4 +165,5 @@ function travado(materialId) {
 
 module.exports = {
   comLockDoMaterial, comLockDosMateriais, travado, adiarParaDepoisDaSecao, materiaisForaDaSecao,
+  naTravaDoMaterial, // Etapa 97 (T0)
 };

@@ -21,7 +21,6 @@ const {
   PODE_SEPARAR, PODE_ENTREGAR, STATUS_PARCIALMENTE_RESERVADA, STATUS_TOTALMENTE_RESERVADA,
   calcularStatusPosAprovacao, validarTransicao,
   alcadaDeValorAindaVale, separacaoAReabrir, // Etapa 94 (T2)
-  STATUS_COM_CAIXA, // Etapa 95 (T0, B473)
 } = require('./requisitionStateMachine');
 
 function num(v) {
@@ -139,25 +138,9 @@ const RESERVADO_PARA_ITEM_SQL = `COALESCE((
         AND r.status = 'ATIVA' AND r.origem = 'REQUISICAO'
     ), 0)`;
 
-/**
- * Etapa 95 (T0, B466/B473) — a CAIXA SEM RESERVA de um material: soma, pelos itens de requisicao ATIVA num status de
- * STATUS_COM_CAIXA, de `max(0, separado - entregue - reserva ATIVA de origem REQUISICAO do item)`. E o separado que
- * ainda esta na prateleira (o motor nao sabe dele: separar nao move estoque) e que nenhuma reserva ja tira do
- * disponivel — retido para quem separou. A reserva do item e a MESMA conta do RESERVADO_PARA_ITEM_SQL (mesmos
- * filtros), so que sobre `ix`. Um construtor so: a separacao, a aprovacao, a fila e o detalhe leem daqui.
- * `materialExpr` e uma expressao SQL do material (`ma.id`, `ir.material_id`); `exclusao` e um `AND ix...` que tira
- * os itens que quem chama conta por conta propria (os da propria requisicao, ou o proprio item). Nao subtrai nada do
- * disponivel (a regra de availabilitySql.js): devolve uma parcela que quem chama passa a `tetoSeparacao`.
- */
-function caixaSemReservaSql(materialExpr, exclusao = '') {
-  const status = STATUS_COM_CAIXA.map((s) => `'${s}'`).join(',');
-  return `COALESCE((SELECT SUM(MAX(COALESCE(ix.quantidade_separada,0) - COALESCE(ix.quantidade_entregue, ix.quantidade_atendida, 0)
-      - COALESCE((SELECT SUM(rx.quantidade - COALESCE(rx.quantidade_utilizada,0)) FROM reservas_material_almoxarifado rx
-          WHERE rx.item_requisicao_id = ix.id AND rx.material_id = ix.material_id
-            AND rx.status = 'ATIVA' AND rx.origem = 'REQUISICAO'), 0), 0))
-    FROM itens_requisicao_almoxarifado ix JOIN requisicoes_almoxarifado rq ON rq.id = ix.requisicao_id
-    WHERE ix.material_id = ${materialExpr} AND COALESCE(rq.ativo, 1) = 1 AND rq.status IN (${status}) ${exclusao}), 0)`;
-}
+// Etapa 97 (T0, B491): `caixaSemReservaSql` MOVIDO para caixaSql.js (o motor precisa le-lo e este arquivo requer
+// o stockService — ciclo). Texto identico; o export deste arquivo continua (re-export, as sondas e testes da 95 o leem).
+const { caixaSemReservaSql } = require('./caixaSql');
 
 /**
  * Etapa 95 (T0, B466; forma da Fase 2, I1/I2) — o TETO de separacao de um item: o que existe na prateleira PARA ELE.
