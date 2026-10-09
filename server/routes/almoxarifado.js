@@ -1509,8 +1509,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // CONCLUIDA fabricava um SEGUNDO AJUSTE_INVENTARIO (e uma segunda auditoria de material de
       // cliente) por item, e concluir uma CANCELADA a ressuscitava. Mesma mensagem de RN-03
       // (PUT /item ja usa), agora tambem aqui — a conferencia so aceita ser concluida uma vez.
+      // Etapa 97 (Fase 5, item 3): este gate le FORA de qualquer trava — duas conclusoes simultaneas passavam as duas
+      // (200/200) e gravavam dois AJUSTE_INVENTARIO por item (e duas auditorias de CONCLUSAO). Quem decide agora e o
+      // compare-and-set do status (`fecharSeAberta`, abaixo); este gate so poupa o trabalho de quem ja chega atrasado.
+      const naoAberta = (status) => ({ error: `Conferência não está aberta (status atual: ${status})` });
+      const statusAtual = async () => (await dbGet(db, `SELECT status FROM conferencias_almoxarifado WHERE id = ?`, [req.params.id])).status;
       if (conf.status !== 'ABERTO') {
-        return res.status(400).json({ error: `Conferência não está aberta (status atual: ${conf.status})` });
+        return res.status(400).json(naoAberta(conf.status));
       }
 
       const todosItens = await dbAll(db,
@@ -1570,6 +1575,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // direto (`naTravaDoMaterial`: a secao segura o material — B494/B-1); o `AJUSTE_INVENTARIO` nao chama de dentro
       // nenhuma porta proibida em secao (recalculo, `cancelarMovimentacao`, variantes sem `sobTrava`) — o alerta e
       // adiado para depois da secao (`adiarParaDepoisDaSecao`), e o alerta/aviso desta rota roda depois, fora dela.
+      //
+      // Etapa 97 (Fase 5, item 3): o compare-and-set do status — `UPDATE ... WHERE status = 'ABERTO'`; so UMA conclusao
+      // o vence. Com ajustes, ele roda DENTRO da trava, DEPOIS da pre-validacao e ANTES de aplicar: a recusa da
+      // pre-validacao continua sem mudar nada (a conferencia fica ABERTO — tudo-ou-nada), e a segunda conclusao nunca
+      // aplica. Sem ajustes, e o proprio UPDATE final (abaixo). Descartado: o CAS antes da pre-validacao (a recusa
+      // teria de desfazer o status, e quem chegasse no meio leria "CONCLUIDO" de uma conclusao que nao aconteceu).
+      const fecharSeAberta = async () => (await dbRun(db,
+        `UPDATE conferencias_almoxarifado SET status = 'CONCLUIDO' WHERE id = ? AND status = 'ABERTO'`, [req.params.id])).changes === 1;
       const recusaAjuste = (aplicar_ajustes && ajustes.length > 0)
         ? await trava.comLockDosMateriais(ajustes.map((i) => i.material_id), async () => {
         // ── Pré-validação: SÓ LEITURA. Nenhum registrarMovimentacao, nenhum
@@ -1639,20 +1652,32 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         // ── Aplicação real, SEQUENCIAL — a pré-validação já rodou a mesma
         // motivoRecusaAjustePorRetencao, sob a mesma trava (Etapa 97): a corrida entre as duas passadas, que era a
         // limitação conhecida da Etapa 10, deixou de existir para os materiais da conferência.
-        for (const item of ajustes) {
-          const material = materiaisPorItem.get(item.id);
-          const quantidadeAbsoluta = item.quantidade_contada + (material.quantidade_em_terceiros || 0);
-          await stockService.registrarMovimentacao(db, req.user, {
-            material_id: item.material_id,
-            tipo: 'AJUSTE_INVENTARIO',
-            quantidade: quantidadeAbsoluta,
-            motivo: `Ajuste de conferência ${conf.numero}`,
-            referencia: conf.numero,
-            justificativa: justificativa_ajuste,
-          });
-          await dbRun(db, `UPDATE itens_conferencia_almoxarifado SET ajustado = 1 WHERE id = ?`, [item.id]);
-          ajustesAplicados += 1;
-          materiaisAjustados.add(item.material_id);
+        // Fase 5 (item 3): antes de aplicar, o CAS — so uma conclusao aplica (a outra pode ter entrado pela porta sem
+        // ajustes, que nao pega esta trava).
+        if (!(await fecharSeAberta())) return { status: 400, body: naoAberta(await statusAtual()) };
+        try {
+          for (const item of ajustes) {
+            const material = materiaisPorItem.get(item.id);
+            const quantidadeAbsoluta = item.quantidade_contada + (material.quantidade_em_terceiros || 0);
+            await stockService.registrarMovimentacao(db, req.user, {
+              material_id: item.material_id,
+              tipo: 'AJUSTE_INVENTARIO',
+              quantidade: quantidadeAbsoluta,
+              motivo: `Ajuste de conferência ${conf.numero}`,
+              referencia: conf.numero,
+              justificativa: justificativa_ajuste,
+            });
+            await dbRun(db, `UPDATE itens_conferencia_almoxarifado SET ajustado = 1 WHERE id = ?`, [item.id]);
+            ajustesAplicados += 1;
+            materiaisAjustados.add(item.material_id);
+          }
+        } catch (errAplicacao) {
+          // Falha no meio da aplicacao (sem transacao — a pre-validacao, sob a mesma trava, ja tirou as recusas
+          // conhecidas): a conferencia volta a ABERTO, como era antes do CAS — o operador ve o erro e pode concluir de
+          // novo (o AJUSTE_INVENTARIO e absoluto: reaplicar os itens ja ajustados nao dobra a quantidade).
+          await dbRun(db, `UPDATE conferencias_almoxarifado SET status = 'ABERTO' WHERE id = ? AND status = 'CONCLUIDO'`,
+            [req.params.id]).catch(() => {});
+          throw errAplicacao;
         }
         return null;
       })
@@ -1674,9 +1699,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       const homologou = aplicar_ajustes && ajustes.length > 0;
       const camposAprovador = homologou ? ', aprovador_id = ?, aprovador_nome = ?' : '';
       const paramsAprovador = homologou ? [req.user.id, req.user.nome || req.user.email] : [];
-      await dbRun(db, `UPDATE conferencias_almoxarifado
+      // Fase 5 (item 3): com ajustes o CAS ja venceu la dentro (o status ja e CONCLUIDO); sem ajustes, ESTE UPDATE e o
+      // CAS — `AND status = 'ABERTO'`, e quem perde recebe a recusa de sempre antes da auditoria e dos avisos.
+      const fechou = await dbRun(db, `UPDATE conferencias_almoxarifado
               SET status = 'CONCLUIDO', data_fim = CURRENT_TIMESTAMP, justificativa_ajuste = ?, impacto_financeiro = ?${camposAprovador}
-              WHERE id = ?`, [aplicar_ajustes ? justificativa_ajuste : conf.justificativa_ajuste, impactoFinanceiro, ...paramsAprovador, req.params.id]);
+              WHERE id = ?${homologou ? '' : ` AND status = 'ABERTO'`}`, [aplicar_ajustes ? justificativa_ajuste : conf.justificativa_ajuste, impactoFinanceiro, ...paramsAprovador, req.params.id]);
+      if (!homologou && fechou.changes !== 1) return res.status(400).json(naoAberta(await statusAtual()));
 
       // Etapa 18 (RN-01): a conclusao SEM ajustes nao deixava vestigio NENHUM — nenhuma
       // movimentacao e criada e `data_fim` nao tem autor, entao "quem fechou este inventario?"

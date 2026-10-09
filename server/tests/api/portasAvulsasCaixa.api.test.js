@@ -776,6 +776,64 @@ const S = (c, un, lista) => ` — ${c} ${un} estão separados para ${lista}${S_F
     assert.strictEqual((await dbGet(db, 'SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id=?', [p1])).q, 5, 'p1 foi ajustado: o tudo-ou-nada quebrou');
   });
 
+  await test('[97 F5-3] duas conclusoes SIMULTANEAS da mesma conferencia: uma conclui, a outra recebe "nao esta aberta" — UM AJUSTE_INVENTARIO no livro (solta, com a trava do material presa, e sem aplicar ajustes)', async () => {
+    // Fase 5 (item 3, pre-existente): a checagem de ABERTO ficava fora do comLockDosMateriais e o status so era gravado
+    // depois de soltar a trava — as duas passavam (200/200) e gravavam dois AJUSTE_INVENTARIO (5/5, e97rv2-p3).
+    const placar = [];
+    for (const variante of ['solta', 'trava', 'sem ajustes']) {
+      for (let i = 0; i < 3; i++) {
+        const cat = `CAT-E97-${++seq}`;
+        const m = await material(0); await entrar(m, 5); // eslint-disable-line no-await-in-loop
+        await dbRun(db, 'UPDATE materiais_almoxarifado SET categoria=? WHERE id=?', [cat, m]); // eslint-disable-line no-await-in-loop
+        const conf = await conferencia(cat); // eslint-disable-line no-await-in-loop
+        await contar(conf, m, 3); // eslint-disable-line no-await-in-loop
+        let soltar = () => {}; let segura = Promise.resolve();
+        if (variante === 'trava') { segura = trava.comLockDoMaterial(m, () => new Promise((r) => { soltar = r; })); await dormir(10); } // eslint-disable-line no-await-in-loop
+        const corpo = variante === 'sem ajustes' ? { aplicar_ajustes: false } : { aplicar_ajustes: true, justificativa_ajuste: 'contagem da etapa 97' };
+        const ps = [como('ADMIN').put(`${API}/conferencias/${conf}/concluir`, corpo), como('ADMIN').put(`${API}/conferencias/${conf}/concluir`, corpo)];
+        await dormir(variante === 'trava' ? 100 : 0); // eslint-disable-line no-await-in-loop
+        soltar(); await segura; // eslint-disable-line no-await-in-loop
+        const rs = await Promise.all(ps); // eslint-disable-line no-await-in-loop
+        const livro = (await dbGet(db, "SELECT COUNT(*) n FROM movimentacoes_almoxarifado WHERE material_id=? AND tipo='AJUSTE_INVENTARIO'", [m])).n; // eslint-disable-line no-await-in-loop
+        const conclusoes = (await dbGet(db, "SELECT COUNT(*) n FROM auditoria_log_almoxarifado WHERE entidade='conferencia' AND entidade_id=? AND acao='CONCLUSAO'", [conf])).n; // eslint-disable-line no-await-in-loop
+        placar.push(`${variante}: ${rs.map((x) => x.status).sort().join('/')} livro ${livro} auditoria ${conclusoes}`);
+        const perdedora = rs.find((x) => x.status !== 200);
+        if (i === 0 && perdedora) {
+          recusou(rota(perdedora), 'Conferência não está aberta (status atual: CONCLUIDO)', `${variante}: a perdedora`);
+        }
+      }
+    }
+    const esperado = [...Array(6).fill(null).map((_, k) => `${k < 3 ? 'solta' : 'trava'}: 200/400 livro 1 auditoria 1`),
+      ...Array(3).fill('sem ajustes: 200/400 livro 0 auditoria 1')];
+    assert.deepStrictEqual(placar, esperado);
+  });
+
+  await test('[97 F5-3] falha no meio da aplicacao (o motor estoura no segundo item): a conferencia volta a ABERTO e concluir de novo conclui — o CAS nao deixa CONCLUIDO uma conclusao que nao terminou', async () => {
+    const cat = `CAT-E97-${++seq}`;
+    const p1 = await material(0); await entrar(p1, 5);
+    const p2 = await material(0); await entrar(p2, 5);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET categoria=? WHERE id IN (?, ?)', [cat, p1, p2]);
+    const conf = await conferencia(cat);
+    await contar(conf, p1, 3); await contar(conf, p2, 4);
+    const orig = stockService.registrarMovimentacao;
+    let chamadas = 0;
+    let r;
+    try {
+      stockService.registrarMovimentacao = function falhaNoSegundo(...args) {
+        chamadas++;
+        if (chamadas === 2) return Promise.reject(new Error('falha simulada no meio da aplicacao'));
+        return orig.apply(this, args);
+      };
+      r = await concluir(conf);
+    } finally { stockService.registrarMovimentacao = orig; }
+    assert.deepStrictEqual([r.status, r.body.error, chamadas], [500, 'falha simulada no meio da aplicacao', 2]);
+    assert.strictEqual((await dbGet(db, 'SELECT status FROM conferencias_almoxarifado WHERE id=?', [conf])).status, 'ABERTO');
+    const r2 = await concluir(conf);
+    assert.strictEqual(r2.status, 200, JSON.stringify(r2.body));
+    const q = await dbAll(db, 'SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id IN (?, ?) ORDER BY id', [p1, p2]);
+    assert.deepStrictEqual(q.map((x) => x.q), [3, 4]);
+  });
+
   await test('[97 F5-1] legado (caixa 4 > fisico 0): o ajuste PARA CIMA nao e recusado pela caixa — AJUSTE 0->2 sem localizacao 201; o ajuste para menos continua recusado', async () => {
     // Fase 5 (regressao da 97): a caixa entrava no retido tambem quando o ajuste AUMENTA o total — no legado (A48) o
     // AJUSTE 0->2 dava 400 e um material assim travava o inventario inteiro (tudo-ou-nada). O que melhora o estado nao
