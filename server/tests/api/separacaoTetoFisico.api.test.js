@@ -15,6 +15,7 @@
  *
  * T0: RN-01, RN-02, RN-04, RN-06 (a)(b)(c) e os indices (B478). T0b: RN-07 (a segunda rodada da entrega, B477).
  * T2: RN-05 (a aprovacao nao reserva a caixa sem reserva de outro item, B469).
+ * T1: RN-03 e RN-06 (d) (a fila e o detalhe dizem o que a porta aceita, B472; o entregavel da B477 no detalhe).
  * Casos `[95 RN-xx]`.
  * Plano: docs/superpowers/plans/2026-10-09-almoxarifado-etapa95-separacao-limitada-ao-fisico.md
  *
@@ -499,6 +500,127 @@ const S2 = (nome, q, max, pend, disp) => `${nome}: não é possível separar ${q
     const o = await req([[m, 2]]); await aprovar(o.R);
     assert.strictEqual(await reservaAtiva(o.R), 0, 'outra requisicao nao reserva o que e de A');
     ok(await separar(a.R, [[a.ids[0], 2]]), 'A separa os 2 que reservou');
+  });
+
+  // ───────────────────────────── RN-03 (T1, B472) ─────────────────────────────
+  // A fila (64) e o detalhe dizem o que a porta aceita: fila.itens[].separavel = detalhe.itens[].quantidade_separavel.
+  const daFila = async (R) => (await como('ALMOX').get(`${API}/fila-separacao`)).body.find((l) => Number(l.id) === Number(R));
+  const detalheItem = async (R, itemId) => {
+    const d = await como('ALMOX').get(`${API}/requisicoes/${R}`);
+    assert.strictEqual(d.status, 200, JSON.stringify(d.body));
+    return d.body.itens.find((i) => Number(i.id) === Number(itemId));
+  };
+  const naFila = async (R, itemId) => {
+    const l = await daFila(R);
+    assert.ok(l, `a requisicao ${R} nao esta na fila`);
+    const it = l.itens.find((i) => Number(i.item_id) === Number(itemId));
+    assert.ok(it, `o item ${itemId} nao esta na linha da fila`);
+    return { etapas: l.etapas, separavel: it.separavel };
+  };
+  // O numero da fila e do detalhe; e a porta: q aceito, q + 0,5 recusado (num estado em que q ainda cabe no pedido).
+  const conferirTres = async (R, itemId, esperado, { porta = true } = {}) => {
+    const f = await naFila(R, itemId);
+    const d = await detalheItem(R, itemId);
+    assert.deepStrictEqual([f.separavel, d.quantidade_separavel], [esperado, esperado], `fila/detalhe (etapas ${f.etapas})`);
+    if (porta) {
+      recusa(await separar(R, [[itemId, Math.round((esperado + 0.5) * 1e6) / 1e6]]));
+      if (esperado > 0) ok(await separar(R, [[itemId, esperado]]), 'a porta aceita o numero da fila');
+    }
+    return f;
+  };
+
+  await test('[95 RN-03] C1: fila 0 (AGUARDANDO_SALDO + ENTREGAR, sem SEPARAR), detalhe 0; saldo_atual e entregavel de hoje (RN-06 d)', async () => {
+    const { R, ids } = await comReserva();
+    ok(await separar(R, [[ids[0], 4]]));
+    const d = await detalheItem(R, ids[0]);
+    assert.deepStrictEqual([d.saldo_separavel, d.quantidade_separavel, d.saldo_atual, d.quantidade_entregavel], [0, 0, 4, 4]);
+    const f = await conferirTres(R, ids[0], 0);
+    assert.ok(f.etapas.includes('AGUARDANDO_SALDO') && f.etapas.includes('ENTREGAR') && !f.etapas.includes('SEPARAR'), JSON.stringify(f.etapas));
+  });
+
+  await test('[95 RN-03] C1 depois de uma entrada de 2: SEPARAR com separavel 2 na fila e no detalhe', async () => {
+    const { m, R, ids } = await comReserva();
+    ok(await separar(R, [[ids[0], 4]]));
+    await entrar(m, 2);
+    const f = await conferirTres(R, ids[0], 2);
+    assert.ok(f.etapas.includes('SEPARAR'), JSON.stringify(f.etapas));
+  });
+
+  await test('[95 RN-03] C2..C7: fila = detalhe = o que a porta aceita (1, 0, 0, 0, 1, 2)', async () => {
+    const c2 = await comReserva(); ok(await separar(c2.R, [[c2.ids[0], 3]]));
+    await conferirTres(c2.R, c2.ids[0], 1);
+    const c3 = await comReserva();
+    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada=4 WHERE id=?', [c3.ids[0]]);
+    await conferirTres(c3.R, c3.ids[0], 0);
+    const c4 = await semReserva(); ok(await separar(c4.R, [[c4.ids[0], 4]]));
+    await conferirTres(c4.R, c4.ids[0], 0);
+    const c5 = await comReserva(); ok(await separar(c5.R, [[c5.ids[0], 4]])); ok(await entregar(c5.R, [[c5.ids[0], 2]]));
+    await conferirTres(c5.R, c5.ids[0], 0);
+    const c6 = await comReserva(); ok(await separar(c6.R, [[c6.ids[0], 4]])); await entrar(c6.m, 1);
+    await conferirTres(c6.R, c6.ids[0], 1);
+    const c7 = await semReserva(); ok(await separar(c7.R, [[c7.ids[0], 2]]));
+    await conferirTres(c7.R, c7.ids[0], 2);
+  });
+
+  await test('[95 RN-03] M2: R2 com ["AGUARDANDO_SALDO"] e separavel 0 na fila e no detalhe', async () => {
+    const m = await material(0);
+    const a = await req([[m, 4]]); await aprovar(a.R);
+    const b = await req([[m, 4]]); await aprovar(b.R);
+    await entrar(m, 4);
+    ok(await separar(a.R, [[a.ids[0], 4]]));
+    const f = await conferirTres(b.R, b.ids[0], 0);
+    assert.deepStrictEqual(f.etapas, ['AGUARDANDO_SALDO']);
+  });
+
+  await test('[95 RN-03] M5: o 2o item do mesmo material (o 1o com os 4 na caixa) mostra 0 na fila e no detalhe', async () => {
+    const m = await material(0);
+    const a = await req([[m, 4], [m, 4]]); await aprovar(a.R);
+    await entrar(m, 4);
+    ok(await separar(a.R, [[a.ids[0], 4]]));
+    await conferirTres(a.R, a.ids[1], 0);
+  });
+
+  await test('[95 RN-03] P4 (Fase 2): R3 com reserva 4 mostra 4 na fila e no detalhe, e a porta aceita', async () => {
+    const m = await material(0);
+    const a = await req([[m, 4]]); await aprovar(a.R);
+    await entrar(m, 4);
+    ok(await separar(a.R, [[a.ids[0], 4]]));
+    await entrar(m, 4);
+    const c = await req([[m, 4]]); await aprovar(c.R);
+    const sai = await como('ADMIN').post(`${API}/movimentacoes/v2`, {
+      material_id: m, tipo: 'SAIDA', quantidade: 4, motivo: 'e95 saida avulsa', justificativa: 'consumo avulso da manutencao',
+    });
+    assert.strictEqual(sai.status, 201);
+    const f = await naFila(c.R, c.ids[0]); const d = await detalheItem(c.R, c.ids[0]);
+    assert.deepStrictEqual([f.separavel, d.quantidade_separavel], [4, 4]);
+    ok(await separar(c.R, [[c.ids[0], 4]]));
+  });
+
+  await test('[95 RN-03] decimal (Fase 2): fila e detalhe dizem 0.2 (nao 0.19999999999999998)', async () => {
+    const m = await material(0);
+    const a = await req([[m, 0.1]]); await aprovar(a.R);
+    const b = await req([[m, 0.3]]); await aprovar(b.R);
+    await entrar(m, 0.3);
+    ok(await separar(a.R, [[a.ids[0], 0.1]]));
+    const f = await naFila(b.R, b.ids[0]); const d = await detalheItem(b.R, b.ids[0]);
+    assert.deepStrictEqual([f.separavel, d.quantidade_separavel, d.saldo_separavel], [0.2, 0.2, 0.2]);
+    ok(await separar(b.R, [[b.ids[0], 0.2]]));
+  });
+
+  await test('[95 RN-03] (B477) P3 no detalhe: a segunda rodada de R2 nao oferece a caixa de R1 (quantidade_entregavel 0)', async () => {
+    const { a, b } = await montarP3(true);
+    const d = await detalheItem(b.R, b.ids[0]);
+    assert.strictEqual(d.quantidade_entregavel, 0);
+    const dSem = await detalheItem(a.R, a.ids[0]);
+    assert.strictEqual(dSem.quantidade_entregavel, 4, 'a dona da caixa continua com os 4 entregaveis');
+  });
+
+  await test('[95 RN-06 (d)] guarda: sem caixa nenhuma o detalhe mantem saldo_atual e quantidade_entregavel de hoje', async () => {
+    const m = await material(0); await entrar(m, 10);
+    const a = await req([[m, 6]]); await aprovar(a.R);
+    ok(await separar(a.R, [[a.ids[0], 2]]));
+    const d = await detalheItem(a.R, a.ids[0]);
+    assert.deepStrictEqual([d.saldo_atual, d.quantidade_entregavel, d.saldo_separavel, d.quantidade_separavel], [10, 2, 8, 4]);
   });
 
   // ───────────────────────────── B478 ─────────────────────────────

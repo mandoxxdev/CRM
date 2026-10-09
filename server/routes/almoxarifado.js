@@ -3205,6 +3205,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                                FROM reservas_material_almoxarifado r2
                                WHERE r2.item_requisicao_id = ir.id AND r2.material_id = ir.material_id
                                  AND r2.status = 'ATIVA' AND r2.origem = 'REQUISICAO'), 0) as quantidade_reservada_item,
+                     -- Etapa 95 (T1, B472): a caixa sem reserva dos OUTROS itens do material (de qualquer requisicao
+                     -- ativa) — normalizarItem calcula com ela saldo_separavel e quantidade_separavel (o teto da porta).
+                     ${requisitionService.caixaSemReservaSql('ir.material_id', 'AND ix.id <> ir.id')} as caixa_sem_reserva_outros,
                      ma.foto, ma.material_critico,
                      ma.localizacao, ma.localizacao_padrao_id,
                      a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,

@@ -85,7 +85,14 @@ function normalizarItem(item) {
   // cai no físico como antes.
   const estoque = num(item.saldo_atual ?? item.saldo_disponivel ?? item.quantidade_atual);
   const pendente = Math.max(0, solicitado - entregue);
-  const entregavel = maxEntregar(item, estoque);
+  // Etapa 95 (T1, B472): o detalhe (routes/almoxarifado.js) traz a caixa sem reserva dos outros itens do material e a
+  // reserva do item — com elas, o TETO de separacao (o mesmo tetoSeparacao da porta). So quem traz a coluna ganha os
+  // campos novos (aditivo; o cliente sem eles cai no saldo_atual) e o teto da segunda rodada da entrega (B477).
+  const temCaixa = item.caixa_sem_reserva_outros !== undefined && item.caixa_sem_reserva_outros !== null;
+  const reservaItem = num(item.quantidade_reservada_item ?? item.reservado_para_item);
+  const teto = temCaixa
+    ? tetoSeparacao(estoque - reservaItem, reservaItem, separado - entregue, item.caixa_sem_reserva_outros) : undefined;
+  const entregavel = maxEntregar(item, estoque, teto);
   return {
     ...item,
     quantidade_entregue: entregue,
@@ -94,6 +101,7 @@ function normalizarItem(item) {
     quantidade_pendente: pendente,
     quantidade_entregavel: entregavel,
     saldo_atual: item.saldo_atual ?? estoque,
+    ...(temCaixa ? { saldo_separavel: teto, quantidade_separavel: maxSeparar(item, teto) } : {}),
   };
 }
 
@@ -569,6 +577,8 @@ async function listarFilaSeparacao(db, user) {
   const itens = await dbAll(db, `SELECT ir.*, ma.codigo as material_codigo, ma.nome as material_nome, ma.unidade,
       ma.material_critico,
       (${disponivelSql('ma')} + ${RESERVADO_PARA_ITEM_SQL}) as saldo_disponivel,
+      ${RESERVADO_PARA_ITEM_SQL} as reservado_para_item,
+      ${caixaSemReservaSql('ir.material_id', 'AND ix.id <> ir.id')} as caixa_outros,
       lsep.codigo as origem_separacao_codigo, ltsep.codigo as lote_separacao_codigo
     FROM itens_requisicao_almoxarifado ir
     JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
@@ -595,7 +605,11 @@ async function listarFilaSeparacao(db, user) {
     const bloqueioValor = !!(avaliacaoValor && avaliacaoValor.requer_aprovacao_valor);
     const linhas = doReq.map((i) => {
       const aSeparar = pendenteSeparacao(i);
-      const separavel = podeSep ? maxSeparar(i, num(i.saldo_disponivel)) : 0;
+      // Etapa 95 (T1, B472): o separavel e o TETO da porta (tetoSeparacao), nao mais o disponivel + reserva — a fila
+      // dizia "Separar 2" com os 4 fisicos na caixa (C169) e a porta recusava. Cada item mostra o seu teto (itens do
+      // mesmo material da mesma requisicao nao sao divididos na linha; a porta divide, RN-02).
+      const separavel = podeSep ? maxSeparar(i, tetoSeparacao(num(i.saldo_disponivel) - num(i.reservado_para_item),
+        i.reservado_para_item, getSeparado(i) - getEntregue(i), i.caixa_outros)) : 0;
       return {
         item_id: i.id, material_id: i.material_id, material_codigo: i.material_codigo, material_nome: i.material_nome,
         unidade: i.unidade, a_separar: aSeparar, separavel, a_entregar: Math.max(0, getSeparado(i) - getEntregue(i)),
