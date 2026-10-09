@@ -1101,8 +1101,6 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     throw err;
   }
 
-  await valueApprovalService.verificarBloqueioLiberacao(db, requisicaoId);
-
   const itens = await carregarItensRequisicao(db, requisicaoId);
 
   // RN-06 (Etapa 28, achado 1 da Fase 2): a entrega sai DIRETO de EM_SEPARACAO, sem passar pela
@@ -1245,6 +1243,38 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
       throw err;
     }
   }
+
+  // Etapa 94 Fase 5 (B464): a alcada de valor DEPOIS das recusas da propria entrega. Com a sexta seta (B462) a
+  // EM_SEPARACAO vazia volta a ter alcada, e a verificacao (que GRAVA status e manda e-mail) rodava antes de
+  // validar as quantidades: um PUT /entregar que a entrega recusaria ("Maximo: 0" — nada separado) virava 403
+  // V403b, AGUARDANDO_APROVACAO_VALOR e e-mail aos aprovadores. A previa abaixo so le (as mesmas contas do laco,
+  // que segue conferindo com leitura fresca); passou dela, a alcada roda antes de qualquer baixa, como antes.
+  // Mantida na entrega (nao removida) como defesa se a separacao deixar passar algo.
+  let algoAEntregar = false;
+  for (const item of itens) {
+    const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
+    const qty = entrada ? num(entrada.quantidade_atendida) : 0;
+    if (qty <= 0) continue;
+    algoAEntregar = true;
+    // eslint-disable-next-line no-await-in-loop
+    const { disponivel } = await saldoDisponivelParaItem(db, item);
+    const max = maxEntregar(item, disponivel);
+    if (qty > max) {
+      const err = new Error(
+        `${item.material_nome}: não é possível entregar ${qty} ${item.unidade || ''}. `
+        + `Máximo: ${max} (pendente: ${pendenteEntrega(item)}, disponível: ${disponivel})`
+      );
+      err.status = 400;
+      throw err;
+    }
+  }
+  if (!algoAEntregar) {
+    const err = new Error('Informe ao menos uma quantidade maior que zero para entregar');
+    err.status = 400;
+    throw err;
+  }
+
+  await valueApprovalService.verificarBloqueioLiberacao(db, requisicaoId);
 
   const entregas = [];
 

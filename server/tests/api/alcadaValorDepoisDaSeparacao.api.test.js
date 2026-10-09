@@ -528,6 +528,36 @@ const notificacoesDe = (R) => notificados.filter((id) => id === Number(R)).lengt
     } finally { await config({ ativo: 1, limite: 10 }); }
   });
 
+  // ── Fase 5 (B464) — a entrega que nao entrega nada nao chega a gravacao da alcada ──
+  // Com a sexta seta (B462) a EM_SEPARACAO vazia volta a ter alcada; a entrega chamava a verificacao ANTES de
+  // validar as quantidades, e um PUT /entregar que a propria entrega recusaria (nada separado: "Maximo: 0")
+  // gravava AGUARDANDO_APROVACAO_VALOR e mandava e-mail aos aprovadores (sondas e94rv1-p1 / e94rv2-sonda2).
+  await test('[94 F5] (1) EM_SEPARACAO vazia, limite baixado: entregar 4 -> 400 "Maximo: 0" da entrega (nao 403 V403b), status EM_SEPARACAO, nenhuma notificacao; o mesmo com itens_atendidos vazio -> 400 "Informe ao menos"', async () => {
+    await config({ ativo: 1, limite: 10 });
+    const x = await produzir('EM_SEPARACAO');
+    const y = await produzir('EM_SEPARACAO');
+    try {
+      assert.strictEqual((await foto(x)).status, 'EM_SEPARACAO', 'premissa x');
+      assert.strictEqual((await foto(y)).status, 'EM_SEPARACAO', 'premissa y');
+      await config({ ativo: 1, limite: 1 });
+      const e = await entregar('ALMOX', x, 4);
+      assert.strictEqual(e.status, 400, `entregar 4: ${e.status} ${JSON.stringify(e.body)}`);
+      assert.match(e.body.error, /não é possível entregar 4 .*Máximo: 0/);
+      assert.strictEqual((await foto(x)).status, 'EM_SEPARACAO');
+      assert.strictEqual(notificacoesDe(x.R), 0, `notificado ${notificacoesDe(x.R)} vez(es)`);
+      const v = await como('ALMOX').put(`${API}/requisicoes/${y.R}/entregar`, { itens_atendidos: [] });
+      assert.strictEqual(v.status, 400, `entregar vazio: ${v.status} ${JSON.stringify(v.body)}`);
+      assert.strictEqual(v.body.error, 'Informe ao menos uma quantidade maior que zero para entregar');
+      assert.strictEqual((await foto(y)).status, 'EM_SEPARACAO');
+      assert.strictEqual(notificacoesDe(y.R), 0, `notificado ${notificacoesDe(y.R)} vez(es)`);
+      // a mesma requisicao, pela separacao, ainda cai na alcada (a regra nao mudou — so a ordem na entrega)
+      const s = await separar('ALMOX', x, 0);
+      assert.strictEqual(s.status, 403, `separar vazio: ${s.status} ${JSON.stringify(s.body)}`);
+      assert.match(s.body.error, V403B);
+      assert.strictEqual(notificacoesDe(x.R), 1);
+    } finally { await config({ ativo: 1, limite: 10 }); }
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   process.exit(failed ? 1 : 0);
