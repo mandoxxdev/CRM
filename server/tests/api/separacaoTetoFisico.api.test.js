@@ -623,11 +623,159 @@ const S2 = (nome, q, max, pend, disp) => `${nome}: não é possível separar ${q
     assert.deepStrictEqual([d.saldo_atual, d.quantidade_entregavel, d.saldo_separavel, d.quantidade_separavel], [10, 2, 8, 4]);
   });
 
+  // ───────────────────────────── Fase 5 (revisao da entrega) ─────────────────────────────
+  // Cada caso abaixo prende um achado de codigo da revisao ou uma sabotagem que a suite deixava verde (e95rv1/e95rv2).
+
+  await test('[95 Fase 5] entrega x separacao AO MESMO TEMPO: a 2a rodada de R2 (entrega 4 sem separar) e R1 separando 4 -> so uma passa (5 rodadas, sem gancho)', async () => {
+    const placar = [];
+    for (let k = 0; k < 5; k++) {
+      const m = await material(0); await entrar(m, 2);
+      const r2 = await req([[m, 6]]); await aprovar(r2.R);
+      ok(await separar(r2.R, [[r2.ids[0], 2]])); ok(await entregar(r2.R, [[r2.ids[0], 2]]));
+      assert.strictEqual((await reqRow(r2.R)).status, 'PARCIALMENTE_ATENDIDA', 'premissa: segunda rodada');
+      const r1 = await req([[m, 4]]); await aprovar(r1.R);
+      await entrar(m, 4);
+      const [e, s] = await Promise.all([entregar(r2.R, [[r2.ids[0], 4]], 'ALMOX2'), separar(r1.R, [[r1.ids[0], 4]], 'ALMOX')]);
+      const fisico = Number((await mat(m)).quantidade_atual);
+      const i1 = await item(r1.ids[0]);
+      const caixaR1 = Number(i1.quantidade_separada || 0) - Number(i1.quantidade_entregue || 0);
+      placar.push(`${e.status}/${s.status}${caixaR1 > fisico + 1e-9 ? ' fantasma' : ''}`);
+    }
+    assert.ok(placar.every((p) => p === '200/400' || p === '400/200'), `rodadas (entrega/separacao): ${placar.join(' ')}`);
+  });
+
+  await test('[95 Fase 5] aprovacao decimal: fisico 0,3, caixa sem reserva de outra 0,1, pede 0,2 -> reserva 0.2 e TOTALMENTE_RESERVADA', async () => {
+    const m = await material(0);
+    const r1 = await req([[m, 0.1]]); await aprovar(r1.R);
+    await entrar(m, 0.3);
+    ok(await separar(r1.R, [[r1.ids[0], 0.1]]));
+    const r3 = await req([[m, 0.2]]); await aprovar(r3.R);
+    const qs = (await dbAll(db, "SELECT quantidade FROM reservas_material_almoxarifado WHERE requisicao_id=? AND status='ATIVA'", [r3.R]))
+      .map((x) => Number(x.quantidade));
+    assert.deepStrictEqual(qs, [0.2]);
+    assert.strictEqual((await reqRow(r3.R)).status, 'TOTALMENTE_RESERVADA');
+  });
+
+  await test('[95 Fase 5] o detalhe nao expoe a coluna crua caixa_sem_reserva_outros (fora do contrato); saldo_separavel e quantidade_separavel ficam', async () => {
+    const m = await material(0);
+    const a = await req([[m, 4]]); await aprovar(a.R);
+    const b = await req([[m, 4]]); await aprovar(b.R);
+    await entrar(m, 4);
+    ok(await separar(a.R, [[a.ids[0], 3]]));
+    const d = await detalheItem(b.R, b.ids[0]);
+    assert.ok(!Object.prototype.hasOwnProperty.call(d, 'caixa_sem_reserva_outros'), `chaves: ${Object.keys(d).join(',')}`);
+    assert.deepStrictEqual([d.saldo_separavel, d.quantidade_separavel], [1, 1]);
+  });
+
+  await test('[95 Fase 5] (T1) P1 com R1 de dois materiais e o disputado sendo o de id MAIOR -> so uma passa (5 rodadas)', async () => {
+    const placar = [];
+    for (let k = 0; k < 5; k++) {
+      const menor = await material(0); const maior = await material(0);
+      assert.ok(maior > menor, 'premissa: o disputado tem o id maior');
+      const a = await req([[menor, 1], [maior, 4]]); await aprovar(a.R);
+      const b = await req([[maior, 4]]); await aprovar(b.R);
+      await entrar(menor, 1); await entrar(maior, 4);
+      const [s1, s2] = await Promise.all([separar(a.R, [[a.ids[0], 1], [a.ids[1], 4]], 'ALMOX'), separar(b.R, [[b.ids[0], 4]], 'ALMOX2')]);
+      placar.push([s1.status, s2.status].sort().join('/'));
+    }
+    assert.deepStrictEqual(placar, Array(5).fill('200/400'), `rodadas: ${placar.join(' ')}`);
+  });
+
+  // PG: dois itens do MESMO material na MESMA requisicao. i1 pede 6, reserva 2, separa 2, entrega 2 (segunda rodada);
+  // entram 4 soltos e i2 separa os 4 (caixa sem reserva do irmao). A entrega de i1 nao pode levar a caixa de i2.
+  const reservaDoItem = async (i) => Number((await dbGet(db, `SELECT COALESCE(SUM(quantidade-COALESCE(quantidade_utilizada,0)),0) q
+    FROM reservas_material_almoxarifado WHERE item_requisicao_id=? AND status='ATIVA'`, [i])).q);
+  await test('[95 Fase 5] (T2) RN-07 com o irmao: i1 na 2a rodada nao leva a caixa sem reserva de i2 (400) e o detalhe diz entregavel 0', async () => {
+    const m = await material(0); await entrar(m, 2);
+    const a = await req([[m, 6], [m, 4]]); await aprovar(a.R);
+    assert.deepStrictEqual([await reservaDoItem(a.ids[0]), await reservaDoItem(a.ids[1])], [2, 0], 'premissa: reservas');
+    ok(await separar(a.R, [[a.ids[0], 2]])); ok(await entregar(a.R, [[a.ids[0], 2]]));
+    await entrar(m, 4);
+    ok(await separar(a.R, [[a.ids[1], 4]]));
+    assert.strictEqual((await detalheItem(a.R, a.ids[0])).quantidade_entregavel, 0);
+    recusa(await entregar(a.R, [[a.ids[0], 4]]), `${nomes.get(m)}: não é possível entregar 4 PC. Máximo: 0 (pendente: 4, disponível: 4)`);
+    ok(await entregar(a.R, [[a.ids[1], 4]]), 'i2 entrega a propria caixa');
+  });
+
+  await test('[95 Fase 5] (T3) M5, metade positiva: dois itens sem reserva, fisico 4 -> 2 do item 1, depois 2 do item 2 (200)', async () => {
+    const m = await material(0);
+    const a = await req([[m, 4], [m, 4]]); await aprovar(a.R);
+    await entrar(m, 4);
+    ok(await separar(a.R, [[a.ids[0], 2]]));
+    ok(await separar(a.R, [[a.ids[1], 2]]), 'a caixa do irmao conta uma vez so');
+    recusa(await separar(a.R, [[a.ids[1], 1]]));
+  });
+
+  await test('[95 Fase 5] (T4) irmao com reserva cobrindo a caixa: reservas [4, 0], +4 soltos -> item 1 separa 4, depois item 2 separa 4 (200)', async () => {
+    const m = await material(0); await entrar(m, 4);
+    const a = await req([[m, 4], [m, 4]]); await aprovar(a.R);
+    assert.deepStrictEqual([await reservaDoItem(a.ids[0]), await reservaDoItem(a.ids[1])], [4, 0], 'premissa: reservas');
+    await entrar(m, 4);
+    ok(await separar(a.R, [[a.ids[0], 4]]));
+    ok(await separar(a.R, [[a.ids[1], 4]]), 'a caixa do item 1 esta coberta pela reserva dele');
+  });
+
+  await test('[95 Fase 5] (T4) a mesma guarda numa rodada so: reservas [4, 0], +4 soltos -> 4 + 4 (200)', async () => {
+    const m = await material(0); await entrar(m, 4);
+    const a = await req([[m, 4], [m, 4]]); await aprovar(a.R);
+    await entrar(m, 4);
+    ok(await separar(a.R, [[a.ids[0], 4], [a.ids[1], 4]]));
+  });
+
+  // STATUS_COM_CAIXA (B473) escrito por extenso aqui, de proposito: importar a constante faria o teste concordar com
+  // qualquer sabotagem dela. Dentro: o separado ainda nao entregue continua retido; fora: a caixa volta a prateleira.
+  await test('[95 Fase 5] (T5-T7) cada status: a caixa sem reserva de R1 retem o fisico para R2 so nos status com caixa', async () => {
+    const DENTRO = ['APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA',
+      'EM_SEPARACAO', 'PARCIALMENTE_ATENDIDA', 'PRONTA_PARA_RETIRADA', 'AGUARDANDO_APROVACAO_VALOR'];
+    const FORA = ['RASCUNHO', 'PENDENTE', 'REJEITADO', 'CANCELADO', 'ENTREGUE', 'ENCERRADA'];
+    const m = await material(0);
+    const a = await req([[m, 4]]); await aprovar(a.R);
+    const b = await req([[m, 4]]); await aprovar(b.R);
+    await entrar(m, 4);
+    ok(await separar(a.R, [[a.ids[0], 4]]));
+    const visto = [];
+    for (const s of [...DENTRO, ...FORA]) {
+      await dbRun(db, 'UPDATE requisicoes_almoxarifado SET status=? WHERE id=?', [s, a.R]); // escritor direto (legado)
+      visto.push(`${s}:${(await detalheItem(b.R, b.ids[0])).quantidade_separavel}`);
+    }
+    assert.deepStrictEqual(visto, [...DENTRO.map((s) => `${s}:0`), ...FORA.map((s) => `${s}:4`)]);
+  });
+
+  await test('[95 Fase 5] (T5/T6) pelas rotas: R1 PARCIALMENTE_ATENDIDA com 2 na caixa retem (R2 separar 2 -> 400); encerrada, a caixa volta (200)', async () => {
+    const m = await material(0);
+    const a = await req([[m, 4]]); await aprovar(a.R);
+    const b = await req([[m, 2]]); await aprovar(b.R);
+    await entrar(m, 4);
+    ok(await separar(a.R, [[a.ids[0], 4]])); ok(await entregar(a.R, [[a.ids[0], 2]]));
+    assert.strictEqual((await reqRow(a.R)).status, 'PARCIALMENTE_ATENDIDA', 'premissa');
+    recusa(await separar(b.R, [[b.ids[0], 2]]), S2(nomes.get(m), 2, 0, 2, 0));
+    const enc = await como('ADMIN').put(`${API}/requisicoes/${a.R}/encerrar`, { motivo: 'e95 fase 5' });
+    assert.strictEqual(enc.status, 200, JSON.stringify(enc.body));
+    assert.strictEqual((await reqRow(a.R)).status, 'ENCERRADA', 'premissa');
+    ok(await separar(b.R, [[b.ids[0], 2]]), 'a caixa de R1 encerrada voltou a prateleira (B473)');
+  });
+
+  await test('[95 Fase 5] (T8) aprovacao com a caixa do IRMAO: i2 com 4 na caixa sem reserva, fisico 4 -> reservas [0, 4]', async () => {
+    const m = await material(0);
+    const a = await req([[m, 4], [m, 4]]); await aprovar(a.R);
+    await entrar(m, 4);
+    ok(await separar(a.R, [[a.ids[1], 4]]));
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET status='AGUARDANDO_APROVACAO_VALOR' WHERE id=?", [a.R]); // legado
+    await requisitionService.reservarItensAprovacao(db, a.R, USERS.ADMIN, { numero: 'E95-F5-T8' });
+    assert.deepStrictEqual([await reservaDoItem(a.ids[0]), await reservaDoItem(a.ids[1])], [0, 4]);
+  });
+
   // ───────────────────────────── B478 ─────────────────────────────
-  await test('[95 B478] os dois indices existem (fila sem varredura: itens por material, reservas por item)', async () => {
-    const nomesIdx = async (t) => (await dbAll(db, `PRAGMA index_list(${t})`)).map((x) => x.name);
-    assert.ok((await nomesIdx('itens_requisicao_almoxarifado')).includes('idx_itens_req_almox_material'));
-    assert.ok((await nomesIdx('reservas_material_almoxarifado')).includes('idx_reservas_almox_item_req'));
+  // Fase 5 (T9): conferido pela COLUNA (PRAGMA index_info), nao so pelo nome — um indice com o nome certo na coluna
+  // errada passava verde e a fila voltava a varrer a tabela.
+  await test('[95 B478] os dois indices existem nas colunas certas (fila sem varredura: itens por material, reservas por item)', async () => {
+    const colunas = async (t, nome) => {
+      const idx = (await dbAll(db, `PRAGMA index_list(${t})`)).find((x) => x.name === nome);
+      assert.ok(idx, `o indice ${nome} nao existe em ${t}`);
+      return (await dbAll(db, `PRAGMA index_info(${nome})`)).map((x) => x.name);
+    };
+    assert.deepStrictEqual(await colunas('itens_requisicao_almoxarifado', 'idx_itens_req_almox_material'), ['material_id']);
+    assert.deepStrictEqual(await colunas('reservas_material_almoxarifado', 'idx_reservas_almox_item_req'), ['item_requisicao_id']);
   });
 
   terminou = true;
