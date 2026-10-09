@@ -98,18 +98,19 @@ Desde a Etapa 91, `services/almoxarifado/travaPorMaterial.js` (um `Map` só, em 
 **um** processo, C132) serializa as seis portas que disputam o disponível de um material: as três que
 **liberam** (nota, inspeção, não conformidade que aceita — do movimento do motor até a distribuição
 para quem espera) e as três que **aprovam** (`/aprovar`, `/aprovar-valor`, aprovação automática —
-`requisitionService.comTravaDaRequisicao`) — e, desde a Etapa 95 (B476), a **separação**, pela mesma
-`comTravaDaRequisicao`, **por dentro** da trava por requisição. Regras que já custaram deadlock ou fila invertida:
+`requisitionService.comTravaDaRequisicao`) — e, desde a Etapa 95 (B476 e Fase 5), a **separação** e a
+**entrega**, pela mesma `comTravaDaRequisicao`, **por dentro** da trava por requisição. Regras que já custaram deadlock ou fila invertida:
 a trava **não é reentrante**; vários materiais só por `comLockDosMateriais` (ordem crescente);
 recálculo de status (76), aviso (75) e alerta de mínimo (`adiarParaDepoisDaSecao`) rodam **depois**
 de soltar; quem reserva confere a seção (`materiaisForaDaSecao` → 409 `TRAVA_INCOMPLETA`). Porta
 nova que ponha saldo no disponível **e distribua**, ou o leia para reservar — **inclusive para limitar o que
 outra porta lê para reservar** (a separação lê o físico para limitar a caixa, e a aprovação desconta a caixa ao
-reservar: sem a trava, duas separações do mesmo material separavam o mesmo livre, 10/10, Etapa 95) —, **tem de
-pegar a trava** — senão a C131 volta. Soltar reserva **sem distribuir** (liberação manual, expiração, os dois cancelamentos
+reservar: sem a trava, duas separações do mesmo material separavam o mesmo livre, 10/10, Etapa 95; e a segunda
+rodada da entrega lê o mesmo teto — só com a trava por requisição, ela e a separação de outra requisição levavam os
+mesmos 4, 10/10, Fase 5 da 95) —, **tem de pegar a trava** — senão a C131 volta. Soltar reserva **sem distribuir** (liberação manual, expiração, os dois cancelamentos
 de requisição) **não** pega: só aumenta o livre, e quem reserva sob a trava no pior caso vê menos do que
 há, nunca mais (B441, Etapa 92). Saída avulsa e reserva manual **não** pegam (declarado, D (91)); a separação
-não pegava até a Etapa 94; pega desde a 95.
+e a entrega não pegavam até a Etapa 94; pegam desde a 95.
 
 **Há outra trava, por requisição** (Etapa 93): `services/almoxarifado/travaPorRequisicao.js`
 (`serializarNaRequisicao`) serializa os cinco gestos do almoxarife numa requisição — separar,
