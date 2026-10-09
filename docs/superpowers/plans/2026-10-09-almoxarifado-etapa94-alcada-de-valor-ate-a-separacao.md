@@ -1,8 +1,11 @@
 # Etapa 94 — a alçada de valor vale até o começo da separação: custo ou limite que mudam depois não tiram da máquina a requisição em separação, pronta ou parcialmente atendida (C68 (47), "fica de fora" da 93, features 06 com a 04, 05 e 07)
 
-> Status: **EM EXECUÇÃO — 2026-10-09: T0 `a758d39d`, T1 `7b66807f`, T2 `19e294fc`, T2c `9cafb842` feitas (seção "Execução" no fim); próximo T3 e Fase 5.** Plano revisto na Fase 2 (`23767283`). Fase 0 medida (abaixo); a Fase 2 (1 bloqueante, 3 importantes,
-> 5 menores) está em "Fase 2 — revisão do plano" e **vale sobre o texto acima** (pontos marcados **"(corrigido na Fase
-> 2)"** ou **"(Fase 2)"**). Próximo: **T0**.
+> Status: **FECHADA — 2026-10-09.** Plano `2bfc82c2`, Fase 2 `23767283`; **T0 `a758d39d`, T1 `7b66807f`, T2 `19e294fc`,
+> T2c `9cafb842`, T3 `79a766e9`**; Fase 5 (2 revisores, **7** achados reais): `ad5fcd7f`, `c729b784`, `469fda3b`; **T4**
+> fechamento `b1b0130c` + o commit deste plano. Próxima: **Etapa 95** — ver "Próxima tarefa detalhada" no fim. A Fase 2
+> (1 bloqueante, 3 importantes, 5 menores) está em "Fase 2 — revisão do plano" e **vale sobre o texto acima** (pontos
+> marcados **"(corrigido na Fase 2)"** ou **"(Fase 2)"**); a Fase 5 corrigiu a B456 e o contrato (marcados **"(corrigido
+> na Fase 5)"**).
 > HEAD de partida: `e5d216b6` (main, árvore limpa, sem push).
 > Origem: "Próxima tarefa detalhada — Etapa 94" no fim de
 > `docs/superpowers/plans/2026-10-09-almoxarifado-etapa93-gestos-concorrentes-mesma-requisicao.md`; o "fica de fora" da 93
@@ -232,8 +235,10 @@ server/tests/api/*.js`). Suíte `test:api` contra o protótipo: **326/327** — 
 - **B456 — a gravação da alçada confere o status lido; perdeu → 409 V1, sem e-mail, sem nova tentativa.** `UPDATE …
   SET status = 'AGUARDANDO_APROVACAO_VALOR', requer_aprovacao_valor = 1, … WHERE id = ? AND status = ?` com o status
   lido no começo da verificação; `changes` 0 → relê o status e lança **409** V1 com ele; a notificação aos aprovadores
-  só sai se o `UPDATE` venceu. Só a separação alcança este caminho (a entrega lê sempre status pós-separação → B453 não
-  grava). **Por que 409 e sem nova tentativa:** a verificação roda **antes** de qualquer gravação da separação (antes da
+  só sai se o `UPDATE` venceu. ~~Só a separação alcança este caminho (a entrega lê sempre status pós-separação → B453 não
+  grava).~~ **(Corrigido na Fase 5 — estava errado:** com a sexta seta (B462), a entrega numa `EM_SEPARACAO` vazia
+  chegava a gravar a alçada — 403 V403b, status trocado, e-mail — antes do 400 da própria entrega; a **B464**
+  (`ad5fcd7f`) põe a verificação da entrega depois das recusas dela, e na prática a entrega nunca grava.**)** **Por que 409 e sem nova tentativa:** a verificação roda **antes** de qualquer gravação da separação (antes da
   reivindicação), então repetir é seguro e a janela é de milissegundos; o 409 é o que a 93 usa quando "outra pessoa
   agiu" (X1, L1). **Descartados:** nova tentativa com o relido (molde B448) — mais código para uma janela de ms, e o
   relido mais provável é `CANCELADO` (onde não se tenta de novo); o **403 de valor** sobre a cancelada (é o que o
@@ -364,6 +369,12 @@ abaixo = os cinco + `EM_SEPARACAO`). "Caixa" = algum item com `quantidade_separa
 
 Forma de toda recusa: `{ error: <literal> }` (o `catch` de hoje: `res.status(e.status || 500).json({ error: e.message })`).
 `${status}` no V1 é o **relido** depois do `changes` 0.
+**(Corrigido na Fase 5 — a tabela estava errada em dois pontos.)** (1) A coluna "código" dizia que V403a/V403b levavam
+`code: 'AGUARDANDO_APROVACAO_VALOR'` na resposta — as rotas mandavam só `{ error }` (o código existia só no objeto de erro
+do serviço); desde a **B465** (`c729b784`) as rotas `/separar`, `/separacao` e `/entregar` mandam o `code` nesse 403, por
+lista branca. (2) A linha V403a dizia "separar/entregar" — **nenhuma das duas portas o alcança**: elas conferem
+`PODE_SEPARAR`/`PODE_ENTREGAR` antes da verificação e *Aguardando* não está em nenhum (sai S1/E0); a tela não oferece os
+botões nesse status. O V403a fica como salvaguarda de quem chame o serviço de valor direto (achado no fechamento).
 
 ### Máquina — `server/services/almoxarifado/requisitionStateMachine.js` (T0)
 
@@ -502,7 +513,8 @@ aqui (mock só na fronteira HTTP), depois da T2. Executores **não** marcam este
   (`STATUS_PRE_SEPARACAO`). **Vermelho antes:** (a) (desabilitado, "Confirmar Separação"), (c) (modal aberto), (d) (nome
   cru). **Controles:** (s1) sem o ramo → cai (a); (s2) o ramo sem olhar a caixa → cai (b); (s3) sem o tratamento do
   409 → cai (c). **Medir:** a suíte do cliente e o `build` com `CI=true`.
-- [ ] **T3 — integração cruzando as portas, pela rota e pelo serviço.** Arquivo novo
+- [x] `79a766e9` **T3 — integração cruzando as portas, pela rota e pelo serviço.** (10/10; controles e a divergência do
+  F em "Execução".) Arquivo novo
   `server/tests/api/alcadaValorDepoisDaSeparacaoIntegracao.api.test.js`, usuários reais por header:
   **Jornada A (custo sobe no meio, pela rota):** S cria R1 (4, R$ 4,00) → ADMIN aprova pela rota (`TOTALMENTE_RESERVADA`)
   → ALMOX separa 4 → entrega 2 (`PARCIALMENTE_ATENDIDA`) → ADMIN faz a **entrada cara** por `POST …/movimentacoes/v2`
@@ -528,7 +540,8 @@ aqui (mock só na fronteira HTTP), depois da T2. Executores **não** marcam este
   `AGUARDANDO_APROVACAO_VALOR` → ADMIN2 aprova por valor → separar 4 → entregar 4 → `ENTREGUE`; o (s8) da T0 derruba a G.
   **Controles:** (s1) da T0 → caem A (403 na última entrega), C, D (primeira metade) e F (403 no separar vazio); (s1) da
   T1 → cai E; (s1) da T2 → cai a asserção da fila em A; nenhuma jornada não prevista pode cair.
-- [ ] **T4 — fechamento (skill `fechar-etapa`).** Novidades: seção da Etapa 94; **B453–B459**; **C163–C168**; **A45**;
+- [x] `b1b0130c` + o commit deste plano **T4 — fechamento (skill `fechar-etapa`).** (Ver "Fechamento (T4)" no fim; a
+  Fase 5 acrescentou B464–B465 e o fechamento o C169.) Novidades: seção da Etapa 94; **B453–B459**; **C163–C168**; **A45**;
   D (94) e F (94); a linha **(93)** de D ("A alçada de valor reavaliada depois de começar a separação") marcada
   resolvida; o item **68** de C anotado (o atalho vira seta — B454 — e o lembrete continua de fora); "Onde estamos";
   cabeçalho. Specs `06` (status e checklist: a alçada vale até o começo da separação; **dizer à vista** que o manual
@@ -703,7 +716,8 @@ foram **rerodadas contra `2bfc82c2`** e reproduziram o que o revisor disse; os p
 
 ## Próximo passo
 
-**(Fase 2 feita — ver a seção acima.)** Próximo: **T0**.
+**(Fechada — ver "Fechamento (T4)" e "Próxima tarefa detalhada — Etapa 95" no fim.)** ~~(Fase 2 feita — ver a seção
+acima.) Próximo: **T0**.~~
 
 ~~Fase 2:~~ (texto original:) um agente fresco recebe este plano + as specs `06`, `05`, `04`, `07` + o plano da 93 e responde as quatro
 perguntas da skill: (1) os contratos cobrem os casos de erro e as literais (V403a, V403b, V1, S1, E0, AV1, RV1)? (2) as
@@ -741,6 +755,8 @@ reproduzidas; depois T0 → T1 → T2 → T2c). Baseline `test:api` 327/327 (387
 | T1 | `7b66807f` | RN-04 (a)(b) (final aguardando valor, não `CANCELADO`); (c) 8/10 | 328/328 (3906); 44/0 |
 | T2 | `19e294fc` | (a)(c)(c')(matriz)(e); (b) guarda | 328/328 (3912); 44/0 |
 | T2c | `9cafb842` | 5/7 | cliente 94 suítes / 1456; build ok |
+| T3 | `79a766e9` | — (arquivo de integração novo; controles abaixo) | 329/329 (3922); 44/0 |
+| Fase 5 | `ad5fcd7f`, `c729b784`, `469fda3b` | [94 F5] (1) e (2), cliente (f) | 329/329 (3924); cliente 94/1459 |
 
 No fim `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 5/0. `[93 RN-08] (d4)` reescrito na T0 (B459): o estado
 legado por `UPDATE` direto; o arquivo 48/0. Testes novos: `alcadaValorDepoisDaSeparacao.api.test.js` e
@@ -760,3 +776,227 @@ nas células "limite"/"ligar" (o custo não muda — correto); T2 s1 não cai em
 vermelho em 8/10, não 10/10 (varia; 6/10 sob o s1); o predicado e a lista do cliente moram em `requisicaoLabels.js`
 (o plano não nomeava o arquivo) e o teste do cliente os compara com a máquina do servidor. A base do cliente antes da
 T2c não foi re-medida (último registro 93/1449; depois 94/1456 com a suíte nova).
+
+
+**T3 (`79a766e9`).** `alcadaValorDepoisDaSeparacaoIntegracao.api.test.js` **10/10**: jornadas A, B, C1, C2, D1, D2, E, F, G e
+o controle positivo da **A45** (RN-06: P1–P3 na (a), P4 na (b), P5 — a ressuscitada — na A43 (a), N1–N4 em nenhuma;
+coluna trocada → o banco recusa as duas). Cada jornada vai até o último gesto (`ENTREGUE`, entregue = saídas, reserva
+`CONSUMIDA`, assinatura 201, nova entrega 400 E0, A45 e A43 (a) vazias). Os gatilhos de limite/ativação usam `PUT
+…/configuracoes/liberacao-valor`, que responde **500** no harness mas **grava** antes (falta a tabela `usuarios` no
+`testApp` — não é defeito de produção; o teste confere o efeito lendo a tabela). **Controles** (um de cada vez, âncora
+= 1, restauro por cópia com md5, CR=0): T0 s1 (sem o retorno antecipado) → caem A (403 na última entrega), C1, C2, D1
+(`separarRequisicao` 403) e F; T1 s1 (sem `AND status`) → cai E (final `AGUARDANDO_APROVACAO_VALOR`); T2 s1 (fila sem
+o predicado) → cai A (fila `APROVACAO_VALOR`); T0 s8 (sem a seta de `EM_SEPARACAO`) → cai G (separar 4 → 200). Nenhuma
+jornada não prevista caiu. **Divergência — o plano estava errado:** previa que o T0 s1 derrubaria F com **403 no separar
+vazio**; não há 403 ali — o `/aprovar-valor` grava `data_aprovacao_valor` e a verificação retorna antes de recusar. F
+ganhou a asserção de `valor_total` intacto (B455) e cai nela (4 → 574,86 com o s1). `test:api` **329/329**.
+
+## Fase 5 — revisão adversarial (2026-10-09): 2 revisores, 7 achados reais, 0 críticos
+
+Lentes: (1) regra de negócio e concorrência; (2) autorização + "este teste passaria com a feature quebrada?" (sabotagem
+de produção). Sondas no scratchpad (`e94rv1-*.js`, `e94rv2-sonda1..3.js`, `e94rv2-sab.sh`) contra worktrees próprias,
+removidas.
+
+**Confirmado (lido e sondado, sem achado) — revisor de regras/concorrência: nada crítico nem importante.** As seis setas
+novas não abrem nada em nenhum chamador (quem lê `TRANSICOES` grava destinos fixos, nunca *Aguardando*); não há beco sem
+saída; o predicado é coerente com
+`quantidade_atendida` (normalizada no boot); *Reabrir separação* é idempotente e não grava rodada nova; a reserva na
+chegada (B461) só tira o bloqueio onde a porta já permite; o V1 sob as travas da 93 é coerente — **30 rodadas** de corrida
+natural sem estado ruim.
+
+**Achados reproduzidos, cada um com o hash que o fechou** (conferidos com `git merge-base --is-ancestor`):
+
+- **1 (código; introduzido pela própria etapa, com a sexta seta B462).** A entrega numa `EM_SEPARACAO` **vazia** com o
+  limite baixado chamava `verificarBloqueioLiberacao` logo depois de `PODE_ENTREGAR` e **gravava a alçada** — 403 V403b,
+  status `AGUARDANDO_APROVACAO_VALOR`, e-mail aos aprovadores — antes do 400 da própria entrega (*"Máximo: 0"* ou
+  *"Informe ao menos uma quantidade maior que zero para entregar"*). **A B456 dizia "só a separação alcança este caminho
+  (a entrega lê sempre status pós-separação)" — estava errado** (marcado à vista na B456 acima). Corrigido em
+  **`ad5fcd7f`** (**B464**): uma prévia só de leitura repete as contas do laço da entrega e a recusa do vazio; a
+  verificação roda **depois** dela e antes de qualquer baixa. **Descartado:** remover a verificação da entrega.
+  **Informativo, declarado:** tirar a verificação da entrega deixava a suíte inteira verde (**328/328**) — com a B464 ela é
+  defesa em profundidade, sem teste que a derrube.
+- **2 (código/tela).** O 403 V403b deixava o modal de separação aberto, com o status velho. Corrigido em **`c729b784`**
+  (**B465**): as rotas `/separar`, `/separacao` e `/entregar` mandam `code: 'AGUARDANDO_APROVACAO_VALOR'` por **lista
+  branca** (outro `e.code`, como o do SQLite, não sai); a tela trata esse 403 como o 409 (fecha, zera o
+  separar-e-entregar, recarrega detalhe e lista); 403 de permissão mantém o modal. **Descartados:** tratar todo 403;
+  reconhecer pelo texto. **O contrato estava errado** (achado de documento): a tabela de literais dizia que V403a/V403b
+  traziam `code` — as rotas mandavam só `{ error }` (marcado à vista no contrato acima). **Lacuna declarada:** a lista
+  branca da rota não tem teste (nenhum erro alcançável pela rota traz outro código hoje). O V403a não sai pela rota de
+  separação (o 400 S1 vem antes: *Aguardando* não está em `PODE_SEPARAR`).
+- **3–6 (testes que faltavam — sabotagens que passavam verde)** — **`469fda3b`**: **SV1** (sem `&& !etapas.includes('SEPARAR')`
+  a fila trazia `SEPARAR` e `RETOMAR_SEPARACAO` juntas) → RN-05 (c)(d) afirmam a ausência; **SV2/CL5** (sem o
+  `?? quantidade_atendida` no predicado do servidor e do cliente) → caso `{ separada 2, entregue null, atendida 2 }` no
+  RN-05 (c') e no (e) do cliente, que agora afirma o **valor** dos dois lados (a igualdade sozinha empataria se os dois
+  perdessem o fallback); **CL4** (sem "nada a separar" em `reabrirSeparacao`) → caso (b2): 2 de 4 separados com saldo →
+  "Confirmar Separação"; e o (a) do cliente passa a **clicar** e conferir o `PUT` com `itens_separados: []`.
+- **CL3 — sem teste, o defeito virou inalcançável pela tela** (regra da skill): tirar `setEntregaAposSeparar(false)` do
+  ramo 409 não derruba nada porque o separar-e-entregar só liga por `handleCompletarEntrega`, cujo botão ("Completar
+  Entrega") só aparece com `temEntregavel` — e aí o handler abre a entrega direto, sem passar pela separação. Mantida a
+  forma segura; declarado em D (94).
+
+**Defeito antigo fora da etapa, confirmado em `main`** (`e94rv2-sonda3.js`; rerodado no fechamento contra `469fda3b`,
+`fecha94-sonda95.js`): **a separação aceita mais que o físico.** Pede 6, estoque 4, aprova (reserva 4,
+`PARCIALMENTE_RESERVADA`), separa 4 → a fila mostra `separavel: 2` → separar +2 → **200**, 6 separados para 4 físicos;
+o mesmo partindo de `PARCIALMENTE_RESERVADA` com 4 separados (legado). Seguindo: entregar 6 → 400 *"… Máximo: 4
+(pendente: 6, disponível: 4)"*; entregar 4 → 200 `PARCIALMENTE_ATENDIDA`, estoque 0, item separado 6 / entregue 4 — 2 "na
+caixa" que não existem. Vira **C169** e a **Etapa 95** (ver "Próxima tarefa detalhada").
+
+**Contagem:** **7** achados reais — **2 de código** (1 e 2), **4 de teste** (SV1, SV2/CL5, CL4, o (a) do cliente) e **1 de
+documento** (o contrato dizia que os 403 de valor traziam `code`; a B456 errada é o achado 1, contado lá); ruído **0**;
+CL3 declarado inalcançável (não contado como achado). **1** rodada de correção. Depois da rodada: `test:api` **329/329**
+(3924 ✓ pelo método das etapas anteriores — ver "Fechamento"), cliente **94/1459**.
+
+## Fechamento (T4) — 2026-10-09
+
+**O que cada artefato recebeu** (skill `fechar-etapa`; specs/mapa/diagrama e guia/manual por dois agentes em paralelo,
+novidades e este plano no fio principal — 0 retrabalho entre eles):
+
+1. `docs/almoxarifado-novidades-por-etapa.md` — seção da Etapa 94 (abertura em linguagem de usuário, Antes → Agora com 9
+   linhas, sete cenários com a mensagem literal lida do código, o que não cobre, o que a revisão encontrou); **A45** (as
+   duas consultas, a conferência da Fase 0 e o controle positivo da T3, como ler cada linha); **B453–B465** (a **B456**
+   com o texto original dito errado à vista, apontando a **B464**; a **B465** dizendo que o contrato do `code` estava
+   errado); **C163–C169** (C163–C165 novas e resolvidas; C166 o manual errado; C167 quem opera — risco aceito; C168 quem
+   integra; **C169** o defeito antigo, próxima etapa); o **C68** anotado (o atalho virou seta; o lembrete continua de
+   fora); a linha **(93)** de D da alçada marcada resolvida e o residual do 409 com janela aberta anotado (B463);
+   limitações **(94)** em D; verificações **(94)** em F; "Onde estamos" com a 94 e a 95 (a "Próxima" da 93 riscada);
+   cabeçalho.
+2. Specs `06` (status, bloco e checklist com hash; "itens alterados" dito errado à vista; a spec era omissa sobre onde a
+   alçada é reconferida — dito), `05` (o "Fica de fora" da 93 marcado resolvido — e dito que ele só nomeava duas origens
+   quando o desvio saía de qualquer status; `RETOMAR_SEPARACAO`; o **C169** como pendência medida), `04` (as seis setas,
+   o 409 V1), `07` (a reserva não fica mais solta com caixa; a chegada usa o predicado).
+3. Mapa `specs/modulo-almoxarifado/README.md` — linhas 04 (🟢), 05 (🟡; o C169 entrou no "falta para 🟢"), 06 (🟡; o que
+   falta não muda: lista técnica e dupla aprovação de ajuste), 07 (🟢), range `2bfc82c2..469fda3b`, cabeçalho apontando a
+   95.
+4. Guia `docs/almoxarifado-guia-etapas-e-testes.md` — cabeçalho (94 entregue, próxima 95), seção da etapa com roteiro
+   clicável (o custo que sobe no meio da entrega; o caminho de projeto; a *Em Separação* vazia; o legado com **Reabrir
+   separação**), o que não cobre; o residual da 93 da janela aberta anotado.
+5. Este plano — T3 e T4 marcadas, a T3 registrada em "Execução", a Fase 5, a B456 e o contrato corrigidos à vista,
+   retro, próxima tarefa.
+6. Verificação final — números abaixo.
+7. Manual `docs/almoxarifado-manual-do-sistema.md` — 8.3 (item 2 e item 3 reescritos: a regra nova, os gatilhos reais,
+   o que não trava, a liberação para retirada, o conflito com o cancelamento, as mensagens), 8.6 (a exceção do lembrete),
+   9.3b (a reserva na chegada), 10.2 (a alçada só antes de separar; a janela que fecha; **Reabrir separação**; o aviso
+   raro que agora fecha a janela), 10.6 (o chip **Reabrir separação**; *Aguardando aprovação de valor* só antes da
+   separação; a ordenação).
+
+**Mais (M4 da Fase 2):** o diagrama "Máquina de estados" de
+`docs/superpowers/specs/2026-08-05-almoxarifado-etapa3-requisicoes-design.md` refeito a partir da `TRANSICOES` atual (o
+comentário de `requisitionStateMachine.js:4` o chama de "cópia literal"), cada seta anotada com a etapa que a criou (4,
+74, 94), e dito à vista que ele já estava atrasado desde a Etapa 4 (sem as setas de reserva) e sem as da 74.
+
+**Letras:** o plano reservou B453–B463 (B460–B463 da Fase 2), C163–C168 e A45 — usadas assim; a Fase 5 acrescentou
+**B464** e **B465** (letras novas, não emendas: a B464 corrige a B456 e precisa ser achável pela letra; a B465 tem parte
+de rota e de tela) e o fechamento o **C169**. Conferidas no documento antes de escrever: última B452, último C 162, última
+A44.
+
+**Divergências do plano, ditas:**
+- **O V403a não sai por nenhuma das duas portas** (achado do agente do guia/manual no fechamento, conferido no código):
+  separar e entregar conferem `PODE_SEPARAR`/`PODE_ENTREGAR` **antes** da verificação (`requisitionService.js:739`, a
+  entrega idem), e *Aguardando* não está em nenhum dos dois — a porta responde S1/E0; e a tela não mostra **Iniciar
+  Separação** nem os botões de entrega nesse status. O contrato ("V403a | separar/entregar") e o manual 8.3 item 2 (que
+  dizia que a separação e a entrega recusavam com a mensagem de valor) estavam errados: o manual foi reescrito, o
+  contrato marcado à vista. O V403a fica como salvaguarda de quem chame o serviço de valor direto.
+- O roteiro do guia e os cenários das novidades citam a regra **pelo conteúdo**, não pelo `RN-xx` (como na 92/93).
+- Os números do guia e das novidades diferem de propósito (o guia prepara 10 por material; as novidades, 8): cada
+  cenário traz a conta do custo médio dele.
+
+**Verificação final (HEAD `469fda3b` + só documentação):** server `npm run test:api` **329/329** arquivos — *"329/329
+arquivos de teste OK (mais lento: filaLiberacaoAprovacaoCorrida.api.test.js, 7.8 s)"*; **3924 ✓** pelo método das etapas
+anteriores (`grep -c "✓"` na saída do runner — o mesmo que deu 3876 na 93 e 3922 na T3; o runner não imprime total de
+casos, só de arquivos), **0** `✗`. *(A rodada de correção da Fase 5 somou os "N passaram" por arquivo e deu 4012 —
+outro método, não comparável: medido agora na mesma saída, a soma dá **4012** e a diferença para 3924 é exatamente os
+**88** casos que alguns arquivos imprimem como `ok` em vez de `✓`.)* Os dois arquivos da
+etapa: regras **38/0**, integração **10/10**. `test:almoxarifado` **44 passou, 0 falhou**; `test:validation` **4/0**;
+`test:safealter` **3/0**; `test:sqlite` **5/0**; cliente `CI=true npx react-scripts test --watchAll=false` **94/94**
+suítes, **1459/1459** testes; `CI=true npx react-scripts build` **Compiled successfully** (saída 0). Os commits do
+fechamento só tocam documentação.
+
+**Retro (4 números):** rodadas de correção até verde — T0, T1, T2, T2c, T3 **1** cada; Fase 5 **1** rodada (servidor +
+cliente). Achados reais na revisão adversarial **7** (2 de código, 4 de teste, 1 de documento), ruído **0**; mais o CL3
+declarado inalcançável e o **C169** (defeito antigo, fora da etapa). Paralelismo: nenhum galho em paralelo na execução
+(decisão do plano — todos sabotam o mesmo serviço); fechamento com 2 agentes em paralelo (specs/mapa/diagrama;
+guia/manual) — **0** retrabalho, **1** fato errado no briefing do fechamento (o V403a) pego por um deles. **Defeito
+escapado da 93, medido nesta etapa: 0** — o desvio da alçada (C163) e a ressuscitada (C164) são anteriores à 93 (o
+`UPDATE … WHERE id = ?` da alçada é da 47); o residual "409 com janela aberta" já estava declarado em D (93). Defeito
+**introduzido** e pego aqui: o achado 1 (a entrega gravando a alçada — da sexta seta, B462), pego pela Fase 5. Defeito
+escapado da 94: a preencher na etapa seguinte.
+
+### Commits do fechamento
+
+`b1b0130c` (novidades, specs 04/05/06/07 e mapa, guia, manual, diagrama da Etapa 3) · o commit deste plano (T3 e T4
+marcadas, Fase 5 registrada, B456 e contrato corrigidos à vista, retro, próxima tarefa).
+
+## Próxima tarefa detalhada — Etapa 95: a separação não aceita mais do que existe na prateleira (C169)
+
+**Por que esta (ordem do CLAUDE.md, medida antes de prometer):** a próxima tarefa escrita por esta etapa — achada pela
+Fase 5 e **reproduzida no fechamento** contra `469fda3b` (sonda `fecha94-sonda95.js` no scratchpad da sessão, `testApp`
+com `requirePermission` real e usuário por header; base `e94rv2-sonda3.js` da revisão). As features tocadas pela 94 — 04 e
+07 🟢; 05 e 06 🟡 com faltas de produto (05) e o lembrete da que volta a aguardar valor (06, sem queixa de uso). Esta é a
+única que deixa **estoque e requisição incoerentes num processo só, sem corrida e sem configuração especial**: basta a
+requisição pedir mais do que há e ser separada em duas rodadas — o fluxo normal da *Parcialmente Reservada*.
+
+**Medido agora (material com 4 físicos, custo 0,1, alçada ligada com limite 10 — abaixo; R pede 6):**
+- `/aprovar` → reserva **4** (`ATIVA`, utilizada 0), `PARCIALMENTE_RESERVADA`.
+- Separar 4 → `EM_SEPARACAO`. A fila (`GET /api/almoxarifado/fila-separacao`) mostra `["SEPARAR","ENTREGAR"]` com
+  **`separavel: 2`**.
+- Separar +2 → **200** `EM_SEPARACAO`, rodada 2 — **`quantidade_separada` 6 para 4 físicos**. O mesmo com o status
+  regravado para `PARCIALMENTE_RESERVADA` depois de separar 4 (o legado): fila `["SEPARAR"]`, separável 2, +2 → 200.
+- Entregar 6 → **400** *"⟨material⟩: não é possível entregar 6 PC. Máximo: 4 (pendente: 6, disponível: 4)"* — a entrega
+  barra pelo disponível (e o motor, `stockService.registrarMovimentacao`, valida de novo atomicamente). Entregar 4 → 200
+  `PARCIALMENTE_ATENDIDA`, `quantidade_atual` 0, `quantidade_reservada` 0, item **separado 6 / entregue 4** — 2 "na
+  caixa" que não existem; a fila e o modal de entrega passam a oferecê-los.
+
+**A conta (lida no código):** `saldoDisponivelParaItem` (`requisitionService.js:129-143`) e a fila
+(`listarFilaSeparacao`, `:507`, `(${disponivelSql('ma')} + ${RESERVADO_PARA_ITEM_SQL}) as saldo_disponivel`) devolvem
+**disponível do material + reserva ATIVA do próprio item** (`quantidade − quantidade_utilizada`). A reserva só é
+"utilizada" na **entrega**; o que foi **separado** continua no físico e continua dentro da reserva. Então, depois de
+separar 4 de uma reserva de 4: disponível do material = 4 − 4 = 0; + reserva do item 4 = **4**; `maxSeparar` =
+min(pendente de separação 2, 4) = **2**. O separado ainda não entregue do **próprio** item (4) não é descontado. Conta
+candidata: `max(0, disponível + reservado_para_item − (separado − entregue))` como teto de **separação** — **medir** antes
+de escrever (ver pontos 2 e 3).
+
+**Contrato (a congelar na Fase 1):**
+- Separar acima do que há → o **400** existente, com o número certo: *"⟨material⟩: não é possível separar ⟨q⟩ ⟨un⟩.
+  Máximo: ⟨max⟩ (pendente: ⟨p⟩, disponível: ⟨d⟩)"* (`requisitionService.js:~799-802`, literal inalterada; muda só o
+  `disponível`/`max`). Decidir (letra B) se o `disponível` da mensagem passa a ser o líquido do separado.
+- A fila: `separavel` com a mesma conta (uma fonte só — o molde da 94: o predicado na máquina/serviço usado pela porta e
+  pela fila). Com `separavel` 0 e `a_separar` > 0 a fila já mostra `AGUARDANDO_SALDO` (`:547`) — conferir que é o que
+  aparece no caso medido.
+- O cliente (`RequisicoesList.js` `maxQtdSeparacao`, `:51-54`: `min(solicitada − separada, saldo_atual)`) usa
+  `saldo_atual` = o disponível do servidor (`normalizarItem`, `:74`) — corrigir no servidor corrige a tela; **conferir**
+  que o detalhe (`GET /almoxarifado/requisicoes/:id`) devolve o `saldo_atual` com a conta nova.
+- **A** nova (consulta para produção): itens de requisição ativa com `quantidade_separada − entregue` acima do que o
+  material tem — o rastro (cuidado com vários itens/requisições no mesmo material: somar o separado pendente por
+  material e comparar com `quantidade_atual`).
+
+**Pontos de atenção (medir na Fase 0):**
+1. **Quem mais usa a mesma conta:** `reservarItensAprovacao` (`:190`) usa `saldoDisponivelParaItem` (e já desconta
+   `jaReservado` — Etapa 73); a entrega (`:1260` prévia da B464 e `:1293` o laço) usa-a com `maxEntregar`. Mudar a função
+   muda os três — talvez a correção seja só no teto da **separação** (`maxSeparar`/a fila), não na função. A 74/76
+   (`reservaChegadaService`) **não** usa essa função: lê `disponivelSql` do material e já exclui requisições com caixa
+   (`:572`) — conferir que não reserva sobre o separado de outra.
+2. **O separado sem reserva:** uma requisição separada a partir de `AGUARDANDO_ESTOQUE`/`APROVADO` sem reserva (o saldo
+   chegou solto) tem material separado no físico **sem** retenção — outra requisição o vê como disponível e o separa de
+   novo? Hipótese não medida; é a mesma família (o separado não é retenção do material).
+3. **`maxEntregar` na "segunda rodada após entrega parcial"** (`:55-63`): com entregue > 0 e separado pendente < pendente,
+   o teto é `min(pendente, estoque)` — a entrega pode sair **sem separar**. Medir se é intencional (Etapa 3) antes de
+   tocar; não é o C169, mas é vizinho.
+4. **Conferência de material crítico** (Etapa 28): a rodada recusada não pode limpar a conferência — a recusa é antes de
+   gravar (passada 1, "tudo ou nada"); conferir.
+5. **A régua da Etapa 59/60** (origem planejada, `saldoOrigem`, divergência): o teto por origem já desconta o separado
+   pendente **de quem planejou o mesmo par** — o C169 é o teto **do item sem origem**. Não reabrir a 59/60; medir se o caso
+   com origem já está certo (controle).
+6. Trava por material e por requisição (91/93): a separação já está na de requisição; a conta nova é leitura dentro dela.
+   Não pegar a trava por material.
+7. Sabotagem só na árvore principal, um controle de cada vez, base LF, perl com âncora contada.
+
+**O que está pronto e não se reabre:** a alçada de valor até o começo da separação (94: B453–B465); as travas por
+requisição e por material (93, 91); as conferências de status das gravações (92, 93); a entrega barrando pelo disponível
+e o motor validando atomicamente; a reserva na chegada (74/75) e o recálculo (76).
+
+**Candidatos descartados (com o porquê):**
+- **O lembrete da requisição que volta a aguardar valor depois de aprovada** (C68/A25, D (94)) — sem queixa de uso.
+- **Guarda em reprovar/cancelar com caixa** (B458) — só o legado chega lá; a A45 orienta.
+- **C145, C147, C150, C139** e os residuais (93) — como na 93: exigem corrida com escritor fora da trava, mexem no motor,
+  ou não têm dado de uso.
+- **Faltas de produto da 05** (lista de separação como entidade, rota de picking, kits) — sem demanda medida.
