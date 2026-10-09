@@ -6,7 +6,7 @@
  * (`quantidadeLegado.listarTortos`) lista cada valor gravado com residuo (`col <> ROUND(col, 6)`); o script
  * `scripts/normalizar-quantidades-almoxarifado.js` lista por padrao e so grava com `--aplicar`.
  *
- * O torto e montado por ESCRITOR DIRETO em cada uma das 14 colunas de COLUNAS_LEGADO (a B483 diz "15": contagem errada, o contrato e a A47 listam 14) — depois da T1 o motor nao produz
+ * O torto e montado por ESCRITOR DIRETO em cada uma das 15 colunas de COLUNAS_LEGADO (14 ate a Fase 5, que somou o solicitado do item — R1) (a B483 diz "15": contagem errada, o contrato e a A47 listam 14) — depois da T1 o motor nao produz
  * mais deriva, e um teste que a fabricasse pelo motor ficaria vazio. Controles limpos (1,5; 0,3; NULL) na mesma tabela
  * provam que a consulta nao acha o que nao e torto. O livro (`movimentacoes_almoxarifado`) nao e reescrito (B484).
  *
@@ -100,6 +100,7 @@ const rodarCli = (dir, args = []) => spawnSync(process.execPath, [SCRIPT, ...arg
       VALUES ('E96T4-REQ', 1, 'Adm')`)).lastID;
   const iT = (await dbRun(db, `INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada)
       VALUES (?, ?, 1)`, [req, mT])).lastID;
+  await torto('itens_requisicao_almoxarifado', 'quantidade_solicitada', iT, TORTO_1); // Etapa 96 Fase 5 (R1)
   await torto('itens_requisicao_almoxarifado', 'quantidade_separada', iT, TORTO_1);
   await torto('itens_requisicao_almoxarifado', 'quantidade_entregue', iT, TORTO_03);
   await torto('itens_requisicao_almoxarifado', 'quantidade_atendida', iT, TORTO_03);
@@ -129,10 +130,10 @@ const rodarCli = (dir, args = []) => spawnSync(process.execPath, [SCRIPT, ...arg
 
   const COLUNAS = L.COLUNAS_LEGADO.map((c) => `${c.tabela}.${c.coluna}`);
 
-  await test('[96 RN-07] premissa: COLUNAS_LEGADO tem as 14 colunas do contrato, sem o livro nem a contagem', async () => {
+  await test('[96 RN-07] premissa: COLUNAS_LEGADO tem as 15 colunas do contrato (14 + o solicitado, Fase 5 R1), sem o livro nem a contagem', async () => {
     const montadas = [...new Set([...esperado.values()].map((e) => `${e.tabela}.${e.coluna}`))].sort();
     assert.deepStrictEqual([...COLUNAS].sort(), montadas);
-    assert.strictEqual(COLUNAS.length, 14);
+    assert.strictEqual(COLUNAS.length, 15); // mudado na Etapa 96 Fase 5 (R1): era 14
     assert.ok(!COLUNAS.some((c) => /movimentacoes_almoxarifado|itens_conferencia_almoxarifado/.test(c)), COLUNAS.join());
   });
 

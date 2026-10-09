@@ -246,6 +246,55 @@ process.on('exit', (code) => {
       + 'o separado ainda não entregue (0.2). Separe o restante e peça a segunda conferência.');
   });
 
+  // ─────────────────────────── Fase 5, R1 — quantidade com mais de 6 casas ───────────────────────────
+  // A separacao e a entrega arredondam (T3); o item gravava o solicitado CRU. 0,3333333 (ou o 1/3 legado) nunca era
+  // alcancado: PARCIALMENTE_ATENDIDA com pendente 0, fora da fila, reserva ATIVA com 3e-7 (zumbi). Antes da 96: ENTREGUE.
+  const statusERes = async (R) => [await statusReq(R), (await reservas(R)).map((r) => r.status)];
+  await test('[96 RN-04] (Fase 5, R1) requisicao nova de 0,3333333: o item grava 0,333333; separar e entregar 0,3333333 -> ENTREGUE, reserva CONSUMIDA, reservado 0', async () => {
+    const m = await material(0); await entrar(m, 5);
+    const { R, I } = await aprovada(m, 0.3333333);
+    assert.strictEqual((await dbGet(db, 'SELECT quantidade_solicitada q FROM itens_requisicao_almoxarifado WHERE id = ?', [I])).q, 0.333333);
+    ok(await separar(R, I, 0.3333333), 'separar 0,3333333');
+    ok(await entregar(R, I, 0.3333333), 'entregar 0,3333333');
+    assert.deepStrictEqual(await statusERes(R), ['ENTREGUE', ['CONSUMIDA']]);
+    assert.deepStrictEqual({ ...(await mat(m)) }, { quantidade_atual: 4.666667, quantidade_reservada: 0 });
+  });
+  await test('[96 RN-04] (Fase 5, R1) requisicao nova de 1,0000004: o item grava 1; separar 1, entregar 1 -> ENTREGUE', async () => {
+    const m = await material(0); await entrar(m, 5);
+    const { R, I } = await aprovada(m, 1.0000004);
+    assert.strictEqual((await dbGet(db, 'SELECT quantidade_solicitada q FROM itens_requisicao_almoxarifado WHERE id = ?', [I])).q, 1);
+    ok(await separar(R, I, 1), 'separar 1');
+    ok(await entregar(R, I, 1), 'entregar 1');
+    assert.deepStrictEqual(await statusERes(R), ['ENTREGUE', ['CONSUMIDA']]);
+  });
+  await test('[96 RN-04] (Fase 5, R1) requisicao de 0,0000004 (arredonda a 0) -> 400 com a recusa de quantidade invalida de sempre, nada gravado', async () => {
+    const m = await material(0); await entrar(m, 5);
+    const antes = (await dbGet(db, 'SELECT COUNT(*) n FROM requisicoes_almoxarifado')).n;
+    const cr = await como('S').post('/api/requisicoes-material', {
+      setor: 'Comercial', urgencia: 'NORMAL', os_referencia: 'OS-96', itens: [{ material_id: m, quantidade: 1 }, { material_id: m, quantidade: 0.0000004 }],
+    });
+    assert.strictEqual(cr.status, 400, JSON.stringify(cr.body));
+    assert.strictEqual(cr.body.error, 'Dados inválidos — itens.1.quantidade: quantidade deve ser maior que zero');
+    assert.strictEqual((await dbGet(db, 'SELECT COUNT(*) n FROM requisicoes_almoxarifado')).n, antes);
+  });
+  await test('[96 RN-06] (Fase 5, R1) legado 1/3 (item, reserva e reservado crus): separar o pendente e entregar o entregavel -> ENTREGUE, reserva CONSUMIDA, reservado 0, fora da fila', async () => {
+    const T = 1 / 3;
+    const m = await material(0); await entrar(m, 5);
+    const { R, I } = await aprovada(m, 0.5);
+    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_solicitada = ? WHERE id = ?', [T, I]);
+    await dbRun(db, 'UPDATE reservas_material_almoxarifado SET quantidade = ? WHERE requisicao_id = ?', [T, R]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_reservada = ? WHERE id = ?', [T, m]);
+    const d0 = await detalhe(R, I);
+    assert.strictEqual(d0.quantidade_pendente, 0.333333);
+    ok(await separar(R, I, d0.quantidade_pendente), 'separar o pendente');
+    const d1 = await detalhe(R, I);
+    ok(await entregar(R, I, d1.quantidade_entregavel), 'entregar o entregavel');
+    assert.deepStrictEqual(await statusERes(R), ['ENTREGUE', ['CONSUMIDA']]);
+    assert.deepStrictEqual({ ...(await mat(m)) }, { quantidade_atual: 4.666667, quantidade_reservada: 0 });
+    const f = await como('ALMOX').get(`${API}/fila-separacao`);
+    assert.ok(!f.body.some((x) => Number(x.id) === Number(R)), 'a requisicao ENTREGUE nao fica na fila');
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed ? 1 : 0);

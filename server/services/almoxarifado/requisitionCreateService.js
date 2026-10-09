@@ -21,6 +21,7 @@ const approvalRulesService = require('./approvalRulesService');
 // sufixos. Era exportada mas nao importada em lugar nenhum, entao remove-la nao mexe em contrato
 // de ninguem.
 const { inserirComNumeroUnico } = require('./numeroDoc');
+const Q = require('./quantidade'); // Etapa 96 (Fase 5, R1)
 const { TIPOS_URGENCIA } = require('./schema');
 
 /**
@@ -198,6 +199,21 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
     await sectorMaterialService.validateMateriaisParaSetor(db, setorFinal, materialIds);
   }
 
+  // Etapa 96 (Fase 5, R1): a quantidade do item e gravada ARREDONDADA a 1e-6 (B482), como a porta do motor. Gravada
+  // crua (0,3333333; 1,0000004; o 1/3 de uma conversao), a separacao e a entrega — que arredondam — nunca alcancavam o
+  // solicitado: a requisicao ficava PARCIALMENTE_ATENDIDA com pendente 0, fora da fila, e a reserva ATIVA com 3e-7.
+  // O que arredonda a zero (0,0000004) recebe a recusa de quantidade invalida de sempre (a do schema), ANTES de
+  // qualquer escrita. Descartado: recusar mais de 6 casas (B482: a conversao de unidade produz 1/3 legitimo).
+  const itensQtd = itens.map((item, i) => {
+    const q = Q.qtd(item.quantidade);
+    if (!(q > 0)) {
+      const err = new Error(`Dados inválidos — itens.${i}.quantidade: quantidade deve ser maior que zero`);
+      err.status = 400;
+      throw err;
+    }
+    return q;
+  });
+
   const statusInicial = isRascunho ? 'RASCUNHO' : 'PENDENTE';
 
   // Etapa 31 (RN-07): o numero nasce DENTRO do gerador, na tentativa que vencer o UNIQUE, e e ele
@@ -227,12 +243,12 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
   // node-sqlite3 nao garante a ordem de execucao de comandos paralelos na mesma conexao: o id do
   // item saia trocado (medido: 16-17 de 20 requisicoes de 5 itens) e o detalhe, que segue o id,
   // mostrava B antes de A para quem pediu A e B.
-  for (const item of itens) {
+  for (const [n, item] of itens.entries()) {
     // eslint-disable-next-line no-await-in-loop
     await dbRun(db,
       `INSERT INTO itens_requisicao_almoxarifado (requisicao_id, material_id, quantidade_solicitada, observacoes)
        VALUES (?,?,?,?)`,
-      [reqId, item.material_id, item.quantidade, item.observacoes || null]);
+      [reqId, item.material_id, itensQtd[n], item.observacoes || null]);
   }
 
   if (isRascunho || skipNotificacoes) {

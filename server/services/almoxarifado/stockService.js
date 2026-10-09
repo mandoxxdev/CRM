@@ -1712,8 +1712,10 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         // Etapa 67 (Fase 5): com tolerancia EPS — a soma de 0,1 dez vezes da 0,9999999999999999, e
         // `<= 0` deixava a reserva ATIVA para sempre com 1,1e-16 de saldo. A sobra (>= 0) sai do
         // reservado do material junto, e o reservado que sobra <= EPS vira zero.
+        // Etapa 96 (Fase 5, R1): a sobra ARREDONDADA — a reserva legada de 1/3 (0.3333333333333333) consumida pelos
+        // 0,333333 que a entrega arredondada manda sobrava 3,3e-7 > EPS e ficava ATIVA para sempre (zumbi).
         const sobraReserva = reserva.quantidade - reserva.quantidade_utilizada;
-        if (sobraReserva <= EPS) {
+        if (Q.qtd(sobraReserva) <= 0) {
           await dbRun(db, "UPDATE reservas_material_almoxarifado SET status = 'CONSUMIDA', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [reserva_id]);
           const sobra = Math.max(0, sobraReserva);
           await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_reservada = ${RESERVADA_MENOS_SQL},

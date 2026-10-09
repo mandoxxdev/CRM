@@ -119,7 +119,9 @@ function normalizarItem(item) {
 // PARCIALMENTE_ATENDIDA para sempre, sem data_entrega, e o indicador a contava como nao integral.
 // E epsilon, nao tolerancia: 0,9 de 1 continua parcial.
 function todosItensCompletos(itens) {
-  return itens.every((i) => getEntregue(i) >= num(i.quantidade_solicitada) - 1e-9);
+  // Etapa 96 (Fase 5, R1): o solicitado ARREDONDADO — o legado guarda 1/3 cru (0.3333333333333333) e a entrega, que
+  // arredonda, para em 0,333333: sem isto a requisicao ficava PARCIALMENTE_ATENDIDA com pendente 0 para sempre.
+  return itens.every((i) => Q.cabe(Q.qtd(num(i.quantidade_solicitada)), getEntregue(i)));
 }
 
 /**
@@ -877,8 +879,10 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
     const item = itens.find((i) => Number(i.id) === Number(entrada.item_id));
     if (!item) continue;
 
-    const qty = num(entrada.quantidade_separada);
-    if (qty <= 0) continue;
+    // Etapa 96 (Fase 5, R1): arredondada como a porta do motor e a entrega — 0,3333333 contra o maximo 0,333333 era
+    // recusada ("nao e possivel separar 0.3333333") e gravava o separado com 7 casas.
+    const qty = Q.qtd(num(entrada.quantidade_separada));
+    if (!(qty > 0)) continue;
 
     // Etapa 95 (T0, B466/B468): o TETO do item — o que existe na prateleira para ele (tetoSeparacao). Antes era
     // `disponivel + reserva do item` e o separado ainda nao entregue nunca era descontado (C169: separava 6 com 4

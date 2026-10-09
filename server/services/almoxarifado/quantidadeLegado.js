@@ -27,6 +27,8 @@ const COLUNAS_LEGADO = Object.freeze([
   ['estoque_saldo_almoxarifado', 'quantidade'],
   ['reservas_material_almoxarifado', 'quantidade'],
   ['reservas_material_almoxarifado', 'quantidade_utilizada'],
+  // Etapa 96 (Fase 5, R1): o solicitado tambem — o 1/3 cru prendia a requisicao em PARCIALMENTE_ATENDIDA.
+  ['itens_requisicao_almoxarifado', 'quantidade_solicitada'],
   ['itens_requisicao_almoxarifado', 'quantidade_separada'],
   ['itens_requisicao_almoxarifado', 'quantidade_entregue'],
   ['itens_requisicao_almoxarifado', 'quantidade_atendida'],
@@ -53,7 +55,7 @@ async function listarTortos(db) {
 
 /**
  * Sem `aplicar`: so conta, por coluna, quantas linhas estao tortas. Com `aplicar`: grava `ROUND(col, 6)` onde torto
- * (idempotente), tudo numa transacao — ou normaliza as 14 colunas, ou nenhuma.
+ * (idempotente), tudo numa transacao — ou normaliza as 15 colunas, ou nenhuma.
  * → `{ aplicado, porColuna: [{ tabela, coluna, linhas }] }` na ordem de COLUNAS_LEGADO.
  */
 async function normalizar(db, { aplicar = false } = {}) {
