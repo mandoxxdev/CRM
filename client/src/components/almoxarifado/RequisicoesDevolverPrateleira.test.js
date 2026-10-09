@@ -177,6 +177,26 @@ describe('Etapa 98 — Devolver à prateleira (o botão)', () => {
   });
 });
 
+describe('Etapa 98 Fase 5 — "Liberar para Retirada" segue a caixa, não o separado', () => {
+  // O servidor passou a recusar o liberar com a caixa vazia (separado 2, entregue 2 numa Em Separação) — antes ela
+  // virava Pronta presa. O botão espelha: some com a caixa 0, aparece com qualquer caixa > 0.
+  test('[98 F5] Em Separação com separado 2 e entregue 2 (caixa 0): sem "Liberar para Retirada"', async () => {
+    requisicao = montar({}, [{ quantidade_separada: 2, quantidade_entregue: 2, quantidade_atendida: 2 }]);
+    await renderizar();
+    expect(botaoPorTexto('Ajustar Separação')).toBeTruthy();
+    expect(botaoPorTexto('Liberar para Retirada')).toBeFalsy();
+  });
+
+  test('[98 F5] Em Separação com caixa > 0 em algum item (inclusive fração): "Liberar para Retirada" aparece', async () => {
+    requisicao = montar({}, [
+      { quantidade_separada: 2, quantidade_entregue: 2, quantidade_atendida: 2 },
+      { quantidade_separada: 0.7, quantidade_entregue: 0.4, quantidade_atendida: 0.4, material_nome: 'Cabo' },
+    ]);
+    await renderizar();
+    expect(botaoPorTexto('Liberar para Retirada')).toBeTruthy();
+  });
+});
+
 describe('Etapa 98 — Devolver à prateleira (o modal)', () => {
   test('[98 T4] título, caixa, quantidade padrão = caixa (máx. a caixa, step any) e o texto fixo', async () => {
     requisicao = montar({}, [{ quantidade_separada: 4, quantidade_entregue: 1, quantidade_atendida: 1 }]);

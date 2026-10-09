@@ -1856,7 +1856,8 @@ const RequisicoesList = () => {
                         <FiUserCheck size={14} /> Conferir separação
                       </button>
                     )}
-                    {detalhe.itens.some((i) => getSeparado(i) > 0) && (
+                    {/* Etapa 98 Fase 5: o servidor recusa o liberar com a caixa vazia (separado = entregue) — o botao segue a caixa. */}
+                    {detalhe.itens.some((i) => caixaDoItem(i) > 0) && (
                       <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
                         onClick={(e) => {
                           if (!bloquearSeNaoPode('separar_emitir', e)) return;

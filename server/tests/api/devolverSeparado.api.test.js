@@ -457,6 +457,38 @@ process.on('exit', (code) => {
     assert.strictEqual((await como('ADMIN').put(`${API}/requisicoes/${c.R}/encerrar`, { motivo: 'e98 encerra' })).status, 200);
   });
 
+  // Fase 5 (revisor 1, sonda e98rv1-a S1 e e98rv1-c): o liberar contava `quantidade_separada > 0`, nao a caixa. Separado
+  // 2 e entregue 2 numa EM_SEPARACAO (depois de devolver, ou sem devolver: entrega parcial + "separar de novo") virava
+  // PRONTA com a caixa vazia — entregar, encerrar, separar e devolver recusavam e ela sumia da fila. O B504 dizia
+  // resolver; nao resolvia. Agora o liberar exige caixa > 0 e recusa com a literal de antes.
+  await test('[98 RN-03] (Fase 5) liberar exige caixa > 0: separado 4, entregue 2, separar [], devolver 2 -> liberar 400 "Nenhum item separado", fica EM_SEPARACAO; separar 1 -> liberar 200', async () => {
+    const c = await montagem();
+    assert.strictEqual((await entregar(c.R, [[c.ids[0], 2]])).status, 200);
+    assert.strictEqual((await separar(c.R, [])).status, 200);
+    assert.strictEqual(await status(c.R), 'EM_SEPARACAO');
+    assert.strictEqual((await devolver(c.R, [[c.ids[0], 2]])).status, 200);
+    assert.deepStrictEqual([(await item(c.ids[0])).sep, (await item(c.ids[0])).ent], [2, 2]);
+    await recusa(liberar(c.R), 400, 'Nenhum item separado');
+    assert.strictEqual(await status(c.R), 'EM_SEPARACAO');
+    assert.ok((await etapas(c.R)), 'a requisicao continua na fila');
+    assert.strictEqual((await separar(c.R, [[c.ids[0], 1]])).status, 200);
+    assert.strictEqual((await liberar(c.R)).status, 200);
+    assert.strictEqual(await status(c.R), 'PRONTA_PARA_RETIRADA');
+  });
+
+  await test('[98 RN-03] (Fase 5) sem devolver: separa 2 de 4, entrega 2, separar [] -> liberar 400 "Nenhum item separado"; resto de ponto flutuante 1e-10 nao conta', async () => {
+    const m = await material(0); const a = await req([[m, 4]]); await aprovar(a.R); await entrar(m, 4);
+    assert.strictEqual((await separar(a.R, [[a.ids[0], 2]])).status, 200);
+    assert.strictEqual((await entregar(a.R, [[a.ids[0], 2]])).status, 200);
+    assert.strictEqual((await separar(a.R, [])).status, 200);
+    assert.strictEqual(await status(a.R), 'EM_SEPARACAO');
+    await recusa(liberar(a.R), 400, 'Nenhum item separado');
+    assert.strictEqual(await status(a.R), 'EM_SEPARACAO');
+    // resto de ponto flutuante (escritor de legado): 2,0000000001 - 2 arredonda a 0 em 6 casas — nao e caixa
+    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada = 2.0000000001 WHERE id = ?', [a.ids[0]]);
+    await recusa(liberar(a.R), 400, 'Nenhum item separado');
+  });
+
   await test('[98 RN-03] legado pre-separacao com caixa e AGUARDANDO_APROVACAO_VALOR com caixa: devolver 200, status igual', async () => {
     const m = await material(0); await entrar(m, 4);
     const a = await req([[m, 4]]); await aprovar(a.R);

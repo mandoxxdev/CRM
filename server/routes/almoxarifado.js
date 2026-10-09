@@ -3883,9 +3883,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           const check = requisitionStateMachine.validarTransicao(reqRow.status, 'PRONTA_PARA_RETIRADA');
           if (!check.ok) return res.status(400).json({ error: check.erro });
 
+          // Etapa 98 Fase 5: conta a CAIXA (separado - entregue), nao o separado. Separado 2 e entregue 2 numa
+          // EM_SEPARACAO (entrega parcial + "separar de novo", com ou sem devolucao) virava PRONTA com a caixa vazia:
+          // entregar, encerrar, separar e devolver recusavam e ela sumia da fila. A recusa e a literal de antes.
           // eslint-disable-next-line no-await-in-loop
           const separados = await dbGet(db,
-            `SELECT COUNT(*) as n FROM itens_requisicao_almoxarifado WHERE requisicao_id = ? AND quantidade_separada > 0`,
+            `SELECT COUNT(*) as n FROM itens_requisicao_almoxarifado WHERE requisicao_id = ? AND quantidade_separada > 0
+              AND ROUND(COALESCE(quantidade_separada, 0) - COALESCE(quantidade_entregue, quantidade_atendida, 0), 6) > 1e-9`,
             [req.params.id]);
           if (!separados || separados.n === 0) {
             return res.status(400).json({ error: 'Nenhum item separado' });
