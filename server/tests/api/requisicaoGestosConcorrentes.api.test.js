@@ -858,6 +858,138 @@ const esperarFila = async (R, ms = 3000) => {
     assert.strictEqual(Number(at.s), 4, 'quantidade_separada nao cai abaixo do entregue');
   });
 
+  // ── RN-08 (d)(d')(d'')(d''') — a exclusao confere ativo e status no UPDATE final (T5, B447 com a Fase 2 I1) ──
+  const E409 = 'A requisição mudou enquanto era excluída; o estorno pode já ter sido feito — confira o estoque e o histórico antes de excluir de novo.';
+  const E409N = 'A requisição mudou enquanto era excluída e nada foi estornado; recarregue e tente de novo.';
+  const E1 = (R, n) => `[almoxarifado-exclusao] Requisicao ${R}: UPDATE final perdeu (ativo/status mudou) depois do estorno de ${n} parte(s) — conferir a consulta A44 (c)`;
+  // (`entregue4`, da RN-04 acima: ENTREGUE com 4, q=0)
+  await test('[93 RN-08] (d) exclusao de uma ENTREGUE (ha estorno): no UPDATE final um escritor fora da trava poe ativo=0 -> 409 E409; E1 1 vez; UPDATE emitido 1 vez (sem nova tentativa: estornaria de novo); o estorno da 1a passada esta no livro', async () => {
+    desarmar();
+    const x = await entregue4();
+    const g = armarEscritor(RE.EXCL, () => raw('UPDATE requisicoes_almoxarifado SET ativo = 0 WHERE id = ?', [x.R]));
+    const er = capturar('error');
+    let ex;
+    try { ex = await comPrazo(excluir('ADMIN', x.R), 8000, 'exclusao'); } finally { er.restaurar(); desarmar(); }
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(g.disparos, 1);
+    assert.strictEqual(ex.status, 409, `exclusao: ${ex.status} ${JSON.stringify(ex.body)}`);
+    assert.strictEqual(ex.body.error, E409);
+    const e1 = er.linhas.filter((l) => l === E1(x.R, 1));
+    assert.strictEqual(e1.length, 1, `E1 ${e1.length} vez(es): ${JSON.stringify(er.linhas)}`);
+    assert.strictEqual(g.emitidos, 1, `UPDATE final emitido ${g.emitidos} vez(es)`);
+    const f = await foto(x);
+    assert.strictEqual(f.estornos.length, 1, 'o estorno da primeira passada (declarado: a A44 (c) olha)');
+    assert.strictEqual((await trilhaDe(x.R, 'EXCLUSAO')).length, 0, 'sem trilha EXCLUSAO (a rota so audita no sucesso)');
+  });
+
+  await test("[93 RN-08] (d') (Fase 2, I1) exclusao de TOTALMENTE_RESERVADA sem entrega (nada a estornar): o escritor troca o status (ativo 1) -> a nova tentativa vence: 200; CANCELADO, ativo=0; UPDATE emitido 2 vezes; nenhum E1", async () => {
+    desarmar();
+    const x = await montar();
+    const g = armarEscritor(RE.EXCL, () => raw("UPDATE requisicoes_almoxarifado SET status = 'PARCIALMENTE_RESERVADA' WHERE id = ?", [x.R]));
+    const er = capturar('error');
+    let ex;
+    try { ex = await comPrazo(excluir('ADMIN', x.R), 8000, 'exclusao'); } finally { er.restaurar(); desarmar(); }
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(ex.status, 200, `exclusao: ${ex.status} ${JSON.stringify(ex.body)}`);
+    assert.strictEqual(g.emitidos, 2, `UPDATE final emitido ${g.emitidos} vez(es)`);
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'CANCELADO'); assert.strictEqual(f.ativo, 0);
+    assert.strictEqual(f.reserva, 'LIBERADA');
+    assert.strictEqual(er.linhas.filter((l) => l.startsWith('[almoxarifado-exclusao]')).length, 0, 'nenhum E1');
+    const tx = await trilhaDe(x.R, 'EXCLUSAO');
+    assert.strictEqual(tx.length, 1);
+    assert.strictEqual(JSON.parse(tx[0].dados_anteriores).status, 'PARCIALMENTE_RESERVADA', 'a trilha grava o status que o UPDATE trocou');
+  });
+
+  await test("[93 RN-08] (d'') (Fase 2, I1) sem estorno, o escritor troca o status nas DUAS emissoes -> 409 E409N; ativo=1; nenhuma ENTRADA; UPDATE emitido 2 vezes", async () => {
+    desarmar();
+    const x = await montar();
+    const g = armarEscritor(RE.EXCL, (n) => raw('UPDATE requisicoes_almoxarifado SET status = ? WHERE id = ?',
+      [n === 1 ? 'PARCIALMENTE_RESERVADA' : 'TOTALMENTE_RESERVADA', x.R]), 2);
+    const ex = await comPrazo(excluir('ADMIN', x.R), 8000, 'exclusao');
+    desarmar();
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(ex.status, 409, `exclusao: ${ex.status} ${JSON.stringify(ex.body)}`);
+    assert.strictEqual(ex.body.error, E409N);
+    assert.strictEqual(g.emitidos, 2, `UPDATE final emitido ${g.emitidos} vez(es) — o teto e uma nova tentativa so`);
+    const f = await foto(x);
+    assert.strictEqual(f.ativo, 1);
+    assert.strictEqual(f.status, 'TOTALMENTE_RESERVADA');
+    assert.strictEqual(f.movs, '', 'nenhuma ENTRADA/SAIDA');
+    assert.strictEqual(f.reserva, 'ATIVA');
+  });
+
+  await test("[93 RN-08] (d''') (Fase 2, I1) sem estorno, o escritor poe ativo=0 -> a releitura ve ativo=0 -> 404 N0; UPDATE emitido 1 vez", async () => {
+    desarmar();
+    const x = await montar();
+    const g = armarEscritor(RE.EXCL, () => raw('UPDATE requisicoes_almoxarifado SET ativo = 0 WHERE id = ?', [x.R]));
+    const ex = await comPrazo(excluir('ADMIN', x.R), 8000, 'exclusao');
+    desarmar();
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(ex.status, 404, `exclusao: ${ex.status} ${JSON.stringify(ex.body)}`);
+    assert.strictEqual(ex.body.error, N0);
+    assert.strictEqual(g.emitidos, 1);
+  });
+
+  // ── RN-08 (e)(e') — o encerramento confere o status lido (T5, B448 com a Fase 2 I3) ──
+  const RE_ENC = /SET\s+status\s*=\s*'ENCERRADA'/;
+  const C1 = 'A requisição mudou enquanto era encerrada; recarregue e confira antes de encerrar.';
+  const parcial = async () => {
+    const x = await montar();
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 4)).status, 200);
+    const e = await entregar('ALMOX', x.R, x.item, 1);
+    assert.strictEqual(e.body.status, 'PARCIALMENTE_ATENDIDA', JSON.stringify(e.body));
+    return x;
+  };
+
+  await test('[93 RN-08] (e) encerramento de PARCIALMENTE_ATENDIDA: o escritor poe ENTREGUE -> a nova tentativa vence (ENTREGUE -> ENCERRADA): 200, ENCERRADA, UPDATE emitido 2 vezes', async () => {
+    desarmar();
+    const x = await parcial();
+    const g = armarEscritor(RE_ENC, () => raw("UPDATE requisicoes_almoxarifado SET status = 'ENTREGUE' WHERE id = ?", [x.R]));
+    const en = await comPrazo(encerrar('ADMIN', x.R), 8000, 'encerrar');
+    desarmar();
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(en.status, 200, `encerrar: ${en.status} ${JSON.stringify(en.body)}`);
+    assert.strictEqual(g.emitidos, 2, `UPDATE emitido ${g.emitidos} vez(es)`);
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'ENCERRADA');
+    assert.strictEqual(f.reserva, 'LIBERADA');
+    assert.strictEqual((await trilhaDe(x.R, 'ENCERRAMENTO')).length, 1);
+  });
+
+  await test('[93 RN-08] (e) encerramento de PARCIALMENTE_ATENDIDA: o escritor poe EM_SEPARACAO -> 400 "Transicao invalida: EM_SEPARACAO -> ENCERRADA"; status EM_SEPARACAO; nenhuma reserva liberada; nenhuma trilha ENCERRAMENTO', async () => {
+    desarmar();
+    const x = await parcial();
+    const g = armarEscritor(RE_ENC, () => raw("UPDATE requisicoes_almoxarifado SET status = 'EM_SEPARACAO' WHERE id = ?", [x.R]));
+    const en = await comPrazo(encerrar('ADMIN', x.R), 8000, 'encerrar');
+    desarmar();
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(en.status, 400, `encerrar: ${en.status} ${JSON.stringify(en.body)}`);
+    assert.strictEqual(en.body.error, 'Transição inválida: EM_SEPARACAO → ENCERRADA');
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'EM_SEPARACAO', `status ${f.status} (ENCERRADA por cima de EM_SEPARACAO)`);
+    assert.strictEqual(f.reserva, 'ATIVA', 'nenhuma reserva liberada');
+    assert.strictEqual((await trilhaDe(x.R, 'ENCERRAMENTO')).length, 0);
+    assert.strictEqual(g.emitidos, 1);
+  });
+
+  await test("[93 RN-08] (e') (Fase 2, I3) o escritor troca o status para outro de onde ENCERRADA vale nas DUAS emissoes -> 409 C1 (nao { error: undefined }); nenhuma reserva liberada; nenhuma trilha", async () => {
+    desarmar();
+    const x = await parcial();
+    const g = armarEscritor(RE_ENC, (n) => raw('UPDATE requisicoes_almoxarifado SET status = ? WHERE id = ?',
+      [n === 1 ? 'ENTREGUE' : 'PARCIALMENTE_ATENDIDA', x.R]), 2);
+    const en = await comPrazo(encerrar('ADMIN', x.R), 8000, 'encerrar');
+    desarmar();
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(en.status, 409, `encerrar: ${en.status} ${JSON.stringify(en.body)}`);
+    assert.strictEqual(en.body.error, C1);
+    assert.strictEqual(g.emitidos, 2);
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'PARCIALMENTE_ATENDIDA');
+    assert.strictEqual(f.reserva, 'ATIVA', 'nenhuma reserva liberada');
+    assert.strictEqual((await trilhaDe(x.R, 'ENCERRAMENTO')).length, 0);
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed ? 1 : 0);

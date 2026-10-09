@@ -3956,10 +3956,32 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
         const { motivo } = req.body;
 
-        await dbRun(db,
-          `UPDATE requisicoes_almoxarifado SET status='ENCERRADA', encerrado_por=?, encerrado_em=CURRENT_TIMESTAMP,
-           updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-          [req.user.id, req.params.id]);
+        // Etapa 93 (T5, B448 + Fase 2 I3): o UPDATE confere o status lido (antes `WHERE id=?`: um escritor fora
+        // da trava que mudasse o status no meio era atropelado — ENCERRADA por cima de EM_SEPARACAO). Perdeu ->
+        // rele: transicao invalida -> o 400 de hoje; valida -> uma nova tentativa; perdeu de novo -> 409 C1
+        // (com a transicao valida o validarTransicao nao tem `erro`: "o mesmo 400" sairia { error: undefined }).
+        // Reservas e trilha SO se o UPDATE venceu.
+        let statusLido = reqRow.status;
+        let venceu = false;
+        for (let tentativa = 0; tentativa < 2 && !venceu; tentativa++) {
+          if (tentativa > 0) {
+            // eslint-disable-next-line no-await-in-loop
+            const relido = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+            if (!relido) return res.status(404).json({ error: 'Requisição não encontrada' });
+            const recheck = requisitionStateMachine.validarTransicao(relido.status, 'ENCERRADA');
+            if (!recheck.ok) return res.status(400).json({ error: recheck.erro });
+            statusLido = relido.status;
+          }
+          // eslint-disable-next-line no-await-in-loop
+          const upd = await dbRun(db,
+            `UPDATE requisicoes_almoxarifado SET status='ENCERRADA', encerrado_por=?, encerrado_em=CURRENT_TIMESTAMP,
+             updated_at=CURRENT_TIMESTAMP WHERE id=? AND status=?`,
+            [req.user.id, req.params.id, statusLido]);
+          venceu = upd.changes > 0;
+        }
+        if (!venceu) {
+          return res.status(409).json({ error: 'A requisição mudou enquanto era encerrada; recarregue e confira antes de encerrar.' });
+        }
 
         // Etapa 74 (T3, Fase 2): ENCERRADA e terminal ("nenhuma entrega futura") — o hold que sobrou (da aprovacao ou
         // da chegada) volta ao disponivel. Best-effort, o molde do cancelamento: o encerramento ja aconteceu.
