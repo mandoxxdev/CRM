@@ -137,7 +137,7 @@
 > das novidades). Fica fora: o **desbloqueio avulso** e o estorno de bloqueio avulso não reservam (**B383**); a aprovação
 > no mesmo instante da decisão inverte a fila (**C131**). Detalhe na spec 07. **A feature continua 🟢.**
 > **Etapa 91 (2026-10-08, `e472f26c` + trava `8a72c801`, integração `22e79982`, Fase 5 `14cf6df7`) — A DECISÃO DA INSPEÇÃO E A NC QUE ACEITA SEGURAM A TRAVA DO MATERIAL ATÉ A DISTRIBUIÇÃO.** `decidirInspecao` pega `travaPorMaterial.comLockDoMaterial(item.material_id)` do claim do item até a distribuição (o `DECISAO_INSPECAO` do motor, o `INSERT` da inspeção, as medidas, o alerta de reprovado, a abertura da NC e `aposLiberacaoSemFalhar(..., { sobTrava, pendencia })`); `decidirNaoConformidade`, quando o efeito previsto é `LIBERAVEL`, pega a trava do material da inspeção do claim da NC até a distribuição (só ali o material é conhecido). Validações e medidas resolvidas antes, fora; o recálculo da 76 e o aviso da 75 rodam **depois** de soltar (`concluirPendencia` no `finally` de fora — B423). Como as três aprovações pegam a mesma trava (feature 04), um `/aprovar` no meio espera, e quem esperava fica com o liberado (**C131 resolvida**, B419). O teto da liberação passou a ser lido **sob** a trava. Respostas inalteradas. O alerta de estoque mínimo, que rodava dentro da seção esperando o SMTP, passou a rodar depois de soltar (F3, B429). ⚠️ **Esta spec dizia, no parágrafo da Etapa 75 acima, que a C131 ficava fora sem dizer por quê; a letra D (75) das novidades a dava como "fica para a migração de banco" — estava errado:** a inversão é entre comandos (o movimento do motor, depois a distribuição) e o Postgres exigiria a mesma reestruturação (B421); o certo é a trava em volta do movimento **e** das aprovações, feita aqui. **Fica de fora:** a saída avulsa, a reserva manual e a separação **dentro** da seção não pegam a trava (D (91)); mais de um processo (**C132**). **A feature continua 🟢.**
-> **Última atualização:** 2026-10-09 (**Etapa 97 — o bloqueio avulso ganha guarda**: `POST /materiais/:id/bloquear` passa a recusar o que passa do físico não retido menos a caixa sem reserva das requisições — bloqueável = físico − bloqueado − em inspeção − em terceiros − caixa, **sem contar o reservado** (a qualidade continua podendo reter material reservado); recusa 400 *"Saldo disponível insuficiente para bloquear: ⟨n⟩ ⟨un⟩"* (M4, nova) + o sufixo da caixa. Antes bloqueava 10 com físico 4. O `BLOQUEIO` interno da devolução para quarentena não muda. Declarado: **C190**. `65dc74b2`, `9dbf11c0`; range `eb7cd9d8..3fc39310`; ver a seção "Etapa 97" no fim; **a feature continua 🟢**). Antes: 2026-10-08 (**Etapa 91 — a inspeção e a NC que aceita seguram a trava do material até a distribuição; a feature continua 🟢**). Antes: 2026-10-02 (**Etapa 75 — a inspeção e a NC que liberam reservam para quem esperava; a
+> **Última atualização:** 2026-10-09 (**Etapa 98 — o C190 visto da qualidade**: bloquear o reservado já separado continua aceito (a guarda do bloqueio **não mudou** — a qualidade continua podendo reter material reservado), mas a entrega deixa de mentir: a fila e o detalhe mostram 0 a entregar e a recusa diz o bloqueio e a saída (E190 — *"… (1 PC bloqueados): nada dele sai pela entrega até liberar da reserva desta requisição o que está retido, ou desbloquear"*). `55bc2165`, `cc130a86`; ver a seção "Etapa 98" no fim. Continua 🟢.) Antes: 2026-10-09 (**Etapa 97 — o bloqueio avulso ganha guarda**: `POST /materiais/:id/bloquear` passa a recusar o que passa do físico não retido menos a caixa sem reserva das requisições — bloqueável = físico − bloqueado − em inspeção − em terceiros − caixa, **sem contar o reservado** (a qualidade continua podendo reter material reservado); recusa 400 *"Saldo disponível insuficiente para bloquear: ⟨n⟩ ⟨un⟩"* (M4, nova) + o sufixo da caixa. Antes bloqueava 10 com físico 4. O `BLOQUEIO` interno da devolução para quarentena não muda. Declarado: **C190**. `65dc74b2`, `9dbf11c0`; range `eb7cd9d8..3fc39310`; ver a seção "Etapa 97" no fim; **a feature continua 🟢**). Antes: 2026-10-08 (**Etapa 91 — a inspeção e a NC que aceita seguram a trava do material até a distribuição; a feature continua 🟢**). Antes: 2026-10-02 (**Etapa 75 — a inspeção e a NC que liberam reservam para quem esperava; a
 > feature continua 🟢**). Antes: 2026-10-01 (**Etapa 69 — a decisão Sucatear executa pelo sucateamento; a feature continua
 > 🟢**). Antes: 2026-09-30 (**Etapa 46 — o documento decidido deixa de ser um beco; a feature CONTINUA 🟢, e a etapa não paga item de checklist: ela fecha o furo C64 que a 45 criou**. Antes: 2026-09-29 (**Etapa 45 — o encaminhamento ganha status; a feature vira 🟢**). Antes: 2026-09-28 (Etapas 43 e 44 — a NC numerada e a liberação pela decisão; as duas escreveram no cabeçalho e na seção "O que falta para 🟢" e a **43 esqueceu de marcar o checklist**, corrigido aqui). Antes: 2026-09-02 (**Etapa 32 — anexos**; antes: 2026-08-31 (**Etapa 30, `af7adea..7982f18`: o cadastro do plano ganha
 > tela** — o item 5 de "O que falta para 🟢", criado no fechamento da 29, está **pago**. Com ele
@@ -668,7 +668,9 @@ reserva de uma requisição (físico 4), bloquear 4 → 200 e a entrega ficava p
   o livro, não é retenção de qualidade — declarado.
 
 **Fica de fora (declarado):**
-- **C190 (aberto):** bloquear material reservado **e já separado** (a reserva da requisição coberta pela caixa) é
+- ~~**C190 (aberto):**~~ *(resolvido do lado da entrega na Etapa 98 — `55bc2165`, `cc130a86`; e **estava incompleto**: com
+  bloqueio parcial a prévia anunciava o resto e o motor recusava tudo — C196. Ver a seção "Etapa 98".)* Texto original:
+  bloquear material reservado **e já separado** (a reserva da requisição coberta pela caixa) é
   aceito — a guarda não conta o reservado — e prende a entrega em *"Máximo: 0"* sem nomear o bloqueio.
 - O gate dos botões avulsos continua `ajustar_estoque` (B56, como antes). Nenhuma rota nova, nenhum campo novo.
 
@@ -680,3 +682,20 @@ reserva manual 4: 5 -> 400, 4 -> 200; montagem: 1 -> 400 M4+S e A entrega 4"*, *
 estorno do DESBLOQUEIO avulso (entra 4, bloqueia 4, desbloqueia 4, separa 4): 400 M9; A entrega 4"*;
 `portasAvulsasCaixaIntegracao.api.test.js` — *"[97 T3 C1]"* (bloquear pela rota) e *"[97 F5-A]"* (o estorno do
 `DESBLOQUEIO` é uma das quatro portas da corrida). `test:api` 338/338 (4163 ✓).
+
+## Etapa 98 — o C190 visto da qualidade (2026-10-09)
+
+Plano: `docs/superpowers/plans/2026-10-09-almoxarifado-etapa98-devolver-da-caixa-a-prateleira.md`. Range
+`6e61cb27..b7fc06a0`. A regra está na feature 07 (B509, B513, B514).
+
+- [x] **A guarda do bloqueio avulso não muda** — continua sem contar o reservado (I-5 da 97); o bloqueio do reservado já
+  separado continua 200. Descartado fazer a guarda contar a caixa coberta (B509 (ii)): o GESTOR bloqueia mas não libera
+  reserva de requisição.
+- [x] **A entrega diz o que o bloqueio retém** — `55bc2165`, `cc130a86`: com o disponível do material negativo, a fila mostra
+  AGUARDANDO_SALDO, o detalhe 0, e entregar → 400 com a E190, que lista as retenções > 0 na ordem *"⟨b⟩ ⟨un⟩
+  bloqueados"*, *"⟨i⟩ ⟨un⟩ em inspeção"*, *"⟨t⟩ ⟨un⟩ em terceiros"* e manda liberar reserva (desta requisição só quando
+  destrava) ou desbloquear. A liberação da reserva solta a entrega (`[98 RN-12]`, `[98 T5 C4]`).
+- [x] **A49** — a consulta de produção acha as requisições presas por isso (feature 07).
+
+**Fica de fora:** o bloqueio de qualidade avisar, no ato, que vai prender uma requisição separada — não pedido; a A49 acha
+o legado.

@@ -864,7 +864,7 @@ A separação entre **Almoxarife** e **Gestor** é intencional e é o desenho de
 | Ajustar material de cliente | ● | – | – | – | – | – | – | – |
 | Remeter a terceiro | ● | ● | – | – | – | – | – | – |
 | Aprovar requisição | ● | ● | – | – | – | ● | – | – |
-| Separar / emitir | ● | ● | – | – | – | – | – | – |
+| Separar / emitir (inclui devolver à prateleira o que está na caixa) | ● | ● | – | – | – | – | – | – |
 | Conferir separação (segunda conferência da caixa) | ● | ● | – | – | – | – | – | – |
 | Requisitar | ● | ● | – | ● | ● | – | – | – |
 | Receber material | ● | ● | ● | – | – | – | – | – |
@@ -1078,7 +1078,7 @@ Isso vale para todo tipo de saída, e a recusa acontece no servidor — não adi
 
 **O material separado na caixa de uma requisição não sai por aqui.** O que já foi separado para uma requisição em andamento e ainda não foi entregue — sem reserva da requisição que o cubra — continua na prateleira e conta no disponível que a tela mostra, mas a saída compara com o **livre fora da caixa** (disponível menos esse separado) e a recusa diz para quem ele está separado:
 
-> *"Saldo insuficiente. Disponível: 0 PC — 4 PC estão separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (material perdido da caixa: entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)"*
+> *"Saldo insuficiente. Disponível: 0 PC — 4 PC estão separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (material perdido da caixa: devolva-o à prateleira na requisição e dê a baixa, entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)"*
 
 A conta, as portas que a seguem e o caminho para o material perdido da caixa estão em 10.2.
 
@@ -1464,6 +1464,7 @@ Clicar numa linha da lista abre o painel de detalhe à direita, com **uma única
 | Rejeitar | **Rejeitado** | Aprovador — ou o próprio solicitante (desistência) | Aprovar requisição, dispensada para a própria |
 | Separar | **Em Separação** | Almoxarifado | Separar e emitir |
 | Liberar para retirada | **Pronta p/ Retirada** | Almoxarifado | Separar e emitir |
+| Devolver à prateleira (tirar da caixa) | não muda — exceto **Pronta p/ Retirada**, que volta a **Em Separação** (10.2b) | Almoxarifado | Separar e emitir |
 | Entregar | **Entregue** ou **Parcialmente Atendida** | Almoxarifado | Separar e emitir |
 | Confirmar recebimento | (não muda o status — registra data e autor) | **Só o solicitante** | — |
 | Encerrar | **Encerrada** | Quem aprova | Aprovar requisição |
@@ -1534,6 +1535,11 @@ Regras:
 
 - Só é possível entregar a partir de **Em Separação**, **Pronta p/ Retirada** ou **Parcialmente Atendida** → *"Requisição deve estar em separação, pronta para retirada ou parcialmente atendida"*.
 - O teto por item é `mínimo(pendente de entrega, separado ainda não entregue, disponível)`. Acima disso, a recusa **nomeia o material e mostra a conta**: *"Chapa 3mm: não é possível entregar 15 KG. Máximo: 8 (pendente: 15, disponível: 8)"* — *pendente* é o que falta entregar do item e *disponível* é o disponível do material somado ao que a reserva do item ainda segura. Depois de uma entrega parcial do item, se o separado ainda não entregue é menor que o pendente, o teto de material **comum** passa a ser `mínimo(pendente, disponível, separado ainda não entregue + separável)` — o restante pode sair sem nova separação, mas a parte que passa do que o item tem na caixa fica limitada ao **separável** do item (10.2): essa entrega não leva o material que está separado, sem reserva, para outro pedido. Com os 4 da prateleira na caixa de outra requisição, entregar 4 assim é recusado com *"Parafuso: não é possível entregar 4 PC. Máximo: 0 (pendente: 4, disponível: 4)"* — o *disponível* da mensagem não desconta a caixa; o *Máximo*, sim. Na tela, nesse caso, a requisição não oferece **Completar Entrega** e diz *"Atendimento parcial — itens pendentes aguardam reposição de estoque."*.
+- **Material com disponível negativo não sai pela entrega.** O disponível do material (6.1) — físico menos **todo** o reservado (inclusive o desta requisição), o bloqueado, o em inspeção e o em poder de terceiros — fica negativo quando material já reservado é bloqueado ou vai para inspeção além do que estava livre, ou quando reservas passam do que existe. Nesse caso, a menos que a saída com saldo negativo esteja permitida (6.1), **nada** desse material sai pela entrega — nem a parte que a reserva da própria requisição segura, nem o excedente. O detalhe da requisição mostra 0 a entregar, a Fila de separação mostra **Aguardando saldo** em vez de **Entregar** (10.6), e a recusa acontece antes de qualquer baixa, com *Máximo* e *disponível* 0 e um trecho que diz o que está retido e a saída. Com 4 Porcas reservadas e separadas, estoque 4 e 1 bloqueada:
+
+  > *"Porca: não é possível entregar 3 PC. Máximo: 0 (pendente: 4, disponível: 0) — o disponível de Porca está negativo (1 PC bloqueados): nada dele sai pela entrega até liberar da reserva desta requisição o que está retido, ou desbloquear"*
+
+  O que está retido aparece na ordem *"⟨n⟩ ⟨un⟩ bloqueados"*, *"⟨n⟩ ⟨un⟩ em inspeção"*, *"⟨n⟩ ⟨un⟩ em terceiros"*, só os maiores que zero, separados por vírgula. A saída depende da reserva do item: se a reserva desta requisição para o item é **maior** que o que falta (reserva do item + disponível do material > 0), o trecho manda *"liberar da reserva desta requisição o que está retido, ou desbloquear"* — no exemplo, liberar 1 da reserva (9.6) e a entrega de 3 sai. Senão — o item não tem reserva, ou ela não cobre o que falta —, liberar a própria reserva não muda nada do que a requisição pode entregar, e o trecho termina em *"nada dele sai pela entrega até liberar outra reserva deste material ou desbloquear"* (a reserva de outra requisição ou uma reserva manual do mesmo material). Sem nada bloqueado, em inspeção ou em terceiros (reservas acima do físico), o trecho diz *"(reservado além do físico)"* e termina em *"…até liberar da reserva desta requisição o que passa do físico"* ou *"…até liberar outra reserva deste material"*. Com o disponível do material zero ou positivo, a recusa é a de sempre, sem o trecho.
 - **Material crítico só sai na quantidade separada e ainda não entregue**, sempre — inclusive depois de uma entrega parcial. Acima disso: *"Chapa 3mm: material crítico só sai depois de separado e conferido — 9 excede o separado ainda não entregue (0). Separe o restante e peça a segunda conferência."*
 - **Com material crítico na caixa, a entrega exige a conferência da separação** (10.3): *"Esta requisição tem material crítico separado e ainda não passou pela segunda conferência. Peça a outra pessoa do almoxarifado para conferir a separação antes de liberar ou entregar."* A recusa acontece antes de qualquer baixa.
 - Se nada foi informado → *"Informe ao menos uma quantidade maior que zero para entregar"*.
@@ -1958,6 +1964,8 @@ Pela integração, a recusa é *"Sem permissão para liberar a reserva da requis
 
 Como decide: o sistema olha, item a item, quanto ainda falta entregar e quanto continua reservado para aquele item. Se todos os itens pendentes continuam cobertos, **Totalmente Reservada**; se só alguns, **Parcialmente Reservada**; se nenhum, a requisição volta ao status de quem foi aprovado — **Aprovado** quando há saldo disponível do material (o caso normal, porque o que acabou de ser liberado está no disponível), ou **Aguardando estoque/compra** se o saldo já tiver sido levado por outra requisição no mesmo instante. O recálculo espera uma nota, inspeção ou não conformidade do mesmo material que esteja reservando naquele momento, para não gravar um status velho.
 
+**Liberar para destravar a entrega.** Quando a entrega é recusada porque o disponível do material está negativo (7.5), a saída é liberar reserva do mesmo material (ou desbloquear). Liberar da reserva da **própria** requisição só adianta quando essa reserva é maior que o que falta: liberar soma ao disponível o que tira da reserva, e o que a requisição pode entregar só cresce quando sobra reserva depois de zerar o que falta. Quando ela não cobre, o que destrava é liberar **outra** reserva do material — de outra requisição ou manual. A recusa da entrega já diz qual das duas (7.5).
+
 **O liberado não vai sozinho para quem esperava.** O saldo liberado volta ao disponível **solto**: uma outra requisição que esperava o mesmo material continua **Aguardando**, e uma requisição aprovada depois pode levá-lo. Se a liberação foi feita para atender outra requisição, separe-a logo — a **Fila de separação** mostra **Separar** para quem pode separar.
 
 Liberar uma reserva **manual** (criada na própria tela **Reservas**, sem requisição) não muda nenhuma requisição. Se o recálculo do status falhar, a liberação vale assim mesmo (o saldo já voltou ao disponível) e o aviso fica no log do servidor; o status se corrige no próximo evento do material.
@@ -1997,7 +2005,7 @@ Os avisos por situação são estes:
 
 O aviso de "chegou" aparece no lugar do de "sem saldo" e não muda o status. Quando o material chega pela **nota de compra**, ele em geral já foi reservado para quem esperava (9.3b) e a requisição já está *Parcialmente/Totalmente Reservada* — o aviso de "chegou" é o caso do material que chegou por outra porta (ajuste, devolução, inspeção liberada) ou cuja reserva não aconteceu. A quantidade é o menor entre o que falta separar e o **separável** do item (10.2); itens do mesmo material dividem esse número entre si (4 que chegaram não aparecem como 4 para cada item). Material que chegou e já foi separado para outra requisição não aparece aqui.
 
-Os botões, na ordem do fluxo: **Iniciar Separação** (que vira **Ajustar Separação** quando a separação já começou), **Conferir separação**, **Liberar para Retirada** — que só aparece se algum item tem quantidade separada — e **Confirmar Entrega e Baixar Estoque**, que entrega em um clique; ao lado dele, **Entregar escolhendo de onde sai…** abre a janela de entrega com o campo **Sai de** por item (7.5). Sem nada separado, no lugar do botão de entrega a tela informa: *"Nenhuma quantidade separada disponível para entrega no momento."*
+Os botões, na ordem do fluxo: **Iniciar Separação** (que vira **Ajustar Separação** quando a separação já começou), **Conferir separação**, **Liberar para Retirada** — que só aparece se algum item tem material na caixa (separado e ainda não entregue) — e **Confirmar Entrega e Baixar Estoque**, que entrega em um clique; ao lado dele, **Entregar escolhendo de onde sai…** abre a janela de entrega com o campo **Sai de** por item (7.5). Sem nada separado, no lugar do botão de entrega a tela informa: *"Nenhuma quantidade separada disponível para entrega no momento."* Na linha de cada item com material na caixa, o botão **Devolver à prateleira** tira da caixa o que não vai sair (10.2b). Em *Parcialmente Atendida* com material crítico na caixa sem a segunda conferência, aparece **Separar de novo para conferir** (10.3).
 
 Abaixo dos itens, o bloco **Separação (N)** lista cada rodada de separação com **quem separou, quando e quantos itens tocou**; embaixo da rodada, cada item separado **abaixo do possível** aparece como *"Chapa 3mm: separou 6 de 10 — 4 avariadas na prateleira"* (ou *"— sem motivo informado"*) — ver **Divergência** em 10.2; e, quando a caixa já foi conferida, a linha **Conferida por … em …**.
 
@@ -2071,11 +2079,11 @@ As portas avulsas que respeitam a caixa:
 
 Quando a recusa acontece e o material tem caixa sem reserva, a mensagem de sempre ganha, no fim, quanto está separado, para quem, e o caminho:
 
-> *" — ⟨quantidade⟩ ⟨unidade⟩ estão separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (material perdido da caixa: entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)"*
+> *" — ⟨quantidade⟩ ⟨unidade⟩ estão separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (material perdido da caixa: devolva-o à prateleira na requisição e dê a baixa, entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)"*
 
 Com duas ou três requisições, o trecho diz *"as requisições ⟨número⟩, ⟨número⟩ e ⟨número⟩"*; com quatro ou mais, nomeia as três primeiras e acrescenta *"e mais ⟨n⟩"*. O número que a mensagem mostra como disponível é o livre fora da caixa, e nunca aparece negativo (é mostrado como 0). Exemplo completo, numa saída com os 4 da prateleira separados para uma requisição:
 
-> *"Saldo insuficiente. Disponível: 0 PC — 4 PC estão separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (material perdido da caixa: entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)"*
+> *"Saldo insuficiente. Disponível: 0 PC — 4 PC estão separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (material perdido da caixa: devolva-o à prateleira na requisição e dê a baixa, entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)"*
 
 Material **sem** caixa sem reserva recebe a recusa de sempre, sem esse trecho.
 
@@ -2083,7 +2091,7 @@ Material **sem** caixa sem reserva recebe a recusa de sempre, sem esse trecho.
 
 **A porta avulsa espera a separação.** A saída, o ajuste, o bloqueio, a reserva manual e as demais portas avulsas entram na mesma fila por material da separação, da entrega e da aprovação (9.3d): uma saída clicada no instante em que outra pessoa separa o mesmo material espera a separação terminar e só então confere o livre fora da caixa — ou a separação espera a saída e calcula o separável com o que sobrou.
 
-**Material quebrado ou perdido na caixa.** Se parte do separado se perdeu (caiu, quebrou, sumiu), a Perda desse material é recusada enquanto a caixa o segura — a recusa ensina o caminho. Não há gesto para "tirar da caixa": entregue o que sobrou (a requisição fica **Parcialmente Atendida**) e **Encerre** a requisição (7.6) — ao encerrar, o que ela tinha separado e não entregou deixa de ser caixa, e a Perda do resto passa. Se **tudo** se perdeu e a requisição está *Em Separação*, não há o que entregar, e ela não se encerra nem se cancela nesse status (*"Transição inválida: EM_SEPARACAO → ENCERRADA"*; *"Não é possível cancelar neste status"*): o administrador do almoxarifado (ou o super administrador) **exclui** a requisição (7.6), e a Perda passa. O almoxarife não exclui — recebe *"Apenas administradores do Almoxarifado ou Super Administrador podem excluir requisições"*.
+**Material quebrado ou perdido na caixa.** Se parte do separado se perdeu (caiu, quebrou, sumiu), a Perda desse material é recusada enquanto a caixa o segura — a recusa ensina o caminho. O caminho do almoxarife é **Devolver à prateleira** (10.2b) a quantidade perdida, com o motivo, e então lançar a **Perda**: a devolução tira o material da caixa, a Perda passa, e a requisição continua viva para o resto — separe de novo quando houver material. Se o item tem **reserva** da requisição, a Perda continua recusada depois da devolução (*"Saldo insuficiente. Disponível: 0 PC"*, sem o trecho da caixa), porque o material segue reservado para ela: libere da reserva a quantidade perdida (9.6) e lance a Perda. Os outros caminhos continuam valendo: entregar o que sobrou e **Encerrar** a requisição (7.6) — ao encerrar, o que ela tinha separado e não entregou deixa de ser caixa —, ou o administrador do almoxarifado (ou o super administrador) **excluir** a requisição (7.6). O almoxarife não exclui — recebe *"Apenas administradores do Almoxarifado ou Super Administrador podem excluir requisições"*.
 
 **De onde sai — "Sai de" na separação.** Cada item do modal de separação tem o campo **Sai de**, com as mesmas opções da entrega (7.5): **"Qualquer endereço (automático)"** e os endereços onde o material está, como *"A-01 (10)"* ou *"B-02 — lote L-7 (4)"*. Quem separa escolhe o endereço (e o lote) de onde tirou. Regras:
 
@@ -2107,6 +2115,45 @@ Material **sem** caixa sem reserva recebe a recusa de sempre, sem esse trecho.
 - A divergência é **só registro**: não bloqueia, não avisa ninguém, não abre não conformidade nem ajusta o inventário. Fica também na **Auditoria**, na linha da rodada.
 - O material separado por **outra** requisição — com ou sem endereço escolhido — já está fora do "quanto dava": ele é caixa e sai do separável (acima).
 
+### 10.2b Devolver à prateleira — tirar da caixa o que não vai sair
+
+Separou e o material não vai sair — quebrou na caixa, sumiu, ou foi separado o material errado? O botão **Devolver à prateleira** tira da caixa da requisição a quantidade informada. É o inverso de separar: diminui o separado do item, e **não move estoque** — a separação nunca tirou o material da prateleira nos livros (10.5), então ele volta, nos livros, para onde sempre esteve. Se fisicamente ele foi guardado em outro endereço, registre a **Transferência** (11).
+
+**Quem e onde.** Quem tem **Separar e emitir** (Administrador e Almoxarife); os demais perfis recebem *"Sem permissão para esta operação"* e nada muda. O botão aparece no detalhe da requisição, no modo almoxarifado, na linha de cada item que tem material na caixa (separado menos entregue maior que zero), nos status em que a caixa existe (os de **Quem segura a caixa**, 10.2). Um item por vez.
+
+**A janela.** Título *"Devolver à prateleira — ⟨material⟩"* e a linha *"Na caixa: ⟨quantidade⟩ ⟨unidade⟩"*. O campo **Quantidade** já vem com a caixa inteira e aceita fração; o campo **Motivo (obrigatório)** aceita até 500 caracteres. Avisos:
+
+- sempre: *"O material volta para a prateleira de onde foi separado — não há movimentação de estoque. Se quebrou ou se perdeu, dê a baixa (Perda) depois."*;
+- com reserva da requisição no item: *"Este item continua reservado para a requisição: para dar baixa, libere a reserva antes."*;
+- com a requisição *Pronta p/ Retirada*: *"A requisição volta para Em Separação."*;
+- com a caixa já conferida: *"A segunda conferência será refeita."*
+
+O botão **Devolver** só habilita com motivo e com quantidade maior que zero e no máximo igual à caixa. No sucesso aparece *"Devolvido à prateleira"* e o detalhe recarrega.
+
+**O que acontece.**
+
+- O separado do item diminui na quantidade devolvida (arredondada a seis casas, 22.1b); o entregue não muda. Nada mais se move: físico, reservado, bloqueado, saldo por endereço, séries e o livro do material ficam iguais. A caixa do item cai, e as portas avulsas (10.2) passam a enxergar esse material como livre — a Perda do que quebrou passa.
+- **A reserva do item não muda.** O material continua prometido à requisição — quem separou o material errado quer separar o certo sem perder a vez. Para dar baixa de material reservado, libere antes a reserva (9.6) e depois lance a Perda.
+- **Pronta p/ Retirada volta a Em Separação**, em qualquer devolução: a liberação atestou uma caixa que mudou. *Em Separação* e *Parcialmente Atendida* ficam como estão, assim como os status anteriores à separação com material na caixa e *Aguard. Aprov. Valor*. A *Em Separação* esvaziada sem nada entregue se separa de novo normalmente — e, como nada mais está separado nem entregue, a aprovação por valor volta a ser conferida na separação (8.3).
+- **A segunda conferência é apagada**, em qualquer status: a caixa mudou e precisa ser conferida de novo (10.3). Quem devolveu **pode** conferir — a regra "quem separou não confere" olha as rodadas de separação, e devolver não é rodada.
+- Quando a caixa do item zera, a **origem da separação** (endereço e lote) do item é apagada, e a próxima separação escolhe de novo; com resto na caixa, ela continua.
+- **Fica registrado.** O detalhe ganha o bloco **"Devolvido à prateleira (N)"**, uma linha por devolução — *"⟨código⟩ ⟨material⟩: ⟨quantidade⟩ ⟨unidade⟩ devolvido(s) à prateleira — ⟨motivo⟩"*, com quem, quando e *"conferência refeita"* quando a devolução apagou a conferência — e a **Auditoria** tem a linha *Devolução à prateleira*, com a conferência apagada quando houve. O registro nunca é editado nem apagado.
+
+**As recusas.** Todas acontecem antes de qualquer gravação; numa devolução de vários itens (por integração), se um é recusado, nenhum é devolvido.
+
+- requisição fora dos status com caixa: *"Só é possível devolver à prateleira o que está separado numa requisição em andamento (status atual: ⟨STATUS⟩)"*;
+- requisição excluída ou inexistente: *"Requisição não encontrada"*;
+- sem motivo (ou só espaços): *"Informe o motivo da devolução à prateleira"*;
+- nenhum item: *"Informe ao menos um item para devolver à prateleira"*;
+- item de outra requisição: *"Item ⟨número do item⟩ não pertence a esta requisição"*; o mesmo item duas vezes: *"Item ⟨número do item⟩ repetido na devolução"*;
+- quantidade zero, negativa ou que não é número: *"⟨material⟩: informe uma quantidade maior que zero para devolver à prateleira"*;
+- acima da caixa: *"⟨material⟩: não é possível devolver ⟨quantidade⟩ ⟨unidade⟩ à prateleira. Na caixa: ⟨caixa⟩ (separado: ⟨separado⟩, entregue: ⟨entregue⟩)"* — a caixa é o separado menos o já entregue: com 4 separados e 3 entregues, devolver 2 é recusado com *"Na caixa: 1 (separado: 4, entregue: 3)"*;
+- sem usuário identificado (integração): *"Devolução à prateleira exige usuário identificado"*.
+
+Nas recusas a janela continua aberta, para corrigir e tentar de novo.
+
+**Ao mesmo tempo que outro gesto.** Devolver entra na fila da requisição com separar, liberar para retirada, entregar, excluir e encerrar (10.2), e na fila por material: uma liberação para retirada clicada no mesmo instante nunca deixa a requisição *Pronta p/ Retirada* com a caixa vazia, e a saída avulsa do mesmo material espera a devolução e confere depois dela. Se a requisição muda por fora no meio (por exemplo, cancelada pela tela dos outros módulos), a resposta é *"A caixa desta requisição mudou enquanto a devolução era registrada; recarregue e confira antes de devolver de novo."* — o que já tinha sido devolvido fica devolvido e registrado; a janela fecha e o detalhe recarrega.
+
 ### 10.3 Conferir separação — a segunda pessoa
 
 Depois de separada, a caixa pode ser **conferida por outra pessoa** — é o botão **Conferir separação**, disponível com a requisição *Em Separação* e ao menos um item separado. Quem confere precisa da permissão **Conferir separação** (Administrador e Almoxarife).
@@ -2114,8 +2161,10 @@ Depois de separada, a caixa pode ser **conferida por outra pessoa** — é o bot
 **Quem separou não confere.** O sistema recusa a conferência de qualquer pessoa que apareça em **qualquer rodada** de separação daquela requisição — não só na última. Na tela, o botão fica desabilitado para essa pessoa, com o aviso *"Você separou esta requisição — a segunda conferência precisa ser feita por outra pessoa"*. Forçando por fora da tela, a recusa é: *"Quem separou não confere: você registrou a rodada de separação #12 desta requisição. A segunda conferência tem de ser de outra pessoa."* Isso vale para o Administrador também: a regra é por pessoa, não por perfil.
 
 - A conferência é **uma só** por caixa. Uma segunda tentativa — ou duas pessoas clicando ao mesmo tempo — recebe: *"Esta requisição não pode ser conferida agora: já foi conferida, saiu de EM_SEPARACAO, ou você separou uma rodada dela — outra pessoa (ou outra aba sua) agiu enquanto esta tela estava aberta. Recarregue e confira o estado atual."* A garantia contra o clique simultâneo é do banco de dados, não da tela.
-- Fora de *Em Separação* a conferência é recusada: *"Só é possível conferir uma requisição em separação (status atual: PARCIALMENTE_ATENDIDA)"*. Se uma requisição parcialmente atendida precisar de conferência, basta **Ajustar Separação** e confirmar sem mudar nada — ela volta a *Em Separação* sem apagar nada.
+- Fora de *Em Separação* a conferência é recusada: *"Só é possível conferir uma requisição em separação (status atual: PARCIALMENTE_ATENDIDA)"*. Se uma requisição parcialmente atendida precisar de conferência, use o botão **Separar de novo para conferir** — que aparece em *Parcialmente Atendida* quando há material crítico na caixa sem a segunda conferência — ou **Ajustar Separação** confirmado sem mudar nada: ela volta a *Em Separação* sem separar nem apagar nada (*"Requisição de volta a Em Separação — confira a separação"*), e lá outra pessoa confere.
 - Uma **rodada nova** de separação apaga a conferência (a caixa mudou). A conferência apagada não se perde: fica registrada na Auditoria, na linha da rodada que a apagou.
+- **Devolver à prateleira** (10.2b) também apaga a conferência, em qualquer status — registrada na Auditoria, na linha da devolução. Quem devolveu pode conferir: devolver não é rodada de separação.
+- **Equipe de dois.** Como a regra olha **todas** as rodadas, se as duas únicas pessoas com permissão de almoxarifado separaram, cada uma, alguma rodada da mesma requisição com material crítico, nenhuma das duas confere — a conferência tem de ser de uma terceira pessoa (outro almoxarife ou o administrador).
 
 **Quando a conferência é obrigatória.** Para material comum ela é opcional — fica registrada, e só. Quando a caixa tem **material crítico** (a marca *Material crítico* do cadastro) **separado e ainda não entregue**, a requisição **não sai sem a conferência**: os botões **Liberar para Retirada** e **Confirmar Entrega e Baixar Estoque** ficam desabilitados com o aviso *"Esta requisição tem material crítico separado e precisa da segunda conferência antes de sair"*, e o servidor recusa as duas operações com: *"Esta requisição tem material crítico separado e ainda não passou pela segunda conferência. Peça a outra pessoa do almoxarifado para conferir a separação antes de liberar ou entregar."* Nenhum saldo se move numa recusa dessas. Material crítico já **totalmente entregue** não conta; material crítico **pedido mas ainda sem nada separado** também não — só o que está na caixa.
 
@@ -2125,7 +2174,8 @@ Consequência prática: **material crítico exige duas pessoas** com permissão 
 
 Leva de **Em Separação** para **Pronta p/ Retirada** — o aviso de que o material está no balcão.
 
-- Exige **ao menos um item com quantidade separada** → *"Nenhum item separado"*.
+- Exige **ao menos um item com material na caixa** — separado e ainda não entregue; item com tudo o que foi separado já entregue não conta → *"Nenhum item separado"*. O botão só aparece nessa condição.
+- *Pronta p/ Retirada* volta a *Em Separação* quando algo é devolvido à prateleira (10.2b); daí se separa, confere e libera de novo.
 - Exige a **conferência** quando há material crítico na caixa (10.3).
 - Transição fora do desenho é recusada com *"Transição inválida: ..."*.
 - **Liberar entra na fila da requisição** (10.2): clicado junto com uma separação, uma entrega, uma exclusão ou um encerramento da mesma requisição, acontece antes ou depois, nunca no meio. Com material crítico, liberar no instante de uma rodada nova de separação nunca deixa a requisição *Pronta p/ Retirada* sem a conferência: ou a liberação chega primeiro e a rodada é recusada, ou a rodada chega primeiro, apaga a conferência, e a liberação é recusada com a mensagem da conferência obrigatória (10.3).
@@ -2144,7 +2194,7 @@ Esta é a pergunta mais importante do capítulo, e a resposta é: **na entrega, 
 
 Ou seja: **o disponível cai na aprovação** (pela reserva) e **o físico cai na entrega**. A separação não mexe em saldo nenhum — ela registra o trabalho de campo e prepara a entrega. Quem espera ver o estoque baixar ao separar vai achar que o sistema não funcionou; ele funcionou, e o material já estava protegido desde a aprovação.
 
-**A caixa — separado, mas ainda na prateleira.** A separação não mexer em saldo não quer dizer que o material separado esteja livre para outro pedido: o separado e ainda não entregue de uma requisição em andamento é a **caixa** dela, e o sistema o desconta do que outra requisição pode separar (10.2), do que outra aprovação reserva (9.3) e do que a entrega sem nova separação pode levar (7.5). Os números de saldo das telas — o *Disponível* do material, o *Saldo* da janela de separação, o *disponível* da Fila de separação — **não** descontam a caixa; só o separável desconta. Quando a requisição deixa de estar em andamento — entregue por completo, encerrada, cancelada, rejeitada ou excluída —, o que ela tinha na caixa volta a contar como livre, sem nenhum movimento de estoque; fisicamente, esse material precisa voltar à prateleira. Enquanto está na caixa, o material **só sai pela entrega**: a saída avulsa, a perda, o ajuste para menos, o bloqueio, a reserva manual, a remessa, o sucateamento e os estornos comparam com o livre fora da caixa e recusam, dizendo para qual requisição ele está separado (10.2).
+**A caixa — separado, mas ainda na prateleira.** A separação não mexer em saldo não quer dizer que o material separado esteja livre para outro pedido: o separado e ainda não entregue de uma requisição em andamento é a **caixa** dela, e o sistema o desconta do que outra requisição pode separar (10.2), do que outra aprovação reserva (9.3) e do que a entrega sem nova separação pode levar (7.5). Os números de saldo das telas — o *Disponível* do material, o *Saldo* da janela de separação, o *disponível* da Fila de separação — **não** descontam a caixa; só o separável desconta. Quando a requisição deixa de estar em andamento — entregue por completo, encerrada, cancelada, rejeitada ou excluída —, o que ela tinha na caixa volta a contar como livre, sem nenhum movimento de estoque; fisicamente, esse material precisa voltar à prateleira. Enquanto está na caixa, o material **só sai pela entrega**: a saída avulsa, a perda, o ajuste para menos, o bloqueio, a reserva manual, a remessa, o sucateamento e os estornos comparam com o livre fora da caixa e recusam, dizendo para qual requisição ele está separado (10.2). Para tirar da caixa o que não vai sair, o caminho é **Devolver à prateleira** (10.2b), que diminui o separado sem mover estoque.
 
 ---
 
@@ -2168,11 +2218,11 @@ Totalmente Reservada, Parcialmente Reservada, Em Separação, Parcialmente Atend
 | Chip | Quando aparece | Dá para agir agora? |
 |---|---|---|
 | **Separar** | Algum item é **separável agora**: o menor entre o que falta separar e o separável do item (10.2) é maior que zero — o mesmo número que a separação aceita | Sim |
-| **Aguardando saldo** | Algum item falta separar e o separável dele é zero — falta material, ou o que está na prateleira já está na caixa de outros pedidos (10.2); ou há separado a entregar, mas nada **entregável agora** | Não |
+| **Aguardando saldo** | Algum item falta separar e o separável dele é zero — falta material, ou o que está na prateleira já está na caixa de outros pedidos (10.2); ou há separado a entregar, mas nada **entregável agora** — inclusive quando o disponível do material está negativo e nada dele sai pela entrega (7.5) | Não |
 | **Conferir** | Material crítico separado sem a segunda conferência (10.3), com a requisição *Em Separação*. Para quem separou, o chip diz **"Conferir — você separou, peça a outra pessoa"** | Sim |
-| **Separar de novo para conferir** | A mesma conferência pendente, num estado de separação que não é *Em Separação* (por exemplo, *Parcialmente Atendida*): o caminho é **Ajustar Separação** e confirmar, que volta a *Em Separação* (10.3) | Sim |
-| **Conferência pendente — peça ao administrador** | A mesma conferência pendente com a requisição *Pronta p/ Retirada*, de onde não há volta à separação | Não |
-| **Entregar** | Há separado não entregue, nenhuma conferência pendente, e algum item **entregável agora**: o separado ainda não entregue, limitado ao disponível | Sim |
+| **Separar de novo para conferir** | A mesma conferência pendente, num estado de separação que não é *Em Separação* (por exemplo, *Parcialmente Atendida*): o caminho é o botão **Separar de novo para conferir** (ou **Ajustar Separação** confirmado sem mudar nada), que volta a *Em Separação* (10.3) | Sim |
+| **Conferência pendente — peça ao administrador** | A mesma conferência pendente com a requisição *Pronta p/ Retirada*, de onde a separação não reabre — devolver à prateleira (10.2b) leva a requisição de volta a *Em Separação* | Não |
+| **Entregar** | Há separado não entregue, nenhuma conferência pendente, e algum item **entregável agora**: o separado ainda não entregue, limitado ao que a entrega deixa sair — zero quando o disponível do material está negativo (7.5) | Sim |
 | **Reabrir separação** | Requisição num status anterior à separação (*Aprovado*, *Aguard. Estoque*, *Aguard. Compra*, *Parcialmente Reservada*, *Totalmente Reservada*) com material separado e ainda não entregue e nada separável agora: o caminho é **Iniciar Separação** → **📦 Reabrir separação** → entregar (10.2) | Sim |
 | **Aguardando aprovação de valor** | No lugar de *Separar*, quando a separação ainda não começou de fato (nenhum item com quantidade separada nem entregue), a requisição não tem aprovação de valor e o valor dela (soma das quantidades solicitadas pelo custo atual) passa do limite **ativo naquele momento** (8.3). Requisição com material separado ou entregue nunca mostra este chip | Não |
 
@@ -3861,7 +3911,7 @@ O **reservado não entra na conta**: a qualidade continua podendo bloquear mater
 
 > *"Saldo disponível insuficiente para bloquear: ⟨n⟩ ⟨un⟩"*
 
-e, quando há caixa, a mensagem ganha no fim o trecho que diz quanto está separado e para quais requisições (10.2). O número mostrado é o bloqueável, nunca negativo. Atenção: bloquear material reservado que já foi separado para a requisição reduz o teto da entrega dela (7.5) — a recusa da entrega mostra o *Máximo* menor sem citar o bloqueio. Para entregar, desbloqueie.
+e, quando há caixa, a mensagem ganha no fim o trecho que diz quanto está separado e para quais requisições (10.2). O número mostrado é o bloqueável, nunca negativo. Atenção: bloquear material reservado que já foi separado para uma requisição, além do que estava livre, deixa o disponível do material negativo — e aí **nada** dele sai pela entrega, nem o que o bloqueio não tocou (7.5): a fila mostra *Aguardando saldo* e a recusa da entrega nomeia o bloqueio e a saída (liberar da reserva da requisição o que está retido, ou desbloquear).
 
 Perfil exigido para bloquear e desbloquear: **ajustar estoque** (Administrador e Gestor). Ele é **diferente** do de decidir inspeção — quem decide inspeção não necessariamente pode bloquear material avulso.
 
@@ -4728,7 +4778,7 @@ A mensagem diz **quanto há, quanto foi pedido e em quantas linhas** — para o 
 
 **O que está separado na caixa de uma requisição não vai para o terceiro.** O "disponível" que o envio compara é o **livre fora da caixa** (10.2): o disponível menos o separado e ainda não entregue, sem reserva, das requisições em andamento. Quando é a caixa que falta, o trecho daquele material na mensagem mostra esse livre (nunca negativo) e termina dizendo para quem o material está separado — os trechos de materiais diferentes continuam separados por `; `:
 
-> *"Nao foi possivel enviar a remessa ⟨REM⟩: ⟨código⟩: disponivel 0 PC, a remessa pede 4 — 4 PC estão separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (material perdido da caixa: entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)"*
+> *"Nao foi possivel enviar a remessa ⟨REM⟩: ⟨código⟩: disponivel 0 PC, a remessa pede 4 — 4 PC estão separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (material perdido da caixa: devolva-o à prateleira na requisição e dê a baixa, entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)"*
 Clicar em "Enviar" duas vezes não retém em dobro: cada item só é enviado uma vez.
 
 ### 17.5 Retorno parcial e o teto do que ainda pode voltar
@@ -5012,8 +5062,8 @@ O que o sistema valida já na solicitação (para a recusa não esperar duas ass
   falta, o número mostrado é esse livre (nunca negativo), a frase do disponível ganha *"e o separado
   na caixa de requisições"* depois de *"em poder de terceiros"*, e a mensagem termina com o trecho
   *" — ⟨quantidade⟩ ⟨un⟩ estão separados para a requisição ⟨número da requisição⟩ e só saem pela
-  entrega (material perdido da caixa: entregue o que existe e encerre a requisição, ou peça ao
-  administrador do almoxarifado para excluí-la)"*. Se o material for separado depois da solicitação,
+  entrega (material perdido da caixa: devolva-o à prateleira na requisição e dê a baixa, entregue o
+  que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)"*. Se o material for separado depois da solicitação,
   a baixa das duas assinaturas confere de novo pela mesma régua e também é recusada.
 - **Material com controle de lote sem lote informado é recusado**, e o lote informado tem de ser
   daquele material.

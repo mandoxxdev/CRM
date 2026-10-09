@@ -115,7 +115,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Quarenta e oito itens para rodar em produção ANTES do deploy — quarenta e cinco são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Quarenta e nove itens para rodar em produção ANTES do deploy — quarenta e seis são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-09 (Etapa 98) de quarenta e oito para quarenta e nove**, com a **A49** — as requisições com material na caixa que a entrega não consegue tirar porque o disponível do material ficou negativo (um bloqueio sobre o reservado já separado, ou a reserva de outra requisição ocupando o físico); opcional: a saída é liberar a reserva certa ou desbloquear.)*
 
 *(**Atualizado em 2026-10-09 (Etapa 97) de quarenta e sete para quarenta e oito**, com a **A48** — as requisições que ficaram presas em *"Máximo: 0"* porque uma saída avulsa (ou uma perda, um ajuste, um bloqueio, uma remessa, uma reserva manual, um sucateamento, uma conferência ou um estorno) levou o material que estava separado na caixa delas antes desta versão; opcional: nada roda sozinho.)*
 
@@ -1719,7 +1721,8 @@ de desenvolvimento não tem dados, então o tamanho real só em produção.)*
   reter); *Em Separação* ou *Pronta para retirada* **sem nada entregue** → **excluir** e refazer a requisição (não há
   entregue a estornar); *Em Separação* **com algo entregue** e sem físico → **não há gesto limpo** (**C174**): excluir
   **estorna** o que já saiu; o administrador decide entre entregar o que existir e encerrar depois, ou aceitar o estorno.
-  **Não excluir quem já entregou** sem essa decisão.
+  **Não excluir quem já entregou** sem essa decisão. *(Desde a Etapa 98 há gesto limpo: o almoxarife **devolve à
+  prateleira** o que falta na caixa e a requisição segue com o pendente, sem estornar nada — **C174** resolvido, **B502**.)*
 - **Linha em (b) que não está em (a)** — uma aprovação reservou o que estava na caixa de outra. A dona da caixa toma
   *"Máximo: 0"* ao entregar: conferir a prateleira; liberar a reserva da requisição aprovada (tela **Reservas**) devolve
   o material à dona da caixa, e a aprovada fica *Aprovado*, sem reserva, até entrar material.
@@ -1842,12 +1845,59 @@ caixa):
 - **Vazia** — nada a fazer.
 - **Com linhas** — cada requisição listada mostra, ao entregar, um *"Máximo"* menor do que o separado. **Conferir a
   prateleira.** Se o material **existe** (o livro é que estava errado), um ajuste de estoque para cima devolve o número —
-  o ajuste para cima nunca é recusado pela caixa (**B499**). Se o material **não existe** mais: entregar o que houver e
+  o ajuste para cima nunca é recusado pela caixa (**B499**). Se o material **não existe** mais: o almoxarife **devolve à prateleira** o que falta e dá a baixa
+  (Perda) — a requisição segue com o pendente (desde a Etapa 98, **B502**); ou entregar o que houver e
   **Encerrar** a requisição (*Parcialmente Atendida* → *Encerrada*); com **nada** a entregar, o administrador do
   almoxarifado **exclui** a requisição. O mesmo cuidado da **A46**: excluir **estorna** o que já foi entregue — não
   excluir quem já entregou sem essa decisão (**C174**).
 
-### B. Decisões de negócio — B1 a B501; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A49 (NOVA, da Etapa 98 — requisições com material na caixa que a entrega não consegue tirar).** Quando o disponível
+do material (físico − reservado − bloqueado − em inspeção − em terceiros) fica negativo — um bloqueio de qualidade sobre
+o reservado já separado, ou a reserva de outra requisição ocupando o físico — o estoque não deixa sair **nada** dele pela
+entrega. Antes desta versão a fila mostrava *Entregar* e o detalhe anunciava um máximo que a entrega depois recusava
+(**C196**); a versão nova mostra *Aguardando saldo* e a recusa diz a saída (**B509**), mas **não destrava** sozinha o que
+está nessa situação. **Nada aqui é obrigatório.** Somente leitura:
+
+```sql
+SELECT rq.numero, rq.status, ma.codigo,
+       ROUND(COALESCE(ix.quantidade_separada,0) - COALESCE(ix.quantidade_entregue, ix.quantidade_atendida, 0), 6) AS na_caixa,
+       ROUND(ma.quantidade_atual - COALESCE(ma.quantidade_reservada,0) - COALESCE(ma.quantidade_bloqueada,0)
+             - COALESCE(ma.quantidade_em_inspecao,0) - COALESCE(ma.quantidade_em_terceiros,0), 6) AS disponivel_material,
+       ROUND(COALESCE(ma.quantidade_bloqueada,0), 6) AS bloqueado
+FROM itens_requisicao_almoxarifado ix
+JOIN requisicoes_almoxarifado rq ON rq.id = ix.requisicao_id
+JOIN materiais_almoxarifado ma ON ma.id = ix.material_id
+WHERE COALESCE(rq.ativo, 1) = 1
+  AND rq.status IN ('EM_SEPARACAO','PRONTA_PARA_RETIRADA','PARCIALMENTE_ATENDIDA')
+  AND COALESCE(ix.quantidade_separada,0) - COALESCE(ix.quantidade_entregue, ix.quantidade_atendida, 0) > 0.000001
+  AND COALESCE(ma.permite_saldo_negativo, 0) = 0
+  AND ma.quantidade_atual - COALESCE(ma.quantidade_reservada,0) - COALESCE(ma.quantidade_bloqueada,0)
+      - COALESCE(ma.quantidade_em_inspecao,0) - COALESCE(ma.quantidade_em_terceiros,0) < -0.000001
+ORDER BY rq.numero, ma.codigo;
+```
+
+*(Conferida nos dois testes da etapa com o texto acima sem mudar uma vírgula (comparado byte a byte, fora as bordas, no
+fechamento), contra o esquema real montado em memória: acha a requisição com bloqueio sobre a reserva separada **antes**
+de liberar e **não acha depois**; acha a requisição **sem** reserva no item quando a reserva de outra ocupa o físico, e
+não acha depois de liberá-la; **não** acha reserva sem bloqueio nem caixa sem reserva com físico de sobra; trocar o nome
+de uma coluna faz o banco recusar. A lista de status é a das requisições que podem entregar — mudou lá, muda aqui.
+**Duas ressalvas:** a consulta olha só a flag do material, e o estoque também aceita a configuração geral de saldo
+negativo (**B514**) — com a configuração geral ligada, as linhas que ela trouxer **não** estão presas; e ela **não
+mostra a reserva do item** — acrescentar a coluna exigiria mudar a cópia da consulta que o teste roda; para decidir a
+saída, abra a requisição (o detalhe mostra a reserva do item). O banco de desenvolvimento não tem dados.)*
+
+**Como ler o resultado** (uma linha por item preso):
+- **Vazia** — nada a fazer.
+- **Com linhas** — a coluna `disponivel_material` é o déficit (negativo) e `bloqueado` diz se há bloqueio. **Saída por
+  linha:** se a reserva do item **desta** requisição for maior que o déficit (reserva do item + `disponivel_material` >
+  0), liberar dela o déficit; senão, liberar **outra** reserva deste material (de outra requisição ou manual) ou
+  desbloquear — liberar a reserva da própria requisição quando ela não cobre o déficit não destrava nada (corrigido na
+  revisão do código, **B513**). (ALMOXARIFE/ADMINISTRADOR; desbloquear é administrador ou Gestor.) A mensagem da entrega,
+  ao tentar entregar, já diz qual das duas saídas vale para aquele item.
+
+### B. Decisões de negócio — B1 a B515; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-09 de B501 para B515**, com as catorze da Etapa 98 — dez do plano (**B502** a **B511**; a **B504** completada à vista pela **B512**), duas da revisão adversarial do código (**B512** e **B513** — letras novas e não emendas: a **B512** é regra nova numa porta que a etapa não planejava tocar, o liberar para retirada; a **B513** decide **qual** saída a recusa nomeia, onde a **B509** decidiu **que** nomeia) e duas tomadas na execução no lugar do plano (**B514**, a regra do saldo negativo que o estoque de fato lê; **B515**, o modal da tela).)*
 
 *(**Atualizado em 2026-10-09 de B490 para B501**, com as onze da Etapa 97 — oito do plano (**B491** a **B498**; a **B494** e a **B496** corrigidas à vista na revisão do plano, e a **B498** **invertida** nela) e três da revisão adversarial do código (**B499**, **B500** e **B501** — letras novas e não emendas, porque cada uma é uma regra nova achada pelo próprio defeito: o ajuste para cima, as duas pernas da devolução e a conclusão concorrente da conferência).)*
 
@@ -6669,7 +6719,8 @@ reserva. (`65dc74b2`, `9dbf11c0`)
 etapa.** O caminho de hoje: entregar o que existe e encerrar a requisição; com tudo perdido, o administrador do
 almoxarifado exclui. A mensagem ensina os dois. **Descartados:** (i) **o gesto "devolver da caixa à prateleira"**
 (diminuir o separado com motivo e trilha) — rota, estado e permissão novos: **é a Etapa 98**, para o almoxarife resolver
-sem o administrador; (ii) "levar da caixa" na própria porta (**B491** (d)).
+sem o administrador; (ii) "levar da caixa" na própria porta (**B491** (d)). **✅ RESOLVIDA NA ETAPA 98:** o gesto existe — **B502**
+(`9e0bb225`, `4941c9d9`).
 
 **B498 (NOVA, da Etapa 97; INVERTIDA na revisão do plano) — a caixa vale mesmo com "permite saldo negativo".** ~~A
 flag continua passando por cima da caixa nas saídas, como passa por cima da reserva — com a flag, a entrega também
@@ -6703,6 +6754,95 @@ aplicar**, e só se ela ainda estiver aberta; sem ajustes, a própria gravação
 novo é seguro: o ajuste de inventário é absoluto). **Descartados:** (i) marcar antes da pré-validação — a recusa teria
 de desfazer, e quem chegasse no meio leria "concluída" de uma conclusão que não aconteceu; (ii) só reler o status dentro
 da trava — a conclusão sem ajustes não pega a trava. (`c427bf6d`)
+
+**B502 (NOVA, da Etapa 98) — o gesto: uma rota própria que diminui o separado, sem mover estoque.** "Devolver à
+prateleira" diminui a caixa de um ou mais itens, com motivo obrigatório e trilha própria. O material nunca saiu da
+prateleira nos livros (a separação não move estoque, medido) — é o livro **da requisição** que muda. Depois dele a caixa
+cai e as portas da 97 liberam a perda. **Descartados:** (i) devolver como movimentação (uma entrada/estorno) — creditaria
+o que nunca foi debitado; (ii) "separar negativo" pela tela de separação — a separação acumula, reivindica o status e
+grava a rodada que a barreira da conferência lê, e hoje já aceita negativo em silêncio (**C197**); (iii) abrir a
+exclusão ou o cancelamento ao almoxarife — mata a requisição que ainda quer o material. (`9e0bb225`, `4941c9d9`)
+
+**B503 (NOVA, da Etapa 98) — quem devolve: a mesma permissão de separar e entregar (Almoxarife e administrador).** Os
+demais perfis tomam *"Sem permissão para esta operação"*. **Descartados:** (i) uma permissão própria — hoje seriam os
+mesmos perfis; reversível numa linha; (ii) só o administrador — é o que já existia (excluir). (`9e0bb225`)
+
+**B504 (NOVA, da Etapa 98; incompleta, completada na revisão do código pela B512) — o status: *Pronta para Retirada*
+volta a *Em Separação* em qualquer devolução; os demais ficam.** Sem a volta, a *Pronta* esvaziada ficava presa
+(separar, entregar e encerrar recusavam e ela sumia da fila). *Em Separação* esvaziada é a *Em Separação* vazia que já
+existia (separa de novo, a alçada de valor volta a valer). *Parcialmente Atendida* fica. *(O plano dizia que, com a seta,
+a *Pronta* com a caixa vazia não existiria mais — **estava incompleto**: o liberar para retirada aceitava uma requisição
+com tudo já entregue, antes da 98 inclusive (**C199**).)* **Descartados:** (i) voltar ao status de antes da separação
+(*Aprovado*/*Reservada*/*Aguardando*) — quatro a seis passagens novas e os recálculos de reserva, alçada e chegada sobre
+cada uma, para um ganho (quem pediu poder cancelar) que é lacuna anterior (**C195**); (ii) a *Pronta* só voltar quando a
+caixa zera — com crítico e a conferência apagada ela ficaria *Pronta* sem poder conferir nem entregar. (`0aafb939`,
+`9e0bb225`)
+
+**B505 (NOVA, da Etapa 98) — a devolução apaga a segunda conferência, em qualquer status; quem devolveu pode
+conferir.** A conferência atesta o conteúdo de uma caixa; a caixa mudou (medido: sem apagar, o crítico saía atestado por
+uma caixa que ninguém viu). **Descartados:** (i) não apagar; (ii) barrar quem devolveu de conferir — a devolução **tira**
+material, não escolhe o que entra; o risco que a barreira cobre (atestar a própria escolha) não está presente.
+Reversível (**C198**). Para a *Parcialmente Atendida* com crítico, a tela ganhou **Separar de novo para conferir**
+(revisão do plano). (`9e0bb225`, `4941c9d9`)
+
+**B506 (NOVA, da Etapa 98) — a reserva do item não muda na devolução.** O caso "separei o errado" quer a promessa. Para
+dar baixa do quebrado **com** reserva, o almoxarife libera a reserva pelo gesto que já existe e depois a perda passa; o
+modal avisa (**C194**). **Descartados:** (i) liberar junto — o "separei o errado" perderia a prioridade; (ii) uma opção
+"liberar a reserva" no mesmo gesto — dois gestos num, com as regras da liberação duplicadas. (`9e0bb225`)
+
+**B507 (NOVA, da Etapa 98) — a trilha numa tabela própria, só de inclusão, e a auditoria "Devolução à prateleira".** O
+detalhe da requisição lista as devoluções (campo novo, aditivo). **Descartado:** gravar a devolução como rodada negativa
+de separação — os leitores somam as rodadas, a barreira da conferência barraria quem devolveu e o "quem separou" da fila
+mentiria. (`0aafb939`, `9e0bb225`)
+
+**B508 (NOVA, da Etapa 98) — o complemento da recusa da 97 ganha a terceira saída.** *"(material perdido da caixa:
+devolva-o à prateleira na requisição e dê a baixa, entregue o que existe e encerre a requisição, ou peça ao
+administrador do almoxarifado para excluí-la)"*. Os dois testes da 97 que casam a frase mudaram só a constante, com
+comentário. **Descartado:** deixar como estava — a recusa mandaria ao administrador quem resolve sozinho. (`672bb151`)
+
+**B509 (NOVA, da Etapa 98) — com o disponível do material negativo, a entrega, a fila e o detalhe dizem o que o estoque
+deixa sair; a recusa nomeia a retenção e a saída.** O estoque não deixa sair nada de um material com o disponível (sem a
+reserva do item) negativo, nem o consumo da reserva. A prévia da entrega, a fila (*Aguardando saldo*) e o detalhe (0
+entregável) passam a dizer o mesmo, e a recusa sai **antes** de qualquer baixa. **Descartados:** (i) só a mensagem na
+recusa do estoque — a fila continuaria dizendo *Entregar*; (ii) a guarda do bloqueio contar a caixa coberta — a qualidade
+perderia o bloqueio do reservado (**B496**); (iii) o estoque consumir a reserva com o disponível negativo — abriria a
+saída de material bloqueado; (iv) "devolva à prateleira" na mensagem — não resolve (medido). (`55bc2165`)
+
+**B510 (NOVA, da Etapa 98) — série: nenhuma regra de inteiro na devolução.** A separação não planeja série (a série é
+escolhida na entrega, que já exige inteiro). Devolver fração de material com série deixa uma caixa fracionária que a
+entrega recusa e que **outra devolução** resolve. **Descartado:** exigir caixa inteira — regra nova sobre um estado que a
+separação já produz (**C197**). (`9e0bb225`)
+
+**B511 (NOVA, da Etapa 98) — a devolução recusa o que a separação ignora:** quantidade zero, negativa ou não numérica e
+item repetido são recusados com mensagem. **Descartado:** copiar o "ignora em silêncio" da separação. (`9e0bb225`)
+
+**B512 (NOVA, da Etapa 98, revisão do código) — o liberar para retirada exige material na caixa (separado − entregue
+> 0), não "algo separado".** Uma *Em Separação* com separado 2 e entregue 2 (entrega parcial seguida de "separar de
+novo", com ou sem devolução) passava e virava *Pronta para Retirada* com a caixa vazia: entregar, encerrar, separar e
+devolver recusavam e ela sumia da fila — só o administrador soltava, excluindo (**C199**, anterior à 98; a 98 abria mais
+um caminho). **Escolhido:** a recusa usa a mensagem que já existia, *"Nenhum item separado"*, e o botão segue a caixa.
+**Descartado:** uma mensagem nova ("nada na caixa") — a tela não chega mais ao caso, só uma corrida. Letra nova, não
+emenda da **B504**: é regra nova numa porta que a 98 não tinha planejado tocar. (`084ded25`)
+
+**B513 (NOVA, da Etapa 98, revisão do código) — a mensagem do bloqueio só manda liberar a reserva desta requisição
+quando isso destrava.** Liberar da própria reserva soma ao disponível o que tira da reserva — o que a requisição pode
+entregar só muda se sobrar reserva depois de cobrir o déficit. **Escolhido:** *"…até liberar da reserva desta requisição
+o que está retido, ou desbloquear"* só quando reserva do item + disponível do material > 0; senão *"…até liberar outra
+reserva deste material ou desbloquear"* — "outra reserva" e não "de outra requisição", porque quem ocupa o físico pode
+ser uma reserva **manual**. **Descartado:** a regra "reserva ≥ déficit" — ainda mandava a uma saída que não destrava no
+caso medido (provado por sabotagem). Letra nova, e não emenda da **B509**: a **B509** decide **que** a recusa nomeia a
+saída; esta decide **qual**. (`cc130a86`)
+
+**B514 (NOVA, da Etapa 98; decidida na execução, no lugar do plano) — "permite saldo negativo", na entrega com o
+disponível negativo, é a flag do material OU a configuração geral.** É o que o estoque de fato lê. **Descartado:** só a
+flag do material, como o plano escrevia — a prévia diria 0 e recusaria uma entrega que o estoque deixaria sair com a
+configuração geral ligada. A **A49** mantém o texto do plano (só a flag do material) — por isso a ressalva nela.
+(`55bc2165`)
+
+**B515 (NOVA, da Etapa 98; decidida na execução da tela) — o modal de devolver.** O 409 (a caixa mudou) **fecha** o modal
+e recarrega o detalhe, como o 409 da separação; os 400 o **mantêm** aberto para corrigir. O motivo é limitado a 500
+caracteres também na tela (o servidor corta em 500). O **Separar de novo para conferir** chama a separação com a lista
+vazia. **Descartado:** manter o modal aberto no 409 — mostraria uma caixa que já não existe. (`4941c9d9`)
 
 
 ### C. Furos e mudanças de número que quem opera precisa saber
@@ -8605,10 +8745,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      material **não** some do livre: quem espera ainda separa o que entrou. O que se perde é a garantia, não o
      separável. Reabrir é etapa própria.
 
-174. **NOVO, da Etapa 95 — *Em Separação* com algo entregue e caixa sem material não tem gesto limpo.** Excluir
+174. **NOVO, da Etapa 95, e ✅ RESOLVIDO NA ETAPA 98 (`9e0bb225`, `4941c9d9`) — *Em Separação* com algo entregue e caixa sem material não tem gesto limpo.** Excluir
      **estorna** o que já foi entregue; *Em Separação* não tem passagem para *Encerrada*. A **A46** lista; o
      administrador decide (entregar o que existir e encerrar depois de *Parcialmente Atendida*, ou aceitar o estorno).
-     Um gesto de "devolver da caixa" é produto novo.
+     Um gesto de "devolver da caixa" é produto novo. *(Existe desde a Etapa 98: **Devolver à prateleira** tira da
+     caixa o que falta, sem estornar o entregue, e a requisição segue — **B502**.)*
 
 175. **NOVO, da Etapa 95 — caixa em requisição que voltou a *Pendente* não retém.** *Pendente* não está entre os
      status que retêm a caixa (**B473**); o único caminho até lá com material separado é o legado da **A45**
@@ -8706,17 +8847,23 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      mostram quanto está separado; só a mensagem de recusa explica. Mostrar a caixa na tela ficou fora.
 
 188. **NOVO, da Etapa 97 — as requisições já presas não destravam sozinhas.** A **A48** as acha; o "como ler" dela diz o
-     que fazer (ajuste para cima se o material existe; entregar e encerrar; excluir).
+     que fazer (ajuste para cima se o material existe; entregar e encerrar; excluir). Desde a Etapa 98, também
+     **devolver à prateleira** e dar a baixa (**B502**).
 
-189. **NOVO, da Etapa 97 — com o material todo perdido na caixa, só o administrador do almoxarifado solta a
+189. **NOVO, da Etapa 97, e ✅ RESOLVIDO NA ETAPA 98 (`9e0bb225`, `4941c9d9`) — com o material todo perdido na caixa, só o administrador do almoxarifado solta a
      requisição** (excluir). O almoxarife recebe *"Apenas administradores do Almoxarifado ou Super Administrador podem
-     excluir requisições"*. Igual a antes; o gesto do almoxarife é a **Etapa 98** (**B497**).
+     excluir requisições"*. Igual a antes; o gesto do almoxarife é a **Etapa 98** (**B497**). Agora o almoxarife devolve à
+     prateleira e dá a baixa (**B502**).
 
-190. **NOVO, da Etapa 97 (revisão do código; declarado, aberto) — bloquear material reservado e já separado prende a
+190. **NOVO, da Etapa 97 (revisão do código), CORRIGIDO À VISTA e ✅ RESOLVIDO NA ETAPA 98 (`55bc2165`, `cc130a86`) — bloquear material reservado e já separado prende a
      entrega sem nomear o bloqueio.** Quando a reserva da requisição cobre o que está na caixa, a guarda do bloqueio (que
      não conta o reservado — **B496**) deixa bloquear; a entrega então mostra *"Máximo: 0"* sem dizer que o motivo é o
      bloqueio. **O que fazer:** se a entrega mostrar um *"Máximo"* menor que o separado e o material tiver bloqueio,
-     falar com a qualidade e desbloquear o que não precisa ficar retido.
+     falar com a qualidade e desbloquear o que não precisa ficar retido. **Este texto estava incompleto:** "mostra
+     *Máximo: 0* sem dizer" só vale com o bloqueio do tamanho da reserva; com bloqueio **parcial** a entrega anunciava
+     *"Máximo: 3"* e o estoque recusava qualquer quantidade, e o caso existia também sem reserva no item (**C196**).
+     Agora a fila diz *Aguardando saldo* e a recusa nomeia o bloqueio e a saída (**B509**, **B513**); a **A49** acha os
+     presos.
 
 191. **NOVO (anterior à Etapa 97, achado na revisão do código) e ✅ RESOLVIDO NELA (`c427bf6d`) — duas conclusões
      simultâneas da mesma conferência aplicavam o inventário duas vezes.** Dois cliques (ou duas pessoas) em
@@ -8729,6 +8876,47 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      separação disparada entre a entrada e a segunda perna: na sucata, estoque 0 com 4 na caixa; na quarentena, 4
      bloqueados mais 4 na caixa sobre estoque 4 — a entrega presa em *"Máximo: 0"*. Agora as duas pernas correm juntas
      (**B500**).
+
+193. **NOVO, da Etapa 98 — devolver à prateleira não move estoque.** O material volta, nos livros, para onde estava (a
+     separação nunca o tirou da prateleira): nenhuma movimentação, o saldo por endereço igual. Se fisicamente ele foi
+     guardado em outro endereço, faça a **transferência** depois (**B502**).
+
+194. **NOVO, da Etapa 98 — com reserva no item, devolver não solta a baixa.** A perda continua recusando *"Saldo
+     insuficiente. Disponível: 0 PC"* (sem complemento — a caixa está coberta pela reserva) até a reserva ser liberada
+     na tela **Reservas**. O modal de devolver avisa antes: *"Este item continua reservado para a requisição: para dar
+     baixa, libere a reserva antes."* A recusa da perda em si não mudou (**B506**).
+
+195. **NOVO, da Etapa 98 (anterior a ela) — a *Em Separação* vazia não cancela por quem pediu.** Vale para a esvaziada
+     pela devolução e para a do "Iniciar Separação" sem quantidade, que já existia. Candidata a etapa (a passagem *Em
+     Separação* → *Cancelado* só sem nada separado nem entregue).
+
+196. **NOVO, da Etapa 98 — o C190 estava incompleto, e ✅ RESOLVIDO NELA (`55bc2165`, `cc130a86`).** Com bloqueio
+     **parcial** sobre o reservado já separado, a prévia da entrega, a fila e o detalhe anunciavam o resto (*"Máximo:
+     3"*, *Entregar*, 3) e o estoque recusava **qualquer** quantidade (*"Saldo físico insuficiente para consumir a
+     reserva. Disponível: -1 PC"*). E havia o caso sem reserva no item (a reserva de outra requisição ocupando o
+     físico), com o detalhe mostrando **−1**. Agora os três dizem 0 / *Aguardando saldo* e a recusa nomeia a retenção e
+     a saída (**B509**, **B513**); a **A49** acha o que está nessa situação.
+
+197. **NOVO, da Etapa 98 (anterior a ela, fora dela) — a separação aceita quantidade negativa em silêncio e fração em
+     material com série.** Negativa: responde sucesso, não separa nada e, por ser o "Iniciar Separação", leva uma
+     *Parcialmente Atendida* de volta a *Em Separação*. Fração de material com série: aceita, e a entrega depois recusa
+     *"material com controle de serie exige quantidade inteira"* — a devolução à prateleira é a saída. **Etapa 99.**
+
+198. **NOVO, da Etapa 98 — quem devolve pode conferir; a barreira "quem separou não confere" continua por rodada de
+     separação** (**B505**). Consequência, anterior à 98: numa equipe de **dois** almoxarifes em que **os dois**
+     separaram rodadas da mesma requisição com material crítico, **ninguém** dos dois confere — a barreira barra os
+     dois (*"Quem separou não confere: …"*). Chame um terceiro almoxarife ou o administrador.
+
+199. **NOVO (anterior à Etapa 98, achado na revisão do código) e ✅ RESOLVIDO NELA (`084ded25`) — a *Pronta para
+     Retirada* com a caixa vazia ficava presa.** O **Liberar para Retirada** contava "algum item separado" em vez de
+     "algum material na caixa": uma *Em Separação* com tudo o que foi separado já entregue (entrega parcial e "separar
+     de novo") virava *Pronta* sem nada a retirar — entregar, encerrar, separar e devolver recusavam e ela sumia da
+     fila. Agora a recusa é *"Nenhum item separado"* e o botão só aparece com material na caixa (**B512**).
+
+200. **NOVO, da Etapa 98 (revisão do código; declarado, aberto) — a segunda conferência aceita confirmar uma caixa
+     vazia.** Ela conta "algum item separado", como o liberar contava (**C199**): numa *Em Separação* com tudo o que foi
+     separado já entregue, a conferência responde sucesso sobre nada. Medido na Fase 0 da Etapa 99: a próxima
+     rodada de separação apaga essa conferência e o liberar recusa — não foi visto prender requisição. **Etapa 99.**
 
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -9720,8 +9908,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   arredondar, a soma da fila sem arredondar e o resto da divisão da entrega — cada uma coberta por outra; só juntas
   derrubam. E o claim da linha sem lote sem folga (a quantidade é a lida da própria linha).
 - **(97) O ajuste com endereço (de ida) ainda leva a caixa** (**B495**, **C186**).
-- **(97) Não há gesto para devolver da caixa à prateleira** (**B497**, **C189**) — com tudo perdido, só o administrador
-  solta a requisição. **Etapa 98.**
+- ~~**(97) Não há gesto para devolver da caixa à prateleira** (**B497**, **C189**) — com tudo perdido, só o administrador
+  solta a requisição. **Etapa 98.**~~ *(Resolvido na Etapa 98 — **B502**.)*
 - **(97) A tela não mostra a caixa** no disponível de Materiais e Movimentações (**C187**); só a mensagem explica.
 - **(97) O legado não destrava sozinho** (**C188**, **A48**).
 - **(97) As compensações do retalho e da transformação** estornam o crédito pela régua de antes: só levariam a caixa se
@@ -9730,10 +9918,20 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   fantasma.
 - **(97) A entrega não honra "permite saldo negativo"** — com a flag a saída não leva mais a caixa (**B498**), mas a
   entrega continua limitada ao disponível somado à reserva do item.
-- **(97) Bloquear o reservado já separado prende a entrega sem nomear o bloqueio** (**C190**).
+- ~~**(97) Bloquear o reservado já separado prende a entrega sem nomear o bloqueio** (**C190**).~~ *(Resolvido na Etapa 98
+  — **B509**; era maior, **C196**.)*
 - **(97) Um processo só** — a trava do material mora na memória do servidor, como antes (**C132**).
 - **(97) Custo medido** na revisão do código: mil saídas com 300 caixas abertas no banco, 1,2 s → 1,6 s; duzentos
   ajustes, 0,26 s → 1,2 s — aceitável.
+- **(98) A devolução deixa *Em Separação*; não volta ao status de antes da separação** (**B504**).
+- **(98) A *Em Separação* vazia não cancela por quem pediu** (**C195**, anterior).
+- **(98) Liberar a reserva é outro gesto** (**B506**, **C194**); a recusa da perda com reserva não nomeia a reserva.
+- **(98) A devolução não move estoque nem escolhe o endereço de volta** (**C193**).
+- **(98) A separação ainda aceita negativo e fração de série** (**C197**) e **a conferência aceita caixa vazia**
+  (**C200**) — Etapa 99.
+- **(98) Devolver usa a permissão de separar** (**B503**) — sem permissão própria.
+- **(98) A A49 olha só a flag do material e não mostra a reserva do item** (**B514**).
+- **(98) Não sondado na revisão:** devolver × conferir ao mesmo tempo — da mesma classe que separar × conferir (Etapa 28).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -10546,6 +10744,21 @@ o almoxarife que separa e entrega), e pelo serviço: **46** verificações no ar
    conferência continua aberta.
 3. **Dois cliques em Concluir** na mesma conferência (ou duas pessoas) — uma conclui, a outra vê *"Conferência não está
    aberta (status atual: CONCLUIDO)"*.
+
+**(98) Nenhum clique foi dado nesta etapa no navegador.** A tela mudou (o botão, o modal, o histórico, o "Separar de
+novo para conferir", o *title* do "Ajustar Separação", o "Liberar para Retirada" seguindo a caixa) e está provada por
+testes de componente com a fronteira HTTP simulada (o arquivo novo da tela, dentro das **96** suítes / **1500** testes do
+cliente); o servidor, pela rota com o usuário certo em cada pedido e pelo serviço: **40** verificações no arquivo do gesto,
+**16** no da entrega com o disponível negativo, **10** no de integração e **3** na paridade da lista de status entre a
+tela e o servidor — dentro dos **342** arquivos da suíte. O que **só o navegador** prova:
+
+1. **O botão e o modal.** No detalhe de uma requisição *Em Separação*, o **Devolver à prateleira** aparece só na linha
+   do item com material na caixa; o modal abre com a quantidade da caixa; **Devolver** desabilitado sem motivo.
+2. **Os avisos condicionais** — reserva, *Pronta*, conferência — aparecem juntos sem cortar o modal.
+3. **O histórico** *"Devolvido à prateleira (n)"* depois de duas devoluções, com *"· conferência refeita"* na que apagou
+   a conferência.
+4. **A recusa E190** inteira legível no aviso da entrega (a frase é longa).
+5. **"Separar de novo para conferir"** numa *Parcialmente Atendida* com crítico devolvido.
 
 
 
@@ -21098,11 +21311,12 @@ devolvido) seguem como antes. A contagem por endereço também (**B495**, **C186
 ### O que esta etapa NÃO cobre
 
 1. **Um gesto para devolver da caixa à prateleira** (**B497**, **C189**) — com tudo perdido, só o administrador solta a
-   requisição. É a **Etapa 98**.
+   requisição. É a **Etapa 98**. *(Feito — Etapa 98, **B502**.)*
 2. **O ajuste com endereço de ida** (contagem por endereço) — **B495**, **C186**.
 3. **A tela mostrar a caixa** no disponível (**C187**).
 4. **Destravar o que já está preso** — a **A48** acha; o "como ler" diz o que fazer (**C188**).
-5. **Bloquear o reservado já separado prende a entrega sem nomear o bloqueio** (**C190**).
+5. **Bloquear o reservado já separado prende a entrega sem nomear o bloqueio** (**C190**). *(Feito — Etapa 98, **B509**;
+   era maior do que dizia, **C196**.)*
 6. **As compensações do retalho e da transformação** e **a entrega com "permite saldo negativo"** — **D (97)**.
 
 ### O que a revisão encontrou
@@ -21134,9 +21348,153 @@ permissão, e mediu o custo (**D (97)**). E achou:
   saída, o filtro de quem entra no complemento e a trava do inventário só no último material — viraram teste
   (`3fc39310`).
 
+## Etapa 98 — O almoxarife tira da caixa o que não vai sair: devolver à prateleira (2026-10-09)
+
+Desde a Etapa 97, o material separado na caixa de uma requisição só sai pela entrega — a saída avulsa, a perda e o
+ajuste recusam levá-lo. Isso fechou o furo, mas deixou um caso legítimo sem gesto: **a peça quebrou na caixa, se perdeu,
+ou foi separado o material errado.** O almoxarife não tinha como tirar da caixa; a perda recusava; e, com tudo perdido,
+só o administrador soltava a requisição, **excluindo-a**. Agora, no detalhe da requisição, cada item com material na
+caixa tem **Devolver à prateleira**: o almoxarife diz quanto e por quê, a caixa diminui (o estoque não se move — a
+separação nunca o tinha tirado da prateleira) e, se o material quebrou, a perda passa em seguida. A requisição continua
+viva, com o pendente. A mesma etapa fez a entrega, a fila e o detalhe dizerem a verdade quando um **bloqueio de
+qualidade** cai sobre material reservado e já separado: antes a tela anunciava *"Máximo: 3"* e o estoque recusava
+qualquer quantidade; agora diz *0*, explica o porquê e qual é a saída.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Quebrou na caixa? A perda recusava e só o administrador soltava, **excluindo** a requisição | O almoxarife **devolve à prateleira** (quantidade e motivo) e dá a baixa; a requisição continua com o pendente (**B502**) |
+| A recusa da perda ensinava "entregue e encerre, ou peça ao administrador para excluir" | Ensina primeiro *"devolva-o à prateleira na requisição e dê a baixa"* (**B508**) |
+| *Pronta para Retirada* não tinha volta | Devolver qualquer quantidade a leva de volta a *Em Separação* (**B504**) |
+| — | A segunda conferência do material crítico é apagada na devolução e tem de ser refeita (**B505**) |
+| *Parcialmente Atendida* com crítico sem conferência: só "Completar Entrega" (recusada) e "Encerrar" | Botão **Separar de novo para conferir** leva a *Em Separação* sem separar nada (**B505**, **C198**) |
+| Bloqueio de 1 sobre a reserva já separada: fila *Entregar*, detalhe 3, entrega de 3 recusada com *"Saldo físico insuficiente para consumir a reserva. Disponível: -1 PC"* | Fila *Aguardando saldo*, detalhe 0, a recusa nomeia o bloqueio e a saída (**B509**, **B513**, **C196**) |
+| *Liberar para Retirada* com a caixa vazia (tudo já entregue) virava *Pronta* presa (**C199**) | Recusa *"Nenhum item separado"*; o botão só aparece com material na caixa (**B512**) |
+| O botão "Ajustar Separação" dizia *"Corrige as quantidades já registradas na separação"* (não corrigia: só soma) | Diz *"Separa mais quantidade — para tirar da caixa, use Devolver à prateleira no item"* |
+
+### As regras, com o cenário exato
+
+**A regra.** Caixa do item = separado − entregue. Devolver à prateleira diminui o separado; o físico, o reservado, o
+bloqueado, o saldo por endereço e o livro de movimentações **não mudam** (**B502**, **C193**). Quem pode: **Almoxarife**
+e **administrador** — o mesmo direito de separar (**B503**). Onde: detalhe da requisição em modo almoxarifado, na linha do
+item com caixa > 0, nos status em que a caixa existe (os de antes da separação com legado, *Em Separação*, *Pronta para
+Retirada*, *Parcialmente Atendida* e *Aguardando aprovação de valor*).
+
+Preparação: material **Porca M8** (PC), estoque 0. **Paula** (sem perfil) pede 4; o **administrador** aprova →
+*Aguardando Estoque*, sem reserva. Entrada de 4 em Movimentações. A **Ana** (Almoxarife) separa 4 → *Em Separação*.
+**Bruno** é outro almoxarife. ⟨número⟩ é o número da requisição de Paula.
+
+**1. A perda recusa e ensina.** Movimentações, Perda de 2 → *"Saldo insuficiente. Disponível: 0 PC — 4 PC estão
+separados para a requisição ⟨número⟩ e só saem pela entrega (material perdido da caixa: devolva-o à prateleira na
+requisição e dê a baixa, entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para
+excluí-la)"*.
+
+**2. Devolver e dar a baixa.** Ana abre a requisição; na linha da Porca, **Devolver à prateleira**. O modal *"Devolver à
+prateleira — Porca M8"* mostra *"Na caixa: 4 PC"*, a quantidade já preenchida com 4 e o texto *"O material volta para a
+prateleira de onde foi separado — não há movimentação de estoque. Se quebrou ou se perdeu, dê a baixa (Perda) depois."*
+Quantidade 2, motivo *"quebrou"*, **Devolver** → *"Devolvido à prateleira"*. A requisição continua *Em Separação*, a
+caixa é 2, e o histórico ganha *"Devolvido à prateleira (1)"*: *"⟨código⟩ Porca M8: 2 PC devolvidos à prateleira —
+quebrou"*, com Ana e a hora. Materiais continua mostrando 4. Agora Perda de 2 → **aceita**. Ana entrega os 2 →
+*Parcialmente Atendida*, pendente 2.
+
+**3. As recusas.** Na tela, **Devolver** fica desabilitado sem motivo, com quantidade 0 ou acima da caixa. Pela
+integração (ou duas abas), cada recusa não muda nada:
+- motivo vazio → *"Informe o motivo da devolução à prateleira"*;
+- sem itens → *"Informe ao menos um item para devolver à prateleira"*;
+- quantidade 0 ou negativa → *"Porca M8: informe uma quantidade maior que zero para devolver à prateleira"*;
+- acima da caixa → *"Porca M8: não é possível devolver 5 PC à prateleira. Na caixa: 4 (separado: 4, entregue: 0)"* — o
+  já entregue não volta (separou 4, entregou 3, devolver 2 → *"… Na caixa: 1 (separado: 4, entregue: 3)"*);
+- requisição *Entregue* (o botão nem aparece) → *"Só é possível devolver à prateleira o que está separado numa
+  requisição em andamento (status atual: ENTREGUE)"*;
+- Paula (sem perfil) → 403 *"Sem permissão para esta operação"*;
+- a caixa mudou enquanto a devolução era gravada → 409 *"A caixa desta requisição mudou enquanto a devolução era
+  registrada; recarregue e confira antes de devolver de novo."* — a tela fecha o modal e recarrega (**B515**).
+Com dois itens, se o segundo estiver acima da caixa, **nenhum** dos dois é devolvido.
+
+**4. *Pronta para Retirada* volta a *Em Separação*.** Ana separa 4 e **Libera para Retirada**. No modal de devolver
+aparece *"A requisição volta para Em Separação."*; devolver 1 → *Em Separação*, caixa 3. Entregar os 3 → aceito.
+
+**5. Devolver tudo.** Devolver os 4 → *Em Separação* sem nada na caixa; o botão **Liberar para Retirada** some (pela
+integração, *"Nenhum item separado"*), a fila mostra **Separar**, e separar de novo funciona. Se o valor da requisição
+passar do limite de quem aprovou, a alçada vale de novo ao separar (como numa *Em Separação* que nunca separou).
+
+**6. O material crítico.** Com a Porca crítica: Ana separa, Bruno confere. Bruno devolve 1 — o modal avisa *"A segunda
+conferência será refeita."*; o histórico diz *"· conferência refeita"*. Entregar → *"Esta requisição tem material
+crítico separado e ainda não passou pela segunda conferência. Peça a outra pessoa do almoxarifado para conferir a
+separação antes de liberar ou entregar."* Ana confere → 403 *"Quem separou não confere: você registrou a rodada de
+separação #⟨n⟩ desta requisição. A segunda conferência tem de ser de outra pessoa."* Bruno (que devolveu) confere →
+aceito; entregar os 3 → aceito. **Quem devolve pode conferir** (**C198**).
+
+**7. Crítico em *Parcialmente Atendida*.** Separou 4, Bruno conferiu, Ana entregou 2, Ana devolve 1 → a conferência some.
+Aparece **Separar de novo para conferir** → *"Requisição de volta a Em Separação — confira a separação"*; Bruno confere;
+**Completar Entrega** de 1 → aceito.
+
+**8. Com reserva, devolver não solta a baixa.** Com estoque 4 antes da aprovação, a aprovação **reserva** os 4. Ana
+separa 4 e abre o modal: aparece *"Este item continua reservado para a requisição: para dar baixa, libere a reserva
+antes."* Devolver 4 → a reserva continua 4 (**B506**); Perda de 4 → *"Saldo insuficiente. Disponível: 0 PC"* (sem o
+complemento — a caixa está coberta pela reserva, **C194**). Ana libera a reserva (tela **Reservas**) → Perda de 4 →
+aceita.
+
+**9. Bloqueio sobre o reservado já separado.** Com a reserva de 4 e a Porca separada, o administrador **bloqueia 1**. A
+fila mostra **Aguardando saldo** (antes: *Entregar*), o detalhe 0 entregável. Entregar 1 → *"Porca M8: não é possível
+entregar 1 PC. Máximo: 0 (pendente: 4, disponível: 0) — o disponível de Porca M8 está negativo (1 PC bloqueados): nada
+dele sai pela entrega até liberar da reserva desta requisição o que está retido, ou desbloquear"* — nada é baixado. Ana
+libera 1 da reserva → entregar 3 → aceito. **Bloqueando 4** em vez de 1, a saída muda, porque liberar a própria reserva
+não destravaria: *"… está negativo (4 PC bloqueados): nada dele sai pela entrega até liberar outra reserva deste
+material ou desbloquear"*; desbloquear → entregar 4 → aceito (**B513**). O mesmo texto "outra reserva" vale quando o item
+nem tem reserva e é a reserva de **outra** requisição (ou uma manual) que ocupa o físico. Com o material (ou a
+configuração geral) permitindo saldo negativo, nada muda: a entrega sai como antes (**B514**).
+
+**10. O que não muda.** A separação, a aprovação, a reserva na chegada, a liberação de reserva, a exclusão, o
+cancelamento e o encerramento seguem iguais; nenhuma permissão nova (a tela de "minhas permissões" não muda).
+
+### O que esta etapa NÃO cobre
+
+1. **Voltar ao status de antes da separação** — a devolução deixa *Em Separação* (**B504**).
+2. **Quem pediu cancelar a *Em Separação* vazia** — já não cancelava antes (**C195**).
+3. **Liberar a reserva no mesmo gesto** — são dois gestos (**B506**, **C194**).
+4. **A separação aceitar quantidade negativa em silêncio e fração em material com série** (**C197**, **B510**).
+5. **Escolher o endereço de volta** — a devolução não move estoque; se foi guardado em outro lugar, transfira
+   (**C193**).
+6. **A conferência aceitar uma caixa vazia** (**C200**) — achada na revisão, não medida.
+7. **Uma permissão própria para devolver** — usa a de separar (**B503**).
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0) reproduziu o caso legítimo sem gesto (6 de 8 cenários sem saída para o almoxarife) e mostrou que
+o contrato que a 97 deixou escrito errava em três pontos: voltar ao status anterior à separação era desnecessário (a *Em
+Separação* vazia já existe) mas a *Pronta* esvaziada ficaria **presa** sem uma seta de volta; com reserva a perda
+continua recusando; e **devolver não resolve o bloqueio sobre o reservado** — que era maior do que a 97 escreveu (**C196**).
+A **revisão do plano** (2 bloqueantes, 5 importantes, 6 menores) pegou a conferência apagada em *Parcialmente Atendida*
+sem saída na tela, a mensagem que mandava liberar "a reserva desta requisição" a quem não tinha reserva, e um controle
+de teste que não sabia falhar.
+
+A **revisão adversarial do código** (dois revisores, executando) confirmou devolver × entregar e devolver × devolver
+coerentes em 10 de 10, sem deadlock, sem exposição nova, e a tela e o servidor concordando na permissão. E achou:
+- **A *Pronta para Retirada* com a caixa vazia presa** — o liberar contava "algo separado" em vez de "algo na caixa";
+  **anterior à etapa** (a 98 abria mais um caminho até ela), consertado (**B512**, **C199**, `084ded25`).
+- **A mensagem do bloqueio mandava liberar a própria reserva quando isso não destrava**, e dizia "de outra requisição"
+  quando a reserva podia ser manual — consertado (**B513**, `cc130a86`).
+- **Seis sabotagens que passavam verde** viraram teste (`b7fc06a0`).
+- **A conferência aceita confirmar uma caixa vazia** — declarado (**C200**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 98 entregue (2026-10-09):** **o almoxarife tira da caixa o que não vai sair — devolver à prateleira.** No
+  detalhe da requisição, cada item com material na caixa tem **Devolver à prateleira** (quantidade e motivo, sem mover
+  estoque); a perda do quebrado passa em seguida, e a requisição continua viva — sem o administrador excluir (**B497**
+  e **C189** resolvidos). A *Pronta para Retirada* volta a *Em Separação*; a segunda conferência é refeita; a reserva
+  fica. A entrega, a fila e o detalhe passam a dizer a verdade quando um bloqueio cai sobre o reservado já separado
+  (**C190** resolvido — e era maior do que dizia, **C196**). A revisão do código pegou a *Pronta* com a caixa vazia
+  presa (anterior à etapa — **B512**, **C199**) e a mensagem do bloqueio mandando a uma saída que não destrava
+  (**B513**), e as consertou. **O que é seu:** a consulta **A49** (opcional); as decisões **B502 a B515** (a **B504**
+  completada pela **B512**; a **B514** e a **B515** tomadas na execução); os avisos **C193 a C200** (o **C194** e o
+  **C198** mudam o que quem opera faz; o **C200** fica aberto); as limitações **(98)** em D e as verificações **(98)**
+  em F. **Próxima: Etapa 99 — a separação recusa o que não dá para separar (negativo, não numérico, item de fora,
+  fração de série — C197) e a conferência deixa de aceitar caixa vazia (C200) — ver o plano da Etapa 98.**
 
 - **Etapa 97 entregue (2026-10-09):** **o material separado na caixa de uma requisição só sai pela entrega.** A saída
   avulsa, a perda, o ajuste para menos, a conferência, o bloqueio de qualidade, a reserva manual, a remessa, o
@@ -21148,8 +21506,8 @@ permissão, e mediu o custo (**D (97)**). E achou:
   as pernas — **B500**; duas conclusões da conferência — **B501**), e as consertou. **O que é seu:** a consulta
   **A48** (opcional); as decisões **B491 a B501** (a **B494** e a **B496** corrigidas à vista na revisão do plano, a
   **B498** invertida nela); os avisos **C184 a C192** (o **C184** muda o que quem opera vê; o **C190** fica aberto); as
-  limitações **(97)** em D e as verificações **(97)** em F. **Próxima: Etapa 98 — o gesto "devolver da caixa à
-  prateleira" (B497, C189) — ver o plano da Etapa 97.**
+  limitações **(97)** em D e as verificações **(97)** em F. ~~**Próxima: Etapa 98 — o gesto "devolver da caixa à
+  prateleira" (B497, C189) — ver o plano da Etapa 97.**~~ *(Feita — Etapa 98.)*
 
 - **Etapa 96 entregue (2026-10-09):** **o estoque não recusa mais o que existe por causa de uma casa decimal.** Toda
   quantidade é guardada arredondada a 6 casas, e "o pedido cabe?" compara com uma folga mínima: entradas fracionadas

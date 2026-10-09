@@ -2,7 +2,7 @@
 
 > **Status:** 🟢 Etapa 4 completa — backend (2026-08-05) e tela (2026-08-06) ·
 > **Spec original:** seção 7
-> **Última atualização:** 2026-10-09 (**Etapa 97** — a reserva manual (`POST /reservas`) não toma mais o material separado na caixa sem reserva de uma requisição: recusa 400 *"Saldo disponível insuficiente: ⟨n⟩"* com o sufixo que nomeia a requisição (M3); as reservas de requisição (aprovação, chegada, recriação no estorno) ficam na régua de hoje (B492); `criarReserva` roda sob a trava do material. `65dc74b2`; range `eb7cd9d8..3fc39310`. Continua 🟢. Ver o item da Etapa 97 no checklist e a seção no fim.)
+> **Última atualização:** 2026-10-09 (**Etapa 98** — devolver da caixa à prateleira **não mexe na reserva do item** (B506, C194): com reserva, a `PERDA` do devolvido continua recusando até a reserva ser liberada pelo gesto que já existe (`POST /reservas/:id/liberar`, `liberar_reserva_requisicao`); e o **C190** fica resolvido do lado da entrega: com o disponível do material negativo (bloqueio sobre o reservado já separado, ou a reserva de outra requisição ocupando o físico) a prévia, a fila e o detalhe dizem 0 e a recusa (E190) nomeia a saída — liberar da reserva **desta** requisição só quando isso destrava (reserva do item + disponível > 0), senão liberar **outra** reserva do material ou desbloquear (B509, B513). Range `6e61cb27..b7fc06a0`; ver a seção "Etapa 98" no fim. Continua 🟢.) Antes: 2026-10-09 (**Etapa 97** — a reserva manual (`POST /reservas`) não toma mais o material separado na caixa sem reserva de uma requisição: recusa 400 *"Saldo disponível insuficiente: ⟨n⟩"* com o sufixo que nomeia a requisição (M3); as reservas de requisição (aprovação, chegada, recriação no estorno) ficam na régua de hoje (B492); `criarReserva` roda sob a trava do material. `65dc74b2`; range `eb7cd9d8..3fc39310`. Continua 🟢. Ver o item da Etapa 97 no checklist e a seção no fim.)
 > Antes: 2026-10-09 (**Etapa 96** — a reserva grava arredondado a 6 casas e o claim de `criarReserva` compara com folga de 1e-9: no legado torto (físico `0.9999…`) a aprovação de uma requisição de 1 volta a reservar **1** (*Totalmente Reservada* — fecha a ressalva do `6e0fae83`, C179); o reservado sem reserva `ATIVA` não guarda resíduo abaixo de 0,0001 (Fase 5, R2, `2adcd51c`). Range `604b37b1..2d0bbfe9`. Continua 🟢. Ver o item da Etapa 96 no checklist.)
 > Antes: 2026-10-09 (**Etapa 95** — a aprovação não reserva mais o material que está na caixa sem
 > reserva de outra requisição (**B469**, `9237af2c`; a reserva arredondada a 1e-6, `6e0fae83`): reserva `min(falta,
@@ -475,3 +475,42 @@ disponivel - caixa dos outros (B469 da 95, igual a hoje)"*, *"[97 RN-04] sem cai
 corrida separacao x ${nome} (…)"* (uma rodada por porta; a reserva manual é uma delas) e *"[97 T3 C1]"* (o
 `POST /reservas` pela rota). O controle (s3) da T1 — `criarReserva` com o livre de caixa também para `requisicao_id` —
 derrubou *"[95 RN-05] P5b (Fase 2, B2)"* e *"[95 Fase 5] (T8)"*. `test:api` 338/338 (4163 ✓).
+
+## Etapa 98 — a devolução à prateleira não mexe na reserva; o C190 diz a saída pela reserva (2026-10-09)
+
+Plano: `docs/superpowers/plans/2026-10-09-almoxarifado-etapa98-devolver-da-caixa-a-prateleira.md` (`d1679eaa`, Fase 2
+`a16ea09f`). Range `6e61cb27..b7fc06a0`. O gesto está na feature 05.
+
+**O que estava errado (Fase 0, s4):** com a reserva 4 cobrindo a caixa 4 e o administrador bloqueando 1, a prévia da
+entrega anunciava *"Máximo: 3"*, a fila mostrava *Entregar* e o detalhe 3 — e o motor recusava **qualquer** quantidade
+(*"Saldo físico insuficiente para consumir a reserva. Disponível: -1 PC"*: o claim do consumo de reserva exige o
+disponível do material ≥ 0). O C190 da 97 dizia "prende em *Máximo: 0* sem nomear" — **estava incompleto** (C196). E na
+Fase 2 apareceu o caso sem reserva no item: a reserva de **outra** requisição ocupando o físico (detalhe −1).
+
+**Entregue:**
+- [x] **A reserva do item não muda na devolução** — `9e0bb225` (B506): a resposta traz `reserva_do_item` por item; com
+  reserva, `PERDA` 4 → 400 *"Saldo insuficiente. Disponível: 0 PC"* (sem sufixo: a caixa está coberta pela reserva,
+  C194); o almoxarife libera a reserva → `PERDA` 4 → 201 (`[98 RN-05]`, `[98 T5 C3]`, `[98 T5 C3b]`). Descartado
+  liberar junto (o "separei o errado" perderia a prioridade) e a opção no body (dois gestos num).
+- [x] **O entregável pelo motor** — `55bc2165` (B509): `entregavelPeloMotor(disponivelDoMaterial, reservaDoItem,
+  permiteNegativo)` = `permiteNegativo ? disp + r : (disp < −folga ? 0 : disp + r)` na prévia e no laço da entrega, na fila
+  (`entregavel`; a etapa vira AGUARDANDO_SALDO) e no detalhe. **A regra "permite negativo" é a do motor: a flag do
+  material OU `permite_saldo_negativo_global`** (`permiteNegativoSql`) — o plano nomeava só a do material (**B514**).
+- [x] **A E190** — `55bc2165`, `cc130a86` (B513): a recusa de antes + *" — o disponível de ⟨material⟩ está negativo
+  (⟨partes⟩): nada dele sai pela entrega até liberar da reserva desta requisição o que está retido, ou desbloquear"*
+  quando reserva do item + disponível do material > folga; senão *"… até liberar outra reserva deste material ou
+  desbloquear"*. Sem retenção > 0: *"(reservado além do físico)"* e *"… até liberar da reserva desta requisição o que passa
+  do físico"* / *"… até liberar outra reserva deste material"*. ⟨partes⟩ = *"⟨b⟩ ⟨un⟩ bloqueados"*, *"⟨i⟩ ⟨un⟩ em inspeção"*,
+  *"⟨t⟩ ⟨un⟩ em terceiros"*. O texto do plano (*"desta requisição"* sempre que o item tinha reserva; *"(de outra
+  requisição)"* sem ela) **estava errado** (Fase 5): liberar a própria reserva que não cobre o déficit não muda o
+  entregável, e a reserva que ocupa o físico pode ser **manual**.
+- [x] **A49** — a consulta de produção acha as requisições com caixa que a entrega não consegue tirar; rodada pelo teste
+  (`[98 A49][CONTROLE]`, `[98 T5 C4]`, `[98 T5 C4b]`). O motor não mudou.
+
+**Fica de fora (declarado):** a recusa da `PERDA` com reserva nomear a reserva (C194 — a tela avisa no modal, e mexer
+na literal M1 reabre a 97); a guarda do bloqueio avulso contar o reservado (descartado na B509 (ii): a qualidade perde
+reter o reservado, a I-5 da 97); o motor consumir a reserva com o disponível negativo (B509 (iii): abriria a saída de
+material bloqueado).
+
+**Testes:** `entregaDisponivelNegativo.api.test.js` (16), `devolverSeparado.api.test.js` `[98 RN-05]`,
+`devolverSeparadoIntegracao.api.test.js` C3, C3b, C4, C4b. `test:api` 342/342 no último commit da etapa.
