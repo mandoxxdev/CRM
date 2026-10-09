@@ -2,7 +2,14 @@
 
 > **Status:** 🟢 Etapa 4 completa — backend (2026-08-05) e tela (2026-08-06) ·
 > **Spec original:** seção 7
-> **Última atualização:** 2026-10-08 (**Etapa 92** — o cancelamento pelos outros módulos solta a reserva em **seis**
+> **Última atualização:** 2026-10-09 (**Etapa 93** — dois gestos do almoxarife na mesma requisição acontecem um depois
+> do outro (trava por requisição, B443 — **outra** trava, não a por material): liberar para retirada no instante de uma
+> rodada nova de material crítico não prende mais a requisição em *Pronta para retirada* com a reserva **ativa** (**C158**,
+> 3c — nenhum gesto a tirava dali, só a exclusão); duas entregas simultâneas consomem a reserva uma vez e o item soma as
+> duas (**C156**; a entrega grava o item **relativo**, M4 da Fase 2); a exclusão solta as reservas uma vez (duas
+> exclusões estornavam duas vezes — **C157**). `fa4ae85c`, `034076ff`, `03c147cb`, `8e0d7509`, `9307a2cc`, Fase 5
+> `588c9862`, `92d995a0`. Consulta **A44** (e). Continua 🟢. Ver o item da Etapa 93 no checklist.)
+> Antes: 2026-10-08 (**Etapa 92** — o cancelamento pelos outros módulos solta a reserva em **seis**
 > status (`PENDENTE`, `APROVADO`, `AGUARDANDO_*`, `*_RESERVADA` — antes só os dois primeiros; **C149 resolvida**, B434),
 > com *compare-and-set* contra o status lido; o material solto volta ao disponível **solto**, sem distribuir e sem a
 > trava por material (B441 — o CLAUDE.md foi apertado para "ponha saldo no disponível **e distribua**", `7e59853d`);
@@ -212,6 +219,17 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
   o livre; a regra do CLAUDE.md dizia "ponha saldo no disponível **ou** o leia" e pela letra o pegaria; foi apertada para
   "**e distribua**" (`7e59853d`, B441). **Fica de fora:** redistribuir o solto (B441); o W1 numa janela de um instante
   (B438); C139, C145, C147, C150, C132 como na 91.
+- [x] **A reserva não fica presa nem é consumida duas vezes quando dois gestos coincidem na mesma requisição (Etapa 93,
+  C156 + C157 + C158)** — `fa4ae85c` (trava por requisição em separar, entregar e excluir: a segunda entrega espera e
+  consome o que sobrou da reserva, a segunda exclusão vê `ativo=0` → 404 e não libera nem estorna de novo — B443);
+  `034076ff` + `03c147cb` (a liberação na trava e conferindo o status e a marca de rodada: a 3c, que liberava o crítico
+  sem conferência e deixava a reserva `ATIVA` presa em `PRONTA_PARA_RETIRADA`, vira rodada recusada com 400 S1, ou —
+  fora da trava — liberação recusada pela barreira — B445); `8e0d7509` (o item da entrega gravado relativo: `SET
+  quantidade_entregue = COALESCE(quantidade_entregue, quantidade_atendida, 0) + ?` — M4); integração `9307a2cc` (jornadas
+  A e B até reserva `CONSUMIDA` e A44 vazia). Fase 5: `588c9862` (a exclusão confere só `ativo` — B452; a liberação das
+  reservas e a trilha só depois do `UPDATE` que venceu); `92d995a0` (RN-08 (c'') separa 2 e afirma separado 4).
+  **Fica de fora:** prazo para pegar a trava (como a C150); C139, C145, C147, C150, C132 (premissa de um processo — com
+  mais de um vira `SELECT … FOR UPDATE` na linha da requisição).
 - [ ] Reserva por lote específico / número de série — **fora da Etapa 4**. Atualização (2026-08-11): a dependência de **lote** caiu — a feature 10 (lotes) foi entregue na Etapa 6 (2026-08-09/10), então reserva por lote ficou implementável; número de série continua dependendo da 6b
 - [x] Data de necessidade na reserva (`data_necessidade`) — `6690c1a`. **Prioridade** ficou fora: sem demanda concreta, `data_necessidade` cobre o ordenamento útil
 - [x] Expiração automática (`POST /reservas/processar-expiracao` + config `reserva_dias_validade`) — `6690c1a`. **Opt-in**: sem a config e sem `expira_em` explícito a reserva não expira, senão as reservas manuais existentes começariam a ser liberadas sozinhas. Alerta por e-mail fica com a feature 20

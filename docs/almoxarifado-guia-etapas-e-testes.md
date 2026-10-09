@@ -1,22 +1,32 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-08 (Etapa 92) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-09 (Etapa 93) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 e 92) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91, 92 e 93) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-08 (Etapa 92 ENTREGUE · próxima do almoxarifado: Etapa 93)
+> ## Onde o desenvolvimento está — 2026-10-09 (Etapa 93 ENTREGUE · próxima do almoxarifado: Etapa 94)
 >
-> **O desenvolvimento parou aqui: Etapa 92 fechada — 2026-10-08.** A **Etapa 92 (quem pediu por outro módulo
+> **O desenvolvimento parou aqui: Etapa 93 fechada — 2026-10-09.** A **Etapa 93 (dois gestos na mesma requisição não
+> passam um por cima do outro)**: separar, liberar para retirada, entregar, excluir e encerrar a **mesma** requisição ao
+> mesmo tempo (duas abas, dois almoxarifes) passam a acontecer **um depois do outro** — o segundo espera o primeiro e
+> decide pelo estado novo. Acabaram a entrega dupla que deixava o item com menos entregue do que saiu (e deixava sair a
+> mais — aviso **C156**), a exclusão dupla que devolvia o estoque duas vezes (**C157**), a requisição excluída que
+> voltava a *Em Separação* escondida da lista, o material crítico liberado sem a segunda conferência (**C158**), a
+> requisição toda entregue parada fora de *Entregue* (**C159**) e a encerrada que voltava a aberta (**C160**). Na tela,
+> uma exclusão recusada por *"Requisição não encontrada"* (ou pelo aviso de conflito) agora fecha a janela e recarrega a
+> lista. **Próxima etapa do almoxarifado: 94 — a alçada de valor reavaliada depois de começar a separação não devolve a requisição em separação ou parcialmente atendida a *Aguardando aprovação de valor* (medido sem corrida)** (ver *"Próxima tarefa detalhada"* no plano da Etapa 93).
+>
+> **Etapa 92, 2026-10-08.** A **Etapa 92 (quem pediu por outro módulo
 > consegue desistir da requisição reservada)**: o **Cancelar Requisição** das telas **Minhas Requisições** dos outros
 > módulos passou a funcionar nos seis status em que aparece — inclusive *Aguard. Estoque/Compra* e *Parcialmente/
 > Totalmente Reservada* —, e a reserva é solta (aviso **C149** resolvido). Um cancelamento e uma separação no mesmo
 > instante não terminam mais com as duas telas dizendo "feito": um vence e o outro recebe a recusa de sempre (avisos
 > **C153** e D (91) resolvidos). O botão deixou de aparecer para quem só tomava erro (o administrador que não pediu, na
 > tela dos outros módulos; o administrador só do módulo Almoxarifado, que não é administrador do sistema, na tela do
-> almoxarifado). **Próxima etapa do almoxarifado: 93 — as gravações da separação depois do começo, da liberação para
-> retirada e da exclusão administrativa conferem o status** (a exclusão no mesmo instante de uma separação deixa a
-> requisição excluída de volta a *Em Separação*; ver *"Próxima tarefa detalhada"* no plano da Etapa 92).
+> almoxarifado). ~~**Próxima etapa do almoxarifado: 93 — as gravações da separação depois do começo, da liberação para
+> retirada e da exclusão administrativa conferem o status**~~ *(Feita — Etapa 93.)* (a exclusão no mesmo instante de uma
+> separação deixava a requisição excluída de volta a *Em Separação*; ver *"Próxima tarefa detalhada"* no plano da Etapa 92).
 >
 > **Etapa 91, 2026-10-08.** A **Etapa 91 (a fila não se inverte quando a
 > aprovação cai no meio de uma liberação)**: a aprovação de uma requisição (o **Aprovar**, o **Aprovar Liberação** por
@@ -30,9 +40,9 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > tela oferece**~~ *(Feita — Etapa 92.)* (aviso **C149**: a tela **Minhas Requisições** mostra **Cancelar Requisição** para requisições
 > reservadas ou em espera, e o servidor recusa; ver *"Próxima tarefa detalhada"* no plano da Etapa 91).
 > *Numeração:* desde a unificação de 2026-10-07 a numeração de etapas é uma só para todos os módulos — as 78 a 90 foram
-> do lote de Compras/núcleo (`docs/compras-novidades-por-etapa.md`, **B18**); por isso, depois da 77, vieram a 91 e a 92.
+> do lote de Compras/núcleo (`docs/compras-novidades-por-etapa.md`, **B18**); por isso, depois da 77, vieram a 91, a 92 e a 93.
 >
-> **Etapas 1 a 20, 22 a 77, 91 e 92 completas.**
+> **Etapas 1 a 20, 22 a 77, 91, 92 e 93 completas.**
 >
 > **Etapa 77, 2026-10-08.** A **Etapa 77 (a reserva de uma requisição só sai
 > pela requisição)**: uma saída pela API de movimentações que cita a reserva de uma requisição é recusada — o material
@@ -5820,11 +5830,110 @@ deixaria a corrida mais frequente.
 
 - **A exclusão administrativa no mesmo instante de uma separação** pode deixar a requisição excluída de volta a *Em
   Separação*, escondida da lista — e liberar para retirada ou entregar no mesmo instante de uma separação da mesma
-  requisição não foi medido. É a **Etapa 93**.
+  requisição não foi medido. É a **Etapa 93**. *(Feita — Etapa 93: medido, 5 de 5 em cada corrida, e fechado — ver a seção
+  da Etapa 93.)*
 - **O material solto pelo cancelamento não vai para quem esperava** (**B441**) — mesma regra da liberação à mão.
 - **Cancelar *Aguard. Aprov. Valor*** — nenhuma das duas telas mostra o botão nesse status (só por integração).
 - **A solicitação de compra** aberta para uma *Aguard. Compra* continua aberta depois do cancelamento (aviso **C154**).
 - **C145, C147, C150, C139** — como na Etapa 91.
+
+## Etapa 93 — Dois gestos na mesma requisição não passam um por cima do outro (ENTREGUE — 2026-10-09)
+
+**O que mudou, em uma frase:** quando duas pessoas (ou a mesma pessoa em duas abas) separam, liberam para retirada,
+entregam, excluem ou encerram a **mesma** requisição no mesmo instante, os dois gestos agora acontecem **um depois do
+outro** — o segundo espera o primeiro terminar e decide olhando o estado novo, em vez de gravar por cima.
+
+**O problema que ela resolve.** Cada um desses botões lia a requisição, fazia o seu trabalho e gravava o status no fim
+sem conferir se alguém tinha mexido nela no meio. Com dois cliques coincidindo, as duas telas diziam "feito" e a
+requisição terminava num estado que nenhum dos dois gestos produziria sozinho. Os casos medidos (cada um 5 de 5 com o
+encaixe forçado; os dois primeiros também **10 de 10 sem forçar nada**, só clicando junto):
+
+- **Duas entregas** da mesma requisição: o item ficava com metade do que saiu do estoque, e a tela oferecia entregar "o
+  que faltava" — **6 saídas para 4 pedidos** quando havia saldo livre (aviso **C156**).
+- **Duas exclusões** de uma requisição entregue: o estoque voltava **duas vezes** — 8 de volta para 4 que saíram
+  (aviso **C157**).
+- **Excluir no instante de uma separação**: a requisição excluída voltava a *Em Separação*, escondida da lista, com
+  material na caixa e sem reserva.
+- **Liberar para retirada no instante de uma rodada nova de material crítico**: a requisição saía *Pronta p/ Retirada*
+  sem a segunda conferência e **ficava presa** ali, com a reserva — nenhum botão a tirava (aviso **C158**).
+- **Separar, liberar e entregar juntos**: requisição com tudo entregue parada em *Em Separação*, *Pronta p/ Retirada* ou
+  *Parcialmente Atendida* (aviso **C159**).
+- **Encerrar no instante de uma entrega**: a encerrada voltava a *Parcialmente Atendida* (aviso **C160**).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Duas entregas da mesma requisição juntas: o item mostrava menos entregue do que saiu e deixava sair a mais (**C156**) | A segunda espera a primeira; o entregue do item é a soma do que saiu; o que passar do pendente é recusado (**B443**) |
+| Duas exclusões juntas devolviam o estoque duas vezes (**C157**) | A segunda diz *"Requisição não encontrada"*; o estoque volta uma vez (**B443**) |
+| Excluir durante a separação deixava a requisição excluída *Em Separação*, fora da lista | Fica *Cancelado* e excluída, com a reserva solta; se a exclusão chega primeiro, a separação é recusada sem gravar nada |
+| Liberar durante uma rodada nova de material crítico liberava sem a segunda conferência e prendia a requisição (**C158**) | Se a liberação chega primeiro, a rodada nova é recusada; se a rodada chega primeiro, a liberação é recusada pela conferência que falta |
+| Requisição toda entregue parada fora de *Entregue* (**C159**) | Termina *Entregue* |
+| Encerrar no meio de uma entrega devolvia a requisição a *Parcialmente Atendida* (**C160**) | Termina *Encerrada* (ou a entrega é recusada, se o encerramento chegou antes) |
+| A segunda exclusão recusada com *"Requisição não encontrada"* deixava a janela aberta e a linha na lista até recarregar a tela | A janela fecha e a lista recarrega (**B452**) |
+| *(achado da revisão)* Reprovar a liberação por valor no instante em que a requisição era excluída transformava a excluída em *Rejeitada* | A reprovação é recusada com *"Apenas requisições aguardando aprovação de valor podem ser reprovadas"* (**B450**) |
+
+*(O plano da etapa previa que, na segunda exclusão, a lista **não** recarregaria — a linha excluída ficaria até recarregar
+a tela. A revisão do código mudou isso: no *"não encontrada"* e no aviso de conflito a janela fecha e a lista recarrega.)*
+
+### Roteiro de teste manual (≈20 min, duas janelas)
+
+**Preparação.** Um material comum **M** com **8** em estoque e um material **crítico** **K** (marca *Material crítico* no
+cadastro) com 4. Dois almoxarifes, **Ana** e **Bruno** (perfil Almoxarife), cada um numa janela (ou um navegador normal e
+uma janela anônima). Um **Administrador** (super administrador) para excluir e encerrar. A coincidência exata dos
+cliques é rara na mão — clique os dois botões o mais junto possível; os testes automáticos forçam o encaixe. O que o
+roteiro confere é que, **qualquer** que seja a ordem, o resultado é um dos dois descritos, nunca uma mistura.
+
+1. **Duas entregas juntas.** Crie **R1** pedindo 4 de M, aprove (fica *Totalmente Reservada*) e separe 4 (Ana). Nas duas
+   janelas, abra R1 em **Almoxarifado → Requisições (almox.)** e clique **Entregar escolhendo de onde sai…** com
+   quantidade **2**. Confirme as duas juntas. Uma mostra *"Entrega parcial registrada. Saldo pendente permanece em
+   aberto."*; a outra, um instante depois, *"Requisição entregue por completo! Estoque baixado."*. R1 fica **Entregue**,
+   o item com **4 entregues**, o extrato de M com **duas saídas de 2**, e M com **4** em estoque. Variante: com R1 nova
+   separada em 4, clique **Confirmar Entrega e Baixar Estoque** nas duas janelas — uma entrega os 4 e a outra recebe
+   *"Requisição deve estar em separação, pronta para retirada ou parcialmente atendida"*; nada sai a mais.
+2. **Duas exclusões juntas.** Com R1 **Entregue** (M em 4), o Administrador abre R1 nas duas janelas → **Excluir
+   Requisição** → justificativa → **Confirmar Exclusão** nas duas juntas. Uma mostra *"Requisição excluída. Estoque
+   estornado em 1 item(ns)."*; a outra, *"Requisição não encontrada"* — e a janela de exclusão **fecha**, a lista
+   recarrega e R1 some dela. M volta a **8** (não 12). No extrato de M, **uma** entrada de estorno; na **Auditoria**, **uma**
+   exclusão.
+3. **Excluir durante a separação.** Crie **R2** (2 de M), aprove. Janela A: Ana com **Iniciar Separação** aberta (1).
+   Janela B: o Administrador com **Excluir Requisição** pronta. Clique os dois juntos. Resultado: **ou** a separação é
+   registrada e depois a exclusão — R2 some da lista (excluída, *Cancelado*), a reserva aparece **Liberada** em
+   **Reservas** —, **ou** a exclusão chega primeiro e a separação é recusada com *"Requisição deve estar aprovada,
+   aguardando estoque/compra, em separação ou parcialmente atendida para separar"*. Em nenhum caso R2 reaparece *Em
+   Separação*.
+4. **Liberar × rodada nova de material crítico.** Crie **R3** pedindo 2 de K, aprove. Ana separa 1; Bruno confere
+   (**Conferir separação**). Janela de Bruno: **Liberar para Retirada**. Janela de Ana: **Ajustar Separação** com mais
+   1. Clique os dois juntos. **Ou** *"Requisição liberada para retirada!"* e a separação de Ana recusada com *"Requisição
+   deve estar aprovada, aguardando estoque/compra, em separação ou parcialmente atendida para separar"* (R3 *Pronta p/
+   Retirada*, conferida por Bruno, 1 separado), **ou** *"Separação registrada!"* e a liberação recusada com *"Esta
+   requisição tem material crítico separado e ainda não passou pela segunda conferência. Peça a outra pessoa do
+   almoxarifado para conferir a separação antes de liberar ou entregar."* (R3 *Em Separação*, sem conferência — Bruno
+   confere de novo e libera). Nunca *Pronta p/ Retirada* sem a conferência.
+5. **Encerrar × entregar.** Crie **R4** (4 de M), aprove, separe 4, entregue 2 → *Parcialmente Atendida*. Janela A: o
+   Administrador com **Encerrar Requisição** aberta. Janela B: Ana com a entrega dos 2 restantes. Clique juntos. **Ou** a
+   entrega sai e depois *"Requisição encerrada!"* (R4 **Encerrada**), **ou** o encerramento chega primeiro e a entrega é
+   recusada com *"Requisição deve estar em separação, pronta para retirada ou parcialmente atendida"*. R4 **nunca** volta
+   a *Parcialmente Atendida* depois de encerrada.
+6. **Requisições diferentes não esperam.** Repita o passo 1 com Ana entregando **R5** e Bruno entregando **R6** ao mesmo
+   tempo: as duas respondem na hora — a espera é só entre gestos da mesma requisição.
+
+### O que esta etapa NÃO cobre
+
+- **Mais de um servidor rodando ao mesmo tempo.** A fila é de um processo só (o sistema roda num processo hoje). Com
+  mais de um, a exclusão precisaria reservar a requisição **antes** de devolver o estoque — candidata da mudança de
+  banco de dados.
+- **Outros gestos que mudam o status fora da fila** — **Aprovar Liberação** por valor, **Conferir separação** e os dois
+  cancelamentos — continuam fora dela (cada um já confere o status ao gravar). A reprovação por valor ganhou essa
+  conferência nesta etapa.
+- **Prazo para esperar a fila** — não há: um gesto lento (por exemplo, a entrega que manda o e-mail de estoque mínimo)
+  segura só aquela requisição, sem limite de tempo.
+- **Avisos que só aparecem se alguém mexer na requisição por fora do sistema no mesmo instante** (escrita direta no
+  banco, outro processo): a separação pode avisar *"A requisição mudou de status durante a separação…"* e a janela de
+  separação continua aberta; a entrega pode responder *"Requisição entregue por completo!"* sobre uma requisição que foi
+  cancelada por fora. Com a fila, nenhum gesto da tela chega a esses casos.
+- **C145, C147, C150, C139** — como na Etapa 92.
+
 
 ## Etapa 72 — A solicitação de compra só fecha quando o material dela chega (ENTREGUE — 2026-10-02)
 

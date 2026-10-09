@@ -11,12 +11,12 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-08):** Etapa 92 fechada (quem pediu por outro módulo consegue cancelar a
-> requisição reservada — **C149** resolvido; a separação e o cancelamento no mesmo instante não "ressuscitam" mais a
-> requisição) — ver "Onde estamos e o que vem a seguir", no fim. A próxima etapa do almoxarifado é a **93** — as
-> gravações da separação depois do começo, da liberação para retirada e da exclusão administrativa conferem o status
-> (D (92)). Desde a unificação de 2026-10-07 a numeração é uma só para todos os módulos, e as 78 a 90 foram usadas pelo
-> lote de Compras/núcleo (`docs/compras-novidades-por-etapa.md`, **B18**) — por isso a etapa depois da 77 foi a 91.
+> **Onde o desenvolvimento está (2026-10-09):** Etapa 93 fechada (dois gestos na mesma requisição — separar, liberar
+> para retirada, entregar, excluir, encerrar — acontecem um depois do outro; duas entregas não deixam mais sair material
+> a mais, duas exclusões não estornam duas vezes, e a excluída não volta a *Em Separação*) — ver "Onde estamos e o que vem
+> a seguir", no fim. A próxima etapa do almoxarifado é a **94** — a alçada de valor reavaliada depois de começar a separação não devolve a requisição em separação ou parcialmente atendida a *Aguardando aprovação de valor* (medido sem corrida). Desde a unificação de 2026-10-07 a
+> numeração é uma só para todos os módulos, e as 78 a 90 foram usadas pelo lote de Compras/núcleo
+> (`docs/compras-novidades-por-etapa.md`, **B18**) — por isso a etapa depois da 77 foi a 91.
 >
 > Fontes: `docs/almoxarifado-guia-etapas-e-testes.md` (roteiros de teste manual de cada
 > etapa), `specs/modulo-almoxarifado/README.md` (status por feature) e os planos em
@@ -114,7 +114,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Quarenta e três itens para rodar em produção ANTES do deploy — quarenta são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Quarenta e quatro itens para rodar em produção ANTES do deploy — quarenta e um são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-09 (Etapa 93) de quarenta e três para quarenta e quatro**, com a **A44** — as cinco marcas que dois gestos na mesma requisição, no mesmo instante, podem ter deixado: excluídas que voltaram a outro status, item com menos entregue do que saiu, estorno dobrado ou faltando, requisição toda entregue parada fora de *Entregue* e crítico liberado sem a segunda conferência.)*
 
 *(**Atualizado em 2026-10-08 (Etapa 92) de quarenta e dois para quarenta e três**, com a **A43** — as requisições que uma separação "ressuscitou" depois de canceladas, e as canceladas com material separado na caixa, deixadas pela corrida separação × cancelamento antes desta versão.)*
 
@@ -1537,7 +1539,76 @@ banco recusar. O banco de desenvolvimento não tem dados, então o tamanho real 
 - **Linha em (b)** — o material está fora da prateleira numa requisição cancelada: devolver à prateleira. Nada a corrigir
   no saldo (separar não move estoque).
 
-### B. Decisões de negócio — B1 a B442; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A44 (NOVA, da Etapa 93 — o que dois gestos na mesma requisição, no mesmo instante, podem ter deixado).** Antes desta
+versão, duas pessoas (ou duas abas) agindo na mesma requisição ao mesmo tempo podiam deixar: uma requisição **excluída**
+de volta a *Em Separação*, *Pronta para retirada* ou *Entregue* (escondida da lista); um item com **menos entregue do que
+saiu** do estoque (duas entregas juntas — e a tela oferecia entregar "o que faltava", saindo material a mais — **C156**);
+uma excluída com o estorno **dobrado** (estoque fantasma — **C157**) ou faltando; uma requisição com **tudo entregue**
+parada em *Em Separação*, *Pronta para retirada* ou *Parcialmente Atendida* (**C159**); e uma *Pronta para retirada* com
+material crítico na caixa **sem a segunda conferência** (**C158**). O deploy não desfaz o que já aconteceu. Somente
+leitura:
+
+```sql
+-- (a) excluídas que voltaram a outro status
+SELECT rq.id, rq.numero, rq.status FROM requisicoes_almoxarifado rq
+ WHERE COALESCE(rq.ativo, 1) = 0 AND rq.status <> 'CANCELADO' ORDER BY rq.id;
+-- (b) item cuja entrega não bate com as saídas do livro (perdeu entrega)
+SELECT rq.id, rq.numero, i.material_id, SUM(COALESCE(i.quantidade_entregue,0)) AS entregue_itens,
+       (SELECT COALESCE(SUM(m.quantidade),0) FROM movimentacoes_almoxarifado m
+         WHERE m.requisicao_id = rq.id AND m.material_id = i.material_id AND m.tipo = 'SAIDA'
+           AND COALESCE(m.cancelado,0) = 0) AS saidas_livro
+  FROM requisicoes_almoxarifado rq JOIN itens_requisicao_almoxarifado i ON i.requisicao_id = rq.id
+ WHERE COALESCE(rq.ativo, 1) = 1
+ GROUP BY rq.id, rq.numero, i.material_id
+HAVING ABS(entregue_itens - saidas_livro) > 1e-9 ORDER BY rq.id;
+-- (c) excluídas cujo estorno não bate com o que saiu (estorno duplo — a mais; ou entrega no meio — a menos)
+SELECT rq.id, rq.numero, m.material_id,
+       SUM(CASE WHEN m.tipo = 'SAIDA' THEN m.quantidade ELSE 0 END) AS saiu,
+       SUM(CASE WHEN m.tipo = 'ENTRADA' AND m.motivo LIKE 'Estorno exclus%' THEN m.quantidade ELSE 0 END) AS estornado
+  FROM requisicoes_almoxarifado rq JOIN movimentacoes_almoxarifado m ON m.requisicao_id = rq.id AND COALESCE(m.cancelado,0) = 0
+ WHERE COALESCE(rq.ativo, 1) = 0
+ GROUP BY rq.id, rq.numero, m.material_id
+HAVING ABS(estornado - saiu) > 1e-9 ORDER BY rq.id;
+-- (d) tudo entregue e parada fora de ENTREGUE
+SELECT rq.id, rq.numero, rq.status FROM requisicoes_almoxarifado rq
+ WHERE COALESCE(rq.ativo, 1) = 1 AND rq.status IN ('EM_SEPARACAO','PRONTA_PARA_RETIRADA','PARCIALMENTE_ATENDIDA')
+   AND EXISTS (SELECT 1 FROM itens_requisicao_almoxarifado i WHERE i.requisicao_id = rq.id)
+   AND NOT EXISTS (SELECT 1 FROM itens_requisicao_almoxarifado i WHERE i.requisicao_id = rq.id
+                    AND COALESCE(i.quantidade_entregue,0) < i.quantidade_solicitada - 1e-9) ORDER BY rq.id;
+-- (e) Pronta para retirada com material crítico na caixa sem a segunda conferência
+SELECT rq.id, rq.numero FROM requisicoes_almoxarifado rq
+ WHERE COALESCE(rq.ativo, 1) = 1 AND rq.status = 'PRONTA_PARA_RETIRADA' AND rq.conferido_por_id IS NULL
+   AND EXISTS (SELECT 1 FROM itens_requisicao_almoxarifado i JOIN materiais_almoxarifado mt ON mt.id = i.material_id
+                WHERE i.requisicao_id = rq.id AND mt.material_critico = 1
+                  AND COALESCE(i.quantidade_separada,0) - COALESCE(i.quantidade_entregue,0) > 1e-9) ORDER BY rq.id;
+```
+
+*(Conferida duas vezes contra o esquema real do módulo, montado em memória pelo mesmo harness dos testes. Na medição da
+etapa: cada consulta **acha** o caso que a corrida produz — (a) a exclusão no meio da separação, da liberação e da
+entrega; (b) duas entregas juntas; (c) a exclusão dupla **e** a entrega no meio da exclusão; (d) as três paradas; (e) o
+crítico liberado sem conferência —, **não acha** o mesmo fluxo feito em sequência, e com uma coluna trocada de propósito
+o banco **recusa** as cinco. No teste de integração da etapa (controle positivo): cada consulta acha o **seu** estado
+montado e as outras quatro não; e as cinco voltam **vazias** no fim de cada jornada de dois almoxarifes, pela tela e pelo
+serviço. A **A43** não acha (a) — ela olha só requisições ativas. O banco de desenvolvimento não tem dados, então o
+tamanho real só em produção.)*
+
+**Como ler o resultado** (ninguém corrige por script — cada linha pede olhar o físico, **B451**):
+- **As cinco vazias** — nada a fazer.
+- **Linha em (a)** — a requisição foi excluída e algo a moveu depois. Conferir a caixa (material separado volta à
+  prateleira) e o histórico; **não reativar**.
+- **Linha em (b)** — **falso positivo possível** em dado antigo (saída anterior ao livro por requisição — o mesmo caso
+  "livro que não soma" da exclusão). Senão, o item mostra menos do que saiu: **não entregar o "que falta"** antes de
+  conferir; acertar o item à mão.
+- **Linha em (c)** — `estornado` maior que `saiu`: estoque fantasma — inventário do material antes de qualquer ajuste.
+  `estornado` menor que `saiu`: a saída depois da exclusão não voltou — conferir se o material saiu de fato.
+- **Linha em (d)** — a requisição entregou tudo. Se está *Parcialmente Atendida*, **Encerrar**; nas outras duas não há
+  gesto — corrigir o status à mão para *Entregue* (decisão de quem administra).
+- **Linha em (e)** — **não entregar** até alguém conferir a caixa; não há gesto que a devolva a *Em Separação* —
+  corrigir à mão para *Em Separação* e pedir a segunda conferência.
+
+### B. Decisões de negócio — B1 a B452; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-09 de B442 para B452**, com as dez da Etapa 93 — nove do plano (**B443** a **B451**) e uma da revisão adversarial do código (**B452**, que muda a **B447**; a **B450** ganhou a reprovação por valor).)*
 
 *(**Atualizado em 2026-10-08 de B433 para B442**, com as nove da Etapa 92 — oito do plano (**B434** a **B441**) e uma da revisão adversarial do código (**B442**); a **B434** reverte uma parte da **B426**.)*
 
@@ -5876,6 +5947,107 @@ administrador) — o clique dava *"Sem permissão"*. Anterior à etapa (a Etapa 
 tela usa a mesma regra do servidor. **Descartado:** o servidor passar a aceitar o administrador do módulo — mais gente
 cancelando requisição alheia, decisão de autorização que ninguém pediu. (`627dc667`)
 
+**B443 (NOVA, da Etapa 93) — uma fila por requisição para os cinco gestos do almoxarife.** **Separar**, **liberar para
+retirada**, **entregar**, **excluir** (pelas duas telas) e **encerrar** entram numa fila da requisição: o segundo gesto
+na mesma requisição **espera** o primeiro terminar e então lê o estado novo. As corridas medidas viram sequências — a
+segunda exclusão vê a requisição já excluída (*"Requisição não encontrada"*); a entrega depois da liberação vê *Pronta*; a
+rodada nova depois da liberação é recusada com a mensagem de sempre da separação. Requisições **diferentes** não esperam
+uma pela outra. É **outra** fila, não a por material da Etapa 91: nenhum destes cinco distribui saldo, e a ordem é
+sempre requisição → material (nenhum caminho da fila por material chega a estes cinco — medido por sonda na suíte
+inteira). Premissa de **um** processo (**C132**, conferida no deploy). **Descartados:** só conferir o status em cada
+gravação — não fecha duas entregas juntas (o defeito é no item, não no status), nem a exclusão dupla (o estorno sai antes
+da gravação final), nem a rodada nova de crítico (o status não muda); uma coluna "operação em curso" no banco —
+migração e limpeza de marca órfã para um ganho (vários processos) que hoje não existe; pegar a fila por material dos
+itens — duas entregas de requisições diferentes do mesmo material passariam a esperar uma pela outra sem razão.
+(`fa4ae85c`, `034076ff`)
+
+**B444 (NOVA, da Etapa 93) — a separação confere o status ao fechar a rodada; se perdeu, responde 409.** A separação
+grava a rodada e, no fim, limpa a conferência e reafirma *Em Separação* — agora só se a requisição ainda está *Em
+Separação*. Se não está (alguém a moveu por fora — outro servidor, escrita direta), **não** regrava o status, limpa a
+conferência mesmo assim (a rodada nova não herda a conferência da velha), registra a rodada na trilha e responde **409**
+*"A requisição mudou de status durante a separação (agora ⟨status⟩); a rodada ficou registrada — confira a caixa antes de
+separar de novo."* **Por que 409 e não 200:** o 200 diria *Em Separação* (mentira) e a tela mostraria "Separação
+registrada!" sem ninguém olhar; quem separou precisa saber que a caixa ficou numa requisição que outra pessoa mexeu.
+**Descartados:** 200 com o status real (silencioso na tela); desfazer a rodada (ela é só de acréscimo). **Alcance:** com a
+**B443**, nenhum gesto do próprio sistema chega aqui. **Residuais declarados:** se o status virou *Pronta para retirada*,
+a conferência limpa deixa a requisição presa como no **C158**; depois do 409 a janela de separação fica aberta e, de
+*Parcialmente Atendida*, um novo **Separar** grava a mesma caixa de novo (a mensagem manda conferir antes). A revisão do
+código achou que a **última** tentativa desse fechamento (depois de três corridas com a conferência) não conferia se
+tinha gravado — respondia 200 *Em Separação* e deixava a conferência velha; agora confere e segue o mesmo caminho do 409.
+(`908ee2a1`, `2661bdd1`)
+
+**B445 (NOVA, da Etapa 93) — a liberação para retirada confere o status lido e se entrou rodada nova; tenta duas
+vezes.** Só grava *Pronta para retirada* se o status é o que leu **e** nenhuma rodada de separação entrou depois da
+leitura. Perdeu → relê e refaz as recusas de sempre (transição inválida, *"Nenhum item separado"*, a barreira da segunda
+conferência); perdeu duas vezes → **409** *"A requisição mudou enquanto era liberada para retirada; recarregue e confira
+antes de liberar."* A marca de rodada é o que impede liberar crítico sem conferência mesmo fora da fila (a rodada nova
+não muda o status). **Descartado:** conferir a conferência no lugar da marca — não pega a primeira rodada de crítico numa
+requisição cuja rodada anterior só tinha material comum. (`03c147cb`)
+
+**B446 (NOVA, da Etapa 93) — a entrega que perde a gravação final responde 200 com o status real; o item soma em vez de
+regravar.** Se o status mudou durante a entrega, ela tenta **uma** vez mais com o relido quando a passagem vale (ex.:
+liberada no meio — *Pronta* → *Entregue*); senão **não** regrava o status e responde **200** com o status real. **Por
+que 200 e não 409:** as baixas já saíram do estoque e estão no item; um 409 faria a tela dizer "erro" e o almoxarife
+**entregar de novo** — e a entrega repetida baixa de novo. **O item:** a quantidade entregue passa a ser **somada** à que
+está no banco na hora de gravar, não regravada a partir do que foi lido no começo — fecha a perda de entrega (**C156**)
+também fora da fila. **Descartados:** 409; estornar as baixas no meio de uma corrida (sem transação, pior que o estado que
+corrige); só declarar o item (é a corrida que mexe em estoque, e o conserto é uma linha). **Residual declarado:** com o
+status real *Cancelado*, a tela mostraria *"Requisição entregue por completo! Estoque baixado."* e ofereceria a
+assinatura, que recusa — só fora da fila. (`8e0d7509`)
+
+**B447 (NOVA, da Etapa 93; mudada na revisão do código — ver B452) — a exclusão não tenta de novo depois de estornar.**
+O texto original desta decisão dizia que a gravação final da exclusão conferia **o status lido** e, sem estorno feito,
+relia e tentava de novo (com uma mensagem própria para a segunda perda). **Isso estava errado e foi trocado pela B452:** a
+exclusão não tem regra de status, e conferir o status fazia a exclusão perder depois de estornar quando outra porta
+(aprovação por valor, aprovação, cancelamento) mudava o status no meio. **O que continua valendo:** perdida a gravação
+**depois** de estornar, **nunca** tentar de novo — refazer a exclusão estornaria de novo (**C157**); responde **409**
+*"A requisição mudou enquanto era excluída; o estorno pode já ter sido feito — confira o estoque e o histórico antes de
+excluir de novo."* e o log aponta a **A44 (c)**. A trilha da exclusão grava o status lido **dentro** da fila (a tela
+antiga lia antes de entrar na fila). **Descartado nesta etapa:** reivindicar a exclusão antes do estorno — é o conserto
+para vários processos, mas é mais uma devolução sem transação para um ganho que hoje não existe; candidata da migração
+para Postgres. (`2ac57af0`, `588c9862`)
+
+**B448 (NOVA, da Etapa 93) — o encerramento confere o status lido, com uma nova tentativa.** Mudou no meio → relê; a
+passagem relida não vale → a recusa de sempre (*"Transição inválida: ⟨status⟩ → ENCERRADA"*); vale → tenta de novo;
+perdeu de novo → **409** *"A requisição mudou enquanto era encerrada; recarregue e confira antes de encerrar."* As
+reservas só são soltas e a trilha só é gravada se o encerramento venceu. (`2ac57af0`)
+
+**B449 (NOVA, da Etapa 93) — a liberação e o encerramento continuam na rota; a tela só muda na exclusão.** A fila e a
+conferência entram no corpo das duas rotas, sem mover para o serviço (mudaria o ponto de auditoria por nada). O plano
+dizia "o cliente não muda" — **mudou em um ponto**, decidido na revisão do código (**B452**): a janela de exclusão fecha
+no 409 e no 404. **Descartado:** extrair a liberação para o serviço. (`034076ff`, `2721c17c`)
+
+**B450 (NOVA, da Etapa 93) — a conferência, os dois cancelamentos e as aprovações ficam fora da fila por requisição.** A
+conferência já reivindica no próprio gravar; os cancelamentos têm a comparação da Etapa 92 e não competem depois que a
+separação começa (não existe *Em Separação* → *Cancelado*); a aprovação está na fila por material (pô-la também na fila
+por requisição criaria uma ordem de travas nova). Pô-los na fila não fecha corrida medida. **Acrescentado pela revisão do
+código:** a **reprovação por valor** era um gesto fora da fila que ninguém tinha analisado — gravava *Rejeitado* por
+cima de uma requisição que acabara de ser excluída. Agora só grava se ainda está *Aguardando aprovação de valor* e
+ativa; perdeu → a recusa de sempre, *"Apenas requisições aguardando aprovação de valor podem ser reprovadas"* (`c4d84b1f`).
+**Descartado:** pôr a reprovação na fila (a comparação basta) e um 409 novo (a recusa existente diz a verdade). Os
+outros gestos fora da fila (aprovação por valor, conferência, cancelamentos) seguem **não analisados um a um** contra a
+exclusão — candidatos (D (93)).
+
+**B451 (NOVA, da Etapa 93) — a A44 lista; ninguém corrige por script.** Cada linha pede decisão física (o material está
+na caixa? saiu de fato?), e um estorno automático de estoque fantasma pode estar errado se alguém já ajustou por
+inventário. **Descartado:** script de correção.
+
+**B452 (NOVA, da Etapa 93, revisão do código) — a exclusão confere só se a requisição ainda está ativa; a tela fecha a
+janela no 409 e no 404.** A revisão reproduziu, num servidor só, a exclusão perdendo a gravação final **depois** de
+estornar porque a aprovação por valor mudou o status no meio (10 de 10 sem gancho, com 0 a 2 ms entre os cliques) — e a
+janela de exclusão continuava aberta, então o segundo **Confirmar Exclusão** estornava **de novo** (6 no estoque para 4
+reais). Defeito **introduzido pela própria etapa** (a conferência de status da B447), pego antes de sair. **Escolhido:**
+(1) a gravação final confere só *ativa* — a exclusão aceita qualquer requisição ativa, como sempre aceitou; perder só
+acontece se alguém excluiu por fora (com estorno feito → o 409 da B447; sem estorno → *"Requisição não encontrada"*); a
+nova tentativa e a mensagem *"…nada foi estornado; recarregue e tente de novo."* do plano **saíram** (sem perda por
+status, não há o que tentar de novo); a trilha grava o status relido logo antes da gravação final. (2) Na tela, 409 e 404
+**fecham** a janela de exclusão, limpam a justificativa e recarregam a lista; o detalhe aberto recarrega no 409 e fecha
+no 404. Outros erros (a recusa do estorno) mantêm a janela aberta — corrigir e tentar de novo é o gesto certo.
+**Descartados:** manter a conferência de status com um laço até vencer (mais código e uma regra de status que a exclusão
+não tem); recarregar em qualquer erro (perderia a justificativa digitada num erro que se resolve na hora). **Residual
+declarado:** uma troca de status exatamente entre a releitura e a gravação final fica fora da trilha da exclusão (a
+trilha de quem trocou a registra). (`588c9862`, `2721c17c`)
+
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -7622,6 +7794,63 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      reserva"* ainda pode aparecer numa janela de um instante (**B438**). **O que fazer:** integrações que cancelam
      devem tratar a recusa como "tente de novo" quando a requisição ainda aparece num dos seis status.
 
+156. **NOVO e ✅ RESOLVIDO NA ETAPA 93 (`fa4ae85c`; o item soma `8e0d7509`) — duas entregas da mesma requisição ao mesmo
+     tempo perdiam a entrega do item.** Achado na medição da Etapa 93, **10 de 10 sem atraso nenhum** (os dois cliques
+     juntos): as duas entregas baixavam o estoque, mas o item ficava com a quantidade de **uma** só — 2 entregues para 4
+     que saíram — e a tela oferecia entregar os 2 "que faltavam": com saldo livre na prateleira, **saíam 6 para 4
+     pedidos**. Pede duas abas ou duas pessoas (o botão desabilita durante o envio). Agora a segunda espera a primeira
+     (**B443**), e o item soma em vez de regravar (**B446**). **O que fazer:** rodar a **A44 (b)**.
+
+157. **NOVO e ✅ RESOLVIDO NA ETAPA 93 (`fa4ae85c`) — duas exclusões da mesma requisição entregue estornavam duas vezes.**
+     Achado na medição, **10 de 10 sem atraso**: as duas respondiam "excluída" e o estoque ganhava **duas** entradas de
+     estorno — estoque fantasma do tamanho da entrega. Agora a segunda espera e responde *"Requisição não encontrada"*
+     (**B443**); a janela de exclusão fecha e a lista recarrega (**B452**). **O que fazer:** **A44 (c)**.
+
+158. **NOVO e ✅ RESOLVIDO NA ETAPA 93 (`034076ff`; fora da fila `03c147cb`) — liberar para retirada no instante de uma
+     rodada nova de material crítico liberava sem a segunda conferência e prendia a requisição.** A liberação lia a
+     conferência da rodada velha; a rodada nova entrava e limpava a conferência; a requisição terminava *Pronta para
+     retirada* com material crítico não conferido na caixa — e **nenhum gesto a tirava dali** (entregar, conferir,
+     separar, cancelar e encerrar recusavam), com a reserva presa. Só a exclusão saía. Agora a rodada nova espera e é
+     recusada com a mensagem de sempre da separação (**B443**); e, mesmo fora da fila, a liberação percebe a rodada nova e
+     recusa pela barreira (**B445**). **O que fazer:** **A44 (e)**.
+
+159. **NOVO e ✅ RESOLVIDO NA ETAPA 93 (`fa4ae85c`, `034076ff`) — requisição toda entregue parada fora de *Entregue*.**
+     Uma separação, uma liberação ou outra entrega no instante de uma entrega podiam deixar a requisição com **tudo
+     entregue** em *Em Separação*, *Pronta para retirada* ou *Parcialmente Atendida* — as duas primeiras sem gesto que as
+     tirasse dali. Agora o segundo gesto espera (**B443**). **O que fazer:** **A44 (d)**.
+
+160. **NOVO e ✅ RESOLVIDO NA ETAPA 93 (`034076ff`, `2ac57af0`) — encerrar no instante de uma entrega devolvia a
+     requisição a *Parcialmente Atendida*.** O encerramento respondia "encerrada" e soltava as reservas; a entrega gravava
+     o status dela por cima. Agora o encerramento espera a entrega e confere o status ao gravar (**B443**, **B448**).
+     **O que fazer:** nada (a A44 (d) acha a que ficou com tudo entregue).
+
+161. **NOVO, da Etapa 93 — o que muda para quem opera.** (1) Dois gestos na mesma requisição (separar, liberar para
+     retirada, entregar, excluir, encerrar) acontecem **um depois do outro**: o segundo **espera** o primeiro — sem prazo,
+     como a fila por material (**C150**) — e decide pelo estado novo. (2) A segunda exclusão diz *"Requisição não
+     encontrada"*, e a janela de exclusão **fecha** e a lista recarrega. (3) Uma rodada nova pedida depois de a requisição
+     ser liberada é recusada com *"Requisição deve estar aprovada, aguardando estoque/compra, em separação ou parcialmente
+     atendida para separar"*. (4) A reprovação por valor de uma requisição excluída no mesmo instante é recusada com
+     *"Apenas requisições aguardando aprovação de valor podem ser reprovadas"*. (5) As mensagens novas de conflito (409)
+     só aparecem se a requisição for mudada **por fora** no mesmo instante (outro servidor, escrita direta no banco).
+     **O que fazer:** nada.
+
+162. **NOVO, da Etapa 93 — o que muda para quem integra.** (1) Respostas **409** novas, todas `{ error: <texto> }` e só
+     alcançáveis com um escritor fora da fila: separação *"A requisição mudou de status durante a separação (agora
+     ⟨status⟩); a rodada ficou registrada — confira a caixa antes de separar de novo."*; liberação *"A requisição mudou
+     enquanto era liberada para retirada; recarregue e confira antes de liberar."*; exclusão *"A requisição mudou enquanto
+     era excluída; o estorno pode já ter sido feito — confira o estoque e o histórico antes de excluir de novo."*;
+     encerramento *"A requisição mudou enquanto era encerrada; recarregue e confira antes de encerrar."* (O plano previa
+     uma quinta, *"…nada foi estornado; recarregue e tente de novo."* — **removida** na revisão do código, **B452**.) (2) A
+     entrega (`PUT …/entregar`) pode responder **200** com `status` = o status real relido (ex.: `CANCELADO`), não o
+     calculado — **B446**. (3) As chamadas simultâneas na mesma requisição demoram o tempo da fila. (4) A reprovação por
+     valor (`PUT …/rejeitar-valor`) de uma requisição excluída no mesmo instante → **400** *"Apenas requisições aguardando
+     aprovação de valor podem ser reprovadas"*. (5) Linhas novas de log: *"[almoxarifado-separacao] Requisicao ⟨id⟩: saiu
+     de EM_SEPARACAO (agora ⟨status⟩) depois da rodada ⟨id⟩; conferencia limpa, status nao regravado"*, *"[almoxarifado-entrega]
+     Requisicao ⟨id⟩: status mudou para ⟨status⟩ durante a entrega; baixas feitas, status nao regravado (seria ⟨status⟩)"* e
+     *"[almoxarifado-exclusao] Requisicao ⟨id⟩: UPDATE final perdeu (ja excluida) depois do estorno de ⟨n⟩ parte(s) —
+     conferir a consulta A44 (c)"* (esta é erro — pede a A44). **O que fazer:** integrações tratam os 409 como "recarregue
+     e confira", **nunca** como "repita" — na exclusão, repetir estornaria de novo.
+
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -8528,10 +8757,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   com a requisição **excluída** (escondida da lista) de volta a *Em Separação* (achado da revisão, reproduzido; anterior
   à etapa). Não corrigido: quando a guarda perderia, a rodada já está gravada, e consertar exige decidir o que fazer com
   ela. A **A43** não acha esse caso (a requisição excluída fica fora das duas consultas) — a consulta vem com a Etapa 93.
-  Candidata da **Etapa 93**.
+  Candidata da **Etapa 93**. *(Etapa 93: resolvido — a fila por requisição, **B443**; a **A44 (a)** acha o que ficou.)*
 - **(92) Liberar para retirada ou entregar no mesmo instante de uma separação da mesma requisição** — as mesmas
   gravações da separação (e a da liberação para retirada) não conferem o status; dois almoxarifes na mesma requisição.
-  Não medido. Candidata da Etapa 93.
+  Não medido. Candidata da Etapa 93. *(Etapa 93: medido — 5 de 5 em cada corrida, e duas prendiam a requisição — e
+  resolvido pela fila, **B443**; ver **C158** e **C159**.)*
 - **(92) O desfazer da separação que falha, residuais** (**B436**): item gravado antes da falha continua com a
   quantidade separada (motor sem transação); o status devolvido é o da primeira leitura (uma troca *Totalmente* ↔
   *Parcialmente* no mesmo instante volta ao velho, e o próximo recálculo corrige); o lembrete zerado não volta; um
@@ -8546,6 +8776,23 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   integração.)
 - **(92) Duas trocas de status no instante do cancelamento** → recusa sobre uma requisição cancelável (**C155**).
 - **(92) C145, C147, C150, C139** — como na 91; nenhuma muda com esta etapa.
+- **(93) Um processo só** — a fila por requisição mora na memória do servidor, como a por material (**C132**); com dois
+  servidores precisa virar trava no banco. As conferências de status das gravações finais (**B444**–**B448**) são a
+  defesa para esse dia, mas a exclusão ainda estorna antes de gravar.
+- **(93) Reivindicar a exclusão antes do estorno** — o conserto para vários processos; sem ganho hoje (**B447**).
+  Candidata da migração para Postgres.
+- **(93) A alçada de valor reavaliada depois de começar a separação** tira a requisição da máquina: uma *Em Separação*
+  ou *Parcialmente Atendida* cujo custo subiu volta a *Aguardando aprovação de valor*, e reprovar ou cancelar daí deixa
+  material na caixa com a reserva solta (medido no fechamento, sem corrida). Candidata da **Etapa 94**.
+- **(93) Aprovação por valor, conferência e os dois cancelamentos ficam fora da fila** (**B450**) — cada um confere o
+  status ao gravar, mas não foram analisados um a um contra a exclusão (a reprovação por valor foi, e ganhou a guarda).
+- **(93) A fila não tem prazo** — como a por material (**C150**); uma entrega lenta segura só a sua requisição.
+- **(93) Residuais que só um escritor fora da fila alcança:** a separação que responde 409 deixa a janela aberta e, de
+  *Parcialmente Atendida*, um novo **Separar** grava a mesma caixa de novo; se o status virou *Pronta para retirada*, a
+  conferência limpa deixa a requisição presa como no **C158** (**B444**); a entrega que responde 200 com o status
+  *Cancelado* mostra *"Requisição entregue por completo! Estoque baixado."* e oferece a assinatura, que recusa (**B446**);
+  uma troca de status exatamente entre a releitura e a gravação final da exclusão fica fora da trilha dela (**B452**).
+- **(93) C145, C147, C150, C139** — como na 92; nenhuma muda com esta etapa.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -9277,6 +9524,25 @@ da tela contra a da porta 4; a jornada de integração 7; a tela 52 casos novos.
    pediu a requisição não vê **Cancelar Requisição**; o administrador do sistema vê.
 4. **Separação × cancelamento com duas abas** — na mão a coincidência é rara; o clique prova só que nada trava e que a
    tela mostra a mensagem de quem perdeu.
+
+**(93) Nenhum clique foi dado nesta etapa.** Os testes provam o servidor pela rota (com o usuário certo em **cada**
+pedido simultâneo — quem pediu, dois almoxarifes, o administrador — e cada cenário confere quem agiu) e pelo serviço; a
+tela por teste de componente, sem navegador. Números lidos no fechamento: os gestos concorrentes na mesma requisição
+**48** casos (cada par de gestos nos dois encaixes, os cinco gestos com alguém mudando a requisição por fora, a fila que
+não prende quem não disputa); a integração **10** (jornadas de dois almoxarifes até a assinatura, o crítico com a
+segunda conferência, a exclusão pelas duas telas, o serviço chamado direto 10 vezes, o cancelamento da Etapa 92 junto, e
+o controle positivo da A44); a tela **3** casos novos (a janela de exclusão no 409, no 404 e no 400). O que **só o
+navegador** prova:
+
+1. **Duas abas, Entregar nas duas.** Requisição com 4 separados, duas abas como **Almoxarife** (ou dois almoxarifes),
+   cada uma com a janela de entrega de 2 aberta: clicar as duas o mais junto possível. Uma diz *"Entrega parcial
+   registrada. Saldo pendente permanece em aberto."*, a outra *"Requisição entregue por completo! Estoque baixado."*; a
+   requisição fica *Entregue* e o extrato do material mostra **duas** saídas de 2 (não mais).
+2. **Duas abas, Excluir nas duas** (administrador), na mesma requisição entregue: uma diz *"Requisição excluída. Estoque
+   estornado em 1 item(ns)."*; a outra *"Requisição não encontrada"* — e a janela de exclusão **fecha**, a lista recarrega
+   e a linha some. O extrato mostra **uma** entrada de estorno.
+3. **Liberar × rodada nova de crítico** — na mão a coincidência é rara; o clique prova só que nada trava e que quem
+   perdeu vê a mensagem dele.
 
 
 
@@ -19285,9 +19551,9 @@ permissão"*.
 ### O que esta etapa NÃO cobre
 
 1. **A exclusão administrativa no instante de uma separação** — a requisição excluída pode terminar *Em Separação*,
-   escondida da lista (achado da revisão, anterior à etapa; D (92)). Candidata da **Etapa 93**.
+   escondida da lista (achado da revisão, anterior à etapa; D (92)). Candidata da **Etapa 93**. *(Feita — Etapa 93.)*
 2. **Liberar para retirada ou entregar no mesmo instante de uma separação da mesma requisição** (dois almoxarifes na mesma
-   requisição) — as gravações da separação depois do começo não conferem o status; não medido (D (92)). Etapa 93.
+   requisição) — as gravações da separação depois do começo não conferem o status; não medido (D (92)). Etapa 93. *(Feita — Etapa 93.)*
 3. **Redistribuir o material solto pelo cancelamento** para quem esperava (**B441**).
 4. **Cancelar *Aguardando aprovação de valor* pelos outros módulos** — a tela não oferece (e a do almoxarifado também
    não mostra o botão nesse status; só por integração).
@@ -19317,12 +19583,125 @@ A **revisão adversarial do código** (dois revisores, executando) reproduziu **
   (`f3b2b4fb`); a guarda "só desfaz se ainda está *Em Separação*" continua sem teste que a derrube (declarado, D (92)).
 - **O administrador do módulo via Cancelar na tela do almoxarifado e tomava *"Sem permissão"*** (anterior) — consertado
   (**B442**, `627dc667`).
-- **A exclusão administrativa durante a separação** (anterior) — declarada (D (92)), candidata da Etapa 93.
+- **A exclusão administrativa durante a separação** (anterior) — declarada (D (92)), candidata da Etapa 93. *(Feita — Etapa 93.)*
 
+
+## Etapa 93 — Dois gestos na mesma requisição acontecem um depois do outro (2026-10-09)
+
+Quando duas pessoas do almoxarifado — ou a mesma pessoa em duas abas, a fila de separação numa e o detalhe na outra —
+agiam na **mesma requisição** no mesmo instante, cada tela dizia "feito" e a requisição terminava num estado que nenhuma
+das duas pediu. As duas que mexiam em estoque aconteciam **sem atraso nenhum, 10 vezes em 10**: duas entregas juntas
+deixavam o item com metade do que saiu, e a tela oferecia entregar "o que faltava" — com saldo na prateleira, **saíam 6
+para 4 pedidos**; duas exclusões juntas de uma requisição entregue **estornavam duas vezes**, criando estoque que não
+existe. As outras deixavam a requisição presa ou escondida: excluída de volta a *Em Separação*, toda entregue parada em
+*Pronta para retirada*, crítico liberado sem a segunda conferência e sem gesto que o tirasse dali, encerrada de volta a
+*Parcialmente Atendida*. Agora os cinco gestos do almoxarife — **separar, liberar para retirada, entregar, excluir e
+encerrar** — entram numa fila da requisição: o segundo espera o primeiro e decide pelo estado novo, com a mensagem de
+sempre. Requisições diferentes não esperam uma pela outra.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Duas entregas da mesma requisição juntas: estoque baixado duas vezes, o item com a quantidade de uma só, e a tela oferecendo entregar a diferença — 6 saídas para 4 pedidos (**C156**, 10 de 10 sem atraso) | A segunda espera a primeira; o item fica com o que saiu, e o que sobra para entregar é o certo (**B443**, **B446**) |
+| Duas exclusões juntas da mesma requisição entregue: as duas "excluída", estorno em dobro (**C157**, 10 de 10 sem atraso) | A segunda diz *"Requisição não encontrada"*; um estorno só (**B443**) |
+| Exclusão no instante de uma separação, de uma liberação ou de uma entrega: a requisição **excluída** terminava *Em Separação*, *Pronta para retirada* ou *Entregue*, escondida da lista e com material na caixa (achado da Etapa 92) | Termina *Cancelado* e excluída; se a exclusão chega primeiro, o outro gesto recebe a recusa de sempre (**B443**) |
+| Liberar para retirada no instante de uma rodada nova de material crítico: *Pronta para retirada* sem a segunda conferência, e nenhum gesto a tirava dali — com a reserva presa (**C158**) | A liberação passa com a conferência que havia; a rodada nova é recusada com a mensagem de sempre da separação (**B443**, **B445**) |
+| Separação, liberação ou outra entrega no instante de uma entrega: requisição **toda entregue** parada em *Em Separação*, *Pronta para retirada* ou *Parcialmente Atendida* (**C159**) | Termina *Entregue* (**B443**) |
+| Encerrar no instante de uma entrega: "encerrada", e a requisição voltava a *Parcialmente Atendida* (**C160**) | Termina *Encerrada* (**B443**, **B448**) |
+| A segunda exclusão que recebia *"Requisição não encontrada"* deixava a janela de exclusão aberta e a linha na lista até recarregar a tela | A janela fecha, a justificativa é limpa e a lista recarrega (**B452**) |
+| *(achado da revisão)* Reprovar por valor uma requisição no instante em que ela era excluída gravava *Rejeitado* por cima da exclusão | A reprovação recusa com *"Apenas requisições aguardando aprovação de valor podem ser reprovadas"* (**B450**) |
+
+### As regras, com o cenário exato
+
+Preparação: um material **M** com **8** em estoque (4 a mais que o pedido, para a corrida poder sair a mais). **Paula**
+(sem perfil no almoxarifado) cria **R1** pedindo 4 de M; o **Gestor** aprova → R1 **Totalmente Reservada**. O
+**Almoxarife A** separa os 4 → R1 **Em Separação**. Um segundo almoxarife (**B**), ou A numa segunda aba, abre R1 também.
+*(Na mão a coincidência exata é rara — os testes a produzem de propósito, nos dois encaixes e pelas duas telas de
+exclusão; o que o clique prova é que nada trava e que cada tela mostra a mensagem certa.)*
+
+**1. Duas entregas ao mesmo tempo.** A e B abrem **Entregar** em R1, cada um com 2, e confirmam juntos. A primeira:
+*"Entrega parcial registrada. Saldo pendente permanece em aberto."*; a segunda espera e: *"Requisição entregue por
+completo! Estoque baixado."* R1 fica **Entregue**, o item com 4 entregues, o extrato de M com **duas** saídas de 2 e M
+com 4. Uma terceira entrega é recusada: *"Requisição deve estar em separação, pronta para retirada ou parcialmente
+atendida"*.
+
+**2. Duas exclusões ao mesmo tempo.** Com R1 **Entregue**, o administrador abre **Excluir Requisição** em duas abas,
+preenche a justificativa e clica **Confirmar Exclusão** nas duas. A primeira: *"Requisição excluída. Estoque estornado
+em 1 item(ns)."*; a segunda: *"Requisição não encontrada"* — a janela fecha e a lista recarrega sem R1. O extrato de M
+tem **uma** entrada de estorno de 4.
+
+**3. Exclusão × separação.** Uma R2 nova *Totalmente Reservada*: A separa 1 enquanto o administrador exclui. Se a
+separação chega primeiro, a exclusão espera e R2 termina **Cancelado**, excluída, com a reserva solta (o material
+separado volta à prateleira à mão). Se a exclusão chega primeiro, a separação recusa: *"Requisição deve estar aprovada,
+aguardando estoque/compra, em separação ou parcialmente atendida para separar"* — nada separado.
+
+**4. Liberar × rodada nova de material crítico.** R3 de material **crítico**: A separa 1; B confere (**Conferir
+separação**). B clica **Liberar para Retirada** enquanto A separa mais 1. A liberação: *"Requisição liberada para
+retirada!"*; a separação de A recusa com a mensagem do passo 3 — nada gravado, R3 **Pronta para retirada** com a
+conferência de B.
+
+**5. Encerrar × entregar.** R4 **Parcialmente Atendida**: B entrega mais 1 enquanto o administrador clica **Encerrar
+Requisição**. A entrega responde normalmente; o encerramento espera e: *"Requisição encerrada!"* — R4 fica **Encerrada**
+e não volta a *Parcialmente Atendida*.
+
+**6. As mensagens de conflito (raras).** Só aparecem se a requisição for mudada **por fora** no mesmo instante (outro
+servidor, escrita direta no banco) — não há clique que as produza:
+- separação: *"A requisição mudou de status durante a separação (agora ⟨status⟩); a rodada ficou registrada — confira a
+  caixa antes de separar de novo."*
+- liberação: *"A requisição mudou enquanto era liberada para retirada; recarregue e confira antes de liberar."*
+- exclusão: *"A requisição mudou enquanto era excluída; o estorno pode já ter sido feito — confira o estoque e o
+  histórico antes de excluir de novo."* — a janela fecha e a lista recarrega; **não** excluir de novo sem conferir.
+- encerramento: *"A requisição mudou enquanto era encerrada; recarregue e confira antes de encerrar."*
+
+### O que esta etapa NÃO cobre
+
+1. **Mais de um servidor** — a fila mora na memória do servidor (**C132**); as conferências de status das gravações são
+   a defesa para esse dia, mas a exclusão ainda estorna antes de gravar (**B447**).
+2. **Aprovação por valor, conferência e cancelamentos** ficam fora da fila (**B450**); a reprovação por valor ganhou a
+   guarda, as outras não foram analisadas uma a uma contra a exclusão.
+3. **A alçada de valor reavaliada depois de começar a separação** tira a requisição da máquina (medido no fechamento) —
+   **Etapa 94**.
+4. **Prazo para esperar a fila** — não há (**C150**).
+5. **Residuais que só um escritor por fora alcança** (D (93)).
+6. **C145, C147, C150, C139** — como na Etapa 92.
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0) reproduziu, 5 de 5 cada, **13 corridas** em quatro portas (separação, exclusão, liberação,
+entrega e o encerramento vizinho) e mediu a largura real sem gancho: duas entregas e duas exclusões juntas acontecem
+**10 de 10** com os cliques a 0–1 ms. E desmentiu o plano da Etapa 92 em sete pontos — o principal: "conferir o status
+ao gravar" **não fecha** três das corridas (o item da entrega, o estorno que sai antes da gravação, a rodada que não
+muda o status); daí a fila (**B443**). A **revisão do plano** (1 bloqueante, 4 importantes, 6 menores) pegou antes de
+executar: um teste da Etapa 92 que travaria para sempre com a fila; uma exclusão legítima que seria recusada; a trilha da
+exclusão gravando o status de antes da fila; uma mensagem de recusa que sairia vazia.
+
+A **revisão adversarial do código** (dois revisores, executando) reproduziu **8 achados**, nenhum bloqueante:
+- **A exclusão perdia a gravação depois de estornar e o segundo clique estornava de novo** (importante, **introduzido
+  pela própria etapa**: a conferência de status da **B447**; 10 de 10 sem gancho, 6 no estoque para 4 reais) —
+  consertado no servidor e na tela (**B452**, `588c9862`, `2721c17c`).
+- **A reprovação por valor gravava *Rejeitado* sobre a exclusão** (menor, anterior à etapa) — consertado (**B450**,
+  `c4d84b1f`).
+- **A última tentativa do fechamento da separação não conferia se tinha gravado** (menor) — consertado (**B444**,
+  `2661bdd1`).
+- **Cinco sabotagens passavam verde** (testes faltando: um terceiro gesto entrando junto na fila; a marca da liberação
+  lida tarde; dois 403 do encerramento; o anterior da conferência na trilha da separação; a soma do item da entrega) —
+  viraram teste (`92d995a0`).
 
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 93 entregue (2026-10-09):** **dois gestos na mesma requisição acontecem um depois do outro.** Separar,
+  liberar para retirada, entregar, excluir e encerrar entram numa fila da requisição: duas entregas juntas não deixam
+  mais sair material a mais (**C156**), duas exclusões não estornam duas vezes (**C157**), a excluída não volta a *Em
+  Separação* (o achado da Etapa 92), o crítico não sai liberado sem a segunda conferência (**C158**), a toda entregue não
+  fica parada fora de *Entregue* (**C159**) e a encerrada não volta a aberta (**C160**). A revisão do código pegou um
+  defeito que a própria etapa tinha posto (a exclusão estornando de novo no segundo clique — **B452**) e a reprovação por
+  valor gravando por cima da exclusão. **O que é seu:** a consulta **A44**; as decisões **B443 a B452** (a **B447** foi
+  mudada pela **B452**); os avisos **C156 a C162** (o **C161** muda o que quem opera vê; o **C162**, o que quem integra
+  vê); as limitações **(93)** em D e as verificações **(93)** em F. **Próxima: Etapa 94 — a alçada de valor reavaliada depois de começar a separação não devolve a requisição em separação ou parcialmente atendida a *Aguardando aprovação de valor* (medido sem corrida) — ver o plano da
+  Etapa 93.**
 
 - **Etapa 92 entregue (2026-10-08):** **quem pediu por outro módulo consegue desistir da requisição reservada.** O
   **Cancelar Requisição** das telas de requisição do Comercial, Compras, Financeiro, Fábrica e Frota passou a funcionar
@@ -19333,9 +19712,9 @@ A **revisão adversarial do código** (dois revisores, executando) reproduziu **
   dizer o status certo e o log da corrida aprovar × cancelar deixou de acusar falha à toa (**C148** resolvido). O botão
   deixou de aparecer para quem só tomava erro (**C152**, **B442**). **O que é seu:** a consulta **A43**; as decisões
   **B434 a B442** (a **B434** reverte uma parte da **B426**); os avisos **C152 a C155** (o **C154** muda o que quem
-  opera vê; o **C155**, o que quem integra vê); as limitações **(92)** em D e as verificações **(92)** em F. **Próxima:
+  opera vê; o **C155**, o que quem integra vê); as limitações **(92)** em D e as verificações **(92)** em F. ~~**Próxima:
   Etapa 93 — as gravações da separação depois do começo, da liberação para retirada e da exclusão administrativa
-  conferem o status (D (92)) — ver o plano da Etapa 92.**
+  conferem o status (D (92)) — ver o plano da Etapa 92.**~~ *(Feita — Etapa 93.)*
 
 - **Etapa 91 entregue (2026-10-08):** **a aprovação não passa mais na frente de quem esperava o material.** Quem libera
   material (a nota, a inspeção que aprova, a não conformidade que aceita) e quem aprova requisição (o **Aprovar**, o
