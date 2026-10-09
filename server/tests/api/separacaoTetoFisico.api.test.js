@@ -14,6 +14,7 @@
  * ALMOX2 (ALMOXARIFE) separam, conferem, liberam e entregam. Material comum (exceto onde dito), custo 0,1.
  *
  * T0: RN-01, RN-02, RN-04, RN-06 (a)(b)(c) e os indices (B478). T0b: RN-07 (a segunda rodada da entrega, B477).
+ * T2: RN-05 (a aprovacao nao reserva a caixa sem reserva de outro item, B469).
  * Casos `[95 RN-xx]`.
  * Plano: docs/superpowers/plans/2026-10-09-almoxarifado-etapa95-separacao-limitada-ao-fisico.md
  *
@@ -25,6 +26,7 @@ const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const { PERFIS } = require('../../services/almoxarifado/permissions');
 const reservaChegadaService = require('../../services/almoxarifado/reservaChegadaService');
+const requisitionService = require('../../services/almoxarifado/requisitionService');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -439,6 +441,64 @@ const S2 = (nome, q, max, pend, disp) => `${nome}: não é possível separar ${q
     recusa(await entregar(b.R, [[b.ids[0], 2]]), `${nomes.get(m)}: não é possível entregar 2 PC. Máximo: 1 (pendente: 4, disponível: 4)`);
     ok(await entregar(b.R, [[b.ids[0], 1]]));
     ok(await entregar(a.R, [[a.ids[0], 3]]), 'R1 entrega a propria caixa');
+  });
+
+  // ───────────────────────────── RN-05 (T2, B469) ─────────────────────────────
+  // M3: R1 (sem reserva) com os 4 fisicos na caixa; R2 criada e aprovada DEPOIS. A aprovacao reservava a caixa de R1
+  // (o disponivel do motor nao sabe da caixa) e R1 nao entregava mais o que separou.
+  const montarM3 = async (fisicoExtra = 0) => {
+    const m = await material(0);
+    const a = await req([[m, 4]]); await aprovar(a.R);
+    await entrar(m, 4);
+    ok(await separar(a.R, [[a.ids[0], 4]]));
+    if (fisicoExtra) await entrar(m, fisicoExtra);
+    const b = await req([[m, 4]]);
+    return { m, a, b };
+  };
+
+  await test('[95 RN-05] M3 pela rota: a aprovacao de R2 nao reserva a caixa de R1; R1 entrega os 4 que separou', async () => {
+    const { a, b } = await montarM3();
+    await aprovar(b.R);
+    assert.strictEqual(await reservaAtiva(b.R), 0, 'R2 nao reserva a caixa de R1');
+    assert.ok(!['PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA'].includes((await reqRow(b.R)).status),
+      `status pos-aprovacao de sempre (C172), veio ${(await reqRow(b.R)).status}`);
+    ok(await entregar(a.R, [[a.ids[0], 4]]), 'a dona da caixa entrega');
+    assert.strictEqual((await reqRow(a.R)).status, 'ENTREGUE');
+  });
+
+  await test('[95 RN-05] fisico 6 com a mesma caixa de 4: R2 reserva so os 2 livres', async () => {
+    const { a, b } = await montarM3(2);
+    await aprovar(b.R);
+    assert.strictEqual(await reservaAtiva(b.R), 2);
+    assert.strictEqual((await reqRow(b.R)).status, 'PARCIALMENTE_RESERVADA');
+    ok(await entregar(a.R, [[a.ids[0], 4]]), 'a dona da caixa entrega');
+  });
+
+  await test('[95 RN-05] pelo servico: reservarItensAprovacao direto devolve reservas [] no M3', async () => {
+    const { b } = await montarM3();
+    const out = await requisitionService.reservarItensAprovacao(db, b.R, USERS.ADMIN, { numero: 'E95-M3' });
+    assert.deepStrictEqual(out, { status: null, reservas: [] });
+  });
+
+  await test('[95 RN-05] guarda: sem caixa nenhuma, a aprovacao reserva como hoje (fisico 4, pede 4 -> 4)', async () => {
+    const m = await material(0); await entrar(m, 4);
+    const b = await req([[m, 4]]); await aprovar(b.R);
+    assert.strictEqual(await reservaAtiva(b.R), 4);
+    assert.strictEqual((await reqRow(b.R)).status, 'TOTALMENTE_RESERVADA');
+  });
+
+  await test('[95 RN-05] P5b (Fase 2, B2): a PROPRIA caixa sem reserva nao desconta — reserva 6, separa os 2 que faltam', async () => {
+    // Legado da A45: pede 6, 4 na caixa sem reserva, em AGUARDANDO_APROVACAO_VALOR (escritor direto); fisico 6.
+    const m = await material(0); await entrar(m, 6);
+    const a = await req([[m, 6]]);
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET status='AGUARDANDO_APROVACAO_VALOR' WHERE id=?", [a.R]);
+    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada=4 WHERE id=?', [a.ids[0]]);
+    const out = await requisitionService.reservarItensAprovacao(db, a.R, USERS.ADMIN, { numero: 'E95-P5b' });
+    assert.deepStrictEqual([out.status, out.reservas.map((r) => r.quantidade)], ['TOTALMENTE_RESERVADA', [6]]);
+    await dbRun(db, 'UPDATE requisicoes_almoxarifado SET status=? WHERE id=?', [out.status, a.R]);
+    const o = await req([[m, 2]]); await aprovar(o.R);
+    assert.strictEqual(await reservaAtiva(o.R), 0, 'outra requisicao nao reserva o que e de A');
+    ok(await separar(a.R, [[a.ids[0], 2]]), 'A separa os 2 que reservou');
   });
 
   // ───────────────────────────── B478 ─────────────────────────────

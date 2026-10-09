@@ -247,11 +247,15 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}) {
       // (duas reservas de 4 para um item de 4). `disponivel` ja soma o hold do proprio item de volta,
       // entao o livre de verdade e `disponivel - reservado_para_item`.
       // eslint-disable-next-line no-await-in-loop
-      const { disponivel, reservado_para_item: jaReservado } = await saldoDisponivelParaItem(db, item);
+      const { disponivel, reservado_para_item: jaReservado, caixa_outros_itens: caixaOutros } = await saldoDisponivelParaItem(db, item);
       const falta = pendente - jaReservado;
       if (jaReservado > 0) algumSeguro = true;
       if (falta <= 1e-9) continue; // o item ja esta todo seguro
-      const aReservar = Math.min(falta, Math.max(0, disponivel - jaReservado));
+      // Etapa 95 (T2, B469): o livre que a aprovacao reserva desconta a caixa sem reserva dos OUTROS itens ativos do
+      // material — o separado ainda nao entregue, que o disponivel do motor conta como livre. Antes a aprovacao
+      // reservava a caixa de outra requisicao e a dona dela nao entregava mais o que separou (M3). A caixa do PROPRIO
+      // item nao entra (Fase 2, B2): a reserva nova a cobre, e desconta-la reservava de menos (P5b: 2 em vez de 6).
+      const aReservar = Math.min(falta, Math.max(0, disponivel - jaReservado - caixaOutros));
       if (aReservar <= 0) { algumFaltou = true; continue; }
 
       try {
