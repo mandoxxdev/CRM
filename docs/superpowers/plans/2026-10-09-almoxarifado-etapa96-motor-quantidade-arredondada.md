@@ -1,7 +1,7 @@
 # Etapa 96 — o motor grava a quantidade arredondada e não recusa o que existe por ponto flutuante (C176, feature 03 com a 05 e a 07)
 
-> Status: **PLANO (Fase 1) — 2026-10-09.** Nenhuma task executada. Próximo passo: **Fase 2** (revisão do plano por um
-> agente fresco) — ver "Próximo passo" no fim.
+> Status: **PLANO (Fase 1) + Fase 2 (revisão) — 2026-10-09.** Nenhuma task executada. Próximo passo: **T0** — ver
+> "Fase 2 — revisão do plano" (vale sobre o texto) e "Próximo passo" no fim.
 > HEAD de partida: `30b7793a` (main, árvore limpa, sem push).
 > Origem: "Próxima tarefa detalhada — Etapa 96" no fim de
 > `docs/superpowers/plans/2026-10-09-almoxarifado-etapa95-separacao-limitada-ao-fisico.md`; o item **C176** da letra C de
@@ -17,8 +17,8 @@
    compara com folga de 1e-9 ao **recusar**. Aplicado no motor e nos serviços que escrevem as mesmas colunas — não
    espalhado à mão.
 2. **Gravação:** toda escrita incremental de quantidade de estoque (`col = col ± ?`) grava `ROUND(…, 6)`; o
-   `quantidade_atual` sincronizado da soma das linhas também; o par `saldo_anterior`/`saldo_posterior` do livro também.
-3. **Recusa:** as guardas de saldo (17 claims SQL + 7 comparações em JS) comparam com a folga — o pedido que cabe passa,
+   `quantidade_atual` sincronizado da soma das linhas também; o par `saldo_anterior`/`saldo_posterior` do livro também. **(Fase 2, I4)** E as escritas **absolutas** (`SET col = ?`) de coluna de quantidade, cujo valor é calculado em JS.
+3. **Recusa:** as guardas de saldo (18 claims SQL + 12 comparações em JS — **corrigido na Fase 2**, eram "17 + 7" (K1, I1)) comparam com a folga — o pedido que cabe passa,
    inclusive quando o disponível é uma **diferença** de colunas limpas (0,3 − 0,1).
 4. **A porta:** a quantidade pedida é arredondada a 1e-6 ao entrar no motor (o livro e o saldo dizem o mesmo número).
 5. **A requisição:** as colunas do item (`quantidade_separada`, `quantidade_entregue`) gravam arredondado e a entrega
@@ -82,7 +82,10 @@ gravação não conserta nem dado novo.**
 
 Na mesma sonda: `ROUND(x, 6)` do SQLite (3.44.2) contra `Math.round(x * 1e6) / 1e6` do JS — **0/20 002** diferentes em
 valores aleatórios e **0/20 000** em `ROUND(a + b, 6)` de parcelas já arredondadas. O helper pode arredondar dos dois
-lados sem discordar do banco (para positivos; ver B482 sobre o sinal).
+lados sem discordar do banco (para positivos; ver B482 sobre o sinal). **(Corrigido na Fase 2, I6:** a amostra aleatória não tem meios exatos. Nos valores `x,xxxxxx5` o `Math.round`
+simétrico discorda do `ROUND` do SQLite em ~9 500/20 000 e o `toFixed(6)` em ~40/20 000; `ROUND(0.0000005, 6)` = 0 no
+SQLite — o binário de 5e-7 fica abaixo do meio. "Arredondar dos dois lados sem discordar" é **falso** nos meios; a regra
+está na B482 revista.)
 
 ### Sonda 10 — o item da requisição (`e96-sonda-10-item.js`) — **1/3 ERRADO**, com estoque limpo
 
@@ -184,9 +187,14 @@ TAMBOR, SACO); todas as colunas de quantidade são `REAL`; o recebimento aceita 
   unidade (`UN` 0, `KG` 3…) — exigiria coluna nova no cadastro de unidades, migração e a regra de quem pode mudar; não há
   pedido; 1e-6 já é a régua de 19 lugares do módulo e um nanômetro/micrograma está abaixo de qualquer instrumento.
 - **B482 — a porta do motor arredonda a quantidade pedida a 1e-6 (não recusa); se arredondar a 0, a recusa de "zero" de
-  cada porta vale.** O livro e o saldo passam a dizer o mesmo número (sonda 8: `ENTRADA` 0,0000004). O arredondamento é
+  cada porta vale.** O livro e o saldo passam a dizer o mesmo número (sonda 8: `ENTRADA` 0,0000004). ~~O arredondamento é
   **simétrico em zero** (`Math.sign(x) * Math.round(Math.abs(x) * 1e6) / 1e6`), como o `ROUND` do SQLite (que arredonda
-  metade para longe de zero; `Math.round` puro arredonda −0,5 para cima). **Descartado:** recusar quantidade com mais de 6
+  metade para longe de zero; `Math.round` puro arredonda −0,5 para cima).~~ **(Corrigido na Fase 2, I6:)** o `Q.qtd` é
+  `Number(x.toFixed(6))` com `−0 → 0` — medido contra o `ROUND` do SQLite 3.44: **0/20 000** em valores aleatórios e em
+  somas de 0,1/0,2/0,3/0,7, ~40/20 000 nos meios exatos (o `Math.round` simétrico: ~9 500/20 000 nos meios). Nenhuma
+  implementação em JS concorda 100% com o SQLite nos meios; **regra:** nunca arredondar o mesmo valor cru dos dois lados
+  e comparar — quando JS e SQL precisam do mesmo número, um lê o que o outro gravou (na T4, o `arredondado` do relatório
+  vem do `ROUND` do SQL, o mesmo que o `normalizar` grava). **Descartado:** recusar quantidade com mais de 6
   casas — as conversões de unidade produzem frações legítimas (1/3 de caixa) e a recusa apareceria como erro de
   digitação que o operador não fez.
 - **B483 — o legado: consulta (A47) e script opcional; nada roda sozinho no boot.** O script
@@ -202,7 +210,8 @@ TAMBOR, SACO); todas as colunas de quantidade são `REAL`; o recebimento aceita 
   registrado apaga a prova do defeito). **Descartado:** normalizar o livro junto.
 - **B485 — as mensagens de recusa mantêm a literal; só o número sai arredondado.** `getSaldoDisponivel` devolve
   `qtd(...)`; as mensagens que interpolam coluna crua (`Quantidade bloqueada insuficiente: ⟨n⟩`, `Baixa acima do que está
-  no terceiro: há ⟨n⟩ …`, a do envio da remessa, a da entrega) passam o número por `qtd`. Nenhuma literal nova.
+  no terceiro: há ⟨n⟩ …`, a do envio da remessa, a da entrega) passam o número por `qtd`. Nenhuma literal nova. **(Fase 2, I1/I3/K1)** A chamada é `Q.qtd` (namespace — I3) e a lista ganha as recusas que a
+  Fase 2 achou fora dela (R1–R5 na tabela de literais), cada uma com a literal de hoje e o número por `Q.qtd`.
 - **B486 — `disponivelSql()` passa a devolver `ROUND((…), 6)`.** Os 15 arquivos que o leem recebem o disponível limpo
   (a tela, a fila, os relatórios, os claims). O teste-varredura de `saldoEmTerceiros.api.test.js` continua valendo (a
   subtração continua só ali). **Descartado:** arredondar em cada leitor (a deriva espalhada de novo).
@@ -213,11 +222,15 @@ TAMBOR, SACO); todas as colunas de quantidade são `REAL`; o recebimento aceita 
   `quantidade_atual` cru e o pré-preenchimento do modal de entrega mostram 1 em vez de `0.9999999999999999`. **Descartado:**
   formatador nas 7 telas (é apresentação, não o defeito; entra se a T5 medir número cru chegando à tela depois do
   tronco). O `step="1"` dos modais (que impede digitar 0,5 kg na separação e na entrega pela tela) é produto — fica de fora
-  (C181).
+  (C181). **(Corrigido na Fase 2, I5:)** "com o servidor mandando números limpos" **não** valia para a fila e o detalhe da
+  requisição — com colunas limpas (separa 0,3, entrega 0,1) o `entregavel` sai `0.19999999999999998`, porque
+  `requisitionService.js` subtrai em JS (`:~95` `maxEntregar`, `:~622` a fila) e soma `disponivelSql +
+  RESERVADO_PARA_ITEM_SQL` sem `ROUND` (`:~177`, `:~583`). O servidor passa esses números por `Q.qtd` (T3); o cliente
+  continua sem mudar.
 
 ## Regras de negócio
 
-Os testes levam o prefixo `[96 RN-xx]`; o manual cita pelo conteúdo. **"Arredondado"** = `qtd(x)` (B482). **"Cabe"** =
+Os testes levam o prefixo `[96 RN-xx]`; o manual cita pelo conteúdo. **"Arredondado"** = `Q.qtd(x)` (B482; namespace — Fase 2, I3). **"Cabe"** =
 `pedido <= disponível + 1e-9`. "Torto" = valor gravado com resíduo de ponto flutuante (`col <> ROUND(col, 6)`), montado
 nos testes **por escritor direto** (`UPDATE … SET quantidade_atual = 0.9999999999999999`) para o legado, e **pelo motor**
 (0,7 + 0,2 + 0,1) para provar que a gravação nova sai limpa.
@@ -228,19 +241,33 @@ nos testes **por escritor direto** (`UPDATE … SET quantidade_atual = 0.9999999
   0,1 → `quantidade_bloqueada` **1**; o `saldo_posterior` da última movimentação = o `quantidade_atual`; `GET
   /materiais/:id` → `quantidade_atual: 1`. **Varredura do código-fonte** (molde `saldoEmTerceiros`): nenhuma escrita
   `col = col ± ?` de coluna de quantidade em `services/almoxarifado` fora de `qtdSql(...)` — com controle positivo do
-  padrão de busca (uma string com a escrita crua tem de ser achada).
+  padrão de busca (uma string com a escrita crua tem de ser achada). **(Fase 2, I4)** A varredura cobre também as
+  escritas absolutas `SET <coluna de quantidade> = ?` — lista nominal (`stockService.js` `:~1875`, `:~1898`, `:~1906`,
+  `:~2147`, `:~2718` e a de `syncSaldoLocalizacaoPadrao` `:~467`), com o valor por `Q.qtd`; e o livro do estorno
+  (`saldoAntes`/`saldoDepois` de `cancelarMovimentacao`) grava `Q.qtd`. Pela rota: `AJUSTE` sem localização depois de
+  0,7 + 0,2 + 0,1 numa linha de endereço → a linha padrão sem resíduo.
 - **RN-02 (o pedido que cabe passa — inclusive no legado)** — pela rota, cada porta da sonda 6 com o físico torto
   **escrito direto** (`0.9999999999999999`) e pedido de 1: `SAIDA` (sem origem, com origem no endereço, do lote),
   `TRANSFERENCIA`, `AJUSTE_NEGATIVO`, `PERDA`, `POST /reservas`, remessa (criar + enviar), `desbloquear` 1 com bloqueado
   `0.9999…` → 2xx. **Colunas limpas, disponível como diferença** (sonda 9): físico 0,3 e reservado 0,1 → `SAIDA` 0,2 →
-  201; físico 0,3 e bloqueado 0,1 → reserva 0,2 → 201.
+  201; físico 0,3 e bloqueado 0,1 → reserva 0,2 → 201. **(Fase 2, K1 — bloqueante)** Estornar `AJUSTE` 0,7→1 depois de `SAIDA` 0,7: entrada 0,7 no
+  endereço A, `AJUSTE` de A para 1, `SAIDA` 0,7 de A, estornar o `AJUSTE` → **200**, a linha de A **0** (sem a correção:
+  400 *"Não é possível estornar: a localização não comporta a reversão (saldo já consumido)"* — o `delta` em JS é
+  `0.30000000000000004` contra a linha 0,3). **(Fase 2, I1)** E as recusas fora da lista: a devolução de 0,2 de uma
+  saída de 0,3 com 0,1 já devolvido → 2xx (hoje *"… restam 0.19999999999999998"*); o estorno de `TRANSFERENCIA` com o
+  destino torto → 200; `AJUSTE` sem localização para o total retido exato com a retenção como soma
+  (`motivoRecusaAjustePorRetencao`) → passa; a entrega de material crítico com a caixa como diferença (separado 0,3,
+  entregue 0,1, entrega 0,2) → 200.
 - **RN-03 (a folga não inventa estoque)** — físico 0,2 limpo: `SAIDA` 0,200001 → **400** *"Saldo insuficiente.
   Disponível: 0.2 PC"*; reserva 0,200001 → 400 *"Saldo disponível insuficiente: 0.2"*; desbloquear 0,200001 com
   bloqueado 0,2 → 400; transferência 0,200001 de um endereço com 0,2 → 400 *"Saldo insuficiente na localização de
   origem"*; entrega de 0,200001 com 0,2 separado → 400 (literal E1 abaixo). Nada gravado em nenhum.
 - **RN-04 (a quantidade pedida é arredondada na porta)** — `ENTRADA` 1,0000004 → físico **1** e a movimentação com
   `quantidade` **1**; `ENTRADA` 0,0000004 → **400** *"material_id, tipo e quantidade são obrigatórios"* (a recusa de zero
-  do motor), nada gravado; `POST /reservas` 0,0000004 → 400 *"Quantidade da reserva deve ser maior que zero"*.
+  do motor), nada gravado; `POST /reservas` 0,0000004 → 400 *"Quantidade da reserva deve ser maior que zero"*. **(Fase 2, menores)** A porta valida o cru **antes** de
+  arredondar: `Q.qtd(null | '' | true)` → `NaN` (a recusa de sempre, nunca 0 ou 1). `AJUSTE` que arredonda a zero:
+  **com** localização (`zeroPermitidoParaAjuste`) zera a linha — aceito (é o que o operador mandou, a 6 casas); **sem**
+  localização cai na Z1, que diz "obrigatórios" para um número que o operador digitou — declarado; a RN-04 testa os dois.
 - **RN-05 (a mensagem mostra o número arredondado)** — com o legado torto e um pedido que **não** cabe (físico
   `0.9999…`, `SAIDA` 2): 400 *"Saldo insuficiente. Disponível: 1 PC"* — a literal de sempre, sem `0.9999999999999999`.
   Idem *"Saldo disponível insuficiente: 1"*, *"Quantidade bloqueada insuficiente: 1"* e a entrega (*"Máximo: 1 (pendente:
@@ -250,7 +277,9 @@ nos testes **por escritor direto** (`UPDATE … SET quantidade_atual = 0.9999999
   físico **0**, reservado 0, reserva `CONSUMIDA`; (b) físico 1 limpo, separar 0,7 + 0,2 + 0,1 → `quantidade_separada`
   **1**, entregar 1 → 200 `ENTREGUE`; (c) separar 1, entregar 0,7 + 0,2 + 0,1 → `ENTREGUE`, físico **0** (não
   2,8e-17), `quantidade_entregue` **1**, `quantidade_utilizada` **1**; (d) a fila e o detalhe no estado de (a) depois de
-  separar → `entregavel` / `quantidade_entregavel` **1**.
+  separar → `entregavel` / `quantidade_entregavel` **1**. **(Fase 2, I5)** E colunas limpas com entrega parcial:
+  físico 1, separa 0,3, entrega 0,1 → fila `entregavel` e detalhe `quantidade_entregavel` **0,2** (hoje
+  `0.19999999999999998`).
 - **RN-07 (o legado se lista e se normaliza só quando o administrador manda)** — com quatro colunas tortas montadas por
   escritor direto (material, linha de endereço, reserva, item de requisição) e um controle limpo (1,5): a A47 acha as
   quatro e não o 1,5; o script sem `--aplicar` imprime as quatro e **não** grava (os valores continuam tortos); com
@@ -264,7 +293,7 @@ nos testes **por escritor direto** (`UPDATE … SET quantidade_atual = 0.9999999
 ```js
 const QTD_CASAS = 6;
 const QTD_FOLGA = 1e-9;          // folga de comparação: menor que meia unidade da precisão (5e-7), nunca aceita o que não existe
-function qtd(x)                  // Number(x) arredondado a 1e-6, simétrico em zero; NaN/undefined -> NaN (quem chama decide)
+function qtd(x)                  // (Fase 2, I6) Number(n.toFixed(6)), -0 -> 0; null/''/boolean/não-finito -> NaN (quem chama decide)
 function cabe(pedido, disponivel) // qtd-agnóstico: Number(pedido) <= Number(disponivel) + QTD_FOLGA
 function qtdSql(expr)            // `ROUND((${expr}), 6)` — para o lado direito de um SET
 const FOLGA_SQL = `- ${QTD_FOLGA}`; // para o lado direito de um claim: `col >= ? ${FOLGA_SQL}`
@@ -274,6 +303,13 @@ module.exports = { QTD_CASAS, QTD_FOLGA, qtd, cabe, qtdSql, FOLGA_SQL };
 - `EPS` de `stockService.js:284` passa a **ser** `QTD_FOLGA` (mesmo valor, 1e-9 — nada muda para quem já usa);
   `RESERVADA_MENOS_SQL` vira `qtdSql(...)` do mesmo `CASE`.
 - `availabilitySql.disponivelSql(alias)` → `ROUND((…), 6)` (B486).
+- **(Corrigido na Fase 2, I3) Importação por namespace:** `const Q = require('./quantidade')` (caminho relativo de
+  cada arquivo) e chamadas `Q.qtd`, `Q.cabe`, `Q.qtdSql`, `Q.FOLGA_SQL`, `Q.QTD_FOLGA`. `qtd` desestruturado colide com
+  `const qtd` local em `criarReserva` (`stockService.js:~2979`), `liberarReserva` (`:~3068`) e `thirdPartyService.js`
+  `:~115`, `:~361`, `:~451` (`TypeError`/`ReferenceError` reproduzidos). Onde este contrato diz `qtd(...)`, `cabe(...)`,
+  `qtdSql(...)`, `FOLGA_SQL`, leia `Q.`.
+- **(Fase 2, I6) Implementação de `qtd`:** `toFixed(6)` — a que mais concorda com o `ROUND` do SQLite (B482 revista).
+- **(Fase 2, menor) Validação:** `Q.qtd` não converte `null`, `''`, `true` nem não-finito em número (→ `NaN`).
 
 ### Gravação (T1, T2, T3)
 
@@ -283,11 +319,28 @@ Toda escrita incremental de coluna de quantidade **de estoque** passa por `qtdSq
 livro passam por `qtd`. **O custo médio** (`stockService.js:1801-1803`, `ROUND(…, 4)` sobre `quantidade_atual + ?`) **não
 muda** — o SQLite lê os valores antigos da linha no lado direito do `SET`.
 
-### Recusa (T1, T2, T3) — as 24 guardas
+**(Fase 2, I4, K1 e menores) Também:** `syncSaldoLocalizacaoPadrao` (`:~442-469` — `novaLinha` em JS gravada absoluta:
+`Q.qtd(novaLinha)`); as `SET col = ?` absolutas `:~1875`, `:~1898`, `:~1906`, `:~2147`, `:~2718` (valor por `Q.qtd`); o
+livro do estorno (`saldoAntes`/`saldoDepois` de `cancelarMovimentacao`, de `:~2556` ao INSERT `:~2766`) por `Q.qtd`; o
+estorno arredonda `mov.quantidade` com `Q.qtd` antes de usar; as escritas do estorno de `AJUSTE` com localização
+(`:~2694`, `:~2707`) por `Q.qtdSql`. Os serviços sem porta do motor (`thirdPartyService` `:~454`/`:~903`,
+`inspectionService:~291`, a prévia da entrega `requisitionService:~1370`) passam a quantidade recebida por `Q.qtd`
+antes do claim — sem isso, pedidos abaixo de 4e-10 passam pela folga (medido: 1000 de 1000 com físico 0) e geram linhas
+no livro sem mover saldo.
+
+### Recusa (T1, T2, T3) — as 30 guardas (corrigido na Fase 2: eram 24)
 
 - As 17 claims SQL: `>= ?` → `>= ? ${FOLGA_SQL}` (o `?` do valor continua o mesmo parâmetro, já arredondado pela porta).
 - As 7 em JS: `disponivel < quantidade` → `!cabe(quantidade, disponivel)` (`stockService.js:1389`, `:1398`,
   `thirdPartyService.js:235`, `:384`, `scrapDisposalService.js:243`, `requisitionService.js:1370`, `:1405`).
+- **(Fase 2, K1 e I1) Mais seis:** em SQL, o piso de `ajustarSaldoExistente` (`stockService.js:225`, `quantidade >= ?`
+  → `>= ? ${Q.FOLGA_SQL}` — o 18º claim); em JS, o estorno de `AJUSTE` com localização (`:~2688-2690`: `delta =
+  Q.qtd(mov.saldo_posterior - mov.saldo_anterior)` e `!Q.cabe(delta, saldoLoc.quantidade)`), o estorno de
+  `TRANSFERENCIA` (`:~2733`: `!Q.cabe(mov.quantidade, destino.quantidade)`), `motivoRecusaAjustePorRetencao`
+  (`:~80-81`: recusa só se `!Q.cabe(retido, novoTotal)`), a devolução (`returnService.js:~43-44`: `restante =
+  Q.qtd(…)` e `!Q.cabe(quantidade, restante)`) e a entrega de crítico (`requisitionService.js:~1232-1233`: `naCaixa =
+  Q.qtd(…)` e `!Q.cabe(qty, naCaixa)`). **Total: 18 SQL + 12 JS = 30.** Tasks: `:225`, `:80`, `:2690`, `:2733` na T1;
+  a devolução na T2; o crítico na T3.
 
 ### Literais (todas **inalteradas na forma**; muda só o número interpolado — B485)
 
@@ -307,6 +360,11 @@ muda** — o SQLite lê os valores antigos da linha no lado direito do `SET`.
 | S1 | `scrapDisposalService.js:244` | 400 | forma de hoje, com `qtd(disponivel)` |
 | E1 | `requisitionService.js:1371-1373` e `:1406-1408` (entrega) | 400 | `` `${material_nome}: não é possível entregar ${qty} ${unidade}. Máximo: ${qtd(max)} (pendente: ${qtd(pendenteEntrega(item))}, disponível: ${qtd(disponivel)})` `` |
 | Z1 | `stockService.js:982` (zero) | 400 | `material_id, tipo e quantidade são obrigatórios` — alcançada também por quantidade que arredonda a 0 (B482) |
+| R1 (Fase 2) | `stockService.js:~89-91` (`motivoRecusaAjustePorRetencao`) | 400 | forma de hoje (`Ajuste para ${novoTotal} … mínimo aceitável: ${retido} …`), com `Q.qtd` em `novoTotal`, `retido` e cada parte |
+| R2 (Fase 2) | `returnService.js:~46-47` (devolução) | 400 | forma de hoje (`Devolução acima do entregue: … entregou ⟨n⟩, já foram devolvidos ⟨n⟩ e restam ⟨n⟩`), números por `Q.qtd` |
+| R3 (Fase 2) | `requisitionService.js:~1234-1235` (crítico) | 400 | forma de hoje (`… ${qty} excede o separado ainda não entregue (${naCaixa}) …`), números por `Q.qtd` |
+| R4 (Fase 2) | `stockService.js:~2734` (estorno de transferência) | 400 | `Não é possível estornar: o destino não tem mais o saldo transferido` |
+| R5 (Fase 2) | `stockService.js:~2691` (estorno de `AJUSTE` com localização) | 400 | `Não é possível estornar: a localização não comporta a reversão (saldo já consumido)` |
 
 ### O legado — `server/services/almoxarifado/quantidadeLegado.js` + `server/scripts/normalizar-quantidades-almoxarifado.js` (T4)
 
@@ -340,7 +398,10 @@ inventário (já tolera 1e-6); a régua de excedente do recebimento (`EPSILON_DI
    (10), `encaminhamentoExecucao` `:549`, `inspecaoDecisao` `:209`, `medidasInspecao` `:205`,
    `comprasPedidoSituacaoFonte` `:113`, `comprasPedidoStatusAutomatico` `:587`): a T1/T2 roda cada um **e confere se o
    cenário ainda produz a deriva** (imprimir o valor gravado). Os que passarem a montar números limpos continuam verdes
-   **sem provar o epsilon** — reescrever o estado deles por escritor direto, no commit da task, dizendo qual.
+   **sem provar o epsilon** — reescrever o estado deles por escritor direto, no commit da task, dizendo qual. **(Fase 2, menor)** A lista é imprecisa:
+   `conferenciaAcuracidade:154` já monta o estado por **escritor direto** (não fabrica pelo motor) e
+   `encaminhamentoExecucao` tende a vazio. A T1 confere os 7 **um a um** (imprime o valor gravado antes e depois da
+   task) e diz, por arquivo, qual mudou e qual foi reescrito.
 4. Sabotagem só na árvore principal, um controle de cada vez, `perl -0pi` com âncora contada = 1, backup
    `e96-<task>-*.bak` no scratchpad, restauro por cópia com md5 conferido, base **LF**. Mensagens `msg-e96-<task>.txt`.
 
@@ -359,6 +420,17 @@ junction"). T2 e T3 **não** vão em paralelo: as duas sabotam o motor que as ou
   (colunas limpas). **Medir antes e depois, sem edição:** `saldoEmTerceiros` (a varredura), `reportService*`,
   `filaSeparacao`, `separacaoTetoFisico*`. **Controles:** (s1) `disponivelSql` sem o `ROUND` → cai RN-02 colunas limpas
   (reserva 0,2 com bloqueado 0,1 → 400); (s2) `qtd` com `Math.round` sem o sinal → cai o caso `-0.0000005`.
+  **(Corrigido na Fase 2, I2, I3, I6 e menores — vale sobre o texto acima.)** RN-00: `Q.qtd(0.1 + 0.2) === 0.3`,
+  `Q.qtd(-0.30000000000000004) === -0.3`, `Q.qtd(0.0000004) === 0`, `Object.is(Q.qtd(-0.0000004), 0)` (sem −0),
+  `Q.qtd(0.0000005) === 0` e `Q.qtd(1.0000005) === 1.000001` — conferidos também contra o `SELECT ROUND(?, 6)` do banco
+  da suíte —, `Q.qtd(null | '' | true | undefined | 'abc')` → `NaN`, `Q.qtd('0.7') === 0.7`; `Q.cabe` e `Q.qtdSql`
+  como acima. O caso `qtd(-0.0000005) === -0.000001` estava **errado** (o SQLite dá 0). **A T0 destrava sozinha a
+  `SAIDA` sem origem, a reserva manual e a aprovação no legado** (a pré-checagem e o claim leem o disponível
+  arredondado — protótipo do revisor `e96rv-p3.js`): esses vermelhos **mudam para a T0** — RN-02 legado `SAIDA` 1 sem
+  origem → 201, `POST /reservas` 1 → 201, aprovar a requisição de 1 → reserva `[1]`. **Controles:** (s1) como acima;
+  (s2) `qtd` por `Math.round(x * 1e6) / 1e6` → cai `Q.qtd(0.0000005) === 0`; (s3) sem o `−0 → 0` → cai
+  `Object.is(Q.qtd(-0.0000004), 0)`; (s4) sem a validação (`Number(x)` direto) → cai `Q.qtd(null)` `NaN`; (s5)
+  `getSaldoDisponivel` sem `Q.qtd` → cai RN-02 legado `SAIDA` 1 sem origem (a pré-checagem `:~1389` recusa).
 - [ ] **T1 (tronco) — o motor (`stockService.js`): gravação, porta, claims, mensagens (B480, B482, B484, B485).**
   Contrato "Gravação", "Recusa" e M1–M9, Z1. **RN-01** (menos a parte de T2/T3), **RN-02**, **RN-03**, **RN-04**,
   **RN-05** nas portas do motor (saída, ajuste, perda, transferência, lote, endereço, reserva criar/liberar, bloqueio
@@ -372,6 +444,16 @@ junction"). T2 e T3 **não** vão em paralelo: as duas sabotam o motor que as ou
   endereço (o físico volta a `0.9999…` pela soma); (s5) a porta sem `qtd` → cai RN-04 (`1,0000004` grava `1.0000004`);
   (s6) `getSaldoDisponivel` sem `qtd` → cai RN-05; (s7) `FOLGA_SQL` = `- 1e-6` (folga grande demais) → cai RN-03 (`SAIDA`
   0,200001 → 201) — **a prova de que a RN-03 sabe falhar**.
+  **(Corrigido na Fase 2, I2, K1, I1, I4 — vale sobre o texto acima.)** Os claims que leem o **disponível** (`:1519`,
+  `:1689`, `:1778`, `:2551`, `:2988`) já passam com o `ROUND` da T0: o controle deles é "`disponivelSql` sem `ROUND`
+  **e** o claim sem folga" (dois gestos, um controle). Controles de folga isolados só nos claims de **coluna crua**
+  (`:225`, `:309`, `:372`, `:1432`, `:1451`, `:1476`, `:1504`, `:1533`, `:1725`, `:2749`; os de `inspectionService:291` e
+  `thirdPartyService:454`/`:903` na T2). O vermelho "RN-02 legado `SAIDA` sem origem / reserva / aprovação" é da T0; na
+  T1 o vermelho do legado fica nas portas de coluna crua (`SAIDA` com origem e do lote, `TRANSFERENCIA`, desbloqueio) e
+  no físico final (`SAIDA` 1 do legado deixa **0**, não −1,1e-16). O (s7) sabota `QTD_FOLGA` (a origem do `FOLGA_SQL`)
+  = 1e-6 e mede a RN-03 também pela transferência (claim de coluna crua, sem pré-checagem em JS). Entram na T1: K1 (RN-02
+  estorno de `AJUSTE`; controle (s8) `delta` sem `Q.qtd` e sem `Q.cabe` → cai K1), as recusas I1 do motor (`:80`,
+  `:225`, `:2733`) e as escritas I4 (absolutas, `syncSaldoLocalizacaoPadrao`, livro do estorno).
 - [ ] **T2 (tronco) — os outros escritores das colunas do material.** `inspectionService.js` (`:290-291`, `:320`,
   bloquear/desbloquear), `thirdPartyService.js` (`:235`, `:384`, `:453-454`, `:770`, `:902-903`), `receiptService.js`
   (`:1536`, `:1559`, `:2368`), `scrapDisposalService.js:243`. **RN-01** (bloquear 0,7+0,2+0,1 → 1), **RN-02** (remessa
@@ -394,7 +476,9 @@ junction"). T2 e T3 **não** vão em paralelo: as duas sabotam o motor que as ou
   banco da suíte copiado — molde "prova de primeiro boot", memória). **Vermelho antes:** tudo (arquivo novo). **Controles:**
   (s1) `normalizar` ignorando `aplicar` (grava sempre) → cai "sem `--aplicar` não grava"; (s2) a consulta com `ABS(…) >
   1e-12` no lugar de `<>` → cai "acha as quatro" (devolve 0 — o falso negativo da 95); (s3) `COLUNAS_LEGADO` sem
-  `estoque_saldo_almoxarifado` → cai "acha a linha de endereço".
+  `estoque_saldo_almoxarifado` → cai "acha a linha de endereço". **(Fase 2, I7)** A prova da CLI: o teste faz `VACUUM INTO '<tmp>/database.sqlite'` do banco da suíte (o nome que
+  `index.js:~1106` monta sobre `CRM_DATA_DIR`) e roda o script com `CRM_DATA_DIR=<tmp>`. A T4 nasce **depois do commit
+  da T0** (consome `Q.qtd`); o `arredondado` do relatório vem do `ROUND` do SQL (B482 revista).
 - [ ] **T5 (integração — cruza T1, T2, T3 e T4).** Ver a seção abaixo. **Controles:** com a T1 revertida (s1 da T1) →
   cai I1; com a T3 revertida (s1 da T3) → cai I3; com a T2 revertida (s1 da T2) → cai I2.
 - [ ] **T6 — fechamento (skill `fechar-etapa`).** Novidades (seção da 96; **C176** marcado resolvido, dizendo que o
@@ -540,9 +624,87 @@ qualquer escrita direta no banco). O livro (`movimentacoes_almoxarifado`) **não
     `inspectionService:217`, a acuracidade). A 96 não unifica os dois: 1e-9 é folga de **comparação**, 1e-6 é a
     **precisão** — a folga tem de ser menor que meia precisão (5e-7) para nunca aceitar o que não existe (RN-03, s7 da T1).
 
+## Fase 2 — revisão do plano (2026-10-09): 1 bloqueante, 7 importantes, 5 menores → plano revisto (vale sobre o texto acima)
+
+Revisor fresco (plano + specs 03/05/07), com sondas no scratchpad: `e96rv-p1.js` e `e96rv-p2.js` (K1, I1, I3, I4, I5
+pela rota), `e96rv-p3.js` (protótipo **só da T0**: `disponivelSql` com `ROUND` + `getSaldoDisponivel` arredondado,
+sem folga nos claims), `e96rv-sql.js` e `e96rv-sql2.js` (`ROUND` do SQLite contra o JS; folga sem porta). Cada achado
+foi conferido contra o código pelo fio principal antes de entrar (linhas lidas no HEAD `604b37b1`: `stockService.js`
+`:80-81`, `:225`, `:442-469`, `:1875`, `:1898`, `:1906`, `:2147`, `:2688-2694`, `:2707`, `:2718`, `:2733`, `:2979`,
+`:3068`; `returnService.js:43-44`; `requisitionService.js` `:95`, `:177`, `:583`, `:622`, `:1232-1233`;
+`thirdPartyService.js` `:115`, `:361`, `:451`; `index.js:1106`), e o I6 re-medido (`e96-fio-sql2.js`,
+`e96-fio-qtd.js`). Os pontos afetados acima estão marcados **"(corrigido na Fase 2)"** ou **"(Fase 2, …)"**. Nenhuma
+letra nova: **B482**, **B485** e **B488** corrigidas à vista; RN-00, RN-02, RN-04 e RN-06 (d) ganham casos; literais
+R1–R5 novas na tabela.
+
+**Bloqueante**
+
+1. **K1 — o estorno de `AJUSTE` com localização trava depois da T1 (reproduzido).** `cancelarMovimentacao`
+   (`stockService.js:~2688-2694`) calcula `delta = saldo_posterior − saldo_anterior` **em JS** e recusa
+   `if (saldoLoc.quantidade − delta < 0)` sem folga. Entrada 0,7 em A, `AJUSTE` de A para 1 (`delta`
+   `0.30000000000000004`), `SAIDA` 0,7 (com a T1 a linha fica **0,3** limpa), estornar o `AJUSTE` → 400 *"Não é possível
+   estornar: a localização não comporta a reversão (saldo já consumido)"*. A gravação limpa da T1 tira o resíduo que, por
+   acaso, compensava o `delta` torto — a T1 sem esta correção **cria** um gesto preso. **Corrigido:** `delta =
+   Q.qtd(…)`, `!Q.cabe(delta, saldoLoc.quantidade)`, `Q.qtdSql` nas escritas `:~2694`/`:~2707`; RN-02 ganha o caso
+   (→ 200, linha 0); controle (s8) da T1; literal R5.
+
+**Importantes**
+
+1. **I1 — recusas fora da lista (reproduzidas).** `motivoRecusaAjustePorRetencao` (`stockService.js:~80-81`), a
+   devolução (`returnService.js:~43-44` — *"… restam 0.19999999999999998"*), a entrega de crítico
+   (`requisitionService.js:~1232-1233`, `naCaixa` é diferença), o estorno de `TRANSFERENCIA` (`:~2733`) e o piso de
+   `ajustarSaldoExistente` (`:~225`, o 18º claim). **Corrigido:** somadas ao contrato "Recusa" (30, não 24) e às
+   literais (R1–R5); o total "17 claims + 7 em JS" estava errado.
+2. **I2 — a T0 sozinha já destrava a `SAIDA`, a reserva e a aprovação no legado (reproduzido, `e96rv-p3.js`).** Com o
+   `ROUND` no `disponivelSql` e `getSaldoDisponivel` arredondado, a pré-checagem e os claims que leem o disponível passam
+   sem folga nenhuma. Consequência: os controles (s1) da T1 em `:1778`/`:2988` e o "vermelho antes" da T1 para esses
+   gestos seriam **vazios**. **Corrigido:** controles de folga isolados só nos claims de coluna crua; nos que leem o
+   disponível, o controle é `disponivelSql` sem `ROUND` **e** claim sem folga; o (s7) sabota `QTD_FOLGA` (origem do
+   `FOLGA_SQL`) e mede a RN-03 também pela transferência; o vermelho que a T0 vira mudou para a T0.
+3. **I3 — `qtd` colide com variáveis locais (reproduzido).** `const qtd` em `criarReserva` (`:~2979`), `liberarReserva`
+   (`:~3068`) e `thirdPartyService.js` `:~115`, `:~361`, `:~451` — desestruturar `{ qtd }` no topo dá `TypeError`
+   (`qtd(...)` chamando o número local) ou `ReferenceError` (TDZ). **Decidido:** namespace `const Q =
+   require('./quantidade')`; contrato, M8 e T1/T2 das literais leem `Q.`.
+4. **I4 — escritas invisíveis à varredura (reproduzido).** `syncSaldoLocalizacaoPadrao` (`:~442-469`, `novaLinha` em JS
+   gravada absoluta), o livro do estorno (`saldoAntes`/`saldoDepois` em JS, INSERT `:~2766`) e as `SET col = ?`
+   absolutas `:~1875`, `:~1898`, `:~1906`, `:~2147`, `:~2718` gravam o número do JS sem passar por `qtdSql`.
+   **Corrigido:** `Q.qtd` no valor; a varredura da RN-01 lista essas uma a uma; o livro de `cancelarMovimentacao` com
+   `Q.qtd`.
+5. **I5 — a fila e o detalhe mandam número cru com colunas limpas (reproduzido).** Separa 0,3, entrega 0,1 →
+   `entregavel` `0.19999999999999998` (`requisitionService.js:~622`, `:~95` `maxEntregar`; `disponivelSql +
+   RESERVADO_PARA_ITEM_SQL` sem `ROUND` em `:~177`/`:~583`). **Decidido:** `Q.qtd` nesses pontos no servidor (T3); o
+   cliente continua sem mudar — a B488 dizia que o servidor já mandaria limpo: errado, corrigido à vista. RN-06 (d)
+   ganha a entrega parcial.
+6. **I6 — `qtd` em JS ≠ `ROUND` do SQLite nos meios exatos (re-medido).** Nos valores `x,xxxxxx5`: `Math.round`
+   simétrico discorda em ~9 500/20 000, `toFixed(6)` em ~40/20 000; `ROUND(0.0000005, 6)` = 0 (o binário fica abaixo do
+   meio — o RN-00 `qtd(-0.0000005) === -0.000001` estava errado). **Decidido:** `toFixed(6)` com `−0 → 0` (a que mais
+   concorda, medida: 0/20 000 fora dos meios) e a **regra**: nunca arredondar o mesmo valor cru dos dois lados e
+   comparar — na T4 o `arredondado` vem do `ROUND` do SQL, o mesmo que o `normalizar` grava. B482 e RN-00 corrigidos.
+7. **I7 — a prova da CLI da T4 não dizia como o banco chega ao script.** **Corrigido:** `VACUUM INTO
+   '<tmp>/database.sqlite'` (o nome que `index.js:~1106` monta) e `CRM_DATA_DIR=<tmp>`; a T4 nasce depois do commit da
+   T0.
+
+**Menores**
+
+1. **M1 — validar o cru antes de arredondar:** `Number(null)` = 0, `Number(true)` = 1, `Number('')` = 0 — `Q.qtd`
+   devolve `NaN` nesses e nunca `−0`. Contrato e RN-00/RN-04.
+2. **M2 — `AJUSTE` que arredonda a zero:** com localização zera a linha (aceito); sem localização a Z1 ("obrigatórios")
+   engana — declarado, a RN-04 testa os dois.
+3. **M3 — o estorno arredonda `mov.quantidade`** com `Q.qtd` (o livro antigo é torto — B484).
+4. **M4 — serviços sem porta do motor** (`thirdPartyService:~454`/`:~903`, `inspectionService:~291`, prévia da entrega
+   `:~1370`) passam a quantidade recebida por `Q.qtd`: com folga e sem porta, 1000 pedidos de 4e-10 passam com físico 0
+   (`e96rv-sql.js` (3)) e geram 1000 linhas no livro.
+5. **M5 — a lista da Técnica 3 é imprecisa:** `conferenciaAcuracidade:154` é escritor direto; `encaminhamentoExecucao`
+   tende a vazio. A T1 confere os 7 um a um.
+
+**Sem achado (atacados pelo revisor):** custo médio (`:~1801-1803` lê os valores antigos da linha; `:~2133` idem);
+concorrência (os claims continuam atômicos, a folga entra no mesmo `WHERE`); linhas negativas (`ROUND` de negativo é
+simétrico no SQLite; `claimSaldoSemLote` lê `quantidade > 0` e não muda).
+
 ## Próximo passo
 
-**Fase 2** — um agente fresco (sem este contexto) com este plano, a spec 03 (motor), a 05 e a 07, e as quatro perguntas
+**(Fase 2 feita — ver a seção acima.) Próximo: T0**, depois T1, T2, T3 (T4 em worktree depois do commit da T0), T5,
+T6. ~~**Fase 2** — um agente fresco (sem este contexto) com este plano, a spec 03 (motor), a 05 e a 07, e as quatro perguntas
 da skill (contratos com erro e literal; RN × spec; independência real do galho T4; **cada RN traçada até o último
 gesto** — entrada → transferência → reserva → saída; aprovar → separar → entregar → encerrar; bloquear → desbloquear;
 enviar → retornar → encerrar remessa; inventário aberto → concluir). Pontos que a Fase 2 deve atacar em especial:
@@ -553,4 +715,4 @@ localização e 0,0000004 vira 0 e **zera** o endereço — aceitável ou recusa
 `estoque_saldo_almoxarifado` com saldo negativo (o "sem localização atribuída" da 51) — `ROUND` de negativo e a régua
 `quantidade > 0` do `claimSaldoSemLote`; (4) `custo_medio` — a T1 diz que não muda; a Fase 2 confere a leitura de
 `:1801-1803` e `:2133`; (5) a T4 em worktree: o teste da CLI copia o banco — conferir que não depende de nada que a T1–T3
-mudam (senão vira tronco). Corrigir o plano, **depois** executar T0.
+mudam (senão vira tronco). Corrigir o plano, **depois** executar T0.~~
