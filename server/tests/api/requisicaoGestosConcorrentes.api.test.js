@@ -1045,6 +1045,40 @@ const esperarFila = async (R, ms = 3000) => {
     assert.strictEqual((await trilhaDe(x.R, 'ENCERRAMENTO')).length, 0);
   });
 
+  // ── RN-08 (f) — a reprovacao por valor confere status e ativo (Fase 5, achado B) ──
+  // O /rejeitar-valor fica fora da trava e gravava `UPDATE ... WHERE id=?`: a exclusao que rodasse entre a leitura e
+  // o UPDATE dele era atropelada (CANCELADO/ativo=0 virava REJEITADO/ativo=0, com trilha REJEICAO_VALOR depois da
+  // EXCLUSAO — sonda e93rv1-b). Agora o UPDATE confere `status='AGUARDANDO_APROVACAO_VALOR' AND ativo=1` e `changes`
+  // (molde do aprovarValor); perdeu -> 400 com a literal de hoje.
+  const RJ0 = 'Apenas requisições aguardando aprovação de valor podem ser reprovadas';
+  await test('[93 RN-08] (f) (Fase 5, achado B) no UPDATE do /rejeitar-valor a exclusao roda inteira -> exclusao 200; rejeitar-valor 400 RJ0; CANCELADO/ativo=0 (nao REJEITADO); sem trilha REJEICAO_VALOR', async () => {
+    desarmar();
+    const x = await montar({ status: 'AGUARDANDO_APROVACAO_VALOR' });
+    const g = armarAguardando(/SET\s+status\s*=\s*'REJEITADO',\s*rejeicao_motivo\s*=\s*\?,\s*rejeicao_valor_motivo/, () => excluir('ADMIN', x.R));
+    const rj = await comPrazo(como('ADMIN2').put(`${API}/requisicoes/${x.R}/rejeitar-valor`, { motivo: 'caro demais para o centro' }), 8000, 'rejeitar-valor');
+    desarmar();
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(g.disparos, 1, `o gancho disparou ${g.disparos} vez(es)`);
+    assert.strictEqual(g.resposta.status, 200, `exclusao: ${g.resposta.status} ${JSON.stringify(g.resposta.body)}`);
+    assert.strictEqual(rj.status, 400, `rejeitar-valor: ${rj.status} ${JSON.stringify(rj.body)}`);
+    assert.strictEqual(rj.body.error, RJ0);
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'CANCELADO', `status ${f.status} (a reprovacao gravou por cima da exclusao)`);
+    assert.strictEqual(f.ativo, 0);
+    assert.strictEqual((await trilhaDe(x.R, 'REJEICAO_VALOR')).length, 0, 'trilha REJEICAO_VALOR de uma reprovacao que perdeu');
+  });
+
+  await test('[93 RN-08] (f) controle: sem corrida, o /rejeitar-valor de sempre -> 200 REJEITADO e trilha REJEICAO_VALOR', async () => {
+    desarmar();
+    const x = await montar({ status: 'AGUARDANDO_APROVACAO_VALOR' });
+    const rj = await como('ADMIN2').put(`${API}/requisicoes/${x.R}/rejeitar-valor`, { motivo: 'caro demais para o centro' });
+    assert.strictEqual(rj.status, 200, `rejeitar-valor: ${rj.status} ${JSON.stringify(rj.body)}`);
+    assert.strictEqual(rj.body.status, 'REJEITADO');
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'REJEITADO'); assert.strictEqual(f.ativo, 1);
+    assert.strictEqual((await trilhaDe(x.R, 'REJEICAO_VALOR')).length, 1);
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed ? 1 : 0);

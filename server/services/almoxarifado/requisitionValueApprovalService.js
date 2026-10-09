@@ -246,13 +246,22 @@ async function rejeitarValor(db, requisicaoId, user, motivo) {
 
   const motivoFinal = motivo?.trim() || 'Reprovada pelo aprovador de alto valor';
 
-  await dbRun(db,
+  // Etapa 93 (Fase 5, achado B): o UPDATE confere o status e `ativo`, e `changes` (molde do aprovarValor acima).
+  // Antes era `WHERE id = ?`: esta porta fica fora da trava por requisicao, e a exclusao que rodasse entre a
+  // leitura e o UPDATE era atropelada — CANCELADO virava REJEITADO numa requisicao ja excluida, com a trilha
+  // REJEICAO_VALOR depois da EXCLUSAO. Perdeu -> o 400 de sempre (o que a leitura teria dito um instante depois).
+  const upd = await dbRun(db,
     `UPDATE requisicoes_almoxarifado
      SET status = 'REJEITADO', rejeicao_motivo = ?, rejeicao_valor_motivo = ?,
          aprovador_valor_id = ?, aprovador_valor_nome = ?,
          updated_at = CURRENT_TIMESTAMP, ultimo_lembrete_enviado = NULL
-     WHERE id = ?`,
-    [motivoFinal, motivoFinal, user.id, user.nome || user.email, requisicaoId]);
+     WHERE id = ? AND status = ? AND COALESCE(ativo, 1) = 1`,
+    [motivoFinal, motivoFinal, user.id, user.nome || user.email, requisicaoId, STATUS_AGUARDANDO]);
+  if (!upd.changes) {
+    const err = new Error('Apenas requisições aguardando aprovação de valor podem ser reprovadas');
+    err.status = 400;
+    throw err;
+  }
 
   const atualizado = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
   notificarSolicitanteValor(db, atualizado, 'rejeitado', motivoFinal).catch((err) => {
