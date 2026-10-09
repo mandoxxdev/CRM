@@ -267,7 +267,66 @@ const comPrazo = (p, ms, rotulo) => Promise.race([
     assert.strictEqual(Number(rs[0].usuario_id), USERS.ALMOX.id, 'quem separou foi o ALMOXARIFE');
   });
 
-  void R1;
+
+  // ══════════════ T1 — os quatro status novos pela rota dos outros modulos (RN-03) e a ordem inversa (RN-04) ══════════════
+  for (const status of ['AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA']) {
+    for (const comQtd of [true, false]) {
+      // eslint-disable-next-line no-await-in-loop
+      await test(`[92 RN-03] rota outros ${status} ${comQtd ? 'com' : 'sem'} quantidade: cancelamento no instante da reivindicacao -> separacao 400 S1, CANCELADO, nada gravado`, async () => {
+        const ctx = await montar(status, { reservar: COM_RESERVA.includes(status) });
+        let cancel = null;
+        const g = armar(RE_EM_SEPARACAO, async () => {
+          cancel = await comPrazo(como('S').put(rotaCancelar('outros', ctx.R)), 5000, 'cancelamento no gancho');
+        });
+        let sep;
+        const oi = console.info; console.info = () => {};
+        try {
+          sep = await comPrazo(como('ALMOX').put(`/api/almoxarifado/requisicoes/${ctx.R}/separar`, {
+            itens_separados: comQtd ? [{ item_id: ctx.item, quantidade_separada: 1 }] : [],
+          }), 10000, 'separacao');
+        } finally { desarmar(); console.info = oi; }
+        assert.strictEqual(sep.status, 400, `separação 400: veio ${sep.status} ${JSON.stringify(sep.body)}`);
+        assert.strictEqual(sep.body.error, S1);
+        await afirmarNadaGravado(ctx, cancel, g);
+      });
+    }
+  }
+
+  // RN-04 (ordem inversa): a separacao inteira roda no instante do UPDATE do cancelamento.
+  const RE_CANCELADO = /SET\s+status\s*=\s*'CANCELADO'/;
+  const R2 = 'Não é possível cancelar neste status';
+  const ordemInversa = async (rota, status) => {
+    const ctx = await montar(status, { reservar: true });
+    let sep = null;
+    const g = armar(RE_CANCELADO, async () => {
+      sep = await comPrazo(como('ALMOX').put(`/api/almoxarifado/requisicoes/${ctx.R}/separar`, {
+        itens_separados: [{ item_id: ctx.item, quantidade_separada: 1 }],
+      }), 10000, 'separacao no gancho');
+    });
+    let cancel;
+    try {
+      cancel = await comPrazo(como('S').put(rotaCancelar(rota, ctx.R)), 15000, 'cancelamento');
+    } finally { desarmar(); }
+    assert.strictEqual(g.disparos, 1, `o gancho disparou ${g.disparos} vez(es) — rodada sem valor`);
+    assert.ok(!g.erro, `a separacao no gancho lancou: ${g.erro && g.erro.message}`);
+    assert.ok(sep, 'a separacao nao rodou no gancho');
+    assert.strictEqual(sep.status, 200, `separacao: ${sep.status} ${JSON.stringify(sep.body)}`);
+    assert.strictEqual(sep.body.status, 'EM_SEPARACAO');
+    assert.strictEqual(cancel.status, 400, `cancelamento: ${cancel.status} ${JSON.stringify(cancel.body)}`);
+    assert.strictEqual(cancel.body.error, rota === 'outros' ? R1 : R2);
+    assert.strictEqual(await st(ctx.R), 'EM_SEPARACAO', 'o cancelamento passou por cima da separacao');
+    assert.strictEqual((await reserva(ctx.rid)).status, 'ATIVA');
+    assert.strictEqual(Number((await itemRow(ctx.item)).quantidade_separada), 1);
+    assert.strictEqual((await trilha(ctx.R, 'CANCELAMENTO')).length, 0);
+    const rs = await rodadas(ctx.R);
+    assert.strictEqual(rs.length, 1);
+    assert.strictEqual(Number(rs[0].usuario_id), USERS.ALMOX.id, 'quem separou foi o ALMOXARIFE');
+  };
+  for (const status of ['APROVADO', 'TOTALMENTE_RESERVADA']) {
+    // eslint-disable-next-line no-await-in-loop
+    await test(`[92 RN-04] rota outros ${status}: a separacao inteira no instante do UPDATE do cancelamento -> separacao 200, cancelamento 400 R1, EM_SEPARACAO, reserva ATIVA`, () => ordemInversa('outros', status));
+  }
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed > 0 ? 1 : 0);

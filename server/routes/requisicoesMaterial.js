@@ -22,6 +22,7 @@ const requisitionService = require('../services/almoxarifado/requisitionService'
 const reservationService = require('../services/almoxarifado/reservationService');
 const { registrarAuditoria } = require('../services/almoxarifado/audit');
 const { dbRun, dbGet } = require('../services/almoxarifado/db');
+const { CANCELAVEIS_OUTROS_MODULOS } = require('../services/almoxarifado/requisitionStateMachine');
 const { disponivelSql } = require('../services/almoxarifado/availabilitySql');
 const requisitionCreateService = require('../services/almoxarifado/requisitionCreateService');
 const alertService = require('../services/almoxarifado/alertService');
@@ -343,23 +344,35 @@ module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticat
   // presa (de APROVADO, ou de PENDENTE na janela da aprovacao), e presa para sempre: o recalculo da 76 nao
   // toca requisicao cancelada e a expiracao e opt-in. Agora, como o cancelamento do almoxarifado
   // (routes/almoxarifado.js, PUT /requisicoes/:id/cancelar), solta as reservas e grava a trilha — as duas
-  // best-effort: o cancelamento ja esta efetivado e e o que o usuario pediu. O UPDATE guardado, os status
-  // aceitos e a resposta sao os de antes (cancelar requisicao ja reservada por aqui continua 400 — B426).
+  // best-effort: o cancelamento ja esta efetivado e e o que o usuario pediu.
   // `reservationService.liberarReservasDaRequisicao` e chamada PELO OBJETO (costura dos testes) e engole a
   // falha de cada reserva, devolvendo `{ liberadas, erros }`: por isso ha dois warns — L2 (lancou) e L2b
   // (voltou com reserva presa). Este arquivo e varrido pelo `saldoEmTerceiros`: nada de conta de disponivel.
+  //
+  // Etapa 92 (T1, C149, B434/B435): a rota aceitava so PENDENTE/APROVADO, mas a tela dos outros modulos
+  // mostra Cancelar em seis status — em quatro deles quem pediu tomava 400 e as reservadas seguravam o
+  // material ate o almoxarife cancelar. Agora aceita CANCELAVEIS_OUTROS_MODULOS (a lista da tela, RN-07),
+  // so para quem pediu, com compare-and-set contra o status LIDO: perdeu (o recalculo da 76 trocou
+  // TOTALMENTE <-> PARCIALMENTE, ou a separacao reivindicou) -> rele e tenta UMA vez mais; a trilha grava o
+  // status que o UPDATE de fato trocou (C148 (2)). Descartados: `status IN (lista)` sem o lido (a trilha
+  // podia mentir) e tentar sem teto.
   app.put('/api/requisicoes-material/:id/cancelar', async (req, res) => {
     const id = req.params.id;
-    let antes = null;
+    let trocado = null;
+    let numero = null;
     try {
-      // So para a trilha (o status de ANTES; depois do UPDATE ja e CANCELADO).
-      antes = await dbGet(db, 'SELECT status, numero FROM requisicoes_almoxarifado WHERE id = ? AND solicitante_id = ?', [id, req.user.id]);
-      const r = await dbRun(db,
-        `UPDATE requisicoes_almoxarifado SET status='CANCELADO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
-
-       WHERE id=? AND solicitante_id=? AND status IN ('PENDENTE','APROVADO')`,
-        [req.params.id, req.user.id]);
-      if (r.changes === 0) {
+      for (let tentativa = 0; tentativa < 2 && !trocado; tentativa++) {
+        // eslint-disable-next-line no-await-in-loop
+        const row = await dbGet(db, 'SELECT status, numero FROM requisicoes_almoxarifado WHERE id = ? AND solicitante_id = ?', [id, req.user.id]);
+        if (!row || !CANCELAVEIS_OUTROS_MODULOS.includes(row.status)) break;
+        // eslint-disable-next-line no-await-in-loop
+        const r = await dbRun(db,
+          `UPDATE requisicoes_almoxarifado SET status='CANCELADO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
+         WHERE id=? AND solicitante_id=? AND status=?`,
+          [id, req.user.id, row.status]);
+        if (r.changes > 0) { trocado = row.status; numero = row.numero; }
+      }
+      if (!trocado) {
         return res.status(400).json({ error: 'Requisição não encontrada ou não pode ser cancelada' });
       }
     } catch (err) {
@@ -377,8 +390,8 @@ module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticat
       await registrarAuditoria(db, {
         entidade: 'requisicao', entidade_id: Number(id), acao: 'CANCELAMENTO',
         usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
-        dados_anteriores: { status: antes?.status },
-        dados_novos: { status: 'CANCELADO', numero: antes?.numero, via: 'requisicoes-material' },
+        dados_anteriores: { status: trocado },
+        dados_novos: { status: 'CANCELADO', numero, via: 'requisicoes-material' },
         justificativa: null,
       });
     } catch (e) {

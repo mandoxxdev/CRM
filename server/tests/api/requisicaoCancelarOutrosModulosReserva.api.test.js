@@ -122,14 +122,16 @@ process.on('exit', (code) => {
     assert.strictEqual((await trilha(R)).length, 0);
   });
 
-  await test('[91 RN-10] (d) TOTALMENTE_RESERVADA -> o mesmo 400 (declarado), reserva ATIVA', async () => {
+  // Invertido na Etapa 92 (B434) — a regra mudou: a 91 declarava o 400 aqui (B426, "cancelar ja reservada
+  // pelos outros modulos fica de fora"); a tela sempre ofereceu o botao nesse status, e agora a rota aceita.
+  await test('[91 RN-10] (d) TOTALMENTE_RESERVADA -> 200, CANCELADO, reserva LIBERADA (invertido na Etapa 92, B434)', async () => {
     const { m, R, rid } = await montar('TOTALMENTE_RESERVADA');
     const c = await cancelar(S, R);
-    assert.strictEqual(c.status, 400, JSON.stringify(c.body));
-    assert.strictEqual(c.body.error, RECUSA);
-    assert.strictEqual(await st(R), 'TOTALMENTE_RESERVADA');
-    assert.strictEqual((await reserva(rid)).status, 'ATIVA');
-    assert.strictEqual(await reservada(m), 4);
+    assert.strictEqual(c.status, 200, JSON.stringify(c.body));
+    assert.deepStrictEqual(c.body, { success: true });
+    assert.strictEqual(await st(R), 'CANCELADO');
+    assert.strictEqual((await reserva(rid)).status, 'LIBERADA');
+    assert.strictEqual(await reservada(m), 0);
   });
 
   // ══════════════ (e) — falhas best-effort ══════════════
@@ -166,6 +168,144 @@ process.on('exit', (code) => {
     assert.strictEqual((await reserva(rid)).status, 'ATIVA');
     assert.ok(linhas.includes(L2(R, 'banco caiu 91T5')), `sem o warn L2: ${JSON.stringify(linhas)}`);
     assert.strictEqual((await trilha(R)).length, 1, 'a auditoria tem de sair mesmo com a liberacao lancando');
+  });
+
+
+  // ══════════════ Etapa 92 (T1, C149, B434/B435) — os seis status da tela, compare-and-set ══════════════
+  const CANCELAVEIS = ['PENDENTE', 'APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA'];
+  const SEM_RESERVA = ['AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA'];
+  // Requisicao de S no status, com reserva ATIVA de 4 (menos nos AGUARDANDO_*, que esperam saldo).
+  const montar92 = async (status, { reservar = !SEM_RESERVA.includes(status) } = {}) => {
+    if (reservar) return montar(status);
+    const m = await material(4);
+    const cr = await as(S, () => request(app).post('/api/requisicoes-material').send({
+      setor: 'Comercial', urgencia: 'NORMAL', os_referencia: 'OS-92T1', itens: [{ material_id: m, quantidade: 4 }],
+    }).then((x) => x));
+    assert.strictEqual(cr.status, 201, JSON.stringify(cr.body));
+    await dbRun(db, 'UPDATE requisicoes_almoxarifado SET status = ? WHERE id = ?', [status, cr.body.id]);
+    return { m, R: cr.body.id, rid: null };
+  };
+
+  for (const status of CANCELAVEIS) {
+    // eslint-disable-next-line no-await-in-loop
+    await test(`[92 RN-01] (a) ${status}: S cancela pelos outros modulos -> 200, CANCELADO, reserva solta, r=0, uma trilha com o status de antes`, async () => {
+      const { m, R, rid } = await montar92(status);
+      const c = await cancelar(S, R);
+      assert.strictEqual(c.status, 200, JSON.stringify(c.body));
+      assert.deepStrictEqual(c.body, { success: true });
+      assert.strictEqual(await st(R), 'CANCELADO');
+      if (rid) {
+        assert.strictEqual((await reserva(rid)).status, 'LIBERADA');
+        const libs = await liberacoes(m);
+        assert.strictEqual(libs.length, 1, JSON.stringify(libs));
+        assert.strictEqual(libs[0].motivo, MOTIVO_MOV);
+      } else {
+        assert.strictEqual((await liberacoes(m)).length, 0);
+      }
+      assert.strictEqual(await reservada(m), 0);
+      const t = await trilha(R);
+      assert.strictEqual(t.length, 1, JSON.stringify(t));
+      assert.strictEqual(JSON.parse(t[0].dados_anteriores).status, status);
+      const novos = JSON.parse(t[0].dados_novos);
+      assert.strictEqual(novos.status, 'CANCELADO');
+      assert.strictEqual(novos.via, 'requisicoes-material');
+      assert.strictEqual(Number(t[0].usuario_id), S.id);
+    });
+  }
+
+  for (const status of ['RASCUNHO', 'AGUARDANDO_APROVACAO_VALOR', 'EM_SEPARACAO', 'PRONTA_PARA_RETIRADA',
+    'PARCIALMENTE_ATENDIDA', 'ENTREGUE', 'ENCERRADA', 'REJEITADO', 'CANCELADO']) {
+    // eslint-disable-next-line no-await-in-loop
+    await test(`[92 RN-01] (b) ${status}: S tenta cancelar -> 400 R1, nada muda, sem trilha`, async () => {
+      const { R } = await montar92(status, { reservar: false });
+      const c = await cancelar(S, R);
+      assert.strictEqual(c.status, 400, JSON.stringify(c.body));
+      assert.strictEqual(c.body.error, RECUSA);
+      assert.strictEqual(await st(R), status);
+      assert.strictEqual((await trilha(R)).length, 0);
+    });
+  }
+
+  for (const status of CANCELAVEIS) {
+    // eslint-disable-next-line no-await-in-loop
+    await test(`[92 RN-01] (c) ${status}: OUTRO usuario -> 400 R1, status igual, reserva ATIVA`, async () => {
+      const { m, R, rid } = await montar92(status);
+      const c = await cancelar(OUTRO, R);
+      assert.strictEqual(c.status, 400, JSON.stringify(c.body));
+      assert.strictEqual(c.body.error, RECUSA);
+      assert.strictEqual(await st(R), status);
+      if (rid) {
+        assert.strictEqual((await reserva(rid)).status, 'ATIVA');
+        assert.strictEqual(await reservada(m), 4);
+      }
+      assert.strictEqual((await trilha(R)).length, 0);
+    });
+  }
+
+  await test('[92 RN-01] (d) id inexistente -> 400 R1', async () => {
+    const c = await cancelar(S, 987654);
+    assert.strictEqual(c.status, 400, JSON.stringify(c.body));
+    assert.strictEqual(c.body.error, RECUSA);
+  });
+
+  // ── RN-02: gancho no UPDATE ... SET status='CANCELADO' da rota; o status muda no instante ──
+  const RE_CANCELADO = /SET\s+status\s*=\s*'CANCELADO'/;
+  const comGancho = async (trocas, fn) => {
+    // trocas: lista de status a gravar, um por emissao do UPDATE (na ordem); depois disso, emissao livre.
+    const origRun = db.run;
+    const run = origRun.bind(db);
+    let emissoes = 0;
+    const fila = [...trocas];
+    db.run = function (sql, ...rest) {
+      if (RE_CANCELADO.test(String(sql))) {
+        emissoes++;
+        if (fila.length) {
+          const novo = fila.shift();
+          const params = rest[0];
+          const R = Array.isArray(params) ? params[0] : null;
+          run('UPDATE requisicoes_almoxarifado SET status = ? WHERE id = ?', [novo, R], () => run(sql, ...rest));
+          return this;
+        }
+      }
+      return run(sql, ...rest);
+    };
+    try { const out = await fn(); return { out, emissoes: () => emissoes }; } finally { db.run = origRun; }
+  };
+
+  await test('[92 RN-02] (a) TOTALMENTE -> PARCIALMENTE no instante do UPDATE -> 200, CANCELADO, trilha PARCIALMENTE_RESERVADA, UPDATE emitido 2 vezes', async () => {
+    const { m, R, rid } = await montar92('TOTALMENTE_RESERVADA');
+    const { out: c, emissoes } = await comGancho(['PARCIALMENTE_RESERVADA'], () => cancelar(S, R));
+    assert.strictEqual(c.status, 200, JSON.stringify(c.body));
+    assert.strictEqual(await st(R), 'CANCELADO');
+    assert.strictEqual(emissoes(), 2, `UPDATE emitido ${emissoes()} vez(es)`);
+    const t = await trilha(R);
+    assert.strictEqual(t.length, 1);
+    assert.strictEqual(JSON.parse(t[0].dados_anteriores).status, 'PARCIALMENTE_RESERVADA', 'a trilha tem de gravar o status que o UPDATE trocou');
+    assert.strictEqual((await reserva(rid)).status, 'LIBERADA');
+    assert.strictEqual(await reservada(m), 0);
+  });
+
+  await test('[92 RN-02] (b) duas trocas seguidas (TOTALMENTE -> PARCIALMENTE -> TOTALMENTE) -> 400 R1, TOTALMENTE_RESERVADA, reserva ATIVA, sem trilha, UPDATE emitido 2 vezes (uma nova tentativa so)', async () => {
+    const { m, R, rid } = await montar92('TOTALMENTE_RESERVADA');
+    const { out: c, emissoes } = await comGancho(['PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA'], () => cancelar(S, R));
+    assert.strictEqual(c.status, 400, JSON.stringify(c.body));
+    assert.strictEqual(c.body.error, RECUSA);
+    assert.strictEqual(emissoes(), 2, `UPDATE emitido ${emissoes()} vez(es)`);
+    assert.strictEqual(await st(R), 'TOTALMENTE_RESERVADA');
+    assert.strictEqual((await reserva(rid)).status, 'ATIVA');
+    assert.strictEqual(await reservada(m), 4);
+    assert.strictEqual((await trilha(R)).length, 0);
+  });
+
+  await test('[92 RN-02] (c) vira EM_SEPARACAO no instante -> 400 R1, EM_SEPARACAO, reserva ATIVA, UPDATE emitido 1 vez', async () => {
+    const { R, rid } = await montar92('TOTALMENTE_RESERVADA');
+    const { out: c, emissoes } = await comGancho(['EM_SEPARACAO'], () => cancelar(S, R));
+    assert.strictEqual(c.status, 400, JSON.stringify(c.body));
+    assert.strictEqual(c.body.error, RECUSA);
+    assert.strictEqual(emissoes(), 1, `UPDATE emitido ${emissoes()} vez(es)`);
+    assert.strictEqual(await st(R), 'EM_SEPARACAO');
+    assert.strictEqual((await reserva(rid)).status, 'ATIVA');
+    assert.strictEqual((await trilha(R)).length, 0);
   });
 
   terminou = true;
