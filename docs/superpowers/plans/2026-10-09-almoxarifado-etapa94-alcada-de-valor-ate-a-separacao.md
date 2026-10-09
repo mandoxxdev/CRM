@@ -1,6 +1,8 @@
 # Etapa 94 — a alçada de valor vale até o começo da separação: custo ou limite que mudam depois não tiram da máquina a requisição em separação, pronta ou parcialmente atendida (C68 (47), "fica de fora" da 93, features 06 com a 04, 05 e 07)
 
-> Status: **PLANO (Fase 1) — 2026-10-09.** Fase 0 medida (abaixo); Fase 2 (revisão do plano) **ainda não feita**.
+> Status: **PLANO REVISTO (Fase 2) — 2026-10-09.** Fase 0 medida (abaixo); a Fase 2 (1 bloqueante, 3 importantes,
+> 5 menores) está em "Fase 2 — revisão do plano" e **vale sobre o texto acima** (pontos marcados **"(corrigido na Fase
+> 2)"** ou **"(Fase 2)"**). Próximo: **T0**.
 > HEAD de partida: `e5d216b6` (main, árvore limpa, sem push).
 > Origem: "Próxima tarefa detalhada — Etapa 94" no fim de
 > `docs/superpowers/plans/2026-10-09-almoxarifado-etapa93-gestos-concorrentes-mesma-requisicao.md`; o "fica de fora" da 93
@@ -12,22 +14,27 @@
 >
 > **Numeração:** etapa única para todos os módulos (esta é a **94**). Letras do documento do almoxarifado, conferidas em
 > 2026-10-09: última **B452** (`:1609`), último item C **162** (`:19702`), última **A44** (`:1542`). Esta etapa usa
-> **B453–B459**, **C163–C168** e **A45**.
+> **B453–B463** (B460–B463 vêm da Fase 2), **C163–C168** e **A45**.
 
 **Escopo desta etapa (o que a Fase 0 reproduziu — e só isso):**
 1. **A regra:** a alçada de valor só é reavaliada — e só bloqueia e grava *Aguardando aprovação de valor* — enquanto a
    requisição está num dos cinco status **anteriores à separação** (`APROVADO`, `AGUARDANDO_ESTOQUE`, `AGUARDANDO_COMPRA`,
-   `PARCIALMENTE_RESERVADA`, `TOTALMENTE_RESERVADA`) **e** nenhum item tem nada separado nem entregue. Em `EM_SEPARACAO`,
-   `PRONTA_PARA_RETIRADA` e `PARCIALMENTE_ATENDIDA` a verificação não recalcula, não grava e não recusa. Fecha a sonda 1
+   `PARCIALMENTE_RESERVADA`, `TOTALMENTE_RESERVADA`) **e** nenhum item tem nada separado nem entregue — **e também em
+   `EM_SEPARACAO` vazia** (*Iniciar Separação* sem quantidade; **corrigido na Fase 2, I2**: sexta seta, B462). Com
+   material na caixa (`EM_SEPARACAO` com separado, `PRONTA_PARA_RETIRADA` e `PARCIALMENTE_ATENDIDA`) a verificação não
+   recalcula, não grava e não recusa. Fecha a sonda 1
    (5/7 por gatilho → 0/7) e a sonda 2 (7/8 por origem → 0/8), medido em protótipo.
-2. **A máquina ganha as cinco setas** pré-separação → `AGUARDANDO_APROVACAO_VALOR` (o caminho do C68 vira transição de
+2. **A máquina ganha as ~~cinco~~ seis setas** (corrigido na Fase 2, I2: + `EM_SEPARACAO`, B462) pré-separação → `AGUARDANDO_APROVACAO_VALOR` (o caminho do C68 vira transição de
    projeto), e a regra **é** `validarTransicao(status, 'AGUARDANDO_APROVACAO_VALOR')` mais "nada na caixa" — uma fonte só,
    usada pela porta e pela fila.
 3. **A gravação da alçada confere o status lido** (`WHERE id = ? AND status = ?`): separar e cancelar no mesmo instante
    **ressuscitavam a cancelada** em *Aguardando aprovação de valor* (**10/10 sem gancho**), e aprovar por valor depois
    reservava de novo. Perdeu → **409** V1.
 4. **A fila de separação (64)** usa a mesma regra: hoje mostra *Aguardando aprovação de valor* numa requisição em
-   separação, pronta ou parcialmente atendida (medido 3/3).
+   separação, pronta ou parcialmente atendida (medido 3/3). **(Fase 2, I1)** A reserva na chegada (74,
+   `reservaChegadaService.bloqueadaPorValor`) é a **terceira** cópia da regra e passa a usar o mesmo predicado (B461).
+   **(Fase 2, B1)** O legado com tudo separado ganha o gesto na tela: a fila mostra `RETOMAR_SEPARACAO` e o modal
+   confirma com zero ("Reabrir separação") — task **T2c**, de cliente (B460); e o 409 V1 fecha o modal e recarrega (B463).
 5. **A45** — duas consultas para produção (o rastro do desvio), conferidas contra o esquema real com controle positivo e
    negativo; a ressuscitada já é pega pela **A43 (a)** (medido).
 
@@ -188,7 +195,7 @@ server/tests/api/*.js`). Suíte `test:api` contra o protótipo: **326/327** — 
 
 - **B453 — a alçada de valor vale até o começo da separação.** **Escolhido:** a verificação só recalcula, bloqueia e
   grava *Aguardando aprovação de valor* quando (1) o status lido tem seta para `AGUARDANDO_APROVACAO_VALOR` na máquina
-  (os cinco pré-separação, B454) **e** (2) nenhum item tem `quantidade_separada` nem entregue > 0. Fora disso devolve a
+  (os ~~cinco pré-separação, B454~~ seis — os cinco pré-separação e `EM_SEPARACAO`, B454 e B462; corrigido na Fase 2) **e** (2) nenhum item tem `quantidade_separada` nem entregue > 0. Fora disso devolve a
   requisição sem tocar em nada (B455). **Por quê:** a aprovação (e a alçada avaliada nela e na separação inicial) é a
   decisão sobre gastar; quando o material está na caixa ou já saiu, o gasto aconteceu — reavaliar ali não tem gesto
   coerente para o aprovador (aprovar desmonta o status, reprovar solta a reserva com o material separado, sonda 2). O
@@ -207,7 +214,8 @@ server/tests/api/*.js`). Suíte `test:api` contra o protótipo: **326/327** — 
   `rodada_id: null` (medido, sonda 1), e a rodada não diz se há material na caixa; (f) **só a seta, como a 93 escreveu**
   ("quando o status lido tem seta para lá") — **hoje nenhum** status de `PODE_SEPARAR` tem seta para *Aguardando* (só
   `PENDENTE`, que não separa): a regra literal desligaria a alçada também antes da separação.
-- **B454 — as cinco setas pré-separação → `AGUARDANDO_APROVACAO_VALOR` entram na máquina.** `APROVADO`,
+- **B454 — as cinco setas pré-separação → `AGUARDANDO_APROVACAO_VALOR` entram na máquina.** **(Fase 2: mais a
+  sexta, `EM_SEPARACAO` — B462; e o predicado ganha "nada na caixa", que já exclui a `EM_SEPARACAO` com separado.)** `APROVADO`,
   `AGUARDANDO_ESTOQUE`, `AGUARDANDO_COMPRA`, `PARCIALMENTE_RESERVADA`, `TOTALMENTE_RESERVADA` ganham o destino; o
   predicado da B453 é `validarTransicao(status, 'AGUARDANDO_APROVACAO_VALOR').ok` — a porta, a fila e a máquina dizem a
   mesma coisa. É o caminho do **C68** (47) virando transição de projeto (a 47 o chamou de atalho fora da máquina e
@@ -231,48 +239,94 @@ server/tests/api/*.js`). Suíte `test:api` contra o protótipo: **326/327** — 
   relido mais provável é `CANCELADO` (onde não se tenta de novo); o **403 de valor** sobre a cancelada (é o que o
   protótipo devolve sem a literal nova — mente: a requisição não está aguardando valor); pôr os cancelamentos na trava
   por requisição (B450 da 93: reabre a ordem de travas — o `/cancelar` libera reservas, que chegam ao recálculo sob a
-  trava por material).
+  trava por material). **(Fase 2, M2)** O V1 também sai — inofensivo — quando o recálculo da 76
+  (`reservaChegadaService.recalcularStatusDeReserva`, `*_RESERVADA` ↔ `AGUARDANDO_*`/`APROVADO`) ou o `/aprovar` mudam
+  o status entre a leitura e o `AND status = ?`: nada foi gravado, e tentar de novo é o certo (a literal diz "recarregue
+  e confira").
 - **B457 — a fila de separação usa o mesmo predicado.** `listarFilaSeparacao` avalia a alçada ao vivo só quando
   `alcadaDeValorAindaVale(status, itens)` (os itens ela já tem em memória). **Descartado:** deixar a fila como está —
-  ela mostraria *Aguardando aprovação de valor* onde a porta entrega (sonda 4, 3/3).
+  ela mostraria *Aguardando aprovação de valor* onde a porta entrega (sonda 4, 3/3). **(Fase 2, I1)** A reserva na
+  chegada usa o mesmo predicado — B461.
 - **B458 — o legado não é consertado por script nem por guarda nova.** Requisições já desviadas (A45) continuam onde
   estão; a regra nova as **destrava** pelo caminho medido: aprovar por valor (vira `*_RESERVADA` com caixa) → *Iniciar
   Separação* sem quantidade (agora sem 403: há caixa → B453 não reavalia) → `EM_SEPARACAO` → entregar. As já reprovadas
   ou canceladas com caixa: devolver o material à prateleira. **Descartados:** script de correção (cada linha pede
   decisão física, como a B451); recusar reprovar/cancelar quando há caixa (contrato novo em duas portas só para legado —
-  e depois desta etapa nenhuma requisição nova chega a *Aguardando* com caixa).
+  e depois desta etapa nenhuma requisição nova chega a *Aguardando* com caixa). **(Corrigido na Fase 2, B1 — B460.)**
+  "O caminho medido" foi medido **pela API**: pela tela ele não existe quando tudo já está separado — a fila não lista a
+  requisição (nada a separar; `TOTALMENTE_RESERVADA` fora de `PODE_ENTREGAR`) e o modal desabilita "Confirmar
+  Separação" (todo item com `maxQtdSeparacao <= 0`). A T2c dá o gesto à tela.
 - **B459 — o teste `[93 RN-08] (d4)` é reescrito, não apagado.** Ele monta *Aguardando* com 2 entregues **pelo desvio**
   (`PARCIALMENTE_ATENDIDA` + custo → entregar → 403) como premissa para provar exclusão × `/aprovar-valor` com um estorno
   só. Depois da T0 esse estado só existe como **legado**: a T0 o monta por **escritor direto** (`UPDATE … SET
   status='AGUARDANDO_APROVACAO_VALOR'` sobre a `PARCIALMENTE_ATENDIDA` — o estado que a A45 (a) lista) e a asserção
   (um estorno, q=4, 404 na segunda) continua provada. **Descartado:** apagar — a corrida exclusão × aprovar-valor sobre
   legado continua possível em produção. *(A suíte do protótipo derrubou **só** este — 326/327; ver "Suíte do protótipo".)*
+- **B460 (Fase 2, B1) — o legado com tudo separado ganha o gesto na tela.** **Escolhido (a):** ramo pequeno no
+  cliente — status pré-separação (os cinco; não `EM_SEPARACAO`, que já tem "Ajustar Separação") com algum item
+  separado > entregue → o modal de separação habilita o botão com zero e o rótulo vira **"Reabrir separação"**; e a
+  fila (servidor) acrescenta a etapa **`RETOMAR_SEPARACAO`** (acionável) quando o mesmo predicado vale e não há
+  `SEPARAR`. O predicado é um só — `separacaoAReabrir(status, itens)` na máquina, espelhado no cliente e conferido por
+  teste — e implica o aceite da porta: status em `PODE_SEPARAR` e caixa (logo a alçada não reavalia, B453).
+  **Reversível:** um ramo na tela e uma etapa a mais na fila. **Descartados:** (b) só declarar e depender de API ou do
+  administrador — o desvio deixou requisições em produção (A45 (b)) que ninguém tiraria pela tela; reusar a etapa
+  `REABRIR_SEPARACAO` — o rótulo dela ("Separar de novo para conferir") é da conferência de material crítico e
+  mentiria aqui.
+- **B461 (Fase 2, I1) — a reserva na chegada usa o mesmo predicado.** `reservaChegadaService.bloqueadaPorValor`
+  (`:111-115`) é a terceira cópia da regra e roda sobre `PODE_SEPARAR` (inclui `EM_SEPARACAO` e
+  `PARCIALMENTE_ATENDIDA`). **Escolhido:** `if (c.data_aprovacao_valor || !alcadaDeValorAindaVale(c.status, itens))
+  return false`, lendo **todos** os itens da requisição. Reproduzido (`e94rv-sonda.js`): `PARCIALMENTE_RESERVADA` (pede
+  4, estoque 2) → separa 2 → `EM_SEPARACAO`; nota de 2 com limite 10 → 1 reserva, fila `SEPARAR,ENTREGAR`; com limite 1
+  → **0** reservas e fila `APROVACAO_VALOR` — com a T0 a porta separaria, mas a chegada continuaria pulando a
+  requisição. **Descartado:** deixar como está (terceira fonte divergente da porta).
+- **B462 (Fase 2, I2) — a sexta seta: `EM_SEPARACAO → AGUARDANDO_APROVACAO_VALOR`.** Reproduzido: *Iniciar Separação*
+  sem quantidade com o valor abaixo do limite → `EM_SEPARACAO` vazia; o limite baixa; separar 4 → hoje **403** e
+  *Aguardando* (coerente: nada na caixa, reserva `ATIVA`). Com o protótipo (cinco setas) separava 4 → entregava 4 →
+  `ENTREGUE` **sem aprovação** — a alçada contornada por um clique. **Escolhido (a):** a sexta seta; a condição "nada
+  na caixa" já exclui a `EM_SEPARACAO` com separado. RN-03 passa a "exatamente `PENDENTE` + seis". **Descartado (b):**
+  declarar — o atalho é um gesto que qualquer almoxarife faz.
+- **B463 (Fase 2, M1) — o 409 V1 na tela fecha o modal e recarrega.** `handleSeparacao` (`RequisicoesList.js:~723-733`)
+  só mostrava o toast. **Escolhido:** num **409** fecha o modal de separação e recarrega o detalhe e a lista (molde do
+  `handleExcluir` da 93, `:~1039`); os demais erros mantêm o modal. Isto também fecha o **M2 da 93** para o **X1** (o
+  409 da separação concorrente deixava o modal aberto, e "Separar" de novo numa `PARCIALMENTE_ATENDIDA` gravava a mesma
+  caixa duas vezes). **Descartado:** só o toast (o modal aberto mostra um estado que já não existe).
 
 ## Regras de negócio
 
 Os testes levam o prefixo `[94 RN-xx]`; o manual cita pelo conteúdo (o manual não tem IDs — divergência declarada na
-92). "Pré-separação" = os cinco status da B454. "Caixa" = algum item com `quantidade_separada` > 0 ou entregue > 0
+92). "Pré-separação" = os cinco status da B454 (**Fase 2:** a alçada vale também na `EM_SEPARACAO` vazia — B462; "os seis"
+abaixo = os cinco + `EM_SEPARACAO`). "Caixa" = algum item com `quantidade_separada` > 0 ou entregue > 0
 (entregue = `COALESCE(quantidade_entregue, quantidade_atendida)`, a régua de `getEntregue`).
 
 - **RN-01 (a alçada não volta depois da separação)** — custo ou configuração que mudam depois de a requisição estar
-  `EM_SEPARACAO`, `PRONTA_PARA_RETIRADA` ou `PARCIALMENTE_ATENDIDA` não bloqueiam separar nem entregar. (a) Matriz da
+  `EM_SEPARACAO` **com material separado** (Fase 2), `PRONTA_PARA_RETIRADA` ou `PARCIALMENTE_ATENDIDA` não bloqueiam separar nem entregar. (a) Matriz da
   sonda 1 pelos **quatro gatilhos por rota** × os seis gestos pós-separação → todos **200** com o desfecho normal
   (entregar 2 de `EM_SEPARACAO`/`PRONTA` → `PARCIALMENTE_ATENDIDA`; de `PARCIALMENTE_ATENDIDA` → `ENTREGUE`, reserva
   `CONSUMIDA`; separar vazio → `EM_SEPARACAO`); `valor_total` e `requer_aprovacao_valor` **iguais** aos de antes do gesto
-  (B455); nenhuma chamada a `notificarAprovadoresValor` (espião). (b) **Pelo serviço:**
+  (B455); nenhuma chamada a `notificarAprovadoresValor` (espião) — **(Fase 2, I3)** asserção negativa com controle positivo:
+  sem o retorno antecipado o espião vê a chamada e ela cai (T0 s1); e o espião só enxerga a chamada porque a T0 a faz
+  passar pelo objeto exportado. (b) **Pelo serviço:**
   `valueApprovalService.verificarBloqueioLiberacao(db, R)` direto em cada um dos três status com o custo alto → devolve a
   linha, status inalterado. (Hoje: 5/7 errado por gatilho, sonda 1.)
-- **RN-02 (antes da separação, como hoje)** — (a) de cada um dos cinco status pré-separação, sem caixa e sem
+- **RN-02 (antes da separação, como hoje)** — (a) de cada um dos ~~cinco~~ **seis** status (Fase 2, I2), sem caixa e sem
   `data_aprovacao_valor`, com o valor acima do limite: separar → **403** V403b; status `AGUARDANDO_APROVACAO_VALOR`;
   reserva `ATIVA` intacta; aprovadores notificados (espião, 1 vez). Daí: aprovar por valor (ADMIN2) → 200 `*_RESERVADA`
-  com **uma** reserva `ATIVA`; reprovar → `REJEITADO`, reserva `LIBERADA`; cancelar (almoxarifado) → `CANCELADO`. (b)
+  com **uma** reserva `ATIVA`; reprovar → `REJEITADO`, reserva `LIBERADA`; cancelar (almoxarifado) → `CANCELADO`. **Como cada status é produzido
+  (Fase 2, M5):** `TOTALMENTE_RESERVADA` — `/aprovar` com estoque 8 (rota); `PARCIALMENTE_RESERVADA` — `/aprovar` com
+  estoque 2 < pede 4 (rota); `AGUARDANDO_ESTOQUE` — `/aprovar` com estoque 0 e nenhuma solicitação de compra (rota);
+  `AGUARDANDO_COMPRA` — `/aprovar` com estoque 0 e uma solicitação de compra `PENDENTE` do material dentro do horizonte
+  (a solicitação por escritor direto, a aprovação pela rota); `APROVADO` — **escritor direto** sobre a `PENDENTE` (o
+  `/aprovar` com disponível reserva e devolve `*_RESERVADA`: `APROVADO` estável não sai de rota nenhuma hoje — o teste
+  diz isso); `EM_SEPARACAO` vazia — *Iniciar Separação* sem quantidade pela rota com o valor abaixo do limite, depois o
+  gatilho. Nos `AGUARDANDO_*` e no `APROVADO` não há reserva: "reserva intacta" vira "nenhuma reserva criada", e
+  aprovar por valor devolve o status pós-aprovação, sem reserva duplicada. (b)
   **Pré-separação com caixa** (legado montado por `UPDATE` direto: `TOTALMENTE_RESERVADA` com 2 separados) → separar
   vazio **200** `EM_SEPARACAO`, sem 403 — a caixa vence o status (B453 (2)). (b') o mesmo com **só separado** (entregue
   0) — controle de que a régua não é só "entregue" (o texto da A45 da 93 só olhava `quantidade_entregue`). (c) Já
   aprovada por valor (`data_aprovacao_valor` preenchida) nunca volta — guarda de regressão do `:142`.
 - **RN-03 (a máquina diz onde a alçada vale)** — matriz: para todo status de `TRANSICOES`, `validarTransicao(s,
-  'AGUARDANDO_APROVACAO_VALOR').ok` é verdade **exatamente** em `PENDENTE` + os cinco pré-separação; e
-  `alcadaDeValorAindaVale(s, [])` é verdade exatamente nos cinco (não em `PENDENTE`, que não separa — ver contrato).
+  'AGUARDANDO_APROVACAO_VALOR').ok` é verdade **exatamente** em `PENDENTE` + os ~~cinco pré-separação~~ **seis** (Fase 2, I2: + `EM_SEPARACAO`); e
+  `alcadaDeValorAindaVale(s, [])` é verdade exatamente nos ~~cinco~~ seis (não em `PENDENTE`, que não separa — ver contrato).
 - **RN-04 (a gravação confere o status)** — gancho no `UPDATE` da alçada dispara o cancelamento (a) pelo almoxarifado
   (S) e (b) pelos outros módulos (S), aguardando a resposta: cancelamento **200**; separação **409** V1 com `agora
   CANCELADO`; final **`CANCELADO`**, reserva `LIBERADA`, 0 rodadas, **nenhuma** notificação aos aprovadores; depois
@@ -282,7 +336,14 @@ Os testes levam o prefixo `[94 RN-xx]`; o manual cita pelo conteúdo (o manual n
 - **RN-05 (a fila não diz o que a porta recusa)** — `GET /fila-separacao` depois do custo subir: (a) `EM_SEPARACAO`,
   `PRONTA` e `PARCIALMENTE_ATENDIDA` → `ENTREGAR` (não `APROVACAO_VALOR`); (b) `TOTALMENTE_RESERVADA` sem caixa →
   `APROVACAO_VALOR`; (c) o legado `TOTALMENTE_RESERVADA` com 2 separados de 4 → `SEPARAR`; (d) para cada linha das três
-  primeiras, o gesto que a fila oferece é aceito pela porta (entregar 200 / separar 200 no (c)). Os casos atuais de
+  primeiras, o gesto que a fila oferece é aceito pela porta (entregar 200 / separar 200 no (c)). **(c') (Fase 2, B1 — B460)** o legado
+  `TOTALMENTE_RESERVADA` com **4 separados de 4** (e o mesmo com 4 separados e 2 entregues): hoje a requisição **some**
+  da fila → passa a vir com `RETOMAR_SEPARACAO`, `acionavel: true`, sem `SEPARAR`; e o gesto pela porta (separar vazio)
+  → 200 `EM_SEPARACAO`. Matriz de `separacaoAReabrir(s, itens)`: verdade só nos cinco pré-separação com algum item
+  separado > entregue. **(e) (Fase 2, I1 — B461)** a reserva na chegada: R `PARCIALMENTE_RESERVADA` (pede 4, estoque 2)
+  → separa 2 → `EM_SEPARACAO`; limite baixado a 1; nota de 2 (`reservarChegadaParaQuemEspera`) → **uma** reserva da
+  nota para R (hold 2 → 4). Controle: o mesmo **sem separar** (R `PARCIALMENTE_RESERVADA` sem caixa, limite 1) → **0**
+  reservas (a alçada ainda vale e bloqueia). Os casos atuais de
   `filaSeparacao.api.test.js` (`APROVACAO_VALOR` na pré-separação; com a aprovação dada, `SEPARAR`) continuam.
 - **RN-06 (A45)** — as duas consultas da "Letra A" acham P1–P4 da sonda 5 (montados por escritor direto, o estado que
   o desvio deixava) e não acham N1–N4; coluna trocada → o banco recusa. Fica no teste de integração (T3), como a A44.
@@ -308,7 +369,8 @@ Forma de toda recusa: `{ error: <literal> }` (o `catch` de hoje: `res.status(e.s
 
 ```js
 // TRANSICOES: + 'AGUARDANDO_APROVACAO_VALOR' nos destinos de APROVADO, AGUARDANDO_ESTOQUE, AGUARDANDO_COMPRA,
-// PARCIALMENTE_RESERVADA e TOTALMENTE_RESERVADA (comentario: Etapa 94, B454, o C68 da 47).
+// PARCIALMENTE_RESERVADA, TOTALMENTE_RESERVADA e (Fase 2, B462) EM_SEPARACAO (comentario: Etapa 94, B454, o C68 da
+// 47; EM_SEPARACAO so vale vazia — o predicado exclui a com caixa).
 const STATUS_AGUARDANDO_APROVACAO_VALOR = 'AGUARDANDO_APROVACAO_VALOR';
 /** RN-01/RN-02: a alcada de valor ainda vale? Pura. `itens` com quantidade_separada / quantidade_entregue /
  *  quantidade_atendida (a regua de getEntregue). PENDENTE tem a seta mas nao separa — fica de fora. */
@@ -317,7 +379,16 @@ function alcadaDeValorAindaVale(status, itens = []) {
   return !itens.some((i) => Number(i.quantidade_separada || 0) > 1e-9
     || Number(i.quantidade_entregue ?? i.quantidade_atendida ?? 0) > 1e-9);
 }
-module.exports = { ..., alcadaDeValorAindaVale };
+// Fase 2 (B1/B460, entra na T2): o legado com caixa num status pre-separacao — a fila oferece RETOMAR_SEPARACAO e o
+// modal confirma com zero. Os cinco pre-separacao (nao EM_SEPARACAO: ali ja ha "Ajustar Separacao"); caixa aqui =
+// separado > entregue (o que ainda esta para entregar).
+const STATUS_PRE_SEPARACAO = ['APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA',
+  'TOTALMENTE_RESERVADA'];
+function separacaoAReabrir(status, itens = []) {
+  return STATUS_PRE_SEPARACAO.includes(status) && itens.some((i) => Number(i.quantidade_separada || 0)
+    - Number(i.quantidade_entregue ?? i.quantidade_atendida ?? 0) > 1e-9);
+}
+module.exports = { ..., alcadaDeValorAindaVale, separacaoAReabrir, STATUS_PRE_SEPARACAO };
 ```
 
 ### A verificação — `requisitionValueApprovalService.verificarBloqueioLiberacao` (T0 + T1)
@@ -326,7 +397,7 @@ Ordem (o que muda em **negrito**): 404 se não existe → V403a se `AGUARDANDO_A
 (`SELECT quantidade_separada, quantidade_entregue, quantidade_atendida FROM itens_requisicao_almoxarifado WHERE
 requisicao_id = ?`); `!alcadaDeValorAindaVale(reqRow.status, itens)` → `return reqRow` (nada lido de custo, nada
 gravado)** → avalia e grava `valor_total` (como hoje) → abaixo do limite → `return` → `data_aprovacao_valor` →
-`return` → **`UPDATE … WHERE id = ? AND status = ?` (T1); `changes` 0 → relê `status` → 409 V1** → notifica (T1: pelo
+`return` → **`UPDATE … WHERE id = ? AND status = ?` (T1); `changes` 0 → relê `status` → 409 V1** → notifica (~~T1~~ **T0** — corrigido na Fase 2, I3: pelo
 objeto exportado, `module.exports.notificarAprovadoresValor`, para o teste espiar) → V403b.
 `require('./requisitionStateMachine')` no topo (sem ciclo: a máquina só importa `db` e `availabilitySql`).
 
@@ -335,14 +406,36 @@ objeto exportado, `module.exports.notificarAprovadoresValor`, para o teste espia
 `const avaliacaoValor = (r.data_aprovacao_valor || !alcadaDeValorAindaVale(r.status, doReq)) ? null : await
 valueApprovalService.avaliarRequisicaoValor(db, r.id);` — o resto inalterado.
 
+**(Fase 2, B460)** Depois das etapas de separar: `if (podeSep && separacaoAReabrir(r.status, doReq) &&
+!etapas.includes('SEPARAR')) etapas.push('RETOMAR_SEPARACAO')`; `RETOMAR_SEPARACAO` entra na lista de `acionavel`.
+Etapa nova no contrato da fila (64): o cliente que não a conhece mostra o nome cru (`rotuloEtapa`); a T2c dá o rótulo.
+
+### A reserva na chegada — `reservaChegadaService.bloqueadaPorValor` (T2; Fase 2, I1)
+
+Lê os itens da requisição (`SELECT quantidade_separada, quantidade_entregue, quantidade_atendida FROM
+itens_requisicao_almoxarifado WHERE requisicao_id = ?`) e `if (c.data_aprovacao_valor ||
+!alcadaDeValorAindaVale(c.status, itens)) return false;` — o resto inalterado.
+
+### A tela — `RequisicoesList.js` e `FilaSeparacao.js` (T2c; Fase 2, B1 e M1)
+
+- `separacaoAReabrir(status, itens)` espelhado no cliente (a mesma lista de cinco, a mesma régua `getSeparado −
+  getEntregue`). Com ele verdadeiro e todo item com `maxQtdSeparacao <= 0`: o botão do modal fica **habilitado** e diz
+  **"Reabrir separação"**; o aviso do modal diz *"Todo o material desta requisição já está separado. Confirme para
+  reabrir a separação e seguir para a entrega."*; o envio é `itens_separados: []` (o que o modal já manda com zero).
+- `FilaSeparacao.js`: `ETAPA_INFO.RETOMAR_SEPARACAO = { label: 'Reabrir separação', ... }`.
+- `handleSeparacao`: num **409** fecha o modal de separação e recarrega o detalhe e a lista; os demais erros mantêm o
+  modal (B463).
+
 ### O que não muda
 
 Quem pode cada gesto; as literais de hoje; `/aprovar-valor` e `/rejeitar-valor` (guardas e literais — Fase 5 da 93,
 `c4d84b1f`); os dois cancelamentos (92); a avaliação na criação (`aplicarAvaliacaoNaCriacao`); o lembrete (só a de
 nascimento); a trava por requisição (93) e a por material (91) — a verificação continua **dentro** da trava por
-requisição (separar/entregar) e **não** pega a de material; `reservaChegadaService` (usa `avaliarRequisicaoValor`, só
-leitura, em requisições `AGUARDANDO_*`, pré-separação); o cliente (nenhuma tela muda — o 409 V1 sai no toast que a
-separação já mostra).
+requisição (separar/entregar) e **não** pega a de material; ~~`reservaChegadaService` (usa `avaliarRequisicaoValor`, só
+leitura, em requisições `AGUARDANDO_*`, pré-separação)~~ **(corrigido na Fase 2, I1 — a frase estava errada:** a
+chegada avalia candidatas em `PODE_SEPARAR`, que inclui `EM_SEPARACAO` e `PARCIALMENTE_ATENDIDA`; passa a usar o
+predicado, B461**)**; ~~o cliente (nenhuma tela muda — o 409 V1 sai no toast que a
+separação já mostra)~~ **(corrigido na Fase 2, B1 e M1:** o modal de separação e a fila mudam — T2c**)**.
 
 ## Técnica dos testes
 
@@ -351,7 +444,8 @@ separação já mostra).
    v2 com custo, `PUT` do material, `PUT` da configuração — este responde 500 no harness e grava: o teste afirma o efeito
    lendo `configuracoes_almoxarifado`, não o código da resposta, e diz por quê). Restaurar a configuração da alçada no
    `finally` de cada caso (a suíte compartilha o banco do arquivo).
-2. Espião de `notificarAprovadoresValor` pelo objeto do módulo (T1 faz a chamada passar por ele).
+2. Espião de `notificarAprovadoresValor` pelo objeto do módulo (~~T1~~ **T0** faz a chamada passar por ele — corrigido
+   na Fase 2, I3).
 3. Gancho no `db.run` (regex `RE_ALCADA = /SET\s+status\s*=\s*\?,\s*requer_aprovacao_valor\s*=\s*1/`), aguardando o
    cancelamento (fora da trava — não há *deadlock*; a 93 só proíbe aguardar no gancho um gesto **travado** da mesma
    requisição), contador de disparos = 1 afirmado.
@@ -360,14 +454,16 @@ separação já mostra).
 
 ## Tasks
 
-**Ordem topológica: T0 → T1 → T2 → T3 → T4.** T0 é **tronco** (máquina de estados e regra compartilhada). T1 e T2 são
+**Ordem topológica: T0 → T1 → T2 → T2c → T3 → T4** (a T2c entrou na Fase 2, B1). T0 é **tronco** (máquina de estados e regra compartilhada). T1 e T2 são
 **galhos por regra** (T1: a gravação; T2: a fila — consomem o predicado da T0, um erro de leitura num não exige
 retrabalho no outro) — mas **executados em sequência na árvore principal**: T1 edita o mesmo arquivo da T0 e as duas
-sabotam produção com a suíte batendo no mesmo SQLite (memória "sabotagem concorrente contamina a suíte"). Nenhum galho
-de cliente. Executores **não** marcam este plano; o fio principal marca.
+sabotam produção com a suíte batendo no mesmo SQLite (memória "sabotagem concorrente contamina a suíte"). ~~Nenhum galho
+de cliente.~~ **(Corrigido na Fase 2.)** Um galho de cliente, a T2c — contra o contrato da fila e da porta congelado
+aqui (mock só na fronteira HTTP), depois da T2. Executores **não** marcam este plano; o fio principal marca.
 
 - [ ] **T0 (tronco) — a alçada vale até o começo da separação (B453, B454, B455, B459).** Contrato "Máquina" e "A
-  verificação" (sem o `AND status` — é da T1). Teste novo: **RN-01**, **RN-02**, **RN-03**. Reescrita declarada do
+  verificação" (sem o `AND status` — é da T1). **(Fase 2)** + a sexta seta (B462) e a chamada de
+  `notificarAprovadoresValor` pelo objeto exportado (I3 — saiu da T1). Teste novo: **RN-01**, **RN-02**, **RN-03**. Reescrita declarada do
   `[93 RN-08] (d4)` (B459) e dos que a Fase 2 listar. **Vermelho antes:** RN-01 (a) (403 e `AGUARDANDO` em 5 de 7 por
   gatilho), RN-01 (b), RN-02 (b)(b') (403 sobre o legado com caixa), RN-03 (a função não existe; a seta não existe).
   RN-02 (a)(c) passam antes — guardas. **Medir antes e depois, sem edição:** os 23 de alçada, `filaSeparacao`,
@@ -377,17 +473,35 @@ de cliente. Executores **não** marcam este plano; o fio principal marca.
   entregue 0); (s4) sem as cinco setas → caem RN-02 (a) (separar 200 em vez de 403 — a alçada desligada antes da
   separação) e RN-03; (s5) `PENDENTE` dentro do predicado → cai RN-03 (asserção "exatamente nos cinco"); (s6) recalcular
   e regravar `valor_total` antes do retorno antecipado → cai RN-01 (a) na asserção "`valor_total` igual" (B455).
+  **(Fase 2)** (s7) a chamada a `notificarAprovadoresValor` pelo binding local (sem o objeto exportado) → o espião não
+  vê nada: cai "notificado 1 vez" do RN-02 (a) — o controle do próprio espião (era o s4 da T1, I3); (s8) sem a seta de
+  `EM_SEPARACAO` → cai a linha `EM_SEPARACAO` vazia do RN-02 (a) (separar 4 → 200, a alçada contornada, B462) e o
+  RN-03. O (s1) também derruba a asserção negativa do espião no RN-01 (a) (o controle positivo dela, I3).
 - [ ] **T1 (galho) — a gravação da alçada confere o status (B456).** `AND status = ?`, releitura, 409 V1, notificação só
-  depois do `UPDATE` vencer e pelo objeto exportado. **RN-04** (a)(b)(c). **Vermelho antes:** (a)(b) 5/5 (status
+  depois do `UPDATE` vencer ~~e pelo objeto exportado~~ (o objeto exportado já é da T0 — Fase 2, I3). **RN-04** (a)(b)(c). **Vermelho antes:** (a)(b) 5/5 (status
   `AGUARDANDO_APROVACAO_VALOR` sobre cancelamento 200, notificação 1), (c) 10/10. **Controles:** (s1) sem `AND status =
   ?` → caem (a)(b)(c) (status e `/aprovar-valor` 200 com reserva nova); (s2) perdeu → V403b em vez de V1 → caem (a)(b)
-  no código e na literal; (s3) notificar **antes** do `UPDATE` → cai a asserção "nenhuma notificação"; (s4) a chamada
+  no código e na literal; (s3) notificar **antes** do `UPDATE` → cai a asserção "nenhuma notificação"; ~~(s4) a chamada
   direta (sem o objeto exportado) → o espião não vê nada: cai a asserção "notificado 1 vez" do RN-02 (a) — controle do
-  próprio espião.
-- [ ] **T2 (galho) — a fila usa o predicado (B457).** **RN-05** (a)–(d). **Vermelho antes:** (a) 3/3 (`APROVACAO_VALOR`),
+  próprio espião.~~ **(Movido para a T0 na Fase 2, I3 — o s7 de lá.)**
+- [ ] **T2 (galho) — a fila usa o predicado (B457; Fase 2: + a chegada, B461, e `RETOMAR_SEPARACAO`, B460).**
+  **RN-05** (a)–(d), **(c')** e **(e)**. **Vermelho antes:** (a) 3/3 (`APROVACAO_VALOR`),
   (c) (`APROVACAO_VALOR` no legado), (d) (a fila não oferece o que a porta aceita). (b) passa antes — guarda. **Medir:**
   `filaSeparacao.api.test.js` e `filaTravaIntegracao`. **Controles:** (s1) sem o predicado → caem (a)(c)(d); (s2) o
-  predicado com `[]` no lugar dos itens → cai (c) (o legado volta a `APROVACAO_VALOR`).
+  predicado com `[]` no lugar dos itens → cai (c) (o legado volta a `APROVACAO_VALOR`). **(Fase 2)** Vermelho antes
+  também: (c') (a requisição ausente da fila) e (e) (0 reservas da nota para a `EM_SEPARACAO`). (s3) `bloqueadaPorValor`
+  sem o predicado → cai (e); (s4) `separacaoAReabrir` olhando só o status (sem a caixa) → cai a matriz do (c'); (s5)
+  `RETOMAR_SEPARACAO` fora de `acionavel` → cai (c'). **Medir** também `recebimentoReservaChegada*`.
+- [ ] **T2c (galho de cliente, Fase 2) — o legado tem gesto na tela e o 409 V1 recarrega (B460, B463).** Contrato "A
+  tela". Testes de componente (API mockada só na fronteira HTTP): (a) detalhe `TOTALMENTE_RESERVADA` com o item 4
+  separados de 4 → "Iniciar Separação" → o botão do modal diz **"Reabrir separação"**, está **habilitado**, e confirmar
+  manda `PUT …/separacao` com `itens_separados: []`; (b) controle: `TOTALMENTE_RESERVADA` sem nada separado e
+  `saldo_atual` 0 → "Confirmar Separação" **desabilitado** (como hoje); (c) 409 no `PUT …/separacao` → o modal fecha e
+  o detalhe e a lista são recarregados; um 400 mantém o modal aberto; (d) `FilaSeparacao` com `etapas:
+  ['RETOMAR_SEPARACAO']` → chip "Reabrir separação"; (e) a lista dos cinco do cliente é a do servidor
+  (`STATUS_PRE_SEPARACAO`). **Vermelho antes:** (a) (desabilitado, "Confirmar Separação"), (c) (modal aberto), (d) (nome
+  cru). **Controles:** (s1) sem o ramo → cai (a); (s2) o ramo sem olhar a caixa → cai (b); (s3) sem o tratamento do
+  409 → cai (c). **Medir:** a suíte do cliente e o `build` com `CI=true`.
 - [ ] **T3 — integração cruzando as portas, pela rota e pelo serviço.** Arquivo novo
   `server/tests/api/alcadaValorDepoisDaSeparacaoIntegracao.api.test.js`, usuários reais por header:
   **Jornada A (custo sobe no meio, pela rota):** S cria R1 (4, R$ 4,00) → ADMIN aprova pela rota (`TOTALMENTE_RESERVADA`)
@@ -408,7 +522,10 @@ de cliente. Executores **não** marcam este plano; o fio principal marca.
   **Jornada F (legado, a B458):** R6 levada por escritor direto ao estado que o desvio deixava (`AGUARDANDO` com 4
   separados e 2 entregues) → **A45 (a) lista R6**; ADMIN2 aprova por valor → `TOTALMENTE_RESERVADA` → **A45 (b) lista
   R6**; ALMOX separa vazio → **200** `EM_SEPARACAO` (sem 403 — há caixa) → entrega 2 → `ENTREGUE`; A45 vazia. Mais a
-  RN-06: P1–P4 achados, N1–N4 não, coluna trocada recusada.
+  RN-06: P1–P4 achados, N1–N4 não, coluna trocada recusada. **(Fase 2, B460)** Na F, entre aprovar por valor e
+  separar vazio, a fila lista R6 com `RETOMAR_SEPARACAO`. **Jornada G (Fase 2, I2):** R7 aprovada → *Iniciar Separação*
+  sem quantidade (valor abaixo) → `EM_SEPARACAO` vazia → limite baixado → separar 4 → **403 V403b**,
+  `AGUARDANDO_APROVACAO_VALOR` → ADMIN2 aprova por valor → separar 4 → entregar 4 → `ENTREGUE`; o (s8) da T0 derruba a G.
   **Controles:** (s1) da T0 → caem A (403 na última entrega), C, D (primeira metade) e F (403 no separar vazio); (s1) da
   T1 → cai E; (s1) da T2 → cai a asserção da fila em A; nenhuma jornada não prevista pode cair.
 - [ ] **T4 — fechamento (skill `fechar-etapa`).** Novidades: seção da Etapa 94; **B453–B459**; **C163–C168**; **A45**;
@@ -416,8 +533,12 @@ de cliente. Executores **não** marcam este plano; o fio principal marca.
   resolvida; o item **68** de C anotado (o atalho vira seta — B454 — e o lembrete continua de fora); "Onde estamos";
   cabeçalho. Specs `06` (status e checklist: a alçada vale até o começo da separação; **dizer à vista** que o manual
   atribuía o bloqueio a "itens alterados" — nenhuma rota altera item —, e que o gatilho real é custo e configuração),
-  `05` (o "Fica de fora" da 93 sobre `verificarBloqueioLiberacao` marcado resolvido; a fila), `04` (máquina: as cinco
-  setas), `07` (a reserva da reprovada/cancelada não fica mais solta com caixa). Mapa. Guia do usuário (roteiro: separar
+  `05` (o "Fica de fora" da 93 sobre `verificarBloqueioLiberacao` marcado resolvido; a fila), `04` (máquina: as ~~cinco~~ seis
+  setas — Fase 2), `07` (a reserva da reprovada/cancelada não fica mais solta com caixa). Mapa. **(Fase 2, M4)** O diagrama "Máquina de
+  estados" de `docs/superpowers/specs/2026-08-05-almoxarifado-etapa3-requisicoes-design.md:20-21` — de que
+  `requisitionStateMachine.js:4` diz que `TRANSICOES` é "cópia literal" — é atualizado (ou o comentário deixa de dizer
+  "cópia literal"); dizer à vista que ele já estava atrasado (não tem as setas de reserva da Etapa 4 nem as da 74).
+  Guia: o legado — *Reabrir separação* (B460). Guia do usuário (roteiro: separar
   4, entregar 2, **registrar entrada com custo alto** em Movimentações, entregar o resto → entrega normal; e o caminho de
   projeto: custo alto **antes** de separar → *Aguard. Aprov. Valor* → liberar → separar). Manual **8.3 item 3**
   (reescrito: "antes de começar a separação, se o valor subir — custo do material ou limite/ativação da alçada — …;
@@ -451,7 +572,8 @@ de cliente. Executores **não** marcam este plano; o fio principal marca.
 - **C167 — o que muda para quem opera (risco aceito):** depois de começada a separação, a alta de custo ou a mudança de
   limite **não para mais** a entrega — uma requisição pode sair acima do limite se o custo subiu depois de separada. O
   controle de valor fica na aprovação e no começo da separação (B453).
-- **C168 — o que muda para quem integra:** o 409 V1 na separação; as cinco transições novas na máquina
+- **C168 — o que muda para quem integra:** o 409 V1 na separação; a etapa `RETOMAR_SEPARACAO` na fila (64) (Fase 2,
+  B460); as ~~cinco~~ seis (Fase 2: + `EM_SEPARACAO`) transições novas na máquina
   (`validarTransicao(pré-separação, 'AGUARDANDO_APROVACAO_VALOR')` passa a ser `ok`); a entrega deixa de responder V403b.
 
 ## O que fica de fora (declarado — e por quê)
@@ -473,22 +595,24 @@ acha o mesmo fluxo sem desvio, e o banco recusa com uma coluna trocada (Fase 0, 
 ```sql
 -- (a) aguardando valor, reprovadas ou canceladas com material separado ou entregue (o desvio, ou o que ele deixou)
 SELECT rq.id, rq.numero, rq.status, i.id AS item_id,
-       COALESCE(i.quantidade_separada,0) - COALESCE(i.quantidade_entregue,0) AS na_caixa,
-       COALESCE(i.quantidade_entregue,0) AS entregue
+       COALESCE(i.quantidade_separada,0) - COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0) AS na_caixa,
+       COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0) AS entregue
   FROM requisicoes_almoxarifado rq JOIN itens_requisicao_almoxarifado i ON i.requisicao_id = rq.id
  WHERE COALESCE(rq.ativo,1) = 1 AND rq.status IN ('AGUARDANDO_APROVACAO_VALOR','REJEITADO','CANCELADO')
-   AND (COALESCE(i.quantidade_separada,0) > 1e-9 OR COALESCE(i.quantidade_entregue,0) > 1e-9)
+   AND (COALESCE(i.quantidade_separada,0) > 1e-9 OR COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0) > 1e-9)
  ORDER BY rq.id;
 -- (b) "aprovada/reservada" com material separado ou entregue (a aprovação por valor depois do desvio)
 SELECT rq.id, rq.numero, rq.status, i.id AS item_id, COALESCE(i.quantidade_separada,0) AS separado,
-       COALESCE(i.quantidade_entregue,0) AS entregue
+       COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0) AS entregue
   FROM requisicoes_almoxarifado rq JOIN itens_requisicao_almoxarifado i ON i.requisicao_id = rq.id
  WHERE COALESCE(rq.ativo,1) = 1
    AND rq.status IN ('APROVADO','AGUARDANDO_ESTOQUE','AGUARDANDO_COMPRA','PARCIALMENTE_RESERVADA','TOTALMENTE_RESERVADA')
-   AND (COALESCE(i.quantidade_separada,0) > 1e-9 OR COALESCE(i.quantidade_entregue,0) > 1e-9)
+   AND (COALESCE(i.quantidade_separada,0) > 1e-9 OR COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0) > 1e-9)
  ORDER BY rq.id;
 ```
-A (a) **sobrepõe** a A43 (b) nas canceladas com caixa (dito no texto, para ninguém somar as duas). A ressuscitada da
+**(Corrigido na Fase 2, M3.)** A régua do entregue é `COALESCE(quantidade_entregue, quantidade_atendida, 0)` — a mesma
+do predicado (`getEntregue`); o texto da Fase 0 usava `COALESCE(quantidade_entregue,0)`. A T3 (RN-06) reconfere as
+duas consultas com a régua nova contra o esquema real. A (a) **sobrepõe** a A43 (b) nas canceladas com caixa (dito no texto, para ninguém somar as duas). A ressuscitada da
 C164 é a **A43 (a)** — não repetida. O que fazer com cada linha (texto da A45): (a) *Aguardando* — aprovar por valor e
 seguir a (b); *Reprovada*/*Cancelada* — devolver à prateleira o que está na caixa; o que já foi entregue saiu de fato
 (nada a estornar), conferir com quem recebeu. (b) *Iniciar Separação* sem quantidade (com a versão nova não há 403) →
@@ -520,9 +644,68 @@ máquina de estados (Etapa 3) — conferir a trilha.
    retirada não verifica (o desvio aparece na entrega seguinte); `/aprovar-valor` devolve `TOTALMENTE_RESERVADA` com
    entregue, e da `PRONTA` perde a liberação.
 
+## Fase 2 — revisão do plano (2026-10-09): 1 bloqueante, 3 importantes, 5 menores → plano revisto (vale sobre o texto acima)
+
+Revisor fresco (plano + specs 06/05/04/07 + plano da 93, as quatro perguntas da skill), com sondas no scratchpad
+(`e94rv-sonda.js`, `e94rv-sonda-legado.js`). Cada achado foi conferido contra o código antes de entrar — as duas sondas
+foram **rerodadas contra `2bfc82c2`** e reproduziram o que o revisor disse; os pontos afetados acima estão marcados
+**"(corrigido na Fase 2)"** ou **"(Fase 2)"**. Decisões novas: **B460–B463**.
+
+**Bloqueante**
+
+1. **B1 — o caminho legado da B458 não é feito pela tela quando tudo já está separado (reproduzido).** Aprovar por
+   valor → *Iniciar Separação* sem quantidade → entregar funciona **pela API**, mas: a fila não lista a requisição
+   (nada a separar, e `TOTALMENTE_RESERVADA` está fora de `PODE_ENTREGAR`) e o modal desabilita "Confirmar Separação"
+   quando todo item tem `maxQtdSeparacao <= 0` (`client/src/components/almoxarifado/RequisicoesList.js:51-54`,
+   `:2120`). Medido: legado `EM_SEPARACAO`→aprovado (4 de 4) e `PARCIAL`→aprovado (4 separados, 2 entregues) — fila
+   **ausente**, `maxQtdSeparacao` 0, botão **desabilitado**, separar vazio pela API 200 `EM_SEPARACAO`; o legado com 2
+   de 4 separados aparece com `SEPARAR` e o botão habilitado. **Decidido (a), B460:** ramo pequeno no cliente
+   ("Reabrir separação" habilitado com zero) e a etapa `RETOMAR_SEPARACAO` na fila com o **mesmo** predicado
+   (`separacaoAReabrir`). Descartado (b) só declarar e depender da API ou do administrador. Entra RN-05 (c') (T2) e a
+   task de cliente **T2c**, depois da T2.
+
+**Importantes**
+
+1. **I1 — a reserva na chegada é a terceira cópia da regra (reproduzido).** `reservaChegadaService.bloqueadaPorValor`
+   (`server/services/almoxarifado/reservaChegadaService.js:111-115`) avalia ao vivo sobre `PODE_SEPARAR` (inclui
+   `EM_SEPARACAO` e `PARCIALMENTE_ATENDIDA`) — a frase de "O que não muda" que dizia "só `AGUARDANDO_*`,
+   pré-separação" **estava errada** (marcada lá). Medido: `EM_SEPARACAO` com 2 de 4 separados, nota de 2 — limite 10
+   → 1 reserva; limite 1 → **0** reservas, fila `APROVACAO_VALOR`, separar o resto 403. **Decidido, B461:** estender
+   a B457 — `if (c.data_aprovacao_valor || !alcadaDeValorAindaVale(c.status, itensDaReq)) return false` (todos os
+   itens da requisição). RN-05 (e) e controle (s3) na T2.
+2. **I2 — a `EM_SEPARACAO` vazia escaparia da alçada (reproduzido).** *Iniciar Separação* sem quantidade → limite
+   baixa → separar 4: hoje 403 e *Aguardando* (coerente); com o protótipo, separa 4 → entrega 4 → `ENTREGUE` sem
+   aprovação. **Decidido (a), B462:** sexta seta `EM_SEPARACAO → AGUARDANDO_APROVACAO_VALOR`; "nada na caixa" já
+   exclui a separada. RN-03 passa a "exatamente `PENDENTE` + seis"; RN-02 (a) ganha a linha; controle (s8) na T0;
+   Jornada G na T3. Descartado (b) declarar.
+3. **I3 — o espião não veria a chamada.** `requisitionValueApprovalService.js:151` chama `notificarAprovadoresValor`
+   pelo binding local; o espião no objeto exportado só a vê se ela passar por ele, e a T0 já precisa disso para a
+   asserção negativa do RN-01 (a) — que sem controle positivo passaria vazia. **Corrigido:** "chamar pelo objeto
+   exportado" sai da T1 e entra na **T0**; o s4 da T1 vira o s7 da T0; o s1 da T0 serve de controle positivo da
+   asserção negativa (sem o retorno antecipado o espião vê a chamada → cai).
+
+**Menores**
+
+1. **M1** — o V1 na tela: `handleSeparacao` (`RequisicoesList.js:~723-733`) só mostra o toast e deixa o modal
+   aberto. **Decidido, B463:** num 409 fechar o modal e recarregar (como o `handleExcluir` da 93, `:~1039`); entra na
+   T2c. Fecha também o **M2 da 93** para o **X1**.
+2. **M2** — o V1 também sai, inofensivo, quando o recálculo da 76 ou o `/aprovar` mudam o status entre a leitura e o
+   `AND status = ?`. Declarado na B456 (tentar de novo é o certo).
+3. **M3** — a A45 usava `COALESCE(quantidade_entregue,0)` e o predicado `COALESCE(quantidade_entregue,
+   quantidade_atendida)`. Corrigido: a A45 usa a régua do predicado (cinco ocorrências); a T3 reconfere.
+4. **M4** — `requisitionStateMachine.js:4` diz que `TRANSICOES` é cópia literal do diagrama de
+   `docs/superpowers/specs/2026-08-05-almoxarifado-etapa3-requisicoes-design.md:20-21`. O fechamento (T4) atualiza o
+   diagrama ou o comentário — e diz que o diagrama já estava atrasado (sem as setas da Etapa 4 e da 74).
+5. **M5** — a RN-02 (a) não dizia como cada status de partida é produzido. Corrigido: rota para
+   `TOTALMENTE_RESERVADA`, `PARCIALMENTE_RESERVADA`, `AGUARDANDO_ESTOQUE`, `AGUARDANDO_COMPRA` (com a solicitação de
+   compra por escritor direto) e a `EM_SEPARACAO` vazia; escritor direto para `APROVADO` (nenhuma rota o deixa estável
+   hoje).
+
 ## Próximo passo
 
-**Fase 2:** um agente fresco recebe este plano + as specs `06`, `05`, `04`, `07` + o plano da 93 e responde as quatro
+**(Fase 2 feita — ver a seção acima.)** Próximo: **T0**.
+
+~~Fase 2:~~ (texto original:) um agente fresco recebe este plano + as specs `06`, `05`, `04`, `07` + o plano da 93 e responde as quatro
 perguntas da skill: (1) os contratos cobrem os casos de erro e as literais (V403a, V403b, V1, S1, E0, AV1, RV1)? (2) as
 RN batem com as specs (em especial: a 06 e o C68; a D3 da 28 não é tocada)? (3) T1 e T2 são independentes de verdade
 (T1 edita o mesmo arquivo da T0; T2 só consome o predicado)? (4) **cada RN seguida até o último gesto do usuário** — em
