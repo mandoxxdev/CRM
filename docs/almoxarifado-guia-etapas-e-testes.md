@@ -1,21 +1,35 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-09 (Etapa 96) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-09 (Etapa 97) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77 e 91 a 96) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77 e 91 a 97) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-09 (Etapa 96 ENTREGUE · próxima do almoxarifado: Etapa 97)
+> ## Onde o desenvolvimento está — 2026-10-09 (Etapa 97 ENTREGUE · próxima do almoxarifado: Etapa 98)
 >
-> **O desenvolvimento parou aqui: Etapa 96 fechada — 2026-10-09.** A **Etapa 96 (o estoque guarda a quantidade
+> **O desenvolvimento parou aqui: Etapa 97 fechada — 2026-10-09.** A **Etapa 97 (o material separado na caixa de uma
+> requisição só sai pela entrega)**: o que foi separado para uma requisição e ainda não foi entregue, **sem reserva**,
+> deixa de poder sair por uma porta avulsa. Separados 4 Parafusos (com 4 em estoque), a **Saída** ou a **Perda** de 4 em
+> Movimentações é recusada com *"Saldo insuficiente. Disponível: 0 PC — 4 PC estão separados para a requisição ⟨número
+> da requisição⟩ e só saem pela entrega (…)"* — antes passava, e a requisição ficava presa na entrega em *"Máximo: 0"*.
+> O mesmo vale para 17 portas: as saídas de Movimentações, o ajuste para menos, a conferência de estoque, a remessa a
+> terceiro, o **Bloquear Material** (que ganhou uma guarda que não tinha), a reserva manual, o sucateamento e alguns
+> estornos. A entrega da requisição continua igual; o ajuste para cima nunca é recusado pela caixa. Material quebrado
+> ou perdido na caixa: entregue o que existe e encerre a requisição, ou o administrador do almoxarifado a exclui —
+> depois disso a **Perda** passa. As requisições que já ficaram presas antes desta versão não se soltam sozinhas
+> (consulta **A48**). **Próxima etapa do almoxarifado: Etapa 98 — o gesto "devolver da caixa à prateleira": o
+> almoxarife diminui o separado de um item, com motivo e registro, e o material volta a ficar livre (B497, C189) — ver
+> o plano da 97.**
+>
+> **Etapa 96, 2026-10-09.** A **Etapa 96 (o estoque guarda a quantidade
 > arredondada e não recusa o que existe)**: entradas fracionadas de 0,7 + 0,2 + 0,1 kg somam **1** (não mais
 > *0,9999999999999999*), e a saída, a reserva, a aprovação e a entrega de exatamente o que existe deixam de ser
 > recusadas (aviso **C176** resolvido) — inclusive no material, no endereço, no lote, no reservado, no bloqueado, na
 > remessa a terceiro e no separado da requisição. Toda quantidade é guardada com até 6 casas; um milionésimo a mais
 > continua recusado. O dado antigo torto se limpa no primeiro movimento ou por uma rotina opcional do administrador
-> (consulta **A47**). A tela continua só com inteiro em Movimentações e Requisições (**C181**). **Próxima etapa do
+> (consulta **A47**). A tela continua só com inteiro em Movimentações e Requisições (**C181**). ~~**Próxima etapa do
 > almoxarifado: 97 — a saída avulsa ainda leva o material que está na caixa (separado e não entregue) de uma
-> requisição** (ver *"Próxima tarefa detalhada"* no plano da Etapa 96).
+> requisição**~~ *(Feita — Etapa 97.)*
 >
 > **Etapa 95, 2026-10-09.** A **Etapa 95 (a separação não aceita mais do que
 > existe na prateleira)**: o material separado e ainda não entregue (a "caixa") deixa de ser oferecido de novo. Pedindo
@@ -6332,6 +6346,155 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 97 — O material separado na caixa de uma requisição só sai pela entrega (ENTREGUE — 2026-10-09)
+
+**O que mudou, em uma frase:** o material que foi separado para uma requisição e ainda não foi entregue (a "caixa"),
+quando a requisição não tem reserva dele, não sai mais por uma saída avulsa, uma perda, um bloqueio, uma reserva
+manual, um ajuste para menos ou uma conferência — só pela entrega da própria requisição.
+
+**O problema que ela resolve.** Separar não tira nada do estoque: os 4 Parafusos separados continuam contados no
+físico e no disponível até a entrega. A Etapa 95 fez a separação e a aprovação respeitarem a caixa, mas as **portas
+avulsas** (a **Saída** e a **Perda** de Movimentações, o **Bloquear Material**, a **Nova Reserva**, a conferência de
+estoque, a remessa a terceiro, o sucateamento e alguns estornos) não sabiam dela: a Saída de 4 passava, o estoque ia a
+0 e a requisição ficava presa para sempre na entrega com *"⟨material⟩: não é possível entregar 4 PC. Máximo: 0
+(pendente: 4, disponível: 0)"*. Pior: a Perda passava calada, e ninguém sabia que havia uma requisição esperando o
+material que acabou de sair.
+
+**A regra agora.** Cada material tem um **livre de caixa**: o disponível de sempre menos o que está separado e não
+entregue, sem reserva, para requisições em andamento (*Aprovado*, *Aguard. Estoque*, *Aguard. Compra*, *Parcialmente
+Reservada*, *Totalmente Reservada*, *Em Separação*, *Parcialmente Atendida*, *Pronta p/ Retirada*, *Aguard. Aprov.
+Valor*). As 17 portas avulsas recusam o que passa do livre de caixa, com a mensagem de sempre **mais um final** que
+diz quanto está separado, para qual requisição, e o que fazer se o material se perdeu. Sem caixa nenhuma, a mensagem
+é exatamente a de antes. O que **não** mudou:
+
+- O **disponível mostrado nas telas** é o mesmo de antes (não desconta a caixa) — a recusa é quem explica.
+- A **entrega** da requisição, a aprovação, a chegada de material e as reservas de requisição seguem a conta da Etapa 95.
+- O **ajuste para cima** (Novo Saldo maior que o estoque) nunca é recusado pela caixa.
+- **"Permite saldo negativo"** no material dispensa reservas e retenções, **nunca** a caixa.
+- O **Bloquear Material** ganhou uma guarda que não tinha (antes bloqueava 10 com 4 em estoque); ela não conta o que
+  está reservado — quem bloqueia não libera reserva de requisição.
+- A porta avulsa e a separação do mesmo material acontecem uma depois da outra (uma não cai no meio da outra).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| 4 Parafusos separados (sem reserva), Saída de 4 em Movimentações: recusava? **Não** — levava a caixa, e a requisição ficava presa em *"Máximo: 0"* | Recusada: *"Saldo insuficiente. Disponível: 0 PC — 4 PC estão separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (…)"*; a requisição entrega os 4 |
+| A **Perda** de 4 passava calada | Recusada com a mesma mensagem — que diz o caminho: entregar o que existe e encerrar, ou pedir a exclusão |
+| **Bloquear Material** de 10 com 4 em estoque: aceitava | Recusa: *"Saldo disponível insuficiente para bloquear: 4 PC"*; com a caixa, *"…: 0 PC"* + o final |
+| **Nova Reserva** reservava o que estava na caixa | Recusa: *"Saldo disponível insuficiente: 0"* + o final |
+| A conferência de estoque que contava 0 zerava o estoque por baixo da caixa | *"Ajuste bloqueado: ⟨código⟩: Ajuste para 0 PC deixaria o disponível negativo (separada na caixa de requisição: 4, …)"* |
+| Remessa a terceiro, sucateamento, estornos (de entrada, de ajuste, de desbloqueio) levavam a caixa | Recusam com a mensagem de cada um + o final |
+| Material da caixa quebrado: a Perda passava e a requisição ficava presa | Primeiro a requisição sai da frente (entrega parcial + encerrar, ou exclusão pelo administrador), depois a Perda passa |
+| Duas conclusões simultâneas da mesma conferência aplicavam o ajuste duas vezes (**C191**) | Só uma conclui; a outra recebe *"Conferência não está aberta (status atual: CONCLUIDO)"* |
+| Sem caixa nenhuma | Igual a antes — mesma mensagem, letra por letra |
+
+### Roteiro de teste manual (≈25 min)
+
+**Preparação (como Administrador).**
+- Em **Almoxarifado → Configurações → Liberação por Valor**, deixe **Habilitar liberação por valor** desligado.
+- Cadastre três materiais **comuns** (não críticos), unidade **PC**, estoque **0**, **sem** "permite saldo negativo":
+  **Parafuso**, **Porca** e **Arruela**. Anote o **código** e a **categoria** do Parafuso (a conferência usa).
+- Usuários: **Paula** (sem perfil — é chão de fábrica) pede; o **Gestor** (ou o Administrador) aprova por **Só
+  Aprovar**; **Ana** (Almoxarife) separa, entrega e faz as movimentações.
+- As entradas são sempre por **Movimentações → Nova Movimentação → Entrada** (não por nota de compra: a nota reservaria
+  o material para quem espera, e o roteiro quer a caixa **sem** reserva). Saída, Perda e Ajuste pedem **Motivo**.
+- Depois de cada entrega o sistema oferece **✍ Colher assinatura do recebedor** — clique **Pular**.
+- As mensagens aparecem no aviso vermelho do canto da tela; onde está *⟨número da requisição⟩*, o sistema mostra o
+  número que aparece na lista de **Requisições (almox.)** (`REQ-` seguido de números e letras).
+
+1. **A caixa só sai pela entrega.**
+   - Paula cria **R1** pedindo **4** Parafusos. O Gestor aprova (**Só Aprovar**) → **Aguard. Estoque** (ou **Aguard.
+     Compra**), sem reserva — não há estoque.
+   - Ana dá **Entrada** de **4** Parafusos. Ana abre R1 → **Iniciar Separação** (4) → **📦 Confirmar Separação** →
+     *"Separação registrada!"*; R1 **Em Separação**. Na tela **Reservas** não há reserva de R1: os 4 estão na caixa
+     sem reserva.
+   - **Movimentações → Nova Movimentação**, tipo **Saída**, Parafuso, **4** → **Confirmar Movimentação** → recusada:
+     *"Saldo insuficiente. Disponível: 0 PC — 4 PC estão separados para a requisição ⟨número da requisição⟩ e só saem
+     pela entrega (material perdido da caixa: entregue o que existe e encerre a requisição, ou peça ao administrador do
+     almoxarifado para excluí-la)"*. Troque o tipo para **Perda** (4) → a mesma mensagem. Nada é gravado (o **Extrato**
+     do Parafuso não tem linha nova).
+   - Como **Administrador** (ou Gestor — o Almoxarife não bloqueia): **Inspeções → Bloquear Material**, Parafuso,
+     **1**, uma justificativa → **Confirmar** → *"Saldo disponível
+     insuficiente para bloquear: 0 PC — 4 PC estão separados para a requisição ⟨número da requisição⟩ e só saem pela
+     entrega (…)"* (o mesmo final).
+   - **Reservas → Nova Reserva**, Parafuso, **1** → **Reservar** → *"Saldo disponível insuficiente: 0 — 4 PC estão
+     separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (…)"*.
+   - Ainda como **Administrador** (concluir aplicando ajustes pede a mesma permissão do bloqueio): **Conferência →
+     Nova Conferência**, filtrando pela categoria do Parafuso → **Criar Conferência**. Abra-a, conte
+     **0** no Parafuso (o campo salva ao sair dele) → **Concluir Conferência** → com **"Aplicar ajustes automáticos ao
+     concluir"** marcado e uma **Justificativa do ajuste** → **Confirmar** → *"Ajuste bloqueado: ⟨código do Parafuso⟩:
+     Ajuste para 0 PC deixaria o disponível negativo (separada na caixa de requisição: 4, mínimo aceitável: 4 PC).
+     Resolva a retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo."*. A conferência
+     continua aberta e nada é ajustado; cancele-a pelo ícone vermelho *"Cancela esta contagem sem alterar saldo
+     nenhum"*.
+   - De volta como Ana: abre R1 → **Confirmar Entrega e Baixar Estoque** → *"Requisição entregue por completo! Estoque baixado."* →
+     R1 **Entregue**; estoque do Parafuso **0**.
+   - Ana dá **Entrada** de **2** Parafusos e uma **Saída** de **2** → registrada (a caixa de R1 foi entregue; nada
+     mais retém).
+   *(Antes desta etapa: a Saída de 4 passava, o estoque ia a 0 e a entrega de R1 era recusada com "Parafuso: não é
+   possível entregar 4 PC. Máximo: 0 (pendente: 4, disponível: 0)" — R1 presa em Em Separação.)*
+
+2. **O caso legítimo: material quebrado na caixa.**
+   - Paula cria **R2** pedindo **4** Porcas; o Gestor aprova; Ana dá **Entrada** de **4** e separa os 4 (R2 **Em
+     Separação**). Duas Porcas quebram na caixa.
+   - **Perda** de **2** Porcas → recusada: *"Saldo insuficiente. Disponível: 0 PC — 4 PC estão separados para a
+     requisição ⟨número da requisição⟩ e só saem pela entrega (material perdido da caixa: …)"*. Em *Em Separação* a
+     requisição não se cancela nem se encerra (por integração: *"Não é possível cancelar neste status"* e *"Transição
+     inválida: EM_SEPARACAO → ENCERRADA"*) — o caminho é o que a mensagem diz:
+   - Ana abre R2 → **Entregar escolhendo de onde sai…** → troque a quantidade para **2** → **✅ Confirmar Entrega** →
+     *"Entrega parcial registrada. Saldo pendente permanece em aberto."* → R2 **Parcialmente Atendida**. A Perda de 2
+     ainda recusa, agora com *"— 2 PC estão separados para a requisição ⟨número da requisição⟩ …"*.
+   - Ana abre R2 → **Encerrar Requisição** → **Confirmar Encerramento** → R2 **Encerrada**. **Perda** de **2** Porcas →
+     registrada; estoque **0**.
+   - **Tudo perdido** (nada a entregar): Paula cria **R3** pedindo **4** Arruelas; aprove, dê **Entrada** de 4 e separe
+     os 4. A Perda de 4 recusa com o final. Ana (Almoxarife) **não** exclui: a lixeira não aparece para ela na lista, e
+     por integração (`DELETE /api/almoxarifado/requisicoes/:id`) o servidor responde 403 *"Apenas administradores do
+     Almoxarifado ou Super Administrador podem excluir requisições"*. O **Administrador**, na lista de **Requisições
+     (almox.)**, clica a lixeira (*"Excluir requisição"*) de R3 → **Justificativa da exclusão** → **Confirmar
+     Exclusão**. Agora a **Perda** de **4** Arruelas é registrada; estoque **0**.
+
+3. **O ajuste para cima nunca é recusado pela caixa.** Repita a montagem do passo 1 com um Parafuso novo (ou com R1
+   refeita): 4 em estoque, 4 separados sem reserva.
+   - **Movimentações → Ajuste**, **Novo Saldo** **3** → recusado: *"Ajuste para 3 PC deixaria o disponível negativo
+     (separada na caixa de requisição: 4, mínimo aceitável: 4 PC). Resolva a retenção antes de ajustar para menos, ou
+     ajuste para um valor maior ou igual ao mínimo."*
+   - **Novo Saldo** **6** → registrado (estoque 6). A requisição entrega os seus 4 normalmente.
+
+**Procedimento do administrador para as requisições que já ficaram presas (opcional).** As requisições cuja caixa foi
+levada por uma saída avulsa **antes desta versão** continuam presas — a etapa impede o defeito de agora em diante, mas
+não desfaz o que já aconteceu (aviso **C188**). Quem tem acesso ao banco as acha pela consulta **A48** de
+`docs/almoxarifado-novidades-por-etapa.md` (o texto está também no plano da Etapa 97, seção *"Letra A"*). Ela só lê,
+nada roda sozinho. Cada linha é um material cuja caixa sem reserva passa do disponível, com as requisições presas
+(número, status e quanto está na caixa de cada uma). Para cada requisição da linha:
+- **Se ainda existe material para ela** (parte do que foi separado está na prateleira): abra a requisição → **Entregar
+  escolhendo de onde sai…** com a quantidade que existe → **✅ Confirmar Entrega** → **Encerrar Requisição** →
+  **Confirmar Encerramento**. O resto pendente é cancelado.
+- **Se não existe nada**: o administrador do almoxarifado (ou o super administrador) a **exclui** pela lixeira, com a
+  justificativa. Se ainda for preciso, Paula pede de novo.
+Rode a consulta de novo: a requisição tratada sai da lista; com todas tratadas, a lista vem vazia.
+
+### O que esta etapa NÃO cobre
+
+- **Ajuste com endereço de ida** (o ajuste por localização) ainda pode levar a caixa (**B495**/**C186**) — mudar isso
+  reabre uma regra da Etapa 10.
+- **Não há gesto "devolver da caixa à prateleira"** (**B497**) — material da caixa que não vai ser entregue só sai por
+  entrega parcial + encerrar, ou exclusão. É a **Etapa 98**.
+- **A tela não mostra a caixa no disponível** (**C187**): Movimentações, Reservas e Inspeções mostram o disponível de
+  sempre; quem explica é a recusa.
+- **As requisições já presas não se destravam sozinhas** (**C188**) — consulta **A48** e o procedimento acima.
+- **Caixa por endereço ou por almoxarifado** — o saldo é global por material, de propósito (uma filial só).
+- **As compensações do retalho e da transformação** ainda poderiam levar a caixa num caso raríssimo (falha no meio e
+  uma separação ao mesmo tempo).
+- **A entrega não honra "permite saldo negativo"** — continua recusando o que não existe.
+- **Bloquear material reservado e já separado** prende a entrega em *"Máximo: 0"* sem dizer que foi o bloqueio
+  (**C190**) — declarado, aberto.
+- **Mais de um servidor rodando ao mesmo tempo** — a espera por material é de um processo só (**C132**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: a tela não mudou (nenhuma rota nova, nenhum campo novo); o roteiro
+acima é o que os testes automáticos do servidor provam, escrito para você conferir à mão com os botões que a tela já
+tinha.
 
 
 ## Etapa 72 — A solicitação de compra só fecha quando o material dela chega (ENTREGUE — 2026-10-02)

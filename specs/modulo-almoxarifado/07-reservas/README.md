@@ -2,7 +2,8 @@
 
 > **Status:** 🟢 Etapa 4 completa — backend (2026-08-05) e tela (2026-08-06) ·
 > **Spec original:** seção 7
-> **Última atualização:** 2026-10-09 (**Etapa 96** — a reserva grava arredondado a 6 casas e o claim de `criarReserva` compara com folga de 1e-9: no legado torto (físico `0.9999…`) a aprovação de uma requisição de 1 volta a reservar **1** (*Totalmente Reservada* — fecha a ressalva do `6e0fae83`, C179); o reservado sem reserva `ATIVA` não guarda resíduo abaixo de 0,0001 (Fase 5, R2, `2adcd51c`). Range `604b37b1..2d0bbfe9`. Continua 🟢. Ver o item da Etapa 96 no checklist.)
+> **Última atualização:** 2026-10-09 (**Etapa 97** — a reserva manual (`POST /reservas`) não toma mais o material separado na caixa sem reserva de uma requisição: recusa 400 *"Saldo disponível insuficiente: ⟨n⟩"* com o sufixo que nomeia a requisição (M3); as reservas de requisição (aprovação, chegada, recriação no estorno) ficam na régua de hoje (B492); `criarReserva` roda sob a trava do material. `65dc74b2`; range `eb7cd9d8..3fc39310`. Continua 🟢. Ver o item da Etapa 97 no checklist e a seção no fim.)
+> Antes: 2026-10-09 (**Etapa 96** — a reserva grava arredondado a 6 casas e o claim de `criarReserva` compara com folga de 1e-9: no legado torto (físico `0.9999…`) a aprovação de uma requisição de 1 volta a reservar **1** (*Totalmente Reservada* — fecha a ressalva do `6e0fae83`, C179); o reservado sem reserva `ATIVA` não guarda resíduo abaixo de 0,0001 (Fase 5, R2, `2adcd51c`). Range `604b37b1..2d0bbfe9`. Continua 🟢. Ver o item da Etapa 96 no checklist.)
 > Antes: 2026-10-09 (**Etapa 95** — a aprovação não reserva mais o material que está na caixa sem
 > reserva de outra requisição (**B469**, `9237af2c`; a reserva arredondada a 1e-6, `6e0fae83`): reserva `min(falta,
 > max(0, disponível − já reservado − caixa sem reserva dos outros itens))` — antes reservava os 4 que estavam separados
@@ -214,7 +215,9 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
   a reserva manual alheia (**C139**, B428 — regra sem dado de uso); a janela da QUARENTENA contra quem **não** pega a
   trava — saída avulsa, reserva manual, separação (**C145**, B430 — as três formas de fechar mexem no motor ou abrem
   portas novas na trava) *(a separação passou a pegar a trava por material na Etapa 95 — B476, `f8edb54a` — e a entrega
-  também, `582844e8`; a saída avulsa e a reserva manual continuam fora)*; o reenvio que duplica a requisição com aprovação automática (**C147**, B432 — precisa de chave
+  também, `582844e8`; ~~a saída avulsa e a reserva manual continuam fora~~ — desde a Etapa 97 (`65dc74b2`, B494)
+  `registrarMovimentacao` e `criarReserva` pegam a trava do material quando chamados fora de uma seção que o segura;
+  a janela da C145 contra elas **não foi re-medida** na 97)*; o reenvio que duplica a requisição com aprovação automática (**C147**, B432 — precisa de chave
   de idempotência do cliente); a tela dos outros módulos oferece **Cancelar** em status reservados que a rota recusa
   (**C149** — contrato da outra porta, B426; **Etapa 92**) *(paga na Etapa 92 — item abaixo)*; mais de um processo (**C132** — premissa escrita no
   módulo); estorno × aprovação com a forma da C131 (`liberarParaEstorno` fora de trava — candidata, D (91)); o `UPDATE`
@@ -271,7 +274,8 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
   aprovada pode ficar *Aprovado* sem reserva e a fila a mostra *Aguardando saldo* (**C172**, cosmético; o teste garante
   que não é *Reservada*); a chegada, a liberação, o estorno (74/75) e o recálculo (76) **não mudam** — dão primeiro a quem
   já tem caixa sem reserva, decisão da 75 (**C173**, B475; quem espera perde a garantia, não o separável); o motor não
-  conhece caixa — uma saída avulsa ainda leva o físico da caixa sem reserva (B466 iv). Consulta **A46** (b) acha a
+  conhece caixa — uma saída avulsa ainda leva o físico da caixa sem reserva (B466 iv) *(resolvido na Etapa 97 — item
+abaixo)*. Consulta **A46** (b) acha a
   aprovação que reservou a caixa de outra no legado.
 - [x] **A reserva com quantidade decimal (Etapa 96, C176/C179)** — `82836975` (o disponível arredondado destrava a
   reserva manual e a aprovação no legado), `8bb43f60` (`criarReserva`/`liberarReserva` e as linhas da reserva gravam por
@@ -289,6 +293,13 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
   transação — uma liberação concorrente apagaria o hold inteiro; com o limite, no máximo um hold < 0,0001). **Fica de
   fora:** o legado no meio exato (0,0010995) — a reserva de 0,0011 continua impossível de consumir pela `SAIDA` com
   `reserva_id` (como antes); o script de normalização cura.
+- [x] **A reserva manual não toma a caixa sem reserva de uma requisição (Etapa 97, B466 iv)** — `65dc74b2` (B491, B492,
+  B494): `criarReserva` **sem** `opcoes.requisicao_id` (a reserva manual, `POST /reservas`) segura pelo livre de caixa
+  (disponível − caixa sem reserva das requisições) e recusa 400 *"Saldo disponível insuficiente: ⟨n⟩"* + o sufixo que
+  nomeia a requisição (M3); **com** `requisicao_id` (aprovação, chegada, recriação no estorno) fica na régua de hoje —
+  a caixa delas já é a conta da 95 (B469, B475). `criarReserva` passou a rodar sob a trava do material. Antes: com 4 na
+  caixa sem reserva de A (físico 4), `POST /reservas` 4 → 201 e A ficava presa em *"Máximo: 0"*. Ver a seção "Etapa 97"
+  no fim.
 - [ ] Reserva por lote específico / número de série — **fora da Etapa 4**. Atualização (2026-08-11): a dependência de **lote** caiu — a feature 10 (lotes) foi entregue na Etapa 6 (2026-08-09/10), então reserva por lote ficou implementável; número de série continua dependendo da 6b
 - [x] Data de necessidade na reserva (`data_necessidade`) — `6690c1a`. **Prioridade** ficou fora: sem demanda concreta, `data_necessidade` cobre o ordenamento útil
 - [x] Expiração automática (`POST /reservas/processar-expiracao` + config `reserva_dias_validade`) — `6690c1a`. **Opt-in**: sem a config e sem `expira_em` explícito a reserva não expira, senão as reservas manuais existentes começariam a ser liberadas sozinhas. Alerta por e-mail fica com a feature 20
@@ -427,7 +438,40 @@ Os nomes abaixo são os reais — copiáveis para localizar o caso.
 | **Etapa 95** — a aprovação não reserva a caixa sem reserva de outros itens (de outra requisição ou da mesma); a própria caixa não desconta; arredondada a 1e-6; sem caixa nenhuma reserva como antes | `separacaoTetoFisico` · *[95 RN-05] M3 pela rota…* · *[95 RN-05] fisico 6 com a mesma caixa de 4…* · *[95 RN-05] pelo servico…* · *[95 RN-05] guarda: sem caixa nenhuma…* · *[95 RN-05] P5b (Fase 2, B2)…* · *[95 Fase 5] (T8) aprovacao com a caixa do IRMAO…* · *[95 Fase 5] aprovacao decimal…* · `separacaoTetoFisicoIntegracao` · *[95 T4 I2]…* · *[95 T4 I6] corrida…* |
 | **Etapa 96** — reserva decimal: reservado arredondado, aprovação no legado reserva 1, folga não inventa, resíduo de 1/3 zera sem reserva ativa (e só sem) | `quantidadeArredondada` · *[96 RN-01] tres reservas 0,7 + 0,2 + 0,1 -> reservado 1…* · *[96 RN-02] legado torto: aprovar a requisicao de 1 reserva 1…* · *[96 RN-02] legado torto: POST /reservas 1 -> 201* · *[96 RN-03] reserva 0,200001 com 0,2…* · *[96 RN-04] POST /reservas 0,0000004…* · *[96 RN-02] (Fase 5, R2) liberar tres reservas legadas de 1/3…* · *[96 RN-02] (Fase 5, R2) consumir pela SAIDA…* · *[96 RN-03] (Fase 5, R2) o residuo so some sem reserva ATIVA…* · *[96 RN-01] (Fase 5) reserva 0,3, liberar 0,1…* |
 | **Etapa 95** — a liberação da 75 distribui como antes; quem espera separa os livres e não mais (C173) | `separacaoTetoFisico` · *[95 RN-06 (c)] L1…* |
+| **Etapa 97** — a reserva manual não toma a caixa sem reserva (M3 + S); a aprovação com a caixa de outra reserva como na 95; sem caixa, a recusa byte a byte | `portasAvulsasCaixa` · *[97 RN-01] reserva manual 4 (M3), REMESSA_TERCEIRO 4 (M2), bloqueio avulso 1 (M4)…* · *[97 RN-03] a aprovacao de C com a caixa de A presente reserva disponivel - caixa dos outros…* · *[97 RN-04] sem caixa, toda recusa e byte a byte a de hoje…* · *[97 F5-A] corrida separacao x ${nome}…* (a reserva manual é uma das quatro) |
 
 ## Dependências
 
 - 03 (fórmula de disponível) · 04 (gancho pós-aprovação) · 10 (reserva por lote/série).
+
+## Etapa 97 — a reserva manual não toma a caixa sem reserva de uma requisição (2026-10-09)
+
+Plano: `docs/superpowers/plans/2026-10-09-almoxarifado-etapa97-portas-avulsas-respeitam-a-caixa.md` (`eb7cd9d8`, Fase 2
+`4a9cf5c1`). Range `eb7cd9d8..3fc39310`. A régua está na feature 03.
+
+**O que estava errado (Fase 0, s1):** com 4 separados na caixa sem reserva da requisição A (físico 4, reservado 0),
+`POST /reservas` 4 → 201 (reservado 4) e A ficava presa: entregar → 400 *"Máximo: 0"*. A aprovação de outra requisição
+já não reservava a caixa (B469, Etapa 95); a reserva manual sim — era a mesma régua só pela metade.
+
+**Entregue:**
+- [x] **A reserva manual pelo livre de caixa (M3)** — `65dc74b2`: `criarReserva` sem `opcoes.requisicao_id` segura
+  pelo livre de caixa; a recusa é *"Saldo disponível insuficiente: ⟨n⟩"* + o sufixo S (sem caixa, byte a byte a de antes).
+- [x] **As reservas de requisição na régua de hoje** — `65dc74b2` (B492): `opcoes.requisicao_id` (só o 4º argumento,
+  nunca o body). A aprovação de C com a caixa de A presente reserva *disponível − caixa dos outros* (B469 da 95, igual);
+  a aprovação do legado com caixa **própria** continua reservando o pedido inteiro (P5b/B2 da 95); a chegada da nota dá
+  primeiro a quem tem caixa (B475), como antes.
+- [x] **`criarReserva` sob a trava do material** — `9ace72b2`, `65dc74b2` (B494): espera a separação em curso do mesmo
+  material; dentro de uma seção que já segura o material (a aprovação, a chegada) roda direto.
+
+**Fica de fora (declarado):** a reserva manual alheia (C139, como antes); a saída **sem** `reserva_id` com
+`permite_saldo_negativo` continua dispensando a reserva (a flag dispensa reserva e retenções, **não** a caixa — B498
+invertida, feature 03); a aprovada que fica *Aprovado* sem reserva com a caixa de outra ocupando o físico (C172, como na
+95).
+
+**Testes:** `portasAvulsasCaixa.api.test.js` — *"[97 RN-01] reserva manual 4 (M3), REMESSA_TERCEIRO 4 (M2), bloqueio
+avulso 1 (M4): 400 com S, nada muda; A entrega 4"*, *"[97 RN-03] a aprovacao de C com a caixa de A presente reserva
+disponivel - caixa dos outros (B469 da 95, igual a hoje)"*, *"[97 RN-04] sem caixa, toda recusa e byte a byte a de hoje
+(saida, reserva manual, remessa, ajuste, estorno de entrada)"*; `portasAvulsasCaixaIntegracao.api.test.js` — *"[97 F5-A]
+corrida separacao x ${nome} (…)"* (uma rodada por porta; a reserva manual é uma delas) e *"[97 T3 C1]"* (o
+`POST /reservas` pela rota). O controle (s3) da T1 — `criarReserva` com o livre de caixa também para `requisicao_id` —
+derrubou *"[95 RN-05] P5b (Fase 2, B2)"* e *"[95 Fase 5] (T8)"*. `test:api` 338/338 (4163 ✓).

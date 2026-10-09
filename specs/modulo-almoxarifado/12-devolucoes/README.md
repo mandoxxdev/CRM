@@ -29,7 +29,8 @@
 > DELETE), anexar comprovante numa devolução antiga é legítimo — e é justamente quando o
 > comprovante costuma chegar. Zero linhas de servidor. A frase "plugar aqui é uma linha", que esta
 > spec repetia desde a Etapa 32, **estava errada** — ver a correção no item de checklist de fotos.
-> **Última atualização:** 2026-09-16 (Etapa 34 — anexos na tela; antes: 2026-08-12 — Etapa 7
+> **Última atualização:** 2026-10-09 (**Etapa 97** — a perna `SUCATA` da devolução fica na régua de hoje (`parDaDevolucao` no 4º argumento do motor, `65dc74b2`): a régua nova das portas avulsas (o livre de caixa) não a recusa depois de a `ENTRADA_DEVOLUCAO` gravar, o que deixaria a devolução pela metade no legado; e os destinos de duas pernas (`QUARENTENA` e `SUCATA`) rodam sob **uma** trava do material (`3810f79a`, Fase 5) — uma separação não cai mais entre a entrada e a segunda perna (**C192**). O plano dizia que a perna podia ficar na régua de hoje porque "o par soma zero" — **estava errado** sem a trava. Range `eb7cd9d8..3fc39310`. Continua 🟢. Ver a seção "Etapa 97" no fim.)
+> Antes: 2026-09-16 (Etapa 34 — anexos na tela; antes: 2026-08-12 — Etapa 7
 > (Tasks 1, 3, 4, 5, 7) + o conserto de compensação fora do plano)
 > Antes: 2026-08-11 — auditoria de cauda: corrigida a descrição da movimentação (anterior à Etapa 6) e registradas as decisões da Etapa 6 que afetam esta feature (isenção de lote, RETRABALHO neutro, SUCATA com justificativa)
 
@@ -155,7 +156,9 @@ auditoria registra, mas não existe alerta nem fila de resolução — descobrir
 a auditoria. A resolução é manual: estornar a `ENTRADA_DEVOLUCAO` órfã pela tela de **Movimentações**.
 É o cenário mais raro possível (exige o motor recusar a **segunda** perna do destino SUCATA depois
 de aceitar a primeira, com as pré-validações passando), mas não é impossível, e fica registrado em
-vez de implícito.
+vez de implícito. *(Etapa 97: a régua nova das portas avulsas — o livre de caixa — **não** vale para a segunda perna
+(`parDaDevolucao`, `65dc74b2`), justamente para não criar um caminho novo para este `ESTADO_PARCIAL`; e as duas pernas
+rodam sob uma trava do material, `3810f79a`. Ver a seção "Etapa 97" no fim.)*
 
 ## Checklist
 
@@ -274,6 +277,9 @@ vez de implícito.
 | Devolução recusada não deixa linha gravada | `[compensacao] devolucao avulsa sem lote recusada nao deixa linha gravada` — mesmo arquivo | ✅ `eabd848` |
 | Devolução recusada não encolhe o devolvível da entrega citada | `[compensacao] devolucao vinculada recusada nao encolhe o saldo_devolvivel da entrega` — mesmo arquivo | ✅ `eabd848` |
 | Devolução com movimentação já gravada **mantém** a linha (rastro do estoque) | `[compensacao] devolucao com movimentacao JA gravada mantem a linha (rastro do estoque)` — mesmo arquivo | ✅ `eabd848` |
+| **Etapa 97** — devolução para sucata no legado (caixa sem reserva > físico) completa com as duas pernas no livro | `[97 I-4] (Fase 2) devolucao para SUCATA no legado (caixa 4 > fisico 2): 201, as duas pernas no livro` — `portasAvulsasCaixa.api.test.js` | ✅ `65dc74b2` |
+| **Etapa 97** — a separação não cai entre as duas pernas (SUCATA e QUARENTENA) | `[97 F5-2] devolucao com duas pernas (SUCATA e QUARENTENA) x separacao entre as pernas: a separacao espera a devolucao inteira — 0/5 com caixa + bloqueado > fisico, por destino` — mesmo arquivo | ✅ `3810f79a` |
+| **Etapa 97** — a quarentena da devolução (`BLOQUEIO` interno) continua bloqueando, mesmo com caixa | `[97 RN-08] a devolucao para QUARENTENA (BLOQUEIO interno, sem a opcao) continua 201 e bloqueia o devolvido, mesmo com caixa` — mesmo arquivo | ✅ `65dc74b2` |
 
 **Testes de tela** (`DevolucoesAlmoxarifado.test.js`, `0722bfd` — 11 casos): lista com material,
 destino e saída de origem; a sugestão condição→destino e o fato de que **ela não trava** a escolha
@@ -286,3 +292,40 @@ em material serializado sem checkboxes, explicando o caminho.
 
 - 03 (movimentação) · 09 (inspeção — a ligação da quarentena de devolução com a fila formal continua
   aberta) · 15 (sucata) · 16 (ferramentas) · 22 (custo de projeto) · 13 (devolução de cliente).
+
+## Etapa 97 — a perna SUCATA na régua de hoje e as duas pernas sob uma trava do material (2026-10-09)
+
+Plano: `docs/superpowers/plans/2026-10-09-almoxarifado-etapa97-portas-avulsas-respeitam-a-caixa.md` (`eb7cd9d8`, Fase 2
+`4a9cf5c1`). Range `eb7cd9d8..3fc39310`. A régua da caixa (as portas avulsas não levam o material separado na caixa sem
+reserva de uma requisição) está na feature 03; aqui, só o que toca a devolução.
+
+**O que estava errado:**
+- **Fase 2 (I-4, reproduzido):** com a régua nova aplicada a toda `SUCATA`, no legado (caixa sem reserva maior que o
+  físico) a `ENTRADA_DEVOLUCAO` gravava e a perna `SUCATA` recusava — devolução pela metade (`ESTADO_PARCIAL`).
+- **Fase 5 (achado 2, igual antes da 97 — 20/20 na base):** cada perna pegava a trava do material sozinha; uma
+  separação que caísse entre a entrada e a segunda perna separava o que a entrada acabou de creditar, e a segunda perna o
+  levava — `SUCATA`: físico 0 com caixa 4; `QUARENTENA`: bloqueado 4 + caixa 4 sobre físico 4 — e a entrega ficava presa
+  em *"Máximo: 0"* (**C192**).
+
+**Entregue:**
+- [x] **A perna `SUCATA` na régua de hoje** — `65dc74b2`: `returnService` passa `{ ...opcoes, parDaDevolucao: true }`
+  no 4º argumento (nunca do body); o motor a trata como a entrega (régua do `disponivelSql`).
+- [x] **As duas pernas sob uma trava do material** — `3810f79a` (B500): os destinos `QUARENTENA` (`ENTRADA_DEVOLUCAO`
+  + `BLOQUEIO`) e `SUCATA` (`ENTRADA_DEVOLUCAO` + `SUCATA`) rodam dentro de `trava.naTravaDoMaterial(material_id, …)`; o
+  motor ali dentro roda direto (a seção segura o material); a compensação (`catch`) roda fora da trava. `ESTOQUE` e
+  `RETRABALHO` (uma perna só): a trava do próprio motor basta.
+
+**Plano que estava errado, dito à vista:** a I-4 da Fase 2 justificava a régua de hoje na perna `SUCATA` com *"o par soma
+zero"* — **só vale sem concorrência**: sem nada entre as pernas. Sem a trava, uma separação no meio fazia o par levar a
+caixa (achado 2 da Fase 5). O certo é: régua de hoje **e** as duas pernas sob uma trava (`3810f79a`).
+
+**Fica de fora (declarado):** o `BLOQUEIO` interno da quarentena continua sem a guarda do bloqueio avulso (num estado já
+inconsistente a devolução quebraria depois da entrada gravada — B496 (i)); o `ESTADO_PARCIAL` continua sem notificação
+(pendência da Etapa 7, acima).
+
+**Testes:** `portasAvulsasCaixa.api.test.js` — *"[97 I-4] (Fase 2) devolucao para SUCATA no legado (caixa 4 > fisico 2):
+201, as duas pernas no livro"*, *"[97 F5-2] devolucao com duas pernas (SUCATA e QUARENTENA) x separacao entre as
+pernas: a separacao espera a devolucao inteira — 0/5 com caixa + bloqueado > fisico, por destino"*, *"[97 RN-08] a
+devolucao para QUARENTENA (BLOQUEIO interno, sem a opcao) continua 201 e bloqueia o devolvido, mesmo com caixa"*.
+Controle (s11) da T1: a perna `SUCATA` sem a opção → a devolução dá 400 com a entrada gravada. `test:api` 338/338
+(4163 ✓). Continua 🟢.

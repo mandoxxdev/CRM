@@ -1076,7 +1076,15 @@ Por padrão, **uma saída maior que o disponível é recusada**, e o sistema diz
 
 Isso vale para todo tipo de saída, e a recusa acontece no servidor — não adianta a tela deixar digitar. Pedir exatamente o que existe sempre passa, mesmo em quantidade fracionada (três entradas de 0,7, 0,2 e 0,1 permitem a saída de 1); as quantidades têm seis casas decimais e a regra completa de arredondamento e comparação está em 22.1b.
 
+**O material separado na caixa de uma requisição não sai por aqui.** O que já foi separado para uma requisição em andamento e ainda não foi entregue — sem reserva da requisição que o cubra — continua na prateleira e conta no disponível que a tela mostra, mas a saída compara com o **livre fora da caixa** (disponível menos esse separado) e a recusa diz para quem ele está separado:
+
+> *"Saldo insuficiente. Disponível: 0 PC — 4 PC estão separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (material perdido da caixa: entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)"*
+
+A conta, as portas que a seguem e o caminho para o material perdido da caixa estão em 10.2.
+
 Permitir saldo negativo é uma decisão **global**, tomada em **Configurações → Configurações Gerais**, na opção *Permitir Saída com Saldo Negativo*. Ela é restrita ao Administrador do módulo e vale para **todos** os materiais — não há como liberar saldo negativo para um material só.
+
+Ligada, a opção dispensa a comparação com o reservado, o bloqueado, o em inspeção e o em terceiros — **nunca a caixa**: a saída passa se o material não tem nada separado sem reserva para requisições (o físico pode ficar negativo), ou se `físico − caixa sem reserva` cobre o pedido; senão, a recusa é a de cima, com o físico menos a caixa como disponível. O Ajuste não depende dessa opção.
 
 Ligá-la significa aceitar que o estoque do sistema pode ficar abaixo de zero. Isso só faz sentido quando a empresa sabe que o lançamento de entrada vai chegar atrasado — **não** é a forma de contornar divergência de contagem. Para divergência de contagem, o caminho é o inventário (seção 13) ou um Ajuste (6.2).
 
@@ -1108,6 +1116,11 @@ nenhum por trás. O livro também a **exibe**; o formulário não a cria.
 Pontos técnicos importantes:
 
 - **Ajuste é absoluto, não incremental.** Digitar 40 num material que tem 100 leva o saldo a 40. Por isso o rótulo do campo muda para "Novo Saldo" quando o tipo é Ajuste.
+- **Ajuste sem localização não desce abaixo do que está retido.** O novo total não pode ficar abaixo de `reservado + bloqueado + em inspeção + em terceiros + separado na caixa de requisição` (a caixa sem reserva — 10.2). A parte da caixa só conta quando o ajuste **reduz** o total: ajustar para **cima** nunca é recusado por causa da caixa (as outras retenções valem nos dois sentidos). A recusa nomeia cada parcela e o mínimo:
+
+  > *"Ajuste para ⟨novo total⟩ ⟨un⟩ deixaria o disponível negativo (reservada: ⟨q⟩, separada na caixa de requisição: ⟨q⟩, mínimo aceitável: ⟨mínimo⟩ ⟨un⟩). Resolva a retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo."*
+
+  Só aparecem as parcelas que existem, na ordem reservada, bloqueada, em inspeção, em terceiros e separada na caixa de requisição. Para o material separado que se perdeu, o caminho está em 10.2.
 - **Ajuste com localização escolhida** zera/redefine **aquela** localização e recalcula o total do material pela soma das prateleiras. É o único tipo que aceita quantidade **zero** — justamente para permitir "esta prateleira está vazia". Em qualquer outro caso, quantidade 0 é recusada com *"quantidade deve ser maior que zero"*.
 - **Ajuste de material com número de série** é sempre do **total** do material — sem localização — e o novo total tem de ser um número inteiro. O formulário mostra *"Material com série: o ajuste é do total, sem endereço."* e *"Séries presentes: P"* (em estoque + bloqueadas). A diferença entre o novo total e as séries presentes decide o que ele pede:
   - **sobe** → **"Números das novas séries (um por linha)"**, exatamente a diferença (contador *"n de d"*);
@@ -1126,7 +1139,7 @@ Pontos técnicos importantes:
   | As séries do material mudaram entre abrir a tela e confirmar (outra pessoa ajustou ou entregou) | *"as series do material mudaram durante o ajuste — recarregue e tente de novo"* — nada muda, e a tela recarrega as séries |
 
   Séries **bloqueadas** contam como presentes mas não aparecem para baixar: desbloqueie antes.
-- **Perda é saída de verdade** para o motor: baixa o físico, respeita controle de lote e a situação do lote. O que a diferencia da Saída comum é que ela **é isenta da trava de vencimento** — assim como a sucata, que passa pela mesma isenção quando a baixa dela sai pelo processo de sucateamento: é assim que um lote vencido consegue sair do sistema (4.3).
+- **Perda é saída de verdade** para o motor: baixa o físico, respeita controle de lote, a situação do lote e o material separado na caixa de requisições (10.2) — material perdido de dentro da caixa não se baixa por Perda enquanto a requisição o segura. O que a diferencia da Saída comum é que ela **é isenta da trava de vencimento** — assim como a sucata, que passa pela mesma isenção quando a baixa dela sai pelo processo de sucateamento: é assim que um lote vencido consegue sair do sistema (4.3).
 
 ### 6.2b Conferir o endereço lendo a etiqueta da posição
 
@@ -1310,7 +1323,7 @@ O motor testa nesta ordem, e **nada de saldo é tocado até todas passarem**:
 6. **Localização** — origem/destino bloqueada é recusada sempre: *"Localização A-01 está bloqueada"*. E uma localização pode restringir o tipo de material que aceita: *"Localização EPI não aceita o tipo de material 'Consumível'"* (essa restrição vale só para o **destino**, nunca para a origem — a política pode ter mudado depois que o material já estava lá).
 7. **Situação do lote** — lote que não está Ativo não sai por caminho nenhum, nem para descarte: *"Lote L-001 esta bloqueado e nao pode ser utilizado"*. O caminho é resolver a situação na tela de Lotes e Séries primeiro.
 8. **Vencimento do lote** — lote vencido **não sai para consumo**, mas **sai** pelas baixas de descarte: Perda ou Ajuste na tela de Movimentações, e a baixa de sucata pelo processo de sucateamento (seção 20) — senão ficaria preso para sempre. A recusa ensina as saídas possíveis: *"Lote L-001 vencido em 2026-01-31 nao pode sair para consumo. Libere o vencimento do lote (PUT /api/almoxarifado/lotes/:id/liberar-vencimento) com justificativa, ou baixe por SUCATA/PERDA ou corrija por AJUSTE."*
-9. **Saldo disponível** → *"Saldo insuficiente. Disponível: 12 UN"*. O número na mensagem é o disponível real, não o físico.
+9. **Saldo disponível** → *"Saldo insuficiente. Disponível: 12 UN"*. O número na mensagem é o disponível real, não o físico. Quando o material tem separado na caixa de requisições sem reserva, a comparação é com o livre fora da caixa, o número da mensagem é esse livre (nunca negativo) e a mensagem ganha o trecho que diz quanto está separado, para quais requisições e o caminho (10.2). A saída que consome uma reserva (9.4) e a entrega da requisição não descontam a caixa.
 10. **Bloqueio de qualidade** — se há quantidade bloqueada e a saída invadiria essa parte: *"Material bloqueado não pode ser utilizado"*.
 
 **Quatro dessas travas não valem para a devolução ao fornecedor** (15b.4-ter), e cada dispensa tem
@@ -1364,6 +1377,7 @@ Movimentação errada **não é excluída**. O botão de estornar (seta curva) n
 - Exige o perfil que pode **ajustar estoque** (mais restrito que o de movimentar).
 - **Estorno de estorno não existe** → *"Estorno não pode ser estornado"*.
 - **Estorno de entrada** vira uma saída, e por isso respeita o disponível: se a mercadoria já foi consumida, a recusa é *"Não é possível estornar: saldo disponível insuficiente (material já consumido)"*. Se a mercadoria **está no estoque mas reservada** (o físico cobre, o disponível não), a recusa diz quem a segura: *"Não é possível estornar: o material está reservado para requisições (⟨números⟩) — libere as reservas antes de estornar"* (uma reserva sem requisição aparece como *"reservas manuais"*). Em material sem lote, se a posição da entrada já não tem aquela quantidade (porque uma saída tirou dela), o estorno tira **como uma saída**: da posição da entrada primeiro, depois das outras com saldo — nenhuma posição fica negativa.
+- **O estorno também respeita o material separado na caixa de requisições** (10.2). O estorno de entrada compara com o livre fora da caixa, e as duas recusas acima ganham, no fim, o trecho *" — ⟨quantidade⟩ ⟨un⟩ estão separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (…)"* quando há caixa. O estorno de um **ajuste** que **reduz** o total (o ajuste tinha subido) passa pela mesma guarda do ajuste (6.2): *"Não é possível estornar: Ajuste para ⟨t⟩ ⟨un⟩ deixaria o disponível negativo (⟨parcelas⟩, mínimo aceitável: ⟨m⟩ ⟨un⟩). Resolva a retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo."* — com ou sem localização; o estorno que aumenta o total não tem essa guarda. O estorno de um **desbloqueio** bloqueia de novo e só cabe no livre fora da caixa (que desconta o reservado): *"Não é possível estornar o desbloqueio: saldo disponível insuficiente para bloquear de novo: ⟨n⟩ ⟨un⟩"*, com o mesmo trecho no fim quando há caixa.
 - **Estorno de saída** devolve a quantidade **a uma posição só**: a origem informada na saída ou, sem ela, a posição padrão do material (ou a conta "sem localização atribuída"). A saída não guarda de quais posições tirou; o físico volta certo, a posição pode não ser a original.
 - **Estorno de uma contagem com localização** que deixaria o material com saldo negativo (porque o material já saiu depois da contagem) é recusado: *"Não é possível estornar: o saldo já foi consumido (o estorno deixaria o material negativo)"*.
 - **Duas pessoas estornando ao mesmo tempo:** só a primeira passa; a segunda recebe *"Movimentação já cancelada"*. Estornar de novo uma linha **já estornada** recebe a mesma mensagem, antes de qualquer alteração.
@@ -1539,6 +1553,8 @@ Regras:
 - Itens **sem** escolha continuam sendo entregues um a um: se um deles for recusado no meio, os anteriores já saíram e ficam contados como entregues.
 
 **O disponível usado aqui soma de volta a reserva da própria requisição** — o que a aprovação reservou é daquela requisição e não pode barrá-la (9.4).
+
+**A entrega é a porta da caixa.** O material separado para uma requisição e ainda não entregue só sai do estoque por aqui: as saídas avulsas, a perda, o ajuste para menos, o bloqueio, a reserva manual, a remessa e o sucateamento não o levam (10.2). Por isso a entrega do separado compara com o disponível de sempre, sem descontar a caixa.
 
 **Assinatura do recebedor.** Logo depois de uma entrega bem-sucedida, o sistema abre **✍ Colher assinatura do recebedor**: o nome de quem retirou o material e um quadro para assinar na tela (funciona com o dedo e com o mouse; **Confirmar assinatura** só habilita depois de existir traço, e **Limpar** recomeça). As regras:
 
@@ -1735,7 +1751,7 @@ Reservar é **separar no sistema** antes de separar na prateleira: o material co
 
 A reserva **não move nada**: ela soma na coluna **Reservado** do material. Como o disponível subtrai o reservado (6.1), o efeito prático é: **o físico fica igual, o disponível cai**.
 
-O hold é criado com validação **no próprio comando**: reservar mais do que o disponível é recusado com *"Saldo disponível insuficiente: 8"*. Isso importa porque reserva acima do físico seria uma reserva **impossível de consumir** — o consumo também exige saldo físico.
+O hold é criado com validação **no próprio comando**: reservar mais do que o disponível é recusado com *"Saldo disponível insuficiente: 8"*. A reserva **manual** (feita na tela **Reservas** ou pela integração) não toma o material separado na caixa de uma requisição: compara com o livre fora da caixa (10.2) e, quando há caixa, a recusa mostra esse livre e ganha o trecho que diz para quem o material está separado — *"Saldo disponível insuficiente: 0 — 4 PC estão separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (…)"*. As reservas que o sistema cria para requisições (na aprovação e na chegada do material — 9.3 a 9.3c) seguem as regras próprias delas. Isso importa porque reserva acima do físico seria uma reserva **impossível de consumir** — o consumo também exige saldo físico.
 
 Outras recusas: sem o perfil, *"Sem permissão para reservar"*; quantidade zero ou negativa, *"Quantidade da reserva deve ser maior que zero"*.
 
@@ -1863,7 +1879,7 @@ Três operações põem material no disponível e o distribuem para quem esperav
 
 **Separar e entregar também entram nessa fila**, por todos os materiais da requisição: uma separação ou entrega espera a nota, a inspeção, a não conformidade ou a aprovação em andamento de um material dela, e a aprovação espera a separação ou a entrega em andamento. Duas separações — ou uma separação e uma entrega — de requisições diferentes com o mesmo material acontecem uma depois da outra, e a segunda lê a caixa que a primeira deixou (10.2).
 
-**O que não entra nessa fila:** a saída avulsa (tela **Movimentações** ou integração) e a reserva manual (tela **Reservas**). Elas usam o disponível do momento em que são lançadas, sem esperar a nota, a inspeção ou a não conformidade do material. A fila também vale para **um** servidor do sistema: com mais de um servidor atendendo ao mesmo tempo, as operações de servidores diferentes não esperam umas pelas outras.
+**As portas avulsas também entram nessa fila**, pelo material que movimentam: a saída e o ajuste (tela **Movimentações** ou integração), o bloqueio avulso, a reserva manual (tela **Reservas**) e as demais portas listadas em 10.2 esperam a nota, a inspeção, a não conformidade, a aprovação, a separação ou a entrega em andamento desse material, e só então conferem o saldo — e essas operações esperam a porta avulsa em andamento. A fila também vale para **um** servidor do sistema: com mais de um servidor atendendo ao mesmo tempo, as operações de servidores diferentes não esperam umas pelas outras.
 
 ### 9.4 Consumo contra reserva
 
@@ -2031,7 +2047,43 @@ Exemplos, todos com material comum:
 
 **Duas separações do mesmo material ao mesmo tempo acontecem uma depois da outra**, mesmo de requisições diferentes: a segunda espera a primeira terminar e só então calcula o separável, já com a caixa que a primeira deixou. O mesmo vale entre a separação, a entrega e a aprovação de requisições que têm material em comum (9.3d). A espera é por material: requisições sem material em comum não esperam umas pelas outras.
 
-**Quem desconta a caixa e quem não desconta.** A separação, a aprovação (9.3) e a entrega sem nova separação depois de uma entrega parcial (7.5) descontam a caixa dos outros pedidos. A **saída avulsa** (tela **Movimentações** ou integração) e a **reserva manual** (tela **Reservas**) não a conhecem: olham só o disponível e podem levar — ou reservar — o material que está separado, sem reserva, para uma requisição. Antes de uma saída avulsa, confira se o material na prateleira não está separado para alguém. Se a saída levar, a entrega da requisição que o separou fica limitada ao disponível que sobrou (7.5).
+**Quem desconta a caixa.** A separação, a aprovação (9.3) e a entrega sem nova separação depois de uma entrega parcial (7.5) descontam a caixa dos outros pedidos pelo separável.
+
+**O material separado na caixa de uma requisição só sai pela entrega.** Toda outra porta que tira material do disponível — as **portas avulsas** — compara o pedido com o **livre fora da caixa**:
+
+```
+livre fora da caixa = disponível − caixa sem reserva das requisições em andamento
+caixa sem reserva   = soma, pelos itens de requisição em andamento daquele material,
+                      de máximo(0, separado − entregue − reserva ativa da requisição para o item)
+```
+
+"Em andamento" são os status de **Quem segura a caixa** (acima). A parte da caixa que a reserva da requisição cobre não entra: ela já saiu do disponível pela reserva e não é descontada duas vezes. O resultado é arredondado a seis casas (22.1b). **Os números das telas não mudam:** o *Disponível* do material, o do extrato e o da Fila de separação continuam sendo o disponível de sempre (6.1); só a recusa explica a caixa.
+
+As portas avulsas que respeitam a caixa:
+
+- **toda saída comum** — Saída (inclusive a emergencial), Perda, Ajuste negativo, devolução ao cliente (16.7) e as saídas para produção, montagem e assistência lançadas por integração (6.7, item 9);
+- **o Ajuste sem localização e a conclusão da conferência de inventário**, quando reduzem o total do material (6.2, 13.5);
+- **o envio de remessa a terceiro** (17.4);
+- **o bloqueio avulso** (15.3);
+- **a reserva manual**, feita na tela **Reservas** (9.1);
+- **a solicitação de sucateamento** — e a baixa final, depois das duas assinaturas (20.1);
+- **os estornos** de entrada, de ajuste (quando o estorno reduz o total) e de desbloqueio (6.10).
+
+Quando a recusa acontece e o material tem caixa sem reserva, a mensagem de sempre ganha, no fim, quanto está separado, para quem, e o caminho:
+
+> *" — ⟨quantidade⟩ ⟨unidade⟩ estão separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (material perdido da caixa: entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)"*
+
+Com duas ou três requisições, o trecho diz *"as requisições ⟨número⟩, ⟨número⟩ e ⟨número⟩"*; com quatro ou mais, nomeia as três primeiras e acrescenta *"e mais ⟨n⟩"*. O número que a mensagem mostra como disponível é o livre fora da caixa, e nunca aparece negativo (é mostrado como 0). Exemplo completo, numa saída com os 4 da prateleira separados para uma requisição:
+
+> *"Saldo insuficiente. Disponível: 0 PC — 4 PC estão separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (material perdido da caixa: entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)"*
+
+Material **sem** caixa sem reserva recebe a recusa de sempre, sem esse trecho.
+
+**Ficam fora dessa régua** — comparam com o disponível de sempre: a **entrega** da requisição (é por ela que a caixa sai); as reservas que o sistema cria para requisições (na aprovação, na chegada da nota, na liberação da inspeção e da não conformidade); a saída que **consome uma reserva** (9.4); as baixas do que está **em terceiros** e do **bloqueado** (17.6, 15b.4-ter); a **transferência**, que não muda o físico; o **Ajuste com localização** (6.2); e a devolução ao estoque com destino **Quarentena** ou **Sucata** (12.6).
+
+**A porta avulsa espera a separação.** A saída, o ajuste, o bloqueio, a reserva manual e as demais portas avulsas entram na mesma fila por material da separação, da entrega e da aprovação (9.3d): uma saída clicada no instante em que outra pessoa separa o mesmo material espera a separação terminar e só então confere o livre fora da caixa — ou a separação espera a saída e calcula o separável com o que sobrou.
+
+**Material quebrado ou perdido na caixa.** Se parte do separado se perdeu (caiu, quebrou, sumiu), a Perda desse material é recusada enquanto a caixa o segura — a recusa ensina o caminho. Não há gesto para "tirar da caixa": entregue o que sobrou (a requisição fica **Parcialmente Atendida**) e **Encerre** a requisição (7.6) — ao encerrar, o que ela tinha separado e não entregou deixa de ser caixa, e a Perda do resto passa. Se **tudo** se perdeu e a requisição está *Em Separação*, não há o que entregar, e ela não se encerra nem se cancela nesse status (*"Transição inválida: EM_SEPARACAO → ENCERRADA"*; *"Não é possível cancelar neste status"*): o administrador do almoxarifado (ou o super administrador) **exclui** a requisição (7.6), e a Perda passa. O almoxarife não exclui — recebe *"Apenas administradores do Almoxarifado ou Super Administrador podem excluir requisições"*.
 
 **De onde sai — "Sai de" na separação.** Cada item do modal de separação tem o campo **Sai de**, com as mesmas opções da entrega (7.5): **"Qualquer endereço (automático)"** e os endereços onde o material está, como *"A-01 (10)"* ou *"B-02 — lote L-7 (4)"*. Quem separa escolhe o endereço (e o lote) de onde tirou. Regras:
 
@@ -2043,7 +2095,7 @@ Exemplos, todos com material comum:
 - **A troca fica registrada.** Quando a rodada deixa sem origem um item que tinha separado ainda não entregue, a troca aparece no bloco **"Substituições (N)"** do detalhe (10.1): quanto já estava separado, de onde, de onde veio a rodada nova, o motivo, quem e quando. Rodada do mesmo lugar, item sem origem anterior, ou com tudo o que foi separado dali já entregue, não registram nada. Rodada recusada não registra nada. O registro nunca é editado nem apagado.
 
 - Escolher só o lote, sem endereço, não vira origem da separação.
-- A separação continua **não mexendo em saldo** (10.5): o material separado de A-01 continua contado em A-01 até a entrega. Outras requisições não contam com ele (é caixa — acima), mas uma saída avulsa pode levá-lo antes — nesse caso a entrega é recusada com o caminho (7.5).
+- A separação continua **não mexendo em saldo** (10.5): o material separado de A-01 continua contado em A-01 até a entrega. Outras requisições não contam com ele (é caixa — acima), e uma saída avulsa não o leva: ele só sai pela entrega.
 
 **Divergência — separar menos do que dava.** Cada rodada guarda, por item, **quanto dava para separar** naquele momento e se o separador ficou **abaixo** disso — e o porquê, se ele escrever. No modal de separação, quando a quantidade de um item fica abaixo do possível, aparece o campo **"Motivo da divergência (opcional)"**, com a dica *"Separando menos que o possível — conte o porquê para quem confere."*. Regras:
 
@@ -2092,7 +2144,7 @@ Esta é a pergunta mais importante do capítulo, e a resposta é: **na entrega, 
 
 Ou seja: **o disponível cai na aprovação** (pela reserva) e **o físico cai na entrega**. A separação não mexe em saldo nenhum — ela registra o trabalho de campo e prepara a entrega. Quem espera ver o estoque baixar ao separar vai achar que o sistema não funcionou; ele funcionou, e o material já estava protegido desde a aprovação.
 
-**A caixa — separado, mas ainda na prateleira.** A separação não mexer em saldo não quer dizer que o material separado esteja livre para outro pedido: o separado e ainda não entregue de uma requisição em andamento é a **caixa** dela, e o sistema o desconta do que outra requisição pode separar (10.2), do que outra aprovação reserva (9.3) e do que a entrega sem nova separação pode levar (7.5). Os números de saldo das telas — o *Disponível* do material, o *Saldo* da janela de separação, o *disponível* da Fila de separação — **não** descontam a caixa; só o separável desconta. Quando a requisição deixa de estar em andamento — entregue por completo, encerrada, cancelada, rejeitada ou excluída —, o que ela tinha na caixa volta a contar como livre, sem nenhum movimento de estoque; fisicamente, esse material precisa voltar à prateleira. A **saída avulsa** pela tela **Movimentações** não conhece a caixa e pode levar o material separado sem reserva para uma requisição: confira a prateleira antes de uma saída avulsa.
+**A caixa — separado, mas ainda na prateleira.** A separação não mexer em saldo não quer dizer que o material separado esteja livre para outro pedido: o separado e ainda não entregue de uma requisição em andamento é a **caixa** dela, e o sistema o desconta do que outra requisição pode separar (10.2), do que outra aprovação reserva (9.3) e do que a entrega sem nova separação pode levar (7.5). Os números de saldo das telas — o *Disponível* do material, o *Saldo* da janela de separação, o *disponível* da Fila de separação — **não** descontam a caixa; só o separável desconta. Quando a requisição deixa de estar em andamento — entregue por completo, encerrada, cancelada, rejeitada ou excluída —, o que ela tinha na caixa volta a contar como livre, sem nenhum movimento de estoque; fisicamente, esse material precisa voltar à prateleira. Enquanto está na caixa, o material **só sai pela entrega**: a saída avulsa, a perda, o ajuste para menos, o bloqueio, a reserva manual, a remessa, o sucateamento e os estornos comparam com o livre fora da caixa e recusam, dizendo para qual requisição ele está separado (10.2).
 
 ---
 
@@ -2289,6 +2341,8 @@ Uma trava específica protege esse caminho: **sucata com lote bloqueado é recus
 
 > *"Lote L-001 está bloqueado e não pode ser sucateado por devolução. Resolva o status do lote primeiro (tela Lotes e Séries) e repita a devolução."*
 
+**Os dois lançamentos dos destinos Quarentena e Sucata acontecem juntos, para o material.** A entrada e o bloqueio (ou a entrada e a baixa de sucata) entram na fila por material (9.3d) como uma operação só: uma separação, saída ou aprovação do mesmo material não cai entre eles. Por isso esses dois lançamentos comparam com o disponível de sempre, sem descontar a caixa de requisições (10.2) — a baixa de sucata tira exatamente o que a entrada acabou de pôr.
+
 Toda devolução recebe uma referência própria no livro (no formato `DEV-<número>`), que amarra os lançamentos ao registro da devolução.
 
 ### 12.7 Anexos da devolução
@@ -2453,7 +2507,7 @@ recusa é imediata, antes de tocar em qualquer material:
 
 Na prática: **o almoxarife conta o inventário, mas quem homologa a divergência no saldo é Administrador ou Gestor.**
 
-**O ajuste é recusado se deixaria alguma retenção maior que o novo total** — reservado, bloqueado, em inspeção ou em poder de terceiros. A mensagem diz qual retenção pesa e o mínimo aceitável:
+**O ajuste é recusado se deixaria alguma retenção maior que o novo total** — reservado, bloqueado, em inspeção ou em poder de terceiros — e, quando a contagem **reduz** o total, também o material separado na caixa de requisições e ainda não entregue (10.2), que aparece na mensagem como *"separada na caixa de requisição: ⟨q⟩"*. Uma contagem acima do que o sistema tem nunca é recusada por causa da caixa. A mensagem diz qual retenção pesa e o mínimo aceitável:
 
 > `Ajuste bloqueado: <código>: Ajuste para <valor> <unidade> deixaria o disponível negativo (<retenção>: <valor>, mínimo aceitável: <valor> <unidade>). Resolva a retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo.`
 
@@ -2472,12 +2526,20 @@ E como a contagem diz quantas peças há, mas não **quais**, o ajuste muda só 
 **A aplicação é tudo ou nada.** Se qualquer item da conferência for recusado (por retenção ou por
 permissão), **nenhum** ajuste é aplicado — nem os que passariam sozinhos — e a conferência
 continua Aberta. Resolva o motivo da recusa (libere a retenção, peça a autorização) e conclua de
-novo.
+novo. Enquanto a conclusão confere e aplica os ajustes, os materiais da conferência ficam na fila
+por material (9.3d): uma separação, saída, reserva ou bloqueio desses materiais espera a conclusão
+terminar, e nada muda o saldo deles entre a conferência e a aplicação. Se um ajuste falhar no meio
+da aplicação, a conferência volta a Aberta e pode ser concluída de novo — o ajuste é absoluto, e
+reaplicar o que já foi ajustado não dobra a quantidade.
 
 **Uma conferência só conclui uma vez.** Tentar concluir de novo uma que já está Concluída ou
 Cancelada é recusado:
 
 > `Conferência não está aberta (status atual: <status>)`
+
+Duas conclusões da mesma conferência clicadas ao mesmo tempo (duas abas, duas pessoas): só uma
+conclui e aplica os ajustes; a outra recebe `Conferência não está aberta (status atual: CONCLUIDO)`
+e não aplica nada.
 
 O **impacto financeiro** é calculado **sempre** na conclusão — com ou sem aplicar ajustes — como
 a soma, em reais, das divergências encontradas (valor absoluto: uma sobra de R$ 50 e uma falta
@@ -2893,7 +2955,7 @@ O efeito prático:
 
 O item retido aparece na tela **Inspeções Pendentes** com a quantidade retida, o recebimento de origem, a nota fiscal e **há quantos dias está esperando**.
 
-**A entrada e a retenção são dois lançamentos seguidos da mesma operação.** As aprovações de requisição esperam a operação inteira (9.3d) e nunca reservam o que vai ser retido. Uma saída avulsa ou uma reserva manual lançada exatamente entre os dois lançamentos — uma fração de segundo — não espera: pode usar a quantidade que em seguida fica retida, e o material passa a mostrar disponível **negativo** (e, se a saída levou o material, mais quantidade retida do que físico). Quando um material crítico aparecer com disponível negativo, confira com a Qualidade antes de decidir a inspeção dele: aprovar esses itens libera um saldo que já saiu da prateleira.
+**A entrada e a retenção são dois lançamentos seguidos da mesma operação.** As aprovações de requisição, a saída avulsa e a reserva manual do mesmo material esperam a operação inteira (9.3d): nenhuma delas cai entre os dois lançamentos nem usa a quantidade que em seguida fica retida. Se, mesmo assim, um material crítico aparecer com disponível **negativo**, confira com a Qualidade antes de decidir a inspeção dele: aprovar esses itens libera um saldo que pode já ter saído da prateleira.
 
 ### 14.7 Anexos do recebimento
 
@@ -3789,6 +3851,18 @@ Os dois exigem **material**, **quantidade** e **justificativa**, e nenhum dos tr
 
 O desbloqueio **nunca satura em silêncio**: pedir para desbloquear 50 quando há 30 bloqueados é recusado, e não devolve 30 fingindo que devolveu 50.
 
+**O bloqueio não passa do que existe e não está retido.** A quantidade a bloquear tem de caber em:
+
+```
+bloqueável = físico − bloqueado − em inspeção − em terceiros − separado na caixa de requisições sem reserva
+```
+
+O **reservado não entra na conta**: a qualidade continua podendo bloquear material reservado — quem bloqueia não precisa liberar a reserva de uma requisição para segurar a peça suspeita. O que está separado na caixa de uma requisição sem reserva que o cubra (10.2) não se bloqueia por aqui: ele só sai pela entrega. Acima do bloqueável:
+
+> *"Saldo disponível insuficiente para bloquear: ⟨n⟩ ⟨un⟩"*
+
+e, quando há caixa, a mensagem ganha no fim o trecho que diz quanto está separado e para quais requisições (10.2). O número mostrado é o bloqueável, nunca negativo. Atenção: bloquear material reservado que já foi separado para a requisição reduz o teto da entrega dela (7.5) — a recusa da entrega mostra o *Máximo* menor sem citar o bloqueio. Para entregar, desbloqueie.
+
 Perfil exigido para bloquear e desbloquear: **ajustar estoque** (Administrador e Gestor). Ele é **diferente** do de decidir inspeção — quem decide inspeção não necessariamente pode bloquear material avulso.
 
 **Há outros dois caminhos para tirar material do bloqueio, e nenhum deles passa por estes botões** —
@@ -4652,6 +4726,9 @@ A soma é por material porque **duas linhas do mesmo material são caso normal**
 
 A mensagem diz **quanto há, quanto foi pedido e em quantas linhas** — para o operador não olhar uma linha de 60, ver 100 disponíveis e concluir que o sistema está errado.
 
+**O que está separado na caixa de uma requisição não vai para o terceiro.** O "disponível" que o envio compara é o **livre fora da caixa** (10.2): o disponível menos o separado e ainda não entregue, sem reserva, das requisições em andamento. Quando é a caixa que falta, o trecho daquele material na mensagem mostra esse livre (nunca negativo) e termina dizendo para quem o material está separado — os trechos de materiais diferentes continuam separados por `; `:
+
+> *"Nao foi possivel enviar a remessa ⟨REM⟩: ⟨código⟩: disponivel 0 PC, a remessa pede 4 — 4 PC estão separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (material perdido da caixa: entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)"*
 Clicar em "Enviar" duas vezes não retém em dobro: cada item só é enviado uma vez.
 
 ### 17.5 Retorno parcial e o teto do que ainda pode voltar
@@ -4721,6 +4798,8 @@ O que já voltou não é estornado de novo — estornar duas vezes negativaria a
 | Valor do estoque | **conta normalmente** |
 | Pode sair, ser reservado, ser requisitado | **não** |
 | Aparece na contagem de inventário | **não** |
+
+O inverso também vale: o material separado na caixa de uma requisição não pode ser enviado ao terceiro (17.4, 10.2).
 
 Essa é a única das quatro retenções que significa "não está no prédio", e é por isso que ela — e só ela — é descontada da quantidade esperada na conferência de estoque. A conta e a razão completa estão em 13.2.
 
@@ -4928,7 +5007,14 @@ O que o sistema valida já na solicitação (para a recusa não esperar duas ass
 - **Saldo disponível insuficiente é recusado com os números**: *"Saldo disponivel insuficiente
   para sucatear CHP-01: disponivel 20 UN, solicitado 30. O disponivel ja desconta reservado,
   bloqueado, em inspecao e em poder de terceiros — sucatear alem dele apagaria material que esta
-  comprometido com outra OS."*
+  comprometido com outra OS."* O disponível comparado aqui é o **livre fora da caixa** (10.2): o
+  material separado na caixa de uma requisição, sem reserva, não se sucateia. Quando é a caixa que
+  falta, o número mostrado é esse livre (nunca negativo), a frase do disponível ganha *"e o separado
+  na caixa de requisições"* depois de *"em poder de terceiros"*, e a mensagem termina com o trecho
+  *" — ⟨quantidade⟩ ⟨un⟩ estão separados para a requisição ⟨número da requisição⟩ e só saem pela
+  entrega (material perdido da caixa: entregue o que existe e encerre a requisição, ou peça ao
+  administrador do almoxarifado para excluí-la)"*. Se o material for separado depois da solicitação,
+  a baixa das duas assinaturas confere de novo pela mesma régua e também é recusada.
 - **Material com controle de lote sem lote informado é recusado**, e o lote informado tem de ser
   daquele material.
 - **Material com número de série não passa pelo processo** — não há campo para dizer qual série
@@ -5930,6 +6016,11 @@ O material tem **uma** quantidade física e **quatro** retenções. O saldo disp
 Consequências:
 
 - **É o disponível que autoriza qualquer saída.** Saída, sucata, perda, devolução ao cliente, reserva, envio a terceiro e atendimento de requisição — todos comparam contra o disponível. Recusa típica: *"Saldo insuficiente. Disponível: 40 KG"*; ao reservar: *"Saldo disponível insuficiente: 40"*; ao enviar a terceiro: *"Saldo disponível insuficiente para enviar ao terceiro: 40 KG"*.
+- **As portas avulsas descontam também a caixa das requisições.** A saída, a perda, o ajuste para menos, o bloqueio avulso, a reserva manual, a remessa, o sucateamento e os estornos comparam com o **livre fora da caixa**:
+
+  > **livre fora da caixa = disponível − caixa sem reserva**, em que a caixa sem reserva é a soma, pelos itens de requisição em andamento do material, de `máximo(0, separado − entregue − reserva ativa da requisição para o item)`
+
+  O disponível mostrado nas telas continua sendo o da fórmula acima; a entrega da requisição e as reservas que o sistema cria para requisições comparam com ele. A regra completa e a lista das portas estão em 10.2.
 - **As três primeiras retenções não tiram nada do patrimônio nem da contagem.** O material está lá.
 - **A quarta tira da contagem**, porque não está lá (13.2).
 - **O consumo contra uma reserva não é bloqueado pela própria reserva.** Quem reservou pode consumir: na hora do consumo, a parte reservada que está sendo usada é somada de volta antes da comparação (9.4).
@@ -6110,7 +6201,7 @@ sistema aplica e audita.
 
 **3. Não intercale, no mesmo material, homologação de inventário e contagem por localização.** A homologação escreve o total do material; a contagem por prateleira recalcula o total a partir da soma das posições. Se você homologar uma conferência e, em seguida, fizer uma contagem por localização naquele mesmo material, o total passa a vir das posições — e o número homologado é substituído. Escolha um dos dois caminhos por material: ou o total vem da conferência, ou vem da soma das prateleiras.
 
-**4. Um ajuste que deixaria alguma retenção maior que o total é recusado — exceto quando o ajuste é escopado a uma localização específica.** Para o ajuste do material inteiro (o caminho que a tela de Movimentações usa sem escolher uma prateleira, e o caminho que toda conferência de inventário usa), o sistema **recusa** e diz qual retenção pesa e o mínimo aceitável (13.5) — reservado, bloqueado, em inspeção e em poder de terceiros continuam protegidos automaticamente. **A única exceção é o ajuste escopado a uma localização/prateleira específica**: ali o total só é conhecido depois de somar todas as posições, e essa combinação ainda não tem a mesma guarda — um material com 8 unidades bloqueadas cujo total, ajustado por localização, cai para 1, ainda fica com a retenção maior que o total, e o disponível calculado (6.1) vira negativo sem aviso. Para esse caso específico, a ordem correta continua sendo soltar a retenção primeiro:
+**4. Um ajuste que deixaria alguma retenção maior que o total é recusado — exceto quando o ajuste é escopado a uma localização específica.** Para o ajuste do material inteiro (o caminho que a tela de Movimentações usa sem escolher uma prateleira, e o caminho que toda conferência de inventário usa), o sistema **recusa** e diz qual retenção pesa e o mínimo aceitável (13.5) — reservado, bloqueado, em inspeção e em poder de terceiros continuam protegidos automaticamente, e, no ajuste que reduz o total, também o material separado na caixa de requisições (10.2). **A única exceção é o ajuste escopado a uma localização/prateleira específica**: ali o total só é conhecido depois de somar todas as posições, e essa combinação não tem a mesma guarda — nem das retenções, nem da caixa: um ajuste com localização pode deixar o total abaixo do que está separado para uma requisição, e a entrega dela passa a ser limitada pelo que sobrou (7.5). Do mesmo modo, um material com 8 unidades bloqueadas cujo total, ajustado por localização, cai para 1, ainda fica com a retenção maior que o total, e o disponível calculado (6.1) vira negativo sem aviso. Para esse caso específico, a ordem correta continua sendo soltar a retenção primeiro:
 
 | Retenção a soltar | Caminho próprio |
 |---|---|

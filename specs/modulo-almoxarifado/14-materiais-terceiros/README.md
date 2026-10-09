@@ -14,8 +14,12 @@
 > sem id, **não** tem clipe (RN-01). Zero linhas de servidor. E a frase "plugar aqui é uma linha",
 > que esta spec repetia desde a Etapa 32, **estava errada** — ver a correção no item "Itens da
 > remessa" do checklist.
-> **Spec original:** seção 18 · **Última atualização:** 2026-09-16 (Etapa 34 — anexos no item da
-> remessa; antes: 2026-08-13)
+> **Spec original:** seção 18 · **Última atualização:** 2026-10-09 (**Etapa 97** — a remessa não
+> leva mais o material separado na caixa sem reserva de uma requisição: o envio pré-checa pelo livre de caixa e recusa
+> com a literal de antes e o sufixo da caixa **dentro do fragmento do material** (M2b, `9dbf11c0`); o
+> `REMESSA_TERCEIRO` do motor recusa pela mesma régua (M2, `65dc74b2`); a compensação da transformação estorna os
+> créditos com `compensacao: true` (régua de hoje). Range `eb7cd9d8..3fc39310`. Continua 🟢. Ver a seção "Etapa 97" no
+> fim.) Antes: 2026-09-16 (Etapa 34 — anexos no item da remessa; antes: 2026-08-13)
 >
 > | Etapa | Design | Plano |
 > |---|---|---|
@@ -250,6 +254,7 @@ pendência 6.
 | Regra | Teste | Onde |
 |-------|-------|------|
 | Material em terceiros sai do disponível mas segue no patrimônio | `envio a terceiro remove do disponivel e mantem quantidade_atual` | `remessaTerceiroMotor.api.test.js` |
+| **Etapa 97** — o envio não leva o material separado na caixa sem reserva de uma requisição; o S vai dentro do fragmento do material; sem caixa, a recusa é byte a byte a de antes | `[97 RN-01] remessa pela rota: criar 201, enviar 400 M2b com o S DENTRO do fragmento do material com caixa; nada muda; A entrega 4` + `[97 RN-04] remessa sem caixa: a recusa do envio e byte a byte a de hoje` + `[97 RN-01] reserva manual 4 (M3), REMESSA_TERCEIRO 4 (M2), bloqueio avulso 1 (M4)…` | `portasAvulsasCaixa.api.test.js` |
 | **A contagem de inventário não cobra o que está no terceiro** | `conferencia desconta o que esta em terceiros do esperado` | `conferenciaEmTerceiros.api.test.js` |
 | Bloqueado e quarentena **continuam** sendo contados (controle positivo) | `conferencia continua cobrando material bloqueado e em quarentena` | `conferenciaEmTerceiros.api.test.js` |
 | Retorno acima do enviado falha, dizendo quanto ainda está lá | `retorno maior que a remessa falha` | `remessaTerceiroCiclo.api.test.js` |
@@ -476,3 +481,35 @@ estar inline no handler HTTP. `data.codigo_auto` verdadeiro torna `data.codigo` 
 liga **retry sob `UNIQUE`** (até **5** tentativas, regerando o código a cada colisão). Sem
 `codigo_auto`, comportamento **idêntico** ao de antes: 400 `'Código já existe'`. `GET /proximo-codigo`
 usa o **`MAX` do sufixo numérico** da família, não mais `ORDER BY id DESC`.
+
+## Etapa 97 — a remessa não leva o material separado na caixa de uma requisição (2026-10-09)
+
+Plano: `docs/superpowers/plans/2026-10-09-almoxarifado-etapa97-portas-avulsas-respeitam-a-caixa.md` (`eb7cd9d8`, Fase 2
+`4a9cf5c1`). Range `eb7cd9d8..3fc39310`. A régua (livre de caixa = disponível do motor − caixa sem reserva das
+requisições) está na feature 03.
+
+**O que estava errado (Fase 0, s1):** com 4 separados na caixa sem reserva de uma requisição A (físico 4, reservado 0),
+criar uma remessa de 4 e enviar → 200 (em terceiros 4) e A ficava presa: entregar → 400 *"Máximo: 0"*. A pré-checagem
+do envio e o claim do `REMESSA_TERCEIRO` comparavam com o `disponivelSql`, que não conhece caixa.
+
+**Entregue:**
+- [x] **O motor (M2)** — `65dc74b2`: o claim do `REMESSA_TERCEIRO` usa o livre de caixa; recusa *"Saldo disponível
+  insuficiente para enviar ao terceiro: ⟨n⟩ ⟨un⟩"* + o sufixo S quando há caixa.
+- [x] **O envio (M2b)** — `9dbf11c0`: `thirdPartyService.enviarRemessa` pré-checa pelo `livreDeCaixaSql('m')` e a recusa
+  continua tudo-ou-nada e por material: *"Nao foi possivel enviar a remessa ⟨REM⟩: ⟨cod⟩: disponivel ⟨n⟩ ⟨un⟩, a remessa
+  pede ⟨q⟩"* + S — o S vai **dentro do fragmento do material** que tem caixa (fragmentos separados por `; `), não no fim
+  da frase inteira (Fase 2, menor 2). Com caixa, ⟨n⟩ = `max(0, livre)`; sem caixa, a literal de antes byte a byte.
+- [x] **A compensação da transformação na régua de hoje** — `65dc74b2` (Fase 2, I-4): `compensarTransformacao` estorna os
+  créditos das peças com `cancelarMovimentacao(…, { compensacao: true })` — sem isso, no legado (caixa > físico), o
+  estorno recusaria e o `.catch` engoliria, deixando peça fantasma. O estorno do consumo (crédito) não muda.
+
+**Fica de fora (declarado):** as compensações com `compensacao: true` só levariam a caixa depois de uma falha no meio da
+transformação **e** uma separação concorrente; a baixa de terceiro (`baixandoTerceiro`), o retorno e o cancelamento da
+remessa não mudam (não tiram do disponível).
+
+**Testes:** `portasAvulsasCaixa.api.test.js` — *"[97 RN-01] remessa pela rota: criar 201, enviar 400 M2b com o S DENTRO
+do fragmento do material com caixa; nada muda; A entrega 4"*, *"[97 RN-04] remessa sem caixa: a recusa do envio e byte a
+byte a de hoje"*, *"[97 RN-01] reserva manual 4 (M3), REMESSA_TERCEIRO 4 (M2), bloqueio avulso 1 (M4): 400 com S, nada
+muda; A entrega 4"*, *"[97 I-4] (Fase 2) estorno de entrada como compensacao (opcoes.compensacao) fica na regua de hoje;
+sem a opcao recusa"*; `portasAvulsasCaixaIntegracao.api.test.js` — *"[97 T3 C1]"* (a remessa pela rota). `test:api`
+338/338 (4163 ✓). Continua 🟢.

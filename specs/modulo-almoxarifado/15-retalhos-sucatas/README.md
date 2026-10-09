@@ -1,5 +1,6 @@
 # 15 — Retalhos, Sobras e Sucatas
 
+> **Última atualização:** 2026-10-09 (**Etapa 97** — o sucateamento **comum** não leva mais o material separado na caixa sem reserva de uma requisição: a recusa vem **na solicitação** (antes das duas assinaturas), pelo livre de caixa, com a frase do disponível acrescida de *"e o separado na caixa de requisições"* e o sufixo da caixa (M7, `9dbf11c0`); `disponivel_na_solicitacao` passa a gravar o livre de caixa (só auditoria); a compensação do retalho estorna com `compensacao: true` (régua de hoje, `65dc74b2`). O sucateamento ligado à NC (`doBloqueado`) não muda. Range `eb7cd9d8..3fc39310`. Continua 🟢. Ver a seção "Etapa 97" no fim.) Antes: 2026-10-01 (Etapa 69 — o status abaixo).
 > **Status:** 🟢 — **+ Etapa 69 (2026-10-01): o material REPROVADO na inspeção vai para o sucateamento** — a não
 > conformidade decidida Sucatear ganha *Solicitar sucateamento* (`POST /nao-conformidades/:id/solicitar-sucateamento`,
 > gate `movimentar`), o sucateamento ligado à NC (`nao_conformidade_id`) passa pelas mesmas duas assinaturas e a segunda
@@ -60,7 +61,9 @@ recusa com o número na mensagem. Repetir a conta no serviço seria uma segunda 
 (o defeito que `availabilitySql.js` existe para impedir) e inútil como proteção — a janela entre a
 pré-checagem e o motor é justamente a corrida. O que protege é a **compensação da assinatura**
 (exercitada por teste com injeção natural: consumir o saldo entre a solicitação e a segunda
-assinatura). A pré-checagem de disponível existe, e fica, na **solicitação**.
+assinatura). A pré-checagem de disponível existe, e fica, na **solicitação**. *(Etapa 97: a pré-checagem da
+solicitação passa a ler o **livre de caixa** — o disponível menos a caixa sem reserva das requisições, `9dbf11c0` — e o
+motor, na segunda assinatura, recusa pela mesma régua, `65dc74b2`. Continua sem pré-checagem própria na aprovação.)*
 
 ## O que já existia (histórico)
 
@@ -130,6 +133,8 @@ assinatura). A pré-checagem de disponível existe, e fica, na **solicitação**
 | A sucata do reprovado baixa do **bloqueado** (físico e bloqueado juntos), recusa acima do bloqueado e não se estorna pelo livro | `sucataBloqueadoMotor.api.test.js` (10 cenários) | ✅ `99bbce4` |
 | Solicitar pela NC deriva material/quantidade/lote, as duas assinaturas baixam do bloqueado, compensação na falha | `sucateamentoReprovado.api.test.js` (16) e, ponta a ponta pelas rotas com sete usuários, `sucateamentoReprovadoIntegracao.api.test.js` (12) | ✅ `419b5a7`, `7c0676c`, `c517248`, `827d655` |
 | O sucateamento **comum** na reprovação parcial continua baixando do disponível (comportamento declarado, **B307**) | cenário (10) de `sucateamentoReprovadoIntegracao.api.test.js` | ✅ `7c0676c` (fixado) |
+| **Etapa 97** — a solicitação do sucateamento comum recusa o que está separado na caixa sem reserva de uma requisição (M7 com a frase da caixa e o S); sem caixa, a recusa é byte a byte a de antes | `[97 RN-01] sucateamento: a recusa vem NA SOLICITACAO (400 M7 com a frase da caixa e o S), nenhuma solicitacao criada; A entrega 4` + `[97 RN-04] sucateamento sem caixa: a recusa e byte a byte a de hoje (sem a frase da caixa, sem S); fisico 6 caixa 4: 3 recusa com S, 2 passa` (`portasAvulsasCaixa.api.test.js`) | ✅ `9dbf11c0` |
+| **Etapa 97** — a compensação do retalho estorna a `ENTRADA_RETALHO` na régua de hoje (`compensacao: true`) | `[97 I-4] (Fase 2) estorno de entrada como compensacao (opcoes.compensacao) fica na regua de hoje; sem a opcao recusa` (`portasAvulsasCaixa.api.test.js`) | ✅ `65dc74b2` |
 
 Arquivos de teste criados pela etapa: `sobras.api.test.js`, `retalhoTipo.api.test.js`,
 `retalhoGeracao.api.test.js`, `retalhoRotas.api.test.js`, `sucataDedicada.api.test.js`,
@@ -182,3 +187,42 @@ client: `SobrasAlmoxarifado.test.js` + casos novos em `etiquetasPdf.test.js`.
 ## Dependências
 
 - 03 (motor/compensação) · 10 (lote/etiqueta) · 06 (aprovação segregada) · 13 (propriedade do cliente) · 12 (devolução destino sucata — o relatório desta feature é o consumidor declarado dela).
+
+## Etapa 97 — o sucateamento não leva o material separado na caixa de uma requisição (2026-10-09)
+
+Plano: `docs/superpowers/plans/2026-10-09-almoxarifado-etapa97-portas-avulsas-respeitam-a-caixa.md` (`eb7cd9d8`, Fase 2
+`4a9cf5c1`). Range `eb7cd9d8..3fc39310`. A régua (livre de caixa = disponível do motor − caixa sem reserva das
+requisições) está na feature 03.
+
+**O que estava errado (Fase 0, s2b):** com 4 separados na caixa sem reserva de uma requisição A (físico 4, reservado
+0), o sucateamento comum de 4 passava inteiro — solicitação 201, primeira assinatura 200, segunda (a baixa) 200 — e A
+ficava presa: entregar → 400 *"Máximo: 0"*.
+
+**Entregue:**
+- [x] **A recusa na solicitação (M7)** — `9dbf11c0`: a pré-checagem lê `livreDeCaixaSql()` como disponível; a recusa
+  vem **na solicitação**, antes das duas assinaturas, e nenhuma solicitação é criada: *"Saldo disponivel insuficiente
+  para sucatear ⟨cod⟩: disponivel ⟨n⟩ ⟨un⟩, solicitado ⟨q⟩. O disponivel ja desconta reservado, bloqueado, em inspecao e
+  em poder de terceiros e o separado na caixa de requisições — sucatear alem dele apagaria material que esta
+  comprometido com outra OS."* + o sufixo S (sem acento no código, é assim). A frase *"e o separado na caixa de
+  requisições"* e o S **só quando há caixa**; sem caixa, a literal de antes byte a byte (Fase 2, menor 2). Com caixa,
+  ⟨n⟩ = `max(0, livre)`.
+- [x] **`disponivel_na_solicitacao` grava o livre de caixa** — `9dbf11c0`: o valor gravado em `dados_novos` da
+  auditoria da solicitação passa a ser o mesmo número que a pré-checagem comparou. **Só auditoria** — nenhuma regra o
+  lê.
+- [x] **A baixa (segunda assinatura) recusa pela mesma régua** — `65dc74b2`: a `SUCATA` sem `doBloqueado` é saída comum
+  do motor (M1 + S). O sucateamento do reprovado (`doBloqueado`, Etapa 69) baixa do bloqueado e **não** muda.
+- [x] **A compensação do retalho na régua de hoje** — `65dc74b2` (Fase 2, I-4): `compensarRetalho` estorna a
+  `ENTRADA_RETALHO` recém-creditada com `cancelarMovimentacao(…, { compensacao: true })` — sem isso, no legado (caixa >
+  físico) o estorno recusaria e o `.catch` deixaria o retalho fantasma que o aviso já descreve. O estorno da baixa do
+  original (crédito) não muda.
+
+**Fica de fora (declarado):** a compensação com `compensacao: true` só levaria a caixa depois de uma falha no meio da
+geração do retalho **e** uma separação concorrente; o C96/B307 (o sucateamento comum na reprovação parcial) não muda.
+
+**Testes:** `portasAvulsasCaixa.api.test.js` — *"[97 RN-01] sucateamento: a recusa vem NA SOLICITACAO (400 M7 com a frase
+da caixa e o S), nenhuma solicitacao criada; A entrega 4"*, *"[97 RN-04] sucateamento sem caixa: a recusa e byte a byte a
+de hoje (sem a frase da caixa, sem S); fisico 6 caixa 4: 3 recusa com S, 2 passa"*, *"[97 RN-01] saida comum pelo
+servico, em laco de tipos (…, SUCATA): cada um 400 M1+S, nada muda, e A entrega 4"*, *"[97 I-4] (Fase 2) estorno de
+entrada como compensacao (opcoes.compensacao) fica na regua de hoje; sem a opcao recusa"*;
+`portasAvulsasCaixaIntegracao.api.test.js` — *"[97 T3 C1]"* (o sucateamento pela rota). `test:api` 338/338 (4163 ✓).
+Continua 🟢.

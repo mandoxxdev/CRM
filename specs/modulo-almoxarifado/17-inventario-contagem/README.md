@@ -9,7 +9,7 @@
 > [Etapa 10](../../../docs/superpowers/specs/2026-08-22-almoxarifado-etapa10-inventario-avancado-design.md) ·
 > [Etapa 10b](../../../docs/superpowers/specs/2026-08-23-almoxarifado-etapa10b-inventario-avancado-2-design.md)
 > **Etapa 31 (2026-08-31, `1e6c9a9..67b6758`) — o NÚMERO deste documento mudou de forma, e só ele.** O `INV-` era montado com os **últimos dígitos** do milissegundo mais um sorteio de 0 a 99, e por isso o carimbo **repetia** a cada **27,78 horas**, e **sem sorteio nenhum**: a colisão em criação simultânea era CERTA. Agora vem do gerador único `services/almoxarifado/numeroDoc.js` (relógio inteiro em base36 + 8 aleatórios), com retry na colisão. **Nada mais desta feature mudou** — nem status, nem checklist, nem comportamento: o número passa de 12–14 caracteres só com dígitos para 20 com letras, os antigos **não** foram migrados e continuam legíveis (RN-05, testada). Furo **C41** das novidades.
-> **Última atualização:** 2026-09-30 (**Etapa 62** — contagem em fração de material com série recusada, e a conclusão lista os materiais com série a regularizar; ver a seção no fim)
+> **Última atualização:** 2026-10-09 (**Etapa 97** — a conferência não leva mais o material separado na caixa sem reserva de uma requisição: a caixa entra na guarda de retenção do ajuste (pré-validação e motor, a mesma função) **só quando o ajuste reduz o total** (`3251b014`); a conclusão inteira (pré-validação + aplicação) roda sob a trava de todos os materiais da conferência (`9dbf11c0`) — a corrida entre as duas passadas, a "limitação conhecida" da Etapa 10, deixou de existir; e duas conclusões simultâneas não aplicam o ajuste duas vezes (compare-and-set, `c427bf6d`, **C191**). Range `eb7cd9d8..3fc39310`. Continua 🟢. Ver a seção "Etapa 97" no fim.) Antes: 2026-09-30 (**Etapa 62** — contagem em fração de material com série recusada, e a conclusão lista os materiais com série a regularizar; ver a seção no fim)
 > Antes: 2026-08-23 (Etapa 10b fechada, `14f4458..7290481`)
 > Antes: 2026-08-22 (Etapa 10, `d644827..8db2671`) · 2026-08-11
 
@@ -38,7 +38,9 @@ o relatório formal seguem fora do escopo — ver "O que ficou de fora" abaixo.)
   `motivoRecusaAjustePorRetencao(material, novoTotal)` — função pura, exportada, chamada tanto
   pelo motor quanto pela pré-validação da rota — recusa um ajuste que deixaria
   `quantidade_atual` abaixo da soma das quatro colunas de retenção
-  (`availabilitySql.COLUNAS_RETENCAO`). `AJUSTE_INVENTARIO` não é estornável pela rota genérica
+  (`availabilitySql.COLUNAS_RETENCAO`) *(desde a Etapa 97 a assinatura é `(material, novoTotal, caixa = 0)`: a
+  caixa sem reserva das requisições entra no retido quando o ajuste reduz o total — ver a seção "Etapa 97")*.
+  `AJUSTE_INVENTARIO` não é estornável pela rota genérica
   de cancelamento (o caminho de correção é uma nova conferência).
 - **Rota** (`server/routes/almoxarifado.js`, bloco `/conferencias`): `POST /conferencias` aceita
   `modo_cego`/`tolerancia_percentual`; `GET /conferencias/:id` omite `quantidade_sistema`/
@@ -119,6 +121,10 @@ o relatório formal seguem fora do escopo — ver "O que ficou de fora" abaixo.)
       da tela geral de relatórios.
 - [ ] E-mail do resultado (feature 19) — **fora do escopo**, mesmo corte de todas as etapas
       anteriores.
+- [x] **A conferência não leva a caixa sem reserva de uma requisição; a conclusão sob trava e com
+      compare-and-set (Etapa 97)** — a caixa na guarda do ajuste `9dbf11c0` (corrigida para "só
+      quando reduz o total" em `3251b014`), a conclusão sob `comLockDosMateriais` `9dbf11c0`, o
+      compare-and-set da conclusão `c427bf6d` (C191). Ver a seção "Etapa 97" no fim.
 
 ### Frontend
 - [x] Modo contagem cega na tela — `4f7ed6f` (Task 3).
@@ -152,6 +158,8 @@ prova cada uma:
 | **(10b)** Dupla contagem: outra pessoa reconta, colega não vê o número, correção própria pré-recontagem | `RN-03/RN-04/RN-08: ...` (11 testes) | `conferenciaDuplaContagem.api.test.js` |
 | **(10b)** Acuracidade: métricas derivadas, agregado ponderado, impacto persistido, gate positivo+negativo, epsilon | `RN-05/RN-06/RN-07: ...` (13 testes) | `conferenciaAcuracidade.api.test.js` |
 | **(10b)** Jornada de composição (escopo + dupla + cego + concluir + relatório + vazamentos fechados) | teste-jornada, 12+ passos | `inventarioEscopoJornada.api.test.js` |
+| **(97)** A conferência que conta abaixo da caixa sem reserva recusa na pré-validação, tudo ou nada; contar acima no legado conclui | `[97 RN-01] inventario pela rota…`, `[97 RN-09] inventario tudo ou nada com a caixa…`, `[97 F5-1] legado (caixa 4 > fisico 0): a conferencia que conta 2 (sistema 0) conclui aplicando…` | `portasAvulsasCaixa.api.test.js` |
+| **(97)** A conclusão inteira sob a trava dos materiais; duas conclusões simultâneas aplicam uma vez; falha no meio volta a ABERTO | `[97 T2] (Fase 2, menor 3) a conclusao inteira (pre-validacao + aplicacao) roda sob comLockDosMateriais…`, `[97 F5-3] duas conclusoes SIMULTANEAS da mesma conferencia…`, `[97 F5-3] falha no meio da aplicacao…` | `portasAvulsasCaixa.api.test.js` |
 
 ## O que ficou de fora (declarado — estado pós-10b)
 
@@ -193,3 +201,55 @@ fora, agora sem etapa marcada:
   foram contadas. Pedir as séries na contagem é outra etapa, se quiserem.
 - Testes: `server/tests/api/ajusteComSerie.api.test.js` (os dois cenários de inventário) e
   `client/src/components/almoxarifado/ConferenciaSeriesARegularizar.test.js`.
+
+## Etapa 97 (2026-10-09) — a conferência não leva a caixa de uma requisição; a conclusão sob trava e com compare-and-set
+
+Plano: `docs/superpowers/plans/2026-10-09-almoxarifado-etapa97-portas-avulsas-respeitam-a-caixa.md` (`eb7cd9d8`, Fase 2
+`4a9cf5c1`). Range `eb7cd9d8..3fc39310`. A régua da caixa sem reserva está na feature 03.
+
+**O que estava errado:**
+- **Fase 0 (P1):** com 4 separados na caixa sem reserva de uma requisição A (físico 4, reservado 0), uma conferência que
+  contava 0 concluía aplicando (`AJUSTE_INVENTARIO` para 0) → 200, físico 0, e A ficava presa: entregar → 400 *"Máximo:
+  0"*. A guarda de retenção (`motivoRecusaAjustePorRetencao`) só somava reservado, bloqueado, em inspeção e em terceiros.
+- **Fase 5, achado 1 (regressão da própria 97, pega antes do fechamento):** com a caixa em toda guarda de ajuste, no
+  legado (caixa 4 sobre físico 0) o ajuste **para cima** (0 → 2) recusava — a conferência que contava 2 travava o
+  inventário inteiro (tudo-ou-nada).
+- **Fase 5, achado 3 (anterior à etapa, 9/9):** duas conclusões simultâneas da mesma conferência aplicavam o ajuste
+  duas vezes (**C191**).
+
+**Entregue:**
+- [x] **A caixa na guarda do ajuste, só quando reduz o total** — `9dbf11c0` (a pré-validação lê a caixa e passa a
+  `motivoRecusaAjustePorRetencao` — a **mesma** função e a mesma leitura que o motor usa, D1 da Etapa 10), `3251b014`
+  (`stockService.caixaParaGuardaDoAjuste`: a caixa entra no retido só se o novo total < físico atual; o que conta mais
+  que o sistema nunca é recusado pela caixa; as retenções de sempre continuam nos dois sentidos, RN-06 da Etapa 10).
+  Recusa: *"Ajuste bloqueado: ⟨cod⟩: Ajuste para ⟨t⟩ ⟨un⟩ deixaria o disponível negativo (⟨partes⟩, mínimo aceitável:
+  ⟨m⟩ ⟨un⟩). Resolva a retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo."* — a
+  parte nova é *"separada na caixa de requisição: ⟨c⟩"* (depois de "em terceiros"); vários materiais separados por `; `.
+  Nenhum item é ajustado (tudo ou nada); a conferência fica aberta.
+- [x] **A conclusão inteira sob a trava dos materiais** — `9dbf11c0` (Fase 2, menor 3): a pré-validação **e** a
+  aplicação rodam dentro de `comLockDosMateriais(materiais ajustados)`; o motor ali dentro roda direto (a seção segura
+  cada material). **A "limitação conhecida" da Etapa 10 — a corrida entre a pré-validação e a aplicação, em que uma
+  separação, reserva ou bloqueio entre as duas passadas fazia o motor recusar o segundo item depois de ajustar o
+  primeiro — deixou de existir para os materiais da conferência.** Esta spec não a afirmava (ela vivia no plano da
+  Etapa 10 e no comentário da rota `PUT /conferencias/:id/concluir`, que agora diz "Resolvida na Etapa 97"); quem a ler
+  no plano da Etapa 10 deve saber que deixou de valer.
+- [x] **Compare-and-set da conclusão** — `c427bf6d` (C191, B501): `UPDATE conferencias_almoxarifado SET status =
+  'CONCLUIDO' WHERE id = ? AND status = 'ABERTO'`; com ajustes ele roda dentro da trava, **depois** da pré-validação e
+  **antes** de aplicar — só uma conclusão aplica; a outra recebe 400 *"Conferência não está aberta (status atual:
+  CONCLUIDO)"*. Falha no meio da aplicação devolve a conferência a `ABERTO` (concluir de novo é seguro: o
+  `AJUSTE_INVENTARIO` é absoluto). Descartado: o CAS antes da pré-validação (a recusa teria de desfazer o status).
+
+**Fica de fora (declarado):** a contagem por endereço e o `AJUSTE` com localização (D2 da 10b; B495 da 97 — o `AJUSTE`
+com localização de ida continua podendo levar a caixa, C186); travas em memória, um processo (C132).
+
+**Testes:** `portasAvulsasCaixa.api.test.js` — *"[97 RN-01] inventario pela rota: conta 0 na montagem e conclui
+aplicando -> 400 "Ajuste bloqueado:" + M6 com a caixa; nada muda, conferencia aberta; A entrega 4"*, *"[97 RN-09]
+inventario tudo ou nada com a caixa: o primeiro sem caixa (conta 3 de 5), o segundo com caixa (conta 0) -> 400 da pre-
+validacao e NENHUM item ajustado"*, *"[97 T2] (Fase 2, menor 3) a conclusao inteira (pre-validacao + aplicacao) roda sob
+comLockDosMateriais (…)"*, *"[97 F5-3] duas conclusoes SIMULTANEAS da mesma conferencia: uma conclui, a outra recebe
+"nao esta aberta" — UM AJUSTE_INVENTARIO no livro (…)"*, *"[97 F5-3] falha no meio da aplicacao (o motor estoura no
+segundo item): a conferencia volta a ABERTO e concluir de novo conclui (…)"*, *"[97 F5-1] legado (caixa 4 > fisico 0):
+o ajuste PARA CIMA nao e recusado pela caixa (…)"*, *"[97 F5-1] legado (caixa 4 > fisico 0): a conferencia que conta 2
+(sistema 0) conclui aplicando — um material do legado nao trava o inventario inteiro"*;
+`portasAvulsasCaixaIntegracao.api.test.js` — *"[97 T3 C1]"* (a conferência que conta 0 recusa e, depois da entrega,
+conclui). `test:api` 338/338 (4163 ✓). Continua 🟢.

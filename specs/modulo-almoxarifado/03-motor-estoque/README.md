@@ -1,7 +1,7 @@
 # 03 — Motor de Estoque (saldos, movimentações, livro, saídas)
 
 > **Status:** 🟢 — Etapa 1 entregue (2026-08-04): motor v2 com regra crítica/emergencial/centro de custo/custo médio, livro com filtros e extrato do item, estorno com motivo (backend + tela). A validação de vencido/lote reprovado que dependia da feature 10 foi entregue na Etapa 6, Task 3 (ver [10-lotes-series-etiquetas](../10-lotes-series-etiquetas/README.md)). · **Spec original:** seções 7 (fórmula de saldo), 13 (saídas), 30 (livro de movimentações)
-> **Última atualização:** 2026-10-09 (**Etapa 96 — o motor grava a quantidade arredondada a 6 casas e as recusas comparam com folga de 1e-9 (C176 resolvido)**; ver a seção "Etapa 96" no fim; o motor continua 🟢). Antes: 2026-10-08 (**Etapa 91 — `reserva_id` só numa saída que consome a reserva (D(77)); o alerta de estoque mínimo roda depois de soltar a trava por material**; ver a seção "Etapa 91" no fim; o motor continua 🟢). Antes: 2026-09-30 (**Etapa 62 — o AJUSTE de material com série pede as séries; por endereço e o estorno recusados**; ver a seção "Etapa 62" no fim; antes: **Etapa 51 — a saída sem lote baixa o ENDEREÇO de onde o material sai**; ver a seção "Etapa 51" no fim; o motor continua 🟢). Anterior: 2026-08-13 (**Etapa 8c — `RETORNO_TRANSFORMACAO`, e o custo médio
+> **Última atualização:** 2026-10-09 (**Etapa 97 — as portas avulsas do motor recusam levar o material que está na caixa sem reserva de uma requisição**: a régua "livre de caixa" (`caixaSql.js`; o `disponivelSql` não muda, B491) na saída comum v1/v2 (todos os `TIPOS_SAIDA` que tiram do disponível), `REMESSA_TERCEIRO`, bloqueio avulso (guarda nova, sem contar o reservado), reserva manual, `AJUSTE`/`AJUSTE_INVENTARIO` sem localização (só quando reduz o total), estorno de entrada e estornos do `AJUSTE` e do `DESBLOQUEIO`; a entrega e as reservas de requisição na régua de hoje (B492); `permite_saldo_negativo` não dispensa a caixa (B498 invertida); `registrarMovimentacao` e `criarReserva` sob a trava do material (`naTravaDoMaterial`, B494). Range `eb7cd9d8..3fc39310` (T0 `9ace72b2`, T1 `65dc74b2`, T2 `9dbf11c0`, T3 `3046eb4a`, Fase 5 `3251b014`, `3810f79a`, `c427bf6d`, `3fc39310`); ver a seção "Etapa 97" no fim; o motor continua 🟢). Antes: 2026-10-09 (**Etapa 96 — o motor grava a quantidade arredondada a 6 casas e as recusas comparam com folga de 1e-9 (C176 resolvido)**; ver a seção "Etapa 96" no fim; o motor continua 🟢). Antes: 2026-10-08 (**Etapa 91 — `reserva_id` só numa saída que consome a reserva (D(77)); o alerta de estoque mínimo roda depois de soltar a trava por material**; ver a seção "Etapa 91" no fim; o motor continua 🟢). Antes: 2026-09-30 (**Etapa 62 — o AJUSTE de material com série pede as séries; por endereço e o estorno recusados**; ver a seção "Etapa 62" no fim; antes: **Etapa 51 — a saída sem lote baixa o ENDEREÇO de onde o material sai**; ver a seção "Etapa 51" no fim; o motor continua 🟢). Anterior: 2026-08-13 (**Etapa 8c — `RETORNO_TRANSFORMACAO`, e o custo médio
 > deixando de ter um alimentador só.** Três mudanças deste motor, detalhadas abaixo: (1) o tipo
 > novo `RETORNO_TRANSFORMACAO` (`9c7ec75`), **entrada com custo**, dedicado (fora da rota genérica)
 > e presente nos **dois** ramos do motor — tem linha própria na tabela de efeitos, em "Tipos de
@@ -261,7 +261,8 @@ quarentena, apontando para a tela de Remessas. **Contraste deliberado:**
   > [10-lotes-series-etiquetas](../10-lotes-series-etiquetas/README.md).
 - [x] **Quantidade arredondada a 6 casas e folga de 1e-9 nas recusas (Etapa 96, C176)** — helper `quantidade.js` `82836975`; motor `8bb43f60`; outros escritores `290ae5dc`; requisição `f26e53db`; legado `5b5abba7`; integração `8f33584f`; Fase 5 `e25454b5`, `2adcd51c`, `8d7c331d`, `983f006c`, `2d0bbfe9`. Ver a seção "Etapa 96" no fim.
 - [ ] (futuro) avaliar reversão de custo médio quando o estorno for da última entrada com custo
-- [x] `permite_saldo_negativo` respeitado (default: bloquear; guarda atômica em `registrarMovimentacao` e em `cancelarMovimentacao`)
+- [x] `permite_saldo_negativo` respeitado (default: bloquear; guarda atômica em `registrarMovimentacao` e em `cancelarMovimentacao`) *(Etapa 97, `65dc74b2`, B498 invertida: a flag dispensa reserva e retenções, **nunca** a caixa sem reserva de uma requisição — com a flag a saída passa se o material não tem caixa ou se físico − caixa ≥ pedido; ver a seção "Etapa 97")*
+- [x] **As portas avulsas não levam a caixa sem reserva de uma requisição (Etapa 97, B466 iv)** — `caixaSql.js` e `naTravaDoMaterial` `9ace72b2`; motor `65dc74b2`; portas fora do motor `9dbf11c0`; integração `3046eb4a`; Fase 5 `3251b014`, `3810f79a`, `c427bf6d`, `3fc39310`. Ver a seção "Etapa 97" no fim.
 - [x] Centro de custo como vínculo (`centros_custo_almoxarifado`, `CentroCustoSchema`, rota `/centros-custo`)
 - [x] Atualização de custo médio na entrada (`custo_medio` calculado atomicamente na mesma UPDATE da entrada; teste dedicado)
 - [x] **O recebimento por NF passou a ALIMENTAR o custo médio** — `8cd3fcf` (Etapa 8c, Task 2),
@@ -632,7 +633,9 @@ disponível calculado como diferença de colunas limpas recusava o que existia; 
 livro encadeado sem resíduo.
 
 **Fica de fora (declarado, com o porquê):**
-- **A saída avulsa que leva a caixa sem reserva** (B466 iv) — o motor não conhece caixa; **Etapa 97**.
+- ~~**A saída avulsa que leva a caixa sem reserva** (B466 iv) — o motor não conhece caixa; **Etapa 97**.~~
+  *(resolvido na Etapa 97 — e eram 17 portas, não só a saída; ver a seção "Etapa 97" abaixo. Fica fora só o `AJUSTE`
+  com localização de ida, B495/C186.)*
 - **O livro histórico** não é reescrito (B484) — é rastro.
 - **Os 19 remendos de leitura** (`Math.round(…*1e6)/1e6`, `toFixed(6)`) ficam (B487) — redundantes, não errados.
 - **Precisão por unidade de medida** (B481) — 1e-6 para tudo.
@@ -650,3 +653,113 @@ livro encadeado sem resíduo.
 por `grep -c "await test("`. Mudados com "mudado na Etapa 96": `filaTravaIntegracao`, `filaLiberacaoAprovacaoCorrida`,
 `encaminhamentoExecucao` (tinha virado vazio), `relatoriosIndicadoresSpec27`, `separacaoTetoFisicoIntegracao`.
 `test:api` 336/336 (4104 ✓) no `2d0bbfe9`.
+
+## Etapa 97 (2026-10-09) — as portas avulsas do motor não levam o material separado na caixa de uma requisição
+
+Plano: `docs/superpowers/plans/2026-10-09-almoxarifado-etapa97-portas-avulsas-respeitam-a-caixa.md` (Fases 0 e 1
+`eb7cd9d8`, Fase 2 `4a9cf5c1`). Range `eb7cd9d8..3fc39310`. Feature 03 com a 05, a 07, a 09, a 12, a 14, a 15 e a 17.
+Fecha a B466 (iv) / D (95) / D (96).
+
+**O que estava errado (Fase 0, medido no HEAD `b15640f3`):** montagem — material com físico 4, requisição A aprovada
+sem reserva, separada 4 (*Em Separação*, caixa sem reserva 4, reservado 0). Qualquer porta avulsa levava os 4 (201/200)
+e A ficava presa: entregar → 400 *"⟨material⟩: não é possível entregar 4 PC. Máximo: 0 (pendente: 4, disponível:
+0)"*. **17 de 17 portas** erradas — `SAIDA` v1 e v2, `SAIDA_PRODUCAO` emergencial, `AJUSTE_NEGATIVO`, `PERDA`, `AJUSTE`
+sem localização (para menos), conferência de inventário, remessa a terceiro, bloqueio avulso, reserva manual, estorno
+de entrada, sucateamento até a baixa, e (achados da Fase 2, B-2) os estornos do `AJUSTE` sem e com localização e do
+`DESBLOQUEIO` avulso; controles 4/4 certos (reserva que cobre a caixa, consumo e liberação de reserva manual,
+transferência). O plano da 96 dizia "9 de 9 portas" — **estava errado**: eram 17. Lacuna vizinha, sem caixa: o
+`BLOQUEIO` do motor não tinha guarda nenhuma (bloquear 10 com físico 4 → 200, P6). A corrida porta avulsa × separação
+existia (gancho determinístico: solto 10/10 errado; sob a trava 0/10).
+
+**A régua (lida do código):** *caixa sem reserva* de um material = soma, pelos itens de requisição ativa num status de
+`STATUS_COM_CAIXA` (Aprovado, Aguardando estoque, Aguardando compra, Parcialmente/Totalmente reservada, Em separação,
+Parcialmente atendida, Pronta para retirada, Aguardando aprovação de valor), de `max(0, separado − entregue − reserva
+ATIVA da requisição para o item)`. *Livre de caixa* = disponível do motor (físico − reservado − bloqueado − em inspeção
+− em terceiros) − caixa sem reserva, arredondado a 6 casas (`caixaSql.livreDeCaixaSql`). O `disponivelSql` e o
+`getSaldoDisponivel` **não mudam** — o disponível mostrado nas telas é o de sempre (B491, C187).
+
+**Entregue:**
+- [x] **T0 — o módulo e a trava** — `9ace72b2` (B491, B494): `server/services/almoxarifado/caixaSql.js`
+  (`caixaSemReservaSql` movido do `requisitionService`, que o re-exporta; `livreDeCaixaSql`, `lerCaixa`, `sufixoCaixa`;
+  nenhum `require` de `stockService`/`requisitionService` — sem ciclo) e `travaPorMaterial.naTravaDoMaterial`: testa
+  `secao.materiais.has(m)` **antes** de `secao.ativa`, e `segurarTrava` tira o material do `Set` no `finally`. A B494
+  do plano decidia "fora de seção" por `secao.ativa` — **estava errado** (Fase 2, B-1): o fluxo nascido dentro de uma
+  seção que chama o motor depois de a mãe fechar pedia a trava que ele mesmo segurava e ficava preso para sempre.
+- [x] **T1 — o motor** — `65dc74b2` (B491–B494, B496, B498): `registrarMovimentacao` = `naTravaDoMaterial(corpo)` (o
+  corpo é `registrarMovimentacaoSemTrava`, exportado só para dois testes de corrida do claim); `criarReserva` também
+  sob a trava. Recusam pelo livre de caixa: a saída comum (pré-checagem e claim, todos os `TIPOS_SAIDA` que tiram do
+  disponível, v1/v2), `REMESSA_TERCEIRO`, o `BLOQUEIO` com `{ bloqueioAvulso: true }` (guarda nova: bloqueável =
+  físico − bloqueado − em inspeção − em terceiros − caixa, **sem contar o reservado** — Fase 2, I-5), a reserva manual
+  (sem `opcoes.requisicao_id`), o estorno de entrada, o `AJUSTE`/`AJUSTE_INVENTARIO` sem localização
+  (`motivoRecusaAjustePorRetencao(material, novoTotal, caixa)`, continua pura: a caixa entra no retido e nas partes como
+  *"separada na caixa de requisição: ⟨c⟩"*), o estorno do `AJUSTE` (sem e com localização, quando reduz o total) e o
+  estorno do `DESBLOQUEIO` (claim pelo livre de caixa — mais estrito que o bloqueio avulso: conta o reservado). Ficam na
+  régua de hoje, pela marca do 4º argumento (nunca do body): a entrega (`requisicaoDaEntrega`), as reservas de
+  requisição (`requisicao_id` — aprovação, chegada, recriação no estorno), a perna `SUCATA` da devolução
+  (`parDaDevolucao`), o estorno de entrada como compensação do retalho/transformação (`compensacao: true`); e, como
+  sempre fora da régua, o consumo de reserva, a baixa de terceiro e do bloqueado, a transferência, o `BLOQUEIO` interno
+  da devolução para quarentena e o `AJUSTE` **com** localização de ida (B495).
+- [x] **T2 — as portas fora do motor** — `9dbf11c0` (a feature 09, 14, 15 e 17 detalham): o bloqueio avulso passa a
+  opção; a remessa e o sucateamento pré-checam pelo livre de caixa; o inventário lê a caixa na pré-validação e a
+  conclusão inteira roda em `comLockDosMateriais`.
+- [x] **T3 — integração** — `3046eb4a` (`portasAvulsasCaixaIntegracao.api.test.js`).
+- [x] **Fase 5 (revisão adversarial, 2 revisores, executando)** — `3251b014` (**regressão da própria 97**: no legado,
+  caixa 4 sobre físico 0, o `AJUSTE` 0→2 recusava e a conferência que contava 2 travava o inventário inteiro; agora a
+  caixa entra no retido **só quando o ajuste reduz o total** — `caixaParaGuardaDoAjuste`; as retenções de sempre
+  continuam nos dois sentidos, RN-06 da Etapa 10, B499); `3810f79a` (as duas pernas da devolução sob uma trava — feature
+  12, B500); `c427bf6d` (compare-and-set da conclusão da conferência — feature 17, B501, C191); `3fc39310` (testes que
+  faltavam: as travas próprias das portas não-`SAIDA`, o claim da saída sem a trava, o filtro do `lerCaixa`, a trava do
+  inventário). Travas sem deadlock nem trava presa (30 rodadas com laço fora de ordem, `comLockDosMateriais` com o motor
+  dentro, seções cruzadas, exceção, fluxo vazado; inventários concorrentes 0/10); as marcas (`requisicaoDaEntrega`,
+  `bloqueioAvulso`, `parDaDevolucao`, `compensacao`) não são forjáveis pelo body.
+
+**As literais** (S = sufixo, só quando o material tem caixa sem reserva; sem caixa a recusa é byte a byte a de antes —
+B493): S = *" — ⟨c⟩ ⟨un⟩ estão separados para a requisição ⟨número⟩ e só saem pela entrega (material perdido da caixa:
+entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)"* (duas ou três
+requisições: *"as requisições ⟨n1⟩, ⟨n2⟩ e ⟨n3⟩"*; quatro ou mais: *"… e mais N"*). **M1** saída comum *"Saldo
+insuficiente. Disponível: ⟨n⟩ ⟨un⟩"* + S (n = `max(0, livre de caixa)`); **M2** remessa no motor *"Saldo disponível
+insuficiente para enviar ao terceiro: ⟨n⟩ ⟨un⟩"* + S; **M3** reserva manual *"Saldo disponível insuficiente: ⟨n⟩"* + S;
+**M4** (nova) bloqueio avulso *"Saldo disponível insuficiente para bloquear: ⟨n⟩ ⟨un⟩"* + S; **M5** estorno de entrada
+= a de antes + S; **M6** ajuste sem localização = a da guarda de retenção com a parte *"separada na caixa de requisição:
+⟨c⟩"* (sem S); **M8** estorno do `AJUSTE` = *"Não é possível estornar: "* + M6; **M9** *"Não é possível estornar o
+desbloqueio: saldo disponível insuficiente para bloquear de novo: ⟨n⟩ ⟨un⟩"* + S.
+
+**Spec/plano que estava errado, dito à vista:** (1) o contrato provável da 96 — *"a entrega exclui só a caixa da
+própria requisição"* — prenderia a entrega que hoje sai (sonda s5: caixas 8 sobre físico 4, a entrega de A daria livre
+0); decidido B492; (2) *"9 de 9 portas"* — eram 17; (3) a B498 original dizia *"com a flag a entrega também sai"* —
+**errado**, `maxEntregar` não honra `permite_saldo_negativo`; a B498 foi **invertida** (a caixa vale com a flag);
+(4) a B494 por `secao.ativa` (B-1, acima); (5) a I-4 do plano dizia que a perna `SUCATA` da devolução podia ficar na
+régua de hoje porque *"o par soma zero"* — só vale sem concorrência (Fase 5, achado 2; ver a feature 12).
+
+**Custo medido (Fase 5):** mil `SAIDA` com 300 caixas: 1,2 s → 1,6 s; 200 `AJUSTE`: 0,26 s → 1,2 s (julgado aceitável na
+revisão).
+
+**Fica de fora (declarado, com o porquê):**
+- **O `AJUSTE` com localização de ida** (B495, C186) — o total novo só existe depois do `syncMaterialTotals` (D1/D7 da
+  Etapa 10) e `ajusteRetencao.api.test.js` prende que a contagem por endereço passa; o **estorno** dele entra.
+- **O gesto "devolver da caixa à prateleira"** (B497) — rota, estado e permissão novos; candidato da Etapa 98. O caso
+  legítimo (material perdido na caixa) sai sem gesto novo: entregar o que existe e encerrar, ou o administrador excluir.
+- **A tela mostrar a caixa no disponível** (C187) — o 400 é que explica.
+- **Destravar sozinho o legado** já preso (C188) — a consulta **A48** acha.
+- **Caixa por endereço/almoxarifado** — saldo global é intencional (`CLAUDE.md`).
+- **As compensações do retalho/transformação** (`compensacao: true`) só levariam a caixa depois de falha no meio +
+  separação concorrente (declarado).
+- **`maxEntregar` não honra `permite_saldo_negativo`** (como antes).
+- **Bloquear o reservado já separado** prende a entrega sem nomear o bloqueio (**C190**, aberto — ver a feature 09).
+- **Travas em memória, um processo** (C132).
+
+**Testes:** `server/tests/api/portasAvulsasCaixa.api.test.js` (46: `[97 RN-00]` a `[97 RN-09]`, `[97 I-3]`, `[97 I-4]`,
+`[97 T2]`, `[97 F5-1]`, `[97 F5-2]`, `[97 F5-3]`, `[97 F5-B]`) e `portasAvulsasCaixaIntegracao.api.test.js` (10 chamadas
+`test()`, 13 ✓ — o `[97 F5-A]` roda uma vez por porta: reserva manual, estorno de entrada, estorno do `AJUSTE`, estorno
+do `DESBLOQUEIO`; `[97 T3]`, `[97 T3 C1..C4]`). Os do motor, em especial: *"[97 RN-01] saida comum pelo servico, em laco
+de tipos (…)"*, *"[97 RN-01] (Fase 2, B-2) estorno do AJUSTE 0->4 SEM localizacao: 400 M8; A entrega 4"*, *"[97 RN-01]
+(Fase 2, B-2) estorno do DESBLOQUEIO avulso (…): 400 M9; A entrega 4"*, *"[97 RN-03] s5: caixas 8 sobre fisico 4
+(legado): A entrega a propria caixa -> 200 (…)"*, *"[97 RN-04] sem caixa, toda recusa e byte a byte a de hoje (…)"*,
+*"[97 RN-05] pelo servico, com o gancho da s4b (…) — 0/10 com separado > fisico"*, *"[97 RN-07] (Fase 2, I-1)
+permite_saldo_negativo: a caixa vale com a flag (…)"*, *"[97 F5-B] o claim da SAIDA tem a guarda da caixa (…)"*,
+*"[97 F5-1] legado (caixa 4 > fisico 0): o ajuste PARA CIMA nao e recusado pela caixa (…)"*, *"[97 I-3] (Fase 2) duas
+SAIDAs concorrentes pelo motor travado SERIALIZAM (…)"*. Editados de forma declarada (Fase 2, I-2/I-3):
+`separacaoTetoFisico` P4 RN-01 e P4 RN-03 e `separacaoTetoFisicoIntegracao` T4 I4 (montagem pelo escritor de legado,
+*"mudado na Etapa 97"*, asserções iguais); `confirmacaoLeituraLocalizacao` *"Fase 5: duas saidas CONCORRENTES"* e
+`saidaPorLocalizacao` *"(12)"* chamam `registrarMovimentacaoSemTrava` para continuarem provando o claim. `test:api`
+338/338 (4163 ✓) no fechamento.
