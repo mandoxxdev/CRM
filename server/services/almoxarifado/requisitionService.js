@@ -93,8 +93,10 @@ function normalizarItem(item) {
   const teto = temCaixa
     ? tetoSeparacao(estoque - reservaItem, reservaItem, separado - entregue, item.caixa_sem_reserva_outros) : undefined;
   const entregavel = maxEntregar(item, estoque, teto);
+  // Etapa 95 (Fase 5): a coluna crua da consulta do detalhe e insumo do teto, nao contrato — nao vai para o JSON.
+  const { caixa_sem_reserva_outros: _caixaCrua, ...resto } = item; // eslint-disable-line no-unused-vars
   return {
-    ...item,
+    ...resto,
     quantidade_entregue: entregue,
     quantidade_separada: separado,
     quantidade_atendida: entregue,
