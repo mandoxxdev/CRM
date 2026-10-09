@@ -9,6 +9,8 @@
  *   servidor): o botão fica habilitado e diz "Reabrir separação", e confirmar manda `itens_separados: []`.
  * - O 409 da separação (V1 da 94: o status mudou enquanto a alçada era conferida; X1 da 93: outra separação
  *   venceu) fecha o modal e recarrega o detalhe e a lista. Um 400 mantém o modal (corrigir e tentar de novo).
+ * - Fase 5 (B465): o 403 da alçada de valor (`code: 'AGUARDANDO_APROVACAO_VALOR'` no corpo) fecha e recarrega como o 409;
+ *   um 403 sem esse código (permissão) mantém o modal.
  * - A fila mostra a etapa nova `RETOMAR_SEPARACAO` como "Reabrir separação".
  *
  * Executar: cd client && CI=true npx react-scripts test src/components/almoxarifado/RequisicoesReabrirSeparacao --watchAll=false
@@ -142,6 +144,7 @@ describe('Etapa 94 — Reabrir separação (o legado com tudo na caixa)', () => 
     expect(botaoPorTexto('Reabrir separação')).toBeFalsy();
     expect(container.textContent).toContain('Nenhum item com estoque disponível para separação.');
   });
+
 });
 
 describe('Etapa 94 — 409 na separação fecha o modal e recarrega (B463)', () => {
@@ -159,6 +162,32 @@ describe('Etapa 94 — 409 na separação fecha o modal e recarrega (B463)', () 
     expect(modalAberto()).toBe(false);
     expect(getsDe('/almoxarifado/requisicoes/55')).toBeGreaterThan(detalheAntes);
     expect(getsDe('/almoxarifado/requisicoes')).toBeGreaterThan(listaAntes);
+  });
+
+  test('(f) 403 da alçada de valor (code AGUARDANDO_APROVACAO_VALOR): o modal fecha e o detalhe e a lista são recarregados', async () => {
+    // Fase 5 (B465): o V403b grava Aguardando aprovação de valor — o modal aberto mostrava o status velho.
+    requisicao = comItem({ quantidade_separada: 0, quantidade_entregue: 0, quantidade_atendida: 0 });
+    api.put.mockRejectedValue(Object.assign(new Error('V403b'), { response: { status: 403, data: {
+      error: 'Valor total (R$ 4,00) excede o limite de liberação automática (R$ 1,00). Aprovação de alto valor necessária.',
+      code: 'AGUARDANDO_APROVACAO_VALOR' } } }));
+    await renderizar();
+    await clicar('Iniciar Separação');
+    const detalheAntes = getsDe('/almoxarifado/requisicoes/55');
+    const listaAntes = getsDe('/almoxarifado/requisicoes');
+    await clicar('Confirmar Separação');
+    await act(async () => { await Promise.resolve(); });
+    expect(modalAberto()).toBe(false);
+    expect(getsDe('/almoxarifado/requisicoes/55')).toBeGreaterThan(detalheAntes);
+    expect(getsDe('/almoxarifado/requisicoes')).toBeGreaterThan(listaAntes);
+  });
+
+  test('(f) controle: um 403 sem o código da alçada (permissão) mantém o modal aberto', async () => {
+    requisicao = comItem({ quantidade_separada: 0, quantidade_entregue: 0, quantidade_atendida: 0 });
+    api.put.mockRejectedValue(erro(403, 'Sem permissão'));
+    await renderizar();
+    await clicar('Iniciar Separação');
+    await clicar('Confirmar Separação');
+    expect(modalAberto()).toBe(true);
   });
 
   test('(c) controle: um 400 mantém o modal aberto', async () => {

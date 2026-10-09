@@ -558,6 +558,25 @@ const notificacoesDe = (R) => notificados.filter((id) => id === Number(R)).lengt
     } finally { await config({ ativo: 1, limite: 10 }); }
   });
 
+  // ── Fase 5 (B465) — o 403 da alcada diz o codigo no corpo ──
+  // O contrato (V403a/V403b) previa `code: 'AGUARDANDO_APROVACAO_VALOR'`, mas as rotas de separacao e entrega so
+  // mandavam `error`. A tela precisa do codigo para fechar o modal de separacao e recarregar (o status mudou), e
+  // nao pode se apoiar no texto. So esse codigo sai (lista branca): erro do SQLite traz `code` proprio.
+  await test('[94 F5] (2) o 403 da alcada pela rota traz code AGUARDANDO_APROVACAO_VALOR: separar com o limite baixado (V403b); o 404 sem code (o V403a nao sai pela rota: PODE_SEPARAR e PODE_ENTREGAR recusam AGUARDANDO_APROVACAO_VALOR antes)', async () => {
+    await config({ ativo: 1, limite: 10 });
+    const x = await montar('RESERVADA');
+    try {
+      await config({ ativo: 1, limite: 1 });
+      const s = await separar('ALMOX', x, 4);
+      assert.strictEqual(s.status, 403, `separar: ${s.status} ${JSON.stringify(s.body)}`);
+      assert.match(s.body.error, V403B);
+      assert.strictEqual(s.body.code, 'AGUARDANDO_APROVACAO_VALOR', `V403b sem code: ${JSON.stringify(s.body)}`);
+      const s3 = await separar('ALMOX', { ...x, R: 999999 }, 4);
+      assert.strictEqual(s3.status, 404, `separar inexistente: ${s3.status} ${JSON.stringify(s3.body)}`);
+      assert.strictEqual(s3.body.code, undefined, `code em erro que nao e da alcada: ${JSON.stringify(s3.body)}`);
+    } finally { await config({ ativo: 1, limite: 10 }); }
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   process.exit(failed ? 1 : 0);

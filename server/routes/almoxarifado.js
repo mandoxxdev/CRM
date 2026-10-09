@@ -3756,13 +3756,19 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     }
   });
 
+  // Etapa 94 Fase 5 (B465): o 403 da alcada de valor (V403a/V403b) diz o codigo no corpo, como o contrato da 94 ja
+  // previa — a tela fecha o modal de separacao e recarrega por ele, sem depender do texto. Lista branca: outro
+  // `e.code` (o do SQLite, por exemplo) nao sai.
+  const corpoDoErroDaRequisicao = (e) => (e && e.code === 'AGUARDANDO_APROVACAO_VALOR'
+    ? { error: e.message, code: e.code } : { error: e && e.message });
+
   const handleSeparacao = (req, res) => {
     const { itens_separados } = req.body || {};
     // Etapa 28: a separação tem dono — `req.user` chega ao serviço (RN-01). Sem isto o serviço
     // recusa com 400, e é essa a fiação que a Etapa 25 ensinou a provar pela rota.
     requisitionService.separarRequisicao(db, req.params.id, itens_separados || [], req.user)
       .then((result) => res.json(result))
-      .catch((e) => res.status(e.status || 500).json({ error: e.message }));
+      .catch((e) => res.status(e.status || 500).json(corpoDoErroDaRequisicao(e)));
   };
 
   // Todo o fluxo de separação/entrega é trabalho de almoxarifado: `separar_emitir`
@@ -3873,7 +3879,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     const { itens_atendidos } = req.body;
     requisitionService.entregarRequisicao(db, req.params.id, itens_atendidos, req.user, alertService)
       .then((result) => res.json(result))
-      .catch((e) => res.status(e.status || 500).json({ error: e.message }));
+      .catch((e) => res.status(e.status || 500).json(corpoDoErroDaRequisicao(e)));
   });
 
   // PUT /api/almoxarifado/requisicoes/:id/confirmar-recebimento — confirmação de

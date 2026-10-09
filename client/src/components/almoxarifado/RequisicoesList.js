@@ -736,7 +736,11 @@ const RequisicoesList = () => {
       // 93: outra separação venceu). O modal aberto mostrava um estado que já não existe, e "Separar" de novo numa
       // Parcialmente Atendida gravava a mesma caixa duas vezes (M2 da 93). Fecha e recarrega; os demais erros
       // mantêm o modal (corrigir e tentar de novo).
-      if (err.response?.status === 409) {
+      // Fase 5 (B465): o 403 da alçada de valor também — o V403b acabou de gravar *Aguardando aprovação de valor* e
+      // o modal mostrava o status velho. Pelo `code` do corpo (não pelo texto); um 403 de permissão mantém o modal.
+      const statusMudou = err.response?.status === 409
+        || (err.response?.status === 403 && err.response?.data?.code === 'AGUARDANDO_APROVACAO_VALOR');
+      if (statusMudou) {
         setShowSeparar(false);
         setEntregaAposSeparar(false);
         await abrirDetalhe(detalhe.id, { force: true });
