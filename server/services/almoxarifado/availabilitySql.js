@@ -29,6 +29,8 @@
  * `quantidade_em_terceiros` e a unica que significa "nao esta no predio" — ver o comentario da
  * coluna em schema.js e o desconto da conferencia em routes/almoxarifado.js.
  */
+const Q = require('./quantidade');
+
 const COLUNAS_RETENCAO = [
   'quantidade_reservada',
   'quantidade_bloqueada',
@@ -39,17 +41,21 @@ const COLUNAS_RETENCAO = [
 /**
  * Expressao SQL do disponivel, JA ENTRE PARENTESES (pode ir direto para um `>= ?` ou um `as x`).
  *
+ * Etapa 96 (B486): ARREDONDADA a 1e-6. O disponivel e uma DIFERENCA de colunas, e a diferenca de dois numeros limpos
+ * ja sai torta (fisico 0,3 - reservado 0,1 = 0.19999999999999998): a SAIDA de 0,2 era recusada e a tela mostrava o
+ * resto do ponto flutuante. Arredondar aqui serve aos claims e a todas as leituras de uma vez.
+ *
  * @param {string} alias alias da tabela materiais_almoxarifado SEM o ponto ('m', 'ma'). Vazio
  *   (default) para UPDATE de tabela unica, onde as colunas nao sao qualificadas.
  * @returns {string}
  *
- *   disponivelSql('m')  =>  (m.quantidade_atual - COALESCE(m.quantidade_reservada,0) - ...)
- *   disponivelSql()     =>  (quantidade_atual - COALESCE(quantidade_reservada,0) - ...)
+ *   disponivelSql('m')  =>  ROUND((m.quantidade_atual - COALESCE(m.quantidade_reservada,0) - ...), 6)
+ *   disponivelSql()     =>  ROUND((quantidade_atual - COALESCE(quantidade_reservada,0) - ...), 6)
  */
 function disponivelSql(alias = '') {
   const p = alias ? `${alias}.` : '';
   const retido = COLUNAS_RETENCAO.map((c) => `COALESCE(${p}${c},0)`).join(' - ');
-  return `(${p}quantidade_atual - ${retido})`;
+  return Q.qtdSql(`${p}quantidade_atual - ${retido}`);
 }
 
 module.exports = { COLUNAS_RETENCAO, disponivelSql };

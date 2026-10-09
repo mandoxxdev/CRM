@@ -10,6 +10,8 @@ const ownerRules = require('./ownerRules');
 const motivoMovimentacao = require('./motivoMovimentacao');
 const { TIPOS_MOVIMENTO, TIPOS_RETENCAO, AREAS_ESPECIAIS } = require('./schema');
 const { disponivelSql, COLUNAS_RETENCAO } = require('./availabilitySql');
+// Etapa 96 (C176): a regra unica de quantidade — namespace de proposito (ha `const qtd` locais neste arquivo).
+const Q = require('./quantidade');
 // Etapa 45 (fix-round): a regua de "isto e diferenca de verdade", dona unica desde a Etapa 10b.
 // Usada SO no claim de `baixandoBloqueado` (`DEVOLUCAO_FORNECEDOR` e, desde a Etapa 69, a `SUCATA`
 // com `doBloqueado`), e o raio pequeno e deliberado — ver o comentario
@@ -52,10 +54,12 @@ async function getMaterial(db, materialId) {
  * poderem divergir — divergirem foi o que a Etapa 8b teve de consertar.
  */
 async function getSaldoDisponivel(material) {
-  return COLUNAS_RETENCAO.reduce(
+  // Etapa 96 (B485/B486): arredondado como o `disponivelSql` — a pre-checagem da saida e as mensagens de recusa
+  // dizem o mesmo numero que o claim compara (0,3 - 0,1 da 0,2, nao 0.19999999999999998).
+  return Q.qtd(COLUNAS_RETENCAO.reduce(
     (saldo, coluna) => saldo - (material[coluna] || 0),
     material.quantidade_atual,
-  );
+  ));
 }
 
 /**
