@@ -158,6 +158,36 @@ const comPrazo = (p, ms, rotulo) => Promise.race([
     assert.strictEqual(res.infos.length, 0, JSON.stringify(res.infos));
   });
 
+  // ══════════════ (Fase 5) a leitura do status que falha nao aborta o laco ══════════════
+  await test('[92 RN-05] (d) duas reservas ATIVA, a leitura do status da primeira falha -> nao lanca, as duas LIBERADA (a leitura que falha segue para o liberarReserva)', async () => {
+    const a = await reservaAtiva();
+    const b = await reservaAtiva();
+    const RE_LEITURA = /^SELECT status FROM reservas_material_almoxarifado WHERE id = \?$/;
+    const origGet = db.get;
+    let disparos = 0;
+    db.get = function (sql, params, ...rest) {
+      if (disparos === 0 && RE_LEITURA.test(String(sql)) && Array.isArray(params) && Number(params[0]) === Number(a.rid)) {
+        disparos++;
+        const cb = [params, ...rest].find((x) => typeof x === 'function');
+        process.nextTick(() => cb && cb.call({}, new Error('falha injetada 92F5 leitura')));
+        return this;
+      }
+      return origGet.call(db, sql, params, ...rest);
+    };
+    let res; let erro = null;
+    try {
+      res = await capturar(() => requisitionService.desfazerReservas(db, { ...USERS.ADMIN }, [{ reserva_id: a.rid }, { reserva_id: b.rid }]));
+    } catch (e) { erro = e; } finally { db.get = origGet; }
+    assert.strictEqual(disparos, 1, `o stub da leitura disparou ${disparos} vez(es) — rodada sem valor`);
+    assert.ok(!erro, `desfazerReservas lancou: ${erro && erro.message}`);
+    const status = async (id) => (await dbGet(db, 'SELECT status FROM reservas_material_almoxarifado WHERE id = ?', [id])).status;
+    assert.strictEqual(await status(b.rid), 'LIBERADA', 'a segunda reserva ficou presa');
+    assert.strictEqual(await reservada(b.m), 0);
+    assert.strictEqual(await status(a.rid), 'LIBERADA', 'a primeira (leitura falhou) devia seguir para o liberarReserva');
+    assert.strictEqual(await reservada(a.m), 0);
+    assert.strictEqual(res.warns.filter((l) => l.startsWith(W1_PREFIXO)).length, 0, JSON.stringify(res.warns));
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed > 0 ? 1 : 0);

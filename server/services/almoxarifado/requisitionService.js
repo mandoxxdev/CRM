@@ -318,13 +318,18 @@ async function desfazerReservas(db, user, reservas = []) {
     // num desfecho certo (sonda: 5/5). Reserva que ja nao esta ATIVA: I1 e segue. A falha REAL (ativa que
     // nao solta) continua no W1. Residual declarado: soltar entre esta leitura e o liberarReserva ainda da
     // W1 (fechar exigiria o motor reconhecer "ja solta"). Descartado: reconhecer o erro pelo texto.
-    // eslint-disable-next-line no-await-in-loop
-    const atual = await dbGet(db, 'SELECT status FROM reservas_material_almoxarifado WHERE id = ?', [r.reserva_id]);
-    if (atual && atual.status !== 'ATIVA') {
-      console.info(`[almoxarifado-aprovar] Reserva ${r.reserva_id} ja estava ${atual.status} — nada a desfazer`);
-      continue; // eslint-disable-line no-continue
-    }
+    // Fase 5: a leitura mora DENTRO do try — antes estava fora e uma falha nela abortava o laco, deixando
+    // as reservas seguintes ATIVA. Leitura que falha vale "nao sei": segue para o liberarReserva (solta
+    // se ainda ativa; se ja solta, lanca e cai no W1). Descartado: W1 + continue na falha da leitura —
+    // deixaria ESTA reserva presa por uma leitura, quando o liberarReserva ainda podia solta-la.
     try {
+      // eslint-disable-next-line no-await-in-loop
+      const atual = await dbGet(db, 'SELECT status FROM reservas_material_almoxarifado WHERE id = ?', [r.reserva_id])
+        .catch(() => null);
+      if (atual && atual.status !== 'ATIVA') {
+        console.info(`[almoxarifado-aprovar] Reserva ${r.reserva_id} ja estava ${atual.status} — nada a desfazer`);
+        continue; // eslint-disable-line no-continue
+      }
       // eslint-disable-next-line no-await-in-loop
       await stockService.liberarReserva(db, user, r.reserva_id, null, {
         statusFinal: 'LIBERADA',
