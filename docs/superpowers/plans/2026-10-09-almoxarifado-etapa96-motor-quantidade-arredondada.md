@@ -1,6 +1,6 @@
 # Etapa 96 — o motor grava a quantidade arredondada e não recusa o que existe por ponto flutuante (C176, feature 03 com a 05 e a 07)
 
-> Status: **EM EXECUÇÃO — 2026-10-09: Fase 2 `e2a2f2d7`; T0 `82836975`, T1 `8bb43f60` feitas (seção "Execução" no fim); próximo T2, T3 e T4.** Próximo passo: **T0** — ver
+> Status: **EM EXECUÇÃO — 2026-10-09: Fase 2 `e2a2f2d7`; T0 `82836975`, T1 `8bb43f60`, T2 `290ae5dc`, T3 `f26e53db`, T4 `5b5abba7` feitas (seção "Execução" no fim); próximo T5 e Fase 5.** Próximo passo: **T0** — ver
 > "Fase 2 — revisão do plano" (vale sobre o texto) e "Próximo passo" no fim.
 > HEAD de partida: `30b7793a` (main, árvore limpa, sem push).
 > Origem: "Próxima tarefa detalhada — Etapa 96" no fim de
@@ -454,7 +454,7 @@ junction"). T2 e T3 **não** vão em paralelo: as duas sabotam o motor que as ou
   = 1e-6 e mede a RN-03 também pela transferência (claim de coluna crua, sem pré-checagem em JS). Entram na T1: K1 (RN-02
   estorno de `AJUSTE`; controle (s8) `delta` sem `Q.qtd` e sem `Q.cabe` → cai K1), as recusas I1 do motor (`:80`,
   `:225`, `:2733`) e as escritas I4 (absolutas, `syncSaldoLocalizacaoPadrao`, livro do estorno).
-- [ ] **T2 (tronco) — os outros escritores das colunas do material.** `inspectionService.js` (`:290-291`, `:320`,
+- [x] `290ae5dc` **T2 (tronco) — os outros escritores das colunas do material.** `inspectionService.js` (`:290-291`, `:320`,
   bloquear/desbloquear), `thirdPartyService.js` (`:235`, `:384`, `:453-454`, `:770`, `:902-903`), `receiptService.js`
   (`:1536`, `:1559`, `:2368`), `scrapDisposalService.js:243`. **RN-01** (bloquear 0,7+0,2+0,1 → 1), **RN-02** (remessa
   com legado; desbloquear; retorno de terceiro 1 de um item com `quantidade_retornada` torta), **RN-03**, **RN-05** (T1,
@@ -463,7 +463,7 @@ junction"). T2 e T3 **não** vão em paralelo: as duas sabotam o motor que as ou
   **Controles:** (s1) a pré-checagem `thirdPartyService.js:235` sem `cabe` → cai RN-02 remessa; (s2) `inspectionService`
   sem `FOLGA_SQL` em `:291` → cai a inspeção de um item com `quantidade_em_inspecao` torta (montar); (s3) a escrita
   `:1442` / bloqueio sem `qtdSql` → cai RN-01 bloqueado = 1.
-- [ ] **T3 (tronco) — a requisição: as colunas do item e a entrega.** `requisitionService.js` `:1018` (`qtd` na soma da
+- [x] `f26e53db` **T3 (tronco) — a requisição: as colunas do item e a entrega.** `requisitionService.js` `:1018` (`qtd` na soma da
   separação), `:1522` (`qtdSql` na entregue), `:1370`/`:1405` (`cabe`), E1 com `qtd`. **RN-06 (a)(b)(c)(d)** pela rota e
   pelo serviço (`separarRequisicao`, `entregarRequisicao` chamados direto). **Vermelho antes:** RN-06 (a) (`APROVADO`
   sem reserva — vem da T1: a T3 confere que continua verde), (b) (sonda 10 A), (c) (físico 2,8e-17). **Medir:**
@@ -471,7 +471,7 @@ junction"). T2 e T3 **não** vão em paralelo: as duas sabotam o motor que as ou
   (s1) `:1018` sem `qtd` → cai RN-06 (b) (entregar 1 → 400); (s2) `:1370` sem `cabe` → cai RN-06 (b) pela prévia
   (mensagem com `Máximo: 1`… só se `:1405` também; sabotar **um** de cada vez e dizer qual asserção cai — a prévia
   `:1370` responde primeiro); (s3) `:1522` sem `qtdSql` → cai RN-06 (c) `quantidade_entregue` = 1.
-- [ ] **T4 (galho, worktree) — a A47 e o script opcional (B483, B484).** Contrato "O legado". **RN-07** pelo serviço
+- [x] `5b5abba7` **T4 (galho, worktree) — a A47 e o script opcional (B483, B484).** Contrato "O legado". **RN-07** pelo serviço
   (`quantidadeLegado.normalizar(db, …)`) **e** pela CLI (`child_process` com `CRM_DATA_DIR` numa pasta temporária com o
   banco da suíte copiado — molde "prova de primeiro boot", memória). **Vermelho antes:** tudo (arquivo novo). **Controles:**
   (s1) `normalizar` ignorando `aplicar` (grava sempre) → cai "sem `--aplicar` não grava"; (s2) a consulta com `ABS(…) >
@@ -742,3 +742,25 @@ errado** (o SQLite dá 0). Recontagem: 18 claims SQL + 12 checagens JS = 30 recu
   (`-0` → `+ 0`). Técnica 3 medida antes/depois por sabotagem do epsilon: só `encaminhamentoExecucao` perdeu a deriva.
   **Atenção da T3:** `relatoriosIndicadoresSpec27.api.test.js:457` espera `quantidade_entregue` ≠ 1 — cai quando a T3
   arredondar a coluna.
+- **T2 `290ae5dc`** — terceiros, inspeção, recebimento, sucateamento e devolução arredondam ao gravar (10 escritas) e
+  recusam com folga; T1/T2/S1/R2 com o número arredondado. **Além do plano:** o `pendente` da remessa arredondado (legado
+  com 0,999… deixava a remessa em `RETORNO_PARCIAL` para sempre). Teste `quantidadeArredondadaServicos.api.test.js` (18):
+  vermelho 10, guardas 7. 11 controles caíram na própria asserção; s9 só caiu depois do caso legado novo. **Divergências:**
+  na devolução só o arredondamento sem folga derruba só a mensagem R2; o claim da inspeção só precisa da folga porque a
+  retida passou a ser arredondada; o primeiro s9 quebrou o arquivo (substituição vazia) — restaurado por cópia e refeito.
+  **Fora do contrato:** `devolucoes_material_almoxarifado` ainda guarda a quantidade crua recebida (o motor arredonda o
+  que move).
+- **T3 `f26e53db`** — soma da separação e escrita do item arredondadas em SQL; a entrega arredonda o pedido e compara com
+  folga (prévia, laço, crítico); E1/R3 arredondados; fila e detalhe arredondados (inclusive a soma SQL disponível + reserva
+  do item); o cliente não muda. Teste `quantidadeArredondadaRequisicao.api.test.js` (13): vermelho 10; RN-06 (a)(d) legado
+  já verdes, como previsto. **O I5 estava errado:** previa 0,2 no detalhe com físico 1; pelas regras da 95 o certo é 0,9 —
+  caso separado com físico limitando. `relatoriosIndicadoresSpec27` [M-1] caiu como anunciado e foi remontado por escritor
+  direto ("mudado na Etapa 96"). Controles s1, s3, crítico, `maxEntregar`+prévia+laço juntos, fila+detalhe juntos caíram.
+  **Camadas redundantes (não testes vazios):** s2 como escrito (prévia sem folga), `maxEntregar` sem arredondar sozinho, a
+  soma SQL da fila sem `ROUND` sozinha, o resto da divisão da entrega sem arredondar — nenhum derruba sozinho.
+- **T4 `5b5abba7`** (worktree, cherry-pick de `2ee018d8`) — `quantidadeLegado.js` (`COLUNAS_LEGADO` 14, `listarTortos` com
+  `arredondado` do `ROUND` do SQL, `normalizar` numa transação) e `scripts/normalizar-quantidades-almoxarifado.js` (sem
+  `--aplicar` só lista; com, normaliza; banco ausente → sai 1). Teste `quantidadeLegado.api.test.js` (11; CLI sobre
+  `VACUUM INTO`; livro intacto; inventário aberto sobre o torto fecha sem movimento novo). Controles s1–s5 caíram.
+  **Divergência:** a B483 diz "15 colunas"; o contrato e a A47 têm **14** — o texto da B483 estava errado.
+- **Contagem:** `test:api` 335/335 (4071 ✓); `test:almoxarifado` 44/0; 4/0, 3/0, 5/0.
