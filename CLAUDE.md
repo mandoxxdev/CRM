@@ -108,6 +108,17 @@ de requisição) **não** pega: só aumenta o livre, e quem reserva sob a trava 
 há, nunca mais (B441, Etapa 92). Saída avulsa, reserva manual e separação **não** pegam (declarado,
 D (91)).
 
+**Há outra trava, por requisição** (Etapa 93): `services/almoxarifado/travaPorRequisicao.js`
+(`serializarNaRequisicao`) serializa os cinco gestos do almoxarife numa requisição — separar,
+entregar e excluir (no serviço, valem para as duas rotas de exclusão) e liberar para retirada e
+encerrar (no corpo das rotas). **Não confunda os nomes:** `requisitionService.comTravaDaRequisicao` é a
+trava **por material** dos itens da requisição (acima); `travaPorRequisicao.serializarNaRequisicao` é
+a por requisição. Também não é reentrante (nenhuma das cinco chama outra; a rota de exclusão **não**
+se embrulha nela, porque o serviço já pega), e a ordem é sempre **requisição → material**: nunca pegue
+a por requisição de dentro de uma seção da por material. Aprovações, conferência e cancelamentos ficam
+fora (B450) e conferem o status no `WHERE` da gravação. Gravação que perde depois de mexer em estoque
+(a exclusão depois do estorno) **não** tenta de novo — estornaria de novo (B447/B452).
+
 ## Regra de negócio: almoxarifado é área física, não filial
 
 Os almoxarifados são áreas de alocação dentro do **mesmo site** — o cliente tem uma filial só.
