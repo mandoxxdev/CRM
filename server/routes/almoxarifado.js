@@ -3791,28 +3791,50 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // nova da mesma requisicao espera e le PRONTA_PARA_RETIRADA (antes: a 3c liberava a rodada 2 de critico
       // sem conferencia e prendia a requisicao com a reserva).
       await travaPorRequisicao.serializarNaRequisicao(req.params.id, async () => {
-        const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
-        if (!reqRow) return res.status(404).json({ error: 'Requisição não encontrada' });
+        // Etapa 93 (T3, B445): a gravacao confere o status lido E a marca de rodada (a ultima rodada, lida ANTES
+        // do reqRow — molde da Fase 5 da 92). Antes era `WHERE id=?`: um escritor fora da trava que entregasse,
+        // excluisse ou gravasse uma rodada nova entre a leitura e o UPDATE era atropelado — e a rodada nova de
+        // critico mantem o status EM_SEPARACAO, entao so o status nao basta (3c: liberava sem a 2a conferencia).
+        // Perdeu -> rele tudo e refaz as recusas de hoje; perdeu duas vezes -> 409 L1.
+        let reqRow = null;
+        for (let tentativa = 0; tentativa < 2; tentativa++) {
+          // eslint-disable-next-line no-await-in-loop
+          const marca = Number((await dbGet(db,
+            'SELECT COALESCE(MAX(id), 0) AS m FROM separacoes_requisicao_almoxarifado WHERE requisicao_id = ?',
+            [req.params.id])).m) || 0;
+          // eslint-disable-next-line no-await-in-loop
+          reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+          if (!reqRow) return res.status(404).json({ error: 'Requisição não encontrada' });
 
-        const check = requisitionStateMachine.validarTransicao(reqRow.status, 'PRONTA_PARA_RETIRADA');
-        if (!check.ok) return res.status(400).json({ error: check.erro });
+          const check = requisitionStateMachine.validarTransicao(reqRow.status, 'PRONTA_PARA_RETIRADA');
+          if (!check.ok) return res.status(400).json({ error: check.erro });
 
-        const separados = await dbGet(db,
-          `SELECT COUNT(*) as n FROM itens_requisicao_almoxarifado WHERE requisicao_id = ? AND quantidade_separada > 0`,
-          [req.params.id]);
-        if (!separados || separados.n === 0) {
-          return res.status(400).json({ error: 'Nenhum item separado' });
+          // eslint-disable-next-line no-await-in-loop
+          const separados = await dbGet(db,
+            `SELECT COUNT(*) as n FROM itens_requisicao_almoxarifado WHERE requisicao_id = ? AND quantidade_separada > 0`,
+            [req.params.id]);
+          if (!separados || separados.n === 0) {
+            return res.status(400).json({ error: 'Nenhum item separado' });
+          }
+
+          // Etapa 28 (RN-06): material crítico SEPARADO exige a segunda conferência antes de sair. A
+          // mesma função guarda a outra saída (entregarRequisicao) — a entrega sai direto de
+          // EM_SEPARACAO, então a barreira só aqui seria opcional.
+          // eslint-disable-next-line no-await-in-loop
+          const itens = await requisitionService.carregarItensRequisicao(db, req.params.id);
+          requisitionService.assertConferidaSeObrigatorio(reqRow, itens);
+
+          // eslint-disable-next-line no-await-in-loop
+          const upd = await dbRun(db,
+            `UPDATE requisicoes_almoxarifado SET status='PRONTA_PARA_RETIRADA', updated_at=CURRENT_TIMESTAMP
+              WHERE id=? AND status=?
+                AND NOT EXISTS (SELECT 1 FROM separacoes_requisicao_almoxarifado WHERE requisicao_id=? AND id > ?)`,
+            [req.params.id, reqRow.status, req.params.id, marca]);
+          if (upd.changes > 0) break;
+          if (tentativa === 1) {
+            return res.status(409).json({ error: 'A requisição mudou enquanto era liberada para retirada; recarregue e confira antes de liberar.' });
+          }
         }
-
-        // Etapa 28 (RN-06): material crítico SEPARADO exige a segunda conferência antes de sair. A
-        // mesma função guarda a outra saída (entregarRequisicao) — a entrega sai direto de
-        // EM_SEPARACAO, então a barreira só aqui seria opcional.
-        const itens = await requisitionService.carregarItensRequisicao(db, req.params.id);
-        requisitionService.assertConferidaSeObrigatorio(reqRow, itens);
-
-        await dbRun(db,
-          `UPDATE requisicoes_almoxarifado SET status='PRONTA_PARA_RETIRADA', updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-          [req.params.id]);
 
         // Etapa 28 (RN-08, D4): a liberação passa a auditar — pós-escrita, best-effort, como o resto
         // do módulo (Etapa 19: falha de log não derruba o ato). `audit.registrarAuditoria` (namespace)

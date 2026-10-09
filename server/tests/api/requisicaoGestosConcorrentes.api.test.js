@@ -707,6 +707,70 @@ const esperarFila = async (R, ms = 3000) => {
     assert.strictEqual(Number(ant.conferencia.usuario_id), USERS.ALMOX2.id);
   });
 
+  // ── RN-08 (b)(b')(b'') — a liberacao confere o status lido e a marca de rodada (T3, B445) ──
+  const L1 = 'A requisição mudou enquanto era liberada para retirada; recarregue e confira antes de liberar.';
+  const BARREIRA = 'Esta requisição tem material crítico separado e ainda não passou pela segunda '
+    + 'conferência. Peça a outra pessoa do almoxarifado para conferir a separação antes de liberar ou entregar.';
+  const rodadaAlheia = (R) => raw(`INSERT INTO separacoes_requisicao_almoxarifado
+    (requisicao_id, usuario_id, usuario_nome, itens_tocados, itens_json) VALUES (?, ?, ?, 0, '[]')`,
+  [R, USERS.ALMOX.id, USERS.ALMOX.nome]);
+
+  await test('[93 RN-08] (b) liberacao: no UPDATE da liberacao um escritor fora da trava poe ENTREGUE -> 400 "Transicao invalida: ENTREGUE -> PRONTA_PARA_RETIRADA"; status ENTREGUE; sem trilha LIBERACAO_RETIRADA; UPDATE emitido 1 vez', async () => {
+    desarmar();
+    const x = await montar();
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 2)).status, 200);
+    const g = armarEscritor(RE_LIB, () => raw("UPDATE requisicoes_almoxarifado SET status = 'ENTREGUE' WHERE id = ?", [x.R]));
+    const lib = await comPrazo(liberar('ALMOX2', x.R), 8000, 'liberar');
+    desarmar();
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(g.disparos, 1);
+    assert.strictEqual(lib.status, 400, `liberar: ${lib.status} ${JSON.stringify(lib.body)}`);
+    assert.strictEqual(lib.body.error, 'Transição inválida: ENTREGUE → PRONTA_PARA_RETIRADA');
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'ENTREGUE', `status ${f.status} (a liberacao gravou por cima)`);
+    assert.strictEqual((await trilhaDe(x.R, 'LIBERACAO_RETIRADA')).length, 0);
+    assert.strictEqual(g.emitidos, 1, `UPDATE da liberacao emitido ${g.emitidos} vez(es)`);
+  });
+
+  await test("[93 RN-08] (b') liberacao de critico conferido: o escritor insere uma rodada nova e limpa a conferencia -> a 1a tentativa perde (marca), a 2a recusa pela BARREIRA (400); EM_SEPARACAO", async () => {
+    desarmar();
+    const x = await montar({ critico: true });
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 1)).status, 200);
+    const cf = await conferir('ALMOX2', x.R);
+    assert.strictEqual(cf.status, 200, JSON.stringify(cf.body));
+    const g = armarEscritor(RE_LIB, async () => {
+      await rodadaAlheia(x.R);
+      await raw(`UPDATE requisicoes_almoxarifado SET conferido_por_id = NULL, conferido_por_nome = NULL,
+        conferido_em = NULL WHERE id = ?`, [x.R]);
+    });
+    const lib = await comPrazo(liberar('ALMOX2', x.R), 8000, 'liberar');
+    desarmar();
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(g.disparos, 1);
+    assert.strictEqual(lib.status, 400, `liberar: ${lib.status} ${JSON.stringify(lib.body)}`);
+    assert.strictEqual(lib.body.error, BARREIRA);
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'EM_SEPARACAO', `status ${f.status} (critico liberado sem conferencia)`);
+    assert.strictEqual(f.conferido, null);
+    assert.strictEqual((await trilhaDe(x.R, 'LIBERACAO_RETIRADA')).length, 0);
+  });
+
+  await test("[93 RN-08] (b'') liberacao: o escritor insere uma rodada nova nas DUAS emissoes -> 409 L1; EM_SEPARACAO; UPDATE emitido 2 vezes", async () => {
+    desarmar();
+    const x = await montar();
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 2)).status, 200);
+    const g = armarEscritor(RE_LIB, () => rodadaAlheia(x.R), 2);
+    const lib = await comPrazo(liberar('ALMOX2', x.R), 8000, 'liberar');
+    desarmar();
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(lib.status, 409, `liberar: ${lib.status} ${JSON.stringify(lib.body)}`);
+    assert.strictEqual(lib.body.error, L1);
+    assert.strictEqual(g.emitidos, 2, `UPDATE da liberacao emitido ${g.emitidos} vez(es) — o teto e uma nova tentativa so`);
+    const f = await foto(x);
+    assert.strictEqual(f.status, 'EM_SEPARACAO');
+    assert.strictEqual((await trilhaDe(x.R, 'LIBERACAO_RETIRADA')).length, 0);
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed ? 1 : 0);
