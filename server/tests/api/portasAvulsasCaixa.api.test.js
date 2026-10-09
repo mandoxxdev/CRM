@@ -28,6 +28,7 @@ const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const { PERFIS } = require('../../services/almoxarifado/permissions');
 const trava = require('../../services/almoxarifado/travaPorMaterial');
 const requisitionService = require('../../services/almoxarifado/requisitionService');
+const stockService = require('../../services/almoxarifado/stockService');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -257,6 +258,326 @@ const S = (c, un, lista) => ` — ${c} ${un} estão separados para ${lista}${S_F
     assert.deepStrictEqual([await estado(filho), rodou], ['pendente', false], 'o filho rodou sem a trava (o Set guardou m solto)');
     soltar(); await outro;
     assert.strictEqual(await filho, 'ok');
+  });
+
+  // ── T1: o motor ───────────────────────────────────────────────────────────────────────────────────────────────────
+  const ADM = { ...USERS.ADMIN };
+  const svc = (params, opcoes) => stockService.registrarMovimentacao(db, ADM, { motivo: 'e97', justificativa: 'sonda e97', ...params }, opcoes)
+    .then((r) => ({ status: 201, r }), (e) => ({ status: e.status || 500, error: e.message }));
+  const reservaManual = (m, q) => stockService.criarReserva(db, ADM, { material_id: m, quantidade: q, os_referencia: 'OS-97', observacoes: 'e97' })
+    .then((r) => ({ status: 201, r }), (e) => ({ status: e.status || 500, error: e.message }));
+  const estornar = (movId, opcoes) => stockService.cancelarMovimentacao(db, ADM, movId, 'sonda e97', opcoes)
+    .then((r) => ({ status: 200, r }), (e) => ({ status: e.status || 500, error: e.message }));
+  const entregar = (R, pares, u = 'ALMOX') => como(u).put(`${API}/requisicoes/${R}/entregar`, {
+    itens_atendidos: pares.map(([item_id, q]) => ({ item_id, quantidade_atendida: q })),
+  });
+  const statusReq = async (R) => (await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id=?', [R])).status;
+  // estado do material (fisico, retencoes) + contagem do livro: a recusa nao pode mexer em nada
+  const foto = async (m) => JSON.stringify({
+    ...(await dbGet(db, `SELECT quantidade_atual q, COALESCE(quantidade_reservada,0) r, COALESCE(quantidade_bloqueada,0) b,
+      COALESCE(quantidade_em_terceiros,0) t FROM materiais_almoxarifado WHERE id=?`, [m])),
+    livro: (await dbGet(db, 'SELECT COUNT(*) n FROM movimentacoes_almoxarifado WHERE material_id=?', [m])).n,
+    reservas: (await dbGet(db, "SELECT COUNT(*) n FROM reservas_material_almoxarifado WHERE material_id=? AND status='ATIVA'", [m])).n,
+  });
+  const recusou = (x, literal, rotulo = '') => {
+    assert.strictEqual(x.status, 400, `${rotulo} esperava 400, veio ${x.status} ${x.error || ''}`);
+    assert.strictEqual(x.error, literal, rotulo);
+  };
+  const entregaTudo = async (a, q = 4) => {
+    const e = await entregar(a.R, [[a.ids[0], q]]);
+    assert.strictEqual(e.status, 200, `A entrega ${q}: ${JSON.stringify(e.body)}`);
+    assert.strictEqual(await statusReq(a.R), 'ENTREGUE');
+  };
+  const reservaAtiva = async (R) => Number((await dbGet(db, `SELECT COALESCE(SUM(quantidade - COALESCE(quantidade_utilizada,0)),0) q
+    FROM reservas_material_almoxarifado WHERE requisicao_id=? AND status='ATIVA'`, [R])).q);
+  const SA = (a, c = 4) => S(c, 'PC', `a requisição ${a.numero}`);
+  const M1 = (n) => `Saldo insuficiente. Disponível: ${n} PC`;
+  const M6 = (total, partes, minimo) => `Ajuste para ${total} PC deixaria o disponível negativo (${partes}, mínimo aceitável: `
+    + `${minimo} PC). Resolva a retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo.`;
+  const ultimaMov = async (m, tipo) => (await dbGet(db, 'SELECT id FROM movimentacoes_almoxarifado WHERE material_id=? AND tipo=? ORDER BY id DESC LIMIT 1', [m, tipo])).id;
+
+  await test('[97 RN-01] saida comum pelo servico, em laco de tipos (SAIDA, SAIDA_PRODUCAO emergencial, SAIDA_MONTAGEM, SAIDA_ASSISTENCIA, AJUSTE_NEGATIVO, PERDA, SUCATA): cada um 400 M1+S, nada muda, e A entrega 4', async () => {
+    const a = await montagem();
+    const antes = await foto(a.m);
+    for (const tipo of ['SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA', 'AJUSTE_NEGATIVO', 'PERDA', 'SUCATA']) {
+      // eslint-disable-next-line no-await-in-loop
+      recusou(await svc({ material_id: a.m, tipo, quantidade: 4, emergencial: true, os_referencia: 'OS-97' }), M1(0) + SA(a), tipo);
+      // eslint-disable-next-line no-await-in-loop
+      assert.strictEqual(await foto(a.m), antes, `${tipo}: a recusa mexeu no material`);
+    }
+    await entregaTudo(a);
+  });
+
+  await test('[97 RN-01] AJUSTE para 3 e para 1 SEM localizacao: 400 M6 com a caixa na guarda de retencao; A entrega 4', async () => {
+    const a = await montagem();
+    const antes = await foto(a.m);
+    // AJUSTE para 0 SEM localizacao ja e recusado antes, pela regra "obrigatorios" (Etapa 96, Fase 2 M2) — por isso 1 e 3.
+    recusou(await svc({ material_id: a.m, tipo: 'AJUSTE', quantidade: 3 }), M6(3, 'separada na caixa de requisição: 4', 4), 'AJUSTE 3');
+    recusou(await svc({ material_id: a.m, tipo: 'AJUSTE', quantidade: 1 }), M6(1, 'separada na caixa de requisição: 4', 4), 'AJUSTE 1');
+    assert.strictEqual(await foto(a.m), antes);
+    await entregaTudo(a);
+  });
+
+  await test('[97 RN-01] reserva manual 4 (M3), REMESSA_TERCEIRO 4 (M2), bloqueio avulso 1 (M4): 400 com S, nada muda; A entrega 4', async () => {
+    const a = await montagem();
+    const antes = await foto(a.m);
+    recusou(await reservaManual(a.m, 4), `Saldo disponível insuficiente: 0${SA(a)}`, 'reserva manual');
+    recusou(await svc({ material_id: a.m, tipo: 'REMESSA_TERCEIRO', quantidade: 4 }),
+      `Saldo disponível insuficiente para enviar ao terceiro: 0 PC${SA(a)}`, 'remessa');
+    recusou(await svc({ material_id: a.m, tipo: 'BLOQUEIO', quantidade: 1 }, { bloqueioAvulso: true }),
+      `Saldo disponível insuficiente para bloquear: 0 PC${SA(a)}`, 'bloqueio avulso');
+    assert.strictEqual(await foto(a.m), antes);
+    await entregaTudo(a);
+  });
+
+  await test('[97 RN-01] estorno da ENTRADA dos 4 (M5): 400 com S, nada muda; A entrega 4', async () => {
+    const a = await montagem();
+    const ent = await ultimaMov(a.m, 'ENTRADA');
+    const antes = await foto(a.m);
+    recusou(await estornar(ent), `Não é possível estornar: saldo disponível insuficiente (material já consumido)${SA(a)}`);
+    assert.strictEqual(await foto(a.m), antes);
+    assert.strictEqual((await dbGet(db, 'SELECT cancelado FROM movimentacoes_almoxarifado WHERE id=?', [ent])).cancelado, 0);
+    await entregaTudo(a);
+  });
+
+  // montagem em que o fisico chega por outro gesto (AJUSTE, com ou sem endereco) em vez da ENTRADA
+  const montagemPor = async (chegar) => {
+    const m = await material(0);
+    const a = await req([[m, 4]]); await aprovar(a.R);
+    const movId = await chegar(m);
+    const s = await separar(a.R, [[a.ids[0], 4]]);
+    assert.strictEqual(s.status, 200, `separar: ${JSON.stringify(s.body)}`);
+    return { m, ...a, movId };
+  };
+  const locSeq = async () => (await dbRun(db, "INSERT INTO localizacoes_almoxarifado (codigo, descricao, ativo) VALUES (?, 'e97', 1)", [`E97L-${++seq}`])).lastID;
+
+  await test('[97 RN-01] (Fase 2, B-2) estorno do AJUSTE 0->4 SEM localizacao: 400 M8; A entrega 4', async () => {
+    const a = await montagemPor(async (m) => { const x = await svc({ material_id: m, tipo: 'AJUSTE', quantidade: 4 }); assert.strictEqual(x.status, 201, x.error); return x.r.id; });
+    const antes = await foto(a.m);
+    recusou(await estornar(a.movId), `Não é possível estornar: ${M6(0, 'separada na caixa de requisição: 4', 4)}`);
+    assert.strictEqual(await foto(a.m), antes);
+    await entregaTudo(a);
+  });
+
+  await test('[97 RN-01] (Fase 2, B-2) estorno do AJUSTE 0->4 COM localizacao: 400 M8; A entrega 4', async () => {
+    const a = await montagemPor(async (m) => {
+      const x = await svc({ material_id: m, tipo: 'AJUSTE', quantidade: 4, localizacao_destino_id: await locSeq() });
+      assert.strictEqual(x.status, 201, x.error); return x.r.id;
+    });
+    const antes = await foto(a.m);
+    const linhas = async () => JSON.stringify(await dbAll(db, 'SELECT id, quantidade FROM estoque_saldo_almoxarifado WHERE material_id=? ORDER BY id', [a.m]));
+    const l0 = await linhas();
+    recusou(await estornar(a.movId), `Não é possível estornar: ${M6(0, 'separada na caixa de requisição: 4', 4)}`);
+    assert.deepStrictEqual([await foto(a.m), await linhas()], [antes, l0]);
+    await entregaTudo(a);
+  });
+
+  await test('[97 RN-01] (Fase 2, B-2) estorno do DESBLOQUEIO avulso (entra 4, bloqueia 4, desbloqueia 4, separa 4): 400 M9; A entrega 4', async () => {
+    const a = await montagemPor(async (m) => {
+      await entrar(m, 4);
+      assert.strictEqual((await svc({ material_id: m, tipo: 'BLOQUEIO', quantidade: 4 }, { bloqueioAvulso: true })).status, 201);
+      assert.strictEqual((await svc({ material_id: m, tipo: 'DESBLOQUEIO', quantidade: 4 })).status, 201);
+      return ultimaMov(m, 'DESBLOQUEIO');
+    });
+    const antes = await foto(a.m);
+    recusou(await estornar(a.movId), `Não é possível estornar o desbloqueio: saldo disponível insuficiente para bloquear de novo: 0 PC${SA(a)}`);
+    assert.strictEqual(await foto(a.m), antes);
+    await entregaTudo(a);
+  });
+
+  await test('[97 RN-01] (Fase 2, B-2/r1b) sem caixa: AJUSTE 0->4, reserva manual 4, estorno do AJUSTE -> 400 M8 (antes 200 com reservado 4 sobre fisico 0)', async () => {
+    const m = await material(0);
+    const aj = await svc({ material_id: m, tipo: 'AJUSTE', quantidade: 4 });
+    assert.strictEqual(aj.status, 201, aj.error);
+    assert.strictEqual((await reservaManual(m, 4)).status, 201);
+    const antes = await foto(m);
+    recusou(await estornar(aj.r.id), `Não é possível estornar: ${M6(0, 'reservada: 4', 4)}`);
+    assert.strictEqual(await foto(m), antes);
+  });
+
+  await test('[97 RN-02] fisico 6, caixa 4: SAIDA 3 -> 400 "Disponivel: 2" + S; SAIDA 2 -> 201', async () => {
+    const a = await montagem({ fisico: 6 });
+    recusou(await svc({ material_id: a.m, tipo: 'SAIDA', quantidade: 3 }), M1(2) + SA(a));
+    assert.strictEqual((await svc({ material_id: a.m, tipo: 'SAIDA', quantidade: 2 })).status, 201);
+    await entregaTudo(a);
+  });
+
+  await test('[97 RN-02] caixa parcialmente coberta (reserva 2 do item, separou 4, fisico 4): livre 0 -> SAIDA 2 recusa com S de 2; A entrega 4', async () => {
+    const m = await material(0); await entrar(m, 2);
+    const a = await req([[m, 4]]); await aprovar(a.R);
+    assert.strictEqual(await reservaAtiva(a.R), 2, 'premissa: a aprovacao reservou 2');
+    await entrar(m, 2);
+    assert.strictEqual((await separar(a.R, [[a.ids[0], 4]])).status, 200);
+    recusou(await svc({ material_id: m, tipo: 'SAIDA', quantidade: 2 }), M1(0) + S(2, 'PC', `a requisição ${a.numero}`));
+    await entregaTudo({ m, ...a });
+  });
+
+  await test('[97 RN-02] caixa de duas requisicoes soma (A 2 + B 2, fisico 6): SAIDA 3 -> 400 "Disponivel: 2" com as duas no sufixo', async () => {
+    const m = await material(0);
+    const x = await montagem({ m, fisico: 2, pede: 2 });
+    const y = await montagem({ m, fisico: 4, pede: 2 });
+    recusou(await svc({ material_id: m, tipo: 'SAIDA', quantidade: 3 }), M1(2) + S(4, 'PC', `as requisições ${x.numero} e ${y.numero}`));
+  });
+
+  await test('[97 RN-03] s5: caixas 8 sobre fisico 4 (legado): A entrega a propria caixa -> 200 (a entrega fica na regua de hoje)', async () => {
+    const m = await material(0);
+    const A = await req([[m, 4]]); await aprovar(A.R);
+    const B = await req([[m, 4]]); await aprovar(B.R);
+    await entrar(m, 8);
+    assert.strictEqual((await separar(A.R, [[A.ids[0], 4]])).status, 200);
+    assert.strictEqual((await separar(B.R, [[B.ids[0], 4]])).status, 200);
+    // mudado na Etapa 97: o estado legado (caixas > fisico) era montado pela SAIDA avulsa que agora recusa —
+    // escritor de legado direto, como a 96 fez com o torto.
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 4 WHERE id = ?', [m]);
+    await entregaTudo({ m, ...A });
+  });
+
+  await test('[97 RN-03] a aprovacao de C com a caixa de A presente reserva disponivel - caixa dos outros (B469 da 95, igual a hoje)', async () => {
+    const a = await montagem({ fisico: 6 });
+    const C = await req([[a.m, 4]]); await aprovar(C.R);
+    assert.strictEqual(await reservaAtiva(C.R), 2);
+  });
+
+  await test('[97 RN-04] sem caixa, toda recusa e byte a byte a de hoje (saida, reserva manual, remessa, ajuste, estorno de entrada)', async () => {
+    const m = await material(0); await entrar(m, 2);
+    recusou(await svc({ material_id: m, tipo: 'SAIDA', quantidade: 3 }), M1(2), 'saida');
+    recusou(await reservaManual(m, 3), 'Saldo disponível insuficiente: 2', 'reserva manual');
+    recusou(await svc({ material_id: m, tipo: 'REMESSA_TERCEIRO', quantidade: 3 }), 'Saldo disponível insuficiente para enviar ao terceiro: 2 PC', 'remessa');
+    assert.strictEqual((await reservaManual(m, 1)).status, 201);
+    recusou(await svc({ material_id: m, tipo: 'AJUSTE', quantidade: 0.5 }), M6(0.5, 'reservada: 1', 1), 'ajuste');
+    const ent = await ultimaMov(m, 'ENTRADA');
+    assert.strictEqual((await svc({ material_id: m, tipo: 'SAIDA', quantidade: 1 })).status, 201);
+    recusou(await estornar(ent), 'Não é possível estornar: saldo disponível insuficiente (material já consumido)', 'estorno');
+  });
+
+  await test('[97 RN-05] pelo servico, com o gancho da s4b (separacao parada depois de ler o teto): a SAIDA avulsa espera e recusa — 0/10 com separado > fisico', async () => {
+    let errados = 0;
+    const origRun = db.run;
+    try {
+      for (let i = 0; i < 10; i++) {
+        const m = await material(0); // eslint-disable-line no-await-in-loop
+        const a = await req([[m, 4]]); await aprovar(a.R); // eslint-disable-line no-await-in-loop
+        await entrar(m, 4); // eslint-disable-line no-await-in-loop
+        let parou; const parada = new Promise((r) => { parou = r; });
+        let liberar; const liberado = new Promise((r) => { liberar = r; });
+        let armado = true;
+        db.run = function ganchoE97(sql, ...resto) {
+          if (armado && /UPDATE itens_requisicao_almoxarifado SET quantidade_separada/.test(sql)) {
+            armado = false; parou();
+            liberado.then(() => origRun.call(db, sql, ...resto));
+            return db;
+          }
+          return origRun.call(db, sql, ...resto);
+        };
+        const sep = requisitionService.separarRequisicao(db, a.R, [{ item_id: a.ids[0], quantidade_separada: 4 }], { ...USERS.ALMOX })
+          .then(() => 200, (e) => e.status || 500);
+        await parada; // eslint-disable-line no-await-in-loop
+        const saida = svc({ material_id: m, tipo: 'SAIDA', quantidade: 4 }); // disparada FORA da secao da separacao
+        await dormir(30); // eslint-disable-line no-await-in-loop
+        liberar();
+        const [s, x] = await Promise.all([sep, saida]); // eslint-disable-line no-await-in-loop
+        db.run = origRun;
+        const est = await dbGet(db, `SELECT ma.quantidade_atual q, ix.quantidade_separada sep FROM materiais_almoxarifado ma
+          JOIN itens_requisicao_almoxarifado ix ON ix.material_id = ma.id WHERE ma.id = ?`, [m]); // eslint-disable-line no-await-in-loop
+        if (est.sep > est.q + 1e-9) errados++;
+        assert.strictEqual(s, 200, 'a separacao conclui');
+        if (i === 0) recusou(x, M1(0) + SA(a), 'a SAIDA depois da separacao');
+      }
+    } finally { db.run = origRun; }
+    assert.strictEqual(errados, 0, `${errados}/10 rodadas com separado > fisico`);
+  });
+
+  await test('[97 RN-05] com a trava do material presa por um teste, a SAIDA avulsa pelo servico fica pendente e resolve ao soltar; dentro da entrega o motor nao espera', async () => {
+    const m = await material(0); await entrar(m, 4);
+    let soltar;
+    const segura = trava.comLockDoMaterial(m, () => new Promise((r) => { soltar = r; }));
+    await dormir(10);
+    const saida = svc({ material_id: m, tipo: 'SAIDA', quantidade: 1 }); // FORA da fn da secao
+    await dormir(150);
+    assert.strictEqual(await estado(saida), 'pendente', 'a SAIDA nao esperou a trava');
+    soltar(); await segura;
+    assert.strictEqual((await saida).status, 201);
+    const a = await montagem();
+    assert.strictEqual(await comPrazo(entregaTudo(a), 3000), 'resolveu', 'a entrega esperou a si mesma');
+  });
+
+  await test('[97 RN-07] (Fase 2, I-1) permite_saldo_negativo: a caixa vale com a flag (SAIDA 4 -> 400, A entrega); a flag dispensa a reserva; sem caixa deixa negativar; o AJUSTE nao', async () => {
+    const m = await material(0);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET permite_saldo_negativo = 1 WHERE id = ?', [m]);
+    const a = await montagem({ m });
+    recusou(await svc({ material_id: m, tipo: 'SAIDA', quantidade: 4 }), M1(0) + SA(a), 'SAIDA 4 com a flag');
+    recusou(await svc({ material_id: m, tipo: 'AJUSTE', quantidade: 1 }), M6(1, 'separada na caixa de requisição: 4', 4), 'AJUSTE 1 com a flag');
+    await entregaTudo(a);
+    const n = await material(0);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET permite_saldo_negativo = 1 WHERE id = ?', [n]);
+    const b = await montagem({ m: n, fisico: 10 });
+    assert.strictEqual((await reservaManual(n, 6)).status, 201, 'reserva manual 6 (livre de caixa 6)');
+    assert.strictEqual((await svc({ material_id: n, tipo: 'SAIDA', quantidade: 6 })).status, 201, 'a flag dispensa a reserva');
+    recusou(await svc({ material_id: n, tipo: 'SAIDA', quantidade: 1 }), M1(0) + SA(b), 'SAIDA 1 a mais');
+    const z = await material(0);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET permite_saldo_negativo = 1 WHERE id = ?', [z]);
+    await entrar(z, 4);
+    assert.strictEqual((await svc({ material_id: z, tipo: 'SAIDA', quantidade: 5 })).status, 201, 'sem caixa a flag negativa');
+  });
+
+  await test('[97 RN-08] (forma da Fase 2, I-5) bloqueio avulso pelo servico: bloquear 10 com fisico 4 -> 400; com reserva manual 4: 5 -> 400, 4 -> 201; montagem: 1 -> 400 com S; o BLOQUEIO interno (sem a opcao) passa', async () => {
+    const m = await material(0); await entrar(m, 4);
+    recusou(await svc({ material_id: m, tipo: 'BLOQUEIO', quantidade: 10 }, { bloqueioAvulso: true }), 'Saldo disponível insuficiente para bloquear: 4 PC');
+    assert.strictEqual((await svc({ material_id: m, tipo: 'BLOQUEIO', quantidade: 4 }, { bloqueioAvulso: true })).status, 201);
+    const r = await material(0); await entrar(r, 4);
+    assert.strictEqual((await reservaManual(r, 4)).status, 201);
+    recusou(await svc({ material_id: r, tipo: 'BLOQUEIO', quantidade: 5 }, { bloqueioAvulso: true }), 'Saldo disponível insuficiente para bloquear: 4 PC');
+    assert.strictEqual((await svc({ material_id: r, tipo: 'BLOQUEIO', quantidade: 4 }, { bloqueioAvulso: true })).status, 201, 'a qualidade retem o reservado');
+    const a = await montagem();
+    recusou(await svc({ material_id: a.m, tipo: 'BLOQUEIO', quantidade: 1 }, { bloqueioAvulso: true }), `Saldo disponível insuficiente para bloquear: 0 PC${SA(a)}`);
+    assert.strictEqual((await svc({ material_id: a.m, tipo: 'BLOQUEIO', quantidade: 1 })).status, 201, 'o BLOQUEIO interno fica como hoje');
+  });
+
+  await test('[97 I-4] (Fase 2) devolucao para SUCATA no legado (caixa 4 > fisico 2): 201, as duas pernas no livro', async () => {
+    const m = await material(0);
+    const a = await req([[m, 4]]); await aprovar(a.R);
+    await entrar(m, 6);
+    assert.strictEqual((await separar(a.R, [[a.ids[0], 4]])).status, 200);
+    const sp = await como('ADMIN').post(`${API}/movimentacoes/v2`, { material_id: m, tipo: 'SAIDA', quantidade: 2, motivo: 'e97', justificativa: 'x', os_referencia: 'OS-97' });
+    assert.strictEqual(sp.status, 201, JSON.stringify(sp.body));
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 2 WHERE id = ?', [m]); // legado A48
+    const d = await como('ADMIN').post(`${API}/devolucoes`, { material_id: m, quantidade: 1, destino: 'SUCATA', motivo: 'sucata', observacoes: 'e97', movimentacao_saida_id: sp.body.id });
+    assert.strictEqual(d.status, 201, JSON.stringify(d.body));
+    const tipos = (await dbAll(db, "SELECT tipo FROM movimentacoes_almoxarifado WHERE material_id=? AND referencia LIKE 'DEV-%' ORDER BY id", [m])).map((x) => x.tipo);
+    assert.deepStrictEqual(tipos, ['ENTRADA_DEVOLUCAO', 'SUCATA']);
+  });
+
+  await test('[97 I-4] (Fase 2) estorno de entrada como compensacao (opcoes.compensacao) fica na regua de hoje; sem a opcao recusa', async () => {
+    const a = await montagem({ fisico: 6 });
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 2 WHERE id = ?', [a.m]); // legado: caixa 4 > fisico 2
+    const x = await svc({ material_id: a.m, tipo: 'ENTRADA', quantidade: 1 });
+    assert.strictEqual(x.status, 201, x.error);
+    recusou(await estornar(x.r.id), `Não é possível estornar: saldo disponível insuficiente (material já consumido)${SA(a)}`, 'sem a opcao');
+    assert.strictEqual((await estornar(x.r.id, { compensacao: true })).status, 200, 'a compensacao do mesmo evento');
+  });
+
+  await test('[97 I-3] (Fase 2) duas SAIDAs concorrentes pelo motor travado SERIALIZAM: a segunda le o resultado da primeira', async () => {
+    const m = await material(0); await entrar(m, 10);
+    // C = o claim do fisico (as duas tentam); L = a linha do livro (so a vencedora grava). Sob a trava a perdedora
+    // so chega ao claim DEPOIS de a vencedora gravar o livro; solta, os dois claims correm antes do livro.
+    const eventos = [];
+    const origRun = db.run; const origGet = db.get;
+    db.get = function claimE97(sql, ...resto) {
+      if (/UPDATE materiais_almoxarifado\s+SET quantidade_atual = /.test(sql)) eventos.push('C');
+      return origGet.call(db, sql, ...resto);
+    };
+    db.run = function livroE97(sql, ...resto) {
+      if (/INSERT INTO movimentacoes_almoxarifado/.test(sql)) eventos.push('L');
+      return origRun.call(db, sql, ...resto);
+    };
+    let rs;
+    try {
+      rs = await Promise.all([svc({ material_id: m, tipo: 'SAIDA', quantidade: 6 }), svc({ material_id: m, tipo: 'SAIDA', quantidade: 6 })]);
+    } finally { db.run = origRun; db.get = origGet; }
+    assert.deepStrictEqual(rs.map((x) => x.status).sort(), [201, 400]);
+    assert.strictEqual(rs.find((x) => x.status === 400).error, M1(4), 'a segunda viu o disponivel que a primeira deixou');
+    // a perdedora le o disponivel ja baixado (pre-checagem) e nem chega ao claim
+    assert.deepStrictEqual(eventos, ['C', 'L'], `os dois correram juntos: ${eventos.join('')}`);
   });
 
   terminou = true;

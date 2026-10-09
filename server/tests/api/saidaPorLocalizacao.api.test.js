@@ -165,7 +165,13 @@ let seq = 0;
     // casava — o perdedor mandava o resto para a linha negativa com A ainda em 40.
     const m = await material(); const A = await loc('A'); const B = await loc('B');
     await entrada(m, A, 100); await entrada(m, B, 50);
-    await Promise.all([entregaSemOrigem(m, 60), entregaSemOrigem(m, 60)]);
+    // mudado na Etapa 97 (Fase 2, I-3): o motor pega a trava do material fora de secao, e as duas saidas pela porta
+    // SERIALIZAM. Este caso prova o CLAIM concorrente da linha, entao chama o corpo sem a trava (a serializacao pelo
+    // motor travado e provada em portasAvulsasCaixa).
+    const semTrava = (q) => stockService.registrarMovimentacaoSemTrava(db, ADMIN, {
+      material_id: m, tipo: 'SAIDA', quantidade: q, motivo: 'entrega', justificativa: 'entrega',
+    });
+    await Promise.all([semTrava(60), semTrava(60)]);
     const l = await linhas(m);
     assert.deepStrictEqual(l, { A: 0, B: 30 }, `o perdedor pulou a linha com saldo: ${JSON.stringify(l)}`);
     await invariante(m);

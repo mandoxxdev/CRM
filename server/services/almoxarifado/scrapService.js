@@ -140,7 +140,9 @@ async function compensarRetalho(db, user, { movEntrada, movBaixa }) {
     // mas SEM rastro nao — o unico cenario em que este ramo falha e exatamente o que deixa
     // retalho-fantasma (credito sem linha de sobra), e alguem precisa achar isso no log.
     // Padrao da casa: stockService.js:1319.
-    await stockService.cancelarMovimentacao(db, user, movEntrada.id, motivo).catch((err) => {
+    // Etapa 97 (Fase 2, I-4): `compensacao` — o credito e do MESMO evento; na regua das portas avulsas o estorno
+    // recusaria no legado (caixa > fisico) e deixaria o retalho-fantasma que o aviso abaixo descreve.
+    await stockService.cancelarMovimentacao(db, user, movEntrada.id, motivo, { compensacao: true }).catch((err) => {
       console.warn('[almoxarifado-retalho] Falha ao estornar a ENTRADA_RETALHO na compensacao '
         + `(mov ${movEntrada.id}) — retalho-fantasma possivel, conferir o livro:`, err.message);
     });

@@ -10,6 +10,9 @@ const ownerRules = require('./ownerRules');
 const motivoMovimentacao = require('./motivoMovimentacao');
 const { TIPOS_MOVIMENTO, TIPOS_RETENCAO, AREAS_ESPECIAIS } = require('./schema');
 const { disponivelSql, COLUNAS_RETENCAO } = require('./availabilitySql');
+// Etapa 97 (T1, B491): o livre de caixa (disponivel - caixa sem reserva das requisicoes), para as portas avulsas.
+// Modulo sem `require` deste arquivo nem do requisitionService (sem ciclo — o teste `portasAvulsasCaixa` cobra).
+const caixaSql = require('./caixaSql');
 // Etapa 96 (C176): a regra unica de quantidade — namespace de proposito (ha `const qtd` locais neste arquivo).
 const Q = require('./quantidade');
 // Etapa 45 (fix-round): a regua de "isto e diferenca de verdade", dona unica desde a Etapa 10b.
@@ -92,8 +95,12 @@ async function getSaldoDisponivel(material, db = null) {
  *
  * @returns {string|null} mensagem de recusa, ou null se o ajuste pode prosseguir.
  */
-function motivoRecusaAjustePorRetencao(material, novoTotal) {
-  const retido = COLUNAS_RETENCAO.reduce((soma, col) => soma + (material[col] || 0), 0);
+function motivoRecusaAjustePorRetencao(material, novoTotal, caixa = 0) {
+  // Etapa 97 (T1, B491): `caixa` = a caixa sem reserva das requisicoes (`caixaSql.lerCaixa`), que o motor le e passa
+  // — a funcao continua PURA. O separado esta na prateleira e e de quem separou: ajustar abaixo dele levava a caixa e
+  // prendia a entrega em "Maximo: 0". Sem caixa (0) a conta e a literal sao byte a byte as de antes.
+  const cx = Math.max(0, Number(caixa) || 0);
+  const retido = COLUNAS_RETENCAO.reduce((soma, col) => soma + (material[col] || 0), 0) + cx;
   if (Q.cabe(retido, novoTotal)) return null; // Etapa 96 (Fase 2, I1): a retencao e uma soma
   const LABELS = {
     quantidade_reservada: 'reservada', quantidade_bloqueada: 'bloqueada',
@@ -102,6 +109,7 @@ function motivoRecusaAjustePorRetencao(material, novoTotal) {
   const partes = COLUNAS_RETENCAO
     .filter((col) => (material[col] || 0) > 0)
     .map((col) => `${LABELS[col]}: ${Q.qtd(material[col])}`);
+  if (cx > Q.QTD_FOLGA) partes.push(`separada na caixa de requisição: ${Q.qtd(cx)}`); // Etapa 97 (M6)
   return `Ajuste para ${Q.qtd(novoTotal)} ${material.unidade} deixaria o disponível negativo `
     + `(${partes.join(', ')}, mínimo aceitável: ${Q.qtd(retido)} ${material.unidade}). Resolva a `
     + 'retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo.';
@@ -981,7 +989,51 @@ async function contarOcupacaoLocalizacao(db, localizacaoId) {
  *    lote.** Ver a nota da guarda de `controle_lote`, mais abaixo, para por que a exigência é
  *    declarada pelo chamador e não deduzida pelo motor.
  */
+/**
+ * Etapa 97 (T1, B491/B493) — a regua das portas avulsas: o livre de caixa e a caixa do material, lidos num SELECT so.
+ * `fisico` e para a regra da flag (B498 invertida na Fase 2): com `permite_saldo_negativo` a saida dispensa reserva e
+ * retencoes, nunca a caixa — o limite e `fisico - caixa`.
+ */
+async function lerReguaDaCaixa(db, materialId) {
+  const r = await dbGet(db, `SELECT ${caixaSql.livreDeCaixaSql()} AS livre,
+      ${caixaSql.caixaSemReservaSql('materiais_almoxarifado.id')} AS caixa, quantidade_atual AS fisico
+    FROM materiais_almoxarifado WHERE id = ?`, [materialId]);
+  return { livre: Number(r && r.livre) || 0, caixa: Q.qtd(Number(r && r.caixa) || 0), fisico: Number(r && r.fisico) || 0 };
+}
+const temCaixa = (regua) => !!regua && regua.caixa > Q.QTD_FOLGA;
+function livreParaSaida(regua, permiteNegativo) {
+  return permiteNegativo ? Q.qtd(regua.fisico - regua.caixa) : regua.livre;
+}
+/** O numero que a recusa mostra: nunca negativo (legado com caixa maior que o disponivel). */
+const livreMostrado = (n) => Q.qtd(Math.max(0, Number(n) || 0));
+async function sufixoDaCaixa(db, materialId, unidade) {
+  return caixaSql.sufixoCaixa(await caixaSql.lerCaixa(db, materialId), unidade);
+}
+/**
+ * Etapa 97 (T1) — a guarda da saida pelo livre de caixa, para o `WHERE` de um UPDATE de tabela unica. Placeholders:
+ * [permiteNegativo ? 1 : 0, quantidade, quantidade]. Com a flag: sem caixa passa (como sempre — o fisico pode ficar
+ * negativo) ou `fisico - caixa >= q`; sem a flag: `livre de caixa >= q`. Material sem caixa = a regua de antes.
+ */
+function guardaSaidaPelaCaixaSql() {
+  const cx = caixaSql.caixaSemReservaSql('materiais_almoxarifado.id');
+  return `((? = 1 AND (${cx} <= ${Q.QTD_FOLGA} OR ${Q.qtdSql(`quantidade_atual - ${cx}`)} >= ? ${Q.FOLGA_SQL}))
+        OR ${caixaSql.livreDeCaixaSql()} >= ? ${Q.FOLGA_SQL})`;
+}
+
+/**
+ * Etapa 97 (T1, B494; forma da Fase 2, B-1) — o motor sob a trava por material. Chamado FORA de uma secao que segura o
+ * material (a porta avulsa: v2, v1, retalho, devolucao, remessa, inventario...), pega a trava e espera a separacao, a
+ * entrega e a aprovacao do mesmo material (s4b da Fase 0: solto 10/10 ERRADO, sob a trava 0/10). Dentro de uma secao
+ * que ja segura o material (a entrega, a aprovacao, a nota, a inspecao) roda direto — a trava nao e reentrante. Ver
+ * `travaPorMaterial.naTravaDoMaterial`. O corpo e o de sempre, em `registrarMovimentacaoSemTrava` (exportado SO para os
+ * testes de corrida do claim — Fase 2, I-3; nenhum servico o chama).
+ */
 async function registrarMovimentacao(db, user, params, opcoes = {}) {
+  return trava.naTravaDoMaterial(params && params.material_id,
+    () => registrarMovimentacaoSemTrava(db, user, params, opcoes));
+}
+
+async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
   // Etapa 66 (RN-05/RN-06): o motivo do CADASTRO (`motivo_id`) e resolvido AQUI, antes da
   // desestruturacao — ele reescreve `motivo` e `justificativa`, que a regra "exige justificativa",
   // o livro, a auditoria e a fila leem abaixo. Recusa (formato, "os dois", inexistente, inativo,
@@ -1118,6 +1170,12 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
   }
   const baixandoBloqueado = tipo === 'DEVOLUCAO_FORNECEDOR'
     || (tipo === 'SUCATA' && opcoes.doBloqueado === true);
+  // Etapa 97 (T1, B492): a saida comum que fica na regua de HOJE (o `disponivelSql`, sem descontar a caixa). So pelo
+  // 4o argumento — nunca do body (a v2 repassa o body inteiro). A entrega da requisicao: a caixa dela ja e a conta da
+  // 95 (`maxEntregar`); excluir so a propria caixa a prenderia quando as caixas somam mais que o fisico (s5). A perna
+  // SUCATA da devolucao (Fase 2, I-4): par do mesmo documento que soma zero com a ENTRADA_DEVOLUCAO logo antes — na
+  // regua nova, no legado (caixa > fisico), a entrada gravava e a SUCATA recusava (devolucao pela metade).
+  const reguaDeHoje = Boolean(opcoes.requisicaoDaEntrega) || opcoes.parDaDevolucao === true;
 
   // ── Lote (Etapa 6) ──────────────────────────────────────────────────────────
   // Aceita `lote_id` (numero) ou `lote` (codigo). O ledger guarda os DOIS: `lote_id` para juntar
@@ -1420,9 +1478,20 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // que levou TODO o saldo do material seria impossivel (disponivel = 0). A validacao real
     // acontece contra a propria coluna, atomicamente, no claim mais abaixo.
     if (!consumindoReserva && !baixandoTerceiro && !baixandoBloqueado) {
-      const disponivel = await getSaldoDisponivel(material, db);
-      if (!Q.cabe(quantidade, disponivel) && !permiteNegativo) {
-        throw Object.assign(new Error(`Saldo insuficiente. Disponível: ${disponivel} ${material.unidade}`), { status: 400 });
+      // Etapa 97 (T1, B491): a porta avulsa compara com o LIVRE DE CAIXA — o separado sem reserva de uma requisicao
+      // esta na prateleira, mas e de quem separou. Sem caixa no material, a regua e a literal de sempre (RN-04).
+      const regua = reguaDeHoje ? null : await lerReguaDaCaixa(db, material_id);
+      if (temCaixa(regua)) {
+        const livre = livreParaSaida(regua, permiteNegativo);
+        if (!Q.cabe(quantidade, livre)) {
+          throw Object.assign(new Error(`Saldo insuficiente. Disponível: ${livreMostrado(livre)} ${material.unidade}`
+            + `${await sufixoDaCaixa(db, material_id, material.unidade)}`), { status: 400 });
+        }
+      } else {
+        const disponivel = await getSaldoDisponivel(material, db);
+        if (!Q.cabe(quantidade, disponivel) && !permiteNegativo) {
+          throw Object.assign(new Error(`Saldo insuficiente. Disponível: ${disponivel} ${material.unidade}`), { status: 400 });
+        }
       }
     }
     // Etapa 45: `baixandoBloqueado` sai daqui pela razao OPOSTA a de todos os outros tipos — ele
@@ -1441,7 +1510,9 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // MATERIAL so e conhecido depois do syncMaterialTotals somar todas as linhas (ver o ramo
     // AJUSTE-com-localizacao mais abaixo); verificar a retencao contra um total ainda-nao-
     // existente fica fora do escopo desta etapa (D1/D7 do design).
-    const motivoRecusa = motivoRecusaAjustePorRetencao(material, parseFloat(quantidade));
+    // Etapa 97 (T1, B491): a caixa sem reserva entra na guarda (M6) — ajustar abaixo do separado levava a caixa.
+    const motivoRecusa = motivoRecusaAjustePorRetencao(material, parseFloat(quantidade),
+      (await caixaSql.lerCaixa(db, material_id)).caixa);
     if (motivoRecusa) throw Object.assign(new Error(motivoRecusa), { status: 400 });
     saldoPosterior = parseFloat(quantidade);
   } else if (tiposAjuste.includes(tipo)) {
@@ -1474,8 +1545,25 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
       [quantidade, saldoDestino.id]);
     saldoPosterior = saldoAnterior;
   } else if (tipo === 'BLOQUEIO') {
-    await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [quantidade, material_id]);
+    if (opcoes.bloqueioAvulso === true) {
+      // Etapa 97 (T1, B496; forma da Fase 2, I-5): o bloqueio AVULSO (tela de Materiais/qualidade) ganha guarda — antes
+      // bloqueava 10 com fisico 4 (P6) e levava a caixa. Bloqueavel = fisico nao retido menos a caixa, SEM contar o
+      // reservado (disponivel + reservado - caixa): a qualidade continua retendo material reservado — o GESTOR bloqueia
+      // mas nao libera reserva de requisicao. O BLOQUEIO sem a opcao (devolucao para quarentena) fica como era.
+      const bloqueavel = Q.qtdSql(`${disponivelSql()} + COALESCE(quantidade_reservada,0) - ${caixaSql.caixaSemReservaSql('materiais_almoxarifado.id')}`);
+      const claimBloqueio = await dbGet(db, `UPDATE materiais_almoxarifado
+        SET quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) + ?')}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND ${bloqueavel} >= ? ${Q.FOLGA_SQL}
+        RETURNING id`, [quantidade, material_id, quantidade]);
+      if (!claimBloqueio) {
+        const b = await dbGet(db, `SELECT ${bloqueavel} AS n FROM materiais_almoxarifado WHERE id = ?`, [material_id]);
+        throw Object.assign(new Error(`Saldo disponível insuficiente para bloquear: ${livreMostrado(b && b.n)} ${material.unidade}`
+          + `${await sufixoDaCaixa(db, material_id, material.unidade)}`), { status: 400 });
+      }
+    } else {
+      await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [quantidade, material_id]);
+    }
     retencaoAplicada = { bloqueada: quantidade, emInspecao: 0 };
     saldoPosterior = saldoAnterior;
   } else if (tipo === 'DESBLOQUEIO') {
@@ -1551,11 +1639,16 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
     // unica — e usar o helper garante que a conta e A MESMA das outras leituras do disponivel.
     const claim = await dbGet(db, `UPDATE materiais_almoxarifado
       SET quantidade_em_terceiros = ${Q.qtdSql('COALESCE(quantidade_em_terceiros,0) + ?')}, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND ${disponivelSql()} >= ? ${Q.FOLGA_SQL}
+      WHERE id = ? AND ${caixaSql.livreDeCaixaSql()} >= ? ${Q.FOLGA_SQL}
       RETURNING id`, [quantidade, material_id, quantidade]);
     if (!claim) {
+      // Etapa 97 (T1, M2): o claim pelo livre de caixa; com caixa a literal mostra o livre e o sufixo.
+      const regua = await lerReguaDaCaixa(db, material_id);
       throw Object.assign(
-        new Error(`Saldo disponível insuficiente para enviar ao terceiro: ${await getSaldoDisponivel(material, db)} ${material.unidade}`),
+        new Error(temCaixa(regua)
+          ? `Saldo disponível insuficiente para enviar ao terceiro: ${livreMostrado(regua.livre)} ${material.unidade}`
+            + `${await sufixoDaCaixa(db, material_id, material.unidade)}`
+          : `Saldo disponível insuficiente para enviar ao terceiro: ${await getSaldoDisponivel(material, db)} ${material.unidade}`),
         { status: 400 });
     }
     saldoPosterior = saldoAnterior; // o material continua sendo nosso: quantidade_atual nao muda
@@ -1810,12 +1903,20 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
         saldoPosterior = rowB.quantidade_atual;
         saidaFisicoAplicado = true;
       } else {
+      // Etapa 97 (T1, B491/B492): o claim da saida comum pelo livre de caixa (a regua de hoje so com a marca do 4o
+      // argumento — a entrega e o par da devolucao).
       const row = await dbGet(db, `UPDATE materiais_almoxarifado
         SET quantidade_atual = ${Q.qtdSql('quantidade_atual - ?')}, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND (? = 1 OR ${disponivelSql()} >= ? ${Q.FOLGA_SQL})
+        WHERE id = ? AND ${reguaDeHoje ? `(? = 1 OR ${disponivelSql()} >= ? ${Q.FOLGA_SQL})` : guardaSaidaPelaCaixaSql()}
         RETURNING quantidade_atual`,
-        [quantidade, material_id, permiteNegativo ? 1 : 0, quantidade]);
+        reguaDeHoje ? [quantidade, material_id, permiteNegativo ? 1 : 0, quantidade]
+          : [quantidade, material_id, permiteNegativo ? 1 : 0, quantidade, quantidade]);
       if (!row) {
+        const regua = reguaDeHoje ? null : await lerReguaDaCaixa(db, material_id);
+        if (temCaixa(regua)) {
+          throw Object.assign(new Error(`Saldo insuficiente. Disponível: ${livreMostrado(livreParaSaida(regua, permiteNegativo))} `
+            + `${material.unidade}${await sufixoDaCaixa(db, material_id, material.unidade)}`), { status: 400 });
+        }
         throw Object.assign(new Error(`Saldo insuficiente. Disponível: ${await getSaldoDisponivel(material, db)} ${material.unidade}`), { status: 400 });
       }
       saldoPosterior = row.quantidade_atual;
@@ -2270,7 +2371,13 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
 // sido bloqueada (ou teve seus tipos_material_permitidos alterados) DEPOIS que o movimento
 // original aconteceu — senão o saldo fica preso sem forma de estornar. Restrições de endereço
 // só se aplicam a movimentos NOVOS via registrarMovimentacao.
-async function cancelarMovimentacao(db, user, movimentoId, motivo) {
+/**
+ * Etapa 97 (T1): `opcoesEstorno.compensacao === true` — o estorno de ENTRADA fica na regua de hoje (sem descontar a
+ * caixa). So para as compensacoes de um evento que falhou no meio (`scrapService.compensarRetalho`,
+ * `thirdPartyService.compensarTransformacao`): o credito que se desfaz e do MESMO evento, o par soma zero, e no legado
+ * (caixa > fisico) a regua nova recusaria e deixaria retalho/peca fantasma (Fase 2, I-4). A rota nunca passa.
+ */
+async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno = {}) {
   if (!motivo) throw Object.assign(new Error('Justificativa obrigatória para cancelamento'), { status: 400 });
   const mov = await dbGet(db, 'SELECT * FROM movimentacoes_almoxarifado WHERE id = ?', [movimentoId]);
   if (!mov) throw Object.assign(new Error('Movimentação não encontrada'), { status: 404 });
@@ -2585,12 +2692,20 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       // derivado do valor pós-update (não da leitura pré-corrida) para manter o par saldo_anterior/
       // saldo_posterior do livro coerente mesmo sob concorrência.
       const permiteNegativo = material.permite_saldo_negativo || (await getConfig(db, 'permite_saldo_negativo_global')) === '1';
-      const row = await dbGet(db, `UPDATE materiais_almoxarifado
+      // Etapa 97 (T1, B491/B494): o estorno de entrada e uma porta avulsa — compara com o livre de caixa (a regra da
+      // flag e a da saida, B498 invertida) e roda sob a trava do material SO em volta do claim (embrulhar o estorno
+      // inteiro travaria em `recalcularStatusSobTrava`, que pega a mesma trava).
+      const deHoje = opcoesEstorno.compensacao === true;
+      const row = await trava.naTravaDoMaterial(mov.material_id, () => dbGet(db, `UPDATE materiais_almoxarifado
         SET quantidade_atual = ${Q.qtdSql('quantidade_atual - ?')}, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND (? = 1 OR ${disponivelSql()} >= ? ${Q.FOLGA_SQL})
+        WHERE id = ? AND ${deHoje ? `(? = 1 OR ${disponivelSql()} >= ? ${Q.FOLGA_SQL})` : guardaSaidaPelaCaixaSql()}
         RETURNING quantidade_atual`,
-        [mov.quantidade, mov.material_id, permiteNegativo ? 1 : 0, mov.quantidade]);
-      if (!row) throw Object.assign(new Error(await mensagemEstornoSemDisponivel(db, mov)), { status: 400 });
+        deHoje ? [mov.quantidade, mov.material_id, permiteNegativo ? 1 : 0, mov.quantidade]
+          : [mov.quantidade, mov.material_id, permiteNegativo ? 1 : 0, mov.quantidade, mov.quantidade]));
+      if (!row) {
+        const sufixo = deHoje ? '' : await sufixoDaCaixa(db, mov.material_id, material.unidade);
+        throw Object.assign(new Error(`${await mensagemEstornoSemDisponivel(db, mov)}${sufixo}`), { status: 400 });
+      }
       saldoDepois = row.quantidade_atual;
       saldoAntes = saldoDepois + parseFloat(mov.quantidade);
       // A partir daqui quantidade_atual JÁ foi debitado — se qualquer coisa adiante falhar
@@ -2715,6 +2830,19 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
       // `desfazerReverterSaida` se o ledger falhar depois.
       if (material.controle_serie) seriesSaidaRevertidas = await seriesService.reverterSaida(db, user, mov.id);
     } else if (mov.tipo === 'AJUSTE') {
+      // Etapa 97 (T1; Fase 2, B-2): o estorno do AJUSTE que REDUZ o total (o de ida subiu) e uma porta avulsa — levava a
+      // caixa (e, sem caixa, o reservado: r1b). A guarda e a do ajuste (`motivoRecusaAjustePorRetencao` com a caixa,
+      // literal M8), sob a trava do material em volta da guarda e da escrita. Estorno que AUMENTA o total: sem guarda.
+      const guardaEstornoAjuste = async (totalDepois, totalAntes) => {
+        if (opcoesEstorno.compensacao === true || !(Q.qtd(totalDepois) < Q.qtd(totalAntes) - Q.QTD_FOLGA)) return;
+        // Total que ficaria NEGATIVO: quem responde e a guarda de sempre logo abaixo ("o saldo ja foi consumido", Etapa
+        // 51) — sem caixa e sem retencao a recusa continua byte a byte a de antes (saidaPorLocalizacao (17)).
+        if (Q.qtd(totalDepois) < -Q.QTD_FOLGA) return;
+        const matG = await getMaterial(db, mov.material_id);
+        const recusa = motivoRecusaAjustePorRetencao(matG, Q.qtd(totalDepois), (await caixaSql.lerCaixa(db, mov.material_id)).caixa);
+        if (recusa) throw Object.assign(new Error(`Não é possível estornar: ${recusa}`), { status: 400 });
+      };
+      await trava.naTravaDoMaterial(mov.material_id, async () => {
       if (mov.localizacao_destino_id) {
         // AJUSTE escopado a uma localização (Task 6): um SET absoluto do total, como no ramo
         // global abaixo, ignoraria as OUTRAS localizações do material — a soma das linhas de
@@ -2727,6 +2855,11 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         // Etapa 96 (Fase 2, K1): o delta e uma DIFERENCA calculada em JS (1 - 0,7 = 0.30000000000000004) — sem arredondar
         // e sem folga, a linha 0,3 limpa recusava o estorno.
         const delta = Q.qtd(mov.saldo_posterior - mov.saldo_anterior);
+        if (delta > Q.QTD_FOLGA) {
+          const soma = await dbGet(db, 'SELECT COALESCE(SUM(quantidade),0) t FROM estoque_saldo_almoxarifado WHERE material_id = ?',
+            [mov.material_id]);
+          await guardaEstornoAjuste(Number(soma.t) - delta, Number(soma.t));
+        }
         const saldoLoc = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, mov.lote_id);
         if (!Q.cabe(delta, saldoLoc.quantidade)) {
           throw Object.assign(new Error('Não é possível estornar: a localização não comporta a reversão (saldo já consumido)'), { status: 400 });
@@ -2756,11 +2889,14 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
         saldoDepois = atual.quantidade_atual;
       } else {
         // AJUSTE sem localização — comportamento original: SET absoluto do total do material.
+        const atualSemLoc = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
+        await guardaEstornoAjuste(mov.saldo_anterior, Number(atualSemLoc && atualSemLoc.quantidade_atual) || 0);
         await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
           [Q.qtd(mov.saldo_anterior), mov.material_id]);
         saldoDepois = Q.qtd(mov.saldo_anterior);
         await syncSaldoLocalizacaoPadrao(db, mov.material_id, mov.lote_id);
       }
+      });
     } else if (mov.tipo === 'AJUSTE_INVENTARIO') {
       // RN-10/D11 (Etapa 10): AJUSTE_INVENTARIO representa uma contagem fisica HOMOLOGADA — nao
       // e um delta que faz sentido reverter para saldo_anterior (AJUSTE comum ja faz isso no ramo
@@ -2795,7 +2931,19 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo) {
           { status: 400 });
       }
     } else if (mov.tipo === 'DESBLOQUEIO') {
-      await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [mov.quantidade, mov.material_id]);
+      // Etapa 97 (T1; Fase 2, B-2): estornar o desbloqueio e bloquear de novo — antes somava ao bloqueado sem guarda e
+      // levava a caixa (e o reservado). Claim pelo livre de caixa (conta o reservado: o estorno corrige o livro, nao e
+      // retencao de qualidade — mais estrito que o bloqueio avulso, declarado), sob a trava do material. Literal M9.
+      const claimDesbloqueio = await trava.naTravaDoMaterial(mov.material_id, () => dbGet(db, `UPDATE materiais_almoxarifado
+        SET quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) + ?')}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND ${caixaSql.livreDeCaixaSql()} >= ? ${Q.FOLGA_SQL}
+        RETURNING id`, [mov.quantidade, mov.material_id, mov.quantidade]));
+      if (!claimDesbloqueio) {
+        const regua = await lerReguaDaCaixa(db, mov.material_id);
+        throw Object.assign(new Error('Não é possível estornar o desbloqueio: saldo disponível insuficiente para bloquear de novo: '
+          + `${livreMostrado(regua.livre)} ${material.unidade}${await sufixoDaCaixa(db, mov.material_id, material.unidade)}`),
+        { status: 400 });
+      }
     }
 
     const r = await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
@@ -3010,7 +3158,15 @@ async function recalcularStatusAposEstorno(db, requisicaoIds) {
  *  - `opcoes.recebimento_id` (Etapa 74): a nota cuja chegada criou a reserva (reservaChegadaService) —
  *    o estorno da entrada desfaz só estas.
  */
+/**
+ * Etapa 97 (T1, B492/B494): sob a trava do material quando chamada fora de uma secao que o segura (a reserva manual
+ * pela rota); a da aprovacao e a da chegada ja rodam dentro da secao. O corpo e o de sempre.
+ */
 async function criarReserva(db, user, data, opcoes = {}) {
+  return trava.naTravaDoMaterial(data && data.material_id, () => criarReservaSemTrava(db, user, data, opcoes));
+}
+
+async function criarReservaSemTrava(db, user, data, opcoes = {}) {
   const { material_id, quantidade, projeto_id, os_id, os_referencia, cliente_id, equipamento, submontagem, observacoes,
     data_necessidade, expira_em } = data;
   const sistema = opcoes.sistema === true;
@@ -3026,10 +3182,17 @@ async function criarReserva(db, user, data, opcoes = {}) {
   // reserva IMPOSSÍVEL de consumir, porque a baixa contra reserva também exige saldo físico.
   const hold = await dbGet(db, `UPDATE materiais_almoxarifado
     SET quantidade_reservada = ${Q.qtdSql('COALESCE(quantidade_reservada,0) + ?')}, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND ${disponivelSql()} >= ? ${Q.FOLGA_SQL}
+    WHERE id = ? AND ${opcoes.requisicao_id ? disponivelSql() : caixaSql.livreDeCaixaSql()} >= ? ${Q.FOLGA_SQL}
     RETURNING id`, [qtd, material_id, qtd]);
+  // Etapa 97 (T1, B492): a reserva MANUAL compara com o livre de caixa (antes tomava a caixa — a reserva de requisicao
+  // ja faz isso pela conta da 95, iguala a B469); a de requisicao (`opcoes.requisicao_id`, so do 4o argumento) fica.
   if (!hold) {
     const atual = await getMaterial(db, material_id);
+    const regua = opcoes.requisicao_id ? null : await lerReguaDaCaixa(db, material_id);
+    if (temCaixa(regua)) {
+      throw Object.assign(new Error(`Saldo disponível insuficiente: ${livreMostrado(regua.livre)}`
+        + `${await sufixoDaCaixa(db, material_id, atual && atual.unidade)}`), { status: 400 });
+    }
     throw Object.assign(new Error(`Saldo disponível insuficiente: ${await getSaldoDisponivel(atual, db)}`), { status: 400 });
   }
 
@@ -3220,6 +3383,7 @@ module.exports = {
   conferirLeitura,
   materiaisComPadrao,
   registrarMovimentacao,
+  registrarMovimentacaoSemTrava, // Etapa 97 (Fase 2, I-3): SO para os testes de corrida do claim
   cancelarMovimentacao,
   criarReserva,
   liberarReserva,

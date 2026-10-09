@@ -151,11 +151,10 @@ const espera = (ms) => new Promise((res) => setTimeout(res, ms));
     assert.strictEqual(r.status, 201, `entrada: ${JSON.stringify(r.body)}`);
     entrou.set(m, arred(entrou.get(m) + q));
   };
+  // mudado na Etapa 97: a SAIDA avulsa que montava o estado P4 levaria a caixa de A e agora recusa (corretamente,
+  // B491); o fisico baixa pelo escritor de legado (como a 96 fez com o torto) e as assercoes nao mudam.
   const saidaAvulsa = async (m, q) => {
-    const r = await como('ADMIN').post(`${API}/movimentacoes/v2`, {
-      material_id: m, tipo: 'SAIDA', quantidade: q, motivo: 'e95t4 saida avulsa', justificativa: 'consumo avulso da manutencao',
-    });
-    assert.strictEqual(r.status, 201, `saida avulsa: ${JSON.stringify(r.body)}`);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual - ? WHERE id = ?', [q, m]);
     entrou.set(m, arred(entrou.get(m) - q));
   };
   // S cria pela rota; itens: [[material, qtd], ...]

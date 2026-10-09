@@ -240,7 +240,9 @@ async function registrarDevolucao(db, user, data) {
         projeto_id: origemProjetoFinal,
         localizacao_origem_id: localizacao_id, lote_id: loteFinalId,
         justificativa: observacoes || motivo, referencia,
-      }, opcoes);
+        // Etapa 97 (Fase 2, I-4): par da ENTRADA_DEVOLUCAO logo acima (soma zero) — fica na regua de hoje. Na regua das
+        // portas avulsas, no legado (caixa > fisico), a entrada gravava e esta perna recusava: devolucao pela metade.
+      }, { ...opcoes, parDaDevolucao: true });
     } else if (destinoFinal === 'RETRABALHO') {
       await registrarMovimentacao(db, user, {
         material_id, tipo: 'RETRABALHO', quantidade, motivo, os_id: origemOsFinal,

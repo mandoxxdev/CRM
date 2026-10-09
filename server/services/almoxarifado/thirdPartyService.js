@@ -765,7 +765,8 @@ async function compensarTransformacao(db, user, { creditos, custosAnteriores, mo
     if (c.linhaId) {
       await dbRun(db, 'DELETE FROM retornos_remessa_item_almoxarifado WHERE id = ?', [c.linhaId]).catch(() => {});
     }
-    await stockService.cancelarMovimentacao(db, user, c.movId, motivo).catch(() => {});
+    // Etapa 97 (Fase 2, I-4): `compensacao` — estorna um credito do MESMO evento (regua de hoje, sem descontar a caixa).
+    await stockService.cancelarMovimentacao(db, user, c.movId, motivo, { compensacao: true }).catch(() => {});
   }
   for (const [materialId, c] of custosAnteriores) {
     await dbRun(db, `UPDATE materiais_almoxarifado

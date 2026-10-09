@@ -12,6 +12,7 @@ const assert = require('assert');
 const request = require('supertest');
 const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet } = require('../../services/almoxarifado/db');
+const stockService = require('../../services/almoxarifado/stockService');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -124,7 +125,13 @@ let seq = 0;
     ok(await mov({ material_id: m, tipo: 'ENTRADA', quantidade: 10, localizacao_destino_id: A.id }));
     ok(await mov({ material_id: m, tipo: 'ENTRADA', quantidade: 50, localizacao_destino_id: B.id }));
     const s = { material_id: m, tipo: 'SAIDA', quantidade: 10, localizacao_origem_id: A.id, codigo_lido_origem: A.codigo };
-    const rs = await Promise.all([mov(s), mov(s)]);
+    // mudado na Etapa 97 (Fase 2, I-3): o motor pega a trava do material fora de secao, e as duas saidas pela rota
+    // SERIALIZAM (a segunda nem chega ao claim). Este caso prova o CLAIM concorrente do endereco conferido, entao
+    // chama o corpo sem a trava, com as opcoes da v2 (a serializacao pelo motor travado e provada em portasAvulsasCaixa).
+    const semTrava = () => stockService.registrarMovimentacaoSemTrava(db, ADMIN, { motivo: 'e56', justificativa: 'e56', ...s },
+      { exigeLote: true, exigeSerie: true })
+      .then(() => ({ status: 201, body: {} }), (e) => ({ status: e.status || 500, body: { error: e.message } }));
+    const rs = await Promise.all([semTrava(), semTrava()]);
     const st = rs.map((r) => r.status).sort();
     assert.deepStrictEqual(st, [201, 400], JSON.stringify(rs.map((r) => r.body)));
     const recusada = rs.find((r) => r.status === 400);

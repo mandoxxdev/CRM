@@ -239,10 +239,10 @@ const S2 = (nome, q, max, pend, disp) => `${nome}: não é possível separar ${q
     await entrar(m, 4);
     const c = await req([[m, 4]]); await aprovar(c.R);
     assert.strictEqual(await reservaAtiva(c.R), 4, 'premissa: R3 reservou 4');
-    const sai = await como('ADMIN').post(`${API}/movimentacoes/v2`, {
-      material_id: m, tipo: 'SAIDA', quantidade: 4, motivo: 'e95 saida avulsa', justificativa: 'consumo avulso da manutencao',
-    });
-    assert.strictEqual(sai.status, 201, `saida avulsa: ${JSON.stringify(sai.body)}`);
+    // mudado na Etapa 97: a SAIDA avulsa que montava este estado levaria a caixa de A e agora recusa (corretamente,
+    // B491); o estado e remontado pelo escritor de legado (o fisico baixa direto, como a 96 fez com o torto) e as
+    // assercoes nao mudam.
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual - 4 WHERE id = ?', [m]);
     assert.deepStrictEqual(await mat(m), { quantidade_atual: 4, quantidade_reservada: 4 }, 'premissa: fisico 4, reservado 4');
     ok(await separar(c.R, [[c.ids[0], 4]]), 'R3 separa a propria reserva');
   });
@@ -587,10 +587,10 @@ const S2 = (nome, q, max, pend, disp) => `${nome}: não é possível separar ${q
     ok(await separar(a.R, [[a.ids[0], 4]]));
     await entrar(m, 4);
     const c = await req([[m, 4]]); await aprovar(c.R);
-    const sai = await como('ADMIN').post(`${API}/movimentacoes/v2`, {
-      material_id: m, tipo: 'SAIDA', quantidade: 4, motivo: 'e95 saida avulsa', justificativa: 'consumo avulso da manutencao',
-    });
-    assert.strictEqual(sai.status, 201);
+    // mudado na Etapa 97: a SAIDA avulsa que montava este estado levaria a caixa de A e agora recusa (corretamente,
+    // B491); o estado e remontado pelo escritor de legado (o fisico baixa direto, como a 96 fez com o torto) e as
+    // assercoes nao mudam.
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual - 4 WHERE id = ?', [m]);
     const f = await naFila(c.R, c.ids[0]); const d = await detalheItem(c.R, c.ids[0]);
     assert.deepStrictEqual([f.separavel, d.quantidade_separavel], [4, 4]);
     ok(await separar(c.R, [[c.ids[0], 4]]));
