@@ -580,6 +580,158 @@ const S = (c, un, lista) => ` — ${c} ${un} estão separados para ${lista}${S_F
     assert.deepStrictEqual(eventos, ['C', 'L'], `os dois correram juntos: ${eventos.join('')}`);
   });
 
+  // ── T2: as portas fora do motor, pela rota ────────────────────────────────────────────────────────────────────────
+  const rota = (x) => ({ status: x.status, error: x.body && x.body.error });
+  const codigoDe = async (m) => (await dbGet(db, 'SELECT codigo FROM materiais_almoxarifado WHERE id=?', [m])).codigo;
+  const bloquearRota = (m, q, u = 'ADMIN') => como(u).post(`${API}/materiais/${m}/bloquear`, { quantidade: q, motivo: 'e97', justificativa: 'teste da etapa 97 T2' });
+  const M4 = (n) => `Saldo disponível insuficiente para bloquear: ${n} PC`;
+
+  await test('[97 RN-08] pela rota (POST /materiais/:id/bloquear): 10 com fisico 4 -> 400 M4; 4 -> 200; com reserva manual 4: 5 -> 400, 4 -> 200; montagem: 1 -> 400 M4+S e A entrega 4', async () => {
+    const m = await material(0); await entrar(m, 4);
+    recusou(rota(await bloquearRota(m, 10)), M4(4), 'bloquear 10 com fisico 4');
+    assert.strictEqual((await bloquearRota(m, 4)).status, 200, 'bloquear 4');
+    const r = await material(0); await entrar(r, 4);
+    assert.strictEqual((await reservaManual(r, 4)).status, 201);
+    recusou(rota(await bloquearRota(r, 5)), M4(4), 'bloquear 5 com reserva 4');
+    assert.strictEqual((await bloquearRota(r, 4)).status, 200, 'a qualidade retem o reservado');
+    const a = await montagem();
+    const antes = await foto(a.m);
+    recusou(rota(await bloquearRota(a.m, 1)), M4(0) + SA(a), 'bloquear 1 na montagem');
+    assert.strictEqual(await foto(a.m), antes);
+    await entregaTudo(a);
+  });
+
+  await test('[97 RN-08] a devolucao para QUARENTENA (BLOQUEIO interno, sem a opcao) continua 201 e bloqueia o devolvido, mesmo com caixa', async () => {
+    const a = await montagem({ fisico: 6 });
+    const sp = await como('ADMIN').post(`${API}/movimentacoes/v2`, { material_id: a.m, tipo: 'SAIDA', quantidade: 2, motivo: 'e97', justificativa: 'x', os_referencia: 'OS-97' });
+    assert.strictEqual(sp.status, 201, JSON.stringify(sp.body));
+    const d = await como('ADMIN').post(`${API}/devolucoes`, { material_id: a.m, quantidade: 1, destino: 'QUARENTENA', motivo: 'quarentena', observacoes: 'e97', movimentacao_saida_id: sp.body.id });
+    assert.strictEqual(d.status, 201, JSON.stringify(d.body));
+    const c = await dbGet(db, 'SELECT quantidade_atual q, quantidade_bloqueada b FROM materiais_almoxarifado WHERE id=?', [a.m]);
+    assert.deepStrictEqual([c.q, c.b], [5, 1]);
+    await entregaTudo(a);
+  });
+
+  await test('[97 RN-01] remessa pela rota: criar 201, enviar 400 M2b com o S DENTRO do fragmento do material com caixa; nada muda; A entrega 4', async () => {
+    const a = await montagem();
+    const n = await material(0); await entrar(n, 1);
+    const [ca, cn] = [await codigoDe(a.m), await codigoDe(n)];
+    const cr = await como('ADMIN').post(`${API}/remessas-terceiros`, {
+      fornecedor_nome: 'Terceiro 97', tipo_servico: 'Galvanizacao', itens: [{ material_id: a.m, quantidade: 4 }, { material_id: n, quantidade: 2 }],
+    });
+    assert.strictEqual(cr.status, 201, `criar remessa: ${JSON.stringify(cr.body)}`);
+    const { numero } = await dbGet(db, 'SELECT numero FROM remessas_terceiro_almoxarifado WHERE id=?', [cr.body.id]);
+    const [fa, fn] = [await foto(a.m), await foto(n)];
+    recusou(rota(await como('ADMIN').post(`${API}/remessas-terceiros/${cr.body.id}/enviar`)),
+      `Nao foi possivel enviar a remessa ${numero}: ${ca}: disponivel 0 PC, a remessa pede 4${SA(a)}; ${cn}: disponivel 1 PC, a remessa pede 2`,
+      'enviar');
+    assert.deepStrictEqual([await foto(a.m), await foto(n)], [fa, fn]);
+    assert.strictEqual((await dbGet(db, 'SELECT status FROM remessas_terceiro_almoxarifado WHERE id=?', [cr.body.id])).status, 'ABERTA');
+    await entregaTudo(a);
+  });
+
+  await test('[97 RN-04] remessa sem caixa: a recusa do envio e byte a byte a de hoje', async () => {
+    const n = await material(0); await entrar(n, 1);
+    const cn = await codigoDe(n);
+    const cr = await como('ADMIN').post(`${API}/remessas-terceiros`, {
+      fornecedor_nome: 'Terceiro 97', tipo_servico: 'Galvanizacao', itens: [{ material_id: n, quantidade: 2 }],
+    });
+    assert.strictEqual(cr.status, 201, `criar remessa: ${JSON.stringify(cr.body)}`);
+    const { numero } = await dbGet(db, 'SELECT numero FROM remessas_terceiro_almoxarifado WHERE id=?', [cr.body.id]);
+    recusou(rota(await como('ADMIN').post(`${API}/remessas-terceiros/${cr.body.id}/enviar`)),
+      `Nao foi possivel enviar a remessa ${numero}: ${cn}: disponivel 1 PC, a remessa pede 2`);
+  });
+
+  const M7 = (cod, n, q, sufixo = '') => `Saldo disponivel insuficiente para sucatear ${cod}: disponivel ${n} PC, solicitado ${q}. `
+    + `O disponivel ja desconta reservado, bloqueado, em inspecao e em poder de terceiros${sufixo ? ' e o separado na caixa de requisições' : ''} — `
+    + `sucatear alem dele apagaria material que esta comprometido com outra OS.${sufixo}`;
+  const solicitarSucata = (m, q) => como('ADMIN').post(`${API}/sucateamentos`, { material_id: m, quantidade: q, justificativa: 'sucata e97' });
+  const nSucata = async (m) => (await dbGet(db, 'SELECT COUNT(*) n FROM sucateamentos_almoxarifado WHERE material_id=?', [m])).n;
+
+  await test('[97 RN-01] sucateamento: a recusa vem NA SOLICITACAO (400 M7 com a frase da caixa e o S), nenhuma solicitacao criada; A entrega 4', async () => {
+    const a = await montagem();
+    const antes = await foto(a.m);
+    recusou(rota(await solicitarSucata(a.m, 4)), M7(await codigoDe(a.m), 0, 4, SA(a)), 'solicitar 4');
+    assert.deepStrictEqual([await foto(a.m), await nSucata(a.m)], [antes, 0]);
+    await entregaTudo(a);
+  });
+
+  await test('[97 RN-04] sucateamento sem caixa: a recusa e byte a byte a de hoje (sem a frase da caixa, sem S); fisico 6 caixa 4: 3 recusa com S, 2 passa', async () => {
+    const n = await material(0); await entrar(n, 2);
+    recusou(rota(await solicitarSucata(n, 3)), M7(await codigoDe(n), 2, 3), 'solicitar 3 com 2');
+    const a = await montagem({ fisico: 6 });
+    recusou(rota(await solicitarSucata(a.m, 3)), M7(await codigoDe(a.m), 2, 3, SA(a)), 'solicitar 3 com livre 2');
+    assert.strictEqual((await solicitarSucata(a.m, 2)).status, 201, 'solicitar 2 com livre 2');
+  });
+
+  const conferencia = async (categoria) => {
+    const conf = await como('ADMIN').post(`${API}/conferencias`, { categoria, tolerancia_percentual: 100 });
+    assert.ok(conf.body.id, `abrir conferencia: ${conf.status} ${JSON.stringify(conf.body)}`);
+    return conf.body.id;
+  };
+  const contar = async (conf, m, q) => {
+    const ic = await dbGet(db, 'SELECT id FROM itens_conferencia_almoxarifado WHERE conferencia_id=? AND material_id=?', [conf, m]);
+    assert.ok(ic, `o material ${m} entrou na conferencia`);
+    const r = await como('ADMIN').put(`${API}/conferencias/${conf}/item/${ic.id}`, { quantidade_contada: q });
+    assert.strictEqual(r.status, 200, `contar: ${JSON.stringify(r.body)}`);
+  };
+  const concluir = (conf) => como('ADMIN').put(`${API}/conferencias/${conf}/concluir`, { aplicar_ajustes: true, justificativa_ajuste: 'contagem da etapa 97' });
+  const M6CX = (total) => M6(total, 'separada na caixa de requisição: 4', 4);
+
+  await test('[97 RN-01] inventario pela rota: conta 0 na montagem e conclui aplicando -> 400 "Ajuste bloqueado:" + M6 com a caixa; nada muda, conferencia aberta; A entrega 4', async () => {
+    const cat = `CAT-E97-${++seq}`;
+    const a = await montagem();
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET categoria=? WHERE id=?', [cat, a.m]);
+    const conf = await conferencia(cat);
+    await contar(conf, a.m, 0);
+    const antes = await foto(a.m);
+    recusou(rota(await concluir(conf)), `Ajuste bloqueado: ${await codigoDe(a.m)}: ${M6CX(0)}`, 'concluir');
+    assert.strictEqual(await foto(a.m), antes);
+    assert.strictEqual((await dbGet(db, 'SELECT status FROM conferencias_almoxarifado WHERE id=?', [conf])).status, 'ABERTO');
+    await entregaTudo(a);
+  });
+
+  await test('[97 RN-09] inventario tudo ou nada com a caixa: o primeiro sem caixa (conta 3 de 5), o segundo com caixa (conta 0) -> 400 da pre-validacao e NENHUM item ajustado', async () => {
+    const cat = `CAT-E97-${++seq}`;
+    const p = await material(0); await entrar(p, 5);
+    const a = await montagem();
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET categoria=? WHERE id IN (?, ?)', [cat, p, a.m]);
+    const conf = await conferencia(cat);
+    await contar(conf, p, 3);
+    await contar(conf, a.m, 0);
+    const [fp, fa] = [await foto(p), await foto(a.m)];
+    recusou(rota(await concluir(conf)), `Ajuste bloqueado: ${await codigoDe(a.m)}: ${M6CX(0)}`, 'concluir');
+    assert.deepStrictEqual([await foto(p), await foto(a.m)], [fp, fa], 'algum item foi ajustado');
+    assert.strictEqual((await dbGet(db, 'SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id=?', [p])).q, 5);
+    assert.strictEqual((await dbGet(db, 'SELECT COUNT(*) n FROM itens_conferencia_almoxarifado WHERE conferencia_id=? AND ajustado=1', [conf])).n, 0);
+  });
+
+  await test('[97 T2] (Fase 2, menor 3) a conclusao inteira (pre-validacao + aplicacao) roda sob comLockDosMateriais: a retencao criada enquanto a trava estava presa e vista pela PRE-VALIDACAO, e nenhum item e ajustado', async () => {
+    // p1 sem trava (conta 3 de 5); p2 com a trava presa por um teste (conta 4 de 5). Enquanto a conclusao espera,
+    // DENTRO da secao que segura p2, uma reserva manual de 5 em p2 (o motor roda direto: a secao segura p2).
+    // Sob a trava: a pre-validacao le depois de soltar -> "Ajuste bloqueado: p2 ..." e p1 continua 5.
+    // Solta (antes da 97): a pre-validacao passava, p1 era ajustado para 3 e o motor recusava p2 sem o prefixo.
+    const cat = `CAT-E97-${++seq}`;
+    const p1 = await material(0); await entrar(p1, 5);
+    const p2 = await material(0); await entrar(p2, 5);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET categoria=? WHERE id IN (?, ?)', [cat, p1, p2]);
+    const conf = await conferencia(cat);
+    await contar(conf, p1, 3);
+    await contar(conf, p2, 4);
+    let soltar; const sinal = new Promise((r) => { soltar = r; });
+    const segura = trava.comLockDoMaterial(p2, async () => { await sinal; return reservaManual(p2, 5); });
+    await dormir(10);
+    const pc = concluir(conf); // FORA da fn da secao
+    await dormir(150);
+    assert.strictEqual(await estado(pc), 'pendente', 'a conclusao nao esperou a trava');
+    soltar();
+    assert.strictEqual((await segura).status, 201, 'a reserva manual dentro da secao');
+    const r = await pc;
+    recusou(rota(r), `Ajuste bloqueado: ${await codigoDe(p2)}: Ajuste para 4 PC deixaria o disponível negativo (reservada: 5, `
+      + 'mínimo aceitável: 5 PC). Resolva a retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo.', 'concluir');
+    assert.strictEqual((await dbGet(db, 'SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id=?', [p1])).q, 5, 'p1 foi ajustado: o tudo-ou-nada quebrou');
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed ? 1 : 0);

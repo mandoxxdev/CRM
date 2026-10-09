@@ -466,10 +466,14 @@ async function bloquearMaterial(db, user, materialId, data = {}) {
   if (!justificativa) {
     throw Object.assign(new Error('Justificativa é obrigatória para bloqueio'), { status: 400 });
   }
+  // Etapa 97 (T2, B496): o bloqueio AVULSO pede a guarda do motor (bloqueavel = fisico - bloqueado - em inspecao - em
+  // terceiros - caixa sem reserva; o reservado NAO conta — Fase 2, I-5: a qualidade retem o reservado). Antes nao havia
+  // guarda nenhuma: bloquear 10 com fisico 4 passava (P6), e bloquear a caixa prendia a entrega. Pelo 4o argumento,
+  // nunca do body; o BLOQUEIO interno (devolucao para quarentena) nao a passa e fica como antes.
   await registrarMovimentacao(db, user, {
     material_id: materialId, tipo: 'BLOQUEIO', quantidade, justificativa,
     motivo: 'Bloqueio avulso',
-  });
+  }, { bloqueioAvulso: true });
   return { success: true };
 }
 

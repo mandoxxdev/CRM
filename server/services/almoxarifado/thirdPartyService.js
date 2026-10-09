@@ -14,7 +14,7 @@
 const { dbRun, dbGet, dbAll } = require('./db');
 const { can } = require('./permissions');
 const { registrarAuditoria } = require('./audit');
-const { disponivelSql } = require('./availabilitySql');
+const caixaSql = require('./caixaSql'); // Etapa 97 (T2, B491)
 const { custoUnitarioSql } = require('./custoSql');
 const stockService = require('./stockService');
 const ownerRules = require('./ownerRules');
@@ -202,7 +202,7 @@ async function enviarRemessa(db, user, remessaId) {
   if (!t.ok) throw erro(t.erro);
 
   const itens = await dbAll(db, `SELECT i.*, m.codigo AS material_codigo, m.unidade, m.ativo,
-      ${disponivelSql('m')} AS disponivel
+      ${caixaSql.livreDeCaixaSql('m')} AS disponivel
     FROM itens_remessa_terceiro_almoxarifado i
     JOIN materiais_almoxarifado m ON i.material_id = m.id
     WHERE i.remessa_id = ? ORDER BY i.id`, [remessaId]);
@@ -232,15 +232,23 @@ async function enviarRemessa(db, user, remessaId) {
     pedidoPorMaterial.set(item.material_id, acc);
   }
   const problemas = [];
-  for (const m of pedidoPorMaterial.values()) {
+  for (const [materialId, m] of pedidoPorMaterial) {
     if (!m.ativo) { problemas.push(`${m.codigo}: material inativo`); continue; }
     // Etapa 96: com folga — duas linhas 0,1 + 0,2 somam 0.30000000000000004 e recusavam o 0,3 que existe.
     if (!Q.cabe(m.pedido, m.disponivel)) {
       // A mensagem DIZ o numero: sem ele o operador tem de adivinhar quanto falta (licao da Etapa 7).
       // E quando o material aparece em varias linhas, DIZ ISSO tambem — senao o operador olha uma
       // linha de 60, ve 100 disponiveis e conclui que o sistema esta errado.
-      problemas.push(`${m.codigo}: disponivel ${Q.qtd(m.disponivel)} ${m.unidade}, `
-        + `a remessa pede ${Q.qtd(m.pedido)}${m.linhas > 1 ? ` em ${m.linhas} linhas` : ''}`);
+      // Etapa 97 (T2, B491/B493, M2b): `disponivel` e o LIVRE DE CAIXA (disponivel do motor - caixa sem reserva das
+      // requisicoes): sem isso a remessa levava o material separado na prateleira e a entrega ficava presa em "Maximo:
+      // 0". Com caixa, o numero sai com `max(0, …)` e o sufixo S vai DENTRO do fragmento deste material (a recusa junta
+      // um fragmento por material — Fase 2, menor 2). Sem caixa, a literal de antes byte a byte.
+      // eslint-disable-next-line no-await-in-loop
+      const cx = await caixaSql.lerCaixa(db, materialId);
+      const sufixo = caixaSql.sufixoCaixa(cx, m.unidade);
+      const n = sufixo ? Math.max(0, Number(m.disponivel)) : m.disponivel;
+      problemas.push(`${m.codigo}: disponivel ${Q.qtd(n)} ${m.unidade}, `
+        + `a remessa pede ${Q.qtd(m.pedido)}${m.linhas > 1 ? ` em ${m.linhas} linhas` : ''}${sufixo}`);
     }
   }
   if (problemas.length) {

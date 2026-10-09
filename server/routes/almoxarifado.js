@@ -44,6 +44,9 @@ function mensagemTipoInvalido(tipo) {
   return `Tipo de localização inválido: ${tipo}`;
 }
 const stockService = require('../services/almoxarifado/stockService');
+// Etapa 97 (T2): a caixa sem reserva na guarda do ajuste do inventario, e a conclusao sob a trava por material.
+const caixaSql = require('../services/almoxarifado/caixaSql');
+const trava = require('../services/almoxarifado/travaPorMaterial');
 const materialService = require('../services/almoxarifado/materialService');
 const {
   materialPhotoFilename,
@@ -1477,7 +1480,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // aplicação, SEQUENCIAL (não Promise.all — precisa poder abortar sem deixar metade aplicada).
   // O motor não tem transação composta: se a aplicação real recusar algo que a pré-validação
   // aprovou, é corrida entre as duas passadas — limitação conhecida, documentada no plano da
-  // Etapa 10, não resolvida aqui.
+  // Etapa 10. Resolvida na Etapa 97 (T2): as duas passadas rodam sob `comLockDosMateriais`.
   app.put('/api/almoxarifado/conferencias/:id/concluir', requirePermission('inventario'), async (req, res) => {
     const { aplicar_ajustes, justificativa_ajuste } = req.body;
 
@@ -1560,7 +1563,16 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       let ajustesAplicados = 0;
       const materiaisAjustados = new Set();
 
-      if (aplicar_ajustes && ajustes.length > 0) {
+      // Etapa 97 (T2, Fase 2 menor 3): a pre-validacao E a aplicacao rodam sob a trava de TODOS os materiais ajustados
+      // (`comLockDosMateriais`: DISTINCT, crescente — a ordem unica). Antes a pre-validacao lia fora da trava e o motor
+      // relia dentro: uma separacao, reserva ou bloqueio que caisse entre as duas passadas fazia o motor recusar o
+      // segundo item DEPOIS de ajustar o primeiro — o tudo-ou-nada quebrado (a "limitacao conhecida" abaixo). Agora
+      // nada muda os materiais da conferencia entre a pre-validacao e a escrita. O motor, chamado aqui dentro, roda
+      // direto (`naTravaDoMaterial`: a secao segura o material — B494/B-1); o `AJUSTE_INVENTARIO` nao chama de dentro
+      // nenhuma porta proibida em secao (recalculo, `cancelarMovimentacao`, variantes sem `sobTrava`) — o alerta e
+      // adiado para depois da secao (`adiarParaDepoisDaSecao`), e o alerta/aviso desta rota roda depois, fora dela.
+      const recusaAjuste = (aplicar_ajustes && ajustes.length > 0)
+        ? await trava.comLockDosMateriais(ajustes.map((i) => i.material_id), async () => {
         // ── Pré-validação: SÓ LEITURA. Nenhum registrarMovimentacao, nenhum
         // assertAjustePermitido — tem de poder abortar tudo sem ter aplicado nada (RN-07/D3).
         const materiaisPorItem = new Map();
@@ -1601,25 +1613,32 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           // `quantidade_sistema` já descontou essa retenção (Etapa 8b), reconstituir sem somar
           // de volta apagaria o material que está no galvanizador. Fecha B3.
           const novoTotal = item.quantidade_contada + (material.quantidade_em_terceiros || 0);
-          const motivoRetencao = stockService.motivoRecusaAjustePorRetencao(material, novoTotal);
+          // Etapa 97 (T2, B491, M6): a caixa sem reserva das requisicoes entra no retido — a MESMA funcao e a mesma
+          // leitura que o motor usa (D1 da Etapa 10: nao duplicar a formula). Sem isso a conferencia que conta 0 de um
+          // material separado levava a caixa, e a entrega ficava presa em "Maximo: 0".
+          const { caixa } = await caixaSql.lerCaixa(db, material.id);
+          const motivoRetencao = stockService.motivoRecusaAjustePorRetencao(material, novoTotal, caixa);
           if (motivoRetencao) falhasRetencao.push(`${material.codigo}: ${motivoRetencao}`);
         }
 
         // RN-07: prioridade — se ALGUM item bloqueia por falta de `ajustar_material_cliente`, a
         // resposta INTEIRA é 403, ignorando as falhas de retenção nesta mesma resposta.
         if (falhasPermissao.length > 0) {
-          return res.status(403).json({
-            error: 'Ajuste bloqueado — os seguintes materiais são de cliente e exigem a permissão '
-              + `"ajustar_material_cliente": ${falhasPermissao.join(', ')}`,
-          });
+          return {
+            status: 403,
+            body: {
+              error: 'Ajuste bloqueado — os seguintes materiais são de cliente e exigem a permissão '
+                + `"ajustar_material_cliente": ${falhasPermissao.join(', ')}`,
+            },
+          };
         }
         if (falhasRetencao.length > 0) {
-          return res.status(400).json({ error: `Ajuste bloqueado: ${falhasRetencao.join('; ')}` });
+          return { status: 400, body: { error: `Ajuste bloqueado: ${falhasRetencao.join('; ')}` } };
         }
 
         // ── Aplicação real, SEQUENCIAL — a pré-validação já rodou a mesma
-        // motivoRecusaAjustePorRetencao; se o motor recusar mesmo assim é corrida entre as duas
-        // passadas (limitação conhecida, ver comentário da rota acima).
+        // motivoRecusaAjustePorRetencao, sob a mesma trava (Etapa 97): a corrida entre as duas passadas, que era a
+        // limitação conhecida da Etapa 10, deixou de existir para os materiais da conferência.
         for (const item of ajustes) {
           const material = materiaisPorItem.get(item.id);
           const quantidadeAbsoluta = item.quantidade_contada + (material.quantidade_em_terceiros || 0);
@@ -1635,7 +1654,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           ajustesAplicados += 1;
           materiaisAjustados.add(item.material_id);
         }
-      }
+        return null;
+      })
+        : null;
+      if (recusaAjuste) return res.status(recusaAjuste.status).json(recusaAjuste.body);
 
       // Etapa 18 (RN-05, C4): `aprovador_id`/`aprovador_nome` existem no schema desde a Etapa 10 e
       // NUNCA foram escritas por ninguem — duas colunas mortas. Quem conclui APLICANDO ajuste e

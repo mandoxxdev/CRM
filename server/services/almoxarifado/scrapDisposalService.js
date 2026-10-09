@@ -48,7 +48,7 @@
 const { dbRun, dbAll, dbGet } = require('./db');
 const { registrarAuditoria } = require('./audit');
 const { can, getPerfilFromUser } = require('./permissions');
-const { disponivelSql } = require('./availabilitySql');
+const caixaSql = require('./caixaSql'); // Etapa 97 (T2, B491)
 // Etapa 96 (C176): a regra unica de quantidade (namespace — Fase 2, I3).
 const Q = require('./quantidade');
 const stockService = require('./stockService');
@@ -162,6 +162,7 @@ function assertAprovaAlgumaPerna(user, oQue) {
  *    caso do projeto interno (cliente_id NULL nao e coringa) continue sendo recusado.
  *  - disponivel: `disponivelSql` (availabilitySql.js). REGRA do modulo desde a 8b — nenhuma query
  *    nova escreve a subtracao a mao, e ha teste que varre o codigo-fonte atras de quem escrever.
+ *    Desde a Etapa 97 (T2) pelo `caixaSql.livreDeCaixaSql()` = o mesmo disponivel menos a caixa sem reserva.
  *  - lote pertence ao material: `lotService.getLote`, como em scrapService.gerarRetalho.
  *
  * `controle_serie` e RECUSADO, e a recusa ENSINA o caminho. O processo nao tem campo de serie:
@@ -200,7 +201,7 @@ async function solicitar(db, user, payload = {}) {
   }
 
   const material = materialId
-    ? await dbGet(db, `SELECT *, ${disponivelSql()} AS disponivel FROM materiais_almoxarifado WHERE id = ?`,
+    ? await dbGet(db, `SELECT *, ${caixaSql.livreDeCaixaSql()} AS disponivel FROM materiais_almoxarifado WHERE id = ?`,
       [materialId])
     : null;
   if (!material) throw erro(`O material ${materialId} nao existe`);
@@ -243,12 +244,18 @@ async function solicitar(db, user, payload = {}) {
   await ownerRules.assertSaidaPermitida(db, material, 'SUCATA', {
     os_id: osOrigemId || undefined, projeto_id: projetoOrigemId || undefined });
 
+  // Etapa 97 (T2, B491/B493, M7): `disponivel` e o LIVRE DE CAIXA (disponivel do motor - caixa sem reserva das
+  // requisicoes). Sem isso a SOLICITACAO passava, as duas assinaturas vinham, e so a baixa (o motor, desde a T1) recusava
+  // — ou, antes da 97, levava o separado na prateleira e prendia a entrega em "Maximo: 0". A recusa vem aqui, na
+  // solicitacao. Com caixa: numero com `max(0, …)`, a frase do disponivel acrescida e o sufixo S; sem caixa, a literal
+  // de antes byte a byte (Fase 2, menor 2).
   const disponivel = Number(material.disponivel);
   if (!Q.cabe(quantidade, disponivel)) { // Etapa 96: com folga
+    const sufixo = caixaSql.sufixoCaixa(await caixaSql.lerCaixa(db, material.id), material.unidade);
     throw erro(`Saldo disponivel insuficiente para sucatear ${material.codigo}: disponivel `
-      + `${Q.qtd(disponivel)} ${material.unidade || ''}, solicitado ${quantidade}. O disponivel ja desconta `
-      + 'reservado, bloqueado, em inspecao e em poder de terceiros — sucatear alem dele apagaria '
-      + 'material que esta comprometido com outra OS.');
+      + `${Q.qtd(sufixo ? Math.max(0, disponivel) : disponivel)} ${material.unidade || ''}, solicitado ${quantidade}. O disponivel ja desconta `
+      + `reservado, bloqueado, em inspecao e em poder de terceiros${sufixo ? ' e o separado na caixa de requisições' : ''} — sucatear alem dele apagaria `
+      + `material que esta comprometido com outra OS.${sufixo}`);
   }
 
   return inserirSolicitacao(db, user, {
