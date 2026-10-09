@@ -16,6 +16,7 @@ import RequisicoesList from './RequisicoesList';
 import { getRequisicaoStepIndex, REQUISICAO_FLOW } from './AlmoxPageHeader';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
+import { STATUS_CANCELAVEIS_OUTROS_MODULOS, STATUS_CANCELAVEIS_ALMOXARIFADO } from './requisicaoLabels';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -39,8 +40,12 @@ jest.mock('../../hooks/useAlmoxPermissoes', () => ({
   }),
 }));
 
+// `user` MUTÁVEL (Etapa 92, RN-06): a regra do botão Cancelar depende de quem está logado — o
+// solicitante (id 99 da fixture) ou um administrador que NÃO pediu. Padrão: o usuário de sempre.
+const USUARIO_PADRAO = { id: 99, nome: 'Almoxarife Teste', role: 'admin' };
+let mockUser = USUARIO_PADRAO;
 jest.mock('../../context/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 99, nome: 'Almoxarife Teste', role: 'admin' } }),
+  useAuth: () => ({ user: mockUser }),
 }));
 
 // `warehouseMode` MUTÁVEL, e não a constante `true` que este arquivo tinha: a MESMA tela roda em
@@ -93,6 +98,7 @@ beforeEach(() => {
   buscaCorrenteDaUrl = '';
   mockPode = () => true;
   mockWarehouseMode = true;
+  mockUser = USUARIO_PADRAO;
   api.get.mockImplementation((url) => {
     // Os dois prefixos que a tela usa, conforme `warehouseMode` (`RequisicoesList.js:82`).
     if (url === '/almoxarifado/requisicoes' || url === '/requisicoes-material') {
@@ -1096,5 +1102,112 @@ describe('Etapa 73: o banner diz que chegou material para a requisição que esp
     detalheDoBanco = comItens('AGUARDANDO_COMPRA', [item({ quantidade_solicitada: 6, saldo_atual: 4 })]);
     await renderizar();
     expect(container.textContent).not.toContain('Chegou material');
+  });
+});
+
+// ─── Etapa 92 (C149, C152, B439, B440): o botão Cancelar fora e dentro do modo almoxarifado ─────
+//
+// Fora do modo almoxarifado a tela chama `PUT /requisicoes-material/:id/cancelar`, que aceita os seis
+// status abaixo e SÓ de quem pediu (`solicitante_id = req.user.id` na leitura e no UPDATE). Até a 92 o
+// botão aparecia também para o administrador que não pediu (`|| isAdmin` nos dois modos) — e ele tomava
+// 400 (C152). No modo almoxarifado a rota é outra e aceita dono ou administrador: inalterado.
+//
+// As listas aqui são escritas à mão DE PROPÓSITO: são a especificação da tela. Ler a constante de
+// `requisicaoLabels.js` faria uma lista errada lá passar aqui (o controle s1 da T4 prova que cai). A
+// conferência tela × rota é o RN-07, no servidor (`cancelarListaTelaRota.api.test.js`).
+describe('Etapa 92: Cancelar Requisição nos outros módulos (RN-06)', () => {
+  const SEIS = ['PENDENTE', 'APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA',
+    'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA'];
+  const NOVE = ['RASCUNHO', 'AGUARDANDO_APROVACAO_VALOR', 'EM_SEPARACAO', 'PRONTA_PARA_RETIRADA',
+    'PARCIALMENTE_ATENDIDA', 'ENTREGUE', 'ENCERRADA', 'REJEITADO', 'CANCELADO'];
+  // Solicitante da fixture (id 99) SEM ser administrador: prova que o botão vem de "quem pediu".
+  const SOLICITANTE_COMUM = { id: 99, nome: 'Quem Pediu', role: 'user' };
+  // Administrador (`role admin` → `canDeleteAlmoxRequisicao`) que NÃO é o solicitante.
+  const ADMIN_QUE_NAO_PEDIU = { id: 7, nome: 'Admin Outro', role: 'admin' };
+
+  let confirmSpy;
+  beforeEach(() => {
+    confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    api.put.mockResolvedValue({ data: { success: true } });
+  });
+  afterEach(() => confirmSpy.mockRestore());
+
+  const clicar = async (botao) => {
+    await act(async () => { botao.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+  };
+
+  test('[92 RN-06] as constantes exportadas são as listas da tela', () => {
+    expect([...STATUS_CANCELAVEIS_OUTROS_MODULOS]).toEqual(SEIS);
+    expect([...STATUS_CANCELAVEIS_ALMOXARIFADO]).toEqual(['RASCUNHO', ...SEIS]);
+  });
+
+  test.each(SEIS)('[92 RN-06 (a)] %s, quem pediu: o botão existe e cancela pela rota dos outros módulos', async (status) => {
+    mockWarehouseMode = false;
+    mockUser = SOLICITANTE_COMUM;
+    detalheDoBanco = baseRequisicao(status);
+    await renderizar();
+    const botao = botaoPorTexto('Cancelar Requisição');
+    expect(botao).toBeTruthy();
+    await clicar(botao);
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(api.put).toHaveBeenCalledWith('/requisicoes-material/55/cancelar');
+    expect(api.put).not.toHaveBeenCalledWith('/almoxarifado/requisicoes/55/cancelar');
+    expect(toast.success).toHaveBeenCalledWith('Requisição cancelada');
+  });
+
+  test.each(NOVE)('[92 RN-06 (b)] %s: sem botão, nem para quem pediu sendo administrador', async (status) => {
+    mockWarehouseMode = false;
+    mockUser = USUARIO_PADRAO; // solicitante (99) E admin: as duas condições a favor
+    detalheDoBanco = baseRequisicao(status);
+    await renderizar();
+    expect(container.textContent).toContain('REQ-055'); // painel aberto (senão a ausência não prova nada)
+    expect(botaoPorTexto('Cancelar Requisição')).toBeFalsy();
+  });
+
+  test.each(SEIS)('[92 RN-06 (c)] %s, administrador que não pediu: sem botão (a rota o recusaria — B439)', async (status) => {
+    mockWarehouseMode = false;
+    mockUser = ADMIN_QUE_NAO_PEDIU;
+    detalheDoBanco = baseRequisicao(status);
+    await renderizar();
+    expect(container.textContent).toContain('REQ-055');
+    expect(botaoPorTexto('Cancelar Requisição')).toBeFalsy();
+  });
+
+  test('[92 RN-06 (d)] a rota responde 400: o toast mostra o erro dela', async () => {
+    mockWarehouseMode = false;
+    mockUser = SOLICITANTE_COMUM;
+    detalheDoBanco = baseRequisicao('TOTALMENTE_RESERVADA');
+    api.put.mockRejectedValue({
+      response: { status: 400, data: { error: 'Requisição não encontrada ou não pode ser cancelada' } },
+    });
+    await renderizar();
+    await clicar(botaoPorTexto('Cancelar Requisição'));
+    expect(api.put).toHaveBeenCalledWith('/requisicoes-material/55/cancelar');
+    expect(toast.error).toHaveBeenCalledWith('Requisição não encontrada ou não pode ser cancelada');
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  const CASOS_ALMOX = ['RASCUNHO', ...SEIS].flatMap((status) => [
+    [status, 'quem pediu', SOLICITANTE_COMUM],
+    [status, 'o administrador que não pediu', ADMIN_QUE_NAO_PEDIU],
+  ]);
+  test.each(CASOS_ALMOX)('[92 RN-06 (e)] modo almoxarifado, %s, %s: botão e rota do almoxarifado', async (status, _quem, usuario) => {
+    mockWarehouseMode = true;
+    mockUser = usuario;
+    detalheDoBanco = baseRequisicao(status);
+    await renderizar();
+    const botao = botaoPorTexto('Cancelar Requisição');
+    expect(botao).toBeTruthy();
+    await clicar(botao);
+    expect(api.put).toHaveBeenCalledWith('/almoxarifado/requisicoes/55/cancelar');
+    expect(api.put).not.toHaveBeenCalledWith('/requisicoes-material/55/cancelar');
+  });
+
+  test.each(NOVE.filter((s) => s !== 'RASCUNHO'))('[92 RN-06 (e)] modo almoxarifado, %s: sem botão', async (status) => {
+    mockWarehouseMode = true;
+    detalheDoBanco = baseRequisicao(status);
+    await renderizar();
+    expect(container.textContent).toContain('REQ-055');
+    expect(botaoPorTexto('Cancelar Requisição')).toBeFalsy();
   });
 });

@@ -9,7 +9,9 @@ import { prefixarAlmoxarifado } from '../../utils/localizacaoLabel';
 import { SkeletonTable } from '../SkeletonLoader';
 import AlmoxPageHeader, { REQUISICAO_FLOW, getRequisicaoStepIndex } from './AlmoxPageHeader';
 import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
-import { TIPO_REQUISICAO_LABELS } from './requisicaoLabels';
+import {
+  TIPO_REQUISICAO_LABELS, STATUS_CANCELAVEIS_ALMOXARIFADO, STATUS_CANCELAVEIS_OUTROS_MODULOS,
+} from './requisicaoLabels';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import AssinaturaCanvas from './AssinaturaCanvas';
 import CampoCodigoLido from './CampoCodigoLido';
@@ -1832,11 +1834,13 @@ const RequisicoesList = () => {
                   </button>
                 )}
 
-                {(warehouseMode
-                  ? ['RASCUNHO', 'PENDENTE', 'APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA']
-                  : ['PENDENTE', 'APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA']
-                ).includes(detalhe.status) && (
-                  detalhe.solicitante_id === user?.id || isAdmin
+                {/* Etapa 92 (B439, C152): fora do modo almoxarifado a rota
+                    (`/requisicoes-material/:id/cancelar`) só cancela de quem pediu — o
+                    administrador que não pediu via o botão e tomava 400. No modo almoxarifado a
+                    rota aceita dono ou administrador. As listas são a do servidor (RN-07). */}
+                {(warehouseMode ? STATUS_CANCELAVEIS_ALMOXARIFADO : STATUS_CANCELAVEIS_OUTROS_MODULOS)
+                  .includes(detalhe.status) && (
+                  detalhe.solicitante_id === user?.id || (warehouseMode && isAdmin)
                 ) && (
                   <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
                     onClick={() => handleCancelar(detalhe.id)}>

@@ -19,4 +19,17 @@ export const TIPO_REQUISICAO_LABELS = {
   MATERIAL_CLIENTE: 'Material do Cliente',
 };
 
+// Etapa 92 (B434, B440, C149): os status em que a tela de requisições mostra **Cancelar Requisição**.
+// Fora do modo almoxarifado a tela chama `PUT /api/requisicoes-material/:id/cancelar`, que aceita
+// exatamente estes seis — a lista do servidor é `CANCELAVEIS_OUTROS_MODULOS`
+// (`server/services/almoxarifado/requisitionStateMachine.js`), conferida contra esta por teste de API
+// (`server/tests/api/cancelarListaTelaRota.api.test.js`, RN-07). Mudou aqui, mude lá.
+export const STATUS_CANCELAVEIS_OUTROS_MODULOS = Object.freeze([
+  'PENDENTE', 'APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA',
+  'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA',
+]);
+
+// No modo almoxarifado (`PUT /api/almoxarifado/requisicoes/:id/cancelar`) entra também o rascunho.
+export const STATUS_CANCELAVEIS_ALMOXARIFADO = Object.freeze(['RASCUNHO', ...STATUS_CANCELAVEIS_OUTROS_MODULOS]);
+
 export default TIPO_REQUISICAO_LABELS;
