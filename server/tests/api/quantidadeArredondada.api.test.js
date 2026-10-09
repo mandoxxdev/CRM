@@ -495,6 +495,53 @@ process.on('exit', (code) => {
     assert.strictEqual(r.status, 400); assert.strictEqual(r.body.error, 'Saldo insuficiente no lote L96M. Disponível: 0.3 PC');
   });
 
+  // ─────────────────────────── Fase 5, R2 — o residuo da ultima reserva ───────────────────────────
+  // Tres reservas legadas de 1/3 contra o reservado 1: cada uma sai pelo saldo arredondado (0,333333) e o reservado,
+  // gravado arredondado, terminava em 0,000001 sem reserva ATIVA — SAIDA 1 com fisico 1 recusada ("Disponivel:
+  // 0.999999"). Antes da 96: 5,5e-17 -> 0. Montado por escritor direto (o motor de hoje nao grava 1/3).
+  const tresReservasTerco = async () => {
+    const m = await material(0); await entrar(m, 1);
+    const ids = [];
+    for (let i = 0; i < 3; i++) {
+      const r = await reservar(m, 0.3);
+      assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+      ids.push(r.body.id);
+    }
+    const T = 1 / 3;
+    await dbRun(db, 'UPDATE reservas_material_almoxarifado SET quantidade = ? WHERE material_id = ?', [T, m]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_reservada = ? WHERE id = ?', [T + T + T, m]);
+    return { m, ids };
+  };
+  await test('[96 RN-02] (Fase 5, R2) liberar tres reservas legadas de 1/3 (reservado 1) -> reservado 0, e a SAIDA de 1 passa', async () => {
+    const { m, ids } = await tresReservasTerco();
+    for (const id of ids) {
+      const l = await como('ADMIN').post(`${API}/reservas/${id}/liberar`, { motivo: 'e96 f5' });
+      assert.strictEqual(l.status, 200, JSON.stringify(l.body));
+    }
+    assert.strictEqual((await mat(m)).quantidade_reservada, 0);
+    const s = await mov(m, 'SAIDA', 1);
+    assert.strictEqual(s.status, 201, JSON.stringify(s.body));
+  });
+  await test('[96 RN-02] (Fase 5, R2) consumir pela SAIDA tres reservas legadas de 1/3 (0,333333 cada) -> reservado 0, reservas CONSUMIDA', async () => {
+    const { m, ids } = await tresReservasTerco();
+    for (const id of ids) {
+      const s = await mov(m, 'SAIDA', 0.333333, { reserva_id: id });
+      assert.strictEqual(s.status, 201, JSON.stringify(s.body));
+    }
+    assert.deepStrictEqual({ ...(await mat(m)) }, { quantidade_atual: 0.000001, quantidade_reservada: 0, quantidade_bloqueada: 0 });
+    const st = await dbAll(db, 'SELECT status FROM reservas_material_almoxarifado WHERE material_id = ? ORDER BY id', [m]);
+    assert.deepStrictEqual(st.map((x) => x.status), ['CONSUMIDA', 'CONSUMIDA', 'CONSUMIDA']);
+  });
+  await test('[96 RN-03] (Fase 5, R2) o residuo so some sem reserva ATIVA: com outra reserva de 0,00005 ativa, liberar a de 0,3 deixa 0,00005', async () => {
+    const m = await material(0); await entrar(m, 1);
+    const a = (await reservar(m, 0.3)).body.id;
+    const b = await reservar(m, 0.00005);
+    assert.strictEqual(b.status, 201, JSON.stringify(b.body));
+    const l = await como('ADMIN').post(`${API}/reservas/${a}/liberar`, { motivo: 'e96 f5' });
+    assert.strictEqual(l.status, 200, JSON.stringify(l.body));
+    assert.strictEqual((await mat(m)).quantidade_reservada, 0.00005);
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed ? 1 : 0);

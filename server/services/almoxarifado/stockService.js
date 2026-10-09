@@ -292,9 +292,23 @@ const EPS = Q.QTD_FOLGA; // tolerância de ponto flutuante: quantidade é REAL n
  * Etapa 67 (Fase 5): `quantidade_reservada` do material menos `?`, com a sobra de ponto flutuante
  * (<= EPS) virando ZERO. Dez consumos de 0,1 contra uma reserva de 1 deixavam 1,38e-16 reservado
  * no material e a reserva ATIVA com 1,1e-16 de saldo: lixo que segura disponivel e mantem uma
- * reserva zumbi. Usa DOIS placeholders com o mesmo valor (a conta aparece duas vezes).
+ * reserva zumbi. Usa TRES placeholders com o mesmo valor (a conta aparece tres vezes; eram dois ate a Etapa 96 Fase 5).
+ *
+ * Etapa 96 (Fase 5, R2): e o residuo de arredondamento que sobra quando a ULTIMA reserva ATIVA do material sai. Tres
+ * reservas legadas de 1/3 (0.3333333333333333) contra um reservado de 1: cada liberacao subtrai o saldo arredondado
+ * (0,333333) e o reservado, gravado arredondado, termina em 0,000001 sem reserva nenhuma — e a SAIDA de 1 com fisico
+ * 1 era recusada ("Disponivel: 0.999999"). Antes da 96 a conta crua fechava em 5,5e-17 (<= EPS -> 0). Regra: sem
+ * reserva ATIVA no material (o UPDATE da reserva vem ANTES deste), o que sobra abaixo de RESIDUO_RESERVADO e residuo
+ * e vira 0. Descartados: (i) subtrair o saldo CRU da reserva — com o reservado arredondado a cada passo fecha em
+ * 0,000001 do mesmo jeito (1 -> 0,666667 -> 0,333334 -> 6,7e-7 -> ROUND 0,000001); (ii) zerar sem limite quando nao
+ * sobra ATIVA — o hold de `criarReserva` sobe o reservado ANTES do INSERT da reserva (sem transacao), e uma liberacao
+ * concorrente zeraria esse hold inteiro; com o limite, o maximo que a corrida apaga e um hold < 0,0001; (iii)
+ * recalcular o reservado pela soma das reservas a cada liberacao — a mesma corrida, com o hold inteiro.
  */
+const RESIDUO_RESERVADO = 0.0001;
 const RESERVADA_MENOS_SQL = Q.qtdSql(`CASE WHEN COALESCE(quantidade_reservada,0) - ? <= ${EPS} THEN 0
+  WHEN COALESCE(quantidade_reservada,0) - ? < ${RESIDUO_RESERVADO} AND NOT EXISTS (SELECT 1 FROM reservas_material_almoxarifado rz
+    WHERE rz.material_id = materiais_almoxarifado.id AND rz.status = 'ATIVA') THEN 0
   ELSE COALESCE(quantidade_reservada,0) - ? END`);
 
 async function claimSaldoDoLote(db, materialId, loteId, locPreferida, quantidade) {
@@ -1719,7 +1733,7 @@ async function registrarMovimentacao(db, user, params, opcoes = {}) {
           await dbRun(db, "UPDATE reservas_material_almoxarifado SET status = 'CONSUMIDA', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [reserva_id]);
           const sobra = Math.max(0, sobraReserva);
           await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_reservada = ${RESERVADA_MENOS_SQL},
-            updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [sobra, sobra, material_id]);
+            updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [sobra, sobra, sobra, material_id]);
         }
       } else if (baixandoTerceiro) {
         // Baixa fisico E retencao NO MESMO UPDATE — molde de DECISAO_INSPECAO, e pela mesma razao:
@@ -3109,7 +3123,7 @@ async function liberarReserva(db, user, reservaId, quantidade = null, options = 
   }
 
   await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_reservada = ${RESERVADA_MENOS_SQL},
-    updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [qtd, qtd, reserva.material_id]);
+    updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [qtd, qtd, qtd, reserva.material_id]);
 
   await registrarMovimentacao(db, user, {
     material_id: reserva.material_id, tipo: 'LIBERACAO_RESERVA', quantidade: qtd,

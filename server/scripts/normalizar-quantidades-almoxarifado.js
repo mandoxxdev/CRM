@@ -37,6 +37,10 @@ async function main() {
         console.log(`  id ${t.id}: ${t.valor} -> ${t.arredondado}`);
       }
     }
+    // Etapa 96 (Fase 5, R2): o agregado do material sai da fonte onde a invariante valia (linhas; reservas ativas).
+    for (const c of r.recalculados) {
+      console.log(`${c.tabela}.${c.coluna} recalculado da ${c.fonte}: ${c.materiais} material(is)`);
+    }
     console.log(r.aplicado ? 'Normalizado.' : 'Nada gravado. Rode com --aplicar para normalizar.');
     return 0;
   } finally {

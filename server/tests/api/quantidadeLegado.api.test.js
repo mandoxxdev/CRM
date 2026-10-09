@@ -266,6 +266,69 @@ const rodarCli = (dir, args = []) => spawnSync(process.execPath, [SCRIPT, ...arg
     assert.strictEqual(m.q, 1);
   });
 
+  // ── Fase 5, R2: os agregados saem das fontes onde a invariante valia (sonda e96rv1-p6-normaliza) ──
+  // Tres linhas de 1/3 e o material = a soma (1): arredondar cada coluna sozinha deixava linhas 0,999999 e material 1.
+  // Tres reservas ATIVAS de 1/3 e o reservado 1: idem, e liberadas as tres sobrava 0,000001 reservado. Controle: um
+  // material cuja soma das linhas JA divergia (5 contra 1) nao e reconciliado — so arredondado.
+  const T = 1 / 3;
+  const soma = async (m) => (await dbGet(db, 'SELECT SUM(quantidade) s FROM estoque_saldo_almoxarifado WHERE material_id = ?', [m])).s;
+  const mR = await material('E96F5-LINHAS');
+  const mRes = await material('E96F5-RESERVAS');
+  const mDiv = await material('E96F5-DIVERGE');
+  for (const m of [mR, mDiv]) {
+    for (let i = 0; i < 3; i++) {
+      const loc = (await dbRun(db, 'INSERT INTO localizacoes_almoxarifado (codigo, descricao, ativo) VALUES (?, ?, 1)',
+        [`E96F5-L${m}-${i}`, 'e96 f5'])).lastID;
+      await dbRun(db, 'INSERT INTO estoque_saldo_almoxarifado (material_id, localizacao_id, quantidade) VALUES (?, ?, ?)', [m, loc, T]);
+    }
+  }
+  await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ? WHERE id = ?', [await soma(mR), mR]);
+  await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 5 WHERE id = ?', [mDiv]);
+  await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 1, quantidade_reservada = ? WHERE id = ?', [T + T + T, mRes]);
+  for (let i = 0; i < 3; i++) {
+    await dbRun(db, `INSERT INTO reservas_material_almoxarifado (material_id, quantidade, quantidade_utilizada, status)
+      VALUES (?, ?, 0, 'ATIVA')`, [mRes, T]);
+  }
+
+  await test('[96 RN-07] (Fase 5, R2) premissa: as invariantes valem no cru (linhas = material; reservas ativas = reservado)', async () => {
+    assert.strictEqual((await dbGet(db, 'SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id = ?', [mR])).q, await soma(mR));
+    assert.strictEqual((await dbGet(db, 'SELECT quantidade_reservada r FROM materiais_almoxarifado WHERE id = ?', [mRes])).r, 1);
+  });
+  await test('[96 RN-07] (Fase 5, R2) sem aplicar: conta um material recalculado em cada agregado e nao grava', async () => {
+    const r = await L.normalizar(db, { aplicar: false });
+    assert.deepStrictEqual(r.recalculados.map((c) => [c.coluna, c.materiais]), [['quantidade_atual', 1], ['quantidade_reservada', 1]]);
+    assert.strictEqual((await dbGet(db, 'SELECT quantidade_reservada r FROM materiais_almoxarifado WHERE id = ?', [mRes])).r, 1);
+  });
+  await test('[96 RN-07] (Fase 5, R2) a CLI diz quantos materiais tem o agregado recalculado da fonte', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'e96f5-'));
+    try {
+      await dbRun(db, `VACUUM INTO '${path.join(dir, 'database.sqlite').replace(/'/g, "''")}'`);
+      const r = rodarCli(dir, ['--aplicar']);
+      assert.strictEqual(r.status, 0, r.stderr);
+      assert.ok(r.stdout.includes('materiais_almoxarifado.quantidade_atual recalculado da soma das linhas de saldo: 1 material(is)'), r.stdout);
+      assert.ok(r.stdout.includes('materiais_almoxarifado.quantidade_reservada recalculado da soma dos saldos das reservas ativas: 1 material(is)'), r.stdout);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+  await test('[96 RN-07] (Fase 5, R2) com aplicar: material = soma das linhas arredondadas (0,999999), reservado = saldo das reservas (0,999999); o divergente so arredonda', async () => {
+    const r = await L.normalizar(db, { aplicar: true });
+    assert.deepStrictEqual(r.recalculados.map((c) => [c.coluna, c.materiais]), [['quantidade_atual', 1], ['quantidade_reservada', 1]]);
+    const a = await dbGet(db, 'SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id = ?', [mR]);
+    assert.deepStrictEqual([a.q, await soma(mR)], [0.999999, 0.999999]);
+    assert.strictEqual((await dbGet(db, 'SELECT quantidade_reservada r FROM materiais_almoxarifado WHERE id = ?', [mRes])).r, 0.999999);
+    assert.strictEqual((await dbGet(db, 'SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id = ?', [mDiv])).q, 5);
+    const deNovo = await L.normalizar(db, { aplicar: true });
+    assert.ok(deNovo.recalculados.every((c) => c.materiais === 0), JSON.stringify(deNovo.recalculados));
+  });
+  await test('[96 RN-07] (Fase 5, R2) depois do script, SAIDA do fisico que o material diz ter zera todas as linhas e o material, nenhuma negativa', async () => {
+    // o fisico que o material DIZ ter (sem o recalculo seria 1 contra linhas de 0,999999: uma linha ia a -0,000001)
+    const fisico = (await dbGet(db, 'SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id = ?', [mR])).q;
+    const s = await request(app).post(`${API}/movimentacoes/v2`).send({ material_id: mR, tipo: 'SAIDA', quantidade: fisico, motivo: 'e96 f5', justificativa: 'teste da etapa 96' });
+    assert.strictEqual(s.status, 201, JSON.stringify(s.body));
+    const ls = await dbAll(db, 'SELECT quantidade FROM estoque_saldo_almoxarifado WHERE material_id = ?', [mR]);
+    assert.deepStrictEqual(ls.map((x) => x.quantidade), [0, 0, 0]);
+    assert.strictEqual((await dbGet(db, 'SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id = ?', [mR])).q, 0);
+  });
+
   terminou = true;
   console.log(`\n  ${passed} passou, ${failed} falhou\n`);
   process.exit(failed ? 1 : 0);
