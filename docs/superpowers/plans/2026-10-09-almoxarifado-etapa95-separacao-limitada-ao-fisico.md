@@ -1,6 +1,6 @@
 # Etapa 95 — a separação não aceita mais do que existe na prateleira: o separado ainda não entregue fica retido para quem separou (C169, D (60), features 05 com a 04 e a 07)
 
-> Status: **PLANO (Fases 0, 1 e 2) — 2026-10-09.** Nenhuma task executada. A **Fase 2** foi feita (2 bloqueantes, 5
+> Status: **EM EXECUÇÃO — 2026-10-09: T0 `f8edb54a` (+ CLAUDE.md `4f89c295`), T0b `35e274c5`, T2 `9237af2c`, T1 `5a2bfa9f` feitas (seção "Execução" no fim); próximo T3, T4 e Fase 5.** Fase 2 em `2bee899c`. A **Fase 2** foi feita (2 bloqueantes, 5
 > importantes, 3 menores — seção "Fase 2 — revisão do plano" antes de "Próximo passo", **vale sobre o texto acima**).
 > Próximo passo: **T0**.
 > HEAD de partida: `616999be` (main, árvore limpa, sem push).
@@ -430,7 +430,7 @@ cliente** (contra o contrato congelado; pode rodar **em paralelo** com T2/T1 —
 árvore principal, **depois** da T2: edita o mesmo arquivo e sabota o mesmo serviço (memória "sabotagem concorrente
 contamina a suíte"). Executores **não** marcam este plano; o fio principal marca.
 
-- [ ] **T0 (tronco) — a conta única e a porta da separação (B466, B468, B471, B473, B474; Fase 2: B476, B478).** Contrato "A conta" e S2.
+- [x] `f8edb54a` **T0 (tronco) — a conta única e a porta da separação (B466, B468, B471, B473, B474; Fase 2: B476, B478).** Contrato "A conta" e S2.
   Teste novo: **RN-01**, **RN-02**, **RN-04**, **RN-06 (a)(b)**. Reescritas declaradas: o caso "Fase 5 (critico)" de
   `filaSeparacao` (estado por escritor direto + o caso da recusa vai para RN-01) e os dois de `separacaoOrigemPorItem`
   (B474); o comentário `separacaoDivergencia.api.test.js:102`. **Vermelho antes:** RN-01 (todos os ERRADO da sonda 1 e 2
@@ -451,13 +451,13 @@ contamina a suíte"). Executores **não** marcam este plano; o fio principal mar
   sem o arredondamento do teto → cai o decimal (separar 0,2 → 400). **E (Fase 2, I3)** os dois índices de B478 (sem
   controle de sabotagem: o teste confere `PRAGMA index_list` nas duas tabelas). **Commit próprio** do `CLAUDE.md`
   (regra da trava: a separação entra em "o leia para reservar"; sai da lista do "não pegam").
-- [ ] **T0b (tronco, NOVA na Fase 2, I4) — a segunda rodada da entrega não leva a caixa de outra (B477).** Contrato "A
+- [x] `35e274c5` **T0b (tronco, NOVA na Fase 2, I4) — a segunda rodada da entrega não leva a caixa de outra (B477).** Contrato "A
   conta" (a entrega). **RN-07** pela rota e o E1/E2 da RN-06 (a). **Vermelho antes:** P3 (R2 entrega 4 → 200; R1
   entrega a própria caixa → 400). **Guardas (passam antes):** o controle da RN-07 (sem a caixa de R1 → 200), E1, E2.
   **Medir:** `separacaoFluxoCompleto`, `reservaConsumo`, `reservaRequisicaoSoPelaEntrega`, `requisicaoGestosConcorrentes*`.
   **Controles:** (s1) sem o terceiro argumento na prévia **e** no laço → cai a RN-07 (200); (s2) só na prévia → cai a
   RN-07 pelo laço (a mensagem sai do laço — prova que os dois lugares leem a conta).
-- [ ] **T2 (tronco) — a aprovação não reserva a caixa de outra (B469).** Contrato "A aprovação". **RN-05** (rota e
+- [x] `9237af2c` **T2 (tronco) — a aprovação não reserva a caixa de outra (B469).** Contrato "A aprovação". **RN-05** (rota e
   serviço). **Vermelho antes:** M3 (reserva 4; R1 entrega 400) e "físico 6 com a mesma caixa → reserva 2" (hoje reserva 4).
   **Guarda (passa antes):** sem caixa nenhuma → reserva como hoje. **Medir:** `reservaAprovacao*`,
   `aprovacaoReserva*`, `filaLiberacaoAprovacaoCorrida`, `recebimentoReservaChegada*`, `requisicaoGestosConcorrentes*`
@@ -466,7 +466,7 @@ contamina a suíte"). Executores **não** marcam este plano; o fio principal mar
   "própria caixa sem reserva re-aprovada" (… reserva só o que a caixa não cobre)~~ **(corrigido na Fase 2, B2 — o
   controle estava invertido):** (s2) `caixa_outros_itens` trocado pela soma de **todos** os itens (sem exclusão, a
   forma anterior da B469) → cai o P5b da RN-05 (reserva 2 em vez de 6; o item separa 0).
-- [ ] **T1 (galho) — a fila e o detalhe dizem o que a porta aceita (B472).** Contrato "A fila" e "O detalhe". **RN-03**,
+- [x] `5a2bfa9f` **T1 (galho) — a fila e o detalhe dizem o que a porta aceita (B472).** Contrato "A fila" e "O detalhe". **RN-03**,
   **RN-06 (d)**. **Vermelho antes:** RN-03 em C1–C7, M2, M5 (fila e detalhe acima do que a porta aceita depois da T0).
   **Medir:** `filaSeparacao`, `filaTravaIntegracao`, os testes do detalhe (`requisicoes*`). **Controles:** (s1) fila com
   o `saldo_disponivel` cru → cai RN-03 C1 na fila (2 em vez de 0) e `etapas` com `SEPARAR`; (s2) `normalizarItem` sem
@@ -721,3 +721,33 @@ a RN-05 nas três portas de aprovação e no `prepararPosAprovacao` (o `calcular
 (4) a consulta da fila: custo do `caixaSemReservaSql` por linha de item (subconsulta correlacionada dupla) — medir com
 a base da suíte e dizer se precisa de índice; (5) `saldoEmTerceiros` — o fragmento novo não pode "escrever a subtração à
 mão" (rodar o teste). Corrigir o plano, **depois** executar T0.~~
+
+## Execução (2026-10-09)
+
+Um executor em sequência na árvore principal. Baseline `test:api` 329/329 (3924 ✓ por `grep -c "✓"`), almox 44/0.
+
+| Task | Commit | `test:api` | ✓ |
+|---|---|---|---|
+| T0 | `f8edb54a` (+ `4f89c295` CLAUDE.md) | 330/330 | 3954 |
+| T0b | `35e274c5` | 330/330 | 3957 |
+| T2 | `9237af2c` | 330/330 | 3962 |
+| T1 | `5a2bfa9f` | 330/330 | 3971 |
+
+`test:almoxarifado` 44/0 sempre; no fim 4/0, 3/0, 5/0. Primeiro boot em `CRM_DATA_DIR` vazio cria os dois índices, avisos
+iguais aos da árvore sem a mudança. Teste novo `separacaoTetoFisico.api.test.js`.
+
+- **Vermelho antes:** T0 19/30 (C1–C7, M2, M5, E3, PRONTA, decimal, P1 200/200 5/5, M4, mesmo item 2×, RN-04, L1) + os 3 testes
+  antigos a reescrever; T0b P3 e parcial (200); T2 M3, físico 6 e o serviço (P5b e a guarda passaram antes); T1 9 casos.
+- **Controles:** T0 s1 → C1–C7, E3, mesmo item 2×, RN-04, RN-06 (a); s2 → M2, PRONTA, decimal, P1, L1; s3 → M4, M5; s4 → mesmo
+  item 2×; s5 → um dos dois "Fase 5" da `separacaoDivergencia` (6 + 4); s6 → PRONTA; s7 → K4, L1; s8 (sem a trava por material)
+  → P1 200/200 5/5; s9 → P4; s10 → decimal. T0b s1 → P3 e parcial. T2 s1 → os três do M3; s2 → P5b. T1 s1 → C1–C7, M2, M5,
+  decimal; s2 → 8; s3 → M5; s4 → P3 no detalhe.
+- **Divergências:** a T0b é **task nova** (I4: entrega é outro assunto e lê a conta congelada na T0); o plano dizia que o s7
+  da T0 derrubaria o K1 — **estava errado** (o teto lê reserva e caixa do próprio item direto); quem cai é a guarda nova K4.
+  s5 derruba só um dos dois "Fase 5" (o do "mesmo par" fica verde). s10 cai pela mensagem (`Máximo: 0.199…`), não pelo
+  400 — a folga de 1e-9 sozinha já aceita 0,2. **T0b s2 não é controle que falha:** a prévia e o laço da entrega se
+  cobrem (sabotar um sozinho fica 33/0); só os dois juntos (s1) derrubam — declarado. Testes reescritos com "Mudado na
+  Etapa 95": "Fase 5 (critico)" da `filaSeparacao`, os dois da `separacaoOrigemPorItem`; e `saldoEmTerceiros` (**fora do
+  plano**: três chamadas levam `requisicao_id`, porque o contrato M2 lança sem ele). RN-06 (b)/O1 precisa de saldo em outro
+  endereço (a RN não dizia). P4 passa na main (a regressão era só do protótipo) — é guarda, derrubada pelo s9. T1 s1 não
+  derruba P4 (a conta antiga também dava 4).
