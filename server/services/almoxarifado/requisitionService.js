@@ -74,6 +74,56 @@ function maxEntregar(item, estoque, teto) {
   return Q.qtd(Math.min(pendente, separadoDisponivel, num(estoque)));
 }
 
+/**
+ * Etapa 98 (T3, B509 — o C190) — o que o MOTOR deixa a entrega tirar, para a previa, a fila e o detalhe dizerem a
+ * mesma coisa que ele. O claim do consumo de reserva (stockService, `disponivel + q >= q`) exige o disponivel do
+ * material >= 0: com ele negativo (bloqueio sobre o reservado ja separado, ou a reserva de outra requisicao ocupando
+ * o fisico) NADA sai pela entrega — nem o consumo da reserva, nem o excedente. Antes a previa somava a reserva do item
+ * ao disponivel negativo e anunciava "Maximo: 3" para uma entrega que o motor recusava inteira.
+ * `disponivelDoMaterial` e o disponivel do motor SEM a reserva do item; `permiteNegativo` a regra do motor (flag do
+ * material ou a global). Pura.
+ */
+function entregavelPeloMotor(disponivelDoMaterial, reservaDoItem, permiteNegativo) {
+  const disp = num(disponivelDoMaterial);
+  const r = num(reservaDoItem);
+  if (permiteNegativo) return disp + r;
+  return disp < -Q.QTD_FOLGA ? 0 : disp + r;
+}
+
+/**
+ * Etapa 98 (T3): a regra do motor para o disponivel negativo, em SQL — a flag do material OU a configuracao global
+ * (stockService: `material.permite_saldo_negativo || getConfig('permite_saldo_negativo_global') === '1'`). As consultas
+ * da fila, do detalhe e da leitura fresca da entrega a trazem para `entregavelPeloMotor`.
+ */
+function permiteNegativoSql(alias) {
+  return `(COALESCE(${alias}.permite_saldo_negativo, 0) = 1 OR EXISTS (SELECT 1 FROM configuracoes_almoxarifado cfg_neg
+    WHERE cfg_neg.chave = 'permite_saldo_negativo_global' AND cfg_neg.valor = '1'))`;
+}
+
+/**
+ * Etapa 98 (T3, E190): a recusa da entrega quando o disponivel do material esta negativo nomeia as retencoes e a
+ * saida medida (s4e da Fase 0): com reserva no item, liberar da reserva desta requisicao o que esta retido, ou
+ * desbloquear; sem reserva no item (Fase 2, B-2), liberar a reserva deste material de OUTRA requisicao, ou desbloquear.
+ * Sem retencao > 0 (reserva maior que o fisico, legado) a parte e "reservado alem do fisico". Le a linha de
+ * `saldoDisponivelParaItem`; fora do caso (disponivel nao negativo, ou o motor permite) devolve '' — a recusa fica
+ * byte a byte a de antes.
+ */
+function sufixoDisponivelNegativo(nomeMaterial, unidade, saldo) {
+  if (saldo.permite_negativo || !(num(saldo.disponivel_material) < -Q.QTD_FOLGA)) return '';
+  const qu = (q) => [Q.qtd(q), unidade].filter((x) => x !== undefined && x !== null && x !== '').join(' ');
+  const partes = [[saldo.bloqueada, 'bloqueados'], [saldo.em_inspecao, 'em inspeção'], [saldo.em_terceiros, 'em terceiros']]
+    .filter(([q]) => num(q) > Q.QTD_FOLGA).map(([q, rotulo]) => `${qu(num(q))} ${rotulo}`);
+  const comReserva = num(saldo.reservado_para_item) > Q.QTD_FOLGA;
+  const inicio = ` — o disponível de ${nomeMaterial} está negativo`;
+  if (!partes.length) {
+    return `${inicio} (reservado além do físico): nada dele sai pela entrega até `
+      + (comReserva ? 'liberar da reserva desta requisição o que passa do físico' : 'liberar reserva deste material (de outra requisição)');
+  }
+  return `${inicio} (${partes.join(', ')}): nada dele sai pela entrega até `
+    + (comReserva ? 'liberar da reserva desta requisição o que está retido, ou desbloquear'
+      : 'liberar reserva deste material (de outra requisição) ou desbloquear');
+}
+
 /** Etapa 95 (T0b, B477): o teto do item para a entrega, a partir da leitura fresca de saldoDisponivelParaItem. */
 function tetoDaLeitura(item, saldo) {
   return tetoSeparacao(saldo.disponivel - saldo.reservado_para_item, saldo.reservado_para_item,
@@ -99,9 +149,13 @@ function normalizarItem(item) {
   const reservaItem = num(item.quantidade_reservada_item ?? item.reservado_para_item);
   const teto = temCaixa
     ? tetoSeparacao(estoque - reservaItem, reservaItem, separado - entregue, item.caixa_sem_reserva_outros) : undefined;
-  const entregavel = maxEntregar(item, estoque, teto);
+  // Etapa 98 (T3, B509): o entregavel e o que o motor deixa sair — so o argumento `estoque` de maxEntregar muda
+  // (o disponivel do material negativo da 0); `teto` (o separavel) e `saldo_atual` ficam como antes.
+  const entregavel = maxEntregar(item,
+    entregavelPeloMotor(estoque - reservaItem, reservaItem, Number(item.motor_permite_negativo) === 1), teto);
   // Etapa 95 (Fase 5): a coluna crua da consulta do detalhe e insumo do teto, nao contrato — nao vai para o JSON.
-  const { caixa_sem_reserva_outros: _caixaCrua, ...resto } = item; // eslint-disable-line no-unused-vars
+  // Etapa 98 (T3): idem a regra do motor (insumo do entregavel).
+  const { caixa_sem_reserva_outros: _caixaCrua, motor_permite_negativo: _permiteCru, ...resto } = item; // eslint-disable-line no-unused-vars
   return {
     ...resto,
     quantidade_entregue: entregue,
@@ -193,11 +247,21 @@ async function saldoDisponivelParaItem(db, item) {
           AND r.status = 'ATIVA' AND r.origem = 'REQUISICAO'
       ), 0) as reservado_para_item,
       ${caixaSemReservaSql('ma.id', 'AND ix.requisicao_id <> ?')} as caixa_outras_requisicoes,
-      ${caixaSemReservaSql('ma.id', 'AND ix.id <> ?')} as caixa_outros_itens
+      ${caixaSemReservaSql('ma.id', 'AND ix.id <> ?')} as caixa_outros_itens,
+      COALESCE(ma.quantidade_bloqueada, 0) as bloqueada, COALESCE(ma.quantidade_em_inspecao, 0) as em_inspecao,
+      COALESCE(ma.quantidade_em_terceiros, 0) as em_terceiros,
+      ${permiteNegativoSql('ma')} as permite_negativo
     FROM materiais_almoxarifado ma WHERE ma.id = ?`, [item.id, item.requisicao_id, item.id, item.material_id]);
   return {
     disponivel: num(row?.saldo_disponivel) + num(row?.reservado_para_item),
     reservado_para_item: num(row?.reservado_para_item),
+    // Etapa 98 (T3, B509): o disponivel do material SEM a reserva do item, as retencoes e a regra do motor — a previa
+    // da entrega diz com eles o que o motor deixa sair (entregavelPeloMotor) e a recusa os nomeia (E190).
+    disponivel_material: num(row?.saldo_disponivel),
+    bloqueada: num(row?.bloqueada),
+    em_inspecao: num(row?.em_inspecao),
+    em_terceiros: num(row?.em_terceiros),
+    permite_negativo: Number(row?.permite_negativo) === 1,
     // Etapa 95 (T0): a caixa sem reserva das OUTRAS requisicoes (a porta soma a da propria requisicao em memoria) e a
     // dos OUTROS itens (a aprovacao e a entrega — a propria caixa elas tratam pela reserva do item).
     caixa_outras_requisicoes: num(row?.caixa_outras_requisicoes),
@@ -576,6 +640,7 @@ async function listarFilaSeparacao(db, user) {
       ${Q.qtdSql(`${disponivelSql('ma')} + ${RESERVADO_PARA_ITEM_SQL}`)} as saldo_disponivel,
       ${RESERVADO_PARA_ITEM_SQL} as reservado_para_item,
       ${caixaSemReservaSql('ir.material_id', 'AND ix.id <> ir.id')} as caixa_outros,
+      ${permiteNegativoSql('ma')} as motor_permite_negativo, -- Etapa 98 (T3): a regra do motor para o entregavel
       lsep.codigo as origem_separacao_codigo, ltsep.codigo as lote_separacao_codigo
     FROM itens_requisicao_almoxarifado ir
     JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
@@ -613,7 +678,10 @@ async function listarFilaSeparacao(db, user) {
         // Fase 5 (critico): a separacao NAO reserva — o separado de A pode ter saido por B. Entregavel agora
         // e o separado limitado ao disponivel; sem isso a fila dizia "Entregar" e a entrega recusava.
         // Etapa 96 (Fase 2, I5): a caixa e uma diferenca — arredondada (separa 0,3, entrega 0,1 -> 0,2, nao 0.1999…).
-        entregavel: Q.qtd(Math.min(Math.max(0, getSeparado(i) - getEntregue(i)), Math.max(0, num(i.saldo_disponivel)))),
+        // Etapa 98 (T3, B509): o disponivel e o que o MOTOR deixa sair (entregavelPeloMotor) — com o disponivel do
+        // material negativo, 0 e a etapa vira AGUARDANDO_SALDO; antes a fila dizia ENTREGAR e o motor recusava tudo.
+        entregavel: Q.qtd(Math.min(Math.max(0, getSeparado(i) - getEntregue(i)), Math.max(0, entregavelPeloMotor(
+          num(i.saldo_disponivel) - num(i.reservado_para_item), i.reservado_para_item, Number(i.motor_permite_negativo) === 1)))),
         disponivel: Q.qtd(num(i.saldo_disponivel)), origem_separacao_codigo: i.origem_separacao_codigo || null,
         lote_separacao_codigo: i.lote_separacao_codigo || null, material_critico: Number(i.material_critico) === 1,
       };
@@ -1366,12 +1434,15 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     algoAEntregar = true;
     // eslint-disable-next-line no-await-in-loop
     const saldo = await saldoDisponivelParaItem(db, item);
-    const { disponivel } = saldo;
+    // Etapa 98 (T3, B509): o que o motor deixa sair — com o disponivel do material negativo, 0 (e a recusa E190
+    // abaixo, antes de qualquer baixa); fora disso o `disponivel + reserva do item` de antes, byte a byte.
+    const disponivel = entregavelPeloMotor(saldo.disponivel_material, saldo.reservado_para_item, saldo.permite_negativo);
     const max = maxEntregar(item, disponivel, tetoDaLeitura(item, saldo)); // Etapa 95 (T0b, B477)
     if (!Q.cabe(qty, max)) { // Etapa 96: com folga (E1)
       const err = new Error(
         `${item.material_nome}: não é possível entregar ${qty} ${item.unidade || ''}. `
         + `Máximo: ${Q.qtd(max)} (pendente: ${Q.qtd(pendenteEntrega(item))}, disponível: ${Q.qtd(disponivel)})`
+        + sufixoDisponivelNegativo(item.material_nome, item.unidade, saldo) // Etapa 98 (T3): E190, ou ''
       );
       err.status = 400;
       throw err;
@@ -1400,13 +1471,16 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     // desta requisição e não pode barrá-la.
     // eslint-disable-next-line no-await-in-loop
     const saldo = await saldoDisponivelParaItem(db, item);
-    const { disponivel, reservado_para_item: reservadoItem } = saldo;
+    const { reservado_para_item: reservadoItem } = saldo;
+    // Etapa 98 (T3, B509): a mesma regra da previa (a leitura e fresca; o motor continua a guarda que vale).
+    const disponivel = entregavelPeloMotor(saldo.disponivel_material, reservadoItem, saldo.permite_negativo);
     const max = maxEntregar(item, disponivel, tetoDaLeitura(item, saldo)); // Etapa 95 (T0b, B477)
 
     if (!Q.cabe(qtyEntregar, max)) { // Etapa 96: com folga (E1)
       const err = new Error(
         `${item.material_nome}: não é possível entregar ${qtyEntregar} ${item.unidade || ''}. `
         + `Máximo: ${Q.qtd(max)} (pendente: ${Q.qtd(pendenteEntrega(item))}, disponível: ${Q.qtd(disponivel)})`
+        + sufixoDisponivelNegativo(item.material_nome, item.unidade, saldo) // Etapa 98 (T3): E190, ou ''
       );
       err.status = 400;
       throw err;
@@ -1996,6 +2070,8 @@ module.exports = {
   pendenteSeparacao,
   maxSeparar,
   maxEntregar,
+  entregavelPeloMotor, // Etapa 98 (T3, B509)
+  permiteNegativoSql, // Etapa 98 (T3): o detalhe (routes/almoxarifado.js) traz a regra do motor
   normalizarItem,
   todosItensCompletos,
   carregarItensRequisicao,

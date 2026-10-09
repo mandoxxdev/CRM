@@ -3258,6 +3258,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                      -- Etapa 95 (T1, B472): a caixa sem reserva dos OUTROS itens do material (de qualquer requisicao
                      -- ativa) — normalizarItem calcula com ela saldo_separavel e quantidade_separavel (o teto da porta).
                      ${requisitionService.caixaSemReservaSql('ir.material_id', 'AND ix.id <> ir.id')} as caixa_sem_reserva_outros,
+                     -- Etapa 98 (T3, B509): a regra do motor (flag do material ou global) — normalizarItem calcula com ela
+                     -- o quantidade_entregavel que o motor deixa sair (disponivel do material negativo da 0).
+                     ${requisitionService.permiteNegativoSql('ma')} as motor_permite_negativo,
                      ma.foto, ma.material_critico,
                      ma.localizacao, ma.localizacao_padrao_id,
                      a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,
