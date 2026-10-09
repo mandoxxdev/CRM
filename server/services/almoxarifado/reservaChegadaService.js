@@ -109,7 +109,13 @@ async function passaNaRegraDoDono(db, material, candidato) {
 }
 
 async function bloqueadaPorValor(db, candidato) {
-  if (candidato.data_aprovacao_valor) return false;
+  // Etapa 94 (T2, Fase 2 I1/B461): o mesmo predicado da porta e da fila. As candidatas vem de PODE_SEPARAR
+  // (inclui EM_SEPARACAO e PARCIALMENTE_ATENDIDA): sem isto a EM_SEPARACAO com material na caixa e custo ou
+  // limite acima deixava de ganhar a reserva da nota, embora a porta (T0) a deixe separar.
+  const itens = await dbAll(db, `SELECT quantidade_separada, quantidade_entregue, quantidade_atendida
+    FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?`, [candidato.requisicao_id]);
+  if (candidato.data_aprovacao_valor
+    || !requisitionStateMachine.alcadaDeValorAindaVale(candidato.status, itens)) return false;
   const avaliacao = await valueApprovalService.avaliarRequisicaoValor(db, candidato.requisicao_id);
   return !!(avaliacao && avaliacao.requer_aprovacao_valor);
 }

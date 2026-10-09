@@ -18,6 +18,7 @@ const { can } = require('./permissions'); // Etapa 64: posso_conferir na fila
 const {
   PODE_SEPARAR, PODE_ENTREGAR, STATUS_PARCIALMENTE_RESERVADA, STATUS_TOTALMENTE_RESERVADA,
   calcularStatusPosAprovacao, validarTransicao,
+  alcadaDeValorAindaVale, separacaoAReabrir, // Etapa 94 (T2)
 } = require('./requisitionStateMachine');
 
 function num(v) {
@@ -522,7 +523,11 @@ async function listarFilaSeparacao(db, user) {
     // coincide com um status separavel (quem grava o flag muda o status junto), e o risco real era o
     // limite baixar ou o custo subir depois: a fila dizia Separar e o separar recusava com 403.
     // eslint-disable-next-line no-await-in-loop
-    const avaliacaoValor = r.data_aprovacao_valor ? null : await valueApprovalService.avaliarRequisicaoValor(db, r.id);
+    // Etapa 94 (T2, B457): o mesmo predicado da porta — com material na caixa (ou fora dos seis status com seta
+    // para AGUARDANDO_APROVACAO_VALOR) a alcada nao vale mais e a fila nao a mostra. Antes dizia "Aguardando
+    // aprovacao de valor" numa requisicao em separacao, pronta ou parcialmente atendida (C165).
+    const avaliacaoValor = (r.data_aprovacao_valor || !alcadaDeValorAindaVale(r.status, doReq))
+      ? null : await valueApprovalService.avaliarRequisicaoValor(db, r.id);
     const bloqueioValor = !!(avaliacaoValor && avaliacaoValor.requer_aprovacao_valor);
     const linhas = doReq.map((i) => {
       const aSeparar = pendenteSeparacao(i);
@@ -540,6 +545,9 @@ async function listarFilaSeparacao(db, user) {
     const etapas = [];
     if (podeSep && linhas.some((l) => l.separavel > 1e-9)) etapas.push(bloqueioValor ? 'APROVACAO_VALOR' : 'SEPARAR');
     if (podeSep && linhas.some((l) => l.a_separar > 1e-9 && l.separavel <= 1e-9)) etapas.push('AGUARDANDO_SALDO');
+    // Etapa 94 (T2, B460): o legado com tudo na caixa num status pre-separacao sumia da fila (nada a separar,
+    // e *_RESERVADA fora de PODE_ENTREGAR). O gesto que a porta aceita e "Iniciar Separacao" sem quantidade.
+    if (podeSep && separacaoAReabrir(r.status, doReq) && !etapas.includes('SEPARAR')) etapas.push('RETOMAR_SEPARACAO');
     const conferenciaPendente = conferenciaObrigatoria(doReq) && !r.conferido_por_id;
     // Fase 5 (critico): REABRIR so onde separar de novo e possivel (PODE_SEPARAR); em PRONTA_PARA_RETIRADA nao
     // ha transicao de volta — CONFERENCIA_SEM_SAIDA, nao acionavel (o administrador resolve).
@@ -560,7 +568,7 @@ async function listarFilaSeparacao(db, user) {
     fila.push({
       id: r.id, numero: r.numero, status: r.status, urgencia: r.urgencia, data_necessidade: r.data_necessidade || null,
       solicitante_nome: r.solicitante_nome, setor: r.setor, created_at: r.created_at,
-      etapas, acionavel: etapas.some((e) => ['SEPARAR', 'CONFERIR', 'REABRIR_SEPARACAO', 'ENTREGAR'].includes(e)),
+      etapas, acionavel: etapas.some((e) => ['SEPARAR', 'CONFERIR', 'REABRIR_SEPARACAO', 'RETOMAR_SEPARACAO', 'ENTREGAR'].includes(e)),
       conferencia_pendente: conferenciaPendente, separadores: quemSeparou,
       posso_conferir: conferenciaPendente && r.status === 'EM_SEPARACAO' && podeConferirPerfil
         && !quemSeparou.some((s) => Number(s.id) === Number(user?.id)),

@@ -138,6 +138,21 @@ function alcadaDeValorAindaVale(status, itens = []) {
 }
 
 /**
+ * Etapa 94 (T2, Fase 2 B1/B460) — o legado com material na caixa num status pre-separacao (o desvio de antes da
+ * 94 + aprovacao por valor: TOTALMENTE_RESERVADA com tudo separado). A porta aceita "Iniciar Separacao" sem
+ * quantidade (status em PODE_SEPARAR e, com caixa, a alcada nao reavalia), mas a fila nao listava a requisicao
+ * e o modal desabilitava o botao. A fila oferece RETOMAR_SEPARACAO e a tela habilita "Reabrir separacao" com
+ * este predicado (espelhado no cliente). Os cinco pre-separacao — nao EM_SEPARACAO, que tem "Ajustar
+ * Separacao". Caixa aqui = separado > entregue (o que ainda esta para entregar).
+ */
+const STATUS_PRE_SEPARACAO = ['APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA',
+  'TOTALMENTE_RESERVADA'];
+function separacaoAReabrir(status, itens = []) {
+  return STATUS_PRE_SEPARACAO.includes(status) && (itens || []).some((i) => Number(i.quantidade_separada || 0)
+    - Number(i.quantidade_entregue ?? i.quantidade_atendida ?? 0) > 1e-9);
+}
+
+/**
  * Regra pós-aprovação (design, seção "Máquina de estados"): calculada ANTES do handler
  * `aprovar` gravar qualquer coisa — depende só dos itens/materiais da requisição, não do
  * status dela. Se NENHUM item da requisição tem saldo disponível (quantidade_atual −
@@ -225,4 +240,6 @@ module.exports = {
   validarTransicao,
   calcularStatusPosAprovacao,
   alcadaDeValorAindaVale, // Etapa 94
+  STATUS_PRE_SEPARACAO, // Etapa 94 (T2)
+  separacaoAReabrir, // Etapa 94 (T2)
 };

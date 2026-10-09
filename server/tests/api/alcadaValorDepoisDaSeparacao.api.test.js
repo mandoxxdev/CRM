@@ -410,6 +410,124 @@ const notificacoesDe = (R) => notificados.filter((id) => id === Number(R)).lengt
     assert.strictEqual(errados, 0, `${errados}/10 com cancelamento 200 e status ${ex.join(',')}`);
   });
 
+  // ── RN-05 — a fila (e a reserva na chegada) nao dizem o que a porta recusa (T2, B457, B460, B461) ──
+  const linhaDaFila = async (x) => {
+    const r = await como('ALMOX').get(`${API}/fila-separacao`);
+    assert.strictEqual(r.status, 200, `fila: ${r.status} ${JSON.stringify(r.body)}`);
+    return (Array.isArray(r.body) ? r.body : []).find((l) => Number(l.id) === Number(x.R)) || null;
+  };
+  const legado = async (estado) => {
+    // o estado que o desvio + a aprovacao por valor deixavam (A45 (b)): TOTALMENTE_RESERVADA com material na caixa
+    const x = await montar(estado);
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET status = 'TOTALMENTE_RESERVADA', data_aprovacao_valor = CURRENT_TIMESTAMP WHERE id = ?", [x.R]);
+    return x;
+  };
+
+  await test('[94 RN-05] (a)(d) custo subiu depois da separacao: EM_SEPARACAO, PRONTA e PARCIALMENTE_ATENDIDA -> a fila diz ENTREGAR (nao APROVACAO_VALOR), e entregar 2 pela porta -> 200', async () => {
+    await config({ ativo: 1, limite: 10 });
+    for (const estado of ['EM_SEPARACAO', 'PRONTA', 'PARCIAL']) {
+      // eslint-disable-next-line no-await-in-loop
+      const x = await montar(estado);
+      // eslint-disable-next-line no-await-in-loop
+      await GATILHOS.entrada(x);
+      // eslint-disable-next-line no-await-in-loop
+      const l = await linhaDaFila(x);
+      assert.ok(l, `${estado}: ausente da fila`);
+      assert.ok(l.etapas.includes('ENTREGAR') && !l.etapas.includes('APROVACAO_VALOR'), `${estado}: etapas ${JSON.stringify(l.etapas)}`);
+      // eslint-disable-next-line no-await-in-loop
+      const e = await entregar('ALMOX', x, 2);
+      assert.strictEqual(e.status, 200, `${estado}: a porta recusou o que a fila ofereceu: ${e.status} ${JSON.stringify(e.body)}`);
+    }
+  });
+  await test('[94 RN-05] (b) TOTALMENTE_RESERVADA sem caixa, custo subiu -> APROVACAO_VALOR (a porta recusa; guarda)', async () => {
+    await config({ ativo: 1, limite: 10 });
+    const x = await montar('RESERVADA');
+    await GATILHOS.entrada(x);
+    const l = await linhaDaFila(x);
+    assert.ok(l, 'ausente da fila');
+    assert.deepStrictEqual(l.etapas, ['APROVACAO_VALOR']);
+  });
+  await test('[94 RN-05] (c)(d) legado TOTALMENTE_RESERVADA com 2 separados de 4, custo subiu -> SEPARAR; separar 2 pela porta -> 200', async () => {
+    await config({ ativo: 1, limite: 10 });
+    const x = await montar('RESERVADA');
+    ok(await separar('ALMOX', x, 2), 'separar 2');
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET status = 'TOTALMENTE_RESERVADA' WHERE id = ?", [x.R]);
+    await GATILHOS.entrada(x);
+    const l = await linhaDaFila(x);
+    assert.ok(l, 'ausente da fila');
+    assert.ok(l.etapas.includes('SEPARAR') && !l.etapas.includes('APROVACAO_VALOR'), `etapas ${JSON.stringify(l.etapas)}`);
+    const s = await separar('ALMOX', x, 2);
+    assert.strictEqual(s.status, 200, `separar 2: ${s.status} ${JSON.stringify(s.body)}`);
+  });
+  await test("[94 RN-05] (c') legado TOTALMENTE_RESERVADA com 4 de 4 separados (e com 4 separados e 2 entregues) -> a fila traz RETOMAR_SEPARACAO, acionavel, sem SEPARAR; separar vazio pela porta -> 200 EM_SEPARACAO", async () => {
+    await config({ ativo: 1, limite: 10 });
+    for (const estado of ['EM_SEPARACAO', 'PARCIAL']) {
+      // eslint-disable-next-line no-await-in-loop
+      const x = await legado(estado);
+      // eslint-disable-next-line no-await-in-loop
+      const l = await linhaDaFila(x);
+      assert.ok(l, `${estado}: o legado some da fila`);
+      assert.ok(l.etapas.includes('RETOMAR_SEPARACAO') && !l.etapas.includes('SEPARAR'), `${estado}: etapas ${JSON.stringify(l.etapas)}`);
+      assert.strictEqual(l.acionavel, true, `${estado}: nao acionavel`);
+      // eslint-disable-next-line no-await-in-loop
+      const s = await separar('ALMOX', x, 0);
+      assert.strictEqual(s.status, 200, `${estado}: separar vazio ${s.status} ${JSON.stringify(s.body)}`);
+      // eslint-disable-next-line no-await-in-loop
+      assert.strictEqual((await foto(x)).status, 'EM_SEPARACAO');
+    }
+  });
+  await test("[94 RN-05] (c') separacaoAReabrir(s, itens): verdade so nos cinco pre-separacao com algum item separado > entregue", async () => {
+    assert.strictEqual(typeof maquina.separacaoAReabrir, 'function', 'separacaoAReabrir nao existe na maquina');
+    assert.deepStrictEqual([...maquina.STATUS_PRE_SEPARACAO].sort(), [...PRE_SEPARACAO].sort());
+    const todos = [...new Set([...Object.keys(maquina.TRANSICOES), 'AGUARDANDO_APROVACAO_VALOR', 'REJEITADO', 'CANCELADO', 'ENCERRADA'])];
+    const casos = [
+      [[{ quantidade_separada: 4, quantidade_entregue: 0 }], PRE_SEPARACAO],
+      [[{ quantidade_separada: 4, quantidade_entregue: 2 }], PRE_SEPARACAO],
+      [[{ quantidade_separada: 4, quantidade_entregue: null, quantidade_atendida: 2 }], PRE_SEPARACAO],
+      [[{ quantidade_separada: 2, quantidade_entregue: 2 }], []],
+      [[{ quantidade_separada: 0 }], []],
+      [[], []],
+    ];
+    for (const [itens, esperado] of casos) {
+      const deu = todos.filter((s) => maquina.separacaoAReabrir(s, itens)).sort();
+      assert.deepStrictEqual(deu, [...esperado].sort(), `itens ${JSON.stringify(itens)}`);
+    }
+  });
+
+  // (e) a reserva na chegada (74) usa o mesmo predicado (B461)
+  const reservaChegadaService = require('../../services/almoxarifado/reservaChegadaService');
+  const hold = async (x) => (await dbAll(db, "SELECT quantidade, COALESCE(quantidade_utilizada,0) u FROM reservas_material_almoxarifado WHERE requisicao_id=? AND status='ATIVA'", [x.R]))
+    .reduce((acc, r) => acc + Number(r.quantidade) - Number(r.u), 0);
+  const nota = async (x, q) => {
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = quantidade_atual + ? WHERE id = ?', [q, x.m]);
+    seq += 1;
+    const r = (await dbRun(db, `INSERT INTO recebimentos_material_almoxarifado (numero, status, nota_fiscal, fornecedor_nome,
+      data_emissao_nf, data_entrada_nf, valor_total_nota) VALUES (?, 'EM_ENTRADA_NF', ?, 'F', '2026-09-01', '2026-09-02', 10)`,
+    [`REC-94-${x.R}-${seq}`, `NF-94-${x.R}-${seq}`])).lastID;
+    await dbRun(db, `INSERT INTO recebimentos_material_itens_almoxarifado (recebimento_id, material_id, quantidade_esperada,
+      quantidade_recebida, entrada_estoque_em) VALUES (?,?,?,?,CURRENT_TIMESTAMP)`, [r, x.m, q, q]);
+    return reservaChegadaService.reservarChegadaParaQuemEspera(db, { ...USERS.ADMIN }, r);
+  };
+  await test('[94 RN-05] (e) chegada: EM_SEPARACAO com 2 de 4 separados e limite 1 -> a nota de 2 reserva para ela (hold 2 -> 4); controle: a mesma sem separar (PARCIALMENTE_RESERVADA) -> 0 reservas', async () => {
+    await config({ ativo: 1, limite: 10 });
+    const x = await montar('RESERVADA', { estoque: 2 });
+    const y = await montar('RESERVADA', { estoque: 2 });
+    try {
+      assert.strictEqual((await foto(x)).status, 'PARCIALMENTE_RESERVADA', 'premissa x');
+      assert.strictEqual((await foto(y)).status, 'PARCIALMENTE_RESERVADA', 'premissa y');
+      ok(await separar('ALMOX', x, 2), 'separar 2');
+      assert.strictEqual((await foto(x)).status, 'EM_SEPARACAO');
+      await config({ ativo: 1, limite: 1 });
+      const h0 = await hold(x);
+      const rx = await nota(x, 2);
+      const h1 = await hold(x);
+      assert.strictEqual(rx.reservas.length, 1, `reservas da nota para a EM_SEPARACAO: ${rx.reservas.length}`);
+      assert.strictEqual(h1, h0 + 2, `hold ${h0} -> ${h1}`);
+      const ry = await nota(y, 2);
+      assert.strictEqual(ry.reservas.length, 0, `controle: a alcada ainda vale e bloqueia, mas a nota reservou ${ry.reservas.length}`);
+    } finally { await config({ ativo: 1, limite: 10 }); }
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   process.exit(failed ? 1 : 0);
