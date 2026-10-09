@@ -412,8 +412,12 @@ const S = (c, un, lista) => ` — ${c} ${un} estão separados para ${lista}${S_F
     await entregaTudo({ m, ...a });
   });
 
-  await test('[97 RN-02] caixa de duas requisicoes soma (A 2 + B 2, fisico 6): SAIDA 3 -> 400 "Disponivel: 2" com as duas no sufixo', async () => {
+  await test('[97 RN-02] caixa de duas requisicoes soma (A 2 + B 2, fisico 6): SAIDA 3 -> 400 "Disponivel: 2" com as duas no sufixo — e a terceira, aprovada e NAO separada, fica fora dele', async () => {
     const m = await material(0);
+    // Fase 5 (C): uma terceira requisicao do mesmo material, aprovada com fisico 0 (sem reserva) e nunca separada — caixa
+    // 0, num status com caixa. O `lerCaixa` so lista as requisicoes com caixa > 1e-9: ela nao entra no sufixo (sem o
+    // filtro o sufixo diria "as requisicoes Z, A e B"); e, sem reserva nem caixa, nao muda o livre.
+    const z = await req([[m, 2]]); await aprovar(z.R);
     const x = await montagem({ m, fisico: 2, pede: 2 });
     const y = await montagem({ m, fisico: 4, pede: 2 });
     recusou(await svc({ material_id: m, tipo: 'SAIDA', quantidade: 3 }), M1(2) + S(4, 'PC', `as requisições ${x.numero} e ${y.numero}`));
@@ -499,6 +503,42 @@ const S = (c, un, lista) => ` — ${c} ${un} estão separados para ${lista}${S_F
     assert.strictEqual((await saida).status, 201);
     const a = await montagem();
     assert.strictEqual(await comPrazo(entregaTudo(a), 3000), 'resolveu', 'a entrega esperou a si mesma');
+  });
+
+  await test('[97 F5-B] o claim da SAIDA tem a guarda da caixa (registrarMovimentacaoSemTrava, sem a trava): a separacao grava entre a pre-checagem e o claim, e o claim recusa com M1+S', async () => {
+    // Fase 5 (B): sob a trava a separacao nunca cai entre a pre-checagem e o claim — a guarda pela caixa no WHERE do
+    // claim (`guardaSaidaPelaCaixaSql`) estava morta sob teste (o claim antigo passava a suite inteira). Aqui o corpo SEM
+    // a trava (exportado so para os testes de corrida do claim, Fase 2 I-3), com o gancho parando o claim: a pre-checagem
+    // ja passou (livre 4), a separacao grava os 4 e solta, e so entao o claim roda.
+    const m = await material(0);
+    const a = await req([[m, 4]]); await aprovar(a.R);
+    await entrar(m, 4);
+    const origGet = db.get;
+    let parou; const parada = new Promise((r) => { parou = r; });
+    let liberar; const liberado = new Promise((r) => { liberar = r; });
+    let disparos = 0;
+    let x;
+    try {
+      db.get = function ganchoE97F5B(sql, ...resto) {
+        if (/UPDATE materiais_almoxarifado\s+SET quantidade_atual = ROUND\(\(quantidade_atual - \?\)/.test(sql)) {
+          disparos++;
+          if (disparos === 1) { parou(); liberado.then(() => origGet.call(db, sql, ...resto)); return db; }
+        }
+        return origGet.call(db, sql, ...resto);
+      };
+      const saida = stockService.registrarMovimentacaoSemTrava(db, ADM, { material_id: m, tipo: 'SAIDA', quantidade: 4, motivo: 'e97', justificativa: 'sonda e97' })
+        .then((r) => ({ status: 201, r }), (e) => ({ status: e.status || 500, error: e.message }));
+      await parada;
+      assert.strictEqual((await separar(a.R, [[a.ids[0], 4]])).status, 200, 'a separacao grava com o claim parado');
+      liberar();
+      x = await saida;
+    } finally { db.get = origGet; }
+    assert.strictEqual(disparos, 1, 'o gancho parou o claim da saida uma vez');
+    recusou(x, M1(0) + SA(a), 'o claim depois da separacao');
+    const est = await dbGet(db, `SELECT ma.quantidade_atual q, ix.quantidade_separada s FROM materiais_almoxarifado ma
+      JOIN itens_requisicao_almoxarifado ix ON ix.material_id = ma.id WHERE ma.id = ?`, [m]);
+    assert.deepStrictEqual([est.q, est.s], [4, 4], 'o fisico ficou com a caixa');
+    await entregaTudo({ m, ...a });
   });
 
   await test('[97 RN-07] (Fase 2, I-1) permite_saldo_negativo: a caixa vale com a flag (SAIDA 4 -> 400, A entrega); a flag dispensa a reserva; sem caixa deixa negativar; o AJUSTE nao', async () => {
@@ -750,30 +790,36 @@ const S = (c, un, lista) => ` — ${c} ${un} estão separados para ${lista}${S_F
     assert.strictEqual((await dbGet(db, 'SELECT COUNT(*) n FROM itens_conferencia_almoxarifado WHERE conferencia_id=? AND ajustado=1', [conf])).n, 0);
   });
 
-  await test('[97 T2] (Fase 2, menor 3) a conclusao inteira (pre-validacao + aplicacao) roda sob comLockDosMateriais: a retencao criada enquanto a trava estava presa e vista pela PRE-VALIDACAO, e nenhum item e ajustado', async () => {
-    // p1 sem trava (conta 3 de 5); p2 com a trava presa por um teste (conta 4 de 5). Enquanto a conclusao espera,
-    // DENTRO da secao que segura p2, uma reserva manual de 5 em p2 (o motor roda direto: a secao segura p2).
-    // Sob a trava: a pre-validacao le depois de soltar -> "Ajuste bloqueado: p2 ..." e p1 continua 5.
-    // Solta (antes da 97): a pre-validacao passava, p1 era ajustado para 3 e o motor recusava p2 sem o prefixo.
-    const cat = `CAT-E97-${++seq}`;
-    const p1 = await material(0); await entrar(p1, 5);
-    const p2 = await material(0); await entrar(p2, 5);
-    await dbRun(db, 'UPDATE materiais_almoxarifado SET categoria=? WHERE id IN (?, ?)', [cat, p1, p2]);
-    const conf = await conferencia(cat);
-    await contar(conf, p1, 3);
-    await contar(conf, p2, 4);
-    let soltar; const sinal = new Promise((r) => { soltar = r; });
-    const segura = trava.comLockDoMaterial(p2, async () => { await sinal; return reservaManual(p2, 5); });
-    await dormir(10);
-    const pc = concluir(conf); // FORA da fn da secao
-    await dormir(150);
-    assert.strictEqual(await estado(pc), 'pendente', 'a conclusao nao esperou a trava');
-    soltar();
-    assert.strictEqual((await segura).status, 201, 'a reserva manual dentro da secao');
-    const r = await pc;
-    recusou(rota(r), `Ajuste bloqueado: ${await codigoDe(p2)}: Ajuste para 4 PC deixaria o disponível negativo (reservada: 5, `
-      + 'mínimo aceitável: 5 PC). Resolva a retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo.', 'concluir');
-    assert.strictEqual((await dbGet(db, 'SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id=?', [p1])).q, 5, 'p1 foi ajustado: o tudo-ou-nada quebrou');
+  await test('[97 T2] (Fase 2, menor 3) a conclusao inteira (pre-validacao + aplicacao) roda sob comLockDosMateriais: a retencao criada enquanto a trava estava presa e vista pela PRE-VALIDACAO, e nenhum item e ajustado — com a trava presa no SEGUNDO material e no PRIMEIRO', async () => {
+    // p1 (conta 3 de 5) e p2 (conta 4 de 5). Um teste segura a trava de UM deles; enquanto a conclusao espera, DENTRO da
+    // secao que o segura, uma reserva manual de 5 nele (o motor roda direto: a secao segura o material). Sob a trava: a
+    // pre-validacao le depois de soltar -> "Ajuste bloqueado: <o segurado> ..." e o outro continua 5.
+    // Solta (antes da 97): a pre-validacao passava, o outro era ajustado e o motor recusava o segurado sem o prefixo.
+    // Fase 5 (D): as duas variantes — segurar so o segundo deixava passar uma trava que so pegasse o PRIMEIRO material
+    // da conferencia (`slice(0, 1)`), e segurar so o primeiro deixa passar a que pegasse so o ULTIMO (`slice(-1)`).
+    for (const segurado of ['p2', 'p1']) {
+      const cat = `CAT-E97-${++seq}`;
+      const p1 = await material(0); await entrar(p1, 5); // eslint-disable-line no-await-in-loop
+      const p2 = await material(0); await entrar(p2, 5); // eslint-disable-line no-await-in-loop
+      await dbRun(db, 'UPDATE materiais_almoxarifado SET categoria=? WHERE id IN (?, ?)', [cat, p1, p2]); // eslint-disable-line no-await-in-loop
+      const conf = await conferencia(cat); // eslint-disable-line no-await-in-loop
+      await contar(conf, p1, 3); // eslint-disable-line no-await-in-loop
+      await contar(conf, p2, 4); // eslint-disable-line no-await-in-loop
+      const [preso, livre, contado] = segurado === 'p2' ? [p2, p1, 4] : [p1, p2, 3];
+      let soltar; const sinal = new Promise((r) => { soltar = r; });
+      const segura = trava.comLockDoMaterial(preso, async () => { await sinal; return reservaManual(preso, 5); });
+      await dormir(10); // eslint-disable-line no-await-in-loop
+      const pc = concluir(conf); // FORA da fn da secao
+      await dormir(150); // eslint-disable-line no-await-in-loop
+      assert.strictEqual(await estado(pc), 'pendente', `${segurado}: a conclusao nao esperou a trava`); // eslint-disable-line no-await-in-loop
+      soltar();
+      assert.strictEqual((await segura).status, 201, `${segurado}: a reserva manual dentro da secao`); // eslint-disable-line no-await-in-loop
+      const r = await pc; // eslint-disable-line no-await-in-loop
+      recusou(rota(r), `Ajuste bloqueado: ${await codigoDe(preso)}: Ajuste para ${contado} PC deixaria o disponível negativo (reservada: 5, ` // eslint-disable-line no-await-in-loop
+        + 'mínimo aceitável: 5 PC). Resolva a retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo.', `${segurado}: concluir`);
+      assert.strictEqual((await dbGet(db, 'SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id=?', [livre])).q, 5, // eslint-disable-line no-await-in-loop
+        `${segurado}: o outro material foi ajustado — o tudo-ou-nada quebrou`);
+    }
   });
 
   await test('[97 F5-3] duas conclusoes SIMULTANEAS da mesma conferencia: uma conclui, a outra recebe "nao esta aberta" — UM AJUSTE_INVENTARIO no livro (solta, com a trava do material presa, e sem aplicar ajustes)', async () => {

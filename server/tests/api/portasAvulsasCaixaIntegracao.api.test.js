@@ -306,6 +306,78 @@ ORDER BY ma.codigo;`;
   });
 
   // ═══════════════ Cenario 3 — RN-06: o caso legitimo (material perdido/quebrado na caixa) ═══════════════
+  // Fase 5 (A): as quatro portas avulsas que NAO sao SAIDA tem a propria trava (fora do `registrarMovimentacao`): a
+  // reserva manual (`criarReserva`), e as escritas curtas dos estornos de ENTRADA, de AJUSTE e de DESBLOQUEIO. Sabotadas
+  // juntas, a suite inteira ficava verde (e97rv2: run-all 338/338). Uma corrida por porta, com o gancho de 1 disparo
+  // (a separacao parada antes de gravar `quantidade_separada`, depois de ler o teto); errado = retido + caixa > fisico.
+  const ADMS = { ...USERS.ADMIN };
+  const svcMov = (p, o) => stockService.registrarMovimentacao(db, ADMS, { motivo: 'e97 f5', justificativa: 'e97 f5', ...p }, o);
+  const PORTAS_NAO_SAIDA = {
+    reservaManual: {
+      prep: async (m) => { await svcMov({ material_id: m, tipo: 'ENTRADA', quantidade: 4 }); },
+      ato: (m) => stockService.criarReserva(db, ADMS, { material_id: m, quantidade: 4, os_referencia: 'OS-97I', observacoes: 'e97 f5' }),
+    },
+    estornoEntrada: {
+      prep: async (m, ctx) => { ctx.mov = (await svcMov({ material_id: m, tipo: 'ENTRADA', quantidade: 4 })).id; },
+      ato: (m, ctx) => stockService.cancelarMovimentacao(db, ADMS, ctx.mov, 'e97 f5'),
+    },
+    estornoAjuste: {
+      prep: async (m, ctx) => { ctx.mov = (await svcMov({ material_id: m, tipo: 'AJUSTE', quantidade: 4 })).id; },
+      ato: (m, ctx) => stockService.cancelarMovimentacao(db, ADMS, ctx.mov, 'e97 f5'),
+    },
+    estornoDesbloqueio: {
+      prep: async (m, ctx) => {
+        await svcMov({ material_id: m, tipo: 'ENTRADA', quantidade: 4 });
+        await svcMov({ material_id: m, tipo: 'BLOQUEIO', quantidade: 4 }, { bloqueioAvulso: true });
+        ctx.mov = (await svcMov({ material_id: m, tipo: 'DESBLOQUEIO', quantidade: 4 })).id;
+      },
+      ato: (m, ctx) => stockService.cancelarMovimentacao(db, ADMS, ctx.mov, 'e97 f5'),
+    },
+  };
+  const corridaPorta = async (porta, rodadas = 10) => {
+    let errados = 0; const disparosPorRodada = []; const atos = new Set();
+    const origRun = db.run;
+    try {
+      for (let i = 0; i < rodadas; i++) {
+        const m = await material(0); // eslint-disable-line no-await-in-loop
+        const a = await req([[m, 4]]); await aprovar(a.R); // eslint-disable-line no-await-in-loop
+        const ctx = {}; await porta.prep(m, ctx); // eslint-disable-line no-await-in-loop
+        let parou; const parada = new Promise((r) => { parou = r; });
+        let liberar; const liberado = new Promise((r) => { liberar = r; });
+        let disparos = 0;
+        db.run = function ganchoE97F5A(sql, ...resto) {
+          if (/UPDATE itens_requisicao_almoxarifado SET quantidade_separada/.test(sql)) {
+            disparos++;
+            if (disparos === 1) { parou(); liberado.then(() => origRun.call(db, sql, ...resto)); return db; }
+          }
+          return origRun.call(db, sql, ...resto);
+        };
+        const sep = requisitionService.separarRequisicao(db, a.R, [{ item_id: a.ids[0], quantidade_separada: 4 }], { ...USERS.ALMOX })
+          .then(() => 200, (e) => e.status || 500);
+        await parada; // eslint-disable-line no-await-in-loop
+        const ato = porta.ato(m, ctx).then(() => 'ok', (e) => e.status || 500);
+        await dormir(30); // eslint-disable-line no-await-in-loop
+        liberar();
+        const [s, x] = await Promise.all([sep, ato]); // eslint-disable-line no-await-in-loop
+        db.run = origRun;
+        disparosPorRodada.push(disparos); atos.add(x);
+        assert.strictEqual(s, 200, `a separacao conclui (rodada ${i})`);
+        const mt = await dbGet(db, `SELECT quantidade_atual q, COALESCE(quantidade_reservada,0) r, COALESCE(quantidade_bloqueada,0) b
+          FROM materiais_almoxarifado WHERE id=?`, [m]); // eslint-disable-line no-await-in-loop
+        const sepq = (await dbGet(db, 'SELECT quantidade_separada s FROM itens_requisicao_almoxarifado WHERE id=?', [a.ids[0]])).s; // eslint-disable-line no-await-in-loop
+        if (mt.r + mt.b + sepq > mt.q + 1e-9) errados++;
+      }
+    } finally { db.run = origRun; }
+    assert.deepStrictEqual(disparosPorRodada, Array(rodadas).fill(1), 'o gancho disparou uma vez por rodada');
+    assert.strictEqual(errados, 0, `${errados}/${rodadas} rodadas com retido + caixa > fisico (a porta respondeu: ${[...atos].join(', ')})`);
+    assert.deepStrictEqual([...atos], [400], 'a porta espera a separacao e recusa');
+  };
+  for (const [nome, porta] of Object.entries(PORTAS_NAO_SAIDA)) {
+    await test(`[97 F5-A] corrida separacao x ${nome} (porta avulsa nao-SAIDA, trava propria): a porta espera a separacao e recusa — 0/10 com retido + caixa > fisico`, async () => {
+      await corridaPorta(porta);
+    });
+  }
+
   await test('[97 T3 C3] RN-06 entregar o que sobrou e encerrar: a PERDA recusa com o S antes de soltar a caixa; entrega 2 -> PARCIALMENTE_ATENDIDA; a PERDA ainda recusa; encerrar -> ENCERRADA; PERDA 2 -> 201, fisico 0', async () => {
     const a = await montagem();
     recusou(rota(await mov('ALMOX', { material_id: a.m, tipo: 'PERDA', quantidade: 2 })), M1(0) + S(4, `a requisição ${a.numero}`), 'PERDA 2 com a caixa 4');
