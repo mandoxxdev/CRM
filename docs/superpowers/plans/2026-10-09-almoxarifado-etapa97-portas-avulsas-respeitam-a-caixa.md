@@ -1,6 +1,6 @@
 # Etapa 97 — as portas avulsas do motor não levam o material que está na caixa sem reserva de uma requisição (B466 iv, feature 03 com a 05 e a 07)
 
-> Status: **Fases 0, 1 e 2 feitas — 2026-10-09.** Próximo: **T0**, depois T1, T2, T3, T4 — **o plano foi revisto na Fase 2**
+> Status: **EM EXECUÇÃO — 2026-10-09: Fase 2 `4a9cf5c1`; T0 `9ace72b2`, T1 `65dc74b2` feitas (seção "Execução" no fim).** Próximo: **T2**, depois T3, T4 — **o plano foi revisto na Fase 2**
 > (seção "Fase 2 — revisão do plano", antes de "Próximo passo"; ela vale sobre o texto acima). Nenhuma task marcada.
 > HEAD de partida: `b15640f3` (main, árvore limpa, sem push).
 > Origem: "Próxima tarefa detalhada — Etapa 97" no fim de
@@ -424,7 +424,7 @@ T1: o motor, lido por quase tudo). T2 só **consome** a régua e a opção da T1
 contamina a suíte"), e é pequena demais para pagar uma worktree. T3 é a integração (cruza T1 e T2 pela rota **e** pelo
 serviço). T4 fecha.
 
-- [ ] **T0 (tronco) — `caixaSql.js` e `naTravaDoMaterial` (B491, B494).** Contrato "O módulo" e "A trava". Testes
+- [x] `9ace72b2` **T0 (tronco) — `caixaSql.js` e `naTravaDoMaterial` (B491, B494).** Contrato "O módulo" e "A trava". Testes
   `[97 RN-00]`: `livreDeCaixaSql('ma')` e `livreDeCaixaSql()` (num `UPDATE … WHERE` de tabela única) dão 0 na montagem e 2
   com físico 6; `lerCaixa` devolve `{ caixa: 4, requisicoes: [numero] }`; `sufixoCaixa({caixa: 0})` é `''`; quatro
   requisições → *"… e mais 1"*; `naTravaDoMaterial` fora de seção espera a trava presa e resolve ao soltar; dentro de
@@ -438,7 +438,7 @@ serviço). T4 fecha.
   presa"; (s3) sempre `comLockDoMaterial` → cai "dentro de seção roda sem esperar" (o `comPrazo` estoura); (s4) `sufixoCaixa`
   sem o corte em três → cai *"e mais 1"*. **(Fase 2:)** (s5) `naTravaDoMaterial` testando `ativa` antes do `has` → cai
   B-1 (a) (PRESO); (s6) `segurarTrava` sem o `delete` no `finally` → cai B-1 (b) (o `Set` velho manda rodar direto).
-- [ ] **T1 (tronco) — o motor (B491–B494, B496, B498).** Contrato "O motor", M1–M6. **RN-01** pelo serviço (saída comum
+- [x] `65dc74b2` **T1 (tronco) — o motor (B491–B494, B496, B498).** Contrato "O motor", M1–M6. **RN-01** pelo serviço (saída comum
   em laço de tipos, ajuste sem localização, reserva manual, remessa pelo `REMESSA_TERCEIRO`, bloqueio com a opção,
   estorno de entrada), **RN-02**, **RN-03**, **RN-04**, **RN-05** pelo serviço, **RN-07**, **RN-08** pelo serviço.
   **Vermelho antes:** RN-01, RN-02 (recusas), RN-05, RN-08. **Guardas (passam antes):** RN-03, RN-04 sem caixa, RN-07
@@ -694,3 +694,24 @@ livre de caixa lido depois disso é o certo?; (3) **o `getSaldoDisponivel` da me
 pelo livre; nenhum outro leitor dele muda; (4) **a pré-validação do inventário** lê `lerCaixa` por material fora da trava
 — a RN-09 fica de pé sem corrida? (5) os testes que espiam `comLockDoMaterial` — contam chamadas em algum caminho fora de
 seção que passa pelo motor? Corrigir o plano, **depois** executar T0.~~
+
+## Execução (2026-10-09)
+
+Baseline `test:api` 336/336 (4104 ✓), almox 44/0. T0 → 337/337 (4114); T1 → 337/337 (4135); 44/0; no fim 4/0, 3/0, 5/0.
+Cada commit com a suíte rodada no seu estado.
+
+- **T0 `9ace72b2`** — `caixaSql.js` (`caixaSemReservaSql` movido do `requisitionService`, que re-exporta; `livreDeCaixaSql`,
+  `lerCaixa`, `sufixoCaixa`); `naTravaDoMaterial` testa `secao.materiais.has(m)` antes de `ativa`, e `segurarTrava` tira o
+  material no `finally` (B-1). Vermelho antes 10/10. Controles s1–s6 caíram cada um no seu; s5 (`ativa` antes do `has`)
+  prende o fluxo nascido dentro da seção — o cenário da B-1.
+- **T1 `65dc74b2`** — o motor. Vermelho antes 18 (RN-03 e a devolução para sucata no legado eram guardas). Controles s1–s13
+  caíram; s3 derruba `[95 RN-05] P5b (Fase 2, B2)` e `[95 Fase 5] (T8)`; s12 aplicado à mão (dois pontos). O teste de
+  ciclo de `require` sabe falhar (aviso de dependência circular). Custo: mil `SAIDA` com 20 requisições com caixa
+  ~1200 → ~1400 ms. Testes antigos editados como declarado: três montagens da 95 pelo escritor de legado; as duas corridas
+  em `registrarMovimentacaoSemTrava` + caso novo provando que pelo motor travado serializam.
+  **Divergências:** (1) `AJUSTE` para 0 sem localização já é recusado pela M2 da 96 — os testes usam 3, 1 e 0,5;
+  (2) o estorno do `AJUSTE` que deixaria o total negativo pula a guarda nova e responde a recusa da Etapa 51 (sem isso
+  `saidaPorLocalizacao (17)` mudava de texto sem caixa — contra a RN-04); (3) a recusa do claim da saída citava um
+  disponível velho — agora relê o material; (4) o caso da RN-03 "a aprovação de C reserva 2" não cai com o s3 — caem os
+  dois da 95; (5) a mensagem do commit da T1 tem um acento ("asserçoes"). **Para a T2:** `inspectionService.bloquearMaterial`
+  ainda não passa `{ bloqueioAvulso: true }` — o motor tem a guarda, a tela não a aciona.
