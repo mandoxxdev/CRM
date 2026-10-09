@@ -132,6 +132,11 @@ describe('Etapa 94 — Reabrir separação (o legado com tudo na caixa)', () => 
     const b = botaoPorTexto('Reabrir separação');
     expect(b).toBeTruthy();
     expect(b.disabled).toBe(false);
+    // Fase 5: clica e confere o PUT (antes so olhava o botao).
+    await clicar('Reabrir separação');
+    const chamada = api.put.mock.calls.find((c) => c[0] === '/almoxarifado/requisicoes/55/separacao');
+    expect(chamada).toBeTruthy();
+    expect(chamada[1]).toEqual({ itens_separados: [] });
   });
 
   test('(b) controle: TOTALMENTE_RESERVADA sem nada separado e sem saldo -> "Confirmar Separação" desabilitado, sem "Reabrir"', async () => {
@@ -145,6 +150,17 @@ describe('Etapa 94 — Reabrir separação (o legado com tudo na caixa)', () => 
     expect(container.textContent).toContain('Nenhum item com estoque disponível para separação.');
   });
 
+  test('(b2) TOTALMENTE_RESERVADA com 2 de 4 separados e saldo 8: ainda há o que separar -> "Confirmar Separação", sem "Reabrir separação"', async () => {
+    // Fase 5 (CL4): "Reabrir" só quando NADA resta a separar — separacaoAReabrir sozinho (2 > 0 na caixa) diria Reabrir
+    // e mandaria `itens_separados: []`, largando os 2 que faltam.
+    requisicao = comItem({ quantidade_separada: 2, quantidade_entregue: 0, quantidade_atendida: 0, saldo_atual: 8 });
+    await renderizar();
+    await clicar('Iniciar Separação');
+    const b = botaoPorTexto('Confirmar Separação');
+    expect(b).toBeTruthy();
+    expect(b.disabled).toBe(false);
+    expect(botaoPorTexto('Reabrir separação')).toBeFalsy();
+  });
 });
 
 describe('Etapa 94 — 409 na separação fecha o modal e recarrega (B463)', () => {
@@ -232,6 +248,8 @@ describe('Etapa 94 — a fila e o predicado', () => {
       [{ quantidade_separada: 4, quantidade_entregue: 2 }],
       [{ quantidade_separada: 4, quantidade_entregue: null, quantidade_atendida: 2 }],
       [{ quantidade_separada: 2, quantidade_entregue: 2 }],
+      // Fase 5 (SV2): entregue nulo cai no atendido legado (2 - 2 = nada na caixa).
+      [{ quantidade_separada: 2, quantidade_entregue: null, quantidade_atendida: 2 }],
       [{ quantidade_separada: 0 }],
     ];
     casos.forEach((itens) => {
@@ -239,5 +257,8 @@ describe('Etapa 94 — a fila e o predicado', () => {
         expect([s, separacaoAReabrir(s, itens)]).toEqual([s, servidor.separacaoAReabrir(s, itens)]);
       });
     });
+    // e o valor, nao so a igualdade (os dois lados sem o fallback empatariam):
+    expect(separacaoAReabrir('TOTALMENTE_RESERVADA', [{ quantidade_separada: 2, quantidade_entregue: null, quantidade_atendida: 2 }])).toBe(false);
+    expect(servidor.separacaoAReabrir('TOTALMENTE_RESERVADA', [{ quantidade_separada: 2, quantidade_entregue: null, quantidade_atendida: 2 }])).toBe(false);
   });
 });

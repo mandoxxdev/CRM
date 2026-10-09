@@ -455,7 +455,9 @@ const notificacoesDe = (R) => notificados.filter((id) => id === Number(R)).lengt
     await GATILHOS.entrada(x);
     const l = await linhaDaFila(x);
     assert.ok(l, 'ausente da fila');
-    assert.ok(l.etapas.includes('SEPARAR') && !l.etapas.includes('APROVACAO_VALOR'), `etapas ${JSON.stringify(l.etapas)}`);
+    assert.ok(l.etapas.includes('SEPARAR') && !l.etapas.includes('APROVACAO_VALOR')
+      // Fase 5 (SV1): com algo a separar o gesto e SEPARAR, nao "Reabrir separacao" — as duas juntas na fila.
+      && !l.etapas.includes('RETOMAR_SEPARACAO'), `etapas ${JSON.stringify(l.etapas)}`);
     const s = await separar('ALMOX', x, 2);
     assert.strictEqual(s.status, 200, `separar 2: ${s.status} ${JSON.stringify(s.body)}`);
   });
@@ -485,6 +487,8 @@ const notificacoesDe = (R) => notificados.filter((id) => id === Number(R)).lengt
       [[{ quantidade_separada: 4, quantidade_entregue: 2 }], PRE_SEPARACAO],
       [[{ quantidade_separada: 4, quantidade_entregue: null, quantidade_atendida: 2 }], PRE_SEPARACAO],
       [[{ quantidade_separada: 2, quantidade_entregue: 2 }], []],
+      // Fase 5 (SV2): entregue nulo cai no atendido legado — sem o `?? quantidade_atendida` a caixa pareceria 2.
+      [[{ quantidade_separada: 2, quantidade_entregue: null, quantidade_atendida: 2 }], []],
       [[{ quantidade_separada: 0 }], []],
       [[], []],
     ];
