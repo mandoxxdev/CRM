@@ -1,7 +1,7 @@
 # Etapa 92 — o cancelamento pelos outros módulos aceita o que a tela oferece (C149, feature 04 com a 05 e a 07)
 
-> Status: **PLANO (Fases 0, 1 e 2) — 2026-10-08. Nenhum código de produção mudou.** Fase 2 feita (0 bloqueantes, 4
-> importantes, 8 menores — seção "Fase 2" no fim, vale sobre o texto). Próximo passo: T0.
+> Status: **EM EXECUÇÃO — 2026-10-08.** Fase 2 feita (`6d0442aa`). **T0 `6a0b529c`, T1 `dd7e84a7`, T2 `0187982e`,
+> T3 `a4237edb` feitas** (seção "Execução" no fim). Próximo passo: T4 (worktree), depois T5.
 > HEAD de partida: `d271721e` (main, árvore limpa).
 > Origem: "Próxima tarefa detalhada — Etapa 92" de
 > `docs/superpowers/plans/2026-10-08-almoxarifado-etapa91-inversao-inspecao-aprovar.md:940-993`, os avisos **C140 (3)**,
@@ -430,7 +430,7 @@ dentro da worktree, com o SQLite dela, nunca na árvore principal. Sabotagem por
 no scratchpad, restauro por cópia com md5 conferido, um controle de cada vez (base **LF**). Mensagens de commit em
 `msg-e92-<task>.txt`. Executores **não** marcam este plano; o fio principal marca.
 
-- [ ] **T0 (tronco) — a separação reivindica a requisição antes de gravar; a constante.** Contrato "Separação" e
+- [x] `6a0b529c` **T0 (tronco) — a separação reivindica a requisição antes de gravar; a constante.** Contrato "Separação" e
   "Constante" acima. Teste novo `server/tests/api/separacaoNaoRessuscita.api.test.js`: **RN-03** pela rota do
   almoxarifado (os 5 status × com/sem quantidade) e pela dos outros módulos em `APROVADO` (os outros quatro status pela
   rota dos outros módulos entram na T1, quando ela os aceitar); e **pelo serviço**: `requisitionService.separarRequisicao`
@@ -456,7 +456,7 @@ no scratchpad, restauro por cópia com md5 conferido, um controle de cada vez (b
   assim, não é surpresa. (s4) S1 trocada por outra frase na reivindicação → cai a asserção do literal. **(s5, Fase 2)**
   sem o `try/catch` do desfazer → cai RN-09 (a) (status `EM_SEPARACAO`; cancelamento 400). (s6, Fase 2) o desfazer
   sem a condição `rodadaId == null` → cai RN-09 (c) (status devolvido com a rodada gravada).
-- [ ] **T1 (galho) — a rota dos outros módulos aceita os seis, com compare-and-set (C149, C148 (2)).** Contrato "Rota —
+- [x] `dd7e84a7` **T1 (galho) — a rota dos outros módulos aceita os seis, com compare-and-set (C149, C148 (2)).** Contrato "Rota —
   `PUT /api/requisicoes-material/:id/cancelar`". Acrescenta ao `requisicaoCancelarOutrosModulosReserva.api.test.js`:
   **RN-01** (a)–(d), **RN-02** (a)–(c) (o **RN-07** fica na T4, que cria o export do cliente). **Edita** o caso (d) de hoje (*"TOTALMENTE_RESERVADA -> o mesmo 400
   (declarado)"*): passa a afirmar 200/`CANCELADO`/reserva `LIBERADA`, com comentário *"invertido na Etapa 92 (B434) — a
@@ -473,7 +473,7 @@ no scratchpad, restauro por cópia com md5 conferido, um controle de cada vez (b
   leitura e do `UPDATE`** → cai RN-01 (c). *Tirar só do `UPDATE` não derruba nada:* a leitura já filtra pelo solicitante e
   o `UPDATE` usa o status dela — redundante por construção, declarado (G85). (s6) a trilha com o status da **primeira**
   leitura → cai RN-02 (a) na asserção da trilha.
-- [ ] **T2 (galho) — o cancelamento do almoxarifado com compare-and-set (C153).** Contrato "Rota — `PUT
+- [x] `0187982e` **T2 (galho) — o cancelamento do almoxarifado com compare-and-set (C153).** Contrato "Rota — `PUT
   /api/almoxarifado/requisicoes/:id/cancelar`". Acrescenta ao `separacaoNaoRessuscita`: **RN-04** pela rota do
   almoxarifado (`APROVADO`, `TOTALMENTE_RESERVADA`) e **RN-04 (b)**. **Vermelho antes:** RN-04 (cancela a separada — 10/10
   medido) e RN-04 (b) (trilha com `TOTALMENTE`).
@@ -482,7 +482,7 @@ no scratchpad, restauro por cópia com md5 conferido, um controle de cada vez (b
   sem a releitura/nova tentativa → cai RN-04 (b) (400 em vez de 200). (s3) a trilha com `r.status` da primeira leitura → cai
   RN-04 (b) na trilha. (s4) a releitura sem `validarTransicao` → **cai RN-04** (a segunda tentativa usaria o status relido
   `EM_SEPARACAO` no `WHERE` e venceria) — é o controle de que a transição é validada de novo.
-- [ ] **T3 (galho) — o desfazer não acusa falha à toa (C148 (1)).** Contrato "`desfazerReservas`". Teste novo
+- [x] `a4237edb` **T3 (galho) — o desfazer não acusa falha à toa (C148 (1)).** Contrato "`desfazerReservas`". Teste novo
   `server/tests/api/aprovarPerdedorReservaJaSolta.api.test.js`: **RN-05** (a)–(c). **Vermelho antes:** (a) (o warn W1
   aparece 5/5 — medido).
   **Medir antes e depois:** `requisicaoPosAprovacaoPortas`, `travaRevisaoFase5`, `filaTravaIntegracao`,
@@ -663,3 +663,32 @@ com casos de erro e literais; RN × spec; galhos independentes de verdade; **cad
 usuário** — em especial: depois do cancelamento de uma *Reservada* pelos outros módulos, a tela **Reservas** e o
 **C140 (3)**; depois da separação recusada, a fila de separação da 64 e o botão "Iniciar Separação"; depois do
 compare-and-set, o que a trilha mostra na tela de auditoria). Corrigir o plano e só então a T0.
+
+## Execução (2026-10-08)
+
+Um executor em sequência na árvore principal (plano revisto + T0→T3). Baseline em `6d0442aa` (worktree temporária):
+`test:api` 321/321 (3733 ✓), `test:almoxarifado` 44/0. Depois de cada task: T0 322/322 (3751), T1 322/322 (3786),
+T2 322/322 (3789), T3 323/323 (3792) — cada delta é exatamente o dos casos novos; `test:almoxarifado` 44/0 o tempo todo;
+`test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 5/0 iguais à baseline. Os 28 arquivos de separação, os 12 de
+`/api/requisicoes-material` e os 6 de cancelamento do almoxarifado verdes antes e depois.
+
+- **T0 `6a0b529c`** — vermelho antes: os 14 RN-03 e RN-09 (c). RN-09 (a)/(b) passaram antes, **como previsto** (o
+  código de antes falhava antes de gravar o status; o vermelho delas é o s5). Controles: s1 → 15 caem (14 RN-03 + RN-09
+  (c)); s2 → os 14 RN-03; s3 com quantidade → "nada gravado" (`quantidade_separada` 1); **s3 sem quantidade → cai
+  "separação 400"**, não "gancho disparou" — **divergência só de ordem das asserções** (o teste confere o 400 primeiro);
+  s4 → os 14 RN-03 no literal; s5 → as duas RN-09 (a); s6 → RN-09 (c).
+- **T1 `dd7e84a7`** — o caso (d) da 91 invertido com comentário. Vermelho antes: (d), RN-01 (a) nos quatro novos,
+  RN-02 (a) (400), os 8 RN-03 novos — **divergência:** apareceram como **"separação 400"**, não "cancelamento 200" (o
+  teste confere a separação primeiro) — e também RN-02 (b) (1 emissão em vez de 2). Controles: s1 → 17 caem (os
+  previstos + RN-02 (a)(b)(c) + RN-04 TOTALMENTE, o gancho nunca dispara); s2 → RN-02 (a)(b), RN-04 não (declarado);
+  s3 → RN-02 (a)(b); s4 → RN-02 (b); s5 → os 6 RN-01 (c) + o (c) da 91; s6 → RN-02 (a).
+- **T2 `0187982e`** — rota do cancelamento do almoxarifado `async`, compare-and-set, releitura e transição revalidada.
+  Vermelho antes: os dois RN-04 (cancelamento 200) e RN-04 (b) — **divergência:** apareceu como contagem de emissão 1,
+  não pela trilha `TOTALMENTE`. Controles: s1 → os 3; s2 → RN-04 (b) 400; s3 → RN-04 (b) na trilha; s4 (releitura sem
+  revalidar) → os dois RN-04.
+- **T3 `a4237edb`** — `desfazerReservas` lê o status e loga I1 em vez do W1. Teste novo
+  `aprovarPerdedorReservaJaSolta.api.test.js`. Vermelho antes: RN-05 (a). Controles: s1 → RN-05 (a); s3 → RN-05 (b);
+  s2 (pula toda reserva) → RN-05 (c) e o `[servico]` de `requisicaoPosAprovacaoPortas`, como previsto, **e também**
+  RN-05 (b) e o "[RN-05 Fase 2]" daquele arquivo (a mais, não a menos).
+- Incidente: a primeira baseline rodou na árvore principal enquanto a T0 era editada — morta e refeita numa worktree em
+  `6d0442aa` (junction removida antes do `worktree remove`).
