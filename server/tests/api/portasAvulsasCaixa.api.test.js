@@ -732,6 +732,30 @@ const S = (c, un, lista) => ` — ${c} ${un} estão separados para ${lista}${S_F
     assert.strictEqual((await dbGet(db, 'SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id=?', [p1])).q, 5, 'p1 foi ajustado: o tudo-ou-nada quebrou');
   });
 
+  await test('[97 F5-1] legado (caixa 4 > fisico 0): o ajuste PARA CIMA nao e recusado pela caixa — AJUSTE 0->2 sem localizacao 201; o ajuste para menos continua recusado', async () => {
+    // Fase 5 (regressao da 97): a caixa entrava no retido tambem quando o ajuste AUMENTA o total — no legado (A48) o
+    // AJUSTE 0->2 dava 400 e um material assim travava o inventario inteiro (tudo-ou-nada). O que melhora o estado nao
+    // e recusado (o mesmo principio do estorno que aumenta o total, B-2).
+    const a = await montagem();
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 0 WHERE id = ?', [a.m]); // legado A48
+    const x = await svc({ material_id: a.m, tipo: 'AJUSTE', quantidade: 2 });
+    assert.strictEqual(x.status, 201, `AJUSTE 0->2: ${x.error}`);
+    recusou(await svc({ material_id: a.m, tipo: 'AJUSTE', quantidade: 1 }), M6CX(1), 'AJUSTE 2->1');
+  });
+
+  await test('[97 F5-1] legado (caixa 4 > fisico 0): a conferencia que conta 2 (sistema 0) conclui aplicando — um material do legado nao trava o inventario inteiro', async () => {
+    // pela conferencia: sistema 0, conta 2 (recontado: 200% passa da tolerancia de 100)
+    const b = await montagem();
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 0 WHERE id = ?', [b.m]);
+    const cat = `CAT-E97-${++seq}`;
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET categoria=? WHERE id=?', [cat, b.m]);
+    const conf = await conferencia(cat);
+    await contar(conf, b.m, 2); await contar(conf, b.m, 2);
+    const c = await concluir(conf);
+    assert.strictEqual(c.status, 200, `concluir: ${JSON.stringify(c.body)}`);
+    assert.strictEqual((await dbGet(db, 'SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id=?', [b.m])).q, 2);
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed ? 1 : 0);

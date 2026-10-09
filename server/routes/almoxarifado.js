@@ -44,8 +44,7 @@ function mensagemTipoInvalido(tipo) {
   return `Tipo de localização inválido: ${tipo}`;
 }
 const stockService = require('../services/almoxarifado/stockService');
-// Etapa 97 (T2): a caixa sem reserva na guarda do ajuste do inventario, e a conclusao sob a trava por material.
-const caixaSql = require('../services/almoxarifado/caixaSql');
+// Etapa 97 (T2): a conclusao do inventario sob a trava por material (a caixa na guarda vem do motor — Fase 5, item 1).
 const trava = require('../services/almoxarifado/travaPorMaterial');
 const materialService = require('../services/almoxarifado/materialService');
 const {
@@ -1616,7 +1615,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           // Etapa 97 (T2, B491, M6): a caixa sem reserva das requisicoes entra no retido — a MESMA funcao e a mesma
           // leitura que o motor usa (D1 da Etapa 10: nao duplicar a formula). Sem isso a conferencia que conta 0 de um
           // material separado levava a caixa, e a entrega ficava presa em "Maximo: 0".
-          const { caixa } = await caixaSql.lerCaixa(db, material.id);
+          // Fase 5 (item 1): so quando o ajuste REDUZ o total — o que conta MAIS que o sistema nao e recusado pela caixa.
+          const caixa = await stockService.caixaParaGuardaDoAjuste(db, material, novoTotal);
           const motivoRetencao = stockService.motivoRecusaAjustePorRetencao(material, novoTotal, caixa);
           if (motivoRetencao) falhasRetencao.push(`${material.codigo}: ${motivoRetencao}`);
         }

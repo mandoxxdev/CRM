@@ -116,6 +116,19 @@ function motivoRecusaAjustePorRetencao(material, novoTotal, caixa = 0) {
 }
 
 /**
+ * Etapa 97 (Fase 5, item 1) — a caixa que a guarda do ajuste SEM localizacao soma ao retido: so quando o ajuste REDUZ o
+ * total (`novoTotal < quantidade_atual`). O que aumenta o total melhora o estado e nao e recusado pela caixa — o mesmo
+ * principio do estorno do AJUSTE que aumenta o total (Fase 2, B-2). Sem isso, no legado (caixa 4 sobre fisico 0, A48) o
+ * AJUSTE 0->2 dava 400 (antes da 97, 201) e a conferencia que contava 2 travava o inventario inteiro (tudo-ou-nada).
+ * As retencoes do motor (reservada, bloqueada...) continuam valendo nos dois sentidos, como sempre (RN-06 da Etapa 10).
+ * Uma regra so para o motor e para a pre-validacao do inventario (`routes/almoxarifado.js`) — D1 da Etapa 10.
+ */
+async function caixaParaGuardaDoAjuste(db, material, novoTotal) {
+  if (Q.cabe(material.quantidade_atual, novoTotal)) return 0;
+  return (await caixaSql.lerCaixa(db, material.id)).caixa;
+}
+
+/**
  * Recalcula o TOTAL FÍSICO do material a partir da soma das linhas de saldo por localização/lote.
  *
  * Restaurada no review round 3 desta task (removida no round 2, achando que o delta local era
@@ -1512,7 +1525,7 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     // existente fica fora do escopo desta etapa (D1/D7 do design).
     // Etapa 97 (T1, B491): a caixa sem reserva entra na guarda (M6) — ajustar abaixo do separado levava a caixa.
     const motivoRecusa = motivoRecusaAjustePorRetencao(material, parseFloat(quantidade),
-      (await caixaSql.lerCaixa(db, material_id)).caixa);
+      await caixaParaGuardaDoAjuste(db, material, parseFloat(quantidade)));
     if (motivoRecusa) throw Object.assign(new Error(motivoRecusa), { status: 400 });
     saldoPosterior = parseFloat(quantidade);
   } else if (tiposAjuste.includes(tipo)) {
@@ -3372,6 +3385,7 @@ module.exports = {
   getMaterial,
   getSaldoDisponivel,
   motivoRecusaAjustePorRetencao,
+  caixaParaGuardaDoAjuste, // Etapa 97 (Fase 5, item 1): a pre-validacao do inventario
   syncMaterialTotals,
   syncSaldoLocalizacaoPadrao,
   getOrCreateSaldo,
