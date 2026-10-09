@@ -152,11 +152,26 @@ async function verificarBloqueioLiberacao(db, requisicaoId) {
 
   if (reqRow.data_aprovacao_valor) return reqRow;
 
-  await dbRun(db,
+  // Etapa 94 (T1, B456): a gravacao confere o status LIDO no comeco da verificacao. Os dois cancelamentos ficam
+  // fora da trava por requisicao (B450): separar e cancelar no mesmo instante RESSUSCITAVAM a cancelada em
+  // AGUARDANDO_APROVACAO_VALOR (10/10 sem gancho, C164), e aprovar por valor depois reservava de novo. Perdeu ->
+  // 409 V1 com o status relido, sem e-mail. Sem nova tentativa: a verificacao roda antes de qualquer gravacao
+  // da separacao, repetir e seguro. Tambem sai (inofensivo) quando o recalculo da 76 ou o /aprovar mudam o
+  // status na janela — nada foi gravado, tentar de novo e o certo (Fase 2, M2).
+  const gravou = await dbRun(db,
     `UPDATE requisicoes_almoxarifado
      SET status = ?, requer_aprovacao_valor = 1, updated_at = CURRENT_TIMESTAMP, ultimo_lembrete_enviado = NULL
-     WHERE id = ?`,
-    [STATUS_AGUARDANDO, requisicaoId]);
+     WHERE id = ? AND status = ?`,
+    [STATUS_AGUARDANDO, requisicaoId, reqRow.status]);
+  if (!gravou.changes) {
+    const relido = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
+    const err = new Error(
+      `A requisição mudou de status enquanto a alçada de valor era conferida (agora ${relido ? relido.status : 'excluída'}); `
+      + 'recarregue e confira antes de separar.'
+    );
+    err.status = 409;
+    throw err;
+  }
 
   const atualizado = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
   // Etapa 94 (I3): pelo objeto exportado, para o teste espiar (e provar que NAO notifica depois da separacao).

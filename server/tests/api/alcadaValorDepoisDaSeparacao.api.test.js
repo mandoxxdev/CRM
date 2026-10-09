@@ -13,7 +13,8 @@
  * ALMOX (ALMOXARIFE) separa, libera e entrega. Material comum, custo 1, pede 4 -> valor R$ 4,00; alcada
  * ligada com limite R$ 10,00 (exceto onde dito).
  *
- * T0: RN-01, RN-02, RN-03. T1 acrescenta a RN-04; T2 a RN-05.
+ * T0: RN-01, RN-02, RN-03. T1: RN-04 (a gravacao da alcada confere o status lido — gancho no SQL que DISPARA o
+ * cancelamento e o aguarda: os cancelamentos ficam fora da trava por requisicao, nao ha deadlock). T2 a RN-05.
  * Plano: docs/superpowers/plans/2026-10-09-almoxarifado-etapa94-alcada-de-valor-ate-a-separacao.md
  *
  * Executar: cd server && node tests/api/alcadaValorDepoisDaSeparacao.api.test.js
@@ -68,6 +69,26 @@ const notificacoesDe = (R) => notificados.filter((id) => id === Number(R)).lengt
     post: (u, b = {}) => request(app).post(u).set('x-teste-usuario', k).send(b).then((x) => x),
     put: (u, b = {}) => request(app).put(u).set('x-teste-usuario', k).send(b).then((x) => x),
   });
+
+  // ── gancho no SQL (T1): dispara o gesto concorrente, AGUARDA a resposta, so entao emite o comando retido.
+  // Pode aguardar: os dois cancelamentos ficam fora da trava por requisicao (B450) — a 93 so proibe aguardar
+  // no gancho um gesto travado da mesma requisicao.
+  const origRun = db.run.bind(db);
+  let ganchos = [];
+  db.run = function (sql, ...rest) {
+    const sq = String(sql);
+    for (const g of ganchos) {
+      if (g.armado && g.re.test(sq)) {
+        g.armado = false; g.disparos++;
+        Promise.resolve().then(g.fn).then((r) => { g.resposta = r; }, (e) => { g.erro = e; })
+          .then(() => origRun(sql, ...rest));
+        return this;
+      }
+    }
+    return origRun(sql, ...rest);
+  };
+  const armar = (re, fn) => { const g = { re, fn, disparos: 0, armado: true }; ganchos.push(g); return g; };
+  const desarmar = () => { ganchos = []; };
 
   // ── configuracao da alcada (escritor direto no setup; os gatilhos usam as rotas) ──
   const config = async ({ ativo = 1, limite = 10 } = {}) => {
@@ -326,6 +347,67 @@ const notificacoesDe = (R) => notificados.filter((id) => id === Number(R)).lengt
       const comCaixa = todos.filter((s) => maquina.alcadaDeValorAindaVale(s, [{ quantidade_separada: 0 }, caixa]));
       assert.deepStrictEqual(comCaixa, [], `com ${JSON.stringify(caixa)}: ${comCaixa}`);
     }
+  });
+
+  // ── RN-04 — a gravacao da alcada confere o status lido (T1, B456) ──
+  const RE_ALCADA = /SET\s+status\s*=\s*\?,\s*requer_aprovacao_valor\s*=\s*1/;
+  const V1 = (st) => `A requisição mudou de status enquanto a alçada de valor era conferida (agora ${st}); recarregue e confira antes de separar.`;
+  const AV1 = 'Apenas requisições aguardando aprovação de valor podem ser liberadas';
+  const A43A = `SELECT rq.id FROM requisicoes_almoxarifado rq
+    JOIN auditoria_log_almoxarifado a ON a.entidade = 'requisicao' AND a.entidade_id = rq.id AND a.acao = 'CANCELAMENTO'
+    WHERE rq.status <> 'CANCELADO' AND COALESCE(rq.ativo, 1) = 1 AND rq.id = ? GROUP BY rq.id`;
+  const CANCELAR = {
+    almoxarifado: (x) => como('S').put(`${API}/requisicoes/${x.R}/cancelar`, { motivo: 'desisti 94' }),
+    'outros modulos': (x) => como('S').put(`/api/requisicoes-material/${x.R}/cancelar`, {}),
+  };
+  for (const [via, cancelar] of Object.entries(CANCELAR)) {
+    // eslint-disable-next-line no-await-in-loop
+    await test(`[94 RN-04] (${via === 'almoxarifado' ? 'a' : 'b'}) separar x cancelar (${via}) no UPDATE da alcada: cancelamento 200, separacao 409 V1 "agora CANCELADO", final CANCELADO, reserva LIBERADA, 0 rodadas, nenhuma notificacao; /aprovar-valor 400 AV1 sem reserva nova; A43 (a) vazia`, async () => {
+      await config({ ativo: 1, limite: 10 });
+      const x = await montar('RESERVADA');
+      let s; let g;
+      try {
+        await config({ ativo: 1, limite: 1 });
+        g = armar(RE_ALCADA, () => cancelar(x));
+        s = await separar('ALMOX', x, 4);
+      } finally { desarmar(); await config({ ativo: 1, limite: 10 }); }
+      assert.strictEqual(g.disparos, 1, `o gancho disparou ${g.disparos} vez(es) — rodada sem valor`);
+      assert.ok(!g.erro, g.erro && g.erro.message);
+      assert.strictEqual(g.resposta.status, 200, `cancelar: ${g.resposta.status} ${JSON.stringify(g.resposta.body)}`);
+      const f = await foto(x);
+      assert.strictEqual(f.status, 'CANCELADO', `status final ${f.status}`);
+      assert.strictEqual(s.status, 409, `separar: ${s.status} ${JSON.stringify(s.body)}`);
+      assert.strictEqual(s.body.error, V1('CANCELADO'));
+      assert.strictEqual(f.reservas, 'LIBERADA', `reservas ${f.reservas}`);
+      const rodadas = (await dbGet(db, 'SELECT COUNT(*) n FROM separacoes_requisicao_almoxarifado WHERE requisicao_id = ?', [x.R])).n;
+      assert.strictEqual(Number(rodadas), 0, `${rodadas} rodada(s)`);
+      assert.strictEqual(notificacoesDe(x.R), 0, `notificado ${notificacoesDe(x.R)} vez(es)`);
+      const a = await como('ADMIN2').put(`${API}/requisicoes/${x.R}/aprovar-valor`, {});
+      assert.strictEqual(a.status, 400, `aprovar-valor: ${a.status} ${JSON.stringify(a.body)}`);
+      assert.strictEqual(a.body.error, AV1);
+      assert.strictEqual((await foto(x)).reservas, 'LIBERADA', 'reserva nova depois do aprovar-valor');
+      assert.deepStrictEqual(await dbAll(db, A43A, [x.R]), [], 'A43 (a) lista a requisicao (ressuscitada)');
+    });
+  }
+  await test('[94 RN-04] (c) sem gancho: Promise.all separar x cancelar (almoxarifado), d=0, N=10 -> 0/10 em AGUARDANDO_APROVACAO_VALOR sobre cancelamento 200', async () => {
+    let errados = 0; const ex = [];
+    try {
+      for (let i = 0; i < 10; i++) {
+        // eslint-disable-next-line no-await-in-loop
+        await config({ ativo: 1, limite: 10 });
+        // eslint-disable-next-line no-await-in-loop
+        const x = await montar('RESERVADA');
+        // eslint-disable-next-line no-await-in-loop
+        await config({ ativo: 1, limite: 1 });
+        // eslint-disable-next-line no-await-in-loop
+        const [, c] = await Promise.all([separar('ALMOX', x, 4),
+          new Promise((r) => setTimeout(r, 0)).then(() => CANCELAR.almoxarifado(x))]);
+        // eslint-disable-next-line no-await-in-loop
+        const f = await foto(x);
+        if (c.status === 200 && f.status !== 'CANCELADO') { errados++; ex.push(f.status); }
+      }
+    } finally { await config({ ativo: 1, limite: 10 }); }
+    assert.strictEqual(errados, 0, `${errados}/10 com cancelamento 200 e status ${ex.join(',')}`);
   });
 
   terminou = true;
