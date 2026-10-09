@@ -49,9 +49,13 @@ const STATUS_INFO = {
 const getEntregue = (item) => Number(item.quantidade_entregue ?? item.quantidade_atendida) || 0;
 const getSeparado = (item) => Number(item.quantidade_separada) || 0;
 const getPendente = (item) => Math.max(0, Number(item.quantidade_solicitada) - getEntregue(item));
+// Etapa 95 (T3, RN-03): o teto da separação é o do SERVIDOR (`saldo_separavel`, T1) — o físico menos a caixa
+// sem reserva dos outros itens e a própria caixa; o saldo_atual oferecia o que a porta recusa (C169). Servidor
+// sem o campo cai no saldo_atual, como antes.
+const saldoSeparavel = (item) => Number(item.saldo_separavel ?? item.saldo_atual) || 0;
 const maxQtdSeparacao = (item) => Math.min(
   Math.max(0, Number(item.quantidade_solicitada) - getSeparado(item)),
-  Number(item.saldo_atual) || 0
+  saldoSeparavel(item)
 );
 const maxQtdEntrega = (item) => {
   if (item.quantidade_entregavel != null) {
@@ -159,7 +163,7 @@ const seriesDoLote = (info, loteId) => (info?.series || [])
 const MOTIVO_DIVERGENCIA_MAX = 500;
 const maxSeparavelNaTela = (item, valorOrigemEscolhida, saldos, outrosMesmoMaterial = 0) => {
   const pendenteSeparacao = Math.max(0, Number(item.quantidade_solicitada) - getSeparado(item));
-  const livre = Math.max(0, (Number(item.saldo_atual) || 0) - (Number(outrosMesmoMaterial) || 0));
+  const livre = Math.max(0, saldoSeparavel(item) - (Number(outrosMesmoMaterial) || 0));
   const base = Math.min(pendenteSeparacao, livre);
   if (!valorOrigemEscolhida) return base;
   const opcao = (saldos || []).find((s) => valorOrigem(s) === valorOrigemEscolhida);
@@ -184,6 +188,20 @@ const separavelAgoraPorItem = (itens) => {
     if (quantidade > 1e-9) acc.push({ item, quantidade: Number(quantidade.toFixed(4)) });
     return acc;
   }, []);
+};
+// Etapa 95 (T3, RN-02): o pré-preenchimento do modal de separação divide o separável entre os itens do mesmo
+// material, na ordem do pedido (a régua de `separavelAgoraPorItem`) — a porta divide a rodada, e com 4 + 4 sobre
+// um teto de 4 ela recusaria o segundo item (M4).
+const quantidadesIniciaisSeparacao = (itens) => {
+  const jaContado = {};
+  const qtds = {};
+  (itens || []).forEach((item) => {
+    const outros = jaContado[item.material_id] || 0;
+    const quantidade = maxSeparavelNaTela(item, null, null, outros);
+    jaContado[item.material_id] = outros + quantidade;
+    qtds[item.id] = quantidade;
+  });
+  return qtds;
 };
 // O que os OUTROS itens do mesmo material estão separando no modal agora (dividem o saldo).
 const separandoOutrosDoMaterial = (itens, item, quantidades) => (itens || [])
@@ -488,13 +506,11 @@ const RequisicoesList = () => {
     setDetalhe(data);
     loadedDetalheIdRef.current = id;
     const qtdsEntrega = {};
-    const qtdsSeparacao = {};
     (data.itens || []).forEach((i) => {
       qtdsEntrega[i.id] = maxQtdEntrega(i);
-      qtdsSeparacao[i.id] = maxQtdSeparacao(i);
     });
     setQuantidadesEntrega(qtdsEntrega);
-    setQuantidadesSeparacao(qtdsSeparacao);
+    setQuantidadesSeparacao(quantidadesIniciaisSeparacao(data.itens));
   }, []);
 
   const loadRequisicoes = async () => {
@@ -681,9 +697,7 @@ const RequisicoesList = () => {
 
   const abrirModalSeparacao = () => {
     if (!detalhe) return;
-    const qtds = {};
-    detalhe.itens.forEach((i) => { qtds[i.id] = maxQtdSeparacao(i); });
-    setQuantidadesSeparacao(qtds);
+    setQuantidadesSeparacao(quantidadesIniciaisSeparacao(detalhe.itens));
     setMotivosSeparacao({});
     setMotivosTrocaSeparacao({});
     setShowSeparar(true);
