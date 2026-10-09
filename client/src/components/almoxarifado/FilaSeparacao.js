@@ -30,6 +30,8 @@ const ETAPA_INFO = {
   AGUARDANDO_SALDO: { label: 'Aguardando saldo', cls: 'zerado' },
   CONFERIR: { label: 'Conferir', cls: 'devolucao' },
   REABRIR_SEPARACAO: { label: 'Separar de novo para conferir', cls: 'estorno' },
+  // Etapa 94 (B460): legado com tudo separado num status pré-separação — "Iniciar Separação" sem quantidade.
+  RETOMAR_SEPARACAO: { label: 'Reabrir separação', cls: 'estorno' },
   ENTREGAR: { label: 'Entregar', cls: 'ok' },
   // Fase 5: conferência pendente numa requisição já PRONTA_PARA_RETIRADA, que não pode voltar
   // à separação — não acionável, só o administrador resolve.

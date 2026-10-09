@@ -32,4 +32,16 @@ export const STATUS_CANCELAVEIS_OUTROS_MODULOS = Object.freeze([
 // No modo almoxarifado (`PUT /api/almoxarifado/requisicoes/:id/cancelar`) entra também o rascunho.
 export const STATUS_CANCELAVEIS_ALMOXARIFADO = Object.freeze(['RASCUNHO', ...STATUS_CANCELAVEIS_OUTROS_MODULOS]);
 
+// Etapa 94 (T2c, B460): o legado com material na caixa num status pré-separação — o desvio de antes da 94 +
+// aprovação por valor deixava *Totalmente Reservada* com tudo separado. O servidor aceita "Iniciar Separação" sem
+// quantidade, mas o modal desabilitava o botão (nada a separar). Espelho de `STATUS_PRE_SEPARACAO` e
+// `separacaoAReabrir` de `server/services/almoxarifado/requisitionStateMachine.js` (a fila usa o mesmo predicado),
+// conferido por teste (`RequisicoesReabrirSeparacao.test.js`, (e)). Mudou aqui, mude lá.
+export const STATUS_PRE_SEPARACAO = Object.freeze([
+  'APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA',
+]);
+export const separacaoAReabrir = (status, itens) => STATUS_PRE_SEPARACAO.includes(status)
+  && (itens || []).some((i) => (Number(i.quantidade_separada) || 0)
+    - (Number(i.quantidade_entregue ?? i.quantidade_atendida) || 0) > 1e-9);
+
 export default TIPO_REQUISICAO_LABELS;

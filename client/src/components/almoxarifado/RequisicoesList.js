@@ -11,6 +11,7 @@ import AlmoxPageHeader, { REQUISICAO_FLOW, getRequisicaoStepIndex } from './Almo
 import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
 import {
   TIPO_REQUISICAO_LABELS, STATUS_CANCELAVEIS_ALMOXARIFADO, STATUS_CANCELAVEIS_OUTROS_MODULOS,
+  separacaoAReabrir,
 } from './requisicaoLabels';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import AssinaturaCanvas from './AssinaturaCanvas';
@@ -731,6 +732,16 @@ const RequisicoesList = () => {
       if (abrirEntrega && updated) abrirModalEntrega(updated);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao separar');
+      // Etapa 94 (B463): 409 = o status mudou enquanto a separação era conferida (V1 da 94: alçada de valor; X1 da
+      // 93: outra separação venceu). O modal aberto mostrava um estado que já não existe, e "Separar" de novo numa
+      // Parcialmente Atendida gravava a mesma caixa duas vezes (M2 da 93). Fecha e recarrega; os demais erros
+      // mantêm o modal (corrigir e tentar de novo).
+      if (err.response?.status === 409) {
+        setShowSeparar(false);
+        setEntregaAposSeparar(false);
+        await abrirDetalhe(detalhe.id, { force: true });
+        loadRequisicoes();
+      }
     } finally {
       setSaving(false);
     }
@@ -1168,6 +1179,10 @@ const RequisicoesList = () => {
   // não existem, por isso os defaults: sem eles, a tela se comporta como antes.
   const separacoes = detalhe?.separacoes || [];
   const euSeparei = !!user?.id && separacoes.some((s) => Number(s.usuario_id) === Number(user.id));
+  // Etapa 94 (B460): legado com tudo separado num status pré-separação — o modal confirma com zero ("Reabrir
+  // separação"): o servidor leva a Em Separação e daí se entrega. Mesmo predicado da fila (RETOMAR_SEPARACAO).
+  const reabrirSeparacao = !!detalhe && separacaoAReabrir(detalhe.status, detalhe.itens)
+    && (detalhe.itens || []).every((i) => maxQtdSeparacao(i) <= 0);
   const conferenciaPendente = !!detalhe?.conferencia_obrigatoria && !detalhe?.conferencia;
   const TITLE_CONFERENCIA_PENDENTE = 'Esta requisição tem material crítico separado e precisa da segunda conferência antes de sair';
 
@@ -2112,13 +2127,18 @@ const RequisicoesList = () => {
                 </div>
               ))}
               {detalhe.itens.every(i => maxQtdSeparacao(i) <= 0) && (
-                <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.85rem' }}>Nenhum item com estoque disponível para separação.</p>
+                <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.85rem' }}>
+                  {reabrirSeparacao
+                    ? 'Todo o material desta requisição já está separado. Confirme para reabrir a separação e seguir para a entrega.'
+                    : 'Nenhum item com estoque disponível para separação.'}
+                </p>
               )}
             </div>
             <div className="almox-modal-footer">
               <button className="btn-almox-secondary" onClick={() => setShowSeparar(false)}>Cancelar</button>
-              <button className="btn-almox-primary" onClick={handleSeparacao} disabled={saving || detalhe.itens.every(i => maxQtdSeparacao(i) <= 0)}>
-                {saving ? 'Separando...' : '📦 Confirmar Separação'}
+              <button className="btn-almox-primary" onClick={handleSeparacao}
+                disabled={saving || (!reabrirSeparacao && detalhe.itens.every(i => maxQtdSeparacao(i) <= 0))}>
+                {saving ? 'Separando...' : (reabrirSeparacao ? '📦 Reabrir separação' : '📦 Confirmar Separação')}
               </button>
             </div>
           </div>
