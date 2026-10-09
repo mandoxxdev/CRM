@@ -313,6 +313,17 @@ const MSG_TRAVA_INCOMPLETA = 'A requisição ganhou itens enquanto era aprovada 
  */
 async function desfazerReservas(db, user, reservas = []) {
   for (const r of reservas) {
+    // Etapa 92 (T3, C148 (1), B438): quem venceu pode ter sido o cancelamento, que ja soltou esta reserva —
+    // `liberarReserva` lancaria "Reserva liberada nao pode ser liberada" e o W1 abaixo parecia incidente
+    // num desfecho certo (sonda: 5/5). Reserva que ja nao esta ATIVA: I1 e segue. A falha REAL (ativa que
+    // nao solta) continua no W1. Residual declarado: soltar entre esta leitura e o liberarReserva ainda da
+    // W1 (fechar exigiria o motor reconhecer "ja solta"). Descartado: reconhecer o erro pelo texto.
+    // eslint-disable-next-line no-await-in-loop
+    const atual = await dbGet(db, 'SELECT status FROM reservas_material_almoxarifado WHERE id = ?', [r.reserva_id]);
+    if (atual && atual.status !== 'ATIVA') {
+      console.info(`[almoxarifado-aprovar] Reserva ${r.reserva_id} ja estava ${atual.status} — nada a desfazer`);
+      continue; // eslint-disable-line no-continue
+    }
     try {
       // eslint-disable-next-line no-await-in-loop
       await stockService.liberarReserva(db, user, r.reserva_id, null, {
