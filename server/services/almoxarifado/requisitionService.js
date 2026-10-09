@@ -12,6 +12,8 @@ const lotService = require('./lotService');
 const reservationService = require('./reservationService');
 // Etapa 91 (T1): a trava por material (modulo sem nenhum require — sem ciclo).
 const travaPorMaterial = require('./travaPorMaterial');
+// Etapa 93 (T0, B443): a trava POR REQUISICAO das portas do almoxarife (outra trava; ordem requisicao -> material).
+const travaPorRequisicao = require('./travaPorRequisicao');
 const { can } = require('./permissions'); // Etapa 64: posso_conferir na fila
 const {
   PODE_SEPARAR, PODE_ENTREGAR, STATUS_PARCIALMENTE_RESERVADA, STATUS_TOTALMENTE_RESERVADA,
@@ -696,7 +698,15 @@ async function checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qty, p
 /** Etapa 92 (T0): o 400 da separacao fora de PODE_SEPARAR — na leitura e na reivindicacao (S1). */
 const MSG_STATUS_SEPARAR = 'Requisição deve estar aprovada, aguardando estoque/compra, em separação ou parcialmente atendida para separar';
 
-async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
+// Etapa 93 (T0, B443): separar, entregar e excluir seguram a trava POR REQUISICAO (travaPorRequisicao) do
+// comeco ao fim — dois gestos na mesma requisicao viram uma sequencia (o segundo le o estado novo). Nao e a
+// `comTravaDaRequisicao` acima (essa e a trava por MATERIAL dos itens). Nao reentrante: nenhuma destas chama outra.
+function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
+  return travaPorRequisicao.serializarNaRequisicao(requisicaoId,
+    () => separarSemTrava(db, requisicaoId, itensSeparados, user));
+}
+
+async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
   if (!user?.id) {
     const err = new Error('Separação exige usuário identificado');
     err.status = 400;
@@ -1029,7 +1039,12 @@ async function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
  * Mantido no parâmetro só para não quebrar as duas rotas que ainda o passam
  * (routes/almoxarifado.js, routes/requisicoesMaterial.js).
  */
-async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertService) { // eslint-disable-line no-unused-vars
+function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertService) {
+  return travaPorRequisicao.serializarNaRequisicao(requisicaoId,
+    () => entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertService));
+}
+
+async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertService) { // eslint-disable-line no-unused-vars
   const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
   if (!reqRow) {
     const err = new Error('Requisição não encontrada');
@@ -1376,7 +1391,12 @@ async function entregarRequisicao(db, requisicaoId, itensAtendidos, user, alertS
  * `alertService` é aceito e ignorado (Etapa 3, Task 3) — mesmo motivo de entregarRequisicao:
  * stockService.registrarMovimentacao já dispara a checagem de alerta internamente.
  */
-async function excluirRequisicao(db, requisicaoId, user, justificativa, alertService) { // eslint-disable-line no-unused-vars
+function excluirRequisicao(db, requisicaoId, user, justificativa, alertService) {
+  return travaPorRequisicao.serializarNaRequisicao(requisicaoId,
+    () => excluirSemTrava(db, requisicaoId, user, justificativa, alertService));
+}
+
+async function excluirSemTrava(db, requisicaoId, user, justificativa, alertService) { // eslint-disable-line no-unused-vars
   const reqRow = await dbGet(db,
     'SELECT * FROM requisicoes_almoxarifado WHERE id = ? AND COALESCE(ativo, 1) = 1',
     [requisicaoId]);
@@ -1515,7 +1535,14 @@ async function excluirRequisicao(db, requisicaoId, user, justificativa, alertSer
       return { liberadas: [], erros: [{ erro: e.message }] };
     });
 
-  return { success: true, estornos, reservas_liberadas: liberacao.liberadas };
+  const resultado = { success: true, estornos, reservas_liberadas: liberacao.liberadas };
+  // Etapa 93 (Fase 2, I2): o que a exclusao leu DENTRO da trava, para a rota auditar (`dados_anteriores`). A rota
+  // lia antes de chamar o servico — com a fila, o status gravado podia ser o de antes do gesto que estava na
+  // frente. Nao enumeravel: o JSON das duas rotas (`res.json(result)`) nao muda de forma.
+  Object.defineProperty(resultado, 'anterior', {
+    value: { id: reqRow.id, numero: reqRow.numero, status: reqRow.status }, enumerable: false,
+  });
+  return resultado;
 }
 
 module.exports = {

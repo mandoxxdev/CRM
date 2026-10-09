@@ -4076,20 +4076,19 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // (`requisitionService` tem zero chamadas de `registrarAuditoria`; so os estornos apareciam, e
   // como `movimentacao`). O ato que mais apaga coisa do fluxo era o unico sem linha propria.
   //
-  // O `dbGet` tem de vir ANTES do servico: `excluirRequisicao` nao devolve `status` nem `numero`,
-  // e depois dele o status JA e 'CANCELADO' — ler no fim registraria "de CANCELADO para
-  // CANCELADO", que nao conta historia nenhuma. Mesmo filtro do servico (`COALESCE(ativo,1)=1`)
-  // para as duas leituras concordarem sobre o que e "requisicao viva".
+  // Etapa 93 (Fase 2, I2): o status e o numero da trilha vem do SERVICO (`result.anterior`, nao enumeravel),
+  // lidos DENTRO da trava por requisicao. A rota lia antes de chamar o servico — com a fila (B443), o status
+  // gravado podia ser o de antes do gesto que estava na frente (ex.: TOTALMENTE_RESERVADA quando a exclusao
+  // pegou EM_SEPARACAO). Ler no fim registraria "de CANCELADO para CANCELADO". PROIBIDO embrulhar esta rota
+  // na trava por requisicao: o servico ja a pega e ela nao e reentrante (a rota esperaria a si mesma).
   app.delete('/api/almoxarifado/requisicoes/:id', async (req, res) => {
     if (!canDeleteAlmoxRequisicao(req.user)) {
       return res.status(403).json({ error: 'Apenas administradores do Almoxarifado ou Super Administrador podem excluir requisições' });
     }
     const justificativa = req.body?.justificativa || req.query?.justificativa;
     try {
-      const antes = await dbGet(db,
-        'SELECT id, numero, status FROM requisicoes_almoxarifado WHERE id = ? AND COALESCE(ativo, 1) = 1',
-        [req.params.id]);
       const result = await requisitionService.excluirRequisicao(db, req.params.id, req.user, justificativa, alertService);
+      const antes = result.anterior;
 
       // Pos-escrita e best-effort: a exclusao (e os estornos de estoque) ja aconteceram.
       if (antes) {

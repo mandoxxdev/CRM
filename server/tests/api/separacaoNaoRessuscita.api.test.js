@@ -399,18 +399,26 @@ const comPrazo = (p, ms, rotulo) => Promise.race([
     assert.strictEqual((await reserva(ctx.rid)).status, 'ATIVA');
   });
 
-  await test('[92 RN-09] (d) TOTALMENTE_RESERVADA: B reivindica e trava no UPDATE do item; A separa inteira (200, rodada); a gravacao de B falha -> o desfazer de B NAO devolve o status, EM_SEPARACAO, e S nao cancela (400 R1)', async () => {
+  // Etapa 93 (T0, Fase 2 B1) — REESCRITO, declarado. Ate a 92 a rodada concorrente era a separacao A rodando
+  // INTEIRA dentro do gancho da B (mesma requisicao), aguardada. Com a trava por requisicao (B443) a A espera a B
+  // e a B espera o gancho: deadlock (medido: "prazo de 10000ms estourado"). A rodada alheia agora entra por um
+  // ESCRITOR FORA DA TRAVA (INSERT direto da rodada e do separado no gancho, aguardavel). O que o caso prova nao
+  // muda: o desfazer de B (RN-09) NAO devolve o status sobre uma rodada gravada depois da marca `ultimaRodadaAntes`.
+  await test('[92 RN-09] (d) TOTALMENTE_RESERVADA: B reivindica e trava no UPDATE do item; uma rodada alheia entra (escritor fora da trava, reescrito na 93); a gravacao de B falha -> o desfazer de B NAO devolve o status, EM_SEPARACAO, e S nao cancela (400 R1)', async () => {
     const ctx = await montar('TOTALMENTE_RESERVADA', { reservar: true });
-    let sepA = null; let erroA = null; let armado = true; let disparos = 0;
+    let rodadaAlheia = null; let erroA = null; let armado = true; let disparos = 0;
     const origRunLocal = db.run;
     db.run = function (sql, ...rest) {
       if (armado && RE_UPDATE_ITEM.test(String(sql))) {
         armado = false; disparos++;
         const cb = rest.find((x) => typeof x === 'function');
-        comPrazo(como('ALMOX').put(`/api/almoxarifado/requisicoes/${ctx.R}/separar`, {
-          itens_separados: [{ item_id: ctx.item, quantidade_separada: 1 }],
-        }), 10000, 'separacao A no gancho')
-          .then((x) => { sepA = x; }, (e) => { erroA = e; })
+        comPrazo((async () => {
+          await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada = 1 WHERE id = ?', [ctx.item]);
+          return (await dbRun(db, `INSERT INTO separacoes_requisicao_almoxarifado
+            (requisicao_id, usuario_id, usuario_nome, itens_tocados, itens_json) VALUES (?, ?, ?, 1, ?)`,
+          [ctx.R, USERS.ALMOX.id, USERS.ALMOX.nome, JSON.stringify([{ item_id: ctx.item, quantidade: 1 }])])).lastID;
+        })(), 10000, 'rodada alheia no gancho')
+          .then((id) => { rodadaAlheia = id; }, (e) => { erroA = e; })
           .then(() => cb && cb.call({}, new Error('falha injetada 92F5d')));
         return this;
       }
@@ -424,15 +432,14 @@ const comPrazo = (p, ms, rotulo) => Promise.race([
       }), 15000, 'separacao B');
     } finally { db.run = origRunLocal; console.warn = ow; }
     assert.strictEqual(disparos, 1, `o gancho disparou ${disparos} vez(es)`);
-    assert.ok(!erroA, `a separacao A lancou: ${erroA && erroA.message}`);
-    assert.ok(sepA, 'a separacao A nao rodou');
-    assert.strictEqual(sepA.status, 200, `separacao A: ${sepA.status} ${JSON.stringify(sepA.body)}`);
+    assert.ok(!erroA, `a rodada alheia lancou: ${erroA && erroA.message}`);
+    assert.ok(rodadaAlheia, 'a rodada alheia nao foi gravada');
     assert.strictEqual(sepB.status, 500, `separacao B: ${sepB.status} ${JSON.stringify(sepB.body)}`);
     assert.strictEqual(sepB.body.error, 'falha injetada 92F5d');
     assert.strictEqual(await st(ctx.R), 'EM_SEPARACAO', 'o desfazer de B devolveu o status sobre a rodada de A');
     const rs = await rodadas(ctx.R);
     assert.strictEqual(rs.length, 1, `rodadas: ${rs.length}`);
-    assert.strictEqual(Number(rs[0].id), Number(sepA.body.rodada_id), 'a rodada e a de A');
+    assert.strictEqual(Number(rs[0].id), Number(rodadaAlheia), 'a rodada e a alheia');
     assert.strictEqual(avisos.filter((l) => /status devolvido/.test(l)).length, 0, `W2 sem ter devolvido: ${JSON.stringify(avisos)}`);
     const c = await como('S').put(rotaCancelar('outros', ctx.R));
     assert.strictEqual(c.status, 400, `S cancelou com material na caixa: ${c.status} ${JSON.stringify(c.body)}`);
