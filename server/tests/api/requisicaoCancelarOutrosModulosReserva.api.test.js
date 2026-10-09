@@ -242,6 +242,27 @@ process.on('exit', (code) => {
     });
   }
 
+  // (Fase 5, B439) o administrador que NAO pediu tambem nao cancela por esta porta — so pela do
+  // almoxarifado. Um superadmin e um role 'admin' sem superadmin, nos seis status.
+  const ADM_ROLE = { id: 9153, nome: 'Admin role 92', role: 'admin', email: 'ar92@t.com' };
+  for (const [rotulo, u] of [['superadmin', ADMIN], ["role 'admin'", ADM_ROLE]]) {
+    for (const status of CANCELAVEIS) {
+      // eslint-disable-next-line no-await-in-loop
+      await test(`[92 RN-01] (c') ${status}: ${rotulo} que nao e S -> 400 R1, status igual, reserva ATIVA, sem trilha (B439)`, async () => {
+        const { m, R, rid } = await montar92(status);
+        const c = await cancelar(u, R);
+        assert.strictEqual(c.status, 400, JSON.stringify(c.body));
+        assert.strictEqual(c.body.error, RECUSA);
+        assert.strictEqual(await st(R), status);
+        if (rid) {
+          assert.strictEqual((await reserva(rid)).status, 'ATIVA');
+          assert.strictEqual(await reservada(m), 4);
+        }
+        assert.strictEqual((await trilha(R)).length, 0);
+      });
+    }
+  }
+
   await test('[92 RN-01] (d) id inexistente -> 400 R1', async () => {
     const c = await cancelar(S, 987654);
     assert.strictEqual(c.status, 400, JSON.stringify(c.body));
