@@ -1,7 +1,8 @@
 # Etapa 93 — dois gestos na mesma requisição ao mesmo tempo: separar, liberar, entregar, excluir e encerrar não passam um por cima do outro (D (92), feature 04 com a 05 e a 07)
 
-> Status: **Fases 0 e 1 feitas (2026-10-09) — plano escrito, nenhuma task executada.** Próximo: **Fase 2** (revisão do
-> plano por agente fresco) — ver "Próximo passo: Fase 2" no fim.
+> Status: **Fases 0, 1 e 2 feitas (2026-10-09) — plano revisto, nenhuma task executada.** Próximo: **T0**. A Fase 2
+> (1 bloqueante, 4 importantes, 6 menores) está em "Fase 2 — revisão do plano" no fim e **vale sobre o texto acima**;
+> os pontos afetados estão marcados **"(corrigido na Fase 2)"** ou **"(Fase 2)"**.
 > HEAD de partida: `7f45ecef` (main, árvore limpa, sem push).
 > Origem: "Próxima tarefa detalhada — Etapa 93" de
 > `docs/superpowers/plans/2026-10-08-almoxarifado-etapa92-cancelar-outros-modulos.md` (fim do arquivo), o **achado 7** da
@@ -94,7 +95,8 @@ grava `SET status='PRONTA_PARA_RETIRADA' … WHERE id=?` (`:3805-3807`) sem guar
 ### Porta 4 — a entrega (`requisitionService.entregarRequisicao`, `:1032-1374`)
 
 Lê o status, **baixa o estoque item a item** (motor) e grava `quantidade_entregue` por item a partir do item **lido no
-começo** (`entregueAcumulado = getEntregue(item)`, `:1225` → `UPDATE … SET quantidade_entregue=?` `:1303-1305`), e só no
+começo** (`let entregueAcumulado = getEntregue(item)`, `:1271` → `UPDATE … SET quantidade_entregue=?` `:1318-1320` —
+**corrigido na Fase 2**, o texto dizia `:1225`/`:1303-1305`), e só no
 fim grava `SET status=? … WHERE id=?` (`:1362-1370`) sem guarda.
 
 | cenário | placar | estado final |
@@ -167,8 +169,11 @@ normal; crítico conferido e liberado); e com uma coluna trocada (`rq.numerox`) 
 - **Concorrência na mesma requisição em teste existente:** `Promise.all`/`allSettled` com entregar/separar em
   `entregaOrigemPorItem:157`, `entregaSeriePorItem:261` e `requisicaoEntregaMotor:171` — **requisições distintas** (a
   trava por requisição não as serializa); `segundaConferencia:284/319` — separar × **conferir** (conferir fica fora da
-  trava, B450). Nenhum teste existente roda um gesto travado **dentro do gancho** de outro gesto travado da **mesma**
-  requisição — se algum aparecer na execução, é *deadlock* do teste (ver "Técnica").
+  trava, B450). ~~Nenhum teste existente roda um gesto travado **dentro do gancho** de outro gesto travado da **mesma**
+  requisição~~ — **(corrigido na Fase 2: a frase estava errada)** `separacaoNaoRessuscita.api.test.js:402-440`
+  `[92 RN-09] (d)` roda a separação A **dentro do gancho** (`RE_UPDATE_ITEM`) da separação B da mesma requisição,
+  aguardando a resposta — com a trava é *deadlock*, reproduzido pelo revisor ("prazo de 10000ms estourado"). A T0
+  reescreve esse teste, declarado (ver T0 e a Fase 2, B1).
 - `test:almoxarifado` (44) e o cliente inteiro (93/1446) — medir; o cliente não muda (B449/C161).
 
 ### O que a Fase 0 achou que contradiz o plano da 92 (ver também a seção própria no fim)
@@ -206,8 +211,14 @@ normal; crítico conferido e liberado); e com uma coluna trocada (`rq.numerox`) 
   lê o disponível para reservar; nenhuma destas cinco distribui) e **nunca é pega de dentro** de uma seção da trava por
   material (nenhuma das seis portas da 91 chama estas cinco) — a ordem é sempre requisição → material. Pela leitura, nenhuma
   das cinco pega a de material hoje (a liberação de reservas da exclusão e do encerramento não chama o recálculo sob
-  trava); **a Fase 2 confere por sonda** — se alguma pegar, a ordem requisição → material continua válida porque nenhum
-  caminho sob a trava por material chega às cinco. Premissa **C132** (um processo); com mais de um processo vira `SELECT … FOR UPDATE` na
+  trava); **medido na Fase 2 por sonda** (espião na suíte inteira: 1574 aquisições da trava por material, **0** de dentro de
+  separar/entregar/excluir/liberação de reservas; **0** dos 532 `UPDATE` das portas dentro de uma seção da trava por
+  material; o espião acusa os dois casos forçados) — e nenhum gesto dos cinco chama outro. Se um dia alguma pegar, a
+  ordem requisição → material continua válida porque nenhum caminho sob a trava por material chega às cinco.
+  **(Fase 2, M5) Nome:** `requisitionService.comTravaDaRequisicao` **já existe e é a trava por material** dos itens da
+  requisição (Etapa 91, citada no CLAUDE.md); a nova é o módulo `travaPorRequisicao.js` com `serializarNaRequisicao` —
+  nome distinto, e a T0 (cabeçalho do módulo) e a T7 (CLAUDE.md) põem as duas lado a lado. Premissa **C132** (um processo — **medido na Fase 2**: `server/ecosystem.config.js` `instances: 1`, `Dockerfile`
+  `CMD ["node", "index.js"]`, `deploy.sh` com pm2 de um processo); com mais de um processo vira `SELECT … FOR UPDATE` na
   linha da requisição. **Descartados:** (1) só *compare-and-set* por porta — não fecha 4e, 2b nem 3c (Fase 0, "contradiz
   o plano da 92" item 1); (2) coluna "operação em curso" no banco — migração, mais a limpeza de marca órfã quando o
   processo cai no meio, para um ganho (multi-processo) que hoje não existe; (3) pegar a trava por material dos itens —
@@ -228,7 +239,10 @@ normal; crítico conferido e liberado); e com uma coluna trocada (`rq.numerox`) 
   *append-only* (RN-02 da 28). **Alcance:** com a B443, nenhum gesto alcança este caminho (as portas que tiram a
   requisição de `EM_SEPARACAO` estão todas na trava); vale para um escritor fora dela (outro processo, escrita direta,
   porta futura) — e é testado assim (RN-08). **Residual declarado:** se o status virou `PRONTA_PARA_RETIRADA`, a
-  conferência limpa deixa a requisição como a 3c (presa) — só alcançável sem a trava.
+  conferência limpa deixa a requisição como a 3c (presa) — só alcançável sem a trava. **(Fase 2, M2) Residual
+  declarado:** depois do 409 X1 o modal de separação fica aberto e a tela não recarrega (`RequisicoesList.js:724-735`: o
+  `catch` só mostra o toast); em `PARCIALMENTE_ATENDIDA` (que está em `PODE_SEPARAR`) um novo "Separar" no mesmo modal
+  grava a mesma caixa de novo — só fora da trava; a literal X1 manda conferir a caixa antes.
 - **B445 — a liberação confere o status lido e a marca de rodada, e reavalia tudo uma vez.** `UPDATE … SET
   status='PRONTA_PARA_RETIRADA', updated_at=CURRENT_TIMESTAMP WHERE id=? AND status=? AND NOT EXISTS (SELECT 1 FROM
   separacoes_requisicao_almoxarifado WHERE requisicao_id=? AND id > ?)` com o status lido e a marca `COALESCE(MAX(id),0)`
@@ -244,20 +258,42 @@ normal; crítico conferido e liberado); e com uma coluna trocada (`rq.numerox`) 
   status: <relido>, parcial: !completo, entregas }`. **Por que 200 e não 409 (a assimetria com a B444):** as baixas já
   saíram do estoque e estão no item; um 409 faz a tela dizer "erro" e o almoxarife **entregar de novo** — e a entrega
   repetida **baixa de novo** (é exatamente o dano da 4e). O 200 diz a verdade: entregue. **Alcance:** como a B444, só
-  fora da trava. **Descartado:** 409 (acima); estornar as baixas (desfazer movimento do motor no meio de uma corrida, sem
+  fora da trava. **(Fase 2, M1) Residual declarado:** a tela lê só `parcial` (`RequisicoesList.js:793`) — com `status:
+  'CANCELADO'` e `parcial: false` mostra *"Requisição entregue por completo!"* e oferece a assinatura de entrega, que
+  recusa `CANCELADO` com 409 (`deliverySignatureService.js:18,35`, `STATUS_ASSINAVEIS`); só fora da trava, e o cliente
+  não muda (B449). **(Fase 2, M4) O item também:** o `UPDATE` do item (`:1318-1320`) grava o acumulado **absoluto**
+  lido no começo — fora da trava a 4e volta. **Escolhido** (defesa em profundidade, reversível): gravar **relativo** —
+  `SET quantidade_entregue = COALESCE(quantidade_entregue,0) + ?, quantidade_atendida = COALESCE(quantidade_entregue,0)
+  + ?, quantidade_separada = MAX(COALESCE(quantidade_separada,0), COALESCE(quantidade_entregue,0) + ?)` (no SQLite o
+  lado direito do `SET` lê os valores **antigos** da linha) — entra na T4 com teste (RN-08 (c'')) e controle.
+  **Descartado:** só declarar em "fica de fora" — é a corrida que mexe em estoque (C156, 10/10 sem gancho) e o conserto
+  é uma linha. **Descartado:** 409 (acima); estornar as baixas (desfazer movimento do motor no meio de uma corrida, sem
   transação — pior que o estado que corrige).
 - **B447 — a exclusão confere `ativo` e o status lido no `UPDATE` final, e não tenta de novo.** `… WHERE id=? AND
-  COALESCE(ativo,1)=1 AND status=?` com o lido. `changes` 0 → `console.error` E1 e **409** E409, sem nova tentativa: o
-  estorno **já foi feito**, e refazer a exclusão estornaria de novo (contradiz o "uma nova tentativa (molde B435/B437)"
-  do plano da 92). O E1 aponta a A44 (c). **Alcance:** só fora da trava (a B443 serializa as duas exclusões — a segunda
-  vê `ativo=0` e toma o **404** *"Requisição não encontrada"* de hoje). **Descartado nesta etapa:** reivindicar antes do
+  COALESCE(ativo,1)=1 AND status=?` com o lido. ~~`changes` 0 → `console.error` E1 e **409** E409, sem nova
+  tentativa~~ **(corrigido na Fase 2, I1)** `changes` 0 → **se houve estorno** (`partes.length > 0`): `console.error` E1
+  e **409** E409, sem nova tentativa — o estorno **já foi feito**, e refazer a exclusão estornaria de novo (contradiz o
+  "uma nova tentativa (molde B435/B437)" do plano da 92); o E1 aponta a A44 (c). **Se não houve estorno:** relê
+  (`ativo=0` → 404 N0) e tenta de novo **uma vez** com o relido (molde da T1 da 92); perdeu de novo, ainda sem estorno →
+  **409** E409N. ~~**Alcance:** só fora da trava~~ — **errado (Fase 2, I1, reproduzido 5/5, controle 0/5):** num
+  processo só, `/aprovar` (`PENDENTE → TOTALMENTE_RESERVADA`), o cancelamento pelos outros módulos e o `/cancelar` do
+  almoxarifado mudam o status **fora** da trava nova, na janela entre a leitura e o `UPDATE` final (recálculo da 76,
+  distribuição da 74, expiração por leitura) — um 409 sem nova tentativa recusaria uma exclusão legítima que não estornou
+  nada. A B443 continua serializando as duas exclusões (a segunda vê `ativo=0` e toma o **404** *"Requisição não
+  encontrada"* de hoje). **(Fase 2, I2) A trilha:** a rota `DELETE /api/almoxarifado/requisicoes/:id` lê `antes`
+  (status/numero) **fora** da trava (`routes/almoxarifado.js:4088-4091`) — com a fila, o `dados_anteriores.status` pode
+  ser o de antes do gesto que estava na frente. Corrigido na **T0**: `excluirRequisicao` devolve o `{ id, numero, status }`
+  lido **dentro** da trava numa propriedade **não enumerável** `anterior` do resultado (o JSON das duas rotas não muda de
+  forma) e a rota audita com ela; **proibido embrulhar a rota na trava** (não reentrante: a rota esperaria a si mesma). **Descartado nesta etapa:** reivindicar antes do
   estorno (`UPDATE … SET ativo=0, status='CANCELADO' WHERE id=? AND COALESCE(ativo,1)=1 AND status=?` **antes** do
   estorno, devolvendo `ativo=1` e o status se o estorno falhar) — é o conserto multi-processo (com ele a 2b não acontece
   nem sem trava), mas é mais uma devolução sem transação (o padrão da RN-09 da 92, com os residuais dela) para um ganho
   que só existe com dois processos. Candidata da migração para Postgres.
 - **B448 — o encerramento confere o status lido, uma nova tentativa (molde B437).** `UPDATE … SET status='ENCERRADA',
   … WHERE id=? AND status=?`; perdeu → relê, `validarTransicao(relido,'ENCERRADA')` falha → 400 com o `erro` de hoje;
-  vale → nova tentativa; perdeu de novo → o mesmo 400 sobre o relido. Liberação das reservas e trilha **só** se o
+  vale → nova tentativa; ~~perdeu de novo → o mesmo 400 sobre o relido~~ **(corrigido na Fase 2, I3)** perdeu de novo → **409** C1 (literal nova,
+  molde da L1): com a transição relida válida, `validarTransicao` devolve `{ ok: true }` sem `erro`, e "o mesmo 400"
+  sairia `{ error: undefined }`. Liberação das reservas e trilha **só** se o
   `UPDATE` venceu. Respostas e literais inalterados.
 - **B449 — a liberação e o encerramento continuam na rota; o cliente não muda.** A trava e o *compare-and-set* entram
   no corpo das rotas (`routes/almoxarifado.js`), sem extrair para o serviço — extração mudaria o ponto de *stub* da
@@ -287,6 +323,10 @@ de soltar o comando retido) e roda **depois** do primeiro terminar.
   **400 S1** (lê `CANCELADO`); 0 rodadas, separado 0; `CANCELADO`, `ativo=0`. (Hoje: (a) 5/5 `EM_SEPARACAO`/`ativo=0`; (b) é a 2c
   da Fase 0 — separação **200** com a rodada gravada numa requisição que termina excluída, 5/5: o status final já era
   `CANCELADO`, mas com a trava o desfecho vira "nada gravado" e o teste afirma o novo.)
+  (c) **(Fase 2, I2)** de `TOTALMENTE_RESERVADA`, gancho na **reivindicação** da separação (o `UPDATE … SET
+  status='EM_SEPARACAO'` da 92, antes da rodada) dispara a exclusão (ADMIN) pela rota do almoxarifado → a trilha
+  `EXCLUSAO` grava `dados_anteriores.status = 'EM_SEPARACAO'` (o lido **dentro** da trava, depois da separação), não
+  `TOTALMENTE_RESERVADA` (o lido pela rota antes de entrar na fila).
 - **RN-02 (liberar × separação, entrega, exclusão)** — gancho no `UPDATE` da liberação (ou no CAC):
   (a) **1b** gancho no CAC (rodada 2) dispara liberar → separação 200; liberar 200 **depois**; final
   `PRONTA_PARA_RETIRADA`, trilha `SEPARACAO,SEPARACAO,LIBERACAO_RETIRADA`.
@@ -331,12 +371,20 @@ de soltar o comando retido) e roda **depois** do primeiro terminar.
   nova (material comum) nas **duas** emissões → **409** L1; `EM_SEPARACAO`; emitido 2 vezes.
   (c) **entrega (B446):** gancho no `UPDATE` final põe `PRONTA_PARA_RETIRADA` → nova tentativa vence: 200
   `ENTREGUE`, emitido 2 vezes. (c') gancho põe `ativo=0, status='CANCELADO'` → **200** `{ status: 'CANCELADO' }`,
-  status `CANCELADO` (não regravado), `SAIDA` gravada, W4 1 vez, emitido 1 vez.
-  (d) **exclusão (B447):** gancho no `UPDATE ativo=0` põe `ativo=0` direto → **409** E409; E1 1 vez; o `UPDATE` emitido 1
-  vez (sem nova tentativa); o estorno da primeira passada está no livro (declarado).
+  status `CANCELADO` (não regravado), `SAIDA` gravada, W4 1 vez, emitido 1 vez. (c'') **(Fase 2, M4)** gancho no
+  `UPDATE` do **item** de uma entrega de 2 soma 2 a `quantidade_entregue` por `UPDATE` direto → o item termina com **4**
+  (o relativo soma em cima), não 2.
+  (d) **exclusão (B447):** requisição `ENTREGUE` (há estorno — Fase 2); gancho no `UPDATE ativo=0` põe `ativo=0` direto →
+  **409** E409; E1 1 vez; o `UPDATE` emitido 1 vez (sem nova tentativa); o estorno da primeira passada está no livro
+  (declarado). **(Fase 2, I1)** (d') `TOTALMENTE_RESERVADA` sem entrega (nada a estornar); o gancho troca o status
+  (`ativo` continua 1) → nova tentativa vence: 200, `CANCELADO`/`ativo=0`, emitido 2 vezes, nenhum E1. (d'') o gancho
+  troca o status nas **duas** emissões → **409** E409N; `ativo=1`; nenhuma `ENTRADA`; emitido 2 vezes. (d''') o gancho
+  põe `ativo=0` sem estorno → a releitura vê `ativo=0` → **404** N0; emitido 1 vez.
   (e) **encerramento (B448):** de `PARCIALMENTE_ATENDIDA`, gancho põe `ENTREGUE` → nova tentativa vence (`ENTREGUE →
   ENCERRADA`): 200; põe `EM_SEPARACAO` → **400** *"Transição inválida: EM_SEPARACAO → ENCERRADA"*, nenhuma reserva
-  liberada, nenhuma trilha `ENCERRAMENTO`.
+  liberada, nenhuma trilha `ENCERRAMENTO`. (e') **(Fase 2, I3)** o gancho troca o status para outro de onde
+  `ENCERRADA` vale (ex. `ENTREGUE`) nas **duas** emissões → **409** C1 (não `{ error: undefined }`), nenhuma reserva
+  liberada, nenhuma trilha.
 - **RN-09 (a trava não prende quem não disputa, e solta)** — (a) requisições **diferentes**: gancho no CAC de R1 roda a
   entrega de R2 **até a resposta** (o molde da 92, aguardando) → R2 200 sem esperar R1 (sem *deadlock*, `comPrazo`
   5000). (b) a separação que lança (400 por quantidade acima do máximo) solta a trava: a seguinte da mesma requisição
@@ -357,16 +405,18 @@ de soltar o comando retido) e roda **depois** do primeiro terminar.
 | E0 | entrega — fora de `PODE_ENTREGAR` (inalterado) | `Requisição deve estar em separação, pronta para retirada ou parcialmente atendida` | 400 |
 | W4 | entrega — perdeu o `UPDATE` final e não regravou (**novo**, B446) | `` console.warn(`[almoxarifado-entrega] Requisicao ${requisicaoId}: status mudou para ${relido} durante a entrega; baixas feitas, status nao regravado (seria ${novoStatus})`) `` | — |
 | N0 | exclusão — inexistente ou já excluída (inalterado) | `Requisição não encontrada` | 404 |
-| E409 | exclusão — perdeu o `UPDATE` final (**novo**, B447) | `A requisição mudou enquanto era excluída; o estorno pode já ter sido feito — confira o estoque e o histórico antes de excluir de novo.` | **409** |
+| E409 | exclusão — perdeu o `UPDATE` final **depois de estornar** (**novo**, B447; corrigido na Fase 2) | `A requisição mudou enquanto era excluída; o estorno pode já ter sido feito — confira o estoque e o histórico antes de excluir de novo.` | **409** |
 | E1 | exclusão — idem, log (**novo**) | `` console.error(`[almoxarifado-exclusao] Requisicao ${requisicaoId}: UPDATE final perdeu (ativo/status mudou) depois do estorno de ${partes.length} parte(s) — conferir a consulta A44 (c)`) `` | — |
+| E409N | exclusão — perdeu o `UPDATE` final duas vezes **sem** estorno feito (**novo**, Fase 2 I1) | `A requisição mudou enquanto era excluída e nada foi estornado; recarregue e tente de novo.` | **409** |
 | L0 | liberação — inexistente / transição / nada separado / barreira (inalterados) | `Requisição não encontrada` (404) · `Transição inválida: ⟨de⟩ → PRONTA_PARA_RETIRADA` (400) · `Nenhum item separado` (400) · a literal da barreira de `assertConferidaSeObrigatorio` (400) | — |
 | L1 | liberação — perdeu as duas tentativas (**novo**, B445) | `A requisição mudou enquanto era liberada para retirada; recarregue e confira antes de liberar.` | **409** |
 | C0 | encerramento — sem permissão / inexistente / transição (inalterados) | `Sem permissão para encerrar requisições` (403) · `Requisição não encontrada` (404) · `Transição inválida: ⟨de⟩ → ENCERRADA` (400) | — |
+| C1 | encerramento — perdeu as duas tentativas (**novo**, Fase 2 I3) | `A requisição mudou enquanto era encerrada; recarregue e confira antes de encerrar.` | **409** |
 
 Respostas de sucesso **inalteradas** na forma: separação `{ success, status: 'EM_SEPARACAO', rodada_id, itens_tocados }`;
 liberação `{ success: true, status: 'PRONTA_PARA_RETIRADA' }`; entrega `{ success, status, parcial, entregas }` — com
 `status` = o relido no caminho da B446 (pode ser `CANCELADO`/`ENCERRADA`/`PRONTA_PARA_RETIRADA` só fora da trava);
-exclusão `{ success, estornos, reservas_liberadas }`; encerramento `{ success: true, status: 'ENCERRADA' }`. Os 409 levam
+exclusão `{ success, estornos, reservas_liberadas }` (mais `anterior` **não enumerável** para a rota auditar — Fase 2, I2); encerramento `{ success: true, status: 'ENCERRADA' }`. Os 409 levam
 `{ error: <literal> }` (o `handleError`/`catch` de hoje: `res.status(e.status || 500).json({ error: e.message })`).
 
 ### Módulo — `server/services/almoxarifado/travaPorRequisicao.js` (T0)
@@ -379,7 +429,8 @@ async function serializarNaRequisicao(requisicaoId, fn) { /* FIFO como segurarTr
 function esperandoNaRequisicao(requisicaoId) { /* numero; 0 sem fila */ }
 module.exports = { serializarNaRequisicao, esperandoNaRequisicao };
 ```
-Comentário de cabeçalho: **não reentrante**; **nunca** pegar de dentro de uma seção da `travaPorMaterial`; nenhuma
+Comentário de cabeçalho: **não reentrante**; **não é** `requisitionService.comTravaDaRequisicao` (essa é a trava **por
+material** dos itens da requisição, Etapa 91 — Fase 2, M5); **nunca** pegar de dentro de uma seção da `travaPorMaterial`; nenhuma
 porta das cinco chama outra das cinco; com mais de um processo → `SELECT … FOR UPDATE` na linha da requisição.
 `requisitionService` chama **pelo objeto do módulo** (`travaPorRequisicao.serializarNaRequisicao(...)`), para os testes
 espiarem/sabotarem.
@@ -450,12 +501,21 @@ cliente). Executores **não** marcam este plano; o fio principal marca.
   na fila" em todos **e** os desfechos: RN-03 (entregue 2 ≠ saídas 4), RN-04 (q=8, duas trilhas), RN-01 (a)
   (`EM_SEPARACAO`), RN-05 (b) (`ENTREGUE`/`ativo=0`), RN-06 (`EM_SEPARACAO`). (s2) só a entrega sem a trava → caem
   RN-03 e RN-05 (a) (a entrega no gancho da exclusão roda e baixa); RN-04 continua. (s3) só a exclusão sem a trava → caem
-  RN-04 e RN-01 (a)/RN-05 (b) (o lado da exclusão); RN-03 continua. (s4) a trava **reentrante por engano** — chave por
-  `String(id)` numa porta e `Number(id)` noutra → caem as RN cuja chamada vem com `id` string da rota (`req.params.id`)
+  RN-04 e RN-01 (a)/RN-05 (b) (o lado da exclusão); RN-03 continua. (s4) ~~a trava **reentrante por engano**~~ **chave não normalizada** (corrigido na Fase 2, M6:
+  o controle prova a normalização da chave, não reentrância) — chave por `String(id)` numa porta e `Number(id)` noutra → caem as RN cuja chamada vem com `id` string da rota (`req.params.id`)
   contra a do serviço com número: RN-05/RN-06 pela rota × serviço — **é o controle de que a chave é normalizada**. (s5)
   a trava não solta na exceção (sem `finally`) → cai RN-09 (b) (prazo estourado). (s6) a técnica da 92 (aguardar no
   gancho) num cenário RN-03 → estoura o `comPrazo` — controle do controle, rodado uma vez e descrito, não fica no
   arquivo.
+  **(Fase 2, B1) Reescrita declarada de um teste da 92:** `separacaoNaoRessuscita.api.test.js` `[92 RN-09] (d)`
+  (`:402-440`) roda a separação A **dentro do gancho** da B na mesma requisição, aguardando — com a trava é *deadlock*. A
+  T0 troca a separação A no gancho por um **escritor fora da trava** (`INSERT` direto da rodada no gancho, aguardável);
+  a asserção de que o desfazer de B **não devolve o status** sobre a rodada alheia (a marca `ultimaRodadaAntes`)
+  continua provada; o que muda é "A separa inteira (200)" → "uma rodada alheia aparece". O s6 é o controle de que a
+  técnica velha trava. **(Fase 2, I2)** A T0 também faz `excluirRequisicao` devolver o `anterior` lido dentro da trava e
+  a rota do almoxarifado auditar com ele — **RN-01 (c)**; controle (s7) a rota volta a usar o `antes` lido fora → cai
+  RN-01 (c) (`TOTALMENTE_RESERVADA`). **(Fase 2, M5)** o cabeçalho do módulo novo diz que
+  `requisitionService.comTravaDaRequisicao` é a trava por material.
 - [ ] **T1 (galho de T0) — a trava na liberação e no encerramento.** Contrato "As portas" (rotas). Acrescenta ao
   `requisicaoGestosConcorrentes`: **RN-02** (a)–(d) e **RN-07 (b)**. **Vermelho antes:** RN-02 (a)(b)(c)(d), RN-07 (b) —
   todos 5/5 na Fase 0. **Medir:** os 6 de liberar e os 8 de encerrar. **Controles:** (s1) liberar sem a trava → caem
@@ -480,12 +540,15 @@ cliente). Executores **não** marcam este plano; o fio principal marca.
   por cima de `PRONTA` — o desfecho certo por acaso); fica como guarda da nova tentativa — **o vermelho dela é o s2**.
   **Controles:** (s1) sem `AND status=?` → cai (c'). (s2) sem a nova tentativa → cai (c) (status `PRONTA`, W4). (s3) 409
   no lugar do 200 → cai (c') no código. (s4) a nova tentativa sem `validarTransicao` → cai (c') (regrava sobre
-  `CANCELADO` — a releitura venceria).
+  `CANCELADO` — a releitura venceria). **(Fase 2, M4)** Acrescenta RN-08 (c''); vermelho antes: o item termina com 2.
+  (s5) volta o `SET quantidade_entregue=?` absoluto → cai (c'').
 - [ ] **T5 (galho) — a exclusão e o encerramento conferem o status (B447, B448).** Acrescenta **RN-08 (d)(e)**.
   **Vermelho antes:** (d) (200 e `UPDATE` regravado), (e) segunda metade (200 sobre `EM_SEPARACAO`). **Controles:** (s1)
   exclusão sem `AND COALESCE(ativo,1)=1` → cai (d). (s2) exclusão com nova tentativa → cai (d) (emitido 2 vezes). (s3)
   encerrar sem `AND status=?` → cai (e) (`ENCERRADA` sobre `EM_SEPARACAO`). (s4) liberar reservas **antes** de conferir
-  que o `UPDATE` venceu → cai (e) ("nenhuma reserva liberada").
+  que o `UPDATE` venceu → cai (e) ("nenhuma reserva liberada"). **(Fase 2, I1/I3)** Acrescenta também RN-08
+  (d')(d'')(d''')(e'); vermelho antes: (d'') e (e') (200 regravando). (s5) exclusão sem nova tentativa quando não
+  estornou → cai (d') (409 em vez de 200). (s6) encerramento com "o mesmo 400" no teto → cai (e') (`error` undefined).
 - [ ] **T6 — integração cruzando as portas, pela rota e pelo serviço.** Arquivo novo
   `server/tests/api/requisicaoGestosConcorrentesIntegracao.api.test.js`, usuários reais por header (S, ALMOX, ALMOX2,
   ADMIN):
@@ -507,8 +570,11 @@ cliente). Executores **não** marcam este plano; o fio principal marca.
   **Jornada E (a 92 compõe):** S cancela pelos outros módulos no gancho da reivindicação de uma separação (a RN-03 da
   92) — sem *deadlock*, desfecho da 92; e uma `PARCIALMENTE_ATENDIDA` encerrada no meio da entrega (RN-07 (b)) não volta
   a aberta.
-  **Controles:** (s1) da T0 → caem A (entregue ≠ saídas), C (q=8) e D; (s1) da T1 → cai B (a rodada 2 passa e
-  libera sem conferência — A44 (e) com R2); (s1) da T2 **não** derruba jornada nenhuma (com a trava o caminho é
+  **Controles:** (s1) da T0 → caem A (entregue ≠ saídas), C (q=8) e D; (s1) da T1 → cai B ~~(a rodada 2 passa e
+  libera sem conferência — A44 (e) com R2)~~ **(corrigido na Fase 2, I4)**: com a T3 feita, a rodada 2 roda no gancho
+  (200, não 400 S1) e limpa a conferência; a liberação perde pela marca da B445, relê e recusa pela barreira — **400** com
+  a literal da barreira; cai "liberar 200" e "rodada 2 400 S1" (o crítico **não** sai liberado sem conferência — a
+  defesa da T3 segura); (s1) da T2 **não** derruba jornada nenhuma (com a trava o caminho é
   inalcançável — dito, é a razão de a RN-08 existir); nenhuma jornada não prevista pode cair.
 - [ ] **T7 — fechamento (skill `fechar-etapa`).** Novidades: seção da Etapa 93; **B443–B451**; **C156–C162** (abaixo);
   **A44**; D (93) e F (93); as duas linhas **(92)** de D (exclusão no instante da separação; liberar/entregar no mesmo
@@ -516,10 +582,13 @@ cliente). Executores **não** marcam este plano; o fio principal marca.
   sem regra de status, dito à vista), `05` (o *compare-and-clear* e a liberação conferem o status; o "Fica de fora (D
   (92))" corrigido à vista — "não medido" virou medido 5/5), `07` (a reserva presa da 3c; a entrega consome a reserva uma
   vez). Mapa. Guia do usuário (roteiro: duas abas na mesma requisição — **Entregar** nas duas → a segunda espera e
-  responde com o estado novo; **Excluir** nas duas → a segunda diz "não encontrada"). Manual (7.x exclusão, 10.x
+  responde com o estado novo; **Excluir** nas duas → a segunda diz "não encontrada" e **a lista não recarrega** — a linha excluída fica até
+  recarregar a tela (`RequisicoesList.js:1019-1033`: o `catch` só mostra o toast; Fase 2, M3)). Manual (7.x exclusão, 10.x
   separação/liberação/entrega: "dois gestos na mesma requisição acontecem um depois do outro"). `CLAUDE.md`: um
   parágrafo na seção da trava dizendo que existe **outra** trava, por requisição, para as cinco portas do almoxarife, com
-  a ordem requisição → material e a proibição de pegá-la de dentro da de material (commit próprio). Retro; **Próxima
+  a ordem requisição → material e a proibição de pegá-la de dentro da de material (commit próprio) — **(Fase 2, M5)**
+  dizendo à vista que `requisitionService.comTravaDaRequisicao` é a trava **por material** e
+  `travaPorRequisicao.serializarNaRequisicao` é a nova. Retro; **Próxima
   tarefa detalhada — Etapa 94**.
 
 ## Teste de integração — por que a T6 é a única prova de três coisas
@@ -550,7 +619,7 @@ cliente). Executores **não** marcam este plano; o fio principal marca.
 - **C161 — o que muda para quem opera:** o segundo gesto na mesma requisição **espera** o primeiro (não há prazo — como a
   C150); a segunda exclusão diz *"Requisição não encontrada"*; a separação pode responder o 409 X1 e a liberação o L1
   (só com um escritor fora da trava). Nada muda na tela.
-- **C162 — o que muda para quem integra:** os 409 novos (X1, L1, E409) e o `status` da resposta da entrega podendo ser o
+- **C162 — o que muda para quem integra:** os 409 novos (X1, L1, E409; e, da Fase 2, E409N e C1) e o `status` da resposta da entrega podendo ser o
   status real relido (B446) — todos só alcançáveis com escritor fora da trava (outro processo, escrita direta).
 
 ## O que fica de fora (declarado — e por quê)
@@ -623,9 +692,68 @@ Reunido de "Fase 0 → O que a Fase 0 achou que contradiz o plano da 92" (itens 
 reivindicar; a 409 vale para a separação mas a entrega pede 200; a exclusão não tem regra de status; o "não medido" da
 92 é 5/5 e prende requisição e reserva; linhas ajustadas.
 
-## Próximo passo: Fase 2
+## Fase 2 — revisão do plano (2026-10-09): 1 bloqueante, 4 importantes, 6 menores → plano revisto (vale sobre o texto acima)
 
-Um agente fresco recebe este plano + as specs `04`, `05`, `07` + o plano da 92 e responde as quatro perguntas da skill:
+Revisor fresco (plano + specs 04/05/07 + plano da 92, as quatro perguntas da skill), com sondas e protótipo da trava
+(scratchpad `e93rv-*`). Cada achado foi conferido contra o código antes de entrar; os pontos afetados acima estão
+marcados **"(corrigido na Fase 2)"** ou **"(Fase 2)"**.
+
+**Medido (confirma o plano):** nenhuma das cinco portas pega a trava por material nem roda sob ela — a suíte inteira
+com espião: **1574** aquisições da trava por material, **0** de dentro de separar/entregar/excluir/liberação de
+reservas; **0** dos **532** `UPDATE` das portas dentro de uma seção da trava por material; o espião acusa os dois casos
+forçados (controle). Nenhum gesto dos cinco chama outro. O deploy é **um processo** (`server/ecosystem.config.js`
+`instances: 1`, `Dockerfile` `CMD ["node", "index.js"]`, `deploy.sh` com pm2) — a premissa C132 vale.
+
+**Bloqueante**
+
+1. **B1 — um teste da 92 trava com a T0 (reproduzido).** `separacaoNaoRessuscita.api.test.js:402-440` `[92 RN-09] (d)`
+   roda a separação A **dentro do gancho** da separação B na mesma requisição, aguardando a resposta; com a trava
+   (protótipo do revisor) é *deadlock* — "prazo de 10000ms estourado". A frase da Fase 0 "nenhum teste existente roda um
+   gesto travado dentro do gancho de outro" **estava errada** (marcada lá). Corrigido: a T0 inclui a **reescrita
+   declarada** desse teste — a rodada concorrente entra por **escritor fora da trava** (`INSERT` direto da rodada no
+   gancho) e a marca `ultimaRodadaAntes` (o desfazer de B não devolve o status sobre a rodada alheia) continua provada.
+
+**Importantes**
+
+1. **I1 — o 409 da exclusão disparava num processo só (reproduzido 5/5, controle 0/5).** `/aprovar` (`PENDENTE →
+   TOTALMENTE_RESERVADA`), o cancelamento pelos outros módulos e o `/cancelar` do almoxarifado ficam fora da trava nova
+   e mudam o status na janela da exclusão (recálculo da 76, distribuição da 74, expiração por leitura); a B447 recusaria
+   com 409 uma exclusão legítima sem estorno nenhum. Corrigido: **sem estorno feito → reler e tentar de novo** (uma vez,
+   com teto — molde da T1 da 92), 409 **E409** só quando já houve estorno, literal nova **E409N** para a segunda perda
+   sem estorno; "Alcance: só fora da trava" riscado. RN-08 (d')(d'')(d'''), controle T5 s5.
+2. **I2 — a trilha da exclusão gravava o status lido fora da trava.** A rota lê `antes` (`routes/almoxarifado.js:4088-4091`)
+   antes de chamar o serviço; com a fila, o status gravado em `dados_anteriores` pode ser o de antes do gesto que estava
+   na frente. Corrigido na T0: `excluirRequisicao` devolve `anterior` (`{ id, numero, status }` lidos **dentro** da
+   trava; propriedade não enumerável, o JSON não muda) e a rota audita com ele. **Proibido embrulhar a rota na trava**
+   (não reentrante → a rota esperaria a si mesma). RN-01 (c), controle T0 s7.
+3. **I3 — o teto do encerramento respondia `{ error: undefined }`.** "Perdeu de novo → o mesmo 400 sobre o relido": com
+   a transição relida válida, `validarTransicao` dá `{ ok: true }` sem `erro`. Corrigido: literal própria **C1** (409,
+   molde da L1) e RN-08 (e') com gancho que dispara duas vezes; controle T5 s6.
+4. **I4 — previsão errada de controle na T6.** Tirar a trava da liberação **não** faz a Jornada B "liberar sem
+   conferência — A44 (e)": com a T3 feita, a marca da B445 faz a liberação perder, reler e recusar pela barreira (400).
+   Desfecho reescrito na T6.
+
+**Menores**
+
+1. **M1** — o 200 da entrega que perde (B446) com `status: 'CANCELADO'`: a tela lê só `parcial`, mostra "Requisição
+   entregue por completo!" e oferece a assinatura, que recusa `CANCELADO` (`deliverySignatureService.js:18,35`) — só fora
+   da trava; declarado na B446.
+2. **M2** — depois do 409 X1 o modal de separação fica aberto e não recarrega (`RequisicoesList.js:724-735`); em
+   `PARCIALMENTE_ATENDIDA` "Separar" de novo grava a mesma caixa duas vezes — só fora da trava; residual da B444.
+3. **M3** — a exclusão que toma 404 não recarrega a lista (`RequisicoesList.js:1019-1033`); o roteiro da T7 diz isso.
+4. **M4** — o `UPDATE` do item da entrega (4e) não tinha defesa fora da trava. **Decidido (letra B, junto da B446):**
+   gravar relativo (`COALESCE(quantidade_entregue,0) + ?`) — defesa em profundidade, entra na T4 com RN-08 (c'') e
+   controle s5. Descartado: declarar em "fica de fora" (é a corrida que mexe em estoque e o conserto é uma linha).
+5. **M5** — `requisitionService.comTravaDaRequisicao` já existe e é a trava **por material**. O nome novo
+   (`travaPorRequisicao.serializarNaRequisicao`) é distinto; T0 (cabeçalho) e T7 (CLAUDE.md) separam as duas à vista.
+6. **M6** — linhas: `let entregueAcumulado` em `requisitionService.js:1271` (não `:1225`); o `UPDATE` do item em
+   `:1318-1320` (não `:1303-1305`); o s4 da T0 ("reentrante por engano") testa a normalização da chave — renomeado.
+
+## Próximo passo
+
+**(Fase 2 feita — ver a seção acima.)** Próximo: **T0**.
+
+~~Fase 2: um agente fresco~~ (texto original:) Um agente fresco recebe este plano + as specs `04`, `05`, `07` + o plano da 92 e responde as quatro perguntas da skill:
 (1) os contratos cobrem os casos de erro e as literais (X1, L1, E409, W3, W4, E1) e o 200 da B446? (2) as RN batem com as
 specs (em especial: a exclusão sem regra de status; a D3 da 28 na B444)? (3) T1–T5 são independentes de verdade (critério:
 um erro de leitura num exige retrabalho no outro? — T3 e T5 tocam o mesmo bloco de rotas; T2/T4/T5 o mesmo serviço)?
