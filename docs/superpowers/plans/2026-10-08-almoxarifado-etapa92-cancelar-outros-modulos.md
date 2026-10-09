@@ -1,7 +1,8 @@
 # Etapa 92 — o cancelamento pelos outros módulos aceita o que a tela oferece (C149, feature 04 com a 05 e a 07)
 
 > Status: **EM EXECUÇÃO — 2026-10-08.** Fase 2 feita (`6d0442aa`). **T0 `6a0b529c`, T1 `dd7e84a7`, T2 `0187982e`,
-> T3 `a4237edb` feitas** (seção "Execução" no fim). Próximo passo: T4 (worktree), depois T5.
+> T3 `a4237edb`, T4 `6ece630d`, T5 `3f84ecaa` feitas** (seção "Execução" no fim). Fase 5: 2 revisores, 8 achados
+> reproduzidos; correção do cliente `627dc667` (A2), correção do servidor em andamento. Depois: T6.
 > HEAD de partida: `d271721e` (main, árvore limpa).
 > Origem: "Próxima tarefa detalhada — Etapa 92" de
 > `docs/superpowers/plans/2026-10-08-almoxarifado-etapa91-inversao-inspecao-aprovar.md:940-993`, os avisos **C140 (3)**,
@@ -490,7 +491,7 @@ no scratchpad, restauro por cópia com md5 conferido, um controle de cada vez (b
   **Controles:** (s1) sem a leitura do status → cai RN-05 (a) (o W1 volta). (s2) a leitura pula **toda** reserva
   (`continue` incondicional) → cai RN-05 (c) (a reserva fica `ATIVA`) **e** o caso `[servico]` de
   `requisicaoPosAprovacaoPortas:285`. (s3) o `continue` também no `catch` real (cala W1) → cai RN-05 (b).
-- [ ] **T4 (galho — cliente; pode ir em worktree em paralelo com T1–T3) — a tela (C152) e as constantes; RN-07.**
+- [x] `6ece630d` **T4 (galho — cliente; pode ir em worktree em paralelo com T1–T3) — a tela (C152) e as constantes; RN-07.**
   Contrato "Cliente". `RequisicoesList.test.js`: **RN-06** (a)–(e) com `mockWarehouseMode = false` e um `useAuth`
   mutável (hoje fixo em `{ id: 99, role: 'admin' }`, `:43` — tornar mutável como `mockWarehouseMode`, padrão do arquivo).
   E o **RN-07** no servidor: `server/tests/api/cancelarListaTelaRota.api.test.js` lê
@@ -508,7 +509,7 @@ no scratchpad, restauro por cópia com md5 conferido, um controle de cada vez (b
   e o RN-07 é teste de API (`server/tests/api/`). Na worktree, o (s4) roda **só dentro dela** (o arquivo e o teste da
   worktree), nunca na árvore principal enquanto T1–T3 rodam a suíte lá (memória "sabotagem concorrente contamina a
   suíte"); o RN-07 e a suíte da API da T4 rodam na worktree, com o SQLite dela.
-- [ ] **T5 — integração cruzando os galhos (T0 × T1 × T2 × T3 × 74 × 76), pela rota e pelo serviço.** Arquivo novo
+- [x] `3f84ecaa` **T5 — integração cruzando os galhos (T0 × T1 × T2 × T3 × 74 × 76), pela rota e pelo serviço.** Arquivo novo
   `server/tests/api/cancelarOutrosModulosIntegracao.api.test.js`, usuários reais por header (S sem perfil, S2 sem perfil,
   ALMOXARIFE, GESTOR):
   **Jornada A (T1 × 76):** M1 e M2 com 4 cada (v2 `ENTRADA`); S cria R1 por `POST /api/requisicoes-material` pedindo 4 de
@@ -692,3 +693,46 @@ T2 322/322 (3789), T3 323/323 (3792) — cada delta é exatamente o dos casos no
   RN-05 (b) e o "[RN-05 Fase 2]" daquele arquivo (a mais, não a menos).
 - Incidente: a primeira baseline rodou na árvore principal enquanto a T0 era editada — morta e refeita numa worktree em
   `6d0442aa` (junction removida antes do `worktree remove`).
+- **T4 `6ece630d`** (worktree, cherry-pick de `b680ce61` — o ff não deu porque a T5 commitou antes) —
+  `requisicaoLabels.js` exporta `STATUS_CANCELAVEIS_OUTROS_MODULOS` (os seis, congelado) e
+  `STATUS_CANCELAVEIS_ALMOXARIFADO` (`RASCUNHO` + os seis); o botão usa as listas e
+  `solicitante_id === user.id || (warehouseMode && isAdmin)`. Teste novo `cancelarListaTelaRota.api.test.js` (RN-07:
+  lê o arquivo do cliente e compara com `CANCELAVEIS_OUTROS_MODULOS`, + cada status → `CANCELADO` válido). Cliente
+  1394 → 1439 (+45), build ok; `test:api` 323 → 324 (3796). Vermelho antes: RN-06 (c) 6/6, as constantes, RN-07.
+  RN-06 (a)/(b)/(d)/(e) passaram antes, como previsto. Controles: s1 → 16 (os previstos **e** RN-06 (d)/(e), porque a
+  lista do almoxarifado é derivada da outra — **divergência**, a mais); s2 → RN-06 (c) 6/6; s3 → RN-06 (e) `RASCUNHO`;
+  s4 → RN-07.
+- **T5 `3f84ecaa`** — `cancelarOutrosModulosIntegracao.api.test.js` 7/7 (A, B1, B2, C, D, E, serviço), usuários reais
+  por header, cada gancho conferido = 1 disparo. Controles: s1 da T0 → B1 e serviço; s2 da T1 → A (trilha); s1 da T2 →
+  B2 (cancelamento 200); s-RN09 → C (reserva `ATIVA` presa); s1 da T3 → E (W1 volta). Nenhum derrubou jornada não
+  prevista. `test:api` 324/324 (3799). **Divergências:** saldo por `POST /movimentacoes/v2` `ENTRADA`; a nota da C
+  passa pelas seis portas e processa pela ação `processar` do workflow (molde da 74), não por `POST
+  /recebimentos/:id/processar` como o plano dizia (**plano errado**); em A a trilha foi posta antes da contagem de
+  emissões para o s2 cair onde o plano previa; o s1 da T2 para no "cancelamento 200" e não chega à entrega.
+
+## Fase 5 — revisão adversarial (2026-10-08): 2 revisores, 8 achados reproduzidos, 0 bloqueantes
+
+Lentes: (1) correção das RN e concorrência; (2) autorização + "este teste passaria com a feature quebrada?". Sondas em
+worktrees próprias (`CRM-e92rv1`, `CRM-e92rv2`) em `a4237edb`, removidas.
+
+1. **(importante, reproduzido pelos dois, 5/5) O desfazer da RN-09 apagava a separação concorrente que venceu.** B
+   reivindica e trava; A reivindica (`EM_SEPARACAO` está em `PODE_SEPARAR`), grava a rodada, 200; a gravação de B
+   falha e B devolve o status lido → a requisição volta a `APROVADO`/`TOTALMENTE_RESERVADA` com 1 na caixa e quem
+   pediu cancela (sintoma (b) da A43). Defeito **introduzido pela Fase 2 desta etapa**. Correção: guarda "nenhuma rodada
+   nova desde a reivindicação" + RN-09 (d).
+2. **(menor, reproduzido) `desfazerReservas`: a leitura nova do status (T3) ficou fora do `try` por reserva** — uma
+   falha na leitura abortava o laço e deixava as seguintes `ATIVA`.
+3. **(média, reproduzido) Nenhum teste prendia a B439** — sabotar a rota para aceitar superadmin passou verde em 4
+   arquivos. RN-01 (c').
+4. **(baixa, reproduzido) W2 e a guarda do desfazer sem asserção** (o RN-09 silenciava `console.warn`).
+5. **(baixa, reproduzido) Cancelamento do almoxarifado sem teste do teto de 2 tentativas** (`< 50` passou verde em 7
+   arquivos). RN-04 (c).
+6. **(baixa, reproduzido; anterior à 92) A2: no modo almoxarifado o admin do módulo via Cancelar e tomava 403** (a tela
+   usava `canDeleteAlmoxRequisicao`, o servidor `isSystemAdmin`). **Corrigido em `627dc667`** (B442): a tela usa
+   `isSystemAdmin`; RN-06 (f) vermelho 7/7 antes. Descartado: o servidor aceitar o admin do módulo.
+7. **(menor, reproduzido; anterior à 92) Exclusão administrativa durante a separação com quantidade** — o
+   `compare-and-clear` (`requisitionService.js:~940-956`) grava `EM_SEPARACAO` sem guarda e a requisição excluída
+   (`CANCELADO`, `ativo=0`) termina `EM_SEPARACAO` escondida. **Não corrigido — declarado** em D (92) (a rodada já
+   está gravada quando a guarda perderia; corrigir exige desfazer a rodada).
+8. Não refutados (lidos e sondados): compare-and-set das T1/T2 (trilha conta a verdade), cancelamento × distribuição da
+   74, cancelamento × `/aprovar`/aprovação de valor, literais S1/I1/I2/W2/R1/R2, autorização das duas rotas.
