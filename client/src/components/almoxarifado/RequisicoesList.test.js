@@ -1203,6 +1203,21 @@ describe('Etapa 92: Cancelar Requisição nos outros módulos (RN-06)', () => {
     expect(api.put).not.toHaveBeenCalledWith('/requisicoes-material/55/cancelar');
   });
 
+  // Fase 5 (A2, B442): a rota do almoxarifado só aceita dono ou `isSystemAdmin` (superadmin ou
+  // role admin) — o admin DO MÓDULO e o perfil ADMINISTRADOR que não pediram tomavam 403.
+  const ADMIN_DO_MODULO_QUE_NAO_PEDIU = {
+    id: 8, nome: 'Admin do Modulo', role: 'user', admin_modulos: ['almoxarifado'],
+    perfil_almoxarifado: 'ADMINISTRADOR',
+  };
+  test.each(['RASCUNHO', ...SEIS])('[92 RN-06 (f)] modo almoxarifado, %s, admin do módulo que não pediu: sem botão (a rota daria 403)', async (status) => {
+    mockWarehouseMode = true;
+    mockUser = ADMIN_DO_MODULO_QUE_NAO_PEDIU;
+    detalheDoBanco = baseRequisicao(status);
+    await renderizar();
+    expect(container.textContent).toContain('REQ-055');
+    expect(botaoPorTexto('Cancelar Requisição')).toBeFalsy();
+  });
+
   test.each(NOVE.filter((s) => s !== 'RASCUNHO'))('[92 RN-06 (e)] modo almoxarifado, %s: sem botão', async (status) => {
     mockWarehouseMode = true;
     detalheDoBanco = baseRequisicao(status);

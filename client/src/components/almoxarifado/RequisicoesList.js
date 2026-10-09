@@ -4,7 +4,7 @@ import api from '../../services/api';
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
-import { canDeleteAlmoxRequisicao } from '../../utils/systemPermissions';
+import { canDeleteAlmoxRequisicao, isSystemAdmin } from '../../utils/systemPermissions';
 import { prefixarAlmoxarifado } from '../../utils/localizacaoLabel';
 import { SkeletonTable } from '../SkeletonLoader';
 import AlmoxPageHeader, { REQUISICAO_FLOW, getRequisicaoStepIndex } from './AlmoxPageHeader';
@@ -1837,10 +1837,12 @@ const RequisicoesList = () => {
                 {/* Etapa 92 (B439, C152): fora do modo almoxarifado a rota
                     (`/requisicoes-material/:id/cancelar`) só cancela de quem pediu — o
                     administrador que não pediu via o botão e tomava 400. No modo almoxarifado a
-                    rota aceita dono ou administrador. As listas são a do servidor (RN-07). */}
+                    rota aceita dono ou administrador DO SISTEMA (`isSystemAdmin`, como o servidor) — o
+                    admin do módulo e o perfil ADMINISTRADOR tomavam 403 (Fase 5, B442). As listas são a
+                    do servidor (RN-07). */}
                 {(warehouseMode ? STATUS_CANCELAVEIS_ALMOXARIFADO : STATUS_CANCELAVEIS_OUTROS_MODULOS)
                   .includes(detalhe.status) && (
-                  detalhe.solicitante_id === user?.id || (warehouseMode && isAdmin)
+                  detalhe.solicitante_id === user?.id || (warehouseMode && isSystemAdmin(user))
                 ) && (
                   <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
                     onClick={() => handleCancelar(detalhe.id)}>
