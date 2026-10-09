@@ -99,7 +99,8 @@ let seq = 0;
     const its = itensDa((await rodadas(id))[0]);
     assert.deepStrictEqual(its.map((x) => [x.maximo, x.divergente]), [[6, false], [4, false]]);
     // Metade positiva (material novo, 10 livres): 6 + 3 deixa 1 — os dois ficam abaixo do separável.
-    // (Separado sem origem de OUTRA requisição não sai do disponível — a separação não reserva; D (60).)
+    // (Mudado na Etapa 95: a D (60) foi revogada — o separado sem reserva de OUTRA requisicao agora sai do separavel,
+    // B467. Aqui nao ha outra requisicao com o material, entao o numero da regua nao muda.)
     const m2 = await material(); await entrar(m2, A.id, 10);
     const r2 = await req([[m2, 10], [m2, 10]]);
     await separar(r2.id, [{ item_id: r2.ids[0], quantidade_separada: 6 }, { item_id: r2.ids[1], quantidade_separada: 3 }]);

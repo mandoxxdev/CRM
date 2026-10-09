@@ -273,17 +273,19 @@ const lerMaterial = (db, id) => dbGet(db, 'SELECT * FROM materiais_almoxarifado 
   // ── Caminho 11: saldoDisponivelParaItem (requisitionService ~115) ────────────────────────────
   // Leitura FRESCA de separar/entregar, imediatamente antes de agir — sitio distinto do de cima e
   // com query propria. Esquece-lo deixaria a entrega passar contra material que esta no terceiro.
+  // (Mudado na Etapa 95 — o contrato mudou, Fase 2 M2: a funcao lanca sem `requisicao_id`, porque a caixa sem
+  // reserva das outras requisicoes exclui a propria por ele. O item passa a levar a requisicao.)
   await test('[separar/entregar] saldoDisponivelParaItem desconta em_terceiros', async () => {
     const id = await novoMaterial(db, 30);
-    const { itemId } = await requisicaoCom(db, id, 5);
-    const r = await requisitionService.saldoDisponivelParaItem(db, { id: itemId, material_id: id });
+    const { requisicaoId, itemId } = await requisicaoCom(db, id, 5);
+    const r = await requisitionService.saldoDisponivelParaItem(db, { id: itemId, requisicao_id: requisicaoId, material_id: id });
     assert.strictEqual(r.disponivel, 70);
   });
 
   await test('[separar/entregar][CONTROLE POSITIVO] sem nada em terceiros o disponivel do item fica inteiro', async () => {
     const id = await novoMaterial(db, 0);
-    const { itemId } = await requisicaoCom(db, id, 5);
-    const r = await requisitionService.saldoDisponivelParaItem(db, { id: itemId, material_id: id });
+    const { requisicaoId, itemId } = await requisicaoCom(db, id, 5);
+    const r = await requisitionService.saldoDisponivelParaItem(db, { id: itemId, requisicao_id: requisicaoId, material_id: id });
     assert.strictEqual(r.disponivel, 100);
   });
 
@@ -393,7 +395,7 @@ const lerMaterial = (db, id) => dbGet(db, 'SELECT * FROM materiais_almoxarifado 
     assert.strictEqual(await requisitionStateMachine.calcularStatusPosAprovacao(db, requisicaoId), 'APROVADO');
     const [item] = await requisitionService.carregarItensRequisicao(db, requisicaoId);
     assert.strictEqual(item.saldo_disponivel, 100);
-    const porItem = await requisitionService.saldoDisponivelParaItem(db, { id: itemId, material_id: id });
+    const porItem = await requisitionService.saldoDisponivelParaItem(db, { id: itemId, requisicao_id: requisicaoId, material_id: id });
     assert.strictEqual(porItem.disponivel, 100);
     const detalhe = await request(app).get(`/api/almoxarifado/requisicoes/${requisicaoId}`);
     assert.strictEqual(detalhe.body.itens[0].saldo_atual, 100);

@@ -93,6 +93,10 @@ let seq = 0;
   await test('RN-01 mesma origem em duas rodadas: a 2a checa o pendente + ela (A:8, 5 + 5 recusado)', async () => {
     const A = await loc('DA'); const m = await material();
     await entrar(m.id, A.id, 8);
+    // Mudado na Etapa 95 — a regra mudou (B474): com o material SO em A, o teto do item (8 - 5 na caixa = 3) recusa
+    // antes da regua da origem, com a mensagem do teto. Saldo em OUTRO endereco para o teto nao barrar e a regua da
+    // origem seguir provada com a mesma mensagem.
+    await entrar(m.id, (await loc('DX')).id, 10);
     const { id, ids } = await req([[m.id, 10]]);
     await separar(id, [{ item_id: ids[0], quantidade_separada: 5, localizacao_origem_id: A.id }]);
     const e = await separarErro(id, [{ item_id: ids[0], quantidade_separada: 5, localizacao_origem_id: A.id }]);
@@ -169,6 +173,9 @@ let seq = 0;
   await test('Fase 5: DOIS itens do mesmo material no mesmo par — o pendente do outro conta (L:7, 5 + 5 recusado)', async () => {
     const A = await loc('TA'); const m = await material();
     await entrar(m.id, A.id, 7);
+    // Mudado na Etapa 95 — a regra mudou (B474): o teto do item 2 (7 - 5 na caixa do item 1 = 2) recusaria antes da
+    // regua da origem. Saldo em OUTRO endereco para a regua da origem seguir provada com a mesma mensagem.
+    await entrar(m.id, (await loc('TX')).id, 10);
     const { id, ids } = await req([[m.id, 5], [m.id, 5]]);
     await separar(id, [{ item_id: ids[0], quantidade_separada: 5, localizacao_origem_id: A.id }]);
     const e = await separarErro(id, [{ item_id: ids[1], quantidade_separada: 5, localizacao_origem_id: A.id }]);

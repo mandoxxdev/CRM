@@ -99,6 +99,16 @@ const PODE_SEPARAR = ['APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA',
 const PODE_ENTREGAR = ['EM_SEPARACAO', 'PRONTA_PARA_RETIRADA', 'PARCIALMENTE_ATENDIDA'];
 
 /**
+ * Etapa 95 (B473): os status em que o separado ainda nao entregue de uma requisicao ATIVA fica RETIDO para ela
+ * (a "caixa") — a separacao e a aprovacao de OUTRA requisicao nao contam com ele como livre. E o que pode separar
+ * ou entregar, mais AGUARDANDO_APROVACAO_VALOR (o legado da A45 tem caixa nesse status). Cancelada, reprovada,
+ * entregue, encerrada ou excluida nao retem (a caixa volta a prateleira sem movimento, como a reserva solta no
+ * cancelamento). PENDENTE fica fora de proposito (Fase 2, M3/C175): so o legado da A45 volta para la com caixa.
+ * A consulta A46 (plano da 95) repete esta lista no IN — mudou aqui, muda la.
+ */
+const STATUS_COM_CAIXA = [...new Set([...PODE_SEPARAR, ...PODE_ENTREGAR, 'AGUARDANDO_APROVACAO_VALOR'])];
+
+/**
  * Etapa 92 (B434, C149): os status em que quem pediu cancela pela rota dos outros modulos
  * (`PUT /api/requisicoes-material/:id/cancelar`). E a lista da tela fora do modo almoxarifado
  * (`client/src/components/almoxarifado/requisicaoLabels.js`, STATUS_CANCELAVEIS_OUTROS_MODULOS),
@@ -236,6 +246,7 @@ module.exports = {
   STATUS_TOTALMENTE_RESERVADA,
   PODE_SEPARAR,
   PODE_ENTREGAR,
+  STATUS_COM_CAIXA, // Etapa 95 (B473)
   CANCELAVEIS_OUTROS_MODULOS,
   validarTransicao,
   calcularStatusPosAprovacao,

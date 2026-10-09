@@ -156,7 +156,11 @@ let seq = 0;
     const m = await material({ qtd: 10 });
     const a = await req([[m, 10]]); const b = await req([[m, 10]]);
     await requisitionService.separarRequisicao(db, a.id, [{ item_id: a.ids[0], quantidade_separada: 10 }], ADMIN);
-    await requisitionService.separarRequisicao(db, b.id, [{ item_id: b.ids[0], quantidade_separada: 10 }], ADMIN);
+    // Mudado na Etapa 95 — a regra mudou: a separacao de B (10 com os 10 fisicos na caixa de A) agora e recusada
+    // (RN-01, M2 em separacaoTetoFisico.api.test.js). O estado que este teste prova continua existindo no LEGADO
+    // (separado antes da 95, achado pela A46), entao a caixa de B e posta por escritor direto, como a separacao antiga.
+    await dbRun(db, "UPDATE itens_requisicao_almoxarifado SET quantidade_separada = 10 WHERE id = ?", [b.ids[0]]);
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET status = 'EM_SEPARACAO' WHERE id = ?", [b.id]);
     await requisitionService.entregarRequisicao(db, a.id, [{ item_id: a.ids[0], quantidade_atendida: 10 }], ADMIN, null);
     const linha = daFila((await fila()).body, b.id);
     assert.deepStrictEqual(linha.etapas, ['AGUARDANDO_SALDO']);

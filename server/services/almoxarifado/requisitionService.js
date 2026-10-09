@@ -19,6 +19,7 @@ const {
   PODE_SEPARAR, PODE_ENTREGAR, STATUS_PARCIALMENTE_RESERVADA, STATUS_TOTALMENTE_RESERVADA,
   calcularStatusPosAprovacao, validarTransicao,
   alcadaDeValorAindaVale, separacaoAReabrir, // Etapa 94 (T2)
+  STATUS_COM_CAIXA, // Etapa 95 (T0, B473)
 } = require('./requisitionStateMachine');
 
 function num(v) {
@@ -108,6 +109,43 @@ const RESERVADO_PARA_ITEM_SQL = `COALESCE((
         AND r.status = 'ATIVA' AND r.origem = 'REQUISICAO'
     ), 0)`;
 
+/**
+ * Etapa 95 (T0, B466/B473) — a CAIXA SEM RESERVA de um material: soma, pelos itens de requisicao ATIVA num status de
+ * STATUS_COM_CAIXA, de `max(0, separado - entregue - reserva ATIVA de origem REQUISICAO do item)`. E o separado que
+ * ainda esta na prateleira (o motor nao sabe dele: separar nao move estoque) e que nenhuma reserva ja tira do
+ * disponivel — retido para quem separou. A reserva do item e a MESMA conta do RESERVADO_PARA_ITEM_SQL (mesmos
+ * filtros), so que sobre `ix`. Um construtor so: a separacao, a aprovacao, a fila e o detalhe leem daqui.
+ * `materialExpr` e uma expressao SQL do material (`ma.id`, `ir.material_id`); `exclusao` e um `AND ix...` que tira
+ * os itens que quem chama conta por conta propria (os da propria requisicao, ou o proprio item). Nao subtrai nada do
+ * disponivel (a regra de availabilitySql.js): devolve uma parcela que quem chama passa a `tetoSeparacao`.
+ */
+function caixaSemReservaSql(materialExpr, exclusao = '') {
+  const status = STATUS_COM_CAIXA.map((s) => `'${s}'`).join(',');
+  return `COALESCE((SELECT SUM(MAX(COALESCE(ix.quantidade_separada,0) - COALESCE(ix.quantidade_entregue, ix.quantidade_atendida, 0)
+      - COALESCE((SELECT SUM(rx.quantidade - COALESCE(rx.quantidade_utilizada,0)) FROM reservas_material_almoxarifado rx
+          WHERE rx.item_requisicao_id = ix.id AND rx.material_id = ix.material_id
+            AND rx.status = 'ATIVA' AND rx.origem = 'REQUISICAO'), 0), 0))
+    FROM itens_requisicao_almoxarifado ix JOIN requisicoes_almoxarifado rq ON rq.id = ix.requisicao_id
+    WHERE ix.material_id = ${materialExpr} AND COALESCE(rq.ativo, 1) = 1 AND rq.status IN (${status}) ${exclusao}), 0)`;
+}
+
+/**
+ * Etapa 95 (T0, B466; forma da Fase 2, I1/I2) — o TETO de separacao de um item: o que existe na prateleira PARA ELE.
+ *   teto = max(0, r - c) + max(0, disp - csrOutros - max(0, c - r))
+ * `disp` e o disponivel do motor SEM a reserva do item; `r` a reserva ativa do item; `c` a caixa do item (separado -
+ * entregue); `csrOutros` a caixa sem reserva dos outros itens do material. A reserva cobre primeiro a caixa do proprio
+ * item (o que sobra dela, `r - c`, e dele); o que a caixa passa da reserva sai do livre, junto com a caixa sem reserva
+ * dos outros. A forma `disp + r - c - csrOutros` (o prototipo da Fase 0) punha a caixa de OUTRA contra a reserva do
+ * item (P4: quem tinha reserva ficava sem separar). Arredondado a 1e-6, como o resto do modulo — sem isso 0,3 - 0,1
+ * dava 0.19999999999999998 e a porta recusava 0,2 (I2). Pura; o cliente nao a importa (le o numero do servidor).
+ */
+function tetoSeparacao(disponivel, reservaDoItem, caixaDoItem, caixaSemReservaOutros) {
+  const r = Math.max(0, num(reservaDoItem));
+  const c = Math.max(0, num(caixaDoItem));
+  const teto = Math.max(0, r - c) + Math.max(0, num(disponivel) - num(caixaSemReservaOutros) - Math.max(0, c - r));
+  return Math.round(teto * 1e6) / 1e6;
+}
+
 async function carregarItensRequisicao(db, requisicaoId) {
   // Etapa 28: `ma.material_critico` entra para a régua da segunda conferência
   // (assertConferidaSeObrigatorio em entregarRequisicao e no liberar-retirada).
@@ -127,6 +165,11 @@ async function carregarItensRequisicao(db, requisicaoId) {
  * item a item imediatamente antes de agir.
  */
 async function saldoDisponivelParaItem(db, item) {
+  // Etapa 95 (Fase 2, M2): sem `id` ou `requisicao_id` a exclusao viraria "<> 0" e contaria a caixa da propria
+  // requisicao (ou do proprio item) como de outra, em silencio. Todo chamador passa linha de carregarItensRequisicao.
+  if (!item || item.id == null || item.requisicao_id == null) {
+    throw new Error('saldoDisponivelParaItem: item sem id ou requisicao_id');
+  }
   const row = await dbGet(db, `SELECT
       ${disponivelSql('ma')} as saldo_disponivel,
       COALESCE((
@@ -134,11 +177,17 @@ async function saldoDisponivelParaItem(db, item) {
         FROM reservas_material_almoxarifado r
         WHERE r.item_requisicao_id = ? AND r.material_id = ma.id
           AND r.status = 'ATIVA' AND r.origem = 'REQUISICAO'
-      ), 0) as reservado_para_item
-    FROM materiais_almoxarifado ma WHERE ma.id = ?`, [item.id, item.material_id]);
+      ), 0) as reservado_para_item,
+      ${caixaSemReservaSql('ma.id', 'AND ix.requisicao_id <> ?')} as caixa_outras_requisicoes,
+      ${caixaSemReservaSql('ma.id', 'AND ix.id <> ?')} as caixa_outros_itens
+    FROM materiais_almoxarifado ma WHERE ma.id = ?`, [item.id, item.requisicao_id, item.id, item.material_id]);
   return {
     disponivel: num(row?.saldo_disponivel) + num(row?.reservado_para_item),
     reservado_para_item: num(row?.reservado_para_item),
+    // Etapa 95 (T0): a caixa sem reserva das OUTRAS requisicoes (a porta soma a da propria requisicao em memoria) e a
+    // dos OUTROS itens (a aprovacao e a entrega — a propria caixa elas tratam pela reserva do item).
+    caixa_outras_requisicoes: num(row?.caixa_outras_requisicoes),
+    caixa_outros_itens: num(row?.caixa_outros_itens),
   };
 }
 
@@ -709,9 +758,14 @@ const MSG_STATUS_SEPARAR = 'Requisição deve estar aprovada, aguardando estoque
 // Etapa 93 (T0, B443): separar, entregar e excluir seguram a trava POR REQUISICAO (travaPorRequisicao) do
 // comeco ao fim — dois gestos na mesma requisicao viram uma sequencia (o segundo le o estado novo). Nao e a
 // `comTravaDaRequisicao` acima (essa e a trava por MATERIAL dos itens). Nao reentrante: nenhuma destas chama outra.
+// Etapa 95 (T0, B476 invertida na Fase 2, B1): e, POR DENTRO, a trava por MATERIAL dos itens (`comTravaDaRequisicao`).
+// A separacao passou a ler o fisico para limitar a caixa — a mesma caixa que a aprovacao le para reservar. Sem a trava,
+// duas requisicoes do mesmo material separavam o mesmo livre ao mesmo tempo (10/10 sem gancho: 8 na caixa para 4) e a
+// aprovacao reservava a caixa que acabava de ser separada. Ordem requisicao -> material (a permitida); a separacao nao
+// chama nada que pegue a trava por material de novo (`verificarBloqueioLiberacao` nao pega).
 function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
   return travaPorRequisicao.serializarNaRequisicao(requisicaoId,
-    () => separarSemTrava(db, requisicaoId, itensSeparados, user));
+    () => comTravaDaRequisicao(db, requisicaoId, () => separarSemTrava(db, requisicaoId, itensSeparados, user)));
 }
 
 async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
@@ -773,6 +827,11 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
       pedidoSeparacao.set(k, (pedidoSeparacao.get(k) || 0) + pend);
     }
   }
+  // Etapa 95 (T0, B468): o separado de ANTES da rodada (retrato, molde do `planejadaAntes`) — a regua da 60 usa o
+  // teto do inicio da rodada, porque ela ja subtrai os outros itens da rodada (`totalPorMaterial`); com o teto em
+  // memoria subtrairia duas vezes. E a caixa sem reserva de um item da propria requisicao, com um separado dado.
+  const separadoAntes = new Map(itens.map((i) => [i.id, getSeparado(i)]));
+  const caixaSemReservaDe = (i, separado) => Math.max(0, separado - getEntregue(i) - num(i.reservado_para_item));
   for (const entrada of itensSeparados) {
     const item = itens.find((i) => Number(i.id) === Number(entrada.item_id));
     if (!item) continue;
@@ -780,25 +839,33 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
     const qty = num(entrada.quantidade_separada);
     if (qty <= 0) continue;
 
-    // Disponível + o hold da PRÓPRIA requisição (Etapa 4): a reserva criada na aprovação sai do
-    // disponível geral, então sem somá-la de volta a requisição não conseguiria separar o
-    // material que já está separado para ela.
+    // Etapa 95 (T0, B466/B468): o TETO do item — o que existe na prateleira para ele (tetoSeparacao). Antes era
+    // `disponivel + reserva do item` e o separado ainda nao entregue nunca era descontado (C169: separava 6 com 4
+    // fisicos; M2/M4: 8 na caixa para 4). A caixa sem reserva das OUTRAS requisicoes vem do banco (leitura fresca,
+    // sob as duas travas); a dos outros itens DESTA requisicao vem da memoria (o que a entrada anterior acabou de
+    // separar conta — RN-02), e a caixa do proprio item tambem (o mesmo item duas vezes no payload).
     // eslint-disable-next-line no-await-in-loop
-    const { disponivel: estoque } = await saldoDisponivelParaItem(db, item);
-    const max = maxSeparar(item, estoque);
+    const saldo = await saldoDisponivelParaItem(db, item);
+    const irmaos = itens.filter((o) => o.id !== item.id && Number(o.material_id) === Number(item.material_id));
+    const tetoCom = (separadoDe) => tetoSeparacao(saldo.disponivel - saldo.reservado_para_item, saldo.reservado_para_item,
+      separadoDe(item) - getEntregue(item),
+      saldo.caixa_outras_requisicoes + irmaos.reduce((acc, o) => acc + caixaSemReservaDe(o, separadoDe(o)), 0));
+    const teto = tetoCom(getSeparado);
+    const max = maxSeparar(item, teto);
     // Etapa 60 (RN-01): a regua da divergencia e o maximo separavel NA HORA, do item AGREGADO (o mesmo
     // item duas vezes no payload nao vira duas reguas) — guardado no 1o encontro, antes da mutacao.
     if (!reguaDivergencia.has(item.id)) {
       reguaDivergencia.set(item.id, {
-        maxInicial: max, pend: pendenteSeparacao(item), estoque: num(estoque), material_id: item.material_id,
-        origens: new Set(), saldoOrigem: null, total: 0, motivo: null, motivoTroca: null,
+        maxInicial: max, pend: pendenteSeparacao(item), estoque: tetoCom((i) => separadoAntes.get(i.id)),
+        material_id: item.material_id, origens: new Set(), saldoOrigem: null, total: 0, motivo: null, motivoTroca: null,
       });
     }
 
-    if (qty > max) {
+    // Etapa 95 (Fase 2, I2): epsilon do modulo — o teto ja vem arredondado a 1e-6.
+    if (qty > max + 1e-9) {
       const err = new Error(
         `${item.material_nome}: não é possível separar ${qty} ${item.unidade || ''}. `
-        + `Máximo: ${max} (pendente: ${pendenteSeparacao(item)}, disponível: ${estoque})`
+        + `Máximo: ${max} (pendente: ${pendenteSeparacao(item)}, disponível: ${teto})`
       );
       err.status = 400;
       throw err;
@@ -1685,6 +1752,8 @@ module.exports = {
   todosItensCompletos,
   carregarItensRequisicao,
   saldoDisponivelParaItem,
+  caixaSemReservaSql, // Etapa 95 (T0)
+  tetoSeparacao, // Etapa 95 (T0)
   reservarItensAprovacao,
   prepararPosAprovacao, // Etapa 73
   desfazerReservas, // Etapa 73

@@ -1324,6 +1324,11 @@ async function initSchema(db) {
   // entrega consome igual); a coluna existe para o estorno da entrada (Etapa 71) achar e desfazer só
   // as reservas que aquela nota criou. Gravada só pelo 4º argumento de criarReserva — nunca do body.
   await safeAlter(db, 'ALTER TABLE reservas_material_almoxarifado ADD COLUMN recebimento_id INTEGER');
+  // Etapa 95 (T0, B478): a caixa sem reserva (requisitionService.caixaSemReservaSql) le a reserva de cada item por
+  // `item_requisicao_id` numa subconsulta correlacionada; sem indice a fila de separacao ficava ~40x mais lenta com o
+  // historico (Fase 2, I3). Depois do ALTER que cria a coluna (primeiro boot).
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_reservas_almox_item_req
+    ON reservas_material_almoxarifado(item_requisicao_id)`);
 
   // ── Recebimentos ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS recebimentos_material_almoxarifado (
@@ -2476,6 +2481,10 @@ async function initSchema(db) {
   await dbRun(db, `UPDATE itens_requisicao_almoxarifado
     SET quantidade_entregue = quantidade_atendida
     WHERE COALESCE(quantidade_entregue, 0) = 0 AND COALESCE(quantidade_atendida, 0) > 0`);
+  // Etapa 95 (T0, B478): a caixa sem reserva soma os itens de TODAS as requisicoes de um material — sem indice por
+  // material, uma varredura da tabela inteira (que nunca e apagada) por linha da fila (Fase 2, I3).
+  await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_itens_req_almox_material
+    ON itens_requisicao_almoxarifado(material_id)`);
 
   // ── Extend conferências (inventário) ──
   await safeAlter(db, 'ALTER TABLE conferencias_almoxarifado ADD COLUMN tipo TEXT DEFAULT \'GERAL\'');
