@@ -11,7 +11,7 @@ import AlmoxPageHeader, { REQUISICAO_FLOW, getRequisicaoStepIndex } from './Almo
 import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
 import {
   TIPO_REQUISICAO_LABELS, STATUS_CANCELAVEIS_ALMOXARIFADO, STATUS_CANCELAVEIS_OUTROS_MODULOS,
-  separacaoAReabrir,
+  separacaoAReabrir, STATUS_COM_CAIXA,
 } from './requisicaoLabels';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import AssinaturaCanvas from './AssinaturaCanvas';
@@ -22,7 +22,7 @@ import { AprovacoesRegraRequisicao, FilaAprovacoesRegra, FilaAprovacaoSimples } 
 import {
   FiPlus, FiRefreshCw, FiEye, FiCheck, FiX, FiPackage,
   FiAlertTriangle, FiClock, FiTruck, FiCheckCircle, FiFilter, FiMap, FiTrash2, FiDollarSign,
-  FiSend, FiArchive, FiShoppingCart, FiUserCheck, FiBox, FiEdit3, FiCopy, FiCheckSquare
+  FiSend, FiArchive, FiShoppingCart, FiUserCheck, FiBox, FiEdit3, FiCopy, FiCheckSquare, FiCornerUpLeft
 } from 'react-icons/fi';
 import './Almoxarifado.css';
 
@@ -101,6 +101,9 @@ const temPlanejada = (item) => !!item.origem_separacao_id && getSeparado(item) >
 const valorPlanejada = (item) => `${item.origem_separacao_id}:${item.lote_separacao_id ?? ''}`;
 // O servidor só aplica a planejada até o separado ainda não entregue; acima disso é automático.
 const pendenteSeparado = (item) => Math.max(0, getSeparado(item) - getEntregue(item));
+// Etapa 98 (T4): a caixa do item na régua do servidor (`Q.qtd`, 6 casas) — o que o "Devolver à prateleira" pode tirar.
+const caixaDoItem = (item) => Math.round(pendenteSeparado(item) * 1e6) / 1e6;
+const MOTIVO_DEVOLUCAO_MAX = 500;
 // Opção do "Sai de" quando a busca de saldos falhou num item com planejada: selecionada, não manda
 // chave (o servidor aplica a planejada) — e faz "Qualquer endereço" virar uma troca de verdade.
 const VALOR_PLANEJADA_SEM_SALDOS = '__planejada__';
@@ -271,6 +274,10 @@ const RequisicoesList = () => {
   const [showEncerrar, setShowEncerrar] = useState(false);
   const [motivoEncerramento, setMotivoEncerramento] = useState('');
   const [confirmDialog, setConfirmDialog] = useState(null);
+  // Etapa 98 (T4): devolver da caixa à prateleira — o item do modal, a quantidade e o motivo.
+  const [devolverItem, setDevolverItem] = useState(null);
+  const [qtdDevolver, setQtdDevolver] = useState('');
+  const [motivoDevolver, setMotivoDevolver] = useState('');
   const [quantidadesEntrega, setQuantidadesEntrega] = useState({});
   // Etapa 58 (RN-05): origem escolhida por item ({ [itemId]: { valor, codigo } }) e as opções por
   // material. `saldosEntregaSeqRef` descarta a resposta de uma abertura anterior do modal.
@@ -1141,6 +1148,68 @@ const RequisicoesList = () => {
     }
   };
 
+  // Etapa 98 (T4, B502): devolver da caixa à prateleira — o inverso do separar, um item por vez. Não move estoque:
+  // o servidor diminui o separado, limpa a conferência (B505) e leva a *Pronta* de volta a *Em Separação* (B504).
+  const abrirModalDevolver = (item) => {
+    setDevolverItem(item);
+    setQtdDevolver(String(caixaDoItem(item)));
+    setMotivoDevolver('');
+  };
+  const fecharModalDevolver = () => {
+    setDevolverItem(null);
+    setQtdDevolver('');
+    setMotivoDevolver('');
+  };
+  const qtdDevolverValida = (item, valor) => {
+    const q = Number(String(valor).replace(',', '.'));
+    return String(valor).trim() !== '' && Number.isFinite(q) && q > 1e-9 && q <= caixaDoItem(item) + 1e-9;
+  };
+  const handleDevolverPrateleira = async () => {
+    if (!detalhe || !devolverItem) return;
+    const motivo = motivoDevolver.trim();
+    if (!motivo || !qtdDevolverValida(devolverItem, qtdDevolver)) return;
+    const id = detalhe.id;
+    setSaving(true);
+    try {
+      await api.put(`/almoxarifado/requisicoes/${id}/devolver-separado`, {
+        motivo,
+        itens: [{ item_id: devolverItem.id, quantidade: Number(String(qtdDevolver).replace(',', '.')) }],
+      });
+      toast.success('Devolvido à prateleira');
+      fecharModalDevolver();
+      await abrirDetalhe(id, { force: true });
+      await loadRequisicoes();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao devolver à prateleira');
+      // D409: a caixa mudou enquanto a devolução era registrada — o modal mostrava uma caixa que já não existe.
+      // Fecha e recarrega (molde do 409 da separação, B463); os 400 mantêm o modal (corrigir e tentar de novo).
+      if (err.response?.status === 409) {
+        fecharModalDevolver();
+        await abrirDetalhe(id, { force: true });
+        await loadRequisicoes();
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Etapa 98 (Fase 2, B-1): em *Parcialmente Atendida* com crítico na caixa e a conferência limpa (a devolução a
+  // limpa, B505), a entrega cai no C3 e o "Conferir separação" só existe em *Em Separação*. A saída é a separação
+  // vazia (`itens_separados: []`), que leva a *Em Separação* sem rodada — e lá outra pessoa confere.
+  const handleSepararDeNovoParaConferir = async (id) => {
+    setSaving(true);
+    try {
+      await api.put(`/almoxarifado/requisicoes/${id}/separar`, { itens_separados: [] });
+      toast.success('Requisição de volta a Em Separação — confira a separação');
+      await abrirDetalhe(id, { force: true });
+      await loadRequisicoes();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao reabrir a separação');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleConfirmarRecebimento = async (id) => {
     setSaving(true);
     try {
@@ -1500,6 +1569,16 @@ const RequisicoesList = () => {
                       {getPendente(item) > 0 && maxQtdEntrega(item) <= 0 && getEntregue(item) > 0 && Number(item.saldo_atual) < getPendente(item) && (
                         <div style={{ fontSize: '0.7rem', color: 'var(--gmp-error)', marginTop: 4 }}>⚠ Sem estoque para entrega</div>
                       )}
+                      {/* Etapa 98 (T4, B502): tirar da caixa o que não vai sair (quebrou, perdeu, separou errado). */}
+                      {warehouseMode && STATUS_COM_CAIXA.includes(detalhe.status) && caixaDoItem(item) > 0 && (
+                        <button type="button" className="btn-almox-secondary" data-testid={`devolver-prateleira-${item.id}`}
+                          style={{ marginTop: 6, fontSize: '0.72rem', padding: '4px 8px' }}
+                          onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; abrirModalDevolver(item); }}
+                          disabled={saving}
+                          title="Tira da caixa desta requisição o que não vai sair (quebrou, perdeu ou foi separado errado) — não move estoque">
+                          <FiCornerUpLeft size={12} /> Devolver à prateleira
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1599,6 +1678,33 @@ const RequisicoesList = () => {
                           </div>
                           <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
                             {s.usuario_nome || 'Usuário'} · {formatDate(s.em)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Etapa 98 (T4, B507): a trilha das devoluções da caixa à prateleira (`devolucoes_caixa` do detalhe). */}
+                {(Array.isArray(detalhe.devolucoes_caixa) ? detalhe.devolucoes_caixa : []).length > 0 && (
+                  <div style={{ marginTop: 16 }} data-testid="devolucoes-caixa">
+                    <div style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--gmp-text)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                      Devolvido à prateleira ({detalhe.devolucoes_caixa.length})
+                    </div>
+                    {detalhe.devolucoes_caixa.map((d) => {
+                      const itemDet = (detalhe.itens || []).find((i) => Number(i.id) === Number(d.item_id));
+                      const unidade = itemDet?.unidade || itemDet?.material_unidade || '';
+                      const motivo = typeof d.motivo === 'string' ? d.motivo.trim() : '';
+                      return (
+                        <div key={d.id} data-testid={`devolucao-caixa-${d.id}`} style={{ padding: '6px 0', borderBottom: '1px solid var(--gmp-border)', fontSize: '0.82rem' }}>
+                          <div>
+                            <strong>{d.material_codigo}</strong>{itemDet?.material_nome ? ` ${itemDet.material_nome}` : ''}
+                            {`: ${d.quantidade}${unidade ? ` ${unidade}` : ''} devolvido${Number(d.quantidade) === 1 ? '' : 's'} à prateleira`}
+                            {motivo ? ` — ${motivo}` : ''}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>
+                            {d.usuario_nome || `Usuário #${d.usuario_id}`} · {formatDate(d.created_at)}
+                            {d.conferencia_limpa ? ' · conferência refeita' : ''}
                           </div>
                         </div>
                       );
@@ -1735,7 +1841,7 @@ const RequisicoesList = () => {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 20 }}>
                     <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
                       onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; abrirModalSeparacao(); }}
-                      title="Corrige as quantidades já registradas na separação">
+                      title="Separa mais quantidade — para tirar da caixa, use Devolver à prateleira no item">
                       <FiPackage size={14} /> Ajustar Separação
                     </button>
                     {/* Etapa 28: segunda conferência — quem separou não confere (o backend
@@ -1840,6 +1946,16 @@ const RequisicoesList = () => {
                         <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', textAlign: 'center', padding: '8px 0' }}>
                           Aguardando reposição de estoque para itens pendentes.
                         </div>
+                      )}
+                      {/* Etapa 98 (Fase 2, B-1): crítico na caixa sem conferência — a entrega cai no C3 e o
+                          "Conferir separação" só existe em Em Separação. A separação vazia leva até lá. */}
+                      {conferenciaPendente && (
+                        <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
+                          onClick={(e) => { if (!bloquearSeNaoPode('separar_emitir', e)) return; handleSepararDeNovoParaConferir(detalhe.id); }}
+                          disabled={saving}
+                          title="Há material crítico na caixa sem a segunda conferência: volta a requisição para Em Separação, sem separar nada, para outra pessoa conferir antes de entregar">
+                          <FiUserCheck size={14} /> Separar de novo para conferir
+                        </button>
                       )}
                     </div>
                   );
@@ -2009,6 +2125,59 @@ const RequisicoesList = () => {
           </div>
         </div>
       )}
+
+      {/* Etapa 98 (T4): devolver da caixa à prateleira — um item, quantidade (padrão = a caixa) e motivo obrigatório. */}
+      {devolverItem && detalhe && (() => {
+        const caixa = caixaDoItem(devolverItem);
+        const unidade = devolverItem.unidade || devolverItem.material_unidade || '';
+        const podeDevolver = !saving && motivoDevolver.trim() !== '' && qtdDevolverValida(devolverItem, qtdDevolver);
+        return (
+          <div className="almox-modal-overlay" onClick={() => !saving && fecharModalDevolver()}>
+            <div className="almox-modal almox-modal-sm" data-testid="modal-devolver-prateleira" onClick={e => e.stopPropagation()}>
+              <div className="almox-modal-header">
+                <h2>Devolver à prateleira — {devolverItem.material_nome}</h2>
+                <button className="almox-modal-close" onClick={fecharModalDevolver} disabled={saving}>✕</button>
+              </div>
+              <div className="almox-modal-body">
+                <p style={{ fontSize: '0.875rem', marginBottom: 12 }}>
+                  Na caixa: <strong>{`${caixa} ${unidade}`.trim()}</strong>
+                </p>
+                <div className="almox-field">
+                  <label className="almox-label" htmlFor="devolver-quantidade">Quantidade</label>
+                  <input id="devolver-quantidade" data-testid="devolver-quantidade" className="almox-input" type="number"
+                    min="0" max={caixa} step="any" value={qtdDevolver}
+                    onChange={e => setQtdDevolver(e.target.value)} />
+                </div>
+                <div className="almox-field">
+                  <label className="almox-label" htmlFor="devolver-motivo">Motivo (obrigatório)</label>
+                  <textarea id="devolver-motivo" data-testid="devolver-motivo" className="almox-textarea" rows={3}
+                    maxLength={MOTIVO_DEVOLUCAO_MAX} value={motivoDevolver}
+                    onChange={e => setMotivoDevolver(e.target.value)}
+                    placeholder="Ex.: quebrou na caixa, perdeu-se, foi separado o material errado..." />
+                </div>
+                <div className="almox-hint-banner" style={{ fontSize: '0.8rem' }}>
+                  <div>O material volta para a prateleira de onde foi separado — não há movimentação de estoque. Se quebrou ou se perdeu, dê a baixa (Perda) depois.</div>
+                  {Number(devolverItem.quantidade_reservada_item) > 0 && (
+                    <div style={{ marginTop: 6 }}>Este item continua reservado para a requisição: para dar baixa, libere a reserva antes.</div>
+                  )}
+                  {detalhe.status === 'PRONTA_PARA_RETIRADA' && (
+                    <div style={{ marginTop: 6 }}>A requisição volta para Em Separação.</div>
+                  )}
+                  {detalhe.conferencia && (
+                    <div style={{ marginTop: 6 }}>A segunda conferência será refeita.</div>
+                  )}
+                </div>
+              </div>
+              <div className="almox-modal-footer">
+                <button className="btn-almox-secondary" onClick={fecharModalDevolver} disabled={saving}>Cancelar</button>
+                <button className="btn-almox-primary" data-testid="devolver-confirmar" onClick={handleDevolverPrateleira} disabled={!podeDevolver}>
+                  {saving ? 'Devolvendo...' : 'Devolver'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Modal encerrar (motivo opcional, design: "body {motivo} opcional") */}
       {showEncerrar && detalhe && (

@@ -44,4 +44,14 @@ export const separacaoAReabrir = (status, itens) => STATUS_PRE_SEPARACAO.include
   && (itens || []).some((i) => (Number(i.quantidade_separada) || 0)
     - (Number(i.quantidade_entregue ?? i.quantidade_atendida) || 0) > 1e-9);
 
+// Etapa 98 (T4, B502): os status em que a tela oferece **Devolver à prateleira** no item com caixa (separado −
+// entregue > 0). Espelho de `STATUS_COM_CAIXA` de `server/services/almoxarifado/requisitionStateMachine.js`
+// (lá derivado de PODE_SEPARAR + PODE_ENTREGAR + aprovação de valor), que a rota
+// `PUT /api/almoxarifado/requisicoes/:id/devolver-separado` usa para recusar (D1). Conferido como conjunto por
+// teste de API (`server/tests/api/devolverListaTelaRota.api.test.js`). Mudou lá, mude aqui.
+export const STATUS_COM_CAIXA = Object.freeze([
+  'APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA',
+  'EM_SEPARACAO', 'PARCIALMENTE_ATENDIDA', 'PRONTA_PARA_RETIRADA', 'AGUARDANDO_APROVACAO_VALOR',
+]);
+
 export default TIPO_REQUISICAO_LABELS;
