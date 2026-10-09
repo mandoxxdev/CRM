@@ -787,6 +787,56 @@ process.on('exit', (code) => {
     assert.deepStrictEqual(errados, []);
   });
 
+  // ── T2: o sufixo S98 (B508) — a recusa da porta avulsa ensina a terceira saida, a devolucao ───────────────────────
+  // Literal S98 (plano, "O sufixo"), inteira: o fim muda; o comeco ("— c un estao separados para ...") e o corte da
+  // lista sao os da 97.
+  const S98_FIM = ' e só saem pela entrega (material perdido da caixa: devolva-o à prateleira na requisição e dê a baixa, '
+    + 'entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)';
+  const S98 = (c, un, lista) => ` — ${c} ${un} estão separados para ${lista}${S98_FIM}`;
+  const M1 = (n) => `Saldo insuficiente. Disponível: ${n} PC`;
+  const movAvulsa = (b) => como('ADMIN').post(`${API}/movimentacoes/v2`, { motivo: 'e98 T2', justificativa: 'teste da etapa 98 T2', ...b });
+
+  await test('[98 RN-11] montagem + SAIDA avulsa de 4 pela rota -> 400 M1 + S98 (literal inteira), nada muda', async () => {
+    const c = await montagem();
+    const numero = (await dbGet(db, 'SELECT numero FROM requisicoes_almoxarifado WHERE id=?', [c.R])).numero;
+    const antes = await dbGet(db, 'SELECT (SELECT COUNT(*) FROM movimentacoes_almoxarifado WHERE material_id=?) AS n, quantidade_atual AS f FROM materiais_almoxarifado WHERE id=?', [c.m, c.m]);
+    const r = await movAvulsa({ material_id: c.m, tipo: 'SAIDA', quantidade: 4 });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, M1(0) + S98(4, 'PC', `a requisição ${numero}`));
+    const depois = await dbGet(db, 'SELECT (SELECT COUNT(*) FROM movimentacoes_almoxarifado WHERE material_id=?) AS n, quantidade_atual AS f FROM materiais_almoxarifado WHERE id=?', [c.m, c.m]);
+    assert.deepStrictEqual(depois, antes);
+  });
+
+  await test('[98 RN-11] depois de devolver 2 a PERDA 4 recusa com a caixa 2 no S98; a PERDA 2 passa', async () => {
+    const c = await montagem();
+    const numero = (await dbGet(db, 'SELECT numero FROM requisicoes_almoxarifado WHERE id=?', [c.R])).numero;
+    const d = await como('ALMOX').put(`${API}/requisicoes/${c.R}/devolver-separado`, { motivo: 'quebrou', itens: [{ item_id: c.ids[0], quantidade: 2 }] });
+    assert.strictEqual(d.status, 200, JSON.stringify(d.body));
+    const r = await movAvulsa({ material_id: c.m, tipo: 'PERDA', quantidade: 4 });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, M1(2) + S98(2, 'PC', `a requisição ${numero}`));
+    const p = await movAvulsa({ material_id: c.m, tipo: 'PERDA', quantidade: 2 });
+    assert.strictEqual(p.status, 201, JSON.stringify(p.body));
+  });
+
+  await test('[98 RN-11] sem caixa a recusa e byte a byte a de hoje (RN-04 da 97): sem sufixo nenhum', async () => {
+    const m = await material(4);
+    const r = await movAvulsa({ material_id: m, tipo: 'SAIDA', quantidade: 5 });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, M1(4));
+  });
+
+  await test('[98 RN-11] sufixoCaixa direto: S98 com uma, tres e mais de tres requisicoes; "" sem caixa', async () => {
+    const { sufixoCaixa } = require('../../services/almoxarifado/caixaSql');
+    assert.strictEqual(sufixoCaixa({ caixa: 4, requisicoes: ['R-1'] }, 'PC'), S98(4, 'PC', 'a requisição R-1'));
+    assert.strictEqual(sufixoCaixa({ caixa: 0.3333333, requisicoes: ['R-1', 'R-2', 'R-3'] }, 'KG'),
+      S98(0.333333, 'KG', 'as requisições R-1, R-2 e R-3'));
+    assert.strictEqual(sufixoCaixa({ caixa: 5, requisicoes: ['A', 'B', 'C', 'D', 'E'] }, 'PC'),
+      S98(5, 'PC', 'as requisições A, B, C e mais 2'));
+    assert.strictEqual(sufixoCaixa({ caixa: 0, requisicoes: ['R-1'] }, 'PC'), '');
+    assert.strictEqual(sufixoCaixa({}, 'PC'), '');
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed ? 1 : 0);

@@ -71,7 +71,8 @@ async function lerCaixa(db, materialId) {
 
 /**
  * Etapa 97 (T0, B493) — o sufixo da recusa quando ha caixa: diz quanto esta separado, para quem, e as duas saidas
- * legitimas de hoje (s3 da Fase 0: entregar o que existe e encerrar, ou o administrador excluir). Sem caixa devolve
+ * legitimas (s3 da Fase 0: entregar o que existe e encerrar, ou o administrador excluir) e, desde a Etapa 98 (B508), a
+ * terceira: devolver a prateleira na requisicao (`PUT /requisicoes/:id/devolver-separado`) e dar a baixa. Sem caixa devolve
  * `''` — a recusa fica byte a byte a de hoje (RN-04). Ate tres numeros de requisicao; depois, "e mais N".
  */
 function sufixoCaixa({ caixa, requisicoes } = {}, unidade) {
@@ -83,8 +84,8 @@ function sufixoCaixa({ caixa, requisicoes } = {}, unidade) {
   else if (r.length <= 3) lista = `as requisições ${r.slice(0, -1).join(', ')} e ${r[r.length - 1]}`;
   else lista = `as requisições ${r.slice(0, 3).join(', ')} e mais ${r.length - 3}`;
   const qtdUn = [Q.qtd(Number(caixa)), unidade].filter((x) => x !== undefined && x !== null && x !== '').join(' ');
-  return ` — ${qtdUn} estão separados para ${lista} e só saem pela entrega (material perdido da caixa: entregue o que `
-    + 'existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)';
+  return ` — ${qtdUn} estão separados para ${lista} e só saem pela entrega (material perdido da caixa: devolva-o à prateleira `
+    + 'na requisição e dê a baixa, entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)';
 }
 
 module.exports = { caixaSemReservaSql, livreDeCaixaSql, lerCaixa, sufixoCaixa };

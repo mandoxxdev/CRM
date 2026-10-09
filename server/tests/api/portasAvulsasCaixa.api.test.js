@@ -60,8 +60,10 @@ const estado = async (p) => {
 };
 
 // Literal S (plano, "Literais"): o sufixo que nomeia a caixa.
-const S_FIM = ' e só saem pela entrega (material perdido da caixa: entregue o que existe e encerre a requisição, ou peça '
-  + 'ao administrador do almoxarifado para excluí-la)';
+// Mudado na Etapa 98 (B508): o sufixo ganhou a terceira saida, "devolva-o a prateleira na requisicao e de a baixa"
+// (literal S98 do plano da 98). Nenhuma outra assercao deste arquivo mudou.
+const S_FIM = ' e só saem pela entrega (material perdido da caixa: devolva-o à prateleira na requisição e dê a baixa, '
+  + 'entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)';
 const S = (c, un, lista) => ` — ${c} ${un} estão separados para ${lista}${S_FIM}`;
 
 (async () => {

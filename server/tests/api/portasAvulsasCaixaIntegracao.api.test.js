@@ -53,8 +53,10 @@ const dormir = (ms) => new Promise((r) => { setTimeout(r, ms); });
 const comPrazo = (p, ms) => Promise.race([Promise.resolve(p).then(() => 'resolveu'), dormir(ms).then(() => 'PRESO')]);
 
 // Literais do plano ("Literais"): S e as recusas de cada porta.
-const S_FIM = ' e só saem pela entrega (material perdido da caixa: entregue o que existe e encerre a requisição, ou peça '
-  + 'ao administrador do almoxarifado para excluí-la)';
+// Mudado na Etapa 98 (B508): o sufixo ganhou a terceira saida, "devolva-o a prateleira na requisicao e de a baixa"
+// (literal S98 do plano da 98). Nenhuma outra assercao deste arquivo mudou.
+const S_FIM = ' e só saem pela entrega (material perdido da caixa: devolva-o à prateleira na requisição e dê a baixa, '
+  + 'entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)';
 const S = (c, lista) => ` — ${c} PC estão separados para ${lista}${S_FIM}`;
 const M1 = (n) => `Saldo insuficiente. Disponível: ${n} PC`;
 const M3 = (n) => `Saldo disponível insuficiente: ${n}`;
