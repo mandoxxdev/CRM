@@ -443,18 +443,22 @@ let seq = 0;
   });
 
   // ══════════════ M-1 — epsilon em todosItensCompletos ══════════════
-  await test('[M-1] dez entregas de 0,1 contra solicitada 1 -> ENTREGUE com data_entrega (e integral)', async () => {
+  // Mudado na Etapa 96 (T3): a entrega passou a gravar `quantidade_entregue` arredondada (dez entregas de 0,1 somam
+  // 1 exato), e o cenario antigo deixou de produzir o residuo — o controle `entregue !== 1` caiu, e sem ele o teste
+  // ficaria verde sem provar o epsilon. O residuo agora e o LEGADO, escrito direto (o que o codigo antigo deixou
+  // gravado): o item A entregue 0.9999999999999999 de 1, e a entrega do item B recalcula a requisicao inteira por
+  // `todosItensCompletos` — sem o epsilon, A contaria como parcial.
+  await test('[M-1] item legado entregue 0.9999999999999999 de 1 (escrito direto): a entrega do outro item -> ENTREGUE com data_entrega', async () => {
     const m = await material({ saldo: 5 });
-    const r = await criarAprovada([[m, 1]], null);
-    await separar(r.id, [[r.itens[0], 1]]);
-    let ultimo;
-    for (let i = 0; i < 10; i++) {
-      // eslint-disable-next-line no-await-in-loop
-      ultimo = await entregar(r.id, [[r.itens[0], 0.1]]);
-    }
-    const row = await dbGet(db, 'SELECT status, data_entrega FROM requisicoes_almoxarifado WHERE id = ?', [r.id]);
+    const r = await criarAprovada([[m, 1], [m, 1]], null);
+    await separar(r.id, [[r.itens[0], 1], [r.itens[1], 1]]);
+    await entregar(r.id, [[r.itens[0], 1]]);
+    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_entregue = ?, quantidade_atendida = ? WHERE id = ?',
+      [0.9999999999999999, 0.9999999999999999, r.itens[0]]);
     const it = await dbGet(db, 'SELECT quantidade_entregue FROM itens_requisicao_almoxarifado WHERE id = ?', [r.itens[0]]);
-    assert.notStrictEqual(it.quantidade_entregue, 1, 'controle: a soma em ponto flutuante NAO da 1 exato (senao o teste nao prova o epsilon)');
+    assert.notStrictEqual(it.quantidade_entregue, 1, 'controle: o legado ficou torto (senao o teste nao prova o epsilon)');
+    const ultimo = await entregar(r.id, [[r.itens[1], 1]]);
+    const row = await dbGet(db, 'SELECT status, data_entrega FROM requisicoes_almoxarifado WHERE id = ?', [r.id]);
     assert.strictEqual(ultimo.status, 'ENTREGUE', `M-1: ${JSON.stringify(ultimo)} entregue=${it.quantidade_entregue}`);
     assert.strictEqual(row.status, 'ENTREGUE');
     assert.ok(row.data_entrega, 'data_entrega tem de ser gravado na entrega completa');

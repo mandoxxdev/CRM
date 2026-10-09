@@ -4,6 +4,8 @@
 const { dbRun, dbGet, dbAll } = require('./db');
 const { registrarAuditoria } = require('./audit');
 const { disponivelSql } = require('./availabilitySql');
+// Etapa 96 (C176, C178): a regra unica de quantidade (namespace — Fase 2, I3).
+const Q = require('./quantidade');
 const { custoUnitarioSql } = require('./custoSql');
 const valueApprovalService = require('./requisitionValueApprovalService');
 const stockService = require('./stockService');
@@ -35,11 +37,12 @@ function getSeparado(item) {
 }
 
 function pendenteEntrega(item) {
-  return Math.max(0, num(item.quantidade_solicitada) - getEntregue(item));
+  // Etapa 96: diferenca de colunas — arredondada (1 - 0,9 dava 0.09999999999999998).
+  return Q.qtd(Math.max(0, num(item.quantidade_solicitada) - getEntregue(item)));
 }
 
 function pendenteSeparacao(item) {
-  return Math.max(0, num(item.quantidade_solicitada) - getSeparado(item));
+  return Q.qtd(Math.max(0, num(item.quantidade_solicitada) - getSeparado(item))); // Etapa 96: idem
 }
 
 /**
@@ -56,7 +59,9 @@ function maxSeparar(item, estoque) {
 function maxEntregar(item, estoque, teto) {
   const pendente = pendenteEntrega(item);
   if (pendente <= 0) return 0;
-  const separadoDisponivel = Math.max(0, getSeparado(item) - getEntregue(item));
+  // Etapa 96 (C178, Fase 2 I5): a caixa e o resultado arredondados — separado 0,3 e entregue 0,1 davam
+  // 0.19999999999999998 e a entrega de 0,2 era recusada (e a fila e o detalhe mostravam o numero cru).
+  const separadoDisponivel = Q.qtd(Math.max(0, getSeparado(item) - getEntregue(item)));
   // Segunda rodada após entrega parcial: separado já foi consumido, mas pendente permanece
   if (getEntregue(item) > 0 && separadoDisponivel < pendente) {
     // Etapa 95 (T0b, B477): a parte ALEM da propria caixa e limitada ao teto do item (tetoSeparacao) — o
@@ -64,9 +69,9 @@ function maxEntregar(item, estoque, teto) {
     // fisico dela (P3: a dona da caixa ficava presa com o separado na mao, "Maximo: 0"). A entrega da propria caixa
     // continua pelo `estoque`. Sem `teto` (chamador que nao o calcula), a conta de antes.
     const alemDaCaixa = (teto === undefined || teto === null) ? Infinity : separadoDisponivel + num(teto);
-    return Math.min(pendente, num(estoque), alemDaCaixa);
+    return Q.qtd(Math.min(pendente, num(estoque), alemDaCaixa));
   }
-  return Math.min(pendente, separadoDisponivel, num(estoque));
+  return Q.qtd(Math.min(pendente, separadoDisponivel, num(estoque)));
 }
 
 /** Etapa 95 (T0b, B477): o teto do item para a entrega, a partir da leitura fresca de saldoDisponivelParaItem. */
@@ -83,8 +88,10 @@ function normalizarItem(item) {
   // quando a query de origem já traz saldo_disponivel (carregarItensRequisicao) — mudança
   // semântica documentada na Task 3. Se só o físico estiver disponível (chamador antigo),
   // cai no físico como antes.
-  const estoque = num(item.saldo_atual ?? item.saldo_disponivel ?? item.quantidade_atual);
-  const pendente = Math.max(0, solicitado - entregue);
+  // Etapa 96 (Fase 2, I5): o saldo do detalhe e uma soma de SQL (disponivel + reserva do item) e o pendente uma
+  // diferenca — arredondados, a tela recebe 0,2 e nao 0.19999999999999998.
+  const estoque = Q.qtd(num(item.saldo_atual ?? item.saldo_disponivel ?? item.quantidade_atual));
+  const pendente = Q.qtd(Math.max(0, solicitado - entregue));
   // Etapa 95 (T1, B472): o detalhe (routes/almoxarifado.js) traz a caixa sem reserva dos outros itens do material e a
   // reserva do item — com elas, o TETO de separacao (o mesmo tetoSeparacao da porta). So quem traz a coluna ganha os
   // campos novos (aditivo; o cliente sem eles cai no saldo_atual) e o teto da segunda rodada da entrega (B477).
@@ -102,7 +109,7 @@ function normalizarItem(item) {
     quantidade_atendida: entregue,
     quantidade_pendente: pendente,
     quantidade_entregavel: entregavel,
-    saldo_atual: item.saldo_atual ?? estoque,
+    saldo_atual: item.saldo_atual == null ? estoque : Q.qtd(num(item.saldo_atual)),
     ...(temCaixa ? { saldo_separavel: teto, quantidade_separavel: maxSeparar(item, teto) } : {}),
   };
 }
@@ -174,7 +181,7 @@ async function carregarItensRequisicao(db, requisicaoId) {
       ma.material_critico,
       ${custoUnitarioSql('ma')} as custo_unitario,
       ${RESERVADO_PARA_ITEM_SQL} as reservado_para_item,
-      (${disponivelSql('ma')} + ${RESERVADO_PARA_ITEM_SQL}) as saldo_disponivel
+      ${Q.qtdSql(`${disponivelSql('ma')} + ${RESERVADO_PARA_ITEM_SQL}`)} as saldo_disponivel
     FROM itens_requisicao_almoxarifado ir
     JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
     WHERE ir.requisicao_id = ?`, [requisicaoId]);
@@ -580,7 +587,7 @@ async function listarFilaSeparacao(db, user) {
   const marcas = ids.map(() => '?').join(',');
   const itens = await dbAll(db, `SELECT ir.*, ma.codigo as material_codigo, ma.nome as material_nome, ma.unidade,
       ma.material_critico,
-      (${disponivelSql('ma')} + ${RESERVADO_PARA_ITEM_SQL}) as saldo_disponivel,
+      ${Q.qtdSql(`${disponivelSql('ma')} + ${RESERVADO_PARA_ITEM_SQL}`)} as saldo_disponivel,
       ${RESERVADO_PARA_ITEM_SQL} as reservado_para_item,
       ${caixaSemReservaSql('ir.material_id', 'AND ix.id <> ir.id')} as caixa_outros,
       lsep.codigo as origem_separacao_codigo, ltsep.codigo as lote_separacao_codigo
@@ -616,11 +623,12 @@ async function listarFilaSeparacao(db, user) {
         i.reservado_para_item, getSeparado(i) - getEntregue(i), i.caixa_outros)) : 0;
       return {
         item_id: i.id, material_id: i.material_id, material_codigo: i.material_codigo, material_nome: i.material_nome,
-        unidade: i.unidade, a_separar: aSeparar, separavel, a_entregar: Math.max(0, getSeparado(i) - getEntregue(i)),
+        unidade: i.unidade, a_separar: aSeparar, separavel, a_entregar: Q.qtd(Math.max(0, getSeparado(i) - getEntregue(i))),
         // Fase 5 (critico): a separacao NAO reserva — o separado de A pode ter saido por B. Entregavel agora
         // e o separado limitado ao disponivel; sem isso a fila dizia "Entregar" e a entrega recusava.
-        entregavel: Math.min(Math.max(0, getSeparado(i) - getEntregue(i)), Math.max(0, num(i.saldo_disponivel))),
-        disponivel: num(i.saldo_disponivel), origem_separacao_codigo: i.origem_separacao_codigo || null,
+        // Etapa 96 (Fase 2, I5): a caixa e uma diferenca — arredondada (separa 0,3, entrega 0,1 -> 0,2, nao 0.1999…).
+        entregavel: Q.qtd(Math.min(Math.max(0, getSeparado(i) - getEntregue(i)), Math.max(0, num(i.saldo_disponivel)))),
+        disponivel: Q.qtd(num(i.saldo_disponivel)), origem_separacao_codigo: i.origem_separacao_codigo || null,
         lote_separacao_codigo: i.lote_separacao_codigo || null, material_critico: Number(i.material_critico) === 1,
       };
     });
@@ -960,7 +968,9 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
     }
     item.origem_separacao_id = planejada.origemId;
     item.lote_separacao_id = planejada.loteId;
-    const novaSeparada = getSeparado(item) + qty;
+    // Etapa 96 (C178): a soma em JS arredondada — 0,7 + 0,2 + 0,1 gravava 0.9999999999999999 e a entrega de 1 era
+    // recusada com o estoque limpo (sonda 10 A da Fase 0).
+    const novaSeparada = Q.qtd(getSeparado(item) + qty);
     item.quantidade_separada = novaSeparada;
     validados.push({ item, qty, novaSeparada, origemId, loteId, planejada });
   }
@@ -1227,10 +1237,12 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   for (const item of itens) {
     if (Number(item.material_critico) !== 1) continue;
     const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
-    const qty = entrada ? num(entrada.quantidade_atendida) : 0;
+    // Etapa 96 (Fase 2, I1): a caixa e uma diferenca (0,3 - 0,1 = 0.19999999999999998) — arredondada, e a
+    // comparacao com folga; o pedido arredondado como a porta do motor (R3 diz os numeros arredondados).
+    const qty = entrada ? Q.qtd(num(entrada.quantidade_atendida)) : 0;
     if (qty <= 0) continue;
-    const naCaixa = Math.max(0, getSeparado(item) - getEntregue(item));
-    if (qty > naCaixa) {
+    const naCaixa = Q.qtd(Math.max(0, getSeparado(item) - getEntregue(item)));
+    if (!Q.cabe(qty, naCaixa)) {
       const err = new Error(`${item.material_nome}: material crítico só sai depois de separado e conferido — ${qty} excede `
         + `o separado ainda não entregue (${naCaixa}). Separe o restante e peça a segunda conferência.`);
       err.status = 400;
@@ -1360,17 +1372,18 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   let algoAEntregar = false;
   for (const item of itens) {
     const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
-    const qty = entrada ? num(entrada.quantidade_atendida) : 0;
+    // Etapa 96 (Fase 2, M4): a quantidade arredondada antes de comparar (a previa nao passa pela porta do motor).
+    const qty = entrada ? Q.qtd(num(entrada.quantidade_atendida)) : 0;
     if (qty <= 0) continue;
     algoAEntregar = true;
     // eslint-disable-next-line no-await-in-loop
     const saldo = await saldoDisponivelParaItem(db, item);
     const { disponivel } = saldo;
     const max = maxEntregar(item, disponivel, tetoDaLeitura(item, saldo)); // Etapa 95 (T0b, B477)
-    if (qty > max) {
+    if (!Q.cabe(qty, max)) { // Etapa 96: com folga (E1)
       const err = new Error(
         `${item.material_nome}: não é possível entregar ${qty} ${item.unidade || ''}. `
-        + `Máximo: ${max} (pendente: ${pendenteEntrega(item)}, disponível: ${disponivel})`
+        + `Máximo: ${Q.qtd(max)} (pendente: ${Q.qtd(pendenteEntrega(item))}, disponível: ${Q.qtd(disponivel)})`
       );
       err.status = 400;
       throw err;
@@ -1388,7 +1401,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
 
   for (const item of itens) {
     const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
-    const qtyEntregar = entrada ? num(entrada.quantidade_atendida) : 0;
+    const qtyEntregar = entrada ? Q.qtd(num(entrada.quantidade_atendida)) : 0; // Etapa 96: como a previa
     if (qtyEntregar <= 0) continue;
 
     // Ceiling é o DISPONÍVEL (Etapa 3, Task 3), não mais o físico — leitura fresca aqui é só
@@ -1402,10 +1415,10 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     const { disponivel, reservado_para_item: reservadoItem } = saldo;
     const max = maxEntregar(item, disponivel, tetoDaLeitura(item, saldo)); // Etapa 95 (T0b, B477)
 
-    if (qtyEntregar > max) {
+    if (!Q.cabe(qtyEntregar, max)) { // Etapa 96: com folga (E1)
       const err = new Error(
         `${item.material_nome}: não é possível entregar ${qtyEntregar} ${item.unidade || ''}. `
-        + `Máximo: ${max} (pendente: ${pendenteEntrega(item)}, disponível: ${disponivel})`
+        + `Máximo: ${Q.qtd(max)} (pendente: ${Q.qtd(pendenteEntrega(item))}, disponível: ${Q.qtd(disponivel)})`
       );
       err.status = 400;
       throw err;
@@ -1443,7 +1456,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
       const usar = Math.min(restante, num(r.saldo));
       if (usar <= 0) continue;
       baixasReserva.push({ quantidade: usar, reserva_id: r.id });
-      restante -= usar;
+      restante = Q.qtd(restante - usar); // Etapa 96: sem resto de 1e-16 virando uma baixa de "zero"
     }
     const baixas = restante > 0
       ? [{ quantidade: restante, reserva_id: undefined }, ...baixasReserva]
@@ -1459,8 +1472,8 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
       if (comOrigemRestante > 1e-9) {
         const parte = Math.min(q, comOrigemRestante);
         pedacos.push({ ...b, quantidade: parte, comOrigem: true });
-        comOrigemRestante -= parte;
-        q -= parte;
+        comOrigemRestante = Q.qtd(comOrigemRestante - parte); // Etapa 96: idem
+        q = Q.qtd(q - parte);
       }
       if (q > 1e-9) pedacos.push({ ...b, quantidade: q, comOrigem: false });
     }
@@ -1519,9 +1532,9 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
       // getEntregue (dado antigo com entregue NULL).
       // eslint-disable-next-line no-await-in-loop
       await dbRun(db,
-        `UPDATE itens_requisicao_almoxarifado SET quantidade_entregue = COALESCE(quantidade_entregue, quantidade_atendida, 0) + ?,
-            quantidade_atendida = COALESCE(quantidade_entregue, quantidade_atendida, 0) + ?,
-            quantidade_separada = MAX(COALESCE(quantidade_separada, 0), COALESCE(quantidade_entregue, quantidade_atendida, 0) + ?)
+        `UPDATE itens_requisicao_almoxarifado SET quantidade_entregue = ${Q.qtdSql('COALESCE(quantidade_entregue, quantidade_atendida, 0) + ?')},
+            quantidade_atendida = ${Q.qtdSql('COALESCE(quantidade_entregue, quantidade_atendida, 0) + ?')},
+            quantidade_separada = ${Q.qtdSql('MAX(COALESCE(quantidade_separada, 0), COALESCE(quantidade_entregue, quantidade_atendida, 0) + ?)')}
           WHERE id=?`,
         [baixa.quantidade, baixa.quantidade, baixa.quantidade, item.id]);
     }
