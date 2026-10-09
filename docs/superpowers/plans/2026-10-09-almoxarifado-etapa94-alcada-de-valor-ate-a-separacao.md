@@ -1,6 +1,6 @@
 # Etapa 94 — a alçada de valor vale até o começo da separação: custo ou limite que mudam depois não tiram da máquina a requisição em separação, pronta ou parcialmente atendida (C68 (47), "fica de fora" da 93, features 06 com a 04, 05 e 07)
 
-> Status: **PLANO REVISTO (Fase 2) — 2026-10-09.** Fase 0 medida (abaixo); a Fase 2 (1 bloqueante, 3 importantes,
+> Status: **EM EXECUÇÃO — 2026-10-09: T0 `a758d39d`, T1 `7b66807f`, T2 `19e294fc`, T2c `9cafb842` feitas (seção "Execução" no fim); próximo T3 e Fase 5.** Plano revisto na Fase 2 (`23767283`). Fase 0 medida (abaixo); a Fase 2 (1 bloqueante, 3 importantes,
 > 5 menores) está em "Fase 2 — revisão do plano" e **vale sobre o texto acima** (pontos marcados **"(corrigido na Fase
 > 2)"** ou **"(Fase 2)"**). Próximo: **T0**.
 > HEAD de partida: `e5d216b6` (main, árvore limpa, sem push).
@@ -461,7 +461,7 @@ sabotam produção com a suíte batendo no mesmo SQLite (memória "sabotagem con
 de cliente.~~ **(Corrigido na Fase 2.)** Um galho de cliente, a T2c — contra o contrato da fila e da porta congelado
 aqui (mock só na fronteira HTTP), depois da T2. Executores **não** marcam este plano; o fio principal marca.
 
-- [ ] **T0 (tronco) — a alçada vale até o começo da separação (B453, B454, B455, B459).** Contrato "Máquina" e "A
+- [x] `a758d39d` **T0 (tronco) — a alçada vale até o começo da separação (B453, B454, B455, B459).** Contrato "Máquina" e "A
   verificação" (sem o `AND status` — é da T1). **(Fase 2)** + a sexta seta (B462) e a chamada de
   `notificarAprovadoresValor` pelo objeto exportado (I3 — saiu da T1). Teste novo: **RN-01**, **RN-02**, **RN-03**. Reescrita declarada do
   `[93 RN-08] (d4)` (B459) e dos que a Fase 2 listar. **Vermelho antes:** RN-01 (a) (403 e `AGUARDANDO` em 5 de 7 por
@@ -477,14 +477,14 @@ aqui (mock só na fronteira HTTP), depois da T2. Executores **não** marcam este
   vê nada: cai "notificado 1 vez" do RN-02 (a) — o controle do próprio espião (era o s4 da T1, I3); (s8) sem a seta de
   `EM_SEPARACAO` → cai a linha `EM_SEPARACAO` vazia do RN-02 (a) (separar 4 → 200, a alçada contornada, B462) e o
   RN-03. O (s1) também derruba a asserção negativa do espião no RN-01 (a) (o controle positivo dela, I3).
-- [ ] **T1 (galho) — a gravação da alçada confere o status (B456).** `AND status = ?`, releitura, 409 V1, notificação só
+- [x] `7b66807f` **T1 (galho) — a gravação da alçada confere o status (B456).** `AND status = ?`, releitura, 409 V1, notificação só
   depois do `UPDATE` vencer ~~e pelo objeto exportado~~ (o objeto exportado já é da T0 — Fase 2, I3). **RN-04** (a)(b)(c). **Vermelho antes:** (a)(b) 5/5 (status
   `AGUARDANDO_APROVACAO_VALOR` sobre cancelamento 200, notificação 1), (c) 10/10. **Controles:** (s1) sem `AND status =
   ?` → caem (a)(b)(c) (status e `/aprovar-valor` 200 com reserva nova); (s2) perdeu → V403b em vez de V1 → caem (a)(b)
   no código e na literal; (s3) notificar **antes** do `UPDATE` → cai a asserção "nenhuma notificação"; ~~(s4) a chamada
   direta (sem o objeto exportado) → o espião não vê nada: cai a asserção "notificado 1 vez" do RN-02 (a) — controle do
   próprio espião.~~ **(Movido para a T0 na Fase 2, I3 — o s7 de lá.)**
-- [ ] **T2 (galho) — a fila usa o predicado (B457; Fase 2: + a chegada, B461, e `RETOMAR_SEPARACAO`, B460).**
+- [x] `19e294fc` **T2 (galho) — a fila usa o predicado (B457; Fase 2: + a chegada, B461, e `RETOMAR_SEPARACAO`, B460).**
   **RN-05** (a)–(d), **(c')** e **(e)**. **Vermelho antes:** (a) 3/3 (`APROVACAO_VALOR`),
   (c) (`APROVACAO_VALOR` no legado), (d) (a fila não oferece o que a porta aceita). (b) passa antes — guarda. **Medir:**
   `filaSeparacao.api.test.js` e `filaTravaIntegracao`. **Controles:** (s1) sem o predicado → caem (a)(c)(d); (s2) o
@@ -492,7 +492,7 @@ aqui (mock só na fronteira HTTP), depois da T2. Executores **não** marcam este
   também: (c') (a requisição ausente da fila) e (e) (0 reservas da nota para a `EM_SEPARACAO`). (s3) `bloqueadaPorValor`
   sem o predicado → cai (e); (s4) `separacaoAReabrir` olhando só o status (sem a caixa) → cai a matriz do (c'); (s5)
   `RETOMAR_SEPARACAO` fora de `acionavel` → cai (c'). **Medir** também `recebimentoReservaChegada*`.
-- [ ] **T2c (galho de cliente, Fase 2) — o legado tem gesto na tela e o 409 V1 recarrega (B460, B463).** Contrato "A
+- [x] `9cafb842` **T2c (galho de cliente, Fase 2) — o legado tem gesto na tela e o 409 V1 recarrega (B460, B463).** Contrato "A
   tela". Testes de componente (API mockada só na fronteira HTTP): (a) detalhe `TOTALMENTE_RESERVADA` com o item 4
   separados de 4 → "Iniciar Separação" → o botão do modal diz **"Reabrir separação"**, está **habilitado**, e confirmar
   manda `PUT …/separacao` com `itens_separados: []`; (b) controle: `TOTALMENTE_RESERVADA` sem nada separado e
@@ -729,3 +729,34 @@ saída acha 1, e o resumo do runner diz 326/327 (os dois concordam). `test:almox
 alçada caiu — em especial `recebimentoReservaChegadaEstorno` `[Fase 2] /rejeitar-valor` (monta *Aguardando* por separar de
 `TOTALMENTE_RESERVADA` — o caminho de projeto, que continua), `filaSeparacao` e `integracaoAprovacoesRegra`. A worktree foi
 removida depois da medição (junction primeiro).
+
+## Execução (2026-10-09)
+
+Um executor, em sequência na árvore principal (Fase 2 aplicada em `23767283` com as sondas do revisor re-rodadas e
+reproduzidas; depois T0 → T1 → T2 → T2c). Baseline `test:api` 327/327 (3876), `test:almoxarifado` 44/0.
+
+| Task | Commit | Vermelho antes | Depois |
+|---|---|---|---|
+| T0 | `a758d39d` | 26/27 | 328/328 (3903); 44/0 |
+| T1 | `7b66807f` | RN-04 (a)(b) (final aguardando valor, não `CANCELADO`); (c) 8/10 | 328/328 (3906); 44/0 |
+| T2 | `19e294fc` | (a)(c)(c')(matriz)(e); (b) guarda | 328/328 (3912); 44/0 |
+| T2c | `9cafb842` | 5/7 | cliente 94 suítes / 1456; build ok |
+
+No fim `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 5/0. `[93 RN-08] (d4)` reescrito na T0 (B459): o estado
+legado por `UPDATE` direto; o arquivo 48/0. Testes novos: `alcadaValorDepoisDaSeparacao.api.test.js` e
+`client/.../RequisicoesReabrirSeparacao.test.js`.
+
+Controles (um de cada vez, âncora = 1, restauro por cópia com md5, CR=0): T0 s1 (sem retorno antecipado) → RN-01 (a)×4,
+(b), RN-02 (b)(b') e a asserção negativa do espião (1 notificação por célula — sabe falhar); s2 (só status) → RN-02
+(b)(b') **e** RN-01 (a)(b), RN-03; s3 (só entregue) → RN-02 (b') **e** RN-01 (a)(b), RN-03; s4 (sem as cinco setas) →
+RN-02 (a) nos cinco, RN-03; s5 (PENDENTE no predicado) → RN-03; s6 (regravar `valor_total` antes) → RN-01 (a)
+"entrada"/"cadastro", (b); s7 (binding local) → os 18 RN-02 (a) (notificado 0); s8 (sem a seta de `EM_SEPARACAO`) → RN-02
+(a) `EM_SEPARACAO`, RN-03. T1 s1 → (a)(b)(c); s2 → (a)(b); s3 (notificar antes do UPDATE) → (a)(b). T2 s1 → (a)(c); s2 →
+(c) **e** (a); s3 → (e); s4 → matriz (c') **e** (b); s5 → (c'). T2c s1/s2/s3 → (a)/(b)/(c).
+
+**Divergências:** RN-02 (a) era **vermelho** antes da T0, não guarda (o espião não via a chamada pelo binding local — é o
+I3 movido para a T0); vários controles caíram mais largo que o previsto por causa da sexta seta (B462); T0 s6 não cai
+nas células "limite"/"ligar" (o custo não muda — correto); T2 s1 não cai em (c') (o plano também não previa); RN-04 (c)
+vermelho em 8/10, não 10/10 (varia; 6/10 sob o s1); o predicado e a lista do cliente moram em `requisicaoLabels.js`
+(o plano não nomeava o arquivo) e o teste do cliente os compara com a máquina do servidor. A base do cliente antes da
+T2c não foi re-medida (último registro 93/1449; depois 94/1456 com a suíte nova).
