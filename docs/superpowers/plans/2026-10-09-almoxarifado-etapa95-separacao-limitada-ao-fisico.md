@@ -1,8 +1,12 @@
 # Etapa 95 — a separação não aceita mais do que existe na prateleira: o separado ainda não entregue fica retido para quem separou (C169, D (60), features 05 com a 04 e a 07)
 
-> Status: **EM EXECUÇÃO — 2026-10-09: T0 `f8edb54a` (+ CLAUDE.md `4f89c295`), T0b `35e274c5`, T2 `9237af2c`, T1 `5a2bfa9f` feitas (seção "Execução" no fim); próximo T3, T4 e Fase 5.** Fase 2 em `2bee899c`. A **Fase 2** foi feita (2 bloqueantes, 5
-> importantes, 3 menores — seção "Fase 2 — revisão do plano" antes de "Próximo passo", **vale sobre o texto acima**).
-> Próximo passo: **T0**.
+> Status: **FECHADA — 2026-10-09.** Plano `f0b94706`, Fase 2 `2bee899c`; **T0 `f8edb54a`** (+ CLAUDE.md `4f89c295`),
+> **T0b `35e274c5`, T2 `9237af2c`, T1 `5a2bfa9f`, T3 `c335cf40`, T4 `ed90a0aa`**; Fase 5 (2 revisores, **12** achados
+> reais — 3 de código, 9 de teste): `582844e8`, `0b6132ae` (CLAUDE.md), `6e0fae83`, `16cacc0e`, `42e08faf`; **T5**
+> fechamento `a9cf2f1f` + o commit deste plano. Próxima: **Etapa 96** — o motor grava a quantidade
+> arredondada e não recusa o que existe por ponto flutuante (C176); ver "Próxima tarefa detalhada" no fim. A **Fase 2**
+> (2 bloqueantes, 5 importantes, 3 menores) está em "Fase 2 — revisão do plano" e **vale sobre o texto acima**; a
+> Fase 5 acrescentou a **B479** (a entrega sob a trava por material) e a emenda da B469 (arredondamento).
 > HEAD de partida: `616999be` (main, árvore limpa, sem push).
 > Origem: "Próxima tarefa detalhada — Etapa 95" no fim de
 > `docs/superpowers/plans/2026-10-09-almoxarifado-etapa94-alcada-de-valor-ate-a-separacao.md`; o item **169** da letra C
@@ -406,7 +410,7 @@ Entrega (`maxEntregar` — **exceto a B477, Fase 2** —, a prévia da B464, o l
 `quantidade_entregavel` (exceto a B477); a régua da origem
 (59) e a mensagem dela; a reserva na chegada/liberação/estorno (74/75) e o recálculo (76); `calcularStatusPosAprovacao`;
 `disponivelSql`; os módulos das travas por requisição (93) e por material (91) — **a separação passa a pegar a por
-material (B476, Fase 2)**; a alçada (94); as rotas, permissões e gates.
+material (B476, Fase 2)** e **a entrega também (B479, Fase 5, `582844e8`)**; a alçada (94); as rotas, permissões e gates.
 
 ---
 
@@ -474,7 +478,7 @@ contamina a suíte"). Executores **não** marcam este plano; o fio principal mar
   (perde os outros itens da mesma requisição) → cai RN-03 M5 na fila (4 em vez de 0). **(Fase 2):** RN-03 inclui o P4
   (fila e detalhe 4) e o decimal (0,2, não `0.19999999999999998`); (s4) `normalizarItem` sem o teto no `maxEntregar` →
   cai o `quantidade_entregavel` do P3 no detalhe (4 em vez de 0 — B477).
-- [ ] **T3 (galho de cliente) — a tela usa o número do servidor.** Contrato "A tela". Testes de componente: (a) detalhe
+- [x] `c335cf40` **T3 (galho de cliente) — a tela usa o número do servidor.** Contrato "A tela". Testes de componente: (a) detalhe
   C1 (`saldo_atual` 4, `saldo_separavel` 0, separado 4 de 6) → o item não aparece entre os separáveis do modal e
   **"Confirmar Separação"** fica desabilitado (como no "nada a separar" de hoje); (b) C2 (`saldo_separavel` 1) → o input
   abre com 1 e `max=1`; (c) M4 (dois itens do mesmo material, `saldo_separavel` 4 cada, nada separado) → abre com 4 e 0;
@@ -482,10 +486,10 @@ contamina a suíte"). Executores **não** marcam este plano; o fio principal mar
   **Controles:** (s1) `maxQtdSeparacao` lendo só `saldo_atual` → caem (a)(b); (s2) pré-preenchimento sem dividir → cai
   (c); (s3) sem o `??` → cai (d). **Medir:** `RequisicoesList.test.js`, `RequisicoesSeparacaoDivergencia`,
   `RequisicoesSeparacaoOrigem`, `RequisicoesReabrirSeparacao`, `RequisicoesTrocaSeparacao`; `CI=true` build.
-- [ ] **T4 (integração — cruza T0, T0b, T1, T2 e o contrato da T3).** Ver a seção abaixo. **Controle:** rodar o arquivo com a
+- [x] `ed90a0aa` **T4 (integração — cruza T0, T0b, T1, T2 e o contrato da T3).** Ver a seção abaixo. **Controle:** rodar o arquivo com a
   T2 revertida (s1 da T2) → cai I2; com a T1 revertida (s1 da T1) → cai a asserção de fila do I1; **(Fase 2)** com a
   T0b revertida (s1 da T0b) → cai o I5.
-- [ ] **T5 — fechamento (skill `fechar-etapa`).** Novidades (seção da 95; **C169** marcado resolvido com o hash;
+- [x] `a9cf2f1f` + o commit deste plano **T5 — fechamento (skill `fechar-etapa`).** *(Feito — ver "Fechamento (T5)"; as letras saíram **B466–B479**, **C170–C176** e **A46**, não as da lista abaixo.)* Novidades (seção da 95; **C169** marcado resolvido com o hash;
   **C170–C173**; **B466–B476**; **A46**; a **D (60)** riscada à vista com a etapa; D (95); F (95)); specs 05 (a pendência
   do C169 fechada; o "Fica de fora" da 60 sobre o livre riscado), 07 (a aprovação e a caixa sem reserva), 04 (o detalhe
   ganha os dois campos); mapa; guia (cabeçalho, seção da 95 com roteiro clicável, o **cenário 5 da 64 corrigido à
@@ -751,3 +755,256 @@ iguais aos da árvore sem a mudança. Teste novo `separacaoTetoFisico.api.test.j
   plano**: três chamadas levam `requisicao_id`, porque o contrato M2 lança sem ele). RN-06 (b)/O1 precisa de saldo em outro
   endereço (a RN não dizia). P4 passa na main (a regressão era só do protótipo) — é guarda, derrubada pelo s9. T1 s1 não
   derruba P4 (a conta antiga também dava 4).
+
+**T3 (`c335cf40`, executada em worktree e integrada por fast-forward — o hash não mudou; conferido com `git merge-base
+--is-ancestor`).** `RequisicoesList.js`: `saldoSeparavel(item)` = `item.saldo_separavel ?? item.saldo_atual`, usado por
+`maxQtdSeparacao` e `maxSeparavelNaTela`; `quantidadesIniciaisSeparacao` divide o separável entre itens do mesmo material
+na ordem do pedido (no carregar do detalhe e no abrir do modal). `FilaSeparacao.js` **não mudou** (lê `separavel` da
+fila). Teste novo `RequisicoesSeparacaoTeto.test.js` (**4**). **Vermelho antes:** 3/4 — (a)(b)(c); o (d) (servidor antigo,
+cai no `saldo_atual`) passava antes, **previsto** (é guarda). **Controles** (um de cada vez): s1 (`maxQtdSeparacao` só com
+`saldo_atual`) → (a)(b) — o (b) cai no atributo `max` do campo, não no valor pré-preenchido (o pré-preenchimento já
+dividia pelo separável); s2 (pré-preenchimento sem dividir) → (c); s3 (sem o `??`) → (d). Cliente 94/1459 → **95/1463**;
+`CI=true` build ok.
+
+**T4 (`ed90a0aa`).** `separacaoTetoFisicoIntegracao.api.test.js` **7** casos: I1–I6 e o controle positivo da **A46**
+(estados montados por escrita direta — a porta não os produz mais; três negativos; coluna trocada → o banco recusa).
+Cada jornada até o último gesto (`ENTREGUE`, `ENCERRADA` ou `CANCELADO`), saldo pela rota contra o livro do teste e A46
+vazia para o material. **Controles** (um de cada vez, restauro por cópia com md5): T2 s1 → I2, I3, I6; T1 s1 → I1, I2,
+I3, I4; T0b s1 (prévia e laço) → I5; T0 s8 (sem a trava por material na separação) → I6; exclusão por requisição na
+coluna do detalhe e na da fila → I4 no M5. **Divergências do plano:** (1) a propriedade do I4 usa delta **0,1** no
+decimal (o "+1" do plano só testaria o pendente); (2) no M4 a propriedade é conferida **item a item** (a linha da fila não
+divide — declarado em "O que fica de fora"); (3) o P4 precisa de uma **entrada de reposição** para fechar a jornada (a
+saída avulsa levou o físico da caixa de R1 — o motor não conhece caixa, B466 (iv)); (4) **I6 fora do plano**: a corrida
+separar × aprovar com gancho (1 disparo) — a aprovação espera a trava por material e não reserva a caixa; (5) **achado
+do motor:** grava 0,3 − 0,1 como `0.19999999999999998` em `quantidade_atual` — fora da etapa, vira o **C176**; o teste
+compara o saldo a 1e-6. `test:api` **331/331** (3978 ✓).
+
+| Task | Commit | `test:api` | ✓ |
+|---|---|---|---|
+| T3 | `c335cf40` | — (cliente 95/1463) | — |
+| T4 | `ed90a0aa` | 331/331 | 3978 |
+| Fase 5 | `582844e8`, `0b6132ae`, `6e0fae83`, `16cacc0e`, `42e08faf` | 331/331 | 3989 |
+
+## Fase 5 — revisão adversarial (2026-10-09): 2 revisores, 12 achados reais (3 de código, 9 de teste), 0 críticos
+
+Lentes: (1) regras de negócio e concorrência; (2) autorização + "este teste passaria com a feature quebrada?" (sabotagem
+de produção, com a suíte inteira). Sondas no scratchpad (`e95f5-rv1-corrida.js`, `-deadlock.js`, `-decimal.js`,
+`-controle.js`; `e95f5-rv2-sonda.js`; `e95rv2-full*.sh/.out` — a suíte inteira sob cada sabotagem; o harness do fio
+`e95-f5-sab.sh` com os backups `e95-f5-*.bak`).
+
+**Confirmado (executado, sem achado):** **sem deadlock** — estresse de 8 rodadas com os materiais {A, B} em ordens
+opostas, separar, aprovar, entregar e a fila ao mesmo tempo, nenhum prazo estourado (a ordem é sempre requisição →
+material; `verificarBloqueioLiberacao` não trava; `registrarMovimentacao` adia o alerta de mínimo para depois da seção).
+**Autorização: nada exposto de novo** — a fila devolve só campos explícitos; o detalhe já era aberto a quem acessa o
+módulo; o agregado da caixa não carrega ids.
+
+**Achados, cada um com o hash que o fechou** (conferidos com `git merge-base --is-ancestor`):
+
+- **1 (alta; código; introduzido pela própria etapa, na T0b).** A entrega da segunda rodada × a separação de outra
+  requisição do mesmo material pegavam o mesmo livre — **10/10 sem gancho**: as duas 200, o físico a 0 e a caixa de R1
+  fantasma, presa. Causa: desde a B477 a entrega lê o teto, mas só sob a trava por requisição. Corrigido em
+  **`582844e8`** (**B479**): `entregarRequisicao` = `serializarNaRequisicao(R, comTravaDaRequisicao(R,
+  entregarSemTrava))`, a mesma ordem da separação; `0b6132ae` põe a entrega na regra da trava do `CLAUDE.md`.
+  **Descartado:** travar só o ramo da segunda rodada (a primeira também baixa o que a outra lê; dois caminhos de trava
+  na mesma função). **Controle:** sem a trava, 5/5 fantasma no teste novo de `42e08faf`. **Pego na Fase 5 — não
+  escapou.**
+- **2 (baixa; código).** A aprovação reservava `0.19999999999999998` (físico 0,3, caixa de outra 0,1, pede 0,2) e
+  deixava `PARCIALMENTE_RESERVADA`. Corrigido em **`6e0fae83`**: `aReservar = min(falta, round6(max(0, …)))`.
+  **Descartado:** folga na comparação `aReservar < falta` (deixaria a reserva de 0,1999… gravada). Emenda na B469.
+- **3 (higiene; código).** `caixa_sem_reserva_outros` (coluna interna da consulta do detalhe) vazava no JSON. Corrigido
+  em **`16cacc0e`** (o `normalizarItem` a retira antes de espalhar o item). **Descartado:** tirar a coluna da consulta
+  (é ela que dá o teto).
+- **4–12 (teste): nove sabotagens que passavam verde** — sete delas com o `test:api` **inteiro 330/330** — viraram 11
+  testes em **`42e08faf`**; cada sabotagem do revisor agora derruba o teste nomeado: (4) a trava por material só no
+  **primeiro** material da requisição → P1 com R1 de dois materiais, o disputado com o id maior; (5) `tetoDaLeitura`
+  com a caixa errada (`caixa_outras_requisicoes`) → RN-07 com dois itens do mesmo material na mesma requisição; (6) a
+  porta excluindo só o próprio item → M5 com a metade positiva (2 e depois 2); (7) `caixaSemReservaDe` sem a reserva do
+  irmão → reservas [4, 0] e 4 soltos, em duas rodadas e numa só; (8–10) `STATUS_COM_CAIXA` sem `PARCIALMENTE_ATENDIDA`,
+  com `ENCERRADA`/`CANCELADO`, sem `AGUARDANDO_APROVACAO_VALOR` → um teste percorre os 15 status (lista por extenso, não
+  importada, para não concordar com a sabotagem) e um pelas rotas (*Parcialmente Atendida* retém, encerrada devolve);
+  (11) a aprovação com a caixa errada (`caixa_outras_requisicoes`) → reservas [0, 4]; (12) os índices da B478 conferidos
+  só pelo nome → agora pela coluna (`PRAGMA index_info`).
+
+**Nota de processo (declarada):** `requisitionService.js` recebeu as três correções de código juntas e foi dividido em
+três commits por `git hash-object` / `update-index` (a versão intermediária de cada um escrita no índice). Os estados
+intermediários **`582844e8` e `6e0fae83` não foram testados isoladamente** — só o final (`42e08faf`, 331/331). Cada
+commit compila no sentido de que o arquivo final é a soma dos três trechos independentes, mas isso não foi medido.
+
+**Contagem:** **12** achados reais — **3 de código** (1, 2, 3) e **9 de teste** (4–12); ruído **0** (nenhum achado do
+revisor descartado como falso, conforme o relato do fio principal; o fechamento conferiu que cada achado listado tem
+commit — `582844e8`..`42e08faf` — e que as sete sabotagens com a suíte inteira verde estão nos `e95rv2-full-*.out`, mas
+não releu os dois relatórios);
+**1** rodada de correção. Depois da rodada: `test:api` **331/331** (3989 ✓), cliente **95/1463**.
+
+## Fechamento (T5) — 2026-10-09
+
+**O que cada artefato recebeu** (skill `fechar-etapa`; specs/mapa e guia/manual por dois agentes em paralelo, novidades e
+este plano no fio principal, e um terceiro agente mediu a Fase 0 da Etapa 96 — 0 retrabalho entre eles):
+
+1. `docs/almoxarifado-novidades-por-etapa.md` — seção da Etapa 95 (abertura em linguagem de usuário, Antes → Agora com 9
+   linhas, seis cenários com a mensagem literal lida do código, o que não cobre, o que a revisão encontrou); **A46** (as
+   duas consultas, a conferência e o controle positivo da T4, como ler cada linha **por status** — não excluir quem já
+   entregou); **B466–B479** (a **B476** dita invertida; a **B469** e a **B470** com o texto original dito errado à
+   vista; a **B479** da Fase 5); **C169** marcado resolvido, dizendo que o defeito era mais largo e que a "causa
+   provável" e o "a fila oferece entregá-los" estavam errados; **C170–C176**; a **D (60)** riscada à vista (revogada,
+   B467); a **D (91)** anotada (a separação e a entrega pegam a trava); a **D (94)** do C169 resolvida; limitações
+   **(95)** em D; verificações **(95)** em F; e, nas seções antigas, a **B253** e o **cenário 5 da Etapa 64**
+   (*"as duas separam 10"*) e o item 3 do "não cobre" da Etapa 60 riscados à vista; "Onde estamos" com a 95 e a 96 (a
+   "Próxima" da 94 riscada); cabeçalho.
+2. Specs `05` (status; o C169 da 94 resolvido com os hashes; o "Fica de fora" da 60 sobre o livre **riscado e dito
+   errado**; a linha "separar mais que o estoque falha" e o "teto = disponível + reserva" ditos errados; bloco da 95 com
+   checklist e hash por item; "falta para 🟢" sem o C169), `07` (a aprovação e a caixa sem reserva, o arredondamento,
+   C172/C173, a trava), `04` (o detalhe ganha `saldo_separavel`/`quantidade_separavel`, sem a coluna crua; a segunda
+   rodada; a trava da entrega).
+3. Mapa `specs/modulo-almoxarifado/README.md` — linhas 04, 05 (🟡), 07 com o range `f0b94706..42e08faf`; cabeçalho.
+4. Guia `docs/almoxarifado-guia-etapas-e-testes.md` — cabeçalho (95 entregue, próxima 96), seção da Etapa 95 com Antes → Agora e roteiro clicável de cinco cenários com as mensagens literais (inclusive a *Porca/Rebite* que só se monta por integração — o formulário recusa repetir material), o que não cobre; riscados à vista com a correção: o "não sai do livre" da Etapa 60, o "a espera é só entre gestos da mesma requisição" da 93 e o C169 da 94. *(O cenário 5 da Etapa 64 — "as duas separam 10" — está no documento de novidades, não no guia; foi riscado lá.)*
+5. Este plano — T3, T4 e T5 marcadas, T3/T4 em "Execução", a Fase 5, retro, próxima tarefa.
+6. Verificação final — números abaixo.
+7. Manual `docs/almoxarifado-manual-do-sistema.md` — 7.5 (a mensagem da entrega e a segunda rodada), 7.6 (encerrar/excluir: a caixa deixa de ser descontada), 9.3 (a aprovação desconta a caixa sem reserva dos outros; *Aprovado* sem reserva), 9.3d (separar e entregar entram na fila por material), 10.1 (o modal pré-preenchido com o separável e dividido), 10.2 (bloco "O separável — a separação para no que existe": a fórmula, os status que retêm a caixa, o que acontece ao encerrar/cancelar/excluir, a mensagem literal; revogado o "continua contado como livre"), 10.5 (a caixa e a saída avulsa), 10.6 (a fila).
+
+**Letras:** o plano reservou B466–B478, C170–C175 e A46 — usadas assim; a Fase 5 acrescentou a **B479** (letra nova,
+não emenda: é a trava da entrega e precisa ser achável) e o arredondamento da aprovação entrou como **emenda na B469**;
+o fechamento acrescentou o **C176** (o motor e o ponto flutuante — defeito fora da etapa, em C porque muda o número que
+quem opera vê na consulta do material). Conferidas no documento antes de escrever: última B465, último C 169, última A45.
+
+**Divergências do plano, ditas:**
+- A T5 do plano listava **B466–B476** e **C170–C173**; o certo, depois da Fase 2 e da Fase 5, é **B466–B479** e
+  **C170–C176**.
+- O roteiro do guia e os cenários das novidades citam as regras **pelo conteúdo**, não pelo `RN-xx` (como na 92–94), e
+  usam materiais diferentes por cenário (cada um com a sua conta).
+
+**Verificação final (HEAD `42e08faf` + só documentação):** server `npm run test:api` **331/331** arquivos — *"331/331
+arquivos de teste OK (mais lento: filaLiberacaoAprovacaoCorrida.api.test.js, 7.8 s)"*; **3989 ✓** por `grep -c "✓"` na
+saída (o método das etapas anteriores), **0** `✗`. Os dois arquivos da etapa: regras **58/0**, integração **7/0**.
+`test:almoxarifado` **44 passou, 0 falhou**; `test:validation` **4/0**; `test:safealter` **3/0**; `test:sqlite` **5/0**;
+cliente `CI=true npx react-scripts test --watchAll=false` **95/95** suítes, **1463/1463** testes; `CI=true npx
+react-scripts build` **Compiled successfully** (saída 0). Os commits do fechamento só tocam documentação.
+
+**Retro (4 números):** rodadas de correção até verde — por task, **não registradas** na seção "Execução" (o executor
+relatou o resultado final de cada uma); Fase 5 **1** rodada. Achados reais na revisão adversarial **12** (3 de código, 9
+de teste), ruído **0**; mais o **C176** (defeito do motor, fora da etapa, achado na T4). Paralelismo: T3 em worktree, em
+paralelo ao tronco (cliente, não toca o SQLite) — integrada por fast-forward, 0 conflito; fechamento com 3 agentes em
+paralelo. **Defeito escapado da 94, medido nesta etapa: 0** — o C169 é anterior à 94 (a D (60) e o cenário 5 da 64 já o
+descreviam como regra). Defeito **introduzido** e pego aqui: o achado 1 da Fase 5 (a entrega × a separação, da T0b/B477).
+Defeito escapado da 95: a preencher na etapa seguinte.
+
+### Commits do fechamento
+
+`a9cf2f1f` (novidades, specs 04/05/07 e mapa, guia, manual) · o commit deste plano (T3, T4 e T5 marcadas, Execução,
+Fase 5, fechamento, retro, próxima tarefa).
+
+## Próxima tarefa detalhada — Etapa 96: o motor grava a quantidade arredondada e não recusa o que existe por ponto flutuante (C176)
+
+**Por que esta (ordem do CLAUDE.md, medida antes de prometer — Fase 0 feita no fechamento por um agente, sondas
+executadas):** (1) a próxima tarefa escrita por esta etapa é esta; (2) o "falta para 🟢" da 05 (a feature tocada) só
+traz produto sem demanda medida (lista de separação como entidade, rota de picking, troca de série, kits) e os dois
+cortes do motor que esta etapa declarou — a saída avulsa que leva a caixa (B466 iv) e o ponto flutuante (C176); (3) no
+mapa, a 03 (motor) está 🟢, mas o motor **recusa gesto válido**: sem corrida, sem estado especial e só com gestos
+inteiros, uma requisição fica presa depois de três entradas fracionadas. A 95 pagou essa deriva **três vezes na
+leitura** (o teto a 1e-6, a porta com folga de 1e-9, a reserva da aprovação a 1e-6 em `6e0fae83`); já há **19**
+arredondamentos `1e6) / 1e6`/`toFixed(6)` em **8** arquivos de `server/services` + `server/routes`. A 96 fecha a raiz
+em vez de mais um remendo. A caixa sem reserva levada pela saída avulsa (o outro candidato do motor) compara números do
+motor — entra **depois** desta (**Etapa 97**).
+
+**Medido agora** (HEAD `42e08faf`; sondas `e96f0-s1-arredonda.js`, `e96f0-s1b-inteiro.js` e `e96f0-s5-consulta.js` no
+scratchpad da sessão; `testApp` com `requirePermission` real e usuário por header, molde `e95-h.js`):
+- **s1b (só gestos inteiros depois de entradas fracionadas, 3/3 ERRADO):** entradas 0,7 + 0,2 + 0,1 por `POST
+  /api/almoxarifado/movimentacoes/v2` deixam `quantidade_atual` = `0.9999999999999999`. `SAIDA` de 1 → **400**
+  *"Saldo insuficiente. Disponível: 0.9999999999999999 PC"*. Uma requisição de 1: `/aprovar` → **200 `APROVADO` com
+  reservas `[]`**; `/separar` 1 → **200** (a separação tolera desde a 95); `/entregar` 1 → **400** *"⟨material⟩: não é
+  possível entregar 1 PC. Máximo: 0.9999999999999999 (pendente: 1, disponível: 0.9999999999999999)"* e a requisição
+  fica `EM_SEPARACAO`; a fila mostra `{"etapas":["ENTREGAR"],"separavel":0,"entregavel":0.9999999999999999}`. **Gesto
+  preso:** o separado não sai.
+- **s1 (5/6 ERRADO):** entrada 0,3 e `SAIDA` 0,1 → físico `0.19999999999999998` (`GET /materiais/:id` devolve esse
+  número); depois `SAIDA`, `AJUSTE_NEGATIVO` e `PERDA` de 0,2 → 400 *"Saldo insuficiente. Disponível:
+  0.19999999999999998 PC"*; a requisição de 0,2: aprovar → `APROVADO` com `[]`, separar 0,2 → 200, entregar 0,2 → 400
+  *"Máximo: 0.19999999999999998 (pendente: 0.2, disponível: 0.19999999999999998)"*; 0,7 − 0,6 grava
+  `0.09999999999999998` e a `SAIDA` 0,1 toma 400; dez entradas de 0,1 gravam `0.9999999999999999` e a `SAIDA` 1 toma
+  400. O único CERTO é o separar.
+- **s5 (consulta do rastro, 1/1 CERTO):** `WHERE quantidade_atual <> ROUND(quantidade_atual, 6) OR
+  COALESCE(quantidade_reservada,0) <> ROUND(COALESCE(quantidade_reservada,0), 6)` acha `0.9999999999999999` e
+  `0.30000000000000004` e não acha 1,5. **A primeira forma, `ABS(x − ROUND(x,6)) > 1e-12`, devolveu `[]`** — a deriva é
+  da ordem de 1e-16; o controle positivo pegou o falso negativo.
+- **A aprovação depois do `6e0fae83`:** pela leitura, ela agora pede ao motor o número arredondado (0,2 / 1) e o claim
+  sem tolerância recusa contra o gravado `0.1999…`/`0.9999…` → `APROVADO` sem reserva. Antes dele reservaria
+  `0.1999…` (*Parcialmente Reservada*). **Não medido contra o estado anterior** — a Fase 0 da 96 mede e a correção do
+  claim fecha os dois.
+
+**Por onde o decimal entra pela tela (lido, não executado):** a Nova Movimentação, a requisição e os modais de separar
+e entregar têm `step="1"` (`MovimentacoesAlmoxarifado.js:910`, `RequisicaoForm.js:520`, `RequisicoesList.js:2139` e
+`:2311`); a quantidade conferida do recebimento tem `step="0.01"` (`RecebimentosAlmoxarifado.js:1184`); as unidades
+incluem `KG`, `M`, `L` e `M²` (`MaterialAlmoxarifadoForm.js:17`). A nota em kg ou metro grava a fração, e o gesto
+inteiro seguinte é recusado. A API aceita decimal direto.
+
+**A conta (lida no código):**
+- **Onde a deriva nasce:** o motor escreve `col = col ± ?` sem arredondar — **37** linhas em `server/services` +
+  `server/routes` somam ou subtraem `quantidade_atual`, `quantidade_reservada`, `_bloqueada`, `_em_inspecao`,
+  `_em_terceiros` (grep `quantidade_atual = quantidade_atual [+-]|quantidade_reservada = .*quantidade_reservada|
+  quantidade_(bloqueada|em_inspecao|em_terceiros) = .*[+-] \?`).
+- **Onde a recusa acontece:** **17** claims `>= ?` sem folga — `stockService.js` `:309`, `:372`, `:1432`, `:1451`,
+  `:1476`, `:1504`, `:1519` (remessa), `:1533`, `:1689` (consumo de reserva), `:1725`, `:1778` (saída comum), `:2551`,
+  `:2749`, `:2988` (`criarReserva`); `inspectionService.js:291`; `thirdPartyService.js:454` e `:903`.
+- **O que já tem folga:** `EPS = 1e-9` existe (`stockService.js:284`) e só parte do motor a usa (`:1663`,
+  `:1760-1761`, `:1853`, `:1868`, `:3073-3088`).
+- **A entrega** compara `qty > max` sem folga (`requisitionService.js:1370` e `:1405`; `maxEntregar` em `:56-69`); a
+  separação, desde a 95, usa `qty > max + 1e-9` (`:898`). A mensagem do motor usa `getSaldoDisponivel`
+  (`stockService.js:54-59`), que não arredonda.
+
+**Contrato (a congelar na Fase 1):**
+- **Gravação — letra B:** (a) o motor grava arredondado a 1e-6 em toda escrita de coluna de quantidade, com um
+  fragmento único (ex.: `qtdSql(expr)` ⇒ `ROUND(expr, 6)`, molde de `disponivelSql`); (b) só folga nos claims; (c) os
+  dois. **Recomendação da Fase 0: (c)** — só (a) não salva o legado (o claim compara antes de gravar e `0.9999… >= 1`
+  continua falso); só (b) deixa a tela mostrando `0.9999999999999999` e cada leitura nova precisa lembrar de arredondar.
+- **Claims:** as 17 guardas viram `>= ? - 1e-9` (a folga da porta da separação). O 400 *"Saldo insuficiente. Disponível:
+  ⟨d⟩ ⟨un⟩"* fica com a mesma literal; só o `⟨d⟩` sai arredondado.
+- **Entrega:** `qty > max + 1e-9` em `:1370` e `:1405`, `Máximo` arredondado; literal inalterada.
+- **A47 (nova):** a consulta da s5, estendida a `quantidade_bloqueada`, `quantidade_em_inspecao`,
+  `quantidade_em_terceiros` e à quantidade das linhas de saldo por endereço/lote que os claims `:309`, `:372`, `:1432`
+  leem. Letra B: o primeiro boot normaliza o legado (`UPDATE … SET col = ROUND(col, 6) WHERE col <> ROUND(col, 6)`,
+  idempotente) ou só lista.
+- **A tela:** 7 lugares exibem `quantidade_atual` cru (`MateriaisAlmoxarifado.js:325` e `:427`,
+  `MovimentacoesAlmoxarifado.js:857`, `RequisicaoForm.js:453`, `AlmoxarifadoDashboard.js:462`,
+  `ExtratoMaterialModal.js:135`, `ConfiguracoesAlmoxarifado.js:641`). Com (a) + normalização, a tela se corrige pelo
+  servidor; sem a normalização, decidir se entra um formatador.
+
+**Pontos de atenção (medir na Fase 0):**
+1. **As tabelas de linha** (saldo por endereço, lote — `:309`, `:372`, `:1432`) e o `RESERVADA_MENOS_SQL` (`:292`)
+   derivam igual? Medir com 0,7 + 0,2 + 0,1 num endereço e a saída de 1 com origem estrita.
+2. **O custo médio** (`:1801-1803`, `ROUND(..., 4)` sobre `quantidade_atual + ?`) não pode mudar para quem já está
+   certo — controle: a suíte de custo.
+3. **O inventário e a acuracidade** já toleram 1e-6 — a normalização do legado não pode gerar ajuste nem divergência
+   fantasma na contagem aberta.
+4. **Os remendos de leitura** (19 em 8 arquivos) ficam; medir que nenhum diverge do gravado (o caso decimal da
+   `separacaoTetoFisico` continua verde).
+5. **O cliente:** a fila oferece `entregavel: 0.9999999999999999` com `step="1"` — medir o que o modal de entrega
+   pré-preenche e se o navegador bloqueia o envio.
+6. **Controle positivo por claim:** a folga não pode deixar passar o que não existe (físico 0,2, saída 0,2000001 →
+   400). Sabotagem só na árvore principal, um controle por vez, base LF, perl com âncora contada.
+7. **A A47 compara com `<>`**, não com `ABS(...) > 1e-12` (a s5 mostrou o falso negativo).
+
+**O que está pronto e não se reabre:** a **95 inteira** (B466–B479: o teto da separação, a caixa sem reserva retida, a
+trava por material na separação e na entrega, a segunda rodada limitada além da própria caixa, a aprovação que não
+reserva a caixa de outra, a fila e o detalhe com o número da porta, os arredondamentos de leitura); a alçada até o
+começo da separação (94); as travas por requisição e por material (91, 93); as conferências de status (92, 93); a
+reserva na chegada/liberação (74/75) e o recálculo (76); a folga do consumo de reserva (67); a tolerância da
+acuracidade do inventário.
+
+**Candidatos descartados (com o porquê):**
+- **A saída avulsa e outras portas do motor levam o físico da caixa sem reserva** (B466 iv) — reproduz
+  (`e96f0-s2-avulsa-caixa.js`, **5/8 ERRADO**): com R1 tendo 4 separados sem reserva e físico 4, `SAIDA` 4,
+  `AJUSTE_NEGATIVO` 4 e `PERDA` 4 → **201**; bloquear 4 → **200**; criar + enviar remessa a terceiro → **200**; em todas
+  R1 fica `AGUARDANDO_SALDO` e o entregar 4 toma *"Máximo: 0 (pendente: 4, disponível: 0)"*, presa em `EM_SEPARACAO`
+  (controle: com reserva, a `SAIDA` 4 toma *"Saldo insuficiente. Disponível: 0 PC"*). Gesto preso, mas pede a caixa
+  dentro de cinco claims do motor — que precisam estar certos em decimal primeiro — e decisão de produto (recusar ou só
+  avisar o almoxarife que tira da caixa). **Etapa 97.**
+- **L1 da 75 (C173)** — `e96f0-s3-l1.js`, 2/4 ERRADO, **igual à 95**: a liberação de 4 reserva para R1 (com caixa sem
+  reserva) e R2 fica sem reserva — mas R2 separa os 4 (200). Perde-se a garantia, não o gesto.
+- **C139** — `e96f0-s4-c139.js` reproduz (usuário sem perfil libera a reserva manual da Engenharia, 200 `LIBERADA`);
+  regra de identidade pequena, a B412 diz que não se reabre sem dado de uso.
+- **C145, C147, C150** (não sondados): C145 é janela de milissegundos com escritor fora da trava (medida na 91); C147
+  continua (sem chave de idempotência na criação) e o conserto é cliente + servidor; C150 é custo, não defeito.
+- **O mapa:** 06, 21 e 22 🟡 bloqueadas por dependência (Engenharia/BOM, previsto × realizado); 05 só produto; 01
+  (transportadoras, conversões) e 23 (log de permissões) de valor menor que um gesto preso.
+
+**Numeração** (conferida no documento depois do fechamento da 95): última **B479**, último C **176**, última **A46** —
+a 96 começa em **B480**, **C177** e **A47**.
