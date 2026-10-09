@@ -4,6 +4,8 @@
 const { dbRun, dbGet, dbAll } = require('./db');
 const alertService = require('./alertService');
 const { custoUnitarioSql } = require('./custoSql');
+// Etapa 94: sem ciclo — a maquina so importa db e availabilitySql no topo.
+const { alcadaDeValorAindaVale } = require('./requisitionStateMachine');
 
 const CONFIG_KEYS = {
   ativo: 'liberacao_valor_ativo',
@@ -134,6 +136,15 @@ async function verificarBloqueioLiberacao(db, requisicaoId) {
     throw err;
   }
 
+  // Etapa 94 (B453/B455): a alcada vale ate o comeco da separacao. Fora dos seis status com seta para
+  // AGUARDANDO_APROVACAO_VALOR, ou com qualquer item separado ou entregue, devolve a linha sem ler custo e sem
+  // gravar nada (nem status, nem valor_total, nem e-mail). Antes gravava AGUARDANDO_APROVACAO_VALOR com
+  // material na caixa: aprovar devolvia *Reservada* com entregue, reprovar/cancelar soltavam a reserva do
+  // material separado (C163).
+  const itensCaixa = await dbAll(db, `SELECT quantidade_separada, quantidade_entregue, quantidade_atendida
+    FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?`, [requisicaoId]);
+  if (!alcadaDeValorAindaVale(reqRow.status, itensCaixa)) return reqRow;
+
   const avaliacao = await avaliarRequisicaoValor(db, requisicaoId);
   await atualizarValorRequisicao(db, requisicaoId, avaliacao);
 
@@ -148,7 +159,8 @@ async function verificarBloqueioLiberacao(db, requisicaoId) {
     [STATUS_AGUARDANDO, requisicaoId]);
 
   const atualizado = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
-  notificarAprovadoresValor(db, atualizado, avaliacao).catch((err) => {
+  // Etapa 94 (I3): pelo objeto exportado, para o teste espiar (e provar que NAO notifica depois da separacao).
+  module.exports.notificarAprovadoresValor(db, atualizado, avaliacao).catch((err) => {
     console.warn('[liberacao-valor] Falha ao notificar aprovadores:', err.message);
   });
 

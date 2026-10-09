@@ -1089,10 +1089,12 @@ const esperarFila = async (R, ms = 3000) => {
       assert.strictEqual((await separar('ALMOX', x.R, x.item, 4)).status, 200);
       const e2 = await entregar('ALMOX', x.R, x.item, 2);
       assert.strictEqual(e2.body.status, 'PARCIALMENTE_ATENDIDA', JSON.stringify(e2.body));
-      await dbRun(db, 'UPDATE materiais_almoxarifado SET custo_unitario = 100 WHERE id = ?', [x.m]);
+      // Etapa 94 (B459): a premissa montava AGUARDANDO_APROVACAO_VALOR com 2 entregues PELO DESVIO (custo alto
+      // -> entregar -> 403). Depois da 94 a alcada nao volta depois da separacao, e esse estado so existe como
+      // LEGADO (o que a A45 (a) lista): montado aqui por escritor direto. A corrida exclusao x /aprovar-valor
+      // sobre o legado continua possivel em producao — a assercao (um estorno, q=4, 404 na segunda) continua.
       await liberacaoValor(true);
-      const e1 = await entregar('ALMOX', x.R, x.item, 1);
-      assert.strictEqual(e1.status, 403, `premissa: a entrega cai na aprovacao por valor: ${e1.status} ${JSON.stringify(e1.body)}`);
+      await dbRun(db, "UPDATE requisicoes_almoxarifado SET status = 'AGUARDANDO_APROVACAO_VALOR' WHERE id = ?", [x.R]);
       assert.strictEqual((await foto(x)).status, 'AGUARDANDO_APROVACAO_VALOR');
       g = armarAguardando(RE.EXCL, () => como('ADMIN2').put(`${API}/requisicoes/${x.R}/aprovar-valor`));
       ex = await comPrazo(excluir('ADMIN', x.R), 8000, 'exclusao');

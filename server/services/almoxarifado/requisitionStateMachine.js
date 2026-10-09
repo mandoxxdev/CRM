@@ -46,13 +46,19 @@ const TRANSICOES = {
   // a reservar.
   AGUARDANDO_APROVACAO_VALOR: ['PENDENTE', 'APROVADO', 'REJEITADO', 'CANCELADO',
     'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA'],
+  // Etapa 94 (B454, o C68 da 47): os cinco pre-separacao e a EM_SEPARACAO (B462, Fase 2) ganham a seta para
+  // AGUARDANDO_APROVACAO_VALOR — a alcada de valor reavaliada na separacao. Antes o servico de valor gravava
+  // esse status por fora da maquina, de QUALQUER status (inclusive com material na caixa). A regra de onde a
+  // alcada ainda vale e alcadaDeValorAindaVale (abaixo): a seta E nada separado nem entregue.
   APROVADO: ['EM_SEPARACAO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA',
-    'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA', 'CANCELADO'],
+    'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA', 'CANCELADO', 'AGUARDANDO_APROVACAO_VALOR'],
   // Etapa 74 (D5/B371): a requisição que esperava ganha a reserva quando a nota chega
   // (reservaChegadaService) — AGUARDANDO_* -> *_RESERVADA. Reabre a B362 de propósito: agora há
   // escritor de status fora das três portas de aprovação.
-  AGUARDANDO_ESTOQUE: ['EM_SEPARACAO', 'CANCELADO', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA'],
-  AGUARDANDO_COMPRA: ['EM_SEPARACAO', 'CANCELADO', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA'],
+  AGUARDANDO_ESTOQUE: ['EM_SEPARACAO', 'CANCELADO', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA',
+    'AGUARDANDO_APROVACAO_VALOR'],
+  AGUARDANDO_COMPRA: ['EM_SEPARACAO', 'CANCELADO', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA',
+    'AGUARDANDO_APROVACAO_VALOR'],
   // Etapa 4 (design, decisão 2): entram ENTRE APROVADO e EM_SEPARACAO. A aprovação reserva o
   // saldo de cada item e a requisição para num deles em vez de ficar só APROVADO. Daqui só se
   // vai para a separação (o caminho normal) ou para o cancelamento — não há atalho para
@@ -61,10 +67,13 @@ const TRANSICOES = {
   // entrada que desfaz a reserva da chegada, de volta a AGUARDANDO_*/APROVADO (sem hold nenhum) ou
   // de TOTALMENTE a PARCIALMENTE (perdeu parte). Só o recálculo de reservaChegadaService grava estas.
   PARCIALMENTE_RESERVADA: ['EM_SEPARACAO', 'CANCELADO', 'TOTALMENTE_RESERVADA',
-    'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'APROVADO'],
+    'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'APROVADO', 'AGUARDANDO_APROVACAO_VALOR'],
   TOTALMENTE_RESERVADA: ['EM_SEPARACAO', 'CANCELADO', 'PARCIALMENTE_RESERVADA',
-    'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'APROVADO'],
-  EM_SEPARACAO: ['PRONTA_PARA_RETIRADA', 'PARCIALMENTE_ATENDIDA', 'ENTREGUE'],
+    'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'APROVADO', 'AGUARDANDO_APROVACAO_VALOR'],
+  // Etapa 94 (B462, Fase 2 I2): a EM_SEPARACAO VAZIA ("Iniciar Separacao" sem quantidade) ainda e pre-gasto —
+  // sem esta seta, separar 4 e entregar 4 depois de o limite baixar saia ENTREGUE sem aprovacao. A com
+  // material separado fica de fora pelo predicado (alcadaDeValorAindaVale), nao pela seta.
+  EM_SEPARACAO: ['PRONTA_PARA_RETIRADA', 'PARCIALMENTE_ATENDIDA', 'ENTREGUE', 'AGUARDANDO_APROVACAO_VALOR'],
   PRONTA_PARA_RETIRADA: ['PARCIALMENTE_ATENDIDA', 'ENTREGUE'],
   PARCIALMENTE_ATENDIDA: ['EM_SEPARACAO', 'ENTREGUE', 'ENCERRADA'],
   ENTREGUE: ['ENCERRADA'],
@@ -110,6 +119,22 @@ function validarTransicao(statusAtual, novoStatus) {
     return { ok: false, erro: `Transição inválida: ${statusAtual} → ${novoStatus}` };
   }
   return { ok: true };
+}
+
+const STATUS_AGUARDANDO_APROVACAO_VALOR = 'AGUARDANDO_APROVACAO_VALOR';
+
+/**
+ * Etapa 94 (B453/B454/B462) — a alcada de valor ainda vale? Pura. Verdade quando o status tem seta para
+ * AGUARDANDO_APROVACAO_VALOR (os cinco pre-separacao e a EM_SEPARACAO) E nenhum item tem nada separado nem
+ * entregue (entregue = quantidade_entregue ?? quantidade_atendida, a regua de getEntregue). Com material na
+ * caixa o gasto ja aconteceu: reavaliar ali nao tem gesto coerente para o aprovador (Fase 0, sonda 2).
+ * PENDENTE tem a seta (a avaliacao da criacao) mas nao separa — fica de fora.
+ * Usada pela verificacao (requisitionValueApprovalService), pela fila e pela reserva na chegada: uma fonte so.
+ */
+function alcadaDeValorAindaVale(status, itens = []) {
+  if (status === 'PENDENTE' || !validarTransicao(status, STATUS_AGUARDANDO_APROVACAO_VALOR).ok) return false;
+  return !(itens || []).some((i) => Number(i.quantidade_separada || 0) > 1e-9
+    || Number(i.quantidade_entregue ?? i.quantidade_atendida ?? 0) > 1e-9);
 }
 
 /**
@@ -199,4 +224,5 @@ module.exports = {
   CANCELAVEIS_OUTROS_MODULOS,
   validarTransicao,
   calcularStatusPosAprovacao,
+  alcadaDeValorAindaVale, // Etapa 94
 };
