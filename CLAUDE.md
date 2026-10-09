@@ -102,8 +102,11 @@ para quem espera) e as três que **aprovam** (`/aprovar`, `/aprovar-valor`, apro
 a trava **não é reentrante**; vários materiais só por `comLockDosMateriais` (ordem crescente);
 recálculo de status (76), aviso (75) e alerta de mínimo (`adiarParaDepoisDaSecao`) rodam **depois**
 de soltar; quem reserva confere a seção (`materiaisForaDaSecao` → 409 `TRAVA_INCOMPLETA`). Porta
-nova que ponha saldo no disponível ou o leia para reservar **tem de pegar a trava** — senão a C131
-volta. Saída avulsa, reserva manual e separação **não** pegam (declarado, D (91)).
+nova que ponha saldo no disponível **e distribua**, ou o leia para reservar, **tem de pegar a trava** —
+senão a C131 volta. Soltar reserva **sem distribuir** (liberação manual, expiração, os dois cancelamentos
+de requisição) **não** pega: só aumenta o livre, e quem reserva sob a trava no pior caso vê menos do que
+há, nunca mais (B441, Etapa 92). Saída avulsa, reserva manual e separação **não** pegam (declarado,
+D (91)).
 
 ## Regra de negócio: almoxarifado é área física, não filial
 
