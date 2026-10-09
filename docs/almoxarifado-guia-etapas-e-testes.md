@@ -1,13 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-09 (Etapa 94) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-09 (Etapa 95) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91, 92, 93 e 94) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91, 92, 93, 94 e 95) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-09 (Etapa 94 ENTREGUE · próxima do almoxarifado: Etapa 95)
+> ## Onde o desenvolvimento está — 2026-10-09 (Etapa 95 ENTREGUE · próxima do almoxarifado: Etapa 96)
 >
-> **O desenvolvimento parou aqui: Etapa 94 fechada — 2026-10-09.** A **Etapa 94 (a alçada de valor vale até o começo
+> **O desenvolvimento parou aqui: Etapa 95 fechada — 2026-10-09.** A **Etapa 95 (a separação não aceita mais do que
+> existe na prateleira)**: o material separado e ainda não entregue (a "caixa") deixa de ser oferecido de novo. Pedindo
+> 6 com 4 em estoque, separados os 4, mais 2 são recusados com *"Parafuso: não é possível separar 2 PC. Máximo: 0
+> (pendente: 2, disponível: 0)"* (aviso **C169** resolvido); duas requisições sem reserva não separam mais os mesmos 4;
+> dois itens do mesmo material dividem o que existe. A **Fila de separação**, o detalhe e a janela de separação mostram
+> o mesmo número (com zero, **"Aguardando saldo"**). A aprovação não reserva mais o que está na caixa sem reserva de
+> outra requisição, e a entrega "sem separar" depois de uma entrega parcial não leva mais a caixa de outra. Separação,
+> entrega e aprovação do mesmo material passam a acontecer uma depois da outra. A saída avulsa ainda pode levar o
+> material da caixa (ver *"O que esta etapa NÃO cobre"*). **Próxima etapa do almoxarifado: 96** (ver *"Próxima tarefa
+> detalhada"* no plano da Etapa 95).
+>
+> **Etapa 94, 2026-10-09.** A **Etapa 94 (a alçada de valor vale até o começo
 > da separação)**: o custo do material que sobe ou o limite da liberação por valor que muda **depois** de começada a
 > separação não tiram mais da máquina a requisição *Em Separação* com material separado, *Pronta p/ Retirada* ou
 > *Parcialmente Atendida* — ela segue até a entrega, sem cair em *Aguard. Aprov. Valor* com material na caixa e sem
@@ -16,7 +27,7 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > cancelada em *Aguard. Aprov. Valor* (**C164**). A **Fila de separação** não diz mais *"Aguardando aprovação de valor"*
 > para requisição em separação (**C165**), e o dado antigo que o defeito deixou ganhou o chip e o botão **"Reabrir
 > separação"**. Na tela, a separação que cai na aprovação de valor (ou num conflito) fecha a janela e recarrega.
-> **Próxima etapa do almoxarifado: 95 — a separação aceita mais que o físico (aviso C169)** (ver *"Próxima tarefa
+> ~~**Próxima etapa do almoxarifado: 95 — a separação aceita mais que o físico (aviso C169)**~~ *(Feita — Etapa 95.)* (ver *"Próxima tarefa
 > detalhada"* no plano da Etapa 94).
 >
 > **Etapa 93, 2026-10-09.** A **Etapa 93 (dois gestos na mesma requisição não
@@ -52,9 +63,9 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > tela oferece**~~ *(Feita — Etapa 92.)* (aviso **C149**: a tela **Minhas Requisições** mostra **Cancelar Requisição** para requisições
 > reservadas ou em espera, e o servidor recusa; ver *"Próxima tarefa detalhada"* no plano da Etapa 91).
 > *Numeração:* desde a unificação de 2026-10-07 a numeração de etapas é uma só para todos os módulos — as 78 a 90 foram
-> do lote de Compras/núcleo (`docs/compras-novidades-por-etapa.md`, **B18**); por isso, depois da 77, vieram a 91, a 92, a 93 e a 94.
+> do lote de Compras/núcleo (`docs/compras-novidades-por-etapa.md`, **B18**); por isso, depois da 77, vieram a 91, a 92, a 93, a 94 e a 95.
 >
-> **Etapas 1 a 20, 22 a 77, 91, 92, 93 e 94 completas.**
+> **Etapas 1 a 20, 22 a 77, 91, 92, 93, 94 e 95 completas.**
 >
 > **Etapa 77, 2026-10-08.** A **Etapa 77 (a reserva de uma requisição só sai
 > pela requisição)**: uma saída pela API de movimentações que cita a reserva de uma requisição é recusada — o material
@@ -5928,7 +5939,9 @@ roteiro confere é que, **qualquer** que seja a ordem, o resultado é um dos doi
    recusada com *"Requisição deve estar em separação, pronta para retirada ou parcialmente atendida"*. R4 **nunca** volta
    a *Parcialmente Atendida* depois de encerrada.
 6. **Requisições diferentes não esperam.** Repita o passo 1 com Ana entregando **R5** e Bruno entregando **R6** ao mesmo
-   tempo: as duas respondem na hora — a espera é só entre gestos da mesma requisição.
+   tempo: as duas respondem na hora — ~~a espera é só entre gestos da mesma requisição~~. *(Mudou na Etapa 95: entregas,
+   separações e aprovações de requisições diferentes com o **mesmo material** também passam uma depois da outra; a
+   espera é de frações de segundo, e as duas continuam respondendo na hora.)*
 
 ### O que esta etapa NÃO cobre
 
@@ -6050,8 +6063,164 @@ os itens de uma requisição depois de criada (o manual dizia "itens alterados":
 - **Mais de um servidor rodando ao mesmo tempo** — como na Etapa 93.
 - **A separação aceita mais que o físico** (aviso **C169**, defeito antigo encontrado nesta etapa): pedindo 6 com 4 em
   estoque, separar 4 e depois mais 2 é aceito — 6 separados para 4 que existem; a entrega para em 4 e sobram 2 "na
-  caixa" que não existem. É a **Etapa 95**.
+  caixa" que não existem. É a **Etapa 95**. *(Feita — Etapa 95: separados os 4, mais 2 são recusados com "Máximo: 0
+  (…)" — ver a seção da Etapa 95.)*
 - **C145, C147, C150, C139** — como na Etapa 93.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor e tela)
+provam, escrito para você conferir à mão.
+
+## Etapa 95 — A separação não aceita mais do que existe na prateleira (ENTREGUE — 2026-10-09)
+
+**O que mudou, em uma frase:** a separação para no que existe na prateleira — o material que já está separado e ainda
+não foi entregue (a "caixa") deixa de ser oferecido de novo, para a mesma requisição ou para outra.
+
+**O problema que ela resolve.** Separar não tira nada do estoque: o material separado continua na prateleira, contado
+no físico e no disponível, até a entrega. Até aqui o máximo da separação era o disponível (mais a reserva da própria
+requisição) e **ninguém descontava o que já estava separado**. Pedindo 6 com 4 em estoque, a requisição separava 4 e
+depois mais 2 — 6 na caixa para 4 que existiam; a entrega parava em 4 e sobravam 2 "na caixa" que não existiam (aviso
+**C169**). Com duas requisições sem reserva do mesmo material, as duas separavam os mesmos 4 (8 na caixa para 4); a
+aprovação de uma terceira reservava os 4 que estavam na caixa de outra, e a dona da caixa não conseguia mais entregar
+o que separou; e a entrega "sem separar" (a segunda rodada depois de uma entrega parcial) levava o material da caixa de
+outra requisição.
+
+**A regra agora.** Cada item tem um **separável**: o livre do material, mais o que a reserva do item ainda segura,
+menos o que já está na caixa dele, menos o que está separado e ainda não entregue, **sem reserva**, para os outros
+pedidos do mesmo material (de qualquer requisição em andamento, inclusive outros itens da mesma requisição). A reserva
+do item cobre primeiro a caixa dele. O máximo da separação é o menor entre o que falta separar e o separável. A fila de
+separação, o detalhe da requisição e a janela de separação mostram o mesmo número. A aprovação não reserva mais o que
+está na caixa sem reserva de outro pedido, e a segunda rodada da entrega não leva mais o que está na caixa de outro
+pedido. Duas separações (ou uma separação e uma entrega, ou uma separação e uma aprovação) de requisições diferentes com
+o mesmo material passam a acontecer uma depois da outra. A caixa só conta enquanto a requisição está em andamento
+(*Aprovado*, *Aguard. Estoque*, *Aguard. Compra*, *Parcialmente Reservada*, *Totalmente Reservada*, *Em Separação*,
+*Pronta p/ Retirada*, *Parcialmente Atendida* ou *Aguard. Aprov. Valor*): entregue por completo, encerrada, cancelada,
+rejeitada ou excluída, ela volta a contar como livre, sem nenhum movimento de estoque — o material precisa voltar à
+prateleira de verdade. A regra completa está no manual, seção 10.2.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Pedido de 6 com 4 em estoque: separava 4 e depois mais 2 (6 na caixa para 4) (**C169**) | Os 2 a mais são recusados: *"⟨material⟩: não é possível separar 2 PC. Máximo: 0 (pendente: 2, disponível: 0)"* |
+| Duas requisições sem reserva separavam os mesmos 4 (8 na caixa para 4) | A segunda é recusada com *"Máximo: 0 (…)"*; na fila ela fica com **"Aguardando saldo"** |
+| A **Fila de separação** dizia *"Separar 2"* com os 4 físicos já na caixa, e a separação recusava | A fila mostra o mesmo número que a separação aceita (*"separável agora 0"* e **"Aguardando saldo"**) |
+| Dois itens do mesmo material na mesma requisição: 4 + 4 numa confirmação com 4 em estoque | O segundo é recusado e nada é gravado; 2 + 2 passa. A janela de separação já abre dividida (4 e 0) |
+| Aprovar uma requisição reservava o material que estava na caixa de outra, e a dona da caixa não entregava mais (*"Máximo: 0"*) | A aprovação não reserva a caixa sem reserva de outro pedido; a requisição aprovada fica sem reserva (**Aprovado**) e aparece com **"Aguardando saldo"** |
+| A entrega "sem separar" depois de uma entrega parcial levava o material da caixa de outra requisição | É recusada: *"⟨material⟩: não é possível entregar 4 PC. Máximo: 0 (pendente: 4, disponível: 4)"*; a dona da caixa entrega o que separou |
+| Duas separações de requisições diferentes com o mesmo material corriam juntas | Uma depois da outra (a segunda lê a caixa que a primeira deixou) — o mesmo entre separação, entrega e aprovação |
+
+### Roteiro de teste manual (≈30 min, duas janelas)
+
+**Preparação (como Administrador).**
+- Em **Almoxarifado → Configurações → Liberação por Valor**, deixe **Habilitar liberação por valor** desligado (ou o
+  limite bem acima do valor das requisições abaixo), para a alçada não entrar no caminho.
+- Cadastre cinco materiais **comuns** (não críticos), todos com unidade **PC**: **Parafuso**, **Porca**, **Arruela**,
+  **Rebite** e **Bucha**, todos com estoque **0**.
+- Usuários: **Sílvio** pede (qualquer usuário com acesso), o **Administrador** aprova sempre por **Só Aprovar**, **Ana**
+  (Almoxarife) separa e entrega. Ana usa **duas janelas** (um navegador normal e uma janela anônima, ou duas abas),
+  chamadas **A** e **B**.
+- As entradas de estoque abaixo são sempre por **Movimentações → Entrada** (não por nota de compra: a nota reservaria o
+  material para quem espera, e o roteiro quer material solto).
+- Depois de cada entrega o sistema oferece **✍ Colher assinatura do recebedor** — clique **Pular**.
+
+1. **(C169) A mesma requisição não separa mais do que existe.** Dê **Entrada** de **4** Parafusos. Sílvio cria **R1**
+   pedindo **6** Parafusos; o Administrador aprova → **Parcialmente Reservada** (reserva de 4).
+   - Janela A: Ana abre R1 em **Requisições (almox.)** → **Iniciar Separação**. A janela mostra *"Solicitado: 6 · Já
+     separado: 0 · Saldo: 4"* com **4** já preenchido. **Antes de confirmar**, na janela B, abra a mesma R1 → **Iniciar
+     Separação** (também com 4) e deixe aberta.
+   - Janela A: **📦 Confirmar Separação** → *"Separação registrada!"*; R1 **Em Separação**.
+   - Janela A: **Ajustar Separação** → o Parafuso **não aparece** na janela, que diz *"Nenhum item com estoque disponível
+     para separação."*, e o **📦 Confirmar Separação** fica desabilitado.
+   - Janela B (a janela velha): troque a quantidade para **2** → **📦 Confirmar Separação** → aviso de erro
+     *"Parafuso: não é possível separar 2 PC. Máximo: 0 (pendente: 2, disponível: 0)"*; a janela continua aberta e nada
+     foi gravado (no detalhe, o item continua com 4 separados). Feche a janela de separação.
+   - **Fila de separação** → **Atualizar**: R1 aparece com **"Entregar"** e **"Aguardando saldo"**, e o item diz *"a
+     separar 2 PC (separável agora 0) · a entregar 4 PC (entregável agora 4) · disponível 4"*. (O *disponível* da linha é
+     o disponível do material somado à reserva do item — ele não desconta a caixa; o *separável agora* desconta.)
+   - Ana abre R1 → **Confirmar Entrega e Baixar Estoque** → *"Entrega parcial registrada. Saldo pendente permanece em
+     aberto."* → R1 **Parcialmente Atendida**; no **Extrato** do Parafuso, o físico é **0**. O detalhe diz *"Atendimento
+     parcial — itens pendentes aguardam reposição de estoque."*.
+   - Dê **Entrada** de **2** Parafusos. Na fila (**Atualizar**), R1 sobe com **"Separar"** e *"a separar 2 PC (separável
+     agora 2)"*. Ana abre R1: *"Atendimento parcial — 2 unidades pendentes prontas para entrega."* → **Completar Entrega
+     (2 pendentes)** → **✅ Confirmar Entrega** com 2 → *"Requisição entregue por completo! Estoque baixado."* → R1
+     **Entregue**, com 6 entregues.
+   *(Antes desta etapa: a janela B separava os 2, R1 ficava com 6 separados para 4 físicos, e a entrega parava em 4.)*
+
+2. **Duas requisições sem reserva disputando o mesmo material.** Sílvio cria **R2** e **R3**, cada uma pedindo **4**
+   Porcas; o Administrador aprova as duas → **Aguard. Estoque** (ou **Aguard. Compra**), sem reserva. Dê **Entrada** de
+   **4** Porcas. As duas mostram *"Chegou material para esta requisição — já dá para separar. … Dá para separar agora: 4
+   PC de Porca."*.
+   - Janela B: Ana abre **R3** → **Iniciar Separação** (4 preenchido) e deixa aberta.
+   - Janela A: Ana abre **R2** → **Iniciar Separação** → **📦 Confirmar Separação** → *"Separação registrada!"*.
+   - Janela B: **📦 Confirmar Separação** → *"Porca: não é possível separar 4 PC. Máximo: 0 (pendente: 4, disponível:
+     0)"*; nada gravado.
+   - Recarregue R3: o aviso de "chegou" sumiu (*"Sem saldo disponível no momento — inicie a separação assim que o
+     estoque for reposto."*, ou o de compra) e **Iniciar Separação** abre dizendo *"Nenhum item com estoque disponível
+     para separação."*. Na fila, R3 está no grupo **"Aguardando"**, com **"Aguardando saldo"** e *"a separar 4 PC
+     (separável agora 0) · disponível 4"*.
+   - **A caixa que sai devolve o livre.** Como Administrador, na lista de **Requisições (almox.)**, clique a lixeira
+     (*"Excluir requisição"*) de **R2** → **Justificativa da exclusão** → **Confirmar Exclusão**. Na fila (**Atualizar**),
+     R3 sobe com **"Separar"** e *"separável agora 4"* — os 4 que estavam na caixa de R2 voltaram a contar como livres,
+     **sem nenhuma linha nova no Extrato** (nada tinha saído). Na prateleira, as Porcas separadas para R2 precisam
+     voltar ao lugar. O mesmo acontece quando a requisição dona da caixa é encerrada, cancelada ou rejeitada.
+   *(Antes desta etapa: R3 separava os mesmos 4 — 8 na caixa para 4 Porcas.)*
+
+3. **A aprovação não reserva a caixa de outra.** Sílvio cria **R4** pedindo **4** Arruelas; o Administrador aprova →
+   *Aguard. Estoque* (ou *Aguard. Compra*). Dê **Entrada** de **4** Arruelas. Ana separa os 4 de R4 (**Iniciar
+   Separação** → **📦 Confirmar Separação**). Agora Sílvio cria **R5** pedindo **4** Arruelas e o Administrador aprova
+   (**Só Aprovar**).
+   - **Confira:** R5 fica **Aprovado** — não *Totalmente Reservada* — e a tela **Reservas** não tem reserva de R5. Na
+     fila, R5 aparece com **"Aguardando saldo"** (*"separável agora 0"*). (O status *Aprovado* sem reserva é esperado: o
+     status da aprovação olha o disponível do material, que não desconta a caixa.)
+   - Ana abre R4 → **Confirmar Entrega e Baixar Estoque** → *"Requisição entregue por completo! Estoque baixado."* → R4
+     **Entregue**: a dona da caixa entrega o que separou.
+   - *(Variante: com uma **Entrada** de **6** Arruelas no lugar de 4, R5 reserva só os **2** livres e fica
+     **Parcialmente Reservada**.)*
+   *(Antes desta etapa: R5 reservava os 4 que estavam na caixa de R4, e a entrega de R4 era recusada com "Máximo: 0".)*
+
+4. **Dois itens do mesmo material na mesma requisição.** A tela de nova requisição não deixa pôr o mesmo material duas
+   vezes (*"Rebite já está na lista"*); uma requisição assim só nasce **por integração**. Com uma requisição **R6** criada
+   por integração com **dois itens de 4 Rebites**, aprovada sem estoque, dê **Entrada** de **4** Rebites.
+   - Na fila, **cada** item diz *"a separar 4 PC (separável agora 4)"* — a linha mostra o separável de cada item sozinho,
+     sem dividir entre os dois.
+   - Ana abre R6 → **Iniciar Separação**: o primeiro Rebite já vem com **4** e o segundo com **0** (a janela divide, na
+     ordem do pedido). Troque o segundo para **4** → **📦 Confirmar Separação** → *"Rebite: não é possível separar 4 PC.
+     Máximo: 0 (pendente: 4, disponível: 0)"* — e **nenhum** dos dois é gravado.
+   - Troque para **2** e **2** → *"Separação registrada!"*: cada item com 2 separados.
+
+5. **A segunda rodada da entrega não leva a caixa de outra.** Dê **Entrada** de **2** Buchas. Sílvio cria **R7** pedindo
+   **6** Buchas; o Administrador aprova → **Parcialmente Reservada** (2). Ana separa 2 e clica **Confirmar Entrega e
+   Baixar Estoque** → *"Entrega parcial registrada. Saldo pendente permanece em aberto."* → R7 **Parcialmente
+   Atendida**, físico 0. Sílvio cria **R8** pedindo **4** Buchas; o Administrador aprova (*Aguard. Estoque* ou *Aguard.
+   Compra*). Dê **Entrada** de **4** Buchas.
+   - Janela B: Ana abre **R7**: *"Atendimento parcial — 4 unidades pendentes prontas para entrega."* → **Completar
+     Entrega (4 pendentes)** → a janela de entrega abre (entregar sem separar de novo); deixe **4** e **não confirme**.
+   - Janela A: Ana abre **R8** → **Iniciar Separação** → 4 → **📦 Confirmar Separação** → *"Separação registrada!"*.
+   - Janela B: **✅ Confirmar Entrega** → *"Bucha: não é possível entregar 4 PC. Máximo: 0 (pendente: 4, disponível: 4)"*;
+     nada sai. Recarregue R7: *"Atendimento parcial — itens pendentes aguardam reposição de estoque."*, sem botão de
+     entrega.
+   - Ana abre **R8** → **Confirmar Entrega e Baixar Estoque** → *"Requisição entregue por completo! Estoque baixado."*
+     → R8 **Entregue**.
+   *(Antes desta etapa: R7 levava as 4 Buchas da caixa de R8, e R8 ficava presa com 4 separados que não existiam.)*
+
+### O que esta etapa NÃO cobre
+
+- **Saída avulsa e reserva manual.** Uma saída pela tela **Movimentações** (ou por integração) e uma reserva feita na
+  tela **Reservas** não conhecem a caixa: podem levar (ou reservar) o material que está separado sem reserva para uma
+  requisição. Quem faz saída avulsa precisa olhar a prateleira — o manual (10.5) diz como regra.
+- **A entrega fora da segunda rodada** continua pelo disponível mais a reserva do item (só a entrega "sem separar"
+  depois de uma entrega parcial, além do que o item tem na caixa, passou a descontar a caixa dos outros).
+- **Corrigir o dado antigo.** Requisições que já têm mais na caixa do que o físico (separadas antes desta etapa)
+  continuam assim — não há gesto de "devolver da caixa". Quem tem acesso ao banco as acha pela consulta **A46** de
+  `docs/almoxarifado-novidades-por-etapa.md`; o administrador decide (excluir e refazer a requisição).
+- **O status de quem foi aprovada sem reserva** porque o material estava na caixa de outra: fica **Aprovado**, não
+  *Aguard. Estoque* (aviso **C172**) — cosmético; a fila mostra **"Aguardando saldo"**.
+- **A chegada da nota, a liberação da inspeção e da não conformidade, os estornos e o recálculo do status** não foram
+  mexidos (aviso **C173**).
+- **A linha da fila não divide** o separável entre dois itens do mesmo material da mesma requisição (cada um mostra o
+  seu); a janela de separação divide.
+- **A mensagem de recusa não diz quanto está na caixa** — o *"disponível"* dela já é o separável.
+- **Mais de um servidor rodando ao mesmo tempo** — como na Etapa 93: a espera por material é de um processo só.
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor e tela)
 provam, escrito para você conferir à mão.
@@ -6504,7 +6673,9 @@ solicitados. Outro material com só **3** em estoque e uma requisição aprovada
 ### O que esta etapa NÃO cobre
 
 - O motivo **não** é obrigatório, e a divergência **não** avisa ninguém nem abre não conformidade (**B238**).
-- Separado **sem endereço** de outra requisição não sai do "livre" — o máximo pode sair maior que o real (**D (60)**).
+- ~~Separado **sem endereço** de outra requisição não sai do "livre" — o máximo pode sair maior que o real (**D (60)**).~~
+  *(Revogada na Etapa 95: o separado e ainda não entregue de outra requisição — com ou sem endereço — sai do máximo da
+  separação; com tudo na caixa de outra, a separação é recusada com "Máximo: 0 (…)". Ver a seção da Etapa 95.)*
 - Não separar nada de um item (quantidade 0) não fica registrado (**D (60)**).
 - A **série** por item continua fora — é a próxima etapa.
 

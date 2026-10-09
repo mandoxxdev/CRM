@@ -11,11 +11,10 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-09):** Etapa 94 fechada (a alçada de valor vale até o começo da
-> separação — custo ou limite que mudam depois de separado algo não devolvem mais a requisição em separação, pronta ou
-> parcialmente atendida a *Aguardando aprovação de valor*; separar e cancelar juntos não ressuscitam a cancelada) — ver
-> "Onde estamos e o que vem a seguir", no fim. A próxima etapa do almoxarifado é a **95** — a separação aceita mais do
-> que existe na prateleira (**C169**, medido sem corrida). Desde a unificação de 2026-10-07 a
+> **Onde o desenvolvimento está (2026-10-09):** Etapa 95 fechada (a separação não aceita mais do que existe na
+> prateleira — o separado ainda não entregue fica retido para quem separou, na separação, na fila, na tela e na
+> aprovação; **C169** resolvido) — ver "Onde estamos e o que vem a seguir", no fim. A próxima etapa do almoxarifado é a
+> **96** — o motor grava a quantidade arredondada e não recusa o que existe por ponto flutuante (**C176**). Desde a unificação de 2026-10-07 a
 > numeração é uma só para todos os módulos, e as 78 a 90 foram usadas pelo lote de Compras/núcleo
 > (`docs/compras-novidades-por-etapa.md`, **B18**) — por isso a etapa depois da 77 foi a 91.
 >
@@ -115,7 +114,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Quarenta e cinco itens para rodar em produção ANTES do deploy — quarenta e dois são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Quarenta e seis itens para rodar em produção ANTES do deploy — quarenta e três são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-09 (Etapa 95) de quarenta e cinco para quarenta e seis**, com a **A46** — os materiais com mais separado na caixa (ou mais prometido) do que existe na prateleira, que a separação e a aprovação deixavam acontecer antes desta versão.)*
 
 *(**Atualizado em 2026-10-09 (Etapa 94) de quarenta e quatro para quarenta e cinco**, com a **A45** — as requisições com material separado ou entregue que a alçada de valor levou a *Aguardando aprovação de valor* (e as que daí foram reprovadas, canceladas ou aprovadas) antes desta versão.)*
 
@@ -1659,7 +1660,69 @@ real só em produção.)*
   ser **Encerrada**.
 - **Falso positivo possível** em dado anterior à máquina de estados (Etapa 3) — conferir a trilha da requisição.
 
-### B. Decisões de negócio — B1 a B465; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A46 (NOVA, da Etapa 95 — materiais com mais separado na caixa, ou mais prometido, do que existe na prateleira).**
+Antes desta versão a separação não descontava o separado ainda não entregue (**C169**): uma requisição separava além
+do estoque, duas requisições sem reserva separavam o mesmo material, e a aprovação reservava o que estava na caixa de
+outra. O deploy não desfaz o que já aconteceu — e a versão nova passa a **recusar** separar onde a caixa já passa do
+físico. Somente leitura:
+
+```sql
+-- (a) caixa acima do fisico: o separado ainda nao entregue de todas as requisicoes ativas passa do que existe
+SELECT m.id AS material_id, m.codigo, m.quantidade_atual AS fisico,
+  SUM(MAX(COALESCE(ir.quantidade_separada,0) - COALESCE(ir.quantidade_entregue, ir.quantidade_atendida, 0), 0)) AS na_caixa,
+  GROUP_CONCAT(r.numero || ' (' || r.status || ')', '; ') AS requisicoes
+FROM itens_requisicao_almoxarifado ir
+JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
+JOIN materiais_almoxarifado m ON m.id = ir.material_id
+WHERE COALESCE(r.ativo,1) = 1
+  AND r.status IN ('APROVADO','AGUARDANDO_ESTOQUE','AGUARDANDO_COMPRA','PARCIALMENTE_RESERVADA','TOTALMENTE_RESERVADA',
+                   'EM_SEPARACAO','PARCIALMENTE_ATENDIDA','PRONTA_PARA_RETIRADA','AGUARDANDO_APROVACAO_VALOR')
+  AND COALESCE(ir.quantidade_separada,0) - COALESCE(ir.quantidade_entregue, ir.quantidade_atendida, 0) > 1e-9
+GROUP BY m.id HAVING na_caixa > m.quantidade_atual + 1e-9 ORDER BY m.codigo;
+
+-- (b) reservado + caixa sem reserva acima do fisico livre: acha tambem a aprovacao que reservou a caixa de outra
+SELECT m.id AS material_id, m.codigo, m.quantidade_atual AS fisico, m.quantidade_reservada AS reservado_total,
+  SUM(MAX(MAX(COALESCE(ir.quantidade_separada,0) - COALESCE(ir.quantidade_entregue, ir.quantidade_atendida, 0), 0)
+    - COALESCE((SELECT SUM(rs.quantidade - COALESCE(rs.quantidade_utilizada,0)) FROM reservas_material_almoxarifado rs
+        WHERE rs.item_requisicao_id = ir.id AND rs.material_id = ir.material_id AND rs.status = 'ATIVA'
+          AND rs.origem = 'REQUISICAO'), 0), 0)) AS caixa_sem_reserva
+FROM itens_requisicao_almoxarifado ir
+JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id
+JOIN materiais_almoxarifado m ON m.id = ir.material_id
+WHERE COALESCE(r.ativo,1) = 1
+  AND r.status IN ('APROVADO','AGUARDANDO_ESTOQUE','AGUARDANDO_COMPRA','PARCIALMENTE_RESERVADA','TOTALMENTE_RESERVADA',
+                   'EM_SEPARACAO','PARCIALMENTE_ATENDIDA','PRONTA_PARA_RETIRADA','AGUARDANDO_APROVACAO_VALOR')
+GROUP BY m.id
+HAVING m.quantidade_reservada + caixa_sem_reserva > m.quantidade_atual - COALESCE(m.quantidade_bloqueada,0)
+  - COALESCE(m.quantidade_em_inspecao,0) - COALESCE(m.quantidade_em_terceiros,0) + 1e-9
+ORDER BY m.codigo;
+```
+
+*(Conferida duas vezes — na medição da etapa e no teste de integração, que roda o texto acima sem mudar uma vírgula —
+contra o esquema real do módulo, montado em memória pelo mesmo harness dos testes (controle positivo, com os estados montados direto no banco porque a versão nova não os
+produz mais): a (a) **acha** o C169 (6 separados para 4) e as duas requisições sem reserva com os mesmos 4 na caixa; a
+(b) acha esses dois **e** a aprovação que reservou a caixa de outra; **nenhuma** acha a caixa coberta pela própria
+reserva, a caixa sem reserva com estoque de sobra, nem a requisição toda entregue; e com uma coluna trocada de propósito
+o banco **recusa** as duas. A lista de status do `IN` é a mesma que o sistema usa para saber quem retém a caixa. O banco
+de desenvolvimento não tem dados, então o tamanho real só em produção.)*
+
+**Como ler o resultado** (ninguém corrige por script — cada linha pede olhar a prateleira):
+- **As duas vazias** — nada a fazer.
+- **Linha em (a)** — as requisições listadas dividem um material que não existe por inteiro: a entrega de uma pode
+  deixar a outra sem conseguir entregar. Conferir a prateleira e decidir quem fica com o que existe. Depois, **por
+  status**, para a que fica sem o material: *Parcialmente Atendida* → **Encerrar** (o entregue fica; a caixa deixa de
+  reter); *Em Separação* ou *Pronta para retirada* **sem nada entregue** → **excluir** e refazer a requisição (não há
+  entregue a estornar); *Em Separação* **com algo entregue** e sem físico → **não há gesto limpo** (**C174**): excluir
+  **estorna** o que já saiu; o administrador decide entre entregar o que existir e encerrar depois, ou aceitar o estorno.
+  **Não excluir quem já entregou** sem essa decisão.
+- **Linha em (b) que não está em (a)** — uma aprovação reservou o que estava na caixa de outra. A dona da caixa toma
+  *"Máximo: 0"* ao entregar: conferir a prateleira; liberar a reserva da requisição aprovada (tela **Reservas**) devolve
+  o material à dona da caixa, e a aprovada fica *Aprovado*, sem reserva, até entrar material.
+- Com a versão nova, separar onde a caixa já passa do físico é **recusado** — é esperado; a A46 diz onde.
+
+### B. Decisões de negócio — B1 a B479; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-09 de B465 para B479**, com as catorze da Etapa 95 — treze do plano (**B466** a **B478**; **B477** e **B478** nasceram na revisão do plano, que também **inverteu** a **B476** e corrigiu à vista a **B469** e a **B470**) e uma da revisão adversarial do código (**B479**, letra nova e não emenda: é a trava da entrega e precisa ser achável pela letra; o arredondamento da aprovação, também da revisão, entrou como emenda na **B469**).)*
 
 *(**Atualizado em 2026-10-09 de B452 para B465**, com as treze da Etapa 94 — onze do plano (**B453** a **B463**; **B460** a **B463** da revisão do plano) e duas da revisão adversarial do código (**B464**, que corrige a **B456** à vista, e **B465**).)*
 
@@ -4823,7 +4886,8 @@ se quiserem, é um critério a mais entre urgência e data).
 **Escolhido:** **Separar** só quando algum item é separável agora (o mesmo teto do separar: o menor entre o que falta
 separar e o disponível, contando a reserva da própria requisição); **Entregar** só quando algum item é entregável agora
 (o separado ainda não entregue, limitado ao disponível — a separação não reserva, e outra requisição pode ter levado o
-material). Sem isso, **Aguardando saldo**, não acionável. **Descartado:** "tem pendente" como critério (punha no topo
+material; *a parte "a separação não reserva" foi **revogada na Etapa 95 (B467)**: o separado fica retido para quem
+separou*). Sem isso, **Aguardando saldo**, não acionável. **Descartado:** "tem pendente" como critério (punha no topo
 requisição aguardando compra que o separar recusa); uma etapa só por requisição (escondia as outras — virou um chip por
 etapa).
 
@@ -6213,6 +6277,114 @@ traziam o código — **estava errado**: as rotas mandavam só a mensagem.)* **D
 de status (o de permissão não muda nada e o modal fechado esconderia a mensagem); reconhecer pelo texto (quebra na
 primeira revisão da mensagem). **Lacuna declarada:** a lista branca da rota (outro código de erro não sai) não tem teste —
 nenhum erro alcançável pela rota traz outro código hoje. (`c729b784`)
+
+**B466 (NOVA, da Etapa 95) — o separado sem reserva fica retido para quem separou, na separação e na aprovação.**
+**Escolhido:** o que um item pode separar é o que existe na prateleira **para ele**: `teto = max(0, r − c) + max(0,
+disp − caixa sem reserva dos outros itens − max(0, c − r))` — `r` a reserva ativa do item, `c` a caixa dele (separado
+− entregue), `disp` o disponível do material sem a reserva do item; a caixa sem reserva de um item é `max(0, caixa −
+reserva dele)`, somada sobre os itens das requisições ativas do material (**B473**). A reserva cobre primeiro a caixa do
+próprio item. Fecha o **C169**, as duas requisições sem reserva separando o mesmo material, os dois itens da mesma
+rodada e o crítico (a conferência não protegia). *(A forma do protótipo da Fase 0, `disp + r − c − caixa dos outros`,
+**estava errada**: punha a caixa de outra contra a reserva do item, e quem tinha reserva ficava sem separar depois de
+uma saída avulsa — a revisão do plano reproduziu; corrigida antes de executar.)* **Descartados:** (i) só o próprio item
+(a conta candidata da Etapa 94) — deixava as outras requisições e os outros itens separando o mesmo material; (ii)
+separar exigir reserva — quebra a requisição aprovada sem estoque cujo material chegou solto; (iii) separar **criar**
+reserva — o mais coerente com o motor, mas escreve reserva em toda separação e mexe nas Etapas 74–77, no cancelamento e
+na exclusão (o menos reversível); (iv) mudar o disponível do motor — 14 leitores, muda saídas avulsas, transferências e
+inventário. **Consequência aceita:** o motor continua sem saber o que é caixa — uma saída avulsa ainda leva o que está
+na caixa sem reserva (**D (95)**). **Reversível:** uma função e um fragmento de consulta. (`f8edb54a`)
+
+**B467 (NOVA, da Etapa 95) — revoga a D (60) e o cenário 5 da Etapa 64.** *"Separado SEM endereço de outra requisição
+não sai do 'livre'"* deixa de valer; *"as duas separam 10 (a separação não reserva)"* vira *"a segunda é recusada:
+Máximo: 0"*. Corrigidos **à vista** (riscados, com a etapa) aqui, no guia e nas specs; o manual foi reescrito.
+**Descartado:** manter a D (60) e corrigir só o próprio item — ver **B466 (i)**. (`f8edb54a`)
+
+**B468 (NOVA, da Etapa 95) — na mesma rodada, itens do mesmo material dividem o teto; a régua da divergência usa o
+retrato do início.** Cada linha da confirmação é conferida contra o que as linhas anteriores acabaram de separar
+(inclusive o mesmo item duas vezes). A régua da divergência (Etapa 60) guarda o teto calculado com o separado de
+**antes** da rodada, porque ela já desconta os outros itens da rodada — com o teto em memória, descontaria duas vezes.
+**Descartado:** régua com o teto em memória (dois testes da 60 caíam — medido no protótipo). (`f8edb54a`)
+
+**B469 (NOVA, da Etapa 95) — a aprovação não reserva a caixa sem reserva de OUTRO item.** `a reservar = min(falta,
+max(0, disponível − já reservado − caixa sem reserva dos outros itens do material))`, arredondado a 6 casas. As três
+portas de aprovação (**Aprovar**, **Aprovar Liberação** por valor e a automática) passam por aqui. *(O plano dizia
+"inclui o próprio item" — **estava errado**: a reserva nova cobre a própria caixa, e descontá-la reservava de menos: no
+legado da A45, pede 6, 4 na caixa, estoque 6 → reservava 2 e outra requisição levava os outros 2. Corrigido na revisão
+do plano.)* *(O arredondamento entrou na revisão do código: sem ele, 0,3 − 0,1 reservava 0,19999… e a requisição
+ficava *Parcialmente Reservada* — `6e0fae83`.)* **Descartado:** declarar e deixar — a dona da caixa ficava presa até
+chegar material, sem aviso. (`9237af2c`, `6e0fae83`)
+
+**B470 (NOVA, da Etapa 95) — a entrega não muda (exceto a B477).** Continua pelo disponível somado à reserva do item, e
+o motor valida na hora; a "segunda rodada" da Etapa 3 (entregar sem separar depois de uma entrega parcial, só material
+comum) continua. **Descartado:** entrega pelo livre real — no legado com caixa dupla (duas requisições com os mesmos 4)
+as **duas** passariam a recusar e ninguém entregaria. *(O plano dizia "a entrega nunca cria caixa fantasma" — **estava
+errado**: a segunda rodada levava a caixa de outra; ver **B477**.)*
+
+**B471 (NOVA, da Etapa 95) — a mensagem de recusa não muda de forma; o "disponível" dela passa a ser o teto do item.**
+*"⟨material⟩: não é possível separar ⟨q⟩ ⟨un⟩. Máximo: ⟨max⟩ (pendente: ⟨p⟩, disponível: ⟨teto⟩)"* — no C169, *"Máximo: 0
+(pendente: 2, disponível: 0)"* (antes diria *"disponível: 4"*, e os 4 eram a caixa dela). O teto é arredondado a 6 casas
+e a porta compara com folga de 1e-9 (sem isso, estoque 0,3 com 0,1 na caixa de outra oferecia 0,19999… e recusava 0,2).
+**Descartado:** acrescentar *"(na caixa: n)"* — muda a literal que testes e integrações casam; fica para quando houver
+queixa. (`f8edb54a`)
+
+**B472 (NOVA, da Etapa 95) — contrato aditivo no detalhe; a fila muda só o separável.** O item do detalhe da
+requisição (`GET /api/almoxarifado/requisicoes/:id`) ganha `saldo_separavel` (o teto) e `quantidade_separavel` (o
+menor entre o que falta separar e o teto); `saldo_atual` **não muda** (a entrega da tela e o "Saldo:" dependem dele). Na
+fila, `separavel` usa o teto; `disponivel` e `entregavel` ficam como estavam. A tela usa o número do servidor e só
+divide a rodada entre itens do mesmo material. **Descartados:** mudar o sentido de `saldo_atual` (quebra a entrega da
+tela); mudar o `disponivel` da fila (no C169 os 4 estão na caixa dela — o número está certo). (`5a2bfa9f`, `c335cf40`;
+a coluna interna da conta saiu do JSON na revisão do código — `16cacc0e`)
+
+**B473 (NOVA, da Etapa 95) — quem conta como caixa.** Itens de requisição **ativa** em *Aprovado*, *Aguardando
+estoque*, *Aguardando compra*, *Parcialmente* e *Totalmente Reservada*, *Em Separação*, *Parcialmente Atendida*,
+*Pronta para retirada* e *Aguardando aprovação de valor* (este pelo legado da A45). Cancelada, reprovada, entregue,
+encerrada ou excluída **não retêm** — a caixa delas volta a contar como livre, sem movimento (é o que o resto do
+sistema já supõe: a reserva é solta no cancelamento). Uma lista só, da máquina de estados. **Descartado:** só "ativa" —
+uma cancelada com caixa reteria para sempre. *Pendente* fica fora de propósito (**C175**). (`f8edb54a`)
+
+**B474 (NOVA, da Etapa 95) — o teto vem antes da régua da origem; dois testes da Etapa 59 mudam de cenário, não de
+mensagem.** Com o material só na origem, a recusa sai pelo teto (*"Máximo: 3…"*) e não pela origem; os testes ganharam
+saldo em outro endereço para seguirem provando a régua da origem com a mesma mensagem. **Descartado:** conferir a
+origem antes do teto — diria *"tiraria de outros endereços"* quando não há outros endereços com o material.
+(`f8edb54a`)
+
+**B475 (NOVA, da Etapa 95) — a chegada, a liberação da inspeção e o estorno (Etapas 74/75) não mudam.** Os que chegam
+vão primeiro a quem já tem caixa sem reserva antes de quem espera — decisão escrita da revisão da Etapa 75. Com a
+**B466**, o motivo daquela decisão deixa de valer **para a separação e a aprovação**, não para a distribuição; quem
+espera ainda separa o que entrou (a reserva que a outra ganhou cobre a caixa dela, não some do livre duas vezes).
+Reabrir é etapa própria (**C173**). **Descartado:** mudar a conta da falta aqui — muda o e-mail das Etapas 70/75 e a
+ordem de quem leva, sem queixa medida.
+
+**B476 (NOVA, da Etapa 95; INVERTIDA na revisão do plano) — a separação pega a trava por material, dentro da trava por
+requisição.** O plano dizia "a separação não pega a trava por material — residual, pede escritor concorrente". **Estava
+errado:** duas requisições sem reserva separando o mesmo material ao mesmo tempo passavam as duas (**10 de 10, sem
+atraso nenhum** — dois cliques) e a aprovação simultânea reservava a caixa recém-separada (5 de 5). Com a trava: 0 de 10
+e 0 de 5, sem deadlock (a ordem é requisição → material, a permitida). **Custo aceito:** separações de requisições com
+material em comum esperam uma pela outra (seções curtas). A **D (91)** perdeu a separação e o `CLAUDE.md` mudou
+(`4f89c295`). **Descartado agora:** manter sem trava. (`f8edb54a`)
+
+**B477 (NOVA, da Etapa 95, revisão do plano) — a segunda rodada da entrega não leva a caixa de outra requisição.** Na
+segunda rodada (já entregou algo e a caixa própria é menor que o pendente), a parte **além da própria caixa** é limitada
+ao teto do item; a entrega da própria caixa continua pelo disponível somado à reserva. A prévia da entrega e o laço
+leem o mesmo teto (cada um sozinho já segura — sabotar só um não derruba o teste, declarado). O detalhe passou a
+oferecer o mesmo número (`5a2bfa9f`). **Descartados:** entrega inteira pelo teto (no legado com caixa dupla as duas
+recusariam — **B470**); declarar (a dona da caixa presa sem aviso). (`35e274c5`)
+
+**B478 (NOVA, da Etapa 95, revisão do plano) — dois índices.** Itens de requisição por material e reservas por item. A
+conta da caixa é uma subconsulta por linha da fila: sem os índices a fila ficava ~40× mais lenta (medido com 6 mil itens
+e 3 mil reservas). Criados no boot, depois das colunas que cobrem (provado em primeiro boot com pasta de dados vazia).
+**Descartado:** sem índice (o custo cresce com o histórico, que nunca é apagado). (`f8edb54a`; conferidos pela coluna
+em `42e08faf`)
+
+**B479 (NOVA, da Etapa 95, revisão do código) — a entrega também pega a trava por material.** Desde a **B477** a
+segunda rodada da entrega lê o teto (o físico menos a caixa sem reserva das outras) para decidir quanto sai — mas só
+pegava a trava por requisição. A revisão reproduziu **10 de 10, sem atraso**: R2 entrega 4 na segunda rodada enquanto
+R1, outra requisição do mesmo material, separa 4 — as duas 200, o estoque a 0 e R1 com 4 na caixa que não existem.
+**Introduzido pela própria etapa** e pego antes de sair. **Escolhido:** a entrega inteira roda sob a trava por
+requisição → por material (a mesma ordem da separação). Sem deadlock (8 rodadas cruzando dois materiais em ordens
+opostas, com separar, aprovar, entregar e fila ao mesmo tempo); a corrida: 0 de 10. **Descartado:** travar só o ramo da
+segunda rodada — a primeira rodada também baixa o físico que a separação alheia lê, e dois caminhos de trava na mesma
+função seriam mais um lugar para errar a ordem. O `CLAUDE.md` diz quem pega a trava (`0b6132ae`). (`582844e8`)
 
 
 ### C. Furos e mudanças de número que quem opera precisa saber
@@ -8064,8 +8236,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      antes da separação e de `EM_SEPARACAO`). **O que fazer:** integrações que separam tratam o 409 como "recarregue e
      tente de novo".
 
-169. **NOVO, achado na revisão do código da Etapa 94 (anterior a ela) — a separação aceita mais do que existe na
-     prateleira.** Medido em `main`: material com **4** em estoque, requisição pede **6**; aprovar reserva 4
+169. **NOVO, achado na revisão do código da Etapa 94 (anterior a ela), e ✅ RESOLVIDO NA ETAPA 95 (`f8edb54a`,
+     `9237af2c`, `5a2bfa9f`, `c335cf40`, `582844e8`) — a separação aceitava mais do que existe na prateleira.** Medido em `main`: material com **4** em estoque, requisição pede **6**; aprovar reserva 4
      (*Parcialmente Reservada*); separar 4 → a fila mostra **2 separáveis**; separar mais 2 → **aceita** — **6 separados
      para 4 físicos** (o mesmo partindo de *Parcialmente Reservada*). A entrega barra pelo estoque (entregar 6 → *"…
      Máximo: 4 (pendente: 6, disponível: 4)"*); entregar 4 → *Parcialmente Atendida*, estoque 0, e o item fica com **2
@@ -8074,6 +8246,71 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      entregue. **Não corrigido nesta etapa** (fora do escopo dela). **O que fazer até a Etapa 95:** ao separar o resto de
      uma requisição com separação parcial, conferir a prateleira; não confiar no "separável" da fila quando a
      requisição pediu mais do que havia em estoque. Próxima etapa (**95**).
+     *(✅ **Resolvido na Etapa 95.** O defeito era **mais largo** do que este item dizia. A "causa provável" estava
+     **incompleta**: o separado ainda não entregue não era descontado de lugar nenhum — também **sem reserva** (21 de 30
+     estados errados no próprio item); duas requisições separavam o mesmo material, dois itens da mesma confirmação
+     idem, e a aprovação reservava a caixa de outra (7 de 10). E "a fila e a tela oferecem entregá-los" estava
+     **errado**: depois de entregar os 4, a fila mostra *Aguardando saldo* com entregável 0 — os 2 só saíam pela
+     segunda rodada da entrega quando chegava estoque. O "o que fazer" acima deixa de valer depois do deploy; antes
+     dele, a **A46**. Ver **B466** a **B479**.)*
+
+170. **NOVO, da Etapa 95 — o que muda para quem opera.** (1) A separação recusa o que está na caixa de outra
+     requisição: duas requisições não separam mais o mesmo material (**B466**, **B467** — o cenário 5 da Etapa 64 deixa
+     de valer). (2) O separável da fila e da tela pode cair para **0** em requisição que antes mostrava **Separar** — ela
+     passa a **Aguardando saldo** até entrar material ou a outra entregar. (3) A mensagem de recusa mostra no
+     *"disponível"* o que existe para aquele item (**B471**). (4) A aprovação pode deixar a requisição **sem reserva**
+     quando o estoque está na caixa de outra (**B469**, **C172**). (5) A segunda rodada da entrega não leva a caixa de
+     outra (**B477**). (6) Separações, entregas e aprovações do mesmo material acontecem uma depois da outra (**B476**,
+     **B479**) — espera de milissegundos. **O que fazer:** rodar a **A46** antes do deploy e tratar cada linha **por
+     status** (está lá): *Parcialmente Atendida* → **Encerrar**; *Em Separação* ou *Pronta para retirada* sem nada
+     entregue → excluir e refazer; *Em Separação* com algo entregue → **C174**. **Não excluir quem já entregou** — a
+     exclusão estorna o entregue.
+
+171. **NOVO, da Etapa 95 — o que muda para quem integra.** (1) O item do detalhe (`GET
+     /api/almoxarifado/requisicoes/:id`) ganha `saldo_separavel` e `quantidade_separavel` (aditivo; `saldo_atual` e os
+     outros campos não mudam, exceto o `quantidade_entregavel` da segunda rodada, que segue a **B477**). (2) A fila
+     (`GET /api/almoxarifado/fila-separacao`) devolve `separavel` menor quando há caixa; `disponivel` e `entregavel`
+     não mudam. (3) O 400 da separação (`PUT …/separacao` e o alias `/separar`) tem a mesma forma, com outro número no
+     *"disponível"* e no *"Máximo"*. (4) A entrega na segunda rodada pode responder o 400 *"… não é possível entregar ⟨q⟩
+     ⟨un⟩. Máximo: ⟨max⟩ (pendente: ⟨p⟩, disponível: ⟨d⟩)"* com o *"disponível"* maior que o *"Máximo"*. (5) As
+     aprovações reservam menos quando há caixa sem reserva do material. **O que fazer:** integração que separa deve ler
+     `quantidade_separavel` (ou o `separavel` da fila), não o `saldo_atual`.
+
+172. **NOVO, da Etapa 95 — a aprovação com a caixa de outra pode dar *Aprovado* sem reserva.** O status depois de
+     aprovar ainda é calculado pelo disponível do motor, que conta a caixa sem reserva como livre: no cenário 3 da
+     etapa a requisição nova fica *Aprovado* sem reserva e a fila a mostra *Aguardando saldo*. Cosmético e declarado (o
+     status não escolhe *Aguardando estoque/compra*). **O que fazer:** nada — a fila diz a verdade.
+
+173. **NOVO, da Etapa 95 — a chegada e a liberação da inspeção dão primeiro a quem já tem caixa sem reserva** (decisão
+     da Etapa 75, **B475**). Quem espera fica sem a **reserva** (o status e o e-mail continuam dizendo que espera)
+     enquanto a requisição com caixa ganha uma reserva sobre o que já separou — que cobre a caixa dela, então o
+     material **não** some do livre: quem espera ainda separa o que entrou. O que se perde é a garantia, não o
+     separável. Reabrir é etapa própria.
+
+174. **NOVO, da Etapa 95 — *Em Separação* com algo entregue e caixa sem material não tem gesto limpo.** Excluir
+     **estorna** o que já foi entregue; *Em Separação* não tem passagem para *Encerrada*. A **A46** lista; o
+     administrador decide (entregar o que existir e encerrar depois de *Parcialmente Atendida*, ou aceitar o estorno).
+     Um gesto de "devolver da caixa" é produto novo.
+
+175. **NOVO, da Etapa 95 — caixa em requisição que voltou a *Pendente* não retém.** *Pendente* não está entre os
+     status que retêm a caixa (**B473**); o único caminho até lá com material separado é o legado da **A45**
+     (*Aguardando aprovação de valor* → *Pendente*). Declarado.
+
+176. **NOVO, achado no teste de integração da Etapa 95 (anterior a ela) — o motor de estoque grava 0,3 − 0,1 como
+     0,19999999999999998.** Medido: estoque **0,3** e uma baixa de **0,1** pelo motor → o estoque do material fica
+     gravado `0.19999999999999998`, não 0,2, e a consulta do material devolve o número cru. A separação, a fila e a aprovação desta etapa arredondam a 6 casas e não são
+     afetadas; o motor (entradas, saídas, ajustes) grava sem arredondar. **Não corrigido nesta etapa** (o motor está
+     fora dela). **Medido no fechamento** (Fase 0 da Etapa 96): entradas de
+     0,7 + 0,2 + 0,1 gravam `0.9999999999999999`; daí uma saída de 1 toma *"Saldo insuficiente. Disponível:
+     0.9999999999999999 PC"*, a aprovação de uma requisição de 1 fica *Aprovado* **sem reserva**, a separação de 1 passa
+     e a entrega de 1 é **recusada** (*"… não é possível entregar 1 PC. Máximo: 0.9999999999999999 (pendente: 1,
+     disponível: 0.9999999999999999)"*) — o separado fica preso. As telas de movimentação e de requisição só aceitam
+     inteiro, mas o recebimento aceita duas casas (kg, metro, litro), e a API aceita qualquer decimal. *(Pela leitura,
+     o arredondamento da aprovação desta etapa — `6e0fae83` — faz a aprovação pedir ao motor o número redondo, que o
+     motor recusa contra o gravado torto: antes ela reservaria 0,9999… (*Parcialmente Reservada*), agora nenhuma. **Não
+     medido** contra o estado anterior; a Etapa 96 mede e fecha os dois.)* **O que fazer até a Etapa 96:** reconhecer a
+     mensagem com um número de muitas casas e chamar quem administra — o número torto só se corrige no banco. **É a
+     Etapa 96.**
 
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -8707,9 +8944,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   (**B238**); a **série** por item continua fora.
 - **(60) A divergência é só registro** (**B238**): não recusa, não avisa ninguém, não abre não conformidade nem
   ajusta inventário.
-- **(60) Separado SEM endereço de outra requisição não sai do "livre".** A separação não reserva; só o separado
+- ~~**(60) Separado SEM endereço de outra requisição não sai do "livre".** A separação não reserva; só o separado
   **com** endereço é descontado. Com outra requisição tendo separado sem escolher endereço, o "quanto dava" pode sair
-  **maior** que o real — e uma separação correta aparecer como divergente.
+  **maior** que o real — e uma separação correta aparecer como divergente.~~ **✅ Revogada na Etapa 95 (B467,
+  `f8edb54a`):** o separado ainda não entregue, com ou sem endereço, é descontado de quem separa depois — fica
+  retido para quem separou; a régua da divergência usa o mesmo número (**B468**).
 - **(60) A janela não conhece as outras requisições**: ela pode não pedir o motivo numa rodada que o servidor grava
   como divergente (ou pedir numa que ele não grava). O que vale é o que o servidor grava (**B239**).
 - **(60) Não separar nada de um item não fica registrado** — o item com quantidade 0 nem entra na rodada, então não há
@@ -8955,7 +9194,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   administrador) não manda e-mail ao solicitante.
 - **(91) Saída avulsa, reserva manual e separação não pegam a trava** — feitas no instante em que uma nota, inspeção ou
   não conformidade do mesmo material está liberando saldo, levam o saldo livre como sempre levaram. A trava cobre quem
-  **distribui** e quem **aprova** (**C145**).
+  **distribui** e quem **aprova** (**C145**). *(**Etapa 95:** a **separação** e a **entrega** passaram a pegar a trava
+  por material — **B476**, **B479**; a saída avulsa e a reserva manual continuam fora.)*
 - **(91) A janela da quarentena não foi fechada na raiz** — o material crítico ainda entra livre por um instante antes
   de ir para a inspeção; o conserto de raiz (entrar já retido, num movimento só) muda o motor e é candidata (**B430**).
 - **(91) Um processo só** — a trava é uma fila na memória do servidor; com dois servidores, modo *cluster* ou Postgres,
@@ -9030,8 +9270,22 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(94) Sem teste que as derrube:** a verificação da alçada na entrega (defesa em profundidade, **B464**); a lista branca
   do código no 403 das rotas (**B465**); e zerar o "separar e entregar" no 409 da tela — esse caminho é inalcançável pela
   tela (o botão **Completar Entrega** só aparece quando há o que entregar, e aí abre a entrega direto).
-- **(94) A separação aceita mais do que existe na prateleira** (**C169**) — anterior à etapa; **Etapa 95**.
+- **(94) A separação aceita mais do que existe na prateleira** (**C169**) — anterior à etapa; **Etapa 95**. *(✅ Resolvido
+  na Etapa 95.)*
 - **(94) C145, C147, C150, C139** e os residuais **(93)** — como na 93; nenhum muda com esta etapa.
+- **(95) Uma saída avulsa (Movimentações) ainda pode levar o material que está na caixa sem reserva** — o motor de
+  estoque não sabe o que é caixa (separar não move estoque). Depois disso, a dona da caixa toma *"Máximo: 0"* ao
+  entregar. Mudar o disponível do motor foi descartado (**B466 (iv)**, 14 leitores). Candidata.
+- **(95) A entrega fora da segunda rodada** continua pelo disponível somado à reserva (**B470**).
+- **(95) A linha da fila não divide o separável entre itens do mesmo material da mesma requisição** — cada item mostra o
+  seu teto; a separação divide (**B468**) e o modal abre dividido.
+- **(95) "(na caixa: n)" na mensagem** — descartado por ora (**B471**).
+- **(95) A chegada e a liberação da inspeção** (**B475**, **C173**), **o status pós-aprovação sem reserva** (**C172**),
+  **a caixa em *Pendente*** (**C175**) e **o legado sem gesto limpo** (**C174**) — declarados.
+- **(95) Sem teste que os derrube, sozinhos:** a prévia e o laço da entrega leem o mesmo teto e se cobrem (sabotar um só
+  deixa tudo verde — só os dois juntos derrubam, **B477**).
+- **(95) O arredondamento do motor** (**C176**) — fora da etapa.
+- **(95) Um processo só** — as travas por requisição e por material moram na memória do servidor, como antes (**C132**).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -9799,6 +10053,23 @@ modal. O que **só o navegador** prova:
    aprovação de valor*; **Iniciar Separação** → o aviso *"Valor total (…) excede o limite de liberação automática (…).
    Aprovação de alto valor necessária."*, o modal **fecha** e o detalhe mostra *Aguard. Aprov. Valor*.
 3. **Reabrir separação** — só com dado antigo (a **A45 (b)**); numa base de teste, montar o estado à mão no banco.
+
+**(95) Nenhum clique foi dado nesta etapa.** Os testes provam o servidor pela rota (com o usuário certo em cada pedido —
+quem pediu, o administrador que aprova e dá entrada, e o almoxarife que separa e entrega) e pelo serviço; a tela por
+teste de componente, sem navegador. Números lidos no fechamento: as regras **58** casos (o C169 e as variações, as
+várias requisições e itens, a aprovação, a segunda rodada da entrega, o decimal, as corridas separar × separar e
+entrega × separação, a lista de status que retém a caixa, os índices); a integração **7** (o C169 do começo ao fim, a
+aprovação com a caixa de outra até as duas entregues, o serviço chamado direto, "a fila nunca oferece o que a separação
+recusa" em doze estados, a segunda rodada, a corrida separar × aprovar e o controle positivo da **A46**); a tela **4**
+(C169, separável 1, dois itens do mesmo material, servidor antigo). O que **só o navegador** prova:
+
+1. **O C169 na tela.** Cenário 1 da etapa: depois de separar 4 de 6 com 4 no estoque, a fila mostra **Aguardando
+   saldo** e **Entregar**, e **Ajustar Separação** não oferece o item (**📦 Confirmar Separação** desabilitado).
+2. **Duas abas, Confirmar Separação nas duas** (dois almoxarifes, duas requisições sem reserva do mesmo material, 4 no
+   estoque, cada uma separando 4): uma aceita, a outra mostra *"⟨material⟩: não é possível separar 4 PC. Máximo: 0
+   (pendente: 4, disponível: 0)"* e o modal fica aberto.
+3. **Dois itens do mesmo material** (requisição criada por integração — o formulário não repete material) — o
+   modal abre com 4 e 0.
 
 
 
@@ -18187,7 +18458,8 @@ cada, separe 6 e 4: nenhum é divergente.
 
 1. A divergência **não** avisa ninguém, não abre não conformidade nem ajusta inventário — **B238**, **D (60)**.
 2. O motivo **não** é obrigatório — **B238** (se quiserem que seja, a decisão é de vocês).
-3. Separado **sem endereço** de outra requisição não sai do "livre" — **D (60)**.
+3. ~~Separado **sem endereço** de outra requisição não sai do "livre" — **D (60)**.~~ *(**Revogado na Etapa 95** —
+   **B467**: o separado ainda não entregue fica retido para quem separou.)*
 4. Não separar nada de um item (quantidade 0) não fica registrado — **D (60)**.
 5. A **série** por item continua fora — **D (59)**.
 
@@ -18444,8 +18716,10 @@ separar 5 UN (separável agora 0) · disponível 0"*. Dê entrada de 3: em **Atu
 com *"separável agora"* igual ao reservado. Outra requisição do mesmo material, sem reserva: **"Aguardando saldo"** — a
 reserva da primeira não é dela.
 
-**5. "Entregar" só com o que dá para entregar agora.** Material com 10; requisições **A** e **B** de 10, as duas
-separam 10 (a separação não reserva). Entregue **A**. Na fila, **B** fica com **"Aguardando saldo"** e o item diz *"a
+**5. "Entregar" só com o que dá para entregar agora.** Material com 10; requisições **A** e **B** de 10, ~~as duas
+separam 10 (a separação não reserva)~~. *(**Revogado na Etapa 95 (B467):** a segunda separação é recusada com
+"Máximo: 0". Para ver o mesmo chip hoje: **B** aprovada sem estoque, entrada solta de 10, **B** separa 10 e uma saída
+avulsa de 10 em Movimentações leva o material — o motor não conhece a caixa, **D (95)**.)* Entregue **A**. Na fila, **B** fica com **"Aguardando saldo"** e o item diz *"a
 entregar 10 UN (entregável agora 0)"* — sem isso a fila diria "Entregar" e a entrega recusaria.
 
 **6. A conferência.** Material **crítico** separado, requisição *Em Separação*: chip **"Conferir"**; para quem separou,
@@ -20052,9 +20326,126 @@ deixaram estado ruim — e achou:
   tela e ficou declarada (D (94)).
 - **Um defeito antigo, fora da etapa:** a separação aceita mais do que existe na prateleira (**C169**) — a próxima etapa.
 
+## Etapa 95 — A separação não aceita mais do que existe na prateleira (2026-10-09)
+
+Separar não tira nada do estoque: o material sai da prateleira para a caixa da requisição, mas o saldo do sistema só
+baixa na entrega. O problema era que o sistema **esquecia** o que já estava na caixa. Uma requisição que pediu 6 de um
+material com 4 em estoque separava os 4 e depois conseguia "separar" mais 2 — **6 separados para 4 que existem**. Duas
+requisições aprovadas sem estoque, quando o material chegava solto, separavam as duas os mesmos 4 (8 na caixa para 4
+na prateleira). A aprovação de uma requisição nova reservava o material que estava na caixa de outra, e a dona da caixa
+não conseguia mais entregar o que tinha separado na mão. Agora o separado e ainda não entregue fica **retido para quem
+separou**: a separação, a fila de separação, a tela e a aprovação usam a mesma conta — o que existe na prateleira para
+aquele item — e a entrega de uma requisição não leva mais o que está na caixa de outra.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Pede 6, estoque 4, reserva 4: separar 4 e depois mais 2 → **aceitava** (6 separados para 4 físicos — **C169**) | Separar mais 2 → *"Parafuso: não é possível separar 2 PC. Máximo: 0 (pendente: 2, disponível: 0)"*; a fila mostra **Aguardando saldo** e **Entregar** (**B466**) |
+| Duas requisições sem reserva separavam os mesmos 4 (8 na caixa para 4) — era limitação declarada (**D (60)**) e cenário do guia da Etapa 64 (*"as duas separam 10"*) | A segunda é recusada com *"Máximo: 0"*; o separado sem reserva fica retido para quem separou (**B466**, **B467** — a D (60) e o cenário 5 da 64 revogados à vista) |
+| Dois itens do mesmo material numa confirmação, 4 + 4 com 4 no estoque → aceitava | Recusa o segundo; o modal já abre dividido (4 e 0) (**B468**) |
+| A aprovação reservava o material que estava na caixa de outra requisição; a dona da caixa tomava *"Máximo: 0"* ao entregar | A aprovação não reserva a caixa sem reserva de outra; a dona entrega (**B469**) |
+| A "segunda rodada" da entrega (entregar sem separar depois de uma entrega parcial) levava o que estava na caixa de outra | Recusa: *"Chapa: não é possível entregar 4 PC. Máximo: 0 (pendente: 4, disponível: 4)"* (**B477**) |
+| A fila e o modal ofereciam o que passou a ser recusado | Fila, detalhe e tela mostram o mesmo número que a separação aceita (**B472**) |
+| Duas separações do mesmo material ao mesmo tempo liam o mesmo livre e as duas passavam (10 de 10) | Acontecem uma depois da outra; a entrega também (**B476**, **B479**) |
+| Material decimal: estoque 0,3 com 0,1 na caixa de outra → a tela oferecia *0,19999999999999998* e recusava 0,2; a aprovação de 0,2 ficava *Parcialmente Reservada* | Oferece **0,2**, aceita 0,2, e a aprovação reserva 0,2 (*Totalmente Reservada*) (**B471**) |
+| A mensagem de recusa mostrava em *"disponível"* o estoque somado à reserva — que incluía a própria caixa | Mostra o que existe para aquele item (**B471**) |
+
+### As regras, com o cenário exato
+
+**A conta.** O que um item pode separar agora = o que a reserva dele ainda segura além do que ele já tem na caixa,
+mais o livre do material depois de tirar (1) o que está na caixa, sem reserva, de **outros** itens do mesmo material
+(de qualquer requisição em andamento, inclusive a mesma) e (2) a parte da caixa do próprio item que a reserva dele não
+cobre. Limitado ao que falta separar; arredondado a 6 casas. Requisição **encerrada, cancelada, reprovada, excluída ou
+toda entregue** deixa de reter a caixa (volta a contar como livre, sem movimento — fisicamente o material tem de voltar
+à prateleira).
+
+Preparação: **Paula** (sem perfil no almoxarifado) pede; o **Gestor** aprova; o **Almoxarife** separa e entrega. Saldo
+solto entra por **Movimentações → Entrada** (não por nota — a nota reserva para quem espera).
+
+**1. O C169 do começo ao fim.** Material **Parafuso** (PC) com **4** em estoque. Paula pede **6**; o Gestor aprova →
+*Parcialmente Reservada* (reserva 4). O Almoxarife separa 4 → *Em Separação*. Na **fila de separação** a requisição
+mostra **Aguardando saldo** e **Entregar** (não mais **Separar 2**); em **Ajustar Separação** o item não aparece entre os
+separáveis e **📦 Confirmar Separação** fica desabilitado. Por integração (ou numa aba aberta antes), separar mais 2 →
+*"Parafuso: não é possível separar 2 PC. Máximo: 0 (pendente: 2, disponível: 0)"* — nada é gravado. Entregar 4 →
+*"Entrega parcial registrada. Saldo pendente permanece em aberto."* → *Parcialmente Atendida*, estoque 0. Entrada de 2
+→ a fila mostra **Separar** com *separável agora 2*; separar 2, entregar 2 → *"Requisição entregue por completo! Estoque
+baixado."*
+
+**2. Duas requisições disputando o mesmo material.** Material **Arruela** com **0** em estoque. Paula pede **4** (R2) e
+**4** (R3); o Gestor aprova as duas → aguardando estoque (ou compra), sem reserva. Entrada de **4**. O Almoxarife separa os 4 de R2.
+Na fila, R3 passa a **Aguardando saldo**. Separar 4 em R3 → *"Arruela: não é possível separar 4 PC. Máximo: 0 (pendente:
+4, disponível: 0)"*. R2 entrega os 4 → *Entregue*. *(Antes desta versão as duas separavam os 4.)*
+
+**3. A aprovação não reserva a caixa de outra.** Material **Bucha** com 0; R4 pede 4, aprovada; entrada de 4; R4 separa
+4. Paula pede 4 (R5); o Gestor aprova → R5 fica **sem reserva** (o status pode dizer *Aprovado* — **C172**) e a fila a
+mostra **Aguardando saldo**. R4 entrega os 4 → *Entregue*. Nova entrada de 4 → R5 com **Separar 4**. Com **6** no
+estoque em vez de 4, R5 reservaria **2** (os 4 de R4 não entram).
+
+**4. Dois itens do mesmo material na mesma requisição.** Uma requisição com duas linhas de **Porca** (4 e 4) — só por integração: o formulário
+de pedido recusa repetir o material (*"Porca já está na lista"*) —, aprovada
+sem estoque, e uma entrada de 4: **Iniciar Separação** abre com **4** e **0** (dividido na ordem do pedido). Por
+integração, 4 + 4 na mesma confirmação → recusa o **segundo** item com *"Porca: não é possível separar 4 PC. Máximo: 0
+(pendente: 4, disponível: 0)"*; 2 + 2 → aceita. *(A linha da fila mostra o número de cada item sem dividir — **D (95)**.)*
+
+**5. A segunda rodada da entrega não leva a caixa de outra.** Material **Chapa** com 2. R6 pede 6, aprovada (reserva 2),
+separa 2, entrega 2 → *Parcialmente Atendida*, estoque 0. R7 pede 4, aprovada sem reserva; entrada de 4; R7 separa 4.
+O detalhe de R6 não oferece entregar nada; por integração, R6 entregar 4 sem separar → *"Chapa: não é possível entregar
+4 PC. Máximo: 0 (pendente: 4, disponível: 4)"*. R7 entrega os 4 → *Entregue*.
+
+**6. Material decimal.** Estoque **0,3**, outra requisição com **0,1** separado sem reserva: a fila e o modal oferecem
+**0,2**; separar 0,2 → aceita; 0,3 → recusa com *"Máximo: 0.2"*.
+
+### O que esta etapa NÃO cobre
+
+1. **A entrega fora da segunda rodada** continua pelo estoque somado à reserva do item (**B470**).
+2. **Uma saída avulsa (Movimentações) ainda pode levar o material que está na caixa sem reserva** — o motor de estoque não
+   sabe o que é caixa (**B466 (iv)**, **D (95)**).
+3. **Corrigir o que já está errado em produção** — nenhum gesto "devolve da caixa"; a **A46** lista e o **C170** diz o
+   que fazer por status.
+4. **A chegada e a liberação da inspeção** dão primeiro a quem já tem caixa sem reserva (decisão da Etapa 75 — **C173**).
+5. **O status pós-aprovação** de quem fica sem reserva por causa da caixa de outra (**C172**, cosmético).
+6. **O motor grava 0,3 − 0,1 como 0,19999999999999998** no estoque do material (**C176**) — anterior à etapa, achado no
+   teste de integração.
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0) mostrou o defeito **mais largo** do que a Etapa 94 dizia: não era só a reserva somada de volta —
+o separado ainda não entregue não era descontado de lugar nenhum, inclusive **sem reserva** (21 de 30 errados no próprio
+item; 7 de 10 com várias requisições e itens), e a aprovação reservava a caixa de outra (sem declaração em lugar
+nenhum). A **revisão do plano** (2 bloqueantes, 5 importantes, 3 menores) pegou antes de executar: duas separações
+simultâneas do mesmo material passavam as duas (10 de 10 — virou a trava por material, **B476 invertida**); a fórmula do
+protótipo deixava quem tinha reserva sem separar e a aprovação reservava de menos a própria caixa; o ponto flutuante; o
+custo da fila sem índice (~40×, **B478**); a segunda rodada da entrega levando a caixa de outra (**B477**); e o "o que
+fazer" do legado que mandava excluir quem já tinha entregue (a exclusão estorna).
+
+A **revisão adversarial do código** (dois revisores, executando) não achou deadlock (8 rodadas com dois materiais em
+ordens opostas, separar, aprovar, entregar e fila ao mesmo tempo, nenhum prazo estourado) nem exposição nova de dado, e
+achou:
+- **A entrega da segunda rodada × a separação de outra requisição do mesmo material pegavam o mesmo livre** — 10 de 10
+  sem atraso, deixando caixa fantasma (introduzido pela própria etapa, com a **B477**) — consertado (**B479**,
+  `582844e8`).
+- **A aprovação de 0,2 com 0,3 no estoque e 0,1 na caixa de outra reservava 0,19999… e ficava *Parcialmente
+  Reservada*** — consertado (`6e0fae83`).
+- **O detalhe devolvia uma coluna interna da conta** — retirada (`16cacc0e`).
+- **Nove sabotagens passavam verde** (sete com a suíte inteira verde) — viraram teste (`42e08faf`).
+- **Um defeito do motor, fora da etapa:** 0,3 − 0,1 gravado como 0,19999999999999998 (**C176**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 95 entregue (2026-10-09):** **a separação não aceita mais do que existe na prateleira.** O separado ainda não
+  entregue fica retido para quem separou: a requisição não separa além do estoque (**C169** resolvido), duas
+  requisições não separam o mesmo material, dois itens da mesma confirmação dividem, a aprovação não reserva o que está
+  na caixa de outra, e a segunda rodada da entrega não leva a caixa de outra. A fila, o detalhe e a tela mostram o mesmo
+  número que a separação aceita. A **D (60)** e o cenário 5 da Etapa 64 (*"as duas separam 10"*) foram revogados à
+  vista. A revisão do código pegou uma corrida que a própria etapa tinha posto (a entrega × a separação de outra
+  requisição — **B479**) e o arredondamento da aprovação. **O que é seu:** a consulta **A46** (com o "o que fazer" por
+  status — não excluir quem já entregou); as decisões **B466 a B479** (a **B476** invertida na revisão do plano; a
+  **B469** e a **B470** corrigidas à vista); os avisos **C170 a C176** (o **C170** muda o que quem opera vê; o **C171**, o
+  que quem integra vê; o **C176** é um defeito do motor, fora da etapa); as limitações **(95)** em D e as verificações
+  **(95)** em F. **Próxima: Etapa 96 — o motor grava a quantidade arredondada e não recusa o que existe por ponto flutuante (**C176**) — ver o plano da Etapa 95.**
 
 - **Etapa 94 entregue (2026-10-09):** **a alçada de valor vale até o começo da separação.** Custo ou limite que mudam
   depois de separado algo não devolvem mais a requisição em separação, pronta ou parcialmente atendida a *Aguardando
@@ -20066,8 +20457,8 @@ deixaram estado ruim — e achou:
   defeito antigo: a separação aceita mais do que existe na prateleira (**C169**). **O que é seu:** a consulta **A45**; as
   decisões **B453 a B465** (a **B456** corrigida à vista pela **B464**); os avisos **C163 a C169** (o **C167** muda o que
   quem opera vê — risco aceito: entrega acima do limite se o custo subiu depois de separar; o **C168**, o que quem integra
-  vê; o **C169** é a próxima etapa); as limitações **(94)** em D e as verificações **(94)** em F. **Próxima: Etapa 95 — a
-  separação aceita mais do que existe na prateleira (C169) — ver o plano da Etapa 94.**
+  vê; o **C169** é a próxima etapa); as limitações **(94)** em D e as verificações **(94)** em F. ~~**Próxima: Etapa 95 — a
+  separação aceita mais do que existe na prateleira (C169) — ver o plano da Etapa 94.**~~ *(Feita — Etapa 95.)*
 
 - **Etapa 93 entregue (2026-10-09):** **dois gestos na mesma requisição acontecem um depois do outro.** Separar,
   liberar para retirada, entregar, excluir e encerrar entram numa fila da requisição: duas entregas juntas não deixam

@@ -2,7 +2,13 @@
 
 > **Status:** 🟢 Etapa 4 completa — backend (2026-08-05) e tela (2026-08-06) ·
 > **Spec original:** seção 7
-> **Última atualização:** 2026-10-09 (**Etapa 94** — a alçada de valor vale até o começo da separação: a requisição com
+> **Última atualização:** 2026-10-09 (**Etapa 95** — a aprovação não reserva mais o material que está na caixa sem
+> reserva de outra requisição (**B469**, `9237af2c`; a reserva arredondada a 1e-6, `6e0fae83`): reserva `min(falta,
+> max(0, disponível − já reservado − caixa sem reserva dos outros itens))` — antes reservava os 4 que estavam separados
+> por outra requisição e a dona da caixa ficava presa (M3). Declarados: a aprovada pode ficar *Aprovado* sem reserva
+> (**C172**, cosmético); a chegada e a liberação (74/75) não mudam e dão primeiro a quem já tem caixa (**C173**, B475).
+> Range `f0b94706..42e08faf`. Continua 🟢. Ver o item da Etapa 95 no checklist.)
+> Antes: 2026-10-09 (**Etapa 94** — a alçada de valor vale até o começo da separação: a requisição com
 > material separado ou entregue não vai mais a *Aguardando aprovação de valor*, então reprovar por valor ou cancelar não
 > solta mais a reserva com material na caixa, e aprovar por valor não devolve mais *Reservada* com material entregue
 > (**C163**); separar × cancelar no mesmo instante não ressuscita a cancelada, e aprovar por valor depois não reserva de
@@ -102,7 +108,8 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
   > consumível pela v2. **E o estorno não reativa a reserva** (medido na Fase 5 da 77): `cancelarMovimentacao` não tem
   > ramo de reserva para estorno de saída — o material volta ao disponível e a reserva fica `CONSUMIDA`.
 - **Reserva na aprovação** (`6690c1a`): `requisitionService.reservarItensAprovacao`; status
-  `PARCIALMENTE_RESERVADA`/`TOTALMENTE_RESERVADA` na máquina de estados.
+  `PARCIALMENTE_RESERVADA`/`TOTALMENTE_RESERVADA` na máquina de estados. *(Etapa 95: reserva o disponível **menos a
+  caixa sem reserva dos outros itens** do material — `9237af2c`; ver o item da Etapa 95 no checklist.)*
 - `reservationService.js`: listagem com filtros, transferência, expiração e
   `liberarReservasDaRequisicao` (usada no cancelamento).
 - Testes de serviço: reserva e transferência em `almoxarifado.test.js`.
@@ -205,7 +212,8 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
   seis portas acima, um processo Node. Respostas de todas as rotas inalteradas (RN-09). **Fica de fora (com o porquê):**
   a reserva manual alheia (**C139**, B428 — regra sem dado de uso); a janela da QUARENTENA contra quem **não** pega a
   trava — saída avulsa, reserva manual, separação (**C145**, B430 — as três formas de fechar mexem no motor ou abrem
-  portas novas na trava); o reenvio que duplica a requisição com aprovação automática (**C147**, B432 — precisa de chave
+  portas novas na trava) *(a separação passou a pegar a trava por material na Etapa 95 — B476, `f8edb54a` — e a entrega
+  também, `582844e8`; a saída avulsa e a reserva manual continuam fora)*; o reenvio que duplica a requisição com aprovação automática (**C147**, B432 — precisa de chave
   de idempotência do cliente); a tela dos outros módulos oferece **Cancelar** em status reservados que a rota recusa
   (**C149** — contrato da outra porta, B426; **Etapa 92**) *(paga na Etapa 92 — item abaixo)*; mais de um processo (**C132** — premissa escrita no
   módulo); estorno × aprovação com a forma da C131 (`liberarParaEstorno` fora de trava — candidata, D (91)); o `UPDATE`
@@ -249,6 +257,21 @@ Reserva automática pós-aprovação, reserva manual, por projeto/OS/lote, com e
   pulando — `[94 RN-05] (e)` com o controle); integração `79a766e9` (jornadas A–G; a A até a reserva `CONSUMIDA`, a E até
   `CANCELADO` com o `/aprovar-valor` recusado; A45 e A43 (a) vazias). **Fica de fora:** guarda em reprovar/cancelar para o legado que o desvio já deixou com caixa (a **A45**
   o acha e diz o que fazer com cada linha); os cancelamentos na trava por requisição (B450).
+- [x] **A aprovação não reserva a caixa sem reserva de outra requisição (Etapa 95, M3 da Fase 0)** — `9237af2c` (B469,
+  corrigida na Fase 2): nas três portas (`/aprovar`, `/aprovar-valor`, a automática), `aReservar = min(falta, max(0,
+  disponível − já reservado − caixa sem reserva dos outros itens))`; a própria caixa do item **não** desconta (a reserva
+  nova a cobre — descontá-la reservava de menos, P5b). Antes: R1 com 4 na caixa sem reserva (físico 4), R2 aprovada
+  depois reservava os 4 e R1 ficava presa (entregar → 400 *"Máximo: 0"*); agora R2 não reserva nada, e com físico 6 a
+  mesma R2 reserva 2. Fase 5 `6e0fae83`: a reserva arredondada a 1e-6 (físico 0,3 com 0,1 na caixa de outra, pede 0,2 →
+  reservava 0,19999… e ficava *Parcialmente Reservada*; agora 0,2 e *Totalmente Reservada*). Idempotência da 73, desfazer
+  na falha e a trava por material da 91 inalterados; a separação (B476) e a entrega (`582844e8`) passam a pegar a mesma
+  trava por material — separação × aprovação do mesmo material uma depois da outra (`[95 T4 I6]`). **Fica de fora
+  (declarado):** `calcularStatusPosAprovacao` ainda lê o disponível do motor — com a caixa de outra ocupando o físico a
+  aprovada pode ficar *Aprovado* sem reserva e a fila a mostra *Aguardando saldo* (**C172**, cosmético; o teste garante
+  que não é *Reservada*); a chegada, a liberação, o estorno (74/75) e o recálculo (76) **não mudam** — dão primeiro a quem
+  já tem caixa sem reserva, decisão da 75 (**C173**, B475; quem espera perde a garantia, não o separável); o motor não
+  conhece caixa — uma saída avulsa ainda leva o físico da caixa sem reserva (B466 iv). Consulta **A46** (b) acha a
+  aprovação que reservou a caixa de outra no legado.
 - [ ] Reserva por lote específico / número de série — **fora da Etapa 4**. Atualização (2026-08-11): a dependência de **lote** caiu — a feature 10 (lotes) foi entregue na Etapa 6 (2026-08-09/10), então reserva por lote ficou implementável; número de série continua dependendo da 6b
 - [x] Data de necessidade na reserva (`data_necessidade`) — `6690c1a`. **Prioridade** ficou fora: sem demanda concreta, `data_necessidade` cobre o ordenamento útil
 - [x] Expiração automática (`POST /reservas/processar-expiracao` + config `reserva_dias_validade`) — `6690c1a`. **Opt-in**: sem a config e sem `expira_em` explícito a reserva não expira, senão as reservas manuais existentes começariam a ser liberadas sozinhas. Alerta por e-mail fica com a feature 20
@@ -313,7 +336,7 @@ Os nomes abaixo são os reais — copiáveis para localizar o caso.
 | Consumo deixa rastro (`reserva_id` na movimentação) | `reservaConsumo` · *a movimentação de consumo fica registrada com o reserva_id (rastro)* |
 | Liberação devolve ao disponível e registra quem/quando/por quê | `reservaConsumo` · *liberar reserva devolve ao disponível* · `reservaTransferenciaExpiracao` · *liberar grava liberado_por, liberado_em e motivo_liberacao* |
 | Aprovação de requisição reserva automaticamente | `requisicaoReservaAutomatica` · *[aprovar] saldo total em todos os itens -> TOTALMENTE_RESERVADA com uma reserva por item* |
-| Aprovação com saldo parcial reserva só o disponível | `requisicaoReservaAutomatica` · *[aprovar] saldo parcial -> PARCIALMENTE_RESERVADA e reserva só do disponível* |
+| Aprovação com saldo parcial reserva só o disponível *(Etapa 95: o disponível menos a caixa sem reserva dos outros itens — ver a linha "Etapa 95")* | `requisicaoReservaAutomatica` · *[aprovar] saldo parcial -> PARCIALMENTE_RESERVADA e reserva só do disponível* |
 | Sem saldo nenhum, segue para AGUARDANDO_ESTOQUE/COMPRA (não regride) | `requisicaoReservaAutomatica` · *[aprovar] nenhum item com saldo -> AGUARDANDO_ESTOQUE e nenhuma reserva (regressão)* |
 | Entrega consome a reserva da própria requisição, debitando uma vez só | `requisicaoReservaAutomatica` · *[entregar] consome a reserva da requisição: CONSUMIDA e disponível debitado UMA vez* |
 | Entrega acima do reservado divide a saída (reserva + excedente) | `requisicaoReservaAutomatica` · *[entregar] quantidade acima da reserva: consome a reserva + o excedente sem reserva* |
@@ -384,6 +407,8 @@ Os nomes abaixo são os reais — copiáveis para localizar o caso.
 | Ponta a ponta (jornada com material crítico, pares serviço × rota, D(77) × 75, C141 × 76 × 77 — perfis reais) | `filaTravaIntegracao` · *[91 T3 jornada 1-2…5]…* · *[91 T3 servico 6/7]…* · *[91 T6 jornada B/C]…* |
 | Excluir requisição libera as reservas dela | `reservaPontasFaltantes` · *excluir requisição libera as reservas dela e devolve ao disponível* |
 | Excluir não toca reserva manual de terceiro | `reservaPontasFaltantes` · *excluir NÃO mexe em reserva manual de outro dono do mesmo material* |
+| **Etapa 95** — a aprovação não reserva a caixa sem reserva de outros itens (de outra requisição ou da mesma); a própria caixa não desconta; arredondada a 1e-6; sem caixa nenhuma reserva como antes | `separacaoTetoFisico` · *[95 RN-05] M3 pela rota…* · *[95 RN-05] fisico 6 com a mesma caixa de 4…* · *[95 RN-05] pelo servico…* · *[95 RN-05] guarda: sem caixa nenhuma…* · *[95 RN-05] P5b (Fase 2, B2)…* · *[95 Fase 5] (T8) aprovacao com a caixa do IRMAO…* · *[95 Fase 5] aprovacao decimal…* · `separacaoTetoFisicoIntegracao` · *[95 T4 I2]…* · *[95 T4 I6] corrida…* |
+| **Etapa 95** — a liberação da 75 distribui como antes; quem espera separa os livres e não mais (C173) | `separacaoTetoFisico` · *[95 RN-06 (c)] L1…* |
 
 ## Dependências
 
