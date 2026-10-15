@@ -109,8 +109,10 @@ reservar: sem a trava, duas separações do mesmo material separavam o mesmo liv
 rodada da entrega lê o mesmo teto — só com a trava por requisição, ela e a separação de outra requisição levavam os
 mesmos 4, 10/10, Fase 5 da 95) —, **tem de pegar a trava** — senão a C131 volta. Soltar reserva **sem distribuir** (liberação manual, expiração, os dois cancelamentos
 de requisição) **não** pega: só aumenta o livre, e quem reserva sob a trava no pior caso vê menos do que
-há, nunca mais (B441, Etapa 92). Saída avulsa e reserva manual **não** pegam (declarado, D (91)); a separação
-e a entrega não pegavam até a Etapa 94; pegam desde a 95.
+há, nunca mais (B441, Etapa 92). A separação e a entrega não pegavam até a Etapa 94; pegam desde a 95. Desde a
+Etapa 97 (B494) o motor inteiro (`registrarMovimentacao` — saída avulsa, ajuste) e a reserva manual (`criarReserva`)
+também pegam, por `naTravaDoMaterial` (não aninha fora de `comLockDosMateriais`). Esta linha dizia "saída avulsa e
+reserva manual **não** pegam (D (91))" e estava errada desde a 97 — enganou o plano da 102 (G87, Etapa 104).
 
 **Há outra trava, por requisição** (Etapa 93): `services/almoxarifado/travaPorRequisicao.js`
 (`serializarNaRequisicao`) serializa os cinco gestos do almoxarife numa requisição — separar,

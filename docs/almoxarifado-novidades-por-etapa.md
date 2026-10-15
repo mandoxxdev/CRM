@@ -12369,7 +12369,7 @@ código de saída não é placar; o executor da suíte também precisa saber fal
 avulsa, a reserva manual e a separação NÃO pegam a trava por material — está desatualizado.** Medido na Etapa 104: desde a
 Etapa 95 a separação pega (`comLockDosMateriais`), e desde a 97 (B494) o motor inteiro (`registrarMovimentacao`) e a reserva
 manual (`criarReserva`) rodam em `naTravaDoMaterial`. O plano da 102 repetiu o erro ("o ajuste com endereço não pega a
-trava") — corrigido à vista lá. **Não editado** (é instrução sua para as sessões): a frase certa seria "saída avulsa,
+trava") — corrigido à vista lá. **Corrigido no `CLAUDE.md` na integração das Etapas 104/105 (2026-10-15)**, dizendo que estava errado. A frase certa, medida em `stockService.js:1045`/`:3199`, é "saída avulsa,
 reserva manual e separação pegam a trava do material desde as Etapas 95/97; não pegam as liberações sem distribuir".
 
 aparece na hora, para quem está editando.
