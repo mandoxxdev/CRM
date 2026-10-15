@@ -3,8 +3,8 @@
  *
  * Escrito ANTES de a barra migrar para `ui/Tabs`, verde no codigo antigo: a ordem e os rotulos das
  * 13 abas, todas com icone, e que quem nao e administrador do almoxarifado ve "Acesso restrito" e
- * NENHUMA aba. `?tab=`, a escrita da URL com `replace` e o modo embutido ja estao presos em
- * `ConfiguracoesEmbedded.test.js` (Etapa 36). O bloco do fim (acessibilidade e tamanho) so o
+ * NENHUMA aba. `?tab=` e o modo embutido ja estao presos em `ConfiguracoesEmbedded.test.js` (Etapa 36); a
+ * escrita com `replace` NAO estava (achado da Fase 5 da 107) e e o ultimo cenario deste arquivo. O bloco do fim (acessibilidade e tamanho) so o
  * `ui/Tabs` cumpre.
  *
  * Executar: cd client && CI=true npx react-scripts test src/components/almoxarifado/ConfiguracoesAlmoxarifado.abas --watchAll=false
@@ -97,4 +97,30 @@ test('RN-107.14 acessibilidade do ui/Tabs: aba ativa vem do ?tab=, "sm" embutida
   lista = container.querySelector('[role="tablist"][aria-label="Configurações do almoxarifado"]');
   expect(lista.classList.contains('ui-tabs-sm')).toBe(true);
   expect(lista.querySelector('[aria-selected="true"]').textContent.trim()).toBe('Tipos de Material');
+});
+
+// Fase 5 da 107 (achado 1): o cabecalho deste arquivo dizia que o `replace` da escrita de `?tab=` estava
+// preso em ConfiguracoesEmbedded.test.js — nao estava (tirar o `{ replace: true }` passava verde). Sem
+// ele, cada clique ou seta empilharia uma entrada no historico do navegador.
+test('RN-107.14 trocar de aba grava ?tab= com REPLACE (nao empilha historico), sozinha e embutida', async () => {
+  const { useNavigationType, useLocation } = require('react-router-dom');
+  const Espiao = () => <span data-testid="nav" data-tipo={useNavigationType()} data-search={useLocation().search} />;
+  const nav = () => container.querySelector('[data-testid="nav"]');
+  for (const [url, embedded] of [['/almoxarifado/configuracoes', false], ['/configuracoes?modulo=almoxarifado', true]]) {
+    remontar();
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={[url]}>
+          <Espiao />
+          <ConfiguracoesAlmoxarifado embedded={embedded} />
+        </MemoryRouter>
+      );
+    });
+    await act(async () => {});
+    expect(nav().getAttribute('data-tipo')).toBe('POP'); // estado inicial do MemoryRouter
+    const categorias = botoesDaBarra().find((b) => b.textContent.trim() === 'Categorias');
+    await act(async () => { categorias.click(); });
+    expect(new URLSearchParams(nav().getAttribute('data-search')).get('tab')).toBe('categorias');
+    expect(nav().getAttribute('data-tipo')).toBe('REPLACE');
+  }
 });

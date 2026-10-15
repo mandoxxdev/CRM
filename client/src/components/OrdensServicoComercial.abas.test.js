@@ -116,3 +116,25 @@ test('RN-107.13 acessibilidade do ui/Tabs: tablist "Ordens de serviço", contado
   expect(abas().map((t) => t.getAttribute('aria-selected'))).toEqual(['false', 'true']);
   expect(container.querySelector('.os-tab, .tab-badge, .os-comercial-tabs')).toBeNull();
 });
+
+// RN-107.15 (Fase 5 da 107, achado 2): a correcao de contraste da aba ativa no celular vive em
+// app-glass.css, que nenhum teste lia — voltar a regra para `.os-tab.active` passava verde. O jsdom nao
+// aplica CSS, entao a regra e lida do arquivo: mira a aba ativa do ui/Tabs e o rotulo dela, NAO o contador
+// (a regra antiga pintava o `.tab-badge` de azul sobre o fundo azul), e dentro do media query do celular.
+test('RN-107.15 app-glass.css: contraste da aba ativa no celular vale para .ui-tab-ativa e nao pinta o contador', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'styles', 'app-glass.css'), 'utf8');
+  expect(css).not.toMatch(/\.os-tab\.active/);
+  expect(css).toMatch(/html:not\(\[data-theme="dark"\]\) \.ui-tab-ativa \.ui-tab-rotulo \{ color: #1D4ED8 !important; \}/);
+  expect(css).toMatch(/\[data-theme="dark"\] \.ui-tab-ativa \.ui-tab-rotulo \{ color: #4FACFE !important; \}/);
+  expect(css).not.toMatch(/\.ui-tab-ativa span/);
+  // nenhuma linha de regra (fora de comentario) com as duas cores pega o contador
+  const regras = css.split('\n').filter((l) => /#1D4ED8|#4FACFE/.test(l) && /\{/.test(l));
+  expect(regras.some((l) => /ui-tab-ativa/.test(l))).toBe(true);
+  expect(regras.filter((l) => l.includes("ui-tab-badge"))).toEqual([]);
+  // dentro do @media (max-width: 768px) que abre no topo do arquivo e vai ate o fim
+  const inicioMedia = css.indexOf('@media (max-width: 768px)');
+  expect(inicioMedia).toBeGreaterThan(-1);
+  expect(css.indexOf('.ui-tab-ativa')).toBeGreaterThan(inicioMedia);
+});
