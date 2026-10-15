@@ -885,19 +885,26 @@ async function migrateSaldoLoteId(db) {
 // proxima chamada roda inteira de novo — a falha NAO fica guardada, entao o retry da extended continua
 // valendo. Descartado: tirar uma das duas chamadas (perde a ordem ou o retry, e o proximo chamador
 // reabre a corrida) e INSERT OR IGNORE nos seeds (categorias nao tem UNIQUE: continuaria em dobro).
-// No harness (createTestApp) o registrador e a extended chamam em fundo depois do `await initSchema`, e o app
-// volta com essa execucao em voo: um teste que chame `await initSchema(db)` logo no comeco pega carona nela
-// em vez de rodar outra (revisao da Fase 2 da 107; hoje so testes de idempotencia fazem isso).
-const initSchemaEmVoo = new WeakMap();
+// No harness (createTestApp) o registrador e a extended chamam em fundo depois do `await initSchema`; o
+// harness espera essa execucao assentar (initSchemaEmVoo) antes de devolver o app — sem isso, um teste que
+// mexesse no schema logo no comeco e chamasse `await initSchema(db)` pegaria carona nela e a migracao nao seria
+// reaplicada (revisoes das Fases 2 e 5 da 107).
+const initSchemaEmVooPorDb = new WeakMap();
 
 function initSchema(db) {
-  const emVoo = initSchemaEmVoo.get(db);
+  const emVoo = initSchemaEmVooPorDb.get(db);
   if (emVoo) return emVoo;
   const execucao = initSchemaUmaExecucao(db).finally(() => {
-    if (initSchemaEmVoo.get(db) === execucao) initSchemaEmVoo.delete(db);
+    if (initSchemaEmVooPorDb.get(db) === execucao) initSchemaEmVooPorDb.delete(db);
   });
-  initSchemaEmVoo.set(db, execucao);
+  initSchemaEmVooPorDb.set(db, execucao);
   return execucao;
+}
+
+// A execucao em voo para esta conexao, ou null. Existe para o harness (createTestApp) esperar a execucao de
+// fundo do registrador/extended antes de devolver o app (Fase 5 da 107) — producao nao precisa.
+function initSchemaEmVoo(db) {
+  return initSchemaEmVooPorDb.get(db) || null;
 }
 
 async function initSchemaUmaExecucao(db) {
@@ -2794,6 +2801,7 @@ async function initSchemaUmaExecucao(db) {
 
 module.exports = {
   initSchema,
+  initSchemaEmVoo,
   safeAlter,
   // Exportada para o cenario (12) da Etapa 44 poder rodar a migracao DEPOIS de criar a inspecao,
   // que e o unico jeito de simular "a inspecao ja existia no dia do deploy" num banco de teste.

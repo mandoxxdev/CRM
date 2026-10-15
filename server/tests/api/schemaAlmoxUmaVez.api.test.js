@@ -191,6 +191,47 @@ async function indiceCategorias(db) {
     await fechar(db);
   });
 
+  // Fase 5 da 107 (achado 2): "por conexao" nao estava preso — uma chave global (single-flight para TODAS as
+  // conexoes) passava os quatro cenarios acima. Duas conexoes ao mesmo tempo: duas execucoes, dois bancos completos.
+  await test('RN-107.01 duas CONEXOES diferentes ao mesmo tempo: uma execucao para cada, os dois bancos completos', async () => {
+    const a = await bancoNovo();
+    const b = await bancoNovo();
+    const cap = capturarConsole();
+    let pa; let pb;
+    try {
+      pa = schemaMod.initSchema(a);
+      pb = schemaMod.initSchema(b);
+      await Promise.all([pa, pb]);
+    } finally { cap.restaurar(); }
+    assert.notStrictEqual(pa, pb, 'a segunda conexao pegou carona na execucao da primeira');
+    assert.deepStrictEqual(await contagens(a), ESPERADO, 'banco A incompleto');
+    assert.deepStrictEqual(await contagens(b), ESPERADO, 'banco B incompleto (nao rodou o proprio schema)');
+    assert.strictEqual(await indiceCategorias(b), true);
+    await fechar(a); await fechar(b);
+  });
+
+  // Fase 5 da 107 (achado 1): o harness devolvia o app com a execucao de fundo (registrador + extended) ainda
+  // em voo; um teste de migracao que mexesse no schema logo no comeco e chamasse initSchema pegava carona nela
+  // e a migracao nao era reaplicada. createTestApp agora espera a execucao de fundo assentar.
+  await test('(harness) logo depois de createTestApp nao ha execucao em voo: DROP COLUMN + initSchema recria a coluna', async () => {
+    const { createTestApp } = require('../helpers/testApp');
+    const { dbRun } = require('../../services/almoxarifado/db');
+    const cap = capturarConsole();
+    let app;
+    try {
+      app = await createTestApp({ user: { id: 1, nome: 'x', role: 'admin', is_superadmin: 1 } });
+      // A prova deterministica: nada em voo quando o app volta (o DROP abaixo e a consequencia, mas depende de
+      // onde a execucao de fundo estaria — sozinho ele passava verde no codigo sem a correcao).
+      assert.strictEqual(schemaMod.initSchemaEmVoo(app.db), null, 'createTestApp devolveu o app com o initSchema de fundo em voo');
+      await dbRun(app.db, 'ALTER TABLE materiais_almoxarifado DROP COLUMN ponto_pedido');
+      await schemaMod.initSchema(app.db);
+    } finally { cap.restaurar(); }
+    const cols = await dbAll(app.db, 'PRAGMA table_info(materiais_almoxarifado)');
+    assert.ok(cols.some((c) => c.name === 'ponto_pedido'),
+      'a coluna nao voltou: o initSchema pegou carona numa execucao de fundo que ja tinha passado do ALTER');
+    if (app.close) await app.close();
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch (_) { /* Windows segura o arquivo as vezes */ }
   process.exit(failed ? 1 : 0);

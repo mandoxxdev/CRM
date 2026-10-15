@@ -13,7 +13,7 @@ const fs = require('fs');
 // upload de producao). Sem este require o harness INTEIRO quebra no carregamento e todos os
 // arquivos de `tests/api/` caem juntos — nao so os de Compras.
 const multer = require('multer');
-const { initSchema } = require('../../services/almoxarifado/schema');
+const { initSchema, initSchemaEmVoo } = require('../../services/almoxarifado/schema');
 const { dbRun } = require('../../services/almoxarifado/db');
 
 async function createTestApp(options = {}) {
@@ -257,6 +257,13 @@ async function createTestApp(options = {}) {
   // registrou as rotas (fila FIFO). Não garante que TODO o initSchema em
   // background terminou — ele é idempotente.
   await dbRun(db, 'SELECT 1');
+  // Etapa 107 (Fase 5): o registrador e a extended chamam initSchema em fundo, e desde a 107 ele e
+  // single-flight por conexao. Sem esperar aqui, o app voltava com essa execucao em voo, e um teste que
+  // mexesse no schema logo no comeco e chamasse `await initSchema(db)` pegava carona nela — a migracao
+  // nao era reaplicada, e o teste passava ou falhava conforme o tempo. Erro da execucao de fundo nao
+  // derruba o harness (o registrador ja o loga, como em producao).
+  const emVoo = initSchemaEmVoo(db);
+  if (emVoo) await emVoo.catch(() => {});
 
   return {
     app,
