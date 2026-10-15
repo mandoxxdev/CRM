@@ -9564,6 +9564,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      reabre a C213 (o ajuste continua olhando o dono). **O que fazer:** não desative material de cliente com saldo; para o
      cliente, devolva primeiro (**Devolução ao cliente**). Candidato a uma etapa futura.
 
+218. **NOVO (medido na Etapa 109 de Compras) — inativar uma família no mesmo instante em que alguém cadastra material nela
+     deixa a família inativa com o material ativo dentro.** 30 de 30 rodadas, nas duas ordens, com as duas requisições
+     disparadas juntas. As duas regras proíbem esse estado ("Inativar" recusa família com material ativo; o cadastro recusa
+     família inativa), mas cada uma confere e grava em passos separados. **O que fazer:** não inative família enquanto
+     alguém cadastra material nela; se acontecer, reative a família ou mova o material. Contrato da correção em
+     `docs/compras-novidades-por-etapa.md`, **B61**. Candidata da **Etapa 110**, junto com a C215.
+
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
