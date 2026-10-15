@@ -119,10 +119,14 @@ function avisoCaixaDoAjuste({ caixa, requisicoes } = {}, disponivel, material = 
   // Fase 5 (achado): a unidade nula ou vazia (legado, ou `PUT /materiais/:id` com `unidade: ''`) nao vira "null" nem espaco
   // duplo — o mesmo filtro do `sufixoCaixa`.
   const qtdUn = (n) => [Q.qtd(n), material.unidade].filter((x) => x !== undefined && x !== null && x !== '').join(' ');
+  // Etapa 106 (RN-08, B710): o estorno de ajuste de material de CLIENTE exige `ajustar_material_cliente` (so
+  // Administrador) — o aviso nao pode mandar pedir ao Gestor um estorno que o motor recusa.
+  const quemEstorna = material.proprietario_cliente_id ? 'perfil Administrador do almoxarifado'
+    : 'perfil Administrador ou Gestor do almoxarifado';
   return `Ajuste gravado, mas o disponível de ${material.codigo} ficou em ${qtdUn(Math.max(0, disp))}, abaixo dos `
     + `${qtdUn(cx)} separados para ${descreverRequisicoes(requisicoes)}: a entrega fica limitada ao disponível. `
-    + 'Se o material está na caixa, a contagem não o incluiu — estorne o ajuste que baixou o estoque (perfil Administrador '
-    + 'ou Gestor do almoxarifado); se ele se perdeu, devolva-o à prateleira na requisição.';
+    + `Se o material está na caixa, a contagem não o incluiu — estorne o ajuste que baixou o estoque (${quemEstorna}); `
+    + 'se ele se perdeu, devolva-o à prateleira na requisição.';
 }
 
 module.exports = { caixaSemReservaSql, livreDeCaixaSql, lerCaixa, sufixoCaixa, descreverRequisicoes, avisoCaixaDoAjuste };

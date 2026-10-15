@@ -253,6 +253,32 @@ const A1 = (cod, total, caixa, lista) => `Ajuste gravado, mas o disponível de $
     assert.strictEqual(caixaSql.sufixoCaixa({ caixa: 0, requisicoes: ['R1'] }, 'PC'), '');
   });
 
+  // Etapa 106 (RN-08, B710): o estorno de ajuste de material de cliente passou a exigir `ajustar_material_cliente` (so
+  // Administrador) — o aviso que ensina "estorne o ajuste que baixou" nao pode mandar o cliente pedir ao Gestor.
+  const A1_CLIENTE = (cod, total, caixa, lista) => A1(cod, total, caixa, lista)
+    .replace('(perfil Administrador ou Gestor do almoxarifado)', () => '(perfil Administrador do almoxarifado)');
+
+  await test('[106 RN-08] funcao pura: material de cliente -> o parentese nomeia so o Administrador; material nosso byte a byte', async () => {
+    const cliente = { codigo: 'MX', unidade: 'PC', proprietario_cliente_id: 7 };
+    const t = caixaSql.avisoCaixaDoAjuste({ caixa: 4, requisicoes: ['R1'] }, 0, cliente);
+    assert.strictEqual(t, A1_CLIENTE('MX', 0, 4, 'a requisição R1'));
+    assert.ok(t.includes('(perfil Administrador do almoxarifado)') && !t.includes('Gestor'), t);
+    for (const dono of [null, undefined, 0]) {
+      assert.strictEqual(caixaSql.avisoCaixaDoAjuste({ caixa: 4, requisicoes: ['R1'] }, 0, { codigo: 'MX', unidade: 'PC', proprietario_cliente_id: dono }),
+        A1('MX', 0, 4, 'a requisição R1'), `dono ${dono}`);
+    }
+    assert.strictEqual(caixaSql.avisoCaixaDoAjuste({ caixa: 4, requisicoes: ['R1'] }, 4, cliente), null, 'sem aviso continua sem aviso');
+  });
+
+  await test('[106 RN-08] pela rota: o Administrador conta "0 no A" de material de CLIENTE com caixa -> A1 nomeia so o Administrador', async () => {
+    const cli = (await dbRun(db, 'INSERT INTO clientes (razao_social) VALUES (?)', ['Cliente E106'])).lastID;
+    const x = await montagem();
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET proprietario_cliente_id = ? WHERE id = ?', [cli, x.m]);
+    const r = await ajuste(x.m, 0, x.A);
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual(r.body.aviso_caixa, A1_CLIENTE(x.codigo, 0, 4, `a requisição ${x.numero}`));
+  });
+
   terminou = true;
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   process.exit(failed > 0 ? 1 : 0);
