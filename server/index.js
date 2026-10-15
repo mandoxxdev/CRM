@@ -258,6 +258,8 @@ const {
 const { deveIncluirNoBackup, backupMaisRecente } = require('./services/backupPackage');
 const { validarTokenBackup } = require('./services/backupAuth');
 const { criarAuthenticateToken } = require('./services/authenticateToken');
+const { registrarTentativaAcessoNegado: registrarAcessoNegadoNoLog } = require('./services/acessoNegadoLog');
+const { criarPortoesDeModulo } = require('./services/portaoDeModulo');
 const {
   mascararValorConfig,
   podeGravarSegredo,
@@ -2958,152 +2960,23 @@ const authenticateToken = criarAuthenticateToken({
 });
 
 // Middleware para verificar permissões de módulo (considera grupo E permissões diretas do usuário)
-function checkModulePermission(requiredModule) {
-  return (req, res, next) => {
-    if (bypassModuleRestrictions(req.user)) {
-      return next();
-    }
-
-    const userId = req.user.id;
-
-    // 1) Verificar permissão direta do usuário (usuario_id preenchido, grupo_id NULL)
-    db.get(
-      `SELECT 1 FROM permissoes
-       WHERE usuario_id = ? AND (grupo_id IS NULL OR grupo_id = 0)
-       AND modulo = ? AND permissao = 1 LIMIT 1`,
-      [userId, requiredModule],
-      (err, directRow) => {
-        if (err) {
-          console.error('Erro ao verificar permissão direta:', err);
-          return res.status(500).json({ error: 'Erro ao verificar permissões' });
-        }
-        if (directRow) {
-          return next();
-        }
-
-        // 2) Buscar grupos do usuário e verificar permissão via grupo
-        db.all(
-          `SELECT gp.id FROM grupos_permissoes gp
-           INNER JOIN usuarios_grupos ug ON gp.id = ug.grupo_id
-           WHERE ug.usuario_id = ? AND gp.ativo = 1`,
-          [userId],
-          (err, grupos) => {
-            if (err) {
-              console.error('Erro ao verificar permissões:', err);
-              return res.status(500).json({ error: 'Erro ao verificar permissões' });
-            }
-
-            // Se não tem grupos, apenas comercial por padrão
-            if (!grupos || grupos.length === 0) {
-              if (requiredModule === 'comercial') {
-                return next();
-              }
-              registrarTentativaAcessoNegado(req, requiredModule);
-              return res.status(403).json({ error: 'Acesso negado ao módulo', modulo: requiredModule });
-            }
-
-            const grupoIds = grupos.map(g => g.id);
-            const placeholders = grupoIds.map(() => '?').join(',');
-
-            db.get(
-              `SELECT COUNT(*) as count FROM permissoes
-               WHERE grupo_id IN (${placeholders})
-               AND modulo = ? AND permissao = 1`,
-              [...grupoIds, requiredModule],
-              (err, row) => {
-                if (err) {
-                  console.error('Erro ao verificar permissões:', err);
-                  return res.status(500).json({ error: 'Erro ao verificar permissões' });
-                }
-                if (row && row.count > 0) {
-                  return next();
-                }
-                registrarTentativaAcessoNegado(req, requiredModule);
-                return res.status(403).json({ error: 'Acesso negado ao módulo', modulo: requiredModule });
-              }
-            );
-          }
-        );
-      }
-    );
-  };
+// Etapa 111 (G17): os dois portoes moram em services/portaoDeModulo.js (mesmo corpo, testado com banco de
+// verdade em tests/api/portaoDeModulo.api.test.js). As declaracoes abaixo continuam `function` (hoisted) para
+// quem as usa em qualquer ponto do arquivo; a fabrica e criada na primeira chamada (`var`, nao `let`, pelo mesmo
+// motivo) e le o `db` na hora do pedido.
+var portoesDeModuloCriados;
+function portoesDeModulo() {
+  if (!portoesDeModuloCriados) {
+    portoesDeModuloCriados = criarPortoesDeModulo({ getDb: () => db, registrar: registrarTentativaAcessoNegado });
+  }
+  return portoesDeModuloCriados;
 }
-
+function checkModulePermission(requiredModule) {
+  return portoesDeModulo().checkModulePermission(requiredModule);
+}
 // Middleware: permite acesso se usuário tiver permissão em QUALQUER módulo da lista.
-// Útil para módulos "irmãos" que compartilham endpoints (ex: engenharia e engenharia_projetos).
 function checkAnyModulePermission(requiredModules) {
-  const mods = Array.isArray(requiredModules) ? requiredModules.filter(Boolean) : [];
-  if (mods.length === 0) return checkModulePermission('comercial');
-
-  return (req, res, next) => {
-    if (bypassModuleRestrictions(req.user)) {
-      return next();
-    }
-
-    const userId = req.user.id;
-    const placeholders = mods.map(() => '?').join(',');
-
-    // 1) Permissão direta do usuário (usuario_id preenchido, grupo_id NULL)
-    db.get(
-      `SELECT 1 FROM permissoes
-       WHERE usuario_id = ? AND (grupo_id IS NULL OR grupo_id = 0)
-       AND modulo IN (${placeholders}) AND permissao = 1 LIMIT 1`,
-      [userId, ...mods],
-      (err, directRow) => {
-        if (err) {
-          console.error('Erro ao verificar permissão direta (any):', err);
-          return res.status(500).json({ error: 'Erro ao verificar permissões' });
-        }
-        if (directRow) {
-          return next();
-        }
-
-        // 2) Verificar permissão via grupos
-        db.all(
-          `SELECT gp.id FROM grupos_permissoes gp
-           INNER JOIN usuarios_grupos ug ON gp.id = ug.grupo_id
-           WHERE ug.usuario_id = ? AND gp.ativo = 1`,
-          [userId],
-          (err2, grupos) => {
-            if (err2) {
-              console.error('Erro ao verificar permissões (any):', err2);
-              return res.status(500).json({ error: 'Erro ao verificar permissões' });
-            }
-
-            // Se não tem grupos, apenas comercial por padrão
-            if (!grupos || grupos.length === 0) {
-              if (mods.includes('comercial')) {
-                return next();
-              }
-              registrarTentativaAcessoNegado(req, mods.join('|'));
-              return res.status(403).json({ error: 'Acesso negado ao módulo', modulo: mods });
-            }
-
-            const grupoIds = grupos.map(g => g.id);
-            const gPlaceholders = grupoIds.map(() => '?').join(',');
-
-            db.get(
-              `SELECT COUNT(*) as count FROM permissoes
-               WHERE grupo_id IN (${gPlaceholders})
-               AND modulo IN (${placeholders}) AND permissao = 1`,
-              [...grupoIds, ...mods],
-              (err3, row) => {
-                if (err3) {
-                  console.error('Erro ao verificar permissões (any):', err3);
-                  return res.status(500).json({ error: 'Erro ao verificar permissões' });
-                }
-                if (row && row.count > 0) {
-                  return next();
-                }
-                registrarTentativaAcessoNegado(req, mods.join('|'));
-                return res.status(403).json({ error: 'Acesso negado ao módulo', modulo: mods });
-              }
-            );
-          }
-        );
-      }
-    );
-  };
+  return portoesDeModulo().checkAnyModulePermission(requiredModules);
 }
 
 // Etapa 21 (RN-04). Precedencia: variaveis de ambiente `SMTP_*` -> valores abaixo.
@@ -3180,46 +3053,10 @@ async function sendEmail({ to, cc, subject, html, text }) {
 }
 
 // Função auxiliar para registrar tentativa de acesso negado
+// Etapa 111 (G17): o corpo mora em services/acessoNegadoLog.js e o nome do modulo vem de
+// services/modulosSistema.js (antes, mapa proprio com 7 dos 11 modulos; os outros iam crus para o log).
 function registrarTentativaAcessoNegado(req, modulo) {
-  const usuario_id = req.user.id;
-  const ip_address = req.ip || req.connection.remoteAddress;
-  const user_agent = req.get('user-agent') || '';
-
-  const nomesModulos = {
-    'comercial': 'Comercial',
-    'compras': 'Compras',
-    'financeiro': 'Financeiro',
-    'operacional': 'Operacional',
-    'administrativo': 'Administrativo',
-    'admin': 'Administração',
-    'engenharia': 'Cálculos de Engenharia'
-  };
-
-  const nome_modulo = nomesModulos[modulo] || modulo;
-
-  // Buscar nome do usuário
-  db.get('SELECT nome, email FROM usuarios WHERE id = ?', [usuario_id], (err, user) => {
-    if (err) {
-      console.error('Erro ao buscar usuário para log:', err);
-      return;
-    }
-
-    const usuario_nome = user?.nome || req.user.email || 'N/A';
-    const usuario_email = user?.email || req.user.email || 'N/A';
-
-    // Registrar no log de auditoria
-    db.run(
-      `INSERT INTO logs_auditoria 
-       (usuario_id, usuario_nome, usuario_email, tipo, modulo, nome_modulo, ip_address, user_agent, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-      [usuario_id, usuario_nome, usuario_email, 'acesso_negado', modulo, nome_modulo, ip_address, user_agent],
-      (err) => {
-        if (err) {
-          console.error('Erro ao registrar log de auditoria:', err);
-        }
-      }
-    );
-  });
+  registrarAcessoNegadoNoLog(db, req, modulo);
 }
 
 // Normaliza campos de texto para MAIÚSCULAS antes de salvar (evita mistura de maiúsculas/minúsculas)
