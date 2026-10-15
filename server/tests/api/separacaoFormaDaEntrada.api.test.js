@@ -267,7 +267,39 @@ process.on('exit', (code) => {
     assert.strictEqual(await separado(x.ids[0]), 1.5);
   });
 
-  // ── RN-05 — tudo ou nada ─────────────────────────────────────────────────────────────────────────────────────────
+  await test('[99 RN-04] (Fase 5) dois itens: a serie e a do material DA LINHA (A sem serie + B com serie, e o inverso)', async () => {
+    const semSerie = await material(); const comSerie = await material({ serie: 1 });
+    await entrar(semSerie, 4); await entrar(comSerie, 4, ['F5S-1', 'F5S-2', 'F5S-3', 'F5S-4']);
+    const a = await criar([[semSerie, 4], [comSerie, 4]]);
+    await aprovar(a.R);
+    await recusa(a.R, () => separar(a.R, [{ item_id: a.ids[1], quantidade_separada: 1.5 }]), 400, q3(comSerie.nome, '1.5'), 'B com serie');
+    await entrar(semSerie, 2); // o A reservou os 4 de antes
+    const b = await criar([[comSerie, 2], [semSerie, 2]]);
+    await aprovar(b.R);
+    const r = await separar(b.R, [{ item_id: b.ids[1], quantidade_separada: 1.5 }]);
+    assert.strictEqual(r.status, 200, `B sem serie depois de A com serie: ${JSON.stringify(r.body)}`);
+    assert.strictEqual(await separado(b.ids[1]), 1.5);
+  });
+
+  await test('[99 RN-03] (Fase 5) dentro da linha, Q2 vem antes de Q1; item_id fracionario -> Q2; "1,5" -> Q1', async () => {
+    const x = await montagem();
+    await recusa(x.R, () => separar(x.R, [{ item_id: 999999, quantidade_separada: -1 }]), 400, q2('999999'), 'rota 999999 -1');
+    await recusa(x.R, () => svc(x.R, [{ item_id: 999999, quantidade_separada: 'abc' }]), 400, q2('999999'), 'svc 999999 abc');
+    await recusa(x.R, () => separar(x.R, [{ item_id: x.ids[0] + 0.5, quantidade_separada: 1 }]), 400, q2(String(x.ids[0] + 0.5)), 'id fracionario');
+    await recusa(x.R, () => separar(x.R, [{ item_id: x.ids[0], quantidade_separada: '1,5' }]), 400, q1(x.m.nome, '1,5'), 'virgula');
+  });
+
+  await test('[99 RN-01] (Fase 5) o corte: 40 caracteres passam inteiros, 41 ganham reticencias; servico com null = []', async () => {
+    const x = await montagem();
+    const q40 = `-${'9'.repeat(39)}`; const q41 = `${'x'.repeat(41)}`;
+    await recusa(x.R, () => separar(x.R, [{ item_id: x.ids[0], quantidade_separada: q40 }]), 400, q1(x.m.nome, q40), '40');
+    await recusa(x.R, () => separar(x.R, [{ item_id: x.ids[0], quantidade_separada: q41 }]), 400, q1(x.m.nome, `${'x'.repeat(40)}…`), '41');
+    const r = await svc(x.R, null);
+    assert.strictEqual(r.status, 200, `svc null: ${JSON.stringify(r.body)}`);
+    assert.strictEqual(r.body.rodada_id, null);
+  });
+
+  // ── RN-05 — tudo ou nada─────────────────────────────────────────────────────────────────────────────────────────
   await test('[99 RN-05] pela rota: A 2 + B -1 -> 400 Q1 e A nao separado; A 2 + 999999 -> 400 Q2 e A nao separado', async () => {
     const x = await montagem({ itens: 2 });
     await recusa(x.R, () => separar(x.R, [{ item_id: x.ids[0], quantidade_separada: 2 }, { item_id: x.ids[1], quantidade_separada: -1 }]),

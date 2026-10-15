@@ -479,3 +479,24 @@ describe('Etapa 99 (T2b, B523) — "Conferir separação" segue a caixa, não o 
     expect(botaoPorTexto('Conferir separação')).toBeTruthy();
   });
 });
+
+describe('Etapa 99 (Fase 5) — o botão "Conferir separação" usa a caixa da tela, como o servidor', () => {
+  test('[99 RN-09] legado: entregue só em quantidade_atendida (2 de 2) — sem o botão', async () => {
+    requisicao = montar({}, [{ quantidade_separada: 2, quantidade_entregue: null, quantidade_atendida: 2 }]);
+    await renderizar();
+    expect(botaoPorTexto('Ajustar Separação')).toBeTruthy();
+    expect(botaoPorTexto('Conferir separação')).toBeFalsy();
+  });
+
+  test('[99 RN-09] resto de ponto flutuante (2,0000001 − 2) — sem o botão; a menor caixa real (0,000001) — com o botão', async () => {
+    requisicao = montar({}, [{ quantidade_separada: 2.0000001, quantidade_entregue: 2, quantidade_atendida: 2 }]);
+    await renderizar();
+    expect(botaoPorTexto('Ajustar Separação')).toBeTruthy();
+    expect(botaoPorTexto('Conferir separação')).toBeFalsy();
+    act(() => root.unmount());
+    root = createRoot(container);
+    requisicao = montar({}, [{ quantidade_separada: 2.000001, quantidade_entregue: 2, quantidade_atendida: 2 }]);
+    await renderizar();
+    expect(botaoPorTexto('Conferir separação')).toBeTruthy();
+  });
+});
