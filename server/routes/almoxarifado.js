@@ -2605,6 +2605,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
     const tipoUsoVal = ['administrativo', 'industrial', 'ambos'].includes(tipo_uso) ? tipo_uso : 'ambos';
     const familiaId = parseInt(req.params.id, 10);
+    // Etapa 103 (achado M4 da revisao do plano): `parent_id: 'abc'` virava NaN, pulava a validacao do
+    // pai e o sqlite gravava NULL — a sub virava raiz calada; `'0'` gravava parent_id = 0 (pai que nao
+    // existe). Informado e nao vazio, so inteiro positivo; o resto e a literal de pai inexistente.
+    if (parent_id !== undefined && parent_id !== null && parent_id !== ''
+      && !/^[1-9]\d*$/.test(String(parent_id).trim())) {
+      return res.status(400).json({ error: 'Família pai não encontrada' });
+    }
 
     // Fix (review pós-Task 3, mesma classe do T2; ampliado no review final da Etapa 2): a aba
     // Famílias de ConfiguracoesAlmoxarifado.js manda PUT só com {nome, descricao, tipo_uso} —
@@ -2663,14 +2670,47 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         // Um parent_id preservado (omitido → veio do current) já era válido quando foi
         // setado; revalidar quebraria a edição de uma subfamília cujo pai foi inativado
         // depois (ex.: renomear a subfamília não deveria falhar por causa disso).
-        if (parentId && !parentIdOmitted) {
-          validateParentFamilia(parentId, (errParent) => {
-            if (errParent) return res.status(400).json({ error: errParent.message });
+        const seguirParaOPai = () => {
+          if (parentId && !parentIdOmitted) {
+            validateParentFamilia(parentId, (errParent) => {
+              if (errParent) return res.status(400).json({ error: errParent.message });
+              applyUpdate();
+            });
+          } else {
             applyUpdate();
+          }
+        };
+
+        // Etapa 103 (G10b, RN-103.01/02): o nivel MUDA quando o pai informado difere do gravado
+        // (por valor — o corpo pode trazer '5' para o 5 gravado; null/'' = raiz). Renomear repetindo
+        // o pai, ou omitindo, nao muda nada e nao passa por aqui.
+        const nivelMuda = !parentIdOmitted && String(parentId || '') !== String(current.parent_id || '');
+        if (!nivelMuda) return seguirParaOPai();
+
+        // RN-103.02: com sub INATIVA a raiz virava sub e, reativada a sub depois (o pai preservado
+        // nao e revalidado), o banco ficava com tres niveis. A ATIVA ja era recusada acima.
+        db.get('SELECT COUNT(*) as c FROM familias_material_almoxarifado WHERE parent_id = ? AND ativo = 0', [familiaId], (errInativas, inativasRow) => {
+          if (errInativas) return res.status(500).json({ error: errInativas.message });
+          if (parentId && inativasRow.c > 0) {
+            return res.status(400).json({ error: 'Família com subfamília(s) inativa(s) não pode virar subfamília — elas ficariam num terceiro nível' });
+          }
+          // RN-103.01 (B49): material desta familia — pelo familia_id (raiz, ou o legado do G10) ou
+          // pelo subfamilia_id — ficaria com o par familia/subfamilia errado. Conta os INATIVOS: o
+          // inativo reativado depois seria o legado de novo. Mesma forma de contagem do DELETE abaixo,
+          // sem o `ativo = 1`.
+          db.get('SELECT COUNT(*) as c FROM materiais_almoxarifado WHERE familia_id = ? OR subfamilia_id = ?', [familiaId, familiaId], (errMat, matRow) => {
+            if (errMat) return res.status(500).json({ error: errMat.message });
+            if (matRow.c > 0) {
+              const eraRaiz = current.parent_id === null || current.parent_id === undefined;
+              return res.status(400).json({
+                error: eraRaiz
+                  ? `Não é possível transformar em subfamília: a família tem ${matRow.c} material(is) cadastrado(s) (contando os inativos)`
+                  : `Não é possível mudar a família principal desta subfamília: ela tem ${matRow.c} material(is) cadastrado(s) (contando os inativos)`,
+              });
+            }
+            seguirParaOPai();
           });
-        } else {
-          applyUpdate();
-        }
+        });
       });
     });
   });
