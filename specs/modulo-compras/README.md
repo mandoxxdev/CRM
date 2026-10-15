@@ -7,7 +7,7 @@
 > como **"fatia Compras"**, porque foi ali que o elo quebrado apareceu (a reposição gerava
 > solicitações que ninguém convertia em pedido, e o recebimento contra pedido da Etapa 37 era
 > inerte).
-> **Última atualização:** 2026-09-22 — **Etapa 41** (`7d9e7d7..ffba9b9`): a **cotação ganhou
+> **Última atualização:** 2026-10-15 — **Etapa 100** (dívidas G1, G10, G13 de Compras; linha na tabela "Depois da unificação") · antes: 2026-09-22 — **Etapa 41** (`7d9e7d7..ffba9b9`): a **cotação ganhou
 > ITENS e vira PEDIDO de compra**. Tabela nova `itens_cotacao` (em `schema.js`, não em `index.js` —
 > chega ao harness sem stub), `itens` **opcional** em `CotacaoSchema` (`8d81cc5`); `valor_total`
 > com **duas regras** (derivado com itens, digitado sem); `POST /api/compras/cotacoes/:id/gerar-pedido`
@@ -73,6 +73,7 @@ na `main` (decisão **B18**, `docs/compras-novidades-por-etapa.md`) ficou assim:
 | **88** | **PDF da OS com "Página X de Y"**: rodapé do Chromium (`services/pdfOs.js`), `@page` com margem inferior de 10 mm, sem a estimativa por itens | 🟢 2026-10-08: `e445837e`, revisão `d0adb583`. Medido: `test:api` 310/310; OS de 3 e 12 itens com o mesmo total de páginas (3 e 6) e o rodapé certo em cada uma (conferido nas páginas renderizadas). Plano: `docs/superpowers/plans/2026-10-08-crm-etapa88-rodape-paginas-pdf-da-os.md` |
 | **89** | **Número de OS com caractere especial não quebra o PDF**: `nomeArquivoPdfOs` limpa só o nome do arquivo | 🟢 2026-10-08: `393f8e1b`. Medido: `test:api` 311/311; prova real `OS 1/2 "A"` antes 500, depois 200 com o número original no documento. Plano: `docs/superpowers/plans/2026-10-08-crm-etapa89-numero-os-quebra-pdf.md` |
 | **90** | **Medição**: "Cliente: CLI (ID: 1)" no PDF da OS — abreviação proposital (3 letras + código) desde o primeiro commit, igual nas telas da OS | ⚪ 2026-10-08: sem código; pergunta **D-90** no doc de novidades. Plano: `docs/superpowers/plans/2026-10-08-crm-etapa89-numero-os-quebra-pdf.md` (próxima tarefa) |
+| **100** | **Dívidas de Compras com correção conhecida**: `DELETE /api/compras/grupos/:id` acima do genérico (G1, "Remover grupo" funciona; ficha do fornecedor mostra "Grupo desativado (#N)"); `validateFamiliaAtiva` recusa subfamília em material novo, legado editável e corrigível pela tela, atalhos de Sobras/Remessas com o par certo (G10); export de pedidos com `IPI %`/`Frete`/`ICMS-ST`/`Desconto` e importação que os lê com leitor estrito (G13). G11 já estava corrigida na 38 (`0c890f24`) — o doc estava desatualizado; G15 avaliada e mantida (motivo no doc) | 🟢 2026-10-15: G1 `f8033192`, G10 `4b091ff6`, G13 `cef3d856` (+ o commit de docs). Medido: `test:api` 343/343, `test:almoxarifado` 44/44, validation/safealter/sqlite verdes, client 97 suítes / 1512 testes, build limpo. Plano: `docs/superpowers/plans/2026-10-15-crm-etapa100-dividas-de-compras.md` |
 
 A partir da unificação, **o desenvolvimento é na `main`**; o índice da linha `main`
 (Etapas 32–38) está em `docs/compras-novidades-por-etapa.md` e nos planos
@@ -335,7 +336,12 @@ a Etapa 38, e a porta nova herdou isso em vez de inventar uma régua que só ela
 `solicitacoes_compra_almoxarifado` é a mesma que o almoxarifado gateia — e o furo era alcançável
 por clique.
 
-## Defeito pré-existente conhecido, medido e CONGELADO
+## Defeito pré-existente conhecido, medido e CONGELADO — ✅ CORRIGIDO na Etapa 100 (`f8033192`)
+
+> **Esta seção descrevia o estado até a Etapa 99 e deixou de valer:** a Etapa 100 (G1) subiu
+> `DELETE /api/compras/grupos/:id` para cima do genérico; "Remover grupo" desativa o grupo, e os dois
+> cenários que congelavam o 400 (`comprasPedidosRotas` (4) e `comprasPedidoEditarExcluir` (8)) passaram a
+> provar o 200. O texto abaixo fica como histórico.
 
 `app.delete('/api/compras/:tipo/:id')` está registrado **antes** de
 `app.delete('/api/compras/grupos/:id')` e o **sombreia**: `grupos` não está no mapa de tabelas do

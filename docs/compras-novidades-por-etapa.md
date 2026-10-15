@@ -39,6 +39,11 @@
 > (B44).
 > **2026-10-08 — Etapa 90 (só medição):** o PDF e as telas da OS mostram o cliente **abreviado de
 > propósito** (3 letras + código) — não mudei nada; ficou a pergunta **D-90**.
+> **2026-10-15 — Etapa 100 entregue (frente Compras):** "Remover grupo" dos fornecedores homologados
+> funciona (G1); material novo com subfamília no lugar da família é recusado e o antigo é corrigível
+> pela tela (G10); o Excel de pedidos leva IPI % e encargos e reimporta com o mesmo total (G13). G11 já
+> estava corrigida desde a 38; G15 avaliada e mantida como dívida. Decisões **B45–B48**, consulta
+> **A6**. Próxima de Compras: a definir.
 > O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
 > A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
@@ -65,6 +70,12 @@
   sequenciais, qualquer um com o endereço do servidor baixava todas as propostas. Agora exigem
   login. **Ação sua só se** alguém da empresa abria a proposta por um link cru salvo (favorito,
   e-mail): esse link passa a pedir login — o sistema nunca gerou esse link, então não deve haver.
+
+- **A6 (Etapa 100) — Consulta, não ação:** materiais gravados com a subfamília no lugar da família
+  (`SELECT m.id, m.codigo, m.nome, m.familia_id FROM materiais_almoxarifado m JOIN familias_material_almoxarifado f ON f.id = m.familia_id WHERE f.parent_id IS NOT NULL`).
+  Zero linhas: nada a fazer. Com linhas: abra cada um em **Materiais → editar**, escolha a família
+  principal e a subfamília e salve (se a subfamília estiver inativa o campo fica travado — reative a
+  sub antes). Nada quebra se ficarem como estão: só não aparecem no filtro pela família principal.
 
 ### B. Decisões que eu tomei e você pode reverter
 - **B1 — Esta frente vive em `main`, e `main` tem OUTRO pedido de compra.** A branch
@@ -194,6 +205,31 @@
   fila — um PDF gerado nesse instante falhava com "Target closed". A medição da 80 achou mais
   três corridas (erro de um derrubando o outro, Chromium aberto em dobro e nunca fechado, e o
   fechamento por ociosidade no meio de uma geração).
+- **B45 — Etapa 100 (G1): desativar o grupo NÃO desliga os fornecedores dele.** O `grupo_id` fica;
+  reativar o grupo no banco devolve o grupo inteiro. **Descartado:** `grupo_id = NULL` em todos os
+  fornecedores no "Remover grupo" (irreversível — ninguém lembraria quem era de qual grupo).
+  Consequência conhecida: `FornecedoresDoGrupo` aberto por um endereço antigo ainda vincula
+  fornecedor ao grupo desativado, e o cadastro de **Variáveis técnicas** que aponta para um grupo
+  desativado continua oferecendo os fornecedores dele (a lista mostra "Grupo #N").
+- **B46 — Etapa 100 (G1): a ficha do fornecedor mostra "Grupo desativado (#N)".** **Descartado:**
+  devolver grupos inativos em `GET /compras/grupos` (mudaria as três telas que o consomem). A opção só
+  aparece depois de a lista de grupos carregar — se a lista falhar, nada é marcado como desativado.
+- **B47 — Etapa 100 (G10): só o valor NOVO é recusado.** Material antigo com a subfamília no lugar da
+  família continua editável (o servidor só revalida a família quando ela muda), a tela de edição libera
+  o campo para corrigir, e os atalhos de Sobras/Remessas montam o par certo sozinhos. **Descartado:** o
+  servidor "consertar" sozinho (`familia_id` = principal, `subfamilia_id` = sub) — conflita quando o
+  pedido traz outra subfamília e esconde de quem chama que o dado chegou torto. A mensagem da recusa é
+  **"A família escolhida é uma subfamília — escolha a família principal e use a subfamília no campo Subfamília"**.
+- **B48 — Etapa 100 (G13): IPI ou encargo ilegível na planilha vira AVISO, não recusa.** A linha entra
+  com IPI 0 (ou sem aquele encargo), como já era com a data. **Descartado:** recusar a linha (perderia o
+  item comprado por uma célula fiscal). Encargos valem **por pedido gerado** (ordem + fornecedor): se a
+  planilha repete o frete em linhas de dois fornecedores da mesma ordem, os dois pedidos ficam com o
+  frete. A coluna "IPI" **sozinha** não é lida (na planilha de fornecedor costuma ser o IPI em R$); só
+  "IPI %" e variações com "%"/"percentual". Vale o valor da **primeira** linha do pedido; linha seguinte
+  com valor diferente ganha o aviso **"Frete diferente do da primeira linha do pedido (vale o da
+  primeira)"** (idem ICMS-ST e Desconto). `%` só é aceito no IPI e `R$` só nos encargos ("10%" no
+  Desconto vira aviso, não R$ 10); "1.500" é mil e quinhentos, como na coluna de preço. **Não coberto:**
+  desconto maior que os produtos dá total negativo (o pedido manual já aceitava).
 - **B44 — Etapa 89: só o nome do arquivo do PDF da OS é limpo; o número da OS fica como foi digitado.**
   Com `/`, `"` ou `:` no número, o Windows recusava o nome do arquivo e o usuário via "Erro ao gerar
   PDF" (o PDF até era gerado). Agora o arquivo vira `OS_OS_1_2_A_<hora>.pdf` e o documento continua
@@ -318,9 +354,11 @@
   administrador do almoxarifado?
 
 ### G. Dívidas conhecidas, declaradas
-- **G1** O `DELETE` genérico de `/api/compras/:tipo/:id` continua sombreando `grupos` (400 'Tipo
-  inválido') — não consertado (escopo da aba Grupos). Em `main` ele mora no `index.js`, fora do
-  harness — não há teste que o caracterize.
+- **G1 — corrigido na Etapa 100 (`f8033192`).** O `DELETE` genérico de `/api/compras/:tipo/:id`
+  sombreava `grupos` (400 'Tipo inválido'): o botão "Remover grupo" nunca removia. A rota de grupos subiu
+  para cima do genérico. **Este item dizia também "em `main` ele mora no `index.js`, fora do harness —
+  não há teste que o caracterize"; estava errado desde a extração da Etapa 38:** o genérico mora em
+  `server/routes/compras.js` e `comprasPedidosRotas.api.test.js` (4) congelava o 400 — hoje prova o 200.
 - **G2 — corrigido em 2026-10-07, depois da Etapa 38.** `GET /api/compras/fornecedores` era
   `SELECT *` e devolvia `planilha_dados` (a planilha de preços inteira em JSON) para quatro telas
   que não a leem (`Compras.js`, `PedidoCompraForm.js`, `FornecedoresDoGrupo.js`,
@@ -359,9 +397,15 @@
   nenhuma tela faz isso): a subfamília conta e lista, a raiz não, e o filtro de Materiais não o
   acha. Correção apontada: `validateFamiliaAtiva` recusar subfamília como família em material
   **novo** ("use a subfamília"). Não feito — sem consumidor real.
+  **Corrigido na Etapa 100 (`f80331920`)** — recusa em material novo, legado editável e corrigível pela
+  tela, atalhos de Sobras/Remessas acertam o par (B47, A6). **Resta G10b:** `PUT /api/almoxarifado/familias/:id`
+  que dá `parent_id` a uma família que já tem materiais (vira subfamília) ainda produz o caso antigo.
 - **G13** (Etapa 39) O export de pedidos para Excel passa a trazer "Valor Total" **com** IPI e
   frete, repetido em cada linha de item, e a reimportação ignora essa coluna — um pedido
   exportado e reimportado nasce com valor menor. Coluna "IPI %" no export fica para depois.
+  **Corrigido na Etapa 100 (`f80331923`):** o export leva `IPI %`, `Frete`, `ICMS-ST` e `Desconto` no fim e a
+  importação os lê (B48) — o pedido reimportado tem o mesmo `valor_total` (vale para pedido da Etapa 39
+  em diante; o legado do G15 reimporta recalculado).
 - **G14** (Etapa 39) O documento impresso do pedido (PDF/HTML no formato do ERP) **ainda não
   existe** — a Etapa 32 deixou "a fazer" e a 39 porta só o conteúdo. É a **Etapa 78** (numeração unificada; o plano da 39 a chamava de "40").
 - **G15** (Etapa 39, achado da revisão) Pedido criado **antes** da 39 com preço unitário de 3+
@@ -370,9 +414,16 @@
   recalculado. Só pedidos antigos com preço de 4 casas; nenhum pedido novo passa por isso. Se
   incomodar, a correção é devolver os totais gravados quando existem (uma condição em
   `relerPedido`).
+  **Avaliada na Etapa 100 e NÃO feita:** o pedido anterior à 39 não tem `total_*` gravados, só o
+  `valor_total` cru. Devolvê-lo faria o formulário, o **PDF enviado ao fornecedor** e o recebimento
+  mostrarem linhas que somam `0,33` com total `0,315` — troca a divergência entre telas por uma
+  divergência **dentro do documento**. Fica como está: o primeiro salvar grava o recalculado.
 - **G11** `?familia_id=<id de subfamília>` digitado na URL de Materiais antes de a lista de famílias
   carregar manda só `familia_id` e devolve zero linhas até mexer no filtro. Nenhum link do sistema
   gera essa URL. Correção: incluir `familias` nas dependências da busca (um GET a mais).
+  **Já estava corrigido desde a Etapa 38 (`0c890f24`, RN-38.05) — este item estava desatualizado.** A
+  Etapa 100 rodou o controle positivo do teste que o prende (`MateriaisAlmoxarifado.test.js`, sabotar a
+  dependência derruba o cenário RN-38.05).
 - **G9** `canConfigureModule` diverge entre cliente e servidor: o cliente aceita `role === 'admin'`,
   o servidor só superadmin/admin de módulo. A Etapa 36 não cria porta de servidor, então nada ficou
   mais frouxo — mas a divergência existe desde antes e precisa fechar quando o core ganhar perfis.
@@ -385,6 +436,88 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 100 — Dívidas de Compras: "Remover grupo" funciona, família no lugar certo, Excel de pedidos com IPI e frete (2026-10-15)
+
+**Em uma frase.** Três defeitos que estavam declarados e tinham conserto conhecido: o botão
+**"Remover grupo"** dos fornecedores homologados não removia nada; dava para gravar um material pela
+API com a **subfamília no lugar da família** (e ele sumia do filtro); e um pedido com **IPI ou frete**
+exportado para Excel e importado de volta nascia **mais barato** do que o original.
+
+### O que há de novo (visível para o usuário)
+- **Compras → Fornecedores homologados → lápis do grupo → "Remover grupo"** agora desativa o grupo: ele
+  some da lista. Os fornecedores do grupo **continuam cadastrados e ligados a ele** (nada se perde).
+- A ficha do fornecedor ligado a um grupo desativado mostra **"Grupo desativado (#N)"** no campo
+  *Grupo homologado* — antes mostrava "Sem grupo" enquanto continuava ligado.
+- Material novo com uma subfamília no campo de família é recusado com:
+  **"A família escolhida é uma subfamília — escolha a família principal e use a subfamília no campo Subfamília"**.
+- Material **antigo** gravado assim continua editável e, ao abrir a edição, o campo *Família* fica
+  **liberado** com a nota **"Este material está gravado com uma subfamília no lugar da família — escolha a
+  família principal e depois a subfamília."** — dá para corrigir pela tela.
+- **Criar material do retalho** (Sobras) e **Criar material resultante** (Remessas) a partir de um desses
+  materiais antigos criam o novo já com a família principal e a subfamília no lugar certo.
+- **Compras → Pedidos → Exportar Excel** ganha quatro colunas no fim: **IPI %**, **Frete**, **ICMS-ST** e
+  **Desconto**. **Importar planilha** lê essas colunas — o pedido reimportado tem o **mesmo valor total**.
+  Valor que não dá para entender vira aviso (a linha entra mesmo assim), por exemplo
+  **"Linha 4 (ipi_percentual): IPI % não reconhecido (use número de 0 a 100)"** e
+  **"Linha 1 (valor_frete): Frete não reconhecido (use número maior ou igual a 0)"**.
+
+### Por baixo do capô
+- **G1:** `DELETE /api/compras/grupos/:id` subiu para cima do `DELETE /api/compras/:tipo/:id` genérico em
+  `server/routes/compras.js` (como as rotas de pedido e cotação). O cenário (4) de
+  `comprasPedidosRotas.api.test.js`, que **congelava** o 400 como caracterização, virou o teste do
+  comportamento certo. `FornecedorForm.js` ganha a opção do grupo desativado só depois de a lista de
+  grupos carregar com sucesso.
+- **G10:** `validateFamiliaAtiva` (`materialService.js`) recusa família com `parent_id`. O `PUT` do
+  material só revalida a família quando ela **muda** — o legado não trava. `MaterialAlmoxarifadoForm.js`
+  destrava o select quando a família **gravada** é subfamília; `utils/familiaDoNovoMaterial.js` acerta o
+  par nos atalhos de Sobras e Remessas. Teste novo: `materialFamiliaSubfamilia.api.test.js` (6).
+- **G11:** **já estava corrigido desde a Etapa 38** (`0c890f24`); a letra G deste documento estava
+  desatualizada. Esta etapa só rodou o controle positivo do teste que o prende.
+- **G13:** `importarPedidos` lê `IPI %` por linha e Frete/ICMS-ST/Desconto por pedido, com um leitor
+  **estrito** (texto como "isento, ver NF" ou "12abc" vira aviso, nunca número inventado). O export
+  (`Compras.js`) põe as quatro colunas no fim. Cenários (11)–(13) de `comprasPedidoImportar.api.test.js`,
+  o (13) cruzando criar pela rota → ler pela rota → reimportar → mesmo `valor_total`.
+- **G15:** avaliada e **não feita** — a correção apontada faria o documento do pedido antigo mostrar
+  linhas que somam um valor e total outro (ver G15 abaixo).
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| "Remover grupo" → erro "Tipo inválido", grupo continuava na lista | Grupo desativado, some da lista; fornecedores continuam ligados |
+| Ficha de fornecedor de grupo desativado mostrava "Sem grupo" (e salvava o grupo mesmo assim) | Mostra "Grupo desativado (#N)"; "Sem grupo" de fato desliga |
+| API aceitava material novo com a subfamília no campo família | 400 com a mensagem que orienta |
+| Material antigo assim: família travada na edição, impossível corrigir pela tela | Campo liberado com nota; corrige escolhendo a principal e a sub |
+| Retalho/resultado de material antigo herdava a subfamília como família | Nasce com a principal + a sub |
+| Export de pedidos sem IPI/encargos → reimport com valor menor | Colunas IPI %, Frete, ICMS-ST, Desconto; reimport com o mesmo total |
+
+### Roteiro de teste manual (clicável)
+1. **Compras → Fornecedores homologados** → crie o grupo "Teste 100" → abra um fornecedor e escolha o grupo
+   "Teste 100" → **Salvar**.
+2. Volte em **Fornecedores homologados** → lápis do "Teste 100" → **Remover grupo** → confirme a pergunta
+   *"Desativar o grupo "Teste 100"? Os fornecedores continuarão cadastrados, mas o grupo não aparecerá na
+   lista."* → o grupo **some** da lista.
+3. Abra o fornecedor do passo 1: o campo *Grupo homologado* mostra **"Grupo desativado (#N)"**. Escolha
+   **Sem grupo** → **Salvar** → reabra: "Sem grupo".
+4. **Pedidos → Novo pedido**: um item com quantidade 3, valor 33,33 e IPI 12; frete 45,90 → **Salvar**.
+   Na lista, **Exportar Excel**: o arquivo tem as colunas **IPI %** (12), **Frete** (45,9), **ICMS-ST** e
+   **Desconto** no fim.
+5. **Novo pedido → Importar planilha** com esse mesmo arquivo: o pedido criado tem **o mesmo Valor Total**
+   do original. Troque a célula *IPI %* por `isento` e importe de novo: aparece
+   **"Linha 1 (ipi_percentual): IPI % não reconhecido (use número de 0 a 100)"** e o pedido entra sem IPI.
+6. (Família — precisa de um material antigo gravado com a subfamília no lugar da família; a consulta
+   **A6** acha os que existirem.) Abra a edição dele: o campo *Família* está liberado com a nota
+   *"Este material está gravado com uma subfamília no lugar da família — escolha a família principal e
+   depois a subfamília."* → escolha a principal e a subfamília → **Salvar**.
+
+### O que a etapa NÃO cobre
+- **Reativar** um grupo desativado: não há botão (só no banco: `UPDATE grupos_compras SET ativo = 1`).
+- Material antigo cuja subfamília (gravada no lugar da família) está **inativa**: o campo continua
+  travado na edição (a tela só reconhece subfamílias ativas) — corrigir pela API ou reativar a sub.
+- `PUT /familias/:id` que transforma uma família **com materiais** em subfamília ainda cria o caso antigo
+  (**G10b**).
+- Pedido **anterior à Etapa 39** com preço de 3+ casas reimporta com o total recalculado, não o gravado
+  (**G15**).
 
 ## Etapa 89 — Número de OS com barra ou aspas não quebra mais o PDF (2026-10-08)
 

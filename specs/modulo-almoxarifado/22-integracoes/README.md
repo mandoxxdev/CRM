@@ -555,7 +555,7 @@ nesta etapa**, porque antes dela não existia pedido nenhum.
 Extração byte-fiel das 23 rotas, ordem de registro, e o **sombreamento de
 `DELETE /api/compras/grupos/:id`** pelo genérico (`400 'Tipo inválido'`) — **medido, congelado como
 caracterização, não consertado**: é comportamento de outra aba, e consertá-lo dentro de uma extração
-"sem mudar comportamento" seria contradição. O cenário que o congela é a asserção que **detecta
+"sem mudar comportamento" seria contradição. **(Consertado depois, na Etapa 100 — G1 de `docs/compras-novidades-por-etapa.md`: a rota de grupos subiu para cima do genérico e o cenário que congelava o 400 passou a provar o 200.)** O cenário que o congela é a asserção que **detecta
 reordenação** das rotas. Nenhuma linha toca `receiptService.js`, `extended.js` ou
 `schema.js`. `?pendentes=1` **não filtra `status`**: pedido `cancelado`/`rejeitado` continua no
 `<select>` do recebimento (porta da Etapa 37, proibida por contrato nesta etapa), e o `LIMIT 50` +
