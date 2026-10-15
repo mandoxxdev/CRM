@@ -165,7 +165,7 @@ seção do defeito congelado marcada como corrigida), `specs/modulo-almoxarifado
 `docs/almoxarifado-guia-etapas-e-testes.md`, `docs/almoxarifado-novidades-por-etapa.md` e
 `specs/modulo-almoxarifado/README.md` — a Etapa 99 do almoxarifado roda em paralelo e edita esses
 arquivos; a regra nova do material (recusa de subfamília, nota do legado) fica para o integrador enxertar
-no manual (texto pronto na seção Etapa 100 do doc de Compras).
+no manual (texto pronto na seção Etapa 100 do doc de Compras). **Feito na integração (2026-10-15):** a linha da recusa e a nota do material legado entraram em `docs/almoxarifado-manual-do-sistema.md` §2.1.
 
 ## Retro (4 números)
 - Rodadas de correção até verde: **2** (a suíte achou a 2ª caracterização do G1; a revisão final, 5 correções).

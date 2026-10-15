@@ -144,6 +144,9 @@ Regras que o sistema aplica:
 | Material sem família | Recusado — a família é obrigatória |
 | Família marcada como inativa | Recusado: *"Família inativa — não é possível vincular novos itens"* |
 | Subfamília que não é filha da família escolhida (ou que está inativa) | Recusado: *"Subfamília inválida para a família selecionada"* |
+| Uma **subfamília** escolhida no lugar da família (só acontecia pela API ou por atalho antigo de Sobras/Remessas) | Recusado em material novo, ou quando a família muda: *"A família escolhida é uma subfamília — escolha a família principal e use a subfamília no campo Subfamília"* (Etapa 100, G10) |
+
+**Material antigo gravado com a subfamília no lugar da família (Etapa 100).** Ele continua editável: o servidor só revalida a família quando ela muda. Ao abrir a edição, a tela libera o campo **Família** e avisa que é preciso escolher a família principal e pôr a subfamília no campo **Subfamília**. Os atalhos "criar material" de **Sobras** e **Remessas** já mandam o par certo sozinhos.
 
 No formulário, o campo **Subfamília** só se habilita depois que a Família é escolhida, e lista apenas as filhas daquela família. Se a família não tiver nenhuma, aparece o aviso *"Esta família não tem subfamílias cadastradas."*
 
