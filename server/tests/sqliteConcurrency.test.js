@@ -307,6 +307,41 @@ async function run() {
     }
   });
 
+  // Fase 5 (achado medio): os PRAGMAs iam num exec so; com o arquivo travado por outro processo,
+  // `synchronous` (que le o schema) caia em SQLITE_BUSY e o sqlite3_exec parava ali — foreign_keys
+  // nunca ligava e o processo seguia sem FK, so com um warn. Cada PRAGMA no seu exec.
+  await test('RN-105.05 (Fase 5) arquivo travado por outro processo no boot: foreign_keys continua ligado', async () => {
+    const arquivo = arquivoNovo('travado');
+    const rival = new sqlite3.Database(arquivo);
+    try {
+      await runCru(rival, 'CREATE TABLE ja_existia (id INTEGER PRIMARY KEY)');
+      await runCru(rival, 'BEGIN EXCLUSIVE');
+      const logs = [];
+      const warnOriginal = console.warn;
+      const logOriginal = console.log;
+      console.warn = (...a) => { if (String(a[0]).startsWith('[SQLite]')) logs.push(a.join(' ')); else warnOriginal(...a); };
+      console.log = (...a) => { if (String(a[0]).startsWith('[SQLite]')) logs.push(a.join(' ')); else logOriginal(...a); };
+      let db;
+      try {
+        db = await new Promise((resolve, reject) => {
+          const d = new sqlite3.Database(arquivo, (err) => (err ? reject(err) : (configureSqlite(d), resolve(d))));
+        });
+        await esperar(150);
+      } finally {
+        console.warn = warnOriginal;
+        console.log = logOriginal;
+      }
+      await runCru(rival, 'ROLLBACK');
+      assert(logs.some((l) => l.includes('WAL mode unavailable')), `setup: o lock tinha de derrubar o WAL: ${JSON.stringify(logs)}`);
+      const fk = await getCru(db, 'PRAGMA foreign_keys');
+      await fecharCru(db);
+      assert(fk && fk.foreign_keys === 1, `foreign_keys deveria ser 1 mesmo com o boot travado: ${JSON.stringify(fk)} — logs: ${JSON.stringify(logs)}`);
+    } finally {
+      await fecharCru(rival);
+      apagarBanco(arquivo);
+    }
+  });
+
   await test('RN-105.05 :memory: nao mente: loga "unavailable: journal_mode=memory", nao "enabled"', async () => {
     const logs = [];
     const logOriginal = console.log;

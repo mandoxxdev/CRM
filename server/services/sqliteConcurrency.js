@@ -43,9 +43,9 @@ function getDbHealthStats() {
  *
  * `db.exec` e exclusivo no driver (`Schedule(..., exclusive = true)`): no callback do open nada roda
  * ainda (`pending == 0`), ele sai na hora, trava a conexao, e o `Process()` que o driver chama depois do
- * callback nao solta a fila ate o PRAGMA terminar. Os outros PRAGMAs vao num segundo `exec`, de dentro do
- * callback do primeiro (ali `pending` voltou a 0: tambem fura a fila), e a leitura do modo no callback do
- * segundo — `WAL mode enabled` so quando o modo LIDO e `wal` (o `:memory:` dizia "enabled" mentindo).
+ * callback nao solta a fila ate o PRAGMA terminar. Os outros PRAGMAs vem em seguida, um `exec` por PRAGMA,
+ * cada um de dentro do callback do anterior (ali `pending` voltou a 0: tambem furam a fila), e a leitura do
+ * modo no fim — `WAL mode enabled` so quando o modo LIDO e `wal` (o `:memory:` dizia "enabled" mentindo).
  * `exec`/`get` CRUS, capturados aqui, porque o `wrapDatabase` (que o index.js aplica logo depois) poe o exec
  * atras de uma promise. Isto e precaucao, nao prova: o controle que ADIA o exec nao derrubou o teste (o exec
  * exclusivo adiado ainda espera a fila esvaziar e trava antes do proximo) — ver o plano da Etapa 105. Todo
@@ -66,11 +66,25 @@ function configureSqlite(db) {
 
   execCru('PRAGMA journal_mode = WAL;', (errWal) => {
     if (errWal) console.warn('[SQLite] WAL mode unavailable:', errWal.message);
-    execCru(
-      'PRAGMA synchronous = NORMAL; PRAGMA cache_size = -64000; PRAGMA foreign_keys = ON; '
-        + 'PRAGMA temp_store = MEMORY; PRAGMA mmap_size = 268435456;',
-      (errPragmas) => {
-        if (errPragmas) console.warn('[SQLite] PRAGMA de configuracao falhou:', errPragmas.message);
+    // Fase 5 (achado medio): UM exec por PRAGMA, encadeados (cada callback roda com pending == 0 e ainda
+    // fura a fila), foreign_keys PRIMEIRO. Num exec so, o sqlite3_exec parava no primeiro erro: com o arquivo
+    // travado por outro processo alem do busy_timeout, `synchronous` (que le o schema) caia em SQLITE_BUSY e
+    // foreign_keys nunca ligava — o processo seguia sem FK, so com um warn.
+    const pragmas = [
+      'PRAGMA foreign_keys = ON;',
+      'PRAGMA synchronous = NORMAL;',
+      'PRAGMA cache_size = -64000;',
+      'PRAGMA temp_store = MEMORY;',
+      'PRAGMA mmap_size = 268435456;',
+    ];
+    const proximo = (i, fim) => {
+      if (i >= pragmas.length) return fim();
+      execCru(pragmas[i], (errPragma) => {
+        if (errPragma) console.warn(`[SQLite] ${pragmas[i]} falhou:`, errPragma.message);
+        proximo(i + 1, fim);
+      });
+    };
+    proximo(0, () => {
         if (errWal) return;
         getCru('PRAGMA journal_mode', (errModo, linha) => {
           const modo = !errModo && linha ? String(linha.journal_mode || '').toLowerCase() : null;
@@ -80,8 +94,7 @@ function configureSqlite(db) {
             console.warn(`[SQLite] WAL mode unavailable: journal_mode=${errModo ? errModo.message : modo}`);
           }
         });
-      }
-    );
+    });
   });
 
   console.log(`[SQLite] busy_timeout=${BUSY_TIMEOUT_MS}ms, synchronous=NORMAL`);
