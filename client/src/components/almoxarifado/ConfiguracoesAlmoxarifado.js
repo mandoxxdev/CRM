@@ -13,6 +13,7 @@ import {
   FiTag, FiAlertTriangle, FiRotateCcw, FiCheckSquare
 } from 'react-icons/fi';
 import TabRegrasAprovacao from './TabRegrasAprovacao';
+import Tabs from '../ui/Tabs';
 import { useSearchParams } from 'react-router-dom';
 import { prefixarAlmoxarifado, buildLocalizacaoPath } from '../../utils/localizacaoLabel';
 import { invalidarAlmoxPermissoes, useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
@@ -264,26 +265,17 @@ const ConfiguracoesAlmoxarifado = ({ embedded = false }) => {
         </div>
       )}
 
-      {/* Tabs — rola de lado: com `html { overflow-x: hidden }` do mobile, 11 abas sem rolagem
-          propria deixam as ultimas inalcancaveis em 360px. */}
-      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--gmp-border)', marginBottom: 24, overflowX: 'auto', flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
-        {TABS.map(t => {
-          const Icon = t.icon;
-          return (
-            <button key={t.id} onClick={() => irParaAba(t.id)}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                padding: '10px 18px', fontSize: '0.875rem', fontWeight: 600,
-                color: tab === t.id ? '#4facfe' : 'var(--gmp-text-light)',
-                borderBottom: `2px solid ${tab === t.id ? '#4facfe' : 'transparent'}`,
-                display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.15s',
-                marginBottom: -1, flexShrink: 0,
-              }}>
-              <Icon size={15} /> {t.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* Etapa 107 (G8, RN-107.14): a barra e o `ui/Tabs` (antes estilo inline). Ele ja rola de lado
+          (`.ui-tabs`: overflow-x auto, nowrap) — com `html { overflow-x: hidden }` do mobile, as abas sem
+          rolagem propria ficavam inalcancaveis em 360px. Embutida em /configuracoes e o segundo nivel
+          (`sm`); sem `painelId`: o painel, embutida, e o de Configuracoes, e sozinha nao ha um. */}
+      <Tabs
+        abas={TABS}
+        ativa={tab}
+        onChange={irParaAba}
+        ariaLabel="Configurações do almoxarifado"
+        tamanho={embedded ? 'sm' : 'md'}
+      />
 
       {tab === 'tipos' && <TabTiposMaterial />}
       {tab === 'familias' && <TabFamilias />}
