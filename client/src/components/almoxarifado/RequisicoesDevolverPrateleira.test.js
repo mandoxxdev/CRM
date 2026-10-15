@@ -459,3 +459,44 @@ describe('Etapa 98 — Ajustar Separação e o achado 1(a) da Fase 2', () => {
     expect(botaoPorTexto('Separar de novo para conferir')).toBeFalsy();
   });
 });
+
+describe('Etapa 99 (T2b, B523) — "Conferir separação" segue a caixa, não o separado', () => {
+  // O servidor passou a recusar conferir uma Em Separação com a caixa vazia ("Nenhum item separado", C200). O botão
+  // olhava o separado acumulado e aparecia sobre nada (separou 2, entregou 2, separar []). Agora espelha o Liberar.
+  test('[99 RN-09] Em Separação com separado 2 e entregue 2 (caixa 0), sem conferência: sem "Conferir separação"', async () => {
+    requisicao = montar({}, [{ quantidade_separada: 2, quantidade_entregue: 2, quantidade_atendida: 2 }]);
+    await renderizar();
+    expect(botaoPorTexto('Ajustar Separação')).toBeTruthy();
+    expect(botaoPorTexto('Conferir separação')).toBeFalsy();
+  });
+
+  test('[99 RN-09] Em Separação com caixa > 0 em algum item (separado 2, entregue 1), sem conferência: aparece', async () => {
+    requisicao = montar({}, [
+      { quantidade_separada: 2, quantidade_entregue: 2, quantidade_atendida: 2 },
+      { quantidade_separada: 2, quantidade_entregue: 1, quantidade_atendida: 1, material_nome: 'Cabo' },
+    ]);
+    await renderizar();
+    expect(botaoPorTexto('Conferir separação')).toBeTruthy();
+  });
+});
+
+describe('Etapa 99 (Fase 5) — o botão "Conferir separação" usa a caixa da tela, como o servidor', () => {
+  test('[99 RN-09] legado: entregue só em quantidade_atendida (2 de 2) — sem o botão', async () => {
+    requisicao = montar({}, [{ quantidade_separada: 2, quantidade_entregue: null, quantidade_atendida: 2 }]);
+    await renderizar();
+    expect(botaoPorTexto('Ajustar Separação')).toBeTruthy();
+    expect(botaoPorTexto('Conferir separação')).toBeFalsy();
+  });
+
+  test('[99 RN-09] resto de ponto flutuante (2,0000001 − 2) — sem o botão; a menor caixa real (0,000001) — com o botão', async () => {
+    requisicao = montar({}, [{ quantidade_separada: 2.0000001, quantidade_entregue: 2, quantidade_atendida: 2 }]);
+    await renderizar();
+    expect(botaoPorTexto('Ajustar Separação')).toBeTruthy();
+    expect(botaoPorTexto('Conferir separação')).toBeFalsy();
+    act(() => root.unmount());
+    root = createRoot(container);
+    requisicao = montar({}, [{ quantidade_separada: 2.000001, quantidade_entregue: 2, quantidade_atendida: 2 }]);
+    await renderizar();
+    expect(botaoPorTexto('Conferir separação')).toBeTruthy();
+  });
+});

@@ -1,6 +1,7 @@
 # 04 — Requisições de Materiais
 
 > **Status:** 🟢 — Etapa 3 entregue (2026-08-05); ciclo ponta a ponta rascunho→entrega→confirmação→encerramento · **Spec original:** seção 5
+> **Etapa 99 (2026-10-15, `314837d6..3e14653a`: T1 `7353265d`, T2 `b8e16e4c`, T2b `c9087106`, T3 `3e14653a`) — a separação recusa o que não é separável e a conferência conta a caixa (regra na feature 05).** O que toca a requisição: `PUT /requisicoes/:id/separar` (e `/separacao`) recusa com 400 a forma inválida **antes** da alçada de valor e da reivindicação, então um payload inválido não muda o status (antes ia para *Em Separação*, ou gravava *Aguardando aprovação de valor*); `conferir-separacao` recusa a caixa vazia (*"Nenhum item separado"*). **Pendência declarada desta feature (C202, 2026-10-15):** a **criação** de requisição aceita fração de material com série (pedir 1,5 → 201) — ver a seção "Etapa 99" no fim. Continua 🟢.
 > **Etapa 98 (2026-10-09, plano `d1679eaa`, Fase 2 `a16ea09f`, T0 `0aafb939`, T1 `9e0bb225`, T2 `672bb151`, T3 `55bc2165`, T4 `4941c9d9`, integração T5 `de77a6eb` + `a70107ca`, Fase 5 `084ded25`, `cc130a86`, `b7fc06a0`) — devolver da caixa à prateleira (regra na feature 05).** O que toca a requisição: a máquina ganha a seta `PRONTA_PARA_RETIRADA → EM_SEPARACAO` (B504 — só a devolução a grava, por compare-and-set); `PUT /api/almoxarifado/requisicoes/:id/devolver-separado` (gate `separar_emitir`); o detalhe `GET /api/almoxarifado/requisicoes/:id` ganha `devolucoes_caixa` (aditivo, em ordem de `id`: `{ id, item_id, material_id, material_codigo, quantidade, separado_antes, separado_depois, entregue, localizacao_planejada_codigo, lote_planejado_codigo, motivo, status_antes, status_depois, conferencia_limpa, usuario_id, usuario_nome, created_at }`) e o `quantidade_entregavel` passa a ser o que o **motor** deixa sair — com o disponível do material sem a reserva do item negativo e sem permitir negativo (flag do material **ou** a global, B514), 0 (antes podia mostrar 3, ou −1, para uma entrega que o motor recusava inteira — C190/C196, B509); `saldo_separavel`, `quantidade_separavel` e `saldo_atual` não mudam. O liberar para retirada exige caixa > 0 (separado − entregue), não separado > 0 — a mesma literal *"Nenhum item separado"* (B512, C199). Ver a seção "Etapa 98" no fim.
 > **Etapa 95 (2026-10-09, plano `f0b94706`, Fase 2 `2bee899c`, T0 `f8edb54a`, T0b `35e274c5`, T2 `9237af2c`, T1 `5a2bfa9f`, T3 `c335cf40`, integração T4 `ed90a0aa` + Fase 5 `582844e8`, `6e0fae83`, `16cacc0e`, `42e08faf`) — a separação não aceita mais do que existe na prateleira (C169; regra na feature 05).** O que toca a requisição: o detalhe `GET /api/almoxarifado/requisicoes/:id` ganha, por item, `saldo_separavel` (o teto da separação) e `quantidade_separavel` (`min(pendente de separação, saldo_separavel)`) — **aditivo** (`5a2bfa9f`, B472), o mesmo número que a fila (`separavel`) e a porta aceitam; `saldo_atual` não muda de sentido (a entrega da tela o usa); a coluna crua `caixa_sem_reserva_outros`, que a consulta traz para o cálculo, **não** sai no JSON (`16cacc0e`). `quantidade_entregavel` muda só na segunda rodada (já entregou, a própria caixa menor que o pendente, material comum): a parte além da própria caixa segue o teto — a tela não oferece o que a entrega recusa (B477, `35e274c5`/`5a2bfa9f`). A entrega pega a trava por material dos itens, por dentro da trava por requisição (`582844e8`, B479). Continua 🟢.
 > **Etapa 94 (2026-10-09, plano `2bfc82c2`, Fase 2 `23767283`, T0 `a758d39d`, T1 `7b66807f`, T2 `19e294fc`, T2c `9cafb842`, integração T3 `79a766e9` + Fase 5 `ad5fcd7f`, `c729b784`, `469fda3b`) — a alçada de valor vale até o começo da separação, e a máquina de estados sabe disso.** `requisitionStateMachine.TRANSICOES` ganha **seis** setas para `AGUARDANDO_APROVACAO_VALOR` — de `APROVADO`, `AGUARDANDO_ESTOQUE`, `AGUARDANDO_COMPRA`, `PARCIALMENTE_RESERVADA`, `TOTALMENTE_RESERVADA` e `EM_SEPARACAO` (B454, B462). Antes `requisitionValueApprovalService.verificarBloqueioLiberacao` gravava esse status **por fora da máquina**, de qualquer status (o **C68** da Etapa 47), inclusive com material separado ou entregue (C163). A `EM_SEPARACAO` com material separado fica de fora pelo predicado `alcadaDeValorAindaVale` (seta **e** nada separado nem entregue), não pela seta. A gravação confere o status lido: perdeu → **409** *"A requisição mudou de status enquanto a alçada de valor era conferida (agora ⟨status⟩); recarregue e confira antes de separar."* (V1, B456 — separar × cancelar ressuscitava a cancelada em *Aguardando aprovação de valor*, C164). Na prática a entrega deixa de responder o 403 de valor acima do limite (C168). Regra completa na feature 06.
@@ -74,6 +75,7 @@ Fluxo completo: rascunho → aprovação → disponibilidade → reserva → sep
 ### Validações e correções (fazer primeiro — bugs conhecidos)
 - [x] `POST /requisicoes-material` **não validava `quantidade > 0`** — corrigido (Etapa 3, Task 1): `RequisicaoSchema` (Zod) valida quantidade > 0 nas duas rotas via `requisitionCreateService`
 - [x] Validar material ativo e existente em cada item (Etapa 3, Task 1)
+- [ ] **Recusar fração de material com série na criação (C202, declarado em 2026-10-15, Etapa 99)** — hoje pedir 1,5 → 201; a separação só leva inteiro desde `7353265d`. Fica de fora da 99 por ser outra porta (contrato de criação); a saída operacional é **Encerrar** a *Parcialmente Atendida* sem zerar o modal — ver a seção "Etapa 99" no fim.
 - [x] Unificar as duas rotas de criação num serviço único (Etapa 3, Task 1): `requisitionCreateService.createRequisicao(db, user, payload, { modulo })` consumido por `routes/almoxarifado.js` e `routes/requisicoesMaterial.js`
 
 ### Status faltantes (spec 5.4)
@@ -241,3 +243,31 @@ conferência confirmada sobre caixa vazia (C200 — `conferir-separacao` ainda c
 
 **Status:** continua 🟢 — a etapa fecha um caminho de saída (o material perdido na caixa sem o administrador) e não abre
 pendência de requisição.
+
+## Etapa 99 — a separação recusa o que não é separável; a conferência conta a caixa (2026-10-15)
+
+Plano: `docs/superpowers/plans/2026-10-09-almoxarifado-etapa99-separacao-recusa-o-inseparavel.md`. Range
+`314837d6..3e14653a`. A regra está na feature 05.
+
+**Entregue (o que toca a requisição):**
+- [x] **A recusa de forma vem antes da alçada e da reivindicação** — `7353265d` (B516): quantidade negativa ou não
+  numérica, item que não é da requisição, fração de material com série e `itens_separados` que não é lista → 400 com
+  literal, e o status **não muda** (*Parcialmente Atendida* continua *Parcialmente Atendida*; com a alçada armada, nada
+  de *Aguardando aprovação de valor* nem e-mail). Antes, 200 e a requisição ia para *Em Separação*.
+- [x] **Conferir a caixa vazia é recusado** — `b8e16e4c` (B522): *"Nenhum item separado"*, a mesma régua do liberar
+  (B512). O botão segue a caixa — `c9087106`.
+
+**Pendência declarada (C202, 2026-10-15, Etapa 99) — a criação aceita fração de material com série.**
+`requisitionCreateService` (as duas rotas de criação) aceita pedir 1,5 de um material com controle de série (sonda E7 da
+Fase 0: **201**). A separação passou a levar só inteiro (Q3 *"⟨material⟩: material com controle de série exige
+quantidade inteira na separação (informado: ⟨q⟩)"*), e a entrega já exigia inteiro: o 0,5 que sobra **nunca separa**.
+Traçado até o último gesto (Fase 2, achado 4; provado pelo teste `[99 I2] o C202 ate o ultimo gesto`): pede 1,5,
+separa e entrega 1 → *Parcialmente Atendida*; **Completar Entrega** abre o modal de separação pré-preenchido com 0,5 →
+toast Q3 e a requisição continua *Parcialmente Atendida*. **A saída é fechar o modal e Encerrar** (quem tem
+`aprovar_requisicao`). **Não zerar o modal:** zerado, sai `itens_separados: []` → 200 → *Em Separação* com a caixa
+vazia, de onde não há seta para encerrar nem cancelar (C195) — presa. Não é regressão (antes separava 0,5 e travava na
+entrega). **Por que fica de fora:** é outra porta (criação, contrato do solicitado), sem estado preso medido quando se
+segue a orientação (encerra); recusar fração de série na criação muda o contrato de criação das duas rotas — etapa
+própria desta feature.
+
+**Status:** continua 🟢 — a etapa fecha a porta da separação; a criação com fração de série fica declarada acima.

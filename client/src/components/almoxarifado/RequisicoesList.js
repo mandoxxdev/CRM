@@ -1846,7 +1846,9 @@ const RequisicoesList = () => {
                     </button>
                     {/* Etapa 28: segunda conferência — quem separou não confere (o backend
                         dá 403 de qualquer jeito; aqui o botão já nasce desabilitado). */}
-                    {!detalhe.conferencia && detalhe.itens.some((i) => getSeparado(i) > 0) && (
+                    {/* Etapa 99 (T2b, B523): segue a CAIXA, como o Liberar abaixo — o servidor recusa conferir a caixa
+                        vazia ("Nenhum item separado"); o separado acumulado oferecia o botão sobre nada. */}
+                    {!detalhe.conferencia && detalhe.itens.some((i) => caixaDoItem(i) > 0) && (
                       <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center' }}
                         onClick={(e) => { if (!bloquearSeNaoPode('conferir_separacao', e)) return; handleConferirSeparacao(detalhe.id); }}
                         disabled={saving || euSeparei}

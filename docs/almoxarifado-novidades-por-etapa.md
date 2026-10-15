@@ -115,7 +115,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Quarenta e nove itens para rodar em produção ANTES do deploy — quarenta e seis são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Cinquenta itens para rodar em produção ANTES do deploy — quarenta e sete são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-15 (Etapa 99) de quarenta e nove para cinquenta**, com a **A50** — as requisições com caixa fracionária em material com série (a entrega só tira inteiro); opcional: a saída é devolver a fração à prateleira.)*
 
 *(**Atualizado em 2026-10-09 (Etapa 98) de quarenta e oito para quarenta e nove**, com a **A49** — as requisições com material na caixa que a entrega não consegue tirar porque o disponível do material ficou negativo (um bloqueio sobre o reservado já separado, ou a reserva de outra requisição ocupando o físico); opcional: a saída é liberar a reserva certa ou desbloquear.)*
 
@@ -1895,7 +1897,44 @@ saída, abra a requisição (o detalhe mostra a reserva do item). O banco de des
   revisão do código, **B513**). (ALMOXARIFE/ADMINISTRADOR; desbloquear é administrador ou Gestor.) A mensagem da entrega,
   ao tentar entregar, já diz qual das duas saídas vale para aquele item.
 
-### B. Decisões de negócio — B1 a B515; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A50 (NOVA, da Etapa 99 — requisições com caixa fracionária em material com série).** A entrega de material com
+controle de série exige quantidade inteira (cada unidade é uma série escolhida); uma caixa de 1,5 só sai até 1, e o 0,5
+fica preso. Até esta versão a separação deixava separar fração de material com série (**C197**); a versão nova recusa
+(**B519**), mas **não corrige** o que já está na caixa. **Nada aqui é obrigatório.** Somente leitura — rodar uma vez
+depois do deploy:
+
+```sql
+SELECT r.id AS requisicao_id, r.numero, r.status, ir.id AS item_id, m.codigo, m.nome,
+       ir.quantidade_separada AS separado,
+       COALESCE(ir.quantidade_entregue, ir.quantidade_atendida, 0) AS entregue,
+       ROUND(COALESCE(ir.quantidade_separada, 0) - COALESCE(ir.quantidade_entregue, ir.quantidade_atendida, 0), 6) AS caixa
+  FROM itens_requisicao_almoxarifado ir
+  JOIN requisicoes_almoxarifado r ON r.id = ir.requisicao_id AND COALESCE(r.ativo, 1) = 1
+  JOIN materiais_almoxarifado m ON m.id = ir.material_id AND COALESCE(m.controle_serie, 0) = 1
+ WHERE r.status IN ('APROVADO', 'AGUARDANDO_ESTOQUE', 'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA',
+                    'TOTALMENTE_RESERVADA', 'EM_SEPARACAO', 'PARCIALMENTE_ATENDIDA', 'PRONTA_PARA_RETIRADA',
+                    'AGUARDANDO_APROVACAO_VALOR')
+   AND ROUND(COALESCE(ir.quantidade_separada, 0) - COALESCE(ir.quantidade_entregue, ir.quantidade_atendida, 0), 6) > 0.000001
+   AND ROUND(COALESCE(ir.quantidade_separada, 0) - COALESCE(ir.quantidade_entregue, ir.quantidade_atendida, 0), 6)
+       <> CAST(ROUND(COALESCE(ir.quantidade_separada, 0) - COALESCE(ir.quantidade_entregue, ir.quantidade_atendida, 0), 6) AS INTEGER)
+ ORDER BY r.id, ir.id;
+```
+
+*(Conferida no teste de integração da etapa com este texto, contra o esquema real montado em memória: acha a caixa de
+0,5 de material com série; continua achando depois de entregar 1 de uma caixa de 1,5; **deixa de achar** depois de
+devolver o 0,5 à prateleira. Na medição da etapa: **não** acha série com caixa inteira nem material sem série com
+fração. A lista de status é a das requisições que podem ter material na caixa — mudou lá, muda aqui. O banco de
+desenvolvimento não tem dados.)*
+
+**Como ler o resultado** (uma linha por item):
+- **Vazia** — nada a fazer.
+- **Com linhas** — a coluna `caixa` é o que está separado e não entregue, com a fração. **Saída:** no detalhe da
+  requisição, **Devolver à prateleira** a fração (por exemplo 0,5) desse item — a caixa fica inteira e a entrega tira o
+  resto escolhendo as séries. (ALMOXARIFE/ADMINISTRADOR.)
+
+### B. Decisões de negócio — B1 a B524; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-15 de B515 para B524**, com as nove da Etapa 99 — **B516** a **B523**, do plano (a **B523** reescrita na revisão do plano: a tela não ficava como estava), e a **B524**, da revisão adversarial do código.)*
 
 *(**Atualizado em 2026-10-09 de B501 para B515**, com as catorze da Etapa 98 — dez do plano (**B502** a **B511**; a **B504** completada à vista pela **B512**), duas da revisão adversarial do código (**B512** e **B513** — letras novas e não emendas: a **B512** é regra nova numa porta que a etapa não planejava tocar, o liberar para retirada; a **B513** decide **qual** saída a recusa nomeia, onde a **B509** decidiu **que** nomeia) e duas tomadas na execução no lugar do plano (**B514**, a regra do saldo negativo que o estoque de fato lê; **B515**, o modal da tela).)*
 
@@ -6844,6 +6883,75 @@ e recarrega o detalhe, como o 409 da separação; os 400 o **mantêm** aberto pa
 caracteres também na tela (o servidor corta em 500). O **Separar de novo para conferir** chama a separação com a lista
 vazia. **Descartado:** manter o modal aberto no 409 — mostraria uma caixa que já não existe. (`4941c9d9`)
 
+**B516 (NOVA, da Etapa 99) — a forma da separação é conferida numa passada própria, antes da alçada de valor e de
+mudar o status.** Depois das recusas de sempre (usuário, requisição, status que permite separar) e **antes** da
+conferência da alçada de valor — que **grava** *Aguardando aprovação de valor* e manda o e-mail aos aprovadores. Medido:
+um envio com quantidade −2, numa requisição acima do limite, gravava *Aguardando aprovação de valor* e mandava o e-mail
+por um envio que nunca separaria. **Descartados:** (i) conferir dentro da passada que já existia (depois da alçada) — o
+e-mail continuaria; (ii) mover a conferência do teto de separação para antes da alçada — mudaria a ordem das recusas de
+todo envio válido acima do teto com a alçada armada, sem defeito medido; (iii) conferir só na rota — o serviço é chamado
+direto. (`7353265d`)
+
+**B517 (NOVA, da Etapa 99) — a quantidade: o que é recusado e o que continua "não separar".** Recusa (400) quantidade
+negativa, texto não numérico, infinito, verdadeiro/falso e objeto, com *"⟨material⟩: quantidade inválida para separar
+(⟨valor⟩) — informe um número positivo, ou 0 para não separar este item"* (o valor mostrado é cortado em 40
+caracteres). **Continuam aceitos como "não separar este item":** 0, `"0"`, vazio, ausente, nulo e só espaços — o "Iniciar
+Separação" com as quantidades zeradas (contrato da Etapa 28). **Descartados:** (i) a frase *"informe uma quantidade
+maior que zero"* — mentiria, o 0 é aceito; (ii) recusar 0 ou vazio — muda o contrato da 28 sem defeito medido; (iii)
+duas frases (negativo × texto) — a ação do operador é a mesma; (iv) ler "verdadeiro" como 1 — separava 1 com rodada e
+apagava a conferência. (`7353265d`)
+
+**B518 (NOVA, da Etapa 99) — item que não é da requisição é recusado sempre, inclusive com quantidade 0.** Item
+inexistente, de **outra** requisição, sem identificação, com identificação em texto não numérico, verdadeiro/falso ou
+lista, e linha que nem é um item → *"Item ⟨id⟩ não pertence a esta requisição"* — a mesma frase da devolução à
+prateleira (98). **Mudança de contrato à vista:** um teste da Etapa 28 mandava item inexistente com 3 e esperava sucesso
+sem rodada; passou a esperar a recusa. **Descartados:** (i) pular em silêncio o item de fora com quantidade 0 — aceitar em
+silêncio é o próprio defeito; (ii) frase nova — a da devolução já é a do módulo; (iii) aceitar "verdadeiro" como o item
+1, como a devolução aceita — casaria um item por acaso. (`7353265d`)
+
+**B519 (NOVA, da Etapa 99) — material com série: quantidade inteira em cada linha da separação.** Material com controle
+de série e quantidade fracionária → *"⟨material⟩: material com controle de série exige quantidade inteira na separação
+(informado: ⟨q⟩)"*. Conferido **depois** do arredondamento a 6 casas (1,0000001 vira 1 e passa). O que já está na caixa
+**não** é conferido: uma caixa antiga com 0,5 ainda separa uma rodada inteira (fica 1,5) — a fração sai pela devolução
+à prateleira, e a **A50** acha quem tem. 0,5 + 0,5 do mesmo item na mesma confirmação é recusado (cada linha é o que foi
+digitado). **Descartados:** (i) exigir a caixa inteira — prenderia a caixa antiga até devolver; (ii) somar as linhas do
+mesmo item — só pela integração, a tela manda uma linha por item. (`7353265d`)
+
+**B520 (NOVA, da Etapa 99) — a lista de itens que não é lista → recusa.** *"Informe os itens separados em lista
+(itens_separados)"* — antes, um objeto dava erro interno (500) e um texto era lido letra a letra e respondia sucesso.
+Ausente ou nula = lista vazia, como sempre. **Revisão do plano:** a rota trocava qualquer valor "falso" (texto vazio, 0,
+falso) por lista vazia e o serviço recusaria o mesmo valor — agora só ausente e nulo viram lista vazia, pela rota e pelo
+serviço. **Descartado:** aceitar um item solto como lista de um — nenhuma tela manda. (`7353265d`)
+
+**B521 (NOVA, da Etapa 99) — o mesmo item duas vezes na mesma confirmação continua aceito** (soma, validado contra o
+total — contrato das Etapas 59, 60 e 95), e a forma de cada linha repetida é conferida. **Diferente da devolução à
+prateleira**, que recusa repetido (lá é um gesto de tirar, com motivo). **Descartado:** recusar repetido — quebraria três
+contratos sem defeito medido. (`7353265d`)
+
+**B522 (NOVA, da Etapa 99) — a segunda conferência conta a caixa, com a frase de sempre.** Conferir exige algum item com
+material **na caixa** (separado − entregue, arredondado a 6 casas, acima da folga) — a régua do **Liberar para
+Retirada** (**B512**). Caixa vazia → *"Nenhum item separado"*. **Descartados:** (i) frase nova ("a caixa está vazia") —
+a mesma do liberar; (ii) apagar a conferência quando a confirmação de separação vem sem nada — contrato da 28, e
+inofensivo medido (a próxima rodada apaga, o liberar recusa, **C203**); (iii) só para material crítico — a conferência de
+material comum também atestaria nada. (`b8e16e4c`)
+
+**B523 (NOVA, da Etapa 99; reescrita na revisão do plano) — a tela muda num ponto só: o "Conferir separação" segue a
+caixa.** O plano dizia "a tela não muda" porque supunha que o botão só aparecia com caixa — **estava errado**: ele olhava
+o separado acumulado e apareceria sobre a caixa vazia, oferecendo um gesto que agora sempre recusa. Agora segue a caixa,
+como o **Liberar para Retirada**. O resto da tela não muda: o modal de separação só manda números positivos dos itens
+da requisição (negativo, texto e item de fora nunca saem dela), o campo já é de inteiros para todo material, e a fração
+digitada em material com série vira o aviso da recusa com o modal aberto. **Descartado:** deixar o botão e a recusa virar
+aviso. (`c9087106`)
+
+**B524 (NOVA, da Etapa 99, revisão do código) — "a conferência é obrigatória" usa a mesma caixa que a conferência.** A
+regra que exige a segunda conferência do material crítico (na fila, no detalhe, no liberar e na entrega) media a caixa
+sem arredondar; a **B522** fez a conferência medir arredondado. Com uma sobra de dado antigo (crítico separado
+2,0000001, entregue 2), a fila mostrava **Conferir**, a conferência recusava *"Nenhum item separado"*, o liberar e a
+entrega recusavam pela conferência que falta, e *Em Separação* não se encerra: **presa** — regressão da própria etapa,
+reproduzida pelo revisor (antes da 99 a conferência aceitava). Agora as três réguas são a mesma (arredondada a 6 casas,
+acima da folga); só muda para sobras menores que meio milionésimo. **Descartado:** deixar a conferência aceitar a
+sobra — voltaria a atestar nada. (`821fb03b`)
+
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -8897,10 +9005,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      físico), com o detalhe mostrando **−1**. Agora os três dizem 0 / *Aguardando saldo* e a recusa nomeia a retenção e
      a saída (**B509**, **B513**); a **A49** acha o que está nessa situação.
 
-197. **NOVO, da Etapa 98 (anterior a ela, fora dela) — a separação aceita quantidade negativa em silêncio e fração em
-     material com série.** Negativa: responde sucesso, não separa nada e, por ser o "Iniciar Separação", leva uma
+197. **NOVO, da Etapa 98 (anterior a ela, fora dela), e ✅ RESOLVIDO NA ETAPA 99 (`7353265d`) — a separação aceita
+     quantidade negativa em silêncio e fração em material com série.** Negativa: responde sucesso, não separa nada e, por ser o "Iniciar Separação", leva uma
      *Parcialmente Atendida* de volta a *Em Separação*. Fração de material com série: aceita, e a entrega depois recusa
      *"material com controle de serie exige quantidade inteira"* — a devolução à prateleira é a saída. **Etapa 99.**
+     *(Resolvido, e era maior: a medição da 99 achou também "verdadeiro" separando 1, a linha válida gravando com a
+     inválida sumida, a lista malformada dando erro interno, o item de outra requisição aceito e a alçada de valor
+     pedindo aprovação por um envio inválido. Agora tudo isso é recusado antes de mudar qualquer coisa — **B516** a
+     **B520**, **C201**.)*
 
 198. **NOVO, da Etapa 98 — quem devolve pode conferir; a barreira "quem separou não confere" continua por rodada de
      separação** (**B505**). Consequência, anterior à 98: numa equipe de **dois** almoxarifes em que **os dois**
@@ -8913,10 +9025,30 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      de novo") virava *Pronta* sem nada a retirar — entregar, encerrar, separar e devolver recusavam e ela sumia da
      fila. Agora a recusa é *"Nenhum item separado"* e o botão só aparece com material na caixa (**B512**).
 
-200. **NOVO, da Etapa 98 (revisão do código; declarado, aberto) — a segunda conferência aceita confirmar uma caixa
-     vazia.** Ela conta "algum item separado", como o liberar contava (**C199**): numa *Em Separação* com tudo o que foi
+200. **NOVO, da Etapa 98 (revisão do código; declarado), e ✅ RESOLVIDO NA ETAPA 99 (`b8e16e4c`, `c9087106`) — a segunda
+     conferência aceita confirmar uma caixa vazia.** Ela conta "algum item separado", como o liberar contava (**C199**): numa *Em Separação* com tudo o que foi
      separado já entregue, a conferência responde sucesso sobre nada. Medido na Fase 0 da Etapa 99: a próxima
      rodada de separação apaga essa conferência e o liberar recusa — não foi visto prender requisição. **Etapa 99.**
+
+
+201. **NOVO, da Etapa 99 — a separação passa a recusar o que antes respondia "Separação registrada" sem separar.**
+     Quantidade negativa ou não numérica, item que não é da requisição, lista que não é lista e fração de material com
+     série recebem a recusa com a explicação, e **nada muda** (nem o status). Pela tela nada disso saía — o modal só
+     manda números positivos dos itens da requisição —, **exceto a fração em material com série**, que agora vira o
+     aviso de recusa. Quem integra pela API e mandava itens de fora ou linhas malformadas passa a ver o erro. Resíduo
+     antigo da tela, fora da etapa: digitar `1e400` no modal manda a quantidade vazia e o servidor lê "não separar".
+
+202. **NOVO, da Etapa 99 (anterior a ela, fora dela) — a criação de requisição aceita fração de material com série.**
+     Pedir 1,5 de um material com série é aceito; a separação só leva inteiro, e o 0,5 nunca separa. **O que fazer:**
+     depois de entregar o inteiro, a requisição fica *Parcialmente Atendida*; **Completar Entrega** abre o modal já com
+     0,5 e a confirmação recusa *"… exige quantidade inteira na separação (informado: 0.5)"*. **Feche o modal e use
+     Encerrar.** Não zere o modal e confirme: isso leva a requisição a *Em Separação* com a caixa vazia, de onde não há
+     como encerrar nem cancelar (**C195**). Antes desta versão era pior: separava 0,5 e travava na entrega.
+
+203. **NOVO, da Etapa 99 — a segunda conferência passa a recusar a caixa vazia** (*"Nenhum item separado"*), e o botão
+     **Conferir separação** só aparece com material na caixa. A conferência gravada **antes** de uma entrega parcial
+     continua gravada sobre a caixa vazia até a próxima rodada de separação (contrato da Etapa 28) — inofensivo: a
+     rodada a apaga e o **Liberar para Retirada** recusa a caixa vazia.
 
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -9927,11 +10059,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(98) A *Em Separação* vazia não cancela por quem pediu** (**C195**, anterior).
 - **(98) Liberar a reserva é outro gesto** (**B506**, **C194**); a recusa da perda com reserva não nomeia a reserva.
 - **(98) A devolução não move estoque nem escolhe o endereço de volta** (**C193**).
-- **(98) A separação ainda aceita negativo e fração de série** (**C197**) e **a conferência aceita caixa vazia**
-  (**C200**) — Etapa 99.
+- ~~**(98) A separação ainda aceita negativo e fração de série** (**C197**) e **a conferência aceita caixa vazia**
+  (**C200**) — Etapa 99.~~ *(Resolvido na Etapa 99.)*
 - **(98) Devolver usa a permissão de separar** (**B503**) — sem permissão própria.
 - **(98) A A49 olha só a flag do material e não mostra a reserva do item** (**B514**).
 - **(98) Não sondado na revisão:** devolver × conferir ao mesmo tempo — da mesma classe que separar × conferir (Etapa 28).
+- **(99) A criação de requisição aceita fração de material com série** (**C202**) — a separação recusa; a saída é
+  encerrar a *Parcialmente Atendida*.
+- **(99) A conferência gravada antes de uma entrega parcial fica até a próxima rodada** (**B522** (ii), **C203**).
+- **(99) O mesmo item repetido na confirmação continua aceito** (**B521**).
+- **(99) `1e400` digitado no modal de separação vira "não separar"** (resíduo da tela, **C201**).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -10759,6 +10896,19 @@ tela e o servidor — dentro dos **342** arquivos da suíte. O que **só o naveg
    a conferência.
 4. **A recusa E190** inteira legível no aviso da entrega (a frase é longa).
 5. **"Separar de novo para conferir"** numa *Parcialmente Atendida* com crítico devolvido.
+
+**(99) Nenhum clique foi dado nesta etapa no navegador.** A tela mudou num ponto só (o **Conferir separação** segue a
+caixa) e está provada por teste de componente com a fronteira HTTP simulada (dentro das **96** suítes / **1504** testes do
+cliente); o servidor, pela rota com o usuário certo em cada pedido e pelo serviço: **24** verificações no arquivo da
+forma da separação, **8** no da conferência, **6** no de integração e o caso novo no teste do liberar — dentro dos **345**
+arquivos da suíte. O que **só o navegador** prova:
+
+1. **O aviso da série.** Separar 1,5 de um material com série: o aviso *"… exige quantidade inteira na separação
+   (informado: 1.5)"* aparece inteiro e o modal continua aberto com o valor.
+2. **O botão Conferir com a caixa vazia.** *Em Separação* com tudo entregue: nem **Conferir separação** nem **Liberar
+   para Retirada** aparecem; o **Ajustar Separação** sim.
+3. **O C202 na tela.** *Parcialmente Atendida* com 0,5 pendente de material com série: **Completar Entrega** abre o modal
+   com 0,5; o aviso aparece; fechar e **Encerrar** funciona.
 
 
 
@@ -21479,9 +21629,111 @@ coerentes em 10 de 10, sem deadlock, sem exposição nova, e a tela e o servidor
 - **Seis sabotagens que passavam verde** viraram teste (`b7fc06a0`).
 - **A conferência aceita confirmar uma caixa vazia** — declarado (**C200**).
 
+## Etapa 99 — A separação recusa o que não dá para separar, e a conferência não confirma caixa vazia (2026-10-15)
+
+Até aqui, a confirmação da separação **pulava em silêncio** a linha que não entendia: quantidade negativa, texto,
+item de outra requisição. Respondia *"Separação registrada"*, não separava nada — e mesmo assim mudava a requisição
+para *Em Separação* (uma *Parcialmente Atendida* deixava de ser). Uma linha boa junto com uma ruim gravava a boa e
+sumia com a ruim; "verdadeiro" no lugar de número separava 1; fração de material com série ia para a caixa, de onde a
+entrega não consegue tirar; e, numa requisição acima do limite de valor, o envio inválido ainda pedia a aprovação de
+valor e mandava o e-mail aos aprovadores. Agora a separação **confere a forma de cada linha antes de qualquer coisa** e
+recusa com a explicação — e **nada muda**. Na mesma etapa, a **segunda conferência** deixa de confirmar uma caixa vazia
+(tudo o que foi separado já tinha sido entregue), e o botão **Conferir separação** só aparece quando há material na
+caixa.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Separar −2, "abc" ou um item de outra requisição respondia *"Separação registrada"* e mudava o status para *Em Separação* | Recusa com a explicação e **nada muda** — nem o status (**B516**, **B517**, **B518**, **C201**) |
+| Uma linha válida e uma inválida no mesmo envio: a válida gravava, a inválida sumia | Tudo ou nada: a recusa da primeira linha inválida, e nenhuma grava (**B516**) |
+| "Verdadeiro" como quantidade separava 1 (e apagava a conferência) | Recusado como quantidade inválida (**B517**) |
+| Fração de material com série ia para a caixa e a entrega recusava depois | Recusada na separação, com o aviso na tela (**B519**); a **A50** acha a fração antiga |
+| Envio inválido numa requisição acima do limite pedia aprovação de valor e mandava e-mail | A recusa vem antes da alçada: nada gravado, nenhum e-mail (**B516**) |
+| Lista de itens malformada dava erro interno (500) ou "sucesso" | *"Informe os itens separados em lista (itens_separados)"* (**B520**) |
+| A segunda conferência confirmava uma caixa vazia (separou 2, entregou 2) | *"Nenhum item separado"* (**B522**, **C203**) |
+| O botão **Conferir separação** aparecia sobre a caixa vazia | Só aparece com material na caixa, como o **Liberar para Retirada** (**B523**) |
+
+### As regras, com o cenário exato
+
+Preparação: material **Porca M8** (PC), estoque 4. **Paula** (sem perfil) pede 4; o **administrador** aprova →
+*Totalmente Reservada*. **Ana** e **Bruno** são almoxarifes. Material **Sensor X** com controle de série, 2 unidades
+em estoque (séries S1 e S2). ⟨número⟩ é o número da requisição.
+
+A tela de separação só manda números positivos dos itens da requisição: os cenários 1 a 3 se reproduzem **pela
+integração** (ou por uma tela antiga aberta); o 4, o 6 e o 7 **pela tela**.
+
+**1. Quantidade inválida.** Confirmar a separação da Porca com −2 → *"Porca M8: quantidade inválida para separar (-2) —
+informe um número positivo, ou 0 para não separar este item"*. A requisição continua *Totalmente Reservada*, nada
+separado. O mesmo com `"abc"`, `true`, infinito. Com **0** (ou vazio) → aceito, sem separar: é o "Iniciar Separação".
+
+**2. Item de fora.** Mandar o item de **outra** requisição (mesmo com quantidade 0) → *"Item ⟨id⟩ não pertence a esta
+requisição"*; nada muda nas duas requisições.
+
+**3. Tudo ou nada.** Requisição com Porca e Arruela; confirmar Porca 2 e Arruela −1 → a recusa da Arruela, e a Porca
+**não** é separada.
+
+**4. Série.** Requisição de 2 Sensor X: na tela, digitar 1,5 e confirmar → aviso *"Sensor X: material com controle de
+série exige quantidade inteira na separação (informado: 1.5)"*, o modal fica aberto; digitar 2 → separa. A entrega
+escolhe as duas séries.
+
+**5. A recusa vem antes da alçada de valor.** Com a alçada ligada e o limite abaixo do valor da requisição (aprovada
+antes de ligar), mandar −2 → a recusa de quantidade (400), a requisição **não** vai para *Aguardando aprovação de valor*
+e ninguém recebe e-mail. Mandar 4 → a alçada vale como sempre: *"Valor total (…) excede o limite de liberação
+automática (…). Aprovação de alto valor necessária."*
+
+**6. A conferência conta a caixa.** Ana separa 2 de 4 da Porca, entrega 2 → *Parcialmente Atendida*. **Completar
+Entrega**, zerar a quantidade e confirmar → *Em Separação* sem nada na caixa. O botão **Conferir separação** **não**
+aparece (nem o **Liberar para Retirada**). Pela integração, Bruno confere → *"Nenhum item separado"*. Ana separa 1 →
+o botão aparece; Bruno confere → aceito; **Liberar** → *Pronta para Retirada*.
+
+**7. A fração de série pedida na criação (C202).** Paula pede **1,5** Sensor X (aceito na criação). Ana separa e entrega
+1 (série S1) → *Parcialmente Atendida*. **Completar Entrega** abre o modal com 0,5 → confirmar dá o aviso *"… exige
+quantidade inteira na separação (informado: 0.5)"*. **Feche o modal e Encerre** a requisição (*Encerrada*). Não zere o
+modal e confirme — a requisição iria a *Em Separação* com a caixa vazia, de onde não se encerra (**C195**).
+
+**8. O que não muda.** Separar o mesmo item em duas linhas soma; acima do disponível, a recusa de sempre (*"… não é
+possível separar 5 PC. Máximo: 4 …"*); requisição cancelada → a frase do status, antes de olhar as linhas; a devolução
+à prateleira, a entrega, o liberar e a fila seguem iguais; nenhuma permissão nova.
+
+### O que esta etapa NÃO cobre
+
+1. **A criação de requisição aceitar fração de material com série** (**C202**) — outra porta; a saída é encerrar.
+2. **Apagar a conferência quando a confirmação vem sem nada** — contrato da Etapa 28; inofensivo (**C203**).
+3. **Recusar o mesmo item repetido na confirmação** (**B521**).
+4. **Quem pediu cancelar a *Em Separação* vazia** (**C195**, anterior).
+5. **`1e400` digitado no modal** vira "não separar" (resíduo da tela, **C201**).
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0) reproduziu 33 de 48 entradas inválidas aceitas pela rota e pelo serviço e 8 de 14 conferências
+de caixa vazia, e mostrou que a tarefa escrita na Etapa 98 errava em sete pontos — entre eles o "verdadeiro" que separa
+1, a gravação parcial, a alçada que gravava antes da recusa e o teste de resíduo do liberar que **não sabia falhar**
+(agora sabe — RN-10). A **revisão do plano** pegou uma trava: o botão **Conferir separação** apareceria sobre a caixa
+vazia (o plano dizia que não) — nasceu a mudança de tela (**B523**); e três correções de contrato (a frase do item de
+fora igual à da devolução, a rota tratando "falso" como lista vazia, o valor mostrado sem limite).
+
+A **revisão adversarial do código** (dois revisores, executando) sondou os chamadores (só as duas rotas e a tela), o
+texto com vírgula, o identificador em texto, as listas malformadas, a ordem das recusas (perfil, requisição, status,
+forma) e a trava — tudo como o contrato. E achou:
+- **Uma regressão da própria etapa:** com uma sobra mínima de material crítico, a fila pedia uma conferência que a
+  conferência recusava, e a requisição ficava presa — consertada (**B524**, `821fb03b`).
+- **Nove sabotagens que passavam verde** de vinte — entre elas a série lida pelo material de outro item da requisição
+  (todo teste de série usava requisição de um item só) — viraram teste (`f1041706`). Ficam sem teste duas mutações
+  equivalentes nos dados possíveis hoje.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 99 entregue (2026-10-15):** **a separação recusa o que não dá para separar, e a conferência não confirma caixa
+  vazia.** Quantidade negativa ou não numérica, item de fora, lista malformada e fração de material com série recebem
+  a recusa com a explicação, **antes** da alçada de valor e sem mudar o status; tudo ou nada; 0 e vazio continuam "não
+  separar" (**C197** resolvido — e era maior do que dizia). A segunda conferência conta a caixa e o botão segue a caixa
+  (**C200** resolvido). **O que é seu:** a consulta **A50** (opcional); as decisões **B516 a B524** (a **B523** reescrita
+  na revisão do plano; a **B524**, regressão achada e consertada na revisão do código); os avisos **C201 a C203** (o **C202** muda o que quem opera faz com a fração de série pedida); as
+  limitações **(99)** em D e as verificações **(99)** em F. **Próxima: Etapa 101 (a 100 foi da frente de Compras) — ver
+  a "próxima tarefa detalhada" no plano da Etapa 99.**
 
 - **Etapa 98 entregue (2026-10-09):** **o almoxarife tira da caixa o que não vai sair — devolver à prateleira.** No
   detalhe da requisição, cada item com material na caixa tem **Devolver à prateleira** (quantidade e motivo, sem mover
@@ -21493,8 +21745,8 @@ coerentes em 10 de 10, sem deadlock, sem exposição nova, e a tela e o servidor
   (**B513**), e as consertou. **O que é seu:** a consulta **A49** (opcional); as decisões **B502 a B515** (a **B504**
   completada pela **B512**; a **B514** e a **B515** tomadas na execução); os avisos **C193 a C200** (o **C194** e o
   **C198** mudam o que quem opera faz; o **C200** fica aberto); as limitações **(98)** em D e as verificações **(98)**
-  em F. **Próxima: Etapa 99 — a separação recusa o que não dá para separar (negativo, não numérico, item de fora,
-  fração de série — C197) e a conferência deixa de aceitar caixa vazia (C200) — ver o plano da Etapa 98.**
+  em F. ~~**Próxima: Etapa 99 — a separação recusa o que não dá para separar (negativo, não numérico, item de fora,
+  fração de série — C197) e a conferência deixa de aceitar caixa vazia (C200) — ver o plano da Etapa 98.**~~ *(Feita — Etapa 99.)*
 
 - **Etapa 97 entregue (2026-10-09):** **o material separado na caixa de uma requisição só sai pela entrega.** A saída
   avulsa, a perda, o ajuste para menos, a conferência, o bloqueio de qualidade, a reserva manual, a remessa, o

@@ -494,7 +494,10 @@ const nomeDoUsuario = (user) => user?.nome || user?.email || null;
  * Para virar "sempre" ou "nunca" muda-se esta linha, e só ela.
  */
 function conferenciaObrigatoria(itens) {
-  return (itens || []).some((i) => Number(i.material_critico) === 1 && (getSeparado(i) - getEntregue(i)) > 0);
+  // Etapa 99 (Fase 5, revisor 1): a caixa ARREDONDADA, acima da folga — a mesma regua da conferencia (B522) e do liberar
+  // (B512). Com a diferenca crua, um resto de legado (2,0000001 - 2) exigia conferencia que a conferencia recusa ("Nenhum
+  // item separado"): a fila mostrava CONFERIR e entregar, liberar, conferir e encerrar recusavam — presa.
+  return (itens || []).some((i) => Number(i.material_critico) === 1 && Q.qtd(getSeparado(i) - getEntregue(i)) > 1e-9);
 }
 
 /**
@@ -565,8 +568,12 @@ async function conferirSeparacao(db, requisicaoId, user) {
     throw err;
   }
 
+  // Etapa 99 (T2, C200, B522): conta a CAIXA (separado - entregue), a regua do liberar (B512). O separado e acumulado e
+  // nao desce na entrega: separou 2, entregou 2, `separar []` -> EM_SEPARACAO com a caixa vazia, e a conferencia atestava
+  // nada. O ROUND tira o resto de ponto flutuante entre a folga e meia unidade da precisao (2,0000001 - 2).
   const separados = await dbGet(db,
-    'SELECT COUNT(*) AS n FROM itens_requisicao_almoxarifado WHERE requisicao_id = ? AND quantidade_separada > 0',
+    'SELECT COUNT(*) AS n FROM itens_requisicao_almoxarifado WHERE requisicao_id = ? AND quantidade_separada > 0'
+    + '\n    AND ROUND(COALESCE(quantidade_separada, 0) - COALESCE(quantidade_entregue, quantidade_atendida, 0), 6) > 1e-9',
     [requisicaoId]);
   if (!separados || Number(separados.n) === 0) {
     const err = new Error('Nenhum item separado');
@@ -855,6 +862,57 @@ async function checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qty, p
 /** Etapa 92 (T0): o 400 da separacao fora de PODE_SEPARAR — na leitura e na reivindicacao (S1). */
 const MSG_STATUS_SEPARAR = 'Requisição deve estar aprovada, aguardando estoque/compra, em separação ou parcialmente atendida para separar';
 
+/**
+ * Etapa 99 (T1, C197) — a passada de FORMA da separacao. So le; nenhuma escrita. Antes a passada 1 PULAVA em silencio
+ * (`continue`) a entrada que nao lia — negativo, texto, item alheio — e a separacao respondia 200 reivindicando
+ * EM_SEPARACAO sem separar; `num(true)` separava 1; a valida do mesmo payload gravava e a invalida sumia; objeto ou
+ * entrada `null` davam 500 e texto iterava as letras; fracao de material com serie ia para a caixa (a entrega so tira
+ * inteiro). Roda DEPOIS do status (PODE_SEPARAR — a literal do status vem primeiro) e ANTES da alcada de valor
+ * (`verificarBloqueioLiberacao` GRAVA AGUARDANDO_APROVACAO_VALOR e notifica: um payload invalido nao pode disparar isso).
+ *
+ * Ordem: Q4 (nao e lista); depois, por entrada na ordem do payload, Q2 (nao pertence) -> Q1 (quantidade) -> Q3 (serie).
+ * Ausente, `null`, `""` e so espaco valem 0, e 0 e pulado (contrato 28 RN-02: "Iniciar Separacao" com quantidades zeradas). O item
+ * alheio e recusado mesmo com 0 (B518). Serie: inteiro POR ENTRADA, depois do arredondamento (`Q.qtd`) — o acumulado
+ * nao e checado (o legado com fracao na caixa separa uma rodada inteira; a fracao sai pela devolucao da 98, B519).
+ * Item repetido continua aceito (59/60/95, B521).
+ */
+async function validarFormaDaSeparacao(db, itens, itensSeparados) {
+  const erro = (msg) => { const e = new Error(msg); e.status = 400; return e; };
+  if (!Array.isArray(itensSeparados)) throw erro('Informe os itens separados em lista (itens_separados)');
+  const porId = new Map(itens.map((i) => [Number(i.id), i]));
+  let serie = null; // material_id -> controle_serie, lido so se alguma entrada precisar
+  for (const entrada of itensSeparados) {
+    // Q2 com a formula da D5 (devolucao, 98): entrada `null` -> "Item null". Mas o id tem de ser numero ou texto
+    // numerico — `Number(true)` = 1 casaria o item 1 (Fase 2, nota 6).
+    const idBruto = entrada && entrada.item_id;
+    const id = typeof idBruto === 'number' || (typeof idBruto === 'string' && idBruto.trim() !== '') ? Number(idBruto) : NaN;
+    const item = Number.isInteger(id) ? porId.get(id) : null;
+    if (!item) throw erro(`Item ${idBruto} não pertence a esta requisição`);
+
+    const bruto = entrada.quantidade_separada;
+    // ausente, null, "" e so espaco valem 0 (Fase 2: `num(" ")` era 0 — aceito)
+    if (bruto === undefined || bruto === null || (typeof bruto === 'string' && bruto.trim() === '')) continue;
+    const q = Q.qtd(bruto);
+    if (Number.isNaN(q) || q < 0) {
+      let mostrado;
+      try { mostrado = typeof bruto === 'object' ? JSON.stringify(bruto) : String(bruto); } catch (_) { mostrado = String(bruto); }
+      if (mostrado.length > 40) mostrado = `${mostrado.slice(0, 40)}…`;
+      throw erro(`${item.material_nome}: quantidade inválida para separar (${mostrado}) — informe um número positivo, ou 0 para não separar este item`);
+    }
+    if (q > 0 && !Number.isInteger(q)) {
+      if (!serie) {
+        const ids = [...new Set(itens.map((i) => Number(i.material_id)))];
+        // eslint-disable-next-line no-await-in-loop
+        const rows = await dbAll(db, `SELECT id, controle_serie FROM materiais_almoxarifado WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+        serie = new Map(rows.map((r) => [Number(r.id), Number(r.controle_serie) === 1]));
+      }
+      if (serie.get(Number(item.material_id))) {
+        throw erro(`${item.material_nome}: material com controle de série exige quantidade inteira na separação (informado: ${q})`);
+      }
+    }
+  }
+}
+
 // Etapa 93 (T0, B443): separar, entregar e excluir seguram a trava POR REQUISICAO (travaPorRequisicao) do
 // comeco ao fim — dois gestos na mesma requisicao viram uma sequencia (o segundo le o estado novo). Nao e a
 // `comTravaDaRequisicao` acima (essa e a trava por MATERIAL dos itens). Nao reentrante: nenhuma destas chama outra.
@@ -869,6 +927,8 @@ function separarRequisicao(db, requisicaoId, itensSeparados = [], user) {
 }
 
 async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
+  // Etapa 99 (B520): `null` vale `[]`, como ausente (a rota ja passava `itens_separados || []`).
+  if (itensSeparados === null) itensSeparados = []; // eslint-disable-line no-param-reassign
   if (!user?.id) {
     const err = new Error('Separação exige usuário identificado');
     err.status = 400;
@@ -896,9 +956,11 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
     throw err;
   }
 
-  await valueApprovalService.verificarBloqueioLiberacao(db, requisicaoId);
-
+  // Etapa 99 (T1, C197, B516-B521): a FORMA de cada entrada, antes da alcada de valor e da reivindicacao.
   const itens = await carregarItensRequisicao(db, requisicaoId);
+  await validarFormaDaSeparacao(db, itens, itensSeparados);
+
+  await valueApprovalService.verificarBloqueioLiberacao(db, requisicaoId);
 
   // PASSADA 1 — validar TODAS as entradas antes de escrever qualquer coisa (fix-round 1, F1).
   // Antes, o laço gravava item a item e lançava 400 no meio: o item válido ficava gravado SEM

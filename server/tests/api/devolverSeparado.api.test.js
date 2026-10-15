@@ -484,9 +484,15 @@ process.on('exit', (code) => {
     assert.strictEqual(await status(a.R), 'EM_SEPARACAO');
     await recusa(liberar(a.R), 400, 'Nenhum item separado');
     assert.strictEqual(await status(a.R), 'EM_SEPARACAO');
-    // resto de ponto flutuante (escritor de legado): 2,0000000001 - 2 arredonda a 0 em 6 casas — nao e caixa
+    // resto de ponto flutuante (escritor de legado): 2,0000000001 - 2 = 1e-10, ABAIXO da folga (1e-9) — recusa com ou
+    // sem o ROUND. Etapa 99 (RN-10, s6 da Fase 0): este caso NAO provava o ROUND do liberar (tirado o ROUND, ficava verde).
     await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada = 2.0000000001 WHERE id = ?', [a.ids[0]]);
     await recusa(liberar(a.R), 400, 'Nenhum item separado');
+    // [99 RN-10] o caso que prova o ROUND: 2,0000001 - 2 = 1e-7, entre a folga (1e-9) e meia unidade da precisao (5e-7)
+    // — arredonda a 0 com o ROUND (recusa); sem ele seria caixa (> 1e-9) e o liberar passaria.
+    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada = 2.0000001 WHERE id = ?', [a.ids[0]]);
+    await recusa(liberar(a.R), 400, 'Nenhum item separado');
+    assert.strictEqual(await status(a.R), 'EM_SEPARACAO');
   });
 
   await test('[98 RN-03] legado pre-separacao com caixa e AGUARDANDO_APROVACAO_VALOR com caixa: devolver 200, status igual', async () => {

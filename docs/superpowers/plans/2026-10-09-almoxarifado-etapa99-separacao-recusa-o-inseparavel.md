@@ -1,7 +1,7 @@
 # Etapa 99 — a porta da separação recusa o que não é separável (C197) e a conferência recusa a caixa vazia (C200)
 
-> Status: **PLANO (Fase 1) — 2026-10-09. Nenhuma task executada.** Próximo passo: Fase 2 (revisão do plano por agente
-> fresco).
+> Status: **FECHADA — 2026-10-15.** Fases 0–6 feitas: T1–T3 `7353265d..3e14653a`, Fase 5 `821fb03b`, `f1041706`, fechamento `481eb653`. **Próxima: Etapa 101** (ver o fim). Worktree `CRM-wt-e99`, branch
+> `etapa-e99` (de `main` `5f28c044`). Marcar cada task ao terminar (hash, divergência).
 > HEAD de partida: `7b5fd57e` (main, árvore limpa, sem push).
 > Origem: "Próxima tarefa detalhada — Etapa 99" no fim de
 > `docs/superpowers/plans/2026-10-09-almoxarifado-etapa98-devolver-da-caixa-a-prateleira.md`; C197, C200 (B510).
@@ -154,6 +154,8 @@ A passada de forma do contrato abaixo (antes da alçada) + a consulta da confer�
 - **Serviço direto:** só testes (`separacaoComDono.api.test.js:215-235` manda 0, `[]` e **item 999999 com 3**).
 - **"Conferir separação"** na tela (`:1856`) só aparece com `conferenciaPendente` (crítico com caixa > 0 e sem
   conferência) — a tela **não** oferece conferir a caixa vazia; o C200 se alcança por tela velha ou pela API.
+  **[Fase 2: ESTAVA ERRADO** — isso descreve o "Separar de novo para conferir". O "Conferir separação" do detalhe
+  (`:1849`) aparece com `!conferencia && algum separado > 0` — o separado acumulado, não a caixa. Ver achado 1 e a T2b.]
 
 ### Onde mexer (lido no HEAD `7b5fd57e`)
 
@@ -164,6 +166,49 @@ A passada de forma do contrato abaixo (antes da alçada) + a consulta da confer�
     `if (!(qty > 0)) continue` ficam como defesa (o primeiro fica inalcançável).
   - `conferirSeparacao` (`:549-600`): a consulta `separados` (`:568-570`) passa à régua da B512 (T2).
 - `server/routes/almoxarifado.js:3890-3893` (liberar, B512): **não muda** — só ganha o caso de resíduo 1e-7 no teste.
+
+---
+
+## Fase 2 — revisão do plano por agente fresco (2026-10-15) — 1 trava, 3 correções, 4 notas
+
+Revisor fresco com as quatro perguntas da skill (somente leitura; worktree `CRM-wt-e99`, branch `etapa-e99` de
+`5f28c044`). Cada achado com o que o plano passou a dizer:
+
+1. **TRAVA — a tela oferece o botão que a T2 passa a recusar (o plano dizia o contrário).** "Conferir separação" no
+   detalhe (`RequisicoesList.js:1849`) aparece em *Em Separação* com `!detalhe.conferencia && itens.some(getSeparado > 0)`
+   — olha o **separado acumulado**, não a caixa. A linha 156 deste plano ("só aparece com `conferenciaPendente`") **estava
+   errada**: aquilo é o "Separar de novo para conferir". No C2 (separa 2, entrega 2, `[]`) e no C1 (a devolução da 98 limpa
+   a conferência), o botão aparece e o clique passaria a dar o 400 novo. O "Liberar" ao lado (`:1860`) já segue a caixa
+   desde a 98. **Corrigido:** a **B523 cai** — nasce a **T2b (galho da T2, cliente)**: o botão segue `caixaDoItem(i) > 0`,
+   molde do `:1860`, com teste jest. O C203 deixa de dizer "a tela não oferece".
+2. **Q2 não era "o mesmo comportamento da D5".** A D5 usa `idBruto = entrada && entrada.item_id` (entrada `null` →
+   *"Item null …"*); o contrato dizia `String(entrada?.item_id)` (→ *"Item undefined …"*). **Corrigido:** a Q2 usa a
+   fórmula da D5, literal e comportamento (B518).
+3. **A rota e o serviço divergiam em `itens_separados` falso.** A rota faz `itens_separados || []`: `""`, `0` e `false`
+   viravam `[]` (200, *Em Separação*), e o serviço daria Q4. **Corrigido:** a rota passa a `?? []` (só ausente e `null`
+   valem `[]`); RN-07 ganha `""`, `0`, `false` → Q4 (B520).
+4. **O caminho de saída do C202 não estava traçado até o último gesto.** Pede 1,5 de material com série, separa e entrega
+   1 → *Parcialmente Atendida*. "Completar Entrega" abre o modal pré-preenchido com 0,5 (`quantidadesIniciaisSeparacao`)
+   → Q3 em toast. Se o operador **zera** o modal, sai `[]` → 200 → *Em Separação* com caixa 0, e dali não há seta para
+   encerrar nem cancelar (C195): presa. **Não é regressão** (antes separava 0,5 e travava na entrega). **Decidido:** a
+   literal fica; o C202 e o guia dizem a saída ("não zere o modal: feche-o e use **Encerrar** na *Parcialmente
+   Atendida*"), e a T3 I2 segue esse caso até o encerramento.
+5. (nota) **A T3 I1 chamava de "Separar de novo para conferir" um gesto que a tela não oferece ali** (exige crítico com
+   caixa). **Corrigido:** o passo passa a "`[]` pela API (= modal zerado)"; a frase do C2 da s4 idem.
+6. (nota) **Literais.** `" "` (só espaço) daria Q1 *"( )"* — hoje `num(" ")` = 0, aceito: **corrigido**, só-espaço vale
+   ausente, como `""` (B517). ⟨bruto⟩ sem limite (100 KB voltariam na mensagem): **corrigido**, corta em 40 caracteres
+   com `…`. `JSON.stringify` de objeto circular (serviço direto) lançaria: **corrigido**, `try` com `String` de reserva.
+   Q2 com `item_id` objeto mostra `[object Object]` — igual à D5, fica. `Number(true)` = 1 casa o item 1: a forma recusa
+   `item_id` que não é número nem texto numérico (booleano, objeto, lista) — **diferente da D5**, que aceita `true`;
+   declarado na B518.
+7. (nota) **Uma leitura dos itens ou duas?** A forma lê `carregarItensRequisicao` antes da alçada; a passada 1 **reusa a
+   mesma leitura** (a alçada não muda itens — só a linha da requisição). Uma leitura só.
+8. (nota) **`1e400` digitado no modal** (`parseFloat` → Infinity, passa no filtro `> 0`, o `JSON.stringify` manda `null`)
+   → o servidor trata como ausente: 200 sem separar. Resíduo antigo da tela; vai como nota no C201, fora do escopo.
+
+Pergunta 3 (independência): a T2 é independente da T1 (só a consulta da conferência e o teste de resíduo; as montagens
+usam payloads válidos e `[]`); serial só pela sabotagem no mesmo arquivo. A T2b é galho da T2 (cliente contra o contrato
+congelado da conferência). Pergunta 2: só o `rFantasma` de `separacaoComDono` usava payload que a forma recusa (grep).
 
 ---
 
@@ -178,7 +223,7 @@ A passada de forma do contrato abaixo (antes da alçada) + a consulta da confer�
   alçada — o teto da 95 lê saldo que a alçada não muda, mas misturar as duas mexe na ordem de recusa de todo payload
   válido acima do teto com a alçada armada (hoje 403, passaria a 400) sem defeito medido; (iii) validar na rota — o
   serviço é chamado direto, e a regra da Etapa 25 exige as duas entradas.
-- **B517 — a quantidade: `Q.qtd` decide.** Ausente, `null` e `""` = 0 (pulado, como hoje: K4); 0 e `"0"` pulados (28
+- **B517 — a quantidade: `Q.qtd` decide.** Ausente, `null` e `""` = 0 (Fase 2: e texto só de espaços, que `num` lia 0) (pulado, como hoje: K4); 0 e `"0"` pulados (28
   RN-02); recusa (Q1) o que `Q.qtd` devolve `NaN` (texto não numérico, `Infinity`, `NaN`, booleano, objeto) ou < 0. A
   literal diz que **0 é aceito** ("ou 0 para não separar este item"). **Descartados:** (i) a literal candidata da 98
   *"informe uma quantidade maior que zero para separar"* — mentiria com o 0 aceito (é a da devolução, onde 0 é recusado);
@@ -188,7 +233,7 @@ A passada de forma do contrato abaixo (antes da alçada) + a consulta da confer�
 - **B518 — item que não pertence: recusado em qualquer entrada, com a literal D5 da 98.** Inexistente, de outra
   requisição, `item_id` nulo ou texto, **inclusive com quantidade 0** (T4), e entrada que não é objeto (F3, hoje 500) →
   Q2 `Item ⟨item_id⟩ não pertence a esta requisição` (⟨item_id⟩ = o valor recebido, `String(...)`; entrada não-objeto →
-  `undefined`, o mesmo comportamento da D5). **Mudança de contrato à vista:** `separacaoComDono.api.test.js:224-226`
+  `undefined`, o mesmo comportamento da D5). **Fase 2:** a fórmula passa a ser exatamente a da D5 (`idBruto = entrada && entrada.item_id`; entrada `null` → *"Item null …"*), e o `item_id` tem de ser número ou texto numérico inteiro — booleano, objeto e lista → Q2 (a D5 aceita `true` = 1; aqui não). **Mudança de contrato à vista:** `separacaoComDono.api.test.js:224-226`
   (`rFantasma`: 999999 com 3 → 200 sem rodada) passa a 400 Q2 — editado com comentário *"mudado na Etapa 99 (B518)"*.
   **Descartados:** (i) pular o item alheio com quantidade 0 — a tela nunca manda, e aceitar em silêncio é o próprio C197;
   (ii) literal própria da separação — a D5 já é a frase do módulo para isto.
@@ -200,7 +245,7 @@ A passada de forma do contrato abaixo (antes da alçada) + a consulta da confer�
   prenderia o legado (E5) até devolver a fração, e a entrega já exige inteiro no que **entrega**; (ii) somar as entradas
   do item na rodada (0,5 + 0,5 = 1 aceito) — só por API, a tela manda uma linha por item; (iii) acrescentar
   `ma.controle_serie` em `carregarItensRequisicao` — muda o objeto de todos os chamadores e das respostas que o espalham.
-- **B520 — `itens_separados` que não é lista → 400 Q4; ausente ou `null` = `[]`.** Hoje objeto → 500 e texto → 200 com a
+- **B520 — `itens_separados` que não é lista → 400 Q4; ausente ou `null` = `[]`.** **Fase 2:** a rota passa de `itens_separados || []` para `?? []` — `""`, `0` e `false` eram `[]` pela rota (200) e Q4 pelo serviço; agora Q4 nos dois. Hoje objeto → 500 e texto → 200 com a
   reivindicação (F1, F2). A rota continua passando `itens_separados || []`; o serviço confere `Array.isArray`.
   **Descartado:** aceitar um objeto único como lista de um — nenhum cliente manda.
 - **B521 — item repetido na rodada continua aceito.** Validado contra o acumulado (59 Fase 5, 60 Fase 2, 95 RN-02 — três
@@ -213,7 +258,8 @@ A passada de forma do contrato abaixo (antes da alçada) + a consulta da confer�
   sem contrato de erro novo, a mesma do liberar; (ii) limpar a conferência no `separar []` (V1: a conferência de antes da
   entrega parcial fica sobre a caixa 0) — contrato da 28 RN-02, e inofensivo medido (a próxima rodada limpa, V1b; o
   liberar recusa, V2); (iii) só para material crítico — a conferência de material comum também atestaria nada.
-- **B523 — a tela não muda.** Medido: o modal filtra `> 0` e só manda itens da requisição (Q1, Q2, T, F nunca saem da
+- **B523 — (Fase 2: REESCRITA) a tela muda num ponto só: o "Conferir separação" do detalhe segue a caixa** (`caixaDoItem > 0`, o molde do Liberar da 98), porque o servidor passa a recusar a caixa vazia e o botão olhava o separado acumulado (achado 1). O resto da tela não muda (os motivos abaixo continuam valendo). **Descartado:** deixar o botão e o toast 400 — o botão ofereceria um gesto que sempre falha.
+  Texto original: **B523 — a tela não muda.** Medido: o modal filtra `> 0` e só manda itens da requisição (Q1, Q2, T, F nunca saem da
   tela); o campo já é `step="1"` para todo material; a fração digitada em série cai no 400 Q3, que vira toast com o
   modal aberto; o "Conferir separação" só aparece com caixa de crítico. **Descartados:** (i) `step` por `controle_serie`
   no campo — o detalhe não traz `controle_serie` (Etapa 61, `:436`) e o `step="1"` já existe para todos; (ii) teste jest
@@ -242,7 +288,7 @@ Reservada*), conferência gravada à mão (77) quando o caso olha a conferência
   400 e **continua *Parcialmente Atendida***; *Aguardando Estoque* + `"abc"` → 400 e continua; alçada armada (custo 5,
   limite 1) + −2 → **400 Q1** (não 403), status intacto, `requer_aprovacao_valor` intacto e **nenhuma** chamada a
   `notificarAprovadoresValor` (espião); a mesma alçada + 4 → 403 V403b como hoje (guarda).
-- **RN-07 (`itens_separados` que não é lista)** — objeto → 400 Q4 (hoje 500); texto → 400 Q4 (hoje 200); nada muda.
+- **RN-07 (`itens_separados` que não é lista)** — objeto → 400 Q4 (hoje 500); texto → 400 Q4 (hoje 200); `""`, `0`, `false` pela rota → Q4 (Fase 2: a rota fazia `|| []`); nada muda.
 - **RN-08 (guardas: o que não muda)** — o mesmo item 2 + 2 → separa 4; acima do teto → o 400 da 95 com a literal de hoje;
   requisição fora de `PODE_SEPARAR` → `MSG_STATUS_SEPARAR` **antes** da forma (cancelada + −2 → a literal do status, não
   Q1); sem `user.id` → *"Separação exige usuário identificado"* antes de tudo.
@@ -273,8 +319,8 @@ Reservada*), conferência gravada à mão (77) quando o caso olha a conferência
   `!Number.isInteger(q)` → Q3.
 - **Recusas novas (literais congeladas):**
   - **Q1** 400: `⟨material_nome⟩: quantidade inválida para separar (⟨bruto⟩) — informe um número positivo, ou 0 para não separar este item`
-    (⟨bruto⟩ = `typeof bruto === 'object' ? JSON.stringify(bruto) : String(bruto)` — `-2`, `abc`, `Infinity`, `true`, `{}`)
-  - **Q2** 400: `Item ⟨item_id⟩ não pertence a esta requisição` (a D5 da 98; ⟨item_id⟩ = `String(entrada?.item_id)`)
+    (⟨bruto⟩ = `typeof bruto === 'object' ? JSON.stringify(bruto) : String(bruto)` — `-2`, `abc`, `Infinity`, `true`, `{}` — **Fase 2:** cortado em 40 caracteres com `…`; `JSON.stringify` que lança cai em `String`)
+  - **Q2** 400: `Item ⟨item_id⟩ não pertence a esta requisição` (a D5 da 98; ⟨item_id⟩ = `entrada && entrada.item_id`, a fórmula da D5 — Fase 2)
   - **Q3** 400: `⟨material_nome⟩: material com controle de série exige quantidade inteira na separação (informado: ⟨q⟩)`
     (⟨q⟩ = `Q.qtd`, ponto decimal: `1.5`)
   - **Q4** 400: `Informe os itens separados em lista (itens_separados)`
@@ -319,9 +365,10 @@ propósito, Etapa 94 I3) e restaura no `finally`.
 pela regra (a conferência não depende da forma da separação), mas roda **serial na mesma árvore** depois da T1: as duas
 sabotam `requisitionService.js`, lido pela suíte inteira (memória "sabotagem concorrente contamina a suíte"), e são
 pequenas demais para pagar uma worktree. T3 é a integração (cruza T1, T2 e a devolução da 98, pela rota **e** pelo
-serviço). T4 fecha. **Sem task de cliente** (B523).
+serviço). T4 fecha. **Fase 2: nasce a T2b (galho da T2, cliente)** — o "Conferir separação" do detalhe segue a caixa
+(B523 reescrita). Arquivo diferente (`client/`), contrato congelado (a literal da conferência) — roda em paralelo à T3.
 
-- [ ] **T1 (tronco) — a passada de forma da separação (B516–B521).** Contrato "separar". Testes `[99 RN-01]` a
+- [x] **T1 (tronco) — a passada de forma da separação (B516–B521).** Contrato "separar". Testes `[99 RN-01]` a
   `[99 RN-08]`, RN-01/03/05 pela rota **e** pelo serviço; RN-06 com o espião. **Edição declarada:**
   `separacaoComDono.api.test.js:224-226` — `rFantasma` passa a esperar 400 Q2 (comentário *"mudado na Etapa 99 (B518)"*);
   o resto daquele teste (0, `[]`, conferência fica) não muda. **Medir antes de editar:** `test:api` inteiro no HEAD e com
@@ -339,7 +386,23 @@ serviço). T4 fecha. **Sem task de cliente** (B523).
   - (s8) sem `Array.isArray` → cai RN-07 (objeto: 500; texto: 200);
   - (s9) a passada de forma validando item a item **dentro** da passada 1 com `continue` (como hoje) → cai RN-05 "A não
     separado".
-- [ ] **T2 (galho, serial depois da T1) — a conferência conta a caixa (B522) e o resíduo do liberar (RN-10).** Contrato
+  **Feito — `7353265d` (2026-10-15).** `separacaoFormaDaEntrada.api.test.js` 21/21 (12 vermelhos no HEAD; RN-02, RN-04
+  "2 e 1,0000001", "legado 0,5 + 1", "sem série 1,5" e RN-08 guardas verdes antes e depois). `separacaoComDono` 11/11 com
+  o `rFantasma` editado. **Divergências:** (1) a passada de forma lê `carregarItensRequisicao` uma vez, antes da alçada,
+  e a passada 1 reusa a leitura (Fase 2, nota 7); (2) as correções da Fase 2 entraram na T1 (fórmula D5, `?? []` na
+  rota, só-espaço = ausente, corte de 40, `JSON.stringify` protegido) com dois testes a mais; (3) o s9 do plano virou
+  "forma desligada" (o efeito de "validar dentro da passada 1 com `continue`" é o HEAD). **Controles (medidos, cada um
+  derruba a asserção nomeada):** s1 forma depois da reivindicação → 14 caem pelo "nada muda" (status vira
+  *Em Separação* — o desfazer da 92 não roda, a recusa fica fora do `try`); s2 depois da alçada → só a RN-06 alçada (403);
+  s3 `num()` → RN-01 "abc" (rota e svc), RN-05 svc, RN-06 aguardando, o corte de 40; s4 sem o `continue` → RN-02 "item
+  sem quantidade" (Q1 *undefined*); s5 `isInteger(bruto)` → RN-04 "1,0000001"; s6 acumulado → RN-04 "legado 0,5 + 1"; s7
+  item só com q > 0 → RN-03 "outra requisição com 0" e "entrada número"; s8 sem `isArray` → RN-07 (500 e 200); s9
+  desligada → 14 caem; s10 rota `|| []` → RN-07 Fase 2; s11 só-espaço → RN-02; s12 sem corte → RN-01 Fase 2; s13
+  `item_id` booleano/lista aceito → RN-03, **pela lista `[id]`** — o caso `true` não cai neste banco (o item 1 é de
+  outra montagem; `true` casaria o item 1 só se ele fosse da requisição): a asserção do `true` fica sem prova própria,
+  declarado. `test:api` 343/344 (o único vermelho: o teste da T2, ainda não implementada).
+
+- [x] **T2 (galho, serial depois da T1) — a conferência conta a caixa (B522) e o resíduo do liberar (RN-10).** Contrato
   "conferir-separacao". Testes `[99 RN-09]` pela rota **e** pelo serviço; `[99 RN-10]` acrescentado ao teste `[98 RN-03]
   (Fase 5)` de `devolverSeparado.api.test.js` (o caso 2,0000001; o comentário do 2,0000000001 corrigido **dizendo que
   ele não provava o ROUND**). **Vermelho antes:** RN-09 C1–C4 (C3' com 1e-7); RN-10 é verde antes (o `ROUND` do liberar
@@ -349,10 +412,23 @@ serviço). T4 fecha. **Sem task de cliente** (B523).
     (registrar a medida no plano: é a prova de que o teste da 98 era vazio para o `ROUND`);
   - (s2) `COALESCE(quantidade_entregue, 0)` sem `quantidade_atendida` → cai RN-09 C4;
   - (s3) a consulta de antes (`quantidade_separada > 0`) → cai RN-09 C1, C2, C3', C4.
-- [ ] **T3 (tronco, integração) — o documento até o último gesto, pela rota e pelo serviço.**
+  **Feito — `b8e16e4c` (2026-10-15).** `conferirCaixaVazia.api.test.js` 6/6 (5 vermelhos antes); `devolverSeparado` 40/40
+  com o RN-10. **Controles:** s1 conferência sem `ROUND` → só C3 (1e-7); s2 sem `quantidade_atendida` → só C4; s3 a
+  consulta de antes → C1, C2, C3, C4 e "o documento anda"; **s1b liberar sem `ROUND` → cai o `[98 RN-03] (Fase 5)` no
+  passo 2,0000001** (PRONTA em vez de 400) — o 1e-10 sozinho não caía (s6 da Fase 0): o teste da 98 era vazio para o
+  `ROUND`, agora não é.
+
+- [x] **T2b (galho da T2, cliente — nasce na Fase 2) — o "Conferir separação" do detalhe segue a caixa (B523).**
+  `RequisicoesList.js:1849`: `getSeparado(i) > 0` → `caixaDoItem(i) > 0` (molde do Liberar, `:1860`). Teste jest
+  `[99 RN-09]`: *Em Separação* com separado 2 e entregue 2 → o botão **não** aparece (e o "Ajustar Separação" aparece —
+  a metade positiva); separado 2, entregue 1 → aparece. **Controle:** voltar a `getSeparado` → cai o "não aparece".
+  **Feito — `c9087106` (2026-10-15).** Jest 39/39 no arquivo. **Controle:** voltar a `getSeparado` → 1 cai (o "não
+  aparece" com caixa 0); restaurado por cópia, md5 conferido.
+
+- [x] **T3 (tronco, integração) — o documento até o último gesto, pela rota e pelo serviço.**
   - **I1 crítico pela rota:** S pede 4; aprova; entra 4; ALMOX separa −2 → 400 Q1, *Totalmente Reservada*; separa 4 →
     200; ALMOX2 confere; entrega 2 → *Parcialmente Atendida*; separa `[{ item, −1 }]` → 400 Q1 e continua *Parcialmente
-    Atendida* (a fila ainda a mostra); devolve 2 (98) → caixa 0; "Separar de novo para conferir" (`[]`) → *Em
+    Atendida* (a fila ainda a mostra); devolve 2 (98) → caixa 0; `[]` pela API (= o modal zerado; Fase 2: o "Separar de novo para conferir" não aparece ali) → *Em
     Separação*; ALMOX2 confere → **400 *"Nenhum item separado"*** (C200); liberar → 400 *"Nenhum item separado"* (B512);
     ALMOX separa 2 → 200; ALMOX2 confere → 200; entrega 2 → *Entregue*. A trilha tem 2 `SEPARACAO`, 1 devolução, 2 saídas.
   - **I2 série pela rota:** material com série, entra 2 (séries), S pede 2, aprova; separa 1,5 → 400 Q3; separa 2 →
@@ -365,7 +441,18 @@ serviço). T4 fecha. **Sem task de cliente** (B523).
     ao confere vazio, com as mesmas literais; entrada `null` → 400 Q2 (não `TypeError`).
   - **Controles:** (s1) desfazer a T1 → cai I1 no primeiro passo (200 e *Em Separação*); (s2) desfazer a T2 → cai I1 no
     confere vazio (200); (s3) a forma depois da alçada (o s2 da T1) → cai I3. Cada recusa com a literal **inteira**.
-- [ ] **T4 — fechamento (skill `fechar-etapa`).** Novidades (B516–B523, C201–C203, A50; **C197** e **C200** anotados como
+  **Feito — `3e14653a` (2026-10-15).** `separacaoFormaDaEntradaIntegracao.api.test.js` 6/6 **de primeira** (I1, I2 série,
+  I2 legado + A50, **I2 C202 até o encerramento** — achado 4 da Fase 2, I3, I4). **Controles:** sem a T1 → 5 de 6 caem
+  (I2 legado fica: só usa entradas válidas); sem a T2 → I1 e I4 no conferir vazio; forma depois da alçada → só I3.
+
+  **Fase 4 (integração serial, árvore `3e14653a` antes do commit — mesma árvore):** `test:api` **345/345** arquivos (EXIT
+  0); `test:almoxarifado` **44/44**; `test:validation` 4/4, `test:safealter` 3/3, `test:sqlite` 5/5 (concorrência);
+  client jest **1502/1502** (96 suítes); `CI=true react-scripts build` EXIT 0. Sem worktree de galho: a T2b (cliente)
+  rodou na mesma árvore porque não toca o servidor nem sabota o que a suíte do servidor lê.
+
+- [x] **T4 — fechamento (skill `fechar-etapa`).** **Feito — `481eb653` (2026-10-15)** (a Fase 5 em `821fb03b`, `f1041706`;
+  ver "Fase 5" abaixo). Divergência: entrou a **B524** (regressão da Fase 5) e a T2b; a spec 05 corrigida à vista.
+  Novidades (B516–B523, C201–C203, A50; **C197** e **C200** anotados como
   resolvidos; a **B510** ganha "a porta que produzia a fração fecha na 99"; a B512 ganha a nota do resíduo (RN-10)),
   spec **05** (a separação recusa a forma inválida; a conferência conta a caixa; **corrigir à vista** o
   `README.md:705` — *"a separação aceitava quantidade negativa em silêncio (200, nada mudava — C197)"* **estava errado**:
@@ -401,13 +488,18 @@ nenhum gesto posterior recusa o que o anterior deixou, e que a recusa nova não 
 - **C201** — a separação passa a **recusar** (400, com a explicação) o que antes respondia *"Separação registrada"* sem
   separar: quantidade negativa, texto, item que não é da requisição, lista que não é lista, fração de material com
   série. Pela tela nada disso saía (o modal só manda números > 0 dos itens da requisição) — **exceto a fração em série**,
-  que agora vira toast. Quem integra pela API e mandava itens alheios ou zerados de outro jeito vê o erro.
+  que agora vira toast. Quem integra pela API e mandava itens alheios ou zerados de outro jeito vê o erro. Nota (Fase 2):
+  `1e400` digitado no modal vira `null` no JSON e o servidor lê como ausente — 200 sem separar (resíduo antigo da tela).
 - **C202** — a **criação** de requisição aceita fração de material com série (E7: pedir 1,5 → 201). A separação leva só
-  inteiros; o 0,5 que sobra nunca separa — a saída é encerrar a *Parcialmente Atendida*. Porta da feature 04, fora desta
+  inteiros; o 0,5 que sobra nunca separa — a saída é encerrar a *Parcialmente Atendida*. **Fase 2 (traçado até o último gesto):** "Completar
+  Entrega" abre o modal pré-preenchido com 0,5 → toast Q3; se o operador **zera** o modal, sai `[]` e a requisição vai
+  a *Em Separação* com a caixa vazia, de onde não há seta para encerrar nem cancelar (C195) — presa. A orientação é
+  **fechar o modal e Encerrar na *Parcialmente Atendida***. Não é regressão (antes separava 0,5 e travava na entrega). Porta da feature 04, fora desta
   etapa.
 - **C203** — conferir uma *Em Separação* com a caixa vazia passa a recusar *"Nenhum item separado"* (antes gravava a
   conferência sobre nada). A conferência gravada **antes** de uma entrega parcial continua sobre a caixa vazia até a
-  próxima rodada (contrato 28 RN-02 — inofensivo: a rodada limpa, o liberar recusa).
+  próxima rodada (contrato 28 RN-02 — inofensivo: a rodada limpa, o liberar recusa). **Fase 2:** a tela oferecia o
+  "Conferir separação" sobre a caixa vazia (olhava o separado acumulado) — a T2b faz o botão seguir a caixa.
 
 ---
 
@@ -484,10 +576,109 @@ vista no fechamento (T4), dizendo que estava errado.
 
 ---
 
-## Próximo passo
+## Próximo passo (escrito na Fase 1 — cumprido)
 
 **Fase 2** — revisão do plano por um agente fresco (skill `desenvolver-etapa-almoxarifado`, Fase 2) com as quatro
 perguntas: as literais Q1–Q4 cobrem os casos medidos? As RN batem com a spec 05 e com o contrato da 28 (RN-02)? A T2 é
 independente da T1 de verdade? **Cada RN seguida até o último gesto** — em especial: depois da recusa nova, *Parcialmente
 Atendida* ainda encerra, a *Em Separação* vazia ainda separa e a fila ainda a mostra, e a tela que manda `[]` ("Separar
 de novo para conferir", "Reabrir separação") não cai em nenhuma recusa nova.
+
+---
+
+## Fase 5 — revisão adversarial do código (2026-10-15) — 1 regressão real, 9 testes que faltavam
+
+Dois revisores frescos em worktrees próprias (`CRM-wt-e99rv1`, `CRM-wt-e99rv2`, HEAD `4e697218`, junction de
+`node_modules`), achado só com sonda executada.
+
+- **Revisor 1 (RN, fluxo até o último gesto, autorização) — 1 achado REAL, reproduzido na minha árvore.**
+  `conferenciaObrigatoria` (`requisitionService.js:496` — a régua que a fila, o detalhe, o liberar e a entrega usam para
+  exigir a segunda conferência) media a caixa **crua** `(separado − entregue) > 0`; a T2 fez a conferência medir a caixa
+  **arredondada**. Crítico com resto de legado (separado 2,0000001, entregue 2), *Em Separação*, sem conferência: fila
+  `["CONFERIR"]` com `posso_conferir`, conferir 400 *"Nenhum item separado"*, liberar 400, entregar 400 C3, encerrar 400
+  (sem seta), devolver 1e-7 400 — **presa**; antes da 99 a conferência aceitava (sonda no HEAD de antes: 200). **Esta
+  regressão é da própria etapa e o plano não a previu:** a RN-09 mediu o resíduo na conferência e não olhou a outra
+  régua que decide se ela é exigida — a pergunta 4 da Fase 2 ("o gesto posterior aceita o que o anterior aceitou?")
+  não foi feita para a **fila**. Consertado em `821fb03b` (**B524**): as três réguas são `Q.qtd(separado − entregue) >
+  1e-9`. Teste `[99 RN-09] (Fase 5) critico com resto …` (fila sem CONFERIR, detalhe sem obrigatória, a metade positiva
+  SEPARAR, o controle 1e-6 ainda obrigatório). **Controle:** voltar à régua crua → cai o teste pela fila
+  `["SEPARAR","CONFERIR"]`. Sondado e passou (rv1): `item_id` texto, `"1,5"` (Q1), `" 2 "`, ±1e-7, os envios vazios da
+  tela, listas malformadas, a ordem perfil (403) → 404 → status → forma, os únicos chamadores (as duas rotas; a tela).
+- **Revisor 2 ("o teste passaria com a feature quebrada?") — 20 sabotagens, 9 verdes; 7 viram teste, 2 equivalentes.**
+  Lacunas de uso normal: a série lida pelo material de **outro** item (todo RN-04 usava requisição de um item) e a
+  ordem Q2 → Q1 dentro da linha. Mais: `"1,5"`, `item_id` fracionário, o corte 40/41, o serviço com `null`, o `ROUND` de 5
+  casas na conferência (C3 só usava 1e-7), e no cliente o botão com o entregue só em `quantidade_atendida`, com o resto
+  2,0000001 e com a menor caixa real. `f1041706`. **Medido:** cada sabotagem do revisor (S1c, S3, S5, S6, S11, S12, S15,
+  C1, C2, C3) derruba agora o teste nomeado; o C3 (`caixaDoItem > 1e-3`) **não** caía com a fixture 0,5 que escrevi
+  primeiro — trocada para 2,000001 − 2, e aí cai. **Sem teste (mutações equivalentes nos dados possíveis):** `> 0` em vez
+  de `> 1e-9` depois do `ROUND` (o resto é 0 ou ≥ 1e-6) e o entregue só por `quantidade_atendida` (a entrega grava as
+  duas iguais).
+
+**Verificação depois da Fase 5 (árvore `f1041706`):** `test:api` **345/345** (EXIT 0); `test:almoxarifado` **44/44**;
+`test:validation` 4/4; `test:safealter` 3/3; `test:sqlite` 5/5; client jest **1504/1504** (96 suítes); `CI=true
+react-scripts build` EXIT 0.
+
+---
+
+## Retro de 4 números
+
+- **Rodadas de correção até verde:** 1 por task (nenhum teste ficou vermelho em duas rodadas). A Fase 5 custou uma
+  rodada de código (B524) e uma de teste (a fixture do C3 que não sabia falhar; o estoque esgotado no teste de dois
+  itens).
+- **Achados de revisão:** Fase 2 — 8 (1 trava, 3 correções, 4 notas), **todos reais** (aceitos e incorporados). Fase 5 —
+  rv1: **1 real** (reproduzido), 0 ruído; rv2: 9 sabotagens verdes → **7 reais** (viraram teste) e **2 ruído** (mutações
+  equivalentes).
+- **Paralelismo:** 0 galho de código em worktree (T1/T2 seriais por sabotarem o mesmo arquivo; a T2b, cliente, na mesma
+  árvore sem conflito). Em paralelo de fato: a revisão do plano × a escrita dos testes da T1, a suíte do cliente × a do
+  servidor, os dois revisores da Fase 5 (worktrees próprias) × o agente da documentação. **Retrabalho:** o teste da T1
+  ganhou as correções da Fase 2 depois de escrito (barato: 3 linhas).
+- **Defeito que escapou:** *(preencher na Etapa 101.)*
+
+---
+
+## Próxima tarefa detalhada — Etapa 101 (a 100 foi da frente de Compras)
+
+**Tema: a *Em Separação* vazia tem saída (C195), e a criação de requisição recusa fração de material com série
+(C202).** As duas pontas do mesmo beco: hoje uma *Em Separação* sem nada na caixa (o "Iniciar Separação" sem quantidade,
+a devolução de tudo à prateleira, o modal zerado na *Parcialmente Atendida*) **não encerra nem cancela** —
+`TRANSICOES.EM_SEPARACAO` = `['PRONTA_PARA_RETIRADA', 'PARCIALMENTE_ATENDIDA', 'ENTREGUE', 'AGUARDANDO_APROVACAO_VALOR']`
+(`requisitionStateMachine.js`). Com a 99, o C202 (pedir 1,5 de série) leva o operador direto a ela se ele zerar o modal.
+
+**Fase 0 — medir antes de prometer (nada disto está medido):**
+1. Os caminhos até a *Em Separação* vazia: com **nada entregue** (Iniciar Separação; separar tudo e devolver tudo) e
+   **com entregue** (entrega parcial + `[]`; devolução depois de entrega parcial). Para cada um: o que quem pediu, o
+   almoxarife e o administrador conseguem fazer (cancelar pelos outros módulos, `PUT /api/almoxarifado/requisicoes/:id/
+   cancelar` — só o solicitante ou o admin do sistema, `routes/almoxarifado.js:4156`; encerrar
+   `PUT …/:id/encerrar` — `aprovar_requisicao`, `:4021`; excluir — só o administrador).
+2. A criação com fração de série: `requisitionCreateService.js` (o laço `itensQtd`, ~`:206`, só recusa `!(q > 0)`), o
+   `RequisicaoSchema` (Zod) e **todas** as portas que gravam `quantidade_solicitada` (criar, enviar o rascunho, editar
+   itens se existir — `grep -rn "quantidade_solicitada" server/routes server/services`). A tela de criação: o `step` do
+   campo e se ela conhece `controle_serie` do material.
+3. Quem lê `CANCELAVEIS_OUTROS_MODULOS` (`requisitionStateMachine.js:119`) e o espelho do cliente
+   (`requisicaoLabels.js`, `STATUS_CANCELAVEIS_OUTROS_MODULOS`) — a paridade tem teste.
+
+**Contrato candidato (a Fase 1 decide; registrar as alternativas na letra B):**
+- **Cancelar a *Em Separação* vazia sem nada entregue:** seta `EM_SEPARACAO → CANCELADO` **só** com caixa 0 e entregue 0
+  em todos os itens (régua `Q.qtd(separado − entregue) > 1e-9` da B524 e `getEntregue = 0`), solta as reservas
+  (`reservationService.liberarReservasDaRequisicao`), sob a trava por requisição (hoje os cancelamentos ficam **fora**
+  dela — B450; a separação reivindica com `WHERE status IN PODE_SEPARAR`, e `CANCELADO` não está lá — conferir a corrida
+  separar × cancelar de novo, C164/C149). Decidir se entra em `CANCELAVEIS_OUTROS_MODULOS` (quem pediu) ou só no
+  almoxarifado.
+- **Encerrar a *Em Separação* vazia com algo entregue:** seta `EM_SEPARACAO → ENCERRADA` só com caixa 0 (ou voltar a
+  *Parcialmente Atendida*) — e o `encerrar` (`:4021`) já valida pela máquina. Pensar no C174 (entregue > 0, sem físico).
+- **C202:** a criação (e o envio do rascunho) recusa quantidade não inteira de material com `controle_serie = 1`, com a
+  frase no molde da Q3 da 99; o rascunho já gravado com fração — decidir se o envio recusa (provável) e consulta A para
+  o que já existe (requisições abertas com `quantidade_solicitada` fracionária de material com série).
+
+**Pontos de atenção:**
+- A régua da caixa é **uma só** desde a B524 — `conferenciaObrigatoria`, `conferirSeparacao`, o liberar (`routes:3890`) e
+  a tela (`caixaDoItem`). Qualquer regra nova de "caixa vazia" usa a mesma, ou a 99 se repete.
+- A recusa de forma da separação (99) vem **antes** da alçada; um cancelamento novo não pode deixar *Aguardando aprovação
+  de valor* gravada (a alçada é `verificarBloqueioLiberacao`, que escreve).
+- A trava por requisição não é reentrante; o cancelamento chamando liberação de reserva pega a trava por material
+  dentro dela (ordem requisição → material, a permitida — CLAUDE.md, "Trava por material").
+- Teste de integração pela rota **e** pelo serviço, seguindo o documento até *Cancelado*/*Encerrada* e conferindo que a
+  reserva saiu e a fila não mostra mais a requisição.
+
+**O que já está pronto e não precisa reabrir:** a forma da separação (Q1–Q4, B516–B521), a conferência e o liberar na
+régua da caixa (B512, B522, B524), a devolução à prateleira (98), a A50.
