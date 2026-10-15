@@ -4,9 +4,15 @@ import { toast } from 'react-toastify';
 import { FiArrowLeft, FiUser, FiLock, FiCamera, FiTrash2, FiSave } from 'react-icons/fi';
 import api from '../services/api';
 import AvatarUsuario from './AvatarUsuario';
+import Tabs from './ui/Tabs';
 import { useAuth } from '../context/AuthContext';
 import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../utils/telefone';
 import './MinhaConta.css';
+
+const ABAS_CONTA = [
+  { id: 'perfil', label: 'Informações pessoais', icon: FiUser },
+  { id: 'senha', label: 'Alterar senha', icon: FiLock },
+];
 
 export default function MinhaConta() {
   const navigate = useNavigate();
@@ -179,14 +185,8 @@ export default function MinhaConta() {
         </div>
       </div>
 
-      <div className="conta-tabs">
-        <button className={aba === 'perfil' ? 'ativa' : ''} onClick={() => setAba('perfil')}>
-          <FiUser /> Informações pessoais
-        </button>
-        <button className={aba === 'senha' ? 'ativa' : ''} onClick={() => setAba('senha')}>
-          <FiLock /> Alterar senha
-        </button>
-      </div>
+      {/* Etapa 107 (G8, RN-107.12): a barra e o `ui/Tabs` (antes `.conta-tabs` com CSS proprio). */}
+      <Tabs abas={ABAS_CONTA} ativa={aba} onChange={setAba} ariaLabel="Minha conta" />
 
       {aba === 'perfil' && (
         <form className="conta-card" onSubmit={salvarPerfil}>
