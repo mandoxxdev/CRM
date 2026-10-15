@@ -271,6 +271,97 @@ const E4 = (codigo) => `O cadastro do material ${codigo} mudou enquanto era salv
     assert.strictEqual(r.body.error, e1(m.codigo, 'lote', 'há 3 sem lote atribuído', 'ALMOXARIFE'));
   });
 
+  // ── Fase 5 (revisao por sabotagem): cenarios que faltavam ─────────────────────────────────────────────────────────
+  const SQL_FAM = /^SELECT id, ativo, parent_id FROM familias_material_almoxarifado WHERE id = \?$/;
+
+  await test('[RN-03 F5] serie BLOQUEADA conta como presente: 1 em estoque + 1 bloqueada, fisico 2 -> religar 200', async () => {
+    const m = await material({ extra: { controle_serie: 1 } });
+    await lancar(m, { tipo: 'ENTRADA', quantidade: 2, series: ['X1', 'X2'] });
+    await dbRun(db, "UPDATE series_almoxarifado SET status = 'BLOQUEADA' WHERE material_id = ? AND numero = 'X2'", [m.id]);
+    await grava(ALMOXARIFE, m, { controle_serie: 0 }, { controle_serie: 0 });
+    await grava(ALMOXARIFE, m, { controle_serie: 1 }, { controle_serie: 1 });
+  });
+
+  await test('[RN-06 F5] janela: sobra fracionaria 0.4 sem lote -> 403 E1 "ha 0.4" (a regua do UPDATE arredonda a 6 casas)', async () => {
+    const m = await material();
+    injecoes = [{ sql: SQL_GUARDA,
+      depois: () => dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 0.4 WHERE id = ?', [m.id]) }];
+    const r = await put(ALMOXARIFE, m.id, { controle_lote: 1 });
+    assert.strictEqual(injecoes.length, 0, 'injecao nao consumida');
+    assert.strictEqual(r.status, 403, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, e1(m.codigo, 'lote', 'há 0.4 sem lote atribuído', 'ALMOXARIFE'));
+    assert.strictEqual((await linha(m.id)).controle_lote, 0);
+  });
+
+  await test('[RN-06 F5] janela serie: fisico 0.4 -> 403 E1 "o fisico e 0.4 e ha 0"', async () => {
+    const m = await material();
+    injecoes = [{ sql: SQL_GUARDA,
+      depois: () => dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 0.4 WHERE id = ?', [m.id]) }];
+    const r = await put(ENGENHARIA, m.id, { controle_serie: 1 });
+    assert.strictEqual(injecoes.length, 0, 'injecao nao consumida');
+    assert.strictEqual(r.status, 403, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, e1(m.codigo, 'serie', 'o físico é 0.4 e há 0 série(s) em estoque', 'ENGENHARIA'));
+  });
+
+  await test('[RN-06 F5] janela com os dois ligando: Entrada COM lote de 2 -> E1 so pela serie (as reguas se somam por AND)', async () => {
+    const m = await material();
+    injecoes = [{ sql: SQL_GUARDA, depois: async () => {
+      const l = (await dbRun(db, "INSERT INTO lotes_almoxarifado (material_id, codigo) VALUES (?, 'LJ')", [m.id])).lastID;
+      await dbRun(db, 'INSERT INTO estoque_saldo_almoxarifado (material_id, lote_id, quantidade) VALUES (?, ?, 2)', [m.id, l]);
+      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 2 WHERE id = ?', [m.id]);
+    } }];
+    const r = await put(ALMOXARIFE, m.id, { controle_lote: 1, controle_serie: 1 });
+    assert.strictEqual(injecoes.length, 0, 'injecao nao consumida');
+    assert.strictEqual(r.status, 403, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, e1(m.codigo, 'ambos', 'o físico é 2 e há 0 série(s) em estoque', 'ALMOXARIFE'));
+    const l = await linha(m.id);
+    assert.strictEqual(l.controle_lote, 0);
+    assert.strictEqual(l.controle_serie, 0);
+  });
+
+  await test('[RN-03 F5] residuo 1e-7 (arredonda a 0 em 6 casas): o Almoxarife liga o lote e a serie (200)', async () => {
+    await grava(ALMOXARIFE, await material({ extra: { quantidade_atual: 1e-7 } }), { controle_lote: 1 }, { controle_lote: 1 });
+    await grava(ALMOXARIFE, await material({ extra: { quantidade_atual: 1e-7 } }), { controle_serie: 1 }, { controle_serie: 1 });
+  });
+
+  await test('[RN-01 F5] serie com fisico 0.1 + 0.2: a mensagem diz "o fisico e 0.3"', async () => {
+    const m = await material({ extra: { quantidade_atual: 0.1 + 0.2 } });
+    await recusa(ALMOXARIFE, m, { controle_serie: 1 }, 'serie', 'o físico é 0.3 e há 0 série(s) em estoque', 'ALMOXARIFE');
+  });
+
+  await test('[RN-06 F5] troca de familia (ativa) mantendo o lote ligado, pelo Almoxarife: 200 e grava a familia', async () => {
+    const f = (await dbRun(db, "INSERT INTO familias_material_almoxarifado (codigo, nome, ativo) VALUES ('PF1', 'PF1', 1)")).lastID;
+    const m = await comSaldo(5);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_lote = 1 WHERE id = ?', [m.id]);
+    await grava(ALMOXARIFE, m, { familia_id: f, controle_lote: 1 }, { familia_id: f, controle_lote: 1 });
+  });
+
+  await test('[RN-06 F5] troca de familia (ativa) e liga o lote sem saldo, pela Engenharia: 200', async () => {
+    const f = (await dbRun(db, "INSERT INTO familias_material_almoxarifado (codigo, nome, ativo) VALUES ('PF2', 'PF2', 1)")).lastID;
+    await grava(ENGENHARIA, await material(), { familia_id: f, controle_lote: 1 }, { familia_id: f, controle_lote: 1 });
+  });
+
+  await test('[RN-06 F5] o Administrador mantem ligado e outra aba desliga na janela: sem condicao -> 200, fica ligado', async () => {
+    const m = await material({ extra: { controle_lote: 1 } });
+    injecoes = [{ sql: SQL_LEITURA,
+      depois: () => dbRun(db, 'UPDATE materiais_almoxarifado SET controle_lote = 0 WHERE id = ?', [m.id]) }];
+    const r = await put(ADM_PERFIL, m.id, { nome: 'Adm grava', controle_lote: 1 });
+    assert.strictEqual(injecoes.length, 0, 'injecao nao consumida');
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual((await linha(m.id)).controle_lote, 1);
+  });
+
+  await test('[RN-07 F5] o Administrador liga com saldo e a familia nova e inativada na janela -> 400 da familia, nunca E1', async () => {
+    const f = (await dbRun(db, "INSERT INTO familias_material_almoxarifado (codigo, nome, ativo) VALUES ('PF3', 'PF3', 1)")).lastID;
+    const m = await comSaldo(5);
+    injecoes = [{ sql: SQL_FAM,
+      depois: () => dbRun(db, 'UPDATE familias_material_almoxarifado SET ativo = 0 WHERE id = ?', [f]) }];
+    const r = await put(ADM_PERFIL, m.id, { familia_id: f, controle_lote: 1 });
+    assert.strictEqual(injecoes.length, 0, 'injecao nao consumida');
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, 'Família inativa — não é possível vincular novos itens');
+  });
+
   await close();
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed ? 1 : 0);
