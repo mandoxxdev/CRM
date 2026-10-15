@@ -205,6 +205,33 @@ function mensagemSaldoInicialSemPermissao(perfil) {
     + 'Entrada em Movimentações.';
 }
 
+/**
+ * Etapa 110 (C218, B61 de Compras, RN-06/RN-07) — a condicao da familia DENTRO do comando que grava o material.
+ *
+ * O cadastro conferia a familia (`validateFamiliaAtiva`) e gravava o material em comandos separados, e o "Inativar"
+ * da familia contava os materiais ativos e gravava `ativo = 0` tambem em comandos separados: disparados juntos, os dois
+ * passavam (30 de 30 na Fase 0) e ficava familia inativa com material ativo — o estado que as duas regras proibem. Uma
+ * conexao SQLite executa um comando inteiro antes ou depois do outro; com a condicao no proprio INSERT/UPDATE (aqui) e a
+ * condicao inversa no UPDATE da familia (rotas de familia), um dos dois sempre ve o outro.
+ * As MESMAS reguas de validateFamiliaAtiva (raiz, ativo = 1) e validateSubfamilia (filha da familia, ativa).
+ * `opcoes.familia` / `opcoes.sub` dizem quais das duas entram (o PUT so poe as que ele valida).
+ */
+function condicaoFamiliaSql(familiaId, subfamiliaId, { familia = true, sub = true } = {}) {
+  const partes = []; const params = [];
+  if (familia && familiaId) {
+    partes.push('EXISTS (SELECT 1 FROM familias_material_almoxarifado WHERE id = ? AND ativo = 1 AND parent_id IS NULL)');
+    params.push(familiaId);
+  }
+  if (sub && subfamiliaId) {
+    partes.push('EXISTS (SELECT 1 FROM familias_material_almoxarifado WHERE id = ? AND parent_id = ? AND ativo = 1)');
+    params.push(subfamiliaId, familiaId);
+  }
+  return { sql: partes.length > 0 ? partes.join(' AND ') : '1 = 1', params };
+}
+
+/** E3 (RN-06): a familia mudou de novo depois da releitura — praticamente inalcancavel, mas nunca gravar nem mentir. */
+const FAMILIA_MUDOU_NO_CADASTRO = 'A família do material mudou enquanto ele era cadastrado — nada foi gravado. Tente de novo.';
+
 /** Quantas vezes createMaterial regera o codigo quando `codigo_auto` esta ligado. */
 const TENTATIVAS_CODIGO_AUTO = 5;
 
@@ -313,16 +340,32 @@ async function createMaterial(db, user, data) {
   };
   const insertColumns = Object.keys(insertValues);
 
+  // Etapa 110 (RN-06): a condicao da familia vai em TODAS as tentativas. Sem linha do SELECT nao ha colisao de UNIQUE —
+  // "nao gravou pela familia" nunca vira "Código já existe". Nao gravou -> rele (a literal de hoje); se a releitura passar
+  // (desfeito na janela), tenta UMA vez mais sem gastar tentativa de codigo; nao gravou de novo -> E3.
+  const condFamilia = condicaoFamiliaSql(familia_id, subfamilia_id || null);
   let id = null;
+  let releuFamilia = false;
   const tentativas = codigo_auto ? TENTATIVAS_CODIGO_AUTO : 1;
   for (let i = 0; i < tentativas && id === null; i += 1) {
     try {
       const result = await dbRun(db, `INSERT INTO materiais_almoxarifado
         (${insertColumns.join(', ')})
-        VALUES (${insertColumns.map(() => '?').join(',')})`,
-        insertColumns.map((c) => insertValues[c]));
-      id = result.lastID;
+        SELECT ${insertColumns.map(() => '?').join(',')}
+        WHERE ${condFamilia.sql}`,
+        [...insertColumns.map((c) => insertValues[c]), ...condFamilia.params]);
+      if (result.changes === 1) { id = result.lastID; continue; }
+      try {
+        await validateFamiliaAtiva(db, familia_id);
+        await validateSubfamilia(db, subfamilia_id || null, familia_id);
+      } catch (eFam) {
+        throw erro(eFam.message, 400);
+      }
+      if (releuFamilia) throw erro(FAMILIA_MUDOU_NO_CADASTRO, 409);
+      releuFamilia = true;
+      i -= 1;
     } catch (err) {
+      if (err.status) throw err;
       if (!(err.message && err.message.includes('UNIQUE'))) throw erro(err.message, 500);
       // Regera SO quando a flag esta ligada, e SO se ainda ha tentativa pela frente. Sem ela, a
       // colisao e resposta ao usuario, nao acidente a contornar.
@@ -378,6 +421,7 @@ module.exports = {
   FAMILIA_E_SUBFAMILIA,
   bool01, validateFamiliaAtiva, validateSubfamilia, resolveLocalizacaoFromFk, validarLocalizacaoPadrao,
   proximoCodigo, createMaterial, TENTATIVAS_CODIGO_AUTO,
+  condicaoFamiliaSql, FAMILIA_MUDOU_NO_CADASTRO,
   SALDO_INICIAL_MOTIVO, quantidadeSaldoInicial, temSaldoInicial, motivosSaldoInicialRecusado,
   mensagemSaldoInicialRecusado, mensagemSaldoInicialSemPermissao,
 };
