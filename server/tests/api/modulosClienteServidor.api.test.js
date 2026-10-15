@@ -37,6 +37,14 @@ function listaDoCliente(src, nome) {
   assert.ok(itens.length > 0, `lista ${nome} vazia em modulosMeta.js`);
   return itens;
 }
+/** Le `export const NOME = { chave: 'Nome', ... };` do arquivo do cliente. Falha alto se nao achar. */
+function objetoDoCliente(src, nome) {
+  const m = src.match(new RegExp(`export const ${nome} = \\{([^}]*)\\};`));
+  assert.ok(m, `objeto ${nome} nao encontrado em modulosMeta.js (o teste nao pode passar vazio)`);
+  const pares = [...m[1].matchAll(/([a-z_]+): '([^']+)'/g)].map((p) => [p[1], p[2]]);
+  assert.ok(pares.length > 0, `objeto ${nome} vazio em modulosMeta.js`);
+  return Object.fromEntries(pares);
+}
 const ordenado = (xs) => [...xs].sort();
 const menos = (a, b) => a.filter((x) => !b.includes(x));
 
@@ -112,6 +120,27 @@ const menos = (a, b) => a.filter((x) => !b.includes(x));
       { soNaTela: ['todolist'], soNoServidor: ['admin'] },
       'a divergencia do admin de modulo mudou — atualize a B60 de docs/compras-novidades-por-etapa.md e este teste'
     );
+  });
+
+  /* ── RN-111.04 nome do modulo: servidor x cliente x App.js (Etapa 111, G17) ───────── */
+  test('RN-111.04 NOMES_MODULO (cliente) = nome do servidor, para os 11 modulos com tela', () => {
+    const { MODULOS_SISTEMA } = require('../../services/modulosSistema');
+    const cliente = objetoDoCliente(src, 'NOMES_MODULO');
+    const ordem = listaDoCliente(src, 'MODULOS_ORDEM');
+    assert.deepStrictEqual(ordenado(Object.keys(cliente)), ordenado(ordem), 'NOMES_MODULO tem de ter as chaves de MODULOS_ORDEM');
+    const nomeServidor = (k) => (MODULOS_SISTEMA.find((m) => m.chave === k) || {}).nome;
+    const diferentes = ordem.filter((k) => nomeServidor(k) !== cliente[k])
+      .map((k) => `${k}: cliente "${cliente[k]}" x servidor "${nomeServidor(k)}"`);
+    assert.deepStrictEqual(diferentes, []);
+  });
+
+  test('RN-111.04 cada <ProtectedModuleRoute modulo nomeModulo> do App.js usa o nome de NOMES_MODULO (11 de 11)', () => {
+    const cliente = objetoDoCliente(src, 'NOMES_MODULO');
+    const app = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'client', 'src', 'App.js'), 'utf8');
+    const rotas = [...app.matchAll(/<ProtectedModuleRoute modulo="([a-z_]+)" nomeModulo="([^"]+)">/g)].map((m) => [m[1], m[2]]);
+    assert.strictEqual(rotas.length, 11, `esperava 11 ProtectedModuleRoute com modulo e nomeModulo no App.js, achei ${rotas.length}`);
+    const diferentes = rotas.filter(([k, n]) => cliente[k] !== n).map(([k, n]) => `${k}: App.js "${n}" x NOMES_MODULO "${cliente[k]}"`);
+    assert.deepStrictEqual(diferentes, []);
   });
 
   console.log(`\n${passed} passaram, ${failed} falharam\n`);

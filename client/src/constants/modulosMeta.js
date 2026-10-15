@@ -105,6 +105,28 @@ export const MODULOS_SO_PERMISSAO = {
   relatorios: { nome: 'Relatórios', descricaoAcesso: 'Análises e relatórios executivos' },
 };
 
+/**
+ * Nome do módulo na tela de acesso negado, no "Carregando ..." e no log de auditoria (Etapa 111, G17).
+ * Admin é "Administração" aqui — não "Admin" como no cartão da seleção —, porque é o nome que o acesso
+ * negado e o log sempre usaram (B62). O servidor tem a mesma lista (`MODULOS_SISTEMA[].nome` em
+ * `server/services/modulosSistema.js`, que grava o log dos 403 das rotas); o teste cruzado
+ * `modulosClienteServidor.api.test.js` lê ESTE objeto como texto e cai se divergirem — por isso ele fica no
+ * formato `chave: 'Nome',` (literal, aspas simples), e confere também os `nomeModulo` do `App.js`.
+ */
+export const NOMES_MODULO = {
+  comercial: 'Comercial',
+  compras: 'Compras',
+  financeiro: 'Financeiro',
+  operacional: 'Operacional',
+  engenharia: 'Cálculos de Engenharia',
+  engenharia_projetos: 'Engenharia / Projetos',
+  almoxarifado: 'Almoxarifado',
+  frota: 'Frota',
+  todolist: 'TODOLIST',
+  administrativo: 'Administrativo',
+  admin: 'Administração',
+};
+
 // Ordem de exibição das badges (menu e lista de usuários) e da barra de módulos de Configurações.
 export const MODULOS_ORDEM = [
   'comercial', 'compras', 'financeiro', 'operacional', 'engenharia',

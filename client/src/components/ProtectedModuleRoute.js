@@ -11,6 +11,7 @@ import { bypassModuleRestrictions, isSystemAdmin } from '../utils/systemPermissi
 import AcessoNegado from './AcessoNegado';
 import SplashScreen from './SplashScreen';
 import { RouteLoading } from './LazyPage';
+import { NOMES_MODULO } from '../constants/modulosMeta';
 
 const lastModuleSplashRef = { module: null, at: 0 };
 const activeModuleSessionRef = { current: null };
@@ -243,21 +244,7 @@ const ProtectedModuleRoute = ({ children, modulo, nomeModulo }) => {
   }
 
   if (temAcesso === false) {
-    const nomesModulos = {
-      comercial: 'Comercial',
-      compras: 'Compras',
-      financeiro: 'Financeiro',
-      operacional: 'Operacional',
-      engenharia: 'Cálculos de Engenharia',
-      engenharia_projetos: 'Engenharia / Projetos',
-      almoxarifado: 'Almoxarifado',
-      frota: 'Frota',
-      todolist: 'TODOLIST',
-      administrativo: 'Administrativo',
-      admin: 'Administração',
-    };
-
-    const nomeModuloExibir = nomeModulo || nomesModulos[moduloDetectado] || 'este módulo';
+    const nomeModuloExibir = nomeModulo || NOMES_MODULO[moduloDetectado] || 'este módulo';
     return <AcessoNegado modulo={moduloDetectado} nomeModulo={nomeModuloExibir} />;
   }
 
