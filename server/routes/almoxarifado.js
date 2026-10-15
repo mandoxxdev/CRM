@@ -2704,9 +2704,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // parent_id = 0 e raiz, como o eraRaiz da 103). Mudando de pai, decide validateParentFamilia, como antes.
       const conferirReativacao = (seguir) => {
         if (!reativa || !current.parent_id || nivelMuda) return seguir();
-        db.get('SELECT ativo FROM familias_material_almoxarifado WHERE id = ?', [current.parent_id], (errPai, paiRow) => {
+        db.get('SELECT ativo, parent_id FROM familias_material_almoxarifado WHERE id = ?', [current.parent_id], (errPai, paiRow) => {
           if (errPai) return res.status(500).json({ error: errPai.message });
           if (!paiRow) return res.status(400).json({ error: 'Família pai não encontrada' });
+          // Fase 5 (B-a): o pai que tambem e sub (o terceiro nivel legado de antes da 103) — reativar a neta
+          // traria o terceiro nivel de volta. A literal e a de validateParentFamilia.
+          if (paiRow.parent_id) return res.status(400).json({ error: 'Subfamília não pode ter filhos (máximo 2 níveis)' });
           if (Number(paiRow.ativo) !== 1) {
             return res.status(400).json({ error: 'Não é possível reativar: a família principal desta subfamília está inativa — reative a família principal antes' });
           }
@@ -2736,8 +2739,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         // Um parent_id preservado (omitido → veio do current) já era válido quando foi
         // setado; revalidar quebraria a edição de uma subfamília cujo pai foi inativado
         // depois (ex.: renomear a subfamília não deveria falhar por causa disso).
+        //
+        // Fase 5 da Etapa 105 (B-b): "novo" = DIFERENTE do gravado (`nivelMuda`), nao apenas informado. Repetir o pai
+        // gravado e o mesmo que omiti-lo — antes, a sub ativa sob raiz inativa nao se inativava nem renomeava
+        // repetindo o parent_id (400 "maximo 2 niveis", que nao descreve o caso).
         const seguirParaOPai = () => {
-          if (parentId && !parentIdOmitted) {
+          if (parentId && nivelMuda) {
             validateParentFamilia(parentId, (errParent) => {
               if (errParent) return res.status(400).json({ error: errParent.message });
               applyUpdate();

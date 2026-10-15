@@ -272,6 +272,40 @@ const L_PAI = 'Família pai não encontrada';
     assert.strictEqual(depois.parent_id, Rativa);
   });
 
+  // ── Fase 5 (revisao adversarial) ─────────────────────────────────────────────
+  await test('Fase 5 (B-a) reativar sub cujo pai tambem e sub (3o nivel legado) sem parent_id -> 400 maximo 2 niveis', async () => {
+    const R = await fam();
+    const M = await fam(R);
+    const S = await fam(M, 0);
+    recusa(await put(S, { nome: 'Neta', ativo: 1 }), 'Subfamília não pode ter filhos (máximo 2 níveis)');
+    assert.strictEqual((await linha(S)).ativo, 0);
+  });
+
+  await test('Fase 5 (B-b) sub ativa sob raiz inativa: inativar repetindo o parent_id -> 200 (o pai repetido nao e revalidado)', async () => {
+    const Ri = await fam(null, 0);
+    const S = await fam(Ri, 1);
+    aceita(await put(S, { nome: 'Sub', ativo: 0, parent_id: Ri }));
+    assert.strictEqual((await linha(S)).ativo, 0);
+    aceita(await put(S, { nome: 'Sub renomeada', parent_id: String(Ri) }));
+    assert.strictEqual((await linha(S)).nome, 'Sub renomeada');
+  });
+
+  await test('Fase 5 recusa (L-I, L-R, ativo invalido) nao grava auditoria; o 200 grava uma linha', async () => {
+    const contar = async (id) => (await dbGet(db,
+      "SELECT COUNT(*) AS c FROM auditoria_log_almoxarifado WHERE entidade = 'familia' AND entidade_id = ?", [id])).c;
+    const R = await fam();
+    await mat(R);
+    const Ri = await fam(null, 0);
+    const S = await fam(Ri, 0);
+    recusa(await put(R, { nome: 'x', ativo: 0 }), L_I(1));
+    recusa(await put(R, { nome: 'x', ativo: 7 }), 'Ativo inválido: use 0 ou 1');
+    recusa(await put(S, { nome: 'x', ativo: 1 }), L_R);
+    assert.strictEqual(await contar(R), 0, 'recusa nao audita');
+    assert.strictEqual(await contar(S), 0, 'recusa nao audita');
+    aceita(await put(R, { nome: 'Renomeada' }));
+    assert.strictEqual(await contar(R), 1, 'o 200 audita uma linha (metade positiva)');
+  });
+
   await test('RN-105.04 (B1) legado com parent_id = 0 e raiz: reativar -> 200 (nao procura o pai 0)', async () => {
     const R = await fam(0, 0);
     aceita(await put(R, { nome: 'Legado zero', ativo: 1 }));
