@@ -87,11 +87,14 @@ const VOLATEIS = new Set(['id', 'codigo', 'nome', 'created_at', 'updated_at']);
   await test('createMaterial grava a movimentacao de saldo inicial igual a rota', async () => {
     // Efeito colateral que mora DENTRO do handler hoje (routes/almoxarifado.js:459-464) e que um
     // refactor "so mover o INSERT" perde em silencio — o material nasceria com saldo e sem historia.
+    // Etapa 110 (C215, RN-02): o corpo completo tem controle por lote e inspecao, que agora recusam o saldo inicial (400);
+    // a comparacao rota x servico do saldo inicial e feita com material sem esses dois controles.
+    const SEM_CONTROLE_QUE_RECUSA_SALDO = { controle_lote: 0, requer_inspecao: 0 };
     setUser(ADMIN);
     await request(app).post('/api/almoxarifado/materiais')
-      .send(corpo({ codigo: 'MOV-ROTA', nome: 'Rota com saldo', quantidade_atual: 40 }));
+      .send(corpo({ codigo: 'MOV-ROTA', nome: 'Rota com saldo', quantidade_atual: 40, ...SEM_CONTROLE_QUE_RECUSA_SALDO }));
     const doServico = await materialService.createMaterial(db, ADMIN,
-      corpo({ codigo: 'MOV-SVC', nome: 'Servico com saldo', quantidade_atual: 40 }));
+      corpo({ codigo: 'MOV-SVC', nome: 'Servico com saldo', quantidade_atual: 40, ...SEM_CONTROLE_QUE_RECUSA_SALDO }));
     const daRota = await dbGet(db, 'SELECT id FROM materiais_almoxarifado WHERE codigo = ?', ['MOV-ROTA']);
 
     const movs = await dbAll(db,

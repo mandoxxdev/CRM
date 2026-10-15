@@ -1,6 +1,8 @@
 # 01 — Cadastros de Materiais
 
-> **Status:** 🟡 — **continua 🟡; a Etapa 66 fecha mais um item** (motivos de movimentação —
+> **Status:** 🟡 — **continua 🟡. Etapa 110 (`233f4787..e5584a85`): o Saldo Inicial do cadastro passa pelo motor de estoque (C215) e a
+> corrida família × cadastro fecha dos dois lados (C218)** — ver a seção "Etapa 110", no fim. Não fecha item do checklist
+> (as duas são regra de integridade do cadastro, não campo novo). Antes: **a Etapa 66 fecha mais um item** (motivos de movimentação —
 > `de04974..40dd180`). Seguem abertos: tabela de conversões genérica, grupo acima de família,
 > **transportadoras e tipos de documento**, `almoxarifadoApi.js`, e o que a Etapa 66 deixou de fora
 > do próprio item de motivos (ver o item no checklist). Histórico do status: a Etapa 26 fechou as
@@ -296,6 +298,35 @@ proprietário de material com saldo, retenção ou livro para quem não tem `aju
 validação do cadastro (B713–B715). O formulário não mudou. Achados de cadastro registrados, **não** resolvidos: o **Saldo
 Inicial** da criação grava ENTRADA fora do motor (`materialService.createMaterial`, C215 — a Etapa 110) e a API aceita
 `proprietario_cliente_id` de cliente inexistente (C216). A cor continua 🟡.
+
+## Etapa 110 (2026-10-15, `233f4787..e5584a85`) — o Saldo Inicial pelo motor, e a corrida da família
+
+- [x] **Saldo Inicial pelo motor (C215)** — `a5173c00`. `POST /materiais` com `quantidade_atual` > 0 (arredondada a
+  1e-6): sem `movimentar` → 403 *"Cadastrar material com saldo inicial exige a permissão "movimentar" (seu perfil: …) — …"*
+  (rota, depois do Zod); com `controle_lote`, `controle_serie`, `requer_inspecao` ou `proprietario_cliente_id` → 400
+  *"O material ⟨código⟩ não pode nascer com saldo inicial: ⟨motivos⟩. …"* (serviço, antes da família); o permitido é
+  `stockService.registrarMovimentacao(ENTRADA, motivo 'Saldo inicial de cadastro', destino = a padrão)` sobre o material
+  gravado com 0; a recusa do motor (ex.: padrão bloqueada, B723) apaga o material recém-criado (B724). Decisão B721
+  (descartado: tirar o campo).
+- [x] **Corrida família × cadastro (C218, B61 de Compras)** — `96f28b29`. `createMaterial` grava com `INSERT … SELECT
+  … WHERE EXISTS` (família raiz ativa, sub ativa filha) em toda tentativa do `codigo_auto`; o `PUT` de material, quando
+  valida família/sub, leva a mesma condição no `UPDATE`; o `DELETE` e o `PUT {ativo: 0}` de família levam `NOT EXISTS`
+  material ativo e subfamília ativa. Não gravou → relê e responde a literal de hoje (409 só quando a família vira duas
+  vezes, E3, ou o PUT de material perde por outra coisa, E4). Decisão B722.
+- [x] **Aviso na tela (RN-11)** — `28907d0d`. Frase sob o Saldo Inicial no cadastro novo com lote, série, inspeção ou
+  cliente; não trava o campo (B725).
+- [x] **Integração** — `7c578b56` (rota e serviço, K1–K3).
+- [x] **Fase 5** — `e5584a85`: o PUT de família não regrava o `ativo` omitido (B727) e a 2ª tentativa do "já inativada por
+  outro" leva a condição; 9 cenários novos das sabotagens verdes.
+- [ ] **Fora, de propósito (B726):** reativar material em família inativa (**C220**), mudar o nível de família e criar
+  subfamília sob raiz sendo inativada (**C221**), ligar lote/série/inspeção num material com saldo (**C222**).
+
+**A C215 estava parcialmente errada — fica dito.** Ela dizia que o saldo inicial pulava "as regras da Entrada da tela"
+inclusive o documento do material de cliente e a inspeção. **Estava errado**: a Entrada manual não exige nenhum dos dois
+(medido: 201); quem exige é o Recebimento. Por isso o saldo inicial desses dois casos é **recusado**, não convertido em
+Entrada manual — e o furo da Entrada manual é a **C219**. **A B61 de Compras dizia que a importação de material usava o
+mesmo `createMaterial` — estava errado**: não existe importação de material (o único `INSERT INTO materiais_almoxarifado`
+do servidor é o do serviço).
 
 ## Entregue na Etapa 66 (2026-10-01, `de04974..40dd180`) — motivos de movimentação viram cadastro
 

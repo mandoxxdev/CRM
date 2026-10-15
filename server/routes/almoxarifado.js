@@ -55,7 +55,7 @@ const {
   enrichMaterialRows,
 } = require('../services/almoxarifado/materialPhoto');
 const { canConfigureAlmox, canDeleteAlmoxRequisicao, isSystemAdmin } = require('../services/systemPermissions');
-const { can, requirePermission } = require('../services/almoxarifado/permissions');
+const { can, requirePermission, getPerfilFromUser } = require('../services/almoxarifado/permissions');
 const reservationService = require('../services/almoxarifado/reservationService');
 const lotService = require('../services/almoxarifado/lotService');
 const { dbRun, dbGet, dbAll } = require('../services/almoxarifado/db');
@@ -596,6 +596,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // Etapa 8c, Task 1: o corpo virou materialService.createMaterial. O gate FICA AQUI de propósito
   // — os caminhos internos que chamam o serviço já passaram pelo gate deles.
   app.post('/api/almoxarifado/materiais', requirePermission('criar_material'), validate(MaterialSchema), async (req, res) => {
+    // Etapa 110 (C215, RN-01): o saldo inicial e uma ENTRADA no estoque — exige `movimentar`, que a Engenharia
+    // (criar_material sem movimentar) nao tem. Antes de qualquer outra validacao do corpo e antes de gravar. O gate fica
+    // na rota, como o do cadastro: o servico nao checa permissao (ver o cabecalho de materialService).
+    if (materialService.temSaldoInicial(req.body) && !can(req.user, 'movimentar')) {
+      return res.status(403).json({ error: materialService.mensagemSaldoInicialSemPermissao(getPerfilFromUser(req.user)) });
+    }
     try {
       const row = await materialService.createMaterial(db, req.user, req.body);
       res.status(201).json(row);
@@ -650,7 +656,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // inativada depois.
     const familiaOmitted = req.body.familia_id === undefined;
     const familiaChanged = merged.familia_id !== current.familia_id;
-    if (!familiaOmitted && familiaChanged) {
+    // Etapa 110 (RN-07): o que foi validado aqui volta como condicao no UPDATE (corrida da familia, C218).
+    const validouFamilia = !familiaOmitted && familiaChanged;
+    if (validouFamilia) {
       try {
         await validateFamiliaAtiva(merged.familia_id);
       } catch (errFam) {
@@ -663,7 +671,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // foi inativada (todas as inativadas pelo DELETE furado de antes da 37) ficava ineditavel com
     // 400. "Novo de fato" = o valor MUDOU em relacao ao gravado, ou a familia mudou.
     const subfamiliaChanged = String(merged.subfamilia_id || '') !== String(current.subfamilia_id || '');
-    if (merged.subfamilia_id && (subfamiliaChanged || familiaChanged)) {
+    const validouSub = !!merged.subfamilia_id && (subfamiliaChanged || familiaChanged);
+    if (validouSub) {
       try {
         await validateSubfamilia(merged.subfamilia_id, merged.familia_id);
       } catch (errSub) {
@@ -694,14 +703,34 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // Etapa 108 (Fase 5, RN-09, B720): o UPDATE so grava se o dono ainda e o que foi lido. Sem isto, um salvar que leu o
     // material antes de o Administrador trocar o dono (A -> B, com TROCA_DONO) e gravou depois escrevia de volta o dono
     // velho — por fora da guarda e da auditoria. `IS` porque o dono pode ser NULL (material nosso).
+    //
+    // Etapa 110 (RN-07, C218): quando a familia ou a subfamilia foram validadas acima, o UPDATE so grava se elas ainda
+    // valem — a conferencia e a gravacao num comando so (o DELETE/PUT de familia tem a condicao inversa). Nao gravou ->
+    // rele para dizer POR QUE: o dono mudou (o 409 da 108), a familia/subfamilia nao vale mais (a literal de hoje), ou
+    // outra coisa mudou na janela (E4).
+    const condFamilia = materialService.condicaoFamiliaSql(merged.familia_id, merged.subfamilia_id,
+      { familia: validouFamilia, sub: validouSub });
     try {
       const escrita = await dbRun(db, `UPDATE materiais_almoxarifado SET
         ${MATERIAL_UPDATE_COLUMNS.map((c) => `${c} = ?`).join(', ')},
         updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND proprietario_cliente_id IS ?`,
-        [...MATERIAL_UPDATE_COLUMNS.map((c) => merged[c]), req.params.id, current.proprietario_cliente_id ?? null]);
+        WHERE id = ? AND proprietario_cliente_id IS ? AND ${condFamilia.sql}`,
+        [...MATERIAL_UPDATE_COLUMNS.map((c) => merged[c]), req.params.id, current.proprietario_cliente_id ?? null,
+          ...condFamilia.params]);
       if (escrita.changes === 0) {
-        return res.status(409).json({ error: `O dono do material ${current.codigo} mudou enquanto este cadastro era salvo — `
+        const agora = await dbGet(db, 'SELECT proprietario_cliente_id FROM materiais_almoxarifado WHERE id = ?', [req.params.id]);
+        if (!agora) return res.status(404).json({ error: 'Material não encontrado' });
+        if ((agora.proprietario_cliente_id ?? null) !== (current.proprietario_cliente_id ?? null)) {
+          return res.status(409).json({ error: `O dono do material ${current.codigo} mudou enquanto este cadastro era salvo — `
+            + 'nada foi gravado. Recarregue o material e salve de novo.' });
+        }
+        try {
+          if (validouFamilia) await validateFamiliaAtiva(merged.familia_id);
+          if (validouSub) await validateSubfamilia(merged.subfamilia_id, merged.familia_id);
+        } catch (errFam) {
+          return res.status(400).json({ error: errFam.message });
+        }
+        return res.status(409).json({ error: `O cadastro do material ${current.codigo} mudou enquanto era salvo — `
           + 'nada foi gravado. Recarregue o material e salve de novo.' });
       }
     } catch (err) {
@@ -2543,6 +2572,31 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   }
   const literalItensAtivos = (n) => `Não é possível remover: família possui ${n} item(ns) ativo(s)`;
 
+  // Etapa 110 (RN-08/RN-09, C218) — a condicao da inativacao DENTRO do UPDATE: nenhum material ativo pela familia ou pela
+  // subfamilia (a regua de contarItensAtivosDaFamilia) e nenhuma subfamilia ativa. O lado do material tem a condicao
+  // inversa (materialService.condicaoFamiliaSql). Placeholders: [id, id, id].
+  const SEM_ATIVOS_NA_FAMILIA_SQL = `NOT EXISTS (SELECT 1 FROM materiais_almoxarifado
+      WHERE (familia_id = ? OR subfamilia_id = ?) AND ativo = 1)
+    AND NOT EXISTS (SELECT 1 FROM familias_material_almoxarifado WHERE parent_id = ? AND ativo = 1)`;
+  const semAtivosNaFamiliaParams = (id) => [id, id, id];
+  // Depois de uma inativacao condicional que nao gravou: o que a impede agora, na ordem das recusas de hoje (itens,
+  // depois subfamilias, e so entao a existencia — material orfao de id inexistente da 400 dos itens, como no DELETE).
+  // callback(err, { itens } | { subs } | { naoExiste } | { atual }) — `atual` = a linha de agora; nada impede (ja inativa).
+  function relerRecusaDaInativacao(familiaId, callback) {
+    contarItensAtivosDaFamilia(familiaId, (errI, n) => {
+      if (errI) return callback(errI);
+      if (n > 0) return callback(null, { itens: n });
+      db.get('SELECT COUNT(*) AS c FROM familias_material_almoxarifado WHERE parent_id = ? AND ativo = 1', [familiaId], (errS, row) => {
+        if (errS) return callback(errS);
+        if (row && row.c > 0) return callback(null, { subs: row.c });
+        db.get('SELECT * FROM familias_material_almoxarifado WHERE id = ?', [familiaId], (errF, fam) => {
+          if (errF) return callback(errF);
+          callback(null, fam ? { atual: fam } : { naoExiste: true });
+        });
+      });
+    });
+  }
+
   // Etapa 105 (RN-105.00, achado M1 da revisao do plano): o PUT gravava `ativo` cru — 'false' e 'true' como
   // TEXTO, 2, '[object Object]'. A familia com 'false' sumia das duas listas (?ativo=0 filtra = 0). Informado,
   // vira 0/1; o que nao e booleano reconhecivel e recusado. Devolve undefined para "invalido".
@@ -2697,15 +2751,44 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         return res.status(400).json({ error: 'Família não pode ser pai de si mesma' });
       }
 
-      const applyUpdate = () => {
-        db.run(`UPDATE familias_material_almoxarifado SET nome=?, descricao=?, categoria_id=?, tipo_uso=?, ativo=?, parent_id=? WHERE id=?`,
-          [nome.trim(), descricao || null, categoriaIdVal, tipoUsoVal, ativoVal, parentId, familiaId],
+      // Etapa 110 (RN-09, C218): na transicao 1 -> 0 o UPDATE leva a condicao da inativacao (a do DELETE) e `ativo = 1`.
+      // Nao gravou -> rele: material ou subfamilia ativa nasceu na janela (a literal de hoje), a familia sumiu (404), ou
+      // outro ja inativou — entao tenta de novo SEM o `ativo = 1` mas COM a condicao dos itens (Fase 5, rv1 achado 1: sem
+      // ela, uma reativacao + cadastro de material no meio da releitura deixava o estado proibido); nao gravou de novo ->
+      // rele outra vez e, se nada impede, 409 (a familia mudou duas vezes no meio).
+      // Fase 5 (rv1 achado 2, anterior a 110): `ativo` OMITIDO nao e gravado (`COALESCE(?, ativo)` com null). Antes o PUT
+      // regravava o `ativo` lido no inicio: renomear (a tela nao manda `ativo`) desfazia um Inativar concorrente, ou
+      // reinativava uma familia reativada no meio com material novo dentro.
+      const applyUpdate = (tentativa = 1, anteriorDeAgora = null) => {
+        const condicional = inativa;
+        let condicaoSql = '';
+        if (condicional) {
+          condicaoSql = tentativa === 1 ? ` AND ativo = 1 AND ${SEM_ATIVOS_NA_FAMILIA_SQL}` : ` AND ${SEM_ATIVOS_NA_FAMILIA_SQL}`;
+        }
+        db.run(`UPDATE familias_material_almoxarifado SET nome=?, descricao=?, categoria_id=?, tipo_uso=?, ativo=COALESCE(?, ativo), parent_id=? WHERE id=?${condicaoSql}`,
+          [nome.trim(), descricao || null, categoriaIdVal, tipoUsoVal, ativoInformado ? ativoVal : null, parentId, familiaId,
+            ...(condicional ? semAtivosNaFamiliaParams(familiaId) : [])],
           function (err) {
             if (err) return res.status(500).json({ error: err.message });
+            if (condicional && this.changes === 0) {
+              return relerRecusaDaInativacao(familiaId, (errR, recusa) => {
+                if (errR) return res.status(500).json({ error: errR.message });
+                if (recusa.itens) return res.status(400).json({ error: literalItensAtivos(recusa.itens) });
+                if (recusa.subs) {
+                  return res.status(400).json({ error: 'Não é possível inativar: família possui subfamília(s) ativa(s)' });
+                }
+                if (recusa.naoExiste) return res.status(404).json({ error: 'Família não encontrada' });
+                if (tentativa > 1) {
+                  return res.status(409).json({ error: 'A família mudou enquanto era salva — nada foi gravado. Recarregue a família e salve de novo.' });
+                }
+                // outro ja inativou: grava o resto (com a condicao dos itens), e a auditoria diz o "de" de AGORA
+                return applyUpdate(2, recusa.atual);
+              });
+            }
             db.get('SELECT * FROM familias_material_almoxarifado WHERE id = ?', [familiaId], (e, r) => {
               auditarCadastro({
                 req, entidade: 'familia', entidade_id: familiaId, acao: 'EDICAO',
-                dados_anteriores: current, dados_novos: r || null,
+                dados_anteriores: anteriorDeAgora || current, dados_novos: r || null,
               }).finally(() => res.json(r));
             });
           });
@@ -2843,13 +2926,24 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           if (selErr) return res.status(500).json({ error: selErr.message });
           // Etapa 23 (RN-04): `AND ativo = 1` para o `changes` distinguir linha ALTERADA de
           // linha apenas CASADA — sem ele a 2a exclusao auditava um ato que nao aconteceu.
-          db.run('UPDATE familias_material_almoxarifado SET ativo = 0 WHERE id = ? AND ativo = 1', [req.params.id], function (err2) {
+          // Etapa 110 (RN-08, C218): as duas contagens acima voltam como condicao no proprio UPDATE — sem isto um
+          // material cadastrado entre a contagem e a gravacao ficava ativo dentro da familia inativa (30 de 30 na Fase 0).
+          db.run(`UPDATE familias_material_almoxarifado SET ativo = 0 WHERE id = ? AND ativo = 1 AND ${SEM_ATIVOS_NA_FAMILIA_SQL}`,
+            [req.params.id, ...semAtivosNaFamiliaParams(req.params.id)], function (err2) {
             if (err2) return res.status(500).json({ error: err2.message });
             // RN-03: id inexistente respondia 200 ("success: true" sobre nada).
             // Etapa 23: `changes === 0` com a linha EXISTINDO e "ja inativa" — 200 sem auditar.
+            // Etapa 110 (RN-08): ou um material/subfamilia ativo nasceu na janela — rele, na ordem das recusas de cima.
             if (this.changes === 0) {
-              if (!anterior) return res.status(404).json({ error: 'Família não encontrada' });
-              return res.json({ success: true, ja_inativo: true });
+              return relerRecusaDaInativacao(req.params.id, (errR, recusa) => {
+                if (errR) return res.status(500).json({ error: errR.message });
+                if (recusa.itens) return res.status(400).json({ error: literalItensAtivos(recusa.itens) });
+                if (recusa.subs) {
+                  return res.status(400).json({ error: `Não é possível remover: família possui ${recusa.subs} subfamília(s) ativa(s)` });
+                }
+                if (recusa.naoExiste) return res.status(404).json({ error: 'Família não encontrada' });
+                return res.json({ success: true, ja_inativo: true });
+              });
             }
             auditarCadastro({
               req, entidade: 'familia', entidade_id: Number(req.params.id), acao: 'EXCLUSAO',

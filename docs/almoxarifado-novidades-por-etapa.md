@@ -11,9 +11,12 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-15):** **Etapa 108 fechada** (trocar o dono de um material com saldo ou
-> movimentação passa a ser só do Administrador — **C213** resolvido); a próxima do almoxarifado é a **110** — o Saldo
-> Inicial do cadastro passa pelas regras da Entrada (**C215**); a 109 é de Compras. *(Antes: Etapa 106 fechada — desfazer
+> **Onde o desenvolvimento está (2026-10-15):** **Etapa 110 fechada** (o Saldo Inicial do cadastro de material passa pelo
+> motor de estoque, só para quem movimenta e só para material sem lote, série, inspeção ou cliente — **C215** resolvido; e
+> inativar uma família no mesmo instante em que alguém cadastra material nela não deixa mais a família inativa com material
+> ativo — **C218** resolvido); a próxima do almoxarifado é a **112** — ver "Onde estamos e o que vem a seguir"; a 111 é de
+> Compras. *(Antes: Etapa 108 fechada — trocar o dono de um material com saldo ou movimentação passa a ser só do
+> Administrador, **C213** resolvido.)* *(Antes ainda: Etapa 106 fechada — desfazer
 > o ajuste de material de cliente passa a ser só do Administrador, **C211** resolvido.)* *(A frase abaixo, de 2026-10-09, parou na Etapa 97 e ficou assim até a 106 — as
 > Etapas 98 a 104 estão no fim, em "Onde estamos e o que vem a seguir"; fica dito, não apagado.)*
 >
@@ -121,7 +124,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cinquenta e seis itens para rodar em produção ANTES do deploy — cinquenta e três são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Cinquenta e oito itens para rodar em produção ANTES do deploy — cinquenta e cinco são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-15 (Etapa 110) de cinquenta e seis para cinquenta e oito**, com a **A57** — os materiais que nasceram com saldo inicial pelo caminho antigo e que hoje seriam recusados — e a **A58** — as famílias inativas com material ativo dentro; as duas opcionais.)*
 
 *(**Atualizado em 2026-10-15 (Etapa 108) de cinquenta e cinco para cinquenta e seis**, com a **A56** — as trocas de dono de material que já aconteceram, e o perfil de hoje de quem trocou; opcional.)*
 
@@ -2115,12 +2120,73 @@ hoje**.
 - **Troca só de ida com histórico** (cliente A → cliente B, ou nosso → cliente com livro) — o saldo e o histórico do
   material mudaram de dono na posição por cliente. Confirme com quem trocou se era a intenção.
 
+**A57 (NOVA, da Etapa 110 — os materiais que nasceram com saldo inicial por quem não movimenta, ou com controle que o
+cadastro não informa).** Até esta versão o **Saldo Inicial** do cadastro entrava sem as regras da Entrada (**C215**): a
+Engenharia criava material com saldo, e material com lote, série, inspeção obrigatória ou de cliente nascia com saldo
+disponível sem lote, sem série, sem inspeção e sem documento. **Nada aqui é obrigatório.** Somente leitura:
+
+```sql
+SELECT m.codigo, m.nome, mv.quantidade AS saldo_inicial, mv.created_at, mv.usuario_nome,
+       p.perfil AS perfil_de_hoje,
+       m.controle_lote, m.controle_serie, m.requer_inspecao, m.proprietario_cliente_id AS dono,
+       (SELECT COUNT(*) FROM lotes_almoxarifado l WHERE l.material_id = m.id) AS lotes,
+       (SELECT COUNT(*) FROM series_almoxarifado s WHERE s.material_id = m.id) AS series,
+       m.quantidade_atual AS saldo_hoje
+  FROM movimentacoes_almoxarifado mv
+  JOIN materiais_almoxarifado m ON m.id = mv.material_id
+  LEFT JOIN perfil_almoxarifado_usuario p ON p.usuario_id = mv.usuario_id
+ WHERE mv.motivo = 'Saldo inicial de cadastro' AND COALESCE(mv.cancelado, 0) = 0
+   AND (COALESCE(p.perfil, '') NOT IN ('ADMINISTRADOR', 'ALMOXARIFE')
+        OR m.controle_lote = 1 OR m.controle_serie = 1 OR m.requer_inspecao = 1
+        OR m.proprietario_cliente_id IS NOT NULL)
+ ORDER BY mv.created_at;
+```
+
+*(Conferida numa sonda da etapa contra o esquema real em memória: acha o saldo inicial da Engenharia, o de quem não tem
+perfil, o de material com lote e o de material de cliente; **não** acha o do Almoxarife em material sem controle nem o que
+foi estornado.)* O perfil é o **de hoje**; o administrador do sistema sem perfil gravado aparece com o perfil vazio — é
+falso alarme, confira o nome.
+
+**Como ler o resultado** (uma linha por material):
+- **Vazia** — nada a fazer.
+- **`controle_lote` = 1 e `lotes` = 0** (ou `controle_serie` = 1 e `series` menor que o saldo) — o saldo existe sem lote ou
+  sem série: na saída, o sistema vai pedir o lote/a série que não existe. Regularize em **Lotes** (regularizar séries) ou
+  com um **Ajuste** do Administrador.
+- **`requer_inspecao` = 1** — o saldo entrou disponível sem inspeção: se o material ainda está na prateleira, peça a
+  inspeção ou bloqueie o que for preciso.
+- **`dono` preenchido** — material de cliente com saldo sem nota de remessa: confira com o cliente o número.
+- **Só o perfil** (Engenharia, vazio) — o saldo é de quem não movimenta estoque: confira com o almoxarife se o número bate.
+
+**A58 (NOVA, da Etapa 110 — as famílias inativas com material ativo dentro).** A corrida da família (**C218**) — e
+reativar um material numa família inativa (**C220**) — deixavam esse estado, que as duas regras proíbem. **Nada aqui é
+obrigatório.** Somente leitura:
+
+```sql
+SELECT f.id AS familia_id, f.codigo AS familia, f.nome, f.parent_id AS raiz_da_subfamilia,
+       COUNT(m.id) AS materiais_ativos, GROUP_CONCAT(m.codigo, ', ') AS codigos
+  FROM familias_material_almoxarifado f
+  JOIN materiais_almoxarifado m ON (m.familia_id = f.id OR m.subfamilia_id = f.id) AND m.ativo = 1
+ WHERE COALESCE(f.ativo, 0) <> 1
+ GROUP BY f.id
+ ORDER BY f.codigo;
+```
+
+*(Conferida numa sonda contra o esquema real: acha a família inativa com material ativo e a subfamília inativa com material
+ativo nela; **não** conta material inativo.)*
+
+**Como ler o resultado:** **vazia** — nada a fazer. **Com linhas** — para cada família, decida: **reativar** a família
+(Configurações → Famílias) se os materiais continuam em uso, ou **mover** os materiais para outra família (editar o
+material) e deixar a família inativa. Enquanto ficar assim, o material aparece no filtro da família inativa e a família não
+recebe material novo.
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B720; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B727; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-15 com as sete da Etapa 110 — B721 a B727.**)*
 
 *(**Atualizado em 2026-10-15 com as oito da Etapa 108 — B713 a B720.**)*
 
@@ -7368,6 +7434,59 @@ do cadastro só acontece se o dono ainda é o que foi lido; senão, *"O dono do 
 outros campos do cadastro contra o mesmo atropelo (é o comportamento de sempre do cadastro, não muda número de cliente — fica
 como está); pegar a trava do material no salvar do cadastro (ela é do disponível). (`970c0dfb`)
 
+**B721 (NOVA, da Etapa 110) — o Saldo Inicial do cadastro ficou, mas passa pelo motor de estoque, exige quem movimenta e
+não vale para material com lote, série, inspeção ou de cliente.** Escolhido: o campo continua no cadastro novo; com saldo,
+o servidor (1) exige a permissão de movimentar estoque — a Engenharia, que cadastra mas não movimenta, recebe *"Cadastrar
+material com saldo inicial exige a permissão "movimentar" (seu perfil: ENGENHARIA) — …"*; (2) recusa o saldo de material
+com controle por lote, controle por série, inspeção obrigatória ou de cliente, nomeando os motivos; (3) no material
+permitido, grava o saldo como uma **Entrada** de verdade (a mesma da tela de Movimentações: extrato com a prateleira, saldo
+por localização, auditoria com o computador de origem, estornável). **Descartados:** tirar o campo **Saldo Inicial** do
+cadastro (mudaria a tela que existe desde a Etapa 2 e tiraria a implantação rápida do material simples — o caso sem
+risco); montar lote e séries no cadastro (duplicaria a tela de Movimentações); deixar lote/série/inspeção/cliente passarem
+pelo motor sem recusa (lote e série cairiam na recusa da Entrada, que fala em "movimentação" para quem está num cadastro;
+inspeção e cliente **passariam**, porque a Entrada manual também não os cobra — **C219**). **Reversível:** a recusa é uma
+lista de quatro motivos; a permissão, uma linha. (`a5173c00`)
+
+**B722 (NOVA, da Etapa 110) — a corrida da família fecha dos dois lados, no próprio comando que grava.** O cadastro (e a
+edição que troca de família ou subfamília) só grava se a família ainda está ativa, e o "Inativar" da família só grava se
+ela não tem material ativo nem subfamília ativa — cada conferência dentro do mesmo comando que grava, que o banco executa
+inteiro antes ou depois do outro. Quem perde a corrida recebe a mensagem de sempre (*"Família inativa — não é possível
+vincular novos itens"* ou *"Não é possível remover: família possui 1 item(ns) ativo(s)"*). **Descartados:** fechar só um
+lado (cada lado confere o que o outro está prestes a mudar — os dois passavam); usar a trava por material (ela é do
+disponível, e família não é material); transação explícita (a base não usa nesta conexão — fica para a migração ao
+Postgres). (`96f28b29`)
+
+**B723 (NOVA, da Etapa 110, achada na revisão do plano) — material com saldo inicial e localização padrão bloqueada passa a
+ser recusado.** Antes o cadastro aceitava (o saldo ia para a prateleira bloqueada); com o motor, a recusa é a da Entrada:
+*"Localização ⟨código⟩ está bloqueada"* (o mesmo vale para a prateleira que não aceita o tipo do material), e o material não
+é criado. Sem saldo, cadastra como antes. **Descartado:** escrever uma recusa própria do cadastro (seria a segunda fonte da
+mesma regra). (`a5173c00`)
+
+**B724 (NOVA, da Etapa 110) — o saldo inicial que falha no motor desfaz o material recém-criado.** Se a Entrada do saldo
+inicial for recusada depois de o material ter sido gravado, o material é apagado e a tela mostra a recusa — quem tentar de
+novo, com o mesmo código, consegue. **Descartado:** criar o material sem saldo e responder sucesso com um aviso (a tela
+diria "Material cadastrado!" com saldo 0 e a pessoa acharia que o saldo entrou). (`a5173c00`)
+
+**B725 (NOVA, da Etapa 110) — a tela avisa, não trava.** No cadastro novo, marcar lote, série, inspeção ou escolher um
+cliente mostra sob o **Saldo Inicial** a frase *"Material com lote, série, inspeção ou de cliente nasce com saldo 0 — a
+entrada é lançada depois, em Movimentações ou pelo Recebimento."* O campo continua editável e a recusa vem do servidor.
+**Descartado:** desabilitar o campo (seria a segunda fonte da regra, e a tela não sabe se a pessoa movimenta estoque).
+(`28907d0d`)
+
+**B726 (NOVA, da Etapa 110) — o que a corrida da família NÃO fecha, por decisão de escopo.** Ficam como estão, nomeados:
+reativar um material numa família inativa (**C220** — sem corrida nenhuma); as outras escritas de família que conferem e
+gravam em passos separados — mudar o nível de uma família (raiz ↔ subfamília) e criar subfamília sob uma raiz sendo
+inativada (**C221**); ligar lote, série ou inspeção num material que já tem saldo (**C222**). Cada uma é a mesma forma
+de correção (a conferência dentro do comando), mas outra regra e outro risco — não entraram para não misturar.
+
+**B727 (NOVA, da Etapa 110, achada na revisão do código) — salvar a família sem mexer na situação não regrava a situação.**
+A tela de Famílias salva nome, descrição e tipo de uso sem mandar a situação (ativa/inativa); o servidor regravava a que
+tinha lido no começo. Se alguém inativasse (ou reativasse) a mesma família no mesmo instante, o salvar desfazia isso em
+silêncio. Agora a situação só é gravada quando vem no pedido. Se a família mudar duas vezes no meio de um "Inativar" pela
+edição, a resposta é *"A família mudou enquanto era salva — nada foi gravado. Recarregue a família e salve de novo."*
+(409). **Descartado:** conferir a situação lida no próprio comando (recusaria o renomear sempre que outra pessoa mexeu na
+situação, sem necessidade). (`e5584a85`)
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -9544,7 +9663,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      com a reserva); ao passar para nosso, nada trava — troque o dono só de material parado. Se alguém salvar o mesmo
      cadastro enquanto o Administrador troca o dono, esse salvar recebe *"O dono do material ⟨código⟩ mudou enquanto este cadastro era salvo — nada foi gravado. Recarregue o material e salve de novo."* (**B720**).
 
-215. **NOVO (anterior à Etapa 108, achado na medição dela) — o Saldo Inicial do cadastro entra fora do motor de estoque.**
+215. **✅ RESOLVIDO NA ETAPA 110 (`a5173c00`) — o Saldo Inicial passa pelo motor, exige quem movimenta e é recusado para
+     material com lote, série, inspeção ou de cliente (**B721**); os que nasceram assim antes: **A57**. ⚠️ Este item estava
+     parcialmente errado:** ele dizia que o saldo inicial pulava "as regras da Entrada da tela de Movimentações" inclusive o
+     documento do cliente e a inspeção — **a Entrada manual não exige documento de material de cliente nem retém material
+     com inspeção** (medido na Etapa 110: as duas passam com 201). Quem exige documento e retém para inspeção é o
+     **Recebimento**. Esse furo da Entrada manual é anterior e virou a **C219**. O texto original: **NOVO (anterior à Etapa
+     108, achado na medição dela) — o Saldo Inicial do cadastro entra fora do motor de estoque.**
      Ao criar um material, o campo **Saldo Inicial** grava uma **Entrada** direto, sem as regras da Entrada da tela de
      Movimentações: a **Engenharia** (que não movimenta estoque) cria material com saldo; material **de cliente** entra sem
      documento; material com **lote** ou **série** controlados fica com saldo sem lote nem série; material com **inspeção
@@ -9564,12 +9689,49 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      reabre a C213 (o ajuste continua olhando o dono). **O que fazer:** não desative material de cliente com saldo; para o
      cliente, devolva primeiro (**Devolução ao cliente**). Candidato a uma etapa futura.
 
-218. **NOVO (medido na Etapa 109 de Compras) — inativar uma família no mesmo instante em que alguém cadastra material nela
-     deixa a família inativa com o material ativo dentro.** 30 de 30 rodadas, nas duas ordens, com as duas requisições
+218. **✅ RESOLVIDO NA ETAPA 110 (`96f28b29`) — a conferência da família e a gravação viraram um comando só, dos dois lados
+     (**B722**); as famílias que já ficaram assim: **A58**.** *(A B61 de Compras dizia que a importação de material usava o
+     mesmo cadastro — não existe importação de material.)* O texto original: **NOVO (medido na Etapa 109 de Compras) —
+     inativar uma família no mesmo instante em que alguém cadastra material nela deixa a família inativa com o material
+     ativo dentro.** 30 de 30 rodadas, nas duas ordens, com as duas requisições
      disparadas juntas. As duas regras proíbem esse estado ("Inativar" recusa família com material ativo; o cadastro recusa
      família inativa), mas cada uma confere e grava em passos separados. **O que fazer:** não inative família enquanto
      alguém cadastra material nela; se acontecer, reative a família ou mova o material. Contrato da correção em
      `docs/compras-novidades-por-etapa.md`, **B61**. Candidata da **Etapa 110**, junto com a C215.
+
+219. **NOVO (anterior à Etapa 110, achado na medição dela) — a Entrada manual de Movimentações não exige documento de
+     material de cliente e não retém material com inspeção obrigatória.** Pela tela de Movimentações (e pelo modal rápido
+     de Materiais), uma **Entrada** de material de cliente sem número de documento passa, e uma Entrada de material que
+     exige inspeção entra **disponível**, sem passar pela inspeção — medido (201 nos dois). Só o **Recebimento** cobra as
+     duas coisas. Por isso o Saldo Inicial do cadastro passou a **recusar** esses dois casos em vez de virar uma Entrada
+     manual (**B721**). **O que fazer:** dê entrada de material de cliente e de material com inspeção pelo **Recebimento**
+     (com a nota). Candidata a uma etapa futura.
+
+220. **NOVO (anterior à Etapa 110, achado na medição dela) — reativar um material numa família inativa deixa a família
+     inativa com material ativo, sem corrida nenhuma.** Editar um material inativo e marcá-lo como ativo passa (200) mesmo
+     com a família dele inativa. **O que fazer:** reative a família antes; a **A58** acha os casos. Candidata a uma etapa
+     futura (**B726**).
+
+221. **NOVO (anterior à Etapa 110, achado na medição dela) — outras escritas de família conferem e gravam em passos
+     separados.** Mudar o nível de uma família (raiz que vira subfamília, subfamília que muda de raiz) confere que ela não
+     tem material e depois grava; criar uma subfamília, ou reativar uma, confere que a raiz está ativa e depois grava — a
+     revisão da Etapa 110 **reproduziu** as duas últimas: subfamília ativa sob família principal inativa. Disparadas no mesmo
+     instante que um cadastro de material (ou que o "Inativar" da raiz), têm a mesma forma de corrida da **C218**. Não
+     medidas por corrida. **O que fazer:** não reorganize famílias enquanto alguém cadastra material nelas (**B726**).
+
+222. **NOVO (anterior à Etapa 110, achado na revisão do plano dela) — ligar lote, série ou inspeção num material que já
+     tem saldo passa, e trava a saída.** O Saldo Inicial do cadastro recusa esses controles (**B721**), mas o caminho em
+     dois passos continua aberto: cadastrar com saldo sem controle e depois editar o material ligando o controle — 200,
+     inclusive pela Engenharia (medido). Depois disso a saída do saldo antigo é recusada (*"O material ⟨código⟩ exige lote
+     nesta movimentacao (controle por lote ligado)"*, ou a de séries), porque o saldo não tem lote nem séries. Escolher um
+     **cliente** como dono de material com saldo já é barrado desde a Etapa 108 (só o Administrador troca o dono).
+     **O que fazer:** ligue os controles no cadastro, antes de qualquer saldo; para material que já tem saldo, o
+     Administrador regulariza (Lotes → regularizar séries, ou Ajuste). Candidata a uma etapa futura (**B726**).
+
+223. **NOVO (anterior à Etapa 110, achado na revisão do plano dela) — família gravada com "pai 0" é raiz para a tela de
+     Famílias e subfamília para o cadastro de material.** Legado de antes da Etapa 103 (o "0" gravado como pai): a aba
+     Famílias a trata como família principal, mas o cadastro de material a recusa como subfamília (*"A família escolhida é
+     uma subfamília — …"*). **O que fazer:** se aparecer, edite a família e salve com a família pai vazia.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -10625,6 +10787,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(108) Uma entrada que chegue entre a leitura e a gravação do cadastro** de um material sem histórico deixa a troca
   passar (o salvar do cadastro não pega a trava do material — ela é do disponível). Janela de milissegundos, o mesmo risco
   do resto do cadastro.
+- **(110) O saldo inicial de material com lote, série, inspeção ou de cliente não existe mais no cadastro** — entra depois,
+  pela Entrada (lote, série) ou pelo Recebimento (inspeção, cliente) (**B721**).
+- **(110) Se a Entrada do saldo inicial falhar depois de gravar o extrato** (uma falha interna do registro dela, não uma
+  recusa), o material não consegue ser desfeito e fica com o saldo atrás da mensagem de erro — o servidor registra no log.
+  A recusa comum (prateleira bloqueada, por exemplo) desfaz o material de fato (**B724**).
+- **(110) A corrida fecha só entre o cadastro/edição de material e o "Inativar" da família** — reativação de material,
+  mudança de nível e criação de subfamília ficam como estão (**B726**, **C220**, **C221**).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -11518,6 +11687,15 @@ novo); o servidor, pela rota e pela regra direto (**25** testes no arquivo novo,
 2. **A auditoria** — Almoxarifado → Auditoria mostra o registro **Troca de dono** do material de cliente com os dois nomes,
    depois da troca feita pelo Administrador.
 3. **A posição por cliente** (Materiais de Clientes) depois da troca: o material sai de um cliente e aparece no outro.
+
+**(110) Nenhum clique foi dado nesta etapa no navegador.** A frase nova do cadastro e a recusa no aviso vermelho foram
+provadas por teste de componente com a fronteira HTTP simulada (**8** casos novos); o servidor, pela rota e pelo serviço
+(**20** testes do saldo inicial, **33** da corrida da família, **9** da revisão, **3** jornadas de integração). O que **só o navegador** prova:
+
+1. **A frase sob o Saldo Inicial** aparece ao marcar *Controle por lote* (e some ao desmarcar), sem empurrar o layout.
+2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
+   aberto.
+3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
 
 
 
@@ -22767,9 +22945,102 @@ donos), mas a requisição só deixa de sair quando o material passa a **outro c
 reescrita. E um furo anterior: inativar material de cliente com saldo o tira da posição do cliente (**C217**). O segundo
 fez **30 sabotagens**: 25 derrubaram teste, 3 eram equivalentes pela rota, e **duas** mostraram asserções faltando no
 contrato da regra chamada direto (texto vazio e zero como "nosso"; a troca sem histórico devolvida como tal) — viraram teste.
+## Etapa 110 — O Saldo Inicial do cadastro vira uma Entrada de verdade, e a família não fica mais inativa com material dentro (2026-10-15)
+
+Ao cadastrar um material, o campo **Saldo Inicial** dá ao material o estoque que ele já tem na prateleira. Até aqui esse
+número entrava por um atalho, sem as regras de uma Entrada: a **Engenharia** — que cadastra material mas não movimenta
+estoque — criava material com saldo; material com **lote** ou **série** controlados nascia com saldo sem lote e sem série
+(e travava na primeira saída); material que **exige inspeção** nascia disponível; material **de cliente** nascia com
+saldo sem a nota de remessa. Agora o saldo inicial é uma **Entrada** como a da tela de Movimentações — com a prateleira no
+extrato, o saldo por prateleira, o registro de onde foi feita e o estorno —, só para quem movimenta estoque, e só para
+material sem esses controles; os outros nascem com 0 e a entrada vem depois, pelo caminho que cobra as regras deles.
+
+E uma corrida rara mas real: inativar uma família no mesmo instante em que alguém cadastrava material nela deixava a
+família inativa **com** o material ativo dentro — o estado que as duas regras proíbem. Agora quem chega por último recebe
+a recusa de sempre.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| A Engenharia cadastrava material com saldo | Recebe *"Cadastrar material com saldo inicial exige a permissão "movimentar" (seu perfil: ENGENHARIA) — …"*; com saldo 0 cadastra como antes (**B721**) |
+| Material com lote, série, inspeção ou de cliente nascia com saldo | Recusado com os motivos nomeados; a tela avisa antes (**B721**, **B725**) |
+| A linha *Saldo inicial de cadastro* do extrato não tinha prateleira nem computador de origem | É uma Entrada do motor: prateleira padrão, saldo por prateleira, auditoria com a origem, estornável como qualquer Entrada |
+| Prateleira padrão bloqueada aceitava o saldo inicial | Recusado com a mensagem da Entrada (**B723**) |
+| Cadastrar material e inativar a família no mesmo instante: família inativa com material ativo (30 de 30) | Um dos dois recebe a recusa de sempre; o estado proibido não nasce (**B722**) |
+| — | Material sem controle, nosso, cadastrado por quem movimenta, **continua** nascendo com saldo |
+
+### As regras, com o cenário exato
+
+Preparação: família **Chapas** ativa; localização **A-01** ativa; cliente **Metalúrgica X**. Usuários: **Ana** (Almoxarife),
+**Edu** (Engenharia) e o **administrador**.
+
+**1. A Engenharia não põe saldo.** Edu abre **Materiais → Novo**, preenche código *CHP-0101*, nome, categoria, família
+**Chapas**, **Saldo Inicial 5**, e salva → aviso vermelho *"Cadastrar material com saldo inicial exige a permissão "movimentar" (seu perfil: ENGENHARIA) — o saldo inicial é uma entrada no estoque. Cadastre com saldo 0 e peça a quem movimenta o estoque para lançar a Entrada em Movimentações."* Nada é criado. Com **Saldo Inicial 0** (ou vazio) → *"Material cadastrado!"*.
+
+**2. Material com controle nasce com 0.** Ana cadastra *CHP-0102* marcando **Controle por lote** → sob o Saldo Inicial
+aparece *"Material com lote, série, inspeção ou de cliente nasce com saldo 0 — a entrada é lançada depois, em Movimentações ou pelo Recebimento."* Com **Saldo Inicial 4**, salvar → *"O material CHP-0102 não pode nascer com saldo inicial: tem controle por lote. Cadastre com saldo 0 e lance a entrada depois — em Movimentações (Entrada, com o lote e as séries) ou pelo Recebimento (inspeção e material de cliente)."*
+Marcando também **Requer inspeção** e escolhendo **Metalúrgica X** como dono, a mesma recusa nomeia *"tem controle por lote,
+exige inspeção, é de cliente"*. Com saldo 0, cadastra.
+
+**3. O saldo permitido é uma Entrada.** Ana cadastra *CHP-0103* (sem controles, localização padrão **A-01**) com **Saldo
+Inicial 7** → *"Material cadastrado!"*. No **extrato** do material: uma **Entrada** de 7, *"Saldo inicial de cadastro"*,
+de 0 para 7, na **A-01**. O administrador estorna essa Entrada (motivo "digitado errado") → saldo 0.
+
+**4. Prateleira bloqueada recusa.** Com a padrão bloqueada, o saldo inicial recebe a recusa da Entrada (*"Localização
+⟨código⟩ está bloqueada"*) e o material não é criado; sem saldo, cadastra.
+
+**5. A família.** O administrador tenta **Inativar** a família **Chapas** com material ativo → *"Não é possível remover:
+família possui N item(ns) ativo(s)"* (como sempre). A diferença está no instante: se alguém cadastra material na Chapas
+**no mesmo segundo** em que ele inativa, um dos dois perde — ou o cadastro recebe *"Família inativa — não é possível
+vincular novos itens"*, ou o "Inativar" recebe a recusa dos itens. *(Não dá para reproduzir com dois cliques; a prova é
+automática — 30 rodadas em cada uma das quatro combinações, nas duas ordens.)*
+
+### O que esta etapa NÃO cobre
+
+1. **A Entrada manual** de Movimentações continua aceitando material de cliente sem documento e material com inspeção
+   sem reter (**C219**).
+2. **Ligar lote, série ou inspeção** num material que já tem saldo (**C222**).
+3. **Reativar material** numa família inativa, **mudar o nível** de uma família e **criar subfamília** sob raiz sendo
+   inativada (**C220**, **C221**, **B726**).
+4. **Os materiais que já nasceram** com saldo pelo caminho antigo — a consulta **A57** acha; as famílias que já ficaram
+   inativas com material — **A58**.
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0) reproduziu o saldo inicial fora do motor com os três perfis que cadastram e com cada controle, e
+mediu o que a Entrada manual cobra — e descobriu que a **C215 estava parcialmente errada**: a Entrada manual não exige
+documento de material de cliente nem retém inspeção (**C219**). Reproduziu a corrida da família em quatro combinações (30
+de 30 em três; 6 de 30 na quarta) e mediu que a importação de material citada na **B61** de Compras não existe.
+
+A **revisão do plano** achou uma **trava**: o extrato do saldo inicial ficaria sem a prateleira (o motor grava a que é
+informada, não a que ele escolhe) — corrigido, com teste. E sete correções: a origem fica na auditoria, não no extrato; a
+prateleira bloqueada passa a recusar (**B723**); a decisão do "não gravou" tem de olhar o número de linhas gravadas, não o
+último número gerado; a ordem das recusas na releitura do "Inativar"; a auditoria do "já inativada por outro"; um teste
+antigo que mandava saldo com lote e inspeção; e o caminho de dois passos (**C222**).
+
+A **revisão adversarial do código** (dois revisores, executando) não achou nenhum perfil sem a permissão pondo saldo
+inicial, nem formato de quantidade, controle ou dono que passasse por fora das regras; as cinco mensagens novas batem letra
+por letra com o plano. O primeiro achou **um defeito real** no código novo: no "Inativar" pela edição da família, o caminho
+"outro já inativou" gravava sem a conferência — se, no meio, alguém reativasse a família e cadastrasse material nela, ela
+voltava a ficar inativa com material dentro; corrigido, com teste. E um **anterior**: salvar a família só renomeando (a tela
+não manda a situação) regravava a situação lida no começo — desfazia um "Inativar" feito no mesmo instante; corrigido
+(**B727**). Achou ainda duas corridas anteriores entre família e subfamília (reativar subfamília e criar subfamília com a
+família principal sendo inativada), que ficam declaradas (**C221**). O segundo fez **45 sabotagens**: 32 derrubaram teste, 2
+eram equivalentes, e **11** mostraram cenários sem prova — viraram **9** testes novos (o mais importante: trocar família e
+subfamília juntas no mesmo salvar, o caso comum, que nenhum teste fazia).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 110 entregue (2026-10-15):** **o Saldo Inicial do cadastro vira uma Entrada de verdade, e a família não fica
+  mais inativa com material dentro.** Com saldo, o cadastro exige quem movimenta estoque, recusa material com lote, série,
+  inspeção ou de cliente, e grava o saldo pelo motor de estoque (**C215** resolvido); o cadastro e o "Inativar" da família
+  conferem e gravam no mesmo comando (**C218** resolvido). **O que é seu:** as consultas **A57** e **A58** (opcionais); as
+  decisões **B721 a B727** (a **B721** — manter o campo com recusa, em vez de tirá-lo — é reversível e a alternativa é sua);
+  os avisos **C219 a C223**; as limitações **(110)** em D e as verificações **(110)** em F. **Próxima: Etapa 112 (a 111 é
+  da frente de Compras) — ver a "próxima tarefa detalhada" no plano da Etapa 110.**
 
 - **Etapa 108 entregue (2026-10-15):** **trocar o dono de um material com histórico passa a ser só do Administrador.** No
   cadastro, tirar o cliente, dar o material a um cliente ou passar de um cliente a outro, num material com saldo, retenção
@@ -22777,9 +23048,9 @@ contrato da regra chamada direto (texto vazio e zero como "nosso"; a troca sem h
   dois nomes; um salvar que leu o dono antes da troca não o grava de volta (**C213** resolvido). **O que é seu:** a consulta
   **A56** (opcional — as trocas de dono já feitas); as decisões **B713 a B720** (a **B714** — compromisso pendente não conta
   como histórico — e a **B716** — sem motivo escrito — são reversíveis e a alternativa é sua; a **B718** repete a **B708**);
-  os avisos **C214** a **C217**; as limitações **(108)** em D e as verificações **(108)** em F. **Próxima: Etapa 110 (a 109
+  os avisos **C214** a **C217**; as limitações **(108)** em D e as verificações **(108)** em F. ~~**Próxima: Etapa 110 (a 109
   é da frente de Compras) — o Saldo Inicial do cadastro passa pelas regras da Entrada (**C215**) — ver a "próxima tarefa
-  detalhada" no plano da Etapa 108.**
+  detalhada" no plano da Etapa 108.**~~ *(Feita — Etapa 110.)*
 
 - **Etapa 106 entregue (2026-10-15):** **desfazer o ajuste de material de cliente passa a ser só do Administrador.** O
   estorno de Ajuste, Ajuste positivo e Ajuste negativo de material de cliente exige a mesma permissão do ajuste; o estorno

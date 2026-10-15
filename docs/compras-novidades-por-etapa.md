@@ -385,6 +385,8 @@
   proíbem ("Inativar" recusa família com material ativo; o cadastro recusa família inativa). Fechar exige mexer no cadastro
   e na edição de material, que é a área da Etapa 108 do almoxarifado em paralelo; deixei para a próxima etapa (é a
   primeira candidata do plano da 109).
+  **Fechada na Etapa 110 do almoxarifado (`96f28b29`)** — gravação condicional dos dois lados; ver a C218 em
+  `docs/almoxarifado-novidades-por-etapa.md`.
 - **B62 — Etapa 111 (G17): o nome do módulo nas telas e no log saiu de uma fonte só — três mudanças pequenas de texto,
   uma divergência de nome mantida.** (1) **Log de auditoria:** o 403 de uma rota do servidor em Almoxarifado, Engenharia /
   Projetos, Frota e TODOLIST gravava a **chave** (`almoxarifado`) na coluna Módulo; agora grava o nome, o mesmo que a
