@@ -53,6 +53,12 @@
 > principal inativa; e o banco passa a entrar em **WAL já no primeiro boot** — a medição mostrou que o aviso do G12
 > **não** era inofensivo: o banco ficava sem WAL em todo boot (G12 estava errado). Decisões **B53–B55**, consulta
 > **A8**. Próxima de Compras: candidatas no plano da 105.
+> **2026-10-15 — Etapa 107 entregue (frente Compras/dívidas do core):** instalação nova **não semeia mais as categorias
+> do almoxarifado em dobro** — o G16 dizia que o banco nascia completo; **estava errado**: em 6 de 14 primeiros boots as
+> 27 categorias entravam duas vezes e o índice de nome único nunca era criado; e as **quatro** barras de abas desenhadas à
+> mão (Administração, Minha Conta, OS comercial, Almoxarifado → Configurações) passam a ser a barra de Configurações — o
+> G8 listava seis, **estava errado** em três (Compras/Financeiro e Operacional não têm barra). Decisões **B56–B58**,
+> consulta **A9**. Próxima de Compras: candidatas no plano da 107.
 > O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
 > A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
@@ -103,6 +109,18 @@
   **três** com o servidor parado, ou usar o backup do próprio sistema, que já copia os três. Voltar ao modo antigo,
   se preferir: `PRAGMA journal_mode = DELETE;` com o servidor parado — mas o boot seguinte põe WAL de novo (é o
   que o código sempre quis: "WAL mode: Habilitado para melhor concorrência").
+- **A9 (Etapa 107) — Consulta, e só age se der linha:** o banco de produção nasceu com categorias (ou tipos de material)
+  em dobro? (G16 — acontecia no **primeiro** boot de uma instalação nova, em 6 de 14 medidos.)
+  `SELECT 'categoria' AS cadastro, nome, COUNT(*) AS vezes FROM categorias_material_almoxarifado GROUP BY nome HAVING COUNT(*) > 1 UNION ALL SELECT 'tipo', nome, COUNT(*) FROM tipos_material_almoxarifado GROUP BY nome HAVING COUNT(*) > 1`.
+  Outro sinal, sem abrir o banco: o log de **todo** boot mostra *"Nao foi possivel criar idx_categorias_almox_nome …
+  ha categorias com nome repetido"*. (a) **Zero linhas:** nada a fazer — o deploy desta versão não muda nada. (b) **Com
+  linhas:** a versão nova não cria duplicata nova, mas não desfaz a antiga. Veja quais cópias estão em uso:
+  `SELECT c.id, c.nome, (SELECT COUNT(*) FROM materiais_almoxarifado m WHERE m.categoria_id = c.id OR m.subcategoria_id = c.id) AS materiais, (SELECT COUNT(*) FROM familias_material_almoxarifado f WHERE f.categoria_id = c.id) AS familias, (SELECT COUNT(*) FROM setor_material_permitido p WHERE p.categoria_id = c.id) AS permissoes FROM categorias_material_almoxarifado c WHERE c.nome IN (SELECT nome FROM categorias_material_almoxarifado GROUP BY nome HAVING COUNT(*) > 1) ORDER BY c.nome, c.id`.
+  Se as cópias de **id maior** têm 0 nas três colunas (o normal: o seed em dobro nasce sem uso), apague-as com o
+  servidor parado (`DELETE FROM categorias_material_almoxarifado WHERE id IN (…)`) e suba de novo — o aviso some e o
+  índice é criado (enquanto ele não existe, **Configurações → Categorias aceita nome repetido** — a recusa *"Já existe uma
+  categoria com este nome"* é feita por ele). Se alguma estiver em uso, não apague: me chame (é preciso repassar os vínculos para a cópia que fica).
+  Mesmo raciocínio para tipos (`materiais_almoxarifado.tipo_material_id`).
 
 ### B. Decisões que eu tomei e você pode reverter
 - **B1 — Esta frente vive em `main`, e `main` tem OUTRO pedido de compra.** A branch
@@ -298,6 +316,28 @@
   *"Ativo inválido: use 0 ou 1"*. Antes o valor era gravado cru — `'false'` virava texto e a família sumia **das
   duas** listas (ativas e inativas). **Descartado:** aceitar qualquer coisa e só interpretar (o banco continuaria
   recebendo texto). Nenhuma tela manda esse campo para família.
+- **B56 — Etapa 107 (G16): o schema do almoxarifado roda uma vez por conexão de cada vez, em vez de tirar uma das duas
+  chamadas do boot.** Quem pede o schema com uma montagem em andamento espera **a mesma**; terminada (bem ou mal), o
+  próximo pedido monta de novo — uma falha não fica guardada, e a nova tentativa automática de 400 ms depois continua
+  valendo. **Descartado:** tirar uma das duas chamadas (a primeira é a que corre antes das rotas; a segunda é a que tem a
+  nova tentativa — tirar qualquer uma muda a ordem ou perde a tentativa, e o próximo módulo que pedir o schema reabre a
+  corrida); `INSERT OR IGNORE` em cada semente (só cobre tabela com nome único — categorias e tipos não têm, e
+  continuariam em dobro). Reversível: reverter o commit `1fff24f4`.
+- **B57 — Etapa 107 (G8): das seis barras de abas que o G8 listava, migrei as quatro que existem e apaguei o código
+  morto das outras.** Compras/Financeiro tinham uma lista de abas que nada desenhava (a navegação é pelo menu) e um CSS de
+  barra sem elemento; Operacional, só o CSS. **Descartado:** criar barras de abas nessas telas (seria tela nova, não
+  unificação). Os **botões de alternância** de outras telas (Ferramentas, Inspeções, Lotes, Reposição, Sobras, Relatórios
+  da Produção, Veículos, Dashboard, Atividades, Colaboradores, Aprovações) e o menu vertical de seções do formulário de OS
+  do Operacional **ficaram como estão** — não são barras de abas; virar aba mudaria o desenho delas.
+- **B58 — Etapa 107 (G8): o visual unificado muda quatro coisas pequenas, de propósito.** (1) Os rótulos das abas da OS
+  comercial saem da caixa alta (eram `PROPOSTAS APROVADAS`); (2) no celular as barras rolam de lado em vez de quebrar em
+  duas linhas (a da Administração quebrava); (3) a aba ativa das Configurações do Almoxarifado sai do azul-claro fixo para
+  o azul do sistema; (4) as setas do teclado (← → Home End) trocam de aba — na OS isso recarrega a lista, como o clique —
+  e a tecla Tab passa a entrar só na aba ativa (as outras se alcançam pelas setas; antes o Tab passava por todas — é o
+  padrão de acessibilidade de abas, o mesmo de Configurações desde a Etapa 36; achado da revisão final).
+  A correção de contraste da aba ativa no celular, que só valia para a OS, passou a valer para todas (inclusive
+  Configurações) e deixou de pintar o contador da aba ativa de azul sobre azul. **Descartado:** manter variações por tela
+  (seria o CSS próprio de volta). Reversível tela a tela: um commit por barra.
 - **B44 — Etapa 89: só o nome do arquivo do PDF da OS é limpo; o número da OS fica como foi digitado.**
   Com `/`, `"` ou `:` no número, o Windows recusava o nome do arquivo e o usuário via "Erro ao gerar
   PDF" (o PDF até era gerado). Agora o arquivo vira `OS_OS_1_2_A_<hora>.pdf` e o documento continua
@@ -464,9 +504,14 @@
 - **G7** A lista de módulos do sistema existe em **quatro** lugares (`modulosMeta.js`,
   `TipoSelecao.todosModulos`, `MODULE_ADMIN_KEYS` no servidor, `DEFAULT_MODULOS_TIPO`). A Etapa 36
   usou a do cliente (`modulosMeta.js`) e **não** criou uma quinta; unificar é etapa própria.
-- **G8** As abas da Etapa 36 usam um componente `Tabs` reutilizável novo; as outras seis barras de
+- **G8 — corrigido na Etapa 107 (`c48efd13`, `1e49c8aa`, `617b122b`, `7af44575`, `6abdee95`, `c52024d9`).** As abas da
+  Etapa 36 usam um componente `Tabs` reutilizável novo; as outras seis barras de
   abas do sistema (Admin, Compras/Financeiro, Minha Conta, OS comercial, Operacional, e a barra
   interna do almoxarifado) continuam cada uma com o próprio CSS. Migrar é etapa própria.
+  **Esta lista estava errada em três das seis:** Compras/Financeiro e Operacional **não têm** barra de abas — só um
+  array `tabs` que nada renderiza e CSS sem elemento (apagados, B57). As quatro reais (Administração, Minha Conta, OS
+  comercial, Almoxarifado → Configurações) usam o `ui/Tabs`; o comportamento de cada uma foi preso em teste **antes** da
+  migração (B58 lista o que mudou no visual).
 - **G10** Material gravado **pela API** com a subfamília no lugar da família (`familia_id = <sub>`;
   nenhuma tela faz isso): a subfamília conta e lista, a raiz não, e o filtro de Materiais não o
   acha. Correção apontada: `validateFamiliaAtiva` recusar subfamília como família em material
@@ -487,7 +532,13 @@
   família possui N item(ns) ativo(s)"*, o `PUT` não confere (medido: 200, `ativo = 0`). Nenhuma tela manda
   `ativo` nesse `PUT` (a aba Famílias manda só nome, descrição e tipo de uso) — só a API. Correção apontada: a
   mesma contagem do `DELETE` quando `ativo` passa de 1 para 0.
-- **G16** (achado na Etapa 105, **não corrigido**) No primeiro boot em banco novo o log mostra, em parte dos boots,
+- **G16 — corrigido na Etapa 107 (`1fff24f4`, `e6b69780`). O texto abaixo estava errado em dois pontos:** o banco **não** nascia
+  sempre completo — em 6 de 14 primeiros boots as **27 categorias entravam em dobro** (categorias não têm nome único, as
+  duas montagens simultâneas semeavam) e o índice de nome único da Etapa 26 **nunca** era criado (aviso em todo boot
+  seguinte); e não era só o seed de setores — todo seed do schema é "conta e, se for zero, insere" (tipos de material
+  também não têm nome único). Agora o schema monta uma vez por conexão de cada vez (B56): 8 de 8 boots novos limpos,
+  27/27, índice criado. Banco que já nasceu em dobro: **A9**.
+  **(Original, Etapa 105):** No primeiro boot em banco novo o log mostra, em parte dos boots,
   `Erro schema almoxarifado v3 (tentativa 1/3): SQLITE_CONSTRAINT: UNIQUE constraint failed: setores_almoxarifado.nome`
   (medido: 3 de 7 boots antes da 105, 5 de 6 depois — a ordem dos comandos mudou, a corrida é a mesma). A segunda
   tentativa passa (nenhum `tentativa 2/3` em 13 boots) e o banco nasce com os 8 setores do seed. Banco existente
@@ -532,6 +583,77 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 107 — O primeiro boot não semeia mais as categorias em dobro; as barras de abas são uma só (2026-10-15)
+
+**Em uma frase.** Numa instalação nova o almoxarifado montava o próprio banco duas vezes ao mesmo tempo, e em quase
+metade dos primeiros boots as 27 categorias de material entravam em dobro — o seletor de categoria mostrava cada nome
+duas vezes e a regra "categoria não repete nome" nunca chegava a valer; e as quatro telas que ainda tinham barra de abas
+desenhada à mão (Administração, Minha Conta, Ordens de Serviço do comercial e as Configurações do Almoxarifado) passam a
+usar a mesma barra de Configurações, com o mesmo visual, a mesma rolagem no celular e o mesmo teclado.
+
+### O que há de novo (visível para o usuário)
+- **Instalação nova:** o almoxarifado nasce com as 27 categorias uma vez só, e o log do primeiro boot fica limpo — some
+  o `Erro schema almoxarifado v3 (tentativa 1/3): … UNIQUE constraint failed` e o aviso
+  `Nao foi possivel criar idx_categorias_almox_nome`. Banco existente: nada muda (mas veja **A9**).
+- **Administração, Minha Conta, Ordens de Serviço (comercial) e Almoxarifado → Configurações:** a barra de abas é a de
+  Configurações — mesma altura, mesma cor da aba ativa, rola de lado no celular em vez de quebrar em duas linhas, e as
+  setas do teclado (← →, Home, End) trocam de aba. O que cada tela faz não muda: a mesma aba abre primeiro, o endereço
+  continua guardando a aba das Configurações do Almoxarifado, quem não é administrador continua sem ver as abas, e os
+  contadores da OS continuam aparecendo só quando passam de zero.
+
+### Por baixo do capô
+- **G16:** `initSchema(db)` do almoxarifado passa a ser **uma execução por conexão de cada vez**: quem chama com uma
+  execução em andamento recebe a mesma promise; terminada (bem ou mal), a próxima chamada roda inteira de novo — a falha
+  não fica guardada, então o retry da extended continua valendo (B56). No boot eram duas chamadas
+  (`routes/almoxarifado.js` e `runInitSchemaWithRetry` da extended) intercalando comando a comando; todo seed é "conta e,
+  se for zero, insere", e as duas viam zero.
+- **G8:** `ui/Tabs` ganhou `badge` (contador opcional ao lado do rótulo; 0 e vazio não aparecem). Admin, Minha Conta, OS
+  comercial e a barra interna de Almoxarifado → Configurações usam o componente; o CSS próprio de cada barra foi apagado.
+  A correção de contraste da aba ativa no celular (que só existia para a OS) vale agora para todas as abas — e o contador
+  da aba ativa, que essa regra pintava de azul sobre azul, fica legível.
+- **O G8 estava errado em metade da lista:** Compras, Financeiro e Operacional **não têm** barra de abas — só um array
+  `tabs` que nada renderiza e CSS sem elemento. Apagados (B57).
+- Testes novos: `schemaAlmoxUmaVez.api.test.js` (6); no client, `Admin.abas`, `MinhaConta.abas`,
+  `OrdensServicoComercial.abas`, `ConfiguracoesAlmoxarifado.abas`, `Configuracoes.almoxEmbutido` e três casos de `badge`
+  em `Tabs.test.js`. Os de comportamento foram escritos **antes** de cada migração e passaram no código antigo.
+- A revisão final achou dois testes que diziam prender o que não prendiam (o endereço das Configurações do Almoxarifado
+  trocar de aba **sem** encher o histórico do navegador, e a regra de contraste do celular) e uma armadilha no harness de
+  testes (montava o app com o schema ainda sendo montado em fundo) — os três fechados (`72f01b83`, `e6b69780`).
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| 1º boot em pasta nova: categorias **54 linhas / 27 nomes** em 6 de 14 boots, índice de nome único ausente | 8 de 8 boots: 27/27, índice criado |
+| Log do 1º boot: `UNIQUE constraint failed` (tentativa 1/3) em 13 de 14 boots | 0 de 8 |
+| Instalação que nasceu em dobro: **Configurações → Categorias aceitava nome repetido** (a recusa *"Já existe uma categoria com este nome"* vem do índice que faltava) | instalação nova recusa; a que já nasceu em dobro continua aceitando até a limpeza da **A9** |
+| Banco que nasceu com categorias em dobro: o aviso do índice em todo boot (duas vezes) | continua avisando (uma vez) — a correção não desfaz o dado antigo (**A9**) |
+| `Schema almoxarifado v3 inicializado` duas vezes por boot | uma vez |
+| Quatro barras de abas com desenho próprio (e Admin quebrando em duas linhas no celular) | a barra de Configurações nas quatro, rolando de lado |
+| Abas trocavam só com o mouse | também com ← → Home End |
+| Contador da aba ativa da OS ilegível no celular (azul sobre azul) | branco sobre azul |
+| Rótulos das abas da OS em MAIÚSCULAS | caixa normal, como as outras abas (B58) |
+
+### Roteiro de teste manual (clicável)
+1. **Administração** (`/admin`, como administrador): três abas Usuários · Permissões · Logs; abre em Usuários; clique em
+   Logs → a lista de logs; com a aba focada, ← volta para Permissões.
+2. **Minha Conta** (menu do usuário): abre em "Informações pessoais"; "Alterar senha" mostra só o formulário de senha.
+3. **Comercial → Ordens de Serviço:** com propostas aprovadas sem OS, a aba "Propostas Aprovadas" mostra o número; sem
+   nenhuma, não mostra número (nem "0"). "Ordens de Serviço" mostra os cartões de total/pendentes e a lista.
+4. **Almoxarifado → Configurações** (administrador do almoxarifado): 13 abas; clique em "Localizações" e aperte F5 — volta
+   em Localizações. Em **Configurações → Almoxarifado**, a mesma barra, menor, abaixo da barra de módulos. Entrando com um
+   usuário que não administra o almoxarifado: "Acesso restrito — administrador do Almoxarifado", sem abas.
+5. (Quem cuida do servidor.) Suba o servidor numa pasta de dados vazia (`CRM_DATA_DIR`): o log não mostra
+   `UNIQUE constraint failed` nem `Nao foi possivel criar idx_categorias_almox_nome`, e
+   `SELECT COUNT(*), COUNT(DISTINCT nome) FROM categorias_material_almoxarifado` responde `27|27`.
+
+### O que a etapa NÃO cobre
+- **Banco que já nasceu com as categorias em dobro** não é consertado — a consulta **A9** diz se o seu é um deles e o que
+  fazer.
+- Botões de alternância que **não são** barras de abas ficam como estão: Ferramentas, Inspeções, Lotes, Reposição e Sobras
+  do almoxarifado, Relatórios da Produção, Veículos/Manutenção, Dashboard, Atividades, Colaboradores e Aprovações; e a
+  navegação vertical de seções do formulário de OS do Operacional. São botões ou menus verticais com o desenho do próprio
+  módulo; trocá-los por abas mudaria a tela, não só unificaria.
 
 ## Etapa 105 — Família com material ativo não se inativa pela API; o banco entra em WAL no primeiro boot (2026-10-15)
 
