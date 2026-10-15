@@ -1122,6 +1122,11 @@ describe('Etapa 92: Cancelar Requisição nos outros módulos (RN-06)', () => {
     'PARCIALMENTE_ATENDIDA', 'ENTREGUE', 'ENCERRADA', 'REJEITADO', 'CANCELADO'];
   // Solicitante da fixture (id 99) SEM ser administrador: prova que o botão vem de "quem pediu".
   const SOLICITANTE_COMUM = { id: 99, nome: 'Quem Pediu', role: 'user' };
+  // Etapa 101 (C195, RN-07): a *Em Separação* VAZIA e sem entrega passou a mostrar Cancelar (as duas rotas a aceitam —
+  // RequisicoesSeparacaoVaziaSaida.test.js). Nos casos "sem botão" a EM_SEPARACAO vem com material na caixa.
+  const semSaida = (status) => (status === 'EM_SEPARACAO'
+    ? { ...baseRequisicao(status), itens: [{ ...ITEM, quantidade_separada: 2, quantidade_entregue: 0, quantidade_atendida: 0 }] }
+    : baseRequisicao(status));
   // Administrador (`role admin` → `canDeleteAlmoxRequisicao`) que NÃO é o solicitante.
   const ADMIN_QUE_NAO_PEDIU = { id: 7, nome: 'Admin Outro', role: 'admin' };
 
@@ -1158,7 +1163,7 @@ describe('Etapa 92: Cancelar Requisição nos outros módulos (RN-06)', () => {
   test.each(NOVE)('[92 RN-06 (b)] %s: sem botão, nem para quem pediu sendo administrador', async (status) => {
     mockWarehouseMode = false;
     mockUser = USUARIO_PADRAO; // solicitante (99) E admin: as duas condições a favor
-    detalheDoBanco = baseRequisicao(status);
+    detalheDoBanco = semSaida(status);
     await renderizar();
     expect(container.textContent).toContain('REQ-055'); // painel aberto (senão a ausência não prova nada)
     expect(botaoPorTexto('Cancelar Requisição')).toBeFalsy();
@@ -1220,7 +1225,7 @@ describe('Etapa 92: Cancelar Requisição nos outros módulos (RN-06)', () => {
 
   test.each(NOVE.filter((s) => s !== 'RASCUNHO'))('[92 RN-06 (e)] modo almoxarifado, %s: sem botão', async (status) => {
     mockWarehouseMode = true;
-    detalheDoBanco = baseRequisicao(status);
+    detalheDoBanco = semSaida(status);
     await renderizar();
     expect(container.textContent).toContain('REQ-055');
     expect(botaoPorTexto('Cancelar Requisição')).toBeFalsy();

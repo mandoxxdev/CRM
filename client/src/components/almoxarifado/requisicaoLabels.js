@@ -54,4 +54,17 @@ export const STATUS_COM_CAIXA = Object.freeze([
   'EM_SEPARACAO', 'PARCIALMENTE_ATENDIDA', 'PRONTA_PARA_RETIRADA', 'AGUARDANDO_APROVACAO_VALOR',
 ]);
 
+// Etapa 101 (C195, RN-07): a saída da *Em Separação* vazia. Espelho de `destinoDaSeparacaoVazia` de
+// `server/services/almoxarifado/requisitionStateMachine.js`, conferido por teste
+// (`RequisicoesSeparacaoVaziaSaida.test.js`, que importa o do servidor). `null` com material na caixa (separado −
+// entregue, arredondado a 6 casas, acima de 1e-9 — a régua da B524); senão 'ENCERRADA' se algum item teve entrega e
+// 'CANCELADO' se nada saiu. Mudou lá, mude aqui.
+const arred6 = (x) => Math.round(x * 1e6) / 1e6;
+export const destinoDaSeparacaoVazia = (itens) => {
+  const lista = itens || [];
+  const entregue = (i) => Number(i.quantidade_entregue ?? i.quantidade_atendida ?? 0) || 0;
+  if (lista.some((i) => arred6((Number(i.quantidade_separada) || 0) - entregue(i)) > 1e-9)) return null;
+  return lista.some((i) => entregue(i) > 1e-9) ? 'ENCERRADA' : 'CANCELADO';
+};
+
 export default TIPO_REQUISICAO_LABELS;

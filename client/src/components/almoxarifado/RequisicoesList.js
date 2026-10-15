@@ -11,7 +11,7 @@ import AlmoxPageHeader, { REQUISICAO_FLOW, getRequisicaoStepIndex } from './Almo
 import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
 import {
   TIPO_REQUISICAO_LABELS, STATUS_CANCELAVEIS_ALMOXARIFADO, STATUS_CANCELAVEIS_OUTROS_MODULOS,
-  separacaoAReabrir, STATUS_COM_CAIXA,
+  separacaoAReabrir, STATUS_COM_CAIXA, destinoDaSeparacaoVazia,
 } from './requisicaoLabels';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import AssinaturaCanvas from './AssinaturaCanvas';
@@ -1966,7 +1966,9 @@ const RequisicoesList = () => {
 
                 {/* Encerramento — a partir de ENTREGUE/PARCIALMENTE_ATENDIDA (design: "cancela
                     saldos pendentes, nenhuma entrega futura"). */}
-                {warehouseMode && ['ENTREGUE', 'PARCIALMENTE_ATENDIDA'].includes(detalhe.status) && (
+                {/* Etapa 101 (C195, RN-07): e a *Em Separação* com a caixa vazia e algo entregue (sem saída antes). */}
+                {warehouseMode && (['ENTREGUE', 'PARCIALMENTE_ATENDIDA'].includes(detalhe.status)
+                  || (detalhe.status === 'EM_SEPARACAO' && destinoDaSeparacaoVazia(detalhe.itens) === 'ENCERRADA')) && (
                   <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}
                     onClick={() => { setMotivoEncerramento(''); setShowEncerrar(true); }} disabled={saving}>
                     <FiArchive size={14} /> Encerrar Requisição
@@ -2008,8 +2010,11 @@ const RequisicoesList = () => {
                     rota aceita dono ou administrador DO SISTEMA (`isSystemAdmin`, como o servidor) — o
                     admin do módulo e o perfil ADMINISTRADOR tomavam 403 (Fase 5, B442). As listas são a
                     do servidor (RN-07). */}
-                {(warehouseMode ? STATUS_CANCELAVEIS_ALMOXARIFADO : STATUS_CANCELAVEIS_OUTROS_MODULOS)
-                  .includes(detalhe.status) && (
+                {/* Etapa 101 (C195, RN-07): também a *Em Separação* vazia da qual nada saiu — as duas rotas aceitam;
+                    com material na caixa ou algo entregue, não (a rota recusa com M1/M2). */}
+                {((warehouseMode ? STATUS_CANCELAVEIS_ALMOXARIFADO : STATUS_CANCELAVEIS_OUTROS_MODULOS)
+                  .includes(detalhe.status)
+                  || (detalhe.status === 'EM_SEPARACAO' && destinoDaSeparacaoVazia(detalhe.itens) === 'CANCELADO')) && (
                   detalhe.solicitante_id === user?.id || (warehouseMode && isSystemAdmin(user))
                 ) && (
                   <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
