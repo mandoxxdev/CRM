@@ -1,6 +1,7 @@
 # 04 — Requisições de Materiais
 
 > **Status:** 🟢 — Etapa 3 entregue (2026-08-05); ciclo ponta a ponta rascunho→entrega→confirmação→encerramento · **Spec original:** seção 5
+> **Etapa 102 (2026-10-15, plano `5ae9ced3`, T1 `99043a57`, T3 `5746553b`, T4 `f18cae5d`) — material na caixa não se encerra, em status nenhum.** `PUT /api/almoxarifado/requisicoes/:id/encerrar` usa `recusaEncerrar(status, itens)` (`requisitionStateMachine.js`): todo status de `STATUS_COM_CAIXA` com caixa (régua da B524) → 400 E1, também na nova tentativa do compare-and-set; a *Entregue* encerra sempre (não retém caixa). A tela mostra a frase E1 no lugar do botão na *Parcialmente Atendida* com caixa (`podeEncerrar`). O sufixo da recusa de saldo por caixa perde *"entregue o que existe e encerre a requisição"* (B701). C204 resolvido.
 > **Etapa 101 (2026-10-15, T1 `6dcced8e`, T2 `38e04309`, T3 `dfdad6b1`, T4 `f7139676`) — a *Em Separação* vazia tem saída e material com série só se pede inteiro.** A *Em Separação* com a caixa vazia **cancela** (nada entregue; as duas rotas, autorização de sempre) ou **encerra** (algo entregue); com material na caixa, as recusas M1/E1 dizem o que fazer; os cancelamentos entram na trava por requisição; a criação, o rascunho, a cópia e o envio recusam fração de material com série. **C195 e C202 resolvidos** — ver a seção "Etapa 101" no fim. Continua 🟢.
 > **Etapa 99 (2026-10-15, `314837d6..3e14653a`: T1 `7353265d`, T2 `b8e16e4c`, T2b `c9087106`, T3 `3e14653a`) — a separação recusa o que não é separável e a conferência conta a caixa (regra na feature 05).** O que toca a requisição: `PUT /requisicoes/:id/separar` (e `/separacao`) recusa com 400 a forma inválida **antes** da alçada de valor e da reivindicação, então um payload inválido não muda o status (antes ia para *Em Separação*, ou gravava *Aguardando aprovação de valor*); `conferir-separacao` recusa a caixa vazia (*"Nenhum item separado"*). **Pendência declarada desta feature (C202, 2026-10-15):** a **criação** de requisição aceita fração de material com série (pedir 1,5 → 201) — ver a seção "Etapa 99" no fim. Continua 🟢.
 > **Etapa 98 (2026-10-09, plano `d1679eaa`, Fase 2 `a16ea09f`, T0 `0aafb939`, T1 `9e0bb225`, T2 `672bb151`, T3 `55bc2165`, T4 `4941c9d9`, integração T5 `de77a6eb` + `a70107ca`, Fase 5 `084ded25`, `cc130a86`, `b7fc06a0`) — devolver da caixa à prateleira (regra na feature 05).** O que toca a requisição: a máquina ganha a seta `PRONTA_PARA_RETIRADA → EM_SEPARACAO` (B504 — só a devolução a grava, por compare-and-set); `PUT /api/almoxarifado/requisicoes/:id/devolver-separado` (gate `separar_emitir`); o detalhe `GET /api/almoxarifado/requisicoes/:id` ganha `devolucoes_caixa` (aditivo, em ordem de `id`: `{ id, item_id, material_id, material_codigo, quantidade, separado_antes, separado_depois, entregue, localizacao_planejada_codigo, lote_planejado_codigo, motivo, status_antes, status_depois, conferencia_limpa, usuario_id, usuario_nome, created_at }`) e o `quantidade_entregavel` passa a ser o que o **motor** deixa sair — com o disponível do material sem a reserva do item negativo e sem permitir negativo (flag do material **ou** a global, B514), 0 (antes podia mostrar 3, ou −1, para uma entrega que o motor recusava inteira — C190/C196, B509); `saldo_separavel`, `quantidade_separavel` e `saldo_atual` não mudam. O liberar para retirada exige caixa > 0 (separado − entregue), não separado > 0 — a mesma literal *"Nenhum item separado"* (B512, C199). Ver a seção "Etapa 98" no fim.
@@ -305,3 +306,35 @@ material na caixa ainda encerra (C204 — contrato da 93; candidata à 102); avi
 com fração só sai cancelando (C206 — o rascunho não tem edição de itens).
 
 **Status:** continua 🟢 — fecha a C195 e a C202 sem abrir pendência de requisição.
+
+## Etapa 102 — material na caixa não se encerra, em status nenhum (2026-10-15)
+
+Plano: `docs/superpowers/plans/2026-10-15-almoxarifado-etapa102-encerrar-com-caixa-recusa.md`. Branch `etapa-e102`
+(plano `5ae9ced3`; código: T1 `99043a57`, T3 `5746553b`, T4 `f18cae5d`; Fase 5 `403e18d2`).
+
+*(**Correção à vista:** a seção da Etapa 101 acima diz, no "Fica de fora", que *"a Parcialmente Atendida com material na
+caixa ainda encerra (C204 — contrato da 93)"*. **Deixou de ser verdade nesta etapa.** E o contrato do encerramento desta
+spec — *"a partir de ENTREGUE ou PARCIALMENTE_ATENDIDA"* — vale agora com a condição da caixa vazia na Parcialmente
+Atendida.)*
+
+**Entregue:**
+- [x] **RN-01 — encerrar com material na caixa é recusado** — `99043a57` (B700): `recusaEncerrar`, E1 em todo status
+  de `STATUS_COM_CAIXA` (com seta para `ENCERRADA`: *Em Separação* e *Parcialmente Atendida*); nada muda (status,
+  reserva, trilha, `encerrado_por`).
+- [x] **RN-02 — Entregue encerra sempre** — `99043a57` (não retém caixa; a devolução não a aceita).
+- [x] **RN-03 — a nova tentativa confere a caixa** — `99043a57`.
+- [x] **RN-04 — a *Em Separação* da 101 intacta** — `99043a57` (E1/E2/200).
+- [x] **RN-05 — a saída é devolver ou entregar** — `99043a57`, `f18cae5d` (rota e serviço).
+- [x] **RN-06 — o sufixo da recusa de saldo** — `99043a57` (B701).
+- [x] **RN-07 — a tela** — `5746553b` (B702): `podeEncerrar` e `MSG_ENCERRAR_COM_CAIXA` em `requisicaoLabels.js`,
+  paridade por tabela contra o servidor.
+- [x] **RN-08 — sem trava nova** — o encerramento já estava na trava por requisição (93); provado pelas corridas
+  entregar × encerrar e devolver × encerrar.
+- [x] **Fase 5** — `403e18d2`: dois revisores, 0 defeito; 25 sabotagens (24 vermelhas, 1 equivalente); os dois testes
+  que só as etapas anteriores seguravam (a nova tentativa relê os itens; o Encerrar fora do modo almoxarifado).
+
+**Fica de fora (com o porquê):** a devolução automática no encerramento (B700 — reversível: a recusa não grava nada); a
+*Entregue* legado com separado > entregue encerra (não retém caixa, sem gesto de devolução); as *Encerradas* antigas com
+caixa ficam (B703, A53); o botão Encerrar não confere o perfil de aprovação antes do clique (anterior, inalterado).
+
+**Status:** continua 🟢 — fecha a C204 sem abrir pendência de requisição.

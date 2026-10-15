@@ -115,7 +115,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cinquenta e dois itens para rodar em produção ANTES do deploy — quarenta e nove são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Cinquenta e quatro itens para rodar em produção ANTES do deploy — cinquenta e um são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-15 (Etapa 102) de cinquenta e dois para cinquenta e quatro**, com a **A53** — as *Encerradas* que ficaram com material na caixa (encerradas antes desta versão; nada a fazer no sistema, só conferir a prateleira) — e a **A54** — as *Parcialmente Atendidas* com material na caixa, que a partir desta versão não se encerram sem antes entregar ou devolver; as duas opcionais.)*
 
 *(**Atualizado em 2026-10-15 (Etapa 101) de cinquenta para cinquenta e dois**, com a **A51** — as requisições abertas com fração de material com série (a criação passou a recusar; o que já existe fica) — e a **A52** — as *Em Separação* com a caixa vazia que estavam presas, com a saída de cada uma; as duas opcionais.)*
 
@@ -1994,8 +1996,53 @@ excluída; deixa de achar depois do cancelamento. Controle: sem o `HAVING` ela a
   entrega o resto, se ainda é para atender.
 - **`updated_at` antigo** é a pista de que ninguém mais vai mexer nela.
 
+**A53 (NOVA, da Etapa 102 — as *Encerradas* com material na caixa).** Até esta versão encerrar a *Parcialmente
+Atendida* aceitava material separado e não entregue, e esse material deixava de ser caixa sem nenhum movimento (**C204**).
+Nos números ele já conta como livre; **fisicamente** pode estar separado num canto. **Nada aqui é obrigatório.** Somente
+leitura — rodar uma vez depois do deploy:
 
-### B. Decisões de negócio — B1 a B530; as em aberto esperam você, as tomadas estão escritas com o descartado
+```sql
+SELECT r.id AS requisicao_id, r.numero, r.updated_at, i.id AS item_id, m.codigo,
+       ROUND(COALESCE(i.quantidade_separada, 0) - COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0), 6) AS na_caixa
+  FROM requisicoes_almoxarifado r
+  JOIN itens_requisicao_almoxarifado i ON i.requisicao_id = r.id
+  JOIN materiais_almoxarifado m ON m.id = i.material_id
+ WHERE r.status = 'ENCERRADA' AND COALESCE(r.ativo, 1) = 1
+   AND ROUND(COALESCE(i.quantidade_separada, 0) - COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0), 6) > 1e-9
+ ORDER BY r.id, i.id;
+```
+
+**A54 (NOVA, da Etapa 102 — as *Parcialmente Atendidas* com material na caixa).** A partir desta versão elas **não se
+encerram** enquanto houver material separado e não entregue (**B700**): o **Encerrar Requisição** some e, no lugar, a
+tela diz *"Esta requisição tem material separado na caixa; entregue-o ou devolva-o à prateleira antes de encerrar."*
+**Nada aqui é obrigatório.** Somente leitura — a mesma consulta com o outro status:
+
+```sql
+SELECT r.id AS requisicao_id, r.numero, r.updated_at, i.id AS item_id, m.codigo,
+       ROUND(COALESCE(i.quantidade_separada, 0) - COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0), 6) AS na_caixa
+  FROM requisicoes_almoxarifado r
+  JOIN itens_requisicao_almoxarifado i ON i.requisicao_id = r.id
+  JOIN materiais_almoxarifado m ON m.id = i.material_id
+ WHERE r.status = 'PARCIALMENTE_ATENDIDA' AND COALESCE(r.ativo, 1) = 1
+   AND ROUND(COALESCE(i.quantidade_separada, 0) - COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0), 6) > 1e-9
+ ORDER BY r.id, i.id;
+```
+
+*(As duas conferidas numa sonda da etapa contra o esquema real em memória: a A54 acha a *Parcialmente Atendida* com 3 na
+caixa e deixa de achá-la depois de **Devolver à prateleira** os 3; a A53 acha a *Encerrada* de legado com 3 na caixa e
+**não** acha a excluída. Controle: sem a condição da caixa, a A54 acha a devolvida — o detector sabe falhar.)*
+
+**Como ler o resultado** (uma linha por item):
+- **Vazia** — nada a fazer.
+- **A53 com linhas** — a requisição já está encerrada e o sistema já conta esse material como livre. Confira na prateleira
+  se o material separado voltou ao lugar; se ele se perdeu, lance a **Perda** em Movimentações.
+- **A54 com linhas** — quem for encerrar uma delas vai encontrar a recusa. O almoxarife **entrega** o que está na caixa,
+  se ainda é para sair, ou **Devolve à prateleira** o que não vai sair (motivo obrigatório); depois quem aprova encerra.
+
+
+### B. Decisões de negócio — B1 a B530 e B700 a B703; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-15 com as quatro da Etapa 102 — B700 a B703.** A numeração **salta de B530 para B700 de propósito**: a Etapa 103 (frente de Compras) corre em paralelo e também usa a série B — ela fica com a B6xx; esta etapa começou na próxima centena livre que não é a 6xx. Não há B531 a B699 no almoxarifado.)*
 
 *(**Atualizado em 2026-10-15 de B524 para B530**, com as seis da Etapa 101 — **B525** a **B530**, do plano e da execução; a **B527** revisa a **B450**.)*
 
@@ -6788,7 +6835,7 @@ régua. (`65dc74b2`)
 
 **B493 (NOVA, da Etapa 97) — a mensagem: a de sempre, mais um sufixo que nomeia a caixa; sem caixa, idêntica byte a
 byte.** O sufixo: *"— ⟨quantidade⟩ ⟨unidade⟩ estão separados para a requisição ⟨número⟩ e só saem pela entrega (material
-perdido da caixa: entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para
+perdido da caixa: ~~entregue o que existe e encerre a requisição~~ *(superado na Etapa 102, B701)*, ou peça ao administrador do almoxarifado para
 excluí-la)"* — até três números (*"as requisições A, B e C"*), depois *"e mais N"*. O *"Disponível"* da mensagem passa a
 ser o livre fora da caixa, nunca negativo. **Descartados:** (i) **só o número menor** — o operador vê estoque 4 na tela
 de Materiais e *"Disponível: 0"* no erro, sem saber por quê; (ii) **mensagem nova inteira** — quebra as telas e os
@@ -6820,7 +6867,7 @@ bloqueio (**C190**) — a frase "o reservado continua bloqueável" vale sem prob
 reserva. (`65dc74b2`, `9dbf11c0`)
 
 **B497 (NOVA, da Etapa 97) — o caso legítimo (material quebrado ou perdido na caixa) não ganha gesto novo nesta
-etapa.** O caminho de hoje: entregar o que existe e encerrar a requisição; com tudo perdido, o administrador do
+etapa.** O caminho de hoje: ~~entregar o que existe e encerrar a requisição~~ *(superado na Etapa 102, B701)*; com tudo perdido, o administrador do
 almoxarifado exclui. A mensagem ensina os dois. **Descartados:** (i) **o gesto "devolver da caixa à prateleira"**
 (diminuir o separado com motivo e trilha) — rota, estado e permissão novos: **é a Etapa 98**, para o almoxarife resolver
 sem o administrador; (ii) "levar da caixa" na própria porta (**B491** (d)). **✅ RESOLVIDA NA ETAPA 98:** o gesto existe — **B502**
@@ -6900,7 +6947,7 @@ de separação — os leitores somam as rodadas, a barreira da conferência barr
 mentiria. (`0aafb939`, `9e0bb225`)
 
 **B508 (NOVA, da Etapa 98) — o complemento da recusa da 97 ganha a terceira saída.** *"(material perdido da caixa:
-devolva-o à prateleira na requisição e dê a baixa, entregue o que existe e encerre a requisição, ou peça ao
+devolva-o à prateleira na requisição e dê a baixa, ~~entregue o que existe e encerre a requisição~~ *(superado na Etapa 102, B701)*, ou peça ao
 administrador do almoxarifado para excluí-la)"*. Os dois testes da 97 que casam a frase mudaram só a constante, com
 comentário. **Descartado:** deixar como estava — a recusa mandaria ao administrador quem resolve sozinho. (`672bb151`)
 
@@ -7068,6 +7115,36 @@ sem como corrigir). O que já foi gravado com fração continua: **A51**, **C206
 módulos quem não pediu a requisição continua recebendo a recusa genérica de sempre (*"Requisição não encontrada ou não
 pode ser cancelada"*) — ele não vê a requisição alheia e a recusa não deve dizer o que há na caixa dela. Quem pediu recebe
 a recusa da caixa ou da entrega, que manda ao almoxarifado. **Descartado:** a recusa nova para todos. (`6dcced8e`)
+
+
+**B700 (NOVA, da Etapa 102) — material na caixa não se encerra, em status nenhum.** A *Parcialmente Atendida* com
+material separado e não entregue passa a recusar o encerramento com a mesma frase da *Em Separação*: *"Esta requisição
+tem material separado na caixa; entregue-o ou devolva-o à prateleira antes de encerrar."* — nada muda (status, reserva,
+registro). O caminho é entregar ou **Devolver à prateleira** (Etapa 98) e então encerrar. **Escolhido por ser
+reversível:** a recusa não grava nada; se você preferir a alternativa, ela é aditiva. **Descartado — o encerramento
+devolver a caixa à prateleira sozinho:** gravaria uma devolução com motivo inventado, esconderia a perda (o material
+perdido "voltaria" à prateleira no papel sem ninguém olhar) e misturaria o gesto de quem aprova com o do almoxarife.
+**Fica de fora:** a *Entregue* sempre se encerra — ela não segura caixa e não aceita devolução (recusar prenderia o
+registro antigo com separado acima do entregue). (`99043a57`, `5746553b`)
+
+**B701 (NOVA, da Etapa 102) — a recusa de saldo por caixa deixa de mandar "entregar o que existe e encerrar".** A frase
+que a Saída, a Perda, o ajuste, o bloqueio, a reserva manual, a remessa, o sucateamento e os estornos acrescentam quando
+o material está na caixa de uma requisição ensinava três caminhos para material perdido; com a **B700**, "entregue o que
+existe e encerre a requisição" passa a ser recusado (a parte perdida fica na caixa). Agora termina em *"(material perdido
+da caixa: devolva-o à prateleira na requisição e dê a baixa, ou peça ao administrador do almoxarifado para excluí-la)"*.
+**Descartado:** manter o texto (a recusa ensinaria um caminho que recusa); reescrever o caminho como "entregue o que
+existe, devolva o resto e encerre" (é o primeiro caminho com um passo a mais). (`99043a57`)
+
+**B702 (NOVA, da Etapa 102) — na tela, no lugar do botão, a frase da recusa.** Na *Parcialmente Atendida* com material
+na caixa o **Encerrar Requisição** não aparece, e no lugar dele a tela mostra a frase da **B700**. Na *Em Separação* com
+material na caixa não aparece nada (é a separação em andamento). **Descartados:** deixar o botão e mostrar a recusa ao
+clicar (a tela tem de oferecer só o que o sistema aceita — regra da Etapa 101); esconder sem dizer por quê. **Nota:** o
+perfil **Gestor** encerra mas não devolve à prateleira (devolver é do almoxarife e do administrador); a frase manda
+devolver — para ele, isso quer dizer pedir ao almoxarifado. O manual diz isso. (`5746553b`)
+
+**B703 (NOVA, da Etapa 102) — as *Encerradas* antigas com caixa ficam como estão.** O que já foi encerrado com material
+na caixa não volta: o sistema já conta esse material como livre. A **A53** lista para conferir a prateleira.
+**Descartado:** reabrir ou corrigir por migração (mexeria em documento fechado, sem ganho de saldo).
 
 
 ### C. Furos e mudanças de número que quem opera precisa saber
@@ -9055,7 +9132,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      qualidade, a reserva manual, o estorno de entrada, a solicitação de sucateamento, o estorno do ajuste (com e sem
      endereço) e o estorno do desbloqueio. O operador vê o estoque com os 4 na tela de Materiais e, ao tentar a saída,
      *"Saldo insuficiente. Disponível: 0 PC — 4 PC estão separados para a requisição ⟨número⟩ e só saem pela entrega
-     (material perdido da caixa: entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado
+     (material perdido da caixa: ~~entregue o que existe e encerre a requisição~~ *(superado na Etapa 102, B701)*, ou peça ao administrador do almoxarifado
      para excluí-la)"*. Com "permite saldo negativo", também (**B498**). Sem caixa, toda recusa é a de antes, palavra por
      palavra. **O que fazer:** entregar a requisição; se o material da caixa se perdeu, o caminho do sufixo (**B497**).
 
@@ -9168,7 +9245,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      rodada a apaga e o **Liberar para Retirada** recusa a caixa vazia.
 
 
-204. **NOVO, da Etapa 101 (anterior a ela) — a *Parcialmente Atendida* com material na caixa ainda se encerra.** A
+204. **✅ RESOLVIDO NA ETAPA 102 (`99043a57`, `5746553b`) — a *Parcialmente Atendida* com material na caixa passou a recusar o encerramento (**B700**); as encerradas antes: **A53**.** O texto original: **NOVO, da Etapa 101 (anterior a ela) — a *Parcialmente Atendida* com material na caixa ainda se encerra.** A
      *Em Separação* com material na caixa recusa o encerramento (*"… entregue-o ou devolva-o à prateleira antes de
      encerrar."*), mas a *Parcialmente Atendida* com material separado e não entregue encerra como sempre (contrato da
      Etapa 93) — e esse material deixa de ser caixa sem nenhum movimento. **O que fazer:** antes de **Encerrar** uma
@@ -9185,6 +9262,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      cópia recusam com a frase da **B529**, e o rascunho não tem edição de itens. **O que fazer:** cancelar o rascunho
      (tela de requisições do almoxarifado, **Cancelar Requisição**) e criar de novo com a quantidade inteira. A **A51**
      lista os que existem.
+
+207. **NOVO, da Etapa 102 — o Encerrar some da *Parcialmente Atendida* com material na caixa.** Quem aprova abre a
+     requisição e, no lugar do botão, lê *"Esta requisição tem material separado na caixa; entregue-o ou devolva-o à
+     prateleira antes de encerrar."* **O que fazer:** o almoxarife entrega o que está separado ou clica **Devolver à
+     prateleira** no item (motivo obrigatório); depois o botão volta. O **Gestor** não devolve — pede ao almoxarifado.
+     A **A54** lista as que estão assim no deploy.
+
+208. **NOVO, da Etapa 102 — a recusa de saldo por caixa ficou mais curta.** A frase do fim (*"… (material perdido da
+     caixa: …)"*) perdeu o trecho *"entregue o que existe e encerre a requisição"* (**B701**). Quem treinou a equipe com a
+     frase antiga: o caminho para material perdido da caixa é devolver à prateleira e dar a baixa.
 
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -10207,12 +10294,18 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(99) `1e400` digitado no modal de separação vira "não separar"** (resíduo da tela, **C201**).
 - **(101) O almoxarife não cancela** — a *Em Separação* vazia sem entrega se cancela por quem pediu ou pelo administrador
   do sistema; o almoxarife só a encerra se algo foi entregue (**B525**, **B526**). Gesto de perfil novo é decisão sua.
-- **(101) A *Parcialmente Atendida* com material na caixa ainda se encerra** (**C204**) — a mesma régua nos dois status
-  é candidata a etapa.
+- ~~**(101) A *Parcialmente Atendida* com material na caixa ainda se encerra** (**C204**) — a mesma régua nos dois status
+  é candidata a etapa.~~ *(Resolvido na Etapa 102 — **B700**.)*
 - **(101) Ninguém é avisado do cancelamento da *Em Separação* vazia** (**C205**).
 - **(101) O rascunho com fração de série só sai cancelando** (**C206**).
 - **(101) A conferência e as aprovações seguem fora da fila por requisição** (**B450** revista pela **B527** só nos
   cancelamentos).
+- **(102) O encerramento não devolve a caixa sozinho** (**B700**) — é recusa; o gesto é do almoxarife.
+- **(102) A *Entregue* com separado acima do entregue (registro antigo) encerra** — não segura caixa e não aceita
+  devolução (**B700**).
+- **(102) O botão Encerrar não confere o perfil de aprovação na tela do almoxarifado** — quem não tem recebe *"Sem
+  permissão para encerrar requisições"* ao confirmar (anterior à etapa, inalterado); a frase da caixa também aparece para
+  qualquer perfil (**B702**).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -11066,6 +11159,15 @@ série inteira — dentro dos **349** arquivos da suíte. O que **só o navegado
 2. **O Encerrar na *Em Separação* vazia com entrega** (tela do almoxarifado): o modal do motivo abre e fecha a requisição.
 3. **A recusa da série na cesta do Comercial** (1,5): o aviso inteiro legível.
 4. **Os botões somem com material na caixa** (nem Cancelar nem Encerrar).
+
+**(102) Nenhum clique foi dado nesta etapa no navegador.** A tela mudou num lugar (o **Encerrar Requisição** da
+*Parcialmente Atendida* e a frase que o substitui) e está provada por teste de componente com a fronteira HTTP simulada
+(o arquivo novo, **7** testes); o servidor, pela rota e pelo serviço (**17** verificações no arquivo novo, **3** jornadas
+no de integração). O que **só o navegador** prova:
+
+1. **A frase no lugar do botão** — legível, centrada, na largura do painel do detalhe, no tema claro e no escuro.
+2. **O botão volta** depois de **Devolver à prateleira** tudo o que estava na caixa (o detalhe recarrega sozinho?).
+3. **A recusa de saldo mais curta** numa **Perda** em Movimentações com material na caixa — o aviso inteiro legível.
 
 
 
@@ -21549,7 +21651,7 @@ requisição, e o que fazer se o material da caixa realmente se perdeu. A entreg
 | Reserva manual, envio de remessa, solicitação de sucateamento, estorno da entrada que trouxe os 4, estornos de ajuste e de desbloqueio levavam a caixa | Recusam, com o complemento; o sucateamento recusa já na **solicitação**, antes das duas assinaturas |
 | Com "permite saldo negativo", a saída levava a caixa e a requisição ficava presa igual | Não leva: a permissão dispensa a reserva, não a caixa (**B498**) |
 | Saída avulsa e separação no mesmo instante podiam deixar separado maior que o estoque | Uma espera a outra (**B494**) |
-| Material perdido da caixa: a perda passava e a requisição ficava presa para sempre | A perda recusa e ensina o caminho — entregar o que existe e encerrar, ou o administrador excluir —; depois a perda passa (**B497**) |
+| Material perdido da caixa: a perda passava e a requisição ficava presa para sempre | A perda recusa e ensina o caminho — ~~entregar o que existe e encerrar~~ *(superado na Etapa 102, B701)*, ou o administrador excluir —; depois a perda passa (**B497**) |
 | Duas conclusões simultâneas da conferência aplicavam o inventário duas vezes (**C191**) | Uma conclui; a outra vê *"Conferência não está aberta (status atual: CONCLUIDO)"* (**B501**) |
 
 ### As regras, com o cenário exato
@@ -21566,7 +21668,7 @@ Saída, perda e entrada: Almoxarife ou administrador; bloqueio e conclusão da c
 Gestor (é a permissão de ajustar estoque).
 
 **1. A saída avulsa.** Movimentações, Saída de 4 → *"Saldo insuficiente. Disponível: 0 PC — 4 PC estão separados para a
-requisição ⟨número⟩ e só saem pela entrega (material perdido da caixa: entregue o que existe e encerre a requisição, ou
+requisição ⟨número⟩ e só saem pela entrega (material perdido da caixa: ~~entregue o que existe e encerre a requisição~~ *(superado na Etapa 102, B701)*, ou
 peça ao administrador do almoxarifado para excluí-la)"*. Nada muda. A mesma recusa para Perda de 4 e Ajuste negativo de 4.
 
 **2. A entrega continua saindo.** Ana entrega os 4 → *Entregue*, estoque 0. Uma entrada nova de 1 e uma saída de 1 →
@@ -21694,7 +21796,7 @@ Preparação: material **Porca M8** (PC), estoque 0. **Paula** (sem perfil) pede
 
 **1. A perda recusa e ensina.** Movimentações, Perda de 2 → *"Saldo insuficiente. Disponível: 0 PC — 4 PC estão
 separados para a requisição ⟨número⟩ e só saem pela entrega (material perdido da caixa: devolva-o à prateleira na
-requisição e dê a baixa, entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para
+requisição e dê a baixa, ~~entregue o que existe e encerre a requisição~~ *(superado na Etapa 102, B701)*, ou peça ao administrador do almoxarifado para
 excluí-la)"*.
 
 **2. Devolver e dar a baixa.** Ana abre a requisição; na linha da Porca, **Devolver à prateleira**. O modal *"Devolver à
@@ -21972,9 +22074,94 @@ Cinco viraram teste (entre elas: todo teste usava requisição de um item só, e
 errada passava); a sexta é inalcançável hoje e ficou declarada. (`3c9e6a03`)
 
 
+## Etapa 102 — Material separado na caixa não se encerra, em status nenhum (2026-10-15)
+
+O almoxarife separa 4 peças para uma requisição, entrega 1, e a requisição fica *Parcialmente Atendida* com 3 peças
+separadas num canto. Até aqui, quem aprova podia clicar **Encerrar Requisição** e o sistema aceitava: a requisição
+fechava, a reserva era solta e as 3 peças voltavam a contar como livres — sem ninguém registrar que voltaram à
+prateleira. Se o material "livre" fosse prometido a outro pedido e as peças continuassem no canto, o saldo do sistema e o
+da prateleira divergiam. Agora o encerramento com material na caixa é **recusado** — como já era na *Em Separação* — e a
+tela diz o que fazer: entregar o que está separado, ou **Devolver à prateleira** o que não vai sair, e então encerrar.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| *Parcialmente Atendida* com material na caixa: **Encerrar** passava, a caixa sumia sem registro | Recusado com a explicação, nada muda (**B700**) |
+| O botão **Encerrar Requisição** aparecia em toda *Parcialmente Atendida* | Só com a caixa vazia; no lugar dele, a frase da recusa (**B702**) |
+| A recusa de saldo de uma Saída/Perda com material na caixa sugeria *"entregue o que existe e encerre a requisição"* | Sugere devolver à prateleira e dar a baixa, ou pedir a exclusão (**B701**) |
+| Encerrar no meio de outro gesto podia ver a requisição mudar para *Parcialmente Atendida* com caixa e encerrar | A nova conferência também recusa |
+
+### As regras, com o cenário exato
+
+Preparação: material **Porca M8** (PC), estoque 10. **Paula** (sem perfil) pede pela tela de requisições do Comercial; o
+**administrador** aprova. **Ana** é almoxarife.
+
+**1. A recusa.** Paula pede 4; aprovada. Ana separa 4 e entrega 1 → *Parcialmente Atendida*, 3 na caixa. O administrador
+abre a requisição no almoxarifado: o botão **Encerrar Requisição** não está lá; no lugar, *"Esta requisição tem material
+separado na caixa; entregue-o ou devolva-o à prateleira antes de encerrar."* Por integração, o encerramento responde a
+mesma frase; status, reserva (*Ativa*) e registro não mudam.
+
+**2. Devolver e encerrar.** No item, Ana clica **Devolver à prateleira**, 3, motivo "não vai sair" → a frase some e
+**Encerrar Requisição** aparece → o administrador encerra → *Encerrada*; em **Reservas**, *Liberada*.
+
+**3. Entregar e encerrar.** Repetir o 1; Ana entrega os 3 → *Entregue* → encerra.
+
+**4. Caixa vazia encerra como sempre.** Paula pede 4; Ana separa 2 e entrega 2 → *Parcialmente Atendida* sem nada na
+caixa → **Encerrar Requisição** aparece e encerra (a reserva dos 2 que faltavam é solta).
+
+**5. Material perdido da caixa.** Material **Arruela**, estoque 0. Paula pede 4; aprovada (sem reserva); **Entrada** de 4;
+Ana separa 4 e entrega 1. Em **Movimentações**, **Perda** de 2 → *"Saldo insuficiente. Disponível: 0 PC — 3 PC estão
+separados para a requisição ⟨número⟩ e só saem pela entrega (material perdido da caixa: devolva-o à prateleira na
+requisição e dê a baixa, ou peça ao administrador do almoxarifado para excluí-la)"*. Ana devolve 2 à prateleira, lança a
+Perda de 2 (aceita), entrega 1 → *Parcialmente Atendida* sem caixa → encerra.
+
+**6. O caminho antigo não serve mais.** No 5, se Ana só entregar 1 e o administrador tentar encerrar com os 2 perdidos
+ainda na caixa → a recusa do cenário 1.
+
+**7. O que não muda.** A *Entregue* sempre encerra; a *Em Separação* da Etapa 101 (vazia com entrega encerra; vazia sem
+entrega, *"Nada foi entregue nesta requisição; em vez de encerrar, ela deve ser cancelada por quem pediu ou pelo
+administrador do sistema."*); quem encerra é quem já encerrava (*"Sem permissão para encerrar requisições"* para os
+outros). O **Gestor** encerra mas não devolve à prateleira — pede ao almoxarifado.
+
+### O que esta etapa NÃO cobre
+
+1. **Devolver a caixa sozinho ao encerrar** — é recusa, não devolução automática (**B700**; a alternativa é sua).
+2. **A *Entregue* com separado acima do entregue (registro antigo)** continua encerrando.
+3. **As requisições já encerradas com material na caixa** ficam como estão (**B703**; **A53** lista).
+4. **O botão Encerrar continua sem conferir o perfil** antes do clique (anterior à etapa).
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0) reproduziu o caso (encerrar 200 com 3 na caixa, reserva solta) e mostrou que a *Entregue* não
+fica com caixa pelos gestos — a entrega acima da caixa sobe o separado —, por isso ela ficou fora. E achou o que a tarefa
+escrita na Etapa 101 não previa: a recusa de saldo por caixa das saídas avulsas ensinava *"entregue o que existe e encerre
+a requisição"*, caminho que a regra nova recusa (**B701**).
+
+A **revisão do plano** achou duas travas: **doze testes existentes** encerravam uma *Parcialmente Atendida* com material
+na caixa (relatórios, corridas da Etapa 93, a jornada da Etapa 97 que é exatamente o caminho que saiu), e as tarefas do
+servidor reescreviam os mesmos arquivos — executadas juntas. Todos os testes foram reescritos para o contrato novo.
+
+A **revisão adversarial do código** (dois revisores, executando) não achou defeito: perfis no encerramento (só quem já
+encerrava; *"Sem permissão para encerrar requisições"* para os outros), a ordem das recusas, registros antigos, tudo o que
+vem depois da recusa (devolver, entregar, separar de novo, excluir — nada fica preso) e as corridas nas duas ordens sem
+travar. O segundo revisor fez **25 sabotagens**: 24 derrubavam teste e 1 era equivalente. Duas só eram pegas por testes
+de etapas anteriores — viraram teste nesta. Nota registrada: num registro antigo com sobra de 0,0000005 o servidor e a tela
+arredondam diferente (a tela mostraria a frase com a caixa já vazia para o servidor) — a gravação arredonda a 6 casas,
+então não acontece com dado novo; é a mesma régua da Etapa 101. (`403e18d2`)
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 102 entregue (2026-10-15):** **material separado na caixa não se encerra, em status nenhum.** A *Parcialmente
+  Atendida* com material separado e não entregue recusa o encerramento como a *Em Separação*; a tela mostra a explicação
+  no lugar do botão; a recusa de saldo das saídas avulsas deixa de sugerir "entregue o que existe e encerre" (**C204**
+  resolvido). **O que é seu:** as consultas **A53** e **A54** (opcionais); as decisões **B700 a B703** (a **B700** —
+  recusar em vez de devolver sozinho — é reversível e a alternativa é sua; a numeração salta de B530 para B700 por causa
+  da Etapa 103 de Compras, que usa a B6xx); os avisos **C207** e **C208**; as limitações **(102)** em D e as verificações
+  **(102)** em F. **Próxima: Etapa 104 (a 103 é da frente de Compras) — o ajuste de inventário com endereço que leva a
+  caixa (C186) — ver a "próxima tarefa detalhada" no plano da Etapa 102.**
 
 - **Etapa 101 entregue (2026-10-15):** **a requisição em separação sem nada na caixa tem saída, e material com série só
   se pede inteiro.** A *Em Separação* vazia **cancela** quando nada foi entregue (quem pediu, ou o administrador do
@@ -21983,8 +22170,8 @@ errada passava); a sexta é inalcançável hoje e ficou declarada. (`3c9e6a03`)
   rascunho, a cópia e o envio recusam fração de material com série (**C202** resolvido). **O que é seu:** as consultas
   **A51** e **A52** (opcionais — a A52 lista as *Em Separação* que estavam presas, com a saída de cada uma); as decisões
   **B525 a B530** (a **B527** revisa a **B450**; a **B525** (iii) — dar ao almoxarife um gesto de cancelar — é sua); os
-  avisos **C204 a C206**; as limitações **(101)** em D e as verificações **(101)** em F. **Próxima: Etapa 102 — encerrar
-  com material na caixa recusa em qualquer status (C204) — ver a "próxima tarefa detalhada" no plano da Etapa 101.**
+  avisos **C204 a C206**; as limitações **(101)** em D e as verificações **(101)** em F. ~~**Próxima: Etapa 102 — encerrar
+  com material na caixa recusa em qualquer status (C204) — ver a "próxima tarefa detalhada" no plano da Etapa 101.**~~ *(Feita — Etapa 102.)*
 
 - **Etapa 99 entregue (2026-10-15):** **a separação recusa o que não dá para separar, e a conferência não confirma caixa
   vazia.** Quantidade negativa ou não numérica, item de fora, lista malformada e fração de material com série recebem
