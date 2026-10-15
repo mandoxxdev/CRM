@@ -1869,7 +1869,8 @@ async function excluirSemTrava(db, requisicaoId, user, justificativa, alertServi
 
   // Etapa 93 (T5, B447; mudado na Fase 5 — a regra estava errada): o UPDATE final confere SO `ativo`. Antes
   // conferia tambem o status lido no inicio, e a exclusao nao tem regra de status (spec 04): num processo so o
-  // /aprovar-valor, o /aprovar e o cancelamento mudam o status FORA da trava por requisicao, na janela do estorno
+  // /aprovar-valor, o /aprovar e o cancelamento mudavam o status FORA da trava por requisicao (os cancelamentos entraram
+  // nela na Etapa 101, B527; o /aprovar-valor e o /aprovar seguem fora), na janela do estorno
   // — a exclusao estornava, perdia o UPDATE, respondia 409 com o modal aberto, e o segundo clique estornava DE NOVO
   // (q=6 para 4 reais, sonda e93rv1-a). Agora so perde quem foi EXCLUIDO por fora (outro processo, escrita direta;
   // dentro do processo a trava serializa as exclusoes): com estorno feito -> E1 + 409 E409, sem nova tentativa

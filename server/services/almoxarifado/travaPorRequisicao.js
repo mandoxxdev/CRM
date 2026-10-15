@@ -9,6 +9,10 @@
  * fecha essas tres (a perda e no item; o estorno vem antes do UPDATE final; a rodada 2 nao muda o status).
  * Com a trava o segundo gesto ESPERA o primeiro terminar e le o estado novo.
  *
+ * Etapa 101 (B527): os DOIS cancelamentos (`PUT /api/almoxarifado/requisicoes/:id/cancelar` e
+ * `PUT /api/requisicoes-material/:id/cancelar`) tambem seguram esta trava — a EM_SEPARACAO vazia passou a cancelar, e a
+ * leitura da caixa tem de ver a separacao inteira. Eles nao chamam nenhuma das outras portas (nao reentrante).
+ *
  * NAO CONFUNDIR com `requisitionService.comTravaDaRequisicao`: aquela e a trava POR MATERIAL dos itens da
  * requisicao (`travaPorMaterial`, Etapa 91 — de quem distribui ou le o disponivel para reservar). Esta e
  * outra, por requisicao. ORDEM: requisicao -> material. Esta trava NUNCA e pega de dentro de uma secao da

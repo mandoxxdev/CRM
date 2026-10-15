@@ -166,6 +166,31 @@ describe('Etapa 101 — a Em Separação vazia tem saída na tela (RN-07)', () =
     expect(botaoPorTexto('Cancelar Requisição')).toBeFalsy();
   });
 
+  // Fase 5 (revisor 2): o Encerrar segue o modo e o status, não só os itens.
+  test('(h) fora do modo almoxarifado, caixa vazia com entrega: sem Encerrar (a rota exige o perfil de aprovação)', async () => {
+    mockWarehouse = false;
+    requisicao = comItem(VAZIA_COM_ENTREGA);
+    await renderizar();
+    expect(container.textContent).toContain('REQ-055');
+    expect(botaoPorTexto('Encerrar Requisição')).toBeFalsy();
+  });
+
+  test('(i) Encerrada e Cancelada com itens de caixa vazia e entrega: sem Encerrar (metade positiva: a mesma fixture em Em Separação mostra)', async () => {
+    mockUser = { id: 99, nome: 'Adm', role: 'admin' };
+    for (const status of ['ENCERRADA', 'CANCELADO']) {
+      requisicao = comItem(VAZIA_COM_ENTREGA, { status });
+      // eslint-disable-next-line no-await-in-loop
+      await renderizar();
+      expect(container.textContent).toContain('REQ-055');
+      expect(botaoPorTexto('Encerrar Requisição')).toBeFalsy();
+      act(() => root.unmount());
+      root = createRoot(container);
+    }
+    requisicao = comItem(VAZIA_COM_ENTREGA);
+    await renderizar();
+    expect(botaoPorTexto('Encerrar Requisição')).toBeTruthy();
+  });
+
   test('(g) o predicado do cliente é o do servidor (tabela de itens)', () => {
     // eslint-disable-next-line global-require, import/no-unresolved
     const servidor = require('../../../../server/services/almoxarifado/requisitionStateMachine');
@@ -174,6 +199,7 @@ describe('Etapa 101 — a Em Separação vazia tem saída na tela (RN-07)', () =
       [], [VAZIA], [VAZIA_COM_ENTREGA], [COM_CAIXA],
       [{ quantidade_separada: 2.0000001, quantidade_entregue: 2 }],
       [{ quantidade_separada: 2.000001, quantidade_entregue: 2 }],
+      [{ quantidade_separada: 2, quantidade_entregue: 1.9999999 }], // Fase 5: o resto no entregue (legado)
       [{ quantidade_separada: 1, quantidade_entregue: null, quantidade_atendida: 1 }],
       [{ quantidade_separada: null }], [{}],
       [VAZIA, VAZIA_COM_ENTREGA], [VAZIA, COM_CAIXA], [VAZIA_COM_ENTREGA, COM_CAIXA],

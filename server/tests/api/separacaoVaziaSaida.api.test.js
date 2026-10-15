@@ -258,6 +258,54 @@ process.on('exit', (code) => {
     ok(await encerrar(ALMOX, x), 'encerrar');
   });
 
+  // ══════════════ Fase 5 (revisor 2) — os testes que faltavam ══════════════
+  await test('[101 RN-03] (Fase 5) o arredondamento e da CAIXA, nao do separado: entregue 1,9999999 (legado) com separado 2 -> caixa vazia: cancelar M2, encerrar 200', async () => {
+    const x = await P3();
+    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada = 2, quantidade_entregue = 1.9999999 WHERE id = ?', [x.item]);
+    const c = await cancelarOutros(S, x);
+    assert.strictEqual(c.status, 400); assert.strictEqual(c.body.error, M2);
+    ok(await encerrar(ALMOX, x), 'encerrar');
+    assert.strictEqual((await foto(x)).status, 'ENCERRADA');
+  });
+
+  await test('[101 RN-02/RN-04] (Fase 5) dois itens (um vazio, outro com 1 na caixa; ids de item diferentes do da requisicao): as duas rotas M1, encerrar E1; devolvido o 1, cancela 200 e as duas reservas saem', async () => {
+    const m1 = await material(4); const m2 = await material(4);
+    const cr = await as(S, () => request(app).post('/api/requisicoes-material').send({
+      setor: 'Comercial', urgencia: 'NORMAL', os_referencia: 'OS-101', itens: [{ material_id: m1, quantidade: 2 }, { material_id: m2, quantidade: 2 }],
+    }).then((r) => r));
+    assert.strictEqual(cr.status, 201, JSON.stringify(cr.body));
+    const R = cr.body.id;
+    ok(await request(app).put(`${API}/requisicoes/${R}/aprovar`).send({}), 'aprovar');
+    const its = await dbAll(db, 'SELECT id FROM itens_requisicao_almoxarifado WHERE requisicao_id = ? ORDER BY id', [R]);
+    // premissa: o item com caixa nao tem o id da requisicao (uma leitura `WHERE id = R` leria outro item e aceitaria).
+    assert.ok(Number(its[1].id) !== Number(R), `premissa: id do item com caixa igual ao da requisicao ${JSON.stringify(its)} R=${R}`);
+    const x = { R, item: its[1].id, m: m2 };
+    ok(await separar({ R, item: its[1].id }, 1), 'separar 1 do item 2');
+    for (const c of [await cancelarOutros(S, x), await cancelarAlmox(S, x)]) {
+      assert.strictEqual(c.status, 400, JSON.stringify(c.body)); assert.strictEqual(c.body.error, M1);
+    }
+    const e = await encerrar(ALMOX, x);
+    assert.strictEqual(e.status, 400); assert.strictEqual(e.body.error, E1);
+    ok(await devolver({ R, item: its[1].id }, 1), 'devolver');
+    ok(await cancelarOutros(S, x), 'cancelar');
+    const rs = await dbAll(db, 'SELECT status FROM reservas_material_almoxarifado WHERE requisicao_id = ?', [R]);
+    assert.deepStrictEqual(rs.map((r) => r.status), ['LIBERADA', 'LIBERADA']);
+  });
+
+  await test('[101 B530] (Fase 5) quem nao pediu, pelos outros modulos, recebe a recusa generica tambem com material na caixa e com entrega (nao ve o estado)', async () => {
+    for (const montarP of [comCaixa, P3]) {
+      // eslint-disable-next-line no-await-in-loop
+      const x = await montarP();
+      // eslint-disable-next-line no-await-in-loop
+      const c = await cancelarOutros(OUTRO, x);
+      assert.strictEqual(c.status, 400); assert.strictEqual(c.body.error, RECUSA_OUTROS);
+      // metade positiva: o dono recebe a recusa especifica
+      // eslint-disable-next-line no-await-in-loop
+      const d = await cancelarOutros(S, x);
+      assert.ok([M1, M2].includes(d.body.error), JSON.stringify(d.body));
+    }
+  });
+
   // ══════════════ RN-06 — a reserva do dono ══════════════
   await test('[101 RN-06] P1: o dono (sem a acao) continua sem liberar a reserva na Em Separacao vazia -> 403 M3, reserva ATIVA (metade positiva: o almoxarife libera)', async () => {
     const x = await P1();

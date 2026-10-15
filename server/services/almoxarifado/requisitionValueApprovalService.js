@@ -152,8 +152,10 @@ async function verificarBloqueioLiberacao(db, requisicaoId) {
 
   if (reqRow.data_aprovacao_valor) return reqRow;
 
-  // Etapa 94 (T1, B456): a gravacao confere o status LIDO no comeco da verificacao. Os dois cancelamentos ficam
-  // fora da trava por requisicao (B450): separar e cancelar no mesmo instante RESSUSCITAVAM a cancelada em
+  // Etapa 94 (T1, B456): a gravacao confere o status LIDO no comeco da verificacao. Os dois cancelamentos ficavam
+  // fora da trava por requisicao (B450 — desde a Etapa 101, B527, estao DENTRO dela e esperam a separacao; o
+  // compare-and-set continua valendo contra quem escreve fora, provado com escritor direto): separar e cancelar no
+  // mesmo instante RESSUSCITAVAM a cancelada em
   // AGUARDANDO_APROVACAO_VALOR (10/10 sem gancho, C164), e aprovar por valor depois reservava de novo. Perdeu ->
   // 409 V1 com o status relido, sem e-mail. Sem nova tentativa: a verificacao roda antes de qualquer gravacao
   // da separacao, repetir e seguro. Tambem sai (inofensivo) quando o recalculo da 76 ou o /aprovar mudam o
