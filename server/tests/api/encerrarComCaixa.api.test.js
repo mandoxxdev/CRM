@@ -266,6 +266,24 @@ process.on('exit', (code) => {
     assert.strictEqual((await foto(x)).status, 'ENCERRADA');
   });
 
+  // Fase 5 (revisor 2, S21): a nova tentativa rele os ITENS (nao reusa os da primeira leitura). Antes so o [93 RN-08] (e)
+  // pegava; aqui a primeira leitura tambem le itens (Parcialmente Atendida com a caixa vazia).
+  await test('[102 RN-03] (Fase 5) Parcialmente Atendida com a caixa vazia (le os itens: passam) -> o escritor poe EM_SEPARACAO com 3 na caixa -> a nova tentativa RELE os itens: 400 E1', async () => {
+    const x = await montar(4);
+    ok(await separar(x, [[x.item, 1]]), 'separar'); ok(await entregar(x, [[x.item, 1]]), 'entregar');
+    const g = armarEscritor(RE_ENC, async () => {
+      await raw('UPDATE itens_requisicao_almoxarifado SET quantidade_separada = 4 WHERE id = ?', [x.item]);
+      await raw("UPDATE requisicoes_almoxarifado SET status = 'EM_SEPARACAO' WHERE id = ?", [x.R]);
+    });
+    const r = await encerrar(ADMIN, x);
+    escritor = null;
+    assert.ok(!g.erro, g.erro && g.erro.message);
+    assert.strictEqual(g.emitidos, 1, `UPDATE emitido ${g.emitidos} vez(es)`);
+    assert.strictEqual(r.status, 400, `encerrar: ${r.status} ${JSON.stringify(r.body)}`);
+    assert.strictEqual(r.body.error, E1);
+    assert.strictEqual((await foto(x)).status, 'EM_SEPARACAO');
+  });
+
   // ══════════════ RN-08 — a trava de sempre ══════════════
   await test('[102 RN-08] entregar o resto x encerrar: a entrega segura a trava (pausada no UPDATE do entregue); o encerramento ESPERA e depois encerra a Entregue (200)', async () => {
     const x = await Q1();

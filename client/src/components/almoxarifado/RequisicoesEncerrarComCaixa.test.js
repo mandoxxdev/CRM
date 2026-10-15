@@ -145,13 +145,20 @@ describe('Etapa 102 — encerrar com material na caixa (RN-07)', () => {
     expect(nota()).toBeTruthy();
   });
 
-  test('(e) fora do modo almoxarifado: nem botão nem nota (metade positiva: a requisição está lá)', async () => {
+  test('(e) fora do modo almoxarifado: nem botão nem nota, com e sem caixa (metade positiva: a requisição está lá)', async () => {
     mockWarehouse = false;
     requisicao = comItem(COM_CAIXA_PARCIAL);
     await renderizar();
     expect(container.textContent).toContain('REQ-055');
     expect(botaoPorTexto('Encerrar Requisição')).toBeFalsy();
     expect(nota()).toBeFalsy();
+    // Fase 5 (revisor 2, C12): fora do modo, nem com a caixa vazia (o Encerrar exige o perfil de aprovação).
+    act(() => root.unmount());
+    root = createRoot(container);
+    requisicao = comItem(PARCIAL_VAZIA);
+    await renderizar();
+    expect(container.textContent).toContain('REQ-055');
+    expect(botaoPorTexto('Encerrar Requisição')).toBeFalsy();
   });
 
   test('(f) Em Separação com material na caixa: sem botão e SEM a nota (é a separação em curso)', async () => {
