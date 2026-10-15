@@ -13,7 +13,7 @@ import './TipoSelecao.css';
 import FloatingBallsBackground from './FloatingBallsBackground';
 import { resetModuleSplashSession } from './ProtectedModuleRoute';
 import { bypassModuleRestrictions } from '../utils/systemPermissions';
-import { nivelAcessoUsuario, modulosDaSelecao } from '../constants/modulosMeta';
+import { nivelAcessoUsuario, modulosDaSelecao, MODULOS_LIBERADOS_SEM_PERMISSAO_SELECAO } from '../constants/modulosMeta';
 
 // Etapa 109 (G7): os cartoes saem de constants/modulosMeta.js (fonte unica do cliente) — mesmos nomes,
 // descricoes, rotas, icones, cores e a ordem desta tela (MODULOS_ORDEM_SELECAO).
@@ -126,7 +126,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
         setLoading(false);
         const modulosComStatus = todosModulos.map(mod => ({
           ...mod,
-          disponivel: mod.sempreDisponivel || mod.modulo === 'comercial'
+          disponivel: mod.sempreDisponivel || MODULOS_LIBERADOS_SEM_PERMISSAO_SELECAO.includes(mod.modulo)
         }));
         setModulosDisponiveis(modulosComStatus);
         return;
@@ -161,7 +161,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
             }
           });
         } else {
-          modulosPermitidos.add('comercial');
+          MODULOS_LIBERADOS_SEM_PERMISSAO_SELECAO.forEach((m) => modulosPermitidos.add(m));
         }
 
         const modulosComStatus = todosModulos.map(mod => ({
@@ -182,7 +182,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
         } else {
           const modulosComStatus = todosModulos.map(mod => ({
             ...mod,
-            disponivel: mod.sempreDisponivel || mod.modulo === 'comercial'
+            disponivel: mod.sempreDisponivel || MODULOS_LIBERADOS_SEM_PERMISSAO_SELECAO.includes(mod.modulo)
           }));
           setModulosDisponiveis(modulosComStatus);
         }
@@ -197,7 +197,7 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
       setLoading(false);
       const modulosComStatus = todosModulos.map(mod => ({
         ...mod,
-        disponivel: mod.modulo === 'comercial'
+        disponivel: MODULOS_LIBERADOS_SEM_PERMISSAO_SELECAO.includes(mod.modulo)
       }));
       setModulosDisponiveis(modulosComStatus);
     }

@@ -143,6 +143,44 @@ const menos = (a, b) => a.filter((x) => !b.includes(x));
     assert.deepStrictEqual(diferentes, []);
   });
 
+  /* ── RN-111.08 "sem nenhuma linha de permissao": tres portoes, divergencia CONGELADA (B63) ── */
+  test('RN-111.08 sem linha: portao do cliente libera comercial e frota, a selecao e o servidor so comercial — congelado (B63)', () => {
+    const { MODULOS_LIBERADOS_SEM_GRUPO } = require('../../services/modulosSistema');
+    const portao = listaDoCliente(src, 'MODULOS_LIBERADOS_SEM_PERMISSAO_PORTAO');
+    const selecao = listaDoCliente(src, 'MODULOS_LIBERADOS_SEM_PERMISSAO_SELECAO');
+    assert.ok(Array.isArray(MODULOS_LIBERADOS_SEM_GRUPO), 'MODULOS_LIBERADOS_SEM_GRUPO nao exportado por modulosSistema');
+    assert.deepStrictEqual(
+      {
+        portao: ordenado(portao), selecao: ordenado(selecao), servidor: ordenado(MODULOS_LIBERADOS_SEM_GRUPO),
+        soNoPortao: ordenado(menos(portao, MODULOS_LIBERADOS_SEM_GRUPO)),
+      },
+      { portao: ['comercial', 'frota'], selecao: ['comercial'], servidor: ['comercial'], soNoPortao: ['frota'] },
+      'a regra do "sem linha" mudou num dos portoes — atualize a B63 de docs/compras-novidades-por-etapa.md e este teste'
+    );
+  });
+
+  test('RN-111.08 fiacao: os dois portoes do servidor e os dois do cliente leem as listas, sem literal proprio', () => {
+    // Desde a revisao da Fase 5 da 111 os portoes moram em services/portaoDeModulo.js (portaoDeModulo.api.test.js os executa).
+    const idx = fs.readFileSync(path.join(__dirname, '..', '..', 'services', 'portaoDeModulo.js'), 'utf8');
+    for (const [nome, fim] of [['checkModulePermission', 'function checkAnyModulePermission'], ['checkAnyModulePermission', 'return { checkModulePermission, checkAnyModulePermission };']]) {
+      const ini = idx.indexOf(`function ${nome}(`);
+      const corpo = idx.slice(ini, idx.indexOf(fim, ini + 1));
+      assert.ok(ini >= 0 && corpo.length > 500, `${nome} nao encontrado em services/portaoDeModulo.js`);
+      // A lista vazia do checkAnyModulePermission cai no portao de comercial (`checkModulePermission('comercial')`) —
+      // e o portao de comercial, nao a regra do "sem grupo"; fica (declarado no plano da 111, M3).
+      const semFallback = corpo.replace("if (mods.length === 0) return checkModulePermission('comercial');", '');
+      assert.ok(!/'comercial'/.test(semFallback), `${nome} ainda tem 'comercial' escrito no corpo`);
+      assert.ok(/MODULOS_LIBERADOS_SEM_GRUPO/.test(corpo), `${nome} nao le MODULOS_LIBERADOS_SEM_GRUPO`);
+    }
+    const cli = (arq) => fs.readFileSync(path.join(__dirname, '..', '..', '..', 'client', 'src', arq), 'utf8');
+    const cache = cli('services/permissionsCache.js');
+    assert.ok(/MODULOS_LIBERADOS_SEM_PERMISSAO_PORTAO\.includes\(modulo\)/.test(cache), 'hasModuleAccess nao le MODULOS_LIBERADOS_SEM_PERMISSAO_PORTAO');
+    assert.ok(!/'frota'/.test(cache) && !/'comercial'/.test(cache), 'permissionsCache.js ainda tem comercial/frota escrito');
+    const sel = cli('components/TipoSelecao.js');
+    assert.ok((sel.match(/MODULOS_LIBERADOS_SEM_PERMISSAO_SELECAO/g) || []).length >= 5, 'TipoSelecao nao le MODULOS_LIBERADOS_SEM_PERMISSAO_SELECAO nos quatro pontos');
+    assert.ok(!/'comercial'/.test(sel), "TipoSelecao ainda tem 'comercial' escrito");
+  });
+
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   process.exit(failed > 0 ? 1 : 0);
 })();

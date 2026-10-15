@@ -1,5 +1,6 @@
 import api from './api';
 import { bypassModuleRestrictions, mergeUserPermissions, isSystemAdmin } from '../utils/systemPermissions';
+import { MODULOS_LIBERADOS_SEM_PERMISSAO_PORTAO } from '../constants/modulosMeta';
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const FETCH_TIMEOUT_MS = parseInt(process.env.REACT_APP_PERMISSIONS_TIMEOUT_MS || '12000', 10);
@@ -107,7 +108,8 @@ export function hasModuleAccess(permissoes, modulo, user) {
     return permissoes.some((perm) => perm.modulo === modulo && perm.permissao === 1);
   }
 
-  return modulo === 'comercial' || modulo === 'frota';
+  // Sem nenhuma linha: regra congelada (Etapa 111, RN-111.08, B63) — diverge da seleção e do servidor.
+  return MODULOS_LIBERADOS_SEM_PERMISSAO_PORTAO.includes(modulo);
 }
 
 export function invalidatePermissionsCache(userId) {

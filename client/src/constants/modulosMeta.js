@@ -170,6 +170,18 @@ export function modulosConcediveis() {
   });
 }
 
+/*
+ * "Sem nenhuma linha de permissão" (Etapa 111, G17, RN-111.08) — as regras de hoje, só nomeadas. Elas DIVERGEM
+ * entre si e do servidor (`MODULOS_LIBERADOS_SEM_GRUPO` em server/services/modulosSistema.js, que vale só quando
+ * o usuário não está em grupo ativo nenhum): o portão de rota libera também Frota, a seleção não. Alinhar muda
+ * quem acessa o quê — decisão do P.O. (B63 de docs/compras-novidades-por-etapa.md); o teste cruzado
+ * modulosClienteServidor.api.test.js lê estas duas listas como texto e cai se alguém mexer.
+ */
+// Portão de rota (`hasModuleAccess`): o usuário sem nenhuma linha de permissão entra nestes.
+export const MODULOS_LIBERADOS_SEM_PERMISSAO_PORTAO = ['comercial', 'frota'];
+// Seleção de módulos (`TipoSelecao`): sem linha, sem usuário ou com a busca de permissões falhando, estes ficam liberados.
+export const MODULOS_LIBERADOS_SEM_PERMISSAO_SELECAO = ['comercial'];
+
 // Rotas dos módulos, o prefixo mais longo primeiro ('/engenharia-projetos' antes de '/engenharia').
 const ROTAS_POR_TAMANHO = Object.keys(MODULOS_META)
   .map((chave) => [MODULOS_META[chave].rota, chave])

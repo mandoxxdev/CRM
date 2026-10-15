@@ -130,3 +130,38 @@ test('RN-109.11 quem vê o quê não muda: usuário comum com Compras e Almoxari
     ESPERADO.map((e) => e[1]).filter((n) => !['Compras', 'Almoxarifado'].includes(n))
   );
 });
+
+// Etapa 111 (G17, RN-111.08) — "sem nenhuma linha de permissão": a seleção libera só Comercial (o portão de rota
+// libera Comercial ou Frota; o servidor, Comercial só sem grupo ativo). Divergência CONGELADA, decisão do P.O. (B63).
+test('RN-111.08 usuário sem nenhuma linha de permissão: só Comercial liberado, os outros 10 em "Sem acesso"', async () => {
+  mockUser = { id: 8, nome: 'Sem Linha', role: 'usuario' };
+  mockPermissoes = [];
+  await render();
+  expect(nomesNaSecao('Seus módulos')).toEqual(['Comercial']);
+  expect(nomesNaSecao('Sem acesso')).toEqual(ESPERADO.map((e) => e[1]).filter((n) => n !== 'Comercial'));
+});
+
+test('RN-111.08 a busca das permissões falha: só Comercial liberado (como sem linha)', async () => {
+  mockUser = { id: 9, nome: 'Falha', role: 'usuario' };
+  getCachedUserPermissions.mockImplementation(() => null);
+  fetchUserPermissions.mockImplementation(() => Promise.reject(new Error('rede')));
+  const erro = jest.spyOn(console, 'error').mockImplementation(() => {});
+  await render();
+  erro.mockRestore();
+  expect(nomesNaSecao('Seus módulos')).toEqual(['Comercial']);
+});
+
+// Sem usuário a tela só mostra "Carregando..." — os dois pontos que liberam Comercial sem usuário não têm efeito
+// visível (medido na revisão da Fase 5 da 111; o teste abaixo prende isso, e o "usuário sem id" prende o outro ponto).
+test('RN-111.08 sem usuário: a tela fica em "Carregando..." e não mostra cartão nenhum', async () => {
+  mockUser = null;
+  await render();
+  expect(container.textContent).toContain('Carregando...');
+  expect(container.querySelectorAll('button.orion-tile')).toHaveLength(0);
+});
+
+test('RN-111.08 usuário sem id: só Comercial liberado', async () => {
+  mockUser = { nome: 'Sem Id', role: 'usuario' };
+  await render();
+  expect(nomesNaSecao('Seus módulos')).toEqual(['Comercial']);
+});
