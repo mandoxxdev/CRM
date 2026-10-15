@@ -44,6 +44,10 @@
 > pela tela (G10); o Excel de pedidos leva IPI % e encargos e reimporta com o mesmo total (G13). G11 já
 > estava corrigida desde a 38; G15 avaliada e mantida como dívida. Decisões **B45–B48**, consulta
 > **A6**. Próxima de Compras: a definir.
+> **2026-10-15 — Etapa 103 entregue (frente Compras):** grupo de fornecedores desativado **volta pela tela**
+> (botão "Reativar") e **não recebe mais fornecedor** — a tela dele avisa e o servidor recusa; família que
+> tem material **não muda de nível** (virar subfamília, trocar de família principal ou virar raiz). Decisões
+> **B49–B52**, consulta **A7**. Próxima de Compras: a definir (candidatas no plano da 103).
 > O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
 > A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
@@ -76,6 +80,15 @@
   Zero linhas: nada a fazer. Com linhas: abra cada um em **Materiais → editar**, escolha a família
   principal e a subfamília e salve (se a subfamília estiver inativa o campo fica travado — reative a
   sub antes). Nada quebra se ficarem como estão: só não aparecem no filtro pela família principal.
+- **A7 (Etapa 103) — Consulta, não ação:** o que a mudança de nível de família pela API pode ter deixado
+  antes da 103. (a) Famílias em **três níveis**:
+  `SELECT f.id, f.codigo, f.nome FROM familias_material_almoxarifado f JOIN familias_material_almoxarifado p ON p.id = f.parent_id WHERE p.parent_id IS NOT NULL`.
+  (b) Materiais cuja subfamília **não é filha** da família gravada:
+  `SELECT m.id, m.codigo, m.nome, m.familia_id, m.subfamilia_id FROM materiais_almoxarifado m JOIN familias_material_almoxarifado s ON s.id = m.subfamilia_id WHERE s.parent_id IS NULL OR s.parent_id <> m.familia_id`.
+  (c) Famílias com pai que não existe (`parent_id = 0` gravado por `'0'`):
+  `SELECT f.id, f.codigo, f.nome, f.parent_id FROM familias_material_almoxarifado f LEFT JOIN familias_material_almoxarifado p ON p.id = f.parent_id WHERE f.parent_id IS NOT NULL AND p.id IS NULL`.
+  Zero linhas nas três: nada a fazer (nenhuma tela produz esses casos — só a API). Com linhas: corrigir à mão
+  no banco, caso a caso (a tela não muda o nível de família).
 
 ### B. Decisões que eu tomei e você pode reverter
 - **B1 — Esta frente vive em `main`, e `main` tem OUTRO pedido de compra.** A branch
@@ -209,7 +222,7 @@
   reativar o grupo no banco devolve o grupo inteiro. **Descartado:** `grupo_id = NULL` em todos os
   fornecedores no "Remover grupo" (irreversível — ninguém lembraria quem era de qual grupo).
   Consequência conhecida: `FornecedoresDoGrupo` aberto por um endereço antigo ainda vincula
-  fornecedor ao grupo desativado, e o cadastro de **Variáveis técnicas** que aponta para um grupo
+  fornecedor ao grupo desativado (**fechado na Etapa 103**, B52), e o cadastro de **Variáveis técnicas** que aponta para um grupo
   desativado continua oferecendo os fornecedores dele (a lista mostra "Grupo #N").
 - **B46 — Etapa 100 (G1): a ficha do fornecedor mostra "Grupo desativado (#N)".** **Descartado:**
   devolver grupos inativos em `GET /compras/grupos` (mudaria as três telas que o consomem). A opção só
@@ -230,6 +243,27 @@
   primeira)"** (idem ICMS-ST e Desconto). `%` só é aceito no IPI e `R$` só nos encargos ("10%" no
   Desconto vira aviso, não R$ 10); "1.500" é mil e quinhentos, como na coluna de preço. **Não coberto:**
   desconto maior que os produtos dá total negativo (o pedido manual já aceitava).
+- **B49 — Etapa 103 (G10b): família que tem material NÃO muda de nível.** Virar subfamília, trocar de família
+  principal ou virar raiz é recusado enquanto houver material ligado a ela (pela família ou pela subfamília),
+  **contando os inativos**. **Descartado:** mover os materiais junto (mudaria a família de muitos itens sem
+  ninguém ver, e não há volta pela tela); contar só os ativos, como o "Inativar" faz (o material inativo
+  reativado depois voltaria a ser o caso errado do G10). Nenhuma tela muda o nível de uma família — a recusa
+  só aparece para quem usa a API. Numeração: o doc de Compras tem **série própria** de B (B1–B48 até a 100;
+  os números B45–B48 também existem no doc do almoxarifado, com outro conteúdo) — esta etapa continua a série
+  daqui; a Etapa 102 (em paralelo) numera no doc do almoxarifado, na faixa B53x, sem colisão.
+- **B50 — Etapa 103 (G10b): família com subfamília INATIVA não vira subfamília.** A ativa já era recusada; a
+  inativa passava e, reativada depois, deixava três níveis no banco. **Descartado:** aceitar e conferir o
+  nível só na hora de reativar a subfamília (deixaria o banco num estado proibido esperando alguém reativar).
+- **B51 — Etapa 103: reativar o grupo é um botão próprio, não um campo "ativo" na edição do grupo.** Rota
+  própria e a lista com os desativados só quando a tela pede. **Descartado:** "ativo" no salvar do grupo (o
+  salvar exige o nome e é o do modal de edição — editar e reativar ficariam misturados); devolver os
+  desativados sempre (B46 já tinha descartado: mudaria a ficha do fornecedor e as Variáveis técnicas).
+- **B52 — Etapa 103: só o grupo que MUDA é conferido.** Vincular fornecedor a grupo desativado (ou que não
+  existe) é recusado; salvar um fornecedor que **já está** num grupo desativado, repetindo o grupo, continua
+  funcionando — a ficha dele (B46) e a edição dentro da tela do grupo. **Descartado:** recusar sempre
+  (travaria salvar a ficha de quem ficou num grupo desativado). **Muda uma regra da Etapa 34**, que dizia
+  "o número do grupo grava sem conferir se o grupo existe". **Não coberto:** a conferência e a gravação não
+  são uma operação só — um grupo desativado no mesmo instante em que alguém vincula ainda recebe o vínculo.
 - **B44 — Etapa 89: só o nome do arquivo do PDF da OS é limpo; o número da OS fica como foi digitado.**
   Com `/`, `"` ou `:` no número, o Windows recusava o nome do arquivo e o usuário via "Erro ao gerar
   PDF" (o PDF até era gerado). Agora o arquivo vira `OS_OS_1_2_A_<hora>.pdf` e o documento continua
@@ -397,13 +431,23 @@
   nenhuma tela faz isso): a subfamília conta e lista, a raiz não, e o filtro de Materiais não o
   acha. Correção apontada: `validateFamiliaAtiva` recusar subfamília como família em material
   **novo** ("use a subfamília"). Não feito — sem consumidor real.
-  **Corrigido na Etapa 100 (`f80331920`)** — recusa em material novo, legado editável e corrigível pela
-  tela, atalhos de Sobras/Remessas acertam o par (B47, A6). **Resta G10b:** `PUT /api/almoxarifado/familias/:id`
-  que dá `parent_id` a uma família que já tem materiais (vira subfamília) ainda produz o caso antigo.
+  **Corrigido na Etapa 100 (`4b091ff6`)** — recusa em material novo, legado editável e corrigível pela
+  tela, atalhos de Sobras/Remessas acertam o par (B47, A6). (Este item citava o hash `f80331920`, que **não
+  existe** — o commit do G10 é `4b091ff6`; corrigido na Etapa 103.)
+  **G10b — corrigido na Etapa 103 (`2e3a09eb`):** `PUT /api/almoxarifado/familias/:id` que dava `parent_id` a
+  uma família com materiais recriava o caso antigo. A medição achou mais três portas para estados errados
+  (sub com material trocando de família principal ou virando raiz; raiz com subfamília **inativa** virando sub,
+  que depois dava três níveis; `parent_id: 'abc'` virando raiz calado) — todas recusadas (B49, B50, A7).
+- **G10c** (achado na Etapa 103, **não corrigido**) `PUT /api/almoxarifado/familias/:id` com `ativo: 0` inativa
+  família **com materiais ativos** — o `DELETE` ("Inativar" da tela) recusa com *"Não é possível remover:
+  família possui N item(ns) ativo(s)"*, o `PUT` não confere (medido: 200, `ativo = 0`). Nenhuma tela manda
+  `ativo` nesse `PUT` (a aba Famílias manda só nome, descrição e tipo de uso) — só a API. Correção apontada: a
+  mesma contagem do `DELETE` quando `ativo` passa de 1 para 0.
 - **G13** (Etapa 39) O export de pedidos para Excel passa a trazer "Valor Total" **com** IPI e
   frete, repetido em cada linha de item, e a reimportação ignora essa coluna — um pedido
   exportado e reimportado nasce com valor menor. Coluna "IPI %" no export fica para depois.
-  **Corrigido na Etapa 100 (`f80331923`):** o export leva `IPI %`, `Frete`, `ICMS-ST` e `Desconto` no fim e a
+  **Corrigido na Etapa 100 (`cef3d856`; este item citava `f80331923`, hash que **não existe** — corrigido na
+  Etapa 103):** o export leva `IPI %`, `Frete`, `ICMS-ST` e `Desconto` no fim e a
   importação os lê (B48) — o pedido reimportado tem o mesmo `valor_total` (vale para pedido da Etapa 39
   em diante; o legado do G15 reimporta recalculado).
 - **G14** (Etapa 39) O documento impresso do pedido (PDF/HTML no formato do ERP) **ainda não
@@ -436,6 +480,88 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 103 — Grupo de fornecedores desativado volta pela tela e não recebe fornecedor; família com material não muda de nível (2026-10-15)
+
+**Em uma frase.** Depois do "Remover grupo" (Etapa 100) o grupo só voltava mexendo no banco, e a tela de um
+grupo desativado aberta por um endereço antigo continuava **vinculando fornecedores a ele** sem avisar nada;
+e, do lado do almoxarifado, transformar em subfamília uma família que já tinha materiais deixava esses
+materiais com a família errada — o mesmo defeito que a Etapa 100 tinha fechado por outra porta.
+
+### O que há de novo (visível para o usuário)
+- **Compras → Fornecedores homologados**: se houver grupos desativados, aparece o botão
+  **"Mostrar grupos desativados (N)"** abaixo da grade. Cada grupo desativado tem o selo **"Desativado"** e o
+  botão **"Reativar"** — clicou, aparece **"Grupo reativado"** e o grupo volta para a grade com os
+  fornecedores que estavam nele. Se **todos** os grupos estiverem desativados, a página diz
+  **"Nenhum grupo ativo."** e o botão continua lá.
+- **A tela de um grupo desativado** (pelo cartão desativado ou por um endereço salvo) mostra
+  **"Este grupo está desativado — reative-o para vincular fornecedores."** com o botão **"Reativar grupo"**, e
+  **não** mostra "Vincular fornecedor" nem "Novo fornecedor". Editar um fornecedor que já está nele e
+  "Remover do grupo" continuam funcionando.
+- **Grupo que não existe** (endereço com número errado): o título vira **"Fornecedores – Grupo não encontrado"**
+  e aparece **"Grupo não encontrado."**, sem os botões de vincular.
+- Quem tentar vincular a um grupo desativado por outro caminho recebe
+  **"Grupo desativado — reative o grupo em Fornecedores homologados antes de vincular fornecedores"**.
+- **Almoxarifado (só pela API — nenhuma tela faz isso):** mudar o nível de uma família que tem material é
+  recusado com **"Não é possível transformar em subfamília: a família tem N material(is) cadastrado(s) (contando
+  os inativos)"** ou **"Não é possível mudar a família principal desta subfamília: ela tem N material(is)
+  cadastrado(s) (contando os inativos)"**; família com subfamília inativa não vira subfamília
+  (**"Família com subfamília(s) inativa(s) não pode virar subfamília — elas ficariam num terceiro nível"**).
+
+### Por baixo do capô
+- **Reativar:** `POST /api/compras/grupos/:id/reativar` (mesmo controle de acesso das outras rotas de grupo;
+  idempotente; não mexe em quem estava ligado). `GET /api/compras/grupos` e `/grupos/:id` aceitam
+  `?incluir_inativos=1`; **sem** o parâmetro respondem como antes — a ficha do fornecedor e as Variáveis
+  técnicas não mudam.
+- **Vínculo:** as portas de fornecedor que respondem (`routes/compras/fornecedores.js`) conferem o grupo só
+  quando ele **muda**: não existe → 400 "Grupo não encontrado"; desativado → 400 com a mensagem acima. O
+  **mesmo** grupo do cadastro passa e nem é regravado — em produção a coluna tem chave estrangeira ligada, e
+  regravar um grupo que já não existe com ele mesmo dava erro (achado da revisão do plano).
+- **Família (G10b):** `PUT /api/almoxarifado/familias/:id` recusa a mudança de nível com material (conta os
+  inativos, por família ou subfamília), recusa raiz com subfamília inativa virando sub e recusa `parent_id`
+  que não é número (`'abc'` virava raiz sem aviso; `'0'` gravava um pai que não existe) com
+  **"Família pai não encontrada"**. Renomear continua livre.
+- Testes novos: `familiaMudaDeNivel.api.test.js` (14), `comprasGrupoDesativado.api.test.js` (9, com uma parte
+  sobre a estrutura de banco de produção com a chave estrangeira ligada), `GruposFornecedores.test.js` (9) e
+  `FornecedoresDoGrupo.test.js` (8). `comprasFornecedor.api.test.js` passou a criar os grupos que usava.
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| Grupo desativado só voltava pelo banco | Botão "Reativar" na lista (seção de desativados) e na tela do grupo |
+| Tela de grupo desativado aberta por endereço: título "Grupo", vinculava fornecedor normalmente | Aviso "Este grupo está desativado…", sem "Vincular"/"Novo"; o servidor recusa |
+| Endereço de grupo inexistente: título "Grupo", vinculava (em produção dava erro do banco) | "Grupo não encontrado", sem botões; o servidor responde 400 com a mensagem |
+| Família com material virava subfamília pela API (materiais com a família errada) | Recusado, com a contagem de materiais |
+| Família com subfamília inativa virava subfamília (três níveis depois de reativar) | Recusado |
+| `parent_id: 'abc'` transformava a subfamília em raiz sem aviso | "Família pai não encontrada" |
+
+### Roteiro de teste manual (clicável)
+1. **Compras → Fornecedores homologados** → **Adicionar grupo** "Teste 103" → abra o grupo → **Vincular
+   fornecedor** (escolha um) → volte.
+2. Lápis do "Teste 103" → **Remover grupo** → confirme. O grupo some da grade e aparece
+   **"Mostrar grupos desativados (1)"**.
+3. Clique no botão → o cartão "Teste 103" aparece com **"Desativado"**. Clique **no cartão** (não no botão):
+   abre a tela do grupo com **"Este grupo está desativado — reative-o para vincular fornecedores."** e sem
+   "Vincular fornecedor"/"Novo fornecedor". O fornecedor do passo 1 continua listado; o lápis dele salva
+   normalmente.
+4. Clique **"Reativar grupo"** → **"Grupo reativado"**; o aviso some e os botões voltam. Volte: o grupo está na
+   grade de novo, com o fornecedor.
+5. Troque o número no endereço por um que não existe (ex.: `…/grupo/99999`): **"Fornecedores – Grupo não
+   encontrado"** e o aviso **"Grupo não encontrado."**.
+6. (Família — só pela API, por exemplo com um cliente HTTP autenticado como administrador do almoxarifado.)
+   `PUT /api/almoxarifado/familias/<id de uma família com materiais>` com `{"nome": "<o mesmo>", "parent_id": <id de outra família>}`
+   → 400 **"Não é possível transformar em subfamília: a família tem N material(is) cadastrado(s) (contando os
+   inativos)"**. O mesmo corpo **sem** `parent_id` → 200 (renomear continua livre).
+
+### O que a etapa NÃO cobre
+- **G10c:** o `PUT` de família com `ativo: 0` ainda inativa família com materiais ativos (o "Inativar" da tela
+  recusa; o `PUT` não confere). Nenhuma tela manda isso.
+- Mudar o nível de uma família pela **tela** continua não existindo (era e continua só API).
+- Família ou material que já estejam num estado errado **antes** desta etapa não são corrigidos sozinhos —
+  a consulta **A7** os acha.
+- Vincular e desativar o grupo **no mesmo instante** (dois usuários) ainda pode deixar um vínculo novo no grupo
+  desativado (B52).
+- Variáveis técnicas que apontam para um grupo desativado continuam oferecendo os fornecedores dele (B45).
 
 ## Etapa 100 — Dívidas de Compras: "Remover grupo" funciona, família no lugar certo, Excel de pedidos com IPI e frete (2026-10-15)
 
@@ -511,11 +637,11 @@ exportado para Excel e importado de volta nascia **mais barato** do que o origin
    depois a subfamília."* → escolha a principal e a subfamília → **Salvar**.
 
 ### O que a etapa NÃO cobre
-- **Reativar** um grupo desativado: não há botão (só no banco: `UPDATE grupos_compras SET ativo = 1`).
+- **Reativar** um grupo desativado: não há botão (só no banco: `UPDATE grupos_compras SET ativo = 1`). → **Etapa 103** criou o botão.
 - Material antigo cuja subfamília (gravada no lugar da família) está **inativa**: o campo continua
   travado na edição (a tela só reconhece subfamílias ativas) — corrigir pela API ou reativar a sub.
 - `PUT /familias/:id` que transforma uma família **com materiais** em subfamília ainda cria o caso antigo
-  (**G10b**).
+  (**G10b**). → **fechado na Etapa 103**.
 - Pedido **anterior à Etapa 39** com preço de 3+ casas reimporta com o total recalculado, não o gravado
   (**G15**).
 

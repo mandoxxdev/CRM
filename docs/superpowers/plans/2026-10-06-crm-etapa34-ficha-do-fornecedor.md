@@ -18,7 +18,7 @@
 - **RN-34.05** POST/PUT gravam as 13 colunas; PUT: **ausente não mexe, `''`/`null` limpa** (grava
   `NULL`). Exceção única: `razao_social` é obrigatória também no PUT (ausente ou `''` → 400).
   `grupo_id`: ausente/`''`/`null` → `NULL` no POST e **limpa** no PUT; inteiro grava **sem validar
-  existência** (como hoje); não-inteiro **não vazio** (`'abc'`) → 400 "Grupo inválido".
+  existência** (como hoje — **mudou na Etapa 103, RN-103.08:** inteiro NOVO tem de ser grupo que existe e está ativo; o mesmo valor do gravado passa); não-inteiro **não vazio** (`'abc'`) → 400 "Grupo inválido".
   ⚠️ Achado da revisão do plano: em `main` o PUT trata `grupo_id: null` como "não mexe"
   (`index.js:20578`), então o botão **"Remover do grupo"** de `FornecedoresDoGrupo.js:191` mostra
   "removido" e **não remove**. A semântica nova conserta isso de tabela — provado pelo cenário (4).

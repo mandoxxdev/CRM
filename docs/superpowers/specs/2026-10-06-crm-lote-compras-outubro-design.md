@@ -181,7 +181,7 @@ sistema.
   Semântica do `PUT`: **chave ausente não mexe; `''`/`null` limpa** — é o que deixa o modal do
   grupo (que manda 7 textos) continuar sem zerar cidade/estado/cep/telefone do vendedor.
   Exceção: `razao_social` obrigatória também no PUT. `grupo_id`: ausente/`''`/`null` → `NULL`
-  (no PUT, **limpa**); inteiro grava sem validar existência (como hoje); não-inteiro não vazio →
+  (no PUT, **limpa**); inteiro grava sem validar existência (como hoje — **mudou na Etapa 103, RN-103.08:** grupo NOVO tem de existir e estar ativo); não-inteiro não vazio →
   400 "Grupo inválido". ⚠️ Isto muda a semântica atual (seção 1.3) — provado por teste nos dois
   sentidos, e conserta o "Remover do grupo".
 - **RN-34.06** `GET /api/compras/fornecedores/:id` **nasce** (projeção nomeada, sem `planilha_*`),
