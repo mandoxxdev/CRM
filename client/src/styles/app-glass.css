@@ -1797,16 +1797,18 @@
      BOLINHA ao lado ja diz de que serie se trata. A letra vira texto. */
   .recharts-legend-item-text { color: var(--ag-texto) !important; }
 
-  /* Aba selecionada de Ordens de Servico: 2,42. O azul e o sinal de
-     "selecionada" e precisa continuar azul; dois passos mais escuro mantem o
-     sinal e passa a 5,65. */
-  html:not([data-theme="dark"]) .os-tab.active,
-  html:not([data-theme="dark"]) .os-tab.active span { color: #1D4ED8 !important; }
+  /* Aba selecionada (era so a de Ordens de Servico, `.os-tab`; desde a Etapa 107
+     toda barra de abas e o `ui/Tabs`, e a correcao vale para todas): 2,42. O
+     azul e o sinal de "selecionada" e precisa continuar azul; dois passos mais
+     escuro mantem o sinal e passa a 5,65. O contador (`.ui-tab-badge`) fica
+     fora: e letra branca sobre o azul. */
+  html:not([data-theme="dark"]) .ui-tab-ativa,
+  html:not([data-theme="dark"]) .ui-tab-ativa .ui-tab-rotulo { color: #1D4ED8 !important; }
   /* No escuro o #1D4ED8 cai para 2,80 — eu tinha esquecido de separar e
      criei ali o defeito que estava consertando aqui. O azul claro original
      e o que se le sobre fundo escuro. */
-  [data-theme="dark"] .os-tab.active,
-  [data-theme="dark"] .os-tab.active span { color: #4FACFE !important; }
+  [data-theme="dark"] .ui-tab-ativa,
+  [data-theme="dark"] .ui-tab-ativa .ui-tab-rotulo { color: #4FACFE !important; }
 
   /* Selos de impacto e prioridade em Relatorios: 3,78 sobre o proprio fundo
      a 10%. Mesmo tratamento dos selos do Almoxarifado: muda a letra, o fundo

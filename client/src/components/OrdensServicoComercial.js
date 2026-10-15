@@ -8,6 +8,7 @@ import {
   FiFileText, FiUser, FiDollarSign, FiBarChart2
 } from 'react-icons/fi';
 import { SkeletonTable } from './SkeletonLoader';
+import Tabs from './ui/Tabs';
 import './OrdensServicoComercial.css';
 
 const OrdensServicoComercial = () => {
@@ -211,29 +212,17 @@ const OrdensServicoComercial = () => {
         </div>
       </div>
 
-      {/* Tabs principais */}
-      <div className="os-comercial-tabs">
-        <button
-          className={`os-tab ${activeTab === 'propostas' ? 'active' : ''}`}
-          onClick={() => setActiveTab('propostas')}
-        >
-          <FiCheckCircle />
-          <span>Propostas Aprovadas</span>
-          {propostasAprovadas.length > 0 && (
-            <span className="tab-badge">{propostasAprovadas.length}</span>
-          )}
-        </button>
-        <button
-          className={`os-tab ${activeTab === 'os' ? 'active' : ''}`}
-          onClick={() => setActiveTab('os')}
-        >
-          <FiClipboard />
-          <span>Ordens de Serviço</span>
-          {stats.total > 0 && (
-            <span className="tab-badge">{stats.total}</span>
-          )}
-        </button>
-      </div>
+      {/* Tabs principais — Etapa 107 (G8, RN-107.13): o `ui/Tabs` (antes `.os-comercial-tabs`/`.os-tab`
+          com CSS proprio). O contador continua so quando > 0 (o `badge` do Tabs nao mostra 0). */}
+      <Tabs
+        abas={[
+          { id: 'propostas', label: 'Propostas Aprovadas', icon: FiCheckCircle, badge: propostasAprovadas.length },
+          { id: 'os', label: 'Ordens de Serviço', icon: FiClipboard, badge: stats.total },
+        ]}
+        ativa={activeTab}
+        onChange={setActiveTab}
+        ariaLabel="Ordens de serviço"
+      />
 
       {/* Estatísticas - apenas na aba OS */}
       {activeTab === 'os' && (
