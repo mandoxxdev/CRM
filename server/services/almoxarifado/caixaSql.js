@@ -116,9 +116,11 @@ function avisoCaixaDoAjuste({ caixa, requisicoes } = {}, disponivel, material = 
   const cx = Number(caixa) || 0;
   const disp = Number(disponivel) || 0;
   if (!(cx > Q.QTD_FOLGA) || Q.cabe(cx, disp)) return null;
-  const un = material.unidade;
-  return `Ajuste gravado, mas o disponível de ${material.codigo} ficou em ${Q.qtd(Math.max(0, disp))} ${un}, abaixo dos `
-    + `${Q.qtd(cx)} ${un} separados para ${descreverRequisicoes(requisicoes)}: a entrega fica limitada ao disponível. `
+  // Fase 5 (achado): a unidade nula ou vazia (legado, ou `PUT /materiais/:id` com `unidade: ''`) nao vira "null" nem espaco
+  // duplo — o mesmo filtro do `sufixoCaixa`.
+  const qtdUn = (n) => [Q.qtd(n), material.unidade].filter((x) => x !== undefined && x !== null && x !== '').join(' ');
+  return `Ajuste gravado, mas o disponível de ${material.codigo} ficou em ${qtdUn(Math.max(0, disp))}, abaixo dos `
+    + `${qtdUn(cx)} separados para ${descreverRequisicoes(requisicoes)}: a entrega fica limitada ao disponível. `
     + 'Se o material está na caixa, a contagem não o incluiu — estorne o ajuste que baixou o estoque (perfil Administrador '
     + 'ou Gestor do almoxarifado); se ele se perdeu, devolva-o à prateleira na requisição.';
 }

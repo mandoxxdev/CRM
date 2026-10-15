@@ -132,6 +132,8 @@ describe('Movimentação — aviso da caixa no ajuste com endereço (Etapa 104, 
     expect(toast.success).toHaveBeenCalledWith('Movimentação registrada!');
     expect(toast.warn).toHaveBeenCalledTimes(1);
     expect(toast.warn).toHaveBeenCalledWith(A1, { autoClose: false });
+    // Fase 5 (rv2 achado 1): o aviso vem DEPOIS do sucesso (inverter deixava os tres testes verdes)
+    expect(toast.success.mock.invocationCallOrder[0]).toBeLessThan(toast.warn.mock.invocationCallOrder[0]);
     expect(toast.error).not.toHaveBeenCalled();
   });
 

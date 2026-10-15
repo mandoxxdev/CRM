@@ -190,6 +190,16 @@ const A1 = (cod, total, caixa, lista) => `Ajuste gravado, mas o disponível de $
     assert.strictEqual(r.body.aviso_caixa, A1(mat.codigo, 1, 4, `a requisição ${x.numero}`));
   });
 
+  await test('[104 RN-02] (Fase 5) pela rota, disponivel NEGATIVO aparece como 0: X caixa 4 sem reserva, Y reserva 3, A:7 -> A->0', async () => {
+    const mat = await material(); const A = await loc();
+    const x = await req(mat.id, 4); await aprovar(x.R);
+    await entrar(mat.id, 7, A);
+    const y = await req(mat.id, 3); await aprovar(y.R);
+    await separar(x.R, x.ids[0], 4);
+    const r = await ajuste(mat.id, 0, A);
+    assert.strictEqual(r.body.aviso_caixa, A1(mat.codigo, 0, 4, `a requisição ${x.numero}`), 'disponivel -3 -> "ficou em 0 PC"');
+  });
+
   await test('[104 RN-02] pelo SERVICO: registrarMovimentacao devolve aviso_caixa no retorno', async () => {
     const x = await montagem();
     const r = await stockService.registrarMovimentacao(db, { ...USERS.ADMIN },
@@ -218,7 +228,13 @@ const A1 = (cod, total, caixa, lista) => `Ajuste gravado, mas o disponível de $
     assert.strictEqual(caixaSql.avisoCaixaDoAjuste({ caixa: 4, requisicoes: ['R1'] }, 4, mat), null);
     assert.strictEqual(caixaSql.avisoCaixaDoAjuste({ caixa: 4, requisicoes: ['R1'] }, 4 - 1e-10, mat), null);
     assert.strictEqual(caixaSql.avisoCaixaDoAjuste({ caixa: 4, requisicoes: ['R1'] }, 3.9999, mat), A1('MX', 3.9999, 4, 'a requisição R1'));
-    assert.strictEqual(caixaSql.avisoCaixaDoAjuste({ caixa: 0.3, requisicoes: ['R1'] }, 0.1 + 0.1, mat), A1('MX', 0.2, 0.3, 'a requisição R1'));
+    // Fase 5 (rv2 achado 2): 0.1 + 0.1 da exatamente 0.2 e nao provava o arredondamento; 0.1 + 0.2 = 0.30000000000000004
+    assert.strictEqual(caixaSql.avisoCaixaDoAjuste({ caixa: 0.4, requisicoes: ['R1'] }, 0.1 + 0.2, mat), A1('MX', 0.3, 0.4, 'a requisição R1'));
+    // Fase 5 (rv1 achado 1): unidade nula ou vazia nao vira "null" nem espaco duplo (o filtro do sufixoCaixa)
+    for (const un of [null, '', undefined]) {
+      const t = caixaSql.avisoCaixaDoAjuste({ caixa: 4, requisicoes: ['R1'] }, 0, { codigo: 'MX', unidade: un });
+      assert.ok(t.startsWith('Ajuste gravado, mas o disponível de MX ficou em 0, abaixo dos 4 separados para a requisição R1: '), `unidade ${un}: ${t}`);
+    }
     // disponivel negativo (reservado alem do fisico): mostra 0, como as recusas de saldo
     assert.strictEqual(caixaSql.avisoCaixaDoAjuste({ caixa: 4, requisicoes: ['R1'] }, -2, mat), A1('MX', 0, 4, 'a requisição R1'));
   });
