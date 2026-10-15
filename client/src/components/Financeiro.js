@@ -48,13 +48,6 @@ const Financeiro = () => {
   const [dashboardMes, setDashboardMes] = useState(now.getMonth() + 1);
   const [dashboardAno, setDashboardAno] = useState(now.getFullYear());
 
-  const tabs = [
-    { id: 'contas_pagar', label: 'Contas a Pagar', icon: FiTrendingDown },
-    { id: 'contas_receber', label: 'Contas a Receber', icon: FiTrendingUp },
-    { id: 'fluxo_caixa', label: 'Fluxo de Caixa', icon: FiBarChart2 },
-    { id: 'bancos', label: 'Bancos', icon: FiCreditCard },
-  ];
-
   useEffect(() => {
     if (location.pathname === '/financeiro' || location.pathname === '/financeiro/') {
       navigate('/financeiro/dashboard', { replace: true });

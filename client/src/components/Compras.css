@@ -8,50 +8,6 @@
   animation: fadeIn 0.3s ease;
 }
 
-.module-tabs {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 2rem;
-  border-bottom: 2px solid var(--gmp-border);
-  padding-bottom: 0;
-}
-
-.module-tab {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1rem 1.5rem;
-  background: transparent;
-  border: none;
-  border-bottom: 3px solid transparent;
-  color: var(--gmp-text-light);
-  font-size: 1rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
-  bottom: -2px;
-}
-
-.module-tab:hover {
-  color: var(--gmp-primary);
-  background: rgba(0, 102, 204, 0.05);
-}
-
-.module-tab.active {
-  color: var(--gmp-primary);
-  border-bottom-color: var(--gmp-primary);
-  font-weight: 600;
-}
-
-[data-theme="dark"] .module-tab.active {
-  background: rgba(0, 168, 232, 0.1);
-}
-
-.module-tab svg {
-  font-size: 1.2rem;
-}
-
 .module-content {
   background: var(--gmp-surface);
   border-radius: 12px;
@@ -298,16 +254,6 @@
 @media (max-width: 768px) {
   .compras {
     padding: 1rem;
-  }
-
-  .module-tabs {
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .module-tab {
-    padding: 0.75rem 1rem;
-    font-size: 0.9rem;
   }
 
   .module-content {
