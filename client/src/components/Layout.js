@@ -7,7 +7,7 @@ import api from '../services/api';
 import AvatarUsuario from './AvatarUsuario';
 import { fetchUserPermissions, getCachedUserPermissions, getEffectiveUser, seedPermissionsFromAuthUser } from '../services/permissionsCache';
 import { bypassModuleRestrictions, isSystemAdmin } from '../utils/systemPermissions';
-import { MODULOS_META, modulosDoUsuario, nivelAcessoUsuario } from '../constants/modulosMeta';
+import { MODULOS_META, modulosDoUsuario, nivelAcessoUsuario, moduloDaRota } from '../constants/modulosMeta';
 import BotaoInstalarApp from './BotaoInstalarApp';
 import BarraInferiorMobile from './BarraInferiorMobile';
 import FundoAppMobile from './FundoAppMobile';
@@ -35,19 +35,11 @@ import '../components/chat/Chat.css';
 
 const CHAT_MENU_ITEM = { path: '/chat', icon: FiMessageCircle, label: 'Chat', global: true };
 
-function getActiveModuleFromPath(path) {
-  if (path.startsWith('/frota')) return 'frota';
-  if (path.startsWith('/todolist')) return 'todolist';
-  if (path.startsWith('/compras')) return 'compras';
-  if (path.startsWith('/financeiro')) return 'financeiro';
-  if (path.startsWith('/fabrica')) return 'operacional';
-  if (path.startsWith('/configuracoes')) return 'administrativo';
-  if (path.startsWith('/admin')) return 'admin';
-  if (path.startsWith('/engenharia-projetos')) return 'engenharia_projetos';
-  if (path.startsWith('/engenharia')) return 'engenharia';
-  if (path.startsWith('/almoxarifado')) return 'almoxarifado';
-  if (path.startsWith('/comercial')) return 'crm';
-  return 'crm';
+// Etapa 111 (G17, RN-111.07): rota → módulo de constants/modulosMeta.js; o menu do comercial (e de quem não é
+// módulo, como /chat e /minha-conta) continua sendo 'crm'.
+export function getActiveModuleFromPath(path) {
+  const modulo = moduloDaRota(path);
+  return !modulo || modulo === 'comercial' ? 'crm' : modulo;
 }
 
 const Layout = () => {

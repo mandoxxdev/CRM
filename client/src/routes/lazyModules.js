@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import ModuleLoading from '../components/ModuleLoading';
 import { lazyImportWithRecovery } from '../utils/chunkLoadRecovery';
+import { moduloDaRota } from '../constants/modulosMeta';
 
 function lazyWithRetry(factory) {
   return lazy(() => lazyImportWithRecovery(factory));
@@ -250,15 +251,7 @@ export function prefetchModuleByRoute(rota) {
   if (!rota) return;
   const path = rota.split('?')[0];
   prefetchRoute(path);
-  if (path.startsWith('/comercial')) return prefetchModule('comercial');
-  if (path.startsWith('/frota')) return prefetchModule('frota');
-  if (path.startsWith('/todolist')) return prefetchModule('todolist');
-  if (path.startsWith('/compras')) return prefetchModule('compras');
-  if (path.startsWith('/financeiro')) return prefetchModule('financeiro');
-  if (path.startsWith('/fabrica')) return prefetchModule('operacional');
-  if (path.startsWith('/configuracoes')) return prefetchModule('administrativo');
-  if (path.startsWith('/engenharia-projetos')) return prefetchModule('engenharia_projetos');
-  if (path.startsWith('/engenharia')) return prefetchModule('engenharia');
-  if (path.startsWith('/almoxarifado')) return prefetchModule('almoxarifado');
-  if (path.startsWith('/admin')) return prefetchModule('admin');
+  // Etapa 111 (G17, RN-111.07): rota → módulo de constants/modulosMeta.js (era um mapa escrito à mão aqui).
+  const modulo = moduloDaRota(path);
+  if (modulo) prefetchModule(modulo);
 }

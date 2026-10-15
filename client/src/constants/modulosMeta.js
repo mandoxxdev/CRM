@@ -170,6 +170,24 @@ export function modulosConcediveis() {
   });
 }
 
+// Rotas dos módulos, o prefixo mais longo primeiro ('/engenharia-projetos' antes de '/engenharia').
+const ROTAS_POR_TAMANHO = Object.keys(MODULOS_META)
+  .map((chave) => [MODULOS_META[chave].rota, chave])
+  .sort((a, b) => b[0].length - a[0].length);
+
+/**
+ * Rota → chave do módulo (Etapa 111, G17, RN-111.07): o módulo cuja `rota` é prefixo do caminho
+ * (`startsWith`, sem fronteira — '/frotas' é frota, '/administrativo' é admin, como sempre foi); nenhum → null.
+ * Até a 110 o mesmo mapa estava escrito à mão no portão de rota (`ProtectedModuleRoute`), no prefetch
+ * (`lazyModules`) e no menu lateral (`Layout`). Fora daqui, de propósito: a requisição de material por módulo
+ * (`requisicoesMaterialConfig`, sem TODOLIST), o `ModuleSplash` e o `isProtectedModuleRoute` do `App.js` (tem /chat).
+ */
+export function moduloDaRota(path) {
+  if (!path) return null;
+  const achado = ROTAS_POR_TAMANHO.find(([rota]) => path.startsWith(rota));
+  return achado ? achado[1] : null;
+}
+
 /** Módulos que o usuário acessa → admin/superadmin veem todos. */
 export function modulosDoUsuario(usuario) {
   if (!usuario) return [];

@@ -11,7 +11,7 @@ import { bypassModuleRestrictions, isSystemAdmin } from '../utils/systemPermissi
 import AcessoNegado from './AcessoNegado';
 import SplashScreen from './SplashScreen';
 import { RouteLoading } from './LazyPage';
-import { NOMES_MODULO } from '../constants/modulosMeta';
+import { NOMES_MODULO, moduloDaRota } from '../constants/modulosMeta';
 
 const lastModuleSplashRef = { module: null, at: 0 };
 const activeModuleSessionRef = { current: null };
@@ -22,19 +22,9 @@ export function resetModuleSplashSession() {
   activeModuleSessionRef.current = null;
 }
 
-function getModuloFromPath(path) {
-  if (path.startsWith('/compras')) return 'compras';
-  if (path.startsWith('/financeiro')) return 'financeiro';
-  if (path.startsWith('/fabrica')) return 'operacional';
-  if (path.startsWith('/configuracoes')) return 'administrativo';
-  if (path.startsWith('/admin')) return 'admin';
-  if (path.startsWith('/engenharia-projetos')) return 'engenharia_projetos';
-  if (path.startsWith('/engenharia')) return 'engenharia';
-  if (path.startsWith('/almoxarifado')) return 'almoxarifado';
-  if (path.startsWith('/frota')) return 'frota';
-  if (path.startsWith('/todolist')) return 'todolist';
-  if (path.startsWith('/comercial')) return 'comercial';
-  return null;
+// Etapa 111 (G17, RN-111.07): rota → módulo sai de constants/modulosMeta.js (era um mapa escrito à mão aqui).
+export function getModuloFromPath(path) {
+  return moduloDaRota(path);
 }
 
 function resolveAccessSync(user, mod) {
