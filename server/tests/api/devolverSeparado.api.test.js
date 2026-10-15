@@ -320,6 +320,8 @@ process.on('exit', (code) => {
     await recusa(devolver(e.R, [[e.ids[0], 1]]), 400, D1('ENTREGUE'));
     const f = await montagem();
     assert.strictEqual((await entregar(f.R, [[f.ids[0], 2]])).status, 200);
+    // Etapa 102 (C204, B700): com 2 na caixa o encerramento e recusado (E1) — devolve-se antes de encerrar.
+    assert.strictEqual((await devolver(f.R, [[f.ids[0], 2]])).status, 200);
     assert.strictEqual((await como('ADMIN').put(`${API}/requisicoes/${f.R}/encerrar`, { motivo: 'e98 encerra' })).status, 200);
     await recusa(devolver(f.R, [[f.ids[0], 1]]), 400, D1('ENCERRADA'));
     const m = await material(0);
@@ -899,7 +901,7 @@ process.on('exit', (code) => {
   // Literal S98 (plano, "O sufixo"), inteira: o fim muda; o comeco ("— c un estao separados para ...") e o corte da
   // lista sao os da 97.
   const S98_FIM = ' e só saem pela entrega (material perdido da caixa: devolva-o à prateleira na requisição e dê a baixa, '
-    + 'entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)';
+    + 'ou peça ao administrador do almoxarifado para excluí-la)'; // Etapa 102 (B701): saiu "entregue o que existe e encerre a requisição, "
   const S98 = (c, un, lista) => ` — ${c} ${un} estão separados para ${lista}${S98_FIM}`;
   const M1 = (n) => `Saldo insuficiente. Disponível: ${n} PC`;
   const movAvulsa = (b) => como('ADMIN').post(`${API}/movimentacoes/v2`, { motivo: 'e98 T2', justificativa: 'teste da etapa 98 T2', ...b });

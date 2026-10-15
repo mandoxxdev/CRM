@@ -741,7 +741,9 @@ const S2 = (nome, q, max, pend, disp) => `${nome}: não é possível separar ${q
     assert.deepStrictEqual(visto, [...DENTRO.map((s) => `${s}:0`), ...FORA.map((s) => `${s}:4`)]);
   });
 
-  await test('[95 Fase 5] (T5/T6) pelas rotas: R1 PARCIALMENTE_ATENDIDA com 2 na caixa retem (R2 separar 2 -> 400); encerrada, a caixa volta (200)', async () => {
+  // Etapa 102 (C204, B700): encerrar com material na caixa passou a ser recusado (E1) — a caixa continua retida. A B473
+  // (a ENCERRADA nao retem) vale para o legado encerrado com caixa antes da 102, montado por SQL.
+  await test('[95 Fase 5] (T5/T6) pelas rotas: R1 PARCIALMENTE_ATENDIDA com 2 na caixa retem (R2 separar 2 -> 400); encerrar -> E1 e continua retendo; a ENCERRADA de legado com caixa nao retem (200)', async () => {
     const m = await material(0);
     const a = await req([[m, 4]]); await aprovar(a.R);
     const b = await req([[m, 2]]); await aprovar(b.R);
@@ -750,8 +752,11 @@ const S2 = (nome, q, max, pend, disp) => `${nome}: não é possível separar ${q
     assert.strictEqual((await reqRow(a.R)).status, 'PARCIALMENTE_ATENDIDA', 'premissa');
     recusa(await separar(b.R, [[b.ids[0], 2]]), S2(nomes.get(m), 2, 0, 2, 0));
     const enc = await como('ADMIN').put(`${API}/requisicoes/${a.R}/encerrar`, { motivo: 'e95 fase 5' });
-    assert.strictEqual(enc.status, 200, JSON.stringify(enc.body));
-    assert.strictEqual((await reqRow(a.R)).status, 'ENCERRADA', 'premissa');
+    assert.strictEqual(enc.status, 400, JSON.stringify(enc.body));
+    assert.strictEqual(enc.body.error, 'Esta requisição tem material separado na caixa; entregue-o ou devolva-o à prateleira antes de encerrar.');
+    assert.strictEqual((await reqRow(a.R)).status, 'PARCIALMENTE_ATENDIDA', 'a recusa nao encerrou');
+    recusa(await separar(b.R, [[b.ids[0], 2]]), S2(nomes.get(m), 2, 0, 2, 0));
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET status='ENCERRADA' WHERE id=?", [a.R]); // legado de antes da 102
     ok(await separar(b.R, [[b.ids[0], 2]]), 'a caixa de R1 encerrada voltou a prateleira (B473)');
   });
 

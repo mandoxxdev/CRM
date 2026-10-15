@@ -56,7 +56,7 @@ const comPrazo = (p, ms) => Promise.race([Promise.resolve(p).then(() => 'resolve
 // Mudado na Etapa 98 (B508): o sufixo ganhou a terceira saida, "devolva-o a prateleira na requisicao e de a baixa"
 // (literal S98 do plano da 98). Nenhuma outra assercao deste arquivo mudou.
 const S_FIM = ' e só saem pela entrega (material perdido da caixa: devolva-o à prateleira na requisição e dê a baixa, '
-  + 'entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)';
+  + 'ou peça ao administrador do almoxarifado para excluí-la)'; // Etapa 102 (B701): saiu "entregue o que existe e encerre a requisição, "
 const S = (c, lista) => ` — ${c} PC estão separados para ${lista}${S_FIM}`;
 const M1 = (n) => `Saldo insuficiente. Disponível: ${n} PC`;
 const M3 = (n) => `Saldo disponível insuficiente: ${n}`;
@@ -380,7 +380,9 @@ ORDER BY ma.codigo;`;
     });
   }
 
-  await test('[97 T3 C3] RN-06 entregar o que sobrou e encerrar: a PERDA recusa com o S antes de soltar a caixa; entrega 2 -> PARCIALMENTE_ATENDIDA; a PERDA ainda recusa; encerrar -> ENCERRADA; PERDA 2 -> 201, fisico 0', async () => {
+  // Etapa 102 (C204, B700/B701): "entregar o que sobrou e encerrar" deixou de ser saida — com os 2 perdidos na caixa o
+  // encerramento recusa (E1), e o sufixo S nao o ensina mais. O caminho e devolver a prateleira, lancar a perda e encerrar.
+  await test('[97 T3 C3] RN-06 (revisto na 102) entregar o que sobrou: a PERDA recusa com o S antes de soltar a caixa; entrega 2 -> PARCIALMENTE_ATENDIDA; a PERDA ainda recusa; encerrar -> E1; devolver 2 -> PERDA 2 -> 201; encerrar -> ENCERRADA, fisico 0', async () => {
     const a = await montagem();
     recusou(rota(await mov('ALMOX', { material_id: a.m, tipo: 'PERDA', quantidade: 2 })), M1(0) + S(4, `a requisição ${a.numero}`), 'PERDA 2 com a caixa 4');
     const e = await entregar(a.R, [[a.ids[0], 2]]);
@@ -388,11 +390,17 @@ ORDER BY ma.codigo;`;
     assert.strictEqual(await statusReq(a.R), 'PARCIALMENTE_ATENDIDA');
     assert.strictEqual((await saldo(a.m)).fisico, 2);
     recusou(rota(await mov('ALMOX', { material_id: a.m, tipo: 'PERDA', quantidade: 2 })), M1(0) + S(2, `a requisição ${a.numero}`), 'PERDA 2 com a caixa 2');
+    const enc0 = await como('ADMIN').put(`${API}/requisicoes/${a.R}/encerrar`, { motivo: 'material quebrado na caixa (e97 T3)' });
+    assert.strictEqual(enc0.status, 400, `encerrar com 2 na caixa: ${JSON.stringify(enc0.body)}`);
+    assert.strictEqual(enc0.body.error, 'Esta requisição tem material separado na caixa; entregue-o ou devolva-o à prateleira antes de encerrar.');
+    assert.strictEqual(await statusReq(a.R), 'PARCIALMENTE_ATENDIDA');
+    const dev = await como('ALMOX').put(`${API}/requisicoes/${a.R}/devolver-separado`, { motivo: 'quebrou (e102)', itens: [{ item_id: a.ids[0], quantidade: 2 }] });
+    assert.strictEqual(dev.status, 200, `devolver 2: ${JSON.stringify(dev.body)}`);
+    const perda = await mov('ALMOX', { material_id: a.m, tipo: 'PERDA', quantidade: 2 });
+    assert.strictEqual(perda.status, 201, `PERDA 2 depois de devolver: ${JSON.stringify(perda.body)}`);
     const enc = await como('ADMIN').put(`${API}/requisicoes/${a.R}/encerrar`, { motivo: 'material quebrado na caixa (e97 T3)' });
     assert.strictEqual(enc.status, 200, `encerrar: ${JSON.stringify(enc.body)}`);
     assert.strictEqual(await statusReq(a.R), 'ENCERRADA');
-    const perda = await mov('ALMOX', { material_id: a.m, tipo: 'PERDA', quantidade: 2 });
-    assert.strictEqual(perda.status, 201, `PERDA 2 depois de encerrar: ${JSON.stringify(perda.body)}`);
     assert.deepStrictEqual(await saldo(a.m), { fisico: 0, reservado: 0, bloqueado: 0, terceiros: 0 });
     assert.deepStrictEqual(await a48(a.m), []);
   });

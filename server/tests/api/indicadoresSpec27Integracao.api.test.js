@@ -186,6 +186,10 @@ let seq = 0;
     await entregar(ctx.A.id, [[ctx.A.itens[1], 3]], 'ENTREGUE');
     await entregar(ctx.B.id, [[ctx.B.itens[1], 3]], 'ENTREGUE');
     setUser({ ...ADMIN });
+    // Etapa 102 (C204, B700): o 2o item de C tem 3 na caixa — encerrar com caixa e recusado (E1); devolve-se a prateleira antes.
+    const dev = await request(app).put(`/api/almoxarifado/requisicoes/${ctx.C.id}/devolver-separado`)
+      .send({ motivo: 'nao vai sair', itens: [{ item_id: ctx.C.itens[1], quantidade: 3 }] });
+    assert.strictEqual(dev.status, 200, JSON.stringify(dev.body));
     const enc = await request(app).put(`/api/almoxarifado/requisicoes/${ctx.C.id}/encerrar`).send({ motivo: 'E67T5' });
     assert.strictEqual(enc.status, 200, JSON.stringify(enc.body));
     const d = await indic();

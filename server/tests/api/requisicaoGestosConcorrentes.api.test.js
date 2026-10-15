@@ -626,7 +626,9 @@ const esperarFila = async (R, ms = 3000) => {
   await test('[93 RN-07] (b) (7a) de PARCIALMENTE_ATENDIDA, no UPDATE final da entrega (1), encerrar (ADMIN) espera: entrega 200; encerrar 200 depois; ENCERRADA, reserva LIBERADA', async () => {
     desarmar();
     const x = await montar();
-    assert.strictEqual((await separar('ALMOX', x.R, x.item, 4)).status, 200);
+    // Etapa 102 (C204, B700): separa 2 (era 4) — a 2a entrega esvazia a caixa; com material na caixa o encerramento
+    // seria recusado (E1) e esta corrida nao provaria a ordem.
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 2)).status, 200);
     const e0 = await entregar('ALMOX', x.R, x.item, 1);
     assert.strictEqual(e0.body.status, 'PARCIALMENTE_ATENDIDA', JSON.stringify(e0.body));
     const g = armarFila(RE.ENT, x.R, () => encerrar('ADMIN', x.R));
@@ -1123,9 +1125,11 @@ const esperarFila = async (R, ms = 3000) => {
   // ── RN-08 (e)(e') — o encerramento confere o status lido (T5, B448 com a Fase 2 I3) ──
   const RE_ENC = /SET\s+status\s*=\s*'ENCERRADA'/;
   const C1 = 'A requisição mudou enquanto era encerrada; recarregue e confira antes de encerrar.';
+  // Etapa 102 (C204, B700): separa 1 e entrega 1 (era separa 4) — Parcialmente Atendida com a caixa VAZIA; com material na
+  // caixa o encerramento recusa E1 ja na primeira leitura e a nova tentativa nao seria exercitada.
   const parcial = async () => {
     const x = await montar();
-    assert.strictEqual((await separar('ALMOX', x.R, x.item, 4)).status, 200);
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 1)).status, 200);
     const e = await entregar('ALMOX', x.R, x.item, 1);
     assert.strictEqual(e.body.status, 'PARCIALMENTE_ATENDIDA', JSON.stringify(e.body));
     return x;
@@ -1147,11 +1151,15 @@ const esperarFila = async (R, ms = 3000) => {
   });
 
   // Etapa 101 (RN-04, B526): a maquina ganhou EM_SEPARACAO -> ENCERRADA, condicional (caixa vazia e algo entregue). Aqui a
-  // caixa tem 3 (separa 4, entrega 1): a nova tentativa le os itens e recusa com E1 (antes: a transicao invalida).
+  // caixa tem 3: a nova tentativa le os itens e recusa com E1 (antes: a transicao invalida). Etapa 102: o parcial() chega
+  // com a caixa vazia (a primeira leitura passa), e o escritor poe a caixa (separado 4) junto com o status.
   await test('[93 RN-08] (e) encerramento de PARCIALMENTE_ATENDIDA: o escritor poe EM_SEPARACAO (com 3 na caixa) -> 400 E1 (Etapa 101; era a transicao invalida); status EM_SEPARACAO; nenhuma reserva liberada; nenhuma trilha ENCERRAMENTO', async () => {
     desarmar();
     const x = await parcial();
-    const g = armarEscritor(RE_ENC, () => raw("UPDATE requisicoes_almoxarifado SET status = 'EM_SEPARACAO' WHERE id = ?", [x.R]));
+    const g = armarEscritor(RE_ENC, async () => {
+      await raw('UPDATE itens_requisicao_almoxarifado SET quantidade_separada = 4 WHERE id = ?', [x.item]);
+      await raw("UPDATE requisicoes_almoxarifado SET status = 'EM_SEPARACAO' WHERE id = ?", [x.R]);
+    });
     const en = await comPrazo(encerrar('ADMIN', x.R), 8000, 'encerrar');
     desarmar();
     assert.ok(!g.erro, g.erro && g.erro.message);
