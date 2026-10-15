@@ -23,6 +23,7 @@
 const { dbRun, dbGet } = require('./db');
 const { registrarAuditoria } = require('./audit');
 const stockService = require('./stockService');
+const Q = require('./quantidade');
 
 const erro = (msg, status = 400) => Object.assign(new Error(msg), { status });
 
@@ -158,6 +159,52 @@ async function proximoCodigo(db, familiaId) {
   return `ALM-${String(prox).padStart(3, '0')}`;
 }
 
+/**
+ * Etapa 110 (C215) — o Saldo Inicial do cadastro.
+ *
+ * Ate a 110 o saldo digitado no cadastro virava uma linha 'Saldo inicial de cadastro' gravada com INSERT direto no livro,
+ * fora do motor: sem trava, sem origem, sem as recusas de lote e serie da Entrada. E a Engenharia, que tem
+ * `criar_material` e nao `movimentar`, criava material com saldo. Agora (RN-01..RN-05 do plano da Etapa 110):
+ *  - a rota exige `movimentar` quando ha saldo (RN-01; a permissao e da rota, como o gate do cadastro);
+ *  - material com lote, serie, inspecao obrigatoria ou de cliente NAO nasce com saldo (RN-02): a Entrada manual cobra
+ *    lote e serie, que o cadastro nao informa; inspecao e documento do cliente so o Recebimento cobra (a Entrada manual
+ *    nao — C219), entao o saldo inicial desses quatro e recusado e o usuario lanca a entrada pelo caminho certo;
+ *  - o saldo permitido e uma ENTRADA do motor sobre o material gravado com 0 (RN-03), e se o motor falhar o material
+ *    recem-criado e apagado (RN-04) — senao o usuario tentaria de novo e tomaria 'Código já existe'.
+ * Descartado (B721): tirar o campo do cadastro (muda a tela e tira a implantacao rapida do material simples).
+ */
+const SALDO_INICIAL_MOTIVO = 'Saldo inicial de cadastro';
+
+/** A quantidade do saldo inicial, arredondada como o motor arredonda (Etapa 96). 0 quando nao ha. */
+function quantidadeSaldoInicial(data) {
+  const n = Number(data && data.quantidade_atual);
+  return Number.isFinite(n) && n > 0 ? Q.qtd(n) : 0;
+}
+const temSaldoInicial = (data) => quantidadeSaldoInicial(data) > 0;
+
+/** Os motivos (ordem fixa) que impedem o saldo inicial; [] quando pode (RN-02). Nao le o banco. */
+function motivosSaldoInicialRecusado(data) {
+  const d = data || {};
+  const motivos = [];
+  if (d.controle_lote) motivos.push('tem controle por lote');
+  if (d.controle_serie) motivos.push('tem controle por número de série');
+  if (d.requer_inspecao) motivos.push('exige inspeção');
+  if (d.proprietario_cliente_id) motivos.push('é de cliente');
+  return motivos;
+}
+
+function mensagemSaldoInicialRecusado(codigo, motivos) {
+  return `O material ${codigo} não pode nascer com saldo inicial: ${motivos.join(', ')}. `
+    + 'Cadastre com saldo 0 e lance a entrada depois — em Movimentações (Entrada, com o lote e as séries) ou pelo '
+    + 'Recebimento (inspeção e material de cliente).';
+}
+
+function mensagemSaldoInicialSemPermissao(perfil) {
+  return `Cadastrar material com saldo inicial exige a permissão "movimentar" (seu perfil: ${perfil}) — `
+    + 'o saldo inicial é uma entrada no estoque. Cadastre com saldo 0 e peça a quem movimenta o estoque para lançar a '
+    + 'Entrada em Movimentações.';
+}
+
 /** Quantas vezes createMaterial regera o codigo quando `codigo_auto` esta ligado. */
 const TENTATIVAS_CODIGO_AUTO = 5;
 
@@ -188,6 +235,13 @@ async function createMaterial(db, user, data) {
     codigo_auto,
   } = data;
 
+  // RN-02 (Etapa 110): antes da familia e de gravar.
+  const saldoInicial = quantidadeSaldoInicial(data);
+  if (saldoInicial > 0) {
+    const motivos = motivosSaldoInicialRecusado(data);
+    if (motivos.length > 0) throw erro(mensagemSaldoInicialRecusado(codigo, motivos), 400);
+  }
+
   try {
     await validateFamiliaAtiva(db, familia_id);
     await validateSubfamilia(db, subfamilia_id || null, familia_id);
@@ -210,7 +264,8 @@ async function createMaterial(db, user, data) {
     categoria: categoria || 'OUTROS',
     unidade: unidade || 'UN',
     localizacao: locText,
-    quantidade_atual: quantidade_atual || 0,
+    // RN-03 (Etapa 110): nasce com 0; o saldo inicial entra abaixo, pelo motor.
+    quantidade_atual: 0,
     quantidade_minima: quantidade_minima || 0,
     quantidade_maxima: quantidade_maxima || 0,
     custo_unitario: custo_unitario || 0,
@@ -282,11 +337,25 @@ async function createMaterial(db, user, data) {
 
   // Movimentacao inicial: SO com saldo. Gravar sempre sujaria o extrato de todo material
   // cadastrado sem saldo, e o extrato e a tela onde a Etapa 1 gastou uma etapa inteira.
-  if ((quantidade_atual || 0) > 0) {
-    await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
-      (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, usuario_id, usuario_nome)
-      VALUES (?, 'ENTRADA', ?, 0, ?, 'Saldo inicial de cadastro', ?, ?)`,
-      [id, quantidade_atual, quantidade_atual, user.id, user.nome || user.email]);
+  // Etapa 110 (RN-03/RN-04): pelo motor — a Entrada de verdade (trava, origem, saldo por localizacao, alerta, as recusas
+  // de lote e serie). Destino = a localizacao padrao, quando ha (o livro registra onde entrou). Falhou -> o
+  // material que acabou de nascer e apagado (nada o referencia ainda: a auditoria CRIACAO vem depois) e o erro do motor
+  // sobe com o status dele.
+  if (saldoInicial > 0) {
+    try {
+      await stockService.registrarMovimentacao(db, user, {
+        material_id: id, tipo: 'ENTRADA', quantidade: saldoInicial, motivo: SALDO_INICIAL_MOTIVO,
+        // Fase 2 (achado 1): o motor grava no livro o destino INFORMADO, nao o resolvido — sem isto a linha ficava
+        // sem destino com o saldo na padrao. A padrao ja foi validada acima (existe e esta ativa).
+        ...(locId ? { localizacao_destino_id: locId } : {}),
+      }, { exigeLote: true, exigeSerie: true });
+    } catch (eEntrada) {
+      await dbRun(db, 'DELETE FROM estoque_saldo_almoxarifado WHERE material_id = ?', [id]).catch(() => null);
+      await dbRun(db, 'DELETE FROM materiais_almoxarifado WHERE id = ?', [id]).catch((eDel) => {
+        console.error('[almoxarifado] Falha ao desfazer o material sem saldo inicial:', eDel.message);
+      });
+      throw eEntrada;
+    }
   }
 
   await stockService.syncSaldoLocalizacaoPadrao(db, id).catch((e) => {
@@ -309,4 +378,6 @@ module.exports = {
   FAMILIA_E_SUBFAMILIA,
   bool01, validateFamiliaAtiva, validateSubfamilia, resolveLocalizacaoFromFk, validarLocalizacaoPadrao,
   proximoCodigo, createMaterial, TENTATIVAS_CODIGO_AUTO,
+  SALDO_INICIAL_MOTIVO, quantidadeSaldoInicial, temSaldoInicial, motivosSaldoInicialRecusado,
+  mensagemSaldoInicialRecusado, mensagemSaldoInicialSemPermissao,
 };

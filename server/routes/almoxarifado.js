@@ -55,7 +55,7 @@ const {
   enrichMaterialRows,
 } = require('../services/almoxarifado/materialPhoto');
 const { canConfigureAlmox, canDeleteAlmoxRequisicao, isSystemAdmin } = require('../services/systemPermissions');
-const { can, requirePermission } = require('../services/almoxarifado/permissions');
+const { can, requirePermission, getPerfilFromUser } = require('../services/almoxarifado/permissions');
 const reservationService = require('../services/almoxarifado/reservationService');
 const lotService = require('../services/almoxarifado/lotService');
 const { dbRun, dbGet, dbAll } = require('../services/almoxarifado/db');
@@ -596,6 +596,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // Etapa 8c, Task 1: o corpo virou materialService.createMaterial. O gate FICA AQUI de propósito
   // — os caminhos internos que chamam o serviço já passaram pelo gate deles.
   app.post('/api/almoxarifado/materiais', requirePermission('criar_material'), validate(MaterialSchema), async (req, res) => {
+    // Etapa 110 (C215, RN-01): o saldo inicial e uma ENTRADA no estoque — exige `movimentar`, que a Engenharia
+    // (criar_material sem movimentar) nao tem. Antes de qualquer outra validacao do corpo e antes de gravar. O gate fica
+    // na rota, como o do cadastro: o servico nao checa permissao (ver o cabecalho de materialService).
+    if (materialService.temSaldoInicial(req.body) && !can(req.user, 'movimentar')) {
+      return res.status(403).json({ error: materialService.mensagemSaldoInicialSemPermissao(getPerfilFromUser(req.user)) });
+    }
     try {
       const row = await materialService.createMaterial(db, req.user, req.body);
       res.status(201).json(row);
