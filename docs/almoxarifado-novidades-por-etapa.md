@@ -2115,6 +2115,11 @@ hoje**.
 - **Troca só de ida com histórico** (cliente A → cliente B, ou nosso → cliente com livro) — o saldo e o histórico do
   material mudaram de dono na posição por cliente. Confirme com quem trocou se era a intenção.
 
+**A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
+Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
+*"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
+Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
+
 ### B. Decisões de negócio — B1 a B530 e B700 a B720; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-15 com as oito da Etapa 108 — B713 a B720.**)*
