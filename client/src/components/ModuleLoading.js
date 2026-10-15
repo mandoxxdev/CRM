@@ -1,23 +1,13 @@
 import React from 'react';
+import { NOMES_MODULO } from '../constants/modulosMeta';
 import './ModuleLoading.css';
 
-const MODULE_LABELS = {
-  comercial: 'Comercial',
-  frota: 'Frota',
-  compras: 'Compras',
-  financeiro: 'Financeiro',
-  operacional: 'Operacional',
-  administrativo: 'Administrativo',
-  engenharia: 'Engenharia',
-  engenharia_projetos: 'Engenharia / Projetos',
-  almoxarifado: 'Almoxarifado',
-  todolist: 'TODOLIST',
-  admin: 'Administração',
-  sistema: 'Orion',
-};
+// Etapa 111 (G17): o nome vem de NOMES_MODULO (constants/modulosMeta.js), o mesmo do acesso negado e do log.
+// Ate a 110 havia um mapa proprio aqui, igual menos na engenharia ("Engenharia"; agora "Cálculos de Engenharia" — B62).
+// `sistema` e o que nao e modulo continuam "Orion".
 
 const ModuleLoading = ({ module = 'sistema', compact = false, inline = false }) => {
-  const label = MODULE_LABELS[module] || 'Orion';
+  const label = NOMES_MODULO[module] || 'Orion';
 
   if (inline || compact) {
     return (
