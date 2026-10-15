@@ -565,8 +565,12 @@ async function conferirSeparacao(db, requisicaoId, user) {
     throw err;
   }
 
+  // Etapa 99 (T2, C200, B522): conta a CAIXA (separado - entregue), a regua do liberar (B512). O separado e acumulado e
+  // nao desce na entrega: separou 2, entregou 2, `separar []` -> EM_SEPARACAO com a caixa vazia, e a conferencia atestava
+  // nada. O ROUND tira o resto de ponto flutuante entre a folga e meia unidade da precisao (2,0000001 - 2).
   const separados = await dbGet(db,
-    'SELECT COUNT(*) AS n FROM itens_requisicao_almoxarifado WHERE requisicao_id = ? AND quantidade_separada > 0',
+    'SELECT COUNT(*) AS n FROM itens_requisicao_almoxarifado WHERE requisicao_id = ? AND quantidade_separada > 0'
+    + '\n    AND ROUND(COALESCE(quantidade_separada, 0) - COALESCE(quantidade_entregue, quantidade_atendida, 0), 6) > 1e-9',
     [requisicaoId]);
   if (!separados || Number(separados.n) === 0) {
     const err = new Error('Nenhum item separado');
