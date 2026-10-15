@@ -596,8 +596,13 @@ const MovimentacoesAlmoxarifado = () => {
       }
       if (form.tipo === 'SAIDA' && form.emergencial) payload.emergencial = true;
 
-      await api.post('/almoxarifado/movimentacoes/v2', payload);
+      const resposta = await api.post('/almoxarifado/movimentacoes/v2', payload);
       toast.success('Movimentação registrada!');
+      // Etapa 104 (RN-06): o ajuste com endereço que deixou o estoque abaixo do material separado na caixa de uma
+      // requisição grava, e o servidor diz o que houve e os caminhos (`aviso_caixa`, texto dele, literal). Não fecha
+      // sozinho: é o único lugar em que quem contou fica sabendo que a contagem bateu numa caixa.
+      const avisoCaixa = resposta?.data?.aviso_caixa;
+      if (typeof avisoCaixa === 'string' && avisoCaixa) toast.warn(avisoCaixa, { autoClose: false });
       setShowModal(false);
       if (location.pathname.endsWith('/novo')) {
         navigate('/almoxarifado/movimentacoes', { replace: true });
