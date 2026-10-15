@@ -1,6 +1,6 @@
 # Etapa 99 — a porta da separação recusa o que não é separável (C197) e a conferência recusa a caixa vazia (C200)
 
-> Status: **EM EXECUÇÃO — Fase 2 feita (2026-10-15, ver "Fase 2"); Fase 3 em curso.** Worktree `CRM-wt-e99`, branch
+> Status: **EM EXECUÇÃO — Fases 2 a 4 feitas (T1–T3, `7353265d..3e14653a`, suíte inteira verde); Fase 5 em curso.** Worktree `CRM-wt-e99`, branch
 > `etapa-e99` (de `main` `5f28c044`). Marcar cada task ao terminar (hash, divergência).
 > HEAD de partida: `7b5fd57e` (main, árvore limpa, sem push).
 > Origem: "Próxima tarefa detalhada — Etapa 99" no fim de
@@ -368,7 +368,7 @@ pequenas demais para pagar uma worktree. T3 é a integração (cruza T1, T2 e a 
 serviço). T4 fecha. **Fase 2: nasce a T2b (galho da T2, cliente)** — o "Conferir separação" do detalhe segue a caixa
 (B523 reescrita). Arquivo diferente (`client/`), contrato congelado (a literal da conferência) — roda em paralelo à T3.
 
-- [ ] **T1 (tronco) — a passada de forma da separação (B516–B521).** Contrato "separar". Testes `[99 RN-01]` a
+- [x] **T1 (tronco) — a passada de forma da separação (B516–B521).** Contrato "separar". Testes `[99 RN-01]` a
   `[99 RN-08]`, RN-01/03/05 pela rota **e** pelo serviço; RN-06 com o espião. **Edição declarada:**
   `separacaoComDono.api.test.js:224-226` — `rFantasma` passa a esperar 400 Q2 (comentário *"mudado na Etapa 99 (B518)"*);
   o resto daquele teste (0, `[]`, conferência fica) não muda. **Medir antes de editar:** `test:api` inteiro no HEAD e com
@@ -386,7 +386,23 @@ serviço). T4 fecha. **Fase 2: nasce a T2b (galho da T2, cliente)** — o "Confe
   - (s8) sem `Array.isArray` → cai RN-07 (objeto: 500; texto: 200);
   - (s9) a passada de forma validando item a item **dentro** da passada 1 com `continue` (como hoje) → cai RN-05 "A não
     separado".
-- [ ] **T2 (galho, serial depois da T1) — a conferência conta a caixa (B522) e o resíduo do liberar (RN-10).** Contrato
+  **Feito — `7353265d` (2026-10-15).** `separacaoFormaDaEntrada.api.test.js` 21/21 (12 vermelhos no HEAD; RN-02, RN-04
+  "2 e 1,0000001", "legado 0,5 + 1", "sem série 1,5" e RN-08 guardas verdes antes e depois). `separacaoComDono` 11/11 com
+  o `rFantasma` editado. **Divergências:** (1) a passada de forma lê `carregarItensRequisicao` uma vez, antes da alçada,
+  e a passada 1 reusa a leitura (Fase 2, nota 7); (2) as correções da Fase 2 entraram na T1 (fórmula D5, `?? []` na
+  rota, só-espaço = ausente, corte de 40, `JSON.stringify` protegido) com dois testes a mais; (3) o s9 do plano virou
+  "forma desligada" (o efeito de "validar dentro da passada 1 com `continue`" é o HEAD). **Controles (medidos, cada um
+  derruba a asserção nomeada):** s1 forma depois da reivindicação → 14 caem pelo "nada muda" (status vira
+  *Em Separação* — o desfazer da 92 não roda, a recusa fica fora do `try`); s2 depois da alçada → só a RN-06 alçada (403);
+  s3 `num()` → RN-01 "abc" (rota e svc), RN-05 svc, RN-06 aguardando, o corte de 40; s4 sem o `continue` → RN-02 "item
+  sem quantidade" (Q1 *undefined*); s5 `isInteger(bruto)` → RN-04 "1,0000001"; s6 acumulado → RN-04 "legado 0,5 + 1"; s7
+  item só com q > 0 → RN-03 "outra requisição com 0" e "entrada número"; s8 sem `isArray` → RN-07 (500 e 200); s9
+  desligada → 14 caem; s10 rota `|| []` → RN-07 Fase 2; s11 só-espaço → RN-02; s12 sem corte → RN-01 Fase 2; s13
+  `item_id` booleano/lista aceito → RN-03, **pela lista `[id]`** — o caso `true` não cai neste banco (o item 1 é de
+  outra montagem; `true` casaria o item 1 só se ele fosse da requisição): a asserção do `true` fica sem prova própria,
+  declarado. `test:api` 343/344 (o único vermelho: o teste da T2, ainda não implementada).
+
+- [x] **T2 (galho, serial depois da T1) — a conferência conta a caixa (B522) e o resíduo do liberar (RN-10).** Contrato
   "conferir-separacao". Testes `[99 RN-09]` pela rota **e** pelo serviço; `[99 RN-10]` acrescentado ao teste `[98 RN-03]
   (Fase 5)` de `devolverSeparado.api.test.js` (o caso 2,0000001; o comentário do 2,0000000001 corrigido **dizendo que
   ele não provava o ROUND**). **Vermelho antes:** RN-09 C1–C4 (C3' com 1e-7); RN-10 é verde antes (o `ROUND` do liberar
@@ -396,11 +412,20 @@ serviço). T4 fecha. **Fase 2: nasce a T2b (galho da T2, cliente)** — o "Confe
     (registrar a medida no plano: é a prova de que o teste da 98 era vazio para o `ROUND`);
   - (s2) `COALESCE(quantidade_entregue, 0)` sem `quantidade_atendida` → cai RN-09 C4;
   - (s3) a consulta de antes (`quantidade_separada > 0`) → cai RN-09 C1, C2, C3', C4.
-- [ ] **T2b (galho da T2, cliente — nasce na Fase 2) — o "Conferir separação" do detalhe segue a caixa (B523).**
+  **Feito — `b8e16e4c` (2026-10-15).** `conferirCaixaVazia.api.test.js` 6/6 (5 vermelhos antes); `devolverSeparado` 40/40
+  com o RN-10. **Controles:** s1 conferência sem `ROUND` → só C3 (1e-7); s2 sem `quantidade_atendida` → só C4; s3 a
+  consulta de antes → C1, C2, C3, C4 e "o documento anda"; **s1b liberar sem `ROUND` → cai o `[98 RN-03] (Fase 5)` no
+  passo 2,0000001** (PRONTA em vez de 400) — o 1e-10 sozinho não caía (s6 da Fase 0): o teste da 98 era vazio para o
+  `ROUND`, agora não é.
+
+- [x] **T2b (galho da T2, cliente — nasce na Fase 2) — o "Conferir separação" do detalhe segue a caixa (B523).**
   `RequisicoesList.js:1849`: `getSeparado(i) > 0` → `caixaDoItem(i) > 0` (molde do Liberar, `:1860`). Teste jest
   `[99 RN-09]`: *Em Separação* com separado 2 e entregue 2 → o botão **não** aparece (e o "Ajustar Separação" aparece —
   a metade positiva); separado 2, entregue 1 → aparece. **Controle:** voltar a `getSeparado` → cai o "não aparece".
-- [ ] **T3 (tronco, integração) — o documento até o último gesto, pela rota e pelo serviço.**
+  **Feito — `c9087106` (2026-10-15).** Jest 39/39 no arquivo. **Controle:** voltar a `getSeparado` → 1 cai (o "não
+  aparece" com caixa 0); restaurado por cópia, md5 conferido.
+
+- [x] **T3 (tronco, integração) — o documento até o último gesto, pela rota e pelo serviço.**
   - **I1 crítico pela rota:** S pede 4; aprova; entra 4; ALMOX separa −2 → 400 Q1, *Totalmente Reservada*; separa 4 →
     200; ALMOX2 confere; entrega 2 → *Parcialmente Atendida*; separa `[{ item, −1 }]` → 400 Q1 e continua *Parcialmente
     Atendida* (a fila ainda a mostra); devolve 2 (98) → caixa 0; `[]` pela API (= o modal zerado; Fase 2: o "Separar de novo para conferir" não aparece ali) → *Em
@@ -416,6 +441,15 @@ serviço). T4 fecha. **Fase 2: nasce a T2b (galho da T2, cliente)** — o "Confe
     ao confere vazio, com as mesmas literais; entrada `null` → 400 Q2 (não `TypeError`).
   - **Controles:** (s1) desfazer a T1 → cai I1 no primeiro passo (200 e *Em Separação*); (s2) desfazer a T2 → cai I1 no
     confere vazio (200); (s3) a forma depois da alçada (o s2 da T1) → cai I3. Cada recusa com a literal **inteira**.
+  **Feito — `3e14653a` (2026-10-15).** `separacaoFormaDaEntradaIntegracao.api.test.js` 6/6 **de primeira** (I1, I2 série,
+  I2 legado + A50, **I2 C202 até o encerramento** — achado 4 da Fase 2, I3, I4). **Controles:** sem a T1 → 5 de 6 caem
+  (I2 legado fica: só usa entradas válidas); sem a T2 → I1 e I4 no conferir vazio; forma depois da alçada → só I3.
+
+  **Fase 4 (integração serial, árvore `3e14653a` antes do commit — mesma árvore):** `test:api` **345/345** arquivos (EXIT
+  0); `test:almoxarifado` **44/44**; `test:validation` 4/4, `test:safealter` 3/3, `test:sqlite` 5/5 (concorrência);
+  client jest **1502/1502** (96 suítes); `CI=true react-scripts build` EXIT 0. Sem worktree de galho: a T2b (cliente)
+  rodou na mesma árvore porque não toca o servidor nem sabota o que a suíte do servidor lê.
+
 - [ ] **T4 — fechamento (skill `fechar-etapa`).** Novidades (B516–B523, C201–C203, A50; **C197** e **C200** anotados como
   resolvidos; a **B510** ganha "a porta que produzia a fração fecha na 99"; a B512 ganha a nota do resíduo (RN-10)),
   spec **05** (a separação recusa a forma inválida; a conferência conta a caixa; **corrigir à vista** o
