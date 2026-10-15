@@ -2753,13 +2753,20 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
       // Etapa 110 (RN-09, C218): na transicao 1 -> 0 o UPDATE leva a condicao da inativacao (a do DELETE) e `ativo = 1`.
       // Nao gravou -> rele: material ou subfamilia ativa nasceu na janela (a literal de hoje), a familia sumiu (404), ou
-      // outro ja inativou — entao grava o resto do corpo sem a condicao (com a familia inativa o cadastro de material ja
-      // recusa, o estado proibido nao nasce por ali).
-      const applyUpdate = (semCondicao = false, anteriorDeAgora = null) => {
-        const condicional = inativa && !semCondicao;
-        db.run(`UPDATE familias_material_almoxarifado SET nome=?, descricao=?, categoria_id=?, tipo_uso=?, ativo=?, parent_id=? WHERE id=?${
-          condicional ? ` AND ativo = 1 AND ${SEM_ATIVOS_NA_FAMILIA_SQL}` : ''}`,
-          [nome.trim(), descricao || null, categoriaIdVal, tipoUsoVal, ativoVal, parentId, familiaId,
+      // outro ja inativou — entao tenta de novo SEM o `ativo = 1` mas COM a condicao dos itens (Fase 5, rv1 achado 1: sem
+      // ela, uma reativacao + cadastro de material no meio da releitura deixava o estado proibido); nao gravou de novo ->
+      // rele outra vez e, se nada impede, 409 (a familia mudou duas vezes no meio).
+      // Fase 5 (rv1 achado 2, anterior a 110): `ativo` OMITIDO nao e gravado (`COALESCE(?, ativo)` com null). Antes o PUT
+      // regravava o `ativo` lido no inicio: renomear (a tela nao manda `ativo`) desfazia um Inativar concorrente, ou
+      // reinativava uma familia reativada no meio com material novo dentro.
+      const applyUpdate = (tentativa = 1, anteriorDeAgora = null) => {
+        const condicional = inativa;
+        let condicaoSql = '';
+        if (condicional) {
+          condicaoSql = tentativa === 1 ? ` AND ativo = 1 AND ${SEM_ATIVOS_NA_FAMILIA_SQL}` : ` AND ${SEM_ATIVOS_NA_FAMILIA_SQL}`;
+        }
+        db.run(`UPDATE familias_material_almoxarifado SET nome=?, descricao=?, categoria_id=?, tipo_uso=?, ativo=COALESCE(?, ativo), parent_id=? WHERE id=?${condicaoSql}`,
+          [nome.trim(), descricao || null, categoriaIdVal, tipoUsoVal, ativoInformado ? ativoVal : null, parentId, familiaId,
             ...(condicional ? semAtivosNaFamiliaParams(familiaId) : [])],
           function (err) {
             if (err) return res.status(500).json({ error: err.message });
@@ -2771,8 +2778,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                   return res.status(400).json({ error: 'Não é possível inativar: família possui subfamília(s) ativa(s)' });
                 }
                 if (recusa.naoExiste) return res.status(404).json({ error: 'Família não encontrada' });
-                // outro ja inativou: grava o resto, e a auditoria diz o "de" de AGORA, nao o lido antes da corrida
-                return applyUpdate(true, recusa.atual);
+                if (tentativa > 1) {
+                  return res.status(409).json({ error: 'A família mudou enquanto era salva — nada foi gravado. Recarregue a família e salve de novo.' });
+                }
+                // outro ja inativou: grava o resto (com a condicao dos itens), e a auditoria diz o "de" de AGORA
+                return applyUpdate(2, recusa.atual);
               });
             }
             db.get('SELECT * FROM familias_material_almoxarifado WHERE id = ?', [familiaId], (e, r) => {

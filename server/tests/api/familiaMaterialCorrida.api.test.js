@@ -350,6 +350,37 @@ const SQL_CONF_SUBS_ATIVAS = /^SELECT COUNT\(\*\) as c FROM familias_material_al
     assert.strictEqual(Number(JSON.parse(aud.dados_anteriores).ativo), 0, aud.dados_anteriores);
   });
 
+  // Fase 5 (rv1 achado 1): o caminho "ja inativada por outro" regravava ativo = 0 SEM condicao.
+  const SQL_RELEITURA_SUBS = /^SELECT COUNT\(\*\) AS c FROM familias_material_almoxarifado WHERE parent_id = \? AND ativo = 1$/;
+  await test('[RN-09] PUT {ativo: 0}: inativada por outro e, na releitura, reativada com material novo -> 400 itens; nunca o estado proibido', async () => {
+    const f = await familia();
+    injetar({ sql: SQL_CONF_SUBS_ATIVAS, depois: inativarDireto(f) },
+      { sql: SQL_RELEITURA_SUBS, antes: async () => { await reativarDireto(f)(); await materialDireto(f); } });
+    const r = await request(app).put(`/api/almoxarifado/familias/${f}`).send({ nome: 'Renomeada 110 e', ativo: 0 });
+    conferirInjecao(2);
+    assert.strictEqual(r.status, 400, `${r.status} ${JSON.stringify(r.body)}`);
+    assert.strictEqual(r.body.error, L_ITENS(1));
+    assert.strictEqual(await famAtiva(f), 1, 'familia inativa com material ativo');
+    assert.strictEqual(await ativosNa(f), 1);
+  });
+
+  // Fase 5 (rv1 achado 2, anterior a 110): o PUT sem `ativo` regravava o `ativo` lido no inicio.
+  await test('[RN-09] PUT so renomeando (sem ativo) nao regrava o ativo: nao desfaz um Inativar concorrente nem reinativa', async () => {
+    const f = await familia();
+    injetar({ sql: SQL_CONF_SUBS_ATIVAS, depois: inativarDireto(f) });
+    const r = await request(app).put(`/api/almoxarifado/familias/${f}`).send({ nome: 'Renomeada 110 g' });
+    conferirInjecao(1);
+    assert.strictEqual(r.status, 200, `${r.status} ${JSON.stringify(r.body)}`);
+    assert.strictEqual(await famAtiva(f), 0, 'o renomear desfez o Inativar concorrente');
+    const g = await familia(0);
+    injetar({ sql: SQL_CONF_SUBS_ATIVAS, depois: async () => { await reativarDireto(g)(); await materialDireto(g); } });
+    const r2 = await request(app).put(`/api/almoxarifado/familias/${g}`).send({ nome: 'Renomeada 110 f' });
+    conferirInjecao(1);
+    assert.strictEqual(r2.status, 200, `${r2.status} ${JSON.stringify(r2.body)}`);
+    assert.strictEqual(await famAtiva(g), 1, 'o renomear reinativou a familia com material ativo dentro');
+    assert.strictEqual((await dbGet(db, 'SELECT nome FROM familias_material_almoxarifado WHERE id = ?', [g])).nome, 'Renomeada 110 f');
+  });
+
   await test('[RN-09] metade positiva: PUT renomeando sem mexer em ativo grava com material ativo (200)', async () => {
     const f = await familia();
     await materialDireto(f);
