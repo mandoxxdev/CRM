@@ -1044,4 +1044,17 @@ describe('MovimentacoesAlmoxarifado — aviso do pedido de compra no estorno (Et
     expect(toast.info).not.toHaveBeenCalled();
     expect(modalAberto()).toBe(true);
   });
+
+  // Etapa 106 (RN-09): o estorno do ajuste de material de cliente sem `ajustar_material_cliente` volta 403 do MOTOR (o
+  // gate da rota, `ajustar_estoque`, deixou o Gestor passar) — a tela mostra a literal E1 e nao o fallback.
+  test('[106 RN-09] recusa 403 do estorno de ajuste de material de cliente: mostra a literal E1, sem sucesso', async () => {
+    const msg = 'Estornar o ajuste do material CHP-0001, que pertence ao cliente Metalurgica X, exige a permissao '
+      + '"ajustar_material_cliente" (seu perfil: GESTOR). Estornar ajuste de estoque de terceiro mexe no numero que o '
+      + 'cliente vai cobrar.';
+    api.post.mockRejectedValue(Object.assign(new Error('403'), { response: { status: 403, data: { error: msg } } }));
+    await estornar();
+    expect(toast.error.mock.calls).toEqual([[msg]]);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(modalAberto()).toBe(true);
+  });
 });
