@@ -54,6 +54,7 @@ process.on('exit', (code) => {
   assert.ok(iJson >= 0, 'premissa: jsonParser na pilha');
   stack.splice(iJson + 1, 0, mw);
   const como = (k) => ({
+    get: (u) => request(app).get(u).set('x-teste-usuario', k).then((x) => x),
     post: (u, b = {}) => request(app).post(u).set('x-teste-usuario', k).send(b).then((x) => x),
     put: (u, b = {}) => request(app).put(u).set('x-teste-usuario', k).send(b).then((x) => x),
   });
@@ -178,6 +179,36 @@ process.on('exit', (code) => {
     ok(await conferir(a.R), 'conferir');
     ok(await como('ALMOX').put(`${API}/requisicoes/${a.R}/liberar-retirada`, {}), 'liberar');
     assert.strictEqual((await conf(a.R)).status, 'PRONTA_PARA_RETIRADA');
+  });
+
+  await test('[99 RN-09] (Fase 5) critico com resto 2,0000001 - 2: a conferencia nao e exigida (fila sem CONFERIR, detalhe sem obrigatoria) — a mesma regua do conferir', async () => {
+    const m = await material(1);
+    const a = await montar([[m, 4]]);
+    ok(await separar(a.R, [[a.ids[0], 2]]), 'separar 2');
+    ok(await conferir(a.R), 'conferir');
+    ok(await entregar(a.R, [[a.ids[0], 2]]), 'entregar 2');
+    ok(await separar(a.R, []), 'separar []');
+    await dbRun(db, `UPDATE itens_requisicao_almoxarifado SET quantidade_separada = 2.0000001 WHERE id = ?`, [a.ids[0]]);
+    await dbRun(db, 'UPDATE requisicoes_almoxarifado SET conferido_por_id = NULL, conferido_por_nome = NULL, conferido_em = NULL WHERE id = ?', [a.R]);
+    await recusaVazia(a.R, 'resto critico');
+    const fila = await como('ALMOX2').get(`${API}/fila-separacao`);
+    assert.strictEqual(fila.status, 200, JSON.stringify(fila.body));
+    const linha = fila.body.find((f) => f.id === a.R);
+    assert.ok(linha, 'a requisicao continua na fila (tem pendente a separar)');
+    assert.ok(!linha.etapas.includes('CONFERIR'), `fila: ${JSON.stringify(linha.etapas)}`);
+    assert.strictEqual(linha.conferencia_pendente, false);
+    assert.ok(linha.etapas.includes('SEPARAR'), `a metade positiva: ${JSON.stringify(linha.etapas)}`);
+    const det = await como('ALMOX2').get(`${API}/requisicoes/${a.R}`);
+    assert.strictEqual(det.body.conferencia_obrigatoria, false);
+    assert.strictEqual(requisitionService.conferenciaObrigatoria([{ material_critico: 1, quantidade_separada: 2.0000001, quantidade_entregue: 2 }]), false);
+    assert.strictEqual(requisitionService.conferenciaObrigatoria([{ material_critico: 1, quantidade_separada: 2.000001, quantidade_entregue: 2 }]), true,
+      'controle: 1e-6 e caixa');
+  });
+
+  await test('[99 RN-09] (Fase 5) a menor caixa que existe (2,000001 - 2 = 1e-6) confere — o ROUND e de 6 casas, a regua do liberar', async () => {
+    const a = await caixaVaziaComum();
+    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada = 2.000001 WHERE id = ?', [a.ids[0]]);
+    ok(await conferir(a.R), 'caixa 1e-6 confere');
   });
 
   terminou = true;

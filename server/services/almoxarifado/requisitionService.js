@@ -494,7 +494,10 @@ const nomeDoUsuario = (user) => user?.nome || user?.email || null;
  * Para virar "sempre" ou "nunca" muda-se esta linha, e só ela.
  */
 function conferenciaObrigatoria(itens) {
-  return (itens || []).some((i) => Number(i.material_critico) === 1 && (getSeparado(i) - getEntregue(i)) > 0);
+  // Etapa 99 (Fase 5, revisor 1): a caixa ARREDONDADA, acima da folga — a mesma regua da conferencia (B522) e do liberar
+  // (B512). Com a diferenca crua, um resto de legado (2,0000001 - 2) exigia conferencia que a conferencia recusa ("Nenhum
+  // item separado"): a fila mostrava CONFERIR e entregar, liberar, conferir e encerrar recusavam — presa.
+  return (itens || []).some((i) => Number(i.material_critico) === 1 && Q.qtd(getSeparado(i) - getEntregue(i)) > 1e-9);
 }
 
 /**
