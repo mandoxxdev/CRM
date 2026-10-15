@@ -240,7 +240,9 @@ Plano: `docs/superpowers/plans/2026-10-09-almoxarifado-etapa97-portas-avulsas-re
   `AJUSTE_INVENTARIO` é absoluto). Descartado: o CAS antes da pré-validação (a recusa teria de desfazer o status).
 
 **Fica de fora (declarado):** a contagem por endereço e o `AJUSTE` com localização (D2 da 10b; B495 da 97 — o `AJUSTE`
-com localização de ida continua podendo levar a caixa, C186); travas em memória, um processo (C132).
+com localização de ida continua podendo levar a caixa, C186 — *desde a Etapa 104 (`660ae114`) com aviso, B704*); travas em
+memória, um processo (C132). *(A conferência de inventário NÃO é essa porta: grava `AJUSTE_INVENTARIO` sem endereço e já
+recusa pela caixa desde a 97 — medido na Fase 0 da 104.)*
 
 **Testes:** `portasAvulsasCaixa.api.test.js` — *"[97 RN-01] inventario pela rota: conta 0 na montagem e conclui
 aplicando -> 400 "Ajuste bloqueado:" + M6 com a caixa; nada muda, conferencia aberta; A entrega 4"*, *"[97 RN-09]
