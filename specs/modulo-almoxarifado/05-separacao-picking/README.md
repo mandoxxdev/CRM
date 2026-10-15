@@ -946,7 +946,7 @@ caixa, nomeando a requisição e os dois caminhos (estornar o ajuste que baixou;
   (integração pela rota e pelo serviço), `86ec9f39` (Fase 5: unidade nula no aviso, três testes reforçados). *(Não "resolvido" no sentido da 97: o ajuste ainda leva a caixa; quem contou fica
   sabendo e tem o caminho. Se o P.O. preferir recusar, é a opção (a) da B704.)*
 - [ ] **A caixa coberta por reserva** — fora (C209): a contagem abaixo do reservado não avisa; a entrega já diz "disponível
-  negativo (reservado além do físico)". Candidata depois da Etapa 106 (a 106 é a C211; o desenho da C209 está no fim da próxima tarefa do plano da 104).
+  negativo (reservado além do físico)". Segue candidata depois da Etapa 106 (a 106 foi a C211 e a 108 é a C213 — B711/B712; o desenho da C209 está no fim da próxima tarefa do plano da 104).
 
 **Correção à vista:** o "o que falta" da Etapa 102 (acima) chamava a C186 de *"o ajuste com endereço de ida leva a caixa —
 candidata à Etapa 104"*: feita, com aviso. E a próxima tarefa do plano da 102 dizia que o ajuste com endereço *"não pega a

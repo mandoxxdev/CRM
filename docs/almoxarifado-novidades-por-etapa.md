@@ -11,7 +11,12 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-09):** Etapa 97 fechada (o material separado na caixa de uma requisição só sai
+> **Onde o desenvolvimento está (2026-10-15):** **Etapa 106 fechada** (desfazer o ajuste de material de cliente passa a
+> ser só do Administrador — **C211** resolvido); a próxima do almoxarifado é a **108** — a troca do dono do material com
+> saldo (**C213**); a 107 é de Compras. *(A frase abaixo, de 2026-10-09, parou na Etapa 97 e ficou assim até a 106 — as
+> Etapas 98 a 104 estão no fim, em "Onde estamos e o que vem a seguir"; fica dito, não apagado.)*
+>
+> **(2026-10-09):** Etapa 97 fechada (o material separado na caixa de uma requisição só sai
 > pela entrega — a saída avulsa, a perda, o ajuste para menos, o bloqueio, a reserva manual, a remessa, o sucateamento,
 > a conferência e os estornos recusam levá-lo, com uma mensagem que diz para quem ele está separado e como resolver;
 > **D (95)** e **D (96)** resolvidos) — ver "Onde estamos e o que vem a seguir", no fim. A próxima etapa do almoxarifado
@@ -115,7 +120,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cinquenta e quatro itens para rodar em produção ANTES do deploy — cinquenta e um são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Cinquenta e cinco itens para rodar em produção ANTES do deploy — cinquenta e dois são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-15 (Etapa 106) de cinquenta e quatro para cinquenta e cinco**, com a **A55** — os ajustes de material de cliente que já foram estornados, e o perfil de hoje de quem estornou; opcional.)*
 
 *(**Atualizado em 2026-10-15 (Etapa 102) de cinquenta e dois para cinquenta e quatro**, com a **A53** — as *Encerradas* que ficaram com material na caixa (encerradas antes desta versão; nada a fazer no sistema, só conferir a prateleira) — e a **A54** — as *Parcialmente Atendidas* com material na caixa, que a partir desta versão não se encerram sem antes entregar ou devolver; as duas opcionais.)*
 
@@ -2039,8 +2046,40 @@ caixa e deixa de achá-la depois de **Devolver à prateleira** os 3; a A53 acha 
 - **A54 com linhas** — quem for encerrar uma delas vai encontrar a recusa. O almoxarife **entrega** o que está na caixa,
   se ainda é para sair, ou **Devolve à prateleira** o que não vai sair (motivo obrigatório); depois quem aprova encerra.
 
+**A55 (NOVA, da Etapa 106 — os ajustes de material de cliente que já foram estornados, e por quem).** Até esta versão o
+Gestor estornava o ajuste de material de cliente que só o Administrador pode fazer (**C211**). **Nada aqui é
+obrigatório.** Somente leitura — rodar uma vez depois do deploy:
 
-### B. Decisões de negócio — B1 a B530 e B700 a B706; as em aberto esperam você, as tomadas estão escritas com o descartado
+```sql
+SELECT o.id AS ajuste_id, o.tipo, m.codigo, c.razao_social AS cliente,
+       o.saldo_anterior, o.saldo_posterior, o.cancelado_em, o.cancelado_por,
+       e.usuario_nome AS quem_estornou, p.perfil AS perfil_de_hoje, o.cancelamento_motivo
+  FROM movimentacoes_almoxarifado o
+  JOIN materiais_almoxarifado m ON m.id = o.material_id
+  LEFT JOIN clientes c ON c.id = m.proprietario_cliente_id
+  LEFT JOIN movimentacoes_almoxarifado e ON e.id = o.movimento_estorno_id
+  LEFT JOIN perfil_almoxarifado_usuario p ON p.usuario_id = o.cancelado_por
+ WHERE o.cancelado = 1 AND o.tipo IN ('AJUSTE', 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO')
+   AND m.proprietario_cliente_id IS NOT NULL
+ ORDER BY o.cancelado_em DESC;
+```
+
+*(Conferida numa sonda da etapa contra o esquema real em memória: acha o ajuste estornado de um material de cliente e
+**não** acha o do material nosso estornado no mesmo teste.)* O perfil é o **de hoje** (o sistema não guarda o perfil da
+época), e o dono é o **de hoje** (**C213**).
+
+**Como ler o resultado** (uma linha por estorno):
+- **Vazia** — nada a fazer.
+- **`perfil_de_hoje` = ADMINISTRADOR**, ou vazio para quem é administrador do sistema — estorno que a regra nova também
+  permitiria; nada a fazer.
+- **`perfil_de_hoje` = GESTOR** (ou outro) — o saldo do cliente voltou pela mão de quem não tinha a permissão. Confira com
+  o cliente se o número de `saldo_anterior` (o de antes do ajuste, que o estorno restaurou) é o certo; se não for, o
+  Administrador faz um **Ajuste** novo com a justificativa.
+
+
+### B. Decisões de negócio — B1 a B530 e B700 a B712; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-15 com as seis da Etapa 106 — B707 a B712.**)*
 
 *(**Atualizado em 2026-10-15 com as três da Etapa 104 — B704 a B706** — e antes com as quatro da Etapa 102 — B700 a B703. A numeração **salta de B530 para B700 de propósito**: a Etapa 103 (frente de Compras) corre em paralelo e também usa a série B — ela fica com a B6xx; esta etapa começou na próxima centena livre que não é a 6xx. Não há B531 a B699 no almoxarifado.)*
 
@@ -7183,6 +7222,49 @@ presa no que sobrou, sem novo aviso); e num registro antigo já preso antes da c
 sobra devolver à prateleira (revisão do código). **Descartados:** duas frases conforme o sentido do ajuste (mais uma literal para treinar a
 equipe); avisar só o ajuste que reduz (o que sobe e continua abaixo deixaria a requisição presa em silêncio). (`660ae114`)
 
+**B707 (NOVA, da Etapa 106) — estornar ajuste de material de cliente exige a mesma permissão de ajustá-lo.** O estorno
+de um **Ajuste** (com ou sem localização, tenha ele subido ou baixado o saldo), de um **Ajuste positivo** ou de um
+**Ajuste negativo** de material de cliente devolve o número do cliente ao de antes — é um ajuste ao contrário — e por
+isso passa a exigir a permissão de ajustar material de cliente (**somente Administrador**, decisão 7 da Etapa 8). O
+Gestor, que estorna o material nosso, recebe *"Estornar o ajuste do material ⟨código⟩, que pertence ao cliente ⟨cliente⟩, exige a permissao "ajustar_material_cliente" (seu perfil: GESTOR). Estornar ajuste de estoque de terceiro mexe no numero que o cliente vai cobrar."* antes de qualquer alteração. **Escolhido por ser reversível** (uma lista de três tipos e
+uma chamada no motor) e por fechar o furo **C211** sem tirar nada do Gestor no material nosso. **Descartados:** mudar a
+permissão da rota de estorno para todos (o Gestor perderia o estorno de **todo** material); e um fluxo de "pedir o
+estorno ao Administrador" (máquina de estados nova, do tamanho da aprovação assíncrona que a Etapa 8 já descartou). A
+frase fica **sem acento** como a recusa do ajuste, que é a irmã dela. (`d6493a7e`)
+
+**B708 (NOVA, da Etapa 106) — os OUTROS estornos de material de cliente não mudam.** Medido: o Gestor estorna a
+**entrada** (o estoque do cliente vai a zero), a **saída** com OS do dono, a **devolução ao cliente**, a
+**transferência**, a **perda** e a **sucata** comum de material de cliente — e continua estornando. São o desfazer de um
+lançamento documentado que **não** exigiu a permissão especial; a decisão 7 é sobre **ajustar**. **A alternativa é sua:**
+se o estorno da **entrada** de material de cliente pelo Gestor também for inaceitável (ele zera o que entrou), é
+acrescentar o tipo à mesma lista — uma linha, a mesma frase de recusa precisaria dizer "a entrada" em vez de "o ajuste".
+(`d6493a7e`)
+
+**B709 (NOVA, da Etapa 106) — o estorno de ajuste de cliente que conclui deixa auditoria nomeando o cliente; o recusado
+não.** Além da trilha de estorno de sempre, o estorno feito pelo Administrador grava um registro **Estorno de ajuste**
+do material de cliente com o cliente, o saldo antes e depois, o tipo estornado e o motivo — o mesmo motivo da auditoria
+do ajuste ("quem mexeu" legível sem cruzar tabela). **Diferente do ajuste**, que registra a **tentativa** antes do efeito:
+no estorno o registro só nasce depois que o estorno aconteceu, e uma falha ao gravá-lo não desfaz o estorno (fica no
+log). **Descartado:** reaproveitar a auditoria do ajuste — gravaria "Ajuste" com uma quantidade que ninguém digitou, antes
+de saber se o estorno passa. **Limite aceito:** o registro nomeia o dono **de hoje** — se o dono do material foi trocado no
+cadastro entre o ajuste e o estorno, os dois registros citam clientes diferentes (**C213**). (`d6493a7e`)
+
+**B710 (NOVA, da Etapa 106) — o aviso da caixa diz "perfil Administrador" quando o material é de cliente.** O aviso da
+Etapa 104 (**B704**) manda *"estorne o ajuste que baixou o estoque (perfil Administrador ou Gestor do almoxarifado)"*; com
+a **B707**, no material de cliente o Gestor não estorna — a frase mandaria pedir a quem o sistema recusa. Para material
+de cliente o parêntese vira *"(perfil Administrador do almoxarifado)"*; para o nosso, a frase é a mesma de antes.
+**Descartado:** uma frase só sem o parêntese (perderia a informação útil no caso comum). (`6ca3f9a0`)
+
+**B711 (NOVA, da Etapa 106) — a C209 fica para depois.** A próxima tarefa da Etapa 104 sugeria tratar, se coubesse, o
+aviso da contagem abaixo do reservado (**C209**). Não é da mesma família (aviso do ajuste, não autorização) e a revisão
+achou um furo de autorização mais grave na mesma família desta etapa (**C213**) — que vira a próxima. O desenho da C209
+continua no plano da Etapa 104.
+
+**B712 (NOVA, da Etapa 106) — a próxima etapa do almoxarifado é a troca do dono do material (C213), não a C209.** Medido:
+o almoxarife, **sozinho**, tira o dono do material no cadastro, ajusta o saldo como se fosse nosso e devolve o dono — o
+número do cliente muda sem a permissão especial e sem a auditoria nomeada. A regra das Etapas 8 e 106 olha o dono **de
+agora**. Fica como a **Etapa 108** (a 107 é de Compras); o desenho está no plano da 106.
+
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -9325,12 +9407,28 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      **Devolver à prateleira** na requisição. A **A48** (requisições presas por caixa sem físico) continua achando as que
      já estavam assim antes.
 
-211. **NOVO (anterior à Etapa 104, achado na revisão do código dela) — o Gestor estorna o ajuste de material de
+211. **✅ RESOLVIDO NA ETAPA 106 (`d6493a7e`) — o estorno do ajuste de material de cliente passou a exigir a permissão do
+     ajuste (**B707**); os estornos feitos antes: **A55**.** O texto original: **NOVO (anterior à Etapa 104, achado na revisão do código dela) — o Gestor estorna o ajuste de material de
      cliente.** Ajustar o saldo de material que é de um cliente exige a permissão especial do Administrador (decisão 7 da
      Etapa 8); o Gestor não ajusta (*"Sem permissão para esta operação"*), mas **estorna** o ajuste que o Administrador
      fez — o estorno não confere o dono. Medido com e sem localização: estorno 200, o saldo do cliente volta. **O que
      fazer:** até a correção, não deixe o estorno de ajuste de material de cliente com o Gestor; confira no livro quem
      estornou. É a candidata da **Etapa 106**.
+
+212. **NOVO, da Etapa 106 — o Gestor deixa de estornar ajuste de material de cliente.** O botão de estorno continua
+     aparecendo para ele no livro de Movimentações (é o mesmo botão do material nosso), mas, numa linha de **Ajuste**,
+     **Ajuste positivo** ou **Ajuste negativo** de material de cliente, ao confirmar aparece *"Estornar o ajuste do material ⟨código⟩, que pertence ao cliente ⟨cliente⟩, exige a permissao "ajustar_material_cliente" (seu perfil: GESTOR). Estornar ajuste de estoque de terceiro mexe no numero que o cliente vai cobrar."* e nada muda. **O que fazer:** peça o estorno ao
+     Administrador. Os outros estornos de material de cliente (entrada, saída, devolução, transferência, perda) continuam
+     com o Gestor (**B708**). O aviso amarelo da contagem que bate numa caixa (**C210**) passa a dizer *"(perfil
+     Administrador do almoxarifado)"* quando o material é de cliente (**B710**).
+
+213. **NOVO (anterior à Etapa 106, achado na revisão do plano dela) — trocar o dono do material no cadastro contorna a
+     permissão de ajustar material de cliente.** Quem edita material (Administrador, Almoxarife, Engenharia) pode tirar o
+     cliente do cadastro de um material **com saldo**, ajustar o saldo como se fosse nosso e devolver o cliente — medido:
+     o almoxarife, sozinho, levou o saldo de um material de cliente de 10 para 50, sem a permissão especial e sem a
+     auditoria que nomeia o cliente. O mesmo vale para o estorno (**B707**): a regra olha o dono **de agora**. **O que
+     fazer:** até a correção, confira na auditoria de **Materiais** as edições que mudam o cliente de um material com
+     saldo; desconfie de material que "deixou de ser de cliente" e voltou. É a candidata da **Etapa 108** (**B712**).
 
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -10371,6 +10469,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   bloqueado acima do contado sem nenhuma requisição separada — o corte da Etapa 10, inalterado).
 - **(104) O aviso aparece só na tela de Movimentações** — não vai para e-mail, notificação nem para a fila de separação;
   quem não estava na tela no momento da contagem não fica sabendo (a **A48** acha as presas).
+- **(106) Só a família do ajuste** (Ajuste, Ajuste positivo, Ajuste negativo) exige a permissão especial no estorno; os
+  estornos de entrada, saída, devolução ao cliente, transferência, perda e sucata de material de cliente continuam com o
+  Gestor (**B708**).
+- **(106) O botão de estorno não some para o Gestor** na linha de ajuste de material de cliente — a tela mostra a recusa
+  do servidor ao confirmar (decisão antiga do livro: a mensagem, não o botão escondido).
+- **(106) A regra olha o dono de agora** — trocar o dono no cadastro contorna o ajuste e o estorno (**C213**, próxima).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -11242,6 +11346,17 @@ integração). O que **só o navegador** prova:
 1. **O aviso inteiro legível** num toast que não fecha sozinho — a frase é longa; no tema claro e no escuro, e no celular.
 2. **O aviso e o sucesso juntos** — o *"Movimentação registrada!"* fecha sozinho e o aviso fica até alguém fechar.
 3. **O estorno pelo livro** depois do aviso (o administrador acha o ajuste, estorna, e a requisição entrega).
+
+**(106) Nenhum clique foi dado nesta etapa no navegador.** A tela não mudou de código; a recusa nova aparece pelo aviso de
+erro que o estorno já mostrava, provado por teste de componente com a fronteira HTTP simulada (**1** teste novo); o
+servidor, pela rota e pelo serviço (**17** testes no arquivo novo, **3** jornadas no de integração, **2** casos novos no do
+aviso da caixa). O que **só o navegador** prova:
+
+1. **A recusa inteira legível** no aviso vermelho do estorno, entrando como Gestor, numa linha de **Ajuste** de material
+   de cliente — e o modal continua aberto com o motivo digitado.
+2. **O aviso amarelo da contagem** de material de cliente com *"(perfil Administrador do almoxarifado)"*.
+3. **A auditoria** — Almoxarifado → Auditoria mostra o registro **Estorno de ajuste** do material de cliente depois do
+   estorno feito pelo Administrador.
 
 
 
@@ -22320,9 +22435,102 @@ vazia ou nula saía no aviso como *"0 null"* ou com espaço duplo; o teste de ar
 E achou um furo **anterior à etapa**: o **Gestor estorna o ajuste de material de cliente**, que só o Administrador pode
 ajustar (**C211**).
 
+## Etapa 106 — Desfazer o ajuste de material de cliente passa a ser só do Administrador (2026-10-15)
+
+Material de cliente é material de outra empresa guardado aqui: o número dele é o que o cliente confere e cobra. Por isso,
+desde a Etapa 8, **ajustar** o saldo de material de cliente é só do Administrador — o Gestor acerta o nosso (pela
+conferência de inventário e pelo estorno), não o do cliente. Mas o **estorno** (a seta curva no livro de Movimentações) só pedia a permissão de ajustar estoque e não olhava de
+quem era o material: o Gestor desfazia o ajuste que o Administrador tinha feito, e o número do cliente voltava ao de antes.
+Agora desfazer um ajuste de material de cliente pede a mesma permissão de fazê-lo, o estorno feito fica registrado com o
+nome do cliente, e o aviso da contagem que bate numa caixa de requisição diz a quem pedir o estorno.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| O Gestor estornava o Ajuste, o Ajuste positivo e o Ajuste negativo de material de cliente, e o saldo do cliente voltava | Recebe *"Estornar o ajuste do material ⟨código⟩, que pertence ao cliente ⟨cliente⟩, exige a permissao "ajustar_material_cliente" (seu perfil: GESTOR). …"* e nada muda (**B707**) |
+| O estorno do ajuste de cliente ficava só na trilha comum de estorno | Ganha também o registro **Estorno de ajuste** do material de cliente, com o cliente, o saldo antes e depois e o motivo (**B709**) |
+| O aviso da contagem que bate na caixa mandava pedir o estorno ao *"Administrador ou Gestor"* também no material de cliente | No material de cliente diz *"(perfil Administrador do almoxarifado)"* (**B710**) |
+| — | Os outros estornos de material de cliente (entrada, saída, devolução, transferência, perda) **não mudam** (**B708**) |
+
+### As regras, com o cenário exato
+
+Preparação: cliente **Metalúrgica X** cadastrado; material **CHP-0001** (PC) com o dono **Metalúrgica X**, prateleira
+**A-01**. O **administrador** lança uma **Entrada** de 10 na A-01 (com o documento). Usuários: **Gil** (perfil Gestor),
+**Ana** (Almoxarife) e o **administrador**.
+
+**1. O Gestor não desfaz o ajuste do cliente.** O administrador, em **Movimentações → Nova Movimentação**, tipo **Ajuste**,
+Novo Saldo **4**, justificativa "contagem" → o estoque vai a 4. Gil entra, acha a linha do Ajuste no livro, clica na seta
+curva, motivo "lancei errado", **Confirmar Estorno** → aviso vermelho *"Estornar o ajuste do material CHP-0001, que pertence ao cliente Metalúrgica X, exige a permissao "ajustar_material_cliente" (seu perfil: GESTOR). Estornar ajuste de estoque de terceiro mexe no numero que o cliente vai cobrar."* O estoque continua 4 e a linha não fica *ESTORNADA*. O mesmo com
+o ajuste **com localização** (A-01, Novo Saldo 4 ou 15) e com **Ajuste positivo** / **Ajuste negativo**.
+
+**2. A Almoxarife continua sem estornar nada.** Ana tenta o mesmo → *"Sem permissão para esta operação"* (como sempre: o
+estorno pede o perfil que ajusta estoque).
+
+**3. O administrador desfaz, e fica registrado.** O administrador estorna a mesma linha (motivo "a contagem não olhou a
+caixa") → *"Movimentação estornada!"*, o estoque volta a 10. Em **Almoxarifado → Auditoria** aparece, além do estorno de
+sempre, a linha **Estorno de ajuste** do material de cliente, com *Metalúrgica X*, o saldo 4 → 10 e o motivo.
+
+**4. O material nosso não muda.** Um material **sem** dono, ajustado de 10 para 4: Gil estorna → *"Movimentação
+estornada!"*, o estoque volta a 10. Sem registro *Estorno de ajuste* de material de cliente.
+
+**5. Os outros estornos do material de cliente continuam com o Gestor.** Gil estorna uma **Saída** do CHP-0001 com a OS
+do dono → passa (o material volta). Gil estorna a **Entrada** → passa (o estoque do cliente vai a 0) — decisão **B708**,
+a alternativa é sua.
+
+**6. O ajuste de inventário continua sem estorno para ninguém.** Na linha de um ajuste de inventário, para o Gestor e para
+o administrador: *"Ajuste de inventário não pode ser estornado por aqui — o caminho de correção é uma nova conferência de
+inventário."*
+
+**7. O aviso da caixa diz a quem pedir.** Uma requisição do CHP-0001 (com o projeto da Metalúrgica X) separada com 4, sem
+reserva, e 4 na A-01. O administrador conta **0** na A-01 → *"Movimentação registrada!"* e o aviso amarelo termina em
+*"… estorne o ajuste que baixou o estoque (perfil Administrador do almoxarifado); se ele se perdeu, devolva-o à prateleira
+na requisição."* Gil estorna → a recusa do cenário 1; o administrador estorna → a requisição entrega os 4. Com um material
+**nosso** a frase continua *"(perfil Administrador ou Gestor do almoxarifado)"* e o Gil estorna.
+
+### O que esta etapa NÃO cobre
+
+1. **Os outros estornos de material de cliente** — entrada, saída, devolução ao cliente, transferência, perda e sucata
+   continuam com o Gestor (**B708**).
+2. **Esconder o botão** de estorno do Gestor nessas linhas — a tela mostra a recusa ao confirmar.
+3. **A troca do dono no cadastro** — tirar o cliente de um material, ajustar e devolver o cliente contorna a regra
+   (**C213**); é a próxima etapa do almoxarifado.
+4. **O aviso da contagem abaixo do reservado** (**C209**) — fica para depois (**B711**).
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0) reproduziu o furo pela rota com os perfis reais — e achou mais do que a tarefa dizia: além do
+**Ajuste**, o Gestor estornava o **Ajuste positivo** e o **Ajuste negativo** de material de cliente. Mediu também os outros
+estornos de material de cliente (entrada, saída, devolução, transferência, perda, sucata) — ficam como estão (**B708**). E,
+seguindo a regra até o último gesto, achou que o aviso da contagem da Etapa 104 mandaria pedir ao Gestor um estorno que
+ele não pode mais fazer (**B710**).
+
+A **revisão do plano** achou três correções: o registro novo de auditoria não tinha nome na tela de Auditoria (aparecia o
+código cru — corrigido para *"Estorno de ajuste"*); o plano não dizia de onde vinha o saldo gravado nele; e o manual e o
+guia mandavam o Gestor estornar. Achou também um furo **anterior**: trocar o dono do material no cadastro contorna a regra
+— medido depois, um almoxarife **sozinho** basta (**C213**, a próxima etapa).
+
+A **revisão adversarial do código** (dois revisores, executando) não achou defeito de regra nem de perfil: o administrador
+do módulo e o administrador do sistema estornam mesmo com perfil Gestor gravado; nada muda antes da recusa; cliente
+apagado aparece como *"cliente #⟨n⟩"*; três estornos ao mesmo tempo dão um só estorno e um só registro. O segundo revisor
+fez **36 sabotagens**: 32 derrubaram teste, 3 eram equivalentes ou inalcançáveis, e **uma** mostrou uma asserção faltando
+— o tipo estornado no registro de auditoria só era conferido para o Ajuste; virou teste (`77c3d525`). Uma frase antiga do
+manual (*"O Gestor ajusta o saldo da GMP"*) estava imprecisa — o Gestor acerta o saldo pela conferência de inventário e
+pelo estorno, mas não lança Ajuste em Movimentações (não tem **Movimentar estoque**); reescrita.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 106 entregue (2026-10-15):** **desfazer o ajuste de material de cliente passa a ser só do Administrador.** O
+  estorno de Ajuste, Ajuste positivo e Ajuste negativo de material de cliente exige a mesma permissão do ajuste; o estorno
+  feito fica auditado com o nome do cliente; o aviso da contagem que bate numa caixa diz *"(perfil Administrador do
+  almoxarifado)"* no material de cliente (**C211** resolvido). **O que é seu:** a consulta **A55** (opcional — os estornos
+  que já aconteceram e o perfil de hoje de quem estornou); as decisões **B707 a B712** (a **B708** — os outros estornos de
+  material de cliente ficam com o Gestor — é reversível e a alternativa é sua); os avisos **C212** e **C213**; as
+  limitações **(106)** em D e as verificações **(106)** em F. **Próxima: Etapa 108 (a 107 é da frente de Compras) — trocar
+  o dono de um material com saldo passa a exigir a permissão de ajustar material de cliente (**C213**) — ver a "próxima
+  tarefa detalhada" no plano da Etapa 106.**
 
 - **Etapa 104 entregue (2026-10-15):** **a contagem por prateleira que bate numa caixa de requisição passa a
   avisar.** O **Ajuste** com localização continua gravando o que foi contado, mas, quando o disponível do material fica
@@ -22330,8 +22538,8 @@ ajustar (**C211**).
   — estornar o ajuste que baixou o estoque, ou devolver à prateleira (**C186** tratado). **O que é seu:** as decisões
   **B704 a B706** (a **B704** — avisar em vez de recusar — é reversível e a alternativa é sua); os avisos **C209** e
   **C210**, e o furo anterior **C211** (o Gestor estorna ajuste de material de cliente — candidata da 106); as limitações **(104)** em D e as verificações **(104)** em F. Sem consulta nova em A (a **A48** já acha as
-  presas). **Próxima: Etapa 106 (a 105 é da frente de Compras) — o estorno de ajuste de material de cliente exige a mesma
-  permissão do ajuste (**C211**) — ver a "próxima tarefa detalhada" no plano da Etapa 104.**
+  presas). ~~**Próxima: Etapa 106 (a 105 é da frente de Compras) — o estorno de ajuste de material de cliente exige a mesma
+  permissão do ajuste (**C211**) — ver a "próxima tarefa detalhada" no plano da Etapa 104.**~~ *(Feita — Etapa 106.)*
 
 - **Etapa 102 entregue (2026-10-15):** **material separado na caixa não se encerra, em status nenhum.** A *Parcialmente
   Atendida* com material separado e não entregue recusa o encerramento como a *Em Separação*; a tela mostra a explicação

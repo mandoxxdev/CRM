@@ -1,19 +1,27 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-15 (Etapa 104) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-15 (Etapa 106) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102 e 104) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104 e 106) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 104 ENTREGUE · próxima do almoxarifado: Etapa 106 — a 105 é da frente de Compras)
+> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 106 ENTREGUE · próxima do almoxarifado: Etapa 108 — a 107 é da frente de Compras)
 >
-> **O desenvolvimento parou aqui: Etapa 104 fechada — 2026-10-15.** A **Etapa 104 (a contagem por prateleira que bate
+> **O desenvolvimento parou aqui: Etapa 106 fechada — 2026-10-15.** A **Etapa 106 (desfazer o ajuste de material de
+> cliente passa a ser só do Administrador)**: o estorno de **Ajuste**, **Ajuste positivo** e **Ajuste negativo** de
+> material de cliente pede a mesma permissão de ajustá-lo — o Gestor, que estorna o material nosso, recebe a recusa e
+> nada muda; o estorno do administrador fica registrado na Auditoria com o nome do cliente; e o aviso amarelo da contagem
+> que bate numa caixa diz *"(perfil Administrador do almoxarifado)"* quando o material é de cliente. **Próxima: Etapa
+> 108** — trocar o dono de um material com saldo passa a exigir a permissão de ajustar material de cliente (C213, achado
+> na revisão desta etapa) — ver a próxima tarefa no plano da 106.
+>
+> **Etapa 104, 2026-10-15.** A **Etapa 104 (a contagem por prateleira que bate
 > numa caixa de requisição passa a avisar)**: o **Ajuste** com localização em Movimentações continua gravando o que foi
 > contado, mas, quando o disponível do material fica abaixo do que está separado para uma requisição, aparece um aviso
 > amarelo que não fecha sozinho, com a requisição e os dois caminhos — estornar o ajuste que baixou o estoque (se o
 > material está na caixa) ou devolver à prateleira (se ele se perdeu). Antes a contagem gravava em silêncio e a
-> requisição ficava presa em *"Máximo: 0"*. **Próxima: Etapa 106** — o estorno de ajuste de material de cliente passa a exigir a
-> mesma permissão do ajuste (C211, achado na revisão desta etapa) — ver a próxima tarefa no plano da 104.
+> requisição ficava presa em *"Máximo: 0"*. ~~**Próxima: Etapa 106** — o estorno de ajuste de material de cliente passa a exigir a
+> mesma permissão do ajuste (C211, achado na revisão desta etapa) — ver a próxima tarefa no plano da 104.~~ *(Feita — Etapa 106.)*
 >
 > **Etapa 102, 2026-10-15.** A **Etapa 102 (material na caixa não se encerra)**:
 > a requisição *Parcialmente Atendida* com material separado e ainda não entregue deixa de se encerrar — antes o
@@ -6401,6 +6409,59 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 106 — Desfazer o ajuste de material de cliente passa a ser só do Administrador (ENTREGUE — 2026-10-15)
+
+**O que mudou, em uma frase:** estornar um ajuste de material de cliente pede a mesma permissão de fazer o ajuste —
+somente o Administrador.
+
+**O problema que ela resolve.** O número do material de cliente é o que o cliente confere e cobra; por isso, desde a
+Etapa 8, só o Administrador ajusta esse saldo. Mas o estorno (a seta curva no livro de Movimentações) só pedia a permissão
+de ajustar estoque, que o Gestor também tem, e não olhava de quem era o material: o Gestor desfazia o ajuste do
+Administrador e o saldo do cliente voltava ao de antes.
+
+| Antes | Agora |
+|---|---|
+| O Gestor estornava o ajuste de material de cliente | Recebe a recusa e nada muda |
+| O estorno ficava só na trilha comum | Ganha o registro **Estorno de ajuste** com o nome do cliente |
+| O aviso da contagem na caixa mandava pedir ao *"Administrador ou Gestor"* | No material de cliente: *"(perfil Administrador do almoxarifado)"* |
+
+**A regra agora.**
+- Vale para o estorno de **Ajuste** (com ou sem localização, tenha subido ou baixado), **Ajuste positivo** e **Ajuste
+  negativo** de material **de cliente**. Quem não é Administrador recebe *"Estornar o ajuste do material ⟨código⟩, que pertence ao cliente ⟨cliente⟩, exige a permissao "ajustar_material_cliente" (seu perfil: ⟨perfil⟩). Estornar ajuste de estoque de terceiro mexe no numero que o cliente vai cobrar."*
+- O material **nosso** não muda: o Gestor continua estornando o ajuste.
+- Os **outros** estornos de material de cliente (entrada, saída, devolução ao cliente, transferência, perda) continuam com
+  o Gestor.
+- O ajuste de inventário continua sem estorno para ninguém.
+
+### Roteiro de teste manual
+
+Preparação: um cliente **Metalúrgica X**; o material **CHP-0001** (PC) com o dono **Metalúrgica X**; uma prateleira
+**A-01**. Usuários: o **administrador**, **Gil** (perfil Gestor) e **Ana** (Almoxarife). O administrador lança uma
+**Entrada** de 10 na A-01 (com o documento).
+
+1. **O ajuste do administrador.** Administrador, **Movimentações → Nova Movimentação**: CHP-0001, tipo **Ajuste**, Novo
+   Saldo **4**, justificativa "contagem" → estoque 4.
+2. **O Gestor não desfaz.** Gil, no livro, seta curva na linha do Ajuste, motivo "lancei errado", **Confirmar Estorno** →
+   aviso vermelho com a frase acima (*"… (seu perfil: GESTOR) …"*). O modal continua aberto, o estoque continua 4 e a
+   linha não fica *ESTORNADA*.
+3. **A Almoxarife também não.** Ana tenta o mesmo → *"Sem permissão para esta operação"*.
+4. **O administrador desfaz.** O administrador estorna a linha (motivo "a contagem não olhou a caixa") → *"Movimentação
+   estornada!"*, estoque 10. **Almoxarifado → Auditoria**: a linha **Estorno de ajuste** do material de cliente com
+   *Metalúrgica X* e o motivo.
+5. **O material nosso.** Um material sem dono com Entrada de 10 e Ajuste para 4: Gil estorna → passa, estoque 10.
+6. **Os outros estornos.** Uma **Saída** do CHP-0001 com a OS da Metalúrgica X: Gil estorna → passa.
+7. **O aviso da caixa.** Uma requisição do CHP-0001 com o projeto da Metalúrgica X, aprovada antes da entrada (sem
+   reserva), separada com 4, e 4 na A-01. O administrador conta **0** na A-01 → o aviso amarelo termina em *"… estorne o
+   ajuste que baixou o estoque (perfil Administrador do almoxarifado); se ele se perdeu, devolva-o à prateleira na
+   requisição."* Gil estorna → recusa; o administrador estorna → a requisição entrega os 4.
+
+**O que esta etapa NÃO cobre.** Os outros estornos de material de cliente (decisão B708, a alternativa é sua); esconder o
+botão de estorno do Gestor (a tela mostra a recusa); a **troca do dono** no cadastro — tirar o cliente de um material,
+ajustar e devolver o cliente ainda contorna a regra (C213, a próxima etapa); o aviso da contagem abaixo do reservado (C209).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor e componente da
+tela) provam, escrito para você conferir à mão.
+
 ## Etapa 104 — A contagem por prateleira que bate numa caixa de requisição passa a avisar (ENTREGUE — 2026-10-15)
 
 **O que mudou, em uma frase:** o **Ajuste** com localização que deixa o estoque abaixo do que está separado para uma
@@ -6422,7 +6483,8 @@ contou fica sabendo no mesmo instante.
 - Avisa quando, depois da contagem, o **disponível** do material (o que a entrega deixa sair) fica abaixo do que está
   separado **sem reserva** para requisições em andamento — também quando a contagem sobe mas continua abaixo.
 - Os caminhos: o material está na caixa → **estorno** do ajuste que baixou o estoque (só Administrador ou Gestor — o
-  almoxarife recebe *"Sem permissão para esta operação"*); o material se perdeu → **Devolver à prateleira** na requisição.
+  almoxarife recebe *"Sem permissão para esta operação"*; **desde a Etapa 106, no material de cliente, só o
+  Administrador**, e o aviso diz *"(perfil Administrador do almoxarifado)"*); o material se perdeu → **Devolver à prateleira** na requisição.
 
 ### Roteiro de teste manual
 

@@ -184,7 +184,9 @@ Dois revisores frescos em worktrees próprias (`CRM-wt-e104rv1`, `CRM-wt-e104rv2
 - **Paralelismo:** 0 galho de código em paralelo (T2 só depois da T1, na mesma árvore). Em paralelo: a revisão do plano ×
   a escrita da T1 (o revisor sondou contra a T1 parcial — ajudou); os dois revisores da Fase 5 × a documentação. Nenhum
   EADDRINUSE (a suíte inteira só rodou com ninguém mais rodando teste).
-- **Defeito que escapou:** *(preencher na Etapa 106.)* Da Etapa 102 para cá: nenhum defeito de código; um erro de
+- **Defeito que escapou:** *(preenchido na Etapa 106.)* Nenhum defeito de código da 104 apareceu na 106. A frase da A1
+  *"(perfil Administrador ou Gestor do almoxarifado)"* passou a ficar errada para material de cliente **por causa da regra nova
+  da 106** (o estorno do ajuste de cliente só do Administrador) — corrigida lá (B710); não é escape da 104. Da Etapa 102 para cá: nenhum defeito de código; um erro de
   documento (a trava no plano da 102) e o `CLAUDE.md` desatualizado na mesma frase (**G87**, não editado).
 
 ## O que fica de fora (declarado)

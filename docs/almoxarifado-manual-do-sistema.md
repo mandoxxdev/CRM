@@ -924,7 +924,7 @@ As leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
   hoje: ferramenta é patrimônio emprestável, não estoque (seção 21), e a permissão existe separada
   de propósito — dá para autorizar um perfil só para ferramentas, sem abrir movimentação de
   material, se um dia isso for pedido.
-- **Ajustar material de cliente é mais restrito que ajustar o estoque próprio.** O Gestor ajusta o saldo da GMP; **apenas o Administrador** ajusta o saldo de material que pertence a um cliente. O motivo é direto: aquele número é o que o cliente vai conferir e cobrar.
+- **Ajustar material de cliente é mais restrito que ajustar o estoque próprio.** O Gestor acerta o saldo da GMP — pela conclusão da conferência de inventário com ajuste (13) e pelo estorno de um ajuste errado (6.10); lançar um Ajuste em Movimentações pede também **Movimentar estoque**, que o Gestor não tem —; **apenas o Administrador** ajusta o saldo de material que pertence a um cliente — e só ele **estorna** um ajuste desse material, porque o estorno devolve o saldo ao de antes (16.8). O motivo é direto: aquele número é o que o cliente vai conferir e cobrar.
 - **Reservar para outra OS** é separado de **Reservar**. Qualquer requisitante reserva material para a própria ordem; transferir uma reserva de uma OS para outra é decisão de priorização, e fica com o Administrador e o Gestor. A reserva que nasceu de uma **requisição** não se transfere — ela pertence à requisição (9.5).
 - **Liberar a reserva de uma requisição** exige, além de **Reservar**, ser **quem pediu a requisição** — e só antes de a separação começar — ou ter esta permissão própria, que é do **Administrador** e do **Almoxarife** (9.6). É a única regra do módulo que olha **quem é a pessoa**, e não só o perfil: o perfil Produção reserva e libera as reservas manuais, mas não solta o material que foi separado para a requisição de outra pessoa. O **Gestor** não a tem porque não tem **Reservar** (a rota de liberar exige as duas); ele solta tudo de uma requisição pelo **Encerrar Requisição**.
 - **Inspecionar** é o que autoriza aprovar, reprovar e liberar material da quarentena, e também mudar a situação de um lote ou de uma série, e liberar vencimento. Pertence ao Administrador, ao Almoxarife e ao **Qualidade**.
@@ -1409,7 +1409,7 @@ A coluna Quantidade mostra o **sinal real** do movimento (+ ou −) calculado pe
 Movimentação errada **não é excluída**. O botão de estornar (seta curva) na coluna Ações cria um **lançamento reverso**: a linha original fica esmaecida com o selo **ESTORNADA** e uma linha nova do tipo Estorno entra no livro.
 
 - **Motivo é obrigatório** → *"Justificativa obrigatória para cancelamento"*.
-- Exige o perfil que pode **ajustar estoque** (mais restrito que o de movimentar).
+- Exige o perfil que pode **ajustar estoque** (mais restrito que o de movimentar). O estorno de um **ajuste de material de cliente** (Ajuste, Ajuste positivo ou Ajuste negativo) exige, além disso, a permissão de ajustar material de cliente — **somente Administrador** (16.8); o Gestor recebe a recusa antes de qualquer alteração.
 - **Estorno de estorno não existe** → *"Estorno não pode ser estornado"*.
 - **Estorno de entrada** vira uma saída, e por isso respeita o disponível: se a mercadoria já foi consumida, a recusa é *"Não é possível estornar: saldo disponível insuficiente (material já consumido)"*. Se a mercadoria **está no estoque mas reservada** (o físico cobre, o disponível não), a recusa diz quem a segura: *"Não é possível estornar: o material está reservado para requisições (⟨números⟩) — libere as reservas antes de estornar"* (uma reserva sem requisição aparece como *"reservas manuais"*). Em material sem lote, se a posição da entrada já não tem aquela quantidade (porque uma saída tirou dela), o estorno tira **como uma saída**: da posição da entrada primeiro, depois das outras com saldo — nenhuma posição fica negativa.
 - **O estorno também respeita o material separado na caixa de requisições** (10.2). O estorno de entrada compara com o livre fora da caixa, e as duas recusas acima ganham, no fim, o trecho *" — ⟨quantidade⟩ ⟨un⟩ estão separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (…)"* quando há caixa. O estorno de um **ajuste** que **reduz** o total (o ajuste tinha subido) passa pela mesma guarda do ajuste (6.2): *"Não é possível estornar: Ajuste para ⟨t⟩ ⟨un⟩ deixaria o disponível negativo (⟨parcelas⟩, mínimo aceitável: ⟨m⟩ ⟨un⟩). Resolva a retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo."* — com ou sem localização; o estorno que aumenta o total não tem essa guarda. O estorno de um **desbloqueio** bloqueia de novo e só cabe no livre fora da caixa (que desconta o reservado): *"Não é possível estornar o desbloqueio: saldo disponível insuficiente para bloquear de novo: ⟨n⟩ ⟨un⟩"*, com o mesmo trecho no fim quando há caixa.
@@ -2139,9 +2139,11 @@ Material **sem** caixa sem reserva recebe a recusa de sempre, sem esse trecho.
 
 > *"Ajuste gravado, mas o disponível de ⟨código⟩ ficou em ⟨n⟩ ⟨un⟩, abaixo dos ⟨caixa⟩ ⟨un⟩ separados para a requisição ⟨número⟩: a entrega fica limitada ao disponível. Se o material está na caixa, a contagem não o incluiu — estorne o ajuste que baixou o estoque (perfil Administrador ou Gestor do almoxarifado); se ele se perdeu, devolva-o à prateleira na requisição."*
 
+Quando o material é **de cliente**, o parêntese diz *"(perfil Administrador do almoxarifado)"* — só o Administrador estorna ajuste de material de cliente (16.8).
+
 Com duas ou mais requisições, a lista segue a regra da recusa acima (*"as requisições ⟨número⟩ e ⟨número⟩"*, *"e mais ⟨n⟩"*); o disponível mostrado nunca é negativo (aparece 0). O aviso também aparece quando o ajuste **sobe** o total mas ele continua abaixo da caixa. Os dois caminhos:
 
-- **O material está na caixa** (a contagem não olhou a caixa): estorne o ajuste que **baixou** o estoque (6.10). O estorno devolve a quantidade àquela prateleira, o total volta, e a entrega passa. O estorno de um ajuste que **subiu** o total é recusado enquanto o total ficar abaixo da caixa — é o do ajuste que baixou que destrava. Se mais de um ajuste baixou, estorne cada um: o estorno não traz aviso, e a entrega mostra o que ainda falta. O almoxarife não estorna (*"Sem permissão para esta operação"*): pede ao Administrador ou ao Gestor.
+- **O material está na caixa** (a contagem não olhou a caixa): estorne o ajuste que **baixou** o estoque (6.10). O estorno devolve a quantidade àquela prateleira, o total volta, e a entrega passa. O estorno de um ajuste que **subiu** o total é recusado enquanto o total ficar abaixo da caixa — é o do ajuste que baixou que destrava. Se mais de um ajuste baixou, estorne cada um: o estorno não traz aviso, e a entrega mostra o que ainda falta. O almoxarife não estorna (*"Sem permissão para esta operação"*): pede ao Administrador ou ao Gestor — no material de cliente, só ao Administrador.
 - **O material se perdeu da caixa:** **Devolver à prateleira** (10.2b) a quantidade perdida. A caixa diminui e a contagem já deu a baixa; a requisição continua viva — separe de novo quando houver material, ou, se nada foi entregue e ela não vai mais sair, quem pediu a cancela (7.6).
 
 O material separado **coberto por reserva** da própria requisição não entra nesse aviso: com a contagem abaixo do reservado, a entrega já diz que o disponível está negativo (7.5).
@@ -4720,12 +4722,19 @@ Ajustar o saldo de material de cliente **exige uma permissão própria**, mais e
 |---|---|
 | Ajustar estoque (material nosso) | Administrador, Gestor |
 | **Ajustar material de cliente** | **somente Administrador** |
+| **Estornar ajuste de material de cliente** | **somente Administrador** |
 
 Quem não tem a permissão recebe:
 
-> *"Ajustar o saldo do material CHP-0001, que pertence ao cliente Metalúrgica X, exige a permissão "ajustar_material_cliente" (seu perfil: GESTOR). Ajustar estoque de terceiro mexe no numero que o cliente vai cobrar."*
+> *"Ajustar o saldo do material CHP-0001, que pertence ao cliente Metalúrgica X, exige a permissao "ajustar_material_cliente" (seu perfil: GESTOR). Ajustar estoque de terceiro mexe no numero que o cliente vai cobrar."*
 
 A verificação acontece **dentro do motor de estoque**, e não só na tela — de forma que qualquer ajuste lançado pela tela de Movimentações passa por ela. Todo ajuste de material de cliente deixa registro de auditoria **nomeando o cliente proprietário**, com o saldo anterior, o tipo de ajuste, a quantidade e a justificativa (que é obrigatória em qualquer ajuste).
+
+**O estorno do ajuste segue a mesma regra.** Estornar um Ajuste (com ou sem localização, tenha ele subido ou baixado o saldo), um Ajuste positivo ou um Ajuste negativo de material de cliente devolve o saldo do cliente ao de antes — é um ajuste ao contrário —, e por isso também é **somente do Administrador**. O botão de estorno continua aparecendo no livro para quem pode estornar o material nosso (o Gestor); ao confirmar, o sistema recusa antes de mexer em qualquer coisa:
+
+> *"Estornar o ajuste do material CHP-0001, que pertence ao cliente Metalúrgica X, exige a permissao "ajustar_material_cliente" (seu perfil: GESTOR). Estornar ajuste de estoque de terceiro mexe no numero que o cliente vai cobrar."*
+
+O estorno feito pelo Administrador deixa, além da trilha de estorno de sempre, um registro de auditoria **Estorno de ajuste** do material de cliente nomeando o cliente proprietário, com o saldo antes e depois, o tipo do ajuste estornado e o motivo. Os **outros** estornos de material de cliente — de entrada, de saída, de devolução ao cliente, de transferência, de perda — seguem a regra comum do estorno (6.10: o perfil que pode ajustar estoque). O ajuste de inventário não se estorna por ninguém (13).
 
 > Para acertar o saldo de um material de cliente, use sempre o **Ajuste** da tela de Movimentações — ver o cuidado registrado em 23.
 

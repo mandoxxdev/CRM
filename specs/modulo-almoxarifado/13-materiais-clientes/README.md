@@ -1,7 +1,7 @@
 # 13 — Materiais Pertencentes a Clientes
 
-> **Status:** 🟢 — **Etapa 8 entregue em 2026-08-12** (`f26b635..5b5eb55`) · **Spec original:** seção 17 (fundamental para industrialização GMP)
-> **Última atualização:** 2026-08-12
+> **Status:** 🟢 — **Etapa 8 entregue em 2026-08-12** (`f26b635..5b5eb55`) **+ Etapa 106 (2026-10-15, `d6493a7e..0c8ec372`): o estorno do ajuste exige a mesma permissão do ajuste (C211 resolvido)** · furo conhecido: **C213** (a troca do dono no cadastro contorna a regra — candidata da Etapa 108) · **Spec original:** seção 17 (fundamental para industrialização GMP)
+> **Última atualização:** 2026-10-15 (Etapa 106)
 >
 > Material de cliente deixou de ser ilha e virou **material normal com dono**
 > (`materiais_almoxarifado.proprietario_cliente_id`, `NULL` = material nosso): ganha lote, série,
@@ -118,6 +118,19 @@ task foi entregue com a **tabela preservada** exatamente para que este cenário 
   > (Tasks 1 e 4). Fechar exige reescrever a aplicação de ajustes da conferência para passar pelo
   > motor — é etapa própria, e é a mesma pendência já registrada na feature 03
   > (`PUT /conferencias/:id/concluir` escreve `quantidade_atual` por fora do motor).
+  >
+  > *(Esta ressalva **está desatualizada** desde a Etapa 10 — a conferência passou a gravar pelo motor
+  > `AJUSTE_INVENTARIO`, que entra em `TIPOS_AJUSTE_DONO`, e a rota recusa material de cliente sem a permissão; ver o
+  > item **C1** de `docs/almoxarifado-novidades-por-etapa.md` ("RESOLVIDO NA ETAPA 10"). Fica dito na Etapa 106, não
+  > apagado.)*
+- [x] **Estorno do ajuste exige a mesma autorização especial** — Etapa 106, `d6493a7e` (T1): o estorno de `AJUSTE`
+  (com ou sem localização), `AJUSTE_POSITIVO` e `AJUSTE_NEGATIVO` de material com dono exige `ajustar_material_cliente`
+  — `ownerRules.assertEstornoDeAjustePermitido`, no motor (`cancelarMovimentacao`), antes de qualquer efeito; 403 com
+  literal própria; o estorno que conclui audita `material_cliente`/`ESTORNO_AJUSTE` nomeando o cliente. `AJUSTE_INVENTARIO`
+  fora (ninguém o estorna). Os outros estornos de material de cliente ficam com `ajustar_estoque` (B708, declarado). O
+  aviso da caixa da Etapa 104 diz "(perfil Administrador do almoxarifado)" no material de cliente — `6ca3f9a0` (T2).
+  Testes: `estornoAjusteCliente.api.test.js`, `estornoAjusteClienteIntegracao.api.test.js` (`0c8ec372`), os `[106 …]` de
+  `ajusteEnderecoCaixa` e o `[106 RN-09]` do cliente (`fbce0cb0`).
 - [ ] Sobras permanecem vinculadas ao proprietário — **fora do escopo da Etapa 8, declarado**
   (decisão 11 do design): depende da UI de retalhos/sobras, **feature 15**.
 - [x] Devolução ao cliente documentada — `27eb9c9` (Task 6): tipo `DEVOLUCAO_CLIENTE` (saída, pelo
@@ -263,7 +276,10 @@ telas operacionais que a Task 9 delimitou. Fica para quem fechar a feature decid
   devolução em si (tipo `DEVOLUCAO_CLIENTE`) entra, só o documento impresso não.
 - **A pendência do `aplicar_ajustes` da conferência de inventário** (ver a ressalva do checklist).
 
-## Furo conhecido — o estorno não confere o dono (C211, achado na Etapa 104)
+## ~~Furo conhecido — o estorno não confere o dono (C211, achado na Etapa 104)~~ — ✅ resolvido na Etapa 106 (`d6493a7e`)
+
+*(O texto abaixo é o registro da 104, mantido; a correção está no checklist acima.)*
+
 
 A decisão 7 restringe o **ajuste** de material de cliente a quem tem `ajustar_material_cliente` (Administrador) — no motor,
 `ownerRules.assertAjustePermitido`. O **estorno** do ajuste (`POST /api/almoxarifado/movimentacoes/:id/cancelar`, gate
@@ -271,6 +287,15 @@ A decisão 7 restringe o **ajuste** de material de cliente a quem tem `ajustar_m
 Gestor recebe 403 ao ajustar e **200** ao estornar o ajuste do Administrador, e o saldo do cliente volta. Anterior à 104
 (a etapa não tocou o estorno). Candidata da Etapa 106 — ver a próxima tarefa no plano da Etapa 104. O status 🟢 desta
 feature fica, com este furo declarado.
+
+## Furo conhecido — a troca do dono no cadastro contorna o ajuste e o estorno (C213, achado na Etapa 106)
+
+`PUT /api/almoxarifado/materiais/:id` (gate `editar_material`: Administrador, Almoxarife, Engenharia) aceita
+`proprietario_cliente_id` no merge genérico, inclusive `null`, em material **com saldo**. Medido (sonda da Etapa 106): o
+Almoxarife, **sozinho**, tira o dono (200), ajusta 10 → 50 como material nosso (201) e devolve o dono (200) — o saldo do
+cliente mudou sem `ajustar_material_cliente` e sem a auditoria `material_cliente` (a edição do material é auditada como
+`ATUALIZACAO`, com o de → para). As guardas das Etapas 8 e 106 olham o dono **de agora**. Candidata da Etapa 108 — ver a
+próxima tarefa no plano da Etapa 106.
 
 ## Dependências
 
