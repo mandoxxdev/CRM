@@ -123,12 +123,15 @@ const COTACOES_E41 = [
 ];
 
 let container; let root; let pedidosDoBanco; let fornecedoresDoBanco; let itensDoBanco; let cotacoesDoBanco;
+// Etapa 100: campos que SO o detalhe (GET /compras/pedidos/:id) traz — `totais` nao vem na lista.
+let extrasDoDetalhe;
 
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   pedidosDoBanco = [];
   fornecedoresDoBanco = FORNECEDORES_E39;
   itensDoBanco = {};
+  extrasDoDetalhe = {};
   cotacoesDoBanco = [];
   // Etapa 41: o unico POST que esta aba faz e a conversao (`…/gerar-pedido`, T2). Resolve com o
   // pedido gerado (`obterPedido` devolve `{ id, numero, … }`); qualquer outra URL REJEITA, pela
@@ -153,7 +156,7 @@ beforeEach(() => {
     if (/^\/compras\/pedidos\/\d+$/.test(url)) {
       const id = Number(url.split('/').pop());
       const daLista = pedidosDoBanco.find((p) => p.id === id) || { id };
-      return Promise.resolve({ data: { ...daLista, itens: itensDoBanco[id] || [] } });
+      return Promise.resolve({ data: { ...daLista, itens: itensDoBanco[id] || [], ...(extrasDoDetalhe[id] || {}) } });
     }
     return Promise.reject(new Error(`URL inesperada no teste: ${url}`));
   });
@@ -367,7 +370,33 @@ test('(h) o Excel exportado leva a data do banco e as colunas Atrasado/Dias de a
   expect(Object.keys(linhas[0])).toEqual([
     'Número', 'Fornecedor', 'Código', 'Descrição', 'Unidade', 'Quantidade', 'Valor Unitário',
     'Valor Total', 'Status', 'Data', 'Previsão Entrega', 'Atrasado', 'Dias de atraso',
-  ]); // ORDEM congelada: as duas novas NO FIM
+    'IPI %', 'Frete', 'ICMS-ST', 'Desconto',
+  ]); // ORDEM congelada: as duas da Etapa 39 e depois as quatro da Etapa 100 (RN-100.08), NO FIM
+}, 10000);
+
+// ── RN-100.08 (Etapa 100, G13) o Excel leva IPI % da linha e os encargos do cabeçalho, como NÚMERO ──
+test('(r100) o Excel leva "IPI %" por item e Frete/ICMS-ST/Desconto do pedido — números, repetidos por linha', async () => {
+  // `totais` vem SÓ do GET /compras/pedidos/:id — a lista não o traz (revisão final, achado 5: com
+  // `totais` na linha da lista, uma tela que lesse `pedido.totais` passaria aqui).
+  pedidosDoBanco = [PEDIDO_420_ATRASADO_3];
+  extrasDoDetalhe[420] = { totais: { valor_frete: 45.9, total_icms_st: 8.25, total_desconto: 10 } };
+  itensDoBanco[420] = [
+    { ...ITENS_420[0], ipi_percentual: 12 },
+    { ...ITENS_420[0], id: 4202, codigo: 'ALM-0908', ipi_percentual: null },
+  ];
+
+  await renderizarEm('/compras/pedidos');
+  await clicar(botaoPorTexto('Exportar Excel'));
+
+  const [linhas] = exportToExcel.mock.calls[0];
+  expect(linhas).toHaveLength(2);
+  expect(linhas[0]['IPI %']).toBe(12);
+  expect(linhas[1]['IPI %']).toBe(0); // nulo no banco = 0, nunca vazio (a importacao leria "sem IPI" igual)
+  for (const l of linhas) {
+    expect(l['Frete']).toBe(45.9);
+    expect(l['ICMS-ST']).toBe(8.25);
+    expect(l['Desconto']).toBe(10);
+  }
 }, 10000);
 
 // ── (i) RN-D08 metade negativa do (h): no prazo exporta "Nao" e a coluna de dias VAZIA ────────

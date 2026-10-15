@@ -639,6 +639,141 @@ const AVISO_DATA_PEDIDO = 'data do pedido não reconhecida (use AAAA-MM-DD ou DD
       'data irreconhecivel cai para hoje, nunca NULL nem texto');
   });
 
+  // (11)-(13) ------------------------------------------------------------------------------
+  //
+  // Etapa 100 (G13): o export da aba Pedidos passou a levar `IPI %`, `Frete`, `ICMS-ST` e
+  // `Desconto`, e a importacao a le-los. Antes, um pedido com IPI/frete exportado e reimportado
+  // nascia com `valor_total` = so os produtos. Literais escritas AQUI por extenso (contrato).
+  const AVISO_IPI = 'IPI % não reconhecido (use número de 0 a 100)';
+  const itensFiscais = (pedidoId) => dbAll(db,
+    'SELECT codigo, ipi_percentual FROM itens_pedido_compra WHERE pedido_id = ? ORDER BY id', [pedidoId]);
+
+  await test('(11) RN-100.09 IPI % por linha: numero, "5,5" e "10%" gravados; fora de 0-100 e texto (inclusive com virgula ou letra) viram 0 com AVISO', async () => {
+    const r = await importar({
+      linhas: [
+        linha('OC-IPI1', 'MAT-IMP-A', { qtd: 2, preco: 100, 'IPI %': 10 }),
+        linha('OC-IPI1', 'MAT-IMP-B', { qtd: 1, preco: 50, 'IPI %': '5,5' }),
+        linha('OC-IPI2', 'MAT-IMP-A', { qtd: 1, preco: 10, 'IPI %': '10%' }),
+        linha('OC-IPI3', 'MAT-IMP-A', { qtd: 1, preco: 10, 'IPI %': 150 }),
+        linha('OC-IPI4', 'MAT-IMP-A', { qtd: 1, preco: 10, 'IPI %': 'isento' }),
+        // Revisao do plano (alta 2): o leitor de preco faria estes dois virarem 0 e 12 SEM aviso.
+        linha('OC-IPI5', 'MAT-IMP-A', { qtd: 1, preco: 10, 'IPI %': 'isento, ver NF' }),
+        linha('OC-IPI6', 'MAT-IMP-A', { qtd: 1, preco: 10, 'IPI %': '12abc' }),
+        // Coluna "IPI" SOZINHA nao e lida (costuma ser o IPI em R$ na planilha do fornecedor).
+        linha('OC-IPI7', 'MAT-IMP-A', { qtd: 1, preco: 10, ipi: 15.3 }),
+        // Revisao final (achado 1): `R$` na coluna de PERCENTUAL e o IPI em reais — aviso, nunca 15,3%.
+        linha('OC-IPI8', 'MAT-IMP-A', { qtd: 1, preco: 10, 'IPI %': 'R$ 15,30' }),
+      ],
+    });
+    assert.strictEqual(r.status, 201, `esperava 201: ${r.status} ${JSON.stringify(r.body)}`);
+    const [p1, p2, p3, p4, p5, p6, p7, p8] = r.body.pedidos;
+    assert.deepStrictEqual((await itensFiscais(p1.id)).map((i) => i.ipi_percentual), [10, 5.5]);
+    assert.deepStrictEqual((await itensFiscais(p2.id)).map((i) => i.ipi_percentual), [10]);
+    // 200 + 20 (IPI 10%) + 50 + 2.75 (IPI 5,5%) = 272.75 — o IPI ENTRA no valor_total.
+    assert.strictEqual((await cabecalho(p1.id)).valor_total, 272.75);
+    assert.strictEqual((await cabecalho(p1.id)).total_ipi, 22.75);
+    // Invalidos: a linha ENTRA, com IPI 0, e o aviso diz qual celula arrumar.
+    for (const p of [p3, p4, p5, p6, p7, p8]) {
+      assert.deepStrictEqual((await itensFiscais(p.id)).map((i) => i.ipi_percentual), [0], `pedido ${p.numero}`);
+    }
+    assert.deepStrictEqual(r.body.avisos, [
+      { linha: 4, campo: 'ipi_percentual', motivo: AVISO_IPI },
+      { linha: 5, campo: 'ipi_percentual', motivo: AVISO_IPI },
+      { linha: 6, campo: 'ipi_percentual', motivo: AVISO_IPI },
+      { linha: 7, campo: 'ipi_percentual', motivo: AVISO_IPI },
+      { linha: 9, campo: 'ipi_percentual', motivo: AVISO_IPI },
+    ], `avisos divergente: ${JSON.stringify(r.body.avisos)}`);
+    assert.deepStrictEqual(r.body.ignorados, []);
+  });
+
+  await test('(12) RN-100.10 Frete/ICMS-ST/Desconto por PEDIDO: primeira linha valida do grupo; invalido vira AVISO', async () => {
+    const r = await importar({
+      linhas: [
+        // O export repete o cabecalho em cada linha; a 1a celula de frete e invalida e a 2a vale.
+        // ICMS-ST DIFERENTE na 2a linha (revisao final, achados 2 e 6): vale o da 1a, e a 2a ganha aviso.
+        linha('OC-ENC1', 'MAT-IMP-A', { qtd: 1, preco: 100, Frete: 'a combinar', 'ICMS-ST': 3, Desconto: 5 }),
+        linha('OC-ENC1', 'MAT-IMP-B', { qtd: 1, preco: 100, Frete: 'R$ 12,50', 'ICMS-ST': 4, Desconto: 5 }),
+        linha('OC-ENC2', 'MAT-IMP-A', { qtd: 1, preco: 100, Desconto: -1 }),
+        // `%` em coluna de VALOR (achado 1): 10% nao vira R$ 10. E '1.500' e milhar (achado 3).
+        linha('OC-ENC5', 'MAT-IMP-A', { qtd: 1, preco: 100, Desconto: '10%', Frete: '1.500' }),
+      ],
+    });
+    assert.strictEqual(r.status, 201, `esperava 201: ${r.status} ${JSON.stringify(r.body)}`);
+    const [p1, p2, p5] = r.body.pedidos;
+    const c1 = await cabecalho(p1.id);
+    assert.strictEqual(c1.valor_frete, 12.5);
+    assert.strictEqual(c1.total_icms_st, 3);
+    assert.strictEqual(c1.total_desconto, 5);
+    // 200 + 12.5 + 3 - 5
+    assert.strictEqual(c1.valor_total, 210.5);
+    const c2 = await cabecalho(p2.id);
+    assert.strictEqual(c2.total_desconto, 0, 'desconto negativo nao entra');
+    assert.strictEqual(c2.valor_total, 100);
+    const c5 = await cabecalho(p5.id);
+    assert.strictEqual(c5.total_desconto, 0, "'10%' no Desconto nao vira R$ 10");
+    assert.strictEqual(c5.valor_frete, 1500, "'1.500' e mil e quinhentos, como no preco");
+    assert.deepStrictEqual(r.body.avisos, [
+      { linha: 1, campo: 'valor_frete', motivo: 'Frete não reconhecido (use número maior ou igual a 0)' },
+      { linha: 2, campo: 'total_icms_st', motivo: 'ICMS-ST diferente do da primeira linha do pedido (vale o da primeira)' },
+      { linha: 3, campo: 'total_desconto', motivo: 'Desconto não reconhecido (use número maior ou igual a 0)' },
+      { linha: 4, campo: 'total_desconto', motivo: 'Desconto não reconhecido (use número maior ou igual a 0)' },
+    ], `avisos divergente: ${JSON.stringify(r.body.avisos)}`);
+    // METADE NEGATIVA: planilha sem as colunas fiscais (a de antes desta etapa) — zero aviso e zero encargo.
+    const sem = await importar({ linhas: [linha('OC-ENC3', 'MAT-IMP-A', { qtd: 1, preco: 7 })] });
+    assert.deepStrictEqual(sem.body.avisos, []);
+    const c3 = await cabecalho(sem.body.pedidos[0].id);
+    assert.strictEqual(c3.valor_total, 7);
+    assert.strictEqual(c3.valor_frete, 0);
+    // POR GRUPO (ordem + fornecedor), revisao do plano (alta 3): a mesma OC com dois fornecedores vira
+    // dois pedidos, e cada um le o frete SO das suas linhas.
+    const mista = await importar({
+      linhas: [
+        linha('OC-ENC4', 'MAT-IMP-A', { qtd: 1, preco: 10, Frete: 30 }),
+        { pedido: 'OC-ENC4', cnpj: cnpjPlanilha2, 'código': 'MAT-IMP-B', qtd: 1, preco: 20 },
+      ],
+    });
+    assert.strictEqual(mista.body.pedidos.length, 2);
+    const fretes = await Promise.all(mista.body.pedidos.map(async (pp) => {
+      const c = await cabecalho(pp.id);
+      return [c.fornecedor_id, c.valor_frete];
+    }));
+    assert.deepStrictEqual(fretes, [[fornecedorId, 30], [fornecedorId2, 0]]);
+  });
+
+  await test('(13) RN-100.11 INTEGRACAO: pedido com IPI e encargos criado pela ROTA, lido pela ROTA, reimportado -> mesmo valor_total', async () => {
+    const criado = await request(app).post('/api/compras/pedidos').send({
+      fornecedor_id: fornecedorId,
+      itens: [
+        { material_id: materialIdA, quantidade: 3, valor_unitario: 33.33, ipi_percentual: 12 },
+        { material_id: materialIdB, quantidade: 7, valor_unitario: 1.1, ipi_percentual: 0 },
+      ],
+      valor_frete: 45.9, total_icms_st: 8.25, total_desconto: 10,
+    });
+    assert.strictEqual(criado.status, 201, `POST pedido: ${criado.status} ${JSON.stringify(criado.body)}`);
+    const lido = await request(app).get(`/api/compras/pedidos/${criado.body.id}`);
+    assert.strictEqual(lido.status, 200);
+    const p = lido.body;
+    // As linhas no formato do "Exportar Excel" (`Compras.js`, `linhaExportPedido`) — os cabecalhos
+    // LITERAIS do export, inclusive os que a importacao ignora (`Valor Total`, `Status`).
+    const linhasExport = p.itens.map((item) => ({
+      'Número': p.numero, 'Fornecedor': p.fornecedor_nome, 'Código': item.codigo, 'Descrição': item.descricao,
+      'Unidade': item.unidade, 'Quantidade': item.quantidade, 'Valor Unitário': item.valor_unitario,
+      'Valor Total': 'R$ 999,99', 'Status': p.status, 'Data': '15/10/2026', 'Previsão Entrega': '',
+      'Atrasado': 'Não', 'Dias de atraso': '',
+      'IPI %': item.ipi_percentual, 'Frete': p.totais.valor_frete, 'ICMS-ST': p.totais.total_icms_st, 'Desconto': p.totais.total_desconto,
+    }));
+    const r = await importar({ linhas: linhasExport });
+    assert.strictEqual(r.status, 201, `reimport: ${r.status} ${JSON.stringify(r.body)}`);
+    assert.deepStrictEqual(r.body.ignorados, []);
+    assert.deepStrictEqual(r.body.avisos, []);
+    const original = await cabecalho(criado.body.id);
+    const reimportado = await cabecalho(r.body.pedidos[0].id);
+    for (const col of ['valor_total', 'total_produtos', 'total_ipi', 'valor_frete', 'total_icms_st', 'total_desconto']) {
+      assert.strictEqual(reimportado[col], original[col], `${col}: reimportado ${reimportado[col]} x original ${original[col]}`);
+    }
+    assert.ok(original.total_ipi > 0 && original.valor_frete > 0, 'o cenario so prova algo com IPI e frete diferentes de zero');
+  });
+
   await close();
   console.log(`\n${passed} passou, ${failed} falhou`);
   process.exit(failed === 0 ? 0 : 1);

@@ -256,7 +256,14 @@ const Compras = () => {
    * Pedido sem item vira UMA linha com as colunas de item vazias: perder o pedido do relatório
    * seria pior, e a importação já recusa a linha dizendo por quê.
    */
-  const linhaExportPedido = (pedido, item) => ({
+  /*
+   * Etapa 100 (G13, RN-100.08): `IPI %` (da linha) e `Frete`/`ICMS-ST`/`Desconto` (do cabeçalho,
+   * repetidos em cada linha) entram NO FIM, como números — a importação os lê
+   * (`pedidoCompraService.importarPedidos`). Sem eles um pedido com IPI ou frete exportado e
+   * reimportado nascia com o valor só dos produtos. Os encargos vêm de `detalhe.totais` (0 em pedido
+   * antigo, nunca nulo); sem detalhe (a leitura falhou) as quatro saem vazias.
+   */
+  const linhaExportPedido = (pedido, item, detalhe) => ({
     'Número': pedido.numero || '',
     'Fornecedor': pedido.fornecedor_nome || '',
     'Código': item ? (item.codigo || '') : '',
@@ -273,7 +280,11 @@ const Compras = () => {
     // ja faz com `Status` e `Valor Total`. `Dias de atraso` vazio (nunca 0, nunca '-') quando o
     // pedido esta no prazo: `0` mentiria ("zero dias de atraso" nao e "nao esta atrasado").
     'Atrasado': pedido.atrasado === 1 ? 'Sim' : 'Não',
-    'Dias de atraso': pedido.atrasado === 1 ? pedido.dias_atraso : ''
+    'Dias de atraso': pedido.atrasado === 1 ? pedido.dias_atraso : '',
+    'IPI %': item ? (Number(item.ipi_percentual) || 0) : '',
+    'Frete': detalhe && detalhe.totais ? detalhe.totais.valor_frete : '',
+    'ICMS-ST': detalhe && detalhe.totais ? detalhe.totais.total_icms_st : '',
+    'Desconto': detalhe && detalhe.totais ? detalhe.totais.total_desconto : ''
   });
 
   const handleExportExcel = async () => {
@@ -306,14 +317,16 @@ const Compras = () => {
           const linhas = [];
           for (const p of pedidos) {
             let itens = [];
+            let lido = null;
             try {
               const detalhe = await api.get(`/compras/pedidos/${p.id}`);
-              itens = (detalhe.data && detalhe.data.itens) || [];
+              lido = detalhe.data || null;
+              itens = (lido && lido.itens) || [];
             } catch (e) {
               itens = [];
             }
-            if (itens.length === 0) linhas.push(linhaExportPedido(p, null));
-            else itens.forEach(item => linhas.push(linhaExportPedido(p, item)));
+            if (itens.length === 0) linhas.push(linhaExportPedido(p, null, lido));
+            else itens.forEach(item => linhas.push(linhaExportPedido(p, item, lido)));
           }
           dadosExport = linhas;
           nomeArquivo = 'pedidos_compra';

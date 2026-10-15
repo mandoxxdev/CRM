@@ -934,6 +934,14 @@ const MOTIVO_FORNECEDOR_NAO_ENCONTRADO = 'fornecedor não encontrado';
  */
 const AVISO_PREVISAO_NAO_RECONHECIDA = 'previsão de entrega não reconhecida (use AAAA-MM-DD ou DD/MM/AAAA)';
 const AVISO_DATA_PEDIDO_NAO_RECONHECIDA = 'data do pedido não reconhecida (use AAAA-MM-DD ou DD/MM/AAAA)';
+/**
+ * Etapa 100 (G13, RN-100.09/10) — IPI e encargos: tambem AVISO, nunca recusa (B48). A linha entra
+ * com IPI 0 (ou sem contribuir com o encargo) e o operador sabe qual celula arrumar. Recusar a linha
+ * jogaria fora o item comprado por causa de uma celula fiscal.
+ */
+const AVISO_IPI_NAO_RECONHECIDO = 'IPI % não reconhecido (use número de 0 a 100)';
+const avisoEncargoNaoReconhecido = (rotulo) => `${rotulo} não reconhecido (use número maior ou igual a 0)`;
+const avisoEncargoDivergente = (rotulo) => `${rotulo} diferente do da primeira linha do pedido (vale o da primeira)`;
 
 /**
  * HOJE, no FUSO DO NEGOCIO (`America/Sao_Paulo`) — o `data_pedido` de quem importa sem coluna de
@@ -1056,6 +1064,54 @@ const CHAVES_DATA_PEDIDO = ['data', 'data_pedido', 'data do pedido', 'data pedid
 const CHAVES_PREVISAO = ['previsao', 'previsão', 'previsao_entrega', 'previsão_entrega',
   'entrega', 'data de entrega', 'previsao de entrega', 'previsão de entrega',
   'previsao entrega', 'previsão entrega'];
+
+/**
+ * Etapa 100 (G13) — as colunas fiscais que o "Exportar Excel" da aba Pedidos passou a levar
+ * (`Compras.js`, `linhaExportPedido`: `'IPI %'`, `'Frete'`, `'ICMS-ST'`, `'Desconto'`). Ate a 99 o
+ * export trazia so `Quantidade`/`Valor Unitário` e um pedido com IPI ou frete, exportado e
+ * reimportado, nascia com `valor_total` = so os produtos (divida G13).
+ *
+ * `'ipi'` sozinho nao colide com nenhuma outra lista (conferido: `CHAVES_VALOR` tem `'valor'`, mas
+ * a chave e comparada INTEIRA, entao `'valor total'` nunca casa). O IPI e POR LINHA; os tres
+ * encargos sao do CABECALHO e o export os repete em cada linha do pedido — vale a primeira linha
+ * do grupo que trouxer numero valido (mesma regra da previsao).
+ */
+// `'ipi'` SOZINHO fica de fora de proposito (revisao do plano): planilha de fornecedor costuma ter
+// uma coluna "IPI" em REAIS (15,30), que seria lida como 15,3%.
+const CHAVES_IPI = ['ipi %', '% ipi', 'ipi (%)', 'ipi_percentual', 'ipi percentual'];
+
+/**
+ * Leitor ESTRITO para IPI e encargos (revisao do plano, achado alto 2). `numeroDaPlanilha` e
+ * leniente de proposito para quantidade/preco (`'isento, ver NF'` vira 0 por `parsePrecoBackend` e
+ * `'12abc'` vira 12 por `parseFloat`) — aqui isso gravaria um valor fiscal inventado SEM aviso.
+ * Aceita: `number` finito; texto com sinal e o numero em pt-BR (`1.234,50`, `5,5`, `1.500`) ou com
+ * ponto decimal (`12.5`). O SIMBOLO tem de bater com a coluna (revisao final, achado 1): `%` so no
+ * IPI e `R$` so nos encargos — `'10%'` no Desconto viraria R$ 10 e `'R$ 15,30'` no IPI viraria 15,3%,
+ * os dois em silencio. Ponto seguido de exatamente 3 digitos e MILHAR (`'1.500'` = 1500), a mesma
+ * convencao de `parsePrecoBackend` na coluna de preco da mesma linha (achado 3). Qualquer outra
+ * coisa -> `null` (aviso).
+ *
+ * @param {*} valor
+ * @param {'percentual'|'valor'} tipo
+ */
+const RE_NUMERO_PT = /^-?\d{1,3}(\.\d{3})+(,\d+)?$|^-?\d+,\d+$/;
+const RE_NUMERO_PONTO = /^-?\d+(\.\d+)?$/;
+function numeroFiscalDaPlanilha(valor, tipo) {
+  if (valor == null) return null;
+  if (typeof valor === 'number') return Number.isFinite(valor) ? valor : null;
+  let texto = String(valor).trim();
+  if (tipo === 'percentual') texto = texto.replace(/\s*%$/, '');
+  else texto = texto.replace(/^R\$\s*/i, '');
+  texto = texto.replace(/\s/g, '');
+  if (RE_NUMERO_PT.test(texto)) return Number(texto.replace(/\./g, '').replace(',', '.'));
+  if (RE_NUMERO_PONTO.test(texto)) return Number(texto);
+  return null;
+}
+const ENCARGOS_DA_PLANILHA = [
+  { campo: 'valor_frete', rotulo: 'Frete', chaves: ['frete', 'valor_frete', 'valor frete', 'valor do frete'] },
+  { campo: 'total_icms_st', rotulo: 'ICMS-ST', chaves: ['icms-st', 'icms st', 'icms_st', 'total_icms_st'] },
+  { campo: 'total_desconto', rotulo: 'Desconto', chaves: ['desconto', 'total_desconto', 'total desconto'] },
+];
 
 /**
  * ⚠️ A CHAVE DO GRUPO E O PAR (ORDEM DA PLANILHA, FORNECEDOR RESOLVIDO) — achado C1 da revisao
@@ -1214,6 +1270,26 @@ async function importarPedidos(db, corpo, user) {
       avisos.push({ linha: numeroDaLinha, campo: 'data_pedido', motivo: AVISO_DATA_PEDIDO_NAO_RECONHECIDA });
     }
 
+    // Etapa 100 (G13, RN-100.09): IPI % da LINHA. Lido CRU (`numeroFiscalDaPlanilha`, estrito):
+    // `'10%'` vira 10, `'5,5'` vira 5.5. Vazio = 0 sem aviso (pedido sem IPI e o caso comum).
+    let ipiPercentual = 0;
+    const ipiCru = valorCruDoRow(row, ...CHAVES_IPI);
+    if (ipiCru != null) {
+      const ipiLido = numeroFiscalDaPlanilha(ipiCru, 'percentual');
+      if (ipiLido != null && ipiLido >= 0 && ipiLido <= 100) ipiPercentual = ipiLido;
+      else avisos.push({ linha: numeroDaLinha, campo: 'ipi_percentual', motivo: AVISO_IPI_NAO_RECONHECIDO });
+    }
+
+    // RN-100.10: frete, ICMS-ST e desconto da linha (do cabecalho, repetidos pelo export).
+    const encargosDaLinha = {};
+    for (const { campo, rotulo, chaves } of ENCARGOS_DA_PLANILHA) {
+      const cru = valorCruDoRow(row, ...chaves);
+      if (cru == null) continue;
+      const lido = numeroFiscalDaPlanilha(cru, 'valor');
+      if (lido != null && lido >= 0) encargosDaLinha[campo] = lido;
+      else avisos.push({ linha: numeroDaLinha, campo, motivo: avisoEncargoNaoReconhecido(rotulo) });
+    }
+
     if (!grupos.has(chaveGrupo)) grupos.set(chaveGrupo, new Map());
     const porFornecedor = grupos.get(chaveGrupo);
     if (!porFornecedor.has(fornecedor.id)) {
@@ -1224,7 +1300,8 @@ async function importarPedidos(db, corpo, user) {
       row,
       previsao: previsaoDaLinha,
       dataPedido: dataPedidoDaLinha,
-      item: { material_id: material.id, quantidade, valor_unitario: valorUnitario },
+      encargos: encargosDaLinha,
+      item: { material_id: material.id, quantidade, valor_unitario: valorUnitario, ipi_percentual: ipiPercentual },
     });
   }
 
@@ -1250,6 +1327,22 @@ async function importarPedidos(db, corpo, user) {
         ? 'Importado de planilha (sem coluna de pedido)'
         : `Planilha: ${grupo.chave}`;
 
+      // Etapa 100 (RN-100.10): por encargo, o PRIMEIRO valor valido das linhas deste grupo. Uma linha
+      // posterior com valor DIFERENTE vira aviso (revisao final, achado 2): planilha de fornecedor com
+      // frete/desconto POR LINHA teria so o da primeira contado, apresentado como o do pedido — e o
+      // operador precisa saber. O export do CRM repete o mesmo valor, entao nao gera aviso.
+      const encargosDoGrupo = {};
+      for (const { campo, rotulo } of ENCARGOS_DA_PLANILHA) {
+        const comValor = grupo.linhas.filter((l) => l.encargos[campo] != null);
+        if (comValor.length === 0) continue;
+        encargosDoGrupo[campo] = comValor[0].encargos[campo];
+        for (const l of comValor.slice(1)) {
+          if (l.encargos[campo] !== encargosDoGrupo[campo]) {
+            avisos.push({ linha: l.numeroDaLinha, campo, motivo: avisoEncargoDivergente(rotulo) });
+          }
+        }
+      }
+
       try {
         const pedido = await criarPedido(db, {
           fornecedor_id: grupo.fornecedorId,
@@ -1257,6 +1350,8 @@ async function importarPedidos(db, corpo, user) {
           observacoes,
           data_pedido: dataPedido,
           ...(previsao ? { previsao_entrega: previsao } : {}),
+          // Etapa 100 (RN-100.10): ausente = 0 (`encargosDoPayload`), o mesmo de antes desta etapa.
+          ...encargosDoGrupo,
         }, user);
         pedidos.push({ id: pedido.id, numero: pedido.numero, itens: (pedido.itens || []).length });
         itensImportados += (pedido.itens || []).length;
