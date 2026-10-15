@@ -67,4 +67,20 @@ export const destinoDaSeparacaoVazia = (itens) => {
   return lista.some((i) => entregue(i) > 1e-9) ? 'ENCERRADA' : 'CANCELADO';
 };
 
+// Etapa 102 (C204, RN-07): o encerramento. Espelho de `recusaEncerrar` + `validarTransicao(s, 'ENCERRADA')` de
+// `server/services/almoxarifado/requisitionStateMachine.js`, conferido por teste (`RequisicoesEncerrarComCaixa.test.js`,
+// que importa o do servidor). Encerra-se de *Entregue*, de *Parcialmente Atendida* com a caixa vazia e da *Em Separação*
+// vazia com entrega (101). Material na caixa (a régua da B524) recusa — a literal E1 do servidor, que a tela mostra no
+// lugar do botão na *Parcialmente Atendida*. Mudou lá, mude aqui.
+export const MSG_ENCERRAR_COM_CAIXA = 'Esta requisição tem material separado na caixa; entregue-o ou devolva-o à prateleira antes de encerrar.';
+const STATUS_ORIGEM_ENCERRAR = ['ENTREGUE', 'PARCIALMENTE_ATENDIDA', 'EM_SEPARACAO'];
+export const temCaixaParaEncerrar = (itens) => (itens || []).some((i) => arred6((Number(i.quantidade_separada) || 0)
+  - (Number(i.quantidade_entregue ?? i.quantidade_atendida ?? 0) || 0)) > 1e-9);
+export const podeEncerrar = (status, itens) => {
+  if (!STATUS_ORIGEM_ENCERRAR.includes(status)) return false;
+  if (status === 'EM_SEPARACAO') return destinoDaSeparacaoVazia(itens) === 'ENCERRADA';
+  if (STATUS_COM_CAIXA.includes(status) && temCaixaParaEncerrar(itens)) return false;
+  return true;
+};
+
 export default TIPO_REQUISICAO_LABELS;

@@ -442,14 +442,18 @@ describe('Etapa 98 — Ajustar Separação e o achado 1(a) da Fase 2', () => {
       conferencia: { usuario_id: 3, usuario_nome: 'Conferente', em: '2026-10-09 10:00:00' } },
     [{ quantidade_separada: 3, quantidade_entregue: 2, quantidade_atendida: 2, material_critico: 1 }]);
     await renderizar();
-    expect(container.textContent).toContain('Encerrar Requisição');
+    // Etapa 102 (C204): com 1 na caixa a Parcialmente Atendida nao encerra — a metade positiva (o detalhe esta la) e a nota
+    // que substitui o botao.
+    expect(container.querySelector('[data-testid="encerrar-bloqueado-caixa"]')).toBeTruthy();
     expect(botaoPorTexto('Separar de novo para conferir')).toBeFalsy();
     act(() => root.unmount());
     root = createRoot(container);
     requisicao = montar({ status: 'PARCIALMENTE_ATENDIDA', conferencia_obrigatoria: false },
       [{ quantidade_separada: 3, quantidade_entregue: 2, quantidade_atendida: 2 }]);
     await renderizar();
-    expect(container.textContent).toContain('Encerrar Requisição');
+    // Etapa 102 (C204): com 1 na caixa a Parcialmente Atendida nao encerra — a metade positiva (o detalhe esta la) e a nota
+    // que substitui o botao.
+    expect(container.querySelector('[data-testid="encerrar-bloqueado-caixa"]')).toBeTruthy();
     expect(botaoPorTexto('Separar de novo para conferir')).toBeFalsy();
     act(() => root.unmount());
     root = createRoot(container);
