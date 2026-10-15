@@ -1,13 +1,27 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-09 (Etapa 98) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-15 (Etapa 99) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77 e 91 a 98) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77 e 91 a 99) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-09 (Etapa 98 ENTREGUE · próxima do almoxarifado: Etapa 99)
+> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 99 ENTREGUE · próxima do almoxarifado: Etapa 101)
 >
-> **O desenvolvimento parou aqui: Etapa 98 fechada — 2026-10-09.** A **Etapa 98 (devolver da caixa à prateleira)**:
+> **O desenvolvimento parou aqui: Etapa 99 fechada — 2026-10-15.** A **Etapa 99 (a separação recusa o que não dá
+> para separar, e a conferência recusa a caixa vazia)**: a separação passa a recusar, com a explicação e **sem mudar
+> nada**, a quantidade negativa ou que não é número, o item que não é daquela requisição e a fração de um material com
+> número de série (1,5 de um material com série é recusado: *"⟨material⟩: material com controle de série exige
+> quantidade inteira na separação (informado: 1.5)"*). Antes ela respondia *"Separação registrada"*, não separava nada
+> e ainda mudava a requisição para *Em Separação* (ou, com aprovação por valor ligada, para *Aguard. Aprov. Valor*). Se
+> uma linha do envio está errada, nenhuma é gravada. **Conferir separação** passa a exigir material na caixa (separado
+> e ainda não entregue) — o botão some com a caixa vazia, e por fora da tela a recusa é *"Nenhum item separado"*. Fica
+> declarado: a **criação** de requisição ainda aceita fração de material com série (**C202**) — o 0,5 que sobra não
+> separa; feche o modal e **Encerre** a requisição *Parcialmente Atendida* (não zere o modal). A revisão adversarial
+> (Fase 5) achou uma regressão — uma sobra mínima de material crítico pedia uma conferência que a conferência
+> recusava, e a requisição ficava presa; consertada (**B524**) — e nove testes que faltavam. **Próxima etapa do almoxarifado: Etapa 101** (a **Etapa 100** foi da frente de
+> **Compras**; a numeração é única para todos os módulos) — ver a próxima tarefa no plano da 99.
+>
+> **Etapa 98, 2026-10-09.** A **Etapa 98 (devolver da caixa à prateleira)**:
 > o almoxarife passa a ter um gesto para tirar da caixa de uma requisição o que não vai sair — material que quebrou, se
 > perdeu ou foi separado errado. No detalhe da requisição, cada item com material na caixa ganha o botão **Devolver à
 > prateleira** (quantidade e motivo obrigatório). Não há movimentação de estoque: o material nunca saiu da prateleira nos
@@ -18,7 +32,7 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > material reservado e já separado, a entrega diz por que nada sai e o que fazer. A revisão do código achou e consertou
 > uma requisição que podia ficar *Pronta p/ Retirada* com a caixa vazia (o **Liberar para Retirada** agora exige
 > material na caixa). As requisições presas pelo bloqueio são achadas pela consulta **A49** (opcional). **Próxima etapa
-> do almoxarifado: Etapa 99 — a separação recusa o que não dá para separar (negativo, não numérico, item de fora, fração de série — C197) e a conferência deixa de aceitar caixa vazia (C200) — ver o plano da 98.**
+> do almoxarifado: Etapa 99 — a separação recusa o que não dá para separar (negativo, não numérico, item de fora, fração de série — C197) e a conferência deixa de aceitar caixa vazia (C200) — ver o plano da 98.** *(Feita — Etapa 99.)*
 >
 > **Etapa 97, 2026-10-09.** A **Etapa 97 (o material separado na caixa de uma
 > requisição só sai pela entrega)**: o que foi separado para uma requisição e ainda não foi entregue, **sem reserva**,
@@ -6360,6 +6374,128 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 99 — A separação recusa o que não dá para separar, e a conferência recusa a caixa vazia (ENTREGUE — 2026-10-15)
+
+**O que mudou, em uma frase:** a separação passa a recusar, com a explicação e sem mudar nada, a quantidade negativa ou
+que não é número, o item que não é daquela requisição e a fração de um material com número de série; e **Conferir
+separação** só existe com material na caixa.
+
+**O problema que ela resolve.** A tela de separação só manda números positivos dos itens da própria requisição — mas a
+porta do servidor aceitava qualquer coisa: mandar −2, *"abc"* ou um item de outra requisição respondia *"Separação
+registrada"*, não separava nada **e mudava a requisição para *Em Separação*** (uma *Totalmente Reservada* ou uma
+*Parcialmente Atendida* mudava de status sem ninguém ter separado). Com a aprovação por valor ligada, o envio inválido
+ainda mandava a requisição para *Aguard. Aprov. Valor* e disparava o e-mail dos aprovadores. Num envio com uma linha
+certa e uma errada, a certa era gravada e a errada sumia calada. E pela própria tela dava para separar **1,5** de um
+material com série — que a entrega nunca deixa sair (série é peça inteira), prendendo o 0,5 na caixa. Do outro lado, a
+**segunda conferência** contava o que já tinha sido separado na vida da requisição, não o que está na caixa: separados
+2, entregues 2 e a requisição de volta a *Em Separação*, o botão **Conferir separação** aparecia e a conferência era
+gravada sobre uma caixa vazia.
+
+**A regra agora.**
+- **A separação recusa** (e nada muda — nem quantidade, nem rodada, nem status, nem a conferência já feita):
+  - quantidade negativa ou que não é número → *"⟨material⟩: quantidade inválida para separar (⟨o que foi enviado⟩) —
+    informe um número positivo, ou 0 para não separar este item"*;
+  - item que não é da requisição (mesmo com quantidade 0) → *"Item ⟨id⟩ não pertence a esta requisição"*;
+  - fração em material com número de série → *"⟨material⟩: material com controle de série exige quantidade inteira na
+    separação (informado: ⟨quantidade⟩)"*;
+  - a lista de itens que não é lista (integração) → *"Informe os itens separados em lista (itens_separados)"*.
+- **Tudo ou nada:** uma linha errada recusa o envio inteiro; a primeira linha errada é a que aparece na mensagem.
+- **A recusa vem antes da aprovação por valor:** um envio inválido não manda a requisição para *Aguard. Aprov. Valor*
+  nem avisa os aprovadores.
+- **Continua aceito:** quantidade **0** ou em branco num item (é "não separar este item") e confirmar sem nenhuma
+  quantidade (leva a *Em Separação* sem separar, como sempre).
+- **Conferir separação exige material na caixa** (separado e ainda não entregue), a mesma régua do **Liberar para
+  Retirada**: o botão só aparece com caixa, e por fora da tela a recusa é *"Nenhum item separado"*.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Mandar −2, *"abc"* ou um item de outra requisição (integração) respondia *"Separação registrada"* e mudava o status para *Em Separação* | A separação recusa com a explicação e nada muda |
+| Com a aprovação por valor ligada, o envio inválido levava a *Aguard. Aprov. Valor* e mandava e-mail | Recusado antes: o status e os aprovadores não são tocados |
+| Uma linha certa e uma errada no mesmo envio: a certa gravava, a errada sumia | Nenhuma grava; a mensagem nomeia a errada |
+| Separar 1,5 de um material com série passava (e o 0,5 ficava preso na caixa) | *"⟨material⟩: material com controle de série exige quantidade inteira na separação (informado: 1.5)"* |
+| *Em Separação* com tudo o que foi separado já entregue: o botão **Conferir separação** aparecia | O botão não aparece (só com material na caixa) |
+| Conferir essa caixa vazia (tela antiga ou integração) gravava a conferência | Recusado: *"Nenhum item separado"* |
+
+### Roteiro de teste manual (≈25 min)
+
+**Preparação (como Administrador).**
+- **Liberação por Valor** desligada (só o passo 4 a liga); saldo negativo desligado.
+- Cadastre, unidade **PC**, estoque **0**: **Porca** (comum) e **Sensor** (marque **Controle por número de série**).
+- Usuários: **Paula** (sem perfil) pede; o **Gestor** (ou o Administrador) aprova e encerra; **Ana** e **Bia**
+  (Almoxarifes) separam, conferem e entregam.
+- As mensagens aparecem no aviso do canto da tela. Os passos marcados *por integração* usam
+  `PUT /api/almoxarifado/requisicoes/⟨id⟩/separar` com `{ "itens_separados": [ { "item_id": ⟨id do item⟩,
+  "quantidade_separada": ⟨q⟩ } ] }` e `PUT /api/almoxarifado/requisicoes/⟨id⟩/conferir-separacao` — a tela não manda
+  esses envios.
+
+1. **Fração de material com série é recusada na tela.**
+   - Ana dá **Entrada** de **2** Sensores, séries *SN-01* e *SN-02*. Paula cria **R1** pedindo **2** Sensores; o Gestor
+     aprova → **Totalmente Reservada**.
+   - Ana abre R1 → **Iniciar Separação** → digite **1,5** no Sensor → **📦 Confirmar Separação** → aviso *"Sensor:
+     material com controle de série exige quantidade inteira na separação (informado: 1.5)"*. A janela continua aberta
+     com o que foi digitado. Feche-a: R1 continua **Totalmente Reservada** (não foi para *Em Separação*).
+   - **Iniciar Separação** → **2** → *"Separação registrada!"* → **Em Separação**. Entregue escolhendo as duas séries →
+     **Entregue**.
+
+2. **O botão Conferir separação segue a caixa.**
+   - Ana dá **Entrada** de **4** Porcas. Paula cria **R2** com **4**; o Gestor aprova. Ana separa **2** →
+     **Em Separação**: o detalhe mostra **Conferir separação** (há 2 na caixa). Ana entrega os **2** → **Parcialmente
+     Atendida**.
+   - *Por integração*, `separar` com `"itens_separados": []` (é o mesmo que confirmar a janela de separação zerada) → R2
+     **Em Separação** com a caixa vazia. Abra R2: aparece **Ajustar Separação**, e **não** aparecem **Conferir
+     separação** nem **Liberar para Retirada**.
+   - *Por integração*, Bia → `conferir-separacao` → *"Nenhum item separado"*; nada é gravado.
+   - Ana → **Ajustar Separação** → **2** → *"Separação registrada!"*: o **Conferir separação** volta. Bia confere →
+     *"Separação conferida!"*. Entregue os 2 → **Entregue**.
+
+3. **Envio inválido não muda nada** (*por integração*).
+   - Ana dá **Entrada** de **4** Porcas; Paula cria **R3** com 4; o Gestor aprova → **Totalmente Reservada**.
+   - `separar` com quantidade **−2** → *"Porca: quantidade inválida para separar (-2) — informe um número positivo, ou 0
+     para não separar este item"*; R3 continua **Totalmente Reservada**.
+   - `separar` com o `item_id` de um item de **R1** → *"Item ⟨id⟩ não pertence a esta requisição"*; R3 e R1 intactas.
+   - `separar` com duas linhas — a Porca com **2** e um item inexistente (999999) → *"Item 999999 não pertence a esta
+     requisição"* e a Porca **não** é separada (separado 0).
+   - `"itens_separados": "abc"` → *"Informe os itens separados em lista (itens_separados)"*.
+   - Na tela, Ana separa os **4** de R3 e entrega **2** (**Parcialmente Atendida**); mande `separar` com **−1** →
+     recusado, e R3 continua **Parcialmente Atendida** (o **Encerrar Requisição** continua lá).
+
+4. **A recusa vem antes da aprovação por valor** (*por integração*).
+   - Dê custo à Porca (R$ 5,00) e **Entrada** de **4**; Paula cria **R4** com 4; o Gestor aprova. **Só então** ligue
+     **Habilitar liberação por valor** com um limite baixo (R$ 1,00).
+   - `separar` com a Porca **2** e outra linha com **−1** → a recusa de quantidade inválida; R4 **não** vai para
+     *Aguard. Aprov. Valor* e nenhum e-mail sai. `separar` com **4** (válido) → a recusa de valor de sempre
+     (*"Valor total (…) excede o limite de liberação automática (…). Aprovação de alto valor necessária."*). Desligue a
+     liberação por valor ao terminar.
+
+5. **A requisição com fração de série — a saída é Encerrar** (aviso **C202**).
+   - A tela de **Nova Requisição** só aceita inteiro; *por integração*, Paula cria **R5** pedindo **1,5** Sensor
+     (`POST /api/requisicoes-material`, `itens: [{ material_id, quantidade: 1.5 }]`) → aceita. Dê **Entrada** de 2
+     Sensores com série; o Gestor aprova.
+   - Ana separa **1** e entrega 1 com uma série → **Parcialmente Atendida**, 0,5 pendente.
+   - Ana → **Completar Entrega**: a janela de separação abre com **0,5** → **Confirmar** → *"Sensor: material com
+     controle de série exige quantidade inteira na separação (informado: 0.5)"*. **Feche a janela** (não zere a
+     quantidade) e, como Gestor, **Encerrar Requisição** com motivo → **Encerrada**.
+   - *Por que não zerar:* zerada, a janela leva R5 a *Em Separação* com a caixa vazia — e de lá não há como encerrar nem
+     cancelar (**C195**).
+
+### O que esta etapa NÃO cobre
+
+- **A criação de requisição ainda aceita fração de material com série** (**C202**, feature de requisições) — a saída é
+  o passo 5.
+- **A conferência feita antes de uma entrega parcial continua gravada** quando se confirma a separação sem nenhuma
+  quantidade — inofensivo: a próxima rodada a apaga, e liberar ou conferir a caixa vazia é recusado.
+- **O mesmo item repetido no mesmo envio** (integração) continua aceito e soma — é contrato de etapas anteriores.
+- **Quem pediu cancelar a *Em Separação* vazia** — continua sem cancelar (**C195**).
+- **Digitar *1e400* na janela de separação** — o navegador envia vazio, e o sistema lê como "não separar este item"
+  (*"Separação registrada"* sem separar; já era assim).
+- **Requisições antigas com fração de série na caixa** não se corrigem sozinhas: a consulta **A50** do documento de
+  novidades as acha; a saída é **Devolver à prateleira** a fração (Etapa 98).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor e tela)
+provam, escrito para você conferir à mão.
+
 ## Etapa 98 — Devolver da caixa à prateleira (ENTREGUE — 2026-10-09)
 
 **O que mudou, em uma frase:** o almoxarife pode tirar da caixa de uma requisição o material que não vai sair (quebrou,
@@ -6528,13 +6664,15 @@ Rode de novo: a requisição tratada sai da lista.
 - **Quem pediu cancelar a *Em Separação* vazia** — continua sem cancelar (já era assim; **C195**).
 - **Liberar a reserva no mesmo gesto** — são dois gestos (**B506**).
 - **Série e fração:** a separação ainda aceita fração de material com série e quantidade negativa em silêncio; a
-  devolução não exige inteiro (**B510**, **C197**).
+  devolução não exige inteiro (**B510**, **C197**). *(Pago na Etapa 99: a separação recusa negativo, não numérico,
+  item de fora e fração de série, e nada muda. A devolução continua aceitando fração — é a saída do legado.)*
 - **Uma permissão própria para devolver** — usa a de separar e entregar (**B503**).
 - **Mover estoque ou escolher o endereço de volta** — use a transferência (**C193**).
 - **A Perda com reserva nomear a reserva** — a recusa continua *"Saldo insuficiente. Disponível: 0 PC"*; quem avisa é o
   modal (**C194**).
 - **Conferir separação com a caixa vazia** — a conferência ainda conta o separado, não a caixa, e pode confirmar uma
-  caixa vazia (**C200**, aberto, não medido como estado preso).
+  caixa vazia (**C200**, aberto, não medido como estado preso). *(Pago na Etapa 99: a conferência exige material na
+  caixa — *"Nenhum item separado"* — e o botão só aparece com caixa.)*
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor e tela)
 provam, escrito para você conferir à mão.
