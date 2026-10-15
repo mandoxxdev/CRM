@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { toast } from 'react-toastify';
-import { FiPlus, FiTruck, FiChevronRight, FiArrowLeft, FiEdit2, FiUserMinus, FiUploadCloud } from 'react-icons/fi';
+import { FiPlus, FiTruck, FiChevronRight, FiArrowLeft, FiEdit2, FiUserMinus, FiUploadCloud, FiRotateCcw } from 'react-icons/fi';
 import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../utils/telefone';
 import './FamiliasProdutos.css';
 import './ModalGrupoForm.css';
@@ -63,18 +63,32 @@ const FornecedoresDoGrupo = () => {
   const [novoFantasia, setNovoFantasia] = useState('');
   const [novoCnpj, setNovoCnpj] = useState('');
   const [saving, setSaving] = useState(false);
+  // Etapa 103 (RN-103.07): 'ativo' | 'desativado' | 'inexistente' | 'desconhecido' (erro que nao e 404 —
+  // a tela fica como antes e o servidor decide, RN-103.08).
+  const [estadoGrupo, setEstadoGrupo] = useState('ativo');
+  const [reativando, setReativando] = useState(false);
 
   const loadData = () => {
     if (!grupoId) return;
     Promise.all([
-      api.get(`/compras/grupos/${grupoId}`).catch(() => null),
+      // Etapa 103: com `incluir_inativos` o grupo desativado vem (com ativo 0) em vez de 404 — a tela
+      // diz que ele esta desativado e nao oferece vincular. Antes o 404 virava o titulo "Grupo" e os
+      // botoes vinculavam fornecedor ao grupo desativado.
+      api.get(`/compras/grupos/${grupoId}`, { params: { incluir_inativos: 1 } })
+        .catch((err) => ({ erro: err.response?.status === 404 ? 'inexistente' : 'desconhecido' })),
       api.get(`/compras/grupos/${grupoId}/fornecedores`).catch(() => []),
       api.get('/compras/fornecedores').catch(() => [])
     ]).then(([grupoRes, fornRes, todosRes]) => {
+      if (grupoRes && grupoRes.data) {
+        setEstadoGrupo(Number(grupoRes.data.ativo) === 1 ? 'ativo' : 'desativado');
+      } else {
+        setEstadoGrupo(grupoRes && grupoRes.erro ? grupoRes.erro : 'desconhecido');
+      }
       setGrupo(grupoRes && grupoRes.data ? grupoRes.data : { id: grupoId, nome: 'Grupo' });
       setFornecedores(fornRes.data || []);
       setTodosFornecedores(todosRes.data || []);
     }).catch(() => {
+      setEstadoGrupo('desconhecido');
       setGrupo({ id: grupoId, nome: 'Grupo' });
       setFornecedores([]);
       setTodosFornecedores([]);
@@ -236,6 +250,24 @@ const FornecedoresDoGrupo = () => {
     }
   };
 
+  const handleReativarGrupo = async () => {
+    setReativando(true);
+    try {
+      await api.post(`/compras/grupos/${grupoId}/reativar`);
+      toast.success('Grupo reativado');
+      loadData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao reativar grupo');
+    } finally {
+      setReativando(false);
+    }
+  };
+
+  // Vincular e cadastrar no grupo so quando ele pode receber fornecedor (ou quando nao se sabe — erro
+  // de rede: o servidor decide). Editar e "Remover do grupo" continuam nos dois casos.
+  const podeVincular = estadoGrupo === 'ativo' || estadoGrupo === 'desconhecido';
+  const tituloGrupo = estadoGrupo === 'inexistente' ? 'Grupo não encontrado' : (grupo ? grupo.nome : 'Grupo');
+
   if (loading) {
     return (
       <div className="loading">
@@ -256,9 +288,23 @@ const FornecedoresDoGrupo = () => {
           >
             <FiArrowLeft /> Voltar para grupos
           </button>
-          <h1>Fornecedores – {grupo ? grupo.nome : 'Grupo'}</h1>
+          <h1>Fornecedores – {tituloGrupo}</h1>
           <p>Fornecedores homologados neste grupo. Clique em um fornecedor para ver itens e preços.</p>
+          {estadoGrupo === 'desativado' && (
+            <div role="status" data-testid="aviso-grupo-desativado" style={{ marginTop: 8, padding: '10px 14px', borderRadius: 8, background: '#fdecea', color: '#a93226', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span>Este grupo está desativado — reative-o para vincular fornecedores.</span>
+              <button type="button" className="btn-primary" onClick={handleReativarGrupo} disabled={reativando}>
+                <FiRotateCcw /> {reativando ? 'Reativando...' : 'Reativar grupo'}
+              </button>
+            </div>
+          )}
+          {estadoGrupo === 'inexistente' && (
+            <div role="status" data-testid="aviso-grupo-inexistente" style={{ marginTop: 8, padding: '10px 14px', borderRadius: 8, background: '#fdecea', color: '#a93226' }}>
+              Grupo não encontrado.
+            </div>
+          )}
         </div>
+        {podeVincular && (
         <div className="header-actions">
           <button
             type="button"
@@ -280,10 +326,11 @@ const FornecedoresDoGrupo = () => {
             <div className="btn-premium-shine"></div>
           </button>
         </div>
+        )}
       </div>
 
       {/* Modal: Vincular fornecedor existente */}
-      {showModalAdd && (
+      {showModalAdd && podeVincular && (
         <div className="modal-grupo-overlay" onClick={() => setShowModalAdd(false)}>
           <div className="modal-grupo-container" onClick={(e) => e.stopPropagation()}>
             <div className="modal-grupo-header">
@@ -319,7 +366,7 @@ const FornecedoresDoGrupo = () => {
       )}
 
       {/* Modal: Novo fornecedor */}
-      {showModalNovo && (
+      {showModalNovo && podeVincular && (
         <div className="modal-grupo-overlay" onClick={() => setShowModalNovo(false)}>
           <div className="modal-grupo-container" onClick={(e) => e.stopPropagation()}>
             <div className="modal-grupo-header">
@@ -421,10 +468,14 @@ const FornecedoresDoGrupo = () => {
           <div className="familias-empty">
             <FiTruck size={48} />
             <p>Nenhum fornecedor neste grupo.</p>
-            <p className="hint">Vincule um fornecedor existente ou cadastre um novo.</p>
-            <button type="button" onClick={() => setShowModalAdd(true)} className="btn-primary">
-              <FiPlus /> Vincular fornecedor
-            </button>
+            {podeVincular && (
+              <>
+                <p className="hint">Vincule um fornecedor existente ou cadastre um novo.</p>
+                <button type="button" onClick={() => setShowModalAdd(true)} className="btn-primary">
+                  <FiPlus /> Vincular fornecedor
+                </button>
+              </>
+            )}
           </div>
         ) : (
           fornecedores.map((f, index) => {

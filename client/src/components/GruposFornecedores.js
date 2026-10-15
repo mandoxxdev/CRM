@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
-import { FiTruck, FiChevronRight, FiPlus, FiEdit2 } from 'react-icons/fi';
+import { toast } from 'react-toastify';
+import { FiTruck, FiChevronRight, FiPlus, FiEdit2, FiRotateCcw } from 'react-icons/fi';
 import ModalGrupoComprasForm from './ModalGrupoComprasForm';
 import './GruposProdutos.css';
 import './Loading.css';
@@ -12,19 +13,48 @@ const GruposFornecedores = () => {
   const [loading, setLoading] = useState(true);
   const [showModalGrupo, setShowModalGrupo] = useState(false);
   const [editingGrupo, setEditingGrupo] = useState(null);
+  const [mostrarDesativados, setMostrarDesativados] = useState(false);
+  const [reativando, setReativando] = useState(null);
 
-  const loadGrupos = () => {
-    api.get('/compras/grupos')
-      .then((res) => setGrupos(res.data || []))
-      .catch(() => setGrupos([]));
-  };
+  // Etapa 103 (RN-103.06): os DOIS carregamentos (o do efeito e o do `onSaved` do modal — que roda
+  // inclusive depois de "Remover grupo") pedem os desativados; a grade continua mostrando so os
+  // ativos e os desativados ficam numa secao propria, com "Reativar". Desativado = ativo diferente de 1
+  // (o mesmo predicado do servidor, que recusa vincular a ele).
+  const loadGrupos = useCallback(() => api.get('/compras/grupos', { params: { incluir_inativos: 1 } })
+    .then((res) => setGrupos(res.data || []))
+    .catch(() => setGrupos([])), []);
 
   useEffect(() => {
-    api.get('/compras/grupos')
-      .then((res) => setGrupos(res.data || []))
-      .catch(() => setGrupos([]))
-      .finally(() => setLoading(false));
-  }, []);
+    loadGrupos().finally(() => setLoading(false));
+  }, [loadGrupos]);
+
+  const ativos = grupos.filter((g) => Number(g.ativo) === 1);
+  const desativados = grupos.filter((g) => Number(g.ativo) !== 1);
+
+  const handleReativar = async (g) => {
+    setReativando(g.id);
+    try {
+      await api.post(`/compras/grupos/${g.id}/reativar`);
+      toast.success('Grupo reativado');
+      await loadGrupos();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erro ao reativar grupo');
+    } finally {
+      setReativando(null);
+    }
+  };
+
+  const botaoDesativados = desativados.length > 0 && (
+    <button
+      type="button"
+      className="btn-secondary"
+      data-testid="toggle-desativados"
+      onClick={() => setMostrarDesativados((v) => !v)}
+      style={{ marginTop: 16 }}
+    >
+      {mostrarDesativados ? 'Ocultar grupos desativados' : `Mostrar grupos desativados (${desativados.length})`}
+    </button>
+  );
 
   const getFotoUrl = (foto) => {
     if (!foto) return null;
@@ -65,21 +95,21 @@ const GruposFornecedores = () => {
         onClose={() => { setShowModalGrupo(false); setEditingGrupo(null); }}
         onSaved={loadGrupos}
         grupo={editingGrupo}
-        totalGrupos={grupos.length}
+        totalGrupos={ativos.length}
       />
 
       <div className="grupos-grid">
-        {grupos.length === 0 ? (
+        {ativos.length === 0 ? (
           <div className="grupos-empty">
             <FiTruck size={48} />
-            <p>Nenhum grupo cadastrado.</p>
+            <p>{desativados.length > 0 ? 'Nenhum grupo ativo.' : 'Nenhum grupo cadastrado.'}</p>
             <p className="hint">Clique em Adicionar grupo para criar (ex.: Insumos, Peças).</p>
             <button type="button" className="btn-primary" onClick={() => setShowModalGrupo(true)}>
               <FiPlus /> Adicionar grupo
             </button>
           </div>
         ) : (
-          grupos.map((g, index) => {
+          ativos.map((g, index) => {
             const themeIndex = index % 3;
             const fotoUrl = getFotoUrl(g.foto);
             return (
@@ -131,6 +161,50 @@ const GruposFornecedores = () => {
           })
         )}
       </div>
+
+      {botaoDesativados}
+      {mostrarDesativados && desativados.length > 0 && (
+        <div className="grupos-grid" data-testid="grupos-desativados" style={{ marginTop: 16 }}>
+          {desativados.map((g) => (
+            <div
+              key={g.id}
+              className="grupo-card"
+              data-testid={`grupo-desativado-${g.id}`}
+              style={{ opacity: 0.75 }}
+              onClick={() => navigate(`/compras/fornecedores-homologados/grupo/${g.id}`)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  navigate(`/compras/fornecedores-homologados/grupo/${g.id}`);
+                }
+              }}
+            >
+              <div className="grupo-card-body">
+                <span
+                  className="status-badge"
+                  style={{ display: 'inline-block', padding: '0.25rem 0.6rem', borderRadius: 12, fontSize: '0.75rem', fontWeight: 600, backgroundColor: '#e74c3c20', color: '#e74c3c', marginBottom: 8 }}
+                >
+                  Desativado
+                </span>
+                {g.numero != null && (
+                  <span className="grupo-card-numero">Nº {g.numero}</span>
+                )}
+                <div className="grupo-card-nome">{g.nome}</div>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={reativando === g.id}
+                  onClick={(e) => { e.stopPropagation(); handleReativar(g); }}
+                >
+                  <FiRotateCcw /> {reativando === g.id ? 'Reativando...' : 'Reativar'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
