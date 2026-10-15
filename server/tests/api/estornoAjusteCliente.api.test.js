@@ -186,6 +186,16 @@ const e1 = (codigo, dono, perfil) => `Estornar o ajuste do material ${codigo}, q
       proprietario_cliente_id: cli, proprietario_cliente_nome: 'Metalurgica Alfa LTDA',
     });
 
+    // Fase 5 (rv2, S21): o tipo auditado e o do movimento estornado, nao um 'AJUSTE' fixo.
+    for (const tipo of ['AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO']) {
+      const mt = await comEntrada();
+      const ajT = await lancar({ material_id: mt.id, tipo, quantidade: 2, justificativa: 'sobra' });
+      assert.strictEqual((await cancelar(SUPER, ajT)).status, 200);
+      const aT = await auditoriaEstorno(mt.id);
+      assert.ok(aT, `${tipo}: sem auditoria ESTORNO_AJUSTE`);
+      assert.strictEqual(JSON.parse(aT.dados_novos).tipo, tipo);
+    }
+
     // Recusa do motor depois da guarda (a localizacao nao comporta a reversao): sem ESTORNO_AJUSTE.
     const m2 = await comEntrada();
     const aj2 = await lancar({ material_id: m2.id, tipo: 'AJUSTE', quantidade: 15, justificativa: 'contagem', localizacao_destino_id: loc });
