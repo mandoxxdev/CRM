@@ -70,6 +70,19 @@ async function lerCaixa(db, materialId) {
 }
 
 /**
+ * Etapa 104 (B704) — a lista das requisicoes que seguram a caixa, como o sufixo sempre a escreveu: "a requisicao X",
+ * "as requisicoes X e Y", "as requisicoes X, Y e Z", "as requisicoes X, Y, Z e mais N"; sem numero, "requisicoes em
+ * separacao". Extraida do `sufixoCaixa` (texto byte a byte o de antes) para o aviso do ajuste com endereco usar a mesma.
+ */
+function descreverRequisicoes(requisicoes) {
+  const r = requisicoes || [];
+  if (r.length === 0) return 'requisições em separação';
+  if (r.length === 1) return `a requisição ${r[0]}`;
+  if (r.length <= 3) return `as requisições ${r.slice(0, -1).join(', ')} e ${r[r.length - 1]}`;
+  return `as requisições ${r.slice(0, 3).join(', ')} e mais ${r.length - 3}`;
+}
+
+/**
  * Etapa 97 (T0, B493) — o sufixo da recusa quando ha caixa: diz quanto esta separado, para quem, e as duas saidas
  * legitimas (s3 da Fase 0: entregar o que existe e encerrar, ou o administrador excluir) e, desde a Etapa 98 (B508), a
  * terceira: devolver a prateleira na requisicao (`PUT /requisicoes/:id/devolver-separado`) e dar a baixa. Etapa 102 (C204,
@@ -79,15 +92,35 @@ async function lerCaixa(db, materialId) {
  */
 function sufixoCaixa({ caixa, requisicoes } = {}, unidade) {
   if (!(Number(caixa) > Q.QTD_FOLGA)) return '';
-  const r = requisicoes || [];
-  let lista;
-  if (r.length === 0) lista = 'requisições em separação';
-  else if (r.length === 1) lista = `a requisição ${r[0]}`;
-  else if (r.length <= 3) lista = `as requisições ${r.slice(0, -1).join(', ')} e ${r[r.length - 1]}`;
-  else lista = `as requisições ${r.slice(0, 3).join(', ')} e mais ${r.length - 3}`;
+  const lista = descreverRequisicoes(requisicoes);
   const qtdUn = [Q.qtd(Number(caixa)), unidade].filter((x) => x !== undefined && x !== null && x !== '').join(' ');
   return ` — ${qtdUn} estão separados para ${lista} e só saem pela entrega (material perdido da caixa: devolva-o à prateleira `
     + 'na requisição e dê a baixa, ou peça ao administrador do almoxarifado para excluí-la)';
 }
 
-module.exports = { caixaSemReservaSql, livreDeCaixaSql, lerCaixa, sufixoCaixa };
+/**
+ * Etapa 104 (C186, B704) — o AVISO do ajuste com endereco que deixou o DISPONIVEL abaixo da caixa sem reserva. A contagem
+ * por endereco redefine o saldo (decisao do cliente, Etapa 6) e nao e recusada pela caixa (opcao (b) da B704; a (a),
+ * projetar e recusar, foi descartada): a resposta diz o que aconteceu e os dois caminhos — o material esta na caixa (a
+ * contagem nao o viu: estornar o ajuste que BAIXOU o estoque, que sobe o total e nao tem guarda) ou se perdeu (devolver
+ * a prateleira na requisicao, Etapa 98). A regua e o DISPONIVEL do motor (`disponivelSql`: fisico - reservado -
+ * bloqueado - em inspecao - em terceiros), o mesmo que limita a entrega — nao o total (Fase 2, achado 2: com bloqueado 2
+ * ou a reserva de outra requisicao, total = caixa e a entrega presa em "Maximo: 2" sem aviso). "o ajuste que baixou o
+ * estoque", nao "este ajuste" (Fase 2, achado 1: o ajuste que SOBE e continua abaixo tambem avisa, e o estorno dele e
+ * recusado pela guarda da 97 — quem destrava e o estorno do que baixou). `null` quando a caixa cabe no disponivel (a
+ * regua da B524: `Q.cabe`, folga 1e-9). O numero mostrado e `max(0, disponivel)`, como as recusas de saldo.
+ * FUNCAO PURA: quem chama le a caixa (`lerCaixa`) e o disponivel DEPOIS de gravar, dentro da trava do material.
+ * @returns {string|null}
+ */
+function avisoCaixaDoAjuste({ caixa, requisicoes } = {}, disponivel, material = {}) {
+  const cx = Number(caixa) || 0;
+  const disp = Number(disponivel) || 0;
+  if (!(cx > Q.QTD_FOLGA) || Q.cabe(cx, disp)) return null;
+  const un = material.unidade;
+  return `Ajuste gravado, mas o disponível de ${material.codigo} ficou em ${Q.qtd(Math.max(0, disp))} ${un}, abaixo dos `
+    + `${Q.qtd(cx)} ${un} separados para ${descreverRequisicoes(requisicoes)}: a entrega fica limitada ao disponível. `
+    + 'Se o material está na caixa, a contagem não o incluiu — estorne o ajuste que baixou o estoque (perfil Administrador '
+    + 'ou Gestor do almoxarifado); se ele se perdeu, devolva-o à prateleira na requisição.';
+}
+
+module.exports = { caixaSemReservaSql, livreDeCaixaSql, lerCaixa, sufixoCaixa, descreverRequisicoes, avisoCaixaDoAjuste };
