@@ -47,6 +47,7 @@ const stockService = require('../services/almoxarifado/stockService');
 // Etapa 97 (T2): a conclusao do inventario sob a trava por material (a caixa na guarda vem do motor — Fase 5, item 1).
 const trava = require('../services/almoxarifado/travaPorMaterial');
 const materialService = require('../services/almoxarifado/materialService');
+const ownerRules = require('../services/almoxarifado/ownerRules');
 const {
   materialPhotoFilename,
   materialPhotoUrl,
@@ -631,6 +632,17 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       merged[col] = MATERIAL_BOOL_FIELDS.has(col) ? bool01(val(col)) : val(col);
     }
 
+    // Etapa 108 (C213, RN-01..RN-06): trocar o dono de material com historico exige `ajustar_material_cliente` — sem
+    // isto o Almoxarife tirava o cliente, ajustava como material nosso e devolvia o cliente, e a troca levava o saldo e o
+    // historico de um dono para o outro. Compara com o GRAVADO (o formulario sempre manda a chave). Autorizacao ANTES das
+    // validacoes de familia/subfamilia/localizacao e antes do UPDATE: recusa = nada gravado (B715).
+    let trocaDono = null;
+    try {
+      trocaDono = await ownerRules.assertTrocaDeDonoPermitida(db, current, req.body.proprietario_cliente_id, req.user);
+    } catch (errDono) {
+      return res.status(errDono.status || 500).json({ error: errDono.message });
+    }
+
     // Mesma semântica do T3 (comentário original preservado): só revalida quando o valor é
     // NOVO — informado explicitamente, OU a família efetiva mudou (um vínculo preservado pode
     // não ser filho da família nova). Um vínculo preservado com a MESMA família já era válido
@@ -721,6 +733,18 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         });
       } catch (errAudit) {
         console.error('[almoxarifado] Falha ao registrar auditoria de edição de material:', errAudit.message);
+      }
+    }
+    // Etapa 108 (RN-07, B716): a troca autorizada de material com historico nomeia os dois lados em `material_cliente`.
+    // Mesma regra da ATUALIZACAO acima: a troca ja foi gravada, a falha do log nao a desfaz.
+    if (trocaDono?.comHistorico) {
+      try {
+        const depois = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [req.params.id]);
+        await ownerRules.auditarTrocaDeDono(db, {
+          material: current, troca: trocaDono, quantidadeAtual: depois?.quantidade_atual ?? null, user: req.user,
+        });
+      } catch (errTroca) {
+        console.error('[almoxarifado] Falha ao registrar auditoria da troca de dono do material:', errTroca.message);
       }
     }
 

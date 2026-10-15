@@ -218,6 +218,7 @@ const GRUPOS_ACAO = congelarGrupos([
   // Estoque / série / ferramenta
   { rotulo: 'Ajuste', verbos: ['AJUSTE'] },
   { rotulo: 'Estorno de ajuste', verbos: ['ESTORNO_AJUSTE'] }, // Etapa 106 (RN-06): material de cliente
+  { rotulo: 'Troca de dono', verbos: ['TROCA_DONO'] }, // Etapa 108 (RN-07): material de cliente
   { rotulo: 'Compensação', verbos: ['COMPENSACAO'] },
   { rotulo: 'Bloqueio', verbos: ['BLOQUEIO'] },
   { rotulo: 'Desbloqueio', verbos: ['DESBLOQUEIO'] },
