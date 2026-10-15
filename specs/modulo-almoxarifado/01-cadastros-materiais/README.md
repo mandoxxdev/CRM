@@ -289,6 +289,14 @@ rota preserva), e o de reativação manda `ativo: 1` explícito.
   de schema sobre o cadastro de material: etapa própria.
 - **`parent_id` da tabela continua sem uso.** O CRUD trata a lista como plana.
 
+## Etapa 108 (2026-10-15, `cd7d5118..bc415eb6`) — o campo Proprietário ganha guarda na edição
+
+Não fecha item deste checklist (a regra é da feature 13): o `PUT /materiais/:id` passa a recusar com 403 a troca do
+proprietário de material com saldo, retenção ou livro para quem não tem `ajustar_material_cliente`, antes de qualquer
+validação do cadastro (B713–B715). O formulário não mudou. Achados de cadastro registrados, **não** resolvidos: o **Saldo
+Inicial** da criação grava ENTRADA fora do motor (`materialService.createMaterial`, C215 — a Etapa 110) e a API aceita
+`proprietario_cliente_id` de cliente inexistente (C216). A cor continua 🟡.
+
 ## Entregue na Etapa 66 (2026-10-01, `de04974..40dd180`) — motivos de movimentação viram cadastro
 
 Plano: `docs/superpowers/plans/2026-10-01-almoxarifado-etapa66-motivos-de-movimentacao.md`.

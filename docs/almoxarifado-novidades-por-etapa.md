@@ -11,9 +11,10 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-15):** **Etapa 106 fechada** (desfazer o ajuste de material de cliente passa a
-> ser só do Administrador — **C211** resolvido); a próxima do almoxarifado é a **108** — a troca do dono do material com
-> saldo (**C213**); a 107 é de Compras. *(A frase abaixo, de 2026-10-09, parou na Etapa 97 e ficou assim até a 106 — as
+> **Onde o desenvolvimento está (2026-10-15):** **Etapa 108 fechada** (trocar o dono de um material com saldo ou
+> movimentação passa a ser só do Administrador — **C213** resolvido); a próxima do almoxarifado é a **110** — o Saldo
+> Inicial do cadastro passa pelas regras da Entrada (**C215**); a 109 é de Compras. *(Antes: Etapa 106 fechada — desfazer
+> o ajuste de material de cliente passa a ser só do Administrador, **C211** resolvido.)* *(A frase abaixo, de 2026-10-09, parou na Etapa 97 e ficou assim até a 106 — as
 > Etapas 98 a 104 estão no fim, em "Onde estamos e o que vem a seguir"; fica dito, não apagado.)*
 >
 > **(2026-10-09):** Etapa 97 fechada (o material separado na caixa de uma requisição só sai
@@ -120,7 +121,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cinquenta e cinco itens para rodar em produção ANTES do deploy — cinquenta e dois são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Cinquenta e seis itens para rodar em produção ANTES do deploy — cinquenta e três são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-15 (Etapa 108) de cinquenta e cinco para cinquenta e seis**, com a **A56** — as trocas de dono de material que já aconteceram, e o perfil de hoje de quem trocou; opcional.)*
 
 *(**Atualizado em 2026-10-15 (Etapa 106) de cinquenta e quatro para cinquenta e cinco**, com a **A55** — os ajustes de material de cliente que já foram estornados, e o perfil de hoje de quem estornou; opcional.)*
 
@@ -2077,7 +2080,44 @@ SELECT o.id AS ajuste_id, o.tipo, m.codigo, c.razao_social AS cliente,
   Administrador faz um **Ajuste** novo com a justificativa.
 
 
-### B. Decisões de negócio — B1 a B530 e B700 a B712; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A56 (NOVA, da Etapa 108 — as trocas de dono de material que já aconteceram).** Até esta versão quem edita material
+(Administrador, Almoxarife, Engenharia) trocava o dono de um material com saldo sem a permissão especial (**C213**). **Nada
+aqui é obrigatório.** Somente leitura — rodar uma vez depois do deploy:
+
+```sql
+SELECT a.id AS auditoria_id, a.created_at, m.codigo,
+       json_extract(a.dados_anteriores, '$.proprietario_cliente_id') AS dono_antes,
+       json_extract(a.dados_novos, '$.proprietario_cliente_id') AS dono_depois,
+       m.proprietario_cliente_id AS dono_hoje, a.usuario_nome, p.perfil AS perfil_de_hoje,
+       m.quantidade_atual AS saldo_hoje,
+       (SELECT COUNT(*) FROM movimentacoes_almoxarifado mv WHERE mv.material_id = m.id) AS linhas_no_livro
+  FROM auditoria_log_almoxarifado a
+  JOIN materiais_almoxarifado m ON m.id = a.entidade_id
+  LEFT JOIN perfil_almoxarifado_usuario p ON p.usuario_id = a.usuario_id
+ WHERE a.entidade = 'material' AND a.acao = 'ATUALIZACAO'
+   AND json_type(a.dados_novos, '$.proprietario_cliente_id') IS NOT NULL
+ ORDER BY m.codigo, a.created_at;
+```
+
+*(Conferida numa sonda da etapa contra o esquema real em memória: acha a troca cliente → nosso e a volta nosso → cliente
+do mesmo material, acha nosso → cliente, e **não** acha a edição que reenviou o mesmo dono. `json_type` e não
+`json_extract` no filtro, porque o dono tirado é gravado como `null` e `json_extract` não distingue `null` de ausente.)*
+`dono_antes`/`dono_depois`/`dono_hoje` são o número do cliente (`clientes.id`); vazio = material nosso. O perfil é o **de
+hoje**.
+
+**Como ler o resultado** (uma linha por troca):
+- **Vazia** — nada a fazer.
+- **`linhas_no_livro` = 0 e `saldo_hoje` = 0** — cadastro corrigido antes de o material se mexer; nada a fazer.
+- **O mesmo material com duas linhas que vão e voltam** (cliente → vazio → cliente) — é o padrão do furo: abra o
+  **extrato** do material e veja se houve **Ajuste** entre os dois horários (`created_at`). Se houve e quem trocou não é
+  Administrador, confira com o cliente se o saldo de hoje é o certo; se não for, o Administrador faz um **Ajuste** novo com
+  a justificativa.
+- **Troca só de ida com histórico** (cliente A → cliente B, ou nosso → cliente com livro) — o saldo e o histórico do
+  material mudaram de dono na posição por cliente. Confirme com quem trocou se era a intenção.
+
+### B. Decisões de negócio — B1 a B530 e B700 a B720; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-15 com as oito da Etapa 108 — B713 a B720.**)*
 
 *(**Atualizado em 2026-10-15 com as seis da Etapa 106 — B707 a B712.**)*
 
@@ -7266,6 +7306,63 @@ número do cliente muda sem a permissão especial e sem a auditoria nomeada. A r
 agora**. Fica como a **Etapa 108** (a 107 é de Compras); o desenho está no plano da 106.
 
 
+**B713 (NOVA, da Etapa 108) — trocar o dono de material com histórico exige a permissão de ajustar material de cliente,
+nos três sentidos.** Tirar o cliente (cliente → nosso), dar o material a um cliente (nosso → cliente) ou passar de um
+cliente a outro, num material que já tem saldo ou movimentação, passa a ser **somente do Administrador** — a mesma
+permissão do ajuste (decisão 7 da Etapa 8). Quem edita material e não a tem (Almoxarife, Engenharia) recebe *"Trocar o dono do material ⟨código⟩ (de cliente ⟨cliente⟩ para estoque proprio (material nosso)) exige a permissao "ajustar_material_cliente" (seu perfil: ALMOXARIFE). O material ja tem saldo ou movimentacao, e a troca leva o saldo e o historico de um dono para o outro - mexe no numero que o cliente vai cobrar."* Fecha a **C213**: o almoxarife tirava o cliente, ajustava como material nosso e
+devolvia o cliente. A regra compara com o dono **gravado** — o formulário sempre manda o campo, com o mesmo valor que leu,
+e editar o resto do cadastro continua livre. **Escolhido por ser reversível** (uma função e uma chamada na rota) e por não
+tirar do Almoxarife a edição do resto do cadastro. **Descartados:** proibir a troca para todos (o Administrador precisa
+corrigir cadastro); mudar a permissão da rota de edição (o Almoxarife perderia o cadastro inteiro); guardar só o sentido
+cliente → nosso (nosso → cliente dá ao cliente material que a GMP pagou, e A → B leva o histórico de um cliente para outro).
+(`cd7d5118`)
+
+**B714 (NOVA, da Etapa 108) — o que conta como "histórico": saldo, retenção ou qualquer linha no livro, inclusive
+cancelada.** O livro de movimentações não guarda o dono por linha: a posição por cliente soma o livro pelo dono **de hoje**
+— medido: um material que recebeu 10 do cliente A, passado a B, some da posição de A e aparece na de B com *recebido* 10.
+Por isso a regra vale mesmo com o saldo zerado se o material já se movimentou; uma linha cancelada também conta, porque
+continua no extrato. Sem nada disso (cadastro errado logo depois de criar) a troca segue livre para quem edita material.
+**Descartados:** só saldo > 0 (deixaria reescrever o histórico de um cliente com o material já consumido); ignorar as
+canceladas (o estorno também é histórico). **Fica de fora, e a alternativa é sua:** compromisso **pendente** (pedido de
+compra aberto, requisição) não conta — um material nosso sem saldo e sem livro, com compra a caminho, ainda pode ser
+passado a um cliente pelo almoxarife, e a compra que a GMP pagou entraria na posição do cliente. Incluir é acrescentar as
+consultas de pedido e requisição à mesma função. (`cd7d5118`)
+
+**B715 (NOVA, da Etapa 108) — a recusa da troca não grava nada do mesmo salvar.** Quando o dono não pode mudar, o 403 sai
+antes de qualquer outra validação do cadastro (família, subfamília, localização) e antes de gravar — os outros campos
+alterados no mesmo salvar (o nome, por exemplo) também não são gravados. **Descartado:** gravar o resto e ignorar só o
+dono — a tela diria "Material atualizado!" e o dono voltaria em silêncio. (`cd7d5118`)
+
+**B716 (NOVA, da Etapa 108) — a troca autorizada com histórico deixa um registro "Troca de dono" nomeando os dois lados;
+sem justificativa obrigatória.** Além da edição de sempre (que guarda só os números), o Administrador que troca o dono de
+um material com histórico grava em **Auditoria** o registro **Troca de dono** do material de cliente, com o nome do
+cliente de antes e o de depois e o saldo. A troca **sem** histórico não ganha esse registro (a edição de sempre basta).
+**Descartados:** um campo de motivo obrigatório no formulário (muda a tela de cadastro e o fluxo do salvar — fica como
+candidato se vocês quiserem o porquê escrito); gravar o registro também na troca sem histórico. (`cd7d5118`)
+
+**B717 (NOVA, da Etapa 108) — a tela não muda: o seletor de dono continua aberto, e a recusa aparece ao salvar.**
+**Descartado:** travar o seletor pela lista de permissões do usuário — a tela não sabe se o material tem livro, e seria uma
+segunda fonte da mesma regra, que divergiria na primeira mudança. Mesmo critério do estorno (Etapa 106): a mensagem do
+servidor, não o controle escondido. (`3fe407d9`)
+
+**B718 (NOVA, da Etapa 108) — a B708 foi medida de novo e continua como está.** O Gestor estorna a **entrada** de material
+de cliente (o estoque do cliente vai a 0) sem a permissão especial e sem registro que nomeie o cliente — medido nesta etapa,
+igual à 106. Não mudou: é decisão sua (**B708**). Se mudar, é a mesma lista e a mesma chamada do estorno do ajuste.
+
+**B719 (NOVA, da Etapa 108) — a próxima etapa do almoxarifado (110) é o saldo inicial do cadastro (C215), não a C209.**
+Medido: o **Saldo Inicial** digitado no cadastro de um material novo vira uma **Entrada** gravada fora do motor de estoque
+— a Engenharia (que não movimenta estoque) cria material com saldo, de cliente sem documento, com lote ou série controlados
+sem lote nem série, com inspeção obrigatória sem passar pela inspeção, e sem prateleira. É autorização e integridade do
+saldo; a **C209** é aviso (**B711**). A 109 é de Compras.
+
+**B720 (NOVA, da Etapa 108, achada na revisão do código) — um salvar que leu o dono antes de uma troca não grava o dono
+velho de volta.** A revisão reproduziu: o almoxarife salva o nome de um material de cliente (sem mexer no dono) e, nos
+milissegundos entre o sistema ler e gravar, o Administrador passa o material de A para B; o salvar do almoxarife gravava A
+de novo — por fora da regra nova e da auditoria (o registro *Troca de dono* dizia B, o cadastro dizia A). Agora a gravação
+do cadastro só acontece se o dono ainda é o que foi lido; senão, *"O dono do material ⟨código⟩ mudou enquanto este cadastro era salvo — nada foi gravado. Recarregue o material e salve de novo."* (409). **Descartado:** proteger também os
+outros campos do cadastro contra o mesmo atropelo (é o comportamento de sempre do cadastro, não muda número de cliente — fica
+como está); pegar a trava do material no salvar do cadastro (ela é do disponível). (`970c0dfb`)
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -9422,7 +9519,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      com o Gestor (**B708**). O aviso amarelo da contagem que bate numa caixa (**C210**) passa a dizer *"(perfil
      Administrador do almoxarifado)"* quando o material é de cliente (**B710**).
 
-213. **NOVO (anterior à Etapa 106, achado na revisão do plano dela) — trocar o dono do material no cadastro contorna a
+213. **✅ RESOLVIDO NA ETAPA 108 (`cd7d5118`) — trocar o dono de material com saldo ou movimentação passou a exigir a
+     permissão de ajustar material de cliente (**B713**); as trocas feitas antes: **A56**.** O texto original: **NOVO (anterior à Etapa 106, achado na revisão do plano dela) — trocar o dono do material no cadastro contorna a
      permissão de ajustar material de cliente.** Quem edita material (Administrador, Almoxarife, Engenharia) pode tirar o
      cliente do cadastro de um material **com saldo**, ajustar o saldo como se fosse nosso e devolver o cliente — medido:
      o almoxarife, sozinho, levou o saldo de um material de cliente de 10 para 50, sem a permissão especial e sem a
@@ -9430,6 +9528,36 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      fazer:** até a correção, confira na auditoria de **Materiais** as edições que mudam o cliente de um material com
      saldo; desconfie de material que "deixou de ser de cliente" e voltou. É a candidata da **Etapa 108** (**B712**).
 
+
+214. **NOVO, da Etapa 108 — o Almoxarife e a Engenharia deixam de trocar o dono de material com saldo ou movimentação.** No
+     cadastro (**Materiais → editar**, seção **Propriedade**), trocar o cliente de um material que já tem saldo, retenção
+     ou qualquer linha no livro mostra, ao salvar, *"Trocar o dono do material ⟨código⟩ (de ⟨lado⟩ para ⟨lado⟩) exige a permissao "ajustar_material_cliente" (seu perfil: ALMOXARIFE). O material ja tem saldo ou movimentacao, e a troca leva o saldo e o historico de um dono para o outro - mexe no numero que o cliente vai cobrar."* e **nada** é gravado — nem os outros campos alterados no mesmo salvar (**B715**). Cada ⟨lado⟩ é *"cliente ⟨razão social⟩"* ou *"estoque proprio (material nosso)"*. **O que fazer:** peça a troca
+     ao Administrador; para corrigir o resto do cadastro, salve sem mexer no dono. Material recém-criado, sem saldo e sem
+     livro, continua corrigível por quem edita. **Depois de uma troca autorizada**, remessa a terceiro ainda aberta continua
+     nomeando o dono antigo (e, se só parte dos itens trocou, sai com itens de dois donos); ao passar a outro cliente ou de
+     nosso para cliente, requisição sem OS/projeto do dono novo deixa de sair, mesmo separada (medido: fica *Em Separação*
+     com a reserva); ao passar para nosso, nada trava — troque o dono só de material parado. Se alguém salvar o mesmo
+     cadastro enquanto o Administrador troca o dono, esse salvar recebe *"O dono do material ⟨código⟩ mudou enquanto este cadastro era salvo — nada foi gravado. Recarregue o material e salve de novo."* (**B720**).
+
+215. **NOVO (anterior à Etapa 108, achado na medição dela) — o Saldo Inicial do cadastro entra fora do motor de estoque.**
+     Ao criar um material, o campo **Saldo Inicial** grava uma **Entrada** direto, sem as regras da Entrada da tela de
+     Movimentações: a **Engenharia** (que não movimenta estoque) cria material com saldo; material **de cliente** entra sem
+     documento; material com **lote** ou **série** controlados fica com saldo sem lote nem série; material com **inspeção
+     obrigatória** fica disponível sem passar pela inspeção; e o saldo fica sem prateleira quando não há localização padrão.
+     Medido com todos esses casos (201). **O que fazer:** até a correção, cadastre o material com saldo **0** e lance a
+     **Entrada** pela tela de Movimentações. É a candidata da **Etapa 110** (**B719**).
+
+216. **NOVO (anterior à Etapa 108, achado na medição dela) — o cadastro aceita um dono que não existe.** Pela API, gravar
+     como dono um número de cliente que não está em Clientes passa (200); a tela não deixa (o seletor só tem clientes
+     cadastrados). O material passa a aparecer como *"cliente #⟨n⟩"* nas mensagens. **O que fazer:** nada no dia a dia; se
+     aparecer *"cliente #⟨n⟩"* num material, o cliente foi apagado ou o número foi gravado errado — o Administrador corrige
+     o dono.
+
+217. **NOVO (anterior à Etapa 108, achado na revisão dela) — inativar um material de cliente com saldo o tira da posição do
+     cliente.** Quem edita material (Almoxarife, Engenharia) pode desativar um material de cliente com saldo; ele some da
+     tela **Materiais de Clientes** e do relatório de posição (que só mostram material ativo), com o saldo e o histórico. Não
+     reabre a C213 (o ajuste continua olhando o dono). **O que fazer:** não desative material de cliente com saldo; para o
+     cliente, devolva primeiro (**Devolução ao cliente**). Candidato a uma etapa futura.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -10474,7 +10602,17 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   Gestor (**B708**).
 - **(106) O botão de estorno não some para o Gestor** na linha de ajuste de material de cliente — a tela mostra a recusa
   do servidor ao confirmar (decisão antiga do livro: a mensagem, não o botão escondido).
-- **(106) A regra olha o dono de agora** — trocar o dono no cadastro contorna o ajuste e o estorno (**C213**, próxima).
+- ~~**(106) A regra olha o dono de agora** — trocar o dono no cadastro contorna o ajuste e o estorno (**C213**, próxima).~~
+  *(Resolvido na Etapa 108 — a troca do dono de material com histórico passou a exigir a mesma permissão, **B713**. A regra
+  continua olhando o dono de agora, mas o dono de um material com histórico não muda mais sem o Administrador.)*
+- **(108) Compromisso pendente não é histórico** — pedido de compra aberto ou requisição não impedem o almoxarife de passar
+  um material nosso sem saldo e sem livro a um cliente (**B714**).
+- **(108) Sem motivo escrito na troca de dono** — o registro *Troca de dono* tem quem, quando, os dois lados e o saldo, mas
+  não o porquê (**B716**).
+- **(108) O seletor de dono não trava** — a recusa aparece ao salvar (**B717**).
+- **(108) Uma entrada que chegue entre a leitura e a gravação do cadastro** de um material sem histórico deixa a troca
+  passar (o salvar do cadastro não pega a trava do material — ela é do disponível). Janela de milissegundos, o mesmo risco
+  do resto do cadastro.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -11357,6 +11495,17 @@ aviso da caixa). O que **só o navegador** prova:
 2. **O aviso amarelo da contagem** de material de cliente com *"(perfil Administrador do almoxarifado)"*.
 3. **A auditoria** — Almoxarifado → Auditoria mostra o registro **Estorno de ajuste** do material de cliente depois do
    estorno feito pelo Administrador.
+
+**(108) Nenhum clique foi dado nesta etapa no navegador.** A tela não mudou de código; a recusa nova aparece pelo aviso de
+erro que o salvar do cadastro já mostrava, provado por teste de componente com a fronteira HTTP simulada (**1** teste
+novo); o servidor, pela rota e pela regra direto (**25** testes no arquivo novo, **3** jornadas no de integração). O que
+**só o navegador** prova:
+
+1. **A recusa inteira legível** no aviso vermelho do salvar, entrando como Almoxarife, trocando o cliente de um material com
+   saldo — e o formulário continua aberto com a troca feita.
+2. **A auditoria** — Almoxarifado → Auditoria mostra o registro **Troca de dono** do material de cliente com os dois nomes,
+   depois da troca feita pelo Administrador.
+3. **A posição por cliente** (Materiais de Clientes) depois da troca: o material sai de um cliente e aparece no outro.
 
 
 
@@ -22518,9 +22667,107 @@ fez **36 sabotagens**: 32 derrubaram teste, 3 eram equivalentes ou inalcançáve
 manual (*"O Gestor ajusta o saldo da GMP"*) estava imprecisa — o Gestor acerta o saldo pela conferência de inventário e
 pelo estorno, mas não lança Ajuste em Movimentações (não tem **Movimentar estoque**); reescrita.
 
+## Etapa 108 — Trocar o dono de um material com histórico passa a ser só do Administrador (2026-10-15)
+
+Material de cliente é material normal com um dono marcado no cadastro — e desde a Etapa 8 só o Administrador ajusta o
+saldo dele, porque aquele número é o que o cliente confere e cobra. Mas o dono era um campo comum do cadastro: quem edita
+material (Administrador, Almoxarife, Engenharia) podia tirar o cliente de um material com saldo, ajustar o saldo como se o
+material fosse nosso e devolver o cliente — o número do cliente mudava sem a permissão especial e sem o registro que nomeia
+o cliente. E como o livro de movimentações não guarda o dono de cada linha, trocar o dono leva **o saldo e todo o
+histórico** do material de um dono para o outro na posição por cliente. Agora trocar o dono de um material que já tem
+saldo ou movimentação é só do Administrador, e a troca fica registrada com o nome dos dois lados. Editar o resto do
+cadastro, e corrigir o dono de um material recém-criado, continuam como antes.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| O Almoxarife (ou a Engenharia) tirava o cliente de um material com saldo, ajustava como nosso e devolvia o cliente | Ao salvar a troca recebe *"Trocar o dono do material ⟨código⟩ (de cliente ⟨cliente⟩ para estoque proprio (material nosso)) exige a permissao "ajustar_material_cliente" (seu perfil: ALMOXARIFE). …"* e nada é gravado (**B713**, **B715**) |
+| Passar um material nosso com saldo a um cliente, ou de um cliente a outro, era edição comum | Também só do Administrador quando o material tem saldo ou movimentação (**B713**, **B714**) |
+| A troca ficava só na edição do material, com os números dos clientes | O Administrador que troca deixa também o registro **Troca de dono** do material de cliente, com os dois nomes e o saldo (**B716**) |
+| — | Editar o resto do cadastro (o formulário reenvia o mesmo dono) e corrigir o dono de um material **sem** saldo nem movimentação **não mudam** |
+
+### As regras, com o cenário exato
+
+Preparação: clientes **Metalúrgica X** e **Caldeiraria Y** cadastrados; material **CHP-0001** (PC) com o dono **Metalúrgica
+X**. O **administrador** lança uma **Entrada** de 10 (com o documento). Usuários: **Ana** (perfil Almoxarife), **Edu**
+(Engenharia) e o **administrador**.
+
+**1. A Almoxarife não tira mais o cliente.** Ana abre **Materiais → CHP-0001 → editar**, seção **Propriedade**, escolhe
+**GMP (estoque próprio)** e salva → aviso vermelho *"Trocar o dono do material CHP-0001 (de cliente Metalúrgica X para estoque proprio (material nosso)) exige a permissao "ajustar_material_cliente" (seu perfil: ALMOXARIFE). O material ja tem saldo ou movimentacao, e a troca leva o saldo e o historico de um dono para o outro - mexe no numero que o cliente vai cobrar."* O formulário continua aberto; o material continua da Metalúrgica X. Se ela tinha mudado também o nome no mesmo salvar, o
+nome **não** foi gravado.
+
+**2. Nem passa para outro cliente, nem dá material nosso a um cliente.** Ana escolhe **Caldeiraria Y** → a mesma recusa,
+com *"(de cliente Metalúrgica X para cliente Caldeiraria Y)"*. Um material **nosso** com saldo, passado à Metalúrgica X → a
+recusa com *"(de estoque proprio (material nosso) para cliente Metalúrgica X)"*. Edu (Engenharia) recebe as mesmas, com
+*"(seu perfil: ENGENHARIA)"*.
+
+**3. O ajuste continua barrado.** Ana tenta, em Movimentações, um **Ajuste** do CHP-0001 para 50 → a recusa de sempre do
+ajuste de material de cliente (*"Ajustar o saldo do material CHP-0001, que pertence ao cliente Metalúrgica X, exige a
+permissao …"*). Com o dono fixo, não há mais o caminho de volta.
+
+**4. Editar o resto continua livre.** Ana muda o nome para "Chapa 3mm Metalúrgica X" sem mexer na Propriedade e salva →
+*"Material atualizado!"*.
+
+**5. O administrador troca, e fica registrado.** O administrador passa o CHP-0001 para **Caldeiraria Y** → *"Material
+atualizado!"*. Em **Materiais de Clientes**, o CHP-0001 sai da Metalúrgica X e aparece na Caldeiraria Y com *recebido* 10
+(o histórico vai junto). Em **Almoxarifado → Auditoria**, além da edição de sempre, o registro **Troca de dono** do
+material de cliente com *Metalúrgica X* → *Caldeiraria Y* e o saldo 10.
+
+**6. Sem histórico, a correção é livre.** Ana cadastra um material novo, com saldo inicial **0**, escolhe por engano a
+Metalúrgica X e salva; depois edita e troca para **Caldeiraria Y** → *"Material atualizado!"* (material sem saldo, sem
+retenção e sem nenhuma linha no livro).
+
+**7. Saldo zerado não apaga o histórico.** Um material da Metalúrgica X cuja única Entrada foi estornada (saldo 0, mas a
+entrada e o estorno estão no extrato): Ana tenta trocar o dono → a recusa do cenário 1. O mesmo com o material todo
+reservado, bloqueado, em inspeção ou em terceiros.
+
+### O que esta etapa NÃO cobre
+
+1. **Compromisso pendente** — pedido de compra aberto ou requisição não contam como histórico (**B714**, a alternativa é
+   sua).
+2. **Um motivo escrito** para a troca do dono (**B716**).
+3. **Travar o seletor** de dono na tela — a recusa aparece ao salvar (**B717**).
+4. **Os estornos de entrada e outros de material de cliente pelo Gestor** (**B708**) — medidos de novo, sem mudança
+   (**B718**).
+5. **O Saldo Inicial do cadastro**, que entra fora do motor de estoque (**C215**) — é a próxima etapa do almoxarifado; e o
+   dono inexistente gravado pela API (**C216**).
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0) reproduziu o furo pela rota com os três perfis que editam material, nos três sentidos da troca, com
+e sem saldo e com cada tipo de retenção (18 de 18 passavam), e mediu que a posição por cliente acompanha o dono de hoje —
+por isso o "histórico" inclui o livro, não só o saldo. Mediu também as portas que gravam o dono (só duas: criar e editar
+o material) e achou dois furos anteriores: o **Saldo Inicial** do cadastro entra fora do motor (**C215**, a próxima) e a API
+aceita um dono que não existe (**C216**).
+
+A **revisão do plano** não achou trava. Achou duas correções: a recusa sairia *"de cliente cliente #⟨n⟩"* quando o cliente
+foi apagado (corrigido, com teste) e o cenário da ordem das recusas precisava de uma família bem formada (o teste já usava).
+Notou que compromisso pendente não conta como histórico (registrado na **B714**) e o que muda depois de uma troca
+autorizada (registrado na **C214**).
+
+A **revisão adversarial do código** (dois revisores, executando) não achou nenhum perfil sem a permissão trocando o dono de
+material com histórico, em nenhum sentido nem formato do campo. O primeiro achou **um defeito real**: se o administrador
+troca o dono enquanto outra pessoa está salvando o mesmo cadastro, o salvar dessa pessoa gravava o dono antigo de volta, por
+fora da regra e do registro — agora esse salvar é recusado sem gravar nada (**B720**, com teste). Achou também que a frase do
+"cuidado" depois da troca estava meio certa: a remessa aberta continua com o dono antigo (e pode ficar com itens de dois
+donos), mas a requisição só deixa de sair quando o material passa a **outro cliente** — passar para nosso não trava nada;
+reescrita. E um furo anterior: inativar material de cliente com saldo o tira da posição do cliente (**C217**). O segundo
+fez **30 sabotagens**: 25 derrubaram teste, 3 eram equivalentes pela rota, e **duas** mostraram asserções faltando no
+contrato da regra chamada direto (texto vazio e zero como "nosso"; a troca sem histórico devolvida como tal) — viraram teste.
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 108 entregue (2026-10-15):** **trocar o dono de um material com histórico passa a ser só do Administrador.** No
+  cadastro, tirar o cliente, dar o material a um cliente ou passar de um cliente a outro, num material com saldo, retenção
+  ou qualquer lançamento no extrato, pede a permissão de ajustar material de cliente; a troca feita fica auditada com os
+  dois nomes; um salvar que leu o dono antes da troca não o grava de volta (**C213** resolvido). **O que é seu:** a consulta
+  **A56** (opcional — as trocas de dono já feitas); as decisões **B713 a B720** (a **B714** — compromisso pendente não conta
+  como histórico — e a **B716** — sem motivo escrito — são reversíveis e a alternativa é sua; a **B718** repete a **B708**);
+  os avisos **C214** a **C217**; as limitações **(108)** em D e as verificações **(108)** em F. **Próxima: Etapa 110 (a 109
+  é da frente de Compras) — o Saldo Inicial do cadastro passa pelas regras da Entrada (**C215**) — ver a "próxima tarefa
+  detalhada" no plano da Etapa 108.**
 
 - **Etapa 106 entregue (2026-10-15):** **desfazer o ajuste de material de cliente passa a ser só do Administrador.** O
   estorno de Ajuste, Ajuste positivo e Ajuste negativo de material de cliente exige a mesma permissão do ajuste; o estorno
@@ -22528,9 +22775,9 @@ pelo estorno, mas não lança Ajuste em Movimentações (não tem **Movimentar e
   almoxarifado)"* no material de cliente (**C211** resolvido). **O que é seu:** a consulta **A55** (opcional — os estornos
   que já aconteceram e o perfil de hoje de quem estornou); as decisões **B707 a B712** (a **B708** — os outros estornos de
   material de cliente ficam com o Gestor — é reversível e a alternativa é sua); os avisos **C212** e **C213**; as
-  limitações **(106)** em D e as verificações **(106)** em F. **Próxima: Etapa 108 (a 107 é da frente de Compras) — trocar
+  limitações **(106)** em D e as verificações **(106)** em F. ~~**Próxima: Etapa 108 (a 107 é da frente de Compras) — trocar
   o dono de um material com saldo passa a exigir a permissão de ajustar material de cliente (**C213**) — ver a "próxima
-  tarefa detalhada" no plano da Etapa 106.**
+  tarefa detalhada" no plano da Etapa 106.**~~ *(Feita — Etapa 108.)*
 
 - **Etapa 104 entregue (2026-10-15):** **a contagem por prateleira que bate numa caixa de requisição passa a
   avisar.** O **Ajuste** com localização continua gravando o que foi contado, mas, quando o disponível do material fica

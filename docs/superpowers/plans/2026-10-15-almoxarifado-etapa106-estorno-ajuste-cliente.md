@@ -198,7 +198,8 @@ Dois revisores frescos em worktrees próprias (`CRM-wt-e106rv1`, `CRM-wt-e106rv2
   anterior), 0 de código; rv2: 36 sabotagens, **1 real** (S21), **3 ruído** (equivalentes/inalcançáveis).
 - **Paralelismo:** 0 galho de código em paralelo. Em paralelo: a revisão do plano × a escrita da T1; os dois revisores da
   Fase 5 × a documentação. Nenhum EADDRINUSE.
-- **Defeito que escapou:** *(preencher na Etapa 108.)*
+- **Defeito que escapou:** nenhum medido na Etapa 108 no código da 106 (a sonda da 108 reestornou a entrada de cliente pelo
+  Gestor — B708, comportamento declarado; a C213 era anterior e conhecida, e foi paga na 108, `cd7d5118`).
 
 ## O que fica de fora (declarado)
 

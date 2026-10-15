@@ -1,7 +1,7 @@
 # 13 — Materiais Pertencentes a Clientes
 
-> **Status:** 🟢 — **Etapa 8 entregue em 2026-08-12** (`f26b635..5b5eb55`) **+ Etapa 106 (2026-10-15, `d6493a7e..0c8ec372`): o estorno do ajuste exige a mesma permissão do ajuste (C211 resolvido)** · furo conhecido: **C213** (a troca do dono no cadastro contorna a regra — candidata da Etapa 108) · **Spec original:** seção 17 (fundamental para industrialização GMP)
-> **Última atualização:** 2026-10-15 (Etapa 106)
+> **Status:** 🟢 — **Etapa 8 entregue em 2026-08-12** (`f26b635..5b5eb55`) **+ Etapa 106 (2026-10-15, `d6493a7e..0c8ec372`): o estorno do ajuste exige a mesma permissão do ajuste (C211 resolvido)** **+ Etapa 108 (2026-10-15, `cd7d5118..bc415eb6`): trocar o dono de material com histórico exige a mesma permissão (C213 resolvido)** · **Spec original:** seção 17 (fundamental para industrialização GMP)
+> **Última atualização:** 2026-10-15 (Etapa 108)
 >
 > Material de cliente deixou de ser ilha e virou **material normal com dono**
 > (`materiais_almoxarifado.proprietario_cliente_id`, `NULL` = material nosso): ganha lote, série,
@@ -131,6 +131,15 @@ task foi entregue com a **tabela preservada** exatamente para que este cenário 
   aviso da caixa da Etapa 104 diz "(perfil Administrador do almoxarifado)" no material de cliente — `6ca3f9a0` (T2).
   Testes: `estornoAjusteCliente.api.test.js`, `estornoAjusteClienteIntegracao.api.test.js` (`0c8ec372`), os `[106 …]` de
   `ajusteEnderecoCaixa` e o `[106 RN-09]` do cliente (`fbce0cb0`).
+- [x] **Trocar o dono de material com histórico exige a mesma autorização especial** — Etapa 108, `cd7d5118` (T1):
+  `PUT /materiais/:id` que muda o dono (comparado com o gravado, nos três sentidos) de material com saldo, retenção ou
+  qualquer linha no livro (inclusive cancelada) exige `ajustar_material_cliente` — `ownerRules.assertTrocaDeDonoPermitida`
+  na rota, antes de qualquer validação e do `UPDATE` (403 com literal própria; nada gravado); a troca autorizada com
+  histórico audita `material_cliente`/`TROCA_DONO` nomeando os dois lados. Sem histórico a troca segue livre. A tela não
+  muda (recusa no toast — `3fe407d9`, T2). Testes: `trocaDonoMaterial.api.test.js`, `trocaDonoMaterialIntegracao.api.test.js`
+  (`bc415eb6`). Fora (declarado): compromisso pendente não conta como histórico (B714); motivo da troca (B716).
+  Fase 5 (`970c0dfb`): o `UPDATE` só grava se o dono ainda é o lido — um salvar concorrente não regrava o dono antigo
+  depois de uma troca autorizada (409; B720). Achado anterior: inativar material de cliente com saldo o tira da posição (C217).
 - [ ] Sobras permanecem vinculadas ao proprietário — **fora do escopo da Etapa 8, declarado**
   (decisão 11 do design): depende da UI de retalhos/sobras, **feature 15**.
 - [x] Devolução ao cliente documentada — `27eb9c9` (Task 6): tipo `DEVOLUCAO_CLIENTE` (saída, pelo
@@ -288,7 +297,10 @@ Gestor recebe 403 ao ajustar e **200** ao estornar o ajuste do Administrador, e 
 (a etapa não tocou o estorno). Candidata da Etapa 106 — ver a próxima tarefa no plano da Etapa 104. O status 🟢 desta
 feature fica, com este furo declarado.
 
-## Furo conhecido — a troca do dono no cadastro contorna o ajuste e o estorno (C213, achado na Etapa 106)
+## ~~Furo conhecido — a troca do dono no cadastro contorna o ajuste e o estorno (C213, achado na Etapa 106)~~ — ✅ resolvido na Etapa 108 (`cd7d5118`)
+
+*(O texto abaixo é o registro da 106, mantido; a correção está no checklist acima. A regra continua olhando o dono de
+agora — o que mudou é que o dono de material com histórico não muda mais sem `ajustar_material_cliente`.)*
 
 `PUT /api/almoxarifado/materiais/:id` (gate `editar_material`: Administrador, Almoxarife, Engenharia) aceita
 `proprietario_cliente_id` no merge genérico, inclusive `null`, em material **com saldo**. Medido (sonda da Etapa 106): o
