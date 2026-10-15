@@ -133,6 +133,17 @@ Duas coisas mudam quando você **edita** um material já existente, e é bom sab
 - **A Família fica travada.** O campo é desabilitado, com a legenda *"A família não pode ser alterada após o cadastro."* — a família define o prefixo do código, e trocá-la depois deixaria o código mentindo sobre a classificação.
 - **O saldo não se edita pela ficha.** O campo que na criação se chama "Saldo Inicial" passa a se chamar "Quantidade Atual" e fica desabilitado, com o aviso *"Use 'Movimentações' para ajustar"*. Saldo só muda por lançamento, e todo lançamento tem autor, motivo e horário.
 
+**O Saldo Inicial.** Preenchido com um número maior que zero ao cadastrar, ele é lançado como uma **Entrada** de verdade — a mesma da tela de Movimentações: aparece no extrato do material com o motivo *Saldo inicial de cadastro*, de 0 para o número digitado, na localização padrão do material (quando há uma), e pode ser estornado como qualquer Entrada. Por isso valem as regras de uma Entrada:
+
+| Situação | Resultado |
+|---|---|
+| Quem cadastra não tem a permissão de movimentar estoque (por exemplo, o perfil Engenharia) | Recusado, e o material não é criado: *"Cadastrar material com saldo inicial exige a permissão "movimentar" (seu perfil: ⟨perfil⟩) — o saldo inicial é uma entrada no estoque. Cadastre com saldo 0 e peça a quem movimenta o estoque para lançar a Entrada em Movimentações."* |
+| Material com **Controle por lote**, **Controle por número de série**, **Requer inspeção**, ou com um cliente como proprietário | Recusado, nomeando todos os motivos: *"O material ⟨código⟩ não pode nascer com saldo inicial: ⟨motivos⟩. Cadastre com saldo 0 e lance a entrada depois — em Movimentações (Entrada, com o lote e as séries) ou pelo Recebimento (inspeção e material de cliente)."* — os motivos são *tem controle por lote*, *tem controle por número de série*, *exige inspeção* e *é de cliente* |
+| A localização padrão está bloqueada (ou não aceita o tipo do material) | Recusado com a mensagem da Entrada (por exemplo *"Localização ⟨código⟩ está bloqueada"*), e o material não é criado |
+| Saldo Inicial vazio ou zero | O material é criado sem lançamento nenhum, para qualquer perfil que cadastra e com qualquer controle |
+
+O motivo dos quatro controles: o cadastro não tem onde informar o lote nem as séries, e a inspeção e a nota de remessa do cliente só são cobradas pelo **Recebimento**. No cadastro novo, ao marcar um desses controles (ou escolher um cliente), a tela mostra sob o campo *"Material com lote, série, inspeção ou de cliente nasce com saldo 0 — a entrada é lançada depois, em Movimentações ou pelo Recebimento."* — é só um aviso; quem decide é o servidor. Quando uma recusa acontece, nada é gravado: tentar de novo com o mesmo código funciona.
+
 ### 2.1 Famílias e subfamílias
 
 A família é o eixo de classificação obrigatório do material, e é ela que determina o prefixo do código. A hierarquia tem **no máximo dois níveis**: uma família pode ter subfamílias, mas uma subfamília não pode ter filhas.
@@ -189,7 +200,7 @@ porque a tela não reativa família:
 | Reativar uma subfamília cuja família principal não existe mais | Recusado: *"Família pai não encontrada"* |
 | Situação (ativo) diferente de ativo/inativo | Recusado: *"Ativo inválido: use 0 ou 1"* |
 
-A recusa por itens vem antes da recusa por subfamília. Uma família que **já está** inativa pode ser renomeada ou
+A recusa por itens vem antes da recusa por subfamília. **Cadastrar material e inativar a família no mesmo instante** (dois usuários, dois cliques) nunca deixa a família inativa com o material ativo: o sistema confere e grava no mesmo passo, e quem chega por último recebe a recusa de sempre — o cadastro, *"Família inativa — não é possível vincular novos itens"* (ou *"Subfamília inválida para a família selecionada"*); o Inativar, *"Não é possível remover: família possui N item(ns) ativo(s)"*. O mesmo vale para a edição de material que troca de família ou de subfamília; se o cadastro mudar no meio do salvar por outro motivo, a recusa é *"O cadastro do material ⟨código⟩ mudou enquanto era salvo — nada foi gravado. Recarregue o material e salve de novo."* Salvar a família sem mudar a situação (ativa/inativa) — como a aba Famílias faz ao editar nome, descrição e tipo de uso — não regrava a situação: um Inativar feito por outra pessoa no mesmo instante continua valendo. Se a família mudar duas vezes no meio de um Inativar pela edição, a recusa é *"A família mudou enquanto era salva — nada foi gravado. Recarregue a família e salve de novo."* Uma família que **já está** inativa pode ser renomeada ou
 editada normalmente, mesmo que ainda tenha itens ativos ou subfamílias ativas dentro dela. Para reativar uma
 subfamília de família inativa, reative primeiro a família principal.
 

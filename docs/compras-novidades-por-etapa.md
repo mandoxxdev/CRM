@@ -371,6 +371,8 @@
   proíbem ("Inativar" recusa família com material ativo; o cadastro recusa família inativa). Fechar exige mexer no cadastro
   e na edição de material, que é a área da Etapa 108 do almoxarifado em paralelo; deixei para a próxima etapa (é a
   primeira candidata do plano da 109).
+  **Fechada na Etapa 110 do almoxarifado (`96f28b29`)** — gravação condicional dos dois lados; ver a C218 em
+  `docs/almoxarifado-novidades-por-etapa.md`.
 - **B44 — Etapa 89: só o nome do arquivo do PDF da OS é limpo; o número da OS fica como foi digitado.**
   Com `/`, `"` ou `:` no número, o Windows recusava o nome do arquivo e o usuário via "Erro ao gerar
   PDF" (o PDF até era gerado). Agora o arquivo vira `OS_OS_1_2_A_<hora>.pdf` e o documento continua

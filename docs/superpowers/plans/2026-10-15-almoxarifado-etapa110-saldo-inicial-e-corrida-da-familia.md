@@ -122,21 +122,21 @@ subfamília(s) ativa(s)`; `Código já existe`; o 409 do dono da 108.
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (tronco) — o saldo inicial pelo motor.** RN-01..RN-05. `materialService.js` (motivos, E2, INSERT com 0, Entrada
+- [x] **T1 (tronco) — o saldo inicial pelo motor.** RN-01..RN-05. `materialService.js` (motivos, E2, INSERT com 0, Entrada
   pelo motor, compensação), `routes/almoxarifado.js` (POST: E1). Teste novo `server/tests/api/saldoInicialCadastro.api.test.js`.
   Controle positivo: conceder `movimentar` à ENGENHARIA (cai RN-01 nomeando); tirar cada motivo (cai o cenário dele); voltar
   ao `INSERT` direto do livro (cai RN-03 na origem/destino); sem a compensação (cai RN-04).
-- [ ] **T2 (tronco, depois de T1) — o lado do material.** RN-06, RN-07. `materialService.createMaterial` (INSERT
+- [x] **T2 (tronco, depois de T1) — o lado do material.** RN-06, RN-07. `materialService.createMaterial` (INSERT
   condicional, releitura, E3), `routes/almoxarifado.js` (PUT de material: condição no UPDATE, releitura, E4). Teste novo
   `server/tests/api/familiaMaterialCorrida.api.test.js` com a janela injetada (embrulha `db.get` da conferência da família e
   inativa entre a conferência e a gravação). Controle: tirar a condição do INSERT / do UPDATE.
-- [ ] **T3 (tronco, depois de T2) — o lado da família.** RN-08, RN-09, RN-10. `routes/almoxarifado.js` (DELETE e PUT de
+- [x] **T3 (tronco, depois de T2) — o lado da família.** RN-08, RN-09, RN-10. `routes/almoxarifado.js` (DELETE e PUT de
   família). No mesmo arquivo de teste: janela injetada (material gravado entre a contagem e o UPDATE) e a corrida real dos
   quatro pares nas duas ordens (30 rodadas). Controle: tirar cada `NOT EXISTS`.
-- [ ] **T4 (galho, contra o contrato) — a tela.** RN-11. `MaterialAlmoxarifadoForm.js` + caso novo no
+- [x] **T4 (galho, contra o contrato) — a tela.** RN-11. `MaterialAlmoxarifadoForm.js` + caso novo no
   `MaterialAlmoxarifadoForm.test.js` (a frase aparece com cada flag e com cliente no cadastro novo; não aparece sem flag nem
   na edição). Controle: trocar a condição.
-- [ ] **T5 (integração, depois de T1–T4) — o documento até o fim, pela rota E pelo serviço.**
+- [x] **T5 (integração, depois de T1–T4) — o documento até o fim, pela rota E pelo serviço.**
   `server/tests/api/saldoInicialFamiliaIntegracao.api.test.js`: (K1) pela rota — a Engenharia cadastra com saldo → 403; com
   0 → 201; o Almoxarife lança a Entrada pela v2 → saldo; o Almoxarife cadastra outro com saldo 5 → o extrato do material
   (`GET /materiais/:id/historico`) mostra a Entrada; o **estorno** dessa Entrada (`POST /movimentacoes/:id/cancelar`) leva
@@ -173,7 +173,9 @@ O revisor leu o código e rodou quatro sondas (`server/tests/sonda/e110rv-*.js`,
 9. **(nota)** T4 é galho de verdade; T1→T2→T3 seriais com razão.
 10. **(correção) A RN-02 se contorna em dois gestos:** cadastrar com saldo sem controle (201) e depois o `PUT` ligar lote,
     série, inspeção ou o cliente (200) — inclusive pela Engenharia, quebrando "séries = saldo". **Anterior** à etapa; vira
-    **C222** (declarado, não corrigido aqui — mexe na edição de material com saldo, outra regra).
+    **C222** (declarado, não corrigido aqui — mexe na edição de material com saldo, outra regra). *(Medido de novo no
+    fechamento, sonda `e110c222.js`: o **cliente** já é 403 pela regra da 108; lote, série e inspeção passam com 200, e
+    depois a saída do saldo antigo é recusada pela falta de lote/séries — a C222 ficou com os três.)*
 11. **(nota)** Estorno da Entrada do saldo inicial → 0 (como antes); reativar material na família inativa pelo `PUT`
     (`ativo: 1`) produz o estado proibido sem corrida (**C220**, já nomeada).
 12. **(nota)** Remessas/Sobras/transformação 8c não mandam `quantidade_atual` e mandam `codigo_auto: 1` — a RN-06 entra
@@ -183,3 +185,131 @@ O revisor leu o código e rodou quatro sondas (`server/tests/sonda/e110rv-*.js`,
     400. Declarado (**D (110)**); a recusa comum (padrão bloqueada) desfaz de fato.
 14. **(correção) Um teste existente quebra:** `materialServiceCriacao` "grava a movimentacao de saldo inicial igual a
     rota" — o corpo completo tem lote e inspeção. Reescrito com o material sem esses dois controles.
+
+## Execução (2026-10-15)
+
+- **Plano** `233f4787` (design, plano, Fase 2 incorporada).
+- **T1** `a5173c00` — `materialService` (motivos, E1/E2, `quantidadeSaldoInicial`, INSERT com 0, Entrada pelo motor com o
+  destino da padrão, compensação), rota (E1 antes do serviço). Teste novo `saldoInicialCadastro` (**20**; 13 vermelhos
+  antes da implementação — os 6 verdes eram as metades positivas e a padrão que já caía na A-01). `materialServiceCriacao`
+  ajustado (Fase 2, achado 14). **Controle:** `movimentar` para ENGENHARIA (2 caem, nomeando), cada um dos quatro motivos
+  tirado (5, 2, 2, 4 caem), o INSERT direto de volta (RN-03 cai pela unidade e RN-04), sem o DELETE da compensação (RN-04),
+  a família validada antes do RN-02 (o cenário da ordem). Todas na asserção certa.
+- **T2+T3** `96f28b29` — um commit (a correção é uma só, dos dois lados; o teste de corrida real só prova com os dois).
+  `familiaMaterialCorrida` (**31**: janela injetada em cada porta + a corrida real dos quatro pares nas duas ordens).
+  **Controle:** sem a condição do INSERT (8 caem), do PUT de material (3), da sub (2), do DELETE (9 — inclusive as seis
+  corridas reais do DELETE), do PUT de família (4, inclusive as duas corridas do PUT), do `NOT EXISTS` da sub (2), a
+  auditoria do "de" lido antes (1). **Achado do controle:** sem a condição do INSERT as corridas reais **não** caíram em 30
+  rodadas — o lado da família sozinho já fecha a ordem que a HTTP produz; o lado do material só é provado pela janela
+  injetada (que caiu). **Divergência do plano:** E3 só depois de duas releituras (RN-06).
+- **T4** `28907d0d` — `AVISO_SALDO_INICIAL` + a frase; 8 casos novos no `MaterialAlmoxarifadoForm.test.js` (51).
+  **Controle:** tirar o lote da condição, e mostrar também na edição — 1 caso cai em cada.
+- **T5** `7c578b56` — `saldoInicialFamiliaIntegracao` (K1–K3). **Controle:** sem o gate da rota cai K1; sem o motivo do
+  cliente cai K3; sem a condição do DELETE nada cai (esperado — a integração não tem corrida; a unidade a cobre).
+
+## Fase 4 — integração serial (2026-10-15)
+
+Sem worktree de galho (T4 é tela contra a frase do contrato, na mesma árvore). Suíte na árvore com T1–T5 (antes dos
+commits): `test:api` **366/366** arquivos (EXIT 0); `test:almoxarifado` **44/44**; `test:validation` **4/4**;
+`test:safealter` **3/3**; `test:sqlite` **10/10**; cliente jest **109 suítes / 1591 testes**; `CI=true react-scripts
+build` EXIT 0. (Uma rodada anterior, com só a T1, deu 363/364 — o `materialServiceCriacao` do achado 14.)
+
+## Fase 5 — revisão adversarial do código (2026-10-15) — 2 defeitos reais (1 da etapa, 1 anterior), 11 asserções faltando
+
+Dois revisores frescos em worktrees próprias (`CRM-wt-e110rv1`, `CRM-wt-e110rv2`, HEAD `7c578b56`, junção; removidas).
+
+- **Revisor 1 (RN, perfil, último gesto)** — sondas `e110rv1-saldo/motor/familia/literais`. Passou: oito perfis × saldo;
+  formatos (`"5"`, 5.0000001, `"1e-7"`, `''`, -1, null, true, `"abc"`, [5]); flags e dono em todos os formatos;
+  `codigo_auto` com colisão e saldo (a Entrada vai para o material novo); padrão bloqueada com notificação ligada (nada
+  sobra em tabela nenhuma); o 409 do dono da 108 vence a família na mesma janela; DELETE de família com ids malformados → 404;
+  E1–E5 byte a byte. **Achados:** (1) **real, da etapa** — o "já inativada por outro" do PUT de família regravava `ativo = 0`
+  sem condição (reativação + material na releitura → estado proibido). **Corrigido:** a 2ª tentativa leva o `NOT EXISTS`;
+  falhou de novo → relê, e 409 *"A família mudou enquanto era salva — nada foi gravado. Recarregue a família e salve de
+  novo."* se nada impede. (2) **real, anterior** — o PUT de família sem `ativo` regravava o `ativo` lido (renomear desfazia
+  um Inativar concorrente, ou reinativava com material novo). **Corrigido:** `ativo = COALESCE(?, ativo)` com null quando
+  omitido (B727). (3)(4) **anteriores** — reativar subfamília e criar subfamília × inativar a raiz deixam sub ativa sob raiz
+  inativa: reproduzidos, **declarados** (C221).
+- **Revisor 2 ("o teste passaria com a feature quebrada?") — 45 sabotagens: 32 vermelhas, 13 verdes.** Equivalentes ou
+  inalcançáveis: S07 (`exigeLote:false` — o RN-02 recusa antes), R15 (família apagada: o código nunca apaga), R20
+  (`familiaOmitted` redundante). Falta de asserção: P1–P9 (condição em toda tentativa do `codigo_auto`; família que vira
+  sub e sub que muda de pai na janela; **troca de família e sub juntas — caso feliz, nenhum teste fazia**; família com sub
+  inativa inativando de fato; E1 depois do Zod; RN-01/RN-02 pelo arredondado; a compensação apagando o saldo por
+  localização) — viraram `saldoInicialFamiliaFase5.api.test.js` (**9**); R06 (dono × família na mesma janela) coberto pela
+  sonda do rv1, sem teste (baixo valor).
+- **Commit** `e5584a85`. **Controle:** sem a condição na 2ª tentativa cai o cenário do achado 1; gravando o `ativo` lido cai
+  o do achado 2; quatro sabotagens do rv2 (sub sem `ativo`, compensação sem o saldo, sub com a família atual, condição só na
+  1ª tentativa) derrubam P5, P9, P4 e P1. Uma rodada deu EADDRINUSE (o rv2 rodando suítes em paralelo) — repetida verde.
+- **Suíte depois da Fase 5:** `test:api` **367/367**; `test:almoxarifado` **44/44**; `test:validation` **4/4**;
+  `test:safealter` **3/3**; `test:sqlite` **10/10**; jest **109 / 1591**; build EXIT 0.
+
+## Retro de 4 números
+
+- **Rodadas de correção até verde:** 3 — Fase 2 (a trava do destino + 7 correções, com a T1 já escrita), a do controle
+  positivo da T2 (o E3 que o plano descrevia mentia na maioria dos casos — virou a segunda releitura) e a Fase 5 (os dois
+  defeitos do PUT de família + 9 testes). Nenhum teste vermelho em duas rodadas seguidas.
+- **Achados de revisão:** Fase 2 — 1 trava + 7 correções **reais**, 6 notas. Fase 5 — rv1: **2 reais** de código (1 da etapa,
+  1 anterior), **2** anteriores declarados; rv2: 45 sabotagens, **11 reais** (asserção faltando), **2 ruído** (equivalentes).
+- **Paralelismo:** 0 galho de código em paralelo (T4 é tela, foi feita na mesma árvore). Em paralelo: a revisão do plano × a
+  T1; os dois revisores da Fase 5 × a documentação. **Um EADDRINUSE** (o rv2 × a minha rodada do controle) — refeita.
+- **Defeito que escapou:** *(preencher na Etapa 112.)*
+
+## O que fica de fora (declarado)
+
+- A Entrada manual sem documento de cliente e sem retenção de inspeção (**C219**).
+- Reativar material em família inativa (**C220**); mudar o nível de família e criar subfamília sob raiz sendo inativada
+  (**C221**); ligar lote/série/inspeção em material com saldo (**C222**) — **B726**.
+- `parent_id = 0` raiz × subfamília (**C223**, nota).
+- O canto da compensação quando o motor falha depois de gravar o livro (**D (110)**, B724).
+
+## Próxima tarefa detalhada — Etapa 112
+
+*(A 111 é da frente de Compras/core — as listas parciais de módulo, G17. A série desta etapa foi B721–B726, C219–C223,
+A57–A58 — a 112 começa em **B727**, **C224**, **A59**; confira com `grep -oE` antes, porque a 111 pode escrever no
+documento do almoxarifado.)*
+
+**Como foi escolhida (mapa `specs/modulo-almoxarifado/README.md` e os C abertos, medidos em 2026-10-15):** as features 🟡
+continuam 00, 01, 05, 06, 21, 22 e 23. Candidatos:
+
+1. **C222 — ligar lote, série ou inspeção num material com saldo trava a saída** (feature 01 com a 10 e a 09). **Medido**
+   (sonda `server/tests/sonda/e110c222.js`, não versionada): material nosso com saldo 5 cadastrado pelo Administrador; o
+   Almoxarife **e a Engenharia** fazem `PUT /materiais/:id` com `controle_lote: 1` / `controle_serie: 1` /
+   `requer_inspecao: 1` → **200** nos três; depois a `SAIDA` de 1 pela v2 → 400 *"O material Z1 exige lote nesta
+   movimentacao (controle por lote ligado)"* / *"material com controle de serie: informe 1 serie(s) para 1 unidade(s) —
+   recebidas 0"* — o saldo antigo fica preso (sem lote, sem séries). O **cliente** já é 403 (regra da 108). É o caminho de
+   dois passos que contorna a RN-02 desta etapa.
+2. **C219 — a Entrada manual sem documento de cliente e sem retenção de inspeção** (features 03, 09, 13). Muda a tela de
+   Movimentações e uma decisão da Etapa 8 (o material de cliente entra pelo Recebimento) — é decisão de P.O. antes de
+   código.
+3. **C217** (inativar material de cliente com saldo o tira da posição), **C216** (dono inexistente pela API), **C209**
+   (aviso da contagem abaixo do reservado), **C220/C221** (as outras escritas de família).
+
+**Escolhida: a C222.** É integridade com consequência medida (a saída trava), fecha o contorno da regra desta etapa e mexe
+só na edição de material.
+
+**Tema: ligar um controle que o saldo não tem não deixa o saldo preso.**
+
+**Fase 0 (medir antes de prometer):**
+1. Reproduzir a sonda com os perfis que editam (Administrador, Almoxarife, Engenharia) e com retenções (reservado,
+   bloqueado, em inspeção, em terceiros), e o caminho de volta (desligar o controle com lotes/séries já existentes).
+2. Medir o que **já** existe para regularizar: `seriesService.regularizarSeries` (séries) e se existe algum caminho
+   para dar lote ao saldo sem lote (não conferido nesta etapa)
+   (`routes/almoxarifado/extended.js:1311`, Etapa 6b) — se o Administrador consegue, depois de ligar a série, cadastrar
+   as séries do saldo antigo; se sim, a regra pode ser "liga, mas só quem pode regularizar" em vez de "recusa".
+3. Consulta A59: materiais com `controle_lote = 1` e saldo sem lote (`estoque_saldo_almoxarifado.lote_id IS NULL` com
+   quantidade > 0) e `controle_serie = 1` com séries presentes ≠ saldo (a régua já usada na conferência, `routes/almoxarifado.js:1819`).
+
+**Contrato candidato (decisão — letra B, caminho reversível):**
+- **(a)** `PUT /materiais/:id` que liga `controle_lote`/`controle_serie`/`requer_inspecao` (0 → 1, comparado com o
+  gravado) num material com saldo ou retenção → 400 nomeando o controle e o caminho (*"zere o saldo ou regularize em
+  Lotes"*), antes de gravar; desligar continua livre (medir se desligar série com séries presentes deixa lixo).
+- **(b)** Permitir só ao Administrador (permissão nova ou `ajustar_estoque`) e mandar regularizar — mais flexível, mas
+  depende da regularização existir para lote.
+Decidir medindo; registrar o descartado.
+
+**Pontos de atenção:** o `PUT` de material já tem duas condições no `UPDATE` (dono, Etapa 108; família, Etapa 110) — a
+nova é **antes** de gravar, não precisa de condição de corrida se o saldo for lido no mesmo `UPDATE` (`AND quantidade_atual
+= 0` quando liga — avaliar); a tela (`MaterialAlmoxarifadoForm.js`, seção Controles) mostra a recusa no toast (o T2 da 108
+prova o caminho); o manual §2.7 (os controles).
+
+**O que já está pronto e não precisa reabrir:** o Saldo Inicial pelo motor e as recusas dele (esta etapa); a corrida da
+família (esta etapa); a guarda do dono (108).

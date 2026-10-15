@@ -1,19 +1,26 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-15 (Etapa 108) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-15 (Etapa 110) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106 e 108) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108 e 110) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 108 ENTREGUE · próxima do almoxarifado: Etapa 110 — a 109 é da frente de Compras)
+> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 110 ENTREGUE · próxima do almoxarifado: Etapa 112 — a 111 é da frente de Compras)
 >
-> **O desenvolvimento parou aqui: Etapa 108 fechada — 2026-10-15.** A **Etapa 108 (trocar o dono de um material com
+> **O desenvolvimento parou aqui: Etapa 110 fechada — 2026-10-15.** A **Etapa 110 (o Saldo Inicial do cadastro vira uma
+> Entrada de verdade, e a família não fica mais inativa com material dentro)**: com saldo inicial, o cadastro de material
+> exige quem movimenta estoque (a Engenharia recebe a recusa e cadastra com 0), recusa material com lote, série, inspeção
+> ou de cliente (a tela avisa antes) e grava o saldo como uma Entrada da tela de Movimentações — com a prateleira no
+> extrato e estornável. Inativar uma família no mesmo instante em que alguém cadastra material nela não deixa mais a
+> família inativa com material ativo. **Próxima: Etapa 112** — ver a próxima tarefa no plano da 110.
+>
+> **Etapa 108, 2026-10-15.** A **Etapa 108 (trocar o dono de um material com
 > histórico passa a ser só do Administrador)**: no cadastro, trocar o cliente dono de um material que já tem saldo,
 > retenção ou qualquer lançamento no extrato pede a permissão de ajustar material de cliente — o Almoxarife e a Engenharia
 > recebem a recusa ao salvar e nada é gravado; a troca do administrador fica registrada na Auditoria (**Troca de dono**)
 > com os dois nomes. Editar o resto do cadastro e corrigir o dono de material recém-criado não mudam. **Próxima: Etapa
 > 110** — o Saldo Inicial do cadastro passa pelas regras da Entrada (C215, achado na medição desta etapa) — ver a próxima
-> tarefa no plano da 108.
+> tarefa no plano da 108. *(Feita — Etapa 110.)*
 >
 > **Etapa 106, 2026-10-15.** A **Etapa 106 (desfazer o ajuste de material de
 > cliente passa a ser só do Administrador)**: o estorno de **Ajuste**, **Ajuste positivo** e **Ajuste negativo** de
@@ -6416,6 +6423,61 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 110 — O Saldo Inicial do cadastro vira uma Entrada de verdade, e a família não fica inativa com material dentro (ENTREGUE — 2026-10-15)
+
+**O que mudou, em uma frase:** o saldo digitado ao cadastrar um material é uma Entrada como a da tela de Movimentações —
+só para quem movimenta estoque e só para material sem lote, série, inspeção ou cliente; e a família não fica mais inativa
+com material ativo por causa de dois cliques no mesmo instante.
+
+**O problema que ela resolve.** O **Saldo Inicial** entrava por um atalho: a Engenharia (que cadastra mas não movimenta)
+criava material com saldo; material com lote ou série controlados nascia com saldo sem lote e sem série — e travava na
+primeira saída —; material com inspeção obrigatória nascia disponível; material de cliente, sem a nota de remessa. E
+inativar uma família enquanto alguém cadastrava material nela deixava a família inativa com o material ativo dentro.
+
+| Antes | Agora |
+|---|---|
+| A Engenharia cadastrava com saldo | Recebe a recusa; com saldo 0 cadastra como antes |
+| Material com lote, série, inspeção ou de cliente nascia com saldo | Recusado com os motivos; a tela avisa sob o campo |
+| O extrato do saldo inicial não tinha prateleira | É uma Entrada: prateleira padrão, saldo por prateleira, estornável |
+| Prateleira padrão bloqueada aceitava o saldo inicial | Recusado, com a mensagem da Entrada |
+| Cadastrar e inativar a família no mesmo instante: família inativa com material ativo | Um dos dois recebe a recusa de sempre |
+
+**A regra agora.**
+- Saldo Inicial maior que zero exige a permissão de **movimentar estoque** (Administrador, Almoxarife). Quem não tem recebe
+  *"Cadastrar material com saldo inicial exige a permissão "movimentar" (seu perfil: ⟨perfil⟩) — o saldo inicial é uma entrada no estoque. Cadastre com saldo 0 e peça a quem movimenta o estoque para lançar a Entrada em Movimentações."*
+- Material com **controle por lote**, **controle por número de série**, **requer inspeção** ou **de cliente** não nasce com
+  saldo: *"O material ⟨código⟩ não pode nascer com saldo inicial: ⟨motivos⟩. Cadastre com saldo 0 e lance a entrada depois — em Movimentações (Entrada, com o lote e as séries) ou pelo Recebimento (inspeção e material de cliente)."*
+- Material sem esses controles, nosso, por quem movimenta: nasce com o saldo, por uma Entrada *"Saldo inicial de cadastro"*
+  na prateleira padrão (se houver).
+- Família: o cadastro e o "Inativar" conferem e gravam no mesmo passo — quem chega por último recebe *"Família inativa — não é possível vincular novos itens"* ou *"Não é possível remover: família possui N item(ns) ativo(s)"*.
+
+### Roteiro de teste manual
+
+Preparação: família **Chapas** ativa; localização **A-01** ativa. Usuários: **Ana** (Almoxarife), **Edu** (Engenharia) e o
+**administrador**.
+
+1. **A Engenharia não põe saldo.** Edu, **Materiais → Novo Material**: código *CHP-0101*, nome, categoria, família
+   **Chapas**, **Saldo Inicial 5**, **Salvar** → aviso vermelho *"Cadastrar material com saldo inicial exige a permissão
+   "movimentar" (seu perfil: ENGENHARIA) — …"*; o formulário fica aberto. Apague o saldo (ou 0) e salve → *"Material
+   cadastrado!"*.
+2. **A frase do cadastro.** Ana, **Novo Material**, seção **Controles**: marque **Controle por lote** → sob o **Saldo
+   Inicial** aparece *"Material com lote, série, inspeção ou de cliente nasce com saldo 0 — a entrada é lançada depois, em
+   Movimentações ou pelo Recebimento."* Desmarque → some. O mesmo com **Controle por número de série**, **Requer inspeção**
+   e escolhendo um cliente em **Propriedade**. **Controle de validade** não mostra a frase.
+3. **A recusa.** Com **Controle por lote** marcado e **Saldo Inicial 4**, salve → *"O material ⟨código⟩ não pode nascer com
+   saldo inicial: tem controle por lote. …"*. Com saldo 0 → *"Material cadastrado!"*.
+4. **O saldo permitido é uma Entrada.** Ana cadastra *CHP-0103*, sem controles, localização padrão **A-01**, **Saldo
+   Inicial 7** → *"Material cadastrado!"*. Abra o **extrato** do material: uma **Entrada** de 7, *"Saldo inicial de
+   cadastro"*, na A-01. O administrador **estorna** essa linha → saldo 0.
+5. **A família.** O administrador, **Configurações → Famílias**, **Inativar** a **Chapas** (com material ativo) →
+   *"Não é possível remover: família possui N item(ns) ativo(s)"*. *(A corrida de dois cliques no mesmo instante não se
+   reproduz à mão — a prova é automática.)*
+
+**O que esta etapa NÃO cobre.** A Entrada manual de Movimentações continua aceitando material de cliente sem documento e
+material com inspeção sem reter (C219); ligar lote, série ou inspeção num material que já tem saldo (C222);
+reativar material numa família inativa (C220); mudar o nível de família e criar subfamília sob raiz sendo inativada
+(C221). Os materiais que já nasceram pelo caminho antigo: consulta **A57**; as famílias inativas com material: **A58**.
 
 ## Etapa 108 — Trocar o dono de um material com histórico passa a ser só do Administrador (ENTREGUE — 2026-10-15)
 
