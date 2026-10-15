@@ -3825,7 +3825,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     const { itens_separados } = req.body || {};
     // Etapa 28: a separação tem dono — `req.user` chega ao serviço (RN-01). Sem isto o serviço
     // recusa com 400, e é essa a fiação que a Etapa 25 ensinou a provar pela rota.
-    requisitionService.separarRequisicao(db, req.params.id, itens_separados || [], req.user)
+    // Etapa 99 (B520, Fase 2): `?? []` — so ausente e null valem []; "", 0 e false chegam ao servico e recebem o Q4.
+    requisitionService.separarRequisicao(db, req.params.id, itens_separados ?? [], req.user)
       .then((result) => res.json(result))
       .catch((e) => res.status(e.status || 500).json(corpoDoErroDaRequisicao(e)));
   };

@@ -222,9 +222,15 @@ const auditoriaSeparacao = (db, reqId) => dbAll(db,
     assert.strictEqual(rZero.rodada_id, null, 'quantidade 0 nao e rodada');
     assert.strictEqual(rZero.itens_tocados, 0);
 
-    // item inexistente tambem nao conta
-    const rFantasma = await requisitionService.separarRequisicao(db, reqId, [{ item_id: 999999, quantidade_separada: 3 }], ALMOX_A);
-    assert.strictEqual(rFantasma.rodada_id, null, 'item inexistente nao e rodada');
+    // item inexistente: mudado na Etapa 99 (B518) — antes era pulado em silencio (200, sem rodada); agora a passada de
+    // forma recusa (400) e nada muda, nem o status nem a conferencia.
+    let erroFantasma = null;
+    try {
+      await requisitionService.separarRequisicao(db, reqId, [{ item_id: 999999, quantidade_separada: 3 }], ALMOX_A);
+    } catch (e) { erroFantasma = e; }
+    assert.ok(erroFantasma, 'item inexistente tem de ser recusado (Etapa 99, B518)');
+    assert.strictEqual(erroFantasma.status, 400);
+    assert.strictEqual(erroFantasma.message, 'Item 999999 não pertence a esta requisição');
 
     assert.strictEqual(await contarRodadas(db, reqId), 0, 'nenhuma linha de rodada');
     const row = await dbGet(db, 'SELECT status, conferido_por_id, conferido_por_nome, conferido_em FROM requisicoes_almoxarifado WHERE id = ?', [reqId]);
