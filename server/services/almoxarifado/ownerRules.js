@@ -221,6 +221,61 @@ async function assertAjustePermitido(db, material, tipo, params, user) {
 }
 
 /**
+ * Etapa 106 (C211, RN-01/RN-04): os tipos da familia do ajuste que o ESTORNO reverte. `AJUSTE_INVENTARIO` fica de fora
+ * de proposito: ninguem o estorna (RN-10 da Etapa 10, recusa propria no motor) — a guarda daria 403 "exige a permissao"
+ * a quem pede uma coisa que nem o Administrador consegue.
+ */
+const TIPOS_AJUSTE_ESTORNAVEIS_DONO = ['AJUSTE', 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO'];
+
+/**
+ * Etapa 106 (C211, B707) — estornar ajuste de material de cliente exige a MESMA permissao de ajusta-lo. O estorno do
+ * ajuste devolve o total ao de antes: e um ajuste ao contrario, e mexe no mesmo numero que o cliente cobra. Ate a 106 o
+ * gate da rota (`ajustar_estoque`, Administrador e Gestor) era a unica guarda, e o Gestor desfazia o ajuste que so o
+ * Administrador pode fazer.
+ *
+ * Por que funcao NOVA e nao `assertAjustePermitido`: aquela AUDITA a tentativa antes do efeito, com a quantidade
+ * digitada (`params.quantidade`) — o estorno nao tem quantidade digitada e quem audita e o motor, DEPOIS de concluir
+ * (`auditarEstornoDeAjuste`). Devolve `null` quando nao se aplica (material nosso, tipo fora da familia) e `{ donoNome }`
+ * quando passou; lanca 403 sem permissao. Nao grava nada.
+ */
+async function assertEstornoDeAjustePermitido(db, material, tipo, user) {
+  if (!material?.proprietario_cliente_id) return null;
+  if (!TIPOS_AJUSTE_ESTORNAVEIS_DONO.includes(tipo)) return null;
+  const donoNome = await nomeDoCliente(db, material.proprietario_cliente_id);
+  if (!can(user, 'ajustar_material_cliente')) {
+    throw erro(`Estornar o ajuste do material ${material.codigo}, que pertence ao cliente ${donoNome}, exige a `
+      + `permissao "ajustar_material_cliente" (seu perfil: ${getPerfilFromUser(user)}). `
+      + 'Estornar ajuste de estoque de terceiro mexe no numero que o cliente vai cobrar.', 403);
+  }
+  return { donoNome };
+}
+
+/**
+ * Etapa 106 (RN-06, B709): a auditoria do estorno de ajuste de material de cliente, nomeando o dono — a mesma razao da
+ * auditoria do ajuste (decisao 7 da Etapa 8: "quem mexeu" legivel sem cruzar tabela). Chamada pelo motor DEPOIS de o
+ * estorno concluir (ao lado da `CANCELAMENTO`); exportada para o motor chama-la pelo objeto do modulo.
+ */
+async function auditarEstornoDeAjuste(db, { material, mov, estornoId, quantidadeDepois, donoNome, user, motivo }) {
+  await registrarAuditoria(db, {
+    entidade: 'material_cliente',
+    entidade_id: material.id,
+    acao: 'ESTORNO_AJUSTE',
+    usuario_id: user?.id,
+    usuario_nome: user?.nome || user?.email,
+    dados_anteriores: { quantidade_atual: material.quantidade_atual },
+    dados_novos: {
+      tipo: mov.tipo,
+      movimentacao_id: mov.id,
+      estorno_id: estornoId,
+      quantidade_atual: quantidadeDepois,
+      proprietario_cliente_id: material.proprietario_cliente_id,
+      proprietario_cliente_nome: donoNome,
+    },
+    justificativa: motivo || null,
+  });
+}
+
+/**
  * NUCLEO COMPARTILHADO das duas guardas material <-> material (transformacao, Etapa 8c; retalho,
  * Etapa 9). O PORQUE da regra esta no docstring longo logo abaixo — aqui mora so a comparacao,
  * que e o pedaco que as duas nao podem deixar divergir.
@@ -323,7 +378,8 @@ async function saidaPassaNaRegraDoDono(db, material, projetoId) {
 }
 
 module.exports = {
-  TIPOS_ISENTOS_DONO, TIPOS_SAIDA_COM_DONO, TIPOS_AJUSTE_DONO,
+  TIPOS_ISENTOS_DONO, TIPOS_SAIDA_COM_DONO, TIPOS_AJUSTE_DONO, TIPOS_AJUSTE_ESTORNAVEIS_DONO,
   assertSaidaPermitida, assertAjustePermitido, saidaPassaNaRegraDoDono,
+  assertEstornoDeAjustePermitido, auditarEstornoDeAjuste,
   assertMesmoDonoNaTransformacao, assertMesmoDonoNoRetalho,
 };

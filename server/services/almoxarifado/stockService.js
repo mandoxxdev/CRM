@@ -2545,6 +2545,14 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
   const tiposSaida = movementTypes.TIPOS_SAIDA;
   const material = await getMaterial(db, mov.material_id);
 
+  // Etapa 106 (C211, RN-01/RN-05/RN-07; B707): o estorno do ajuste de material de cliente exige `ajustar_material_cliente`
+  // — a mesma permissao do ajuste (Etapa 8, decisao 7). AQUI, antes de qualquer efeito (inspecao, serie, reserva da
+  // chegada, claim): a recusa nao toca o livro nem o saldo. Depois das recusas por tipo e da "ja cancelada" (lidas antes
+  // do material). A compensacao interna nao passa (nenhuma estorna ajuste hoje; compensar o proprio evento que falhou
+  // nunca pode parar em permissao). Os outros estornos de material de cliente ficam so com o gate da rota (B708).
+  const donoEstornoAjuste = opcoesEstorno.compensacao === true ? null
+    : await ownerRules.assertEstornoDeAjustePermitido(db, material, mov.tipo, user);
+
   // Etapa 71 (Fase 2, corrige a RN-08/C108 do plano, que estavam ERRADAS): a ENTRADA_COMPRA de nota
   // cujo item ainda tem quantidade EM INSPECAO nao e estornavel. O plano dizia que o motor ja recusava
   // (falta de disponivel, "material ja consumido") — so recusava SEM outro estoque do material. Com
@@ -3065,6 +3073,20 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
     usuario_id: user.id, usuario_nome: user.nome || user.email, justificativa: motivo,
     dados_novos: { estorno_id: estornoId, ...camposDeOrigem(user) },
   });
+
+  // Etapa 106 (RN-06, B709): o estorno de ajuste de material de cliente que CONCLUIU audita nomeando o dono. Depois do
+  // efeito (o recusado nao chega aqui) e nao-fatal: o estorno ja esta no livro e a `CANCELAMENTO` acima ja o registra.
+  if (donoEstornoAjuste) {
+    try {
+      const depois = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
+      await ownerRules.auditarEstornoDeAjuste(db, {
+        material, mov, estornoId, quantidadeDepois: depois ? Q.qtd(depois.quantidade_atual) : null,
+        donoNome: donoEstornoAjuste.donoNome, user, motivo,
+      });
+    } catch (audErr) {
+      console.warn(`[almoxarifado] auditoria do estorno de ajuste de material de cliente falhou (movimentacao ${movimentoId}): ${audErr.message}`);
+    }
+  }
 
   // Etapa 71 (D5/B333) — O PEDIDO DE COMPRA DESCONTA E REABRE. No MOTOR (e nao na rota) porque o
   // estorno entra por mais de uma porta; DEPOIS do claim e da auditoria do cancelamento, entao roda
