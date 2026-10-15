@@ -1,6 +1,6 @@
 # Etapa 99 — a porta da separação recusa o que não é separável (C197) e a conferência recusa a caixa vazia (C200)
 
-> Status: **EM EXECUÇÃO — Fases 2 a 4 feitas (T1–T3, `7353265d..3e14653a`, suíte inteira verde); Fase 5 em curso.** Worktree `CRM-wt-e99`, branch
+> Status: **FECHADA — 2026-10-15.** Fases 0–6 feitas: T1–T3 `7353265d..3e14653a`, Fase 5 `821fb03b`, `f1041706`, fechamento `481eb653`. **Próxima: Etapa 101** (ver o fim). Worktree `CRM-wt-e99`, branch
 > `etapa-e99` (de `main` `5f28c044`). Marcar cada task ao terminar (hash, divergência).
 > HEAD de partida: `7b5fd57e` (main, árvore limpa, sem push).
 > Origem: "Próxima tarefa detalhada — Etapa 99" no fim de
@@ -450,7 +450,9 @@ serviço). T4 fecha. **Fase 2: nasce a T2b (galho da T2, cliente)** — o "Confe
   client jest **1502/1502** (96 suítes); `CI=true react-scripts build` EXIT 0. Sem worktree de galho: a T2b (cliente)
   rodou na mesma árvore porque não toca o servidor nem sabota o que a suíte do servidor lê.
 
-- [ ] **T4 — fechamento (skill `fechar-etapa`).** Novidades (B516–B523, C201–C203, A50; **C197** e **C200** anotados como
+- [x] **T4 — fechamento (skill `fechar-etapa`).** **Feito — `481eb653` (2026-10-15)** (a Fase 5 em `821fb03b`, `f1041706`;
+  ver "Fase 5" abaixo). Divergência: entrou a **B524** (regressão da Fase 5) e a T2b; a spec 05 corrigida à vista.
+  Novidades (B516–B523, C201–C203, A50; **C197** e **C200** anotados como
   resolvidos; a **B510** ganha "a porta que produzia a fração fecha na 99"; a B512 ganha a nota do resíduo (RN-10)),
   spec **05** (a separação recusa a forma inválida; a conferência conta a caixa; **corrigir à vista** o
   `README.md:705` — *"a separação aceitava quantidade negativa em silêncio (200, nada mudava — C197)"* **estava errado**:
@@ -574,10 +576,109 @@ vista no fechamento (T4), dizendo que estava errado.
 
 ---
 
-## Próximo passo
+## Próximo passo (escrito na Fase 1 — cumprido)
 
 **Fase 2** — revisão do plano por um agente fresco (skill `desenvolver-etapa-almoxarifado`, Fase 2) com as quatro
 perguntas: as literais Q1–Q4 cobrem os casos medidos? As RN batem com a spec 05 e com o contrato da 28 (RN-02)? A T2 é
 independente da T1 de verdade? **Cada RN seguida até o último gesto** — em especial: depois da recusa nova, *Parcialmente
 Atendida* ainda encerra, a *Em Separação* vazia ainda separa e a fila ainda a mostra, e a tela que manda `[]` ("Separar
 de novo para conferir", "Reabrir separação") não cai em nenhuma recusa nova.
+
+---
+
+## Fase 5 — revisão adversarial do código (2026-10-15) — 1 regressão real, 9 testes que faltavam
+
+Dois revisores frescos em worktrees próprias (`CRM-wt-e99rv1`, `CRM-wt-e99rv2`, HEAD `4e697218`, junction de
+`node_modules`), achado só com sonda executada.
+
+- **Revisor 1 (RN, fluxo até o último gesto, autorização) — 1 achado REAL, reproduzido na minha árvore.**
+  `conferenciaObrigatoria` (`requisitionService.js:496` — a régua que a fila, o detalhe, o liberar e a entrega usam para
+  exigir a segunda conferência) media a caixa **crua** `(separado − entregue) > 0`; a T2 fez a conferência medir a caixa
+  **arredondada**. Crítico com resto de legado (separado 2,0000001, entregue 2), *Em Separação*, sem conferência: fila
+  `["CONFERIR"]` com `posso_conferir`, conferir 400 *"Nenhum item separado"*, liberar 400, entregar 400 C3, encerrar 400
+  (sem seta), devolver 1e-7 400 — **presa**; antes da 99 a conferência aceitava (sonda no HEAD de antes: 200). **Esta
+  regressão é da própria etapa e o plano não a previu:** a RN-09 mediu o resíduo na conferência e não olhou a outra
+  régua que decide se ela é exigida — a pergunta 4 da Fase 2 ("o gesto posterior aceita o que o anterior aceitou?")
+  não foi feita para a **fila**. Consertado em `821fb03b` (**B524**): as três réguas são `Q.qtd(separado − entregue) >
+  1e-9`. Teste `[99 RN-09] (Fase 5) critico com resto …` (fila sem CONFERIR, detalhe sem obrigatória, a metade positiva
+  SEPARAR, o controle 1e-6 ainda obrigatório). **Controle:** voltar à régua crua → cai o teste pela fila
+  `["SEPARAR","CONFERIR"]`. Sondado e passou (rv1): `item_id` texto, `"1,5"` (Q1), `" 2 "`, ±1e-7, os envios vazios da
+  tela, listas malformadas, a ordem perfil (403) → 404 → status → forma, os únicos chamadores (as duas rotas; a tela).
+- **Revisor 2 ("o teste passaria com a feature quebrada?") — 20 sabotagens, 9 verdes; 7 viram teste, 2 equivalentes.**
+  Lacunas de uso normal: a série lida pelo material de **outro** item (todo RN-04 usava requisição de um item) e a
+  ordem Q2 → Q1 dentro da linha. Mais: `"1,5"`, `item_id` fracionário, o corte 40/41, o serviço com `null`, o `ROUND` de 5
+  casas na conferência (C3 só usava 1e-7), e no cliente o botão com o entregue só em `quantidade_atendida`, com o resto
+  2,0000001 e com a menor caixa real. `f1041706`. **Medido:** cada sabotagem do revisor (S1c, S3, S5, S6, S11, S12, S15,
+  C1, C2, C3) derruba agora o teste nomeado; o C3 (`caixaDoItem > 1e-3`) **não** caía com a fixture 0,5 que escrevi
+  primeiro — trocada para 2,000001 − 2, e aí cai. **Sem teste (mutações equivalentes nos dados possíveis):** `> 0` em vez
+  de `> 1e-9` depois do `ROUND` (o resto é 0 ou ≥ 1e-6) e o entregue só por `quantidade_atendida` (a entrega grava as
+  duas iguais).
+
+**Verificação depois da Fase 5 (árvore `f1041706`):** `test:api` **345/345** (EXIT 0); `test:almoxarifado` **44/44**;
+`test:validation` 4/4; `test:safealter` 3/3; `test:sqlite` 5/5; client jest **1504/1504** (96 suítes); `CI=true
+react-scripts build` EXIT 0.
+
+---
+
+## Retro de 4 números
+
+- **Rodadas de correção até verde:** 1 por task (nenhum teste ficou vermelho em duas rodadas). A Fase 5 custou uma
+  rodada de código (B524) e uma de teste (a fixture do C3 que não sabia falhar; o estoque esgotado no teste de dois
+  itens).
+- **Achados de revisão:** Fase 2 — 8 (1 trava, 3 correções, 4 notas), **todos reais** (aceitos e incorporados). Fase 5 —
+  rv1: **1 real** (reproduzido), 0 ruído; rv2: 9 sabotagens verdes → **7 reais** (viraram teste) e **2 ruído** (mutações
+  equivalentes).
+- **Paralelismo:** 0 galho de código em worktree (T1/T2 seriais por sabotarem o mesmo arquivo; a T2b, cliente, na mesma
+  árvore sem conflito). Em paralelo de fato: a revisão do plano × a escrita dos testes da T1, a suíte do cliente × a do
+  servidor, os dois revisores da Fase 5 (worktrees próprias) × o agente da documentação. **Retrabalho:** o teste da T1
+  ganhou as correções da Fase 2 depois de escrito (barato: 3 linhas).
+- **Defeito que escapou:** *(preencher na Etapa 101.)*
+
+---
+
+## Próxima tarefa detalhada — Etapa 101 (a 100 foi da frente de Compras)
+
+**Tema: a *Em Separação* vazia tem saída (C195), e a criação de requisição recusa fração de material com série
+(C202).** As duas pontas do mesmo beco: hoje uma *Em Separação* sem nada na caixa (o "Iniciar Separação" sem quantidade,
+a devolução de tudo à prateleira, o modal zerado na *Parcialmente Atendida*) **não encerra nem cancela** —
+`TRANSICOES.EM_SEPARACAO` = `['PRONTA_PARA_RETIRADA', 'PARCIALMENTE_ATENDIDA', 'ENTREGUE', 'AGUARDANDO_APROVACAO_VALOR']`
+(`requisitionStateMachine.js`). Com a 99, o C202 (pedir 1,5 de série) leva o operador direto a ela se ele zerar o modal.
+
+**Fase 0 — medir antes de prometer (nada disto está medido):**
+1. Os caminhos até a *Em Separação* vazia: com **nada entregue** (Iniciar Separação; separar tudo e devolver tudo) e
+   **com entregue** (entrega parcial + `[]`; devolução depois de entrega parcial). Para cada um: o que quem pediu, o
+   almoxarife e o administrador conseguem fazer (cancelar pelos outros módulos, `PUT /api/almoxarifado/requisicoes/:id/
+   cancelar` — só o solicitante ou o admin do sistema, `routes/almoxarifado.js:4156`; encerrar
+   `PUT …/:id/encerrar` — `aprovar_requisicao`, `:4021`; excluir — só o administrador).
+2. A criação com fração de série: `requisitionCreateService.js` (o laço `itensQtd`, ~`:206`, só recusa `!(q > 0)`), o
+   `RequisicaoSchema` (Zod) e **todas** as portas que gravam `quantidade_solicitada` (criar, enviar o rascunho, editar
+   itens se existir — `grep -rn "quantidade_solicitada" server/routes server/services`). A tela de criação: o `step` do
+   campo e se ela conhece `controle_serie` do material.
+3. Quem lê `CANCELAVEIS_OUTROS_MODULOS` (`requisitionStateMachine.js:119`) e o espelho do cliente
+   (`requisicaoLabels.js`, `STATUS_CANCELAVEIS_OUTROS_MODULOS`) — a paridade tem teste.
+
+**Contrato candidato (a Fase 1 decide; registrar as alternativas na letra B):**
+- **Cancelar a *Em Separação* vazia sem nada entregue:** seta `EM_SEPARACAO → CANCELADO` **só** com caixa 0 e entregue 0
+  em todos os itens (régua `Q.qtd(separado − entregue) > 1e-9` da B524 e `getEntregue = 0`), solta as reservas
+  (`reservationService.liberarReservasDaRequisicao`), sob a trava por requisição (hoje os cancelamentos ficam **fora**
+  dela — B450; a separação reivindica com `WHERE status IN PODE_SEPARAR`, e `CANCELADO` não está lá — conferir a corrida
+  separar × cancelar de novo, C164/C149). Decidir se entra em `CANCELAVEIS_OUTROS_MODULOS` (quem pediu) ou só no
+  almoxarifado.
+- **Encerrar a *Em Separação* vazia com algo entregue:** seta `EM_SEPARACAO → ENCERRADA` só com caixa 0 (ou voltar a
+  *Parcialmente Atendida*) — e o `encerrar` (`:4021`) já valida pela máquina. Pensar no C174 (entregue > 0, sem físico).
+- **C202:** a criação (e o envio do rascunho) recusa quantidade não inteira de material com `controle_serie = 1`, com a
+  frase no molde da Q3 da 99; o rascunho já gravado com fração — decidir se o envio recusa (provável) e consulta A para
+  o que já existe (requisições abertas com `quantidade_solicitada` fracionária de material com série).
+
+**Pontos de atenção:**
+- A régua da caixa é **uma só** desde a B524 — `conferenciaObrigatoria`, `conferirSeparacao`, o liberar (`routes:3890`) e
+  a tela (`caixaDoItem`). Qualquer regra nova de "caixa vazia" usa a mesma, ou a 99 se repete.
+- A recusa de forma da separação (99) vem **antes** da alçada; um cancelamento novo não pode deixar *Aguardando aprovação
+  de valor* gravada (a alçada é `verificarBloqueioLiberacao`, que escreve).
+- A trava por requisição não é reentrante; o cancelamento chamando liberação de reserva pega a trava por material
+  dentro dela (ordem requisição → material, a permitida — CLAUDE.md, "Trava por material").
+- Teste de integração pela rota **e** pelo serviço, seguindo o documento até *Cancelado*/*Encerrada* e conferindo que a
+  reserva saiu e a fila não mostra mais a requisição.
+
+**O que já está pronto e não precisa reabrir:** a forma da separação (Q1–Q4, B516–B521), a conferência e o liberar na
+régua da caixa (B512, B522, B524), a devolução à prateleira (98), a A50.
