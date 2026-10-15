@@ -327,6 +327,8 @@ O bloco **Propriedade** tem um campo, **Proprietário**, que por padrão vem em 
 
 Não existe cadastro separado de "material de cliente": ele é material normal, com dono — e por isso tem lote, série, endereço, extrato e etiqueta como qualquer outro. As regras completas de propriedade estão na seção 16.
 
+**Trocar o proprietário de um material que já se movimentou é só do Administrador** (16.2). Para quem edita material, o campo continua aberto: salvar sem mexer nele não muda nada, e num material recém-cadastrado, sem saldo e sem nenhuma movimentação, o proprietário escolhido errado se corrige livremente.
+
 ### 2.9 Histórico do cadastro
 
 Toda criação e toda edição de material ficam registradas com **quem fez, quando, e o de/para de cada campo alterado** — apenas os campos que realmente mudaram, não a ficha inteira. **Trocar a foto também conta como edição**, e o registro guarda o nome do arquivo anterior e o do novo. Excluir um material é uma **inativação**: ele sai das listas, mas o histórico de movimentações continua íntegro. **Desativar um material que já estava inativo não gera registro nenhum** — o sistema aceita a operação, mas o histórico só recebe linha quando houve efeito (seção 5.7).
@@ -924,7 +926,7 @@ As leituras que essa tabela permite fazer, e que vale explicar a quem pergunta:
   hoje: ferramenta é patrimônio emprestável, não estoque (seção 21), e a permissão existe separada
   de propósito — dá para autorizar um perfil só para ferramentas, sem abrir movimentação de
   material, se um dia isso for pedido.
-- **Ajustar material de cliente é mais restrito que ajustar o estoque próprio.** O Gestor acerta o saldo da GMP — pela conclusão da conferência de inventário com ajuste (13) e pelo estorno de um ajuste errado (6.10); lançar um Ajuste em Movimentações pede também **Movimentar estoque**, que o Gestor não tem —; **apenas o Administrador** ajusta o saldo de material que pertence a um cliente — e só ele **estorna** um ajuste desse material, porque o estorno devolve o saldo ao de antes (16.8). O motivo é direto: aquele número é o que o cliente vai conferir e cobrar.
+- **Ajustar material de cliente é mais restrito que ajustar o estoque próprio.** O Gestor acerta o saldo da GMP — pela conclusão da conferência de inventário com ajuste (13) e pelo estorno de um ajuste errado (6.10); lançar um Ajuste em Movimentações pede também **Movimentar estoque**, que o Gestor não tem —; **apenas o Administrador** ajusta o saldo de material que pertence a um cliente — e só ele **estorna** um ajuste desse material, porque o estorno devolve o saldo ao de antes (16.8), e só ele **troca o dono** de um material que já se movimentou, porque a troca leva o saldo e o histórico de um dono para o outro (16.2). O motivo é direto: aquele número é o que o cliente vai conferir e cobrar.
 - **Reservar para outra OS** é separado de **Reservar**. Qualquer requisitante reserva material para a própria ordem; transferir uma reserva de uma OS para outra é decisão de priorização, e fica com o Administrador e o Gestor. A reserva que nasceu de uma **requisição** não se transfere — ela pertence à requisição (9.5).
 - **Liberar a reserva de uma requisição** exige, além de **Reservar**, ser **quem pediu a requisição** — e só antes de a separação começar — ou ter esta permissão própria, que é do **Administrador** e do **Almoxarife** (9.6). É a única regra do módulo que olha **quem é a pessoa**, e não só o perfil: o perfil Produção reserva e libera as reservas manuais, mas não solta o material que foi separado para a requisição de outra pessoa. O **Gestor** não a tem porque não tem **Reservar** (a rota de liberar exige as duas); ele solta tudo de uma requisição pelo **Encerrar Requisição**.
 - **Inspecionar** é o que autoriza aprovar, reprovar e liberar material da quarentena, e também mudar a situação de um lote ou de uma série, e liberar vencimento. Pertence ao Administrador, ao Almoxarife e ao **Qualidade**.
@@ -4647,6 +4649,26 @@ No cadastro do material (**Almoxarifado → Materiais → Novo**), existe a seç
 
 **É no cadastro que o material de cliente nasce** — não há uma tela separada de "cadastrar material de cliente".
 
+**Trocar o dono depois que o material se movimentou exige a permissão de ajustar material de cliente (somente Administrador).** O extrato do material não guarda o dono de cada lançamento: a posição por cliente (16.9) soma tudo o que o material recebeu, consumiu e devolveu pelo dono **de hoje**. Trocar o dono, portanto, leva o saldo **e todo o histórico** de um dono para o outro — e, sem esta regra, tirar o cliente, ajustar como material nosso e devolver o cliente mudaria o número do cliente sem a autorização da seção 16.8.
+
+A regra vale nos três sentidos — tirar o cliente (passar a GMP), dar o material a um cliente e passar de um cliente a outro — sempre que o material tem ao menos um destes:
+
+- saldo maior que zero;
+- alguma quantidade reservada, bloqueada, em inspeção ou em terceiros;
+- qualquer lançamento no extrato, **inclusive estornado**.
+
+Quem edita material sem a permissão (Almoxarife, Engenharia) recebe, ao salvar:
+
+> *"Trocar o dono do material CHP-0001 (de cliente Metalúrgica X para estoque proprio (material nosso)) exige a permissao "ajustar_material_cliente" (seu perfil: ALMOXARIFE). O material ja tem saldo ou movimentacao, e a troca leva o saldo e o historico de um dono para o outro - mexe no numero que o cliente vai cobrar."*
+
+Cada lado da troca aparece como *"cliente ⟨razão social⟩"* ou *"estoque proprio (material nosso)"*; um cliente que não existe mais em Clientes aparece como *"cliente #⟨número⟩"*. A recusa vem antes de qualquer outra verificação do cadastro e **nada daquele salvar é gravado** — nem os outros campos alterados junto. O sistema compara com o dono **gravado**: salvar o cadastro sem mexer no Proprietário (o formulário reenvia o mesmo dono) nunca é troca. Material **sem** saldo, sem retenção e sem nenhum lançamento troca de dono por quem edita material.
+
+A troca feita pelo Administrador num material com histórico deixa, além do registro da edição, o registro de auditoria **Troca de dono** do material de cliente, com o nome do dono de antes, o de depois e o saldo. **Cuidado:** depois da troca, uma remessa a terceiro ainda aberta continua nomeando o dono antigo no documento — e, se só parte dos itens trocou de dono, sai com itens de dois donos. Ao passar o material a outro cliente, ou de nosso para um cliente, a garantia de 16.4 passa a ler o dono novo: requisição sem OS ou projeto **dele** deixa de poder sair, mesmo já separada. Ao passar para nosso, nada trava. Troque o dono de material parado.
+
+Se outra pessoa trocar o dono enquanto alguém salva o mesmo cadastro, o salvar dessa pessoa é recusado sem gravar nada:
+
+> *"O dono do material CHP-0001 mudou enquanto este cadastro era salvo — nada foi gravado. Recarregue o material e salve de novo."*
+
 ### 16.3 O selo de propriedade
 
 Como material de cliente e material nosso convivem nas mesmas telas (catálogo de Materiais, livro de Movimentações, extrato do item, remessas), o sistema marca cada linha que não é nossa com um **selo com a razão social do cliente**.
@@ -4723,6 +4745,7 @@ Ajustar o saldo de material de cliente **exige uma permissão própria**, mais e
 | Ajustar estoque (material nosso) | Administrador, Gestor |
 | **Ajustar material de cliente** | **somente Administrador** |
 | **Estornar ajuste de material de cliente** | **somente Administrador** |
+| **Trocar o dono de material com saldo ou movimentação** | **somente Administrador** (16.2) |
 
 Quem não tem a permissão recebe:
 

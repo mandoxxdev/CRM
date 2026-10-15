@@ -1,19 +1,27 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-15 (Etapa 106) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-15 (Etapa 108) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104 e 106) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106 e 108) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 106 ENTREGUE · próxima do almoxarifado: Etapa 108 — a 107 é da frente de Compras)
+> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 108 ENTREGUE · próxima do almoxarifado: Etapa 110 — a 109 é da frente de Compras)
 >
-> **O desenvolvimento parou aqui: Etapa 106 fechada — 2026-10-15.** A **Etapa 106 (desfazer o ajuste de material de
+> **O desenvolvimento parou aqui: Etapa 108 fechada — 2026-10-15.** A **Etapa 108 (trocar o dono de um material com
+> histórico passa a ser só do Administrador)**: no cadastro, trocar o cliente dono de um material que já tem saldo,
+> retenção ou qualquer lançamento no extrato pede a permissão de ajustar material de cliente — o Almoxarife e a Engenharia
+> recebem a recusa ao salvar e nada é gravado; a troca do administrador fica registrada na Auditoria (**Troca de dono**)
+> com os dois nomes. Editar o resto do cadastro e corrigir o dono de material recém-criado não mudam. **Próxima: Etapa
+> 110** — o Saldo Inicial do cadastro passa pelas regras da Entrada (C215, achado na medição desta etapa) — ver a próxima
+> tarefa no plano da 108.
+>
+> **Etapa 106, 2026-10-15.** A **Etapa 106 (desfazer o ajuste de material de
 > cliente passa a ser só do Administrador)**: o estorno de **Ajuste**, **Ajuste positivo** e **Ajuste negativo** de
 > material de cliente pede a mesma permissão de ajustá-lo — o Gestor, que estorna o material nosso, recebe a recusa e
 > nada muda; o estorno do administrador fica registrado na Auditoria com o nome do cliente; e o aviso amarelo da contagem
-> que bate numa caixa diz *"(perfil Administrador do almoxarifado)"* quando o material é de cliente. **Próxima: Etapa
+> que bate numa caixa diz *"(perfil Administrador do almoxarifado)"* quando o material é de cliente. ~~**Próxima: Etapa
 > 108** — trocar o dono de um material com saldo passa a exigir a permissão de ajustar material de cliente (C213, achado
-> na revisão desta etapa) — ver a próxima tarefa no plano da 106.
+> na revisão desta etapa) — ver a próxima tarefa no plano da 106.~~ *(Feita — Etapa 108.)*
 >
 > **Etapa 104, 2026-10-15.** A **Etapa 104 (a contagem por prateleira que bate
 > numa caixa de requisição passa a avisar)**: o **Ajuste** com localização em Movimentações continua gravando o que foi
@@ -6408,6 +6416,64 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 108 — Trocar o dono de um material com histórico passa a ser só do Administrador (ENTREGUE — 2026-10-15)
+
+**O que mudou, em uma frase:** trocar o cliente dono de um material que já tem saldo ou movimentação pede a mesma
+permissão de ajustar material de cliente — somente o Administrador.
+
+**O problema que ela resolve.** Desde a Etapa 8 só o Administrador ajusta o saldo de material de cliente. Mas o dono era
+um campo comum do cadastro: o almoxarife tirava o cliente de um material com saldo, ajustava como se fosse nosso e
+devolvia o cliente — o número do cliente mudava sem a permissão e sem o registro com o nome do cliente. E trocar o dono
+leva o saldo e todo o histórico do material de um cliente para outro na posição por cliente.
+
+| Antes | Agora |
+|---|---|
+| Almoxarife e Engenharia trocavam o dono de material com saldo | Recebem a recusa ao salvar e nada é gravado |
+| A troca ficava só na edição do material | O Administrador que troca deixa também o registro **Troca de dono** com os dois nomes |
+| Editar o resto do cadastro e corrigir o dono de material recém-criado | **Não mudam** |
+
+**A regra agora.**
+- Vale nos três sentidos — tirar o cliente, dar o material a um cliente, passar de um cliente a outro — quando o material
+  tem **saldo**, alguma quantidade **reservada, bloqueada, em inspeção ou em terceiros**, ou **qualquer linha no extrato**
+  (inclusive estornada). Quem não é Administrador recebe *"Trocar o dono do material ⟨código⟩ (de ⟨lado⟩ para ⟨lado⟩) exige a permissao "ajustar_material_cliente" (seu perfil: ⟨perfil⟩). O material ja tem saldo ou movimentacao, e a troca leva o saldo e o historico de um dono para o outro - mexe no numero que o cliente vai cobrar."* — cada lado é *"cliente ⟨nome⟩"* ou *"estoque proprio (material nosso)"*.
+- A recusa não grava **nada** daquele salvar (nem o nome, se ele também mudou).
+- Salvar sem mexer na Propriedade continua livre (o formulário reenvia o mesmo dono).
+- Material **sem** saldo, sem retenção e sem nenhuma linha no extrato: quem edita material troca o dono (cadastro errado).
+
+### Roteiro de teste manual
+
+Preparação: clientes **Metalúrgica X** e **Caldeiraria Y**; o material **CHP-0001** (PC) com o dono **Metalúrgica X**.
+Usuários: o **administrador**, **Ana** (perfil Almoxarife) e **Edu** (Engenharia). O administrador lança uma **Entrada** de
+10 do CHP-0001 (com o documento).
+
+1. **A Almoxarife não tira o cliente.** Ana, **Materiais → CHP-0001 → editar**, seção **Propriedade**: escolhe **GMP
+   (estoque próprio)**, muda também o nome, **Salvar** → aviso vermelho *"Trocar o dono do material CHP-0001 (de cliente
+   Metalúrgica X para estoque proprio (material nosso)) exige a permissao … (seu perfil: ALMOXARIFE) …"*. O formulário
+   continua aberto. Reabra o material: dono e nome os de antes.
+2. **Nem passa a outro cliente.** Ana escolhe **Caldeiraria Y** → a mesma recusa, *"(de cliente Metalúrgica X para cliente
+   Caldeiraria Y)"*. Edu tenta o mesmo → *"(seu perfil: ENGENHARIA)"*.
+3. **O ajuste continua barrado.** Ana, **Movimentações → Nova Movimentação**, **Ajuste** do CHP-0001 para 50 → a recusa do
+   ajuste de material de cliente (*"Ajustar o saldo do material CHP-0001, que pertence ao cliente Metalúrgica X, exige a
+   permissao …"*).
+4. **Editar o resto continua.** Ana muda só o nome e salva → *"Material atualizado!"*.
+5. **O administrador troca.** O administrador passa o CHP-0001 para **Caldeiraria Y** → *"Material atualizado!"*.
+   **Materiais de Clientes**: o CHP-0001 sai da Metalúrgica X e aparece na Caldeiraria Y com *recebido* 10.
+   **Almoxarifado → Auditoria**: o registro **Troca de dono** do material de cliente com os dois nomes e o saldo 10.
+6. **Sem histórico, livre.** Ana cadastra um material novo com saldo inicial 0 e dono Metalúrgica X; edita e troca para
+   Caldeiraria Y → *"Material atualizado!"*.
+7. **Saldo zerado não basta.** Um material da Metalúrgica X com uma Entrada de 5 estornada (saldo 0): Ana tenta trocar o
+   dono → a recusa do passo 1.
+
+**O que esta etapa NÃO cobre.** Compromisso pendente (pedido de compra aberto, requisição) não conta como histórico (B714);
+a troca não pede motivo (B716); o seletor de dono não trava na tela (B717); os estornos de entrada de material de cliente
+pelo Gestor (B708, medido de novo — B718); o **Saldo Inicial** do cadastro, que entra fora do motor de estoque (C215, a
+próxima etapa); o dono inexistente gravado pela API (C216). **Cuidado:** depois de uma troca autorizada, remessa a
+terceiro aberta continua nomeando o dono antigo; ao passar a outro cliente (ou de nosso para cliente), requisição sem
+OS/projeto do dono novo deixa de sair; ao passar para nosso, nada trava — troque o dono só de material parado (C214).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor e componente da
+tela) provam, escrito para você conferir à mão.
 
 ## Etapa 106 — Desfazer o ajuste de material de cliente passa a ser só do Administrador (ENTREGUE — 2026-10-15)
 

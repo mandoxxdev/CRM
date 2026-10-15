@@ -235,6 +235,24 @@ describe('MaterialAlmoxarifadoForm — edição de material com dono', () => {
     await submeter();
     expect(api.put.mock.calls[0][1].proprietario_cliente_id).toBe(2);
   });
+
+  // Etapa 108 (RN-08): trocar o dono de material com saldo ou movimentacao exige `ajustar_material_cliente`; quem
+  // decide e o servidor, e a tela mostra a recusa literal — sem "Material atualizado!" e sem sair do formulario.
+  test('[RN-08] a troca recusada pelo servidor (403) mostra a mensagem literal e continua no formulario', async () => {
+    const E1 = 'Trocar o dono do material CHP-002 (de cliente Cliente Alfa LTDA para cliente Cliente Beta SA) exige a '
+      + 'permissao "ajustar_material_cliente" (seu perfil: ALMOXARIFE). O material ja tem saldo ou movimentacao, e a '
+      + 'troca leva o saldo e o historico de um dono para o outro - mexe no numero que o cliente vai cobrar.';
+    api.put.mockRejectedValueOnce({ response: { status: 403, data: { error: E1 } } });
+    await renderizarEdicao();
+    preencher(proprietario(), '2');
+    await submeter();
+    await esperarEfeitos();
+    expect(api.put).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith(E1);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(proprietario()).not.toBeNull();
+    expect(proprietario().value).toBe('2');
+  });
 });
 
 /**

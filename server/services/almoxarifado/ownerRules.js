@@ -377,9 +377,83 @@ async function saidaPassaNaRegraDoDono(db, material, projetoId) {
   }
 }
 
+/**
+ * Etapa 108 (C213, RN-04, B714): o material ja tem "historico" de dono — saldo, alguma retencao, ou QUALQUER linha no
+ * livro (inclusive cancelada). O livro nao guarda o dono por linha: a posicao por cliente (clienteEstoqueService) soma o
+ * livro pelo dono DE HOJE, entao trocar o dono de um material que ja se movimentou leva a prestacao de contas inteira de um
+ * dono para o outro — mesmo com o saldo zerado. A cancelada entra porque continua no extrato do material.
+ */
+async function materialTemHistorico(db, material) {
+  const colunas = ['quantidade_atual', 'quantidade_reservada', 'quantidade_bloqueada', 'quantidade_em_inspecao',
+    'quantidade_em_terceiros'];
+  if (colunas.some((c) => Number(material?.[c] || 0) > 0)) return true;
+  const linha = await dbGet(db, 'SELECT 1 AS tem FROM movimentacoes_almoxarifado WHERE material_id = ? LIMIT 1', [material.id]);
+  return !!linha;
+}
+
+/** `null`, '' e 0 sao "nosso"; o resto vira numero — o formulario manda numero, a API aceita string (RN-05). */
+const normalizarDono = (v) => (Number(v) > 0 ? Number(v) : null);
+
+/**
+ * Etapa 108 (C213, RN-01..RN-05, B713) — trocar o dono de material com historico exige `ajustar_material_cliente`.
+ *
+ * Ate a 108 o dono era um campo comum do cadastro (gate `editar_material`: Administrador, Almoxarife, Engenharia), e as
+ * guardas do ajuste (Etapa 8) e do estorno do ajuste (Etapa 106) leem o dono DE AGORA: o Almoxarife, sozinho, tirava o
+ * cliente, ajustava como material nosso e devolvia o cliente. Os tres sentidos sao guardados — cliente -> nosso,
+ * nosso -> cliente (da ao cliente material que a GMP pagou) e cliente A -> cliente B.
+ *
+ * Compara com o GRAVADO (o formulario sempre manda a chave, com o mesmo valor que leu): `undefined` (chave omitida) e o
+ * mesmo dono devolvem `null` sem consultar nada. Sem historico a troca e livre (cadastro errado logo depois de criar).
+ * Devolve `{ deId, paraId, deNome, paraNome, comHistorico }` quando troca e pode; lanca 403 quando nao pode. Nao grava.
+ */
+async function assertTrocaDeDonoPermitida(db, materialGravado, novoDono, user) {
+  if (novoDono === undefined) return null;
+  const deId = normalizarDono(materialGravado.proprietario_cliente_id);
+  const paraId = normalizarDono(novoDono);
+  if (deId === paraId) return null;
+
+  const deNome = await nomeDoCliente(db, deId);
+  const paraNome = await nomeDoCliente(db, paraId);
+  const comHistorico = await materialTemHistorico(db, materialGravado);
+  if (comHistorico && !can(user, 'ajustar_material_cliente')) {
+    // `nomeDoCliente` ja devolve 'cliente #<id>' para cliente apagado: nao prefixar de novo (Fase 2, correcao 1).
+    const lado = (id, nome) => {
+      if (!id) return 'estoque proprio (material nosso)';
+      return nome === `cliente #${id}` ? nome : `cliente ${nome}`;
+    };
+    throw erro(`Trocar o dono do material ${materialGravado.codigo} (de ${lado(deId, deNome)} para ${lado(paraId, paraNome)}) exige a `
+      + `permissao "ajustar_material_cliente" (seu perfil: ${getPerfilFromUser(user)}). O material ja tem saldo ou `
+      + 'movimentacao, e a troca leva o saldo e o historico de um dono para o outro - mexe no numero que o cliente vai '
+      + 'cobrar.', 403);
+  }
+  return { deId, paraId, deNome, paraNome, comHistorico };
+}
+
+/**
+ * Etapa 108 (RN-07, B716): a troca autorizada de material com historico deixa trilha `material_cliente` nomeando OS DOIS
+ * lados — a `ATUALIZACAO` do material so guarda os ids. A rota a chama DEPOIS do UPDATE, pelo objeto do modulo.
+ */
+async function auditarTrocaDeDono(db, { material, troca, quantidadeAtual, user }) {
+  await registrarAuditoria(db, {
+    entidade: 'material_cliente',
+    entidade_id: material.id,
+    acao: 'TROCA_DONO',
+    usuario_id: user?.id,
+    usuario_nome: user?.nome || user?.email,
+    dados_anteriores: { proprietario_cliente_id: troca.deId, proprietario_cliente_nome: troca.deNome },
+    dados_novos: {
+      proprietario_cliente_id: troca.paraId,
+      proprietario_cliente_nome: troca.paraNome,
+      quantidade_atual: quantidadeAtual,
+    },
+    justificativa: null,
+  });
+}
+
 module.exports = {
   TIPOS_ISENTOS_DONO, TIPOS_SAIDA_COM_DONO, TIPOS_AJUSTE_DONO, TIPOS_AJUSTE_ESTORNAVEIS_DONO,
   assertSaidaPermitida, assertAjustePermitido, saidaPassaNaRegraDoDono,
   assertEstornoDeAjustePermitido, auditarEstornoDeAjuste,
+  materialTemHistorico, assertTrocaDeDonoPermitida, auditarTrocaDeDono,
   assertMesmoDonoNaTransformacao, assertMesmoDonoNoRetalho,
 };

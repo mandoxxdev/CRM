@@ -145,6 +145,13 @@ por segundo.
 saiu); não há registro de quem baixou esses arquivos (só os **anexos** têm, desde a Etapa 32); e
 tela aberta por mais de ~20 minutos mostra imagem em branco até recarregar — corte declarado.
 
+## Etapa 108 (2026-10-15, `cd7d5118`) — a permissão de material de cliente vale também na troca do dono
+
+Nenhuma ação nova em `ACAO_PERFIS` (`minhas-permissoes` igual): `ajustar_material_cliente` (só Administrador) passa a
+valer também na troca do proprietário de material com histórico pelo `PUT /materiais/:id` (gate `editar_material`
+inalterado). Verbo de auditoria novo `TROCA_DONO` (entidade `material_cliente`) com rótulo *"Troca de dono"*. A cor não
+muda; a C213, que a Etapa 106 somou ao que falta, está paga.
+
 ## Objetivo
 
 Perfis da spec cobertos, regras de segurança da seção 29 aplicadas (imutabilidade, estorno, histórico de cadastro, justificativas) e trilha de auditoria visível.
