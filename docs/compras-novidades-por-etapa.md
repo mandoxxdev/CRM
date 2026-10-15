@@ -59,6 +59,13 @@
 > mão (Administração, Minha Conta, OS comercial, Almoxarifado → Configurações) passam a ser a barra de Configurações — o
 > G8 listava seis, **estava errado** em três (Compras/Financeiro e Operacional não têm barra). Decisões **B56–B58**,
 > consulta **A9**. Próxima de Compras: candidatas no plano da 107.
+> **2026-10-15 — Etapa 109 entregue (frente Compras/core):** vincular fornecedor a um grupo no mesmo instante em que alguém
+> clica "Remover grupo" **não grava mais o vínculo depois da desativação** — a medição mostrou que o B52 exagerava o efeito
+> (o estado que sobrava era o mesmo de vincular um instante antes, que sempre foi permitido) e que a corrida **parecida** da
+> família (inativar x cadastrar material) é a grave: 30 de 30 deixam família inativa com material ativo (medida, não
+> corrigida — é da área da Etapa 108). E a lista de módulos do sistema passa a ter **uma fonte no cliente e uma no
+> servidor**, com um teste que falha se divergirem — o G7 dizia quatro listas; **estava errado**: eram cinco com nome e
+> mais dez parciais. Decisões **B59–B61**. Próxima de Compras: candidatas no plano da 109.
 > O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
 > A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
@@ -338,6 +345,32 @@
   A correção de contraste da aba ativa no celular, que só valia para a OS, passou a valer para todas (inclusive
   Configurações) e deixou de pintar o contador da aba ativa de azul sobre azul. **Descartado:** manter variações por tela
   (seria o CSS próprio de volta). Reversível tela a tela: um commit por barra.
+- **B59 — Etapa 109 (B52): o vínculo novo é gravado só se o grupo está ativo no próprio comando que grava.** A
+  conferência continua antes (é ela que dá a mensagem no caso comum) e a gravação passou a ser condicional — conferir e
+  gravar viram uma coisa só. Numa corrida de verdade (o "Remover grupo" clicado no mesmo instante), quem perde agora recebe
+  *"Grupo desativado — reative o grupo em Fornecedores homologados antes de vincular fornecedores"* e **nada** é gravado
+  (no PUT, nem os outros campos da ficha). **O que a medição mostrou de diferente do B52:** a corrida não deixava estado
+  proibido — o banco ficava igual a "vinculou um instante antes e depois desativou", e desativar nunca desvinculou (B45). O
+  que estava errado era a ordem: o vínculo chegava ao banco depois de o "Remover grupo" já ter respondido. **Descartado:**
+  trava em memória (premissa de um processo e mais código, sem ganho sobre um comando só) e gravar e desfazer (o vínculo
+  apareceria por um instante). Reversível: reverter `083384ea`.
+- **B60 — Etapa 109 (G7): unifiquei as listas de módulos sem mudar quem vê o quê — as três divergências que mexem em
+  permissão ficaram como estavam, presas num teste.** (1) **TODOLIST:** o cadastro de usuário oferece "Administrador do
+  módulo" e o servidor descarta ao salvar (recarregando, o botão volta desligado) — nenhuma regra usa "admin do TODOLIST",
+  mas alinhar seria passar a gravar uma permissão que hoje não se grava. (2) **Admin:** o servidor aceita admin de módulo
+  do Admin; a tela não oferece o botão (só pela API). (3) **Relatórios:** dá para marcar no cadastro e a linha é gravada,
+  mas nenhuma tela, rota ou checagem usa — tirar mudaria o que o salvar do usuário grava. Decida se (1) deve sumir da
+  tela ou passar a valer, se (2) deve aparecer, e se (3) deve sair; o teste
+  `modulosClienteServidor.api.test.js` cai de propósito quando alguém alinhar um dos lados, para este item ser atualizado.
+  **Mudança visível, uma só:** o cartão de engenharia do cadastro de usuário (e o painel de permissões dos grupos, na
+  mesma tela) dizia "Engenharia" e passou a dizer **"Cálculos de Engenharia"**, o nome do módulo em todo o resto
+  (seleção de módulos, badges, rota). **Descartado:** criar `GET /api/modulos` (D-36d) — contrato novo sem consumidor que
+  precise dele: o cliente precisa de ícone e cor, que o servidor não tem; um teste que lê a lista do cliente basta.
+- **B61 — Etapa 109: a corrida da família (inativar x cadastrar material) foi medida e NÃO corrigida.** 30 de 30 rodadas,
+  nas duas ordens, terminam com **família inativa e material ativo dentro dela** — esta sim um estado que as duas regras
+  proíbem ("Inativar" recusa família com material ativo; o cadastro recusa família inativa). Fechar exige mexer no cadastro
+  e na edição de material, que é a área da Etapa 108 do almoxarifado em paralelo; deixei para a próxima etapa (é a
+  primeira candidata do plano da 109).
 - **B44 — Etapa 89: só o nome do arquivo do PDF da OS é limpo; o número da OS fica como foi digitado.**
   Com `/`, `"` ou `:` no número, o Windows recusava o nome do arquivo e o usuário via "Erro ao gerar
   PDF" (o PDF até era gerado). Agora o arquivo vira `OS_OS_1_2_A_<hora>.pdf` e o documento continua
@@ -501,9 +534,24 @@
   corrida por sorte (o de desenvolvimento do André está em WAL; um de produção criado com o código atual pode não
   estar — **A8**). A causa não era transação nenhuma: o `PRAGMA` disputava a conexão com os `CREATE`/`SELECT` que
   os módulos enfileiram antes de o banco abrir. Agora ele sai antes de tudo — 6 de 6 boots novos em WAL (B53).
-- **G7** A lista de módulos do sistema existe em **quatro** lugares (`modulosMeta.js`,
+- **G7 — corrigido na Etapa 109 (`0c4da131`). Este item estava errado:** não eram quatro listas — eram
+  **cinco** com chave e nome (faltava `UsuarioForm.todosModulos`, justamente a que grava a permissão) e mais **dez**
+  parciais com outro propósito (G17). Agora: no servidor `services/modulosSistema.js` alimenta `MODULE_ADMIN_KEYS` e
+  `DEFAULT_MODULOS_TIPO` (mesmos valores, mesma ordem); no cliente `constants/modulosMeta.js` alimenta a seleção de
+  módulos e o cadastro de usuário; `modulosClienteServidor.api.test.js` lê a do cliente e falha se divergirem. As três
+  divergências de permissão ficaram como estavam (B60).
+  **(Original):** A lista de módulos do sistema existe em **quatro** lugares (`modulosMeta.js`,
   `TipoSelecao.todosModulos`, `MODULE_ADMIN_KEYS` no servidor, `DEFAULT_MODULOS_TIPO`). A Etapa 36
   usou a do cliente (`modulosMeta.js`) e **não** criou uma quinta; unificar é etapa própria.
+- **G17 (Etapa 109, medido, não feito)** — as listas parciais de módulo que ficaram fora do G7, cada uma com outro
+  propósito: rótulos de carregamento (`ModuleLoading`), splash (`SplashScreen`), prefetch (`lazyModules`), nomes do
+  "acesso negado" do cliente (`ProtectedModuleRoute`) e do log do servidor (`index.js`, só 7 dos 11 — os outros vão para
+  o log com a chave crua), requisição de material por módulo e o link do e-mail de recebimento (10, sem TODOLIST — já
+  presos um no outro por teste), setores semeados (9), rotas do `App.js`, menus do `Layout` (que chama o comercial de
+  `crm`). Nomes diferentes do mesmo módulo entre elas (engenharia "Engenharia"/"Cálculos de Engenharia", admin
+  "Admin"/"Administração"). E uma divergência de **permissão**, não de lista: sem nenhuma linha de permissão, a seleção
+  libera só Comercial, o portão de rota do cliente libera Comercial **ou Frota**, e o servidor libera Comercial só se o
+  usuário não estiver em grupo nenhum (da mesma família do G9).
 - **G8 — corrigido na Etapa 107 (`c48efd13`, `1e49c8aa`, `617b122b`, `7af44575`, `6abdee95`, `c52024d9`).** As abas da
   Etapa 36 usam um componente `Tabs` reutilizável novo; as outras seis barras de
   abas do sistema (Admin, Compras/Financeiro, Minha Conta, OS comercial, Operacional, e a barra
@@ -583,6 +631,70 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 109 — Vincular fornecedor não perde mais a corrida para o "Remover grupo"; a lista de módulos numa fonte só (2026-10-15)
+
+**Em uma frase.** Se uma pessoa vinculava um fornecedor a um grupo no mesmo instante em que outra clicava "Remover grupo",
+o vínculo podia ser gravado depois de o grupo já estar desativado — agora conferir o grupo e gravar o vínculo são uma coisa
+só, e quem chega depois recebe a mesma mensagem de grupo desativado; e a lista de módulos do sistema, que estava escrita à
+mão em cinco lugares, passa a ter uma fonte no navegador e uma no servidor, com um teste que avisa se as duas divergirem.
+
+### O que há de novo (visível para o usuário)
+- **Fornecedores homologados:** vincular (ou cadastrar já num grupo) no instante em que o grupo é removido dá
+  *"Grupo desativado — reative o grupo em Fornecedores homologados antes de vincular fornecedores"* e não grava nada.
+  Fora dessa coincidência, nada muda: vincular a grupo ativo funciona, o fornecedor que já estava no grupo continua nele
+  quando o grupo é removido, e salvar a ficha repetindo o grupo desativado continua funcionando.
+- **Cadastro de usuário → Módulos de Acesso:** o cartão de engenharia passa a dizer **"Cálculos de Engenharia"** (era
+  "Engenharia"), o mesmo nome da seleção de módulos e das badges. O resto da tela não muda (os mesmos 12 cartões, na mesma
+  ordem, com as mesmas descrições).
+- **Seleção de módulos:** nada muda na tela (os mesmos 11 cartões, mesma ordem, cores, ícones e destinos).
+
+### Por baixo do capô
+- **B52:** `POST` e `PUT /api/compras/fornecedores` gravam o grupo **novo** com `INSERT … SELECT … WHERE EXISTS (grupo
+  ativo)` e `UPDATE … WHERE id = ? AND EXISTS (grupo ativo)`. Quando não grava, a rota relê e responde a literal da 103
+  (grupo apagado → *"Grupo não encontrado"*; fornecedor apagado → *"Fornecedor não encontrado"*). Medido antes: com as
+  duas requisições disparadas juntas, **30 de 30** vínculos do POST gravados depois da desativação; depois: **0 de 20** em
+  cada ordem (teste). O PUT quase nunca perdia pela HTTP (a leitura extra dele deixava a desativação passar na frente), mas
+  a janela existia — o teste a prova injetando a desativação entre a conferência e a gravação (B59).
+- **A medição corrigiu o B52:** o estado que a corrida deixava era permitido (o mesmo de vincular um instante antes); o
+  defeito era a ordem. A corrida **grave** é a da família, medida aqui e não corrigida (B61).
+- **G7:** `server/services/modulosSistema.js` (uma linha por módulo: tipo padrão e se aceita admin de módulo) alimenta
+  `MODULE_ADMIN_KEYS` e `DEFAULT_MODULOS_TIPO` com os mesmos valores e a mesma ordem de antes; `constants/modulosMeta.js`
+  ganhou rota e as duas descrições de cada módulo e alimenta a seleção de módulos e o cadastro de usuário. O teste
+  `modulosClienteServidor.api.test.js` lê o arquivo do cliente como texto e confere os conjuntos; as três divergências de
+  permissão (TODOLIST, Admin, Relatórios) estão congeladas nele (B60).
+- **O G7 estava errado:** dizia quatro listas; eram cinco com nome (o cadastro de usuário é a quinta) e mais dez parciais
+  com outro propósito (G17).
+- Testes novos: `comprasGrupoDesativadoCorrida.api.test.js` (8), `modulosClienteServidor.api.test.js` (7); no client,
+  `TipoSelecao.modulos` (4) e `UsuarioForm.modulos` (3) — os dois de tela escritos **antes** da troca e verdes no código
+  antigo, menos o rótulo de engenharia.
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| Vincular e "Remover grupo" no mesmo instante: o vínculo gravado depois da desativação em 30 de 30 tentativas (cadastro novo) | 0 de 20 — quem chega depois recebe "Grupo desativado — …" e nada é gravado |
+| Grupo apagado do banco entre a conferência e a gravação: erro 500 (com a regra de integridade de produção) | "Grupo não encontrado" |
+| Cadastro de usuário: cartão "Engenharia" | "Cálculos de Engenharia" |
+| Lista de módulos escrita à mão em 5 lugares (3 no navegador, 2 no servidor), sem teste entre eles | 1 no navegador, 1 no servidor, teste que falha se divergirem |
+
+### Roteiro de teste manual (clicável)
+1. **Compras → Fornecedores homologados** (dois navegadores, dois usuários de Compras): abra o mesmo grupo nos dois. No
+   segundo, volte à lista e clique "Remover grupo". No primeiro (a tela ainda aberta, com os botões de vincular), vincule
+   um fornecedor → *"Grupo desativado — reative o grupo em Fornecedores homologados antes de vincular fornecedores"* e o
+   fornecedor não entra. (Isso é o caso sequencial, que já era assim desde a 103; a coincidência de milissegundos não se
+   reproduz à mão — está provada no teste.)
+2. **Remover grupo com fornecedor dentro:** os fornecedores continuam no grupo (aparecem ao reativar) — como antes.
+3. **Administração → Usuários → editar um usuário:** em "Módulos de Acesso", 12 cartões; o de engenharia diz "Cálculos de
+   Engenharia"; o Admin não tem "Administrador do módulo"; marque Relatórios, salve, reabra → continua marcado.
+4. **Seleção de módulos** (como administrador e como usuário comum com só Compras): os mesmos cartões de antes; o usuário
+   comum vê Compras liberado e o resto em "Sem acesso".
+
+### O que a etapa NÃO cobre
+- **A corrida da família** (inativar família x cadastrar material no mesmo instante → família inativa com material ativo)
+  — medida (30 de 30), não corrigida (B61).
+- As três divergências de permissão da lista de módulos (TODOLIST, Admin, Relatórios) — ficaram como estavam (B60).
+- As dez listas parciais de módulo (carregamento, splash, prefetch, menus, setores, log do servidor) — G17.
+- `canConfigureModule` cliente x servidor (G9) — fora, como combinado.
 
 ## Etapa 107 — O primeiro boot não semeia mais as categorias em dobro; as barras de abas são uma só (2026-10-15)
 

@@ -2,19 +2,10 @@
  * Permissões globais do Orion CRM — Super Admin, Admin de Sistema e Admin por Módulo
  */
 
-const MODULE_ADMIN_KEYS = [
-  'comercial',
-  'compras',
-  'financeiro',
-  'operacional',
-  'engenharia',
-  'engenharia_projetos',
-  'almoxarifado',
-  'frota',
-  'relatorios',
-  'administrativo',
-  'admin',
-];
+// Etapa 109 (G7): a lista sai de modulosSistema.js (fonte unica do servidor) — mesmos valores e ordem.
+const { chavesComAdminDeModulo } = require('./modulosSistema');
+
+const MODULE_ADMIN_KEYS = chavesComAdminDeModulo();
 
 function parseAdminModulos(value) {
   if (!value) return [];

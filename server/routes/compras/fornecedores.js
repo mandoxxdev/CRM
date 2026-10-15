@@ -79,6 +79,19 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
     return null;
   }
 
+  /**
+   * Etapa 109 (B52, RN-109.01/02) — condicao SQL do vinculo novo: o grupo esta ativo NO COMANDO que
+   * grava. A conferencia previa (recusaDoGrupoNovo) e um SELECT separado; um "Remover grupo" que caisse
+   * entre ela e a gravacao deixava o vinculo gravado DEPOIS da desativacao (sonda: 30 de 30 no POST).
+   * Um comando so o SQLite executa inteiro antes ou depois do UPDATE do DELETE /grupos/:id.
+   */
+  const GRUPO_ATIVO_NO_COMANDO = 'EXISTS (SELECT 1 FROM grupos_compras WHERE id = ? AND ativo = 1)';
+
+  /** A gravacao condicional nao gravou: rele para responder a literal da 103 (ou a de desativado). */
+  async function recusaDepoisDaCorrida(grupoId) {
+    return (await recusaDoGrupoNovo(grupoId)) || GRUPO_DESATIVADO;
+  }
+
   // G2 (lote de outubro): a lista morava inline no index.js como `SELECT *` e devolvia
   // `planilha_dados` — a planilha de precos inteira em JSON — para QUATRO telas que nao a leem
   // (Compras.js, PedidoCompraForm.js, FornecedoresDoGrupo.js, ItensFornecedor.js); um fornecedor
@@ -135,12 +148,19 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
         const recusa = await recusaDoGrupoNovo(grupo.valor);
         if (recusa) return res.status(400).json({ error: recusa });
       }
-      const r = await dbRun(
-        db,
-        `INSERT INTO fornecedores (razao_social, ${CAMPOS_TEXTO.join(', ')}, grupo_id, status)
-         VALUES (?, ${CAMPOS_TEXTO.map(() => '?').join(', ')}, ?, ?)`,
-        [razao_social, ...textos, grupo.valor, 'ativo']
-      );
+      const colunas = `razao_social, ${CAMPOS_TEXTO.join(', ')}, grupo_id, status`;
+      const marcas = `?, ${CAMPOS_TEXTO.map(() => '?').join(', ')}, ?, ?`;
+      const valores = [razao_social, ...textos, grupo.valor, 'ativo'];
+      // Etapa 109: com grupo, INSERT ... SELECT ... WHERE grupo ativo — a conferencia e a gravacao
+      // sao o mesmo comando. Sem grupo, o INSERT de sempre.
+      const r = grupo.valor == null
+        ? await dbRun(db, `INSERT INTO fornecedores (${colunas}) VALUES (${marcas})`, valores)
+        : await dbRun(
+          db,
+          `INSERT INTO fornecedores (${colunas}) SELECT ${marcas} WHERE ${GRUPO_ATIVO_NO_COMANDO}`,
+          [...valores, grupo.valor]
+        );
+      if (r.changes === 0) return res.status(400).json({ error: await recusaDepoisDaCorrida(grupo.valor) });
       res.status(201).json({
         id: r.lastID, razao_social, nome_fantasia: textos[0], grupo_id: grupo.valor,
       });
@@ -190,6 +210,7 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
       // Grupo IGUAL ao gravado não entra no SET: com a FK de produção ligada
       // (`grupo_id REFERENCES grupos_compras`, foreign_keys = ON), reescrever um grupo_id órfão com
       // ele mesmo falha ("FOREIGN KEY constraint failed") — achado M1 da revisão do plano.
+      let grupoNovo = null;
       if (temGrupo && grupoValor != null) {
         const atual = await dbGet(db, 'SELECT grupo_id FROM fornecedores WHERE id = ?', [id]);
         if (!atual) return res.status(404).json({ error: NAO_ENCONTRADO });
@@ -199,6 +220,7 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
           if (recusa) return res.status(400).json({ error: recusa });
           sets.push('grupo_id = ?');
           params.push(grupoValor);
+          grupoNovo = grupoValor;
         }
       } else if (temGrupo) {
         sets.push('grupo_id = ?');
@@ -206,8 +228,20 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
       }
       sets.push('updated_at = CURRENT_TIMESTAMP');
       params.push(id);
-      const r = await dbRun(db, `UPDATE fornecedores SET ${sets.join(', ')} WHERE id = ?`, params);
-      if (r.changes === 0) return res.status(404).json({ error: NAO_ENCONTRADO });
+      // Etapa 109: grupo NOVO -> o UPDATE so grava se o grupo ainda esta ativo no proprio comando
+      // (tudo ou nada: a ficha inteira e recusada, como na recusa previa da 103).
+      let where = 'WHERE id = ?';
+      if (grupoNovo != null) {
+        where += ` AND ${GRUPO_ATIVO_NO_COMANDO}`;
+        params.push(grupoNovo);
+      }
+      const r = await dbRun(db, `UPDATE fornecedores SET ${sets.join(', ')} ${where}`, params);
+      if (r.changes === 0) {
+        if (grupoNovo != null && await dbGet(db, 'SELECT 1 AS existe FROM fornecedores WHERE id = ?', [id])) {
+          return res.status(400).json({ error: await recusaDepoisDaCorrida(grupoNovo) });
+        }
+        return res.status(404).json({ error: NAO_ENCONTRADO });
+      }
       res.json({ message: 'Fornecedor atualizado' });
     } catch (err) {
       console.error('Erro ao atualizar fornecedor:', err);

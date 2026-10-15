@@ -10,6 +10,11 @@ import {
 import { invalidatePermissionsCache } from '../services/permissionsCache';
 import { FiUsers, FiShield, FiCheck, FiX, FiStar } from 'react-icons/fi';
 import './UsuarioForm.css';
+import { modulosConcediveis } from '../constants/modulosMeta';
+
+// Etapa 109 (G7): os cartoes "Modulos de Acesso" saem de constants/modulosMeta.js (fonte unica do cliente):
+// os 12 de sempre (as 11 telas + relatorios), as descricoes de sempre; engenharia com o nome do modulo (B60).
+const todosModulos = modulosConcediveis();
 
 const UsuarioForm = () => {
   const { id } = useParams();
@@ -44,20 +49,6 @@ const UsuarioForm = () => {
   const [modulosSelecionados, setModulosSelecionados] = useState([]);
   const [modulosAdmin, setModulosAdmin] = useState([]);
 
-  const todosModulos = [
-    { value: 'comercial', label: 'Comercial', descricao: 'Gestão de vendas, propostas e oportunidades' },
-    { value: 'compras', label: 'Compras', descricao: 'Gestão de fornecedores, pedidos e cotações' },
-    { value: 'financeiro', label: 'Financeiro', descricao: 'Contas a pagar/receber, fluxo de caixa e bancos' },
-    { value: 'operacional', label: 'Operacional', descricao: 'Gestão de projetos e atividades' },
-    { value: 'engenharia', label: 'Engenharia', descricao: 'Cálculos e utilitários de engenharia' },
-    { value: 'engenharia_projetos', label: 'Engenharia / Projetos', descricao: 'Solicitações (cesta), cadastro e OS (projetos)' },
-    { value: 'almoxarifado', label: 'Almoxarifado', descricao: 'Materiais, estoque, requisições e conferências' },
-    { value: 'frota', label: 'Frota', descricao: 'Veículos, manutenções, combustível e documentação' },
-    { value: 'todolist', label: 'TODOLIST', descricao: 'Kanban de atividades e controle de programação' },
-    { value: 'relatorios', label: 'Relatórios', descricao: 'Análises e relatórios executivos' },
-    { value: 'administrativo', label: 'Administrativo', descricao: 'Configurações e gestão do sistema' },
-    { value: 'admin', label: 'Admin', descricao: 'Gestão de usuários e permissões' },
-  ];
 
   const acoes = [
     { value: 'visualizar', label: 'Visualizar' },
@@ -538,7 +529,7 @@ const UsuarioForm = () => {
               const isSelected = modulosSelecionados.includes(modulo.value);
               const isModAdmin = modulosAdmin.includes(modulo.value);
               const isDisabled = formData.role === 'admin' || formData.is_superadmin === 1;
-              const canSetModuleAdmin = modulo.value !== 'admin' && !isDisabled;
+              const canSetModuleAdmin = modulo.aceitaAdminDeModulo && !isDisabled;
               
               return (
                 <div

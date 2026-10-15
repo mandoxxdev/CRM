@@ -3,24 +3,14 @@
  */
 const { dbRun, dbGet, dbAll } = require('./almoxarifado/db');
 
-const TIPO_ADMINISTRATIVO = 'administrativo';
-const TIPO_INDUSTRIAL = 'industrial';
+// Etapa 109 (G7): os tipos padrao saem de modulosSistema.js (fonte unica do servidor) — mesmos
+// valores e ordem. (O comentario antigo dizia "espelhados de client/src/config/requisicoesMaterialConfig.js";
+// la nao ha `todolist`, aqui ha desde sempre.)
+const { tiposPadrao, TIPO_ADMINISTRATIVO, TIPO_INDUSTRIAL } = require('./modulosSistema');
+
 const VALID_TIPOS = new Set([TIPO_ADMINISTRATIVO, TIPO_INDUSTRIAL]);
 
-/** Defaults espelhados de client/src/config/requisicoesMaterialConfig.js */
-const DEFAULT_MODULOS_TIPO = {
-  comercial: TIPO_ADMINISTRATIVO,
-  compras: TIPO_ADMINISTRATIVO,
-  financeiro: TIPO_ADMINISTRATIVO,
-  operacional: TIPO_INDUSTRIAL,
-  engenharia: TIPO_ADMINISTRATIVO,
-  engenharia_projetos: TIPO_ADMINISTRATIVO,
-  almoxarifado: TIPO_ADMINISTRATIVO,
-  administrativo: TIPO_ADMINISTRATIVO,
-  admin: TIPO_ADMINISTRATIVO,
-  frota: TIPO_INDUSTRIAL,
-  todolist: TIPO_ADMINISTRATIVO,
-};
+const DEFAULT_MODULOS_TIPO = tiposPadrao();
 
 async function ensureModulosTipoConfig(db) {
   await dbRun(db, `CREATE TABLE IF NOT EXISTS modulos_tipo_config (

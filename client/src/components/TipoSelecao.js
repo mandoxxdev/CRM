@@ -3,12 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { useModulosTipoConfig } from '../hooks/useModulosTipoConfig';
-import {
-  FiBriefcase, FiShoppingCart, FiDollarSign,
-  FiSettings, FiPackage, FiTarget,
-  FiLock, FiShield, FiTool, FiSliders, FiArchive, FiCheckSquare,
-  FiSearch, FiPlay, FiX
-} from 'react-icons/fi';
+import { FiSettings, FiLock, FiSearch, FiPlay, FiX } from 'react-icons/fi';
 import { prefetchModule, prefetchModuleByRoute } from '../routes/lazyModules';
 import {
   fetchUserPermissions,
@@ -18,7 +13,11 @@ import './TipoSelecao.css';
 import FloatingBallsBackground from './FloatingBallsBackground';
 import { resetModuleSplashSession } from './ProtectedModuleRoute';
 import { bypassModuleRestrictions } from '../utils/systemPermissions';
-import { nivelAcessoUsuario } from '../constants/modulosMeta';
+import { nivelAcessoUsuario, modulosDaSelecao } from '../constants/modulosMeta';
+
+// Etapa 109 (G7): os cartoes saem de constants/modulosMeta.js (fonte unica do cliente) — mesmos nomes,
+// descricoes, rotas, icones, cores e a ordem desta tela (MODULOS_ORDEM_SELECAO).
+const todosModulos = modulosDaSelecao();
 
 const RECENT_MODULES_KEY = 'gmp_modulos_recentes';
 
@@ -74,107 +73,6 @@ const TipoSelecao = ({ onClose, forceShow = false }) => {
   const { user } = useAuth();
   const { tipoOverrides, updateModuloTipo } = useModulosTipoConfig();
 
-  const todosModulos = [
-    {
-      id: 'comercial',
-      nome: 'Comercial',
-      descricao: 'Vendas, propostas e oportunidades',
-      icon: FiTarget,
-      modulo: 'comercial',
-      rota: '/comercial',
-      gradient: 'linear-gradient(135deg, #6d28d9 0%, #be185d 100%)'
-    },
-    {
-      id: 'frota',
-      nome: 'Frota',
-      descricao: 'Gestão completa de veículos, manutenções e custos',
-      icon: FiTool,
-      modulo: 'frota',
-      rota: '/frota',
-      gradient: 'linear-gradient(135deg, #ea580c 0%, #b91c1c 100%)'
-    },
-    {
-      id: 'compras',
-      nome: 'Compras',
-      descricao: 'Fornecedores, pedidos e cotações',
-      icon: FiShoppingCart,
-      modulo: 'compras',
-      rota: '/compras',
-      gradient: 'linear-gradient(135deg, #0f766e 0%, #0891b2 100%)'
-    },
-    {
-      id: 'financeiro',
-      nome: 'Financeiro',
-      descricao: 'Contas, fluxo de caixa e bancos',
-      icon: FiDollarSign,
-      modulo: 'financeiro',
-      rota: '/financeiro',
-      gradient: 'linear-gradient(135deg, #047857 0%, #10b981 100%)'
-    },
-    {
-      id: 'operacional',
-      nome: 'Operacional',
-      descricao: 'Fábrica, OS e produção',
-      icon: FiPackage,
-      modulo: 'operacional',
-      rota: '/fabrica',
-      gradient: 'linear-gradient(135deg, #1e40af 0%, #4338ca 100%)'
-    },
-    {
-      id: 'administrativo',
-      nome: 'Administrativo',
-      descricao: 'Configurações do sistema',
-      icon: FiSettings,
-      modulo: 'administrativo',
-      rota: '/configuracoes',
-      gradient: 'linear-gradient(135deg, #334155 0%, #6d28d9 100%)'
-    },
-    {
-      id: 'engenharia',
-      nome: 'Cálculos de Engenharia',
-      descricao: 'Tampo, pressão e dimensionamento',
-      icon: FiSliders,
-      modulo: 'engenharia',
-      rota: '/engenharia',
-      gradient: 'linear-gradient(135deg, #b45309 0%, #ea580c 100%)'
-    },
-    {
-      id: 'engenharia_projetos',
-      nome: 'Engenharia / Projetos',
-      descricao: 'Solicitações e cadastros',
-      icon: FiBriefcase,
-      modulo: 'engenharia_projetos',
-      rota: '/engenharia-projetos',
-      gradient: 'linear-gradient(135deg, #3730a3 0%, #6366f1 100%)'
-    },
-    {
-      id: 'almoxarifado',
-      nome: 'Almoxarifado',
-      descricao: 'Materiais, estoque, requisições e conferências',
-      icon: FiArchive,
-      modulo: 'almoxarifado',
-      rota: '/almoxarifado',
-      gradient: 'linear-gradient(135deg, #78350f 0%, #a16207 100%)'
-    },
-    {
-      id: 'todolist',
-      nome: 'TODOLIST',
-      descricao: 'Kanban de atividades e controle de programação',
-      icon: FiCheckSquare,
-      modulo: 'todolist',
-      rota: '/todolist',
-      gradient: 'linear-gradient(135deg, #0369a1 0%, #0ea5e9 100%)'
-    },
-    {
-      id: 'admin',
-      nome: 'Admin',
-      descricao: 'Usuários e permissões',
-      icon: FiShield,
-      modulo: 'admin',
-      rota: '/admin',
-      gradient: 'linear-gradient(135deg, #450a0a 0%, #991b1b 100%)'
-    }
-  ];
 
   useEffect(() => {
     resetModuleSplashSession();
