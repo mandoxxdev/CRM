@@ -58,7 +58,8 @@ export const MSG_LIBERAR_RESERVA_REQUISICAO =
 
 // Etapa 77, Fase 5 (F1): quem pediu só libera enquanto a requisição ainda se cancela — depois que
 // a separação começa, liberar devolvia o material separado ao disponível e a entrega morria. É a
-// lista de status que a máquina do servidor deixa ir para CANCELADO (o teste compara as duas).
+// lista de status que a máquina do servidor deixa ir para CANCELADO sem condição — desde a Etapa 101 a *Em Separação*
+// vazia também cancela, mas o dono não libera ali (STATUS_CANCELAVEIS_SEM_CONDICAO; o teste compara as duas).
 export const STATUS_DONO_LIBERA_RESERVA = [
   'RASCUNHO', 'PENDENTE', 'AGUARDANDO_APROVACAO_VALOR', 'APROVADO', 'AGUARDANDO_ESTOQUE',
   'AGUARDANDO_COMPRA', 'PARCIALMENTE_RESERVADA', 'TOTALMENTE_RESERVADA',

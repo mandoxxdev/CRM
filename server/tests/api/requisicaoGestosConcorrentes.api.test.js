@@ -52,6 +52,9 @@ const USERS = {
 const S1 = 'Requisição deve estar aprovada, aguardando estoque/compra, em separação ou parcialmente atendida para separar';
 const E0 = 'Requisição deve estar em separação, pronta para retirada ou parcialmente atendida';
 const N0 = 'Requisição não encontrada';
+// Etapa 101 (RN-02/RN-04): as recusas da saida da EM_SEPARACAO.
+const M1_101 = 'Esta requisição tem material separado na caixa; para cancelar, o almoxarifado precisa devolvê-lo à prateleira primeiro.';
+const E1_101 = 'Esta requisição tem material separado na caixa; entregue-o ou devolva-o à prateleira antes de encerrar.';
 const RE = {
   // a reivindicacao da separacao (92): `... WHERE id=? AND status IN (...)`
   CLAIM: /SET\s+status\s*=\s*'EM_SEPARACAO'[^;]*WHERE\s+id\s*=\s*\?\s+AND\s+status\s+IN/,
@@ -472,18 +475,23 @@ const esperarFila = async (R, ms = 3000) => {
     assert.strictEqual(esperandoNa(x.R), 0);
   });
 
-  await test('[93 RN-09] (c) o cancelamento da 92 (fora da trava) na reivindicacao, AGUARDADO: sem deadlock; cancela 200, separacao 400 S1, CANCELADO', async () => {
+  // Etapa 101 (RN-05, B527): os dois cancelamentos entraram na trava por requisicao (a B450 os deixava fora porque nao
+  // existia EM_SEPARACAO -> CANCELADO; agora existe, condicional a caixa vazia). O cancelamento disparado na
+  // reivindicacao NAO roda mais no meio da separacao (antes: AGUARDADO, cancelava 200 e a separacao tomava S1) — entra
+  // na fila, a separacao grava 1 na caixa, e o cancelamento le a caixa e recusa com M1.
+  await test('[93 RN-09] (c) o cancelamento da 92 na reivindicacao (Etapa 101: dentro da trava) -> entra na fila; separacao 200 com 1 na caixa; cancelamento 400 M1; EM_SEPARACAO', async () => {
     desarmar();
     const x = await montar();
-    const g = armarAguardando(RE.CLAIM, () => cancelarOutros('S', x.R));
+    const g = armarFila(RE.CLAIM, x.R, () => cancelarOutros('S', x.R));
     const sep = await comPrazo(separar('ALMOX', x.R, x.item, 1), 8000, 'separacao');
+    await afirmarSerializado(g);
     desarmar();
-    assert.strictEqual(g.disparos, 1);
-    assert.ok(!g.erro, `cancelamento no gancho: ${g.erro && g.erro.message}`);
-    assert.strictEqual(g.resposta.status, 200, JSON.stringify(g.resposta.body));
-    assert.strictEqual(sep.status, 400, JSON.stringify(sep.body));
-    assert.strictEqual(sep.body.error, S1);
-    assert.strictEqual((await foto(x)).status, 'CANCELADO');
+    assert.strictEqual(sep.status, 200, JSON.stringify(sep.body));
+    assert.strictEqual(g.resposta.status, 400, JSON.stringify(g.resposta.body));
+    assert.strictEqual(g.resposta.body.error, M1_101);
+    const f = await foto(x);
+    assert.deepStrictEqual([f.status, f.sep, f.reserva], ['EM_SEPARACAO', 1, 'ATIVA']);
+    afirmarFila(g);
   });
 
   await test('[93 RN-09] (d) unidade: FIFO na mesma chave (numero e string), esperandoNaRequisicao conta e volta a 0, a chave sai do Map', async () => {
@@ -1138,7 +1146,9 @@ const esperarFila = async (R, ms = 3000) => {
     assert.strictEqual((await trilhaDe(x.R, 'ENCERRAMENTO')).length, 1);
   });
 
-  await test('[93 RN-08] (e) encerramento de PARCIALMENTE_ATENDIDA: o escritor poe EM_SEPARACAO -> 400 "Transicao invalida: EM_SEPARACAO -> ENCERRADA"; status EM_SEPARACAO; nenhuma reserva liberada; nenhuma trilha ENCERRAMENTO', async () => {
+  // Etapa 101 (RN-04, B526): a maquina ganhou EM_SEPARACAO -> ENCERRADA, condicional (caixa vazia e algo entregue). Aqui a
+  // caixa tem 3 (separa 4, entrega 1): a nova tentativa le os itens e recusa com E1 (antes: a transicao invalida).
+  await test('[93 RN-08] (e) encerramento de PARCIALMENTE_ATENDIDA: o escritor poe EM_SEPARACAO (com 3 na caixa) -> 400 E1 (Etapa 101; era a transicao invalida); status EM_SEPARACAO; nenhuma reserva liberada; nenhuma trilha ENCERRAMENTO', async () => {
     desarmar();
     const x = await parcial();
     const g = armarEscritor(RE_ENC, () => raw("UPDATE requisicoes_almoxarifado SET status = 'EM_SEPARACAO' WHERE id = ?", [x.R]));
@@ -1146,7 +1156,7 @@ const esperarFila = async (R, ms = 3000) => {
     desarmar();
     assert.ok(!g.erro, g.erro && g.erro.message);
     assert.strictEqual(en.status, 400, `encerrar: ${en.status} ${JSON.stringify(en.body)}`);
-    assert.strictEqual(en.body.error, 'Transição inválida: EM_SEPARACAO → ENCERRADA');
+    assert.strictEqual(en.body.error, E1_101);
     const f = await foto(x);
     assert.strictEqual(f.status, 'EM_SEPARACAO', `status ${f.status} (ENCERRADA por cima de EM_SEPARACAO)`);
     assert.strictEqual(f.reserva, 'ATIVA', 'nenhuma reserva liberada');

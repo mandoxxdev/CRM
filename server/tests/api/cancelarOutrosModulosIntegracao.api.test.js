@@ -45,6 +45,18 @@ const USERS = {
 // Literais congeladas do plano (Contrato).
 const S1 = 'Requisição deve estar aprovada, aguardando estoque/compra, em separação ou parcialmente atendida para separar';
 const R2 = 'Não é possível cancelar neste status';
+// Etapa 101 (RN-02): a recusa da EM_SEPARACAO com material na caixa.
+const M1_101 = 'Esta requisição tem material separado na caixa; para cancelar, o almoxarifado precisa devolvê-lo à prateleira primeiro.';
+// Etapa 101 (RN-05): os cancelamentos esperam na fila da trava por requisicao.
+const travaPorRequisicao = require('../../services/almoxarifado/travaPorRequisicao');
+const esperarNaFila = async (R, ms = 3000) => {
+  const ate = Date.now() + ms;
+  while (travaPorRequisicao.esperandoNaRequisicao(R) < 1 && Date.now() < ate) {
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  return travaPorRequisicao.esperandoNaRequisicao(R) >= 1;
+};
 const W1_PREFIXO = '[almoxarifado-aprovar] Falha ao desfazer reserva';
 const I1 = (id, status) => `[almoxarifado-aprovar] Reserva ${id} ja estava ${status} — nada a desfazer`;
 const RE_EM_SEPARACAO = /SET\s+status\s*=\s*'EM_SEPARACAO'/;
@@ -159,7 +171,7 @@ const comPrazo = (p, ms, rotulo) => Promise.race([
     if (via) assert.strictEqual(JSON.parse(tc[0].dados_novos).via, via);
   };
   /** O cancelamento no instante da reivindicacao: a separacao nao gravou nada. */
-  const afirmarNadaGravado = async (R, m, rids) => {
+  const afirmarNadaGravado = async (R, m, rids, via = 'requisicoes-material') => {
     assert.strictEqual(await st(R), 'CANCELADO', 'status CANCELADO (a separacao ressuscitou a requisicao)');
     for (const it of await itensDe(R)) {
       assert.strictEqual(Number(it.quantidade_separada || 0), 0, 'nada gravado: quantidade_separada');
@@ -174,7 +186,7 @@ const comPrazo = (p, ms, rotulo) => Promise.race([
       assert.strictEqual((await dbGet(db, 'SELECT status FROM reservas_material_almoxarifado WHERE id = ?', [rid])).status, 'LIBERADA', 'reserva solta pelo cancelamento');
     }
     assert.strictEqual(Number((await mat(m)).r), 0, 'r=0');
-    await afirmarTrilhaCancel(R, 'TOTALMENTE_RESERVADA', 'requisicoes-material');
+    await afirmarTrilhaCancel(R, 'TOTALMENTE_RESERVADA', via);
   };
 
   // ── a nota pelas seis portas (molde: recebimentoReservaChegadaIntegracao) ──
@@ -239,52 +251,51 @@ const comPrazo = (p, ms, rotulo) => Promise.race([
   });
 
   // ══════════════ Jornada B (T0 x T1 x T2): separacao x cancelamento, ate a entrega ══════════════
-  await test('[92 T5 B1] R2 TOTALMENTE: o ALMOXARIFE separa 1 e S cancela pelos outros modulos no instante da reivindicacao -> separacao 400 S1, CANCELADO, nada gravado', async () => {
+  // Etapa 101 (RN-05, B527): os cancelamentos entraram na trava por requisicao. O cancelamento disparado na
+  // reivindicacao ESPERA a separacao inteira (antes rodava no meio e vencia: CANCELADO e a separacao S1): a separacao
+  // grava 1 na caixa e o cancelamento le a caixa e recusa com M1 — a Em Separacao com material nao cancela (RN-02).
+  await test('[92 T5 B1] R2 TOTALMENTE: o ALMOXARIFE separa 1 e S cancela pelos outros modulos no instante da reivindicacao -> (Etapa 101) o cancelamento espera na fila; separacao 200, separado 1; cancelamento 400 M1; EM_SEPARACAO, reservas ATIVA', async () => {
     const m = await material(4);
     const R = await criarDe('S', [[m, 4]]);
     assert.strictEqual(await aprovarComoGestor(R), 'TOTALMENTE_RESERVADA');
-    const rids = (await reservasDe(R)).map((r) => r.id);
     const item = (await itensDe(R))[0].id;
-    let cancel = null;
-    const g = armar(RE_EM_SEPARACAO, async () => { cancel = await comPrazo(cancelarOutros('S', R), 5000, 'cancelamento no gancho'); });
+    let cancelP = null; let naFila = false;
+    const g = armar(RE_EM_SEPARACAO, async () => { cancelP = cancelarOutros('S', R); naFila = await esperarNaFila(R); });
     let sep;
     try { ({ out: sep } = await silenciar(() => comPrazo(separarRota(R, [[item, 1]]), 10000, 'separacao'))); } finally { desarmar(); }
     afirmarGancho(g, 'B1');
-    assert.strictEqual(cancel && cancel.status, 200, `cancelamento: ${cancel && JSON.stringify(cancel.body)}`);
-    assert.strictEqual(sep.status, 400, `separação 400: veio ${sep.status} ${JSON.stringify(sep.body)}`);
-    assert.strictEqual(sep.body.error, S1);
-    await afirmarNadaGravado(R, m, rids);
+    const cancel = await comPrazo(cancelP, 5000, 'cancelamento');
+    assert.strictEqual(sep.status, 200, `separacao: ${sep.status} ${JSON.stringify(sep.body)}`);
+    assert.strictEqual(cancel.status, 400, `cancelamento: ${cancel.status} ${JSON.stringify(cancel.body)}`);
+    assert.strictEqual(cancel.body.error, M1_101);
+    assert.strictEqual(await st(R), 'EM_SEPARACAO');
+    assert.strictEqual(Number((await itensDe(R))[0].quantidade_separada), 1);
+    assert.deepStrictEqual((await reservasDe(R)).map((r) => r.status), ['ATIVA']);
+    assert.strictEqual((await trilha(R, 'CANCELAMENTO')).length, 0);
+    assert.strictEqual(naFila, true, 'o cancelamento NAO entrou na fila da trava por requisicao');
   });
 
-  await test('[92 T5 B2] R3 TOTALMENTE (pede 1, nao critico): S cancela PELO ALMOXARIFADO e a separacao inteira roda no instante do UPDATE -> cancelamento 400 R2, EM_SEPARACAO, separado 1, reserva ATIVA; o ALMOXARIFE entrega -> ENTREGUE, reserva CONSUMIDA', async () => {
+  // Etapa 101 (RN-05, B527): o inverso — o cancelamento pelo almoxarifado segura a trava; a separacao disparada no
+  // instante do UPDATE dele ESPERA (antes rodava inteira ali e o cancelamento perdia com R2). Cancela 200 de
+  // TOTALMENTE_RESERVADA; a separacao, na vez dela, le CANCELADO e recusa S1 sem gravar nada.
+  await test('[92 T5 B2] R3 TOTALMENTE (pede 1, nao critico): S cancela PELO ALMOXARIFADO e a separacao chega no instante do UPDATE -> (Etapa 101) a separacao espera na fila; cancelamento 200, CANCELADO; separacao 400 S1, nada gravado', async () => {
     const m = await material(4);
     const R = await criarDe('S', [[m, 1]]);
     assert.strictEqual(await aprovarComoGestor(R), 'TOTALMENTE_RESERVADA');
-    const rs = await reservasDe(R);
-    assert.strictEqual(rs.length, 1);
+    const rids = (await reservasDe(R)).map((r) => r.id);
+    assert.strictEqual(rids.length, 1);
     const item = (await itensDe(R))[0].id;
-    let sep = null;
-    const g = armar(RE_CANCELADO, async () => { sep = await comPrazo(separarRota(R, [[item, 1]]), 10000, 'separacao no gancho'); });
+    let sepP = null; let naFila = false;
+    const g = armar(RE_CANCELADO, async () => { sepP = separarRota(R, [[item, 1]]); naFila = await esperarNaFila(R); });
     let cancel;
     try { cancel = await comPrazo(cancelarAlmox('S', R), 15000, 'cancelamento'); } finally { desarmar(); }
     afirmarGancho(g, 'B2');
-    assert.strictEqual(sep && sep.status, 200, `separacao: ${sep && JSON.stringify(sep.body)}`);
-    assert.strictEqual(sep.body.status, 'EM_SEPARACAO');
-    assert.strictEqual(cancel.status, 400, `cancelamento: ${cancel.status} ${JSON.stringify(cancel.body)}`);
-    assert.strictEqual(cancel.body.error, R2);
-    assert.strictEqual(await st(R), 'EM_SEPARACAO', 'o cancelamento passou por cima da separacao');
-    assert.strictEqual(Number((await itensDe(R))[0].quantidade_separada), 1);
-    assert.strictEqual((await dbGet(db, 'SELECT status FROM reservas_material_almoxarifado WHERE id = ?', [rs[0].id])).status, 'ATIVA');
-    assert.strictEqual((await trilha(R, 'CANCELAMENTO')).length, 0);
-    const rod = await rodadas(R);
-    assert.strictEqual(rod.length, 1);
-    assert.strictEqual(Number(rod[0].usuario_id), USERS.ALMOX.id, 'quem separou foi o ALMOXARIFE');
-    // ... e a requisicao segue: o ALMOXARIFE entrega pela rota (a 77 consome a reserva).
-    const e = await como('ALMOX').put(`${API}/requisicoes/${R}/entregar`, { itens_atendidos: [{ item_id: item, quantidade_atendida: 1 }] });
-    assert.strictEqual(e.status, 200, `entregar: ${e.status} ${JSON.stringify(e.body)}`);
-    assert.strictEqual(await st(R), 'ENTREGUE');
-    assert.strictEqual((await dbGet(db, 'SELECT status FROM reservas_material_almoxarifado WHERE id = ?', [rs[0].id])).status, 'CONSUMIDA');
-    assert.deepStrictEqual(await mat(m), { q: 3, r: 0, d: 3 });
+    const { out: sep } = await silenciar(() => comPrazo(sepP, 10000, 'separacao'));
+    assert.strictEqual(cancel.status, 200, `cancelamento: ${cancel.status} ${JSON.stringify(cancel.body)}`);
+    assert.strictEqual(sep.status, 400, `separacao: ${sep.status} ${JSON.stringify(sep.body)}`);
+    assert.strictEqual(sep.body.error, S1, JSON.stringify(sep.body));
+    await afirmarNadaGravado(R, m, rids, null); // o cancelamento do almoxarifado nao grava 'via'
+    assert.strictEqual(naFila, true, 'a separacao NAO entrou na fila da trava por requisicao');
   });
 
   // ══════════════ Jornada C (T1 x 74): a distribuicao da nota x o cancelamento de AGUARDANDO ══════════════
@@ -361,28 +372,28 @@ const comPrazo = (p, ms, rotulo) => Promise.race([
   });
 
   // ══════════════ Pelo servico: a guarda e do servico, vale para qualquer chamador ══════════════
-  await test('[92 T5 servico] separarRequisicao direto (ALMOXARIFE) numa TOTALMENTE aprovada pelo GESTOR, S cancela pelos outros modulos no instante -> lanca 400 S1, CANCELADO, nada gravado', async () => {
+  // Etapa 101 (RN-05, B527): pelo servico, o mesmo desfecho do B1 — o cancelamento espera a separacao e recusa com M1.
+  await test('[92 T5 servico] separarRequisicao direto (ALMOXARIFE) numa TOTALMENTE aprovada pelo GESTOR, S cancela pelos outros modulos no instante -> (Etapa 101) o cancelamento espera; o servico separa 1; cancelamento 400 M1; EM_SEPARACAO', async () => {
     const m = await material(4);
     const R = await criarDe('S', [[m, 4]]);
     assert.strictEqual(await aprovarComoGestor(R), 'TOTALMENTE_RESERVADA');
-    const rids = (await reservasDe(R)).map((r) => r.id);
     const item = (await itensDe(R))[0].id;
-    let cancel = null;
-    const g = armar(RE_EM_SEPARACAO, async () => { cancel = await comPrazo(cancelarOutros('S', R), 5000, 'cancelamento no gancho'); });
-    let erro = null; let ok = null;
+    let cancelP = null; let naFila = false;
+    const g = armar(RE_EM_SEPARACAO, async () => { cancelP = cancelarOutros('S', R); naFila = await esperarNaFila(R); });
+    let ok = null;
     try {
       await silenciar(async () => {
-        try {
-          ok = await comPrazo(requisitionService.separarRequisicao(db, R, [{ item_id: item, quantidade_separada: 1 }], { ...USERS.ALMOX }), 10000, 'servico');
-        } catch (e) { erro = e; }
+        ok = await comPrazo(requisitionService.separarRequisicao(db, R, [{ item_id: item, quantidade_separada: 1 }], { ...USERS.ALMOX }), 10000, 'servico');
       });
     } finally { desarmar(); }
     afirmarGancho(g, 'servico');
-    assert.strictEqual(cancel && cancel.status, 200, `cancelamento: ${cancel && JSON.stringify(cancel.body)}`);
-    assert.ok(erro, `o servico nao recusou: ${JSON.stringify(ok)}`);
-    assert.strictEqual(erro.status, 400, `status do erro: ${erro.status} ${erro.message}`);
-    assert.strictEqual(erro.message, S1);
-    await afirmarNadaGravado(R, m, rids);
+    const cancel = await comPrazo(cancelP, 5000, 'cancelamento');
+    assert.strictEqual(ok && ok.status, 'EM_SEPARACAO', `servico: ${JSON.stringify(ok)}`);
+    assert.strictEqual(cancel.status, 400, `cancelamento: ${cancel.status} ${JSON.stringify(cancel.body)}`);
+    assert.strictEqual(cancel.body.error, M1_101);
+    assert.strictEqual(await st(R), 'EM_SEPARACAO');
+    assert.strictEqual(Number((await itensDe(R))[0].quantidade_separada), 1);
+    assert.strictEqual(naFila, true, 'o cancelamento NAO entrou na fila da trava por requisicao');
   });
 
   terminou = true;

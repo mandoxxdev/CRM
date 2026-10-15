@@ -21,8 +21,11 @@ const requisitionService = require('../services/almoxarifado/requisitionService'
 // Etapa 91 (T5, C141): o cancelamento por aqui solta as reservas e grava a trilha, como o do almoxarifado.
 const reservationService = require('../services/almoxarifado/reservationService');
 const { registrarAuditoria } = require('../services/almoxarifado/audit');
-const { dbRun, dbGet } = require('../services/almoxarifado/db');
-const { CANCELAVEIS_OUTROS_MODULOS } = require('../services/almoxarifado/requisitionStateMachine');
+const { dbRun, dbGet, dbAll } = require('../services/almoxarifado/db');
+const {
+  CANCELAVEIS_OUTROS_MODULOS, STATUS_CANCELAVEIS_COM_CONDICAO, recusaSaidaDaSeparacao, // Etapa 101 (C195)
+} = require('../services/almoxarifado/requisitionStateMachine');
+const travaPorRequisicao = require('../services/almoxarifado/travaPorRequisicao'); // Etapa 101 (RN-05)
 const { disponivelSql } = require('../services/almoxarifado/availabilitySql');
 const requisitionCreateService = require('../services/almoxarifado/requisitionCreateService');
 const alertService = require('../services/almoxarifado/alertService');
@@ -356,48 +359,70 @@ module.exports = function registerRequisicoesMaterialRoutes(app, db, authenticat
   // TOTALMENTE <-> PARCIALMENTE, ou a separacao reivindicou) -> rele e tenta UMA vez mais; a trilha grava o
   // status que o UPDATE de fato trocou (C148 (2)). Descartados: `status IN (lista)` sem o lido (a trilha
   // podia mentir) e tentar sem teto.
+  //
+  // Etapa 101 (C195, RN-01/RN-02/RN-05, B525/B527): a EM_SEPARACAO VAZIA sem entrega tambem cancela (antes: 400 e a
+  // reserva ATIVA presa ate o administrador excluir). Com material na caixa ou algo entregue, a recusa diz o que fazer
+  // (M1/M2 — so para quem pediu; quem nao pediu continua com a recusa generica, nao ve o estado). E o gesto inteiro
+  // (leitura do status E dos itens, UPDATE, liberacao, trilha) passou a correr DENTRO da trava por requisicao: a B450
+  // deixava os cancelamentos fora porque "nao existe EM_SEPARACAO -> CANCELADO" — deixou de ser verdade, e uma separacao
+  // que gravasse a caixa entre a leitura dos itens e o UPDATE deixaria material numa cancelada. Sem trava por material:
+  // cancelar so solta reserva, nao distribui (CLAUDE.md).
   app.put('/api/requisicoes-material/:id/cancelar', async (req, res) => {
     const id = req.params.id;
-    let trocado = null;
-    let numero = null;
     try {
-      for (let tentativa = 0; tentativa < 2 && !trocado; tentativa++) {
-        // eslint-disable-next-line no-await-in-loop
-        const row = await dbGet(db, 'SELECT status, numero FROM requisicoes_almoxarifado WHERE id = ? AND solicitante_id = ?', [id, req.user.id]);
-        if (!row || !CANCELAVEIS_OUTROS_MODULOS.includes(row.status)) break;
-        // eslint-disable-next-line no-await-in-loop
-        const r = await dbRun(db,
-          `UPDATE requisicoes_almoxarifado SET status='CANCELADO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
-         WHERE id=? AND solicitante_id=? AND status=?`,
-          [id, req.user.id, row.status]);
-        if (r.changes > 0) { trocado = row.status; numero = row.numero; }
-      }
-      if (!trocado) {
-        return res.status(400).json({ error: 'Requisição não encontrada ou não pode ser cancelada' });
-      }
-    } catch (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    try {
-      const { erros } = await reservationService.liberarReservasDaRequisicao(db, req.user, id, 'Requisição cancelada');
-      if (erros.length > 0) {
-        console.warn(`[requisicoes-material] liberacao das reservas no cancelamento deixou ${erros.length} reserva(s) presa(s) (requisicao ${id}): ${erros.map((x) => `${x.id}: ${x.erro}`).join('; ')}`);
-      }
-    } catch (e) {
-      console.warn(`[requisicoes-material] liberacao das reservas no cancelamento falhou (requisicao ${id}): ${e.message}`);
-    }
-    try {
-      await registrarAuditoria(db, {
-        entidade: 'requisicao', entidade_id: Number(id), acao: 'CANCELAMENTO',
-        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
-        dados_anteriores: { status: trocado },
-        dados_novos: { status: 'CANCELADO', numero, via: 'requisicoes-material' },
-        justificativa: null,
+      await travaPorRequisicao.serializarNaRequisicao(id, async () => {
+        let trocado = null;
+        let numero = null;
+        let recusa = null;
+        for (let tentativa = 0; tentativa < 2 && !trocado; tentativa++) {
+          // eslint-disable-next-line no-await-in-loop
+          const row = await dbGet(db, 'SELECT status, numero FROM requisicoes_almoxarifado WHERE id = ? AND solicitante_id = ?', [id, req.user.id]);
+          if (!row) break;
+          if (!CANCELAVEIS_OUTROS_MODULOS.includes(row.status) && !STATUS_CANCELAVEIS_COM_CONDICAO.includes(row.status)) {
+            recusa = null; // o status mudou para um que nao cancela: a recusa generica de sempre
+            break;
+          }
+          if (STATUS_CANCELAVEIS_COM_CONDICAO.includes(row.status)) {
+            // eslint-disable-next-line no-await-in-loop
+            const itens = await dbAll(db, `SELECT quantidade_separada, quantidade_entregue, quantidade_atendida
+              FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?`, [id]);
+            recusa = recusaSaidaDaSeparacao(row.status, itens, 'CANCELADO');
+            if (recusa) break;
+          }
+          // eslint-disable-next-line no-await-in-loop
+          const r = await dbRun(db,
+            `UPDATE requisicoes_almoxarifado SET status='CANCELADO', updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
+           WHERE id=? AND solicitante_id=? AND status=?`,
+            [id, req.user.id, row.status]);
+          if (r.changes > 0) { trocado = row.status; numero = row.numero; }
+        }
+        if (!trocado) {
+          return res.status(400).json({ error: recusa || 'Requisição não encontrada ou não pode ser cancelada' });
+        }
+        try {
+          const { erros } = await reservationService.liberarReservasDaRequisicao(db, req.user, id, 'Requisição cancelada');
+          if (erros.length > 0) {
+            console.warn(`[requisicoes-material] liberacao das reservas no cancelamento deixou ${erros.length} reserva(s) presa(s) (requisicao ${id}): ${erros.map((x) => `${x.id}: ${x.erro}`).join('; ')}`);
+          }
+        } catch (e) {
+          console.warn(`[requisicoes-material] liberacao das reservas no cancelamento falhou (requisicao ${id}): ${e.message}`);
+        }
+        try {
+          await registrarAuditoria(db, {
+            entidade: 'requisicao', entidade_id: Number(id), acao: 'CANCELAMENTO',
+            usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+            dados_anteriores: { status: trocado },
+            dados_novos: { status: 'CANCELADO', numero, via: 'requisicoes-material' },
+            justificativa: null,
+          });
+        } catch (e) {
+          console.warn(`[requisicoes-material] auditoria do cancelamento falhou (requisicao ${id}): ${e.message}`);
+        }
+        return res.json({ success: true });
       });
-    } catch (e) {
-      console.warn(`[requisicoes-material] auditoria do cancelamento falhou (requisicao ${id}): ${e.message}`);
+    } catch (err) {
+      if (!res.headersSent) res.status(500).json({ error: err.message });
     }
-    res.json({ success: true });
   });
 
 

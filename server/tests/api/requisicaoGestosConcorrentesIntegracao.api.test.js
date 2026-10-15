@@ -476,25 +476,27 @@ const esperarFila = async (R, ms = 3000) => {
   });
 
   // ══════════════ Jornada E — a 92 compoe ══════════════
-  await test('[93 T6 E1] (RN-03 da 92) S cancela pelos outros modulos no instante da reivindicacao da separacao de ALMOX, AGUARDADO (fora da trava) -> sem deadlock; cancelamento 200, separacao 400 S1, CANCELADO, nada gravado, r=0', async () => {
+  // Etapa 101 (RN-05, B527): os cancelamentos entraram na trava por requisicao — o cancelamento disparado na
+  // reivindicacao ESPERA a separacao (antes: AGUARDADO, fora da trava, cancelava 200 e a separacao tomava S1). A
+  // separacao grava 1 na caixa; o cancelamento le a caixa e recusa com M1 (a Em Separacao com material nao cancela).
+  await test('[93 T6 E1] (RN-03 da 92; Etapa 101) S cancela pelos outros modulos no instante da reivindicacao da separacao de ALMOX -> o cancelamento espera na fila; separacao 200 (separado 1); cancelamento 400 M1; EM_SEPARACAO, reserva ATIVA, saldo q=4 r=4; A44 vazia', async () => {
     desarmar();
     const x = await pedirEAprovar(await material(4), 4);
-    const g = armarAguardando(RE.CLAIM, () => cancelarOutros('S', x.R));
+    const g = armarFila(RE.CLAIM, x.R, () => cancelarOutros('S', x.R));
     const sep = await comPrazo(separar('ALMOX', x.R, x.item, 1), 10000, 'separacao');
     await afirmarGancho(g, 'E1');
     desarmar();
-    assert.strictEqual(g.resposta.status, 200, `cancelamento: ${g.resposta.status} ${JSON.stringify(g.resposta.body)}`);
-    assert.strictEqual(sep.status, 400, `separacao: ${sep.status} ${JSON.stringify(sep.body)}`);
-    assert.strictEqual(sep.body.error, S1);
+    assert.strictEqual(sep.status, 200, `separacao: ${sep.status} ${JSON.stringify(sep.body)}`);
+    assert.strictEqual(g.resposta.status, 400, `cancelamento: ${g.resposta.status} ${JSON.stringify(g.resposta.body)}`);
+    assert.strictEqual(g.resposta.body.error, 'Esta requisição tem material separado na caixa; para cancelar, o almoxarifado precisa devolvê-lo à prateleira primeiro.');
     const f = await foto(x);
-    assert.strictEqual(f.status, 'CANCELADO');
-    assert.strictEqual(f.sep, 0); assert.strictEqual(f.rodadas.length, 0);
-    assert.strictEqual(f.reserva, 'LIBERADA');
-    const tc = f.trilha.filter((t) => t.acao === 'CANCELAMENTO');
-    assert.strictEqual(tc.length, 1); assert.strictEqual(Number(tc[0].usuario_id), USERS.S.id, 'quem cancelou foi S');
-    assert.strictEqual(f.acoes.filter((a) => a === 'SEPARACAO').length, 0);
-    assert.deepStrictEqual(await saldo(x.m), { q: 4, r: 0 });
+    assert.strictEqual(f.status, 'EM_SEPARACAO');
+    assert.strictEqual(f.sep, 1); assert.strictEqual(f.rodadas.length, 1);
+    assert.strictEqual(f.reserva, 'ATIVA');
+    assert.strictEqual(f.trilha.filter((t) => t.acao === 'CANCELAMENTO').length, 0);
+    assert.deepStrictEqual(await saldo(x.m), { q: 4, r: 4 });
     await afirmarA44Vazia(x.R, undefined, 'E1');
+    afirmarFila(g, 'E1');
   });
 
   await test('[93 T6 E2] (RN-07 (b), 7a) de PARCIALMENTE_ATENDIDA (1 de 4), no UPDATE final da entrega de 1 de ALMOX, o ADMIN encerra (espera) -> entrega 200 PARCIALMENTE; encerrar 200 depois; ENCERRADA, reserva LIBERADA; uma nova entrega -> 400 E0; saldo q=2 r=0; A44 vazia', async () => {

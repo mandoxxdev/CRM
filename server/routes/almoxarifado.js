@@ -4032,6 +4032,17 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
         const check = requisitionStateMachine.validarTransicao(reqRow.status, 'ENCERRADA');
         if (!check.ok) return res.status(400).json({ error: check.erro });
+        // Etapa 101 (C195, RN-03/RN-04, B526): a EM_SEPARACAO encerra so com a caixa vazia e algo entregue (E1 com material
+        // na caixa, E2 sem entrega — essa cancela). Os itens sao lidos aqui, dentro da trava: separar, entregar e devolver
+        // (os escritores da caixa) estao nela. Uma funcao, conferida tambem na nova tentativa do compare-and-set abaixo.
+        const recusaDaSeparacao = async (status) => {
+          if (!requisitionStateMachine.STATUS_CANCELAVEIS_COM_CONDICAO.includes(status)) return null;
+          const itens = await dbAll(db, `SELECT quantidade_separada, quantidade_entregue, quantidade_atendida
+            FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?`, [req.params.id]);
+          return requisitionStateMachine.recusaSaidaDaSeparacao(status, itens, 'ENCERRADA');
+        };
+        const recusa = await recusaDaSeparacao(reqRow.status);
+        if (recusa) return res.status(400).json({ error: recusa });
 
         const { motivo } = req.body;
 
@@ -4049,6 +4060,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             if (!relido) return res.status(404).json({ error: 'Requisição não encontrada' });
             const recheck = requisitionStateMachine.validarTransicao(relido.status, 'ENCERRADA');
             if (!recheck.ok) return res.status(400).json({ error: recheck.erro });
+            // eslint-disable-next-line no-await-in-loop
+            const recusaRelida = await recusaDaSeparacao(relido.status); // Etapa 101 (RN-04): o relido EM_SEPARACAO
+            if (recusaRelida) return res.status(400).json({ error: recusaRelida });
             statusLido = relido.status;
           }
           // eslint-disable-next-line no-await-in-loop
@@ -4153,56 +4167,72 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // ser EM_SEPARACAO) e tenta uma vez mais; esgotou -> 400 R2. A trilha grava o status que o UPDATE
   // trocou. Resposta, 403/404 e literais inalterados. Virou `async`: o laco de duas tentativas nao cabia
   // no callback aninhado.
+  //
+  // Etapa 101 (C195, RN-01/RN-02/RN-05, B525/B527): a maquina ganhou EM_SEPARACAO -> CANCELADO, CONDICIONAL — so com a
+  // caixa vazia e nada entregue (`recusaSaidaDaSeparacao`: M1 com material na caixa, M2 com entrega). E o gesto inteiro
+  // corre DENTRO da trava por requisicao (B450 revista: a premissa "nao existe EM_SEPARACAO -> CANCELADO" acabou; uma
+  // separacao gravando a caixa entre a leitura dos itens e o UPDATE deixaria material numa cancelada). 404/403 de hoje
+  // ficam dentro tambem (a leitura do dono e barata e nao muda). Sem trava por material: so solta reserva.
   app.put('/api/almoxarifado/requisicoes/:id/cancelar', async (req, res) => {
-    const { motivo } = req.body;
+    const motivo = req.body ? req.body.motivo : undefined;
     const id = req.params.id;
-    let r;
-    let trocado = null;
     try {
-      r = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [id]);
-      if (!r) return res.status(404).json({ error: 'Não encontrada' });
-      if (r.solicitante_id !== req.user.id && !isSystemAdmin(req.user)) {
-        return res.status(403).json({ error: 'Sem permissão' });
-      }
-      for (let tentativa = 0; tentativa < 2 && !trocado; tentativa++) {
-        if (tentativa > 0) {
-          // eslint-disable-next-line no-await-in-loop
-          r = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [id]);
-          if (!r) break;
+      await travaPorRequisicao.serializarNaRequisicao(id, async () => {
+        let r;
+        let trocado = null;
+        let recusa = null;
+        r = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [id]);
+        if (!r) return res.status(404).json({ error: 'Não encontrada' });
+        if (r.solicitante_id !== req.user.id && !isSystemAdmin(req.user)) {
+          return res.status(403).json({ error: 'Sem permissão' });
         }
-        if (!requisitionStateMachine.validarTransicao(r.status, 'CANCELADO').ok) break;
-        // eslint-disable-next-line no-await-in-loop
-        const upd = await dbRun(db, `UPDATE requisicoes_almoxarifado SET status='CANCELADO', rejeicao_motivo=?, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
-          WHERE id=? AND status=?`, [motivo || null, id, r.status]);
-        if (upd.changes > 0) trocado = r.status;
-      }
-      if (!trocado) return res.status(400).json({ error: 'Não é possível cancelar neste status' });
-    } catch (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    // Cancelar sem soltar as reservas deixaria o hold preso: como a expiração é opt-in
-    // por config, na prática ficaria preso para sempre — a mesma armadilha de saldo
-    // reservado inutilizável que a Etapa 4 fecha no consumo. Best-effort: falha aqui não
-    // desfaz o cancelamento, que é a ação que o usuário pediu.
-    // Etapa 18 (RN-07): a trilha diz QUEM cancelou e de QUAL status (desde a 92, o que o UPDATE trocou).
-    // Nenhuma das duas falhas impede o `res.json`: o cancelamento ja esta efetivado.
-    try {
-      await reservationService.liberarReservasDaRequisicao(db, req.user, id, motivo || 'Requisição cancelada');
-    } catch (e) {
-      console.warn('Liberação de reservas no cancelamento:', e.message);
-    }
-    try {
-      await audit.registrarAuditoria(db, {
-        entidade: 'requisicao', entidade_id: Number(id), acao: 'CANCELAMENTO',
-        usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
-        dados_anteriores: { status: trocado },
-        dados_novos: { status: 'CANCELADO', numero: r.numero },
-        justificativa: motivo || null,
+        for (let tentativa = 0; tentativa < 2 && !trocado; tentativa++) {
+          if (tentativa > 0) {
+            // eslint-disable-next-line no-await-in-loop
+            r = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [id]);
+            if (!r) break;
+          }
+          if (!requisitionStateMachine.validarTransicao(r.status, 'CANCELADO').ok) break;
+          if (requisitionStateMachine.STATUS_CANCELAVEIS_COM_CONDICAO.includes(r.status)) {
+            // eslint-disable-next-line no-await-in-loop
+            const itens = await dbAll(db, `SELECT quantidade_separada, quantidade_entregue, quantidade_atendida
+              FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?`, [id]);
+            recusa = requisitionStateMachine.recusaSaidaDaSeparacao(r.status, itens, 'CANCELADO');
+            if (recusa) break;
+          }
+          // eslint-disable-next-line no-await-in-loop
+          const upd = await dbRun(db, `UPDATE requisicoes_almoxarifado SET status='CANCELADO', rejeicao_motivo=?, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
+            WHERE id=? AND status=?`, [motivo || null, id, r.status]);
+          if (upd.changes > 0) trocado = r.status;
+        }
+        if (!trocado) return res.status(400).json({ error: recusa || 'Não é possível cancelar neste status' });
+        // Cancelar sem soltar as reservas deixaria o hold preso: como a expiração é opt-in
+        // por config, na prática ficaria preso para sempre — a mesma armadilha de saldo
+        // reservado inutilizável que a Etapa 4 fecha no consumo. Best-effort: falha aqui não
+        // desfaz o cancelamento, que é a ação que o usuário pediu.
+        // Etapa 18 (RN-07): a trilha diz QUEM cancelou e de QUAL status (desde a 92, o que o UPDATE trocou).
+        // Nenhuma das duas falhas impede o `res.json`: o cancelamento ja esta efetivado.
+        try {
+          await reservationService.liberarReservasDaRequisicao(db, req.user, id, motivo || 'Requisição cancelada');
+        } catch (e) {
+          console.warn('Liberação de reservas no cancelamento:', e.message);
+        }
+        try {
+          await audit.registrarAuditoria(db, {
+            entidade: 'requisicao', entidade_id: Number(id), acao: 'CANCELAMENTO',
+            usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
+            dados_anteriores: { status: trocado },
+            dados_novos: { status: 'CANCELADO', numero: r.numero },
+            justificativa: motivo || null,
+          });
+        } catch (errAudit) {
+          console.error('[almoxarifado] Falha ao registrar auditoria de cancelamento de requisição:', errAudit.message);
+        }
+        return res.json({ success: true });
       });
-    } catch (errAudit) {
-      console.error('[almoxarifado] Falha ao registrar auditoria de cancelamento de requisição:', errAudit.message);
+    } catch (err) {
+      if (!res.headersSent) res.status(500).json({ error: err.message });
     }
-    return res.json({ success: true });
   });
 
   // DELETE /api/almoxarifado/requisicoes/:id — exclusão administrativa (soft delete + estorno)

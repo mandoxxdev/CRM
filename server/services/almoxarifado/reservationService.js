@@ -9,7 +9,7 @@ const { dbAll, dbGet, dbRun } = require('./db');
 const { registrarAuditoria } = require('./audit');
 const stockService = require('./stockService');
 const { can } = require('./permissions');
-const { validarTransicao } = require('./requisitionStateMachine');
+const { STATUS_CANCELAVEIS_SEM_CONDICAO } = require('./requisitionStateMachine');
 
 const CAMPOS_DONO = ['projeto_id', 'os_id', 'os_referencia', 'cliente_id'];
 
@@ -280,7 +280,9 @@ async function assertPodeLiberarReserva(db, user, reservaId) {
   // comecou (EM_SEPARACAO, PRONTA_PARA_RETIRADA...) o /cancelar recusa, e a liberacao pelo dono devolvia o
   // material JA SEPARADO ao disponivel: outra reserva o prometia e a entrega morria em "Maximo: 0". A regra
   // e derivada da maquina de estados (nao de uma lista a mao) para nao divergir do /cancelar.
-  if (ehDono && validarTransicao(q.status, 'CANCELADO').ok) return;
+  // Etapa 101 (RN-06, B528): a lista dos status que cancelam SEM condicao — a EM_SEPARACAO ganhou a seta para CANCELADO
+  // (so vazia e sem entrega), e derivar da seta crua devolvia ao dono a liberacao com material na caixa (o F1 acima).
+  if (ehDono && STATUS_CANCELAVEIS_SEM_CONDICAO.includes(q.status)) return;
   if (can(user, 'liberar_reserva_requisicao')) return;
   const numero = (q && q.numero) || `#${r.requisicao_id}`;
   if (ehDono) {

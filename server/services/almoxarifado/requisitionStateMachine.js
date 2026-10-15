@@ -8,6 +8,7 @@
  */
 const { dbGet, dbAll } = require('./db');
 const { disponivelSql } = require('./availabilitySql');
+const Q = require('./quantidade'); // Etapa 101: a regua da caixa (B524)
 
 // Etapa 73 (T1): abaixo disso o "a caminho" e residuo de ponto flutuante, nao compra vindo.
 const EPS_A_CAMINHO = 1e-9;
@@ -73,7 +74,11 @@ const TRANSICOES = {
   // Etapa 94 (B462, Fase 2 I2): a EM_SEPARACAO VAZIA ("Iniciar Separacao" sem quantidade) ainda e pre-gasto —
   // sem esta seta, separar 4 e entregar 4 depois de o limite baixar saia ENTREGUE sem aprovacao. A com
   // material separado fica de fora pelo predicado (alcadaDeValorAindaVale), nao pela seta.
-  EM_SEPARACAO: ['PRONTA_PARA_RETIRADA', 'PARCIALMENTE_ATENDIDA', 'ENTREGUE', 'AGUARDANDO_APROVACAO_VALOR'],
+  // Etapa 101 (C195, B525/B526): a EM_SEPARACAO VAZIA tem saida - CANCELADO com nada entregue, ENCERRADA com algo
+  // entregue. As setas sao CONDICIONAIS aos itens: quem as usa confere `recusaSaidaDaSeparacao` (abaixo); com material
+  // na caixa nenhuma das duas vale (cancelar/encerrar perderia a caixa sem movimento, B437).
+  EM_SEPARACAO: ['PRONTA_PARA_RETIRADA', 'PARCIALMENTE_ATENDIDA', 'ENTREGUE', 'AGUARDANDO_APROVACAO_VALOR',
+    'CANCELADO', 'ENCERRADA'],
   // Etapa 98 (B504): a devolucao a prateleira muda a caixa que a liberacao atestou — a PRONTA volta a EM_SEPARACAO
   // (sem a seta, a Pronta esvaziada ficava presa: separar, entregar e encerrar recusavam e ela sumia da fila).
   PRONTA_PARA_RETIRADA: ['PARCIALMENTE_ATENDIDA', 'ENTREGUE', 'EM_SEPARACAO'],
@@ -163,6 +168,56 @@ function separacaoAReabrir(status, itens = []) {
   return STATUS_PRE_SEPARACAO.includes(status) && (itens || []).some((i) => Number(i.quantidade_separada || 0)
     - Number(i.quantidade_entregue ?? i.quantidade_atendida ?? 0) > 1e-9);
 }
+
+/**
+ * Etapa 101 (C195, B525/B526) — a saida da EM_SEPARACAO VAZIA. Pura; espelhada no cliente
+ * (`client/src/components/almoxarifado/requisicaoLabels.js`, destinoDaSeparacaoVazia), conferida por teste.
+ * `null` com material na caixa (a regua UNICA da B524: Q.qtd(separado - entregue) > 1e-9); senao 'ENCERRADA' se algum
+ * item teve entrega (> 1e-9, entregue = quantidade_entregue ?? quantidade_atendida) e 'CANCELADO' se nada saiu.
+ * Nao olha o status: quem chama ja sabe que e EM_SEPARACAO.
+ */
+function destinoDaSeparacaoVazia(itens = []) {
+  const lista = itens || [];
+  const entregue = (i) => Number(i.quantidade_entregue ?? i.quantidade_atendida ?? 0) || 0;
+  if (lista.some((i) => Q.qtd((Number(i.quantidade_separada) || 0) - entregue(i)) > 1e-9)) return null;
+  return lista.some((i) => entregue(i) > 1e-9) ? 'ENCERRADA' : 'CANCELADO';
+}
+
+/** Etapa 101: as literais das recusas da saida da EM_SEPARACAO (contrato do plano, M1/M2/E1/E2). */
+const MSG_SAIDA_SEPARACAO = Object.freeze({
+  M1: 'Esta requisição tem material separado na caixa; para cancelar, o almoxarifado precisa devolvê-lo à prateleira primeiro.',
+  M2: 'Esta requisição já teve material entregue e não pode ser cancelada; o almoxarifado pode encerrá-la.',
+  E1: 'Esta requisição tem material separado na caixa; entregue-o ou devolva-o à prateleira antes de encerrar.',
+  E2: 'Nada foi entregue nesta requisição; em vez de encerrar, ela deve ser cancelada por quem pediu ou pelo administrador do sistema.',
+});
+
+/**
+ * Etapa 101 (RN-02, RN-04): a condicao das setas EM_SEPARACAO -> CANCELADO/ENCERRADA. `null` = pode (ou o status nao
+ * e EM_SEPARACAO — ai so a maquina decide); senao a literal da recusa. Chamar DEPOIS de validarTransicao e com os
+ * itens lidos DENTRO da trava por requisicao (os escritores da caixa — separar, entregar, devolver — estao nela).
+ */
+function recusaSaidaDaSeparacao(status, itens, destino) {
+  if (status !== 'EM_SEPARACAO') return null;
+  const d = destinoDaSeparacaoVazia(itens);
+  if (destino === 'CANCELADO') {
+    if (d === null) return MSG_SAIDA_SEPARACAO.M1;
+    return d === 'ENCERRADA' ? MSG_SAIDA_SEPARACAO.M2 : null;
+  }
+  if (destino === 'ENCERRADA') {
+    if (d === null) return MSG_SAIDA_SEPARACAO.E1;
+    return d === 'CANCELADO' ? MSG_SAIDA_SEPARACAO.E2 : null;
+  }
+  return null;
+}
+
+/**
+ * Etapa 101 (RN-06, B528): os status que vao a CANCELADO SEM condicao de itens — os com seta, menos a EM_SEPARACAO
+ * (condicional). E a regua da excecao do dono em `reservationService.assertPodeLiberarReserva` e da lista da tela das
+ * reservas (`ReservasAlmoxarifado.js`, STATUS_DONO_LIBERA_RESERVA). Derivada da maquina: setas novas entram sozinhas.
+ */
+const STATUS_CANCELAVEIS_COM_CONDICAO = Object.freeze(['EM_SEPARACAO']);
+const STATUS_CANCELAVEIS_SEM_CONDICAO = Object.freeze(Object.keys(TRANSICOES)
+  .filter((s) => TRANSICOES[s].includes('CANCELADO') && !STATUS_CANCELAVEIS_COM_CONDICAO.includes(s)));
 
 /**
  * Regra pós-aprovação (design, seção "Máquina de estados"): calculada ANTES do handler
@@ -255,4 +310,6 @@ module.exports = {
   alcadaDeValorAindaVale, // Etapa 94
   STATUS_PRE_SEPARACAO, // Etapa 94 (T2)
   separacaoAReabrir, // Etapa 94 (T2)
+  destinoDaSeparacaoVazia, recusaSaidaDaSeparacao, MSG_SAIDA_SEPARACAO, // Etapa 101 (C195)
+  STATUS_CANCELAVEIS_SEM_CONDICAO, STATUS_CANCELAVEIS_COM_CONDICAO, // Etapa 101 (RN-06)
 };

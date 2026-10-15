@@ -366,12 +366,19 @@ async function criarRequisicao(db, { status, itens, solicitanteId = 1 }) {
     assert.strictEqual(row.status, 'CANCELADO');
   });
 
-  await test('[cancelar] de EM_SEPARACAO -> 400 (continua não permitido)', async () => {
+  // Etapa 101 (C195, B525): a EM_SEPARACAO com material na caixa continua sem cancelar (agora com a recusa M1); a VAZIA e sem
+  // entrega passou a cancelar (separacaoVaziaSaida.api.test.js).
+  await test('[cancelar] de EM_SEPARACAO com material na caixa -> 400 M1 (continua não permitido); vazia -> 200 (Etapa 101)', async () => {
     const matId = await criarMaterial('MATEST-12', 10);
     const { id: reqId } = await criarRequisicao(db, { status: 'EM_SEPARACAO', itens: [{ material_id: matId, quantidade: 1 }] });
+    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada = 1 WHERE requisicao_id = ?', [reqId]);
 
     const res = await request(app).put(`/api/almoxarifado/requisicoes/${reqId}/cancelar`).send({});
     assert.strictEqual(res.status, 400, JSON.stringify(res.body));
+    assert.strictEqual(res.body.error, 'Esta requisição tem material separado na caixa; para cancelar, o almoxarifado precisa devolvê-lo à prateleira primeiro.');
+    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada = 0 WHERE requisicao_id = ?', [reqId]);
+    const vazia = await request(app).put(`/api/almoxarifado/requisicoes/${reqId}/cancelar`).send({});
+    assert.strictEqual(vazia.status, 200, JSON.stringify(vazia.body));
   });
 
   await close();

@@ -381,7 +381,10 @@ process.on('exit', (code) => {
   });
 
   // RN-02b ────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  await test('[98 RN-02b] o 409 no meio do laco: quem pediu cancela depois do 1o claim -> 409 D409; item 1 devolvido COM trilha e auditoria; item 2 intacto', async () => {
+  // Etapa 101 (RN-05, B527): o cancelamento pelos outros modulos entrou na trava por requisicao — nao cai mais no meio
+  // da devolucao (espera ela terminar). O 409 do meio do laco continua alcancavel por quem escreve o status FORA da
+  // trava (a reprovacao por valor, escritores de legado): o gancho agora e um escritor direto que poe CANCELADO.
+  await test('[98 RN-02b] o 409 no meio do laco: um escritor fora da trava cancela depois do 1o claim -> 409 D409; item 1 devolvido COM trilha e auditoria; item 2 intacto', async () => {
     const m1 = await material(0); const m2 = await material(0);
     await entrar(m1, 2); await entrar(m2, 2);
     const b = await req([[m1, 2], [m2, 2]]); await aprovar(b.R);
@@ -398,7 +401,7 @@ process.on('exit', (code) => {
         const cb = args[args.length - 1];
         args[args.length - 1] = function aposClaim(err) {
           const ctx = this;
-          cancelamento = como('S').put(`/api/requisicoes-material/${b.R}/cancelar`, { motivo: 'e98 no meio' });
+          cancelamento = new Promise((res, rej) => orig.call(db, "UPDATE requisicoes_almoxarifado SET status = 'CANCELADO' WHERE id = ?", [b.R], (e) => (e ? rej(e) : res({ status: 200 }))));
           const espera = async () => {
             for (let k = 0; k < 200 && (await status(b.R)) !== 'CANCELADO'; k++) await dormir(5); // eslint-disable-line no-await-in-loop
           };
@@ -410,7 +413,7 @@ process.on('exit', (code) => {
     let r;
     try { r = await devolver(b.R, [[b.ids[0], 2], [b.ids[1], 2]]); } finally { db.run = orig; }
     assert.ok(cancelamento, 'premissa: o gancho disparou');
-    assert.strictEqual((await cancelamento).status, 200, 'premissa: o cancelamento pelos outros modulos passou no meio');
+    assert.strictEqual((await cancelamento).status, 200, 'premissa: o escritor fora da trava passou no meio');
     assert.strictEqual(await status(b.R), 'CANCELADO');
     assert.strictEqual(r.status, 409, JSON.stringify(r.body));
     assert.strictEqual(r.body.error, MSG_D409);

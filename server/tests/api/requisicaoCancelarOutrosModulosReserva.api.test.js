@@ -32,6 +32,8 @@ const ADMIN = { id: 1, nome: 'Adm 91T5', role: 'admin', is_superadmin: 1, email:
 const S = { id: 9151, nome: 'Solicitante 91T5', role: 'user', email: 's91t5@t.com' }; // sem perfil
 const OUTRO = { id: 9152, nome: 'Outro 91T5', role: 'user', email: 'o91t5@t.com' };
 const RECUSA = 'Requisição não encontrada ou não pode ser cancelada';
+// Etapa 101 (RN-02): a recusa da EM_SEPARACAO com material na caixa.
+const M1_101 = 'Esta requisição tem material separado na caixa; para cancelar, o almoxarifado precisa devolvê-lo à prateleira primeiro.';
 const MOTIVO_MOV = 'Liberação por cancelamento de requisição';
 // Literais congeladas do plano (Contrato, L2/L2b).
 const L2 = (id, msg) => `[requisicoes-material] liberacao das reservas no cancelamento falhou (requisicao ${id}): ${msg}`;
@@ -213,7 +215,9 @@ process.on('exit', (code) => {
     });
   }
 
-  for (const status of ['RASCUNHO', 'AGUARDANDO_APROVACAO_VALOR', 'EM_SEPARACAO', 'PRONTA_PARA_RETIRADA',
+  // Etapa 101 (C195, B525): EM_SEPARACAO saiu desta lista — a VAZIA sem entrega passou a cancelar (separacaoVaziaSaida);
+  // a com material na caixa recusa com M1 (o teste logo abaixo).
+  for (const status of ['RASCUNHO', 'AGUARDANDO_APROVACAO_VALOR', 'PRONTA_PARA_RETIRADA',
     'PARCIALMENTE_ATENDIDA', 'ENTREGUE', 'ENCERRADA', 'REJEITADO', 'CANCELADO']) {
     // eslint-disable-next-line no-await-in-loop
     await test(`[92 RN-01] (b) ${status}: S tenta cancelar -> 400 R1, nada muda, sem trilha`, async () => {
@@ -225,6 +229,16 @@ process.on('exit', (code) => {
       assert.strictEqual((await trilha(R)).length, 0);
     });
   }
+
+  await test('[92 RN-01] (b) EM_SEPARACAO com material na caixa: S tenta cancelar -> 400 M1 (Etapa 101), nada muda, sem trilha', async () => {
+    const { R } = await montar92('EM_SEPARACAO', { reservar: false });
+    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada = 4 WHERE requisicao_id = ?', [R]);
+    const c = await cancelar(S, R);
+    assert.strictEqual(c.status, 400, JSON.stringify(c.body));
+    assert.strictEqual(c.body.error, M1_101);
+    assert.strictEqual(await st(R), 'EM_SEPARACAO');
+    assert.strictEqual((await trilha(R)).length, 0);
+  });
 
   for (const status of CANCELAVEIS) {
     // eslint-disable-next-line no-await-in-loop
@@ -318,11 +332,15 @@ process.on('exit', (code) => {
     assert.strictEqual((await trilha(R)).length, 0);
   });
 
-  await test('[92 RN-02] (c) vira EM_SEPARACAO no instante -> 400 R1, EM_SEPARACAO, reserva ATIVA, UPDATE emitido 1 vez', async () => {
+  // Etapa 101 (C195, B525): a EM_SEPARACAO VAZIA passou a cancelar — a separacao que vira EM_SEPARACAO no instante tem
+  // de ter posto material na caixa (aqui, o legado com a caixa cheia num status pre-separacao); a nova tentativa le os
+  // itens e recusa com M1 (antes: R1, porque a maquina nao tinha a seta).
+  await test('[92 RN-02] (c) vira EM_SEPARACAO (com material na caixa) no instante -> 400 M1 (Etapa 101; era R1), EM_SEPARACAO, reserva ATIVA, UPDATE emitido 1 vez', async () => {
     const { R, rid } = await montar92('TOTALMENTE_RESERVADA');
+    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada = 4 WHERE requisicao_id = ?', [R]);
     const { out: c, emissoes } = await comGancho(['EM_SEPARACAO'], () => cancelar(S, R));
     assert.strictEqual(c.status, 400, JSON.stringify(c.body));
-    assert.strictEqual(c.body.error, RECUSA);
+    assert.strictEqual(c.body.error, M1_101);
     assert.strictEqual(emissoes(), 1, `UPDATE emitido ${emissoes()} vez(es)`);
     assert.strictEqual(await st(R), 'EM_SEPARACAO');
     assert.strictEqual((await reserva(rid)).status, 'ATIVA');

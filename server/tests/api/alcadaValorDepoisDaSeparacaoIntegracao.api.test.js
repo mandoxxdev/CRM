@@ -35,6 +35,7 @@ const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const { PERFIS } = require('../../services/almoxarifado/permissions');
 const requisitionService = require('../../services/almoxarifado/requisitionService');
+const travaPorRequisicao = require('../../services/almoxarifado/travaPorRequisicao'); // Etapa 101 (RN-05)
 const valueApprovalService = require('../../services/almoxarifado/requisitionValueApprovalService');
 
 let passed = 0; let failed = 0;
@@ -121,6 +122,20 @@ const notificacoesDe = (R) => notificados.filter((id) => id === Number(R)).lengt
   db.run = function (sql, ...rest) {
     const s = String(sql);
     for (const g of ganchos) {
+      if (g.armado && g.re.test(s) && g.fila) {
+        g.armado = false; g.disparos++;
+        g.promessa = Promise.resolve().then(g.fn).then((r) => { g.resposta = r; }, (e) => { g.erro = e; });
+        (async () => {
+          const ate = Date.now() + 3000;
+          while (travaPorRequisicao.esperandoNaRequisicao(g.R) < 1 && Date.now() < ate) {
+            // eslint-disable-next-line no-await-in-loop
+            await new Promise((r) => setTimeout(r, 5));
+          }
+          g.entrouNaFila = travaPorRequisicao.esperandoNaRequisicao(g.R) >= 1;
+          origRun(sql, ...rest);
+        })();
+        return this;
+      }
       if (g.armado && g.re.test(s)) {
         g.armado = false; g.disparos++;
         g.promessa = comPrazo(Promise.resolve().then(g.fn), 5000, 'gesto aguardado no gancho')
@@ -132,6 +147,9 @@ const notificacoesDe = (R) => notificados.filter((id) => id === Number(R)).lengt
     return origRun(sql, ...rest);
   };
   const armar = (re, fn) => { const g = { re, fn, disparos: 0, armado: true }; ganchos.push(g); return g; };
+  // Etapa 101 (RN-05): o gesto que DISPUTA a trava por requisicao nao pode ser aguardado no gancho (esperaria a si
+  // mesmo): dispara sem aguardar, espera ele entrar na fila da trava e so entao emite o comando retido.
+  const armarFila = (re, R, fn) => { const g = { re, R, fn, fila: true, disparos: 0, armado: true }; ganchos.push(g); return g; };
   const desarmar = () => { ganchos = []; };
 
   // ── configuracao da alcada: escritor direto so no setup/restauro; os gatilhos usam a rota ──
@@ -390,30 +408,40 @@ const notificacoesDe = (R) => notificados.filter((id) => id === Number(R)).lengt
   });
 
   // ══════════════ Jornada E — a corrida, pela rota ══════════════
-  await test('[94 T3 E] R aprovada, entrada cara; no UPDATE da alcada S cancela pelos outros modulos (aguardado) -> cancelamento 200, separacao 409 V1 "agora CANCELADO", CANCELADO, reserva LIBERADA, 0 rodadas, nenhuma notificacao; /aprovar-valor 400 AV1 sem reserva nova; saldo q=9 r=0; A43 (a) e A45 vazias', async () => {
+  // Etapa 101 (RN-05, B527): os cancelamentos entraram na trava por requisicao. O cancelamento disparado no UPDATE da
+  // alcada (dentro da separacao) ESPERA a separacao — antes rodava ali, AGUARDADO, e vencia (CANCELADO; a separacao
+  // 409 V1). Agora a separacao termina primeiro (403 V403b, AGUARDANDO_APROVACAO_VALOR, notificada), e o cancelamento
+  // pelos outros modulos le esse status, que nao cancela por la (lista RN-07 da 92): 400 R1. O documento segue: ADMIN2
+  // aprova por valor e S cancela -> CANCELADO, reserva LIBERADA, saldo q=9 r=0.
+  await test('[94 T3 E] (Etapa 101) R aprovada, entrada cara; no UPDATE da alcada S cancela pelos outros modulos -> o cancelamento ESPERA na fila; separacao 403 V403b, AGUARDANDO_APROVACAO_VALOR, 1 notificacao; cancelamento 400 R1; ADMIN2 aprova por valor; S cancela -> CANCELADO, reserva LIBERADA; saldo q=9 r=0; A43 (a) e A45 vazias', async () => {
     desarmar(); await config({ ativo: 1, limite: 10 });
     const x = await pedirEAprovar(await material(8));
     await entradaCara(x);
-    const g = armar(RE_ALCADA, () => cancelarOutros('S', x));
+    const g = armarFila(RE_ALCADA, x.R, () => cancelarOutros('S', x));
     let s;
     try { s = await comPrazo(separar('ALMOX', x, 4), 10000, 'separacao'); } finally { desarmar(); }
     await g.promessa;
     assert.strictEqual(g.disparos, 1, `E: o gancho disparou ${g.disparos} vez(es) — rodada sem valor`);
     assert.ok(!g.erro, g.erro && g.erro.message);
-    assert.strictEqual(g.resposta.status, 200, `E: cancelar ${g.resposta.status} ${JSON.stringify(g.resposta.body)}`);
-    const f = await foto(x);
-    assert.strictEqual(f.status, 'CANCELADO', `E: status final ${f.status}`);
-    assert.strictEqual(s.status, 409, `E: separar ${s.status} ${JSON.stringify(s.body)}`);
-    assert.strictEqual(s.body.error, V1('CANCELADO'));
-    assert.strictEqual(f.reservas, 'LIBERADA', `E: reservas ${f.reservas}`);
+    assert.strictEqual(s.status, 403, `E: separar ${s.status} ${JSON.stringify(s.body)}`);
+    assert.match(s.body.error, V403B);
+    assert.strictEqual(g.resposta.status, 400, `E: cancelar ${g.resposta.status} ${JSON.stringify(g.resposta.body)}`);
+    assert.strictEqual(g.resposta.body.error, 'Requisição não encontrada ou não pode ser cancelada');
+    let f = await foto(x);
+    assert.strictEqual(f.status, 'AGUARDANDO_APROVACAO_VALOR', `E: status ${f.status}`);
+    assert.strictEqual(f.reservas, 'ATIVA', `E: reservas ${f.reservas}`);
     assert.strictEqual(f.rodadas, 0); assert.strictEqual(f.sep, 0);
-    assert.strictEqual(notificacoesDe(x.R), 0, `E: notificado ${notificacoesDe(x.R)} vez(es)`);
+    assert.strictEqual(notificacoesDe(x.R), 1, `E: notificado ${notificacoesDe(x.R)} vez(es)`);
     const a = await aprovarValor(x);
-    assert.strictEqual(a.status, 400, `E: aprovar-valor ${a.status} ${JSON.stringify(a.body)}`);
-    assert.strictEqual(a.body.error, AV1);
-    assert.strictEqual((await foto(x)).reservas, 'LIBERADA', 'E: reserva nova depois do aprovar-valor');
+    assert.strictEqual(a.status, 200, `E: aprovar-valor ${a.status} ${JSON.stringify(a.body)}`);
+    const c = await cancelarOutros('S', x);
+    assert.strictEqual(c.status, 200, `E: cancelar depois ${c.status} ${JSON.stringify(c.body)}`);
+    f = await foto(x);
+    assert.strictEqual(f.status, 'CANCELADO');
+    assert.strictEqual(f.reservas, 'LIBERADA', `E: reservas ${f.reservas}`);
     assert.deepStrictEqual(await saldo(x.m), { q: 9, r: 0 }, 'E: saldo');
     await afirmarConsultasVazias(x, 'E');
+    assert.strictEqual(g.entrouNaFila, true, 'E: o cancelamento NAO entrou na fila da trava por requisicao');
   });
 
   // ══════════════ Jornada F — o legado (B458, B460) ══════════════

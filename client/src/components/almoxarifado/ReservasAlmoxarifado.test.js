@@ -358,10 +358,15 @@ describe('[RN-10] Liberar reserva de requisição — de quem é', () => {
     expect(modalAberto()).not.toBeNull();
   });
 
-  test('(d4) a lista de status em que o dono libera é a do servidor: os que a máquina deixa ir para CANCELADO', () => {
+  // Etapa 101 (RN-06, B528): a máquina ganhou EM_SEPARACAO -> CANCELADO, condicional à caixa vazia sem entrega — o dono
+  // não libera ali. A lista do servidor passou a ser STATUS_CANCELAVEIS_SEM_CONDICAO (as setas para CANCELADO menos as
+  // condicionais); a guarda abaixo confere que a EM_SEPARACAO TEM a seta e mesmo assim fica de fora.
+  test('(d4) a lista de status em que o dono libera é a do servidor: os que vão para CANCELADO sem condição', () => {
     // eslint-disable-next-line global-require, import/no-unresolved
-    const { TRANSICOES } = require('../../../../server/services/almoxarifado/requisitionStateMachine');
-    const doServidor = Object.keys(TRANSICOES).filter((s) => TRANSICOES[s].includes('CANCELADO'));
+    const { TRANSICOES, STATUS_CANCELAVEIS_SEM_CONDICAO } = require('../../../../server/services/almoxarifado/requisitionStateMachine');
+    const doServidor = [...STATUS_CANCELAVEIS_SEM_CONDICAO];
+    expect(TRANSICOES.EM_SEPARACAO).toContain('CANCELADO');
+    expect(doServidor).not.toContain('EM_SEPARACAO');
     // Guarda da guarda: import quebrado viria vazio e o toEqual compararia nada com nada.
     expect(doServidor).toContain('TOTALMENTE_RESERVADA');
     expect([...STATUS_DONO_LIBERA_RESERVA].sort()).toEqual([...doServidor].sort());

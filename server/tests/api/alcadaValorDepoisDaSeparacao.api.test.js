@@ -360,15 +360,26 @@ const notificacoesDe = (R) => notificados.filter((id) => id === Number(R)).lengt
     almoxarifado: (x) => como('S').put(`${API}/requisicoes/${x.R}/cancelar`, { motivo: 'desisti 94' }),
     'outros modulos': (x) => como('S').put(`/api/requisicoes-material/${x.R}/cancelar`, {}),
   };
-  for (const [via, cancelar] of Object.entries(CANCELAR)) {
+  // Etapa 101 (RN-05, B527): os dois cancelamentos entraram na trava por requisicao — pela ROTA, o cancelamento nao cai
+  // mais no meio da separacao (espera ela terminar; o caso da rota esta logo abaixo, (a')/(b')). O compare-and-set da
+  // gravacao da alcada (B456) continua valendo contra quem escreve o status FORA da trava: o gancho agora e um escritor
+  // direto que faz o que o cancelamento de antes fazia (status CANCELADO + solta as reservas pelo servico).
+  const reservationService = require('../../services/almoxarifado/reservationService');
+  const travaPorRequisicao = require('../../services/almoxarifado/travaPorRequisicao');
+  const cancelarForaDaTrava = async (x) => {
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET status = 'CANCELADO', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [x.R]);
+    await reservationService.liberarReservasDaRequisicao(db, { ...USERS.S }, x.R, 'Requisição cancelada');
+    return { status: 200, body: { success: true } };
+  };
+  for (const via of ['almoxarifado', 'outros modulos']) {
     // eslint-disable-next-line no-await-in-loop
-    await test(`[94 RN-04] (${via === 'almoxarifado' ? 'a' : 'b'}) separar x cancelar (${via}) no UPDATE da alcada: cancelamento 200, separacao 409 V1 "agora CANCELADO", final CANCELADO, reserva LIBERADA, 0 rodadas, nenhuma notificacao; /aprovar-valor 400 AV1 sem reserva nova; A43 (a) vazia`, async () => {
+    await test(`[94 RN-04] (${via === 'almoxarifado' ? 'a' : 'b'}) separar x cancelamento FORA DA TRAVA (escritor direto, Etapa 101) no UPDATE da alcada: separacao 409 V1 "agora CANCELADO", final CANCELADO, reserva LIBERADA, 0 rodadas, nenhuma notificacao; /aprovar-valor 400 AV1 sem reserva nova; A43 (a) vazia`, async () => {
       await config({ ativo: 1, limite: 10 });
       const x = await montar('RESERVADA');
       let s; let g;
       try {
         await config({ ativo: 1, limite: 1 });
-        g = armar(RE_ALCADA, () => cancelar(x));
+        g = armar(RE_ALCADA, () => cancelarForaDaTrava(x));
         s = await separar('ALMOX', x, 4);
       } finally { desarmar(); await config({ ativo: 1, limite: 10 }); }
       assert.strictEqual(g.disparos, 1, `o gancho disparou ${g.disparos} vez(es) — rodada sem valor`);
@@ -387,6 +398,51 @@ const notificacoesDe = (R) => notificados.filter((id) => id === Number(R)).lengt
       assert.strictEqual(a.body.error, AV1);
       assert.strictEqual((await foto(x)).reservas, 'LIBERADA', 'reserva nova depois do aprovar-valor');
       assert.deepStrictEqual(await dbAll(db, A43A, [x.R]), [], 'A43 (a) lista a requisicao (ressuscitada)');
+    });
+  }
+  // Etapa 101 (RN-05): pela ROTA, o cancelamento clicado no instante da alcada ESPERA a separacao (sem o gancho
+  // aguardado: dispara e solta o comando retido). A separacao termina primeiro — 403 V403b, AGUARDANDO_APROVACAO_VALOR,
+  // aprovadores notificados — e o cancelamento le esse status: pelo almoxarifado cancela (200, reserva LIBERADA); pelos
+  // outros modulos recusa (a lista da tela deles nao tem AGUARDANDO_APROVACAO_VALOR, 92 RN-07).
+  for (const via of ['almoxarifado', 'outros modulos']) {
+    // eslint-disable-next-line no-await-in-loop
+    await test(`[94 RN-04] (${via === 'almoxarifado' ? "a'" : "b'"}) (Etapa 101) separar x cancelar (${via}, ROTA) no UPDATE da alcada: separacao 403 V403b; o cancelamento espera e ${via === 'almoxarifado' ? '200, CANCELADO, reserva LIBERADA' : '400 R1, AGUARDANDO_APROVACAO_VALOR, reserva ATIVA'}; 1 notificacao`, async () => {
+      await config({ ativo: 1, limite: 10 });
+      const x = await montar('RESERVADA');
+      let s; let cancelP = null; let naFila = false;
+      try {
+        await config({ ativo: 1, limite: 1 });
+        // Dispara o cancelamento e segura o UPDATE da alcada ate ele ENTRAR NA FILA da trava (ou 1,5 s — sem a trava ele
+        // terminaria nesse tempo, por cima da alcada, e a separacao sairia 409 V1: o controle).
+        armar(RE_ALCADA, async () => {
+          cancelP = CANCELAR[via](x);
+          const ate = Date.now() + 1500;
+          while (travaPorRequisicao.esperandoNaRequisicao(x.R) < 1 && Date.now() < ate) {
+            // eslint-disable-next-line no-await-in-loop
+            await new Promise((r) => setTimeout(r, 5));
+          }
+          naFila = travaPorRequisicao.esperandoNaRequisicao(x.R) >= 1;
+          return null;
+        });
+        s = await separar('ALMOX', x, 4);
+      } finally { desarmar(); await config({ ativo: 1, limite: 10 }); }
+      assert.ok(cancelP, 'o gancho nao disparou');
+      const c = await cancelP;
+      assert.strictEqual(s.status, 403, `separar: ${s.status} ${JSON.stringify(s.body)}`);
+      const f = await foto(x);
+      if (via === 'almoxarifado') {
+        assert.strictEqual(c.status, 200, `cancelar: ${c.status} ${JSON.stringify(c.body)}`);
+        assert.strictEqual(f.status, 'CANCELADO');
+        assert.strictEqual(f.reservas, 'LIBERADA');
+      } else {
+        assert.strictEqual(c.status, 400, `cancelar: ${c.status} ${JSON.stringify(c.body)}`);
+        assert.strictEqual(c.body.error, 'Requisição não encontrada ou não pode ser cancelada');
+        assert.strictEqual(f.status, 'AGUARDANDO_APROVACAO_VALOR');
+        assert.strictEqual(f.reservas, 'ATIVA');
+      }
+      assert.strictEqual(notificacoesDe(x.R), 1, `notificado ${notificacoesDe(x.R)} vez(es)`);
+      assert.deepStrictEqual(await dbAll(db, A43A, [x.R]), [], 'A43 (a) lista a requisicao');
+      assert.strictEqual(naFila, true, 'o cancelamento NAO entrou na fila da trava por requisicao');
     });
   }
   await test('[94 RN-04] (c) sem gancho: Promise.all separar x cancelar (almoxarifado), d=0, N=10 -> 0/10 em AGUARDANDO_APROVACAO_VALOR sobre cancelamento 200', async () => {
