@@ -649,6 +649,27 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       return res.status(errDono.status || 500).json({ error: errDono.message });
     }
 
+    // Etapa 112 (C222, RN-01..RN-04, RN-07): ligar lote ou serie (0 -> 1, comparado com o GRAVADO — o formulario sempre
+    // manda as chaves) num material cujo saldo nao esta identificado (sobra sem lote atribuido; fisico diferente das series
+    // presentes) exige `ajustar_estoque`: depois de ligar, a saida desse saldo e recusada ate ser regularizado, e
+    // regularizar e do Administrador. Depois da guarda do dono e antes da familia; recusa = nada gravado.
+    const controlesQueLiga = materialService.controlesLigados(current, merged);
+    const podeRegularizar = can(req.user, 'ajustar_estoque');
+    const guardaControle = controlesQueLiga.length > 0 && !podeRegularizar;
+    const recusaControle = async () => {
+      const partes = await materialService.saldoNaoIdentificado(db, req.params.id, controlesQueLiga);
+      return partes.length === 0 ? null : materialService.mensagemControleSemPermissao(current.codigo, controlesQueLiga,
+        partes, getPerfilFromUser(req.user));
+    };
+    if (guardaControle) {
+      try {
+        const msg = await recusaControle();
+        if (msg) return res.status(403).json({ error: msg });
+      } catch (errControle) {
+        return res.status(500).json({ error: errControle.message });
+      }
+    }
+
     // Mesma semântica do T3 (comentário original preservado): só revalida quando o valor é
     // NOVO — informado explicitamente, OU a família efetiva mudou (um vínculo preservado pode
     // não ser filho da família nova). Um vínculo preservado com a MESMA família já era válido
@@ -710,19 +731,38 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // outra coisa mudou na janela (E4).
     const condFamilia = materialService.condicaoFamiliaSql(merged.familia_id, merged.subfamilia_id,
       { familia: validouFamilia, sub: validouSub });
+    // Etapa 112 (RN-06): para quem nao pode regularizar, o UPDATE so grava se o controle gravado ainda e o lido (um
+    // desligar de outra aba no meio nao vira "manter ligado") e, quando liga, se o saldo continua identificado — uma
+    // Entrada sem lote que caiu depois da leitura nao fica presa.
+    let condControle = '';
+    const paramsControle = [];
+    if (!podeRegularizar) {
+      for (const col of ['controle_lote', 'controle_serie']) {
+        if (Number(merged[col]) === 1) {
+          condControle += ` AND COALESCE(${col}, 0) = ?`;
+          paramsControle.push(Number(current[col] || 0) === 1 ? 1 : 0);
+        }
+      }
+      if (guardaControle) condControle += ` AND ${materialService.condicaoSaldoIdentificadoSql(controlesQueLiga)}`;
+    }
     try {
       const escrita = await dbRun(db, `UPDATE materiais_almoxarifado SET
         ${MATERIAL_UPDATE_COLUMNS.map((c) => `${c} = ?`).join(', ')},
         updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND proprietario_cliente_id IS ? AND ${condFamilia.sql}`,
+        WHERE id = ? AND proprietario_cliente_id IS ? AND ${condFamilia.sql}${condControle}`,
         [...MATERIAL_UPDATE_COLUMNS.map((c) => merged[c]), req.params.id, current.proprietario_cliente_id ?? null,
-          ...condFamilia.params]);
+          ...condFamilia.params, ...paramsControle]);
       if (escrita.changes === 0) {
         const agora = await dbGet(db, 'SELECT proprietario_cliente_id FROM materiais_almoxarifado WHERE id = ?', [req.params.id]);
         if (!agora) return res.status(404).json({ error: 'Material não encontrado' });
         if ((agora.proprietario_cliente_id ?? null) !== (current.proprietario_cliente_id ?? null)) {
           return res.status(409).json({ error: `O dono do material ${current.codigo} mudou enquanto este cadastro era salvo — `
             + 'nada foi gravado. Recarregue o material e salve de novo.' });
+        }
+        // RN-07: a mesma ordem da guarda previa — controle antes da familia.
+        if (guardaControle) {
+          const msgAgora = await recusaControle();
+          if (msgAgora) return res.status(403).json({ error: msgAgora });
         }
         try {
           if (validouFamilia) await validateFamiliaAtiva(merged.familia_id);

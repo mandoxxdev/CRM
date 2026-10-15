@@ -417,6 +417,76 @@ async function createMaterial(db, user, data) {
     WHERE m.id = ?`, [id]);
 }
 
+/**
+ * Etapa 112 (C222, RN-01..RN-07) — ligar controle por lote ou por numero de serie num material com saldo nao identificado.
+ *
+ * Ligar o controle com saldo que nao tem lote (sobra "sem lote atribuido", a conta da tela de Lotes) ou com fisico
+ * diferente das series presentes fazia a Saida manual, a transferencia e a devolucao cobrarem lote (e a Saida e a entrega
+ * cobrarem series) de um saldo que nao tem — o saldo ficava preso (medido na Fase 0). A regularizacao existe e e do
+ * Administrador (`ajustar_estoque`): series pela tela de Series (so com o controle ligado) e lote por Entrada com lote +
+ * Ajuste do total. Por isso ligar nesse estado exige `ajustar_estoque` (B728). Descartado: recusar para todos e mandar
+ * zerar o saldo (a Saida de zerar e consumo ficticio; material de cliente so sai pela OS do dono; e a regularizacao de
+ * series exige o controle ja ligado). `requer_inspecao` fica de fora: nenhum fluxo de saida le a coluna (RN-05).
+ */
+const EPS_CONTROLE = 1e-9;
+const STATUS_SERIE_PRESENTE_SQL = "('EM_ESTOQUE','BLOQUEADA')";
+const r6 = (v) => Math.round((Number(v) || 0) * 1e6) / 1e6;
+
+/** Os controles que o PUT LIGA: 0 -> 1, o gravado tambem lido como 0/1. `merged` ja passou pelo bool01. */
+function controlesLigados(gravado, merged) {
+  const ligados = [];
+  if (Number(merged.controle_lote) === 1 && Number(gravado.controle_lote || 0) !== 1) ligados.push('lote');
+  if (Number(merged.controle_serie) === 1 && Number(gravado.controle_serie || 0) !== 1) ligados.push('serie');
+  return ligados;
+}
+
+/** SQL (correlacionado com materiais_almoxarifado) da sobra sem lote — a mesma conta de lotService.resumoLotesDoMaterial. */
+const SOMA_LOTES_SQL = `(SELECT COALESCE(SUM(s.quantidade), 0) FROM estoque_saldo_almoxarifado s
+  JOIN lotes_almoxarifado l ON l.id = s.lote_id WHERE s.material_id = materiais_almoxarifado.id)`;
+const PRESENTES_SQL = `(SELECT COUNT(*) FROM series_almoxarifado sr WHERE sr.material_id = materiais_almoxarifado.id
+  AND sr.status IN ${STATUS_SERIE_PRESENTE_SQL})`;
+
+/**
+ * O que o saldo tem de nao identificado para os controles que o PUT liga: [] quando nada prende; senao as partes
+ * ("há 5 sem lote atribuído", "o físico é 3 e há 0 série(s) em estoque"), na ordem lote, serie.
+ */
+async function saldoNaoIdentificado(db, materialId, ligados) {
+  if (!ligados.length) return [];
+  const row = await dbGet(db, `SELECT quantidade_atual AS fisico, ${SOMA_LOTES_SQL} AS soma_lotes, ${PRESENTES_SQL} AS presentes
+    FROM materiais_almoxarifado WHERE id = ?`, [materialId]);
+  if (!row) return [];
+  const partes = [];
+  if (ligados.includes('lote')) {
+    const sobra = r6(Number(row.fisico || 0) - Number(row.soma_lotes || 0));
+    if (Math.abs(sobra) > EPS_CONTROLE) partes.push(`há ${String(sobra)} sem lote atribuído`);
+  }
+  if (ligados.includes('serie')) {
+    const fisico = r6(row.fisico);
+    const presentes = Number(row.presentes || 0);
+    if (Math.abs(fisico - presentes) > EPS_CONTROLE) {
+      partes.push(`o físico é ${String(fisico)} e há ${presentes} série(s) em estoque`);
+    }
+  }
+  return partes;
+}
+
+const NOMES_CONTROLE = { lote: 'por lote', serie: 'por número de série', ambos: 'por lote e por número de série' };
+
+function mensagemControleSemPermissao(codigo, ligados, partes, perfil) {
+  const nomes = NOMES_CONTROLE[ligados.length > 1 ? 'ambos' : ligados[0]];
+  return `Ligar o controle ${nomes} no material ${codigo} exige a permissão "ajustar_estoque" (seu perfil: ${perfil}): `
+    + `${partes.join('; ')}. Depois de ligar, a saída desse saldo é recusada até ele ser regularizado, e regularizar é do `
+    + 'Administrador do almoxarifado. Peça a ele para ligar o controle e regularizar o saldo.';
+}
+
+/** RN-06: a mesma regua, para o WHERE do UPDATE de quem nao pode regularizar. */
+function condicaoSaldoIdentificadoSql(ligados) {
+  const partes = [];
+  if (ligados.includes('lote')) partes.push(`ABS(ROUND(COALESCE(quantidade_atual, 0) - ${SOMA_LOTES_SQL}, 6)) <= ${EPS_CONTROLE}`);
+  if (ligados.includes('serie')) partes.push(`ABS(ROUND(COALESCE(quantidade_atual, 0), 6) - ${PRESENTES_SQL}) <= ${EPS_CONTROLE}`);
+  return partes.length ? partes.join(' AND ') : '1 = 1';
+}
+
 module.exports = {
   FAMILIA_E_SUBFAMILIA,
   bool01, validateFamiliaAtiva, validateSubfamilia, resolveLocalizacaoFromFk, validarLocalizacaoPadrao,
@@ -424,4 +494,5 @@ module.exports = {
   condicaoFamiliaSql, FAMILIA_MUDOU_NO_CADASTRO,
   SALDO_INICIAL_MOTIVO, quantidadeSaldoInicial, temSaldoInicial, motivosSaldoInicialRecusado,
   mensagemSaldoInicialRecusado, mensagemSaldoInicialSemPermissao,
+  controlesLigados, saldoNaoIdentificado, mensagemControleSemPermissao, condicaoSaldoIdentificadoSql,
 };
