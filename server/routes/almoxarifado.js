@@ -4091,13 +4091,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         const check = requisitionStateMachine.validarTransicao(reqRow.status, 'ENCERRADA');
         if (!check.ok) return res.status(400).json({ error: check.erro });
         // Etapa 101 (C195, RN-03/RN-04, B526): a EM_SEPARACAO encerra so com a caixa vazia e algo entregue (E1 com material
-        // na caixa, E2 sem entrega — essa cancela). Os itens sao lidos aqui, dentro da trava: separar, entregar e devolver
-        // (os escritores da caixa) estao nela. Uma funcao, conferida tambem na nova tentativa do compare-and-set abaixo.
+        // na caixa, E2 sem entrega — essa cancela). Etapa 102 (C204, B700): a caixa recusa em TODO status que a retem — a
+        // PARCIALMENTE_ATENDIDA com material separado e nao entregue tambem toma E1 (antes encerrava e a caixa sumia sem
+        // movimento). Os itens sao lidos aqui, dentro da trava: separar, entregar e devolver (os escritores da caixa) estao
+        // nela. Uma funcao, conferida tambem na nova tentativa do compare-and-set abaixo.
         const recusaDaSeparacao = async (status) => {
-          if (!requisitionStateMachine.STATUS_CANCELAVEIS_COM_CONDICAO.includes(status)) return null;
+          if (!requisitionStateMachine.STATUS_COM_CAIXA.includes(status)) return null;
           const itens = await dbAll(db, `SELECT quantidade_separada, quantidade_entregue, quantidade_atendida
             FROM itens_requisicao_almoxarifado WHERE requisicao_id = ?`, [req.params.id]);
-          return requisitionStateMachine.recusaSaidaDaSeparacao(status, itens, 'ENCERRADA');
+          return requisitionStateMachine.recusaEncerrar(status, itens);
         };
         const recusa = await recusaDaSeparacao(reqRow.status);
         if (recusa) return res.status(400).json({ error: recusa });
@@ -4119,7 +4121,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             const recheck = requisitionStateMachine.validarTransicao(relido.status, 'ENCERRADA');
             if (!recheck.ok) return res.status(400).json({ error: recheck.erro });
             // eslint-disable-next-line no-await-in-loop
-            const recusaRelida = await recusaDaSeparacao(relido.status); // Etapa 101 (RN-04): o relido EM_SEPARACAO
+            const recusaRelida = await recusaDaSeparacao(relido.status); // Etapa 101 (RN-04) e 102 (RN-03): o relido com caixa
             if (recusaRelida) return res.status(400).json({ error: recusaRelida });
             statusLido = relido.status;
           }

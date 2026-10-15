@@ -220,7 +220,7 @@ Dois revisores frescos em worktrees próprias (`CRM-wt-e101rv1`, `CRM-wt-e101rv2
   cherry-pick entrou limpo; a correção 4 da Fase 2 chegou ao agente por mensagem no meio da task). Em paralelo também: a
   revisão do plano × a escrita da T1; os dois revisores da Fase 5 × a documentação; a suíte do servidor × a escrita dos
   testes do cliente.
-- **Defeito que escapou:** *(preencher na Etapa 102.)* Da Etapa 99 para cá: nenhum defeito da 99 apareceu nesta etapa.
+- **Defeito que escapou:** *(preenchido na Etapa 102: nenhum defeito da 101 apareceu — a C204, que a 102 fechou, era limitação declarada da 101, não defeito.)* Da Etapa 99 para cá: nenhum defeito da 99 apareceu nesta etapa.
 
 ---
 

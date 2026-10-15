@@ -111,11 +111,12 @@ let seq = 0;
     assert.strictEqual(e.status, 'ENTREGUE', JSON.stringify(e));
     return r;
   };
-  // Parcial: dois itens, entrega so o primeiro.
+  // Parcial: dois itens, entrega so o primeiro. Etapa 102 (C204, B700): separa so o primeiro (era os dois) — com o segundo
+  // na caixa o encerramento e recusado (E1).
   const entregueParcial = async (dataNecessidade) => {
     const m1 = await material(); const m2 = await material();
     const r = await criarAprovada([[m1, 2], [m2, 3]], dataNecessidade);
-    await separar(r.id, [[r.itens[0], 2], [r.itens[1], 3]]);
+    await separar(r.id, [[r.itens[0], 2]]);
     const e = await entregar(r.id, [[r.itens[0], 2]]);
     assert.strictEqual(e.status, 'PARCIALMENTE_ATENDIDA', JSON.stringify(e));
     return r;

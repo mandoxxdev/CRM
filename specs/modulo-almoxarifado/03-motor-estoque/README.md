@@ -715,7 +715,7 @@ ATIVA da requisição para o item)`. *Livre de caixa* = disponível do motor (f�
 
 **As literais** (S = sufixo, só quando o material tem caixa sem reserva; sem caixa a recusa é byte a byte a de antes —
 B493): S = *" — ⟨c⟩ ⟨un⟩ estão separados para a requisição ⟨número⟩ e só saem pela entrega (material perdido da caixa:
-entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)"* (duas ou três
+~~entregue o que existe e encerre a requisição~~ *(superado na Etapa 102, B701: encerrar com material na caixa passou a ser recusado — devolva à prateleira e encerre)*, ou peça ao administrador do almoxarifado para excluí-la)"* (duas ou três
 requisições: *"as requisições ⟨n1⟩, ⟨n2⟩ e ⟨n3⟩"*; quatro ou mais: *"… e mais N"*). **M1** saída comum *"Saldo
 insuficiente. Disponível: ⟨n⟩ ⟨un⟩"* + S (n = `max(0, livre de caixa)`); **M2** remessa no motor *"Saldo disponível
 insuficiente para enviar ao terceiro: ⟨n⟩ ⟨un⟩"* + S; **M3** reserva manual *"Saldo disponível insuficiente: ⟨n⟩"* + S;
@@ -738,7 +738,7 @@ revisão).
 - **O `AJUSTE` com localização de ida** (B495, C186) — o total novo só existe depois do `syncMaterialTotals` (D1/D7 da
   Etapa 10) e `ajusteRetencao.api.test.js` prende que a contagem por endereço passa; o **estorno** dele entra.
 - **O gesto "devolver da caixa à prateleira"** (B497) — rota, estado e permissão novos; candidato da Etapa 98. O caso
-  legítimo (material perdido na caixa) sai sem gesto novo: entregar o que existe e encerrar, ou o administrador excluir.
+  legítimo (material perdido na caixa) sai sem gesto novo: ~~entregar o que existe e encerrar~~ *(superado na Etapa 102, B701: encerrar com material na caixa passou a ser recusado — devolva à prateleira e encerre)*, ou o administrador excluir.
 - **A tela mostrar a caixa no disponível** (C187) — o 400 é que explica.
 - **Destravar sozinho o legado** já preso (C188) — a consulta **A48** acha.
 - **Caixa por endereço/almoxarifado** — saldo global é intencional (`CLAUDE.md`).

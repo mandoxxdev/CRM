@@ -502,7 +502,7 @@ const esperarFila = async (R, ms = 3000) => {
   await test('[93 T6 E2] (RN-07 (b), 7a) de PARCIALMENTE_ATENDIDA (1 de 4), no UPDATE final da entrega de 1 de ALMOX, o ADMIN encerra (espera) -> entrega 200 PARCIALMENTE; encerrar 200 depois; ENCERRADA, reserva LIBERADA; uma nova entrega -> 400 E0; saldo q=2 r=0; A44 vazia', async () => {
     desarmar();
     const x = await pedirEAprovar(await material(4), 4);
-    assert.strictEqual((await separar('ALMOX', x.R, x.item, 4)).status, 200);
+    assert.strictEqual((await separar('ALMOX', x.R, x.item, 2)).status, 200); // Etapa 102 (B700): separa 2 (era 4) — a 2a entrega esvazia a caixa; com caixa, E1
     const e0 = await entregar('ALMOX', x.R, x.item, 1);
     assert.strictEqual(e0.body.status, 'PARCIALMENTE_ATENDIDA', JSON.stringify(e0.body));
     const g = armarFila(RE.ENT, x.R, () => encerrar('ADMIN', x.R));

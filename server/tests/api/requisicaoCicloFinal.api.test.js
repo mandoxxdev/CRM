@@ -240,7 +240,8 @@ async function criarRequisicao(db, {
     const matId = await criarMaterial('MATCICLO-10');
     const { id: reqId, itemIds } = await criarRequisicao(db, {
       status: 'PARCIALMENTE_ATENDIDA',
-      itens: [{ material_id: matId, quantidade: 5, quantidade_separada: 5, quantidade_entregue: 2 }],
+      // Etapa 102 (C204, B700): separado = entregue — com material na caixa (era separado 5) o encerramento e recusado (E1).
+      itens: [{ material_id: matId, quantidade: 5, quantidade_separada: 2, quantidade_entregue: 2 }],
       solicitanteId: 42,
     });
 

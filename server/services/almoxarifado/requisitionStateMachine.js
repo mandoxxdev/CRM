@@ -211,6 +211,24 @@ function recusaSaidaDaSeparacao(status, itens, destino) {
 }
 
 /**
+ * Etapa 102 (C204, RN-01..RN-04, B700) — a condicao do encerramento. Pura. `null` = pode (ou o status nao retem caixa: so
+ * a maquina decide); senao a literal da recusa. Vale para todo status que RETEM caixa (STATUS_COM_CAIXA) — com seta para
+ * ENCERRADA sao a EM_SEPARACAO e a PARCIALMENTE_ATENDIDA: material na caixa (a regua UNICA da B524, Q.qtd(separado -
+ * entregue) > 1e-9 em algum item) -> E1; a EM_SEPARACAO vazia sem entrega -> E2 (a 101). ENTREGUE fica fora de proposito
+ * (RN-02): nao retem caixa e a devolucao nao a aceita — recusar prenderia o legado com separado > entregue.
+ * Antes da 102 a PARCIALMENTE_ATENDIDA com caixa encerrava e a caixa deixava de ser caixa sem movimento.
+ * Chamar DEPOIS de validarTransicao(status, 'ENCERRADA'), com os itens lidos DENTRO da trava por requisicao.
+ */
+function recusaEncerrar(status, itens) {
+  if (!STATUS_COM_CAIXA.includes(status)) return null;
+  const lista = itens || [];
+  const entregue = (i) => Number(i.quantidade_entregue ?? i.quantidade_atendida ?? 0) || 0;
+  if (lista.some((i) => Q.qtd((Number(i.quantidade_separada) || 0) - entregue(i)) > 1e-9)) return MSG_SAIDA_SEPARACAO.E1;
+  if (status === 'EM_SEPARACAO' && destinoDaSeparacaoVazia(lista) === 'CANCELADO') return MSG_SAIDA_SEPARACAO.E2;
+  return null;
+}
+
+/**
  * Etapa 101 (RN-06, B528): os status que vao a CANCELADO SEM condicao de itens — os com seta, menos a EM_SEPARACAO
  * (condicional). E a regua da excecao do dono em `reservationService.assertPodeLiberarReserva` e da lista da tela das
  * reservas (`ReservasAlmoxarifado.js`, STATUS_DONO_LIBERA_RESERVA). Derivada da maquina: setas novas entram sozinhas.
@@ -312,4 +330,5 @@ module.exports = {
   separacaoAReabrir, // Etapa 94 (T2)
   destinoDaSeparacaoVazia, recusaSaidaDaSeparacao, MSG_SAIDA_SEPARACAO, // Etapa 101 (C195)
   STATUS_CANCELAVEIS_SEM_CONDICAO, STATUS_CANCELAVEIS_COM_CONDICAO, // Etapa 101 (RN-06)
+  recusaEncerrar, // Etapa 102 (C204)
 };

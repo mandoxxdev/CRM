@@ -11,7 +11,7 @@ import AlmoxPageHeader, { REQUISICAO_FLOW, getRequisicaoStepIndex } from './Almo
 import { useRequisicoesMaterialContext } from './RequisicoesMaterialContext';
 import {
   TIPO_REQUISICAO_LABELS, STATUS_CANCELAVEIS_ALMOXARIFADO, STATUS_CANCELAVEIS_OUTROS_MODULOS,
-  separacaoAReabrir, STATUS_COM_CAIXA, destinoDaSeparacaoVazia,
+  separacaoAReabrir, STATUS_COM_CAIXA, destinoDaSeparacaoVazia, podeEncerrar, temCaixaParaEncerrar, MSG_ENCERRAR_COM_CAIXA,
 } from './requisicaoLabels';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import AssinaturaCanvas from './AssinaturaCanvas';
@@ -1967,8 +1967,15 @@ const RequisicoesList = () => {
                 {/* Encerramento — a partir de ENTREGUE/PARCIALMENTE_ATENDIDA (design: "cancela
                     saldos pendentes, nenhuma entrega futura"). */}
                 {/* Etapa 101 (C195, RN-07): e a *Em Separação* com a caixa vazia e algo entregue (sem saída antes). */}
-                {warehouseMode && (['ENTREGUE', 'PARCIALMENTE_ATENDIDA'].includes(detalhe.status)
-                  || (detalhe.status === 'EM_SEPARACAO' && destinoDaSeparacaoVazia(detalhe.itens) === 'ENCERRADA')) && (
+                {/* Etapa 102 (C204, RN-07): material na caixa não encerra em status nenhum — na *Parcialmente Atendida*
+                    com caixa, no lugar do botão, a tela diz por quê (a literal da recusa do servidor). */}
+                {warehouseMode && detalhe.status === 'PARCIALMENTE_ATENDIDA' && temCaixaParaEncerrar(detalhe.itens) && (
+                  <div data-testid="encerrar-bloqueado-caixa"
+                    style={{ marginTop: 12, fontSize: '0.78rem', color: 'var(--gmp-text-light)', textAlign: 'center' }}>
+                    <FiArchive size={12} /> {MSG_ENCERRAR_COM_CAIXA}
+                  </div>
+                )}
+                {warehouseMode && podeEncerrar(detalhe.status, detalhe.itens) && (
                   <button className="btn-almox-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}
                     onClick={() => { setMotivoEncerramento(''); setShowEncerrar(true); }} disabled={saving}>
                     <FiArchive size={14} /> Encerrar Requisição

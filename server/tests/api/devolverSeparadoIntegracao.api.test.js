@@ -62,8 +62,7 @@ const estado = async (p) => {
 // Literais do plano, inteiras.
 // S98 (T2, B508): o sufixo da porta avulsa com a terceira saida.
 const S98 = (c, lista) => ` — ${c} PC estão separados para ${lista} e só saem pela entrega (material perdido da caixa: `
-  + 'devolva-o à prateleira na requisição e dê a baixa, entregue o que existe e encerre a requisição, ou peça ao '
-  + 'administrador do almoxarifado para excluí-la)';
+  + 'devolva-o à prateleira na requisição e dê a baixa, ou peça ao administrador do almoxarifado para excluí-la)'; // Etapa 102 (B701)
 const M1 = (n) => `Saldo insuficiente. Disponível: ${n} PC`;
 // C3 da Etapa 28 (a segunda conferencia) e a barreira R (quem separou nao confere).
 const C3 = 'Esta requisição tem material crítico separado e ainda não passou pela segunda conferência. Peça a outra '

@@ -63,7 +63,7 @@ const estado = async (p) => {
 // Mudado na Etapa 98 (B508): o sufixo ganhou a terceira saida, "devolva-o a prateleira na requisicao e de a baixa"
 // (literal S98 do plano da 98). Nenhuma outra assercao deste arquivo mudou.
 const S_FIM = ' e só saem pela entrega (material perdido da caixa: devolva-o à prateleira na requisição e dê a baixa, '
-  + 'entregue o que existe e encerre a requisição, ou peça ao administrador do almoxarifado para excluí-la)';
+  + 'ou peça ao administrador do almoxarifado para excluí-la)'; // Etapa 102 (B701): saiu "entregue o que existe e encerre a requisição, "
 const S = (c, un, lista) => ` — ${c} ${un} estão separados para ${lista}${S_FIM}`;
 
 (async () => {
