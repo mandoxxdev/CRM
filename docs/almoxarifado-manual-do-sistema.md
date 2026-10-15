@@ -328,7 +328,25 @@ O bloco **Controles** tem sete opções. Ligar uma delas muda o comportamento do
 
 Há ainda uma marcação fora deste bloco que tem efeito operacional: **Material crítico**, no bloco Classificação. É ela — e não a opção "Requer inspeção" — que faz a quantidade recebida entrar **retida em inspeção** no recebimento, em vez de entrar direto como disponível (ver 14.6). O material fica fisicamente no galpão, contado no saldo total, mas fora do disponível até que a inspeção decida.
 
-Onde a exigência de lote e de série **não** se aplica, e isso é deliberado: entrega de requisição, estorno de requisição excluída, inspeção, ajuste puro de inventário e as movimentações de remessa a terceiros. Exigi-los ali tornaria o material impossível de entregar. Na entrega de requisição o lote é **opcional**: escolhendo em **"Sai de"** (7.5) o endereço e o lote de onde o item sai, a baixa é daquele lote; sem escolher, fica na linha "sem lote". O ajuste é isento por um motivo próprio: é por ele que se regulariza estoque antigo, que não tem lote nenhum. O preço é que a quantidade movimentada por esses caminhos fica na linha "sem lote" — o saldo total do material continua correto.
+Onde a exigência de **lote** **não** se aplica, e isso é deliberado: entrega de requisição, estorno de requisição excluída, inspeção, ajuste puro de inventário e as movimentações de remessa a terceiros. Exigi-lo ali tornaria o material impossível de entregar. Na entrega de requisição o lote é **opcional**: escolhendo em **"Sai de"** (7.5) o endereço e o lote de onde o item sai, a baixa é daquele lote; sem escolher, fica na linha "sem lote". O preço é que a quantidade movimentada por esses caminhos fica na linha "sem lote" — o saldo total do material continua correto. A **série**, ao contrário, é pedida também na entrega de requisição: cada unidade que sai tem de ser escolhida.
+
+#### Ligar o controle por lote ou por série num material que já tem saldo
+
+O saldo que já está no material não tem lote nem número de série. Ligar o controle nesse estado faz a saída desse saldo ser recusada até alguém **regularizá-lo** — e regularizar é do **Administrador** do almoxarifado (permissão de ajustar estoque). Por isso o sistema decide assim, ao salvar o cadastro:
+
+- **O saldo está identificado** — para o lote, todo o físico está em lotes (a soma do saldo dos lotes do material é igual ao físico — a mesma conta do "Sem lote atribuído" da tela de Lotes, que só aparece lá depois que o controle é ligado); para a série, o físico é igual ao número de séries em estoque (em estoque ou bloqueadas); ou o material não tem saldo nenhum. Qualquer perfil que edita material liga o controle.
+- **O saldo não está identificado** — só quem tem a permissão de ajustar estoque (o Administrador) liga. O Almoxarife e a Engenharia recebem, ao salvar, por exemplo: *"Ligar o controle por lote no material CHP-001 exige a permissão "ajustar_estoque" (seu perfil: ALMOXARIFE): há 5 sem lote atribuído. Depois de ligar, a saída desse saldo é recusada até ele ser regularizado, e regularizar é do Administrador do almoxarifado. Peça a ele para ligar o controle e regularizar o saldo."* Na série, o trecho do meio é *"o físico é 3 e há 0 série(s) em estoque"*; ligando os dois, aparecem os dois, separados por ponto e vírgula. Nada do cadastro é gravado.
+
+Os números da mensagem são os da hora em que o cadastro é salvo: se uma entrada sem lote cair no mesmo instante, a recusa sai com o número novo. E, para quem não pode regularizar, salvar um material cujo controle **outra pessoa acabou de desligar** não o religa por fora da regra — a resposta é *"O cadastro do material ⟨código⟩ mudou enquanto era salvo — nada foi gravado. Recarregue o material e salve de novo."*
+
+O que **não** muda: editar qualquer outro campo de um material que já tem o controle ligado; **desligar** o controle (a saída volta a andar sem lote ou sem série); e ligar **Requer inspeção**, que não prende saldo nenhum.
+
+Como o Administrador regulariza, depois de ligar:
+
+- **Série** — em **Lotes e Séries → Séries**, o aviso de divergência mostra as séries presentes e o físico; o formulário **Regularizar séries** cadastra os números das unidades que já estão no estoque (ver 4.7).
+- **Lote** — dar **Entrada** em Movimentações da mesma quantidade, informando o lote, e em seguida um **Ajuste** do total de volta ao físico real. A Entrada põe a quantidade no lote; o Ajuste tira a mesma quantidade da linha "sem lote". O "Sem lote atribuído" da tela de Lotes volta a 0. (O Ajuste sozinho não basta: ele corrige o total, não diz de que lote é o saldo.)
+
+Quem não é Administrador e quer ligar o lote sem depender dele: lance as entradas **com o lote** antes de ligar o controle — a Entrada aceita lote mesmo em material sem controle —, e o saldo já nasce identificado.
 
 ### 2.8 Proprietário — material que é do cliente
 

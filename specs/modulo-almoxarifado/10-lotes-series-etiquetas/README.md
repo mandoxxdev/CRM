@@ -222,6 +222,14 @@ quando quem chama declara `exigeLote` (ver a tabela acima). Só o `AJUSTE` puro 
 tipo, para qualquer chamador: é o caminho de regularização de quem ligou a flag com estoque antigo
 sem lote conhecido em casa. Exigir lote no `AJUSTE` trancaria a porta de saída dessa migração.
 
+> **Correção (Etapa 112, 2026-10-15) — a frase acima estava errada no que promete.** O `AJUSTE` puro sozinho **não**
+> regulariza o estoque antigo sem lote: ele é de valor **absoluto** do total do material — corrige o total e mexe na linha
+> "sem lote", mas não diz de que lote é o saldo — e a v2 não aceita ajuste a 0 sem endereço. Medido (sonda da Etapa 112):
+> o que regulariza é o **par** Entrada com o lote (mesma quantidade) + `AJUSTE` do total de volta ao físico real — o
+> "sem lote atribuído" vai a 0. A isenção do `AJUSTE` continua necessária para esse par funcionar. Desde a Etapa 112,
+> ligar `controle_lote`/`controle_serie` com saldo não identificado exige `ajustar_estoque` (ver a spec 01, seção
+> "Etapa 112", e a **B728**).
+
 ### O saldo do lote é agregado nas DUAS pontas
 
 `lotService.listarLotesDoMaterial` sempre calculou `saldo` como a **soma** de `quantidade` em

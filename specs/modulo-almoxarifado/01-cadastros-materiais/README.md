@@ -1,6 +1,8 @@
 # 01 — Cadastros de Materiais
 
-> **Status:** 🟡 — **continua 🟡. Etapa 110 (`233f4787..e5584a85`): o Saldo Inicial do cadastro passa pelo motor de estoque (C215) e a
+> **Status:** 🟡 — **continua 🟡. Etapa 112 (`a8cda2ad..d7b0cae8`): ligar controle por lote ou por série num material
+> com saldo não identificado passa a exigir `ajustar_estoque` (C222)** — ver a seção "Etapa 112", no fim. Não fecha item
+> do checklist (regra de integridade do cadastro). Antes: **Etapa 110 (`233f4787..e5584a85`): o Saldo Inicial do cadastro passa pelo motor de estoque (C215) e a
 > corrida família × cadastro fecha dos dois lados (C218)** — ver a seção "Etapa 110", no fim. Não fecha item do checklist
 > (as duas são regra de integridade do cadastro, não campo novo). Antes: **a Etapa 66 fecha mais um item** (motivos de movimentação —
 > `de04974..40dd180`). Seguem abertos: tabela de conversões genérica, grupo acima de família,
@@ -319,7 +321,8 @@ Inicial** da criação grava ENTRADA fora do motor (`materialService.createMater
 - [x] **Fase 5** — `e5584a85`: o PUT de família não regrava o `ativo` omitido (B727) e a 2ª tentativa do "já inativada por
   outro" leva a condição; 9 cenários novos das sabotagens verdes.
 - [ ] **Fora, de propósito (B726):** reativar material em família inativa (**C220**), mudar o nível de família e criar
-  subfamília sob raiz sendo inativada (**C221**), ligar lote/série/inspeção num material com saldo (**C222**).
+  subfamília sob raiz sendo inativada (**C221**), ~~ligar lote/série/inspeção num material com saldo (**C222**)~~ — *a
+  C222 foi feita na Etapa 112 (seção abaixo).*
 
 **A C215 estava parcialmente errada — fica dito.** Ela dizia que o saldo inicial pulava "as regras da Entrada da tela"
 inclusive o documento do material de cliente e a inspeção. **Estava errado**: a Entrada manual não exige nenhum dos dois
@@ -352,3 +355,25 @@ confere os cabeçalhos do XLSX.
 
 **Para a rastreabilidade futura:** `motivo` na linha do livro é o nome **da época** (renomear não reescreve); o filtro por
 motivo é pelo **id** (`m.motivo_id`), nunca pelo texto.
+
+## Etapa 112 (2026-10-15, `a8cda2ad..d7b0cae8`) — ligar lote ou série com saldo não identificado
+
+- [x] **A guarda (C222)** — `528a44a0`. `PUT /materiais/:id` que liga `controle_lote` ou `controle_serie` (0 → 1 contra o
+  gravado) num material com **sobra sem lote atribuído ≠ 0** (lote; a conta de `lotService.resumoLotesDoMaterial`) ou
+  **físico ≠ séries presentes** (série; `EM_ESTOQUE` + `BLOQUEADA`), por quem não tem `ajustar_estoque` → 403 *"Ligar o
+  controle ⟨nomes⟩ no material ⟨código⟩ exige a permissão "ajustar_estoque" (seu perfil: ⟨perfil⟩): ⟨partes⟩. …"*, depois da
+  guarda do dono e antes da família. Para quem não pode regularizar, o `UPDATE` leva a régua e o controle gravado como
+  condição; a releitura responde na ordem dono → controle → família → E4. Decisões **B728**–**B731**.
+- [x] **Integração** — `51df3c3c` (lote, série, material de cliente e o caminho do Almoxarife, até a Saída depois de
+  regularizar).
+- [x] **Fase 5** — `d7b0cae8` (10 cenários das sabotagens que passavam; nenhuma mudança de produção).
+- [ ] **Fora, de propósito:** aviso ao Administrador que liga com saldo não identificado (**C224**); desligar a série com
+  séries presentes (**C225**); a Entrada que começou antes de o controle ser ligado (**C226**); reativar material em
+  família inativa (**C220**) e inativar material com saldo (**C217**, **C227**) — a Etapa 113.
+
+**A C222 estava parcialmente errada — fica dito.** Ela dizia que ligar **inspeção** com saldo também travava a saída.
+**Estava errado**: *Requer inspeção* não é lida por saída nenhuma (quem retém no Recebimento é *Material crítico*). E dizia
+que o Administrador regulariza o lote "com um Ajuste" — **também errado**: o Ajuste sozinho corrige o total; o que dá lote
+ao saldo é a Entrada com o lote + o Ajuste do total (B730). O plano desta etapa partiu de "recusar para todos e zerar o
+saldo"; a revisão do plano derrubou (consumo fictício, impossível no material de cliente, tranca a regularização de séries
+— B728).

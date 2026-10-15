@@ -1,18 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-15 (Etapa 110) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-15 (Etapa 112) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108 e 110) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110 e 112) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 110 ENTREGUE · próxima do almoxarifado: Etapa 112 — a 111 é da frente de Compras)
+> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 112 ENTREGUE · próxima do almoxarifado: Etapa 113)
 >
-> **O desenvolvimento parou aqui: Etapa 110 fechada — 2026-10-15.** A **Etapa 110 (o Saldo Inicial do cadastro vira uma
+> **O desenvolvimento parou aqui: Etapa 112 fechada — 2026-10-15.** A **Etapa 112 (ligar lote ou série num material que
+> já tem saldo passa a ser do Administrador)**: marcar *Controle por lote* ou *Controle por número de série* num material
+> cujo saldo ainda não tem lote (ou não tem as séries) só o Administrador faz — o Almoxarife e a Engenharia recebem a
+> recusa ao salvar, dizendo quanto está sem lote; com o saldo já todo em lote, qualquer um liga. O Administrador liga e
+> regulariza (séries pela tela de Séries; lote por Entrada com o lote + Ajuste do total). **Próxima: Etapa 113** —
+> inativar material com saldo (C217, C227) e reativar numa família inativa (C220) — ver a próxima tarefa no plano da 112.
+>
+> **Etapa 110, 2026-10-15.** A **Etapa 110 (o Saldo Inicial do cadastro vira uma
 > Entrada de verdade, e a família não fica mais inativa com material dentro)**: com saldo inicial, o cadastro de material
 > exige quem movimenta estoque (a Engenharia recebe a recusa e cadastra com 0), recusa material com lote, série, inspeção
 > ou de cliente (a tela avisa antes) e grava o saldo como uma Entrada da tela de Movimentações — com a prateleira no
 > extrato e estornável. Inativar uma família no mesmo instante em que alguém cadastra material nela não deixa mais a
-> família inativa com material ativo. **Próxima: Etapa 112** — ver a próxima tarefa no plano da 110.
+> família inativa com material ativo. **Próxima: Etapa 112** — ver a próxima tarefa no plano da 110. *(Feita — Etapa 112.)*
 >
 > **Etapa 108, 2026-10-15.** A **Etapa 108 (trocar o dono de um material com
 > histórico passa a ser só do Administrador)**: no cadastro, trocar o cliente dono de um material que já tem saldo,
@@ -6423,6 +6430,56 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 112 — Ligar lote ou série num material que já tem saldo passa a ser do Administrador (ENTREGUE — 2026-10-15)
+
+**O que mudou, em uma frase:** marcar **Controle por lote** ou **Controle por número de série** num material cujo saldo
+ainda não tem lote (ou não tem as séries) só o Administrador faz — porque depois disso a saída desse saldo trava até ele
+regularizar, e regularizar é dele.
+
+**O problema que ela resolve.** A Etapa 110 impediu o material com lote ou série de **nascer** com saldo. Mas sobrava o
+caminho de dois passos: cadastrar sem controle, dar entrada, e depois editar o material ligando o controle. O Almoxarife
+e a Engenharia conseguiam — e, dali em diante, a saída daquele saldo antigo (sem lote, sem séries) era recusada.
+
+| Antes | Agora |
+|---|---|
+| O Almoxarife e a Engenharia ligavam lote ou série num material com saldo (e a saída travava) | Recebem a recusa ao salvar, com o que está sem lote / sem série; nada é gravado |
+| — | Com o saldo todo em lote (ou séries = físico, ou sem saldo), qualquer um que edita material liga |
+| — | O Administrador liga e regulariza (Séries → Regularizar séries; lote: Entrada com o lote + Ajuste do total) |
+| Ligar **Requer inspeção** num material com saldo | Continua livre — não prende saldo nenhum |
+
+**A regra agora.**
+- Quem não tem a permissão de ajustar estoque (Almoxarife, Engenharia), ao ligar o lote num material com saldo sem lote,
+  recebe *"Ligar o controle por lote no material ⟨código⟩ exige a permissão "ajustar_estoque" (seu perfil: ⟨perfil⟩): há ⟨n⟩ sem lote atribuído. Depois de ligar, a saída desse saldo é recusada até ele ser regularizado, e regularizar é do Administrador do almoxarifado. Peça a ele para ligar o controle e regularizar o saldo."*
+- Na série, o trecho do meio é *"o físico é ⟨n⟩ e há ⟨m⟩ série(s) em estoque"*; ligando os dois, os dois trechos,
+  separados por ponto e vírgula.
+- Desligar o controle e editar outros campos de um material que já tem o controle continuam livres.
+
+### Roteiro de teste manual
+
+Preparação: um material **CHP-0201** sem controles; **Ana** (Almoxarife), **Edu** (Engenharia) e o **administrador**.
+
+1. **Dê saldo sem lote.** Ana, **Movimentações → Nova**, **Entrada** de 5 no CHP-0201, sem lote.
+2. **A recusa.** Ana, **Materiais → editar CHP-0201**, seção **Controles**, marque **Controle por lote**, **Salvar** →
+   aviso vermelho *"Ligar o controle por lote no material CHP-0201 exige a permissão "ajustar_estoque" (seu perfil:
+   ALMOXARIFE): há 5 sem lote atribuído. …"*; o formulário continua aberto. Edu faz o mesmo → *"(seu perfil:
+   ENGENHARIA)"*. Marcando também **Controle por número de série** → os dois trechos.
+3. **Inspeção é livre.** Ana marca só **Requer inspeção** e salva → *"Material atualizado!"*.
+4. **O Administrador liga.** O administrador marca **Controle por lote** e salva → *"Material atualizado!"*. Em
+   **Movimentações**, uma **Saída** de 1 sem lote → *"O material CHP-0201 exige lote nesta movimentacao (controle por lote
+   ligado)"* — é o saldo preso que a recusa do passo 2 anunciava.
+5. **O Administrador regulariza o lote.** **Entrada** de 5 informando o lote **L1**; depois **Ajuste** do total para **5**.
+   Em **Lotes e Séries → Lotes**, o CHP-0201 mostra L1 com 5 e **sem** o aviso "Sem lote atribuído". A **Saída** de 1 pelo
+   lote L1 passa.
+6. **O caminho de quem não é Administrador.** Num material novo sem controle, Ana dá **Entrada** de 3 **já com o lote**
+   L2 e só depois marca **Controle por lote** → *"Material atualizado!"* (o saldo já estava todo em lote).
+7. **Série.** Num material com 2 de saldo sem série, o administrador liga **Controle por número de série**, abre **Lotes e
+   Séries → Séries**, vê a divergência e usa **Regularizar séries** com dois números → a **Saída** escolhendo a série passa.
+
+**O que esta etapa NÃO cobre.** O Administrador que liga com saldo não identificado não recebe aviso no salvar (as telas de
+Lotes e Séries mostram a divergência — C224); desligar a série deixa as séries como "em estoque" (C225); uma Entrada sem
+lote que começou antes de o controle ser ligado e termina depois (C226); reativar material numa família inativa (C220). Os
+materiais que já estão com controle e saldo não identificado: consulta **A59**.
 
 ## Etapa 110 — O Saldo Inicial do cadastro vira uma Entrada de verdade, e a família não fica inativa com material dentro (ENTREGUE — 2026-10-15)
 

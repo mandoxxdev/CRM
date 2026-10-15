@@ -124,7 +124,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cinquenta e oito itens para rodar em produção ANTES do deploy — cinquenta e cinco são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Cinquenta e nove itens para rodar em produção ANTES do deploy — cinquenta e seis são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-15 (Etapa 112) de cinquenta e oito para cinquenta e nove**, com a **A59** — os materiais com lote ou série ligados e saldo não identificado (sem lote atribuído, ou séries diferentes do físico); opcional.)*
 
 *(**Atualizado em 2026-10-15 (Etapa 110) de cinquenta e seis para cinquenta e oito**, com a **A57** — os materiais que nasceram com saldo inicial pelo caminho antigo e que hoje seriam recusados — e a **A58** — as famílias inativas com material ativo dentro; as duas opcionais.)*
 
@@ -2150,8 +2152,10 @@ falso alarme, confira o nome.
 **Como ler o resultado** (uma linha por material):
 - **Vazia** — nada a fazer.
 - **`controle_lote` = 1 e `lotes` = 0** (ou `controle_serie` = 1 e `series` menor que o saldo) — o saldo existe sem lote ou
-  sem série: na saída, o sistema vai pedir o lote/a série que não existe. Regularize em **Lotes** (regularizar séries) ou
-  com um **Ajuste** do Administrador.
+  sem série: na saída, o sistema vai pedir o lote/a série que não existe. Regularize em **Lotes** (regularizar séries) ou,
+  para o lote, com uma **Entrada** com o lote + um **Ajuste** do total, pelo Administrador. *(Corrigido na Etapa 112: este
+  item dizia "ou com um **Ajuste** do Administrador" — **estava errado**: o Ajuste sozinho corrige o total, não dá lote ao
+  saldo; **B730**.)*
 - **`requer_inspecao` = 1** — o saldo entrou disponível sem inspeção: se o material ainda está na prateleira, peça a
   inspeção ou bloqueie o que for preciso.
 - **`dono` preenchido** — material de cliente com saldo sem nota de remessa: confira com o cliente o número.
@@ -2179,12 +2183,42 @@ ativo nela; **não** conta material inativo.)*
 material) e deixar a família inativa. Enquanto ficar assim, o material aparece no filtro da família inativa e a família não
 recebe material novo.
 
+**A59 (NOVA, da Etapa 112 — os materiais com lote ou série ligados e saldo não identificado).** Antes da Etapa 112 o
+Almoxarife e a Engenharia ligavam o controle num material com saldo (**C222**); o saldo antigo ficou sem lote ou sem
+séries e a saída dele é recusada. **Nada aqui é obrigatório.** Somente leitura:
+
+```sql
+SELECT m.id, m.codigo, m.nome, m.quantidade_atual AS fisico,
+       m.controle_lote, ROUND(m.quantidade_atual - COALESCE((SELECT SUM(s.quantidade) FROM estoque_saldo_almoxarifado s
+         JOIN lotes_almoxarifado l ON l.id = s.lote_id WHERE s.material_id = m.id), 0), 6) AS sem_lote_atribuido,
+       m.controle_serie, (SELECT COUNT(*) FROM series_almoxarifado sr WHERE sr.material_id = m.id
+         AND sr.status IN ('EM_ESTOQUE','BLOQUEADA')) AS series_presentes
+  FROM materiais_almoxarifado m
+ WHERE m.ativo = 1
+   AND ((m.controle_lote = 1 AND ABS(ROUND(m.quantidade_atual - COALESCE((SELECT SUM(s.quantidade) FROM estoque_saldo_almoxarifado s
+         JOIN lotes_almoxarifado l ON l.id = s.lote_id WHERE s.material_id = m.id), 0), 6)) > 0)
+     OR (m.controle_serie = 1 AND ABS(ROUND(m.quantidade_atual, 6) - (SELECT COUNT(*) FROM series_almoxarifado sr
+         WHERE sr.material_id = m.id AND sr.status IN ('EM_ESTOQUE','BLOQUEADA'))) > 0))
+ ORDER BY m.codigo;
+```
+
+*(Conferida numa sonda contra o esquema real: acha o material com lote e saldo sem lote, o de série sem séries e o de
+série com físico 0 e uma série bloqueada; **não** acha o de saldo todo em lote, o de séries = físico nem o sem controle.)*
+
+**Como ler o resultado:** **vazia** — nada a fazer. **`sem_lote_atribuido` ≠ 0** (com `controle_lote` = 1) — o
+Administrador dá **Entrada** dessa quantidade com o lote e depois **Ajuste** do total ao físico real; se o número for
+negativo, saiu mais sem lote do que entrou (saídas por requisição sem escolher lote) — confira na tela de Lotes antes.
+**`series_presentes` ≠ `fisico`** (com `controle_serie` = 1) — **Lotes e Séries → Séries → Regularizar séries**
+(cadastrar as que faltam ou baixar as que saíram).
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B727; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B732; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-15 com as cinco da Etapa 112 — B728 a B732.**)*
 
 *(**Atualizado em 2026-10-15 com as sete da Etapa 110 — B721 a B727.**)*
 
@@ -7487,6 +7521,46 @@ edição, a resposta é *"A família mudou enquanto era salva — nada foi grava
 (409). **Descartado:** conferir a situação lida no próprio comando (recusaria o renomear sempre que outra pessoa mexeu na
 situação, sem necessidade). (`e5584a85`)
 
+**B728 (NOVA, da Etapa 112) — ligar lote ou série com saldo não identificado é do Administrador, não proibido para todos.**
+Quem não tem a permissão de ajustar estoque (Almoxarife, Engenharia) recebe a recusa ao ligar o controle num material cujo
+saldo não tem lote ou não tem as séries; o Administrador liga e regulariza. **Descartado — o que o plano propunha primeiro:**
+recusar para **todos** e mandar "zerar o saldo com uma Saída, ligar e dar Entrada de novo". A revisão do plano mediu que
+isso (1) registra um **consumo que não aconteceu** no material nosso (a Saída de zerar entra no extrato como qualquer
+Saída); (2) é **impossível** no material de cliente (a Saída exige a OS ou o projeto do dono); (3) tranca a regularização
+de séries, que só funciona com o controle **já ligado**. *(A mensagem diz "regularizar é do Administrador do
+almoxarifado"; o **Gestor** também regulariza — tem a mesma permissão de ajustar estoque —, mas não edita material, então
+quem **liga** é só o Administrador. A frase ficou assim de propósito: é a quem o Almoxarife vai pedir.)* **Reversível:** a regra é uma permissão num ponto só — trocar a
+permissão pela recusa geral é uma linha. (`528a44a0`)
+
+**B729 (NOVA, da Etapa 112) — "saldo não identificado" é a régua que as telas já mostram, não "tem saldo".** Para lote:
+o **Sem lote atribuído** da tela de Lotes (físico menos a soma dos lotes) diferente de zero. Para série: o físico
+diferente das séries **em estoque ou bloqueadas** (a divergência da tela de Séries). Com o saldo todo em lote, séries =
+físico ou sem saldo, qualquer perfil que edita material liga. **Descartado:** recusar sempre que o físico (ou uma
+retenção) é diferente de zero — recusava o material com o saldo **todo** em lote (a mensagem dizia "sem lote" e era
+mentira) e deixava **religar** a série com físico 0 e séries ainda em estoque, que depois recusava a Entrada das mesmas
+séries. *(Achado da revisão do código: a tela de Lotes só mostra o "Sem lote atribuído" de material **com** o controle
+ligado — antes de ligar, o número da recusa não aparece lá; e o material **inativo**, que a tela não mostra, também é
+conferido, porque o saldo ficaria preso se ele fosse reativado.)* (`528a44a0`)
+
+**B730 (NOVA, da Etapa 112) — a regularização do lote é a Entrada com o lote + o Ajuste do total; nenhum gesto novo.**
+Medido: com 5 sem lote, a Entrada de 5 no lote L1 e o Ajuste do total de volta a 5 deixam o "sem lote" em 0 e L1 com 5.
+Ficam duas linhas no extrato (uma Entrada e um Ajuste) que se anulam no total. **Descartado:** um botão "atribuir lote ao
+saldo sem lote" (gesto novo no motor de estoque — etapa própria, se o uso pedir). Quem não é Administrador evita a
+regularização lançando as entradas **já com o lote** antes de ligar o controle. (`51df3c3c`)
+
+**B731 (NOVA, da Etapa 112) — desligar o controle e ligar "Requer inspeção" continuam livres.** Medido: desligar o lote
+ou a série com saldo não prende nada (a saída volta a andar sem lote ou sem série); "Requer inspeção" não é lida por
+nenhuma saída (quem retém no Recebimento é **Material crítico**). **Descartado:** recusar desligar (a regularização de
+séries não baixa série quando as presentes são iguais ao físico — o controle ficaria impossível de desligar). O preço está
+na **C225**. (`528a44a0`)
+
+**B732 (NOVA, da Etapa 112) — a próxima etapa do almoxarifado (113) é a situação do material: inativar com saldo (C217,
+C227) e reativar numa família inativa (C220).** Medido no fim desta etapa: o "Inativar" do material não confere nada — a
+Engenharia inativa material de cliente com saldo e o Almoxarife, material nosso com saldo; o saldo fica preso (a Saída
+recusa material inativo). É a mesma forma da C222, por tela. A C220 (só pela API — nenhuma tela reativa material) vai junto,
+por ser a outra transição do mesmo campo. A C219 (Entrada manual sem documento de cliente) muda uma decisão da Etapa 8 e
+espera você. Ver a próxima tarefa no plano da Etapa 112.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -9719,8 +9793,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      instante que um cadastro de material (ou que o "Inativar" da raiz), têm a mesma forma de corrida da **C218**. Não
      medidas por corrida. **O que fazer:** não reorganize famílias enquanto alguém cadastra material nelas (**B726**).
 
-222. **NOVO (anterior à Etapa 110, achado na revisão do plano dela) — ligar lote, série ou inspeção num material que já
-     tem saldo passa, e trava a saída.** O Saldo Inicial do cadastro recusa esses controles (**B721**), mas o caminho em
+222. **✅ RESOLVIDO NA ETAPA 112 (`528a44a0`) — ligar lote ou série num material com saldo não identificado passou a
+     exigir a permissão de ajustar estoque (o Administrador), que é quem regulariza (**B728**, **B729**); os materiais que
+     já estão assim: **A59**. ⚠️ Este item estava parcialmente errado em dois pontos:** (1) **"ou inspeção"** — ligar
+     *Requer inspeção* com saldo não prende nada (nenhuma saída lê a opção; **B731**); (2) **"o Administrador regulariza
+     (… ou Ajuste)"** — o Ajuste **sozinho** não dá lote ao saldo (corrige o total); o que regulariza o lote é a **Entrada
+     com o lote + o Ajuste do total** (**B730**). O texto original: **NOVO (anterior à Etapa 110, achado na revisão do
+     plano dela) — ligar lote, série ou inspeção num material que já tem saldo passa, e trava a saída.** O Saldo Inicial do cadastro recusa esses controles (**B721**), mas o caminho em
      dois passos continua aberto: cadastrar com saldo sem controle e depois editar o material ligando o controle — 200,
      inclusive pela Engenharia (medido). Depois disso a saída do saldo antigo é recusada (*"O material ⟨código⟩ exige lote
      nesta movimentacao (controle por lote ligado)"*, ou a de séries), porque o saldo não tem lote nem séries. Escolher um
@@ -9732,6 +9811,30 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      Famílias e subfamília para o cadastro de material.** Legado de antes da Etapa 103 (o "0" gravado como pai): a aba
      Famílias a trata como família principal, mas o cadastro de material a recusa como subfamília (*"A família escolhida é
      uma subfamília — …"*). **O que fazer:** se aparecer, edite a família e salve com a família pai vazia.
+
+224. **NOVO (da Etapa 112) — o Administrador que liga lote ou série com saldo não identificado não recebe aviso.** O salvar
+     responde *"Material atualizado!"* como sempre, e a partir dali a saída do saldo antigo é recusada (*"O material
+     ⟨código⟩ exige lote nesta movimentacao (controle por lote ligado)"*, ou a das séries) até ele regularizar. **O que
+     fazer:** ao ligar com saldo, regularize na hora — **Lotes e Séries → Séries → Regularizar séries**; para o lote,
+     **Entrada** com o lote + **Ajuste** do total (**B730**). A tela de Lotes mostra *"Sem lote atribuído"* e a de Séries a
+     divergência enquanto faltar.
+
+225. **NOVO (da Etapa 112, medido) — desligar a série deixa as séries como "em estoque".** Desligar *Controle por número de
+     série* num material com séries e dar saída sem série baixa o físico, mas as séries continuam *Em estoque*. Se o
+     controle for religado, o físico e as séries não batem: o Almoxarife recebe a recusa (**B729**) e o Administrador, ao
+     religar, regulariza (baixar as séries que saíram). **O que fazer:** não desligue a série de material com saldo; se
+     desligar, o Administrador regulariza ao religar.
+
+226. **NOVO (da Etapa 112) — uma Entrada sem lote que começou antes de o controle ser ligado e grava depois fica sem lote.**
+     O salvar do cadastro confere o saldo no mesmo comando que grava (uma Entrada que caiu **antes** é vista), mas a
+     Entrada lê o controle no começo dela: se o controle for ligado nos milissegundos do meio, ela grava sem lote.
+     Janela de milissegundos; o resultado é o mesmo estado que o Administrador já regulariza (**C224**).
+
+227. **NOVO (da Etapa 112, medido no fim dela) — inativar um material com saldo prende o saldo, para qualquer dono.** A
+     **C217** já dizia isso do material de cliente; vale também para o nosso. O "Inativar" da tela de Materiais não confere
+     saldo nem retenção: o Almoxarife e a Engenharia inativam material com 5 em estoque (medido) e, a partir daí, a Saída
+     recusa (*"Material inativo não pode ser movimentado"*) com o saldo ainda lá. **O que fazer:** não inative material com
+     saldo — dê saída ou devolva antes. Candidata da **Etapa 113** (**B732**).
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -10794,6 +10897,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   A recusa comum (prateleira bloqueada, por exemplo) desfaz o material de fato (**B724**).
 - **(110) A corrida fecha só entre o cadastro/edição de material e o "Inativar" da família** — reativação de material,
   mudança de nível e criação de subfamília ficam como estão (**B726**, **C220**, **C221**).
+- **(112) A tela não avisa antes de salvar** que ligar lote ou série vai ser recusado — a recusa aparece no aviso vermelho
+  do salvar, com o texto do servidor (a tela não sabe o saldo por lote nem as séries do material).
+- **(112) Não existe gesto de "atribuir lote ao saldo sem lote"** — a regularização é a Entrada com o lote + o Ajuste do
+  total, que deixa duas linhas no extrato (**B730**).
+- **(112) A recusa olha só lote e série** — *Requer inspeção*, validade, corrida, certificado e foto continuam livres de
+  ligar com saldo (**B731**; o certificado só age no lote que nasce no Recebimento).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -11696,6 +11805,18 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(112) Nenhum clique foi dado nesta etapa no navegador.** A tela não mudou: a recusa nova chega pelo mesmo aviso vermelho
+do salvar que a Etapa 108 já prova por teste de componente (403 com a mensagem literal, sem *"Material atualizado!"*, o
+formulário aberto). O servidor foi provado pela rota (**26** cenários da regra, **4** jornadas de integração com o motor e a
+regularização). O que **só o navegador** prova:
+
+1. **A recusa inteira legível** no aviso vermelho, entrando como Almoxarife e marcando *Controle por lote* num material com
+   saldo sem lote — e o formulário continua aberto, com a caixa marcada.
+2. **A regularização do lote pela tela de Movimentações**: a Entrada com o lote e o Ajuste do total, num material que já
+   tem o controle ligado (a tela pode pedir o lote no Ajuste — o servidor não pede).
+3. **Lotes e Séries** depois da regularização: sem o aviso *"Sem lote atribuído"*; e, na série, o formulário
+   *Regularizar séries* aparecendo para o Administrador logo depois de ligar.
 
 
 
@@ -23030,17 +23151,102 @@ família principal sendo inativada), que ficam declaradas (**C221**). O segundo 
 eram equivalentes, e **11** mostraram cenários sem prova — viraram **9** testes novos (o mais importante: trocar família e
 subfamília juntas no mesmo salvar, o caso comum, que nenhum teste fazia).
 
+## Etapa 112 — Ligar lote ou série num material que já tem saldo passa a ser do Administrador (2026-10-15)
+
+Marcar **Controle por lote** ou **Controle por número de série** num material faz o sistema passar a pedir o lote (ou as
+séries) em cada saída. Num material que **já tem saldo**, esse saldo antigo não tem lote nem séries — e a partir do
+momento em que o controle é ligado, a saída dele é recusada até alguém dizer de que lote ele é, ou cadastrar as séries das
+unidades que estão na prateleira. Até aqui o Almoxarife e a Engenharia ligavam o controle sem aviso nenhum e o saldo
+ficava preso. Agora, quando o saldo ainda não está identificado, ligar o controle é do **Administrador** — que é quem tem
+os dois gestos de regularização. Quando o saldo já está todo em lote (ou as séries batem com o físico, ou não há saldo),
+qualquer um que edita material continua ligando.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| O Almoxarife e a Engenharia ligavam lote ou série num material com saldo, e a saída desse saldo travava | Recebem a recusa ao salvar, dizendo quanto está sem lote / quantas séries faltam; nada é gravado (**B728**) |
+| — | Saldo já identificado (todo em lote, séries = físico, ou sem saldo): qualquer perfil que edita material liga (**B729**) |
+| — | O Administrador liga e regulariza: séries pela tela de Séries; lote por Entrada com o lote + Ajuste do total (**B730**) |
+| Religar a série com o físico zerado e séries ainda "em estoque" (de quando o controle foi desligado) passava, e a Entrada seguinte das mesmas séries recusava | Recusado para quem não é Administrador — o trecho diz *"o físico é 0 e há 2 série(s) em estoque"* |
+| Salvar um material com o controle ligado enquanto outra pessoa o desligava religava o controle | Recebe *"O cadastro do material ⟨código⟩ mudou enquanto era salvo — nada foi gravado. …"* |
+| Ligar **Requer inspeção** num material com saldo | Continua livre — a opção não prende saldo nenhum (**B731**) |
+
+### As regras, com o cenário exato
+
+Preparação: um material **CHP-0201** sem controles; usuários **Ana** (Almoxarife), **Edu** (Engenharia) e o
+**administrador**.
+
+**1. Saldo sem lote: a recusa.** Ana dá **Entrada** de 5 no CHP-0201 (Movimentações, sem lote). Depois, **Materiais →
+editar CHP-0201**, marca **Controle por lote** e salva → aviso vermelho:
+*"Ligar o controle por lote no material CHP-0201 exige a permissão "ajustar_estoque" (seu perfil: ALMOXARIFE): há 5 sem lote atribuído. Depois de ligar, a saída desse saldo é recusada até ele ser regularizado, e regularizar é do Administrador do almoxarifado. Peça a ele para ligar o controle e regularizar o saldo."*
+O formulário continua aberto e nada foi gravado. Edu recebe a mesma, com *"(seu perfil: ENGENHARIA)"*.
+
+**2. A série, e os dois juntos.** Marcando **Controle por número de série** no mesmo material → o trecho do meio vira
+*"o físico é 5 e há 0 série(s) em estoque"*. Marcando os dois → *"Ligar o controle por lote e por número de série no
+material CHP-0201 exige … : há 5 sem lote atribuído; o físico é 5 e há 0 série(s) em estoque. …"*.
+
+**3. Saldo já identificado: livre.** Num material novo sem controle, Ana dá **Entrada** de 3 **informando o lote** L2 (a
+Entrada aceita lote mesmo sem o controle) e depois marca **Controle por lote** → *"Material atualizado!"*. Com 3 em L2 e
+mais 2 sem lote, a recusa diz *"há 2 sem lote atribuído"* — só a sobra.
+
+**4. O Administrador liga e regulariza.** O administrador marca **Controle por lote** no CHP-0201 → *"Material
+atualizado!"*. Uma **Saída** de 1 sem lote → *"O material CHP-0201 exige lote nesta movimentacao (controle por lote
+ligado)"* (o saldo preso que a recusa anunciava). Ele regulariza: **Entrada** de 5 com o lote **L1** e **Ajuste** do total
+para **5** → em **Lotes e Séries → Lotes**, L1 com 5 e sem o aviso *"Sem lote atribuído"*; a Saída pelo L1 passa. Na
+série: ligar, abrir **Lotes e Séries → Séries**, **Regularizar séries** com os números das unidades → a Saída escolhendo a
+série passa.
+
+**5. O que continua livre.** Editar qualquer campo de um material que já tem o controle ligado; **desligar** o controle;
+ligar **Requer inspeção** com saldo — *"Material atualizado!"* nos três.
+
+### O que esta etapa NÃO cobre
+
+1. **O Administrador que liga com saldo não identificado** não recebe aviso ao salvar — o saldo fica preso até ele
+   regularizar; as telas de Lotes e de Séries mostram a diferença (**C224**).
+2. **Desligar a série** deixa as séries como "em estoque" (**C225**).
+3. **Uma Entrada sem lote que começou antes** de o controle ser ligado e grava depois (**C226**).
+4. **Inativar material com saldo** (**C217**, **C227**) e **reativar material numa família inativa** (**C220**) — é a
+   próxima etapa.
+5. **Os materiais que já estão** com controle ligado e saldo não identificado — a consulta **A59** acha.
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0) reproduziu o caminho de dois passos com os três perfis que editam material e com cada controle, e
+descobriu que a **C222 estava parcialmente errada**: ligar *Requer inspeção* com saldo não prende nada. A **revisão do
+plano** derrubou a primeira decisão — recusar para todos e mandar zerar o saldo com uma Saída —, medindo que isso
+registraria consumo que não aconteceu, seria impossível no material de cliente, recusaria saldo que já estava todo em lote
+e deixaria religar a série com séries ainda em estoque. A medição seguinte mostrou que a regularização do lote existe
+(Entrada com o lote + Ajuste do total) e que a de séries exige o controle já ligado — daí a regra final (**B728**).
+
+A **revisão adversarial do código** (dois revisores, executando) não achou nenhum defeito na regra nem na permissão: os
+perfis que escapam ou são barrados batem com o esperado, a mensagem confere letra por letra com o contrato, e a troca de
+família junto com ligar o controle grava certo. Registrou três pontos menores, agora escritos: a tela de Lotes só mostra o
+"Sem lote atribuído" depois de ligar o controle; o material inativo também é conferido; e o **Gestor** também regulariza
+(**B728**, **B729**). O segundo revisor fez **25 sabotagens** novas: 13 derrubaram teste, 2 eram inalcançáveis e **10**
+mostraram cenários sem prova — viraram **10** testes novos (o mais importante: trocar a família de um material com o
+controle ligado, que uma inversão na ordem dos parâmetros recusaria sempre sem nenhum teste notar).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 112 entregue (2026-10-15):** **ligar lote ou série num material que já tem saldo passa a ser do Administrador.**
+  Com o saldo ainda sem lote (ou sem as séries), o Almoxarife e a Engenharia recebem a recusa ao salvar o cadastro, com o
+  que está sem lote; o Administrador liga e regulariza; com o saldo já identificado, qualquer um liga (**C222** resolvido).
+  **O que é seu:** a consulta **A59** (opcional); as decisões **B728 a B732** (a **B728** — o Administrador liga, em vez
+  de proibir para todos — é reversível e a alternativa é sua); os avisos **C224 a C227**; as limitações **(112)** em D e
+  as verificações **(112)** em F. **Próxima: Etapa 113 — inativar material com saldo (C217, C227) e reativar numa
+  família inativa (C220) — ver a
+  "próxima tarefa detalhada" no plano da Etapa 112.**
 
 - **Etapa 110 entregue (2026-10-15):** **o Saldo Inicial do cadastro vira uma Entrada de verdade, e a família não fica
   mais inativa com material dentro.** Com saldo, o cadastro exige quem movimenta estoque, recusa material com lote, série,
   inspeção ou de cliente, e grava o saldo pelo motor de estoque (**C215** resolvido); o cadastro e o "Inativar" da família
   conferem e gravam no mesmo comando (**C218** resolvido). **O que é seu:** as consultas **A57** e **A58** (opcionais); as
   decisões **B721 a B727** (a **B721** — manter o campo com recusa, em vez de tirá-lo — é reversível e a alternativa é sua);
-  os avisos **C219 a C223**; as limitações **(110)** em D e as verificações **(110)** em F. **Próxima: Etapa 112 (a 111 é
-  da frente de Compras) — ver a "próxima tarefa detalhada" no plano da Etapa 110.**
+  os avisos **C219 a C223**; as limitações **(110)** em D e as verificações **(110)** em F. ~~**Próxima: Etapa 112 (a 111 é
+  da frente de Compras) — ver a "próxima tarefa detalhada" no plano da Etapa 110.**~~ *(Feita — Etapa 112.)*
 
 - **Etapa 108 entregue (2026-10-15):** **trocar o dono de um material com histórico passa a ser só do Administrador.** No
   cadastro, tirar o cliente, dar o material a um cliente ou passar de um cliente a outro, num material com saldo, retenção
