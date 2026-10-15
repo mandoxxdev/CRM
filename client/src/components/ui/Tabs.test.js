@@ -180,3 +180,44 @@ test('nenhuma classe casa com os seletores que mobile-app.css forca a quebrar li
     }
   }
 });
+
+// Etapa 107 (RN-107.10): o contador opcional ao lado do rotulo — a OS comercial mostra quantas
+// propostas aprovadas e quantas OS existem, e so quando o numero e maior que zero.
+test('RN-107.10 badge: numero > 0 ou texto aparece em .ui-tab-badge depois do rotulo; 0/vazio/ausente nao', () => {
+  render({
+    ativa: 'empresa',
+    onChange: jest.fn(),
+    abas: [
+      { id: 'empresa', label: 'Empresa', badge: 3 },
+      { id: 'sistema', label: 'Sistema', badge: 0 },
+      { id: 'email', label: 'E-mail', badge: 'novo' },
+      { id: 'backup', label: 'Backup', badge: '' },
+      { id: 'logs', label: 'Logs', badge: null },
+      { id: 'outros', label: 'Outros' },
+    ],
+  });
+  const badge = (t) => t.querySelector('.ui-tab-badge');
+  const [empresa, sistema, email, backup, logs, outros] = tabs();
+  expect(badge(empresa).textContent).toBe('3');
+  // depois do rotulo, dentro do botao
+  expect(empresa.querySelector('.ui-tab-rotulo').nextElementSibling).toBe(badge(empresa));
+  expect(badge(email).textContent).toBe('novo');
+  expect(badge(sistema)).toBeNull();
+  expect(badge(backup)).toBeNull();
+  expect(badge(logs)).toBeNull();
+  expect(badge(outros)).toBeNull();
+});
+
+test('RN-107.10 sem badge o HTML da aba e so icone + rotulo (Configuracoes nao muda)', () => {
+  render({ ativa: 'empresa', onChange: jest.fn() });
+  expect(container.querySelectorAll('.ui-tab-badge')).toHaveLength(0);
+  expect(tabs()[0].innerHTML).toBe('<span class="ui-tab-rotulo">Empresa</span>');
+});
+
+test('RN-107.10 a classe do badge tambem nao casa com os seletores do mobile-app.css', () => {
+  render({ ativa: 'empresa', onChange: jest.fn(), abas: [{ id: 'empresa', label: 'Empresa', badge: 2 }] });
+  const cls = [...container.querySelector('.ui-tab-badge').classList];
+  for (const frag of ['header', 'toolbar', 'barra', 'actions', 'acoes', 'botoes', 'buttons']) {
+    expect(cls.some((c) => c.includes(frag))).toBe(false);
+  }
+});

@@ -5,7 +5,9 @@ import './Tabs.css';
  * Barra de abas reutilizavel (Etapa 36, RN-36.09).
  *
  * Contrato (congelado no plano da etapa):
- *   abas: [{ id, label, icon? }]  — `icon` e um componente (react-icons), opcional
+ *   abas: [{ id, label, icon?, badge? }]  — `icon` e um componente (react-icons), opcional;
+ *                                 `badge` (Etapa 107, RN-107.10) e um contador opcional: numero > 0
+ *                                 ou texto nao vazio aparece em `.ui-tab-badge` depois do rotulo
  *   ativa: id da aba selecionada  — o componente e CONTROLADO; quem guarda o estado e o pai
  *   onChange(id)                  — chamado no clique e nas setas; o pai decide o que fazer
  *   ariaLabel                     — rotulo do tablist (ha dois niveis na mesma tela)
@@ -23,6 +25,9 @@ import './Tabs.css';
  * 'header', 'toolbar', 'barra', 'actions' etc. — `mobile-app.css:231-238` forca `flex-wrap:
  * wrap` nesses fragmentos e a barra deixaria de rolar no celular.
  */
+// 0, null, undefined e '' nao mostram nada: o contador da OS comercial so aparecia acima de zero.
+const temBadge = (b) => (typeof b === 'number' ? b > 0 : b != null && b !== '' && b !== false);
+
 const Tabs = ({ abas = [], ativa, onChange, ariaLabel, tamanho = 'md', painelId }) => {
   const listaRef = useRef(null);
 
@@ -87,6 +92,7 @@ const Tabs = ({ abas = [], ativa, onChange, ariaLabel, tamanho = 'md', painelId 
           >
             {Icone ? <Icone aria-hidden="true" /> : null}
             <span className="ui-tab-rotulo">{aba.label}</span>
+            {temBadge(aba.badge) ? <span className="ui-tab-badge">{aba.badge}</span> : null}
           </button>
         );
       })}

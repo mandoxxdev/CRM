@@ -76,3 +76,18 @@
   font-size: 0.92rem;
   border-bottom-width: 2px;
 }
+
+/* Etapa 107 (RN-107.10): contador ao lado do rotulo (OS comercial). Mesmo desenho do `.tab-badge`
+   que a OS tinha, nos tokens do Tabs. */
+.ui-tab-badge {
+  flex: 0 0 auto;
+  min-width: 1.5rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: var(--gmp-primary);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+}
