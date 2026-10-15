@@ -12,9 +12,11 @@
  * cidade/estado/cep/telefone do vendedor. Exceção única: `razao_social` é obrigatória também
  * no PUT (ausente ou vazia → 400), como já era.
  *
- * `grupo_id`: ausente/`''`/`null` → NULL (no PUT, limpa); inteiro grava SEM validar
- * existência (como sempre foi — o modal manda o id do grupo que está aberto); não-inteiro
- * não vazio ('abc') → 400 "Grupo inválido".
+ * `grupo_id`: ausente/`''`/`null` → NULL (no PUT, limpa); não-inteiro não vazio ('abc') → 400
+ * "Grupo inválido". Inteiro NOVO (todo POST; no PUT, diferente do gravado) tem de ser de um grupo
+ * que existe e está ativo (Etapa 103, RN-103.08, B52) — até a 102 gravava SEM validar, e a tela de
+ * um grupo desativado aberta por endereço antigo vinculava fornecedor a ele. O MESMO valor do
+ * gravado passa (fornecedor que já está num grupo desativado continua editável — B45/B46).
  *
  * Ordem de registro: este módulo só tem GET/POST/PUT, então a posição em relação ao
  * `app.delete('/api/compras/:tipo/:id')` genérico é inócua (verbos diferentes não se
@@ -28,6 +30,9 @@ const { dbRun, dbGet, dbAll } = require('../../services/compras/db');
 // Literal já usada pelas outras rotas de fornecedor do index.js (foto, planilha) — uma só.
 const NAO_ENCONTRADO = 'Fornecedor não encontrado';
 const STATUS_VALIDOS = ['ativo', 'inativo'];
+/** Etapa 103 (RN-103.08) — literais do vínculo a grupo que não pode receber fornecedor. */
+const GRUPO_NAO_ENCONTRADO = 'Grupo não encontrado';
+const GRUPO_DESATIVADO = 'Grupo desativado — reative o grupo em Fornecedores homologados antes de vincular fornecedores';
 
 /** Colunas de texto da ficha, além de razao_social (obrigatória) e grupo_id (inteiro). */
 const CAMPOS_TEXTO = [
@@ -65,6 +70,14 @@ function parseGrupoId(v) {
 
 module.exports = function (app, db, authenticateToken, checkModulePermission) {
   const guard = [authenticateToken, checkModulePermission('compras')];
+
+  /** Devolve a literal da recusa, ou null quando o grupo existe e está ativo. */
+  async function recusaDoGrupoNovo(grupoId) {
+    const g = await dbGet(db, 'SELECT ativo FROM grupos_compras WHERE id = ?', [grupoId]);
+    if (!g) return GRUPO_NAO_ENCONTRADO;
+    if (Number(g.ativo) !== 1) return GRUPO_DESATIVADO;
+    return null;
+  }
 
   // G2 (lote de outubro): a lista morava inline no index.js como `SELECT *` e devolvia
   // `planilha_dados` — a planilha de precos inteira em JSON — para QUATRO telas que nao a leem
@@ -118,6 +131,10 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
 
     const textos = CAMPOS_TEXTO.map((k) => textoOuNull(body[k]));
     try {
+      if (grupo.valor != null) {
+        const recusa = await recusaDoGrupoNovo(grupo.valor);
+        if (recusa) return res.status(400).json({ error: recusa });
+      }
       const r = await dbRun(
         db,
         `INSERT INTO fornecedores (razao_social, ${CAMPOS_TEXTO.join(', ')}, grupo_id, status)
@@ -149,11 +166,13 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
       params.push(textoOuNull(body[k]));
     });
 
-    if (temChave(body, 'grupo_id')) {
+    // Lido aqui (a ordem dos 400 nao muda: razao -> grupo invalido -> status), gravado abaixo.
+    const temGrupo = temChave(body, 'grupo_id');
+    let grupoValor = null;
+    if (temGrupo) {
       const grupo = parseGrupoId(body.grupo_id);
       if (grupo.erro) return res.status(400).json({ error: grupo.erro });
-      sets.push('grupo_id = ?');
-      params.push(grupo.valor);
+      grupoValor = grupo.valor;
     }
 
     if (temChave(body, 'status')) {
@@ -163,11 +182,30 @@ module.exports = function (app, db, authenticateToken, checkModulePermission) {
       params.push(status);
     }
 
-    sets.push('updated_at = CURRENT_TIMESTAMP');
     if (!id) return res.status(404).json({ error: NAO_ENCONTRADO });
-    params.push(id);
 
     try {
+      // RN-103.08 (B52): só o grupo que MUDA passa pela checagem; o fornecedor inexistente responde
+      // 404 antes dela. A comparação é com o valor JÁ passado por parseGrupoId ('7' da URL = 7).
+      // Grupo IGUAL ao gravado não entra no SET: com a FK de produção ligada
+      // (`grupo_id REFERENCES grupos_compras`, foreign_keys = ON), reescrever um grupo_id órfão com
+      // ele mesmo falha ("FOREIGN KEY constraint failed") — achado M1 da revisão do plano.
+      if (temGrupo && grupoValor != null) {
+        const atual = await dbGet(db, 'SELECT grupo_id FROM fornecedores WHERE id = ?', [id]);
+        if (!atual) return res.status(404).json({ error: NAO_ENCONTRADO });
+        const mesmo = atual.grupo_id != null && Number(atual.grupo_id) === grupoValor;
+        if (!mesmo) {
+          const recusa = await recusaDoGrupoNovo(grupoValor);
+          if (recusa) return res.status(400).json({ error: recusa });
+          sets.push('grupo_id = ?');
+          params.push(grupoValor);
+        }
+      } else if (temGrupo) {
+        sets.push('grupo_id = ?');
+        params.push(null);
+      }
+      sets.push('updated_at = CURRENT_TIMESTAMP');
+      params.push(id);
       const r = await dbRun(db, `UPDATE fornecedores SET ${sets.join(', ')} WHERE id = ?`, params);
       if (r.changes === 0) return res.status(404).json({ error: NAO_ENCONTRADO });
       res.json({ message: 'Fornecedor atualizado' });

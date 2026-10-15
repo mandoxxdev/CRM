@@ -684,15 +684,26 @@ app.delete('/api/compras/:tipo/:id', authenticateToken, checkModulePermission('c
 });
 
 // ---------- Grupos de fornecedores homologados (Compras) ----------
+// Etapa 103 (RN-103.05, B51): `?incluir_inativos=1` devolve tambem os desativados (ativos primeiro) —
+// so a tela de grupos (`GruposFornecedores.js`, para oferecer "Reativar") e a do grupo
+// (`FornecedoresDoGrupo.js`, para mostrar "desativado" em vez de "Grupo") pedem. SEM o parametro nada
+// muda: a ficha do fornecedor e Variaveis tecnicas continuam vendo so ativos (B46).
+const incluirInativos = (req) => String(req.query.incluir_inativos || '') === '1';
 app.get('/api/compras/grupos', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  db.all('SELECT * FROM grupos_compras WHERE ativo = 1 ORDER BY COALESCE(numero, 999) ASC, ordem ASC, nome ASC', [], (err, rows) => {
+  const sql = incluirInativos(req)
+    ? 'SELECT * FROM grupos_compras ORDER BY ativo DESC, COALESCE(numero, 999) ASC, ordem ASC, nome ASC'
+    : 'SELECT * FROM grupos_compras WHERE ativo = 1 ORDER BY COALESCE(numero, 999) ASC, ordem ASC, nome ASC';
+  db.all(sql, [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
   });
 });
 app.get('/api/compras/grupos/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
   const id = req.params.id;
-  db.get('SELECT * FROM grupos_compras WHERE id = ? AND ativo = 1', [id], (err, row) => {
+  const sql = incluirInativos(req)
+    ? 'SELECT * FROM grupos_compras WHERE id = ?'
+    : 'SELECT * FROM grupos_compras WHERE id = ? AND ativo = 1';
+  db.get(sql, [id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!row) return res.status(404).json({ error: 'Grupo não encontrado' });
     res.json(row);
@@ -723,6 +734,17 @@ app.put('/api/compras/grupos/:id', authenticateToken, checkModulePermission('com
   });
 });
 // Etapa 100 (G1): o `DELETE /api/compras/grupos/:id` mora ACIMA do generico `/:tipo/:id` — ver la.
+// Etapa 103 (RN-103.04, B51): reativar o grupo desativado pelo "Remover grupo". Idempotente como o
+// DELETE (ja ativo -> 200). Nao toca `fornecedores.grupo_id`: quem ficou ligado volta com o grupo (B45).
+// POST com tres segmentos depois de /api/compras — nenhum generico casa (o generico e so DELETE /:tipo/:id).
+app.post('/api/compras/grupos/:id/reativar', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  const id = req.params.id;
+  db.run('UPDATE grupos_compras SET ativo = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Grupo não encontrado' });
+    res.json({ message: 'Grupo reativado' });
+  });
+});
 app.post('/api/compras/grupos/:id/foto', authenticateToken, checkModulePermission('compras'), uploadGrupoCompras.single('foto'), (req, res) => {
   const id = req.params.id;
   if (!req.file || !req.file.filename) return res.status(400).json({ error: 'Nenhuma imagem enviada' });

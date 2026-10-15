@@ -74,6 +74,18 @@ function corpoDoModal(grupoId) {
 
   const linha = (id) => dbGet(db, 'SELECT * FROM fornecedores WHERE id = ?', [id]);
 
+  // Etapa 103 (RN-103.08): os ids de grupo que este arquivo usa (2, 3, 4, 7, 9) eram gravados SEM
+  // tabela de grupos — a porta nao validava existencia. Desde a 103 grupo NOVO tem de existir e estar
+  // ativo, entao o arquivo cria `grupos_compras` (tabela core, fora do harness — a mesma DDL de
+  // `index.js`) com esses ids ATIVOS. O que os cenarios provam nao muda.
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS grupos_compras (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, numero INTEGER DEFAULT 10, ordem INTEGER DEFAULT 0,
+    foto TEXT, ativo INTEGER DEFAULT 1, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  for (const gid of [2, 3, 4, 7, 9]) {
+    await dbRun(db, 'INSERT INTO grupos_compras (id, nome, ativo) VALUES (?, ?, 1)', [gid, `Grupo ${gid}`]);
+  }
+
   /* ── (1) POST grava as 13 colunas ─────────────────────────────────── */
   console.log('(1) POST com as 13 colunas');
   let idCompleto = null;
