@@ -48,6 +48,11 @@
 > (botão "Reativar") e **não recebe mais fornecedor** — a tela dele avisa e o servidor recusa; família que
 > tem material **não muda de nível** (virar subfamília, trocar de família principal ou virar raiz). Decisões
 > **B49–B52**, consulta **A7**. Próxima de Compras: a definir (candidatas no plano da 103).
+> **2026-10-15 — Etapa 105 entregue (frente Compras/cadastros):** família com material ativo **não se inativa
+> mais pela API** (a mesma regra e a mesma mensagem do "Inativar" da tela), subfamília não se reativa sob família
+> principal inativa; e o banco passa a entrar em **WAL já no primeiro boot** — a medição mostrou que o aviso do G12
+> **não** era inofensivo: o banco ficava sem WAL em todo boot (G12 estava errado). Decisões **B53–B55**, consulta
+> **A8**. Próxima de Compras: candidatas no plano da 105.
 > O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
 > A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
@@ -89,6 +94,15 @@
   `SELECT f.id, f.codigo, f.nome, f.parent_id FROM familias_material_almoxarifado f LEFT JOIN familias_material_almoxarifado p ON p.id = f.parent_id WHERE f.parent_id IS NOT NULL AND p.id IS NULL`.
   Zero linhas nas três: nada a fazer (nenhuma tela produz esses casos — só a API). Com linhas: corrigir à mão
   no banco, caso a caso (a tela não muda o nível de família).
+- **A8 (Etapa 105) — Consulta, e uma mudança que o deploy faz sozinho:** em que modo está o banco de produção.
+  Com o servidor parado (ou numa cópia do arquivo), `sqlite3 database.sqlite "PRAGMA journal_mode;"` — ou, sem
+  abrir conexão, o byte 18 do arquivo: `2` = WAL, `1` = rollback. Medido aqui: banco criado pelo código atual
+  ficava em **`delete`** (rollback) em todo boot (G12). (a) **`wal`**: nada muda no deploy. (b) **`delete`**: o
+  primeiro boot da versão nova **passa o banco para WAL** (B53) — aparecem `database.sqlite-wal` e
+  `database.sqlite-shm` ao lado do arquivo; quem copia o banco à mão (backup fora do sistema) passa a copiar os
+  **três** com o servidor parado, ou usar o backup do próprio sistema, que já copia os três. Voltar ao modo antigo,
+  se preferir: `PRAGMA journal_mode = DELETE;` com o servidor parado — mas o boot seguinte põe WAL de novo (é o
+  que o código sempre quis: "WAL mode: Habilitado para melhor concorrência").
 
 ### B. Decisões que eu tomei e você pode reverter
 - **B1 — Esta frente vive em `main`, e `main` tem OUTRO pedido de compra.** A branch
@@ -264,6 +278,26 @@
   (travaria salvar a ficha de quem ficou num grupo desativado). **Muda uma regra da Etapa 34**, que dizia
   "o número do grupo grava sem conferir se o grupo existe". **Não coberto:** a conferência e a gravação não
   são uma operação só — um grupo desativado no mesmo instante em que alguém vincula ainda recebe o vínculo.
+- **B53 — Etapa 105 (G12): banco existente em modo `delete` passa a WAL no próximo boot.** O pedido era "WAL no
+  primeiro boot sem mudar nada em banco existente"; a medição mostrou que o banco existente criado pelo código
+  atual **também** está sem WAL (todo boot perdia a mesma corrida), então as duas metades se contradizem. Escolhido:
+  WAL em todo boot, novo ou existente — é o que o código anunciava desde sempre, e banco que já está em WAL não muda
+  nada (provado). **Descartado:** WAL só em banco novo (deixaria produção no modo de rollback, com leitura e
+  escrita se bloqueando e o checkpoint de recuperação sem efeito, para preservar um estado que ninguém escolheu).
+  Reversível: `PRAGMA journal_mode = DELETE` e reverter o commit. Ver **A8**.
+- **B54 — Etapa 105 (G10c): o PUT recusa com a mensagem do "Inativar" da tela, palavra por palavra** —
+  *"Não é possível remover: família possui N item(ns) ativo(s)"*, inclusive o "remover" (a ação é inativar).
+  Escolhido: quem reproduz pela API vê o mesmo texto que a tela mostra. A recusa já existente de **subfamília
+  ativa** no PUT (*"Não é possível inativar: família possui subfamília(s) ativa(s)"*) ficou com o texto dela —
+  **não** unificada com a do DELETE (*"…possui N subfamília(s) ativa(s)"*). **Descartado:** reescrever as duas para
+  "inativar" (mudaria a mensagem da tela, que está no manual) e unificar a de subfamília (troca de contrato sem
+  ganho: nenhuma tela mostra a mensagem do PUT). As duas regras só valem na **transição** ativa → inativa: uma
+  família que já estava inativa continua editável mesmo com item ativo dentro (legado).
+- **B55 — Etapa 105: o campo "ativo" da família só aceita 0/1.** `1`, `'1'`, `true`, `'true'` gravam 1;
+  `0`, `'0'`, `false`, `'false'`, `null` gravam 0; qualquer outra coisa (`2`, `'sim'`, `''`) é recusada com
+  *"Ativo inválido: use 0 ou 1"*. Antes o valor era gravado cru — `'false'` virava texto e a família sumia **das
+  duas** listas (ativas e inativas). **Descartado:** aceitar qualquer coisa e só interpretar (o banco continuaria
+  recebendo texto). Nenhuma tela manda esse campo para família.
 - **B44 — Etapa 89: só o nome do arquivo do PDF da OS é limpo; o número da OS fica como foi digitado.**
   Com `/`, `"` ou `:` no número, o Windows recusava o nome do arquivo e o usuário via "Erro ao gerar
   PDF" (o PDF até era gerado). Agora o arquivo vira `OS_OS_1_2_A_<hora>.pdf` e o documento continua
@@ -421,6 +455,12 @@
   Fica um aviso pré-existente e inofensivo: `WAL mode unavailable: cannot change into wal mode
   from within a transaction` (o `PRAGMA` roda dentro de uma transação; o WAL entra no boot
   seguinte) — **G12**.
+  **G12 — esta descrição estava errada; corrigido na Etapa 105 (`1ace8b88`, `d46126c9`).** Medido com o `journal_mode` lido
+  depois do boot: o WAL **não** entrava no boot seguinte — 1º boot em `delete` em 6 de 7, e do 2º ao 6º boot sobre
+  o mesmo banco continuou `delete` em 6 de 6. Não era inofensivo: o banco só virava WAL se algum boot ganhasse a
+  corrida por sorte (o de desenvolvimento do André está em WAL; um de produção criado com o código atual pode não
+  estar — **A8**). A causa não era transação nenhuma: o `PRAGMA` disputava a conexão com os `CREATE`/`SELECT` que
+  os módulos enfileiram antes de o banco abrir. Agora ele sai antes de tudo — 6 de 6 boots novos em WAL (B53).
 - **G7** A lista de módulos do sistema existe em **quatro** lugares (`modulosMeta.js`,
   `TipoSelecao.todosModulos`, `MODULE_ADMIN_KEYS` no servidor, `DEFAULT_MODULOS_TIPO`). A Etapa 36
   usou a do cliente (`modulosMeta.js`) e **não** criou uma quinta; unificar é etapa própria.
@@ -438,11 +478,23 @@
   uma família com materiais recriava o caso antigo. A medição achou mais três portas para estados errados
   (sub com material trocando de família principal ou virando raiz; raiz com subfamília **inativa** virando sub,
   que depois dava três níveis; `parent_id: 'abc'` virando raiz calado) — todas recusadas (B49, B50, A7).
-- **G10c** (achado na Etapa 103, **não corrigido**) `PUT /api/almoxarifado/familias/:id` com `ativo: 0` inativa
+- **G10c — corrigido na Etapa 105 (`80b15bc9`).** O texto abaixo é o de quando foi achado; a medição da 105
+  confirmou e achou mais três portas: `ativo: 'false'` gravado como texto (a família sumia das duas listas e passava
+  até com subfamília ativa), a recusa de subfamília ativa valendo também para família já inativa (renomear o
+  legado dava 400), e o inverso — reativar subfamília sob família principal inativa (B54, B55).
+  **(Original, Etapa 103):** `PUT /api/almoxarifado/familias/:id` com `ativo: 0` inativa
   família **com materiais ativos** — o `DELETE` ("Inativar" da tela) recusa com *"Não é possível remover:
   família possui N item(ns) ativo(s)"*, o `PUT` não confere (medido: 200, `ativo = 0`). Nenhuma tela manda
   `ativo` nesse `PUT` (a aba Famílias manda só nome, descrição e tipo de uso) — só a API. Correção apontada: a
   mesma contagem do `DELETE` quando `ativo` passa de 1 para 0.
+- **G16** (achado na Etapa 105, **não corrigido**) No primeiro boot em banco novo o log mostra, em parte dos boots,
+  `Erro schema almoxarifado v3 (tentativa 1/3): SQLITE_CONSTRAINT: UNIQUE constraint failed: setores_almoxarifado.nome`
+  (medido: 3 de 7 boots antes da 105, 5 de 6 depois — a ordem dos comandos mudou, a corrida é a mesma). A segunda
+  tentativa passa (nenhum `tentativa 2/3` em 13 boots) e o banco nasce com os 8 setores do seed. Banco existente
+  não é afetado. Causa (lida, não corrigida): o schema do almoxarifado (`initSchema`) roda **duas vezes ao mesmo
+  tempo** no boot — uma chamada direta em `routes/almoxarifado.js` e outra, com retry, em
+  `routes/almoxarifado/extended.js` — e as duas veem a tabela de setores vazia e semeiam. Correção apontada: uma
+  chamada só, ou o seed com `INSERT OR IGNORE`. É do almoxarifado; registrado aqui porque a 105 o mediu.
 - **G13** (Etapa 39) O export de pedidos para Excel passa a trazer "Valor Total" **com** IPI e
   frete, repetido em cada linha de item, e a reimportação ignora essa coluna — um pedido
   exportado e reimportado nasce com valor menor. Coluna "IPI %" no export fica para depois.
@@ -480,6 +532,76 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 105 — Família com material ativo não se inativa pela API; o banco entra em WAL no primeiro boot (2026-10-15)
+
+**Em uma frase.** O botão "Inativar" da aba Famílias sempre recusou família com material ativo, mas o mesmo
+gesto feito pela API passava calado — a família sumia das listas com os materiais dentro —, e reativar uma
+subfamília pela API deixava-a pendurada numa família principal inativa, onde nenhum material novo entra; e, por
+baixo de tudo, o banco que deveria funcionar em modo WAL (leitura e escrita sem se bloquear) ficava no modo antigo
+em quase todo boot, ao contrário do que o documento dizia.
+
+### O que há de novo (visível para o usuário)
+- **Nada muda na tela.** A aba Famílias já recusava inativar família com material ativo (*"Não é possível remover:
+  família possui N item(ns) ativo(s)"*); agora quem faz o mesmo pela API recebe **a mesma mensagem**, palavra por palavra.
+- **Pela API (nenhuma tela faz isso):** reativar uma subfamília cuja família principal está inativa é recusado com
+  **"Não é possível reativar: a família principal desta subfamília está inativa — reative a família principal antes"**;
+  o campo "ativo" da família só aceita 0/1 (**"Ativo inválido: use 0 ou 1"**).
+- **Banco:** o servidor passa a ligar o modo WAL já no primeiro boot (e no próximo boot de um banco que estava no modo
+  antigo). O aviso `WAL mode unavailable` some do log.
+
+### Por baixo do capô
+- **G10c:** `PUT /api/almoxarifado/familias/:id` com `ativo` passando de ativo para inativo usa **a mesma contagem** do
+  `DELETE` (um helper só para as duas portas): material ativo pela família ou pela subfamília → 400 com a literal do
+  DELETE, antes da checagem de subfamília ativa (a ordem do DELETE). Família **já** inativa continua editável.
+- A medição achou mais três portas, todas fechadas: `ativo` gravado cru (`'false'` virava texto e a família sumia das
+  listas de ativas **e** de inativas; agora 0/1 normalizado, o resto recusado — B55); a recusa de subfamília ativa
+  valendo também para família já inativa (renomear o legado dava 400; agora só na transição — B54); e o inverso,
+  reativar subfamília sob raiz inativa (antes 200; repetindo o pai, a recusa era a enganosa "máximo 2 níveis").
+- **G12:** `configureSqlite` pede o `PRAGMA journal_mode = WAL` por `exec`, que o driver executa **sozinho e antes**
+  de tudo o que os módulos enfileiraram antes de o banco abrir (era um `run` comum, que disputava a conexão com ~40
+  `CREATE`/`SELECT` e perdia). Os outros PRAGMAs vão logo atrás, ainda antes da fila, e o modo é **lido** depois: o log
+  só diz "WAL mode enabled" quando o banco está mesmo em WAL. Cada PRAGMA vai separado, com `foreign_keys` primeiro: a
+  revisão final achou que, juntos, um arquivo travado por outro processo no boot deixava as chaves estrangeiras
+  desligadas o processo inteiro. Efeito colateral bom: o `PRAGMA temp_store`, que às vezes
+  caía com uma exceção não tratada no mesmo boot (1 de 7 medidos), não cai mais.
+- A revisão final achou mais duas, também fechadas: reativar uma subfamília que estava num **terceiro nível** (legado de
+  antes da 103) trazia o terceiro nível de volta — agora *"Subfamília não pode ter filhos (máximo 2 níveis)"*; e repetir
+  no corpo o mesmo pai gravado fazia o sistema revalidá-lo, de modo que uma subfamília sob família principal inativa não
+  se renomeava nem se inativava — agora repetir o pai é o mesmo que omiti-lo.
+- Testes novos: `familiaInativaPeloPut.api.test.js` (38) e cinco cenários em `sqliteConcurrency.test.js`.
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| `PUT` de família com `ativo: 0` e material ativo: 200, família inativada com os materiais dentro | 400 *"Não é possível remover: família possui N item(ns) ativo(s)"* — a mesma do "Inativar" |
+| `ativo: 'false'` gravado como texto: a família sumia das ativas e das inativas | grava 0; valor que não é 0/1 → *"Ativo inválido: use 0 ou 1"* |
+| `ativo: 'false'` inativava raiz com subfamília ativa | *"Não é possível inativar: família possui subfamília(s) ativa(s)"* |
+| Renomear pela API uma raiz já inativa que tinha subfamília ativa: 400 | 200 (não é inativação) |
+| Reativar subfamília com família principal inativa: 200, sub pendurada | *"Não é possível reativar: a família principal desta subfamília está inativa — reative a família principal antes"* |
+| Banco novo: modo antigo (`delete`) em 6 de 7 boots, e continuava assim nos boots seguintes | WAL em 6 de 6 boots novos; banco antigo em `delete` vira WAL no primeiro boot |
+| Log: `WAL mode unavailable: … within a transaction` (dito inofensivo) | `WAL mode enabled`, só quando o modo lido é WAL |
+
+### Roteiro de teste manual (clicável)
+1. **Almoxarifado → Configurações → Famílias** → numa família que tem material ativo, clique no ícone de lixeira
+   (**Inativar**) e confirme: aparece *"Não é possível remover: família possui N item(ns) ativo(s)"* (como antes).
+2. (Só pela API, autenticado como administrador do almoxarifado.) `PUT /api/almoxarifado/familias/<a mesma família>` com
+   `{"nome": "<o mesmo>", "ativo": 0}` → **400** com **a mesma frase** do passo 1. A família continua na aba.
+3. Mesma chamada com `"ativo": "talvez"` → **400** *"Ativo inválido: use 0 ou 1"*.
+4. Inative uma família **sem** material e com uma subfamília sem material: primeiro a subfamília (lixeira), depois a
+   família (lixeira). Pela API, `PUT` na subfamília com `{"nome": "<o mesmo>", "ativo": 1}` → **400**
+   *"Não é possível reativar: a família principal desta subfamília está inativa — reative a família principal antes"*.
+   Reative a família principal (`PUT` com `"ativo": 1`) e repita na subfamília → 200; as duas voltam à aba.
+5. (Banco — quem cuida do servidor.) Suba o servidor numa pasta de dados vazia (`CRM_DATA_DIR`); o log mostra
+   `[SQLite] WAL mode enabled` e, com o servidor parado, `PRAGMA journal_mode;` responde `wal`.
+
+### O que a etapa NÃO cobre
+- A tela de Famílias continua **sem** botão de reativar família (a reativação é só pela API, como antes).
+- A recusa de subfamília ativa do `PUT` manteve o texto próprio (*"Não é possível inativar…"*), diferente do DELETE (B54).
+- **G16:** o erro de setores duplicados (`UNIQUE constraint failed: setores_almoxarifado.nome`, tentativa 1/3) no
+  primeiro boot continua aparecendo — o schema do almoxarifado roda duas vezes ao mesmo tempo; a segunda tentativa passa.
+- Inativar e mexer no material **no mesmo instante** (dois usuários) não é uma operação só — a contagem e a gravação
+  são passos separados, como no DELETE desde sempre.
 
 ## Etapa 103 — Grupo de fornecedores desativado volta pela tela e não recebe fornecedor; família com material não muda de nível (2026-10-15)
 
@@ -555,7 +677,7 @@ materiais com a família errada — o mesmo defeito que a Etapa 100 tinha fechad
 
 ### O que a etapa NÃO cobre
 - **G10c:** o `PUT` de família com `ativo: 0` ainda inativa família com materiais ativos (o "Inativar" da tela
-  recusa; o `PUT` não confere). Nenhuma tela manda isso.
+  recusa; o `PUT` não confere). Nenhuma tela manda isso. **Corrigido na Etapa 105 (`80b15bc9`).**
 - Mudar o nível de uma família pela **tela** continua não existindo (era e continua só API).
 - Família ou material que já estejam num estado errado **antes** desta etapa não são corrigidos sozinhos —
   a consulta **A7** os acha.
