@@ -190,10 +190,17 @@ process.on('exit', (code) => {
     assert.strictEqual(await status(a.R), 'ENTREGUE');
   });
 
-  await test('[99 I2] o C202 ate o ultimo gesto: pede 1,5 de serie, separa e entrega 1, o 0,5 recusa Q3 e a requisicao continua Parcialmente Atendida e encerra', async () => {
+  await test('[99 I2] o C202 ate o ultimo gesto: legado 1,5 de serie (a criacao recusa), separa e entrega 1, o 0,5 recusa Q3 e a requisicao continua Parcialmente Atendida e encerra', async () => {
     const m = await material({ serie: 1 });
     await entrar(m, 2, [`I2C-${seq}-1`, `I2C-${seq}-2`]);
-    const a = await criar([[m, 1.5]]);
+    // Etapa 101 (C202, RN-08): a criacao recusa a fracao; o legado e montado por SQL.
+    const pedido15 = await como('S').post('/api/requisicoes-material', {
+      setor: 'Comercial', urgencia: 'NORMAL', os_referencia: 'OS-99i', itens: [{ material_id: m.id, quantidade: 1.5 }],
+    });
+    recusa(pedido15, 400,
+      `${m.nome}: material com controle de série exige quantidade inteira na requisição (informado: 1.5)`, 'criar 1,5 pela rota');
+    const a = await criar([[m, 2]]);
+    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_solicitada = 1.5 WHERE id = ?', [a.ids[0]]);
     await aprovar(a.R);
     ok(await separar(a.R, [{ item_id: a.ids[0], quantidade_separada: 1 }]), 'separa 1');
     ok(await entregar(a.R, [{ item_id: a.ids[0], quantidade_atendida: 1, serie_ids: await serieIds(m, 1) }]), 'entrega 1');

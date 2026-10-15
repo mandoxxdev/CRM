@@ -3467,6 +3467,21 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         return res.status(e.status || 400).json({ error: e.message });
       }
 
+      // Etapa 101 (T2, C202, RN-09): o rascunho gravado antes da regra pode ter fracao de material com serie
+      // (a criacao ja recusa — RN-08). Enviar e quando passa a valer: recusa com a MESMA funcao da criacao,
+      // antes do UPDATE; o status continua RASCUNHO e nada e notificado.
+      const itensEnvio = await dbAll(db,
+        `SELECT ma.nome, ma.controle_serie, i.quantidade_solicitada AS quantidade
+           FROM itens_requisicao_almoxarifado i
+           JOIN materiais_almoxarifado ma ON ma.id = i.material_id
+          WHERE i.requisicao_id = ?
+          ORDER BY i.id`,
+        [req.params.id]);
+      const recusaSerie = requisitionCreateService.recusaFracaoDeSerie(itensEnvio);
+      if (recusaSerie) {
+        return res.status(400).json({ error: recusaSerie });
+      }
+
       await dbRun(db,
         // Etapa 47 (Fase 5, regras, I2): `regras_avaliadas_em = NULL` no mesmo UPDATE - o gate fica
         // FECHADO desde o instante em que a requisicao vira PENDENTE ate o avaliador gravar o carimbo.

@@ -140,6 +140,27 @@ function exigirOS(osReferencia) {
   return numero;
 }
 
+/**
+ * Etapa 101 (T2, C202, RN-08/RN-09): material com controle por serie so se pede em quantidade INTEIRA.
+ * A separacao leva serie de unidade em unidade; o 0,5 de um pedido de 1,5 ficava preso para sempre na
+ * requisicao. Recebe [{ nome, controle_serie, quantidade }] na ordem dos itens e devolve a mensagem S1 do
+ * primeiro item de serie cuja quantidade ARREDONDADA (`Q.qtd`, a mesma que se grava) nao e inteira, ou null.
+ * Usada pela criacao (inclusive rascunho e copia) e pelo `/enviar` (rascunho legado) — uma funcao so, como a
+ * `exigirOS`: duas copias da regra divergiriam. Descartado: arredondar calado (pedir 1,5 e receber 1 ou 2,
+ * decidindo pelo solicitante) e aceitar no rascunho (o rascunho nao tem edicao de itens; o erro so apareceria
+ * no envio, sem como corrigir).
+ */
+function recusaFracaoDeSerie(itens) {
+  for (const item of itens) {
+    if (Number(item.controle_serie) !== 1) continue;
+    const q = Q.qtd(item.quantidade);
+    if (!Number.isInteger(q)) {
+      return `${item.nome}: material com controle de série exige quantidade inteira na requisição (informado: ${q})`;
+    }
+  }
+  return null;
+}
+
 // eslint-disable-next-line no-unused-vars -- `modulo` faz parte do contrato da interface
 // (identifica a rota chamadora para uso futuro/auditoria); nenhuma regra de Task 1 depende dele.
 async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = false } = {}) {
@@ -185,7 +206,7 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
   const materialIds = [...new Set(itens.map((i) => i.material_id))];
   const placeholders = materialIds.map(() => '?').join(',');
   const materiaisAtivos = await dbAll(db,
-    `SELECT id FROM materiais_almoxarifado WHERE id IN (${placeholders}) AND ativo = 1`,
+    `SELECT id, nome, controle_serie FROM materiais_almoxarifado WHERE id IN (${placeholders}) AND ativo = 1`,
     materialIds);
   if (materiaisAtivos.length !== materialIds.length) {
     const encontrados = new Set(materiaisAtivos.map((m) => m.id));
@@ -213,6 +234,20 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
     }
     return q;
   });
+
+  // Etapa 101 (T2, C202, RN-08): fracao de material com serie recusada ANTES de qualquer escrita, na ordem
+  // do payload, depois da recusa de quantidade <= 0 (o laco acima). Vale para o rascunho e para a copia.
+  const materialPorId = new Map(materiaisAtivos.map((m) => [Number(m.id), m]));
+  const recusaSerie = recusaFracaoDeSerie(itens.map((item, n) => ({
+    nome: materialPorId.get(Number(item.material_id)).nome,
+    controle_serie: materialPorId.get(Number(item.material_id)).controle_serie,
+    quantidade: itensQtd[n],
+  })));
+  if (recusaSerie) {
+    const err = new Error(recusaSerie);
+    err.status = 400;
+    throw err;
+  }
 
   const statusInicial = isRascunho ? 'RASCUNHO' : 'PENDENTE';
 
@@ -269,4 +304,4 @@ async function createRequisicao(db, user, payload, { modulo, skipNotificacoes = 
 module.exports = {
   // Exportada para a rota /enviar cobrar a MESMA regra no envio do rascunho — duas
   // cópias da condição divergiriam e o rascunho viraria a porta dos fundos da RN-A.
-  exigirOS, createRequisicao, dispararNotificacoesCriacao, FORMATO_DATA_NECESSIDADE };
+  exigirOS, recusaFracaoDeSerie, createRequisicao, dispararNotificacoesCriacao, FORMATO_DATA_NECESSIDADE };
