@@ -1,13 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-15 (Etapa 99) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-15 (Etapa 101) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77 e 91 a 99) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99 e 101) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 99 ENTREGUE · próxima do almoxarifado: Etapa 101)
+> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 101 ENTREGUE · próxima do almoxarifado: Etapa 102)
 >
-> **O desenvolvimento parou aqui: Etapa 99 fechada — 2026-10-15.** A **Etapa 99 (a separação recusa o que não dá
+> **O desenvolvimento parou aqui: Etapa 101 fechada — 2026-10-15.** A **Etapa 101 (a requisição em separação sem nada
+> na caixa tem saída, e material com série só se pede inteiro)**: a requisição que ficou em *Em Separação* sem nada na
+> caixa — **Iniciar Separação** sem quantidade, tudo devolvido à prateleira, ou separação confirmada vazia depois de uma
+> entrega parcial — passa a ter saída: **Cancelar** quando nada foi entregue (quem pediu, ou o administrador do sistema
+> pela tela do almoxarifado) e **Encerrar** quando algo foi (quem aprova); com material na caixa, a recusa diz para
+> entregar ou devolver à prateleira primeiro. Antes ninguém cancelava nem encerrava e a reserva ficava presa. O
+> cancelamento clicado no instante de uma separação espera ela terminar. Pedir 1,5 de um material com série passa a ser
+> recusado na criação, no rascunho, na cópia e no envio. A revisão adversarial não achou defeito; fechou seis testes que
+> deixavam passar a feature quebrada. **Próxima: Etapa 102** — encerrar com material na caixa recusa também na
+> *Parcialmente Atendida* (C204) — ver a próxima tarefa no plano da 101.
+>
+> **Etapa 99, 2026-10-15.** A **Etapa 99 (a separação recusa o que não dá
 > para separar, e a conferência recusa a caixa vazia)**: a separação passa a recusar, com a explicação e **sem mudar
 > nada**, a quantidade negativa ou que não é número, o item que não é daquela requisição e a fração de um material com
 > número de série (1,5 de um material com série é recusado: *"⟨material⟩: material com controle de série exige
@@ -18,8 +29,7 @@ Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifad
 > declarado: a **criação** de requisição ainda aceita fração de material com série (**C202**) — o 0,5 que sobra não
 > separa; feche o modal e **Encerre** a requisição *Parcialmente Atendida* (não zere o modal). A revisão adversarial
 > (Fase 5) achou uma regressão — uma sobra mínima de material crítico pedia uma conferência que a conferência
-> recusava, e a requisição ficava presa; consertada (**B524**) — e nove testes que faltavam. **Próxima etapa do almoxarifado: Etapa 101** (a **Etapa 100** foi da frente de
-> **Compras**; a numeração é única para todos os módulos) — ver a próxima tarefa no plano da 99.
+> recusava, e a requisição ficava presa; consertada (**B524**) — e nove testes que faltavam. ~~Próxima: Etapa 101~~ *(feita).*
 >
 > **Etapa 98, 2026-10-09.** A **Etapa 98 (devolver da caixa à prateleira)**:
 > o almoxarife passa a ter um gesto para tirar da caixa de uma requisição o que não vai sair — material que quebrou, se
@@ -6373,6 +6383,63 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 101 — A requisição em separação sem nada na caixa tem saída, e material com série só se pede inteiro (ENTREGUE — 2026-10-15)
+
+**O que mudou, em uma frase:** a requisição que entrou em separação e ficou sem nada na caixa passa a ter saída —
+**Cancelar** se nada foi entregue, **Encerrar** se parte já saiu —, e pedir fração de um material com número de série
+passa a ser recusado.
+
+**O problema que ela resolve.** Três jeitos comuns deixavam uma requisição parada em *Em Separação* com a caixa vazia:
+**Iniciar Separação** sem quantidade, **Devolver à prateleira** tudo o que estava separado, ou — depois de uma entrega
+parcial — confirmar a separação sem quantidade. Dali ninguém cancelava nem encerrava, e a reserva continuava segurando o
+material; só a exclusão pelo administrador resolvia. E pedir 1,5 de um material com série era aceito, mas a separação só
+leva unidades inteiras: o 0,5 nunca saía.
+
+| Antes | Agora |
+|---|---|
+| *Em Separação* vazia, nada entregue: ninguém cancela | Quem pediu (ou o administrador do sistema, pela tela do almoxarifado) **cancela**; a reserva é solta |
+| *Em Separação* vazia, algo entregue: *"Transição inválida: EM_SEPARACAO → ENCERRADA"* | Quem aprova **encerra**; a reserva que sobrou é solta |
+| Material na caixa: recusa genérica | A recusa explica: entregar ou devolver à prateleira primeiro |
+| Cancelar no mesmo instante de uma separação: o cancelamento passava na frente | Um espera o outro; o cancelamento decide pela caixa que a separação deixou |
+| 1,5 de material com série aceito na criação, rascunho, cópia e envio | Recusado com a explicação, nada gravado |
+
+**A regra agora.**
+- "Caixa vazia" = em todo item, separado menos entregue (arredondado a 6 casas) é zero.
+- Caixa vazia e **nada entregue** → **Cancelar** (as duas telas; quem já podia cancelar). Encerrar recusa: *"Nada foi
+  entregue nesta requisição; em vez de encerrar, ela deve ser cancelada por quem pediu ou pelo administrador do sistema."*
+- Caixa vazia e **algo entregue** → **Encerrar** (perfil de aprovação). Cancelar recusa: *"Esta requisição já teve
+  material entregue e não pode ser cancelada; o almoxarifado pode encerrá-la."*
+- Material **na caixa** → nem um nem outro: *"Esta requisição tem material separado na caixa; para cancelar, o
+  almoxarifado precisa devolvê-lo à prateleira primeiro."* / *"Esta requisição tem material separado na caixa;
+  entregue-o ou devolva-o à prateleira antes de encerrar."*
+- Material com série: *"⟨material⟩: material com controle de série exige quantidade inteira na requisição (informado:
+  1.5)"*.
+
+### Roteiro de teste manual
+
+Preparação: material **Porca M8** (PC) com 10 em estoque; material **Sensor X** com **controle de série** marcado e 2 em
+estoque. Usuários: **Paula** (sem perfil do almoxarifado, pede pelo Comercial), um **administrador**, **Ana**
+(almoxarife).
+
+1. **Cancelar a vazia.** Paula, em *Comercial → Requisições*, pede 2 Porca M8. O administrador aprova. Ana abre a
+   requisição no almoxarifado, **Iniciar Separação**, confirma sem quantidade → *Em Separação*. Paula abre a dela: o
+   botão **Cancelar Requisição** aparece → confirmar → *"Requisição cancelada"*. Conferir: status *Cancelado*; em
+   **Almoxarifado → Reservas** a reserva está *Liberada*; a requisição sumiu da **Fila de separação**.
+2. **Cancelar depois de devolver.** Nova requisição de 2, aprovada. Ana separa 2 e **Devolver à prateleira** 2 (motivo
+   "teste"). O administrador, na tela do almoxarifado, vê **Cancelar Requisição** → cancela.
+3. **Sem botão com material na caixa.** Nova requisição de 2, aprovada; Ana separa 2. Nem **Cancelar Requisição** nem
+   **Encerrar Requisição** aparecem (para Paula nem para o administrador).
+4. **Encerrar depois de entrega parcial.** Paula pede 4; aprovada; Ana separa 2 e entrega 2 → *Parcialmente Atendida*.
+   Ana clica **Completar Entrega**, zera a quantidade e confirma → *Em Separação*. Aparece **Encerrar Requisição** (e
+   não **Cancelar**) → encerra → *Encerrada*. Em **Reservas**, a reserva dos 2 restantes está *Liberada*.
+5. **Série inteira.** Paula, na cesta do Comercial, pede 1,5 Sensor X (digitar 1.5 no campo) e envia → aparece *"Sensor
+   X: material com controle de série exige quantidade inteira na requisição (informado: 1.5)"*; nenhuma requisição
+   criada. Com 2 → criada.
+
+**O que esta etapa NÃO cobre.** O almoxarife cancelar (só quem pediu ou o administrador do sistema); a *Parcialmente
+Atendida* com material na caixa ainda se encerra (C204); ninguém avisa quem separava que a requisição foi cancelada
+(C205); o rascunho antigo com fração de série só sai cancelando (C206).
 
 ## Etapa 99 — A separação recusa o que não dá para separar, e a conferência recusa a caixa vazia (ENTREGUE — 2026-10-15)
 

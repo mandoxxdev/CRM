@@ -632,7 +632,7 @@ react-scripts build` EXIT 0.
   árvore sem conflito). Em paralelo de fato: a revisão do plano × a escrita dos testes da T1, a suíte do cliente × a do
   servidor, os dois revisores da Fase 5 (worktrees próprias) × o agente da documentação. **Retrabalho:** o teste da T1
   ganhou as correções da Fase 2 depois de escrito (barato: 3 linhas).
-- **Defeito que escapou:** *(preencher na Etapa 101.)*
+- **Defeito que escapou:** nenhum medido na Etapa 101 (as duas revisões da 101 sondaram a forma da separação e a conferência pelo caminho — sem achado da 99). *(Preenchido na Etapa 101.)*
 
 ---
 

@@ -1,6 +1,7 @@
 # 04 — Requisições de Materiais
 
 > **Status:** 🟢 — Etapa 3 entregue (2026-08-05); ciclo ponta a ponta rascunho→entrega→confirmação→encerramento · **Spec original:** seção 5
+> **Etapa 101 (2026-10-15, T1 `6dcced8e`, T2 `38e04309`, T3 `dfdad6b1`, T4 `f7139676`) — a *Em Separação* vazia tem saída e material com série só se pede inteiro.** A *Em Separação* com a caixa vazia **cancela** (nada entregue; as duas rotas, autorização de sempre) ou **encerra** (algo entregue); com material na caixa, as recusas M1/E1 dizem o que fazer; os cancelamentos entram na trava por requisição; a criação, o rascunho, a cópia e o envio recusam fração de material com série. **C195 e C202 resolvidos** — ver a seção "Etapa 101" no fim. Continua 🟢.
 > **Etapa 99 (2026-10-15, `314837d6..3e14653a`: T1 `7353265d`, T2 `b8e16e4c`, T2b `c9087106`, T3 `3e14653a`) — a separação recusa o que não é separável e a conferência conta a caixa (regra na feature 05).** O que toca a requisição: `PUT /requisicoes/:id/separar` (e `/separacao`) recusa com 400 a forma inválida **antes** da alçada de valor e da reivindicação, então um payload inválido não muda o status (antes ia para *Em Separação*, ou gravava *Aguardando aprovação de valor*); `conferir-separacao` recusa a caixa vazia (*"Nenhum item separado"*). **Pendência declarada desta feature (C202, 2026-10-15):** a **criação** de requisição aceita fração de material com série (pedir 1,5 → 201) — ver a seção "Etapa 99" no fim. Continua 🟢.
 > **Etapa 98 (2026-10-09, plano `d1679eaa`, Fase 2 `a16ea09f`, T0 `0aafb939`, T1 `9e0bb225`, T2 `672bb151`, T3 `55bc2165`, T4 `4941c9d9`, integração T5 `de77a6eb` + `a70107ca`, Fase 5 `084ded25`, `cc130a86`, `b7fc06a0`) — devolver da caixa à prateleira (regra na feature 05).** O que toca a requisição: a máquina ganha a seta `PRONTA_PARA_RETIRADA → EM_SEPARACAO` (B504 — só a devolução a grava, por compare-and-set); `PUT /api/almoxarifado/requisicoes/:id/devolver-separado` (gate `separar_emitir`); o detalhe `GET /api/almoxarifado/requisicoes/:id` ganha `devolucoes_caixa` (aditivo, em ordem de `id`: `{ id, item_id, material_id, material_codigo, quantidade, separado_antes, separado_depois, entregue, localizacao_planejada_codigo, lote_planejado_codigo, motivo, status_antes, status_depois, conferencia_limpa, usuario_id, usuario_nome, created_at }`) e o `quantidade_entregavel` passa a ser o que o **motor** deixa sair — com o disponível do material sem a reserva do item negativo e sem permitir negativo (flag do material **ou** a global, B514), 0 (antes podia mostrar 3, ou −1, para uma entrega que o motor recusava inteira — C190/C196, B509); `saldo_separavel`, `quantidade_separavel` e `saldo_atual` não mudam. O liberar para retirada exige caixa > 0 (separado − entregue), não separado > 0 — a mesma literal *"Nenhum item separado"* (B512, C199). Ver a seção "Etapa 98" no fim.
 > **Etapa 95 (2026-10-09, plano `f0b94706`, Fase 2 `2bee899c`, T0 `f8edb54a`, T0b `35e274c5`, T2 `9237af2c`, T1 `5a2bfa9f`, T3 `c335cf40`, integração T4 `ed90a0aa` + Fase 5 `582844e8`, `6e0fae83`, `16cacc0e`, `42e08faf`) — a separação não aceita mais do que existe na prateleira (C169; regra na feature 05).** O que toca a requisição: o detalhe `GET /api/almoxarifado/requisicoes/:id` ganha, por item, `saldo_separavel` (o teto da separação) e `quantidade_separavel` (`min(pendente de separação, saldo_separavel)`) — **aditivo** (`5a2bfa9f`, B472), o mesmo número que a fila (`separavel`) e a porta aceitam; `saldo_atual` não muda de sentido (a entrega da tela o usa); a coluna crua `caixa_sem_reserva_outros`, que a consulta traz para o cálculo, **não** sai no JSON (`16cacc0e`). `quantidade_entregavel` muda só na segunda rodada (já entregou, a própria caixa menor que o pendente, material comum): a parte além da própria caixa segue o teto — a tela não oferece o que a entrega recusa (B477, `35e274c5`/`5a2bfa9f`). A entrega pega a trava por material dos itens, por dentro da trava por requisição (`582844e8`, B479). Continua 🟢.
@@ -271,3 +272,36 @@ segue a orientação (encerra); recusar fração de série na criação muda o c
 própria desta feature.
 
 **Status:** continua 🟢 — a etapa fecha a porta da separação; a criação com fração de série fica declarada acima.
+
+*(**Atualização da Etapa 101 (2026-10-15):** a "Pendência declarada (C202)" acima está **resolvida** — a criação recusa a
+fração de série (B529, `38e04309`); e o "de onde não há seta para encerrar nem cancelar (C195) — presa" **deixou de ser
+verdade**: a *Em Separação* vazia cancela (nada entregue) ou encerra (algo entregue). Ver a seção abaixo.)*
+
+## Etapa 101 — a *Em Separação* vazia tem saída; material com série só se pede inteiro (2026-10-15)
+
+Plano: `docs/superpowers/plans/2026-10-15-almoxarifado-etapa101-em-separacao-vazia-tem-saida.md`. Range
+`2935c7d2..HEAD` da branch `etapa-e101` (código: T1 `6dcced8e`, T2 `38e04309`, T3 `dfdad6b1`, T4 `f7139676`).
+
+**Entregue:**
+- [x] **RN-01/RN-02 — cancelar a *Em Separação* com a caixa vazia e nada entregue** — `6dcced8e` (B525): a máquina ganha
+  `EM_SEPARACAO → CANCELADO`, **condicional** aos itens (`recusaSaidaDaSeparacao`, régua da caixa da B524); as duas rotas
+  (`PUT /api/requisicoes-material/:id/cancelar`, só o dono; `PUT /api/almoxarifado/requisicoes/:id/cancelar`, dono ou
+  admin do sistema) aceitam; com material na caixa → M1, com entrega → M2; quem não é dono pelos outros módulos continua
+  com a recusa genérica (B530). Solta as reservas; trilha `CANCELAMENTO` com `dados_anteriores.status = EM_SEPARACAO`.
+- [x] **RN-03/RN-04 — encerrar a *Em Separação* com a caixa vazia e algo entregue** — `6dcced8e` (B526):
+  `EM_SEPARACAO → ENCERRADA` condicional; E1 (caixa) e E2 (nada entregue), também na nova tentativa do compare-and-set.
+- [x] **RN-05 — os dois cancelamentos dentro da trava por requisição** — `6dcced8e` (B527, revisa a B450).
+- [x] **RN-06 — a exceção do dono para liberar reserva não ganha a *Em Separação*** — `6dcced8e` (B528,
+  `STATUS_CANCELAVEIS_SEM_CONDICAO`).
+- [x] **RN-07 — a tela** — `dfdad6b1`: **Cancelar Requisição** e **Encerrar Requisição** na *Em Separação* vazia
+  (`destinoDaSeparacaoVazia`, espelho conferido por teste contra o do servidor).
+- [x] **RN-08/RN-09 — material com série só inteiro** — `38e04309` (B529): `createRequisicao` (duas rotas, rascunho,
+  cópia) e `POST /requisicoes/:id/enviar` recusam com *"⟨material⟩: material com controle de série exige quantidade
+  inteira na requisição (informado: ⟨q⟩)"*, `recusaFracaoDeSerie` única.
+- [x] **RN-10 / integração pela rota e pelo serviço** — `f7139676`.
+
+**Fica de fora (com o porquê):** o almoxarife cancelar (decisão de perfil — B525 (iii)); a *Parcialmente Atendida* com
+material na caixa ainda encerra (C204 — contrato da 93; candidata à 102); aviso a quem separava (C205); o rascunho legado
+com fração só sai cancelando (C206 — o rascunho não tem edição de itens).
+
+**Status:** continua 🟢 — fecha a C195 e a C202 sem abrir pendência de requisição.

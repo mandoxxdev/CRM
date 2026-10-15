@@ -1,6 +1,6 @@
 # Etapa 101 — a *Em Separação* vazia tem saída (C195) e a requisição recusa fração de material com série (C202)
 
-> Status: **EM EXECUÇÃO — 2026-10-15.** Worktree `CRM-wt-e101`, branch `etapa-e101` (de `main` `2e0ba280`). Marcar
+> Status: **FECHADA — 2026-10-15.** Fases 0–6 feitas: plano `2935c7d2`, T1 `6dcced8e`, T2 `38e04309`, T3 `dfdad6b1`, T4 `f7139676`, Fase 5 `3c9e6a03`, fechamento (docs) no commit seguinte. **Próxima: Etapa 102** (ver o fim). Worktree `CRM-wt-e101`, branch `etapa-e101` (de `main` `2e0ba280`). Marcar
 > cada task ao terminar (hash, divergência).
 > Origem: "Próxima tarefa detalhada — Etapa 101" no fim de
 > `docs/superpowers/plans/2026-10-09-almoxarifado-etapa99-separacao-recusa-o-inseparavel.md`; C195, C202.
@@ -121,7 +121,7 @@ Máquina: `TRANSICOES.EM_SEPARACAO` ganha `'CANCELADO'` e `'ENCERRADA'`. Exporta
   `listarFilaSeparacao` (serviço) e `GET /api/almoxarifado/fila-separacao` (rota) sem a requisição, reserva
   liberada e `quantidade_reservada` do material, a separação seguinte recusada; e a C202 + C195 juntas (legado 1,5 de
   série → entrega 1 → `separar []` → encerrar).
-- [ ] **T5 — Fase 5 e fechamento** (revisores frescos; `fechar-etapa` inteira; consultas A51/A52).
+- [x] **T5 — Fase 5 e fechamento** (revisores frescos; `fechar-etapa` inteira; consultas A51/A52).
 
 ## O que fica de fora (declarado)
 
@@ -171,3 +171,85 @@ com caixa encerrando (C204).
 - **T3** `dfdad6b1` — os dois botões e o espelho do predicado; teste novo `RequisicoesSeparacaoVaziaSaida` (7).
   **Controle:** 4 sabotagens no cliente, todas vermelhas.
 - **T4** `f7139676` — `separacaoVaziaSaidaIntegracao` (4 jornadas, rota e serviço). J4 vermelha antes da T2.
+
+## Fase 4 — integração serial (2026-10-15)
+
+Cherry-pick da T2 (`756bc1d4` → `38e04309`), sem conflito. Suíte inteira na árvore `5de70a0b`: `test:api` **349/349**
+arquivos (EXIT 0); `test:almoxarifado` 44/44; `test:validation` 4/4; `test:safealter` 3/3; `test:sqlite` 5/5; cliente
+jest **98 suítes / 1523 testes**; `CI=true react-scripts build` EXIT 0. A primeira rodada da suíte com a T1 (antes das
+reescritas) deu **342/347** — os cinco arquivos de corrida da correção 1 da Fase 2 (um deles, `alcadaValorDepoisDaSeparacao`,
+por *timeout*: o gancho aguardava o cancelamento sem prazo, deadlock com a trava).
+
+## Fase 5 — revisão adversarial do código (2026-10-15) — 0 defeito, 6 testes que faltavam
+
+Dois revisores frescos em worktrees próprias (`CRM-wt-e101rv1`, `CRM-wt-e101rv2`, HEAD `5de70a0b`, junction).
+
+- **Revisor 1 (RN, autorização, último gesto) — 0 achado.** Sondado e passou: perfis no encerrar (ALMOXARIFE, GESTOR,
+  ADMINISTRADOR do módulo, admin do sistema 200; CONSULTA e PRODUCAO 403) e no cancelar por quem não é dono (403 no
+  almoxarifado, genérica nos outros módulos); a ordem das recusas; vários itens; resíduos 1e-7; tudo o que vem depois do
+  cancelamento (separar, entregar, devolver, liberar, conferir, confirmar recebimento recusam; copiar 201; excluir 200
+  sem estorno; some da fila, com controle positivo); concorrência (dois cancelamentos, encerrar × cancelar, entregar ×
+  cancelar, excluir × cancelar, cancelar × separar, 18 gestos em 6 requisições em 29 ms sem travar); a C202 com `"1.5"`,
+  2,0000006, item repetido, `material_id` texto. **Notas:** o entregue não arredonda como a caixa (1e-7 de legado dá M2 —
+  o contrato, sem estado preso: encerra); a cancelada com conferência gravada mantém `conferido_por_id` (ninguém lê);
+  **dois comentários de produção desatualizados** (a exclusão e a alçada diziam "cancelamento fora da trava") —
+  corrigidos em `3c9e6a03`, e o cabeçalho de `travaPorRequisicao.js`.
+- **Revisor 2 ("o teste passaria com a feature quebrada?") — 39 sabotagens: 28 vermelhas, 5 equivalentes, 6 verdes.**
+  Equivalentes: `controle_serie` truthy (a coluna é 0/1), `/enviar` sem `ORDER BY` (o plano do SQLite varre pelo rowid),
+  quantidade crua na criação (a função arredonda), a reconferência dos itens na 2ª tentativa dos cancelamentos ×2
+  (inalcançável hoje — todo escritor da caixa está na mesma trava; **declarada sem teste**). Verdes viraram teste em
+  `3c9e6a03`: (1) `Q.qtd` mudado de **posição** (resto no entregue 1,9999999) — servidor e tabela (g) do cliente; (2) as
+  três leituras de itens com `WHERE id = ?` (todo teste tinha um item e id de item = id da requisição) — requisição de
+  dois itens com o item da caixa fora do id da requisição; (3) quem não pediu sem o filtro do dono pelos outros módulos
+  (B530) — `comCaixa` e P3; (4) Encerrar sem `warehouseMode`; (5) Encerrar sem conferir o status (Encerrada/Cancelada).
+  **Medido:** cada sabotagem (S3, S11, S12, S13, S28, C1, C7) derruba agora o teste nomeado.
+
+**Verificação depois da Fase 5 (árvore `3c9e6a03`):** `test:api` **349/349** arquivos (EXIT 0); `test:almoxarifado` **44/44**; `test:validation` 4/4; `test:safealter` 3/3; `test:sqlite` 5/5; cliente jest **98 suítes / 1525 testes**; `CI=true react-scripts build` EXIT 0.
+
+---
+
+## Retro de 4 números
+
+- **Rodadas de correção até verde:** 1 por task no código (nenhum teste vermelho em duas rodadas seguidas); a T1 custou
+  uma rodada de **reescrita de testes de corrida** (nove arquivos) — o custo real da etapa. A Fase 5 custou uma rodada
+  de teste (e uma de ajuste: o teste de dois itens com a premissa errada na primeira escrita).
+- **Achados de revisão:** Fase 2 — 5 correções + notas, **todas reais** (0 trava). Fase 5 — rv1: **0 real**, 3 notas
+  (1 real: comentários desatualizados); rv2: 11 verdes → **6 reais** (5 viraram teste, 1 declarada) e **5 ruído**
+  (equivalentes).
+- **Paralelismo:** 1 galho de código em worktree própria (T2, agente) em paralelo com a T1 — **sem retrabalho** (o
+  cherry-pick entrou limpo; a correção 4 da Fase 2 chegou ao agente por mensagem no meio da task). Em paralelo também: a
+  revisão do plano × a escrita da T1; os dois revisores da Fase 5 × a documentação; a suíte do servidor × a escrita dos
+  testes do cliente.
+- **Defeito que escapou:** *(preencher na Etapa 102.)* Da Etapa 99 para cá: nenhum defeito da 99 apareceu nesta etapa.
+
+---
+
+## Próxima tarefa detalhada — Etapa 102
+
+**Tema: encerrar com material na caixa recusa em qualquer status (C204).** A Etapa 101 deu à *Em Separação* a recusa
+E1 (*"Esta requisição tem material separado na caixa; entregue-o ou devolva-o à prateleira antes de encerrar."*), mas a
+*Parcialmente Atendida* com material separado e não entregue **encerra** — e a caixa deixa de ser caixa sem movimento
+(`STATUS_COM_CAIXA` não tem `ENCERRADA`). **Medido na Fase 0 da 101** (sonda `e102fase0.js`, não versionada): pede 4,
+separa 4, entrega 1 → *Parcialmente Atendida*, caixa 3, reserva ATIVA → `PUT /encerrar` **200**, *Encerrada*, separado
+4 / entregue 1, reserva *Liberada*, `quantidade_reservada` 0.
+
+**Fase 0 (o que medir antes de prometer):**
+1. Todos os status de onde `ENCERRADA` sai (`TRANSICOES`: *Parcialmente Atendida*, *Entregue*, e a *Em Separação* da
+   101) — *Entregue* pode ter caixa? (separado > entregue com tudo entregue? sonda com entrega acima do separado de
+   material comum — a Etapa 3 deixa).
+2. Quem depende do encerrar com caixa hoje: o teste `[93 RN-08] (e)` (o `parcial()` encerra com 3 na caixa — o escritor
+   põe *Entregue* e a nova tentativa encerra) e `requisicaoCicloFinal`; o manual (10.2) diz *"ao encerrar, o que ela
+   tinha separado e não entregou deixa de ser caixa"* — **é a regra documentada**: mudar é decisão (letra B), com a
+   alternativa "encerrar devolve a caixa à prateleira automaticamente com a trilha da devolução da 98".
+3. A tela: o **Encerrar Requisição** na *Parcialmente Atendida* com caixa — esconder ou deixar e mostrar a recusa.
+
+**Contrato candidato:** `recusaSaidaDaSeparacao` vira `recusaEncerrar(status, itens)` — E1 para qualquer status com
+caixa; ou (alternativa B) o encerrar devolve a caixa (`devolverSeparado` sob a mesma trava) e encerra. Consulta A para
+as *Encerradas* com caixa (o legado).
+
+**Pontos de atenção:** o encerrar já está na trava por requisição (93) e a devolução também — chamar a devolução de
+dentro do encerrar exige a versão **sem trava** (`devolverSemTrava` + `comTravaDaRequisicao`), nunca a pública (não
+reentrante). A régua da caixa é a da B524.
+
+**O que já está pronto e não precisa reabrir:** a saída da *Em Separação* vazia (101), a trava nos cancelamentos (B527),
+a recusa da fração de série (B529), a devolução à prateleira (98).

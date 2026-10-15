@@ -115,7 +115,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cinquenta itens para rodar em produção ANTES do deploy — quarenta e sete são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Cinquenta e dois itens para rodar em produção ANTES do deploy — quarenta e nove são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-15 (Etapa 101) de cinquenta para cinquenta e dois**, com a **A51** — as requisições abertas com fração de material com série (a criação passou a recusar; o que já existe fica) — e a **A52** — as *Em Separação* com a caixa vazia que estavam presas, com a saída de cada uma; as duas opcionais.)*
 
 *(**Atualizado em 2026-10-15 (Etapa 99) de quarenta e nove para cinquenta**, com a **A50** — as requisições com caixa fracionária em material com série (a entrega só tira inteiro); opcional: a saída é devolver a fração à prateleira.)*
 
@@ -1932,7 +1934,70 @@ desenvolvimento não tem dados.)*
   requisição, **Devolver à prateleira** a fração (por exemplo 0,5) desse item — a caixa fica inteira e a entrega tira o
   resto escolhendo as séries. (ALMOXARIFE/ADMINISTRADOR.)
 
-### B. Decisões de negócio — B1 a B524; as em aberto esperam você, as tomadas estão escritas com o descartado
+**A51 (NOVA, da Etapa 101 — requisições abertas com fração de material com série).** A partir desta versão a criação,
+o rascunho, a cópia e o envio recusam quantidade não inteira de material com controle de série (**B529**). O que já foi
+gravado antes continua lá. **Nada aqui é obrigatório.** Somente leitura — rodar uma vez depois do deploy:
+
+```sql
+SELECT r.id AS requisicao_id, r.numero, r.status, r.solicitante_nome,
+       m.codigo AS material_codigo, m.nome AS material_nome, i.quantidade_solicitada,
+       COALESCE(i.quantidade_separada, 0) AS separado,
+       COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0) AS entregue
+  FROM itens_requisicao_almoxarifado i
+  JOIN requisicoes_almoxarifado r ON r.id = i.requisicao_id
+  JOIN materiais_almoxarifado m ON m.id = i.material_id
+ WHERE m.controle_serie = 1
+   AND COALESCE(r.ativo, 1) = 1
+   AND r.status NOT IN ('CANCELADO', 'REJEITADO', 'ENCERRADA', 'ENTREGUE')
+   AND ABS(ROUND(i.quantidade_solicitada, 6) - ROUND(i.quantidade_solicitada, 0)) > 1e-9
+ ORDER BY r.id, i.id;
+```
+
+*(Conferida numa sonda da etapa contra o esquema real montado em memória: acha o item de série com 1,5 numa requisição
+aberta; **não** acha série com quantidade inteira, material sem série com 1,5, requisição encerrada nem o resíduo
+2,0000001 (arredonda a 2). Controle: sem o filtro de série ela passa a achar o material comum com 1,5 — o detector sabe
+falhar. O banco de desenvolvimento não tem dados.)*
+
+**Como ler o resultado** (uma linha por item):
+- **Vazia** — nada a fazer.
+- **`status` = `RASCUNHO`** — o envio vai recusar (*"… exige quantidade inteira na requisição (informado: 1.5)"*). **Saída:**
+  quem pediu cancela o rascunho (tela do almoxarifado) e cria de novo com a quantidade inteira (**C206**).
+- **Outro status** — a fração nunca separa. **Saída:** entregar a parte inteira e **Encerrar** (se a separação ficou
+  vazia, *Em Separação* também encerra — **B526**); antes da separação, quem pediu pode cancelar e pedir de novo.
+
+**A52 (NOVA, da Etapa 101 — as *Em Separação* com a caixa vazia que estavam presas).** Até esta versão a *Em Separação*
+sem nada na caixa não cancelava nem encerrava (**C195**); agora tem saída (**B525**, **B526**), mas as que já estão lá
+esperam alguém dar o gesto. **Nada aqui é obrigatório.** Somente leitura — rodar uma vez depois do deploy:
+
+```sql
+SELECT r.id AS requisicao_id, r.numero, r.solicitante_nome, r.updated_at,
+       CASE WHEN SUM(CASE WHEN COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0) > 1e-9 THEN 1 ELSE 0 END) > 0
+            THEN 'ENCERRAR' ELSE 'CANCELAR' END AS saida
+  FROM requisicoes_almoxarifado r
+  JOIN itens_requisicao_almoxarifado i ON i.requisicao_id = r.id
+ WHERE r.status = 'EM_SEPARACAO' AND COALESCE(r.ativo, 1) = 1
+ GROUP BY r.id
+HAVING SUM(CASE WHEN ROUND(COALESCE(i.quantidade_separada, 0) - COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0), 6) > 1e-9
+                THEN 1 ELSE 0 END) = 0
+ ORDER BY r.id;
+```
+
+*(Conferida numa sonda da etapa contra o esquema real em memória: acha a *Em Separação* do "Iniciar Separação" sem
+quantidade (`CANCELAR`) e a da entrega parcial + separação vazia (`ENCERRAR`); **não** acha a com material na caixa nem a
+excluída; deixa de achar depois do cancelamento. Controle: sem o `HAVING` ela acha a com caixa — o detector sabe falhar.)*
+
+**Como ler o resultado** (uma linha por requisição):
+- **Vazia** — nada a fazer.
+- **`saida` = `CANCELAR`** — nada foi entregue: quem pediu (ou o administrador do sistema, pela tela do almoxarifado)
+  clica **Cancelar Requisição**. Se ainda querem o material, o almoxarife separa de novo em vez de cancelar.
+- **`saida` = `ENCERRAR`** — algo foi entregue: quem aprova clica **Encerrar Requisição** — ou o almoxarife separa e
+  entrega o resto, se ainda é para atender.
+- **`updated_at` antigo** é a pista de que ninguém mais vai mexer nela.
+
+
+### B. Decisões de negócio — B1 a B530; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-15 de B524 para B530**, com as seis da Etapa 101 — **B525** a **B530**, do plano e da execução; a **B527** revisa a **B450**.)*
 
 *(**Atualizado em 2026-10-15 de B515 para B524**, com as nove da Etapa 99 — **B516** a **B523**, do plano (a **B523** reescrita na revisão do plano: a tela não ficava como estava), e a **B524**, da revisão adversarial do código.)*
 
@@ -6356,7 +6421,7 @@ conferência entram no corpo das duas rotas, sem mover para o serviço (mudaria 
 dizia "o cliente não muda" — **mudou em um ponto**, decidido na revisão do código (**B452**): a janela de exclusão fecha
 no 409 e no 404. **Descartado:** extrair a liberação para o serviço. (`034076ff`, `2721c17c`)
 
-**B450 (NOVA, da Etapa 93) — a conferência, os dois cancelamentos e as aprovações ficam fora da fila por requisição.** A
+**B450 (NOVA, da Etapa 93) — a conferência, os dois cancelamentos e as aprovações ficam fora da fila por requisição.** *(**Revista na Etapa 101 pela B527:** os dois cancelamentos **entraram** na fila — a premissa abaixo, "não existe *Em Separação* → *Cancelado*", deixou de ser verdade com a **B525**. A conferência e as aprovações continuam fora.)* A
 conferência já reivindica no próprio gravar; os cancelamentos têm a comparação da Etapa 92 e não competem depois que a
 separação começa (não existe *Em Separação* → *Cancelado*); a aprovação está na fila por material (pô-la também na fila
 por requisição criaria uma ordem de travas nova). Pô-los na fila não fecha corrida medida. **Acrescentado pela revisão do
@@ -6951,6 +7016,58 @@ entrega recusavam pela conferência que falta, e *Em Separação* não se encerr
 reproduzida pelo revisor (antes da 99 a conferência aceitava). Agora as três réguas são a mesma (arredondada a 6 casas,
 acima da folga); só muda para sobras menores que meio milionésimo. **Descartado:** deixar a conferência aceitar a
 sobra — voltaria a atestar nada. (`821fb03b`)
+
+
+**B525 (NOVA, da Etapa 101) — a *Em Separação* com a caixa vazia e nada entregue se cancela.** Antes ninguém a
+cancelava (**C195**) e a reserva ficava presa até o administrador excluir. Agora as duas telas de cancelamento a
+aceitam, com a autorização de sempre de cada uma (pelos outros módulos, só quem pediu; pelo almoxarifado, quem pediu ou
+o administrador do sistema); a reserva é solta e a **Auditoria** registra que ela estava *Em Separação*. "Caixa vazia" é
+a régua da **B524** (separado menos entregue, arredondado a 6 casas, zero em todo item). Com material na caixa a recusa
+diz o que fazer: *"Esta requisição tem material separado na caixa; para cancelar, o almoxarifado precisa devolvê-lo à
+prateleira primeiro."* **Descartados:** (i) voltar a *Em Separação* vazia ao status de antes da separação (o descartado da
+**B504** — quatro a seis passagens novas e os recálculos de reserva, alçada e chegada); (ii) só o almoxarifado cancelar;
+(iii) dar ao almoxarife um gesto de cancelar — a autorização não muda nesta etapa (é sua, se quiser). (`6dcced8e`,
+`dfdad6b1`)
+
+**B526 (NOVA, da Etapa 101) — a *Em Separação* com a caixa vazia e algo entregue se encerra; sem nada entregue, não.**
+Quem aprova (a permissão de sempre do **Encerrar**) encerra a *Em Separação* da qual parte já saiu: a entrega parcial
+seguida de uma separação confirmada sem quantidade, ou de uma devolução à prateleira. Sem nada entregue o encerrar recusa
+— *"Nada foi entregue nesta requisição; em vez de encerrar, ela deve ser cancelada por quem pediu ou pelo administrador
+do sistema."* —, porque *Encerrada* conta como atendimento nos indicadores e uma requisição da qual nada saiu é
+desistência. Cancelar depois de uma entrega também recusa: *"Esta requisição já teve material entregue e não pode ser
+cancelada; o almoxarifado pode encerrá-la."* **Descartados:** encerrar sem entrega; voltar a *Parcialmente Atendida*
+(quem quer continuar já separa de novo a partir da *Em Separação*). (`6dcced8e`, `dfdad6b1`)
+
+**B527 (NOVA, da Etapa 101) — os dois cancelamentos entram na fila por requisição (revisa a B450).** A **B450** deixou
+os cancelamentos fora da fila porque "não existe *Em Separação* → *Cancelado*". Agora existe: uma separação que pusesse
+material na caixa entre a leitura dos itens e a gravação do cancelamento deixaria material numa requisição cancelada.
+Os dois cancelamentos (o do almoxarifado e o dos outros módulos) passam a esperar a separação, a entrega, a devolução e o
+encerramento da mesma requisição. **O que muda para quem opera:** clicados no mesmo instante, a separação que chega
+primeiro termina, e o cancelamento decide pela caixa que ela deixou (com material — a recusa acima; sem — cancela);
+antes o cancelamento passava na frente e a separação era recusada. E se a separação mudou a requisição para *Aguard.
+Aprov. Valor* (a alçada), o cancelamento pelos outros módulos recusa — esse status não se cancela por lá (Etapa 92); pela
+tela do almoxarifado, cancela. Cancelar continua fora da fila **por material** (só solta reserva, não distribui —
+regra do CLAUDE.md). **Descartado:** comparar a caixa só no comando do banco, sem a fila (a separação reivindica o
+status antes de gravar a caixa; havia janela). (`6dcced8e`)
+
+**B528 (NOVA, da Etapa 101) — quem pediu continua sem liberar a reserva da *Em Separação*.** A exceção que deixa o dono
+liberar a reserva da própria requisição era "enquanto ela ainda se cancela". Com a **B525**, a *Em Separação* vazia se
+cancela — e a regra derivada como estava devolveria ao dono a liberação da reserva de **qualquer** *Em Separação*,
+inclusive com material na caixa (o defeito que a Etapa 77 fechou). A exceção passa a valer nos status que se cancelam
+**sem condição** (os de antes); na *Em Separação* vazia o dono cancela a requisição inteira, mas não libera a reserva à
+parte. **Descartado:** liberar à parte na vazia (exigiria a mesma régua da caixa na liberação; ganho pequeno). (`6dcced8e`)
+
+**B529 (NOVA, da Etapa 101) — material com série só se pede em unidades inteiras.** A criação (as duas telas), o
+**Salvar Rascunho**, a cópia e o envio de rascunho recusam quantidade não inteira (já arredondada a 6 casas) de material
+com controle de série: *"⟨material⟩: material com controle de série exige quantidade inteira na requisição (informado:
+1.5)"*, e nada é gravado (**C202** resolvido). **Descartados:** arredondar sem avisar (pedir 1,5 e receber 1 ou 2
+decidiria pelo solicitante); aceitar no rascunho (o rascunho não tem edição de itens — o erro só apareceria no envio,
+sem como corrigir). O que já foi gravado com fração continua: **A51**, **C206**. (`38e04309`)
+
+**B530 (NOVA, da Etapa 101) — pelos outros módulos, as recusas novas só aparecem para quem pediu.** Na tela dos outros
+módulos quem não pediu a requisição continua recebendo a recusa genérica de sempre (*"Requisição não encontrada ou não
+pode ser cancelada"*) — ele não vê a requisição alheia e a recusa não deve dizer o que há na caixa dela. Quem pediu recebe
+a recusa da caixa ou da entrega, que manda ao almoxarifado. **Descartado:** a recusa nova para todos. (`6dcced8e`)
 
 
 ### C. Furos e mudanças de número que quem opera precisa saber
@@ -8994,7 +9111,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      na tela **Reservas**. O modal de devolver avisa antes: *"Este item continua reservado para a requisição: para dar
      baixa, libere a reserva antes."* A recusa da perda em si não mudou (**B506**).
 
-195. **NOVO, da Etapa 98 (anterior a ela) — a *Em Separação* vazia não cancela por quem pediu.** Vale para a esvaziada
+195. **✅ RESOLVIDO NA ETAPA 101 (`6dcced8e`, `dfdad6b1`) — era maior: a *Em Separação* vazia não cancelava por ninguém nem encerrava.** Agora cancela quando nada foi entregue e encerra quando algo foi (**B525**, **B526**); as presas antes do deploy: **A52**. O texto original: **NOVO, da Etapa 98 (anterior a ela) — a *Em Separação* vazia não cancela por quem pediu.** Vale para a esvaziada
      pela devolução e para a do "Iniciar Separação" sem quantidade, que já existia. Candidata a etapa (a passagem *Em
      Separação* → *Cancelado* só sem nada separado nem entregue).
 
@@ -9038,7 +9155,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      aviso de recusa. Quem integra pela API e mandava itens de fora ou linhas malformadas passa a ver o erro. Resíduo
      antigo da tela, fora da etapa: digitar `1e400` no modal manda a quantidade vazia e o servidor lê "não separar".
 
-202. **NOVO, da Etapa 99 (anterior a ela, fora dela) — a criação de requisição aceita fração de material com série.**
+202. **✅ RESOLVIDO NA ETAPA 101 (`38e04309`) — a criação, o rascunho, a cópia e o envio recusam a fração de série (B529); o que já existe: A51, C206.** O texto original, que vale para as requisições gravadas antes (a saída por *Em Separação* vazia agora existe — **B526**): **NOVO, da Etapa 99 (anterior a ela, fora dela) — a criação de requisição aceita fração de material com série.**
      Pedir 1,5 de um material com série é aceito; a separação só leva inteiro, e o 0,5 nunca separa. **O que fazer:**
      depois de entregar o inteiro, a requisição fica *Parcialmente Atendida*; **Completar Entrega** abre o modal já com
      0,5 e a confirmação recusa *"… exige quantidade inteira na separação (informado: 0.5)"*. **Feche o modal e use
@@ -9049,6 +9166,25 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      **Conferir separação** só aparece com material na caixa. A conferência gravada **antes** de uma entrega parcial
      continua gravada sobre a caixa vazia até a próxima rodada de separação (contrato da Etapa 28) — inofensivo: a
      rodada a apaga e o **Liberar para Retirada** recusa a caixa vazia.
+
+
+204. **NOVO, da Etapa 101 (anterior a ela) — a *Parcialmente Atendida* com material na caixa ainda se encerra.** A
+     *Em Separação* com material na caixa recusa o encerramento (*"… entregue-o ou devolva-o à prateleira antes de
+     encerrar."*), mas a *Parcialmente Atendida* com material separado e não entregue encerra como sempre (contrato da
+     Etapa 93) — e esse material deixa de ser caixa sem nenhum movimento. **O que fazer:** antes de **Encerrar** uma
+     *Parcialmente Atendida*, olhe se há material separado; se houver, entregue ou **Devolva à prateleira**. Candidata a
+     etapa (a mesma régua nos dois status).
+
+205. **NOVO, da Etapa 101 — quem separava não é avisado quando quem pediu cancela a *Em Separação* vazia.** O almoxarife
+     que clicou **Iniciar Separação** e está pegando o material na prateleira só descobre na hora de confirmar: *"Requisição
+     deve estar aprovada, aguardando estoque/compra, em separação ou parcialmente atendida para separar"*. **O que fazer:**
+     devolver o que pegou à prateleira. Se o cancelamento chega **depois** de a separação ser confirmada com quantidade, é
+     o contrário: o cancelamento é recusado pela caixa.
+
+206. **NOVO, da Etapa 101 — o rascunho gravado com fração de material com série não se envia nem se copia.** O envio e a
+     cópia recusam com a frase da **B529**, e o rascunho não tem edição de itens. **O que fazer:** cancelar o rascunho
+     (tela de requisições do almoxarifado, **Cancelar Requisição**) e criar de novo com a quantidade inteira. A **A51**
+     lista os que existem.
 
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -10056,7 +10192,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(97) Custo medido** na revisão do código: mil saídas com 300 caixas abertas no banco, 1,2 s → 1,6 s; duzentos
   ajustes, 0,26 s → 1,2 s — aceitável.
 - **(98) A devolução deixa *Em Separação*; não volta ao status de antes da separação** (**B504**).
-- **(98) A *Em Separação* vazia não cancela por quem pediu** (**C195**, anterior).
+- ~~**(98) A *Em Separação* vazia não cancela por quem pediu** (**C195**, anterior).~~ *(Resolvido na Etapa 101 — **B525**, **B526**.)*
 - **(98) Liberar a reserva é outro gesto** (**B506**, **C194**); a recusa da perda com reserva não nomeia a reserva.
 - **(98) A devolução não move estoque nem escolhe o endereço de volta** (**C193**).
 - ~~**(98) A separação ainda aceita negativo e fração de série** (**C197**) e **a conferência aceita caixa vazia**
@@ -10064,11 +10200,19 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(98) Devolver usa a permissão de separar** (**B503**) — sem permissão própria.
 - **(98) A A49 olha só a flag do material e não mostra a reserva do item** (**B514**).
 - **(98) Não sondado na revisão:** devolver × conferir ao mesmo tempo — da mesma classe que separar × conferir (Etapa 28).
-- **(99) A criação de requisição aceita fração de material com série** (**C202**) — a separação recusa; a saída é
-  encerrar a *Parcialmente Atendida*.
+- ~~**(99) A criação de requisição aceita fração de material com série** (**C202**) — a separação recusa; a saída é
+  encerrar a *Parcialmente Atendida*.~~ *(Resolvido na Etapa 101 — **B529**.)*
 - **(99) A conferência gravada antes de uma entrega parcial fica até a próxima rodada** (**B522** (ii), **C203**).
 - **(99) O mesmo item repetido na confirmação continua aceito** (**B521**).
 - **(99) `1e400` digitado no modal de separação vira "não separar"** (resíduo da tela, **C201**).
+- **(101) O almoxarife não cancela** — a *Em Separação* vazia sem entrega se cancela por quem pediu ou pelo administrador
+  do sistema; o almoxarife só a encerra se algo foi entregue (**B525**, **B526**). Gesto de perfil novo é decisão sua.
+- **(101) A *Parcialmente Atendida* com material na caixa ainda se encerra** (**C204**) — a mesma régua nos dois status
+  é candidata a etapa.
+- **(101) Ninguém é avisado do cancelamento da *Em Separação* vazia** (**C205**).
+- **(101) O rascunho com fração de série só sai cancelando** (**C206**).
+- **(101) A conferência e as aprovações seguem fora da fila por requisição** (**B450** revista pela **B527** só nos
+  cancelamentos).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -10909,6 +11053,19 @@ arquivos da suíte. O que **só o navegador** prova:
    para Retirada** aparecem; o **Ajustar Separação** sim.
 3. **O C202 na tela.** *Parcialmente Atendida* com 0,5 pendente de material com série: **Completar Entrega** abre o modal
    com 0,5; o aviso aparece; fechar e **Encerrar** funciona.
+
+
+**(101) Nenhum clique foi dado nesta etapa no navegador.** A tela mudou em dois botões (**Cancelar Requisição** e
+**Encerrar Requisição** na *Em Separação* vazia) e está provada por teste de componente com a fronteira HTTP simulada
+(o arquivo novo, **9** testes, dentro das **98** suítes / **1525** testes do cliente); o servidor, pela rota com o usuário certo em cada pedido
+e pelo serviço: **21** verificações no arquivo da saída da *Em Separação*, **4** jornadas no de integração e **13** no da
+série inteira — dentro dos **349** arquivos da suíte. O que **só o navegador** prova:
+
+1. **O Cancelar na tela dos outros módulos.** Paula, em *Comercial → Requisições*, abre a requisição *Em Separação*
+   vazia: o botão aparece; o *confirm* e o aviso *"Requisição cancelada"*.
+2. **O Encerrar na *Em Separação* vazia com entrega** (tela do almoxarifado): o modal do motivo abre e fecha a requisição.
+3. **A recusa da série na cesta do Comercial** (1,5): o aviso inteiro legível.
+4. **Os botões somem com material na caixa** (nem Cancelar nem Encerrar).
 
 
 
@@ -21722,9 +21879,112 @@ forma) e a trava — tudo como o contrato. E achou:
   (todo teste de série usava requisição de um item só) — viraram teste (`f1041706`). Ficam sem teste duas mutações
   equivalentes nos dados possíveis hoje.
 
+## Etapa 101 — A requisição em separação sem nada na caixa tem saída, e material com série só se pede inteiro (2026-10-15)
+
+Uma requisição podia ficar **parada para sempre** em *Em Separação*: bastava o almoxarife clicar **Iniciar Separação**
+sem quantidade, devolver à prateleira tudo o que tinha separado, ou — depois de uma entrega parcial — confirmar a
+separação sem nada. Daí ninguém cancelava (nem quem pediu, nem o administrador), ninguém encerrava, e a reserva continuava
+segurando o material de outras requisições; só a exclusão administrativa a tirava dali. Agora **o que aconteceu com o
+material decide a saída**: se nada foi entregue, quem pediu **cancela** (como cancelaria uma requisição reservada); se
+parte já saiu, quem aprova **encerra**; se há material separado na caixa, o sistema explica que primeiro é preciso
+entregar ou devolver à prateleira. Na mesma etapa, pedir **1,5 de um material controlado por número de série** deixou de
+ser aceito — a separação só leva unidades inteiras, e o meio que sobrava nunca saía.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| *Em Separação* sem nada na caixa e sem entrega: cancelar dava *"Não é possível cancelar neste status"* (ou *"Requisição não encontrada ou não pode ser cancelada"*), para todos | **Cancela** — quem pediu (as duas telas) ou o administrador do sistema (tela do almoxarifado); a reserva é solta (**B525**) |
+| *Em Separação* sem nada na caixa, com algo entregue: encerrar dava *"Transição inválida: EM_SEPARACAO → ENCERRADA"* | **Encerra** — quem aprova; a reserva que sobrou é solta (**B526**) |
+| O botão **Cancelar Requisição** não aparecia na *Em Separação*; o **Encerrar Requisição** só em *Entregue*/*Parcialmente Atendida* | Aparecem na *Em Separação* vazia, cada um no caso dele (**B525**, **B526**) |
+| Cancelar ou encerrar a *Em Separação* com material na caixa: a recusa genérica | A recusa diz o que fazer (entregar ou devolver à prateleira) |
+| Cancelar no instante de uma separação: o cancelamento passava na frente | Um espera o outro; o cancelamento decide pela caixa que a separação deixou (**B527**) |
+| Pedir 1,5 de material com série (criação, rascunho, cópia, envio) era aceito | Recusado com a explicação, sem gravar nada (**B529**) |
+
+### As regras, com o cenário exato
+
+Preparação: material **Porca M8** (PC), estoque 4. **Paula** (sem perfil) pede pela tela de requisições do Comercial;
+o **administrador** aprova → *Totalmente Reservada*. **Ana** é almoxarife (tem **Encerrar**, que é do perfil de aprovação).
+Material **Sensor X** com controle de série, 2 em estoque.
+
+**1. Iniciar Separação e desistir.** Paula pede 2 Porca M8; Ana abre a requisição, clica **Iniciar Separação** e confirma
+sem quantidade → *Em Separação*. Paula abre a requisição dela: o botão **Cancelar Requisição** está lá → confirma →
+*"Requisição cancelada"*, status *Cancelado*; em **Reservas**, a reserva da requisição aparece *Liberada*; a requisição
+some da **Fila de separação**.
+
+**2. Separou e devolveu tudo.** Outra requisição de 2: Ana separa 2 e depois **Devolver à prateleira** 2 (motivo
+qualquer) → *Em Separação* sem nada na caixa. O administrador do sistema, na tela do almoxarifado, **Cancelar
+Requisição** → *Cancelado*.
+
+**3. Material na caixa.** Ana separa 2 (sem entregar). Por integração (a tela não mostra o botão), Paula cancela →
+*"Esta requisição tem material separado na caixa; para cancelar, o almoxarifado precisa devolvê-lo à prateleira
+primeiro."*; Ana tenta **Encerrar** (por integração) → *"Esta requisição tem material separado na caixa; entregue-o ou
+devolva-o à prateleira antes de encerrar."* Nada muda.
+
+**4. Entregou parte e parou.** Paula pede 4; Ana separa 2 e entrega 2 → *Parcialmente Atendida*. Ana clica **Completar
+Entrega**, zera a quantidade e confirma → *Em Separação*, caixa vazia. O botão **Encerrar Requisição** aparece (o
+**Cancelar**, não) → Ana encerra (motivo opcional) → *Encerrada*, a reserva dos 2 restantes é solta. Por integração,
+Paula cancelar → *"Esta requisição já teve material entregue e não pode ser cancelada; o almoxarifado pode encerrá-la."*
+
+**5. Encerrar o que nada entregou.** No cenário 1 antes de Paula cancelar, Ana tenta **Encerrar** (por integração) →
+*"Nada foi entregue nesta requisição; em vez de encerrar, ela deve ser cancelada por quem pediu ou pelo administrador do
+sistema."*
+
+**6. Clique simultâneo.** Ana confirma a separação de 2 enquanto Paula clica **Cancelar** na mesma requisição: a separação
+termina (*Em Separação*, 2 na caixa) e o cancelamento recebe a recusa da caixa do cenário 3. Se Ana confirmou **sem**
+quantidade, o cancelamento passa.
+
+**7. Série inteira.** Paula pede **1,5** Sensor X pela cesta do Comercial → *"Sensor X: material com controle de série
+exige quantidade inteira na requisição (informado: 1.5)"*, nada criado. Com 2 → aceito. O mesmo vale para **Salvar
+Rascunho**, **Copiar como Novo Rascunho** de uma requisição antiga com 1,5, e **Enviar** de um rascunho antigo com 1,5
+(o rascunho continua *Rascunho*). Material sem série com 1,5 continua aceito.
+
+**8. O que não muda.** Quem pode cancelar e encerrar é quem já podia; o dono **não** ganha "liberar a reserva" na *Em
+Separação* (**B528**); a *Parcialmente Atendida* continua se encerrando como antes (**C204**); a separação, a entrega, a
+devolução e a fila seguem iguais.
+
+### O que esta etapa NÃO cobre
+
+1. **O almoxarife cancelar** — a *Em Separação* vazia sem entrega se cancela por quem pediu ou pelo administrador do
+   sistema (decisão de perfil é sua — **B525**).
+2. **A *Parcialmente Atendida* com material na caixa ainda se encerra** (**C204**).
+3. **Aviso a quem separava** quando quem pediu cancela (**C205**).
+4. **O rascunho antigo com fração de série** só sai cancelando (**C206**; **A51** lista).
+5. **A conferência e as aprovações** continuam fora da fila por requisição (**B450**, revista só nos cancelamentos).
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0) reproduziu os quatro caminhos até a *Em Separação* vazia — em todos, as duas telas de cancelar
+e o encerrar recusavam, para quem pediu e para o administrador, com a reserva presa — e a fração de série aceita em
+cinco portas (criar pelas duas telas, rascunho, envio, cópia). E achou o que a tarefa escrita na Etapa 99 não previa: a
+regra que deixa o dono liberar a reserva derivava de "a requisição ainda se cancela" — sem cuidado, a *Em Separação*
+cancelável devolveria ao dono a liberação com material na caixa (**B528**).
+
+A **revisão do plano** não achou trava; achou que o plano subestimava o efeito de pôr os cancelamentos na fila (**B527**)
+sobre os testes de corrida existentes — previa um, eram cerca de trinta e sete em nove arquivos —, e três testes fora das
+tarefas. Todos reescritos para o contrato novo ("o cancelamento espera e decide pela caixa").
+
+A **revisão adversarial do código** (dois revisores, executando) não achou defeito de regra nem de permissão: perfis no
+encerrar e no cancelar, a ordem das recusas, vários itens, sobras mínimas, tudo o que vem depois do cancelamento (fila,
+recebimento, cópia, exclusão) e dezoito gestos simultâneos em seis requisições sem travar. O segundo revisor fez **39
+sabotagens**: 28 derrubavam teste, 5 eram mutações equivalentes e **6 passavam verdes** — lacunas de teste, nenhum bug.
+Cinco viraram teste (entre elas: todo teste usava requisição de um item só, e uma leitura dos itens pela requisição
+errada passava); a sexta é inalcançável hoje e ficou declarada. (`3c9e6a03`)
+
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 101 entregue (2026-10-15):** **a requisição em separação sem nada na caixa tem saída, e material com série só
+  se pede inteiro.** A *Em Separação* vazia **cancela** quando nada foi entregue (quem pediu, ou o administrador do
+  sistema pela tela do almoxarifado) e **encerra** quando algo foi (quem aprova); com material na caixa, a recusa diz o
+  que fazer; os dois cancelamentos passam a esperar a separação da mesma requisição (**C195** resolvido). A criação, o
+  rascunho, a cópia e o envio recusam fração de material com série (**C202** resolvido). **O que é seu:** as consultas
+  **A51** e **A52** (opcionais — a A52 lista as *Em Separação* que estavam presas, com a saída de cada uma); as decisões
+  **B525 a B530** (a **B527** revisa a **B450**; a **B525** (iii) — dar ao almoxarife um gesto de cancelar — é sua); os
+  avisos **C204 a C206**; as limitações **(101)** em D e as verificações **(101)** em F. **Próxima: Etapa 102 — encerrar
+  com material na caixa recusa em qualquer status (C204) — ver a "próxima tarefa detalhada" no plano da Etapa 101.**
 
 - **Etapa 99 entregue (2026-10-15):** **a separação recusa o que não dá para separar, e a conferência não confirma caixa
   vazia.** Quantidade negativa ou não numérica, item de fora, lista malformada e fração de material com série recebem
@@ -21732,8 +21992,8 @@ forma) e a trava — tudo como o contrato. E achou:
   separar" (**C197** resolvido — e era maior do que dizia). A segunda conferência conta a caixa e o botão segue a caixa
   (**C200** resolvido). **O que é seu:** a consulta **A50** (opcional); as decisões **B516 a B524** (a **B523** reescrita
   na revisão do plano; a **B524**, regressão achada e consertada na revisão do código); os avisos **C201 a C203** (o **C202** muda o que quem opera faz com a fração de série pedida); as
-  limitações **(99)** em D e as verificações **(99)** em F. **Próxima: Etapa 101 (a 100 foi da frente de Compras) — ver
-  a "próxima tarefa detalhada" no plano da Etapa 99.**
+  limitações **(99)** em D e as verificações **(99)** em F. ~~**Próxima: Etapa 101 (a 100 foi da frente de Compras) — ver
+  a "próxima tarefa detalhada" no plano da Etapa 99.**~~ *(Feita — Etapa 101.)*
 
 - **Etapa 98 entregue (2026-10-09):** **o almoxarife tira da caixa o que não vai sair — devolver à prateleira.** No
   detalhe da requisição, cada item com material na caixa tem **Devolver à prateleira** (quantidade e motivo, sem mover
