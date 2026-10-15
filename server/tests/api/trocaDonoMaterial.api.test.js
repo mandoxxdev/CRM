@@ -225,6 +225,39 @@ const e1 = (codigo, de, para, perfil) => `Trocar o dono do material ${codigo} (d
     assert.strictEqual(rotulo, 'Troca de dono');
   });
 
+  await test('[RN-09] um salvar que leu o dono antes da troca autorizada nao grava o dono velho de volta (409, nada gravado)', async () => {
+    // Fase 5 (revisor 1): o Almoxarife salva o nome (sem a chave do dono) e fica parado entre a leitura e o UPDATE; nesse
+    // meio o Administrador passa o material de A para B. Antes, o UPDATE do Almoxarife reescrevia A.
+    const fam = (await dbRun(db, "INSERT INTO familias_material_almoxarifado (codigo, nome, ativo) VALUES ('E108-R9', 'Fam R9', 1)")).lastID;
+    const m = await material({ qtd: 3 });
+    let pausar = true; let soltar; const solto = new Promise((r) => { soltar = r; });
+    let chegou; const chegada = new Promise((r) => { chegou = r; });
+    const origGet = db.get;
+    db.get = function (sql, params, cb) {
+      if (pausar && /FROM familias_material_almoxarifado WHERE id/.test(sql)) {
+        pausar = false; chegou();
+        solto.then(() => origGet.call(db, sql, params, cb)); return this;
+      }
+      return origGet.call(db, sql, params, cb);
+    };
+    try {
+      setUser(ALMOXARIFE);
+      const pAlmox = request(app).put(`/api/almoxarifado/materiais/${m.id}`).send({ nome: 'editado', familia_id: fam }).then((x) => x);
+      await chegada;
+      setUser(ADM_PERFIL);
+      const rAdm = await request(app).put(`/api/almoxarifado/materiais/${m.id}`).send({ proprietario_cliente_id: B });
+      assert.strictEqual(rAdm.status, 200, JSON.stringify(rAdm.body));
+      setUser(ALMOXARIFE); soltar();
+      const rAl = await pAlmox;
+      assert.strictEqual(rAl.status, 409, JSON.stringify(rAl.body));
+      assert.strictEqual(rAl.body.error, `O dono do material ${m.codigo} mudou enquanto este cadastro era salvo — nada foi gravado. `
+        + 'Recarregue o material e salve de novo.');
+    } finally { db.get = origGet; setUser(SUPER); }
+    const fim = await linhaMat(m.id);
+    assert.strictEqual(fim.dono, B, 'o dono velho voltou');
+    assert.notStrictEqual(fim.nome, 'editado', 'o salvar recusado gravou o nome');
+  });
+
   await test('[RN-01] pelo servico: assertTrocaDeDonoPermitida lanca 403 E1 ao Almoxarife e devolve a troca ao Administrador', async () => {
     const m = await material({ qtd: 10 });
     const gravado = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [m.id]);
@@ -235,6 +268,15 @@ const e1 = (codigo, de, para, perfil) => `Trocar o dono do material ${codigo} (d
       comHistorico: true });
     assert.strictEqual(await ownerRules.assertTrocaDeDonoPermitida(db, gravado, String(A), ALMOXARIFE), null);
     assert.strictEqual(await ownerRules.assertTrocaDeDonoPermitida(db, gravado, undefined, ALMOXARIFE), null);
+    // Fase 5 (revisor 2, s02/s27): o contrato direto — '' e 0 sao "nosso"; sem historico a troca volta com comHistorico false.
+    const nosso = await material({ dono: null, qtd: 10 });
+    const gNosso = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [nosso.id]);
+    assert.strictEqual(await ownerRules.assertTrocaDeDonoPermitida(db, gNosso, '', ALMOXARIFE), null);
+    assert.strictEqual(await ownerRules.assertTrocaDeDonoPermitida(db, gNosso, 0, ALMOXARIFE), null);
+    const vazio = await material({ qtd: 0 });
+    const gVazio = await dbGet(db, 'SELECT * FROM materiais_almoxarifado WHERE id = ?', [vazio.id]);
+    assert.deepStrictEqual(await ownerRules.assertTrocaDeDonoPermitida(db, gVazio, B, ALMOXARIFE),
+      { deId: A, paraId: B, deNome: 'Metalurgica Alfa LTDA', paraNome: 'Caldeiraria Beta SA', comHistorico: false });
   });
 
   await close();

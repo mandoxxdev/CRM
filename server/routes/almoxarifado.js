@@ -691,12 +691,19 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     merged.localizacao_padrao_id = locId;
     merged.localizacao = locText;
 
+    // Etapa 108 (Fase 5, RN-09, B720): o UPDATE so grava se o dono ainda e o que foi lido. Sem isto, um salvar que leu o
+    // material antes de o Administrador trocar o dono (A -> B, com TROCA_DONO) e gravou depois escrevia de volta o dono
+    // velho — por fora da guarda e da auditoria. `IS` porque o dono pode ser NULL (material nosso).
     try {
-      await dbRun(db, `UPDATE materiais_almoxarifado SET
+      const escrita = await dbRun(db, `UPDATE materiais_almoxarifado SET
         ${MATERIAL_UPDATE_COLUMNS.map((c) => `${c} = ?`).join(', ')},
         updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?`,
-        [...MATERIAL_UPDATE_COLUMNS.map((c) => merged[c]), req.params.id]);
+        WHERE id = ? AND proprietario_cliente_id IS ?`,
+        [...MATERIAL_UPDATE_COLUMNS.map((c) => merged[c]), req.params.id, current.proprietario_cliente_id ?? null]);
+      if (escrita.changes === 0) {
+        return res.status(409).json({ error: `O dono do material ${current.codigo} mudou enquanto este cadastro era salvo — `
+          + 'nada foi gravado. Recarregue o material e salve de novo.' });
+      }
     } catch (err) {
       if (err.message && err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
       return res.status(500).json({ error: err.message });
