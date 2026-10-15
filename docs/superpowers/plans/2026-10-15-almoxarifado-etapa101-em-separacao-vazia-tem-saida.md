@@ -102,20 +102,20 @@ Máquina: `TRANSICOES.EM_SEPARACAO` ganha `'CANCELADO'` e `'ENCERRADA'`. Exporta
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (tronco) — a máquina, os dois cancelamentos, o encerramento e a reserva do dono.** RN-01..RN-06.
+- [x] **T1 (tronco) — a máquina, os dois cancelamentos, o encerramento e a reserva do dono.** RN-01..RN-06.
   `requisitionStateMachine.js`, `routes/requisicoesMaterial.js`, `routes/almoxarifado.js` (cancelar, encerrar),
   `reservationService.js`. Teste novo `server/tests/api/separacaoVaziaSaida.api.test.js`: P1–P4 pela rota (cancelar
   nas duas, encerrar), M1/M2/E1/E2, a reserva do dono continua 403 na *Em Separação* vazia, a corrida separar ×
   cancelar (a separação segura a trava: cancelar espera e recebe M1). Ajustar o `[93 RN-08] (e)` (E1 no lugar da
   transição inválida — a caixa é 3). Controle positivo: sabotar o predicado (aceitar com caixa) e a trava.
-- [ ] **T2 (galho) — C202 no servidor.** RN-08, RN-09. `requisitionCreateService.js`, `routes/almoxarifado.js`
+- [x] **T2 (galho) — C202 no servidor.** RN-08, RN-09. `requisitionCreateService.js`, `routes/almoxarifado.js`
   (`/enviar`). Teste novo `server/tests/api/requisicaoSerieInteira.api.test.js`: as duas rotas, rascunho, cópia de
   legado, envio de legado, serviço direto, inteiro aceito, 1,0000001 aceito (arredonda), material sem série com 1,5
   aceito, "nada gravado". Independente da T1 (arquivos e regras distintos).
-- [ ] **T3 (galho, depois da T1) — a tela.** RN-07. `requisicaoLabels.js` (`destinoDaSeparacaoVazia`),
+- [x] **T3 (galho, depois da T1) — a tela.** RN-07. `requisicaoLabels.js` (`destinoDaSeparacaoVazia`),
   `RequisicoesList.js` (os dois botões), `ReservasAlmoxarifado.test.js` (d4 contra `STATUS_CANCELAVEIS_SEM_CONDICAO`).
   Teste novo de cliente: os botões por caso e a paridade do predicado contra o do servidor (tabela de itens).
-- [ ] **T4 (integração, depois de T1–T3) — o documento até o fim, pela rota E pelo serviço.**
+- [x] **T4 (integração, depois de T1–T3) — o documento até o fim, pela rota E pelo serviço.**
   `server/tests/api/separacaoVaziaSaidaIntegracao.api.test.js`: monta a *Em Separação* vazia pelo serviço
   (`separarRequisicao(db, R, [], user)`, `devolverSeparado`) e pela rota; cancela/encerra pela rota; confere
   `listarFilaSeparacao` (serviço) e `GET /api/almoxarifado/fila-separacao` (rota) sem a requisição, reserva
@@ -128,3 +128,46 @@ Máquina: `TRANSICOES.EM_SEPARACAO` ganha `'CANCELADO'` e `'ENCERRADA'`. Exporta
 - Gesto de cancelar para o almoxarife (B).
 - *Parcialmente Atendida* com material na caixa continua encerrando (contrato da 93; C204).
 - A tela de criação já barra fração para todo material pelo `step` (fora; C205).
+
+## Fase 2 — revisão do plano (agente fresco, 2026-10-15) — 0 trava, 5 correções, notas
+
+As regras e as literais se sustentaram; o que estava errado era o **alcance nos testes existentes**. O plano dizia
+"ajustar o `[93 RN-08] (e)`"; o medido foi ~37 casos em 7 arquivos do servidor e 2 do cliente.
+
+1. **(correção) A trava nos cancelamentos (RN-05) derruba os testes de corrida que disparavam o cancelamento AGUARDADO
+   dentro da separação/devolução** — viram deadlock. Medido pelo revisor e por mim na suíte (342/347 na primeira
+   rodada com a T1). Reescritos na T1: o cancelamento agora **espera** e decide pela caixa que a separação deixou (M1, ou
+   200 na *Em Separação* vazia); a ordem inversa vira "cancelamento 200, separação S1"; os que provavam o
+   compare-and-set contra escritor **fora** da trava (98 RN-02b, 94 RN-04 (a)/(b)) usam escritor direto — o D409 da
+   devolução e o V1 da alçada continuam alcançáveis por quem escreve fora da trava (reprovação por valor, legado).
+   Arquivos: `separacaoNaoRessuscita`, `requisicaoGestosConcorrentes`, `requisicaoGestosConcorrentesIntegracao`,
+   `cancelarOutrosModulosIntegracao`, `devolverSeparado`, `requisicaoCancelarOutrosModulosReserva`,
+   `alcadaValorDepoisDaSeparacao` (este o revisor não listou — a suíte o pegou por *timeout*),
+   `alcadaValorDepoisDaSeparacaoIntegracao`, `requisicaoEstados`.
+2. **(correção) A T1 deixa a suíte do cliente vermelha** (`ReservasAlmoxarifado.test.js` (d4) deriva de `TRANSICOES`) —
+   movido para a T1.
+3. **(correção) A T3 esquecia `RequisicoesList.test.js` `[92 RN-06 (b)/(e)]`** ("sem botão" na *Em Separação* com fixture
+   vazia) — reescrito com material na caixa.
+4. **(correção) A T2 esquecia `separacaoFormaDaEntradaIntegracao` `[99 I2]`** (criava 1,5 de série pela rota) — o
+   legado passou a ser montado por SQL.
+5. **(correção) T1 e T2 tocam o mesmo arquivo** (`routes/almoxarifado.js`, trechos distantes) — a T2 rodou em worktree
+   própria (`CRM-wt-e101-t2`); o cherry-pick entrou limpo.
+
+Notas registradas: o rascunho legado com fração só sai cancelando (C206); quem separava não é avisado do cancelamento
+(C205); `STATUS_CANCELAVEIS_COM_CONDICAO` entra no contrato (exportado); assimetria declarada da *Parcialmente Atendida*
+com caixa encerrando (C204).
+
+## Execução (2026-10-15)
+
+- **T1** `6dcced8e` — máquina (setas condicionais + `destinoDaSeparacaoVazia`, `recusaSaidaDaSeparacao`,
+  `STATUS_CANCELAVEIS_SEM_CONDICAO`/`_COM_CONDICAO`, `MSG_SAIDA_SEPARACAO`), os dois cancelamentos dentro da trava,
+  encerrar com E1/E2 (também na nova tentativa), a exceção do dono; teste novo `separacaoVaziaSaida` (18) e as
+  reescritas acima. **Controle:** 6 sabotagens (predicado aceitando tudo, sem trava em cada rota, dono pela seta crua,
+  entregue sem `quantidade_atendida`, caixa crua) — cada uma derruba o teste nomeado, pela asserção certa.
+- **T2** `38e04309` (cherry-pick de `756bc1d4`, worktree `CRM-wt-e101-t2`, agente) — `recusaFracaoDeSerie` única para
+  criação e envio; teste novo `requisicaoSerieInteira` (13). **Divergência:** os testes do plano não derrubavam a
+  sabotagem "Number cru no lugar de `Q.qtd`" (a criação já passa o arredondado) — o agente acrescentou o envio de um
+  legado 1,0000001 e a função chamada direto.
+- **T3** `dfdad6b1` — os dois botões e o espelho do predicado; teste novo `RequisicoesSeparacaoVaziaSaida` (7).
+  **Controle:** 4 sabotagens no cliente, todas vermelhas.
+- **T4** `f7139676` — `separacaoVaziaSaidaIntegracao` (4 jornadas, rota e serviço). J4 vermelha antes da T2.
