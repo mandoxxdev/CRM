@@ -66,6 +66,12 @@
 > corrigida — é da área da Etapa 108). E a lista de módulos do sistema passa a ter **uma fonte no cliente e uma no
 > servidor**, com um teste que falha se divergirem — o G7 dizia quatro listas; **estava errado**: eram cinco com nome e
 > mais dez parciais. Decisões **B59–B61**. Próxima de Compras: candidatas no plano da 109.
+> **2026-10-15 — Etapa 111 entregue (frente Compras/core):** a tela **Logs de Auditoria** passa a mostrar o **nome** do
+> módulo também nas negações que vêm do servidor (Almoxarifado, Engenharia / Projetos, Frota e TODOLIST iam com a chave
+> crua) e o filtro de módulo dela oferece os 11 módulos (eram 6); o "Carregando …" da engenharia diz "Cálculos de
+> Engenharia". O nome do módulo e o "rota → módulo" saem de uma fonte só; a regra do usuário **sem nenhuma permissão**,
+> que é diferente em três lugares, foi medida e congelada para decisão (**B63**). O G17 dizia dez listas; **estava
+> errado** — eram catorze pontos. Decisões **B62–B63**, consulta **A10**. Próxima de Compras: candidatas no plano da 111.
 > O que sobra para o P.O.: **D-37** (categoria depende de família?) e **D-35** (significado de
 > A/B/C). Design do lote:
 > `docs/superpowers/specs/2026-10-06-crm-lote-compras-outubro-design.md`; índice do módulo:
@@ -128,6 +134,14 @@
   índice é criado (enquanto ele não existe, **Configurações → Categorias aceita nome repetido** — a recusa *"Já existe uma
   categoria com este nome"* é feita por ele). Se alguma estiver em uso, não apague: me chame (é preciso repassar os vínculos para a cópia que fica).
   Mesmo raciocínio para tipos (`materiais_almoxarifado.tipo_material_id`).
+- **A10 (Etapa 111) — Consulta, não ação (opcional):** quantas linhas antigas do log de auditoria têm o módulo cru no
+  lugar do nome (os 403 do servidor de Almoxarifado, Engenharia / Projetos, Frota, TODOLIST e a combinação das duas
+  engenharias gravavam a chave). A versão nova grava o nome nas linhas **novas**; as antigas ficam como estão (a tela
+  Logs mostra a chave nelas, como hoje).
+  `SELECT modulo, nome_modulo, COUNT(*) AS linhas FROM logs_auditoria WHERE tipo = 'acesso_negado' AND (nome_modulo IS NULL OR nome_modulo = modulo) GROUP BY modulo, nome_modulo ORDER BY linhas DESC`.
+  (a) **Zero linhas ou não importa:** nada a fazer. (b) **Quer o histórico uniforme:** com o servidor parado,
+  `UPDATE logs_auditoria SET nome_modulo = CASE modulo WHEN 'almoxarifado' THEN 'Almoxarifado' WHEN 'engenharia_projetos' THEN 'Engenharia / Projetos' WHEN 'frota' THEN 'Frota' WHEN 'todolist' THEN 'TODOLIST' WHEN 'engenharia|engenharia_projetos' THEN 'Cálculos de Engenharia ou Engenharia / Projetos' ELSE nome_modulo END WHERE tipo = 'acesso_negado' AND nome_modulo = modulo`
+  — só muda o texto exibido; o filtro da tela filtra pela chave (`modulo`), que não muda.
 
 ### B. Decisões que eu tomei e você pode reverter
 - **B1 — Esta frente vive em `main`, e `main` tem OUTRO pedido de compra.** A branch
@@ -371,6 +385,31 @@
   proíbem ("Inativar" recusa família com material ativo; o cadastro recusa família inativa). Fechar exige mexer no cadastro
   e na edição de material, que é a área da Etapa 108 do almoxarifado em paralelo; deixei para a próxima etapa (é a
   primeira candidata do plano da 109).
+- **B62 — Etapa 111 (G17): o nome do módulo nas telas e no log saiu de uma fonte só — três mudanças pequenas de texto,
+  uma divergência de nome mantida.** (1) **Log de auditoria:** o 403 de uma rota do servidor em Almoxarifado, Engenharia /
+  Projetos, Frota e TODOLIST gravava a **chave** (`almoxarifado`) na coluna Módulo; agora grava o nome, o mesmo que a
+  tela de acesso negado já gravava. A combinação das duas engenharias (rotas de materiais de escritório) grava
+  *"Cálculos de Engenharia ou Engenharia / Projetos"* — escolhido por mim; **descartado:** escolher um dos dois (o 403
+  vale para os dois módulos). Linhas antigas não mudam (**A10**). (2) **Logs de Auditoria → filtro de módulo:** tinha 6
+  opções; agora tem as 11 (entram Cálculos de Engenharia, Engenharia / Projetos, Almoxarifado, Frota, TODOLIST) e
+  "Admin" passa a **"Administração"**, o nome da coluna. (3) **"Carregando …" da engenharia:** dizia "Carregando
+  Engenharia..."; agora *"Carregando Cálculos de Engenharia..."*, como em todo o resto. **Mantido:** o Admin chama-se
+  **"Administração"** no acesso negado, no log, no carregamento e no filtro, e **"Admin"** no cartão da seleção de
+  módulos e no cadastro de usuário. Alinhar a "Admin" mudaria o log (linhas novas com outro nome que as antigas);
+  alinhar a "Administração" mudaria o cartão. Decida se quer um nome só. Reversível: um commit por tela.
+- **B63 — Etapa 111 (G17): o usuário "sem nenhuma linha de permissão" vê coisas diferentes em três lugares — medido,
+  congelado num teste, NÃO alinhado (decisão sua, perto do G9).** Hoje: (a) a **seleção de módulos** libera só
+  Comercial; (b) o **portão de rota** do navegador libera Comercial **e Frota** — digitando `/frota` no endereço a casca
+  do módulo abre (splash e menu) e cada tela responde "Acesso negado ao módulo" do servidor, gravando uma linha de frota
+  no log a cada chamada; (c) o **servidor** libera Comercial só a quem **não está em grupo ativo nenhum** — quem está num
+  grupo sem a linha de Comercial não ganha Comercial no servidor, mas a seleção e o portão do navegador mostram
+  Comercial liberado (se o grupo não tiver linha nenhuma). E o inverso: quem tem permissão **direta** só de Compras, sem
+  grupo, é barrado do Comercial no navegador e liberado no servidor (só uma rota de comercial confere módulo hoje, a
+  lista de OS do comercial). Decida a regra: "sem linha → só Comercial" nos três (tira Frota do portão; muda quem entra
+  na casca de Frota), "sem linha → nada", ou deixar. Os três lugares agora leem listas com nome
+  (`MODULOS_LIBERADOS_SEM_PERMISSAO_PORTAO`, `…_SELECAO` no navegador, `MODULOS_LIBERADOS_SEM_GRUPO` no servidor) e o
+  teste `modulosClienteServidor.api.test.js` cai de propósito se alguém mexer em uma delas. **Descartado:** alinhar
+  nesta etapa — mudaria quem acessa o quê sem decisão.
 - **B44 — Etapa 89: só o nome do arquivo do PDF da OS é limpo; o número da OS fica como foi digitado.**
   Com `/`, `"` ou `:` no número, o Windows recusava o nome do arquivo e o usuário via "Erro ao gerar
   PDF" (o PDF até era gerado). Agora o arquivo vira `OS_OS_1_2_A_<hora>.pdf` e o documento continua
@@ -543,7 +582,17 @@
   **(Original):** A lista de módulos do sistema existe em **quatro** lugares (`modulosMeta.js`,
   `TipoSelecao.todosModulos`, `MODULE_ADMIN_KEYS` no servidor, `DEFAULT_MODULOS_TIPO`). A Etapa 36
   usou a do cliente (`modulosMeta.js`) e **não** criou uma quinta; unificar é etapa própria.
-- **G17 (Etapa 109, medido, não feito)** — as listas parciais de módulo que ficaram fora do G7, cada uma com outro
+- **G17 — feito na Etapa 111 (o que dava; o resto declarado). Este item estava errado na contagem:** não eram dez
+  listas — eram **catorze** pontos (os mapas rota → módulo eram seis, não um; e o filtro de módulo da tela Logs não
+  estava na lista). A frase "só 7 dos 11 — os outros vão para o log com a chave crua" estava **certa**. Agora: o nome do
+  log do servidor sai de `services/modulosSistema.js` (`nome`); no cliente `NOMES_MODULO` (`constants/modulosMeta.js`)
+  alimenta o acesso negado, o "Carregando …" e o filtro da tela Logs, e `moduloDaRota` alimenta o portão de rota, o
+  prefetch e o menu lateral; o teste cruzado confere nomes servidor x cliente x `App.js`. A divergência de permissão do
+  "sem nenhuma linha" ficou como estava, congelada (B63). **Fora, declarado:** splash (texto de desenho), prefetch de
+  chunk, requisição por módulo e link do e-mail (almoxarifado), setores semeados (dado), árvore de rotas e menus,
+  `isProtectedModuleRoute` do `App.js` e `ModuleSplash` (têm `/chat` e outro desenho), o Admin chamado "Admin" no cartão
+  (B62).
+  **(Original, Etapa 109, medido, não feito):** as listas parciais de módulo que ficaram fora do G7, cada uma com outro
   propósito: rótulos de carregamento (`ModuleLoading`), splash (`SplashScreen`), prefetch (`lazyModules`), nomes do
   "acesso negado" do cliente (`ProtectedModuleRoute`) e do log do servidor (`index.js`, só 7 dos 11 — os outros vão para
   o log com a chave crua), requisição de material por módulo e o link do e-mail de recebimento (10, sem TODOLIST — já
@@ -631,6 +680,77 @@
 <!-- Formato de cada seção de etapa (escrita no fechamento da etapa, SÓ dentro do próprio cabeçalho):
 **Em uma frase.** · ### O que há de novo (visível para o usuário) · ### Por baixo do capô ·
 ### Antes → Agora (tabela) · ### Roteiro de teste manual (clicável) · ### O que a etapa NÃO cobre -->
+
+## Etapa 111 — O log de acesso negado com o nome do módulo; o nome e a rota de cada módulo numa fonte só (2026-10-15)
+
+**Em uma frase.** Quem abre **Administração → Logs de Auditoria** via o mesmo módulo com dois nomes — "Almoxarifado" quando
+a negação vinha da tela, `almoxarifado` quando vinha do servidor — e não conseguia filtrar por Almoxarifado, Frota,
+TODOLIST nem pelas engenharias; agora o nome é um só, o filtro tem os 11 módulos, e as listas de nome e de rota de módulo
+que estavam copiadas à mão em várias telas leem uma fonte só, com um teste que avisa se cliente e servidor divergirem.
+
+### O que há de novo (visível para o usuário)
+- **Logs de Auditoria → coluna Módulo:** as negações que o servidor registra em Almoxarifado, Engenharia / Projetos, Frota
+  e TODOLIST aparecem com o **nome** (eram a chave: `almoxarifado`, `frota`…). A das rotas de materiais de escritório
+  (que valem para as duas engenharias) aparece *"Cálculos de Engenharia ou Engenharia / Projetos"*. Linhas antigas ficam
+  como estavam (A10).
+- **Logs de Auditoria → filtro "Todos os Módulos":** 11 opções (Comercial, Compras, Financeiro, Operacional, Cálculos de
+  Engenharia, Engenharia / Projetos, Almoxarifado, Frota, TODOLIST, Administrativo, Administração); eram 6, e o Admin se
+  chamava "Admin" no filtro e "Administração" na coluna.
+- **Entrando em Cálculos de Engenharia:** *"Carregando Cálculos de Engenharia..."* (era "Carregando Engenharia...").
+- Nada mais muda: acesso negado, seleção de módulos, menus e quem entra onde são os mesmos.
+
+### Por baixo do capô
+- **Servidor:** `services/modulosSistema.js` ganhou `nome` por módulo e `nomeDoModulo` (chave desconhecida volta crua;
+  `a|b` vira "A ou B"); o registro do 403 saiu do `index.js` para `services/acessoNegadoLog.js` (o mesmo corpo,
+  executado em teste contra o SQLite com a DDL de produção). Os dois portões de módulo (`checkModulePermission`,
+  `checkAnyModulePermission`) saíram do `index.js` para `services/portaoDeModulo.js`, **com o mesmo corpo** — achado da
+  revisão final: nenhum teste executava os portões (o ambiente de teste usa um falso), e trocar a regra do "sem grupo"
+  para liberar tudo não derrubava nada. Agora `portaoDeModulo.api.test.js` os roda com banco de verdade. Prova de boot:
+  `node index.js` numa pasta de dados vazia, um usuário sem permissão → 403 em Frota, Almoxarifado e materiais de
+  escritório, e o log com "Frota", "Almoxarifado" e "Cálculos de Engenharia ou Engenharia / Projetos".
+- **Cliente:** `constants/modulosMeta.js` ganhou `NOMES_MODULO` (acesso negado, "Carregando …", filtro da tela Logs) e
+  `moduloDaRota` (derivado das rotas de `MODULOS_META`, prefixo mais longo primeiro), que substitui três mapas escritos à
+  mão (portão de rota, prefetch, menu lateral) — mesmo resultado para todo caminho (tabela de 25 caminhos escrita antes,
+  verde no código antigo; sonda da revisão do plano com 82).
+- **"Sem nenhuma linha de permissão":** as três regras (portão de rota: Comercial e Frota; seleção: Comercial; servidor:
+  Comercial só sem grupo ativo) viraram listas com nome e o teste cruzado as congela — não alinhadas (B63).
+- **O G17 estava errado na contagem** (dez → catorze pontos); a medição da 111 e a revisão do plano acharam o filtro da
+  tela Logs e dois mapas a mais (`ModuleSplash`).
+- Testes novos: `acessoNegadoLog.api.test.js` (7), `portaoDeModulo.api.test.js` (11),
+  `modulosClienteServidor.api.test.js` (+4, agora 11); no client `ProtectedModuleRoute.nomes` (3), `ModuleLoading.nomes`
+  (3), `Logs.filtroModulo` (2), `moduloDaRota` (3), `Layout.modulo` (1), `permissionsCache.semLinha` (3),
+  `TipoSelecao.modulos` (+4).
+
+### Antes → Agora
+| Antes | Agora |
+|---|---|
+| Logs: negação do servidor em Almoxarifado/Frota/TODOLIST/Eng. Projetos com a chave crua (`almoxarifado`) | O nome ("Almoxarifado"), igual à negação registrada pela tela |
+| Logs: a negação das rotas das duas engenharias com a chave dupla crua | "Cálculos de Engenharia ou Engenharia / Projetos" |
+| Filtro de módulo dos Logs: 6 opções, "Admin" | 11 opções, "Administração" |
+| "Carregando Engenharia..." | "Carregando Cálculos de Engenharia..." |
+| Nome do módulo copiado em 5 lugares, rota → módulo em 3, sem teste entre eles | `NOMES_MODULO`/`moduloDaRota` no cliente, `nome` no servidor, teste cruzado |
+
+### Roteiro de teste manual (clicável)
+1. Entre com um usuário **sem** permissão de Almoxarifado (e que esteja em algum grupo). Abra **Almoxarifado** pela
+   seleção → tela de acesso negado. Isso grava uma linha pela tela.
+2. Como administrador, **Administração → Logs de Auditoria**: a linha nova mostra Módulo **"Almoxarifado"**. (A negação
+   pelo servidor — uma chamada de API do almoxarifado sem permissão — também grava "Almoxarifado"; antes, `almoxarifado`.)
+3. No filtro "Todos os Módulos", escolha **Almoxarifado** → só as linhas de almoxarifado. Confira que o filtro tem
+   11 módulos e que o Admin aparece como **Administração**.
+4. Abra **Cálculos de Engenharia** pela seleção: o carregamento diz *"Carregando Cálculos de Engenharia..."* (aparece por
+   um instante; com a rede lenta do DevTools dá para ver).
+5. Menus e navegação: entre em Compras, Frota, Engenharia / Projetos e Configurações — o menu lateral é o de sempre.
+
+### O que a etapa NÃO cobre
+- A regra do usuário **sem nenhuma permissão** (Frota liberada só no portão de rota; servidor "sem grupo" x cliente "sem
+  linha") — medida e congelada, não alinhada (B63, perto do G9).
+- O Admin com dois nomes ("Admin" no cartão, "Administração" no resto) — mantido (B62). B60 (TODOLIST/Admin/Relatórios no
+  admin de módulo) — continua com o P.O.
+- Linhas antigas do log com a chave crua — consulta e correção opcional na A10.
+- Splash, `ModuleSplash`, `isProtectedModuleRoute`, requisição de material por módulo, setores semeados, rotas e menus —
+  listas com outro propósito, declaradas no design.
+- O filtro da tela Logs não acha a negação da combinação das duas engenharias (filtra por igualdade da chave; antes também
+  não achava).
 
 ## Etapa 109 — Vincular fornecedor não perde mais a corrida para o "Remover grupo"; a lista de módulos numa fonte só (2026-10-15)
 
