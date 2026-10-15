@@ -22,7 +22,7 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 // Etapa 35: LEGENDA_ABC é a constante exportada que a tela e o manual citam (RN-35.03).
-import MaterialAlmoxarifadoForm, { LEGENDA_ABC } from './MaterialAlmoxarifadoForm';
+import MaterialAlmoxarifadoForm, { LEGENDA_ABC, AVISO_SALDO_INICIAL } from './MaterialAlmoxarifadoForm';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 
@@ -886,5 +886,63 @@ describe('MaterialAlmoxarifadoForm — RN-100.06b: legado com subfamília no lug
     expect(selectFamilia().disabled).toBe(true);
     expect(container.textContent).toContain('A família não pode ser alterada após o cadastro.');
     expect(container.querySelector('[data-testid="aviso-familia-legada"]')).toBeNull();
+  });
+});
+
+describe('MaterialAlmoxarifadoForm — Etapa 110 (RN-11): o aviso do saldo inicial', () => {
+  const aviso = () => container.querySelector('[data-testid="aviso-saldo-inicial"]');
+  const marcar = (rotulo) => {
+    const campo = [...container.querySelectorAll('label.almox-checkbox-field')].find((l) => l.textContent.includes(rotulo));
+    if (!campo) throw new Error('checkbox nao encontrado: ' + rotulo);
+    act(() => { campo.querySelector('input[type="checkbox"]').click(); });
+  };
+
+  test('a frase e a do contrato', () => {
+    expect(AVISO_SALDO_INICIAL).toBe('Material com lote, série, inspeção ou de cliente nasce com saldo 0 — a entrada é lançada depois, em Movimentações ou pelo Recebimento.');
+  });
+
+  test.each([['Controle por lote'], ['Controle por número de série'], ['Requer inspeção']])(
+    'cadastro novo: marcar "%s" mostra a frase; desmarcar tira', async (rotulo) => {
+      await renderizarNovo();
+      expect(container.textContent).toContain('Saldo Inicial');
+      expect(aviso()).toBeNull();
+      marcar(rotulo);
+      expect(aviso()).not.toBeNull();
+      expect(aviso().textContent).toBe(AVISO_SALDO_INICIAL);
+      marcar(rotulo);
+      expect(aviso()).toBeNull();
+    });
+
+  test('cadastro novo: escolher um cliente como dono mostra a frase; voltar para GMP tira', async () => {
+    await renderizarNovo();
+    expect(aviso()).toBeNull();
+    preencher(proprietario(), '2');
+    expect(aviso().textContent).toBe(AVISO_SALDO_INICIAL);
+    preencher(proprietario(), '');
+    expect(aviso()).toBeNull();
+  });
+
+  test('controle de validade nao mostra a frase (o servidor nao recusa)', async () => {
+    await renderizarNovo();
+    marcar('Controle de validade');
+    expect(aviso()).toBeNull();
+  });
+
+  test('edicao de material de cliente: sem a frase (o saldo nao se digita na edicao)', async () => {
+    await renderizarEdicao();
+    expect(container.textContent).toContain('Quantidade Atual');
+    expect(proprietario().value).toBe('1');
+    expect(aviso()).toBeNull();
+  });
+
+  test('a recusa do servidor (400 E2) aparece no toast e o formulario fica', async () => {
+    const E2 = 'O material CHP-100 não pode nascer com saldo inicial: tem controle por lote. Cadastre com saldo 0 e lance a entrada depois — em Movimentações (Entrada, com o lote e as séries) ou pelo Recebimento (inspeção e material de cliente).';
+    api.post.mockRejectedValueOnce({ response: { status: 400, data: { error: E2 } } });
+    await renderizarNovo();
+    await preencherObrigatorios();
+    marcar('Controle por lote');
+    await submeter();
+    expect(toast.error).toHaveBeenCalledWith(E2);
+    expect(toast.success).not.toHaveBeenCalled();
   });
 });

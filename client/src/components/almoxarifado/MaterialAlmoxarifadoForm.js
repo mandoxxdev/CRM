@@ -43,6 +43,10 @@ const CONTROLE_CHECKS = [
   { field: 'requer_foto', label: 'Requer foto' },
 ];
 
+// Etapa 110 (RN-11): a frase sob o "Saldo Inicial" no cadastro novo quando o material tem um controle que o cadastro não
+// informa (lote, série), exige inspeção ou é de cliente — o servidor recusa o saldo inicial desses (RN-02).
+export const AVISO_SALDO_INICIAL = 'Material com lote, série, inspeção ou de cliente nasce com saldo 0 — a entrada é lançada depois, em Movimentações ou pelo Recebimento.';
+
 const MaterialAlmoxarifadoForm = () => {
   const { user } = useAuth();
   const isAdmin = canConfigureAlmox(getEffectiveUser(user));
@@ -835,6 +839,13 @@ const MaterialAlmoxarifadoForm = () => {
                     value={form.quantidade_atual} onChange={e => set('quantidade_atual', e.target.value)}
                     placeholder="0" disabled={isEdit} title={isEdit ? 'Use Movimentações para alterar o saldo' : ''} />
                   {isEdit && <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>Use "Movimentações" para ajustar</small>}
+                  {/* Etapa 110 (RN-11): o servidor recusa o saldo inicial desses quatro (RN-02) — a frase avisa antes,
+                      sem travar o campo: quem decide é o servidor. */}
+                  {!isEdit && (form.controle_lote || form.controle_serie || form.requer_inspecao || form.proprietario_cliente_id) && (
+                    <small data-testid="aviso-saldo-inicial" style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
+                      {AVISO_SALDO_INICIAL}
+                    </small>
+                  )}
                 </div>
                 <div className="almox-field">
                   <label className="almox-label">Estoque Mínimo</label>
