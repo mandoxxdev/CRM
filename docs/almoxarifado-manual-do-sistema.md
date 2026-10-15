@@ -161,7 +161,22 @@ As famílias são mantidas em **Almoxarifado → Configurações → aba "Famíl
 | Contagem "N itens" de uma subfamília | Conta os materiais cadastrados **nela**; a contagem da raiz inclui os das subfamílias |
 | "Adicionar item" numa subfamília | Abre o cadastro de material já com família **e** subfamília escolhidas |
 
-O que a tela **não** faz: mover uma subfamília para outra família, ou transformar família em subfamília (e vice-versa) — só pela API.
+O que a tela **não** faz: mover uma subfamília para outra família, ou transformar família em subfamília (e
+vice-versa) — só pela API. E mesmo pela API o sistema só aceita essas mudanças de nível em família **sem
+material** (ativo ou inativo, cadastrado nela como família ou como subfamília) e, para virar subfamília, sem
+subfamílias próprias (ativas ou inativas — a hierarquia nunca passa de dois níveis):
+
+| Situação | Resultado |
+|---|---|
+| Família com material passando a ser subfamília | Recusado: *"Não é possível transformar em subfamília: a família tem N material(is) cadastrado(s) (contando os inativos)"* |
+| Subfamília com material indo para outra família principal, ou virando família principal | Recusado: *"Não é possível mudar a família principal desta subfamília: ela tem N material(is) cadastrado(s) (contando os inativos)"* |
+| Família com subfamília ativa passando a ser subfamília | Recusado: *"Família com subfamília(s) ativa(s) não pode virar subfamília"* |
+| Família com subfamília inativa passando a ser subfamília | Recusado: *"Família com subfamília(s) inativa(s) não pode virar subfamília — elas ficariam num terceiro nível"* |
+| Família pai informada que não é um número de família | Recusado: *"Família pai não encontrada"* |
+
+Renomear ou editar a família sem mudar o pai continua livre, com ou sem material.
+
+*(Etapa 103 — G10b: as mudanças de nível passaram a ser recusadas com material; antes a API as aceitava e recriava material com a subfamília no lugar da família.)*
 
 Além da família existe o campo **Categoria**, uma classificação de apoio escolhida num **catálogo mantido pela própria empresa** — Aço carbono, Aço inox, Chapas, Tubos, Perfis estruturais, Componentes usinados, Rolamentos, Elementos de fixação, Solda e consumíveis e assim por diante. O catálogo é editado em **Almoxarifado → Configurações → aba "Categorias"** (logo abaixo), e é a **mesma lista** que alimenta o cadastro de material, o filtro da listagem de materiais e o filtro de escopo da conferência de estoque.
 
