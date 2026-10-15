@@ -2040,9 +2040,9 @@ caixa e deixa de achá-la depois de **Devolver à prateleira** os 3; a A53 acha 
   se ainda é para sair, ou **Devolve à prateleira** o que não vai sair (motivo obrigatório); depois quem aprova encerra.
 
 
-### B. Decisões de negócio — B1 a B530 e B700 a B703; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B706; as em aberto esperam você, as tomadas estão escritas com o descartado
 
-*(**Atualizado em 2026-10-15 com as quatro da Etapa 102 — B700 a B703.** A numeração **salta de B530 para B700 de propósito**: a Etapa 103 (frente de Compras) corre em paralelo e também usa a série B — ela fica com a B6xx; esta etapa começou na próxima centena livre que não é a 6xx. Não há B531 a B699 no almoxarifado.)*
+*(**Atualizado em 2026-10-15 com as três da Etapa 104 — B704 a B706** — e antes com as quatro da Etapa 102 — B700 a B703. A numeração **salta de B530 para B700 de propósito**: a Etapa 103 (frente de Compras) corre em paralelo e também usa a série B — ela fica com a B6xx; esta etapa começou na próxima centena livre que não é a 6xx. Não há B531 a B699 no almoxarifado.)*
 
 *(**Atualizado em 2026-10-15 de B524 para B530**, com as seis da Etapa 101 — **B525** a **B530**, do plano e da execução; a **B527** revisa a **B450**.)*
 
@@ -6855,6 +6855,9 @@ variante explícita "sob trava" — desnecessária. (`9ace72b2`, `65dc74b2`)
 somar as linhas de endereço (D1/D7 da Etapa 10), e um teste prende que a contagem por endereço passa mesmo abaixo da
 retenção. **Descartado:** projetar o total e recusar — reabriria uma decisão da Etapa 10 com teste que a prende. O
 **estorno** desse ajuste entrou na régua (**C186**).
+*(**Revista na Etapa 104 (B704):** o ajuste com endereço continua sem recusa pela caixa, mas passa a **avisar**. A frase
+"teste que a prende" **estava imprecisa**: o teste da Etapa 10 prende um corte de escopo, e uma recusa só da caixa não o
+derrubaria — o que ela reabriria é a decisão do cliente de que a contagem redefine o saldo.)*
 
 **B496 (NOVA, da Etapa 97; corrigida à vista na revisão do plano) — o bloqueio avulso de qualidade ganha guarda, que
 NÃO conta o reservado.** Pode-se bloquear até: estoque − bloqueado − em inspeção − em terceiros − caixa sem reserva. Antes
@@ -7145,6 +7148,40 @@ devolver — para ele, isso quer dizer pedir ao almoxarifado. O manual diz isso.
 **B703 (NOVA, da Etapa 102) — as *Encerradas* antigas com caixa ficam como estão.** O que já foi encerrado com material
 na caixa não volta: o sistema já conta esse material como livre. A **A53** lista para conferir a prateleira.
 **Descartado:** reabrir ou corrigir por migração (mexeria em documento fechado, sem ganho de saldo).
+
+**B704 (NOVA, da Etapa 104) — a contagem por endereço que leva a caixa GRAVA e AVISA; não é recusada.** Separados 4 de
+um material com 4 na prateleira A (sem reserva), a contagem "0 no A" grava como sempre — a prateleira vira 0, o total
+vira a soma das prateleiras — e, quando o disponível do material fica abaixo do que está separado sem reserva, a
+resposta traz o aviso *"Ajuste gravado, mas o disponível de ⟨código⟩ ficou em ⟨n⟩ ⟨un⟩, abaixo dos ⟨caixa⟩ ⟨un⟩ separados para a requisição ⟨número⟩: a entrega fica limitada ao disponível. Se o material está na caixa, a contagem não o incluiu — estorne o ajuste que baixou o estoque (perfil Administrador ou Gestor do almoxarifado); se ele se perdeu, devolva-o à prateleira na requisição."* A tela mostra o aviso junto do *"Movimentação registrada!"*, sem fechar sozinho. **Escolhido
+por ser reversível:** nada é recusado (nenhum teste nem gesto existente muda), o próprio ajuste se desfaz pelo estorno
+(medido: estorno 200, a entrega passa), e não contraria a decisão do cliente de que *a contagem por endereço redefine o
+saldo* (Etapa 6). **Descartado — projetar o total e recusar** (a opção (a) da próxima tarefa): a pessoa contou e o
+sistema se recusaria a gravar o que ela viu; quando a caixa se perdeu, a contagem verdadeira ficaria impossível até
+alguém devolver à prateleira — e quem conta não é necessariamente quem separa. **O argumento a favor da recusa, para você
+pesar:** separar tira as peças da prateleira para a caixa, mas no sistema elas continuam no endereço — quem conta a
+prateleira sem olhar a caixa conta **menos** do que existe; o 0 pode ser contagem errada, não perda. Se na operação real
+a caixa fica sempre longe da prateleira, a recusa é a regra mais segura: a troca é uma guarda no lugar do aviso.
+*(Achado da medição: a **B495** dizia que recusar "reabriria uma decisão da Etapa 10 com teste que a prende" — o teste
+da Etapa 10 prende um **corte de escopo** (o ajuste com endereço fora da guarda de retenção), não "a contagem é a verdade
+física", e uma recusa **só da caixa** não o derrubaria. O que a recusa reabriria é a decisão do cliente, não o teste.)*
+(`660ae114`, `385ff127`)
+
+**B705 (NOVA, da Etapa 104; corrigida na revisão do plano) — o aviso compara a caixa com o DISPONÍVEL, não com o total.**
+O disponível (físico − reservado − bloqueado − em inspeção − em terceiros) é o que limita a entrega; o número que o aviso
+mostra é o mesmo *"Máximo"* que a entrega daria (com uma requisição só). *(O plano dizia "o total" — **estava errado**: com
+2 bloqueados, ou com 3 reservados para outra requisição, a contagem deixava total = caixa e a entrega presa em
+"Máximo: 2" / "Máximo: 1" sem aviso nenhum.)* **Descartado:** o total (o achado acima). **Fica de fora:** o material
+separado **coberto por reserva** da própria requisição (**C209**). (`660ae114`)
+
+**B706 (NOVA, da Etapa 104; corrigida na revisão do plano) — o aviso manda estornar "o ajuste que baixou o estoque", não
+"este ajuste".** O aviso também aparece quando o ajuste **sobe** o total mas ele continua abaixo da caixa (o estado
+continua preso). O estorno desse ajuste reduz o total e é recusado pela regra da caixa (Etapa 97); quem destrava é o
+estorno do ajuste que baixou. *(O plano dizia "estorne este ajuste" — **estava errado** no caso do que subiu.)*
+**Limitações aceitas da frase:** com duas requisições, "devolva-o à prateleira na requisição" fica no singular; a frase
+não diz quanto devolver; com **dois** ajustes que baixaram, é preciso estornar os dois (estornar só o último deixa a entrega
+presa no que sobrou, sem novo aviso); e num registro antigo já preso antes da contagem pode não haver ajuste que baixou —
+sobra devolver à prateleira (revisão do código). **Descartados:** duas frases conforme o sentido do ajuste (mais uma literal para treinar a
+equipe); avisar só o ajuste que reduz (o que sobe e continua abaixo deixaria a requisição presa em silêncio). (`660ae114`)
 
 
 ### C. Furos e mudanças de número que quem opera precisa saber
@@ -9141,9 +9178,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      (mais o sufixo, se houver caixa). Antes aceitava bloquear 10 com estoque 4. ~~Inclusive material reservado
      (liberar a reserva antes).~~ **O reservado continua bloqueável** (corrigido na revisão do plano — **B496**).
 
-186. **NOVO, da Etapa 97 — o ajuste COM endereço (de ida) ainda pode levar a caixa** (**B495**). A contagem por
+186. **NOVO, da Etapa 97, e ✅ TRATADO NA ETAPA 104 COM AVISO (`660ae114`, `385ff127`) — o ajuste COM endereço (de ida) ainda pode levar a caixa** (**B495**). A contagem por
      endereço redefine o total do material e não é limitada pela caixa; o **estorno** desse ajuste, sim. **O que fazer:**
      ao contar por endereço um material que tem requisição em separação, conferir a caixa antes de gravar.
+     *(Desde a Etapa 104 a contagem continua gravando, mas o sistema avisa quando o disponível ficou abaixo da caixa sem
+     reserva, com a requisição e o caminho — **B704**, **C210**.)*
 
 187. **NOVO, da Etapa 97 — a tela mostra o disponível de sempre, com a caixa dentro.** Materiais e Movimentações não
      mostram quanto está separado; só a mensagem de recusa explica. Mostrar a caixa na tela ficou fora.
@@ -9272,6 +9311,26 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 208. **NOVO, da Etapa 102 — a recusa de saldo por caixa ficou mais curta.** A frase do fim (*"… (material perdido da
      caixa: …)"*) perdeu o trecho *"entregue o que existe e encerre a requisição"* (**B701**). Quem treinou a equipe com a
      frase antiga: o caminho para material perdido da caixa é devolver à prateleira e dar a baixa.
+
+209. **NOVO, da Etapa 104 — a contagem por endereço que leva material separado COM reserva não avisa.** Se a requisição
+     tinha reserva (o material existia quando ela foi aprovada) e a contagem deixa o físico abaixo do reservado, a gravação
+     vem sem aviso; a entrega diz *"… o disponível de ⟨código⟩ está negativo (reservado além do físico): nada dele sai pela
+     entrega até liberar outra reserva deste material"*. **O que fazer:** se o material está na caixa, estorne o ajuste; se
+     se perdeu, libere da reserva o que se perdeu (Reservas) e devolva à prateleira. (**B705**)
+
+210. **NOVO, da Etapa 104 — a contagem por endereço pode mostrar um aviso amarelo que não fecha sozinho.** Depois de um
+     **Ajuste** com localização, se o disponível do material ficou abaixo do que está separado para requisições, aparece
+     *"Ajuste gravado, mas o disponível de ⟨código⟩ ficou em ⟨n⟩ ⟨un⟩, abaixo dos ⟨caixa⟩ ⟨un⟩ separados para a requisição ⟨número⟩: a entrega fica limitada ao disponível. Se o material está na caixa, a contagem não o incluiu — estorne o ajuste que baixou o estoque (perfil Administrador ou Gestor do almoxarifado); se ele se perdeu, devolva-o à prateleira na requisição."* **O que fazer:** antes de qualquer coisa, olhe a caixa da requisição. Se as peças estão lá, peça ao
+     Administrador ou ao Gestor o **estorno** do ajuste que baixou o estoque (o almoxarife não estorna); se sumiram,
+     **Devolver à prateleira** na requisição. A **A48** (requisições presas por caixa sem físico) continua achando as que
+     já estavam assim antes.
+
+211. **NOVO (anterior à Etapa 104, achado na revisão do código dela) — o Gestor estorna o ajuste de material de
+     cliente.** Ajustar o saldo de material que é de um cliente exige a permissão especial do Administrador (decisão 7 da
+     Etapa 8); o Gestor não ajusta (*"Sem permissão para esta operação"*), mas **estorna** o ajuste que o Administrador
+     fez — o estorno não confere o dono. Medido com e sem localização: estorno 200, o saldo do cliente volta. **O que
+     fazer:** até a correção, não deixe o estorno de ajuste de material de cliente com o Gestor; confira no livro quem
+     estornou. É a candidata da **Etapa 106**.
 
 
 ### D. Limitações declaradas — são decisão, não esquecimento
@@ -10262,7 +10321,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(96) Camadas redundantes, sem teste que as derrube sozinhas:** a prévia da entrega sem folga, o máximo da entrega sem
   arredondar, a soma da fila sem arredondar e o resto da divisão da entrega — cada uma coberta por outra; só juntas
   derrubam. E o claim da linha sem lote sem folga (a quantidade é a lida da própria linha).
-- **(97) O ajuste com endereço (de ida) ainda leva a caixa** (**B495**, **C186**).
+- **(97) O ajuste com endereço (de ida) ainda leva a caixa** (**B495**, **C186**). *(Desde a Etapa 104 continua levando,
+  mas **avisa** — **B704**.)*
 - ~~**(97) Não há gesto para devolver da caixa à prateleira** (**B497**, **C189**) — com tudo perdido, só o administrador
   solta a requisição. **Etapa 98.**~~ *(Resolvido na Etapa 98 — **B502**.)*
 - **(97) A tela não mostra a caixa** no disponível de Materiais e Movimentações (**C187**); só a mensagem explica.
@@ -10306,6 +10366,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(102) O botão Encerrar não confere o perfil de aprovação na tela do almoxarifado** — quem não tem recebe *"Sem
   permissão para encerrar requisições"* ao confirmar (anterior à etapa, inalterado); a frase da caixa também aparece para
   qualquer perfil (**B702**).
+- **(104) A contagem por endereço não é recusada pela caixa** — grava e avisa (**B704**); a recusa é a alternativa sua.
+- **(104) O aviso não cobre o material separado com reserva** (**C209**) nem as retenções sem caixa (reservado ou
+  bloqueado acima do contado sem nenhuma requisição separada — o corte da Etapa 10, inalterado).
+- **(104) O aviso aparece só na tela de Movimentações** — não vai para e-mail, notificação nem para a fila de separação;
+  quem não estava na tela no momento da contagem não fica sabendo (a **A48** acha as presas).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -11168,6 +11233,15 @@ no de integração). O que **só o navegador** prova:
 1. **A frase no lugar do botão** — legível, centrada, na largura do painel do detalhe, no tema claro e no escuro.
 2. **O botão volta** depois de **Devolver à prateleira** tudo o que estava na caixa (o detalhe recarrega sozinho?).
 3. **A recusa de saldo mais curta** numa **Perda** em Movimentações com material na caixa — o aviso inteiro legível.
+
+**(104) Nenhum clique foi dado nesta etapa no navegador.** A tela mudou num lugar (o aviso amarelo depois do
+**Ajuste** com localização em Movimentações) e está provada por teste de componente com a fronteira HTTP simulada (o
+arquivo novo, **3** testes); o servidor, pela rota e pelo serviço (**13** testes no arquivo novo, **5** jornadas no de
+integração). O que **só o navegador** prova:
+
+1. **O aviso inteiro legível** num toast que não fecha sozinho — a frase é longa; no tema claro e no escuro, e no celular.
+2. **O aviso e o sucesso juntos** — o *"Movimentação registrada!"* fecha sozinho e o aviso fica até alguém fechar.
+3. **O estorno pelo livro** depois do aviso (o administrador acha o ajuste, estorna, e a requisição entrega).
 
 
 
@@ -12290,6 +12364,13 @@ com *"[run-all] o arquivo terminou sem chamar process.exit (placar ausente)"*; (
 foi interrompido (timeout): ⟨arquivo⟩"*; (3) o teste da Etapa 75 que usava `.unref()` passou a usar relógio vivo. **A
 guarda rodada nos 291 arquivos não achou nenhum teste vazio escondido** — todos chamam `process.exit`. **A lição:**
 código de saída não é placar; o executor da suíte também precisa saber falhar (o mesmo princípio do controle positivo).
+
+**G87 (NOVO, notado na Etapa 104 — do arquivo de instruções do projeto, não do sistema). O `CLAUDE.md` diz que a saída
+avulsa, a reserva manual e a separação NÃO pegam a trava por material — está desatualizado.** Medido na Etapa 104: desde a
+Etapa 95 a separação pega (`comLockDosMateriais`), e desde a 97 (B494) o motor inteiro (`registrarMovimentacao`) e a reserva
+manual (`criarReserva`) rodam em `naTravaDoMaterial`. O plano da 102 repetiu o erro ("o ajuste com endereço não pega a
+trava") — corrigido à vista lá. **Não editado** (é instrução sua para as sessões): a frase certa seria "saída avulsa,
+reserva manual e separação pegam a trava do material desde as Etapas 95/97; não pegam as liberações sem distribuir".
 
 aparece na hora, para quem está editando.
 ## Etapa 0 — Fundação (2026-08-03)
@@ -22150,9 +22231,107 @@ de etapas anteriores — viraram teste nesta. Nota registrada: num registro anti
 arredondam diferente (a tela mostraria a frase com a caixa já vazia para o servidor) — a gravação arredonda a 6 casas,
 então não acontece com dado novo; é a mesma régua da Etapa 101. (`403e18d2`)
 
+## Etapa 104 — A contagem por prateleira que bate numa caixa de requisição passa a avisar (2026-10-15)
+
+O almoxarife separa 4 peças para uma requisição e as leva para a caixa. No sistema, separar não move estoque: as 4
+continuam "na prateleira A". Depois alguém conta a prateleira A, não vê nada e lança **Ajuste** com localização A = 0.
+Até aqui o sistema gravava em silêncio: o estoque do material ia a 0 e a requisição ficava presa na entrega com
+*"Máximo: 0"* — e ninguém sabia que a contagem tinha batido numa caixa. Agora a contagem **continua gravando** (quem conta
+a prateleira diz o que viu), mas o sistema **avisa** na hora, diz para qual requisição o material estava separado e
+ensina os dois caminhos: se o material está na caixa, estornar o ajuste; se ele se perdeu, devolver à prateleira na
+requisição.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Contar 0 numa prateleira com material separado para uma requisição gravava sem aviso nenhum | Grava e mostra um aviso amarelo que não fecha sozinho, com a requisição e o caminho (**B704**) |
+| A requisição ficava presa em *"Máximo: 0"* e só a consulta **A48** a achava depois | Quem contou fica sabendo no mesmo instante |
+| — | O aviso compara com o **disponível** (o que a entrega deixa sair), então também pega o caso com material bloqueado ou reservado para outra requisição (**B705**) |
+| — | O aviso aparece também quando a contagem sobe mas continua abaixo da caixa, e manda estornar **o ajuste que baixou** (**B706**) |
+
+### As regras, com o cenário exato
+
+Preparação: material **Parafuso M6** (PC), estoque 0, prateleira **A-01**. **Paula** (sem perfil) pede 4 pela tela de
+requisições do Comercial; o **administrador** aprova (sem estoque: sem reserva). **Entrada** de 4 na **A-01**. **Ana**
+(almoxarife) separa 4.
+
+**1. A contagem que leva a caixa avisa.** Ana, em **Movimentações → Nova Movimentação**, tipo **Ajuste**, localização
+**A-01**, Novo Saldo **0**, motivo → aparece *"Movimentação registrada!"* e, embaixo, o aviso
+*"Ajuste gravado, mas o disponível de ⟨código⟩ ficou em 0 PC, abaixo dos 4 PC separados para a requisição ⟨número⟩: a entrega fica limitada ao disponível. Se o material está na caixa, a contagem não o incluiu — estorne o ajuste que baixou o estoque (perfil Administrador ou Gestor do almoxarifado); se ele se perdeu, devolva-o à prateleira na requisição."* O estoque do material vai a 0. Na requisição, **Entregar** 4 →
+*"⟨código⟩: não é possível entregar 4 PC. Máximo: 0 (pendente: 4, disponível: 0)"*.
+
+**2. O material estava na caixa: estornar.** Ana tenta estornar o ajuste no livro → *"Sem permissão para esta operação"*
+(o almoxarife não estorna). O administrador estorna (motivo "a contagem não viu a caixa") → o estoque volta a 4 → Ana
+entrega 4 → *Entregue*.
+
+**3. O material se perdeu: devolver à prateleira.** Repetir a preparação e o 1. Na requisição, Ana clica **Devolver à
+prateleira**, 4, motivo "perdido da caixa" → a requisição fica *Em Separação* sem nada na caixa. Uma nova contagem 0 na
+A-01 grava **sem** aviso. Paula cancela a requisição (nada foi entregue).
+
+**4. Contar acima da caixa não avisa.** Com a requisição separada (4 na caixa) e estoque 6 (A-01 com 4, **B-01** com 2),
+contar **0 na B-01** → total 4 = caixa → só *"Movimentação registrada!"*.
+
+**5. A contagem que sobe e continua abaixo também avisa.** Depois do 1 (A-01 = 0), contar **3** na A-01 → o aviso, com
+*"ficou em 3 PC"*. Estornar **este** ajuste é recusado (*"Não é possível estornar: Ajuste para 0 PC deixaria o disponível
+negativo (separada na caixa de requisição: 4, mínimo aceitável: 4 PC)…"*); estornar o ajuste do 1 (o que baixou) passa e o
+estoque fica 7.
+
+**6. O disponível, não o total.** Material com estoque 6 na A-01, 2 **bloqueados** e 4 separados para a requisição.
+Contar **4** na A-01 → o aviso com *"ficou em 2 PC"* — e a entrega diria *"Máximo: 2"*.
+
+**7. O que não avisa.** Entrada, Saída e Transferência não avisam; o **Ajuste sem localização** continua recusado quando
+reduz abaixo da caixa (como desde a Etapa 97); material **sem** requisição separada nunca avisa; material separado
+**com reserva** da requisição não avisa (a entrega já diz *"disponível está negativo (reservado além do físico)"* —
+**C209**).
+
+### O que esta etapa NÃO cobre
+
+1. **Recusar a contagem** — é aviso, não recusa (**B704**; a alternativa é sua, e o argumento a favor está lá).
+2. **O material separado com reserva** (**C209**) e as retenções sem caixa (o corte da Etapa 10).
+3. **O aviso fora da tela de Movimentações** — nada de e-mail ou notificação; as presas antigas continuam na **A48**.
+4. **A frase não diz quanto devolver**, e com duas requisições fica no singular (**B706**).
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0) reproduziu o caso (201, estoque 0, entrega presa em *"Máximo: 0"*), provou que o estorno do ajuste
+destrava (200, a entrega passa) e corrigiu dois documentos: a **B495** dizia que recusar "reabriria uma decisão da Etapa
+10 com teste que a prende" — o teste prende um corte de escopo, e o que se reabriria é a decisão do cliente de que a
+contagem redefine o saldo; e a tarefa escrita na Etapa 102 dizia que o ajuste com endereço não esperava a separação do
+mesmo material — **estava errado** desde a Etapa 97: todo ajuste espera.
+
+A **revisão do plano** achou uma trava e uma correção: a frase planejada mandava *"estorne este ajuste"* — num ajuste que
+subiu o total esse estorno é recusado (**B706**); e o aviso planejado comparava com o total, o que deixava a entrega presa
+sem aviso com material bloqueado ou reservado para outra requisição (**B705**). A suíte achou o que a revisão do plano
+não listou: um teste da Etapa 97 prendia o número exato de funções do módulo da caixa — reescrito.
+
+**Fragilidade de documento (**G87**):** o arquivo de instruções do projeto (`CLAUDE.md`, seção "Trava por material")
+ainda diz que *"saída avulsa, reserva manual e separação **não** pegam"* a trava — **desatualizado** desde as Etapas 95 e 97
+(medido: o motor inteiro, a reserva manual e a separação pegam). Não foi editado nesta etapa (é instrução sua).
+
+A **revisão adversarial do código** (dois revisores, executando) não achou defeito de regra nem de perfil: ADMIN e o
+almoxarife contam (o almoxarife recebe o aviso); Gestor, Consulta e quem não tem perfil recebem *"Sem permissão para esta
+operação"* na contagem; no estorno, só Administrador e Gestor; lote, prateleira inativa, material que permite saldo
+negativo, *Parcialmente Atendida*, *Pronta para Retirada* (a devolução a leva de volta a *Em Separação*), requisição
+excluída (sem aviso) e a corrida separar × contar (10 rodadas nas duas ordens, sempre coerente). O segundo revisor fez
+**33 sabotagens**: 29 derrubaram teste, 4 eram equivalentes ou inalcançáveis. Viraram correção (`86ec9f39`): a unidade
+vazia ou nula saía no aviso como *"0 null"* ou com espaço duplo; o teste de arredondamento não arredondava nada; a ordem
+"sucesso, depois aviso" não estava presa; três frases do manual ainda diziam que "o ajuste para menos" nunca leva a caixa.
+E achou um furo **anterior à etapa**: o **Gestor estorna o ajuste de material de cliente**, que só o Administrador pode
+ajustar (**C211**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 104 entregue (2026-10-15):** **a contagem por prateleira que bate numa caixa de requisição passa a
+  avisar.** O **Ajuste** com localização continua gravando o que foi contado, mas, quando o disponível do material fica
+  abaixo do que está separado sem reserva para uma requisição, a tela mostra um aviso com a requisição e os dois caminhos
+  — estornar o ajuste que baixou o estoque, ou devolver à prateleira (**C186** tratado). **O que é seu:** as decisões
+  **B704 a B706** (a **B704** — avisar em vez de recusar — é reversível e a alternativa é sua); os avisos **C209** e
+  **C210**, e o furo anterior **C211** (o Gestor estorna ajuste de material de cliente — candidata da 106); as limitações **(104)** em D e as verificações **(104)** em F. Sem consulta nova em A (a **A48** já acha as
+  presas). **Próxima: Etapa 106 (a 105 é da frente de Compras) — o estorno de ajuste de material de cliente exige a mesma
+  permissão do ajuste (**C211**) — ver a "próxima tarefa detalhada" no plano da Etapa 104.**
 
 - **Etapa 102 entregue (2026-10-15):** **material separado na caixa não se encerra, em status nenhum.** A *Parcialmente
   Atendida* com material separado e não entregue recusa o encerramento como a *Em Separação*; a tela mostra a explicação
@@ -22160,8 +22339,8 @@ então não acontece com dado novo; é a mesma régua da Etapa 101. (`403e18d2`)
   resolvido). **O que é seu:** as consultas **A53** e **A54** (opcionais); as decisões **B700 a B703** (a **B700** —
   recusar em vez de devolver sozinho — é reversível e a alternativa é sua; a numeração salta de B530 para B700 por causa
   da Etapa 103 de Compras, que usa a B6xx); os avisos **C207** e **C208**; as limitações **(102)** em D e as verificações
-  **(102)** em F. **Próxima: Etapa 104 (a 103 é da frente de Compras) — o ajuste de inventário com endereço que leva a
-  caixa (C186) — ver a "próxima tarefa detalhada" no plano da Etapa 102.**
+  **(102)** em F. ~~**Próxima: Etapa 104 (a 103 é da frente de Compras) — o ajuste de inventário com endereço que leva a
+  caixa (C186) — ver a "próxima tarefa detalhada" no plano da Etapa 102.**~~ *(Feita — Etapa 104.)*
 
 - **Etapa 101 entregue (2026-10-15):** **a requisição em separação sem nada na caixa tem saída, e material com série só
   se pede inteiro.** A *Em Separação* vazia **cancela** quando nada foi entregue (quem pediu, ou o administrador do

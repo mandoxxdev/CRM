@@ -263,6 +263,15 @@ telas operacionais que a Task 9 delimitou. Fica para quem fechar a feature decid
   devolução em si (tipo `DEVOLUCAO_CLIENTE`) entra, só o documento impresso não.
 - **A pendência do `aplicar_ajustes` da conferência de inventário** (ver a ressalva do checklist).
 
+## Furo conhecido — o estorno não confere o dono (C211, achado na Etapa 104)
+
+A decisão 7 restringe o **ajuste** de material de cliente a quem tem `ajustar_material_cliente` (Administrador) — no motor,
+`ownerRules.assertAjustePermitido`. O **estorno** do ajuste (`POST /api/almoxarifado/movimentacoes/:id/cancelar`, gate
+`ajustar_estoque`: Administrador e Gestor) não chama essa regra: medido na Etapa 104 (sonda com e sem localização), o
+Gestor recebe 403 ao ajustar e **200** ao estornar o ajuste do Administrador, e o saldo do cliente volta. Anterior à 104
+(a etapa não tocou o estorno). Candidata da Etapa 106 — ver a próxima tarefa no plano da Etapa 104. O status 🟢 desta
+feature fica, com este furo declarado.
+
 ## Dependências
 
 - 03 (motor — unificação feita) · 06 (aprovação assíncrona de ajuste, descartada nesta etapa) ·

@@ -1,20 +1,28 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-15 (Etapa 102) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-15 (Etapa 104) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101 e 102) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102 e 104) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 102 ENTREGUE · próxima do almoxarifado: Etapa 104 — a 103 é da frente de Compras)
+> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 104 ENTREGUE · próxima do almoxarifado: Etapa 106 — a 105 é da frente de Compras)
 >
-> **O desenvolvimento parou aqui: Etapa 102 fechada — 2026-10-15.** A **Etapa 102 (material na caixa não se encerra)**:
+> **O desenvolvimento parou aqui: Etapa 104 fechada — 2026-10-15.** A **Etapa 104 (a contagem por prateleira que bate
+> numa caixa de requisição passa a avisar)**: o **Ajuste** com localização em Movimentações continua gravando o que foi
+> contado, mas, quando o disponível do material fica abaixo do que está separado para uma requisição, aparece um aviso
+> amarelo que não fecha sozinho, com a requisição e os dois caminhos — estornar o ajuste que baixou o estoque (se o
+> material está na caixa) ou devolver à prateleira (se ele se perdeu). Antes a contagem gravava em silêncio e a
+> requisição ficava presa em *"Máximo: 0"*. **Próxima: Etapa 106** — o estorno de ajuste de material de cliente passa a exigir a
+> mesma permissão do ajuste (C211, achado na revisão desta etapa) — ver a próxima tarefa no plano da 104.
+>
+> **Etapa 102, 2026-10-15.** A **Etapa 102 (material na caixa não se encerra)**:
 > a requisição *Parcialmente Atendida* com material separado e ainda não entregue deixa de se encerrar — antes o
 > encerramento passava e as peças separadas deixavam de ser caixa sem nenhum registro. Agora a recusa é *"Esta requisição
 > tem material separado na caixa; entregue-o ou devolva-o à prateleira antes de encerrar."*, o botão **Encerrar
 > Requisição** some e, no lugar dele, aparece essa mesma frase. O caminho: entregar o que está separado ou **Devolver à
 > prateleira** e então encerrar. A mensagem de saldo das saídas avulsas com material na caixa deixa de sugerir "entregue o
-> que existe e encerre a requisição". **Próxima: Etapa 104** — o ajuste de inventário com endereço que leva a caixa
-> (C186) — ver a próxima tarefa no plano da 102.
+> que existe e encerre a requisição". ~~**Próxima: Etapa 104** — o ajuste de inventário com endereço que leva a caixa
+> (C186) — ver a próxima tarefa no plano da 102.~~ *(Feita — Etapa 104.)*
 >
 > **Etapa 101, 2026-10-15.** A **Etapa 101 (a requisição em separação sem nada
 > na caixa tem saída, e material com série só se pede inteiro)**: a requisição que ficou em *Em Separação* sem nada na
@@ -6393,6 +6401,48 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 104 — A contagem por prateleira que bate numa caixa de requisição passa a avisar (ENTREGUE — 2026-10-15)
+
+**O que mudou, em uma frase:** o **Ajuste** com localização que deixa o estoque abaixo do que está separado para uma
+requisição continua gravando, mas agora avisa na hora, com a requisição e o que fazer.
+
+**O problema que ela resolve.** Separar não move estoque: as peças que o almoxarife leva para a caixa da requisição
+continuam, no sistema, na prateleira de onde saíram. Quem conta essa prateleira não vê as peças e lança **Ajuste** = 0.
+O sistema gravava em silêncio, o estoque ia a 0 e a requisição ficava presa na entrega em *"Máximo: 0"*. Agora quem
+contou fica sabendo no mesmo instante.
+
+| Antes | Agora |
+|---|---|
+| A contagem gravava e ninguém era avisado | Grava e aparece um aviso amarelo que não fecha sozinho |
+| A requisição presa só aparecia depois, numa consulta de suporte | O aviso nomeia a requisição e os dois caminhos |
+
+**A regra agora.**
+- Vale só para o **Ajuste com localização** escolhida. O Ajuste sem localização continua recusando reduzir abaixo da
+  caixa (desde a Etapa 97).
+- Avisa quando, depois da contagem, o **disponível** do material (o que a entrega deixa sair) fica abaixo do que está
+  separado **sem reserva** para requisições em andamento — também quando a contagem sobe mas continua abaixo.
+- Os caminhos: o material está na caixa → **estorno** do ajuste que baixou o estoque (só Administrador ou Gestor — o
+  almoxarife recebe *"Sem permissão para esta operação"*); o material se perdeu → **Devolver à prateleira** na requisição.
+
+### Roteiro de teste manual
+
+Preparação: material **Parafuso M6** (PC) com 0 em estoque e uma prateleira **A-01**. Usuários: **Paula** (sem perfil,
+pede pelo Comercial), um **administrador**, **Ana** (almoxarife). Paula pede 4; o administrador aprova (sem estoque: sem
+reserva). Lance uma **Entrada** de 4 na **A-01**. Ana separa 4.
+
+1. **O aviso.** Ana, em **Movimentações → Nova Movimentação**: Parafuso M6, tipo **Ajuste**, localização **A-01**, Novo
+   Saldo **0**, um motivo → *"Movimentação registrada!"* e o aviso *"Ajuste gravado, mas o disponível de ⟨código⟩ ficou em 0 PC, abaixo dos 4 PC separados para a requisição ⟨número⟩: a entrega fica limitada ao disponível. Se o material está na caixa, a contagem não o incluiu — estorne o ajuste que baixou o estoque (perfil Administrador ou Gestor do almoxarifado); se ele se perdeu, devolva-o à prateleira na requisição."* O aviso fica até ser fechado.
+2. **A requisição presa.** Na requisição, **Entregar** 4 → *"… Máximo: 0 (pendente: 4, disponível: 0)"*.
+3. **O estorno.** Ana tenta estornar o ajuste no livro → *"Sem permissão para esta operação"*. O administrador estorna →
+   o estoque volta a 4 → Ana entrega 4 → *Entregue*.
+4. **A devolução.** Repita a preparação e o passo 1. Ana abre a requisição, **Devolver à prateleira** 4, motivo "perdido
+   da caixa" → conte de novo 0 na A-01 → só *"Movimentação registrada!"*, sem aviso. Paula cancela a requisição.
+5. **Sem aviso quando cabe.** Com 4 separados e estoque 6 (4 na A-01, 2 numa **B-01**), conte 0 na B-01 → sem aviso.
+
+**O que esta etapa NÃO cobre.** A contagem não é recusada (é aviso; decisão **B704** — a alternativa é sua); o material
+separado **com reserva** da requisição não avisa (a entrega já explica o disponível negativo — **C209**); o aviso aparece
+só na tela de Movimentações (nada de e-mail); a frase não diz quanto devolver.
+
 ## Etapa 102 — Material na caixa não se encerra (ENTREGUE — 2026-10-15)
 
 **O que mudou, em uma frase:** a requisição *Parcialmente Atendida* que ainda tem material separado e não entregue
@@ -6933,7 +6983,7 @@ Rode a consulta de novo: a requisição tratada sai da lista; com todas tratadas
 ### O que esta etapa NÃO cobre
 
 - **Ajuste com endereço de ida** (o ajuste por localização) ainda pode levar a caixa (**B495**/**C186**) — mudar isso
-  reabre uma regra da Etapa 10.
+  reabre uma regra da Etapa 10. *(Desde a Etapa 104 continua gravando, mas avisa — ver a seção da Etapa 104.)*
 - **Não há gesto "devolver da caixa à prateleira"** (**B497**) — material da caixa que não vai ser entregue só sai por
   entrega parcial + encerrar, ou exclusão. É a **Etapa 98**. *(Pago na Etapa 98: **Devolver à prateleira** no item;
   depois a Perda passa.)*

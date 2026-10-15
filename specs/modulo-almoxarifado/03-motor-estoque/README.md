@@ -737,6 +737,10 @@ revisão).
 **Fica de fora (declarado, com o porquê):**
 - **O `AJUSTE` com localização de ida** (B495, C186) — o total novo só existe depois do `syncMaterialTotals` (D1/D7 da
   Etapa 10) e `ajusteRetencao.api.test.js` prende que a contagem por endereço passa; o **estorno** dele entra.
+  *(Etapa 104, `660ae114`: continua sem recusa, mas o motor devolve `aviso_caixa` quando o disponível depois do ajuste
+  ficou abaixo da caixa sem reserva — `caixaSql.avisoCaixaDoAjuste`, lido depois do livro, dentro da trava, em
+  `try/catch` (B704–B706). A frase "prende que a contagem passa" é verdade; o **porquê** que o teste prende é um corte de
+  escopo (D7 da Etapa 10), não "a contagem é a verdade física" — essa é a decisão do cliente do round 3 da Etapa 6.)*
 - **O gesto "devolver da caixa à prateleira"** (B497) — rota, estado e permissão novos; candidato da Etapa 98. O caso
   legítimo (material perdido na caixa) sai sem gesto novo: ~~entregar o que existe e encerrar~~ *(superado na Etapa 102, B701: encerrar com material na caixa passou a ser recusado — devolva à prateleira e encerre)*, ou o administrador excluir.
 - **A tela mostrar a caixa no disponível** (C187) — o 400 é que explica.

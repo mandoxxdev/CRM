@@ -213,7 +213,9 @@ react-scripts build` EXIT 0.
   do servidor). Em paralelo: a revisão do plano × a escrita da T1 (o revisor rodou testes e a suíte que corria ao mesmo
   tempo deu **EADDRINUSE** em 6 arquivos — retrabalho de uma rodada da suíte); os dois revisores da Fase 5 × a
   documentação e o jest do cliente.
-- **Defeito que escapou:** *(preencher na Etapa 104.)* Da Etapa 101 para cá: nenhum defeito da 101 apareceu nesta etapa.
+- **Defeito que escapou:** **nenhum** no código da 102 (medido na Etapa 104: a 104 não tocou encerramento nem sufixo, e a
+  suíte da 102 seguiu verde). **Um erro de documento:** a próxima tarefa abaixo dizia que o ajuste com endereço não pega a
+  trava por material — corrigido à vista lá. Da Etapa 101 para cá: nenhum defeito da 101 apareceu nesta etapa.
 
 
 ## O que fica de fora (declarado)
@@ -259,8 +261,9 @@ ganha `aviso_caixa` e a tela mostra a requisição que ficou com caixa sem físi
 (b) não reabre a B495 e não esconde a perda; a (a) reabre e exige mudar o teste que a prende. Escolher pela medição do
 item 2 — se o teste prende a contagem como verdade física, a (b) é a reversível.
 
-**Pontos de atenção:** o ajuste com endereço não pega a trava por material hoje (CLAUDE.md: saída avulsa, reserva manual e
-separação não pegam — declarado D (91)); se a (a) for a escolhida, a projeção lê a caixa fora da trava (a separação
+**Pontos de atenção:** ~~o ajuste com endereço não pega a trava por material hoje (CLAUDE.md: saída avulsa, reserva manual e
+separação não pegam — declarado D (91));~~ *(**Estava errado** — medido na Fase 0 da Etapa 104: desde a Etapa 97 (B494)
+`registrarMovimentacao` envolve o motor inteiro em `naTravaDoMaterial`; todo ajuste pela v2 roda sob a trava do material.)* se a (a) for a escolhida, a projeção lê a caixa fora da trava (a separação
 concorrente pode crescer a caixa depois da leitura) — declarar ou pegar a trava (`comLockDosMateriais`). A régua da caixa é
 a da B524 (`Q.qtd`), a do livre é `caixaSql.livreDeCaixaSql`.
 

@@ -127,9 +127,11 @@ const S = (c, un, lista) => ` — ${c} ${un} estão separados para ${lista}${S_F
   }
   const exigeModulo = () => { if (caixaSql.erro) throw new Error(`caixaSql nao carrega: ${caixaSql.erro}`); };
 
-  await test('[97 RN-00] o modulo exporta exatamente caixaSemReservaSql, livreDeCaixaSql, lerCaixa, sufixoCaixa', async () => {
+  // Etapa 104 (B704): o modulo ganhou descreverRequisicoes (a lista do sufixo, extraida) e avisoCaixaDoAjuste (o aviso do
+  // ajuste com endereco) — funcoes puras, sem require novo; o teste do ciclo abaixo segue igual, agora com 6 exports.
+  await test('[97 RN-00] o modulo exporta exatamente caixaSemReservaSql, livreDeCaixaSql, lerCaixa, sufixoCaixa (e, desde a 104, descreverRequisicoes, avisoCaixaDoAjuste)', async () => {
     exigeModulo();
-    assert.deepStrictEqual(Object.keys(caixaSql).sort(), ['caixaSemReservaSql', 'lerCaixa', 'livreDeCaixaSql', 'sufixoCaixa']);
+    assert.deepStrictEqual(Object.keys(caixaSql).sort(), ['avisoCaixaDoAjuste', 'caixaSemReservaSql', 'descreverRequisicoes', 'lerCaixa', 'livreDeCaixaSql', 'sufixoCaixa']);
   });
 
   await test('[97 RN-00] requisitionService.caixaSemReservaSql e o MESMO do caixaSql (movido, re-exportado)', async () => {
@@ -147,7 +149,7 @@ const S = (c, un, lista) => ` — ${c} ${un} estão separados para ${lista}${S_F
       const r = spawnSync(process.execPath, ['--trace-warnings', '-e', codigo], { cwd: server, encoding: 'utf8' });
       assert.strictEqual(r.status, 0, `${ordem.join(' -> ')}: saiu ${r.status} ${r.stderr}`);
       assert.ok(!/circular|non-existent property/i.test(r.stderr), `${ordem.join(' -> ')}: aviso de ciclo: ${r.stderr}`);
-      assert.strictEqual(r.stdout.trim().split('\n').pop(), '4', `${ordem.join(' -> ')}: exports parciais: ${r.stdout}`);
+      assert.strictEqual(r.stdout.trim().split('\n').pop(), '6', `${ordem.join(' -> ')}: exports parciais: ${r.stdout}`);
     }
   });
 

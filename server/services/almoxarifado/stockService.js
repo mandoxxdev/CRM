@@ -1712,6 +1712,8 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
   //   (local, no catch do claim de série, ou no claim de lote) — o catch amplo lê o estado destas
   //   variáveis e não repete uma compensação que já aconteceu.
   let entradaCreditoAplicado = null;
+  // Etapa 104 (C186, B704): o ajuste COM endereco grava a contagem e, no fim, avisa se o total ficou abaixo da caixa.
+  let ajusteComEndereco = false;
   let saldoLinhasSaidaParaReverter = [];
   let saidaFisicoAplicado = false;
   // Reverte SÓ o físico agregado (quantidade_atual [+ reserva]) desta saída — nunca a(s) linha(s)
@@ -2029,6 +2031,7 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
       await syncMaterialTotals(db, material_id);
       const atual = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [material_id]);
       saldoPosterior = atual.quantidade_atual;
+      ajusteComEndereco = true;
     } else if (tiposAjuste.includes(tipo)) { // AJUSTE sem localização — define valor absoluto (last-writer-wins é aceitável para ajuste)
       // Etapa 62 (RN-01): as series ANTES do SET do fisico — uma recusa aqui nao deixa o fisico
       // mudado; e se algo falhar depois, o catch amplo desfaz as series E restaura o fisico.
@@ -2376,7 +2379,24 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     console.warn('[almoxarifado-notificacoes] Falha ao enfileirar pos-movimentacao:', notifErr.message);
   }
 
-  return { id: result.lastID, saldo_anterior: saldoAnteriorReal, saldo_posterior: saldoPosterior };
+  // Etapa 104 (C186, B704; RN-02/RN-04/RN-05): o ajuste com endereco que deixou o DISPONIVEL abaixo da caixa sem reserva
+  // AVISA — a contagem continua gravando (opcao (b); a (a), recusar, descartada). A caixa e lida DEPOIS do livro e dentro
+  // da trava do material (`registrarMovimentacao` envolve este corpo; a separacao e a entrega do material esperam), e a
+  // leitura que falha nunca derruba o ajuste ja gravado: sai sem o aviso. A chave so vem quando ha aviso (aditivo).
+  let avisoCaixa = null;
+  if (ajusteComEndereco) {
+    try {
+      const disp = await dbGet(db, `SELECT ${disponivelSql()} AS d FROM materiais_almoxarifado WHERE id = ?`, [material_id]);
+      avisoCaixa = caixaSql.avisoCaixaDoAjuste(await caixaSql.lerCaixa(db, material_id), disp && disp.d, material);
+    } catch (avisoErr) {
+      console.warn('[almoxarifado-caixa] Falha ao ler a caixa para o aviso do ajuste:', avisoErr.message);
+    }
+  }
+
+  return {
+    id: result.lastID, saldo_anterior: saldoAnteriorReal, saldo_posterior: saldoPosterior,
+    ...(avisoCaixa ? { aviso_caixa: avisoCaixa } : {}),
+  };
 }
 
 // Decisão (Etapa 2, Task 2): cancelarMovimentacao NÃO chama validarLocalizacaoParaMovimento.
