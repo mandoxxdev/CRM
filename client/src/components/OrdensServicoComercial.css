@@ -34,62 +34,6 @@
   font-family: inherit;
 }
 
-/* Tabs principais */
-.os-comercial-tabs {
-  display: flex;
-  gap: 0;
-  margin-bottom: var(--spacing-xl, 32px);
-  border-bottom: 2px solid var(--gmp-border, #e2e8f0);
-  padding-bottom: 0;
-}
-
-.os-tab {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 16px 32px;
-  background: transparent;
-  border: none;
-  border-bottom: 3px solid transparent;
-  color: var(--gmp-text-light, #64748b);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  position: relative;
-  bottom: -2px;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-  font-family: inherit;
-}
-
-.os-tab:hover {
-  color: var(--gmp-primary, #0066cc);
-  background: var(--gmp-bg, #f8fafc);
-}
-
-.os-tab.active {
-  color: var(--gmp-primary, #0066cc);
-  border-bottom-color: var(--gmp-primary, #0066cc);
-  font-weight: 700;
-}
-
-.os-tab svg {
-  font-size: 16px;
-}
-
-.tab-badge {
-  background: var(--gmp-primary, #0066cc);
-  color: white;
-  border-radius: 12px;
-  padding: 3px 10px;
-  font-size: 11px;
-  font-weight: 700;
-  margin-left: 8px;
-  min-width: 24px;
-  text-align: center;
-}
-
 /* Estatísticas */
 .os-stats-grid {
   display: grid;

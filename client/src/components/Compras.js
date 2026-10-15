@@ -4,7 +4,7 @@ import api from '../services/api';
 import { toast } from 'react-toastify';
 import {
   FiPlus, FiSearch, FiEdit, FiTrash2, FiDownload,
-  FiShoppingCart, FiPackage, FiFileText, FiDollarSign,
+  FiShoppingCart, FiDollarSign,
   FiFilter, FiCalendar, FiTrendingUp, FiTrendingDown, FiPrinter
 } from 'react-icons/fi';
 import { exportToExcel } from '../utils/exportExcel';
@@ -62,12 +62,6 @@ const Compras = () => {
   // sem essa opcao, exibiria "Todos os status". Derivado no render — sem efeito, sem setState —
   // e usado NOS DOIS lugares: no `value` do select e nos `params.status` de `loadData`.
   const statusValido = (OPCOES_STATUS[activeSection] || []).some(([v]) => v === filterStatus) ? filterStatus : '';
-
-  const tabs = [
-    { id: 'fornecedores', label: 'Fornecedores', icon: FiShoppingCart },
-    { id: 'pedidos', label: 'Pedidos de Compra', icon: FiPackage },
-    { id: 'cotacoes', label: 'Cotações', icon: FiFileText },
-  ];
 
   useEffect(() => {
     // Redirecionar para fornecedores se estiver na raiz

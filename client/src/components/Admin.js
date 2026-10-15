@@ -5,8 +5,11 @@ import { isSystemAdmin } from '../utils/systemPermissions';
 import Usuarios from './Usuarios';
 import Permissoes from './Permissoes';
 import Logs from './Logs';
+import Tabs from './ui/Tabs';
 import { FiUsers, FiShield, FiFileText } from 'react-icons/fi';
 import './Admin.css';
+
+const PAINEL_ID = 'ui-tabpanel-admin';
 
 const Admin = () => {
   const [activeTab, setActiveTab] = useState('usuarios');
@@ -56,24 +59,17 @@ const Admin = () => {
         <p>Gerencie usuários e permissões do sistema</p>
       </div>
 
-      <div className="admin-tabs">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              className={`admin-tab ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              <Icon />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
+      {/* Etapa 107 (G8, RN-107.11): a barra e o `ui/Tabs` (antes `.admin-tabs` com CSS proprio). Mesmo
+          array, mesmo estado local, sem URL — como antes. */}
+      <Tabs
+        abas={tabs}
+        ativa={activeTab}
+        onChange={setActiveTab}
+        ariaLabel="Administração"
+        painelId={PAINEL_ID}
+      />
 
-      <div className="admin-content">
+      <div className="admin-content" role="tabpanel" id={PAINEL_ID} aria-labelledby={`ui-tab-${activeTab}`}>
         {renderActiveTab()}
       </div>
     </div>

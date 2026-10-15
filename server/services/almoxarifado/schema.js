@@ -517,11 +517,10 @@ async function migrateCriarAlmoxarifadoGeral(db) {
     await dbRun(db, 'UPDATE localizacoes_almoxarifado SET almoxarifado_id = ? WHERE almoxarifado_id IS NULL', [geral.id]);
   }
 
-  // OR IGNORE: no boot há duas chamadas de initSchema em paralelo (routes/almoxarifado.js:56
-  // fire-and-forget + extended.js runInitSchemaWithRetry) que podem interlear num DB fresco —
-  // ambas passam pelo `if (applied) return;` acima antes de qualquer uma commitar a marca, então
-  // a perdedora bateria numa violação de PK aqui. Com OR IGNORE ela é auto-curativa e silenciosa
-  // (a vencedora já persistiu a marca; a corrida não perde nem duplica o vínculo/ALM-GERAL).
+  // OR IGNORE: escrito quando o boot rodava duas execucoes de initSchema intercaladas (routes/almoxarifado.js
+  // + extended.js runInitSchemaWithRetry) e as duas passavam pelo `if (applied) return;` acima. Desde a
+  // Etapa 107 (G16) o initSchema e single-flight por conexao e isso nao acontece mais; o OR IGNORE fica
+  // como defesa barata para quem chamar a migracao fora do initSchema.
   await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
     [MIGRATION_CRIAR_ALMOXARIFADO_GERAL]);
   console.log('✅ Migração criar_almoxarifado_geral aplicada (ALM-GERAL criado e localizações vinculadas)');
@@ -876,7 +875,39 @@ async function migrateSaldoLoteId(db) {
   }
 }
 
-async function initSchema(db) {
+// Etapa 107 (G16, RN-107.01..03): UMA execucao por conexao ao mesmo tempo. No boot o registrador
+// (routes/almoxarifado.js) dispara initSchema sem await e a extended (runInitSchemaWithRetry) dispara
+// outra logo depois; as duas intercalavam comando a comando na mesma conexao, e todo seed abaixo e
+// "conta e, se for zero, insere" — as duas viam zero. Onde ha UNIQUE (familias.codigo, setores.nome) a
+// perdedora caia e o retry acertava; em categorias (sem UNIQUE) as 27 entravam em dobro e o
+// idx_categorias_almox_nome nunca mais era criado (6 de 14 boots em pasta nova, medido na 107).
+// Quem chega com uma execucao em voo recebe A MESMA promise; terminada (bem ou mal), a vaga se abre e a
+// proxima chamada roda inteira de novo — a falha NAO fica guardada, entao o retry da extended continua
+// valendo. Descartado: tirar uma das duas chamadas (perde a ordem ou o retry, e o proximo chamador
+// reabre a corrida) e INSERT OR IGNORE nos seeds (categorias nao tem UNIQUE: continuaria em dobro).
+// No harness (createTestApp) o registrador e a extended chamam em fundo depois do `await initSchema`; o
+// harness espera essa execucao assentar (initSchemaEmVoo) antes de devolver o app — sem isso, um teste que
+// mexesse no schema logo no comeco e chamasse `await initSchema(db)` pegaria carona nela e a migracao nao seria
+// reaplicada (revisoes das Fases 2 e 5 da 107).
+const initSchemaEmVooPorDb = new WeakMap();
+
+function initSchema(db) {
+  const emVoo = initSchemaEmVooPorDb.get(db);
+  if (emVoo) return emVoo;
+  const execucao = initSchemaUmaExecucao(db).finally(() => {
+    if (initSchemaEmVooPorDb.get(db) === execucao) initSchemaEmVooPorDb.delete(db);
+  });
+  initSchemaEmVooPorDb.set(db, execucao);
+  return execucao;
+}
+
+// A execucao em voo para esta conexao, ou null. Existe para o harness (createTestApp) esperar a execucao de
+// fundo do registrador/extended antes de devolver o app (Fase 5 da 107) — producao nao precisa.
+function initSchemaEmVoo(db) {
+  return initSchemaEmVooPorDb.get(db) || null;
+}
+
+async function initSchemaUmaExecucao(db) {
   await ensureBaseTables(db);
 
   // ── Categorias ──
@@ -2770,6 +2801,7 @@ async function initSchema(db) {
 
 module.exports = {
   initSchema,
+  initSchemaEmVoo,
   safeAlter,
   // Exportada para o cenario (12) da Etapa 44 poder rodar a migracao DEPOIS de criar a inspecao,
   // que e o unico jeito de simular "a inspecao ja existia no dia do deploy" num banco de teste.

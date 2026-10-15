@@ -166,13 +166,24 @@ test('?tab= invalido cai em Tipos de Material', async () => {
   expect(api.get).toHaveBeenCalledWith('/almoxarifado/tipos-material');
 });
 
+// Etapa 107 (G8, RN-107.14): a barra deixou de ter estilo inline e passou a ser o `ui/Tabs`. Este
+// cenario conferia `barra.style.overflowX`; agora confere que a barra E o `.ui-tabs` e que a folha do
+// Tabs da a ela a rolagem lateral (o jsdom nao aplica CSS — por isso a regra e lida do arquivo).
+const fs = require('fs');
+const path = require('path');
+const blocoUiTabs = () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'ui', 'Tabs.css'), 'utf8');
+  return css.match(/\n\.ui-tabs \{([^}]*)\}/)[1];
+};
+
 test('a barra interna rola de lado em vez de quebrar linha ou sumir atras do overflow-x do mobile', async () => {
   await render({ embedded: true });
 
   const barra = barraDeAbas();
-  expect(barra.style.overflowX).toBe('auto');
-  expect(barra.style.flexWrap).toBe('nowrap');
-  expect(barra.style.whiteSpace).toBe('nowrap');
+  expect(barra.classList.contains('ui-tabs')).toBe(true);
+  expect(blocoUiTabs()).toMatch(/overflow-x:\s*auto/);
+  expect(blocoUiTabs()).toMatch(/flex-wrap:\s*nowrap/);
+  expect(blocoUiTabs()).not.toMatch(/flex-wrap:\s*wrap/);
   // Nos dois modos — a rota antiga tem o mesmo defeito no celular.
   await act(() => root.unmount());
   container.remove();
@@ -180,5 +191,5 @@ test('a barra interna rola de lado em vez de quebrar linha ou sumir atras do ove
   document.body.appendChild(container);
   root = createRoot(container);
   await render();
-  expect(barraDeAbas().style.overflowX).toBe('auto');
+  expect(barraDeAbas().classList.contains('ui-tabs')).toBe(true);
 });

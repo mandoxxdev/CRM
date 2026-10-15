@@ -4458,8 +4458,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   // ── Rotas estendidas v3 (serviços, reservas, recebimentos, relatórios) ──
   // Registra a extended após um roundtrip no sqlite (garante apenas a ordem de
-  // registro; o initSchema disparado acima pode ainda estar em andamento — é
-  // idempotente e a extended roda runInitSchemaWithRetry por conta própria).
+  // registro; o initSchema disparado acima pode ainda estar em andamento. A extended chama
+  // runInitSchemaWithRetry por conta própria: desde a Etapa 107 (G16) essa chamada pega carona na
+  // execução em voo (initSchema é single-flight por conexão) em vez de rodar outra intercalada —
+  // eram as duas juntas que semeavam as categorias em dobro no primeiro boot).
   db.run('SELECT 1', [], () => {
     // `uploadsAlmoxDir` (declarado acima, :46) e passado adiante para a extended: o multer do
     // comprovante de sucateamento (Task 7) mora la, e precisa do MESMO diretorio fisico que
