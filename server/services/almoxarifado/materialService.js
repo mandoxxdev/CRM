@@ -28,10 +28,26 @@ const erro = (msg, status = 400) => Object.assign(new Error(msg), { status });
 
 function bool01(v) { return v ? 1 : 0; }
 
+/**
+ * Etapa 100 (G10, RN-100.05) — a literal da recusa de SUBFAMILIA no lugar da familia. O material
+ * grava `familia_id` = raiz e `subfamilia_id` = filha (Etapa 37); com a sub no `familia_id` a sub
+ * conta e lista, a raiz nao, e o filtro de Materiais nao acha o item. Nenhuma tela manda isso — a
+ * porta e a API (e os atalhos de Sobras/Remessas, que copiam a familia de um material de origem
+ * LEGADO gravado assim).
+ */
+const FAMILIA_E_SUBFAMILIA = 'A família escolhida é uma subfamília — escolha a família principal e use a subfamília no campo Subfamília';
+
+/**
+ * So e chamada com valor NOVO de `familia_id`: no `createMaterial` e no `PUT` quando a familia MUDA
+ * (`routes/almoxarifado.js`). Material LEGADO ja gravado com `familia_id = <sub>` continua editavel
+ * enquanto o PUT omite ou repete o valor (B47) — a recusa nao alcanca o que ja esta no banco.
+ * Ordem: nao existe -> subfamilia -> inativa.
+ */
 async function validateFamiliaAtiva(db, familiaId) {
   if (!familiaId) return null;
-  const row = await dbGet(db, 'SELECT id, ativo FROM familias_material_almoxarifado WHERE id = ?', [familiaId]);
+  const row = await dbGet(db, 'SELECT id, ativo, parent_id FROM familias_material_almoxarifado WHERE id = ?', [familiaId]);
   if (!row) throw new Error('Família não encontrada');
+  if (row.parent_id !== null && row.parent_id !== undefined) throw new Error(FAMILIA_E_SUBFAMILIA);
   if (row.ativo !== 1) throw new Error('Família inativa — não é possível vincular novos itens');
   return row;
 }
@@ -290,6 +306,7 @@ async function createMaterial(db, user, data) {
 }
 
 module.exports = {
+  FAMILIA_E_SUBFAMILIA,
   bool01, validateFamiliaAtiva, validateSubfamilia, resolveLocalizacaoFromFk, validarLocalizacaoPadrao,
   proximoCodigo, createMaterial, TENTATIVAS_CODIGO_AUTO,
 };

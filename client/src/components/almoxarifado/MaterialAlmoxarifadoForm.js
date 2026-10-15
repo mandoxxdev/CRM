@@ -62,6 +62,9 @@ const MaterialAlmoxarifadoForm = () => {
   // abaixo. Localização continua opcional, então este campo também é.
   const [almoxSelecionado, setAlmoxSelecionado] = useState('');
   const [familias, setFamilias] = useState([]);
+  // Etapa 100 (G10, RN-100.06b): a família GRAVADA no material, como veio do servidor. É ela — e
+  // não `form.familia_id`, que muda quando o usuário escolhe — que decide se o select destrava.
+  const [familiaGravadaId, setFamiliaGravadaId] = useState('');
   const [loadingFamilias, setLoadingFamilias] = useState(true);
   const [loadingLocalizacoes, setLoadingLocalizacoes] = useState(true);
   const [localizacaoInativa, setLocalizacaoInativa] = useState(null);
@@ -309,6 +312,7 @@ const MaterialAlmoxarifadoForm = () => {
     try {
       const res = await api.get(`/almoxarifado/materiais/${id}`);
       const m = res.data;
+      setFamiliaGravadaId(m.familia_id ? String(m.familia_id) : '');
       setForm({
         codigo: m.codigo || '',
         nome: m.nome || '',
@@ -405,6 +409,16 @@ const MaterialAlmoxarifadoForm = () => {
     if (!isEdit || !form.subfamilia_id || familias.length === 0) return null;
     return subfamiliasDisponiveis.some(s => String(s.id) === String(form.subfamilia_id)) ? null : form.subfamilia_id;
   }, [isEdit, form.subfamilia_id, familias.length, subfamiliasDisponiveis]);
+
+  // Etapa 100 (G10, RN-100.06b): material LEGADO gravado pela API com a subfamília no `familia_id`.
+  // O servidor passou a recusar subfamília como família em valor NOVO, mas o legado continua
+  // editável (o PUT só revalida quando a família muda). Sem destravar o select, ninguém o
+  // corrigiria pela tela — o select fica travado na edição. Só a sub ATIVA é reconhecida (a lista
+  // traz só ativas); legado com sub inativa continua travado, declarado.
+  const familiaLegadaSub = useMemo(() => {
+    if (!isEdit || !familiaGravadaId) return false;
+    return familias.some(f => String(f.id) === familiaGravadaId && f.parent_id !== null && f.parent_id !== undefined);
+  }, [isEdit, familiaGravadaId, familias]);
 
   const handleFamiliaChange = (familiaId) => {
     setForm(f => ({ ...f, familia_id: familiaId, subfamilia_id: '' }));
@@ -632,7 +646,7 @@ const MaterialAlmoxarifadoForm = () => {
                       value={form.familia_id}
                       onChange={e => handleFamiliaChange(e.target.value)}
                       required={!isEdit}
-                      disabled={isEdit && !!form.familia_id}
+                      disabled={isEdit && !!form.familia_id && !familiaLegadaSub}
                     >
                       <option value="">Selecione a família...</option>
                       {familiasRaiz.map(fam => (
@@ -642,9 +656,14 @@ const MaterialAlmoxarifadoForm = () => {
                       ))}
                     </select>
                   )}
-                  {isEdit && form.familia_id && (
+                  {isEdit && form.familia_id && !familiaLegadaSub && (
                     <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem' }}>
                       A família não pode ser alterada após o cadastro.
+                    </small>
+                  )}
+                  {familiaLegadaSub && (
+                    <small data-testid="aviso-familia-legada" style={{ color: 'var(--gmp-warning, #b45309)', fontSize: '0.75rem' }}>
+                      Este material está gravado com uma subfamília no lugar da família — escolha a família principal e depois a subfamília.
                     </small>
                   )}
                 </div>

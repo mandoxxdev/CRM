@@ -330,6 +330,24 @@ describe('SobrasAlmoxarifado — modal de gerar retalho', () => {
       proprietario_cliente_id: null, categoria: 'Chapas',
     }));
   });
+
+  test('Etapa 100 (RN-100.06c): origem LEGADA com a subfamília no familia_id cria o retalho com a principal + a sub', async () => {
+    const getPadrao = api.get.getMockImplementation();
+    api.get.mockImplementation((url, opcoes) => (url === '/almoxarifado/familias'
+      ? Promise.resolve({ data: [{ id: 4, parent_id: null, ativo: 1 }, { id: 9, parent_id: 4, ativo: 1 }] })
+      : getPadrao(url, opcoes)));
+    await renderizar();
+    await clicar(botao('Gerar retalho'));
+    preencher(campo('Material de origem'), '101');
+    await esperarEfeitos();
+    await clicar(botao('Criar material do retalho'));
+    preencher(campo('Nome do novo material'), 'Retalho novo');
+    await clicar(botao('Cadastrar e usar'));
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/proximo-codigo?familia_id=4');
+    expect(api.post).toHaveBeenCalledWith('/almoxarifado/materiais', expect.objectContaining({
+      familia_id: 4, subfamilia_id: 9,
+    }));
+  });
 });
 
 // Etapa 9, Task 9 — a aba Sucateamentos e a etiqueta de retalho com QR (paga a pendencia da 6c).

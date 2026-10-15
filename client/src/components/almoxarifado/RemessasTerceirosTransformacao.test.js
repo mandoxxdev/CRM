@@ -232,6 +232,25 @@ test('o atalho de criar material resultante herda dono e familia da chapa, e usa
   }));
 });
 
+test('Etapa 100 (RN-100.06c): chapa LEGADA com a subfamilia no familia_id cria o resultado com a principal + a sub', async () => {
+  const getPadrao = api.get.getMockImplementation();
+  api.get.mockImplementation((url, opcoes) => (url === '/almoxarifado/familias'
+    ? Promise.resolve({ data: [{ id: 2, parent_id: null, ativo: 1 }, { id: 3, parent_id: 2, ativo: 1 }] })
+    : getPadrao(url, opcoes)));
+  api.post.mockResolvedValue({ data: { id: 99, codigo: 'PC-011', nome: 'Peca nova', unidade: 'UN', familia_id: 2, proprietario_cliente_id: null } });
+  await abrirTransformacao();
+  await digitar(campo('Item transformado'), '101');
+  await clicar(porTexto('Criar material resultante'));
+  await digitar(campo('Nome do novo material'), 'Peca nova');
+  await digitar(campo('Unidade do novo material'), 'UN');
+  await clicar(porTexto('Cadastrar e usar'));
+
+  expect(api.get).toHaveBeenCalledWith('/almoxarifado/proximo-codigo?familia_id=2');
+  expect(api.post).toHaveBeenCalledWith('/almoxarifado/materiais', expect.objectContaining({
+    familia_id: 2, subfamilia_id: 3,
+  }));
+});
+
 test('o atalho de criar material e barrado por criar_material, NAO por remessar_terceiro', async () => {
   // Os gates sao DIFERENTES (permissions.js): remessar_terceiro e [ADMINISTRADOR, ALMOXARIFE];
   // criar_material e [ADMINISTRADOR, ALMOXARIFE, ENGENHARIA]. Barrar o atalho pelo gate da

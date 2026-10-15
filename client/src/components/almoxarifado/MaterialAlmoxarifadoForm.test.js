@@ -825,3 +825,48 @@ describe('MaterialAlmoxarifadoForm — Etapa 86: falha da foto mostra a mensagem
     expect(toast.error).toHaveBeenCalledWith('Foto não pôde ser salva, mas o material foi criado: Arquivo grande demais (máximo 10 MB)');
   });
 });
+
+/**
+ * Etapa 100 (G10, RN-100.06b) — material LEGADO gravado pela API com a subfamília no `familia_id`.
+ * O servidor passou a recusar subfamília como família em valor NOVO; o legado continua editável,
+ * mas o select de família ficava travado na edição e ninguém o corrigia pela tela.
+ */
+describe('MaterialAlmoxarifadoForm — RN-100.06b: legado com subfamília no lugar da família', () => {
+  const selectFamilia = () => campoPorRotulo(/^Família/).querySelector('select');
+  const LEGADO = { ...MATERIAL_DO_CLIENTE, id: 82, familia_id: 6, subfamilia_id: null };
+  const mockCom = (material) => {
+    api.get.mockImplementation((url) => {
+      if (url === '/clientes') return Promise.resolve({ data: [CLIENTE_UM, CLIENTE_DOIS] });
+      if (url === '/almoxarifado/familias') return Promise.resolve({ data: FAMILIAS });
+      if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
+      if (url === `/almoxarifado/materiais/${material.id}`) return Promise.resolve({ data: material });
+      return Promise.resolve({ data: [] });
+    });
+  };
+
+  test('(a) o select destrava, a nota orienta, e escolher a raiz + a sub manda familia_id 5 e subfamilia_id 6', async () => {
+    mockCom(LEGADO);
+    await renderizarEdicao(82);
+    expect(selectFamilia().disabled).toBe(false);
+    expect(container.querySelector('[data-testid="aviso-familia-legada"]').textContent)
+      .toBe('Este material está gravado com uma subfamília no lugar da família — escolha a família principal e depois a subfamília.');
+    expect(container.textContent).not.toContain('A família não pode ser alterada após o cadastro.');
+    preencher(selectFamilia(), '5');
+    preencher(selectSubfamilia(), '6');
+    // Escolhida a raiz, o select NÃO volta a travar no meio da correção.
+    expect(selectFamilia().disabled).toBe(false);
+    await submeter();
+    expect(api.put).toHaveBeenCalled();
+    const payload = api.put.mock.calls[0][1];
+    expect(payload.familia_id).toBe(5);
+    expect(payload.subfamilia_id).toBe(6);
+  });
+
+  test('(b) [não-regressão] material no padrão (família raiz) continua com o select travado e a nota antiga', async () => {
+    mockCom({ ...MATERIAL_DO_CLIENTE, id: 83, familia_id: 5 });
+    await renderizarEdicao(83);
+    expect(selectFamilia().disabled).toBe(true);
+    expect(container.textContent).toContain('A família não pode ser alterada após o cadastro.');
+    expect(container.querySelector('[data-testid="aviso-familia-legada"]')).toBeNull();
+  });
+});

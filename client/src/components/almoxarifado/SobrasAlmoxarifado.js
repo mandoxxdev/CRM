@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
+import { familiaDoNovoMaterial } from '../../utils/familiaDoNovoMaterial';
 import { toast } from 'react-toastify';
 import {
   FiRefreshCw, FiScissors, FiEdit2, FiPlus, FiTag, FiTrash2,
@@ -309,13 +310,15 @@ const SobrasAlmoxarifado = () => {
     }
     setSalvando(true);
     try {
-      const prox = await api.get(`/almoxarifado/proximo-codigo?familia_id=${novoMaterial.familia_id}`);
+      // Etapa 100 (RN-100.06c): origem LEGADA (subfamília no `familia_id`) vira o par do padrão.
+      const familia = await familiaDoNovoMaterial(api, novoMaterial.familia_id);
+      const prox = await api.get(`/almoxarifado/proximo-codigo?familia_id=${familia.familia_id}`);
       const criado = await api.post('/almoxarifado/materiais', {
         codigo: prox.data?.codigo,
         codigo_auto: 1,
         nome: String(novoMaterial.nome).trim(),
         unidade: String(novoMaterial.unidade || 'UN').trim(),
-        familia_id: Number(novoMaterial.familia_id),
+        ...familia,
         proprietario_cliente_id: novoMaterial.proprietario_cliente_id ?? null,
         categoria: novoMaterial.categoria || undefined,
       });
