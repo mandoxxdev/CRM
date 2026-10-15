@@ -2689,7 +2689,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
         // RN-103.02: com sub INATIVA a raiz virava sub e, reativada a sub depois (o pai preservado
         // nao e revalidado), o banco ficava com tres niveis. A ATIVA ja era recusada acima.
-        db.get('SELECT COUNT(*) as c FROM familias_material_almoxarifado WHERE parent_id = ? AND ativo = 0', [familiaId], (errInativas, inativasRow) => {
+        // "Inativa" = qualquer coisa que nao seja 1 (o PUT grava `ativo` cru do corpo: `'false'` ficava
+        // fora das duas contagens e a raiz virava sub — achado baixo da revisao final).
+        db.get('SELECT COUNT(*) as c FROM familias_material_almoxarifado WHERE parent_id = ? AND COALESCE(ativo, 0) <> 1', [familiaId], (errInativas, inativasRow) => {
           if (errInativas) return res.status(500).json({ error: errInativas.message });
           if (parentId && inativasRow.c > 0) {
             return res.status(400).json({ error: 'Família com subfamília(s) inativa(s) não pode virar subfamília — elas ficariam num terceiro nível' });
@@ -2701,7 +2703,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           db.get('SELECT COUNT(*) as c FROM materiais_almoxarifado WHERE familia_id = ? OR subfamilia_id = ?', [familiaId, familiaId], (errMat, matRow) => {
             if (errMat) return res.status(500).json({ error: errMat.message });
             if (matRow.c > 0) {
-              const eraRaiz = current.parent_id === null || current.parent_id === undefined;
+              // `!parent_id`: o legado com parent_id = 0 (gravado por '0' antes da 103) e raiz, como no nivelMuda.
+              const eraRaiz = !current.parent_id;
               return res.status(400).json({
                 error: eraRaiz
                   ? `Não é possível transformar em subfamília: a família tem ${matRow.c} material(is) cadastrado(s) (contando os inativos)`

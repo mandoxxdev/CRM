@@ -30,6 +30,11 @@ const GruposFornecedores = () => {
 
   const ativos = grupos.filter((g) => Number(g.ativo) === 1);
   const desativados = grupos.filter((g) => Number(g.ativo) !== 1);
+  // Reativado o ultimo desativado, a secao fecha: senao o proximo "Remover grupo" a reabria sozinha
+  // (achado baixo da revisao final).
+  useEffect(() => {
+    if (desativados.length === 0) setMostrarDesativados(false);
+  }, [desativados.length]);
 
   const handleReativar = async (g) => {
     setReativando(g.id);

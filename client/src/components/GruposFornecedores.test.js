@@ -142,6 +142,33 @@ describe('GruposFornecedores — RN-103.06 grupos desativados e Reativar', () =>
     expect(container.querySelector('[data-testid="toggle-desativados"]').textContent).toBe('Mostrar grupos desativados (1)');
   });
 
+  test('reativado o ultimo desativado, a secao fecha — o proximo "Remover grupo" nao a reabre sozinha', async () => {
+    api.get
+      .mockResolvedValueOnce({ data: [ATIVO, DESATIVADO] })
+      .mockResolvedValueOnce({ data: [ATIVO, { ...DESATIVADO, ativo: 1 }] })
+      .mockResolvedValueOnce({ data: [{ ...ATIVO, ativo: 0 }, { ...DESATIVADO, ativo: 1 }] });
+    api.post.mockResolvedValue({ data: { message: 'Grupo reativado' } });
+    api.delete.mockResolvedValue({ data: { message: 'Grupo desativado' } });
+    await render();
+    await clicar(container.querySelector('[data-testid="toggle-desativados"]'));
+    await clicar(botaoComTexto(/^\s*Reativar\s*$/));
+    expect(container.querySelector('[data-testid="toggle-desativados"]')).toBeNull();
+    await clicar(container.querySelector('.btn-icon-grupo'));
+    await clicar(botaoComTexto(/Remover grupo/));
+    expect(container.querySelector('[data-testid="grupos-desativados"]')).toBeNull();
+    expect(container.querySelector('[data-testid="toggle-desativados"]').textContent).toBe('Mostrar grupos desativados (1)');
+  });
+
+  test('"Número do grupo" do modal conta so os ativos (5 ativos + 3 desativados -> 10 a 60)', async () => {
+    const ativos = [1, 2, 3, 4, 5].map((i) => ({ id: i, nome: `Ativo ${i}`, numero: i * 10, ativo: 1 }));
+    const desat = [6, 7, 8].map((i) => ({ id: i, nome: `Desativado ${i}`, numero: i * 10, ativo: 0 }));
+    api.get.mockResolvedValue({ data: [...ativos, ...desat] });
+    await render();
+    await clicar(botaoComTexto(/Adicionar grupo/));
+    const opcoes = [...container.querySelectorAll('.modal-grupo-select-numero option')].map((o) => o.textContent);
+    expect(opcoes).toEqual(['10', '20', '30', '40', '50', '60']);
+  });
+
   test('cartao desativado abre a tela do grupo (que mostra o aviso)', async () => {
     api.get.mockResolvedValue({ data: [ATIVO, DESATIVADO] });
     await render();

@@ -107,6 +107,29 @@ const L_ATIVA = 'Família com subfamília(s) ativa(s) não pode virar subfamíli
     assert.strictEqual(await pai(B), null);
   });
 
+  await test("RN-103.02 sub com ativo fora de 0/1 (texto 'false', gravado cru pelo PUT) tambem conta como inativa", async () => {
+    const B = await fam();
+    await dbRun(db, "INSERT INTO familias_material_almoxarifado (codigo, nome, ativo, parent_id) VALUES ('F103-TXT', 'Sub texto', 'false', ?)", [B]);
+    const r = await put(B, { nome: 'Raiz com sub texto', parent_id: R1 });
+    assert.strictEqual(r.status, 400, `esperava 400: ${r.status} ${JSON.stringify(r.body)}`);
+    assert.strictEqual(r.body.error, L_F3);
+  });
+
+  await test('RN-103.01 legado com parent_id = 0 e material e tratado como RAIZ (literal L-F1)', async () => {
+    const Z = (await dbRun(db, "INSERT INTO familias_material_almoxarifado (codigo, nome, ativo, parent_id) VALUES ('F103-Z', 'Pai zero', 1, 0)")).lastID;
+    await mat(Z);
+    const r = await put(Z, { nome: 'Pai zero', parent_id: R1 });
+    assert.strictEqual(r.status, 400);
+    assert.strictEqual(r.body.error, L_F1(1));
+  });
+
+  await test('RN-103.03 METADE POSITIVA: sub SEM material vira raiz -> 200', async () => {
+    const S = await fam(R1);
+    const r = await put(S, { nome: 'Sub vazia vira raiz', parent_id: null });
+    assert.strictEqual(r.status, 200, `${r.status} ${JSON.stringify(r.body)}`);
+    assert.strictEqual(await pai(S), null);
+  });
+
   await test('RN-103.02 a recusa de subfamilia ATIVA nao mudou (mesma literal, vem antes)', async () => {
     const C = await fam();
     await fam(C, 1);
