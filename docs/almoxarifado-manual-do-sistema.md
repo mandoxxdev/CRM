@@ -157,7 +157,7 @@ As famílias são mantidas em **Almoxarifado → Configurações → aba "Famíl
 | Situação | Resultado |
 |---|---|
 | Inativar uma família que tem subfamílias ativas | Recusado: *"Não é possível remover: família possui N subfamília(s) ativa(s)"* |
-| Inativar uma subfamília que tem itens ativos | Recusado: *"Não é possível remover: família possui N item(ns) ativo(s)"* — antes da Etapa 37 a inativação passava e os itens ficavam ineditáveis |
+| Inativar uma família ou subfamília que tem itens ativos (contando os das subfamílias, no caso da família) | Recusado: *"Não é possível remover: família possui N item(ns) ativo(s)"* |
 | Contagem "N itens" de uma subfamília | Conta os materiais cadastrados **nela**; a contagem da raiz inclui os das subfamílias |
 | "Adicionar item" numa subfamília | Abre o cadastro de material já com família **e** subfamília escolhidas |
 
@@ -177,6 +177,23 @@ subfamílias próprias (ativas ou inativas — a hierarquia nunca passa de dois 
 Renomear ou editar a família sem mudar o pai continua livre, com ou sem material.
 
 *(Etapa 103 — G10b: as mudanças de nível passaram a ser recusadas com material; antes a API as aceitava e recriava material com a subfamília no lugar da família.)*
+
+Inativar e reativar famílias **pela API** segue as mesmas regras da tela, com as mesmas mensagens — e algumas a mais,
+porque a tela não reativa família:
+
+| Situação | Resultado |
+|---|---|
+| Inativar família ou subfamília com itens ativos | Recusado: *"Não é possível remover: família possui N item(ns) ativo(s)"* |
+| Inativar família que tem subfamília ativa | Recusado: *"Não é possível inativar: família possui subfamília(s) ativa(s)"* |
+| Reativar uma subfamília cuja família principal está inativa | Recusado: *"Não é possível reativar: a família principal desta subfamília está inativa — reative a família principal antes"* |
+| Reativar uma subfamília cuja família principal não existe mais | Recusado: *"Família pai não encontrada"* |
+| Situação (ativo) diferente de ativo/inativo | Recusado: *"Ativo inválido: use 0 ou 1"* |
+
+A recusa por itens vem antes da recusa por subfamília. Uma família que **já está** inativa pode ser renomeada ou
+editada normalmente, mesmo que ainda tenha itens ativos ou subfamílias ativas dentro dela. Para reativar uma
+subfamília de família inativa, reative primeiro a família principal.
+
+*(Etapa 105 — G10c: antes o `PUT` da API inativava família com itens ativos e reativava subfamília de família inativa; a tela já recusava a inativação.)*
 
 Além da família existe o campo **Categoria**, uma classificação de apoio escolhida num **catálogo mantido pela própria empresa** — Aço carbono, Aço inox, Chapas, Tubos, Perfis estruturais, Componentes usinados, Rolamentos, Elementos de fixação, Solda e consumíveis e assim por diante. O catálogo é editado em **Almoxarifado → Configurações → aba "Categorias"** (logo abaixo), e é a **mesma lista** que alimenta o cadastro de material, o filtro da listagem de materiais e o filtro de escopo da conferência de estoque.
 
