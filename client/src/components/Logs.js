@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import { FiAlertTriangle, FiShield, FiFilter, FiDownload, FiRefreshCw } from 'react-icons/fi';
 import { exportToExcel } from '../utils/exportExcel';
+import { MODULOS_ORDEM, NOMES_MODULO } from '../constants/modulosMeta';
 import './Logs.css';
 
 const Logs = () => {
@@ -139,12 +140,10 @@ const Logs = () => {
             className="filter-select"
           >
             <option value="">Todos os Módulos</option>
-            <option value="comercial">Comercial</option>
-            <option value="compras">Compras</option>
-            <option value="financeiro">Financeiro</option>
-            <option value="operacional">Operacional</option>
-            <option value="administrativo">Administrativo</option>
-            <option value="admin">Admin</option>
+            {/* Etapa 111 (G17, RN-111.09): os 11 módulos, com o nome que a coluna mostra (eram 6 escritos à mão). */}
+            {MODULOS_ORDEM.map((chave) => (
+              <option key={chave} value={chave}>{NOMES_MODULO[chave]}</option>
+            ))}
           </select>
         </div>
 
