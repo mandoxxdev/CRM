@@ -22,8 +22,9 @@
  * rotas novas de pedido entram **ANTES** dele no arquivo; registradas depois, o 409 desta task
  * **nunca seria alcancado** e a lixeira continuaria apagando. O cenario (5) mede isso pelo status
  * (409 vs 200) e o cenario (8) guarda a metade positiva: o generico **continua** respondendo pelas
- * outras abas (`cotacoes`) e **continua** sombreando `DELETE /api/compras/grupos/:id` com
- * `400 'Tipo inválido'` — a caracterizacao da Task 1, que este arquivo NAO conserta.
+ * outras abas (`cotacoes`). Ate a Etapa 99 ele tambem afirmava que o generico **continuava**
+ * sombreando `DELETE /api/compras/grupos/:id` com `400 'Tipo inválido'` (a caracterizacao da Task 1);
+ * a Etapa 100 (G1) subiu a rota de grupos para cima do generico e a assercao passou a provar o 200.
  *
  * ── ⚠️ AS DUAS PERNAS DA REGUA, e por que uma so nao basta ────────────────────────────────────
  * Perna 1: alguma linha com `COALESCE(quantidade_recebida, 0) > 0` (material ja entrou no estoque).
@@ -106,8 +107,8 @@ const ERRO_STATUS = 'Dados inválidos — status: status do pedido inválido (us
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
-  // `grupos_compras`, pelo mesmo motivo: o cenario (8) reafirma a CARACTERIZACAO da Task 1 (o
-  // generico sombreia `DELETE /api/compras/grupos/:id` e responde 400). Mesmo DDL de
+  // `grupos_compras`, pelo mesmo motivo: o cenario (8) mede o `DELETE /api/compras/grupos/:id` (ate a
+  // Etapa 99 caracterizava o 400 do generico; desde a 100, o 200 da rota propria). Mesmo DDL de
   // `comprasPedidosRotas.api.test.js`.
   await dbRun(db, `CREATE TABLE IF NOT EXISTS grupos_compras (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -439,7 +440,7 @@ const ERRO_STATUS = 'Dados inválidos — status: status do pedido inválido (us
   });
 
   // (8) ------------------------------------------------------------------------------------
-  await test('(8) o generico continua respondendo pelas outras abas — e continua sombreando grupos', async () => {
+  await test('(8) o generico continua respondendo pelas outras abas — e NAO sombreia mais grupos (Etapa 100, G1)', async () => {
     // METADE POSITIVA DA ORDEM DE REGISTRO: registrar `DELETE /api/compras/pedidos/:id` ANTES do
     // generico nao pode ter tirado o generico do ar para as abas que ele AINDA serve.
     //
@@ -461,17 +462,16 @@ const ERRO_STATUS = 'Dados inválidos — status: status do pedido inválido (us
     assert.strictEqual(await dbGet(db, 'SELECT id FROM cotacoes WHERE id = ?', [cot.lastID]), undefined,
       'a cotacao tinha de ter sumido');
 
-    // E A CARACTERIZACAO DA TASK 1, INTACTA: o generico `/:tipo/:id` esta registrado ANTES de
-    // `DELETE /api/compras/grupos/:id` e o sombreia; `tables['grupos']` nao existe no mapa dele,
-    // entao apagar um grupo responde 400 e o grupo segue ativo. NAO E O DESEJADO — e o que existe,
-    // e consertar e etapa propria (muda o comportamento de outra aba). Esta assercao esta aqui
-    // para acusar quem "organizar as rotas por recurso" ao inserir as tres rotas de pedido.
+    // ATE A ETAPA 99 este trecho CONGELAVA a caracterizacao da Task 1 (o generico, registrado antes
+    // de `DELETE /api/compras/grupos/:id`, respondia 400 'Tipo inválido' e o grupo seguia ativo). A
+    // Etapa 100 (G1, RN-100.01) subiu a rota de grupos para cima do generico: agora o grupo e
+    // desativado. A metade acima (fornecedor pelo generico, cotacao pela rota propria) continua.
     const grupo = await dbRun(db, "INSERT INTO grupos_compras (nome, numero) VALUES ('Grupo T3', 43)");
     const g = await request(app).delete(`/api/compras/grupos/${grupo.lastID}`);
-    assert.strictEqual(g.status, 400, `grupo continua caindo no generico: ${g.status} ${JSON.stringify(g.body)}`);
-    assert.strictEqual(g.body.error, 'Tipo inválido', 'a caracterizacao da Task 1 mudou');
+    assert.strictEqual(g.status, 200, `grupo tem de chegar a rota propria: ${g.status} ${JSON.stringify(g.body)}`);
+    assert.strictEqual(g.body.message, 'Grupo desativado');
     const ativo = await dbGet(db, 'SELECT ativo FROM grupos_compras WHERE id = ?', [grupo.lastID]);
-    assert.strictEqual(ativo.ativo, 1, 'o soft-delete de grupo NAO roda hoje (o generico vence)');
+    assert.strictEqual(ativo.ativo, 0, 'o soft-delete de grupo roda');
   });
 
   // (9) ------------------------------------------------------------------------------------

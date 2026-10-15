@@ -15,14 +15,12 @@
  *    dentro da funcao): reindentar 498 linhas tornaria o diff da movimentacao impossivel de
  *    auditar linha a linha, que e a unica prova de que nada mudou no caminho.
  *
- * 2. **Nao reordena as rotas.** A ORDEM DE REGISTRO E COMPORTAMENTO NO EXPRESS, e aqui ela esconde
- *    um defeito conhecido: `app.delete("/api/compras/:tipo/:id")` esta registrado ANTES de
- *    `app.delete("/api/compras/grupos/:id")` e o sombreia — `tables['grupos']` nao existe no mapa
- *    do generico, entao apagar um grupo responde **400 `'Tipo inválido'`** e o grupo continua
- *    ativo. Nao e o comportamento desejado; e o que existe. Consertar muda o comportamento de
- *    outra aba e e etapa propria. `tests/api/comprasPedidosRotas.api.test.js`, cenario (4),
- *    CONGELA esse 400 como caracterizacao — ele existe para acusar quem "organizar as rotas por
- *    recurso" numa task que promete nao mudar nada.
+ * 2. **Nao reordena as rotas.** A ORDEM DE REGISTRO E COMPORTAMENTO NO EXPRESS. Na extracao ela
+ *    escondia um defeito: `app.delete("/api/compras/:tipo/:id")` registrado ANTES de
+ *    `app.delete("/api/compras/grupos/:id")` o sombreava (400 `'Tipo inválido'`, grupo seguia
+ *    ativo). **Corrigido na Etapa 100 (G1):** a rota de grupos subiu para cima do generico, como
+ *    as de pedido e cotacao; `tests/api/comprasPedidosRotas.api.test.js` cenario (4), que
+ *    congelava o 400 como caracterizacao, passou a provar o 200 e a desativacao.
  *
  * 3. **Nao troca a validacao na mao por Zod** e nao mexe nos `if (!campo) return 400`. Zod entra
  *    na Task 2, e so no pedido de compra.
@@ -224,7 +222,7 @@ app.post('/api/compras/pedidos', authenticateToken, checkModulePermission('compr
 // ⚠️ ESTE BLOCO TEM DE FICAR ACIMA DE `app.delete('/api/compras/:tipo/:id')`, e a posicao e
 // COMPORTAMENTO, nao organizacao: `/api/compras/pedidos/7` tem DOIS segmentos e casa o padrao
 // `/:tipo/:id` do generico (medicao 2 da Fase 0 — o mesmo sombreamento que faz `DELETE
-// /api/compras/grupos/:id` responder `400 'Tipo inválido'` ate hoje). Registradas DEPOIS dele, as
+// /api/compras/grupos/:id` responder `400 'Tipo inválido'` ate a Etapa 99). Registradas DEPOIS dele, as
 // rotas abaixo nunca seriam alcancadas: medido por sonda contra o codigo de hoje, o generico
 // respondeu `200 'Item excluído com sucesso'` a um pedido COM material recebido, apagou a cabeca e
 // deixou a linha de `itens_pedido_compra` orfa. Mover este bloco para baixo derruba os cenarios
@@ -538,6 +536,29 @@ app.delete('/api/compras/cotacoes/:id', authenticateToken, checkModulePermission
   catch (e) { respondeErro(res, e); }
 });
 
+/**
+ * Etapa 100 (G1, RN-100.01/03) — desativar grupo de fornecedores homologados.
+ *
+ * ⚠️ POSICAO E COMPORTAMENTO: esta rota TEM DE FICAR ACIMA de `app.delete('/api/compras/:tipo/:id')`,
+ * como os DELETE de pedido e de cotacao. `/api/compras/grupos/7` tem dois segmentos e casa o padrao
+ * do generico; `tables['grupos']` nao existe no mapa dele, entao ate a Etapa 99 (quando ela vivia
+ * ~160 linhas abaixo) o botao "Remover grupo" da aba Grupos respondia 400 'Tipo inválido' e o
+ * grupo NUNCA era desativado. Mover para baixo do generico derruba o cenario (4) de
+ * `comprasPedidosRotas.api.test.js`.
+ *
+ * Soft-delete (`ativo = 0`) e SEM tocar `fornecedores.grupo_id` (B45): os fornecedores continuam
+ * apontando para o grupo, e reativar a linha no banco devolve o grupo inteiro. A ficha do
+ * fornecedor mostra "Grupo desativado (#id)" (`FornecedorForm.js`, RN-100.04).
+ */
+app.delete('/api/compras/grupos/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
+  const id = req.params.id;
+  db.run('UPDATE grupos_compras SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    if (this.changes === 0) return res.status(404).json({ error: 'Grupo não encontrado' });
+    res.json({ message: 'Grupo desativado' });
+  });
+});
+
 // Delete genérico
 app.delete('/api/compras/:tipo/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
   const { tipo, id } = req.params;
@@ -701,14 +722,7 @@ app.put('/api/compras/grupos/:id', authenticateToken, checkModulePermission('com
     res.json({ id, nome, numero: isNaN(numero) || numero < 10 ? 10 : numero, ordem });
   });
 });
-app.delete('/api/compras/grupos/:id', authenticateToken, checkModulePermission('compras'), (req, res) => {
-  const id = req.params.id;
-  db.run('UPDATE grupos_compras SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id], function(err) {
-    if (err) return res.status(500).json({ error: err.message });
-    if (this.changes === 0) return res.status(404).json({ error: 'Grupo não encontrado' });
-    res.json({ message: 'Grupo desativado' });
-  });
-});
+// Etapa 100 (G1): o `DELETE /api/compras/grupos/:id` mora ACIMA do generico `/:tipo/:id` — ver la.
 app.post('/api/compras/grupos/:id/foto', authenticateToken, checkModulePermission('compras'), uploadGrupoCompras.single('foto'), (req, res) => {
   const id = req.params.id;
   if (!req.file || !req.file.filename) return res.status(400).json({ error: 'Nenhuma imagem enviada' });

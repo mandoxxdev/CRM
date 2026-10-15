@@ -91,16 +91,22 @@ const FornecedorForm = () => {
 
   const [form, setForm] = useState(FORM_VAZIO);
   const [grupos, setGrupos] = useState([]);
+  // Etapa 100 (RN-100.04): so com a lista CARREGADA da para afirmar que um grupo_id "nao esta entre os
+  // ativos" — falha ou atraso do GET deixaria um grupo ativo marcado como desativado.
+  const [gruposCarregados, setGruposCarregados] = useState(false);
   const [carregando, setCarregando] = useState(editando);
   const [salvando, setSalvando] = useState(false);
   const [buscandoCnpj, setBuscandoCnpj] = useState(false);
   const [buscandoCep, setBuscandoCep] = useState(false);
   const [erro, setErro] = useState('');
 
+  const grupoDesativado = gruposCarregados && form.grupo_id !== ''
+    && !grupos.some((g) => String(g.id) === String(form.grupo_id));
+
   useEffect(() => {
     let vivo = true;
     api.get('/compras/grupos')
-      .then((r) => { if (vivo) setGrupos(Array.isArray(r.data) ? r.data : []); })
+      .then((r) => { if (vivo) { setGrupos(Array.isArray(r.data) ? r.data : []); setGruposCarregados(true); } })
       .catch(() => { if (vivo) setGrupos([]); });
     return () => { vivo = false; };
   }, []);
@@ -254,6 +260,12 @@ const FornecedorForm = () => {
                 <select id="fornecedor-grupo" data-testid="fornecedor-grupo"
                   value={form.grupo_id} onChange={(e) => set('grupo_id', e.target.value)}>
                   <option value="">Sem grupo</option>
+                  {/* Etapa 100 (G1, RN-100.04): desativar o grupo NAO desvincula o fornecedor (B45), e a
+                      lista so traz grupos ativos. Sem esta opcao o navegador mostrava "Sem grupo" enquanto
+                      o state guardava o id e o salvar o regravava — a tela mentia. */}
+                  {grupoDesativado && (
+                    <option value={form.grupo_id}>{`Grupo desativado (#${form.grupo_id})`}</option>
+                  )}
                   {grupos.map((g) => <option key={g.id} value={String(g.id)}>{g.nome}</option>)}
                 </select>
               </Campo>

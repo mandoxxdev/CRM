@@ -262,6 +262,46 @@ describe('FornecedorForm — (d) edicao', () => {
   });
 });
 
+describe('FornecedorForm — (k) Etapa 100, RN-100.04: grupo desativado', () => {
+  const comGrupo = (grupoId, gruposResp) => (url) => {
+    if (url === '/compras/grupos') return gruposResp();
+    if (url === '/compras/fornecedores/7') return Promise.resolve({ data: { ...FORNECEDOR_7, grupo_id: grupoId } });
+    return respostaPadrao(url);
+  };
+  const opcoesGrupo = () => Array.from(campo('grupo').options).map((o) => o.textContent);
+
+  test('grupo_id fora da lista de ativos aparece como "Grupo desativado (#9)" selecionado e o salvar o preserva', async () => {
+    api.get.mockImplementation(comGrupo(9, () => Promise.resolve({ data: GRUPOS })));
+    await renderEm('/compras/fornecedores/editar/7');
+    expect(campo('grupo').value).toBe('9');
+    expect(campo('grupo').selectedOptions[0].textContent).toBe('Grupo desativado (#9)');
+    await submeter();
+    expect(api.put).toHaveBeenCalledWith('/compras/fornecedores/7', expect.objectContaining({ grupo_id: '9' }));
+  });
+
+  test('"Sem grupo" limpa o grupo desativado; grupo ATIVO nao ganha a opcao (metade positiva)', async () => {
+    api.get.mockImplementation(comGrupo(9, () => Promise.resolve({ data: GRUPOS })));
+    await renderEm('/compras/fornecedores/editar/7');
+    await digitar('grupo', '');
+    await submeter();
+    expect(api.put).toHaveBeenCalledWith('/compras/fornecedores/7', expect.objectContaining({ grupo_id: '' }));
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    api.get.mockImplementation(comGrupo(2, () => Promise.resolve({ data: GRUPOS })));
+    await renderEm('/compras/fornecedores/editar/7');
+    expect(campo('grupo').value).toBe('2');
+    expect(opcoesGrupo()).toEqual(['Sem grupo', 'Insumos', 'Peças']);
+  });
+
+  test('lista de grupos que FALHOU nao marca grupo nenhum como desativado', async () => {
+    api.get.mockImplementation(comGrupo(2, () => Promise.reject(new Error('rede'))));
+    await renderEm('/compras/fornecedores/editar/7');
+    expect(opcoesGrupo().some((t) => /desativado/.test(t))).toBe(false);
+    expect(campo('razao').value).toBe('TECNOPAR FIXADORES LTDA');
+  });
+});
+
 describe('FornecedorForm — (e)(f) CNPJ', () => {
   test('/novo: sair do campo com 14 digitos validos consulta /cnpj e preenche razao, fantasia, endereco, cidade, estado, CEP, telefone, email', async () => {
     await renderEm('/compras/fornecedores/novo');

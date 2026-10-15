@@ -15,14 +15,13 @@
  * exercitavel aqui e o **401 sem usuario**; um cenario de 403 de perfil mediria uma camada que
  * este modulo nao tem.
  *
- * ⚠️ O CENARIO (4) CONGELA UM DEFEITO, DE PROPOSITO. `app.delete('/api/compras/:tipo/:id')` foi
- * registrado ANTES de `app.delete('/api/compras/grupos/:id')`, e `tables['grupos']` nao existe no
- * mapa do generico: apagar um grupo responde hoje **400 `'Tipo inválido'`** e o grupo continua
- * ativo. **Nao e o que queremos; e o que existe.** Consertar e etapa propria (muda o
- * comportamento de outra aba). O cenario existe para detectar REORDENACAO durante a extracao: um
- * copiar-colar que "organize as rotas por recurso" consertaria o defeito SEM QUERER, dentro de
- * uma task que promete "sem mudar comportamento" — e e exatamente esse tipo de divergencia que
- * ninguem audita depois.
+ * ⚠️ O CENARIO (4) CONGELAVA UM DEFEITO ATE A ETAPA 99, e deixou de congelar na Etapa 100 (G1).
+ * `app.delete('/api/compras/:tipo/:id')` estava registrado ANTES de
+ * `app.delete('/api/compras/grupos/:id')` e `tables['grupos']` nao existe no mapa do generico:
+ * apagar um grupo respondia **400 `'Tipo inválido'`** e o grupo continuava ativo. Na extracao o
+ * cenario existia para acusar reordenacao "sem querer" numa task que prometia nao mudar nada. A
+ * Etapa 100 subiu a rota de grupos para cima do generico (de proposito, com etapa propria) e o
+ * cenario passou a provar o 200 + `ativo = 0` + fornecedor ainda vinculado (RN-100.01/02/03).
  *
  * ⚠️ O pedido ORFAO do cenario (1) tambem nao e enfeite: sem uma linha de `pedidos_compra` cujo
  * `fornecedor_id` nao existe, trocar o `LEFT JOIN fornecedores` por `JOIN` na
@@ -152,19 +151,39 @@ const ADMIN = { id: 64, nome: 'Admin Compras E38', role: 'admin' };
     assert.strictEqual(comToken.body.length, 2);
   });
 
-  await test('(4) CARACTERIZACAO da ordem de registro: o DELETE generico sombreia o de grupos', async () => {
-    // O generico `/:tipo/:id` esta registrado ANTES de `/grupos/:id`. `tables['grupos']` nao
-    // existe, entao Express entrega a chamada ao generico e ele recusa o tipo.
-    // NAO E O COMPORTAMENTO DESEJADO — e o que existe hoje, e esta assercao esta aqui para
-    // acusar reordenacao durante a extracao.
-    const res = await request(app).delete(`/api/compras/grupos/${grupoId}`);
-    assert.strictEqual(res.status, 400,
-      `apagar grupo cai no generico e responde 400 hoje: ${res.status} ${JSON.stringify(res.body)}`);
-    assert.strictEqual(res.body.error, 'Tipo inválido');
+  await test('(4) RN-100.01/02/03 (Etapa 100, G1): o DELETE de grupo desativa o grupo — o generico nao o sombreia mais', async () => {
+    // ATE A ETAPA 99 este cenario CONGELAVA o defeito (400 'Tipo inválido', grupo seguia ativo)
+    // como caracterizacao da extracao. A Etapa 100 subiu `DELETE /grupos/:id` para cima do
+    // generico e o cenario passou a provar o comportamento correto. Grupo PROPRIO deste cenario:
+    // o `grupoId` do fixture e lido ativo pelo cenario (5).
+    const grupoDoCenario = (await dbRun(db,
+      'INSERT INTO grupos_compras (nome, numero, ordem, ativo) VALUES (?,?,?,1)',
+      ['Grupo a desativar E100', 43, 0])).lastID;
+    const fornecedorDoGrupo = (await dbRun(db,
+      "INSERT INTO fornecedores (razao_social, status, grupo_id) VALUES (?, 'ativo', ?)",
+      ['Fornecedor do grupo E100', grupoDoCenario])).lastID;
 
-    const aindaAtivo = await dbGet(db, 'SELECT ativo FROM grupos_compras WHERE id = ?', [grupoId]);
-    assert.strictEqual(aindaAtivo.ativo, 1,
-      'como o generico venceu, o soft-delete de grupo NAO rodou e o grupo segue ativo');
+    const res = await request(app).delete(`/api/compras/grupos/${grupoDoCenario}`);
+    assert.strictEqual(res.status, 200,
+      `apagar grupo tem de chegar a rota de grupos: ${res.status} ${JSON.stringify(res.body)}`);
+    assert.strictEqual(res.body.message, 'Grupo desativado');
+
+    const desativado = await dbGet(db, 'SELECT ativo FROM grupos_compras WHERE id = ?', [grupoDoCenario]);
+    assert.strictEqual(desativado.ativo, 0, 'o soft-delete tem de ter rodado');
+    const lista = await request(app).get('/api/compras/grupos');
+    assert.ok(!lista.body.some((g) => g.id === grupoDoCenario), 'o grupo desativado sai da lista');
+    assert.ok(lista.body.some((g) => g.id === grupoId), 'METADE POSITIVA: o grupo ativo do fixture continua');
+
+    // RN-100.03 (B45): o fornecedor NAO e desvinculado.
+    const forn = await dbGet(db, 'SELECT grupo_id FROM fornecedores WHERE id = ?', [fornecedorDoGrupo]);
+    assert.strictEqual(forn.grupo_id, grupoDoCenario, 'desativar o grupo nao mexe em fornecedores.grupo_id');
+    // O cenario (5) conta os fornecedores do fixture (1): o deste cenario sai depois de provado.
+    await dbRun(db, 'DELETE FROM fornecedores WHERE id = ?', [fornecedorDoGrupo]);
+
+    // Id inexistente: a literal da rota de grupos, nao a do generico.
+    const inexistente = await request(app).delete(`/api/compras/grupos/${grupoDoCenario + 9000}`);
+    assert.strictEqual(inexistente.status, 404);
+    assert.strictEqual(inexistente.body.error, 'Grupo não encontrado');
 
     // METADE POSITIVA: o generico funciona para um tipo que ele CONHECE. Sem esta metade, um
     // 400 vindo de qualquer outro motivo (rota derrubada, middleware quebrado) passaria pelo
