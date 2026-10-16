@@ -140,7 +140,8 @@ test('(d) Fase 2 I4: o Processar que falha no meio recarrega o painel — o item
   api.post.mockImplementation((url) => {
     if (url === '/almoxarifado/recebimentos/96/processar') {
       processou = true;
-      return Promise.reject(Object.assign(new Error('500'), { response: { status: 500, data: { error: 'Falha no meio' } } }));
+      // Fase 5 (r3 R38): o status REAL da falha no meio e 400 (o motor recusa a serie: medido, sonda e130r3-sonda-r38)
+      return Promise.reject(Object.assign(new Error('400'), { response: { status: 400, data: { error: 'Falha no meio' } } }));
     }
     return Promise.resolve({ data: { success: true } });
   });
@@ -153,6 +154,45 @@ test('(d) Fase 2 I4: o Processar que falha no meio recarrega o painel — o item
   expect(campo(blocoDo(961), 'input[placeholder="Lote"]').disabled).toBe(true);
   expect(blocoDo(961).textContent).toContain(FRASE);
   expect(campo(blocoDo(962), 'input[placeholder="Lote"]').disabled).toBe(false);
+});
+
+test('(e) Fase 5 r1 M1: o Processar que falha nao apaga o que foi digitado e nao salvo no item que não entrou', async () => {
+  let processou = false;
+  const antes = { ...DETALHE, itens: ITENS.map((i) => ({ ...i, entrada_estoque_em: null })) };
+  api.get.mockImplementation((url) => {
+    if (url === '/almoxarifado/recebimentos') return Promise.resolve({ data: RECEBIMENTOS });
+    if (url === '/almoxarifado/recebimentos/96') return Promise.resolve({ data: processou ? DETALHE : antes });
+    if (url === '/almoxarifado/materiais') return Promise.resolve({ data: MATERIAIS });
+    if (url === '/almoxarifado/recebimentos-aux/pedidos-compra') return Promise.resolve({ data: [] });
+    if (url === '/almoxarifado/recebimentos-aux/fornecedores') return Promise.resolve({ data: [] });
+    if (url === '/almoxarifado/anexos') return Promise.resolve({ data: [] });
+    if (url === '/almoxarifado/localizacoes') return Promise.resolve({ data: [] });
+    if (/^\/almoxarifado\/materiais\/\d+\/sugestao-localizacao$/.test(url)) return Promise.resolve({ data: { padrao: null, sugestoes: [] } });
+    return Promise.reject(new Error(`URL inesperada no teste: ${url}`));
+  });
+  api.post.mockImplementation((url) => {
+    if (url === '/almoxarifado/recebimentos/96/processar') {
+      processou = true;
+      return Promise.reject(Object.assign(new Error('400'), { response: { status: 400, data: { error: 'Falha no meio' } } }));
+    }
+    return Promise.resolve({ data: { success: true } });
+  });
+  await abrirDetalhe();
+  // digita (e não salva) um lote novo no 962 e no 961
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  for (const [id, valor] of [[962, 'L-DIGITADO'], [961, 'L-PERDIDO']]) {
+    const el = campo(blocoDo(id), 'input[placeholder="Lote"]');
+    await act(async () => { setter.call(el, valor); el.dispatchEvent(new Event('input', { bubbles: true })); });
+  }
+  expect(campo(blocoDo(962), 'input[placeholder="Lote"]').value).toBe('L-DIGITADO');
+  await clicar(botaoPorTexto('Processar Nota'));
+  await clicar(container.querySelector('[data-testid="confirmar-processar"]'));
+  await esperarEfeitos();
+  // o 962 (não entrou) guarda o digitado; o 961 (entrou) mostra o que o servidor tem e fica travado
+  expect(campo(blocoDo(962), 'input[placeholder="Lote"]').value).toBe('L-DIGITADO');
+  expect(campo(blocoDo(962), 'input[placeholder="Lote"]').disabled).toBe(false);
+  expect(campo(blocoDo(961), 'input[placeholder="Lote"]').value).toBe('L-ORIG');
+  expect(campo(blocoDo(961), 'input[placeholder="Lote"]').disabled).toBe(true);
 });
 
 test('(c) salvar os dados fiscais manda o eco do item que entrou (o que está gravado)', async () => {

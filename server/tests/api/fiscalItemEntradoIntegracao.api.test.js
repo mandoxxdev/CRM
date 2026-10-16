@@ -22,7 +22,7 @@ function test(name, fn) {
 }
 const SUPER = { id: 1, nome: 'Super Teste', role: 'admin', is_superadmin: 1, email: 'super@test.com' };
 const API = '/api/almoxarifado';
-const L8 = 'Item já deu entrada no estoque — o lote e as séries dele ficaram registrados no estoque com o que a nota tinha na entrada e não mudam mais pela nota; para corrigir, o Administrador do almoxarifado estorna a entrada e dá a entrada de novo (o pedido de compra e a reserva de quem esperava voltam a esperar)';
+const L8 = 'Item já deu entrada no estoque — o lote e as séries dele ficaram registrados no estoque com o que a nota tinha na entrada e não mudam mais pela nota; para corrigir o estoque, o Administrador do almoxarifado estorna a entrada e dá a entrada de novo (o documento da nota continua como entrou, e o pedido de compra e a reserva de quem esperava voltam a esperar)';
 const L9 = 'Item já deu entrada no estoque — o valor unitário e o total dele não mudam mais: a entrada no estoque já foi feita com o valor que a nota tinha';
 
 /** A78 (a) — o lote do documento que nao bate com o lote do estoque (o mesmo texto do documento de novidades). */
@@ -172,6 +172,10 @@ SELECT 'SERIE_SEM_REGISTRO' AS achado, ri.recebimento_id, r.numero, ri.id AS ite
     assert.strictEqual(await fisico(mA), 2);
     const vivas = await dbAll(db, "SELECT numero FROM series_almoxarifado WHERE material_id = ? AND status = 'EM_ESTOQUE' ORDER BY numero", [mA]);
     assert.deepStrictEqual(vivas.map((s) => s.numero), ['S8', 'S9']);
+    // Fase 5 (r1 I1, declarado na L8 e na C269): o caminho corrige o ESTOQUE; o documento da nota continua como entrou
+    const docA = await dbGet(db, 'SELECT lote, series, entrada_estoque_em FROM recebimentos_material_itens_almoxarifado WHERE id = ?', [its[0]]);
+    assert.deepStrictEqual([docA.lote, docA.series], ['L-ORIG', 'S1\nS2']);
+    assert.ok(docA.entrada_estoque_em, 'o estorno nao limpa a entrada do item');
   });
 
   await test('[RN-08] A78 acha o que o /fiscal antigo deixou (lote diferente, validade diferente, lote sem registro, serie sem registro) e nao acha o limpo', async () => {

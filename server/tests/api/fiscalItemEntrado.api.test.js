@@ -23,7 +23,7 @@ const SUPER = { id: 1, nome: 'Super Teste', role: 'admin', is_superadmin: 1, ema
 const API = '/api/almoxarifado';
 
 const L7 = 'Item já deu entrada no estoque — a quantidade dele não muda mais; se a contagem estava errada, corrija o estoque por um ajuste (perfil Administrador ou Almoxarife do almoxarifado)';
-const L8 = 'Item já deu entrada no estoque — o lote e as séries dele ficaram registrados no estoque com o que a nota tinha na entrada e não mudam mais pela nota; para corrigir, o Administrador do almoxarifado estorna a entrada e dá a entrada de novo (o pedido de compra e a reserva de quem esperava voltam a esperar)';
+const L8 = 'Item já deu entrada no estoque — o lote e as séries dele ficaram registrados no estoque com o que a nota tinha na entrada e não mudam mais pela nota; para corrigir o estoque, o Administrador do almoxarifado estorna a entrada e dá a entrada de novo (o documento da nota continua como entrou, e o pedido de compra e a reserva de quem esperava voltam a esperar)';
 const L9 = 'Item já deu entrada no estoque — o valor unitário e o total dele não mudam mais: a entrada no estoque já foi feita com o valor que a nota tinha';
 const L3 = 'Esta nota já está sendo processada';
 
@@ -178,6 +178,26 @@ const L3 = 'Esta nota já está sendo processada';
     recusa(await fiscal(r.id, { itens: [{ id: r.its[1], quantidade_recebida: 1 }, { id: r.its[0], valor_unitario: 99 }] }), 409, L7);
     await intacto(r.its[0]);
     await intacto(r.its[1]);
+  });
+
+  // ── Fase 5 (r1 M2, r3 R11/R16/R3/R4): os cenarios que faltavam ──
+  await test('[RN-03 F5 r3-R11/R16] valor MENOR tambem recusa (unitario 5 sobre 10, total 1 sobre 20); "99,5" vale 99 (a regua do comando) e recusa', async () => {
+    const r = await notaParcial([{ ...PADRAO }], [0]);
+    recusa(await fiscal(r.id, { itens: [{ id: r.its[0], valor_unitario: 5 }] }), 409, L9);
+    recusa(await fiscal(r.id, { itens: [{ id: r.its[0], valor_total: 1 }] }), 409, L9);
+    recusa(await fiscal(r.id, { itens: [{ id: r.its[0], valor_unitario: '99,5' }] }), 409, L9);
+    await intacto(r.its[0]);
+  });
+
+  await test('[RN-01 F5 r1-M2] data com lixo antes ou depois nao e eco (409); a data com hora e com espaco continua eco', async () => {
+    const r = await notaParcial([{ ...PADRAO }], [0]);
+    for (const data_validade_lote of ['2027-01-31lixo', 'x2027-01-31', 'x31/01/2027', '31/01/2027x']) {
+      recusa(await fiscal(r.id, { itens: [{ id: r.its[0], data_validade_lote }] }), 409, L8);
+    }
+    for (const data_validade_lote of ['2027-01-31 00:00:00', '2027-01-31T03:00:00-03:00', ' 2027-01-31 ']) {
+      aceita(await fiscal(r.id, { itens: [{ id: r.its[0], data_validade_lote }] }));
+    }
+    await intacto(r.its[0]);
   });
 
   await test('[RN-04] ICMS, IPI e reducao do item entrado continuam aceitos e gravados', async () => {

@@ -960,10 +960,11 @@ const LITERAIS_CONFERENCIA = {
   // Etapa 130 (C267, Fase 2 I1/I2/M6): o caminho que existe para lote/serie digitados errado e estornar a entrada
   // (`ajustar_estoque`) e dar a entrada de novo (`movimentar`) — so o Administrador tem os dois. Ele reabre o pedido de compra e
   // solta a reserva de quem esperava (medido, sonda e130rev2-l8): a literal diz isso. "ficaram registrados" e verdade tambem para o
-  // item que entrou sem lote.
+  // item que entrou sem lote. Fase 5 (r1 I1): o caminho corrige o ESTOQUE, nao o documento — o estorno nao limpa a entrada do item,
+  // entao o texto dele continua o que entrou (a etiqueta da nota tambem) e a literal diz isso (C269).
   LOTE_SERIE_JA_ENTROU: 'Item já deu entrada no estoque — o lote e as séries dele ficaram registrados no estoque com o que a nota '
-    + 'tinha na entrada e não mudam mais pela nota; para corrigir, o Administrador do almoxarifado estorna a entrada e dá a entrada '
-    + 'de novo (o pedido de compra e a reserva de quem esperava voltam a esperar)',
+    + 'tinha na entrada e não mudam mais pela nota; para corrigir o estoque, o Administrador do almoxarifado estorna a entrada e dá a '
+    + 'entrada de novo (o documento da nota continua como entrou, e o pedido de compra e a reserva de quem esperava voltam a esperar)',
   // Etapa 130 (C267, B839): "a entrada ja foi feita com o valor" e verdade tambem com o unitario 0 (o motor nao toca no custo).
   VALOR_JA_ENTROU: 'Item já deu entrada no estoque — o valor unitário e o total dele não mudam mais: a entrada no estoque já foi '
     + 'feita com o valor que a nota tinha',
@@ -1164,9 +1165,10 @@ async function avancarWorkflow(db, user, recebimentoId, acao, opcoes = {}) {
 const textoDoItem = (v) => (v === undefined || v === null ? '' : String(v).trim());
 function dataDoItem(v) {
   const t = textoDoItem(v);
-  let m = /^(\d{4}-\d{2}-\d{2})/.exec(t);
+  // Fase 5 (r1 M2): o texto INTEIRO tem de ser a data (a hora, ISO ou com espaco, e opcional) — '2027-01-31lixo' nao e eco.
+  let m = /^(\d{4}-\d{2}-\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/.exec(t);
   if (m) return m[1];
-  m = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(t);
+  m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(t);
   return m ? `${m[3]}-${m[2]}-${m[1]}` : t;
 }
 /** As series como CONJUNTO: lista, texto JSON de lista ou texto uma por linha; aparadas, sem vazias, ordenadas. */

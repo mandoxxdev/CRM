@@ -572,6 +572,26 @@ const RecebimentosAlmoxarifado = () => {
     setErroProcessar(null);
   };
 
+  // Etapa 130 (Fase 2 I4, Fase 5 r1 M1): depois de um Processar que falhou, traz do servidor so os itens que ganharam a entrada.
+  const atualizarItensQueEntraram = async (id) => {
+    try {
+      const res = await api.get(`/almoxarifado/recebimentos/${id}`);
+      const doServidor = new Map((res.data.itens || []).map((it) => [it.id, it]));
+      setDetalhe((d) => {
+        if (!d || d.id !== id) return d;
+        return {
+          ...d,
+          itens: (d.itens || []).map((it) => {
+            const novo = doServidor.get(it.id);
+            return novo && novo.entrada_estoque_em && !it.entrada_estoque_em ? novo : it;
+          }),
+        };
+      });
+    } catch {
+      // sem a releitura o painel fica como estava; a recusa do servidor continua valendo no salvar
+    }
+  };
+
   const processarNota = async () => {
     const destinos = itensQueVaoEntrar(detalhe?.itens)
       .filter((it) => destinosProc[it.id])
@@ -590,10 +610,12 @@ const RecebimentosAlmoxarifado = () => {
       // A recusa fica NO MODAL (RN-05): a lista "{MAT}: motivo" do servidor diz qual item trocar,
       // e um toast que some em segundos deixaria o operador sem saber qual.
       setErroProcessar(err.response?.data?.error || 'Erro ao processar nota');
-      // Etapa 130 (Fase 2 I4): o processamento que falha no MEIO ja deu entrada dos itens anteriores (a nota parcial). Sem recarregar,
+      // Etapa 130 (Fase 2 I4): o processamento que falha no MEIO ja deu entrada dos itens anteriores (a nota parcial). Sem isto,
       // o painel continuava mostrando esses itens com o lote, as series e o valor abertos — e salvar os dados fiscais com eles
-      // editados recusa (o servidor so aceita o eco do item que entrou). Recarregar tambem tira da janela o item que ja entrou.
-      abrirDetalhe(detalhe.id);
+      // editados recusa (o servidor so aceita o eco do item que entrou). Fase 5 (r1 M1): recarregar o painel inteiro apagava o que
+      // o operador tinha digitado e nao salvou nos OUTROS itens; so os itens que acabaram de entrar trocam pela versao do servidor
+      // (o processamento usou o que estava salvo — e o que entrou).
+      atualizarItensQueEntraram(detalhe.id);
     } finally {
       setSaving(false);
     }
