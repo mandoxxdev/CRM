@@ -163,7 +163,20 @@ function enrichUserFromDb(db) {
       'SELECT id, nome, email, role, is_superadmin, admin_modulos FROM usuarios WHERE id = ? AND ativo = 1',
       [req.user.id],
       (err, row) => {
-        if (err || !row) return next();
+        if (err) return next();
+        if (!row) {
+          // Etapa 130 (Fase 5 r2, B842): usuario INATIVO ou APAGADO com o token ainda valido (24 h). Antes seguia com o papel do
+          // TOKEN: o administrador desativado continuava administrador (medido: 200 na lista inteira e no cadastro dos outros, onde
+          // o rebaixado levava 403). Sem a linha, nenhum poder que so o banco confirma: sem papel de administrador, sem super, sem
+          // modulos administrados e sem perfil herdado do token. Descartado: 401 aqui (derrubaria toda requisicao do inativo,
+          // inclusive as que hoje degradam sem erro — fica para a etapa do nucleo que revisar a sessao do inativo).
+          req.user.role = 'usuario';
+          req.user.is_superadmin = 0;
+          req.user.admin_modulos = [];
+          delete req.user.perfil_almoxarifado;
+          delete req.user.perfil_frota;
+          return next();
+        }
 
         req.user.nome = row.nome;
         req.user.email = row.email;

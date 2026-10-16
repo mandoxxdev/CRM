@@ -160,8 +160,45 @@ const L10 = 'Acesso negado — apenas o próprio usuário ou administradores do 
       assert.ok(!src.includes(rota), `o index.js ainda declara ${rota}`);
     }
     assert.ok(!/function getUsuarioModuleContext\s*\(/.test(src), 'getUsuarioModuleContext continua definida no index.js');
-    assert.ok(/getUsuarioModuleContext[^\n]*require\('\.\/services\/leituraDeUsuarios'\)|require\('\.\/services\/leituraDeUsuarios'\)/.test(src),
-      'o index.js nao importa o modulo');
+    // Fase 5 (r3 R29/R30): o import tem de trazer as DUAS (o login usa getUsuarioModuleContext) e a chamada leva o authenticateToken
+    assert.ok(/const \{[^}]*\bregistrarLeituraDeUsuarios\b[^}]*\bgetUsuarioModuleContext\b[^}]*\} = require\('\.\/services\/leituraDeUsuarios'\);/.test(src),
+      'o index.js nao importa registrarLeituraDeUsuarios e getUsuarioModuleContext do modulo');
+    assert.ok(src.includes('registrarLeituraDeUsuarios(app, { getDb: () => db, authenticateToken });'), 'a chamada mudou (getDb/authenticateToken)');
+  });
+
+  // ── Fase 5 (r2, B842): o usuario INATIVO ou APAGADO com o token valido nao guarda o papel do token ──
+  await test('[RN-13 F5 r2] com o enriquecimento real: o ex-administrador desativado ou apagado perde o papel do token (lista reduzida, 403 nos outros)', async () => {
+    const { enrichUserFromDb } = require('../../services/systemPermissions');
+    await run(db, `INSERT INTO usuarios (id, nome, email, senha, role, is_superadmin, ativo) VALUES (20, 'Ex Admin', 'x@t', 'x', 'admin', 1, 0)`);
+    let token = null;
+    const app2 = express();
+    // o JWT carrega o papel de quando o token foi emitido; o enriquecimento le o banco
+    app2.use((req, res, next) => { req.user = { ...token }; enrichUserFromDb(db)(req, res, next); });
+    registrarLeituraDeUsuarios(app2, { getDb: () => db, authenticateToken: (req, res, next) => next() });
+    const como = (t, url) => { token = t; return request(app2).get(url); };
+    const tokenAdmin = (id) => ({ id, role: 'admin', is_superadmin: 1, admin_modulos: ['almoxarifado'], perfil_almoxarifado: 'ADMINISTRADOR' });
+    // a metade positiva: o admin ativo (id 2) continua lendo tudo
+    assert.strictEqual((await como(tokenAdmin(2), '/api/usuarios/5')).status, 200);
+    assert.ok('role' in (await como(tokenAdmin(2), '/api/usuarios')).body[0]);
+    for (const id of [20, 77]) { // 20 desativado, 77 apagado (sem linha)
+      negado(await como(tokenAdmin(id), '/api/usuarios/5'));
+      negado(await como(tokenAdmin(id), '/api/usuarios/5/grupos'));
+      const lista = await como(tokenAdmin(id), '/api/usuarios');
+      assert.strictEqual(lista.status, 200);
+      for (const u of lista.body) assert.deepStrictEqual(Object.keys(u).sort(), ['ativo', 'email', 'id', 'nome']);
+    }
+  });
+
+  await test('[RN-13 F5 r2] erro do banco no enriquecimento nao rebaixa ninguem (so a AUSENCIA da linha rebaixa)', async () => {
+    const { enrichUserFromDb } = require('../../services/systemPermissions');
+    const dbQuebrado = { get: (sql, p, cb) => cb(new Error('SQLITE_BUSY')) };
+    const req = { user: { id: 2, role: 'admin', is_superadmin: 1, admin_modulos: [] } };
+    await new Promise((ok) => enrichUserFromDb(dbQuebrado)(req, {}, ok));
+    assert.strictEqual(req.user.role, 'admin');
+    const req2 = { user: { id: 77, role: 'admin', is_superadmin: 1, admin_modulos: ['almoxarifado'], perfil_almoxarifado: 'ADMINISTRADOR', perfil_frota: 'ADMIN_FROTA' } };
+    await new Promise((ok) => enrichUserFromDb(db)(req2, {}, ok));
+    assert.deepStrictEqual([req2.user.role, req2.user.is_superadmin, req2.user.admin_modulos, req2.user.perfil_almoxarifado, req2.user.perfil_frota],
+      ['usuario', 0, [], undefined, undefined]);
   });
 
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
