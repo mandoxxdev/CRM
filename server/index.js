@@ -3866,6 +3866,9 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
       if (err) {
         return res.status(500).json({ error: err.message });
       }
+      // Etapa 132 (C271, RN-04): o `ativo` vem cru do corpo (0, NULL sem o campo, 'true') — so a releitura diz se o usuario
+      // ficou sem linha ativa; se ficou, os sockets do chat dele caem na hora. Resolve sempre (nao rejeita).
+      if (chatSocket) chatSocket.encerrarSocketsSeInativo(id);
       syncModuleAdminProfiles(db, id, admin_modulos || '[]')
         .catch((syncErr) => console.warn('Sync perfis módulo:', syncErr.message))
         .finally(() => {
@@ -3975,6 +3978,9 @@ app.patch('/api/usuarios/:id/status', authenticateToken, requireManageUsers, (re
             return respondDbError(res, err, 'usuarios:status');
           }
           invalidateComercialResponsaveisCache();
+          // Etapa 132 (C271, RN-04): desativado -> os sockets abertos do chat dele recebem sessao_encerrada e caem na hora
+          // (antes continuavam recebendo o conteudo das mensagens ate o token vencer).
+          if (ativo === 0 && chatSocket) chatSocket.encerrarSocketsDoUsuario(id);
           res.json({
             message: ativo ? 'Usuário reativado com sucesso' : 'Usuário desativado com sucesso',
             ativo,
@@ -4086,6 +4092,8 @@ app.delete('/api/usuarios/:id', authenticateToken, requireDeleteUsers, async (re
 
     await db.exec(stmts.join('\n'));
     invalidateComercialResponsaveisCache();
+    // Etapa 132 (C271, RN-04): apagado -> os sockets abertos do chat dele caem na hora (a sala nao sai com a linha).
+    if (chatSocket) chatSocket.encerrarSocketsDoUsuario(targetId);
 
     res.json({
       message: 'Usuário excluído com sucesso',
