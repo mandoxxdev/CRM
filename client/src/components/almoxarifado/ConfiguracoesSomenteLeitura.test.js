@@ -164,6 +164,15 @@ describe('C261 (Etapa 126) — RN-03: Setores e Áreas', () => {
     expect(botoesTitulo('Editar', almoxarifados())).toHaveLength(1);
     expect(botoesTitulo('Inativar', almoxarifados())).toHaveLength(1);
   });
+  test('[RN-08, Fase 5 r3] perfil Administrador, setor INATIVO: Editar, sem Inativar e sem um "0" solto na célula', async () => {
+    dados['/almoxarifado/setores?all=1'] = [{ id: 2, nome: 'Corredor Z', codigo_prefixo: 'Z', tipo: 'corredor', ordem: 2, qtd_localizacoes: 0, ativo: 0 }];
+    await renderAba(ADM_PERFIL, 'setores');
+    const linha = [...setores().querySelectorAll('tbody tr')].find((t) => t.textContent.includes('Corredor Z'));
+    const acoes = linha.querySelectorAll('td')[6];
+    expect(botoesTitulo('Editar', linha)).toHaveLength(1);
+    expect(botoesTitulo('Inativar', linha)).toHaveLength(0);
+    expect(acoes.textContent).toBe('');
+  });
   test('[RN-08] perfil Administrador: setores com Novo, Editar e Inativar, sem frase', async () => {
     await renderAba(ADM_PERFIL, 'setores');
     expect(botoesTexto(/Novo Setor ou Área/)).toHaveLength(1);
@@ -267,6 +276,9 @@ describe('C261 (Etapa 126) — RN-07: Mapa de Áreas', () => {
     dados['/almoxarifado/mapa/localizacoes'] = [];
     await renderMapa(ADM_PERFIL);
     expect([...container.querySelectorAll('a')].filter((a) => /Cadastrar localizações/.test(a.textContent))).toHaveLength(1);
+    // Fase 5 (r3): o link abre a aba Localizações
+    const cadastrar = [...container.querySelectorAll('a')].find((a) => /Cadastrar localizações/.test(a.textContent));
+    expect(cadastrar.getAttribute('href')).toBe('/almoxarifado/configuracoes?tab=localizacoes');
   });
 });
 

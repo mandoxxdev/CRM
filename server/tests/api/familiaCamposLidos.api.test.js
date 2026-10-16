@@ -300,10 +300,12 @@ const E1 = (tipo, codigo, rotulos) => (rotulos.length === 1
   // ── RN-27 (a janela entre a leitura e o UPDATE) ───────────────────────────────────────────────────────────────────────
   const getOriginal = db.get.bind(db);
   let injecao = null;
+  // a consulta onde a injecao cai: por padrao a leitura do current; a Fase 5 (r3) usa a contagem de subfamilias da conferencia
+  let injecaoSql = 'SELECT * FROM familias_material_almoxarifado WHERE id = ?';
   db.get = function (sql, params, cb) {
     if (typeof params === 'function') { cb = params; params = []; }
     const s = String(sql).replace(/\s+/g, ' ').trim();
-    if (injecao && s === 'SELECT * FROM familias_material_almoxarifado WHERE id = ?') {
+    if (injecao && s === injecaoSql) {
       const inj = injecao; injecao = null;
       return getOriginal(sql, params, (err, row) => { inj().then(() => cb(err, row), (e) => cb(e)); });
     }
@@ -350,7 +352,77 @@ const E1 = (tipo, codigo, rotulos) => (rotulos.length === 1
     assert.deepStrictEqual([(await linha(f.id)).nome, (await linha(f.id)).descricao], ['Nome na janela', 'so a descricao']);
   });
 
+  // ── Fase 5 (r3): os sobreviventes que pediam cenario ─────────────────────────────────────────────────────────────────
+  const MUDA = { nome: 'Nome do outro', tipo_uso: 'administrativo', descricao: 'desc do outro' };
+  for (const col of ['nome', 'tipo_uso', 'descricao']) {
+    await test(`[RN-23, Fase 5 r3] ${col} LIDO mas OMITIDO no corpo, mudado pelo outro ANTES do PUT -> 200, o valor do outro fica`, async () => {
+      const f = await familia();
+      const a = await abrir(ADM, f.id);
+      await outro(f.id, { [col]: MUDA[col] });
+      const corpo = a.corpo(col === 'nome' ? { descricao: 'minha' } : { nome: 'Renomeada' });
+      delete corpo[col];
+      const r = await put(ADM, f.id, corpo);
+      assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+      assert.strictEqual((await linha(f.id))[col], MUDA[col]);
+    });
+    if (col === 'nome') continue; // o nome na janela ja esta acima (Fase 2 M1)
+    await test(`[RN-27, Fase 5 r3] ${col} LIDO mas OMITIDO no corpo, mudado NA JANELA -> 200, o valor do outro fica`, async () => {
+      const f = await familia();
+      const a = await abrir(ADM, f.id);
+      let rodou = false;
+      injecao = async () => { rodou = true; await outro(f.id, { [col]: MUDA[col] }); };
+      const corpo = a.corpo({ nome: 'Renomeada' });
+      delete corpo[col];
+      const r = await put(ADM, f.id, corpo);
+      assert.ok(rodou, 'a injecao nao rodou — teste vazio');
+      assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+      assert.deepStrictEqual([(await linha(f.id)).nome, (await linha(f.id))[col]], ['Renomeada', MUDA[col]]);
+    });
+  }
+
+  await test('[RN-27, Fase 5 r3] na janela, a coluna lida muda E nasce uma subfamilia (virando sub): o 409 geral, nao o 400 da conferencia', async () => {
+    const raiz = await familia();
+    const destino = await familia();
+    const a = await abrir(ADM, raiz.id);
+    let rodou = false;
+    // depois da conferencia (que ja contou zero subfamilias) e antes do UPDATE
+    injecaoSql = 'SELECT COUNT(*) as c FROM familias_material_almoxarifado WHERE parent_id = ? AND ativo = 1';
+    injecao = async () => {
+      rodou = true;
+      await outro(raiz.id, { descricao: 'na janela' });
+      await familia({ parent: raiz.id });
+    };
+    const r = await put(ADM, raiz.id, { ...a.corpo({ nome: 'Renomeada' }), parent_id: destino.id });
+    injecaoSql = 'SELECT * FROM familias_material_almoxarifado WHERE id = ?';
+    assert.ok(rodou, 'a injecao nao rodou — teste vazio');
+    assert.strictEqual(r.status, 409, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, L409);
+    assert.deepStrictEqual([(await linha(raiz.id)).parent_id, (await linha(raiz.id)).descricao], [null, 'na janela']);
+  });
+
+  await test('[RN-27, Fase 5 r3] na janela SO nasce a subfamilia (as lidas intactas): o 400 literal da conferencia, nao o 409', async () => {
+    const raiz = await familia();
+    const destino = await familia();
+    const a = await abrir(ADM, raiz.id);
+    let rodou = false;
+    injecaoSql = 'SELECT COUNT(*) as c FROM familias_material_almoxarifado WHERE parent_id = ? AND ativo = 1';
+    injecao = async () => { rodou = true; await familia({ parent: raiz.id }); };
+    const r = await put(ADM, raiz.id, { ...a.corpo({ nome: 'Renomeada' }), parent_id: destino.id });
+    injecaoSql = 'SELECT * FROM familias_material_almoxarifado WHERE id = ?';
+    assert.ok(rodou, 'a injecao nao rodou — teste vazio');
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, 'Família com subfamília(s) ativa(s) não pode virar subfamília');
+    assert.strictEqual((await linha(raiz.id)).parent_id, null);
+  });
+
   db.get = getOriginal;
+
+  await test('[RN-24, Fase 5 r3] o lido numero compara como texto: descricao lida 3 contra a gravada "3", o usuario muda -> 200', async () => {
+    const f = await familia({ descricao: '3' });
+    const r = await put(ADM, f.id, { nome: 'Renomeada', descricao: 'outra', tipo_uso: 'industrial', campos_lidos: { descricao: 3, nome: f.nome } });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+  });
+
   await close();
   console.log(`\n${passed} passaram, ${failed} falharam`);
   process.exit(failed ? 1 : 0);

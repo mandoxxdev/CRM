@@ -20,6 +20,8 @@ jest.mock('react-toastify', () => ({
 }));
 let mockUser = null;
 jest.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: mockUser }) }));
+let mockEfetivo;
+jest.mock('../../services/permissionsCache', () => ({ getEffectiveUser: (u) => (mockEfetivo !== undefined ? mockEfetivo : u) }));
 
 const ADMIN_SISTEMA = { id: 5, nome: 'Admin do sistema', role: 'admin' };
 const ADM_PERFIL = { id: 4, nome: 'Adm', role: 'user', perfil_almoxarifado: 'ADMINISTRADOR' };
@@ -34,7 +36,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
 });
-afterEach(() => { act(() => root.unmount()); container.remove(); });
+afterEach(() => { act(() => root.unmount()); container.remove(); mockEfetivo = undefined; });
 
 async function renderNovo(user) {
   mockUser = user;
@@ -63,5 +65,14 @@ describe('C261 (Etapa 126) — RN-11: a dica do formulário de material', () => 
     expect(link('/almoxarifado/configuracoes?tab=familias')).not.toBeNull();
     expect(link('/almoxarifado/configuracoes?tab=localizacoes')).not.toBeNull();
     expect(container.textContent).not.toContain('solicite a um administrador');
+    // Fase 5 (r3): o texto do link diz para onde ele leva
+    expect(link('/almoxarifado/configuracoes?tab=localizacoes').textContent).toBe('Configurações → Localizações');
+    expect(link('/almoxarifado/configuracoes?tab=familias').textContent).toBe('Configurações → Famílias');
+  });
+  test('[RN-11, Fase 5 r3] decide pelo usuário EFETIVO: logado Administrador, efetivo administrador do sistema -> "solicite"', async () => {
+    mockEfetivo = ADMIN_SISTEMA;
+    await renderNovo(ADM_PERFIL);
+    expect((container.textContent.match(/solicite a um administrador/g) || []).length).toBe(2);
+    expect(link('/almoxarifado/configuracoes?tab=familias')).toBeNull();
   });
 });
