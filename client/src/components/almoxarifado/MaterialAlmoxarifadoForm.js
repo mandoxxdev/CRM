@@ -61,6 +61,9 @@ const MaterialAlmoxarifadoForm = () => {
   // `controles_lidos`, e o servidor recusa (409) o salvar que desfaria o controle que outra pessoa mudou enquanto o
   // formulario estava aberto. Ref, e nao o state: marcar a caixa antes de salvar muda o `form`, nao o que foi lido.
   const controlesLidosRef = useRef(null);
+  // Etapa 124 (D (123), RN-07): o mesmo para a família e a subfamília — vão no PUT como `familia_lida`, e o servidor recusa
+  // (409) o salvar que desfaria a família ou a subfamília que outra pessoa mudou depois que o formulário abriu.
+  const familiaLidaRef = useRef(null);
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -322,6 +325,10 @@ const MaterialAlmoxarifadoForm = () => {
       const m = res.data;
       setFamiliaGravadaId(m.familia_id ? String(m.familia_id) : '');
       controlesLidosRef.current = { controle_lote: !!m.controle_lote, controle_serie: !!m.controle_serie };
+      familiaLidaRef.current = {
+        familia_id: m.familia_id ? Number(m.familia_id) : null,
+        subfamilia_id: m.subfamilia_id ? Number(m.subfamilia_id) : null,
+      };
       setForm({
         codigo: m.codigo || '',
         nome: m.nome || '',
@@ -498,6 +505,7 @@ const MaterialAlmoxarifadoForm = () => {
       let res;
       if (isEdit) {
         if (controlesLidosRef.current) payload.controles_lidos = controlesLidosRef.current;
+        if (familiaLidaRef.current) payload.familia_lida = familiaLidaRef.current;
         res = await api.put(`/almoxarifado/materiais/${id}`, payload);
         toast.success('Material atualizado!');
       } else {

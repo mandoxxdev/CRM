@@ -1050,3 +1050,86 @@ describe('MaterialAlmoxarifadoForm — RN-06 (Etapa 116): o PUT diz os controles
     expect(container.querySelector('form')).not.toBeNull();
   });
 });
+
+/**
+ * Etapa 124 (D (123), RN-07) — o PUT leva `familia_lida`, a família e a subfamília DE QUANDO O MATERIAL FOI CARREGADO. O
+ * servidor recusa (409) o salvar que desfaria a mudança feita por outra pessoa depois que o formulário abriu. A fonte é o
+ * carregado, não o state: trocar a subfamília no select antes de salvar não muda o lido.
+ */
+describe('MaterialAlmoxarifadoForm — RN-07 (Etapa 124): o PUT diz a família que leu', () => {
+  const OUTRA_SUB = { id: 10, codigo: 'CHP-GRS', nome: 'Chapas grossas', parent_id: 5, ativo: 1 };
+  const COM_SUB = { ...MATERIAL_DO_CLIENTE, id: 80, familia_id: 5, subfamilia_id: 6 };
+  const SEM_SUB = { ...MATERIAL_DO_CLIENTE, id: 82, familia_id: 5, subfamilia_id: null };
+  const selectSub = () => [...container.querySelectorAll('select')].find((s) => [...s.options].some((o) => o.textContent === '— nenhuma —'));
+  const mock = () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/familias') return Promise.resolve({ data: [...FAMILIAS, OUTRA_SUB] });
+      if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
+      if (url === '/almoxarifado/materiais/80') return Promise.resolve({ data: COM_SUB });
+      if (url === '/almoxarifado/materiais/82') return Promise.resolve({ data: SEM_SUB });
+      if (url.startsWith('/almoxarifado/materiais/')) return Promise.resolve({ data: MATERIAL_DO_CLIENTE });
+      return Promise.resolve({ data: [] });
+    });
+  };
+
+  test('abre com 5/6, troca a subfamília para 10 e salva: subfamilia_id 10 e familia_lida {5, 6}', async () => {
+    mock();
+    await renderizarEdicao(80);
+    expect(selectSub().value).toBe('6');
+    preencher(selectSub(), '10');
+    expect(selectSub().value).toBe('10');
+    await submeter();
+    const payload = api.put.mock.calls[0][1];
+    expect(payload.subfamilia_id).toBe(10);
+    expect(payload.familia_lida).toEqual({ familia_id: 5, subfamilia_id: 6 });
+  });
+
+  test('abre sem subfamília: familia_lida {5, null} (null, não string vazia)', async () => {
+    mock();
+    await renderizarEdicao(82);
+    await submeter();
+    expect(api.put.mock.calls[0][1].familia_lida).toEqual({ familia_id: 5, subfamilia_id: null });
+  });
+
+  test('trocar de material sem desmontar a tela: o PUT leva o par do material NOVO', async () => {
+    mock();
+    let navegar;
+    function Navegador() { navegar = useNavigate(); return null; }
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={['/almoxarifado/materiais/80/editar']}>
+          <Navegador />
+          <Routes><Route path="/almoxarifado/materiais/:id/editar" element={<MaterialAlmoxarifadoForm />} /></Routes>
+        </MemoryRouter>,
+      );
+    });
+    await esperarEfeitos();
+    await act(async () => { navegar('/almoxarifado/materiais/82/editar'); });
+    await esperarEfeitos();
+    await submeter();
+    expect(api.put.mock.calls[0][0]).toBe('/almoxarifado/materiais/82');
+    expect(api.put.mock.calls[0][1].familia_lida).toEqual({ familia_id: 5, subfamilia_id: null });
+  });
+
+  test('cadastro novo (POST) não leva familia_lida', async () => {
+    await renderizarNovo();
+    await preencherObrigatorios();
+    await submeter();
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(api.post.mock.calls[0][1]).not.toHaveProperty('familia_lida');
+    expect(api.post.mock.calls[0][1].codigo).toBe('CHP-100');
+  });
+
+  test('o 409 da subfamília mudada aparece com a literal e o formulário continua aberto', async () => {
+    const E1S = 'A subfamília do material CHP-002 foi mudada por outra pessoa depois que você abriu o cadastro — salvar '
+      + 'desfaria essa mudança, e nada foi gravado. Recarregue o material e salve de novo.';
+    mock();
+    api.put.mockRejectedValueOnce({ response: { status: 409, data: { error: E1S } } });
+    await renderizarEdicao(80);
+    await submeter();
+    await esperarEfeitos();
+    expect(toast.error).toHaveBeenCalledWith(E1S);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(container.querySelector('form')).not.toBeNull();
+  });
+});
