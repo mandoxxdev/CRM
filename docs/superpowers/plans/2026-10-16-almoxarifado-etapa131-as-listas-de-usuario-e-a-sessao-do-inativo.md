@@ -109,15 +109,15 @@
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 — tronco (núcleo: o enriquecimento)** — `enrichUserFromDb` (RN-06, RN-07) + `sessaoDoInativo.api.test.js` (pronto = RN-06/07
+- [x] **T1 — tronco (núcleo: o enriquecimento)** — `enrichUserFromDb` (RN-06, RN-07) + `sessaoDoInativo.api.test.js` (pronto = RN-06/07
   verdes; a RN-08 depende da T2); os dois `[RN-13 F5 r2]` de `leituraDeUsuarios.api.test.js` mudam à vista (rebaixamento → 401; o
   segundo é reescrito). T1 e T2 editam esse mesmo arquivo de teste: em série.
-- [ ] **T2 — tronco (núcleo: as listas)** — as três rotas para `services/leituraDeUsuarios.js`, a projeção, o `index.js` (RN-01..RN-05) +
+- [x] **T2 — tronco (núcleo: as listas)** — as três rotas para `services/leituraDeUsuarios.js`, a projeção, o `index.js` (RN-01..RN-05) +
   `listasDeUsuarios.api.test.js`; o RN-12 da 130 muda à vista. Outra regra que a T1 (independente), serializada pelo "um teste por vez".
-- [ ] **T3 — integração** — RN-08 em `sessaoDoInativo.api.test.js` (rota **e** serviço), depois de T1 e T2.
-- [ ] **T4 — galho (client)** — `services/api.js` (RN-09) + `components/Login.js` (RN-10), `apiSessaoEncerrada.test.js` e
+- [x] **T3 — integração** — RN-08 em `sessaoDoInativo.api.test.js` (rota **e** serviço), depois de T1 e T2.
+- [x] **T4 — galho (client)** — `services/api.js` (RN-09) + `components/Login.js` (RN-10), `apiSessaoEncerrada.test.js` e
   `LoginSessaoEncerrada.test.js`, com controle positivo. Nenhum seletor muda: leem `id`, `nome` e `cargo`.
-- [ ] **T5 — fechamento** — novidades (B844+, C270 resolvida, C271 o socket do chat, D (131), F (131), a seção da etapa, cabeçalho),
+- [x] **T5 — fechamento** — novidades (B844+, C270 resolvida, C271 o socket do chat, D (131), F (131), a seção da etapa, cabeçalho),
   spec 23 (o núcleo), mapa, guia, manual, este plano (retro, "Próxima tarefa detalhada — Etapa 132"), o "defeito que escapou" da retro da
   130. CLAUDE.md: a trava **não** muda.
 
@@ -126,4 +126,94 @@ um usuário desativado com o token na mão levando 401. Sem migração (nenhuma 
 
 ## Execução — o que aconteceu
 
-*(preencher)*
+- **Fase 0** — medida por mim (grep nos chamadores com a régua testada contra um caso que existe — `Dashboard.js:136`): 12
+  consumidores das três listas, os campos que cada um lê (`id`, `nome`; `cargo` em dois), `/filtrar` sem chamador; o cache de 30 s do
+  `enrichUserFromDb` morto (uma instância por pedido); o interceptor de 401 do client; os testes que montam o `authenticateToken`.
+- **Fase 2 antes do código de produção:** 2 Important + 7 Minor, todos aceitos (ver o topo); os testes T1, T2 e T4 foram escritos e
+  rodados **vermelhos** antes do código (`listas` 0/7, `sessao` 2/6 — os 2 eram controles —, e o client caiu no 401 sem
+  `sessao_encerrada`). Design e plano `b6ebf17d`.
+- **Ordem dos commits ≠ ordem das tasks:** T2 (`31976510`) saiu antes de T1 (`831386a2`) porque a RN-08 (no arquivo da T1) depende
+  das rotas movidas; o `leituraDeUsuarios.api.test.js` foi dividido entre os dois commits (o RN-12 no da T2, os RN-13 no da T1) pelo
+  índice do git, para cada commit ficar verde sozinho. T3 entrou junto com a T1 (o mesmo arquivo). T4 `bc51b6b5`.
+- **Controles positivos** (âncora contada = 1, md5 antes/sabotado/restaurado, restauro por cópia — `scratchpad/e131/bateria.js`):
+  **22** antes da Fase 5 (A1..A9, B1..B5, C1..C5) — 20 caem pelo cenário certo, 2 equivalentes (A9: o `undefined → null` do extra,
+  a linha do SQL sempre traz `cargo`; B4: um `Map` declarado e não usado) — e **9** das correções da Fase 5 (D1..D9), todas caem.
+- **Boot** com pasta de dados vazia (`scratchpad/e131/boot.sh`), antes e depois da Fase 5: login, as seis rotas, o comum criado com as
+  listas reduzidas, desativado → 401 L11 nas listas, no `/auth/me` e no `/usuarios/:id`; o login dele, 401 *"Email ou senha
+  inválidos"*. Log com 2 linhas de erro — os dois `duplicate column` da migração de `materiais_escritorio`, anteriores (os mesmos da 130).
+  **Migração:** nenhuma — banco novo e antigo não se aplica.
+- **CLAUDE.md:** a seção da trava **não mudou** (nada aqui mexe em saldo). A seção "Autorização do almoxarifado" continua verdadeira.
+- **Suíte antes dos commits de código (T1, T2, T4):** `test:api` **440/440**; `test:almoxarifado` **44/0**; `test:validation` 4/0,
+  `test:safealter` 3/0, `test:sqlite` 10/0; client **129** suítes / **1755** testes; `CI=true build` *Compiled successfully*.
+- **Fase 5** — três revisores frescos em paralelo sob a trava de máquina; o de sabotagem numa worktree própria (`CRM-wt-e131-r3`,
+  removida com as junções desfeitas antes). Eu não rodei nada enquanto eles trabalhavam.
+  - **Regra (r1): 0 Critical/Important, 1 Minor** (não reproduzido, por leitura): na corrida entre a releitura da sessão e a da lista, a
+    lista responde o 401/403 antigo do contexto → declarado em D (131). Resistiu: os corpos das três rotas idênticos aos de `12de5dc3`;
+    o cache; o client até o último gesto (o `error.config.url` continua relativo no axios 1.x).
+  - **Permissão (r2): 2 Minor reais (reproduzidos, `e131r2-boot.js`, `e131r2-enrich.js`)** — token sem id/id 0 seguia com o papel do
+    token; erro não-BUSY deixava o desativado passar como comum (e o BUSY no perfil virava Produção) → corrigidos (`5974a6c7`, B845). E
+    três candidatos a C: o chat (medido: o desativado conecta de novo e recebe o conteúdo das mensagens; o apagado com o socket aberto
+    também) → **C271** reescrita com o medido; a Lista de Tarefas devolve `role` de todos → **C272**; as rotas de permissões com `role ===
+    'admin'` exato → **C273**. A tabela perfil × rota medida (14 perfis × 6 rotas, servidor de verdade) está no relatório do r2; o resumo, em "O que a revisão encontrou" da novidades.
+  - **Sabotagem (r3): 46** sabotagens novas, **39** sobreviveram: **31** (a) faltava asserção → viraram cenários (`5974a6c7`,
+    `38dc9a46`) e, rodada a bateria dele de novo contra a branch, **todas caem**; **8** (b) equivalentes provados (o `'true'` do ativo, o
+    `DISTINCT`, o perfil do token que nunca vem, as variações da régua do login, o `config?.`, o aviso pela mensagem, o `!sessaoExpirada`).
+- **Suíte final (depois da Fase 5, antes da documentação):** `test:api` **440/440**; `test:almoxarifado` **44/0**; `test:validation`
+  4/0, `test:safealter` 3/0, `test:sqlite` 10/0; client **129** suítes / **1756** testes; `CI=true build` *Compiled successfully*.
+- **T5 — fechamento** (o commit de documentação — ver `git log`): novidades (cabeçalho, B842 marcada como substituída, B844–B847, C270
+  resolvida, C271–C273, D (131), F (131), a seção da etapa, "Onde estamos"), spec 23 (a B842 da 130 dizia "erro do banco não rebaixa" —
+  **estava errado como regra**, dito à vista), mapa, guia, manual (5.2d e 5.2e nova), este plano, o "defeito que escapou" da retro da 130.
+
+## Tasks — estado
+
+- [x] **T1** `831386a2` (Fase 5 `5974a6c7`) · [x] **T2** `31976510` (Fase 5 `5974a6c7`) · [x] **T3** `831386a2` · [x] **T4**
+  `bc51b6b5` (Fase 5 `38dc9a46`) · [x] **T5** — o commit de documentação.
+
+## Retro (4 números)
+
+1. **Rodadas de correção até verde:** **1** (Fase 5). Testes antigos que mudaram à vista: os dois `[RN-13 F5 r2]` e o RN-12 de
+   `leituraDeUsuarios.api.test.js` (130).
+2. **Achados da revisão:** Fase 2 — **2 Important + 7 Minor, todos reais** (o I1 reproduzido). Fase 5 — r1 **1 Minor** real (declarado);
+   r2 **2 Minor** reais (corrigidos) + 3 candidatos a C reais (C271–C273); r3 **39** sobreviventes — 31 viraram cenários, 8 equivalentes
+   provados; **0** ruído.
+3. **Paralelismo:** **0** galhos em paralelo de fato (a T4 é galho, mas o "um teste por vez" a serializa), **0** retrabalho; **1** revisor
+   na Fase 2 e **3** em paralelo na Fase 5 sob a trava.
+4. **Defeito que escapou:** *(preencher na Etapa 132)*.
+
+## Próxima tarefa detalhada — Etapa 132
+
+*(A série desta etapa foi B844–B847, C271–C273, nenhuma A — a 132 começa em **B848**, **C274**, **A79**; confira com `grep -oE` antes.)*
+
+**Medido em 2026-10-16 (Fase 5 desta etapa):** sem o P.O., três candidatas do núcleo, todas reversíveis.
+
+1. **C271 — o desativado no chat em tempo real (núcleo) — a principal. Não depende do P.O.** `server/services/chat/socket.js`:
+   `criarAuthSocket` (linha ~22) só faz `jwt.verify`; `io.on('connection')` põe o socket na sala `user:<id>`; `join_conversa` (~53)
+   confere `chatService.isParticipant`, que não olha `ativo`. **Medido pelo r2 desta etapa** (`scratchpad/e131/e131r2-boot.js`, com
+   socket.io-client): desativado → conexão nova aceita com o token velho, entra na conversa, recebe o conteúdo da mensagem nova; apagado
+   com o socket aberto continua recebendo. **Candidato:** reler `usuarios.ativo` no handshake (recusar com `Sessão encerrada…`) e no
+   `join_conversa`; no `PATCH /api/usuarios/:id/status` (`index.js` ~3945) com `ativo = 0` e no `DELETE /api/usuarios/:id` (~3992),
+   derrubar os sockets da sala `user:<id>` (`initChatSocket` devolve o `chatSocket` — `index.js` ~22567 — medir se expõe o `io`).
+   **Pontos de atenção:** o teste existente `chatSocketTokenNaUrl.api.test.js` monta o `criarAuthSocket` com usuário fora do banco
+   (o handshake passa a precisar do `db`: mudar a assinatura muda esse teste à vista); o `index.js` cria o socket depois de o banco
+   abrir; o BUSY no handshake não pode derrubar ninguém (o client do chat reconecta?) — medir `client/src/services` do chat antes. Boot
+   com pasta vazia obrigatório (mexe no `index.js`).
+2. **C272 — a Lista de Tarefas devolve o papel de todos (núcleo).** `server/services/todolist/todolistService.js:46`
+   (`SELECT id, nome, email, role`), servido por `GET /api/todolist/usuarios` e dentro do `/api/todolist/board`. **Medido nesta etapa:**
+   `grep "\.role" client/src/components/todolist` → **0** (a tela não lê o papel) → candidato: tirar `role` do SELECT (ou a projeção
+   da B844). Confirmar com teste de rota.
+3. **C273 — as rotas de permissões com `role === 'admin'` exato (núcleo).** `/api/permissoes/*` (`index.js` ~18475, ~18707) recusam o
+   super administrador sem o papel *admin* e o *Admin* com maiúscula, que o cadastro aceita (`canManageUsers`). Candidato: a mesma régua.
+   **Atenção:** muda quem pode mexer em permissão — é ampliação de acesso; registrar na letra B com o descartado.
+4. **Dependem do P.O. — NÃO implemente:** **B808**, **B755**, **B761**/**C239**, **C224**, o resto da **C225**, **C228**, **C219**,
+   **C230**, o reparo da **C246** (e a **C247**), a tabela de conversões e o grupo acima de família, a **régua do tempo de recebimento
+   (E2)**, a **C268** (o custo sigiloso?), a **C269** (o documento da nota deve seguir o estoque corrigido pelo estorno?); na 05, os itens
+   de produto e a **C198**; na 06, a **B11** e a Engenharia; na 21, a valorização por cliente e previsto × realizado; na 22, **B13**,
+   **B101**/G30, **G38**.
+
+**Escolhida: a C271 (1)**, com a C272 (2) se couber com qualidade — as duas do núcleo, reversíveis, registradas na letra B. A C273
+amplia acesso: só com o registro explícito na letra B, numa etapa própria.
+
+**O que já está pronto e não precisa reabrir:** as seis leituras de `services/leituraDeUsuarios.js` (com a projeção
+`projetarListaDeUsuarios(user, linhas, extras)` — a C272 pode reusá-la), o `enrichUserFromDb` (401 `USUARIO_INATIVO`, `respondDbError`
+em qualquer erro, sem cache; `LITERAL_SESSAO_ENCERRADA` exportado — o handshake do chat deve reusar a mesma frase), o interceptor do
+client (`sessao_encerrada=1`) e o aviso do Login.

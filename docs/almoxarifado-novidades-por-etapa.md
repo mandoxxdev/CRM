@@ -11,10 +11,14 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-16):** **Etapa 130 fechada** (os dados fiscais não mudam mais o lote, as séries nem o valor de
+> **Onde o desenvolvimento está (2026-10-16):** **Etapa 131 fechada** (do núcleo: os seletores de responsável deixam de mostrar o papel,
+> o setor e o departamento dos outros usuários a quem não gerencia usuários — **C270** resolvido, **B844**; e o usuário desativado ou
+> apagado é desconectado na primeira ação, com o aviso *"Sessão encerrada"* no login — **B845**, **B846**); a próxima é a **132** — ver
+> "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 130 fechada** (os dados fiscais não mudam mais o lote, as séries nem o valor de
 > um item que já deu entrada no estoque — recusam com a frase do que fazer, e o painel trava esses campos: **C267** resolvido, com a
 > consulta **A78** para o que já foi mudado antes; e, do núcleo, o cadastro e as permissões de um usuário passam a ser lidos só por ele
-> mesmo e por quem gerencia usuários — **B841**, **B842**); a próxima do almoxarifado é a **131** — ver "Onde estamos e o que vem a seguir".
+> mesmo e por quem gerencia usuários — **B841**, **B842**); a próxima do almoxarifado era a **131**.)*
 > *(Antes: **Etapa 129 fechada** (a conferência do recebimento e os dados fiscais não mudam
 > mais um recebimento que já deu entrada no estoque — recusam com a frase do que fazer: **C266** resolvido, com a consulta **A77** para o
 > que já foi mudado antes; e o relatório novo **Perdas por motivo** mostra quanto se perdeu, por tipo e motivo, com o valor); a próxima do
@@ -2925,7 +2929,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B843; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B847; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -9169,11 +9173,51 @@ válido por até 24 horas), ele seguia com o papel do **token** — o administra
 inteira e o cadastro dos outros, onde o rebaixado levava a recusa). Agora, sem a linha ativa no banco, a requisição segue sem papel de
 administrador, sem super administrador, sem módulo administrado e sem o perfil que o token trazia. Um erro do banco nessa releitura
 **não** rebaixa ninguém. **Descartado:** responder 401 (sessão encerrada) ao desativado — derrubaria toda requisição dele, inclusive as
-que hoje só mostram menos; fica para uma etapa do núcleo que revise a sessão do desativado. **Reversível.**
+que hoje só mostram menos; fica para uma etapa do núcleo que revise a sessão do desativado. **Reversível.** *(Etapa 131: **substituída
+pela B845** — o desativado agora leva a sessão encerrada, e o erro do banco nessa releitura **não deixa mais passar**: deixar o token como
+estava devolvia o papel ao administrador desativado num banco ocupado — medido.)*
 
 **B843 (NOVA, da Etapa 130) — a próxima etapa do almoxarifado (131).** Ver a "próxima tarefa detalhada" no plano da Etapa 130. A
 **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da **C246**/**C247**,
 a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**) e a **C268** continuam esperando vocês.
+
+**B844 (NOVA, da Etapa 131; do núcleo) — os seletores de responsável mostram de cada usuário só o que a tela usa.** Fecha a **C270**.
+Medido quem chama as três listas dos seletores (`/api/usuarios/comercial`, `/api/usuarios/por-modulo/…` e `/api/usuarios/filtrar`):
+os seletores de responsável do comercial (Propostas, Projetos, Oportunidades, Atividades, OS do comercial), o filtro do painel inicial e
+o responsável da OS do operacional — todos leem o **nome**, e dois (*Projeto* e *Proposta*) mostram também o **cargo** ("Nome - Cargo"); a
+`/filtrar` não tem tela que a chame. Agora quem gerencia usuários (super administrador ou papel *admin*) recebe as listas como antes; os
+outros recebem de cada usuário só **id, nome, e-mail, ativo e cargo** — sem papel, setor, departamento, oculto nem data de criação. **Quem
+aparece não muda:** os filtros de setor, de módulo e de marca ficam exatamente como estavam (inclusive o super administrador sem o papel
+*admin*, que continua vendo só o próprio setor, e o setor da `/filtrar`, que compara exato, sem ignorar espaço e caixa como as outras
+duas). O cache de 60 s da lista do comercial guarda as linhas inteiras e a forma é aplicada a cada pedido — o super administrador e o
+comum do mesmo setor caem na mesma entrada do cache, e cada um recebe a sua. **Descartado:** tirar o cargo (os dois seletores perderiam o
+"- Cargo"); uma forma por lista (três regras para o mesmo dado); recusar as listas (os seletores quebrariam para todos); pôr a forma na
+chave do cache (a chave teria de repetir a regra de quem gerencia usuários, e quem mudar a regra esquece a chave). **Reversível.**
+
+**B845 (NOVA, da Etapa 131; do núcleo) — o usuário desativado ou apagado é desconectado na primeira ação.** Substitui a **B842**. O token
+vale 24 horas; até aqui o desativado continuava usando o sistema como usuário comum até ele vencer. Agora, a cada requisição, sem a linha
+**ativa** no banco o servidor responde **401** *"Sessão encerrada — o usuário foi desativado ou removido"* — o navegador limpa a sessão e
+volta para o login (**B846**). Três decisões junto: (1) **erro do banco** nessa releitura não deixa mais passar — banco ocupado responde
+*"Banco temporariamente ocupado. Tente novamente em alguns segundos."* (a tela repete sozinha), outro erro responde 500; antes o pedido
+seguia com o papel do token, e num banco ocupado o administrador desativado voltava a ser administrador (medido: reativou-se). Vale
+também para a leitura do perfil do almoxarifado e da frota, que num banco ocupado fazia o Almoxarife virar Produção naquele pedido. (2) O
+token **sem** identificação de usuário (ou com uma que não seja número inteiro positivo) também leva a sessão encerrada — o login sempre
+põe a identificação, então isso só alcança um token forjado com o segredo do servidor, mas antes ele passava com o papel que trouxesse.
+(3) Saiu um cache de 30 s dessa releitura que nunca funcionou (era recriado a cada requisição); feito funcionar, a retirada de papel e a
+desativação demorariam até 30 s. **Descartado:** manter o rebaixamento (o desativado seguia usando o sistema por até 24 h); responder 403
+(a tela não desconecta com 403, mostraria "sem permissão" para sempre); deixar passar sem poder no erro do banco (o desativado passava como
+comum enquanto o erro durasse). **Reversível.** O `/api/auth/me` do desativado, que respondia 404 (a tela guardava o usuário velho),
+passa a ser essa mesma sessão encerrada.
+
+**B846 (NOVA, da Etapa 131; do núcleo) — o login diz por que a sessão caiu, e a senha errada não recarrega a página.** Quem foi
+desconectado pela **B845** chega ao login com o aviso *"Sessão encerrada — o seu usuário foi desativado ou removido. Fale com o
+administrador do sistema."* (não o de sessão expirada — não expirou). E, achado da revisão do plano: o erro do **próprio** login (senha
+errada, ou o desativado tentando entrar) recarregava a página com *"Sessão expirada. Faça login novamente para continuar."* e apagava a
+mensagem do formulário — agora o formulário mostra *"Email ou senha inválidos"* e a página fica. **Reversível.**
+
+**B847 (NOVA, da Etapa 131) — a próxima etapa (132).** Ver a "próxima tarefa detalhada" no plano da Etapa 131. A **B808**, a **B755**, a
+**B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da **C246**/**C247**, a tabela de
+conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268** e a **C269** continuam esperando vocês.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -11783,11 +11827,31 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      séries e valores no painel; depois do caminho acima, feche o pedido e refaça a reserva pelos gestos de Compras e de Reservas, e
      reimprima a etiqueta pela tela de **Lotes**. Candidata de etapa futura: o estorno da entrada de nota liberar o item para os dados
      fiscais (decisão de vocês: o documento deve seguir o estoque corrigido?).
-270. **NOVO (da revisão da Etapa 130; do núcleo, anterior a ela) — três outras leituras de usuário continuam abertas a qualquer
-     logado.** `GET /api/usuarios/por-modulo/:modulo` devolve, de quem tem acesso ao módulo pedido e é do mesmo setor, o papel, o cargo,
+270. **✅ RESOLVIDO NA ETAPA 131 (B844)** — ~~**NOVO (da revisão da Etapa 130; do núcleo, anterior a ela) — três outras leituras de usuário continuam abertas a qualquer
+     logado.**~~ *(Etapa 131: as três listas mostram de cada usuário só id, nome, e-mail, ativo e cargo a quem não gerencia usuários;
+     quem aparece não mudou.)* `GET /api/usuarios/por-modulo/:modulo` devolve, de quem tem acesso ao módulo pedido e é do mesmo setor, o papel, o cargo,
      o setor, o departamento, se é oculto e a data de criação (`por-modulo/admin` lista os administradores); `/api/usuarios/comercial` e
      `/api/usuarios/filtrar` também devolvem o papel (a segunda só para uma marca que o próprio tem). São os seletores de responsável das
      telas — fechar exige medir cada um, como a **B841** fez com as três. **O que fazer:** nada por enquanto; candidata de etapa do núcleo.
+271. **NOVO (da Etapa 131; do núcleo, anterior a ela) — o desativado continua no chat e nas imagens assinadas.** A sessão encerrada
+     (**B845**) vale para tudo que passa pelo servidor com o token, mas há três caminhos que não passam: (1) o **chat em tempo real** só
+     confere o token — medido: depois de desativado, o usuário abre uma conexão nova com o token velho (até 24 h), entra na conversa de que
+     participa e **recebe o conteúdo das mensagens novas**; a conexão já aberta (inclusive a do usuário **apagado**) segue recebendo das
+     conversas em que já entrou até desconectar, sem limite de tempo; (2) os **links assinados** de fotos da proposta e avatares continuam
+     abrindo até vencer (até cerca de 13 h e 25 h); (3) algumas telas pedem arquivo por fora do canal comum (o download da cotação, os
+     modais de família e grupo, fornecedores do grupo, a ficha do cliente, o modelo da proposta) — recebem a recusa sem desconectar; o
+     próximo clique desconecta. **O que fazer:** ao desligar alguém, desative **e** peça para fechar o navegador; candidata de etapa do
+     núcleo (reler o usuário ao conectar e ao entrar na conversa, e derrubar as conexões dele ao desativar).
+272. **NOVO (da revisão da Etapa 131; do núcleo, anterior a ela) — a lista de usuários da Lista de Tarefas mostra o papel de todos.**
+     `GET /api/todolist/usuarios` e o quadro (`/api/todolist/board`) devolvem o **papel** (administrador ou não) de todos os usuários
+     ativos a quem tem o módulo Lista de Tarefas — o mesmo que a **C270** era, por outra porta (medido). Na mesma linha, de menor peso: a
+     tela de perfis do almoxarifado mostra a quem a configura quem é forçado a Administrador (o super administrador e o administrador do
+     sistema) — informação que a tela usa, para um público restrito. **O que fazer:** nada por enquanto; candidata de etapa do núcleo
+     (medir se a tela lê o papel e reduzir a id, nome e e-mail).
+273. **NOVO (da revisão da Etapa 131; do núcleo, anterior a ela) — o super administrador sem o papel *admin* não abre as telas de
+     permissão.** As rotas de permissões (`/api/permissoes/…`) aceitam só o papel *admin* escrito exatamente assim; o super administrador
+     com outro papel, ou um papel *Admin* com maiúscula, leva recusa — enquanto o cadastro de usuários os aceita. **O que fazer:** dê o
+     papel *admin* a quem é super administrador; candidata de etapa do núcleo (usar a mesma régua do cadastro).
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -13013,7 +13077,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(130) A lista reduzida de usuários mostra também os inativos e os ocultos** — como a lista inteira sempre mostrou (as abas do
   almoxarifado filtram os inativos; os ocultos aparecem, como antes) (**B841**).
 - **(130) O usuário desativado com o token válido continua entrando nas telas** de usuário comum até o token vencer (24 h) — o que
-  mudou é que ele não é mais administrador (**B842**).
+  mudou é que ele não é mais administrador (**B842**). *(Etapa 131: não vale mais — ele é desconectado na primeira ação, **B845**.)*
+- **(131) O cargo continua nas listas dos seletores** para todos (dois seletores mostram "Nome - Cargo") — o papel, o setor e o
+  departamento não (**B844**).
+- **(131) Quem aparece nos seletores não mudou** — o super administrador sem o papel *admin* continua vendo só o próprio setor, e a
+  `/filtrar` continua comparando o setor exato (as outras duas ignoram espaço e caixa) (**B844**).
+- **(131) Na corrida rara** em que o usuário é desativado ou apagado entre a releitura da sessão e a da própria lista, a lista responde
+  como antes (*"Usuário inativo"* ou *"Usuário não encontrado"*); a ação seguinte já leva a sessão encerrada.
+- **(131) O chat em tempo real e os links assinados não desconectam o desativado** (**C271**).
 
 ### E. Regras que foram DEDUZIDAS e nunca confirmadas com vocês — perguntas, não requisitos atendidos (E1, a remessa mista; E2, o tempo de recebimento)
 
@@ -13925,6 +13996,13 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(131) Um boot de verdade foi feito, sem navegador.** Pasta de dados vazia, servidor subido, login do administrador semeado, as seis
+leituras de usuário respondendo; um usuário comum criado, logado (as listas vieram reduzidas), **desativado** pelo administrador — e o
+token dele levou *"Sessão encerrada — o usuário foi desativado ou removido"* nas listas, no `/api/auth/me` e no próprio cadastro; o login
+dele de novo, *"Email ou senha inválidos"*. O que **só o navegador** prova: o roteiro da Etapa 131 no guia — a tela aberta do desativado
+voltando ao login com o aviso amarelo, a senha errada mostrando a mensagem sem recarregar, e os seletores de responsável (Propostas,
+Projeto, OS) listando como antes, com o "- Cargo".
 
 **(130) Nenhum clique foi dado nesta etapa no navegador.** Mudou o painel do recebimento (os campos travados do item que entrou e a
 atualização depois do *Processar* que falha) — provado por teste com a tela real e só a fronteira HTTP simulada (**5** casos); o servidor,
@@ -26881,16 +26959,83 @@ outras leituras abertas (**C270**); o de **sabotagem** fez **38** sabotagens al�
 (o valor **menor**, o "99,5", o status real da falha no meio, o import e a chamada do registro, a data com lixo no começo) e viraram
 cenários; **6** foram provadas inofensivas.
 
+## Etapa 131 — As listas de usuário e a sessão do desativado (2026-10-16)
+
+Duas coisas do núcleo, as duas fechando o que a Etapa 130 deixou aberto. A primeira: os seletores de **responsável** (de propostas,
+projetos, oportunidades, atividades e OS) traziam, de cada usuário listado, o papel (quem é administrador), o setor, o departamento e
+outros dados que a tela nem mostra — qualquer pessoa logada os via. Agora quem não gerencia usuários recebe só o que a tela usa: nome,
+cargo, e-mail. A segunda: o usuário **desativado** (ou apagado) continuava usando o sistema até o token vencer, em até 24 horas. Agora, na
+primeira ação depois de desativado, ele volta para o login com o aviso *"Sessão encerrada"* — e a senha errada no login não recarrega
+mais a página apagando a mensagem.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Os seletores de responsável traziam o papel, o setor, o departamento, o oculto e a data de criação de cada usuário, para qualquer logado | Para quem não gerencia usuários, só id, nome, e-mail, ativo e cargo; quem aparece não muda (**B844**) |
+| O desativado com o token válido usava o sistema como usuário comum até 24 h | Primeira ação: volta ao login com *"Sessão encerrada — o seu usuário foi desativado ou removido. Fale com o administrador do sistema."* (**B845**, **B846**) |
+| Num banco ocupado, o administrador desativado voltava a ser administrador naquela ação | *"Banco temporariamente ocupado. Tente novamente em alguns segundos."* — a tela repete sozinha (**B845**) |
+| Senha errada no login recarregava a página com *"Sessão expirada…"* e sumia a mensagem | O formulário mostra *"Email ou senha inválidos"* e fica (**B846**) |
+
+### As regras, com o cenário exato
+
+Preparação: o **administrador do sistema**; um usuário **comum** (sem gerenciar usuários) com acesso ao Comercial; um vendedor
+**V** do mesmo setor com acesso ao Comercial e cargo *Vendedor*.
+
+**1. O seletor de responsável.** Logado como o **comum**, **Comercial → Propostas → Nova**: o seletor *Responsável* lista os mesmos nomes
+de antes (os do setor dele com o Comercial, e os administradores). Em **Projetos → Novo**, *V* aparece como *"V - Vendedor"*. Pela API,
+`GET /api/usuarios/comercial`: cada linha com só `id`, `nome`, `email`, `ativo` e `cargo`. Logado como o **administrador**, a mesma
+chamada traz também `role`, `setor`, `departamento` e `created_at`, como antes. Igual para `/api/usuarios/por-modulo/comercial` e para
+os `items` de `/api/usuarios/filtrar?flag=compras`.
+
+**2. O desativado é desconectado.** Abra o sistema como o **comum** num navegador. Em outro, como **administrador**, **Admin → Usuários** →
+desative o comum. Volte ao primeiro navegador e clique em qualquer coisa que busque dados (ex.: **Propostas**): a tela volta ao login com o
+aviso *"Sessão encerrada — o seu usuário foi desativado ou removido. Fale com o administrador do sistema."*. Pela API com o token dele:
+**401** `{"error":"Sessão encerrada — o usuário foi desativado ou removido","code":"USUARIO_INATIVO"}`.
+
+**3. O login.** Ainda no primeiro navegador, tente entrar com o comum: *"Email ou senha inválidos"* aparece no formulário e a página não
+recarrega (o aviso de sessão encerrada continua acima). Com uma senha errada de qualquer usuário: a mesma frase, sem recarregar.
+
+### O que esta etapa NÃO cobre
+
+1. **O chat em tempo real, os links assinados e as telas que baixam arquivo por fora** — não desconectam o desativado (**C271**).
+2. **A lista de usuários da Lista de Tarefas** ainda mostra o papel de todos (**C272**).
+3. **As telas de permissão** recusam o super administrador sem o papel *admin* (**C273**).
+4. **O cargo** continua nas listas dos seletores para todos (**B844**).
+5. As decisões que esperam vocês: **B808**, **B755**, **B761**/**C239**, **C224**, **C225**, **C228**, **C219**, **C230**,
+   **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (**E2**), a **C268** e a **C269**.
+
+### O que a revisão encontrou
+
+A **medição** achou os doze chamadores das três listas e o que cada um lê (nome; o cargo em dois; ninguém lê o papel) e que o cache de 30 s
+da releitura da sessão nunca funcionou. A **revisão do plano** (antes do código) reproduziu que, num banco ocupado, o administrador
+desativado voltava a ser administrador (a primeira versão do plano congelava isso) e que a senha errada no login recarregava a página
+com "sessão expirada"; pediu cenários para as recusas que as listas já tinham e uma prova de que o cache foi usado — tudo entrou antes do
+código. A **revisão adversarial do código** (três revisores, executando): o de **regra** confirmou que as três listas filtram exatamente
+como antes e que ninguém recebe a forma de outro pelo cache (uma corrida rara ficou declarada em D); o de **permissão** mediu a tabela
+perfil × rota com o servidor de verdade e achou que um token sem identificação de usuário seguia com o papel que trouxesse e que um erro
+do banco que não fosse "ocupado" deixava o desativado passar como comum — os dois corrigidos (**B845**) —, além do chat (**C271**, medido
+com o desativado recebendo mensagens), da Lista de Tarefas (**C272**) e das telas de permissão (**C273**); o de **sabotagem** fez **46**
+sabotagens além das **22** já feitas: **31** mostraram cenário faltando (filtros da `/filtrar` sem caso, ordem por nome, limites, o
+erro da lista, o perfil do administrador do módulo, o "respondeu e seguiu") e viraram cenários; **8** foram provadas inofensivas.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 131 entregue (2026-10-16):** **as listas de usuário e a sessão do desativado** (do núcleo). Os seletores de responsável mostram
+  de cada usuário só o que a tela usa para quem não gerencia usuários (**C270** resolvido — **B844**); o desativado ou apagado é
+  desconectado na primeira ação, com o aviso no login, e a senha errada não recarrega mais a página (**B845**, **B846**). **O que é seu:**
+  as decisões **B844 a B846** (reversíveis); os avisos **C271**, **C272** e **C273**; as limitações **(131)** em D e a verificação
+  **(131)** em F. Nenhuma consulta nova em A.
+  **Próxima: Etapa 132 — ver a "próxima tarefa detalhada" no plano da Etapa 131.**
 
 - **Etapa 130 entregue (2026-10-16):** **o item que entrou não muda pela nota, e as leituras de usuário.** Os dados fiscais recusam
   mudar o lote, as séries, o valor unitário e o total de um item que já deu entrada no estoque, e o painel trava esses campos (**C267**
   resolvido — **B838**, **B839**, **B840**); do núcleo, o cadastro e as permissões de um usuário são lidos só por ele e por quem gerencia
   usuários, e o administrador desativado deixa de ser administrador (**B841**, **B842**). **O que é seu:** a consulta **A78** (opcional);
   as decisões **B838 a B842** (reversíveis); os avisos **C269** e **C270**; as limitações **(130)** em D e a verificação **(130)** em F.
-  **Próxima: Etapa 131 — ver a "próxima tarefa detalhada" no plano da Etapa 130.**
+  *(Próxima, na época: Etapa 131 — entregue acima.)*
 
 - **Etapa 129 entregue (2026-10-16):** **a conferência depois da entrada e as perdas com valor.** A conferência e os dados fiscais
   recusam mudar um recebimento que já deu entrada no estoque, a conferência não marca mais *Aprovado* e não grava durante o

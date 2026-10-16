@@ -204,7 +204,12 @@ Sem migração (nenhuma coluna, nenhuma tabela): a prova de primeiro boot não s
    viraram cenários, 8 equivalentes provados; **0** ruído.
 3. **Paralelismo:** **0** galhos em paralelo de fato (T2 e T4 são galhos por regra, mas "um teste por vez" os serializa), **0**
    retrabalho; **1** agente de medição na Fase 0, **1** revisor na Fase 2 e **3** em paralelo na Fase 5 sob a trava.
-4. **Defeito que escapou:** *(preencher na Etapa 131)*.
+4. **Defeito que escapou:** **1** (achado na Fase 2 da Etapa 131, reproduzido pela sonda `e131rev2-busy.js`): a B842 desta etapa
+   (Fase 5, `01dfd645`) congelou "erro do banco no enriquecimento não rebaixa ninguém" — com um SQLITE_BUSY nessa leitura, o
+   administrador **desativado** seguia com o papel do token (`PATCH /api/usuarios/3/status` → 200; sem o BUSY, 403). O teste
+   `[RN-13 F5 r2] erro do banco … nao rebaixa ninguem` prendia o defeito como regra. Corrigido na 131 (503 no BUSY; na Fase 5 da 131,
+   qualquer erro → `respondDbError`). Vizinho, anterior a esta etapa e achado na Fase 5 da 131: o token sem `id` seguia com o papel do
+   token (o `!req.user?.id → next()` que a B842 não tocou).
 
 ## Próxima tarefa detalhada — Etapa 131
 

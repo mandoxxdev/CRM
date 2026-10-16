@@ -1035,7 +1035,17 @@ O cadastro de um usuário (o papel, se é administrador do sistema, os módulos 
 
 — também quando o usuário procurado não existe, para que a recusa não revele quem existe. A **lista** de usuários continua disponível a quem precisa escolher alguém (por exemplo, os aprovadores em **Configurações → Liberação por valor** e **Regras de aprovação**), mas, para quem não gerencia usuários, ela traz só o nome, o e-mail e se o usuário está ativo.
 
-Usuário **desativado ou excluído** deixa de ser tratado como administrador na ação seguinte, mesmo com a sessão ainda aberta; a sessão continua até expirar, com os poderes de um usuário comum. Se a leitura do cadastro no banco falhar por um instante, ninguém é rebaixado por isso.
+As listas que alimentam os seletores de **Responsável** (propostas, projetos, oportunidades, atividades, OS, o filtro do painel inicial) seguem a mesma ideia: quem gerencia usuários recebe o cadastro completo de cada pessoa listada; os outros recebem só o nome, o cargo, o e-mail e se está ativo — é o que os seletores mostram ("Nome - Cargo"). **Quem aparece** em cada seletor não depende disso: são os usuários ativos com acesso ao módulo (direto ou por grupo) e os administradores do sistema; quem não tem o papel de administrador vê só os do próprio setor (sem diferença de maiúsculas e espaços).
+
+### 5.2e Usuário desativado ou excluído
+
+O sistema relê o cadastro de quem está usando a cada ação. Usuário **desativado ou excluído** — mesmo com a sessão ainda aberta — tem a ação seguinte recusada com
+
+> *"Sessão encerrada — o usuário foi desativado ou removido"*
+
+e a tela volta ao login, com o aviso *"Sessão encerrada — o seu usuário foi desativado ou removido. Fale com o administrador do sistema."*. Ele só volta a entrar depois de reativado; até lá, o login responde *"Email ou senha inválidos"* (a mesma frase da senha errada, para não revelar quem existe). Se a releitura do cadastro falhar porque o banco está ocupado, a ação responde *"Banco temporariamente ocupado. Tente novamente em alguns segundos."* e a tela tenta de novo sozinha — ninguém é desconectado nem ganha ou perde poder por isso.
+
+O que a desativação **não** alcança na hora: o **chat em tempo real** (a conexão já aberta continua recebendo as mensagens das conversas em que a pessoa está, e uma conexão nova é aceita enquanto a sessão não vence) e os **links de fotos e avatares** já gerados, que abrem até vencer (algumas horas). Ao desligar alguém, desative o usuário e peça que feche o navegador.
 
 ### 5.3 Usuário sem perfil definido é tratado como chão de fábrica
 

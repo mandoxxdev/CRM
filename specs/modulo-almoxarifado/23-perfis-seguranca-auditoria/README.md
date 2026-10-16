@@ -22,6 +22,8 @@
 > ALMOXARIFE]` no mapa, mais uma regra por **identidade** (quem pediu a requisição) checada no serviço; ver o bloco
 > "Etapa 77" logo abaixo. O status 🟡-forte não muda — a etapa é da feature 07). Antes: 2026-08-29 (**Etapa 24, `a81e51a..4680daa`: a perna Perfis começa** — `QUALIDADE` em `permissions.js` (`a81e51a`), a revogação auditando com `EXCLUSAO` e o `dados_anteriores` nos dois caminhos (`9f7c309`), `ADMINISTRADOR` fora do seletor com a razão visível e os 7 primeiros testes da aba (`b13de4a`), a integração que dá e tira perfil e lê pela tela-contrato (`b9a5848`) e o rótulo do perfil no 403 do client (`4680daa`); ver o bloco "Etapa 24" no fim). Antes: 2026-08-28 (**Etapa 23, `0fe8d02..4f1aeb9`: a trilha para de mentir por omissão e por excesso** — o retry de `SQLITE_BUSY` para de responder erro e gravar assim mesmo (`0fe8d02`), `PUT /configuracoes` vira um `UPDATE` único com `CASE` (`b6b7b24`/`d507ccc`), as **cinco** rotas de exclusão distinguem "não existe" de "já inativa" (`9858bec`) e a leitura pela tela-contrato prova que a trilha mostra **um** ato (`4f1aeb9`); ver o bloco "Etapa 23" no fim e o checklist "Trilha honesta"). Antes: 2026-08-28 (**Etapa 22, `8c6ffbe..169458d`: a trilha ganha leitor** — tela `/almoxarifado/auditoria` com os quatro filtros novos, o de/para calculado no servidor, a rota de opções alimentada pelo banco e os **três índices** que a tabela nunca teve; ver o bloco "Etapa 22" no fim e o checklist "Auditoria visível"). Antes: 2026-08-28 (Etapa 21, `d5c8d3a..07a4b1c`: **nada desta feature mudou** — a etapa é do núcleo do CRM e fecha os itens que a Etapa 20 empurrou para cá dizendo "é do core"; registrada no bloco "Etapa 21 — o que era do núcleo" no fim deste arquivo, e o item de backup do checklist de Segurança ganhou a medição que faltava). Antes: 2026-08-28 (Etapa 20, `1b0f0e9..a3f5135`: a rota de foto de material para de mentir sucesso, de deixar órfão e de não auditar; a leitura de configurações para de devolver segredo em claro e o PUT genérico para de aceitá-lo; ler o mapa de permissões por setor passa a exigir o mesmo que escrevê-lo). Antes: 2026-08-28 (Etapa 19, `a574b3a..55e4144`: os 23 endpoints de cadastro e configuração passam a auditar, com diff nas configurações, segredo mascarado e três correções de comportamento que o log exigia). Antes: 2026-08-28 (Etapa 18: a trilha do inventário). Antes: 2026-08-11 — auditoria de cauda: corrigida a afirmação "auditoria não é usada em produção" (era verdade em 2026-08-02, foi superada pelas Etapas 3–6 e ninguém atualizou aqui), corrigida a contagem de ações (14, não 15) e nomeados os dois buracos reais de auditoria que restam
 >
+> **Etapa 131 (2026-10-16):** do núcleo — as três listas dos seletores de responsável (`/usuarios/comercial`, `/filtrar`, `/por-modulo/:modulo`) saem do `index.js` para `services/leituraDeUsuarios.js` e devolvem só id, nome, e-mail, ativo e cargo a quem não gerencia usuários (`31976510`, Fase 5 `5974a6c7`; B844, C270 resolvida); o usuário desativado, apagado ou com token sem id leva 401 `USUARIO_INATIVO` e o erro do banco no enriquecimento não deixa mais passar (`831386a2`, `bc51b6b5`, Fase 5 `5974a6c7`, `38dc9a46`; B845, B846). Continua 🟡-forte. Ver a seção da Etapa 131 no fim do checklist.
+>
 > **Etapa 130 (2026-10-16):** do núcleo — as três leituras de usuário (`GET /api/usuarios`, `/:id`, `/:id/grupos`), que só exigiam token (B836), passam a ser do próprio ou de quem gerencia usuários (a lista vem reduzida a id, nome, e-mail e ativo para os outros), em `services/leituraDeUsuarios.js` (`e6553429`; B841); e o usuário desativado ou apagado com o token válido perde o papel do token na hora (`01dfd645`; B842). Continuam abertas `/por-modulo`, `/comercial` e `/filtrar` (C270). Continua 🟡-forte.
 >
 > **Etapa 127 (2026-10-16):** o perfil retirado sai da tela ao recarregar a página (C264, do núcleo; `1f8910e5`; B818). O status não muda: a perna *Perfis* continua dependendo da B56.
@@ -1183,12 +1185,35 @@ Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa130-o-item-que-entro
 - [x] **As rotas saíram do `index.js`** — `e6553429`: `registrarLeituraDeUsuarios` no mesmo ponto (depois de `/comercial`, `/filtrar`,
   `/por-modulo`), com `getUsuarioModuleContext` (o login importa). Fiação presa por texto (RN-12); boot com pasta vazia conferido.
 - [x] **O desativado perde o papel do token** — `01dfd645` (Fase 5, r2): `enrichUserFromDb` sem a linha ativa zera papel, super, módulos
-  administrados e perfis; erro do banco não rebaixa. B842. RN-13.
-- [ ] **`/por-modulo`, `/comercial`, `/filtrar`** — continuam devolvendo o papel de outros usuários a qualquer logado (C270): são os
-  seletores de responsável; fechar exige medir cada chamador.
-- [ ] **A sessão do desativado** — ele segue logado como usuário comum até o token vencer (B842, 401 descartado).
+  administrados e perfis; erro do banco não rebaixa. B842. RN-13. *(Etapa 131: "erro do banco não rebaixa" **estava errado como regra** —
+  num SQLITE_BUSY o administrador desativado voltava a ser administrador, reproduzido na Fase 2 da 131; substituído pela B845, abaixo.)*
+- [x] **`/por-modulo`, `/comercial`, `/filtrar`** — *(era `[ ]`, C270)* — feito na **Etapa 131** (`31976510`), abaixo.
+- [x] **A sessão do desativado** — *(era `[ ]`, "401 descartado")* — feito na **Etapa 131** (`831386a2`, `bc51b6b5`), abaixo.
 
 Testes: `server/tests/api/leituraDeUsuarios.api.test.js` (7: as rotas do módulo num express com SQLite real e o `enrichUserFromDb` real).
+
+## Etapa 131 (2026-10-16) — as listas dos seletores e a sessão do desativado (núcleo, C270, B842)
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa131-as-listas-de-usuario-e-a-sessao-do-inativo.md`.
+
+- [x] **As três listas dos seletores reduzidas para quem não gerencia usuários** — `31976510`: `/usuarios/comercial`, `/filtrar`
+  (os `items`) e `/por-modulo/:modulo` devolvem `{ id, nome, email, ativo, cargo }` (`projetarListaDeUsuarios(user, linhas,
+  CAMPOS_EXTRAS_DOS_SELETORES)`); quem gerencia recebe as linhas de antes. Filtros de setor, módulo e flag inalterados. B844. RN-01..RN-04.
+- [x] **O cache da `/comercial` não serve a forma de um para o outro** — `31976510`: guarda as linhas inteiras, a forma é por pedido. RN-02.
+- [x] **As três rotas saíram do `index.js`** — `31976510`: registradas por `registrarLeituraDeUsuarios` antes do `/:id`; o
+  `buildSetorCondition` duplicado saiu (vem de `comercialResponsaveisCache.js`). RN-05; o RN-12 da 130 mudou à vista.
+- [x] **O desativado ou apagado leva 401** — `831386a2`: `enrichUserFromDb` sem linha ativa → 401 *"Sessão encerrada — o usuário foi
+  desativado ou removido"* (`code: 'USUARIO_INATIVO'`); sem o cache de 30 s (código morto). B845. RN-06, RN-07.
+- [x] **O erro do banco no enriquecimento não deixa passar; token sem id leva 401** — `831386a2` (BUSY → 503) e Fase 5 `5974a6c7`
+  (qualquer erro das três leituras → `respondDbError`; id que não é inteiro positivo → 401). B845. RN-06.
+- [x] **O client: aviso de sessão encerrada e o 401 do login sem recarregar** — `bc51b6b5`, Fase 5 `38dc9a46`. B846. RN-09, RN-10.
+- [ ] **O chat em tempo real, os links assinados e as telas com `fetch` cru** — não desconectam o desativado (C271): fora do escopo
+  (cada um é um caminho de token próprio).
+- [ ] **A lista de usuários da Lista de Tarefas** ainda devolve o papel de todos (C272); **as rotas de permissões** aceitam só `role ===
+  'admin'` exato (C273) — achados da revisão, anteriores à etapa.
+
+Testes: `listasDeUsuarios.api.test.js` (12), `sessaoDoInativo.api.test.js` (9, com a RN-08 de integração: JWT real + enriquecimento
+real + rotas, rota e serviço), `leituraDeUsuarios.api.test.js` (7); client `apiSessaoEncerrada.test.js` (3), `LoginSessaoEncerrada.test.js` (4).
 
 ## Regras essenciais + testes de API exigidos
 

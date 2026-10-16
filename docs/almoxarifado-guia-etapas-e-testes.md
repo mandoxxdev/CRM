@@ -1,17 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-16 (Etapa 130) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-16 (Etapa 131) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129 e 130) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130 e 131) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 130 ENTREGUE · próxima do almoxarifado: Etapa 131)
+> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 131 ENTREGUE · próxima: Etapa 132)
 >
-> **O desenvolvimento parou aqui: Etapa 130 fechada — 2026-10-16.** A **Etapa 130 (o item que entrou não muda pela nota, e as leituras
+> **O desenvolvimento parou aqui: Etapa 131 fechada — 2026-10-16.** A **Etapa 131 (as listas de usuário e a sessão do desativado,
+> do núcleo)**: os seletores de responsável (propostas, projetos, OS…) deixam de trazer o papel, o setor e o departamento de cada usuário
+> para quem não gerencia usuários — quem aparece não muda —; e o usuário desativado ou apagado volta ao login com o aviso *"Sessão
+> encerrada"* na primeira ação, em vez de seguir usando o sistema até o token vencer; a senha errada no login não recarrega mais a
+> página. **Próxima: Etapa 132** — ver a próxima tarefa no plano da 131.
+>
+> **Etapa 130, 2026-10-16.** A **Etapa 130 (o item que entrou não muda pela nota, e as leituras
 > de usuário)**: numa nota que entrou em parte, o modal da nota deixa de mudar o lote, as séries e o valor de um item que já está no
 > estoque (recusa com a frase do que fazer) e o painel mostra esses campos travados; e, do núcleo, o cadastro e as permissões de um
 > usuário passam a ser lidos só por ele mesmo e por quem gerencia usuários — e o administrador desativado deixa de ser administrador na
-> hora. **Próxima: Etapa 131** — ver a próxima tarefa no plano da 130.
+> hora.
+> *(Próxima, na época: Etapa 131 — entregue acima.)*
 >
 > **Etapa 129, 2026-10-16.** A **Etapa 129 (a conferência depois da entrada e as perdas com
 > valor)**: a conferência do recebimento e o modal da nota deixam de mudar um recebimento que já deu entrada no estoque (recusam com a
@@ -6544,6 +6551,39 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 131 — As listas de usuário e a sessão do desativado (ENTREGUE — 2026-10-16)
+
+**O que mudou, em uma frase:** os seletores de responsável trazem de cada usuário só o que a tela usa (nome, cargo, e-mail) para quem não
+gerencia usuários, e o usuário desativado ou apagado é desconectado na primeira ação, com um aviso próprio no login.
+
+**O problema que ela resolve.** As listas que alimentam os seletores de *Responsável* (Propostas, Projetos, Oportunidades, Atividades, OS
+do comercial e do operacional, o filtro do painel inicial) devolviam a qualquer pessoa logada o papel de cada usuário (quem é
+administrador), o setor, o departamento e a data de criação — dados que nenhuma dessas telas mostra. E o usuário desativado pelo
+administrador continuava usando o sistema, como usuário comum, até o token dele vencer (até 24 horas).
+
+| Antes | Agora |
+|---|---|
+| As listas dos seletores traziam papel, setor, departamento, oculto e data de criação para qualquer logado | Para quem não gerencia usuários: id, nome, e-mail, ativo e cargo; quem aparece em cada seletor não muda |
+| O desativado seguia usando o sistema por até 24 h | Na primeira ação, volta ao login com *"Sessão encerrada — o seu usuário foi desativado ou removido. Fale com o administrador do sistema."* |
+| Senha errada recarregava a página com *"Sessão expirada…"* e a mensagem sumia | Aparece *"Email ou senha inválidos"* e a página fica |
+
+**Roteiro de teste (5 minutos).** Prepare, como **administrador do sistema**: um usuário **comum** (papel usuário) com acesso ao
+Comercial, e um vendedor **V** do mesmo setor com acesso ao Comercial e cargo *Vendedor*.
+
+1. **Os seletores.** Entre como o **comum** → **Projetos → Novo**: o *Responsável* lista os mesmos nomes de antes, com *"V - Vendedor"*.
+   Pelo console (F12), `fetch('⟨API⟩/usuarios/comercial', { headers: { Authorization: 'Bearer ' + localStorage.getItem('token') } })
+   .then((r) => r.json()).then(console.log)`: cada linha só com `id`, `nome`, `email`, `ativo` e `cargo`. Como **administrador do
+   sistema**, a mesma chamada traz também `role`, `setor` e `departamento`, como antes.
+2. **A sessão encerrada.** Deixe o **comum** logado num navegador. Noutro (ou numa janela anônima), como **administrador**, **Admin →
+   Usuários** → desative o comum. Volte ao primeiro e clique em **Propostas**: a tela volta ao login com o aviso amarelo *"Sessão encerrada
+   — o seu usuário foi desativado ou removido. Fale com o administrador do sistema."*.
+3. **O login.** Ainda ali, tente entrar com o comum: *"Email ou senha inválidos"* aparece no formulário e a página **não** recarrega. Com a
+   senha errada de qualquer usuário ativo: a mesma frase, sem recarregar. Reative o comum e entre: funciona.
+
+**O que esta etapa NÃO cobre.** O chat em tempo real, os links assinados de fotos e avatares e algumas telas que baixam arquivo por fora
+não desconectam o desativado (**C271**); a lista de usuários da Lista de Tarefas ainda traz o papel de todos (**C272**); as telas de
+permissão recusam o super administrador sem o papel *admin* (**C273**); o cargo continua nos seletores para todos (**B844**).
+
 ## Etapa 130 — O item que entrou não muda pela nota, e as leituras de usuário (ENTREGUE — 2026-10-16)
 
 **O que mudou, em uma frase:** numa nota que entrou em parte, o modal da nota não muda mais o lote, as séries nem o valor de um item que
@@ -6600,7 +6640,7 @@ entrou. E qualquer pessoa logada conseguia ler, pela API, quem é administrador 
 **O que esta etapa NÃO cobre.** O documento da nota depois do conserto pelo estorno continua como entrou, e o valor errado de uma entrada
 não tem gesto de conserto (**C269**); o ICMS, o IPI e a redução do item que entrou continuam editáveis; as leituras de usuário dos
 seletores de responsável (`/por-modulo`, `/comercial`, `/filtrar`) continuam abertas (**C270**); o usuário desativado continua logado
-como usuário comum até o token vencer (**B842**).
+como usuário comum até o token vencer (**B842**). *(Os dois saíram na Etapa 131.)*
 
 ## Etapa 129 — A conferência depois da entrada e as perdas com valor (ENTREGUE — 2026-10-16)
 
