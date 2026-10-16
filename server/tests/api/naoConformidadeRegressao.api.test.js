@@ -208,8 +208,15 @@ let seq = 0;
 
     // A reconferencia posterior "corrige" para 10. Destruir o documento seria irreversivel, e o
     // motivo automatico afirmaria uma correcao que nunca houve: os 8 ja viraram saldo.
+    // Etapa 129 (C266, B830): o `/conferir` passou a RECUSAR (409) depois da entrada — a reconferencia nem chega na NC. A guarda
+    // da NC continua (legado, e cinto) e e exercitada pelo SERVICO, com o item reescrito por fora (o que o `/conferir` antigo
+    // fazia), para que sabotar o marcador do item ainda derrube este cenario (Fase 2 da 129, M5).
     const c2 = await conferir(recId, [{ id: itemId, quantidade_recebida: 10 }]);
-    assert.strictEqual(c2.status, 200, JSON.stringify(c2.body));
+    assert.strictEqual(c2.status, 409, JSON.stringify(c2.body));
+    await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET quantidade_recebida = 10 WHERE id = ?', [itemId]);
+    const sinc = await require('../../services/almoxarifado/nonConformityService')
+      .sincronizarNaoConformidadeQuantidade(db, ADMIN, itemId, { recebimentoId: recId });
+    assert.strictEqual(sinc.efeito, 'BLOQUEADA_PROCESSADO', JSON.stringify(sinc));
 
     const depois = await ncGravada(aberta.id);
     assert.strictEqual(depois.status, 'ABERTA',

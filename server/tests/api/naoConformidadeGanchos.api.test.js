@@ -249,7 +249,11 @@ let seq = 0;
   });
 
   // ── (6) RN-11 / D10 — com o recebimento PROCESSADO, abre mas nao destroi ────────────────────
-  await test('(6) RN-11: recebimento PROCESSADO nao cancela nem atualiza — mas ainda ABRE', async () => {
+  // Etapa 129 (C266, B830): a reconferencia depois do processamento passou a ser RECUSADA pelo `/conferir` (409) — a metade
+  // "reconferir depois abre NC nova" do D10 deixou de existir por esta porta. A guarda da NC continua (legado, e cinto): ela e
+  // exercitada aqui pelo SERVICO, com o item reescrito por fora (o que o `/conferir` antigo fazia), para que sabotar a guarda
+  // ainda derrube este cenario (Fase 2 da 129, M5).
+  await test('(6) RN-11: recebimento PROCESSADO — o /conferir recusa 409; a guarda da NC nao cancela nem atualiza, mas ainda ABRE', async () => {
     const { recId, itemIds } = await novoRecebimento([10, 10]);
     const [itemA, itemB] = itemIds;
     await conferir(recId, [{ id: itemA, quantidade_recebida: 8 }]);
@@ -259,16 +263,22 @@ let seq = 0;
     // O estoque ja foi creditado, a conta a pagar gerada e o pedido fechado COM ESTE FATO.
     await dbRun(db, "UPDATE recebimentos_material_almoxarifado SET status = 'PROCESSADO' WHERE id = ?", [recId]);
 
-    // Uma reconferencia posterior "corrige" para 10: destruir o documento seria irreversivel.
     const res = await conferir(recId, [{ id: itemA, quantidade_recebida: 10 }]);
-    assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+    assert.strictEqual(res.status, 409, JSON.stringify(res.body));
+    assert.strictEqual((await dbGet(db, 'SELECT quantidade_recebida q FROM recebimentos_material_itens_almoxarifado WHERE id = ?',
+      [itemA])).q, 8, 'a recusa gravou o item');
+
+    // A guarda, pelo servico: o item "corrigido" para 10 por fora — destruir o documento seria irreversivel.
+    await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET quantidade_recebida = 10 WHERE id = ?', [itemA]);
+    const s = await nonConformityService.sincronizarNaoConformidadeQuantidade(db, ADMIN, itemA, { recebimentoId: recId });
+    assert.strictEqual(s.efeito, 'BLOQUEADA_PROCESSADO');
     const depois = (await ncsDoItem(itemA))[0];
     assert.strictEqual(depois.status, 'ABERTA', 'com o recebimento PROCESSADO a NC nao pode ser cancelada');
     assert.strictEqual(depois.quantidade_recebida, 8, 'nem atualizada: o fato fica como estava');
 
-    // Metade positiva da ASSIMETRIA (D10): criar nao e destruir — uma divergencia descoberta
-    // depois do processamento e justamente o que precisa de documento.
-    await conferir(recId, [{ id: itemB, quantidade_recebida: 7 }]);
+    // Metade positiva da ASSIMETRIA (D10): criar nao e destruir — pela guarda, o item com divergencia nova ainda ABRE.
+    await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET quantidade_recebida = 7 WHERE id = ?', [itemB]);
+    await nonConformityService.sincronizarNaoConformidadeQuantidade(db, ADMIN, itemB, { recebimentoId: recId });
     const doB = await ncsDoItem(itemB);
     assert.strictEqual(doB.length, 1, 'recebimento processado tem de continuar ABRINDO NC nova');
     assert.strictEqual(doB[0].status, 'ABERTA');

@@ -922,6 +922,81 @@ function assertSaldoDoPedidoPermitido(user, resolvidos, linhas, autorizado) {
   return excedentes;
 }
 
+/**
+ * Etapa 129 (C266, RN-01..RN-07) — as recusas da conferencia que dependem da SITUACAO do recebimento.
+ *
+ * Medido na Fase 0 (sonda e129fase0): o `/conferir` nao lia a situacao. Num *Aprovado* aceitava mudar a quantidade de um item que
+ * nao entrou (ele nunca mais entrava: o /aprovar e o /processar recusam "ja aprovado/processado") e trocar a situacao (para
+ * REPROVADO o /aprovar dava entrada de novo; para APROVADO a nota que falhou no meio ficava pronta sem o item que faltava); de
+ * RECEBIDO marcava APROVADO sem estoque nenhum; num id inexistente respondia 200; e gravava com a marca de processamento viva.
+ *
+ * - A conferencia nunca marca APROVADO (o APROVADO e o que a aprovacao grava DEPOIS de dar entrada) — 400, antes do 404. APROVADO
+ *   continua no enum de proposito: fora dele a resposta seria "Status invalido" (Fase 2, M9).
+ * - Depois da entrada (PROCESSADO/APROVADO, ou qualquer item com `entrada_estoque_em`): 409. A divergencia descoberta depois nao
+ *   reescreve o documento — o estoque se corrige por ajuste (B830). Isto aposenta a metade "reconferir depois do processamento abre
+ *   NC nova" do D10 da Etapa 43 (a guarda BLOQUEADA_PROCESSADO da NC continua, para o legado e como cinto).
+ * - Com a marca de processamento viva: 409 com a literal do segundo Processar.
+ * - O `status` so muda a partir de um status de conferencia; de EM_COMPRAS/ENCAMINHADO_FATURAMENTO/EM_ENTRADA_NF, 409. A
+ *   QUANTIDADE sem status nesses tres continua aceita (o /fiscal aceita a mesma coisa; nada entrou).
+ *
+ * Tudo isto roda ANTES de qualquer gravacao (status, item, trilha de excedente, NC, aviso) — o molde da RN-18 da Etapa 36. E o
+ * comando de cada gravacao repete a condicao (RN-06): o processamento le os itens DEPOIS de reivindicar a marca
+ * (`darEntradaEstoque`), entao um UPDATE da conferencia que casa e anterior a leitura dele.
+ */
+const STATUS_DA_CONFERENCIA = [
+  STATUS.RECEBIDO, STATUS.EM_CONFERENCIA, STATUS.CONFERIDO_ALMOX,
+  STATUS.REPROVADO, STATUS.PARCIALMENTE_APROVADO, STATUS.BLOQUEADO,
+];
+const LITERAIS_CONFERENCIA = {
+  DEPOIS_DA_ENTRADA: 'Recebimento já deu entrada no estoque — a conferência não pode mais mudar quantidade nem situação; '
+    + 'se a contagem estava errada, corrija o estoque por um ajuste',
+  NAO_APROVA: 'A conferência não aprova o recebimento — use "Aprovar", que dá a entrada no estoque',
+  ENCERRADA: (s) => `A conferência já foi encerrada (situação atual: ${s}) — a situação segue pelo fluxo do recebimento`,
+  MUDOU: 'O recebimento mudou de situação enquanto a conferência era salva — recarregue e confira de novo',
+  ITEM_JA_ENTROU: 'Item já deu entrada no estoque — a quantidade dele não muda mais; se a contagem estava errada, '
+    + 'corrija o estoque por um ajuste',
+};
+
+/** A marca de processamento VIVA — o complemento exato do "livre" de `reivindicarProcessamento` (10 minutos). */
+function marcaVivaSql(alias = '') {
+  const p = alias ? `${alias}.` : '';
+  return `(${p}processando_em IS NOT NULL AND ${p}processando_em >= datetime('now', '-10 minutes'))`;
+}
+
+/** Algum item do recebimento `rid` (expressao SQL do id) ja deu entrada no estoque. */
+function algumItemEntrouSql(rid) {
+  return `EXISTS (SELECT 1 FROM recebimentos_material_itens_almoxarifado ent
+    WHERE ent.recebimento_id = ${rid} AND ent.entrada_estoque_em IS NOT NULL)`;
+}
+
+/** RN-01/RN-02/RN-03/RN-05 — le a situacao e recusa; devolve a linha (status lido) quando pode conferir. */
+async function assertConferenciaPermitida(db, recebimentoId, status) {
+  const rec = await dbGet(db, `SELECT r.status, ${marcaVivaSql('r')} AS marca_viva, ${algumItemEntrouSql('r.id')} AS algum_entrou
+    FROM recebimentos_material_almoxarifado r WHERE r.id = ?`, [recebimentoId]);
+  if (!rec) throw Object.assign(new Error('Recebimento não encontrado'), { status: 404 });
+  if ([STATUS.PROCESSADO, STATUS.APROVADO].includes(rec.status) || rec.algum_entrou) {
+    throw Object.assign(new Error(LITERAIS_CONFERENCIA.DEPOIS_DA_ENTRADA), { status: 409 });
+  }
+  if (rec.marca_viva) throw Object.assign(new Error(LITERAL_EM_PROCESSAMENTO), { status: 409 });
+  if (status && !STATUS_DA_CONFERENCIA.includes(rec.status)) {
+    throw Object.assign(new Error(LITERAIS_CONFERENCIA.ENCERRADA(rec.status)), { status: 409 });
+  }
+  return rec;
+}
+
+/** RN-06 — o comando nao casou por corrida: a literal do estado novo, senao a generica. */
+async function recusarPelaCorrida(db, recebimentoId, status) {
+  await assertConferenciaPermitida(db, recebimentoId, status);
+  throw Object.assign(new Error(LITERAIS_CONFERENCIA.MUDOU), { status: 409 });
+}
+
+/** O aviso e a NC de quantidade (Etapa 17 / 43). Na recusa por corrida rodam para o que ja foi gravado (Fase 2, M6). */
+async function ganchosDaConferencia(db, user, itens, recebimentoId) {
+  await avisarDivergenciasDoRecebimento(db, recebimentoId);
+  // Etapa 43 (T3): DEPOIS do aviso, posicao congelada no D4. Ver `abrirNaoConformidadesDeQuantidade`.
+  await abrirNaoConformidadesDeQuantidade(db, user, itens, recebimentoId);
+}
+
 async function conferirRecebimento(db, user, recebimentoId, data) {
   const { status } = data;
   // Etapa 70, Fase 5: ANTES de tudo (o UPDATE de status vem logo abaixo) — '' vira null, texto
@@ -934,6 +1009,12 @@ async function conferirRecebimento(db, user, recebimentoId, data) {
   if (status && !validStatus.includes(status)) {
     throw Object.assign(new Error('Status inválido'), { status: 400 });
   }
+  // Etapa 129 (RN-04): antes do 404 — vale para qualquer recebimento.
+  if (status === STATUS.APROVADO) {
+    throw Object.assign(new Error(LITERAIS_CONFERENCIA.NAO_APROVA), { status: 400 });
+  }
+  // Etapa 129 (RN-01/02/03/05): antes do excedente (a recusa de situacao nao depende de quem autoriza excedente).
+  const rec = await assertConferenciaPermitida(db, recebimentoId, status);
 
   // RN-18: a PRIMEIRA porta. Antes do UPDATE de status e do UPDATE de item — recusar depois de
   // gravar deixaria o documento meio escrito com um 400 por cima. Etapa 122 (B791): a trilha vem depois de cada item.
@@ -941,41 +1022,65 @@ async function conferirRecebimento(db, user, recebimentoId, data) {
 
   if (status) {
     const etapa = STATUS_ETAPA[status] || ETAPAS.ALMOXARIFADO;
-    await dbRun(db, `UPDATE recebimentos_material_almoxarifado
-      SET status = ?, etapa_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [status, etapa, recebimentoId]);
+    // Etapa 129 (RN-06): o status LIDO, fora da entrada e sem marca viva — no proprio comando.
+    const upd = await dbRun(db, `UPDATE recebimentos_material_almoxarifado
+      SET status = ?, etapa_atual = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status = ? AND NOT ${marcaVivaSql()}
+        AND NOT ${algumItemEntrouSql('recebimentos_material_almoxarifado.id')}`,
+    [status, etapa, recebimentoId, rec.status]);
+    if (upd.changes !== 1) await recusarPelaCorrida(db, recebimentoId, status);
   }
 
   if (itens) {
-    for (const [indice, item] of itens.entries()) {
-      // Etapa 36 (T3): as CINCO colunas com COALESCE, no molde ja escrito em `salvarDadosFiscal`.
-      // Esta rota esta ganhando o PRIMEIRO chamador da vida (o painel de conferencia da T5), e
-      // enquanto ela nao tinha chamador o defeito ficou invisivel: com `quantidade_recebida = ?` e
-      // `observacoes = ?`, um item enviado SEM esses campos APAGAVA os dois (medido por sonda: a
-      // coluna ia a `null`, e 200 na resposta). Duas colunas, nao uma. Os booleanos so viram 0/1
-      // quando VIERAM (`!= null`), senao `false` e `ausente` seriam a mesma coisa e qualquer
-      // chamada parcial zeraria o que a conferencia anterior marcou.
-      const upd = await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado SET
-        quantidade_recebida = COALESCE(?, quantidade_recebida),
-        conferencia_quantidade = COALESCE(?, conferencia_quantidade),
-        conferencia_descricao = COALESCE(?, conferencia_descricao),
-        observacoes = COALESCE(?, observacoes),
-        series = COALESCE(?, series)
-        WHERE id = ? AND recebimento_id = ?`, [
-        item.quantidade_recebida, // ja normalizado: numero ou null (null = COALESCE mantem)
-        item.conferencia_quantidade != null ? (item.conferencia_quantidade ? 1 : 0) : null,
-        item.conferencia_descricao != null ? (item.conferencia_descricao ? 1 : 0) : null,
-        item.observacoes ?? null,
-        item.series ?? null,
-        item.id, recebimentoId,
-      ]);
-      await gravarTrilhasDoItem(db, user, excedentes, indice, upd);
+    const gravados = [];
+    try {
+      for (const [indice, item] of itens.entries()) {
+        // Etapa 36 (T3): as CINCO colunas com COALESCE, no molde ja escrito em `salvarDadosFiscal`.
+        // Esta rota esta ganhando o PRIMEIRO chamador da vida (o painel de conferencia da T5), e
+        // enquanto ela nao tinha chamador o defeito ficou invisivel: com `quantidade_recebida = ?` e
+        // `observacoes = ?`, um item enviado SEM esses campos APAGAVA os dois (medido por sonda: a
+        // coluna ia a `null`, e 200 na resposta). Duas colunas, nao uma. Os booleanos so viram 0/1
+        // quando VIERAM (`!= null`), senao `false` e `ausente` seriam a mesma coisa e qualquer
+        // chamada parcial zeraria o que a conferencia anterior marcou.
+        // Etapa 129 (RN-06, Fase 2 M7): o item sem entrada, o cabecalho fora da entrada, sem marca viva e sem item entrado.
+        const upd = await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado SET
+          quantidade_recebida = COALESCE(?, quantidade_recebida),
+          conferencia_quantidade = COALESCE(?, conferencia_quantidade),
+          conferencia_descricao = COALESCE(?, conferencia_descricao),
+          observacoes = COALESCE(?, observacoes),
+          series = COALESCE(?, series)
+          WHERE id = ? AND recebimento_id = ? AND entrada_estoque_em IS NULL
+            AND EXISTS (SELECT 1 FROM recebimentos_material_almoxarifado r WHERE r.id = ?
+              AND r.status NOT IN ('PROCESSADO', 'APROVADO') AND NOT ${marcaVivaSql('r')} AND NOT ${algumItemEntrouSql('r.id')})`, [
+          item.quantidade_recebida, // ja normalizado: numero ou null (null = COALESCE mantem)
+          item.conferencia_quantidade != null ? (item.conferencia_quantidade ? 1 : 0) : null,
+          item.conferencia_descricao != null ? (item.conferencia_descricao ? 1 : 0) : null,
+          item.observacoes ?? null,
+          item.series ?? null,
+          item.id, recebimentoId, recebimentoId,
+        ]);
+        if (upd.changes !== 1) {
+          // O item estranho (de outro recebimento, ou que nao existe) continua ignorado como antes; o deste recebimento que nao
+          // casou perdeu a corrida.
+          const doRecebimento = await dbGet(db, `SELECT 1 AS ok FROM recebimentos_material_itens_almoxarifado
+            WHERE id = ? AND recebimento_id = ?`, [item.id, recebimentoId]);
+          if (doRecebimento) await recusarPelaCorrida(db, recebimentoId, null);
+          continue;
+        }
+        gravados.push(item);
+        await gravarTrilhasDoItem(db, user, excedentes, indice, upd);
+      }
+    } catch (e) {
+      if (gravados.length) {
+        try { await ganchosDaConferencia(db, user, gravados, recebimentoId); } catch (eG) {
+          console.warn(`[recebimento] ganchos da conferencia recusada falharam (recebimento ${recebimentoId}): ${eG.message}`);
+        }
+      }
+      throw e;
     }
   }
 
-  await avisarDivergenciasDoRecebimento(db, recebimentoId);
-  // Etapa 43 (T3): DEPOIS do aviso, posicao congelada no D4. Ver `abrirNaoConformidadesDeQuantidade`.
-  await abrirNaoConformidadesDeQuantidade(db, user, itens, recebimentoId);
+  await ganchosDaConferencia(db, user, itens, recebimentoId);
 
   return { success: true };
 }
@@ -1029,6 +1134,25 @@ async function avancarWorkflow(db, user, recebimentoId, acao, opcoes = {}) {
   return { success: true, status: t.para, etapa_atual: t.etapa };
 }
 
+/**
+ * Etapa 129 (RN-09, Fase 2 I1) — o `/fiscal` e a outra porta que escreve `quantidade_recebida`. Numa nota parcial (EM_ENTRADA_NF
+ * com um item ja entrado) ele aceitava reescrever a quantidade do item entrado: item 2, movimento 5, fisico 5 (sonda e129rev2). O
+ * modal de NF REENVIA a quantidade de todos os itens, entao o eco do mesmo valor (`Q.qtd` dos dois lados, a regua de gravacao do
+ * modulo; o gravado pela `quantidadeDoItem` — o NULL legado vale a esperada) passa. Lote, serie e valores do item entrado continuam
+ * aceitos aqui (C267, declarado).
+ */
+async function assertQuantidadeDoItemEntradoIntacta(db, recebimentoId, itens) {
+  for (const item of itens || []) {
+    if (item.quantidade_recebida == null) continue;
+    const atual = await dbGet(db, `SELECT quantidade_recebida, quantidade_esperada, entrada_estoque_em
+      FROM recebimentos_material_itens_almoxarifado WHERE id = ? AND recebimento_id = ?`, [item.id, recebimentoId]);
+    if (!atual || !atual.entrada_estoque_em) continue;
+    if (Q.qtd(item.quantidade_recebida) !== Q.qtd(quantidadeDoItem(atual))) {
+      throw Object.assign(new Error(LITERAIS_CONFERENCIA.ITEM_JA_ENTROU), { status: 409 });
+    }
+  }
+}
+
 async function salvarDadosFiscal(db, user, recebimentoId, data) {
   const rec = await dbGet(db, 'SELECT * FROM recebimentos_material_almoxarifado WHERE id = ?', [recebimentoId]);
   if (!rec) throw Object.assign(new Error('Recebimento não encontrado'), { status: 404 });
@@ -1048,6 +1172,8 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
   } = data;
   // Etapa 70, Fase 5: antes da guarda de NF e do UPDATE do cabecalho. Ver `normalizarRecebida`.
   const itens = normalizarRecebidasDoPayload(data.itens);
+  // Etapa 129 (RN-09, Fase 2 I1): antes de qualquer gravacao — a quantidade de item ja entrado nao muda.
+  await assertQuantidadeDoItemEntradoIntacta(db, recebimentoId, itens);
 
   let pedido = null;
   if (pedido_compra_id || pedido_compra_numero) {
@@ -1127,8 +1253,10 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
       const qtd = parseFloat(item.quantidade_recebida) || parseFloat(item.quantidade_esperada) || 0;
       const vUnit = parseFloat(item.valor_unitario) || 0;
       const vTotal = parseFloat(item.valor_total) || (qtd * vUnit);
+      // Etapa 129 (RN-09): a defesa no comando — o item que ganhou a entrada depois da guarda mantem a quantidade.
       const upd = await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado SET
-        quantidade_recebida = COALESCE(?, quantidade_recebida),
+        quantidade_recebida = CASE WHEN entrada_estoque_em IS NULL THEN COALESCE(?, quantidade_recebida)
+          ELSE quantidade_recebida END,
         valor_unitario = COALESCE(?, valor_unitario),
         valor_total = COALESCE(?, valor_total),
         valor_icms = COALESCE(?, valor_icms),
@@ -2697,6 +2825,8 @@ module.exports = {
   ETAPAS,
   criarRecebimento,
   conferirRecebimento,
+  // Etapa 129: as literais da conferencia e do /fiscal depois da entrada (para os testes).
+  LITERAIS_CONFERENCIA,
   aprovarRecebimento,
   // Exportada para teste (review final da Etapa 6): a pre-checagem e a marca de idempotencia
   // precisam ser exercitadas com um item que falha no meio, e chegar la pelo workflow inteiro do

@@ -176,7 +176,9 @@ const LEDGER_CONF = 'backfill_conferencia_finalizada_em';
     }, () => request(app).put(`${API}/recebimentos/${id}/conferir`).send({ autorizar_excedente: true,
       itens: [{ id: itens[0], quantidade_recebida: 5 }] }));
     assert.ok(ok, 'gancho');
-    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    // Etapa 129 (RN-06): o item DESTE recebimento cujo UPDATE nao grava perdeu uma corrida — a conferencia recusa 409 (era 200
+    // calado). O que este cenario prende continua: sem o ato, nenhuma trilha.
+    assert.strictEqual(r.status, 409, JSON.stringify(r.body));
     assert.deepStrictEqual(await trilhas(itens), [], 'trilha sem o ato');
     const r2 = await request(app).put(`${API}/recebimentos/${id}/conferir`).send({ autorizar_excedente: true,
       itens: [{ id: itens[0], quantidade_recebida: 5 }] });
