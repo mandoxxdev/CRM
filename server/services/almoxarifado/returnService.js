@@ -1,7 +1,8 @@
 const { dbRun, dbAll, dbGet } = require('./db');
 const { registrarMovimentacao } = require('./stockService');
 const lotService = require('./lotService');
-const { registrarAuditoria } = require('./audit');
+// Etapa 121 (C252, B784): as Auditorias deste arquivo rodam depois do ato (ou num catch que relanca o erro original).
+const { registrarAuditoriaDoAto } = require('./audit');
 // Etapa 96 (C176): a regra unica de quantidade (namespace — Fase 2, I3).
 const Q = require('./quantidade');
 // Etapa 97 (Fase 5, item 2): as duas pernas da devolucao (QUARENTENA, SUCATA) sob uma trava do material.
@@ -353,7 +354,7 @@ async function registrarDevolucao(db, user, data) {
       await dbRun(db, 'DELETE FROM devolucoes_material_almoxarifado WHERE id = ?', [r.lastID]);
       // Etapa 121 (C252, B784): a falha desta Auditoria trocava o 400 do motor ("exige lote") por 500 — nao-fatal, e o
       // `throw e` abaixo segue com o erro original. `require` local: o topo do arquivo muda em paralelo (C253).
-      await require('./audit').registrarAuditoriaDoAto(db, {
+      await registrarAuditoriaDoAto(db, {
         entidade: 'devolucao', entidade_id: r.lastID, acao: 'COMPENSACAO',
         usuario_id: null, usuario_nome: 'sistema',
         dados_anteriores: {
@@ -371,7 +372,7 @@ async function registrarDevolucao(db, user, data) {
       // este ramo pode fazer e deixar o estado parcial REGISTRADO, para ser resolvido a mao —
       // desfazer a perna ja gravada daqui seria reimplementar o estorno pela metade.
       // Etapa 121 (C252, B784): nao-fatal — a falha desta Auditoria mascarava o erro do motor e pulava o aviso abaixo.
-      await require('./audit').registrarAuditoriaDoAto(db, {
+      await registrarAuditoriaDoAto(db, {
         entidade: 'devolucao', entidade_id: r.lastID, acao: 'ESTADO_PARCIAL',
         usuario_id: user.id, usuario_nome: user.nome || user.email,
         dados_novos: {
@@ -420,7 +421,7 @@ async function registrarDevolucao(db, user, data) {
   }
 
   // Etapa 121 (C252, B784): a devolucao ja esta no livro; a falha da Auditoria respondia 500 e repetir devolvia de novo.
-  await require('./audit').registrarAuditoriaDoAto(db, { entidade: 'devolucao', entidade_id: r.lastID, acao: 'CRIACAO', usuario_id: user.id, usuario_nome: user.nome || user.email });
+  await registrarAuditoriaDoAto(db, { entidade: 'devolucao', entidade_id: r.lastID, acao: 'CRIACAO', usuario_id: user.id, usuario_nome: user.nome || user.email });
   return { id: r.lastID };
 }
 
