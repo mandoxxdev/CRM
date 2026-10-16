@@ -113,8 +113,15 @@ há, nunca mais (B441, Etapa 92). A separação e a entrega não pegavam até a 
 Etapa 97 (B494) o motor inteiro (`registrarMovimentacao` — saída avulsa, ajuste) e a reserva manual (`criarReserva`)
 também pegam, por `naTravaDoMaterial` (não aninha fora de `comLockDosMateriais`). Esta linha dizia "saída avulsa e
 reserva manual **não** pegam (D (91))" e estava errada desde a 97 — enganou o plano da 102 (G87, Etapa 104). Desde a Etapa 116 o ramo de **saída** do estorno (`cancelarMovimentacao`) roda inteiro sob `naTravaDoMaterial`, com o
-controle de série relido no começo. A conferência devolução × estorno não usa a trava: vai no próprio comando, com `NOT EXISTS`
-de devolução viva no claim do estorno e `INSERT … WHERE EXISTS` na devolução.
+controle de série relido no começo — e, desde a Etapa 117 (C235), **o livro e o desfazer também**: o `INSERT` da linha
+`ESTORNO`, o `movimento_estorno_id` e, se algo falhar depois do crédito, o desfazer de séries, linha e físico rodam dentro
+da seção, antes de soltar (fora dela, uma Saída do mesmo material cabia entre o crédito e o desfazer: físico −2). Quem
+desfaz **subtraindo** o que acabou de creditar tem de desfazer sob a trava; desfazer **somando** (o ramo de entrada) não
+precisa — só aumenta o livre. A conferência devolução × estorno não usa a trava: vai no próprio comando, com `NOT EXISTS`
+de devolução viva no claim do estorno e `INSERT … WHERE EXISTS` na devolução. A régua "viva" mora em
+`services/almoxarifado/devolucaoViva.js` (Etapa 117) e é uma só para as cinco contas do que já voltou de uma saída; ela só
+dá a devolução por morta quando o estorno da entrada **concluiu** (`movimento_estorno_id` gravado — o claim `cancelado = 1`
+é provisório e volta a 0 se o estorno falhar).
 
 **Há outra trava, por requisição** (Etapa 93): `services/almoxarifado/travaPorRequisicao.js`
 (`serializarNaRequisicao`) serializa os cinco gestos do almoxarife numa requisição — separar,
