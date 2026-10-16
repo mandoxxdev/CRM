@@ -232,6 +232,8 @@ const {
   invalidateComercialResponsaveisCache,
 } = require('./services/comercialResponsaveisCache');
 const systemPermissions = require('./services/systemPermissions');
+// Etapa 130 (B841): as leituras de usuario e o contexto de modulo do usuario.
+const { registrarLeituraDeUsuarios, getUsuarioModuleContext } = require('./services/leituraDeUsuarios');
 const {
   parseAdminModulos,
   serializeAdminModulos,
@@ -3094,57 +3096,8 @@ function normalizarFamiliaComparacao(str) {
 
 // ========== ROTAS DE AUTENTICAÇÃO ==========
 
-function getUsuarioModuleContext(db, userId, callback) {
-  db.get(
-    'SELECT role, is_superadmin, admin_modulos FROM usuarios WHERE id = ? AND ativo = 1',
-    [userId],
-    (err, row) => {
-      if (err) return callback(err);
-      if (!row) return callback(null, null);
-
-      const usuario = {
-        role: row.role,
-        is_superadmin: isTruthyFlag(row.is_superadmin),
-        admin_modulos: parseAdminModulos(row.admin_modulos),
-        perfil_almoxarifado: null,
-        perfil_frota: null,
-      };
-
-      if (usuario.admin_modulos.includes('almoxarifado')) {
-        usuario.perfil_almoxarifado = 'ADMINISTRADOR';
-      }
-      if (usuario.admin_modulos.includes('frota')) {
-        usuario.perfil_frota = 'ADMIN_FROTA';
-      }
-
-      const finish = () => callback(null, usuario);
-
-      if (usuario.perfil_almoxarifado && usuario.perfil_frota) {
-        return finish();
-      }
-
-      db.get(
-        'SELECT perfil FROM perfil_almoxarifado_usuario WHERE usuario_id = ?',
-        [userId],
-        (err2, almoxRow) => {
-          if (!usuario.perfil_almoxarifado && almoxRow?.perfil) {
-            usuario.perfil_almoxarifado = almoxRow.perfil;
-          }
-          db.get(
-            'SELECT perfil FROM perfil_frota_usuario WHERE usuario_id = ?',
-            [userId],
-            (err3, frotaRow) => {
-              if (!usuario.perfil_frota && frotaRow?.perfil) {
-                usuario.perfil_frota = frotaRow.perfil;
-              }
-              finish();
-            }
-          );
-        }
-      );
-    }
-  );
-}
+// Etapa 130 (B841): `getUsuarioModuleContext` mora em services/leituraDeUsuarios.js (importada no topo) — o `/usuarios/:id/grupos`
+// e o login (`buildAuthUserPayload`, abaixo) leem o mesmo contexto.
 
 function buildAuthUserPayload(db, user, callback) {
   getUsuarioModuleContext(db, user.id, (err, moduleContext) => {
@@ -3981,187 +3934,10 @@ app.get('/api/usuarios/por-modulo/:modulo', authenticateToken, (req, res) => {
   );
 });
 
-app.get('/api/usuarios', authenticateToken, (req, res) => {
-  const limitRaw = parseInt(req.query.limit, 10);
-  const offsetRaw = parseInt(req.query.offset, 10);
-  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 500) : 0;
-  const offset = Number.isFinite(offsetRaw) && offsetRaw > 0 ? offsetRaw : 0;
-
-  let sql = `SELECT id, nome, email, cargo, role, ativo, setor, departamento, flag_vendedor, flag_compras, flag_ti, is_superadmin, admin_modulos, is_oculto, created_at
-     FROM usuarios WHERE 1=1 ORDER BY nome`;
-  const sqlParams = [];
-  if (limit > 0) {
-    sql += ' LIMIT ? OFFSET ?';
-    sqlParams.push(limit, offset);
-  }
-
-  db.all(sql, sqlParams, (err, rows) => {
-      if (err) {
-        if (isSqliteBusy(err)) {
-          return res.status(503).json({ error: 'Banco temporariamente ocupado. Tente novamente.', retryAfter: 2 });
-        }
-        return res.status(500).json({ error: err.message });
-      }
-
-      if (!rows || rows.length === 0) {
-        return res.json([]);
-      }
-
-      const userIds = rows.map((u) => u.id);
-      const placeholders = userIds.map(() => '?').join(',');
-
-      db.all(
-        `SELECT ug.usuario_id, gp.id, gp.nome, gp.ativo
-         FROM usuarios_grupos ug
-         INNER JOIN grupos_permissoes gp ON gp.id = ug.grupo_id AND gp.ativo = 1
-         WHERE ug.usuario_id IN (${placeholders})
-         ORDER BY gp.nome`,
-        userIds,
-        (errGrupos, grupoRows) => {
-          if (errGrupos) {
-            if (isSqliteBusy(errGrupos)) {
-              return res.status(503).json({ error: 'Banco temporariamente ocupado. Tente novamente.', retryAfter: 2 });
-            }
-            return res.status(500).json({ error: errGrupos.message });
-          }
-
-          const gruposPorUsuario = {};
-          (grupoRows || []).forEach((g) => {
-            if (!gruposPorUsuario[g.usuario_id]) gruposPorUsuario[g.usuario_id] = [];
-            gruposPorUsuario[g.usuario_id].push({ id: g.id, nome: g.nome, ativo: g.ativo });
-          });
-
-          // Módulos acessíveis por usuário (permissão direta + via grupo) — usado para
-          // mostrar as badges de módulo ao lado do nome na lista de usuários.
-          const modulosSql = `
-            SELECT usuario_id, modulo FROM permissoes
-              WHERE usuario_id IN (${placeholders}) AND (grupo_id IS NULL OR grupo_id = 0) AND permissao = 1
-            UNION
-            SELECT ug.usuario_id, p.modulo FROM usuarios_grupos ug
-              INNER JOIN permissoes p ON p.grupo_id = ug.grupo_id AND p.permissao = 1
-              WHERE ug.usuario_id IN (${placeholders})
-          `;
-          db.all(modulosSql, [...userIds, ...userIds], (errMods, modRows) => {
-            if (errMods) {
-              if (isSqliteBusy(errMods)) {
-                return res.status(503).json({ error: 'Banco temporariamente ocupado. Tente novamente.', retryAfter: 2 });
-              }
-              return res.status(500).json({ error: errMods.message });
-            }
-
-            const modulosPorUsuario = {};
-            (modRows || []).forEach((m) => {
-              if (!m.modulo) return;
-              if (!modulosPorUsuario[m.usuario_id]) modulosPorUsuario[m.usuario_id] = new Set();
-              modulosPorUsuario[m.usuario_id].add(m.modulo);
-            });
-
-            const usuariosComGrupos = rows.map((usuario) => ({
-              ...usuario,
-              is_superadmin: !!usuario.is_superadmin,
-              is_oculto: !!usuario.is_oculto,
-              admin_modulos: parseAdminModulos(usuario.admin_modulos),
-              grupos: gruposPorUsuario[usuario.id] || [],
-              modulos: Array.from(modulosPorUsuario[usuario.id] || []),
-            }));
-
-            res.json(usuariosComGrupos);
-          });
-        }
-      );
-    }
-  );
-});
-
-app.get('/api/usuarios/:id', authenticateToken, (req, res) => {
-  const { id } = req.params;
-  db.get('SELECT id, nome, email, cargo, role, ativo, setor, departamento, flag_vendedor, flag_compras, flag_ti, pode_aprovar_descontos, is_superadmin, admin_modulos, is_oculto, created_at FROM usuarios WHERE id = ?', [id], (err, row) => {
-    if (err) {
-      return res.status(500).json({ error: err.message });
-    }
-    if (!row) {
-      return res.status(404).json({ error: 'Usuário não encontrado' });
-    }
-    res.json({
-      ...row,
-      is_superadmin: !!row.is_superadmin,
-      is_oculto: !!row.is_oculto,
-      admin_modulos: parseAdminModulos(row.admin_modulos),
-    });
-  });
-});
-
-// Obter grupos e permissões de um usuário (otimizado: 2 queries em vez de 4+ aninhadas)
-app.get('/api/usuarios/:id/grupos', authenticateToken, (req, res) => {
-  const { id } = req.params;
-
-  const sendBusy = (err) => {
-    if (isSqliteBusy(err)) {
-      return res.status(503).json({ error: 'Banco temporariamente ocupado. Tente novamente.', retryAfter: 2 });
-    }
-    return res.status(500).json({ error: err.message });
-  };
-
-  db.get('SELECT id FROM usuarios WHERE id = ?', [id], (ghostErr, target) => {
-    if (ghostErr) return sendBusy(ghostErr);
-    if (!target) return res.status(404).json({ error: 'Usuário não encontrado' });
-
-    getUsuarioModuleContext(db, id, (ctxErr, usuario) => {
-      if (ctxErr) return sendBusy(ctxErr);
-
-      db.all(
-        `SELECT gp.id, gp.nome, gp.descricao, gp.ativo,
-                p.id AS perm_id, p.modulo, p.acao, p.permissao, p.grupo_id
-         FROM grupos_permissoes gp
-         INNER JOIN usuarios_grupos ug ON gp.id = ug.grupo_id
-         LEFT JOIN permissoes p ON p.grupo_id = gp.id
-         WHERE ug.usuario_id = ? AND gp.ativo = 1
-         ORDER BY gp.nome, p.modulo, p.acao`,
-        [id],
-        (errGrupoPerms, joinedRows) => {
-          if (errGrupoPerms) return sendBusy(errGrupoPerms);
-
-          const gruposMap = new Map();
-          const permissoesGrupos = [];
-          (joinedRows || []).forEach((row) => {
-            if (!gruposMap.has(row.id)) {
-              gruposMap.set(row.id, {
-                id: row.id,
-                nome: row.nome,
-                descricao: row.descricao,
-                ativo: row.ativo,
-              });
-            }
-            if (row.perm_id) {
-              permissoesGrupos.push({
-                id: row.perm_id,
-                grupo_id: row.grupo_id,
-                modulo: row.modulo,
-                acao: row.acao,
-                permissao: row.permissao,
-                grupo_nome: row.nome,
-              });
-            }
-          });
-
-          db.all(
-            `SELECT p.id, p.usuario_id, p.grupo_id, p.modulo, p.acao, p.permissao, NULL as grupo_nome
-             FROM permissoes p
-             WHERE p.usuario_id = ? AND p.grupo_id IS NULL
-             ORDER BY p.modulo, p.acao`,
-            [id],
-            (errDiretas, permissoesDiretas) => {
-              if (errDiretas) return sendBusy(errDiretas);
-              const grupos = Array.from(gruposMap.values());
-              const todasPermissoes = [...permissoesGrupos, ...(permissoesDiretas || [])];
-              res.json({ grupos, permissoes: todasPermissoes, usuario });
-            }
-          );
-        }
-      );
-    });
-  });
-});
+// Etapa 130 (B841): `GET /api/usuarios`, `/api/usuarios/:id` e `/api/usuarios/:id/grupos` moram em services/leituraDeUsuarios.js
+// (o proprio usuario ou quem gerencia usuarios; a lista reduzida para os outros). Registradas AQUI, depois de /comercial, /filtrar e
+// /por-modulo — que senao cairiam no `/:id` — e antes do POST.
+registrarLeituraDeUsuarios(app, { getDb: () => db, authenticateToken });
 
 app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
   normalizarMaiusculas(req.body, ['nome', 'cargo']);
