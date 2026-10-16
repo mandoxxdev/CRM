@@ -2927,7 +2927,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   app.put('/api/almoxarifado/familias/:id',(req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
     const { nome, descricao, categoria_id, ativo, tipo_uso, parent_id } = req.body;
-    if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
+    // Etapa 125 (D (124) item 2, RN-10/RN-11; B807): `nome` OMITIDO preserva o gravado (no proprio comando, abaixo — o molde da
+    // descricao e do tipo de uso, B803). O Reativar da aba Familias manda so `{ativo: 1}`: antes mandava o nome da lista, e um
+    // renomear de outro Administrador feito depois de a lista carregar era desfeito. Informado vazio/so espacos/null: 400.
+    const nomeOmitido = nome === undefined;
+    if (!nomeOmitido && !nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
     const tipoUsoVal = ['administrativo', 'industrial', 'ambos'].includes(tipo_uso) ? tipo_uso : 'ambos';
     const familiaId = parseInt(req.params.id, 10);
     // Etapa 103 (achado M4 da revisao do plano): `parent_id: 'abc'` virava NaN, pulava a validacao do
@@ -3139,9 +3143,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         // Etapa 124 (Fase 5, r2 I1; B803): `descricao` e `tipo_uso` OMITIDOS preservam o gravado, no proprio comando (o molde de
         // `ativo`). Antes viravam NULL e 'ambos' — nenhuma tela os omitia ate o Reativar da aba Familias (`{nome, ativo: 1}`),
         // que apagava a descricao e mudava o tipo de uso (o que distribui familia por setor). Informados, como sempre.
-        db.run(`UPDATE familias_material_almoxarifado SET nome=?, descricao=CASE WHEN ? THEN descricao ELSE ? END, categoria_id=?,
+        db.run(`UPDATE familias_material_almoxarifado SET nome=CASE WHEN ? THEN nome ELSE ? END, descricao=CASE WHEN ? THEN descricao ELSE ? END, categoria_id=?,
           tipo_uso=CASE WHEN ? THEN tipo_uso ELSE ? END, ativo=COALESCE(?, ativo), parent_id=? WHERE id=?${condicaoSql}`,
-          [nome.trim(), descricao === undefined ? 1 : 0, descricao || null, categoriaIdVal, tipo_uso === undefined ? 1 : 0, tipoUsoVal,
+          [nomeOmitido ? 1 : 0, nomeOmitido ? null : nome.trim(), descricao === undefined ? 1 : 0, descricao || null, categoriaIdVal, tipo_uso === undefined ? 1 : 0, tipoUsoVal,
             ativoInformado ? ativoVal : null, parentId, familiaId,
             ...condicaoParams],
           function (err) {
