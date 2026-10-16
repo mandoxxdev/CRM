@@ -116,8 +116,13 @@ reserva manual **não** pegam (D (91))" e estava errada desde a 97 — enganou o
 controle de série relido no começo — e, desde a Etapa 117 (C235), **o livro e o desfazer também**: o `INSERT` da linha
 `ESTORNO`, o `movimento_estorno_id` e, se algo falhar depois do crédito, o desfazer de séries, linha e físico rodam dentro
 da seção, antes de soltar (fora dela, uma Saída do mesmo material cabia entre o crédito e o desfazer: físico −2). Quem
-desfaz **subtraindo** o que acabou de creditar tem de desfazer sob a trava; desfazer **somando** (o ramo de entrada) não
-precisa — só aumenta o livre. A conferência devolução × estorno não usa a trava: vai no próprio comando, com `NOT EXISTS`
+desfaz **subtraindo** o que acabou de creditar tem de desfazer sob a trava. Desde a Etapa 118 (C238, C243) isso vale para
+**todos** os ramos do estorno: uma seção só vai do efeito ao livro (entrada, saída, ajuste, transferência, bloqueio,
+desbloqueio), com o desfazer dos efeitos **e do claim** dentro dela — o ramo de entrada, que desfaz somando, entrou mesmo
+assim, porque as séries dele trocavam fora da trava (uma devolução avulsa no meio deixava físico 4 com 2 séries). Fora da
+seção ficam a liberação e a recriação das reservas da chegada e o recálculo (pegam a mesma trava). E o **bloquear/desbloquear
+série** (`mudarStatusSerie`) pega a trava do material desde a 118 (RN-10): fora dela, bloquear uma série no meio do estorno
+de entrada fazia o estorno pular a série e responder 200 com séries e estoque sem bater. A conferência devolução × estorno não usa a trava: vai no próprio comando, com `NOT EXISTS`
 de devolução viva no claim do estorno e `INSERT … WHERE EXISTS` na devolução. A régua "viva" mora em
 `services/almoxarifado/devolucaoViva.js` (Etapa 117) e é uma só para as cinco contas do que já voltou de uma saída; ela só
 dá a devolução por morta quando o estorno da entrada **concluiu** (`movimento_estorno_id` gravado — o claim `cancelado = 1`
