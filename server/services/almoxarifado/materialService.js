@@ -488,6 +488,58 @@ function condicaoSaldoIdentificadoSql(ligados) {
 }
 
 /**
+ * Etapa 115 (C226, RN-01) — o PUT muda algum controle (lote ou serie, ligando OU desligando), os dois lados lidos como
+ * 0/1. O motor le os dois controles e grava o saldo/as series DENTRO da trava do material (Etapa 97); o salvar que muda
+ * controle grava sob a mesma trava, senao uma Entrada que ja leu o controle velho grava depois do salvar.
+ */
+function mudaControle(gravado, merged) {
+  const b = (v) => (Number(v) === 1 ? 1 : 0);
+  return ['controle_lote', 'controle_serie'].some((c) => b(gravado[c]) !== b(merged[c]));
+}
+
+/** Etapa 115 (C225, RN-03): o PUT desliga a serie (1 -> 0, comparado com o GRAVADO). */
+function desligaSerie(gravado, merged) {
+  return Number(gravado.controle_serie || 0) === 1 && Number(merged.controle_serie) !== 1;
+}
+
+/** RN-03: as series presentes (EM_ESTOQUE + BLOQUEADA, a contagem da regularizacao) e o fisico, numa leitura so. */
+async function seriesPresentes(db, materialId) {
+  const r = await dbGet(db, `SELECT quantidade_atual AS fisico, ${PRESENTES_SQL} AS presentes
+    FROM materiais_almoxarifado WHERE id = ?`, [materialId]);
+  return { presentes: Number(r && r.presentes) || 0, fisico: r6(r && r.fisico) };
+}
+
+/** RN-06: a mesma regua no WHERE do UPDATE de quem nao pode regularizar (tabela sem apelido). */
+const SEM_SERIE_PRESENTE_SQL = `${PRESENTES_SQL} = 0`;
+
+/**
+ * E1 da Etapa 115 (contrato congelado no plano, com as variantes da Fase 2, R1). Desligar a serie com series presentes
+ * deixa-as orfas: a saida sem serie baixa o fisico e nao baixa as series, e a regularizacao de series exige o controle
+ * ligado (B745). Quando ha mais series que fisico, as que sobram ja sao orfas e o caminho e outro: o Administrador baixa
+ * as ausentes na regularizacao (no maximo `floor(presentes - fisico)`, a regua de regularizarSeries).
+ *   - E1a (nenhuma a baixar): pedir ao Administrador que desligue;
+ *   - E1b (todas a baixar — fisico <= 0): pedir que as baixe; sem serie presente, desligar e livre (RN-05);
+ *   - E1c (algumas): pedir que baixe as ausentes e desligue.
+ */
+function mensagemDesligarSerieSemPermissao(codigo, { presentes, fisico }, perfil) {
+  const inicio = `Desligar o controle por número de série no material ${codigo} exige a permissão "ajustar_estoque" `
+    + `(seu perfil: ${perfil}): há ${presentes} série(s) em estoque`;
+  const ausentes = Math.min(presentes, Math.max(0, Math.floor(presentes - fisico + 1e-9)));
+  const caminho = 'Lotes e Séries → Séries → Regularizar séries';
+  if (ausentes === 0) {
+    return `${inicio}. Depois de desligar, a saída não baixa essas séries, e elas continuam "Em estoque" depois que o `
+      + 'material sai. Peça ao Administrador do almoxarifado para desligar o controle.';
+  }
+  const fis = ` e o físico é ${String(fisico === 0 ? 0 : fisico)}`;
+  if (ausentes === presentes) {
+    return `${inicio}${fis}. Peça ao Administrador do almoxarifado para baixá-las em ${caminho}; sem série em estoque, `
+      + 'o controle pode ser desligado.';
+  }
+  return `${inicio}${fis}. Peça ao Administrador do almoxarifado para baixar as ${ausentes} que não estão mais no `
+    + `estoque (${caminho}) e para desligar o controle.`;
+}
+
+/**
  * Etapa 113 (C217, C227, RN-01..RN-04) — inativar material com saldo prende o saldo: o motor recusa movimentar material
  * inativo e nenhuma tela reativa. Por isso inativar exige o fisico e as quatro retencoes zerados (6 casas), para TODOS
  * (B733: o padrao "so quem regulariza" da 112 nao serve — quem regulariza tambem ficaria preso).
@@ -549,4 +601,5 @@ module.exports = {
   SALDO_INICIAL_MOTIVO, quantidadeSaldoInicial, temSaldoInicial, motivosSaldoInicialRecusado,
   mensagemSaldoInicialRecusado, mensagemSaldoInicialSemPermissao,
   controlesLigados, saldoNaoIdentificado, mensagemControleSemPermissao, condicaoSaldoIdentificadoSql,
+  mudaControle, desligaSerie, seriesPresentes, SEM_SERIE_PRESENTE_SQL, mensagemDesligarSerieSemPermissao,
 };

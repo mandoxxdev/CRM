@@ -6,6 +6,8 @@
  */
 const { dbGet, dbAll, dbRun } = require('./db');
 const { registrarAuditoria } = require('./audit');
+// Etapa 115 (Fase 2, R2): o unico require da trava e do proprio Node — sem ciclo.
+const trava = require('./travaPorMaterial');
 
 // Etapa 61: BAIXADA = serie dada como ausente na regularizacao (nao presente; ver regularizarSeries).
 const STATUS_SERIE = ['EM_ESTOQUE', 'BLOQUEADA', 'ENTREGUE', 'SUCATEADA', 'ESTORNADA', 'BAIXADA'];
@@ -333,7 +335,17 @@ async function mudarStatusSerie(db, user, serieId, novoStatus, justificativa) {
  *  - `baixar` series "fantasma" (presentes mas ausentes) — no maximo `presentes − fisico`, status BAIXADA.
  * Sem movimentacao de estoque (o fisico ja esta certo); justificativa obrigatoria; auditado por serie.
  */
-async function regularizarSeries(db, user, materialId, { cadastrar = [], baixar = [], justificativa, lote_id: loteBruto } = {}) {
+/**
+ * Etapa 115 (Fase 2, R2): sob a trava do material. A regularizacao le `controle_serie` no comeco e cadastra depois; o PUT
+ * que desliga a serie grava sob a mesma trava (C226/C225) com a condicao "sem serie presente" — fora dela, um desligar
+ * entre a leitura e o INSERT deixava series EM_ESTOQUE num material sem controle, por fora da recusa. Dentro da secao so
+ * escritas de serie e auditoria (nenhum motor, nenhuma outra porta — a trava nao e reentrante).
+ */
+async function regularizarSeries(db, user, materialId, opcoes = {}) {
+  return trava.naTravaDoMaterial(materialId, () => regularizarSeriesSemTrava(db, user, materialId, opcoes));
+}
+
+async function regularizarSeriesSemTrava(db, user, materialId, { cadastrar = [], baixar = [], justificativa, lote_id: loteBruto } = {}) {
   const just = String(justificativa || '').trim();
   if (just.length < 5) throw erro('justificativa obrigatoria (minimo 5 caracteres)');
   const material = await dbGet(db, 'SELECT id, codigo, quantidade_atual, controle_serie FROM materiais_almoxarifado WHERE id = ?', [materialId]);

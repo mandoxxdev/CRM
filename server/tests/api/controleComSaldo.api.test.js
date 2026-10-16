@@ -116,7 +116,8 @@ const E4 = (codigo) => `O cadastro do material ${codigo} mudou enquanto era salv
   await test('[RN-01] fisico 0 com 2 series presentes (desligou e saiu sem serie): religar a serie e recusado', async () => {
     const m = await material({ extra: { controle_serie: 1 } });
     await lancar(m, { tipo: 'ENTRADA', quantidade: 2, series: ['A1', 'A2'] });
-    await grava(ALMOXARIFE, m, { controle_serie: 0 }, { controle_serie: 0 });
+    // Etapa 115 (C225): desligar a serie com series presentes passou a ser do Administrador — o estado de partida e o mesmo.
+    await grava(ADM_PERFIL, m, { controle_serie: 0 }, { controle_serie: 0 });
     await lancar(m, { tipo: 'SAIDA', quantidade: 2 });
     await recusa(ALMOXARIFE, m, { controle_serie: 1 }, 'serie', 'o físico é 0 e há 2 série(s) em estoque', 'ALMOXARIFE');
   });
@@ -143,7 +144,8 @@ const E4 = (codigo) => `O cadastro do material ${codigo} mudou enquanto era salv
   await test('[RN-03] series presentes = fisico (desligou sem movimentar): a Engenharia religa (200)', async () => {
     const m = await material({ extra: { controle_serie: 1 } });
     await lancar(m, { tipo: 'ENTRADA', quantidade: 2, series: ['B1', 'B2'] });
-    await grava(ALMOXARIFE, m, { controle_serie: 0 }, { controle_serie: 0 });
+    // Etapa 115 (C225): desligar a serie com series presentes passou a ser do Administrador — o estado de partida e o mesmo.
+    await grava(ADM_PERFIL, m, { controle_serie: 0 }, { controle_serie: 0 });
     await grava(ENGENHARIA, m, { controle_serie: 1 }, { controle_serie: 1 });
   });
 
@@ -278,7 +280,8 @@ const E4 = (codigo) => `O cadastro do material ${codigo} mudou enquanto era salv
     const m = await material({ extra: { controle_serie: 1 } });
     await lancar(m, { tipo: 'ENTRADA', quantidade: 2, series: ['X1', 'X2'] });
     await dbRun(db, "UPDATE series_almoxarifado SET status = 'BLOQUEADA' WHERE material_id = ? AND numero = 'X2'", [m.id]);
-    await grava(ALMOXARIFE, m, { controle_serie: 0 }, { controle_serie: 0 });
+    // Etapa 115 (C225): desligar a serie com series presentes passou a ser do Administrador — o estado de partida e o mesmo.
+    await grava(ADM_PERFIL, m, { controle_serie: 0 }, { controle_serie: 0 });
     await grava(ALMOXARIFE, m, { controle_serie: 1 }, { controle_serie: 1 });
   });
 

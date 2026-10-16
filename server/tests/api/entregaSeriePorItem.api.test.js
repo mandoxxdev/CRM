@@ -262,7 +262,11 @@ let seq = 0;
       regularizar(m.id, { cadastrar: ['Z1'], justificativa: 'aba um do legado' }),
       regularizar(m.id, { cadastrar: ['Z2'], justificativa: 'aba dois do legado' }),
     ]);
-    assert.deepStrictEqual(rs.map((r) => r.status).sort(), [200, 409], JSON.stringify(rs.map((r) => r.body)));
+    // Etapa 115 (Fase 2, R2): a regularizacao roda sob a trava do material, entao a segunda aba espera a primeira e e
+    // recusada pela validacao (400, com a conta), nao mais pela guarda do WHERE (409) — o limite continua o mesmo.
+    assert.deepStrictEqual(rs.map((r) => r.status).sort(), [200, 400], JSON.stringify(rs.map((r) => r.body)));
+    assert.strictEqual(rs.find((r) => r.status === 400).body.error,
+      'cadastrar 1 serie(s) passaria o fisico (2) — presentes 2, cadastre no maximo 0');
     assert.deepStrictEqual(await estado(m.id), { fisico: 2, presentes: 2 });
     // Baixa uma por engano, depois reativa pelo mesmo gesto (cadastrar o número).
     await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 1 WHERE id = ?', [m.id]);

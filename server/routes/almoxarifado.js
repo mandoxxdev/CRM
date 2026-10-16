@@ -701,6 +701,25 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       }
     }
 
+    // Etapa 115 (C225, RN-03..RN-07): desligar a serie (1 -> 0, comparado com o GRAVADO) de material com series presentes
+    // (EM_ESTOQUE/BLOQUEADA) exige `ajustar_estoque`: depois de desligar, a saida sem serie baixa o fisico e nao baixa as
+    // series, que ficam "Em estoque" orfas — e a regularizacao de series exige o controle ligado. A regua da 112 no sentido
+    // inverso (B728/B745). Depois da guarda de ligar (uma mensagem so) e antes da familia; recusa = nada gravado.
+    const guardaDesligarSerie = materialService.desligaSerie(current, merged) && !podeRegularizar;
+    const recusaDesligarSerie = async () => {
+      const contagem = await materialService.seriesPresentes(db, req.params.id);
+      return contagem.presentes === 0 ? null
+        : materialService.mensagemDesligarSerieSemPermissao(current.codigo, contagem, getPerfilFromUser(req.user));
+    };
+    if (guardaDesligarSerie) {
+      try {
+        const msg = await recusaDesligarSerie();
+        if (msg) return res.status(403).json({ error: msg });
+      } catch (errSerie) {
+        return res.status(500).json({ error: errSerie.message });
+      }
+    }
+
     // Mesma semântica do T3 (comentário original preservado): só revalida quando o valor é
     // NOVO — informado explicitamente, OU a família efetiva mudou (um vínculo preservado pode
     // não ser filho da família nova). Um vínculo preservado com a MESMA família já era válido
@@ -769,14 +788,16 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // Entrada sem lote que caiu depois da leitura nao fica presa.
     let condControle = '';
     const paramsControle = [];
+    // Etapa 115 (Fase 2, R4): as duas colunas, ligadas ou nao — um salvar lido com o controle desligado (renomear) que
+    // gravasse depois de o Administrador ligar a serie apagava o ligar calado e deixava as series orfas, por fora da E1.
     if (!podeRegularizar) {
       for (const col of ['controle_lote', 'controle_serie']) {
-        if (Number(merged[col]) === 1) {
-          condControle += ` AND COALESCE(${col}, 0) = ?`;
-          paramsControle.push(Number(current[col] || 0) === 1 ? 1 : 0);
-        }
+        condControle += ` AND COALESCE(${col}, 0) = ?`;
+        paramsControle.push(Number(current[col] || 0) === 1 ? 1 : 0);
       }
       if (guardaControle) condControle += ` AND ${materialService.condicaoSaldoIdentificadoSql(controlesQueLiga)}`;
+      // Etapa 115 (RN-06): desligar a serie so grava se continua sem serie presente.
+      if (guardaDesligarSerie) condControle += ` AND ${materialService.SEM_SERIE_PRESENTE_SQL}`;
     }
     // Etapa 113 (RN-04): inativar so grava se o saldo continua zerado — para todos.
     if (inativa) condControle += ` AND ${materialService.SEM_SALDO_SQL}`;
@@ -792,7 +813,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         WHERE id = ? AND proprietario_cliente_id IS ? AND ${condFamilia.sql}${condControle}`,
         [...MATERIAL_UPDATE_COLUMNS.map((c) => merged[c]), req.params.id, current.proprietario_cliente_id ?? null,
           ...condFamilia.params, ...paramsControle]);
-      const escrita = inativa ? await trava.naTravaDoMaterial(current.id, gravar) : await gravar();
+      // Etapa 115 (C226, RN-01): mudar o controle (ligar ou desligar lote/serie) tambem — o motor le o controle e grava o
+      // saldo dentro da trava (Etapa 97); fora dela, uma Entrada sem lote que ja leu "controle 0" gravava depois do ligar e o
+      // saldo ficava sem lote com o controle ligado, por baixo da regua acima. Sob a trava a Entrada termina antes (e a regua
+      // ve o saldo dela) ou comeca depois (e exige lote). Dentro da secao so este UPDATE (a trava nao e reentrante).
+      const sobTrava = inativa || materialService.mudaControle(current, merged);
+      const escrita = sobTrava ? await trava.naTravaDoMaterial(current.id, gravar) : await gravar();
       if (escrita.changes === 0) {
         const agora = await dbGet(db, 'SELECT proprietario_cliente_id FROM materiais_almoxarifado WHERE id = ?', [req.params.id]);
         if (!agora) return res.status(404).json({ error: 'Material não encontrado' });
@@ -807,6 +833,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         if (guardaControle) {
           const msgAgora = await recusaControle();
           if (msgAgora) return res.status(403).json({ error: msgAgora });
+        }
+        // Etapa 115 (RN-06/RN-07): depois do ligar, o desligar da serie — antes da familia.
+        if (guardaDesligarSerie) {
+          const msgSerie = await recusaDesligarSerie();
+          if (msgSerie) return res.status(403).json({ error: msgSerie });
         }
         try {
           if (validouFamilia) await validateFamiliaAtiva(merged.familia_id);
