@@ -124,6 +124,22 @@ describe('C264 (Etapa 127) — a sessao aberta com o perfil retirado', () => {
     expect(getEffectiveUser(authRef.user).perfil_almoxarifado).toBe('ADMINISTRADOR');
   });
 
+  test('[RN-08c] (Fase 5, r2) a busca de permissoes em voo no instante do refreshUser nao grava o perfil velho por cima do novo', async () => {
+    meAtual = payload({ id: 7, role: 'user', perfil_almoxarifado: null });
+    await abrirComSessao(payload({ id: 7, role: 'user', perfil_almoxarifado: null }));
+    const base = api.get.getMockImplementation();
+    let soltar;
+    api.get.mockImplementation((url) => (url === '/usuarios/7/grupos'
+      ? new Promise((resolve) => { soltar = () => resolve({ data: { grupos: [], permissoes: [], usuario: { role: 'user', is_superadmin: false, admin_modulos: [], perfil_almoxarifado: null, perfil_frota: null } } }); })
+      : base(url)));
+    const emVoo = fetchUserPermissions(7); // comecou com o perfil velho (null)
+    meAtual = payload({ id: 7, role: 'user', perfil_almoxarifado: 'ADMINISTRADOR' });
+    await act(async () => { await authRef.refreshUser(); }); // invalida no meio
+    await act(async () => { soltar(); await emVoo; });
+    expect(authRef.user.perfil_almoxarifado).toBe('ADMINISTRADOR');
+    expect(getEffectiveUser(authRef.user).perfil_almoxarifado).toBe('ADMINISTRADOR'); // a busca velha nao gravou
+  });
+
   test('[RN-09] o cache de permissoes (/usuarios/:id/grupos) com perfil null tira o perfil do usuario efetivo', async () => {
     api.get.mockImplementation((url) => (url === '/usuarios/7/grupos'
       ? Promise.resolve({ data: { grupos: [], permissoes: [], usuario: { role: 'user', is_superadmin: false, admin_modulos: [], perfil_almoxarifado: null, perfil_frota: null } } })

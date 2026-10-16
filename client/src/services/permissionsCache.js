@@ -6,6 +6,9 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 const FETCH_TIMEOUT_MS = parseInt(process.env.REACT_APP_PERMISSIONS_TIMEOUT_MS || '12000', 10);
 const cache = new Map();
 const inflight = new Map();
+// Etapa 127 (Fase 5, r2): a geracao do cache — invalidar a incrementa, e a busca que comecou antes nao grava depois. Sem isso, um
+// /usuarios/:id/grupos em voo no instante do refreshUser gravava o perfil velho (null) por cima do fresco por ate 5 min.
+let geracao = 0;
 
 function withTimeout(promise, ms = FETCH_TIMEOUT_MS) {
   return Promise.race([
@@ -44,6 +47,7 @@ export async function fetchUserPermissions(userId, options = {}) {
   }
 
   const timeoutMs = options.timeoutMs ?? FETCH_TIMEOUT_MS;
+  const geracaoDaBusca = geracao;
 
   const promise = withTimeout(
     api.get(`/usuarios/${userId}/grupos`),
@@ -51,12 +55,14 @@ export async function fetchUserPermissions(userId, options = {}) {
   )
     .then((response) => {
       const data = response.data || { permissoes: [], grupos: [], usuario: null };
-      cache.set(userId, { data, ts: Date.now() });
-      inflight.delete(userId);
+      if (geracaoDaBusca === geracao) {
+        cache.set(userId, { data, ts: Date.now() });
+        inflight.delete(userId);
+      }
       return data;
     })
     .catch((error) => {
-      inflight.delete(userId);
+      if (geracaoDaBusca === geracao) inflight.delete(userId);
       if (error?.message === 'TIMEOUT_PERMISSIONS') {
         const stale = cache.get(userId);
         if (stale?.data) {
@@ -113,6 +119,7 @@ export function hasModuleAccess(permissoes, modulo, user) {
 }
 
 export function invalidatePermissionsCache(userId) {
+  geracao += 1;
   if (userId) {
     cache.delete(userId);
     inflight.delete(userId);

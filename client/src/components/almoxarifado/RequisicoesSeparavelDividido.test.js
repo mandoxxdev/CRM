@@ -159,6 +159,52 @@ describe('Etapa 127 (C265) — o modal divide só o que passa da reserva própri
     expect(container.querySelector('textarea#separacao-motivo-1')).not.toBeNull();
   });
 
+  // Fase 5 (r3): o irmao abaixo da propria nao devolve ao livre; a propria nao conta duas vezes; tres irmaos acumulam.
+  test('[127 RN-17, Fase 5 r3] C3 com o primeiro em 2 (abaixo da propria): o segundo continua com maximo 2', async () => {
+    requisicao = { ...REQ, status: 'PARCIALMENTE_RESERVADA', itens: [
+      { ...ITEM, id: 1, saldo_separavel: 6, quantidade_separavel: 4, saldo_separavel_reserva: 4 },
+      { ...ITEM, id: 2, saldo_separavel: 2, quantidade_separavel: 2, saldo_separavel_reserva: 0 },
+    ] };
+    await renderizar();
+    await clicar('Iniciar Separação');
+    await digitar(inputs()[0], '2');
+    await digitar(inputs()[1], '1');
+    expect(container.querySelector('textarea#separacao-motivo-2')).not.toBeNull();
+    await digitar(inputs()[1], '3');
+    expect(container.querySelector('textarea#separacao-motivo-2')).toBeNull();
+  });
+
+  test('[127 RN-17, Fase 5 r3] a propria nao conta duas vezes: pedidos 6 e 4 (6 com reserva 4, 2 livres) -> abre 6 e 0; com o segundo em 2, o maximo do primeiro e 4', async () => {
+    requisicao = { ...REQ, status: 'PARCIALMENTE_RESERVADA', itens: [
+      { ...ITEM, id: 1, quantidade_solicitada: 6, saldo_separavel: 6, quantidade_separavel: 6, saldo_separavel_reserva: 4 },
+      { ...ITEM, id: 2, quantidade_solicitada: 4, saldo_separavel: 2, quantidade_separavel: 2, saldo_separavel_reserva: 0 },
+    ] };
+    await renderizar();
+    await clicar('Iniciar Separação');
+    expect(inputs().map((i) => i.value)).toEqual(['6', '0']);
+    await digitar(inputs()[1], '2');
+    await digitar(inputs()[0], '3');
+    expect(container.querySelector('textarea#separacao-motivo-1')).not.toBeNull();
+    await digitar(inputs()[0], '5');
+    expect(container.querySelector('textarea#separacao-motivo-1')).toBeNull();
+  });
+
+  test('[127 RN-17, Fase 5 r3] tres irmaos de 2 com 5 livres: abre 2, 2 e 1', async () => {
+    requisicao = { ...REQ, status: 'APROVADO', itens: [1, 2, 3].map((id) => (
+      { ...ITEM, id, quantidade_solicitada: 2, saldo_separavel: 5, quantidade_separavel: 2, saldo_separavel_reserva: 0 })) };
+    await renderizar();
+    await clicar('Iniciar Separação');
+    expect(inputs().map((i) => i.value)).toEqual(['2', '2', '1']);
+  });
+
+  test('[127 RN-18, Fase 5 r3] o aviso "chegou" com tres irmaos de 2 e 5 livres: 2, 2 e 1', async () => {
+    requisicao = { ...REQ, status: 'AGUARDANDO_ESTOQUE', itens: [1, 2, 3].map((id) => (
+      { ...ITEM, id, quantidade_solicitada: 2, saldo_separavel: 5, quantidade_separavel: 2, saldo_separavel_reserva: 0 })) };
+    await renderizar();
+    await act(async () => { await Promise.resolve(); });
+    expect(container.textContent).toContain('Dá para separar agora: 2 PC de Chapa 3mm; 2 PC de Chapa 3mm; 1 PC de Chapa 3mm.');
+  });
+
   // Fase 2 (M1): o aviso "chegou" so aparece em Aguard. Estoque/Compra, onde a parte propria e 0 — a conta nova nao muda o que se ve.
   test('[127 RN-18] o aviso "chegou" (controle): sem reserva, 4 livres, dois itens de 4 -> só o primeiro, 4', async () => {
     requisicao = { ...REQ, status: 'AGUARDANDO_ESTOQUE', itens: [
