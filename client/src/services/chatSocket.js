@@ -1,6 +1,9 @@
 import { io } from 'socket.io-client';
 
 let socket = null;
+// Etapa 132 (Fase 2 I2): o token com que o socket nasceu. O logout nao recarrega a pagina; sem isto o socket de quem saiu
+// seguia na aba de quem entrou depois (o tempo real do anterior, e o aviso de sessao encerrada dele deslogando o novo).
+let tokenDoSocket = null;
 
 export function getSocketURL() {
   if (process.env.REACT_APP_SOCKET_URL) {
@@ -24,9 +27,26 @@ function getToken() {
   return localStorage.getItem('token') || sessionStorage.getItem('token');
 }
 
+/**
+ * Etapa 132 (C271, RN-07): o servidor recusa no handshake quem ficou sem linha ativa (`connect_error` com
+ * `data.code = 'USUARIO_INATIVO'`) e derruba o socket aberto de quem foi desativado ou apagado, avisando antes com
+ * `sessao_encerrada`. Sai como o 401 da 131 (`services/api.js`): limpa a sessao e vai para `/login?sessao_encerrada=1`.
+ * So se o socket ainda for o da aba — o aviso do socket do usuario anterior nao desloga quem entrou depois.
+ */
+function sairPorSessaoEncerrada(tokenDele) {
+  if (tokenDele !== getToken()) return;
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  sessionStorage.removeItem('token');
+  window.location.href = '/login?sessao_encerrada=1';
+}
+
 export function connectChatSocket() {
   const token = getToken();
   if (!token) return null;
+
+  // Etapa 132 (Fase 2 I2): outro token na aba (outro usuario entrou sem recarregar) -> o socket velho sai e nasce outro.
+  if (socket && tokenDoSocket !== token) disconnectChatSocket();
 
   if (socket?.connected) return socket;
 
@@ -42,6 +62,11 @@ export function connectChatSocket() {
     transports: ['websocket', 'polling'],
     reconnection: true,
   });
+  tokenDoSocket = token;
+  socket.on('sessao_encerrada', () => sairPorSessaoEncerrada(token));
+  socket.on('connect_error', (err) => {
+    if (err && err.data && err.data.code === 'USUARIO_INATIVO') sairPorSessaoEncerrada(token);
+  });
 
   return socket;
 }
@@ -55,6 +80,7 @@ export function disconnectChatSocket() {
     socket.disconnect();
     socket = null;
   }
+  tokenDoSocket = null;
 }
 
 export function joinConversa(conversaId) {

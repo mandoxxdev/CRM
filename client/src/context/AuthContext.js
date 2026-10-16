@@ -3,6 +3,7 @@ import axios from 'axios';
 import api from '../services/api';
 import { invalidatePermissionsCache, onPermissoesGravadas, seedPermissionsFromAuthUser } from '../services/permissionsCache';
 import { mergeUserPermissions } from '../utils/systemPermissions';
+import { disconnectChatSocket } from '../services/chatSocket';
 
 const AuthContext = createContext();
 
@@ -161,6 +162,8 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('user');
     sessionStorage.removeItem('token');
     delete axios.defaults.headers.common['Authorization'];
+    // Etapa 132 (C271, Fase 2 I2): o logout nao recarrega a pagina — o socket do chat de quem saiu nao fica na aba.
+    disconnectChatSocket();
     setUser(null);
   };
 
