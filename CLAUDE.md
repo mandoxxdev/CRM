@@ -128,6 +128,15 @@ de devolução viva no claim do estorno e `INSERT … WHERE EXISTS` na devoluç�
 dá a devolução por morta quando o estorno da entrada **concluiu** (`movimento_estorno_id` gravado — o claim `cancelado = 1`
 é provisório e volta a 0 se o estorno falhar).
 
+Desde a Etapa 120 (B781) a **exclusão da requisição** também segura a trava por material dos itens
+(`comTravaDaRequisicao`, por dentro da trava por requisição, como a separação e a entrega): ela valida as séries da entrega
+(a guarda da 116 e a das séries que já voltaram, C251) e credita no estorno; validando fora, uma Entrada que reativava as
+séries e o desligar da série no meio a faziam creditar sem série (físico 4 com 2 séries, 8/200). **Teste de corrida com
+gancho:** o gesto concorrente disparado **de dentro** do gancho herda o contexto da seção (`AsyncLocalStorage`) e passa
+direto pela trava (ou espera a si mesmo, se ele pegar `comLockDoMaterial`) — dispare-o do contexto do teste, com o gancho
+só sinalizando e segurando o comando (molde: `exclusaoSerieQueVoltou.api.test.js` RN-15, e o (d4) de
+`requisicaoGestosConcorrentes`).
+
 **Há outra trava, por requisição** (Etapa 93): `services/almoxarifado/travaPorRequisicao.js`
 (`serializarNaRequisicao`) serializa os cinco gestos do almoxarife numa requisição — separar,
 entregar e excluir (no serviço, valem para as duas rotas de exclusão) e liberar para retirada e
