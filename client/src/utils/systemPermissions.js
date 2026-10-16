@@ -102,8 +102,12 @@ export function mergeUserPermissions(authUser, extra = {}) {
     admin_modulos: extra.admin_modulos !== undefined
       ? parseAdminModulos(extra.admin_modulos)
       : parseAdminModulos(base.admin_modulos),
-    perfil_almoxarifado: extra.perfil_almoxarifado ?? base.perfil_almoxarifado ?? null,
-    perfil_frota: extra.perfil_frota ?? base.perfil_frota ?? null,
+    // Etapa 127 (C264, RN-01..RN-05; B818): a chave PRESENTE vale, inclusive null — o servidor (/auth/me, /auth/login e o usuario
+    // de /usuarios/:id/grupos) manda as duas SEMPRE, com null para quem nao tem perfil. Com `??` o null caia no valor antigo do
+    // localStorage e quem perdia o perfil continuava vendo os botoes ate sair e entrar. So a chave ausente (o `{}` do boot e do
+    // applyFreshUser) preserva — o mesmo de admin_modulos e is_superadmin.
+    perfil_almoxarifado: extra.perfil_almoxarifado !== undefined ? extra.perfil_almoxarifado : (base.perfil_almoxarifado ?? null),
+    perfil_frota: extra.perfil_frota !== undefined ? extra.perfil_frota : (base.perfil_frota ?? null),
   };
 }
 

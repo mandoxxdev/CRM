@@ -48,6 +48,11 @@ export const AuthProvider = ({ children }) => {
       const currentUser = userRef.current || JSON.parse(localStorage.getItem('user') || '{}');
       const freshUser = await refreshUserFromServer(token, currentUser);
       setUser(freshUser);
+      // Etapa 127 (C264, Fase 2 C1): o cache de permissoes (5 min) e o usuario efetivo de getEffectiveUser — sem regrava-lo, o perfil
+      // velho do cache venceria o fresco (quem perdeu continuava gravando; quem ganhou tinha o perfil apagado). O mesmo do login e do
+      // applyFreshUser.
+      invalidatePermissionsCache(freshUser?.id);
+      seedPermissionsFromAuthUser(freshUser);
       return freshUser;
     } catch (error) {
       console.warn('Não foi possível atualizar permissões do usuário:', error);
