@@ -3120,8 +3120,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         const sempre = condicoesSempre();
         condicaoSql += sempre.sql;
         condicaoParams.push(...sempre.params);
-        db.run(`UPDATE familias_material_almoxarifado SET nome=?, descricao=?, categoria_id=?, tipo_uso=?, ativo=COALESCE(?, ativo), parent_id=? WHERE id=?${condicaoSql}`,
-          [nome.trim(), descricao || null, categoriaIdVal, tipoUsoVal, ativoInformado ? ativoVal : null, parentId, familiaId,
+        // Etapa 124 (Fase 5, r2 I1; B803): `descricao` e `tipo_uso` OMITIDOS preservam o gravado, no proprio comando (o molde de
+        // `ativo`). Antes viravam NULL e 'ambos' — nenhuma tela os omitia ate o Reativar da aba Familias (`{nome, ativo: 1}`),
+        // que apagava a descricao e mudava o tipo de uso (o que distribui familia por setor). Informados, como sempre.
+        db.run(`UPDATE familias_material_almoxarifado SET nome=?, descricao=CASE WHEN ? THEN descricao ELSE ? END, categoria_id=?,
+          tipo_uso=CASE WHEN ? THEN tipo_uso ELSE ? END, ativo=COALESCE(?, ativo), parent_id=? WHERE id=?${condicaoSql}`,
+          [nome.trim(), descricao === undefined ? 1 : 0, descricao || null, categoriaIdVal, tipo_uso === undefined ? 1 : 0, tipoUsoVal,
+            ativoInformado ? ativoVal : null, parentId, familiaId,
             ...condicaoParams],
           function (err) {
             if (err) return res.status(500).json({ error: err.message });
