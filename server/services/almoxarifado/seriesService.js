@@ -252,14 +252,23 @@ async function desfazerReverterSaida(db, afetadas) {
 /**
  * Estorno de entrada: series ainda EM_ESTOQUE daquela movimentacao viram ESTORNADA.
  * Devolve afetadas[] = { anterior, linha } pelo mesmo motivo de `reverterSaida` acima.
+ *
+ * Etapa 117 (Fase 2, R1): com `saidaId` (o estorno da ENTRADA_DEVOLUCAO de uma devolucao que citou a saida), as series
+ * voltam a ENTREGUE vinculadas a essa saida — o estorno da devolucao diz que o material nao voltou, entao a peca esta de
+ * novo com quem a levou. Sem `saidaId`, o de sempre.
  */
-async function reverterEntrada(db, user, movimentacaoId) {
+async function reverterEntrada(db, user, movimentacaoId, { saidaId = null } = {}) {
   const linhas = await dbAll(db, `
     SELECT * FROM series_almoxarifado
      WHERE movimentacao_entrada_id = ? AND status = 'EM_ESTOQUE'`, [movimentacaoId]);
   const afetadas = [];
   for (const s of linhas) {
-    const linha = await dbGet(db, `
+    const linha = saidaId
+      ? await dbGet(db, `
+      UPDATE series_almoxarifado
+         SET status = 'ENTREGUE', status_motivo = 'Devolução estornada', movimentacao_saida_id = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND status = 'EM_ESTOQUE' RETURNING *`, [saidaId, s.id])
+      : await dbGet(db, `
       UPDATE series_almoxarifado
          SET status = 'ESTORNADA', status_motivo = 'Entrada estornada', updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND status = 'EM_ESTOQUE' RETURNING *`, [s.id]);
@@ -268,7 +277,8 @@ async function reverterEntrada(db, user, movimentacaoId) {
       await registrarAuditoria(db, {
         entidade: 'serie', entidade_id: linha.id, acao: 'ESTORNO_ENTRADA',
         usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
-        dados_anteriores: { status: 'EM_ESTOQUE' }, dados_novos: { status: 'ESTORNADA' },
+        dados_anteriores: { status: 'EM_ESTOQUE' },
+        dados_novos: saidaId ? { status: 'ENTREGUE', movimentacao_saida_id: saidaId } : { status: 'ESTORNADA' },
       });
     }
   }
@@ -280,11 +290,12 @@ async function reverterEntrada(db, user, movimentacaoId) {
  * entrada. */
 async function desfazerReverterEntrada(db, afetadas) {
   for (const a of [...afetadas].reverse()) {
+    // Etapa 117 (Fase 2, R1): o vinculo com a saida tambem volta (o estorno da entrada da devolucao o gravava).
     const linha = await dbGet(db, `
       UPDATE series_almoxarifado
-         SET status = ?, status_motivo = ?, updated_at = CURRENT_TIMESTAMP
+         SET status = ?, status_motivo = ?, movimentacao_saida_id = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ? RETURNING *`,
-      [a.anterior.status, a.anterior.status_motivo, a.linha.id]);
+      [a.anterior.status, a.anterior.status_motivo, a.anterior.movimentacao_saida_id ?? null, a.linha.id]);
     if (linha) {
       await registrarAuditoria(db, {
         entidade: 'serie', entidade_id: linha.id, acao: 'COMPENSACAO',

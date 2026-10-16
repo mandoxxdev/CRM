@@ -2409,14 +2409,9 @@ async function contarSeriesDaSaida(db, movimentoId) {
 /** A recusa da 6b (series da saida que ja reentraram) — tambem usada pela 116 com a serie desligada (Fase 2, R3). */
 const MSG_SERIES_REENTRARAM = 'estorno de saida recusado: series desta saida ja reentraram no estoque — a devolucao ja repos o material';
 
-/**
- * Etapa 116 (Fase 5, revisor 1): a devolucao "viva" — a que NAO teve a sua ENTRADA_DEVOLUCAO estornada pelo livro. Sem isto
- * a devolucao estornada continuava contando: a Saida ficava inestornavel com a E3 dizendo que o material voltou, quando o
- * estorno da devolucao ja o tinha tirado de novo. SQL correlacionado com o apelido `d` (devolucoes_material_almoxarifado).
- * A devolucao legada (sem a referencia DEV-<id>, antes da Etapa 7) conta — conservador.
- */
-const DEVOLUCAO_VIVA_SQL = `NOT EXISTS (SELECT 1 FROM movimentacoes_almoxarifado ed
-  WHERE ed.referencia = 'DEV-' || d.id AND ed.tipo = 'ENTRADA_DEVOLUCAO' AND COALESCE(ed.cancelado, 0) = 1)`;
+// Etapa 116 (Fase 5, revisor 1): a devolucao "viva" — desde a 117 (C236) a regua mora em `devolucaoViva.js`, comum as cinco
+// contas do que ja voltou de uma saida (ver la).
+const { DEVOLUCAO_VIVA_SQL, ENTRADA_DA_DEVOLUCAO_SQL, estornoConcluidoSql } = require('./devolucaoViva');
 
 /** RN-10: a recusa do estorno de uma Saida que ja teve devolucao viva, ou null. */
 async function recusaDoEstornoDeSaidaDevolvida(db, mov, unidade) {
@@ -2435,6 +2430,25 @@ function mensagemEstornoDeSaidaDevolvida(devolvida, restante, unidade) {
   }
   return `Não é possível estornar: esta saída já foi devolvida inteira (${devolvida} ${unidade}) — o estorno devolveria de `
     + 'novo o que já voltou.';
+}
+
+/**
+ * Etapa 117 (C237, RN-05; B760): a perna SUCATA viva da devolucao para sucata a que esta ENTRADA_DEVOLUCAO pertence. A
+ * devolucao para SUCATA grava a entrada e logo depois a SUCATA (a mesma `referencia = DEV-<id>`, Etapa 7): o material voltou
+ * e foi sucateado. Estornar so a entrada tirava do estoque de novo o que ja tinha saido pela sucata (medido: 8 -> 6). SQL
+ * correlacionado: `refSql`/`matSql` sao a referencia e o material da entrada. A perna e a PRIMEIRA SUCATA com a referencia
+ * do mesmo material (a da devolucao — a referencia e digitavel nas outras movimentacoes: Fase 2, R2), e ela so deixa de
+ * estar de pe quando o estorno dela CONCLUIU (o claim provisorio de um estorno que ainda pode falhar conta como de pe — R3).
+ */
+const sucataViva = (refSql, matSql) => `EXISTS (SELECT 1 FROM movimentacoes_almoxarifado sc
+  WHERE sc.id = (SELECT MIN(s2.id) FROM movimentacoes_almoxarifado s2
+    WHERE s2.referencia = ${refSql} AND s2.tipo = 'SUCATA' AND s2.material_id = ${matSql})
+    AND NOT ${estornoConcluidoSql('sc')})`;
+
+/** E1 da Etapa 117 (400, contrato congelado no plano). */
+function mensagemEntradaDaSucata(referencia) {
+  return `Não é possível estornar: esta entrada é da devolução ${referencia}, que foi para a sucata — estornar só a entrada `
+    + 'tiraria do estoque de novo o que já saiu pela sucata. Estorne primeiro a sucata desta devolução e depois esta entrada.';
 }
 
 /** E2 da Etapa 116 (400, contrato congelado no plano). */
@@ -2702,6 +2716,25 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
     if (msgDevolvida) throw Object.assign(new Error(msgDevolvida), { status: 400 });
   }
 
+  // Etapa 117 (C237, RN-05; B760): a ENTRADA_DEVOLUCAO de uma devolucao para SUCATA nao se estorna com a perna SUCATA de pe —
+  // o material ja saiu pela sucata, e o estorno da entrada o tirava de novo (8 -> 6). Estornada a sucata (o material volta,
+  // como numa devolucao para o estoque), a entrada estorna. Antes do claim: nada tocado; a condicao tambem no claim (a
+  // sucata nao pode voltar a ficar de pe entre esta leitura e a gravacao — o estorno dela que falha desfaz o proprio claim).
+  // A compensacao interna nao passa. So a entrada DA devolucao (identidade: a primeira ENTRADA_DEVOLUCAO com a referencia,
+  // do mesmo material — Fase 2, R2): uma entrada digitada com a referencia DEV-<id> nao e da devolucao.
+  // Lida aqui tambem para as series (Fase 2, R1): o estorno da entrada de uma devolucao que citou a saida devolve as series
+  // a "Entregue" naquela saida (o material nao voltou), em vez de "Estornada".
+  const devolucaoDaEntrada = mov.tipo === 'ENTRADA_DEVOLUCAO' && /^DEV-\d+$/.test(String(mov.referencia || ''))
+    ? await dbGet(db, `SELECT d.id, d.destino, d.movimentacao_saida_id FROM devolucoes_material_almoxarifado d
+        WHERE d.id = ? AND d.material_id = ? AND ${ENTRADA_DA_DEVOLUCAO_SQL} = ?`,
+    [Number(String(mov.referencia).slice(4)), mov.material_id, mov.id])
+    : null;
+  const entradaDaSucata = !!devolucaoDaEntrada && devolucaoDaEntrada.destino === 'SUCATA' && opcoesEstorno.compensacao !== true;
+  if (entradaDaSucata) {
+    const viva = await dbGet(db, `SELECT 1 AS v WHERE ${sucataViva('?', '?')}`, [mov.referencia, mov.material_id]);
+    if (viva) throw Object.assign(new Error(mensagemEntradaDaSucata(mov.referencia)), { status: 400 });
+  }
+
   if (tiposSaida.includes(mov.tipo) && material.controle_serie) {
     const entregues = await dbGet(db, `SELECT COUNT(*) AS n FROM series_almoxarifado
       WHERE movimentacao_saida_id = ? AND status IN ('ENTREGUE', 'SUCATEADA')`, [movimentoId]);
@@ -2779,9 +2812,13 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
   const claim = await dbRun(db, `UPDATE movimentacoes_almoxarifado
     SET cancelado = 1, cancelado_por = ?, cancelado_em = CURRENT_TIMESTAMP, cancelamento_motivo = ?, regularizacao_pendente = 0
     WHERE id = ? AND cancelado = 0${claimSemDevolucao ? ` AND NOT EXISTS (SELECT 1 FROM devolucoes_material_almoxarifado d
-      WHERE d.movimentacao_saida_id = movimentacoes_almoxarifado.id AND ${DEVOLUCAO_VIVA_SQL})` : ''}`,
+      WHERE d.movimentacao_saida_id = movimentacoes_almoxarifado.id AND ${DEVOLUCAO_VIVA_SQL})` : ''}${
+  entradaDaSucata ? ` AND NOT ${sucataViva('movimentacoes_almoxarifado.referencia', 'movimentacoes_almoxarifado.material_id')}` : ''}`,
   [user.id, motivo, movimentoId]);
   if (!claim.changes) {
+    if (entradaDaSucata && await dbGet(db, `SELECT 1 AS v WHERE ${sucataViva('?', '?')}`, [mov.referencia, mov.material_id])) {
+      throw Object.assign(new Error(mensagemEntradaDaSucata(mov.referencia)), { status: 400 });
+    }
     if (claimSemDevolucao) {
       const msgDevolvida = await recusaDoEstornoDeSaidaDevolvida(db, mov, material.unidade);
       if (msgDevolvida) throw Object.assign(new Error(msgDevolvida), { status: 400 });
@@ -2922,7 +2959,14 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
       // sem linha vinculada a este movimentacao_entrada_id). Fix round 1 (Task 5): guarda o
       // retorno (afetadas[], não mais a contagem) para o catch poder compensar via
       // `desfazerReverterEntrada` se o ledger falhar depois.
-      if (material.controle_serie) seriesEntradaRevertidas = await seriesService.reverterEntrada(db, user, mov.id);
+      // Etapa 117 (Fase 2, R1): a entrada da devolucao que citou uma saida devolve as series a "Entregue" NAQUELA saida — o
+      // estorno diz que o material nao voltou. Como "Estornada" (sem vinculo), a devolucao morta (C236) deixava a saida sem
+      // series para devolver de novo (a tela: "Nenhuma serie em aberto"), a exclusao da requisicao entrava sem serie (o
+      // invariante quebrado para sempre) e o estorno da saida recusava dizendo que as series reentraram.
+      if (material.controle_serie) {
+        seriesEntradaRevertidas = await seriesService.reverterEntrada(db, user, mov.id,
+          { saidaId: devolucaoDaEntrada ? devolucaoDaEntrada.movimentacao_saida_id : null });
+      }
       // Decisão (Etapa 1): estorno NÃO reverte custo_medio/custo_unitario — reversão exata é
       // mal-definida após movimentos intermediários; corrigir via nova entrada com custo. Ver
       // specs/modulo-almoxarifado/03-motor-estoque/README.md.

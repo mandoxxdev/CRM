@@ -6,6 +6,8 @@ const { registrarAuditoria } = require('./audit');
 const Q = require('./quantidade');
 // Etapa 97 (Fase 5, item 2): as duas pernas da devolucao (QUARENTENA, SUCATA) sob uma trava do material.
 const trava = require('./travaPorMaterial');
+// Etapa 117 (C236, B759): so a devolucao viva (a entrada nao estornada) conta no que ja voltou da saida.
+const { DEVOLUCAO_VIVA_SQL } = require('./devolucaoViva');
 // Sem ciclo: nem alertService nem notificationQueueService requerem este arquivo (Etapa 12,
 // Task 3, RN-06 — aviso de devolucao em ESTADO_PARCIAL). stockService (acima) ja carregou os
 // dois por completo antes desta linha rodar, entao aqui e so cache-hit.
@@ -41,9 +43,11 @@ async function validarSaidaOriginal(db, { movimentacaoSaidaId, materialId, quant
     throw erro400(`A movimentação ${movimentacaoSaidaId} é do tipo ${saida.tipo} e não é uma entrega devolvível `
       + `(devolvíveis: ${TIPOS_SAIDA_DEVOLVIVEL.join(', ')})`);
   }
+  // Etapa 117 (C236, RN-01): so a devolucao viva — a que teve a entrada estornada pelo livro tirou o material de novo, e
+  // conta-la recusava devolver o que esta de fato fora ("ja foram devolvidos 2 e restam 0" com o material na rua).
   const { devolvida } = await dbGet(db,
-    `SELECT COALESCE(SUM(quantidade),0) AS devolvida FROM devolucoes_material_almoxarifado
-      WHERE movimentacao_saida_id = ?`, [movimentacaoSaidaId]);
+    `SELECT COALESCE(SUM(d.quantidade),0) AS devolvida FROM devolucoes_material_almoxarifado d
+      WHERE d.movimentacao_saida_id = ? AND ${DEVOLUCAO_VIVA_SQL}`, [movimentacaoSaidaId]);
   // Etapa 96 (C176, Fase 2 I1): o restante e uma DIFERENCA (0,3 - 0,1 = 0.19999999999999998) — arredondado, e a
   // comparacao com folga; a mensagem diz os numeros arredondados (R2).
   const restante = Q.qtd(saida.quantidade - devolvida);
@@ -152,6 +156,8 @@ async function registrarDevolucao(db, user, data) {
   // cabe no restante — a conferencia de `validarSaidaOriginal` e a gravacao num comando so. Lidas antes, separadas, duas
   // devolucoes simultaneas da mesma saida passavam as duas (30/30: fisico 7 para 5), e o estorno concorrente tambem (o claim
   // do estorno tem a condicao inversa: nenhuma devolucao viva). Nao gravou -> a validacao de novo diz por que.
+  // Etapa 117 (C236, RN-02): a mesma regua viva da validacao — se so uma das duas contasse a viva, a validacao passaria e
+  // esta gravacao recusaria com "mudou enquanto a devolucao era gravada".
   const valores = [
     material_id, quantidade, motivo, condicao || null, destinoFinal,
     origemOsFinal, origemProjetoFinal,
@@ -165,7 +171,7 @@ async function registrarDevolucao(db, user, data) {
       SELECT ?,?,?,?,?,?,?,?,?,?,?,?
       WHERE EXISTS (SELECT 1 FROM movimentacoes_almoxarifado s WHERE s.id = ? AND COALESCE(s.cancelado, 0) = 0
         AND ROUND(s.quantidade - (SELECT COALESCE(SUM(d.quantidade), 0) FROM devolucoes_material_almoxarifado d
-          WHERE d.movimentacao_saida_id = s.id), 6) >= ROUND(?, 6) ${Q.FOLGA_SQL})`,
+          WHERE d.movimentacao_saida_id = s.id AND ${DEVOLUCAO_VIVA_SQL}), 6) >= ROUND(?, 6) ${Q.FOLGA_SQL})`,
     [...valores, movimentacao_saida_id, Q.qtd(quantidade)])
     : await dbRun(db, `INSERT INTO devolucoes_material_almoxarifado ${colunas} VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, valores);
   if (!r.changes) {
@@ -378,6 +384,8 @@ async function listarDevolucoes(db, filters = {}) {
  * mostra desabilitada. As 30 mais recentes: quem devolve devolve o que saiu ha pouco; lista
  * infinita rolando no modal atrapalha mais do que ajuda.
  *
+ * Etapa 117 (C236, RN-03): as duas pontas somam so a devolucao viva (`devolucaoViva.js`).
+ *
  * O `saldo_devolvivel` publicado aqui e, DE PROPOSITO, a mesma conta de `validarSaidaOriginal`
  * (`saida.quantidade - SUM(devolucoes daquela movimentacao)`), sobre a mesma lista de tipos
  * (`TIPOS_SAIDA_DEVOLVIVEL`) e o mesmo filtro de cancelamento. Se as duas pontas divergirem, a
@@ -397,7 +405,7 @@ async function listarSaidasElegiveis(db, materialId, { limite = 30 } = {}) {
            mv.requisicao_id, mv.os_id, mv.projeto_id, mv.usuario_nome,
            req.numero AS requisicao_numero,
            COALESCE((SELECT SUM(d.quantidade) FROM devolucoes_material_almoxarifado d
-                      WHERE d.movimentacao_saida_id = mv.id), 0) AS quantidade_devolvida
+                      WHERE d.movimentacao_saida_id = mv.id AND ${DEVOLUCAO_VIVA_SQL}), 0) AS quantidade_devolvida
       FROM movimentacoes_almoxarifado mv
       LEFT JOIN requisicoes_almoxarifado req ON req.id = mv.requisicao_id
      WHERE mv.material_id = ? AND COALESCE(mv.cancelado,0) = 0 AND mv.tipo IN (${marcadores})

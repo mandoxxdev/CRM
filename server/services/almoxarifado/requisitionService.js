@@ -14,6 +14,8 @@ const lotService = require('./lotService');
 const reservationService = require('./reservationService');
 // Etapa 91 (T1): a trava por material (modulo sem nenhum require — sem ciclo).
 const travaPorMaterial = require('./travaPorMaterial');
+// Etapa 117 (C236, B759): a devolucao viva (a entrada nao estornada) — a mesma regua do estorno e da tela de Devolucoes.
+const { DEVOLUCAO_VIVA_SQL } = require('./devolucaoViva');
 // Etapa 93 (T0, B443): a trava POR REQUISICAO das portas do almoxarife (outra trava; ordem requisicao -> material).
 const travaPorRequisicao = require('./travaPorRequisicao');
 // Etapa 114 (C229): a requisicao com item pendente de material inativo (modulo sem require de servico — sem ciclo).
@@ -1811,9 +1813,13 @@ async function excluirSemTrava(db, requisicaoId, user, justificativa, alertServi
     // ramo "legado" e entrava sem série); e uma saída legada misturada com uma nova no mesmo grupo
     // travava a exclusão para sempre. Cada saída: o que falta devolver dela; material com série,
     // as séries dela ainda ENTREGUE (legada: nenhuma — o de antes; número diferente: recusa).
+    // Etapa 117 (C236, RN-04): só a devolução viva desconta — a que teve a entrada estornada pelo livro já tirou o material
+    // de novo, e descontá-la deixava o físico a menos depois da exclusão (entrega 2, devolução 2, estorno da entrada, excluir:
+    // 3 em vez de 5).
     // eslint-disable-next-line no-await-in-loop
     const saidas = await dbAll(db, `SELECT m.id, m.localizacao_origem_id as origem, m.lote_id, m.quantidade as q,
-        COALESCE((SELECT SUM(d.quantidade) FROM devolucoes_material_almoxarifado d WHERE d.movimentacao_saida_id = m.id), 0) as devolvida
+        COALESCE((SELECT SUM(d.quantidade) FROM devolucoes_material_almoxarifado d WHERE d.movimentacao_saida_id = m.id
+          AND ${DEVOLUCAO_VIVA_SQL}), 0) as devolvida
       FROM movimentacoes_almoxarifado m
       WHERE m.requisicao_id = ? AND m.material_id = ? AND m.tipo = 'SAIDA' AND COALESCE(m.cancelado, 0) = 0
       ORDER BY m.id`, [requisicaoId, materialId]);
@@ -1864,7 +1870,7 @@ async function excluirSemTrava(db, requisicaoId, user, justificativa, alertServi
       // eslint-disable-next-line no-await-in-loop
       const dev = await dbGet(db, `SELECT COALESCE(SUM(d.quantidade), 0) as q FROM devolucoes_material_almoxarifado d
         JOIN movimentacoes_almoxarifado m ON m.id = d.movimentacao_saida_id
-        WHERE m.requisicao_id = ? AND m.material_id = ?`, [requisicaoId, materialId]);
+        WHERE m.requisicao_id = ? AND m.material_id = ? AND ${DEVOLUCAO_VIVA_SQL}`, [requisicaoId, materialId]);
       const liquido = totalEntregue - (Number(dev.q) || 0);
       if (liquido > 1e-9) partes.push({ material, nome, quantidade: liquido, destino: undefined, lote_id: undefined });
     }
