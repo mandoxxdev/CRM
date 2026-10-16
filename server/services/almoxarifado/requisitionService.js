@@ -1771,9 +1771,16 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
  * `alertService` é aceito e ignorado (Etapa 3, Task 3) — mesmo motivo de entregarRequisicao:
  * stockService.registrarMovimentacao já dispara a checagem de alerta internamente.
  */
+// Etapa 120 (Fase 5, revisor 2; B781): tambem sob a trava por MATERIAL dos itens (`comTravaDaRequisicao`), na ordem da
+// separacao e da entrega (requisicao -> material). Ate a 120 a exclusao validava as series da entrega (a guarda da 116, a da
+// C251) FORA da trava do material e so a ENTRADA do estorno entrava nela (pelo motor): uma Entrada que reativava as series e o
+// desligar da serie no meio faziam o motor creditar sem serie — 200, fisico 4 com 2 series (8/200 numa corrida real); so o
+// desligar no meio (anterior, desde a 116) creditava com as series Entregue (7/100). Aqui dentro a Entrada e o desligar
+// esperam. Dentro da secao so a validacao, as ENTRADAs (o motor passa direto: a secao segura o material), o UPDATE e a
+// liberacao das reservas (o motor, idem; nenhum recalculo que peca a trava de novo — ela nao e reentrante).
 function excluirRequisicao(db, requisicaoId, user, justificativa, alertService) {
   return travaPorRequisicao.serializarNaRequisicao(requisicaoId,
-    () => excluirSemTrava(db, requisicaoId, user, justificativa, alertService));
+    () => comTravaDaRequisicao(db, requisicaoId, () => excluirSemTrava(db, requisicaoId, user, justificativa, alertService)));
 }
 
 async function excluirSemTrava(db, requisicaoId, user, justificativa, alertService) { // eslint-disable-line no-unused-vars

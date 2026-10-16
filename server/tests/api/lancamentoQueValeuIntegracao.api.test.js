@@ -130,6 +130,7 @@ const REENTRARAM = 'estorno de saida recusado: series desta saida ja reentraram 
     assert.ok(erro && erro.status === 400 && erro.message === REENTRARAM, `pelo servico: ${erro && erro.message}`);
     const x = await request(app).delete(`/api/almoxarifado/requisicoes/${req}`).send({ justificativa: 'lqi120' });
     assert.strictEqual(x.status, 400, `a exclusao creditou em dobro: ${JSON.stringify(x.body)}`);
+    assert.ok(/as séries desta entrega já voltaram ao estoque por uma Entrada/.test(x.body.error), x.body.error);
     assert.strictEqual(await fisico(m), 2);
   });
 

@@ -100,12 +100,36 @@ const E2 = (codigo, n) => `Não é possível estornar: esta saída baixou ${n} s
     const { m, s1 } = await saidaDeDuasSeries();
     await mov(m, { tipo: 'ENTRADA', quantidade: 2, series: ['V1', 'V2'] });
     await desligar(m);
-    const r = await estornar(s1);
+    // Fase 5 (r3, S13): a recusa vem ANTES do claim (nada tocado) — so a de dentro da trava a pegaria, desfazendo o claim.
+    const original = db.run; let claims = 0;
+    db.run = function (sql, ...rest) {
+      if (/UPDATE movimentacoes_almoxarifado\s+SET cancelado = 1/.test(String(sql))) claims += 1;
+      return original.call(db, sql, ...rest);
+    };
+    let r;
+    try { r = await estornar(s1); } finally { db.run = original; }
     assert.strictEqual(r.status, 400, `estorno devolveu em dobro: ${JSON.stringify(r.body)} fisico=${await fisico(m)}`);
     assert.strictEqual(r.body.error, REENTRARAM);
+    assert.strictEqual(claims, 0, 'a recusa veio depois do claim (so a guarda de dentro da trava viu)');
     assert.strictEqual(await fisico(m), 2);
     assert.strictEqual(await cancelado(s1), 0);
     assert.deepStrictEqual(await series(m), ['EM_ESTOQUE', 'EM_ESTOQUE']);
+  });
+
+  await test('[RN-07b] (Fase 5, r3) o banco que ja tem a tabela da 119 ganha a coluna no boot (safeAlter)', async () => {
+    const sqlite3 = require('sqlite3');
+    const { initSchema } = require('../../services/almoxarifado/schema');
+    const velho = new sqlite3.Database(':memory:');
+    await dbRun(velho, `CREATE TABLE series_entrada_anterior_almoxarifado (id INTEGER PRIMARY KEY AUTOINCREMENT,
+      serie_id INTEGER NOT NULL, movimentacao_entrada_id INTEGER NOT NULL, entrada_anterior_id INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE (serie_id, movimentacao_entrada_id))`);
+    const antes = (await dbAll(velho, 'PRAGMA table_info(series_entrada_anterior_almoxarifado)')).map((c) => c.name);
+    assert.ok(!antes.includes('saida_anterior_id'), 'premissa: a tabela no formato da 119');
+    const log = console.log; console.log = () => {};
+    try { await initSchema(velho); } finally { console.log = log; }
+    const depois = (await dbAll(velho, 'PRAGMA table_info(series_entrada_anterior_almoxarifado)')).map((c) => c.name);
+    await new Promise((res) => velho.close(() => res()));
+    assert.ok(depois.includes('saida_anterior_id'), `o boot nao acrescentou a coluna: ${depois.join(',')}`);
   });
 
   await test('[RN-08] nao regride: so V1 voltou -> a mesma literal; Saida sem serie depois de desligar -> 200; series fora -> E2', async () => {
@@ -120,6 +144,7 @@ const E2 = (codigo, n) => `Não é possível estornar: esta saída baixou ${n} s
     const sSem = await mov(a.m, { tipo: 'SAIDA', quantidade: 2 });
     r = await estornar(sSem);
     assert.strictEqual(r.status, 200, `a Saida sem serie deixou de estornar: ${JSON.stringify(r.body)}`);
+    assert.strictEqual(await fisico(a.m), 4, 'o estorno da Saida sem serie devolveu outra quantidade');
     // (c) as series ainda fora
     const c = await saidaDeDuasSeries();
     await desligar(c.m);

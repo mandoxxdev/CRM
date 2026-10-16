@@ -84,6 +84,84 @@ const VOLTARAM = (nome) => `${nome}: as séries desta entrega já voltaram ao es
     assert.strictEqual(await ativa(req), 0);
   });
 
+  /** A devolucao citando a saida, com V1 V2, desfeita pelo livro: as series voltam a Entregue NESSA saida (a linha fica). */
+  async function devolucaoDesfeita(m, saida) {
+    const d = await request(app).post('/api/almoxarifado/devolucoes').send({ material_id: m.id, quantidade: 2,
+      motivo: 'NAO_UTILIZADO', destino: 'ESTOQUE', movimentacao_saida_id: saida, series: ['V1', 'V2'] });
+    assert.strictEqual(d.status, 201, JSON.stringify(d.body));
+    const ed = (await dbGet(db, "SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'ENTRADA_DEVOLUCAO'", [m.id])).id;
+    const e = await request(app).post(`/api/almoxarifado/movimentacoes/${ed}/cancelar`).send({ motivo: 'esv120' });
+    assert.strictEqual(e.status, 200, JSON.stringify(e.body));
+    const linhas = await dbGet(db, 'SELECT COUNT(*) n FROM series_entrada_anterior_almoxarifado WHERE saida_anterior_id = ?', [saida]);
+    assert.strictEqual(linhas.n, 2, 'premissa: a linha da reativacao da devolucao fica');
+  }
+
+  await test('[RN-16] (Fase 5, r3) a devolucao desfeita nao conta como "voltou": serie ligada, excluir -> 200, fisico 2, V1 V2 de volta', async () => {
+    const { m, req, saida } = await entregaDeDuasSeries();
+    await devolucaoDesfeita(m, saida);
+    const r = await excluir(req);
+    assert.strictEqual(r.status, 200, `falso positivo: ${JSON.stringify(r.body)}`);
+    assert.deepStrictEqual(await estado(m), { fisico: 2, presentes: 2 });
+  });
+
+  await test('[RN-16b] (Fase 5, r3) o mesmo com a serie desligada: a recusa da 116 (religue), nao a de "ja voltaram"', async () => {
+    const { m, req, saida } = await entregaDeDuasSeries();
+    await devolucaoDesfeita(m, saida);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_serie = 0 WHERE id = ?', [m.id]);
+    const r = await excluir(req);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, `${m.nome}: esta entrega baixou 2 série(s) e o controle por número de série do material `
+      + 'foi desligado depois — excluir a requisição devolveria o saldo sem devolver as séries. Religue o controle por '
+      + 'número de série no cadastro do material e exclua de novo.');
+  });
+
+  await test('[RN-15] (Fase 5, r2) a Entrada das series e o desligar no meio da exclusao esperam: 200, fisico 2, 2 presentes', async () => {
+    // Depois que a exclusao le as series Entregue da saida, dispara (sem esperar) uma Entrada de V1 V2 e o desligar da serie.
+    // Sem a trava do material a Entrada reativava as series, o desligar passava e a ENTRADA do estorno creditava sem serie:
+    // fisico 4 com 2 series. Sob a trava os dois esperam a exclusao terminar.
+    const { m, req } = await entregaDeDuasSeries();
+    // Os dois gestos partem do contexto do TESTE (nao de dentro do gancho): disparados dali herdariam o contexto da secao da
+    // exclusao (AsyncLocalStorage) e passariam direto pela trava — o teste provaria nada.
+    const original = db.all; let disparou = false; let sinal;
+    const lido = new Promise((res) => { sinal = res; });
+    db.all = function (sql, params, cb) {
+      if (typeof params === 'function') { cb = params; params = []; }
+      if (!disparou && typeof sql === 'string' && sql.includes("status = 'ENTREGUE' AND movimentacao_saida_id")) {
+        disparou = true;
+        return original.call(db, sql, params, (err, rows) => { sinal(); setTimeout(() => cb(err, rows), 40); });
+      }
+      return original.call(db, sql, params, cb);
+    };
+    let r; let entrada;
+    try {
+      const exclusao = excluir(req).then((x) => x);
+      await lido;
+      const e = await v2(m, { tipo: 'ENTRADA', quantidade: 2, series: ['V1', 'V2'] });
+      await request(app).put(`/api/almoxarifado/materiais/${m.id}`).send({ controle_serie: false });
+      entrada = e.status;
+      r = await exclusao;
+    } finally { db.all = original; }
+    assert.ok(disparou, 'gancho da leitura das series nao disparou');
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.deepStrictEqual(await estado(m), { fisico: 2, presentes: 2 }, 'a exclusao creditou sem serie no meio da Entrada');
+    assert.strictEqual(entrada, 400, 'a Entrada das series que a exclusao devolveu deveria recusar (ja em estoque)');
+  });
+
+  await test('[RN-14b] declarado (Fase 5, r1): a Entrada de volta estornada com a serie desligada -> a exclusao recusa', async () => {
+    // Como a RN-08b do estorno: a C225 deixa V1 e V2 "Em estoque" com o fisico 0; antes da 120 a exclusao passava (fisico 2) e o
+    // estado batia por acaso. Recusar nunca conta em dobro; o acerto e por Ajuste.
+    const { m, req } = await entregaDeDuasSeries();
+    const e = await v2(m, { tipo: 'ENTRADA', quantidade: 2, series: ['V1', 'V2'] });
+    assert.strictEqual(e.status, 201);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET controle_serie = 0 WHERE id = ?', [m.id]);
+    const est = await request(app).post(`/api/almoxarifado/movimentacoes/${e.body.id}/cancelar`).send({ motivo: 'esv120' });
+    assert.strictEqual(est.status, 200, JSON.stringify(est.body));
+    const r = await excluir(req);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, VOLTARAM(m.nome));
+    assert.deepStrictEqual(await estado(m), { fisico: 0, presentes: 2 });
+  });
+
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   await close();
   process.exit(failed ? 1 : 0);

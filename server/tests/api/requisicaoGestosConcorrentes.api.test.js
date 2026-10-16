@@ -1091,7 +1091,11 @@ const esperarFila = async (R, ms = 3000) => {
       await dbRun(db, 'INSERT OR REPLACE INTO configuracoes_almoxarifado (chave, valor) VALUES (?, ?)', [k, v]);
     }
   };
-  await test('[93 RN-08] (d4) (Fase 5, achado A) pela rota: no UPDATE final da exclusao o /aprovar-valor roda inteiro -> exclusao 200 com UM estorno (q=4), CANCELADO/ativo=0; a 2a exclusao -> 404 e q continua 4', async () => {
+  // Mudado na Etapa 120 (Fase 5, revisor 2; B781): a exclusao passou a segurar tambem a trava por MATERIAL dos itens (a ordem
+  // da separacao e da entrega) e o /aprovar-valor pega a mesma trava — ele nao roda mais NO MEIO da exclusao: espera ela
+  // terminar e encontra a requisicao ja excluida. O gesto parte do contexto do teste (de dentro do gancho herdaria a secao da
+  // exclusao) e o gancho so solta o UPDATE final depois de o gesto ter chegado. A promessa da 93 continua: um estorno, q=4.
+  await test('[93 RN-08] (d4) (Fase 5, achado A; mudado na 120) pela rota: o /aprovar-valor disparado no UPDATE final da exclusao espera a trava -> exclusao 200 com UM estorno (q=4), CANCELADO/ativo=0; o aprovar-valor nao aprova; a 2a exclusao -> 404 e q continua 4', async () => {
     desarmar();
     const x = await montar();
     let ex; let g;
@@ -1106,13 +1110,31 @@ const esperarFila = async (R, ms = 3000) => {
       await liberacaoValor(true);
       await dbRun(db, "UPDATE requisicoes_almoxarifado SET status = 'AGUARDANDO_APROVACAO_VALOR' WHERE id = ?", [x.R]);
       assert.strictEqual((await foto(x)).status, 'AGUARDANDO_APROVACAO_VALOR');
-      g = armarAguardando(RE.EXCL, () => como('ADMIN2').put(`${API}/requisicoes/${x.R}/aprovar-valor`));
-      ex = await comPrazo(excluir('ADMIN', x.R), 8000, 'exclusao');
+      let sinal; const chegou = new Promise((res) => { sinal = res; }); let soltar; const solto = new Promise((res) => { soltar = res; });
+      g = { disparos: 0 };
+      const runAntes = db.run;
+      db.run = function (sql, ...rest) {
+        if (g.disparos === 0 && RE.EXCL.test(String(sql))) {
+          g.disparos++; sinal();
+          solto.then(() => runAntes.call(db, sql, ...rest));
+          return this;
+        }
+        return runAntes.call(db, sql, ...rest);
+      };
+      try {
+        const exclusao = excluir('ADMIN', x.R).then((r) => r);
+        await comPrazo(chegou, 8000, 'UPDATE final da exclusao');
+        const aprovacao = como('ADMIN2').put(`${API}/requisicoes/${x.R}/aprovar-valor`);
+        await new Promise((r) => setTimeout(r, 30));
+        soltar();
+        ex = await comPrazo(exclusao, 8000, 'exclusao');
+        g.resposta = await comPrazo(aprovacao, 8000, 'aprovar-valor');
+      } finally { db.run = runAntes; }
     } finally { desarmar(); await liberacaoValor(false); }
-    assert.ok(!g.erro, g.erro && g.erro.message);
     assert.strictEqual(g.disparos, 1);
-    assert.strictEqual(g.resposta.status, 200, `aprovar-valor: ${g.resposta.status} ${JSON.stringify(g.resposta.body)}`);
     assert.strictEqual(ex.status, 200, `exclusao: ${ex.status} ${JSON.stringify(ex.body)}`);
+    // o /aprovar-valor que chega depois responde o status em que a requisicao esta (CANCELADO) — nao aprova nada
+    assert.strictEqual(g.resposta.body && g.resposta.body.status, 'CANCELADO', `aprovar-valor: ${g.resposta.status} ${JSON.stringify(g.resposta.body)}`);
     let f = await foto(x);
     assert.strictEqual(f.status, 'CANCELADO'); assert.strictEqual(f.ativo, 0);
     assert.strictEqual(f.estornos.length, 1); assert.strictEqual(f.q, 4, `q ${f.q}`);
