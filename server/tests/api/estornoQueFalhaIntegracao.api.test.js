@@ -153,8 +153,7 @@ const SUPER = { id: 1, nome: 'Super Teste', role: 'admin', is_superadmin: 1, ema
     const { res, meio } = await comLivroFalhando(() => estornar(saidaId),
       () => devolver(m, saidaId, 2).then((r) => ({ status: r.status, error: r.body && r.body.error })));
     assert.strictEqual(res.status, 500, JSON.stringify(res.body));
-    assert.deepStrictEqual(meio, { status: 400, error: `A saída ${saidaId} está sendo estornada neste instante — nada foi gravado. `
-      + 'Tente de novo em instantes: se o estorno concluir, a saída deixa de aceitar devolução.' });
+    assert.deepStrictEqual(meio, { status: 400, error: `A saída ${saidaId} tem um estorno em andamento que ainda não concluiu — nada foi gravado. Tente de novo em instantes; se a recusa continuar, o estorno foi interrompido: avise o administrador do almoxarifado.` });
     assert.strictEqual((await lista(m, saidaId)).saldo_devolvivel, 2);
     assert.strictEqual((await devolver(m, saidaId, 2)).status, 201);
     assert.strictEqual(await fisico(m), 5);

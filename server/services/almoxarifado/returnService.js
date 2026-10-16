@@ -37,8 +37,8 @@ async function validarSaidaOriginal(db, { movimentacaoSaidaId, materialId, quant
   // so o estorno concluido tem `movimento_estorno_id` (a ultima escrita dele; devolucaoViva.estornoConcluidoSql). No meio, a
   // recusa dizia que o estorno ja tinha devolvido o material, e o estorno que falhava deixava a saida de pe.
   if (saida.cancelado && saida.movimento_estorno_id == null) {
-    throw erro400(`A saída ${movimentacaoSaidaId} está sendo estornada neste instante — nada foi gravado. Tente de novo em instantes: `
-      + 'se o estorno concluir, a saída deixa de aceitar devolução.');
+    throw erro400(`A saída ${movimentacaoSaidaId} tem um estorno em andamento que ainda não concluiu — nada foi gravado. Tente de `
+      + 'novo em instantes; se a recusa continuar, o estorno foi interrompido: avise o administrador do almoxarifado.');
   }
   if (saida.cancelado) {
     throw erro400(`A saída ${movimentacaoSaidaId} foi cancelada (estornada) — o estorno já devolveu o material`);

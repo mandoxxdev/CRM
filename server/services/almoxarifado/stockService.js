@@ -402,15 +402,18 @@ async function claimSaldoDoLote(db, materialId, loteId, locPreferida, quantidade
  *
  * Devolve TODAS as linhas debitadas (inclusive a do resto), para as compensações da saída
  * (série recusada, INSERT do ledger falhando) devolverem exatamente o que foi tirado.
+ *
+ * Etapa 118 (Fase 5, revisor 1, I-3): `aplicados` e o rastreador do CHAMADOR — cada linha entra nele logo depois do seu
+ * debito. Com o array local, a falha no debito da 2a linha saia daqui sem o `return`: o estorno de entrada voltava o fisico e
+ * deixava a 1a linha debitada (fisico 7, soma das linhas 5; o estorno de novo divergia para sempre). A forma da C245.
  */
-async function claimSaldoSemLote(db, materialId, locPreferida, quantidade) {
+async function claimSaldoSemLote(db, materialId, locPreferida, quantidade, { aplicados = [] } = {}) {
   const linhas = await dbAll(db, `
     SELECT id FROM estoque_saldo_almoxarifado
     WHERE material_id = ? AND lote_id IS NULL AND quantidade > 0
     ORDER BY (localizacao_id IS ?) DESC, quantidade DESC, id`,
   [materialId, locPreferida || null]);
 
-  const aplicados = [];
   let restante = quantidade;
   for (const linha of linhas) {
     if (restante <= EPS) break;
@@ -2146,7 +2149,9 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
         // ou a padrão primeiro) e só o resto vai para a linha "sem localização atribuída". A
         // condição é `!loteIdFinal`, e não o `else` inteiro: este ramo também atendia saída COM
         // lote de material que permite negativo, que segue no ramo de baixo (Fase 2, IMPORTANT 3).
-        saldoLinhasSaidaParaReverter = await claimSaldoSemLote(db, material_id, locSaida, quantidade);
+        // Etapa 118 (Fase 5, I-3): o rastreador da compensacao vai como acumulador (a linha ja debitada entra nele).
+        saldoLinhasSaidaParaReverter = [];
+        await claimSaldoSemLote(db, material_id, locSaida, quantidade, { aplicados: saldoLinhasSaidaParaReverter });
       } else {
         // Com lote em material que permite saldo negativo: a linha continua sendo criada, porque
         // aqui ela PODE ficar negativa e precisa existir para `syncMaterialTotals` somar.
@@ -2926,9 +2931,17 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
   };
   // Etapa 118 (Fase 2, achado 4c): o claim desfeito tambem de dentro da secao — solto antes, um estorno de novo nessa janela
   // ouvia "Movimentação já cancelada" (falso) e a devolucao da saida a recusa de "estorno em andamento" (C240) por mais tempo.
-  // Idempotente: o catch de fora repete (para a falha antes da secao).
-  const desfazerClaim = () => dbRun(db, `UPDATE movimentacoes_almoxarifado SET cancelado = 0, cancelado_por = NULL, cancelado_em = NULL,
+  // UMA vez so (Fase 5, revisor 2): o catch de fora o repetia depois de soltar a trava, com um UPDATE incondicional — um segundo
+  // estorno da mesma movimentacao que gravasse o claim entre os dois desfazeres tinha o claim apagado, concluia com 200 e deixava
+  // o original com cancelado = 0 e o estorno no livro (o terceiro estorno creditava de novo: 10 -> 12, 30/30 com o desfazer de
+  // dentro atrasado). O de fora so roda se o de dentro nao rodou (a falha antes da secao, ou o de dentro que falhou).
+  let claimDesfeito = false;
+  const desfazerClaim = async () => {
+    if (claimDesfeito) return;
+    await dbRun(db, `UPDATE movimentacoes_almoxarifado SET cancelado = 0, cancelado_por = NULL, cancelado_em = NULL,
       cancelamento_motivo = NULL, regularizacao_pendente = ? WHERE id = ?`, [mov.regularizacao_pendente, movimentoId]);
+    claimDesfeito = true;
+  };
 
   try {
     let saldoAntes = material.quantidade_atual;
@@ -2979,6 +2992,18 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
           // Etapa 97 (T1, B491/B494): o estorno de entrada e uma porta avulsa — compara com o livre de caixa (a regra da
           // flag e a da saida, B498 invertida). Desde a 118 o ramo inteiro roda na secao de fora (ate la so este claim).
           const deHoje = opcoesEstorno.compensacao === true;
+          // Etapa 118 (Fase 5, revisor 1, I-1): a guarda das series desta entrada DE NOVO, sob a trava e antes de qualquer
+          // efeito. A de cima roda fora da trava: um bloqueio de serie (ou outra porta) entre ela e esta secao fazia
+          // `reverterEntrada` pular a serie em silencio — estorno 200, fisico 0 e a serie Bloqueada contada como presente (3/3).
+          if (material.controle_serie) {
+            const presentesAgora = await dbGet(db, `SELECT COUNT(*) AS n FROM series_almoxarifado
+              WHERE movimentacao_entrada_id = ? AND status = 'EM_ESTOQUE'`, [movimentoId]);
+            if (presentesAgora.n < Math.round(mov.quantidade)) {
+              throw Object.assign(new Error(
+                'estorno de entrada recusado: ha series desta entrada ja movimentadas — estorne as saidas primeiro'),
+              { status: 400 });
+            }
+          }
           const row = await dbGet(db, `UPDATE materiais_almoxarifado
             SET quantidade_atual = ${Q.qtdSql('quantidade_atual - ?')}, updated_at = CURRENT_TIMESTAMP
             WHERE id = ? AND ${deHoje ? `(? = 1 OR ${disponivelSql()} >= ? ${Q.FOLGA_SQL})` : guardaSaidaPelaCaixaSql()}
@@ -3033,7 +3058,9 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
             const linhaEntrada = await dbGet(db, `SELECT quantidade FROM estoque_saldo_almoxarifado
               WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS NULL`, [mov.material_id, loc || null]);
             if (linhaEntrada && Number(linhaEntrada.quantidade) < Number(mov.quantidade) - EPS) {
-              compensarLinhasClaim = await claimSaldoSemLote(db, mov.material_id, loc, Number(mov.quantidade));
+              // Etapa 118 (Fase 5, I-3): o rastreador como acumulador.
+              compensarLinhasClaim = [];
+              await claimSaldoSemLote(db, mov.material_id, loc, Number(mov.quantidade), { aplicados: compensarLinhasClaim });
             }
           }
           const pisoLinha = (mov.lote_id && !permiteNegativo) ? mov.quantidade : null;
@@ -3100,6 +3127,14 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
           // Etapa 118: a secao e o desfazer de dentro dela sao os de fora (iguais aos que este ramo tinha desde a 117).
           const agora = await dbGet(db, 'SELECT controle_serie FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
           const serieLigada = !!agora && Number(agora.controle_serie) === 1;
+          // Etapa 118 (Fase 5, revisor 1, I-2): a guarda das series que reentraram DE NOVO, sob a trava e antes do credito. A
+          // de cima roda fora: uma Entrada com o numero de uma serie desta saida entre ela e esta secao fazia o estorno
+          // creditar sem a serie voltar (estorno 200, fisico 3 com 2 series presentes, 3/3).
+          if (serieLigada) {
+            const entreguesAgora = await dbGet(db, `SELECT COUNT(*) AS n FROM series_almoxarifado
+              WHERE movimentacao_saida_id = ? AND status IN ('ENTREGUE', 'SUCATEADA')`, [movimentoId]);
+            if (entreguesAgora.n < Math.round(mov.quantidade)) throw Object.assign(new Error(MSG_SERIES_REENTRARAM), { status: 400 });
+          }
           if (!serieLigada && opcoesEstorno.compensacao !== true) {
             const recusa = await recusaDoEstornoDeSaidaSemSerie(db, mov, material.codigo);
             if (recusa) throw Object.assign(new Error(recusa), { status: 400 });

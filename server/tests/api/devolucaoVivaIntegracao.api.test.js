@@ -138,8 +138,7 @@ const SUPER = { id: 1, nome: 'Super Teste', role: 'admin', is_superadmin: 1, ema
     assert.strictEqual(c, 0);
     assert.strictEqual(d.status, 400, JSON.stringify(d.body));
     // Etapa 118 (C240): era a literal falsa ("foi cancelada (estornada) — o estorno ja devolveu o material"), declarada na C240.
-    assert.strictEqual(d.body.error, `A saída ${saidaId} está sendo estornada neste instante — nada foi gravado. Tente de novo em `
-      + 'instantes: se o estorno concluir, a saída deixa de aceitar devolução.');
+    assert.strictEqual(d.body.error, `A saída ${saidaId} tem um estorno em andamento que ainda não concluiu — nada foi gravado. Tente de novo em instantes; se a recusa continuar, o estorno foi interrompido: avise o administrador do almoxarifado.`);
     assert.strictEqual(await fisico(m), 3);
     const linhas = (await dbGet(db, 'SELECT COUNT(*) n FROM devolucoes_material_almoxarifado WHERE material_id = ?', [m.id])).n;
     const entradas = (await dbGet(db, "SELECT COUNT(*) n FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'ENTRADA_DEVOLUCAO'",
