@@ -265,6 +265,12 @@ async function desfazerReverterSaida(db, afetadas) {
  * novo com quem a levou. Sem `saidaId`, o de sempre.
  */
 // Etapa 118 (C245, RN-08): `afetadas` e o rastreador do chamador, como em `reverterSaida`.
+//
+// Etapa 119 (C242, RN-05/05b; B776): com `saidaId`, a serie volta tambem a ENTRADA que tinha antes desta devolucao a
+// reativar (`series_entrada_anterior_almoxarifado`, chave serie + esta entrada) — o estorno da devolucao diz que a peca nao
+// voltou, entao ela e de novo a peca da entrada de onde veio. Sem isto, estornada depois a saida, a serie ficava em estoque
+// na entrada da devolucao (ja estornada) e a entrada original recusava para sempre ("ha series desta entrada ja
+// movimentadas"). Sem a linha (serie reativada antes da etapa), a entrada fica como estava.
 async function reverterEntrada(db, user, movimentacaoId, { saidaId = null, afetadas = [] } = {}) {
   const linhas = await dbAll(db, `
     SELECT * FROM series_almoxarifado
@@ -273,8 +279,11 @@ async function reverterEntrada(db, user, movimentacaoId, { saidaId = null, afeta
     const linha = saidaId
       ? await dbGet(db, `
       UPDATE series_almoxarifado
-         SET status = 'ENTREGUE', status_motivo = 'Devolução estornada', movimentacao_saida_id = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ? AND status = 'EM_ESTOQUE' RETURNING *`, [saidaId, s.id])
+         SET status = 'ENTREGUE', status_motivo = 'Devolução estornada', movimentacao_saida_id = ?,
+             movimentacao_entrada_id = COALESCE((SELECT ea.entrada_anterior_id FROM series_entrada_anterior_almoxarifado ea
+               WHERE ea.serie_id = series_almoxarifado.id AND ea.movimentacao_entrada_id = ?), movimentacao_entrada_id),
+             updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND status = 'EM_ESTOQUE' RETURNING *`, [saidaId, movimentacaoId, s.id])
       : await dbGet(db, `
       UPDATE series_almoxarifado
          SET status = 'ESTORNADA', status_motivo = 'Entrada estornada', updated_at = CURRENT_TIMESTAMP
@@ -300,11 +309,13 @@ async function desfazerReverterEntrada(db, afetadas) {
   while (afetadas.length) {
     const a = afetadas[afetadas.length - 1];
     // Etapa 117 (Fase 2, R1): o vinculo com a saida tambem volta (o estorno da entrada da devolucao o gravava).
+    // Etapa 119 (C242, RN-06): e a entrada (o estorno da entrada da devolucao a devolve a anterior).
     const linha = await dbGet(db, `
       UPDATE series_almoxarifado
-         SET status = ?, status_motivo = ?, movimentacao_saida_id = ?, updated_at = CURRENT_TIMESTAMP
+         SET status = ?, status_motivo = ?, movimentacao_saida_id = ?, movimentacao_entrada_id = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ? RETURNING *`,
-      [a.anterior.status, a.anterior.status_motivo, a.anterior.movimentacao_saida_id ?? null, a.linha.id]);
+      [a.anterior.status, a.anterior.status_motivo, a.anterior.movimentacao_saida_id ?? null,
+        a.anterior.movimentacao_entrada_id ?? null, a.linha.id]);
     afetadas.pop();
     if (linha) {
       await registrarAuditoria(db, {

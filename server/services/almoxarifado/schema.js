@@ -1283,6 +1283,21 @@ async function initSchemaUmaExecucao(db) {
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_series_almox_material_status
     ON series_almoxarifado (material_id, status)`);
 
+  // Etapa 119 (C242, B776): a entrada que a serie tinha quando uma entrada a REATIVOU (devolucao, ou Entrada com o numero de
+  // uma serie fora do estoque). A reativacao troca `movimentacao_entrada_id` e ninguem guardava a anterior: desfeita a
+  // devolucao e estornada a saida, a entrada original nao estornava mais ("ha series desta entrada ja movimentadas").
+  // Chave (serie, entrada que reativou), e nao uma coluna na serie: com duas devolucoes encadeadas (S1 -> D1 -> S2 -> D2) a
+  // coluna era sobrescrita pela D2 e o estorno da D1 nao achava mais a entrada original (Fase 2 da etapa, medido).
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS series_entrada_anterior_almoxarifado (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    serie_id INTEGER NOT NULL,
+    movimentacao_entrada_id INTEGER NOT NULL,
+    entrada_anterior_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (serie_id, movimentacao_entrada_id),
+    FOREIGN KEY (serie_id) REFERENCES series_almoxarifado(id)
+  )`);
+
   // ── Extend movimentações ──
   const movCols = [
     'localizacao_origem_id INTEGER',

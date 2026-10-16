@@ -237,6 +237,70 @@ const SUPER = { id: 1, nome: 'Super Teste', role: 'admin', is_superadmin: 1, ema
     assert.strictEqual(r2.body.error, 'Movimentação já cancelada');
   });
 
+  // ── C242 ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  await test('[RN-05] desfeita a devolucao e estornada a saida, a entrada original estorna: 200, fisico 0, V1 e V2 Estornada', async () => {
+    const { m, e1, s1, ed } = await devolucaoComSeries();
+    let r = await estornar(ed);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.deepStrictEqual((await series(m)).map((s) => [s.status, s.e, s.s]), [['ENTREGUE', e1, s1], ['ENTREGUE', e1, s1]],
+      'a serie nao voltou a entrada original');
+    r = await estornar(s1);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    r = await estornar(e1);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(await fisico(m), 0);
+    assert.deepStrictEqual((await series(m)).map((s) => s.status), ['ESTORNADA', 'ESTORNADA']);
+  });
+
+  await test('[RN-05b] duas devolucoes encadeadas (S1 -> D1 -> S2 -> D2): ED2, S2, ED1, S1, E1 -> todos 200, fisico 0, Estornada', async () => {
+    const { m, e1, s1, ed: ed1 } = await devolucaoComSeries();
+    const ids = (await dbAll(db, 'SELECT id FROM series_almoxarifado WHERE material_id = ? ORDER BY numero', [m.id])).map((x) => x.id);
+    const s2 = await mov(m, { tipo: 'SAIDA', quantidade: 2, serie_ids: ids });
+    const d2 = await request(app).post('/api/almoxarifado/devolucoes').send({ material_id: m.id, quantidade: 2,
+      motivo: 'NAO_UTILIZADO', destino: 'ESTOQUE', movimentacao_saida_id: s2, series: ['V1', 'V2'] });
+    assert.strictEqual(d2.status, 201, JSON.stringify(d2.body));
+    const ed2 = await ultimo(m, 'ENTRADA_DEVOLUCAO');
+    assert.notStrictEqual(ed2, ed1);
+    for (const [nome, id] of [['ED2', ed2], ['S2', s2], ['ED1', ed1], ['S1', s1], ['E1', e1]]) {
+      const r = await estornar(id);
+      assert.strictEqual(r.status, 200, `estorno ${nome}: ${JSON.stringify(r.body)} series=${JSON.stringify(await series(m))}`);
+    }
+    assert.strictEqual(await fisico(m), 0);
+    assert.deepStrictEqual((await series(m)).map((s) => s.status), ['ESTORNADA', 'ESTORNADA']);
+  });
+
+  await test('[RN-06] o estorno da devolucao que falha no livro deixa a serie na entrada da devolucao; de novo, a cadeia segue', async () => {
+    const { m, e1, s1, ed } = await devolucaoComSeries();
+    let r = await comLivroFalhando(() => estornar(ed));
+    assert.strictEqual(r.status, 500, JSON.stringify(r.body));
+    assert.deepStrictEqual((await series(m)).map((s) => [s.status, s.e, s.s]), [['EM_ESTOQUE', ed, null], ['EM_ESTOQUE', ed, null]],
+      'o desfazer nao devolveu a serie a entrada da devolucao');
+    assert.strictEqual(await fisico(m), 2);
+    for (const id of [ed, s1, e1]) {
+      r = await estornar(id);
+      assert.strictEqual(r.status, 200, `estorno ${id}: ${JSON.stringify(r.body)}`);
+    }
+    assert.strictEqual(await fisico(m), 0);
+    assert.deepStrictEqual((await series(m)).map((s) => s.status), ['ESTORNADA', 'ESTORNADA']);
+  });
+
+  await test('[RN-07] serie reativada antes da etapa (sem a linha da tabela): ED -> S1 -> Em estoque na entrada da devolucao -> E1 recusa', async () => {
+    const { m, e1, s1, ed } = await devolucaoComSeries();
+    const apagadas = await dbRun(db, `DELETE FROM series_entrada_anterior_almoxarifado
+      WHERE serie_id IN (SELECT id FROM series_almoxarifado WHERE material_id = ?)`, [m.id]);
+    assert.strictEqual(apagadas.changes, 2, 'premissa: a devolucao gravou uma linha por serie');
+    let r = await estornar(ed);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.deepStrictEqual((await series(m)).map((s) => [s.status, s.e, s.s]), [['ENTREGUE', ed, s1], ['ENTREGUE', ed, s1]]);
+    r = await estornar(s1);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.deepStrictEqual((await series(m)).map((s) => [s.status, s.e]), [['EM_ESTOQUE', ed], ['EM_ESTOQUE', ed]]);
+    r = await estornar(e1);
+    assert.strictEqual(r.status, 400);
+    assert.strictEqual(r.body.error, 'estorno de entrada recusado: ha series desta entrada ja movimentadas — estorne as saidas primeiro');
+    assert.strictEqual(await fisico(m), 2);
+  });
+
   await test('[RN-08] entrega de requisicao com lote, 2o endereco falhando -> 500, fisico 6, A 3 e B 3; de novo -> entrega, fisico 1', async () => {
     const { m, A, B, lt } = await loteEmDoisEnderecos();
     const req = (await dbRun(db, `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status)

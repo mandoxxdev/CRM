@@ -2335,6 +2335,20 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     await dbRun(db, `UPDATE series_almoxarifado SET movimentacao_entrada_id = ?
       WHERE id IN (${seriesAfetadas.map(() => '?').join(',')})`,
       [result.lastID, ...seriesAfetadas.map((a) => a.linha.id)]);
+    // Etapa 119 (C242, B776): a serie REATIVADA guarda a entrada que tinha antes, chaveada por esta entrada — o estorno de uma
+    // devolucao que citou a saida (`reverterEntrada` com `saidaId`) a devolve a ela. Nao-fatal pelo mesmo motivo do vinculo
+    // acima (o livro ja esta gravado): sem a linha, o estorno da devolucao faz o de antes da etapa (a serie fica na entrada
+    // da devolucao) — a A67 acha.
+    for (const a of seriesAfetadas) {
+      if (a.acao !== 'REATIVACAO') continue;
+      try {
+        await dbRun(db, `INSERT OR IGNORE INTO series_entrada_anterior_almoxarifado
+          (serie_id, movimentacao_entrada_id, entrada_anterior_id) VALUES (?, ?, ?)`,
+        [a.linha.id, result.lastID, a.anterior.movimentacao_entrada_id ?? null]);
+      } catch (e) {
+        console.warn(`[almoxarifado] entrada anterior da serie ${a.linha.id} nao registrada (movimentacao ${result.lastID}): ${e.message}`);
+      }
+    }
   }
   // Vínculo série → movimentação de SAÍDA (Etapa 6b, Task 4): mesmo raciocínio e mesma janela que
   // a entrada acima — `claimSaidaSeries` roda com `movimentacao_id: null` porque o id do ledger
