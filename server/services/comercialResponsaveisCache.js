@@ -67,6 +67,7 @@ function fetchComercialResponsaveis(db, actor, ctxUser, callback) {
 
 module.exports = {
   CACHE_TTL_MS,
+  buildSetorCondition,
   buildComercialSql,
   fetchComercialResponsaveis,
   invalidateComercialResponsaveisCache,

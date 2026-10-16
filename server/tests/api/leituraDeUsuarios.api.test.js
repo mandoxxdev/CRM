@@ -152,10 +152,11 @@ const L10 = 'Acesso negado — apenas o próprio usuário ou administradores do 
     const chamadas = src.match(/registrarLeituraDeUsuarios\(app,/g) || [];
     assert.strictEqual(chamadas.length, 1, `registrarLeituraDeUsuarios(app, aparece ${chamadas.length} vezes`);
     const pos = src.indexOf('registrarLeituraDeUsuarios(app,');
-    const porModulo = src.indexOf("app.get('/api/usuarios/por-modulo/:modulo'");
+    // Etapa 131 (C270): /por-modulo saiu do index.js para o modulo (que o registra antes do /:id) — a ancora de posicao mudou a vista;
+    // a ordem dentro do modulo e presa em listasDeUsuarios.api.test.js (RN-05).
     const post = src.indexOf("app.post('/api/usuarios'");
-    assert.ok(porModulo > 0 && post > 0, 'as ancoras sumiram do index.js');
-    assert.ok(porModulo < pos && pos < post, 'registrado fora do lugar (tem de vir depois de /por-modulo e antes do POST)');
+    assert.ok(pos > 0 && post > 0, 'as ancoras sumiram do index.js');
+    assert.ok(pos < post, 'registrado fora do lugar (tem de vir antes do POST)');
     for (const rota of ["app.get('/api/usuarios',", "app.get('/api/usuarios/:id',", "app.get('/api/usuarios/:id/grupos',"]) {
       assert.ok(!src.includes(rota), `o index.js ainda declara ${rota}`);
     }

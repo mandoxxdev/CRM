@@ -17,7 +17,8 @@
  * do pedido, como `portaoDeModulo`.
  */
 const { canManageUsers, parseAdminModulos, isTruthyFlag } = require('./systemPermissions');
-const { isSqliteBusy } = require('./sqliteConcurrency');
+const { isSqliteBusy, respondDbError } = require('./sqliteConcurrency');
+const { buildSetorCondition, fetchComercialResponsaveis } = require('./comercialResponsaveisCache');
 
 const LITERAL_LEITURA_USUARIO = 'Acesso negado — apenas o próprio usuário ou administradores do sistema';
 
@@ -32,10 +33,24 @@ function requireLerUsuario(req, res, next) {
   return res.status(403).json({ error: LITERAL_LEITURA_USUARIO });
 }
 
-/** A lista como quem pede pode ver: inteira para quem gerencia usuarios; so id, nome, email e ativo para os outros. */
-function projetarListaDeUsuarios(user, linhas) {
+/**
+ * Etapa 131 (C270): os campos que os seletores de responsavel leem alem dos quatro — medido: `ProjetoForm` e `PropostaForm` mostram
+ * "nome - cargo"; os outros leem so id e nome. Uma regra so para as tres listas dos seletores.
+ */
+const CAMPOS_EXTRAS_DOS_SELETORES = ['cargo'];
+
+/**
+ * A lista como quem pede pode ver: inteira para quem gerencia usuarios; para os outros, so id, nome, email e ativo e os `extras`
+ * (as listas dos seletores passam `CAMPOS_EXTRAS_DOS_SELETORES`; a `/api/usuarios` da 130, nenhum). Nao muta as linhas (o cache da
+ * `/comercial` guarda as inteiras).
+ */
+function projetarListaDeUsuarios(user, linhas, extras = []) {
   if (canManageUsers(user)) return linhas;
-  return (linhas || []).map((u) => ({ id: u.id, nome: u.nome, email: u.email, ativo: u.ativo }));
+  return (linhas || []).map((u) => {
+    const p = { id: u.id, nome: u.nome, email: u.email, ativo: u.ativo };
+    for (const k of extras) p[k] = u[k] === undefined ? null : u[k];
+    return p;
+  });
 }
 
 function getUsuarioModuleContext(db, userId, callback) {
@@ -90,7 +105,216 @@ function getUsuarioModuleContext(db, userId, callback) {
   );
 }
 
+/**
+ * Etapa 131 (C270, do nucleo) — as tres listas dos seletores de responsavel, vindas do index.js com o corpo de antes (filtros de
+ * setor, modulo e flag como estavam) e a forma de quem pede na resposta. Registradas ANTES de `/api/usuarios/:id` (senao cairiam
+ * nele). Ate a 130 devolviam a qualquer logado o papel, o setor, o departamento, o oculto e a data de criacao dos outros.
+ */
+function registrarListasDosSeletores(app, { getDb, authenticateToken }) {
+  // Lista apenas usuários com acesso ao módulo Comercial (para filtros do comercial: responsáveis).
+  // Regra: só aparecem quem tem permissão explícita ao módulo (direta ou via grupo) e, se não for admin, mesmo setor.
+  app.get('/api/usuarios/comercial', authenticateToken, (req, res) => {
+    const db = getDb();
+    db.get(
+      `SELECT id, role, ativo, setor FROM usuarios WHERE id = ? LIMIT 1`,
+      [req.user.id],
+      (ctxErr, ctxUser) => {
+        if (ctxErr) return respondDbError(res, ctxErr, 'usuarios/comercial:context');
+        if (!ctxUser) return res.status(401).json({ error: 'Usuário não encontrado' });
+        if (!ctxUser.ativo) return res.status(403).json({ error: 'Usuário inativo' });
+
+        fetchComercialResponsaveis(db, req.user, ctxUser, (err, rows) => {
+          if (err) return respondDbError(res, err, 'usuarios/comercial');
+          // Etapa 131 (C270, RN-01): o cache guarda as linhas inteiras; a forma e de quem pede, aplicada aqui, por pedido.
+          return res.json(projetarListaDeUsuarios(req.user, rows || [], CAMPOS_EXTRAS_DOS_SELETORES));
+        });
+      }
+    );
+  });
+
+  // ======= FILTRO PREMIUM DE USUÁRIOS (flags + setor + contexto do logado) =======
+  // Exemplo:
+  //   GET /api/usuarios/filtrar?flag=vendedor&ativo=1&q=mat&limit=25&offset=0
+  // Regras:
+  // - Apenas retorna usuários com a flag solicitada
+  // - Usuário não-admin só pode filtrar flags "relevantes" ao seu próprio perfil (ele precisa ter a flag)
+  // - Usuário não-admin só enxerga usuários do mesmo setor (evita vazamento entre setores)
+  // - Filtros adicionais: ativo/inativo, departamento, busca textual, paginação
+  app.get('/api/usuarios/filtrar', authenticateToken, (req, res) => {
+    const db = getDb();
+    const rawFlag = (req.query.flag || '').toString().trim().toLowerCase();
+    const q = (req.query.q || '').toString().trim();
+    const departamento = (req.query.departamento || '').toString().trim();
+
+    // ativo pode ser: 1, 0, true, false, all
+    const ativoRaw = (req.query.ativo ?? '1').toString().trim().toLowerCase();
+    const limit = Math.max(1, Math.min(parseInt(req.query.limit || '50', 10) || 50, 200));
+    const offset = Math.max(0, parseInt(req.query.offset || '0', 10) || 0);
+
+    const FLAG_TO_COLUMN = {
+      vendedor: 'flag_vendedor',
+      compras: 'flag_compras',
+      ti: 'flag_ti'
+    };
+
+    const flagColumn = FLAG_TO_COLUMN[rawFlag];
+    if (!flagColumn) {
+      return res.status(400).json({
+        error: 'flag inválida. Use: vendedor | compras | ti',
+        allowed: Object.keys(FLAG_TO_COLUMN)
+      });
+    }
+
+    // Buscar contexto atual direto no DB (mais seguro do que depender do token)
+    db.get(
+      `SELECT id, role, ativo, setor, departamento, flag_vendedor, flag_compras, flag_ti
+       FROM usuarios WHERE id = ? LIMIT 1`,
+      [req.user.id],
+      (ctxErr, ctxUser) => {
+        if (ctxErr) return res.status(500).json({ error: ctxErr.message });
+        if (!ctxUser) return res.status(401).json({ error: 'Usuário não encontrado' });
+
+        const isAdmin = ctxUser.role === 'admin';
+
+        // Segurança: usuário inativo não deve conseguir usar filtros (evita reuso de token antigo)
+        if (!ctxUser.ativo) {
+          return res.status(403).json({ error: 'Usuário inativo' });
+        }
+
+        // Regra 4: usuário não-admin não pode ver filtros que não são relevantes para o seu setor/função.
+        // Implementação objetiva: ele só pode pedir uma flag que ele mesmo possua.
+        if (!isAdmin && !ctxUser[flagColumn]) {
+          return res.status(403).json({ error: 'Filtro não permitido para o seu perfil' });
+        }
+
+        const where = [];
+        const params = [];
+
+        // Regra 3: apenas usuários com a flag solicitada
+        where.push(`u.${flagColumn} = 1`);
+
+        // Regra 4: isolamento por setor (não-admin)
+        if (!isAdmin) {
+          where.push(`COALESCE(u.setor, '') = COALESCE(?, '')`);
+          params.push(ctxUser.setor || '');
+        } else {
+          // Admin pode opcionalmente filtrar por setor
+          const setorParam = (req.query.setor || '').toString().trim();
+          if (setorParam) {
+            where.push(`COALESCE(u.setor, '') = COALESCE(?, '')`);
+            params.push(setorParam);
+          }
+        }
+
+        // Filtro ativo/inativo
+        if (ativoRaw !== 'all') {
+          const ativoBool =
+            ativoRaw === '1' || ativoRaw === 'true' ? 1 :
+            ativoRaw === '0' || ativoRaw === 'false' ? 0 :
+            1;
+          where.push(`u.ativo = ?`);
+          params.push(ativoBool);
+        }
+
+        // Filtro por departamento (configurável)
+        if (departamento) {
+          where.push(`COALESCE(u.departamento, '') = ?`);
+          params.push(departamento);
+        }
+
+        // Busca textual (nome/email/cargo)
+        if (q) {
+          where.push(`(
+            u.nome LIKE ? OR u.email LIKE ? OR COALESCE(u.cargo, '') LIKE ?
+          )`);
+          const like = `%${q}%`;
+          params.push(like, like, like);
+        }
+
+        const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+        // Observação de performance:
+        // - Não retornamos senha
+        // - Paginamos (limit/offset)
+        // - Seleção mínima de colunas para dropdowns
+        const sql = `
+          SELECT
+            u.id, u.nome, u.email, u.cargo, u.role, u.ativo,
+            u.setor, u.departamento,
+            u.flag_vendedor, u.flag_compras, u.flag_ti, u.is_oculto
+          FROM usuarios u
+          ${whereSql}
+          ORDER BY u.nome
+          LIMIT ? OFFSET ?`;
+
+        db.all(sql, [...params, limit, offset], (listErr, rows) => {
+          if (listErr) return res.status(500).json({ error: listErr.message });
+          const visible = rows || [];
+          return res.json({
+            flag: rawFlag,
+            limit,
+            offset,
+            count: visible.length,
+            // Etapa 131 (C270, RN-04): os items com a forma de quem pede.
+            items: projetarListaDeUsuarios(req.user, visible, CAMPOS_EXTRAS_DOS_SELETORES)
+          });
+        });
+      }
+    );
+  });
+
+  // Lista usuários com acesso a um módulo (para filtros de responsável por módulo).
+  // Só retorna quem tem permissão explícita ao módulo (direta ou via grupo) e, se não for admin, mesmo setor.
+  // Módulos: comercial, compras, financeiro, operacional, administrativo, admin, engenharia, engenharia_projetos, almoxarifado
+  app.get('/api/usuarios/por-modulo/:modulo', authenticateToken, (req, res) => {
+    const db = getDb();
+    const { modulo } = req.params;
+    db.get(
+      `SELECT id, role, ativo, setor FROM usuarios WHERE id = ? LIMIT 1`,
+      [req.user.id],
+      (ctxErr, ctxUser) => {
+        if (ctxErr) return res.status(500).json({ error: ctxErr.message });
+        if (!ctxUser) return res.status(401).json({ error: 'Usuário não encontrado' });
+        if (!ctxUser.ativo) return res.status(403).json({ error: 'Usuário inativo' });
+
+        const isAdmin = ctxUser.role === 'admin';
+        const setorCond = buildSetorCondition(isAdmin, ctxUser.setor);
+
+        const sql = `
+          SELECT DISTINCT u.id, u.nome, u.email, u.cargo, u.role, u.ativo, u.setor, u.departamento, u.is_oculto, u.created_at
+          FROM usuarios u
+          WHERE u.ativo = 1
+          ${setorCond.sql}
+          AND (
+            u.role = 'admin'
+            OR EXISTS (
+              SELECT 1 FROM permissoes p
+              WHERE p.usuario_id = u.id AND (p.grupo_id IS NULL OR p.grupo_id = 0)
+              AND p.modulo = ? AND p.permissao = 1
+            )
+            OR EXISTS (
+              SELECT 1 FROM usuarios_grupos ug
+              INNER JOIN permissoes p ON p.grupo_id = ug.grupo_id AND p.modulo = ? AND p.permissao = 1
+              WHERE ug.usuario_id = u.id
+            )
+          )
+          ORDER BY u.nome`;
+
+        const params = [...setorCond.params, modulo, modulo];
+
+        db.all(sql, params, (err, rows) => {
+          if (err) return res.status(500).json({ error: err.message });
+          // Etapa 131 (C270, RN-03)
+          return res.json(projetarListaDeUsuarios(req.user, rows || [], CAMPOS_EXTRAS_DOS_SELETORES));
+        });
+      }
+    );
+  });
+}
+
 function registrarLeituraDeUsuarios(app, { getDb, authenticateToken }) {
+  registrarListasDosSeletores(app, { getDb, authenticateToken });
+
   app.get('/api/usuarios', authenticateToken, (req, res) => {
     const db = getDb();
     const limitRaw = parseInt(req.query.limit, 10);
@@ -283,6 +507,7 @@ module.exports = {
   podeLerUsuario,
   requireLerUsuario,
   projetarListaDeUsuarios,
+  CAMPOS_EXTRAS_DOS_SELETORES,
   getUsuarioModuleContext,
   LITERAL_LEITURA_USUARIO,
 };
