@@ -946,3 +946,64 @@ describe('MaterialAlmoxarifadoForm — Etapa 110 (RN-11): o aviso do saldo inici
     expect(toast.success).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * Etapa 116 (C233, RN-06) — o PUT leva `controles_lidos`, os controles DE QUANDO O MATERIAL FOI CARREGADO. O servidor
+ * compara com o gravado e recusa (409) o salvar que desfaria o controle mudado por outra pessoa enquanto o formulario
+ * estava aberto. O teste prende que a fonte e o carregado, nao o state atual: marcar o lote antes de salvar nao muda o lido.
+ */
+describe('MaterialAlmoxarifadoForm — RN-06 (Etapa 116): o PUT diz os controles que leu', () => {
+  const caixa = (rotulo) => [...container.querySelectorAll('label.almox-checkbox-field')]
+    .find((l) => l.textContent.trim() === rotulo).querySelector('input');
+  const marcar = (input) => act(() => { input.click(); });
+
+  test('abre com lote 0 e serie 0, marca o lote e salva: controle_lote true e controles_lidos com os dois false', async () => {
+    await renderizarEdicao();
+    expect(caixa('Controle por lote').checked).toBe(false);
+    marcar(caixa('Controle por lote'));
+    expect(caixa('Controle por lote').checked).toBe(true);
+    await submeter();
+    const payload = api.put.mock.calls[0][1];
+    expect(payload.controle_lote).toBe(true);
+    expect(payload.controles_lidos).toEqual({ controle_lote: false, controle_serie: false });
+  });
+
+  test('abre com a serie ligada: controles_lidos.controle_serie true, mesmo desmarcando antes de salvar', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/familias') return Promise.resolve({ data: FAMILIAS });
+      if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
+      if (url.startsWith('/almoxarifado/materiais/')) {
+        return Promise.resolve({ data: { ...MATERIAL_DO_CLIENTE, controle_serie: 1, controle_lote: 0 } });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await renderizarEdicao();
+    expect(caixa('Controle por número de série').checked).toBe(true);
+    marcar(caixa('Controle por número de série'));
+    await submeter();
+    const payload = api.put.mock.calls[0][1];
+    expect(payload.controle_serie).toBe(false);
+    expect(payload.controles_lidos).toEqual({ controle_lote: false, controle_serie: true });
+  });
+
+  test('cadastro novo (POST) nao leva controles_lidos', async () => {
+    await renderizarNovo();
+    await preencherObrigatorios();
+    await submeter();
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(api.post.mock.calls[0][1]).not.toHaveProperty('controles_lidos');
+    expect(api.post.mock.calls[0][1].codigo).toBe('CHP-100');
+  });
+
+  test('o 409 do servidor aparece com a literal e o formulario continua aberto', async () => {
+    const E1 = 'O controle por número de série do material CHP-002 foi ligado por outra pessoa depois que você abriu o '
+      + 'cadastro — salvar desfaria essa mudança, e nada foi gravado. Recarregue o material e salve de novo.';
+    api.put.mockRejectedValueOnce({ response: { status: 409, data: { error: E1 } } });
+    await renderizarEdicao();
+    await submeter();
+    await esperarEfeitos();
+    expect(toast.error).toHaveBeenCalledWith(E1);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(container.querySelector('form')).not.toBeNull();
+  });
+});

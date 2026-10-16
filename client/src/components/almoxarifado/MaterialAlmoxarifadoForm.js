@@ -57,6 +57,10 @@ const MaterialAlmoxarifadoForm = () => {
   const fileInputRef = useRef();
   // Conta as escolhas de foto: o FileReader de uma escolha cuja foto foi RECUSADA nao repinta o preview.
   const fotoTentativaRef = useRef(0);
+  // Etapa 116 (C233, RN-06): os controles de lote e serie DE QUANDO O MATERIAL FOI CARREGADO — vao no PUT como
+  // `controles_lidos`, e o servidor recusa (409) o salvar que desfaria o controle que outra pessoa mudou enquanto o
+  // formulario estava aberto. Ref, e nao o state: marcar a caixa antes de salvar muda o `form`, nao o que foi lido.
+  const controlesLidosRef = useRef(null);
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -317,6 +321,7 @@ const MaterialAlmoxarifadoForm = () => {
       const res = await api.get(`/almoxarifado/materiais/${id}`);
       const m = res.data;
       setFamiliaGravadaId(m.familia_id ? String(m.familia_id) : '');
+      controlesLidosRef.current = { controle_lote: !!m.controle_lote, controle_serie: !!m.controle_serie };
       setForm({
         codigo: m.codigo || '',
         nome: m.nome || '',
@@ -492,6 +497,7 @@ const MaterialAlmoxarifadoForm = () => {
 
       let res;
       if (isEdit) {
+        if (controlesLidosRef.current) payload.controles_lidos = controlesLidosRef.current;
         res = await api.put(`/almoxarifado/materiais/${id}`, payload);
         toast.success('Material atualizado!');
       } else {
