@@ -606,6 +606,28 @@ function mensagemControleMudadoPorOutro(codigo, desfeitos, gravado) {
 }
 
 /**
+ * Etapa 124 (D (123), RN-01..RN-03; B800) — o par familia/subfamilia que o salvar DESFARIA: o molde de `controlesDesfeitos`.
+ * Para cada coluna presente em `lida` (o que o formulario mostrava ao abrir): lido diferente do gravado (outra pessoa mudou
+ * depois) E o salvar grava nela um valor diferente do gravado. Devolve `'familia'` (a familia vence), `'subfamilia'` ou
+ * `null`. Chave ausente em `lida` nao e comparada; `null` e "sem subfamilia".
+ */
+function familiaDesfeita(lida, gravado, merged) {
+  if (!lida || typeof lida !== 'object') return null;
+  const n = (v) => (v === null || v === undefined || v === '' || !Number(v) ? null : Number(v));
+  for (const [col, nome] of [['familia_id', 'familia'], ['subfamilia_id', 'subfamilia']]) {
+    if (lida[col] === undefined) continue;
+    if (n(lida[col]) !== n(gravado[col]) && n(merged[col]) !== n(gravado[col])) return nome;
+  }
+  return null;
+}
+
+/** E1f/E1s da Etapa 124 (409, contrato congelado no plano). `codigo` e o gravado. */
+function mensagemFamiliaMudadaPorOutro(codigo, qual) {
+  return `A ${qual === 'familia' ? 'família' : 'subfamília'} do material ${codigo} foi mudada por outra pessoa depois que você `
+    + 'abriu o cadastro — salvar desfaria essa mudança, e nada foi gravado. Recarregue o material e salve de novo.';
+}
+
+/**
  * Etapa 113 (C217, C227, RN-01..RN-04) — inativar material com saldo prende o saldo: o motor recusa movimentar material
  * inativo e nenhuma tela reativa. Por isso inativar exige o fisico e as quatro retencoes zerados (6 casas), para TODOS
  * (B733: o padrao "so quem regulariza" da 112 nao serve — quem regulariza tambem ficaria preso).
@@ -670,4 +692,5 @@ module.exports = {
   controlesLigados, saldoNaoIdentificado, mensagemControleSemPermissao, condicaoSaldoIdentificadoSql,
   mudaControle, desligaSerie, seriesPresentes, SEM_SERIE_PRESENTE_SQL, mensagemDesligarSerieSemPermissao,
   controlesDesfeitos, mensagemControleMudadoPorOutro,
+  familiaDesfeita, mensagemFamiliaMudadaPorOutro,
 };

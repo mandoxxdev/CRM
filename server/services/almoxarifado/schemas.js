@@ -318,8 +318,16 @@ const MaterialSchema = MaterialShape.superRefine(refineUnidadesFator);
 // Etapa 116 (C233, RN-03): `controles_lidos` — os controles que o formulario mostrava ao abrir. So no PUT; SEM DECLARAR
 // AQUI o z.object descarta a chave em silencio e a conferencia nunca liga (a armadilha da reserva_id/lote_id/codigo_auto).
 // Nao entra no UPDATE (a lista e MATERIAL_UPDATE_COLUMNS).
+//
+// Etapa 124 (D (123), B800): `familia_lida` — a familia e a subfamilia que o formulario mostrava ao abrir. O mesmo molde
+// (e a mesma armadilha) de `controles_lidos`. `numFromForm` deixa `null` atravessar (subfamilia lida vazia) e colapsa `''`
+// para ausente (a coluna nao e comparada).
 const MaterialUpdateSchema = MaterialShape.partial().extend({
   controles_lidos: z.object({ controle_lote: FlagSchema, controle_serie: FlagSchema }).optional(),
+  familia_lida: z.object({
+    familia_id: numFromForm(z.number().int().positive().nullable().optional()),
+    subfamilia_id: numFromForm(z.number().int().positive().nullable().optional()),
+  }).optional(),
 }).superRefine(refineUnidadesFator);
 
 // ── Requisições (Etapa 3, Task 1) ──────────────────────────────────────────────

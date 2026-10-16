@@ -657,6 +657,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     if (desfeitos.length > 0) {
       return res.status(409).json({ error: materialService.mensagemControleMudadoPorOutro(current.codigo, desfeitos, current) });
     }
+    // Etapa 124 (D (123), RN-01..RN-06; B800): o mesmo para a familia e a subfamilia — o formulario manda o par que leu
+    // (`familia_lida`); se outra pessoa o mudou depois e este salvar o desfaria, 409. Depois do dos controles (uma recusa so,
+    // a da 116 primeiro) e antes da troca de dono e de toda validacao. Concorrencia, nao autorizacao: so recusa. A mudanca
+    // que cai ENTRE esta leitura e o UPDATE continua com o 409 generico (B798, condicao do par lido no WHERE).
+    const familiaDesfeita = materialService.familiaDesfeita(req.body.familia_lida, current, merged);
+    if (familiaDesfeita) {
+      return res.status(409).json({ error: materialService.mensagemFamiliaMudadaPorOutro(current.codigo, familiaDesfeita) });
+    }
 
     // Etapa 108 (C213, RN-01..RN-06): trocar o dono de material com historico exige `ajustar_material_cliente` — sem
     // isto o Almoxarife tirava o cliente, ajustava como material nosso e devolvia o cliente, e a troca levava o saldo e o
