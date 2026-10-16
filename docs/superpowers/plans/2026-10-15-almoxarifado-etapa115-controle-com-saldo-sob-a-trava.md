@@ -155,7 +155,7 @@ Galhos: nenhum (não há tela — o formulário já mostra a mensagem do servido
    Minor), **1 Important declarado** (C233), **10** sabotagens sem prova → 11 cenários, **0** ruído.
 3. **Paralelismo:** **0** galhos (não há tela); revisores em paralelo (Fase 2 durante a escrita dos testes; Fase 5 três de uma
    vez), cada um na sua worktree, sem retrabalho.
-4. **Defeito que escapou:** *(preencher na Etapa 116)*. Da Etapa 114: nenhum de código apareceu nesta etapa; de documento,
+4. **Defeito que escapou:** *(preenchido na Etapa 116)* nenhum de código; de documento, a C232 nomeava duas portas (estorno e devolução) e havia uma terceira — excluir a requisição — achada na Fase 5 da 116. E a revisão do plano da 116 achou, medindo, um defeito anterior às duas etapas: estornar a saída já devolvida contava em dobro (B756). Da Etapa 114: nenhum de código apareceu nesta etapa; de documento,
    nenhum — a Fase 0 confirmou as duas medições da próxima tarefa (4 ms aqui contra 3 ms lá, mesma conclusão).
 
 ## Próxima tarefa detalhada — Etapa 116

@@ -329,3 +329,20 @@ pernas: a separacao espera a devolucao inteira — 0/5 com caixa + bloqueado > f
 devolucao para QUARENTENA (BLOQUEIO interno, sem a opcao) continua 201 e bloqueia o devolvido, mesmo com caixa"*.
 Controle (s11) da T1: a perna `SUCATA` sem a opção → a devolução dá 400 com a entrada gravada. `test:api` 338/338
 (4163 ✓). Continua 🟢.
+
+## Etapa 116 — o estorno da saída devolvida e a devolução concorrente (2026-10-16)
+
+**Esta spec dizia 🟢 e escondia uma conta em dobro — fica dito, não apagado.** A devolução recusava a saída já estornada,
+mas o estorno não olhava as devoluções: entrada 5 → saída 2 → devolução 2 (5) → estorno da saída → **7**, em qualquer
+material. E duas devoluções simultâneas da mesma saída passavam as duas (30/30 rodadas; o "restante" era lido e gravado
+separado). Achado medindo, na revisão do plano da Etapa 116.
+
+- [x] **O estorno de Saída com devolução viva é recusado (B756)** — `333f13cd`; a conferência vai no claim do estorno
+  (`NOT EXISTS` devolução viva) — `00783173`. "Viva" = sem a sua `ENTRADA_DEVOLUCAO` estornada (`referencia = 'DEV-<id>'`).
+- [x] **A devolução com vínculo grava com a condição** (saída não estornada e quantidade ≤ restante, num `INSERT … SELECT …
+  WHERE EXISTS`) — `00783173`. Fecha as duas corridas (estorno × devolução, devolução × devolução).
+- [ ] **Fora:** o "restante" da devolução continua contando a devolução cuja entrada foi estornada (**C236**, candidata da
+  117); a devolução de Saída com séries depois de desligar a série devolve só a quantidade (**B755**).
+
+Continua 🟢 (com a C236 declarada). Testes: `estornoSemSerie.api.test.js` (RN-10), `estornoSemSerieFase5.api.test.js` (R1-a,
+R2-c, R2-d, S-D2/D6/D8).

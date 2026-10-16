@@ -1,13 +1,19 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-15 (Etapa 115) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-16 (Etapa 116) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114 e 115) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115 e 116) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 115 ENTREGUE · próxima do almoxarifado: Etapa 116)
+> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 116 ENTREGUE · próxima do almoxarifado: Etapa 117)
 >
-> **O desenvolvimento parou aqui: Etapa 115 fechada — 2026-10-15.** A **Etapa 115 (ligar e desligar o controle por lote ou
+> **O desenvolvimento parou aqui: Etapa 116 fechada — 2026-10-16.** A **Etapa 116 (o cadastro aberto há muito tempo não
+> desfaz mais o controle de outra pessoa, e o estorno não devolve saldo sem as séries)**: o salvar do formulário que ficou
+> aberto enquanto outra pessoa ligava ou desligava o lote ou a série é recusado com o pedido para recarregar; estornar a saída
+> com séries (ou excluir a requisição) depois de desligar a série pede para religar; e estornar uma saída já devolvida é
+> recusado — contava o material em dobro. **Próxima: Etapa 117** — ver a próxima tarefa no plano da 116.
+>
+> **Etapa 115, 2026-10-15.** A **Etapa 115 (ligar e desligar o controle por lote ou
 > série não deixa mais saldo nem série para trás)**: desligar o *Controle por número de série* de um material com séries em
 > estoque passa a ser do Administrador, com a mensagem dizendo o caminho (baixar as séries que saíram em Regularizar séries,
 > ou dar saída com as séries); o salvar que liga ou desliga um controle espera a movimentação daquele material em curso.
@@ -6452,6 +6458,65 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 116 — O cadastro aberto há muito tempo não desfaz mais o controle de outra pessoa, e o estorno não devolve saldo sem as séries (ENTREGUE — 2026-10-16)
+
+**O que mudou, em uma frase:** salvar um cadastro de material que ficou aberto enquanto outra pessoa ligava ou desligava o
+lote ou a série é recusado com um pedido para recarregar; o estorno de uma saída que baixou séries, com a série desligada
+depois, pede para religar; e o estorno de uma saída que já foi devolvida é recusado.
+
+**O problema que ela resolve.** O formulário de material envia os controles como estavam quando foi aberto: o Almoxarife que
+salvava (só renomeando) um cadastro aberto antes de o Administrador ligar a série a desligava de novo, calado. A saída com
+séries estornada depois de desligar a série devolvia a quantidade e deixava as séries *Entregue*. E estornar uma saída já
+devolvida pela tela de Devoluções devolvia o material duas vezes, em qualquer material (entrada 5, saída 2, devolução 2 → 5;
+o estorno levava a 7).
+
+| Antes | Agora |
+|---|---|
+| O cadastro velho, ao salvar, desfazia o controle que outra pessoa mudou | *"O controle por … do material … foi ligado (ou desligado) por outra pessoa depois que você abriu o cadastro — salvar desfaria essa mudança, e nada foi gravado. Recarregue o material e salve de novo."* |
+| A saída com séries, estornada com a série desligada, deixava as séries *Entregue* | Recusado: religue a série e estorne de novo — as séries voltam a *Em estoque* |
+| Estornar a saída já devolvida contava o material em dobro | Recusado, com quanto já voltou e quanto falta devolver |
+| Excluir a requisição cuja entrega baixou séries, com a série desligada, deixava as séries *Entregue* | Recusado: religue a série e exclua de novo |
+
+**A regra agora.**
+- O cadastro: se um controle (lote ou série) está gravado diferente do que o formulário mostrava ao abrir **e** o salvar o
+  mudaria, a resposta é *"O controle por ⟨lote | número de série | lote e por número de série⟩ do material ⟨código⟩ foi
+  ⟨ligado | desligado | mudado⟩ por outra pessoa depois que você abriu o cadastro — salvar desfaria essa mudança, e nada foi
+  gravado. Recarregue o material e salve de novo."* Vale para todos os perfis, e vem antes de qualquer outra recusa do
+  cadastro. Se a pessoa marcou o controle igual ao que está gravado, o salvar passa.
+- O estorno de saída com séries, com a série desligada: *"Não é possível estornar: esta saída baixou ⟨n⟩ série(s) do material
+  ⟨código⟩ e o controle por número de série foi desligado depois — o estorno devolveria o saldo sem devolver as séries.
+  Religue o controle por número de série no cadastro do material e estorne de novo."*
+- O estorno de saída devolvida: *"Não é possível estornar: esta saída já foi devolvida inteira (⟨d⟩ ⟨un⟩) — o estorno
+  devolveria de novo o que já voltou."* ou, parcial, *"Não é possível estornar: ⟨d⟩ ⟨un⟩ desta saída já voltou (voltaram)
+  pela devolução — o estorno devolveria de novo o que já voltou. Para desfazer o resto, registre a devolução dos ⟨r⟩ ⟨un⟩ que
+  faltam."*
+
+### Roteiro de teste manual
+
+Preparação: **PRF-0601** sem controle; **PRF-0602** com *Controle por número de série* e uma Entrada de 2 (séries **S1**,
+**S2**); **PRF-0603** comum com 5 unidades; **Ana** (Almoxarife) numa aba e o **administrador** noutra.
+
+1. **O cadastro velho.** Ana abre **Materiais → editar PRF-0601**. O administrador, na outra aba, marca *Controle por número
+   de série* no PRF-0601 e salva. Ana, sem recarregar, muda o nome e clica **Salvar** → aviso vermelho *"O controle por número
+   de série do material PRF-0601 foi ligado por outra pessoa depois que você abriu o cadastro — …"*; o formulário continua
+   aberto. **F5**: a caixa aparece marcada; mude o nome e salve → *"Material atualizado!"*, série ligada.
+2. **Sem desfazer, passa.** Repita o passo 1, mas antes de salvar Ana marca ela mesma a série → *"Material atualizado!"*.
+3. **O estorno com a série desligada.** PRF-0602: **Saída** de 2 escolhendo S1 e S2; no cadastro, desmarque a série e salve.
+   Como administrador, **Movimentações** → estornar a saída (motivo) → aviso vermelho *"Não é possível estornar: esta saída
+   baixou 2 série(s) do material PRF-0602 …"*; nada muda. Religue a série no cadastro e estorne de novo → *"Movimentação
+   estornada!"*; em **Lotes e Séries → Séries**, S1 e S2 *Em estoque*; o estoque do PRF-0602 é 2.
+4. **A saída devolvida.** PRF-0603: **Saída** de 2; **Devoluções** → devolva as 2 dessa saída (estoque 5); estorne a saída →
+   *"Não é possível estornar: esta saída já foi devolvida inteira (2 PC) — …"*; estoque continua 5. Com saída de 3 e devolução
+   de 1: a frase diz *"1 PC desta saída já voltou pela devolução … registre a devolução dos 2 PC que faltam."*.
+
+**O que esta etapa NÃO cobre.** A devolução de uma saída com séries depois de desligar continua devolvendo só a quantidade
+(as séries ficam *Entregue* — B755); o Gestor estorna mas não religa a série (peça ao Administrador); séries que reentraram
+por uma Entrada antes de o Administrador desligar a série (C234); outros campos do cadastro continuam no "último que salva
+vence"; C224, o resto da C225, C228, C219, C230 (decisões do P.O.).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor e tela) provam,
+escrito para você conferir à mão.
 
 ## Etapa 115 — Ligar e desligar o controle por lote ou série não deixa mais saldo nem série para trás (ENTREGUE — 2026-10-15)
 

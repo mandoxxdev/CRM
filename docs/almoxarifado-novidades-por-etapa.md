@@ -11,9 +11,12 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-15):** **Etapa 115 fechada** (ligar e desligar o controle por lote ou série não deixa
-> mais saldo sem lote nem série órfã — **C226** resolvido, **C225** resolvido para o Almoxarife e a Engenharia); a próxima do
-> almoxarifado é a **116** — ver "Onde estamos e o que vem a seguir". *(Antes: Etapa 114 fechada (a requisição de um material inativado é recusada na
+> **Onde o desenvolvimento está (2026-10-16):** **Etapa 116 fechada** (o cadastro aberto há muito tempo não desfaz mais o
+> controle mudado por outra pessoa — **C233** resolvido; o estorno de saída com séries depois de desligar pede para religar —
+> **C232** resolvido, menos a devolução; e estornar uma saída já devolvida é recusado — contava em dobro, **B756**); a próxima
+> do almoxarifado é a **117** — ver "Onde estamos e o que vem a seguir". *(Antes: Etapa 115 fechada (ligar e desligar o
+> controle por lote ou série não deixa mais saldo sem lote nem série órfã — **C226** resolvido, **C225** resolvido para o
+> Almoxarife e a Engenharia).)* *(Antes: Etapa 114 fechada (a requisição de um material inativado é recusada na
 > aprovação, no envio e na separação, em vez de ficar aprovada e parada — **C229** resolvido).)* *(Esta frase tinha parado na Etapa 110 — as Etapas 112 e 113 não a
 > atualizaram; as duas estão na seção delas e em "Onde estamos".)* *(Antes: Etapa 110 fechada (o Saldo Inicial do cadastro de material passa pelo
 > motor de estoque, só para quem movimenta e só para material sem lote, série, inspeção ou cliente — **C215** resolvido; e
@@ -128,7 +131,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Sessenta e dois itens para rodar em produção ANTES do deploy — cinquenta e nove são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Sessenta e quatro itens para rodar em produção ANTES do deploy — sessenta e um são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-16 (Etapa 116) de sessenta e dois para sessenta e quatro**, com a **A63** — saídas devolvidas e depois estornadas, o estoque contado em dobro — e a **A64** — séries *Entregue* de saída estornada; opcionais.)*
 
 *(**Atualizado em 2026-10-15 (Etapa 115) de sessenta e um para sessenta e dois**, com a **A62** — os materiais com a série desligada e séries ainda "Em estoque"; opcional.)*
 
@@ -2300,12 +2305,59 @@ Séries**, confere o aviso *"Séries presentes: P · Físico: F"* e, em **Regula
 que faltam). Depois, se quiser o controle desligado: sem série em estoque, qualquer um desliga; com séries iguais ao físico,
 só o Administrador (**B746**).
 
+**A63 (NOVA, da Etapa 116 — saídas estornadas depois de devolvidas: o estoque contado em dobro).** Até a Etapa 116 o
+estorno de uma saída não olhava as devoluções: entrada 5, saída 2, devolução 2 (estoque 5), estorno da saída → estoque **7**
+(**B756**). Em qualquer material. **Nada aqui é obrigatório**, mas cada linha é estoque a mais no sistema. Somente leitura:
+
+```sql
+SELECT mv.id AS saida_id, mv.tipo, m.codigo, m.nome, mv.quantidade AS saida,
+       (SELECT SUM(d.quantidade) FROM devolucoes_material_almoxarifado d WHERE d.movimentacao_saida_id = mv.id) AS devolvido,
+       mv.cancelado_em, mv.cancelamento_motivo
+  FROM movimentacoes_almoxarifado mv
+  JOIN materiais_almoxarifado m ON m.id = mv.material_id
+ WHERE mv.cancelado = 1
+   AND mv.tipo IN ('SAIDA', 'SAIDA_PRODUCAO', 'SAIDA_MONTAGEM', 'SAIDA_ASSISTENCIA')
+   AND EXISTS (SELECT 1 FROM devolucoes_material_almoxarifado d WHERE d.movimentacao_saida_id = mv.id)
+ ORDER BY mv.cancelado_em;
+```
+
+*(Conferida numa sonda contra o esquema real: acha a saída devolvida e depois estornada; **não** acha a saída devolvida e
+não estornada nem a estornada sem devolução.)*
+
+**Como ler o resultado:** **vazia** — nada a fazer. **Cada linha** é uma saída cujo `devolvido` voltou ao estoque duas
+vezes (pela devolução e pelo estorno). Confira o estoque físico do material na prateleira; se o sistema estiver acima,
+corrija com um **Ajuste** (justificativa citando a saída). Se a entrada da devolução foi estornada depois pelo livro, o
+dobro já foi desfeito — confira o extrato antes de ajustar.
+
+**A64 (NOVA, da Etapa 116 — séries que ficaram *Entregue* numa saída estornada).** Até a Etapa 116, estornar uma saída com
+séries depois de desligar a série devolvia a quantidade e deixava as séries *Entregue* (**C232**). Somente leitura:
+
+```sql
+SELECT m.codigo, m.nome, m.controle_serie, sr.numero, sr.status, mv.id AS saida_id, mv.cancelado_em
+  FROM series_almoxarifado sr
+  JOIN movimentacoes_almoxarifado mv ON mv.id = sr.movimentacao_saida_id
+  JOIN materiais_almoxarifado m ON m.id = sr.material_id
+ WHERE mv.cancelado = 1
+   AND sr.status IN ('ENTREGUE', 'SUCATEADA')
+ ORDER BY m.codigo, sr.numero;
+```
+
+*(Conferida numa sonda contra o esquema real: acha as duas séries *Entregue* da saída estornada com a série desligada; **não**
+acha as da saída estornada com a série ligada, que voltaram a *Em estoque*.)*
+
+**Como ler o resultado:** **vazia** — nada a fazer. **Cada linha** é uma série que o sistema diz ter saído numa saída que o
+livro diz não ter acontecido. Se a unidade está na prateleira: o Administrador religa a série do material (se desligada) e
+acerta séries e físico em **Lotes e Séries → Séries → Regularizar séries**. Se não está, nada a fazer na série — confira se o
+físico do material não ficou a mais.
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B751; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B758; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
 *(**Atualizado em 2026-10-15 com as cinco da Etapa 114 — B740 a B744.**)*
 
@@ -7823,7 +7875,59 @@ mudança da outra aba já está gravada quando ele grava). **Reversível:** a co
 mudado por outra pessoa (C233), com o estorno de Saída com série depois de desligar (C232).** Medido na revisão desta
 etapa: com o formulário aberto, o Administrador liga a série e o salvar do Almoxarife (só renomeando) a desliga de novo
 (200, calado). Nenhuma das duas depende de vocês. A **C224**, a **C228**, a **C219** e a **C230** continuam esperando
-vocês. Ver a próxima tarefa no plano da Etapa 115.
+vocês. Ver a próxima tarefa no plano da Etapa 115. *(Feita — Etapa 116.)*
+
+**B752 (NOVA, da Etapa 116) — o salvar que desfaria o controle que outra pessoa mudou é recusado.** **O que foi escolhido:**
+o formulário de material envia, ao editar, os controles de lote e série **de quando o material foi carregado**; o salvar é
+recusado quando um deles está gravado diferente do que o formulário mostrava **e** o salvar o mudaria (`58e8fbbf`,
+`d7d9ef6c`): *"O controle por número de série do material ⟨código⟩ foi ligado por outra pessoa depois que você abriu o
+cadastro — salvar desfaria essa mudança, e nada foi gravado. Recarregue o material e salve de novo."* Se a pessoa marcou o
+controle igual ao gravado (ou o campo não veio), o salvar passa. Sem a informação nova (outra integração), o comportamento de
+antes. **Descartado:** recusar sempre que o lido difere (recusaria quem marcou igual — recusa sem dano a evitar); usar a data
+de alteração do material como versão (cada movimentação a regrava — o formulário aberto recusaria por qualquer Entrada); a
+mensagem *"mudou enquanto era salvo"* da **B749** (diz o contrário: mudou **antes**). **Reversível.** Vale só para os dois
+controles; os outros campos continuam no "último que salva vence".
+
+**B753 (NOVA, da Etapa 116) — essa recusa vem antes de todas as outras do cadastro.** **O que foi escolhido:** logo depois de
+"material não encontrado", antes da troca de dono, de inativar e das recusas de ligar/desligar controle. Cada uma dessas seria
+calculada sobre um controle que a pessoa não viu (era assim que a recusa do desligar enganava). **Descartado:** depois das
+recusas de perfil. Vale para todos os perfis (é conferência, não permissão).
+
+**B754 (NOVA, da Etapa 116) — estornar a saída com séries, com a série desligada depois, é recusado; religar destrava.**
+**O que foi escolhido** (`333f13cd`): *"Não é possível estornar: esta saída baixou ⟨n⟩ série(s) do material ⟨código⟩ e o
+controle por número de série foi desligado depois — o estorno devolveria o saldo sem devolver as séries. Religue o controle
+por número de série no cadastro do material e estorne de novo."* Nada é tocado; religada a série, o estorno devolve as séries.
+Com parte das séries já de volta ao estoque (por uma Entrada), a recusa é a de sempre (*"estorno de saida recusado: series
+desta saida ja reentraram no estoque — a devolucao ja repos o material"*), porque religar não adiantaria. A mesma regra vale
+para **excluir a requisição** cuja entrega baixou séries (`00783173`). **Descartado:** devolver as séries mesmo com a série
+desligada (série *Em estoque* num material sem controle — a **C225**); estornar só a quantidade (o estado da **C232**).
+**Reversível.**
+
+**B755 (NOVA, da Etapa 116) — a devolução da saída com séries, depois de desligar, fica como está.** Continua devolvendo só a
+quantidade; as séries ficam *Entregue* (a tela de Devoluções não oferece séries de material sem controle). **Por quê:** é outra
+porta, com regra própria (destinos, quarentena, sucata) — decidir se ela recusa como o estorno é decisão sua. Declarado em
+**D (116)**.
+
+**B756 (NOVA, da Etapa 116, da revisão do plano) — a saída que já teve devolução não se estorna.** Medido: em **qualquer**
+material, entrada 5 → saída 2 → devolução 2 (estoque 5) → estorno da saída → **7**. A devolução já recusava a saída
+estornada; o lado inverso faltava. **O que foi escolhido** (`333f13cd`, `00783173`): *"Não é possível estornar: esta saída já
+foi devolvida inteira (⟨d⟩ ⟨un⟩) — o estorno devolveria de novo o que já voltou."* ou, com devolução parcial, *"Não é possível
+estornar: ⟨d⟩ ⟨un⟩ desta saída já voltou (voltaram) pela devolução — o estorno devolveria de novo o que já voltou. Para
+desfazer o resto, registre a devolução dos ⟨r⟩ ⟨un⟩ que faltam."* A conferência e a gravação vão num comando só, dos dois
+lados (estorno e devolução no mesmo instante passavam os dois em 30 de 30 rodadas antes disso). A devolução cuja entrada foi
+estornada pelo livro **não** conta. **Descartado:** estornar só o que não foi devolvido (o livro tem uma linha por saída —
+seria motor novo); descontar a devolução no estorno (o estorno deixaria de ser o inverso exato da saída). Consulta **A63**
+para o passado. **Reversível.**
+
+**B757 (NOVA, da Etapa 116, da revisão do código) — a devolução para RETRABALHO também impede o estorno.** O material
+devolvido para retrabalho não volta ao estoque, mas também não está mais com quem o levou; estornar a saída o poria no estoque
+com ele em retrabalho. A recusa é a mesma da **B756** (*"… o estorno devolveria de novo o que já voltou"*) — a frase não
+distingue o destino. **Descartado:** uma frase própria para o retrabalho (mais um texto para um caso raro). **Reversível.**
+
+**B758 (NOVA, da Etapa 116) — a próxima etapa do almoxarifado (117).** Ver a "próxima tarefa detalhada" no plano da Etapa 116:
+a devolução que continua contando quando a entrada dela é estornada (**C236**), o desfazer do estorno fora da trava (**C235**)
+e, se vocês decidirem recusar, a devolução de saída com séries depois de desligar (**B755**). A **C224**, o resto da **C225**,
+a **C228**, a **C219** e a **C230** continuam esperando vocês.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -10137,7 +10241,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      e reativar a família é só do Administrador (Configurações). **O que fazer:** o Administrador reativa a família e
      depois o material; ou quem aprova rejeita a requisição (o Rejeitar continua funcionando).
 
-232. **NOVO (da Etapa 115, da revisão do plano) — estornar (ou devolver) uma Saída com série depois de desligar a série não
+232. **✅ RESOLVIDO NA ETAPA 116 (menos a devolução — B755) — estornar a saída é recusado, e excluir a requisição também (`333f13cd`, `00783173`; B754).** O texto original: **NOVO (da Etapa 115, da revisão do plano) — estornar (ou devolver) uma Saída com série depois de desligar a série não
      volta as séries.** O caminho que a recusa do desligar ensina — dar saída **com** as séries e então desligar — deixa as
      séries *Entregue*. Se essa Saída for estornada depois, com o controle já desligado, o físico volta e as séries
      continuam *Entregue* (o estorno só mexe em série de material com o controle ligado); a devolução também não as
@@ -10150,7 +10254,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      antes do crédito, fora da trava. Desde `385d938f` ele relê o controle sob a trava do material: o desligar que cai antes
      deixa as séries *Entregue* (este item); o que cai depois vê as séries de volta e é recusado.
 
-233. **NOVO (da Etapa 115, da revisão do código) — um formulário de material aberto há muito tempo desfaz, ao salvar, o
+233. **✅ RESOLVIDO NA ETAPA 116 — o salvar que desfaria o controle de outra pessoa é recusado com o pedido para recarregar (`58e8fbbf`, `d7d9ef6c`; B752).** O texto original: **NOVO (da Etapa 115, da revisão do código) — um formulário de material aberto há muito tempo desfaz, ao salvar, o
      controle que outra pessoa mudou nesse meio-tempo.** O formulário manda sempre *Controle por lote* e *Controle por
      número de série* com o valor de quando foi aberto. A conferência da **B749**/**B750** só pega a mudança que cai nos
      milissegundos entre a leitura e a gravação do próprio salvar; se o Administrador ligar a série enquanto o Almoxarife
@@ -10160,6 +10264,24 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      qualquer campo do cadastro (é o "último salvar vence" de sempre), mas nos controles o efeito é o da **C225**/**C226**.
      **O que fazer:** recarregue o material antes de salvar se alguém pode ter mexido nele; se a recusa do desligar
      aparecer sem você ter desmarcado a série, recarregue.
+
+234. **NOVO (da Etapa 116) — séries que voltaram por uma Entrada e depois tiveram a série desligada pelo Administrador.** A
+     Entrada com o número de uma série *Entregue* a devolve ao estoque e apaga o vínculo com a saída. Se depois o
+     Administrador desligar a série (com ela em estoque — só ele pode) e alguém estornar aquela saída, o estorno não vê
+     séries vinculadas e devolve a quantidade: o estoque fica a mais. **O que fazer:** antes de estornar uma saída antiga de
+     material com série, confira no extrato se houve Entrada com os mesmos números depois dela.
+
+235. **NOVO (da Etapa 116, da revisão do código) — uma falha do banco no fim do estorno de saída pode deixar o físico
+     negativo.** O registro do estorno no livro e o desfazer (se esse registro falhar) rodam depois de soltar a trava do
+     material; com a falha **forçada** em teste e uma saída do mesmo material no meio, o físico foi a −2. Só aparece com erro
+     de banco no instante exato. **O que fazer:** nada no dia a dia; se o log mostrar erro de estorno, confira o físico do
+     material.
+
+236. **NOVO (da Etapa 116, da revisão do código) — a devolução cuja entrada foi estornada continua contando como devolvida
+     na tela de Devoluções.** Estornar pelo livro a entrada de uma devolução tira o material do estoque de novo, e o estorno da
+     saída volta a ser aceito (**B756**); mas a devolução continua dizendo *"já foram devolvidos ⟨d⟩"* e recusa devolver de novo
+     (*"Devolução acima do entregue: … restam 0"*). **O que fazer:** se o material voltou de fato, estorne a saída (em vez de
+     devolver de novo). Candidata da **Etapa 117**.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -11246,6 +11368,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   depois do clique, com o texto do servidor.
 - **(115) A trava do salvar** faz o salvar que liga ou desliga um controle esperar a movimentação em curso daquele material
   (milissegundos); a regularização de séries também espera.
+- **(116) A devolução de uma saída com séries depois de desligar a série** continua devolvendo só a quantidade; as séries ficam
+  *Entregue* (**B755**).
+- **(116) O Gestor estorna, mas não edita material**: a recusa do estorno com a série desligada manda religar — quem religa é o
+  Administrador (ou o Almoxarife, quando o físico bate com as séries).
+- **(116) A conferência do formulário aberto** vale para os dois controles (lote e série); os outros campos do cadastro
+  continuam no "último que salva vence". O formulário não tem botão de recarregar — a mensagem pede para recarregar a página.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -12148,6 +12276,13 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(116) Nenhum clique foi dado nesta etapa no navegador.** A tela mudou só no que envia (o formulário de material manda os
+controles de quando abriu — provado por teste de componente com a fronteira HTTP simulada, **6** casos); as recusas novas
+chegam pelos avisos vermelhos que já mostram a mensagem do servidor (Salvar do cadastro, Estornar, Excluir requisição). O
+servidor foi provado pela rota (**18** + **12** + **9** cenários, **3** jornadas de integração, corridas de 12 rodadas). O que
+**só o navegador** prova: (1) o cenário 1 da seção da Etapa 116 com duas abas — o aviso vermelho inteiro legível e o
+formulário continuando aberto; (2) depois do F5, a caixa da série aparecendo marcada.
 
 **(115) Nenhum clique foi dado nesta etapa no navegador.** A tela não mudou: a recusa nova do desligar chega pelo mesmo
 aviso vermelho do formulário de material, que já mostra a mensagem do servidor. O servidor foi provado pela rota (**47**
@@ -23829,9 +23964,110 @@ declarado; é a próxima etapa). As corridas da etapa ficaram **0 de 30** (com a
 ruins). O terceiro revisor fez **32 sabotagens** novas: 18 derrubaram teste, 4 eram equivalentes ou inalcançáveis e **10**
 mostraram cenários sem prova — viraram 11 testes.
 
+## Etapa 116 — O cadastro aberto há muito tempo não desfaz mais o controle de outra pessoa, e o estorno não devolve saldo sem as séries (2026-10-16)
+
+Três situações em que o sistema ficava com o número errado sem avisar ninguém. A primeira: o Almoxarife abria o cadastro de
+um material, o Administrador ligava a série nesse meio-tempo, e quando o Almoxarife salvava (mesmo só mudando o nome) a série
+voltava a ficar desligada — calado, ou com uma recusa sobre um desligar que ele nunca pediu. A segunda: uma saída que baixou
+séries, estornada depois de alguém desligar a série, devolvia a quantidade e deixava as séries como *Entregue* para sempre.
+A terceira, achada medindo: estornar uma saída que **já tinha sido devolvida** pela tela de Devoluções devolvia o material
+**de novo** — em qualquer material, com ou sem série (entrada 5, saída 2, devolução 2: o estoque voltava a 5; o estorno o
+levava a 7). Agora o salvar avisa que o cadastro mudou e pede para recarregar; o estorno da saída com séries pede para religar
+a série; e o estorno da saída devolvida é recusado, com o que falta devolver.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| O cadastro aberto antes de o Administrador ligar (ou desligar) um controle, ao ser salvo, desfazia a mudança dele | *"O controle por número de série do material … foi ligado por outra pessoa depois que você abriu o cadastro — salvar desfaria essa mudança, e nada foi gravado. …"* (**B752**, **B753**) |
+| Com séries já entradas, esse mesmo salvar recebia a recusa do desligar (*"Peça ao Administrador … para desligar o controle"*), que enganava | Recebe a mensagem acima — antes de qualquer outra recusa |
+| — | Se a pessoa marcou o controle igual ao que está gravado (ou não mexeu no campo), o salvar passa normalmente |
+| A saída que baixou séries, estornada depois de desligar a série, devolvia a quantidade e deixava as séries *Entregue* | Recusado: *"… o estorno devolveria o saldo sem devolver as séries. Religue o controle por número de série …"* (**B754**) |
+| — | Religada a série, o estorno passa e as séries voltam a *Em estoque* |
+| Estornar uma saída já devolvida devolvia o material de novo (contado em dobro) | Recusado, dizendo quanto já voltou e quanto falta devolver (**B756**) |
+| Excluir a requisição cuja entrega baixou séries, com a série desligada depois, devolvia a quantidade e deixava as séries *Entregue* | Recusado com a mesma orientação: religue a série e exclua de novo |
+| Devolução e estorno da mesma saída no mesmo instante passavam os dois (e duas devoluções simultâneas também) | Só um passa; o outro recebe a recusa |
+| Devolver uma saída com série depois de desligar | Continua devolvendo só a quantidade, sem as séries (**B755**, declarado) |
+
+### As regras, com o cenário exato
+
+Preparação: um material nosso sem controle, **PRF-0601**; um material nosso com **Controle por número de série**,
+**PRF-0602**, com uma Entrada de 2 unidades (séries **S1** e **S2**); um material comum **PRF-0603** com 5 unidades; usuários
+**Ana** (Almoxarife) e o **administrador**. Duas abas do navegador ajudam: uma como Ana, outra como administrador.
+
+**1. O cadastro que mudou enquanto estava aberto.** Na aba da Ana, abra o PRF-0601 em **Editar**. Na aba do administrador,
+abra o mesmo material, marque *Controle por número de série* e salve → *"Material atualizado!"*. Volte à aba da Ana (sem
+recarregar), mude o nome e clique em **Salvar** → aviso vermelho: *"O controle por número de série do material PRF-0601 foi
+ligado por outra pessoa depois que você abriu o cadastro — salvar desfaria essa mudança, e nada foi gravado. Recarregue o
+material e salve de novo."* O formulário continua aberto. Recarregue a página (F5): a caixa aparece marcada; mude o nome e
+salve → *"Material atualizado!"*, com a série ligada. Com o lote é a mesma frase com *"controle por lote"*; se o administrador
+**desligou**, a frase diz *"foi desligado"*; se mudou os dois, *"O controle por lote e por número de série … foi mudado …"*.
+O administrador também recebe a mensagem, se for ele quem está com o cadastro velho aberto.
+
+**2. Quando a mensagem não aparece.** No passo 1, se a Ana marcar ela mesma *Controle por número de série* antes de salvar
+(o que já está gravado), o salvar passa — nada seria desfeito.
+
+**3. Estornar a saída com séries depois de desligar.** No PRF-0602, dê uma **Saída** de 2 escolhendo S1 e S2; depois, no
+cadastro, desmarque a série e salve (sem série em estoque, qualquer um desliga). Como administrador, em **Movimentações**,
+estorne a saída → aviso vermelho: *"Não é possível estornar: esta saída baixou 2 série(s) do material PRF-0602 e o controle
+por número de série foi desligado depois — o estorno devolveria o saldo sem devolver as séries. Religue o controle por número
+de série no cadastro do material e estorne de novo."* Nada muda: a saída continua de pé, o estoque continua 0. Religue a série
+no cadastro e estorne de novo → estorno feito; S1 e S2 voltam a *Em estoque* e o estoque volta a 2.
+
+**4. Saída devolvida não se estorna.** No PRF-0603, dê uma **Saída** de 2 e, em **Devoluções**, devolva as 2 dessa saída →
+o estoque volta a 5. Estorne a saída → *"Não é possível estornar: esta saída já foi devolvida inteira (2 PC) — o estorno
+devolveria de novo o que já voltou."* O estoque continua 5. Com devolução parcial (saída de 3, devolvida 1): *"Não é possível
+estornar: 1 PC desta saída já voltou pela devolução — o estorno devolveria de novo o que já voltou. Para desfazer o resto,
+registre a devolução dos 2 PC que faltam."* — e devolver os 2 que faltam leva o estoque de volta a 5.
+
+**5. Parte das séries já voltou.** Se uma das séries da saída já reentrou no estoque por uma Entrada, e a série foi desligada,
+o estorno responde a recusa de sempre dessa situação: *"estorno de saida recusado: series desta saida ja reentraram no estoque
+— a devolucao ja repos o material"* — religar não adiantaria.
+
+**6. O que continua igual.** Estornar a saída de um material que nunca teve série, ou uma saída feita sem série depois do
+desligar; estornar com a série ligada (as séries voltam); o salvar sem mudança de controle nenhuma.
+
+### O que esta etapa NÃO cobre
+
+1. **A devolução** de uma saída com séries depois de desligar a série continua devolvendo só a quantidade; as séries ficam
+   *Entregue* (**B755**, **D (116)**).
+2. **O Gestor** pode estornar, mas não edita material: a recusa do passo 3 manda religar quem não religa — peça ao
+   Administrador (**D (116)**).
+3. **Séries que reentraram por uma Entrada e depois o Administrador desligou a série** com elas em estoque: o estorno daquela
+   saída não as vê e devolve a quantidade (**C234**).
+4. **Qualquer outro campo** do cadastro continua no "último que salva vence" — a conferência nova é só dos dois controles.
+5. A **C224**, o resto da **C225**, a **C228**, a **C219** e a **C230** — decisões suas.
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0) confirmou as duas do plano da Etapa 115 lendo o código: o salvar comparava os controles com a
+própria leitura, e o estorno de saída só devolvia série com a série ligada. A **revisão do plano** achou oito pontos: o
+plano dizia que o Almoxarife estorna (**estava errado** — estornar é do Administrador e do Gestor); e, medindo um deles numa
+sonda, achou um defeito mais largo que a etapa — **estornar uma saída já devolvida contava o material em dobro, em qualquer
+material** (5 → 7) — que virou a **B756**. Achou também que, com parte das séries já de volta, a recusa mandava religar à toa,
+e que o estorno creditava a quantidade antes de conferir a série (corrigido: o estorno de saída inteiro espera a trava do
+material). A **revisão adversarial do código** (três revisores, executando) achou quatro defeitos reais, corrigidos em
+`00783173`: **devolução e estorno da mesma saída no mesmo instante** ainda contavam em dobro (30 de 30 rodadas); **duas
+devoluções simultâneas** da mesma saída passavam as duas (30 de 30, defeito anterior a esta etapa); a devolução cuja entrada
+foi estornada pelo livro continuava travando o estorno com uma mensagem falsa; e **excluir a requisição** cuja entrega baixou
+séries, com a série desligada, deixava as séries *Entregue* — a mesma brecha por outra porta. Depois da correção, as corridas
+ficaram **0 de 30**. O terceiro revisor fez **70 sabotagens**: 50 derrubaram teste, 12 eram equivalentes ou inalcançáveis e
+**8** mostraram cenários sem prova — viraram testes (`00783173`, `96a90ce2`). Ficaram declarados: o desfazer do estorno fora
+da trava (**C235**, só com falha de banco) e a devolução estornada que ainda conta na tela de Devoluções (**C236**).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 116 entregue (2026-10-16):** **o cadastro aberto há muito tempo não desfaz mais o controle de outra pessoa, e o
+  estorno não devolve saldo sem as séries.** O salvar que desfaria o lote ou a série mudados por outra pessoa enquanto o
+  formulário estava aberto é recusado com o pedido para recarregar (**C233** resolvido); estornar a saída com séries depois de
+  desligar a série — e excluir a requisição cuja entrega as baixou — pede para religar (**C232** resolvido, menos a
+  devolução); e estornar uma saída já devolvida é recusado, em qualquer material (achado nesta etapa: contava em dobro).
+  **O que é seu:** as consultas **A63** (saídas devolvidas e estornadas — estoque a mais) e **A64** (opcionais); as decisões
+  **B752 a B758** (a **B755** — a devolução com a série desligada fica como está — é decisão sua; a **B756** e a **B757** são
+  reversíveis); os avisos **C234**, **C235** e **C236**; as limitações **(116)** em D e a verificação **(116)** em F.
+  **Próxima: Etapa 117 — ver a "próxima tarefa detalhada" no plano da Etapa 116.**
 
 - **Etapa 115 entregue (2026-10-15):** **ligar e desligar o controle por lote ou série não deixa mais saldo nem série para
   trás.** O salvar que liga ou desliga um controle espera a movimentação em curso do material (**C226** resolvido);
@@ -23840,8 +24076,9 @@ mostraram cenários sem prova — viraram 11 testes.
   trava. **O que é seu:** a consulta **A62** (opcional); as decisões **B745 a B751** (a **B746** — o Administrador desliga, em
   vez de baixar as séries ao desligar — e a **B750** — o salvar do Administrador também é conferido — são reversíveis e a
   alternativa é sua); os avisos **C225** (o resto, só do Administrador), **C232** e **C233**; as limitações **(115)** em D e a
-  verificação **(115)** em F. **Próxima: Etapa 116 — o formulário de material que desfaz o controle mudado por outra pessoa
-  (C233) e o estorno de saída com série depois de desligar (C232) — ver a "próxima tarefa detalhada" no plano da Etapa 115.**
+  verificação **(115)** em F. ~~**Próxima: Etapa 116 — o formulário de material que desfaz o controle mudado por outra pessoa
+  (C233) e o estorno de saída com série depois de desligar (C232) — ver a "próxima tarefa detalhada" no plano da Etapa 115.**~~
+  *(Feita — Etapa 116.)*
 
 - **Etapa 114 entregue (2026-10-15):** **a requisição de um material inativado não é mais aprovada para ficar parada.** A
   aprovação comum, a por valor e a automática recusam a requisição com item pendente de material inativo, sem reservar

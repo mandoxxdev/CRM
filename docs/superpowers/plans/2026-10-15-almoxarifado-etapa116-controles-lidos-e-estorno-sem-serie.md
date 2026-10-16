@@ -102,24 +102,106 @@ Schema: `MaterialUpdateSchema` ganha `controles_lidos: z.object({ controle_lote:
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 — tronco (C233, servidor)** — RN-01..RN-05 em `routes/almoxarifado.js` + `materialService.js` + `schemas.js`;
+- [x] **T1 — tronco (C233, servidor)** — RN-01..RN-05 em `routes/almoxarifado.js` + `materialService.js` + `schemas.js`;
   `server/tests/api/controlesLidos.api.test.js`. Controle positivo: sem a guarda; guarda sem a condição "gravaria ≠ gravado";
   guarda depois do dono; schema sem a chave (descarte silencioso).
-- [ ] **T2 — tronco (C232, motor)** — RN-07/RN-08 em `stockService.js`; `server/tests/api/estornoSemSerie.api.test.js`;
+- [x] **T2 — tronco (C232, motor)** — RN-07/RN-08 em `stockService.js`; `server/tests/api/estornoSemSerie.api.test.js`;
   `[R2-F5]` de `controleSobATravaFase5` passa a esperar a E2. Controle positivo: sem a guarda prévia; guarda contando só
   `ENTREGUE`; sem a recusa sob a trava (o `[R2-F5]` volta a 200); recusa também na compensação.
-- [ ] **T3 — galho (C233, tela)** — RN-06 em `MaterialAlmoxarifadoForm.js` + teste jest. Contra o contrato acima (mock só na
+- [x] **T3 — galho (C233, tela)** — RN-06 em `MaterialAlmoxarifadoForm.js` + teste jest. Contra o contrato acima (mock só na
   fronteira HTTP). Controle positivo: `controles_lidos` do state atual (não do carregado); sem a chave.
-- [ ] **T4 — integração (cruza Materiais, Movimentações, Séries)** — `server/tests/api/controlesLidosIntegracao.api.test.js`:
+- [x] **T4 — integração (cruza Materiais, Movimentações, Séries)** — `server/tests/api/controlesLidosIntegracao.api.test.js`:
   (i) o Almoxarife abre (GET) → o Administrador liga a série e entra 2 séries → o Almoxarife salva o GET antigo como o
   formulário mandaria → 409 E1 → recarrega (GET) → salva → 200, série ligada; (ii) RN-09 inteira pelas rotas (Entrada 2 séries
   → Saída com as 2 → o Administrador desliga → estorno E2 → religa → estorno 200 → 2 *Em estoque*, físico 2); (iii) a Saída
   avulsa sem série depois do desligar continua estornável.
-- [ ] **T5 — fechamento** (skill `fechar-etapa`).
+- [x] **T5 — fechamento** — o commit de documentação desta etapa (ver `git log`) (skill `fechar-etapa`).
 
 Galhos: T3 (tela) é independente do servidor pelo contrato; roda depois de T1 nesta mesma árvore (é jest, não bate no SQLite —
 mas não rodar jest junto do `test:api`).
 
 ## Execução — o que aconteceu
 
-*(preenchido ao executar)*
+- **Design e plano:** `fe93cc10` (já com a correção da Fase 2).
+- **T1** `58e8fbbf` — 17 cenários (`controlesLidos.api.test.js`); 6 sabotagens, todas derrubando a asserção certa (sem a guarda,
+  sem "gravaria ≠ gravado", sem "lido ≠ gravado", schema sem a chave, verbo invertido, chave ausente comparada).
+- **T2** `333f13cd` — 12 cenários (`estornoSemSerie.api.test.js`), com a R2 (RN-10), a R3 e a R4 da Fase 2 dentro; o `[R2-F5]` da
+  115 passou de 200 para a E2 (de propósito). 11 sabotagens; a guarda prévia só ficou provada depois da asserção "nada tocado"
+  (o claim e o crédito nunca rodam) — a primeira versão da asserção tinha um `\s` perdido no escape e não via nada (controle
+  positivo pegou: a sabotagem passava verde).
+- **T3** `d7d9ef6c` — 4 casos jest (RN-06); 3 sabotagens.
+- **T4** `4f693c7f` — 3 jornadas (`controlesLidosIntegracao.api.test.js`); controle positivo: sem a guarda da C233 e sem a chave
+  no schema, (i) cai pela recusa do desligar da 115 (a que enganava); sem a guarda prévia da C232 os três passam (a recusa sob a
+  trava cobre pela rota — quem distingue é o "nada tocado").
+- **Fase 5** `00783173`, `96a90ce2` — três revisores frescos em paralelo, cada um na sua worktree (removidas). **Concorrência**
+  (corridas de 30 rodadas): **2 Important** reproduzidos e corrigidos — devolução × estorno da mesma Saída (30/30 em dobro: a
+  guarda da RN-10 lia fora de qualquer trava → conferência no claim do estorno e no INSERT da devolução) e duas devoluções
+  simultâneas (30/30, anterior à 116 — o mesmo INSERT condicional); 1 Minor **declarado** (**C235**, ledger e compensação fora da
+  trava, só com falha injetada); sem deadlock. **Regra e fluxo:** **2 Important** corrigidos — a devolução cuja entrada foi
+  estornada travava o estorno com mensagem falsa (→ devolução "viva") e excluir a requisição deixava as séries *Entregue* com a
+  série desligada (a C232 por outra porta); 1 Minor decidido (**B757**, RETRABALHO). **Sabotagem:** 70, 50 derrubaram, 12
+  equivalentes/inalcançáveis, **8 sem prova** → 8 cenários (4 em `estornoSemSerieFase5`, 4 em `controlesLidos`/`estornoSemSerie`/
+  jest). Controle positivo das correções: 9 sabotagens, todas vermelhas (a do ramo sem a trava só depois de o gancho disparar o
+  PUT **fora** do contexto da seção — de dentro ele herdava a trava pelo `AsyncLocalStorage` e o teste provava nada).
+- **Suíte final (medida, depois de `96a90ce2`):** `test:api` **384/384** arquivos; `test:almoxarifado` **44/0**;
+  `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 10/0; client **115** suítes / **1629** testes; `CI=true build`
+  *Compiled successfully*.
+- **Divergências do plano:** (1) a Fase 2 trouxe a RN-10 (a saída devolvida — mais larga que a etapa: qualquer material), a R3 e a
+  R4 (o ramo de saída inteiro sob a trava); (2) o plano dizia que o Almoxarife estorna — **estava errado** (R1); (3) a Fase 5
+  achou uma terceira porta da C232 (excluir requisição) e as duas corridas da devolução; (4) a RN-10 do plano contava toda
+  devolução — a "viva" (sem a entrada estornada) entrou na Fase 5.
+
+- [x] **T1** `58e8fbbf` · [x] **T2** `333f13cd` · [x] **T3** `d7d9ef6c` · [x] **T4** `4f693c7f` · [x] **Fase 5** `00783173`,
+  `96a90ce2` · [x] **T5** — o commit de documentação desta etapa (ver `git log`).
+
+## Retro (4 números)
+
+1. **Rodadas de correção até verde:** **1** no código (Fase 5: as duas corridas, a devolução viva, a exclusão de requisição);
+   **1** de redesenho antes do commit, pela revisão do plano (RN-10, R3, R4). Teste antigo que mudou de propósito: 1
+   (`[R2-F5]` da 115, 200 → E2).
+2. **Achados da revisão:** Fase 2 — **8 reais** de 8 (R1–R8; 2 Important); Fase 5 — **4 de produção** (todos Important), 1
+   Minor declarado (C235), 1 Minor decidido (B757), **8** sabotagens sem prova → 8 cenários, **0** ruído.
+3. **Paralelismo:** **1** galho (T3, tela), feito na mesma árvore depois do tronco (jest, sem SQLite); revisores em paralelo (Fase 2
+   durante os testes; Fase 5 três de uma vez), cada um na sua worktree, sem retrabalho.
+4. **Defeito que escapou:** *(preencher na Etapa 117)*. Da Etapa 115: nenhum de código; de documento, a C232 da 115 nomeava duas
+   portas (estorno e devolução) e havia uma terceira (excluir requisição) — achada na Fase 5 desta etapa.
+
+## Próxima tarefa detalhada — Etapa 117
+
+*(A série desta etapa foi B752–B758, C234–C236, A63–A64 — a 117 começa em **B759**, **C237**, **A65**; confira com `grep -oE`
+antes.)*
+
+**Como foi escolhida (mapa `specs/modulo-almoxarifado/README.md` e os C abertos, medidos em 2026-10-16):** as features 🟡
+continuam 00, 01, 05, 06, 21, 22 e 23. Candidatos:
+
+1. **C236 — a devolução cuja entrada foi estornada continua contando no "restante"** (feature 12). **Medido na Fase 5** (revisor
+   1, rotas reais): entrada 5 → saída 2 → devolução 2 → estorno da `ENTRADA_DEVOLUCAO` (físico 3) → devolver de novo 2 → **400**
+   *"Devolução acima do entregue: … já foram devolvidos 2 e restam 0"*. O estorno da saída já passa (desde `00783173`). **Não
+   depende do P.O.**
+2. **C235 — o INSERT do livro e a compensação do estorno de Saída fora da trava** (feature 03). **Medido na Fase 5** (revisor 2,
+   falha do ledger injetada + Saída de 5 no meio): físico **−2**. Só com falha de banco. **Não depende do P.O.**
+3. **B755 — a devolução de Saída com séries depois de desligar a série** devolve só a quantidade — **depende do P.O.** (recusar
+   como o estorno, ou deixar). **C224**, **C225-resto**, **C228**, **C219**, **C230** — **dependem do P.O.** **C234** (séries
+   reentradas antes de o Administrador desligar) — raro, exige gesto do Administrador. **C231** — pequeno, sem P.O.
+
+**Escolhida: C236 + C235.**
+
+**Contrato candidato (decisão — letra B, caminho reversível):**
+- **C236:** a conta do "restante" (`returnService.validarSaidaOriginal`, o `INSERT … WHERE EXISTS` de `registrarDevolucao`, e
+  `listarSaidasElegiveis` — as três têm de concordar, o teste de `devolucaoVinculo` lê o número de uma para bater com a outra)
+  passa a somar só a devolução **viva** — a mesma régua de `stockService.DEVOLUCAO_VIVA_SQL` (hoje interna; exportar ou mover
+  para um módulo comum). E a exclusão de requisição (`requisitionService.excluirSemTrava`, que desconta as devoluções por saída)
+  também. **Alternativa a pesar:** recusar o estorno da `ENTRADA_DEVOLUCAO` pelo livro (como `DEVOLUCAO_FORNECEDOR`) — mais
+  coerente com a linha de devolução que nunca some, mas tira uma correção hoje possível.
+- **C235:** no ramo de saída de `cancelarMovimentacao`, o INSERT da linha `ESTORNO` e o `movimento_estorno_id` passam para dentro
+  da seção `naTravaDoMaterial` (são escritas simples, não pegam a trava); ou a compensação do `catch` ganha guarda. Medir antes
+  qual dos dois a sonda do revisor 2 (`e116r2LedgerFalha.js`, recriar em `server/tests/sonda/`) distingue.
+
+**Pontos de atenção:** a devolução para **SUCATA** grava `ENTRADA_DEVOLUCAO` + `SUCATA` — estornar só a entrada deixa a sucata
+de pé (a devolução "viva" pela régua dela some, e o material também já saiu pela sucata: medir antes de decidir); a devolução
+para **QUARENTENA** grava `ENTRADA_DEVOLUCAO` + `BLOQUEIO`; a trava não é reentrante — a releitura do teto tem de ficar no mesmo
+comando do INSERT (como hoje), não numa seção nova em volta do motor (o motor pega a trava dele).
+
+**O que já está pronto e não precisa reabrir:** a conferência do formulário aberto (C233), o estorno de Saída com séries e a
+exclusão de requisição com a série desligada (C232), a recusa do estorno de saída devolvida e as duas corridas da devolução
+(esta etapa).

@@ -1,6 +1,9 @@
 # 01 — Cadastros de Materiais
 
-> **Status:** 🟡 — **continua 🟡. Etapa 115 (`e60e34e1..385d938f`): o salvar que liga ou desliga lote/série grava sob a trava do
+> **Status:** 🟡 — **continua 🟡. Etapa 116 (`fe93cc10..96a90ce2`): o formulário de material manda os controles que leu ao
+> abrir e o salvar que desfaria o controle mudado por outra pessoa é recusado (C233); o estorno de Saída com séries (e a
+> exclusão de requisição) com a série desligada depois é recusado (C232)** — ver a seção "Etapa 116", no fim. Não fecha item
+> do checklist (regra de integridade do cadastro). Antes: **Etapa 115 (`e60e34e1..385d938f`): o salvar que liga ou desliga lote/série grava sob a trava do
 > material (C226) e desligar a série com séries em estoque exige `ajustar_estoque` (C225)** — ver a seção "Etapa 115", no
 > fim. Não fecha item do checklist (regra de integridade do cadastro). Antes: **Etapa 113 (`508eb6c4..6ed479a6`): inativar material com saldo ou retenção é recusado para
 > todos (C217, C227), reativar confere a família (C220) e a lista de Materiais ganha Inativos + Reativar** — ver a seção
@@ -439,3 +442,26 @@ Plano: `docs/superpowers/plans/2026-10-15-almoxarifado-etapa115-controle-com-sal
 lote e a série sem série presente continuam livres. **E o plano desta etapa afirmava, na R4, que "outra aba liga a série na
 janela de um renomear → 409 E4" protegia o renomear — estava largo demais:** a conferência só pega a mudança que cai entre a
 leitura e a gravação do próprio salvar; o formulário manda os controles de quando foi aberto (**C233**).
+
+## Etapa 116 — o formulário diz o que leu, e o estorno não devolve saldo sem as séries (2026-10-16)
+
+Plano: `docs/superpowers/plans/2026-10-15-almoxarifado-etapa116-controles-lidos-e-estorno-sem-serie.md`.
+
+- [x] **`controles_lidos` no PUT (C233)** — `58e8fbbf`. `PUT /materiais/:id` com `controles_lidos: { controle_lote,
+  controle_serie }`: lido ≠ gravado **e** gravaria ≠ gravado → 409 (*"O controle por ⟨nomes⟩ do material ⟨código⟩ foi
+  ⟨ligado|desligado|mudado⟩ por outra pessoa depois que você abriu o cadastro — …"*), logo depois do 404, para todos (B752,
+  B753). Sem a chave → o comportamento da 115. Declarado no `MaterialUpdateSchema` (senão o `z.object` descarta).
+- [x] **O formulário manda os lidos** — `d7d9ef6c` (ref gravado em `loadMaterial`; não vai no POST); `96a90ce2` (troca de
+  material sem desmontar; lote lido).
+- [x] **Estorno de Saída com séries, série desligada (C232)** — `333f13cd`. 400 E2 antes do claim; o ramo de saída do estorno
+  roda inteiro sob a trava com o controle relido; parte das séries já reentrou → a literal da 6b (B754).
+- [x] **Excluir requisição com a mesma regra** — `00783173` (achado da Fase 5).
+- [x] **Estorno de Saída já devolvida (B756)** — `333f13cd`, `00783173` (conferência atômica dos dois lados; devolução viva).
+  Ver a spec 12.
+- [x] **Integração** — `4f693c7f`.
+- [ ] **Fora, de propósito:** a devolução de Saída com séries depois de desligar (**B755**); séries reentradas antes de o
+  Administrador desligar (**C234**); os outros campos do cadastro no "último que salva vence".
+
+**O plano desta etapa dizia "o estorno (Administrador ou Almoxarife)" — estava errado:** estornar exige `ajustar_estoque`
+(Administrador e Gestor). A seção "Etapa 115" acima marcava a C232 e a C233 como abertas; as duas fecharam aqui (a C232 menos
+a devolução).
