@@ -260,6 +260,19 @@ function formularioDe(m) {
     assert.deepStrictEqual([l.nome, l.custo_unitario], [m.nome, 55]);
   });
 
+  await test('[RN-01e, Fase 5 r2 M1] outra coluna (unidade) gravada por outra aba entre a leitura e o UPDATE -> o 409 geral', async () => {
+    const m = await material();
+    const f = await abrir(ALMOXARIFE, m.id);
+    let rodou = false;
+    injecao = async () => { rodou = true; await dbRun(db, "UPDATE materiais_almoxarifado SET unidade = 'KG' WHERE id = ?", [m.id]); };
+    const r = await put(ALMOXARIFE, m.id, f.corpo({ nome: 'Renomeada' }));
+    assert.ok(rodou, 'a injecao nao rodou — teste vazio');
+    assert.strictEqual(r.status, 409, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, E4(m.codigo));
+    const l = await linha(m.id);
+    assert.deepStrictEqual([l.nome, l.unidade], [m.nome, 'KG']);
+  });
+
   await test('[RN-01e] a mesma janela SEM custo_unitario em campos_lidos: o de antes (200, o custo do corpo) — o escopo', async () => {
     const m = await material();
     const f = await abrir(ALMOXARIFE, m.id);
@@ -341,7 +354,7 @@ function formularioDe(m) {
   });
 
   // ── RN-04 ──────────────────────────────────────────────────────────────────────────────────────────────────────────
-  await test('[RN-04] lido = gravado, o usuario muda nome e unidade -> 200, gravado, EDICAO com o de/para', async () => {
+  await test('[RN-04] lido = gravado, o usuario muda nome e unidade -> 200, gravado, ATUALIZACAO com o de/para (Fase 5, r1 M2: o plano dizia EDICAO)', async () => {
     const m = await material();
     const f = await abrir(ALMOXARIFE, m.id);
     const aud = await auditorias(m.id);
@@ -350,6 +363,24 @@ function formularioDe(m) {
     const l = await linha(m.id);
     assert.deepStrictEqual([l.nome, l.unidade], ['Mudou', 'KG']);
     assert.strictEqual(await auditorias(m.id), aud + 1);
+    const log = await dbGet(db, `SELECT acao, dados_anteriores, dados_novos FROM auditoria_log_almoxarifado
+      WHERE entidade = 'material' AND entidade_id = ? ORDER BY id DESC LIMIT 1`, [m.id]);
+    assert.strictEqual(log.acao, 'ATUALIZACAO');
+    assert.deepStrictEqual([JSON.parse(log.dados_anteriores).unidade, JSON.parse(log.dados_novos).unidade], ['PC', 'KG']);
+  });
+
+  await test('[RN-05c, Fase 5 r1 M1] minimo/maximo NULL que a aba Estoques minimos regravou como 0: o usuario digita o maximo -> 200', async () => {
+    const m = await material({ quantidade_minima: null, quantidade_maxima: null });
+    const f = await abrir(ALMOXARIFE, m.id);
+    await outro(m, { quantidade_minima: 0, quantidade_maxima: 0 });
+    const r = await put(ALMOXARIFE, m.id, f.corpo({ quantidade_maxima: '10' }));
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual((await linha(m.id)).quantidade_maxima, 10);
+    // metade positiva: o maximo mudado DE VERDADE por outro (NULL -> 5) continua recusado
+    const m2 = await material({ quantidade_maxima: null });
+    const f2 = await abrir(ALMOXARIFE, m2.id);
+    await outro(m2, { quantidade_maxima: 5 });
+    await recusa(ALMOXARIFE, m2, f2.corpo({ quantidade_maxima: '10' }), E1(m2.codigo, ['Estoque Máximo']));
   });
 
   // ── RN-05 ──────────────────────────────────────────────────────────────────────────────────────────────────────────

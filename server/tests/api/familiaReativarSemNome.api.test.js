@@ -66,9 +66,9 @@ const L_PAI_INATIVO = 'Não é possível reativar: a família principal desta su
     assert.deepStrictEqual([de.ativo, para.ativo, de.nome, para.nome], [0, 1, f.nome, f.nome]);
   });
 
-  await test('[RN-11] nome informado vazio, so espacos ou null -> 400 "Nome é obrigatório", nada gravado', async () => {
+  await test('[RN-11] nome informado vazio, so espacos, null ou nao texto -> 400 "Nome é obrigatório", nada gravado', async () => {
     const f = await familia();
-    for (const nome of ['', '   ', null]) {
+    for (const nome of ['', '   ', null, 5]) { // 5: Fase 5, r1 M3 (era 500)
       const r = await put(ADM, f.id, { nome, ativo: 1 });
       assert.strictEqual(r.status, 400, `nome ${JSON.stringify(nome)}: ${JSON.stringify(r.body)}`);
       assert.strictEqual(r.body.error, L_NOME);

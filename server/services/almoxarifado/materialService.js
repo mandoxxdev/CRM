@@ -654,6 +654,7 @@ const NORMALIZA_CAMPO = {
   texto: (v) => (vazioLido(v) ? '' : String(v)),
   // Fase 2 (M2): o lido nao numerico (NaN nunca e igual a NaN) compara como texto.
   numero: (v) => { if (vazioLido(v)) return null; const x = Number(v); return Number.isNaN(x) ? String(v) : x; },
+  numero0: (v) => { if (vazioLido(v)) return 0; const x = Number(v); return Number.isNaN(x) ? String(v) : x; },
   id: (v) => (vazioLido(v) || !Number(v) ? null : Number(v)),
   caixa: (v) => (Number(v) === 1 || v === true ? 1 : 0),
 };

@@ -9,7 +9,9 @@
  * (`categoria_id`, `subcategoria_id`, `fornecedor_id`, `unidade_consumo`, `fator_conversao_consumo` — preserve-when-omitted).
  * `custo_unitario` ENTRA (B806): o recebimento grava o ultimo custo de compra, e o formulario aberto o regravava calado.
  *
- * Tipos (a normalizacao de `materialService.camposDesfeitos`): 'caixa' (0/1), 'id' (0/''/null iguais), 'numero', 'texto'.
+ * Tipos (a normalizacao de `materialService.camposDesfeitos`): 'caixa' (0/1), 'id' (0/''/null iguais), 'numero', 'numero0'
+ * (NULL vale 0 — Fase 5, r1 M1: a aba Estoques minimos regrava o minimo e o maximo NULL como 0 ao mudar so o prazo, e o
+ * formulario aberto antes recusava por um campo que ninguem mudou), 'texto'.
  */
 const CAMPOS_LIDOS = [
   ['codigo', 'Código', 'texto'],
@@ -33,8 +35,8 @@ const CAMPOS_LIDOS = [
   ['especificacoes', 'Especificações Técnicas', 'texto'],
   ['observacoes', 'Observações Gerais', 'texto'],
   ['unidade', 'Unidade de Medida', 'texto'],
-  ['quantidade_minima', 'Estoque Mínimo', 'numero'],
-  ['quantidade_maxima', 'Estoque Máximo', 'numero'],
+  ['quantidade_minima', 'Estoque Mínimo', 'numero0'],
+  ['quantidade_maxima', 'Estoque Máximo', 'numero0'],
   ['ponto_reposicao', 'Ponto de Reposição', 'numero'],
   ['lote_economico', 'Lote Econômico', 'numero'],
   ['localizacao_padrao_id', 'Localização no estoque', 'id'],

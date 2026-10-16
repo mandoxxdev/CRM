@@ -57,6 +57,7 @@ const {
   enrichMaterialRows,
 } = require('../services/almoxarifado/materialPhoto');
 const { canConfigureAlmox, canDeleteAlmoxRequisicao, isSystemAdmin } = require('../services/systemPermissions');
+const { COLUNAS_CAMPOS_LIDOS } = require('../services/almoxarifado/camposLidos');
 const { can, requirePermission, getPerfilFromUser } = require('../services/almoxarifado/permissions');
 const reservationService = require('../services/almoxarifado/reservationService');
 const lotService = require('../services/almoxarifado/lotService');
@@ -859,13 +860,17 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // lido no WHERE, nao grava -> o 409 E4 (B798). O molde e o do dono (Etapa 108).
     condControle += ' AND familia_id IS ? AND subfamilia_id IS ?';
     paramsControle.push(current.familia_id ?? null, current.subfamilia_id ?? null);
-    // Etapa 125 (Fase 2, M4; RN-01e): o custo unitario e gravado pelo recebimento, nao por uma pessoa olhando a tela — o que cai
-    // ENTRE a leitura e este UPDATE seria desfeito calado. Com o custo em `campos_lidos` (o formulario), o UPDATE so grava se o
-    // custo ainda e o lido; nao gravou -> o 409 E4 (B798). Os outros campos ficam no "ultimo que salva vence" nessa janela
-    // (milissegundos, declarado). Sem a chave, o de antes.
-    if (req.body.campos_lidos && req.body.campos_lidos.custo_unitario !== undefined) {
-      condControle += ' AND custo_unitario IS ?';
-      paramsControle.push(current.custo_unitario ?? null);
+    // Etapa 125 (Fase 2, M4; Fase 5, r2 M1; RN-01e): o que cai ENTRE a leitura do `current` e este UPDATE seria desfeito calado —
+    // o custo que o recebimento grava (Fase 2) e qualquer outro campo de outra aba salvando no mesmo instante (Fase 5, medido: 9/30
+    // rodadas de dois salvares simultaneos desfaziam a unidade da outra aba com 200 para as duas). Para cada coluna presente em
+    // `campos_lidos` (o formulario), o UPDATE so grava se ela ainda e a lida AGORA (o valor cru do `current` — sem falso 409: e o
+    // mesmo que acabou de sair do banco); nao gravou -> o 409 E4 (B798). Sem a chave, o de antes.
+    if (req.body.campos_lidos) {
+      for (const col of COLUNAS_CAMPOS_LIDOS) {
+        if (req.body.campos_lidos[col] === undefined) continue;
+        condControle += ` AND ${col} IS ?`;
+        paramsControle.push(current[col] ?? null);
+      }
     }
     try {
       // Etapa 113 (RN-04 d): inativar grava sob a trava do material (a mesma razao do DELETE); o resto do PUT, como sempre.
@@ -2931,7 +2936,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // descricao e do tipo de uso, B803). O Reativar da aba Familias manda so `{ativo: 1}`: antes mandava o nome da lista, e um
     // renomear de outro Administrador feito depois de a lista carregar era desfeito. Informado vazio/so espacos/null: 400.
     const nomeOmitido = nome === undefined;
-    if (!nomeOmitido && !nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
+    // Fase 5 (r1 M3, anterior): `nome` que nao e texto (`{nome: 5}`) dava 500 (TypeError no `trim`) — agora o 400 de sempre.
+    if (!nomeOmitido && (typeof nome !== 'string' || !nome.trim())) return res.status(400).json({ error: 'Nome é obrigatório' });
     const tipoUsoVal = ['administrativo', 'industrial', 'ambos'].includes(tipo_uso) ? tipo_uso : 'ambos';
     const familiaId = parseInt(req.params.id, 10);
     // Etapa 103 (achado M4 da revisao do plano): `parent_id: 'abc'` virava NaN, pulava a validacao do
