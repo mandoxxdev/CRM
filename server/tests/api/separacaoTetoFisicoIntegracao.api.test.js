@@ -352,7 +352,8 @@ const espera = (ms) => new Promise((res) => setTimeout(res, ms));
     let svc = await fila(r4.R);
     assert.ok(svc, 'I3: M4 fora da fila do servico');
     assert.deepStrictEqual(svc, await linhaDaFila(r4.R), 'I3: fila do servico = fila da rota (M4)');
-    assert.deepStrictEqual(svc.itens.map((i) => i.separavel), [4, 4], 'I3: cada item mostra o seu teto (nao dividido na linha)');
+    // Etapa 127 (RN-10, Fase 2 I2): ESTAVA ERRADO dizer que a linha nao divide — a fila passou a dizer o que a porta aceita (4 e 0).
+    assert.deepStrictEqual(svc.itens.map((i) => i.separavel), [4, 0], 'I3: a linha divide o separavel entre os itens do mesmo material (Etapa 127)');
     // ate o ultimo gesto: 2 + 2 e entrega pelo servico, encerrar pela rota
     const sep = await requisitionService.separarRequisicao(db, r4.R, [{ item_id: r4.ids[0], quantidade_separada: 2 }, { item_id: r4.ids[1], quantidade_separada: 2 }], { ...USERS.ALMOX });
     assert.strictEqual(sep.status, 'EM_SEPARACAO');
@@ -408,11 +409,13 @@ const espera = (ms) => new Promise((res) => setTimeout(res, ms));
       await entrar(m, 4); ok(await separar(a.R, [[a.ids[0], 4]]));
       return { m, R: b.R, item: b.ids[0], outros: [a.R] };
     }, esperado: 0 },
+    // Etapa 127 (RN-10, B821): a FILA divide na ordem do pedido — o item 2 mostra 0 (o 1 leva os 4); o detalhe continua com o teto
+    // do item sozinho (4). A porta aceita o item 2 sozinho com 4; o que ela recusa e o 0 + 1 DEPOIS do irmao com o numero da fila.
     ...[0, 1].map((k) => ({ nome: `M4 (item ${k + 1})`, montar: async () => {
       const m = await material(0);
       const a = await req([[m, 4], [m, 4]]); await aprovar(a.R); await entrar(m, 4);
-      return { m, R: a.R, item: a.ids[k] };
-    }, esperado: 4 })),
+      return { m, R: a.R, item: a.ids[k], irmao: k === 1 ? a.ids[0] : null };
+    }, esperado: 4, ...(k === 1 ? { esperadoFila: 0 } : {}) })),
     { nome: 'M5', montar: async () => {
       const m = await material(0);
       const a = await req([[m, 4], [m, 4]]); await aprovar(a.R); await entrar(m, 4);
@@ -449,9 +452,12 @@ const espera = (ms) => new Promise((res) => setTimeout(res, ms));
         const f = await naFila(x.R, x.item);
         // eslint-disable-next-line no-await-in-loop
         const d = await detalheItem(x.R, x.item);
-        conferir(`${e.nome}/${variante}`, f.separavel === d.quantidade_separavel && f.separavel === e.esperado,
-          `fila ${f.separavel}, detalhe ${d.quantidade_separavel}, esperado ${e.esperado}`);
-        conferir(`${e.nome}/${variante}`, (f.separavel > 1e-9) === f.etapas.includes('SEPARAR'), `etapas ${JSON.stringify(f.etapas)} com separavel ${f.separavel}`);
+        const esperadoFila = e.esperadoFila !== undefined ? e.esperadoFila : e.esperado;
+        conferir(`${e.nome}/${variante}`, f.separavel === esperadoFila && d.quantidade_separavel === e.esperado,
+          `fila ${f.separavel}, detalhe ${d.quantidade_separavel}, esperado ${esperadoFila}/${e.esperado}`);
+        // eslint-disable-next-line no-await-in-loop
+        const fIrmao = x.irmao ? await naFila(x.R, x.irmao) : null;
+        conferir(`${e.nome}/${variante}`, (f.separavel > 1e-9 || !!(fIrmao && fIrmao.separavel > 1e-9)) === f.etapas.includes('SEPARAR'), `etapas ${JSON.stringify(f.etapas)} com separavel ${f.separavel}`);
         if (variante === 'aceito') {
           if (f.separavel > 1e-9) {
             // eslint-disable-next-line no-await-in-loop
@@ -462,8 +468,9 @@ const espera = (ms) => new Promise((res) => setTimeout(res, ms));
           const q = arred(f.separavel + delta);
           const pend = arred(Number(d.quantidade_solicitada) - Number(d.quantidade_separada));
           // eslint-disable-next-line no-await-in-loop
-          const s = await separar(x.R, [[x.item, q]]);
-          const literal = S2(nomes.get(x.m), q, f.separavel, pend, d.saldo_separavel);
+          const s = await separar(x.R, [...(fIrmao ? [[x.irmao, fIrmao.separavel]] : []), [x.item, q]]);
+          // com o irmao na rodada, o disponivel da recusa e o teto DEPOIS dele (o numero da fila); sozinho, o saldo_separavel do detalhe
+          const literal = S2(nomes.get(x.m), q, f.separavel, pend, fIrmao ? f.separavel : d.saldo_separavel);
           conferir(`${e.nome}/recusado`, s.status === 400 && s.body.error === literal,
             `separar ${q} -> ${s.status} ${JSON.stringify(s.body)} (esperava 400 "${literal}")`);
         }

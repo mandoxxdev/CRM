@@ -178,7 +178,10 @@ function normalizarItem(item) {
     quantidade_pendente: pendente,
     quantidade_entregavel: entregavel,
     saldo_atual: item.saldo_atual == null ? estoque : Q.qtd(num(item.saldo_atual)),
-    ...(temCaixa ? { saldo_separavel: teto, quantidade_separavel: maxSeparar(item, teto) } : {}),
+    // Etapa 127 (RN-15): `saldo_separavel_reserva` — a parte do teto que e reserva propria (nao e dividida entre os irmaos); o modal
+    // desconta dos irmaos so o que passa dela. Aditivo; 0 no inativo (como o teto).
+    ...(temCaixa ? { saldo_separavel: teto, quantidade_separavel: maxSeparar(item, teto),
+      saldo_separavel_reserva: inativo ? 0 : reservaPropriaSeparavel(reservaItem, separado - entregue) } : {}),
   };
 }
 
@@ -226,6 +229,35 @@ function tetoSeparacao(disponivel, reservaDoItem, caixaDoItem, caixaSemReservaOu
   const c = Math.max(0, num(caixaDoItem));
   const teto = Math.max(0, r - c) + Math.max(0, num(disponivel) - num(caixaSemReservaOutros) - Math.max(0, c - r));
   return Math.round(teto * 1e6) / 1e6;
+}
+
+/**
+ * Etapa 127 (RN-16; B819, B821, Fase 2 I1) — o separavel DIVIDIDO entre itens do mesmo material da mesma requisicao, na ordem do
+ * pedido: o numero que a porta (separarRequisicao) aceita. A porta processa as entradas em ordem e cada item ve a caixa sem reserva
+ * que os irmaos da rodada acabaram de criar (`caixaSemReservaDe`); do teto de cada item, a `propria` (max(0, r - c), a reserva dele
+ * fora da caixa) nao e dividida, e o `livre` (teto - propria) e o MESMO pote para os irmaos (disp - caixa sem reserva total). Separar
+ * q num irmao tira do pote so o que passa da propria dele. Entrada: [{ id, material_id, pendente, teto, propria }] na ordem do
+ * pedido (inativo e status que nao separa entram com teto 0). Saida: Map(id -> separavel). Pura.
+ */
+function dividirSeparavel(itens) {
+  const consumido = new Map();
+  const out = new Map();
+  for (const it of itens || []) {
+    const teto = Math.max(0, num(it.teto));
+    const propria = Math.min(teto, Math.max(0, num(it.propria)));
+    const livre = Math.max(0, teto - propria);
+    const chave = String(it.material_id);
+    const usado = consumido.get(chave) || 0;
+    const separavel = Q.qtd(Math.max(0, Math.min(num(it.pendente), propria + Math.max(0, livre - usado))));
+    consumido.set(chave, usado + Math.max(0, separavel - propria));
+    out.set(it.id, separavel);
+  }
+  return out;
+}
+
+/** Etapa 127 (RN-15): a parte propria do teto — a reserva ativa do item que ainda nao esta na caixa. */
+function reservaPropriaSeparavel(reservaDoItem, caixaDoItem) {
+  return Q.qtd(Math.max(0, Math.max(0, num(reservaDoItem)) - Math.max(0, num(caixaDoItem))));
 }
 
 async function carregarItensRequisicao(db, requisicaoId) {
@@ -683,7 +715,8 @@ async function listarFilaSeparacao(db, user) {
     JOIN materiais_almoxarifado ma ON ir.material_id = ma.id
     LEFT JOIN localizacoes_almoxarifado lsep ON lsep.id = ir.origem_separacao_id
     LEFT JOIN lotes_almoxarifado ltsep ON ltsep.id = ir.lote_separacao_id
-    WHERE ir.requisicao_id IN (${marcas})`, ids);
+    WHERE ir.requisicao_id IN (${marcas})
+    ORDER BY ir.requisicao_id, ir.id`, ids); // Etapa 127 (B821): a ordem do pedido, a da divisao
   const separadores = await dbAll(db, `SELECT requisicao_id, usuario_id, MAX(usuario_nome) as usuario_nome
     FROM separacoes_requisicao_almoxarifado WHERE requisicao_id IN (${marcas})
     GROUP BY requisicao_id, usuario_id`, ids);
@@ -702,16 +735,26 @@ async function listarFilaSeparacao(db, user) {
     const avaliacaoValor = (r.data_aprovacao_valor || !alcadaDeValorAindaVale(r.status, doReq))
       ? null : await valueApprovalService.avaliarRequisicaoValor(db, r.id);
     const bloqueioValor = !!(avaliacaoValor && avaliacaoValor.requer_aprovacao_valor);
+    // Etapa 95 (T1, B472): o separavel e o TETO da porta (tetoSeparacao), nao mais o disponivel + reserva — a fila
+    // dizia "Separar 2" com os 4 fisicos na caixa (C169) e a porta recusava.
+    // Etapa 127 (RN-10..RN-14; B819, B820): DIVIDIDO entre os itens do mesmo material desta requisicao, na ordem do pedido
+    // (dividirSeparavel) — o numero que a porta aceita. A 95 dizia "cada item mostra o seu teto (itens do mesmo material nao sao
+    // divididos na linha)": com 4 livres e dois itens de 4 a fila prometia 4 e 4 e a porta recusava o segundo.
+    // Etapa 114 (Fase 5, M1): material inativo — separavel e entregavel 0, o numero da porta e do detalhe (RN-08);
+    // antes a fila punha "Separar 2"/"Entregar 2" no topo e a porta recusava (E3 / o motor).
+    const divididos = dividirSeparavel(doReq.map((i) => {
+      const separa = podeSep && !materialInativo.materialInativo(i.material_ativo);
+      return {
+        id: i.id, material_id: i.material_id, pendente: pendenteSeparacao(i),
+        teto: separa ? tetoSeparacao(num(i.saldo_disponivel) - num(i.reservado_para_item), i.reservado_para_item,
+          getSeparado(i) - getEntregue(i), i.caixa_outros) : 0,
+        propria: separa ? reservaPropriaSeparavel(i.reservado_para_item, getSeparado(i) - getEntregue(i)) : 0,
+      };
+    }));
     const linhas = doReq.map((i) => {
       const aSeparar = pendenteSeparacao(i);
-      // Etapa 95 (T1, B472): o separavel e o TETO da porta (tetoSeparacao), nao mais o disponivel + reserva — a fila
-      // dizia "Separar 2" com os 4 fisicos na caixa (C169) e a porta recusava. Cada item mostra o seu teto (itens do
-      // mesmo material da mesma requisicao nao sao divididos na linha; a porta divide, RN-02).
-      // Etapa 114 (Fase 5, M1): material inativo — separavel e entregavel 0, o numero da porta e do detalhe (RN-08);
-      // antes a fila punha "Separar 2"/"Entregar 2" no topo e a porta recusava (E3 / o motor).
       const inativo = materialInativo.materialInativo(i.material_ativo);
-      const separavel = podeSep && !inativo ? maxSeparar(i, tetoSeparacao(num(i.saldo_disponivel) - num(i.reservado_para_item),
-        i.reservado_para_item, getSeparado(i) - getEntregue(i), i.caixa_outros)) : 0;
+      const separavel = divididos.get(i.id) || 0;
       return {
         item_id: i.id, material_id: i.material_id, material_codigo: i.material_codigo, material_nome: i.material_nome,
         unidade: i.unidade, a_separar: aSeparar, separavel, a_entregar: Q.qtd(Math.max(0, getSeparado(i) - getEntregue(i))),
@@ -2221,6 +2264,7 @@ module.exports = {
   saldoDisponivelParaItem,
   caixaSemReservaSql, // Etapa 95 (T0)
   tetoSeparacao, // Etapa 95 (T0)
+  dividirSeparavel, // Etapa 127 (RN-16)
   reservarItensAprovacao,
   prepararPosAprovacao, // Etapa 73
   desfazerReservas, // Etapa 73
