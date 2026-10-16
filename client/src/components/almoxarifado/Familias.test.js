@@ -203,7 +203,11 @@ describe('TabFamilias — RN-37.03: editar subfamília', () => {
     expect(api.put).toHaveBeenCalledTimes(1);
     const [rota, corpo] = api.put.mock.calls[0];
     expect(rota).toBe('/almoxarifado/familias/3');
-    expect(corpo).toEqual({ nome: 'Esferas de aço', descricao: 'Rolamentos de esferas', tipo_uso: 'industrial' });
+    // Etapa 126 (RN-29): o Editar leva também o que LEU (campos_lidos) — o corpo da 37 mais a chave nova.
+    expect(corpo).toEqual({
+      nome: 'Esferas de aço', descricao: 'Rolamentos de esferas', tipo_uso: 'industrial',
+      campos_lidos: { nome: 'Esferas', tipo_uso: 'industrial', descricao: 'Rolamentos de esferas' },
+    });
     expect(corpo).not.toHaveProperty('parent_id');
     expect(api.post).not.toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith('Subfamília atualizada!');

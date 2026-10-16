@@ -506,6 +506,10 @@ const TabFamilias = () => {
   // id da raiz-pai quando o formulário é de SUBFAMÍLIA (nova ou em edição); null = família raiz.
   const [parentForm, setParentForm] = useState(null);
   const [form, setForm] = useState(FORM_FAMILIA_VAZIO);
+  // Etapa 126 (D (125), RN-29; B815): o que o Editar LEU da lista (crus: null fica null), mandado como `campos_lidos`. Nao se
+  // atualiza no recarregar da lista (Fase 2, I2): salvar de novo depois de um 409 recebe o 409 de novo — atualizar desfaria a
+  // mudanca do outro calado. So o proximo Editar le de novo.
+  const [lidosEdicao, setLidosEdicao] = useState(null);
   const [expandidas, setExpandidas] = useState({});
   const [itensPorFamilia, setItensPorFamilia] = useState({});
   const [loadingItens, setLoadingItens] = useState({});
@@ -555,6 +559,7 @@ const TabFamilias = () => {
   const resetForm = () => {
     setForm(FORM_FAMILIA_VAZIO);
     setEditando(null);
+    setLidosEdicao(null);
     setParentForm(null);
     setShowForm(false);
   };
@@ -582,6 +587,7 @@ const TabFamilias = () => {
       tipo_uso: fam.tipo_uso || 'ambos',
     });
     setEditando(fam.id);
+    setLidosEdicao({ nome: fam.nome ?? null, tipo_uso: fam.tipo_uso ?? null, descricao: fam.descricao ?? null });
     setParentForm(ehRaiz(fam) ? null : fam.parent_id);
     setShowForm(true);
   };
@@ -598,6 +604,7 @@ const TabFamilias = () => {
           nome: form.nome,
           descricao: form.descricao,
           tipo_uso: form.tipo_uso,
+          campos_lidos: lidosEdicao,
         });
         toast.success(`${rotulo} atualizada!`);
       } else {
@@ -609,6 +616,9 @@ const TabFamilias = () => {
       loadFamilias();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erro ao salvar');
+      // Etapa 126 (RN-29; B816): no 409 (outra pessoa mudou a familia) o formulario FICA com o digitado e a lista recarrega — mostra o
+      // que o outro gravou; o proximo Editar le de novo.
+      if (err.response?.status === 409) loadFamilias();
     } finally { setSaving(false); }
   };
 
