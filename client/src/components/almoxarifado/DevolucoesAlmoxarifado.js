@@ -193,6 +193,8 @@ const DevolucoesAlmoxarifado = () => {
     const reentrada = Number(s.quantidade_reentrada) || 0;
     if (s.saldo_devolvivel > 0) partes.push(`devolvível ${s.saldo_devolvivel}`);
     else if (!(reentrada > 0)) partes.push('já devolvido por inteiro');
+    // Fase 2 da 121 (I5): com devolução também, as duas partes — senão o "devolvido" some do rótulo e a conta não fecha.
+    if (reentrada > 0 && Number(s.quantidade_devolvida) > 0) partes.push(`devolvido ${s.quantidade_devolvida}`);
     if (reentrada > 0) partes.push(`${reentrada} já ${reentrada > 1 ? 'voltaram' : 'voltou'} ao estoque por outra entrada`);
     return partes.join(' · ');
   };

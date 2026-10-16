@@ -170,6 +170,7 @@ describe('DevolucoesAlmoxarifado — saída de origem e limite de quantidade', (
     saidasDoBanco = [
       { ...SAIDA_ZERADA, id: 503, quantidade: 2, quantidade_devolvida: 0, quantidade_reentrada: 2, saldo_devolvivel: 0 },
       { ...SAIDA_COM_SALDO, id: 504, quantidade: 2, quantidade_devolvida: 0, quantidade_reentrada: 1, saldo_devolvivel: 1 },
+      { ...SAIDA_ZERADA, id: 505, quantidade: 2, quantidade_devolvida: 1, quantidade_reentrada: 1, saldo_devolvivel: 0 },
       SAIDA_ZERADA,
     ];
     await abrirModal();
@@ -182,6 +183,8 @@ describe('DevolucoesAlmoxarifado — saída de origem e limite de quantidade', (
     expect(voltou.textContent).not.toMatch(/devolvido por inteiro/);
     expect(parcial.disabled).toBe(false);
     expect(parcial.textContent).toMatch(/devolvível 1 · 1 já voltou ao estoque por outra entrada/);
+    // Fase 2 (I5): com devolução e volta por fora, as duas partes aparecem.
+    expect(opcoes.find((o) => o.value === '505').textContent).toMatch(/devolvido 1 · 1 já voltou ao estoque por outra entrada/);
     // A metade positiva: a saída devolvida de verdade continua dizendo "já devolvido por inteiro".
     expect(opcoes.find((o) => o.value === '502').textContent).toMatch(/já devolvido por inteiro/);
   });
