@@ -669,6 +669,17 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       return res.status(errDono.status || 500).json({ error: errDono.message });
     }
 
+    // Etapa 123 (C216, RN-11, RN-11b, RN-12): o dono NOVO existe em Clientes. Depois do 403 da troca (quem nao pode trocar
+    // ouve a recusa de permissao, nao a do cadastro) e antes das demais guardas; recusa = nada gravado. So quando o dono MUDA
+    // para um id (`trocaDono.paraId`): legado com dono inexistente gravado continua editavel omitindo ou repetindo a chave.
+    if (trocaDono && trocaDono.paraId) {
+      try {
+        await materialService.assertDonoExiste(db, trocaDono.paraId);
+      } catch (errExiste) {
+        return res.status(errExiste.status || 500).json({ error: errExiste.message });
+      }
+    }
+
     // Etapa 113 (C217, C227, RN-01, RN-06): o PUT tambem inativa (`ativo` esta em MATERIAL_UPDATE_COLUMNS) — a mesma regra do
     // DELETE, para todos, depois da guarda do dono e antes da do controle; recusa = nada gravado. E reativar (0 -> 1) confere
     // a familia (C220, RN-05, abaixo). `!current.ativo`: a mesma leitura do motor (NULL e inativo).

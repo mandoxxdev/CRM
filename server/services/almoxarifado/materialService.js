@@ -229,6 +229,36 @@ function condicaoFamiliaSql(familiaId, subfamiliaId, { familia = true, sub = tru
   return { sql: partes.length > 0 ? partes.join(' AND ') : '1 = 1', params };
 }
 
+/**
+ * Etapa 123 (C216, RN-10..RN-12; B794) — o dono do material tem de existir em Clientes.
+ *
+ * O schema so exige inteiro positivo e a tela so oferece cadastrados, mas a API e porta propria: `POST` com 99999 gravava
+ * 99999 (201) e o material aparecia como "cliente #99999" — selo de cliente, guardas de material de cliente ligadas e
+ * nenhum cliente para cobrar ou devolver. So a EXISTENCIA (M1: cliente com razao social vazia existe; inativo e aceito,
+ * o cadastro de Clientes e quem decide se ele ainda e atendido). Sem condicao no comando que grava (D2): nenhuma porta do
+ * sistema apaga cliente, entao a conferencia nao tem corrida com quem tira o cliente. Dono vazio/null/0 = nosso, sem
+ * conferir. Quem chama: createMaterial (abaixo) e o PUT /materiais/:id quando o dono MUDA para um id (rota).
+ */
+const normalizarDonoInformado = (v) => (Number(v) > 0 ? Number(v) : null);
+
+async function clienteDonoExiste(db, clienteId) {
+  const row = await dbGet(db, 'SELECT 1 AS ok FROM clientes WHERE id = ?', [clienteId]);
+  return !!row;
+}
+
+function mensagemDonoInexistente(clienteId) {
+  return `O cliente dono informado (#${clienteId}) não existe em Clientes — escolha um cliente cadastrado ou deixe o `
+    + 'material como estoque próprio.';
+}
+
+/** Lanca 400 com a literal quando o dono informado e um id que nao esta em Clientes; vazio/null/0 passa sem ler. */
+async function assertDonoExiste(db, donoInformado) {
+  const id = normalizarDonoInformado(donoInformado);
+  if (id === null) return null;
+  if (!(await clienteDonoExiste(db, id))) throw erro(mensagemDonoInexistente(id), 400);
+  return id;
+}
+
 /** E3 (RN-06): a familia mudou de novo depois da releitura — praticamente inalcancavel, mas nunca gravar nem mentir. */
 const FAMILIA_MUDOU_NO_CADASTRO = 'A família do material mudou enquanto ele era cadastrado — nada foi gravado. Tente de novo.';
 
@@ -268,6 +298,10 @@ async function createMaterial(db, user, data) {
     const motivos = motivosSaldoInicialRecusado(data);
     if (motivos.length > 0) throw erro(mensagemSaldoInicialRecusado(codigo, motivos), 400);
   }
+
+  // Etapa 123 (C216, RN-10, RN-10c): o dono existe em Clientes — depois da recusa do saldo inicial (a de hoje vem primeiro)
+  // e antes da familia (ordem saldo inicial -> dono -> familia, Fase 2, M2). Recusa = nada gravado.
+  await assertDonoExiste(db, proprietario_cliente_id);
 
   try {
     await validateFamiliaAtiva(db, familia_id);
@@ -630,6 +664,7 @@ module.exports = {
   bool01, validateFamiliaAtiva, validateSubfamilia, resolveLocalizacaoFromFk, validarLocalizacaoPadrao,
   proximoCodigo, createMaterial, TENTATIVAS_CODIGO_AUTO,
   condicaoFamiliaSql, FAMILIA_MUDOU_NO_CADASTRO,
+  clienteDonoExiste, mensagemDonoInexistente, assertDonoExiste,
   SALDO_INICIAL_MOTIVO, quantidadeSaldoInicial, temSaldoInicial, motivosSaldoInicialRecusado,
   mensagemSaldoInicialRecusado, mensagemSaldoInicialSemPermissao,
   controlesLigados, saldoNaoIdentificado, mensagemControleSemPermissao, condicaoSaldoIdentificadoSql,
