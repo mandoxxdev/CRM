@@ -677,10 +677,23 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       return partes.length === 0 ? null : materialService.mensagemControleSemPermissao(current.codigo, controlesQueLiga,
         partes, getPerfilFromUser(req.user));
     };
+    // Etapa 113 (Fase 5, P2): o saldo de inativar foi conferido no `current` (o retrato da leitura) e o do controle e lido
+    // agora — uma Entrada entre os dois fazia esta recusa sair antes da de inativar (RN-06). Relê o saldo de inativar.
+    const recusaInativarAgora = async () => {
+      if (!inativa) return null;
+      const agora = await dbGet(db, `SELECT ativo, ${materialService.COLUNAS_INATIVAR_SQL}, proprietario_cliente_id
+        FROM materiais_almoxarifado WHERE id = ?`, [req.params.id]);
+      const preso = materialService.saldoQuePrendeInativacao(agora);
+      return preso ? materialService.mensagemInativarComSaldo(current.codigo, preso, opcoesInativar(req.user)) : null;
+    };
     if (guardaControle) {
       try {
         const msg = await recusaControle();
-        if (msg) return res.status(403).json({ error: msg });
+        if (msg) {
+          const msgInativar = await recusaInativarAgora();
+          if (msgInativar) return res.status(400).json({ error: msgInativar });
+          return res.status(403).json({ error: msg });
+        }
       } catch (errControle) {
         return res.status(500).json({ error: errControle.message });
       }
@@ -786,12 +799,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
             + 'nada foi gravado. Recarregue o material e salve de novo.' });
         }
         // Etapa 113 (RN-06): a mesma ordem da guarda previa — inativar, controle, familia.
-        if (inativa) {
-          const releitura = await dbGet(db, `SELECT ativo, ${materialService.COLUNAS_INATIVAR_SQL}, proprietario_cliente_id
-            FROM materiais_almoxarifado WHERE id = ?`, [req.params.id]);
-          const presoAgora = materialService.saldoQuePrendeInativacao(releitura);
-          if (presoAgora) return res.status(400).json({ error: materialService.mensagemInativarComSaldo(current.codigo, presoAgora, opcoesInativar(req.user)) });
-        }
+        const msgInativarAgora = await recusaInativarAgora();
+        if (msgInativarAgora) return res.status(400).json({ error: msgInativarAgora });
         // RN-07: a mesma ordem da guarda previa — controle antes da familia.
         if (guardaControle) {
           const msgAgora = await recusaControle();

@@ -2544,6 +2544,13 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
   const tiposEntrada = movementTypes.TIPOS_ENTRADA;
   const tiposSaida = movementTypes.TIPOS_SAIDA;
   const material = await getMaterial(db, mov.material_id);
+  // Etapa 113 (Fase 5, RN-09): o estorno e um movimento — estornar a Saida de um material inativado devolvia o saldo a
+  // ele (inativo com saldo: o estado que o "Inativar" passou a proibir, e a Saida seguinte recusada). A mesma literal do
+  // motor; reativar (Materiais -> Inativos) destrava. A compensacao interna (desfazer o proprio evento que acabou de
+  // falhar) nao passa por aqui, como na guarda do dono abaixo.
+  if (!material.ativo && opcoesEstorno.compensacao !== true) {
+    throw Object.assign(new Error('Material inativo não pode ser movimentado'), { status: 400 });
+  }
 
   // Etapa 106 (C211, RN-01/RN-05/RN-07; B707): o estorno do ajuste de material de cliente exige `ajustar_material_cliente`
   // — a mesma permissao do ajuste (Etapa 8, decisao 7). AQUI, antes de qualquer efeito (inspecao, serie, reserva da
@@ -2834,8 +2841,12 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
       // mal-definida após movimentos intermediários; corrigir via nova entrada com custo. Ver
       // specs/modulo-almoxarifado/03-motor-estoque/README.md.
     } else if (tiposSaida.includes(mov.tipo)) {
-      await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_atual = ${Q.qtdSql('quantidade_atual + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      // Etapa 113 (Fase 5, RN-09): `AND ativo = 1` — o material inativado entre a leitura acima e este credito nao recebe
+      // o saldo de volta (o "Inativar" confere o saldo sob a trava do material; este credito roda fora dela). Sem linha ->
+      // a recusa de material inativo, e o catch desfaz o claim. A compensacao interna credita como sempre.
+      const credito = await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_atual = ${Q.qtdSql('quantidade_atual + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?${opcoesEstorno.compensacao === true ? '' : ' AND ativo = 1'}`,
         [mov.quantidade, mov.material_id]);
+      if (credito.changes === 0) throw Object.assign(new Error('Material inativo não pode ser movimentado'), { status: 400 });
       saldoDepois = saldoAntes + parseFloat(mov.quantidade);
       // Fix round 1 (Task 5): a partir daqui quantidade_atual JÁ foi creditado — se algo adiante
       // falhar (ledger do estorno), o catch precisa devolver este delta (subtrair de volta).

@@ -469,6 +469,156 @@ const FAM_E_SUB = 'A família escolhida é uma subfamília — escolha a famíli
     assert.strictEqual((await linha(m.id)).controle_lote, 0);
   });
 
+  // ───────────── RN-09 (Fase 5) ─────────────
+  // O estorno e um movimento: estornar a Saida de um material inativado devolvia o saldo a ele (medido pela revisao:
+  // inativo com 5, e a Saida seguinte recusada). Recusado com a literal do motor; o livro e o saldo nao mudam.
+  const INATIVO_MOV = 'Material inativo não pode ser movimentado';
+  const saidaDe5 = async () => {
+    const m = await comSaldo(5);
+    const s5 = await request(app).post('/api/almoxarifado/movimentacoes/v2').send({ material_id: m.id, tipo: 'SAIDA',
+      quantidade: 5, motivo: 'e113', justificativa: 'preparo e113' });
+    assert.strictEqual(s5.status, 201, JSON.stringify(s5.body));
+    return { m, saidaId: s5.body.id };
+  };
+  const cancelada = async (id) => Number((await dbGet(db, 'SELECT cancelado FROM movimentacoes_almoxarifado WHERE id = ?',
+    [id])).cancelado);
+  const estornar = (u, id) => as(u, () => request(app).post(`/api/almoxarifado/movimentacoes/${id}/cancelar`)
+    .send({ motivo: 'estorno e113' }));
+
+  await test('[RN-09] estornar a Saida de um material inativado: 400 "Material inativo...", saldo 0 e a Saida intacta', async () => {
+    const { m, saidaId } = await saidaDe5();
+    assert.strictEqual((await del(ALMOXARIFE, m.id)).status, 200);
+    const r = await estornar(ADM_PERFIL, saidaId);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, INATIVO_MOV);
+    const l = await linha(m.id);
+    assert.strictEqual(l.ativo, 0);
+    assert.strictEqual(l.quantidade_atual, 0);
+    assert.strictEqual(await cancelada(saidaId), 0, 'a Saida ficou marcada como cancelada');
+  });
+
+  await test('[RN-09 controle] reativado, o mesmo estorno passa (201/200) e o saldo volta', async () => {
+    const { m, saidaId } = await saidaDe5();
+    assert.strictEqual((await del(ALMOXARIFE, m.id)).status, 200);
+    assert.strictEqual((await put(ALMOXARIFE, m.id, { ativo: 1 })).status, 200);
+    const r = await estornar(ADM_PERFIL, saidaId);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual((await linha(m.id)).quantidade_atual, 5);
+  });
+
+  await test('[RN-09] estornar o Ajuste (5 -> 2) de um material zerado e inativado: 400, o saldo nao volta (guarda previa)', async () => {
+    const m = await comSaldo(5);
+    const aj = await request(app).post('/api/almoxarifado/movimentacoes/v2').send({ material_id: m.id, tipo: 'AJUSTE',
+      quantidade: 2, motivo: 'e113', justificativa: 'contagem deu 2' });
+    assert.strictEqual(aj.status, 201, JSON.stringify(aj.body));
+    await lancar(m, { tipo: 'SAIDA', quantidade: 2 });
+    assert.strictEqual((await linha(m.id)).quantidade_atual, 0);
+    assert.strictEqual((await del(ALMOXARIFE, m.id)).status, 200);
+    const r = await estornar(ADM_PERFIL, aj.body.id);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, INATIVO_MOV);
+    assert.strictEqual((await linha(m.id)).quantidade_atual, 0, 'o estorno do ajuste devolveu saldo a material inativo');
+    assert.strictEqual(await cancelada(aj.body.id), 0);
+  });
+
+  await test('[RN-09] janela: o material e inativado entre a leitura do estorno e o credito -> 400, nada creditado', async () => {
+    const { m, saidaId } = await saidaDe5();
+    // a leitura do material pelo estorno e o `SELECT *` do getMaterial; inativa logo depois dela
+    injecoes = [{ sql: /^SELECT \* FROM materiais_almoxarifado WHERE id = \?$/,
+      depois: () => dbRun(db, 'UPDATE materiais_almoxarifado SET ativo = 0 WHERE id = ?', [m.id]) }];
+    const r = await estornar(ADM_PERFIL, saidaId);
+    assert.strictEqual(injecoes.length, 0, 'injecao nao consumida');
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, INATIVO_MOV);
+    assert.strictEqual((await linha(m.id)).quantidade_atual, 0, 'o estorno creditou material inativo');
+    assert.strictEqual(await cancelada(saidaId), 0, 'a Saida ficou marcada como cancelada');
+  });
+
+  // ───────────── Fase 5: cenarios que as sabotagens da revisao deixaram passar ─────────────
+  // Fase 5, P1 (S13a/b/c): DELETE com UMA retencao so e fisico 0 (o estado anomalo da RN-01) — o DELETE nao tem guarda previa,
+  // o SEM_SALDO_SQL e a unica barreira.
+  for (const [col, rot, q] of [['quantidade_bloqueada', 'bloqueado', 1.5], ['quantidade_em_inspecao', 'em inspeção', 2],
+    ['quantidade_em_terceiros', 'em terceiros', 0.25]]) {
+    await test(`[F5 P1] DELETE com so ${rot} ${q} (fisico 0): 400 E1, continua ativo`, async () => {
+      const m = await material({ [col]: q });
+      await recusa(await del(ALMOXARIFE, m.id), m, e1(m.codigo, 0, `${rot} ${q}`));
+    });
+  }
+
+  // Fase 5, P2 (S9): PUT { ativo: 0, controle_lote: 1 } pelo Almoxarife, saldo 0 na leitura, Entrada sem lote de 4 na janela.
+  await test('[F5 P2] PUT inativa + liga lote, Entrada de 4 na janela: E1 de inativar (RN-06), nao a do controle', async () => {
+    const m = await material();
+    injecoes = [{ sql: SQL_PUT_LEITURA,
+      depois: () => dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 4 WHERE id = ?', [m.id]) }];
+    const r = await put(ALMOXARIFE, m.id, { ativo: 0, controle_lote: 1 });
+    assert.strictEqual(injecoes.length, 0, 'injecao nao consumida');
+    await recusa(r, m, e1(m.codigo, 4));
+  });
+
+  // Fase 5, P2b (S9): a Entrada cai DEPOIS da guarda previa do controle (antes do UPDATE): a releitura decide.
+  await test("[F5 P2b] PUT inativa + liga lote, Entrada de 4 depois da guarda previa: E1 de inativar pela releitura", async () => {
+    const m = await material();
+    injecoes = [{ sql: /^SELECT quantidade_atual AS fisico/,
+      depois: () => dbRun(db, "UPDATE materiais_almoxarifado SET quantidade_atual = 4 WHERE id = ?", [m.id]) }];
+    const r = await put(ALMOXARIFE, m.id, { ativo: 0, controle_lote: 1 });
+    assert.strictEqual(injecoes.length, 0, "injecao nao consumida");
+    await recusa(r, m, e1(m.codigo, 4));
+  });
+
+  // Fase 5, P3 (S10): PUT { ativo: 0 } de material de cliente, Entrada de 3 na janela: o caminho relido e o do cliente.
+  await test('[F5 P3] PUT inativa material de cliente, saldo 3 na janela: E1 com o caminho do cliente', async () => {
+    const m = await material({ proprietario_cliente_id: await cliente() });
+    injecoes = [{ sql: SQL_PUT_LEITURA,
+      depois: () => dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 3 WHERE id = ?', [m.id]) }];
+    const r = await put(ALMOXARIFE, m.id, { ativo: 0 });
+    assert.strictEqual(injecoes.length, 0, 'injecao nao consumida');
+    await recusa(r, m, e1(m.codigo, 3, '', true));
+  });
+
+  // Fase 5, P4 (S16): material legado com ativo NULL numa familia inativa: reativar recusa.
+  await test('[F5 P4] reativar material ativo NULL (legado) de familia inativa: 400 da familia, continua NULL', async () => {
+    const f = await familia();
+    const m = await material({ familia_id: f, ativo: null });
+    await inativarFamilia(f);
+    const r = await put(ALMOXARIFE, m.id, { ativo: 1 });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, FAM_INATIVA);
+    assert.strictEqual((await linha(m.id)).ativo, null);
+  });
+
+  // Fase 5, P5 (S8): fisico negativo COM retencao: libera primeiro e depois Entrada/Ajuste.
+  await test('[F5 P5] DELETE fisico -2 com reservado 1: "Libere primeiro ... Entrada ou um Ajuste."', async () => {
+    const m = await material({ quantidade_atual: -2, quantidade_reservada: 1 });
+    const r = await del(ALMOXARIFE, m.id);
+    await recusa(r, m, e1(m.codigo, -2, 'reservado 1'));
+    assert.ok(r.body.error.endsWith('Libere primeiro o que está retido e, depois, zere o saldo com uma Entrada ou um Ajuste.'));
+  });
+
+  // Fase 5, P6 (S12b): o residuo 4e-7 e livre tambem pelo PUT (a guarda previa JS).
+  await test('[F5 P6] PUT { ativo: 0 } com residuo 4e-7: 200, inativa', async () => {
+    const m = await material({ quantidade_atual: 4e-7 });
+    const r = await put(ALMOXARIFE, m.id, { ativo: 0 });
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual((await linha(m.id)).ativo, 0);
+  });
+
+  // Fase 5, P7 (S20): o PUT que inativa E liga o lote tambem espera a trava do material.
+  await test('[F5 P7] PUT { ativo: 0, controle_lote: 1 } (Almoxarife) espera a trava e ve o saldo da Entrada', async () => {
+    const m = await material();
+    let resposta = null; let soltar; let segurando;
+    const segurou = new Promise((ok) => {
+      segurando = trava.comLockDoMaterial(m.id, () => new Promise((fim) => { soltar = fim; ok(); }));
+    });
+    await segurou;
+    const pendente = put(ALMOXARIFE, m.id, { ativo: 0, controle_lote: 1 }).then((r) => { resposta = r; });
+    await new Promise((ok) => setTimeout(ok, 60));
+    const cedo = resposta;
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 4 WHERE id = ?', [m.id]);
+    soltar(); await segurando; await pendente;
+    assert.strictEqual(cedo, null, `gravou sem esperar a trava: ${cedo && cedo.status}`);
+    await recusa(resposta, m, e1(m.codigo, 4));
+  });
+
   // ───────────── RN-08 ─────────────
   await test('[RN-08] GET ?status=inativo lista so os inativos (e o NULL); sem status, so os ativos', async () => {
     const at = await material();

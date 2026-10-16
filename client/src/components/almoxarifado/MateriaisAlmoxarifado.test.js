@@ -602,3 +602,58 @@ describe('MateriaisAlmoxarifado — RN-08 (Etapa 113): Inativos e Reativar', () 
     expect(api.put).not.toHaveBeenCalled();
   });
 });
+
+// Etapa 113 (Fase 5): cenarios que as sabotagens da revisao adversarial deixaram passar.
+describe('MateriaisAlmoxarifado — Etapa 113 (Fase 5): Inativo zerado, confirmar, recarregar', () => {
+  const { toast } = require('react-toastify');
+  const INATIVO_ZERO = { ...MATERIAL_NOSSO, id: 31, codigo: 'INZ-001', nome: 'Chapa inativa zerada', ativo: 0, quantidade_atual: 0 };
+  let confirmOriginal;
+  beforeEach(() => {
+    confirmOriginal = window.confirm; window.confirm = jest.fn(() => true);
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [INATIVO_ZERO, MATERIAL_NOSSO] });
+      if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
+      return Promise.resolve({ data: [] });
+    });
+  });
+  afterEach(() => { window.confirm = confirmOriginal; });
+  const reat = async () => {
+    const b = linhaDe('INZ-001').querySelector('button[title="Reativa o material (volta às listas e a movimentar)"]');
+    expect(b).toBeTruthy();
+    await act(async () => { b.click(); });
+  };
+  const listas = () => api.get.mock.calls.filter(([u]) => u === '/almoxarifado/materiais').length;
+
+  test('SF5a inativo com saldo 0 (o estado normal) mostra o selo Inativo, nao Zerado', async () => {
+    await renderizar();
+    expect(linhaDe('INZ-001').textContent).toContain('Inativo');
+    expect(linhaDe('INZ-001').textContent).not.toContain('Zerado');
+  });
+  test('SF2 confirm cancelado: nao manda PUT', async () => {
+    window.confirm = jest.fn(() => false);
+    await renderizar();
+    await reat();
+    expect(api.put).not.toHaveBeenCalled();
+  });
+  test('SF3 sucesso recarrega a lista', async () => {
+    api.put.mockResolvedValue({ data: {} });
+    await renderizar();
+    const antes = listas();
+    await reat();
+    expect(listas()).toBe(antes + 1);
+  });
+  test('SF4 falha sem mensagem: "Erro ao reativar material"', async () => {
+    api.put.mockRejectedValue(new Error('Network Error'));
+    await renderizar();
+    await reat();
+    expect(toast.error).toHaveBeenCalledWith('Erro ao reativar material');
+  });
+  test('SF6 inativar com sucesso recarrega a lista', async () => {
+    api.delete.mockResolvedValue({ data: { success: true } });
+    await renderizar();
+    const antes = listas();
+    const b = linhaDe('CHP-001').querySelector('button[title="Inativa o material (não apaga o histórico)"]');
+    await act(async () => { b.click(); });
+    expect(listas()).toBe(antes + 1);
+  });
+});
