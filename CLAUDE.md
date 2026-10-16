@@ -137,6 +137,13 @@ direto pela trava (ou espera a si mesmo, se ele pegar `comLockDoMaterial`) — d
 só sinalizando e segurando o comando (molde: `exclusaoSerieQueVoltou.api.test.js` RN-15, e o (d4) de
 `requisicaoGestosConcorrentes`).
 
+Desde a Etapa 121 (B786) a **devolução para Estoque** também roda as pernas sob `naTravaDoMaterial` (Quarentena e Sucata já
+rodavam, Etapa 97) e **relê dentro da seção** o controle de série (devolução com séries e o controle desligado no meio → 400)
+e o que já voltou da saída citada (devoluções vivas, ela incluída, + as séries que voltaram por outra entrada, a régua
+`seriesQueVoltaramSql` de `devolucaoViva.js`). A validação e o `INSERT … WHERE EXISTS` continuam **fora** da trava (a
+conferência devolução × estorno vai no comando); fora da seção, uma Entrada das séries e o desligar entre o `INSERT` e as
+pernas faziam o motor creditar sem série (físico 4 com 2 peças, 8/300). Molde: `devolucaoDoQueVoltou.api.test.js` RN-09d.
+
 **Há outra trava, por requisição** (Etapa 93): `services/almoxarifado/travaPorRequisicao.js`
 (`serializarNaRequisicao`) serializa os cinco gestos do almoxarife numa requisição — separar,
 entregar e excluir (no serviço, valem para as duas rotas de exclusão) e liberar para retirada e
