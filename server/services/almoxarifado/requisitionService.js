@@ -1836,6 +1836,19 @@ async function excluirSemTrava(db, requisicaoId, user, justificativa, alertServi
           if (!loc || Number(loc.ativo) !== 1 || stockService.motivoRecusaEndereco(loc, material, 'destino')) destino = undefined;
         }
         let series;
+        // Etapa 120 (C251, B780; achado da Fase 2): sem serie vinculada a esta Saida nao quer dizer "dado legado" — as series
+        // dela podem ter voltado TODAS por uma Entrada (a reativacao apaga o vinculo). A exclusao creditava a quantidade sem
+        // serie: fisico 4 com 2 series presentes, com a serie ligada e com ela desligada (medido). A reativacao grava a saida
+        // de onde a serie saiu (B779); voltou alguma -> recusa, validado antes da primeira ENTRADA (tudo ou nada, Etapa 58).
+        const recusaSeVoltaram = async () => {
+          const voltou = await dbGet(db, 'SELECT 1 AS v FROM series_entrada_anterior_almoxarifado WHERE saida_anterior_id = ? LIMIT 1',
+            [g.id]);
+          if (!voltou) return;
+          const err = new Error(`${nome}: as séries desta entrega já voltaram ao estoque por uma Entrada — excluir a requisição `
+            + 'devolveria o saldo de novo. Encerre a requisição em vez de excluir.');
+          err.status = 400;
+          throw err;
+        };
         if (Number(material.controle_serie)) {
           // eslint-disable-next-line no-await-in-loop
           const sr = await dbAll(db, `SELECT numero FROM series_almoxarifado
@@ -1846,6 +1859,8 @@ async function excluirSemTrava(db, requisicaoId, user, justificativa, alertServi
             throw err;
           }
           if (sr.length) series = sr.map((s) => s.numero);
+          // eslint-disable-next-line no-await-in-loop
+          else await recusaSeVoltaram();
         } else {
           // Etapa 116 (C232, Fase 5 revisor 1): a mesma regra do estorno pelo livro — a entrega que baixou series de um
           // material com a serie DESLIGADA depois nao e desfeita: a ENTRADA sem serie devolvia o fisico e as series ficavam
@@ -1861,6 +1876,8 @@ async function excluirSemTrava(db, requisicaoId, user, justificativa, alertServi
             err.status = 400;
             throw err;
           }
+          // eslint-disable-next-line no-await-in-loop
+          await recusaSeVoltaram();
         }
         partes.push({ material, nome, quantidade: liquido, destino, lote_id: g.lote_id || undefined, series });
       }
