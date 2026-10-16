@@ -3979,7 +3979,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       const itensEnvio = await dbAll(db,
         `SELECT ma.nome, ma.controle_serie, i.quantidade_solicitada AS quantidade,
                 i.quantidade_solicitada, i.quantidade_entregue, i.quantidade_atendida, i.material_id,
-                ma.ativo AS material_ativo, ma.codigo AS material_codigo
+                ma.ativo AS material_ativo, ma.codigo AS material_codigo,
+                ${requisicaoMaterialInativo.familiaInativaSql('ma')} AS material_familia_inativa
            FROM itens_requisicao_almoxarifado i
            JOIN materiais_almoxarifado ma ON ma.id = i.material_id
           WHERE i.requisicao_id = ?
@@ -3996,7 +3997,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       const inativosEnvio = requisicaoMaterialInativo.codigosInativosPendentes(itensEnvio);
       if (inativosEnvio.length > 0) {
         return res.status(400).json({
-          error: requisicaoMaterialInativo.mensagemEnviar(requisicaoMaterialInativo.numeroDe(reqRow.numero, req.params.id), inativosEnvio),
+          error: requisicaoMaterialInativo.mensagemEnviar(requisicaoMaterialInativo.numeroDe(reqRow.numero, req.params.id), inativosEnvio,
+            requisicaoMaterialInativo.gruposFamiliaInativa(itensEnvio)),
         });
       }
 

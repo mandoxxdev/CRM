@@ -234,6 +234,7 @@ async function carregarItensRequisicao(db, requisicaoId) {
   // Etapa 114 (C229): `ma.ativo` entra para a aprovacao e a separacao recusarem material inativo (aditivo).
   return dbAll(db, `SELECT ir.*, ma.quantidade_atual, ma.unidade, ma.nome as material_nome, ma.codigo as material_codigo,
       ma.material_critico, ma.ativo as material_ativo,
+      ${materialInativo.familiaInativaSql('ma')} as material_familia_inativa,
       ${custoUnitarioSql('ma')} as custo_unitario,
       ${RESERVADO_PARA_ITEM_SQL} as reservado_para_item,
       ${Q.qtdSql(`${disponivelSql('ma')} + ${RESERVADO_PARA_ITEM_SQL}`)} as saldo_disponivel
@@ -324,7 +325,10 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}, { rec
   // inativar depois dele e o estado de inativar depois de aprovar (B734), nao um 400 com o status ja gravado.
   if (recusarInativo) {
     const inativos = materialInativo.codigosInativosPendentes(itens);
-    if (inativos.length > 0) throw materialInativo.erroAprovar(reqRow, requisicaoId, inativos);
+    // Etapa 124 (C231): com a familia/subfamilia inativa, a recusa manda reativa-la antes do material.
+    if (inativos.length > 0) {
+      throw materialInativo.erroAprovar(reqRow, requisicaoId, inativos, { familias: materialInativo.gruposFamiliaInativa(itens) });
+    }
   }
   const reservas = [];
   let algumFaltou = false;
@@ -926,7 +930,7 @@ async function validarFormaDaSeparacao(db, itens, itensSeparados) {
     // Etapa 114 (RN-05, C229): o item de material inativo nao vai para a caixa — a entrega recusaria depois ("Material
     // inativo nao pode ser movimentado") e o separado ficava preso. So a entrada com quantidade > 0 (0 = nao separar).
     // Sob as duas travas (a do material segura o inativar — Etapa 113, RN-04 d).
-    if (q > 0 && materialInativo.materialInativo(item.material_ativo)) throw erro(materialInativo.mensagemSeparar(item.material_nome));
+    if (q > 0 && materialInativo.materialInativo(item.material_ativo)) throw erro(materialInativo.mensagemSeparar(item.material_nome, item.material_familia_inativa));
     if (q > 0 && !Number.isInteger(q)) {
       if (!serie) {
         const ids = [...new Set(itens.map((i) => Number(i.material_id)))];

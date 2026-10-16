@@ -251,8 +251,9 @@ async function aprovarValor(db, requisicaoId, user) {
     const msgGate = await approvalRulesService.mensagemGateAtual(db, requisicaoId);
     const atual = await dbGet(db, 'SELECT status, data_aprovacao FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
     if (!msgGate && atual && atual.status === STATUS_AGUARDANDO && atual.data_aprovacao == null) {
-      const inativos = await materialInativo.lerCodigosInativosPendentes(db, requisicaoId);
-      if (inativos.length > 0) throw materialInativo.erroAprovar(reqRow, requisicaoId, inativos, { valor: true });
+      // Etapa 124 (C231): a familia/subfamilia inativa entra na frase.
+      const { codigos: inativos, familias } = await materialInativo.lerInativosPendentes(db, requisicaoId);
+      if (inativos.length > 0) throw materialInativo.erroAprovar(reqRow, requisicaoId, inativos, { valor: true, familias });
     }
     const err = new Error(msgGate || 'Apenas requisições aguardando aprovação de valor podem ser liberadas');
     err.status = 400;
