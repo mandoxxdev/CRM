@@ -423,3 +423,61 @@ describe('TabFamilias — Etapa 124: as inativas aparecem e se reativam', () => 
     expect(subDe(cartaoDe('VED'), 'VED-ORI')).toBeTruthy();
   });
 });
+
+describe('TabFamilias — Etapa 124 (Fase 5): a inativa expandida não oferece o cadastro', () => {
+  const VEDACOES = { id: 20, codigo: 'VED', nome: 'Vedações', descricao: '', parent_id: null, parent_nome: null, tipo_uso: 'ambos', ativo: 0, qtd_itens: 0 };
+  test('[RN-18] expandir a raiz inativa sem itens: "Nenhum item nesta família." sem "Cadastrar primeiro item"; a ativa mantém', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/familias?ativo=all') return Promise.resolve({ data: [...FAMILIAS, VEDACOES] });
+      return Promise.resolve({ data: [] });
+    });
+    await renderAbaFamilias();
+    await clicar(cartaoDe('VED').querySelector('.almox-familia-cabecalho'));
+    const ved = cartaoDe('VED');
+    expect(ved.textContent).toMatch(/Nenhum item nesta família\./);
+    expect([...ved.querySelectorAll('a')].some((a) => /Cadastrar primeiro item/.test(a.textContent))).toBe(false);
+    // metade positiva: a ativa sem itens (PAR) continua oferecendo
+    await clicar(cartaoDe('PAR').querySelector('.almox-familia-cabecalho'));
+    expect([...cartaoDe('PAR').querySelectorAll('a')].some((a) => /Cadastrar primeiro item/.test(a.textContent))).toBe(true);
+  });
+});
+
+describe('TabFamilias — Etapa 124 (Fase 5, sabotagem): NULL, a ordem e a órfã inativa', () => {
+  const mock = (lista) => api.get.mockImplementation((url) => {
+    if (url === '/almoxarifado/familias?ativo=all') return Promise.resolve({ data: lista });
+    return Promise.resolve({ data: [] });
+  });
+  const codigosDosCartoes = () => cartoes().map((c) => c.querySelector('.almox-familia-cabecalho span').textContent);
+
+  test('[RN-16] ativo NULL é inativa (a leitura do servidor): selo e Reativar, sem Inativar', async () => {
+    const NULA = { id: 30, codigo: 'NUL', nome: 'Nula', descricao: '', parent_id: null, parent_nome: null, tipo_uso: 'ambos', ativo: null, qtd_itens: 0 };
+    mock([...FAMILIAS, NULA]);
+    await renderAbaFamilias();
+    const cab = cartaoDe('NUL').querySelector('.almox-familia-cabecalho');
+    expect(cab.querySelector('.almox-selo-inativa')).not.toBeNull();
+    expect(cab.querySelector('button[title="Reativar"]')).not.toBeNull();
+    expect(cab.querySelector('button[title="Inativar"]')).toBeNull();
+  });
+
+  test('[RN-16] as inativas vão depois das ativas: a raiz inativa "Aaa" é o último cartão; a sub inativa, a última linha', async () => {
+    const AAA = { id: 31, codigo: 'AAA', nome: 'Aaa', descricao: '', parent_id: null, parent_nome: null, tipo_uso: 'ambos', ativo: 0, qtd_itens: 0 };
+    const AAA_SUB = { id: 32, codigo: 'ROL-AAA', nome: 'Aaa sub', descricao: '', parent_id: 1, parent_nome: 'Rolamentos', tipo_uso: 'ambos', ativo: 0, qtd_itens: 0 };
+    mock([...FAMILIAS, AAA, AAA_SUB]);
+    await renderAbaFamilias();
+    expect(codigosDosCartoes()).toEqual(['PAR', 'ROL', 'AAA']);
+    const linhas = subsDoCartao(cartaoDe('ROL')).map((r) => r.querySelector('span').textContent);
+    expect(linhas).toEqual(['ROL-ESF', 'ROL-ROL', 'ROL-AAA']);
+  });
+
+  test('[RN-19] órfã INATIVA (pai fora da lista): no bloco, com o selo e Reativar, sem Inativar', async () => {
+    const ORFA_INATIVA = { id: 33, codigo: 'ZER-SUB', nome: 'Pai zero', descricao: '', parent_id: 0, parent_nome: null, tipo_uso: 'ambos', ativo: 0, qtd_itens: 0 };
+    mock([...FAMILIAS, ORFA_INATIVA]);
+    await renderAbaFamilias();
+    const bloco = container.querySelector('.almox-familia-orfas');
+    expect(bloco).not.toBeNull();
+    const linha = [...bloco.querySelectorAll('.almox-subfamilia-row')].find((r) => r.textContent.includes('ZER-SUB'));
+    expect(linha.querySelector('.almox-selo-inativa')).not.toBeNull();
+    expect(linha.querySelector('button[title="Reativar"]')).not.toBeNull();
+    expect(linha.querySelector('button[title="Inativar"]')).toBeNull();
+  });
+});

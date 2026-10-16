@@ -641,8 +641,9 @@ const TabFamilias = () => {
     if (itens.length === 0) {
       return (
         <div style={{ fontSize: '0.85rem', color: 'var(--gmp-text-light)' }}>
-          Nenhum item nesta {ehRaiz(fam) ? 'família' : 'subfamília'}.{' '}
-          <Link to={linkNovo} style={{ color: '#4facfe' }}>Cadastrar primeiro item</Link>
+          Nenhum item nesta {ehRaiz(fam) ? 'família' : 'subfamília'}.
+          {/* Etapa 124 (Fase 5, r1 M1): a inativa nao oferece o cadastro — o servidor recusaria (RN-18). */}
+          {!ehInativa(fam) && (<>{' '}<Link to={linkNovo} style={{ color: '#4facfe' }}>Cadastrar primeiro item</Link></>)}
         </div>
       );
     }
