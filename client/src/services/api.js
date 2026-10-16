@@ -149,9 +149,20 @@ api.interceptors.response.use(
 
     // 401 = não autenticado (token inválido/expirado) -> volta para a tela de login
     if (error.response?.status === 401) {
+      // Etapa 131 (RN-09, Fase 2 I2): o 401 do PROPRIO login (senha errada, usuario desativado tentando entrar) nao e sessao que
+      // caiu: nao limpa nada nem recarrega — o formulario mostra a frase do servidor. Antes, "Email ou senha inválidos" casava a
+      // regua abaixo e a pagina recarregava com "Sessão expirada", apagando a mensagem.
+      if (/\/auth\/login\/?$/.test(String(error.config?.url || ''))) {
+        return Promise.reject(error);
+      }
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       sessionStorage.removeItem('token');
+      // Etapa 131 (B842): o usuario desativado ou removido com o token ainda valido — aviso proprio (nao expirou).
+      if (error.response?.data?.code === 'USUARIO_INATIVO') {
+        window.location.href = '/login?sessao_encerrada=1';
+        return Promise.reject(error);
+      }
       const msg = error.response?.data?.error || '';
       const sessaoExpirada = /expirado|inválido|não fornecido/i.test(msg);
       window.location.href = sessaoExpirada ? '/login?sessao_expirada=1' : '/login';

@@ -13,6 +13,8 @@ const Login = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const sessaoExpirada = searchParams.get('sessao_expirada') === '1';
+  // Etapa 131 (B842, RN-10): o servidor recusou o token porque o usuario foi desativado ou removido (401 USUARIO_INATIVO).
+  const sessaoEncerrada = searchParams.get('sessao_encerrada') === '1';
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -119,6 +121,11 @@ const Login = () => {
           {sessaoExpirada && (
             <div className="login-sessao-expirada" role="alert">
               <FiAlertCircle size={18} /> Sessão expirada. Faça login novamente para continuar.
+            </div>
+          )}
+          {sessaoEncerrada && (
+            <div className="login-sessao-expirada" role="alert">
+              <FiAlertCircle size={18} /> Sessão encerrada — o seu usuário foi desativado ou removido. Fale com o administrador do sistema.
             </div>
           )}
           {error && (
