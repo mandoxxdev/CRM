@@ -78,7 +78,7 @@ async function loteDoMaterial(db, materialId, codigo) {
     }
   });
 
-  await test('PUT status bloqueia e desbloqueia; transicao invalida 400; corrida 409', async () => {
+  await test('PUT status bloqueia e desbloqueia; transicao invalida 400; corrida: uma vence, a outra 400', async () => {
     const mat = await novoMaterial(db);
     const lote = await loteDoMaterial(db, mat, 'LOTE-SERIE-3');
     await seriesService.entradaSeries(db, ADMIN, {
@@ -104,8 +104,9 @@ async function loteDoMaterial(db, materialId, codigo) {
       .send({ status: 'ENTREGUE', justificativa: 'transicao invalida' });
     assert.strictEqual(transicaoInvalida.status, 400, `transicao invalida deveria retornar 400, got ${transicaoInvalida.status}`);
 
-    // Race condition real: duas mudancas para o mesmo status leem EM_ESTOQUE antes dos UPDATEs
-    // Uma vence na guarda (UPDATE com AND status = ?), a outra cai em 409
+    // Race condition real: duas mudancas simultaneas para o mesmo status. Ate a Etapa 118 as duas liam EM_ESTOQUE antes dos
+    // UPDATEs, uma vencia na guarda (UPDATE com AND status = ?) e a outra caia em 409. Desde a 118 (RN-10, B771) a mudanca
+    // roda sob a trava do material: a segunda espera, le BLOQUEADA e recusa a transicao (400). Uma so vence, como antes.
     const results = await Promise.allSettled([
       seriesService.mudarStatusSerie(db, ADMIN, serieId, 'BLOQUEADA', 'corrida 1'),
       seriesService.mudarStatusSerie(db, ADMIN, serieId, 'BLOQUEADA', 'corrida 2')
@@ -115,7 +116,8 @@ async function loteDoMaterial(db, materialId, codigo) {
     assert.strictEqual(fulfilled, 1, `race condition: esperava 1 fulfilled, got ${fulfilled}`);
     assert.strictEqual(rejected, 1, `race condition: esperava 1 rejected, got ${rejected}`);
     const error = results.find(r => r.status === 'rejected')?.reason;
-    assert.strictEqual(error?.status, 409, `rejected deveria ser 409, got ${error?.status}`);
+    assert.strictEqual(error?.status, 400, `rejected deveria ser 400, got ${error?.status}`);
+    assert.strictEqual(error?.message, 'transicao invalida: BLOQUEADA -> BLOQUEADA');
   });
 
   await close();

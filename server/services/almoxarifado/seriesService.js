@@ -205,11 +205,13 @@ async function desfazerSaida(db, claimed) {
  * (status ENTREGUE/SUCATEADA + `movimentacao_saida_id` original), não haveria como saber para
  * onde voltar.
  */
-async function reverterSaida(db, user, movimentacaoId) {
+// Etapa 118 (C245, RN-08; B769): `afetadas` e o rastreador do CHAMADOR — cada serie entra nele logo depois do seu UPDATE. Com
+// o array local de antes, a falha na 2a serie (o UPDATE ou a auditoria) saia daqui sem o `return`, e a 1a ficava EM_ESTOQUE
+// com o estoque desfeito (fisico 0 com 2 series presentes, medido).
+async function reverterSaida(db, user, movimentacaoId, { afetadas = [] } = {}) {
   const linhas = await dbAll(db, `
     SELECT * FROM series_almoxarifado
      WHERE movimentacao_saida_id = ? AND status IN ('ENTREGUE','SUCATEADA')`, [movimentacaoId]);
-  const afetadas = [];
   for (const s of linhas) {
     const linha = await dbGet(db, `
       UPDATE series_almoxarifado
@@ -231,13 +233,18 @@ async function reverterSaida(db, user, movimentacaoId) {
  * `movimentacao_saida_id` anteriores — usada quando o cancelamento que chamou reverterSaida
  * falha DEPOIS (ex.: INSERT do ledger de ESTORNO), então o estorno de saida nunca aconteceu de
  * verdade e a serie não pode ficar "presente" no estoque como se tivesse voltado. */
+// Etapa 118 (RN-08c): CONSOME a lista, da ultima para a primeira — a serie sai dela logo depois do seu UPDATE (antes da
+// auditoria): o refazer do catch de fora (cancelarMovimentacao) desfaz so o que falta, sem COMPENSACAO em dobro. Nao confere
+// o status (B771): sob a trava do material ninguem muda a serie entre o estorno e o desfazer.
 async function desfazerReverterSaida(db, afetadas) {
-  for (const a of [...afetadas].reverse()) {
+  while (afetadas.length) {
+    const a = afetadas[afetadas.length - 1];
     const linha = await dbGet(db, `
       UPDATE series_almoxarifado
          SET status = ?, movimentacao_saida_id = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ? RETURNING *`,
       [a.anterior.status, a.anterior.movimentacao_saida_id, a.linha.id]);
+    afetadas.pop();
     if (linha) {
       await registrarAuditoria(db, {
         entidade: 'serie', entidade_id: linha.id, acao: 'COMPENSACAO',
@@ -257,11 +264,11 @@ async function desfazerReverterSaida(db, afetadas) {
  * voltam a ENTREGUE vinculadas a essa saida — o estorno da devolucao diz que o material nao voltou, entao a peca esta de
  * novo com quem a levou. Sem `saidaId`, o de sempre.
  */
-async function reverterEntrada(db, user, movimentacaoId, { saidaId = null } = {}) {
+// Etapa 118 (C245, RN-08): `afetadas` e o rastreador do chamador, como em `reverterSaida`.
+async function reverterEntrada(db, user, movimentacaoId, { saidaId = null, afetadas = [] } = {}) {
   const linhas = await dbAll(db, `
     SELECT * FROM series_almoxarifado
      WHERE movimentacao_entrada_id = ? AND status = 'EM_ESTOQUE'`, [movimentacaoId]);
-  const afetadas = [];
   for (const s of linhas) {
     const linha = saidaId
       ? await dbGet(db, `
@@ -288,14 +295,17 @@ async function reverterEntrada(db, user, movimentacaoId, { saidaId = null } = {}
 /** Compensacao de reverterEntrada: series voltam a EM_ESTOQUE com o `status_motivo` anterior
  * (tipicamente NULL) — mesma justificativa de `desfazerReverterSaida`, espelhada para o lado da
  * entrada. */
+// Etapa 118 (RN-08c): consome a lista, como `desfazerReverterSaida`.
 async function desfazerReverterEntrada(db, afetadas) {
-  for (const a of [...afetadas].reverse()) {
+  while (afetadas.length) {
+    const a = afetadas[afetadas.length - 1];
     // Etapa 117 (Fase 2, R1): o vinculo com a saida tambem volta (o estorno da entrada da devolucao o gravava).
     const linha = await dbGet(db, `
       UPDATE series_almoxarifado
          SET status = ?, status_motivo = ?, movimentacao_saida_id = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ? RETURNING *`,
       [a.anterior.status, a.anterior.status_motivo, a.anterior.movimentacao_saida_id ?? null, a.linha.id]);
+    afetadas.pop();
     if (linha) {
       await registrarAuditoria(db, {
         entidade: 'serie', entidade_id: linha.id, acao: 'COMPENSACAO',
@@ -307,8 +317,22 @@ async function desfazerReverterEntrada(db, afetadas) {
   }
 }
 
-/** Bloqueio/desbloqueio avulso — decisao humana: justificativa obrigatoria. */
+/**
+ * Bloqueio/desbloqueio avulso — decisao humana: justificativa obrigatoria.
+ *
+ * Etapa 118 (Fase 2, achado 1; RN-10, B771): sob a trava do material da serie. Era a unica porta que muda serie presente sem
+ * a trava: no meio de um estorno de entrada (que confere as series antes do claim e marca cada uma depois), bloquear uma delas
+ * fazia o `UPDATE ... AND status = 'EM_ESTOQUE'` de `reverterEntrada` pular a serie em silencio — estorno 200, fisico 0 e a
+ * serie BLOQUEADA contada como presente (medido). Sob a trava, o bloqueio espera o estorno e recusa a transicao. O unico
+ * chamador e a rota PUT /series/:id/status, fora de qualquer secao. Dentro: so leitura, UPDATE da serie e auditoria.
+ */
 async function mudarStatusSerie(db, user, serieId, novoStatus, justificativa) {
+  const serie = await getSerie(db, serieId);
+  return trava.naTravaDoMaterial(serie ? serie.material_id : null,
+    () => mudarStatusSerieSemTrava(db, user, serieId, novoStatus, justificativa));
+}
+
+async function mudarStatusSerieSemTrava(db, user, serieId, novoStatus, justificativa) {
   if (!justificativa || !String(justificativa).trim()) {
     throw erro('justificativa e obrigatoria para mudar o status da serie');
   }

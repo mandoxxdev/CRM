@@ -2859,6 +2859,11 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
   let compensarSyncLocalizacaoPadrao = null; // { loteId } — reconciliarEstornoSemLinha sincronizou a linha padrão; refazer DEPOIS de restaurar quantidade_atual
   let seriesEntradaRevertidas = []; // afetadas[] de reverterEntrada, para desfazerReverterEntrada
   let seriesSaidaRevertidas = []; // afetadas[] de reverterSaida, para desfazerReverterSaida
+  // Etapa 118 (C238, RN-01..RN-05; B769): os ramos que nao tinham desfazer. Com o livro falhando, o estorno respondia 500 com
+  // `cancelado = 0` e o efeito aplicado — bloqueio 2 -> 0 (e o estorno de novo recusava: preso), desbloqueio 0 -> 2 (e de novo:
+  // 4), AJUSTE com localizacao 7 -> 5 (e de novo: 3), transferencia com as linhas trocadas (preso). Medido.
+  let compensarBloqueada = null; // delta a somar em quantidade_bloqueada (BLOQUEIO: +q; DESBLOQUEIO: -q)
+  let compensarLinhasPorId = null; // [{ id, quantidade }] — TRANSFERENCIA: o delta de volta em cada linha, pelo id
   // Etapa 117 (C235, RN-06): o desfazer dos efeitos de serie e saldo numa funcao so, chamada de dentro da secao do ramo de
   // saida (sob a trava) ou do catch de fora (os outros ramos). Idempotente: zera os rastreadores ao terminar — o catch de
   // fora, chamado depois do de dentro, nao desfaz em dobro. A ordem e a do fix round 1 da 6b (comentario no catch).
@@ -2902,7 +2907,28 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
       await syncSaldoLocalizacaoPadrao(db, mov.material_id, compensarSyncLocalizacaoPadrao.loteId);
       compensarSyncLocalizacaoPadrao = null;
     }
+    if (compensarLinhasPorId) {
+      while (compensarLinhasPorId.length) {
+        const l = compensarLinhasPorId[0];
+        await dbRun(db, `UPDATE estoque_saldo_almoxarifado
+          SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [l.quantidade, l.id]);
+        compensarLinhasPorId.shift();
+      }
+      compensarLinhasPorId = null;
+    }
+    if (compensarBloqueada) {
+      const delta = compensarBloqueada;
+      await dbRun(db, `UPDATE materiais_almoxarifado
+        SET quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [delta, mov.material_id]);
+      compensarBloqueada = null;
+    }
   };
+  // Etapa 118 (Fase 2, achado 4c): o claim desfeito tambem de dentro da secao — solto antes, um estorno de novo nessa janela
+  // ouvia "Movimentação já cancelada" (falso) e a devolucao da saida a recusa de "estorno em andamento" (C240) por mais tempo.
+  // Idempotente: o catch de fora repete (para a falha antes da secao).
+  const desfazerClaim = () => dbRun(db, `UPDATE movimentacoes_almoxarifado SET cancelado = 0, cancelado_por = NULL, cancelado_em = NULL,
+      cancelamento_motivo = NULL, regularizacao_pendente = ? WHERE id = ?`, [mov.regularizacao_pendente, movimentoId]);
 
   try {
     let saldoAntes = material.quantidade_atual;
@@ -2934,136 +2960,144 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
       estornoId = r.lastID;
     };
 
-    if (tiposEntrada.includes(mov.tipo)) {
-      // Reverter entrada = saída com guarda de disponível (a mercadoria pode já ter sido consumida).
-      // Mesmo padrão atômico de registrarMovimentacao (Task 3): UPDATE...RETURNING sob o lock de
-      // linha do SQLite fecha a janela de corrida entre a leitura acima e a escrita; saldoAntes é
-      // derivado do valor pós-update (não da leitura pré-corrida) para manter o par saldo_anterior/
-      // saldo_posterior do livro coerente mesmo sob concorrência.
-      const permiteNegativo = material.permite_saldo_negativo || (await getConfig(db, 'permite_saldo_negativo_global')) === '1';
-      // Etapa 97 (T1, B491/B494): o estorno de entrada e uma porta avulsa — compara com o livre de caixa (a regra da
-      // flag e a da saida, B498 invertida) e roda sob a trava do material SO em volta do claim (embrulhar o estorno
-      // inteiro travaria em `recalcularStatusSobTrava`, que pega a mesma trava).
-      const deHoje = opcoesEstorno.compensacao === true;
-      const row = await trava.naTravaDoMaterial(mov.material_id, () => dbGet(db, `UPDATE materiais_almoxarifado
-        SET quantidade_atual = ${Q.qtdSql('quantidade_atual - ?')}, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND ${deHoje ? `(? = 1 OR ${disponivelSql()} >= ? ${Q.FOLGA_SQL})` : guardaSaidaPelaCaixaSql()}
-        RETURNING quantidade_atual`,
-        deHoje ? [mov.quantidade, mov.material_id, permiteNegativo ? 1 : 0, mov.quantidade]
-          : [mov.quantidade, mov.material_id, permiteNegativo ? 1 : 0, mov.quantidade, mov.quantidade]));
-      if (!row) {
-        const sufixo = deHoje ? '' : await sufixoDaCaixa(db, mov.material_id, material.unidade);
-        throw Object.assign(new Error(`${await mensagemEstornoSemDisponivel(db, mov)}${sufixo}`), { status: 400 });
-      }
-      saldoDepois = row.quantidade_atual;
-      saldoAntes = saldoDepois + parseFloat(mov.quantidade);
-      // A partir daqui quantidade_atual JÁ foi debitado — se qualquer coisa adiante falhar
-      // (linha não comporta, ledger do estorno), o catch precisa devolver este delta (fix round
-      // 1, Task 5: antes deste fix, só a "linha não comporta" abaixo compensava isto — a
-      // falha do INSERT do ledger, mais adiante, não compensava nada).
-      compensarQuantidadeMaterial = mov.quantidade;
-      // reverter localização da entrada original — mov.lote_id (Etapa 6, Task 3) devolve para a
-      // MESMA linha de lote que a entrada creditou, lida do próprio ledger (imutável), não
-      // recalculada. Sem gate por localização desde o review round 3: `syncMaterialTotals` soma
-      // TODAS as linhas do material, então uma linha sem localização nem lote também precisa
-      // acompanhar o estorno, senão fica "fantasma" com o valor de antes e um
-      // AJUSTE-com-localização posterior ressuscita quantidade já removida.
-      // Mas o estorno NUNCA cria a linha DESTA chave (review round 4): se a movimentação original é
-      // legada e nunca escreveu linha, criar uma agora com −quantidade inventa uma linha negativa
-      // que inverte a primeira contagem daquele material — ver `ajustarSaldoExistente`.
-      // Quando a chave não casa, quem decide é `reconciliarEstornoSemLinha` (round 5): material sem
-      // nenhuma linha segue no-op; material que já tem linha reconcilia o residual, senão
-      // `quantidade_atual` desgarra da soma e a contagem seguinte apaga este estorno. O miss também
-      // acontece sem nada de legado — a chave usa a localização padrão de HOJE, e o forward usou a
-      // da época.
-      //
-      // O PISO da linha (review final da Etapa 6): a guarda acima protege o disponível do
-      // MATERIAL, e a subtração acerta a linha do LOTE — exatamente a assimetria do −8 original,
-      // só que na direção inversa. Sem `minimo`, estornar a entrada de um lote cujo saldo já saiu
-      // deixava a linha daquele lote NEGATIVA em silêncio (medido: −10), com o total do material
-      // coerente e a listagem FEFO passando a exibir saldo negativo num material que não permite
-      // saldo negativo. Só vale quando há lote E o material não permite negativo — a mesma
-      // condição do ramo forward, e a que preserva `loteGuardasSaida.api.test.js`
-      // (`material que permite negativo continua podendo negativar a linha no estorno`).
-      // NAO e restricoesEndereco.api.test.js:213 — aquele teste (achado do review final) e sobre
-      // DELETE de localizacao com SUM(quantidade) das linhas dando zero (net-zero), sem lote nem
-      // permite_saldo_negativo envolvidos.
-      const loc = mov.localizacao_destino_id || material.localizacao_padrao_id;
-      // Etapa 51 (Fase 5, IMPORTANT): desde que a saída sem lote drena os endereços, a linha desta
-      // entrada pode já ter sido consumida por uma saída de OUTRO lugar do raciocínio — entradas de
-      // 100 em A e em B, saída de 100 que drenou A, estorno da entrada de A ⇒ A:−100 e B:100 com o
-      // físico em 0 (o endereço fantasma que a etapa existe para eliminar). Sem lote e sem negativo,
-      // quando a linha da entrada não comporta a reversão, o estorno debita como uma SAÍDA: a linha
-      // da entrada primeiro, depois as outras com saldo (`claimSaldoSemLote`).
-      if (!mov.lote_id && !permiteNegativo) {
-        const linhaEntrada = await dbGet(db, `SELECT quantidade FROM estoque_saldo_almoxarifado
-          WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS NULL`, [mov.material_id, loc || null]);
-        if (linhaEntrada && Number(linhaEntrada.quantidade) < Number(mov.quantidade) - EPS) {
-          compensarLinhasClaim = await claimSaldoSemLote(db, mov.material_id, loc, Number(mov.quantidade));
-        }
-      }
-      const pisoLinha = (mov.lote_id && !permiteNegativo) ? mov.quantidade : null;
-      const r = compensarLinhasClaim
-        ? { aplicado: true, existe: true, viaClaim: true }
-        : await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, -mov.quantidade, { minimo: pisoLinha });
-      if (!r.aplicado && r.existe) {
-        // A linha existe e não comporta a reversão. `quantidade_atual` já foi debitado logo acima
-        // e não há transação aqui — o `catch` deste método devolve o físico agora (fix round 1,
-        // Task 5: `compensarQuantidadeMaterial`, setado acima, cobre exatamente este caso; a
-        // compensação manual que existia aqui foi removida para não devolver em dobro).
-        throw Object.assign(new Error(mensagemLoteNaoComportaEstorno(mov, r.quantidade)), { status: 400 });
-      }
-      if (r.aplicado && r.viaClaim) {
-        // a compensacao das N linhas fica em `compensarLinhasClaim`, devolvida no catch.
-      } else if (r.aplicado) {
-        // Fix round 1 (Task 5): se o ledger falhar depois, a compensação é o delta oposto na
-        // MESMA chave (loc, lote) — espelha exatamente o que este `ajustarSaldoExistente` acabou
-        // de aplicar (−mov.quantidade), sem piso (a compensação está devolvendo, não retirando).
-        compensarLinha = { loc, loteId: mov.lote_id, delta: mov.quantidade };
-      } else {
-        const sincronizou = await reconciliarEstornoSemLinha(db, mov.material_id, mov.lote_id);
-        // Fix round 1 (Task 5): reconciliarEstornoSemLinha só mexeu em algo (via
-        // syncSaldoLocalizacaoPadrao) quando o material já tinha alguma linha — `sincronizou`
-        // distingue isso do no-op de material legado sem linha nenhuma, que não precisa de
-        // compensação. A compensação em si só pode rodar DEPOIS que quantidade_atual tiver
-        // voltado ao valor original (ver ordem no catch), porque syncSaldoLocalizacaoPadrao lê
-        // quantidade_atual para calcular o residual.
-        if (sincronizou) compensarSyncLocalizacaoPadrao = { loteId: mov.lote_id };
-      }
-      // Serie (Etapa 6b, Task 5): so depois que o saldo reverteu de verdade — a guarda lá em
-      // cima (antes do claim) já garantiu que todas as séries desta entrada seguem EM_ESTOQUE,
-      // então aqui é só marcar ESTORNADA. Condicionado a controle_serie para não gastar o
-      // SELECT + laço à toa em material sem série (reverterEntrada é no-op de qualquer forma,
-      // sem linha vinculada a este movimentacao_entrada_id). Fix round 1 (Task 5): guarda o
-      // retorno (afetadas[], não mais a contagem) para o catch poder compensar via
-      // `desfazerReverterEntrada` se o ledger falhar depois.
-      // Etapa 117 (Fase 2, R1): a entrada da devolucao que citou uma saida devolve as series a "Entregue" NAQUELA saida — o
-      // estorno diz que o material nao voltou. Como "Estornada" (sem vinculo), a devolucao morta (C236) deixava a saida sem
-      // series para devolver de novo (a tela: "Nenhuma serie em aberto"), a exclusao da requisicao entrava sem serie (o
-      // invariante quebrado para sempre) e o estorno da saida recusava dizendo que as series reentraram.
-      if (material.controle_serie) {
-        seriesEntradaRevertidas = await seriesService.reverterEntrada(db, user, mov.id,
-          { saidaId: devolucaoDaEntrada ? devolucaoDaEntrada.movimentacao_saida_id : null });
-      }
-      // Decisão (Etapa 1): estorno NÃO reverte custo_medio/custo_unitario — reversão exata é
-      // mal-definida após movimentos intermediários; corrigir via nova entrada com custo. Ver
-      // specs/modulo-almoxarifado/03-motor-estoque/README.md.
-    } else if (tiposSaida.includes(mov.tipo)) {
-      // Etapa 116 (C232, RN-08; Fase 2, R4): o ramo de saida INTEIRO roda sob a trava do material, com o controle de serie
-      // relido no comeco. Ate a 116 so a reversao das series estava sob a trava (115, Fase 5) e o credito vinha antes, fora
-      // dela: a recusa do desligar que caisse no meio desfazia um credito ja aplicado, e nessa janela uma Saida sem serie
-      // podia consumir o saldo creditado (a compensacao do catch subtrai sem guarda -> fisico negativo). Sob a trava, o
-      // desligar cai antes (recusa aqui, nada creditado — o catch so desfaz o claim) ou depois (as series ja voltaram e o
-      // desligar as ve). Dentro da secao so escrita de saldo e de serie: nenhuma porta que pegue a trava de novo (ela nao e
-      // reentrante); recalculo/aviso continuam depois, fora.
-      //
-      // Etapa 117 (C235, RN-06; B762): o registro no livro e o desfazer TAMBEM dentro da secao. Ate a 117 o INSERT do livro
-      // e o catch (que subtrai o credito sem guarda) rodavam depois de soltar: com o livro falhando, uma Saida do mesmo
-      // material cabia entre o credito e o desfazer e levava o que o estorno tinha creditado — fisico -2 (medido: entrada 5,
-      // saida 2, estorno com o livro falhando e uma saida de 5 no meio). Aqui dentro a Saida espera, e o desfazer acha o
-      // credito onde o deixou. O catch de fora so desfaz o claim e recria as reservas (o desfazer ja zerou os rastreadores).
-      await trava.naTravaDoMaterial(mov.material_id, async () => {
-        try {
+    // Etapa 118 (C238, C243; B769, B770): UMA secao da trava do material do efeito ao livro, em TODOS os ramos — a forma que a
+    // 117 deu ao ramo de saida (C235). Ate a 118 o ramo de entrada travava so o debito (as linhas, as series e o livro rodavam
+    // fora: uma devolucao avulsa das mesmas series cabia entre a troca das series e o desfazer — fisico 4 com 2 series, 3/3),
+    // e BLOQUEIO e TRANSFERENCIA nao travavam nada (o desfazer do bloqueio subtrai do disponivel). Se algo falha aqui dentro, o
+    // desfazer dos efeitos e do claim roda ANTES de soltar. Fora da secao, como sempre: a liberacao e a recriacao das reservas
+    // da chegada e o recalculo das requisicoes (pegam a mesma trava — ela nao e reentrante; o descartado da B762), o pedido de
+    // compra, o alerta e a notificacao. As `naTravaDoMaterial` de dentro (as escritas do motor chamadas daqui) passam direto.
+    await trava.naTravaDoMaterial(mov.material_id, async () => {
+      try {
+        if (tiposEntrada.includes(mov.tipo)) {
+          // Reverter entrada = saída com guarda de disponível (a mercadoria pode já ter sido consumida).
+          // Mesmo padrão atômico de registrarMovimentacao (Task 3): UPDATE...RETURNING sob o lock de
+          // linha do SQLite fecha a janela de corrida entre a leitura acima e a escrita; saldoAntes é
+          // derivado do valor pós-update (não da leitura pré-corrida) para manter o par saldo_anterior/
+          // saldo_posterior do livro coerente mesmo sob concorrência.
+          const permiteNegativo = material.permite_saldo_negativo || (await getConfig(db, 'permite_saldo_negativo_global')) === '1';
+          // Etapa 97 (T1, B491/B494): o estorno de entrada e uma porta avulsa — compara com o livre de caixa (a regra da
+          // flag e a da saida, B498 invertida). Desde a 118 o ramo inteiro roda na secao de fora (ate la so este claim).
+          const deHoje = opcoesEstorno.compensacao === true;
+          const row = await dbGet(db, `UPDATE materiais_almoxarifado
+            SET quantidade_atual = ${Q.qtdSql('quantidade_atual - ?')}, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND ${deHoje ? `(? = 1 OR ${disponivelSql()} >= ? ${Q.FOLGA_SQL})` : guardaSaidaPelaCaixaSql()}
+            RETURNING quantidade_atual`,
+            deHoje ? [mov.quantidade, mov.material_id, permiteNegativo ? 1 : 0, mov.quantidade]
+              : [mov.quantidade, mov.material_id, permiteNegativo ? 1 : 0, mov.quantidade, mov.quantidade]);
+          if (!row) {
+            const sufixo = deHoje ? '' : await sufixoDaCaixa(db, mov.material_id, material.unidade);
+            throw Object.assign(new Error(`${await mensagemEstornoSemDisponivel(db, mov)}${sufixo}`), { status: 400 });
+          }
+          saldoDepois = row.quantidade_atual;
+          saldoAntes = saldoDepois + parseFloat(mov.quantidade);
+          // A partir daqui quantidade_atual JÁ foi debitado — se qualquer coisa adiante falhar
+          // (linha não comporta, ledger do estorno), o catch precisa devolver este delta (fix round
+          // 1, Task 5: antes deste fix, só a "linha não comporta" abaixo compensava isto — a
+          // falha do INSERT do ledger, mais adiante, não compensava nada).
+          compensarQuantidadeMaterial = mov.quantidade;
+          // reverter localização da entrada original — mov.lote_id (Etapa 6, Task 3) devolve para a
+          // MESMA linha de lote que a entrada creditou, lida do próprio ledger (imutável), não
+          // recalculada. Sem gate por localização desde o review round 3: `syncMaterialTotals` soma
+          // TODAS as linhas do material, então uma linha sem localização nem lote também precisa
+          // acompanhar o estorno, senão fica "fantasma" com o valor de antes e um
+          // AJUSTE-com-localização posterior ressuscita quantidade já removida.
+          // Mas o estorno NUNCA cria a linha DESTA chave (review round 4): se a movimentação original é
+          // legada e nunca escreveu linha, criar uma agora com −quantidade inventa uma linha negativa
+          // que inverte a primeira contagem daquele material — ver `ajustarSaldoExistente`.
+          // Quando a chave não casa, quem decide é `reconciliarEstornoSemLinha` (round 5): material sem
+          // nenhuma linha segue no-op; material que já tem linha reconcilia o residual, senão
+          // `quantidade_atual` desgarra da soma e a contagem seguinte apaga este estorno. O miss também
+          // acontece sem nada de legado — a chave usa a localização padrão de HOJE, e o forward usou a
+          // da época.
+          //
+          // O PISO da linha (review final da Etapa 6): a guarda acima protege o disponível do
+          // MATERIAL, e a subtração acerta a linha do LOTE — exatamente a assimetria do −8 original,
+          // só que na direção inversa. Sem `minimo`, estornar a entrada de um lote cujo saldo já saiu
+          // deixava a linha daquele lote NEGATIVA em silêncio (medido: −10), com o total do material
+          // coerente e a listagem FEFO passando a exibir saldo negativo num material que não permite
+          // saldo negativo. Só vale quando há lote E o material não permite negativo — a mesma
+          // condição do ramo forward, e a que preserva `loteGuardasSaida.api.test.js`
+          // (`material que permite negativo continua podendo negativar a linha no estorno`).
+          // NAO e restricoesEndereco.api.test.js:213 — aquele teste (achado do review final) e sobre
+          // DELETE de localizacao com SUM(quantidade) das linhas dando zero (net-zero), sem lote nem
+          // permite_saldo_negativo envolvidos.
+          const loc = mov.localizacao_destino_id || material.localizacao_padrao_id;
+          // Etapa 51 (Fase 5, IMPORTANT): desde que a saída sem lote drena os endereços, a linha desta
+          // entrada pode já ter sido consumida por uma saída de OUTRO lugar do raciocínio — entradas de
+          // 100 em A e em B, saída de 100 que drenou A, estorno da entrada de A ⇒ A:−100 e B:100 com o
+          // físico em 0 (o endereço fantasma que a etapa existe para eliminar). Sem lote e sem negativo,
+          // quando a linha da entrada não comporta a reversão, o estorno debita como uma SAÍDA: a linha
+          // da entrada primeiro, depois as outras com saldo (`claimSaldoSemLote`).
+          if (!mov.lote_id && !permiteNegativo) {
+            const linhaEntrada = await dbGet(db, `SELECT quantidade FROM estoque_saldo_almoxarifado
+              WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS NULL`, [mov.material_id, loc || null]);
+            if (linhaEntrada && Number(linhaEntrada.quantidade) < Number(mov.quantidade) - EPS) {
+              compensarLinhasClaim = await claimSaldoSemLote(db, mov.material_id, loc, Number(mov.quantidade));
+            }
+          }
+          const pisoLinha = (mov.lote_id && !permiteNegativo) ? mov.quantidade : null;
+          const r = compensarLinhasClaim
+            ? { aplicado: true, existe: true, viaClaim: true }
+            : await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, -mov.quantidade, { minimo: pisoLinha });
+          if (!r.aplicado && r.existe) {
+            // A linha existe e não comporta a reversão. `quantidade_atual` já foi debitado logo acima
+            // e não há transação aqui — o `catch` deste método devolve o físico agora (fix round 1,
+            // Task 5: `compensarQuantidadeMaterial`, setado acima, cobre exatamente este caso; a
+            // compensação manual que existia aqui foi removida para não devolver em dobro).
+            throw Object.assign(new Error(mensagemLoteNaoComportaEstorno(mov, r.quantidade)), { status: 400 });
+          }
+          if (r.aplicado && r.viaClaim) {
+            // a compensacao das N linhas fica em `compensarLinhasClaim`, devolvida no catch.
+          } else if (r.aplicado) {
+            // Fix round 1 (Task 5): se o ledger falhar depois, a compensação é o delta oposto na
+            // MESMA chave (loc, lote) — espelha exatamente o que este `ajustarSaldoExistente` acabou
+            // de aplicar (−mov.quantidade), sem piso (a compensação está devolvendo, não retirando).
+            compensarLinha = { loc, loteId: mov.lote_id, delta: mov.quantidade };
+          } else {
+            const sincronizou = await reconciliarEstornoSemLinha(db, mov.material_id, mov.lote_id);
+            // Fix round 1 (Task 5): reconciliarEstornoSemLinha só mexeu em algo (via
+            // syncSaldoLocalizacaoPadrao) quando o material já tinha alguma linha — `sincronizou`
+            // distingue isso do no-op de material legado sem linha nenhuma, que não precisa de
+            // compensação. A compensação em si só pode rodar DEPOIS que quantidade_atual tiver
+            // voltado ao valor original (ver ordem no catch), porque syncSaldoLocalizacaoPadrao lê
+            // quantidade_atual para calcular o residual.
+            if (sincronizou) compensarSyncLocalizacaoPadrao = { loteId: mov.lote_id };
+          }
+          // Serie (Etapa 6b, Task 5): so depois que o saldo reverteu de verdade — a guarda lá em
+          // cima (antes do claim) já garantiu que todas as séries desta entrada seguem EM_ESTOQUE,
+          // então aqui é só marcar ESTORNADA. Condicionado a controle_serie para não gastar o
+          // SELECT + laço à toa em material sem série (reverterEntrada é no-op de qualquer forma,
+          // sem linha vinculada a este movimentacao_entrada_id). Fix round 1 (Task 5): guarda o
+          // retorno (afetadas[], não mais a contagem) para o catch poder compensar via
+          // `desfazerReverterEntrada` se o ledger falhar depois.
+          // Etapa 117 (Fase 2, R1): a entrada da devolucao que citou uma saida devolve as series a "Entregue" NAQUELA saida — o
+          // estorno diz que o material nao voltou. Como "Estornada" (sem vinculo), a devolucao morta (C236) deixava a saida sem
+          // series para devolver de novo (a tela: "Nenhuma serie em aberto"), a exclusao da requisicao entrava sem serie (o
+          // invariante quebrado para sempre) e o estorno da saida recusava dizendo que as series reentraram.
+          if (material.controle_serie) {
+            // Etapa 118 (C245): o rastreador vai como acumulador — a serie que ja mudou entra no desfazer mesmo se a seguinte falhar.
+            await seriesService.reverterEntrada(db, user, mov.id,
+              { saidaId: devolucaoDaEntrada ? devolucaoDaEntrada.movimentacao_saida_id : null, afetadas: seriesEntradaRevertidas });
+          }
+          // Decisão (Etapa 1): estorno NÃO reverte custo_medio/custo_unitario — reversão exata é
+          // mal-definida após movimentos intermediários; corrigir via nova entrada com custo. Ver
+          // specs/modulo-almoxarifado/03-motor-estoque/README.md.
+        } else if (tiposSaida.includes(mov.tipo)) {
+          // Etapa 116 (C232, RN-08; Fase 2, R4): o ramo de saida INTEIRO roda sob a trava do material, com o controle de serie
+          // relido no comeco. Ate a 116 so a reversao das series estava sob a trava (115, Fase 5) e o credito vinha antes, fora
+          // dela: a recusa do desligar que caisse no meio desfazia um credito ja aplicado, e nessa janela uma Saida sem serie
+          // podia consumir o saldo creditado (a compensacao do catch subtrai sem guarda -> fisico negativo). Sob a trava, o
+          // desligar cai antes (recusa aqui, nada creditado — o catch so desfaz o claim) ou depois (as series ja voltaram e o
+          // desligar as ve). Dentro da secao so escrita de saldo e de serie: nenhuma porta que pegue a trava de novo (ela nao e
+          // reentrante); recalculo/aviso continuam depois, fora.
+          //
+          // Etapa 117 (C235, RN-06; B762): o registro no livro e o desfazer TAMBEM dentro da secao. Ate a 117 o INSERT do livro
+          // e o catch (que subtrai o credito sem guarda) rodavam depois de soltar: com o livro falhando, uma Saida do mesmo
+          // material cabia entre o credito e o desfazer e levava o que o estorno tinha creditado — fisico -2 (medido: entrada 5,
+          // saida 2, estorno com o livro falhando e uma saida de 5 no meio). Aqui dentro a Saida espera, e o desfazer acha o
+          // credito onde o deixou. O catch de fora so desfaz o claim e recria as reservas (o desfazer ja zerou os rastreadores).
+          // Etapa 118: a secao e o desfazer de dentro dela sao os de fora (iguais aos que este ramo tinha desde a 117).
           const agora = await dbGet(db, 'SELECT controle_serie FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
           const serieLigada = !!agora && Number(agora.controle_serie) === 1;
           if (!serieLigada && opcoesEstorno.compensacao !== true) {
@@ -3114,132 +3148,146 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
           // Etapa 115 (Fase 5, revisor 2): o controle de serie e o relido sob a trava (acima), nao o do `material` lido fora
           // dela — lendo o velho, este estorno devolvia as series a EM_ESTOQUE depois do desligar do Almoxarife e deixava-as
           // orfas (26/30 rodadas).
-          if (serieLigada) seriesSaidaRevertidas = await seriesService.reverterSaida(db, user, mov.id);
-          await gravarLivroDoEstorno();
-        } catch (eSecao) {
-          await desfazerEfeitosDoEstorno();
-          throw eSecao;
-        }
-      });
-    } else if (mov.tipo === 'AJUSTE') {
-      // Etapa 97 (T1; Fase 2, B-2): o estorno do AJUSTE que REDUZ o total (o de ida subiu) e uma porta avulsa — levava a
-      // caixa (e, sem caixa, o reservado: r1b). A guarda e a do ajuste (`motivoRecusaAjustePorRetencao` com a caixa,
-      // literal M8), sob a trava do material em volta da guarda e da escrita. Estorno que AUMENTA o total: sem guarda.
-      const guardaEstornoAjuste = async (totalDepois, totalAntes) => {
-        if (opcoesEstorno.compensacao === true || !(Q.qtd(totalDepois) < Q.qtd(totalAntes) - Q.QTD_FOLGA)) return;
-        // Total que ficaria NEGATIVO: quem responde e a guarda de sempre logo abaixo ("o saldo ja foi consumido", Etapa
-        // 51) — sem caixa e sem retencao a recusa continua byte a byte a de antes (saidaPorLocalizacao (17)).
-        if (Q.qtd(totalDepois) < -Q.QTD_FOLGA) return;
-        const matG = await getMaterial(db, mov.material_id);
-        const recusa = motivoRecusaAjustePorRetencao(matG, Q.qtd(totalDepois), (await caixaSql.lerCaixa(db, mov.material_id)).caixa);
-        if (recusa) throw Object.assign(new Error(`Não é possível estornar: ${recusa}`), { status: 400 });
-      };
-      await trava.naTravaDoMaterial(mov.material_id, async () => {
-      if (mov.localizacao_destino_id) {
-        // AJUSTE escopado a uma localização (Task 6): um SET absoluto do total, como no ramo
-        // global abaixo, ignoraria as OUTRAS localizações do material — a soma das linhas de
-        // estoque_saldo_almoxarifado deixaria de bater com quantidade_atual (achado do review
-        // pós-Task 6). O delta que o ajuste aplicou à localização é o mesmo que aplicou ao total
-        // (saldo_posterior - saldo_anterior do livro, ambos totais do material), então revertemos
-        // SÓ a localização por esse delta e recalculamos o total a partir da soma real
-        // (`syncMaterialTotals` — restaurada no review round 3, decisão de negócio do cliente:
-        // ver o comentário no ramo forward de registrarMovimentacao).
-        // Etapa 96 (Fase 2, K1): o delta e uma DIFERENCA calculada em JS (1 - 0,7 = 0.30000000000000004) — sem arredondar
-        // e sem folga, a linha 0,3 limpa recusava o estorno.
-        const delta = Q.qtd(mov.saldo_posterior - mov.saldo_anterior);
-        if (delta > Q.QTD_FOLGA) {
-          const soma = await dbGet(db, 'SELECT COALESCE(SUM(quantidade),0) t FROM estoque_saldo_almoxarifado WHERE material_id = ?',
-            [mov.material_id]);
-          await guardaEstornoAjuste(Number(soma.t) - delta, Number(soma.t));
-        }
-        const saldoLoc = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, mov.lote_id);
-        if (!Q.cabe(delta, saldoLoc.quantidade)) {
-          throw Object.assign(new Error('Não é possível estornar: a localização não comporta a reversão (saldo já consumido)'), { status: 400 });
-        }
-        await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-          [delta, saldoLoc.id]);
-        // Etapa 51 (RN-04; Fase 5, MINOR): o estorno do AJUSTE com localização recalcula o total
-        // pela soma. No AJUSTE de IDA a absorção das linhas sem lote negativas se justifica — é uma
-        // contagem, é verdade física. No ESTORNO não há contagem: absorver faria o livro registrar
-        // uma quantidade que não se moveu (estorno de 50 com 45 sumindo na absorção). Então, se o
-        // total ficaria negativo num material que não permite, RECUSA e devolve a linha.
-        const matEstorno = await getMaterial(db, mov.material_id);
-        const permiteNegEstorno = matEstorno.permite_saldo_negativo
-          || (await getConfig(db, 'permite_saldo_negativo_global')) === '1';
-        if (!permiteNegEstorno) {
-          const tot = await dbGet(db, 'SELECT COALESCE(SUM(quantidade),0) as t FROM estoque_saldo_almoxarifado WHERE material_id = ?',
-            [mov.material_id]);
-          if (Number(tot.t) < -EPS) {
-            await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+          // Etapa 118 (C245): o rastreador como acumulador.
+          if (serieLigada) await seriesService.reverterSaida(db, user, mov.id, { afetadas: seriesSaidaRevertidas });
+        } else if (mov.tipo === 'AJUSTE') {
+          // Etapa 97 (T1; Fase 2, B-2): o estorno do AJUSTE que REDUZ o total (o de ida subiu) e uma porta avulsa — levava a
+          // caixa (e, sem caixa, o reservado: r1b). A guarda e a do ajuste (`motivoRecusaAjustePorRetencao` com a caixa,
+          // literal M8), sob a trava do material em volta da guarda e da escrita. Estorno que AUMENTA o total: sem guarda.
+          const guardaEstornoAjuste = async (totalDepois, totalAntes) => {
+            if (opcoesEstorno.compensacao === true || !(Q.qtd(totalDepois) < Q.qtd(totalAntes) - Q.QTD_FOLGA)) return;
+            // Total que ficaria NEGATIVO: quem responde e a guarda de sempre logo abaixo ("o saldo ja foi consumido", Etapa
+            // 51) — sem caixa e sem retencao a recusa continua byte a byte a de antes (saidaPorLocalizacao (17)).
+            if (Q.qtd(totalDepois) < -Q.QTD_FOLGA) return;
+            const matG = await getMaterial(db, mov.material_id);
+            const recusa = motivoRecusaAjustePorRetencao(matG, Q.qtd(totalDepois), (await caixaSql.lerCaixa(db, mov.material_id)).caixa);
+            if (recusa) throw Object.assign(new Error(`Não é possível estornar: ${recusa}`), { status: 400 });
+          };
+          if (mov.localizacao_destino_id) {
+            // AJUSTE escopado a uma localização (Task 6): um SET absoluto do total, como no ramo
+            // global abaixo, ignoraria as OUTRAS localizações do material — a soma das linhas de
+            // estoque_saldo_almoxarifado deixaria de bater com quantidade_atual (achado do review
+            // pós-Task 6). O delta que o ajuste aplicou à localização é o mesmo que aplicou ao total
+            // (saldo_posterior - saldo_anterior do livro, ambos totais do material), então revertemos
+            // SÓ a localização por esse delta e recalculamos o total a partir da soma real
+            // (`syncMaterialTotals` — restaurada no review round 3, decisão de negócio do cliente:
+            // ver o comentário no ramo forward de registrarMovimentacao).
+            // Etapa 96 (Fase 2, K1): o delta e uma DIFERENCA calculada em JS (1 - 0,7 = 0.30000000000000004) — sem arredondar
+            // e sem folga, a linha 0,3 limpa recusava o estorno.
+            const delta = Q.qtd(mov.saldo_posterior - mov.saldo_anterior);
+            if (delta > Q.QTD_FOLGA) {
+              const soma = await dbGet(db, 'SELECT COALESCE(SUM(quantidade),0) t FROM estoque_saldo_almoxarifado WHERE material_id = ?',
+                [mov.material_id]);
+              await guardaEstornoAjuste(Number(soma.t) - delta, Number(soma.t));
+            }
+            const saldoLoc = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, mov.lote_id);
+            if (!Q.cabe(delta, saldoLoc.quantidade)) {
+              throw Object.assign(new Error('Não é possível estornar: a localização não comporta a reversão (saldo já consumido)'), { status: 400 });
+            }
+            await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
               [delta, saldoLoc.id]);
-            throw Object.assign(new Error('Não é possível estornar: o saldo já foi consumido (o estorno deixaria o material negativo)'),
+            // Etapa 118 (C238, RN-04): a linha volta pelo desfazer (a mesma chave de `getOrCreateSaldo`) — tambem na recusa abaixo,
+            // que devolvia a linha a mao.
+            compensarLinha = { loc: mov.localizacao_destino_id, loteId: mov.lote_id, delta };
+            // Etapa 51 (RN-04; Fase 5, MINOR): o estorno do AJUSTE com localização recalcula o total
+            // pela soma. No AJUSTE de IDA a absorção das linhas sem lote negativas se justifica — é uma
+            // contagem, é verdade física. No ESTORNO não há contagem: absorver faria o livro registrar
+            // uma quantidade que não se moveu (estorno de 50 com 45 sumindo na absorção). Então, se o
+            // total ficaria negativo num material que não permite, RECUSA e devolve a linha.
+            const matEstorno = await getMaterial(db, mov.material_id);
+            const permiteNegEstorno = matEstorno.permite_saldo_negativo
+              || (await getConfig(db, 'permite_saldo_negativo_global')) === '1';
+            if (!permiteNegEstorno) {
+              const tot = await dbGet(db, 'SELECT COALESCE(SUM(quantidade),0) as t FROM estoque_saldo_almoxarifado WHERE material_id = ?',
+                [mov.material_id]);
+              if (Number(tot.t) < -EPS) {
+                throw Object.assign(new Error('Não é possível estornar: o saldo já foi consumido (o estorno deixaria o material negativo)'),
+                  { status: 400 });
+              }
+            }
+            // Etapa 118 (Fase 2, achado 2): o total volta por DELTA (o lido antes do sync menos o de depois), nao re-sincronizando
+            // pela soma — num material cujo total ja nao batia com as linhas, re-sincronizar mudaria o fisico no desfazer.
+            const antesDoSync = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
+            await syncMaterialTotals(db, mov.material_id);
+            const atual = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
+            compensarQuantidadeMaterial = Q.qtd(Number(antesDoSync.quantidade_atual) - Number(atual.quantidade_atual)) || null;
+            saldoDepois = atual.quantidade_atual;
+          } else {
+            // AJUSTE sem localização — comportamento original: SET absoluto do total do material.
+            const atualSemLoc = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
+            await guardaEstornoAjuste(mov.saldo_anterior, Number(atualSemLoc && atualSemLoc.quantidade_atual) || 0);
+            await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+              [Q.qtd(mov.saldo_anterior), mov.material_id]);
+            // Etapa 118 (C238, RN-03): o desfazer volta o total por delta (o lido antes do SET) e re-sincroniza a linha padrao depois
+            // (a ordem do desfazer: total, depois linha). Restaura as linhas exatas quando elas batiam com o total; material sem
+            // linha nenhuma sai do desfazer com a linha padrao criada pelo sync, igual ao total (declarado, Fase 2 achado 3).
+            compensarQuantidadeMaterial = Q.qtd((Number(atualSemLoc && atualSemLoc.quantidade_atual) || 0) - Q.qtd(mov.saldo_anterior)) || null;
+            compensarSyncLocalizacaoPadrao = { loteId: mov.lote_id };
+            saldoDepois = Q.qtd(mov.saldo_anterior);
+            await syncSaldoLocalizacaoPadrao(db, mov.material_id, mov.lote_id);
+          }
+        } else if (mov.tipo === 'AJUSTE_INVENTARIO') {
+          // RN-10/D11 (Etapa 10): AJUSTE_INVENTARIO representa uma contagem fisica HOMOLOGADA — nao
+          // e um delta que faz sentido reverter para saldo_anterior (AJUSTE comum ja faz isso no ramo
+          // acima; este e NOVO de proposito, nao reusa aquele ramo). Recusa explicita, mesmo
+          // precedente de REMESSA_TERCEIRO (linha ~1360): o caminho de correcao e uma contagem nova.
+          throw Object.assign(new Error(
+            'Ajuste de inventário não pode ser estornado por aqui — o caminho de correção é uma '
+            + 'nova conferência de inventário.'), { status: 400 });
+        } else if (mov.tipo === 'TRANSFERENCIA') {
+          // mov.lote_id (Etapa 6, Task 3): estorna a MESMA linha de lote que a transferência moveu.
+          const origem = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_origem_id, mov.lote_id);
+          const destino = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, mov.lote_id);
+          if (!Q.cabe(mov.quantidade, destino.quantidade)) {
+            throw Object.assign(new Error('Não é possível estornar: o destino não tem mais o saldo transferido'), { status: 400 });
+          }
+          await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [mov.quantidade, destino.id]);
+          // Etapa 118 (C238, RN-05): cada linha entra no desfazer logo depois de mudar.
+          compensarLinhasPorId = [{ id: destino.id, quantidade: mov.quantidade }];
+          await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [mov.quantidade, origem.id]);
+          compensarLinhasPorId.push({ id: origem.id, quantidade: -mov.quantidade });
+        } else if (mov.tipo === 'BLOQUEIO') {
+          // Guarda condicional em vez de MAX(0,...) — mesma correção do ramo DESBLOQUEIO de
+          // registrarMovimentacao (achado do review final). Com a saturação, estornar um BLOQUEIO
+          // que o DESBLOQUEIO já tinha desfeito "passava" (0 - 10 saturava em 0) e o estorno
+          // seguinte do DESBLOQUEIO somava 10 de volta: quantidade_bloqueada = 10 sem NENHUM
+          // bloqueio vivo por trás, a dois cliques na tela do livro. Recusando aqui, o BLOQUEIO
+          // continua vivo — e o catch abaixo desfaz o claim, então ele não fica preso como cancelado.
+          const claim = await dbGet(db, `UPDATE materiais_almoxarifado
+            SET quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) - ?')}, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND COALESCE(quantidade_bloqueada,0) >= ? ${Q.FOLGA_SQL}
+            RETURNING id`, [mov.quantidade, mov.material_id, mov.quantidade]);
+          if (!claim) {
+            throw Object.assign(new Error(
+              `Não é possível estornar: o bloqueio já foi desfeito (quantidade bloqueada: ${Q.qtd(material.quantidade_bloqueada || 0)})`),
               { status: 400 });
           }
+          // Etapa 118 (C238, RN-01/RN-06): desfazer = bloquear de novo (tira do disponivel) — por isso sob a trava (a secao de fora).
+          compensarBloqueada = mov.quantidade;
+        } else if (mov.tipo === 'DESBLOQUEIO') {
+          // Etapa 97 (T1; Fase 2, B-2): estornar o desbloqueio e bloquear de novo — antes somava ao bloqueado sem guarda e
+          // levava a caixa (e o reservado). Claim pelo livre de caixa (conta o reservado: o estorno corrige o livro, nao e
+          // retencao de qualidade — mais estrito que o bloqueio avulso, declarado), sob a trava do material. Literal M9.
+          const claimDesbloqueio = await dbGet(db, `UPDATE materiais_almoxarifado
+            SET quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) + ?')}, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND ${caixaSql.livreDeCaixaSql()} >= ? ${Q.FOLGA_SQL}
+            RETURNING id`, [mov.quantidade, mov.material_id, mov.quantidade]);
+          if (!claimDesbloqueio) {
+            const regua = await lerReguaDaCaixa(db, mov.material_id);
+            throw Object.assign(new Error('Não é possível estornar o desbloqueio: saldo disponível insuficiente para bloquear de novo: '
+              + `${livreMostrado(regua.livre)} ${material.unidade}${await sufixoDaCaixa(db, mov.material_id, material.unidade)}`),
+            { status: 400 });
+          }
+          compensarBloqueada = -mov.quantidade; // Etapa 118 (C238, RN-02)
         }
-        await syncMaterialTotals(db, mov.material_id);
-        const atual = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
-        saldoDepois = atual.quantidade_atual;
-      } else {
-        // AJUSTE sem localização — comportamento original: SET absoluto do total do material.
-        const atualSemLoc = await dbGet(db, 'SELECT quantidade_atual FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
-        await guardaEstornoAjuste(mov.saldo_anterior, Number(atualSemLoc && atualSemLoc.quantidade_atual) || 0);
-        await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-          [Q.qtd(mov.saldo_anterior), mov.material_id]);
-        saldoDepois = Q.qtd(mov.saldo_anterior);
-        await syncSaldoLocalizacaoPadrao(db, mov.material_id, mov.lote_id);
-      }
-      });
-    } else if (mov.tipo === 'AJUSTE_INVENTARIO') {
-      // RN-10/D11 (Etapa 10): AJUSTE_INVENTARIO representa uma contagem fisica HOMOLOGADA — nao
-      // e um delta que faz sentido reverter para saldo_anterior (AJUSTE comum ja faz isso no ramo
-      // acima; este e NOVO de proposito, nao reusa aquele ramo). Recusa explicita, mesmo
-      // precedente de REMESSA_TERCEIRO (linha ~1360): o caminho de correcao e uma contagem nova.
-      throw Object.assign(new Error(
-        'Ajuste de inventário não pode ser estornado por aqui — o caminho de correção é uma '
-        + 'nova conferência de inventário.'), { status: 400 });
-    } else if (mov.tipo === 'TRANSFERENCIA') {
-      // mov.lote_id (Etapa 6, Task 3): estorna a MESMA linha de lote que a transferência moveu.
-      const origem = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_origem_id, mov.lote_id);
-      const destino = await getOrCreateSaldo(db, mov.material_id, mov.localizacao_destino_id, mov.lote_id);
-      if (!Q.cabe(mov.quantidade, destino.quantidade)) {
-        throw Object.assign(new Error('Não é possível estornar: o destino não tem mais o saldo transferido'), { status: 400 });
-      }
-      await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade - ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [mov.quantidade, destino.id]);
-      await dbRun(db, `UPDATE estoque_saldo_almoxarifado SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [mov.quantidade, origem.id]);
-    } else if (mov.tipo === 'BLOQUEIO') {
-      // Guarda condicional em vez de MAX(0,...) — mesma correção do ramo DESBLOQUEIO de
-      // registrarMovimentacao (achado do review final). Com a saturação, estornar um BLOQUEIO
-      // que o DESBLOQUEIO já tinha desfeito "passava" (0 - 10 saturava em 0) e o estorno
-      // seguinte do DESBLOQUEIO somava 10 de volta: quantidade_bloqueada = 10 sem NENHUM
-      // bloqueio vivo por trás, a dois cliques na tela do livro. Recusando aqui, o BLOQUEIO
-      // continua vivo — e o catch abaixo desfaz o claim, então ele não fica preso como cancelado.
-      const claim = await dbGet(db, `UPDATE materiais_almoxarifado
-        SET quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) - ?')}, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND COALESCE(quantidade_bloqueada,0) >= ? ${Q.FOLGA_SQL}
-        RETURNING id`, [mov.quantidade, mov.material_id, mov.quantidade]);
-      if (!claim) {
-        throw Object.assign(new Error(
-          `Não é possível estornar: o bloqueio já foi desfeito (quantidade bloqueada: ${Q.qtd(material.quantidade_bloqueada || 0)})`),
-          { status: 400 });
-      }
-    } else if (mov.tipo === 'DESBLOQUEIO') {
-      // Etapa 97 (T1; Fase 2, B-2): estornar o desbloqueio e bloquear de novo — antes somava ao bloqueado sem guarda e
-      // levava a caixa (e o reservado). Claim pelo livre de caixa (conta o reservado: o estorno corrige o livro, nao e
-      // retencao de qualidade — mais estrito que o bloqueio avulso, declarado), sob a trava do material. Literal M9.
-      const claimDesbloqueio = await trava.naTravaDoMaterial(mov.material_id, () => dbGet(db, `UPDATE materiais_almoxarifado
-        SET quantidade_bloqueada = ${Q.qtdSql('COALESCE(quantidade_bloqueada,0) + ?')}, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND ${caixaSql.livreDeCaixaSql()} >= ? ${Q.FOLGA_SQL}
-        RETURNING id`, [mov.quantidade, mov.material_id, mov.quantidade]));
-      if (!claimDesbloqueio) {
-        const regua = await lerReguaDaCaixa(db, mov.material_id);
-        throw Object.assign(new Error('Não é possível estornar o desbloqueio: saldo disponível insuficiente para bloquear de novo: '
-          + `${livreMostrado(regua.livre)} ${material.unidade}${await sufixoDaCaixa(db, mov.material_id, material.unidade)}`),
-        { status: 400 });
-      }
-    }
 
-    // O ramo de saida ja gravou o livro dentro da secao dele (Etapa 117, C235).
-    if (estornoId === undefined) await gravarLivroDoEstorno();
+        await gravarLivroDoEstorno();
+      } catch (eSecao) {
+        await desfazerEfeitosDoEstorno();
+        await desfazerClaim();
+        throw eSecao;
+      }
+    });
   } catch (err) {
     // Fix round 1 (Task 5, achado do review por sonda): compensa os efeitos de SÉRIE e SALDO que
     // os ramos de ENTRADA/SAIDA já tinham aplicado com sucesso, na ordem inversa da aplicação,
@@ -3267,8 +3315,7 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
     // reverter uma entrada já consumida), o movimento não pode ficar marcado como cancelado sem
     // ter revertido nada — senão fica "preso" (não pode ser estornado de novo) sem o saldo ter
     // voltado. regularizacao_pendente volta ao valor original lido antes do claim.
-    await dbRun(db, `UPDATE movimentacoes_almoxarifado SET cancelado = 0, cancelado_por = NULL, cancelado_em = NULL,
-      cancelamento_motivo = NULL, regularizacao_pendente = ? WHERE id = ?`, [mov.regularizacao_pendente, movimentoId]);
+    await desfazerClaim();
     // Etapa 74 (T3 + Fase 5): o estorno nao aconteceu, mas as reservas da chegada ja foram liberadas — recria
     // o que foi liberado (o fisico ja voltou acima, entao o hold cabe de novo) e o status acompanha.
     await recriarReservasDoEstorno(db, user, liberadasNoEstorno, movimentoId);
