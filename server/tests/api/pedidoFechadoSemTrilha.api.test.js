@@ -141,6 +141,8 @@ const LEDGER = 'backfill_pedido_fechado_automaticamente';
     await dbRun(db, "DELETE FROM auditoria_log_almoxarifado WHERE entidade = 'pedido_compra' AND entidade_id = ?", [p.id]);
     await estornar(mov);
     assert.strictEqual((await pedidoAgora(p.id)).status, 'recebido');
+    // Fase 5 (r3 M11): a metade positiva — o estorno rodou (a linha foi descontada); so nao reabriu.
+    assert.strictEqual((await dbGet(db, 'SELECT quantidade_recebida q FROM itens_pedido_compra WHERE id = ?', [p.linha])).q, 0);
   });
 
   await test('[RN-07d] controle: a trilha automatica gravada e a coluna apagada nao reabre (quem decide e a coluna)', async () => {
@@ -152,6 +154,8 @@ const LEDGER = 'backfill_pedido_fechado_automaticamente';
     await dbRun(db, 'UPDATE pedidos_compra SET fechado_automaticamente_de = NULL WHERE id = ?', [p.id]);
     await estornar(mov);
     assert.strictEqual((await pedidoAgora(p.id)).status, 'recebido', 'o estorno ainda decide pela trilha da Auditoria');
+    assert.strictEqual((await dbGet(db, 'SELECT quantidade_recebida q FROM itens_pedido_compra WHERE id = ?', [p.linha])).q, 0,
+      'a metade positiva: o estorno rodou e descontou a linha');
   });
 
   await test('[RN-08] destino ilegivel na coluna: reabre para pendente', async () => {

@@ -116,7 +116,8 @@ const LEDGER = 'backfill_conferencia_finalizada_em';
       VALUES ('recebimento', ?, 'FINALIZAR_CONFERENCIA', ?)`, [id, quando]);
     await trilha(comTrilha, '2026-03-02 10:00:00');
     await trilha(comTrilha, '2026-03-01 09:00:00');
-    assert.strictEqual(await conferidos('FORN-CST122-E'), 0, 'fixture: sem a coluna o relatorio nao pode contar');
+    // Fase 5 (r3 M10): NAO e so pre-condicao — e a unica guarda contra o relatorio voltar a ler a trilha como fallback.
+    assert.strictEqual(await conferidos('FORN-CST122-E'), 0, 'o relatorio contou pela trilha, sem a coluna (a leitura antiga voltou)');
     await dbRun(db, 'DELETE FROM schema_migrations_almoxarifado WHERE id = ?', [LEDGER]);
     await schema.migrateBackfillConferenciaFinalizadaEm(db);
     assert.strictEqual(await coluna(comTrilha), '2026-03-01 09:00:00');
