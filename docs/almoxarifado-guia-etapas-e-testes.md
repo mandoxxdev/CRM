@@ -1,13 +1,19 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-16 (Etapa 116) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-16 (Etapa 117) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115 e 116) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116 e 117) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 116 ENTREGUE · próxima do almoxarifado: Etapa 117)
+> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 117 ENTREGUE · próxima do almoxarifado: Etapa 118)
 >
-> **O desenvolvimento parou aqui: Etapa 116 fechada — 2026-10-16.** A **Etapa 116 (o cadastro aberto há muito tempo não
+> **O desenvolvimento parou aqui: Etapa 117 fechada — 2026-10-16.** A **Etapa 117 (a devolução desfeita pelo livro deixa de
+> contar, e o estorno que falha não deixa estoque negativo)**: estornar a entrada de uma devolução registrada por engano faz a
+> tela de Devoluções oferecer a entrega de novo, a exclusão da requisição devolver o certo e as séries voltarem a *Entregue*; a
+> entrada de uma devolução para sucata pede para estornar a sucata primeiro. **Próxima: Etapa 118** — ver a próxima tarefa no
+> plano da 117.
+>
+> **Etapa 116, 2026-10-16.** A **Etapa 116 (o cadastro aberto há muito tempo não
 > desfaz mais o controle de outra pessoa, e o estorno não devolve saldo sem as séries)**: o salvar do formulário que ficou
 > aberto enquanto outra pessoa ligava ou desligava o lote ou a série é recusado com o pedido para recarregar; estornar a saída
 > com séries (ou excluir a requisição) depois de desligar a série pede para religar; e estornar uma saída já devolvida é
@@ -6458,6 +6464,64 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 117 — A devolução desfeita pelo livro deixa de contar, e o estorno que falha não deixa estoque negativo (ENTREGUE — 2026-10-16)
+
+**O que mudou, em uma frase:** estornar no livro a entrada de uma devolução registrada por engano passa a "desfazer" a
+devolução de verdade — a tela de Devoluções volta a oferecer a entrega, a exclusão da requisição devolve o certo e as peças
+com série voltam a constar com quem as levou —, e a entrada de uma devolução para sucata pede para estornar a sucata primeiro.
+
+**O problema que ela resolve.** O estorno da entrada tirava o material do estoque de novo, mas a devolução continuava contando:
+*"Devolução acima do entregue: … já foram devolvidos 2 e restam 0"*, e excluir a requisição deixava o estoque a menos. Na
+devolução para sucata, estornar a entrada tirava duas vezes (8 → 6). E, por baixo, o estorno de uma saída que falhava por erro
+de banco podia deixar o estoque negativo se outra saída do mesmo material caísse no mesmo instante.
+
+| Antes | Agora |
+|---|---|
+| Estornada a entrada da devolução, devolver de novo era recusado (*"… restam 0"*) | A tela oferece de novo e a devolução passa |
+| Excluir a requisição depois disso deixava o estoque a menos | A exclusão devolve o que faltava |
+| Com série, as séries ficavam *Estornada*, soltas | Voltam a *Entregue* na entrega de onde saíram |
+| Estornar só a entrada de uma devolução para sucata tirava duas vezes | Recusado: estorne a sucata primeiro |
+| O estorno de saída que falhava podia deixar o estoque negativo | Desfaz antes de liberar o material |
+| A devolução citando a entrega aceitava qualquer série | Só as séries que saíram nela |
+| A entrega de uma requisição excluída podia ser devolvida de novo | Some da lista e é recusada |
+
+### Roteiro de teste manual
+
+Pré-requisitos: login como **administrador**; um material comum **PRF-0701** com uma Entrada de 5 (unidade PC); um material
+comum **PRF-0702** com uma Entrada de 10; um material com **Controle por número de série**, **PRF-0703**, com uma Entrada de 2
+(séries **T1**, **T2**).
+
+1. **Movimentações → Nova** → PRF-0701, **Saída** de 2 → estoque 3.
+2. **Devoluções → Nova Devolução** → PRF-0701, escolha a entrega do passo 1, quantidade 2, destino **Estoque** → *"Devolução
+   registrada!"*; estoque 5.
+3. **Movimentações** → filtre o PRF-0701 → na linha *Entrada de devolução* (referência `DEV-…`), clique em estornar, motivo
+   "devolução lançada por engano" → estoque 3.
+4. **Devoluções → Nova Devolução** → PRF-0701: a entrega aparece com **2** a devolver (antes: 0). Digite 3 e confirme →
+   *"Devolução acima do entregue: a saída ⟨id⟩ entregou 2, já foram devolvidos 0 e restam 2"*. Digite 2 → registrada; estoque 5.
+5. **Movimentações** → estorne a **Saída** do passo 1 → *"Não é possível estornar: esta saída já foi devolvida inteira (2 PC) —
+   o estorno devolveria de novo o que já voltou."*
+6. PRF-0702: **Saída** de 2 (estoque 8); **Devoluções** → devolva as 2 com destino **Sucata** (estoque 8). Em **Movimentações**,
+   estorne a *Entrada de devolução* → *"Não é possível estornar: esta entrada é da devolução DEV-⟨número⟩, que foi para a sucata
+   — estornar só a entrada tiraria do estoque de novo o que já saiu pela sucata. Estorne primeiro a sucata desta devolução e
+   depois esta entrada."*; estoque 8. Estorne a linha **Sucata** da mesma referência → estoque 10; estorne a entrada → estoque 8.
+7. PRF-0703: **Saída** de 2 escolhendo T1 e T2; **Devoluções** → devolva as 2 com T1 e T2; em **Movimentações**, estorne a
+   *Entrada de devolução* → em **Lotes e Séries → Séries**, T1 e T2 aparecem **Entregue**. Em **Devoluções** a entrega oferece
+   T1 e T2 de novo.
+
+8. Repita o passo 7 até a devolução, mas digite **T9** (que não existe) como série → *"A série T9 não saiu na saída ⟨id⟩ — informe
+   as séries desta entrega (a lista mostra as que estão fora) ou registre a devolução sem citar a entrega."*
+9. Entregue 2 do PRF-0701 por uma requisição e exclua a requisição: em **Devoluções**, essa entrega não aparece mais.
+
+O roteiro **não** testa o erro de banco no meio do estorno (só se força em teste automatizado).
+
+### O que esta etapa não cobre
+
+- Devolução para **quarentena**: estornar só a entrada deixa o bloqueio — estorne também a linha *Bloqueio* da mesma
+  referência (**C239**).
+- A lista de devoluções não marca a devolução desfeita (continua como histórico).
+- Devolução para **retrabalho** não tem entrada para estornar.
+- O erro de banco no estorno de bloqueio, desbloqueio, ajuste e transferência (**C238**).
 
 ## Etapa 116 — O cadastro aberto há muito tempo não desfaz mais o controle de outra pessoa, e o estorno não devolve saldo sem as séries (ENTREGUE — 2026-10-16)
 

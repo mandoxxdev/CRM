@@ -767,3 +767,26 @@ SAIDAs concorrentes pelo motor travado SERIALIZAM (…)"*. Editados de forma dec
 *"mudado na Etapa 97"*, asserções iguais); `confirmacaoLeituraLocalizacao` *"Fase 5: duas saidas CONCORRENTES"* e
 `saidaPorLocalizacao` *"(12)"* chamam `registrarMovimentacaoSemTrava` para continuarem provando o claim. `test:api`
 338/338 (4163 ✓) no fechamento.
+
+## Etapa 117 (2026-10-16) — o livro e o desfazer do estorno de saída sob a trava; a entrada da devolução para sucata
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa117-devolucao-viva-e-livro-do-estorno-na-trava.md`. Feature 03
+com a 12. *(Esta spec não registrou a Etapa 116 — o ramo de saída do estorno passou a rodar inteiro sob `naTravaDoMaterial`
+ali, com o controle de série relido no começo, e o estorno de saída com devolução viva passou a ser recusado (B756): está na
+spec 12 e na 01. Fica dito aqui.)*
+
+- [x] **O `INSERT` da linha `ESTORNO`, o `movimento_estorno_id` e o desfazer rodam dentro da seção do ramo de saída (C235,
+  B762)** — `6aa8fc7f`. Antes rodavam depois de soltar: com o livro falhando, uma Saída do mesmo material cabia entre o crédito e o
+  desfazer (físico −2). O `try` cobre a seção inteira (livro, linha de saldo, séries); o desfazer é uma função idempotente
+  (`desfazerEfeitosDoEstorno`, zera os rastreadores) e o `catch` de fora só desfaz o claim e recria as reservas. O
+  `movimento_estorno_id` que falha depois do `INSERT` apaga a linha `ESTORNO` (era órfã). Ramos de entrada: desfazem somando,
+  ficam fora (só aumenta o livre).
+- [x] **`ENTRADA_DEVOLUCAO` de devolução para SUCATA com a perna `SUCATA` de pé → 400 (C237, B760)** — `00bfee8b`; guarda e
+  condição no claim. Identidade da entrada e da perna: a primeira da referência `DEV-<id>`, do mesmo material.
+- [x] **Com série, o estorno da entrada de devolução que citou a saída devolve as séries a `ENTREGUE` com o vínculo à saída**
+  (`seriesService.reverterEntrada(…, { saidaId })`; o desfazer restaura o vínculo) — `00bfee8b` (B763).
+- [ ] **Fora:** o estorno de `BLOQUEIO`, `DESBLOQUEIO`, `AJUSTE` e `TRANSFERENCIA` não desfaz o efeito se o livro falhar
+  (medido para os dois primeiros: bloqueado 2 → 0, físico 7 → 5, com `cancelado = 0`) — **C238**, candidata da 118.
+
+Testes: `estornoLivroNaTrava.api.test.js` (9), `devolucaoViva.api.test.js` (27), `devolucaoVivaIntegracao.api.test.js` (3).
+Continua 🟢.

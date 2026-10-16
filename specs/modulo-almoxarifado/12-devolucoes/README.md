@@ -18,6 +18,10 @@
 > escondeu por sete semanas (2026-08-12 a 2026-09-29) um item de que outra feature dependia. O verde agora vale para os dois
 > destinos; o que ficou de fora está no item 187 e nas limitações desta spec, não na cor.)*
 >
+> **Etapa 117 (2026-10-16, `00bfee8b`):** a devolução desfeita pelo livro (a entrada estornada) deixa de contar no "restante" —
+> nas cinco contas; com série, as séries voltam a *Entregue* na entrega; a entrada da devolução para SUCATA não se estorna com a
+> sucata de pé (C237). A seção da 116 dizia o que era "viva" de forma incompleta — corrigido na seção da 117, no fim.
+>
 > **Status:** 🟢 — **os DOIS destinos existem**: ao estoque desde a Etapa 7, ao fornecedor desde a **Etapa 45** (2026-09-29, `a425559..7f72e39`, pela tela de **Não Conformidades** — ver a nota resolvida no topo e o item 187). **Etapa 7 entregue (2026-08-12, `29524fc..0722bfd` + `eabd848`/`7fc1b7f`)**: a
 > devolução cita a saída original (com validação de quantidade), herda o lote, reativa a série,
 > tem tela dedicada em `/almoxarifado/devolucoes` — e o **bug de saldo do destino SUCATA foi
@@ -346,3 +350,32 @@ separado). Achado medindo, na revisão do plano da Etapa 116.
 
 Continua 🟢 (com a C236 declarada). Testes: `estornoSemSerie.api.test.js` (RN-10), `estornoSemSerieFase5.api.test.js` (R1-a,
 R2-c, R2-d, S-D2/D6/D8).
+
+## Etapa 117 — a devolução desfeita pelo livro deixa de contar, nas cinco contas (2026-10-16)
+
+**A seção da Etapa 116 acima dizia: "Viva = sem a sua `ENTRADA_DEVOLUCAO` estornada (`referencia = 'DEV-<id>'`)". Estava
+incompleto em dois pontos — fica dito, não apagado:** (1) qualquer `ENTRADA_DEVOLUCAO` com aquela referência contava, e a
+Entrada v2 aceita o tipo com referência livre — uma digitada e estornada matava a devolução (o estorno da saída passava: físico
+12 com 10); (2) `cancelado = 1` é gravado pelo claim **antes** do efeito e volta a 0 se o estorno falha — nessa janela a
+devolução parecia morta (físico 7 para 5). E o item "Fora" da 116 (C236) está resolvido abaixo.
+
+- [x] **A régua "viva" é uma só, em `services/almoxarifado/devolucaoViva.js`** — `00bfee8b`. Viva = a **primeira**
+  `ENTRADA_DEVOLUCAO` com a referência `DEV-<id>`, do material da devolução, **não** teve o estorno **concluído**
+  (`cancelado = 1` **e** `movimento_estorno_id` gravado). Legada (sem referência) e RETRABALHO (sem entrada) contam sempre.
+- [x] **As cinco contas usam a régua (C236)** — `00bfee8b`: `validarSaidaOriginal`, o `INSERT … WHERE EXISTS` de
+  `registrarDevolucao`, `listarSaidasElegiveis` (`saldo_devolvivel`), as duas somas de `requisitionService.excluirSemTrava` e o
+  estorno da saída (guarda e claim, 116).
+- [x] **Com série, o estorno da entrada da devolução que citou a saída devolve as séries a *Entregue* naquela saída** (não
+  *Estornada*) — `00bfee8b` (B763). O desfazer devolve o vínculo anterior.
+- [x] **A entrada da devolução para SUCATA não se estorna com a perna SUCATA de pé (C237, B760)** — `00bfee8b`; guarda e condição no
+  claim, perna = a primeira SUCATA da referência, "de pé" até o estorno dela concluir.
+- [x] **(Fase 5) Com a entrega citada, cada série tem de ter saído nela** (Entregue com o vínculo, ou sem vínculo — legado) —
+  `0b2d72f5` (B766). Sem isto a B763 ligaria à entrega uma série digitada errada ou de outra saída.
+- [x] **(Fase 5) A `ENTRADA_DEVOLUCAO` com a referência `DEV-<n>` só nasce da devolução** (o motor recusa sem a opção
+  `daDevolucao`) — `0b2d72f5` (B764). A identidade "a primeira" sozinha era contornável com a entrada digitada antes da devolução.
+- [x] **(Fase 5) A entrega de requisição excluída não é devolvível e sai da lista** (validação, `INSERT` condicional e
+  `listarSaidasElegiveis`) — `0b2d72f5` (C244, B767; anterior à 117: 5 → 7).
+- [ ] **Fora:** QUARENTENA — estornar só a entrada deixa o `BLOQUEIO` da devolução de pé (**C239**, **B761**); a lista de
+  devoluções não marca a desfeita (**D (117)**); RETRABALHO não tem entrada para estornar (**D (117)**); **B755** (P.O.).
+
+Continua 🟢. Testes: `devolucaoViva.api.test.js` (27), `devolucaoVivaIntegracao.api.test.js` (3), `devolucaoVivaFase5.api.test.js` (10).

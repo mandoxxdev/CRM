@@ -11,10 +11,13 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-16):** **Etapa 116 fechada** (o cadastro aberto há muito tempo não desfaz mais o
+> **Onde o desenvolvimento está (2026-10-16):** **Etapa 117 fechada** (a devolução desfeita pelo livro deixa de contar na tela,
+> na gravação e na exclusão da requisição — **C236** resolvido; a entrada da devolução para sucata não se estorna mais sozinha —
+> **C237**; e o estorno de saída que falha desfaz antes de liberar o material — **C235** resolvido); a próxima do almoxarifado é a
+> **118** — ver "Onde estamos e o que vem a seguir". *(Antes: Etapa 116 fechada (o cadastro aberto há muito tempo não desfaz mais o
 > controle mudado por outra pessoa — **C233** resolvido; o estorno de saída com séries depois de desligar pede para religar —
 > **C232** resolvido, menos a devolução; e estornar uma saída já devolvida é recusado — contava em dobro, **B756**); a próxima
-> do almoxarifado é a **117** — ver "Onde estamos e o que vem a seguir". *(Antes: Etapa 115 fechada (ligar e desligar o
+> do almoxarifado é a **117**.)* *(Antes: Etapa 115 fechada (ligar e desligar o
 > controle por lote ou série não deixa mais saldo sem lote nem série órfã — **C226** resolvido, **C225** resolvido para o
 > Almoxarife e a Engenharia).)* *(Antes: Etapa 114 fechada (a requisição de um material inativado é recusada na
 > aprovação, no envio e na separação, em vez de ficar aprovada e parada — **C229** resolvido).)* *(Esta frase tinha parado na Etapa 110 — as Etapas 112 e 113 não a
@@ -131,7 +134,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Sessenta e quatro itens para rodar em produção ANTES do deploy — sessenta e um são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Sessenta e cinco itens para rodar em produção ANTES do deploy — sessenta e dois são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-16 (Etapa 117) de sessenta e quatro para sessenta e cinco**, com a **A65** — devoluções desfeitas pelo livro antes da Etapa 117: estoque a menos na sucata e na exclusão de requisição, séries soltas; opcional.)*
 
 *(**Atualizado em 2026-10-16 (Etapa 116) de sessenta e dois para sessenta e quatro**, com a **A63** — saídas devolvidas e depois estornadas, o estoque contado em dobro — e a **A64** — séries *Entregue* de saída estornada; opcionais.)*
 
@@ -2350,12 +2355,60 @@ livro diz não ter acontecido. Se a unidade está na prateleira: o Administrador
 acerta séries e físico em **Lotes e Séries → Séries → Regularizar séries**. Se não está, nada a fazer na série — confira se o
 físico do material não ficou a mais.
 
+**A65 (NOVA, da Etapa 117 — devoluções desfeitas pelo livro antes da Etapa 117: estoque a menos e séries soltas).** Três
+consultas, somente leitura; **nada aqui é obrigatório**. Até a Etapa 117: estornar só a entrada de uma devolução para sucata
+tirava o material duas vezes (**C237**); excluir a requisição depois de desfazer a devolução não devolvia o que ela tinha
+tirado (**C236**); e, com série, o estorno da entrada deixava as séries *Estornada*, soltas da entrega (**B763**).
+
+```sql
+-- (1) devolução para sucata com a entrada estornada e a sucata de pé: o estoque está a menos pela quantidade
+SELECT d.id AS devolucao_id, m.codigo, d.quantidade, ed.id AS entrada_id, ed.cancelado_em, sc.id AS sucata_id
+  FROM devolucoes_material_almoxarifado d
+  JOIN materiais_almoxarifado m ON m.id = d.material_id
+  JOIN movimentacoes_almoxarifado ed ON ed.referencia = 'DEV-' || d.id AND ed.tipo = 'ENTRADA_DEVOLUCAO'
+       AND ed.material_id = d.material_id AND ed.cancelado = 1
+  JOIN movimentacoes_almoxarifado sc ON sc.referencia = 'DEV-' || d.id AND sc.tipo = 'SUCATA'
+       AND sc.material_id = d.material_id AND COALESCE(sc.cancelado, 0) = 0
+ WHERE d.destino = 'SUCATA'
+ ORDER BY ed.cancelado_em;
+
+-- (2) requisição excluída cuja entrega teve uma devolução desfeita pelo livro: confira se a exclusão devolveu o certo
+SELECT r.numero AS requisicao, m.codigo, d.id AS devolucao_id, d.quantidade, ed.cancelado_em AS entrada_estornada_em
+  FROM devolucoes_material_almoxarifado d
+  JOIN materiais_almoxarifado m ON m.id = d.material_id
+  JOIN movimentacoes_almoxarifado s ON s.id = d.movimentacao_saida_id
+  JOIN requisicoes_almoxarifado r ON r.id = s.requisicao_id AND COALESCE(r.ativo, 1) = 0
+  JOIN movimentacoes_almoxarifado ed ON ed.referencia = 'DEV-' || d.id AND ed.tipo = 'ENTRADA_DEVOLUCAO'
+       AND ed.material_id = d.material_id AND ed.cancelado = 1
+ ORDER BY r.numero;
+
+-- (3) séries "Estornada" de uma devolução desfeita que citava a entrega
+SELECT m.codigo, sr.numero, sr.status, d.id AS devolucao_id, d.movimentacao_saida_id AS saida_id
+  FROM series_almoxarifado sr
+  JOIN materiais_almoxarifado m ON m.id = sr.material_id
+  JOIN movimentacoes_almoxarifado ed ON ed.id = sr.movimentacao_entrada_id AND ed.tipo = 'ENTRADA_DEVOLUCAO' AND ed.cancelado = 1
+  JOIN devolucoes_material_almoxarifado d ON ed.referencia = 'DEV-' || d.id
+ WHERE sr.status = 'ESTORNADA' AND d.movimentacao_saida_id IS NOT NULL
+ ORDER BY m.codigo, sr.numero;
+```
+
+*(Conferidas numa sonda contra o esquema real: a (1) acha a entrada estornada com a sucata de pé e **não** acha a devolução em
+que a sucata foi estornada primeiro; a (2) acha a requisição excluída e **não** a ativa; a (3) acha as séries no estado de
+antes e devolve **vazio** no comportamento novo.)*
+
+**Como ler o resultado:** **vazias** — nada a fazer. **(1)** cada linha é estoque a menos pela `quantidade`: estorne a linha
+*Sucata* da mesma referência (o estoque volta ao certo, e a devolução fica desfeita). **(2)** cada linha é uma exclusão que pode
+ter devolvido a menos (se a entrada foi estornada **antes** da exclusão): confira no extrato do material a entrada *"Estorno
+exclusão requisição ⟨número⟩"* e, se faltou a `quantidade`, corrija com um **Ajuste** citando a requisição. **(3)** cada linha é
+uma série que saiu com quem a levou mas está *Estornada*: a tela de Devoluções não a oferece; se a peça voltar, o Administrador
+acerta em **Lotes e Séries → Séries → Regularizar séries**.
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B758; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B768; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -7929,6 +7982,71 @@ a devolução que continua contando quando a entrada dela é estornada (**C236**
 e, se vocês decidirem recusar, a devolução de saída com séries depois de desligar (**B755**). A **C224**, o resto da **C225**,
 a **C228**, a **C219** e a **C230** continuam esperando vocês.
 
+**B759 (NOVA, da Etapa 117) — a devolução cuja entrada foi estornada pelo livro deixa de contar no "restante".** **O que foi
+escolhido** (`00bfee8b`): a validação e a gravação da devolução, a lista de entregas da tela de Devoluções, a exclusão da requisição e
+o estorno da saída usam **a mesma régua**: só conta a devolução cuja entrada continua de pé. Devolução avulsa antiga (sem a
+referência `DEV-…`) e a de Retrabalho (que não grava entrada) continuam contando. **Descartado:** recusar o estorno da entrada
+de devolução pelo livro (tiraria a única correção de uma devolução registrada por engano); apagar ou marcar a linha da
+devolução no estorno (a lista perderia o histórico). **Reversível.**
+
+**B760 (NOVA, da Etapa 117) — a entrada de uma devolução para sucata não se estorna com a sucata de pé.** Medido: estornar só a
+entrada tirava o material duas vezes (8 → 6). **O que foi escolhido** (`00bfee8b`): *"Não é possível estornar: esta entrada é da
+devolução DEV-⟨número⟩, que foi para a sucata — estornar só a entrada tiraria do estoque de novo o que já saiu pela sucata.
+Estorne primeiro a sucata desta devolução e depois esta entrada."* Estornada a sucata, a entrada estorna. **Descartado:**
+estornar as duas linhas juntas (o estorno passaria a desfazer duas movimentações — motor novo); só avisar (o estoque fica
+errado). **Reversível.**
+
+**B761 (NOVA, da Etapa 117) — a devolução para quarentena fica como está.** Estornar só a entrada deixa o bloqueio dela de pé
+(o estoque certo, o disponível a menos). Exigir o bloqueio estornado antes travaria a entrada para sempre quando a quarentena já
+foi liberada (o estorno do bloqueio recusa *"o bloqueio já foi desfeito"*). Declarado na **C239**. **Decisão sua** se quiser
+outra regra.
+
+**B762 (NOVA, da Etapa 117) — o estorno de uma saída que falha no meio desfaz antes de liberar o material.** **O que foi
+escolhido** (`6aa8fc7f`): o registro do estorno no livro e, se algo falhar depois do crédito, o desfazer acontecem antes de soltar a
+trava do material; uma saída do mesmo material no mesmo instante espera. **Descartado:** só pôr uma guarda no desfazer (o
+desfazer que não coubesse deixaria o crédito aplicado com a saída de pé — o estorno seguinte creditaria de novo); a trava em
+volta do estorno inteiro (o recálculo das requisições pega a mesma trava, que não é reentrante). **Reversível.**
+
+**B763 (NOVA, da Etapa 117, da revisão do plano) — com número de série, o estorno da entrada da devolução devolve as séries à
+entrega.** As séries voltam a *Entregue* na saída que a devolução citou (o material não voltou), e não a *Estornada* soltas.
+Sem isto, a B759 deixava a tela sem séries para devolver de novo e a exclusão da requisição entrava sem série (séries e
+estoque sem bater, para sempre). Devolução avulsa: *Estornada*, como antes. **Descartado:** aplicar a B759 só a material sem
+série (a C236 ficaria de pé para os serializados). **Reversível.**
+
+**B764 (NOVA, da Etapa 117, da revisão do plano) — só a entrada que a própria devolução gerou conta.** A tela de Movimentações
+aceita lançar uma *Entrada de devolução* com referência livre; uma digitada com `DEV-⟨número⟩` e estornada "desfazia" a
+devolução — e, desde a 116, liberava o estorno da saída (estoque 12 com 10 de verdade). Agora vale a primeira entrada de
+devolução com aquela referência, do mesmo material. **E, desde a revisão do código, a referência é reservada:** a primeira
+entrada não bastava — uma digitada **antes** da devolução, com o número que ela ia receber, virava "a primeira" (a sucata
+estornava pela metade de novo, 9 → 7). A tela de Movimentações (e a integração) recusa a *Entrada de devolução* com a referência
+`DEV-⟨número⟩`: *"A referência DEV-⟨número⟩ é reservada às devoluções — a entrada de devolução com essa referência só é registrada
+pela tela de Devoluções."* — as outras referências e os outros tipos passam como antes. **Descartado:** guardar na devolução o
+número da sua entrada (coluna nova e dado antigo sem ela). O que esta B dizia antes — "descartado: recusar a referência na tela
+de Movimentações" — foi revisto aqui, com a medição. **Reversível.**
+
+**B765 (NOVA, da Etapa 117, da revisão do plano) — a devolução só morre quando o estorno da entrada terminou.** O estorno marca
+a linha como cancelada antes de mexer no estoque e desmarca se falhar; nesse meio, a devolução parecia desfeita e o estorno da
+saída passava (estoque 7 para 5, 5 de 5 rodadas). Agora só o estorno concluído conta — e o mesmo para a sucata da **B760**.
+**Reversível.**
+
+**B766 (NOVA, da Etapa 117, da revisão do código) — a devolução que cita a entrega só aceita as séries que saíram nela.** Desde a
+**B763** o estorno da entrada devolve as séries à entrega citada; uma série digitada errada (que nascia nova) ou de outra entrega
+passaria a constar dela (estoque 1 com 2 séries presentes). **O que foi escolhido** (`0b2d72f5`): *"A série ⟨número⟩ não saiu na
+saída ⟨id⟩ — informe as séries desta entrega (a lista mostra as que estão fora) ou registre a devolução sem citar a entrega."*
+A série *Entregue* sem o vínculo (dado antigo) continua aceita; a devolução avulsa aceita qualquer série, como antes. A tela já
+oferecia só as séries da entrega. **Descartado:** o estorno ligar à entrega só as séries que tinham saído nela (a devolução apaga
+esse vínculo ao reativar a série — não há de onde ler). **Reversível.**
+
+**B767 (NOVA, da Etapa 117, da revisão do código) — a entrega de uma requisição excluída não se devolve.** Medido: entrega 2,
+excluir a requisição (o estoque volta), devolver as 2 citando a entrega → o estoque contava em dobro (5 → 7). Anterior a esta
+etapa, mas a **B759** abria mais um caminho até ele. **O que foi escolhido** (`0b2d72f5`): *"A saída ⟨id⟩ é de uma requisição
+excluída — a exclusão já devolveu o material ao estoque"*, e a entrega sai da lista da tela de Devoluções. **Descartado:**
+marcar a saída como estornada na exclusão (a exclusão grava uma Entrada própria — mexeria no livro de toda exclusão antiga).
+**Reversível.**
+
+**B768 (NOVA, da Etapa 117) — a próxima etapa do almoxarifado (118).** Ver a "próxima tarefa detalhada" no plano da Etapa 117.
+A **B755**, a **C224**, o resto da **C225**, a **C228**, a **C219** e a **C230** continuam esperando vocês.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -8049,7 +8167,8 @@ a **C228**, a **C219** e a **C230** continuam esperando vocês.
    vínculo atual). Quem re-vincula precisa saber que "desfez" o fechamento automático do pedido
    anterior. É consequência declarada do desenho da B22(c).
 
-16. **(14) Estornar SÓ a perna de entrada de uma devolução-sucata infla o Consumido do
+16. **✅ RESOLVIDO NA ETAPA 117 (`00bfee8b`; B760, C237) — estornar só a entrada de uma devolução para sucata é recusado
+   enquanto a sucata estiver de pé; o rodapé do relatório foi corrigido.** O texto original: **(14) Estornar SÓ a perna de entrada de uma devolução-sucata infla o Consumido do
    relatório Custo por projeto.** A devolução para sucata lança duas movimentações (entrada +
    sucata). Cancelar apenas a entrada deixa a perna SUCATA viva — que conta como consumo do
    projeto sem a devolução abatendo. O rodapé do relatório declara isso; a correção é cancelar
@@ -10271,17 +10390,70 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      séries vinculadas e devolve a quantidade: o estoque fica a mais. **O que fazer:** antes de estornar uma saída antiga de
      material com série, confira no extrato se houve Entrada com os mesmos números depois dela.
 
-235. **NOVO (da Etapa 116, da revisão do código) — uma falha do banco no fim do estorno de saída pode deixar o físico
+235. **✅ RESOLVIDO NA ETAPA 117 (`6aa8fc7f`; B762) — o registro no livro e o desfazer do estorno de saída rodam sob a trava do material: a saída do mesmo instante espera e vê o estoque certo.** O texto original: **NOVO (da Etapa 116, da revisão do código) — uma falha do banco no fim do estorno de saída pode deixar o físico
      negativo.** O registro do estorno no livro e o desfazer (se esse registro falhar) rodam depois de soltar a trava do
      material; com a falha **forçada** em teste e uma saída do mesmo material no meio, o físico foi a −2. Só aparece com erro
      de banco no instante exato. **O que fazer:** nada no dia a dia; se o log mostrar erro de estorno, confira o físico do
      material.
 
-236. **NOVO (da Etapa 116, da revisão do código) — a devolução cuja entrada foi estornada continua contando como devolvida
+236. **✅ RESOLVIDO NA ETAPA 117 (`00bfee8b`; B759, B763) — a devolução desfeita pelo livro deixa de contar na tela, na gravação, na exclusão da requisição e no estorno da saída; com série, as séries voltam a *Entregue* na entrega.** O texto original: **NOVO (da Etapa 116, da revisão do código) — a devolução cuja entrada foi estornada continua contando como devolvida
      na tela de Devoluções.** Estornar pelo livro a entrada de uma devolução tira o material do estoque de novo, e o estorno da
      saída volta a ser aceito (**B756**); mas a devolução continua dizendo *"já foram devolvidos ⟨d⟩"* e recusa devolver de novo
      (*"Devolução acima do entregue: … restam 0"*). **O que fazer:** se o material voltou de fato, estorne a saída (em vez de
      devolver de novo). Candidata da **Etapa 117**.
+
+237. **✅ RESOLVIDO NA ETAPA 117 (`00bfee8b`; B760) — achado na medição da etapa: estornar só a entrada de uma devolução para sucata
+     tirava o material duas vezes.** A devolução para sucata entra e sai (estoque igual); estornar a entrada tirava de novo o que
+     já tinha saído pela sucata (8 → 6). Agora é recusado com a sucata de pé. **Se já aconteceu:** consulta **A65**.
+
+238. **NOVO (da Etapa 117, medido) — uma falha do banco no fim do estorno de bloqueio, desbloqueio, ajuste ou transferência
+     deixa o efeito aplicado.** O registro no livro falhando (forçado em teste) devolve erro, a linha original continua de pé,
+     mas o bloqueado (ou o físico) já mudou: bloqueio 2 → 0; ajuste 7 → 5. Estornar de novo aplicaria outra vez. Só com erro de
+     banco no instante exato. **O que fazer:** se o log mostrar erro de estorno, confira o físico e o bloqueado do material antes
+     de estornar de novo. Candidata da próxima etapa. (No estorno de saída o desfazer existe e roda sob a trava — **C235**; o
+     resto que sobra ali é a falha **dupla**, o vínculo do estorno e a limpeza da linha falhando juntos: fica uma linha de
+     estorno a mais no livro, com o estoque certo.)
+
+239. **NOVO (da Etapa 117) — estornar só a entrada de uma devolução para quarentena deixa o bloqueio de pé.** O estoque fica
+     certo, mas o disponível fica a menos pela quantidade da devolução; e, como a devolução desfeita já não conta (**B759**),
+     devolver para a quarentena e estornar a entrada de novo acumula outro bloqueio a cada volta. **O que fazer:** ao desfazer
+     uma devolução para quarentena, estorne também a linha *Bloqueio* com a mesma referência `DEV-⟨número⟩` (**B761**).
+
+240. **NOVO (da Etapa 117, da revisão do plano) — durante um estorno de saída que acaba falhando, a devolução daquela saída
+     recebe uma mensagem que não é verdade.** Nos instantes em que o estorno está em curso, a devolução recusa com *"A saída
+     ⟨n⟩ foi cancelada (estornada) — o estorno já devolveu o material"*; se o estorno falhar por erro de banco, a saída continua
+     de pé. Só com erro de banco no instante exato. **O que fazer:** se a devolução disser isso e o extrato mostrar a saída sem
+     o selo ESTORNADA, devolva de novo.
+
+241. **✅ RESOLVIDO NA ETAPA 117 (`00bfee8b`; B764) — achado na revisão do plano: uma entrada digitada com a referência de uma
+     devolução, estornada, liberava o estorno da saída devolvida.** Desde a 116 o estorno da saída devolvida é recusado; mas a
+     recusa olhava qualquer *Entrada de devolução* com a referência `DEV-⟨número⟩`, inclusive uma lançada à mão na tela de
+     Movimentações — estornando essa, o estorno da saída passava e o material voltava duas vezes (10 → 12). **Se já aconteceu:**
+     a **A63** acha.
+
+242. **NOVO (da Etapa 117, da revisão do código) — depois de desfazer a devolução e estornar a saída, a entrada original das
+     peças com série não se estorna mais.** As séries voltam ao estoque pelo estorno da saída, mas continuam marcadas como
+     vindas da entrada da devolução (já estornada); o estorno da Entrada original recusa com *"estorno de entrada recusado: ha
+     series desta entrada ja movimentadas — estorne as saidas primeiro"*, sem saída para estornar. Antes da Etapa 117 a cadeia
+     parava um passo antes (o estorno da saída recusava). **O que fazer:** para tirar essas peças do estoque, use um **Ajuste**
+     com as séries (6.2 do manual).
+
+243. **NOVO (da Etapa 117, da revisão do código; anterior a ela) — o estorno de uma entrada com série que falha por erro de
+     banco, com uma devolução da mesma peça no mesmo instante, pode deixar estoque e séries sem bater.** É o gêmeo, no estorno
+     de entrada, do que a **C235** resolveu no de saída: a troca das séries e o registro no livro rodam fora da trava, e o
+     desfazer das séries não confere se outra operação já as mudou. Medido só com a falha **forçada** (estoque 3 com 2 séries
+     presentes). **O que fazer:** se o log mostrar erro de estorno, confira em **Lotes e Séries → Séries → Regularizar séries**.
+     Candidata da próxima etapa, junto com a **C238**.
+
+244. **✅ RESOLVIDO NA ETAPA 117 (`0b2d72f5`; B767) — achado na revisão do código, anterior a ela: a entrega de uma requisição
+     excluída podia ser devolvida de novo.** A exclusão devolve ao estoque o que a requisição entregou, mas a entrega continuava
+     na lista de Devoluções e a devolução passava — o material contado em dobro (5 → 7). Agora é recusada e sai da lista. **Se
+     já aconteceu:** confira no extrato do material as devoluções cuja entrega é de uma requisição excluída (*Cancelado*) e
+     corrija com um **Ajuste**.
+
+245. **NOVO (da Etapa 117, da revisão do código; anterior a ela) — o estorno de uma saída com várias séries que falha no meio
+     da devolução das séries pode deixar uma série "Em estoque" com o estoque desfeito.** Só com erro de banco no instante exato
+     (forçado em teste). **O que fazer:** se o log mostrar erro de estorno, confira em **Regularizar séries**.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -11375,6 +11547,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(116) A conferência do formulário aberto** vale para os dois controles (lote e série); os outros campos do cadastro
   continuam no "último que salva vence". O formulário não tem botão de recarregar — a mensagem pede para recarregar a página.
 
+- **(117) A lista de devoluções** continua mostrando a devolução desfeita pelo livro, como histórico, sem marca de "desfeita".
+- **(117) A devolução para Retrabalho** não grava entrada: estornar a linha de retrabalho não a desfaz, e ela continua contando.
+- **(117) A devolução para Quarentena** desfeita pela entrada deixa o bloqueio dela de pé (**C239**, **B761**).
+
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
 **"Uma remessa não pode misturar materiais de donos diferentes."** O sistema hoje **recusa** montar
@@ -12276,6 +12452,12 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(117) Nenhum clique foi dado nesta etapa no navegador.** A tela não mudou: a lista de Devoluções lê o mesmo número do
+servidor (que agora conta só a devolução não desfeita) e as séries que ele oferece; a recusa nova do estorno chega pelo aviso
+vermelho que já mostra a mensagem do servidor. O servidor foi provado pela rota (**49** cenários: 27 + 9 + 10 da etapa e da revisão, e **3** jornadas de integração; corridas de 30 rodadas pelos revisores). O que **só o navegador** prova: (1) o
+cenário 1 da seção da Etapa 117 — a entrega voltando a aparecer com 2 na janela *Nova Devolução* depois do estorno da entrada;
+(2) o cenário 3 — T1 e T2 oferecidas de novo na janela.
 
 **(116) Nenhum clique foi dado nesta etapa no navegador.** A tela mudou só no que envia (o formulário de material manda os
 controles de quando abriu — provado por teste de componente com a fronteira HTTP simulada, **6** casos); as recusas novas
@@ -24055,9 +24237,108 @@ ficaram **0 de 30**. O terceiro revisor fez **70 sabotagens**: 50 derrubaram tes
 **8** mostraram cenários sem prova — viraram testes (`00783173`, `96a90ce2`). Ficaram declarados: o desfazer do estorno fora
 da trava (**C235**, só com falha de banco) e a devolução estornada que ainda conta na tela de Devoluções (**C236**).
 
+## Etapa 117 — A devolução desfeita pelo livro deixa de contar, e o estorno que falha não deixa estoque negativo (2026-10-16)
+
+Quem registrava uma devolução por engano e a desfazia estornando a entrada dela no livro ficava preso: o material saía do
+estoque de novo, mas a tela de Devoluções continuava dizendo que ele já tinha voltado e recusava devolvê-lo de verdade quando
+ele voltasse (*"… já foram devolvidos 2 e restam 0"*). Excluir a requisição dessa entrega também deixava o estoque a menos. E,
+medindo, apareceu uma segunda conta errada no mesmo lugar: na devolução para **sucata**, estornar só a entrada tirava do
+estoque **de novo** o que já tinha saído pela sucata (8 → 6). Agora a devolução desfeita pelo livro sai da conta em todos os
+lugares — a tela, a gravação, a exclusão da requisição e o estorno da saída —, as peças com número de série voltam a constar
+com quem as levou, e a entrada da devolução para sucata pede para estornar a sucata primeiro. Por baixo, o estorno de uma saída
+que falha no meio por erro de banco desfaz o que fez antes de liberar o material para outra pessoa (antes, uma saída no mesmo
+instante podia deixar o estoque negativo).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Estornada a entrada de uma devolução, devolver de novo era recusado: *"… já foram devolvidos 2 e restam 0"* | A devolução desfeita não conta: a tela oferece de novo e a devolução passa (**B759**) |
+| A lista de entregas da tela de Devoluções mostrava saldo 0 para essa entrega | Mostra o que de fato está fora (2) |
+| Excluir a requisição depois disso deixava o estoque a menos (3 em vez de 5) | A exclusão devolve o que a devolução desfeita deixou de fora (5) |
+| Com série, o estorno da entrada da devolução marcava as séries *Estornada*, soltas | As séries voltam a *Entregue*, na entrega de onde saíram — a tela as oferece para devolver de novo (**B763**) |
+| Estornar só a entrada de uma devolução para sucata tirava o material duas vezes (8 → 6) | Recusado, pedindo para estornar a sucata primeiro; estornada a sucata, a entrada estorna (**B760**) |
+| Uma entrada digitada na tela de Movimentações com a referência de uma devolução, e estornada, "desfazia" a devolução | Só a entrada que a própria devolução gerou conta (**B764**) |
+| O estorno de saída que falhava por erro de banco desfazia o crédito depois de liberar o material: uma saída no mesmo instante deixava o estoque negativo (−2) | O desfazer acontece antes de liberar; a outra saída espera e vê o estoque certo (**B762**) |
+| A tela de Movimentações aceitava lançar uma *Entrada de devolução* com a referência `DEV-⟨número⟩` | Recusado: *"A referência DEV-⟨número⟩ é reservada às devoluções — …"* (**B764**) |
+| A devolução que cita a entrega aceitava qualquer número de série | Só as séries que saíram naquela entrega (**B766**) |
+| A entrega de uma requisição excluída continuava na lista de Devoluções e podia ser devolvida de novo (5 → 7) | Recusado e fora da lista (**B767**) |
+
+### As regras, com o cenário exato
+
+Preparação: um material comum **PRF-0701** com uma Entrada de 5 unidades; um material comum **PRF-0702** com uma Entrada de
+10; um material com **Controle por número de série**, **PRF-0703**, com uma Entrada de 2 (séries **T1** e **T2**). Usuário:
+o **administrador** (estornar exige o perfil que ajusta estoque).
+
+**1. Desfazer uma devolução registrada por engano.** No PRF-0701, dê uma **Saída** de 2 (estoque 3). Em **Devoluções**,
+devolva as 2 citando essa saída → estoque 5. Em **Movimentações**, ache a linha *Entrada de devolução* (referência
+`DEV-⟨número⟩`) e estorne-a → estoque 3. Volte a **Devoluções**, escolha o PRF-0701: a entrega aparece de novo com **2** a
+devolver. Tente devolver 3 → *"Devolução acima do entregue: a saída ⟨id⟩ entregou 2, já foram devolvidos 0 e restam 2"*.
+Devolva 2 → estoque 5. Estorne a saída agora → *"Não é possível estornar: esta saída já foi devolvida inteira (2 PC) — o
+estorno devolveria de novo o que já voltou."* (a devolução nova vale).
+
+**2. A sucata primeiro.** No PRF-0702, dê uma **Saída** de 2 (estoque 8) e devolva as 2 com destino **Sucata** (o estoque
+continua 8: entra e sai). Em **Movimentações**, estorne a *Entrada de devolução* dessa devolução → aviso vermelho: *"Não é
+possível estornar: esta entrada é da devolução DEV-⟨número⟩, que foi para a sucata — estornar só a entrada tiraria do estoque
+de novo o que já saiu pela sucata. Estorne primeiro a sucata desta devolução e depois esta entrada."* O estoque continua 8.
+Estorne a linha *Sucata* com a mesma referência → estoque 10 (o material voltou, como numa devolução para o estoque). Estorne
+agora a entrada → estoque 8; em **Devoluções** a entrega volta a oferecer 2.
+
+**3. Com número de série.** No PRF-0703, dê uma **Saída** de 2 escolhendo T1 e T2. Devolva as 2 citando a saída, com T1 e
+T2. Estorne a *Entrada de devolução* → em **Lotes e Séries**, T1 e T2 aparecem *Entregue* (não *Estornada*). Em
+**Devoluções**, a entrega oferece T1 e T2 de novo; ou estorne a saída → T1 e T2 voltam a *Em estoque*, estoque 2.
+
+**4. A requisição.** Entregue 2 do PRF-0701 por uma requisição, devolva as 2 citando a entrega, estorne a entrada da
+devolução e exclua a requisição (administrador) → o estoque volta ao que era antes da entrega.
+
+**5. Série que não saiu na entrega.** No passo 3, devolva citando a saída mas digite **T9** (que não existe) → *"A série T9 não
+saiu na saída ⟨id⟩ — informe as séries desta entrega (a lista mostra as que estão fora) ou registre a devolução sem citar a
+entrega."* Nada é gravado.
+
+**6. Requisição excluída.** Entregue 2 do PRF-0701 por uma requisição e exclua a requisição (o estoque volta). Em **Devoluções**,
+a entrega não aparece mais; pela integração, devolvê-la responde *"A saída ⟨id⟩ é de uma requisição excluída — a exclusão já
+devolveu o material ao estoque"*.
+
+**7. O que continua igual.** A devolução que não foi desfeita continua contando; a devolução avulsa e a de **Retrabalho**
+continuam como antes; a entrada de uma devolução para o **Estoque** estorna sem pedir nada.
+
+### O que esta etapa NÃO cobre
+
+1. **Quarentena:** estornar só a entrada de uma devolução para quarentena deixa o bloqueio dela de pé — o estoque fica certo,
+   o disponível fica a menos até alguém estornar o *Bloqueio* com a mesma referência; e, agora que a devolução de novo é
+   aceita, repetir o ciclo acumula bloqueio (**C239**, **B761**).
+2. **A lista de devoluções** continua mostrando a devolução desfeita, como histórico — sem marca de "desfeita" (**D (117)**).
+3. **Retrabalho:** a devolução para retrabalho não tem entrada; estornar a linha de retrabalho não a desfaz (**D (117)**).
+4. **O erro de banco no estorno de bloqueio, desbloqueio, ajuste e transferência** continua sem desfazer o que já fez (**C238**).
+5. A **B755**, a **C224**, o resto da **C225**, a **C228**, a **C219** e a **C230** — decisões suas.
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0, sondas pelas rotas) confirmou as duas do plano da Etapa 116 e achou de passagem a sucata estornada pela
+metade (**C237**) e o estorno de bloqueio e de ajuste sem desfazer (**C238**). A **revisão do plano** achou sete pontos, dois
+críticos: com série, desfazer a devolução deixaria a exclusão da requisição sem série (séries e estoque sem bater para sempre —
+corrigido antes de escrever o código, **B763**); e uma *Entrada de devolução* digitada com a referência da devolução, estornada,
+liberava o estorno da saída devolvida (estoque 12 com 10 — um furo que já existia, **C241**). Achou também que a régua lia a
+marca provisória do estorno em curso (**B765**). A **revisão adversarial do código** (três revisores, executando, cada um na sua
+cópia) achou: a série errada na devolução que o estorno ligaria à entrega (**B766**); a referência digitada **antes** da
+devolução, que contornava a primeira correção (**B764**, agora reservada); a entrega de requisição excluída devolvível de novo
+(**C244**, anterior a esta etapa); e o desfazer que, falhando no meio, era refeito em dobro — corrigidos em `0b2d72f5`. As corridas
+(30 rodadas, nas duas ordens) ficaram **0 de 30** erradas; nenhum travamento. O terceiro revisor fez **48 sabotagens**: 26
+derrubaram teste, 15 eram equivalentes e **7** mostraram cenários sem prova — viraram testes. Ficaram declarados: **C242**,
+**C243** e **C245** (os dois últimos anteriores à etapa, só com falha de banco).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 117 entregue (2026-10-16):** **a devolução desfeita pelo livro deixa de contar, e o estorno que falha não deixa
+  estoque negativo.** Estornar a entrada de uma devolução registrada por engano faz a tela de Devoluções oferecer a entrega de
+  novo, a exclusão da requisição devolver o certo e as séries voltarem a *Entregue* (**C236** resolvido); a entrada de uma
+  devolução para sucata pede para estornar a sucata primeiro (**C237**, achado na medição: tirava duas vezes); e o estorno de
+  saída que falha por erro de banco desfaz sob a trava do material (**C235** resolvido). **O que é seu:** a consulta **A65**
+  (opcional); as decisões **B759 a B768** (a **B761** — a quarentena fica como está — é decisão sua; as outras são
+  reversíveis); os avisos **C238** a **C245** (a **C244** resolvida); as limitações **(117)** em D e a verificação **(117)** em F.
+  **Próxima: Etapa 118 — ver a "próxima tarefa detalhada" no plano da Etapa 117.**
 
 - **Etapa 116 entregue (2026-10-16):** **o cadastro aberto há muito tempo não desfaz mais o controle de outra pessoa, e o
   estorno não devolve saldo sem as séries.** O salvar que desfaria o lote ou a série mudados por outra pessoa enquanto o
@@ -24067,7 +24348,7 @@ da trava (**C235**, só com falha de banco) e a devolução estornada que ainda 
   **O que é seu:** as consultas **A63** (saídas devolvidas e estornadas — estoque a mais) e **A64** (opcionais); as decisões
   **B752 a B758** (a **B755** — a devolução com a série desligada fica como está — é decisão sua; a **B756** e a **B757** são
   reversíveis); os avisos **C234**, **C235** e **C236**; as limitações **(116)** em D e a verificação **(116)** em F.
-  **Próxima: Etapa 117 — ver a "próxima tarefa detalhada" no plano da Etapa 116.**
+  *(Próxima, na época: Etapa 117 — entregue acima.)*
 
 - **Etapa 115 entregue (2026-10-15):** **ligar e desligar o controle por lote ou série não deixa mais saldo nem série para
   trás.** O salvar que liga ou desliga um controle espera a movimentação em curso do material (**C226** resolvido);

@@ -163,7 +163,7 @@ mas não rodar jest junto do `test:api`).
    Minor declarado (C235), 1 Minor decidido (B757), **8** sabotagens sem prova → 8 cenários, **0** ruído.
 3. **Paralelismo:** **1** galho (T3, tela), feito na mesma árvore depois do tronco (jest, sem SQLite); revisores em paralelo (Fase 2
    durante os testes; Fase 5 três de uma vez), cada um na sua worktree, sem retrabalho.
-4. **Defeito que escapou:** *(preencher na Etapa 117)*. Da Etapa 115: nenhum de código; de documento, a C232 da 115 nomeava duas
+4. **Defeito que escapou:** *(preenchido na Etapa 117)* **dois**, os dois na régua da devolução viva da Fase 5: ela aceitava a `ENTRADA_DEVOLUCAO` digitada na Entrada v2 com a referência `DEV-<id>` (estornada, liberava o estorno da saída devolvida: 10 → 12 — C241) e lia o claim provisório (`cancelado = 1` antes do efeito) do estorno da entrada. Achados pela revisão do plano da 117, corrigidos em `00bfee8b` e `0b2d72f5`. Da Etapa 115: nenhum de código; de documento, a C232 da 115 nomeava duas
    portas (estorno e devolução) e havia uma terceira (excluir requisição) — achada na Fase 5 desta etapa.
 
 ## Próxima tarefa detalhada — Etapa 117

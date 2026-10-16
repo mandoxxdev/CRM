@@ -85,16 +85,16 @@ passa a importá-lo; `returnService` e `requisitionService` também.
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 — tronco (C236, serviço)** — `devolucaoViva.js`; RN-01..RN-04 em `returnService.js` e `requisitionService.js`;
+- [x] **T1 — tronco (C236, serviço)** `00bfee8b` — `devolucaoViva.js`; RN-01..RN-04 em `returnService.js` e `requisitionService.js`;
   `server/tests/api/devolucaoViva.api.test.js`. Controle positivo: cada uma das quatro contas sem a régua (a da validação, a do
   INSERT, a da lista, a da exclusão por saída); a régua sem o `tipo = 'ENTRADA_DEVOLUCAO'`.
-- [ ] **T2 — tronco (C237, motor)** — RN-05 em `stockService.js`, no mesmo arquivo de teste. Controle positivo: sem a guarda
+- [x] **T2 — tronco (C237, motor)** `00bfee8b` (no mesmo commit da T1 — mesmo arquivo de teste, mesma régua) — RN-05 em `stockService.js`, no mesmo arquivo de teste. Controle positivo: sem a guarda
   prévia (o claim ainda recusa? → então a asserção "nada tocado" distingue); sem a condição no claim; guarda também na
   compensação.
-- [ ] **T3 — tronco (C235, motor)** — RN-06 em `stockService.js`; `server/tests/api/estornoLivroNaTrava.api.test.js`. Controle
+- [x] **T3 — tronco (C235, motor)** `6aa8fc7f` — RN-06 em `stockService.js`; `server/tests/api/estornoLivroNaTrava.api.test.js`. Controle
   positivo: o `INSERT` de volta para fora da seção (físico −2); o desfazer fora da seção; o desfazer duplicado (de dentro e de
   fora: físico 1); `serieEstornoLedgerFalha` continua verde.
-- [ ] **T4 — integração (cruza Devoluções, Movimentações, Requisições)** — `server/tests/api/devolucaoVivaIntegracao.api.test.js`:
+- [x] **T4** `3aa601b7` **— integração (cruza Devoluções, Movimentações, Requisições)** — `server/tests/api/devolucaoVivaIntegracao.api.test.js`:
   (i) a tela lista a saída → devolve → estorna a entrada pelo livro → a lista volta a oferecer 2 → devolve pela lista → o estorno
   da saída é recusado com a E3 da 116 (a devolução nova está viva); (ii) pela requisição: entrega 2 → devolução para SUCATA → E1
   → estorna a sucata → estorna a entrada → excluir a requisição → físico da entrada inicial (10); (iii) *(reescrita na Fase 2,
@@ -102,7 +102,102 @@ passa a importá-lo; `returnService` e `requisitionService` também.
   /devolucoes` de 2 citando a saída (fora da seção) → estorno 500; devolução **400** *"A saída ⟨id⟩ foi cancelada (estornada) —
   o estorno já devolveu o material"* (falsa nessa janela — declarado, **C240**), nenhuma linha de devolução nem
   `ENTRADA_DEVOLUCAO`, físico 3, `cancelado = 0`; depois devolver 2 → 201, físico 5; estorno da saída → E3.
-- [ ] **T5 — fechamento** — skill `fechar-etapa`.
+- [x] **T5 — fechamento** — o commit de documentação desta etapa (ver `git log`) (skill `fechar-etapa`).
 
 Sem galho: as três tasks mexem em regra compartilhada (motor/serviço). Não há tela nesta etapa (o front lê `saldo_devolvivel`, que
 muda só no valor).
+
+## Execução — o que aconteceu
+
+- **Fase 0** (sondas `e117fase0.js`, `e117fase0b.js`, não versionadas): C236 reproduzido nas quatro contas (a exclusão: 3 em vez de 5)
+  e C235 (físico −2); de passagem, a C237 (sucata 8 → 6) e a C238 (bloqueio e ajuste sem desfazer).
+- **Fase 2** — revisor fresco, 7 achados medidos (ver o bloco no topo); todos entraram antes do primeiro commit de código.
+- **T1 + T2** `00bfee8b` — `devolucaoViva.js` e as cinco contas; a E1 da sucata; as séries de volta a *Entregue* (RN-07); 27
+  cenários (`devolucaoViva.api.test.js`). Controle positivo: 14 sabotagens, 12 vermelhas na asserção certa; a identidade sem o
+  material e a guarda prévia da E1 são equivalentes (o claim cobre a segunda).
+- **T3** `6aa8fc7f` — o livro e o desfazer sob a trava; 9 cenários (`estornoLivroNaTrava.api.test.js`). Controle positivo: 4
+  sabotagens; "sem o desfazer de dentro" só caiu depois do cenário do **desfazer lento** — sem atraso, a ordem das escritas no
+  SQLite escondia (a lição: corrida que depende de sorte precisa de um atraso que tire a sorte).
+- **T4** `3aa601b7` — 3 jornadas (`devolucaoVivaIntegracao.api.test.js`); a (iii) só passou a provar algo com o controle (tirar
+  a recusa de saída cancelada da validação e do `INSERT` → vermelho).
+- **Design e plano** `436a4e3a`; **CLAUDE.md** `a87a1783` (a regra da trava: quem desfaz subtraindo desfaz sob a trava).
+- **Fase 5** `0b2d72f5` — três revisores frescos em paralelo, cada um na sua worktree (removidas). **Regra e fluxo:** 2
+  Important (série errada ligada à entrega pelo estorno — regressão desta etapa; entrega de requisição excluída devolvível —
+  anterior, 5 → 7), 2 Minor (a identidade contornável com a entrada digitada antes — corrigido reservando a referência; o
+  `movimentacao_entrada_id` que não volta — declarado, C242). **Concorrência:** sem deadlock, corridas 0/30 em todas as
+  variantes; 1 baixa corrigida (desfazer refeito em dobro quando um passo falha), 1 anterior declarada (C243), 1 residual (falha
+  dupla, linha de estorno a mais — na C238). **Sabotagem:** 48, 26 vermelhas, 15 equivalentes, **7 sem prova** → 5 cenários
+  (P1, P2, P6, P7, P8) em `devolucaoVivaFase5.api.test.js`; P9 anterior declarada (C245). Controle das correções: 8
+  sabotagens, 7 vermelhas, 1 equivalente (a condição de requisição excluída no `INSERT`, atrás da validação).
+- **Suíte final (medida, depois de `0b2d72f5`):** `test:api` **388/388** arquivos; `test:almoxarifado` **44/0**;
+  `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 10/0; client **115** suítes / **1629** testes; `CI=true build`
+  *Compiled successfully*.
+- **Divergências do plano:** (1) a Fase 2 trouxe RN-07, RN-08 e RN-09 (com série, identidade, só o estorno concluído); (2) a
+  Fase 5 trouxe três regras que o plano não tinha (a série da devolução tem de ter saído na entrega; a referência `DEV-<n>`
+  reservada — revendo o "descartado" da B764; a entrega de requisição excluída); (3) T1 e T2 saíram num commit só (mesmo arquivo
+  de teste, mesma régua).
+
+## Retro (4 números)
+
+1. **Rodadas de correção até verde:** **1** de redesenho antes do código (Fase 2: RN-07..RN-09) e **1** no código (Fase 5). Nenhum
+   teste antigo mudou de comportamento esperado; um mudou de montagem (o [R2] monta a entrada digitada no banco, porque a v2 passou
+   a recusar).
+2. **Achados da revisão:** Fase 2 — **7 reais** de 7 (2 Critical); Fase 5 — **4 de produção** corrigidos (2 Important, 1 Minor,
+   1 baixa), **3** declarados (C242, C243, C245; dois anteriores à etapa), **7** sabotagens sem prova → 5 cenários, **0** ruído.
+3. **Paralelismo:** **0** galhos (as três tasks mexem em regra compartilhada do motor); revisores em paralelo na Fase 5 (três de
+   uma vez, cada um na sua worktree), sem retrabalho. As suítes de cada commit rodaram isoladas (o resto da árvore guardado em
+   `git stash`/scratchpad), uma por commit de código.
+4. **Defeito que escapou:** *(preencher na Etapa 118)*. Da Etapa 116: **dois** — a régua da devolução viva da 116 aceitava a
+   `ENTRADA_DEVOLUCAO` digitada com a referência (o estorno da saída devolvida passava: 10 → 12, C241) e lia o claim provisório
+   do estorno da entrada; os dois achados pela revisão do plano desta etapa.
+
+## Próxima tarefa detalhada — Etapa 118
+
+*(A série desta etapa foi B759–B768, C237–C245, A65 — a 118 começa em **B769**, **C246**, **A66**; confira com `grep -oE`
+antes.)*
+
+**Como foi escolhida (mapa `specs/modulo-almoxarifado/README.md` e os C abertos, medidos em 2026-10-16):** as features 🟡
+continuam 00, 01, 05, 06, 21, 22 e 23. Candidatos:
+
+1. **C238 — o estorno de BLOQUEIO, DESBLOQUEIO, AJUSTE e TRANSFERÊNCIA não desfaz o efeito se o livro falhar** (feature 03).
+   **Medido nesta etapa** (sonda `e117fase0b.js`, recriar em `server/tests/sonda/`): `INSERT` da linha `ESTORNO` forçado a
+   falhar → 500, `cancelado = 0`, mas BLOQUEIO: bloqueado 2 → 0; AJUSTE (sem localização): físico 7 → 5. O estorno seguinte
+   aplicaria de novo (no BLOQUEIO a guarda do claim recusa; no AJUSTE sem localização é um SET absoluto, idempotente; o AJUSTE
+   **com** localização e a TRANSFERÊNCIA são deltas — **medir**). **Não depende do P.O.** Só com falha de banco.
+2. **C240** — a mensagem falsa da devolução durante um estorno de saída que falha. Pequeno, raro, sem P.O.
+3. **C239 / B761** — a devolução para quarentena desfeita pela entrada deixa o bloqueio — **depende do P.O.** (estornar as
+   duas pernas, recusar, ou deixar). **B755**, **C224**, **C225-resto**, **C228**, **C219**, **C230** — **dependem do P.O.**
+   **C234** — raro, exige gesto do Administrador. **C231** — pequeno, sem P.O.
+
+   **C243** (Fase 5 desta etapa, anterior a ela) — o gêmeo da C235 no **ramo de entrada**: no estorno de ENTRADA_DEVOLUCAO com
+   série, a troca das séries e o livro rodam fora da trava, e `desfazerReverterEntrada` grava `WHERE id = ?` sem conferir o
+   status (apaga o que uma devolução concorrente fez) — medido pelo revisor 2 (`e117r2-a.js`, A2): físico 3 com 2 séries
+   presentes. **C245** (anterior) — `reverterSaida` que falha na 2ª série deixa a 1ª *Em estoque* (o `afetadas` não chega ao
+   chamador). Os dois são da mesma família da C238 (falha de banco no meio do estorno). **C242** — a entrada original das séries
+   que não estorna depois de desfazer a devolução (o `movimentacao_entrada_id` não volta) — pequeno, sem P.O.
+
+**Escolhida: C238 + C243 + C245 (o estorno que falha no meio desfaz tudo, em todos os ramos) — + C240 se couber.**
+
+**Contrato candidato (decisão — letra B, caminho reversível):**
+- **C238:** cada ramo ganha o seu rastreador em `desfazerEfeitosDoEstorno` (a função idempotente desta etapa, em
+  `cancelarMovimentacao`): BLOQUEIO → devolver `quantidade_bloqueada + q`; DESBLOQUEIO → `quantidade_bloqueada − q`; AJUSTE sem
+  localização → voltar o físico ao lido antes do SET (+ `syncSaldoLocalizacaoPadrao`); AJUSTE com localização → a linha `+ delta`
+  e `syncMaterialTotals`; TRANSFERÊNCIA → as duas linhas de volta. **Onde roda o desfazer:** o que **subtrai** do disponível
+  (BLOQUEIO desfeito = bloquear de novo; AJUSTE que tinha subido o total, desfeito = subtrair; TRANSFERÊNCIA = mexe só em linha)
+  tem de rodar sob a trava — os ramos de AJUSTE e DESBLOQUEIO já têm seção (`naTravaDoMaterial`); o de BLOQUEIO e o de
+  TRANSFERÊNCIA não (medir se precisam). Regra do CLAUDE.md (seção da trava, Etapa 117): desfazer subtraindo = sob a trava.
+- **Alternativa a pesar:** gravar o livro **antes** do efeito nesses ramos (o `INSERT` do `ESTORNO` primeiro, apagado se o
+  efeito recusar) — inverte a ordem de toda a função, mais arriscado.
+
+- **C243:** no ramo de entrada, as séries (`reverterEntrada`) e o livro entram na seção da trava (a mesma do claim do débito,
+  alargada), e `desfazerReverterEntrada` ganha `AND status = <o que reverterEntrada gravou>`. **C245:** `reverterSaida` devolve
+  o parcial ao chamador (ou se desfaz sozinho) antes de lançar.
+
+**Pontos de atenção:** a trava não é reentrante (nenhuma escrita do desfazer pega a trava); o `catch` de fora roda fora da seção;
+o `movimento_estorno_id` continua sendo a última escrita (a régua da devolução viva depende disso — `devolucaoViva.js`);
+`serieEstornoLedgerFalha.api.test.js` e `estornoLivroNaTrava.api.test.js` são o molde (gancho no `db.run`, Saída do meio
+disparada **fora** do contexto da seção por `AsyncResource.bind`, e o desfazer atrasado para tirar a sorte da ordem do SQLite).
+
+**O que já está pronto e não precisa reabrir:** a régua da devolução viva nas cinco contas (C236), a entrada da devolução para
+sucata (C237), as séries da devolução desfeita voltando a *Entregue* (B763), o livro e o desfazer do estorno de saída sob a trava
+(C235).
