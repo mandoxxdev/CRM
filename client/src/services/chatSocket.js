@@ -4,6 +4,9 @@ let socket = null;
 // Etapa 132 (Fase 2 I2): o token com que o socket nasceu. O logout nao recarrega a pagina; sem isto o socket de quem saiu
 // seguia na aba de quem entrou depois (o tempo real do anterior, e o aviso de sessao encerrada dele deslogando o novo).
 let tokenDoSocket = null;
+// Etapa 132 (Fase 5 r1, C274): a conversa aberta. O socket novo (reconexao depois de queda de rede, ou depois de o servidor
+// derrubar sem o aviso) nao esta em sala nenhuma; sem reentrar, a conversa aberta parava de receber ate trocar de conversa.
+let conversaAtual = null;
 
 export function getSocketURL() {
   if (process.env.REACT_APP_SOCKET_URL) {
@@ -63,7 +66,19 @@ export function connectChatSocket() {
     reconnection: true,
   });
   tokenDoSocket = token;
-  socket.on('sessao_encerrada', () => sairPorSessaoEncerrada(token));
+  const meu = socket;
+  let encerrada = false;
+  socket.on('sessao_encerrada', () => { encerrada = true; sairPorSessaoEncerrada(token); });
+  socket.on('connect', () => { if (conversaAtual) meu.emit('join_conversa', conversaAtual); });
+  // Etapa 132 (Fase 5 r1): derrubado pelo servidor SEM o aviso (a releitura do usuario falhou logo depois de o administrador
+  // editar o cadastro) -> reconecta sozinho em 1 s; o handshake rele a linha (o desativado leva a recusa e sai). O
+  // socket.io-client nao reconecta sozinho depois de "io server disconnect": o ativo ficava parado ate o proximo clique.
+  socket.on('disconnect', (reason) => {
+    if (reason !== 'io server disconnect' || encerrada) return;
+    setTimeout(() => {
+      if (socket === meu && tokenDoSocket === token && getToken() === token && !meu.connected) meu.connect();
+    }, 1000);
+  });
   socket.on('connect_error', (err) => {
     if (err && err.data && err.data.code === 'USUARIO_INATIVO') sairPorSessaoEncerrada(token);
   });
@@ -81,14 +96,17 @@ export function disconnectChatSocket() {
     socket = null;
   }
   tokenDoSocket = null;
+  conversaAtual = null;
 }
 
 export function joinConversa(conversaId) {
+  if (conversaId) conversaAtual = conversaId;
   const s = getChatSocket();
   if (s && conversaId) s.emit('join_conversa', conversaId);
 }
 
 export function leaveConversa(conversaId) {
+  if (conversaId && String(conversaAtual) === String(conversaId)) conversaAtual = null;
   const s = getChatSocket();
   if (s && conversaId) s.emit('leave_conversa', conversaId);
 }

@@ -110,6 +110,72 @@ describe('[RN-07] o socket do chat e a sessao encerrada', () => {
     limpou();
   });
 
+  test('[F5 r3 K10] token so no sessionStorage: o aviso tambem limpa e redireciona', () => {
+    localStorage.removeItem('token');
+    const s = mod.connectChatSocket();
+    expect(s.opts.auth).toEqual({ token: 'tokA' });
+    s.dispara('sessao_encerrada', ENCERRADA);
+    limpou();
+  });
+
+  test('[F5 r3 K11] token novo com o socket velho CONECTADO: desconecta o velho e nasce outro', () => {
+    const a = mod.connectChatSocket();
+    a.connected = true;
+    localStorage.setItem('token', 'tokB');
+    const b = mod.connectChatSocket();
+    expect(a.disconnect).toHaveBeenCalled();
+    expect(b).not.toBe(a);
+    expect(b.opts.auth).toEqual({ token: 'tokB' });
+  });
+
+  describe('[F5 r1] derrubado sem o aviso e a conversa aberta (C274)', () => {
+    beforeEach(() => { jest.useFakeTimers(); });
+    afterEach(() => { jest.useRealTimers(); });
+
+    test('io server disconnect SEM o aviso: reconecta sozinho em 1 s (o handshake rele a linha)', () => {
+      const s = mod.connectChatSocket();
+      s.connect.mockClear();
+      s.dispara('disconnect', 'io server disconnect');
+      jest.advanceTimersByTime(999);
+      expect(s.connect).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(1);
+      expect(s.connect).toHaveBeenCalledTimes(1);
+      naoMexeu();
+    });
+
+    test('com o aviso antes, nao reconecta; queda pelo client (logout) tambem nao', () => {
+      const s = mod.connectChatSocket();
+      localStorage.setItem('token', 'outro'); // o aviso e de outra sessao: nao desloga, mas marca a sessao como encerrada
+      s.dispara('sessao_encerrada', ENCERRADA);
+      s.dispara('disconnect', 'io server disconnect');
+      jest.advanceTimersByTime(5000);
+      expect(s.connect).not.toHaveBeenCalled();
+      const s2 = mod.connectChatSocket();
+      s2.connect.mockClear();
+      s2.dispara('disconnect', 'io client disconnect');
+      s2.dispara('disconnect', 'transport close'); // essa o proprio socket.io reconecta
+      jest.advanceTimersByTime(5000);
+      expect(s2.connect).not.toHaveBeenCalled();
+    });
+
+    test('ao (re)conectar, reentra na conversa aberta; depois de sair dela, nao', () => {
+      const s = mod.connectChatSocket();
+      mod.joinConversa(7);
+      expect(s.emit).toHaveBeenCalledWith('join_conversa', 7);
+      s.emit.mockClear();
+      s.dispara('connect');
+      expect(s.emit).toHaveBeenCalledWith('join_conversa', 7);
+      mod.joinConversa(9);
+      s.emit.mockClear();
+      s.dispara('connect');
+      expect(s.emit.mock.calls).toEqual([['join_conversa', 9]]);
+      mod.leaveConversa(9);
+      s.emit.mockClear();
+      s.dispara('connect');
+      expect(s.emit).not.toHaveBeenCalledWith('join_conversa', expect.anything());
+    });
+  });
+
   test('mesmo token: reusa o socket (nao recria)', () => {
     const a = mod.connectChatSocket();
     const b = mod.connectChatSocket();
