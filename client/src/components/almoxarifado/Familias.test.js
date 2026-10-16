@@ -352,11 +352,11 @@ describe('TabFamilias — Etapa 124: as inativas aparecem e se reativam', () => 
     expect(selo(subDe(cartaoDe('ROL'), 'ROL-ESF'))).toHaveLength(0);
   });
 
-  test('[RN-17] Reativar a raiz manda PUT {nome, ativo: 1}, toast "Família reativada" e recarrega', async () => {
+  test('[RN-17][RN-12 da 125] Reativar a raiz manda PUT {ativo: 1} (sem o nome da lista), toast "Família reativada" e recarrega', async () => {
     mock();
     await renderAbaFamilias();
     await clicar(cartaoDe('VED').querySelector('.almox-familia-cabecalho button[title="Reativar"]'));
-    expect(api.put).toHaveBeenCalledWith('/almoxarifado/familias/20', { nome: 'Vedações', ativo: 1 });
+    expect(api.put).toHaveBeenCalledWith('/almoxarifado/familias/20', { ativo: 1 });
     expect(toast.success).toHaveBeenCalledWith('Família reativada');
     expect(api.get.mock.calls.filter((c) => c[0] === '/almoxarifado/familias?ativo=all')).toHaveLength(2);
   });
@@ -365,7 +365,7 @@ describe('TabFamilias — Etapa 124: as inativas aparecem e se reativam', () => 
     mock();
     await renderAbaFamilias();
     await clicar(subDe(cartaoDe('ROL'), 'ROL-AGU').querySelector('button[title="Reativar"]'));
-    expect(api.put).toHaveBeenCalledWith('/almoxarifado/familias/22', { nome: 'Agulhas', ativo: 1 });
+    expect(api.put).toHaveBeenCalledWith('/almoxarifado/familias/22', { ativo: 1 });
     expect(toast.success).toHaveBeenCalledWith('Subfamília reativada');
     const LIT = 'Não é possível reativar: a família principal desta subfamília está inativa — reative a família principal antes';
     api.put.mockRejectedValueOnce({ response: { status: 400, data: { error: LIT } } });

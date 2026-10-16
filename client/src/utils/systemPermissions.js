@@ -67,6 +67,15 @@ export function canConfigureAlmox(user) {
   return canConfigureModule(user, 'almoxarifado');
 }
 
+// Etapa 125 (C259, RN-15; B808): quem o SERVIDOR deixa gravar a configuracao do almoxarifado — o `canConfigureAlmox` de
+// server/services/systemPermissions.js (`denyUnlessAlmoxAdmin`), que NAO aceita o administrador do sistema sozinho. O
+// `canConfigureAlmox` daqui aceita (abre a tela), e por isso o administrador do sistema via botoes que respondiam 403. Usado para
+// esconder o que o servidor recusaria; quem decide continua sendo o servidor.
+export function podeGravarConfigAlmox(user) {
+  if (!user) return false;
+  return isSuperAdmin(user) || isModuleAdmin(user, 'almoxarifado') || hasAlmoxAdminPerfil(user);
+}
+
 export function hasFrotaAdminPerfil(user) {
   return String(user?.perfil_frota || '').toUpperCase() === 'ADMIN_FROTA';
 }

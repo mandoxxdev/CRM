@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
-import { canConfigureAlmox, filterVisibleUsers } from '../../utils/systemPermissions';
+import { canConfigureAlmox, filterVisibleUsers, podeGravarConfigAlmox } from '../../utils/systemPermissions';
 import { getEffectiveUser } from '../../services/permissionsCache';
 import {
   FiSave, FiPlus, FiTrash2, FiEdit2, FiCheck, FiX,
@@ -488,7 +488,16 @@ const ehInativa = (f) => Number(f.ativo) !== 1;
 const ativasPrimeiro = (a, b) => (ehInativa(a) - ehInativa(b)) || porNome(a, b);
 const SELO_INATIVA_STYLE = { fontSize: '0.7rem', background: 'rgba(120,144,156,0.15)', color: 'var(--gmp-text-light)', padding: '2px 10px', borderRadius: 20, fontWeight: 600 };
 
+// Etapa 125 (C259, RN-16; B808): a frase da aba para quem o servidor nao deixa gravar familia.
+export const FRASE_FAMILIAS_SOMENTE_LEITURA = 'Somente leitura — cadastrar, editar, inativar e reativar famílias é do '
+  + 'Administrador do almoxarifado ou do Super Administrador; peça a um deles.';
+
 const TabFamilias = () => {
+  // Etapa 125 (C259, RN-16/RN-17; Fase 2, I1): os gestos de FAMILIA (Nova familia, Nova subfamilia, Editar, Inativar, Reativar)
+  // so para quem o servidor deixa (`podeGravarConfigAlmox`); os de MATERIAL (Adicionar item, Cadastrar primeiro item, editar o
+  // item) ficam — criar e editar material tem a regra propria, que o administrador do sistema passa.
+  const { user } = useAuth();
+  const podeGravar = podeGravarConfigAlmox(getEffectiveUser(user));
   const [familias, setFamilias] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -615,11 +624,12 @@ const TabFamilias = () => {
     } catch (err) { toast.error(err.response?.data?.error || 'Erro ao inativar'); }
   };
 
-  // RN-17: `ativo: 1` EXPLÍCITO e o `nome` (obrigatório na rota) — o Editar não manda `ativo` e por isso não reativa. A recusa
-  // do servidor (subfamília de raiz inativa, perfil sem acesso) vai para o toast com a literal.
+  // RN-17: `ativo: 1` EXPLÍCITO — o Editar não manda `ativo` e por isso não reativa. Etapa 125 (RN-12; B807): SEM o `nome` —
+  // a rota preserva o gravado quando ele é omitido; mandar o da lista desfazia o renomear de outro Administrador feito depois de a
+  // lista carregar. A recusa do servidor (subfamília de raiz inativa, perfil sem acesso) vai para o toast com a literal.
   const handleReativar = async (fam) => {
     try {
-      await api.put(`/almoxarifado/familias/${fam.id}`, { nome: fam.nome, ativo: 1 });
+      await api.put(`/almoxarifado/familias/${fam.id}`, { ativo: 1 });
       toast.success(ehRaiz(fam) ? 'Família reativada' : 'Subfamília reativada');
       loadFamilias();
     } catch (err) { toast.error(err.response?.data?.error || 'Erro ao reativar'); }
@@ -702,7 +712,13 @@ const TabFamilias = () => {
         Cada item mantém sua própria localização e estoque.
       </p>
 
-      {!showForm && (
+      {!podeGravar && (
+        <div className="almox-familias-somente-leitura" style={{ fontSize: '0.85rem', marginBottom: 20, padding: '10px 14px', borderRadius: 8, background: 'rgba(79,172,254,0.08)', border: '1px solid rgba(79,172,254,0.25)' }}>
+          <FiShield size={14} style={{ verticalAlign: '-2px', marginRight: 6 }} />{FRASE_FAMILIAS_SOMENTE_LEITURA}
+        </div>
+      )}
+
+      {!showForm && podeGravar && (
         <button className="btn-almox-primary" style={{ marginBottom: 20 }} onClick={handleNovaRaiz}>
           <FiPlus size={14} /> Nova Família
         </button>
@@ -792,12 +808,14 @@ const TabFamilias = () => {
                   <span style={{ fontWeight: 500 }}>{sub.nome}</span>
                   <span style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>família: {sub.parent_nome || sub.parent_id}</span>
                   {seloInativa(sub)}
+                  {podeGravar && (
                   <span style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
                     <button type="button" className="almox-btn-icon" title="Editar" onClick={() => handleEditar(sub)}><FiEdit2 size={14} /></button>
                     {ehInativa(sub)
                       ? botaoReativar(sub)
                       : <button type="button" className="almox-btn-icon danger" title="Inativar" onClick={() => handleInativar(sub)}><FiTrash2 size={14} /></button>}
                   </span>
+                  )}
                 </div>
               ))}
             </div>
@@ -833,10 +851,10 @@ const TabFamilias = () => {
                         <FiPlus size={12} /> Adicionar item
                       </Link>
                     )}
-                    <button className="almox-btn-icon" onClick={() => handleEditar(fam)} title="Editar"><FiEdit2 size={13} /></button>
-                    {raizInativa
+                    {podeGravar && <button className="almox-btn-icon" onClick={() => handleEditar(fam)} title="Editar"><FiEdit2 size={13} /></button>}
+                    {podeGravar && (raizInativa
                       ? botaoReativar(fam)
-                      : <button className="almox-btn-icon danger" onClick={() => handleInativar(fam)} title="Inativar"><FiTrash2 size={13} /></button>}
+                      : <button className="almox-btn-icon danger" onClick={() => handleInativar(fam)} title="Inativar"><FiTrash2 size={13} /></button>)}
                   </div>
                 </div>
 
@@ -852,7 +870,7 @@ const TabFamilias = () => {
                     <span style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--gmp-text-light)' }}>
                       Subfamílias{subs.length ? ` (${subs.length})` : ''}
                     </span>
-                    {!raizInativa && (
+                    {!raizInativa && podeGravar && (
                       <button type="button" className="btn-almox-secondary" style={{ fontSize: '0.75rem', padding: '4px 10px' }} onClick={() => handleNovaSub(fam)}>
                         <FiPlus size={12} /> Nova subfamília
                       </button>
@@ -883,10 +901,10 @@ const TabFamilias = () => {
                                     <FiPlus size={12} /> Adicionar item
                                   </Link>
                                 )}
-                                <button className="almox-btn-icon" onClick={() => handleEditar(sub)} title="Editar"><FiEdit2 size={13} /></button>
-                                {ehInativa(sub)
+                                {podeGravar && <button className="almox-btn-icon" onClick={() => handleEditar(sub)} title="Editar"><FiEdit2 size={13} /></button>}
+                                {podeGravar && (ehInativa(sub)
                                   ? botaoReativar(sub)
-                                  : <button className="almox-btn-icon danger" onClick={() => handleInativar(sub)} title="Inativar"><FiTrash2 size={13} /></button>}
+                                  : <button className="almox-btn-icon danger" onClick={() => handleInativar(sub)} title="Inativar"><FiTrash2 size={13} /></button>)}
                               </div>
                             </div>
                             {sub.descricao && <div style={{ fontSize: '0.72rem', color: 'var(--gmp-text-light)', paddingLeft: 42, marginTop: -4, marginBottom: 4 }}>{sub.descricao}</div>}
