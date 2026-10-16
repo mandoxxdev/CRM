@@ -373,7 +373,7 @@ material inativo depois da criação — a criação já recusava (`requisitionC
 
 **Fica de fora (com o porquê):** a requisição **já aprovada** cujo material foi inativado depois fica com o item pendente
 (C230 — a família da C228, decisão do P.O.; a A61 lista); a tela não avisa antes do clique e o lembrete continua (D (114));
-família inativa junto (C231).
+família inativa junto (C231). *(Resolvida na Etapa 124 — ver a seção "Etapa 124", no fim.)*
 
 **Status:** continua 🟢 — fecha a C229.
 
@@ -398,3 +398,25 @@ motor — spec 03; esta parte foi achada na revisão do plano).
   Ajuste); as séries que voltaram antes do deploy (sem a coluna) não são vistas (**A68**).
 
 Testes: `exclusaoSerieQueVoltou.api.test.js` (7); `requisicaoGestosConcorrentes.api.test.js` (d4) ajustado. Continua 🟢.
+
+## Etapa 124 — a recusa do material inativo diz qual família reativar (2026-10-16)
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa124-a-familia-que-o-formulario-leu-e-a-reativacao-que-a-recusa-pede.md`.
+
+- [x] **C231** — `efc4c4df`. As três leituras de itens (`carregarItensRequisicao`, `lerInativosPendentes`, a do envio) trazem
+  `material_familia_inativa` (1 família raiz inativa, 2 subfamília inativa, 3 as duas; só família que existe; o legado com a
+  subfamília no `familia_id` dá 0). Com algum material inativo pendente nesse caso, o trecho *"Reative o material em Materiais →
+  Inativos (…)"* das quatro recusas (aprovar, aprovar-valor, envio, separação) vira *"Reative a família de ⟨cód⟩ em Configurações →
+  Famílias (Administrador do almoxarifado) e depois o material em Materiais → Inativos (Administrador, Almoxarife ou
+  Engenharia)"* (com *"a subfamília de"*, *"a família e a subfamília de"*; na separação, *"… do material"*). Sem família inativa, a
+  literal da 114 byte a byte; `erroAprovar` continua com `materiais` = os códigos (B801).
+- [x] **A trilha até o último gesto** — `efc4c4df` (rota) e `fa0fa1f9` (integração): o Almoxarife ouve 403 na família; o
+  Administrador reativa a principal e a subfamília (`{nome, ativo: 1}`, o corpo da aba — `2105505e`); o *Reativar* do material
+  (`{ativo: 1}`) passa; aprova.
+- [x] **Fase 5** — `5b5e3998` (subfamília com `ativo` NULL; o mesmo material em dois itens com o primeiro entregue).
+- [ ] **Fora:** o legado com a subfamília no campo Família (frase de antes; **A75**).
+
+**A C231 estava errada num ponto — fica dito:** ela dizia que o Administrador reativa a família "em Configurações"; nenhuma tela
+fazia isso até a Etapa 124 (a aba Famílias só mostrava as ativas). E a subfamília inativa dava o mesmo beco, que ela não citava.
+
+**Status:** continua 🟢 — fecha a C231.

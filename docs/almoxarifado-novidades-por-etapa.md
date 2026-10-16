@@ -11,11 +11,15 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-16):** **Etapa 123 fechada** (reorganizar famílias enquanto outra pessoa mexe nelas não
+> **Onde o desenvolvimento está (2026-10-16):** **Etapa 124 fechada** (o formulário de material aberto há minutos não desfaz mais
+> a família ou a subfamília que outra pessoa mudou — **D (123)** resolvida; a recusa da requisição de material inativo manda
+> reativar a família antes, quando ela também está inativa — **C231** resolvido; e a aba **Famílias** passa a mostrar as inativas
+> e a reativá-las, o que nenhuma tela fazia); a próxima do almoxarifado é a **125** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 123 fechada** (reorganizar famílias enquanto outra pessoa mexe nelas não
 > deixa mais subfamília ativa sob família inativa, terceiro nível nem material com o par errado — **C221** resolvido; o cadastro
 > recusa dono que não está em Clientes — **C216** resolvido; e a família de "pai 0" vira família principal no boot e não nasce
-> mais — **C223** resolvido); a próxima do almoxarifado é a **124** — ver "Onde estamos e o que vem a seguir". *(Esta frase tinha
-> parado na Etapa 120 — as Etapas 121 e 122 não a atualizaram; as duas estão na seção delas e em "Onde estamos". Fica dito.)*
+> mais — **C223** resolvido); a próxima do almoxarifado era a **124**. *(Esta frase tinha
+> parado na Etapa 120 — as Etapas 121 e 122 não a atualizaram; as duas estão na seção delas e em "Onde estamos". Fica dito.)*)*
 > *(Antes: **Etapa 120 fechada** (o lançamento que já valeu responde sucesso mesmo com a
 > Auditoria falhando, **C250**; a saída cujas séries voltaram por uma Entrada não estorna em dobro com a série desligada,
 > **C234**; e a exclusão da requisição não devolve de novo as séries que já voltaram, **C251**); a próxima do almoxarifado é a
@@ -146,7 +150,10 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Setenta e quatro itens para rodar em produção ANTES do deploy — setenta e um são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Setenta e cinco itens para rodar em produção ANTES do deploy — setenta e dois são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-16 (Etapa 124) de setenta e quatro para setenta e cinco**, com a **A75** — materiais inativos gravados
+com a subfamília no campo Família, que o *Reativar* recusa mesmo com a família reativada; opcional e somente leitura.)*
 
 *(**Atualizado em 2026-10-16 (Etapa 123) de setenta e um para setenta e quatro**, com a **A72** — materiais com dono que não está
 em Clientes —, a **A73** — famílias com pai 0 ou pai inexistente, e o material nelas — e a **A74** — o que as corridas da
@@ -2728,12 +2735,38 @@ subfamília continua em uso, ou inative a subfamília. **(b)**: a neta tem de su
 principal (ou nenhum). **(c)**: o material aparece com "Subfamília inválida…" ao mudar de família; edite-o e escolha o par certo.
 A (c) também lista o material antigo gravado com a subfamília no campo Família (o legado conhecido desde a Etapa 100).
 
+**A75 (NOVA, da Etapa 124 — o material inativo que o Reativar recusa mesmo com a família ativa).** Uma consulta, somente leitura;
+**opcional**. Desde a Etapa 124 a recusa da requisição de material inativo diz qual família reativar antes do material (**C231**).
+Ela **não** diz isso para o material antigo gravado com a **subfamília** no campo Família (o legado conhecido desde a Etapa 100):
+para ele, reativar a família não basta — o *Reativar* do material recusa com *"A família escolhida é uma subfamília — escolha a
+família principal e use a subfamília no campo Subfamília"*, e a tela de Inativos não deixa corrigir o par. A consulta lista quem
+está nesse beco.
+
+```sql
+SELECT m.id, m.codigo, m.ativo, f.codigo AS gravada_como_familia, f.ativo AS ela_ativa,
+       p.codigo AS familia_principal, p.ativo AS principal_ativa
+  FROM materiais_almoxarifado m
+  JOIN familias_material_almoxarifado f ON f.id = m.familia_id
+  LEFT JOIN familias_material_almoxarifado p ON p.id = f.parent_id
+ WHERE f.parent_id IS NOT NULL AND f.parent_id <> 0
+   AND (m.ativo IS NULL OR m.ativo <> 1)
+ ORDER BY m.codigo;
+```
+
+*(Conferida numa sonda: acha o material inativo com a subfamília no campo Família — com `ativo` 0 e com `ativo` NULL — e **não**
+acha o mesmo legado **ativo** nem o material inativo de par certo.)*
+
+**Como ler o resultado:** **vazia** — nada a fazer. Cada linha é um material que só volta pela API: `PUT
+/api/almoxarifado/materiais/⟨id⟩` com `{"familia_id": ⟨id da família principal⟩, "subfamilia_id": ⟨id da gravada_como_familia⟩,
+"ativo": 1}` (a família principal e a subfamília ativas antes), ou deixe-o inativo se não é mais usado. Se houver requisição
+pendente dele, rejeite-a.
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B799; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B804; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -8648,6 +8681,48 @@ gravado. Recarregue o material e salve de novo."* (a de sempre). **Reversível.*
 **B755**, a **B761**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230** e o reparo da **C246** continuam
 esperando vocês.
 
+**B800 (NOVA, da Etapa 124) — o formulário de material manda a família e a subfamília que leu.** Antes: o salvar gravava o par que o
+formulário mostrava ao abrir; se outra pessoa tinha mudado a subfamília (ou a família) nesse meio-tempo, o salvar — mesmo só
+renomeando — a desfazia sem aviso (**D (123)**; medido: 200, o par velho gravado). **O que foi escolhido** (`879b362b`, `1a1ebf1c`):
+o molde dos controles lidos da Etapa 116 — o formulário manda o par que leu; se ele mudou depois **e** o salvar o desfaria, a
+recusa é *"A família do material ⟨código⟩ foi mudada por outra pessoa depois que você abriu o cadastro — salvar desfaria essa mudança, e nada foi gravado. Recarregue o material e salve de novo."* (ou *"A subfamília do material …"*, quando só ela mudou). Se o usuário escolheu o mesmo par que o outro gravou, o
+salvar passa. Vem logo depois da recusa dos controles e antes de todas as outras. Sem a informação (outras telas, a API), o de
+antes. **Descartado:** (a) um carimbo de "última alteração" do cadastro inteiro (recusaria quase todo salvar de material em uso —
+o estoque grava as quantidades no mesmo cadastro a cada movimento); (b) pôr o par junto dos controles lidos (mudaria o que a 116
+combinou); (c) recarregar a tela sozinha na recusa (apagaria o que o usuário digitou). **Reversível.**
+
+**B801 (NOVA, da Etapa 124) — a recusa da requisição de material inativo diz qual família reativar antes.** Antes: a recusa mandava
+reativar o material, e o *Reativar* recusava quando a família (ou a subfamília) dele também estava inativa (**C231**). **O que foi
+escolhido** (`efc4c4df`): nas quatro portas (Aprovar, Aprovar valor, enviar o rascunho, separar), quando algum material inativo
+pendente tem a família ou a subfamília inativa, a frase vira *"A requisição ⟨número⟩ tem material inativo: ⟨código⟩. Reative a família de ⟨código⟩ em Configurações → Famílias (Administrador do almoxarifado) e depois o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou rejeite a requisição."* — com *"a subfamília de"*, *"a família e a subfamília de"*,
+ou vários códigos, conforme o caso. Sem família inativa, a frase de antes, letra por letra. O material antigo gravado com a
+subfamília no campo Família fica com a frase de antes (reativar a família não o destrava — **A75**). **Descartado:** (a) o
+*Reativar* do material reativar a família junto (o Almoxarife reativaria família, que é do Administrador); (b) o *Reativar* tirar a
+subfamília inativa do material (mudaria a classificação calado); (c) uma frase genérica ("a família pode estar inativa"). **Reversível**
+(texto).
+
+**B802 (NOVA, da Etapa 124, da revisão do plano) — a aba Famílias mostra as inativas e as reativa.** A revisão do plano mostrou que a
+frase da **B801** mandaria a um gesto que **não existia**: a aba Famílias só carregava as ativas e não tinha *Reativar*; o *Editar*
+não mexe na situação. Ninguém reativava família pela tela — nem o Administrador (a **C231** dizia que ele reativava "em
+Configurações": **estava errado**). **O que foi escolhido** (`2105505e`, `98bfcca5`): a aba lista também as inativas, com o selo
+**Inativa**, depois das ativas; a inativa oferece *Editar* e **Reativar** (não *Adicionar item*, *Nova subfamília*, *Inativar* nem
+*Cadastrar primeiro item*). *Reativar* responde *"Família reativada"* / *"Subfamília reativada"*; a recusa do servidor aparece no
+aviso (a subfamília de família principal inativa: *"Não é possível reativar: a família principal desta subfamília está inativa —
+reative a família principal antes"*). **Descartado:** um filtro "Mostrar inativas" desligado por padrão (a recusa da requisição
+manda a pessoa para a aba, e ela não acharia a família sem saber do filtro). **Reversível.**
+
+**B803 (NOVA, da Etapa 124, da revisão; o defeito é anterior) — reativar a família não apaga a descrição nem o tipo de uso.** A
+edição de família pela API gravava a descrição vazia e o tipo de uso *Ambos* quando eles não vinham no pedido. Nenhuma tela os
+omitia até o **Reativar** da **B802** — reativar apagava a descrição e mudava o tipo de uso, que é o que distribui família por
+setor (achado pelo revisor de concorrência). **O que foi escolhido** (`ee6c3774`): descrição e tipo de uso que não vêm no pedido
+ficam como estão, no próprio passo que grava; informados, gravam como sempre (o *Editar* da aba manda os dois). **Descartado:** só a
+tela mandar a descrição e o tipo de uso que tinha na lista (a lista pode estar velha e regravaria o que outro administrador acabou
+de editar). **Reversível.**
+
+**B804 (NOVA, da Etapa 124) — a próxima etapa do almoxarifado (125).** Ver a "próxima tarefa detalhada" no plano da Etapa 124. A
+**B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230** e o reparo da **C246**/**C247**
+continuam esperando vocês.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -10965,7 +11040,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      …"*) e nada entra num material inativo. **O que fazer:** reativar e atender; ou separar os outros itens com 0 neste,
      entregar o resto e **Encerrar**. A consulta **A61** lista as que existem.
 
-231. **NOVO (da Etapa 114, da revisão do código) — se a família do material também foi inativada, quem a mensagem nomeia
+231. **✅ RESOLVIDO NA ETAPA 124 (`efc4c4df`, `2105505e`; B801, B802) — a recusa diz qual família reativar antes, e a aba
+     Famílias passou a reativar.** **Este item estava errado em um ponto:** dizia que o Administrador reativa a família "em
+     Configurações" — nenhuma tela fazia isso (a aba só mostrava as ativas e não tinha *Reativar*); só pela API. E a subfamília
+     inativa dava o mesmo beco, que o texto não citava. Fica a exceção do material antigo com a subfamília no campo Família
+     (**A75**). O texto original: **NOVO (da Etapa 114, da revisão do código) — se a família do material também foi inativada, quem a mensagem nomeia
      não consegue reativar.** A recusa da aprovação manda reativar o material e nomeia Administrador, Almoxarife ou
      Engenharia; mas, com a família inativa, o Reativar recusa (*"Família inativa — não é possível vincular novos itens"*)
      e reativar a família é só do Administrador (Configurações). **O que fazer:** o Administrador reativa a família e
@@ -11150,6 +11229,18 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      mudou enquanto era inativada — nada foi gravado. Tente de novo."* Antes, o salvar desfazia a mudança do outro sem avisar
      (**B793**, **B797**, **B798**). Só com duas pessoas mexendo no mesmo cadastro no mesmo segundo. **O que fazer:** recarregue
      (feche e abra o cadastro) e salve de novo.
+
+259. **NOVO (da Etapa 124, da revisão; anterior a ela) — o administrador do sistema sem perfil no almoxarifado vê a aba Famílias, e
+     os botões dela recusam.** Quem é administrador do sistema (sem ser Super Administrador, sem perfil Administrador do almoxarifado
+     e sem ser administrador do módulo) abre **Configurações → Famílias** e vê *Nova família*, *Editar*, *Inativar* e, desde a 124,
+     *Reativar* — e cada um responde *"Acesso restrito — administrador do Almoxarifado ou Super Administrador"*. A tela e o servidor
+     leem "quem configura o almoxarifado" de jeitos diferentes. **O que fazer:** dê a essa pessoa o perfil **Administrador** do
+     almoxarifado (ou peça a um Administrador). Candidata da próxima etapa.
+
+260. **NOVO (da Etapa 124) — salvar um material cuja família outra pessoa mudou é recusado.** Com o formulário de material aberto,
+     se outra pessoa mudou a família ou a subfamília dele, o **Salvar** responde *"A família do material ⟨código⟩ foi mudada por outra pessoa depois que você abriu o cadastro — salvar desfaria essa mudança, e nada foi gravado. Recarregue o material e salve de novo."* (ou *"A subfamília do material …"*) e nada
+     é gravado — antes, o salvar desfazia a mudança sem aviso (**B800**). **O que fazer:** feche, abra o material de novo (ele já
+     mostra a família nova) e salve. O que tinha sido digitado e não salvo precisa ser digitado de novo.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -12301,7 +12392,19 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   há minutos manda o par que mostrava ao abrir: se outra pessoa mudou a família do material **depois** de o formulário abrir e
   **antes** do clique em Salvar, o salvar grava de volta a família que o formulário mostra (conferida como uma troca de família,
   com as recusas de sempre) — o "último que salva vence" dos campos do cadastro (o mesmo da **C233** antes da 116, para os
-  controles).
+  controles). *(Resolvido para a família e a subfamília na Etapa 124 — **B800**.)*
+- **(124) Os outros campos do cadastro de material continuam no "último que salva vence".** O formulário aberto protege os
+  controles (116) e a família e a subfamília (124); nome, descrição, unidade, mínimos e os demais são gravados com o que o
+  formulário mostra — medido pelo revisor: duas pessoas salvando o mesmo material, uma trocando a subfamília e outra só
+  renomeando, ficam as duas com sucesso e o nome de quem salvou por último. Candidata da próxima etapa.
+- **(124) O *Reativar* da aba Famílias manda o nome que a lista mostrava.** Se outro administrador renomeou a família no mesmo
+  minuto, o *Reativar* volta o nome antigo (o "último que salva vence"; descrição e tipo de uso não são afetados — **B803**).
+- **(124) O material antigo com a subfamília no campo Família** recebe a recusa de antes (*"Reative o material …"*) e o *Reativar*
+  dele recusa mesmo com a família ativa — a **A75** lista; corrige-se pela API.
+- **(124) A frase da recusa é lida no instante da recusa.** Se outra pessoa reativa ou inativa a família logo depois, a frase pode
+  ficar velha; o passo seguinte sempre diz a verdade (medido pelo revisor de concorrência: nenhum beco).
+- **(124) A mudança da família que cai dentro do próprio salvar** (entre a leitura e a gravação, milissegundos) continua com a
+  recusa geral *"O cadastro do material ⟨código⟩ mudou enquanto era salvo — …"* (**B798**), não com a nova.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -13204,6 +13307,13 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(124) Nenhum clique foi dado nesta etapa no navegador.** Duas telas mudaram — o formulário de material (manda a família lida) e a
+aba **Famílias** (as inativas, o selo e o *Reativar*) — e foram provadas por teste de componente com a fronteira HTTP simulada
+(**5** casos do formulário, **11** da aba); o servidor, pela rota e pelo serviço (**53** cenários em cinco arquivos novos, um deles
+a jornada de integração que segue a frase da recusa até aprovar). O que **só o navegador** prova: o roteiro da Etapa 124 no guia —
+o cartão inativo com o selo e o *Reativar* (e que ele some de *Adicionar item*), o aviso *"Família reativada"*, e o aviso vermelho
+do formulário ao salvar um material cuja subfamília outra pessoa trocou (duas abas).
 
 **(123) Nenhum clique foi dado nesta etapa no navegador.** Nenhuma tela mudou: as recusas novas chegam pelo aviso vermelho que já
 mostra a mensagem do servidor, e as corridas só existem com duas pessoas no mesmo segundo (forçadas nos testes). Tudo foi provado
@@ -25557,9 +25667,89 @@ situação sem mudá-la, o salvar do material que devolvia a família antiga e o
 corrigidas (**B796**, **B797**, **B798**); o de **sabotagem** fez **78** sabotagens: 68 derrubaram teste pela asserção certa, 4 eram
 equivalentes ou impossíveis, e **6** mostraram cenários sem prova — viraram teste.
 
+## Etapa 124 — A família que o formulário leu, e a reativação que a recusa pede (2026-10-16)
+
+Duas pontas soltas do cadastro de famílias. A primeira: o formulário de material aberto há alguns minutos grava, ao salvar, a família
+e a subfamília que mostrava quando abriu — se outra pessoa reclassificou o material nesse meio-tempo, o salvar desfazia a
+reclassificação sem avisar ninguém, mesmo quando a pessoa só queria corrigir o nome. A segunda: quando uma requisição tem um material
+inativado, a recusa manda reativar o material; mas, se a família dele também foi inativada, o *Reativar* recusa — a mensagem mandava
+fazer o que o sistema não deixa. E a revisão achou que o caminho para reativar a família simplesmente não existia na tela: a aba
+Famílias só mostrava as ativas. A etapa fecha as três coisas.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Formulário de material aberto; outra pessoa troca a subfamília; o salvar (só renomeando) devolvia a subfamília antiga | *"A família do material ⟨código⟩ foi mudada por outra pessoa depois que você abriu o cadastro — salvar desfaria essa mudança, e nada foi gravado. Recarregue o material e salve de novo."* — nada gravado; recarregue e salve (**B800**) |
+| O mesmo com a família inteira trocada | A mesma recusa, com *"A família do material …"* |
+| Recusa da requisição de material inativo com a família inativa: *"Reative o material em Materiais → Inativos (…)"* — e o *Reativar* recusava | *"A requisição ⟨número⟩ tem material inativo: ⟨código⟩. Reative a família de ⟨código⟩ em Configurações → Famílias (Administrador do almoxarifado) e depois o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou rejeite a requisição."* (**B801**) |
+| A aba **Famílias** não mostrava família inativa nem tinha *Reativar* — só pela API | As inativas aparecem com o selo **Inativa**, depois das ativas, com **Reativar** (**B802**) |
+| Reativar uma família pela API sem mandar descrição e tipo de uso apagava a descrição e mudava o tipo para *Ambos* | Ficam como estavam (**B803**) |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Administrador** do almoxarifado (ou Super Administrador); uma família **Vedações Teste** com as subfamílias
+**O-rings** e **Planas**; um material **VED-T1** em *Vedações Teste / O-rings*, sem saldo.
+
+**1. Duas abas no mesmo material.** Abra **Materiais → VED-T1 → Editar** em duas abas do navegador (A e B). Na aba **B**, troque a
+Subfamília para *Planas* → **Salvar**: *"Material atualizado!"*. Na aba **A** (que ainda mostra *O-rings*), mude o nome → **Salvar**:
+*"A subfamília do material VED-T1 foi mudada por outra pessoa depois que você abriu o cadastro — salvar desfaria essa mudança, e nada
+foi gravado. Recarregue o material e salve de novo."* O formulário continua aberto. Feche, abra **VED-T1** de novo (mostra *Planas*),
+mude o nome → **Salvar**: *"Material atualizado!"*.
+
+**2. Escolher o mesmo que o outro escolheu passa.** Repita o cenário 1, mas na aba **A** troque também a Subfamília para *Planas*
+antes de salvar: salva normalmente — não desfaz nada.
+
+**3. A recusa que diz qual família reativar.** Crie uma requisição de 1 **VED-T1** (fica *Pendente*). Em **Materiais**, inative o
+**VED-T1**. Em **Configurações → Famílias**, inative **O-rings** e **Planas** e depois **Vedações Teste** (a principal só inativa depois das
+subfamílias: *"Não é possível remover: família possui 1 subfamília(s) ativa(s)"*). Abra a requisição → **Aprovar**: *"A requisição
+⟨número⟩ tem material inativo: VED-T1. Reative a família e a subfamília de VED-T1 em Configurações → Famílias (Administrador do
+almoxarifado) e depois o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou rejeite a requisição."*
+
+**4. Seguir a frase até aprovar.** **Configurações → Famílias**: o cartão **Vedações Teste** aparece no fim, com o selo **Inativa** e
+o botão **Reativar** (sem *Adicionar item*, *Nova subfamília* e *Inativar*). Clique **Reativar** em **Planas** antes da principal:
+*"Não é possível reativar: a família principal desta subfamília está inativa — reative a família principal antes"*. **Reativar** em
+**Vedações Teste**: *"Família reativada"*; depois em **Planas**: *"Subfamília reativada"* (a descrição e o tipo de uso continuam os
+mesmos). **Materiais → Inativos → VED-T1 → Reativar**. Volte à requisição → **Aprovar**: aprovada.
+
+**5. Sem família inativa, nada muda.** Inative só o material (família ativa) e aprove: a recusa é a de antes, *"… Reative o material
+em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou rejeite a requisição."* O mesmo vale no envio do rascunho
+(*"O rascunho … ou cancele o rascunho e faça outro sem ele."*), na liberação por valor (*"… ou reprove a liberação por valor."*) e
+na separação (*"⟨nome⟩: material inativo não pode ser separado. Reative a família do material em Configurações → Famílias
+(Administrador do almoxarifado) e depois o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou separe os
+outros itens com 0 neste."*, com a família inativa).
+
+### O que esta etapa NÃO cobre
+
+1. **Os outros campos do cadastro** (nome, descrição, unidade, mínimos…) continuam no "último que salva vence" — **D (124)**.
+2. **O material antigo com a subfamília no campo Família** recebe a frase de antes e só se reativa pela API — **A75**.
+3. **O administrador do sistema sem perfil no almoxarifado** vê a aba Famílias e os botões recusam — **C259**.
+4. A **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230** e o reparo da
+   **C246**/**C247** — decisões suas.
+
+### O que a revisão encontrou
+
+A **medição** reproduziu os dois defeitos antes de qualquer código (o salvar desfazendo a subfamília: 200 com o par velho; a recusa
+mandando reativar e o *Reativar* recusando). A **revisão do plano** (um revisor, antes do código) achou a **trava**: a frase nova
+mandaria a pessoa a uma tela que não reativa nada — a aba Famílias não mostrava as inativas —, e a C231 estava errada ao dizer que o
+Administrador reativava "em Configurações"; virou uma tarefa a mais (a aba reativa). Achou também que o material antigo com a
+subfamília no campo Família ficaria preso mesmo seguindo a frase (fica com a frase de antes e a **A75**). A **revisão adversarial
+do código** (três revisores, executando): o de **regra** não refutou as duas regras e achou o link *Cadastrar primeiro item* no
+cartão inativo expandido (corrigido) e o administrador do sistema que vê botões que recusam (anterior, **C259**); o de
+**concorrência** achou que o *Reativar* novo apagava a descrição e o tipo de uso da família (**B803**, corrigido) e confirmou, em
+corridas de 30 rodadas, que duas abas nunca desfazem a mudança uma da outra; o de **sabotagem** fez **90** sabotagens: 74 derrubaram
+teste pela asserção certa, 4 eram equivalentes, e **12** mostraram cenários sem prova — viraram teste.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 124 entregue (2026-10-16):** **a família que o formulário leu, e a reativação que a recusa pede.** O formulário de material
+  aberto não desfaz mais a família ou a subfamília que outra pessoa mudou (**D (123)** resolvida, **B800**); a recusa da requisição
+  de material inativo diz qual família reativar antes (**C231** resolvido — estava errado, **B801**); a aba Famílias mostra as
+  inativas e as reativa (**B802**), sem apagar a descrição e o tipo de uso (**B803**). **O que é seu:** a consulta **A75** (opcional);
+  as decisões **B800 a B803** (reversíveis); os avisos **C259** e **C260**; as limitações **(124)** em D e a verificação **(124)** em F.
+  **Próxima: Etapa 125 — ver a "próxima tarefa detalhada" no plano da Etapa 124.**
 
 - **Etapa 123 entregue (2026-10-16):** **reorganizar famílias sem corrida, e o dono que existe.** Criar, reativar e mudar de nível
   uma família no mesmo instante em que outra pessoa a inativa, cadastra material nela ou a reorganiza não deixa mais estado
@@ -25568,7 +25758,7 @@ equivalentes ou impossíveis, e **6** mostraram cenários sem prova — viraram 
   família principal no boot (**C223** resolvido — estava errada). **O que é seu:** as consultas **A72**, **A73** e **A74**
   (opcionais); as decisões **B793 a B798** (reversíveis); o aviso **C258**; as limitações **(123)** em D e a verificação **(123)**
   em F.
-  **Próxima: Etapa 124 — ver a "próxima tarefa detalhada" no plano da Etapa 123.**
+  *(Próxima, na época: Etapa 124 — entregue acima.)*
 
 - **Etapa 122 entregue (2026-10-16):** **a aprovação que falha não prende material, e o estado não mora na Auditoria.** O *Aprovar*
   que falha ao gravar o status desfaz a reserva; o *Aprovar valor* responde sucesso com ela (**C254** resolvido); o estorno da

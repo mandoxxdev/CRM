@@ -1,6 +1,9 @@
 # 01 — Cadastros de Materiais
 
-> **Status:** 🟡 — **continua 🟡. Etapa 123 (`40b7e08e..0106f6b5`): reorganizar famílias confere e grava no mesmo passo (C221),
+> **Status:** 🟡 — **continua 🟡. Etapa 124 (`a5e9d30f..5b5e3998`): o formulário de material manda a família e a subfamília que
+> leu e o salvar que desfaria a mudança de outra pessoa é recusado (D (123), B800); a aba Famílias lista as inativas e as reativa
+> sem apagar descrição e tipo de uso (B802, B803)** — ver a seção "Etapa 124", no fim. Não fecha item do checklist. Antes:
+> **Etapa 123 (`40b7e08e..0106f6b5`): reorganizar famílias confere e grava no mesmo passo (C221),
 > o dono do material tem de estar em Clientes (C216) e o pai 0 deixa de nascer e vira família principal no boot (C223)** — ver a
 > seção "Etapa 123", no fim. Não fecha item do checklist (regras de integridade do cadastro). Antes: **Etapa 116 (`fe93cc10..96a90ce2`): o formulário de material manda os controles que leu ao
 > abrir e o salvar que desfaria o controle mudado por outra pessoa é recusado (C233); o estorno de Saída com séries (e a
@@ -495,3 +498,29 @@ continuou gravando `parent_id = 0` com `"0"` (e `"1.5"` como pai 1) até esta et
 (raiz que vira sub com sub nascendo nela; sub que entra numa raiz que está virando sub) e a mudança para uma raiz sendo inativada
 são a mesma forma e não estavam nela. **A seção "Etapa 108" acima diz "cliente inexistente" sem dizer como ele aparece — e a C216
 dizia "o cliente foi apagado": estava errado**, o sistema não apaga cliente (só inativa).
+
+## Etapa 124 — a família que o formulário leu, e a aba Famílias que reativa (2026-10-16)
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa124-a-familia-que-o-formulario-leu-e-a-reativacao-que-a-recusa-pede.md`
+(design e plano `a5e9d30f`).
+
+- [x] **O par lido (D (123))** — `879b362b`. `familia_lida: {familia_id, subfamilia_id}` declarada no `MaterialUpdateSchema`
+  (`numFromForm`: `null` atravessa, `''` é ausente); `materialService.familiaDesfeita`: por coluna presente, lido ≠ gravado **e**
+  merged ≠ gravado → 409 *"A família do material ⟨código gravado⟩ foi mudada por outra pessoa depois que você abriu o cadastro —
+  salvar desfaria essa mudança, e nada foi gravado. Recarregue o material e salve de novo."* (ou *"A subfamília …"*; a família
+  vence). Depois do 409 dos controles (116), antes do 403 do dono. Sem a chave, o de antes (B800).
+- [x] **O formulário manda o par lido** — `1a1ebf1c` (ref gravado em `loadMaterial`, número ou `null`; não vai no POST).
+- [x] **A aba Famílias lista as inativas e reativa** — `2105505e`, `98bfcca5` (`GET /familias?ativo=all`; selo *Inativa*,
+  inativas depois; *Reativar* → `PUT {nome, ativo: 1}`; a inativa sem *Adicionar item*, *Nova subfamília*, *Inativar* e
+  *Cadastrar primeiro item*; a subfamília ativa sob principal inativa no bloco das órfãs) (B802).
+- [x] **`PUT /familias/:id` preserva `descricao` e `tipo_uso` omitidos** — `ee6c3774` (no próprio `UPDATE`, `CASE WHEN`)
+  (B803; o defeito era anterior — nenhuma tela os omitia antes do *Reativar*).
+- [x] **Integração** — `fa0fa1f9` (duas abas pela rota; a C231 seguida até aprovar).
+- [x] **Fase 5** — `ee6c3774`, `98bfcca5`, `5b5e3998` (três revisores; 90 sabotagens, 12 cenários sem prova viraram teste).
+- [ ] **Fora, de propósito:** os outros campos do cadastro (nome, descrição, unidade…) continuam no "último que salva vence"
+  (D (124), candidata da 125); o *Reativar* da família manda o nome da lista (D (124)); o administrador do sistema sem perfil vê os
+  botões da aba e a rota recusa (C259, anterior); o legado com a subfamília no `familia_id` (A75).
+
+**A seção "Etapa 123" acima marca "o formulário aberto há minutos ainda grava a família que mostra" como fora** — fechado aqui.
+**A spec dizia, na lista de Famílias (topo), "CRUD (rotas de `/familias`)" como se a tela cobrisse o CRUD:** a tela não reativava
+(a aba só pedia as ativas) — **estava incompleto**; a reativação existia só pela API até esta etapa.

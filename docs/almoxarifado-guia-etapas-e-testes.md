@@ -1,18 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-16 (Etapa 123) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-16 (Etapa 124) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122 e 123) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123 e 124) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 123 ENTREGUE · próxima do almoxarifado: Etapa 124)
+> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 124 ENTREGUE · próxima do almoxarifado: Etapa 125)
 >
-> **O desenvolvimento parou aqui: Etapa 123 fechada — 2026-10-16.** A **Etapa 123 (reorganizar famílias sem corrida, e o dono que
+> **O desenvolvimento parou aqui: Etapa 124 fechada — 2026-10-16.** A **Etapa 124 (a família que o formulário leu, e a reativação
+> que a recusa pede)**: o formulário de material aberto não desfaz mais a família ou a subfamília que outra pessoa mudou enquanto
+> ele estava aberto (avisa e pede para recarregar); a recusa da requisição de material inativo diz qual família reativar antes do
+> material; e a aba **Famílias** mostra as inativas, com o botão **Reativar**.
+> **Próxima: Etapa 125** — ver a próxima tarefa no plano da 124.
+>
+> **Etapa 123, 2026-10-16.** A **Etapa 123 (reorganizar famílias sem corrida, e o dono que
 > existe)**: criar, reativar e mudar de nível uma família no mesmo instante em que outra pessoa a inativa, cadastra material nela
 > ou a reorganiza não deixa mais subfamília ativa sob família inativa, terceiro nível nem material com o par errado; o salvar não
 > desfaz mais a mudança de outra pessoa feita no meio; o cadastro de material recusa dono que não está em Clientes; e a família de
 > "pai 0" deixa de nascer e vira família principal no boot.
-> **Próxima: Etapa 124** — ver a próxima tarefa no plano da 123.
+> *(Próxima, na época: Etapa 124 — entregue acima.)*
 >
 > **Etapa 122, 2026-10-16.** A **Etapa 122 (a aprovação que falha não prende material,
 > e o estado não mora na Auditoria)**: o *Aprovar* que falha ao gravar o status não deixa reserva de pé (e o *Aprovar valor*
@@ -6500,6 +6506,62 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 124 — A família que o formulário leu, e a reativação que a recusa pede (ENTREGUE — 2026-10-16)
+
+**O que mudou, em uma frase:** salvar um material não desfaz mais a família que outra pessoa mudou enquanto o formulário estava
+aberto, e quem recebe a recusa de uma requisição com material inativo fica sabendo que precisa reativar a família primeiro — e
+consegue, porque a aba Famílias agora mostra e reativa as inativas.
+
+**O problema que ela resolve.** O formulário de material grava, ao salvar, a família e a subfamília que mostrava ao abrir. Se outra
+pessoa reclassificou o material nesse meio-tempo, o salvar — mesmo só para corrigir o nome — devolvia a classificação antiga, sem
+aviso. E a requisição com material inativo era recusada com *"Reative o material …"*; com a família também inativa, o *Reativar* do
+material recusava, e a aba Famílias nem mostrava família inativa — não havia como reativá-la pela tela.
+
+| Antes | Agora |
+|---|---|
+| Duas abas no mesmo material: a que salvava por último desfazia a subfamília que a outra tinha trocado | *"A subfamília do material ⟨código⟩ foi mudada por outra pessoa depois que você abriu o cadastro — salvar desfaria essa mudança, e nada foi gravado. Recarregue o material e salve de novo."* |
+| Recusa da requisição com a família do material inativa: mandava só reativar o material (e o *Reativar* recusava) | *"… Reative a família de ⟨código⟩ em Configurações → Famílias (Administrador do almoxarifado) e depois o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou rejeite a requisição."* |
+| A aba Famílias não mostrava família inativa | Mostra, com o selo **Inativa**, depois das ativas, e o botão **Reativar** |
+| Reativar família pela API sem descrição e tipo de uso apagava os dois | Ficam como estavam |
+
+### Roteiro de teste manual
+
+Pré-requisitos: login como **Administrador** do almoxarifado (ou Super Administrador). Em **Configurações → Famílias**, crie a família
+**Vedações Teste** com as subfamílias **O-rings** e **Planas**; em **Materiais → Novo**, cadastre **VED-T1** em *Vedações Teste /
+O-rings*, sem saldo.
+
+1. Abra **Materiais → VED-T1 → Editar** em **duas abas** do navegador (A e B).
+2. Na aba **B**, troque a **Subfamília** para *Planas* → **Salvar**: *"Material atualizado!"*.
+3. Na aba **A** (ainda mostrando *O-rings*), mude o **Nome** → **Salvar**: aviso vermelho *"A subfamília do material VED-T1 foi
+   mudada por outra pessoa depois que você abriu o cadastro — salvar desfaria essa mudança, e nada foi gravado. Recarregue o material
+   e salve de novo."*; o formulário continua aberto.
+4. Feche a aba A, abra **VED-T1** de novo (mostra *Planas*), mude o nome → **Salvar**: *"Material atualizado!"*.
+5. **Requisições → Nova** → 1 **VED-T1** → enviar (fica *Pendente*).
+6. **Materiais** → **VED-T1** → **Inativar**. **Configurações → Famílias** → **Inativar** em *O-rings*, em *Planas* e depois em
+   *Vedações Teste*.
+7. Abra a requisição → **Aprovar**: *"A requisição ⟨número⟩ tem material inativo: VED-T1. Reative a família e a subfamília de VED-T1
+   em Configurações → Famílias (Administrador do almoxarifado) e depois o material em Materiais → Inativos (Administrador, Almoxarife
+   ou Engenharia) ou rejeite a requisição."*
+8. **Configurações → Famílias**: o cartão *Vedações Teste* está no fim da lista, com o selo **Inativa**, os botões *Editar* e
+   **Reativar**, e sem *Adicionar item*, *Nova subfamília* e *Inativar*. Clique para expandir: *"Nenhum item nesta família."*, sem
+   o link de cadastrar.
+9. **Reativar** em *Planas* primeiro: *"Não é possível reativar: a família principal desta subfamília está inativa — reative a
+   família principal antes"*. **Reativar** em *Vedações Teste*: *"Família reativada"*; depois em *Planas*: *"Subfamília
+   reativada"*. Clique **Editar** em *Vedações Teste* e confira que a descrição e o tipo de uso continuam os mesmos.
+10. **Materiais → Inativos → VED-T1 → Reativar**; volte à requisição → **Aprovar**: aprovada.
+
+### O que esta etapa não cobre
+
+- Os outros campos do cadastro de material (nome, descrição, unidade, mínimos…) continuam com o "último que salva vence".
+- O material antigo gravado com a subfamília no campo Família recebe a frase de antes e só se reativa pela API (consulta **A75**).
+- O administrador do sistema sem perfil no almoxarifado vê a aba Famílias e os botões recusam (**C259**).
+- As decisões pendentes do P.O. (**B755**, **B761**/**C239**, **C224**, o resto da **C225**, **C228**, **C219**, **C230**, o reparo
+  da **C246**/**C247**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: as duas telas que mudaram (o formulário de material e a aba Famílias) foram
+provadas por teste de componente com o servidor simulado, e o servidor pelas rotas e pelo serviço; o roteiro acima é para você
+conferir à mão.
+
 ## Etapa 123 — Reorganizar famílias sem corrida, e o dono que existe (ENTREGUE — 2026-10-16)
 
 **O que mudou, em uma frase:** reorganizar famílias enquanto outra pessoa mexe nelas não deixa mais a hierarquia num estado
@@ -6542,7 +6604,8 @@ Pré-requisitos: login como **administrador**; um cliente **Caldeiraria Teste** 
 
 ### O que esta etapa não cobre
 
-- O formulário aberto há minutos ainda grava a família que mostra, se outra pessoa a mudou entre abrir e salvar.
+- O formulário aberto há minutos ainda grava a família que mostra, se outra pessoa a mudou entre abrir e salvar. *(Coberto na Etapa
+  124.)*
 - O pai que aponta para família inexistente (a consulta **A73** mostra); o que as corridas já deixaram (**A74**); o dono fantasma
   (**A72**).
 - As decisões pendentes do P.O. (**B755**, **B761**/**C239**, **C224**, o resto da **C225**, **C228**, **C219**, **C230**, o reparo

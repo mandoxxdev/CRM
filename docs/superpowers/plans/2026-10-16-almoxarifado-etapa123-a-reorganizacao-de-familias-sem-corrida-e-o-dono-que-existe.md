@@ -175,7 +175,11 @@ Galho: só a T2. A suíte inteira roda **uma por vez**, sempre na branch; o galh
 3. **Paralelismo:** **1** galho em paralelo de fato (T2), **0** retrabalho, **0** conflito no cherry-pick; três revisores em paralelo
    na Fase 5. **Custo de ambiente:** arquivos de teste rodando em paralelo na máquina (revisores) dão falso vermelho — a suíte inteira
    rodou sempre sozinha, 0 EADDRINUSE.
-4. **Defeito que escapou:** *(preencher na Etapa 124)*.
+4. **Defeito que escapou:** **0 da Etapa 123** (preenchido na 124). A 124 mexeu nas mesmas portas (`PUT /materiais`, `PUT
+   /familias`) e as três revisões dela as exercitaram: a janela entre a leitura e o `UPDATE` do `PUT /materiais` (B798) deu o 409
+   genérico nas cinco variantes, e as corridas "Reativar × Inativar" da aba não deixaram estado proibido (30/30). O que a 124 achou
+   de defeito é **anterior** à 123: o `PUT /familias` apagava descrição e tipo de uso omitidos (Etapa 2; só alcançável por tela
+   depois do *Reativar* da 124 — B803), a premissa da C231 (Etapa 114 — a tela não reativava família) e a C259 (o portão da aba).
 
 ## Próxima tarefa detalhada — Etapa 124
 
