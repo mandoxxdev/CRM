@@ -2343,13 +2343,15 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     // Etapa 119 (C242, B776): a serie REATIVADA guarda a entrada que tinha antes, chaveada por esta entrada — o estorno de uma
     // devolucao que citou a saida (`reverterEntrada` com `saidaId`) a devolve a ela. Nao-fatal pelo mesmo motivo do vinculo
     // acima (o livro ja esta gravado): sem a linha, o estorno da devolucao faz o de antes da etapa (a serie fica na entrada
-    // da devolucao) — a A67 acha.
+    // da devolucao) — a A67 acha. Etapa 120 (C234, B779): a mesma linha guarda a SAIDA de onde a serie saiu (o vinculo que a
+    // reativacao apaga) — o estorno da saida com a serie desligada e a exclusao da requisicao a leem; sem a linha (legado, ou
+    // este INSERT falhando), nao veem a volta — a A68 acha.
     for (const a of seriesAfetadas) {
       if (a.acao !== 'REATIVACAO') continue;
       try {
         await dbRun(db, `INSERT OR IGNORE INTO series_entrada_anterior_almoxarifado
-          (serie_id, movimentacao_entrada_id, entrada_anterior_id) VALUES (?, ?, ?)`,
-        [a.linha.id, result.lastID, a.anterior.movimentacao_entrada_id ?? null]);
+          (serie_id, movimentacao_entrada_id, entrada_anterior_id, saida_anterior_id) VALUES (?, ?, ?, ?)`,
+        [a.linha.id, result.lastID, a.anterior.movimentacao_entrada_id ?? null, a.anterior.movimentacao_saida_id ?? null]);
       } catch (e) {
         console.warn(`[almoxarifado] entrada anterior da serie ${a.linha.id} nao registrada (movimentacao ${result.lastID}): ${e.message}`);
       }
@@ -2518,7 +2520,15 @@ function mensagemEstornoSemSerie(codigo, n) {
  */
 async function recusaDoEstornoDeSaidaSemSerie(db, mov, codigo) {
   const baixadas = await contarSeriesDaSaida(db, mov.id);
-  if (baixadas === 0) return null;
+  if (baixadas === 0) {
+    // Etapa 120 (C234, B779): sem serie vinculada nao quer dizer "Saida sem serie" — as series dela podem ter voltado TODAS por
+    // uma Entrada (a reativacao apaga o vinculo). Antes desta etapa o estorno devolvia a quantidade em dobro (medido: Entrada 2,
+    // Saida 2, Entrada avulsa das 2, desliga, estorno -> fisico 4). A reativacao grava a saida de onde a serie saiu (motor, a
+    // tabela da 119); com a serie ligada a guarda da 6b recusa o mesmo caso. Reativada antes da 120 (sem a coluna): a A68 acha.
+    const voltou = await dbGet(db, 'SELECT 1 AS v FROM series_entrada_anterior_almoxarifado WHERE saida_anterior_id = ? LIMIT 1',
+      [mov.id]);
+    return voltou ? MSG_SERIES_REENTRARAM : null;
+  }
   if (baixadas < Math.round(mov.quantidade)) return MSG_SERIES_REENTRARAM;
   return mensagemEstornoSemSerie(codigo, baixadas);
 }

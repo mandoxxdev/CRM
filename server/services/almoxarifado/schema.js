@@ -1293,10 +1293,15 @@ async function initSchemaUmaExecucao(db) {
     serie_id INTEGER NOT NULL,
     movimentacao_entrada_id INTEGER NOT NULL,
     entrada_anterior_id INTEGER,
+    saida_anterior_id INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (serie_id, movimentacao_entrada_id),
     FOREIGN KEY (serie_id) REFERENCES series_almoxarifado(id)
   )`);
+  // Etapa 120 (C234, B779): a SAIDA de onde a serie reativada tinha saido (o vinculo `movimentacao_saida_id` que a reativacao
+  // apaga). O estorno de uma Saida com a serie desligada, que nao acha serie vinculada, le esta coluna: se as series dela
+  // voltaram por uma Entrada, recusa (antes devolvia a quantidade em dobro). safeAlter para o banco que ja tem a tabela (119).
+  await safeAlter(db, 'ALTER TABLE series_entrada_anterior_almoxarifado ADD COLUMN saida_anterior_id INTEGER');
 
   // ── Extend movimentações ──
   const movCols = [
