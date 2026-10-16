@@ -4003,10 +4003,22 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         // A GARANTIA: status ainda PENDENTE e o gate das regras, no mesmo UPDATE. `status='PENDENTE'`
         // fecha também o achado anterior à etapa — dois /aprovar simultâneos respondiam 200 os dois
         // e o segundo reservava de novo.
-        const upd = await dbRun(db,
-          `UPDATE requisicoes_almoxarifado SET status=?, aprovador_id=?, aprovador_nome=?, data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
-           WHERE id=? AND status='PENDENTE' AND ${approvalRulesService.GATE_SQL}`,
-          [statusFinal, req.user.id, req.user.nome || req.user.email, req.params.id]);
+        //
+        // Etapa 122 (C254, D1/B789): o UPDATE que LANCA (nao o que perde) deixava a requisicao PENDENTE com
+        // a reserva desta chamada ATIVA — e rejeitar depois dava REJEITADO com o material preso para sempre
+        // (C256). Agora desfaz as reservas desta chamada AQUI, sob a trava (antes de solta-la), e relanca o
+        // erro original: a resposta e o 500 de sempre, e repetir aprova. Descartado: responder 200 (o status
+        // nao foi gravado).
+        let upd;
+        try {
+          upd = await dbRun(db,
+            `UPDATE requisicoes_almoxarifado SET status=?, aprovador_id=?, aprovador_nome=?, data_aprovacao=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP, ultimo_lembrete_enviado=NULL
+             WHERE id=? AND status='PENDENTE' AND ${approvalRulesService.GATE_SQL}`,
+            [statusFinal, req.user.id, req.user.nome || req.user.email, req.params.id]);
+        } catch (e) {
+          await requisitionService.desfazerReservas(db, req.user, reserva.reservas);
+          throw e;
+        }
         if (!upd.changes) {
           // Perdeu: devolve SÓ as reservas que ESTA chamada criou. Não `liberarReservasDaRequisicao`
           // — ela soltaria também as de um /aprovar concorrente que venceu (9.7/C1).
@@ -4113,27 +4125,50 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // quem perde rodam SOB A TRAVA de todos os materiais da requisicao (C131 — ver o /aprovar).
       // `aprovarValor` continua FORA: grava APROVADO, e nessa janela a requisicao ja e candidata da
       // distribuicao — inofensivo, `prepararPosAprovacao` desconta o hold que o item ja tiver.
-      await requisitionService.comTravaDaRequisicao(db, req.params.id, async () => {
-        const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
-        // Etapa 114 (RN-02): a recusa de material inativo desta porta e a condicao do UPDATE de `aprovarValor` (acima, fora
-        // da trava). Aqui o APROVADO ja esta gravado: um inativar entre os dois (zerado) segue como inativar depois de
-        // aprovar (B734) — recusar agora responderia 400 com a requisicao ja aprovada.
-        const pos = await requisitionService.prepararPosAprovacao(db, req.params.id, req.user, reqRow, { recusarInativo: false });
-        result.reservas = pos.reservas;
-        if (pos.status !== 'APROVADO') {
-          const upd = await dbRun(db,
-            `UPDATE requisicoes_almoxarifado SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='APROVADO'`,
-            [pos.status, req.params.id]);
-          if (upd.changes) {
-            result.status = pos.status;
-          } else {
-            await requisitionService.desfazerReservas(db, req.user, pos.reservas);
-            const atual = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
-            result.status = atual?.status;
-            result.reservas = [];
+      //
+      // Etapa 122 (C254, D2/B790): daqui para baixo o ato — a liberacao por valor — JA esta gravado (APROVADO).
+      // Qualquer falha neste bloco (a trava, a releitura, `prepararPosAprovacao`, o UPDATE, o ramo de quem perde)
+      // respondia 500 e repetir dava 400 (o status ja nao e AGUARDANDO_APROVACAO_VALOR). Agora: avisa no log,
+      // MANTEM as reservas que ficaram ATIVA (APROVADO com hold e estado legitimo — o recalculo da 76, a separacao
+      // e a entrega partem dele; so faltou o rotulo "reservada"), responde 200 com o status relido (ou APROVADO)
+      // e segue para a Auditoria. `prepararPosAprovacao` que lanca ja desfez as proprias reservas: `reservas: []`.
+      // Descartado: desfazer e responder 500 ou 200 (aprovada SEM o hold, o defeito que a Task 6 da Etapa 4
+      // fechou). As recusas do proprio `aprovarValor` (403/400/404), acima, ficam fora deste try.
+      let reservasMantidas = [];
+      try {
+        await requisitionService.comTravaDaRequisicao(db, req.params.id, async () => {
+          const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+          // Etapa 114 (RN-02): a recusa de material inativo desta porta e a condicao do UPDATE de `aprovarValor` (acima, fora
+          // da trava). Aqui o APROVADO ja esta gravado: um inativar entre os dois (zerado) segue como inativar depois de
+          // aprovar (B734) — recusar agora responderia 400 com a requisicao ja aprovada.
+          const pos = await requisitionService.prepararPosAprovacao(db, req.params.id, req.user, reqRow, { recusarInativo: false });
+          reservasMantidas = pos.reservas;
+          result.reservas = pos.reservas;
+          if (pos.status !== 'APROVADO') {
+            const upd = await dbRun(db,
+              `UPDATE requisicoes_almoxarifado SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='APROVADO'`,
+              [pos.status, req.params.id]);
+            if (upd.changes) {
+              result.status = pos.status;
+            } else {
+              reservasMantidas = [];
+              await requisitionService.desfazerReservas(db, req.user, pos.reservas);
+              const atual = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+              result.status = atual?.status;
+              result.reservas = [];
+            }
           }
+        });
+      } catch (e) {
+        console.warn(`[almoxarifado-aprovar-valor] A requisição ${req.params.id} foi liberada por valor e fica APROVADO; o status pós-aprovação não foi gravado: ${e.message}`);
+        result.reservas = reservasMantidas;
+        try {
+          const atual = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+          result.status = atual?.status || 'APROVADO';
+        } catch (e2) {
+          result.status = 'APROVADO';
         }
-      });
+      }
 
       // Etapa 121 (C252, B784): ato ja gravado, a Auditoria falhando nao o derruba (antes 500; repetir recusava).
       await audit.registrarAuditoriaDoAto(db, {
