@@ -389,6 +389,7 @@ module.exports = {
   requireAlmoxAdmin,
   enrichUserFromDb,
   LITERAL_SESSAO_ENCERRADA,
+  idDoTokenValido,
   syncModuleAdminProfiles,
   sanitizeSuperAdminPayload,
   isTruthyFlag,

@@ -43,11 +43,12 @@ test('handshake vazio/incompleto -> null sem lancar', () => {
   assert.strictEqual(tokenDoHandshake(undefined), null);
 });
 
-test('fiacao: io.use usa criarAuthSocket(jwtSecret) e e o unico io.use', () => {
+// Etapa 132 (C271): a fiacao passa a levar o db (o handshake rele a linha ativa) — esta regua mudou a vista.
+test('fiacao: io.use usa criarAuthSocket(jwtSecret, db) e e o unico io.use', () => {
   const fonte = fs.readFileSync(path.join(__dirname, '../../services/chat/socket.js'), 'utf8');
   const semComentarios = fonte.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-  assert.ok(/io\.use\(criarAuthSocket\(jwtSecret\)\);/.test(semComentarios),
-    'io.use tem de usar criarAuthSocket(jwtSecret)');
+  assert.ok(/io\.use\(criarAuthSocket\(jwtSecret, db\)\);/.test(semComentarios),
+    'io.use tem de usar criarAuthSocket(jwtSecret, db)');
   assert.strictEqual((semComentarios.match(/io\.use\(/g) || []).length, 1, 'outro io.use poderia autenticar por outro caminho');
 });
 
@@ -57,7 +58,10 @@ test('fiacao: io.use usa criarAuthSocket(jwtSecret) e e o unico io.use', () => {
 // a guarda.
 
 const SEGREDO = 'segredo-de-teste-c84-socket';
-const authSocket = criarAuthSocket(SEGREDO);
+// Etapa 132: criarAuthSocket exige o db; o usuario 7 tem linha ativa (o handshake rele `usuarios` — o desativado e o
+// apagado estao em chatSocketSessaoDoInativo.api.test.js).
+const dbUsuario7Ativo = { get: (sql, params, cb) => setImmediate(() => cb(null, Number(params[0]) === 7 ? { id: 7 } : undefined)) };
+const authSocket = criarAuthSocket(SEGREDO, dbUsuario7Ativo);
 const valido = jwt.sign({ id: 7, email: 'a@b.c' }, SEGREDO, { expiresIn: '1h' });
 
 function socketFalso({ auth = {}, headers = {}, query = {} } = {}) {
