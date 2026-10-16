@@ -3373,11 +3373,21 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
   // este ponto e extensao declarada, nao esquecimento (a linha de ESTORNO em si nasce de um
   // INSERT direto aqui dentro, nao de `registrarMovimentacao`, entao ela nao seria alcancada
   // pela auditoria de cima).
-  await registrarAuditoria(db, {
-    entidade: 'movimentacao', entidade_id: movimentoId, acao: 'CANCELAMENTO',
-    usuario_id: user.id, usuario_nome: user.nome || user.email, justificativa: motivo,
-    dados_novos: { estorno_id: estornoId, ...camposDeOrigem(user) },
-  });
+  //
+  // Etapa 119 (C248, RN-04; B775): NAO-FATAL. O estorno ja valeu aqui (livro, estoque, series, vinculo `movimento_estorno_id`)
+  // e nao ha como desfaze-lo sem um segundo estorno. Fatal, a falha desta auditoria respondia 500 com o estorno concluido e
+  // pulava o que vem abaixo (o desconto e a reabertura do pedido de compra, o recalculo das requisicoes, o alerta, a supressao
+  // do aviso); quem tentava de novo ouvia "Movimentação já cancelada" (medido). O log registra; a linha ESTORNO do livro e o
+  // `cancelado_por`/`cancelado_em` continuam dizendo quem estornou e quando.
+  try {
+    await registrarAuditoria(db, {
+      entidade: 'movimentacao', entidade_id: movimentoId, acao: 'CANCELAMENTO',
+      usuario_id: user.id, usuario_nome: user.nome || user.email, justificativa: motivo,
+      dados_novos: { estorno_id: estornoId, ...camposDeOrigem(user) },
+    });
+  } catch (audErr) {
+    console.warn(`[almoxarifado] auditoria do cancelamento falhou (movimentacao ${movimentoId}): ${audErr.message}`);
+  }
 
   // Etapa 106 (RN-06, B709): o estorno de ajuste de material de cliente que CONCLUIU audita nomeando o dono. Depois do
   // efeito (o recusado nao chega aqui) e nao-fatal: o estorno ja esta no livro e a `CANCELAMENTO` acima ja o registra.

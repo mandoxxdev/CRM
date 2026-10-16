@@ -213,6 +213,30 @@ const SUPER = { id: 1, nome: 'Super Teste', role: 'admin', is_superadmin: 1, ema
     assert.strictEqual(await fisico(m), 8);
   });
 
+  // ── C248 ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  await test('[RN-04] estorno com a auditoria CANCELAMENTO falhando -> 200, cancelado, fisico 0, o aviso suprimido; de novo -> 400', async () => {
+    for (const [chave, valor] of [['notificar_movimentacoes', '1'], ['notificacoes_dest_entradas', 'ojv119@test.com']]) {
+      await dbRun(db, 'DELETE FROM configuracoes_almoxarifado WHERE chave = ?', [chave]);
+      await dbRun(db, 'INSERT INTO configuracoes_almoxarifado (chave, valor) VALUES (?, ?)', [chave, valor]);
+    }
+    const m = await material();
+    const id = await mov(m, { tipo: 'ENTRADA', quantidade: 5 });
+    await dbRun(db, "DELETE FROM configuracoes_almoxarifado WHERE chave IN ('notificar_movimentacoes', 'notificacoes_dest_entradas')");
+    const aviso = async () => (await dbGet(db, "SELECT status FROM fila_notificacoes_almoxarifado WHERE payload LIKE ? AND evento = 'MOVIMENTACAO'",
+      [`%"movimentacao_id":${id},%`]));
+    assert.strictEqual((await aviso()).status, 'PENDENTE', 'premissa: a entrada enfileirou o aviso');
+    const r = await comAuditoriaFalhando('CANCELAMENTO', () => estornar(id));
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.strictEqual(r.body.success, true);
+    assert.ok(r.body.estorno_id, 'o corpo traz o estorno_id');
+    assert.strictEqual(await cancelado(id), 1);
+    assert.strictEqual(await fisico(m), 0);
+    assert.strictEqual((await aviso()).status, 'FALHA', 'o que vem depois da auditoria nao rodou');
+    const r2 = await estornar(id);
+    assert.strictEqual(r2.status, 400);
+    assert.strictEqual(r2.body.error, 'Movimentação já cancelada');
+  });
+
   await test('[RN-08] entrega de requisicao com lote, 2o endereco falhando -> 500, fisico 6, A 3 e B 3; de novo -> entrega, fisico 1', async () => {
     const { m, A, B, lt } = await loteEmDoisEnderecos();
     const req = (await dbRun(db, `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status)
