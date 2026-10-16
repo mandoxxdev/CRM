@@ -133,3 +133,14 @@ Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa122-a-aprovacao-que-
 ## Dependências
 
 - Quase todas — os relatórios ficam completos conforme as features donas entregam os dados. Desenvolver a **tela** cedo com os relatórios já existentes e ir ampliando.
+
+## Etapa 127 (2026-10-16) — medida na Fase 0 do mapa (nada entregue nesta feature)
+
+- **Correção à vista — o checklist estava incompleto:** a seção 27 dos requisitos
+  (`specs/modulo-almoxarifado/2026-08-02-requisitos-modulo-almoxarifado.md`, "Gestão") pede **perdas**, e este README não tinha o item.
+  Hoje só existe a listagem do histórico com `tipo=PERDA`, sem valor. Fica aberto:
+- [ ] **Perdas com valor** (quanto se perdeu, por período e motivo) — não depende do P.O.; pequeno.
+- [ ] **Tempo médio de recebimento** — medido: não existe; as datas existem (`data_recebimento` no cabeçalho do recebimento,
+  `entrada_estoque_em` por item, que só volta a NULL quando nada entrou). **Nenhuma spec define a régua** — a natural (deduzida) é da
+  chegada à entrada no estoque (`data_recebimento` → o maior `entrada_estoque_em` do recebimento). Escolhida como próxima tarefa
+  (Etapa 128), com a régua para o P.O. confirmar.

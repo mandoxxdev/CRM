@@ -1,18 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-16 (Etapa 126) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-16 (Etapa 127) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125 e 126) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126 e 127) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 126 ENTREGUE · próxima do almoxarifado: Etapa 127)
+> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 127 ENTREGUE · próxima do almoxarifado: Etapa 128)
 >
-> **O desenvolvimento parou aqui: Etapa 126 fechada — 2026-10-16.** A **Etapa 126 (as Configurações que o servidor recusa, e o
+> **O desenvolvimento parou aqui: Etapa 127 fechada — 2026-10-16.** A **Etapa 127 (o perfil que saiu, e o separável dividido)**: quem
+> perde o perfil Administrador do almoxarifado deixa de ver os botões ao recarregar a página (antes, só saindo e entrando); e a Fila de
+> separação e a janela de separação dividem o que dá para separar entre dois itens do mesmo material com o número que a separação aceita
+> — a fila deixou de prometer o que a separação recusava, e a janela deixou de abrir zero no item que tinha a própria reserva.
+> **Próxima: Etapa 128** — ver a próxima tarefa no plano da 127.
+>
+> **Etapa 126, 2026-10-16.** A **Etapa 126 (as Configurações que o servidor recusa, e o
 > Editar da família que leu)**: o administrador do sistema sem perfil no almoxarifado vê cada aba de Configurações dizer o que ele
 > pode — as que ele só lê aparecem sem os botões de gravar, com a frase de quem é; as três que ele nem lê mostram só a frase —, em vez
 > de botões que recusam; e o *Editar* da aba Famílias não desfaz mais o que outro administrador mudou enquanto a lista estava aberta
 > (avisa quais campos e pede para editar de novo).
-> **Próxima: Etapa 127** — ver a próxima tarefa no plano da 126.
+> *(Próxima, na época: Etapa 127 — entregue acima.)*
 >
 > **Etapa 125, 2026-10-16.** A **Etapa 125 (o cadastro que o formulário leu, inteiro)**: o
 > formulário de material aberto não desfaz mais nenhum campo que outra pessoa mudou enquanto ele estava aberto — nem o custo que a
@@ -6518,6 +6524,45 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 127 — O perfil que saiu, e o separável dividido (ENTREGUE — 2026-10-16)
+
+**O que mudou, em uma frase:** tirar o perfil de alguém passa a valer na tela dele ao recarregar a página; e, numa requisição com dois
+itens do mesmo material, a fila e a janela de separação mostram o que a separação de fato aceita.
+
+**O problema que ela resolve.** Quem perdia o perfil **Administrador** continuava vendo os botões de Configurações — que recusavam —
+até sair e entrar. E, com dois itens do mesmo material na mesma requisição, a **Fila de separação** mostrava o máximo de cada item como
+se o outro não existisse (4 e 4 com só 4 na prateleira), enquanto a **janela de separação** abria com **zero** no segundo item mesmo
+quando ele tinha a sua própria reserva (4 e 0 com os dois reservados).
+
+| Antes | Agora |
+|---|---|
+| Perfil retirado: os botões ficavam até sair e entrar | Somem ao recarregar a página (F5) |
+| Fila: 4 na prateleira, dois itens de 4 → "separável agora 4" nos dois | 4 no primeiro, 0 no segundo; chips *Separar* e *Aguardando saldo* |
+| Janela: dois itens reservados 4 + 4 → abria com 4 e 0 | Abre com 4 e 4 |
+| Janela: 4 reservados no primeiro + 2 livres → abria com 4 e 0 | Abre com 4 e 2 |
+
+**Roteiro de teste (10 minutos).**
+
+1. Entre como **Administrador** do almoxarifado e dê o perfil **Administrador** a um usuário **Administrador do Sistema** que não é Super
+   Administrador (**Configurações → Perfis de Acesso**).
+2. Em outra janela do navegador (ou anônima), entre como esse usuário → **Almoxarifado → Configurações → Famílias**: *Nova Família* aparece.
+3. Na primeira janela, tire o perfil dele. Na segunda, **recarregue** (F5): a aba mostra *"Somente leitura — cadastrar, editar,
+   inativar e reativar famílias é do Administrador do almoxarifado ou do Super Administrador; peça a um deles."* e não tem *Nova Família*.
+4. Cadastre o material **PORCA** (unidade PC) sem saldo. Como Produção, crie uma requisição com **duas linhas** de PORCA, 4 cada; aprove.
+   Dê uma **Entrada** de 4 em Movimentações.
+5. **Fila de separação**: a requisição com *Separar* e *Aguardando saldo*; "separável agora 4" na primeira linha e "0" na segunda.
+6. Abra a requisição → **Iniciar Separação**: abre com 4 e 0. Ponha 4 no segundo → **Confirmar**: *"PORCA: não é possível separar 4 PC.
+   Máximo: 0 (pendente: 4, disponível: 0)"*. Volte a 0 → **Confirmar**: separa.
+7. Dê mais 8 de entrada e crie outra requisição com duas linhas de 4; aprove (*Totalmente Reservada*). **Iniciar Separação**: abre com
+   **4 e 4**. Confirme: separa os dois.
+8. Com o saldo livre de PORCA em 4 (se precisar, ajuste), crie mais uma requisição de duas linhas de 4 e aprove (*Parcialmente
+   Reservada* — só a primeira reservada); dê uma entrada de 2. **Iniciar Separação**: abre com **4 e 2**.
+
+**O que esta etapa NÃO cobre.** O perfil retirado só some ao recarregar a página, não na hora (e, sem recarregar, pode aparecer e
+sumir conforme a tela relê as permissões); a fila mostra **uma** divisão — a da ordem do pedido —, mas a separação aceita qualquer
+divisão que caiba; o entregável de dois itens do mesmo material não foi medido; o tempo médio de recebimento e a C209 são a próxima
+etapa.
 
 ## Etapa 126 — As Configurações que o servidor recusa, e o Editar da família que leu (ENTREGUE — 2026-10-16)
 

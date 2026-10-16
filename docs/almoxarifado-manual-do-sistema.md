@@ -1025,7 +1025,7 @@ em que ⟨o quê⟩ é *"cadastrar, editar e excluir tipos de material"*, *"cada
 
 No **Mapa de Áreas**, *Editar Posições* (e, sem localização cadastrada, *Cadastrar localizações*) só aparece para quem grava. No cadastro de material sem família ou sem localização cadastrada, a dica *"— cadastre em Configurações → Famílias"* (ou *→ Localizações*) só aparece para quem grava; os outros veem *"— solicite a um administrador"*. Quem decide continua sendo o servidor: pela API, qualquer gravação dessas abas feita por quem não grava responde *"Acesso restrito — administrador do Almoxarifado ou Super Administrador"*.
 
-Quem perde o perfil **Administrador** do almoxarifado com a sessão aberta continua vendo a tela como Administrador até sair e entrar de novo — e o servidor recusa cada gravação com a mesma frase.
+Quem perde o perfil **Administrador** do almoxarifado com a sessão aberta continua vendo a tela como Administrador até **recarregar a página** (ou salvar algo em *Minha Conta*) — sem recarregar, os botões podem sumir ao entrar num módulo e voltar alguns minutos depois — e, até lá, o servidor recusa cada gravação com a mesma frase. Ao recarregar, a tela já segue o perfil novo; o mesmo vale para quem ganhou um perfil.
 
 ### 5.3 Usuário sem perfil definido é tratado como chão de fábrica
 
@@ -2328,7 +2328,16 @@ Exemplos, todos com material comum:
 
 **Quem segura a caixa.** Só conta como caixa o separado e não entregue de requisição em andamento: *Aprovado*, *Aguard. Estoque*, *Aguard. Compra*, *Parcialmente Reservada*, *Totalmente Reservada*, *Em Separação*, *Pronta p/ Retirada*, *Parcialmente Atendida* e *Aguard. Aprov. Valor*. Quando a requisição é cancelada, rejeitada ou excluída, o que ela tinha separado e não entregou deixa de ser descontado e volta a contar como livre — sem nenhum movimento de estoque, porque nada tinha saído. Na prateleira, esse material precisa voltar ao lugar (10.5). Encerrar não entra nessa lista: com material na caixa o encerramento é recusado (7.6). Uma requisição *Entregue* ou *Encerrada* não segura caixa — se os números de uma delas mostrarem separado acima do entregue (registro antigo), esse excedente já conta como livre.
 
-**Itens do mesmo material dividem.** Na mesma confirmação, o segundo item do mesmo material vê o que o primeiro acabou de separar: com 4 na prateleira e dois itens de 4 sem reserva, 4 + 4 é recusado no segundo (*"Rebite: não é possível separar 4 PC. Máximo: 0 (pendente: 4, disponível: 0)"*) e nada é gravado; 2 + 2 é aceito. O mesmo item informado duas vezes na confirmação (por integração) também soma. A janela de separação já abre com as quantidades divididas, na ordem do pedido (10.1); a linha da Fila de separação mostra o separável de cada item sozinho, sem dividir (10.6).
+**Itens do mesmo material dividem.** Na mesma confirmação, o segundo item do mesmo material vê o que o primeiro acabou de separar: com 4 na prateleira e dois itens de 4 sem reserva, 4 + 4 é recusado no segundo (*"Rebite: não é possível separar 4 PC. Máximo: 0 (pendente: 4, disponível: 0)"*) e nada é gravado; 2 + 2 é aceito. O mesmo item informado duas vezes na confirmação (por integração) também soma. A janela de separação já abre com as quantidades divididas, na ordem do pedido (10.1), e a linha da Fila de separação mostra o mesmo número (10.6). **O que se divide é só o livre:** a reserva do próprio item, ainda fora da caixa, é dele e não entra na divisão. Para cada item, na ordem do pedido:
+
+```
+própria  = máximo(0, reserva do item − caixa do item)
+livre    = separável do item − própria          (o mesmo para todos os itens do material)
+divide   = mínimo(pendente, própria + máximo(0, livre − o que os itens anteriores tiraram do livre))
+tira do livre = máximo(0, divide − própria)
+```
+
+Exemplos: dois itens de 4 sem reserva e 4 na prateleira → 4 e 0; dois itens de 4 reservados (8 na prateleira) → 4 e 4; 4 reservados no primeiro, o segundo sem reserva e 2 livres → 4 e 2 (e 4 + 3 é recusado: *"Rebite: não é possível separar 3 PC. Máximo: 2 (pendente: 4, disponível: 2)"*). A separação aceita qualquer divisão cuja soma caiba no livre; a janela e a fila mostram a da ordem do pedido. Na janela, o máximo de cada item — que decide quando pedir o motivo da divergência — acompanha o que se digita nos outros, pela mesma conta. O detalhe de cada item continua mostrando o separável dele sozinho.
 
 **Duas separações do mesmo material ao mesmo tempo acontecem uma depois da outra**, mesmo de requisições diferentes: a segunda espera a primeira terminar e só então calcula o separável, já com a caixa que a primeira deixou. O mesmo vale entre a separação, a entrega e a aprovação de requisições que têm material em comum (9.3d). A espera é por material: requisições sem material em comum não esperam umas pelas outras.
 
@@ -2398,7 +2407,7 @@ O material separado **coberto por reserva** da própria requisição não entra 
 **Divergência — separar menos do que dava.** Cada rodada guarda, por item, **quanto dava para separar** naquele momento e se o separador ficou **abaixo** disso — e o porquê, se ele escrever. No modal de separação, quando a quantidade de um item fica abaixo do possível, aparece o campo **"Motivo da divergência (opcional)"**, com a dica *"Separando menos que o possível — conte o porquê para quem confere."*. Regras:
 
 - **O motivo não é obrigatório.** A rodada é aceita com ou sem ele — separar em várias viagens é normal. O que muda é o registro: o bloco **Separação (N)** mostra *"⟨material⟩: separou ⟨q⟩ de ⟨máximo⟩ — ⟨motivo⟩"*, ou *"— sem motivo informado"*, para quem confere.
-- **"Quanto dava"** é o que o item ainda tem a separar, limitado ao seu **separável** no começo da rodada (acima): descontado o que **outros itens do mesmo material** estão separando na mesma rodada; e, quando se escolhe um endereço no **Sai de**, limitado ao saldo nele menos o que **já foi separado dali e ainda não foi entregue** (por esta ou por outra requisição).
+- **"Quanto dava"** é o que o item ainda tem a separar, limitado ao seu **separável** no começo da rodada (acima): descontado o que **outros itens do mesmo material** estão separando na mesma rodada **além da reserva própria deles** (a divisão acima — a reserva de cada item é dele e não sai do que dava para o outro); e, quando se escolhe um endereço no **Sai de**, limitado ao saldo nele menos o que **já foi separado dali e ainda não foi entregue** (por esta ou por outra requisição).
 - **Falta de material não é divergência.** Com 3 no estoque e 10 pedidos, separar 3 é separar tudo o que dava — o campo não aparece e nada é registrado como divergência. Separar 4 de um endereço que só tem 4 também não é.
 - **Quem decide o registro é o sistema, não a tela.** A tela faz a mesma conta para saber quando pedir o motivo, mas não enxerga as outras requisições; o motivo digitado é **sempre guardado**, mesmo quando o sistema conclui que não houve divergência.
 - Item com quantidade **0** não entra na rodada — não separar nada de um item não aparece como divergência.
@@ -2508,7 +2517,7 @@ Totalmente Reservada, Parcialmente Reservada, Em Separação, Parcialmente Atend
 | Chip | Quando aparece | Dá para agir agora? |
 |---|---|---|
 | **Separar** | Algum item é **separável agora**: o menor entre o que falta separar e o separável do item (10.2) é maior que zero — o mesmo número que a separação aceita | Sim |
-| **Aguardando saldo** | Algum item falta separar e o separável dele é zero — falta material, ou o que está na prateleira já está na caixa de outros pedidos (10.2); ou há separado a entregar, mas nada **entregável agora** — inclusive quando o disponível do material está negativo e nada dele sai pela entrega (7.5) | Não |
+| **Aguardando saldo** | Algum item falta separar e o separável dele é zero — falta material, o que está na prateleira já está na caixa de outros pedidos (10.2), ou o que há do material já vai para um item anterior da mesma requisição (a divisão de 10.2 — então a mesma requisição pode mostrar *Separar* e *Aguardando saldo*); ou há separado a entregar, mas nada **entregável agora** — inclusive quando o disponível do material está negativo e nada dele sai pela entrega (7.5) | Não |
 | **Conferir** | Material crítico separado sem a segunda conferência (10.3), com a requisição *Em Separação*. Para quem separou, o chip diz **"Conferir — você separou, peça a outra pessoa"** | Sim |
 | **Separar de novo para conferir** | A mesma conferência pendente, num estado de separação que não é *Em Separação* (por exemplo, *Parcialmente Atendida*): o caminho é o botão **Separar de novo para conferir** (ou **Ajustar Separação** confirmado sem mudar nada), que volta a *Em Separação* (10.3) | Sim |
 | **Conferência pendente — peça ao administrador** | A mesma conferência pendente com a requisição *Pronta p/ Retirada*, de onde a separação não reabre — devolver à prateleira (10.2b) leva a requisição de volta a *Em Separação* | Não |

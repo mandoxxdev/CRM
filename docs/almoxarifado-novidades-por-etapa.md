@@ -11,11 +11,14 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-16):** **Etapa 126 fechada** (as abas de Configurações que o servidor recusa ao
+> **Onde o desenvolvimento está (2026-10-16):** **Etapa 127 fechada** (quem perde o perfil Administrador deixa de ver os botões ao
+> recarregar a página — **C264** resolvido, do núcleo; e a fila de separação e a janela de separação dividem o separável entre itens do
+> mesmo material com o número que a separação aceita — a fila prometia o que a separação recusava, e a janela abria zero onde a separação
+> aceitava a reserva do item: **C265** resolvido); a próxima do almoxarifado é a **128** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 126 fechada** (as abas de Configurações que o servidor recusa ao
 > administrador do sistema sem perfil ficam somente leitura — ou, as três que ele nem consegue ler, com a frase de quem é —, em vez
 > de oferecer botões que recusam: **C261** resolvido; e o *Editar* da aba Famílias não desfaz mais o nome, a descrição ou o tipo de uso
-> que outro administrador mudou enquanto a lista estava aberta: **D (125)** resolvida); a próxima do almoxarifado é a **127** — ver
-> "Onde estamos e o que vem a seguir".
+> que outro administrador mudou enquanto a lista estava aberta: **D (125)** resolvida); a próxima do almoxarifado era a **127**.)*
 > *(Antes: **Etapa 125 fechada** (o formulário de material aberto não desfaz mais **nenhum**
 > campo que outra pessoa — ou o recebimento, no custo — mudou enquanto ele estava aberto: avisa quais e pede para recarregar —
 > **D (124)** resolvida; o *Reativar* da aba Famílias não volta mais o nome antigo; e a aba Famílias fica somente leitura para o
@@ -2776,7 +2779,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B817; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B822; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -8837,6 +8840,43 @@ digitado) e não recarregar a lista. **Reversível.**
 **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões e o grupo acima de família continuam esperando vocês.
 
+**B818 (NOVA, da Etapa 127) — o perfil retirado: a correção é no núcleo, para os dois perfis (C264).** Quem perdia o perfil
+Administrador do almoxarifado (ou deixava de ser administrador do módulo) continuava vendo os botões até sair e entrar: o servidor
+manda "sem perfil" e a tela guardava o perfil antigo do navegador. **O que foi escolhido** (`1f8910e5`, `30ef3acb`): a leitura do usuário no
+navegador — que serve o CRM inteiro — passa a aceitar o "sem perfil" do servidor, para o perfil do **almoxarifado e o da Frota** (a
+mesma linha, o mesmo defeito); e o *atualizar o usuário* (Minha Conta, cadastro de usuário) passa a renovar também o guardado das
+permissões (sem isso, achado da revisão do plano, o perfil antigo continuaria valendo — e quem **ganhou** um perfil o perderia por até
+5 minutos; e, achado da revisão do código, uma busca de permissões em andamento no mesmo instante também apagava — corrigido). O efeito é **ao recarregar a página**. **Descartado:** (a) só o do almoxarifado (a Frota ficaria com o defeito conhecido);
+(b) a tela de Configurações reler o perfil sozinha (consertaria uma tela e deixaria as outras); (c) avisar a sessão aberta na hora,
+sem recarregar (mudança do núcleo, de produto). **Consequência aceita:** se o banco falhar exatamente na leitura do perfil, a tela
+esconde os botões até o próximo recarregar (antes mostrava o perfil antigo) — o servidor decide igual. **Reversível** (uma linha por
+perfil).
+
+**B819 (NOVA, da Etapa 127) — da Fase 0 do mapa, a separação (feature 05), e não o tempo médio de recebimento (21).** Medidas as 🟡 05,
+06, 21 e 22 (tabela no design da etapa). **O que foi escolhido:** a fila e a janela de separação dividem o separável entre itens do
+mesmo material com o número que a separação aceita (`77385aaa`, `e5e7938f`) — número errado na tela de trabalho do almoxarife, nos dois
+sentidos (**C265**). **Descartado agora (próxima tarefa):** (a) o **tempo médio de recebimento** — valor de gestão, mas ninguém definiu a
+régua (da chegada à entrada no estoque é a natural, deduzida — vai com a pergunta na próxima etapa); (b) a **C209** (o aviso da contagem
+abaixo do reservado — pequena, aditiva, sem número errado); (c) o aviso de rejeição da Qualidade ao comprador (22 — "quando o negócio
+pedir"); (d) perdas com valor no relatório (21). Fora por dependerem de vocês: os itens de produto da 05 (lista de separação, rota,
+kits, troca de série), a **C198** (B505 (ii)), a **B11** (06), a valorização por cliente (21) e, na 22, **B13**, **B101**, **G38**.
+**Reversível.**
+
+**B820 (NOVA, da Etapa 127) — a fila mostra *Separar* e *Aguardando saldo* juntos quando o separável não cobre os dois itens.** Com 4
+na prateleira e dois itens de 4 do mesmo material, a fila diz 4 e 0, e a linha ganha os dois chips — como já acontecia com dois
+materiais diferentes, um com saldo e outro sem. **Descartado:** calcular os chips pelo número de antes (a fila diria "nada aguardando
+saldo" com metade do pedido sem material). **Reversível.**
+
+**B821 (NOVA, da Etapa 127) — a divisão é na ordem do pedido.** O primeiro item leva o que dá, o segundo o que sobra — a mesma ordem
+em que a janela de separação abre e em que a tela manda. Quem quiser separar o segundo item primeiro digita na janela (o máximo de cada
+item acompanha o que se digita nos outros). A separação aceita qualquer divisão cuja soma caiba no que existe; a fila mostra **uma**
+delas, a da ordem do pedido. **Descartado:** dividir proporcional (nenhuma porta faz assim). **Reversível.**
+
+**B822 (NOVA, da Etapa 127) — a próxima etapa do almoxarifado (128).** Ver a "próxima tarefa detalhada" no plano da Etapa 127: o tempo
+médio de recebimento (com a régua para vocês confirmarem) e a C209. A **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da
+**C225**, a **C228**, a **C219**, a **C230**, o reparo da **C246**/**C247**, a tabela de conversões e o grupo acima de família continuam
+esperando vocês.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -11387,13 +11427,23 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      aviso (**B815**). **O que fazer:** clique **Cancelar** e **Editar** de novo (a lista já recarregou com o que o outro gravou) e
      salve. Salvar de novo sem clicar **Editar** recebe o mesmo aviso (**B816**). O que tinha sido digitado precisa ser digitado de novo.
 
-264. **NOVO (da Etapa 126, da revisão; anterior a ela, do núcleo) — o perfil Administrador tirado de alguém continua valendo na tela
+264. **✅ RESOLVIDO NA ETAPA 127 (`1f8910e5`, `30ef3acb`; B818) — ao recarregar a página, quem perdeu o perfil deixa de ver os botões.** O "o que
+     fazer" abaixo muda: em vez de sair e entrar, basta **recarregar a página** (F5). O texto original: **NOVO (da Etapa 126, da revisão;
+     anterior a ela, do núcleo) — o perfil Administrador tirado de alguém continua valendo na tela
      até essa pessoa sair e entrar de novo.** Quem perdeu o perfil **Administrador** do almoxarifado (ou deixou de ser administrador do
      módulo) e continua com a sessão aberta segue vendo Configurações com os botões de gravar — e o servidor recusa cada um com
      *"Acesso restrito — administrador do Almoxarifado ou Super Administrador"*. Recarregar a página não resolve; sair e entrar resolve
      (a sessão dura no máximo 24 horas). Trocar o perfil por **outro** perfil é respeitado na hora; só a remoção (perfil vazio) não é.
      Nada é gravado por engano — quem decide é o servidor. **O que fazer:** depois de tirar o perfil de alguém, peça para a pessoa sair
      e entrar de novo. Candidata de etapa do núcleo (a leitura das permissões do usuário no navegador).
+
+265. **✅ RESOLVIDO NA ETAPA 127 (`77385aaa`, `e5e7938f`, `0fe7a111`; B819–B821) — NOVO (da medição da Etapa 127; anterior a ela) — a janela de
+     separação abria zero para o segundo item do mesmo material que tinha reserva própria.** Com dois itens do mesmo material
+     reservados (4 + 4), a janela de **Iniciar Separação** abria com 4 e **0**; com 4 reservados no primeiro e 2 livres, 4 e **0** — e a
+     separação aceita 4 + 4 e 4 + 2. Quem confiava no número já preenchido deixava material reservado na prateleira. E a **Fila de
+     separação** fazia o contrário: com 4 livres e dois itens de 4 sem reserva, dizia *"separável agora 4"* nos dois, e a separação
+     recusava o segundo. **Agora** as duas dizem o número que a separação aceita. **O que fazer (até o deploy):** na janela de
+     separação, confira o número de cada item contra o *Saldo* e digite a quantidade certa; o Confirmar aceita.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -12360,8 +12410,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   entregar. Mudar o disponível do motor foi descartado (**B466 (iv)**, 14 leitores). Candidata. *(✅ Resolvido na Etapa 97 — **B491**; fica só o ajuste com endereço de
   ida, **C186**.)*
 - **(95) A entrega fora da segunda rodada** continua pelo disponível somado à reserva (**B470**).
-- **(95) A linha da fila não divide o separável entre itens do mesmo material da mesma requisição** — cada item mostra o
-  seu teto; a separação divide (**B468**) e o modal abre dividido.
+- **(95) ✅ RESOLVIDA NA ETAPA 127 (`77385aaa`, `e5e7938f`; B819) — a linha da fila divide.** O texto dizia também *"o modal abre
+  dividido"* — **estava incompleto**: abria dividido **errado** quando o item tinha reserva própria (**C265**). O texto original:
+  **A linha da fila não divide o separável entre itens do mesmo material da mesma requisição** — cada item mostra o seu teto; a
+  separação divide (**B468**) e o modal abre dividido.
 - **(95) "(na caixa: n)" na mensagem** — descartado por ora (**B471**).
 - **(95) A chegada e a liberação da inspeção** (**B475**, **C173**), **o status pós-aprovação sem reserva** (**C172**),
   **a caixa em *Pendente*** (**C175**) e **o legado sem gesto limpo** (**C174**) — declarados.
@@ -12576,7 +12628,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(126) A frase *"Restrito — …"* das três abas que o administrador do sistema não lê** não mostra nada da configuração — nem o que
   dá para ver sem gravar. É a regra do servidor (ele recusa a leitura); mostrar mais é a **B808**.
 - **(126) O Mapa de Áreas não tem frase de somente leitura** para o administrador do sistema: o *Editar Posições* só some.
-- **(126) O perfil Administrador removido continua valendo na tela até sair e entrar** — a **C264** (do núcleo).
+- **(126) ✅ RESOLVIDA NA ETAPA 127 — o perfil removido** (a **C264**): agora ao recarregar a página.
+- **(127) O perfil retirado deixa de valer ao recarregar a página**, não na hora: a sessão aberta continua com os botões até o F5 (ou
+  até a pessoa salvar algo em *Minha Conta*). Sem recarregar, para quem não é administrador do sistema, os botões podem **sumir e
+  voltar**: some quando a tela relê as permissões (ao entrar num módulo), volta depois de 5 minutos, até o F5 (achado da revisão, medido;
+  antes ficavam sempre). O servidor recusa cada gravação, como sempre.
+- **(127) A fila mostra uma divisão — a da ordem do pedido** (**B821**): com 4 para dois itens de 4, ela diz 4 e 0, mas a separação
+  aceita também 0 e 4, ou 2 e 2. O detalhe do item (o máximo dele sozinho) continua dizendo 4.
+- **(127) O *entregável* da fila não foi medido** com dois itens do mesmo material — não mudou.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -13479,6 +13538,13 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(127) Nenhum clique foi dado nesta etapa no navegador.** Mudaram a leitura do usuário no navegador (o perfil que o servidor diz que
+saiu), a Fila de separação (o número de cada item) e a janela de separação (o número já preenchido e o motivo da divergência) —
+provados por teste com a tela real e só a fronteira HTTP simulada (**12** casos do perfil, **10** da janela) e pelo servidor, pela rota e
+pelo serviço (**22** cenários em dois arquivos novos, um deles a integração). O que **só o navegador** prova: o roteiro da Etapa 127 no
+guia — tirar o perfil de alguém com a sessão aberta e ver os botões sumirem no F5, e a janela de separação abrindo 4 e 4 para dois
+itens reservados.
 
 **(126) Nenhum clique foi dado nesta etapa no navegador.** Mudaram a tela de Configurações (oito abas com a regra de quem grava), o
 Mapa de Áreas (o *Editar Posições* e o link), a dica do formulário de material e o *Editar* da aba Famílias (manda o que leu) — provados
@@ -26074,17 +26140,93 @@ achou uma recusa a mais no mesmo instante (declarada); o de **permissão** mediu
 divergência e achou a **C264** (anterior, do núcleo); o de **sabotagem** fez **112** sabotagens — 90 derrubaram teste pela asserção
 certa, e as que sobreviveram pediram **10** cenários novos e duas asserções (`11a12cad`).
 
+## Etapa 127 — O perfil que saiu, e o separável dividido entre itens do mesmo material (2026-10-16)
+
+Duas coisas que a tela dizia diferente do servidor. A primeira: quem perdia o perfil **Administrador** do almoxarifado continuava vendo
+os botões de Configurações até sair e entrar — e cada um recusava. Agora basta recarregar a página. A segunda é da separação: numa
+requisição com dois itens do **mesmo material**, a **Fila de separação** prometia separar os dois quando só havia material para um, e a
+**janela de separação** fazia o contrário — abria com **zero** no segundo item mesmo quando ele tinha a sua própria reserva, e quem
+confiava no número já preenchido deixava material reservado na prateleira. Agora as duas mostram o que a separação aceita.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Tiraram o perfil Administrador de alguém: a pessoa continuava vendo *Nova Família*, *Editar*, os botões de gravar — até sair e entrar (recarregar não resolvia) | Ao **recarregar a página** (F5), a tela já segue o perfil novo (**B818**) |
+| Quem **ganhou** um perfil e salvou algo em *Minha Conta* | Continua valendo na hora (a revisão do plano achou que a correção ingênua o apagaria — evitado) |
+| Fila: 4 na prateleira, dois itens de 4 do mesmo material, sem reserva → *"separável agora 4"* nos dois, e a separação recusava o segundo | *"separável agora 4"* no primeiro e *"0"* no segundo; a linha mostra *Separar* e *Aguardando saldo* (**B820**) |
+| Janela de separação: dois itens reservados (4 + 4) → abria com **4 e 0** | Abre com **4 e 4** (**C265**) |
+| Janela: 4 reservados no primeiro e 2 livres → abria com **4 e 0** | Abre com **4 e 2** |
+| O motivo da divergência (opcional) não aparecia no segundo item reservado separado a menos — e o sistema gravava a separação como "não divergente" | Aparece, e quem confere vê a divergência com o motivo |
+
+### As regras, com o cenário exato
+
+Preparação: um usuário **Administrador do Sistema** que não é Super Administrador; um **Administrador** do almoxarifado; um
+**Almoxarife**; e um material comum **PORCA** (unidade *PC*).
+
+**1. O perfil que saiu.** Dê o perfil **Administrador** do almoxarifado ao administrador do sistema (**Configurações → Perfis de
+Acesso**, entrando como o Administrador). Numa **outra** janela do navegador, entre como o administrador do sistema e abra
+**Almoxarifado → Configurações → Famílias**: *Nova Família* está lá. Volte à primeira janela e tire o perfil dele. Na segunda,
+**recarregue** a página (F5): a aba Famílias mostra *"Somente leitura — cadastrar, editar, inativar e reativar famílias é do
+Administrador do almoxarifado ou do Super Administrador; peça a um deles."* e não tem mais *Nova Família*. Com um usuário comum (sem
+ser administrador do sistema) que perdeu o perfil Administrador, o F5 mostra *"Acesso restrito — administrador do Almoxarifado"* no
+lugar da tela inteira. Sem recarregar, os botões continuam — e o servidor recusa cada um com *"Acesso restrito — administrador do
+Almoxarifado ou Super Administrador"* (**D (127)**).
+
+**2. A fila divide.** Com **PORCA** sem saldo, crie uma requisição com **duas linhas** de PORCA, 4 cada, e aprove-a. Dê uma entrada de 4
+(**Movimentações → Entrada**). **Almoxarifado → Fila de separação**: a requisição mostra os chips **Separar** e **Aguardando saldo**; a
+primeira linha diz *"a separar 4 PC (separável agora 4)"* e a segunda *"a separar 4 PC (separável agora 0)"*. Abra a requisição →
+**Iniciar Separação**: a janela abre com 4 e 0. Mude o segundo para 4 e **Confirmar**: *"PORCA: não é possível separar 4 PC. Máximo: 0
+(pendente: 4, disponível: 0)"*, e nada é gravado. Volte o segundo a 0 e confirme: separa.
+
+**3. A janela não come a reserva do item.** Com **PORCA** com 8 em estoque, crie uma requisição com duas linhas de 4 e aprove (as duas
+ficam reservadas — *Totalmente Reservada*). **Iniciar Separação**: a janela abre com **4 e 4** (antes, 4 e 0). Confirme: separa os
+dois. Na fila, antes de separar, as duas linhas diziam 4.
+
+**4. Reserva parcial.** Com **PORCA** com 4 em estoque, crie uma requisição com duas linhas de 4 e aprove (a primeira fica reservada,
+a segunda não — *Parcialmente Reservada*). Dê uma entrada de 2. **Iniciar Separação**: a janela abre com **4 e 2**; a fila diz 4 e 2.
+Mude o segundo para 3 e confirme: *"PORCA: não é possível separar 3 PC. Máximo: 2 (pendente: 4, disponível: 2)"*.
+
+### O que esta etapa NÃO cobre
+
+1. **O perfil que sai na hora**, sem recarregar a página — declarado em **D (127)**.
+2. **A fila mostra uma divisão só** — a da ordem do pedido (**B821**); a separação aceita qualquer divisão que caiba.
+3. **O entregável** de dois itens do mesmo material não foi medido (**D (127)**).
+4. **O tempo médio de recebimento** e a **C209** — a próxima etapa (**B822**); os itens de produto da separação (lista, rota, kits, troca
+   de série), a **C198** e as decisões **B808**, **B755**, **B761**/**C239**, **C224**, **C225**, **C228**, **C219**, **C230**,
+   **C246**/**C247** — de vocês.
+
+### O que a revisão encontrou
+
+A **medição** (dois leitores e uma sonda) cruzou as quatro features amarelas com o que as specs já diziam e achou, de quebra, o erro da
+janela de separação (**C265**). A **revisão do plano** (antes do código) achou que a correção do perfil sozinha não bastava — o
+guardado das permissões venceria o perfil novo, e quem **ganhasse** um perfil o perderia por alguns minutos — e um material inativo com
+reserva que a conta nova mostraria como separável; os dois entraram antes da primeira linha de código. A **revisão adversarial do
+código** (três revisores, executando): o de **regra** confirmou que a fila mostra exatamente o que a separação aceita e achou que o
+**registro da divergência** (o que quem confere vê) ainda usava a conta antiga — a janela pedia o motivo e o sistema gravava "não
+divergente"; corrigido. O de **permissão** confirmou que ninguém perde nem ganha perfil indevidamente, achou uma busca em andamento que
+podia apagar o perfil recém-dado (corrigida) e que, sem recarregar, os botões podem sumir e voltar (declarado). O de **sabotagem** fez
+**48** sabotagens além das 11 já feitas: as 14 que mostraram cenário faltando viraram **13** cenários novos; as outras 13 foram provadas
+inofensivas.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 127 entregue (2026-10-16):** **o perfil que saiu, e o separável dividido.** Quem perde o perfil Administrador deixa de ver os
+  botões ao recarregar a página (**C264** resolvido, do núcleo — **B818**); a Fila de separação e a janela de separação dividem o
+  separável entre itens do mesmo material com o número que a separação aceita (**C265** resolvido, **D (95)** resolvida — **B819** a
+  **B821**). **O que é seu:** as decisões **B818 a B821** (reversíveis); a pergunta da régua do tempo médio de recebimento (próxima
+  etapa, **B822**); as limitações **(127)** em D e a verificação **(127)** em F. Nenhuma consulta nova em A. **Próxima: Etapa 128 — ver a
+  "próxima tarefa detalhada" no plano da Etapa 127.**
 
 - **Etapa 126 entregue (2026-10-16):** **as Configurações que o servidor recusa, e o Editar da família que leu.** As abas de
   Configurações que o servidor recusa ao administrador do sistema sem perfil ficam somente leitura — ou com a frase *Restrito*, as três
   que ele não lê —, e o Mapa e o formulário de material deixam de oferecer o que ele não pode (**C261** resolvido; **B811** a
   **B814**); o *Editar* da aba Famílias não desfaz mais o que outro administrador mudou (**D (125)** resolvida; **B815**, **B816**).
   **O que é seu:** a decisão **B808** (continua); as decisões **B811 a B816** (reversíveis); os avisos **C263** e **C264**; as
-  limitações **(126)** em D e a verificação **(126)** em F. Nenhuma consulta nova em A. **Próxima: Etapa 127 — ver a "próxima
-  tarefa detalhada" no plano da Etapa 126.**
+  limitações **(126)** em D e a verificação **(126)** em F. Nenhuma consulta nova em A.
+  *(Próxima, na época: Etapa 127 — entregue acima.)*
 
 - **Etapa 125 entregue (2026-10-16):** **o cadastro que o formulário leu, inteiro.** O formulário de material aberto não desfaz mais
   nenhum campo que outra pessoa (ou o recebimento, no custo) mudou — **D (124)** resolvida (**B805**, **B806**, **B809**); o *Reativar*

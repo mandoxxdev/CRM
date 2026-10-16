@@ -197,7 +197,7 @@ mesmo tempo, nem jest junto).
    (anterior, do núcleo — C264); r3 **22** sobreviventes — 13 viraram cenários, 9 equivalentes provados; **0** ruído.
 3. **Paralelismo:** **0** galhos em paralelo de fato, **0** retrabalho; **3** revisores em paralelo sob a trava de máquina, sem quebra da
    regra desta vez.
-4. **Defeito que escapou:** *(preencher na Etapa 127)*.
+4. **Defeito que escapou:** **nenhum encontrado** (preenchido na Etapa 127). A 127 exercitou a aba Famílias somente leitura pela fiação real (`AuthProvider` e `permissionsCache` reais, `AuthContextPerfilRetirado.test.js`) e ela seguiu o contrato desta etapa. O que a 127 achou no caminho — o cache que o `refreshUser` não renovava e a busca de permissões em voo — é anterior a esta etapa, do núcleo (C264).
 
 ## Próxima tarefa detalhada — Etapa 127
 
