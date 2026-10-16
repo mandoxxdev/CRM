@@ -187,6 +187,9 @@ describe('DevolucoesAlmoxarifado — saída de origem e limite de quantidade', (
     expect(opcoes.find((o) => o.value === '505').textContent).toMatch(/devolvido 1 · 1 já voltou ao estoque por outra entrada/);
     // A metade positiva: a saída devolvida de verdade continua dizendo "já devolvido por inteiro".
     expect(opcoes.find((o) => o.value === '502').textContent).toMatch(/já devolvido por inteiro/);
+    // Fase 5 (r3): sem volta por fora, o rótulo não ganha o "devolvido" (nem na zerada nem na que tem saldo).
+    expect(opcoes.find((o) => o.value === '502').textContent).not.toMatch(/devolvido [0-9]/);
+    expect(opcoes.find((o) => o.value === '504').textContent).not.toMatch(/devolvido [0-9]/);
   });
 
   test('escolhida a saída, a quantidade fica limitada ao saldo devolvível', async () => {
