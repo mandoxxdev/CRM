@@ -4,6 +4,7 @@
 
 // Etapa 109 (G7): a lista sai de modulosSistema.js (fonte unica do servidor) — mesmos valores e ordem.
 const { chavesComAdminDeModulo } = require('./modulosSistema');
+const { isSqliteBusy, respondDbError } = require('./sqliteConcurrency');
 
 const MODULE_ADMIN_KEYS = chavesComAdminDeModulo();
 
@@ -146,36 +147,44 @@ function requireAlmoxAdmin(req, res, next) {
   return res.status(403).json({ error: 'Acesso restrito — administrador do Almoxarifado ou Super Administrador' });
 }
 
-function enrichUserFromDb(db) {
-  const CACHE_TTL_MS = 30000;
-  const cache = new Map();
+/** Etapa 131 (B842): o 401 do usuario desativado ou apagado com o token ainda valido. */
+const LITERAL_SESSAO_ENCERRADA = 'Sessão encerrada — o usuário foi desativado ou removido';
 
+/** Sem linha, nenhum poder que so o banco confirma: sem papel de administrador, sem super, sem modulos, sem perfil do token. */
+function tirarPoderDoToken(user) {
+  user.role = 'usuario';
+  user.is_superadmin = 0;
+  user.admin_modulos = [];
+  delete user.perfil_almoxarifado;
+  delete user.perfil_frota;
+}
+
+/**
+ * Le o usuario do banco a cada pedido e poe em req.user o papel, o super, os modulos administrados e os perfis.
+ *
+ * Etapa 131 (B842, RN-06/RN-07):
+ * - sem linha ATIVA (desativado ou apagado, token ainda valido por ate 24 h) -> 401 LITERAL_SESSAO_ENCERRADA, code USUARIO_INATIVO;
+ *   o client desloga em qualquer 401 (services/api.js). Ate a 130 rebaixava e seguia: o desativado usava o sistema como comum.
+ * - banco ocupado -> 503 (respondDbError; o client repete o pedido no 503). Erro de outro tipo -> segue SEM o poder do token.
+ *   Ate a 130 o erro deixava o token como estava: com um BUSY o administrador desativado voltava a ser administrador (Fase 2 I1).
+ * - sem cache: o de 30 s era codigo morto (o index.js cria uma instancia por pedido, o Map nascia vazio); como instancia unica,
+ *   a retirada de papel e a desativacao passariam a valer so depois de ate 30 s.
+ */
+function enrichUserFromDb(db) {
   return (req, res, next) => {
     if (!req.user?.id) return next();
-
-    const cached = cache.get(req.user.id);
-    if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
-      Object.assign(req.user, cached.data);
-      return next();
-    }
 
     db.get(
       'SELECT id, nome, email, role, is_superadmin, admin_modulos FROM usuarios WHERE id = ? AND ativo = 1',
       [req.user.id],
       (err, row) => {
-        if (err) return next();
-        if (!row) {
-          // Etapa 130 (Fase 5 r2, B842): usuario INATIVO ou APAGADO com o token ainda valido (24 h). Antes seguia com o papel do
-          // TOKEN: o administrador desativado continuava administrador (medido: 200 na lista inteira e no cadastro dos outros, onde
-          // o rebaixado levava 403). Sem a linha, nenhum poder que so o banco confirma: sem papel de administrador, sem super, sem
-          // modulos administrados e sem perfil herdado do token. Descartado: 401 aqui (derrubaria toda requisicao do inativo,
-          // inclusive as que hoje degradam sem erro — fica para a etapa do nucleo que revisar a sessao do inativo).
-          req.user.role = 'usuario';
-          req.user.is_superadmin = 0;
-          req.user.admin_modulos = [];
-          delete req.user.perfil_almoxarifado;
-          delete req.user.perfil_frota;
+        if (err) {
+          if (isSqliteBusy(err)) return respondDbError(res, err, 'auth:enrich');
+          tirarPoderDoToken(req.user);
           return next();
+        }
+        if (!row) {
+          return res.status(401).json({ error: LITERAL_SESSAO_ENCERRADA, code: 'USUARIO_INATIVO' });
         }
 
         req.user.nome = row.nome;
@@ -184,27 +193,9 @@ function enrichUserFromDb(db) {
         req.user.is_superadmin = row.is_superadmin;
         req.user.admin_modulos = parseAdminModulos(row.admin_modulos);
 
-        const storeCache = () => {
-          cache.set(req.user.id, {
-            at: Date.now(),
-            data: {
-              nome: req.user.nome,
-              email: req.user.email,
-              role: req.user.role,
-              is_superadmin: req.user.is_superadmin,
-              admin_modulos: req.user.admin_modulos,
-              perfil_almoxarifado: req.user.perfil_almoxarifado,
-              perfil_frota: req.user.perfil_frota,
-            },
-          });
-        };
-
         if (isModuleAdmin(req.user, 'almoxarifado')) {
           req.user.perfil_almoxarifado = 'ADMINISTRADOR';
-          finishFrotaProfile(db, req, () => {
-            storeCache();
-            next();
-          });
+          finishFrotaProfile(db, req, next);
           return;
         }
 
@@ -215,10 +206,7 @@ function enrichUserFromDb(db) {
             if (!err2 && perfilRow?.perfil) {
               req.user.perfil_almoxarifado = perfilRow.perfil;
             }
-            finishFrotaProfile(db, req, () => {
-              storeCache();
-              next();
-            });
+            finishFrotaProfile(db, req, next);
           }
         );
       }
@@ -402,6 +390,7 @@ module.exports = {
   requireAdministrativoConfig,
   requireAlmoxAdmin,
   enrichUserFromDb,
+  LITERAL_SESSAO_ENCERRADA,
   syncModuleAdminProfiles,
   sanitizeSuperAdminPayload,
   isTruthyFlag,

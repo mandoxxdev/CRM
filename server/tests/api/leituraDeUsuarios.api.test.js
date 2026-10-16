@@ -168,7 +168,8 @@ const L10 = 'Acesso negado — apenas o próprio usuário ou administradores do 
   });
 
   // ── Fase 5 (r2, B842): o usuario INATIVO ou APAGADO com o token valido nao guarda o papel do token ──
-  await test('[RN-13 F5 r2] com o enriquecimento real: o ex-administrador desativado ou apagado perde o papel do token (lista reduzida, 403 nos outros)', async () => {
+  // Etapa 131 (B842, RN-06): o desativado ou apagado nao e mais rebaixado e segue — leva 401 USUARIO_INATIVO (muda a vista).
+  await test('[RN-13 F5 r2 / 131 RN-06] com o enriquecimento real: o ex-administrador desativado ou apagado leva 401 (nao segue com o papel do token)', async () => {
     const { enrichUserFromDb } = require('../../services/systemPermissions');
     await run(db, `INSERT INTO usuarios (id, nome, email, senha, role, is_superadmin, ativo) VALUES (20, 'Ex Admin', 'x@t', 'x', 'admin', 1, 0)`);
     let token = null;
@@ -182,24 +183,24 @@ const L10 = 'Acesso negado — apenas o próprio usuário ou administradores do 
     assert.strictEqual((await como(tokenAdmin(2), '/api/usuarios/5')).status, 200);
     assert.ok('role' in (await como(tokenAdmin(2), '/api/usuarios')).body[0]);
     for (const id of [20, 77]) { // 20 desativado, 77 apagado (sem linha)
-      negado(await como(tokenAdmin(id), '/api/usuarios/5'));
-      negado(await como(tokenAdmin(id), '/api/usuarios/5/grupos'));
-      const lista = await como(tokenAdmin(id), '/api/usuarios');
-      assert.strictEqual(lista.status, 200);
-      for (const u of lista.body) assert.deepStrictEqual(Object.keys(u).sort(), ['ativo', 'email', 'id', 'nome']);
+      for (const url of ['/api/usuarios/5', '/api/usuarios/5/grupos', '/api/usuarios']) {
+        const r = await como(tokenAdmin(id), url);
+        assert.strictEqual(r.status, 401, `id ${id} ${url}: ${r.status} ${JSON.stringify(r.body)}`);
+        assert.strictEqual(r.body.code, 'USUARIO_INATIVO');
+      }
     }
   });
 
-  await test('[RN-13 F5 r2] erro do banco no enriquecimento nao rebaixa ninguem (so a AUSENCIA da linha rebaixa)', async () => {
+  // Etapa 131 (Fase 2 I1): o erro do banco que deixava o token como estava devolvia o papel ao desativado. Os cenarios do erro do banco
+  // (503 no BUSY, sem o poder do token nos outros) moram em sessaoDoInativo.api.test.js (RN-06); aqui fica o apagado com o res de verdade.
+  await test('[RN-13 F5 r2 / 131 RN-06] o apagado (sem linha) nao segue: 401 com o corpo L11 e o next nao e chamado', async () => {
     const { enrichUserFromDb } = require('../../services/systemPermissions');
-    const dbQuebrado = { get: (sql, p, cb) => cb(new Error('SQLITE_BUSY')) };
-    const req = { user: { id: 2, role: 'admin', is_superadmin: 1, admin_modulos: [] } };
-    await new Promise((ok) => enrichUserFromDb(dbQuebrado)(req, {}, ok));
-    assert.strictEqual(req.user.role, 'admin');
-    const req2 = { user: { id: 77, role: 'admin', is_superadmin: 1, admin_modulos: ['almoxarifado'], perfil_almoxarifado: 'ADMINISTRADOR', perfil_frota: 'ADMIN_FROTA' } };
-    await new Promise((ok) => enrichUserFromDb(db)(req2, {}, ok));
-    assert.deepStrictEqual([req2.user.role, req2.user.is_superadmin, req2.user.admin_modulos, req2.user.perfil_almoxarifado, req2.user.perfil_frota],
-      ['usuario', 0, [], undefined, undefined]);
+    const req2 = { user: { id: 77, role: 'admin', is_superadmin: 1, admin_modulos: ['almoxarifado'], perfil_almoxarifado: 'ADMINISTRADOR' } };
+    const saida = await new Promise((ok) => {
+      const res = { status(c) { this.c = c; return this; }, json(b) { ok({ c: this.c, b }); return this; } };
+      enrichUserFromDb(db)(req2, res, () => ok({ seguiu: true }));
+    });
+    assert.deepStrictEqual(saida, { c: 401, b: { error: 'Sessão encerrada — o usuário foi desativado ou removido', code: 'USUARIO_INATIVO' } });
   });
 
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
