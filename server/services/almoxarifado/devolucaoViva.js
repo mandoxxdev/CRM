@@ -29,4 +29,23 @@ const estornoConcluidoSql = (alias) => `(COALESCE(${alias}.cancelado, 0) = 1 AND
 const DEVOLUCAO_VIVA_SQL = `NOT EXISTS (SELECT 1 FROM movimentacoes_almoxarifado ed
   WHERE ed.id = ${ENTRADA_DA_DEVOLUCAO_SQL} AND ${estornoConcluidoSql('ed')})`;
 
-module.exports = { DEVOLUCAO_VIVA_SQL, ENTRADA_DA_DEVOLUCAO_SQL, estornoConcluidoSql };
+/**
+ * Etapa 121 (C253, B783) — as series que sairam pela saida `saidaSql` e voltaram ao estoque por uma entrada que NAO e a de uma
+ * devolucao que cita essa saida (uma Entrada avulsa com o numero da serie, ou a devolucao avulsa). A reativacao apaga o vinculo
+ * da serie com a saida; desde a 120 a linha de `series_entrada_anterior_almoxarifado` guarda a saida (`saida_anterior_id`). Sem
+ * esta conta a devolucao citando a saida, com a serie desligada, devolvia de novo o que ja tinha voltado (2 pecas, fisico 4).
+ *
+ * Conta TODA linha que cita a saida, inclusive a de uma entrada estornada depois (Fase 0 da 121, medido): filtrar a entrada
+ * estornada abria o falso negativo da Fase 2 da 120 (volta, estorno da volta com a serie ligada — series ESTORNADA —, nova
+ * entrada que as reativa sem citar a saida: devolveria em dobro). O preco, declarado (RN-06b): a volta estornada sem nova
+ * entrada recusa a devolucao com o material de fato fora — recusar nunca conta em dobro; o acerto e um Ajuste.
+ *
+ * A entrada de uma devolucao que cita a saida fica fora (viva, ja conta em `DEVOLUCAO_VIVA_SQL`; estornada, a serie voltou a
+ * "Entregue" nessa saida). Legado (a linha sem a saida, antes da 120): nao e vista — a A68 acha. `saidaSql` e o SQL do id da
+ * saida (`?` ou uma coluna correlacionada); devolve um numero (COUNT).
+ */
+const seriesQueVoltaramSql = (saidaSql) => `(SELECT COUNT(DISTINCT sea.serie_id) FROM series_entrada_anterior_almoxarifado sea
+  WHERE sea.saida_anterior_id = ${saidaSql} AND NOT EXISTS (SELECT 1 FROM devolucoes_material_almoxarifado d
+    WHERE d.movimentacao_saida_id = ${saidaSql} AND sea.movimentacao_entrada_id = ${ENTRADA_DA_DEVOLUCAO_SQL}))`;
+
+module.exports = { DEVOLUCAO_VIVA_SQL, ENTRADA_DA_DEVOLUCAO_SQL, estornoConcluidoSql, seriesQueVoltaramSql };

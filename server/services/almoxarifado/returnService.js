@@ -7,7 +7,8 @@ const Q = require('./quantidade');
 // Etapa 97 (Fase 5, item 2): as duas pernas da devolucao (QUARENTENA, SUCATA) sob uma trava do material.
 const trava = require('./travaPorMaterial');
 // Etapa 117 (C236, B759): so a devolucao viva (a entrada nao estornada) conta no que ja voltou da saida.
-const { DEVOLUCAO_VIVA_SQL } = require('./devolucaoViva');
+// Etapa 121 (C253, B783): e a serie que voltou por outra entrada tambem nao se devolve de novo.
+const { DEVOLUCAO_VIVA_SQL, seriesQueVoltaramSql } = require('./devolucaoViva');
 // Sem ciclo: nem alertService nem notificationQueueService requerem este arquivo (Etapa 12,
 // Task 3, RN-06 — aviso de devolucao em ESTADO_PARCIAL). stockService (acima) ja carregou os
 // dois por completo antes desta linha rodar, entao aqui e so cache-hit.
@@ -61,15 +62,23 @@ async function validarSaidaOriginal(db, { movimentacaoSaidaId, materialId, quant
   const { devolvida } = await dbGet(db,
     `SELECT COALESCE(SUM(d.quantidade),0) AS devolvida FROM devolucoes_material_almoxarifado d
       WHERE d.movimentacao_saida_id = ? AND ${DEVOLUCAO_VIVA_SQL}`, [movimentacaoSaidaId]);
+  // Etapa 121 (C253, B783): as series desta saida que voltaram por uma entrada que nao a cita (Entrada avulsa, devolucao
+  // avulsa) tambem ja voltaram — com a serie desligada, devolve-las de novo contava em dobro (2 pecas, fisico 4).
+  const { voltaram } = await dbGet(db, `SELECT ${seriesQueVoltaramSql('?')} AS voltaram`, [movimentacaoSaidaId, movimentacaoSaidaId]);
   // Etapa 96 (C176, Fase 2 I1): o restante e uma DIFERENCA (0,3 - 0,1 = 0.19999999999999998) — arredondado, e a
-  // comparacao com folga; a mensagem diz os numeros arredondados (R2).
-  const restante = Q.qtd(saida.quantidade - devolvida);
+  // comparacao com folga; a mensagem diz os numeros arredondados (R2). Nunca negativo (a volta por outra entrada e a
+  // devolucao sem serie da B755 deixa as series "Entregue", e uma Entrada delas depois soma as duas contas).
+  const restante = Math.max(0, Q.qtd(saida.quantidade - devolvida - Number(voltaram || 0)));
   // `>` com a folga, e nao `!Q.cabe`: quantidade nao numerica (NaN) continua passando daqui para a recusa de sempre do
   // motor, em vez de virar "acima do entregue".
   if (Q.qtd(quantidade) > restante + Q.QTD_FOLGA) {
-    // A mensagem DIZ o numero: sem ele o operador tem de adivinhar quanto ainda pode devolver.
+    // A mensagem DIZ o numero: sem ele o operador tem de adivinhar quanto ainda pode devolver. Sem volta por outra entrada,
+    // a literal de sempre (nao muda); com ela, a frase diz quantas voltaram por fora, senao "devolvidos 0 e restam 0" nao fecha.
+    const porFora = Number(voltaram || 0) > 0
+      ? `, ${voltaram} ${voltaram > 1 ? 'já voltaram' : 'já voltou'} ao estoque por uma entrada que não cita esta saída`
+      : '';
     throw erro400(`Devolução acima do entregue: a saída ${movimentacaoSaidaId} entregou ${Q.qtd(saida.quantidade)}, `
-      + `já foram devolvidos ${Q.qtd(devolvida)} e restam ${restante}`);
+      + `já foram devolvidos ${Q.qtd(devolvida)}${porFora} e restam ${restante}`);
   }
   return saida;
 }
@@ -196,7 +205,8 @@ async function registrarDevolucao(db, user, data) {
   // devolucoes simultaneas da mesma saida passavam as duas (30/30: fisico 7 para 5), e o estorno concorrente tambem (o claim
   // do estorno tem a condicao inversa: nenhuma devolucao viva). Nao gravou -> a validacao de novo diz por que.
   // Etapa 117 (C236, RN-02): a mesma regua viva da validacao — se so uma das duas contasse a viva, a validacao passaria e
-  // esta gravacao recusaria com "mudou enquanto a devolucao era gravada".
+  // esta gravacao recusaria com "mudou enquanto a devolucao era gravada". Etapa 121 (C253, RN-07): e a mesma volta por outra
+  // entrada — a que chega entre a validacao e este comando faz a validacao de baixo dizer quantas voltaram.
   const valores = [
     material_id, quantidade, motivo, condicao || null, destinoFinal,
     origemOsFinal, origemProjetoFinal,
@@ -211,7 +221,8 @@ async function registrarDevolucao(db, user, data) {
       WHERE EXISTS (SELECT 1 FROM movimentacoes_almoxarifado s WHERE s.id = ? AND COALESCE(s.cancelado, 0) = 0
         AND ${requisicaoNaoExcluidaSql('s')}
         AND ROUND(s.quantidade - (SELECT COALESCE(SUM(d.quantidade), 0) FROM devolucoes_material_almoxarifado d
-          WHERE d.movimentacao_saida_id = s.id AND ${DEVOLUCAO_VIVA_SQL}), 6) >= ROUND(?, 6) ${Q.FOLGA_SQL})`,
+          WHERE d.movimentacao_saida_id = s.id AND ${DEVOLUCAO_VIVA_SQL}) - ${seriesQueVoltaramSql('s.id')}, 6)
+          >= ROUND(?, 6) ${Q.FOLGA_SQL})`,
     [...valores, movimentacao_saida_id, Q.qtd(quantidade)])
     : await dbRun(db, `INSERT INTO devolucoes_material_almoxarifado ${colunas} VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, valores);
   if (!r.changes) {
@@ -426,6 +437,8 @@ async function listarDevolucoes(db, filters = {}) {
  * infinita rolando no modal atrapalha mais do que ajuda.
  *
  * Etapa 117 (C236, RN-03): as duas pontas somam so a devolucao viva (`devolucaoViva.js`).
+ * Etapa 121 (C253, B783): e descontam as series que voltaram por uma entrada que nao cita a saida (`quantidade_reentrada`,
+ * campo novo da lista — a tela diz "já voltou ao estoque" em vez de "já devolvido por inteiro").
  *
  * O `saldo_devolvivel` publicado aqui e, DE PROPOSITO, a mesma conta de `validarSaidaOriginal`
  * (`saida.quantidade - SUM(devolucoes daquela movimentacao)`), sobre a mesma lista de tipos
@@ -446,7 +459,8 @@ async function listarSaidasElegiveis(db, materialId, { limite = 30 } = {}) {
            mv.requisicao_id, mv.os_id, mv.projeto_id, mv.usuario_nome,
            req.numero AS requisicao_numero,
            COALESCE((SELECT SUM(d.quantidade) FROM devolucoes_material_almoxarifado d
-                      WHERE d.movimentacao_saida_id = mv.id AND ${DEVOLUCAO_VIVA_SQL}), 0) AS quantidade_devolvida
+                      WHERE d.movimentacao_saida_id = mv.id AND ${DEVOLUCAO_VIVA_SQL}), 0) AS quantidade_devolvida,
+           ${seriesQueVoltaramSql('mv.id')} AS quantidade_reentrada
       FROM movimentacoes_almoxarifado mv
       LEFT JOIN requisicoes_almoxarifado req ON req.id = mv.requisicao_id
      WHERE mv.material_id = ? AND COALESCE(mv.cancelado,0) = 0 AND mv.tipo IN (${marcadores})
@@ -465,7 +479,8 @@ async function listarSaidasElegiveis(db, materialId, { limite = 30 } = {}) {
       : [];
     out.push({
       ...s,
-      saldo_devolvivel: Number((s.quantidade - s.quantidade_devolvida).toFixed(4)),
+      // Etapa 121 (C253): a mesma conta da validacao — menos o que voltou por uma entrada que nao cita a saida.
+      saldo_devolvivel: Math.max(0, Number((s.quantidade - s.quantidade_devolvida - s.quantidade_reentrada).toFixed(4))),
       series,
     });
   }
