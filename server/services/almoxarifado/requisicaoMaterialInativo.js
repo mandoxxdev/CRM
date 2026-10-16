@@ -77,6 +77,7 @@ function gruposFamiliaInativa(itens = []) {
 }
 
 /** Le os itens da requisicao (ordem `ir.id`): `{ codigos, familias }` (`codigosInativosPendentes`, `gruposFamiliaInativa`). */
+// Etapa 124 (Fase 5, r3 T10): substitui `lerCodigosInativosPendentes`, que ficou sem chamador e foi removida.
 async function lerInativosPendentes(db, requisicaoId) {
   const itens = await dbAll(db, `SELECT ir.quantidade_solicitada, ir.quantidade_entregue, ir.quantidade_atendida,
       ir.material_id, ma.ativo AS material_ativo, ma.codigo AS material_codigo,
@@ -88,10 +89,6 @@ async function lerInativosPendentes(db, requisicaoId) {
   return { codigos: codigosInativosPendentes(itens), familias: gruposFamiliaInativa(itens) };
 }
 
-/** Le os itens da requisicao (ordem `ir.id`) e devolve `codigosInativosPendentes`. */
-async function lerCodigosInativosPendentes(db, requisicaoId) {
-  return (await lerInativosPendentes(db, requisicaoId)).codigos;
-}
 
 /**
  * Condicao para o `UPDATE requisicoes_almoxarifado ... WHERE id = ? AND ...` (tabela sem apelido): nenhum item pendente de
@@ -161,7 +158,6 @@ function erroAprovar(reqRow, requisicaoId, codigos, opcoes) {
 
 module.exports = {
   codigosInativosPendentes,
-  lerCodigosInativosPendentes,
   lerInativosPendentes,
   gruposFamiliaInativa,
   familiaInativaSql,
