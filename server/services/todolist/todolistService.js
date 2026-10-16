@@ -41,9 +41,11 @@ async function getTarefaById(db, id) {
   `, [id]);
 }
 
+// Etapa 132 (C272): sem o `role` — a tela (o seletor de responsavel do TodolistBoard) so le id e nome, e a lista ia para
+// qualquer um com o modulo. O `email` fica (a mesma forma das listas de usuario projetadas da 131).
 async function listUsuariosAtivos(db) {
   return dbAll(db, `
-    SELECT id, nome, email, role
+    SELECT id, nome, email
     FROM usuarios
     WHERE ativo = 1
     ORDER BY nome COLLATE NOCASE
