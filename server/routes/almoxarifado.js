@@ -20,6 +20,8 @@ const notificationQueueService = require('../services/almoxarifado/notificationQ
 const alertRegistry = require('../services/almoxarifado/alertRegistry');
 const requisitionReminderService = require('../services/almoxarifado/requisitionReminderService');
 const requisitionService = require('../services/almoxarifado/requisitionService');
+// Etapa 114 (C229): a requisicao com item de material inativo (envio do rascunho).
+const requisicaoMaterialInativo = require('../services/almoxarifado/requisicaoMaterialInativo');
 const { proximoCodigoLocalizacao } = require('../services/almoxarifado/localizacaoCodigo');
 const deliverySignatureService = require('../services/almoxarifado/deliverySignatureService');
 const { disponivelSql } = require('../services/almoxarifado/availabilitySql');
@@ -3606,6 +3608,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                      -- o quantidade_entregavel que o motor deixa sair (disponivel do material negativo da 0).
                      ${requisitionService.permiteNegativoSql('ma')} as motor_permite_negativo,
                      ma.foto, ma.material_critico,
+                     -- Etapa 114 (RN-08): material inativo -> separavel e entregavel 0 no detalhe (normalizarItem), aditivo.
+                     ma.ativo as material_ativo,
                      ma.localizacao, ma.localizacao_padrao_id,
                      a.codigo as almoxarifado_codigo, a.nome as almoxarifado_nome,
                      tm.nome as tipo_nome, tm.icone as tipo_icone, tm.is_epi, tm.requer_assinatura,
@@ -3815,7 +3819,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // (a criacao ja recusa — RN-08). Enviar e quando passa a valer: recusa com a MESMA funcao da criacao,
       // antes do UPDATE; o status continua RASCUNHO e nada e notificado.
       const itensEnvio = await dbAll(db,
-        `SELECT ma.nome, ma.controle_serie, i.quantidade_solicitada AS quantidade
+        `SELECT ma.nome, ma.controle_serie, i.quantidade_solicitada AS quantidade,
+                i.quantidade_solicitada, i.quantidade_entregue, i.quantidade_atendida, i.material_id,
+                ma.ativo AS material_ativo, ma.codigo AS material_codigo
            FROM itens_requisicao_almoxarifado i
            JOIN materiais_almoxarifado ma ON ma.id = i.material_id
           WHERE i.requisicao_id = ?
@@ -3824,6 +3830,16 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       const recusaSerie = requisitionCreateService.recusaFracaoDeSerie(itensEnvio);
       if (recusaSerie) {
         return res.status(400).json({ error: recusaSerie });
+      }
+      // Etapa 114 (RN-04, C229): a criacao recusa material inativo; o rascunho gravado antes do "Inativar" era enviado e
+      // ate aprovado sozinho (aprovacao automatica: APROVADO sem reserva, ou AGUARDANDO_ESTOQUE para sempre). Recusa antes
+      // do UPDATE: continua RASCUNHO e nada e notificado. Sem trava: o envio nao reserva — quem aprova confere de novo,
+      // sob a trava (RN-01/RN-03).
+      const inativosEnvio = requisicaoMaterialInativo.codigosInativosPendentes(itensEnvio);
+      if (inativosEnvio.length > 0) {
+        return res.status(400).json({
+          error: requisicaoMaterialInativo.mensagemEnviar(requisicaoMaterialInativo.numeroDe(reqRow.numero, req.params.id), inativosEnvio),
+        });
       }
 
       await dbRun(db,
@@ -4046,7 +4062,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       // distribuicao — inofensivo, `prepararPosAprovacao` desconta o hold que o item ja tiver.
       await requisitionService.comTravaDaRequisicao(db, req.params.id, async () => {
         const reqRow = await dbGet(db, 'SELECT * FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
-        const pos = await requisitionService.prepararPosAprovacao(db, req.params.id, req.user, reqRow);
+        // Etapa 114 (RN-02): a recusa de material inativo desta porta e a condicao do UPDATE de `aprovarValor` (acima, fora
+        // da trava). Aqui o APROVADO ja esta gravado: um inativar entre os dois (zerado) segue como inativar depois de
+        // aprovar (B734) — recusar agora responderia 400 com a requisicao ja aprovada.
+        const pos = await requisitionService.prepararPosAprovacao(db, req.params.id, req.user, reqRow, { recusarInativo: false });
         result.reservas = pos.reservas;
         if (pos.status !== 'APROVADO') {
           const upd = await dbRun(db,

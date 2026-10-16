@@ -16,6 +16,8 @@ const reservationService = require('./reservationService');
 const travaPorMaterial = require('./travaPorMaterial');
 // Etapa 93 (T0, B443): a trava POR REQUISICAO das portas do almoxarife (outra trava; ordem requisicao -> material).
 const travaPorRequisicao = require('./travaPorRequisicao');
+// Etapa 114 (C229): a requisicao com item pendente de material inativo (modulo sem require de servico — sem ciclo).
+const materialInativo = require('./requisicaoMaterialInativo');
 const { can } = require('./permissions'); // Etapa 64: posso_conferir na fila
 const {
   PODE_SEPARAR, PODE_ENTREGAR, STATUS_PARCIALMENTE_RESERVADA, STATUS_TOTALMENTE_RESERVADA,
@@ -152,11 +154,16 @@ function normalizarItem(item) {
   // campos novos (aditivo; o cliente sem eles cai no saldo_atual) e o teto da segunda rodada da entrega (B477).
   const temCaixa = item.caixa_sem_reserva_outros !== undefined && item.caixa_sem_reserva_outros !== null;
   const reservaItem = num(item.quantidade_reservada_item ?? item.reservado_para_item);
+  // Etapa 114 (RN-08, Fase 2 R1): material inativo — a porta recusa separar (E3) e o motor recusa entregar, entao o
+  // separavel e o entregavel do detalhe sao 0 (o mesmo numero da porta, B472). Sem isto o modal pre-preenchia o item com
+  // o maximo e o Confirmar recusava a rodada inteira. So quem traz a coluna (`in`: NULL tambem e inativo).
+  const inativo = Object.prototype.hasOwnProperty.call(item, 'material_ativo') && materialInativo.materialInativo(item.material_ativo);
   const teto = temCaixa
-    ? tetoSeparacao(estoque - reservaItem, reservaItem, separado - entregue, item.caixa_sem_reserva_outros) : undefined;
+    ? (inativo ? 0 : tetoSeparacao(estoque - reservaItem, reservaItem, separado - entregue, item.caixa_sem_reserva_outros))
+    : undefined;
   // Etapa 98 (T3, B509): o entregavel e o que o motor deixa sair — so o argumento `estoque` de maxEntregar muda
   // (o disponivel do material negativo da 0); `teto` (o separavel) e `saldo_atual` ficam como antes.
-  const entregavel = maxEntregar(item,
+  const entregavel = inativo ? 0 : maxEntregar(item,
     entregavelPeloMotor(estoque - reservaItem, reservaItem, Number(item.motor_permite_negativo) === 1), teto);
   // Etapa 95 (Fase 5): a coluna crua da consulta do detalhe e insumo do teto, nao contrato — nao vai para o JSON.
   // Etapa 98 (T3): idem a regra do motor (insumo do entregavel).
@@ -222,8 +229,9 @@ function tetoSeparacao(disponivel, reservaDoItem, caixaDoItem, caixaSemReservaOu
 async function carregarItensRequisicao(db, requisicaoId) {
   // Etapa 28: `ma.material_critico` entra para a régua da segunda conferência
   // (assertConferidaSeObrigatorio em entregarRequisicao e no liberar-retirada).
+  // Etapa 114 (C229): `ma.ativo` entra para a aprovacao e a separacao recusarem material inativo (aditivo).
   return dbAll(db, `SELECT ir.*, ma.quantidade_atual, ma.unidade, ma.nome as material_nome, ma.codigo as material_codigo,
-      ma.material_critico,
+      ma.material_critico, ma.ativo as material_ativo,
       ${custoUnitarioSql('ma')} as custo_unitario,
       ${RESERVADO_PARA_ITEM_SQL} as reservado_para_item,
       ${Q.qtdSql(`${disponivelSql('ma')} + ${RESERVADO_PARA_ITEM_SQL}`)} as saldo_disponivel
@@ -296,7 +304,7 @@ async function saldoDisponivelParaItem(db, item) {
  * conseguiu reservar conta como não reservado — no pior caso a requisição fica
  * PARCIALMENTE_RESERVADA/sem reserva e a separação segue disputando o disponível como antes.
  */
-async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}) {
+async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}, { recusarInativo = true } = {}) {
   const itens = await carregarItensRequisicao(db, requisicaoId);
   // Etapa 91 (Fase 5, F1): dentro de uma secao da trava (as tres portas de aprovacao), todo material a
   // reservar tem de estar travado por ELA — conferido antes de reservar qualquer item, entao a recusa nao
@@ -304,6 +312,17 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}) {
   const foraDaTrava = travaPorMaterial.materiaisForaDaSecao(itens.map((i) => i.material_id));
   if (foraDaTrava.length > 0) {
     throw Object.assign(new Error(MSG_TRAVA_INCOMPLETA), { status: 409, code: 'TRAVA_INCOMPLETA', materiais: foraDaTrava });
+  }
+  // Etapa 114 (RN-01/RN-03, C229): item pendente de material inativo recusa a aprovacao INTEIRA, antes de reservar
+  // qualquer item (nem o ativo fica com hold). Antes `criarReserva` recusava o inativo, o `catch` abaixo so logava e a
+  // requisicao saia APROVADO sem reserva (a entrega recusava depois) ou AGUARDANDO_ESTOQUE para sempre (nada credita
+  // material inativo). Dentro da secao da trava: as duas portas que inativam (DELETE e PUT do material) pegam a trava do
+  // material (Etapa 113, RN-04 d), entao ninguem inativa entre esta leitura e o UPDATE de quem aprova.
+  // `recusarInativo: false` so no /aprovar-valor: la o APROVADO ja foi gravado (com a condicao no UPDATE, RN-02); um
+  // inativar depois dele e o estado de inativar depois de aprovar (B734), nao um 400 com o status ja gravado.
+  if (recusarInativo) {
+    const inativos = materialInativo.codigosInativosPendentes(itens);
+    if (inativos.length > 0) throw materialInativo.erroAprovar(reqRow, requisicaoId, inativos);
   }
   const reservas = [];
   let algumFaltou = false;
@@ -397,9 +416,9 @@ async function reservarItensAprovacao(db, requisicaoId, user, reqRow = {}) {
  * Nao grava o status — quem chama grava num UPDATE guardado e, se perder, chama `desfazerReservas`.
  * @returns {Promise<{status: string, reservas: Array<{item_id, reserva_id, quantidade}>}>}
  */
-async function prepararPosAprovacao(db, requisicaoId, user, reqRow = {}) {
+async function prepararPosAprovacao(db, requisicaoId, user, reqRow = {}, opcoes = {}) {
   const statusPos = await calcularStatusPosAprovacao(db, requisicaoId);
-  const reserva = await reservarItensAprovacao(db, requisicaoId, user, reqRow);
+  const reserva = await reservarItensAprovacao(db, requisicaoId, user, reqRow, opcoes); // Etapa 114: `recusarInativo`
   if (reserva.status) return { status: reserva.status, reservas: reserva.reservas };
   const status = statusPos === 'APROVADO' ? await calcularStatusPosAprovacao(db, requisicaoId) : statusPos;
   return { status, reservas: reserva.reservas };
@@ -899,6 +918,10 @@ async function validarFormaDaSeparacao(db, itens, itensSeparados) {
       if (mostrado.length > 40) mostrado = `${mostrado.slice(0, 40)}…`;
       throw erro(`${item.material_nome}: quantidade inválida para separar (${mostrado}) — informe um número positivo, ou 0 para não separar este item`);
     }
+    // Etapa 114 (RN-05, C229): o item de material inativo nao vai para a caixa — a entrega recusaria depois ("Material
+    // inativo nao pode ser movimentado") e o separado ficava preso. So a entrada com quantidade > 0 (0 = nao separar).
+    // Sob as duas travas (a do material segura o inativar — Etapa 113, RN-04 d).
+    if (q > 0 && materialInativo.materialInativo(item.material_ativo)) throw erro(materialInativo.mensagemSeparar(item.material_nome));
     if (q > 0 && !Number.isInteger(q)) {
       if (!serie) {
         const ids = [...new Set(itens.map((i) => Number(i.material_id)))];

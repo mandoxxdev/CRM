@@ -6,6 +6,8 @@ const alertService = require('./alertService');
 const { custoUnitarioSql } = require('./custoSql');
 // Etapa 94: sem ciclo — a maquina so importa db e availabilitySql no topo.
 const { alcadaDeValorAindaVale } = require('./requisitionStateMachine');
+// Etapa 114 (RN-02, C229): modulo sem require de servico — sem ciclo.
+const materialInativo = require('./requisicaoMaterialInativo');
 
 const CONFIG_KEYS = {
   ativo: 'liberacao_valor_ativo',
@@ -232,10 +234,20 @@ async function aprovarValor(db, requisicaoId, user) {
      SET status = 'APROVADO', aprovador_valor_id = ?, aprovador_valor_nome = ?,
          data_aprovacao_valor = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP,
          ultimo_lembrete_enviado = NULL, rejeicao_valor_motivo = NULL
-     WHERE id = ? AND status = ? AND ${approvalRulesService.GATE_SQL}`,
+     WHERE id = ? AND status = ? AND ${approvalRulesService.GATE_SQL} AND ${materialInativo.SEM_MATERIAL_INATIVO_SQL}`,
     [user.id, user.nome || user.email, requisicaoId, STATUS_AGUARDANDO]);
   if (!upd.changes) {
+    // Etapa 114 (RN-02, C229): a requisicao com item pendente de material inativo nao e liberada por valor. A conferencia
+    // e a condicao do UPDATE (este APROVADO e gravado FORA da trava dos materiais, entao uma pre-checagem teria janela);
+    // a releitura so da a mensagem, DEPOIS das de hoje (status mudou -> a de status; gate -> a do gate). Antes liberava, o
+    // pos-aprovacao nao reservava (o `catch` da reserva so logava) e a requisicao ficava APROVADO sem reserva — a entrega
+    // recusava depois.
     const msgGate = await approvalRulesService.mensagemGateAtual(db, requisicaoId);
+    const atual = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
+    if (!msgGate && atual && atual.status === STATUS_AGUARDANDO) {
+      const inativos = await materialInativo.lerCodigosInativosPendentes(db, requisicaoId);
+      if (inativos.length > 0) throw materialInativo.erroAprovar(reqRow, requisicaoId, inativos, { valor: true });
+    }
     const err = new Error(msgGate || 'Apenas requisições aguardando aprovação de valor podem ser liberadas');
     err.status = 400;
     throw err;
