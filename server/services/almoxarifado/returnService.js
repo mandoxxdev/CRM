@@ -284,8 +284,36 @@ async function registrarDevolucao(db, user, data) {
   // `comLockDoMaterial`: fora de secao (a rota, unico chamador) e a mesma coisa; chamado de dentro de uma secao que ja
   // segura o material nao espera a si mesmo. O `catch` (compensacao) roda FORA da trava. Destinos de uma perna so
   // (ESTOQUE, RETRABALHO): a trava do proprio motor basta.
+  // Etapa 121 (Fase 5, r2; B786): a releitura DENTRO da trava do material. A validacao e o INSERT condicional rodam antes, fora
+  // dela; uma Entrada das series (que as reativa e grava de que saida vieram) e o desligar da serie no meio faziam o motor da
+  // devolucao rodar com o controle ja desligado — as series informadas ignoradas, a guarda "serie ja em estoque" sem rodar — e
+  // creditar de novo (fisico 4 com 2 pecas; 20/20 com o gancho, 8/300 sem, anterior a etapa). Aqui: (1) devolucao com series e
+  // o controle desligado desde a validacao -> recusa; (2) devolucao citando a saida e o que ja voltou dela (devolucoes vivas,
+  // ESTA incluida, + as series que voltaram por fora) passando do entregue -> recusa. Lanca antes de qualquer perna: o catch de
+  // baixo (emitidas 0) apaga a linha. Descartado: a devolucao inteira (validacao e INSERT) sob a trava — a conferencia
+  // devolucao x estorno vai no proprio comando, e uma devolucao no meio de um estorno espera hoje so o que precisa.
+  const reconferirNaTrava = async () => {
+    if (seriesInformadas.length > 0) {
+      const agora = await dbGet(db, 'SELECT controle_serie FROM materiais_almoxarifado WHERE id = ?', [material_id]);
+      if (!agora || Number(agora.controle_serie) !== 1) {
+        throw erro400(`O controle por número de série do material ${material.codigo} foi desligado enquanto a devolução era `
+          + 'gravada — nada foi gravado. Registre a devolução de novo.');
+      }
+    }
+    if (movimentacao_saida_id) {
+      const c = await dbGet(db, `SELECT s.quantidade AS q,
+          (SELECT COALESCE(SUM(d.quantidade), 0) FROM devolucoes_material_almoxarifado d
+            WHERE d.movimentacao_saida_id = s.id AND ${DEVOLUCAO_VIVA_SQL}) AS dev,
+          ${seriesQueVoltaramSql('s.id')} AS volt
+        FROM movimentacoes_almoxarifado s WHERE s.id = ?`, [movimentacao_saida_id]);
+      if (c && Q.qtd(Number(c.dev) + Number(c.volt)) > Q.qtd(c.q) + Q.QTD_FOLGA) {
+        throw erro400(`A saída ${movimentacao_saida_id} mudou enquanto a devolução era gravada — nada foi gravado. Tente de novo.`);
+      }
+    }
+  };
   const pernas = async () => {
     if (destinoFinal === 'ESTOQUE' || destinoFinal === 'QUARENTENA') {
+      await reconferirNaTrava();
       await registrarMovimentacao(db, user, {
         material_id, tipo: 'ENTRADA_DEVOLUCAO', quantidade,
         motivo, os_id: origemOsFinal, projeto_id: origemProjetoFinal,
@@ -339,8 +367,10 @@ async function registrarDevolucao(db, user, data) {
     }
   };
   try {
-    if (destinoFinal === 'QUARENTENA' || destinoFinal === 'SUCATA') await trava.naTravaDoMaterial(material_id, pernas);
-    else await pernas();
+    // Etapa 121 (Fase 5, r2; B786): ESTOQUE tambem — a releitura de `reconferirNaTrava` so vale dentro da secao.
+    if (destinoFinal === 'ESTOQUE' || destinoFinal === 'QUARENTENA' || destinoFinal === 'SUCATA') {
+      await trava.naTravaDoMaterial(material_id, pernas);
+    } else await pernas();
   } catch (e) {
     // A PERGUNTA QUE DECIDE: alguma movimentacao chegou ao LIVRO? Contar linhas por `referencia`
     // responde exatamente isso — `DEV-<id>` e unica por devolucao, e o motor grava o ledger por

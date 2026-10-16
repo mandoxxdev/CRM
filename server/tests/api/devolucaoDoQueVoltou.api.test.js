@@ -276,6 +276,124 @@ const ACIMA_DE_SEMPRE = (s, q, d, r) => `Devolução acima do entregue: a saída
     assert.strictEqual(await fisico(m), 4);
   });
 
+  await test('[RN-04c] (Fase 5, r3) nunca negativo: RETRABALHO das 2 e a volta de V1 -> a lista da 0 e a recusa diz "restam 0"', async () => {
+    const { m, s } = await saidaDeDuasSeries();
+    let r = await devolver(m, s, 2, { destino: 'RETRABALHO' });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    await mov(m, { tipo: 'ENTRADA', quantidade: 1, series: ['V1'] });
+    const el = await elegivel(m, s);
+    assert.strictEqual(el.saldo_devolvivel, 0, `saldo negativo publicado: ${JSON.stringify(el)}`);
+    r = await devolver(m, s, 1, { series: ['V2'] });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, ACIMA(s, 2, 2, 1, 0));
+  });
+
+  /**
+   * Fase 5 da 121 (r2, I1; B786): a devolucao confere "o que ja voltou" no INSERT, fora da trava do material; as pernas rodavam
+   * depois. Uma Entrada das series e o desligar da serie no meio faziam o motor da devolucao rodar sem serie (o controle ja
+   * desligado) e creditar de novo: fisico 4 com 2 pecas (20/20 com o gancho; 8/300 sem). Agora as pernas da devolucao para
+   * Estoque rodam sob a trava do material e releem ali o controle de serie e o que ja voltou da saida citada. O gancho so
+   * segura a resposta do INSERT; os gestos concorrentes partem do contexto do TESTE (regra do CLAUDE.md).
+   */
+  async function comDevolucaoSegura(m, corpo, noMeio) {
+    const original = db.run; let disparou = false; let sinal;
+    const gravou = new Promise((res) => { sinal = res; });
+    db.run = function (sql, params, cb) {
+      if (typeof params === 'function') { cb = params; params = []; }
+      if (!disparou && typeof sql === 'string' && sql.includes('INSERT INTO devolucoes_material_almoxarifado')) {
+        disparou = true;
+        return original.call(db, sql, params, function (err) { const ctx = this; sinal(); setTimeout(() => cb.call(ctx, err), 60); });
+      }
+      return original.call(db, sql, params, cb);
+    };
+    let r;
+    try {
+      const dev = request(app).post('/api/almoxarifado/devolucoes').send({ material_id: m.id, motivo: 'SOBRA_PROJETO',
+        destino: 'ESTOQUE', ...corpo }).then((x) => x);
+      await gravou;
+      await noMeio();
+      r = await dev;
+    } finally { db.run = original; }
+    assert.ok(disparou, 'gancho do INSERT da devolucao nao disparou');
+    return r;
+  }
+  const MSG_DESLIGOU = (codigo) => `O controle por número de série do material ${codigo} foi desligado enquanto a devolução era `
+    + 'gravada — nada foi gravado. Registre a devolução de novo.';
+  const MUDOU = (s) => `A saída ${s} mudou enquanto a devolução era gravada — nada foi gravado. Tente de novo.`;
+
+  await test('[RN-09] (Fase 5, r2) devolucao citando S com V1 e V2; a Entrada delas e o desligar no meio -> 400, fisico 2', async () => {
+    const { m, s } = await saidaDeDuasSeries();
+    const r = await comDevolucaoSegura(m, { quantidade: 2, movimentacao_saida_id: s, series: ['V1', 'V2'] }, async () => {
+      await mov(m, { tipo: 'ENTRADA', quantidade: 2, series: ['V1', 'V2'] });
+      await desligar(m);
+    });
+    assert.strictEqual(r.status, 400, `creditou em dobro: ${JSON.stringify(r.body)} fisico=${await fisico(m)}`);
+    assert.strictEqual(r.body.error, MSG_DESLIGOU(m.codigo));
+    assert.strictEqual(await fisico(m), 2);
+    assert.strictEqual(await devolucoes(m), 0, 'a linha da devolucao recusada ficou');
+    // Repetida (agora sem serie, porque a serie esta desligada), a recusa e a da regua.
+    const r2 = await devolver(m, s, 2);
+    assert.strictEqual(r2.body.error, ACIMA(s, 2, 0, 2, 0));
+  });
+
+  await test('[RN-09b] (Fase 5, r2) devolucao AVULSA com V1; a Entrada de V1 e o desligar no meio -> 400, fisico 1', async () => {
+    const { m } = await saidaDeDuasSeries();
+    const r = await comDevolucaoSegura(m, { quantidade: 1, series: ['V1'] }, async () => {
+      await mov(m, { tipo: 'ENTRADA', quantidade: 1, series: ['V1'] });
+      await desligar(m);
+    });
+    assert.strictEqual(r.status, 400, `creditou em dobro: ${JSON.stringify(r.body)} fisico=${await fisico(m)}`);
+    assert.strictEqual(r.body.error, MSG_DESLIGOU(m.codigo));
+    assert.strictEqual(await fisico(m), 1);
+    assert.strictEqual(await devolucoes(m), 0);
+  });
+
+  await test('[RN-09c] (Fase 5, r2) devolucao citando S sem serie (desligada); religa, Entrada V1 V2, desliga no meio -> 400, fisico 2', async () => {
+    // Sem serie informada a releitura do controle nao pega; quem pega e a releitura do que ja voltou de S, dentro da trava.
+    const { m, s } = await saidaDeDuasSeries();
+    await desligar(m);
+    const r = await comDevolucaoSegura(m, { quantidade: 2, movimentacao_saida_id: s }, async () => {
+      const lig = await request(app).put(`/api/almoxarifado/materiais/${m.id}`).send({ controle_serie: true });
+      assert.strictEqual(lig.status, 200, JSON.stringify(lig.body));
+      await mov(m, { tipo: 'ENTRADA', quantidade: 2, series: ['V1', 'V2'] });
+      await desligar(m);
+    });
+    assert.strictEqual(r.status, 400, `creditou em dobro: ${JSON.stringify(r.body)} fisico=${await fisico(m)}`);
+    assert.strictEqual(r.body.error, MUDOU(s));
+    assert.strictEqual(await fisico(m), 2);
+    assert.strictEqual(await devolucoes(m), 0);
+  });
+
+  await test('[RN-09d] (Fase 5, r2) a Entrada e o desligar logo DEPOIS da releitura esperam a trava: 201 com as series, fisico 2', async () => {
+    // Prova a trava, nao a releitura: o gancho segura a resposta da releitura do controle (ja dentro da secao) e os dois gestos
+    // partem do contexto do teste. Fora da trava eles entravam antes do motor da devolucao, que creditava sem serie (fisico 4).
+    const { m, s } = await saidaDeDuasSeries();
+    const original = db.get; let disparou = false; let sinal;
+    const releu = new Promise((res) => { sinal = res; });
+    db.get = function (sql, params, cb) {
+      if (typeof params === 'function') { cb = params; params = []; }
+      if (!disparou && sql === 'SELECT controle_serie FROM materiais_almoxarifado WHERE id = ?' && params[0] === m.id) {
+        disparou = true;
+        return original.call(db, sql, params, (err, row) => { sinal(); setTimeout(() => cb(err, row), 60); });
+      }
+      return original.call(db, sql, params, cb);
+    };
+    let r; let entrada; let deslig;
+    try {
+      const dev = devolver(m, s, 2, { series: ['V1', 'V2'] }).then((x) => x);
+      await releu;
+      const e = request(app).post('/api/almoxarifado/movimentacoes/v2').send({ material_id: m.id, tipo: 'ENTRADA', quantidade: 2,
+        series: ['V1', 'V2'], motivo: 'dqv121', justificativa: 'dqv121', documento_vinculado: 'NF-DQV121' }).then((x) => x);
+      const d = request(app).put(`/api/almoxarifado/materiais/${m.id}`).send({ controle_serie: false }).then((x) => x);
+      r = await dev; entrada = await e; deslig = await d;
+    } finally { db.get = original; }
+    assert.ok(disparou, 'gancho da releitura nao disparou');
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual(entrada.status, 400, `a Entrada das series ja devolvidas passou: ${JSON.stringify(entrada.body)}`);
+    assert.strictEqual(deslig.status, 200, JSON.stringify(deslig.body));
+    assert.strictEqual(await fisico(m), 2, 'creditou sem serie no meio da devolucao');
+  });
+
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   await close();
   process.exit(failed ? 1 : 0);
