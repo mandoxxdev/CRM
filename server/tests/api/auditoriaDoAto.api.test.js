@@ -82,6 +82,37 @@ const SUPER = { id: 1, nome: 'Super Teste', role: 'admin', is_superadmin: 1, ema
     assert.strictEqual((await dbGet(db, 'SELECT quantidade_atual f FROM materiais_almoxarifado WHERE id = ?', [id])).f, 1);
   });
 
+  await test('[RN-14b] (Fase 5, r3) fica fatal: a Auditoria da REATIVACAO de serie (Entrada de serie Entregue) -> 500, nada gravado', async () => {
+    const id = (await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, quantidade_minima,
+      custo_unitario, ativo, controle_serie) VALUES ('ADA121-2', 'ADA121-2', 'PC', 0, 0, 10, 1, 1)`)).lastID;
+    const v2 = (b) => request(app).post('/api/almoxarifado/movimentacoes/v2').send({ material_id: id, motivo: 'ada121',
+      justificativa: 'ada121', documento_vinculado: 'NF-ADA121', ...b });
+    assert.strictEqual((await v2({ tipo: 'ENTRADA', quantidade: 1, series: ['R1'] })).status, 201);
+    const sid = (await dbGet(db, 'SELECT id FROM series_almoxarifado WHERE material_id = ?', [id])).id;
+    assert.strictEqual((await v2({ tipo: 'SAIDA', quantidade: 1, serie_ids: [sid] })).status, 201);
+    const r = await comAuditoriaFalhando('serie', 'REATIVACAO', () => v2({ tipo: 'ENTRADA', quantidade: 1, series: ['R1'] }));
+    assert.strictEqual(r.status, 500, `a Auditoria da reativacao virou nao-fatal: ${r.status} ${JSON.stringify(r.body)}`);
+    const est = await dbGet(db, `SELECT m.quantidade_atual f, (SELECT status FROM series_almoxarifado WHERE id = ?) s,
+      (SELECT COUNT(*) FROM movimentacoes_almoxarifado WHERE material_id = m.id) l FROM materiais_almoxarifado m WHERE m.id = ?`, [sid, id]);
+    assert.deepStrictEqual({ ...est }, { f: 0, s: 'ENTREGUE', l: 2 }, 'o motor nao compensou');
+    assert.strictEqual((await v2({ tipo: 'ENTRADA', quantidade: 1, series: ['R1'] })).status, 201);
+  });
+
+  await test('[RN-14c] (Fase 5, r3) fica fatal: a Auditoria da SAIDA de serie, antes do livro -> 500, nada gravado', async () => {
+    const id = (await dbRun(db, `INSERT INTO materiais_almoxarifado (codigo, nome, unidade, quantidade_atual, quantidade_minima,
+      custo_unitario, ativo, controle_serie) VALUES ('ADA121-3', 'ADA121-3', 'PC', 0, 0, 10, 1, 1)`)).lastID;
+    const v2 = (b) => request(app).post('/api/almoxarifado/movimentacoes/v2').send({ material_id: id, motivo: 'ada121',
+      justificativa: 'ada121', documento_vinculado: 'NF-ADA121', ...b });
+    assert.strictEqual((await v2({ tipo: 'ENTRADA', quantidade: 1, series: ['S1'] })).status, 201);
+    const sid = (await dbGet(db, 'SELECT id FROM series_almoxarifado WHERE material_id = ?', [id])).id;
+    const r = await comAuditoriaFalhando('serie', 'SAIDA', () => v2({ tipo: 'SAIDA', quantidade: 1, serie_ids: [sid] }));
+    assert.strictEqual(r.status, 500, `a Auditoria da saida de serie virou nao-fatal: ${r.status} ${JSON.stringify(r.body)}`);
+    const est = await dbGet(db, `SELECT m.quantidade_atual f, (SELECT status FROM series_almoxarifado WHERE id = ?) s,
+      (SELECT COUNT(*) FROM movimentacoes_almoxarifado WHERE material_id = m.id) l FROM materiais_almoxarifado m WHERE m.id = ?`, [sid, id]);
+    assert.deepStrictEqual({ ...est }, { f: 1, s: 'EM_ESTOQUE', l: 1 }, 'o motor nao compensou');
+    assert.strictEqual((await v2({ tipo: 'SAIDA', quantidade: 1, serie_ids: [sid] })).status, 201);
+  });
+
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   await close();
   process.exit(failed ? 1 : 0);
