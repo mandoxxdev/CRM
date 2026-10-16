@@ -58,6 +58,7 @@ const {
 } = require('../services/almoxarifado/materialPhoto');
 const { canConfigureAlmox, canDeleteAlmoxRequisicao, isSystemAdmin } = require('../services/systemPermissions');
 const { COLUNAS_CAMPOS_LIDOS } = require('../services/almoxarifado/camposLidos');
+const familiaCamposLidos = require('../services/almoxarifado/familiaCamposLidos');
 const { can, requirePermission, getPerfilFromUser } = require('../services/almoxarifado/permissions');
 const reservationService = require('../services/almoxarifado/reservationService');
 const lotService = require('../services/almoxarifado/lotService');
@@ -2931,7 +2932,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
   app.put('/api/almoxarifado/familias/:id',(req, res) => {
     if (denyUnlessAlmoxAdmin(req, res)) return;
-    const { nome, descricao, categoria_id, ativo, tipo_uso, parent_id } = req.body;
+    const { nome, descricao, categoria_id, ativo, tipo_uso, parent_id, campos_lidos: camposLidos } = req.body;
     // Etapa 125 (D (124) item 2, RN-10/RN-11; B807): `nome` OMITIDO preserva o gravado (no proprio comando, abaixo — o molde da
     // descricao e do tipo de uso, B803). O Reativar da aba Familias manda so `{ativo: 1}`: antes mandava o nome da lista, e um
     // renomear de outro Administrador feito depois de a lista carregar era desfeito. Informado vazio/so espacos/null: 400.
@@ -2947,6 +2948,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       && !/^[1-9]\d*$/.test(String(parent_id).trim())) {
       return res.status(400).json({ error: 'Família pai não encontrada' });
     }
+    // Etapa 126 (D (125), RN-24; B815): `campos_lidos` mal formado -> 400 antes da leitura do banco (Fase 2, M6: antes do 404).
+    if (familiaCamposLidos.camposLidosFamiliaInvalidos(camposLidos)) {
+      return res.status(400).json({ error: 'Campos lidos inválidos' });
+    }
+    // As colunas lidas E informadas (Fase 2, M1: a omitida e preservada pelo UPDATE — nao se desfaz, nao entra no WHERE).
+    const informado = { nome: !nomeOmitido, tipo_uso: tipo_uso !== undefined, descricao: descricao !== undefined };
+    const colunasLidas = camposLidos === undefined ? []
+      : familiaCamposLidos.CAMPOS_LIDOS_FAMILIA.map(([col]) => col).filter((col) => camposLidos[col] !== undefined && informado[col]);
 
     // Fix (review pós-Task 3, mesma classe do T2; ampliado no review final da Etapa 2): a aba
     // Famílias de ConfiguracoesAlmoxarifado.js manda PUT só com {nome, descricao, tipo_uso} —
@@ -2981,6 +2990,22 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
 
       if (parentId && parentId === familiaId) {
         return res.status(400).json({ error: 'Família não pode ser pai de si mesma' });
+      }
+
+      // Etapa 126 (D (125), RN-20..RN-26; B815): o Editar manda o que LEU. Lido != gravado E o que gravaria != gravado -> salvar
+      // desfaria a mudanca de outra pessoa: 409 nomeando os campos, nada gravado. Antes das conferencias (RN-25).
+      if (camposLidos !== undefined) {
+        const gravaria = {
+          nome: nomeOmitido ? current.nome : nome.trim(),
+          tipo_uso: tipo_uso === undefined ? current.tipo_uso : tipoUsoVal,
+          descricao: descricao === undefined ? current.descricao : (descricao || null),
+        };
+        const rotulos = familiaCamposLidos.camposDesfeitosFamilia(camposLidos, current, gravaria);
+        if (rotulos.length) {
+          return res.status(409).json({
+            error: familiaCamposLidos.mensagemCamposFamiliaMudadosPorOutro(!!current.parent_id, current.codigo, rotulos),
+          });
+        }
       }
 
       // Etapa 103 (G10b, RN-103.01/02): o nivel MUDA quando o pai informado difere do gravado
@@ -3122,6 +3147,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           sql += ' AND NOT EXISTS (SELECT 1 FROM familias_material_almoxarifado WHERE parent_id = ?)';
           params.push(familiaId);
         }
+        // Etapa 126 (RN-27; Fase 2, M2): a coluna lida e informada leva o valor do CURRENT (o gravado, nao o lido do cliente) — a
+        // mudanca de outro que cai entre a leitura e o UPDATE nao e desfeita (o molde da 125, Fase 5 r2).
+        for (const col of colunasLidas) {
+          sql += ` AND ${col} IS ?`;
+          params.push(current[col] ?? null);
+        }
         return { sql, params };
       };
 
@@ -3164,6 +3195,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                 // Fase 5 (r2 I1): o `ativo` informado mudou no meio — o que esta tela leu nao vale mais. A inativacao fica de
                 // fora: "outro ja inativou" grava o resto (Etapa 110).
                 if (ativoInformado && !inativa && (agora.ativo ?? null) !== (current.ativo ?? null)) {
+                  return res.status(409).json({ error: L409 });
+                }
+                // Etapa 126 (RN-27): uma coluna lida mudou no meio — o que esta tela leu nao vale mais.
+                if (colunasLidas.some((col) => (agora[col] ?? null) !== (current[col] ?? null))) {
                   return res.status(409).json({ error: L409 });
                 }
                 conferir((errC, literal) => {
