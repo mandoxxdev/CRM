@@ -145,7 +145,9 @@ const A1 = (cod, total, caixa, lista) => `Ajuste gravado, mas o disponível de $
     assert.strictEqual(r.body.aviso_caixa, A1(mat.codigo, 1, 4, `as requisições ${a.numero} e ${b.numero}`));
   });
 
-  await test('[104 C209] caixa COBERTA por reserva (entrada antes da aprovacao): A->0 grava sem aviso (declarado: a entrega diz "disponivel negativo")', async () => {
+  // Etapa 128: este titulo dizia "grava sem aviso (declarado)"; a C209 foi resolvida — continua SEM `aviso_caixa` (a caixa esta
+  // coberta pela reserva, a regua da 104 nao muda), e agora vem `aviso_retencao` (ajusteEnderecoRetencao.api.test.js, RN-11).
+  await test('[104 C209] caixa COBERTA por reserva (entrada antes da aprovacao): A->0 grava sem aviso_caixa (o aviso e o da retencao, Etapa 128)', async () => {
     const mat = await material(); const A = await loc();
     await entrar(mat.id, 4, A);
     const a = await req(mat.id, 4); await aprovar(a.R);

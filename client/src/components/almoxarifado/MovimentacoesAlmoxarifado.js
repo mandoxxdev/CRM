@@ -603,6 +603,10 @@ const MovimentacoesAlmoxarifado = () => {
       // sozinho: é o único lugar em que quem contou fica sabendo que a contagem bateu numa caixa.
       const avisoCaixa = resposta?.data?.aviso_caixa;
       if (typeof avisoCaixa === 'string' && avisoCaixa) toast.warn(avisoCaixa, { autoClose: false });
+      // Etapa 128 (C209, RN-18): o ajuste com endereço que deixou o disponível negativo (reserva, bloqueio, inspeção ou terceiros
+      // acima do estoque) — o texto do servidor, literal, depois do da caixa quando os dois vêm.
+      const avisoRetencao = resposta?.data?.aviso_retencao;
+      if (typeof avisoRetencao === 'string' && avisoRetencao) toast.warn(avisoRetencao, { autoClose: false });
       setShowModal(false);
       if (location.pathname.endsWith('/novo')) {
         navigate('/almoxarifado/movimentacoes', { replace: true });

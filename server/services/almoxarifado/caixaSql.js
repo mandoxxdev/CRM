@@ -15,7 +15,7 @@
  * O `disponivelSql` NAO muda (B491): a caixa dentro dele mudaria os 15 leitores juntos, e a separacao e a aprovacao da
  * 95 a descontariam duas vezes (`tetoSeparacao`, B469). O livre de caixa e uma regua a MAIS, so para as portas avulsas.
  */
-const { dbAll } = require('./db');
+const { dbAll, dbGet } = require('./db');
 const { disponivelSql } = require('./availabilitySql');
 const Q = require('./quantidade');
 const { STATUS_COM_CAIXA } = require('./requisitionStateMachine');
@@ -129,4 +129,20 @@ function avisoCaixaDoAjuste({ caixa, requisicoes } = {}, disponivel, material = 
     + 'se ele se perdeu, devolva-o à prateleira na requisição.';
 }
 
-module.exports = { caixaSemReservaSql, livreDeCaixaSql, lerCaixa, sufixoCaixa, descreverRequisicoes, avisoCaixaDoAjuste };
+/**
+ * Etapa 128 (C209, Fase 2 I1) — a caixa coberta por RESERVA do material: o separado que ainda nao saiu (`max(0, separado - entregue)`,
+ * nas requisicoes vivas com caixa, a mesma selecao de `caixaSemReservaSql`) menos a caixa sem reserva. E o que o aviso da retencao
+ * usa para mandar "devolva-o a prateleira na requisicao e libere a reserva": liberar sem devolver deixa o material na caixa (a entrega
+ * segue "Maximo: 0" e o encerrar recusa), devolver sem liberar deixa a reserva (o disponivel segue negativo).
+ */
+async function lerCaixaComReserva(db, materialId) {
+  const status = STATUS_COM_CAIXA.map((s) => `'${s}'`).join(',');
+  const linha = await dbGet(db, `SELECT COALESCE(SUM(MAX(COALESCE(ix.quantidade_separada,0)
+        - COALESCE(ix.quantidade_entregue, ix.quantidade_atendida, 0), 0)), 0) AS total
+    FROM itens_requisicao_almoxarifado ix JOIN requisicoes_almoxarifado rq ON rq.id = ix.requisicao_id
+    WHERE ix.material_id = ? AND COALESCE(rq.ativo, 1) = 1 AND rq.status IN (${status})`, [materialId]);
+  const semReserva = (await lerCaixa(db, materialId)).caixa;
+  return Q.qtd(Math.max(0, (Number(linha && linha.total) || 0) - semReserva));
+}
+
+module.exports = { caixaSemReservaSql, livreDeCaixaSql, lerCaixa, lerCaixaComReserva, sufixoCaixa, descreverRequisicoes, avisoCaixaDoAjuste };

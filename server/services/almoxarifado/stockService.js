@@ -99,20 +99,64 @@ function motivoRecusaAjustePorRetencao(material, novoTotal, caixa = 0) {
   // Etapa 97 (T1, B491): `caixa` = a caixa sem reserva das requisicoes (`caixaSql.lerCaixa`), que o motor le e passa
   // — a funcao continua PURA. O separado esta na prateleira e e de quem separou: ajustar abaixo dele levava a caixa e
   // prendia a entrega em "Maximo: 0". Sem caixa (0) a conta e a literal sao byte a byte as de antes.
-  const cx = Math.max(0, Number(caixa) || 0);
-  const retido = COLUNAS_RETENCAO.reduce((soma, col) => soma + (material[col] || 0), 0) + cx;
+  // Etapa 128 (C209): as parcelas e o retido vem de `partesDaRetencao` (a mesma conta do aviso do ajuste com endereco).
+  const { partes, retido } = partesDaRetencao(material, caixa);
   if (Q.cabe(retido, novoTotal)) return null; // Etapa 96 (Fase 2, I1): a retencao e uma soma
-  const LABELS = {
-    quantidade_reservada: 'reservada', quantidade_bloqueada: 'bloqueada',
-    quantidade_em_inspecao: 'em inspeção', quantidade_em_terceiros: 'em terceiros',
-  };
-  const partes = COLUNAS_RETENCAO
-    .filter((col) => (material[col] || 0) > 0)
-    .map((col) => `${LABELS[col]}: ${Q.qtd(material[col])}`);
-  if (cx > Q.QTD_FOLGA) partes.push(`separada na caixa de requisição: ${Q.qtd(cx)}`); // Etapa 97 (M6)
   return `Ajuste para ${Q.qtd(novoTotal)} ${material.unidade} deixaria o disponível negativo `
     + `(${partes.join(', ')}, mínimo aceitável: ${Q.qtd(retido)} ${material.unidade}). Resolva a `
     + 'retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo.';
+}
+
+/**
+ * Etapa 128 (C209) — as parcelas da retencao, com os rotulos da M6 (Etapa 97), extraidas de `motivoRecusaAjustePorRetencao` (a
+ * literal da recusa continua byte a byte — RN-17) para o aviso do ajuste com endereco usar as mesmas (D1 da Etapa 10: uma formula so).
+ * PURA. `caixa` = a caixa sem reserva que a recusa soma ao retido; o aviso passa 0.
+ * @returns {{ partes: string[], retido: number }}
+ */
+const LABELS_RETENCAO = {
+  quantidade_reservada: 'reservada', quantidade_bloqueada: 'bloqueada',
+  quantidade_em_inspecao: 'em inspeção', quantidade_em_terceiros: 'em terceiros',
+};
+function partesDaRetencao(material, caixa = 0) {
+  const cx = Math.max(0, Number(caixa) || 0);
+  const retido = COLUNAS_RETENCAO.reduce((soma, col) => soma + (material[col] || 0), 0) + cx;
+  const partes = COLUNAS_RETENCAO
+    .filter((col) => (material[col] || 0) > 0)
+    .map((col) => `${LABELS_RETENCAO[col]}: ${Q.qtd(material[col])}`);
+  if (cx > Q.QTD_FOLGA) partes.push(`separada na caixa de requisição: ${Q.qtd(cx)}`); // Etapa 97 (M6)
+  return { partes, retido };
+}
+
+/**
+ * Etapa 128 (C209, RN-11..RN-16; Fase 2 I1/I2/M4) — o aviso do ajuste COM endereco que deixou o DISPONIVEL negativo (o fisico abaixo
+ * do retido: reservada, bloqueada, em inspecao, em terceiros). A contagem grava (a decisao da Etapa 10: a contagem por endereco
+ * redefine o saldo); o aviso diz o que houve e o caminho de cada retencao presente. `material` = a linha relida DEPOIS do ajuste;
+ * `caixaComReserva` = o separado coberto por reserva (`caixaSql.lerCaixaComReserva`) — com ele, liberar a reserva so destrava se o
+ * material voltar a prateleira antes. PURA. Sem retencao (o fisico negativo de quem permite negativo) ou com o disponivel >= 0: null.
+ */
+function avisoRetencaoDoAjuste(material, caixaComReserva = 0) {
+  const { partes, retido } = partesDaRetencao(material, 0);
+  const total = Number(material.quantidade_atual) || 0;
+  if (!(retido > Q.QTD_FOLGA) || Q.cabe(retido, total)) return null;
+  const qtdUn = (n) => [Q.qtd(n), material.unidade].filter((x) => x !== undefined && x !== null && x !== '').join(' ');
+  const quemEstorna = material.proprietario_cliente_id ? 'perfil Administrador do almoxarifado'
+    : 'perfil Administrador ou Gestor do almoxarifado';
+  const acoes = [];
+  if ((material.quantidade_reservada || 0) > 0) {
+    acoes.push(Number(caixaComReserva) > Q.QTD_FOLGA
+      ? 'devolva-o à prateleira na requisição e libere a reserva (perfil Administrador ou Almoxarife)'
+      : 'libere a reserva (perfil Administrador ou Almoxarife)');
+  }
+  if ((material.quantidade_bloqueada || 0) > 0) acoes.push('desbloqueie o que se perdeu (perfil Administrador ou Gestor)');
+  if ((material.quantidade_em_inspecao || 0) > 0) acoes.push('decida a inspeção');
+  const terceiros = (material.quantidade_em_terceiros || 0) > 0;
+  if (terceiros) acoes.push('resolva a remessa ao terceiro');
+  const juntas = acoes.length <= 1 ? acoes.join('') : `${acoes.slice(0, -1).join(', ')} e ${acoes[acoes.length - 1]}`;
+  return `Ajuste gravado, mas o disponível de ${material.codigo} ficou negativo: o estoque (${qtdUn(total)}) é menor que o retido `
+    + `(${partes.join(', ')}, total retido: ${qtdUn(retido)}), e nada dele sai pela entrega de requisição enquanto for assim.`
+    + (terceiros ? ' O que está em terceiros continua no saldo do endereço: a contagem tem de somá-lo.' : '')
+    + ` Se o material existe e a contagem não o incluiu, estorne o ajuste que baixou o estoque (${quemEstorna}); se ele se perdeu, `
+    + `${juntas}.`;
 }
 
 /**
@@ -2448,9 +2492,27 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     }
   }
 
+  // Etapa 128 (C209, RN-11..RN-16, RN-19): o mesmo ajuste com endereco que deixou o DISPONIVEL negativo avisa da retencao — a caixa
+  // coberta por reserva, que o `aviso_caixa` nao olha, e as retencoes sem caixa (o corte da Etapa 10). A linha relida aqui, dentro
+  // da trava do material, depois do livro; a leitura que falha nunca derruba o ajuste ja gravado. Chave so com aviso (aditivo).
+  let avisoRetencao = null;
+  if (ajusteComEndereco) {
+    try {
+      const depois = await dbGet(db, `SELECT codigo, unidade, proprietario_cliente_id, quantidade_atual, ${COLUNAS_RETENCAO.join(', ')}
+        FROM materiais_almoxarifado WHERE id = ?`, [material_id]);
+      const sem = depois ? avisoRetencaoDoAjuste(depois, 0) : null;
+      avisoRetencao = sem && (depois.quantidade_reservada || 0) > 0
+        ? avisoRetencaoDoAjuste(depois, await caixaSql.lerCaixaComReserva(db, material_id))
+        : sem;
+    } catch (avisoErr) {
+      console.warn('[almoxarifado-retencao] Falha ao ler a retencao para o aviso do ajuste:', avisoErr.message);
+    }
+  }
+
   return {
     id: result.lastID, saldo_anterior: saldoAnteriorReal, saldo_posterior: saldoPosterior,
     ...(avisoCaixa ? { aviso_caixa: avisoCaixa } : {}),
+    ...(avisoRetencao ? { aviso_retencao: avisoRetencao } : {}),
   };
 }
 
@@ -3783,6 +3845,8 @@ module.exports = {
   getMaterial,
   getSaldoDisponivel,
   motivoRecusaAjustePorRetencao,
+  partesDaRetencao,
+  avisoRetencaoDoAjuste,
   caixaParaGuardaDoAjuste, // Etapa 97 (Fase 5, item 1): a pre-validacao do inventario
   syncMaterialTotals,
   syncSaldoLocalizacaoPadrao,
