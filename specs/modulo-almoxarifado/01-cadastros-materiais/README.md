@@ -1,6 +1,8 @@
 # 01 — Cadastros de Materiais
 
-> **Status:** 🟡 — **continua 🟡. Etapa 112 (`a8cda2ad..d7b0cae8`): ligar controle por lote ou por série num material
+> **Status:** 🟡 — **continua 🟡. Etapa 113 (`508eb6c4..6ed479a6`): inativar material com saldo ou retenção é recusado para
+> todos (C217, C227), reativar confere a família (C220) e a lista de Materiais ganha Inativos + Reativar** — ver a seção
+> "Etapa 113", no fim. Não fecha item do checklist (regra de integridade do cadastro). Antes: **Etapa 112 (`a8cda2ad..d7b0cae8`): ligar controle por lote ou por série num material
 > com saldo não identificado passa a exigir `ajustar_estoque` (C222)** — ver a seção "Etapa 112", no fim. Não fecha item
 > do checklist (regra de integridade do cadastro). Antes: **Etapa 110 (`233f4787..e5584a85`): o Saldo Inicial do cadastro passa pelo motor de estoque (C215) e a
 > corrida família × cadastro fecha dos dois lados (C218)** — ver a seção "Etapa 110", no fim. Não fecha item do checklist
@@ -320,7 +322,7 @@ Inicial** da criação grava ENTRADA fora do motor (`materialService.createMater
 - [x] **Integração** — `7c578b56` (rota e serviço, K1–K3).
 - [x] **Fase 5** — `e5584a85`: o PUT de família não regrava o `ativo` omitido (B727) e a 2ª tentativa do "já inativada por
   outro" leva a condição; 9 cenários novos das sabotagens verdes.
-- [ ] **Fora, de propósito (B726):** reativar material em família inativa (**C220**), mudar o nível de família e criar
+- [ ] **Fora, de propósito (B726):** ~~reativar material em família inativa (**C220**)~~ — *feita na Etapa 113*, mudar o nível de família e criar
   subfamília sob raiz sendo inativada (**C221**), ~~ligar lote/série/inspeção num material com saldo (**C222**)~~ — *a
   C222 foi feita na Etapa 112 (seção abaixo).*
 
@@ -369,7 +371,7 @@ motivo é pelo **id** (`m.motivo_id`), nunca pelo texto.
 - [x] **Fase 5** — `d7b0cae8` (10 cenários das sabotagens que passavam; nenhuma mudança de produção).
 - [ ] **Fora, de propósito:** aviso ao Administrador que liga com saldo não identificado (**C224**); desligar a série com
   séries presentes (**C225**); a Entrada que começou antes de o controle ser ligado (**C226**); reativar material em
-  família inativa (**C220**) e inativar material com saldo (**C217**, **C227**) — a Etapa 113.
+  família inativa (**C220**) e inativar material com saldo (**C217**, **C227**) — a Etapa 113 (*feita, seção abaixo*).
 
 **A C222 estava parcialmente errada — fica dito.** Ela dizia que ligar **inspeção** com saldo também travava a saída.
 **Estava errado**: *Requer inspeção* não é lida por saída nenhuma (quem retém no Recebimento é *Material crítico*). E dizia
@@ -377,3 +379,28 @@ que o Administrador regulariza o lote "com um Ajuste" — **também errado**: o 
 ao saldo é a Entrada com o lote + o Ajuste do total (B730). O plano desta etapa partiu de "recusar para todos e zerar o
 saldo"; a revisão do plano derrubou (consumo fictício, impossível no material de cliente, tranca a regularização de séries
 — B728).
+
+## Etapa 113 (2026-10-15, `508eb6c4..6ed479a6`) — a situação do material não prende saldo
+
+Plano: `docs/superpowers/plans/2026-10-15-almoxarifado-etapa113-situacao-do-material.md`.
+
+- [x] **Inativar com saldo (C217, C227)** — `082c210a`. `DELETE /materiais/:id` e `PUT /materiais/:id` com `ativo` 1 → 0 num
+  material com físico ou retenção ≠ 0 (6 casas) → 400 *"Não é possível inativar o material ⟨código⟩: o saldo físico é …"*,
+  para todos (B733). A condição vai no `UPDATE` (`SEM_SALDO_SQL`; no DELETE também `ativo = 1`), sob
+  `trava.naTravaDoMaterial` (o motor lê `ativo` e credita dentro dela); não gravou → relê. O DELETE de material já inativo
+  não escreve e a auditoria é pelo `changes`.
+- [x] **Reativar confere a família (C220)** — `082c210a`. `ativo` 0 → 1 valida família/subfamília com as literais de sempre e
+  leva `condicaoFamiliaSql` (B736). O PUT leva sempre `AND ativo IS ⟨lido⟩` (B737).
+- [x] **Lista e tela** — `GET /materiais?status=inativo` em `082c210a`; filtro Inativos, selo, Reativar e a mensagem do
+  servidor no toast do Inativar em `e6671ce8` (B735).
+- [x] **Integração** — `9abef080` (Saída → inativar; Devolver ao cliente → inativar; reativar família → reativar material;
+  reserva → cancelar → inativar; conferência aberta → reativar → concluir).
+- [x] **Fase 5** — `6ed479a6`: o estorno de movimento de material inativo é recusado (no motor, `cancelarMovimentacao`;
+  o crédito do estorno de Saída leva `AND ativo = 1`), a recusa do PUT que inativa e liga o lote relê o saldo, e 14
+  cenários das sabotagens que passavam (B738).
+- [ ] **Fora, de propósito (B734):** documento aberto não impede inativar — conferência e nota travam depois (**C228**); a
+  requisição pendente de material inativado é aprovada sem reserva (**C229**, Etapa 114).
+
+**O design desta etapa tinha uma premissa errada — fica dito.** Ele declarava como furo a corrida "Entrada que leu *ativo*
+antes do Inativar e grava depois", dizendo que o motor não pega a trava do material. **Estava errado**: desde a Etapa 97 o
+motor inteiro roda em `naTravaDoMaterial`; o `UPDATE` que inativa passou a usar a mesma trava e a corrida fecha.

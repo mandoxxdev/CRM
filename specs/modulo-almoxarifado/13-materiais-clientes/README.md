@@ -139,7 +139,7 @@ task foi entregue com a **tabela preservada** exatamente para que este cenário 
   muda (recusa no toast — `3fe407d9`, T2). Testes: `trocaDonoMaterial.api.test.js`, `trocaDonoMaterialIntegracao.api.test.js`
   (`bc415eb6`). Fora (declarado): compromisso pendente não conta como histórico (B714); motivo da troca (B716).
   Fase 5 (`970c0dfb`): o `UPDATE` só grava se o dono ainda é o lido — um salvar concorrente não regrava o dono antigo
-  depois de uma troca autorizada (409; B720). Achado anterior: inativar material de cliente com saldo o tira da posição (C217).
+  depois de uma troca autorizada (409; B720). Achado anterior: inativar material de cliente com saldo o tira da posição (C217 — **resolvido na Etapa 113**, `082c210a`: inativar com saldo é recusado, e a mensagem do material de cliente manda "Devolver ao cliente").
 - [ ] Sobras permanecem vinculadas ao proprietário — **fora do escopo da Etapa 8, declarado**
   (decisão 11 do design): depende da UI de retalhos/sobras, **feature 15**.
 - [x] Devolução ao cliente documentada — `27eb9c9` (Task 6): tipo `DEVOLUCAO_CLIENTE` (saída, pelo

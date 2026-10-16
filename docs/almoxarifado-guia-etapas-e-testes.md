@@ -1,18 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-15 (Etapa 112) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-15 (Etapa 113) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110 e 112) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112 e 113) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 112 ENTREGUE · próxima do almoxarifado: Etapa 113)
+> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 113 ENTREGUE · próxima do almoxarifado: Etapa 114)
 >
-> **O desenvolvimento parou aqui: Etapa 112 fechada — 2026-10-15.** A **Etapa 112 (ligar lote ou série num material que
+> **O desenvolvimento parou aqui: Etapa 113 fechada — 2026-10-15.** A **Etapa 113 (inativar material com saldo é recusado,
+> e a tela de Materiais passa a reativar)**: o "Inativar" de um material com saldo ou com algo retido é recusado para
+> todos, com uma mensagem que diz quanto há e o que fazer (dar saída, ajustar ou devolver ao cliente); a lista de
+> Materiais ganha o filtro **Inativos** e o botão **Reativar**, que recusa quando a família do material está inativa.
+> **Próxima: Etapa 114** — a requisição pendente de um material inativado (C229) — ver a próxima tarefa no plano da 113.
+>
+> **Etapa 112, 2026-10-15.** A **Etapa 112 (ligar lote ou série num material que
 > já tem saldo passa a ser do Administrador)**: marcar *Controle por lote* ou *Controle por número de série* num material
 > cujo saldo ainda não tem lote (ou não tem as séries) só o Administrador faz — o Almoxarife e a Engenharia recebem a
 > recusa ao salvar, dizendo quanto está sem lote; com o saldo já todo em lote, qualquer um liga. O Administrador liga e
 > regulariza (séries pela tela de Séries; lote por Entrada com o lote + Ajuste do total). **Próxima: Etapa 113** —
 > inativar material com saldo (C217, C227) e reativar numa família inativa (C220) — ver a próxima tarefa no plano da 112.
+> *(Feita — Etapa 113.)*
 >
 > **Etapa 110, 2026-10-15.** A **Etapa 110 (o Saldo Inicial do cadastro vira uma
 > Entrada de verdade, e a família não fica mais inativa com material dentro)**: com saldo inicial, o cadastro de material
@@ -6431,6 +6438,57 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 113 — Inativar material com saldo é recusado, e a tela de Materiais passa a reativar (ENTREGUE — 2026-10-15)
+
+**O que mudou, em uma frase:** o "Inativar" de um material que ainda tem saldo (ou algo reservado, bloqueado, em inspeção
+ou em terceiros) é recusado para todos, e a lista de Materiais mostra os inativos e os reativa.
+
+**O problema que ela resolve.** Inativar um material faz o sistema recusar qualquer movimento dele. Até aqui o "Inativar"
+não olhava o estoque: o Almoxarife, a Engenharia e o Administrador inativavam um material com 5 na prateleira e aquelas 5
+peças ficavam presas — sem saída, sem devolução ao cliente, e sem nenhuma tela para trazer o material de volta.
+
+| Antes | Agora |
+|---|---|
+| "Inativar" com saldo passava e o saldo ficava preso | Recusado para todos, com o saldo, as retenções e o caminho na mensagem |
+| A recusa, quando havia, aparecia como *"Erro ao inativar material"* | O aviso mostra a mensagem do servidor |
+| Material inativo sumia sem volta | Filtro **Inativos** e botão **Reativar** |
+| Reativar (pela integração) deixava material ativo em família inativa | Recusado com *"Família inativa — não é possível vincular novos itens"* |
+
+**A regra agora.**
+- Com saldo: *"Não é possível inativar o material ⟨código⟩: o saldo físico é ⟨n⟩. Material inativo não pode ser
+  movimentado, então esse saldo ficaria preso. Antes de inativar, zere o saldo com uma Saída ou um Ajuste."*
+- Com algo retido, o número entre parênteses (*"(reservado 2, em terceiros 1)"*) e *"Libere primeiro o que está retido e,
+  depois, …"*; material de cliente: *"… devolva o saldo ao cliente ("Devolver ao cliente", em Materiais de Clientes)."*;
+  saldo negativo: *"… zere o saldo com uma Entrada ou um Ajuste."*; para a Engenharia, no fim: *"Seu perfil (ENGENHARIA)
+  não movimenta estoque: peça isso ao almoxarifado."*
+- Sem saldo, inativar continua livre (mesmo com movimentações no extrato ou requisição pendente).
+
+### Roteiro de teste manual
+
+Preparação: um material **CHP-0301** (nosso) e um **CHP-0302** de um cliente, sem saldo; **Ana** (Almoxarife), **Edu**
+(Engenharia) e o **administrador**.
+
+1. **Dê saldo.** Ana, **Movimentações → Nova**, **Entrada** de 5 no CHP-0301.
+2. **A recusa.** Ana, **Materiais**, na linha do CHP-0301, ícone de lixeira (**Inativar**) → confirma → aviso vermelho
+   *"Não é possível inativar o material CHP-0301: o saldo físico é 5. …"*; o material continua na lista. O administrador →
+   a mesma recusa. Edu → a mesma, terminando em *"Seu perfil (ENGENHARIA) não movimenta estoque: peça isso ao almoxarifado."*
+3. **Zerar e inativar.** Ana dá **Saída** de 5 e repete o **Inativar** → *"Material inativado"*; o CHP-0301 some da lista.
+4. **Material de cliente.** Ana dá **Entrada** de 3 no CHP-0302, tenta **Inativar** → a mensagem manda *"devolva o saldo
+   ao cliente…"*. Em **Materiais de Clientes → Devolver ao cliente** (3, com o número do documento) → o **Inativar** passa.
+5. **Reativar.** Em **Materiais**, filtro de status **Inativos** → o CHP-0301 aparece com o selo **Inativo**, sem os botões
+   Requisitar, Entrada, Saída e Inativar, e com o botão **Reativar** → confirma → *"Material reativado"*; com o filtro
+   **Todos status**, ele está de volta.
+6. **Família inativa.** Inative de novo o CHP-0301 (sem saldo), inative a família dele em **Configurações → Famílias** e
+   tente **Reativar** o material → aviso *"Família inativa — não é possível vincular novos itens"*. Reative a família e o
+   **Reativar** passa.
+7. **Estorno.** Num material zerado por uma Saída e inativado, **Movimentações → estornar** a Saída → *"Material
+   inativo não pode ser movimentado"*; reative o material e o estorno passa.
+
+**O que esta etapa NÃO cobre.** Documento aberto não impede inativar: uma conferência aberta ou uma nota de pedido que
+trazem o material travam depois (C228 — **Reativar**, concluir, inativar de novo); uma requisição pendente de material
+inativado é aprovada sem reserva (C229 — a próxima etapa). A tela não avisa antes do clique. Os materiais que já estão
+inativos com saldo: consulta **A60**.
+
 ## Etapa 112 — Ligar lote ou série num material que já tem saldo passa a ser do Administrador (ENTREGUE — 2026-10-15)
 
 **O que mudou, em uma frase:** marcar **Controle por lote** ou **Controle por número de série** num material cujo saldo
@@ -6478,8 +6536,8 @@ Preparação: um material **CHP-0201** sem controles; **Ana** (Almoxarife), **Ed
 
 **O que esta etapa NÃO cobre.** O Administrador que liga com saldo não identificado não recebe aviso no salvar (as telas de
 Lotes e Séries mostram a divergência — C224); desligar a série deixa as séries como "em estoque" (C225); uma Entrada sem
-lote que começou antes de o controle ser ligado e termina depois (C226); reativar material numa família inativa (C220). Os
-materiais que já estão com controle e saldo não identificado: consulta **A59**.
+lote que começou antes de o controle ser ligado e termina depois (C226); reativar material numa família inativa (C220 —
+*feita na Etapa 113*). Os materiais que já estão com controle e saldo não identificado: consulta **A59**.
 
 ## Etapa 110 — O Saldo Inicial do cadastro vira uma Entrada de verdade, e a família não fica inativa com material dentro (ENTREGUE — 2026-10-15)
 

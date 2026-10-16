@@ -360,7 +360,7 @@ Não existe cadastro separado de "material de cliente": ele é material normal, 
 
 ### 2.9 Histórico do cadastro
 
-Toda criação e toda edição de material ficam registradas com **quem fez, quando, e o de/para de cada campo alterado** — apenas os campos que realmente mudaram, não a ficha inteira. **Trocar a foto também conta como edição**, e o registro guarda o nome do arquivo anterior e o do novo. Excluir um material é uma **inativação**: ele sai das listas, mas o histórico de movimentações continua íntegro. **Desativar um material que já estava inativo não gera registro nenhum** — o sistema aceita a operação, mas o histórico só recebe linha quando houve efeito (seção 5.7).
+Toda criação e toda edição de material ficam registradas com **quem fez, quando, e o de/para de cada campo alterado** — apenas os campos que realmente mudaram, não a ficha inteira. **Trocar a foto também conta como edição**, e o registro guarda o nome do arquivo anterior e o do novo. Excluir um material é uma **inativação**: ele sai das listas, mas o histórico de movimentações continua íntegro (as regras de inativar e reativar estão em 2.11). **Desativar um material que já estava inativo não gera registro nenhum** — o sistema aceita a operação, mas o histórico só recebe linha quando houve efeito (seção 5.7).
 
 Esse histórico é lido em **Almoxarifado → Auditoria**, filtrando a entidade **Material** (seção 5.8). Ele não aparece dentro da ficha do material — a consulta é sempre pela tela de Auditoria, e é restrita a quem administra o módulo.
 
@@ -369,6 +369,55 @@ Esse histórico é lido em **Almoxarifado → Auditoria**, filtrando a entidade 
 Além da foto, cada material guarda **documentos**. Na lista de **Almoxarifado → Materiais**, a coluna de ações de cada linha tem um ícone de **clipe** (*"Anexos e documentos deste material"*) que abre a janela **Anexos do material**, identificada pelo código e pelo nome. É onde ficam a **ficha técnica**, o **desenho** e o **catálogo do fabricante** — documentos que valem para o item, não para um lançamento dele.
 
 O clipe aparece para todo mundo que enxerga a tela, inclusive para quem só consulta: **ver e baixar** é liberado a qualquer perfil do módulo, e é **enviar** e **remover** que dependem do perfil. Material desativado continua aceitando anexo — ficha técnica de item aposentado é exatamente o tipo de documento que se precisa consultar depois. As regras completas de formato, tamanho, permissão e registro de download estão em **15.2.4**.
+
+### 2.11 Inativar e reativar um material
+
+**Inativar** é o ícone de lixeira na linha do material, em **Almoxarifado → Materiais** (*"Inativa o material (não apaga o
+histórico)"*), e é de quem edita material. Material inativo sai das listas, dos relatórios de estoque, da sugestão de
+compra, dos alertas e da posição do cliente; não entra em requisição nova; e **não se movimenta por caminho nenhum** — o
+sistema recusa com *"Material inativo não pode ser movimentado"*.
+
+Por isso **só se inativa material zerado**. O sistema confere o saldo físico e as quatro retenções (reservado, bloqueado,
+em inspeção, em terceiros), arredondados a 6 casas decimais; se qualquer um não for zero, recusa — para todos os perfis,
+inclusive o Administrador — e nada muda:
+
+> *"Não é possível inativar o material ⟨código⟩: o saldo físico é ⟨físico⟩⟨retidos⟩. Material inativo não pode ser
+> movimentado, então esse saldo ficaria preso. ⟨caminho⟩"*
+
+- **⟨retidos⟩** — vazio quando nada está retido; senão, entre parênteses, só os diferentes de zero, nesta ordem:
+  *"(reservado 2, bloqueado 1, em inspeção 3, em terceiros 1)"*.
+- **⟨caminho⟩** — sem retenção: *"Antes de inativar, …"*; com retenção e saldo físico: *"Libere primeiro o que está retido
+  e, depois, …"*; com retenção e físico zero: *"Libere o que está retido antes de inativar."* O "…" é: saldo negativo →
+  *"zere o saldo com uma Entrada ou um Ajuste."*; material de cliente → *"devolva o saldo ao cliente ("Devolver ao cliente",
+  em Materiais de Clientes)."*; material nosso → *"zere o saldo com uma Saída ou um Ajuste."*
+- Para quem não movimenta estoque (o perfil Engenharia), a mensagem termina com *"Seu perfil (ENGENHARIA) não movimenta
+  estoque: peça isso ao almoxarifado."*
+
+Movimentações no extrato, requisição pendente, pedido de compra aberto e conferência aberta **não** impedem inativar um
+material zerado. Mas, depois de inativado, uma conferência de inventário aberta que o contou não conclui (*"Ajuste
+bloqueado: ⟨código⟩: Material inativo não pode ser movimentado"*, e nenhum ajuste da conferência é aplicado), uma nota de
+pedido que o traz não é processada, e uma requisição pendente dele é aprovada sem reservar nada. Nesses casos, reative o
+material, termine o documento e inative de novo. Uma Entrada lançada no mesmo instante do "Inativar" nunca deixa o material
+inativo com saldo: ou a Entrada entra primeiro e o "Inativar" é recusado, ou o "Inativar" passa e a Entrada é recusada.
+
+**Reativar.** Na mesma lista, o filtro de status **Inativos** mostra só os materiais inativos, com o selo **Inativo**. Nas
+ações da linha inativa ficam Extrato, mapa (quando há posição), etiqueta, plano de inspeção, anexos e edição; somem Requisitar, Entrada e Saída
+rápidas e Inativar; e aparece **Reativar** (*"Reativa o material (volta às listas e a movimentar)"*), de quem edita
+material. Ele pede confirmação (*"Reativar o material "⟨nome⟩"?"*) e responde *"Material reativado"*. Reativar confere a
+família do material como no cadastro: família inativa → *"Família inativa — não é possível vincular novos itens"*;
+subfamília inativa ou que não é filha da família → *"Subfamília inválida para a família selecionada"*; material antigo
+gravado com a subfamília no campo Família → *"A família escolhida é uma subfamília — escolha a família principal e use a
+subfamília no campo Subfamília"*. Reative primeiro a família (2.1).
+
+**Estorno.** Estornar qualquer movimento de um material inativo é recusado com *"Material inativo não pode ser
+movimentado"* (6.10); reative o material para estornar.
+
+**Ficha aberta antes.** Se alguém inativar (ou reativar) o material enquanto outra pessoa está com a ficha dele aberta, o
+salvar dessa ficha é recusado com *"O cadastro do material ⟨código⟩ mudou enquanto era salvo — nada foi gravado. Recarregue
+o material e salve de novo."* — a ficha velha nunca desfaz a inativação.
+
+O "Inativar" e o "Reativar" ficam no histórico do cadastro (2.9): o primeiro como **Desativação**, o segundo como
+**Atualização** com o campo *ativo* de 0 para 1.
 
 ---
 
@@ -1442,6 +1491,7 @@ Movimentação errada **não é excluída**. O botão de estornar (seta curva) n
 - **Motivo é obrigatório** → *"Justificativa obrigatória para cancelamento"*.
 - Exige o perfil que pode **ajustar estoque** (mais restrito que o de movimentar). O estorno de um **ajuste de material de cliente** (Ajuste, Ajuste positivo ou Ajuste negativo) exige, além disso, a permissão de ajustar material de cliente — **somente Administrador** (16.8); o Gestor recebe a recusa antes de qualquer alteração.
 - **Estorno de estorno não existe** → *"Estorno não pode ser estornado"*.
+- **Material inativo** → *"Material inativo não pode ser movimentado"*, para qualquer tipo de movimento: reative o material (2.11) para estornar.
 - **Estorno de entrada** vira uma saída, e por isso respeita o disponível: se a mercadoria já foi consumida, a recusa é *"Não é possível estornar: saldo disponível insuficiente (material já consumido)"*. Se a mercadoria **está no estoque mas reservada** (o físico cobre, o disponível não), a recusa diz quem a segura: *"Não é possível estornar: o material está reservado para requisições (⟨números⟩) — libere as reservas antes de estornar"* (uma reserva sem requisição aparece como *"reservas manuais"*). Em material sem lote, se a posição da entrada já não tem aquela quantidade (porque uma saída tirou dela), o estorno tira **como uma saída**: da posição da entrada primeiro, depois das outras com saldo — nenhuma posição fica negativa.
 - **O estorno também respeita o material separado na caixa de requisições** (10.2). O estorno de entrada compara com o livre fora da caixa, e as duas recusas acima ganham, no fim, o trecho *" — ⟨quantidade⟩ ⟨un⟩ estão separados para a requisição ⟨número da requisição⟩ e só saem pela entrega (…)"* quando há caixa. O estorno de um **ajuste** que **reduz** o total (o ajuste tinha subido) passa pela mesma guarda do ajuste (6.2): *"Não é possível estornar: Ajuste para ⟨t⟩ ⟨un⟩ deixaria o disponível negativo (⟨parcelas⟩, mínimo aceitável: ⟨m⟩ ⟨un⟩). Resolva a retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo."* — com ou sem localização; o estorno que aumenta o total não tem essa guarda. O estorno de um **desbloqueio** bloqueia de novo e só cabe no livre fora da caixa (que desconta o reservado): *"Não é possível estornar o desbloqueio: saldo disponível insuficiente para bloquear de novo: ⟨n⟩ ⟨un⟩"*, com o mesmo trecho no fim quando há caixa.
 - **Estorno de saída** devolve a quantidade **a uma posição só**: a origem informada na saída ou, sem ela, a posição padrão do material (ou a conta "sem localização atribuída"). A saída não guarda de quais posições tirou; o físico volta certo, a posição pode não ser a original.
@@ -4803,7 +4853,7 @@ Em **Almoxarifado → Materiais de Clientes**, escolhe-se o cliente e o sistema 
 | **Saldo** | o que está no galpão agora |
 | **Aplicado em** | a lista de OS e projetos onde aquele material foi usado, com a quantidade de cada |
 
-Os números **saem do livro de movimentações**, não de contadores paralelos: a conta que o cliente faz de cabeça — **recebido − consumido − devolvido = saldo** — fecha. Movimentações estornadas não contam (o estorno é visível no livro, mas não pesa na posição).
+Os números **saem do livro de movimentações**, não de contadores paralelos: a conta que o cliente faz de cabeça — **recebido − consumido − devolvido = saldo** — fecha. Movimentações estornadas não contam (o estorno é visível no livro, mas não pesa na posição). Material de cliente **inativo** não aparece nesta tela nem no relatório — por isso o sistema não deixa inativar material com saldo (2.11): o caminho é devolver ao cliente antes.
 
 "Devolvido" é coluna separada porque o cliente precisa distinguir **o que virou peça** de **o que voltou para ele**. Perda no terceiro e consumo no processo entram em "Consumido", e não somem da tela: material que o cliente não vai receber de volta tem de aparecer em algum lugar. **Material do cliente devolvido ao fornecedor entra em "Consumido"** pela mesma razão — ele saiu do galpão e não vai voltar para o cliente, e deixá-lo fora tornaria a saída invisível e a conta da tela não fecharia.
 

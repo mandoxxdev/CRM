@@ -124,7 +124,7 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Cinquenta e nove itens para rodar em produção ANTES do deploy — cinquenta e seis são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Sessenta itens para rodar em produção ANTES do deploy — cinquenta e sete são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
 
 *(**Atualizado em 2026-10-15 (Etapa 112) de cinquenta e oito para cinquenta e nove**, com a **A59** — os materiais com lote ou série ligados e saldo não identificado (sem lote atribuído, ou séries diferentes do físico); opcional.)*
 
@@ -2211,12 +2211,39 @@ negativo, saiu mais sem lote do que entrou (saídas por requisição sem escolhe
 **`series_presentes` ≠ `fisico`** (com `controle_serie` = 1) — **Lotes e Séries → Séries → Regularizar séries**
 (cadastrar as que faltam ou baixar as que saíram).
 
+**A60 (NOVA, da Etapa 113 — os materiais inativos que ainda têm saldo).** Antes da Etapa 113 o "Inativar" do material não
+conferia nada (**C217**, **C227**): quem edita material inativava um item com saldo e, a partir daí, a Saída recusava
+(*"Material inativo não pode ser movimentado"*) com o saldo lá. **Nada aqui é obrigatório.** Somente leitura:
+
+```sql
+SELECT m.id, m.codigo, m.nome, m.proprietario_cliente_id AS cliente,
+       m.quantidade_atual AS fisico, m.quantidade_reservada AS reservado, m.quantidade_bloqueada AS bloqueado,
+       m.quantidade_em_inspecao AS em_inspecao, m.quantidade_em_terceiros AS em_terceiros
+  FROM materiais_almoxarifado m
+ WHERE (m.ativo IS NULL OR m.ativo <> 1)
+   AND (ROUND(COALESCE(m.quantidade_atual, 0), 6) <> 0 OR ROUND(COALESCE(m.quantidade_reservada, 0), 6) <> 0
+     OR ROUND(COALESCE(m.quantidade_bloqueada, 0), 6) <> 0 OR ROUND(COALESCE(m.quantidade_em_inspecao, 0), 6) <> 0
+     OR ROUND(COALESCE(m.quantidade_em_terceiros, 0), 6) <> 0)
+ ORDER BY m.codigo;
+```
+
+*(Conferida numa sonda contra o esquema real: acha o inativo com saldo 5, o inativo só com reservado e o de `ativo`
+nulo com saldo; **não** acha o inativo zerado nem o ativo com saldo.)*
+
+**Como ler o resultado:** **vazia** — nada a fazer. **Cada linha** é um material que sumiu das listas com saldo dentro. Em
+**Materiais**, filtro de status **Inativos**, o botão **Reativar** devolve o material (se a família dele estiver inativa, a
+recusa diz isso — reative a família antes); depois dê saída do saldo (ou **Devolver ao cliente**, quando há `cliente`),
+libere o que estiver retido, e só então inative de novo. Se o saldo for fantasma (não existe na prateleira), quem corrige é
+o Administrador, com um **Ajuste**.
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B732; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B739; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-15 com as sete da Etapa 113 — B733 a B739.**)*
 
 *(**Atualizado em 2026-10-15 com as cinco da Etapa 112 — B728 a B732.**)*
 
@@ -7561,6 +7588,64 @@ recusa material inativo). É a mesma forma da C222, por tela. A C220 (só pela A
 por ser a outra transição do mesmo campo. A C219 (Entrada manual sem documento de cliente) muda uma decisão da Etapa 8 e
 espera você. Ver a próxima tarefa no plano da Etapa 112.
 
+**B733 (NOVA, da Etapa 113) — inativar material com saldo é recusado para todos, inclusive o Administrador.**
+**O que foi escolhido:** o "Inativar" (e o mesmo pela integração) recusa quando o físico ou qualquer retenção (reservado,
+bloqueado, em inspeção, em terceiros), arredondados a 6 casas, não são zero — para qualquer perfil (`082c210a`).
+**O que foi descartado:** o padrão da Etapa 112, "só quem regulariza" (o Administrador inativaria com saldo).
+**Por quê:** aqui quem regulariza **também** fica preso — o sistema recusa movimentar material inativo, então o saldo
+de um material inativo não sai nem pelo Administrador; e zerar antes já é possível com o que existe (Saída, Ajuste,
+Devolver ao cliente). **Reversível:** liberar o Administrador é uma condição na rota.
+
+**B734 (NOVA, da Etapa 113) — o que impede inativar é só saldo e retenção; documento aberto não impede.**
+**O que foi escolhido:** requisição pendente (sem reserva), pedido de compra aberto, conferência de inventário aberta e
+recebimento pendente **não** impedem inativar um material zerado.
+**O que foi descartado:** recusar inativar enquanto houver documento aberto do material.
+**Por quê:** a Etapa 108 já decidiu que compromisso pendente não é "histórico" (**B714**); recusar por documento exige uma
+regra por porta (e a que faltasse deixaria o material sem saída); e a Engenharia ficaria sem limpar o catálogo por causa
+de uma requisição esquecida. **A consequência está nos avisos C228 e C229** — a saída é o **Reativar** (**B735**).
+
+**B735 (NOVA, da Etapa 113, da revisão do plano) — a tela de Materiais lista os inativos e reativa.**
+**O que foi escolhido:** o filtro de status ganha **Inativos**; a linha inativa mostra o selo **Inativo** e o botão
+**Reativar** (quem edita material), e esconde Requisitar, Entrada/Saída rápida e Inativar (`e6671ce8`).
+**O que foi descartado:** deixar a reativação só pela integração, como era.
+**Por quê:** a revisão do plano mostrou que um material inativado **sem** saldo ainda trava o que vier depois (uma
+conferência aberta que o conta não conclui; uma nota de pedido aberto não processa) e que os inativos com saldo antigo
+eram invisíveis — sem uma volta pela tela, a regra nova só deslocava o beco. **Reversível:** o botão é só da tela; a regra
+de reativar (B736) é do servidor.
+
+**B736 (NOVA, da Etapa 113) — reativar confere a família e a subfamília, com as recusas de sempre.**
+**O que foi escolhido:** reativar um material com família (ou subfamília) inativa é recusado com *"Família inativa — não
+é possível vincular novos itens"* (ou *"Subfamília inválida para a família selecionada"*), e a conferência vai no mesmo
+comando que grava (`082c210a`). O material antigo gravado com a subfamília no campo Família recusa com *"A família escolhida
+é uma subfamília — escolha a família principal e use a subfamília no campo Subfamília"*.
+**O que foi descartado:** conferir só "ativa" no reativar (deixando o legado passar).
+**Por quê:** material ativo dentro de família inativa é o estado que o "Inativar" da família proíbe (**C220**); e reativar é
+a hora de corrigir o cadastro antigo — o material inativo não está em uso.
+
+**B737 (NOVA, da Etapa 113, da revisão do plano) — salvar um cadastro lido antes de outra pessoa inativar o material não o
+reativa mais.**
+**O que foi escolhido:** o salvar da ficha só grava se a situação (ativo/inativo) ainda é a que ele leu; senão responde
+*"O cadastro do material ⟨código⟩ mudou enquanto era salvo — nada foi gravado. Recarregue o material e salve de novo."*
+(`082c210a`). E o "Inativar" de um material já inativo não grava nada (antes atualizava a data da ficha).
+**O que foi descartado:** gravar a situação só quando o formulário a manda (o formulário nunca manda — daria no mesmo, com
+mais código).
+**Por quê:** a revisão reproduziu: uma ficha aberta antes de o material **e** a família serem inativados, salva depois,
+regravava "ativo" — material ativo em família inativa, sem passar pela B736 e sem aparecer no histórico.
+
+**B738 (NOVA, da Etapa 113, da revisão do código) — o estorno de um movimento de material inativo é recusado.**
+**O que foi escolhido:** estornar qualquer movimento de um material inativo responde *"Material inativo não pode ser
+movimentado"* — a mesma frase da Saída — e nada muda; reativado, o mesmo estorno passa (`6ed479a6`). O desfazer interno que
+o próprio sistema faz quando um documento falha no meio continua passando.
+**O que foi descartado:** deixar o estorno de fora (como era) ou recusar só o estorno que aumenta o saldo.
+**Por quê:** a revisão reproduziu: estornar a Saída de um material zerado e inativado devolvia as 5 peças a um material
+inativo — o estado que o "Inativar" passou a proibir. Estorno é movimento; a regra do material inativo é a mesma. Recusar
+todos os tipos é o que não deixa nenhum escapar (o estorno de um Ajuste também devolvia saldo).
+
+**B739 (NOVA, da Etapa 113) — a próxima etapa do almoxarifado (114) é a requisição de material inativado.** Medido nesta
+etapa: uma requisição **pendente** de um material que foi inativado é **aprovada** (*APROVADO*) sem reservar nada, e o
+resto do caminho dela (separar, entregar) recusa material inativo (**C229**). A C219 (Entrada manual sem documento de
+cliente) continua esperando você. Ver a próxima tarefa no plano da Etapa 113.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -9757,7 +9842,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      aparecer *"cliente #⟨n⟩"* num material, o cliente foi apagado ou o número foi gravado errado — o Administrador corrige
      o dono.
 
-217. **NOVO (anterior à Etapa 108, achado na revisão dela) — inativar um material de cliente com saldo o tira da posição do
+217. **✅ RESOLVIDO NA ETAPA 113 (`082c210a`) — inativar material com saldo passou a ser recusado, para qualquer dono
+     (**B733**); os que já estão assim: **A60**.** O texto original: **NOVO (anterior à Etapa 108, achado na revisão dela) —
+     inativar um material de cliente com saldo o tira da posição do
      cliente.** Quem edita material (Almoxarife, Engenharia) pode desativar um material de cliente com saldo; ele some da
      tela **Materiais de Clientes** e do relatório de posição (que só mostram material ativo), com o saldo e o histórico. Não
      reabre a C213 (o ajuste continua olhando o dono). **O que fazer:** não desative material de cliente com saldo; para o
@@ -9781,8 +9868,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      manual (**B721**). **O que fazer:** dê entrada de material de cliente e de material com inspeção pelo **Recebimento**
      (com a nota). Candidata a uma etapa futura.
 
-220. **NOVO (anterior à Etapa 110, achado na medição dela) — reativar um material numa família inativa deixa a família
-     inativa com material ativo, sem corrida nenhuma.** Editar um material inativo e marcá-lo como ativo passa (200) mesmo
+220. **✅ RESOLVIDO NA ETAPA 113 (`082c210a`) — reativar confere a família e a subfamília (**B736**), e a tela ganhou o
+     Reativar (**B735**).** O texto original: **NOVO (anterior à Etapa 110, achado na medição dela) — reativar um material
+     numa família inativa deixa a família inativa com material ativo, sem corrida nenhuma.** Editar um material inativo e marcá-lo como ativo passa (200) mesmo
      com a família dele inativa. **O que fazer:** reative a família antes; a **A58** acha os casos. Candidata a uma etapa
      futura (**B726**).
 
@@ -9830,11 +9918,25 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      Entrada lê o controle no começo dela: se o controle for ligado nos milissegundos do meio, ela grava sem lote.
      Janela de milissegundos; o resultado é o mesmo estado que o Administrador já regulariza (**C224**).
 
-227. **NOVO (da Etapa 112, medido no fim dela) — inativar um material com saldo prende o saldo, para qualquer dono.** A
+227. **✅ RESOLVIDO NA ETAPA 113 (`082c210a`, a mensagem na tela em `e6671ce8`) — ver a C217.** O texto original: **NOVO (da
+     Etapa 112, medido no fim dela) — inativar um material com saldo prende o saldo, para qualquer dono.** A
      **C217** já dizia isso do material de cliente; vale também para o nosso. O "Inativar" da tela de Materiais não confere
      saldo nem retenção: o Almoxarife e a Engenharia inativam material com 5 em estoque (medido) e, a partir daí, a Saída
      recusa (*"Material inativo não pode ser movimentado"*) com o saldo ainda lá. **O que fazer:** não inative material com
      saldo — dê saída ou devolva antes. Candidata da **Etapa 113** (**B732**).
+
+228. **NOVO (da Etapa 113, da revisão do plano) — inativar um material zerado que ainda está numa conferência aberta, ou
+     numa nota de pedido aberto, trava o documento inteiro.** Inativar sem saldo é livre (**B734**). Mas o concluir da
+     conferência que contou o material responde *"Ajuste bloqueado: ⟨código⟩: Material inativo não pode ser movimentado"* e
+     **não aplica nenhum ajuste** dela (medido); e o processar da nota que traz o material recusa a nota inteira (lido no
+     código, não medido). **O que fazer:** em **Materiais → Inativos**, **Reativar** o material, concluir (ou processar) e
+     inativar de novo.
+
+229. **NOVO (da Etapa 113, medido) — uma requisição pendente de material inativado é aprovada sem reservar nada.** A
+     requisição feita antes do "Inativar" continua pendente; aprová-la responde *APROVADO*, com o material sem reserva, e o
+     resto do caminho (separar, entregar) recusa material inativo. **O que fazer:** antes de inativar, cancele as
+     requisições pendentes do material; se já aprovou, **Reativar** e atender (ou cancelar). Candidata da **Etapa 114**
+     (**B738**).
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -10903,6 +11005,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   total, que deixa duas linhas no extrato (**B730**).
 - **(112) A recusa olha só lote e série** — *Requer inspeção*, validade, corrida, certificado e foto continuam livres de
   ligar com saldo (**B731**; o certificado só age no lote que nasce no Recebimento).
+- **(113) A tela não avisa antes de clicar** que o "Inativar" vai ser recusado — a recusa aparece no aviso vermelho depois
+  da confirmação, com o texto do servidor (o botão continua em todo material ativo).
+- **(113) Documento aberto não impede inativar** (**B734**) — a saída é o Reativar (**C228**, **C229**).
+- **(113) O Reativar não mostra o histórico de quem inativou** — está na Auditoria (entidade Material, *Desativação*).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -11805,6 +11911,10 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(113) Nenhum clique foi dado nesta etapa no navegador.** A tela de Materiais mudou (o filtro **Inativos**, o selo, o
+**Reativar** e o aviso do **Inativar**) e está coberta por testes de tela com a resposta do servidor simulada, não por um
+clique de verdade. Vale rodar os cenários 1, 3 e 6 da seção da Etapa 113.
 
 **(112) Nenhum clique foi dado nesta etapa no navegador.** A tela não mudou: a recusa nova chega pelo mesmo aviso vermelho
 do salvar que a Etapa 108 já prova por teste de componente (403 com a mensagem literal, sem *"Material atualizado!"*, o
@@ -23227,18 +23337,108 @@ família junto com ligar o controle grava certo. Registrou três pontos menores,
 mostraram cenários sem prova — viraram **10** testes novos (o mais importante: trocar a família de um material com o
 controle ligado, que uma inversão na ordem dos parâmetros recusaria sempre sem nenhum teste notar).
 
+## Etapa 113 — Inativar material com saldo é recusado, e a tela de Materiais passa a reativar (2026-10-15)
+
+Inativar um material tira ele das listas e o sistema passa a recusar qualquer movimento dele — é o certo para um item que
+saiu de linha. Mas até aqui o "Inativar" não olhava o estoque: o Almoxarife, a Engenharia e o Administrador inativavam um
+material com 5 na prateleira e, dali em diante, ninguém conseguia dar saída nem devolver ao cliente aquelas 5 peças — e
+nenhuma tela trazia o material de volta. Agora o "Inativar" com saldo é recusado, para todos, com uma mensagem que diz
+quanto há, o que está retido e o que fazer; e a lista de Materiais ganha o filtro **Inativos** com o botão **Reativar**,
+que confere se a família do material ainda está ativa.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| "Inativar" um material com saldo passava, e o saldo ficava preso (a Saída recusava material inativo) | Recusado para todos, com o saldo, as retenções e o caminho na mensagem; nada muda (**B733**) |
+| A recusa do "Inativar", quando havia, aparecia como *"Erro ao inativar material"* | O aviso vermelho mostra a mensagem do servidor |
+| Material inativo sumia de todas as telas, sem volta | Filtro **Inativos** e botão **Reativar** na lista de Materiais (**B735**) |
+| Reativar pela integração colocava material ativo dentro de família inativa | Recusado com *"Família inativa — não é possível vincular novos itens"* (**B736**) |
+| Uma ficha aberta antes de o material ser inativado, salva depois, o reativava | *"O cadastro do material ⟨código⟩ mudou enquanto era salvo — nada foi gravado. …"* (**B737**) |
+| Uma Entrada e o "Inativar" no mesmo instante podiam deixar o material inativo com a quantidade da Entrada | Um espera o outro: ou a Entrada entra e o "Inativar" recusa, ou o "Inativar" passa e a Entrada recusa |
+| Estornar a Saída (ou o Ajuste) de um material inativado devolvia o saldo a ele | *"Material inativo não pode ser movimentado"*; reativado, o estorno passa (**B738**) |
+
+### As regras, com o cenário exato
+
+Preparação: um material **CHP-0301** (nosso) e um **CHP-0302** de um cliente, ambos sem saldo; usuários **Ana**
+(Almoxarife), **Edu** (Engenharia) e o **administrador**.
+
+**1. A recusa.** Ana dá **Entrada** de 5 no CHP-0301. Em **Materiais**, na linha dele, **Inativar** → confirma → aviso
+vermelho: *"Não é possível inativar o material CHP-0301: o saldo físico é 5. Material inativo não pode ser movimentado,
+então esse saldo ficaria preso. Antes de inativar, zere o saldo com uma Saída ou um Ajuste."* O material continua na lista.
+O administrador recebe a mesma recusa.
+
+**2. Quem não movimenta.** Edu tenta o mesmo → a mensagem termina com *"… Antes de inativar, zere o saldo com uma Saída ou
+um Ajuste. Seu perfil (ENGENHARIA) não movimenta estoque: peça isso ao almoxarifado."*
+
+**3. O que está retido.** Ana abre uma requisição de 2 do CHP-0301 e o administrador aprova (reserva 2). **Inativar** →
+*"Não é possível inativar o material CHP-0301: o saldo físico é 5 (reservado 2). Material inativo não pode ser movimentado,
+então esse saldo ficaria preso. Libere primeiro o que está retido e, depois, zere o saldo com uma Saída ou um Ajuste."* Ana
+cancela a requisição, dá **Saída** de 5 e o **Inativar** passa: *"Material inativado"*.
+
+**4. Material de cliente.** Com 3 no CHP-0302, **Inativar** → *"… o saldo físico é 3. … Antes de inativar, devolva o saldo
+ao cliente ("Devolver ao cliente", em Materiais de Clientes)."* Em **Materiais de Clientes → Devolver ao cliente** (3, com o
+número do documento) e o **Inativar** passa.
+
+**5. Saldo negativo.** Num material com saldo −2, a recusa termina com *"Antes de inativar, zere o saldo com uma Entrada ou
+um Ajuste."*
+
+**6. Reativar.** Em **Materiais**, filtro de status **Inativos** → aparece o CHP-0301 com o selo **Inativo** e, nas ações,
+só o que serve a um inativo (sem Requisitar, Entrada, Saída e Inativar) e o botão **Reativar** → confirma *"Reativar o
+material "…"?"* → *"Material reativado"*; ele volta à lista normal. Se a família do material tiver sido inativada → aviso
+vermelho *"Família inativa — não é possível vincular novos itens"*: reative a família em Configurações → Famílias e tente de
+novo.
+
+**7. O estorno também.** Num material zerado por uma Saída e depois inativado, **Movimentações → estornar** essa Saída →
+*"Material inativo não pode ser movimentado"*. Reative o material (passo 6) e o estorno passa.
+
+**8. O que continua livre.** Inativar material sem saldo (com ou sem movimentações no extrato, com ou sem requisição
+pendente); editar a ficha de um material inativo.
+
+### O que esta etapa NÃO cobre
+
+1. **Documento aberto não impede inativar** (**B734**): a conferência aberta e a nota de pedido que trazem o material
+   travam depois (**C228**); a requisição pendente é aprovada sem reserva (**C229** — a próxima etapa).
+2. **A tela não avisa antes** do clique que o "Inativar" vai ser recusado.
+3. **Os materiais que já estão inativos com saldo** — a consulta **A60** acha; o Reativar resolve.
+4. A **C219** (Entrada manual sem documento de cliente) — decisão sua.
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0) reproduziu a recusa que faltava com os três perfis e pelas duas portas (o "Inativar" e o salvar da
+ficha com a situação inativa), e mediu que a aprovação de uma requisição pendente de material inativado passa sem reservar.
+A **revisão do plano** achou oito pontos, dois que travavam: inativar **sem** saldo ainda trava a conferência aberta e a
+nota de pedido, sem volta pela tela — daí o **Reativar** (**B735**); e uma ficha aberta antes de o material e a família
+serem inativados, salva depois, reativava o material (**B737**). Os outros corrigiram a mensagem: com saldo negativo a
+Saída não zera (vira *"Entrada ou Ajuste"*), com só retenção não há o que zerar depois, e a Engenharia não movimenta.
+Na execução, o design dizia que uma Entrada e o "Inativar" no mesmo instante ficariam como furo declarado — **estava
+errado**: o motor já trabalha sob a trava do material, e o "Inativar" passou a usar a mesma trava. A **revisão adversarial
+do código** (três revisores, executando) achou um furo real: o **estorno** de uma Saída devolvia o saldo a um material
+inativado — agora recusado (**B738**). E um ponto menor: com uma Entrada caindo no meio de um salvar que inativa e liga o
+lote ao mesmo tempo, a recusa que aparecia era a do lote, não a do saldo — corrigido. O terceiro revisor fez **41
+sabotagens** novas: 20 derrubaram teste, 7 eram inalcançáveis e **14** mostraram cenários sem prova — viraram testes
+(`6ed479a6`).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 113 entregue (2026-10-15):** **inativar material com saldo é recusado, e a tela de Materiais reativa.** O
+  "Inativar" com saldo ou retenção é recusado para todos, com o caminho na mensagem (**C217**, **C227** resolvidos);
+  reativar confere a família (**C220** resolvido); a lista ganha **Inativos** e **Reativar**. **O que é seu:** a consulta
+  **A60** (opcional); as decisões **B733 a B739** (a **B733** — recusar também para o Administrador — e a **B734** —
+  documento aberto não impede — são reversíveis e a alternativa é sua); os avisos **C228** e **C229**; as limitações
+  **(113)** em D e as verificações **(113)** em F. **Próxima: Etapa 114 — a requisição de material inativado (C229) — ver
+  a "próxima tarefa detalhada" no plano da Etapa 113.**
 
 - **Etapa 112 entregue (2026-10-15):** **ligar lote ou série num material que já tem saldo passa a ser do Administrador.**
   Com o saldo ainda sem lote (ou sem as séries), o Almoxarife e a Engenharia recebem a recusa ao salvar o cadastro, com o
   que está sem lote; o Administrador liga e regulariza; com o saldo já identificado, qualquer um liga (**C222** resolvido).
   **O que é seu:** a consulta **A59** (opcional); as decisões **B728 a B732** (a **B728** — o Administrador liga, em vez
   de proibir para todos — é reversível e a alternativa é sua); os avisos **C224 a C227**; as limitações **(112)** em D e
-  as verificações **(112)** em F. **Próxima: Etapa 113 — inativar material com saldo (C217, C227) e reativar numa
+  as verificações **(112)** em F. ~~**Próxima: Etapa 113 — inativar material com saldo (C217, C227) e reativar numa
   família inativa (C220) — ver a
-  "próxima tarefa detalhada" no plano da Etapa 112.**
+  "próxima tarefa detalhada" no plano da Etapa 112.**~~ *(Feita — Etapa 113.)*
 
 - **Etapa 110 entregue (2026-10-15):** **o Saldo Inicial do cadastro vira uma Entrada de verdade, e a família não fica
   mais inativa com material dentro.** Com saldo, o cadastro exige quem movimenta estoque, recusa material com lote, série,
