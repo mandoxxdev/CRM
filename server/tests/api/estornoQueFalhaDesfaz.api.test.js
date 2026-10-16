@@ -352,6 +352,34 @@ const SUPER = { id: 1, nome: 'Super Teste', role: 'admin', is_superadmin: 1, ema
     assert.strictEqual(x.status, 404, JSON.stringify(x.body));
   });
 
+  // ── C240: a devolucao no meio do estorno da saida ───────────────────────────────────────────────────────────────────
+  await test('[RN-09] devolucao no meio de um estorno de Saida que falha -> 400 "esta sendo estornada", nada gravado; depois 201', async () => {
+    const m = await material();
+    await mov(m, { tipo: 'ENTRADA', quantidade: 5 });
+    const saidaId = await mov(m, { tipo: 'SAIDA', quantidade: 2 });
+    const { res, meio } = await comLivroFalhando(() => estornar(saidaId),
+      () => devolver(m, saidaId, 2).then((r) => ({ status: r.status, error: r.body && r.body.error })));
+    assert.strictEqual(res.status, 500, JSON.stringify(res.body));
+    assert.deepStrictEqual(meio.ok, { status: 400, error: `A saída ${saidaId} está sendo estornada neste instante — nada foi gravado. `
+      + 'Tente de novo em instantes: se o estorno concluir, a saída deixa de aceitar devolução.' });
+    const n = (await dbGet(db, 'SELECT COUNT(*) n FROM devolucoes_material_almoxarifado WHERE movimentacao_saida_id = ?', [saidaId])).n;
+    assert.strictEqual(n, 0);
+    assert.strictEqual(await fisico(m), 3);
+    const d = await devolver(m, saidaId, 2);
+    assert.strictEqual(d.status, 201, JSON.stringify(d.body));
+    assert.strictEqual(await fisico(m), 5);
+  });
+
+  await test('[RN-09] a saida estornada de verdade continua com a literal de sempre', async () => {
+    const m = await material();
+    await mov(m, { tipo: 'ENTRADA', quantidade: 5 });
+    const saidaId = await mov(m, { tipo: 'SAIDA', quantidade: 2 });
+    assert.strictEqual((await estornar(saidaId)).status, 200);
+    const d = await devolver(m, saidaId, 2);
+    assert.strictEqual(d.status, 400);
+    assert.strictEqual(d.body.error, `A saída ${saidaId} foi cancelada (estornada) — o estorno já devolveu o material`);
+  });
+
   // ── controles: o caminho feliz de cada ramo continua o de sempre ─────────────────────────────────────────────────────
   await test('[controle] sem falha: bloqueio, desbloqueio, ajuste com e sem localizacao e transferencia estornam com uma linha ESTORNO cada', async () => {
     const m = await material();

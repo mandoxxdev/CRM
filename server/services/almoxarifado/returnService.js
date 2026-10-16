@@ -33,6 +33,13 @@ const erro400 = (msg) => Object.assign(new Error(msg), { status: 400 });
 async function validarSaidaOriginal(db, { movimentacaoSaidaId, materialId, quantidade }) {
   const saida = await dbGet(db, 'SELECT * FROM movimentacoes_almoxarifado WHERE id = ?', [movimentacaoSaidaId]);
   if (!saida) throw erro400(`Movimentação de saída ${movimentacaoSaidaId} não encontrada`);
+  // Etapa 118 (C240, RN-09; B772): o claim do estorno grava `cancelado = 1` ANTES do efeito e o desfaz se o estorno falhar —
+  // so o estorno concluido tem `movimento_estorno_id` (a ultima escrita dele; devolucaoViva.estornoConcluidoSql). No meio, a
+  // recusa dizia que o estorno ja tinha devolvido o material, e o estorno que falhava deixava a saida de pe.
+  if (saida.cancelado && saida.movimento_estorno_id == null) {
+    throw erro400(`A saída ${movimentacaoSaidaId} está sendo estornada neste instante — nada foi gravado. Tente de novo em instantes: `
+      + 'se o estorno concluir, a saída deixa de aceitar devolução.');
+  }
   if (saida.cancelado) {
     throw erro400(`A saída ${movimentacaoSaidaId} foi cancelada (estornada) — o estorno já devolveu o material`);
   }
