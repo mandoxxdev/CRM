@@ -25,16 +25,24 @@ const run = (db, sql, p = []) => new Promise((ok, ko) => db.run(sql, p, function
 
 const L11 = 'Sessão encerrada — o usuário foi desativado ou removido';
 
-/** Roda o middleware como o express roda: devolve { proximo, status, corpo }. */
+/**
+ * Roda o middleware como o express roda: devolve { proximo, status, corpo, req }. (Fase 5 r3 N35/N36) Espera o laco assentar depois da
+ * primeira saida e falha se houve DUAS (resposta e next, ou duas respostas) — senao o "respondeu e seguiu" passava pela primeira.
+ */
 function rodar(mw, user) {
-  return new Promise((ok) => {
-    const req = { user: { ...user } };
+  return new Promise((ok, ko) => {
+    const req = { user: user === undefined ? undefined : { ...user } };
+    const saidas = [];
+    const assentar = () => setImmediate(() => setImmediate(() => {
+      if (saidas.length !== 1) return ko(new Error(`o middleware saiu ${saidas.length} vezes: ${JSON.stringify(saidas)}`));
+      return ok({ ...saidas[0], req });
+    }));
     const res = {
       statusCode: 200,
       status(c) { this.statusCode = c; return this; },
-      json(b) { ok({ proximo: false, status: this.statusCode, corpo: b, req }); return this; },
+      json(b) { saidas.push({ proximo: false, status: this.statusCode, corpo: b }); if (saidas.length === 1) assentar(); return this; },
     };
-    mw(req, res, () => ok({ proximo: true, status: null, corpo: null, req }));
+    mw(req, res, () => { saidas.push({ proximo: true, status: null, corpo: null }); if (saidas.length === 1) assentar(); });
   });
 }
 
@@ -60,7 +68,10 @@ function rodar(mw, user) {
   await run(db, `INSERT INTO usuarios (id, nome, email, senha, cargo, role, is_superadmin, admin_modulos, setor, ativo) VALUES
     (1, 'Admin', 'a@t', 'x', 'TI', 'admin', 0, '["frota"]', 'Vendas', 1),
     (2, 'Comum', 'c@t', 'x', 'Vendedor', 'usuario', 0, NULL, 'Vendas', 1),
-    (3, 'Ex Admin', 'x@t', 'x', 'Ex', 'admin', 1, '["almoxarifado"]', 'Vendas', 0)`);
+    (3, 'Ex Admin', 'x@t', 'x', 'Ex', 'admin', 1, '["almoxarifado"]', 'Vendas', 0),
+    (4, 'Admin Almox', 'm@t', 'x', 'Chefe', 'usuario', 0, '["almoxarifado"]', 'Vendas', 1)`);
+  // 4: administrador do modulo almoxarifado ATIVO, com uma linha PRODUCAO no perfil (Fase 5 r3 N31/N32)
+  await run(db, "INSERT INTO perfil_almoxarifado_usuario (usuario_id, perfil) VALUES (4, 'PRODUCAO')");
   await run(db, "INSERT INTO perfil_almoxarifado_usuario (usuario_id, perfil) VALUES (2, 'ALMOXARIFE')");
   await run(db, "INSERT INTO perfil_frota_usuario (usuario_id, perfil) VALUES (2, 'MOTORISTA')");
   await run(db, "INSERT INTO permissoes (usuario_id, grupo_id, modulo, acao, permissao) VALUES (2, NULL, 'comercial', 'acesso', 1), (3, NULL, 'comercial', 'acesso', 1)");
@@ -87,6 +98,9 @@ function rodar(mw, user) {
     const c = await rodar(enrichUserFromDb(db), { id: 2, role: 'admin' });
     assert.strictEqual(c.proximo, true);
     assert.deepStrictEqual([c.req.user.role, c.req.user.perfil_almoxarifado, c.req.user.perfil_frota], ['usuario', 'ALMOXARIFE', 'MOTORISTA']);
+    // (Fase 5 r3 N31/N32) o administrador do modulo almoxarifado e ADMINISTRADOR, mesmo com outra linha no perfil
+    const m = await rodar(enrichUserFromDb(db), { id: 4 });
+    assert.deepStrictEqual([m.proximo, m.req.user.admin_modulos, m.req.user.perfil_almoxarifado], [true, ['almoxarifado'], 'ADMINISTRADOR']);
   });
 
   await test('[RN-06 F2-I1] banco ocupado: 503 e o pedido nao segue (o client repete; ninguem e deslogado nem fica com o papel do token)', async () => {
@@ -98,18 +112,38 @@ function rodar(mw, user) {
     }
   });
 
-  await test('[RN-06 F2-I1] outro erro do banco segue SEM o poder do token; token sem id segue sem ler o banco', async () => {
-    const quebrado = { get: (sql, p, cb) => cb(new Error('SQLITE_CORRUPT: disco')) };
+  await test('[RN-06 F5-r2 M2] outro erro do banco: 500 e o pedido nao segue (nem com o papel do token, nem como comum)', async () => {
+    const quebrado = { get: (sql, p, cb) => cb(new Error('SQLITE_IOERR: disco')) };
     const r = await rodar(enrichUserFromDb(quebrado), tokenAdmin(3));
-    assert.strictEqual(r.proximo, true);
-    assert.deepStrictEqual([r.req.user.role, r.req.user.is_superadmin, r.req.user.admin_modulos, r.req.user.perfil_almoxarifado, r.req.user.perfil_frota],
-      ['usuario', 0, [], undefined, undefined]);
-    assert.strictEqual(sp.canManageUsers(r.req.user), false);
+    assert.deepStrictEqual([r.proximo, r.status, r.corpo], [false, 500, { error: 'SQLITE_IOERR: disco' }]);
+  });
+
+  await test('[RN-06 F5-r2 M2] BUSY ou erro na leitura do perfil (almoxarifado ou frota): 503/500, nao vira Producao naquele pedido', async () => {
+    const busy = Object.assign(new Error('x'), { code: 'SQLITE_BUSY' });
+    for (const tabela of ['perfil_almoxarifado_usuario', 'perfil_frota_usuario']) {
+      const falhaNo = { get: (sql, p, cb) => (sql.includes(tabela) ? cb(busy) : db.get(sql, p, cb)) };
+      const r = await rodar(enrichUserFromDb(falhaNo), { id: 2 });
+      assert.deepStrictEqual([r.proximo, r.status, r.corpo && r.corpo.context], [false, 503, 'auth:enrich'], tabela);
+      const outro = { get: (sql, p, cb) => (sql.includes(tabela) ? cb(new Error('SQLITE_IOERR')) : db.get(sql, p, cb)) };
+      const o = await rodar(enrichUserFromDb(outro), { id: 2 });
+      assert.deepStrictEqual([o.proximo, o.status], [false, 500], tabela);
+    }
+  });
+
+  await test('[RN-06 F5-r2 M1] token sem id, ou com id que nao e inteiro positivo: 401 L11 sem ler o banco', async () => {
     let leu = 0;
-    const espiao = { get: (sql, p, cb) => { leu++; cb(null, null); } };
-    const s = await rodar(enrichUserFromDb(espiao), { email: 'sem@id' });
-    assert.strictEqual(s.proximo, true);
-    assert.strictEqual(leu, 0);
+    const espiao = { get: (sql, p, cb) => { leu++; cb(null, { id: 1, role: 'admin', is_superadmin: 1 }); } };
+    for (const t of [{ email: 'sem@id', role: 'admin', is_superadmin: 1 }, { id: 0, role: 'admin' }, { id: '', role: 'admin' }, { id: 'abc' },
+      { id: -1 }, { id: 1.5 }, { id: true }, { id: null }]) {
+      const r = await rodar(enrichUserFromDb(espiao), t);
+      assert.deepStrictEqual([r.proximo, r.status, r.corpo], [false, 401, { error: L11, code: 'USUARIO_INATIVO' }], JSON.stringify(t));
+    }
+    const semUser = await rodar(enrichUserFromDb(espiao), undefined);
+    assert.strictEqual(semUser.status, 401);
+    assert.strictEqual(leu, 0, 'leu o banco com id invalido');
+    // a metade positiva: o id numerico em texto le o banco e segue
+    const t = await rodar(enrichUserFromDb(db), { id: '2' });
+    assert.deepStrictEqual([t.proximo, t.req.user.nome], [true, 'Comum']);
   });
 
   await test('[RN-07] sem cache: a MESMA instancia ve o papel trocado no banco e a desativacao no pedido seguinte', async () => {
@@ -144,6 +178,15 @@ function rodar(mw, user) {
     assert.strictEqual(c.status, 200);
     assert.ok(c.body.length >= 1);
     for (const u of c.body) assert.deepStrictEqual(Object.keys(u).sort(), ['ativo', 'cargo', 'email', 'id', 'nome'], 'o token de admin do comum nao vale');
+    // (Fase 5 r3 N36) o BUSY pela rota: 503 e a rota nao roda (nem "headers already sent")
+    const busyDb = { get: (sql, p, cb) => cb(Object.assign(new Error('x'), { code: 'SQLITE_BUSY' })) };
+    const appBusy = express();
+    let rotaRodou = 0;
+    appBusy.get('/x', criarAuthenticateToken({ jwtSecret: SEGREDO, enrich: (req, res, next) => enrichUserFromDb(busyDb)(req, res, next) }),
+      (req, res) => { rotaRodou++; res.json({ ok: 1 }); });
+    const b = await request(appBusy).get('/x').set('Authorization', `Bearer ${assina({ id: 1, role: 'admin' })}`);
+    await new Promise((r) => setImmediate(r));
+    assert.deepStrictEqual([b.status, b.body.code, rotaRodou], [503, 'SQLITE_BUSY', 0]);
     for (const id of [3, 77]) {
       const tok = assina(tokenAdmin(id));
       for (const url of ['/api/usuarios', '/api/usuarios/comercial', '/api/usuarios/por-modulo/comercial', '/api/usuarios/filtrar?flag=compras', '/api/usuarios/2', '/api/usuarios/2/grupos']) {

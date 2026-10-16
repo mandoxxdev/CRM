@@ -239,6 +239,81 @@ const chaves = (u) => Object.keys(u).sort();
     assert.ok(src.indexOf(chamada) < src.indexOf("app.post('/api/usuarios'"), 'o registro tem de vir antes do POST');
   });
 
+  // ── Fase 5 (r3): os filtros que a massa de cima nao separava (nomes na ordem dos ids, um departamento so, ninguem com setor com
+  // espaco e flag). Linhas novas, todas ativas, no setor Vendas salvo onde dito; este bloco e o ultimo do arquivo.
+  await run(db, `INSERT INTO usuarios (id, nome, email, senha, cargo, role, setor, ativo, flag_compras, departamento) VALUES
+    (12, 'AA Primeiro', 'u12@t', 'x', 'Auxiliar', 'usuario', 'Vendas', 1, 1, 'Outro'),
+    (13, 'M Espaco', 'u13@t', 'x', 'X', 'usuario', ' Vendas ', 1, 1, 'Depto'),
+    (14, 'N Comum Espaco', 'u14@t', 'x', 'X', 'usuario', ' Vendas ', 1, 0, 'Depto'),
+    (15, 'O Grupo Negado', 'u15@t', 'x', 'X', 'usuario', 'Vendas', 1, 0, 'Depto'),
+    (16, 'P Direto Errado', 'u16@t', 'x', 'X', 'usuario', 'Vendas', 1, 0, 'Depto'),
+    (17, 'Q Grupo Zero', 'u17@t', 'x', 'X', 'usuario', 'Vendas', 1, 0, 'Depto')`);
+  await run(db, "INSERT INTO grupos_permissoes (id, nome) VALUES (20, 'Negado')");
+  await run(db, 'INSERT INTO usuarios_grupos (usuario_id, grupo_id) VALUES (15, 20)');
+  await run(db, `INSERT INTO permissoes (usuario_id, grupo_id, modulo, acao, permissao) VALUES
+    (12, NULL, 'operacional', 'acesso', 1), (13, NULL, 'comercial', 'acesso', 1), (NULL, 20, 'operacional', 'acesso', 0),
+    (16, 99, 'operacional', 'acesso', 1), (17, 0, 'operacional', 'acesso', 1)`);
+  COMO.comumEspaco = { id: 14, role: 'usuario', is_superadmin: 0, admin_modulos: [] };
+
+  await test('[RN-03 F5-r3] /por-modulo: ordem por nome, grupo com permissao 0 nao conta, linha direta com grupo_id de outro nao conta, grupo_id 0 conta', async () => {
+    const r = await get('comum', '/api/usuarios/por-modulo/operacional');
+    projetada(r, 'comum');
+    assert.deepStrictEqual(ids(r), [12, 5, 10, 17]);
+  });
+
+  await test('[RN-01/03 F5-r3] o setor do proprio com espaco e caixa diferente ve o mesmo que o setor limpo (comercial e por-modulo)', async () => {
+    for (const url of ['/api/usuarios/comercial', '/api/usuarios/por-modulo/operacional']) {
+      invalidateComercialResponsaveisCache();
+      const limpo = ids(await get('comum', url));
+      invalidateComercialResponsaveisCache();
+      const espaco = ids(await get('comumEspaco', url));
+      assert.deepStrictEqual(espaco, limpo, url);
+      assert.ok(limpo.length >= 3, url);
+    }
+    invalidateComercialResponsaveisCache();
+    assert.ok(ids(await get('comum', '/api/usuarios/comercial')).includes(13), 'o setor " Vendas " de outro casa no comercial');
+  });
+
+  await test('[RN-04 F5-r3] /filtrar: setor exato, ordem por nome, limit/offset e seus limites, flag em caixa alta, ativo, q, departamento, ?setor= do admin, super sem a flag', async () => {
+    const f = async (quem, qs) => (await get(quem, `/api/usuarios/filtrar?${qs}`)).body;
+    assert.deepStrictEqual((await f('comum', 'flag=compras')).items.map((u) => u.id), [12, 3, 4], 'ordem por nome e o setor " Vendas " fora');
+    const pag = await f('comum', 'flag=compras&limit=1&offset=1');
+    assert.deepStrictEqual([pag.limit, pag.offset, pag.count, pag.items.map((u) => u.id)], [1, 1, 1, [3]]);
+    assert.strictEqual((await f('comum', 'flag=compras&limit=500')).limit, 200);
+    const neg = await f('comum', 'flag=compras&limit=-5');
+    assert.deepStrictEqual([neg.limit, neg.items.length], [1, 1]);
+    assert.strictEqual((await f('comum', 'flag=compras&offset=-3')).offset, 0);
+    const caixa = await get('comum', '/api/usuarios/filtrar?flag=COMPRAS');
+    assert.deepStrictEqual([caixa.status, caixa.body.flag], [200, 'compras']);
+    for (const a of ['0', 'false']) assert.deepStrictEqual((await f('comum', `flag=compras&ativo=${a}`)).items.map((u) => u.id), [7], a);
+    assert.deepStrictEqual((await f('comum', 'flag=compras&ativo=xyz')).items.map((u) => u.id), [12, 3, 4], 'valor estranho = ativos');
+    const todos = (await f('comum', 'flag=compras&ativo=all')).items;
+    assert.strictEqual(todos.find((u) => u.id === 7).ativo, 0, 'a projecao leva o ativo real');
+    assert.deepStrictEqual((await f('comum', 'flag=compras&q=Vended')).items.map((u) => u.id), [4]);
+    assert.deepStrictEqual((await f('comum', 'flag=compras&q=Assist')).items.map((u) => u.id), [3], 'q tambem casa o cargo');
+    assert.deepStrictEqual((await f('comum', 'flag=compras&departamento=Outro')).items.map((u) => u.id), [12]);
+    assert.deepStrictEqual((await f('admin', 'flag=compras&setor=Vendas')).items.map((u) => u.id), [12, 3, 4], 'o ?setor= do admin');
+    assert.ok((await f('admin', 'flag=compras')).items.some((u) => u.id === 6), 'controle: sem ?setor= o admin ve a Fabrica');
+    const sup = await get('super', '/api/usuarios/filtrar?flag=compras');
+    assert.deepStrictEqual([sup.status, sup.body.error], [403, 'Filtro não permitido para o seu perfil'], 'o filtro de flag segue o role, nao o super');
+  });
+
+  await test('[RN-01/03/04 F5-r3] erro do banco na LISTA (o contexto leu): 503 com o context da lista na /comercial, 500 na /filtrar e na /por-modulo', async () => {
+    const busy = Object.assign(new Error('SQLITE_BUSY: database is locked'), { code: 'SQLITE_BUSY' });
+    const ctx = { id: 3, role: 'usuario', ativo: 1, setor: 'Vendas', flag_compras: 1 };
+    const listaFalha = { get: (sql, p, cb) => cb(null, ctx), all: (sql, p, cb) => cb(busy) };
+    const app3 = express();
+    registrarLeituraDeUsuarios(app3, { getDb: () => listaFalha, authenticateToken });
+    atual = COMO.comum;
+    invalidateComercialResponsaveisCache();
+    const c = await request(app3).get('/api/usuarios/comercial');
+    assert.deepStrictEqual([c.status, c.body.code, c.body.context], [503, 'SQLITE_BUSY', 'usuarios/comercial']);
+    for (const url of ['/api/usuarios/filtrar?flag=compras', '/api/usuarios/por-modulo/comercial']) {
+      const x = await request(app3).get(url);
+      assert.deepStrictEqual([x.status, x.body.error], [500, 'SQLITE_BUSY: database is locked'], url);
+    }
+  });
+
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   db.close();
   process.exit(failed ? 1 : 0);

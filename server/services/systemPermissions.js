@@ -4,7 +4,7 @@
 
 // Etapa 109 (G7): a lista sai de modulosSistema.js (fonte unica do servidor) — mesmos valores e ordem.
 const { chavesComAdminDeModulo } = require('./modulosSistema');
-const { isSqliteBusy, respondDbError } = require('./sqliteConcurrency');
+const { respondDbError } = require('./sqliteConcurrency');
 
 const MODULE_ADMIN_KEYS = chavesComAdminDeModulo();
 
@@ -150,13 +150,10 @@ function requireAlmoxAdmin(req, res, next) {
 /** Etapa 131 (B842): o 401 do usuario desativado ou apagado com o token ainda valido. */
 const LITERAL_SESSAO_ENCERRADA = 'Sessão encerrada — o usuário foi desativado ou removido';
 
-/** Sem linha, nenhum poder que so o banco confirma: sem papel de administrador, sem super, sem modulos, sem perfil do token. */
-function tirarPoderDoToken(user) {
-  user.role = 'usuario';
-  user.is_superadmin = 0;
-  user.admin_modulos = [];
-  delete user.perfil_almoxarifado;
-  delete user.perfil_frota;
+/** O id do token so vale se for um inteiro positivo (o login sempre assina o id da linha; AUTOINCREMENT, nunca 0). */
+function idDoTokenValido(id) {
+  const n = Number(id);
+  return id !== null && id !== '' && typeof id !== 'boolean' && Number.isInteger(n) && n > 0;
 }
 
 /**
@@ -165,27 +162,26 @@ function tirarPoderDoToken(user) {
  * Etapa 131 (B842, RN-06/RN-07):
  * - sem linha ATIVA (desativado ou apagado, token ainda valido por ate 24 h) -> 401 LITERAL_SESSAO_ENCERRADA, code USUARIO_INATIVO;
  *   o client desloga em qualquer 401 (services/api.js). Ate a 130 rebaixava e seguia: o desativado usava o sistema como comum.
- * - banco ocupado -> 503 (respondDbError; o client repete o pedido no 503). Erro de outro tipo -> segue SEM o poder do token.
- *   Ate a 130 o erro deixava o token como estava: com um BUSY o administrador desativado voltava a ser administrador (Fase 2 I1).
+ * - token sem id, ou com id que nao e inteiro positivo -> o mesmo 401, sem ler o banco (Fase 5 r2 M1: ate aqui seguia com o papel
+ *   do token, sem nada que o banco confirmasse — so alcancavel com o segredo do JWT, mas contradizia a regra).
+ * - erro do banco em QUALQUER das tres leituras -> respondDbError (503 no BUSY, que o client repete; 500 nos outros) e o pedido
+ *   nao segue. Ate a 130 o erro deixava o token como estava: com um BUSY o administrador desativado voltava a ser administrador
+ *   (Fase 2 I1); e seguir rebaixado num erro de outro tipo deixava o desativado passar como comum (Fase 5 r2 M2), assim como o BUSY
+ *   na leitura do perfil fazia o Almoxarife virar Producao naquele pedido.
  * - sem cache: o de 30 s era codigo morto (o index.js cria uma instancia por pedido, o Map nascia vazio); como instancia unica,
  *   a retirada de papel e a desativacao passariam a valer so depois de ate 30 s.
  */
 function enrichUserFromDb(db) {
   return (req, res, next) => {
-    if (!req.user?.id) return next();
+    const encerrada = () => res.status(401).json({ error: LITERAL_SESSAO_ENCERRADA, code: 'USUARIO_INATIVO' });
+    if (!req.user || !idDoTokenValido(req.user.id)) return encerrada();
 
     db.get(
       'SELECT id, nome, email, role, is_superadmin, admin_modulos FROM usuarios WHERE id = ? AND ativo = 1',
       [req.user.id],
       (err, row) => {
-        if (err) {
-          if (isSqliteBusy(err)) return respondDbError(res, err, 'auth:enrich');
-          tirarPoderDoToken(req.user);
-          return next();
-        }
-        if (!row) {
-          return res.status(401).json({ error: LITERAL_SESSAO_ENCERRADA, code: 'USUARIO_INATIVO' });
-        }
+        if (err) return respondDbError(res, err, 'auth:enrich');
+        if (!row) return encerrada();
 
         req.user.nome = row.nome;
         req.user.email = row.email;
@@ -195,7 +191,7 @@ function enrichUserFromDb(db) {
 
         if (isModuleAdmin(req.user, 'almoxarifado')) {
           req.user.perfil_almoxarifado = 'ADMINISTRADOR';
-          finishFrotaProfile(db, req, next);
+          finishFrotaProfile(db, req, res, next);
           return;
         }
 
@@ -203,10 +199,11 @@ function enrichUserFromDb(db) {
           'SELECT perfil FROM perfil_almoxarifado_usuario WHERE usuario_id = ?',
           [req.user.id],
           (err2, perfilRow) => {
-            if (!err2 && perfilRow?.perfil) {
+            if (err2) return respondDbError(res, err2, 'auth:enrich');
+            if (perfilRow?.perfil) {
               req.user.perfil_almoxarifado = perfilRow.perfil;
             }
-            finishFrotaProfile(db, req, next);
+            finishFrotaProfile(db, req, res, next);
           }
         );
       }
@@ -214,7 +211,7 @@ function enrichUserFromDb(db) {
   };
 }
 
-function finishFrotaProfile(db, req, next) {
+function finishFrotaProfile(db, req, res, next) {
   if (isModuleAdmin(req.user, 'frota')) {
     req.user.perfil_frota = 'ADMIN_FROTA';
     return next();
@@ -223,7 +220,8 @@ function finishFrotaProfile(db, req, next) {
     'SELECT perfil FROM perfil_frota_usuario WHERE usuario_id = ?',
     [req.user.id],
     (err, perfilRow) => {
-      if (!err && perfilRow?.perfil) {
+      if (err) return respondDbError(res, err, 'auth:enrich');
+      if (perfilRow?.perfil) {
         req.user.perfil_frota = perfilRow.perfil;
       }
       next();
