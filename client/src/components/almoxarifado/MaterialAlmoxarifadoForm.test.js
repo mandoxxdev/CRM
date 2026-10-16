@@ -22,7 +22,7 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Routes, Route, useNavigate } from 'react-router-dom';
 // Etapa 35: LEGENDA_ABC é a constante exportada que a tela e o manual citam (RN-35.03).
-import MaterialAlmoxarifadoForm, { LEGENDA_ABC, AVISO_SALDO_INICIAL } from './MaterialAlmoxarifadoForm';
+import MaterialAlmoxarifadoForm, { LEGENDA_ABC, AVISO_SALDO_INICIAL, CAMPOS_LIDOS } from './MaterialAlmoxarifadoForm';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 
@@ -1129,6 +1129,102 @@ describe('MaterialAlmoxarifadoForm — RN-07 (Etapa 124): o PUT diz a família q
     await submeter();
     await esperarEfeitos();
     expect(toast.error).toHaveBeenCalledWith(E1S);
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(container.querySelector('form')).not.toBeNull();
+  });
+});
+
+/**
+ * Etapa 125 (D (124), RN-08) — o PUT leva `campos_lidos`, os outros campos DE QUANDO O MATERIAL FOI CARREGADO, crus (como o GET
+ * devolveu). O servidor recusa (409) o salvar que desfaria um campo que outra pessoa mudou depois que o formulário abriu. A lista
+ * é o contrato congelado do plano — escrita aqui por extenso, para a lista da tela não mudar sozinha.
+ */
+describe('MaterialAlmoxarifadoForm — RN-08 (Etapa 125): o PUT diz os campos que leu', () => {
+  const CONTRATO = ['codigo', 'nome', 'descricao', 'descricao_tecnica', 'categoria', 'tipo_material', 'material_critico',
+    'proprietario_cliente_id', 'fabricante', 'codigo_fabricante', 'marca', 'modelo', 'norma', 'material_construtivo',
+    'peso_unitario', 'dimensoes', 'ncm', 'aplicacao', 'especificacoes', 'observacoes', 'unidade', 'quantidade_minima',
+    'quantidade_maxima', 'ponto_reposicao', 'lote_economico', 'localizacao_padrao_id', 'controle_validade', 'controle_corrida',
+    'controle_certificado', 'requer_inspecao', 'requer_foto', 'classe_abc', 'custo_unitario', 'unidade_compra',
+    'fator_conversao_compra', 'fornecedor_principal', 'codigo_fornecedor'];
+  // Material com legado: unidade null, marca null, número 0, custo decimal, caixa 1. `ncm` ausente no GET (vai null — Fase 2, M7).
+  const CARREGADO = { ...MATERIAL_DO_CLIENTE, id: 90, unidade: null, marca: null, quantidade_minima: 0, custo_unitario: 12.5,
+    material_critico: 1, classe_abc: null, localizacao_padrao_id: null };
+  const OUTRO = { ...MATERIAL_DO_CLIENTE, id: 91, codigo: 'CHP-091', nome: 'Outro material', marca: 'Marca 91' };
+  const inputNome = () => [...container.querySelectorAll('.almox-field')]
+    .find((f) => f.textContent.startsWith('Nome do Material')).querySelector('input');
+  const mock = () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/familias') return Promise.resolve({ data: FAMILIAS });
+      if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
+      if (url === '/almoxarifado/materiais/90') return Promise.resolve({ data: CARREGADO });
+      if (url === '/almoxarifado/materiais/91') return Promise.resolve({ data: OUTRO });
+      if (url.startsWith('/almoxarifado/materiais/')) return Promise.resolve({ data: MATERIAL_DO_CLIENTE });
+      return Promise.resolve({ data: [] });
+    });
+  };
+
+  test('a lista exportada é a do contrato, na ordem', () => {
+    expect(CAMPOS_LIDOS).toEqual(CONTRATO);
+  });
+
+  test('abre, renomeia e salva: campos_lidos com as 37 chaves, os valores crus do carregado (não o que foi digitado)', async () => {
+    mock();
+    await renderizarEdicao(90);
+    preencher(inputNome(), 'Nome digitado');
+    await submeter();
+    const payload = api.put.mock.calls[0][1];
+    expect(payload.nome).toBe('Nome digitado');
+    expect(Object.keys(payload.campos_lidos)).toEqual(CONTRATO);
+    expect(payload.campos_lidos.nome).toBe(CARREGADO.nome);
+    expect(payload.campos_lidos.unidade).toBeNull();
+    expect(payload.unidade).toBe('UN');
+    expect(payload.campos_lidos.marca).toBeNull();
+    expect(payload.campos_lidos.quantidade_minima).toBe(0);
+    expect(payload.campos_lidos.custo_unitario).toBe(12.5);
+    expect(payload.campos_lidos.material_critico).toBe(1);
+    expect(payload.campos_lidos.proprietario_cliente_id).toBe(1);
+    expect(payload.campos_lidos.ncm).toBeNull();
+  });
+
+  test('trocar de material sem desmontar a tela: o PUT leva os campos do material NOVO', async () => {
+    mock();
+    let navegar;
+    function Navegador() { navegar = useNavigate(); return null; }
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={['/almoxarifado/materiais/90/editar']}>
+          <Navegador />
+          <Routes><Route path="/almoxarifado/materiais/:id/editar" element={<MaterialAlmoxarifadoForm />} /></Routes>
+        </MemoryRouter>,
+      );
+    });
+    await esperarEfeitos();
+    await act(async () => { navegar('/almoxarifado/materiais/91/editar'); });
+    await esperarEfeitos();
+    await submeter();
+    expect(api.put.mock.calls[0][0]).toBe('/almoxarifado/materiais/91');
+    expect(api.put.mock.calls[0][1].campos_lidos.nome).toBe('Outro material');
+    expect(api.put.mock.calls[0][1].campos_lidos.marca).toBe('Marca 91');
+  });
+
+  test('cadastro novo (POST) não leva campos_lidos', async () => {
+    await renderizarNovo();
+    await preencherObrigatorios();
+    await submeter();
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(api.post.mock.calls[0][1]).not.toHaveProperty('campos_lidos');
+    expect(api.post.mock.calls[0][1].codigo).toBe('CHP-100');
+  });
+
+  test('o 409 dos campos mudados aparece com a literal e o formulário continua aberto', async () => {
+    const E1 = 'Os campos "Unidade de Medida" e "Estoque Mínimo" do material CHP-002 foram mudados por outra pessoa depois que '
+      + 'você abriu o cadastro — salvar desfaria essas mudanças, e nada foi gravado. Recarregue o material e salve de novo.';
+    mock();
+    api.put.mockRejectedValueOnce({ response: { status: 409, data: { error: E1 } } });
+    await renderizarEdicao(90);
+    await submeter();
+    await esperarEfeitos();
+    expect(toast.error).toHaveBeenCalledWith(E1);
     expect(toast.success).not.toHaveBeenCalled();
     expect(container.querySelector('form')).not.toBeNull();
   });

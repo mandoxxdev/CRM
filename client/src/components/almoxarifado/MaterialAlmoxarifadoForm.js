@@ -43,6 +43,18 @@ const CONTROLE_CHECKS = [
   { field: 'requer_foto', label: 'Requer foto' },
 ];
 
+// Etapa 125 (D (124), RN-08; B805): as colunas que o PUT leva como LIDAS em `campos_lidos` — as que esta tela mostra e o
+// servidor grava, fora os controles de lote/série (`controles_lidos`) e a família/subfamília (`familia_lida`). A mesma lista do
+// servidor (services/almoxarifado/camposLidos.js), na ordem da tela; o contrato congelado no plano da Etapa 125.
+export const CAMPOS_LIDOS = [
+  'codigo', 'nome', 'descricao', 'descricao_tecnica', 'categoria', 'tipo_material', 'material_critico',
+  'proprietario_cliente_id', 'fabricante', 'codigo_fabricante', 'marca', 'modelo', 'norma', 'material_construtivo',
+  'peso_unitario', 'dimensoes', 'ncm', 'aplicacao', 'especificacoes', 'observacoes', 'unidade', 'quantidade_minima',
+  'quantidade_maxima', 'ponto_reposicao', 'lote_economico', 'localizacao_padrao_id', 'controle_validade', 'controle_corrida',
+  'controle_certificado', 'requer_inspecao', 'requer_foto', 'classe_abc', 'custo_unitario', 'unidade_compra',
+  'fator_conversao_compra', 'fornecedor_principal', 'codigo_fornecedor',
+];
+
 // Etapa 110 (RN-11): a frase sob o "Saldo Inicial" no cadastro novo quando o material tem um controle que o cadastro não
 // informa (lote, série), exige inspeção ou é de cliente — o servidor recusa o saldo inicial desses (RN-02).
 export const AVISO_SALDO_INICIAL = 'Material com lote, série, inspeção ou de cliente nasce com saldo 0 — a entrada é lançada depois, em Movimentações ou pelo Recebimento.';
@@ -64,6 +76,9 @@ const MaterialAlmoxarifadoForm = () => {
   // Etapa 124 (D (123), RN-07): o mesmo para a família e a subfamília — vão no PUT como `familia_lida`, e o servidor recusa
   // (409) o salvar que desfaria a família ou a subfamília que outra pessoa mudou depois que o formulário abriu.
   const familiaLidaRef = useRef(null);
+  // Etapa 125 (D (124), RN-08): o mesmo para os outros campos — os valores CRUS do material carregado (como o GET devolveu:
+  // null fica null, número fica número; chave ausente vai null), em `campos_lidos`. Editar o formulário não muda o lido.
+  const camposLidosRef = useRef(null);
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -329,6 +344,7 @@ const MaterialAlmoxarifadoForm = () => {
         familia_id: m.familia_id ? Number(m.familia_id) : null,
         subfamilia_id: m.subfamilia_id ? Number(m.subfamilia_id) : null,
       };
+      camposLidosRef.current = Object.fromEntries(CAMPOS_LIDOS.map((c) => [c, m[c] ?? null]));
       setForm({
         codigo: m.codigo || '',
         nome: m.nome || '',
@@ -506,6 +522,7 @@ const MaterialAlmoxarifadoForm = () => {
       if (isEdit) {
         if (controlesLidosRef.current) payload.controles_lidos = controlesLidosRef.current;
         if (familiaLidaRef.current) payload.familia_lida = familiaLidaRef.current;
+        if (camposLidosRef.current) payload.campos_lidos = camposLidosRef.current;
         res = await api.put(`/almoxarifado/materiais/${id}`, payload);
         toast.success('Material atualizado!');
       } else {
