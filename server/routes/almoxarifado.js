@@ -2816,14 +2816,31 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     const tipoUsoVal = ['administrativo', 'industrial', 'ambos'].includes(tipo_uso) ? tipo_uso : 'ambos';
     const parentId = parent_id ? parseInt(parent_id, 10) : null;
 
-    const insertFamilia = (codigoVal) => {
+    // Etapa 123 (C221, RN-01..RN-01d): a subfamilia so nasce se o pai AINDA e raiz ativa — a conferencia de
+    // validateParentFamilia volta como condicao no proprio INSERT (o molde da C218, Etapa 110). Sem isto, o "Inativar" da
+    // raiz entre a conferencia e a gravacao deixava subfamilia ativa sob raiz inativa (Fase 0: 18/30 e 22/30 pela rota).
+    // Nao gravou -> rele pela mesma conferencia (a literal de hoje); desfeito na janela -> UMA tentativa a mais; de novo ->
+    // 409. "Nao gravou" e SO `this.changes === 0`: o INSERT ... SELECT que nao grava deixa `this.lastID` da insercao
+    // anterior (Fase 2, I2) — ler a familia por ele responderia 201 com outra e auditaria uma criacao que nao houve.
+    const condicaoPaiSql = parentId
+      ? ' WHERE EXISTS (SELECT 1 FROM familias_material_almoxarifado WHERE id = ? AND ativo = 1 AND parent_id IS NULL)' : '';
+    const insertFamilia = (codigoVal, tentativa = 1) => {
       db.run(`INSERT INTO familias_material_almoxarifado (codigo, nome, descricao, categoria_id, tipo_uso, parent_id)
-              VALUES (?,?,?,?,?,?)`,
-        [codigoVal, nome.trim(), descricao || null, categoria_id || null, tipoUsoVal, parentId],
+              SELECT ?,?,?,?,?,?${condicaoPaiSql}`,
+        [codigoVal, nome.trim(), descricao || null, categoria_id || null, tipoUsoVal, parentId, ...(parentId ? [parentId] : [])],
         function (err) {
           if (err) {
             if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Código já existe' });
             return res.status(500).json({ error: err.message });
+          }
+          if (this.changes === 0) {
+            return validateParentFamilia(parentId, (errParent) => {
+              if (errParent) return res.status(400).json({ error: errParent.message });
+              if (tentativa > 1) {
+                return res.status(409).json({ error: 'A família principal mudou enquanto a subfamília era criada — nada foi gravado. Tente de novo.' });
+              }
+              insertFamilia(codigoVal, 2);
+            });
           }
           // `this.lastID` existe aqui, mas nao no callback do SELECT (arrow): o `r` que a rota
           // ja le para responder da o id e o `dados_novos`.
@@ -2907,38 +2924,178 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         return res.status(400).json({ error: 'Família não pode ser pai de si mesma' });
       }
 
+      // Etapa 103 (G10b, RN-103.01/02): o nivel MUDA quando o pai informado difere do gravado
+      // (por valor — o corpo pode trazer '5' para o 5 gravado; null/'' = raiz). Renomear repetindo
+      // o pai, ou omitindo, nao muda nada.
+      const nivelMuda = !parentIdOmitted && String(parentId || '') !== String(current.parent_id || '');
+
+      // Etapa 123 (C221, B793): cada conferencia abaixo devolve a literal da recusa (ou null) em vez de responder — a
+      // primeira passada E a releitura (quando o UPDATE condicional nao grava) chamam as MESMAS funcoes, na MESMA ordem:
+      // itens (inativar) -> subfamilias ativas -> reativacao -> subfamilias inativas -> materiais -> pai. Uma regua so.
+      // cb(err, literal | null).
+
+      // RN-105.01 (G10c): inativar pelo PUT com item ativo -> a recusa do DELETE ("Inativar" da tela), com a
+      // MESMA string e ANTES da checagem de subfamilia ativa (a ordem do DELETE: itens, depois subs). So na
+      // transicao: a familia ja inativa (legado com item ativo) continua editavel.
+      const recusaItensNaInativacao = (cb) => {
+        if (!inativa) return cb(null, null);
+        contarItensAtivosDaFamilia(familiaId, (errItens, n) => cb(errItens, n > 0 ? literalItensAtivos(n) : null));
+      };
+
+      // Subfamílias ativas da família sendo editada (só existem se ela for raiz — subfamília
+      // não pode ter filhos). Usadas para bloquear (a) virar subfamília de outra família e
+      // (b) ser inativada enquanto ainda tem filhas ativas.
+      // RN-105.03 (M2): (b) so na TRANSICAO ativa -> inativa. Antes valia sempre (`Number(ativoVal) === 0`): a raiz
+      // ja inativa com sub ativa (legado) nao renomeava, e `ativo: 'false'` (NaN) inativava com sub ativa.
+      const recusaSubsAtivas = (cb) => {
+        db.get('SELECT COUNT(*) as c FROM familias_material_almoxarifado WHERE parent_id = ? AND ativo = 1', [familiaId], (errChildren, childrenRow) => {
+          if (errChildren) return cb(errChildren);
+          const hasActiveChildren = childrenRow.c > 0;
+          if (inativa && hasActiveChildren) return cb(null, 'Não é possível inativar: família possui subfamília(s) ativa(s)');
+          if (parentId && hasActiveChildren) return cb(null, 'Família com subfamília(s) ativa(s) não pode virar subfamília');
+          cb(null, null);
+        });
+      };
+
+      // RN-105.04 (o inverso do G10c): reativar uma SUBFAMILIA sem mudar de pai com o pai gravado inativo
+      // deixava a sub ativa sob raiz inativa — o bloco "Subfamilias sem familia ativa" da tela, onde nenhum
+      // material novo entra (e, repetindo o parent_id, a recusa era a enganosa "maximo 2 niveis"). Pai que nao
+      // existe mais (legado) -> a literal de pai inexistente. "E sub" = `!!current.parent_id` (o legado com
+      // parent_id = 0 e raiz, como o eraRaiz da 103). Mudando de pai, decide validateParentFamilia, como antes.
+      const confereReativacao = reativa && !!current.parent_id && !nivelMuda;
+      const recusaReativacao = (cb) => {
+        if (!confereReativacao) return cb(null, null);
+        db.get('SELECT ativo, parent_id FROM familias_material_almoxarifado WHERE id = ?', [current.parent_id], (errPai, paiRow) => {
+          if (errPai) return cb(errPai);
+          if (!paiRow) return cb(null, 'Família pai não encontrada');
+          // Fase 5 (B-a): o pai que tambem e sub (o terceiro nivel legado de antes da 103) — reativar a neta
+          // traria o terceiro nivel de volta. A literal e a de validateParentFamilia.
+          if (paiRow.parent_id) return cb(null, 'Subfamília não pode ter filhos (máximo 2 níveis)');
+          if (Number(paiRow.ativo) !== 1) {
+            return cb(null, 'Não é possível reativar: a família principal desta subfamília está inativa — reative a família principal antes');
+          }
+          cb(null, null);
+        });
+      };
+
+      // RN-103.02: com sub INATIVA a raiz virava sub e, reativada a sub depois (o pai preservado
+      // nao e revalidado), o banco ficava com tres niveis. A ATIVA ja e recusada acima.
+      // "Inativa" = qualquer coisa que nao seja 1 (o PUT grava `ativo` cru do corpo: `'false'` ficava
+      // fora das duas contagens e a raiz virava sub — achado baixo da revisao final). Desde a 105 o PUT grava
+      // 0/1 normalizado (RN-105.00); a regua continua valendo para o legado gravado cru antes dela.
+      // RN-103.01 (B49): material desta familia — pelo familia_id (raiz, ou o legado do G10) ou
+      // pelo subfamilia_id — ficaria com o par familia/subfamilia errado. Conta os INATIVOS: o
+      // inativo reativado depois seria o legado de novo. Mesma forma de contagem do DELETE abaixo,
+      // sem o `ativo = 1`.
+      const recusaNivel = (cb) => {
+        if (!nivelMuda) return cb(null, null);
+        db.get('SELECT COUNT(*) as c FROM familias_material_almoxarifado WHERE parent_id = ? AND COALESCE(ativo, 0) <> 1', [familiaId], (errInativas, inativasRow) => {
+          if (errInativas) return cb(errInativas);
+          if (parentId && inativasRow.c > 0) {
+            return cb(null, 'Família com subfamília(s) inativa(s) não pode virar subfamília — elas ficariam num terceiro nível');
+          }
+          db.get('SELECT COUNT(*) as c FROM materiais_almoxarifado WHERE familia_id = ? OR subfamilia_id = ?', [familiaId, familiaId], (errMat, matRow) => {
+            if (errMat) return cb(errMat);
+            if (matRow.c > 0) {
+              // `!parent_id`: o legado com parent_id = 0 (gravado por '0' antes da 103) e raiz, como no nivelMuda.
+              const eraRaiz = !current.parent_id;
+              return cb(null, eraRaiz
+                ? `Não é possível transformar em subfamília: a família tem ${matRow.c} material(is) cadastrado(s) (contando os inativos)`
+                : `Não é possível mudar a família principal desta subfamília: ela tem ${matRow.c} material(is) cadastrado(s) (contando os inativos)`);
+            }
+            cb(null, null);
+          });
+        });
+      };
+
+      // Só revalida a hierarquia do pai quando o valor é NOVO. Um parent_id preservado (omitido → veio do current) já era
+      // válido quando foi setado; revalidar quebraria a edição de uma subfamília cujo pai foi inativado depois.
+      // Fase 5 da Etapa 105 (B-b): "novo" = DIFERENTE do gravado (`nivelMuda`), nao apenas informado. Repetir o pai
+      // gravado e o mesmo que omiti-lo — antes, a sub ativa sob raiz inativa nao se inativava nem renomeava
+      // repetindo o parent_id (400 "maximo 2 niveis", que nao descreve o caso).
+      const validaPai = !!parentId && nivelMuda;
+      const recusaPai = (cb) => {
+        if (!validaPai) return cb(null, null);
+        validateParentFamilia(parentId, (errParent) => cb(null, errParent ? errParent.message : null));
+      };
+
+      const ETAPAS = [recusaItensNaInativacao, recusaSubsAtivas, recusaReativacao, recusaNivel, recusaPai];
+      const conferir = (cb, i = 0) => {
+        if (i >= ETAPAS.length) return cb(null, null);
+        ETAPAS[i]((err, literal) => {
+          if (err || literal) return cb(err, literal);
+          conferir(cb, i + 1);
+        });
+      };
+
+      // Etapa 123 (C221, RN-01..RN-06c): o que foi conferido acima volta como condicao NO PROPRIO UPDATE — o molde da C218
+      // (Etapa 110). Uma conexao SQLite executa um comando inteiro antes ou depois do outro; do outro lado o "Inativar"
+      // tem NOT EXISTS (subfamilia ativa) e o cadastro de material exige familia raiz/sub da familia, tambem no comando.
+      // Fase 0: sem isto, criar/reativar/mudar de pai com a raiz sendo inativada deixava sub ativa sob raiz inativa, e mudar
+      // o nivel com um material ou uma subfamilia nascendo no meio deixava par errado ou terceiro nivel.
+      //  - `parent_id IS ?` SEMPRE (Fase 2, C1): o renomear da tela nao manda `parent_id` e o UPDATE regravava o pai lido —
+      //    desfazia uma mudanca de raiz feita no meio (e com ela a raiz antiga inativada: sub ativa sob raiz inativa).
+      //  - o pai conferido ativo e raiz (validaPai / confereReativacao);
+      //  - nenhum material pela familia ou subfamilia (nivelMuda);
+      //  - nenhuma subfamilia, ativa ou inativa (vira subfamilia).
+      const paiConferido = validaPai ? parentId : (confereReativacao ? current.parent_id : null);
+      const semFilhas = !!parentId && nivelMuda;
+      const condicoesSempre = () => {
+        let sql = ' AND parent_id IS ?';
+        const params = [current.parent_id ?? null];
+        if (paiConferido) {
+          sql += ' AND EXISTS (SELECT 1 FROM familias_material_almoxarifado WHERE id = ? AND ativo = 1 AND parent_id IS NULL)';
+          params.push(paiConferido);
+        }
+        if (nivelMuda) {
+          sql += ' AND NOT EXISTS (SELECT 1 FROM materiais_almoxarifado WHERE familia_id = ? OR subfamilia_id = ?)';
+          params.push(familiaId, familiaId);
+        }
+        if (semFilhas) {
+          sql += ' AND NOT EXISTS (SELECT 1 FROM familias_material_almoxarifado WHERE parent_id = ?)';
+          params.push(familiaId);
+        }
+        return { sql, params };
+      };
+
       // Etapa 110 (RN-09, C218): na transicao 1 -> 0 o UPDATE leva a condicao da inativacao (a do DELETE) e `ativo = 1`.
-      // Nao gravou -> rele: material ou subfamilia ativa nasceu na janela (a literal de hoje), a familia sumiu (404), ou
-      // outro ja inativou — entao tenta de novo SEM o `ativo = 1` mas COM a condicao dos itens (Fase 5, rv1 achado 1: sem
-      // ela, uma reativacao + cadastro de material no meio da releitura deixava o estado proibido); nao gravou de novo ->
-      // rele outra vez e, se nada impede, 409 (a familia mudou duas vezes no meio).
       // Fase 5 (rv1 achado 2, anterior a 110): `ativo` OMITIDO nao e gravado (`COALESCE(?, ativo)` com null). Antes o PUT
       // regravava o `ativo` lido no inicio: renomear (a tela nao manda `ativo`) desfazia um Inativar concorrente, ou
       // reinativava uma familia reativada no meio com material novo dentro.
+      // Etapa 123 (Fase 2, I1): NAO GRAVOU -> UMA releitura so, para todas as condicoes: a familia sumiu (404); o pai mudou
+      // (409 — o que esta tela leu nao vale mais); senao as conferencias de cima de novo, na mesma ordem (a literal de
+      // hoje). Nada impede (desfeito na janela) -> UMA tentativa a mais; a inativacao perde o `ativo = 1` so se a linha
+      // relida ja esta inativa (outro ja inativou — Etapa 110), mantendo a condicao dos itens (rv1 achado 1 da 110: sem
+      // ela, uma reativacao + cadastro de material no meio deixava o estado proibido). Nao gravou de novo -> 409.
+      const L409 = 'A família mudou enquanto era salva — nada foi gravado. Recarregue a família e salve de novo.';
       const applyUpdate = (tentativa = 1, anteriorDeAgora = null) => {
-        const condicional = inativa;
+        const jaInativaAgora = !!anteriorDeAgora && Number(anteriorDeAgora.ativo) !== 1;
         let condicaoSql = '';
-        if (condicional) {
-          condicaoSql = tentativa === 1 ? ` AND ativo = 1 AND ${SEM_ATIVOS_NA_FAMILIA_SQL}` : ` AND ${SEM_ATIVOS_NA_FAMILIA_SQL}`;
+        const condicaoParams = [];
+        if (inativa) {
+          condicaoSql = jaInativaAgora ? ` AND ${SEM_ATIVOS_NA_FAMILIA_SQL}` : ` AND ativo = 1 AND ${SEM_ATIVOS_NA_FAMILIA_SQL}`;
+          condicaoParams.push(...semAtivosNaFamiliaParams(familiaId));
         }
+        const sempre = condicoesSempre();
+        condicaoSql += sempre.sql;
+        condicaoParams.push(...sempre.params);
         db.run(`UPDATE familias_material_almoxarifado SET nome=?, descricao=?, categoria_id=?, tipo_uso=?, ativo=COALESCE(?, ativo), parent_id=? WHERE id=?${condicaoSql}`,
           [nome.trim(), descricao || null, categoriaIdVal, tipoUsoVal, ativoInformado ? ativoVal : null, parentId, familiaId,
-            ...(condicional ? semAtivosNaFamiliaParams(familiaId) : [])],
+            ...condicaoParams],
           function (err) {
             if (err) return res.status(500).json({ error: err.message });
-            if (condicional && this.changes === 0) {
-              return relerRecusaDaInativacao(familiaId, (errR, recusa) => {
-                if (errR) return res.status(500).json({ error: errR.message });
-                if (recusa.itens) return res.status(400).json({ error: literalItensAtivos(recusa.itens) });
-                if (recusa.subs) {
-                  return res.status(400).json({ error: 'Não é possível inativar: família possui subfamília(s) ativa(s)' });
-                }
-                if (recusa.naoExiste) return res.status(404).json({ error: 'Família não encontrada' });
-                if (tentativa > 1) {
-                  return res.status(409).json({ error: 'A família mudou enquanto era salva — nada foi gravado. Recarregue a família e salve de novo.' });
-                }
-                // outro ja inativou: grava o resto (com a condicao dos itens), e a auditoria diz o "de" de AGORA
-                return applyUpdate(2, recusa.atual);
+            if (this.changes === 0) {
+              return db.get('SELECT * FROM familias_material_almoxarifado WHERE id = ?', [familiaId], (errA, agora) => {
+                if (errA) return res.status(500).json({ error: errA.message });
+                if (!agora) return res.status(404).json({ error: 'Família não encontrada' });
+                if ((agora.parent_id ?? null) !== (current.parent_id ?? null)) return res.status(409).json({ error: L409 });
+                conferir((errC, literal) => {
+                  if (errC) return res.status(500).json({ error: errC.message });
+                  if (literal) return res.status(400).json({ error: literal });
+                  if (tentativa > 1) return res.status(409).json({ error: L409 });
+                  // a auditoria diz o "de" de AGORA (ja inativa por outro, por exemplo — Etapa 110, Fase 2 achado 8)
+                  return applyUpdate(2, agora);
+                });
               });
             }
             db.get('SELECT * FROM familias_material_almoxarifado WHERE id = ?', [familiaId], (e, r) => {
@@ -2950,113 +3107,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           });
       };
 
-      // RN-105.01 (G10c): inativar pelo PUT com item ativo -> a recusa do DELETE ("Inativar" da tela), com a
-      // MESMA string e ANTES da checagem de subfamilia ativa (a ordem do DELETE: itens, depois subs). So na
-      // transicao: a familia ja inativa (legado com item ativo) continua editavel.
-      const conferirItensNaInativacao = (seguir) => {
-        if (!inativa) return seguir();
-        contarItensAtivosDaFamilia(familiaId, (errItens, n) => {
-          if (errItens) return res.status(500).json({ error: errItens.message });
-          if (n > 0) return res.status(400).json({ error: literalItensAtivos(n) });
-          seguir();
-        });
-      };
-
-      // Etapa 103 (G10b, RN-103.01/02): o nivel MUDA quando o pai informado difere do gravado
-      // (por valor — o corpo pode trazer '5' para o 5 gravado; null/'' = raiz). Renomear repetindo
-      // o pai, ou omitindo, nao muda nada.
-      const nivelMuda = !parentIdOmitted && String(parentId || '') !== String(current.parent_id || '');
-
-      // RN-105.04 (o inverso do G10c): reativar uma SUBFAMILIA sem mudar de pai com o pai gravado inativo
-      // deixava a sub ativa sob raiz inativa — o bloco "Subfamilias sem familia ativa" da tela, onde nenhum
-      // material novo entra (e, repetindo o parent_id, a recusa era a enganosa "maximo 2 niveis"). Pai que nao
-      // existe mais (legado) -> a literal de pai inexistente. "E sub" = `!!current.parent_id` (o legado com
-      // parent_id = 0 e raiz, como o eraRaiz da 103). Mudando de pai, decide validateParentFamilia, como antes.
-      const conferirReativacao = (seguir) => {
-        if (!reativa || !current.parent_id || nivelMuda) return seguir();
-        db.get('SELECT ativo, parent_id FROM familias_material_almoxarifado WHERE id = ?', [current.parent_id], (errPai, paiRow) => {
-          if (errPai) return res.status(500).json({ error: errPai.message });
-          if (!paiRow) return res.status(400).json({ error: 'Família pai não encontrada' });
-          // Fase 5 (B-a): o pai que tambem e sub (o terceiro nivel legado de antes da 103) — reativar a neta
-          // traria o terceiro nivel de volta. A literal e a de validateParentFamilia.
-          if (paiRow.parent_id) return res.status(400).json({ error: 'Subfamília não pode ter filhos (máximo 2 níveis)' });
-          if (Number(paiRow.ativo) !== 1) {
-            return res.status(400).json({ error: 'Não é possível reativar: a família principal desta subfamília está inativa — reative a família principal antes' });
-          }
-          seguir();
-        });
-      };
-
-      // Subfamílias ativas da família sendo editada (só existem se ela for raiz — subfamília
-      // não pode ter filhos). Usadas para bloquear (a) virar subfamília de outra família e
-      // (b) ser inativada enquanto ainda tem filhas ativas.
-      conferirItensNaInativacao(() => {
-      db.get('SELECT COUNT(*) as c FROM familias_material_almoxarifado WHERE parent_id = ? AND ativo = 1', [familiaId], (errChildren, childrenRow) => {
-        if (errChildren) return res.status(500).json({ error: errChildren.message });
-        const hasActiveChildren = childrenRow.c > 0;
-
-        // RN-105.03 (M2): so na TRANSICAO ativa -> inativa. Antes valia sempre (`Number(ativoVal) === 0`): a raiz
-        // ja inativa com sub ativa (legado) nao renomeava, e `ativo: 'false'` (NaN) inativava com sub ativa.
-        if (inativa && hasActiveChildren) {
-          return res.status(400).json({ error: 'Não é possível inativar: família possui subfamília(s) ativa(s)' });
-        }
-        if (parentId && hasActiveChildren) {
-          return res.status(400).json({ error: 'Família com subfamília(s) ativa(s) não pode virar subfamília' });
-        }
-
-        conferirReativacao(() => {
-        // Só revalida a hierarquia do pai quando o valor é NOVO (informado explicitamente).
-        // Um parent_id preservado (omitido → veio do current) já era válido quando foi
-        // setado; revalidar quebraria a edição de uma subfamília cujo pai foi inativado
-        // depois (ex.: renomear a subfamília não deveria falhar por causa disso).
-        //
-        // Fase 5 da Etapa 105 (B-b): "novo" = DIFERENTE do gravado (`nivelMuda`), nao apenas informado. Repetir o pai
-        // gravado e o mesmo que omiti-lo — antes, a sub ativa sob raiz inativa nao se inativava nem renomeava
-        // repetindo o parent_id (400 "maximo 2 niveis", que nao descreve o caso).
-        const seguirParaOPai = () => {
-          if (parentId && nivelMuda) {
-            validateParentFamilia(parentId, (errParent) => {
-              if (errParent) return res.status(400).json({ error: errParent.message });
-              applyUpdate();
-            });
-          } else {
-            applyUpdate();
-          }
-        };
-
-        if (!nivelMuda) return seguirParaOPai();
-
-        // RN-103.02: com sub INATIVA a raiz virava sub e, reativada a sub depois (o pai preservado
-        // nao e revalidado), o banco ficava com tres niveis. A ATIVA ja era recusada acima.
-        // "Inativa" = qualquer coisa que nao seja 1 (o PUT grava `ativo` cru do corpo: `'false'` ficava
-        // fora das duas contagens e a raiz virava sub — achado baixo da revisao final). Desde a 105 o PUT grava
-        // 0/1 normalizado (RN-105.00); a regua continua valendo para o legado gravado cru antes dela.
-        db.get('SELECT COUNT(*) as c FROM familias_material_almoxarifado WHERE parent_id = ? AND COALESCE(ativo, 0) <> 1', [familiaId], (errInativas, inativasRow) => {
-          if (errInativas) return res.status(500).json({ error: errInativas.message });
-          if (parentId && inativasRow.c > 0) {
-            return res.status(400).json({ error: 'Família com subfamília(s) inativa(s) não pode virar subfamília — elas ficariam num terceiro nível' });
-          }
-          // RN-103.01 (B49): material desta familia — pelo familia_id (raiz, ou o legado do G10) ou
-          // pelo subfamilia_id — ficaria com o par familia/subfamilia errado. Conta os INATIVOS: o
-          // inativo reativado depois seria o legado de novo. Mesma forma de contagem do DELETE abaixo,
-          // sem o `ativo = 1`.
-          db.get('SELECT COUNT(*) as c FROM materiais_almoxarifado WHERE familia_id = ? OR subfamilia_id = ?', [familiaId, familiaId], (errMat, matRow) => {
-            if (errMat) return res.status(500).json({ error: errMat.message });
-            if (matRow.c > 0) {
-              // `!parent_id`: o legado com parent_id = 0 (gravado por '0' antes da 103) e raiz, como no nivelMuda.
-              const eraRaiz = !current.parent_id;
-              return res.status(400).json({
-                error: eraRaiz
-                  ? `Não é possível transformar em subfamília: a família tem ${matRow.c} material(is) cadastrado(s) (contando os inativos)`
-                  : `Não é possível mudar a família principal desta subfamília: ela tem ${matRow.c} material(is) cadastrado(s) (contando os inativos)`,
-              });
-            }
-            seguirParaOPai();
-          });
-        });
-        }); // conferirReativacao
+      conferir((errC, literal) => {
+        if (errC) return res.status(500).json({ error: errC.message });
+        if (literal) return res.status(400).json({ error: literal });
+        applyUpdate();
       });
-      }); // conferirItensNaInativacao
     });
   });
 

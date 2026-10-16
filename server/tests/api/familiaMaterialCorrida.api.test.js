@@ -351,7 +351,10 @@ const SQL_CONF_SUBS_ATIVAS = /^SELECT COUNT\(\*\) as c FROM familias_material_al
   });
 
   // Fase 5 (rv1 achado 1): o caminho "ja inativada por outro" regravava ativo = 0 SEM condicao.
-  const SQL_RELEITURA_SUBS = /^SELECT COUNT\(\*\) AS c FROM familias_material_almoxarifado WHERE parent_id = \? AND ativo = 1$/;
+  // Etapa 123 (C221, Fase 2 I1): a releitura do PUT deixou de ser `relerRecusaDaInativacao` (que so o DELETE usa agora) e
+  // passou a ser as MESMAS conferencias da primeira passada — a contagem de subfamilias ativas da releitura e o SQL da
+  // primeira (a 2a ocorrencia de SQL_CONF_SUBS_ATIVAS). O cenario e o mesmo: reativada com material novo na releitura.
+  const SQL_RELEITURA_SUBS = SQL_CONF_SUBS_ATIVAS;
   await test('[RN-09] PUT {ativo: 0}: inativada por outro e, na releitura, reativada com material novo -> 400 itens; nunca o estado proibido', async () => {
     const f = await familia();
     injetar({ sql: SQL_CONF_SUBS_ATIVAS, depois: inativarDireto(f) },
