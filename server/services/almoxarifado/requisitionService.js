@@ -667,7 +667,7 @@ async function listarFilaSeparacao(db, user) {
   const ids = reqs.map((r) => r.id);
   const marcas = ids.map(() => '?').join(',');
   const itens = await dbAll(db, `SELECT ir.*, ma.codigo as material_codigo, ma.nome as material_nome, ma.unidade,
-      ma.material_critico,
+      ma.material_critico, ma.ativo as material_ativo,
       ${Q.qtdSql(`${disponivelSql('ma')} + ${RESERVADO_PARA_ITEM_SQL}`)} as saldo_disponivel,
       ${RESERVADO_PARA_ITEM_SQL} as reservado_para_item,
       ${caixaSemReservaSql('ir.material_id', 'AND ix.id <> ir.id')} as caixa_outros,
@@ -701,7 +701,10 @@ async function listarFilaSeparacao(db, user) {
       // Etapa 95 (T1, B472): o separavel e o TETO da porta (tetoSeparacao), nao mais o disponivel + reserva — a fila
       // dizia "Separar 2" com os 4 fisicos na caixa (C169) e a porta recusava. Cada item mostra o seu teto (itens do
       // mesmo material da mesma requisicao nao sao divididos na linha; a porta divide, RN-02).
-      const separavel = podeSep ? maxSeparar(i, tetoSeparacao(num(i.saldo_disponivel) - num(i.reservado_para_item),
+      // Etapa 114 (Fase 5, M1): material inativo — separavel e entregavel 0, o numero da porta e do detalhe (RN-08);
+      // antes a fila punha "Separar 2"/"Entregar 2" no topo e a porta recusava (E3 / o motor).
+      const inativo = materialInativo.materialInativo(i.material_ativo);
+      const separavel = podeSep && !inativo ? maxSeparar(i, tetoSeparacao(num(i.saldo_disponivel) - num(i.reservado_para_item),
         i.reservado_para_item, getSeparado(i) - getEntregue(i), i.caixa_outros)) : 0;
       return {
         item_id: i.id, material_id: i.material_id, material_codigo: i.material_codigo, material_nome: i.material_nome,
@@ -711,7 +714,7 @@ async function listarFilaSeparacao(db, user) {
         // Etapa 96 (Fase 2, I5): a caixa e uma diferenca — arredondada (separa 0,3, entrega 0,1 -> 0,2, nao 0.1999…).
         // Etapa 98 (T3, B509): o disponivel e o que o MOTOR deixa sair (entregavelPeloMotor) — com o disponivel do
         // material negativo, 0 e a etapa vira AGUARDANDO_SALDO; antes a fila dizia ENTREGAR e o motor recusava tudo.
-        entregavel: Q.qtd(Math.min(Math.max(0, getSeparado(i) - getEntregue(i)), Math.max(0, entregavelPeloMotor(
+        entregavel: inativo ? 0 : Q.qtd(Math.min(Math.max(0, getSeparado(i) - getEntregue(i)), Math.max(0, entregavelPeloMotor(
           num(i.saldo_disponivel) - num(i.reservado_para_item), i.reservado_para_item, Number(i.motor_permite_negativo) === 1)))),
         disponivel: Q.qtd(num(i.saldo_disponivel)), origem_separacao_codigo: i.origem_separacao_codigo || null,
         lote_separacao_codigo: i.lote_separacao_codigo || null, material_critico: Number(i.material_critico) === 1,

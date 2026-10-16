@@ -234,7 +234,8 @@ async function aprovarValor(db, requisicaoId, user) {
      SET status = 'APROVADO', aprovador_valor_id = ?, aprovador_valor_nome = ?,
          data_aprovacao_valor = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP,
          ultimo_lembrete_enviado = NULL, rejeicao_valor_motivo = NULL
-     WHERE id = ? AND status = ? AND ${approvalRulesService.GATE_SQL} AND ${materialInativo.SEM_MATERIAL_INATIVO_SQL}`,
+     WHERE id = ? AND status = ? AND ${approvalRulesService.GATE_SQL}
+       AND (data_aprovacao IS NOT NULL OR ${materialInativo.SEM_MATERIAL_INATIVO_SQL})`,
     [user.id, user.nome || user.email, requisicaoId, STATUS_AGUARDANDO]);
   if (!upd.changes) {
     // Etapa 114 (RN-02, C229): a requisicao com item pendente de material inativo nao e liberada por valor. A conferencia
@@ -242,9 +243,14 @@ async function aprovarValor(db, requisicaoId, user) {
     // a releitura so da a mensagem, DEPOIS das de hoje (status mudou -> a de status; gate -> a do gate). Antes liberava, o
     // pos-aprovacao nao reservava (o `catch` da reserva so logava) e a requisicao ficava APROVADO sem reserva — a entrega
     // recusava depois.
+    // Fase 5 (I1): so na PRIMEIRA aprovacao (`data_aprovacao` nula). A requisicao ja aprovada pelo /aprovar (ou pela
+    // automatica) volta a AGUARDANDO_APROVACAO_VALOR na separacao quando o custo passa do limite (verificarBloqueioLiberacao,
+    // Etapa 94); se um material dela foi inativado DEPOIS de aprovada (B734), recusar aqui prendia o resto da requisicao —
+    // a separacao com 0 no inativo (a E3) caia na alcada e a liberacao recusava. Ela segue como o pos-aprovacao desta
+    // porta (`recusarInativo: false`): o item inativo fica pendente e a separacao o recusa (RN-05).
     const msgGate = await approvalRulesService.mensagemGateAtual(db, requisicaoId);
-    const atual = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
-    if (!msgGate && atual && atual.status === STATUS_AGUARDANDO) {
+    const atual = await dbGet(db, 'SELECT status, data_aprovacao FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
+    if (!msgGate && atual && atual.status === STATUS_AGUARDANDO && atual.data_aprovacao == null) {
       const inativos = await materialInativo.lerCodigosInativosPendentes(db, requisicaoId);
       if (inativos.length > 0) throw materialInativo.erroAprovar(reqRow, requisicaoId, inativos, { valor: true });
     }
