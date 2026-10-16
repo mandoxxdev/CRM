@@ -11,11 +11,16 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-16):** **Etapa 125 fechada** (o formulário de material aberto não desfaz mais **nenhum**
+> **Onde o desenvolvimento está (2026-10-16):** **Etapa 126 fechada** (as abas de Configurações que o servidor recusa ao
+> administrador do sistema sem perfil ficam somente leitura — ou, as três que ele nem consegue ler, com a frase de quem é —, em vez
+> de oferecer botões que recusam: **C261** resolvido; e o *Editar* da aba Famílias não desfaz mais o nome, a descrição ou o tipo de uso
+> que outro administrador mudou enquanto a lista estava aberta: **D (125)** resolvida); a próxima do almoxarifado é a **127** — ver
+> "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 125 fechada** (o formulário de material aberto não desfaz mais **nenhum**
 > campo que outra pessoa — ou o recebimento, no custo — mudou enquanto ele estava aberto: avisa quais e pede para recarregar —
 > **D (124)** resolvida; o *Reativar* da aba Famílias não volta mais o nome antigo; e a aba Famílias fica somente leitura para o
 > administrador do sistema sem perfil, em vez de oferecer botões que recusam — **C259** resolvido na aba Famílias, as outras abas
-> viram a **C261**); a próxima do almoxarifado é a **126** — ver "Onde estamos e o que vem a seguir".
+> viram a **C261**); a próxima do almoxarifado era a **126**.)*
 > *(Antes: **Etapa 124 fechada** (o formulário de material aberto há minutos não desfaz mais
 > a família ou a subfamília que outra pessoa mudou — **D (123)** resolvida; a recusa da requisição de material inativo manda
 > reativar a família antes, quando ela também está inativa — **C231** resolvido; e a aba **Famílias** passa a mostrar as inativas
@@ -2771,7 +2776,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B810; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B817; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -8783,6 +8788,55 @@ Reposição, Lote Econômico, peso, custo, quantidade por compra), vazio → 0 �
 lidos — nenhuma das duas depende de vocês. A **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a
 **C230**, o reparo da **C246**/**C247** e a **B808** (o administrador do sistema configura o almoxarifado?) continuam esperando vocês.
 
+**B811 (NOVA, da Etapa 126) — as outras abas de Configurações ficam somente leitura para quem o servidor recusa (C261).** O mesmo
+descompasso da B808, nas outras abas: o administrador do sistema sem perfil abre Configurações, e as gravações de **Tipos de
+material**, **Estoques mínimos**, **Setores**, **Localizações** e **Liberação por valor** — e até a leitura de **Alertas de estoque**,
+**Regras de aprovação** e **Configurações gerais** — recusam a ele (medido rota a rota). **O que foi escolhido** (`2c6eab89`): a tela
+segue a regra do servidor — as cinco abas mostram os dados sem os botões de gravar, as três que ele não lê mostram só a frase, e o
+*Editar Posições* do Mapa de Áreas some. **Nenhuma permissão mudou.** **Descartado:** (a) **alargar o servidor** — continua sendo a
+**B808**: decidida a favor, esta etapa se desfaz numa linha (a regra da tela passa a aceitar o administrador do sistema); (b)
+esconder as abas da barra — a aba sumiria sem dizer de quem é o gesto, e Tipos, Setores e Localizações são consulta útil. **Fica para
+a B808:** a aba **Perfis de Acesso** funciona para ele, então ele consegue dar o perfil Administrador a outra pessoa — um caminho
+indireto para o que as abas escondem dele (anterior a esta etapa; achado do revisor, não é defeito). **Reversível.**
+
+**B812 (NOVA, da Etapa 126) — duas frases, uma forma.** As abas que leem e não gravam: *"Somente leitura — ⟨o quê⟩ é do Administrador
+do almoxarifado ou do Super Administrador; peça a um deles."* (a da aba Famílias, da 125, sai da mesma regra, com o mesmo texto). As
+três que nem leem: *"Restrito — ⟨o quê⟩ é do Administrador do almoxarifado ou do Super Administrador; peça a um deles."*, no lugar da
+aba, **sem** perguntar ao servidor (antes: um aviso de erro e a aba vazia — em Alertas, com o servidor de e-mail em branco, parecendo o
+configurado). **Descartado:** perguntar e trocar o erro pela frase (um aviso de "acesso restrito" a cada abertura, e dependeria do
+texto da recusa). **Reversível.**
+
+**B813 (NOVA, da Etapa 126) — em Estoques mínimos e Liberação por valor os campos ficam à vista, desabilitados.** A tabela de
+mínimos e o cartão da liberação continuam iguais, com os valores gravados; os campos não aceitam digitação e o botão de salvar some;
+o filtro de materiais e a busca de usuário continuam (só leem). **Descartado:** trocar os campos por texto (a tela mudaria de forma só
+para essa pessoa). **Reversível.**
+
+**B814 (NOVA, da Etapa 126) — o Mapa de Áreas e o formulário de material seguem a mesma regra.** No Mapa, *Editar Posições* e
+*Cadastrar localizações* só para quem grava (sem frase: é tela de consulta, e o gesto some sem deixar buraco); o link *Localizações*
+fica e passa a abrir a aba **Localizações** (abria **Tipos de material** — o endereço não dizia a aba; achado da revisão do plano). No
+formulário de material sem família ou sem localização cadastrada, a dica *"— cadastre em Configurações …"* só para quem grava; o
+administrador do sistema vê *"— solicite a um administrador"*, que já existia para os outros. **Reversível.**
+
+**B815 (NOVA, da Etapa 126) — o *Editar* da aba Famílias confere o que leu (D (125)).** O *Editar* mandava o nome, a descrição e o tipo
+de uso que a lista mostrava; se outro administrador tinha mudado a família depois de a lista carregar, o salvar desfazia a mudança
+calado. **O que foi escolhido** (`897044e2`, `5140841e`): o *Editar* manda também o que leu; se o que leu é diferente do gravado e o
+salvar mudaria o gravado, a gravação é recusada nomeando os campos: *"O campo "Descrição" da família ⟨código⟩ foi mudado por outra
+pessoa depois que você abriu a edição — salvar desfaria essa mudança, e nada foi gravado. Recarregue a lista e edite de novo."* (ou
+*"Os campos "Nome" e "Tipo de uso" da subfamília ⟨código⟩ foram mudados …"*). Nome com espaços nas pontas, tipo de uso vazio e
+descrição vazia contam como o que o sistema grava (sem isso, uma família antiga salva sem mudança por outra pessoa daria um aviso
+falso — achado da revisão do plano, medido). **Descartado:** (a) uma chave com outro nome (confundiria com a família **do material**,
+da 124); (b) só a recusa geral *"A família mudou enquanto era salva — …"* (não diz o quê). **Reversível.**
+
+**B816 (NOVA, da Etapa 126) — depois do aviso, o formulário fica e a lista recarrega.** O que foi digitado fica à vista (para ler ou
+copiar) e a lista já mostra o que o outro gravou. **Salvar de novo sem clicar Editar recebe o mesmo aviso, de propósito:** o formulário
+continua conferindo o que leu na abertura — se passasse a conferir a lista recarregada, desfaria a mudança do outro calado. Clicar
+**Editar** de novo recarrega o formulário da lista (o digitado se perde ali). **Descartado:** fechar o formulário no aviso (perde o
+digitado) e não recarregar a lista. **Reversível.**
+
+**B817 (NOVA, da Etapa 126) — a próxima etapa do almoxarifado (127).** Ver a "próxima tarefa detalhada" no plano da Etapa 126. A
+**B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
+**C246**/**C247**, a tabela de conversões e o grupo acima de família continuam esperando vocês.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -11307,7 +11361,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      é gravado — antes, o salvar desfazia a mudança sem aviso (**B800**). **O que fazer:** feche, abra o material de novo (ele já
      mostra a família nova) e salve. O que tinha sido digitado e não salvo precisa ser digitado de novo.
 
-261. **NOVO (da Etapa 125, medido) — o administrador do sistema sem perfil vê outras abas de Configurações que não gravam.** O
+261. **✅ RESOLVIDO NA ETAPA 126 (`2c6eab89`, `11a12cad`; B811 a B814) — as cinco abas ficam somente leitura para ele, as três que ele não
+     lê mostram a frase de quem é, e o Mapa e o formulário de material deixam de oferecer o que ele não pode.** O "o que fazer" abaixo
+     continua valendo para o gesto em si. O texto original: **NOVO (da Etapa 125, medido) — o administrador do sistema sem perfil vê outras abas de Configurações que não gravam.** O
      mesmo descompasso da C259, nas outras abas: para quem é administrador do sistema sem perfil Administrador do almoxarifado (e sem
      ser Super Administrador nem administrador do módulo), **Tipos de material**, **Estoques mínimos**, **Setores**, **Localizações** e
      **Liberação por valor** mostram os dados e cada gravação responde *"Acesso restrito — administrador do Almoxarifado ou Super
@@ -11322,6 +11378,22 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      e nada foi gravado. Recarregue o material e salve de novo."* (ou *"Os campos … foram mudados …"*) e nada é gravado — antes, o
      salvar desfazia a mudança sem aviso (**B805**, **B806**). **O que fazer:** feche, abra o material de novo (ele já mostra o que o
      outro gravou) e salve. O que tinha sido digitado e não salvo precisa ser digitado de novo.
+
+263. **NOVO (da Etapa 126) — editar uma família que outra pessoa mudou é recusado, nomeando os campos.** Em **Configurações →
+     Famílias**, se outro administrador mudou o nome, a descrição ou o tipo de uso da família depois de a sua lista carregar, o
+     **Salvar** do *Editar* responde *"O campo "⟨Nome | Tipo de uso | Descrição⟩" da família ⟨código⟩ foi mudado por outra pessoa
+     depois que você abriu a edição — salvar desfaria essa mudança, e nada foi gravado. Recarregue a lista e edite de novo."* (ou
+     *"Os campos … foram mudados …"*; *"da subfamília"* para subfamília) e nada é gravado — antes, o salvar desfazia a mudança sem
+     aviso (**B815**). **O que fazer:** clique **Cancelar** e **Editar** de novo (a lista já recarregou com o que o outro gravou) e
+     salve. Salvar de novo sem clicar **Editar** recebe o mesmo aviso (**B816**). O que tinha sido digitado precisa ser digitado de novo.
+
+264. **NOVO (da Etapa 126, da revisão; anterior a ela, do núcleo) — o perfil Administrador tirado de alguém continua valendo na tela
+     até essa pessoa sair e entrar de novo.** Quem perdeu o perfil **Administrador** do almoxarifado (ou deixou de ser administrador do
+     módulo) e continua com a sessão aberta segue vendo Configurações com os botões de gravar — e o servidor recusa cada um com
+     *"Acesso restrito — administrador do Almoxarifado ou Super Administrador"*. Recarregar a página não resolve; sair e entrar resolve
+     (a sessão dura no máximo 24 horas). Trocar o perfil por **outro** perfil é respeitado na hora; só a remoção (perfil vazio) não é.
+     Nada é gravado por engano — quem decide é o servidor. **O que fazer:** depois de tirar o perfil de alguém, peça para a pessoa sair
+     e entrar de novo. Candidata de etapa do núcleo (a leitura das permissões do usuário no navegador).
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -12486,7 +12558,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   ficar velha; o passo seguinte sempre diz a verdade (medido pelo revisor de concorrência: nenhum beco).
 - **(124) A mudança da família que cai dentro do próprio salvar** (entre a leitura e a gravação, milissegundos) continua com a
   recusa geral *"O cadastro do material ⟨código⟩ mudou enquanto era salvo — …"* (**B798**), não com a nova.
-- **(125) O *Editar* da aba Famílias continua no "último que salva vence".** Ele manda o nome, a descrição e o tipo de uso que a
+- **(125) ✅ RESOLVIDA NA ETAPA 126 (`897044e2`, `5140841e`; B815) — o *Editar* da aba Famílias confere o que leu.** O texto original:
+  **O *Editar* da aba Famílias continua no "último que salva vence".** Ele manda o nome, a descrição e o tipo de uso que a
   lista mostrava: se outro administrador mudou a família no mesmo minuto, o *Editar* volta o que a lista mostrava. Candidata da
   próxima etapa (o mesmo molde dos campos lidos).
 - **(125) Os campos que o formulário de material não mostra** (categoria e subcategoria do catálogo antigo, fornecedor por código,
@@ -12494,7 +12567,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(125) O formulário recusa por mudança que não se vê na tela em um caso:** a unidade de compra e a quantidade por compra são o
   mesmo *"Como é comprado"*; mudar só a quantidade num material sem unidade de compra (só pela API) recusa nomeando *"Como é
   comprado"*, que a tela mostra vazio.
-- **(125) As outras abas de Configurações** com o administrador do sistema sem perfil — a **C261**.
+- **(125) ✅ RESOLVIDA NA ETAPA 126 — as outras abas de Configurações** com o administrador do sistema sem perfil — a **C261**.
+- **(126) A recusa geral pode aparecer por uma mudança que não muda nada.** Se, no instante exato do salvar do *Editar* de família
+  (milissegundos), outra pessoa grava a mesma coisa de outro jeito (o nome sem os espaços das pontas, o tipo de uso vazio como
+  "Ambos") ou exatamente o que você digitou, a resposta é *"A família mudou enquanto era salva — nada foi gravado. Recarregue a família
+  e salve de novo."* em vez de gravar. Salvar de novo grava (medido pelo revisor: sem laço, nada desfeito). Ficou assim de propósito:
+  a conferência nesse instante compara o valor gravado exato, e afrouxá-la traria de volta o risco de desfazer.
+- **(126) A frase *"Restrito — …"* das três abas que o administrador do sistema não lê** não mostra nada da configuração — nem o que
+  dá para ver sem gravar. É a regra do servidor (ele recusa a leitura); mostrar mais é a **B808**.
+- **(126) O Mapa de Áreas não tem frase de somente leitura** para o administrador do sistema: o *Editar Posições* só some.
+- **(126) O perfil Administrador removido continua valendo na tela até sair e entrar** — a **C264** (do núcleo).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -13397,6 +13479,14 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(126) Nenhum clique foi dado nesta etapa no navegador.** Mudaram a tela de Configurações (oito abas com a regra de quem grava), o
+Mapa de Áreas (o *Editar Posições* e o link), a dica do formulário de material e o *Editar* da aba Famílias (manda o que leu) — provados
+por teste de componente com a fronteira HTTP simulada (**27** casos nas abas, no Mapa e no formulário; **9** do *Editar* da família); o
+servidor, pela rota e pelo serviço (**36** cenários em dois arquivos novos, um deles a jornada de integração). O que **só o navegador**
+prova: o roteiro da Etapa 126 no guia — a frase no topo de cada aba para o administrador do sistema, os campos cinza em Estoques
+mínimos e Liberação por valor, a frase *Restrito* em Alertas sem o aviso de erro, e o aviso vermelho nomeando os campos no *Editar*
+da família com duas abas.
 
 **(125) Nenhum clique foi dado nesta etapa no navegador.** Duas telas mudaram — o formulário de material (manda os campos lidos) e
 a aba **Famílias** (o *Reativar* sem o nome; somente leitura para o administrador do sistema sem perfil) — e foram provadas por teste
@@ -25906,17 +25996,103 @@ salvares no mesmo segundo ainda desfaziam um ao outro em 9 de 30 rodadas — a c
 **sabotagem** fez **228** sabotagens: 126 derrubaram teste pela asserção certa, e as que sobreviveram mostraram que 22 dos 37 campos não
 tinham teste próprio — viraram 43 cenários.
 
+## Etapa 126 — As Configurações que o servidor recusa, e o Editar da família que leu (2026-10-16)
+
+A Etapa 125 tirou da aba Famílias os botões que o administrador do sistema via e que sempre recusavam — mas o mesmo acontecia em
+quase todas as outras abas de Configurações: ele abria **Tipos de material**, **Estoques mínimos**, **Setores**, **Localizações** e
+**Liberação por valor**, mexia, clicava em salvar e recebia *"Acesso restrito …"*; **Alertas**, **Regras de aprovação** e
+**Configurações gerais** nem abriam direito (um aviso de erro e a aba vazia). Esta etapa faz cada aba dizer, de cara, o que ele pode
+e de quem é o resto. E fecha o último "último que salva vence" da aba Famílias: o *Editar* não desfaz mais o que outro administrador
+mudou enquanto a lista estava aberta.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Administrador do sistema sem perfil em **Tipos de material**: *Novo Tipo*, editar e excluir — todos recusavam | Os cartões sem esses botões, com *"Somente leitura — cadastrar, editar e excluir tipos de material é do Administrador do almoxarifado ou do Super Administrador; peça a um deles."* (**B811**) |
+| **Estoques mínimos**: a tabela editável e *Salvar Alterações* — recusava | Os valores à vista em campos desabilitados, sem o botão, com *"Somente leitura — mudar estoque mínimo, estoque máximo, ponto de pedido e prazo de reposição é do …"* (**B813**) |
+| **Setores e Áreas**: *Novo Setor*, *Editar*, *Inativar* — recusavam | Sem os três, com *"Somente leitura — cadastrar, editar e inativar setores e áreas é do …"*; o bloco **Almoxarifados** continua igual (esse ele grava) |
+| **Localizações**: *Nova Localização*, *Editar*, *Mover*, *Excluir* — recusavam | Sem os quatro, com *"Somente leitura — cadastrar, editar, mover e excluir localizações é do …"*; *Etiqueta* e *Ver Mapa de Áreas* ficam |
+| **Liberação por valor**: a chave, o limite, os aprovadores e *Salvar* — recusava | Tudo à vista, desabilitado, sem *Salvar*, com *"Somente leitura — mudar a liberação por valor e os aprovadores é do …"* |
+| **Alertas**, **Regras de aprovação**, **Configurações gerais**: aviso de erro e a aba vazia | *"Restrito — ver e mudar os alertas de estoque é do Administrador do almoxarifado ou do Super Administrador; peça a um deles."* (e o mesmo para as regras de aprovação e as configurações gerais), sem aviso de erro (**B812**) |
+| **Mapa de Áreas**: *Editar Posições* — recusava ao salvar; o link *Localizações* abria a aba Tipos | Sem *Editar Posições*; o link abre a aba Localizações (**B814**) |
+| Formulário de material sem família cadastrada: *"— cadastre em Configurações → Famílias"* (ele não podia) | *"— solicite a um administrador"* |
+| *Editar* de família que outro administrador mudou depois de a lista carregar: desfazia a mudança calado | *"O campo "Descrição" da família ⟨código⟩ foi mudado por outra pessoa depois que você abriu a edição — salvar desfaria essa mudança, e nada foi gravado. Recarregue a lista e edite de novo."* (**B815**, **B816**) |
+
+### As regras, com o cenário exato
+
+Preparação: um usuário com perfil do sistema **Administrador** que **não** é Super Administrador, **não** tem perfil no almoxarifado
+e **não** é administrador do módulo Almoxarifado ("o administrador do sistema"); e um usuário **Administrador** do almoxarifado.
+
+**1. As abas que leem.** Entre como o administrador do sistema, **Almoxarifado → Configurações**. Em **Tipos de Material**, o topo diz
+*"Somente leitura — cadastrar, editar e excluir tipos de material é do Administrador do almoxarifado ou do Super Administrador; peça a
+um deles."* e os cartões não têm os ícones de editar e excluir. Em **Estoques Mínimos**, os números estão cinza e não aceitam
+digitação, não há *Salvar Alterações*, e o filtro funciona. Em **Setores e Áreas**, o bloco *Almoxarifados* tem *Novo Almoxarifado* e
+*Editar* (esses ele grava); a tabela de setores não tem *Novo Setor ou Área*, *Editar* nem *Inativar*. Em **Localizações**, sem *Nova
+Localização*, *Editar*, *Mover* e *Excluir*; *Etiqueta* e *Ver Mapa de Áreas* continuam. Em **Liberação por Valor**, a chave, o
+limite e as caixas dos aprovadores aparecem cinza com o gravado, sem *Salvar Configurações*.
+
+**2. As abas que nem leem.** Ainda como o administrador do sistema: **Alertas de Estoque** mostra só *"Restrito — ver e mudar os
+alertas de estoque é do Administrador do almoxarifado ou do Super Administrador; peça a um deles."*, sem aviso de erro; **Regras de
+Aprovação**, *"Restrito — ver e mudar as regras de aprovação é do …"*; **Configurações Gerais**, *"Restrito — ver e mudar as
+configurações gerais do almoxarifado é do …"*.
+
+**3. As que ele grava continuam.** **Categorias** (*Nova Categoria*), **Motivos**, **Materiais por setor**, **Perfis de Acesso** e o
+bloco **Almoxarifados**: como sempre, sem frase.
+
+**4. O Mapa e o formulário.** **Mapa de Áreas**: sem *Editar Posições*; o botão *Localizações* abre a aba Localizações. **Materiais →
+Novo**, numa base sem família cadastrada: *"Nenhuma família cadastrada — solicite a um administrador"*.
+
+**5. Quem grava.** Entre como o **Administrador** do almoxarifado: todas as abas como sempre, sem nenhuma frase; o Mapa com *Editar
+Posições*.
+
+**6. O *Editar* da família.** Como **Administrador** do almoxarifado, abra **Configurações → Famílias** em duas abas do navegador (A e
+B), com a família **ROL** (descrição *"Rolamentos"*). Na aba **B**: **Editar** → descrição *"Rolamentos em geral"* → **Salvar**:
+*"Família atualizada!"*. Na aba **A** (que ainda mostra a descrição antiga): **Editar** → mude só o nome → **Salvar**: *"O campo
+"Descrição" da família ROL foi mudado por outra pessoa depois que você abriu a edição — salvar desfaria essa mudança, e nada foi
+gravado. Recarregue a lista e edite de novo."* O formulário fica aberto com o nome digitado, e a lista atrás já mostra a descrição
+nova. **Salvar** de novo: o mesmo aviso. **Cancelar** → **Editar** → mude o nome → **Salvar**: *"Família atualizada!"*, com a
+descrição da aba B. Se na aba A você digitar a mesma descrição que a B gravou antes de salvar, salva normalmente.
+
+### O que esta etapa NÃO cobre
+
+1. **Se o administrador do sistema deve configurar o almoxarifado** — decisão sua (**B808**); decidida a favor, as abas voltam ao
+   normal para ele numa linha.
+2. **A recusa geral por uma mudança equivalente no mesmo instante** do salvar da família — declarada em **D (126)**.
+3. **O perfil Administrador removido que continua na tela até sair e entrar** — a **C264**, do núcleo.
+4. A **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
+   **C246**/**C247**, a tabela de conversões e o grupo acima de família — decisões suas.
+
+### O que a revisão encontrou
+
+A **medição** rodou cada rota das abas como o administrador do sistema e confirmou, uma a uma, o que a Etapa 125 tinha medido lendo.
+A **revisão do plano** (antes do código) achou um aviso falso numa família antiga (nome com espaços e tipo de uso vazio salvos sem
+mudança por outra pessoa) — a conferência passou a tratar os dois como o sistema grava; achou que salvar de novo depois do aviso
+recebe o aviso de novo (é o certo, e ficou dito); e achou o link do Mapa que abria a aba errada e a dica do formulário de material que
+mandava cadastrar onde ele não podia. A **revisão adversarial do código** (três revisores, executando): o de **regra** não refutou e
+achou uma recusa a mais no mesmo instante (declarada); o de **permissão** mediu 17 tipos de usuário contra 39 rotas sem nenhuma
+divergência e achou a **C264** (anterior, do núcleo); o de **sabotagem** fez **112** sabotagens — 90 derrubaram teste pela asserção
+certa, e as que sobreviveram pediram **10** cenários novos e duas asserções (`11a12cad`).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 126 entregue (2026-10-16):** **as Configurações que o servidor recusa, e o Editar da família que leu.** As abas de
+  Configurações que o servidor recusa ao administrador do sistema sem perfil ficam somente leitura — ou com a frase *Restrito*, as três
+  que ele não lê —, e o Mapa e o formulário de material deixam de oferecer o que ele não pode (**C261** resolvido; **B811** a
+  **B814**); o *Editar* da aba Famílias não desfaz mais o que outro administrador mudou (**D (125)** resolvida; **B815**, **B816**).
+  **O que é seu:** a decisão **B808** (continua); as decisões **B811 a B816** (reversíveis); os avisos **C263** e **C264**; as
+  limitações **(126)** em D e a verificação **(126)** em F. Nenhuma consulta nova em A. **Próxima: Etapa 127 — ver a "próxima
+  tarefa detalhada" no plano da Etapa 126.**
 
 - **Etapa 125 entregue (2026-10-16):** **o cadastro que o formulário leu, inteiro.** O formulário de material aberto não desfaz mais
   nenhum campo que outra pessoa (ou o recebimento, no custo) mudou — **D (124)** resolvida (**B805**, **B806**, **B809**); o *Reativar*
   de família não volta o nome antigo (**B807**); a aba Famílias fica somente leitura para o administrador do sistema sem perfil
   (**C259** resolvido na aba — o "o que fazer" dela estava errado; **B808**). **O que é seu:** a decisão **B808** (o administrador do
   sistema configura o almoxarifado?); as decisões **B805 a B809** (reversíveis); os avisos **C261** e **C262**; as limitações
-  **(125)** em D e a verificação **(125)** em F. Nenhuma consulta nova em A. **Próxima: Etapa 126 — ver a "próxima tarefa
-  detalhada" no plano da Etapa 125.**
+  **(125)** em D e a verificação **(125)** em F. Nenhuma consulta nova em A.
+  *(Próxima, na época: Etapa 126 — entregue acima.)*
 
 - **Etapa 124 entregue (2026-10-16):** **a família que o formulário leu, e a reativação que a recusa pede.** O formulário de material
   aberto não desfaz mais a família ou a subfamília que outra pessoa mudou (**D (123)** resolvida, **B800**); a recusa da requisição

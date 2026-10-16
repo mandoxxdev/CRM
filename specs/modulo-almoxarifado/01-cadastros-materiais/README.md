@@ -1,6 +1,9 @@
 # 01 — Cadastros de Materiais
 
-> **Status:** 🟡 — **continua 🟡. Etapa 125 (`13f3f37e..4d07084d`): o formulário de material manda os outros 37 campos que
+> **Status:** 🟡 — **continua 🟡. Etapa 126 (`6a1ecee0..11a12cad`): o *Editar* da aba Famílias manda o nome, o tipo de uso e a descrição
+> que leu (`campos_lidos`) e o salvar que desfaria a mudança de outro administrador é recusado nomeando os campos (D (125), B815,
+> B816); as outras abas de Configurações seguem a regra do servidor (C261, na feature 23)** — ver a seção "Etapa 126", no fim. Não
+> fecha item do checklist. Antes: **Etapa 125 (`13f3f37e..4d07084d`): o formulário de material manda os outros 37 campos que
 > leu (`campos_lidos`) e o salvar que desfaria a mudança de outra pessoa — ou do recebimento, no custo — é recusado nomeando os campos
 > (D (124), B805, B806, B809); o *Reativar* da aba Famílias não manda o nome (B807); a aba Famílias fica somente leitura para quem o
 > servidor recusa (C259, B808)** — ver a seção "Etapa 125", no fim. Não fecha item do checklist. Antes: **Etapa 124 (`a5e9d30f..5b5e3998`): o formulário de material manda a família e a subfamília que
@@ -554,3 +557,24 @@ Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa125-o-cadastro-que-o
   fator de consumo); as outras abas de Configurações com o administrador do sistema (C261).
 
 **A seção "Etapa 124" acima marca "os outros campos do cadastro" e "o *Reativar* manda o nome da lista" como fora** — fechados aqui.
+
+## Etapa 126 — o Editar da família que leu (2026-10-16)
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa126-configuracoes-que-o-servidor-recusa.md` (design e plano `6a1ecee0`).
+
+- [x] **`PUT /familias/:id` com `campos_lidos`** — `897044e2`, `11a12cad` (`services/almoxarifado/familiaCamposLidos.js`: `nome`
+  "Nome", `tipo_uso` "Tipo de uso", `descricao` "Descrição"; lido ≠ gravado **e** o que gravaria ≠ gravado, normalizados pela mesma
+  função — nome aparado, tipo de uso fora da lista = `'ambos'`, descrição vazia/NULL = `''` → 409 *"O campo "⟨rótulo⟩" da
+  ⟨família|subfamília⟩ ⟨código⟩ foi mudado por outra pessoa depois que você abriu a edição — salvar desfaria essa mudança, e nada foi
+  gravado. Recarregue a lista e edite de novo."*; forma inválida → 400 *"Campos lidos inválidos"* antes da leitura do banco; a coluna
+  lida **e** informada vai no `WHERE` com o valor do `current` → a mudança dentro do salvar dá o 409 geral *"A família mudou enquanto
+  era salva — …"*). Sem a chave, o de antes (B815).
+- [x] **O *Editar* da aba manda o que leu** — `5140841e` (os valores crus da lista; não vai no *Nova* nem no *Reativar*; no 409 o
+  formulário fica e a lista recarrega; os lidos não se atualizam no recarregar — B816).
+- [x] **Integração** — `470b49e8` (dois Administradores pela rota; o segundo salvar com os mesmos lidos; o Inativar e o Reativar
+  depois; o serviço direto).
+- [x] **Fase 5** — `11a12cad` (três revisores; 112 sabotagens, 10 cenários novos e duas asserções).
+- [ ] **Fora, de propósito:** a recusa geral por uma mudança equivalente no mesmo instante do salvar (D (126)); a tabela de conversões e
+  o grupo acima de família (do P.O.).
+
+**A seção "Etapa 125" acima marca o *Editar* da aba Famílias como fora** — fechado aqui.

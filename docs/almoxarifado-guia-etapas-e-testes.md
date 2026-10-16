@@ -1,17 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-16 (Etapa 125) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-16 (Etapa 126) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124 e 125) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125 e 126) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 125 ENTREGUE · próxima do almoxarifado: Etapa 126)
+> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 126 ENTREGUE · próxima do almoxarifado: Etapa 127)
 >
-> **O desenvolvimento parou aqui: Etapa 125 fechada — 2026-10-16.** A **Etapa 125 (o cadastro que o formulário leu, inteiro)**: o
+> **O desenvolvimento parou aqui: Etapa 126 fechada — 2026-10-16.** A **Etapa 126 (as Configurações que o servidor recusa, e o
+> Editar da família que leu)**: o administrador do sistema sem perfil no almoxarifado vê cada aba de Configurações dizer o que ele
+> pode — as que ele só lê aparecem sem os botões de gravar, com a frase de quem é; as três que ele nem lê mostram só a frase —, em vez
+> de botões que recusam; e o *Editar* da aba Famílias não desfaz mais o que outro administrador mudou enquanto a lista estava aberta
+> (avisa quais campos e pede para editar de novo).
+> **Próxima: Etapa 127** — ver a próxima tarefa no plano da 126.
+>
+> **Etapa 125, 2026-10-16.** A **Etapa 125 (o cadastro que o formulário leu, inteiro)**: o
 > formulário de material aberto não desfaz mais nenhum campo que outra pessoa mudou enquanto ele estava aberto — nem o custo que a
 > nota atualizou (avisa quais campos e pede para recarregar); o *Reativar* da aba Famílias não volta mais o nome antigo; e a aba
 > Famílias fica somente leitura para o administrador do sistema sem perfil no almoxarifado, em vez de mostrar botões que recusam.
-> **Próxima: Etapa 126** — ver a próxima tarefa no plano da 125.
+> *(Próxima, na época: Etapa 126 — entregue acima.)*
 >
 > **Etapa 124, 2026-10-16.** A **Etapa 124 (a família que o formulário leu, e a reativação
 > que a recusa pede)**: o formulário de material aberto não desfaz mais a família ou a subfamília que outra pessoa mudou enquanto
@@ -6511,6 +6518,50 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 126 — As Configurações que o servidor recusa, e o Editar da família que leu (ENTREGUE — 2026-10-16)
+
+**O que mudou, em uma frase:** quem abre Configurações sem poder gravar vê, em cada aba, o que pode e de quem é o resto — em vez de
+botões que recusam; e editar uma família não desfaz mais o que outro administrador mudou enquanto a lista estava aberta.
+
+**O problema que ela resolve.** O administrador do sistema que não tem perfil no almoxarifado abre Configurações, mas o servidor só
+deixa ele gravar algumas abas. Em **Tipos de material**, **Estoques mínimos**, **Setores**, **Localizações** e **Liberação por valor**
+ele mexia, salvava e recebia *"Acesso restrito …"*; **Alertas**, **Regras de aprovação** e **Configurações gerais** abriam com um aviso
+de erro e a aba vazia. E o *Editar* da aba Famílias gravava o nome, a descrição e o tipo de uso que a lista mostrava, desfazendo o que
+outro administrador tinha acabado de mudar.
+
+| Antes | Agora |
+|---|---|
+| Botões de cadastrar, editar, excluir e salvar que recusavam | As abas mostram os dados sem esses botões, com *"Somente leitura — ⟨o quê⟩ é do Administrador do almoxarifado ou do Super Administrador; peça a um deles."* |
+| Estoques mínimos e Liberação por valor editáveis | Os valores à vista em campos cinza; o filtro e a busca continuam |
+| Alertas, Regras de aprovação e Configurações gerais: aviso de erro e aba vazia | *"Restrito — ver e mudar ⟨…⟩ é do Administrador do almoxarifado ou do Super Administrador; peça a um deles."* |
+| Mapa de Áreas: *Editar Posições* recusava; o botão *Localizações* abria a aba Tipos | Sem *Editar Posições* para ele; o botão abre a aba Localizações |
+| *Editar* de família desfazia a mudança de outro administrador | *"O campo "Descrição" da família ⟨código⟩ foi mudado por outra pessoa depois que você abriu a edição — salvar desfaria essa mudança, e nada foi gravado. Recarregue a lista e edite de novo."* |
+
+**Roteiro de teste (10 minutos).**
+
+1. Entre como um usuário **Administrador do Sistema** que não é Super Administrador, não tem perfil no almoxarifado e não é
+   administrador do módulo. Abra **Almoxarifado → Configurações**.
+2. **Tipos de Material**: no topo, *"Somente leitura — cadastrar, editar e excluir tipos de material é do Administrador do almoxarifado
+   ou do Super Administrador; peça a um deles."*; sem *Novo Tipo de Material* e sem os ícones de editar e excluir nos cartões.
+3. **Estoques Mínimos**: os números cinza, sem aceitar digitação; sem *Salvar Alterações*; digite no filtro e a lista filtra.
+4. **Setores e Áreas**: o bloco *Almoxarifados* com *Novo Almoxarifado* e *Editar* (esses ele grava); a tabela de setores sem *Novo
+   Setor ou Área*, *Editar* e *Inativar*, com a frase.
+5. **Localizações**: sem *Nova Localização*, *Editar*, *Mover* e *Excluir*; *Etiqueta* e *Ver Mapa de Áreas* continuam.
+6. **Liberação por Valor**: a chave, o limite e os aprovadores cinza com o gravado; sem *Salvar Configurações*.
+7. **Alertas de Estoque**, **Regras de Aprovação** e **Configurações Gerais**: só a frase *"Restrito — …"*, sem aviso de erro.
+8. **Categorias**, **Motivos**, **Materiais por setor** e **Perfis de Acesso**: como sempre.
+9. **Mapa de Áreas**: sem *Editar Posições*; *Localizações* abre a aba Localizações.
+10. Entre como **Administrador** do almoxarifado: tudo como sempre, sem frase.
+11. Ainda como Administrador, **Configurações → Famílias** em duas abas do navegador (A e B). Aba **B**: **Editar** uma família → mude
+    a descrição → **Salvar** (*"Família atualizada!"*). Aba **A**: **Editar** a mesma → mude o nome → **Salvar**: *"O campo "Descrição"
+    da família ⟨código⟩ foi mudado por outra pessoa depois que você abriu a edição — salvar desfaria essa mudança, e nada foi gravado.
+    Recarregue a lista e edite de novo."*; o formulário fica com o nome digitado. **Salvar** de novo: o mesmo aviso. **Cancelar** →
+    **Editar** → mude o nome → **Salvar**: grava, com a descrição da aba B.
+
+**O que esta etapa NÃO cobre.** Se o administrador do sistema deve configurar o almoxarifado continua sendo decisão sua (B808); quem
+perdeu o perfil Administrador continua vendo os botões até sair e entrar (C264, do núcleo); e, no instante exato do salvar, uma mudança
+equivalente de outra pessoa pode dar a recusa geral *"A família mudou enquanto era salva — …"* — salvar de novo grava (D (126)).
 
 ## Etapa 125 — O cadastro que o formulário leu, inteiro (ENTREGUE — 2026-10-16)
 

@@ -205,7 +205,11 @@ A suíte inteira roda **uma por vez**, sempre na branch; galho e revisores rodam
    ruído.
 3. **Paralelismo:** **0** galhos em paralelo de fato (3 galhos em sequência), **0** retrabalho; **3** revisores em paralelo na Fase 5
    sob a trava de máquina (sem esgotar portas desta vez); 1 quebra da regra por mim (acima).
-4. **Defeito que escapou:** *(preencher na Etapa 126)*.
+4. **Defeito que escapou** *(preenchido na Etapa 126)*: **nenhum no código da 125** — a Fase 0 e os quatro revisores da 126 (Fase 2 e
+   Fase 5) passaram pela aba Famílias somente leitura, pelo `podeGravarConfigAlmox` e pelo `PUT /familias` com o nome omitido sem achar
+   defeito neles. **Escapou da medição:** a matriz da C261 (agente de leitura da 125) cobriu as abas de Configurações, mas não o
+   **formulário de material**, que dizia ao administrador do sistema *"— cadastre em Configurações"* (`canConfigureAlmox`), nem o link
+   *Localizações* do Mapa, que abria a aba Tipos (sem `?tab`); os dois foram achados pela Fase 2 da 126 e corrigidos nela (B814).
 
 ## Próxima tarefa detalhada — Etapa 126
 

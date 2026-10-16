@@ -21,6 +21,8 @@
 > ALMOXARIFE]` no mapa, mais uma regra por **identidade** (quem pediu a requisição) checada no serviço; ver o bloco
 > "Etapa 77" logo abaixo. O status 🟡-forte não muda — a etapa é da feature 07). Antes: 2026-08-29 (**Etapa 24, `a81e51a..4680daa`: a perna Perfis começa** — `QUALIDADE` em `permissions.js` (`a81e51a`), a revogação auditando com `EXCLUSAO` e o `dados_anteriores` nos dois caminhos (`9f7c309`), `ADMINISTRADOR` fora do seletor com a razão visível e os 7 primeiros testes da aba (`b13de4a`), a integração que dá e tira perfil e lê pela tela-contrato (`b9a5848`) e o rótulo do perfil no 403 do client (`4680daa`); ver o bloco "Etapa 24" no fim). Antes: 2026-08-28 (**Etapa 23, `0fe8d02..4f1aeb9`: a trilha para de mentir por omissão e por excesso** — o retry de `SQLITE_BUSY` para de responder erro e gravar assim mesmo (`0fe8d02`), `PUT /configuracoes` vira um `UPDATE` único com `CASE` (`b6b7b24`/`d507ccc`), as **cinco** rotas de exclusão distinguem "não existe" de "já inativa" (`9858bec`) e a leitura pela tela-contrato prova que a trilha mostra **um** ato (`4f1aeb9`); ver o bloco "Etapa 23" no fim e o checklist "Trilha honesta"). Antes: 2026-08-28 (**Etapa 22, `8c6ffbe..169458d`: a trilha ganha leitor** — tela `/almoxarifado/auditoria` com os quatro filtros novos, o de/para calculado no servidor, a rota de opções alimentada pelo banco e os **três índices** que a tabela nunca teve; ver o bloco "Etapa 22" no fim e o checklist "Auditoria visível"). Antes: 2026-08-28 (Etapa 21, `d5c8d3a..07a4b1c`: **nada desta feature mudou** — a etapa é do núcleo do CRM e fecha os itens que a Etapa 20 empurrou para cá dizendo "é do core"; registrada no bloco "Etapa 21 — o que era do núcleo" no fim deste arquivo, e o item de backup do checklist de Segurança ganhou a medição que faltava). Antes: 2026-08-28 (Etapa 20, `1b0f0e9..a3f5135`: a rota de foto de material para de mentir sucesso, de deixar órfão e de não auditar; a leitura de configurações para de devolver segredo em claro e o PUT genérico para de aceitá-lo; ler o mapa de permissões por setor passa a exigir o mesmo que escrevê-lo). Antes: 2026-08-28 (Etapa 19, `a574b3a..55e4144`: os 23 endpoints de cadastro e configuração passam a auditar, com diff nas configurações, segredo mascarado e três correções de comportamento que o log exigia). Antes: 2026-08-28 (Etapa 18: a trilha do inventário). Antes: 2026-08-11 — auditoria de cauda: corrigida a afirmação "auditoria não é usada em produção" (era verdade em 2026-08-02, foi superada pelas Etapas 3–6 e ninguém atualizou aqui), corrigida a contagem de ações (14, não 15) e nomeados os dois buracos reais de auditoria que restam
 >
+> **Etapa 126 (2026-10-16):** as abas de Configurações que o servidor recusa ao administrador do sistema sem perfil ficam somente leitura (ou restritas, as três que ele não lê), e o Mapa e o formulário de material seguem a mesma regra (C261, `2c6eab89`, `11a12cad`; B811–B814). Nenhuma permissão do servidor mudou. Achado anterior, do núcleo: o perfil Administrador removido continua na tela até sair e entrar (C264). Continua 🟡-forte.
+>
 > **Etapa 122 (2026-10-16):** as duas leituras que tratavam a linha da Auditoria como estado (C255) passam a ler colunas gravadas com o ato (B788); a trilha do excedente na conferência deixa de ser fatal (B791). Continua 🟡-forte.
 
 ## Etapa 98 — a devolução à prateleira cabe na ação `separar_emitir` (`9e0bb225`, `4941c9d9`, `b7fc06a0`)
@@ -1110,6 +1112,25 @@ Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa125-o-cadastro-que-o
   As duas regras do servidor discordam entre si; qual vale é a **B808**. As outras abas: **C261**.
 - **A C259 dizia "dê a essa pessoa o perfil Administrador" — estava errado:** `PUT /perfis-usuario/:id` de um administrador do sistema
   responde 409 (*"… tem acesso total ao almoxarifado …"*) e o cadastro de usuários desabilita o *Administrador do módulo* para ele.
+
+## Etapa 126 (2026-10-16) — as outras abas de Configurações somente leitura para quem o servidor recusa (C261)
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa126-configuracoes-que-o-servidor-recusa.md`.
+
+- [x] **A regra da tela é a do servidor em toda a Configurações** — `2c6eab89`, `11a12cad`: o pai calcula `podeGravarConfigAlmox` pelo
+  mesmo usuário efetivo do portão; **Tipos de material**, **Estoques mínimos**, **Setores** (sem o bloco Almoxarifados, que o servidor
+  deixa), **Localizações** e **Liberação por valor** ficam somente leitura com *"Somente leitura — ⟨o quê⟩ é do Administrador do
+  almoxarifado ou do Super Administrador; peça a um deles."*; **Alertas**, **Regras de aprovação** e **Configurações gerais** mostram
+  *"Restrito — ⟨o quê⟩ …"* sem chamar o `GET` (B811–B813).
+- [x] **O Mapa de Áreas e o formulário de material** — `2c6eab89`: *Editar Posições* e *Cadastrar localizações* só para quem grava; a
+  dica *"— cadastre em Configurações"* só para quem grava; os links abrem a aba Localizações (B814).
+- [x] **Medido (Fase 0, sonda; Fase 5, 17 tipos de usuário × 39 rotas):** nenhuma divergência entre `podeGravarConfigAlmox` e o
+  servidor nos perfis que as rotas produzem.
+- **Achado anterior, do núcleo (C264):** `mergeUserPermissions` (cliente) faz `perfil_almoxarifado: extra ?? base` — o `null` do
+  servidor (perfil removido) cai no valor antigo guardado no navegador, e a tela continua como Administrador até sair e entrar. O
+  servidor recusa. Fora desta etapa (é do núcleo).
+- **Para a B808 (não é defeito):** a aba **Perfis de Acesso** funciona para o administrador do sistema, que pode dar o perfil
+  Administrador a outra pessoa.
 
 ## Regras essenciais + testes de API exigidos
 
