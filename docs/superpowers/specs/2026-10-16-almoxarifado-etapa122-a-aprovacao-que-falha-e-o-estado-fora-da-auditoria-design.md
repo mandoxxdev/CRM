@@ -13,7 +13,7 @@ Gancho em `db.run` que faz falhar **uma vez** o comando citado (molde `auditoria
 |---|---|---|
 | 1 | `/aprovar` de requisição PENDENTE de 3 com saldo 10, o `UPDATE … SET status=?, aprovador_id…` falhando | **500** `{"error":"<msg do banco>"}`, status **PENDENTE**, **1 reserva ATIVA** |
 | 2 | o mesmo, depois reaprovar | 200 TOTALMENTE_RESERVADA, 1 reserva ATIVA (não reserva em dobro — confirma a r2 da 121) |
-| 3 | o mesmo, depois **rejeitar** (em vez de reaprovar) | 200 **REJEITADO com a reserva ATIVA** — o material fica preso para uma requisição morta, e nenhuma tela solta (achado novo da Fase 0, **C256**) |
+| 3 | o mesmo, depois **rejeitar** (em vez de reaprovar) | 200 **REJEITADO com a reserva ATIVA** — () => 'o material fica preso para uma requisição morta (achado novo da Fase 0, **C256**) — *dizia "e nenhuma tela solta"; **estava errado**: a liberação manual em **Reservas** solta (Fase 5, r1)*' |
 | 4 | `/aprovar-valor` de AGUARDANDO_APROVACAO_VALOR, o `UPDATE … WHERE status='APROVADO'` falhando | **500**, status **APROVADO** (gravado pelo serviço), 1 reserva ATIVA; repetir dá 400 (o status já não é AGUARDANDO_APROVACAO_VALOR) |
 | 5 | aprovação automática com o `UPDATE` falhando | já tratada desde a 73: 201, PENDENTE, reservas desfeitas (`routes/almoxarifado.js` ~3768) |
 | 6 | nota processada contra pedido `enviado` de 2 com a trilha `STATUS_AUTOMATICO_RECEBIDO` falhando → estorno da entrada | processar 200, pedido `recebido`; estorno 200, **pedido continua `recebido`** (deveria reabrir para `enviado`) |

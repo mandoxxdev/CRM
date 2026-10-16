@@ -141,7 +141,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Sessenta e nove itens para rodar em produção ANTES do deploy — sessenta e seis são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Setenta e um itens para rodar em produção ANTES do deploy — sessenta e oito são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-16 (Etapa 122) de sessenta e nove para setenta e um**, com a **A70** — reservas presas em requisições rejeitadas, canceladas ou pendentes — e a **A71** — pedidos e conferências que perderam a linha da Auditoria entre a Etapa 121 e a 122; as duas opcionais.)*
 
 *(**Atualizado em 2026-10-16 (Etapa 121) de sessenta e oito para sessenta e nove**, com a **A69** — entregas em que a Devolução pode ter devolvido de novo peças que já tinham voltado por outra entrada; opcional.)*
 
@@ -2555,12 +2557,83 @@ uma vez só, **estorne a Entrada de devolução** dessa devolução em **Movimen
 devolução deixa de contar (conferido numa sonda para a devolução ao Estoque: estoque 4 → 2). Para a devolução à Quarentena,
 o mesmo acerto não foi conferido — fale com o suporte antes.
 
+**A70 (NOVA, da Etapa 122 — reservas presas em requisições que não podem mais usá-las).** Uma consulta, somente leitura;
+**opcional**. Até a Etapa 122, se a gravação do status falhasse no *Aprovar*, a reserva criada ficava **ativa** com a requisição
+*Pendente* — e, rejeitada ou cancelada depois, o material ficava preso para sempre (**C254**, **C256**). Desde a 122 isso não
+acontece mais, salvo por duas falhas seguidas (a do status e a do desfazer).
+
+```sql
+-- reservas ativas de requisicoes que nao seguram reserva (rascunho, pendente, rejeitada, cancelada ou excluida)
+SELECT r.id AS reserva_id, r.material_id, m.codigo AS material, r.quantidade,
+       rq.id AS requisicao_id, rq.numero AS requisicao, rq.status AS status_requisicao, rq.ativo
+  FROM reservas_material_almoxarifado r
+  JOIN requisicoes_almoxarifado rq ON rq.id = r.requisicao_id
+  LEFT JOIN materiais_almoxarifado m ON m.id = r.material_id
+ WHERE r.status = 'ATIVA'
+   AND (rq.status IN ('RASCUNHO', 'PENDENTE', 'REJEITADO', 'CANCELADO') OR COALESCE(rq.ativo, 1) = 0)
+ ORDER BY rq.id, r.id;
+```
+
+*(Conferida numa sonda contra o código de antes da etapa: o *Aprovar* com a gravação do status falhando e o *Rejeitar* em seguida
+geram a reserva presa, e a consulta a acha; a reserva legítima de uma requisição aprovada no mesmo banco **não** aparece. Contra o
+código da etapa, o mesmo roteiro não deixa nada e a consulta sai vazia.)*
+
+**Como ler o resultado:** **vazia** — nada a fazer. Cada linha é material segurado para uma requisição que não vai mais buscá-lo.
+Em **Almoxarifado → Reservas**, ache a reserva pelo número da requisição e use **Liberar** (motivo: *reserva presa — A70*). Se a
+requisição estiver *Pendente* e ainda for aprovada, aprovar de novo também acerta (não reserva em dobro).
+
+**A71 (NOVA, da Etapa 122 — o que perdeu a linha da Auditoria entre a Etapa 121 e esta).** Duas consultas, somente leitura;
+**opcional**. Desde a Etapa 121 a linha da Auditoria de um ato já feito pode faltar sem derrubar o ato (**B784**). Desde a 122 o
+estorno da nota e o relatório de fornecedor não dependem mais dela (**B788**), e a migração preenche o passado **lendo essa linha**
+— o que perdeu a linha nesse intervalo fica de fora (**C257**). Só com erro de banco; o normal é as duas saírem vazias.
+
+```sql
+-- (a) pedidos fechados como "Recebido", com nota processada, sem o registro de quem fechou
+SELECT p.id, p.numero, p.status, p.updated_at,
+       (SELECT a.acao FROM auditoria_log_almoxarifado a
+         WHERE a.entidade = 'pedido_compra' AND a.entidade_id = p.id
+           AND a.acao IN ('STATUS_AUTOMATICO_RECEBIDO', 'STATUS_AUTOMATICO_REABERTO', 'STATUS_MANUAL_ALTERADO')
+         ORDER BY a.id DESC LIMIT 1) AS ultima_trilha
+  FROM pedidos_compra p
+ WHERE LOWER(COALESCE(p.status, '')) = 'recebido'
+   AND p.fechado_automaticamente_de IS NULL
+   AND EXISTS (SELECT 1 FROM recebimentos_material_almoxarifado r
+                WHERE r.pedido_compra_id = p.id AND r.status = 'PROCESSADO')
+   AND COALESCE((SELECT a.acao FROM auditoria_log_almoxarifado a
+                  WHERE a.entidade = 'pedido_compra' AND a.entidade_id = p.id
+                    AND a.acao IN ('STATUS_AUTOMATICO_RECEBIDO', 'STATUS_AUTOMATICO_REABERTO', 'STATUS_MANUAL_ALTERADO')
+                  ORDER BY a.id DESC LIMIT 1), '') <> 'STATUS_MANUAL_ALTERADO'
+ ORDER BY p.id;
+
+-- (b) recebimentos cuja conferencia comecou, ja passaram dela, e nao tem a data do fim da conferencia
+SELECT r.id, r.numero, r.status, r.fornecedor_nome, r.data_recebimento
+  FROM recebimentos_material_almoxarifado r
+ WHERE r.conferencia_finalizada_em IS NULL
+   AND r.status IN ('CONFERIDO_ALMOX', 'EM_COMPRAS', 'ENCAMINHADO_FATURAMENTO', 'EM_ENTRADA_NF', 'PROCESSADO')
+   AND EXISTS (SELECT 1 FROM auditoria_log_almoxarifado a
+                WHERE a.entidade = 'recebimento' AND a.entidade_id = r.id AND a.acao = 'INICIAR_CONFERENCIA')
+ ORDER BY r.id;
+```
+
+*(Conferidas numa sonda contra o esquema da etapa: (a) acha o pedido fechado pela nota sem a coluna e sem a linha, e **não** acha o
+fechado normalmente nem o fechado à mão pelo comprador; (b) acha o recebimento finalizado sem a coluna e sem a linha, e **não** acha
+o finalizado normalmente, o que ainda está em conferência nem o que foi para Compras sem conferência.)*
+
+**Como ler o resultado:** **vazias** — nada a fazer. **(a)**: cada linha é um pedido *Recebido* que o estorno da nota **não**
+reabriria. Pergunte ao comprador se ele fechou o pedido à mão; a (a) também lista pedidos fechados à mão antes da Etapa 71 (a mesma
+família da **A35**). **Foi o sistema** (a nota completou o pedido): o suporte grava o status de antes do fechamento —
+`UPDATE pedidos_compra SET fechado_automaticamente_de = 'enviado' WHERE id = ⟨id⟩` (use o status que o pedido tinha: *enviado*,
+*aprovado*, *em_analise* ou *pendente*). **Foi ele:** nada a fazer. **(b)**: cada linha é um recebimento que o relatório *Qualidade
+por fornecedor* conta como **não conferido**. Se a conferência foi finalizada (o operador confirma), o suporte grava a data —
+`UPDATE recebimentos_material_almoxarifado SET conferencia_finalizada_em = '⟨data⟩' WHERE id = ⟨id⟩`; se não, nada a fazer. Só muda
+o relatório.
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B787; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B792; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -8370,6 +8443,56 @@ a aprovação que falha ao gravar o status e deixa as reservas de pé (**C254**)
 Auditoria (**C255**). A **B755**, a **B761**, a **C224**, o resto da **C225**, a **C228**, a **C219** e a **C230** continuam
 esperando vocês.
 
+**B788 (NOVA, da Etapa 122) — "fechado pelo sistema" e "conferência finalizada" viram colunas; a do pedido é na tabela do Compras
+(core).** Antes: o estorno da nota só reabria o pedido fechado automaticamente se a **última** linha de mudança de status na
+Auditoria fosse a do fechamento automático; o relatório *Qualidade por fornecedor* só dava o recebimento como conferido se
+existisse a linha *Fim da conferência*. Desde a Etapa 121 essas linhas podem faltar com o ato feito (**B784**) — medido: o pedido
+não reabria e o recebimento saía *não conferido* (**C255**). **O que foi escolhido** (`63490f75`, `ec140017`, `0980cd78`): o estado
+passa a ser uma **coluna gravada no mesmo comando que muda o status** — o único jeito, sem transação no banco, de não ter uma
+segunda gravação que possa falhar: (1) no **pedido de compra** (tabela do Compras), *de que status o sistema o fechou* — gravado
+pelo fechamento automático, apagado pela reabertura do estorno e pela **mudança manual do comprador** quando o status muda (a tela
+de Compras ganhou essa expressão no seu comando de gravação; nada mais no Compras mudou); (2) no **recebimento**, *quando a
+conferência foi finalizada* (a primeira vez), gravado só pelo gesto *Finalizar Conferência*. As linhas da Auditoria continuam
+sendo gravadas, como rastro. O passado é preenchido uma vez, no boot, a partir dessas linhas (a **A71** acha o que perdeu a linha
+entre a Etapa 121 e esta). Achado na revisão e corrigido: o comprador que fechava à mão no mesmo instante em que uma nota completava
+o pedido tinha o fechamento desfeito pelo estorno — vale agora o que ele **viu** ao clicar, como na linha da Auditoria; e a migração
+do boot cede a uma mudança manual feita durante ela. **Core × módulo — descartado:** uma tabela do módulo para o fechamento (seria a
+segunda gravação, a mesma brecha da Auditoria — e a mudança manual do Compras teria de apagá-la do mesmo jeito, mexendo no core);
+manter a linha da Auditoria como estado. **Reversível:** as colunas são novas e opcionais; voltar o código as deixa ignoradas.
+
+**B789 (NOVA, da Etapa 122) — o *Aprovar* que falha ao gravar o status desfaz a reserva que acabou de criar.** Antes: a reserva
+ficava **ativa** com a requisição *Pendente*; aprovar de novo acertava, mas **rejeitar** deixava o material preso para uma
+requisição morta (**C254**, **C256**). **O que foi escolhido** (`1ffd53da`): a falha na gravação do status desfaz as reservas desta
+aprovação, esperando a movimentação dos materiais como a aprovação, e devolve o mesmo erro de sempre; a requisição fica *Pendente*
+sem reserva e aprovar de novo funciona. **Descartado:** responder sucesso (o status não foi gravado). Resíduo: se o desfazer também
+falhar, a reserva continua presa — **Reservas → Liberar**, e a **A70** acha. **Reversível.**
+
+**B790 (NOVA, da Etapa 122) — o *Aprovar valor* que falha depois da liberação responde sucesso.** Antes: a liberação por valor já
+estava gravada (*Aprovada*) quando a reserva e o status de reserva eram gravados; uma falha nessa segunda parte respondia erro — e
+repetir dava *"Apenas requisições aguardando aprovação de valor podem ser liberadas"* (medido). **O que foi escolhido**
+(`1ffd53da`, `0980cd78`): qualquer falha depois da liberação **mantém** o que foi reservado e responde sucesso com o status gravado
+(*Aprovada* com a reserva é um estado normal: a separação, a entrega e a nota seguinte trabalham com ele — conferido pela revisão);
+o log do servidor registra *"[almoxarifado-aprovar-valor] A requisição ⟨n⟩ foi liberada por valor e fica APROVADO; o status
+pós-aprovação não foi gravado: ⟨erro⟩"*. **Se a requisição foi cancelada ou rejeitada no mesmo instante** (achado na revisão, 30 em
+30), a reserva é desfeita. **Inclui** a recusa *"A requisição ganhou itens enquanto era aprovada…"* nessa porta: passa a responder
+sucesso com a requisição *Aprovada* sem reserva (a nota seguinte reserva para ela; repetir dava erro). **Descartado:** desfazer a
+reserva e responder erro, ou sucesso sem a reserva (a requisição aprovada ficaria sem o material garantido — o defeito que a
+Etapa 4 fechou). **Reversível.**
+
+**B791 (NOVA, da Etapa 122) — a Auditoria do excedente autorizado na conferência e na tela fiscal vem depois da quantidade.**
+Antes: as duas telas gravavam a linha *Excedente autorizado* **antes** de gravar as quantidades, item a item; com dois excedentes e
+a linha do segundo falhando, nada era gravado e a linha do primeiro ficava — o registro de uma autorização que não aconteceu. A
+Etapa 121 tinha deixado essa porta **fatal de propósito** (o erro era a verdade, porque nada tinha sido gravado); com dois itens nem
+isso valia. **O que foi escolhido** (`6e149507`): a decisão (as recusas *"Quantidade recebida … maior que a esperada …"* e a da
+permissão) continua **antes** de qualquer gravação; a linha de cada excedente é gravada logo **depois** da quantidade daquele item,
+e a falha dela não derruba a tela (como as outras desde a **B784**). **Descartado:** gravar todas as linhas antes, num comando só
+(tudo ou nada, mas continua registrando um ato que pode não acontecer); gravar todas no fim (uma falha no meio deixaria as
+quantidades anteriores sem linha). **Reversível.**
+
+**B792 (NOVA, da Etapa 122) — a próxima etapa do almoxarifado (123).** Ver a "próxima tarefa detalhada" no plano da Etapa 122. A
+**B755**, a **B761**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230** e o reparo da **C246** continuam
+esperando vocês.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -10829,19 +10952,30 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      desligada, antes de devolver uma saída antiga de material que tinha série, confira no extrato se as peças já voltaram por uma
      Entrada. Candidata da próxima etapa.
 
-254. **NOVO (da Etapa 121, da revisão do código; anterior a ela) — a aprovação que falha ao gravar o novo status deixa as
+254. **✅ RESOLVIDO NA ETAPA 122 (`1ffd53da`, `0980cd78`; B789, B790) — a aprovação que falha ao gravar o status não deixa reserva de pé; o *Aprovar valor* responde sucesso com a reserva; o que ficou preso antes, a A70 acha (C256).** O texto original: **NOVO (da Etapa 121, da revisão do código; anterior a ela) — a aprovação que falha ao gravar o novo status deixa as
      reservas de pé.** Só com erro de banco: se a gravação do status no *Aprovar* falha, a tela responde erro, as reservas criadas
      para a requisição ficam **ativas** e a requisição continua **pendente** (o material fica preso para ela). Aprovar de novo não
      reserva em dobro (medido, 0 em 10). **O que fazer:** se o *Aprovar* responder erro, recarregue a requisição — se ela continuar
-     pendente, aprove de novo (as reservas se acertam) ou rejeite. Candidata da próxima etapa.
+     () => 'pendente, aprove de novo (as reservas se acertam) ou rejeite. Candidata da próxima etapa. *(Etapa 122: o "ou rejeite"\n     **estava errado** — rejeitar deixava o material preso para a requisição rejeitada; ver a **C256** e a **A70**.)*'
 
-255. **NOVO (da Etapa 121) — duas leituras dependem da linha da Auditoria, que agora pode faltar quando o banco falha.** Desde a
+255. **✅ RESOLVIDO NA ETAPA 122 (`63490f75`, `ec140017`, `0980cd78`; B788) — o estorno da nota e o relatório de fornecedor leem colunas gravadas junto com o ato, não a Auditoria; o que perdeu a linha entre a 121 e a 122, a A71 acha (C257).** O texto original: **NOVO (da Etapa 121) — duas leituras dependem da linha da Auditoria, que agora pode faltar quando o banco falha.** Desde a
      Etapa 121 o ato vale mesmo com a Auditoria falhando (**B784**); em dois lugares o sistema lê essa linha como estado: (1) o
      **estorno da nota** só reabre o pedido de compra que foi **fechado automaticamente** se achar a linha desse fechamento — sem
      ela, o pedido continua *Recebido*; (2) o **relatório de fornecedor** dá o recebimento como *conferido* pela linha do fim da
      conferência — sem ela, ele aparece como não conferido. Igual a antes da etapa para aquele item (antes a falha também deixava o
      ato feito sem a linha). Só com erro de banco. **O que fazer:** depois de estornar uma nota, confira o status do pedido e
      reabra-o à mão se preciso. Candidata da próxima etapa (guardar esse estado numa coluna, não na Auditoria).
+
+256. **NOVO (da Etapa 122, da medição; anterior a ela) — a requisição rejeitada (ou cancelada) com uma reserva presa.** Até a
+     Etapa 122, o *Aprovar* que falhava ao gravar o status deixava a reserva ativa (**C254**); rejeitada a requisição depois, o
+     material ficava preso para ela — nenhuma tela de requisição o soltava. **Desde a 122** isso não acontece mais (**B789**,
+     **B790**), salvo por duas falhas seguidas de banco. **O que fazer:** rode a **A70**; cada linha se solta em **Reservas →
+     Liberar**.
+
+257. **NOVO (da Etapa 122, da revisão) — o que perdeu a linha da Auditoria entre a Etapa 121 e a 122.** Nesse intervalo, um pedido
+     fechado pelo sistema ou uma conferência finalizada com a linha da Auditoria falhando (só com erro de banco) ficam sem o estado
+     novo depois do deploy — a migração lê essas linhas. O pedido não reabre no estorno da nota; o recebimento sai *não conferido*
+     no relatório. **O que fazer:** rode a **A71** e acerte o que ela listar.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -11967,7 +12101,20 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   dependem dessa linha ficam sem ela (**C255**).
 - **(121) O excedente autorizado na conferência** grava a linha da Auditoria antes do ato, item a item: se ela falhar no segundo
   item, a do primeiro fica sem o ato (a conferência não acontece e responde erro; repetir grava a do primeiro de novo). Anterior à
-  etapa; fica fatal de propósito (antes do ato o erro é a verdade).
+  etapa; fica fatal de propósito (antes do ato o erro é a verdade). **Resolvido na Etapa 122 (B791):** a linha passou para depois
+  da quantidade de cada item e não derruba mais a tela — o "fica fatal de propósito" deixou de valer.
+- **(122) Rejeitar uma requisição não solta reserva.** A reserva de uma requisição pendente só existia pelo defeito da **C254**;
+  mexer no *Rejeitar* seria outra porta. O que ficou preso: **A70** e **Reservas → Liberar**.
+- **(122) A reserva presa por duas falhas seguidas** (a gravação do status e o desfazer da reserva, no mesmo *Aprovar*) continua
+  presa — a **A70** acha.
+- **(122) A edição do pedido de compra (o formulário inteiro) não apaga o "fechado pelo sistema".** Ela recusa pedido com
+  recebimento, e todo pedido fechado pelo sistema tem — o caso não acontece.
+- **(122) No *Aprovar valor*, a recusa "a requisição ganhou itens enquanto era aprovada"** vira sucesso com a requisição *Aprovada*
+  sem reserva (**B790**); a nota seguinte reserva para ela.
+- **(122) A coluna do pedido nasce também pelo boot do core**, que nenhum teste automatizado sobe: provado à mão, num banco novo e
+  num banco de antes da etapa (a migração preencheu o pedido fechado pelo sistema e não o fechado à mão).
+- **(122) A guarda "só grava a linha do excedente se a quantidade foi gravada"** não tem como ser provada por teste de ponta a
+  ponta: a decisão já descarta o item que não é do recebimento; ficou pela segurança.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -12870,6 +13017,12 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(122) Nenhum clique foi dado nesta etapa no navegador.** Nenhuma tela mudou: o pedido que reabre, o relatório que conta e as
+aprovações que não prendem material são do servidor, e as falhas de banco só existem forçadas. Tudo foi provado pela rota e pelo
+serviço (**39** cenários novos ou reescritos, **2** jornadas de integração; corridas e falhas forçadas pelos revisores) e por dois
+boots reais (banco novo e banco de antes da etapa). O que **só o navegador** prova: o roteiro da Etapa 122 no guia — o pedido fechado
+pela nota voltando a *Enviado* no estorno, o fechado à mão continuando *Recebido*, e o relatório contando a conferência.
 
 **(121) Nenhum clique foi dado nesta etapa no navegador.** A tela de Devoluções mudou só no texto de uma linha da lista de
 entregas (provado por teste de componente com a fronteira HTTP simulada); as recusas novas chegam pelo aviso vermelho que já
@@ -25057,9 +25210,94 @@ quando uma Entrada das peças e o desligar caíam no meio dela (8 em 300 rodadas
 aprovação que deixa reservas de pé (**C254**, declarado); o de **sabotagem** fez **94** sabotagens válidas — 87 derrubaram teste
 pela asserção certa, 2 são equivalentes, e **5** mostraram cenários sem prova, que viraram teste.
 
+## Etapa 122 — A aprovação que falha não prende material, e o estado não mora na Auditoria (2026-10-16)
+
+Três situações em que um erro de banco num passo **secundário** deixava o sistema num estado errado sem ninguém ver. A primeira:
+se a gravação do novo status falhava no *Aprovar* de uma requisição, a reserva já criada ficava de pé com a requisição ainda
+*Pendente* — e, se alguém a rejeitasse depois, o material ficava **preso para sempre** para uma requisição morta. A segunda: o
+estorno de uma nota só reabria o pedido de compra que tinha sido fechado automaticamente se achasse a linha desse fechamento na
+**Auditoria**, e o relatório de fornecedor só dava o recebimento como conferido se achasse a linha do fim da conferência — desde a
+Etapa 121 essas linhas podem faltar com o ato feito. A terceira: na conferência com dois itens acima do esperado, a falha na linha
+de Auditoria do segundo deixava gravada a do primeiro, registrando uma autorização de excedente que **não aconteceu**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| *Aprovar* com erro ao gravar o status: tela de erro, reserva **ativa**, requisição *Pendente* | Tela de erro, **nenhuma reserva**; aprovar de novo funciona (**B789**) |
+| Rejeitar essa requisição depois: *Rejeitada* com o material preso | Nada preso (e a **A70** acha o que ficou preso antes) |
+| *Aprovar valor* com erro depois da liberação: tela de erro com a requisição já *Aprovada*; repetir dava erro | Sucesso, *Aprovada* com a reserva (**B790**) |
+| Estorno da nota com a linha do fechamento faltando na Auditoria: o pedido continuava *Recebido* | O pedido reabre (**B788**) |
+| Relatório *Qualidade por fornecedor* com a linha do fim da conferência faltando: *não conferido* | *Conferido* (**B788**) |
+| Conferência com dois excedentes e a Auditoria do segundo falhando: erro, nada gravado, a Auditoria do primeiro gravada | Sucesso, as duas quantidades gravadas, a linha do primeiro gravada (**B791**) |
+| O comprador fecha o pedido à mão no mesmo instante em que uma nota o completa: o estorno podia desfazer o fechamento dele | O fechamento é do comprador; o estorno não o desfaz |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **administrador**; um material **PRF-1221** com 10 em estoque; um fornecedor cadastrado.
+
+**1. O pedido fechado pelo sistema reabre no estorno — mesmo sem a linha da Auditoria.** (O caso com a Auditoria falhando só se
+reproduz com erro de banco forçado — teste automatizado. Na tela, o roteiro mostra a regra, que é a mesma.)
+1. **Compras → Pedidos → Novo**: fornecedor, PRF-1221, quantidade **2**, status **Enviado** → salvar.
+2. **Almoxarifado → Recebimentos → Novo** → *Pedido de compra* → escolha o pedido → quantidade **2** → criar; siga o fluxo até
+   **Processar Nota**. O pedido passa a **Recebido** (fechado pelo sistema).
+3. **Movimentações** → a *Entrada de compra* dessa nota → **Estornar** (motivo: *lançado errado*). O pedido volta a **Enviado**.
+4. Repita 1 e 2; em **Compras → Pedidos**, mude o status do pedido à mão para **Aprovado** e depois para **Recebido**; estorne a
+   Entrada. O pedido **continua Recebido** — o fechamento é do comprador.
+
+**2. O relatório conta a conferência finalizada.** **Recebimentos** → um recebimento novo → **Iniciar Conferência** →
+**Finalizar Conferência**. **Relatórios → Qualidade por fornecedor** (período de hoje): a linha do fornecedor mostra **1** item
+conferido. Um recebimento que foi para Compras **sem** passar pela conferência continua contando 0.
+
+**3. A aprovação que falha não prende material.** Só com erro de banco forçado (teste automatizado): *Aprovar* responde o erro do
+banco (a mensagem dele, no aviso vermelho), a requisição continua **Pendente** e a tela **Reservas** não mostra reserva dela;
+aprovar de novo reserva uma vez só. No *Aprovar valor*, a liberação já gravada vale: a tela responde sucesso, a requisição fica
+**Aprovada** com a reserva — e, se ela foi cancelada no mesmo instante, a reserva é desfeita. Nenhuma mensagem nova na tela; o log
+do servidor registra *"[almoxarifado-aprovar-valor] A requisição ⟨n⟩ foi liberada por valor e fica APROVADO; o status
+pós-aprovação não foi gravado: ⟨erro⟩"*.
+
+**4. A Auditoria do excedente vem depois da quantidade.** Recebimento com dois itens de 2 esperados → **Iniciar Conferência** →
+digite **5** e **6** → marque *Autorizo o recebimento acima do pedido* → salvar: as duas quantidades gravadas; na **Auditoria**,
+uma linha *Excedente autorizado* por item, cada uma **depois** da gravação do item. Sem a caixa (ou como Almoxarife, que não a vê),
+a recusa de sempre, na tela: *"Quantidade recebida (5) maior que a esperada (2) no item #⟨n⟩ — a autorização de excedente é de
+Compras ou do Administrador"* — nada gravado. (Pela API, o Almoxarife que manda a autorização recebe *"Autorizar recebimento acima
+do pedido exige a permissão "autorizar_excedente" (seu perfil: ALMOXARIFE)."*, também sem gravar nada.)
+
+### O que esta etapa NÃO cobre
+
+1. **Os atos feitos entre a Etapa 121 e esta com a linha da Auditoria falhando** (o pedido fechado pelo sistema, a conferência
+   finalizada) não são recuperados sozinhos: a migração lê justamente essas linhas. A consulta **A71** lista os candidatos (**C257**).
+2. **A reserva presa por duas falhas seguidas** (o status **e** o desfazer da reserva falhando) continua presa — solta pela tela
+   **Reservas → Liberar**; a **A70** acha (**C256**).
+3. **Rejeitar uma requisição não solta reserva** (a de uma requisição pendente só existe por esse defeito) — declarado, **D (122)**.
+4. **O *Aprovar valor* que esbarra na requisição ganhando itens** (*"A requisição ganhou itens enquanto era aprovada…"*) passa a
+   responder sucesso com a requisição *Aprovada* e sem reserva — a nota seguinte reserva para ela (**B790**).
+5. A **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230** e o reparo da **C246** —
+   decisões suas.
+
+### O que a revisão encontrou
+
+A **medição** reproduziu os oito cenários antes de qualquer código e achou um novo: a requisição rejeitada com o material preso
+(**C256**). A **revisão do plano** (um revisor, antes do código — na Etapa 121 a ordem tinha sido a inversa) achou que a suíte do
+almoxarifado quebraria com a coluna nova, que a consulta de reservas presas citava um status que não existe (*CANCELADA*; o certo é
+*CANCELADO*) e que o *Aprovar valor* tinha mais três falhas depois da liberação além da gravação do status. A **revisão adversarial
+do código** (três revisores, cada um na sua cópia, executando): o de **regra** não derrubou nenhuma regra e apontou dois resíduos
+(**C256**, **C257**); o de **concorrência** achou três corridas — a reserva presa no *Aprovar valor* com um cancelamento no meio
+(30 em 30), o fechamento à mão do comprador desfeito pelo estorno quando caía junto com a nota (20 em 20), e a migração gravando
+sobre um fechamento à mão feito durante o boot (10 em 10) — corrigidas; o de **sabotagem** fez **73** sabotagens: dois pontos de
+produção sem prova (a Auditoria do excedente no fiscal, as migrações chamadas no boot) e onze menores — todos viraram teste.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 122 entregue (2026-10-16):** **a aprovação que falha não prende material, e o estado não mora na Auditoria.** O *Aprovar*
+  que falha ao gravar o status desfaz a reserva; o *Aprovar valor* responde sucesso com ela (**C254** resolvido); o estorno da
+  nota reabre o pedido fechado pelo sistema e o relatório de fornecedor conta a conferência sem depender da Auditoria (**C255**
+  resolvido); a linha do excedente autorizado vem depois da quantidade (**B791**). **O que é seu:** as consultas **A70** e **A71**
+  (opcionais); as decisões **B788 a B791** (reversíveis — a **B788** mexe numa tabela do Compras); os avisos **C256** e **C257**; as
+  limitações **(122)** em D e a verificação **(122)** em F.
+  **Próxima: Etapa 123 — ver a "próxima tarefa detalhada" no plano da Etapa 122.**
 
 - **Etapa 121 entregue (2026-10-16):** **o que já voltou não se devolve de novo, e a Auditoria depois do ato não desfaz o ato.**
   A Devolução não devolve de novo as peças que voltaram por outra entrada (**C253** resolvido); o ato que já está feito
@@ -25067,7 +25305,7 @@ pela asserção certa, 2 são equivalentes, e **5** mostraram cenários sem prov
   devolução no mesmo instante de uma Entrada das peças espera a movimentação do material (**B786**, achado e resolvido).
   **O que é seu:** a consulta **A69** (opcional); as decisões **B783 a B786** (reversíveis); os avisos **C254** e **C255**; as
   limitações **(121)** em D e a verificação **(121)** em F.
-  **Próxima: Etapa 122 — ver a "próxima tarefa detalhada" no plano da Etapa 121.**
+  *(Próxima, na época: Etapa 122 — entregue acima.)*
 
 - **Etapa 120 entregue (2026-10-16):** **o lançamento que já valeu e a série que já voltou.** O lançamento que já está no estoque
   responde sucesso mesmo com a Auditoria falhando (**C250** resolvido); a saída cujas séries voltaram por uma Entrada não estorna em

@@ -114,25 +114,25 @@ Pedido `enviado` de 2 pela porta real, nota de 2 processada contra ele (fecha `r
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 — galho (C254)** — `routes/almoxarifado.js` (`/aprovar`, `/aprovar-valor`). RN-01..RN-03 (com RN-02b, RN-02c). Worktree própria
+- [x] **T1 — galho (C254)** — `routes/almoxarifado.js` (`/aprovar`, `/aprovar-valor`). RN-01..RN-03 (com RN-02b, RN-02c). Worktree própria
   (`CRM-wt-e122-g1`), cherry-pick. Não depende de nada desta etapa.
-- [ ] **T2 — tronco (C255a, schema + pedido)** — `index.js` (`ALTERS_PEDIDOS_COMPRA`), `tests/helpers/testApp.js` (stub),
+- [x] **T2 — tronco (C255a, schema + pedido)** — `index.js` (`ALTERS_PEDIDOS_COMPRA`), `tests/helpers/testApp.js` (stub),
   `tests/almoxarifado.test.js` (o DDL próprio de `pedidos_compra` — Fase 2, I1),
   `services/almoxarifado/schema.js` (`safeAlter` + `migrateBackfillPedidoFechadoAutomaticamente`, exportada),
   `receiptService` (`fecharPedidosCompletos`, `destinoDaReabertura`, `estornarEntradaNoPedido`), `services/compras/pedidoCompraService.js`
   (`alterarStatusPedido`). RN-05..RN-09.
-- [ ] **T3 — tronco (C255b)** — `schema.js` (`safeAlter` + `migrateBackfillConferenciaFinalizadaEm`), `receiptService.avancarWorkflow`,
+- [x] **T3 — tronco (C255b)** — `schema.js` (`safeAlter` + `migrateBackfillConferenciaFinalizadaEm`), `receiptService.avancarWorkflow`,
   `reportService`. RN-10..RN-12. Depois da T2 (mesmo `schema.js`).
-- [ ] **T4 — tronco (excedente)** — `receiptService` (`assertExcedentePermitido`, `conferirRecebimento`, `salvarDadosFiscal`), o
+- [x] **T4 — tronco (excedente)** — `receiptService` (`assertExcedentePermitido`, `conferirRecebimento`, `salvarDadosFiscal`), o
   `[RN-14]` da 121. RN-13..RN-13d. Depois da T3 (mesmo arquivo).
-- [ ] **T5 — integração** — `server/tests/api/estadoForaDaAuditoriaIntegracao.api.test.js`, cruza Compras, Recebimento,
+- [x] **T5 — integração** — `server/tests/api/estadoForaDaAuditoriaIntegracao.api.test.js`, cruza Compras, Recebimento,
   Movimentações, Relatórios e Requisições: (i) **pela rota**: pedido `enviado` de 2 → recebimento contra o pedido → iniciar
   conferência → `/conferir` 3 com autorização e a trilha do excedente falhando (200) → finalizar com a trilha falhando (200) →
   fiscal → processar com a trilha do fechamento falhando (pedido `recebido`) → o relatório conta o item conferido → estorno da
   entrada → pedido `enviado`; e uma requisição de 3 do mesmo material criada depois da nota, `/aprovar` com o `UPDATE` falhando →
   500, 0 reservas, reaprovar 200; (ii) **pelo serviço**: `stockService.cancelarMovimentacao` reabre e
   `reportService.relatorioQualidadeFornecedores` conta, sem a trilha.
-- [ ] **T6 — fechamento** (skill `fechar-etapa`), com a **A70** (RN-15) medida no banco de uma sonda.
+- [x] **T6 — fechamento** (skill `fechar-etapa`), com a **A70** (RN-15) medida no banco de uma sonda.
 
 Galho: só a T1 (arquivo e regra disjuntos — a aprovação de requisição não toca pedido, recebimento nem relatório). T2..T4 mexem
 no mesmo `receiptService`/`schema.js` e são feitas em sequência, na branch. A suíte inteira roda **uma por vez** (lição da 121): o
@@ -140,12 +140,96 @@ galho roda só os próprios arquivos.
 
 ## Execução — o que aconteceu
 
-*(preencher)*
+- **Fase 0** (sonda `e122fase0.js`, não versionada): os oito cenários do design medidos — e um novo: rejeitar a requisição cujo
+  `/aprovar` falhou deixa o material preso (**C256**). Varredura das leituras da Auditoria como estado: só as duas da C255.
+- **Fase 2 antes do código** (a ordem da skill; na 121 foi a inversa): um revisor fresco, sondas `e122r-d2.js`,
+  `e122r-almoxtest.js` — 0 Critical, 3 Important, 6 Minor, todos aceitos (ver o topo). Design e plano `2496acfd`.
+- **TDD:** cada arquivo vermelho antes do código — `aprovacaoQueFalhaAoGravar` 1/6 (a guarda RN-03), `pedidoFechadoSemTrilha` 0/9,
+  `conferidoSemTrilha` 0/4, `excedenteDaConferenciaDepoisDoAto` 3/6 (as três guardas: RN-13b2, RN-13c2, RN-13d — passam antes de
+  propósito; a RN-13b2 mediu que o mesmo item duas vezes já dava duas trilhas).
+- **Galho em paralelo:** T1 numa worktree (`CRM-wt-e122-g1`, subagente) enquanto T2..T4 corriam na branch; entrou por cherry-pick
+  sem conflito. O galho rodou só os próprios arquivos (15 vizinhos, iguais antes e depois); **a suíte inteira rodou uma por vez**,
+  sempre na branch — **0 EADDRINUSE** em todas as rodadas (a lição da 121 funcionou).
+- **Controles positivos** (âncora contada com perl, md5, restauro por cópia): T1 5 sabotagens; T2 7 (fechar sem a coluna, reabrir
+  sem limpar, manual sem limpar, manual sempre limpando, backfill sem ledger, backfill por qualquer trilha — e a do ledger refeita
+  com âncora multilinha contada por perl, porque `grep -cF` de padrão com quebra de linha contou 8); T3 5; T4 4; T5 4 (cada frente
+  derruba a integração pela asserção dela).
+- **Migração e primeiro boot:** `CRM_DATA_DIR` vazio + `node index.js` duas vezes → 0 `no such table`/`no such column`, as duas
+  colunas e os dois ledgers; banco de **antes** da etapa (boot com `a0edfb70` numa worktree destacada, um pedido fechado pelo
+  sistema e um à mão semeados) + boot com o código novo → a migração preencheu só o fechado pelo sistema (`enviado`), deixou o à
+  mão NULL e preencheu a conferência com a data da trilha.
+- **Fase 5** — três revisores frescos em paralelo, cada um na sua worktree (removidas). **Regra (r1):** 0 Critical, 0 Important,
+  2 Minor, nenhum regressão — a reserva presa por duas falhas seguidas (C256, declarado; a **liberação manual de Reservas** solta —
+  o design dizia "nenhuma tela solta", **estava errado**) e o que perdeu a trilha entre os deploys da 121 e da 122 (**C257**, A71).
+  **Concorrência (r2):** 1 Important e 3 Minor, todos reproduzidos — a reserva presa no `/aprovar-valor` com um cancelamento no meio
+  (30/30), o PATCH × fechamento automático (20/20, regressão desta etapa), o backfill × PATCH no boot (10/10, regressão desta etapa)
+  → corrigidos `0980cd78`; o 409 `TRAVA_INCOMPLETA` virando 200 → declarado (B790). **Sabotagem (r3):** 73 sabotagens, 2 Important
+  (a trilha do `/fiscal` antes do item; os backfills tirados do `initSchema`) e 11 Minor, todos sem prova → cenários em
+  `estadoForaDaAuditoriaFase5` (`0980cd78`) e as metades positivas `e93ec16b`. Cada correção revertida derruba o seu cenário.
+- **A70 e A71** medidas em sondas (`e122a70.js` no código de antes e no novo; `e122a71.js`), não versionadas.
+- **Suíte final (medida depois de `e93ec16b`):** `test:api` **409/409** (0 EADDRINUSE); `test:almoxarifado` **44/0**;
+  `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 10/0; client **115** suítes / **1630** testes; `CI=true build`
+  *Compiled successfully*.
+- **Divergências do plano:** (1) o T1 entrou por cherry-pick sem a suíte inteira **antes** daquele commit — ela rodou na integração
+  (T5), antes do commit seguinte; (2) a mensagem do commit da T2 diz "sete sabotagens" e lista seis (a sétima, a do ledger, foi
+  refeita fora do laço — ver acima); (3) a Fase 5 trouxe três correções de produção e o design ganhou duas correções ("nenhuma tela
+  solta"; o `CANCELADA` da A70, na Fase 2).
+
+## Tasks (estado final)
+
+- [x] **T1 — galho (C254)** `1ffd53da` (worktree g1, entrou por cherry-pick), Fase 5 `0980cd78` (RN-02d/e).
+- [x] **T2 — tronco (C255a)** `63490f75`, Fase 5 `0980cd78` (RN-07e/f/g, RN-09e..i), `e93ec16b` (metades positivas).
+- [x] **T3 — tronco (C255b)** `ec140017`, Fase 5 `e93ec16b` (o rótulo da guarda), RN-11c em `0980cd78`.
+- [x] **T4 — tronco (excedente)** `6e149507`, Fase 5 `0980cd78` (RN-13e/f).
+- [x] **T5 — integração** `864f34eb`.
+- [x] **T6 — fechamento** — o commit de documentação desta etapa (ver `git log`). CLAUDE.md: a seção da trava **não mudou** (o
+  desfazer do `/aprovar` roda sob a trava, como o de quem perde; o do `/aprovar-valor` roda fora, e é soltar sem distribuir — B441).
 
 ## Retro (4 números)
 
-*(preencher)*
+1. **Rodadas de correção até verde:** **1** na Fase 5 (três correções de produção e as provas que faltavam, numa rodada); nenhuma
+   rodada na Fase 2 virou código. Um teste antigo mudou de comportamento esperado, de propósito: o `[RN-14]` da 121 (B791).
+2. **Achados da revisão:** Fase 2 — **3 Important + 6 Minor, todos reais**. Fase 5 — r1 **2** Minor (declarados), r2 **1** Important
+  + **3** Minor reais (3 corrigidos, 1 declarado), r3 **2** Important + **11** Minor sem prova (todos viraram teste); **0** ruído.
+3. **Paralelismo:** **1** galho em paralelo de fato (T1), **0** retrabalho; três revisores em paralelo na Fase 5; **0** custo de
+   ambiente (a suíte inteira, uma por vez).
+4. **Defeito que escapou:** *(preencher na Etapa 123)*.
 
 ## Próxima tarefa detalhada — Etapa 123
 
-*(preencher)*
+*(A série desta etapa foi B788–B792, C256–C257, A70–A71 — a 123 começa em **B793**, **C258**, **A72**; confira com `grep -oE`
+antes.)*
+
+**Como foi escolhida (mapa e os C abertos, medidos em 2026-10-16):** as features 🟡 continuam 00, 01, 05, 06, 21, 22 e 23. Os C
+abertos que **não** dependem do P.O. e não são só aviso de comportamento novo:
+
+1. **C221 — as escritas de família que conferem e gravam em passos separados** (feature 01): mudar o nível de uma família, criar
+   subfamília, reativar subfamília — a revisão da 110 **reproduziu** subfamília ativa sob família principal inativa. Molde pronto:
+   a **C218** foi fechada pondo a condição da família **dentro do comando** que grava o material (`materialService` ~209, Etapa 110).
+   Medir antes: as escritas de família estão em `routes/almoxarifado.js` e `services/almoxarifado/sectorMaterialService.js`
+   (`grep -n "UPDATE familias_material_almoxarifado"`); uma sonda
+   de corrida por porta (criar subfamília × inativar raiz; reativar × inativar raiz; mudar nível × cadastrar material). **Não
+   depende do P.O.**
+2. **C216 — o cadastro aceita um dono (cliente) que não existe** (feature 13/01): `materialService` ~312 grava
+   `proprietario_cliente_id || null` sem conferir em `clientes` (medido por leitura). Correção candidata: 400 com literal nova no
+   criar e no editar; atenção à tabela `clientes` ser core (só leitura) e ao legado (uma **A** para materiais com dono inexistente).
+   **Não depende do P.O.**
+3. **C223 — família com "pai 0"** (legado de antes da 103): um reparo no boot (`parent_id = 0` → NULL) com ledger e uma **A**. Pequeno.
+4. **C231** — a mensagem da aprovação que manda reativar o material quando a família está inativa: a frase passaria a nomear o
+   Administrador e a reativação da família. Pequeno, de texto (B reversível).
+5. **Dependem do P.O.:** **B755**, **B761**/**C239**, **C224**, o resto da **C225**, **C228**, **C219**, **C230**, o reparo da
+   **C246** (e a **C247**).
+
+**Escolhida: C221 + C216 (+ C223, se couber).**
+
+**Contrato candidato:** C221 — cada escrita de família que hoje confere e depois grava passa a pôr a condição no `WHERE` (ou a
+esperar a mesma trava que o cadastro de material, se a família tiver uma); a recusa com a literal que a porta já tem quando a
+condição falha; nenhum corpo novo. C216 — `POST/PUT /materiais` com `proprietario_cliente_id` inexistente → 400 (literal nova,
+congelar no plano); a tela não muda (o seletor só oferece cadastrados).
+
+**Pontos de atenção:** medir as portas de família **pelo nome do contrato** (as rotas), não pelo nome imaginado; a C218 é o molde
+(condição no comando); `clientes` é core; galhos em paralelo não rodam a suíte inteira ao mesmo tempo; a revisão do plano vem
+**antes** do código.
+
+**O que já está pronto e não precisa reabrir:** o estado do pedido e da conferência nas colunas (B788) com o legado migrado; o
+`/aprovar` e o `/aprovar-valor` que falham ao gravar o status (B789, B790); a trilha do excedente depois do ato (B791).

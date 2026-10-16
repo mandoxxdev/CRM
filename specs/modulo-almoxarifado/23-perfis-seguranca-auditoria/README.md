@@ -20,6 +20,8 @@
 > **Última atualização:** 2026-10-09 (**Etapa 98** — a devolução da caixa à prateleira `PUT /api/almoxarifado/requisicoes/:id/devolver-separado` usa a ação **`separar_emitir`** (ADMINISTRADOR, ALMOXARIFE — o mesmo gate do separar e do entregar, B503); **nenhuma ação nova**, `ACAO_PERFIS` e `GET /almoxarifado/minhas-permissoes` não mudam; verbo de auditoria novo `DEVOLUCAO_CAIXA` com rótulo *"Devolução à prateleira"*; ver o bloco "Etapa 98" logo abaixo. O status 🟡-forte não muda.) Antes: 2026-10-08 (**Etapa 77** — ação nova `liberar_reserva_requisicao` = `[ADMINISTRADOR,
 > ALMOXARIFE]` no mapa, mais uma regra por **identidade** (quem pediu a requisição) checada no serviço; ver o bloco
 > "Etapa 77" logo abaixo. O status 🟡-forte não muda — a etapa é da feature 07). Antes: 2026-08-29 (**Etapa 24, `a81e51a..4680daa`: a perna Perfis começa** — `QUALIDADE` em `permissions.js` (`a81e51a`), a revogação auditando com `EXCLUSAO` e o `dados_anteriores` nos dois caminhos (`9f7c309`), `ADMINISTRADOR` fora do seletor com a razão visível e os 7 primeiros testes da aba (`b13de4a`), a integração que dá e tira perfil e lê pela tela-contrato (`b9a5848`) e o rótulo do perfil no 403 do client (`4680daa`); ver o bloco "Etapa 24" no fim). Antes: 2026-08-28 (**Etapa 23, `0fe8d02..4f1aeb9`: a trilha para de mentir por omissão e por excesso** — o retry de `SQLITE_BUSY` para de responder erro e gravar assim mesmo (`0fe8d02`), `PUT /configuracoes` vira um `UPDATE` único com `CASE` (`b6b7b24`/`d507ccc`), as **cinco** rotas de exclusão distinguem "não existe" de "já inativa" (`9858bec`) e a leitura pela tela-contrato prova que a trilha mostra **um** ato (`4f1aeb9`); ver o bloco "Etapa 23" no fim e o checklist "Trilha honesta"). Antes: 2026-08-28 (**Etapa 22, `8c6ffbe..169458d`: a trilha ganha leitor** — tela `/almoxarifado/auditoria` com os quatro filtros novos, o de/para calculado no servidor, a rota de opções alimentada pelo banco e os **três índices** que a tabela nunca teve; ver o bloco "Etapa 22" no fim e o checklist "Auditoria visível"). Antes: 2026-08-28 (Etapa 21, `d5c8d3a..07a4b1c`: **nada desta feature mudou** — a etapa é do núcleo do CRM e fecha os itens que a Etapa 20 empurrou para cá dizendo "é do core"; registrada no bloco "Etapa 21 — o que era do núcleo" no fim deste arquivo, e o item de backup do checklist de Segurança ganhou a medição que faltava). Antes: 2026-08-28 (Etapa 20, `1b0f0e9..a3f5135`: a rota de foto de material para de mentir sucesso, de deixar órfão e de não auditar; a leitura de configurações para de devolver segredo em claro e o PUT genérico para de aceitá-lo; ler o mapa de permissões por setor passa a exigir o mesmo que escrevê-lo). Antes: 2026-08-28 (Etapa 19, `a574b3a..55e4144`: os 23 endpoints de cadastro e configuração passam a auditar, com diff nas configurações, segredo mascarado e três correções de comportamento que o log exigia). Antes: 2026-08-28 (Etapa 18: a trilha do inventário). Antes: 2026-08-11 — auditoria de cauda: corrigida a afirmação "auditoria não é usada em produção" (era verdade em 2026-08-02, foi superada pelas Etapas 3–6 e ninguém atualizou aqui), corrigida a contagem de ações (14, não 15) e nomeados os dois buracos reais de auditoria que restam
+>
+> **Etapa 122 (2026-10-16):** as duas leituras que tratavam a linha da Auditoria como estado (C255) passam a ler colunas gravadas com o ato (B788); a trilha do excedente na conferência deixa de ser fatal (B791). Continua 🟡-forte.
 
 ## Etapa 98 — a devolução à prateleira cabe na ação `separar_emitir` (`9e0bb225`, `4941c9d9`, `b7fc06a0`)
 
@@ -1073,11 +1075,26 @@ Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa121-o-que-ja-voltou-
   estorno e o estoque mínimo em lote (RN-12l..n, Fase 5 r1) — `12b92c40`.
 - [x] **Sucateamento, retalho, devolução, regularização** e as duas que mascaravam o erro (RN-13) — `897b1fb6`.
 - [x] **Ficam fatais, com prova:** série (`CRIACAO`, `REATIVACAO`, `SAIDA`) dentro do motor antes do livro, o excedente na
-  conferência (RN-14, RN-14b, RN-14c) — `931bb1a2`, `66eafc59`, `47395cee`.
-- [ ] **Fora (declarado):** duas leituras que tratam a linha da Auditoria como estado — a reabertura do pedido no estorno da nota
-  (`STATUS_AUTOMATICO_RECEBIDO`) e o "conferido" do relatório de fornecedor (`FINALIZAR_CONFERENCIA`) — **C255**, candidata da 122.
+  conferência (RN-14, RN-14b, RN-14c) — `931bb1a2`, `66eafc59`, `47395cee`. ⚠️ **O excedente na conferência deixou de ficar
+  fatal na Etapa 122** (B791, `6e149507`): a trilha passou para depois do `UPDATE` de cada item — isto estava certo para o código
+  da 121 e não vale mais.
+- [x] **(Era "fora (declarado)") duas leituras que tratam a linha da Auditoria como estado** — a reabertura do pedido no estorno da nota
+  (`STATUS_AUTOMATICO_RECEBIDO`) e o "conferido" do relatório de fornecedor (`FINALIZAR_CONFERENCIA`) — **C255**, resolvida na Etapa
+  122 (ver a seção dela, abaixo).
 
 Continua 🟡-forte (o que falta para 🟢 não mudou: ver o topo).
+
+## Etapa 122 (2026-10-16) — as leituras da Auditoria como estado saem dela (C255)
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa122-a-aprovacao-que-falha-e-o-estado-fora-da-auditoria.md`.
+
+- [x] **A reabertura do pedido no estorno** lê `pedidos_compra.fechado_automaticamente_de` (não mais `STATUS_AUTOMATICO_RECEBIDO`)
+  — `63490f75`, `0980cd78`.
+- [x] **O "conferido" do relatório de fornecedor** lê `recebimentos_material_almoxarifado.conferencia_finalizada_em` (não mais
+  `FINALIZAR_CONFERENCIA`) — `ec140017`.
+- [x] **O excedente autorizado na conferência e no fiscal:** a trilha depois do ato, não-fatal (B791) — `6e149507`.
+- Varredura (`grep auditoria_log_almoxarifado` em `services/` e `routes/`, fora de INSERT/DDL): não sobra leitura da Auditoria como
+  estado; o resto é a tela de Auditoria e as migrações que leem o passado uma vez.
 
 ## Regras essenciais + testes de API exigidos
 

@@ -1091,9 +1091,9 @@ As três primeiras listas **não são fixas**: elas são montadas a partir do qu
 
 **A trilha não é o livro.** Toda movimentação de estoque (entrada, saída, ajuste, transferência, estorno, e as que nascem de requisição, devolução, recebimento, retalho e das outras telas) é registrada **primeiro no livro** e só depois na Auditoria. Se o registro na Auditoria falhar por um erro do banco, a movimentação **continua valendo** e a tela que a pediu responde sucesso: ela aparece no livro, no extrato do material e no saldo, com quem lançou e quando — só não aparece na Auditoria (perde-se o endereço de rede e o navegador de onde partiu). Para "quem lançou isto", o livro é a fonte; a Auditoria é o complemento.
 
-O mesmo vale para os outros atos que gravam uma linha na Auditoria **depois** de feitos: aprovar, rejeitar, encerrar e copiar requisição; criar e editar regra de aprovação; criar recebimento, avançá-lo no fluxo (conferência, fiscal) e processar a nota (a reserva para quem esperava o material nasce normalmente); cancelar solicitação de compra e gerar solicitações pelo estoque mínimo; abrir não conformidade; transferir reserva; assinar a entrega; reenviar aviso por e-mail; os atos de ferramenta (empréstimo, devolução, manutenção, calibração, ocorrência, bloqueio); mudar o status de série e de lote; cadastrar material; sucateamento (solicitar, aprovar, rejeitar, cancelar, registrar destino); gerar retalho e editar sobra; registrar devolução; regularizar movimentação; alterar estoques mínimos em lote (cada material ganha a sua linha, mesmo que a de outro falhe). Se a linha da Auditoria falhar por erro do banco, o ato **vale** e a tela responde sucesso — repetir não é preciso (e duplicaria). O ato continua registrado na própria tela dele, com quem e quando; só não aparece na Auditoria. Duas leituras dependem dessa linha: sem a do **fechamento automático do pedido de compra**, o estorno da nota não reabre aquele pedido (reabra à mão); sem a do **fim da conferência**, o relatório de fornecedor mostra aquele recebimento como não conferido.
+O mesmo vale para os outros atos que gravam uma linha na Auditoria **depois** de feitos: aprovar, rejeitar, encerrar e copiar requisição; criar e editar regra de aprovação; criar recebimento, avançá-lo no fluxo (conferência, fiscal), autorizar o excedente na conferência e nos dados fiscais (a linha de cada item é gravada logo depois da quantidade dele) e processar a nota (a reserva para quem esperava o material nasce normalmente); cancelar solicitação de compra e gerar solicitações pelo estoque mínimo; abrir não conformidade; transferir reserva; assinar a entrega; reenviar aviso por e-mail; os atos de ferramenta (empréstimo, devolução, manutenção, calibração, ocorrência, bloqueio); mudar o status de série e de lote; cadastrar material; sucateamento (solicitar, aprovar, rejeitar, cancelar, registrar destino); gerar retalho e editar sobra; registrar devolução; regularizar movimentação; alterar estoques mínimos em lote (cada material ganha a sua linha, mesmo que a de outro falhe). Se a linha da Auditoria falhar por erro do banco, o ato **vale** e a tela responde sucesso — repetir não é preciso (e duplicaria). O ato continua registrado na própria tela dele, com quem e quando; só não aparece na Auditoria. Nenhuma decisão do sistema depende dessa linha: o estorno da nota sabe que o pedido de compra foi **fechado pelo sistema** por um registro gravado no próprio pedido, junto com o fechamento; e o relatório de fornecedor sabe que a **conferência foi finalizada** por um registro gravado no próprio recebimento, junto com o gesto.
 
-Não vale para o que a Auditoria registra **antes** do ato (a série, o lote e o dono do material dentro de uma movimentação; o excedente autorizado na conferência): ali, se a Auditoria falhar, o ato não acontece e a tela mostra o erro — repetir é o certo.
+Não vale para o que a Auditoria registra **antes** do ato (a série, o lote e o dono do material dentro de uma movimentação): ali, se a Auditoria falhar, o ato não acontece e a tela mostra o erro — repetir é o certo.
 
 A razão de as duas recusarem em vez de simplesmente não achar nada: numa auditoria, **lista vazia parece prova de que nada aconteceu**. Uma data escrita errada que devolvesse zero linhas levaria alguém a concluir, com toda a boa-fé, que ninguém mexeu em nada naquele período.
 
@@ -1531,12 +1531,15 @@ pedido**, o sistema:
 - **desconta** da linha do pedido a quantidade daquela entrada (sem deixar a linha negativa) — o pedido volta a dizer
   que esse material falta, e a próxima nota dele é aceita sem autorização de excedente;
 - **reabre** o pedido quando a nota o tinha fechado: se antes do estorno o pedido estava completo e *Recebido*, depois
-  dele deixou de estar completo, e o último registro de status do pedido é o **fechamento automático**, o pedido volta
+  dele deixou de estar completo, e o *Recebido* atual foi escrito pelo **fechamento automático** (nenhuma mudança manual de
+  status depois dele), o pedido volta
   ao status que tinha antes de fechar (*Pendente*, *Aprovado*, *Em Análise* ou *Enviado*) — e com isso volta à lista de
   atrasados (se a previsão venceu), aos pendentes do Recebimento e ao alerta de parcial;
 - **não reabre** quando o último *Recebido* foi escrito **à mão** pelo comprador (lápis → *Status*, que deixa a trilha
   *"Mudança manual de status do pedido"*), nem quando o pedido está *Cancelado* ou *Rejeitado* — nesses casos só a linha
-  desconta.
+  desconta. Vale o que o comprador **viu** ao mudar: se ele mudou para *Recebido* um pedido que a tela mostrava *Enviado* e,
+  no mesmo instante, uma nota o completou, o fechamento é dele e o estorno não o desfaz. Reescrever o mesmo status
+  (*Recebido* → *Recebido*) não conta como mudança.
 
 Depois de *"Movimentação estornada!"*, a tela mostra um segundo aviso: *"Pedido de compra ⟨número⟩ reaberto: faltam
 ⟨saldo⟩ para receber"* (o pedido reabriu) ou *"Pedido de compra ⟨número⟩: o saldo a receber voltou a ⟨saldo⟩"* (só a
@@ -1982,6 +1985,13 @@ O status final da requisição sai daí:
 | Nada foi reservado, e nenhum item tinha saldo | **Aguard. Compra** ou **Aguard. Estoque** (7.1) |
 | Nada foi reservado, mas algum item tinha saldo — a reserva falhou, ou todo o disponível estava na caixa sem reserva de outros pedidos | **Aprovado** |
 | Nada foi reservado porque outra aprovação levou o último saldo ao mesmo tempo | O sistema relê o saldo e grava **Aguard. Compra** ou **Aguard. Estoque** |
+
+**Falhar ao gravar o status desfaz a reserva.** Se, depois de reservar, a gravação do novo status da requisição falhar (erro do
+banco), em **Só Aprovar** as reservas que essa aprovação criou são desfeitas antes de a tela mostrar o erro: a requisição continua
+*Pendente*, sem nada reservado, e aprovar de novo funciona normalmente. Em **Aprovar Liberação**, a liberação por valor já está
+gravada quando a reserva é feita: qualquer falha daí em diante **mantém** o que foi reservado e a tela responde sucesso — a
+requisição fica *Aprovado* com a reserva, que a separação e a entrega usam normalmente. Se a requisição foi cancelada ou
+rejeitada no mesmo instante, a reserva é desfeita.
 
 **Falhar em reservar não derruba a aprovação.** A decisão de aprovar já foi tomada e é independente de haver saldo — é exatamente o caso "Aguard. Estoque". No pior cenário a requisição fica sem hold e a separação dela fica limitada ao separável (10.2), como a de qualquer requisição sem reserva. Se a falha acontece **no meio** (um item reservado, o seguinte não), as reservas já feitas por aquela aprovação são desfeitas: nenhum saldo fica preso por uma aprovação que não terminou.
 
@@ -3094,7 +3104,7 @@ quantidade recebida > quantidade recebida já gravada no item
 
 A segunda condição é o que faz a autorização valer **uma vez**: depois de autorizado, reenviar a **mesma** quantidade — ao preencher os dados fiscais, ao salvar a conferência de outro item, ao reabrir o painel — não é um ato novo de autorização, não pede a caixa de novo e **não** gera outra linha de auditoria. **Baixar** a quantidade também nunca pede autorização. Só **aumentar** sobre o que já está registrado pede.
 
-**A recusa recusa o salvamento inteiro, não apenas o item problemático**, e nomeia **só o primeiro** item acima do esperado. Se a nota tiver dois itens excedentes, corrigir o primeiro e salvar de novo pode trazer a recusa do segundo. A trilha, ao contrário, escreve uma linha por item.
+**A recusa recusa o salvamento inteiro, não apenas o item problemático**, e nomeia **só o primeiro** item acima do esperado. Se a nota tiver dois itens excedentes, corrigir o primeiro e salvar de novo pode trazer a recusa do segundo. A trilha, ao contrário, escreve uma linha por item — cada uma **depois** de gravada a quantidade daquele item, de modo que nunca há linha de autorização para uma quantidade que não foi gravada.
 
 **O que esta autorização NÃO mede:** ela compara a quantidade com a **esperada daquele item, naquele recebimento** — não com o saldo do pedido de compra. Um pedido de 10 unidades pode receber 25 em três recebimentos diferentes, cada um dentro do esperado do próprio documento.
 
@@ -6277,7 +6287,7 @@ vazia). Uma linha por fornecedor:
 | **Fornecedor** | o nome que veio no recebimento mais recente do grupo |
 | **Agrupado por** | o que juntou a linha: *"CNPJ ⟨como veio⟩"*, *"Cadastro #⟨número⟩"* ou *"Nome digitado"* |
 | **Recebimentos** | quantos recebimentos do fornecedor no período |
-| **Itens conferidos (conferência finalizada)** | itens de recebimentos em que alguém clicou **"Finalizar Conferência"** |
+| **Itens conferidos (conferência finalizada)** | itens de recebimentos em que alguém clicou **"Finalizar Conferência"** (o recebimento guarda quando isso aconteceu pela primeira vez) |
 | **Itens com divergência** / **Com falta** / **Com sobra** | itens conferidos com quantidade recebida diferente da esperada |
 | **% divergência** | itens com divergência ÷ itens conferidos × 100 |
 | **Inspeções** / **Inspeções com reprovação** | inspeções decididas dos itens do fornecedor, e as que reprovaram alguma quantidade |

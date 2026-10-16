@@ -36,6 +36,8 @@
 > edição, exclusão e importação por planilha no módulo **core Compras**, e a Etapa 37 deixou de ser
 > inerte · antes: 2026-09-16 — a correção medida na Fase 0 da Etapa 38 (Compras **não** está maduro:
 > não há como criar pedido) · antes: 2026-08-25 — fechamento da Etapa 14
+>
+> **Etapa 122 (2026-10-16):** a tabela `pedidos_compra` (core) ganha `fechado_automaticamente_de`, escrita pelo fechamento automático, limpa pela reabertura do estorno e pela mudança manual de status do Compras (`alterarStatusPedido`, quando o status muda — comparando o status lido) (C255a, B788 — core × módulo, reversível).
 
 ## Contexto importante
 
@@ -841,6 +843,17 @@ direto continua aceitando fornecedor inativo; `criarPedido` soma o total **sem**
 **serviço** não passa pelo schema (`quantidade 0` chegaria — mesma classe do pedido, letra G); a
 frase morta de `comprasPedidoEditarExcluir.api.test.js:93` continua lá; o genérico mantém
 `'cotacoes'` no mapa, sombreado.
+
+## Etapa 122 (2026-10-16) — o fechamento automático do pedido numa coluna do core (C255a)
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa122-a-aprovacao-que-falha-e-o-estado-fora-da-auditoria.md`.
+
+- [x] Coluna `pedidos_compra.fechado_automaticamente_de TEXT` em `ALTERS_PEDIDOS_COMPRA` (`index.js`, callback do CREATE) e por
+  `safeAlter` no `initSchema` do módulo; stub do harness e o DDL de `tests/almoxarifado.test.js` com a coluna — `63490f75`.
+  Primeiro boot provado num banco novo e num banco de antes da etapa (sem `no such table`/`no such column`; ledgers gravados).
+- [x] `alterarStatusPedido` (core): `fechado_automaticamente_de = CASE WHEN LOWER(status lido) = LOWER(novo) THEN coluna ELSE NULL END`
+  no mesmo `UPDATE` — `63490f75`; comparar o status **lido** (não o da linha) é da Fase 5 (r2 M1, RN-07e) — `0980cd78`.
+- [ ] Fora (declarado): `atualizarPedido` não limpa a coluna — inalcançável (recusa pedido com recebimento).
 
 ## Regras essenciais + testes de API exigidos
 

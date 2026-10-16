@@ -15,6 +15,8 @@
 > (tarefa extra da Etapa 8c, ver "Valoração do estoque" abaixo). O resto da linha de 2026-08-11
 > segue valendo: eram 15 tipos, a Etapa 2 acrescentou `materiais-sem-endereco` (16), e "só 2
 > consumidos no front" continua verdade.
+>
+> **Etapa 122 (2026-10-16):** o *Qualidade por fornecedor* dá o recebimento como conferido pela coluna `conferencia_finalizada_em` (antes, pela existência da trilha `FINALIZAR_CONFERENCIA`, que pode faltar desde a 121 — C255b, B788). Status inalterado.
 
 ## Objetivo
 
@@ -109,6 +111,16 @@ replicar, com controle positivo do próprio padrão de busca.
 - [ ] Consumo por projeto previsto×realizado — depende de BOM/OP (feature 22)
 - [x] Indicadores restantes da spec 27 (% no prazo, divergência por fornecedor etc.) — **Etapa 67**, ver o item da
   seção "Gestão e indicadores" acima (hashes e régua lá)
+
+## Etapa 122 (2026-10-16) — o "conferido" do relatório de fornecedor sem a Auditoria (C255b)
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa122-a-aprovacao-que-falha-e-o-estado-fora-da-auditoria.md`.
+
+- [x] `relatorioQualidadeFornecedores`: `conferido` = item com quantidade **e** `r.conferencia_finalizada_em IS NOT NULL` — `ec140017`.
+  ⚠️ **Corrige a Etapa 67:** a régua ("só o gesto *Finalizar Conferência* conta") continua; **dizia "auditoria FINALIZAR_CONFERENCIA"
+  como fonte, e isso deixou de ser confiável na 121** — a trilha é não-fatal. O legado vem da trilha, uma vez, no boot.
+- [x] Guardas: `/conferir` com status CONFERIDO_ALMOX, `iniciar_conferencia` e `encaminhar_compras` não contam (RN-11, RN-11c).
+- [ ] Fora: a conferência finalizada com a trilha falhando entre os deploys da 121 e da 122 (**C257**, A71 (b)).
 
 ## Regras essenciais + testes de API exigidos
 

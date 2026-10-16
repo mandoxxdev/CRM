@@ -1,18 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-16 (Etapa 121) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-16 (Etapa 122) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120 e 121) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121 e 122) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 121 ENTREGUE · próxima do almoxarifado: Etapa 122)
+> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 122 ENTREGUE · próxima do almoxarifado: Etapa 123)
 >
-> **O desenvolvimento parou aqui: Etapa 121 fechada — 2026-10-16.** A **Etapa 121 (o que já voltou não se devolve de novo, e a
+> **O desenvolvimento parou aqui: Etapa 122 fechada — 2026-10-16.** A **Etapa 122 (a aprovação que falha não prende material,
+> e o estado não mora na Auditoria)**: o *Aprovar* que falha ao gravar o status não deixa reserva de pé (e o *Aprovar valor*
+> responde sucesso com ela); o estorno da nota reabre o pedido de compra fechado pelo sistema e o relatório de fornecedor conta a
+> conferência finalizada sem depender de uma linha da Auditoria; e a linha do excedente autorizado vem depois da quantidade.
+> **Próxima: Etapa 123** — ver a próxima tarefa no plano da 122.
+>
+> **Etapa 121, 2026-10-16.** A **Etapa 121 (o que já voltou não se devolve de novo, e a
 > Auditoria depois do ato não desfaz o ato)**: a Devolução não aceita devolver de novo as peças com série que já voltaram ao
 > estoque por outra entrada (e a tela diz isso na lista de entregas); dezenas de telas que gravam a Auditoria depois de terminar
 > — aprovar, encerrar e copiar requisição, processar a nota, retalho, sucateamento, ferramentas, devolução — não respondem mais
 > erro com o ato feito; e a devolução no mesmo instante de uma Entrada das peças espera a movimentação do material.
-> **Próxima: Etapa 122** — ver a próxima tarefa no plano da 121.
+> *(Próxima, na época: Etapa 122 — entregue acima.)*
 >
 > **Etapa 120, 2026-10-16.** A **Etapa 120 (o lançamento que já valeu e a série que
 > já voltou)**: o lançamento que já está no estoque responde sucesso mesmo com o registro da Auditoria falhando (a entrega não
@@ -6487,6 +6493,57 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 122 — A aprovação que falha não prende material, e o estado não mora na Auditoria (ENTREGUE — 2026-10-16)
+
+**O que mudou, em uma frase:** a aprovação que falha no meio não deixa material preso, e o estorno da nota e o relatório de
+fornecedor não dependem mais de uma linha da Auditoria para saber o que aconteceu.
+
+**O problema que ela resolve.** Com um erro do banco na gravação do status, o *Aprovar* deixava a reserva de pé com a requisição
+*Pendente* — e, rejeitada a requisição, o material ficava preso para sempre. O estorno de uma nota só reabria o pedido de compra
+fechado pelo sistema se achasse a linha desse fechamento na Auditoria, e o relatório de fornecedor só contava a conferência se
+achasse a linha do fim dela — linhas que, desde a Etapa 121, podem faltar com o ato feito. E a conferência com dois excedentes
+podia registrar uma autorização de excedente que não aconteceu.
+
+| Antes | Agora |
+|---|---|
+| *Aprovar* com erro ao gravar o status: reserva ativa, requisição *Pendente*; rejeitada, material preso | Nenhuma reserva; aprovar de novo funciona |
+| *Aprovar valor* com erro depois da liberação: erro, e repetir dava erro | Sucesso; *Aprovada* com a reserva |
+| Estorno da nota sem a linha do fechamento na Auditoria: o pedido continuava *Recebido* | Reabre |
+| Relatório *Qualidade por fornecedor* sem a linha do fim da conferência: *não conferido* | *Conferido* |
+| Conferência com dois excedentes e a Auditoria do segundo falhando: erro e nada gravado | As duas quantidades gravadas |
+| O comprador fecha à mão no mesmo instante em que a nota completa o pedido: o estorno podia desfazer | O fechamento é dele |
+
+### Roteiro de teste manual
+
+As falhas de banco só se reproduzem forçadas (teste automatizado). O que se clica é a regra, que é a mesma.
+Pré-requisitos: login como **administrador**; um material **PRF-1221**; um fornecedor cadastrado.
+
+1. **Compras → Pedidos → Novo**: o fornecedor, PRF-1221, quantidade **2**, status **Enviado** → salvar.
+2. **Almoxarifado → Recebimentos → Novo** → *Pedido de compra* → escolha o pedido → quantidade **2** → criar.
+3. **Iniciar Conferência (Almoxarifado)** → **Finalizar Conferência** → siga o fluxo (Compras, dados fiscais) até **Processar Nota —
+   Estoque + Contas a Pagar**. Em **Compras → Pedidos**, o pedido está **Recebido**.
+4. **Relatórios → Qualidade por fornecedor** (período de hoje): a linha do fornecedor mostra **1** item conferido.
+5. **Movimentações** → a *Entrada de compra* dessa nota → **Estornar** (motivo: *lançado errado*). Em **Compras → Pedidos**, o pedido
+   voltou a **Enviado**.
+6. **O fechamento do comprador:** repita 1 a 3 com um pedido novo; em **Compras → Pedidos**, mude o status à mão para **Aprovado** e
+   depois para **Recebido**; estorne a Entrada (passo 5). O pedido **continua Recebido**.
+7. **O excedente:** recebimento novo com dois itens de 2 → **Iniciar Conferência** → digite **5** e **6** → marque *Autorizo o
+   recebimento acima do pedido* → salvar: as duas quantidades ficam; **Auditoria** → uma linha *Excedente autorizado* por item. Sem a
+   caixa: *"Quantidade recebida (5) maior que a esperada (2) no item #⟨n⟩ — a autorização de excedente é de Compras ou do
+   Administrador"*, nada gravado.
+
+### O que esta etapa não cobre
+
+- O que perdeu a linha da Auditoria **entre a Etapa 121 e esta** (pedido fechado pelo sistema, conferência finalizada) — a consulta
+  **A71** lista; o suporte acerta (**C257**).
+- A reserva presa por **duas** falhas seguidas, e as presas antes desta etapa — **Reservas → Liberar**; a **A70** acha (**C256**).
+- O *Rejeitar* não solta reserva (a de uma requisição pendente só existia pelo defeito).
+- As decisões pendentes do P.O. (**B755**, **B761**/**C239**, **C224**, o resto da **C225**, **C228**, **C219**, **C230**, o reparo
+  da **C246**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: nenhuma tela mudou; o roteiro acima é o que os testes automáticos (pelas rotas e
+pelo serviço) e dois boots reais provam, escrito para você conferir à mão.
+
 ## Etapa 121 — O que já voltou não se devolve de novo, e a Auditoria depois do ato não desfaz o ato (ENTREGUE — 2026-10-16)
 
 **O que mudou, em uma frase:** a Devolução não aceita mais devolver de novo as peças com série que já voltaram ao estoque por
@@ -6529,9 +6586,9 @@ Pré-requisitos: login como **administrador**; um material com **Controle por n�
 - A **devolução sem série** (Retrabalho, Sucata) e a volta de uma peça por uma Entrada **somam** — a peça que está fora volta pela
   devolução avulsa.
 - O ato com erro na Auditoria fica **fora da tela de Auditoria**; e duas leituras dependem dessa linha (o estorno da nota reabrir o
-  pedido de compra fechado automaticamente; o relatório de fornecedor dar o recebimento como conferido) — **C255**: depois de
-  estornar uma nota, confira o pedido.
-- A aprovação que falha ao gravar o status deixa as reservas de pé (**C254**, só com erro de banco).
+  pedido de compra fechado automaticamente; o relatório de fornecedor dar o recebimento como conferido) — **C255** *(resolvida na
+  Etapa 122)*.
+- A aprovação que falha ao gravar o status deixa as reservas de pé (**C254**, só com erro de banco) *(resolvida na Etapa 122)*.
 - As decisões pendentes do P.O. (**B755**, **B761**/**C239**, **C224**, o resto da **C225**, **C228**, **C219**, **C230**).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (pelas rotas do servidor e o teste

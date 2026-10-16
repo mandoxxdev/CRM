@@ -178,7 +178,7 @@ da Fase 3: um erro de leitura num deles não exige retrabalho no outro (a regra 
    **0** ruído.
 3. **Paralelismo:** **4** galhos em paralelo de fato (T3..T6), **0** retrabalho de código; **1** custo de ambiente (portas
    esgotadas pelas quatro suítes simultâneas). Quatro medidores em paralelo na Fase 0 e três revisores na Fase 5.
-4. **Defeito que escapou:** *(preencher na Etapa 122)*. **Da Etapa 120:** **nenhum defeito introduzido por ela** — a régua nova
+() => '4. **Defeito que escapou** *(preenchido na Etapa 122)*: **nenhum defeito de código introduzido pela 121** — as\n   portas não-fatais e a régua da devolução se comportaram como descritas; as três leituras que a 122 corrigiu (C254, C255 e o\n   excedente da D (121)) estavam **declaradas**. **Um erro de documentação escapou:** o "O que fazer" da **C254** mandava, com o\n   *Aprovar* falhando, *"aprove de novo … ou rejeite"* — **rejeitar deixava o material preso para sempre** (medido na Fase 0 da 122,\n   **C256**). E a Fase 5 da 122 achou duas corridas nas portas que a 122 criou, não nas da 121.' **Da Etapa 120:** **nenhum defeito introduzido por ela** — a régua nova
    da 121 se apoia na coluna `saida_anterior_id` da 120 e ela se comportou como descrita. Um erro de **medição**: a "próxima
    tarefa" da 120 contou **115** chamadas à Auditoria com `grep` (somava `require`s e comentários — são **110**), e a fatia B da
    121 deixou de fora dois desfazeres que a r1 achou; não mudou decisão nenhuma.

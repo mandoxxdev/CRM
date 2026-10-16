@@ -17,6 +17,8 @@
 > abaixo, dizendo que estavam errados. A **cor não muda**: o motor de regras configuráveis
 > continua não existindo, e continua adiado por decisão de escopo, não por esquecimento.)
 > Antes: 2026-08-11 (auditoria spec×código)
+>
+> **Etapa 122 (2026-10-16):** o `/aprovar` cujo `UPDATE` do status lança desfaz as reservas desta chamada (antes: reserva ATIVA com a requisição PENDENTE — C254, C256); o `/aprovar-valor` que falha depois da liberação responde 200 com o status gravado e a reserva (B789, B790). Status da feature inalterado.
 
 ## Objetivo
 
@@ -149,6 +151,24 @@ ela.** Escrita sem leitor, na forma mais cara.
 > que esta spec já dizia. A correção está registrada no desenho (7.4).
 >
 > **Os dois achados estão resolvidos:** 1 por `dc1c3f8` (T2), 2 por `4f53292` (T1).
+
+## Etapa 122 (2026-10-16) — a aprovação que falha ao gravar o status não prende material (C254)
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa122-a-aprovacao-que-falha-e-o-estado-fora-da-auditoria.md`.
+
+- [x] **`/aprovar`:** o `UPDATE` do status que lança desfaz as reservas desta chamada sob a trava (antes de soltá-la) e relança o
+  erro — 500 de sempre, PENDENTE sem reserva, repetir aprova; rejeitar depois não prende material (RN-01, RN-01b; B789) — `1ffd53da`.
+- [x] **`/aprovar-valor`:** qualquer falha depois de `aprovarValor` gravar o APROVADO (pós-aprovação, trava, `UPDATE`, releitura)
+  mantém o que ficou reservado e responde 200 com o status relido, com o log *"[almoxarifado-aprovar-valor] A requisição ⟨id⟩ foi
+  liberada por valor e fica APROVADO; o status pós-aprovação não foi gravado: ⟨msg⟩"* (RN-02, RN-02b, RN-02c; B790) — `1ffd53da`.
+- [x] **Fase 5 (r2 I1):** cancelada no meio, a reserva mantida é desfeita (status relido RASCUNHO/PENDENTE/REJEITADO/CANCELADO ou
+  `ativo = 0`); a releitura de quem perde falhando também (RN-02d, RN-02e) — `0980cd78`.
+- [x] **Guarda:** a aprovação automática com o `UPDATE` falhando continua 201 PENDENTE sem reserva (RN-03; já era assim desde a 73).
+- [ ] **Fora (declarado):** o rejeitar soltar reserva (outra porta; o legado é a **A70**); as duas falhas seguidas (status e desfazer)
+  — C256; o 409 `TRAVA_INCOMPLETA` do `/aprovar-valor` passa a 200 sem reserva (B790).
+
+Testes: `aprovacaoQueFalhaAoGravar.api.test.js`, `estadoForaDaAuditoriaFase5.api.test.js` (RN-02d/e),
+`estadoForaDaAuditoriaIntegracao.api.test.js` (i).
 
 ## Regras essenciais + testes de API exigidos
 
