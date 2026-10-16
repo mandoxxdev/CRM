@@ -948,13 +948,15 @@ const STATUS_DA_CONFERENCIA = [
   STATUS.REPROVADO, STATUS.PARCIALMENTE_APROVADO, STATUS.BLOQUEADO,
 ];
 const LITERAIS_CONFERENCIA = {
+  // Fase 5 (r2 A2): o ajuste e da tela de Movimentacoes, gate `movimentar` — Administrador ou Almoxarife. Sem o perfil, o
+  // Compras (que tambem confere) seria mandado a um gesto que recebe 403.
   DEPOIS_DA_ENTRADA: 'Recebimento já deu entrada no estoque — a conferência não pode mais mudar quantidade nem situação; '
-    + 'se a contagem estava errada, corrija o estoque por um ajuste',
+    + 'se a contagem estava errada, corrija o estoque por um ajuste (perfil Administrador ou Almoxarife do almoxarifado)',
   NAO_APROVA: 'A conferência não aprova o recebimento — use "Aprovar", que dá a entrada no estoque',
   ENCERRADA: (s) => `A conferência já foi encerrada (situação atual: ${s}) — a situação segue pelo fluxo do recebimento`,
   MUDOU: 'O recebimento mudou de situação enquanto a conferência era salva — recarregue e confira de novo',
   ITEM_JA_ENTROU: 'Item já deu entrada no estoque — a quantidade dele não muda mais; se a contagem estava errada, '
-    + 'corrija o estoque por um ajuste',
+    + 'corrija o estoque por um ajuste (perfil Administrador ou Almoxarife do almoxarifado)',
 };
 
 /** A marca de processamento VIVA — o complemento exato do "livre" de `reivindicarProcessamento` (10 minutos). */
@@ -1142,6 +1144,13 @@ async function avancarWorkflow(db, user, recebimentoId, acao, opcoes = {}) {
  * aceitos aqui (C267, declarado).
  */
 async function assertQuantidadeDoItemEntradoIntacta(db, recebimentoId, itens) {
+  // Fase 5 (r1 I1, reproduzido): com a marca de processamento viva, o `/fiscal` gravava a quantidade de um item ainda na fila do
+  // `darEntradaEstoque` (que ja leu os itens): documento 1, fisico 4, PROCESSADO. A mesma recusa do `/conferir` (RN-03).
+  if (itens && itens.length) {
+    const marca = await dbGet(db, `SELECT 1 AS viva FROM recebimentos_material_almoxarifado WHERE id = ? AND ${marcaVivaSql()}`,
+      [recebimentoId]);
+    if (marca) throw Object.assign(new Error(LITERAL_EM_PROCESSAMENTO), { status: 409 });
+  }
   for (const item of itens || []) {
     if (item.quantidade_recebida == null) continue;
     const atual = await dbGet(db, `SELECT quantidade_recebida, quantidade_esperada, entrada_estoque_em
@@ -1269,15 +1278,24 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
         data_fabricacao_lote = COALESCE(?, data_fabricacao_lote),
         corrida_lote = COALESCE(?, corrida_lote),
         series = COALESCE(?, series)
-        WHERE id = ? AND recebimento_id = ?`, [
+        WHERE id = ? AND recebimento_id = ?
+          AND NOT EXISTS (SELECT 1 FROM recebimentos_material_almoxarifado r WHERE r.id = ? AND ${marcaVivaSql('r')})`, [
         item.quantidade_recebida, vUnit || null, vTotal || null, // recebida ja normalizada
         item.valor_icms ?? null, item.valor_ipi ?? null, item.reducao_icms_percent ?? null,
         item.conferencia_quantidade != null ? (item.conferencia_quantidade ? 1 : 0) : null,
         item.conferencia_descricao != null ? (item.conferencia_descricao ? 1 : 0) : null,
         item.lote ?? null, item.data_validade_lote ?? null, item.data_fabricacao_lote ?? null,
         item.corrida_lote ?? null, item.series ?? null,
-        item.id, recebimentoId,
+        item.id, recebimentoId, recebimentoId,
       ]);
+      if (upd.changes !== 1) {
+        // Fase 5 (r1 I1): o item deste recebimento que nao gravou perdeu a corrida com o processamento (o cabecalho ja foi
+        // gravado — declarado em D (129)); o item estranho continua ignorado.
+        const doRecebimento = await dbGet(db, `SELECT 1 AS ok FROM recebimentos_material_itens_almoxarifado
+          WHERE id = ? AND recebimento_id = ?`, [item.id, recebimentoId]);
+        if (doRecebimento) throw Object.assign(new Error(LITERAL_EM_PROCESSAMENTO), { status: 409 });
+        continue;
+      }
       await gravarTrilhasDoItem(db, user, excedentes, indice, upd);
     }
   }

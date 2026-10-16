@@ -23,21 +23,27 @@ const SUPER = { id: 1, nome: 'Super Teste', role: 'admin', is_superadmin: 1, ema
 const ALMOXARIFE = { id: 3, nome: 'Almoxarife', role: 'usuario', perfil_almoxarifado: 'ALMOXARIFE', email: 'almox@test.com' };
 const API = '/api/almoxarifado';
 const L2 = 'Recebimento já deu entrada no estoque — a conferência não pode mais mudar quantidade nem situação; '
-  + 'se a contagem estava errada, corrija o estoque por um ajuste';
+  + 'se a contagem estava errada, corrija o estoque por um ajuste (perfil Administrador ou Almoxarife do almoxarifado)';
 
 // A77 — o MESMO texto do documento de novidades (letra A). Mudou la, muda aqui.
-const A77 = `SELECT r.id AS recebimento_id, r.numero, r.status, ri.id AS item_id, m.codigo AS material,
-       CAST(COALESCE(NULLIF(TRIM(ri.quantidade_recebida), ''), ri.quantidade_esperada) AS REAL) AS no_documento,
-       mv.quantidade AS entrou, ri.entrada_estoque_em
+const A77 = `SELECT r.id AS recebimento_id, r.numero, r.status, r.created_at AS recebido_em, ri.id AS item_id, m.codigo AS material,
+       CAST(COALESCE(CASE WHEN ri.quantidade_recebida IS NULL
+              OR (typeof(ri.quantidade_recebida) = 'text' AND TRIM(ri.quantidade_recebida) = '')
+            THEN ri.quantidade_esperada ELSE ri.quantidade_recebida END, 0) AS REAL) AS no_documento,
+       mv.quantidade AS entrou, COALESCE(mv.cancelado, 0) AS entrada_estornada, ri.entrada_estoque_em,
+       CASE WHEN ri.entrada_estoque_em IS NULL THEN 'SEM_ENTRADA' ELSE 'DIFERENTE_DA_ENTRADA' END AS achado
   FROM recebimentos_material_almoxarifado r
   JOIN recebimentos_material_itens_almoxarifado ri ON ri.recebimento_id = r.id
   JOIN materiais_almoxarifado m ON m.id = ri.material_id
   LEFT JOIN movimentacoes_almoxarifado mv ON mv.id = ri.movimentacao_entrada_id
- WHERE r.status IN ('PROCESSADO', 'APROVADO')
-   AND ((ri.entrada_estoque_em IS NULL
-         AND CAST(COALESCE(NULLIF(TRIM(ri.quantidade_recebida), ''), ri.quantidade_esperada) AS REAL) > 0.000001)
-     OR (mv.id IS NOT NULL
-         AND ABS(mv.quantidade - CAST(COALESCE(NULLIF(TRIM(ri.quantidade_recebida), ''), ri.quantidade_esperada) AS REAL)) > 0.000001))
+ WHERE (r.status IN ('PROCESSADO', 'APROVADO') AND ri.entrada_estoque_em IS NULL
+        AND CAST(COALESCE(CASE WHEN ri.quantidade_recebida IS NULL
+              OR (typeof(ri.quantidade_recebida) = 'text' AND TRIM(ri.quantidade_recebida) = '')
+            THEN ri.quantidade_esperada ELSE ri.quantidade_recebida END, 0) AS REAL) > 0.000001)
+    OR (ri.entrada_estoque_em IS NOT NULL AND mv.id IS NOT NULL
+        AND ABS(mv.quantidade - CAST(COALESCE(CASE WHEN ri.quantidade_recebida IS NULL
+              OR (typeof(ri.quantidade_recebida) = 'text' AND TRIM(ri.quantidade_recebida) = '')
+            THEN ri.quantidade_esperada ELSE ri.quantidade_recebida END, 0) AS REAL)) > 0.000001)
  ORDER BY r.id, ri.id;`;
 
 (async () => {
@@ -121,9 +127,11 @@ const A77 = `SELECT r.id AS recebimento_id, r.numero, r.status, ri.id AS item_id
     assert.ok(!(await dbAll(db, A77)).some((l) => l.recebimento_id === r.id), 'a A77 acusou o processado limpo');
   });
 
-  await test('[RN-08] A77: acha os tres formatos do legado e nao acha o limpo, o item 0 nem o que nao foi aprovado', async () => {
+  await test('[RN-08] A77: acha os formatos do legado (SEM_ENTRADA / DIFERENTE_DA_ENTRADA) e nao acha o limpo, o item 0, o estornado sem mudanca nem o que nao foi aprovado', async () => {
     // (1) aprovado com item que ganhou quantidade sem entrar; (2) processado com o item reescrito depois da entrada;
-    // (3) aprovado pela conferencia sem entrada nenhuma. Montados pelas portas + o UPDATE que o /conferir antigo fazia.
+    // (3) aprovado pela conferencia sem entrada nenhuma; (4) Fase 5 r1-M2: o Aprovado -> REPROVADO da conferencia antiga, item
+    // entrado com a quantidade reescrita; (5) Fase 5 r3-A1: aprovado sem entrada com a recebida NULL (vale a esperada).
+    // Montados pelas portas + o UPDATE que o /conferir antigo fazia.
     const a = await receber([5, 2]);
     await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET quantidade_recebida = 0 WHERE id = ?', [a.its[0]]);
     await ok(request(app).post(`${API}/recebimentos/${a.id}/aprovar`).send({}));
@@ -134,16 +142,36 @@ const A77 = `SELECT r.id AS recebimento_id, r.numero, r.status, ri.id AS item_id
     await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET quantidade_recebida = 7 WHERE id = ?', [b.its[0]]);
     const c = await receber([4]);
     await dbRun(db, "UPDATE recebimentos_material_almoxarifado SET status = 'APROVADO' WHERE id = ?", [c.id]);
+    const d = await receber([3]);
+    await ok(request(app).post(`${API}/recebimentos/${d.id}/aprovar`).send({}));
+    await dbRun(db, "UPDATE recebimentos_material_almoxarifado SET status = 'REPROVADO' WHERE id = ?", [d.id]);
+    await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET quantidade_recebida = 1 WHERE id = ?', [d.its[0]]);
+    const e = await receber([6]);
+    await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET quantidade_recebida = NULL WHERE id = ?', [e.its[0]]);
+    await dbRun(db, "UPDATE recebimentos_material_almoxarifado SET status = 'APROVADO' WHERE id = ?", [e.id]);
     const zero = await receber([6]);
     await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET quantidade_recebida = 0 WHERE id = ?', [zero.its[0]]);
     await ok(request(app).post(`${API}/recebimentos/${zero.id}/aprovar`).send({}));
+    // o estorno da entrada nao limpa `entrada_estoque_em` nem `movimentacao_entrada_id` (Fase 2, I2): sem mudanca de
+    // quantidade, a A77 nao acusa — e mostra `entrada_estornada` quando acusa.
+    const est = await receber([2]);
+    await ok(request(app).post(`${API}/recebimentos/${est.id}/aprovar`).send({}));
+    const movEst = (await dbGet(db, 'SELECT movimentacao_entrada_id m FROM recebimentos_material_itens_almoxarifado WHERE id = ?', [est.its[0]])).m;
+    await ok(request(app).post(`${API}/movimentacoes/${movEst}/cancelar`).send({ motivo: 'teste A77' }));
     const aberto = await receber([9]);
-    const linhas = (await dbAll(db, A77)).filter((l) => [a.id, b.id, c.id, zero.id, aberto.id].includes(l.recebimento_id));
-    assert.deepStrictEqual(linhas.map((l) => [l.recebimento_id, l.item_id, l.no_documento, l.entrou]), [
-      [a.id, a.its[0], 5, null],
-      [b.id, b.its[0], 7, 3],
-      [c.id, c.its[0], 4, null],
+    const ids = [a.id, b.id, c.id, d.id, e.id, zero.id, est.id, aberto.id];
+    const linhas = (await dbAll(db, A77)).filter((l) => ids.includes(l.recebimento_id));
+    assert.deepStrictEqual(linhas.map((l) => [l.recebimento_id, l.item_id, l.no_documento, l.entrou, l.achado, l.entrada_estornada]), [
+      [a.id, a.its[0], 5, null, 'SEM_ENTRADA', 0],
+      [b.id, b.its[0], 7, 3, 'DIFERENTE_DA_ENTRADA', 0],
+      [c.id, c.its[0], 4, null, 'SEM_ENTRADA', 0],
+      [d.id, d.its[0], 1, 3, 'DIFERENTE_DA_ENTRADA', 0],
+      [e.id, e.its[0], 6, null, 'SEM_ENTRADA', 0],
     ], JSON.stringify(linhas));
+    // o estornado, reescrito depois: aparece, marcado
+    await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET quantidade_recebida = 1 WHERE id = ?', [est.its[0]]);
+    const doEst = (await dbAll(db, A77)).filter((l) => l.recebimento_id === est.id);
+    assert.deepStrictEqual(doEst.map((l) => [l.achado, l.entrada_estornada]), [['DIFERENTE_DA_ENTRADA', 1]]);
   });
 
   await test('[RN-17] a perda pela rota real aparece com o valor; estornada pela rota, some', async () => {

@@ -25,11 +25,11 @@ const ALMOXARIFE = { id: 3, nome: 'Almoxarife', role: 'usuario', perfil_almoxari
 const API = '/api/almoxarifado';
 
 const L2 = 'Recebimento já deu entrada no estoque — a conferência não pode mais mudar quantidade nem situação; '
-  + 'se a contagem estava errada, corrija o estoque por um ajuste';
+  + 'se a contagem estava errada, corrija o estoque por um ajuste (perfil Administrador ou Almoxarife do almoxarifado)';
 const L3 = 'Esta nota já está sendo processada';
 const L4 = 'A conferência não aprova o recebimento — use "Aprovar", que dá a entrada no estoque';
 const L5 = (s) => `A conferência já foi encerrada (situação atual: ${s}) — a situação segue pelo fluxo do recebimento`;
-const L7 = "Item já deu entrada no estoque — a quantidade dele não muda mais; se a contagem estava errada, corrija o estoque por um ajuste";
+const L7 = "Item já deu entrada no estoque — a quantidade dele não muda mais; se a contagem estava errada, corrija o estoque por um ajuste (perfil Administrador ou Almoxarife do almoxarifado)";
 const L6 = 'O recebimento mudou de situação enquanto a conferência era salva — recarregue e confira de novo';
 
 (async () => {
@@ -322,6 +322,99 @@ const L6 = 'O recebimento mudou de situação enquanto a conferência era salva 
       (orig) => runOriginal(orig, 'UPDATE recebimentos_material_itens_almoxarifado SET entrada_estoque_em = CURRENT_TIMESTAMP WHERE id = ?', [r.its[0]]),
       () => request(app).put(`${API}/recebimentos/${r.id}/fiscal`).send({ itens: [{ id: r.its[0], quantidade_recebida: 2 }] }));
     assert.strictEqual((await item(r.its[0])).quantidade_recebida, 5);
+  });
+
+  // ── Fase 5 (r1 e r3): os cenarios que faltavam ──
+  await test('[RN-02 F5 r3-C1] PROCESSADO com a marca viva: a RN-02 vem antes da RN-03 (409 L2, nao L3)', async () => {
+    const r = await receber([{ esp: 2, rec: 2 }]);
+    await dbRun(db, `UPDATE recebimentos_material_almoxarifado SET status = 'PROCESSADO',
+      processando_em = strftime('%Y-%m-%d %H:%M:%S','now') || ' #viva' WHERE id = ?`, [r.id]);
+    recusa(await conferir(r.id, { itens: [{ id: r.its[0], quantidade_recebida: 1 }] }), 409, L2);
+  });
+
+  await test('[RN-02 F5 r3-C12] APROVADO sem item entrado (o legado da conferencia que marcava APROVADO) recusa 409 L2', async () => {
+    const r = await receber([{ esp: 4, rec: 4 }]);
+    await dbRun(db, "UPDATE recebimentos_material_almoxarifado SET status = 'APROVADO' WHERE id = ?", [r.id]);
+    recusa(await conferir(r.id, { itens: [{ id: r.its[0], quantidade_recebida: 1 }] }), 409, L2);
+    assert.strictEqual((await item(r.its[0])).quantidade_recebida, 4);
+  });
+
+  await test('[RN-03 F5 r3-C3] a marca de 9 min e meio ainda e viva (a janela e 10 min)', async () => {
+    const r = await receber([{ esp: 2, rec: 2 }]);
+    await dbRun(db, "UPDATE recebimentos_material_almoxarifado SET processando_em = strftime('%Y-%m-%d %H:%M:%S','now','-570 seconds') || ' #quase' WHERE id = ?", [r.id]);
+    recusa(await conferir(r.id, { itens: [{ id: r.its[0], quantidade_recebida: 1 }] }), 409, L3);
+  });
+
+  await test('[RN-06 F5 r3-C2] corrida: a marca chega logo antes do UPDATE do status -> 409 L3 e o status fica', async () => {
+    const r = await receber([{ esp: 2, rec: 2 }]);
+    const res = await comGancho(ehUpdateDoStatus,
+      (orig) => runOriginal(orig, "UPDATE recebimentos_material_almoxarifado SET processando_em = strftime('%Y-%m-%d %H:%M:%S','now') || ' #st' WHERE id = ?", [r.id]),
+      () => conferir(r.id, { status: 'BLOQUEADO' }));
+    recusa(res, 409, L3);
+    assert.strictEqual((await cab(r.id)).status, 'RECEBIDO');
+  });
+
+  await test('[RN-06 F5 r3-C11] corrida: o recebimento vira APROVADO (sem item entrado) antes do UPDATE do item -> 409 L2', async () => {
+    const r = await receber([{ esp: 2, rec: 2 }]);
+    const res = await comGancho(ehUpdateDoItem,
+      (orig) => runOriginal(orig, "UPDATE recebimentos_material_almoxarifado SET status = 'APROVADO' WHERE id = ?", [r.id]),
+      () => conferir(r.id, { itens: [{ id: r.its[0], quantidade_recebida: 1 }] }));
+    recusa(res, 409, L2);
+    assert.strictEqual((await item(r.its[0])).quantidade_recebida, 2);
+  });
+
+  const fiscalDe = (id, body) => request(app).put(`${API}/recebimentos/${id}/fiscal`).send(body);
+  const notaParcial = async (qtds, entrados) => {
+    const r = await receber(qtds);
+    await dbRun(db, "UPDATE recebimentos_material_almoxarifado SET status = 'EM_ENTRADA_NF' WHERE id = ?", [r.id]);
+    for (const i of entrados) {
+      await dbRun(db, 'UPDATE recebimentos_material_itens_almoxarifado SET entrada_estoque_em = CURRENT_TIMESTAMP WHERE id = ?', [r.its[i]]);
+    }
+    return r;
+  };
+
+  await test('[RN-09 F5 r3-C4] /fiscal: aumentar a quantidade do item entrado (3 de 5 para 4) tambem recusa 409 L7', async () => {
+    const r = await notaParcial([{ esp: 5, rec: 3 }], [0]);
+    recusa(await fiscalDe(r.id, { itens: [{ id: r.its[0], quantidade_recebida: 4 }] }), 409, L7);
+    assert.strictEqual((await item(r.its[0])).quantidade_recebida, 3);
+  });
+
+  await test('[RN-09 F5 r3-C5] /fiscal: item entrado sem quantidade no payload (so o valor) passa 200', async () => {
+    const r = await notaParcial([{ esp: 5, rec: 5 }], [0]);
+    const x = await fiscalDe(r.id, { itens: [{ id: r.its[0], valor_unitario: 2 }] });
+    assert.strictEqual(x.status, 200, JSON.stringify(x.body));
+    assert.strictEqual((await item(r.its[0])).valor_unitario, 2);
+  });
+
+  await test('[RN-09 F5 r3-C6] /fiscal: item entrado de OUTRO recebimento no payload nao recusa e nao muda', async () => {
+    const outro = await notaParcial([{ esp: 7, rec: 7 }], [0]);
+    const r = await notaParcial([{ esp: 2, rec: 2 }], []);
+    const x = await fiscalDe(r.id, { itens: [{ id: outro.its[0], quantidade_recebida: 1 }, { id: r.its[0], quantidade_recebida: 1 }] });
+    assert.strictEqual(x.status, 200, JSON.stringify(x.body));
+    assert.strictEqual((await item(outro.its[0])).quantidade_recebida, 7);
+    assert.strictEqual((await item(r.its[0])).quantidade_recebida, 1);
+  });
+
+  await test('[RN-09 F5 r1-I1] /fiscal com a marca de processamento viva recusa 409 L3 antes de gravar (cabecalho e itens)', async () => {
+    const r = await notaParcial([{ esp: 5, rec: 5 }, { esp: 4, rec: 4 }], []);
+    await dbRun(db, "UPDATE recebimentos_material_almoxarifado SET processando_em = strftime('%Y-%m-%d %H:%M:%S','now') || ' #proc' WHERE id = ?", [r.id]);
+    recusa(await fiscalDe(r.id, { nota_serie: 'S-PROC', itens: [{ id: r.its[1], quantidade_recebida: 1 }] }), 409, L3);
+    assert.strictEqual((await item(r.its[1])).quantidade_recebida, 4);
+    assert.notStrictEqual((await dbGet(db, 'SELECT nota_serie s FROM recebimentos_material_almoxarifado WHERE id = ?', [r.id])).s, 'S-PROC');
+    // sem itens no payload (so o cabecalho) continua aceito — o processamento leu o cabecalho antes
+    assert.strictEqual((await fiscalDe(r.id, { nota_serie: 'S-SO-CAB' })).status, 200);
+  });
+
+  await test('[RN-09 F5 r1-I1] /fiscal: corrida — a marca chega logo antes do UPDATE do item -> 409 L3 e o item nao muda', async () => {
+    const r = await notaParcial([{ esp: 5, rec: 5 }], []);
+    const ehItemFiscal = (sql) => sql.includes('UPDATE recebimentos_material_itens_almoxarifado SET') && sql.includes('reducao_icms_percent');
+    const res = await comGancho(ehItemFiscal,
+      (orig) => runOriginal(orig, "UPDATE recebimentos_material_almoxarifado SET processando_em = strftime('%Y-%m-%d %H:%M:%S','now') || ' #fis' WHERE id = ?", [r.id]),
+      () => fiscalDe(r.id, { itens: [{ id: r.its[0], quantidade_recebida: 2, valor_unitario: 9 }] }));
+    recusa(res, 409, L3);
+    const it = await item(r.its[0]);
+    assert.strictEqual(it.quantidade_recebida, 5);
+    assert.notStrictEqual(it.valor_unitario, 9);
   });
 
   await test('[RN-07] o que nao muda: conferencia normal abre a NC, CONFERIDO_ALMOX nao grava a finalizacao, excedente sem flag 400', async () => {

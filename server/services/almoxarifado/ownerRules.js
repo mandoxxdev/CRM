@@ -194,7 +194,10 @@ const TIPOS_AJUSTE_DONO = ['AJUSTE', 'AJUSTE_POSITIVO', 'AJUSTE_NEGATIVO', 'AJUS
  * continua no livro de movimentacoes, que so ganha linha quando o ajuste conclui.
  */
 async function assertAjustePermitido(db, material, tipo, params, user) {
-  if (!material?.proprietario_cliente_id) return; // material nosso: segue em ajustar_estoque
+  // Material nosso: nada aqui — o gate e o da rota (`movimentar`: Administrador ou Almoxarife). Esta linha dizia "segue em
+  // ajustar_estoque" e ESTAVA ERRADA: o motor nao confere `ajustar_estoque` no ajuste de material nosso (medido na Fase 5 da
+  // Etapa 129: o Gestor, que tem `ajustar_estoque`, leva 403 no AJUSTE pelas duas rotas de movimentacao).
+  if (!material?.proprietario_cliente_id) return;
   if (!TIPOS_AJUSTE_DONO.includes(tipo)) return;
 
   const donoNome = await nomeDoCliente(db, material.proprietario_cliente_id);

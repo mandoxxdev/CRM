@@ -160,6 +160,28 @@ function binaryParser(res, callback) {
     assert.deepStrictEqual(linhas[0], RELATORIOS['perdas-por-motivo'].colunas.map((c) => c.rotulo));
   });
 
+  await test('[RN-11/RN-12 F5 r3] centavos (0,35 x 3 = 1,05), o mesmo material duas vezes, o ultimo_em e o desempate entre motivos', async () => {
+    const AAA = await motivo('AAA F5 E129');
+    const BBB = await motivo('BBB F5 E129');
+    const m = await material({ unitario: 0.35 });
+    await mov(m, 'PERDA', 1, { motivoId: AAA, createdAt: '2026-02-01 10:00:00' });
+    await mov(m, 'PERDA', 2, { motivoId: AAA, createdAt: '2026-03-01 10:00:00' });
+    const ls = linhaDo(await rel(`?material_id=${m}`), 'PERDA', 'AAA F5 E129');
+    assert.strictEqual(ls[0].valor, 1.05, 'o valor nao foi arredondado a centavos');
+    assert.strictEqual(ls[0].lancamentos, 2);
+    assert.strictEqual(ls[0].materiais, 1, 'o mesmo material contou duas vezes');
+    assert.strictEqual(ls[0].ultimo_em, '2026-03-01 10:00:00', 'ultimo_em nao e o mais recente');
+    // desempate pelo motivo, depois pelo tipo: PERDA_TERCEIRO/AAA e PERDA/BBB valem 2 -> AAA antes de BBB
+    const n = await material({ unitario: 1 });
+    await mov(n, 'PERDA', 2, { motivoId: BBB });
+    await mov(n, 'PERDA_TERCEIRO', 2, { motivoId: AAA });
+    assert.deepStrictEqual((await rel(`?material_id=${n}`)).map((l) => [l.tipo, l.motivo]),
+      [['PERDA_TERCEIRO', 'AAA F5 E129'], ['PERDA', 'BBB F5 E129']]);
+    // o formulario enviado sem material (material_id vazio) nao e erro
+    const vazio = await request(app).get(`${URL_REL}?material_id=`);
+    assert.strictEqual(vazio.status, 200, JSON.stringify(vazio.body));
+  });
+
   await test('[RN-12/RN-16] registro: titulo, categoria, gate, params, colunas e a nota', async () => {
     const e = RELATORIOS['perdas-por-motivo'];
     assert.ok(e, 'chave perdas-por-motivo nao declarada');
