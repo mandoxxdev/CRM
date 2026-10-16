@@ -128,13 +128,16 @@ function partesDaRetencao(material, caixa = 0) {
 }
 
 /**
- * Etapa 128 (C209, RN-11..RN-16; Fase 2 I1/I2/M4) — o aviso do ajuste COM endereco que deixou o DISPONIVEL negativo (o fisico abaixo
- * do retido: reservada, bloqueada, em inspecao, em terceiros). A contagem grava (a decisao da Etapa 10: a contagem por endereco
- * redefine o saldo); o aviso diz o que houve e o caminho de cada retencao presente. `material` = a linha relida DEPOIS do ajuste;
- * `caixaComReserva` = o separado coberto por reserva (`caixaSql.lerCaixaComReserva`) — com ele, liberar a reserva so destrava se o
- * material voltar a prateleira antes. PURA. Sem retencao (o fisico negativo de quem permite negativo) ou com o disponivel >= 0: null.
+ * Etapa 128 (C209, RN-11..RN-16; Fase 2 I1/I2/M4; Fase 5 r1) — o aviso do ajuste COM endereco que deixou o DISPONIVEL negativo (o
+ * fisico abaixo do retido: reservada, bloqueada, em inspecao, em terceiros). A contagem grava (a decisao da Etapa 10: a contagem por
+ * endereco redefine o saldo); o aviso diz o que houve e o caminho de cada retencao presente. `material` = a linha relida DEPOIS do
+ * ajuste; `caixaComReserva` = o separado coberto por reserva (`caixaSql.lerCaixaComReserva`) — com ele, liberar a reserva so destrava
+ * se o material voltar a prateleira antes; `permiteNegativo` = a regra do motor (o material ou o global): com ela a entrega ainda
+ * sai pelo fisico e a frase "nada dele sai" seria falsa (Fase 5 r1, achado 2). O que esta em terceiros NAO e "o que se perdeu": a
+ * remessa nao tira do endereco, entao o caminho e recontar somando-o (Fase 5 r1, achado 1 — o retorno apagaria estoque dos livros e
+ * a baixa no terceiro recusa). PURA. Sem retencao (o fisico negativo de quem permite negativo) ou com o disponivel >= 0: null.
  */
-function avisoRetencaoDoAjuste(material, caixaComReserva = 0) {
+function avisoRetencaoDoAjuste(material, caixaComReserva = 0, { permiteNegativo = false } = {}) {
   const { partes, retido } = partesDaRetencao(material, 0);
   const total = Number(material.quantidade_atual) || 0;
   if (!(retido > Q.QTD_FOLGA) || Q.cabe(retido, total)) return null;
@@ -148,15 +151,18 @@ function avisoRetencaoDoAjuste(material, caixaComReserva = 0) {
       : 'libere a reserva (perfil Administrador ou Almoxarife)');
   }
   if ((material.quantidade_bloqueada || 0) > 0) acoes.push('desbloqueie o que se perdeu (perfil Administrador ou Gestor)');
-  if ((material.quantidade_em_inspecao || 0) > 0) acoes.push('decida a inspeção');
-  const terceiros = (material.quantidade_em_terceiros || 0) > 0;
-  if (terceiros) acoes.push('resolva a remessa ao terceiro');
+  // Fase 5 r1 (achado 3): reprovar o que esta em inspecao o deixa BLOQUEADO — o caminho inteiro, com quem desbloqueia.
+  if ((material.quantidade_em_inspecao || 0) > 0) {
+    acoes.push('decida a inspeção (o reprovado fica bloqueado: desbloqueie depois, perfil Administrador ou Gestor)');
+  }
+  const terceiros = Number(material.quantidade_em_terceiros) || 0;
   const juntas = acoes.length <= 1 ? acoes.join('') : `${acoes.slice(0, -1).join(', ')} e ${acoes[acoes.length - 1]}`;
   return `Ajuste gravado, mas o disponível de ${material.codigo} ficou negativo: o estoque (${qtdUn(total)}) é menor que o retido `
-    + `(${partes.join(', ')}, total retido: ${qtdUn(retido)}), e nada dele sai pela entrega de requisição enquanto for assim.`
-    + (terceiros ? ' O que está em terceiros continua no saldo do endereço: a contagem tem de somá-lo.' : '')
-    + ` Se o material existe e a contagem não o incluiu, estorne o ajuste que baixou o estoque (${quemEstorna}); se ele se perdeu, `
-    + `${juntas}.`;
+    + `(${partes.join(', ')}, total retido: ${qtdUn(retido)})`
+    + (permiteNegativo ? '.' : ', e nada dele sai pela entrega de requisição enquanto for assim.')
+    + (terceiros > 0 ? ` O que está em terceiros (${qtdUn(terceiros)}) continua no saldo do endereço: refaça a contagem somando-o.` : '')
+    + ` Se o material existe e a contagem não o incluiu, estorne o ajuste que baixou o estoque (${quemEstorna})`
+    + (acoes.length ? `; se ele se perdeu, ${juntas}.` : '.');
 }
 
 /**
@@ -2500,9 +2506,10 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
     try {
       const depois = await dbGet(db, `SELECT codigo, unidade, proprietario_cliente_id, quantidade_atual, ${COLUNAS_RETENCAO.join(', ')}
         FROM materiais_almoxarifado WHERE id = ?`, [material_id]);
-      const sem = depois ? avisoRetencaoDoAjuste(depois, 0) : null;
+      const opcoes = { permiteNegativo: !!permiteNegativo };
+      const sem = depois ? avisoRetencaoDoAjuste(depois, 0, opcoes) : null;
       avisoRetencao = sem && (depois.quantidade_reservada || 0) > 0
-        ? avisoRetencaoDoAjuste(depois, await caixaSql.lerCaixaComReserva(db, material_id))
+        ? avisoRetencaoDoAjuste(depois, await caixaSql.lerCaixaComReserva(db, material_id), opcoes)
         : sem;
     } catch (avisoErr) {
       console.warn('[almoxarifado-retencao] Falha ao ler a retencao para o aviso do ajuste:', avisoErr.message);

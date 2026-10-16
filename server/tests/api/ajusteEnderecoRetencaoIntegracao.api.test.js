@@ -14,6 +14,7 @@ const { createTestApp } = require('../helpers/testApp');
 const { dbRun, dbGet, dbAll } = require('../../services/almoxarifado/db');
 const { PERFIS } = require('../../services/almoxarifado/permissions');
 const stockService = require('../../services/almoxarifado/stockService');
+const caixaSql = require('../../services/almoxarifado/caixaSql');
 
 let passed = 0; let failed = 0;
 function test(name, fn) {
@@ -145,6 +146,34 @@ let seq = 0;
     const r2 = await mov({ material_id: x.id, tipo: 'AJUSTE', quantidade: 0, localizacao_destino_id: B });
     assert.strictEqual(r2.status, 201, JSON.stringify(r2.body));
     assert.ok(!('aviso_retencao' in r2.body), `nao devia avisar mais: ${JSON.stringify(r2.body)}`);
+  });
+
+  await test('[128 RN-19] (Fase 5 r3) a leitura do aviso que lanca nao derruba o ajuste: 201, sem aviso_retencao, e a contagem gravou', async () => {
+    const x = await c209();
+    const original = caixaSql.lerCaixaComReserva;
+    caixaSql.lerCaixaComReserva = async () => { throw new Error('falha simulada'); };
+    const avisos = []; const warn = console.warn; console.warn = (...a) => avisos.push(a.join(' '));
+    let r;
+    try { r = await mov({ material_id: x.id, tipo: 'AJUSTE', quantidade: 0, localizacao_destino_id: x.A }); } finally {
+      caixaSql.lerCaixaComReserva = original; console.warn = warn;
+    }
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.ok(!('aviso_retencao' in r.body), JSON.stringify(r.body));
+    assert.ok(avisos.some((a) => a.includes('[almoxarifado-retencao]') && a.includes('falha simulada')), JSON.stringify(avisos));
+    assert.strictEqual((await dbGet(db, 'SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id=?', [x.id])).q, 0);
+  });
+
+  await test('[128 RN-20] (Fase 5 r1) caminho de terceiros: a frase manda recontar somando — a recontagem que soma os 3 tira do negativo, sem aviso', async () => {
+    const mat = await material(); const A = await loc();
+    await mov({ material_id: mat.id, tipo: 'ENTRADA', quantidade: 4, localizacao_destino_id: A });
+    // 3 no terceiro (a remessa nao tira do endereco: o saldo do A continua 4)
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_em_terceiros = 3 WHERE id = ?', [mat.id]);
+    const r = await mov({ material_id: mat.id, tipo: 'AJUSTE', quantidade: 1, localizacao_destino_id: A });
+    assert.ok(/O que está em terceiros \(3 PC\) continua no saldo do endereço: refaça a contagem somando-o\./.test(r.body.aviso_retencao), r.body.aviso_retencao);
+    const r2 = await mov({ material_id: mat.id, tipo: 'AJUSTE', quantidade: 4, localizacao_destino_id: A });
+    assert.strictEqual(r2.status, 201, JSON.stringify(r2.body));
+    assert.ok(!('aviso_retencao' in r2.body), JSON.stringify(r2.body));
+    assert.strictEqual(await disponivel(mat.id), 1);
   });
 
   terminou = true;

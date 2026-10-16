@@ -38,19 +38,21 @@ process.on('exit', (code) => {
 
 const NOSSO = 'perfil Administrador ou Gestor do almoxarifado';
 const DO_CLIENTE = 'perfil Administrador do almoxarifado';
-// Literal A2 (plano, "Regras de negocio" — C209; refeita na Fase 2, I1/I2/M4): o "se perdeu" e uma acao por retencao presente.
+// Literal A2 (plano, "Regras de negocio" — C209; refeita na Fase 2, I1/I2/M4, e na Fase 5, r1): o "se perdeu" e uma acao por
+// retencao presente; o que esta em terceiros nao e "perdido" (a frase manda recontar somando); com permite-negativo, sem o "nada sai".
 const RES = 'libere a reserva (perfil Administrador ou Almoxarife)';
 const RES_CX = 'devolva-o à prateleira na requisição e libere a reserva (perfil Administrador ou Almoxarife)';
 const BLOQ = 'desbloqueie o que se perdeu (perfil Administrador ou Gestor)';
-const INSP = 'decida a inspeção';
-const TERC = 'resolva a remessa ao terceiro';
+const INSP = 'decida a inspeção (o reprovado fica bloqueado: desbloqueie depois, perfil Administrador ou Gestor)';
 const juntar = (xs) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} e ${xs[xs.length - 1]}`);
-const A2 = (cod, total, partes, retido, acoes, { quem = NOSSO, un = 'PC' } = {}) => {
+const A2 = (cod, total, partes, retido, acoes, { quem = NOSSO, un = 'PC', terceiros = 0, permiteNegativo = false } = {}) => {
   const q = (n) => [n, un].filter((x) => x !== undefined && x !== null && x !== '').join(' ');
-  const terceiros = acoes.includes(TERC) ? ' O que está em terceiros continua no saldo do endereço: a contagem tem de somá-lo.' : '';
   return `Ajuste gravado, mas o disponível de ${cod} ficou negativo: o estoque (${q(total)}) é menor que o retido (${partes}, total `
-    + `retido: ${q(retido)}), e nada dele sai pela entrega de requisição enquanto for assim.${terceiros} Se o material existe e a `
-    + `contagem não o incluiu, estorne o ajuste que baixou o estoque (${quem}); se ele se perdeu, ${juntar(acoes)}.`;
+    + `retido: ${q(retido)})`
+    + (permiteNegativo ? '.' : ', e nada dele sai pela entrega de requisição enquanto for assim.')
+    + (terceiros ? ` O que está em terceiros (${q(terceiros)}) continua no saldo do endereço: refaça a contagem somando-o.` : '')
+    + ` Se o material existe e a contagem não o incluiu, estorne o ajuste que baixou o estoque (${quem})`
+    + (acoes.length ? `; se ele se perdeu, ${juntar(acoes)}.` : '.');
 };
 // A1 da Etapa 104 (o aviso da caixa), para o cenario dos dois juntos.
 const A1 = (cod, total, caixa, lista) => `Ajuste gravado, mas o disponível de ${cod} ficou em ${total} PC, abaixo dos ${caixa} PC `
@@ -152,17 +154,17 @@ const A1 = (cod, total, caixa, lista) => `Ajuste gravado, mas o disponível de $
     await entrar(mat.id, 5, A);
     await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_em_inspecao = 2, quantidade_em_terceiros = 1.5 WHERE id = ?', [mat.id]);
     const r = await ajuste(mat.id, 3, A);
-    assert.strictEqual(r.body.aviso_retencao, A2(mat.codigo, 3, 'em inspeção: 2, em terceiros: 1.5', 3.5, [INSP, TERC]));
+    assert.strictEqual(r.body.aviso_retencao, A2(mat.codigo, 3, 'em inspeção: 2, em terceiros: 1.5', 3.5, [INSP], { terceiros: 1.5 }));
   });
 
-  await test('[128 RN-13] (Fase 2, I2) so em terceiros: a frase manda somar o que esta no terceiro e resolver a remessa', async () => {
+  await test('[128 RN-13] (Fase 2, I2) so em terceiros: a frase manda recontar somando o que esta no terceiro, sem "se perdeu" (Fase 5 r1: o retorno apagaria estoque)', async () => {
     const mat = await material(); const A = await loc();
     await entrar(mat.id, 4, A);
     await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_em_terceiros = 3 WHERE id = ?', [mat.id]);
     const r = await ajuste(mat.id, 1, A);
     assert.strictEqual(r.status, 201, JSON.stringify(r.body));
-    assert.strictEqual(r.body.aviso_retencao, A2(mat.codigo, 1, 'em terceiros: 3', 3, [TERC]));
-    assert.ok(!/libere/.test(r.body.aviso_retencao), 'sem reserva nem bloqueio, nao manda liberar');
+    assert.strictEqual(r.body.aviso_retencao, A2(mat.codigo, 1, 'em terceiros: 3', 3, [], { terceiros: 3 }));
+    assert.ok(!/libere|se ele se perdeu|remessa/.test(r.body.aviso_retencao), 'sem reserva nem bloqueio, nao manda liberar nem resolver a remessa');
   });
 
   await test('[128 RN-14] disponivel exatamente 0 nao avisa (metade positiva: um a menos avisa); positivo nao avisa', async () => {
@@ -236,6 +238,46 @@ const A1 = (cod, total, caixa, lista) => `Ajuste gravado, mas o disponível de $
     assert.ok(!/null|  /.test(r.body.aviso_retencao), r.body.aviso_retencao);
   });
 
+  await test('[128 RN-11] (Fase 5 r3) unidade NULL (legado): sem espaco sobrando', async () => {
+    const mat = await material({ unidade: null }); const A = await loc();
+    await entrar(mat.id, 4, A);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = 3 WHERE id = ?', [mat.id]);
+    const r = await ajuste(mat.id, 1, A);
+    assert.ok(/o estoque \(1\) é menor que o retido \(bloqueada: 3, total retido: 3\)/.test(r.body.aviso_retencao), r.body.aviso_retencao);
+  });
+
+  await test('[128 RN-12] (Fase 5 r3) o separado de requisicao ENTREGUE legado (separado > entregue) nao e caixa com reserva', async () => {
+    const mat = await material(); const A = await loc();
+    await entrar(mat.id, 6, A);
+    const z = await req(mat.id, 2); await aprovar(z.R); await separar(z.R, z.ids[0], 2);
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET status='ENTREGUE' WHERE id=?", [z.R]);
+    await dbRun(db, "UPDATE reservas_material_almoxarifado SET status='LIBERADA' WHERE material_id=? AND status='ATIVA'", [mat.id]);
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_reservada = 0 WHERE id=?', [mat.id]);
+    const y = await req(mat.id, 3); await aprovar(y.R); // reserva 3, nao separada
+    const r = await ajuste(mat.id, 1, A);
+    assert.strictEqual(r.body.aviso_retencao, A2(mat.codigo, 1, 'reservada: 3', 3, [RES]));
+  });
+
+  await test('[128 RN-11] (Fase 5 r3) item com entregue > separado (legado) nao abate a caixa coberta de outra requisicao', async () => {
+    const mat = await material(); const A = await loc();
+    await entrar(mat.id, 4, A);
+    const x = await req(mat.id, 4); await aprovar(x.R); await separar(x.R, x.ids[0], 4);
+    const w = await req(mat.id, 4); await aprovar(w.R); // sem livre: sem reserva
+    await dbRun(db, "UPDATE requisicoes_almoxarifado SET status='PARCIALMENTE_ATENDIDA' WHERE id=?", [w.R]);
+    await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET quantidade_separada = 0, quantidade_entregue = 4 WHERE id=?', [w.ids[0]]);
+    const r = await ajuste(mat.id, 0, A);
+    assert.strictEqual(r.body.aviso_retencao, A2(mat.codigo, 0, 'reservada: 4', 4, [RES_CX]));
+  });
+
+  await test('[128 RN-11] (Fase 5 r1) material que permite negativo: o aviso vem SEM o "nada dele sai pela entrega"', async () => {
+    const mat = await material({ permiteNegativo: 1 }); const A = await loc();
+    await entrar(mat.id, 4, A);
+    const a = await req(mat.id, 3); await aprovar(a.R);
+    const r = await ajuste(mat.id, 1, A);
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.strictEqual(r.body.aviso_retencao, A2(mat.codigo, 1, 'reservada: 3', 3, [RES], { permiteNegativo: true }));
+  });
+
   await test('[128 RN-11] pelo SERVICO: registrarMovimentacao devolve aviso_retencao no retorno', async () => {
     const mat = await material(); const A = await loc();
     await entrar(mat.id, 4, A);
@@ -255,7 +297,9 @@ const A1 = (cod, total, caixa, lista) => `Ajuste gravado, mas o disponível de $
     assert.strictEqual(stockService.avisoRetencaoDoAjuste({ ...base, quantidade_reservada: 3 }), A2('MX', 1, 'reservada: 3', 3, [RES]));
     assert.strictEqual(stockService.avisoRetencaoDoAjuste({ ...base, quantidade_reservada: 3 }, 2), A2('MX', 1, 'reservada: 3', 3, [RES_CX]), 'com caixa coberta por reserva');
     assert.strictEqual(stockService.avisoRetencaoDoAjuste({ ...base, quantidade_reservada: 1, quantidade_bloqueada: 1, quantidade_em_inspecao: 1, quantidade_em_terceiros: 1 }),
-      A2('MX', 1, 'reservada: 1, bloqueada: 1, em inspeção: 1, em terceiros: 1', 4, [RES, BLOQ, INSP, TERC]), 'as quatro, na ordem');
+      A2('MX', 1, 'reservada: 1, bloqueada: 1, em inspeção: 1, em terceiros: 1', 4, [RES, BLOQ, INSP], { terceiros: 1 }), 'as quatro, na ordem');
+    assert.strictEqual(stockService.avisoRetencaoDoAjuste({ ...base, quantidade_reservada: 3 }, 0, { permiteNegativo: true }),
+      A2('MX', 1, 'reservada: 3', 3, [RES], { permiteNegativo: true }), 'permite negativo: sem o "nada sai" (Fase 5 r1)');
     assert.strictEqual(stockService.avisoRetencaoDoAjuste({ ...base, quantidade_atual: -2 }), null, 'fisico negativo sem retencao');
     assert.strictEqual(stockService.avisoRetencaoDoAjuste({ ...base, quantidade_reservada: 3, proprietario_cliente_id: 7 }),
       A2('MX', 1, 'reservada: 3', 3, [RES], { quem: DO_CLIENTE }));
