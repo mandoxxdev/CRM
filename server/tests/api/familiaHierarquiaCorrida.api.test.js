@@ -50,6 +50,9 @@ const SQL_SUBS_INATIVAS = /^SELECT COUNT\(\*\) as c FROM familias_material_almox
 (async () => {
   console.log('\n═══ Reorganizacao de familias sem corrida (Etapa 123, C221) ═══\n');
   const { app, db, close } = await createTestApp({ user: SUPER });
+  // Fase 5 (r1): um servidor so para o arquivo — supertest com request(app) abre um por requisicao, e nas corridas de 30
+  // rodadas em paralelo isso deu EADDRINUSE no Windows sob carga.
+  const srv = app.listen(0);
 
   let seq = 0;
   const familia = async (ativo = 1, parentId = null) => {
@@ -93,8 +96,8 @@ const SQL_SUBS_INATIVAS = /^SELECT COUNT\(\*\) as c FROM familias_material_almox
     assert.strictEqual(injecoes.length, 0, `injecao nao consumida (a conferencia sumiu? teste vazio): ${injecoes.map((x) => x.sql).join(', ')}`);
     assert.strictEqual(rodadas, n, `injecoes rodadas ${rodadas}, esperado ${n}`);
   };
-  const postSub = (nome, parentId) => request(app).post('/api/almoxarifado/familias').send({ nome, parent_id: parentId });
-  const put = (id, corpo) => request(app).put(`/api/almoxarifado/familias/${id}`).send(corpo);
+  const postSub = (nome, parentId) => request(srv).post('/api/almoxarifado/familias').send({ nome, parent_id: parentId });
+  const put = (id, corpo) => request(srv).put(`/api/almoxarifado/familias/${id}`).send(corpo);
 
   /* ── RN-01: criar subfamilia ───────────────────────────────────────────────────────────── */
   await test('[RN-01] criar subfamilia, a raiz inativada na janela -> 400 "maximo 2 niveis", nada gravado', async () => {
@@ -328,7 +331,7 @@ const SQL_SUBS_INATIVAS = /^SELECT COUNT\(\*\) as c FROM familias_material_almox
     ['criar subfamilia x Inativar a raiz', async () => {
       const R = await familia(); seq += 1; const nome = `corr sub ${seq}`;
       return {
-        a: () => postSub(nome, R), b: () => request(app).delete(`/api/almoxarifado/familias/${R}`),
+        a: () => postSub(nome, R), b: () => request(srv).delete(`/api/almoxarifado/familias/${R}`),
         okA: [201], recusaA: [L_2NIVEIS], okB: [200], recusaB: [L_SUBS_DEL(1)],
         furo: async () => (await porNome(nome)) > 0 && Number((await linha(R)).ativo) !== 1,
       };
@@ -336,7 +339,7 @@ const SQL_SUBS_INATIVAS = /^SELECT COUNT\(\*\) as c FROM familias_material_almox
     ['reativar subfamilia x Inativar a raiz', async () => {
       const R = await familia(); const S = await familia(0, R);
       return {
-        a: () => put(S, { nome: `re ${S}`, ativo: 1 }), b: () => request(app).delete(`/api/almoxarifado/familias/${R}`),
+        a: () => put(S, { nome: `re ${S}`, ativo: 1 }), b: () => request(srv).delete(`/api/almoxarifado/familias/${R}`),
         okA: [200], recusaA: [L_REATIVAR], okB: [200], recusaB: [L_SUBS_DEL(1)],
         furo: async () => Number((await linha(S)).ativo) === 1 && Number((await linha(R)).ativo) !== 1,
       };
@@ -345,7 +348,7 @@ const SQL_SUBS_INATIVAS = /^SELECT COUNT\(\*\) as c FROM familias_material_almox
       const X = await familia(); const R2 = await familia(); seq += 1; const codigo = `CORR123-${seq}`;
       return {
         a: () => put(X, { nome: `x ${X}`, parent_id: R2 }),
-        b: () => request(app).post('/api/almoxarifado/materiais').send({ codigo, nome: codigo, unidade: 'PC', categoria: 'OUTROS', familia_id: X }),
+        b: () => request(srv).post('/api/almoxarifado/materiais').send({ codigo, nome: codigo, unidade: 'PC', categoria: 'OUTROS', familia_id: X }),
         okA: [200], recusaA: [L_VIRAR_SUB(1)], okB: [201], recusaB: [L_FAM_SUB],
         furo: async () => (await linha(X)).parent_id !== null
           && (await dbGet(db, 'SELECT COUNT(*) AS n FROM materiais_almoxarifado WHERE familia_id = ?', [X])).n > 0,
@@ -388,6 +391,7 @@ const SQL_SUBS_INATIVAS = /^SELECT COUNT\(\*\) as c FROM familias_material_almox
     }
   }
 
+  srv.close();
   await close();
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   process.exit(failed > 0 ? 1 : 0);
