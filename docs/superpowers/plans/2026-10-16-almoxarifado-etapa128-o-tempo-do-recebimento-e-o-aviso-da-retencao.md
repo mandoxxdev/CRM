@@ -147,18 +147,18 @@ mergeUserPermissions(prev, data.usuario)` e `igual` compara `role`, `is_superadm
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 — tronco (servidor, relatório)** — `reportService.relatorioIndicadores` (o bloco) + `reportRegistry` (a nota) +
+- [x] **T1 — tronco (servidor, relatório)** — `reportService.relatorioIndicadores` (o bloco) + `reportRegistry` (a nota) +
   `relatoriosTempoRecebimento.api.test.js`. RN-01..RN-08.
-- [ ] **T2 — galho (tela, dashboard)** — `AlmoxarifadoDashboard.js` + `AlmoxarifadoDashboardTempoRecebimento.test.js`, contra o
+- [x] **T2 — galho (tela, dashboard)** — `AlmoxarifadoDashboard.js` + `AlmoxarifadoDashboardTempoRecebimento.test.js`, contra o
   contrato (mock HTTP). RN-09. Depende só do contrato da T1.
-- [ ] **T3 — tronco (motor)** — `stockService` (`partesDaRetencao`, `avisoRetencaoDoAjuste`, a chave no retorno) +
+- [x] **T3 — tronco (motor)** — `stockService` (`partesDaRetencao`, `avisoRetencaoDoAjuste`, a chave no retorno) +
   `ajusteEnderecoRetencao.api.test.js`. RN-11..RN-17, RN-19 (declarada).
-- [ ] **T4 — galho (tela, movimentações)** — `MovimentacoesAlmoxarifado.js` + `MovimentacoesAvisoRetencao.test.js`. RN-18.
-- [ ] **T5 — tronco (núcleo, cliente)** — `permissionsCache.js` (o ouvinte) + `AuthContext.js` (a assinatura) + os dois testes.
+- [x] **T4 — galho (tela, movimentações)** — `MovimentacoesAlmoxarifado.js` + `MovimentacoesAvisoRetencao.test.js`. RN-18.
+- [x] **T5 — tronco (núcleo, cliente)** — `permissionsCache.js` (o ouvinte) + `AuthContext.js` (a assinatura) + os dois testes.
   RN-21..RN-24. Independente de T1..T4 (outra regra, outro arquivo).
-- [ ] **T6 — integração** — `tempoRecebimentoIntegracao.api.test.js` (RN-10) e `ajusteEnderecoRetencaoIntegracao.api.test.js` (RN-20),
+- [x] **T6 — integração** — `tempoRecebimentoIntegracao.api.test.js` (RN-10) e `ajusteEnderecoRetencaoIntegracao.api.test.js` (RN-20),
   rota **e** serviço.
-- [ ] **T7 — fechamento** — novidades (B823+, C209 resolvida, D (128), E segundo item, F se houver), specs 21, 03/17 (C209) e 23 (o
+- [x] **T7 — fechamento** — novidades (B823+, C209 resolvida, D (128), E segundo item, F se houver), specs 21, 03/17 (C209) e 23 (o
   pisca), mapa, guia, manual, plano (retro e "Próxima tarefa detalhada — Etapa 129"), o "defeito que escapou" da retro da 127.
   CLAUDE.md só se a trava mudar (não deve: o aviso só **lê**, dentro da trava que já existe).
 
@@ -167,4 +167,122 @@ arquivos de servidor ao mesmo tempo, nem jest junto).
 
 ## Execução — o que aconteceu
 
-*(preencher)*
+- **Fase 0** — sondas `e128fase0.js` e `e128fase0b.js` (não versionadas, rodadas uma vez, sozinhas, sob a trava `e128-lock.sh`): a C209
+  reproduzida (201 sem aviso, disponível −4; o mesmo sem caixa e com bloqueado), as duas datas do recebimento pela rota (o mesmo formato
+  UTC, um escritor cada). Cruzado com a spec 21 (o item já dizia "não existe") e com o desenho da C209 no plano da 104.
+- **Testes escritos antes do código** e rodados **vermelhos**: servidor 12/13 (T1) e 11/13 (T3); cliente 15/21 (T2, T4, T5). Os que
+  passavam no código antigo eram controles (o negativo sem retenção, a literal da Etapa 10, o outro usuário, o inativo, o logout, o
+  servidor antigo, o sem aviso, o não-texto) — provados pelas sabotagens.
+- **Fase 2 antes do código de produção** (topo): 4 Important + 4 Minor, todos aceitos; o plano e dois testes mudaram antes da primeira
+  linha. Design e plano `e471580f`.
+- **Divergência da execução:** (1) o `'0'` texto da I4 não existe na coluna `REAL` (o SQLite guarda `0`) — o caso legado do teste é
+  `'0,0'` (texto que o `CAST` lê 0); a régua é a mesma. (2) A "caixa total" da A2 virou a caixa **coberta por reserva**
+  (`lerCaixaComReserva`; ver a regra). (3) A RN-23 é defesa (Fase 2, M2).
+- **Controles positivos** (âncora contada = 1, md5 antes/sabotado/restaurado, restauro por cópia — `e128-sabota.js` no scratchpad):
+  **21** antes da Fase 5 — T1: MAX→MIN, sem o CAST, sem a guarda de status, sem a janela, sem o `continue`, `null`→0, mediana = média;
+  T3: sem a chave, `<=` no lugar de `Q.cabe`, sem a guarda do retido, sem o ramo da caixa com reserva, sem o `lerCaixaComReserva` no
+  motor, sem o ramo do cliente, sem a frase de terceiros, caixa 1 nas partes, `lerCaixaComReserva` sem subtrair a sem reserva e sem o
+  entregue; T5: sem notificar, sem o `catch`, sem o filtro do id, sem o `igual`; T2: sem a mediana, `null`→`0.00h`, incompletos > 5; T4:
+  o `typeof`. Todos caíram pela asserção certa (a do `catch` sabotado com `finally` caiu por `ReferenceError` — vale como prova de que
+  um ouvinte que lança derruba a busca sem ele).
+- **Migração:** nenhuma (sem coluna, sem tabela) — a prova de primeiro boot não se aplica.
+- **Suíte (antes dos commits de código):** `test:api` **432/432** (a primeira rodada deu 431/432: o teste de exports do `caixaSql`,
+  `portasAvulsasCaixa`, prendia 6 exports — atualizado para 7 com `lerCaixaComReserva`, à vista); `test:almoxarifado` **44/0**;
+  `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 10/0; client **126** suítes / **1736** testes; `CI=true build` *Compiled
+  successfully*. Commits `37aa1228` (T1+T2+T6 do tempo), `e62dc05f` (T3+T4+T6 da retenção), `0d0ddf4f` (T5).
+- **CLAUDE.md:** a seção da trava **não mudou** (o aviso só lê, dentro da trava que o motor já pega; nada põe saldo no disponível nem
+  reserva). **Compras:** nada.
+- **Fase 5** — três revisores frescos em paralelo sob a **trava de máquina**; o de sabotagem numa worktree própria (`CRM-wt-e128-r3`,
+  removida com as junções desfeitas antes). Eu não rodei nada enquanto eles trabalhavam.
+  - **Regra (r1): 2 Important + 2 Minor, reproduzidos.** (1) em terceiros, *"resolva a remessa"* apagava estoque dos livros (o
+    retorno só baixa o `em_terceiros`) ou era recusada → *"refaça a contagem somando-o"*, sem *"se perdeu"* quando só há terceiros;
+    (2) com `permite_saldo_negativo` (material ou global) o *"nada dele sai"* era falso (*"Máximo: 2"* e a entrega de 2 passa) → o motor
+    passa `permiteNegativo` e a frase sai (**B827**); (3) reprovar a inspeção deixa bloqueado → a ação diz o caminho inteiro; (4) a nota
+    parcial marcada *Aprovada* pelo `PUT /conferir` conta como inteira → registrado na **C266** (a régua não muda: o corte por status
+    é o da I3). Resistiu: o `lerCaixaComReserva` (entrega parcial, cancelada, excluída, devolvida, reserva manual), as outras portas de
+    ajuste (o inventário vai sem endereço; a v1 não carrega endereço), os perfis de cada ação, as datas em UTC.
+  - **Permissão (r2): 2 achados, mesma causa, reproduzidos em jest** — o `localStorage` escrito dentro do updater do `setUser` (roda no
+    render): depois de um `refreshUser` do mesmo lote o navegador ficava com o perfil velho (contexto `null`, navegador `ALMOXARIFE`),
+    e depois de um logout podia devolver o `user` → o updater só marca, um efeito grava o que ficou. Resistiu: ninguém ganha nem perde
+    perfil (login de outro usuário com busca em voo, StrictMode, seed, inativo, o cadastro de usuários, os `useEffect([user])` sem
+    loop); cada perfil que a A2 nomeia é o que o servidor aceita (tabela no relatório: estorno de cliente só o Administrador,
+    desbloquear Gestor, liberar reserva Administrador/Almoxarife); o bloco novo só traz agregados. Notado, fora do escopo e anterior:
+    `GET /api/usuarios/:id/grupos` só exige token (qualquer autenticado lê as permissões de outro) — não reproduzido; vai na próxima
+    tarefa como candidata do núcleo.
+  - **Sabotagem (r3): 24** sabotagens novas (fora as 21 minhas), **19** sobreviveram: **14** (a) faltava asserção, cada uma com sonda
+    que passa limpa e cai com a sabotagem → viraram cenários (a janela pela última entrada com dois itens; os status `RECEBIDO`,
+    `CONFERIDO_ALMOX`, `ENCAMINHADO_FATURAMENTO`; status `NULL`; 0,5 com `CAST` inteiro; o `try/catch` do aviso — sem ele, **500 com o
+    ajuste gravado**; unidade `NULL`; o separado legado de requisição *Entregue*; entregue > separado; as quatro chaves do `igual`; o id
+    em texto; o corpo vazio no ouvinte; o cartão com `incompletos` em texto); **5** (b) equivalentes, provados (`>=`→`>` na janela; o
+    `ativo` no `lerCaixaComReserva` — a exclusão grava `CANCELADO` no mesmo UPDATE; o `Math.max` externo; `atual = prev`; o `typeof` antes
+    do `Number.isFinite`). Eu re-rodei 3 das 14 contra os **meus** cenários (MIN, o `catch`, a chave `role`): caem pela asserção certa.
+- **Fase 5, commits:** `37110f59` (o aviso: terceiros, permite-negativo, inspeção + os cenários do r1/r3 no servidor), `41255477` (os
+  seis cenários do tempo + o cartão malformado), `c7fd82ae` (o `localStorage` fora do updater + os cenários do r2/r3 no núcleo).
+  Controles das correções da Fase 5: a escrita de volta no updater derruba o cenário do `refreshUser` no mesmo lote; `permiteNegativo:
+  false` derruba o do material que permite negativo. **Declarado:** o cenário do logout no mesmo lote passa também com a escrita no
+  updater (o React calcula o updater na hora com a fila vazia) — a prova da correção é o do `refreshUser`.
+- **Suíte final (medida depois da Fase 5, antes da documentação):** `test:api` **432/432**; `test:almoxarifado` **44/0**;
+  `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 10/0; client **126** suítes / **1744** testes; `CI=true build` *Compiled
+  successfully*.
+- **T7 — fechamento** (o commit de documentação desta etapa — ver `git log`): novidades (cabeçalho, A76, B823–B829, C209 resolvida,
+  C266, D (128), E2, F (128), a seção da etapa, "Onde estamos"), specs 03, 05, 21 e 23, mapa, guia, manual, este plano, o "defeito que
+  escapou" da retro da 127.
+
+## Tasks — estado
+
+- [x] **T1** `37aa1228` (Fase 5 `41255477`) · [x] **T2** `37aa1228` (Fase 5 `41255477`) · [x] **T3** `e62dc05f` (Fase 5 `37110f59`) ·
+  [x] **T4** `e62dc05f` · [x] **T5** `0d0ddf4f` (Fase 5 `c7fd82ae`) · [x] **T6** `37aa1228` (tempo), `e62dc05f` e `37110f59` (retenção) ·
+  [x] **T7** — o commit de documentação.
+
+## Retro (4 números)
+
+1. **Rodadas de correção até verde:** **1** (Fase 5: o aviso em terceiros/permite-negativo/inspeção, o `localStorage` fora do updater e
+   20 cenários). Testes antigos que mudaram: o título do caso C209 da 104 (afirmação corrigida à vista) e o de exports do `caixaSql` (6 → 7).
+2. **Achados da revisão:** Fase 2 — **4 Important + 4 Minor, todos reais**. Fase 5 — r1 **2 Important + 2 Minor** reais (3 corrigidos, 1
+   registrado na C266); r2 **2** reais, mesma causa (corrigidos); r3 **19** sobreviventes — 14 viraram cenários, 5 equivalentes provados;
+   **0** ruído.
+3. **Paralelismo:** **0** galhos em paralelo de fato (T2 e T4 são galhos por regra, mas "um teste por vez" os serializa), **0**
+   retrabalho; **1** revisor na Fase 2 e **3** revisores em paralelo na Fase 5 sob a trava.
+4. **Defeito que escapou:** *(preencher na Etapa 129)*.
+
+**O "defeito que escapou" da 127** (preenchido aqui): **nenhum encontrado**. A 128 exercitou o que a 127 entregou — a **geração** do
+cache de permissões (a busca invalidada no meio não grava) é a base do ouvinte novo, e o cenário RN-21 *"a busca de geração velha não
+chama"* passou com ela intacta; o `refreshUser` que invalida e regrava foi exercitado pelo cenário do mesmo lote (r2). O que a 128 achou
+no núcleo (o `localStorage` no updater) é **desta** etapa, não da 127.
+
+## Próxima tarefa detalhada — Etapa 129
+
+*(A série desta etapa foi B823–B829, C266, A76, E2 — a 129 começa em **B830**, **C267**, **A77**; confira com `grep -oE` antes.)*
+
+**Medido em 2026-10-16 (Fase 0 desta etapa e Fase 5):** sem o P.O., três candidatas; a primeira é integridade.
+
+1. **C266 — a conferência do recebimento sem guarda de situação (feature 08) — a principal. Não depende do P.O.** **Medido** (r1 e
+   Fase 2 da 128, sondas `e128r-fase2-a.js`/`e128r1-b.js`): `PUT /api/almoxarifado/recebimentos/:id/conferir`
+   (`receiptService.conferirRecebimento`, ~925) aceita `status` em `EM_CONFERENCIA, CONFERIDO_ALMOX, APROVADO, REPROVADO,
+   PARCIALMENTE_APROVADO, BLOQUEADO` **sem ler o status atual**, e reescreve `quantidade_recebida` dos itens também depois da entrada:
+   (a) recebimento `APROVADO` com item de quantidade 0 → conferir 5 → 200, e o item nunca entra (o `/aprovar` e o `/processar` recusam
+   *"Recebimento já aprovado/processado"*); (b) `APROVADO` → `REPROVADO` → 200, e o `/aprovar` volta a dar entrada; (c) a nota parcial
+   (`EM_ENTRADA_NF`) → `APROVADO` pela conferência → fica dada como pronta sem o item que faltava. **Contrato candidato (reversível,
+   letra B):** com o recebimento em `PROCESSADO`/`APROVADO` (ou com qualquer item já com `entrada_estoque_em`), o conferir recusa **409**
+   *"Recebimento já deu entrada no estoque — a conferência não pode mais mudar quantidade nem situação"* antes de qualquer UPDATE (o
+   molde da RN-18 da Etapa 36: recusar antes de gravar); e o `status` só aceita a transição a partir do status de conferência
+   (`RECEBIDO`/`EM_CONFERENCIA`/`CONFERIDO_ALMOX`). **Pontos de atenção:** quem chama o `/conferir` (o painel de conferência da Etapa
+   36, a tela — que não manda `status` —, o `aprovarRecebimento` e os testes antigos que conferem depois de aprovar: medir com grep e
+   rodar `recebimento*`); a trilha `FINALIZAR_CONFERENCIA` e a `conferencia_finalizada_em` (Etapa 122); o excedente autorizado
+   (`assertExcedentePermitido`) vem antes hoje — a guarda nova vai antes dele; a A77 (opcional) lista os recebimentos já
+   processados cuja conferência mudou depois (comparar `updated_at` com a maior `entrada_estoque_em`?) — medir antes de prometer.
+2. **Perdas com valor (feature 21) — se couber.** Medido na 127: só existe o histórico com `tipo=PERDA`, sem valor. Uma chave nova no
+   registro (`perdas-por-periodo`?) com o custo pela fonte única `custoUnitarioSql` (atenção: custo **atual** retroativo, como o
+   `custo-por-projeto` declara) e o motivo. Não depende do P.O. (a régua do custo é a que já existe).
+3. **Candidata do núcleo, baixa (r2 da 128):** `GET /api/usuarios/:id/grupos` só exige token — qualquer usuário autenticado lê as
+   permissões e o perfil de qualquer outro. Não reproduzido; medir antes (quem chama: `UsuarioForm`, `fetchUserPermissions` do próprio).
+4. **Dependem do P.O.:** **B808**, **B755**, **B761**/**C239**, **C224**, o resto da **C225**, **C228**, **C219**, **C230**, o reparo da **C246**
+   (e a **C247**), a tabela de conversões e o grupo acima de família, a **régua do tempo de recebimento (E2)**; na 05, os itens de produto
+   e a **C198**; na 06, a **B11** e a Engenharia; na 21, a valorização por cliente e previsto × realizado; na 22, **B13**, **B101**/G30,
+   **G38**.
+
+**Escolhida: a C266 (1)**, com as perdas com valor (2) se couber com qualidade.
+
+**O que já está pronto e não precisa reabrir:** o tempo médio de recebimento (`tempo_recebimento`, B823–B825 — se a C266 mudar o que o
+`/conferir` aceita, a régua continua; o corte por status dela é o mesmo); o aviso da retenção (`aviso_retencao`, B826/B827); o perfil
+regravado pelo ouvinte do cache (B828).

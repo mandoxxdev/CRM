@@ -11,10 +11,15 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-16):** **Etapa 127 fechada** (quem perde o perfil Administrador deixa de ver os botões ao
+> **Onde o desenvolvimento está (2026-10-16):** **Etapa 128 fechada** (os Indicadores e o painel do almoxarifado passam a mostrar o
+> **tempo médio de recebimento** — da chegada da nota ao estoque, com a régua para vocês confirmarem (letra **E**); a contagem por
+> endereço que deixa o disponível negativo passa a avisar o que houve e o que fazer — **C209** resolvido; e, do núcleo, o perfil
+> retirado não volta mais sozinho depois de 5 minutos na sessão aberta); a próxima do almoxarifado é a **129** — ver "Onde estamos e o
+> que vem a seguir".
+> *(Antes: **Etapa 127 fechada** (quem perde o perfil Administrador deixa de ver os botões ao
 > recarregar a página — **C264** resolvido, do núcleo; e a fila de separação e a janela de separação dividem o separável entre itens do
 > mesmo material com o número que a separação aceita — a fila prometia o que a separação recusava, e a janela abria zero onde a separação
-> aceitava a reserva do item: **C265** resolvido); a próxima do almoxarifado é a **128** — ver "Onde estamos e o que vem a seguir".
+> aceitava a reserva do item: **C265** resolvido); a próxima do almoxarifado era a **128**.)*
 > *(Antes: **Etapa 126 fechada** (as abas de Configurações que o servidor recusa ao
 > administrador do sistema sem perfil ficam somente leitura — ou, as três que ele nem consegue ler, com a frase de quem é —, em vez
 > de oferecer botões que recusam: **C261** resolvido; e o *Editar* da aba Famílias não desfaz mais o nome, a descrição ou o tipo de uso
@@ -163,8 +168,10 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Setenta e cinco itens para rodar em produção ANTES do deploy — setenta e dois são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Setenta e seis itens para rodar em produção ANTES do deploy — setenta e três são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
 
+*(**Atualizado em 2026-10-16 (Etapa 128) de setenta e cinco para setenta e seis**, com a **A76** — os materiais com o disponível
+negativo hoje (o estado que o aviso novo da contagem passa a explicar); opcional e somente leitura.)*
 *(**Atualizado em 2026-10-16 (Etapa 124) de setenta e quatro para setenta e cinco**, com a **A75** — materiais inativos gravados
 com a subfamília no campo Família, que o *Reativar* recusa mesmo com a família reativada; opcional e somente leitura.)*
 
@@ -2774,12 +2781,39 @@ acha o mesmo legado **ativo** nem o material inativo de par certo.)*
 "ativo": 1}` (a família principal e a subfamília ativas antes), ou deixe-o inativo se não é mais usado. Se houver requisição
 pendente dele, rejeite-a.
 
+**A76 (NOVA, da Etapa 128 — os materiais com o disponível negativo hoje).** Uma consulta, somente leitura; **opcional**. Desde a
+Etapa 128 a contagem por endereço que deixa o **disponível** negativo (o físico abaixo do reservado, bloqueado, em inspeção ou em
+terceiros) avisa na hora (**C209**). Os materiais que já estavam assim antes do deploy não recebem aviso nenhum até a próxima
+contagem — e, enquanto estiverem assim, nada deles sai pela entrega de requisição. A consulta lista quem está nesse estado.
+
+```sql
+SELECT m.id, m.codigo, m.quantidade_atual AS fisico, m.quantidade_reservada AS reservada, m.quantidade_bloqueada AS bloqueada,
+       m.quantidade_em_inspecao AS em_inspecao, m.quantidade_em_terceiros AS em_terceiros,
+       ROUND(m.quantidade_atual - COALESCE(m.quantidade_reservada,0) - COALESCE(m.quantidade_bloqueada,0)
+             - COALESCE(m.quantidade_em_inspecao,0) - COALESCE(m.quantidade_em_terceiros,0), 6) AS disponivel
+  FROM materiais_almoxarifado m
+ WHERE m.ativo = 1
+   AND m.quantidade_atual - COALESCE(m.quantidade_reservada,0) - COALESCE(m.quantidade_bloqueada,0)
+       - COALESCE(m.quantidade_em_inspecao,0) - COALESCE(m.quantidade_em_terceiros,0) < -0.000001
+ ORDER BY disponivel, m.codigo;
+```
+
+*(Conferida numa sonda: acha o material ativo com reservado 6 sobre físico 4 (disponível −2) e **não** acha o de disponível 0, o
+de resto de ponto flutuante (reservado 4,0000000001 sobre 4), o de disponível positivo nem o inativo.)*
+
+**Como ler o resultado:** **vazia** — nada a fazer. Cada linha é um material que a entrega de requisição não tira: conte a prateleira
+de novo (somando o que está em terceiros, se houver). Se a contagem antiga deixou de fora material que existe, peça o estorno do
+ajuste que baixou o estoque (Administrador ou Gestor; de cliente, só o Administrador); se ele se perdeu, **libere a reserva** que
+sobra (Administrador ou Almoxarife — e, se ele estava separado na caixa de uma requisição, **devolva-o à prateleira** na requisição
+antes), **desbloqueie** o que se perdeu (Administrador ou Gestor) ou **decida a inspeção**. A **A49** lista, desse conjunto, as
+requisições com material na caixa.
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B822; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B829; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -8877,6 +8911,51 @@ médio de recebimento (com a régua para vocês confirmarem) e a C209. A **B808*
 **C225**, a **C228**, a **C219**, a **C230**, o reparo da **C246**/**C247**, a tabela de conversões e o grupo acima de família continuam
 esperando vocês.
 
+**B823 (NOVA, da Etapa 128) — o tempo médio de recebimento sem nenhum recebimento no período mostra "—", não 0.** O bloco novo
+devolve `null` na média e na mediana quando nenhum recebimento terminou na janela, e o painel mostra *"—"* com *"sem recebimentos
+concluídos no período"*. **Descartado:** 0, como o tempo de atendimento faz desde a Etapa 13 (0 horas diria "instantâneo"). O
+atendimento **não** foi mudado — fica como está. **Reversível.**
+
+**B824 (NOVA, da Etapa 128) — no tempo de recebimento, material de cliente e material inativado entram; a entrada estornada
+continua contando.** É o tempo do trabalho do galpão (receber, conferir, dar entrada), não valor de patrimônio — por isso não segue a
+regra dos outros indicadores, que deixam o material de cliente de fora. O estorno não apaga a hora da entrada, e o recebimento
+continua no cálculo. **Descartado:** tirar o material de cliente (a nota do cliente dá o mesmo trabalho) e tirar a entrada estornada
+(exigiria ler o livro de movimentações por item). **Reversível.**
+
+**B825 (NOVA, da Etapa 128; da revisão do plano) — "esperando entrada" só vale antes de o recebimento ser processado ou aprovado.**
+Um recebimento entra no cálculo quando nenhum item com quantidade está esperando entrada. Depois de *Processado* ou *Aprovado*, nada
+mais entra por ele — então um item que ganhou quantidade depois (a conferência aceita isso hoje, **C266**) não o deixa "incompleto"
+para sempre. **Descartado:** contar qualquer item sem entrada (o recebimento sairia da média sem conserto possível). **Reversível.**
+
+**B826 (NOVA, da Etapa 128) — a contagem por endereço que deixa o disponível negativo AVISA, e o aviso diz o caminho de cada
+retenção.** Continua gravando (a contagem por endereço redefine o saldo — Etapa 10; a **B704** escolheu avisar, não recusar, para a
+caixa). O aviso diz o estoque, cada retenção e o total, e o que fazer: se o material existe, estornar o ajuste que baixou; se ele se
+perdeu, **liberar a reserva** (e, se ele estava separado na caixa com reserva, **devolver à prateleira na requisição** antes — a revisão
+do plano mediu que só liberar deixava a requisição travada), **desbloquear**, ou **decidir a inspeção** (o reprovado fica bloqueado).
+O que está **em terceiros** não é "o que se perdeu": a remessa não tira do endereço, e o aviso manda **recontar somando** (a revisão do
+código mediu que *"resolva a remessa"* apagaria estoque dos livros ou seria recusada). **Descartado:** (a) recusar a contagem; (b)
+estender o aviso da caixa da Etapa 104 (as duas réguas misturadas confundiriam a frase em uso); (c) avisar com o disponível exatamente
+0 (é o estado normal de material todo reservado). **Reversível.**
+
+**B827 (NOVA, da Etapa 128; da revisão do código) — com material que pode ficar negativo, o aviso não diz "nada dele sai pela
+entrega".** Para o material marcado *Permite saldo negativo* (ou com a configuração geral ligada) a entrega ainda tira pelo físico —
+a frase seria falsa; ela sai do aviso nesse caso. **Descartado:** uma frase para os dois casos (ou mentiria num, ou não diria nada no
+outro). **Reversível.**
+
+**B828 (NOVA, da Etapa 128 — do núcleo) — o perfil que muda na sessão aberta passa a valer na hora em que o sistema relê as
+permissões, e não volta.** Quando a tela relê as permissões do próprio usuário (ao entrar num módulo, a cada 5 minutos), a sessão
+passa a guardar o que o servidor disse — o perfil do almoxarifado, o da frota, o papel, o Super Administrador e os módulos que
+administra. Antes, quem perdia o perfil via os botões sumirem e voltarem 5 minutos depois (**D (127)**). **Escolhido no núcleo**
+(serve o CRM inteiro, como a **B818**). **Descartado:** (a) só os dois perfis (o papel e os módulos piscariam do mesmo jeito); (b)
+perguntar ao servidor de tempos em tempos (mudança de produto); (c) o guardado sem validade (perderia a renovação). Continua valendo
+só quando a tela relê — não é instantâneo. **Reversível.**
+
+**B829 (NOVA, da Etapa 128) — a próxima etapa do almoxarifado (129).** Ver a "próxima tarefa detalhada" no plano da Etapa 128: a
+**C266** (a conferência do recebimento aceita mudar quantidade e situação depois da entrada no estoque — integridade, não depende de
+vocês) e, se couber, as **perdas com valor** no relatório (feature 21). A **B808**, a **B755**, a **B761**/**C239**, a **C224**, o
+resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da **C246**/**C247**, a tabela de conversões, o grupo acima de família e
+a régua do tempo de recebimento (letra **E**) continuam esperando vocês.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -11006,7 +11085,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      caixa: …)"*) perdeu o trecho *"entregue o que existe e encerre a requisição"* (**B701**). Quem treinou a equipe com a
      frase antiga: o caminho para material perdido da caixa é devolver à prateleira e dar a baixa.
 
-209. **NOVO, da Etapa 104 — a contagem por endereço que leva material separado COM reserva não avisa.** Se a requisição
+209. **✅ RESOLVIDO NA ETAPA 128 (`e62dc05f`, `37110f59`; B826, B827) — a contagem que deixa o disponível negativo avisa e diz o que
+     fazer (e a consulta A76 lista os materiais que já estão assim).** O texto original: **NOVO, da Etapa 104 — a contagem por endereço que leva material separado COM reserva não avisa.** Se a requisição
      tinha reserva (o material existia quando ela foi aprovada) e a contagem deixa o físico abaixo do reservado, a gravação
      vem sem aviso; a entrega diz *"… o disponível de ⟨código⟩ está negativo (reservado além do físico): nada dele sai pela
      entrega até liberar outra reserva deste material"*. **O que fazer:** se o material está na caixa, estorne o ajuste; se
@@ -11444,6 +11524,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      separação** fazia o contrário: com 4 livres e dois itens de 4 sem reserva, dizia *"separável agora 4"* nos dois, e a separação
      recusava o segundo. **Agora** as duas dizem o número que a separação aceita. **O que fazer (até o deploy):** na janela de
      separação, confira o número de cada item contra o *Saldo* e digite a quantidade certa; o Confirmar aceita.
+
+266. **NOVO (da revisão da Etapa 128; anterior a ela) — a conferência do recebimento aceita mudar a quantidade e a situação depois
+     da entrada no estoque.** A rota de conferência não confere a situação do recebimento: num recebimento já *Aprovado*, ela aceita
+     mudar a quantidade recebida de um item que não entrou (ele nunca mais entra — o processar responde *"Recebimento já
+     aprovado/processado"*) e aceita trocar a situação (para *Reprovado*, e o *Aprovar* volta a dar entrada; ou para *Aprovado*, e a nota
+     que falhou no meio fica dada como pronta sem o item que faltava). Só pela API — a tela não manda a situação. O tempo médio de
+     recebimento herda: a nota marcada *Aprovada* assim conta como "entrou inteira" (**B825**). **O que fazer:** não use a
+     conferência depois do processamento; se usou, confira o estoque do item contra a nota. É a próxima etapa (**B829**).
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -12481,7 +12569,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   permissão para encerrar requisições"* ao confirmar (anterior à etapa, inalterado); a frase da caixa também aparece para
   qualquer perfil (**B702**).
 - **(104) A contagem por endereço não é recusada pela caixa** — grava e avisa (**B704**); a recusa é a alternativa sua.
-- **(104) O aviso não cobre o material separado com reserva** (**C209**) nem as retenções sem caixa (reservado ou
+- **(104) ✅ RESOLVIDA NA ETAPA 128 — o aviso não cobria o material separado com reserva** (**C209**) nem as retenções sem caixa
+  (reservado ou
   bloqueado acima do contado sem nenhuma requisição separada — o corte da Etapa 10, inalterado).
 - **(104) O aviso aparece só na tela de Movimentações** — não vai para e-mail, notificação nem para a fila de separação;
   quem não estava na tela no momento da contagem não fica sabendo (a **A48** acha as presas).
@@ -12629,15 +12718,25 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   dá para ver sem gravar. É a regra do servidor (ele recusa a leitura); mostrar mais é a **B808**.
 - **(126) O Mapa de Áreas não tem frase de somente leitura** para o administrador do sistema: o *Editar Posições* só some.
 - **(126) ✅ RESOLVIDA NA ETAPA 127 — o perfil removido** (a **C264**): agora ao recarregar a página.
-- **(127) O perfil retirado deixa de valer ao recarregar a página**, não na hora: a sessão aberta continua com os botões até o F5 (ou
+- **(127) ✅ RESOLVIDA EM PARTE NA ETAPA 128 (B828) — o "sumir e voltar".** O perfil retirado deixa de valer ao recarregar a página, não na hora: a sessão aberta continua com os botões até o F5 (ou
   até a pessoa salvar algo em *Minha Conta*). Sem recarregar, para quem não é administrador do sistema, os botões podem **sumir e
   voltar**: some quando a tela relê as permissões (ao entrar num módulo), volta depois de 5 minutos, até o F5 (achado da revisão, medido;
   antes ficavam sempre). O servidor recusa cada gravação, como sempre.
 - **(127) A fila mostra uma divisão — a da ordem do pedido** (**B821**): com 4 para dois itens de 4, ela diz 4 e 0, mas a separação
   aceita também 0 e 4, ou 2 e 2. O detalhe do item (o máximo dele sozinho) continua dizendo 4.
 - **(127) O *entregável* da fila não foi medido** com dois itens do mesmo material — não mudou.
+- **(128) O tempo médio de recebimento não mostra a lista** dos recebimentos que entraram na conta, nem por fornecedor — é um número
+  (média e mediana) e duas contagens. Os recebimentos processados antes da Etapa 6 não têm a hora da entrada e não aparecem; o que tem a
+  data de chegada vazia também fica fora (nenhuma tela grava isso). A inspeção depois da entrada não conta.
+- **(128) O aviso da retenção aparece só na tela de Movimentações**, no ajuste com localização — não vai para e-mail nem notificação, e
+  quem não estava na tela não fica sabendo (a **A76** acha os materiais que estão assim). O ajuste **sem** localização continua recusado
+  no mesmo estado, como sempre.
+- **(128) Enquanto o disponível estiver negativo, a Fila de separação ainda mostra o reservado do item como separável** (a separação
+  confia na reserva do item, Etapa 95) — o aviso da contagem é o que avisa; a entrega recusa.
+- **(128) O perfil que muda na sessão aberta só vale quando a tela relê as permissões** (ao entrar num módulo ou a cada 5 minutos) ou
+  ao recarregar — não na hora (**B828**). O servidor recusa cada gravação, como sempre.
 
-### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
+### E. Regras que foram DEDUZIDAS e nunca confirmadas com vocês — perguntas, não requisitos atendidos (E1, a remessa mista; E2, o tempo de recebimento)
 
 **"Uma remessa não pode misturar materiais de donos diferentes."** O sistema hoje **recusa** montar
 uma remessa com chapa do Cliente A e chapa do Cliente B na mesma viagem, com esta mensagem:
@@ -12657,6 +12756,15 @@ documento passa a imprimir o dono por linha).
 **mesmo dono da chapa**. Essa segunda regra é consequência direta da Etapa 8 (material de cliente
 não vira patrimônio da GMP) e não depende da resposta acima — mas, se a regra da remessa mista
 estiver errada, vale revisar as duas juntas.
+
+**E2 (NOVA, da Etapa 128) — "O tempo médio de recebimento é da chegada da nota no sistema à última entrada no estoque."** O
+painel e o relatório Indicadores passam a mostrar esse número, e **a régua não veio de vocês** — nenhuma especificação a define. Foi
+escolhida a que mede o trabalho do almoxarifado: começa quando o recebimento é registrado (a nota chega) e termina quando o último
+item entra no estoque; entram só os recebimentos que entraram inteiros e terminaram na janela; os que entraram em parte aparecem à
+parte (*"com entrada incompleta, fora da conta"*). **A pergunta é literalmente esta: é isso que vocês querem medir, ou é do pedido
+de compra à chegada (o prazo do fornecedor), ou da chegada à liberação pela Qualidade?** Nada aqui é irreversível — é uma consulta,
+não muda dado nenhum, e as outras réguas usam datas que já existem. *(Este é o segundo item desta letra; o primeiro, acima, não tinha
+número — passa a ser lido como E1.)*
 
 ### F. Verificações manuais que ainda não foram feitas — valem 5 minutos no navegador
 
@@ -13538,6 +13646,13 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(128) Nenhum clique foi dado nesta etapa no navegador.** Mudaram o painel do almoxarifado (o cartão *Tempo médio de recebimento*),
+a tela de Movimentações (o aviso amarelo novo depois do ajuste com localização) e a sessão aberta (o perfil relido) — provados por
+teste com a tela real e só a fronteira HTTP simulada (**5** casos do cartão, **4** do aviso, **20** da sessão) e pelo servidor, pela
+rota e pelo serviço (**48** cenários em quatro arquivos novos, dois deles de integração). O que **só o navegador** prova: o roteiro da
+Etapa 128 no guia — o quinto cartão no painel (e a tela Relatórios → Indicadores com o bloco novo), os dois avisos amarelos um
+embaixo do outro quando a contagem bate na caixa e na reserva, e o perfil tirado sumindo ao entrar de novo no módulo.
 
 **(127) Nenhum clique foi dado nesta etapa no navegador.** Mudaram a leitura do usuário no navegador (o perfil que o servidor diz que
 saiu), a Fila de separação (o número de cada item) e a janela de separação (o número já preenchido e o motivo da divergência) —
@@ -26209,16 +26324,119 @@ podia apagar o perfil recém-dado (corrigida) e que, sem recarregar, os botões 
 **48** sabotagens além das 11 já feitas: as 14 que mostraram cenário faltando viraram **13** cenários novos; as outras 13 foram provadas
 inofensivas.
 
+## Etapa 128 — O tempo do recebimento, o aviso da retenção e o perfil que não pisca (2026-10-16)
+
+Três coisas. A primeira é um número que faltava: quanto tempo a nota leva da chegada ao estoque. O painel do almoxarifado e o
+relatório **Indicadores** passam a mostrar o **tempo médio de recebimento** (e a mediana) — com uma régua que nós escolhemos e vocês
+precisam confirmar (letra **E**). A segunda é da contagem: quem contava uma prateleira e deixava o estoque abaixo do que estava
+reservado (ou bloqueado, ou em inspeção, ou no terceiro) gravava sem saber, e a requisição ficava presa na entrega. Agora a contagem
+continua gravando, mas um aviso amarelo diz o que houve e o que fazer. A terceira é do núcleo: quem perdia um perfil com a sessão
+aberta via os botões sumirem e, cinco minutos depois, voltarem — não voltam mais.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| O painel tinha giro, rupturas, atendimento e requisições no prazo — nada sobre recebimento | Quinto cartão: **Tempo médio de recebimento**, com a mediana e a janela (**E2**) |
+| Relatórios → Indicadores não falava de recebimento | O bloco **tempo_recebimento** (média, mediana, considerados, incompletos) e a régua escrita na nota |
+| Sem recebimento concluído no período: — | *"—"* e *"sem recebimentos concluídos no período"* — nunca *"0.00h"* (**B823**) |
+| Contagem "0 no A" de material separado com reserva: gravava, sem aviso; a entrega dizia *"Máximo: 0"* | Grava e mostra o aviso amarelo com o caminho (**C209**, **B826**) |
+| Contagem abaixo do reservado (ou do bloqueado, da inspeção, do terceiro), sem nada separado: gravava, sem aviso | O mesmo aviso, com a ação de cada retenção |
+| Sessão aberta, perfil tirado: os botões sumiam e voltavam 5 minutos depois | Somem e ficam sumidos (**B828**) |
+
+### As regras, com o cenário exato
+
+Preparação: o **Administrador** do almoxarifado, um **Almoxarife** e um **Gestor**; material comum **PORCA** (unidade *PC*); uma
+localização **A-01**.
+
+**1. O cartão novo.** Entre como qualquer perfil e abra **Almoxarifado** (o painel). Na seção **Indicadores gerenciais**, o quinto
+cartão: **Tempo médio de recebimento**, com *"Janela de 90 dias · da chegada à entrada no estoque · mediana ⟨M⟩h"*. Sem nenhum
+recebimento com entrada nos últimos 90 dias: *"—"* e *"sem recebimentos concluídos no período"*. Com uma nota que entrou em parte
+(o processamento falhou no meio): *"1 com entrada incompleta, fora da conta"*.
+
+**2. A régua.** Registre um recebimento de **PORCA** (**Recebimento → Novo**) e, depois de algumas horas, dê a entrada no estoque
+(**Aprovar** ou **Processar Nota**). O cartão conta esse recebimento com as horas entre o registro e a entrada. Com dois itens que
+entraram em horas diferentes, vale a **última**. Em **Relatórios → Gestão → Indicadores gerenciais**, o bloco *tempo_recebimento* traz
+os mesmos números, e a nota do rodapé termina com *"Tempo de recebimento: da chegada da nota no sistema à última entrada no estoque dos
+itens, só os recebimentos que entraram inteiros e cuja última entrada está na janela; os que entraram em parte são contados à parte
+(incompletos) e os que ainda não entraram não aparecem; a inspeção depois da entrada não conta; materiais de clientes entram; entrada
+estornada continua contando."*
+
+**3. A contagem que leva o separado com reserva (a C209).** **PORCA** com 4 na A-01. Crie uma requisição de 4 e aprove (fica
+*Totalmente Reservada*); como Almoxarife, separe as 4. Como Administrador, **Movimentações → Nova Movimentação → Ajuste**, PORCA,
+localização A-01, quantidade **0**. Aparece *"Movimentação registrada!"* e o aviso amarelo, que não fecha sozinho:
+*"Ajuste gravado, mas o disponível de PORCA ficou negativo: o estoque (0 PC) é menor que o retido (reservada: 4, total retido: 4 PC), e
+nada dele sai pela entrega de requisição enquanto for assim. Se o material existe e a contagem não o incluiu, estorne o ajuste que baixou
+o estoque (perfil Administrador ou Gestor do almoxarifado); se ele se perdeu, devolva-o à prateleira na requisição e libere a reserva
+(perfil Administrador ou Almoxarife)."* Tente entregar: a entrega recusa com *"Máximo: 0"*.
+- **Se o material existe:** como **Gestor**, estorne esse ajuste no livro de Movimentações; a entrega das 4 passa.
+- **Se ele se perdeu:** como Almoxarife, **Devolver à prateleira** na requisição e depois **Liberar** a reserva (Reservas). Só os dois
+  juntos tiram o disponível do negativo; a próxima contagem não avisa mais.
+
+**4. Só reservado, ou bloqueado.** **PORCA** com 4 na A-01 e uma requisição de 3 aprovada (sem separar). Ajuste A-01 para **1**:
+*"… o estoque (1 PC) é menor que o retido (reservada: 3, total retido: 3 PC), … se ele se perdeu, libere a reserva (perfil Administrador ou
+Almoxarife)."* Com 3 **bloqueados** no lugar da reserva: *"… (bloqueada: 3, total retido: 3 PC), … se ele se perdeu, desbloqueie o que se
+perdeu (perfil Administrador ou Gestor)."* Com 3 **em inspeção**: *"… se ele se perdeu, decida a inspeção (o reprovado fica bloqueado:
+desbloqueie depois, perfil Administrador ou Gestor)."*
+
+**5. Em terceiros.** **PORCA** com 4 na A-01 e 3 enviados ao terceiro (a remessa não tira do endereço). Ajuste A-01 para **1**: *"… (em
+terceiros: 3, total retido: 3 PC), e nada dele sai pela entrega de requisição enquanto for assim. O que está em terceiros (3 PC) continua no
+saldo do endereço: refaça a contagem somando-o. Se o material existe e a contagem não o incluiu, estorne o ajuste que baixou o estoque
+(perfil Administrador ou Gestor do almoxarifado)."* Ajuste de novo para **4**: sem aviso.
+
+**6. O que não avisa.** Disponível exatamente 0 (ajuste para 3 com 3 reservados); material sem nada retido; Entrada, Saída e
+Transferência. O ajuste **sem** localização no mesmo estado continua recusado: *"Ajuste para 1 PC deixaria o disponível negativo
+(reservada: 3, mínimo aceitável: 3 PC). Resolva a retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao
+mínimo."* Material de cliente: o parêntese do estorno diz *"(perfil Administrador do almoxarifado)"*. Material que **permite saldo
+negativo**: o aviso vem sem o *"e nada dele sai pela entrega de requisição enquanto for assim"* (**B827**). A contagem que bate na
+caixa sem reserva **e** na reserva de outra requisição mostra os **dois** avisos, o da caixa primeiro.
+
+**7. O perfil que não volta.** Com um usuário comum que tem o perfil Administrador, abra **Almoxarifado → Configurações → Famílias**
+numa janela. Em outra, como Administrador, tire o perfil dele. Na primeira, passados até 5 minutos, saia do módulo e entre de novo
+(o sistema relê as permissões): *"Acesso restrito — administrador do Almoxarifado"*. Fique mais 5 minutos e clique entre as abas:
+continua restrito (antes, os botões voltavam).
+
+### O que esta etapa NÃO cobre
+
+1. **A lista dos recebimentos** do tempo médio, por fornecedor ou por material — é um número (**D (128)**).
+2. **A régua confirmada** — é deduzida; a pergunta está na **E2**.
+3. **A conferência que muda o recebimento depois da entrada** (**C266**) — a próxima etapa (**B829**).
+4. **O aviso fora da tela de Movimentações** (e-mail, notificação) — a **A76** acha os materiais que já estão assim.
+5. **O perfil na hora** em que é tirado, sem a tela reler — **D (128)**.
+6. As decisões que esperam vocês: **B808**, **B755**, **B761**/**C239**, **C224**, **C225**, **C228**, **C219**, **C230**,
+   **C246**/**C247**, a tabela de conversões e o grupo acima de família.
+
+### O que a revisão encontrou
+
+A **medição** reproduziu a C209 antes do código e confirmou que as duas datas do recebimento têm um escritor só cada. A **revisão
+do plano** (antes do código) achou que o primeiro texto do aviso mandava um caminho que não destravava a requisição (liberar a reserva
+com o material ainda na caixa), que a retenção em terceiros ou em inspeção não tinha gesto nenhum, que a conferência sem trava de
+situação deixaria recebimentos "incompletos" para sempre (**C266**) e que o banco compara texto com número de um jeito que contaria
+como pendente um item sem quantidade; tudo entrou antes da primeira linha de código. A **revisão adversarial do código** (três
+revisores, executando): o de **regra** achou que, em terceiros, o *"resolva a remessa"* apagaria estoque dos livros ou seria recusado
+(virou *"refaça a contagem somando"*), que o *"nada dele sai"* é falso para material que pode ficar negativo (**B827**) e que reprovar a
+inspeção deixa bloqueado (a frase diz agora o caminho inteiro); o de **permissão** confirmou que cada perfil que o aviso nomeia é o que
+o servidor aceita e que ninguém ganha nem perde perfil indevidamente, e achou que a sessão podia guardar no navegador um perfil
+diferente do que a tela mostrava (corrigido); o de **sabotagem** fez **24** sabotagens além das 21 já feitas: as 14 que mostraram cenário
+faltando viraram cenários novos; as outras 5 foram provadas inofensivas.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 128 entregue (2026-10-16):** **o tempo do recebimento, o aviso da retenção e o perfil que não pisca.** O painel e os
+  Indicadores mostram o tempo médio de recebimento (**B823** a **B825**, régua na **E2**); a contagem por endereço que deixa o disponível
+  negativo avisa e diz o caminho (**C209** resolvido — **B826**, **B827**); o perfil retirado não volta depois de 5 minutos (do núcleo,
+  **B828**). **O que é seu:** a pergunta da **E2** (a régua); a consulta **A76** (opcional); as decisões **B823 a B828** (reversíveis);
+  o aviso **C266**; as limitações **(128)** em D e a verificação **(128)** em F. **Próxima: Etapa 129 — ver a "próxima tarefa
+  detalhada" no plano da Etapa 128.**
 
 - **Etapa 127 entregue (2026-10-16):** **o perfil que saiu, e o separável dividido.** Quem perde o perfil Administrador deixa de ver os
   botões ao recarregar a página (**C264** resolvido, do núcleo — **B818**); a Fila de separação e a janela de separação dividem o
   separável entre itens do mesmo material com o número que a separação aceita (**C265** resolvido, **D (95)** resolvida — **B819** a
   **B821**). **O que é seu:** as decisões **B818 a B821** (reversíveis); a pergunta da régua do tempo médio de recebimento (próxima
-  etapa, **B822**); as limitações **(127)** em D e a verificação **(127)** em F. Nenhuma consulta nova em A. **Próxima: Etapa 128 — ver a
-  "próxima tarefa detalhada" no plano da Etapa 127.**
+  etapa, **B822**); as limitações **(127)** em D e a verificação **(127)** em F. Nenhuma consulta nova em A.
+  *(Próxima, na época: Etapa 128 — entregue acima.)*
 
 - **Etapa 126 entregue (2026-10-16):** **as Configurações que o servidor recusa, e o Editar da família que leu.** As abas de
   Configurações que o servidor recusa ao administrador do sistema sem perfil ficam somente leitura — ou com a frase *Restrito*, as três

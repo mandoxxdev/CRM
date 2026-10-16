@@ -1,17 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-16 (Etapa 127) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-16 (Etapa 128) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126 e 127) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127 e 128) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 127 ENTREGUE · próxima do almoxarifado: Etapa 128)
+> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 128 ENTREGUE · próxima do almoxarifado: Etapa 129)
 >
-> **O desenvolvimento parou aqui: Etapa 127 fechada — 2026-10-16.** A **Etapa 127 (o perfil que saiu, e o separável dividido)**: quem
+> **O desenvolvimento parou aqui: Etapa 128 fechada — 2026-10-16.** A **Etapa 128 (o tempo do recebimento, o aviso da retenção e o
+> perfil que não pisca)**: o painel e o relatório Indicadores mostram o **tempo médio de recebimento** (da chegada da nota à entrada no
+> estoque — régua para vocês confirmarem); a contagem por endereço que deixa o estoque abaixo do reservado, bloqueado, em inspeção ou
+> no terceiro grava e mostra um aviso amarelo com o caminho; e, do núcleo, quem perde um perfil com a sessão aberta não vê mais os
+> botões voltarem cinco minutos depois.
+> **Próxima: Etapa 129** — ver a próxima tarefa no plano da 128.
+>
+> **Etapa 127, 2026-10-16.** A **Etapa 127 (o perfil que saiu, e o separável dividido)**: quem
 > perde o perfil Administrador do almoxarifado deixa de ver os botões ao recarregar a página (antes, só saindo e entrando); e a Fila de
 > separação e a janela de separação dividem o que dá para separar entre dois itens do mesmo material com o número que a separação aceita
 > — a fila deixou de prometer o que a separação recusava, e a janela deixou de abrir zero no item que tinha a própria reserva.
-> **Próxima: Etapa 128** — ver a próxima tarefa no plano da 127.
+> *(Próxima, na época: Etapa 128 — entregue acima.)*
 >
 > **Etapa 126, 2026-10-16.** A **Etapa 126 (as Configurações que o servidor recusa, e o
 > Editar da família que leu)**: o administrador do sistema sem perfil no almoxarifado vê cada aba de Configurações dizer o que ele
@@ -6524,6 +6531,53 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 128 — O tempo do recebimento, o aviso da retenção e o perfil que não pisca (ENTREGUE — 2026-10-16)
+
+**O que mudou, em uma frase:** o painel passa a dizer quanto tempo a nota leva da chegada ao estoque; a contagem que deixa o estoque
+abaixo do que está preso a requisições, bloqueios, inspeção ou terceiros avisa e diz o que fazer; e o perfil tirado de alguém com a
+sessão aberta não volta mais sozinho.
+
+**O problema que ela resolve.** O gestor não tinha como ver o tempo de recebimento — só o de atendimento de requisição. Quem contava
+uma prateleira e encontrava menos do que estava reservado (ou bloqueado, em inspeção, no terceiro) gravava a contagem sem saber que a
+requisição ficava presa: só na entrega aparecia *"Máximo: 0"*. E quem perdia um perfil com a sessão aberta via os botões sumirem e, cinco
+minutos depois, voltarem.
+
+| Antes | Agora |
+|---|---|
+| Painel: giro, rupturas, atendimento e no prazo | Quinto cartão: **Tempo médio de recebimento**, com a mediana e a janela |
+| Sem recebimento concluído no período | *"—"* e *"sem recebimentos concluídos no período"* |
+| Contagem abaixo do reservado: gravava em silêncio | Grava e mostra o aviso amarelo (estoque, retido, e o caminho) |
+| Perfil tirado na sessão aberta: sumia e voltava | Some e fica sumido |
+
+**Roteiro de teste (10 minutos).**
+
+1. Entre como **Administrador** e abra **Almoxarifado** (o painel). Na seção **Indicadores gerenciais**, veja o quinto cartão
+   **Tempo médio de recebimento**: *"—"* e *"sem recebimentos concluídos no período"* se nenhum recebimento entrou no estoque nos últimos
+   90 dias.
+2. **Recebimento → Novo**: um recebimento de **PORCA** (unidade PC), 5 unidades. Depois de alguns minutos, **Aprovar** (ou **Processar
+   Nota**). Volte ao painel: o cartão mostra as horas entre o registro e a entrada (*"0.05h"* para três minutos), com *"mediana …h"*.
+3. **Relatórios → Gestão → Indicadores gerenciais**: o bloco *tempo_recebimento* com *media_horas*, *mediana_horas*, *considerados* e
+   *incompletos*; a nota do rodapé termina com a régua (*"Tempo de recebimento: da chegada da nota no sistema à última entrada no
+   estoque dos itens, …"*).
+4. Dê 4 de **Entrada** de PORCA na localização **A-01**. Como Produção, crie uma requisição de 4 e aprove; como **Almoxarife**, separe
+   as 4.
+5. Como Administrador, **Movimentações → Nova Movimentação → Ajuste**, PORCA, A-01, quantidade **0**. Depois de *"Movimentação
+   registrada!"*, o aviso amarelo (não fecha sozinho): *"Ajuste gravado, mas o disponível de PORCA ficou negativo: o estoque (0 PC) é
+   menor que o retido (reservada: 4, total retido: 4 PC), e nada dele sai pela entrega de requisição enquanto for assim. Se o material
+   existe e a contagem não o incluiu, estorne o ajuste que baixou o estoque (perfil Administrador ou Gestor do almoxarifado); se ele se
+   perdeu, devolva-o à prateleira na requisição e libere a reserva (perfil Administrador ou Almoxarife)."*
+6. Tente **Entregar** a requisição: *"… Máximo: 0 …"*. Como **Gestor**, estorne o ajuste no livro de Movimentações; a entrega das 4
+   passa.
+7. (Opcional) Com uma requisição de 3 aprovada sem separar e 4 em estoque, ajuste a A-01 para **1**: o aviso termina com *"se ele se
+   perdeu, libere a reserva (perfil Administrador ou Almoxarife)."* Ajuste para **3**: sem aviso (o disponível fica 0).
+8. Com um usuário comum que tem o perfil Administrador, abra **Configurações → Famílias**; em outra janela, tire o perfil dele. Passados
+   até 5 minutos, ele sai do módulo e entra de novo: *"Acesso restrito — administrador do Almoxarifado"*. Mais 5 minutos e alguns
+   cliques: continua restrito.
+
+**O que esta etapa NÃO cobre.** A lista dos recebimentos por trás do tempo médio (é um número); a régua confirmada (é deduzida — a
+pergunta está na letra E das novidades); a conferência que muda o recebimento depois da entrada (**C266**, a próxima etapa); o aviso
+fora da tela de Movimentações; e o perfil na hora em que é tirado, sem a tela reler as permissões.
 
 ## Etapa 127 — O perfil que saiu, e o separável dividido (ENTREGUE — 2026-10-16)
 

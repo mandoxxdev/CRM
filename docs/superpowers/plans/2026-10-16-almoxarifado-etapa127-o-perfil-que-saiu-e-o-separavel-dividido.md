@@ -181,7 +181,7 @@ mesmo tempo, nem jest junto).
    **2** Minor reais (1 corrigido, 1 declarado); r3 **27** sobreviventes — 14 viraram cenários, 13 equivalentes provados; **0** ruído.
 3. **Paralelismo:** **0** galhos em paralelo de fato (a T3 é galho por regra, mas a regra "um teste por vez" a serializa), **0** retrabalho;
    **2** agentes de leitura em paralelo na Fase 0 e **3** revisores em paralelo na Fase 5 sob a trava.
-4. **Defeito que escapou:** *(preencher na Etapa 128)*.
+4. **Defeito que escapou:** **nenhum encontrado** (preenchido na Etapa 128): a 128 apoiou o ouvinte novo do cache na **geração** que a 127 criou (o cenário *"a busca de geração velha não chama"* passou com ela) e exercitou o `refreshUser` que invalida e regrava num lote com a busca em voo; o que achou no núcleo (o `localStorage` escrito no updater do `setUser`) é da própria 128. Ver o plano da 128.
 
 **O "defeito que escapou" da 126** (preenchido aqui): **nenhum encontrado**. A 127 exercitou o que a 126 entregou — a aba Famílias somente
 leitura pelo `podeGravarConfigAlmox(getEffectiveUser(user))`, agora com o `AuthProvider` e o `permissionsCache` reais

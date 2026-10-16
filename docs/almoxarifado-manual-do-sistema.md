@@ -1025,7 +1025,7 @@ em que ⟨o quê⟩ é *"cadastrar, editar e excluir tipos de material"*, *"cada
 
 No **Mapa de Áreas**, *Editar Posições* (e, sem localização cadastrada, *Cadastrar localizações*) só aparece para quem grava. No cadastro de material sem família ou sem localização cadastrada, a dica *"— cadastre em Configurações → Famílias"* (ou *→ Localizações*) só aparece para quem grava; os outros veem *"— solicite a um administrador"*. Quem decide continua sendo o servidor: pela API, qualquer gravação dessas abas feita por quem não grava responde *"Acesso restrito — administrador do Almoxarifado ou Super Administrador"*.
 
-Quem perde o perfil **Administrador** do almoxarifado com a sessão aberta continua vendo a tela como Administrador até **recarregar a página** (ou salvar algo em *Minha Conta*) — sem recarregar, os botões podem sumir ao entrar num módulo e voltar alguns minutos depois — e, até lá, o servidor recusa cada gravação com a mesma frase. Ao recarregar, a tela já segue o perfil novo; o mesmo vale para quem ganhou um perfil.
+Quem perde o perfil **Administrador** do almoxarifado com a sessão aberta continua vendo a tela como Administrador até o sistema reler as permissões dele — ao **recarregar a página**, ao salvar algo em *Minha Conta*, ou quando a tela relê as permissões sozinha (ao entrar num módulo, com no máximo 5 minutos entre uma leitura e outra) — e, até lá, o servidor recusa cada gravação com a mesma frase. Depois da leitura, a sessão passa a guardar o que o servidor disse (o perfil do almoxarifado, o da frota, o papel, o Super Administrador e os módulos que a pessoa administra) e a tela segue o perfil novo, sem voltar ao antigo; o mesmo vale para quem ganhou um perfil.
 
 ### 5.3 Usuário sem perfil definido é tratado como chão de fábrica
 
@@ -2386,7 +2386,21 @@ Com duas ou mais requisições, a lista segue a regra da recusa acima (*"as requ
 - **O material está na caixa** (a contagem não olhou a caixa): estorne o ajuste que **baixou** o estoque (6.10). O estorno devolve a quantidade àquela prateleira, o total volta, e a entrega passa. O estorno de um ajuste que **subiu** o total é recusado enquanto o total ficar abaixo da caixa — é o do ajuste que baixou que destrava. Se mais de um ajuste baixou, estorne cada um: o estorno não traz aviso, e a entrega mostra o que ainda falta. O almoxarife não estorna (*"Sem permissão para esta operação"*): pede ao Administrador ou ao Gestor — no material de cliente, só ao Administrador.
 - **O material se perdeu da caixa:** **Devolver à prateleira** (10.2b) a quantidade perdida. A caixa diminui e a contagem já deu a baixa; a requisição continua viva — separe de novo quando houver material, ou, se nada foi entregue e ela não vai mais sair, quem pediu a cancela (7.6).
 
-O material separado **coberto por reserva** da própria requisição não entra nesse aviso: com a contagem abaixo do reservado, a entrega já diz que o disponível está negativo (7.5).
+O material separado **coberto por reserva** da própria requisição não entra nesse aviso — entra no seguinte.
+
+**O Ajuste com localização que deixa o disponível negativo também avisa.** Se, depois da contagem, o físico ficou **abaixo do que está retido** — reservado, bloqueado, em inspeção ou em terceiros (6.1) —, o disponível fica negativo e, enquanto for assim, nada desse material sai pela entrega de requisição (a entrega diz *"Máximo: 0"*). A contagem grava, e aparece o aviso:
+
+> *"Ajuste gravado, mas o disponível de ⟨código⟩ ficou negativo: o estoque (⟨físico⟩ ⟨un⟩) é menor que o retido (⟨retenções⟩, total retido: ⟨soma⟩ ⟨un⟩), e nada dele sai pela entrega de requisição enquanto for assim. Se o material existe e a contagem não o incluiu, estorne o ajuste que baixou o estoque (perfil Administrador ou Gestor do almoxarifado); se ele se perdeu, ⟨o que fazer⟩."*
+
+As retenções aparecem na ordem *reservada*, *bloqueada*, *em inspeção*, *em terceiros*, só as que existem (ex.: *"reservada: 2, bloqueada: 2, total retido: 4 PC"*). O *⟨o que fazer⟩* é uma ação por retenção, juntas por vírgula e *"e"*:
+
+- **reservada:** *"libere a reserva (perfil Administrador ou Almoxarife)"* — ou, se há material separado e ainda não entregue desse material numa requisição com reserva, *"devolva-o à prateleira na requisição e libere a reserva (perfil Administrador ou Almoxarife)"*: liberar a reserva sem devolver deixa o material na caixa (a entrega continua em *"Máximo: 0"* e o encerramento é recusado), e devolver sem liberar deixa a reserva — só os dois juntos tiram o disponível do negativo;
+- **bloqueada:** *"desbloqueie o que se perdeu (perfil Administrador ou Gestor)"*;
+- **em inspeção:** *"decida a inspeção (o reprovado fica bloqueado: desbloqueie depois, perfil Administrador ou Gestor)"*.
+
+O que está **em terceiros** não é "o que se perdeu": a remessa não tira o material do endereço no sistema. Com algo em terceiros, o aviso acrescenta, logo depois da primeira frase, *"O que está em terceiros (⟨quantidade⟩ ⟨un⟩) continua no saldo do endereço: refaça a contagem somando-o."* — e, se só há terceiros retidos, o aviso termina no estorno, sem *"se ele se perdeu"*.
+
+Quando o material é **de cliente**, o parêntese do estorno diz *"(perfil Administrador do almoxarifado)"*. Quando o material **permite saldo negativo** (no cadastro ou pela configuração geral), a entrega ainda tira pelo físico, e o trecho *"e nada dele sai pela entrega de requisição enquanto for assim"* não aparece. Disponível exatamente 0 (material todo reservado) não avisa. Os dois avisos podem aparecer juntos — o da caixa sem reserva primeiro, o da retenção depois. O aviso aparece só na tela de Movimentações, no momento da contagem; o **Ajuste sem localização** no mesmo estado continua recusado (*"Ajuste para ⟨n⟩ ⟨un⟩ deixaria o disponível negativo (…, mínimo aceitável: ⟨soma⟩ ⟨un⟩). Resolva a retenção antes de ajustar para menos, ou ajuste para um valor maior ou igual ao mínimo."*).
 
 **A porta avulsa espera a separação.** A saída, o ajuste, o bloqueio, a reserva manual e as demais portas avulsas entram na mesma fila por material da separação, da entrega e da aprovação (9.3d): uma saída clicada no instante em que outra pessoa separa o mesmo material espera a separação terminar e só então confere o livre fora da caixa — ou a separação espera a saída e calcula o separável com o que sobrou.
 
@@ -6336,16 +6350,33 @@ três blocos de requisição e o de ajustes pelo nome técnico do campo (*requis
   estornados não contam (nem o lançamento estornado, nem a linha do estorno); material inativado
   conta. Conta **lançamentos**, não quantidade: cada material tem sua unidade, e o AJUSTE grava o
   saldo final, não a diferença. O detalhe por motivo está em **Ajustes por motivo**, abaixo.
+- **Tempo de recebimento** (*tempo_recebimento*): para cada recebimento, as horas entre o
+  **registro da chegada** no sistema e a **última entrada no estoque** dos itens:
+  > **horas = (hora da última entrada no estoque − hora do registro do recebimento) × 24**,
+  e o bloco mostra a **média** (*media_horas*) e a **mediana** (*mediana_horas*), com duas casas, e
+  quantos entraram na conta (*considerados*). Entra só o recebimento que **entrou inteiro** — todos os
+  itens com quantidade deram entrada — e cuja última entrada está na janela. O que entrou **em parte**
+  (o processamento parou no meio e o resto espera ser processado de novo) fica fora da média e é
+  contado à parte, em *incompletos*; o que ainda não entrou nada não aparece. Depois de o recebimento
+  ser **Processado** ou **Aprovado**, nada mais entra por ele: um item sem entrada não o torna incompleto.
+  Item sem quantidade não conta. A inspeção depois da entrada não muda a conta (o material de inspeção
+  entra no estoque retido, e é essa entrada que vale). Materiais de clientes e materiais inativados
+  **entram**; a entrada estornada continua contando. Recebimentos processados antes de o sistema
+  registrar a hora da entrada não aparecem. Sem nenhum recebimento na conta, média e mediana ficam
+  vazias (*—*), nunca 0.
 
 **Entrega em frações completa.** Uma requisição entregue em várias partes fracionárias (dez
 entregas de 0,1, por exemplo) passa a **Entregue** quando a soma alcança o pedido, e a reserva
 do item fecha como **Consumida** — a diferença de arredondamento do computador
 (0,9999999999999999 em vez de 1) não deixa nada pendente.
 
-O painel inicial do almoxarifado mostra quatro desses números em cartões — giro, rupturas,
-tempo de atendimento e **"Requisições no prazo"** —, com a janela na legenda. O cartão de prazo
-tem a legenda *"Janela de N dias · prazo vencido até hoje · entrega completa até o dia"*; sem
-nada para medir, mostra *"—"* e *"sem requisições com prazo no período"*. Se os indicadores
+O painel inicial do almoxarifado mostra cinco desses números em cartões — giro, rupturas,
+tempo de atendimento, **"Requisições no prazo"** e **"Tempo médio de recebimento"** —, com a janela na
+legenda. O cartão de prazo tem a legenda *"Janela de N dias · prazo vencido até hoje · entrega completa
+até o dia"*; sem nada para medir, mostra *"—"* e *"sem requisições com prazo no período"*. O de
+recebimento mostra a média em horas (*"6.50h"*) e a legenda *"Janela de N dias · da chegada à entrada
+no estoque · mediana M.MMh"*; sem recebimento na conta, *"—"* e *"sem recebimentos concluídos no
+período"*; com recebimentos que entraram em parte, *"⟨n⟩ com entrada incompleta, fora da conta"*. Se os indicadores
 falharem, apenas os cartões mostram o erro — o restante do painel continua.
 
 ### Ajustes por motivo

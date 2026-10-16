@@ -1,6 +1,6 @@
 # 21 — Relatórios, Dashboards e Indicadores
 
-> **Status:** 🟡→quase-🟢 — **Etapa 67 (2026-10-01, `22c6e57..80bad3b`): os indicadores que faltavam da spec 27** — % de requisições no prazo e integrais (blocos novos do `indicadores` + cartão "Requisições no prazo" no dashboard + campo "Data de necessidade" na criação, que nenhuma tela gravava), nº de ajustes (bloco + chave `ajustes-por-motivo`), divergência e rejeição por fornecedor (chave `qualidade-fornecedores`, com a coluna "Agrupado por"); o tempo de atendimento deixou de contar requisição excluída (C89). O registro tem **25** chaves. **Falta para 🟢:** previsto × realizado / consumo não previsto por projeto (depende da 22) — o único item da spec 27 ainda aberto, e bloqueado; o tempo médio de recebimento continua candidato (ver o item). · Antes: **Etapa 49 (2026-09-30, `492b14f..` fechamento): os relatórios de SALDO que faltavam** — saldo por lote (atribuído + "Sem lote atribuído", que fecha com o físico), séries em estoque, saldos comprometidos, e o histórico de movimentações por grupo, usuário e centro de custo. Com isso **todos os itens de "Relatórios de estoque" e "Relatórios de movimentação" estão pagos** (cinco deles já estavam cobertos por chaves existentes — ver o checklist). **Falta para 🟢:** previsto × realizado (depende da 22) e os indicadores restantes da spec 27 (cada um com a feature dona); o **saldo por endereço** ficou fora de propósito (ver o item). · **Etapa 13 entregue (2026-08-24, `4fdda54..8bb5e52`)**: tela de relatórios dirigida por registro único com gate declarado por chave, exportação XLSX, indicadores gerenciais e cartões no dashboard. · **Spec original:** seção 27
+> **Status:** 🟡→quase-🟢 — **Etapa 128 (2026-10-16, `37aa1228`, Fase 5 `41255477`): o tempo médio de recebimento** — bloco `tempo_recebimento` no `indicadores` (média, mediana, considerados, incompletos; da chegada à última entrada no estoque, só o que entrou inteiro, janela pelo fim, `null` sem dados) e o quinto cartão no dashboard; a régua é **deduzida** (letra E2 das novidades). **Falta para 🟢:** previsto × realizado (depende da 22) e as perdas com valor (candidata da 129). · Antes: **Etapa 67 (2026-10-01, `22c6e57..80bad3b`): os indicadores que faltavam da spec 27** — % de requisições no prazo e integrais (blocos novos do `indicadores` + cartão "Requisições no prazo" no dashboard + campo "Data de necessidade" na criação, que nenhuma tela gravava), nº de ajustes (bloco + chave `ajustes-por-motivo`), divergência e rejeição por fornecedor (chave `qualidade-fornecedores`, com a coluna "Agrupado por"); o tempo de atendimento deixou de contar requisição excluída (C89). O registro tem **25** chaves. **Falta para 🟢:** previsto × realizado / consumo não previsto por projeto (depende da 22) — o único item da spec 27 ainda aberto, e bloqueado; o tempo médio de recebimento continua candidato (ver o item). · Antes: **Etapa 49 (2026-09-30, `492b14f..` fechamento): os relatórios de SALDO que faltavam** — saldo por lote (atribuído + "Sem lote atribuído", que fecha com o físico), séries em estoque, saldos comprometidos, e o histórico de movimentações por grupo, usuário e centro de custo. Com isso **todos os itens de "Relatórios de estoque" e "Relatórios de movimentação" estão pagos** (cinco deles já estavam cobertos por chaves existentes — ver o checklist). **Falta para 🟢:** previsto × realizado (depende da 22) e os indicadores restantes da spec 27 (cada um com a feature dona); o **saldo por endereço** ficou fora de propósito (ver o item). · **Etapa 13 entregue (2026-08-24, `4fdda54..8bb5e52`)**: tela de relatórios dirigida por registro único com gate declarado por chave, exportação XLSX, indicadores gerenciais e cartões no dashboard. · **Spec original:** seção 27
 >
 > **CORREÇÃO DE FATO (regra 5), Etapa 49:** o item do Levantamento dizia "**são 18**" chaves no
 > registro — **estava errado**: eram **19** (a `custo-por-projeto`, `reportRegistry.js:416`, entrou na
@@ -11,7 +11,8 @@
 > `indicadores` são **18**. E o cabeçalho dizia "só **2** consumidos no front" — eram **3**
 > (o dashboard consome consumo-os e materiais-mais-consumidos; a tela de Reposição consome o
 > gated solicitacoes-compra).
-> **Última atualização:** 2026-08-13 — **a valoração dos relatórios estava errada e foi corrigida**
+> **Última atualização:** 2026-10-16 (**Etapa 128** — o tempo médio de recebimento; ver o status e a seção no fim). *Esta linha tinha parado em 2026-08-13; as etapas seguintes estão no status e nas seções.*
+> *Antes:* 2026-08-13 — **a valoração dos relatórios estava errada e foi corrigida**
 > (tarefa extra da Etapa 8c, ver "Valoração do estoque" abaixo). O resto da linha de 2026-08-11
 > segue valendo: eram 15 tipos, a Etapa 2 acrescentou `materiais-sem-endereco` (16), e "só 2
 > consumidos no front" continua verdade.
@@ -140,7 +141,22 @@ Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa122-a-aprovacao-que-
   (`specs/modulo-almoxarifado/2026-08-02-requisitos-modulo-almoxarifado.md`, "Gestão") pede **perdas**, e este README não tinha o item.
   Hoje só existe a listagem do histórico com `tipo=PERDA`, sem valor. Fica aberto:
 - [ ] **Perdas com valor** (quanto se perdeu, por período e motivo) — não depende do P.O.; pequeno.
-- [ ] **Tempo médio de recebimento** — medido: não existe; as datas existem (`data_recebimento` no cabeçalho do recebimento,
+- [x] ~~Tempo médio de recebimento — medido: não existe~~ *(entregue na Etapa 128 — o item abaixo)*; as datas existem (`data_recebimento` no cabeçalho do recebimento,
   `entrada_estoque_em` por item, que só volta a NULL quando nada entrou). **Nenhuma spec define a régua** — a natural (deduzida) é da
   chegada à entrada no estoque (`data_recebimento` → o maior `entrada_estoque_em` do recebimento). Escolhida como próxima tarefa
   (Etapa 128), com a régua para o P.O. confirmar.
+
+## Etapa 128 (2026-10-16) — o tempo médio de recebimento
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa128-o-tempo-do-recebimento-e-o-aviso-da-retencao.md`.
+
+- [x] **Tempo médio de recebimento** — ✅ **Etapa 128** (`37aa1228`; Fase 5 `41255477`). Régua (deduzida, E2): por recebimento, de
+  `data_recebimento` (só o DEFAULT a escreve) ao **maior** `entrada_estoque_em` de qualquer item que a tem; entra só o que entrou
+  inteiro — nenhum item com quantidade > 0 (`CAST`, no SQLite texto > 0) sem data **com o recebimento ainda antes de
+  `PROCESSADO`/`APROVADO`** (B825; a conferência sem guarda de status é a **C266**); o que entrou em parte vai para `incompletos`; janela
+  pelo fim; `null` sem considerado (B823); cliente e inativo entram, estorno não tira (B824). Cartão *"Tempo médio de recebimento"* no
+  dashboard. Testes: `relatoriosTempoRecebimento` (22), `tempoRecebimentoIntegracao` (2, rota e serviço, a nota que falha no meio
+  pela rota), `AlmoxarifadoDashboardTempoRecebimento` (5). **Fora:** a lista dos recebimentos (é um número); os anteriores à Etapa 6
+  (sem a hora da entrada); a inspeção depois da entrada.
+  *(O item do checklist de "Gestão e indicadores" acima diz "**De recebimento** continua fora … candidato" — **deixou de valer** na Etapa
+  128; fica como estava para a história, e este item é o que vale.)*
