@@ -512,7 +512,7 @@ rota fazia isso. Era uma parede com placa de porta.
 - [x] **Série é única por material; ciclo de vida rastreável** — implementado Tasks 1-7 — [`.superpowers/sdd/2026-08-11-almoxarifado-etapa6b-series/`](../../../.superpowers/sdd/2026-08-11-almoxarifado-etapa6b-series/) tem o design, plano e relatórios de cada task
 - [x] **Rotas HTTP** (Task 7, **`fc33d59`**+doc `eba5ff1`+fix `c6eff55`, teste de corrida real e hashes corrigidos):
   - `GET /api/almoxarifado/materiais/:id/series?status=` (perm. `visualizar`) — lista com lote_codigo
-  - `PUT /api/almoxarifado/series/:id/status` (perm. `inspecionar`) — muda de EM_ESTOQUE ↔ BLOQUEADA com justificativa obrigatória
+  - `PUT /api/almoxarifado/series/:id/status` (perm. `inspecionar`) — muda de EM_ESTOQUE ↔ BLOQUEADA com justificativa obrigatória. *(Etapa 118, `ad75feda`, B771: roda sob a trava do material da série — espera o estorno em curso; dois bloqueios simultâneos dão 400 "transicao invalida: BLOQUEADA -> BLOQUEADA" no segundo, não mais o 409 "status da serie mudou durante a operacao — recarregue", que ficou só como defesa.)*
 
 ### Frontend — números de série
 

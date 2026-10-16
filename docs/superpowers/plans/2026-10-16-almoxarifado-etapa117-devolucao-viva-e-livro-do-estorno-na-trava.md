@@ -147,7 +147,7 @@ muda só no valor).
 3. **Paralelismo:** **0** galhos (as três tasks mexem em regra compartilhada do motor); revisores em paralelo na Fase 5 (três de
    uma vez, cada um na sua worktree), sem retrabalho. As suítes de cada commit rodaram isoladas (o resto da árvore guardado em
    `git stash`/scratchpad), uma por commit de código.
-4. **Defeito que escapou:** *(preencher na Etapa 118)*. Da Etapa 116: **dois** — a régua da devolução viva da 116 aceitava a
+4. **Defeito que escapou:** *(preenchido na Etapa 118)* **nenhum defeito introduzido pela 117** apareceu na 118 (a Fase 0, a revisão do plano e os três revisores da Fase 5 mediram o estorno inteiro). **Uma afirmação errada**: o checklist da spec 03 dizia que o ramo de entrada podia ficar fora da trava ("desfaz somando, só aumenta o livre") — as séries dele trocavam fora (a C243, que a própria 117 declarou); corrigido à vista na spec 03. E a jornada (iii) da T4 prendia a literal falsa da C240 de propósito (declarada) — trocada na 118. Da Etapa 116: **dois** — a régua da devolução viva da 116 aceitava a
    `ENTRADA_DEVOLUCAO` digitada com a referência (o estorno da saída devolvida passava: 10 → 12, C241) e lia o claim provisório
    do estorno da entrada; os dois achados pela revisão do plano desta etapa.
 

@@ -379,3 +379,18 @@ devolução parecia morta (físico 7 para 5). E o item "Fora" da 116 (C236) est�
   devoluções não marca a desfeita (**D (117)**); RETRABALHO não tem entrada para estornar (**D (117)**); **B755** (P.O.).
 
 Continua 🟢. Testes: `devolucaoViva.api.test.js` (27), `devolucaoVivaIntegracao.api.test.js` (3), `devolucaoVivaFase5.api.test.js` (10).
+
+## Etapa 118 (2026-10-16) — a devolução no meio de um estorno de saída
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa118-estorno-que-falha-desfaz-tudo.md` (a etapa é do motor — spec 03).
+
+- [x] **A saída com o estorno em curso (claim gravado, `movimento_estorno_id` ainda nulo) recusa com a literal verdadeira (C240,
+  B772)** — `771a4aa1`, texto revisto em `50aeb457`: *"A saída ⟨id⟩ tem um estorno em andamento que ainda não concluiu — nada foi
+  gravado. Tente de novo em instantes; se a recusa continuar, o estorno foi interrompido: avise o administrador do almoxarifado."*
+  (400). A saída estornada de verdade continua com *"A saída ⟨id⟩ foi cancelada (estornada) — o estorno já devolveu o material"*.
+  A jornada (iii) de `devolucaoVivaIntegracao.api.test.js` prendia a literal falsa (declarada na 117) e passou a prender a nova.
+- [x] **A devolução avulsa das mesmas séries no meio de um estorno da entrada de uma devolução espera a trava e é recusada**
+  (C243; a seção única do estorno, `ad75feda`) — a linha da devolução recusada sai (o desfazer de sempre do `returnService`).
+- [ ] **Fora:** o estorno interrompido deixa a recusa de pé até o suporte desmarcar a linha (**C246**, **A66**).
+
+Continua 🟢. Testes: `estornoQueFalhaDesfaz.api.test.js` (RN-07, RN-09), `estornoQueFalhaIntegracao.api.test.js` (i, iv).

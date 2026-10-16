@@ -58,7 +58,9 @@ Etapa 117). O único escritor de `cancelado = 1` em todo o servidor é esse clai
    e vê as séries de volta.
 5. **C240: a recusa diz a verdade.** `validarSaidaOriginal`: `cancelado = 1` **sem** `movimento_estorno_id` → literal nova
    (400): *"A saída ⟨id⟩ está sendo estornada neste instante — nada foi gravado. Tente de novo em instantes: se o estorno
-   concluir, a saída deixa de aceitar devolução."* Com `movimento_estorno_id`, a de sempre.
+   concluir, a saída deixa de aceitar devolução."* Com `movimento_estorno_id`, a de sempre. *(Fase 5: trocada por "A saída ⟨id⟩ tem um estorno em andamento que ainda não concluiu — nada foi gravado.
+Tente de novo em instantes; se a recusa continuar, o estorno foi interrompido: avise o administrador do almoxarifado." — o estorno
+interrompido (C246) deixava a primeira de pé para sempre.)*
 
 ## Decisões (letra B)
 

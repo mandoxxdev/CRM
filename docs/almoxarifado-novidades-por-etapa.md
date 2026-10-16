@@ -11,10 +11,12 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-16):** **Etapa 117 fechada** (a devolução desfeita pelo livro deixa de contar na tela,
+> **Onde o desenvolvimento está (2026-10-16):** **Etapa 118 fechada** (o estorno que falha no meio desfaz tudo, em qualquer tipo de
+> movimento — **C238**, **C243**, **C245** e **C240** resolvidos; bloquear uma série espera o estorno); a próxima do almoxarifado é a
+> **119** — ver "Onde estamos e o que vem a seguir". *(Antes: Etapa 117 fechada (a devolução desfeita pelo livro deixa de contar na tela,
 > na gravação e na exclusão da requisição — **C236** resolvido; a entrada da devolução para sucata não se estorna mais sozinha —
-> **C237**; e o estorno de saída que falha desfaz antes de liberar o material — **C235** resolvido); a próxima do almoxarifado é a
-> **118** — ver "Onde estamos e o que vem a seguir". *(Antes: Etapa 116 fechada (o cadastro aberto há muito tempo não desfaz mais o
+> **C237**; e o estorno de saída que falha desfaz antes de liberar o material — **C235** resolvido); a próxima do almoxarifado era a
+> **118**.)* *(Antes: Etapa 116 fechada (o cadastro aberto há muito tempo não desfaz mais o
 > controle mudado por outra pessoa — **C233** resolvido; o estorno de saída com séries depois de desligar pede para religar —
 > **C232** resolvido, menos a devolução; e estornar uma saída já devolvida é recusado — contava em dobro, **B756**); a próxima
 > do almoxarifado é a **117**.)* *(Antes: Etapa 115 fechada (ligar e desligar o
@@ -134,7 +136,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Sessenta e cinco itens para rodar em produção ANTES do deploy — sessenta e dois são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Sessenta e seis itens para rodar em produção ANTES do deploy — sessenta e três são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-16 (Etapa 118) de sessenta e cinco para sessenta e seis**, com a **A66** — estornos interrompidos: a movimentação marcada como em estorno sem o estorno ter concluído, e o estorno com duas linhas no livro; opcional.)*
 
 *(**Atualizado em 2026-10-16 (Etapa 117) de sessenta e quatro para sessenta e cinco**, com a **A65** — devoluções desfeitas pelo livro antes da Etapa 117: estoque a menos na sucata e na exclusão de requisição, séries soltas; opcional.)*
 
@@ -2403,12 +2407,49 @@ exclusão requisição ⟨número⟩"* e, se faltou a `quantidade`, corrija com 
 uma série que saiu com quem a levou mas está *Estornada*: a tela de Devoluções não a oferece; se a peça voltar, o Administrador
 acerta em **Lotes e Séries → Séries → Regularizar séries**.
 
+**A66 (NOVA, da Etapa 118 — estornos interrompidos).** Duas consultas, somente leitura; **nada aqui é obrigatório**. O estorno
+marca a movimentação como cancelada **antes** de mexer no estoque e desmarca se falhar; se o próprio desmarcar falhar (ou o
+servidor cair no meio), a movimentação fica marcada sem o estorno ter acontecido — a devolução dela passa a responder *"… tem
+um estorno em andamento que ainda não concluiu …"* para sempre, e estornar de novo responde *"Movimentação já cancelada"*
+(**C246**). E, com duas falhas seguidas no fim do estorno, o livro fica com uma linha *Estorno* a mais (**C247**).
+
+```sql
+-- (1) marcada como cancelada sem o estorno ter concluído (o claim ficou preso)
+SELECT mv.id, m.codigo, mv.tipo, mv.quantidade, mv.cancelado_em, mv.cancelamento_motivo
+  FROM movimentacoes_almoxarifado mv
+  JOIN materiais_almoxarifado m ON m.id = mv.material_id
+ WHERE COALESCE(mv.cancelado, 0) = 1 AND mv.movimento_estorno_id IS NULL AND mv.tipo <> 'ESTORNO'
+ ORDER BY mv.cancelado_em;
+
+-- (2) estorno com mais de uma linha no livro, ou linha de estorno de uma movimentação que não está estornada
+SELECT o.id AS original_id, m.codigo, o.tipo, COALESCE(o.cancelado, 0) AS cancelado, o.movimento_estorno_id,
+       COUNT(e.id) AS linhas_estorno, GROUP_CONCAT(e.id) AS estornos
+  FROM movimentacoes_almoxarifado e
+  JOIN movimentacoes_almoxarifado o ON e.documento_vinculado = 'ESTORNO-' || o.id
+  JOIN materiais_almoxarifado m ON m.id = o.material_id
+ WHERE e.tipo = 'ESTORNO'
+ GROUP BY o.id
+HAVING COUNT(e.id) > 1 OR COALESCE(o.cancelado, 0) = 0 OR o.movimento_estorno_id IS NULL
+ ORDER BY o.id;
+```
+
+*(Conferidas numa sonda contra o esquema real, com os estados criados pelos caminhos de verdade — as falhas forçadas no
+estorno: a (1) acha a saída cujo estorno falhou com os dois desmarcar falhando, e **não** acha o estorno normal; a (2) acha a
+saída com duas linhas de estorno depois da falha dupla, e **não** acha o estorno normal.)*
+
+**Como ler o resultado:** **vazias** — nada a fazer (o esperado). **(1)** cada linha é uma movimentação cujo estorno **não**
+aconteceu (o estoque não foi mexido — o desfazer roda antes do desmarcar): confira no extrato do material que não há linha
+*Estorno* dela e peça ao suporte para desmarcar a linha (`UPDATE movimentacoes_almoxarifado SET cancelado = 0, cancelado_por =
+NULL, cancelado_em = NULL, cancelamento_motivo = NULL WHERE id = ⟨id⟩`); depois ela estorna e aceita devolução como qualquer
+outra. **(2)** cada linha é um estorno registrado mais de uma vez (o estoque está certo — só o livro tem a linha a mais): anote;
+corrigir o livro é decisão sua (ele é imutável por regra).
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B768; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B774; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -8047,6 +8088,49 @@ marcar a saída como estornada na exclusão (a exclusão grava uma Entrada próp
 **B768 (NOVA, da Etapa 117) — a próxima etapa do almoxarifado (118).** Ver a "próxima tarefa detalhada" no plano da Etapa 117.
 A **B755**, a **C224**, o resto da **C225**, a **C228**, a **C219** e a **C230** continuam esperando vocês.
 
+**B769 (NOVA, da Etapa 118) — o estorno de bloqueio, desbloqueio, ajuste e transferência que falha no meio desfaz o que já
+fez.** Medido antes: com o registro no livro falhando, o estorno respondia erro e deixava o efeito aplicado — bloqueado 2 → 0
+(e estornar de novo recusava: o bloqueio ficava preso), desbloqueio 0 → 2 (de novo: 4), ajuste com endereço 7 → 5 (de novo: 3),
+transferência com as linhas trocadas (presa). **O que foi escolhido** (`ad75feda`): cada um desses estornos desfaz o que já tinha
+feito antes de responder, como a entrada e a saída já faziam; o total do ajuste com endereço volta pela diferença lida antes,
+e não re-somando os endereços (num material cujo total já não batia com os endereços, re-somar mudaria o estoque).
+**Descartado:** gravar o livro **antes** do efeito (inverteria a função inteira, e a régua da devolução desfeita depende de o
+estorno ser a última coisa gravada). **Reversível.**
+
+**B770 (NOVA, da Etapa 118) — todo estorno roda inteiro sob a trava do material, do efeito ao registro no livro.** Até aqui só o
+estorno de saída (Etapa 117); no de entrada, as séries e o livro trocavam fora da trava — uma devolução avulsa das mesmas
+séries no meio de um estorno que falhava deixava estoque 4 com 2 séries (3 de 3). **O que foi escolhido** (`ad75feda`): uma
+espera só, do efeito ao livro, em todos os tipos, com o desfazer (e o desmarcar) dentro dela. **Revê o descartado da B762**
+("a trava em volta do estorno inteiro") só no que importa: o que a B762 temia — o recálculo das requisições, que pega a mesma
+trava — continua fora. **Reversível.**
+
+**B771 (NOVA, da Etapa 118) — bloquear ou desbloquear uma série espera a movimentação em curso daquele material.** A revisão do
+plano achou: bloquear a 2ª série no meio do estorno de uma entrada fazia o estorno **pular** a série e responder sucesso —
+estoque 0 com a série *Bloqueada* contada como presente. **O que foi escolhido** (`ad75feda`): o bloquear/desbloquear série
+entra na mesma espera. Consequência visível: dois bloqueios da mesma série ao mesmo tempo — o segundo recebe *"transicao
+invalida: BLOQUEADA -> BLOQUEADA"* (antes: *"status da serie mudou durante a operacao — recarregue"*). **Descartado:** o
+desfazer das séries conferir o status de cada uma (com a espera, ninguém muda a série no meio; e conferindo, uma série bloqueada
+no meio de um estorno de saída que falha ficaria *Bloqueada*, contada como presente, com o estoque desfeito). **Reversível.**
+
+**B772 (NOVA, da Etapa 118) — a devolução de uma saída cujo estorno está em curso recebe a recusa que diz isso.** Antes:
+*"A saída ⟨n⟩ foi cancelada (estornada) — o estorno já devolveu o material"* — falso se o estorno acabasse falhando. **O que foi
+escolhido** (`771a4aa1`, texto revisto em `50aeb457`): *"A saída ⟨n⟩ tem um estorno em andamento que ainda não concluiu — nada foi
+gravado. Tente de novo em instantes; se a recusa continuar, o estorno foi interrompido: avise o administrador do almoxarifado."*
+(400, como as outras recusas da devolução). O texto da primeira versão (*"está sendo estornada neste instante … Tente de novo em
+instantes: se o estorno concluir, a saída deixa de aceitar devolução."*) foi trocado na revisão do código: o estorno interrompido
+(**C246**) deixava a recusa de pé para sempre, e "neste instante" enganava. **Descartado:** 409; a devolução esperar o estorno
+terminar (mais uma porta na trava por uma mensagem). **Reversível.**
+
+**B773 (NOVA, da Etapa 118, da revisão do código) — o estorno de material com série confere as séries de novo depois de
+esperar a trava.** Medido pelos revisores: a conferência das séries rodava **antes** da espera; um bloqueio de série (ou uma
+Entrada com o número de uma série da saída) que caísse entre a conferência e a espera passava, e o estorno respondia sucesso
+com séries e estoque sem bater (3 de 3; e 4 a 6 de 30 só com o instante de chegada). **O que foi escolhido** (`50aeb457`): a mesma
+conferência, com as mesmas mensagens, de novo dentro da espera, antes de mexer em qualquer coisa — o estorno é **recusado** e
+nada é tocado. **Descartado:** só recusar depois de marcar as séries (desfaria tudo; a recusa antes é mais simples). **Reversível.**
+
+**B774 (NOVA, da Etapa 118) — a próxima etapa do almoxarifado (119).** Ver a "próxima tarefa detalhada" no plano da Etapa 118.
+A **B755**, a **B761**, a **C224**, o resto da **C225**, a **C228**, a **C219** e a **C230** continuam esperando vocês.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -10406,20 +10490,20 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      tirava o material duas vezes.** A devolução para sucata entra e sai (estoque igual); estornar a entrada tirava de novo o que
      já tinha saído pela sucata (8 → 6). Agora é recusado com a sucata de pé. **Se já aconteceu:** consulta **A65**.
 
-238. **NOVO (da Etapa 117, medido) — uma falha do banco no fim do estorno de bloqueio, desbloqueio, ajuste ou transferência
+238. **✅ RESOLVIDO NA ETAPA 118 (`ad75feda`; B769, B770) — o estorno de bloqueio, desbloqueio, ajuste e transferência que falha no meio desfaz o que já fez, sob a trava do material.** O texto original: **NOVO (da Etapa 117, medido) — uma falha do banco no fim do estorno de bloqueio, desbloqueio, ajuste ou transferência
      deixa o efeito aplicado.** O registro no livro falhando (forçado em teste) devolve erro, a linha original continua de pé,
      mas o bloqueado (ou o físico) já mudou: bloqueio 2 → 0; ajuste 7 → 5. Estornar de novo aplicaria outra vez. Só com erro de
      banco no instante exato. **O que fazer:** se o log mostrar erro de estorno, confira o físico e o bloqueado do material antes
      de estornar de novo. Candidata da próxima etapa. (No estorno de saída o desfazer existe e roda sob a trava — **C235**; o
      resto que sobra ali é a falha **dupla**, o vínculo do estorno e a limpeza da linha falhando juntos: fica uma linha de
-     estorno a mais no livro, com o estoque certo.)
+     estorno a mais no livro, com o estoque certo.) *(A falha dupla continua — virou a **C247**.)*
 
 239. **NOVO (da Etapa 117) — estornar só a entrada de uma devolução para quarentena deixa o bloqueio de pé.** O estoque fica
      certo, mas o disponível fica a menos pela quantidade da devolução; e, como a devolução desfeita já não conta (**B759**),
      devolver para a quarentena e estornar a entrada de novo acumula outro bloqueio a cada volta. **O que fazer:** ao desfazer
      uma devolução para quarentena, estorne também a linha *Bloqueio* com a mesma referência `DEV-⟨número⟩` (**B761**).
 
-240. **NOVO (da Etapa 117, da revisão do plano) — durante um estorno de saída que acaba falhando, a devolução daquela saída
+240. **✅ RESOLVIDO NA ETAPA 118 (`771a4aa1`, `50aeb457`; B772) — a devolução no meio de um estorno de saída recebe *"A saída ⟨n⟩ tem um estorno em andamento que ainda não concluiu — …"*.** O texto original: **NOVO (da Etapa 117, da revisão do plano) — durante um estorno de saída que acaba falhando, a devolução daquela saída
      recebe uma mensagem que não é verdade.** Nos instantes em que o estorno está em curso, a devolução recusa com *"A saída
      ⟨n⟩ foi cancelada (estornada) — o estorno já devolveu o material"*; se o estorno falhar por erro de banco, a saída continua
      de pé. Só com erro de banco no instante exato. **O que fazer:** se a devolução disser isso e o extrato mostrar a saída sem
@@ -10438,7 +10522,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      parava um passo antes (o estorno da saída recusava). **O que fazer:** para tirar essas peças do estoque, use um **Ajuste**
      com as séries (6.2 do manual).
 
-243. **NOVO (da Etapa 117, da revisão do código; anterior a ela) — o estorno de uma entrada com série que falha por erro de
+243. **✅ RESOLVIDO NA ETAPA 118 (`ad75feda`, `50aeb457`; B770, B773) — o estorno de entrada roda inteiro sob a trava, e as séries são conferidas de novo dentro dela.** O texto original: **NOVO (da Etapa 117, da revisão do código; anterior a ela) — o estorno de uma entrada com série que falha por erro de
      banco, com uma devolução da mesma peça no mesmo instante, pode deixar estoque e séries sem bater.** É o gêmeo, no estorno
      de entrada, do que a **C235** resolveu no de saída: a troca das séries e o registro no livro rodam fora da trava, e o
      desfazer das séries não confere se outra operação já as mudou. Medido só com a falha **forçada** (estoque 3 com 2 séries
@@ -10451,9 +10535,34 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      já aconteceu:** confira no extrato do material as devoluções cuja entrega é de uma requisição excluída (*Cancelado*) e
      corrija com um **Ajuste**.
 
-245. **NOVO (da Etapa 117, da revisão do código; anterior a ela) — o estorno de uma saída com várias séries que falha no meio
+245. **✅ RESOLVIDO NA ETAPA 118 (`ad75feda`) — a série que já tinha mudado entra no desfazer mesmo quando a seguinte falha (na saída e na entrada).** O texto original: **NOVO (da Etapa 117, da revisão do código; anterior a ela) — o estorno de uma saída com várias séries que falha no meio
      da devolução das séries pode deixar uma série "Em estoque" com o estoque desfeito.** Só com erro de banco no instante exato
      (forçado em teste). **O que fazer:** se o log mostrar erro de estorno, confira em **Regularizar séries**.
+
+246. **NOVO (da Etapa 118, da revisão do código; anterior a ela) — o estorno interrompido deixa a movimentação marcada como em
+     estorno.** O estorno marca a linha antes de mexer no estoque e desmarca se falhar; se o desmarcar também falhar, ou o
+     servidor cair no meio, a linha fica marcada sem o estorno ter acontecido (o estoque está certo): estornar de novo responde
+     *"Movimentação já cancelada"* e a devolução dela, *"A saída ⟨n⟩ tem um estorno em andamento que ainda não concluiu — …"*,
+     para sempre. Só com erro de banco duplo ou queda do processo no instante exato. **O que fazer:** a consulta **A66 (1)** acha;
+     o suporte desmarca a linha.
+
+247. **NOVO (da Etapa 118; o resto da C238) — duas falhas seguidas no fim do estorno deixam uma linha *Estorno* a mais no livro.**
+     Se o vínculo do estorno com a movimentação e a limpeza da linha recém-gravada falharem juntos, o estorno responde erro com
+     o estoque desfeito e a linha *Estorno* fica; o estorno de novo grava outra. O estoque fica certo. **O que fazer:** a
+     consulta **A66 (2)** acha.
+
+248. **NOVO (da Etapa 118, da revisão do código; anterior a ela) — o estorno que conclui e falha ao registrar a auditoria
+     responde erro.** O estorno já valeu (estoque, livro, séries), mas a falha da auditoria de cancelamento — logo depois —
+     responde erro e pula o que vem depois: o desconto do pedido de compra (na entrada de nota), o recálculo das requisições, o
+     alerta de mínimo e a supressão do aviso. Quem tenta de novo ouve *"Movimentação já cancelada"*. Só com erro de banco.
+     **O que fazer:** se o estorno de uma entrada de nota responder erro e a linha aparecer *Estornada* no extrato, confira o
+     pedido de compra.
+
+249. **NOVO (da Etapa 118, da revisão do código; medido no fechamento) — a saída com lote que debita mais de um endereço e falha no meio
+     pode deixar um endereço debitado.** É a mesma forma que a Etapa 118 corrigiu no estorno de entrada sem lote (o endereço já
+     debitado não entrava no desfazer), na saída **com lote** (o débito por endereço do lote). Medido: lote em dois endereços (3 + 3),
+     saída de 5 com o débito do segundo endereço falhando → erro, estoque 6, endereços 0 e 3 (soma 3). **O que fazer:**
+     se o log mostrar erro numa saída com lote, confira os endereços do lote em **Estoque**.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -11551,6 +11660,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(117) A devolução para Retrabalho** não grava entrada: estornar a linha de retrabalho não a desfaz, e ela continua contando.
 - **(117) A devolução para Quarentena** desfeita pela entrada deixa o bloqueio dela de pé (**C239**, **B761**).
 
+- **(118) O ajuste sem endereço de um material que nunca teve endereço**, estornado com falha no meio, sai do desfazer com a
+  linha "sem endereço" criada, igual ao total — o material deixa de ser "legado sem linha" (coerente: a soma bate com o total).
+- **(118) Se o próprio desfazer falhar** (duas falhas de banco seguidas), a resposta é o erro do desfazer, não o original; o que
+  faltou desfazer é refeito uma vez depois de soltar a trava (como desde a Etapa 117).
+- **(118) O desmarcar de dentro da espera** (o estorno que falha desmarca a movimentação antes de soltar a trava) é defensivo: a
+  revisão provou que nenhuma porta real o observa — quem espera a trava lê a movimentação antes de esperar.
+
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
 **"Uma remessa não pode misturar materiais de donos diferentes."** O sistema hoje **recusa** montar
@@ -12452,6 +12568,13 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(118) Nenhum clique foi dado nesta etapa no navegador.** A tela não mudou: as recusas novas chegam pelo aviso vermelho que já
+mostra a mensagem do servidor (Estornar no livro, Bloquear série, Nova Devolução). Tudo o que a etapa muda só acontece com
+**erro de banco forçado** ou com duas pessoas no mesmo instante, e foi provado por teste automatizado pela rota (**28** cenários
+de unidade e **4** jornadas de integração; corridas de 30 rodadas pelos revisores). O que **só o navegador** prova: (1) o
+estorno de bloqueio, desbloqueio, ajuste com e sem endereço e transferência continua dando certo (o roteiro da Etapa 118 no
+guia); (2) bloquear e desbloquear uma série em **Lotes e Séries → Séries** continua como antes.
 
 **(117) Nenhum clique foi dado nesta etapa no navegador.** A tela não mudou: a lista de Devoluções lê o mesmo número do
 servidor (que agora conta só a devolução não desfeita) e as séries que ele oferece; a recusa nova do estorno chega pelo aviso
@@ -24327,9 +24450,93 @@ devolução, que contornava a primeira correção (**B764**, agora reservada); a
 derrubaram teste, 15 eram equivalentes e **7** mostraram cenários sem prova — viraram testes. Ficaram declarados: **C242**,
 **C243** e **C245** (os dois últimos anteriores à etapa, só com falha de banco).
 
+## Etapa 118 — O estorno que falha no meio desfaz tudo, em qualquer tipo de movimento (2026-10-16)
+
+Quem estorna no livro um bloqueio, um desbloqueio, um ajuste ou uma transferência não via nada de diferente no dia a dia — mas,
+se o banco falhasse no último passo do estorno, o sistema respondia erro e deixava metade feita: o bloqueio sumia com o livro
+dizendo que ele continuava de pé (e estornar de novo era recusado), o desbloqueio ou o ajuste por endereço eram aplicados de
+novo no estorno seguinte (o estoque mudava duas vezes), a transferência ficava com os endereços trocados. Agora todo estorno que
+falha desfaz o que já tinha feito antes de responder, e faz isso **antes** de liberar o material para outra pessoa. No mesmo
+movimento, a etapa fechou três furos vizinhos, todos de séries: uma série bloqueada (ou devolvida, ou que voltou por uma
+Entrada) no instante exato de um estorno podia fazer o estorno pular a série e responder sucesso com séries e estoque sem bater;
+e a devolução feita enquanto um estorno de saída estava em curso dizia que o estorno já tinha devolvido o material — o que podia
+não ser verdade.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Estorno de bloqueio com erro de banco no fim: o bloqueado zerava, o livro dizia bloqueio de pé, e estornar de novo era recusado | O bloqueado volta; estornar de novo dá certo (**B769**) |
+| Estorno de desbloqueio com erro no fim: bloqueava, e o estorno seguinte bloqueava de novo (2 → 4) | Desfeito; o seguinte bloqueia uma vez (2) |
+| Estorno de ajuste com endereço com erro no fim: o estoque mudava, e o estorno seguinte mudava de novo (7 → 5 → 3) | Desfeito; o seguinte vai a 5 |
+| Estorno de transferência com erro no fim: os endereços ficavam trocados e o estorno seguinte era recusado | Os endereços voltam; o seguinte dá certo |
+| No estorno de entrada com série, uma devolução das mesmas peças no mesmo instante passava (estoque 4 com 2 séries) | A devolução espera o estorno e é recusada (as peças já estão no estoque) (**B770**) |
+| Bloquear uma série no instante do estorno da entrada dela: o estorno pulava a série e respondia sucesso | O estorno é recusado e nada muda (**B771**, **B773**) |
+| Uma Entrada com o número de uma série no instante do estorno da saída dela: o estorno creditava sem a série voltar | O estorno é recusado (**B773**) |
+| A série que já tinha voltado ao estoque ficava "Em estoque" quando a seguinte falhava (estoque 0 com 2 séries) | As duas voltam a *Entregue* |
+| A devolução de uma saída no meio do estorno dela: *"… foi cancelada (estornada) — o estorno já devolveu o material"* | *"A saída ⟨n⟩ tem um estorno em andamento que ainda não concluiu — …"* (**B772**) |
+| Dois bloqueios da mesma série ao mesmo tempo: *"status da serie mudou durante a operacao — recarregue"* | *"transicao invalida: BLOQUEADA -> BLOQUEADA"* (o segundo espera o primeiro) |
+
+### As regras, com o cenário exato
+
+Quase tudo nesta etapa só aparece com **erro de banco forçado** — não se reproduz clicando. O que dá para mostrar ao vivo é que
+os estornos de sempre continuam iguais. Preparação: um material comum **PRF-1181** com uma Entrada de 5 no endereço **A** e um
+segundo endereço **B** vazio; um material com **Controle por número de série**, **PRF-1182**, com uma Entrada de 1 (série
+**S1**). Usuário: o **administrador**.
+
+**1. Bloqueio e desbloqueio.** No PRF-1181, bloqueie 2 em **Inspeções → Bloquear Material** (bloqueado 2) e, em **Movimentações**, estorne o *Bloqueio* → bloqueado 0.
+Bloqueie 1 e desbloqueie 1 (**Desbloquear Material**, na mesma tela); estorne o *Desbloqueio* → bloqueado 1.
+
+**2. Transferência.** Transfira 3 de A para B (A 2, B 3) e estorne → A 5, B 0. Dê uma Saída de 3 de B depois de uma nova
+transferência e estorne essa transferência → *"Não é possível estornar: o destino não tem mais o saldo transferido"*.
+
+**3. Ajuste.** Ajuste o PRF-1181 no endereço A para 8 e estorne → 5.
+
+**4. Série.** No PRF-1182, em **Lotes e Séries → Séries**, bloqueie S1 (justificativa obrigatória) e desbloqueie. Tente estornar
+a Entrada com S1 bloqueada → *"estorno de entrada recusado: ha series desta entrada ja movimentadas — estorne as saidas
+primeiro"* (a mesma recusa de sempre — agora ela vale também para o bloqueio que chega no mesmo instante do estorno).
+
+**5. A devolução no meio do estorno** (só com erro forçado; o texto exato): *"A saída ⟨n⟩ tem um estorno em andamento que ainda
+não concluiu — nada foi gravado. Tente de novo em instantes; se a recusa continuar, o estorno foi interrompido: avise o
+administrador do almoxarifado."*
+
+### O que esta etapa NÃO cobre
+
+1. **O estorno interrompido** (erro de banco duplo ou queda do servidor no meio) deixa a movimentação marcada sem o estorno ter
+   acontecido — a consulta **A66** acha (**C246**).
+2. **Duas falhas seguidas no fim do estorno** deixam uma linha *Estorno* a mais no livro, com o estoque certo (**C247**).
+3. **O estorno que conclui e falha na auditoria** responde erro (**C248**); **a saída com lote que falha no meio** pode deixar um
+   endereço debitado — medido, candidata da próxima etapa (**C249**).
+4. A **quarentena** desfeita pela entrada (**C239**, **B761**), a **B755**, a **C224**, o resto da **C225**, a **C228**, a
+   **C219** e a **C230** — decisões suas.
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0, sondas pelas rotas) reproduziu os quatro furos do plano: os cinco tipos de estorno sem desfazer — com dois
+"em dobro" (desbloqueio e ajuste por endereço) que o plano da 117 não tinha medido —, a série perdida quando a seguinte falha e a
+devolução no meio do estorno de entrada (3 de 3). A **revisão do plano** (um revisor, com sonda) achou um ponto importante: o
+bloquear série no meio do estorno da entrada fazia o estorno pular a série e responder sucesso — virou a **B771**. A **revisão
+adversarial do código** (três revisores, cada um na sua cópia, executando) achou: **(1)** as conferências de série rodavam antes
+da espera — o mesmo furo por outra janela, 3 de 3 (**B773**); **(2)** o endereço já debitado no estorno de entrada sem lote não
+voltava quando o segundo falhava (estoque e endereços sem bater para sempre); **(3)** uma **regressão desta etapa**: o desmarcar
+da movimentação rodava duas vezes, e o segundo apagava a marca de um segundo estorno que entrasse no meio — o terceiro estorno
+creditaria de novo (10 → 12; 30 de 30 com o atraso forçado, 0 de 160 sem ele); **(4)** a mensagem da devolução, que ficava de pé
+para sempre num estorno interrompido. Os quatro corrigidos em `50aeb457`. O revisor de concorrência rodou 48 combinações de estorno
+× operação no meio, 30 rodadas cada: **0** erradas; nenhum travamento; o custo é de ~30 ms de espera para quem chega no meio de um
+estorno de 200 séries. O terceiro revisor fez **42 sabotagens**: 30 derrubaram teste, 3 são equivalentes, e **9** mostraram
+cenários sem prova — 7 viraram testes. Ficaram declarados: **C246** a **C249** (todos anteriores à etapa, só com falha de banco).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 118 entregue (2026-10-16):** **o estorno que falha no meio desfaz tudo, em qualquer tipo de movimento.** O estorno de
+  bloqueio, desbloqueio, ajuste e transferência que falha por erro de banco desfaz o que já fez (**C238** resolvido); todo
+  estorno roda inteiro sob a trava do material, e as séries são conferidas de novo dentro dela (**C243** resolvido); a série
+  que já tinha mudado entra no desfazer (**C245** resolvido); a devolução no meio de um estorno diz a verdade (**C240**
+  resolvido); bloquear uma série espera o estorno. **O que é seu:** a consulta **A66** (opcional); as decisões **B769 a B774**
+  (todas reversíveis); os avisos **C246 a C249**; as limitações **(118)** em D e a verificação **(118)** em F.
+  **Próxima: Etapa 119 — ver a "próxima tarefa detalhada" no plano da Etapa 118.**
 
 - **Etapa 117 entregue (2026-10-16):** **a devolução desfeita pelo livro deixa de contar, e o estorno que falha não deixa
   estoque negativo.** Estornar a entrada de uma devolução registrada por engano faz a tela de Devoluções oferecer a entrega de
@@ -24338,7 +24545,7 @@ derrubaram teste, 15 eram equivalentes e **7** mostraram cenários sem prova —
   saída que falha por erro de banco desfaz sob a trava do material (**C235** resolvido). **O que é seu:** a consulta **A65**
   (opcional); as decisões **B759 a B768** (a **B761** — a quarentena fica como está — é decisão sua; as outras são
   reversíveis); os avisos **C238** a **C245** (a **C244** resolvida); as limitações **(117)** em D e a verificação **(117)** em F.
-  **Próxima: Etapa 118 — ver a "próxima tarefa detalhada" no plano da Etapa 117.**
+  *(Próxima, na época: Etapa 118 — entregue acima.)*
 
 - **Etapa 116 entregue (2026-10-16):** **o cadastro aberto há muito tempo não desfaz mais o controle de outra pessoa, e o
   estorno não devolve saldo sem as séries.** O salvar que desfaria o lote ou a série mudados por outra pessoa enquanto o
