@@ -64,6 +64,14 @@ test('[RN-21] a busca de geracao velha (invalidada no meio) nao chama; a seguint
   expect(chamadas).toHaveLength(1);
 });
 
+test('[RN-21] (Fase 5 r3) o ouvinte recebe o MESMO objeto que a busca devolve, inclusive o substituto do corpo vazio', async () => {
+  api.get.mockResolvedValue({});
+  const data = await fetchUserPermissions(5);
+  expect(chamadas).toHaveLength(1);
+  expect(chamadas[0][1]).toBe(data);
+  expect(chamadas[0][1]).toEqual({ permissoes: [], grupos: [], usuario: null });
+});
+
 test('[RN-21] a busca que falha nao chama', async () => {
   api.get.mockRejectedValue(new Error('rede'));
   await expect(fetchUserPermissions(7)).rejects.toThrow('rede');

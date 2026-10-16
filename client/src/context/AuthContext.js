@@ -37,6 +37,10 @@ export const AuthProvider = ({ children }) => {
   // sumirem com o cache e voltarem quando ele vencia (5 min), porque getEffectiveUser caia no usuario velho do contexto. Sem
   // mudanca nas cinco chaves de permissao, o objeto fica o mesmo (sem render, sem localStorage); depois do logout (prev null) ou
   // para outro id, nada muda.
+  // Fase 5 (r2): o localStorage NAO e escrito dentro do updater — o updater roda no render, depois de um refreshUser/logout do mesmo
+  // lote, e gravava por cima o valor velho (ou recriava o `user` depois do logout). O updater so marca; o efeito abaixo grava o
+  // usuario que de fato ficou no contexto (nada, se ficou null).
+  const persistirDoOuvinteRef = useRef(false);
   useEffect(() => onPermissoesGravadas((userId, data) => {
     const usuario = data?.usuario;
     if (!usuario) return;
@@ -47,10 +51,15 @@ export const AuthProvider = ({ children }) => {
       const igual = ['role', 'is_superadmin', 'perfil_almoxarifado', 'perfil_frota'].every((k) => atual[k] === novo[k])
         && JSON.stringify(atual.admin_modulos) === JSON.stringify(novo.admin_modulos);
       if (igual) return prev;
-      localStorage.setItem('user', JSON.stringify(novo));
+      persistirDoOuvinteRef.current = true;
       return novo;
     });
   }), []);
+  useEffect(() => {
+    if (!persistirDoOuvinteRef.current) return;
+    persistirDoOuvinteRef.current = false;
+    if (user) localStorage.setItem('user', JSON.stringify(user));
+  }, [user]);
 
   const applyFreshUser = useCallback((freshUser) => {
     if (!freshUser) return;

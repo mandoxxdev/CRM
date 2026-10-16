@@ -152,6 +152,71 @@ describe('D (127) r2 (Etapa 128) — o perfil retirado nao volta quando o cache 
     expect(gravar.mock.calls.filter(([k]) => k === 'user')).toHaveLength(1);
   });
 
+  // Fase 5 (r3, A2..A5): cada uma das cinco chaves comparadas — so a que mudou, o contexto e o localStorage passam a ter o novo.
+  const BASE_R3 = { role: 'user', is_superadmin: false, admin_modulos: [], perfil_almoxarifado: 'ADMINISTRADOR', perfil_frota: 'GESTOR' };
+  async function abrirCom(usuario, idDaBusca = 7) {
+    api.get.mockImplementation((url) => {
+      if (url === '/auth/me') return Promise.resolve({ data: { user: payload({ perfil_frota: 'GESTOR' }) } });
+      if (url === `/usuarios/${idDaBusca}/grupos`) return Promise.resolve(grupos(usuario));
+      return Promise.resolve({ data: [] });
+    });
+    localStorage.setItem('token', 't');
+    localStorage.setItem('user', JSON.stringify(payload({ perfil_frota: 'GESTOR' })));
+    await act(async () => { root.render(<AuthProvider><Sonda /></AuthProvider>); });
+    await assentar();
+    await act(async () => { await fetchUserPermissions(idDaBusca); });
+    await assentar();
+  }
+  test.each([
+    ['perfil_frota', { perfil_frota: null }, (u) => u.perfil_frota, null],
+    ['role', { role: 'admin' }, (u) => u.role, 'admin'],
+    ['is_superadmin', { is_superadmin: true }, (u) => u.is_superadmin, 1],
+    ['admin_modulos', { admin_modulos: ['compras'] }, (u) => u.admin_modulos, ['compras']],
+  ])('[RN-22] (Fase 5 r3) so %s mudou: o contexto e o localStorage passam a ter o novo', async (_k, over, ler, esperado) => {
+    await abrirCom({ ...BASE_R3, ...over });
+    expect(ler(authRef.user)).toEqual(esperado);
+    expect(ler(JSON.parse(localStorage.getItem('user')))).toEqual(esperado);
+  });
+
+  test('[RN-23] (Fase 5 r3) o id da busca em texto ("7") e o mesmo usuario (String)', async () => {
+    await abrirCom({ ...BASE_R3, perfil_almoxarifado: null }, '7');
+    expect(authRef.user.perfil_almoxarifado).toBeNull();
+  });
+
+  test('[RN-22] (Fase 5 r2) busca e refreshUser no mesmo lote: o localStorage fica igual ao contexto', async () => {
+    await abrir();
+    let soltarGrupos; let soltarMe;
+    api.get.mockImplementation((url) => {
+      if (url === '/usuarios/7/grupos') return new Promise((r) => { soltarGrupos = () => r(grupos({ ...USUARIO_COM, perfil_almoxarifado: 'ALMOXARIFE' })); });
+      if (url === '/auth/me') return new Promise((r) => { soltarMe = () => r({ data: { user: payload({ perfil_almoxarifado: null }) } }); });
+      return Promise.resolve({ data: [] });
+    });
+    const busca = fetchUserPermissions(7);
+    let refresh;
+    await act(async () => { refresh = authRef.refreshUser(); await Promise.resolve(); });
+    await act(async () => { soltarGrupos(); soltarMe(); await busca; await refresh; });
+    await assentar();
+    const ls = JSON.parse(localStorage.getItem('user'));
+    expect(ls.perfil_almoxarifado).toBe(authRef.user.perfil_almoxarifado);
+  });
+
+  test('[RN-22] (Fase 5 r2) busca que chega no mesmo lote do logout nao devolve o user ao localStorage', async () => {
+    await abrir();
+    let soltar;
+    api.get.mockImplementation((url) => (url === '/usuarios/7/grupos'
+      ? new Promise((r) => { soltar = () => r(grupos(USUARIO_SEM)); })
+      : Promise.resolve({ data: [] })));
+    const busca = fetchUserPermissions(7);
+    // Declarado: aqui o React calcula o updater do ouvinte na hora (fila vazia), antes do logout — este cenario passa tambem com o
+    // localStorage escrito dentro do updater. A prova da correcao (a escrita fora do updater) e o cenario do refreshUser acima, que
+    // cai com ela; este prende o resultado.
+    await act(async () => { soltar(); await busca; authRef.logout(); });
+    await assentar();
+    expect(authRef.user).toBeNull();
+    expect(localStorage.getItem('user')).toBeNull();
+    expect(localStorage.getItem('token')).toBeNull(); // metade positiva: o logout valeu
+  });
+
   test('[RN-22] usuario inativo (usuario: null no cache) nao mexe no contexto', async () => {
     await abrir();
     porUrl['/usuarios/7/grupos'] = () => ({ data: { grupos: [], permissoes: [], usuario: null } });
