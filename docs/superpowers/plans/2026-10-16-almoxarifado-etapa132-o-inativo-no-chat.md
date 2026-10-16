@@ -112,15 +112,15 @@ dados vazia numa porta livre.
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 — tronco (núcleo: o socket)** — `socket.js`, o export de `idDoTokenValido` (RN-01..RN-04, a parte do `socket.js` da RN-05), o cliente mínimo de teste,
+- [x] **T1 — tronco (núcleo: o socket)** — `socket.js`, o export de `idDoTokenValido` (RN-01..RN-04, a parte do `socket.js` da RN-05), o cliente mínimo de teste,
   `chatSocketSessaoDoInativo.api.test.js`; o `chatSocketTokenNaUrl.api.test.js` muda à vista (assinatura com `db`, usuário 7 no banco,
   a regex da fiação).
-- [ ] **T2 — tronco/integração (núcleo: as três portas)** — `index.js` (RN-05 do `index.js`) + `chatSocketInativoNoServidor.api.test.js`
+- [x] **T2 — tronco/integração (núcleo: as três portas)** — `index.js` (RN-05 do `index.js`) + `chatSocketInativoNoServidor.api.test.js`
   (RN-06). Depende da T1.
-- [ ] **T3 — galho (client)** — `chatSocket.js` e o `logout` do `AuthContext.js` (RN-07) + `chatSocketSessaoEncerrada.test.js`, com controle positivo. Consome só o
+- [x] **T3 — galho (client)** — `chatSocket.js` e o `logout` do `AuthContext.js` (RN-07) + `chatSocketSessaoEncerrada.test.js`, com controle positivo. Consome só o
   contrato do evento.
-- [ ] **T4 — galho (C272)** — `todolistService.js` + `todolistUsuariosSemPapel.api.test.js` (RN-08). Independente das outras.
-- [ ] **T5 — fechamento** — novidades (B848+, C271 e C272 resolvidas, C274+ — a reentrada na conversa depois de cair a rede —, D (132)
+- [x] **T4 — galho (C272)** — `todolistService.js` + `todolistUsuariosSemPapel.api.test.js` (RN-08). Independente das outras.
+- [x] **T5 — fechamento** — novidades (B848+, C271 e C272 resolvidas, C274+ — a reentrada na conversa depois de cair a rede —, D (132)
   das URLs assinadas e das telas por fora, F (132), a seção da etapa, cabeçalho), spec 23 (o núcleo), mapa, guia, manual, este plano
   (retro, "Próxima tarefa detalhada — Etapa 133"), o "defeito que escapou" da retro da 131. CLAUDE.md: a trava **não** muda.
 
@@ -139,12 +139,96 @@ sem a releitura (RN-03), o `encerrarSocketsSeInativo` que não derruba no erro (
 
 ## Execução — o que aconteceu
 
-*(preencher)*
+- **Fase 0** — medida por mim no servidor real (`scratchpad/e132/sonda-chat.js`, socket.io-client 4.8.3 do client, `index.js` com pasta
+  vazia): as três portas (PATCH de status, PUT, DELETE) deixavam o socket aberto recebendo `SEGREDO-*`; conexão nova aceita; o `typing`
+  do desativado chegava ao administrador. Boot do `index.js` em ≈ 1,6 s (`tempo-boot.sh`) — viabilizou a RN-06 dentro da suíte.
+- **Fase 2 antes do código de produção:** 3 Important + 13 Minor, todos aceitos (ver o topo). Os testes da T1 foram escritos e rodados
+  **vermelhos** antes do código (3/22 — os 3 verdes eram comportamento de hoje: ativo conecta, sem token, não participante); o da T4 (0/5) e
+  os do client (2/7; o "[F2-I2] anterior" passava vazio, provado depois pela sabotagem C1). Design e plano `a5369920`.
+- **Commits:** T1 `6a77a4cb`, T2 `4c451c60`, T4 `45f604bb`, T3 `7ca9e395`; Fase 5 `55226494` (socket), `1d13093e` (index.js),
+  `5950809d` (todolist), `146065f4` (client).
+- **Divergências do plano:** (1) o teste da Lista de Tarefas nasceu com `fetch` e o Node no Windows derrubava o processo no
+  `process.exit` (assert do libuv com o keep-alive do `fetch`) — trocado por `supertest`, como os outros; (2) o I3 (o `index.js` órfão)
+  foi **medido**: no Windows o job object do libuv já mata o neto quando o pai morre (sem `detached`), e com `detached: true` sem o
+  preload o neto sobrevive, com o preload sai (`scratchpad/e132/orfao.js`) — o preload fica para o Linux; (3) **o contrato "nenhuma rota
+  HTTP muda" deixou de valer na Fase 5**: o `PUT /api/usuarios/:id` do próprio usuário com `ativo` falso passa a 403 *"Não é possível
+  desativar o próprio usuário"*, o `PATCH …/status` compara o id pelo número, e o PUT sem `ativo` mantém o gravado (`COALESCE`) — B852;
+  (4) a reentrada na conversa depois de reconectar, que o plano registraria como C nova, foi **corrigida** na Fase 5 (B849) — a C274 virou
+  outro achado (o `mensagem_excluida` com o id cru).
+- **Controles positivos** (âncora contada = 1, md5 antes/sabotado/restaurado, restauro por cópia): **23** antes da Fase 5
+  (`scratchpad/e132/bateria.js` S1..S17 e `bateria-client.js` C1..C6) — todas caem pelo cenário certo; **16** da Fase 5
+  (`bateria-f5.js` D1..D16): 15 caem pelo cenário certo (D1 pelo crash do processo — o servidor real também cairia; D5, D6 e D8 pelo
+  teste certo, o casamento do script cortou o nome em 150 caracteres), **1 equivalente provado** (D7: sem a marca `encerrada`, o reconectar
+  já é barrado porque o aviso da mesma sessão limpa o token e o de outra sessão tem token diferente).
+- **Boot** com pasta de dados vazia: a RN-06 dentro da suíte (o `index.js` real) e a sonda `sonda-chat.sh` antes (o quadro da Fase 0),
+  depois da T2 e depois da Fase 5: as três conexões caem como `io server disconnect` e não voltam; as três conexões novas recusadas com L11;
+  o `ok` segue recebendo. Log com 2 linhas de erro — os dois `duplicate column` da migração de `materiais_escritorio`, anteriores.
+  **Migração:** nenhuma.
+- **CLAUDE.md:** a seção da trava **não mudou** (nada aqui mexe em saldo).
+- **Suíte antes dos commits de código (T1–T4):** `test:api` **443/443**; `test:almoxarifado` **44/0**; `test:validation` 4/0,
+  `test:safealter` 3/0, `test:sqlite` 10/0; client **131** suítes / **1763** testes; `CI=true build` *Compiled successfully*.
+- **Fase 5** — três revisores frescos em paralelo sob a trava de máquina; o de sabotagem numa worktree própria (`CRM-wt-e132-r3`, removida
+  com as junções desfeitas antes). Eu não rodei nada enquanto eles trabalhavam.
+  - **Regra (r1): 0 Critical/Important, 4 Minor** (sonda `r1-sonda.js`, polling e duas abas reproduzidos): "reconecta no próximo gesto"
+    era otimista e a conversa aberta não voltava depois de reconectar → corrigido (`146065f4`, B849); `emit('typing')` sem payload lançava
+    fora do `try` → corrigido (`55226494`); duas abas com o mesmo usuário relogado e o socket recriado sem os ouvintes do ChatPage →
+    declarados (D (132)) / sem ação.
+  - **Permissão (r2): 2 Important + 1 Minor, anteriores à etapa** (sonda `r2-sonda.js`, tabela perfil × canal no servidor real): o
+    administrador se desativava por `/usuarios/02/status` (N1) → corrigido; o administrador do sistema desativa um super (N2) → pergunta
+    **B853**; e o **M8** da Fase 2 confirmado e subido a Important (o PUT sem `ativo` tranca o último super fora) → corrigido com o PUT do
+    próprio usuário (`1d13093e`, B852, A79); o `mensagem_excluida` com o id cru → **C274**.
+  - **Sabotagem (r3): 49** sabotagens novas, **11** sobreviveram: **8** (a) faltava asserção → viraram cenários (`55226494`,
+    `5950809d`, `146065f4`) e as 8 caem na bateria D (D9..D16); **3** (b) equivalentes provados (K4, K5, K12).
+- **Suíte final (depois da Fase 5, antes da documentação):** `test:api` **443/443**; `test:almoxarifado` **44/0**; `test:validation`
+  4/0, `test:safealter` 3/0, `test:sqlite` 10/0; client **131** suítes / **1768** testes; `CI=true build` *Compiled successfully*.
+- **T5 — fechamento** (o commit de documentação — ver `git log`): novidades (cabeçalho, A79, B848–B854, C271 e C272 resolvidas, C274, D
+  (132), F (132), a seção da etapa, "Onde estamos"), spec 23, mapa, guia, manual (5.2e), este plano, o "defeito que escapou" da retro da 131.
+
+## Tasks — estado
+
+- [x] **T1** `6a77a4cb` (Fase 5 `55226494`) · [x] **T2** `4c451c60` (Fase 5 `1d13093e`) · [x] **T3** `7ca9e395` (Fase 5 `146065f4`) ·
+  [x] **T4** `45f604bb` (Fase 5 `5950809d`) · [x] **T5** — o commit de documentação.
 
 ## Retro (4 números)
 
-*(preencher)*
+1. **Rodadas de correção até verde:** **1** (Fase 5). Teste antigo que mudou à vista: `chatSocketTokenNaUrl.api.test.js` (a assinatura).
+2. **Achados da revisão:** Fase 2 — **3 Important + 13 Minor, todos reais** (as afirmações da biblioteca confirmadas por sonda). Fase 5 —
+   r1 **4 Minor** reais (2 corrigidos, 2 declarados); r2 **2 Important + 1 Minor** reais, anteriores à etapa (1 corrigido, 1 pergunta B853,
+   1 C) + o M8 confirmado e corrigido; r3 **11** sobreviventes — 8 viraram cenários, 3 equivalentes provados; **0** ruído.
+3. **Paralelismo:** **0** galhos em paralelo de fato (T3 e T4 são galhos, mas o "um teste por vez" os serializa), **0** retrabalho; **1**
+   revisor na Fase 2 e **3** em paralelo na Fase 5 sob a trava.
+4. **Defeito que escapou:** *(preencher na Etapa 133)*.
 
 ## Próxima tarefa detalhada — Etapa 133
 
-*(preencher no fechamento)*
+*(A série desta etapa foi B848–B854, C274, A79 — a 133 começa em **B855**, **C275**, **A80**; confira com `grep -oE` antes.)*
+
+**Medido em 2026-10-16 (fechamento desta etapa):** as candidatas do núcleo sem o P.O. que sobram são a **C273** e a **C274**.
+
+1. **C273 — as rotas com `role === 'admin'` exato (núcleo) — a principal.** `server/index.js`: as rotas de `/api/permissoes/*` (≈ 18487
+   `GET /usuario/:id`, 18508 `/verificar`, 18570 `POST /`, 18641–18789 os grupos e os usuários do grupo, 20188 `DELETE /usuario/:id/modulos`)
+   recusam com `req.user.role !== 'admin'` — o super administrador com outro papel e o papel *Admin* com maiúscula levam 403, enquanto o
+   cadastro de usuários aceita (`canManageUsers` = `isSystemAdmin`, `services/systemPermissions.js:42`). **Efeito na tela (medir):**
+   `UsuarioForm.js:276`/`:284` grava os módulos pelo `DELETE /permissoes/usuario/:id/modulos` e `POST /permissoes` — o super sem o papel
+   *admin* salva o cadastro e pode **perder** a gravação das permissões (403 no meio do salvar?); `Permissoes.js` inteira. Fora das
+   permissões, o mesmo padrão em ≈ 14323 (aprovações), 17947–18030 (materiais de escritório da Engenharia), 20667, 22397 — **medir cada um**
+   e decidir por rota (nem todo "admin" é "gerencia usuários"). **Candidato:** trocar a régua das rotas de permissões por `canManageUsers`
+   (o que o cadastro já usa). **Atenção:** é **ampliação de acesso** (o super sem o papel e o *Admin* com maiúscula passam a mexer em
+   permissões) — registrar na letra B com o descartado (manter exato; ou só o super). Teste de rota com o registrador de produção — as
+   rotas estão no `index.js`: extrair para um serviço (como a 131 fez com as listas) ou estender o teste que sobe o `index.js` real
+   (`chatSocketInativoNoServidor.api.test.js` é o molde: porta livre, pasta vazia, preload `morreComOPai`). Boot com pasta vazia obrigatório.
+2. **C274 — o `mensagem_excluida` com o id cru (núcleo, pequeno).** `server/routes/chat.js:253` emite para `` `conversa:${req.params.id}` ``
+   — com `/conversas/03/...` a sala fica `conversa:03`; normalizar com `Number`. Cabe junto da C273.
+3. **Dependem do P.O. — NÃO implemente:** **B853** (o administrador do sistema desativa um super?), **B808**, **B755**, **B761**/**C239**,
+   **C224**, o resto da **C225**, **C228**, **C219**, **C230**, o reparo da **C246** (e a **C247**), a tabela de conversões e o grupo acima
+   de família, a **régua do tempo de recebimento (E2)**, a **C268**, a **C269**; na 05, os itens de produto e a **C198**; na 06, a **B11** e
+   a Engenharia; na 21, a valorização por cliente e previsto × realizado; na 22, **B13**, **B101**/G30, **G38**.
+
+**Escolhida: a C273 (1)**, com a C274 (2) junto — as duas do núcleo, reversíveis (a C273 com o registro de ampliação de acesso na letra B).
+Depois delas, as candidatas do núcleo sem o P.O. acabam: a 134 mede o mapa `specs/modulo-almoxarifado/README.md` e o do Compras
+(`specs/modulo-compras/README.md`) por algo de valor que não dependa do P.O.
+
+**O que já está pronto e não precisa reabrir:** o socket do chat (`services/chat/socket.js`: o handshake, o `join`/`typing` e as duas
+`encerrarSockets*`, com o cliente mínimo `tests/helpers/clienteSocketIo.js`), as três portas do `index.js`, o client do chat
+(`chatSocket.js`: o token do socket, o aviso, a reconexão e a reentrada), o `enrichUserFromDb` da 131 e o teste que sobe o `index.js`
+real (molde para a RN de rota da C273).

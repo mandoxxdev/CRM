@@ -1045,7 +1045,13 @@ O sistema relê o cadastro de quem está usando a cada ação. Usuário **desati
 
 e a tela volta ao login, com o aviso *"Sessão encerrada — o seu usuário foi desativado ou removido. Fale com o administrador do sistema."*. Ele só volta a entrar depois de reativado; até lá, o login responde *"Email ou senha inválidos"* (a mesma frase da senha errada, para não revelar quem existe). Se a releitura do cadastro falhar porque o banco está ocupado, a ação responde *"Banco temporariamente ocupado. Tente novamente em alguns segundos."* e a tela tenta de novo sozinha — ninguém é desconectado nem ganha ou perde poder por isso.
 
-O que a desativação **não** alcança na hora: o **chat em tempo real** (a conexão já aberta continua recebendo as mensagens das conversas em que a pessoa está, e uma conexão nova é aceita enquanto a sessão não vence) e os **links de fotos e avatares** já gerados, que abrem até vencer (algumas horas). Ao desligar alguém, desative o usuário e peça que feche o navegador.
+O **chat em tempo real** segue a mesma regra. No instante em que o usuário é desativado (pelo botão de inativar da lista ou pela caixa *Usuário ativo* do formulário) ou excluído, a conexão de chat dele recebe o aviso de sessão encerrada e cai, e a tela dele volta ao login com o aviso acima — sem ele clicar em nada. Uma conexão nova do chat com a sessão antiga é recusada com *"Sessão encerrada — o usuário foi desativado ou removido"*, e entrar numa conversa ou "digitar" também relê o cadastro. Reativado, ele entra de novo e encontra as conversas com o histórico. Se o banco estiver ocupado na hora de conectar, o chat conecta assim mesmo — o conteúdo das conversas continua atrás da releitura feita ao entrar nelas. Se a conexão cair por qualquer outro motivo, o chat reconecta sozinho e volta a receber na conversa aberta.
+
+Ao **sair**, o chat é fechado junto: quem entrar depois no mesmo navegador abre o seu, sem herdar o de quem saiu.
+
+Ninguém se desativa: tanto o botão de inativar quanto o formulário recusam desativar o próprio usuário com *"Não é possível desativar o próprio usuário"*. Editar um usuário sem informar se ele está ativo mantém o que estava gravado.
+
+O que a desativação **não** alcança: os **links de fotos, avatares e anexos** já gerados abrem até vencer (de 15 minutos a 25 horas, conforme o tipo) — eles não consultam a sessão; a pessoa desativada não consegue link novo. E algumas telas que baixam arquivo por um caminho próprio recebem a recusa do servidor sem voltar ao login naquele clique; o clique seguinte volta.
 
 ### 5.3 Usuário sem perfil definido é tratado como chão de fábrica
 

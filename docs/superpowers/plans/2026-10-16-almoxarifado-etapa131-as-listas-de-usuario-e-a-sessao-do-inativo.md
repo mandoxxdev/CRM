@@ -178,7 +178,11 @@ um usuário desativado com o token na mão levando 401. Sem migração (nenhuma 
    provados; **0** ruído.
 3. **Paralelismo:** **0** galhos em paralelo de fato (a T4 é galho, mas o "um teste por vez" a serializa), **0** retrabalho; **1** revisor
    na Fase 2 e **3** em paralelo na Fase 5 sob a trava.
-4. **Defeito que escapou:** *(preencher na Etapa 132)*.
+4. **Defeito que escapou:** **1** — o `PUT /api/usuarios/:id` sem o campo `ativo` gravava `NULL` (anterior à 131), e a régua exata da 131
+   (`ativo = 1` no enriquecimento e no login) passou a trancar esse usuário fora — inclusive o último super administrador, porque a trava
+   dele (`countActiveSuperAdmins`, `COALESCE(ativo, 1)`) conta o `NULL` como ativo. Achado pelo r2 da Fase 5 da **132**, reproduzido no
+   servidor real; corrigido em `1d13093e` (`ativo = COALESCE(?, ativo)`), com a consulta **A79** para o que ficou assim antes. A 131 mediu
+   quem **lê** `ativo`, não quem o **grava** — a lição: régua nova sobre uma coluna exige medir os escritores dela também.
 
 ## Próxima tarefa detalhada — Etapa 132
 

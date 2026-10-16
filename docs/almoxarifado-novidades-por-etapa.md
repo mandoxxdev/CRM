@@ -11,10 +11,14 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-16):** **Etapa 131 fechada** (do núcleo: os seletores de responsável deixam de mostrar o papel,
+> **Onde o desenvolvimento está (2026-10-16):** **Etapa 132 fechada** (do núcleo: o usuário desativado ou apagado sai também do **chat
+> em tempo real** na hora — a conexão aberta cai com o aviso de sessão encerrada e a conexão nova é recusada — **C271** resolvido, **B848**
+> a **B850**; a Lista de Tarefas deixa de mostrar o papel de todos — **C272** resolvido, **B851**; e o administrador não se desativa mais
+> pelo formulário nem pelo id com zero, e editar um usuário pela API sem o campo *ativo* não o tranca fora — **B852**, com a consulta
+> **A79**); a próxima é a **133** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 131 fechada** (do núcleo: os seletores de responsável deixam de mostrar o papel,
 > o setor e o departamento dos outros usuários a quem não gerencia usuários — **C270** resolvido, **B844**; e o usuário desativado ou
-> apagado é desconectado na primeira ação, com o aviso *"Sessão encerrada"* no login — **B845**, **B846**); a próxima é a **132** — ver
-> "Onde estamos e o que vem a seguir".
+> apagado é desconectado na primeira ação, com o aviso *"Sessão encerrada"* no login — **B845**, **B846**); a próxima era a **132**.)*
 > *(Antes: **Etapa 130 fechada** (os dados fiscais não mudam mais o lote, as séries nem o valor de
 > um item que já deu entrada no estoque — recusam com a frase do que fazer, e o painel trava esses campos: **C267** resolvido, com a
 > consulta **A78** para o que já foi mudado antes; e, do núcleo, o cadastro e as permissões de um usuário passam a ser lidos só por ele
@@ -179,8 +183,10 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Setenta e oito itens para rodar em produção ANTES do deploy — setenta e cinco são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Setenta e nove itens para rodar em produção ANTES do deploy — setenta e seis são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
 
+*(**Atualizado em 2026-10-16 (Etapa 132) de setenta e oito para setenta e nove**, com a **A79** — os usuários gravados com *ativo* vazio
+ou com outro valor, que não conseguem entrar; opcional e somente leitura.)*
 *(**Atualizado em 2026-10-16 (Etapa 130) de setenta e sete para setenta e oito**, com a **A78** — os itens de recebimento cujo lote ou
 séries no documento já não batem com o estoque (o que os dados fiscais deixavam mudar depois da entrada — **C267**); opcional e somente
 leitura.)*
@@ -2924,12 +2930,29 @@ almoxarifado estorna a entrada e dá a entrada de novo com os certos (**C269** �
 esperar). Uma série cujo vínculo com o recebimento falhou na entrada (registrado só no log do servidor) também aparece; confira em
 **Lotes → Séries**. O **valor** não tem como ser conferido depois: o livro de movimentações não guarda custo.
 
+**A79 (NOVA, da Etapa 132 — usuários com *ativo* vazio ou diferente de 0 e 1).** Editar um usuário pela API **sem** o campo *ativo*
+gravava o campo vazio (o formulário de **Admin → Usuários** sempre manda o campo, então isto só acontecia por chamada direta). Desde a
+Etapa 131 quem não tem *ativo = 1* não entra (o login responde *"Email ou senha inválidos"*) e, se estava logado, leva a sessão
+encerrada — mas a conta de super administradores ativos (a trava do último super) ainda o conta como ativo. A Etapa 132 parou de gravar o
+vazio (**B852**); esta consulta acha quem ficou assim antes.
+
+```sql
+SELECT id, nome, email, ativo, is_superadmin
+FROM usuarios
+WHERE ativo IS NULL OR ativo NOT IN (0, 1);
+```
+
+**Como ler o resultado:** **vazia** — nada a fazer. **Linhas:** cada uma é um usuário que não consegue entrar. Se ele deve estar ativo:
+**Admin → Usuários → editar → marque *Usuário ativo* → Salvar** (grava 1). Se deve estar desativado: o botão de inativar da lista
+(grava 0). **Atenção ao `is_superadmin = 1`**: se todos os super administradores que você conhece aparecem aqui, quem ainda entra como
+super é só quem **não** aparece — reative pelo formulário de um super que entra, antes de qualquer outra mudança.
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B847; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B854; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -9219,6 +9242,58 @@ mensagem do formulário — agora o formulário mostra *"Email ou senha inválid
 **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da **C246**/**C247**, a tabela de
 conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268** e a **C269** continuam esperando vocês.
 
+**B848 (NOVA, da Etapa 132; do núcleo) — o chat em tempo real confere se o usuário está ativo.** Fecha a **C271** (a parte do chat).
+Até aqui a conexão do chat só conferia o token: o desativado (e o apagado com a conexão aberta) continuava recebendo o conteúdo das
+mensagens, e abria conexão nova com o token velho (medido no servidor de verdade, pelas três portas que desativam ou apagam — o botão de
+inativar da lista, a caixa *Usuário ativo* do formulário e a exclusão). Agora: (1) **ao conectar**, o servidor relê o usuário com a mesma
+régua da sessão (**B845**: só *ativo = 1*); sem linha ativa, recusa com *"Sessão encerrada — o usuário foi desativado ou removido"*; (2)
+**ao entrar numa conversa e ao "digitar"**, relê de novo — sem linha ativa, avisa e desconecta, sem entrar; (3) **ao desativar ou excluir**,
+as conexões abertas daquele usuário recebem o aviso e caem na hora. Uma decisão junto: **banco ocupado ao conectar deixa conectar** (como
+antes), porque o chat do navegador não tenta de novo sozinho depois de uma recusa — recusar deixaria um usuário **ativo** sem tempo real
+até o próximo clique; o conteúdo continua protegido pelo passo (2). **Descartado:** recusar com o banco ocupado (derruba o ativo);
+reler o usuário a cada mensagem enviada (custo por mensagem × participantes; (2) e (3) cobrem); tirar o desativado das conversas ao
+desativar (perderia o histórico ao reativar — e a desativação é "reversível, mantém o histórico"). **Reversível.**
+
+**B849 (NOVA, da Etapa 132; do núcleo) — editar o usuário com o banco ocupado não desloga ninguém; o chat reconecta sozinho.** Ao salvar
+o formulário de um usuário, o servidor relê se ele ficou ativo (o campo vem do formulário como veio). Se essa releitura falhar, a
+conexão do chat dele cai **sem** o aviso de sessão encerrada — achado da revisão do plano: com o aviso, um usuário **ativo** seria
+deslogado com a frase de desativado — e o navegador reconecta em 1 segundo (quem está mesmo desativado leva a recusa ao reconectar). E,
+achado da revisão do código: ao reconectar (depois disso ou de uma queda de rede), o chat **volta a entrar na conversa aberta** — antes ela
+parava de receber em tempo real até a pessoa trocar de conversa (anterior à etapa). **Descartado:** não derrubar no erro (o desativado
+seguiria recebendo a conversa em que já estava). **Reversível.**
+
+**B850 (NOVA, da Etapa 132; do núcleo) — o chat do navegador sai junto com a sessão, e a sessão de outro usuário na mesma aba não se
+mistura.** Recebendo o aviso de sessão encerrada (ou a recusa ao conectar), a tela limpa a sessão e volta ao login com o aviso da **B846**.
+Achado da revisão do plano: **sair** não recarregava a página nem fechava a conexão do chat — no computador compartilhado, quem entrasse
+depois na mesma aba seguia com a conexão (e o tempo real) de quem saiu, e o desativar de quem saiu deslogaria quem entrou. Agora sair
+fecha a conexão; a conexão guarda de quem é e é refeita quando outro entra; o aviso de uma conexão que não é mais a da aba é ignorado.
+**Reversível.**
+
+**B851 (NOVA, da Etapa 132; do núcleo) — a Lista de Tarefas mostra de cada usuário só id, nome e e-mail.** Fecha a **C272**. A lista de
+usuários do quadro (o seletor de responsável) devolvia o **papel** de todos os ativos a quem tem o módulo; a tela só lê o nome. Agora id,
+nome e e-mail, para todos (inclusive quem gerencia usuários). **Descartado:** a forma por quem pede da **B844** (quem gerencia usuários
+continuaria recebendo o papel numa tela que não o lê); tirar o e-mail (fora do pedido). **Reversível.**
+
+**B852 (NOVA, da Etapa 132; do núcleo) — o administrador não se desativa pelo formulário nem pelo endereço com zero, e editar sem o campo
+*ativo* não tranca o usuário fora.** Achados da revisão de permissão (reproduzidos no servidor de verdade), anteriores à etapa: (1) o
+botão de inativar recusava desativar a si mesmo, mas a caixa *Usuário ativo* do **formulário** deixava (o administrador caía na hora) —
+agora o formulário recusa com a mesma frase, *"Não é possível desativar o próprio usuário"*; (2) o endereço com zero à esquerda
+(`/usuarios/02/status`) passava pela recusa do próprio usuário — agora compara o número; (3) editar pela API **sem** o campo *ativo*
+gravava o campo vazio, e desde a **B845** isso tranca o usuário fora (e o último super administrador também, porque a trava dele conta o
+vazio como ativo) — agora, sem o campo, fica o que está gravado. A consulta **A79** acha quem ficou assim antes. **Reversível.**
+
+**B853 (NOVA, da Etapa 132; do núcleo) — EM ABERTO: o administrador do sistema que não é super pode desativar um super administrador?**
+Medido na revisão: o botão de inativar só exige gerenciar usuários — o administrador do sistema desativa um super administrador (só o
+**último** super ativo é protegido); a **exclusão** já exige ser super. **Hoje:** pode (não mudou nada). **Opção (a)** — manter: quem
+gerencia usuários desativa qualquer um, menos o último super. **Opção (b)** — desativar (e editar) um super só por outro super, como a
+exclusão: a consequência é que o administrador do sistema não consegue mais tirar um super que saiu da empresa sem chamar outro super.
+Não implementado — é regra de quem manda em quem.
+
+**B854 (NOVA, da Etapa 132) — a próxima etapa (133).** Ver a "próxima tarefa detalhada" no plano da Etapa 132. A **B808**, a **B755**, a
+**B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da **C246**/**C247**, a tabela de
+conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e a **B853** continuam
+esperando vocês.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -11833,7 +11908,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      o setor, o departamento, se é oculto e a data de criação (`por-modulo/admin` lista os administradores); `/api/usuarios/comercial` e
      `/api/usuarios/filtrar` também devolvem o papel (a segunda só para uma marca que o próprio tem). São os seletores de responsável das
      telas — fechar exige medir cada um, como a **B841** fez com as três. **O que fazer:** nada por enquanto; candidata de etapa do núcleo.
-271. **NOVO (da Etapa 131; do núcleo, anterior a ela) — o desativado continua no chat e nas imagens assinadas.** A sessão encerrada
+271. **✅ RESOLVIDO NA ETAPA 132 (B848–B850), a parte do chat; os links assinados e as telas por fora ficam declarados em D (132)** —
+     ~~**NOVO (da Etapa 131; do núcleo, anterior a ela) — o desativado continua no chat e nas imagens assinadas.**~~ *(Etapa 132: a
+     conexão do chat relê o usuário ao conectar, ao entrar na conversa e ao digitar, e cai na hora ao desativar ou excluir; o "O que
+     fazer" abaixo — pedir para fechar o navegador — não é mais necessário para o chat.)* A sessão encerrada
      (**B845**) vale para tudo que passa pelo servidor com o token, mas há três caminhos que não passam: (1) o **chat em tempo real** só
      confere o token — medido: depois de desativado, o usuário abre uma conexão nova com o token velho (até 24 h), entra na conversa de que
      participa e **recebe o conteúdo das mensagens novas**; a conexão já aberta (inclusive a do usuário **apagado**) segue recebendo das
@@ -11842,7 +11920,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      modais de família e grupo, fornecedores do grupo, a ficha do cliente, o modelo da proposta) — recebem a recusa sem desconectar; o
      próximo clique desconecta. **O que fazer:** ao desligar alguém, desative **e** peça para fechar o navegador; candidata de etapa do
      núcleo (reler o usuário ao conectar e ao entrar na conversa, e derrubar as conexões dele ao desativar).
-272. **NOVO (da revisão da Etapa 131; do núcleo, anterior a ela) — a lista de usuários da Lista de Tarefas mostra o papel de todos.**
+272. **✅ RESOLVIDO NA ETAPA 132 (B851)** — ~~**NOVO (da revisão da Etapa 131; do núcleo, anterior a ela) — a lista de usuários da
+     Lista de Tarefas mostra o papel de todos.**~~ *(Etapa 132: id, nome e e-mail; a tela de perfis do almoxarifado, de menor peso, não
+     mudou.)*
      `GET /api/todolist/usuarios` e o quadro (`/api/todolist/board`) devolvem o **papel** (administrador ou não) de todos os usuários
      ativos a quem tem o módulo Lista de Tarefas — o mesmo que a **C270** era, por outra porta (medido). Na mesma linha, de menor peso: a
      tela de perfis do almoxarifado mostra a quem a configura quem é forçado a Administrador (o super administrador e o administrador do
@@ -11852,6 +11932,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      permissão.** As rotas de permissões (`/api/permissoes/…`) aceitam só o papel *admin* escrito exatamente assim; o super administrador
      com outro papel, ou um papel *Admin* com maiúscula, leva recusa — enquanto o cadastro de usuários os aceita. **O que fazer:** dê o
      papel *admin* a quem é super administrador; candidata de etapa do núcleo (usar a mesma régua do cadastro).
+274. **NOVO (da revisão da Etapa 132; do núcleo, anterior a ela) — apagar uma mensagem do chat pelo endereço com zero não avisa os
+     outros na hora.** A exclusão de mensagem avisa a conversa pelo número escrito no endereço; com zero à esquerda (`/conversas/03/…`) a
+     mensagem é apagada, mas o aviso vai para uma conversa que não existe — os outros só veem a exclusão ao recarregar. Só alcança quem
+     chama a API à mão (a tela manda o número sem zero). **O que fazer:** nada; candidata de etapa do núcleo (normalizar o número).
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -13084,7 +13168,21 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   `/filtrar` continua comparando o setor exato (as outras duas ignoram espaço e caixa) (**B844**).
 - **(131) Na corrida rara** em que o usuário é desativado ou apagado entre a releitura da sessão e a da própria lista, a lista responde
   como antes (*"Usuário inativo"* ou *"Usuário não encontrado"*); a ação seguinte já leva a sessão encerrada.
-- **(131) O chat em tempo real e os links assinados não desconectam o desativado** (**C271**).
+- **(131) O chat em tempo real e os links assinados não desconectam o desativado** (**C271**). *(Etapa 132: o chat sim, **B848**; os
+  links, ver (132) abaixo.)*
+- **(132) Os links já gerados de fotos, avatares e anexos continuam abrindo até vencer** — o almoxarifado em 15 a 20 minutos, os anexos do
+  chat em 8 a 9 horas, as fotos da proposta em 12 a 13 horas, os avatares em 24 a 25 horas. Eles não consultam a sessão de propósito (cada
+  imagem de cada lista teria de ir ao banco). O desativado **não** consegue link novo — só reabre o que já tinha recebido, dentro do prazo.
+- **(132) Algumas telas pedem arquivo por fora do canal comum** (a ficha do cliente, o modelo da proposta, os modais de família e de
+  grupo, fornecedores do grupo, a proposta): o servidor recusa o desativado do mesmo jeito; a tela só não volta ao login nesse clique — o
+  próximo clique volta.
+- **(132) Na corrida rara** em que o usuário é desativado no exato instante em que a conexão do chat abre, ela pode ficar aberta recebendo
+  só o aviso de "conversa atualizada" (o número da conversa, sem conteúdo) — esse aviso faz a tela buscar a lista, que já recusa e
+  desconecta; e entrar numa conversa relê o usuário e o derruba.
+- **(132) Com o banco ocupado na hora de conectar, o chat conecta** (o desativado também, nesse instante) — o conteúdo continua atrás da
+  entrada na conversa, que relê o usuário (**B848**).
+- **(132) Duas abas do mesmo usuário, saindo e entrando de novo numa delas**: a outra aba ignora o aviso de sessão encerrada da conexão
+  antiga (é de outra sessão) e só volta ao login no próximo clique; a conexão dela já foi derrubada pelo servidor, então nada vaza.
 
 ### E. Regras que foram DEDUZIDAS e nunca confirmadas com vocês — perguntas, não requisitos atendidos (E1, a remessa mista; E2, o tempo de recebimento)
 
@@ -13996,6 +14094,15 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(132) Um boot de verdade foi feito, sem navegador — e virou teste da suíte.** O servidor de verdade sobe com pasta de dados vazia dentro
+da suíte (o arquivo novo do chat): quatro usuários com a conversa aberta; o botão de inativar, a caixa do formulário e a exclusão derrubam
+a conexão deles com o aviso; a mensagem seguinte não chega; a conexão nova é recusada; quem fica ativo continua recebendo; reativado, volta
+a receber; e as recusas (o administrador desativando a si mesmo, pelos dois caminhos) não derrubam ninguém. A sonda com o cliente de
+chat de verdade (o mesmo do navegador) repetiu o quadro: as três conexões caíram como *"io server disconnect"* e não tentaram voltar
+sozinhas. O que **só o navegador** prova: o roteiro da Etapa 132 no guia — a tela do chat aberta do desativado voltando ao login com o
+aviso amarelo no instante em que o administrador clica em inativar, e o administrador que tenta desmarcar o próprio *Usuário ativo*
+vendo a recusa no formulário.
 
 **(131) Um boot de verdade foi feito, sem navegador.** Pasta de dados vazia, servidor subido, login do administrador semeado, as seis
 leituras de usuário respondendo; um usuário comum criado, logado (as listas vieram reduzidas), **desativado** pelo administrador — e o
@@ -27019,16 +27126,90 @@ com o desativado recebendo mensagens), da Lista de Tarefas (**C272**) e das tela
 sabotagens além das **22** já feitas: **31** mostraram cenário faltando (filtros da `/filtrar` sem caso, ordem por nome, limites, o
 erro da lista, o perfil do administrador do módulo, o "respondeu e seguiu") e viraram cenários; **8** foram provadas inofensivas.
 
+## Etapa 132 — O desativado sai do chat na hora, e a Lista de Tarefas sem o papel (2026-10-16)
+
+Do núcleo, fechando o que a Etapa 131 deixou aberto. A 131 fez o usuário desativado (ou apagado) voltar ao login na primeira ação — mas o
+**chat em tempo real** não passava por essa conferência: a conversa aberta dele seguia recebendo as mensagens novas, e ele podia
+reconectar com o token velho por até 24 horas. Agora, no instante em que o administrador desativa ou exclui alguém, a tela de chat dessa
+pessoa recebe o aviso de sessão encerrada e volta ao login; e uma conexão nova é recusada. De quebra: a Lista de Tarefas deixa de mostrar o
+papel de todos os usuários, o administrador não consegue mais se desativar pelo próprio formulário, e o chat volta a receber na conversa
+aberta depois de uma queda de rede.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| O desativado (e o excluído) com o chat aberto continuava recebendo as mensagens novas | A conexão cai na hora, com o aviso; a tela volta ao login com *"Sessão encerrada — o seu usuário foi desativado ou removido. Fale com o administrador do sistema."* (**B848**, **B850**) |
+| Conexão nova do chat com o token velho era aceita (até 24 h) | Recusada com *"Sessão encerrada — o usuário foi desativado ou removido"* (**B848**) |
+| O "digitando…" do desativado aparecia para os outros | Não aparece; a conexão dele cai (**B848**) |
+| Quem entrava depois na mesma aba, sem recarregar, herdava o chat de quem saiu | Sair fecha o chat; quem entra abre o seu (**B850**) |
+| Depois de uma queda de rede, a conversa aberta parava de receber até trocar de conversa | Volta a receber sozinha ao reconectar (**B849**) |
+| A Lista de Tarefas trazia o papel de todos os usuários | Só id, nome e e-mail (**B851**) |
+| O administrador desmarcava o próprio *Usuário ativo* no formulário e caía | *"Não é possível desativar o próprio usuário"* (**B852**) |
+| Editar um usuário pela API sem o campo *ativo* o trancava fora | Fica o que estava gravado (**B852**, consulta **A79**) |
+
+### As regras, com o cenário exato
+
+Preparação: o **administrador do sistema** num navegador; um usuário **comum** noutro navegador (ou janela anônima), com uma conversa do
+chat aberta com o administrador.
+
+**1. Desativar derruba o chat na hora.** Com a conversa aberta na tela do **comum**, o administrador vai a **Admin → Usuários** e clica em
+inativar o comum. Sem o comum clicar em nada, a tela dele volta ao login com o aviso amarelo *"Sessão encerrada — o seu usuário foi
+desativado ou removido. Fale com o administrador do sistema."*. O mesmo pela caixa *Usuário ativo* desmarcada no formulário do comum, e
+pela exclusão do usuário.
+
+**2. O token velho não reconecta.** Pela API, a conexão do chat com o token do comum desativado é recusada com *"Sessão encerrada — o
+usuário foi desativado ou removido"*. Reative o comum e entre de novo: o chat volta, com o histórico da conversa.
+
+**3. O administrador não se desativa.** No formulário do **próprio** administrador, desmarque *Usuário ativo* e salve: *"Não é possível
+desativar o próprio usuário"* — e nada muda.
+
+**4. A Lista de Tarefas.** Com o módulo Lista de Tarefas, `GET /api/todolist/usuarios` (e a lista `usuarios` do quadro): cada linha só
+com `id`, `nome` e `email`. O seletor *Responsável (programador)* lista os mesmos nomes de antes.
+
+### O que esta etapa NÃO cobre
+
+1. **Os links já gerados** de fotos, avatares e anexos abrem até vencer; **algumas telas que baixam arquivo por fora** recusam sem voltar
+   ao login naquele clique (**D (132)**).
+2. **As telas de permissão** recusam o super administrador sem o papel *admin* (**C273** — amplia acesso; etapa própria, a próxima).
+3. **Se o administrador do sistema pode desativar um super** é decisão de vocês (**B853**).
+4. **Apagar mensagem pelo endereço com zero** não avisa os outros na hora (**C274**).
+5. As decisões que esperam vocês: **B808**, **B755**, **B761**/**C239**, **C224**, **C225**, **C228**, **C219**, **C230**,
+   **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (**E2**), a **C268**, a **C269** e a
+   **B853**.
+
+### O que a revisão encontrou
+
+A **medição** subiu o servidor de verdade e mostrou o desativado recebendo o conteúdo pelas três portas (inativar, formulário, exclusão) e
+o "digitando" dele chegando aos outros. A **revisão do plano** (antes do código, com uma sonda do chat nos três transportes) confirmou o que
+o desenho supunha da biblioteca e achou três problemas que entraram antes do código: a releitura que falha deslogaria um **ativo** com a
+frase de desativado (**B849**); a conexão do usuário anterior na mesma aba deslogaria quem entrou depois (**B850**); e o teste que sobe o
+servidor de verdade poderia deixar um servidor órfão na máquina. A **revisão adversarial do código** (três revisores, executando): o de
+**regra** não achou vazamento nem ativo deslogado — achou que "reconecta no próximo gesto" era otimista e que a conversa aberta não voltava
+depois de reconectar (corrigidos, **B849**) e um "digitando" vazio que lançava erro no servidor (corrigido); o de **permissão** montou a
+tabela perfil × canal no servidor de verdade e achou o administrador se desativando pelo endereço com zero e pelo formulário, e o campo
+*ativo* vazio trancando o último super fora (corrigidos, **B852**, **A79**), além da pergunta **B853** e da **C274**; o de **sabotagem**
+fez **49** sabotagens além das **23** já feitas: **8** mostraram cenário faltando (as réguas do id e do *ativo*, o zero à esquerda na sala,
+o fechamento da conexão, a sessão só na aba, a conexão velha ainda aberta) e viraram cenários; **3** foram provadas inofensivas.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 132 entregue (2026-10-16):** **o desativado sai do chat na hora, e a Lista de Tarefas sem o papel** (do núcleo). A conexão do
+  chat relê o usuário ao conectar, ao entrar na conversa e ao digitar, e cai na hora ao desativar ou excluir (**C271** resolvido — **B848**
+  a **B850**); a Lista de Tarefas mostra só id, nome e e-mail (**C272** resolvido — **B851**); o administrador não se desativa mais pelo
+  formulário nem pelo endereço com zero, e editar sem o campo *ativo* não tranca ninguém fora (**B852**). **O que é seu:** a consulta
+  **A79** (opcional); a pergunta **B853**; as decisões **B848 a B852** (reversíveis); o aviso **C274**; as limitações **(132)** em D e a
+  verificação **(132)** em F.
+  **Próxima: Etapa 133 — ver a "próxima tarefa detalhada" no plano da Etapa 132.**
 
 - **Etapa 131 entregue (2026-10-16):** **as listas de usuário e a sessão do desativado** (do núcleo). Os seletores de responsável mostram
   de cada usuário só o que a tela usa para quem não gerencia usuários (**C270** resolvido — **B844**); o desativado ou apagado é
   desconectado na primeira ação, com o aviso no login, e a senha errada não recarrega mais a página (**B845**, **B846**). **O que é seu:**
   as decisões **B844 a B846** (reversíveis); os avisos **C271**, **C272** e **C273**; as limitações **(131)** em D e a verificação
   **(131)** em F. Nenhuma consulta nova em A.
-  **Próxima: Etapa 132 — ver a "próxima tarefa detalhada" no plano da Etapa 131.**
+  *(Próxima, na época: Etapa 132 — entregue acima.)*
 
 - **Etapa 130 entregue (2026-10-16):** **o item que entrou não muda pela nota, e as leituras de usuário.** Os dados fiscais recusam
   mudar o lote, as séries, o valor unitário e o total de um item que já deu entrada no estoque, e o painel trava esses campos (**C267**

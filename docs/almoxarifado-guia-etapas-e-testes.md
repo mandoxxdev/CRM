@@ -1,17 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-16 (Etapa 131) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-16 (Etapa 132) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130 e 131) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131 e 132) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 131 ENTREGUE · próxima: Etapa 132)
+> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 132 ENTREGUE · próxima: Etapa 133)
 >
-> **O desenvolvimento parou aqui: Etapa 131 fechada — 2026-10-16.** A **Etapa 131 (as listas de usuário e a sessão do desativado,
+> **O desenvolvimento parou aqui: Etapa 132 fechada — 2026-10-16.** A **Etapa 132 (o desativado sai do chat na hora, e a Lista de
+> Tarefas sem o papel, do núcleo)**: no instante em que o administrador desativa ou exclui alguém, a tela de chat aberta dessa pessoa
+> volta ao login com o aviso de sessão encerrada, e uma conexão nova do chat com o token velho é recusada; a Lista de Tarefas deixa de
+> trazer o papel de todos; e o administrador não consegue mais se desativar pelo próprio formulário. **Próxima: Etapa 133** — ver a
+> próxima tarefa no plano da 132.
+>
+> **Etapa 131, 2026-10-16.** A **Etapa 131 (as listas de usuário e a sessão do desativado,
 > do núcleo)**: os seletores de responsável (propostas, projetos, OS…) deixam de trazer o papel, o setor e o departamento de cada usuário
 > para quem não gerencia usuários — quem aparece não muda —; e o usuário desativado ou apagado volta ao login com o aviso *"Sessão
 > encerrada"* na primeira ação, em vez de seguir usando o sistema até o token vencer; a senha errada no login não recarrega mais a
-> página. **Próxima: Etapa 132** — ver a próxima tarefa no plano da 131.
+> página.
+> *(Próxima, na época: Etapa 132 — entregue acima.)*
 >
 > **Etapa 130, 2026-10-16.** A **Etapa 130 (o item que entrou não muda pela nota, e as leituras
 > de usuário)**: numa nota que entrou em parte, o modal da nota deixa de mudar o lote, as séries e o valor de um item que já está no
@@ -6551,6 +6558,47 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 132 — O desativado sai do chat na hora, e a Lista de Tarefas sem o papel (ENTREGUE — 2026-10-16)
+
+**O que mudou, em uma frase:** quem é desativado ou excluído sai também do chat em tempo real, na hora — a conversa aberta dele volta ao
+login com o aviso —, e a Lista de Tarefas deixa de trazer o papel de todos os usuários.
+
+**O problema que ela resolve.** A Etapa 131 fez o desativado voltar ao login na primeira ação, mas o chat em tempo real tinha um caminho
+próprio: com a conversa aberta, o desativado continuava recebendo as mensagens novas, e podia reconectar o chat com o token velho por até
+24 horas. Além disso, no computador compartilhado, quem entrava depois na mesma aba (sem recarregar) herdava a conexão do chat de quem
+saiu.
+
+| Antes | Agora |
+|---|---|
+| O desativado ou excluído com o chat aberto continuava recebendo as mensagens novas | A tela dele volta ao login na hora, com *"Sessão encerrada — o seu usuário foi desativado ou removido. Fale com o administrador do sistema."* |
+| O chat reconectava com o token velho | A conexão é recusada |
+| Quem entrava depois na mesma aba herdava o chat de quem saiu | Sair fecha o chat |
+| Depois de uma queda de rede, a conversa aberta parava de receber | Volta a receber sozinha |
+| A Lista de Tarefas trazia o papel de todos | Só id, nome e e-mail |
+| O administrador desmarcava o próprio *Usuário ativo* e caía | *"Não é possível desativar o próprio usuário"* |
+
+**Roteiro de teste (5 minutos).** Prepare, como **administrador do sistema**, um usuário **comum** com acesso ao Chat.
+
+1. **Desativar derruba o chat.** Entre como o **comum** num navegador e abra **Chat** → uma conversa com o administrador. Noutro navegador
+   (ou janela anônima), como **administrador**, **Admin → Usuários** → inative o comum. **Sem clicar em nada** no primeiro navegador, a
+   tela volta ao login com o aviso amarelo *"Sessão encerrada — o seu usuário foi desativado ou removido. Fale com o administrador do
+   sistema."*.
+2. **Reativar devolve tudo.** Reative o comum, entre de novo como ele e abra o **Chat**: a conversa está lá, com o histórico; mande uma
+   mensagem pelo administrador e ela aparece na hora.
+3. **Pelo formulário e pela exclusão.** Repita o passo 1 desmarcando *Usuário ativo* no formulário do comum (Salvar), e depois com outro
+   usuário de teste excluído: a tela de chat dele volta ao login do mesmo jeito.
+4. **O administrador não se desativa.** No formulário do **próprio** administrador, desmarque *Usuário ativo* → Salvar: a mensagem *"Não é
+   possível desativar o próprio usuário"* aparece, e nada muda.
+5. **Sair e entrar outro na mesma aba.** Como o comum, abra o Chat, clique em **Sair** e entre como o administrador **na mesma aba**:
+   o Chat mostra as conversas do administrador (e não recebe as do comum).
+6. **A Lista de Tarefas.** Como quem tem o módulo, **Lista de Tarefas → Nova tarefa**: o *Responsável (programador)* lista os mesmos nomes
+   de antes.
+
+**O que esta etapa NÃO cobre.** Os links já gerados de fotos, avatares e anexos continuam abrindo até vencer (de 15 minutos a 25 horas,
+conforme o tipo); algumas telas que baixam arquivo por fora recusam sem voltar ao login naquele clique; as telas de permissão recusam o
+super administrador sem o papel *admin* (**C273**, a próxima etapa); se o administrador do sistema pode desativar um super é pergunta para
+vocês (**B853**).
+
 ## Etapa 131 — As listas de usuário e a sessão do desativado (ENTREGUE — 2026-10-16)
 
 **O que mudou, em uma frase:** os seletores de responsável trazem de cada usuário só o que a tela usa (nome, cargo, e-mail) para quem não
@@ -6583,6 +6631,7 @@ Comercial, e um vendedor **V** do mesmo setor com acesso ao Comercial e cargo *V
 **O que esta etapa NÃO cobre.** O chat em tempo real, os links assinados de fotos e avatares e algumas telas que baixam arquivo por fora
 não desconectam o desativado (**C271**); a lista de usuários da Lista de Tarefas ainda traz o papel de todos (**C272**); as telas de
 permissão recusam o super administrador sem o papel *admin* (**C273**); o cargo continua nos seletores para todos (**B844**).
+*(O chat e a Lista de Tarefas saíram na Etapa 132.)*
 
 ## Etapa 130 — O item que entrou não muda pela nota, e as leituras de usuário (ENTREGUE — 2026-10-16)
 

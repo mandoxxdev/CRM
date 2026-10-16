@@ -22,6 +22,8 @@
 > ALMOXARIFE]` no mapa, mais uma regra por **identidade** (quem pediu a requisição) checada no serviço; ver o bloco
 > "Etapa 77" logo abaixo. O status 🟡-forte não muda — a etapa é da feature 07). Antes: 2026-08-29 (**Etapa 24, `a81e51a..4680daa`: a perna Perfis começa** — `QUALIDADE` em `permissions.js` (`a81e51a`), a revogação auditando com `EXCLUSAO` e o `dados_anteriores` nos dois caminhos (`9f7c309`), `ADMINISTRADOR` fora do seletor com a razão visível e os 7 primeiros testes da aba (`b13de4a`), a integração que dá e tira perfil e lê pela tela-contrato (`b9a5848`) e o rótulo do perfil no 403 do client (`4680daa`); ver o bloco "Etapa 24" no fim). Antes: 2026-08-28 (**Etapa 23, `0fe8d02..4f1aeb9`: a trilha para de mentir por omissão e por excesso** — o retry de `SQLITE_BUSY` para de responder erro e gravar assim mesmo (`0fe8d02`), `PUT /configuracoes` vira um `UPDATE` único com `CASE` (`b6b7b24`/`d507ccc`), as **cinco** rotas de exclusão distinguem "não existe" de "já inativa" (`9858bec`) e a leitura pela tela-contrato prova que a trilha mostra **um** ato (`4f1aeb9`); ver o bloco "Etapa 23" no fim e o checklist "Trilha honesta"). Antes: 2026-08-28 (**Etapa 22, `8c6ffbe..169458d`: a trilha ganha leitor** — tela `/almoxarifado/auditoria` com os quatro filtros novos, o de/para calculado no servidor, a rota de opções alimentada pelo banco e os **três índices** que a tabela nunca teve; ver o bloco "Etapa 22" no fim e o checklist "Auditoria visível"). Antes: 2026-08-28 (Etapa 21, `d5c8d3a..07a4b1c`: **nada desta feature mudou** — a etapa é do núcleo do CRM e fecha os itens que a Etapa 20 empurrou para cá dizendo "é do core"; registrada no bloco "Etapa 21 — o que era do núcleo" no fim deste arquivo, e o item de backup do checklist de Segurança ganhou a medição que faltava). Antes: 2026-08-28 (Etapa 20, `1b0f0e9..a3f5135`: a rota de foto de material para de mentir sucesso, de deixar órfão e de não auditar; a leitura de configurações para de devolver segredo em claro e o PUT genérico para de aceitá-lo; ler o mapa de permissões por setor passa a exigir o mesmo que escrevê-lo). Antes: 2026-08-28 (Etapa 19, `a574b3a..55e4144`: os 23 endpoints de cadastro e configuração passam a auditar, com diff nas configurações, segredo mascarado e três correções de comportamento que o log exigia). Antes: 2026-08-28 (Etapa 18: a trilha do inventário). Antes: 2026-08-11 — auditoria de cauda: corrigida a afirmação "auditoria não é usada em produção" (era verdade em 2026-08-02, foi superada pelas Etapas 3–6 e ninguém atualizou aqui), corrigida a contagem de ações (14, não 15) e nomeados os dois buracos reais de auditoria que restam
 >
+> **Etapa 132 (2026-10-16):** do núcleo — o chat em tempo real relê o usuário ao conectar, ao entrar na conversa e ao digitar, e as três portas que desativam ou apagam derrubam a conexão na hora (`6a77a4cb`, `4c451c60`, `7ca9e395`, Fase 5 `55226494`, `146065f4`; B848–B850, C271 resolvida na parte do chat); a Lista de Tarefas sem o papel (`45f604bb`; B851, C272 resolvida); o administrador não se desativa pelo formulário nem pelo id com zero, e o PUT sem `ativo` não grava NULL (Fase 5 `1d13093e`; B852, A79). Continua 🟡-forte. Ver a seção da Etapa 132 no fim do checklist.
+>
 > **Etapa 131 (2026-10-16):** do núcleo — as três listas dos seletores de responsável (`/usuarios/comercial`, `/filtrar`, `/por-modulo/:modulo`) saem do `index.js` para `services/leituraDeUsuarios.js` e devolvem só id, nome, e-mail, ativo e cargo a quem não gerencia usuários (`31976510`, Fase 5 `5974a6c7`; B844, C270 resolvida); o usuário desativado, apagado ou com token sem id leva 401 `USUARIO_INATIVO` e o erro do banco no enriquecimento não deixa mais passar (`831386a2`, `bc51b6b5`, Fase 5 `5974a6c7`, `38dc9a46`; B845, B846). Continua 🟡-forte. Ver a seção da Etapa 131 no fim do checklist.
 >
 > **Etapa 130 (2026-10-16):** do núcleo — as três leituras de usuário (`GET /api/usuarios`, `/:id`, `/:id/grupos`), que só exigiam token (B836), passam a ser do próprio ou de quem gerencia usuários (a lista vem reduzida a id, nome, e-mail e ativo para os outros), em `services/leituraDeUsuarios.js` (`e6553429`; B841); e o usuário desativado ou apagado com o token válido perde o papel do token na hora (`01dfd645`; B842). Continuam abertas `/por-modulo`, `/comercial` e `/filtrar` (C270). Continua 🟡-forte.
@@ -1207,13 +1209,38 @@ Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa131-as-listas-de-usu
 - [x] **O erro do banco no enriquecimento não deixa passar; token sem id leva 401** — `831386a2` (BUSY → 503) e Fase 5 `5974a6c7`
   (qualquer erro das três leituras → `respondDbError`; id que não é inteiro positivo → 401). B845. RN-06.
 - [x] **O client: aviso de sessão encerrada e o 401 do login sem recarregar** — `bc51b6b5`, Fase 5 `38dc9a46`. B846. RN-09, RN-10.
-- [ ] **O chat em tempo real, os links assinados e as telas com `fetch` cru** — não desconectam o desativado (C271): fora do escopo
-  (cada um é um caminho de token próprio).
-- [ ] **A lista de usuários da Lista de Tarefas** ainda devolve o papel de todos (C272); **as rotas de permissões** aceitam só `role ===
-  'admin'` exato (C273) — achados da revisão, anteriores à etapa.
+- [x] **O chat em tempo real** — *(era `[ ]`, C271)* — feito na **Etapa 132** (`6a77a4cb`, `4c451c60`, `7ca9e395`), abaixo. Os **links
+  assinados** e as **telas com `fetch` cru** ficam declarados (D (132)): os links não consultam a sessão de propósito, e as telas recebem
+  a recusa do servidor (só não voltam ao login naquele clique).
+- [x] **A lista de usuários da Lista de Tarefas** — *(era `[ ]`, C272)* — feito na **Etapa 132** (`45f604bb`), abaixo.
+- [ ] **As rotas de permissões** aceitam só `role === 'admin'` exato (C273) — amplia acesso; etapa própria (a 133).
 
 Testes: `listasDeUsuarios.api.test.js` (12), `sessaoDoInativo.api.test.js` (9, com a RN-08 de integração: JWT real + enriquecimento
 real + rotas, rota e serviço), `leituraDeUsuarios.api.test.js` (7); client `apiSessaoEncerrada.test.js` (3), `LoginSessaoEncerrada.test.js` (4).
+
+## Etapa 132 (2026-10-16) — o desativado no chat em tempo real e a Lista de Tarefas sem o papel (núcleo, C271, C272)
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa132-o-inativo-no-chat.md`.
+
+- [x] **O handshake do socket relê a linha ativa** — `6a77a4cb`: `criarAuthSocket(jwtSecret, db)` (o `db` obrigatório) com a régua
+  do `enrichUserFromDb` (`ativo = 1`; token sem id válido pela mesma `idDoTokenValido`, agora exportada) → `connect_error` L11 com
+  `data.code = 'USUARIO_INATIVO'`; banco com erro → conecta (B848). RN-01, RN-05.
+- [x] **`join_conversa` e `typing` releem** — `6a77a4cb` (Fase 5 `55226494`: o `typing` sem payload): sem linha ativa →
+  `sessao_encerrada` + `disconnect(true)`, sem entrar. RN-02, RN-03.
+- [x] **As três portas derrubam na hora** — `4c451c60`: `PATCH …/status` (ativo 0) e `DELETE` → `encerrarSocketsDoUsuario`; `PUT` →
+  `encerrarSocketsSeInativo` (relê; erro → derruba sem o aviso, B849). RN-04, RN-05, RN-06 (o `index.js` real dentro da suíte).
+- [x] **O client sai com a sessão encerrada; a sessão de outro usuário na aba não se mistura** — `7ca9e395` (Fase 5 `146065f4`: reconecta
+  1 s depois de cair sem o aviso e reentra na conversa aberta). B849, B850. RN-07.
+- [x] **A Lista de Tarefas sem `role`** — `45f604bb` (Fase 5 `5950809d`): `listUsuariosAtivos` → `id, nome, email`. B851. RN-08.
+- [x] **O administrador não se desativa pelo PUT nem pelo id com zero; o PUT sem `ativo` mantém o gravado** — Fase 5 `1d13093e` (achado
+  do r2, anterior à etapa). B852, A79.
+- [ ] **Se o administrador do sistema que não é super pode desativar um super** — pergunta ao P.O. (B853); não implementado.
+- [ ] **Os links assinados e as telas com `fetch` cru** — declarados em D (132), sem código (ver o item da 131 acima).
+
+Testes: `chatSocketSessaoDoInativo.api.test.js` (30 — servidor HTTP e `initChatSocket` de produção, cliente socket.io mínimo sobre
+`ws`, `tests/helpers/clienteSocketIo.js`), `chatSocketInativoNoServidor.api.test.js` (9 — sobe o `index.js` real com pasta vazia;
+preload `tests/helpers/morreComOPai.js`), `todolistUsuariosSemPapel.api.test.js` (5); o `chatSocketTokenNaUrl.api.test.js` mudou à
+vista (a assinatura com `db`); client `chatSocketSessaoEncerrada.test.js` (11), `AuthContextLogoutChat.test.js` (1).
 
 ## Regras essenciais + testes de API exigidos
 
