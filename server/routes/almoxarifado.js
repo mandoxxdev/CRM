@@ -4018,7 +4018,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       if (!out.venceu) return res.status(400).json({ error: out.erro400 });
       const { statusFinal } = out;
 
-      await registrarAuditoria(db, {
+      // Etapa 121 (C252, B784): ato ja gravado, a Auditoria falhando nao o derruba (antes 500; repetir recusava).
+      await audit.registrarAuditoriaDoAto(db, {
         entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'APROVACAO',
         usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
         dados_novos: { status: statusFinal, reservas: out.reservas },
@@ -4067,7 +4068,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         return res.status(400).json({ error: 'Apenas requisições pendentes podem ser rejeitadas' });
       }
 
-      await registrarAuditoria(db, {
+      // Etapa 121 (C252, B784): ato ja gravado, a Auditoria falhando nao o derruba (antes 500; repetir recusava).
+      await audit.registrarAuditoriaDoAto(db, {
         entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'REJEICAO',
         usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
         justificativa: motivo, dados_novos: { status: 'REJEITADO' },
@@ -4131,7 +4133,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         }
       });
 
-      await registrarAuditoria(db, {
+      // Etapa 121 (C252, B784): ato ja gravado, a Auditoria falhando nao o derruba (antes 500; repetir recusava).
+      await audit.registrarAuditoriaDoAto(db, {
         entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'APROVACAO_VALOR',
         usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
         dados_novos: { status: result.status, reservas: result.reservas },
@@ -4160,7 +4163,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     if (denyUnlessAlmoxAdmin(req, res)) return;
     try {
       const regra = await approvalRulesService.criarRegra(db, req.body, req.user);
-      await registrarAuditoria(db, {
+      // Etapa 121 (C252, B784): ato ja gravado, a Auditoria falhando nao o derruba (antes 500; repetir DUPLICAVA a regra).
+      await audit.registrarAuditoriaDoAto(db, {
         entidade: 'regra_aprovacao', entidade_id: regra.id, acao: 'CRIACAO',
         usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email, dados_novos: regra,
       });
@@ -4174,7 +4178,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     if (denyUnlessAlmoxAdmin(req, res)) return;
     try {
       const result = await approvalRulesService.atualizarRegra(db, req.params.id, req.body, req.user);
-      await registrarAuditoria(db, {
+      // Etapa 121 (C252, B784): ato ja gravado, a Auditoria falhando nao o derruba (antes 500; a tela lia falha).
+      await audit.registrarAuditoriaDoAto(db, {
         entidade: 'regra_aprovacao', entidade_id: Number(req.params.id), acao: 'EDICAO',
         usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
         dados_novos: { ...result.regra, pendencias_obsoletadas: result.pendencias_obsoletadas },
@@ -4204,7 +4209,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   app.put('/api/almoxarifado/requisicoes/:id/aprovacoes-regra/:pid/aprovar', async (req, res) => {
     try {
       const result = await approvalRulesService.assinarPendencia(db, req.params.id, req.params.pid, req.user);
-      await registrarAuditoria(db, {
+      // Etapa 121 (C252, B784): ato ja gravado, a Auditoria falhando nao o derruba (antes 500; repetir recusava).
+      await audit.registrarAuditoriaDoAto(db, {
         entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'APROVACAO_REGRA',
         usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
         dados_novos: { pendencia_id: Number(req.params.pid), pendencias_abertas: result.pendencias_abertas },
@@ -4230,7 +4236,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         console.warn('[almoxarifado] Liberação de reservas na rejeição por valor:', relErr.message);
       }
 
-      await registrarAuditoria(db, {
+      // Etapa 121 (C252, B784): ato ja gravado, a Auditoria falhando nao o derruba (antes 500; repetir recusava).
+      await audit.registrarAuditoriaDoAto(db, {
         entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'REJEICAO_VALOR',
         usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
         justificativa: req.body.motivo, dados_novos: { status: result.status },
@@ -4414,7 +4421,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
          updated_at=CURRENT_TIMESTAMP WHERE id=?`,
         [req.user.id, req.params.id]);
 
-      await registrarAuditoria(db, {
+      // Etapa 121 (C252, B784): ato ja gravado, a Auditoria falhando nao o derruba (antes 500; repetir recusava).
+      await audit.registrarAuditoriaDoAto(db, {
         entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'CONFIRMACAO_RECEBIMENTO',
         usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
         dados_novos: { recebimento_confirmado_por: req.user.id },
@@ -4514,7 +4522,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
           console.warn('[almoxarifado] Liberação de reservas no encerramento:', relErr.message);
         }
 
-        await registrarAuditoria(db, {
+        // Etapa 121 (C252, B784): ato ja gravado, a Auditoria falhando nao o derruba (antes 500; repetir recusava).
+        await audit.registrarAuditoriaDoAto(db, {
           entidade: 'requisicao', entidade_id: Number(req.params.id), acao: 'ENCERRAMENTO',
           usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
           justificativa: motivo || null, dados_novos: { status: 'ENCERRADA' },
@@ -4575,7 +4584,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         db, req.user, payload, { modulo: 'almoxarifado' },
       );
 
-      await registrarAuditoria(db, {
+      // Etapa 121 (C252, B784): ato ja gravado, a Auditoria falhando nao o derruba (antes 500; repetir DUPLICAVA o rascunho).
+      await audit.registrarAuditoriaDoAto(db, {
         entidade: 'requisicao', entidade_id: result.id, acao: 'COPIA',
         usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
         dados_novos: { origem_id: Number(req.params.id), numero: result.numero },
