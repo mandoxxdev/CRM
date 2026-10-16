@@ -14,7 +14,7 @@ const { dbRun, dbGet, dbAll } = require('./db');
 // na T1 desta etapa. Quem reordenar a lista tem de vir ate aqui.
 const { TIPOS_RECEBIMENTO } = require('./schema');
 const [TIPO_NOTA_FISCAL, TIPO_PEDIDO_COMPRA] = TIPOS_RECEBIMENTO;
-const { registrarAuditoria } = require('./audit');
+const { registrarAuditoria, registrarAuditoriaDoAto } = require('./audit');
 // Etapa 96 (C176): a regra unica de quantidade (namespace — Fase 2, I3).
 const Q = require('./quantidade');
 // (Etapa 42, onda de correcao) O epsilon vem de `divergencia.js`, que existe desde a Etapa 10b como
@@ -574,8 +574,10 @@ async function criarRecebimento(db, user, data) {
 
   // (F5) A trilha DEPOIS do INSERT, e nao dentro da barreira: antes do INSERT o item nao tem id, e
   // auditar a posicao do payload deixaria `entidade_id` apontando para lugar nenhum.
+  // Etapa 121 (C252, B784): na CRIACAO o documento ja esta gravado — a trilha nao derruba (500 + repetir duplicava o
+  // recebimento). A conferencia (assertExcedentePermitido) continua fatal: la a trilha roda antes do UPDATE.
   for (const ex of excedentesDaCriacao) {
-    await auditarExcedenteAutorizado(db, user, idsPorIndice[ex.indice], ex);
+    await auditarExcedenteAutorizado(db, user, idsPorIndice[ex.indice], ex, { depoisDoAto: true });
   }
 
   // (Etapa 37) A trilha do excedente CONTRA O PEDIDO, uma linha por item excedente, DEPOIS dos
@@ -587,7 +589,8 @@ async function criarRecebimento(db, user, data) {
   // comparado. Por isso NAO reusa `auditarExcedenteAutorizado`.
   for (const ex of excedentesDoPedido) {
     for (const indice of ex.indices) {
-      await registrarAuditoria(db, {
+      // Etapa 121 (C252, B784): idem, o documento ja esta gravado.
+      await registrarAuditoriaDoAto(db, {
         entidade: 'recebimento_item', entidade_id: idsPorIndice[indice],
         acao: 'EXCEDENTE_AUTORIZADO',
         usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
@@ -597,7 +600,8 @@ async function criarRecebimento(db, user, data) {
     }
   }
 
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): idem — com 500, repetir criava um 2o recebimento.
+  await registrarAuditoriaDoAto(db, {
     entidade: 'recebimento', entidade_id: r.lastID, acao: 'CRIACAO',
     usuario_id: user.id, usuario_nome: user.nome || user.email,
   });
@@ -660,7 +664,10 @@ function assertAutorizacaoExcedente(user, autorizado, mensagem400) {
   }
 }
 
-const auditarExcedenteAutorizado = (db, user, itemId, { esperada, recebida }) => registrarAuditoria(db, {
+// Etapa 121 (C252, B784): `depoisDoAto` so na criacao (o item ja existe); a conferencia chama sem ele, fatal,
+// porque la a trilha roda ANTES do UPDATE e o 500 e a verdade (Fase 2, I4).
+const auditarExcedenteAutorizado = (db, user, itemId, { esperada, recebida }, { depoisDoAto = false } = {}) => (
+  depoisDoAto ? registrarAuditoriaDoAto : registrarAuditoria)(db, {
   entidade: 'recebimento_item', entidade_id: itemId, acao: 'EXCEDENTE_AUTORIZADO',
   usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
   dados_anteriores: { quantidade_esperada: esperada },
@@ -992,7 +999,8 @@ async function avancarWorkflow(db, user, recebimentoId, acao, opcoes = {}) {
   params.push(recebimentoId);
   await dbRun(db, `UPDATE recebimentos_material_almoxarifado SET ${sets.join(', ')} WHERE id = ?`, params);
 
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): o status ja mudou; com 500 repetir dava "no status atual".
+  await registrarAuditoriaDoAto(db, {
     entidade: 'recebimento', entidade_id: recebimentoId, acao: acao.toUpperCase(),
     usuario_id: user.id, usuario_nome: user.nome || user.email,
   });
@@ -1778,7 +1786,9 @@ async function concluirProcessamentoNotaSobTrava(db, user, rec, recebimentoId, {
     user.id, user.nome || user.email, contasPagarId, recebimentoId,
   ]);
 
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): estoque, conta a pagar e PROCESSADO ja gravados; a falha da trilha nao pode pular o
+  // fechamento das solicitacoes nem a reserva de quem esperava (repetir dava "Nota ja processada").
+  await registrarAuditoriaDoAto(db, {
     entidade: 'recebimento', entidade_id: recebimentoId, acao: 'PROCESSAR_NOTA',
     usuario_id: user.id, usuario_nome: user.nome || user.email,
   });
@@ -2226,7 +2236,9 @@ async function fecharPedidosCompletos(db, user, recebimentoId) {
     // o fechamento do comprador.) Aqui o pedido do comprador muda SOZINHO, por um ato de outro modulo. Sem esta linha ninguem responde "quem
     // mudou meu pedido". Dentro do mesmo `try` nao-fatal do chamador, de proposito: a trilha nao
     // vale travar a nota.
-    await registrarAuditoria(db, {
+    // Etapa 121 (C252, B784): nao-fatal tambem por pedido: a falha da trilha nao pula os pedidos seguintes. Sem a
+    // linha, o estorno da nota nao reabre este pedido (ele le a trilha) — declarado, igual a hoje.
+    await registrarAuditoriaDoAto(db, {
       entidade: 'pedido_compra',
       entidade_id: pedidoId,
       acao: 'STATUS_AUTOMATICO_RECEBIDO',

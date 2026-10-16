@@ -8,7 +8,7 @@
  * este serviço só valida a requisição, insere e audita.
  */
 const { dbRun, dbGet, dbAll } = require('./db');
-const { registrarAuditoria } = require('./audit');
+const { registrarAuditoriaDoAto } = require('./audit');
 // Etapa 33: este servico montava a URL com o PREFIXO importado, sem passar por materialPhotoUrl —
 // e por isso o guard de 'lancar sem assinador' daquele modulo nao o alcancava: a assinatura de
 // entrega continuaria saindo sem assinar, com a suite verde. Agora ele usa o MESMO ponto de
@@ -43,7 +43,9 @@ async function registrarAssinatura(db, user, requisicaoId, { recebedor_nome, arq
     VALUES (?,?,?,?,?)`,
     [req.id, recebedor_nome, arquivo, user.id, user.nome || user.email || null]);
 
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): a assinatura ja esta gravada; a falha da trilha nao pode virar 500, senao o catch da rota
+  // apaga o arquivo do disco e a linha fica apontando para nada.
+  await registrarAuditoriaDoAto(db, {
     entidade: 'requisicao',
     entidade_id: req.id,
     acao: 'ASSINATURA_ENTREGA',

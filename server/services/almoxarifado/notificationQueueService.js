@@ -9,7 +9,7 @@
  */
 const crypto = require('crypto');
 const { dbRun, dbGet, dbAll } = require('./db');
-const { registrarAuditoria } = require('./audit');
+const { registrarAuditoriaDoAto } = require('./audit');
 // movementTypes NAO importa este servico (nem alertService/stockService) — sem ciclo. Ver a nota
 // em `enfileirarMovimentacao` sobre por que `alertService` continua sendo requerido LAZY (dentro
 // da funcao), no mesmo padrao de `processarFila`.
@@ -239,7 +239,8 @@ async function reenviar(db, usuario, id) {
     SET status = 'PENDENTE', tentativas = 0, ultimo_erro = NULL, proxima_tentativa_em = NULL, enviado_em = NULL
     WHERE id = ?`, [id]);
 
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): o reset ja esta gravado; a falha da trilha nao pode pular o envio na hora.
+  await registrarAuditoriaDoAto(db, {
     entidade: 'notificacao',
     entidade_id: id,
     acao: 'REENVIAR',

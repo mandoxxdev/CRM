@@ -49,7 +49,7 @@
 const { dbRun, dbGet, dbAll } = require('./db');
 const { EPSILON_DIVERGENCIA } = require('./divergencia');
 const { inserirComNumeroUnico } = require('./numeroDoc');
-const { registrarAuditoria } = require('./audit');
+const { registrarAuditoria, registrarAuditoriaDoAto } = require('./audit');
 // Etapa 91 (T2, D1/B419): a trava por material (modulo sem nenhum `require` — o cabecalho acima continua
 // valendo: sem ciclo). Pelo OBJETO do modulo: os testes espiam `trava.comLockDoMaterial`.
 const trava = require('./travaPorMaterial');
@@ -444,7 +444,8 @@ async function abrirNaoConformidade(db, user, dados = {}) {
   }
 
   const id = inserido.resultado.lastID;
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): a NC ja esta gravada; com 500 o operador repetia e tomava 409 "ja existe".
+  await registrarAuditoriaDoAto(db, {
     entidade: ENTIDADE_AUDITORIA,
     entidade_id: id,
     acao: ACAO_ABERTA,
@@ -648,7 +649,8 @@ async function sincronizarNaoConformidadeQuantidade(db, user, itemId, opcoes = {
     await dbRun(db, `UPDATE nao_conformidades_almoxarifado SET
       status = 'CANCELADA', motivo_cancelamento = ?, cancelado_em = CURRENT_TIMESTAMP,
       updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'ABERTA'`, [motivo, aberta.id]);
-    await registrarAuditoria(db, {
+    // Etapa 121 (C252, B784): o cancelamento ja esta gravado; a falha da trilha nao sobe como falha do gancho.
+    await registrarAuditoriaDoAto(db, {
       entidade: ENTIDADE_AUDITORIA,
       entidade_id: aberta.id,
       acao: ACAO_CANCELADA,

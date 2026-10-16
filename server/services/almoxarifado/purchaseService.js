@@ -3,7 +3,7 @@ const { disponivelSql } = require('./availabilitySql');
 const { custoUnitarioSql } = require('./custoSql');
 const { consumoJanelaSql, consumoJanelaParams } = require('./consumoSql');
 const { TIPOS_SAIDA, TIPOS_ENTRADA } = require('./movementTypes');
-const { registrarAuditoria } = require('./audit');
+const { registrarAuditoria, registrarAuditoriaDoAto } = require('./audit');
 // Sem ciclo: nem alertService nem notificationQueueService requerem este arquivo (Etapa 12,
 // Task 3, RN-06 — resumo de solicitacoes de compra geradas).
 const alertService = require('./alertService');
@@ -261,7 +261,9 @@ async function verificarEstoqueMinimo(db, user = null) {
       const qtd = Math.max(m.quantidade_maxima - m.quantidade_atual, m.quantidade_minima);
       const r = await dbRun(db, `INSERT INTO solicitacoes_compra_almoxarifado (material_id, quantidade, motivo) VALUES (?,?,?)`,
         [m.id, qtd, 'ESTOQUE_MINIMO']);
-      await registrarAuditoria(db, {
+      // Etapa 121 (C252, B784): a solicitacao ja esta gravada; a falha da trilha nao aborta o laco (os materiais
+      // seguintes ficavam sem solicitacao).
+      await registrarAuditoriaDoAto(db, {
         entidade: 'solicitacao_compra', entidade_id: r.lastID, acao: 'CRIAR',
         usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
         dados_novos: { material_id: m.id, quantidade: qtd, motivo: 'ESTOQUE_MINIMO', origem: 'verificar-minimos' },
@@ -353,7 +355,8 @@ async function cancelarSolicitacao(db, user, solicitacaoId, motivo) {
     [user.nome || user.email, motivo, solicitacaoId]);
 
   // dados_novos OBJETO (licao E11/Fase 2) — audit.js serializa.
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): o cancelamento ja esta gravado; com 500 repetir dava "ja finalizada".
+  await registrarAuditoriaDoAto(db, {
     entidade: 'solicitacao_compra', entidade_id: solicitacaoId, acao: 'CANCELAMENTO',
     usuario_id: user.id, usuario_nome: user.nome || user.email,
     dados_novos: { motivo, status_anterior: sol.status },
@@ -447,7 +450,8 @@ async function fecharSolicitacoesDoPedido(db, user, pedidoCompraId, { recebiment
     for (const linha of fechadas.sort((a, b) => a.id - b.id)) {
       // dados_novos ADITIVO: `pedido_compra_id` continua la (o (5) da Etapa 14 le). Fase 5:
       // `solicitado` e o DESTA solicitacao (era o do par) e `recebido_atribuido` (o livro) entra.
-      await registrarAuditoria(db, {
+      // Etapa 121 (C252, B784): a solicitacao ja fechou; a falha da trilha nao pula os materiais seguintes.
+      await registrarAuditoriaDoAto(db, {
         entidade: 'solicitacao_compra', entidade_id: linha.id, acao: 'RECEBIDA',
         usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
         dados_novos: {
@@ -809,7 +813,8 @@ async function gerarSolicitacoesDaSugestao(db, usuario, materialIds) {
       [materialId, item.quantidade_sugerida]);
     // dados_novos como OBJETO — audit.js serializa; string aqui viraria escape em dobro
     // (Fase 2, verificado nos 11 chamadores reais).
-    await registrarAuditoria(db, {
+    // Etapa 121 (C252, B784): a solicitacao ja esta gravada; a falha da trilha nao aborta o laco nem pula o resumo.
+    await registrarAuditoriaDoAto(db, {
       entidade: 'solicitacao_compra', entidade_id: r.lastID, acao: 'CRIAR',
       usuario_id: usuario.id, usuario_nome: usuario.nome || usuario.email,
       dados_novos: { material_id: materialId, quantidade: item.quantidade_sugerida, motivo: 'PONTO_REPOSICAO' },

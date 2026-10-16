@@ -6,7 +6,7 @@
  * que só reusa `liberarReserva`.
  */
 const { dbAll, dbGet, dbRun } = require('./db');
-const { registrarAuditoria } = require('./audit');
+const { registrarAuditoria, registrarAuditoriaDoAto } = require('./audit');
 const stockService = require('./stockService');
 const { can } = require('./permissions');
 const { STATUS_CANCELAVEIS_SEM_CONDICAO } = require('./requisitionStateMachine');
@@ -102,7 +102,8 @@ async function transferirReserva(db, user, reservaId, data = {}) {
   const anteriores = {};
   for (const campo of CAMPOS_DONO) anteriores[campo] = reserva[campo];
 
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): a reserva ja mudou de dono; com 500 a tela dizia que continuava na OS antiga.
+  await registrarAuditoriaDoAto(db, {
     entidade: 'reserva',
     entidade_id: Number(reservaId),
     acao: 'TRANSFERENCIA',
