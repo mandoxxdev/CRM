@@ -139,6 +139,37 @@ const ACIMA_DE_SEMPRE = (s, q, d, r) => `Devolução acima do entregue: a saída
     assert.strictEqual(await fisico(m), 2);
   });
 
+  await test('[RN-04b] (Fase 2, I1) declarado: a devolucao sem serie e a volta de uma peca somam — recusa; a avulsa resolve', async () => {
+    // S de 2 -> RETRABALHO 1 citando S (o destino nao leva serie: V1 e V2 ficam Entregue) -> uma peca volta por uma Entrada V1.
+    // Nao ha como saber se V1 e a peca do retrabalho (resta V2) ou a outra (nao resta nada). A soma (restam 0) e a conta
+    // conservadora — o MAIOR dos dois (restaria 1) devolveria em dobro no segundo caso. B785: a peca que esta fora volta pela
+    // devolucao AVULSA (sem citar a saida).
+    const a = await saidaDeDuasSeries();
+    let r = await devolver(a.m, a.s, 1, { destino: 'RETRABALHO' });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    await mov(a.m, { tipo: 'ENTRADA', quantidade: 1, series: ['V1'] });
+    let el = await elegivel(a.m, a.s);
+    assert.strictEqual(el.saldo_devolvivel, 0, JSON.stringify(el));
+    r = await devolver(a.m, a.s, 1, { series: ['V2'] });
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, ACIMA(a.s, 2, 1, 1, 0));
+    r = await devolver(a.m, null, 1, { series: ['V2'] });
+    assert.strictEqual(r.status, 201, `a avulsa nao resolveu: ${JSON.stringify(r.body)}`);
+    assert.strictEqual(await fisico(a.m), 2);
+    // Misto: a devolucao citando S COM V1 e a volta de V2 por uma Entrada -> as duas voltaram, restam 0 (a soma e exata).
+    const c = await saidaDeDuasSeries();
+    r = await devolver(c.m, c.s, 1, { series: ['V1'] });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    await mov(c.m, { tipo: 'ENTRADA', quantidade: 1, series: ['V2'] });
+    await desligar(c.m);
+    el = await elegivel(c.m, c.s);
+    assert.strictEqual(el.saldo_devolvivel, 0, JSON.stringify(el));
+    r = await devolver(c.m, c.s, 1);
+    assert.strictEqual(r.status, 400, `devolveu em dobro: ${JSON.stringify(r.body)}`);
+    assert.strictEqual(r.body.error, ACIMA(c.s, 2, 1, 1, 0));
+    assert.strictEqual(await fisico(c.m), 2);
+  });
+
   await test('[RN-05] nao regride: a devolucao que cita a saida conta uma vez so; a desfeita pelo livro nao conta', async () => {
     // (a) devolucao citando S com V1 (viva): restam 1, nao 0 — a linha da reativacao dela cita S e nao pode contar de novo.
     const a = await saidaDeDuasSeries();

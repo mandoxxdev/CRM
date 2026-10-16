@@ -66,8 +66,11 @@ async function validarSaidaOriginal(db, { movimentacaoSaidaId, materialId, quant
   // avulsa) tambem ja voltaram — com a serie desligada, devolve-las de novo contava em dobro (2 pecas, fisico 4).
   const { voltaram } = await dbGet(db, `SELECT ${seriesQueVoltaramSql('?')} AS voltaram`, [movimentacaoSaidaId, movimentacaoSaidaId]);
   // Etapa 96 (C176, Fase 2 I1): o restante e uma DIFERENCA (0,3 - 0,1 = 0.19999999999999998) — arredondado, e a
-  // comparacao com folga; a mensagem diz os numeros arredondados (R2). Nunca negativo (a volta por outra entrada e a
-  // devolucao sem serie da B755 deixa as series "Entregue", e uma Entrada delas depois soma as duas contas).
+  // comparacao com folga; a mensagem diz os numeros arredondados (R2). Nunca negativo: a devolucao que nao leva serie
+  // (RETRABALHO, SUCATA sem serie, a devolucao sem serie da B755) deixa as series "Entregue", e uma Entrada de uma delas
+  // depois soma nas duas contas. Fase 2 da 121 (I1, B785): a SOMA fica, de proposito — nao ha como saber se a peca que voltou
+  // e a mesma da devolucao sem serie (entao restaria a outra) ou a outra (entao nao resta nada); o MAIOR dos dois devolveria
+  // em dobro no segundo caso. Recusar nunca conta em dobro; a peca que de fato esta fora volta pela devolucao avulsa.
   const restante = Math.max(0, Q.qtd(saida.quantidade - devolvida - Number(voltaram || 0)));
   // `>` com a folga, e nao `!Q.cabe`: quantidade nao numerica (NaN) continua passando daqui para a recusa de sempre do
   // motor, em vez de virar "acima do entregue".
