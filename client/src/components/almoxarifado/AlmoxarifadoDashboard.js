@@ -427,6 +427,39 @@ const AlmoxarifadoDashboard = () => {
                   </div>
                 </div>
               )}
+              {/* Etapa 128 (RN-09): so com o bloco (servidor antigo mantem os cartoes de antes). Media null (nenhum recebimento
+                  concluido na janela) mostra "—", nunca "0.00h"; numero que nao e numero tambem (resposta malformada nao derruba). */}
+              {indicadores.tempo_recebimento && (() => {
+                const tr = indicadores.tempo_recebimento;
+                const temMedia = typeof tr.media_horas === 'number' && Number.isFinite(tr.media_horas);
+                const temMediana = typeof tr.mediana_horas === 'number' && Number.isFinite(tr.mediana_horas);
+                const incompletos = Number.isInteger(tr.incompletos) ? tr.incompletos : 0;
+                return (
+                  <div className="almox-kpi-card">
+                    <div className="almox-kpi-icon warning"><FiClock /></div>
+                    <div className="almox-kpi-info">
+                      <div className="almox-kpi-value" data-testid="kpi-tempo-recebimento">
+                        {temMedia ? `${tr.media_horas.toFixed(2)}h` : '—'}
+                      </div>
+                      <div className="almox-kpi-label">Tempo médio de recebimento</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)' }}>
+                        Janela de {indicadores.janela_dias} dias · da chegada à entrada no estoque
+                        {temMedia && temMediana ? ` · mediana ${tr.mediana_horas.toFixed(2)}h` : ''}
+                      </div>
+                      {!temMedia && (
+                        <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)' }}>
+                          sem recebimentos concluídos no período
+                        </div>
+                      )}
+                      {incompletos > 0 && (
+                        <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)' }}>
+                          {incompletos} com entrada incompleta, fora da conta
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>

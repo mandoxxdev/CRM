@@ -488,7 +488,7 @@ const RELATORIOS = {
     // todo usuario do modulo; gate novo seria regra nova sem pedido. Reversivel (uma linha).
     acao: null,
     // Devolve OBJETO (giro/cobertura/rupturas/valor_por_grupo/atendimento_requisicoes e, desde a
-    // Etapa 67, requisicoes_no_prazo/requisicoes_integrais/ajustes), nao
+    // Etapa 67, requisicoes_no_prazo/requisicoes_integrais/ajustes; desde a Etapa 128, tempo_recebimento), nao
     // array — mesma razao de materiais-cliente/sucata-financeiro (Fase 2 da Task 1, C1).
     exportavel: false,
     // A regua de cada bloco, para a tela nao deixar implicito (RN-05): giro e APROXIMACAO
@@ -524,7 +524,12 @@ const RELATORIOS = {
       + 'Requisição excluída fica fora de todos os blocos de requisição. Ajustes: lançamentos '
       + 'AJUSTE, AJUSTE_POSITIVO, AJUSTE_NEGATIVO e AJUSTE_INVENTARIO na janela, sem os '
       + 'estornados; material inativado conta. O detalhe por motivo está no relatório Ajustes por '
-      + 'motivo.',
+      + 'motivo. '
+      // Etapa 128 (RN-08): a regua do tempo de recebimento (deduzida — letra E).
+      + 'Tempo de recebimento: da chegada da nota no sistema à última entrada no estoque dos itens, só os recebimentos '
+      + 'que entraram inteiros e cuja última entrada está na janela; os que entraram em parte são contados à parte (incompletos) e os '
+      + 'que ainda não entraram não aparecem; a inspeção depois da entrada não conta; materiais de clientes entram; entrada estornada '
+      + 'continua contando.',
     limite: null,
     params: [
       { nome: 'janela_dias', rotulo: 'Janela (dias)', tipo: 'number', obrigatorio: false },

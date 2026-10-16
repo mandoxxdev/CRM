@@ -5,6 +5,7 @@ const { divergenciaRealSql } = require('./divergencia');
 const { consumoJanelaSql, consumoJanelaParams } = require('./consumoSql');
 const { TIPOS_SAIDA, TIPOS_DEVOLUCAO } = require('./movementTypes');
 const { residualSemLote } = require('./lotService');
+const { QTD_DO_ITEM_SQL } = require('./receiptNotificationService');
 
 async function relatorioEstoqueAtual(db) {
   // Etapa 8, Task 1 (classe A): relatorio de posicao do estoque PROPRIO. valor_total somando
@@ -810,6 +811,43 @@ async function relatorioIndicadores(db, query = {}) {
     ORDER BY mv.tipo`, [janela]);
   const porTipo = ajustesRows.map((r) => ({ tipo: r.tipo, total: Number(r.total) || 0 }));
 
+  // ── Etapa 128 (feature 21, RN-01..RN-06): TEMPO DE RECEBIMENTO. Regua DEDUZIDA (letra E): por recebimento, da chegada no ──
+  // sistema (`data_recebimento`, so o DEFAULT do cabecalho a escreve) a ULTIMA entrada no estoque (o maior `entrada_estoque_em`
+  // de QUALQUER item que a tem — Fase 2, I3: sem filtro de quantidade, o item entrado e depois reescrito para 0 pelo conferir sem
+  // guarda, C266, nao some do fim). "Espera entrada" = quantidade > 0 (CAST: no SQLite '0' > 0 e verdadeiro, Fase 2 I4; a regua do
+  // '' legado e a QTD_DO_ITEM_SQL), sem data, e o recebimento ainda podendo dar entrada (fora de PROCESSADO/APROVADO — depois dela
+  // nada mais entra por ele). Completo = pelo menos uma entrada e nenhum item esperando; o que entrou em parte (a nota que falhou
+  // no meio) vai para `incompletos`. Janela pelo FIM. Material de cliente e inativo entram (e o tempo do trabalho, nao valor de
+  // patrimonio — B824). `data_recebimento` nula fica fora (julianday NULL). Tabela derivada no FROM (a varredura so captura SELECT).
+  const recebimentosRows = await dbAll(db, `
+    SELECT x.horas, x.esperando
+    FROM (
+      SELECT (julianday(MAX(ri.entrada_estoque_em)) - julianday(r.data_recebimento)) * 24 AS horas,
+             MAX(ri.entrada_estoque_em) AS fim,
+             COALESCE(SUM(CASE WHEN ri.entrada_estoque_em IS NULL
+                                AND CAST(COALESCE(${QTD_DO_ITEM_SQL}, 0) AS REAL) > 0
+                                AND COALESCE(r.status, '') NOT IN ('PROCESSADO', 'APROVADO') THEN 1 ELSE 0 END), 0) AS esperando
+      FROM recebimentos_material_almoxarifado r
+      JOIN recebimentos_material_itens_almoxarifado ri ON ri.recebimento_id = r.id
+      GROUP BY r.id
+    ) x
+    WHERE x.fim IS NOT NULL AND x.fim >= datetime('now', '-' || ? || ' days')`, [janela]);
+  const duracoes = [];
+  let recIncompletos = 0;
+  for (const r of recebimentosRows) {
+    if (Number(r.esperando) > 0) { recIncompletos += 1; continue; }
+    const h = r.horas === null || r.horas === undefined ? NaN : Number(r.horas);
+    if (Number.isFinite(h)) duracoes.push(h);
+  }
+  // RN-05 (B823): sem considerado, null — 0 diria "instantaneo". Arredondado a 2 casas, como o atendimento.
+  const arred2 = (n) => Number(n.toFixed(2));
+  const tempoRecebimento = {
+    media_horas: duracoes.length ? arred2(duracoes.reduce((a, b) => a + b, 0) / duracoes.length) : null,
+    mediana_horas: duracoes.length ? arred2(mediana(duracoes)) : null,
+    considerados: duracoes.length,
+    incompletos: recIncompletos,
+  };
+
   return {
     janela_dias: janela,
     giro: { valor_consumido: valorConsumido, valor_estoque_atual: valorEstoqueAtual, indice },
@@ -835,6 +873,7 @@ async function relatorioIndicadores(db, query = {}) {
       consideradas: inConsideradas,
     },
     ajustes: { total: porTipo.reduce((s, r) => s + r.total, 0), por_tipo: porTipo },
+    tempo_recebimento: tempoRecebimento,
   };
 }
 
