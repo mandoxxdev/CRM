@@ -4099,6 +4099,8 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // Segregação (solicitante não aprova a própria) é aplicada dentro do serviço, que já
   // busca a requisição para validar o status AGUARDANDO_APROVACAO_VALOR — ver
   // requisitionValueApprovalService.aprovarValor.
+  // Etapa 122 (Fase 5, r2 I1): os status em que uma reserva da requisicao nao tem razao de existir — o mesmo conjunto da A70.
+  const STATUS_QUE_NAO_SEGURAM_RESERVA = ['RASCUNHO', 'PENDENTE', 'REJEITADO', 'CANCELADO'];
   app.put('/api/almoxarifado/requisicoes/:id/aprovar-valor', async (req, res) => {
     try {
       const result = await valueApprovalService.aprovarValor(db, req.params.id, req.user);
@@ -4162,11 +4164,21 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       } catch (e) {
         console.warn(`[almoxarifado-aprovar-valor] A requisição ${req.params.id} foi liberada por valor e fica APROVADO; o status pós-aprovação não foi gravado: ${e.message}`);
         result.reservas = reservasMantidas;
+        let atual = null;
         try {
-          const atual = await dbGet(db, 'SELECT status FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
+          atual = await dbGet(db, 'SELECT status, ativo FROM requisicoes_almoxarifado WHERE id = ?', [req.params.id]);
           result.status = atual?.status || 'APROVADO';
         } catch (e2) {
           result.status = 'APROVADO';
+        }
+        // Etapa 122 (Fase 5, r2 I1): um cancelamento (que nao pega a trava de material) entre o APROVADO e a reserva deixava,
+        // com a falha aqui, a reserva mantida ATIVA numa requisicao CANCELADO — material preso (30/30 na sonda). Se o status
+        // relido nao segura reserva, desfaz as desta chamada (soltar sem distribuir: nao pega a trava, B441) e responde
+        // `reservas: []`. Releitura que falhou: mantem (o status gravado por esta porta e APROVADO).
+        if (atual && (STATUS_QUE_NAO_SEGURAM_RESERVA.includes(atual.status) || Number(atual.ativo ?? 1) === 0)
+          && reservasMantidas.length) {
+          await requisitionService.desfazerReservas(db, req.user, reservasMantidas);
+          result.reservas = [];
         }
       }
 

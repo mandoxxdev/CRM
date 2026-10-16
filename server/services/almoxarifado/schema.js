@@ -713,23 +713,30 @@ async function migrateBackfillPedidoFechadoAutomaticamente(db) {
   if (!coluna) { await marcar(); return; }
 
   const ph = TRILHAS_DE_STATUS_PEDIDO.map(() => '?').join(', ');
-  const candidatos = await dbAll(db, `SELECT p.id,
+  const candidatos = await dbAll(db, `SELECT p.id, p.updated_at,
+      (SELECT a.id FROM auditoria_log_almoxarifado a WHERE a.entidade = 'pedido_compra' AND a.entidade_id = p.id
+        AND a.acao IN (${ph}) ORDER BY a.id DESC LIMIT 1) AS trilha_id,
       (SELECT a.acao FROM auditoria_log_almoxarifado a WHERE a.entidade = 'pedido_compra' AND a.entidade_id = p.id
         AND a.acao IN (${ph}) ORDER BY a.id DESC LIMIT 1) AS acao,
       (SELECT a.dados_anteriores FROM auditoria_log_almoxarifado a WHERE a.entidade = 'pedido_compra' AND a.entidade_id = p.id
         AND a.acao IN (${ph}) ORDER BY a.id DESC LIMIT 1) AS anteriores
     FROM pedidos_compra p
     WHERE LOWER(COALESCE(p.status, '')) = 'recebido' AND p.fechado_automaticamente_de IS NULL`,
-  [...TRILHAS_DE_STATUS_PEDIDO, ...TRILHAS_DE_STATUS_PEDIDO]);
+  [...TRILHAS_DE_STATUS_PEDIDO, ...TRILHAS_DE_STATUS_PEDIDO, ...TRILHAS_DE_STATUS_PEDIDO]);
   let n = 0;
   for (const c of candidatos) {
     if (c.acao !== 'STATUS_AUTOMATICO_RECEBIDO') continue; // eslint-disable-line no-continue
     let anterior = '';
     try { anterior = String((JSON.parse(c.anteriores || 'null') || {}).status || '').toLowerCase(); } catch (_) { anterior = ''; }
     const destino = STATUS_REABERTURA_PEDIDO.includes(anterior) ? anterior : 'pendente';
+    // Fase 5 (r2 M2): o initSchema roda sem await antes do `listen` — um PATCH manual (ou outro ato no pedido) entre a leitura
+    // acima e este UPDATE vence: grava so se o pedido nao mudou (`updated_at`) e nenhuma trilha de status nova apareceu.
     // eslint-disable-next-line no-await-in-loop
     const r = await dbRun(db, `UPDATE pedidos_compra SET fechado_automaticamente_de = ?
-      WHERE id = ? AND fechado_automaticamente_de IS NULL AND LOWER(COALESCE(status, '')) = 'recebido'`, [destino, c.id]);
+      WHERE id = ? AND fechado_automaticamente_de IS NULL AND LOWER(COALESCE(status, '')) = 'recebido'
+        AND COALESCE(updated_at, '') = COALESCE(?, '')
+        AND NOT EXISTS (SELECT 1 FROM auditoria_log_almoxarifado a WHERE a.entidade = 'pedido_compra' AND a.entidade_id = ?
+          AND a.acao IN (${ph}) AND a.id > ?)`, [destino, c.id, c.updated_at, c.id, ...TRILHAS_DE_STATUS_PEDIDO, c.trilha_id]);
     n += r.changes || 0;
   }
   await marcar();
