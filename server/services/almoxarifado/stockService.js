@@ -344,14 +344,18 @@ const RESERVADA_MENOS_SQL = Q.qtdSql(`CASE WHEN COALESCE(quantidade_reservada,0)
     WHERE rz.material_id = materiais_almoxarifado.id AND rz.status = 'ATIVA') THEN 0
   ELSE COALESCE(quantidade_reservada,0) - ? END`);
 
-async function claimSaldoDoLote(db, materialId, loteId, locPreferida, quantidade) {
+// Etapa 119 (C249, RN-01..RN-03): `aplicados` e o rastreador do CHAMADOR — cada linha entra nele logo depois do seu debito.
+// Com o array local de antes, a falha no debito da 2a linha saia daqui sem o `return` e o catch amplo do motor nao sabia da
+// 1a: lote em A 3 e B 3, saida de 5 com o 2o debito falhando -> 500, fisico 6, A 0 e B 3 (medido; a forma da C245/I-3). No
+// `ok: false` o desfazer CONSOME o rastreador (a linha sai dele logo depois do credito de volta): sem falha ele volta vazio e o
+// catch amplo nao credita em dobro; com falha no meio, o catch amplo credita so o que falta.
+async function claimSaldoDoLote(db, materialId, loteId, locPreferida, quantidade, { aplicados = [] } = {}) {
   const linhas = await dbAll(db, `
     SELECT id, quantidade FROM estoque_saldo_almoxarifado
     WHERE material_id = ? AND lote_id IS ? AND quantidade > 0
     ORDER BY (localizacao_id IS ?) DESC, quantidade DESC, id`,
     [materialId, loteId, locPreferida || null]);
 
-  const aplicados = [];
   let restante = quantidade;
   for (const linha of linhas) {
     if (restante <= EPS) break;
@@ -368,10 +372,12 @@ async function claimSaldoDoLote(db, materialId, loteId, locPreferida, quantidade
   }
 
   if (restante > EPS) {
-    for (const a of aplicados) {
+    while (aplicados.length) {
+      const a = aplicados[0];
       await dbRun(db, `UPDATE estoque_saldo_almoxarifado
         SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         [a.quantidade, a.id]);
+      aplicados.shift();
     }
     const total = await dbGet(db, `SELECT COALESCE(SUM(quantidade),0) as total
       FROM estoque_saldo_almoxarifado WHERE material_id = ? AND lote_id IS ?`, [materialId, loteId]);
@@ -2119,10 +2125,11 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
       // `saldoLinhasSaidaParaReverter` (Etapa 6b, Task 4; hoisted no fix round 1): registra a(s)
       // linha(s) de saldo que este bloco efetivamente debitou, para a compensação do claim de
       // série logo abaixo (ou o catch amplo, se o INSERT do ledger falhar depois) poder devolver
-      // exatamente o que foi tirado. Diferente da compensação do claim de LOTE (que não precisa
-      // disto: `claimSaldoDoLote` já autocompensa as próprias linhas por dentro quando FALHA — ver
-      // a docstring dela), aqui o débito físico já teve SUCESSO quando o claim de série roda,
-      // então a reversão da(s) linha(s) é responsabilidade de quem debitou.
+      // exatamente o que foi tirado. O claim de LOTE autocompensa as próprias linhas quando RECUSA
+      // (`ok: false`, esvaziando o rastreador); quando uma linha LANÇA no meio (erro de banco), as
+      // já debitadas estão no rastreador e quem as devolve é o catch amplo (Etapa 119, C249). Aqui
+      // o débito físico já teve SUCESSO quando o claim de série roda, então a reversão da(s)
+      // linha(s) é responsabilidade de quem debitou.
       if (loteIdFinal && !permiteNegativo) {
         // Guarda no WHERE, como o resto do motor. Sem isto a subtracao negativa a linha do lote em
         // silencio: a guarda de saldo insuficiente la em cima compara com o disponivel do
@@ -2132,7 +2139,10 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
         // O claim e contra o CONJUNTO de linhas do lote, nao contra uma linha so, e NAO cria linha
         // — ver a docstring de `claimSaldoDoLote` para os dois motivos (alinhar com o saldo
         // agregado que a tela mostra; e nao deixar linha zerada atras de toda saida recusada).
-        const claim = await claimSaldoDoLote(db, material_id, loteIdFinal, locSaida, quantidade);
+        // Etapa 119 (C249): o rastreador da compensacao vai como acumulador (a linha ja debitada entra nele).
+        saldoLinhasSaidaParaReverter = [];
+        const claim = await claimSaldoDoLote(db, material_id, loteIdFinal, locSaida, quantidade,
+          { aplicados: saldoLinhasSaidaParaReverter });
         if (!claim.ok) {
           // O físico do material já foi debitado acima (linha ~439-452/rowRes quando a saída
           // consumia reserva, ou ~460-468 no caminho simples) antes deste claim rodar — não há
@@ -2143,7 +2153,6 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
             new Error(`Saldo insuficiente no lote ${loteCodigoFinal}. Disponível: ${claim.disponivel} ${material.unidade}`),
             { status: 400 });
         }
-        saldoLinhasSaidaParaReverter = claim.linhas;
       } else if (!loteIdFinal) {
         // Etapa 51 (RN-01/02): sem lote, a saída drena os ENDEREÇOS com saldo (a origem declarada
         // ou a padrão primeiro) e só o resto vai para a linha "sem localização atribuída". A
