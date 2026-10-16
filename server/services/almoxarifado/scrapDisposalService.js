@@ -46,7 +46,7 @@
  * Quem quiser marcar a sobra como SUCATEADA usa o PUT /sobras/:id da Task 1, que audita.
  */
 const { dbRun, dbAll, dbGet } = require('./db');
-const { registrarAuditoria } = require('./audit');
+const { registrarAuditoria, registrarAuditoriaDoAto } = require('./audit');
 const { can, getPerfilFromUser } = require('./permissions');
 const caixaSql = require('./caixaSql'); // Etapa 97 (T2, B491)
 // Etapa 96 (C176): a regra unica de quantidade (namespace — Fase 2, I3).
@@ -286,7 +286,8 @@ async function inserirSolicitacao(db, user, linha, extraAuditoria = {}) {
     user.id, nomeDoUsuario(user), ouNulo(observacoes), ncId || null,
   ]);
 
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): o ato ja foi gravado; a falha da Auditoria nao pode responder 500 sobre ele.
+  await registrarAuditoriaDoAto(db, {
     entidade: 'sucateamento',
     entidade_id: ins.lastID,
     acao: 'solicitar',
@@ -713,7 +714,8 @@ async function aprovar(db, user, id, pernaNome) {
   // Auditoria DEPOIS da baixa, de proposito: gravada antes, ela afirmaria uma aprovacao que a
   // compensacao acabou de desfazer. O caminho compensado deixa a sua propria linha
   // (`acao: 'compensacao'`), que e a versao verdadeira do que aconteceu.
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): o ato ja foi gravado; a falha da Auditoria nao pode responder 500 sobre ele.
+  await registrarAuditoriaDoAto(db, {
     entidade: 'sucateamento',
     entidade_id: Number(id),
     acao: 'aprovar',
@@ -766,7 +768,8 @@ async function rejeitar(db, user, id, motivo) {
       + 'estava aberta. Recarregue a fila e confira o estado atual.', 409);
   }
 
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): o ato ja foi gravado; a falha da Auditoria nao pode responder 500 sobre ele.
+  await registrarAuditoriaDoAto(db, {
     entidade: 'sucateamento',
     entidade_id: Number(id),
     acao: 'rejeitar',
@@ -809,7 +812,8 @@ async function cancelar(db, user, id) {
       + 'estava aberta. Recarregue a fila e confira o estado atual.', 409);
   }
 
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): o ato ja foi gravado; a falha da Auditoria nao pode responder 500 sobre ele.
+  await registrarAuditoriaDoAto(db, {
     entidade: 'sucateamento',
     entidade_id: Number(id),
     acao: 'cancelar',
@@ -872,7 +876,9 @@ async function registrarDestino(db, user, id, data = {}) {
       + 'pessoa enquanto esta tela estava aberta. Recarregue e confira.', 409);
   }
 
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): o ato ja foi gravado; a falha da Auditoria nao pode responder 500 sobre ele. Aqui, pior: o
+  // catch da rota apagaria do disco o comprovante que a linha ja referencia.
+  await registrarAuditoriaDoAto(db, {
     entidade: 'sucateamento',
     entidade_id: Number(id),
     acao: 'registrar_destino',

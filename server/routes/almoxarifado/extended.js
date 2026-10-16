@@ -847,7 +847,8 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
       const { os_id = mov.os_id, projeto_id = mov.projeto_id, centro_custo_id = mov.centro_custo_id } = req.body;
       await dbRun(db, `UPDATE movimentacoes_almoxarifado SET os_id=?, projeto_id=?, centro_custo_id=?, regularizacao_pendente=0 WHERE id=?`,
         [os_id || null, projeto_id || null, centro_custo_id || null, req.params.id]);
-      await registrarAuditoria(db, {
+      // Etapa 121 (C252, B784): o UPDATE ja valeu; a falha da Auditoria respondia 500 e repetir dava "nao esta pendente".
+      await audit.registrarAuditoriaDoAto(db, {
         entidade: 'movimentacao', entidade_id: mov.id, acao: 'REGULARIZACAO',
         usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
         dados_novos: { os_id, projeto_id, centro_custo_id },

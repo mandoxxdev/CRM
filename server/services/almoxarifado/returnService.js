@@ -351,7 +351,9 @@ async function registrarDevolucao(db, user, data) {
     if (emitidas === 0) {
       // Nada aconteceu no estoque: a linha da devolucao e pura ficcao. Apaga.
       await dbRun(db, 'DELETE FROM devolucoes_material_almoxarifado WHERE id = ?', [r.lastID]);
-      await registrarAuditoria(db, {
+      // Etapa 121 (C252, B784): a falha desta Auditoria trocava o 400 do motor ("exige lote") por 500 — nao-fatal, e o
+      // `throw e` abaixo segue com o erro original. `require` local: o topo do arquivo muda em paralelo (C253).
+      await require('./audit').registrarAuditoriaDoAto(db, {
         entidade: 'devolucao', entidade_id: r.lastID, acao: 'COMPENSACAO',
         usuario_id: null, usuario_nome: 'sistema',
         dados_anteriores: {
@@ -368,7 +370,8 @@ async function registrarDevolucao(db, user, data) {
       // e o livro ficaria com uma ENTRADA_DEVOLUCAO cuja `referencia` nao aponta para nada. O que
       // este ramo pode fazer e deixar o estado parcial REGISTRADO, para ser resolvido a mao —
       // desfazer a perna ja gravada daqui seria reimplementar o estorno pela metade.
-      await registrarAuditoria(db, {
+      // Etapa 121 (C252, B784): nao-fatal — a falha desta Auditoria mascarava o erro do motor e pulava o aviso abaixo.
+      await require('./audit').registrarAuditoriaDoAto(db, {
         entidade: 'devolucao', entidade_id: r.lastID, acao: 'ESTADO_PARCIAL',
         usuario_id: user.id, usuario_nome: user.nome || user.email,
         dados_novos: {
@@ -416,7 +419,8 @@ async function registrarDevolucao(db, user, data) {
     throw e;
   }
 
-  await registrarAuditoria(db, { entidade: 'devolucao', entidade_id: r.lastID, acao: 'CRIACAO', usuario_id: user.id, usuario_nome: user.nome || user.email });
+  // Etapa 121 (C252, B784): a devolucao ja esta no livro; a falha da Auditoria respondia 500 e repetir devolvia de novo.
+  await require('./audit').registrarAuditoriaDoAto(db, { entidade: 'devolucao', entidade_id: r.lastID, acao: 'CRIACAO', usuario_id: user.id, usuario_nome: user.nome || user.email });
   return { id: r.lastID };
 }
 

@@ -12,7 +12,7 @@
  * recriaria a mesma ilha, so que com uma casca de validacao por cima.
  */
 const { dbRun, dbAll, dbGet } = require('./db');
-const { registrarAuditoria } = require('./audit');
+const { registrarAuditoriaDoAto } = require('./audit');
 const stockService = require('./stockService');
 const ownerRules = require('./ownerRules');
 const lotService = require('./lotService');
@@ -100,7 +100,8 @@ async function atualizarSobra(db, user, id, data) {
 
   // O `user` deixa de ser parametro morto: grava quem agiu, com o antes/depois completo — o
   // pedaco da spec 23 que faltava fechar neste servico.
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): o ato ja foi gravado; a falha da Auditoria nao pode responder 500 sobre ele.
+  await registrarAuditoriaDoAto(db, {
     entidade: 'sobra',
     entidade_id: Number(id),
     acao: 'atualizar',
@@ -397,7 +398,8 @@ async function gerarRetalho(db, user, payload = {}) {
   // Auditoria FORA do try de proposito: ela e o registro de um evento que JA aconteceu por
   // inteiro. Dentro, uma falha de gravacao do log desfaria uma geracao de retalho valida — e
   // auditoria e para nao perder o rastro, nao para poder cancelar o fato.
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): o ato ja foi gravado; a falha da Auditoria nao pode responder 500 sobre ele.
+  await registrarAuditoriaDoAto(db, {
     entidade: 'sobra',
     entidade_id: sobraId,
     acao: 'gerar_retalho',
