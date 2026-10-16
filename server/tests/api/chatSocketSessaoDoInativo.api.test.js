@@ -84,7 +84,7 @@ test('[RN-01] ativo conecta', async () => {
   c.fechar();
 });
 
-for (const [rotulo, id] of [['desativado (ativo = 0)', 3], ['apagado (sem linha)', 404], ['ativo NULL', 5], ["ativo = 'true'", 6]]) {
+for (const [rotulo, id] of [['desativado (ativo = 0)', 3], ['apagado (sem linha)', 404], ['ativo NULL', 5], ["ativo = 'true'", 6], ['ativo = 2 (F5 r3 N4: o PUT grava o valor cru)', 10]]) {
   test(`[RN-01] ${rotulo} -> connect_error L11 com data.code USUARIO_INATIVO`, async () => {
     const c = abre({ id });
     assert.strictEqual(await c.pronto, 'recusado');
@@ -93,7 +93,9 @@ for (const [rotulo, id] of [['desativado (ativo = 0)', 3], ['apagado (sem linha)
   });
 }
 
-for (const [rotulo, payload] of [['sem id', { email: 'x@t.com', role: 'admin' }], ['id 0', { id: 0 }], ["id 'abc'", { id: 'abc' }]]) {
+for (const [rotulo, payload] of [['sem id', { email: 'x@t.com', role: 'admin' }], ['id 0', { id: 0 }], ["id 'abc'", { id: 'abc' }],
+  // Fase 5 r3 N3: os casos da regua da 131 (idDoTokenValido) — com uma checagem local Number(id) > 0, o {id: true} conectava como o 1
+  ['id true', { id: true }], ['id 1.5', { id: 1.5 }], ['id -1', { id: -1 }], ["id ''", { id: '' }]]) {
   test(`[RN-01] token ${rotulo} -> L11 SEM ler o banco`, async () => {
     const antes = sonda.leiturasUsuarios;
     const c = abre(payload);
@@ -150,10 +152,21 @@ test('[RN-02] socket aberto antes de desativar: join -> sessao_encerrada + desco
   assert.ok(await ate(() => ex.recebeu('sessao_encerrada').length === 1));
   assert.deepStrictEqual(ex.recebeu('sessao_encerrada')[0][1], ENCERRADA);
   assert.ok(await ate(() => ex.desconectadoPeloServidor), 'desconectado pelo servidor');
+  assert.ok(await ate(() => ex.fechado), 'e o transporte fecha (disconnect(true)) — F5 r3 N12');
   await chat.emitNewMessage(1, { conversa_id: 1, conteudo: 'S-rn02' });
   assert.ok(await ate(() => msgs(ativo).includes('S-rn02')));
   assert.deepStrictEqual(msgs(ex), []);
   ativo.fechar();
+});
+
+test('[RN-02] ativo = 2 depois de conectar (F5 r3 N4): join -> sessao_encerrada + desconectado', async () => {
+  await run('UPDATE usuarios SET ativo = 1 WHERE id = 8');
+  const ex = await abreConectado({ id: 8 });
+  await run('UPDATE usuarios SET ativo = 2 WHERE id = 8');
+  ex.emit('join_conversa', 1);
+  assert.ok(await ate(() => ex.recebeu('sessao_encerrada').length === 1));
+  assert.ok(await ate(() => ex.fechado));
+  await run('UPDATE usuarios SET ativo = 0 WHERE id = 8');
 });
 
 test('[RN-02] apagado com o socket aberto: join -> sessao_encerrada + desconectado', async () => {
@@ -222,6 +235,21 @@ test('[RN-03] typing: o ativo participante chega aos outros; o desativado leva s
   um.fechar(); dois.fechar(); fora.fechar();
 });
 
+test('[RN-03] typing sem payload (F5 r1): nao derruba o processo nem o socket; o typing seguinte chega', async () => {
+  const um = await abreConectado({ id: 1 });
+  const dois = await abreConectado({ id: 2 });
+  um.emit('join_conversa', 1); dois.emit('join_conversa', 1);
+  await pausa(150);
+  dois.emit('typing');
+  dois.emit('typing', null);
+  await pausa(150);
+  dois.emit('typing', { conversa_id: 1, typing: false });
+  assert.ok(await ate(() => um.recebeu('typing').length === 1), 'o typing valido chega');
+  assert.deepStrictEqual(um.recebeu('typing')[0][1], { conversa_id: 1, usuario_id: 2, typing: false });
+  assert.strictEqual(dois.conectado, true);
+  um.fechar(); dois.fechar();
+});
+
 // ── RN-04 — derrubar na hora ──────────────────────────────────────────────────────────────
 test("[RN-04] encerrarSocketsDoUsuario('02'): os dois sockets do 2 levam sessao_encerrada e caem pelo servidor (41); o do 1 nao", async () => {
   const d1 = await abreConectado({ id: 2 });
@@ -235,6 +263,16 @@ test("[RN-04] encerrarSocketsDoUsuario('02'): os dois sockets do 2 levam sessao_
   await pausa(100);
   assert.strictEqual(um.conectado, true);
   assert.deepStrictEqual(um.recebeu('sessao_encerrada'), []);
+  um.fechar();
+});
+
+test("[RN-04] token com id '02' (F5 r3 N15): a sala e pelo numero — encerrarSocketsDoUsuario(2) o derruba", async () => {
+  const c = await abreConectado({ id: '02' });
+  const um = await abreConectado({ id: 1 });
+  chat.encerrarSocketsDoUsuario(2);
+  assert.ok(await ate(() => c.fechado && c.desconectadoPeloServidor), 'o socket do 2 (token 02) cai');
+  await pausa(100);
+  assert.strictEqual(um.conectado, true);
   um.fechar();
 });
 
@@ -266,7 +304,11 @@ test('[RN-04] encerrarSocketsSeInativo com erro na releitura -> derruba SEM sess
   assert.strictEqual(ativo.desconectadoPeloServidor, true, '41');
   assert.deepStrictEqual(ativo.recebeu('sessao_encerrada'), [], 'sem o evento: o client nao desloga o ativo');
   const volta = await abreConectado({ id: 2 });
-  volta.fechar();
+  // F5 r3 N16: o ramo do erro tambem normaliza o id ('02' -> sala user:2)
+  sonda.falha = 'outro';
+  try { await chat.encerrarSocketsSeInativo('02'); } finally { sonda.falha = null; }
+  assert.ok(await ate(() => volta.fechado), "'02' com erro na releitura derruba o socket do 2");
+  assert.deepStrictEqual(volta.recebeu('sessao_encerrada'), []);
   await pausa(100);
   assert.strictEqual(outro.conectado, true, 'o de outro usuario nao cai');
   outro.fechar();
@@ -278,11 +320,11 @@ test('[RN-04] encerrarSocketsSeInativo com erro na releitura -> derruba SEM sess
     cargo TEXT, role TEXT DEFAULT 'usuario', ativo INTEGER DEFAULT 1, created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`, (e) => (e ? rej(e) : res())));
   await initChatSchema(real);
-  for (const [id, ativo] of [[1, 1], [2, 1], [3, 0], [5, null], [6, 'true'], [7, 1], [8, 1]]) {
+  for (const [id, ativo] of [[1, 1], [2, 1], [3, 0], [5, null], [6, 'true'], [7, 1], [8, 1], [10, 2]]) {
     await run('INSERT INTO usuarios (id, nome, email, senha, ativo) VALUES (?, ?, ?, ?, ?)', [id, `U${id}`, `u${id}@t.com`, 'x', ativo]);
   }
   await run("INSERT INTO chat_conversas (id, tipo, nome) VALUES (1, 'grupo', 'G')");
-  for (const u of [1, 2, 3, 5, 6, 8]) await run('INSERT INTO chat_participantes (conversa_id, usuario_id) VALUES (1, ?)', [u]);
+  for (const u of [1, 2, 3, 5, 6, 8, 10]) await run('INSERT INTO chat_participantes (conversa_id, usuario_id) VALUES (1, ?)', [u]);
 
   server = http.createServer();
   chat = initChatSocket(server, db, SEGREDO);

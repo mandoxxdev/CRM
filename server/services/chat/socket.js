@@ -119,8 +119,10 @@ function initChatSocket(httpServer, db, jwtSecret) {
       socket.leave(`conversa:${Number(conversaId)}`);
     });
 
-    socket.on('typing', async ({ conversa_id, typing }) => {
+    socket.on('typing', async (payload) => {
       try {
+        // Etapa 132 (Fase 5 r1): sem payload a desestruturacao lancava fora do try (erro nao tratado no log a cada evento).
+        const { conversa_id, typing } = payload || {};
         const id = Number(conversa_id);
         if (!id) return;
         const { ativo, participa } = await lerSituacaoNaConversa(db, id, userId);
