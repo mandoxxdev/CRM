@@ -379,11 +379,17 @@ const L6 = 'O recebimento mudou de situação enquanto a conferência era salva 
     assert.strictEqual((await item(r.its[0])).quantidade_recebida, 3);
   });
 
-  await test('[RN-09 F5 r3-C5] /fiscal: item entrado sem quantidade no payload (so o valor) passa 200', async () => {
+  // Etapa 130 (C267, B839): este cenario mandava o VALOR UNITARIO no item entrado e esperava 200 com o valor gravado. Desde a 130 o
+  // unitario do item entrado so aceita o eco (409, `fiscalItemEntrado.api.test.js` RN-03); o que continua aceito sem quantidade e o
+  // ICMS/IPI/reducao — o cenario prende a mesma coisa (o item entrado sem quantidade no payload nao recusa pela quantidade) com eles.
+  await test('[RN-09 F5 r3-C5] /fiscal: item entrado sem quantidade no payload (so o ICMS) passa 200 — com o unitario, 409 desde a 130', async () => {
     const r = await notaParcial([{ esp: 5, rec: 5 }], [0]);
-    const x = await fiscalDe(r.id, { itens: [{ id: r.its[0], valor_unitario: 2 }] });
+    const x = await fiscalDe(r.id, { itens: [{ id: r.its[0], valor_icms: 2 }] });
     assert.strictEqual(x.status, 200, JSON.stringify(x.body));
-    assert.strictEqual((await item(r.its[0])).valor_unitario, 2);
+    assert.strictEqual((await item(r.its[0])).valor_icms, 2);
+    const v = await fiscalDe(r.id, { itens: [{ id: r.its[0], valor_unitario: 2 }] });
+    assert.strictEqual(v.status, 409, JSON.stringify(v.body));
+    assert.strictEqual((await item(r.its[0])).valor_unitario, 0);
   });
 
   await test('[RN-09 F5 r3-C6] /fiscal: item entrado de OUTRO recebimento no payload nao recusa e nao muda', async () => {

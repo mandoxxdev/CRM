@@ -957,6 +957,16 @@ const LITERAIS_CONFERENCIA = {
   MUDOU: 'O recebimento mudou de situação enquanto a conferência era salva — recarregue e confira de novo',
   ITEM_JA_ENTROU: 'Item já deu entrada no estoque — a quantidade dele não muda mais; se a contagem estava errada, '
     + 'corrija o estoque por um ajuste (perfil Administrador ou Almoxarife do almoxarifado)',
+  // Etapa 130 (C267, Fase 2 I1/I2/M6): o caminho que existe para lote/serie digitados errado e estornar a entrada
+  // (`ajustar_estoque`) e dar a entrada de novo (`movimentar`) — so o Administrador tem os dois. Ele reabre o pedido de compra e
+  // solta a reserva de quem esperava (medido, sonda e130rev2-l8): a literal diz isso. "ficaram registrados" e verdade tambem para o
+  // item que entrou sem lote.
+  LOTE_SERIE_JA_ENTROU: 'Item já deu entrada no estoque — o lote e as séries dele ficaram registrados no estoque com o que a nota '
+    + 'tinha na entrada e não mudam mais pela nota; para corrigir, o Administrador do almoxarifado estorna a entrada e dá a entrada '
+    + 'de novo (o pedido de compra e a reserva de quem esperava voltam a esperar)',
+  // Etapa 130 (C267, B839): "a entrada ja foi feita com o valor" e verdade tambem com o unitario 0 (o motor nao toca no custo).
+  VALOR_JA_ENTROU: 'Item já deu entrada no estoque — o valor unitário e o total dele não mudam mais: a entrada no estoque já foi '
+    + 'feita com o valor que a nota tinha',
 };
 
 /** A marca de processamento VIVA — o complemento exato do "livre" de `reivindicarProcessamento` (10 minutos). */
@@ -1140,10 +1150,58 @@ async function avancarWorkflow(db, user, recebimentoId, acao, opcoes = {}) {
  * Etapa 129 (RN-09, Fase 2 I1) — o `/fiscal` e a outra porta que escreve `quantidade_recebida`. Numa nota parcial (EM_ENTRADA_NF
  * com um item ja entrado) ele aceitava reescrever a quantidade do item entrado: item 2, movimento 5, fisico 5 (sonda e129rev2). O
  * modal de NF REENVIA a quantidade de todos os itens, entao o eco do mesmo valor (`Q.qtd` dos dois lados, a regua de gravacao do
- * modulo; o gravado pela `quantidadeDoItem` — o NULL legado vale a esperada) passa. Lote, serie e valores do item entrado continuam
- * aceitos aqui (C267, declarado).
+ * modulo; o gravado pela `quantidadeDoItem` — o NULL legado vale a esperada) passa. Lote, serie e valores do item entrado ficavam
+ * aceitos aqui (C267, declarado) — fechados desde a Etapa 130 (C267, `assertItemEntradoIntacto` logo abaixo).
  */
-async function assertQuantidadeDoItemEntradoIntacta(db, recebimentoId, itens) {
+/**
+ * Etapa 130 (C267; RN-01..RN-03 e B838/B839) — o resto do item entrado. A entrada criou o lote (codigo, validade, fabricacao,
+ * corrida) e as series com o que o item tinha, e o motor usou o valor unitario; depois dela o texto do item so e lido para mostrar,
+ * imprimir a etiqueta, devolver o reprovado pelo lote (o texto e a reserva do `lote_id`) e dizer ao comprador o ultimo custo de
+ * entrada (`purchaseService.contextoMaterial`). Mudar o texto faria o documento contradizer o estoque (sonda e130fase0). O modal da
+ * nota REENVIA todos os campos de todos os itens, entao o eco passa — comparado depois de normalizar dos dois lados. ICMS, IPI e
+ * reducao ninguem le depois da entrada: continuam aceitos (B839). Ausente (`undefined`/`null`) nao e mudanca: o COALESCE mantem.
+ */
+const textoDoItem = (v) => (v === undefined || v === null ? '' : String(v).trim());
+function dataDoItem(v) {
+  const t = textoDoItem(v);
+  let m = /^(\d{4}-\d{2}-\d{2})/.exec(t);
+  if (m) return m[1];
+  m = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(t);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : t;
+}
+/** As series como CONJUNTO: lista, texto JSON de lista ou texto uma por linha; aparadas, sem vazias, ordenadas. */
+function seriesDoItem(v) {
+  let lista = null;
+  if (Array.isArray(v)) lista = v;
+  else {
+    const t = textoDoItem(v);
+    if (t.startsWith('[')) {
+      try { const j = JSON.parse(t); if (Array.isArray(j)) lista = j; } catch (e) { lista = null; }
+    }
+    if (!lista) lista = t.split(/\r?\n/);
+  }
+  return lista.map((x) => textoDoItem(x)).filter(Boolean).sort().join('\n');
+}
+/** A regua do proprio UPDATE para unitario e total: `parseFloat(v) || null` — 0, '' e ilegivel valem "nao informado". */
+const valorEfetivo = (v) => parseFloat(v) || null;
+const CAMPOS_LOTE_DO_ITEM = ['lote', 'corrida_lote'];
+const DATAS_LOTE_DO_ITEM = ['data_validade_lote', 'data_fabricacao_lote'];
+const VALORES_DO_ITEM = ['valor_unitario', 'valor_total'];
+const informado = (v) => v !== undefined && v !== null;
+
+function loteOuSerieMudou(item, atual) {
+  if (CAMPOS_LOTE_DO_ITEM.some((c) => informado(item[c]) && textoDoItem(item[c]) !== textoDoItem(atual[c]))) return true;
+  if (DATAS_LOTE_DO_ITEM.some((c) => informado(item[c]) && dataDoItem(item[c]) !== dataDoItem(atual[c]))) return true;
+  return informado(item.series) && seriesDoItem(item.series) !== seriesDoItem(atual.series);
+}
+function valorMudou(item, atual) {
+  return VALORES_DO_ITEM.some((c) => {
+    const novo = valorEfetivo(item[c]);
+    return novo !== null && Math.abs(novo - (valorEfetivo(atual[c]) || 0)) > 1e-6;
+  });
+}
+
+async function assertItemEntradoIntacto(db, recebimentoId, itens) {
   // Fase 5 (r1 I1, reproduzido): com a marca de processamento viva, o `/fiscal` gravava a quantidade de um item ainda na fila do
   // `darEntradaEstoque` (que ja leu os itens): documento 1, fisico 4, PROCESSADO. A mesma recusa do `/conferir` (RN-03).
   if (itens && itens.length) {
@@ -1151,13 +1209,20 @@ async function assertQuantidadeDoItemEntradoIntacta(db, recebimentoId, itens) {
       [recebimentoId]);
     if (marca) throw Object.assign(new Error(LITERAL_EM_PROCESSAMENTO), { status: 409 });
   }
+  // Etapa 130 (Fase 2 M7): por item, na ordem do payload — quantidade (L7), lote/series (L8), valores (L9).
   for (const item of itens || []) {
-    if (item.quantidade_recebida == null) continue;
-    const atual = await dbGet(db, `SELECT quantidade_recebida, quantidade_esperada, entrada_estoque_em
-      FROM recebimentos_material_itens_almoxarifado WHERE id = ? AND recebimento_id = ?`, [item.id, recebimentoId]);
+    if (!item || typeof item !== 'object') continue;
+    const atual = await dbGet(db, 'SELECT * FROM recebimentos_material_itens_almoxarifado WHERE id = ? AND recebimento_id = ?',
+      [item.id, recebimentoId]);
     if (!atual || !atual.entrada_estoque_em) continue;
-    if (Q.qtd(item.quantidade_recebida) !== Q.qtd(quantidadeDoItem(atual))) {
+    if (item.quantidade_recebida != null && Q.qtd(item.quantidade_recebida) !== Q.qtd(quantidadeDoItem(atual))) {
       throw Object.assign(new Error(LITERAIS_CONFERENCIA.ITEM_JA_ENTROU), { status: 409 });
+    }
+    if (loteOuSerieMudou(item, atual)) {
+      throw Object.assign(new Error(LITERAIS_CONFERENCIA.LOTE_SERIE_JA_ENTROU), { status: 409 });
+    }
+    if (valorMudou(item, atual)) {
+      throw Object.assign(new Error(LITERAIS_CONFERENCIA.VALOR_JA_ENTROU), { status: 409 });
     }
   }
 }
@@ -1181,8 +1246,9 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
   } = data;
   // Etapa 70, Fase 5: antes da guarda de NF e do UPDATE do cabecalho. Ver `normalizarRecebida`.
   const itens = normalizarRecebidasDoPayload(data.itens);
-  // Etapa 129 (RN-09, Fase 2 I1): antes de qualquer gravacao — a quantidade de item ja entrado nao muda.
-  await assertQuantidadeDoItemEntradoIntacta(db, recebimentoId, itens);
+  // Etapa 129 (RN-09, Fase 2 I1): antes de qualquer gravacao — a quantidade de item ja entrado nao muda. Etapa 130 (C267): nem o
+  // lote, as series, o valor unitario e o total.
+  await assertItemEntradoIntacto(db, recebimentoId, itens);
 
   let pedido = null;
   if (pedido_compra_id || pedido_compra_numero) {
@@ -1262,22 +1328,24 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
       const qtd = parseFloat(item.quantidade_recebida) || parseFloat(item.quantidade_esperada) || 0;
       const vUnit = parseFloat(item.valor_unitario) || 0;
       const vTotal = parseFloat(item.valor_total) || (qtd * vUnit);
-      // Etapa 129 (RN-09): a defesa no comando — o item que ganhou a entrada depois da guarda mantem a quantidade.
+      // Etapa 129 (RN-09): a defesa no comando — o item que ganhou a entrada depois da guarda mantem a quantidade. Etapa 130
+      // (RN-06): e o lote, as datas e a corrida dele, as series, o valor unitario e o total (ICMS, IPI e reducao nao: B839).
       const upd = await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado SET
         quantidade_recebida = CASE WHEN entrada_estoque_em IS NULL THEN COALESCE(?, quantidade_recebida)
           ELSE quantidade_recebida END,
-        valor_unitario = COALESCE(?, valor_unitario),
-        valor_total = COALESCE(?, valor_total),
+        valor_unitario = CASE WHEN entrada_estoque_em IS NULL THEN COALESCE(?, valor_unitario) ELSE valor_unitario END,
+        valor_total = CASE WHEN entrada_estoque_em IS NULL THEN COALESCE(?, valor_total) ELSE valor_total END,
         valor_icms = COALESCE(?, valor_icms),
         valor_ipi = COALESCE(?, valor_ipi),
         reducao_icms_percent = COALESCE(?, reducao_icms_percent),
         conferencia_quantidade = COALESCE(?, conferencia_quantidade),
         conferencia_descricao = COALESCE(?, conferencia_descricao),
-        lote = COALESCE(?, lote),
-        data_validade_lote = COALESCE(?, data_validade_lote),
-        data_fabricacao_lote = COALESCE(?, data_fabricacao_lote),
-        corrida_lote = COALESCE(?, corrida_lote),
-        series = COALESCE(?, series)
+        lote = CASE WHEN entrada_estoque_em IS NULL THEN COALESCE(?, lote) ELSE lote END,
+        data_validade_lote = CASE WHEN entrada_estoque_em IS NULL THEN COALESCE(?, data_validade_lote) ELSE data_validade_lote END,
+        data_fabricacao_lote = CASE WHEN entrada_estoque_em IS NULL THEN COALESCE(?, data_fabricacao_lote)
+          ELSE data_fabricacao_lote END,
+        corrida_lote = CASE WHEN entrada_estoque_em IS NULL THEN COALESCE(?, corrida_lote) ELSE corrida_lote END,
+        series = CASE WHEN entrada_estoque_em IS NULL THEN COALESCE(?, series) ELSE series END
         WHERE id = ? AND recebimento_id = ?
           AND NOT EXISTS (SELECT 1 FROM recebimentos_material_almoxarifado r WHERE r.id = ? AND ${marcaVivaSql('r')})`, [
         item.quantidade_recebida, vUnit || null, vTotal || null, // recebida ja normalizada
