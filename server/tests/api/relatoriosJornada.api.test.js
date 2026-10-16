@@ -137,8 +137,10 @@ async function criarMaterial(db, over = {}) {
     // Etapa 14, Task 3: custo-por-projeto nasce gated (gerenciar_reposicao, D6) — PRODUCAO
     // tambem nao o ve. 3 gated agora, nao 2.
     assert.ok(!tipos.includes('custo-por-projeto'), JSON.stringify(tipos));
+    // Etapa 129: perdas-por-motivo nasce gated (gerenciar_reposicao, B832) — 4 gated agora.
+    assert.ok(!tipos.includes('perdas-por-motivo'), JSON.stringify(tipos));
     assert.ok(tipos.includes('indicadores'), 'indicadores tem acao:null — PRODUCAO deveria ve-lo');
-    assert.strictEqual(tipos.length, Object.keys(RELATORIOS).length - 3, JSON.stringify(tipos));
+    assert.strictEqual(tipos.length, Object.keys(RELATORIOS).length - 4, JSON.stringify(tipos));
 
     for (const { tipo } of res.body.relatorios) {
       const qs = tipo === 'materiais-cliente' ? `?cliente_id=${clienteId}` : '';

@@ -2317,6 +2317,8 @@ module.exports = function registerExtendedRoutes(app, db, authenticateToken, upl
     'ajustes-por-motivo': (db, q) => reportService.relatorioAjustesPorMotivo(db, q),
     // Etapa 67 (T3): divergencia e rejeicao por fornecedor (snapshot do recebimento).
     'qualidade-fornecedores': (db, q) => reportService.relatorioQualidadeFornecedores(db, q),
+    // Etapa 129 (feature 21): as perdas com valor, por tipo e motivo.
+    'perdas-por-motivo': (db, q) => reportService.relatorioPerdasPorMotivo(db, q),
   };
 
   // Exposto SO para o teste de paridade (relatoriosRegistro.api.test.js) inspecionar o PAR

@@ -311,6 +311,51 @@ async function relatorioAjustesPorMotivo(db, filters = {}) {
 }
 
 /**
+ * Etapa 129 (feature 21, RN-10..RN-16) — as PERDAS com valor, por tipo e motivo. Medido na 127: so existia o historico com
+ * `tipo=PERDA`, sem valor. Le o LIVRO: `PERDA` e `PERDA_TERCEIRO` nao estornadas (`cancelado = 0`; o ESTORNO e outro tipo e nao
+ * casa); a SUCATA tem relatorio proprio (`sucata-financeiro`). O motivo e o da `ajustes-por-motivo` (o cadastro pelo nome ATUAL,
+ * "(desativado)", "Motivo #id"; sem cadastro, junto em "Sem motivo do cadastro"). O valor e pelo custo ATUAL
+ * (`custoUnitarioSql`, fonte unica), retroativo — o livro nao guarda custo por movimento, como `custo-por-projeto` e
+ * `sucata-financeiro` declaram. Quantidade NAO e somada (cada material tem sua unidade). Material de cliente fora (patrimonio
+ * alheio); material inativado conta (fato do livro). Datas pelo DIA em UTC.
+ */
+async function relatorioPerdasPorMotivo(db, filters = {}) {
+  const params = [];
+  let filtro = '';
+  const materialBruto = filters.material_id;
+  if (materialBruto !== undefined && materialBruto !== null && String(materialBruto).trim() !== '') {
+    if (!/^\d+$/.test(String(materialBruto).trim()) || Number(materialBruto) <= 0) {
+      throw Object.assign(new Error('Parâmetro "material_id" deve ser um número inteiro positivo'), { status: 400 });
+    }
+    filtro += ' AND mv.material_id = ?';
+    params.push(Number(materialBruto));
+  }
+  if (filters.data_inicio) { filtro += ' AND DATE(mv.created_at) >= ?'; params.push(filters.data_inicio); }
+  if (filters.data_fim) { filtro += ' AND DATE(mv.created_at) <= ?'; params.push(filters.data_fim); }
+  const rows = await dbAll(db, `
+    SELECT
+      mv.tipo AS tipo,
+      CASE WHEN mv.motivo_id IS NOT NULL THEN 'Cadastro' ELSE 'Texto livre' END AS origem,
+      mv.motivo_id AS motivo_id,
+      CASE WHEN mv.motivo_id IS NOT NULL
+             THEN COALESCE(mm.nome, 'Motivo #' || mv.motivo_id)
+                  || CASE WHEN COALESCE(mm.ativo, 1) = 0 THEN ' (desativado)' ELSE '' END
+           ELSE 'Sem motivo do cadastro' END AS motivo,
+      COUNT(*) AS lancamentos,
+      COUNT(DISTINCT mv.material_id) AS materiais,
+      ROUND(SUM(mv.quantidade * ${custoUnitarioSql('m')}), 2) AS valor,
+      MAX(mv.created_at) AS ultimo_em
+    FROM movimentacoes_almoxarifado mv
+    JOIN materiais_almoxarifado m ON m.id = mv.material_id
+    LEFT JOIN motivos_movimentacao_almoxarifado mm ON mm.id = mv.motivo_id
+    WHERE mv.cancelado = 0 AND mv.tipo IN ('PERDA', 'PERDA_TERCEIRO') AND m.proprietario_cliente_id IS NULL${filtro}
+    GROUP BY 1, 2, 3, 4
+    ORDER BY valor DESC, motivo, tipo`, params);
+  return rows.map((r) => ({ ...r, lancamentos: Number(r.lancamentos) || 0, materiais: Number(r.materiais) || 0,
+    valor: Number(r.valor) || 0 }));
+}
+
+/**
  * Etapa 67 (T3): CNPJ sem pontuacao (ponto, barra, hifen, espaco) e em maiusculas — nao "so
  * digitos": o CNPJ alfanumerico (2026) tem letras, e o SQLite nao tem regex para tirar o resto.
  */
@@ -958,6 +1003,8 @@ module.exports = {
   relatorioCustoProjeto,
   // Etapa 67: regua unica dos ajustes (consumida pela chave ajustes-por-motivo)
   ajustesWhereSql, relatorioAjustesPorMotivo, relatorioQualidadeFornecedores,
+  // Etapa 129 (feature 21): as perdas com valor.
+  relatorioPerdasPorMotivo,
   // Etapa 49
   relatorioSaldoPorLote, relatorioSeriesEmEstoque, relatorioSaldosComprometidos,
 };

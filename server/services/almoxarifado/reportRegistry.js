@@ -327,6 +327,38 @@ const RELATORIOS = {
   // (spec 27). Gate null (D10): recebimentos-pendentes ja mostra fornecedor sem gate. A nota e a
   // literal do plano REVISTA pela Fase 2: "conferido" e a conferencia FINALIZADA (o sinal medido na
   // T3), a chave do fornecedor comeca pelo CNPJ, e a entrega parcial combinada esta declarada.
+  // Etapa 129 (feature 21, RN-10..RN-16): as perdas com valor. Gate gerenciar_reposicao (B832): dado de custo, nasce fechado
+  // como o custo-por-projeto (D6 da Etapa 14) — a sucata-financeiro, aberta desde a Etapa 9, e anterior a essa decisao.
+  'perdas-por-motivo': {
+    titulo: 'Perdas por motivo',
+    categoria: 'Gestão',
+    acao: 'gerenciar_reposicao',
+    exportavel: true,
+    nota: 'Soma as perdas do livro — PERDA e PERDA_TERCEIRO (perda de material em terceiro) —, sem as estornadas. A Sucata tem '
+      + 'relatório próprio (Sucata — financeiro) e não entra, nem os ajustes negativos. O valor é a quantidade perdida × o custo ATUAL '
+      + 'do material (custo médio, ou o custo unitário quando não há média), retroativo: o livro não guarda custo por movimento, então '
+      + 'um período fechado muda de valor quando chega nota nova. A quantidade não é somada (cada material tem sua unidade). O motivo '
+      + 'do cadastro aparece pelo nome ATUAL (renomear junta as linhas antigas); as perdas sem motivo do cadastro aparecem juntas em '
+      + '"Sem motivo do cadastro". Materiais de clientes ficam fora (patrimônio alheio); material inativado conta. As datas comparam o '
+      + 'DIA em UTC.',
+    limite: null,
+    params: [
+      { nome: 'data_inicio', rotulo: 'Data início', tipo: 'date', obrigatorio: false },
+      { nome: 'data_fim', rotulo: 'Data fim', tipo: 'date', obrigatorio: false },
+      { nome: 'material_id', rotulo: 'Material', tipo: 'number', obrigatorio: false },
+    ],
+    colunas: [
+      { chave: 'tipo', rotulo: 'Tipo' },
+      { chave: 'origem', rotulo: 'Origem' },
+      { chave: 'motivo_id', rotulo: 'Motivo (id)' },
+      { chave: 'motivo', rotulo: 'Motivo' },
+      { chave: 'lancamentos', rotulo: 'Lançamentos' },
+      { chave: 'materiais', rotulo: 'Materiais' },
+      { chave: 'valor', rotulo: 'Valor (custo atual)' },
+      { chave: 'ultimo_em', rotulo: 'Último em' },
+    ],
+    fn: null,
+  },
   'qualidade-fornecedores': {
     titulo: 'Qualidade por fornecedor',
     categoria: 'Gestão',
