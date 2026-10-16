@@ -49,6 +49,11 @@ describe('[RN-09] o 401 de usuario inativo desloga', () => {
     await expect(capturado.ko(erro)).rejects.toBe(erro);
     expect(window.location.href).toBe('/login?sessao_expirada=1');
     expect(localStorage.getItem('token')).toBeNull();
+    // (Fase 5 r3 N44) o 401 com OUTRO code (o NO_TOKEN do servidor) continua no aviso de sessao expirada — so o USUARIO_INATIVO encerra
+    window.location.href = INICIO;
+    const semToken = { response: { status: 401, data: { error: 'Token não fornecido', code: 'NO_TOKEN' } }, config: {} };
+    await expect(capturado.ko(semToken)).rejects.toBe(semToken);
+    expect(window.location.href).toBe('/login?sessao_expirada=1');
   });
 
   test('[F2-I2] o 401 do proprio /auth/login nao limpa nem recarrega (o formulario mostra a frase do servidor)', async () => {

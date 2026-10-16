@@ -31,6 +31,12 @@ describe('[RN-10] o aviso de sessao encerrada no login', () => {
     expect(container.textContent).not.toContain('Sessão encerrada');
   });
 
+  test('(Fase 5 r3 N45) com ?sessao_encerrada=0 nao aparece (e o formulario esta la)', () => {
+    abrir('/login?sessao_encerrada=0');
+    expect(alertas()).toEqual([]);
+    expect(container.querySelector('#email')).not.toBeNull();
+  });
+
   test('com ?sessao_expirada=1 so o de sessao expirada', () => {
     abrir('/login?sessao_expirada=1');
     expect(alertas()).toEqual([EXPIRADA]);
