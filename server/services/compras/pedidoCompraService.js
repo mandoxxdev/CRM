@@ -676,8 +676,14 @@ async function obterPedido(db, pedidoId) {
 async function alterarStatusPedido(db, pedidoId, status, user = null) {
   const pedido = await dbGet(db, 'SELECT id, numero, status FROM pedidos_compra WHERE id = ?', [pedidoId]);
   if (!pedido) throw erro(PEDIDO_NAO_ENCONTRADO, 404);
-  await dbRun(db, 'UPDATE pedidos_compra SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [status, pedido.id]);
+  // Etapa 122 (C255a, B788 — o core muda por decisao reversivel, letra B): a mudanca manual que MUDA o status limpa
+  // `fechado_automaticamente_de` no mesmo UPDATE — o `recebido` (ou o que vier) passa a ser do comprador, e o estorno da nota
+  // nao o desfaz. Reescrever o mesmo status mantem a coluna (o mesmo criterio da trilha abaixo: nao e decisao nova). Antes o
+  // estorno lia a trilha STATUS_MANUAL_ALTERADO, que e nao-fatal e pode faltar.
+  await dbRun(db, `UPDATE pedidos_compra SET status = ?,
+      fechado_automaticamente_de = CASE WHEN LOWER(COALESCE(status, '')) = LOWER(?) THEN fechado_automaticamente_de ELSE NULL END,
+      updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+  [status, status, pedido.id]);
   // Etapa 71, Fase 5 (decisao reversivel, letra B) — a porta manual passa a DEIXAR TRILHA. Ate aqui
   // ela nao auditava (assimetria deliberada da Etapa 42: o autor era o proprio ato humano), e por
   // isso o estorno da 71 nao tinha como saber que o `recebido` era do comprador: reabria o pedido

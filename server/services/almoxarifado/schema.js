@@ -677,6 +677,65 @@ async function migrateBackfillLiberacaoNcInspecoesAntigas(db, jaExistia = false)
   }
 }
 
+const MIGRATION_BACKFILL_PEDIDO_FECHADO_AUTO = 'backfill_pedido_fechado_automaticamente';
+
+/** Os status para onde a reabertura do estorno pode voltar — espelho de `STATUS_REABERTURA` do receiptService. */
+const STATUS_REABERTURA_PEDIDO = ['pendente', 'aprovado', 'em_analise', 'enviado'];
+const TRILHAS_DE_STATUS_PEDIDO = ['STATUS_AUTOMATICO_RECEBIDO', 'STATUS_AUTOMATICO_REABERTO', 'STATUS_MANUAL_ALTERADO'];
+
+/**
+ * Etapa 122 (C255a, B788) — o legado de `pedidos_compra.fechado_automaticamente_de`.
+ *
+ * Ate a 122 o "este `recebido` e do fechamento automatico" era a ULTIMA trilha de status do pedido na Auditoria (Etapa 71,
+ * `destinoDaReabertura`). A coluna passa a ser o estado; esta migracao a preenche, uma vez, para os pedidos que ja estavam
+ * `recebido` no deploy: a ultima trilha entre as tres de status e a automatica -> a coluna recebe o `dados_anteriores.status`
+ * dela (normalizado como a leitura antiga: fora da lista, ou ilegivel, `pendente`). Qualquer outra (manual, reabertura) ou
+ * nenhuma -> fica NULL, que e o que a leitura antiga decidia.
+ *
+ * LEDGER, e nao "so quando a coluna nasce" (`jaExistia`, a barreira da Etapa 44): em producao a coluna nasce pelo `index.js`
+ * (callback do CREATE, antes deste initSchema), e o backfill nunca rodaria. Re-executar (ledger perdido) e quase inofensivo:
+ * depois do deploy todo fechamento grava a coluna, e so um pedido cuja ULTIMA trilha e a automatica sem a coluna seria tocado
+ * (um PATCH manual com as duas trilhas falhando — declarado). Sem a tabela do Compras (banco novo, o initSchema chegou antes
+ * do CREATE do core): grava o ledger e sai — nao ha legado. Exportada para o teste (RN-09).
+ */
+async function migrateBackfillPedidoFechadoAutomaticamente(db) {
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS schema_migrations_almoxarifado (
+    id TEXT PRIMARY KEY,
+    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  const applied = await dbGet(db, 'SELECT 1 as ok FROM schema_migrations_almoxarifado WHERE id = ?',
+    [MIGRATION_BACKFILL_PEDIDO_FECHADO_AUTO]);
+  if (applied) return;
+  const marcar = () => dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
+    [MIGRATION_BACKFILL_PEDIDO_FECHADO_AUTO]);
+  const coluna = await dbGet(db,
+    `SELECT name FROM pragma_table_info('pedidos_compra') WHERE name = 'fechado_automaticamente_de'`);
+  if (!coluna) { await marcar(); return; }
+
+  const ph = TRILHAS_DE_STATUS_PEDIDO.map(() => '?').join(', ');
+  const candidatos = await dbAll(db, `SELECT p.id,
+      (SELECT a.acao FROM auditoria_log_almoxarifado a WHERE a.entidade = 'pedido_compra' AND a.entidade_id = p.id
+        AND a.acao IN (${ph}) ORDER BY a.id DESC LIMIT 1) AS acao,
+      (SELECT a.dados_anteriores FROM auditoria_log_almoxarifado a WHERE a.entidade = 'pedido_compra' AND a.entidade_id = p.id
+        AND a.acao IN (${ph}) ORDER BY a.id DESC LIMIT 1) AS anteriores
+    FROM pedidos_compra p
+    WHERE LOWER(COALESCE(p.status, '')) = 'recebido' AND p.fechado_automaticamente_de IS NULL`,
+  [...TRILHAS_DE_STATUS_PEDIDO, ...TRILHAS_DE_STATUS_PEDIDO]);
+  let n = 0;
+  for (const c of candidatos) {
+    if (c.acao !== 'STATUS_AUTOMATICO_RECEBIDO') continue; // eslint-disable-line no-continue
+    let anterior = '';
+    try { anterior = String((JSON.parse(c.anteriores || 'null') || {}).status || '').toLowerCase(); } catch (_) { anterior = ''; }
+    const destino = STATUS_REABERTURA_PEDIDO.includes(anterior) ? anterior : 'pendente';
+    // eslint-disable-next-line no-await-in-loop
+    const r = await dbRun(db, `UPDATE pedidos_compra SET fechado_automaticamente_de = ?
+      WHERE id = ? AND fechado_automaticamente_de IS NULL AND LOWER(COALESCE(status, '')) = 'recebido'`, [destino, c.id]);
+    n += r.changes || 0;
+  }
+  await marcar();
+  if (n > 0) console.log(`✅ Migração ${MIGRATION_BACKFILL_PEDIDO_FECHADO_AUTO} aplicada (${n} pedido(s) fechado(s) automaticamente)`);
+}
+
 const MIGRATION_BACKFILL_EXECUCAO_NC = 'backfill_execucao_estado_nc';
 
 /**
@@ -2320,6 +2379,14 @@ async function initSchemaUmaExecucao(db) {
   await dbRun(db, `CREATE INDEX IF NOT EXISTS idx_auditoria_almox_usuario
     ON auditoria_log_almoxarifado(usuario_id)`);
 
+  // Etapa 122 (C255a, B788): o fechamento automatico do pedido de compra numa COLUNA do pedido (tabela do Compras, core —
+  // decisao reversivel na letra B). Tambem em `ALTERS_PEDIDOS_COMPRA` do index.js: aqui cobre o harness e a ordem do boot.
+  // Depois da Auditoria, porque o backfill le a trilha. Sem a tabela do Compras (o initSchema chegou antes do CREATE do core
+  // num banco novo), a coluna vem do index.js e o backfill grava o ledger e sai.
+  const temPedidosCompra = await dbGet(db, "SELECT name FROM sqlite_master WHERE type='table' AND name='pedidos_compra'");
+  if (temPedidosCompra) await safeAlter(db, 'ALTER TABLE pedidos_compra ADD COLUMN fechado_automaticamente_de TEXT');
+  await migrateBackfillPedidoFechadoAutomaticamente(db);
+
   // ── Solicitações de compra (integração futura) ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS solicitacoes_compra_almoxarifado (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2829,6 +2896,8 @@ module.exports = {
   // Etapa 45: mesmo motivo — o cenario do backfill precisa roda-la DEPOIS de criar a NC decidida,
   // que e o unico jeito de simular "a NC ja estava decidida no dia do deploy" num banco de teste.
   migrateBackfillExecucaoEstadoNc,
+  // Etapa 122 (C255a): o cenario do legado roda a migracao depois de montar o pedido e as trilhas.
+  migrateBackfillPedidoFechadoAutomaticamente,
   CATEGORIAS_SEED,
   FAMILIAS_SEED,
   SETORES_ALMOX_SEED,

@@ -271,7 +271,9 @@ async function run() {
       id INTEGER PRIMARY KEY AUTOINCREMENT, numero TEXT UNIQUE, fornecedor_id INTEGER, valor_total REAL DEFAULT 0,
       -- Etapa 69 (G79): status/updated_at como no index.js — sem eles fecharPedidosCompletos
       -- estourava "no such column: status" e o fechamento automatico do pedido nunca rodava aqui.
-      status TEXT DEFAULT 'pendente', updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      status TEXT DEFAULT 'pendente', updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      -- Etapa 122 (C255a, Fase 2 I1): o fechamento automatico grava esta coluna no mesmo UPDATE do status.
+      fechado_automaticamente_de TEXT
     )`);
     const forn = await dbRun(db, `INSERT INTO fornecedores (razao_social, cnpj) VALUES ('Forn Test', '12.345.678/0001-90')`);
     const ped = await dbRun(db, `INSERT INTO pedidos_compra (numero, fornecedor_id, valor_total) VALUES ('PC-001', ?, 500)`, [forn.lastID]);

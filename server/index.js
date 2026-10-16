@@ -19482,6 +19482,11 @@ const ALTERS_PEDIDOS_COMPRA = [
   'snap_fornecedor_telefone TEXT',
   'snap_fornecedor_email TEXT',
   'snap_fornecedor_celular TEXT',
+  // Etapa 122 (C255a, B788): o status de antes do fechamento AUTOMATICO pelo almoxarifado (NULL = o `recebido` atual nao
+  // e desse fechamento). Escrita no MESMO UPDATE do status por `fecharPedidosCompletos`, limpa pela reabertura do estorno e
+  // pela mudanca manual (`alterarStatusPedido`). Antes o estado era a ultima trilha da Auditoria, que pode faltar com o ato
+  // feito. Tambem por `safeAlter` no initSchema do modulo (o harness e a ordem do boot) — o backfill do legado mora la.
+  'fechado_automaticamente_de TEXT',
 ];
 db.run(`CREATE TABLE IF NOT EXISTS pedidos_compra (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

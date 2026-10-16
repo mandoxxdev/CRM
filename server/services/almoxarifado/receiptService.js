@@ -2216,8 +2216,10 @@ async function fecharPedidosCompletos(db, user, recebimentoId) {
     // estorno que desconte a linha entre a leitura e este UPDATE faria o pedido virar `recebido` com a
     // conta ja aberta — e o estorno, que leu o status antes, nao teria reaberto. Cenario (11) de
     // `pedidoReabreNoEstorno`.
+    // Etapa 122 (C255a, B788): o "fechado automaticamente, vindo de X" mora na COLUNA, gravada neste MESMO UPDATE (o SQLite
+    // avalia `status` com o valor de antes). Ate a 122 era a trilha abaixo — a segunda escrita, que pode faltar com o ato feito.
     const r = await dbRun(db, `UPDATE pedidos_compra
-        SET status = 'recebido', updated_at = CURRENT_TIMESTAMP
+        SET status = 'recebido', fechado_automaticamente_de = LOWER(COALESCE(status, '')), updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND LOWER(COALESCE(status, '')) NOT IN ('recebido', 'cancelado', 'rejeitado')
         AND ${SQL_PEDIDO_COMPLETO}`,
     [pedidoId]);
@@ -2236,8 +2238,8 @@ async function fecharPedidosCompletos(db, user, recebimentoId) {
     // o fechamento do comprador.) Aqui o pedido do comprador muda SOZINHO, por um ato de outro modulo. Sem esta linha ninguem responde "quem
     // mudou meu pedido". Dentro do mesmo `try` nao-fatal do chamador, de proposito: a trilha nao
     // vale travar a nota.
-    // Etapa 121 (C252, B784): nao-fatal tambem por pedido: a falha da trilha nao pula os pedidos seguintes. Sem a
-    // linha, o estorno da nota nao reabre este pedido (ele le a trilha) — declarado, igual a hoje.
+    // Etapa 121 (C252, B784): nao-fatal tambem por pedido: a falha da trilha nao pula os pedidos seguintes. Desde a 122
+    // (C255a) a trilha e so rastro: o estorno decide pela coluna `fechado_automaticamente_de`, gravada no UPDATE acima.
     await registrarAuditoriaDoAto(db, {
       entidade: 'pedido_compra',
       entidade_id: pedidoId,
@@ -2316,23 +2318,19 @@ async function resolverItemDaEntrada(db, mov) {
  * LIMITE DECLARADO (letra B): a mudanca manual feita ANTES do deploy da Fase 5 nao deixou rastro; num
  * pedido fechado pelo automatico e reescrito a mao antes disso, o automatico ainda e o "ultimo" e o
  * estorno reabre. A A35 lista os pedidos a conferir.
+ *
+ * ⚠️ Etapa 122 (C255a, B788): o "ultimo registro" deixou de ser a TRILHA da Auditoria e passou a ser a COLUNA
+ * `pedidos_compra.fechado_automaticamente_de` — escrita no mesmo UPDATE do fechamento (`fecharPedidosCompletos`), limpa
+ * no mesmo UPDATE da reabertura (abaixo) e no da mudanca manual do Compras (`alterarStatusPedido`, quando o status muda).
+ * A regra acima nao mudou; mudou ONDE ela le. Com a trilha, a linha que faltava (a Auditoria do ato e nao-fatal desde a
+ * 121) deixava o pedido sem reabrir (C255) — ou reabria o fechamento do comprador quando faltava a trilha manual. O legado
+ * (pedidos ja `recebido` no deploy) e preenchido uma vez pela trilha: `schema.migrateBackfillPedidoFechadoAutomaticamente`.
+ * Coluna NULL = nao reabre; fora de `STATUS_REABERTURA` = `pendente` (o mesmo da trilha ilegivel).
  */
-const TRILHAS_DE_STATUS = ['STATUS_AUTOMATICO_RECEBIDO', 'STATUS_AUTOMATICO_REABERTO', 'STATUS_MANUAL_ALTERADO'];
-
 async function destinoDaReabertura(db, pedidoId) {
-  const trilha = await dbGet(db, `SELECT acao, dados_anteriores FROM auditoria_log_almoxarifado
-    WHERE entidade = 'pedido_compra' AND entidade_id = ?
-      AND acao IN (${TRILHAS_DE_STATUS.map(() => '?').join(', ')})
-    ORDER BY id DESC LIMIT 1`, [pedidoId, ...TRILHAS_DE_STATUS]);
-  if (!trilha || trilha.acao !== 'STATUS_AUTOMATICO_RECEBIDO') return null;
-  if (!trilha.dados_anteriores) return 'pendente';
-  let anterior = null;
-  try {
-    anterior = JSON.parse(trilha.dados_anteriores);
-  } catch (_) {
-    return 'pendente';
-  }
-  const status = String((anterior && anterior.status) || '').toLowerCase();
+  const p = await dbGet(db, 'SELECT fechado_automaticamente_de AS de FROM pedidos_compra WHERE id = ?', [pedidoId]);
+  if (!p || p.de == null) return null;
+  const status = String(p.de).toLowerCase();
   return STATUS_REABERTURA.includes(status) ? status : 'pendente';
 }
 
@@ -2398,8 +2396,11 @@ async function estornarEntradaNoPedido(db, user, mov) {
     && String(pedido.status || '').toLowerCase() === 'recebido') {
     destino = await destinoDaReabertura(db, pedido.id);
     if (destino) {   // null = o ultimo `recebido` foi do comprador (ou sem trilha): nao reabre (Fase 5)
-      const r = await dbRun(db, `UPDATE pedidos_compra SET status = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND LOWER(COALESCE(status, '')) = 'recebido' AND NOT ${SQL_PEDIDO_COMPLETO}`,
+      // Etapa 122 (C255a): limpa a coluna no mesmo UPDATE, e so reabre se ela ainda diz "automatico" — uma mudanca manual
+      // entre a leitura do destino e aqui (que a limpa) vence.
+      const r = await dbRun(db, `UPDATE pedidos_compra SET status = ?, fechado_automaticamente_de = NULL, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND LOWER(COALESCE(status, '')) = 'recebido' AND fechado_automaticamente_de IS NOT NULL
+          AND NOT ${SQL_PEDIDO_COMPLETO}`,
       [destino, pedido.id]);
       reaberto = r.changes === 1;
     }
