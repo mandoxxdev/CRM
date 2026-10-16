@@ -2851,10 +2851,68 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
   let compensarSyncLocalizacaoPadrao = null; // { loteId } — reconciliarEstornoSemLinha sincronizou a linha padrão; refazer DEPOIS de restaurar quantidade_atual
   let seriesEntradaRevertidas = []; // afetadas[] de reverterEntrada, para desfazerReverterEntrada
   let seriesSaidaRevertidas = []; // afetadas[] de reverterSaida, para desfazerReverterSaida
+  // Etapa 117 (C235, RN-06): o desfazer dos efeitos de serie e saldo numa funcao so, chamada de dentro da secao do ramo de
+  // saida (sob a trava) ou do catch de fora (os outros ramos). Idempotente: zera os rastreadores ao terminar — o catch de
+  // fora, chamado depois do de dentro, nao desfaz em dobro. A ordem e a do fix round 1 da 6b (comentario no catch).
+  const desfazerEfeitosDoEstorno = async () => {
+    if (seriesSaidaRevertidas.length > 0) {
+      await seriesService.desfazerReverterSaida(db, seriesSaidaRevertidas);
+    }
+    if (seriesEntradaRevertidas.length > 0) {
+      await seriesService.desfazerReverterEntrada(db, seriesEntradaRevertidas);
+    }
+    if (compensarLinha) {
+      await dbRun(db, `UPDATE estoque_saldo_almoxarifado
+        SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP
+        WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS ?`,
+        [compensarLinha.delta, mov.material_id, compensarLinha.loc || null, compensarLinha.loteId || null]);
+    }
+    if (compensarLinhasClaim) {
+      for (const l of compensarLinhasClaim) {
+        await dbRun(db, `UPDATE estoque_saldo_almoxarifado
+          SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [l.quantidade, l.id]);
+      }
+    }
+    if (compensarQuantidadeMaterial) {
+      await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_atual = ${Q.qtdSql('quantidade_atual + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        [compensarQuantidadeMaterial, mov.material_id]);
+    }
+    if (compensarSyncLocalizacaoPadrao) {
+      await syncSaldoLocalizacaoPadrao(db, mov.material_id, compensarSyncLocalizacaoPadrao.loteId);
+    }
+    seriesSaidaRevertidas = []; seriesEntradaRevertidas = [];
+    compensarLinha = null; compensarLinhasClaim = null; compensarQuantidadeMaterial = null; compensarSyncLocalizacaoPadrao = null;
+  };
 
   try {
     let saldoAntes = material.quantidade_atual;
     let saldoDepois = saldoAntes;
+    // Etapa 117 (C235, RN-06; B762): o registro do estorno no livro numa funcao so — o ramo de saida o chama DENTRO da secao
+    // da trava (ver la); os outros ramos, depois do if-chain, como sempre. Le saldoAntes/saldoDepois na hora da chamada.
+    const gravarLivroDoEstorno = async () => {
+      const r = await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
+        (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, observacoes,
+         usuario_id, usuario_nome, localizacao_origem_id, localizacao_destino_id, lote, lote_id, unidade,
+         projeto_id, os_id, cliente_id, documento_vinculado, justificativa, centro_custo_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+        mov.material_id, 'ESTORNO', mov.quantidade, Q.qtd(saldoAntes), Q.qtd(saldoDepois),
+        `Estorno mov. #${movimentoId}`, mov.referencia, null,
+        user.id, user.nome || user.email,
+        mov.localizacao_destino_id, mov.localizacao_origem_id, mov.lote, mov.lote_id, mov.unidade,
+        mov.projeto_id, mov.os_id, mov.cliente_id, `ESTORNO-${movimentoId}`, motivo,
+        mov.centro_custo_id,
+      ]);
+      // `movimento_estorno_id` e a ULTIMA escrita do estorno que deu certo — a regua da devolucao viva le so o estorno com
+      // ele (devolucaoViva.js, Fase 2 R3). Se ele falhar, a linha ESTORNO acabada de gravar sai de novo (Fase 2, R4): sem
+      // isto o livro ficava com um estorno de algo que o desfazer devolveu.
+      try {
+        await dbRun(db, 'UPDATE movimentacoes_almoxarifado SET movimento_estorno_id = ? WHERE id = ?', [r.lastID, movimentoId]);
+      } catch (eVinculo) {
+        await dbRun(db, "DELETE FROM movimentacoes_almoxarifado WHERE id = ? AND tipo = 'ESTORNO'", [r.lastID]);
+        throw eVinculo;
+      }
+      estornoId = r.lastID;
+    };
 
     if (tiposEntrada.includes(mov.tipo)) {
       // Reverter entrada = saída com guarda de disponível (a mercadoria pode já ter sido consumida).
@@ -2978,58 +3036,70 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
       // desligar cai antes (recusa aqui, nada creditado — o catch so desfaz o claim) ou depois (as series ja voltaram e o
       // desligar as ve). Dentro da secao so escrita de saldo e de serie: nenhuma porta que pegue a trava de novo (ela nao e
       // reentrante); recalculo/aviso continuam depois, fora.
+      //
+      // Etapa 117 (C235, RN-06; B762): o registro no livro e o desfazer TAMBEM dentro da secao. Ate a 117 o INSERT do livro
+      // e o catch (que subtrai o credito sem guarda) rodavam depois de soltar: com o livro falhando, uma Saida do mesmo
+      // material cabia entre o credito e o desfazer e levava o que o estorno tinha creditado — fisico -2 (medido: entrada 5,
+      // saida 2, estorno com o livro falhando e uma saida de 5 no meio). Aqui dentro a Saida espera, e o desfazer acha o
+      // credito onde o deixou. O catch de fora so desfaz o claim e recria as reservas (o desfazer ja zerou os rastreadores).
       await trava.naTravaDoMaterial(mov.material_id, async () => {
-        const agora = await dbGet(db, 'SELECT controle_serie FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
-        const serieLigada = !!agora && Number(agora.controle_serie) === 1;
-        if (!serieLigada && opcoesEstorno.compensacao !== true) {
-          const recusa = await recusaDoEstornoDeSaidaSemSerie(db, mov, material.codigo);
-          if (recusa) throw Object.assign(new Error(recusa), { status: 400 });
+        try {
+          const agora = await dbGet(db, 'SELECT controle_serie FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
+          const serieLigada = !!agora && Number(agora.controle_serie) === 1;
+          if (!serieLigada && opcoesEstorno.compensacao !== true) {
+            const recusa = await recusaDoEstornoDeSaidaSemSerie(db, mov, material.codigo);
+            if (recusa) throw Object.assign(new Error(recusa), { status: 400 });
+          }
+          // Etapa 113 (Fase 5, RN-09): `AND ativo = 1` — o material inativado entre a leitura acima e este credito nao recebe
+          // o saldo de volta (o "Inativar" confere o saldo sob a trava do material — desde a 116 este credito roda sob ela
+          // tambem). Sem linha -> a recusa de material inativo, e o catch desfaz o claim. A compensacao interna credita como
+          // sempre.
+          const credito = await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_atual = ${Q.qtdSql('quantidade_atual + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?${opcoesEstorno.compensacao === true ? '' : ' AND ativo = 1'}`,
+            [mov.quantidade, mov.material_id]);
+          if (credito.changes === 0) throw Object.assign(new Error('Material inativo não pode ser movimentado'), { status: 400 });
+          saldoDepois = saldoAntes + parseFloat(mov.quantidade);
+          // Fix round 1 (Task 5): a partir daqui quantidade_atual JÁ foi creditado — se algo adiante
+          // falhar (ledger do estorno), o catch precisa devolver este delta (subtrair de volta).
+          compensarQuantidadeMaterial = -mov.quantidade;
+          // mov.lote_id (Etapa 6, Task 3): devolve para a linha do lote que a saída original debitou.
+          // Sem gate por localização (round 3), sem CRIAR a linha desta chave (round 4) e com
+          // reconciliação do residual quando o material já tem linha (round 5) — mesmos motivos do ramo
+          // de ENTRADA acima; aqui a linha inventada seria +quantidade, que soma ao próximo inventário
+          // uma quantidade que nunca teve endereço.
+          //
+          // SEM piso aqui, e isso é decisão, não esquecimento (review final da Etapa 6): o delta é
+          // POSITIVO, então nenhum valor de `quantidade` da linha pode torná-lo inválido — devolver
+          // saldo não cria negativo. Um "teto" simétrico ao piso do ramo de ENTRADA precisaria de um
+          // limite superior por linha, que não existe: o almoxarifado não tem capacidade máxima
+          // modelada, e inventar uma aqui recusaria estornos legítimos. O que existe de assimetria
+          // real é de DISTRIBUIÇÃO: quando a saída original drenou linhas de mais de uma localização
+          // (`claimSaldoDoLote`), o estorno devolve tudo na linha desta chave. O total volta exato; o
+          // endereçamento pode consolidar. Pendência declarada na spec 10.
+          const loc = mov.localizacao_origem_id || material.localizacao_padrao_id;
+          const r = await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, mov.quantidade);
+          if (r.aplicado) {
+            // Fix round 1 (Task 5): compensação é o delta oposto na mesma chave (−mov.quantidade),
+            // espelhando o +mov.quantidade que este `ajustarSaldoExistente` acabou de aplicar.
+            compensarLinha = { loc, loteId: mov.lote_id, delta: -mov.quantidade };
+          } else {
+            const sincronizou = await reconciliarEstornoSemLinha(db, mov.material_id, mov.lote_id);
+            if (sincronizou) compensarSyncLocalizacaoPadrao = { loteId: mov.lote_id };
+          }
+          // Serie (Etapa 6b, Task 5): devolve a EM_ESTOQUE as series ENTREGUE/SUCATEADA desta saida,
+          // logo apos o saldo ja ter voltado. Sem guarda de disponibilidade aqui (diferente do ramo
+          // de ENTRADA acima) — devolver serie ao estoque nunca pode ficar "negativo". Fix round 1
+          // (Task 5): guarda o retorno (afetadas[]) para o catch poder compensar via
+          // `desfazerReverterSaida` se o ledger falhar depois.
+          //
+          // Etapa 115 (Fase 5, revisor 2): o controle de serie e o relido sob a trava (acima), nao o do `material` lido fora
+          // dela — lendo o velho, este estorno devolvia as series a EM_ESTOQUE depois do desligar do Almoxarife e deixava-as
+          // orfas (26/30 rodadas).
+          if (serieLigada) seriesSaidaRevertidas = await seriesService.reverterSaida(db, user, mov.id);
+          await gravarLivroDoEstorno();
+        } catch (eSecao) {
+          await desfazerEfeitosDoEstorno();
+          throw eSecao;
         }
-        // Etapa 113 (Fase 5, RN-09): `AND ativo = 1` — o material inativado entre a leitura acima e este credito nao recebe
-        // o saldo de volta (o "Inativar" confere o saldo sob a trava do material — desde a 116 este credito roda sob ela
-        // tambem). Sem linha -> a recusa de material inativo, e o catch desfaz o claim. A compensacao interna credita como
-        // sempre.
-        const credito = await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_atual = ${Q.qtdSql('quantidade_atual + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?${opcoesEstorno.compensacao === true ? '' : ' AND ativo = 1'}`,
-          [mov.quantidade, mov.material_id]);
-        if (credito.changes === 0) throw Object.assign(new Error('Material inativo não pode ser movimentado'), { status: 400 });
-        saldoDepois = saldoAntes + parseFloat(mov.quantidade);
-        // Fix round 1 (Task 5): a partir daqui quantidade_atual JÁ foi creditado — se algo adiante
-        // falhar (ledger do estorno), o catch precisa devolver este delta (subtrair de volta).
-        compensarQuantidadeMaterial = -mov.quantidade;
-        // mov.lote_id (Etapa 6, Task 3): devolve para a linha do lote que a saída original debitou.
-        // Sem gate por localização (round 3), sem CRIAR a linha desta chave (round 4) e com
-        // reconciliação do residual quando o material já tem linha (round 5) — mesmos motivos do ramo
-        // de ENTRADA acima; aqui a linha inventada seria +quantidade, que soma ao próximo inventário
-        // uma quantidade que nunca teve endereço.
-        //
-        // SEM piso aqui, e isso é decisão, não esquecimento (review final da Etapa 6): o delta é
-        // POSITIVO, então nenhum valor de `quantidade` da linha pode torná-lo inválido — devolver
-        // saldo não cria negativo. Um "teto" simétrico ao piso do ramo de ENTRADA precisaria de um
-        // limite superior por linha, que não existe: o almoxarifado não tem capacidade máxima
-        // modelada, e inventar uma aqui recusaria estornos legítimos. O que existe de assimetria
-        // real é de DISTRIBUIÇÃO: quando a saída original drenou linhas de mais de uma localização
-        // (`claimSaldoDoLote`), o estorno devolve tudo na linha desta chave. O total volta exato; o
-        // endereçamento pode consolidar. Pendência declarada na spec 10.
-        const loc = mov.localizacao_origem_id || material.localizacao_padrao_id;
-        const r = await ajustarSaldoExistente(db, mov.material_id, loc, mov.lote_id, mov.quantidade);
-        if (r.aplicado) {
-          // Fix round 1 (Task 5): compensação é o delta oposto na mesma chave (−mov.quantidade),
-          // espelhando o +mov.quantidade que este `ajustarSaldoExistente` acabou de aplicar.
-          compensarLinha = { loc, loteId: mov.lote_id, delta: -mov.quantidade };
-        } else {
-          const sincronizou = await reconciliarEstornoSemLinha(db, mov.material_id, mov.lote_id);
-          if (sincronizou) compensarSyncLocalizacaoPadrao = { loteId: mov.lote_id };
-        }
-        // Serie (Etapa 6b, Task 5): devolve a EM_ESTOQUE as series ENTREGUE/SUCATEADA desta saida,
-        // logo apos o saldo ja ter voltado. Sem guarda de disponibilidade aqui (diferente do ramo
-        // de ENTRADA acima) — devolver serie ao estoque nunca pode ficar "negativo". Fix round 1
-        // (Task 5): guarda o retorno (afetadas[]) para o catch poder compensar via
-        // `desfazerReverterSaida` se o ledger falhar depois.
-        //
-        // Etapa 115 (Fase 5, revisor 2): o controle de serie e o relido sob a trava (acima), nao o do `material` lido fora
-        // dela — lendo o velho, este estorno devolvia as series a EM_ESTOQUE depois do desligar do Almoxarife e deixava-as
-        // orfas (26/30 rodadas).
-        if (serieLigada) seriesSaidaRevertidas = await seriesService.reverterSaida(db, user, mov.id);
       });
     } else if (mov.tipo === 'AJUSTE') {
       // Etapa 97 (T1; Fase 2, B-2): o estorno do AJUSTE que REDUZ o total (o de ida subiu) e uma porta avulsa — levava a
@@ -3148,21 +3218,8 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
       }
     }
 
-    const r = await dbRun(db, `INSERT INTO movimentacoes_almoxarifado
-      (material_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia, observacoes,
-       usuario_id, usuario_nome, localizacao_origem_id, localizacao_destino_id, lote, lote_id, unidade,
-       projeto_id, os_id, cliente_id, documento_vinculado, justificativa, centro_custo_id)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
-      mov.material_id, 'ESTORNO', mov.quantidade, Q.qtd(saldoAntes), Q.qtd(saldoDepois),
-      `Estorno mov. #${movimentoId}`, mov.referencia, null,
-      user.id, user.nome || user.email,
-      mov.localizacao_destino_id, mov.localizacao_origem_id, mov.lote, mov.lote_id, mov.unidade,
-      mov.projeto_id, mov.os_id, mov.cliente_id, `ESTORNO-${movimentoId}`, motivo,
-      mov.centro_custo_id,
-    ]);
-    estornoId = r.lastID;
-
-    await dbRun(db, 'UPDATE movimentacoes_almoxarifado SET movimento_estorno_id = ? WHERE id = ?', [estornoId, movimentoId]);
+    // O ramo de saida ja gravou o livro dentro da secao dele (Etapa 117, C235).
+    if (estornoId === undefined) await gravarLivroDoEstorno();
   } catch (err) {
     // Fix round 1 (Task 5, achado do review por sonda): compensa os efeitos de SÉRIE e SALDO que
     // os ramos de ENTRADA/SAIDA já tinham aplicado com sucesso, na ordem inversa da aplicação,
@@ -3184,31 +3241,7 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
     //     tinha sincronizado)
     // Só um dos dois lados (entrada OU saída) tem estado não-vazio por chamada — a função só
     // processa um `tipo` de cada vez —, então os blocos abaixo convivem sem se atrapalhar.
-    if (seriesSaidaRevertidas.length > 0) {
-      await seriesService.desfazerReverterSaida(db, seriesSaidaRevertidas);
-    }
-    if (seriesEntradaRevertidas.length > 0) {
-      await seriesService.desfazerReverterEntrada(db, seriesEntradaRevertidas);
-    }
-    if (compensarLinha) {
-      await dbRun(db, `UPDATE estoque_saldo_almoxarifado
-        SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP
-        WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS ?`,
-        [compensarLinha.delta, mov.material_id, compensarLinha.loc || null, compensarLinha.loteId || null]);
-    }
-    if (compensarLinhasClaim) {
-      for (const l of compensarLinhasClaim) {
-        await dbRun(db, `UPDATE estoque_saldo_almoxarifado
-          SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [l.quantidade, l.id]);
-      }
-    }
-    if (compensarQuantidadeMaterial) {
-      await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_atual = ${Q.qtdSql('quantidade_atual + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-        [compensarQuantidadeMaterial, mov.material_id]);
-    }
-    if (compensarSyncLocalizacaoPadrao) {
-      await syncSaldoLocalizacaoPadrao(db, mov.material_id, compensarSyncLocalizacaoPadrao.loteId);
-    }
+    await desfazerEfeitosDoEstorno();
 
     // Desfaz o claim: se a aplicação do efeito inverso falhar (ex.: saldo insuficiente para
     // reverter uma entrada já consumida), o movimento não pode ficar marcado como cancelado sem
