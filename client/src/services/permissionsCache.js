@@ -9,6 +9,25 @@ const inflight = new Map();
 // Etapa 127 (Fase 5, r2): a geracao do cache — invalidar a incrementa, e a busca que comecou antes nao grava depois. Sem isso, um
 // /usuarios/:id/grupos em voo no instante do refreshUser gravava o perfil velho (null) por cima do fresco por ate 5 min.
 let geracao = 0;
+// Etapa 128 (RN-21, D (127) r2): quem quer saber que uma busca REAL gravou o cache (o AuthProvider regrava o usuario do contexto,
+// e o perfil retirado nao volta quando o cache vence). So a gravacao da busca da geracao corrente notifica — nunca o seed, a leitura
+// do cache valido, a busca invalidada no meio ou a que falhou. Um ouvinte que lanca nao rejeita a busca (Fase 2, M3).
+const ouvintes = new Set();
+
+export function onPermissoesGravadas(fn) {
+  ouvintes.add(fn);
+  return () => { ouvintes.delete(fn); };
+}
+
+function notificarGravacao(userId, data) {
+  ouvintes.forEach((fn) => {
+    try {
+      fn(userId, data);
+    } catch (e) {
+      console.warn('[permissionsCache] ouvinte falhou:', e);
+    }
+  });
+}
 
 function withTimeout(promise, ms = FETCH_TIMEOUT_MS) {
   return Promise.race([
@@ -58,6 +77,7 @@ export async function fetchUserPermissions(userId, options = {}) {
       if (geracaoDaBusca === geracao) {
         cache.set(userId, { data, ts: Date.now() });
         inflight.delete(userId);
+        notificarGravacao(userId, data);
       }
       return data;
     })

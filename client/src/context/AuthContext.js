@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import api from '../services/api';
-import { invalidatePermissionsCache, seedPermissionsFromAuthUser } from '../services/permissionsCache';
+import { invalidatePermissionsCache, onPermissoesGravadas, seedPermissionsFromAuthUser } from '../services/permissionsCache';
 import { mergeUserPermissions } from '../utils/systemPermissions';
 
 const AuthContext = createContext();
@@ -31,6 +31,26 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     userRef.current = user;
   }, [user]);
+
+  // Etapa 128 (RN-22..RN-24, D (127) r2): quando a busca de /usuarios/:id/grupos do PROPRIO usuario grava o cache, o usuario do
+  // contexto passa a ter as permissoes dela (o mesmo merge de getEffectiveUser). Sem isso, quem perdeu o perfil via os botoes
+  // sumirem com o cache e voltarem quando ele vencia (5 min), porque getEffectiveUser caia no usuario velho do contexto. Sem
+  // mudanca nas cinco chaves de permissao, o objeto fica o mesmo (sem render, sem localStorage); depois do logout (prev null) ou
+  // para outro id, nada muda.
+  useEffect(() => onPermissoesGravadas((userId, data) => {
+    const usuario = data?.usuario;
+    if (!usuario) return;
+    setUser((prev) => {
+      if (!prev || String(prev.id) !== String(userId)) return prev;
+      const atual = mergeUserPermissions(prev, {});
+      const novo = mergeUserPermissions(prev, usuario);
+      const igual = ['role', 'is_superadmin', 'perfil_almoxarifado', 'perfil_frota'].every((k) => atual[k] === novo[k])
+        && JSON.stringify(atual.admin_modulos) === JSON.stringify(novo.admin_modulos);
+      if (igual) return prev;
+      localStorage.setItem('user', JSON.stringify(novo));
+      return novo;
+    });
+  }), []);
 
   const applyFreshUser = useCallback((freshUser) => {
     if (!freshUser) return;
