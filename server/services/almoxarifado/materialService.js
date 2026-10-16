@@ -21,7 +21,7 @@
  * a coluna, em vez de uma lista de campos escolhida a dedo).
  */
 const { dbRun, dbGet } = require('./db');
-const { registrarAuditoria } = require('./audit');
+const { registrarAuditoriaDoAto } = require('./audit');
 const stockService = require('./stockService');
 const Q = require('./quantidade');
 
@@ -405,7 +405,9 @@ async function createMaterial(db, user, data) {
     console.warn('[almoxarifado] Falha ao sincronizar saldo por localização:', e.message);
   });
 
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): o material e o saldo inicial ja estao gravados — a falha da Auditoria nao derruba o cadastro
+  // (com codigo_auto, repetir criava outro material e outra Entrada)
+  await registrarAuditoriaDoAto(db, {
     entidade: 'material', entidade_id: id, acao: 'CRIACAO',
     usuario_id: user.id, usuario_nome: user.nome || user.email,
     dados_novos: { codigo: insertValues.codigo, nome, familia_id },

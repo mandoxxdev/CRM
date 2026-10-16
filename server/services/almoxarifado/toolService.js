@@ -1,5 +1,5 @@
 const { dbRun, dbAll, dbGet } = require('./db');
-const { registrarAuditoria } = require('./audit');
+const { registrarAuditoriaDoAto } = require('./audit');
 const { STATUS } = require('./toolStateMachine');
 
 async function criarFerramenta(db, user, data) {
@@ -11,7 +11,8 @@ async function criarFerramenta(db, user, data) {
     data.status || STATUS.DISPONIVEL, data.material_id || null, data.numero_serie || null,
     data.localizacao_id || null, data.exige_calibracao || 0, data.observacoes || null,
   ]);
-  await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: r.lastID, acao: 'CRIACAO', usuario_id: user.id, usuario_nome: user.nome || user.email });
+  // Etapa 121 (C252, B784): o ato ja esta gravado — a falha da Auditoria vai ao log e nao o derruba
+  await registrarAuditoriaDoAto(db, { entidade: 'ferramenta', entidade_id: r.lastID, acao: 'CRIACAO', usuario_id: user.id, usuario_nome: user.nome || user.email });
   return { id: r.lastID };
 }
 
@@ -41,7 +42,8 @@ async function atualizarFerramenta(db, user, id, data) {
   sets.push('updated_at = CURRENT_TIMESTAMP');
   params.push(id);
   await dbRun(db, `UPDATE ferramentas_almoxarifado SET ${sets.join(', ')} WHERE id = ?`, params);
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): o ato ja esta gravado — a falha da Auditoria vai ao log e nao o derruba
+  await registrarAuditoriaDoAto(db, {
     entidade: 'ferramenta', entidade_id: Number(id), acao: 'EDICAO',
     usuario_id: user.id, usuario_nome: user.nome || user.email,
     dados_anteriores: atual, dados_novos: data,
@@ -90,7 +92,8 @@ async function emprestarFerramenta(db, user, ferramentaId, data) {
     throw e;
   });
 
-  await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: ferramentaId, acao: 'EMPRESTIMO',
+  // Etapa 121 (C252, B784): o ato ja esta gravado — a falha da Auditoria vai ao log e nao o derruba
+  await registrarAuditoriaDoAto(db, { entidade: 'ferramenta', entidade_id: ferramentaId, acao: 'EMPRESTIMO',
     usuario_id: user.id, usuario_nome: user.nome || user.email,
     dados_novos: { emprestimo_id: r.lastID, colaborador_nome: data.colaborador_nome } });
   return { id: r.lastID };
@@ -127,7 +130,8 @@ async function devolverFerramenta(db, user, emprestimoId, data = {}) {
     dadosNovos.status_atual = atual ? atual.status : null;
   }
 
-  await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: emp.ferramenta_id, acao: 'DEVOLUCAO',
+  // Etapa 121 (C252, B784): o ato ja esta gravado — a falha da Auditoria vai ao log e nao o derruba
+  await registrarAuditoriaDoAto(db, { entidade: 'ferramenta', entidade_id: emp.ferramenta_id, acao: 'DEVOLUCAO',
     usuario_id: user.id, usuario_nome: user.nome || user.email,
     dados_novos: dadosNovos });
   return { success: true };
@@ -148,7 +152,8 @@ async function bloquearFerramenta(db, user, ferramentaId, data) {
     if (!atual) throw Object.assign(new Error('Ferramenta não encontrada'), { status: 404 });
     throw Object.assign(new Error(`Ferramenta não pode ser bloqueada (status atual: ${atual.status})`), { status: 400 });
   }
-  await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'BLOQUEIO',
+  // Etapa 121 (C252, B784): o ato ja esta gravado — a falha da Auditoria vai ao log e nao o derruba
+  await registrarAuditoriaDoAto(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'BLOQUEIO',
     usuario_id: user.id, usuario_nome: user.nome || user.email,
     dados_novos: { justificativa: data.justificativa } });
   return { success: true };
@@ -163,7 +168,8 @@ async function desbloquearFerramenta(db, user, ferramentaId, data) {
     if (!atual) throw Object.assign(new Error('Ferramenta não encontrada'), { status: 404 });
     throw Object.assign(new Error(`Ferramenta não está bloqueada (status atual: ${atual.status})`), { status: 400 });
   }
-  await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'DESBLOQUEIO',
+  // Etapa 121 (C252, B784): o ato ja esta gravado — a falha da Auditoria vai ao log e nao o derruba
+  await registrarAuditoriaDoAto(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'DESBLOQUEIO',
     usuario_id: user.id, usuario_nome: user.nome || user.email,
     dados_novos: { justificativa: data.justificativa } });
   return { success: true };
@@ -211,7 +217,8 @@ async function iniciarManutencao(db, user, ferramentaId, data) {
       throw e;
     });
 
-  await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'MANUTENCAO_INICIO',
+  // Etapa 121 (C252, B784): o ato ja esta gravado — a falha da Auditoria vai ao log e nao o derruba
+  await registrarAuditoriaDoAto(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'MANUTENCAO_INICIO',
     usuario_id: user.id, usuario_nome: user.nome || user.email,
     dados_novos: { manutencao_id: r.lastID, descricao: data.descricao } });
   return { id: r.lastID };
@@ -247,13 +254,15 @@ async function concluirManutencao(db, user, manutencaoId, data = {}) {
 
   if (claimFerramenta.changes === 0) {
     const atual = await dbGet(db, 'SELECT status FROM ferramentas_almoxarifado WHERE id = ?', [manutencao.ferramenta_id]);
-    await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: manutencao.ferramenta_id, acao: 'MANUTENCAO_FIM',
+    // Etapa 121 (C252, B784): a manutencao ja foi fechada — a falha da Auditoria nao troca o 400 abaixo (o status real) por 500
+    await registrarAuditoriaDoAto(db, { entidade: 'ferramenta', entidade_id: manutencao.ferramenta_id, acao: 'MANUTENCAO_FIM',
       usuario_id: user.id, usuario_nome: user.nome || user.email,
       dados_novos: { manutencao_id: Number(manutencaoId), anomalia: 'ferramenta_nao_estava_em_manutencao', status_atual: atual ? atual.status : null } });
     throw Object.assign(new Error(`Estado da ferramenta mudou durante a conclusão da manutenção (status atual: ${atual ? atual.status : 'desconhecido'})`), { status: 400 });
   }
 
-  await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: manutencao.ferramenta_id, acao: 'MANUTENCAO_FIM',
+  // Etapa 121 (C252, B784): o ato ja esta gravado — a falha da Auditoria vai ao log e nao o derruba
+  await registrarAuditoriaDoAto(db, { entidade: 'ferramenta', entidade_id: manutencao.ferramenta_id, acao: 'MANUTENCAO_FIM',
     usuario_id: user.id, usuario_nome: user.nome || user.email,
     dados_novos: { manutencao_id: Number(manutencaoId) } });
   return { success: true };
@@ -274,7 +283,8 @@ async function reencontrarFerramenta(db, user, ferramentaId, data) {
     if (!atual) throw Object.assign(new Error('Ferramenta não encontrada'), { status: 404 });
     throw Object.assign(new Error(`Ferramenta não está perdida (status atual: ${atual.status})`), { status: 400 });
   }
-  await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'REENCONTRO',
+  // Etapa 121 (C252, B784): o ato ja esta gravado — a falha da Auditoria vai ao log e nao o derruba
+  await registrarAuditoriaDoAto(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'REENCONTRO',
     usuario_id: user.id, usuario_nome: user.nome || user.email,
     dados_novos: { justificativa: data.justificativa } });
   return { success: true };
@@ -368,7 +378,9 @@ async function registrarOcorrencia(db, user, ferramentaId, data, fotoPath) {
     emprestimoEncerradoId = empAberto.id;
   }
 
-  await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'OCORRENCIA',
+  // Etapa 121 (C252, B784): a ocorrencia ja esta gravada — a falha da Auditoria nao derruba o ato (o catch da rota
+  // apagava a foto do disco e repetir recusava: a ferramenta ja estava AVARIADA/PERDIDA)
+  await registrarAuditoriaDoAto(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'OCORRENCIA',
     usuario_id: user.id, usuario_nome: user.nome || user.email,
     dados_novos: { ocorrencia_id: ocorrenciaId, tipo: data.tipo, emprestimo_encerrado_id: emprestimoEncerradoId } });
   return { id: ocorrenciaId };
@@ -460,7 +472,9 @@ async function registrarCalibracao(db, user, ferramentaId, data, certificadoPath
     certificadoPath || null, data.observacoes || null, user.id,
   ]);
 
-  await registrarAuditoria(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'CALIBRACAO',
+  // Etapa 121 (C252, B784): a calibracao ja esta gravada — a falha da Auditoria nao derruba o ato (o catch da rota
+  // apagava o certificado do disco e repetir gravava outra calibracao)
+  await registrarAuditoriaDoAto(db, { entidade: 'ferramenta', entidade_id: Number(ferramentaId), acao: 'CALIBRACAO',
     usuario_id: user.id, usuario_nome: user.nome || user.email,
     dados_novos: { calibracao_id: r.lastID, data_calibracao: data.data_calibracao, data_validade: data.data_validade } });
   return { id: r.lastID };

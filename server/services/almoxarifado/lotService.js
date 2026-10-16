@@ -12,7 +12,7 @@
 const { dbRun, dbGet, dbAll } = require('./db');
 // Etapa 33: a URL do certificado passa a ser MINADA pelo servidor, no ponto unico do modulo.
 const { materialPhotoUrl } = require('./materialPhoto');
-const { registrarAuditoria } = require('./audit');
+const { registrarAuditoria, registrarAuditoriaDoAto } = require('./audit');
 
 const STATUS_LOTE = ['ATIVO', 'BLOQUEADO', 'REPROVADO'];
 
@@ -101,7 +101,8 @@ async function mudarStatusLote(db, user, loteId, novoStatus, justificativa) {
     RETURNING id`, [novoStatus, motivo, loteId, anterior.status]);
   if (!claim) throw erro('O status do lote mudou durante a operacao. Recarregue e tente de novo.', 409);
 
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): o status ja mudou — a falha da Auditoria vai ao log e nao derruba o ato
+  await registrarAuditoriaDoAto(db, {
     entidade: 'lote', entidade_id: loteId, acao: 'MUDANCA_STATUS',
     usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
     dados_anteriores: { status: anterior.status, status_motivo: anterior.status_motivo },
@@ -139,7 +140,8 @@ async function liberarBloqueioPorCertificado(db, user, loteId, justificativa) {
     RETURNING id`, [motivo, loteId]);
   if (!claim) return null;
 
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): o certificado e a liberacao ja estao gravados — a falha da Auditoria nao derruba a rota
+  await registrarAuditoriaDoAto(db, {
     entidade: 'lote', entidade_id: loteId, acao: 'MUDANCA_STATUS',
     usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
     dados_anteriores: { status: anterior.status, status_motivo: anterior.status_motivo },
@@ -180,7 +182,8 @@ async function liberarVencimento(db, user, loteId, justificativa) {
   if (!claim) throw erro('O lote mudou durante a operacao. Recarregue e tente de novo.', 409);
 
   const atualizado = await getLote(db, loteId);
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): a liberacao ja esta gravada — a falha da Auditoria vai ao log e nao derruba o ato
+  await registrarAuditoriaDoAto(db, {
     entidade: 'lote', entidade_id: loteId, acao: 'LIBERACAO_VENCIMENTO',
     usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
     dados_anteriores: { vencimento_liberado_em: anterior.vencimento_liberado_em },

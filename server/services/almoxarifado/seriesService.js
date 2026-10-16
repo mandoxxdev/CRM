@@ -5,7 +5,7 @@
  * significa status EM_ESTOQUE ou BLOQUEADA; so EM_ESTOQUE e elegivel para saida.
  */
 const { dbGet, dbAll, dbRun } = require('./db');
-const { registrarAuditoria } = require('./audit');
+const { registrarAuditoria, registrarAuditoriaDoAto } = require('./audit');
 // Etapa 115 (Fase 2, R2): o unico require da trava e do proprio Node — sem ciclo.
 const trava = require('./travaPorMaterial');
 
@@ -105,7 +105,9 @@ async function desfazerEntrada(db, afetadas) {
   for (const a of [...afetadas].reverse()) {
     if (a.acao === 'CRIACAO') {
       await dbRun(db, 'DELETE FROM series_almoxarifado WHERE id = ?', [a.linha.id]);
-      await registrarAuditoria(db, {
+      // Etapa 121 (C252, B784): a falha da Auditoria da compensacao nao para o desfazer no meio (ficava serie presente
+      // sem fisico) nem troca a recusa de negocio (400) por 500
+      await registrarAuditoriaDoAto(db, {
         entidade: 'serie', entidade_id: a.linha.id, acao: 'COMPENSACAO',
         usuario_id: null, usuario_nome: 'sistema',
         dados_anteriores: { status: 'EM_ESTOQUE' }, dados_novos: null,
@@ -122,7 +124,8 @@ async function desfazerEntrada(db, afetadas) {
          a.anterior.localizacao_id, a.anterior.movimentacao_entrada_id,
          a.anterior.movimentacao_saida_id, a.linha.id]);
       if (linha) {
-        await registrarAuditoria(db, {
+        // Etapa 121 (C252, B784): idem — a falha da Auditoria nao interrompe a compensacao
+        await registrarAuditoriaDoAto(db, {
           entidade: 'serie', entidade_id: linha.id, acao: 'COMPENSACAO',
           usuario_id: null, usuario_nome: 'sistema',
           dados_anteriores: { status: a.linha.status }, dados_novos: { status: a.anterior.status },
@@ -187,7 +190,9 @@ async function desfazerSaida(db, claimed) {
          SET status = 'EM_ESTOQUE', movimentacao_saida_id = NULL, updated_at = CURRENT_TIMESTAMP
        WHERE id = ? RETURNING *`, [c.linha.id]);
     if (linha) {
-      await registrarAuditoria(db, {
+      // Etapa 121 (C252, B784): a falha da Auditoria da compensacao nao para o desfazer no meio (ficava serie Entregue
+      // sem saida no livro) nem troca a recusa de negocio (400) por 500
+      await registrarAuditoriaDoAto(db, {
         entidade: 'serie', entidade_id: linha.id, acao: 'COMPENSACAO',
         usuario_id: null, usuario_nome: 'sistema',
         dados_anteriores: { status: c.linha.status }, dados_novos: { status: 'EM_ESTOQUE' },
@@ -369,7 +374,8 @@ async function mudarStatusSerieSemTrava(db, user, serieId, novoStatus, justifica
      WHERE id = ? AND status = ? RETURNING *`,
     [novoStatus, String(justificativa).trim(), serieId, atual.status]);
   if (!linha) throw erro('status da serie mudou durante a operacao — recarregue', 409);
-  await registrarAuditoria(db, {
+  // Etapa 121 (C252, B784): o status ja mudou — a falha da Auditoria nao derruba o ato (repetir recusava a transicao)
+  await registrarAuditoriaDoAto(db, {
     entidade: 'serie', entidade_id: linha.id, acao: 'MUDANCA_STATUS',
     usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
     dados_anteriores: { status: atual.status, status_motivo: atual.status_motivo },
@@ -487,7 +493,8 @@ async function regularizarSeriesSemTrava(db, user, materialId, { cadastrar = [],
     throw e;
   }
   for (const a of feitas) {
-    await registrarAuditoria(db, {
+    // Etapa 121 (C252, B784): as escritas ja valeram — a falha de uma Auditoria nao pula as seguintes nem derruba a resposta
+    await registrarAuditoriaDoAto(db, {
       entidade: 'serie', entidade_id: a.id, acao: 'REGULARIZACAO_SERIES',
       usuario_id: user?.id, usuario_nome: user?.nome || user?.email,
       dados_anteriores: a.de ? { status: a.de } : null,
