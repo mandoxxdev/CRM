@@ -173,6 +173,33 @@ let seq = 0;
     assert.deepStrictEqual([b.considerados, b.incompletos], [2, 1], JSON.stringify(b));
   });
 
+  await test('[RN-04] (Fase 5 r3) janela pelo FIM = a ULTIMA entrada: A entrou ha 35 dias, B ha 10 -> entra na de 30 (720 h)', async () => {
+    await limpar();
+    await recebimento(-40 * 24, [{ entrou: -35 * 24 }, { entrou: -10 * 24 }]);
+    assert.deepStrictEqual(await bloco(30), { media_horas: 720, mediana_horas: 720, considerados: 1, incompletos: 0 });
+  });
+
+  for (const st of ['RECEBIDO', 'CONFERIDO_ALMOX', 'ENCAMINHADO_FATURAMENTO']) {
+    await test(`[RN-02] (Fase 5 r3) a entrada que falhou no meio vinda de ${st} (o /aprovar e o /processar aceitam) e incompleta`, async () => {
+      await limpar();
+      await recebimento(-10, [{ entrou: -7 }, { entrou: null }], st);
+      assert.deepStrictEqual(await bloco(), { media_horas: null, mediana_horas: null, considerados: 0, incompletos: 1 });
+    });
+  }
+
+  await test('[RN-02] (Fase 5 r3) status NULL (legado) com item esperando e incompleto', async () => {
+    await limpar();
+    const r = await recebimento(-10, [{ entrou: -7 }, { entrou: null }], 'EM_ENTRADA_NF');
+    await dbRun(db, 'UPDATE recebimentos_material_almoxarifado SET status = NULL WHERE id = ?', [r]);
+    assert.deepStrictEqual(await bloco(), { media_horas: null, mediana_horas: null, considerados: 0, incompletos: 1 });
+  });
+
+  await test('[RN-03] (Fase 5 r3) item de 0.5 sem entrada (EM_ENTRADA_NF) torna incompleto (CAST REAL, nao INTEGER)', async () => {
+    await limpar();
+    await recebimento(-10, [{ entrou: -7 }, { entrou: null, recebida: 0.5, esperada: 0.5 }], 'EM_ENTRADA_NF');
+    assert.deepStrictEqual(await bloco(), { media_horas: null, mediana_horas: null, considerados: 0, incompletos: 1 });
+  });
+
   await test('[RN-04] recebimento sem entrada nenhuma (em conferencia) nao aparece', async () => {
     await limpar();
     await recebimento(-3, [{ entrou: null }, { entrou: null }]);

@@ -106,8 +106,12 @@ describe('AlmoxarifadoDashboard — cartão "Tempo médio de recebimento" (Etapa
   });
 
   test('bloco malformado (media_horas texto): não quebra o dashboard; mostra "—"', async () => {
-    await renderizar(com({ media_horas: '6', mediana_horas: undefined, considerados: 1, incompletos: 0 }));
+    await renderizar(com({ media_horas: '6', mediana_horas: undefined, considerados: 1, incompletos: '3' }));
     expect(kpi().textContent).toBe('—');
     expect(secao().textContent).toContain('Giro de estoque');
+    // Fase 5 (r3, D1/D2): o malformado nao inventa incompletos nem esconde o "sem recebimentos"
+    const cartao = kpi().closest('.almox-kpi-card').textContent;
+    expect(cartao).not.toContain('fora da conta');
+    expect(cartao).toContain('sem recebimentos concluídos no período');
   });
 });
