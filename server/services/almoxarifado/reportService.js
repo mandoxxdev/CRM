@@ -338,8 +338,11 @@ function chaveFornecedorSql(r = 'r') {
  * e indice de rejeicao, uma linha por fornecedor (chaveFornecedorSql), periodo pelo DIA de
  * `r.data_recebimento` (UTC; data invalida devolve vazio, como o historico).
  *
- * CONFERIDO = o recebimento teve a conferencia FINALIZADA (auditoria FINALIZAR_CONFERENCIA, que so
- * o gesto "Finalizar Conferencia" do workflow escreve) e o item tem quantidade recebida. Fase 2,
+ * CONFERIDO = o recebimento teve a conferencia FINALIZADA (coluna `conferencia_finalizada_em`, que so
+ * o gesto "Finalizar Conferencia" do workflow escreve) e o item tem quantidade recebida.
+ * ⚠️ Etapa 122 (C255b): isto dizia "auditoria FINALIZAR_CONFERENCIA" — o relatorio lia a EXISTENCIA da trilha, e desde a 121
+ * a trilha pode faltar com o gesto feito (B784): o recebimento conferido saia "nao conferido". A regra nao mudou; mudou onde
+ * ela le (a coluna, gravada no mesmo UPDATE do status; legado pela trilha, uma vez, no boot). Fase 2,
  * critico 2, medido na T3: todo item NASCE com `quantidade_recebida` (o INSERT grava
  * o informado ou a esperada — desde a Etapa 70 T0 o 0 informado fica 0, antes o `|| qtd` o
  * trocava pela esperada); `conferencia_quantidade` nao serve porque a tela grava
@@ -394,9 +397,7 @@ async function relatorioQualidadeFornecedores(db, filters = {}) {
              WHEN TRIM(COALESCE(r.fornecedor_nome, '')) <> '' THEN 'Nome digitado'
              ELSE 'Sem CNPJ, cadastro ou nome' END AS agrupamento,
         ri.recebimento_id AS recebimento_id,
-        CASE WHEN ri.quantidade_recebida IS NOT NULL AND EXISTS (
-               SELECT 1 FROM auditoria_log_almoxarifado a
-               WHERE a.entidade = 'recebimento' AND a.entidade_id = r.id AND a.acao = 'FINALIZAR_CONFERENCIA')
+        CASE WHEN ri.quantidade_recebida IS NOT NULL AND r.conferencia_finalizada_em IS NOT NULL
              THEN 1 ELSE 0 END AS conferido,
         CASE WHEN ri.quantidade_recebida IS NOT NULL
                AND ${divergenciaRealSql('ri.quantidade_recebida - ri.quantidade_esperada')} THEN 1 ELSE 0 END AS divergente,

@@ -736,6 +736,34 @@ async function migrateBackfillPedidoFechadoAutomaticamente(db) {
   if (n > 0) console.log(`✅ Migração ${MIGRATION_BACKFILL_PEDIDO_FECHADO_AUTO} aplicada (${n} pedido(s) fechado(s) automaticamente)`);
 }
 
+const MIGRATION_BACKFILL_CONFERENCIA_FINALIZADA = 'backfill_conferencia_finalizada_em';
+
+/**
+ * Etapa 122 (C255b, B788) — o legado de `recebimentos_material_almoxarifado.conferencia_finalizada_em`: o recebimento com a
+ * trilha FINALIZAR_CONFERENCIA e a coluna vazia recebe a data da trilha MAIS ANTIGA (a primeira finalizacao, o mesmo que o
+ * `COALESCE` do gesto guarda dali em diante). Ledger por custo; re-executar e inofensivo — so preenche onde ha a trilha, e a
+ * trilha so existe se o gesto rodou. Exportada para o teste (RN-12).
+ */
+async function migrateBackfillConferenciaFinalizadaEm(db) {
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS schema_migrations_almoxarifado (
+    id TEXT PRIMARY KEY,
+    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  const applied = await dbGet(db, 'SELECT 1 as ok FROM schema_migrations_almoxarifado WHERE id = ?',
+    [MIGRATION_BACKFILL_CONFERENCIA_FINALIZADA]);
+  if (applied) return;
+  const r = await dbRun(db, `UPDATE recebimentos_material_almoxarifado
+    SET conferencia_finalizada_em = (SELECT MIN(a.created_at) FROM auditoria_log_almoxarifado a
+      WHERE a.entidade = 'recebimento' AND a.entidade_id = recebimentos_material_almoxarifado.id
+        AND a.acao = 'FINALIZAR_CONFERENCIA')
+    WHERE conferencia_finalizada_em IS NULL AND EXISTS (SELECT 1 FROM auditoria_log_almoxarifado a
+      WHERE a.entidade = 'recebimento' AND a.entidade_id = recebimentos_material_almoxarifado.id
+        AND a.acao = 'FINALIZAR_CONFERENCIA')`);
+  await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)',
+    [MIGRATION_BACKFILL_CONFERENCIA_FINALIZADA]);
+  if (r.changes > 0) console.log(`✅ Migração ${MIGRATION_BACKFILL_CONFERENCIA_FINALIZADA} aplicada (${r.changes} recebimento(s) com a conferência finalizada)`);
+}
+
 const MIGRATION_BACKFILL_EXECUCAO_NC = 'backfill_execucao_estado_nc';
 
 /**
@@ -1786,6 +1814,10 @@ async function initSchemaUmaExecucao(db) {
     // mesmo tempo geravam duas contas a pagar e o gancho pos-entrada rodava no perdedor. Ver
     // `reivindicarProcessamento` no receiptService. Nao e status novo (telas e listas nao mudam).
     'processando_em DATETIME',
+    // Etapa 122 (C255b, B788): quando o gesto "Finalizar Conferencia" rodou (a primeira vez). Gravada no MESMO UPDATE do
+    // status (`avancarWorkflow`); o relatorio de fornecedor le esta coluna — antes lia a trilha FINALIZAR_CONFERENCIA, que e
+    // nao-fatal desde a 121 e pode faltar com o ato feito. Legado: `migrateBackfillConferenciaFinalizadaEm`.
+    'conferencia_finalizada_em DATETIME',
   ];
   for (const col of recebCols) await safeAlter(db, `ALTER TABLE recebimentos_material_almoxarifado ADD COLUMN ${col}`);
 
@@ -2386,6 +2418,8 @@ async function initSchemaUmaExecucao(db) {
   const temPedidosCompra = await dbGet(db, "SELECT name FROM sqlite_master WHERE type='table' AND name='pedidos_compra'");
   if (temPedidosCompra) await safeAlter(db, 'ALTER TABLE pedidos_compra ADD COLUMN fechado_automaticamente_de TEXT');
   await migrateBackfillPedidoFechadoAutomaticamente(db);
+  // Etapa 122 (C255b): idem para a conferencia finalizada (a coluna nasce em `recebCols`, acima).
+  await migrateBackfillConferenciaFinalizadaEm(db);
 
   // ── Solicitações de compra (integração futura) ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS solicitacoes_compra_almoxarifado (
@@ -2898,6 +2932,7 @@ module.exports = {
   migrateBackfillExecucaoEstadoNc,
   // Etapa 122 (C255a): o cenario do legado roda a migracao depois de montar o pedido e as trilhas.
   migrateBackfillPedidoFechadoAutomaticamente,
+  migrateBackfillConferenciaFinalizadaEm, // Etapa 122 (C255b), idem
   CATEGORIAS_SEED,
   FAMILIAS_SEED,
   SETORES_ALMOX_SEED,

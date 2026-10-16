@@ -968,7 +968,10 @@ async function avancarWorkflow(db, user, recebimentoId, acao, opcoes = {}) {
 
   const transicoes = {
     iniciar_conferencia: { de: [STATUS.RECEBIDO], para: STATUS.EM_CONFERENCIA, etapa: ETAPAS.ALMOXARIFADO },
-    finalizar_conferencia: { de: [STATUS.EM_CONFERENCIA], para: STATUS.CONFERIDO_ALMOX, etapa: ETAPAS.ALMOXARIFADO },
+    // Etapa 122 (C255b, B788): o "conferencia finalizada" vira coluna, no MESMO UPDATE do status (a primeira finalizacao
+    // fica). O relatorio de fornecedor lia a trilha FINALIZAR_CONFERENCIA abaixo, que e nao-fatal e pode faltar.
+    finalizar_conferencia: { de: [STATUS.EM_CONFERENCIA], para: STATUS.CONFERIDO_ALMOX, etapa: ETAPAS.ALMOXARIFADO,
+      sql: ['conferencia_finalizada_em = COALESCE(conferencia_finalizada_em, CURRENT_TIMESTAMP)'] },
     encaminhar_compras: { de: [STATUS.CONFERIDO_ALMOX, STATUS.RECEBIDO], para: STATUS.EM_COMPRAS, etapa: ETAPAS.COMPRAS },
     finalizar_compras: { de: [STATUS.EM_COMPRAS], para: STATUS.ENCAMINHADO_FATURAMENTO, etapa: ETAPAS.FATURAMENTO,
       extra: { compras_responsavel_id: user.id, compras_responsavel_nome: user.nome || user.email, compras_data: new Date().toISOString() } },
@@ -996,6 +999,7 @@ async function avancarWorkflow(db, user, recebimentoId, acao, opcoes = {}) {
       params.push(v);
     }
   }
+  if (t.sql) sets.push(...t.sql);
   params.push(recebimentoId);
   await dbRun(db, `UPDATE recebimentos_material_almoxarifado SET ${sets.join(', ')} WHERE id = ?`, params);
 
