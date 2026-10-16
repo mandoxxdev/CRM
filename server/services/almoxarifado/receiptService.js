@@ -575,7 +575,7 @@ async function criarRecebimento(db, user, data) {
   // (F5) A trilha DEPOIS do INSERT, e nao dentro da barreira: antes do INSERT o item nao tem id, e
   // auditar a posicao do payload deixaria `entidade_id` apontando para lugar nenhum.
   // Etapa 121 (C252, B784): na CRIACAO o documento ja esta gravado — a trilha nao derruba (500 + repetir duplicava o
-  // recebimento). A conferencia (assertExcedentePermitido) continua fatal: la a trilha roda antes do UPDATE.
+  // recebimento). Desde a 122 (B791) a conferencia e o fiscal tambem gravam depois do ato (ver `assertExcedentePermitido`).
   for (const ex of excedentesDaCriacao) {
     await auditarExcedenteAutorizado(db, user, idsPorIndice[ex.indice], ex, { depoisDoAto: true });
   }
@@ -664,8 +664,8 @@ function assertAutorizacaoExcedente(user, autorizado, mensagem400) {
   }
 }
 
-// Etapa 121 (C252, B784): `depoisDoAto` so na criacao (o item ja existe); a conferencia chama sem ele, fatal,
-// porque la a trilha roda ANTES do UPDATE e o 500 e a verdade (Fase 2, I4).
+// Etapa 121 (C252, B784): `depoisDoAto` na criacao (o item ja existe). Etapa 122 (B791): a conferencia e o fiscal tambem —
+// a trilha passou para DEPOIS do UPDATE de cada item (`gravarTrilhasDoItem`); o ramo fatal ficou sem chamador.
 const auditarExcedenteAutorizado = (db, user, itemId, { esperada, recebida }, { depoisDoAto = false } = {}) => (
   depoisDoAto ? registrarAuditoriaDoAto : registrarAuditoria)(db, {
   entidade: 'recebimento_item', entidade_id: itemId, acao: 'EXCEDENTE_AUTORIZADO',
@@ -711,7 +711,7 @@ const auditarExcedenteAutorizado = (db, user, itemId, { esperada, recebida }, { 
  */
 async function assertExcedentePermitido(db, user, recebimentoId, itens, autorizado) {
   const excedentes = [];
-  for (const item of itens || []) {
+  for (const [indice, item] of (itens || []).entries()) {
     if (item.quantidade_recebida == null) continue;
     const atual = await dbGet(db, `SELECT id, quantidade_esperada, quantidade_recebida
       FROM recebimentos_material_itens_almoxarifado WHERE id = ? AND recebimento_id = ?`,
@@ -724,16 +724,33 @@ async function assertExcedentePermitido(db, user, recebimentoId, itens, autoriza
     // o que ja esta registrado", e a barreira volta a depender so de `recebida > esperada`.
     const aumenta = !Number.isFinite(gravada) || recebida > gravada;
     if (Number.isFinite(recebida) && Number.isFinite(esperada) && recebida > esperada && aumenta) {
-      excedentes.push({ id: atual.id, recebida, esperada });
+      excedentes.push({ id: atual.id, recebida, esperada, indice });
     }
   }
-  if (!excedentes.length) return;
+  if (!excedentes.length) return excedentes;
 
   const e = excedentes[0];
   assertAutorizacaoExcedente(user, autorizado,
     mensagemExcedenteSemFlag(e.recebida, e.esperada, e.id));
+  // Etapa 122 (D (121), B791): a trilha SAIU daqui. Ela rodava antes do UPDATE, item a item: com dois excedentes e a trilha do
+  // 2o falhando, a porta respondia 500 sem gravar item nenhum e deixava a trilha do 1o — o registro de um excedente que nao
+  // aconteceu (medido). Esta funcao agora so DECIDE (as recusas 400/403 continuam antes de qualquer escrita) e devolve os
+  // excedentes com a POSICAO no payload; quem chama grava a trilha de cada um logo depois do UPDATE daquela posicao
+  // (`gravarTrilhasDoItem`), nao-fatal (B784). Descartado: INSERT multi-linha antes do ato (tudo ou nada, mas continua sendo o
+  // registro de um ato que pode nao acontecer); gravar no fim do laco (um UPDATE que falha no meio deixaria os anteriores sem
+  // trilha).
+  return excedentes;
+}
+
+/**
+ * Etapa 122 (B791) — a trilha EXCEDENTE_AUTORIZADO da posicao `indice` do payload, depois do UPDATE dela e so se ele gravou
+ * a linha (`changes === 1`). Nao-fatal: o item ja esta gravado (B784). Casada pela posicao, nao pelo id: o mesmo item duas
+ * vezes no payload sao duas decisoes, como antes da etapa.
+ */
+async function gravarTrilhasDoItem(db, user, excedentes, indice, upd) {
+  if (!excedentes || !excedentes.length || !upd || upd.changes !== 1) return;
   for (const ex of excedentes) {
-    await auditarExcedenteAutorizado(db, user, ex.id, ex);
+    if (ex.indice === indice) await auditarExcedenteAutorizado(db, user, ex.id, ex, { depoisDoAto: true });
   }
 }
 
@@ -919,8 +936,8 @@ async function conferirRecebimento(db, user, recebimentoId, data) {
   }
 
   // RN-18: a PRIMEIRA porta. Antes do UPDATE de status e do UPDATE de item — recusar depois de
-  // gravar deixaria o documento meio escrito com um 400 por cima.
-  await assertExcedentePermitido(db, user, recebimentoId, itens, data.autorizar_excedente === true);
+  // gravar deixaria o documento meio escrito com um 400 por cima. Etapa 122 (B791): a trilha vem depois de cada item.
+  const excedentes = await assertExcedentePermitido(db, user, recebimentoId, itens, data.autorizar_excedente === true);
 
   if (status) {
     const etapa = STATUS_ETAPA[status] || ETAPAS.ALMOXARIFADO;
@@ -930,7 +947,7 @@ async function conferirRecebimento(db, user, recebimentoId, data) {
   }
 
   if (itens) {
-    for (const item of itens) {
+    for (const [indice, item] of itens.entries()) {
       // Etapa 36 (T3): as CINCO colunas com COALESCE, no molde ja escrito em `salvarDadosFiscal`.
       // Esta rota esta ganhando o PRIMEIRO chamador da vida (o painel de conferencia da T5), e
       // enquanto ela nao tinha chamador o defeito ficou invisivel: com `quantidade_recebida = ?` e
@@ -938,7 +955,7 @@ async function conferirRecebimento(db, user, recebimentoId, data) {
       // coluna ia a `null`, e 200 na resposta). Duas colunas, nao uma. Os booleanos so viram 0/1
       // quando VIERAM (`!= null`), senao `false` e `ausente` seriam a mesma coisa e qualquer
       // chamada parcial zeraria o que a conferencia anterior marcou.
-      await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado SET
+      const upd = await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado SET
         quantidade_recebida = COALESCE(?, quantidade_recebida),
         conferencia_quantidade = COALESCE(?, conferencia_quantidade),
         conferencia_descricao = COALESCE(?, conferencia_descricao),
@@ -952,6 +969,7 @@ async function conferirRecebimento(db, user, recebimentoId, data) {
         item.series ?? null,
         item.id, recebimentoId,
       ]);
+      await gravarTrilhasDoItem(db, user, excedentes, indice, upd);
     }
   }
 
@@ -1059,8 +1077,8 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
   // ANTES do UPDATE do cabecalho: recusar depois gravaria os dados fiscais e devolveria 400.
   // A regra de AUMENTO (F1 + R2) mora dentro de `assertExcedentePermitido` e vale nas duas portas:
   // o modal de NF nao tem campo de quantidade nem caixa de autorizacao, e reenvia a quantidade de
-  // TODOS os itens.
-  await assertExcedentePermitido(db, user, recebimentoId, itens, data.autorizar_excedente === true);
+  // TODOS os itens. Etapa 122 (B791): a trilha vem depois do UPDATE de cada item (abaixo).
+  const excedentes = await assertExcedentePermitido(db, user, recebimentoId, itens, data.autorizar_excedente === true);
 
   await dbRun(db, `UPDATE recebimentos_material_almoxarifado SET
     nota_fiscal = COALESCE(?, nota_fiscal),
@@ -1105,11 +1123,11 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
   ]);
 
   if (itens?.length) {
-    for (const item of itens) {
+    for (const [indice, item] of itens.entries()) {
       const qtd = parseFloat(item.quantidade_recebida) || parseFloat(item.quantidade_esperada) || 0;
       const vUnit = parseFloat(item.valor_unitario) || 0;
       const vTotal = parseFloat(item.valor_total) || (qtd * vUnit);
-      await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado SET
+      const upd = await dbRun(db, `UPDATE recebimentos_material_itens_almoxarifado SET
         quantidade_recebida = COALESCE(?, quantidade_recebida),
         valor_unitario = COALESCE(?, valor_unitario),
         valor_total = COALESCE(?, valor_total),
@@ -1132,6 +1150,7 @@ async function salvarDadosFiscal(db, user, recebimentoId, data) {
         item.corrida_lote ?? null, item.series ?? null,
         item.id, recebimentoId,
       ]);
+      await gravarTrilhasDoItem(db, user, excedentes, indice, upd);
     }
   }
 

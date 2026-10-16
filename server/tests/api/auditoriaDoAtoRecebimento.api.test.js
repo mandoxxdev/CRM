@@ -333,16 +333,21 @@ const API = '/api/almoxarifado';
     assert.ok(avisos.some((l) => l.includes('[almoxarifado] auditoria do ato falhou (nao_conformidade')), JSON.stringify(avisos));
   });
 
-  // ── RN-14: a conferencia fica fatal ──
-  await test('[RN-14] fica fatal de proposito: a Auditoria do excedente na CONFERENCIA (antes do UPDATE) falhando -> 500 e nada gravado', async () => {
+  // ── RN-14: a conferencia ──
+  // ⚠️ Etapa 122 (B791): este cenario dizia "fica fatal de proposito: ... -> 500 e nada gravado". Estava certo para o codigo da
+  // 121, em que a trilha rodava ANTES do UPDATE (o 500 era a verdade). A 122 moveu a trilha para DEPOIS do UPDATE de cada item
+  // (com dois excedentes e a 2a trilha falhando, o 500 deixava a 1a trilha sem o ato) — a razao do "fatal" caiu e a porta segue
+  // a B784: o ato vale. Os cenarios novos estao em `excedenteDaConferenciaDepoisDoAto.api.test.js`.
+  await test('[RN-14] a Auditoria do excedente na CONFERENCIA falhando -> 200, o status e o item gravados (desde a 122, depois do ato)', async () => {
     const m = await material();
     const rec = await novaNota([{ material_id: m, q: 2 }], { status: 'RECEBIDO' });
     const item = (await dbGet(db, 'SELECT id FROM recebimentos_material_itens_almoxarifado WHERE recebimento_id = ?', [rec])).id;
     const r = await comAuditoriaFalhando('recebimento_item', 'EXCEDENTE_AUTORIZADO', () => request(app).put(`${API}/recebimentos/${rec}/conferir`)
       .send({ status: 'EM_CONFERENCIA', autorizar_excedente: true, itens: [{ id: item, quantidade_recebida: 5 }] }));
-    assert.strictEqual(r.status, 500, `a Auditoria da conferencia virou nao-fatal: ${r.status} ${JSON.stringify(r.body)}`);
-    assert.strictEqual(await statusRec(rec), 'RECEBIDO', 'o status mudou com a Auditoria falhando');
-    assert.strictEqual((await dbGet(db, 'SELECT quantidade_recebida q FROM recebimentos_material_itens_almoxarifado WHERE id = ?', [item])).q, 2);
+    assert.strictEqual(r.status, 200, `a Auditoria da conferencia ainda derruba o ato: ${r.status} ${JSON.stringify(r.body)}`);
+    assert.strictEqual(await statusRec(rec), 'EM_CONFERENCIA');
+    assert.strictEqual((await dbGet(db, 'SELECT quantidade_recebida q FROM recebimentos_material_itens_almoxarifado WHERE id = ?', [item])).q, 5);
+    assert.strictEqual(await linhas('recebimento_item', 'EXCEDENTE_AUTORIZADO', item), 0, 'a trilha que falhou apareceu');
   });
 
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
