@@ -53,6 +53,12 @@ const getPendente = (item) => Math.max(0, Number(item.quantidade_solicitada) - g
 // sem reserva dos outros itens e a própria caixa; o saldo_atual oferecia o que a porta recusa (C169). Servidor
 // sem o campo cai no saldo_atual, como antes.
 const saldoSeparavel = (item) => Number(item.saldo_separavel ?? item.saldo_atual) || 0;
+// Etapa 127 (C265, RN-17; B819): a parte do separável que é RESERVA PRÓPRIA do item (`saldo_separavel_reserva` do servidor) — não é
+// dividida entre os itens do mesmo material; o que um irmão separa só tira do resto (o livre, que é o mesmo para todos) o que passa da
+// reserva própria dele. Antes o modal tirava tudo: com dois itens reservados 4 + 4 abria 4 e 0, e a porta aceitava 4 + 4. Servidor sem o
+// campo: 0 — a conta de antes.
+const reservaPropriaSeparavel = (item) => Math.min(saldoSeparavel(item), Math.max(0, Number(item.saldo_separavel_reserva) || 0));
+const tiraDoLivre = (item, quantidade) => Math.max(0, (Number(quantidade) || 0) - reservaPropriaSeparavel(item));
 const maxQtdSeparacao = (item) => Math.min(
   Math.max(0, Number(item.quantidade_solicitada) - getSeparado(item)),
   saldoSeparavel(item)
@@ -166,7 +172,9 @@ const seriesDoLote = (info, loteId) => (info?.series || [])
 const MOTIVO_DIVERGENCIA_MAX = 500;
 const maxSeparavelNaTela = (item, valorOrigemEscolhida, saldos, outrosMesmoMaterial = 0) => {
   const pendenteSeparacao = Math.max(0, Number(item.quantidade_solicitada) - getSeparado(item));
-  const livre = Math.max(0, saldoSeparavel(item) - (Number(outrosMesmoMaterial) || 0));
+  // Etapa 127 (RN-17): `outrosMesmoMaterial` é o que os irmãos tiram do livre (`tiraDoLivre`); a reserva própria fica.
+  const propria = reservaPropriaSeparavel(item);
+  const livre = propria + Math.max(0, saldoSeparavel(item) - propria - (Number(outrosMesmoMaterial) || 0));
   const base = Math.min(pendenteSeparacao, livre);
   if (!valorOrigemEscolhida) return base;
   const opcao = (saldos || []).find((s) => valorOrigem(s) === valorOrigemEscolhida);
@@ -187,7 +195,7 @@ const separavelAgoraPorItem = (itens) => {
   return (itens || []).reduce((acc, item) => {
     const outros = jaContado[item.material_id] || 0;
     const quantidade = maxSeparavelNaTela(item, null, null, outros);
-    jaContado[item.material_id] = outros + quantidade;
+    jaContado[item.material_id] = outros + tiraDoLivre(item, quantidade);
     if (quantidade > 1e-9) acc.push({ item, quantidade: Number(quantidade.toFixed(4)) });
     return acc;
   }, []);
@@ -201,15 +209,16 @@ const quantidadesIniciaisSeparacao = (itens) => {
   (itens || []).forEach((item) => {
     const outros = jaContado[item.material_id] || 0;
     const quantidade = maxSeparavelNaTela(item, null, null, outros);
-    jaContado[item.material_id] = outros + quantidade;
+    jaContado[item.material_id] = outros + tiraDoLivre(item, quantidade);
     qtds[item.id] = quantidade;
   });
   return qtds;
 };
-// O que os OUTROS itens do mesmo material estão separando no modal agora (dividem o saldo).
+// O que os OUTROS itens do mesmo material estão separando no modal agora (dividem o saldo) — Etapa 127 (RN-17): só o que passa da
+// reserva própria de cada um.
 const separandoOutrosDoMaterial = (itens, item, quantidades) => (itens || [])
   .filter((i) => i.id !== item.id && Number(i.material_id) === Number(item.material_id))
-  .reduce((s, i) => s + Math.max(0, parseFloat((quantidades || {})[i.id]) || 0), 0);
+  .reduce((s, i) => s + tiraDoLivre(i, Math.max(0, parseFloat((quantidades || {})[i.id]) || 0)), 0);
 // Só abaixo do máximo e acima de zero: quantidade 0 não vai no payload, então não há onde levar o motivo.
 const separacaoDivergente = (qtdDigitada, maximo) => {
   const q = parseFloat(qtdDigitada) || 0;
