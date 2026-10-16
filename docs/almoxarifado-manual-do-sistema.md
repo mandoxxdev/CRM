@@ -1091,6 +1091,10 @@ As três primeiras listas **não são fixas**: elas são montadas a partir do qu
 
 **A trilha não é o livro.** Toda movimentação de estoque (entrada, saída, ajuste, transferência, estorno, e as que nascem de requisição, devolução, recebimento, retalho e das outras telas) é registrada **primeiro no livro** e só depois na Auditoria. Se o registro na Auditoria falhar por um erro do banco, a movimentação **continua valendo** e a tela que a pediu responde sucesso: ela aparece no livro, no extrato do material e no saldo, com quem lançou e quando — só não aparece na Auditoria (perde-se o endereço de rede e o navegador de onde partiu). Para "quem lançou isto", o livro é a fonte; a Auditoria é o complemento.
 
+O mesmo vale para os outros atos que gravam uma linha na Auditoria **depois** de feitos: aprovar, rejeitar, encerrar e copiar requisição; criar e editar regra de aprovação; criar recebimento, avançá-lo no fluxo (conferência, fiscal) e processar a nota (a reserva para quem esperava o material nasce normalmente); cancelar solicitação de compra e gerar solicitações pelo estoque mínimo; abrir não conformidade; transferir reserva; assinar a entrega; reenviar aviso por e-mail; os atos de ferramenta (empréstimo, devolução, manutenção, calibração, ocorrência, bloqueio); mudar o status de série e de lote; cadastrar material; sucateamento (solicitar, aprovar, rejeitar, cancelar, registrar destino); gerar retalho e editar sobra; registrar devolução; regularizar movimentação; alterar estoques mínimos em lote (cada material ganha a sua linha, mesmo que a de outro falhe). Se a linha da Auditoria falhar por erro do banco, o ato **vale** e a tela responde sucesso — repetir não é preciso (e duplicaria). O ato continua registrado na própria tela dele, com quem e quando; só não aparece na Auditoria. Duas leituras dependem dessa linha: sem a do **fechamento automático do pedido de compra**, o estorno da nota não reabre aquele pedido (reabra à mão); sem a do **fim da conferência**, o relatório de fornecedor mostra aquele recebimento como não conferido.
+
+Não vale para o que a Auditoria registra **antes** do ato (a série, o lote e o dono do material dentro de uma movimentação; o excedente autorizado na conferência): ali, se a Auditoria falhar, o ato não acontece e a tela mostra o erro — repetir é o certo.
+
 A razão de as duas recusarem em vez de simplesmente não achar nada: numa auditoria, **lista vazia parece prova de que nada aconteceu**. Uma data escrita errada que devolvesse zero linhas levaria alguém a concluir, com toda a boa-fé, que ninguém mexeu em nada naquele período.
 
 **Ações com nomes diferentes para o mesmo ato aparecem juntas.** O sistema, por razões históricas, gravou o mesmo ato com nomes diferentes conforme a tela que o registrou. O filtro de ação mostra **uma** opção por ato — escolher "Criação" traz todas as grafias juntas, e você não perde nenhuma linha por causa disso. Ao mesmo tempo, cada linha da lista continua mostrando, em letra miúda embaixo do rótulo, **o nome exato que está gravado**. A tela agrupa para facilitar a busca; ela não esconde o que o registro diz.
@@ -2531,8 +2535,28 @@ Só quatro tipos de saída são devolvíveis: **Saída**, **Saída para produç�
 A conta é:
 
 ```
-saldo devolvível = quantidade da entrega − soma do que foi devolvido citando aquela entrega e não foi desfeito pelo livro
+saldo devolvível = quantidade da entrega
+                  − soma do que foi devolvido citando aquela entrega e não foi desfeito pelo livro
+                  − peças com número de série daquela entrega que voltaram ao estoque por outra entrada
 ```
+
+A terceira parcela vale para material com número de série. Uma peça que saiu naquela entrega e voltou ao estoque **sem citar a entrega** — por uma **Entrada** com o número dela, ou por uma devolução **avulsa** — já voltou: não pode ser devolvida de novo citando a entrega, mesmo que o controle por número de série tenha sido desligado depois (sem série, a devolução não tem como saber que é a mesma peça). A peça que voltou pela devolução que **cita** a entrega não entra nessa parcela — ela já está na segunda. A volta conta mesmo que a entrada que a trouxe tenha sido estornada depois: o sistema não distingue "voltou e foi desfeita" de "voltou", e prefere recusar a devolver em dobro. Duas consequências, ambas recusas e nunca crédito a mais:
+
+- devolução **sem série** citando a entrega (Retrabalho, Sucata, ou com o controle desligado) e, depois, a volta de **uma** peça por uma Entrada: as duas contam, e a entrega pode ficar com saldo 0 com uma peça ainda fora — o sistema não sabe se a peça que voltou era a do retrabalho ou a outra. A peça que está fora volta pela **devolução avulsa** (sem citar a entrega);
+- a entrada que trouxe as peças de volta, estornada: a entrega continua com saldo 0; o acerto é por **Ajuste**.
+
+Uma peça que voltou antes de o sistema passar a guardar de que entrega ela tinha saído não é vista por essa parcela.
+
+A devolução para **Estoque** (como a de Quarentena e a de Sucata) espera a movimentação em curso do material e, nesse momento,
+confere de novo. Se ela leva números de série e o controle por número de série foi desligado enquanto ela era gravada:
+
+> *"O controle por número de série do material ⟨código⟩ foi desligado enquanto a devolução era gravada — nada foi gravado. Registre a devolução de novo."*
+
+Se a entrega citada recebeu de volta, nesse meio-tempo, mais do que cabe (uma Entrada das mesmas peças):
+
+> *"A saída ⟨n⟩ mudou enquanto a devolução era gravada — nada foi gravado. Tente de novo."*
+
+Nos dois casos nada fica gravado; repetida, a devolução recebe a recusa com os números.
 
 Devoluções parciais **somam**: de uma entrega de 10, devolver 6 e depois 4 cabe; 6 e depois 5, não.
 
@@ -2540,11 +2564,15 @@ Acima do teto, a recusa **diz o número** — sem ele o operador teria de adivin
 
 > *"Devolução acima do entregue: a saída 1 entregou 10, já foram devolvidos 4 e restam 6"*
 
+Quando há peças que voltaram por outra entrada, a recusa diz quantas:
+
+> *"Devolução acima do entregue: a saída 7 entregou 2, já foram devolvidos 0, 2 já voltaram ao estoque por uma entrada que não cita esta saída e restam 0"* (com uma só: *"1 já voltou ao estoque por uma entrada que não cita esta saída"*)
+
 A tela mostra o mesmo número antes de enviar e barra localmente: *"Esta entrega ainda aceita 6 de devolução"*. As duas pontas usam **a mesma conta, sobre a mesma lista de tipos e o mesmo filtro de estorno** — se divergissem, a tela ofereceria devolver 6 e o servidor responderia que só cabem 4, sem o operador ter como saber quem está certo.
 
 **O teto não distingue destino:** devolver 3 para Sucata consome os mesmos 3 do devolvível daquela entrega que uma devolução ao Estoque consumiria. O teto mede *quanto daquela entrega já voltou*, não *para onde voltou*.
 
-Uma entrega **já devolvida por inteiro continua aparecendo na lista**, com saldo 0 e desabilitada. Escondê-la faria o operador procurar uma entrega que o sistema decidiu não mostrar. A lista traz as **30 entregas mais recentes** daquele material — quem devolve devolve o que saiu há pouco.
+Uma entrega **já devolvida por inteiro continua aparecendo na lista**, com saldo 0 e desabilitada. Se as peças voltaram por outra entrada, a linha diz isso em vez de "já devolvido por inteiro": *"2 já voltaram ao estoque por outra entrada"* (com devolução também: *"devolvido 1 · 1 já voltou ao estoque por outra entrada"*; com saldo: *"devolvível 1 · 1 já voltou ao estoque por outra entrada"*). Escondê-la faria o operador procurar uma entrega que o sistema decidiu não mostrar. A lista traz as **30 entregas mais recentes** daquele material — quem devolve devolve o que saiu há pouco.
 
 O teto é conferido **no mesmo instante em que a devolução é gravada**: duas devoluções da mesma entrega ao mesmo tempo (duas abas) não passam juntas acima do teto — a segunda recebe a recusa com o número. E a entrega que alguém está estornando naquele instante também não recebe a devolução: *"A saída ⟨n⟩ tem um estorno em andamento que ainda não concluiu — nada foi gravado. Tente de novo em instantes; se a recusa continuar, o estorno foi interrompido: avise o administrador do almoxarifado."* — se o estorno concluir, a recusa passa a ser a da entrega estornada (*"A saída ⟨n⟩ foi cancelada (estornada) — o estorno já devolveu o material"*); se ele falhar, a devolução de novo passa. No sentido inverso, a entrega que já teve devolução não se estorna (6.10). A devolução **desfeita pelo livro** — a linha *Entrada de devolução* que ela gerou, estornada (6.10) — **deixa de contar** no teto, na tela e no servidor: o estorno tirou o material do estoque de novo, então ele está outra vez com quem o levou e pode ser devolvido. Vale só o estorno da entrada que a própria devolução gerou (a primeira *Entrada de devolução* com a referência `DEV-⟨número⟩`, do mesmo material) e só depois de ele concluir; uma entrada lançada à mão com essa referência não desfaz a devolução. Com número de série, as séries da devolução desfeita voltam a **Entregue** naquela entrega — a tela as oferece de novo. Uma devolução avulsa antiga sem a referência e a devolução para Retrabalho (que não gera entrada) continuam contando.
 

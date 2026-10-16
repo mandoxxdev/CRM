@@ -1055,6 +1055,30 @@ servidor**. Está na letra **C** das novidades, porque quem ler só "a retençã
 conclui que o painel inteiro funciona.
 
 
+## Etapa 121 (2026-10-16) — a Auditoria de um ato já feito não derruba o ato (C252)
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa121-o-que-ja-voltou-e-a-auditoria-depois-do-ato.md` (Fase 0 com as
+110 chamadas medidas no design da etapa).
+
+`audit.registrarAuditoriaDoAto` grava a linha; se o banco falhar, o log registra *"[almoxarifado] auditoria do ato falhou
+(⟨entidade⟩ ⟨id⟩, ⟨acao⟩): ⟨msg⟩"* e o ato segue. **A trilha deixa de ser garantida para esses atos** — o ato fica na tabela dele
+(com quem e quando); a tela de Auditoria não o mostra.
+
+- [x] **O helper** (RN-09) — `931bb1a2`.
+- [x] **Requisição e regras** — aprovar, rejeitar, aprovar e rejeitar valor, aprovar regra, confirmar recebimento, encerrar,
+  copiar, criar e editar regra (RN-10) — `e50f8f7d`.
+- [x] **Recebimento, compras, NC, reserva, assinatura, fila** — inclusive processar a nota (a reserva de quem esperava nasce) e
+  três laços (RN-11) — `66eafc59`.
+- [x] **Ferramenta, série, lote, material** e os três desfazeres de série da movimentação (RN-12a..k) — `acc9778c`; e os dois do
+  estorno e o estoque mínimo em lote (RN-12l..n, Fase 5 r1) — `12b92c40`.
+- [x] **Sucateamento, retalho, devolução, regularização** e as duas que mascaravam o erro (RN-13) — `897b1fb6`.
+- [x] **Ficam fatais, com prova:** série (`CRIACAO`, `REATIVACAO`, `SAIDA`) dentro do motor antes do livro, o excedente na
+  conferência (RN-14, RN-14b, RN-14c) — `931bb1a2`, `66eafc59`, `47395cee`.
+- [ ] **Fora (declarado):** duas leituras que tratam a linha da Auditoria como estado — a reabertura do pedido no estorno da nota
+  (`STATUS_AUTOMATICO_RECEBIDO`) e o "conferido" do relatório de fornecedor (`FINALIZAR_CONFERENCIA`) — **C255**, candidata da 122.
+
+Continua 🟡-forte (o que falta para 🟢 não mudou: ver o topo).
+
 ## Regras essenciais + testes de API exigidos
 
 | Regra | Teste |

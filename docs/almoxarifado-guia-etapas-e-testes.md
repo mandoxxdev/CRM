@@ -1,17 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-16 (Etapa 120) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-16 (Etapa 121) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119 e 120) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120 e 121) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 120 ENTREGUE · próxima do almoxarifado: Etapa 121)
+> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 121 ENTREGUE · próxima do almoxarifado: Etapa 122)
 >
-> **O desenvolvimento parou aqui: Etapa 120 fechada — 2026-10-16.** A **Etapa 120 (o lançamento que já valeu e a série que
+> **O desenvolvimento parou aqui: Etapa 121 fechada — 2026-10-16.** A **Etapa 121 (o que já voltou não se devolve de novo, e a
+> Auditoria depois do ato não desfaz o ato)**: a Devolução não aceita devolver de novo as peças com série que já voltaram ao
+> estoque por outra entrada (e a tela diz isso na lista de entregas); dezenas de telas que gravam a Auditoria depois de terminar
+> — aprovar, encerrar e copiar requisição, processar a nota, retalho, sucateamento, ferramentas, devolução — não respondem mais
+> erro com o ato feito; e a devolução no mesmo instante de uma Entrada das peças espera a movimentação do material.
+> **Próxima: Etapa 122** — ver a próxima tarefa no plano da 121.
+>
+> **Etapa 120, 2026-10-16.** A **Etapa 120 (o lançamento que já valeu e a série que
 > já voltou)**: o lançamento que já está no estoque responde sucesso mesmo com o registro da Auditoria falhando (a entrega não
 > baixa mais duas vezes, o retalho e o cadastro com saldo não ficam pela metade); a saída cujas peças voltaram por uma Entrada
 > não se estorna em dobro depois de desligar a série; e a exclusão da requisição cuja entrega voltou assim é recusada, e espera
-> a movimentação do material. **Próxima: Etapa 121** — ver a próxima tarefa no plano da 120.
+> a movimentação do material. *(Próxima, na época: Etapa 121 — entregue acima.)*
 >
 > **Etapa 119, 2026-10-16.** A **Etapa 119 (o que já valeu não se perde nem responde
 > erro)**: a saída e a entrega de requisição com lote que falham no meio de dois endereços devolvem o endereço já baixado; o
@@ -6479,6 +6486,56 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 121 — O que já voltou não se devolve de novo, e a Auditoria depois do ato não desfaz o ato (ENTREGUE — 2026-10-16)
+
+**O que mudou, em uma frase:** a Devolução não aceita mais devolver de novo as peças com série que já voltaram ao estoque por
+outra entrada, e as dezenas de telas que gravam a Auditoria depois de terminar não respondem mais erro com o ato feito.
+
+**O problema que ela resolve.** As peças que voltaram ao estoque por uma Entrada (sem passar pela Devolução) podiam ser devolvidas
+**outra vez** citando a entrega, depois de o Administrador desligar a série — 2 peças viravam 4. E, com um erro do banco no
+registro da Auditoria, a tela mostrava erro com o ato **feito**: quem repetia duplicava (a cópia da requisição, o retalho, a
+devolução, o recebimento, a calibração), ouvia "já feito", ou perdia o que vinha depois — a nota processada não reservava o
+material para a requisição que esperava, e o comprovante do sucateamento e a assinatura da entrega eram apagados.
+
+| Antes | Agora |
+|---|---|
+| Saída de V1 e V2, Entrada de V1 e V2, série desligada: a Devolução citando a saída dava estoque 4 | Recusa: *"…, 2 já voltaram ao estoque por uma entrada que não cita esta saída e restam 0"* |
+| A janela *Nova Devolução* oferecia aquela saída com "devolvível 2" | *"2 já voltaram ao estoque por outra entrada"*, desabilitada |
+| Ato feito, erro na Auditoria: tela de erro; repetir duplicava ou recusava | Sucesso; o ato vale (não aparece na tela de Auditoria) |
+| Nota processada com erro na Auditoria: a requisição que esperava ficava sem reserva | A reserva nasce |
+
+### Roteiro de teste manual
+
+O erro de Auditoria só se reproduz forçando o banco (teste automatizado). A devolução se clica.
+Pré-requisitos: login como **administrador**; um material com **Controle por número de série**, **PRF-1211**, sem saldo.
+
+1. **Movimentações → Nova** → *Entrada* de 2 do PRF-1211 com as séries **V1** e **V2** → estoque 2.
+2. *Saída* de 2 com V1 e V2 → estoque 0.
+3. *Entrada* de 2 com V1 e V2 de novo (as peças voltaram sem passar pela Devolução) → estoque 2.
+4. **Materiais** → abra o PRF-1211 → desmarque **Controle por número de série** → salvar.
+5. **Devoluções → Nova Devolução** → material PRF-1211 → no campo da entrega, a saída do passo 2 aparece **desabilitada**, com
+   *"2 já voltaram ao estoque por outra entrada"*. *(Antes desta etapa: "devolvível 2", e devolver dava estoque 4.)*
+6. **Só uma voltou:** repita 1 e 2 num segundo material (**PRF-1212**); no passo 3 dê *Entrada* só de **V1**; desligue a série. A
+   entrega aparece com *"devolvível 1 · 1 já voltou ao estoque por outra entrada"*; a devolução de 1 citando a entrega passa
+   (estoque 2); a de 2 a tela já não deixa digitar.
+7. **A peça que está fora volta pela devolução avulsa:** registre a devolução **sem** escolher a entrega — ela continua aceita.
+
+### O que esta etapa não cobre
+
+- Peças que voltaram **antes da Etapa 120** não guardaram de que entrega saíram — a devolução não as vê. As consultas **A68** e
+  **A69** listam o que conferir.
+- A **Entrada de volta estornada** continua contando: a entrega fica com 0 com o material fora — acerto por **Ajuste**.
+- A **devolução sem série** (Retrabalho, Sucata) e a volta de uma peça por uma Entrada **somam** — a peça que está fora volta pela
+  devolução avulsa.
+- O ato com erro na Auditoria fica **fora da tela de Auditoria**; e duas leituras dependem dessa linha (o estorno da nota reabrir o
+  pedido de compra fechado automaticamente; o relatório de fornecedor dar o recebimento como conferido) — **C255**: depois de
+  estornar uma nota, confira o pedido.
+- A aprovação que falha ao gravar o status deixa as reservas de pé (**C254**, só com erro de banco).
+- As decisões pendentes do P.O. (**B755**, **B761**/**C239**, **C224**, o resto da **C225**, **C228**, **C219**, **C230**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (pelas rotas do servidor e o teste
+de componente da tela) provam, escrito para você conferir à mão.
 
 ## Etapa 120 — O lançamento que já valeu e a série que já voltou (ENTREGUE — 2026-10-16)
 

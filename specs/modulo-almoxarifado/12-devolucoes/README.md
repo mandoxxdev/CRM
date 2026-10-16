@@ -413,10 +413,36 @@ Continua 🟢. Testes: `oQueJaValeuNaoSePerde.api.test.js` (RN-05, RN-05b, RN-06
 
 ## Etapa 120 (2026-10-16) — o que a etapa NÃO mudou aqui
 
-- [ ] **A devolução que cita a saída cujas séries já voltaram por uma Entrada, com a série desligada, ainda credita em dobro**
+- [x] ~~**A devolução que cita a saída cujas séries já voltaram por uma Entrada, com a série desligada, ainda credita em dobro**~~ — **resolvido na Etapa 121** (seção abaixo; `b5f43da1`). A razão dada aqui para deixar de fora ("mexe na régua viva comum às cinco contas") não se confirmou: a 121 resolveu **sem** mexer na régua viva, com uma conta própria da devolução.
   (achado na revisão da 120, r1; anterior à etapa) → **C253**. Medido: Entrada 2 (V1, V2) → Saída S → Entrada avulsa V1, V2 →
   desliga → `POST /devolucoes` ESTOQUE de 2 citando S, sem série → 201, físico 4; a lista de saídas elegíveis oferece S com
   `saldo_devolvivel: 2`. Com a série ligada é recusada (a série não saiu nessa saída). Ficou fora porque descontar "o que voltou
   por Entrada" mexe na régua viva comum às cinco contas (`devolucaoViva.js`) e tem um falso negativo medido na Fase 2 (a série
   reativada a partir de *Estornada* não guarda a saída) — candidata da próxima etapa.
 - A devolução com a auditoria do motor falhando responde 201 sem marcar `ESTADO_PARCIAL` (C250, `2e05c2ee`; RN-05, RN-05b).
+
+## Etapa 121 (2026-10-16) — o que já voltou por outra entrada não se devolve de novo (C253)
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa121-o-que-ja-voltou-e-a-auditoria-depois-do-ato.md`.
+
+O "restante" de uma saída (as três pontas: `validarSaidaOriginal`, o `INSERT … WHERE EXISTS` e o `saldo_devolvivel` de
+`listarSaidasElegiveis`) passa a ser **quantidade − devolvido vivo − séries da saída que voltaram por uma entrada que não é a de
+uma devolução que a cita** (`devolucaoViva.seriesQueVoltaramSql`, lendo `series_entrada_anterior_almoxarifado.saida_anterior_id`
+da Etapa 120). A régua "viva" (`DEVOLUCAO_VIVA_SQL`) não mudou — as outras quatro contas (estorno da saída, exclusão) já recusam
+o mesmo caso por outra via (B779, B780).
+
+- [x] **As três pontas descontam a volta por fora, com a série ligada ou desligada (RN-01..RN-04, RN-07)** — `b5f43da1`. Literal
+  nova só com volta por fora: *"Devolução acima do entregue: a saída ⟨S⟩ entregou ⟨q⟩, já foram devolvidos ⟨d⟩, ⟨v⟩ já voltaram
+  (já voltou) ao estoque por uma entrada que não cita esta saída e restam ⟨r⟩"*. A lista ganha `quantidade_reentrada`.
+- [x] **A tela diz "⟨v⟩ já voltaram ao estoque por outra entrada"** em vez de "já devolvido por inteiro" — `02704ce4`, `91027cbb`,
+  `691f034c` (RN-08t).
+- [x] **A volta estornada depois continua contando** (o falso negativo da Fase 2 da 120, RN-06; preço declarado, RN-06b) — `b5f43da1`.
+- [x] **A devolução sem série e a volta de uma peça somam, de propósito** (RN-04b, B785) — `db5559d4`. A peça que está fora volta
+  pela devolução avulsa.
+- [x] **(Fase 5, r2) A devolução para Estoque roda as pernas sob a trava do material e relê ali o controle de série e o que já
+  voltou** (RN-09..RN-09d, B786) — `c52e5484`. Anterior à etapa: 8/300 com físico 4.
+- [x] **(Fase 5) A Auditoria `CRIACAO`, `COMPENSACAO` e `ESTADO_PARCIAL` da devolução não derrubam a resposta** (C252) — `897b1fb6`.
+- [ ] **Fora:** voltas anteriores à Etapa 120 (sem `saida_anterior_id`) não são vistas — **A68**, **A69**.
+
+Continua 🟢. Testes: `devolucaoDoQueVoltou.api.test.js` (15), `oQueJaVoltouIntegracao.api.test.js` (i, ii),
+`auditoriaDoAtoSucata.api.test.js` (RN-13h, RN-13j, RN-13k), `DevolucoesAlmoxarifado.test.js` (C253).

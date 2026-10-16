@@ -157,7 +157,7 @@ a T4 só testa e depende das três. Sem tela. Testes de cada task num arquivo pr
    teste, **1** sabotagem equivalente, **0** ruído.
 3. **Paralelismo:** **0** galhos (as quatro tasks são do mesmo motor ou dependem da coluna); revisores em paralelo na Fase 5 (três,
    cada um na sua worktree).
-4. **Defeito que escapou:** *(preencher na Etapa 121)*. **Da Etapa 119:** **nenhum introduzido por ela.** Um erro de **medição**
+4. **Defeito que escapou:** *(preenchido na Etapa 121)* **nenhum defeito introduzido pela 120** — a coluna `saida_anterior_id` e a Auditoria não-fatal do lançamento se comportaram como descritas, e a 121 construiu sobre elas. Um erro de **medição** desta própria etapa: a "próxima tarefa" contou **115** chamadas à Auditoria com `grep` (somava `require`s e comentários — eram **110**). **Da Etapa 119:** **nenhum introduzido por ela.** Um erro de **medição**
    dela: a "próxima tarefa" contou **25** chamadores do motor (`grep` só em `server/services`) — são **30** com `server/routes`;
    não mudou a decisão, mas é a forma de erro que a skill já descreve (medir sem cruzar). E a próxima tarefa dela apontava a
    integração da C234 pela Saída da entrega — que nem se estorna pelo livro (o teste vazio que a Fase 2 da 120 pegou).
