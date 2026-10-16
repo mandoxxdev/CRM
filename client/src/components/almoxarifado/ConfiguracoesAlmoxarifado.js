@@ -222,6 +222,10 @@ const ConfiguracoesAlmoxarifado = ({ embedded = false }) => {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const isAdmin = canConfigureAlmox(getEffectiveUser(user));
+  // Etapa 126 (C261, RN-01..RN-10; B811): abrir a tela (`canConfigureAlmox`, aceita o administrador do sistema) nao e gravar — quem o
+  // SERVIDOR deixa gravar e `podeGravarConfigAlmox`. As abas que o servidor recusa ficam somente leitura (ou restritas, as tres que
+  // nem leem), pelo mesmo usuario efetivo do portao.
+  const podeGravar = podeGravarConfigAlmox(getEffectiveUser(user));
   const tabParam = searchParams.get('tab');
   const tab = tabParam && TABS.some(t => t.id === tabParam) ? tabParam : 'tipos';
   const wrapperClass = embedded ? 'almox-embedded' : 'almox-page';
@@ -277,25 +281,49 @@ const ConfiguracoesAlmoxarifado = ({ embedded = false }) => {
         tamanho={embedded ? 'sm' : 'md'}
       />
 
-      {tab === 'tipos' && <TabTiposMaterial />}
+      {tab === 'tipos' && <TabTiposMaterial podeGravar={podeGravar} />}
       {tab === 'familias' && <TabFamilias />}
       {tab === 'categorias' && <TabCategorias />}
       {tab === 'motivos-movimentacao' && <TabMotivosMovimentacao />}
       {tab === 'materiais-setor' && <TabMateriaisPorSetor />}
-      {tab === 'estoques' && <TabEstoquesMinimos />}
-      {tab === 'setores' && <TabSetores />}
-      {tab === 'localizacoes' && <TabLocalizacoes />}
-      {tab === 'alertas' && <TabAlertasEstoque />}
-      {tab === 'liberacao-valor' && <TabLiberacaoValor />}
-      {tab === 'regras-aprovacao' && <TabRegrasAprovacao />}
+      {tab === 'estoques' && <TabEstoquesMinimos podeGravar={podeGravar} />}
+      {tab === 'setores' && <TabSetores podeGravar={podeGravar} />}
+      {tab === 'localizacoes' && <TabLocalizacoes podeGravar={podeGravar} />}
+      {/* RN-06 (B812): as tres que o servidor recusa ate para LER — a frase no lugar, sem chamar a rota (nem toast de erro, nem o
+          formulario com os valores padrao). */}
+      {tab === 'alertas' && (podeGravar ? <TabAlertasEstoque /> : <AvisoSomenteLeitura frase={FRASES_CONFIG.alertas} />)}
+      {tab === 'liberacao-valor' && <TabLiberacaoValor podeGravar={podeGravar} />}
+      {tab === 'regras-aprovacao' && (podeGravar ? <TabRegrasAprovacao /> : <AvisoSomenteLeitura frase={FRASES_CONFIG.regras} />)}
       {tab === 'perfis' && <TabPerfisAcesso />}
-      {tab === 'geral' && <TabConfiguracoes />}
+      {tab === 'geral' && (podeGravar ? <TabConfiguracoes /> : <AvisoSomenteLeitura frase={FRASES_CONFIG.geral} />)}
     </div>
   );
 };
 
+/* ===================== SOMENTE LEITURA (Etapa 126, C261) ===================== */
+// Etapa 126 (C261; B812): duas frases, uma forma — a da aba Familias (Etapa 125, B808) sai da mesma funcao, com a mesma literal.
+// "Somente leitura" = a aba le e nao grava; "Restrito" = o servidor recusa ate a leitura.
+const DE_QUEM_GRAVA = ' é do Administrador do almoxarifado ou do Super Administrador; peça a um deles.';
+export const fraseSomenteLeitura = (oQue) => `Somente leitura — ${oQue}${DE_QUEM_GRAVA}`;
+export const fraseRestrita = (oQue) => `Restrito — ${oQue}${DE_QUEM_GRAVA}`;
+export const FRASES_CONFIG = {
+  tipos: fraseSomenteLeitura('cadastrar, editar e excluir tipos de material'),
+  estoques: fraseSomenteLeitura('mudar estoque mínimo, estoque máximo, ponto de pedido e prazo de reposição'),
+  setores: fraseSomenteLeitura('cadastrar, editar e inativar setores e áreas'),
+  localizacoes: fraseSomenteLeitura('cadastrar, editar, mover e excluir localizações'),
+  liberacao: fraseSomenteLeitura('mudar a liberação por valor e os aprovadores'),
+  alertas: fraseRestrita('ver e mudar os alertas de estoque'),
+  regras: fraseRestrita('ver e mudar as regras de aprovação'),
+  geral: fraseRestrita('ver e mudar as configurações gerais do almoxarifado'),
+};
+const AvisoSomenteLeitura = ({ frase, className = '' }) => (
+  <div className={`almox-config-somente-leitura ${className}`.trim()} style={{ fontSize: '0.85rem', marginBottom: 20, padding: '10px 14px', borderRadius: 8, background: 'rgba(79,172,254,0.08)', border: '1px solid rgba(79,172,254,0.25)' }}>
+    <FiShield size={14} style={{ verticalAlign: '-2px', marginRight: 6 }} />{frase}
+  </div>
+);
+
 /* ===================== TAB TIPOS DE MATERIAL ===================== */
-const TabTiposMaterial = () => {
+const TabTiposMaterial = ({ podeGravar = true }) => {
   const [tipos, setTipos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editando, setEditando] = useState(null);
@@ -367,7 +395,8 @@ const TabTiposMaterial = () => {
 
   return (
     <div>
-      {!showForm && (
+      {!podeGravar && <AvisoSomenteLeitura frase={FRASES_CONFIG.tipos} />}
+      {!showForm && podeGravar && (
         <button className="btn-almox-primary" style={{ marginBottom: 20 }} onClick={() => setShowForm(true)}>
           <FiPlus size={14} /> Novo Tipo de Material
         </button>
@@ -441,10 +470,12 @@ const TabTiposMaterial = () => {
                     {tipo.descricao && <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{tipo.descricao}</div>}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button className="almox-btn-icon" onClick={() => handleEditar(tipo)}><FiEdit2 size={13} /></button>
-                  <button className="almox-btn-icon danger" onClick={() => handleDeletar(tipo.id)}><FiTrash2 size={13} /></button>
-                </div>
+                {podeGravar && (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="almox-btn-icon" onClick={() => handleEditar(tipo)} title="Editar"><FiEdit2 size={13} /></button>
+                    <button className="almox-btn-icon danger" onClick={() => handleDeletar(tipo.id)} title="Excluir"><FiTrash2 size={13} /></button>
+                  </div>
+                )}
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {tipo.is_epi && <span className="almox-selo almox-selo-epi">EPI</span>}
@@ -489,8 +520,8 @@ const ativasPrimeiro = (a, b) => (ehInativa(a) - ehInativa(b)) || porNome(a, b);
 const SELO_INATIVA_STYLE = { fontSize: '0.7rem', background: 'rgba(120,144,156,0.15)', color: 'var(--gmp-text-light)', padding: '2px 10px', borderRadius: 20, fontWeight: 600 };
 
 // Etapa 125 (C259, RN-16; B808): a frase da aba para quem o servidor nao deixa gravar familia.
-export const FRASE_FAMILIAS_SOMENTE_LEITURA = 'Somente leitura — cadastrar, editar, inativar e reativar famílias é do '
-  + 'Administrador do almoxarifado ou do Super Administrador; peça a um deles.';
+// Etapa 126 (B812): sai de `fraseSomenteLeitura`, com a MESMA literal da 125.
+export const FRASE_FAMILIAS_SOMENTE_LEITURA = fraseSomenteLeitura('cadastrar, editar, inativar e reativar famílias');
 
 const TabFamilias = () => {
   // Etapa 125 (C259, RN-16/RN-17; Fase 2, I1): os gestos de FAMILIA (Nova familia, Nova subfamilia, Editar, Inativar, Reativar)
@@ -723,9 +754,7 @@ const TabFamilias = () => {
       </p>
 
       {!podeGravar && (
-        <div className="almox-familias-somente-leitura" style={{ fontSize: '0.85rem', marginBottom: 20, padding: '10px 14px', borderRadius: 8, background: 'rgba(79,172,254,0.08)', border: '1px solid rgba(79,172,254,0.25)' }}>
-          <FiShield size={14} style={{ verticalAlign: '-2px', marginRight: 6 }} />{FRASE_FAMILIAS_SOMENTE_LEITURA}
-        </div>
+        <AvisoSomenteLeitura frase={FRASE_FAMILIAS_SOMENTE_LEITURA} className="almox-familias-somente-leitura" />
       )}
 
       {!showForm && podeGravar && (
@@ -1352,7 +1381,7 @@ const TabMotivosMovimentacao = () => {
 };
 
 /* ===================== TAB ESTOQUES MÍNIMOS ===================== */
-const TabEstoquesMinimos = () => {
+const TabEstoquesMinimos = ({ podeGravar = true }) => {
   const [materiais, setMateriais] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1413,10 +1442,13 @@ const TabEstoquesMinimos = () => {
           <input className="almox-input" style={{ width: 260 }} placeholder="Filtrar materiais..." value={buscaFiltro} onChange={e => setBuscaFiltro(e.target.value)} />
           {countEditados > 0 && <span style={{ fontSize: '0.8rem', color: '#f9a825', fontWeight: 600 }}>{countEditados} alteração(ões) pendente(s)</span>}
         </div>
-        <button className="btn-almox-primary" onClick={handleSalvar} disabled={saving || countEditados === 0}>
-          <FiSave size={14} /> {saving ? 'Salvando...' : `Salvar Alterações${countEditados > 0 ? ` (${countEditados})` : ''}`}
-        </button>
+        {podeGravar && (
+          <button className="btn-almox-primary" onClick={handleSalvar} disabled={saving || countEditados === 0}>
+            <FiSave size={14} /> {saving ? 'Salvando...' : `Salvar Alterações${countEditados > 0 ? ` (${countEditados})` : ''}`}
+          </button>
+        )}
       </div>
+      {!podeGravar && <AvisoSomenteLeitura frase={FRASES_CONFIG.estoques} />}
 
       {loading ? (
         <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>
@@ -1451,7 +1483,7 @@ const TabEstoquesMinimos = () => {
                     </td>
                     {['quantidade_minima', 'quantidade_maxima', 'ponto_pedido', 'prazo_reposicao_dias'].map(campo => (
                       <td key={campo}>
-                        <input className="almox-count-input" type="number" min="0" step="1"
+                        <input className="almox-count-input" type="number" min="0" step="1" disabled={!podeGravar}
                           value={getVal(mat, campo)} onChange={e => handleChange(mat.id, campo, e.target.value)} />
                       </td>
                     ))}
@@ -1594,7 +1626,7 @@ const AlmoxarifadosSection = () => {
       {loading ? (
         <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>
       ) : (
-        <div className="almox-table-container">
+        <div className="almox-table-container almox-almoxarifados-tabela">
           <table className="almox-table">
             <thead>
               <tr><th>Código</th><th>Nome</th><th>Descrição</th><th>Status</th><th style={{ textAlign: 'right' }}>Ações</th></tr>
@@ -1633,7 +1665,7 @@ const AlmoxarifadosSection = () => {
 /* ===================== TAB SETORES E ÁREAS ===================== */
 const SETOR_FORM_INITIAL = { nome: '', codigo_prefixo: '', tipo: 'corredor', ordem: 0 };
 
-const TabSetores = () => {
+const TabSetores = ({ podeGravar = true }) => {
   const [setores, setSetores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1727,7 +1759,8 @@ const TabSetores = () => {
         O <strong>prefixo do código</strong> é usado na geração automática (ex.: Corredor D com prefixo &quot;D&quot; gera códigos D-01, D-02…).
       </p>
 
-      {!showForm && (
+      {!podeGravar && <AvisoSomenteLeitura frase={FRASES_CONFIG.setores} />}
+      {!showForm && podeGravar && (
         <button className="btn-almox-primary" style={{ marginBottom: 20 }} onClick={() => setShowForm(true)}>
           <FiPlus size={14} /> Novo Setor ou Área
         </button>
@@ -1784,7 +1817,7 @@ const TabSetores = () => {
       {loading ? (
         <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>
       ) : (
-        <div className="almox-table-container">
+        <div className="almox-table-container almox-setores-tabela">
           <table className="almox-table">
             <thead>
               <tr>
@@ -1812,8 +1845,8 @@ const TabSetores = () => {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                      <button className="almox-btn-icon" onClick={() => handleEditar(s)} title="Editar"><FiEdit2 size={13} /></button>
-                      {s.ativo && (
+                      {podeGravar && <button className="almox-btn-icon" onClick={() => handleEditar(s)} title="Editar"><FiEdit2 size={13} /></button>}
+                      {podeGravar && !!s.ativo && (
                         <button className="almox-btn-icon danger" onClick={() => handleInativar(s)} title="Inativar"
                           disabled={s.qtd_localizacoes > 0}>
                           <FiTrash2 size={13} />
@@ -1847,7 +1880,7 @@ const WIZARD_INITIAL = {
   altura: 80,
 };
 
-const TabLocalizacoes = () => {
+const TabLocalizacoes = ({ podeGravar = true }) => {
   const [localizacoes, setLocalizacoes] = useState([]);
   const [setoresConfig, setSetoresConfig] = useState([]);
   const [tiposLoc, setTiposLoc] = useState([]);
@@ -2277,12 +2310,12 @@ const TabLocalizacoes = () => {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
-        {!showWizard && !showEdit && !moverLoc && (
+        {podeGravar && !showWizard && !showEdit && !moverLoc && (
           <button className="btn-almox-primary" onClick={() => { resetEdit(); resetMover(); abrirWizard(); }}>
             <FiPlus size={14} /> Nova Localização
           </button>
         )}
-        <Link to="/almoxarifado/mapa" className="btn-almox-secondary" style={{ marginLeft: (!showWizard && !showEdit && !moverLoc) ? 'auto' : 0 }}>
+        <Link to="/almoxarifado/mapa" className="btn-almox-secondary" style={{ marginLeft: (podeGravar && !showWizard && !showEdit && !moverLoc) ? 'auto' : 0 }}>
           <FiMapPin size={14} /> Ver Mapa de Áreas
         </Link>
         {localizacoes.length > 0 && (
@@ -2296,6 +2329,8 @@ const TabLocalizacoes = () => {
           </button>
         )}
       </div>
+
+      {!podeGravar && <AvisoSomenteLeitura frase={FRASES_CONFIG.localizacoes} />}
 
       {showWizard && (
         <div className="almox-wizard-panel">
@@ -2757,10 +2792,10 @@ const TabLocalizacoes = () => {
                   <td style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)' }}>{loc.almoxarifado_codigo || '—'}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                      <button className="almox-btn-icon" onClick={() => handleEditar(loc)} title="Editar"><FiEdit2 size={13} /></button>
-                      <button className="almox-btn-icon" onClick={() => startMover(loc)} title="Mover"><FiMove size={13} /></button>
+                      {podeGravar && <button className="almox-btn-icon" onClick={() => handleEditar(loc)} title="Editar"><FiEdit2 size={13} /></button>}
+                      {podeGravar && <button className="almox-btn-icon" onClick={() => startMover(loc)} title="Mover"><FiMove size={13} /></button>}
                       <button className="almox-btn-icon" onClick={() => setEtiquetas([montarEtiquetaLocalizacao(loc, window.location.origin)])} title="Etiqueta" aria-label={`Etiqueta ${loc.codigo}`}><FiTag size={13} /></button>
-                      <button className="almox-btn-icon danger" onClick={() => handleDeletar(loc.id)} title="Excluir"><FiTrash2 size={13} /></button>
+                      {podeGravar && <button className="almox-btn-icon danger" onClick={() => handleDeletar(loc.id)} title="Excluir"><FiTrash2 size={13} /></button>}
                     </div>
                   </td>
                 </tr>
@@ -3190,7 +3225,7 @@ const TabAlertasEstoque = () => {
 };
 
 /* ===================== TAB LIBERAÇÃO POR VALOR ===================== */
-const TabLiberacaoValor = () => {
+const TabLiberacaoValor = ({ podeGravar = true }) => {
   const { user } = useAuth();
   const [config, setConfig] = useState({ ativo: false, limite: 500, aprovadorIds: [] });
   const [usuarios, setUsuarios] = useState([]);
@@ -3255,6 +3290,7 @@ const TabLiberacaoValor = () => {
 
   return (
     <div style={{ maxWidth: 720 }}>
+      {!podeGravar && <AvisoSomenteLeitura frase={FRASES_CONFIG.liberacao} />}
       <p style={{ color: 'var(--gmp-text-light)', fontSize: '0.875rem', marginBottom: 20 }}>
         Requisições cujo valor total exceder o limite configurado exigirão aprovação de um aprovador autorizado
         antes da separação ou entrega. O valor é calculado com base no custo unitário (ou custo médio) dos materiais.
@@ -3269,7 +3305,7 @@ const TabLiberacaoValor = () => {
             </div>
           </div>
           <label className="switch" style={{ flexShrink: 0 }}>
-            <input type="checkbox" checked={config.ativo}
+            <input type="checkbox" checked={config.ativo} disabled={!podeGravar}
               onChange={(e) => setConfig((c) => ({ ...c, ativo: e.target.checked }))} />
             <span className="slider" />
           </label>
@@ -3282,7 +3318,7 @@ const TabLiberacaoValor = () => {
               Abaixo deste valor o almoxarife pode liberar sem aprovação extra
             </div>
           </div>
-          <input className="almox-input" type="number" min="0" step="0.01" style={{ width: 140 }}
+          <input className="almox-input" type="number" min="0" step="0.01" style={{ width: 140 }} disabled={!podeGravar}
             value={config.limite}
             onChange={(e) => setConfig((c) => ({ ...c, limite: e.target.value }))} />
         </div>
@@ -3297,7 +3333,7 @@ const TabLiberacaoValor = () => {
           <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
             {usuariosFiltrados.map((u) => (
               <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 6, cursor: 'pointer', background: config.aprovadorIds.includes(u.id) ? 'rgba(79,172,254,0.08)' : 'transparent' }}>
-                <input type="checkbox" checked={config.aprovadorIds.includes(u.id)}
+                <input type="checkbox" checked={config.aprovadorIds.includes(u.id)} disabled={!podeGravar}
                   onChange={() => toggleAprovador(u.id)} />
                 <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>{u.nome}</span>
                 <span style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>{u.email}</span>
@@ -3315,9 +3351,11 @@ const TabLiberacaoValor = () => {
         </div>
       </div>
 
-      <button className="btn-almox-primary" style={{ marginTop: 24 }} onClick={handleSalvar} disabled={saving}>
-        <FiSave size={14} /> {saving ? 'Salvando...' : 'Salvar Configurações'}
-      </button>
+      {podeGravar && (
+        <button className="btn-almox-primary" style={{ marginTop: 24 }} onClick={handleSalvar} disabled={saving}>
+          <FiSave size={14} /> {saving ? 'Salvando...' : 'Salvar Configurações'}
+        </button>
+      )}
     </div>
   );
 };

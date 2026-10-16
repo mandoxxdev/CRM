@@ -4,7 +4,7 @@ import api from '../../services/api';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../context/AuthContext';
 import { getEffectiveUser } from '../../services/permissionsCache';
-import { canConfigureAlmox } from '../../utils/systemPermissions';
+import { canConfigureAlmox, podeGravarConfigAlmox } from '../../utils/systemPermissions';
 import {
   buildLocalizacaoPath, formatLocalizacaoLabel, resolveAlmoxarifadoCodigo
 } from '../../utils/localizacaoLabel';
@@ -284,6 +284,8 @@ const MapaLocalizacoesAlmoxarifado = () => {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const isAdmin = canConfigureAlmox(getEffectiveUser(user));
+  // Etapa 126 (C261, RN-07; B814): mover posicoes e cadastrar localizacao so para quem o SERVIDOR deixa gravar.
+  const podeGravar = podeGravarConfigAlmox(getEffectiveUser(user));
   const svgRef = useRef(null);
 
   const [localizacoes, setLocalizacoes] = useState([]);
@@ -565,7 +567,7 @@ const MapaLocalizacoesAlmoxarifado = () => {
           <button className="btn-almox-secondary" onClick={loadData}>
             <FiRefreshCw size={14} /> Atualizar
           </button>
-          {isAdmin && (
+          {podeGravar && (
             <>
               {modoEdicao ? (
                 <>
@@ -584,7 +586,7 @@ const MapaLocalizacoesAlmoxarifado = () => {
             </>
           )}
           {isAdmin && (
-            <Link to="/almoxarifado/configuracoes" className="btn-almox-secondary">
+            <Link to="/almoxarifado/configuracoes?tab=localizacoes" className="btn-almox-secondary">
               <FiSettings size={14} /> Localizações
             </Link>
           )}
@@ -664,8 +666,8 @@ const MapaLocalizacoesAlmoxarifado = () => {
             <div className="almox-empty">
               <FiMap size={48} style={{ opacity: 0.25, display: 'block', margin: '0 auto 16px' }} />
               <p>Nenhuma localização cadastrada ou compatível com os filtros.</p>
-              {isAdmin && (
-                <Link to="/almoxarifado/configuracoes" className="btn-almox-primary" style={{ marginTop: 16, display: 'inline-flex' }}>
+              {podeGravar && (
+                <Link to="/almoxarifado/configuracoes?tab=localizacoes" className="btn-almox-primary" style={{ marginTop: 16, display: 'inline-flex' }}>
                   Cadastrar localizações
                 </Link>
               )}

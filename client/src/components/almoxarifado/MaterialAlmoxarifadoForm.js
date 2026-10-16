@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getEffectiveUser } from '../../services/permissionsCache';
-import { canConfigureAlmox } from '../../utils/systemPermissions';
+import { podeGravarConfigAlmox } from '../../utils/systemPermissions';
 import api from '../../services/api';
 import { useCategoriasMaterial } from '../../hooks/useCategoriasMaterial';
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
@@ -61,7 +61,9 @@ export const AVISO_SALDO_INICIAL = 'Material com lote, série, inspeção ou de 
 
 const MaterialAlmoxarifadoForm = () => {
   const { user } = useAuth();
-  const isAdmin = canConfigureAlmox(getEffectiveUser(user));
+  // Etapa 126 (C261, RN-11; Fase 2 M5): "cadastre em Configuracoes" so para quem o SERVIDOR deixa cadastrar familia e localizacao —
+  // o administrador do sistema sem perfil abria a tela pelo canConfigureAlmox e recebia 403 la. Os outros: "solicite a um administrador".
+  const isAdmin = podeGravarConfigAlmox(getEffectiveUser(user));
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -909,7 +911,7 @@ const MaterialAlmoxarifadoForm = () => {
                       Nenhuma localização cadastrada
                       {isAdmin ? (
                         <> — cadastre em{' '}
-                          <Link to="/almoxarifado/configuracoes" style={{ color: '#4facfe' }}>Configurações</Link>
+                          <Link to="/almoxarifado/configuracoes?tab=localizacoes" style={{ color: '#4facfe' }}>Configurações → Localizações</Link>
                         </>
                       ) : (
                         <> — solicite a um administrador</>
