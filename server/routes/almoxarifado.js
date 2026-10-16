@@ -665,6 +665,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     if (familiaDesfeita) {
       return res.status(409).json({ error: materialService.mensagemFamiliaMudadaPorOutro(current.codigo, familiaDesfeita) });
     }
+    // Etapa 125 (D (124), RN-01..RN-07; B805, B806): o mesmo para os outros campos que o formulario mostra (`campos_lidos`, a
+    // lista de camposLidos.js) — se outra pessoa (ou o recebimento, no custo) mudou um deles depois e este salvar o desfaria, 409.
+    // Depois do da familia (uma recusa so: controles, familia, campos) e antes da troca de dono (o Proprietario mudado por outro
+    // e "mudado por outra pessoa", nao "sem permissao" — RN-06d). Concorrencia, nao autorizacao: so recusa.
+    const camposDesfeitos = materialService.camposDesfeitos(req.body.campos_lidos, current, merged);
+    if (camposDesfeitos.length > 0) {
+      return res.status(409).json({ error: materialService.mensagemCamposMudadosPorOutro(current.codigo, camposDesfeitos) });
+    }
 
     // Etapa 108 (C213, RN-01..RN-06): trocar o dono de material com historico exige `ajustar_material_cliente` — sem
     // isto o Almoxarife tirava o cliente, ajustava como material nosso e devolvia o cliente, e a troca levava o saldo e o
@@ -851,6 +859,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // lido no WHERE, nao grava -> o 409 E4 (B798). O molde e o do dono (Etapa 108).
     condControle += ' AND familia_id IS ? AND subfamilia_id IS ?';
     paramsControle.push(current.familia_id ?? null, current.subfamilia_id ?? null);
+    // Etapa 125 (Fase 2, M4; RN-01e): o custo unitario e gravado pelo recebimento, nao por uma pessoa olhando a tela — o que cai
+    // ENTRE a leitura e este UPDATE seria desfeito calado. Com o custo em `campos_lidos` (o formulario), o UPDATE so grava se o
+    // custo ainda e o lido; nao gravou -> o 409 E4 (B798). Os outros campos ficam no "ultimo que salva vence" nessa janela
+    // (milissegundos, declarado). Sem a chave, o de antes.
+    if (req.body.campos_lidos && req.body.campos_lidos.custo_unitario !== undefined) {
+      condControle += ' AND custo_unitario IS ?';
+      paramsControle.push(current.custo_unitario ?? null);
+    }
     try {
       // Etapa 113 (RN-04 d): inativar grava sob a trava do material (a mesma razao do DELETE); o resto do PUT, como sempre.
       const gravar = () => dbRun(db, `UPDATE materiais_almoxarifado SET

@@ -5,6 +5,7 @@ const { TIPOS_REQUISICAO, TIPOS_MOVIMENTO, TIPOS_RETENCAO, TIPOS_DEDICADOS, TIPO
 // estados (ver o comentario de SucateamentoDestinoSchema no fim do arquivo). O modulo e puro —
 // nao requer nada — entao nao ha ciclo aqui.
 const { DESTINOS_FINAIS } = require('./scrapDisposalStateMachine');
+const { COLUNAS_CAMPOS_LIDOS } = require('./camposLidos');
 
 const CentroCustoSchema = z.object({
   codigo: z.string().min(1, 'codigo é obrigatório'),
@@ -322,12 +323,19 @@ const MaterialSchema = MaterialShape.superRefine(refineUnidadesFator);
 // Etapa 124 (D (123), B800): `familia_lida` — a familia e a subfamilia que o formulario mostrava ao abrir. O mesmo molde
 // (e a mesma armadilha) de `controles_lidos`. `numFromForm` deixa `null` atravessar (subfamilia lida vazia) e colapsa `''`
 // para ausente (a coluna nao e comparada).
+//
+// Etapa 125 (D (124), B805): `campos_lidos` — os outros campos que o formulario mostrava ao abrir (a lista congelada em
+// camposLidos.js). O mesmo molde e a mesma armadilha. UM tipo so para todas as chaves (Fase 2, M1): o lido vem CRU do GET, e
+// tipar pela coluna (FlagSchema, numFromForm, o enum da classe ABC) daria 400 em todo salvar de um material com legado esquisito.
+// Chave fora da lista: descartada pelo z.object.
+const ValorLidoSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]).optional();
 const MaterialUpdateSchema = MaterialShape.partial().extend({
   controles_lidos: z.object({ controle_lote: FlagSchema, controle_serie: FlagSchema }).optional(),
   familia_lida: z.object({
     familia_id: numFromForm(z.number().int().positive().nullable().optional()),
     subfamilia_id: numFromForm(z.number().int().positive().nullable().optional()),
   }).optional(),
+  campos_lidos: z.object(Object.fromEntries(COLUNAS_CAMPOS_LIDOS.map((c) => [c, ValorLidoSchema]))).optional(),
 }).superRefine(refineUnidadesFator);
 
 // ── Requisições (Etapa 3, Task 1) ──────────────────────────────────────────────

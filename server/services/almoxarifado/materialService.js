@@ -24,6 +24,7 @@ const { dbRun, dbGet } = require('./db');
 const { registrarAuditoriaDoAto } = require('./audit');
 const stockService = require('./stockService');
 const Q = require('./quantidade');
+const { CAMPOS_LIDOS } = require('./camposLidos');
 
 const erro = (msg, status = 400) => Object.assign(new Error(msg), { status });
 
@@ -628,6 +629,48 @@ function mensagemFamiliaMudadaPorOutro(codigo, qual) {
 }
 
 /**
+ * Etapa 125 (D (124), RN-01..RN-05; B805, B806) — os outros campos que o salvar DESFARIA: o molde de `controlesDesfeitos` e
+ * `familiaDesfeita`, coluna a coluna da lista congelada (camposLidos.js). Para cada coluna presente em `lidos`: lido diferente do
+ * gravado (outra pessoa — ou o recebimento, no custo — mudou depois) E o salvar grava nela um valor diferente do gravado.
+ * Comparacao NORMALIZADA dos dois lados: o lido vem cru do GET (so difere do gravado quando alguem mudou); a normalizacao protege o
+ * "gravaria" (o formulario manda '' para texto vazio, numeros como texto, 'UN' para unidade vazia). Devolve os rotulos, na ordem
+ * da tela, sem repetir (a unidade de compra e a quantidade por compra sao o mesmo "Como é comprado").
+ */
+function camposDesfeitos(lidos, gravado, merged) {
+  if (!lidos || typeof lidos !== 'object') return [];
+  const rotulos = [];
+  for (const [col, rotulo, tipo] of CAMPOS_LIDOS) {
+    if (lidos[col] === undefined) continue;
+    const n = NORMALIZA_CAMPO[tipo];
+    if (!Object.is(n(lidos[col]), n(gravado[col])) && !Object.is(n(merged[col]), n(gravado[col])) && !rotulos.includes(rotulo)) {
+      rotulos.push(rotulo);
+    }
+  }
+  return rotulos;
+}
+
+const vazioLido = (v) => v === null || v === undefined || v === '';
+const NORMALIZA_CAMPO = {
+  texto: (v) => (vazioLido(v) ? '' : String(v)),
+  // Fase 2 (M2): o lido nao numerico (NaN nunca e igual a NaN) compara como texto.
+  numero: (v) => { if (vazioLido(v)) return null; const x = Number(v); return Number.isNaN(x) ? String(v) : x; },
+  id: (v) => (vazioLido(v) || !Number(v) ? null : Number(v)),
+  caixa: (v) => (Number(v) === 1 || v === true ? 1 : 0),
+};
+
+/** E1 da Etapa 125 (409, contrato congelado no plano). Singular/plural depois de juntar os rotulos (Fase 2, M3). */
+function mensagemCamposMudadosPorOutro(codigo, rotulos) {
+  const q = rotulos.map((r) => `"${r}"`);
+  const meio = ' por outra pessoa depois que você abriu o cadastro — salvar desfaria ';
+  if (q.length === 1) {
+    return `O campo ${q[0]} do material ${codigo} foi mudado${meio}essa mudança, e nada foi gravado. `
+      + 'Recarregue o material e salve de novo.';
+  }
+  return `Os campos ${q.slice(0, -1).join(', ')} e ${q[q.length - 1]} do material ${codigo} foram mudados${meio}`
+    + 'essas mudanças, e nada foi gravado. Recarregue o material e salve de novo.';
+}
+
+/**
  * Etapa 113 (C217, C227, RN-01..RN-04) — inativar material com saldo prende o saldo: o motor recusa movimentar material
  * inativo e nenhuma tela reativa. Por isso inativar exige o fisico e as quatro retencoes zerados (6 casas), para TODOS
  * (B733: o padrao "so quem regulariza" da 112 nao serve — quem regulariza tambem ficaria preso).
@@ -693,4 +736,5 @@ module.exports = {
   mudaControle, desligaSerie, seriesPresentes, SEM_SERIE_PRESENTE_SQL, mensagemDesligarSerieSemPermissao,
   controlesDesfeitos, mensagemControleMudadoPorOutro,
   familiaDesfeita, mensagemFamiliaMudadaPorOutro,
+  camposDesfeitos, mensagemCamposMudadosPorOutro,
 };
