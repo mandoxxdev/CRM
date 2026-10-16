@@ -133,7 +133,7 @@ Sem galho: T1, T2 e T3 mexem no motor/séries; a T4 só testa e depende das trê
    amplo, D (119)), **9** sabotagens equivalentes, **0** ruído.
 3. **Paralelismo:** **0** galhos (a T3 podia ser — Fase 2, Minor 2 — e ficou sequencial: um arquivo de teste e a etapa pequena);
    revisores em paralelo na Fase 5 (três, cada um na sua worktree).
-4. **Defeito que escapou:** *(preencher na Etapa 120)*. **Da Etapa 118:** **nenhum introduzido por ela.** Um anterior a ela, na **mesma forma** que ela corrigiu em
+4. **Defeito que escapou:** *(preenchido na Etapa 120)* **nenhum introduzido por esta etapa.** Dois erros de **medição** da "próxima tarefa" abaixo, achados pela 120: (a) "25 chamadas fora do motor" — o `grep` cobriu só `server/services`; com `server/routes` são **30** (não mudou a decisão); (b) a C234 foi descrita só pelo estorno da Saída, e a porta que dobrava **de verdade** era a exclusão da requisição (também com a série ligada, anterior a esta etapa — C251, achada pela Fase 2 da 120). Lição: medir o furo em **todas** as portas que leem o mesmo vínculo (`grep -n "movimentacao_saida_id"`), não só na que o achado nomeou. **Da Etapa 118:** **nenhum introduzido por ela.** Um anterior a ela, na **mesma forma** que ela corrigiu em
    `claimSaldoSemLote` (I-3) e declarou em `claimSaldoDoLote` (C249), escapou da revisão dela: o desfazer local do claim de série na
    saída, que zerava o rastreador só no fim (achado na Fase 5 desta etapa, r1 e r2; corrigido em `f37cef55`). Lição: quando um padrão
    de rastreador é corrigido num lugar, varrer **todos** os laços de compensação do mesmo motor (`grep -n "for (const l of"`).

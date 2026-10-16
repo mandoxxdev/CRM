@@ -1,17 +1,22 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-16 (Etapa 119) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-16 (Etapa 120) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118 e 119) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119 e 120) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 119 ENTREGUE · próxima do almoxarifado: Etapa 120)
+> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 120 ENTREGUE · próxima do almoxarifado: Etapa 121)
 >
-> **O desenvolvimento parou aqui: Etapa 119 fechada — 2026-10-16.** A **Etapa 119 (o que já valeu não se perde nem responde
+> **O desenvolvimento parou aqui: Etapa 120 fechada — 2026-10-16.** A **Etapa 120 (o lançamento que já valeu e a série que
+> já voltou)**: o lançamento que já está no estoque responde sucesso mesmo com o registro da Auditoria falhando (a entrega não
+> baixa mais duas vezes, o retalho e o cadastro com saldo não ficam pela metade); a saída cujas peças voltaram por uma Entrada
+> não se estorna em dobro depois de desligar a série; e a exclusão da requisição cuja entrega voltou assim é recusada, e espera
+> a movimentação do material. **Próxima: Etapa 121** — ver a próxima tarefa no plano da 120.
+>
+> **Etapa 119, 2026-10-16.** A **Etapa 119 (o que já valeu não se perde nem responde
 > erro)**: a saída e a entrega de requisição com lote que falham no meio de dois endereços devolvem o endereço já baixado; o
 > estorno concluído responde sucesso mesmo com a auditoria falhando (e o pedido de compra reabre); e, desfeita a devolução de
-> peças com série e estornada a entrega, a entrada original delas estorna. **Próxima: Etapa 120** — ver a próxima tarefa no
-> plano da 119.
+> peças com série e estornada a entrega, a entrada original delas estorna. *(Próxima, na época: Etapa 120 — entregue acima.)*
 >
 > **Etapa 118, 2026-10-16.** A **Etapa 118 (o estorno que falha no meio desfaz tudo,
 > em qualquer tipo de movimento)**: o estorno de bloqueio, desbloqueio, ajuste e transferência que falha por erro de banco
@@ -6474,6 +6479,61 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 120 — O lançamento que já valeu e a série que já voltou (ENTREGUE — 2026-10-16)
+
+**O que mudou, em uma frase:** o lançamento que já está no estoque não responde mais erro só porque o registro na Auditoria
+falhou, e as peças com série que voltaram ao estoque por uma Entrada não são devolvidas de novo — nem pelo estorno da saída depois
+de desligar a série, nem pela exclusão da requisição.
+
+**O problema que ela resolve.** Com um erro do banco no registro da Auditoria, a tela mostrava erro com o lançamento **feito**:
+quem repetia lançava duas vezes; a entrega de requisição baixava o material duas vezes; a devolução ficava marcada como "parcial";
+o retalho desfazia a baixa do original e deixava o retalho sem cadastro; o material cadastrado com saldo inicial era apagado com a
+entrada no livro. E a saída cujas peças tinham voltado por uma Entrada avulsa, estornada depois de desligar a série — ou a
+requisição cuja entrega era essa, excluída —, devolvia a quantidade **outra vez**: 2 peças viravam 4 no estoque.
+
+| Antes | Agora |
+|---|---|
+| Lançamento gravado, erro na Auditoria: tela de erro; repetir lança de novo | Sucesso; o lançamento aparece no livro e no extrato (não na Auditoria) |
+| Entrega de requisição com erro na Auditoria: erro; entregar de novo baixava de novo | Entregue, uma baixa só |
+| Saída de V1 e V2, Entrada avulsa de V1 e V2, série desligada: o estorno da saída dava estoque 4 | Recusa: *"estorno de saida recusado: series desta saida ja reentraram no estoque — a devolucao ja repos o material"* |
+| A requisição cuja entrega levou V1 e V2, que voltaram por uma Entrada: excluir dava estoque 4 (série ligada ou desligada) | Recusa, mandando encerrar em vez de excluir |
+
+### Roteiro de teste manual
+
+O erro de Auditoria só se reproduz forçando o banco (teste automatizado). O resto se clica.
+Pré-requisitos: login como **administrador**; um material com **Controle por número de série**, **PRF-1201**, sem saldo.
+
+1. **Movimentações → Nova** → *Entrada* de 2 do PRF-1201 com as séries **V1** e **V2** → estoque 2.
+2. *Saída* de 2 com V1 e V2 → estoque 0; em **Lotes e Séries → Séries**, as duas *Entregue*.
+3. *Entrada* de 2 com V1 e V2 de novo (a peça voltou sem passar pela Devolução) → estoque 2; as duas *Em estoque*.
+4. **Materiais** → abra o PRF-1201 → desmarque **Controle por número de série** → salvar (só o Administrador consegue, com séries
+   em estoque).
+5. Em **Movimentações**, estorne a *Saída* do passo 2 → aviso vermelho: *"estorno de saida recusado: series desta saida ja
+   reentraram no estoque — a devolucao ja repos o material"*; estoque continua **2**. *(Antes desta etapa: sucesso, estoque 4.)*
+6. **Exclusão da requisição:** num segundo material com série (**PRF-1202**), faça uma requisição de 2, aprove, separe com V1 e
+   V2 e entregue. Depois, em **Movimentações**, *Entrada* de 2 com V1 e V2. Em **Requisições**, exclua a requisição → aviso
+   vermelho: *"⟨nome do material⟩: as séries desta entrega já voltaram ao estoque por uma Entrada — excluir a requisição
+   devolveria o saldo de novo. Encerre a requisição em vez de excluir."* (o começo é o **nome** do PRF-1202, não o código); estoque continua 2; a requisição
+   continua na lista. **Encerrar** funciona.
+7. *(Opcional, duas abas)* Com uma exclusão de requisição em andamento, uma Entrada do mesmo material ou o salvar do cadastro
+   dele esperam a exclusão terminar — não se vê diferença na tela, só um instante a mais de espera.
+
+### O que esta etapa não cobre
+
+- Peças que voltaram por uma Entrada **antes do deploy** não guardaram de que saída vieram — o estorno com a série desligada e a
+  exclusão da requisição não as veem. A consulta **A68** lista as saídas a conferir.
+- Se a Entrada que trouxe as peças de volta for estornada **com a série desligada**, a saída continua sem estorno (a recusa acima)
+  — o acerto, se preciso, é por **Ajuste**.
+- O lançamento com erro na Auditoria fica **fora da tela de Auditoria** (está no livro e no extrato).
+- A **Devolução** que cita uma saída cujas peças já voltaram por uma Entrada, com a série **desligada**, ainda devolve a quantidade
+  de novo (**C253**): com a série desligada, confira no extrato antes de devolver uma saída antiga.
+- Outras telas que gravam a Auditoria **depois** de terminar (a geração de retalho, por exemplo) continuam respondendo erro com o
+  ato feito (**C252**): confira antes de repetir.
+- As decisões pendentes do P.O. (**B755**, **B761**/**C239**, **C224**, o resto da **C225**, **C228**, **C219**, **C230**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (pelas rotas do servidor) provam,
+escrito para você conferir à mão.
 
 ## Etapa 119 — O que já valeu não se perde nem responde erro (ENTREGUE — 2026-10-16)
 

@@ -11,10 +11,13 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-16):** **Etapa 119 fechada** (o que já valeu não se perde nem responde erro — a saída
+> **Onde o desenvolvimento está (2026-10-16):** **Etapa 120 fechada** (o lançamento que já valeu responde sucesso mesmo com a
+> Auditoria falhando, **C250**; a saída cujas séries voltaram por uma Entrada não estorna em dobro com a série desligada,
+> **C234**; e a exclusão da requisição não devolve de novo as séries que já voltaram, **C251**); a próxima do almoxarifado é a
+> **121** — ver "Onde estamos e o que vem a seguir". *(Antes: Etapa 119 fechada (o que já valeu não se perde nem responde erro — a saída
 > com lote que falha no meio devolve o endereço já baixado, **C249**; o estorno concluído responde sucesso mesmo com a auditoria
 > falhando, **C248**; desfeita a devolução e estornada a entrega, a entrada original das séries estorna, **C242**); a próxima do
-> almoxarifado é a **120** — ver "Onde estamos e o que vem a seguir". *(Antes: Etapa 118 fechada (o estorno que falha no meio desfaz
+> almoxarifado era a **120**.)* *(Antes: Etapa 118 fechada (o estorno que falha no meio desfaz
 > tudo, em qualquer tipo de movimento — **C238**, **C243**, **C245** e **C240** resolvidos); a próxima era a **119**.)* *(Antes: Etapa 117 fechada (a devolução desfeita pelo livro deixa de contar na tela,
 > na gravação e na exclusão da requisição — **C236** resolvido; a entrada da devolução para sucata não se estorna mais sozinha —
 > **C237**; e o estorno de saída que falha desfaz antes de liberar o material — **C235** resolvido); a próxima do almoxarifado era a
@@ -138,7 +141,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Sessenta e sete itens para rodar em produção ANTES do deploy — sessenta e quatro são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Sessenta e oito itens para rodar em produção ANTES do deploy — sessenta e cinco são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-16 (Etapa 120) de sessenta e sete para sessenta e oito**, com a **A68** — saídas de material com série cujas peças podem ter voltado ao estoque por uma Entrada antes da Etapa 120; opcional.)*
 
 *(**Atualizado em 2026-10-16 (Etapa 119) de sessenta e seis para sessenta e sete**, com a **A67** — séries presas à entrada de uma devolução desfeita antes da Etapa 119; opcional.)*
 
@@ -2478,12 +2483,42 @@ comportamento novo.)*
 *Entrada* com aquele número no extrato do material, anterior à entrega): `UPDATE series_almoxarifado SET movimentacao_entrada_id =
 ⟨id da entrada original⟩ WHERE id = ⟨id da série⟩`.
 
+**A68 (NOVA, da Etapa 120 — saídas cujas séries podem ter voltado por uma Entrada).** Uma consulta, somente leitura; **opcional**.
+Desde a Etapa 120, a Entrada que traz de volta ao estoque uma série *Entregue* guarda de que saída ela tinha saído — e o estorno
+dessa saída depois de desligar a série, e a exclusão da requisição cuja entrega ela era, recusam em vez de devolver a quantidade
+de novo (**C234**, **C251**). As séries que voltaram **antes** do deploy não guardaram a saída: para elas o estorno (com a série
+desligada) e a exclusão da requisição (com a série ligada ou desligada) ainda devolvem em dobro.
+
+```sql
+-- saídas não estornadas de material que tem série, sem nenhuma série ligada a elas (candidatas: as séries voltaram
+-- todas por uma Entrada, ou a saída foi feita com a série desligada)
+SELECT m.codigo, m.nome, mv.id AS saida_id, mv.tipo, mv.quantidade, mv.requisicao_id, mv.created_at
+  FROM movimentacoes_almoxarifado mv
+  JOIN materiais_almoxarifado m ON m.id = mv.material_id
+ WHERE mv.tipo IN ('SAIDA','SAIDA_PRODUCAO','SAIDA_MONTAGEM','SAIDA_ASSISTENCIA','AJUSTE_NEGATIVO','SUCATA','PERDA',
+                   'DEVOLUCAO_CLIENTE','PERDA_TERCEIRO','CONSUMO_TERCEIRO','DEVOLUCAO_FORNECEDOR')
+   AND COALESCE(mv.cancelado, 0) = 0
+   AND EXISTS (SELECT 1 FROM series_almoxarifado s WHERE s.material_id = mv.material_id AND s.created_at <= mv.created_at)
+   AND NOT EXISTS (SELECT 1 FROM series_almoxarifado s WHERE s.movimentacao_saida_id = mv.id)
+ ORDER BY m.codigo, mv.id;
+```
+
+*(Conferida numa sonda contra o esquema real, com os estados criados pelas rotas: acha a saída cujas duas séries voltaram por
+uma Entrada avulsa; **não** acha a saída cujas séries continuam fora nem a de um material sem série.)*
+
+**Como ler o resultado:** **vazia** — nada a fazer. Cada linha é uma saída que **não** deve ser estornada nem ter a requisição
+(`requisicao_id`) excluída sem conferir: abra o extrato do material e veja se houve, depois dela, uma *Entrada* com os mesmos
+números de série. **Houve:** o material já voltou — não estorne a saída nem exclua a requisição (encerre-a); se quiser blindar,
+o suporte grava a saída na linha da volta (`UPDATE series_entrada_anterior_almoxarifado SET saida_anterior_id = ⟨saida_id⟩ WHERE
+serie_id = ⟨id da série⟩ AND movimentacao_entrada_id = ⟨id da Entrada⟩`) — a tabela nasce com a Etapa 119, então só existe linha
+para voltas registradas desde ela. **Não houve** (a saída foi feita com a série desligada): nada a fazer, ela estorna normalmente.
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B777; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B782; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -8189,6 +8224,50 @@ fica como era — a **A67** acha. **Reversível** (a tabela é só lida pelo est
 **B777 (NOVA, da Etapa 119) — a próxima etapa do almoxarifado (120).** Ver a "próxima tarefa detalhada" no plano da Etapa 119.
 A **B755**, a **B761**, a **C224**, o resto da **C225**, a **C228**, a **C219** e a **C230** continuam esperando vocês.
 
+**B778 (NOVA, da Etapa 120) — o lançamento que já valeu responde sucesso mesmo se a Auditoria falhar.** Antes: a falha do banco
+ao gravar a linha da Auditoria — que roda **depois** de o lançamento estar no livro e no estoque — respondia erro, e **todas** as
+telas liam esse erro como "nada aconteceu" (medido, uma a uma): repetir a Entrada lançava duas vezes; a entrega de requisição não
+marcava o entregue e a segunda entrega baixava de novo (estoque 2 em vez de 6); a devolução completa ficava marcada como
+"parcial"; o retalho desfazia a baixa do original e deixava a entrada do retalho sem a sobra cadastrada; o cadastro com saldo
+inicial **apagava o material** com a Entrada no livro (**C250**). **O que foi escolhido** (`2e05c2ee`): a Auditoria do lançamento
+passa a ser **não-fatal** — a tela responde sucesso, o resto roda, e o log do servidor registra *"auditoria do lancamento falhou
+(movimentacao ⟨n⟩)"*. O lançamento fica no livro e no extrato (com quem e quando), mas **não aparece na tela de Auditoria**.
+**Descartado:** manter o erro (não protege ninguém — medido); desfazer o lançamento quando a Auditoria falha (apaga a trilha junto
+e o desfazer pode falhar no meio); gravar a Auditoria antes do livro (seria um registro falso se o livro falhasse). O código dizia
+que esse erro era "semântica congelada" de propósito — **estava errado**: a etapa que escreveu isso só não quis decidir.
+**Reversível.**
+
+**B779 (NOVA, da Etapa 120) — a série que volta por uma Entrada guarda de que saída tinha saído.** Antes: a Entrada com o número
+de uma série *Entregue* a devolvia ao estoque e apagava o vínculo com a saída; desligada a série, o estorno dessa saída não via
+série nenhuma e devolvia a quantidade **de novo** — 2 peças viravam 4 (**C234**). **O que foi escolhido** (`aa0b83e2`): a mesma
+linha que a Etapa 119 grava na volta da série guarda também a saída; o estorno da saída com a série desligada, sem série ligada a
+ela, olha essa linha e recusa com a mensagem de sempre (*"estorno de saida recusado: series desta saida ja reentraram no estoque — a
+devolucao ja repos o material"*). **Descartado:** recusar o estorno de toda saída sem série de material que já teve série
+(bloquearia a saída legítima feita com a série desligada); não apagar o vínculo na volta (ele é lido como "fora por esta saída"
+em seis lugares); ler a Auditoria da série (não guarda a saída). **Efeito colateral declarado:** se a Entrada que trouxe as peças
+de volta for estornada **com a série desligada**, a saída também recusa (antes passava e o estoque voltava a bater por acaso — o
+estorno de entrada com a série desligada não mexe nas séries, **C225**); o acerto é por **Ajuste**. **Legado:** voltas antes do
+deploy — a **A68** acha. **Reversível.**
+
+**B780 (NOVA, da Etapa 120) — a exclusão da requisição não devolve de novo as séries que já voltaram.** Achado na revisão do plano:
+excluir a requisição cuja entrega teve as séries de volta por uma Entrada devolvia a quantidade sem série — estoque 4 com 2
+peças — com a série **ligada** (anterior à etapa) e desligada (**C251**). **O que foi escolhido** (`051094a3`): a exclusão lê a
+mesma linha da B779 e recusa, antes de devolver qualquer coisa: *"⟨material⟩: as séries desta entrega já voltaram ao estoque por
+uma Entrada — excluir a requisição devolveria o saldo de novo. Encerre a requisição em vez de excluir."* **Descartado:** devolver
+só o que não voltou (a exclusão devolve por saída inteira, tudo ou nada, desde a Etapa 58 — mudar é redesenho). A mesma ressalva
+da B779 vale aqui (Entrada de volta estornada com a série desligada → recusa). **Reversível.**
+
+**B781 (NOVA, da Etapa 120) — a exclusão da requisição espera a movimentação do material.** Achado na revisão do código, com
+corridas: a exclusão conferia as séries **sem** esperar a movimentação do material; uma Entrada das mesmas séries e o desligar da
+série no mesmo instante faziam ela devolver sem série (estoque 4 com 2 peças, 8 em 200 rodadas); só o desligar no meio (desde a
+Etapa 116) devolvia com as séries *Entregue* (7 em 100). **O que foi escolhido** (`969914b0`): a exclusão espera, como a
+separação e a entrega, a movimentação em curso dos materiais da requisição — e quem chega durante ela espera. **Descartado:** o
+motor recusar a Entrada com séries quando a série foi desligada (regra nova para todas as telas, e numa requisição de vários
+materiais deixaria parte devolvida). **Reversível.**
+
+**B782 (NOVA, da Etapa 120) — a próxima etapa do almoxarifado (121).** Ver a "próxima tarefa detalhada" no plano da Etapa 120.
+A **B755**, a **B761**, a **C224**, o resto da **C225**, a **C228**, a **C219** e a **C230** continuam esperando vocês.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -10526,7 +10605,7 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      **O que fazer:** recarregue o material antes de salvar se alguém pode ter mexido nele; se a recusa do desligar
      aparecer sem você ter desmarcado a série, recarregue.
 
-234. **NOVO (da Etapa 116) — séries que voltaram por uma Entrada e depois tiveram a série desligada pelo Administrador.** A
+234. **✅ RESOLVIDO NA ETAPA 120 (`aa0b83e2`; B779) — o estorno da saída cujas séries voltaram por uma Entrada recusa também com a série desligada; voltadas antes do deploy, a **A68** acha.** O texto original: **NOVO (da Etapa 116) — séries que voltaram por uma Entrada e depois tiveram a série desligada pelo Administrador.** A
      Entrada com o número de uma série *Entregue* a devolve ao estoque e apaga o vínculo com a saída. Se depois o
      Administrador desligar a série (com ela em estoque — só ele pode) e alguém estornar aquela saída, o estorno não vê
      séries vinculadas e devolve a quantidade: o estoque fica a mais. **O que fazer:** antes de estornar uma saída antiga de
@@ -10622,12 +10701,31 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      saída de 5 com o débito do segundo endereço falhando → erro, estoque 6, endereços 0 e 3 (soma 3). **O que fazer:**
      se o log mostrar erro numa saída com lote, confira os endereços do lote em **Estoque**.
 
-250. **NOVO (da Etapa 119, medido) — o lançamento que é gravado e falha ao registrar a auditoria responde erro.** O gêmeo da
+250. **✅ RESOLVIDO NA ETAPA 120 (`2e05c2ee`; B778) — o lançamento gravado responde sucesso; o log registra a falha da Auditoria, e o lançamento não aparece na tela de Auditoria.** O texto original: **NOVO (da Etapa 119, medido) — o lançamento que é gravado e falha ao registrar a auditoria responde erro.** O gêmeo da
      **C248** no lançamento comum (Entrada, Saída, Ajuste…): a auditoria roda **depois** de a linha estar no livro e o estoque
      mexido; se ela falhar, a tela mostra erro com o lançamento **feito** (medido: Entrada de 5 → erro, a linha no livro, estoque
      5). Quem repete o lançamento lança **duas vezes**. Só com erro de banco. **O que fazer:** se um lançamento responder erro,
      confira o extrato do material **antes** de repetir. Candidata da próxima etapa (é decisão: o código declara essa auditoria
      fatal de propósito).
+
+251. **✅ RESOLVIDO NA ETAPA 120 (`051094a3`, `969914b0`; B780, B781) — achado e resolvido na mesma etapa: a exclusão da
+     requisição cuja entrega teve as séries de volta por uma Entrada devolvia o material de novo.** Com a série ligada ou desligada:
+     estoque 4 com 2 peças. Agora recusa, mandando encerrar; e a exclusão espera a movimentação do material (sem isso, uma Entrada e
+     o desligar no mesmo instante ainda furavam). Voltas antes do deploy: a **A68** acha.
+
+252. **NOVO (da Etapa 120, medido) — outras telas que gravam a Auditoria depois de terminar ainda respondem erro com o ato feito.**
+     A Etapa 120 só mudou a Auditoria do **lançamento** (todas as telas que movimentam estoque). Mas várias telas gravam, além
+     dela, a Auditoria do próprio ato no fim — e essa continua derrubando a resposta. Medido na geração de retalho: com a Auditoria
+     do evento falhando, a tela responde erro com o retalho **gerado** (origem baixada, sobra cadastrada); repetir gera outro (origem
+     70 → 40, duas sobras). Só com erro de banco. **O que fazer:** se uma tela responder erro, confira se o ato aconteceu antes de
+     repetir. Candidata de uma próxima etapa (são dezenas de pontos; cada um precisa ser medido).
+
+253. **NOVO (da Etapa 120, da revisão; anterior a ela) — a Devolução que cita uma saída cujas séries já voltaram por uma Entrada,
+     com a série desligada, devolve de novo.** Entrada de 2 (V1, V2), saída das duas, Entrada avulsa de V1 e V2, o Administrador
+     desliga a série, e a **Devolução** de 2 citando aquela saída (sem série, porque a série está desligada) é aceita: estoque 4 com 2
+     peças; a janela *Nova Devolução* oferece a saída com 2 a devolver. Com a série ligada é recusada. **O que fazer:** com a série
+     desligada, antes de devolver uma saída antiga de material que tinha série, confira no extrato se as peças já voltaram por uma
+     Entrada. Candidata da próxima etapa.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -11738,6 +11836,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(119) Duas falhas de banco seguidas no desfazer de uma saída** (o registro no livro falha e, no desfazer, a devolução de um
   endereço também): a resposta é o erro, e o estoque do material fica sem voltar — anterior à etapa; só com transação de verdade.
 
+- **(120) A Entrada que trouxe as peças de volta, estornada com a série desligada,** deixa a saída sem estorno e a requisição sem
+  exclusão (a recusa da B779/B780) — o acerto é por **Ajuste**. Recusar nunca conta em dobro; distinguir "voltou e foi desfeita"
+  exigiria reabrir a **C225**.
+- **(120) O lançamento com a Auditoria falhando** fica fora da tela de Auditoria (está no livro e no extrato).
+- **(120) Se a gravação de "de que saída a série veio" falhar** (erro de banco na Entrada que traz a série de volta), a Entrada
+  responde sucesso e a recusa da B779/B780 não vê aquela volta — como o legado (**A68**).
+
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
 **"Uma remessa não pode misturar materiais de donos diferentes."** O sistema hoje **recusa** montar
@@ -12639,6 +12744,12 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(120) Nenhum clique foi dado nesta etapa no navegador.** A tela não mudou: as recusas novas chegam pelo aviso vermelho que já
+mostra a mensagem do servidor (Estornar no livro, Excluir requisição). A Auditoria não-fatal só acontece com **erro de banco
+forçado**. Tudo foi provado pela rota (**21** cenários de unidade e **3** jornadas de integração; corridas de 200 rodadas pelo
+revisor). O que **só o navegador** prova: o roteiro da Etapa 120 no guia — a saída cujas peças voltaram por uma Entrada, com a
+série desligada, recusando o estorno; e a exclusão da requisição recusando, com a mensagem inteira legível.
 
 **(119) Nenhum clique foi dado nesta etapa no navegador.** A tela não mudou. O que a etapa muda só acontece com **erro de banco
 forçado** (C249, C248) ou numa cadeia de estornos (C242) que os testes automatizados percorrem pelas rotas (**13** cenários e **2**
@@ -24671,16 +24782,92 @@ com sucesso, e o pedido de compra reabrindo) e corridas de 30 e 150 rodadas: **0
 teste, 9 são equivalentes, 1 virou teste. Fica declarado: duas falhas de banco seguidas no desfazer de uma saída deixam o estoque do
 material sem voltar (anterior à etapa).
 
+## Etapa 120 — O lançamento que já valeu e a série que já voltou (2026-10-16)
+
+Duas situações em que o sistema contava algo **duas vezes**. A primeira: todo lançamento de estoque grava, depois de feito, uma
+linha na Auditoria; se o banco falhasse só nessa linha, a tela mostrava erro com o lançamento **já feito** — e cada tela reagia como
+se nada tivesse acontecido: a entrega de requisição baixava de novo no segundo clique, a devolução ficava "parcial", o retalho
+desfazia metade, o material cadastrado com saldo era apagado com a entrada no livro. A segunda: peças com número de série que
+voltaram ao estoque por uma Entrada (sem passar pela Devolução) eram devolvidas **outra vez** pelo estorno da saída, depois de o
+Administrador desligar a série — e, como a revisão achou, pela exclusão da requisição cuja entrega elas eram, com a série ligada
+ou desligada: 2 peças viravam 4 no estoque.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Lançamento gravado e erro na Auditoria: tela de erro; repetir lançava de novo | Sucesso; o lançamento está no livro e no extrato, não na Auditoria (**B778**) |
+| Entrega de requisição com erro na Auditoria: erro; entregar de novo baixava de novo | *Entregue*, uma baixa só |
+| Devolução com erro na Auditoria: erro, e a devolução ficava marcada como parcial | Sucesso, devolução normal |
+| Retalho com erro na Auditoria: a baixa do original era desfeita e o retalho ficava sem cadastro | Sucesso: baixa, retalho e sobra |
+| Cadastro com saldo inicial e erro na Auditoria: o material era apagado com a entrada no livro | Sucesso: o material existe com o saldo |
+| Saída de V1 e V2, Entrada avulsa de V1 e V2, série desligada: o estorno da saída dava estoque 4 | Recusa (**B779**) |
+| Excluir a requisição cuja entrega levou V1 e V2, que voltaram por uma Entrada: estoque 4 (série ligada ou desligada) | Recusa, mandando encerrar (**B780**) |
+| Excluir a requisição no mesmo instante de uma Entrada ou do desligar da série: podia devolver sem série | A exclusão espera a movimentação do material (**B781**) |
+
+### As regras, com o cenário exato
+
+Preparação: dois materiais com **Controle por número de série**, **PRF-1201** e **PRF-1202**. Usuário: o **administrador**.
+
+**1. O lançamento que falha só na Auditoria** (só com erro de banco forçado — teste automatizado): a tela responde sucesso; o
+extrato mostra o lançamento; a tela de Auditoria não mostra.
+
+**2. A saída cujas peças voltaram por uma Entrada.** No PRF-1201:
+1. **Movimentações → Entrada** de 2 com as séries **V1** e **V2** (estoque 2).
+2. **Saída** de 2 com V1 e V2 (estoque 0).
+3. **Entrada** de 2 com V1 e V2 de novo (estoque 2 — a peça voltou sem a Devolução).
+4. **Materiais → PRF-1201** → desmarque **Controle por número de série** → salvar.
+5. Em **Movimentações**, estorne a **Saída** do passo 2 → *"estorno de saida recusado: series desta saida ja reentraram no
+   estoque — a devolucao ja repos o material"*; estoque continua **2**. *(Antes da etapa: sucesso, estoque 4.)*
+
+**3. A exclusão da requisição cuja entrega voltou.** No PRF-1202: requisição de 2, aprovar, separar com V1 e V2, entregar; depois
+**Movimentações → Entrada** de 2 com V1 e V2; em **Requisições**, **Excluir** → *"⟨nome do PRF-1202⟩: as séries desta entrega já
+voltaram ao estoque por uma Entrada — excluir a requisição devolveria o saldo de novo. Encerre a requisição em vez de excluir."*;
+estoque continua 2; **Encerrar** funciona.
+
+### O que esta etapa NÃO cobre
+
+1. **As peças que voltaram antes do deploy** não guardaram de que saída vieram — o estorno com a série desligada e a exclusão da
+   requisição não as veem. A consulta **A68** lista as saídas a conferir.
+2. **A Entrada de volta estornada com a série desligada** deixa a saída sem estorno e a requisição sem exclusão (acerto por
+   **Ajuste**) — declarado, **D (120)**.
+3. **A Devolução** que cita uma saída cujas peças já voltaram, com a série desligada, ainda devolve de novo (**C253**).
+4. **As outras Auditorias gravadas no fim de um ato** (a do retalho, por exemplo) continuam respondendo erro com o ato feito
+   (**C252**).
+5. A **quarentena** desfeita pela entrada (**C239**, **B761**), a **B755**, a **C224**, o resto da **C225**, a **C228**, a
+   **C219**, a **C230** e o reparo automático da **C246** — decisões suas.
+
+### O que a revisão encontrou
+
+A **medição** reproduziu os dois furos e leu os **30** pontos que lançam pelo motor: nenhum dependia do erro da Auditoria para
+desfazer o que o motor gravou — todos o liam como "nada aconteceu", e cinco foram executados mostrando o estrago. A **revisão do
+plano** (um revisor, com sonda) achou o ponto mais importante da etapa: o teste de integração planejado era **vazio** (a saída de
+uma entrega não se estorna pelo livro — o "recusa" já saía antes da etapa), e a porta que devolvia em dobro **de verdade** era a
+**exclusão da requisição**, também com a série ligada — virou a **B780**. Achou também o efeito colateral da regra nova (a Entrada
+de volta estornada com a série desligada), que ficou declarado. A **revisão adversarial do código** (três revisores, cada um na sua
+cópia, executando): o de **concorrência** achou a exclusão conferindo as séries sem esperar a movimentação do material (8 em 200
+rodadas com estoque em dobro; e uma forma anterior, desde a Etapa 116, 7 em 100) — corrigido, **B781**; o de **regra** achou a
+Devolução com a série desligada (anterior, **C253**, declarado) e o efeito colateral também na exclusão (declarado); o de
+**sabotagem** fez **28** sabotagens — 23 derrubaram teste, 1 é equivalente, e **4** mostraram cenários sem prova, que viraram teste
+(entre eles: sem a migração da coluna no banco que já existe, a correção não valeria em produção).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 120 entregue (2026-10-16):** **o lançamento que já valeu e a série que já voltou.** O lançamento que já está no estoque
+  responde sucesso mesmo com a Auditoria falhando (**C250** resolvido); a saída cujas séries voltaram por uma Entrada não estorna em
+  dobro com a série desligada (**C234** resolvido); a exclusão da requisição cuja entrega voltou assim é recusada e espera a
+  movimentação do material (**C251**, achado e resolvido). **O que é seu:** a consulta **A68** (opcional); as decisões **B778 a
+  B781** (reversíveis); os avisos **C252** e **C253**; as limitações **(120)** em D e a verificação **(120)** em F.
+  **Próxima: Etapa 121 — ver a "próxima tarefa detalhada" no plano da Etapa 120.**
 
 - **Etapa 119 entregue (2026-10-16):** **o que já valeu não se perde nem responde erro.** A saída e a entrega de requisição com
   lote que falham no meio devolvem o endereço já baixado (**C249** resolvido); o estorno concluído responde sucesso mesmo com a
   auditoria falhando, e o pedido de compra reabre (**C248** resolvido); desfeita a devolução e estornada a entrega, a entrada
   original das séries estorna (**C242** resolvido). **O que é seu:** a consulta **A67** (opcional); as decisões **B775** e
   **B776** (reversíveis); o aviso **C250**; as limitações **(119)** em D e a verificação **(119)** em F.
-  **Próxima: Etapa 120 — ver a "próxima tarefa detalhada" no plano da Etapa 119.**
+  *(Próxima, na época: Etapa 120 — entregue acima.)*
 
 - **Etapa 118 entregue (2026-10-16):** **o estorno que falha no meio desfaz tudo, em qualquer tipo de movimento.** O estorno de
   bloqueio, desbloqueio, ajuste e transferência que falha por erro de banco desfaz o que já fez (**C238** resolvido); todo

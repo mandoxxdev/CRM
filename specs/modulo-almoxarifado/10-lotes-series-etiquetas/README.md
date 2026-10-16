@@ -937,6 +937,18 @@ Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa119-o-que-ja-valeu-n
 - [x] **A saída com lote que drena mais de um endereço e falha no meio devolve os endereços já baixados (C249)** — `df037855`
   (`claimSaldoDoLote` com o rastreador do chamador). A regra "o saldo do lote é agregado nas duas pontas" não muda.
 - [x] **A série reativada por uma entrada guarda a entrada que tinha** (`series_entrada_anterior_almoxarifado`; C242, B776) —
-  `c098535c`. Só o estorno da entrada de uma devolução que citou a saída a lê.
+  `c098535c`. Só o estorno da entrada de uma devolução que citou a saída a lê. *(Desde a Etapa 120 isto **deixou de ser verdade** — ver abaixo: a mesma linha guarda a saída, lida por mais duas portas.)*
+
+Continua 🟢.
+
+## Etapa 120 (2026-10-16) — a série que voltou por uma Entrada não é devolvida de novo
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa120-o-lancamento-que-valeu-e-a-serie-que-voltou.md` (a etapa é do motor — spec 03).
+
+- [x] **A reativação guarda a saída de onde a série saiu** (`saida_anterior_id` na tabela da 119; C234, B779) — `aa0b83e2`. Lida pelo
+  estorno da Saída com a série desligada (sem série vinculada e com a linha → *"estorno de saida recusado: series desta saida ja
+  reentraram no estoque — a devolucao ja repos o material"*) e pela exclusão da requisição (C251, `051094a3`, spec 04).
+- [ ] **Fora (declarado):** reativação antes da etapa (sem a coluna — **A68**); a Entrada de volta estornada com a série desligada
+  faz a saída recusar (RN-08b; a C225 deixa as séries *Em estoque* com o físico 0 — caminho: Ajuste).
 
 Continua 🟢.

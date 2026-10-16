@@ -377,3 +377,24 @@ família inativa junto (C231).
 
 **Status:** continua 🟢 — fecha a C229.
 
+
+## Etapa 120 — a exclusão não devolve de novo as séries que já voltaram (2026-10-16)
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa120-o-lancamento-que-valeu-e-a-serie-que-voltou.md` (a etapa é do
+motor — spec 03; esta parte foi achada na revisão do plano).
+
+- [x] **A exclusão recusa quando as séries da entrega já voltaram por uma Entrada (C251, B780)** — `051094a3`. Antes: sem série
+  vinculada à saída, `excluirSemTrava` tratava como dado legado e creditava a quantidade sem série — 200, físico 4 com 2 séries
+  presentes, com a série **ligada** (anterior à etapa) e desligada. Agora lê `series_entrada_anterior_almoxarifado.saida_anterior_id`
+  (B779) e recusa, antes da primeira ENTRADA: *"⟨material⟩: as séries desta entrega já voltaram ao estoque por uma Entrada —
+  excluir a requisição devolveria o saldo de novo. Encerre a requisição em vez de excluir."* A devolução desfeita (as séries de
+  volta a *Entregue* nessa saída) não conta (RN-16, RN-16b).
+- [x] **A exclusão segura a trava por material dos itens (B781; Fase 5, revisor 2)** — `969914b0`: `excluirRequisicao` =
+  `serializarNaRequisicao` → `comTravaDaRequisicao` → `excluirSemTrava` (a ordem da separação e da entrega). Validando fora da
+  trava, a Entrada das séries e o desligar no meio faziam creditar sem série (8/200); só o desligar (desde a 116), 7/100. O (d4)
+  de `requisicaoGestosConcorrentes` (Etapa 93) mudou: o `/aprovar-valor` não roda mais no meio da exclusão — espera e encontra
+  a requisição cancelada (o corpo responde `status: 'CANCELADO'`).
+- [ ] **Fora (declarado):** a Entrada de volta estornada com a série desligada faz a exclusão recusar (RN-14b — a C225; caminho:
+  Ajuste); as séries que voltaram antes do deploy (sem a coluna) não são vistas (**A68**).
+
+Testes: `exclusaoSerieQueVoltou.api.test.js` (7); `requisicaoGestosConcorrentes.api.test.js` (d4) ajustado. Continua 🟢.

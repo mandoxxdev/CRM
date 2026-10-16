@@ -410,3 +410,13 @@ recusava para sempre (C242, declarada na 117).
 - [ ] **Fora:** a série devolvida antes do deploy fica como era (**A67**).
 
 Continua 🟢. Testes: `oQueJaValeuNaoSePerde.api.test.js` (RN-05, RN-05b, RN-06, RN-07, RN-09, RN-11), `oQueJaValeuIntegracao.api.test.js` (ii).
+
+## Etapa 120 (2026-10-16) — o que a etapa NÃO mudou aqui
+
+- [ ] **A devolução que cita a saída cujas séries já voltaram por uma Entrada, com a série desligada, ainda credita em dobro**
+  (achado na revisão da 120, r1; anterior à etapa) → **C253**. Medido: Entrada 2 (V1, V2) → Saída S → Entrada avulsa V1, V2 →
+  desliga → `POST /devolucoes` ESTOQUE de 2 citando S, sem série → 201, físico 4; a lista de saídas elegíveis oferece S com
+  `saldo_devolvivel: 2`. Com a série ligada é recusada (a série não saiu nessa saída). Ficou fora porque descontar "o que voltou
+  por Entrada" mexe na régua viva comum às cinco contas (`devolucaoViva.js`) e tem um falso negativo medido na Fase 2 (a série
+  reativada a partir de *Estornada* não guarda a saída) — candidata da próxima etapa.
+- A devolução com a auditoria do motor falhando responde 201 sem marcar `ESTADO_PARCIAL` (C250, `2e05c2ee`; RN-05, RN-05b).

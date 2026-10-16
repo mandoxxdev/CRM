@@ -87,22 +87,121 @@ que já tem a tabela), gravada no mesmo `INSERT OR IGNORE` da 119 com `a.anterio
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 — tronco (C250, motor)** — `try/catch` com `console.warn` em volta do `registrarAuditoria` do fim de
+- [x] **T1 — tronco (C250, motor)** `2e05c2ee` — `try/catch` com `console.warn` em volta do `registrarAuditoria` do fim de
   `registrarMovimentacaoSemTrava`; reescrever o comentário da Etapa 25 que declarava a semântica fatal (e dizer que mudou, B778).
   Testes `server/tests/api/lancamentoQueValeu.api.test.js` (RN-01..RN-06, RN-05b).
-- [ ] **T2 — tronco (C234, schema + motor + estorno)** — a coluna, a gravação, `recusaDoEstornoDeSaidaSemSerie` olhando a
+- [x] **T2 — tronco (C234, schema + motor + estorno)** `aa0b83e2` — a coluna, a gravação, `recusaDoEstornoDeSaidaSemSerie` olhando a
   coluna quando `baixadas === 0`. RN-07..RN-11 em `server/tests/api/serieQueVoltou.api.test.js`.
-- [ ] **T3 — tronco (C251, exclusão da requisição; Fase 2)** — `requisitionService.excluirSemTrava`: sem série vinculada à Saída
+- [x] **T3 — tronco (C251, exclusão da requisição; Fase 2)** `051094a3` — `requisitionService.excluirSemTrava`: sem série vinculada à Saída
   (ligada) ou sem série fora (desligada), lê a coluna da B779 e recusa antes da primeira ENTRADA. Testes
   `server/tests/api/exclusaoSerieQueVoltou.api.test.js` (RN-12..RN-14). Depende da coluna (T2).
-- [ ] **T4 — integração (cruza Cadastro, Requisições, Devoluções, Movimentações, Estorno, Séries; refeita na Fase 2)** —
+- [x] **T4 — integração** `54fb26a3` — (cruza Cadastro, Requisições, Devoluções, Movimentações, Estorno, Séries; refeita na Fase 2)** —
   `server/tests/api/lancamentoQueValeuIntegracao.api.test.js`: (i) **pela rota**: o cadastro com Saldo Inicial 5 e a auditoria
   `ENTRADA` falhando → 201, o material existe, físico 5, uma Entrada (antes: o material era **apagado** e a Entrada ficava órfã);
   (ii) **pela rota**: a entrega com a auditoria `SAIDA` falhando → 200 → a devolução dela (201) → o estorno da devolução (200),
   uma Saída só; (iii) **pela rota e pelo serviço**: a Entrada que traz as séries de volta com a auditoria falhando → 201 (C250) →
   uma Saída avulsa delas e a volta → desliga → o estorno da Saída avulsa recusa pela rota **e** pelo
   `stockService.cancelarMovimentacao` (C234) → a exclusão da requisição cuja entrega elas eram recusa (C251).
-- [ ] **T5 — fechamento** (skill `fechar-etapa`).
+- [x] **T5 — fechamento** (skill `fechar-etapa`) — o commit de documentação desta etapa (ver `git log`).
 
 Sem galho: T1 e T2 mexem no motor; a T3 depende da coluna da T2 (arquivo disjunto, mas a regra é a mesma — pela Fase 3, tronco);
 a T4 só testa e depende das três. Sem tela. Testes de cada task num arquivo próprio (um commit por assunto com a suíte verde).
+
+## Execução — o que aconteceu
+
+- **Fase 0** (sonda `e120fase0.js`, não versionada): C250 reproduzida em cinco portas (v2: 500 e repetida → físico 10; entrega:
+  500, entregue 0, a segunda → **duas Saídas**, físico 2; devolução ESTOQUE: 500 + `ESTADO_PARCIAL`; QUARENTENA: 500 com as duas
+  pernas; retalho: 500, a baixa estornada e a entrada do retalho órfã); os 30 chamadores lidos (a 119 contou 25 — só `services/`);
+  C234 reproduzida (200, físico 4). Conclusão: a C250 muda.
+- **Fase 2** — um revisor fresco, com sondas: 1 Critical, 1 Important, 4 Minor (ver a divergência no topo). Design e plano `c8584af6`.
+- **TDD:** os testes antes do código; RN-01, 02, 04, 05, 05b, 06 vermelhos (a RN-03 é guarda — passou antes, de propósito: a falha
+  **antes** do livro); RN-07, 09, 10, 11 vermelhos (a RN-08 é não-regressão); RN-12 e RN-13 vermelhos (a RN-14 é não-regressão); as
+  três jornadas da T4 vermelhas com o serviço de antes. Um arquivo de teste por task — cada commit com a suíte verde.
+- **T1** `2e05c2ee` — controle: o catch que relança derruba RN-01, 02, 04, 05, 05b, 06; o que sai cedo derruba só a asserção do aviso.
+- **T2** `aa0b83e2` — controle: a recusa sem a coluna derruba RN-07 e RN-10; só a guarda de dentro da trava derruba RN-10; o motor
+  gravando NULL derruba RN-07 e RN-09; olhar a coluna antes das séries vinculadas derruba RN-09. Boot em pasta nova, duas vezes:
+  0 *no such table / no column named / ALTER falhou*.
+- **T3** `051094a3` — controle: o ramo ligado sem a conferência derruba RN-12; o desligado, RN-13.
+- **T4** `54fb26a3` — controle: as três vermelhas com o serviço de antes; a recusa sem a coluna e a exclusão sem a conferência
+  derrubam a (iii) nos pontos certos.
+- **Cada commit de código teve a sua rodada completa:** `test:api` T1 393/393, T2 394/394, T3 395/395, T4 396/396; `test:almoxarifado`
+  44/0, `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 10/0, client 115 suítes / 1629 testes e `CI=true build`
+  *Compiled successfully* nas quatro.
+- **Fase 5** `969914b0` + CLAUDE.md `7b42108c` — três revisores frescos em paralelo, cada um na sua worktree (removidas).
+  **Concorrência (r2):** 1 Important reproduzido — a exclusão validava as séries fora da trava do material (8/200 com físico 4; a
+  forma anterior, desde a 116, 7/100) → a exclusão sob `comTravaDaRequisicao` (**B781**, **RN-15**; controle: sem a trava, físico 4);
+  as falhas forçadas nas leituras novas e no `INSERT` da linha não deixaram estado errado (o `INSERT` falhando = o legado, declarado).
+  O (d4) de `requisicaoGestosConcorrentes` (93) mudou de propósito: o `/aprovar-valor` disparado no meio agora espera (o
+  `armarAguardando` de dentro do gancho travava — o gesto tem de partir do contexto do teste; virou regra no CLAUDE.md).
+  **Regra e fluxo (r1):** 2 Important, ambos declarados — a Devolução citando a saída cujas séries voltaram, com a série desligada,
+  credita em dobro (anterior; **C253**); e a RN-08b também na exclusão (**RN-14b**). **Sabotagem (r3):** 28 sabotagens, 23
+  vermelhas, 1 equivalente (a coluna só pelo `safeAlter`), **4 sem prova** → RN-07 conta o claim (recusa antes dele), **RN-07b**
+  (o `safeAlter` no banco da 119 — sem ele a C234 não valeria em produção), **RN-16** e **RN-16b** (a devolução desfeita na
+  exclusão, ligada e desligada); e duas asserções reforçadas (o físico da RN-08 b; a literal da exclusão na integração). Controle
+  das quatro: cada sabotagem do r3 derruba o teste novo pela asserção certa (medido).
+- **Fechamento** — a A68 conferida numa sonda (`e120a68.js`: acha a saída cujas séries voltaram; não acha a de séries fora nem a de
+  material sem série); a C252 medida (`e120c252.js`: o retalho com a Auditoria do evento falhando → 500 com a sobra gravada;
+  repetido → duas sobras, origem 40).
+- **Suíte final (medida, depois de `969914b0`):** `test:api` **396/396** arquivos; `test:almoxarifado` **44/0**; `test:validation` 4/0,
+  `test:safealter` 3/0, `test:sqlite` 10/0; client **115** suítes / **1629** testes; `CI=true build` *Compiled successfully*.
+- **Divergências do plano:** (1) a Fase 2 trouxe a T3 (exclusão, C251) e refez a integração (a do plano era vazia); (2) a Fase 5
+  trouxe a B781 (a exclusão sob a trava) e mudou um teste da 93 de propósito; (3) a RN-08 "não regride o que já passava" estava
+  errada — a RN-08b declara o caso que regride.
+
+## Retro (4 números)
+
+1. **Rodadas de correção até verde:** **1** de redesenho antes do código (Fase 2: a T3 e a integração refeita) e **1** no código
+   (Fase 5). Um teste antigo mudou de comportamento esperado, de propósito: o (d4) da Etapa 93.
+2. **Achados da revisão:** Fase 2 — **1 Critical + 1 Important + 4 Minor, todos reais** (os três primeiros reproduzidos). Fase 5 —
+   **1** de produção corrigido (a exclusão fora da trava, r2), **2** declarados (r1: C253 e RN-14b), **4** sabotagens sem prova →
+   teste, **1** sabotagem equivalente, **0** ruído.
+3. **Paralelismo:** **0** galhos (as quatro tasks são do mesmo motor ou dependem da coluna); revisores em paralelo na Fase 5 (três,
+   cada um na sua worktree).
+4. **Defeito que escapou:** *(preencher na Etapa 121)*. **Da Etapa 119:** **nenhum introduzido por ela.** Um erro de **medição**
+   dela: a "próxima tarefa" contou **25** chamadores do motor (`grep` só em `server/services`) — são **30** com `server/routes`;
+   não mudou a decisão, mas é a forma de erro que a skill já descreve (medir sem cruzar). E a próxima tarefa dela apontava a
+   integração da C234 pela Saída da entrega — que nem se estorna pelo livro (o teste vazio que a Fase 2 da 120 pegou).
+
+## Próxima tarefa detalhada — Etapa 121
+
+*(A série desta etapa foi B778–B782, C251–C253, A68 — a 121 começa em **B783**, **C254**, **A69**; confira com `grep -oE` antes.)*
+
+**Como foi escolhida (mapa `specs/modulo-almoxarifado/README.md` e os C abertos, medidos em 2026-10-16):** as features 🟡
+continuam 00, 01, 05, 06, 21, 22 e 23; o motor (03) está 🟢. Candidatos:
+
+1. **C253 — a Devolução que cita a saída cujas séries voltaram por uma Entrada, com a série desligada, credita em dobro** (feature
+   12/03). **Medido** pelo revisor r1 da 120 (sonda `e120r1-a.js`, não versionada — recriar: Entrada 2 (V1, V2) → Saída S → Entrada
+   avulsa V1, V2 → `PUT /materiais/:id` com `controle_serie: false` → `POST /devolucoes` ESTOQUE de 2 com
+   `movimentacao_saida_id = S` → **201, físico 4**; `GET /devolucoes/saidas-elegiveis` oferece S com `saldo_devolvivel: 2`, ligada
+   ou desligada). Correção candidata (letra B, reversível): descontar do devolvível de S as séries que voltaram por uma Entrada
+   **que não é a da devolução** (`series_entrada_anterior_almoxarifado` com `saida_anterior_id = S` e a entrada de tipo ≠
+   `ENTRADA_DEVOLUCAO`), nas duas pontas (`validarSaidaOriginal` e `listarSaidasElegiveis`) **e** no `INSERT … WHERE EXISTS` da
+   devolução (a conferência no comando, Etapa 116). **Pontos de atenção:** (a) a régua "viva" é uma só para as cinco contas do que já
+   voltou de uma saída (`devolucaoViva.js`) — decidir se "voltou por Entrada" entra nela (o estorno e a exclusão já recusam por
+   outra via) ou fica só na devolução; (b) o falso negativo medido na Fase 2 da 120: S → E2 (volta) → estorno de E2 com a série
+   ligada (séries *Estornada*) → E3 reativa (a linha de E3 tem `saida_anterior_id` NULL, porque a série estava *Estornada*) — a linha
+   de E2 é a única que cita S, e a E2 está estornada; não filtrar por "entrada estornada" sem medir isso; (c) a Entrada de volta
+   estornada com a série desligada (RN-08b) — a C225 deixa as séries *Em estoque* com o físico 0. **Não depende do P.O.**
+2. **C252 — as outras Auditorias fatais depois do fato** (fora do motor). **Medido** no retalho (`e120c252.js`: 500 com a sobra
+   gravada; repetido → duas sobras, origem 40). `grep -rn "await registrarAuditoria\|audit.registrarAuditoria" server/services/almoxarifado
+   server/routes` → **115** chamadas; a etapa que a pegar mede quais vêm **depois** de o ato estar gravado e quais o chamador usa para
+   desfazer (o mesmo método da Fase 0 da 120). **Não depende do P.O.**
+3. **C231** (a mensagem da aprovação que manda reativar o material quando a família está inativa) — pequeno, de texto.
+4. **C246/C247** — só com transação de verdade (Postgres) ou um reparo no boot; o reparo automático do claim preso **depende do P.O.**
+5. **Dependem do P.O.:** **B755**, **B761**/**C239**, **C224**, o resto da **C225**, **C228**, **C219**, **C230**, o reparo da **C246**.
+
+**Escolhida: C253 (a devolução não devolve de novo o que já voltou por uma Entrada) + a medição da C252 com a correção das que
+o chamador lê como "nada aconteceu".**
+
+**Contrato candidato:** C253 — `POST /devolucoes` citando S recusa com a literal de hoje *"Devolução acima do entregue: a saída
+⟨S⟩ entregou ⟨q⟩, já foram devolvidos ⟨d⟩ e restam ⟨r⟩"* com o `restante` já descontado do que voltou por Entrada (ou uma literal
+nova, a decidir na Fase 1 — registrar na B); `saldo_devolvivel` da lista de elegíveis com a mesma conta. C252 — as portas medidas
+respondem o sucesso de sempre com a Auditoria do ato falhando (o log registra). Nenhum corpo novo.
+
+**Pontos de atenção:** a trava não é reentrante; a exclusão da requisição agora segura a trava do material (B781) — gesto concorrente
+em teste parte do contexto do teste, não de dentro do gancho (CLAUDE.md); molde de teste: `serieQueVoltou.api.test.js` (o desligar
+pela rota) e `lancamentoQueValeu.api.test.js` (o gancho da Auditoria por `entidade`/`acao` — o gancho genérico por ação pega a
+Auditoria de série antes do livro, achado do r2 da 120).
+
+**O que já está pronto e não precisa reabrir:** a Auditoria do lançamento não-fatal; a coluna `saida_anterior_id` (gravada, migrada
+por `safeAlter`, lida pelo estorno com a série desligada e pela exclusão); a exclusão sob a trava do material; tudo da 119.
