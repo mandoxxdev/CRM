@@ -11,9 +11,10 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-15):** **Etapa 114 fechada** (a requisição de um material inativado é recusada na
-> aprovação, no envio e na separação, em vez de ficar aprovada e parada — **C229** resolvido); a próxima do almoxarifado é a
-> **115** — ver "Onde estamos e o que vem a seguir". *(Esta frase tinha parado na Etapa 110 — as Etapas 112 e 113 não a
+> **Onde o desenvolvimento está (2026-10-15):** **Etapa 115 fechada** (ligar e desligar o controle por lote ou série não deixa
+> mais saldo sem lote nem série órfã — **C226** resolvido, **C225** resolvido para o Almoxarife e a Engenharia); a próxima do
+> almoxarifado é a **116** — ver "Onde estamos e o que vem a seguir". *(Antes: Etapa 114 fechada (a requisição de um material inativado é recusada na
+> aprovação, no envio e na separação, em vez de ficar aprovada e parada — **C229** resolvido).)* *(Esta frase tinha parado na Etapa 110 — as Etapas 112 e 113 não a
 > atualizaram; as duas estão na seção delas e em "Onde estamos".)* *(Antes: Etapa 110 fechada (o Saldo Inicial do cadastro de material passa pelo
 > motor de estoque, só para quem movimenta e só para material sem lote, série, inspeção ou cliente — **C215** resolvido; e
 > inativar uma família no mesmo instante em que alguém cadastra material nela não deixa mais a família inativa com material
@@ -127,7 +128,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Sessenta e um itens para rodar em produção ANTES do deploy — cinquenta e oito são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Sessenta e dois itens para rodar em produção ANTES do deploy — cinquenta e nove são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-15 (Etapa 115) de sessenta e um para sessenta e dois**, com a **A62** — os materiais com a série desligada e séries ainda "Em estoque"; opcional.)*
 
 *(**Atualizado em 2026-10-15 (Etapa 114) de sessenta para sessenta e um**, com a **A61** — as requisições em aberto com item pendente de material inativo; opcional.)*
 
@@ -2271,12 +2274,38 @@ reservadas, `EM_SEPARACAO`, `PARCIALMENTE_ATENDIDA`…) — o item não separa m
 e atenda, ou separe os outros itens com 0 neste e, entregue o resto, **Encerre**. **`separado` > `entregue`** — há material
 na caixa de um material inativo (a entrega recusa): reative para entregar, ou devolva o separado à prateleira.
 
+**A62 (NOVA, da Etapa 115 — os materiais com a série desligada e séries ainda "Em estoque").** Antes da Etapa 115 o
+Almoxarife e a Engenharia desligavam a série de um material com séries em estoque (**C225**); a saída seguinte, sem série,
+deixou as séries marcadas *Em estoque*, e nenhuma tela mostra isso (o aviso de divergência é só de material com o controle
+ligado). **Nada aqui é obrigatório.** Somente leitura:
+
+```sql
+SELECT m.id, m.codigo, m.nome, m.ativo, m.quantidade_atual AS fisico,
+       (SELECT COUNT(*) FROM series_almoxarifado sr WHERE sr.material_id = m.id
+         AND sr.status IN ('EM_ESTOQUE','BLOQUEADA')) AS series_presentes
+  FROM materiais_almoxarifado m
+ WHERE COALESCE(m.controle_serie, 0) <> 1
+   AND EXISTS (SELECT 1 FROM series_almoxarifado sr WHERE sr.material_id = m.id
+         AND sr.status IN ('EM_ESTOQUE','BLOQUEADA'))
+ ORDER BY m.codigo;
+```
+
+*(Conferida numa sonda contra o esquema real: acha o material de série desligada com 2 séries em estoque e físico 0 e o de
+`controle_serie` nulo com uma série bloqueada; **não** acha o de série ligada, o que só tem séries *Entregue*/*Baixada* nem
+o sem série nenhuma.)*
+
+**Como ler o resultado:** **vazia** — nada a fazer. **Cada linha** é um material com séries marcadas que podem não estar
+mais na prateleira. O Administrador **religa** a série (para ele passa mesmo com o físico diferente), abre **Lotes e Séries →
+Séries**, confere o aviso *"Séries presentes: P · Físico: F"* e, em **Regularizar séries**, baixa as que saíram (ou cadastra as
+que faltam). Depois, se quiser o controle desligado: sem série em estoque, qualquer um desliga; com séries iguais ao físico,
+só o Administrador (**B746**).
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B744; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B751; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-15 com as cinco da Etapa 114 — B740 a B744.**)*
 
@@ -7616,7 +7645,8 @@ regularização lançando as entradas **já com o lote** antes de ligar o contro
 ou a série com saldo não prende nada (a saída volta a andar sem lote ou sem série); "Requer inspeção" não é lida por
 nenhuma saída (quem retém no Recebimento é **Material crítico**). **Descartado:** recusar desligar (a regularização de
 séries não baixa série quando as presentes são iguais ao físico — o controle ficaria impossível de desligar). O preço está
-na **C225**. (`528a44a0`)
+na **C225**. (`528a44a0`) *(Desde a Etapa 115, desligar a **série** com séries em estoque é do Administrador —
+**B746**; o lote e a série sem série em estoque continuam livres.)*
 
 **B732 (NOVA, da Etapa 112) — a próxima etapa do almoxarifado (113) é a situação do material: inativar com saldo (C217,
 C227) e reativar numa família inativa (C220).** Medido no fim desta etapa: o "Inativar" do material não confere nada — a
@@ -7731,6 +7761,69 @@ passa pelo Almoxarife (200), a Saída sem série seguinte baixa o físico a 0 e 
 que liga *Controle por lote* não espera a trava do material (com a trava segura por 300 ms, respondeu em 3 ms) — a Entrada
 sem lote que está gravando passa por baixo. A C228 (documento aberto) e a C219 continuam esperando você. Ver a próxima
 tarefa no plano da Etapa 114.
+
+**B745 (NOVA, da Etapa 115) — o salvar do cadastro que liga ou desliga um controle espera a movimentação do material em
+curso.** **O que foi escolhido:** o salvar que muda *Controle por lote* ou *Controle por número de série* (ligando ou
+desligando) grava sob a mesma trava do material que as movimentações usam; o salvar que não mexe em controle continua sem
+esperar nada (`8072b497`). Uma entrada sem lote que estava gravando termina antes — e a recusa da Etapa 112 sai com o
+número dela — ou começa depois, e exige o lote (**C226**). **O que foi descartado:** conferir o controle de novo no fim da
+movimentação (duplicaria a régua e não fecharia o desligar da série); pegar a trava só ao ligar (o desligar da série tem a
+mesma janela com a entrada que cria séries). **Reversível:** é a condição de quando pegar a trava, num ponto só.
+
+**B746 (NOVA, da Etapa 115) — desligar a série com séries em estoque é do Administrador, não proibido para todos.**
+**O que foi escolhido:** quem não tem a permissão de ajustar estoque (Almoxarife, Engenharia) recebe a recusa ao desligar
+*Controle por número de série* num material com séries em estoque ou bloqueadas; o Administrador desliga e as séries ficam
+como estão (`8072b497`). É a régua da **B728** no sentido inverso. Sem série em estoque, qualquer um desliga; desligar o
+lote continua livre. **O que foi descartado:** (b) recusar para **todos** até as séries saírem — com séries iguais ao
+físico, só uma Saída as tiraria, um consumo que não aconteceu (o motivo da **B731**); (c) **baixar as séries
+automaticamente** ao desligar (*Baixada*, com trilha) — fecharia a brecha também para o Administrador, mas muda o histórico
+de cada série num salvar de cadastro e apaga o *Bloqueada* (o motivo do bloqueio). **A (c) é a alternativa se vocês
+quiserem o Administrador coberto** (hoje ele desliga e, se sair material sem série, as séries ficam *Em estoque* — a
+**C225** continua para ele). **Reversível:** uma permissão num ponto só. *(A **B731** dizia "desligar o controle continua
+livre" — continua verdade para o lote e para a série sem série em estoque; para a série com séries em estoque, não mais.)*
+
+**B747 (NOVA, da Etapa 115, da revisão do plano) — a recusa do desligar diz o caminho conforme as séries e o físico.**
+**O que foi escolhido:** três textos (`8072b497`): séries iguais ao físico (ou menos) — *"… Peça ao Administrador do
+almoxarifado para desligar o controle."*; físico 0 ou menos — *"… Peça ao Administrador do almoxarifado para baixá-las em
+Lotes e Séries → Séries → Regularizar séries; sem série em estoque, o controle pode ser desligado."* (depois disso o próprio
+Almoxarife desliga); mais séries que físico, com físico — *"… para baixar as ⟨k⟩ que não estão mais no estoque (…) e para
+desligar o controle."*, com ⟨k⟩ a conta da regularização (séries menos físico, em unidades inteiras). **O que foi
+descartado:** uma frase só, "peça ao Administrador para desligar" — no legado (séries que já saíram) ela mandava pedir
+justamente o gesto que deixa as séries órfãs, quando o caminho certo é baixá-las.
+
+**B748 (NOVA, da Etapa 115, da revisão do plano) — a regularização de séries espera a trava do material.** **O que foi
+escolhido:** **Regularizar séries** grava sob a trava (`8072b497`): ela lia o controle no começo e cadastrava depois, e um
+desligar no meio deixava séries *Em estoque* num material sem controle, por fora da recusa. Efeito visível: duas abas
+regularizando o mesmo material ao mesmo tempo — a segunda espera e recebe *"cadastrar 1 serie(s) passaria o fisico (2) —
+presentes 2, cadastre no maximo 0"* (antes recebia *"o limite de series mudou durante a regularizacao — recarregue"*); o
+limite é o mesmo. **Descartado:** conferir o controle em cada gravação da regularização (mais condições num caminho que já
+tem duas, e não serializa com a entrada que cria séries).
+
+**B749 (NOVA, da Etapa 115, da revisão do plano) — para quem não regulariza, o salvar não desfaz um controle que outra
+pessoa acabou de mudar.** **O que foi escolhido:** o salvar do Almoxarife e da Engenharia só grava se os **dois** controles
+continuam como foram lidos — ligados ou não (`8072b497`). Antes, só o controle que ficava ligado era conferido: um
+renomear lido com a série desligada, salvo depois de o Administrador ligá-la, a desligava de novo calado (e deixava as
+séries dele órfãs). Agora a resposta é *"O cadastro do material ⟨código⟩ mudou enquanto era salvo — nada foi gravado.
+Recarregue o material e salve de novo."* **Descartado:** conferir também para o Administrador (a Etapa 112 decidiu que ele
+não leva a condição — **B728**). *(Na revisão do código: a conferência só pega a mudança que cai **durante** o
+próprio salvar — um formulário aberto há minutos ainda desfaz o controle mudado nesse meio-tempo, **C233**; e o
+"Descartado" acima foi revisto — a condição passou a valer também para o Administrador, **B750**.)*
+
+**B750 (NOVA, da Etapa 115, da revisão do código) — o salvar do Administrador também não desfaz um controle que outra
+pessoa acabou de mudar.** **O que foi escolhido:** a condição da **B749** (os dois controles como foram lidos) vale também
+para o Administrador (`385d938f`). Medido na revisão: o Administrador renomeando o material no mesmo instante em que o
+Almoxarife desligava o lote religou o lote calado em 16 de 30 rodadas — e, com uma entrada sem lote logo depois, o saldo
+ficava sem lote com o controle ligado (o estado da **C226**). Agora ele recebe *"O cadastro do material ⟨código⟩ mudou
+enquanto era salvo — nada foi gravado. Recarregue o material e salve de novo."* **Isto inverte um cenário da Etapa 112**,
+que dizia "o Administrador não leva a condição: mantém ligado e fica ligado" — o que ficou de fora dele (a régua do saldo
+identificado, **B728**) continua de fora. **Descartado:** pôr o renomear do Administrador sob a trava (não resolve: a
+mudança da outra aba já está gravada quando ele grava). **Reversível:** a condição está num ponto só.
+
+**B751 (NOVA, da Etapa 115) — a próxima etapa do almoxarifado (116) é o formulário de material que desfaz o controle
+mudado por outra pessoa (C233), com o estorno de Saída com série depois de desligar (C232).** Medido na revisão desta
+etapa: com o formulário aberto, o Administrador liga a série e o salvar do Almoxarife (só renomeando) a desliga de novo
+(200, calado). Nenhuma das duas depende de vocês. A **C224**, a **C228**, a **C219** e a **C230** continuam esperando
+vocês. Ver a próxima tarefa no plano da Etapa 115.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -9993,13 +10086,18 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      **Entrada** com o lote + **Ajuste** do total (**B730**). A tela de Lotes mostra *"Sem lote atribuído"* e a de Séries a
      divergência enquanto faltar.
 
-225. **NOVO (da Etapa 112, medido) — desligar a série deixa as séries como "em estoque".** Desligar *Controle por número de
+225. **🟡 PARCIALMENTE RESOLVIDO NA ETAPA 115 (`8072b497`) — o Almoxarife e a Engenharia não desligam mais a série com
+     séries em estoque (**B746**), e a recusa diz o caminho (**B747**); para o **Administrador** continua como está abaixo
+     (ele desliga, e a saída sem série deixa as séries — a alternativa é a **B746** (c)); os materiais que já estão assim:
+     **A62**.** O texto original: **NOVO (da Etapa 112, medido) — desligar a série deixa as séries como "em estoque".** Desligar *Controle por número de
      série* num material com séries e dar saída sem série baixa o físico, mas as séries continuam *Em estoque*. Se o
      controle for religado, o físico e as séries não batem: o Almoxarife recebe a recusa (**B729**) e o Administrador, ao
      religar, regulariza (baixar as séries que saíram). **O que fazer:** não desligue a série de material com saldo; se
      desligar, o Administrador regulariza ao religar.
 
-226. **NOVO (da Etapa 112) — uma Entrada sem lote que começou antes de o controle ser ligado e grava depois fica sem lote.**
+226. **✅ RESOLVIDO NA ETAPA 115 (`8072b497`) — o salvar que liga ou desliga um controle espera a movimentação do
+     material em curso (**B745**); a Entrada termina antes (e o Almoxarife recebe a recusa da Etapa 112 com o número dela) ou
+     começa depois (e exige o lote).** O texto original: **NOVO (da Etapa 112) — uma Entrada sem lote que começou antes de o controle ser ligado e grava depois fica sem lote.**
      O salvar do cadastro confere o saldo no mesmo comando que grava (uma Entrada que caiu **antes** é vista), mas a
      Entrada lê o controle no começo dela: se o controle for ligado nos milissegundos do meio, ela grava sem lote.
      Janela de milissegundos; o resultado é o mesmo estado que o Administrador já regulariza (**C224**).
@@ -10038,6 +10136,30 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      Engenharia; mas, com a família inativa, o Reativar recusa (*"Família inativa — não é possível vincular novos itens"*)
      e reativar a família é só do Administrador (Configurações). **O que fazer:** o Administrador reativa a família e
      depois o material; ou quem aprova rejeita a requisição (o Rejeitar continua funcionando).
+
+232. **NOVO (da Etapa 115, da revisão do plano) — estornar (ou devolver) uma Saída com série depois de desligar a série não
+     volta as séries.** O caminho que a recusa do desligar ensina — dar saída **com** as séries e então desligar — deixa as
+     séries *Entregue*. Se essa Saída for estornada depois, com o controle já desligado, o físico volta e as séries
+     continuam *Entregue* (o estorno só mexe em série de material com o controle ligado); a devolução também não as
+     oferece. Se o controle for religado, o físico e as séries não batem: o Almoxarife recebe a recusa (**B729**) e o
+     Administrador regulariza — mas cadastrar de novo o número de uma série *Entregue* é recusado (*"serie ⟨número⟩ ja existe
+     neste material"*; só a *Baixada* volta por ali). Lido no código, não medido. **O que fazer:** estorne a saída antes de
+     desligar a série; se já desligou, religue a série e estorne com ela ligada.
+     **Na revisão do código apareceu o lado pior, corrigido:** com o estorno no **mesmo instante** do desligar do
+     Almoxarife, as séries voltavam a *Em estoque* com o controle já desligado (26 de 30 rodadas) — o estorno lia o controle
+     antes do crédito, fora da trava. Desde `385d938f` ele relê o controle sob a trava do material: o desligar que cai antes
+     deixa as séries *Entregue* (este item); o que cai depois vê as séries de volta e é recusado.
+
+233. **NOVO (da Etapa 115, da revisão do código) — um formulário de material aberto há muito tempo desfaz, ao salvar, o
+     controle que outra pessoa mudou nesse meio-tempo.** O formulário manda sempre *Controle por lote* e *Controle por
+     número de série* com o valor de quando foi aberto. A conferência da **B749**/**B750** só pega a mudança que cai nos
+     milissegundos entre a leitura e a gravação do próprio salvar; se o Administrador ligar a série enquanto o Almoxarife
+     está com o formulário aberto, o salvar do Almoxarife (mesmo só renomeando) **desliga** a série de novo — calado, ou,
+     se já entraram séries, com a recusa do desligar (*"Desligar o controle por número de série … Peça ao Administrador do
+     almoxarifado para desligar o controle."*), que aí engana: ele não quis desligar nada. Medido na revisão. Vale para
+     qualquer campo do cadastro (é o "último salvar vence" de sempre), mas nos controles o efeito é o da **C225**/**C226**.
+     **O que fazer:** recarregue o material antes de salvar se alguém pode ter mexido nele; se a recusa do desligar
+     aparecer sem você ter desmarcado a série, recarregue.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -11118,6 +11240,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   com 0 leva a *Em Separação* com a caixa vazia, de onde quem pediu cancela (ou o almoxarifado reativa o material).
 - **(114) A liberação por valor no mesmo instante do "Inativar"** de um material zerado da requisição: a liberação passa e
   esse item fica *Aguard. estoque* (**B741**) — janela de milissegundos, o estado de inativar depois de aprovar (**C230**).
+- **(115) O Administrador que desliga a série com séries em estoque não recebe aviso**, e as séries ficam *Em estoque*
+  depois da saída (**C225**, agora só para ele; a alternativa — baixá-las ao desligar — é a **B746** (c)).
+- **(115) A tela não avisa antes de salvar** que desligar a série vai ser recusado — a recusa aparece no aviso vermelho
+  depois do clique, com o texto do servidor.
+- **(115) A trava do salvar** faz o salvar que liga ou desliga um controle esperar a movimentação em curso daquele material
+  (milissegundos); a regularização de séries também espera.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -12020,6 +12148,12 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(115) Nenhum clique foi dado nesta etapa no navegador.** A tela não mudou: a recusa nova do desligar chega pelo mesmo
+aviso vermelho do formulário de material, que já mostra a mensagem do servidor. O servidor foi provado pela rota (**47**
+cenários — 32 da etapa, 4 e 11 da revisão —, **7** jornadas de integração, incluindo a Entrada real com o salvar disparado no meio dela). O que **só o
+navegador** prova: (1) a recusa inteira legível no aviso, com o formulário continuando aberto; (2) no cenário 4 da seção da
+Etapa 115, o aviso *"Séries presentes: 2 · Físico: 0"* depois de o Administrador religar.
 
 **(114) Nenhum clique foi dado nesta etapa no navegador.** A tela não mudou: as recusas novas chegam pelos avisos vermelhos
 que já mostram a mensagem do servidor (Aprovar, Aprovar liberação, Enviar, Confirmar separação), e o 0 do item inativo vem
@@ -23608,18 +23742,115 @@ inativo (corrigido). As corridas (7 cenários × 30 rodadas de inativar no meio 
 não deixaram nenhuma aprovação com material já inativo nem reserva solta. O terceiro revisor fez **33 sabotagens** novas: 18
 derrubaram teste, 6 eram inalcançáveis ou equivalentes e **9** mostraram cenários sem prova — viraram testes (`071f6c7b`).
 
+## Etapa 115 — Ligar e desligar o controle por lote ou série não deixa mais saldo nem série para trás (2026-10-15)
+
+O controle por lote e o controle por número de série mudam o que a saída exige. A Etapa 112 já impedia o Almoxarife de
+**ligar** o controle num material com saldo sem lote; sobravam duas brechas. A primeira: se uma **entrada sem lote** estava
+sendo gravada no mesmo instante em que alguém salvava o cadastro ligando o lote, o salvar passava por baixo dela e o saldo
+ficava sem lote com o controle ligado — a saída desse saldo passava a ser recusada. A segunda: o Almoxarife **desligava** a
+série de um material com séries em estoque; a saída seguinte, já sem pedir série, baixava o material e deixava as séries
+marcadas *Em estoque* para sempre, sem nenhuma tela mostrar. Agora o salvar que mexe em controle espera a movimentação em
+curso, e desligar a série com séries em estoque é do Administrador — com a mensagem dizendo o caminho.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| O salvar que ligava o lote não esperava a entrada sem lote que estava sendo gravada; o saldo dela ficava sem lote com o controle ligado | O salvar espera; o Almoxarife recebe a recusa da 112 com o número dela (*"há 5 sem lote atribuído"*) e nada é gravado (**B745**) |
+| — | A entrada que começa depois do salvar já exige o lote (como sempre) |
+| O Almoxarife e a Engenharia desligavam a série com séries em estoque, e a saída seguinte deixava as séries *Em estoque* | Recusado, com a contagem e o caminho; o Administrador desliga (**B746**) |
+| Séries que já tinham saído e ficado marcadas (físico 0) não tinham caminho na mensagem | A recusa manda o Administrador baixá-las em **Regularizar séries**; depois, o próprio Almoxarife desliga (**B747**) |
+| A regularização de séries gravava sem esperar o salvar do cadastro | Espera; o desligar no meio dela recusa com a contagem nova (**B748**) |
+| Salvar no mesmo instante em que outra aba muda um controle desfazia a mudança calado (inclusive o salvar do Administrador) | *"O cadastro do material … mudou enquanto era salvo — nada foi gravado. …"* (**B749**, **B750**) |
+| O estorno de uma saída com série no mesmo instante do desligar devolvia as séries a *Em estoque* | O estorno espera; as séries não ficam órfãs |
+| Desligar o controle por lote | Continua livre (**B731**) |
+
+### As regras, com o cenário exato
+
+Preparação: um material nosso com **Controle por número de série**, **PRF-0501**, com uma Entrada de 2 unidades (séries
+**S1** e **S2**); um material nosso sem controle, **PRF-0502**; usuários **Ana** (Almoxarife), **Edu** (Engenharia) e o
+**administrador**.
+
+**1. Desligar a série com séries em estoque.** Ana abre o PRF-0501, desmarca *Controle por número de série* e salva → aviso
+vermelho: *"Desligar o controle por número de série no material PRF-0501 exige a permissão "ajustar_estoque" (seu perfil:
+ALMOXARIFE): há 2 série(s) em estoque. Depois de desligar, a saída não baixa essas séries, e elas continuam "Em estoque"
+depois que o material sai. Peça ao Administrador do almoxarifado para desligar o controle."* O cadastro continua como
+estava (inclusive o nome, se ela tiver mudado junto). Edu recebe a mesma, com *"(seu perfil: ENGENHARIA)"*.
+
+**2. O caminho do Almoxarife sem pedir a ninguém.** Ana dá uma **Saída** de 2 escolhendo S1 e S2 → as duas viram
+*Entregue*; desmarca a série e salva → *"Material atualizado!"*.
+
+**3. O Administrador desliga.** Com outro material como o do passo 1, o administrador desmarca e salva →
+*"Material atualizado!"*; as séries ficam como estão. Se depois sair material sem série, elas continuam *Em estoque*; para
+acertar, ele religa a série e, em **Lotes e Séries → Séries → Regularizar séries**, baixa as que saíram.
+
+**4. Séries que já saíram (físico 0).** Material com a série ligada, físico 0 e 2 séries ainda *Em estoque* (o estado que
+a consulta **A62** acha, ou o legado de antes da Etapa 61): Ana desmarca e salva → *"… há 2 série(s) em estoque e o físico
+é 0. Peça ao Administrador do almoxarifado para baixá-las em Lotes e Séries → Séries → Regularizar séries; sem série em
+estoque, o controle pode ser desligado."* O administrador baixa as duas (justificativa) e Ana desliga → *"Material
+atualizado!"*. Com físico 1 e 3 séries, a frase é *"… há 3 série(s) em estoque e o físico é 1. Peça ao Administrador do
+almoxarifado para baixar as 2 que não estão mais no estoque (Lotes e Séries → Séries → Regularizar séries) e para desligar o
+controle."*
+
+**5. A entrada que está sendo gravada.** Não é demonstrável no clique (é questão de milissegundos), mas a regra é: o salvar
+que liga ou desliga um controle espera a movimentação daquele material em curso. Se for uma entrada sem lote de 5 no
+PRF-0502, Ana, ao ligar o lote, recebe *"Ligar o controle por lote no material PRF-0502 exige a permissão "ajustar_estoque"
+(seu perfil: ALMOXARIFE): há 5 sem lote atribuído. …"* — a recusa da Etapa 112, com o número da entrada que acabou de cair.
+O administrador, no mesmo instante, liga (o saldo fica sem lote e ele regulariza, como na 112); a entrada seguinte sem lote
+é recusada: *"O material PRF-0502 exige lote nesta movimentacao (controle por lote ligado)"*.
+
+**6. O que continua livre.** Desligar a série de material sem nenhuma série em estoque (mesmo com saldo); desligar o lote
+com saldo; editar qualquer outro campo sem mexer no controle — esse salvar não espera nada.
+
+### O que esta etapa NÃO cobre
+
+1. **O Administrador** que desliga a série com séries em estoque não recebe aviso, e as séries ficam *Em estoque* depois da
+   saída (**C225**, agora só para ele) — o aviso é a mesma pergunta da **C224**, decisão sua; a alternativa forte (baixar as
+   séries ao desligar) está na **B746**.
+2. **Estornar ou devolver uma saída com série depois de desligar** não volta as séries (**C232**).
+3. **Um formulário de material aberto há muito tempo**, ao salvar, volta os controles ao que ele mostrava — desfaz a
+   mudança de outra pessoa nesse meio-tempo (**C233**); recarregue antes de salvar.
+4. A **C224**, a **C228**, a **C219** e a **C230** — decisões suas.
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0) reproduziu as duas brechas: o Almoxarife desligou a série com 2 em estoque (aceito) e a saída sem
+série deixou as duas *Em estoque*; com a trava do material presa, o salvar que liga o lote respondeu em 4 ms. A **revisão do
+plano** achou seis pontos: a mensagem mandava pedir ao Administrador justamente o gesto que cria o problema, e no legado
+(físico 0) o caminho certo era baixar as séries (**B747**); a regularização de séries corria com o desligar sem esperar
+(**B748**); renomear por cima de um "ligar" de outra aba o desfazia (**B749**); e estornar a saída com série depois de
+desligar não volta as séries (**C232**, declarado). A **revisão adversarial do código** (três revisores, executando
+corridas de 30 rodadas) achou dois defeitos reais, corrigidos em `385d938f`: o **estorno** de uma Saída com série, no mesmo
+instante do desligar do Almoxarife, devolvia as séries a *Em estoque* com o controle já desligado (26 de 30 rodadas — o
+estorno lia o controle antes, fora da trava); e o **renomear do Administrador** religava calado o lote que o Almoxarife
+acabara de desligar (16 de 30) — a conferência passou a valer para todos (**B750**). Achou também que a proteção contra
+"outra aba mudou" só vale durante o próprio salvar — o formulário aberto há minutos ainda desfaz o controle (**C233**,
+declarado; é a próxima etapa). As corridas da etapa ficaram **0 de 30** (com a trava tirada de propósito: 5, 17 e 19 de 30
+ruins). O terceiro revisor fez **32 sabotagens** novas: 18 derrubaram teste, 4 eram equivalentes ou inalcançáveis e **10**
+mostraram cenários sem prova — viraram 11 testes.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 115 entregue (2026-10-15):** **ligar e desligar o controle por lote ou série não deixa mais saldo nem série para
+  trás.** O salvar que liga ou desliga um controle espera a movimentação em curso do material (**C226** resolvido);
+  desligar a série com séries em estoque passa a ser do Administrador, com a mensagem dizendo o caminho (**C225**
+  resolvido para o Almoxarife e a Engenharia); a regularização de séries e o estorno de saída com série esperam a mesma
+  trava. **O que é seu:** a consulta **A62** (opcional); as decisões **B745 a B751** (a **B746** — o Administrador desliga, em
+  vez de baixar as séries ao desligar — e a **B750** — o salvar do Administrador também é conferido — são reversíveis e a
+  alternativa é sua); os avisos **C225** (o resto, só do Administrador), **C232** e **C233**; as limitações **(115)** em D e a
+  verificação **(115)** em F. **Próxima: Etapa 116 — o formulário de material que desfaz o controle mudado por outra pessoa
+  (C233) e o estorno de saída com série depois de desligar (C232) — ver a "próxima tarefa detalhada" no plano da Etapa 115.**
 
 - **Etapa 114 entregue (2026-10-15):** **a requisição de um material inativado não é mais aprovada para ficar parada.** A
   aprovação comum, a por valor e a automática recusam a requisição com item pendente de material inativo, sem reservar
   nada; o envio do rascunho e a separação também recusam; o detalhe e a fila dizem 0 no item inativo (**C229** resolvido).
   **O que é seu:** a consulta **A61** (opcional); as decisões **B740 a B744** (a **B740** — recusar em vez de aprovar e
   avisar — e a **B741** — a liberação por valor só recusa na primeira aprovação — são reversíveis e a alternativa é sua); os
-  avisos **C230** e **C231**; as limitações **(114)** em D e as verificações **(114)** em F. **Próxima: Etapa 115 — a série
+  avisos **C230** e **C231**; as limitações **(114)** em D e as verificações **(114)** em F. ~~**Próxima: Etapa 115 — a série
   desligada com séries em estoque (C225) e a Entrada que cruza o ligar do lote (C226) — ver a "próxima tarefa detalhada" no
-  plano da Etapa 114.**
+  plano da Etapa 114.**~~ *(Feita — Etapa 115.)*
 
 - **Etapa 113 entregue (2026-10-15):** **inativar material com saldo é recusado, e a tela de Materiais reativa.** O
   "Inativar" com saldo ou retenção é recusado para todos, com o caminho na mensagem (**C217**, **C227** resolvidos);

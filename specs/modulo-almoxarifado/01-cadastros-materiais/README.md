@@ -1,6 +1,8 @@
 # 01 — Cadastros de Materiais
 
-> **Status:** 🟡 — **continua 🟡. Etapa 113 (`508eb6c4..6ed479a6`): inativar material com saldo ou retenção é recusado para
+> **Status:** 🟡 — **continua 🟡. Etapa 115 (`e60e34e1..385d938f`): o salvar que liga ou desliga lote/série grava sob a trava do
+> material (C226) e desligar a série com séries em estoque exige `ajustar_estoque` (C225)** — ver a seção "Etapa 115", no
+> fim. Não fecha item do checklist (regra de integridade do cadastro). Antes: **Etapa 113 (`508eb6c4..6ed479a6`): inativar material com saldo ou retenção é recusado para
 > todos (C217, C227), reativar confere a família (C220) e a lista de Materiais ganha Inativos + Reativar** — ver a seção
 > "Etapa 113", no fim. Não fecha item do checklist (regra de integridade do cadastro). Antes: **Etapa 112 (`a8cda2ad..d7b0cae8`): ligar controle por lote ou por série num material
 > com saldo não identificado passa a exigir `ajustar_estoque` (C222)** — ver a seção "Etapa 112", no fim. Não fecha item
@@ -370,7 +372,8 @@ motivo é pelo **id** (`m.motivo_id`), nunca pelo texto.
   regularizar).
 - [x] **Fase 5** — `d7b0cae8` (10 cenários das sabotagens que passavam; nenhuma mudança de produção).
 - [ ] **Fora, de propósito:** aviso ao Administrador que liga com saldo não identificado (**C224**); desligar a série com
-  séries presentes (**C225**); a Entrada que começou antes de o controle ser ligado (**C226**); reativar material em
+  séries presentes (**C225**); a Entrada que começou antes de o controle ser ligado (**C226**) *(as duas — Etapa 115, seção
+  abaixo; a C225 só para o Almoxarife e a Engenharia)*; reativar material em
   família inativa (**C220**) e inativar material com saldo (**C217**, **C227**) — a Etapa 113 (*feita, seção abaixo*).
 
 **A C222 estava parcialmente errada — fica dito.** Ela dizia que ligar **inspeção** com saldo também travava a saída.
@@ -406,3 +409,33 @@ Plano: `docs/superpowers/plans/2026-10-15-almoxarifado-etapa113-situacao-do-mate
 **O design desta etapa tinha uma premissa errada — fica dito.** Ele declarava como furo a corrida "Entrada que leu *ativo*
 antes do Inativar e grava depois", dizendo que o motor não pega a trava do material. **Estava errado**: desde a Etapa 97 o
 motor inteiro roda em `naTravaDoMaterial`; o `UPDATE` que inativa passou a usar a mesma trava e a corrida fecha.
+
+## Etapa 115 (2026-10-15, `e60e34e1..385d938f`) — ligar e desligar o controle com saldo, sob a trava do material
+
+Plano: `docs/superpowers/plans/2026-10-15-almoxarifado-etapa115-controle-com-saldo-sob-a-trava.md`.
+
+- [x] **O salvar que muda o controle espera a trava (C226)** — `8072b497`. `PUT /materiais/:id` que liga **ou desliga**
+  `controle_lote`/`controle_serie` grava o `UPDATE` em `trava.naTravaDoMaterial` (`materialService.mudaControle`); o renomear
+  continua fora. Sob a trava a Entrada sem lote termina antes (a régua da 112 vê o saldo dela: 403 para quem não regulariza)
+  ou começa depois (exige lote). Decisão **B745**.
+- [x] **Desligar a série com séries presentes exige `ajustar_estoque` (C225)** — `8072b497`. 1 → 0 com ≥ 1 série
+  `EM_ESTOQUE`/`BLOQUEADA`, por quem não regulariza → 403 com três textos (E1a/E1b/E1c, pela conta `min(n, floor(n − físico))`),
+  depois da 403 de ligar e antes da família; a condição `SEM_SERIE_PRESENTE_SQL` no `UPDATE` e a releitura. O Administrador
+  desliga (as séries ficam). Decisões **B746**, **B747**.
+- [x] **Regularizar séries sob a trava** — `8072b497` (**B748**; a segunda aba da corrida recebe 400 da validação no lugar
+  do 409).
+- [x] **Os dois controles lidos no `WHERE`** — `8072b497` para quem não regulariza (**B749**); `385d938f` para todos
+  (**B750** — inverte o cenário da 112 "o Administrador mantém ligado e fica ligado").
+- [x] **Integração** — `0324037d` (o caminho que a E1 manda, o Almoxarife sem pedir a ninguém, o legado com físico 0 e a
+  Entrada real pela v2 com o salvar disparado no meio dela).
+- [x] **Fase 5** — `385d938f`: o estorno de Saída relê `controle_serie` sob a trava antes de `reverterSaida` (26/30 rodadas
+  deixavam séries órfãs); a guarda prévia do desligar relê o saldo de inativar (RN-07); 15 cenários (`controleSobATravaFase5`,
+  `controleSobATravaSabotagem`).
+- [ ] **Fora, de propósito:** o Administrador que desliga com séries presentes não é avisado e as séries ficam (**C225**, o
+  resto; a alternativa é a **B746** (c)); estornar/devolver Saída com série depois de desligar não volta as séries (**C232**);
+  o formulário aberto há minutos desfaz o controle mudado nesse meio-tempo (**C233**, próxima — Etapa 116); **C224** (P.O.).
+
+**A B731 dizia "desligar o controle continua livre" — para a série com séries presentes isso deixou de valer** (B746); o
+lote e a série sem série presente continuam livres. **E o plano desta etapa afirmava, na R4, que "outra aba liga a série na
+janela de um renomear → 409 E4" protegia o renomear — estava largo demais:** a conferência só pega a mudança que cai entre a
+leitura e a gravação do próprio salvar; o formulário manda os controles de quando foi aberto (**C233**).

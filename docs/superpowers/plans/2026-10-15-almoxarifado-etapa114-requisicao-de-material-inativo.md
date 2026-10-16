@@ -153,7 +153,7 @@ num SQLite.
    M1 Minor), **2 Minor declarados** sem correção, **9** cenários sem prova, **0** ruído.
 3. **Paralelismo:** **0** galhos (não houve tela); revisores em paralelo na Fase 5, cada um na sua worktree, sem
    retrabalho.
-4. **Defeito que escapou:** *(preencher na Etapa 115)*. Da Etapa 113: **um de documento** — a C229 e a próxima tarefa
+4. **Defeito que escapou:** *(preenchido na Etapa 115)* **nenhum** — a Fase 0 da 115 refez as duas medições desta próxima tarefa (C225 e C226) e elas se confirmaram; nenhum defeito de código da 114 apareceu na 115. Da Etapa 113: **um de documento** — a C229 e a próxima tarefa
    diziam que a separação recusava material inativo (medido: aceitava), e a C229 citava a **B738** no lugar da **B739**; e
    o cabeçalho do documento de novidades tinha parado na Etapa 110 (112 e 113 não o atualizaram). Nenhum defeito de código
    da 113 apareceu nesta etapa.

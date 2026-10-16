@@ -337,9 +337,9 @@ O saldo que já está no material não tem lote nem número de série. Ligar o c
 - **O saldo está identificado** — para o lote, todo o físico está em lotes (a soma do saldo dos lotes do material é igual ao físico — a mesma conta do "Sem lote atribuído" da tela de Lotes, que só aparece lá depois que o controle é ligado); para a série, o físico é igual ao número de séries em estoque (em estoque ou bloqueadas); ou o material não tem saldo nenhum. Qualquer perfil que edita material liga o controle.
 - **O saldo não está identificado** — só quem tem a permissão de ajustar estoque (o Administrador) liga. O Almoxarife e a Engenharia recebem, ao salvar, por exemplo: *"Ligar o controle por lote no material CHP-001 exige a permissão "ajustar_estoque" (seu perfil: ALMOXARIFE): há 5 sem lote atribuído. Depois de ligar, a saída desse saldo é recusada até ele ser regularizado, e regularizar é do Administrador do almoxarifado. Peça a ele para ligar o controle e regularizar o saldo."* Na série, o trecho do meio é *"o físico é 3 e há 0 série(s) em estoque"*; ligando os dois, aparecem os dois, separados por ponto e vírgula. Nada do cadastro é gravado.
 
-Os números da mensagem são os da hora em que o cadastro é salvo: se uma entrada sem lote cair no mesmo instante, a recusa sai com o número novo. E, para quem não pode regularizar, salvar um material cujo controle **outra pessoa acabou de desligar** não o religa por fora da regra — a resposta é *"O cadastro do material ⟨código⟩ mudou enquanto era salvo — nada foi gravado. Recarregue o material e salve de novo."*
+Os números da mensagem são os da hora em que o cadastro é salvo. O salvar que liga ou desliga um controle **espera** a movimentação daquele material que estiver sendo gravada no mesmo instante (uma entrada, uma saída, uma entrega): se for uma entrada sem lote, ela termina primeiro e a recusa sai com o número dela; a entrada que começar depois do salvar já exige o lote. O salvar que não mexe em controle não espera nada. E salvar um material cujo controle **outra pessoa mudou no mesmo instante** — desligou ou ligou enquanto este salvar era gravado — não desfaz a mudança dela, para nenhum perfil: a resposta é *"O cadastro do material ⟨código⟩ mudou enquanto era salvo — nada foi gravado. Recarregue o material e salve de novo."*. Isso vale só para a mudança que cai durante o próprio salvar: o formulário de material envia os controles como estavam quando ele foi **aberto**, então um formulário que ficou aberto enquanto outra pessoa ligava ou desligava um controle, ao ser salvo, volta o controle ao que ele mostrava. Recarregue o material antes de salvar se alguém pode ter mexido nele.
 
-O que **não** muda: editar qualquer outro campo de um material que já tem o controle ligado; **desligar** o controle (a saída volta a andar sem lote ou sem série); e ligar **Requer inspeção**, que não prende saldo nenhum.
+O que **não** muda: editar qualquer outro campo de um material que já tem o controle ligado; **desligar** o controle por lote (a saída volta a andar sem lote); e ligar **Requer inspeção**, que não prende saldo nenhum. Desligar o controle por **série** tem regra própria (abaixo).
 
 Como o Administrador regulariza, depois de ligar:
 
@@ -347,6 +347,20 @@ Como o Administrador regulariza, depois de ligar:
 - **Lote** — dar **Entrada** em Movimentações da mesma quantidade, informando o lote, e em seguida um **Ajuste** do total de volta ao físico real. A Entrada põe a quantidade no lote; o Ajuste tira a mesma quantidade da linha "sem lote". O "Sem lote atribuído" da tela de Lotes volta a 0. (O Ajuste sozinho não basta: ele corrige o total, não diz de que lote é o saldo.)
 
 Quem não é Administrador e quer ligar o lote sem depender dele: lance as entradas **com o lote** antes de ligar o controle — a Entrada aceita lote mesmo em material sem controle —, e o saldo já nasce identificado.
+
+#### Desligar o controle por série num material que tem séries em estoque
+
+Com o controle por série desligado, a saída deixa de pedir os números de série: ela baixa o físico e **não baixa** séries. As séries que estavam em estoque continuam marcadas *Em estoque* depois que o material sai — e nenhuma tela mostra isso, porque o aviso de divergência da tela de Séries só aparece para material com o controle ligado, e a regularização de séries também só funciona com ele ligado. Por isso o sistema decide assim, ao salvar o cadastro:
+
+- **Nenhuma série em estoque** (em estoque ou bloqueadas) — qualquer perfil que edita material desliga, mesmo com saldo (o saldo sem série não deixa nada para trás).
+- **Há séries em estoque** — só quem tem a permissão de ajustar estoque (o Administrador) desliga; as séries ficam como estão. O Almoxarife e a Engenharia recebem, ao salvar, uma recusa que depende de quantas séries há para o físico:
+  - **séries iguais ao físico, ou menos** — *"Desligar o controle por número de série no material CHP-001 exige a permissão "ajustar_estoque" (seu perfil: ALMOXARIFE): há 2 série(s) em estoque. Depois de desligar, a saída não baixa essas séries, e elas continuam "Em estoque" depois que o material sai. Peça ao Administrador do almoxarifado para desligar o controle."*
+  - **mais séries que físico, e o físico é 0 (ou menos)** — todas já saíram e ficaram marcadas: *"… há 2 série(s) em estoque e o físico é 0. Peça ao Administrador do almoxarifado para baixá-las em Lotes e Séries → Séries → Regularizar séries; sem série em estoque, o controle pode ser desligado."* Depois de o Administrador baixá-las, o próprio Almoxarife desliga.
+  - **mais séries que físico, com físico** — *"… há 3 série(s) em estoque e o físico é 1. Peça ao Administrador do almoxarifado para baixar as 2 que não estão mais no estoque (Lotes e Séries → Séries → Regularizar séries) e para desligar o controle."* A conta das que podem ser baixadas é a da regularização: as séries em estoque menos o físico, em unidades inteiras.
+
+  Nada do cadastro é gravado. Se séries forem cadastradas no mesmo instante em que o cadastro é salvo (uma entrada, a regularização), o salvar espera e a recusa sai com a contagem nova.
+
+Quem não é Administrador e quer desligar a série sem depender dele: dê saída das unidades **com** os números de série (a saída com série baixa cada uma); sem série em estoque, o controle desliga.
 
 ### 2.8 Proprietário — material que é do cliente
 

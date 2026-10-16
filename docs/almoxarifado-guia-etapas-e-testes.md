@@ -1,18 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-15 (Etapa 114) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-15 (Etapa 115) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113 e 114) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114 e 115) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 114 ENTREGUE · próxima do almoxarifado: Etapa 115)
+> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 115 ENTREGUE · próxima do almoxarifado: Etapa 116)
 >
-> **O desenvolvimento parou aqui: Etapa 114 fechada — 2026-10-15.** A **Etapa 114 (a requisição de um material inativado
+> **O desenvolvimento parou aqui: Etapa 115 fechada — 2026-10-15.** A **Etapa 115 (ligar e desligar o controle por lote ou
+> série não deixa mais saldo nem série para trás)**: desligar o *Controle por número de série* de um material com séries em
+> estoque passa a ser do Administrador, com a mensagem dizendo o caminho (baixar as séries que saíram em Regularizar séries,
+> ou dar saída com as séries); o salvar que liga ou desliga um controle espera a movimentação daquele material em curso.
+> **Próxima: Etapa 116** — o formulário de material aberto há muito tempo que desfaz o controle mudado por outra pessoa
+> (C233) e o estorno de saída com série depois de desligar (C232) — ver a próxima tarefa no plano da 115.
+>
+> **Etapa 114, 2026-10-15.** A **Etapa 114 (a requisição de um material inativado
 > não é mais aprovada para ficar parada)**: aprovar, aprovar por valor e a aprovação automática recusam a requisição que
 > tem item pendente de material inativo, sem reservar nada; o envio do rascunho e a separação também recusam; a janela de
 > separação abre com 0 no item inativo. A mensagem diz quem reativa e o que fazer em cada fila. **Próxima: Etapa 115** — a
 > série desligada com séries em estoque (C225) e a Entrada que cruza o ligar do lote (C226) — ver a próxima tarefa no
-> plano da 114.
+> plano da 114. *(Feita — Etapa 115.)*
 >
 > **Etapa 113, 2026-10-15.** A **Etapa 113 (inativar material com saldo é recusado,
 > e a tela de Materiais passa a reativar)**: o "Inativar" de um material com saldo ou com algo retido é recusado para
@@ -6445,6 +6452,66 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 115 — Ligar e desligar o controle por lote ou série não deixa mais saldo nem série para trás (ENTREGUE — 2026-10-15)
+
+**O que mudou, em uma frase:** desligar o *Controle por número de série* de um material que tem séries em estoque passa a
+ser do Administrador (com a mensagem dizendo o caminho), e o salvar que liga ou desliga um controle espera a movimentação
+daquele material que estiver sendo gravada.
+
+**O problema que ela resolve.** O Almoxarife desligava a série de um material com séries em estoque; a saída seguinte, já
+sem pedir série, baixava o material e deixava as séries *Em estoque* para sempre — e nenhuma tela mostra isso, porque o
+aviso de divergência só existe para material com o controle ligado. E o salvar que ligava o lote não esperava uma entrada
+sem lote que estivesse gravando no mesmo instante: o saldo dela ficava sem lote com o controle já ligado.
+
+| Antes | Agora |
+|---|---|
+| Almoxarife/Engenharia desligavam a série com séries em estoque | Recusado, com a contagem e o caminho; o Administrador desliga |
+| Séries que já tinham saído (físico 0) não tinham caminho | A recusa manda o Administrador baixá-las em Regularizar séries; depois o Almoxarife desliga |
+| O salvar que liga o lote passava por baixo da entrada sem lote em curso | Espera; a recusa da Etapa 112 sai com o número dela |
+| Salvar no mesmo instante em que outra aba muda um controle desfazia a mudança | *"O cadastro do material … mudou enquanto era salvo — nada foi gravado. …"* (para todos os perfis) |
+| O estorno de uma saída com série no mesmo instante do desligar devolvia as séries a *Em estoque* | O estorno espera; as séries não ficam órfãs |
+
+**A regra agora.**
+- Séries em estoque iguais ao físico (ou menos): *"Desligar o controle por número de série no material ⟨código⟩ exige a
+  permissão "ajustar_estoque" (seu perfil: ⟨perfil⟩): há ⟨n⟩ série(s) em estoque. Depois de desligar, a saída não baixa
+  essas séries, e elas continuam "Em estoque" depois que o material sai. Peça ao Administrador do almoxarifado para desligar
+  o controle."*
+- Físico 0 (ou menos) com séries em estoque: *"… há ⟨n⟩ série(s) em estoque e o físico é ⟨f⟩. Peça ao Administrador do
+  almoxarifado para baixá-las em Lotes e Séries → Séries → Regularizar séries; sem série em estoque, o controle pode ser
+  desligado."*
+- Mais séries que físico, com físico: *"… há ⟨n⟩ série(s) em estoque e o físico é ⟨f⟩. Peça ao Administrador do
+  almoxarifado para baixar as ⟨k⟩ que não estão mais no estoque (Lotes e Séries → Séries → Regularizar séries) e para
+  desligar o controle."*
+- Sem série em estoque: qualquer perfil que edita material desliga. Desligar o lote continua livre.
+
+### Roteiro de teste manual
+
+Preparação: **PRF-0501** com *Controle por número de série* e uma Entrada de 2 (séries **S1**, **S2**); **Ana**
+(Almoxarife), **Edu** (Engenharia) e o **administrador**.
+
+1. **A recusa.** Ana, **Materiais → editar PRF-0501**, desmarca *Controle por número de série*, **Salvar** → aviso vermelho
+   *"Desligar o controle por número de série no material PRF-0501 … há 2 série(s) em estoque. …"*; reabra: a série continua
+   ligada. Edu: a mesma, com *ENGENHARIA*.
+2. **Sem pedir a ninguém.** Ana, **Movimentações → Nova**, Saída de 2 do PRF-0501 escolhendo S1 e S2; volte ao cadastro,
+   desmarque e salve → *"Material atualizado!"*.
+3. **O Administrador.** Com outro material igual ao do passo 1 (S3, S4), o administrador desmarca e salva → *"Material
+   atualizado!"*. Uma Saída sem série de 2 passa; em **Lotes e Séries → Séries** o material não aparece com divergência (o
+   controle está desligado) — é o declarado.
+4. **Séries que já saíram.** No material do passo 3, o administrador religa a série (passa para ele), abre **Lotes e Séries →
+   Séries**, vê *"Séries presentes: 2 · Físico: 0"* e, antes de regularizar, Ana tenta desligar → *"… há 2 série(s) em estoque
+   e o físico é 0. Peça ao Administrador do almoxarifado para baixá-las em Lotes e Séries → Séries → Regularizar séries; …"*.
+   O administrador baixa S3 e S4 (justificativa); Ana desliga → *"Material atualizado!"*.
+5. **O que continua livre.** Desligar o lote de um material com saldo em lote; renomear o PRF-0501 sem mexer no controle.
+
+**O que esta etapa NÃO cobre.** O Administrador que desliga a série com séries em estoque não recebe aviso e as séries ficam
+*Em estoque* depois da saída (C225, decisão do P.O. — B746); estornar ou devolver uma saída com série depois de desligar não
+volta as séries (C232); um formulário de material aberto há muito tempo, ao salvar, volta os controles ao que mostrava (C233 —
+recarregue antes de salvar; é a próxima etapa). A corrida "entrada sem lote × ligar o lote" é de milissegundos e não é demonstrável no clique — os
+testes automáticos a provam.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam, escrito
+para você conferir à mão.
 
 ## Etapa 114 — A requisição de um material inativado não é mais aprovada para ficar parada (ENTREGUE — 2026-10-15)
 
