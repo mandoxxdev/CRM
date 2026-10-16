@@ -3852,6 +3852,12 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
   const removingSuper = is_superadmin !== undefined && !isTruthyFlag(is_superadmin);
   const deactivating = ativo !== undefined && !isTruthyFlag(ativo);
 
+  // Etapa 132 (Fase 5 r2 M8): a mesma recusa do PATCH de status — pela caixa "Usuario ativo" do proprio formulario o
+  // administrador se desativava (200) e caia na hora.
+  if (deactivating && Number(req.user.id) === Number(id)) {
+    return res.status(403).json({ error: 'Não é possível desativar o próprio usuário' });
+  }
+
   const proceedWithUpdate = () => {
     // Verificar se o email já existe em outro usuário
     db.get('SELECT id FROM usuarios WHERE email = ? AND id != ?', [email, id], (err, existingUser) => {
@@ -3880,7 +3886,7 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
     if (senha) {
       const hashedPassword = bcrypt.hashSync(senha, 10);
       db.run(
-        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = ?, pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, is_superadmin = COALESCE(?, is_superadmin), admin_modulos = COALESCE(?, admin_modulos), pode_editar_conta = COALESCE(?, pode_editar_conta), is_oculto = 0, senha = ? WHERE id = ?',
+        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = COALESCE(?, ativo), pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, is_superadmin = COALESCE(?, is_superadmin), admin_modulos = COALESCE(?, admin_modulos), pode_editar_conta = COALESCE(?, pode_editar_conta), is_oculto = 0, senha = ? WHERE id = ?',
         [
           nome,
           email,
@@ -3903,7 +3909,7 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
       );
     } else {
       db.run(
-        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = ?, pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, is_superadmin = COALESCE(?, is_superadmin), admin_modulos = COALESCE(?, admin_modulos), pode_editar_conta = COALESCE(?, pode_editar_conta), is_oculto = 0 WHERE id = ?',
+        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = COALESCE(?, ativo), pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, is_superadmin = COALESCE(?, is_superadmin), admin_modulos = COALESCE(?, admin_modulos), pode_editar_conta = COALESCE(?, pode_editar_conta), is_oculto = 0 WHERE id = ?',
         [
           nome,
           email,
@@ -3949,7 +3955,9 @@ app.patch('/api/usuarios/:id/status', authenticateToken, requireManageUsers, (re
   const { id } = req.params;
   const ativo = isTruthyFlag(req.body?.ativo) ? 1 : 0;
 
-  if (ativo === 0 && String(req.user.id) === String(id)) {
+  // Etapa 132 (Fase 5 r2 N1): pelo numero — com o texto, '/usuarios/02/status' do proprio 2 passava ('2' !== '02') e o SQLite
+  // casava a linha 2.
+  if (ativo === 0 && Number(req.user.id) === Number(id)) {
     return res.status(403).json({ error: 'Não é possível desativar o próprio usuário' });
   }
 

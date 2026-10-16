@@ -177,6 +177,23 @@ test('[RN-06] as recusas nao derrubam: o administrador desativando a si mesmo (4
   const [, u] = await j('GET', `/usuarios/${ctx.ids.ok}`, ctx.T);
   const [s3] = await j('PUT', `/usuarios/${ctx.ids.ok}`, ctx.T, { ...u, cargo: 'Outro', ativo: 1, admin_modulos: undefined });
   assert.strictEqual(s3, 200);
+  // Fase 5 r2 N1: o proprio id com zero a esquerda tambem e o proprio usuario
+  const [s4, x4] = await j('PATCH', `/usuarios/0${ctx.adminId}/status`, ctx.T, { ativo: 0 });
+  assert.deepStrictEqual([s4, x4 && x4.error], [403, 'Não é possível desativar o próprio usuário']);
+  // Fase 5 r2 M8: pelo formulario (PUT) o administrador tambem nao se desativa
+  const [, eu] = await j('GET', `/usuarios/${ctx.adminId}`, ctx.T);
+  const [s5, x5] = await j('PUT', `/usuarios/${ctx.adminId}`, ctx.T, { ...eu, ativo: 0, admin_modulos: undefined });
+  assert.deepStrictEqual([s5, x5 && x5.error], [403, 'Não é possível desativar o próprio usuário']);
+  // Fase 5 r2 M8: PUT sem o campo ativo mantem o que esta gravado (antes gravava NULL e trancava o usuario fora)
+  const [, u2] = await j('GET', `/usuarios/${ctx.ids.ok}`, ctx.T);
+  const semAtivo = { ...u2, cargo: 'Sem ativo', admin_modulos: undefined };
+  delete semAtivo.ativo;
+  const [s6] = await j('PUT', `/usuarios/${ctx.ids.ok}`, ctx.T, semAtivo);
+  assert.strictEqual(s6, 200);
+  const [, u3] = await j('GET', `/usuarios/${ctx.ids.ok}`, ctx.T);
+  assert.deepStrictEqual([u3.cargo, Number(u3.ativo)], ['SEM ATIVO', 1]);
+  const [s7] = await j('GET', '/auth/me', ctx.tok.ok);
+  assert.strictEqual(s7, 200, 'o ok continua entrando');
   await pausa(400);
   assert.strictEqual(ctx.sa.conectado, true, 'o administrador segue');
   assert.strictEqual(ctx.s.ok.conectado, true, 'o ok segue');
