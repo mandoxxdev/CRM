@@ -399,7 +399,9 @@ Plano: `docs/superpowers/plans/2026-10-15-almoxarifado-etapa113-situacao-do-mate
   o crédito do estorno de Saída leva `AND ativo = 1`), a recusa do PUT que inativa e liga o lote relê o saldo, e 14
   cenários das sabotagens que passavam (B738).
 - [ ] **Fora, de propósito (B734):** documento aberto não impede inativar — conferência e nota travam depois (**C228**); a
-  requisição pendente de material inativado é aprovada sem reserva (**C229**, Etapa 114).
+  requisição pendente de material inativado é aprovada sem reserva (**C229**, Etapa 114). *(Paga na Etapa 114 — `a113a657`,
+  `071f6c7b`: a aprovação, o envio e a separação recusam; ver a spec 04. A frase "a separação recusa depois", da C229,
+  **estava errada**: a separação aceitava.)*
 
 **O design desta etapa tinha uma premissa errada — fica dito.** Ele declarava como furo a corrida "Entrada que leu *ativo*
 antes do Inativar e grava depois", dizendo que o motor não pega a trava do material. **Estava errado**: desde a Etapa 97 o

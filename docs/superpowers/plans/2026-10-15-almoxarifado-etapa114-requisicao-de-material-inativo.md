@@ -101,13 +101,13 @@ message: E1 }` sem reservar.
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 — tronco** — módulo novo + `carregarItensRequisicao` + RN-01/03 (`reservarItensAprovacao`) + RN-02
+- [x] **T1 — tronco** — `a113a657`. — módulo novo + `carregarItensRequisicao` + RN-01/03 (`reservarItensAprovacao`) + RN-02
   (`aprovarValor` + rota) + RN-04 (rota do envio) + RN-05 (`validarFormaDaSeparacao`) + RN-06/07 + RN-08 (`normalizarItem`
   + a consulta do detalhe). `server/tests/api/requisicaoMaterialInativo.api.test.js`. Controle positivo: sabotagens (sem a
   conferência na aprovação; conferência depois de reservar; sem a condição do `UPDATE` do valor; releitura sem E1v;
   releitura fora de ordem; `recusarInativo` ignorado; sem a RN-04; sem a RN-05; contar item entregue (JS e SQL); `ativo = 0`
   em vez de `<> 1` (JS e SQL); códigos repetidos; o valor com a frase do `/aprovar`; o detalhe sem zerar).
-- [ ] **T2 — integração (cruza aprovação, Materiais e separação/entrega)** —
+- [x] **T2 — integração (cruza aprovação, Materiais e separação/entrega)** — `52435e81`. —
   `server/tests/api/requisicaoMaterialInativoIntegracao.api.test.js`: (i) requisição pendente → inativar (zerado) →
   aprovar E1 → `PUT /materiais/:id { ativo: 1 }` (Reativar) → Entrada 5 → aprovar 200 `TOTALMENTE_RESERVADA` → separar →
   entregar 200; (ii) aprovar E1 → `/rejeitar` 200 (o caminho da mensagem); (iii) rascunho → inativar → enviar E2 →
@@ -116,7 +116,7 @@ message: E1 }` sem reservar.
   separar → entregar 200; (vi) *(R1)* legado misto: o detalhe dá 0 no inativo → separar o ativo com 0 no inativo 200 →
   entregar o ativo → `/encerrar` 200 (o pendente do inativo se encerra); (vii) *(R2)* o Gestor recebe a E1 e
   `/rejeitar` 200; o aprovador de valor recebe a E1v e `/rejeitar-valor` 200.
-- [ ] **T3 — fechamento** (skill `fechar-etapa`): novidades (seção 114 + B740+, C229 resolvido, A61), spec 04 (e 05/06 se
+- [x] **T3 — fechamento** — o commit de documentação desta etapa (ver `git log`) (skill `fechar-etapa`): novidades (seção 114 + B740+, C229 resolvido, A61), spec 04 (e 05/06 se
   couber), mapa, guia, manual (§ aprovação, envio, separação), plano + retro.
 
 Galhos: nenhum (não há tela — a Fase 2 confirmou que os toasts já mostram a mensagem do servidor). Uma etapa só, suíte
@@ -124,4 +124,79 @@ num SQLite.
 
 ## Execução — o que aconteceu
 
-*(preencher)*
+- **Design e plano:** `48277da8` (já com a correção da Fase 2).
+- **T1** `a113a657` — 24 cenários; 19 sabotagens, 18 derrubando a asserção certa. A que não derruba — conferir o inativo
+  **depois** de reservar, desfazendo as reservas — é externamente equivalente; mantida a forma "antes de reservar", sem prova
+  pela suíte (declarado no commit).
+- **T2** `52435e81` — 6 jornadas; controle positivo com 6 sabotagens, todas derrubando a jornada certa.
+- **Fase 5** `071f6c7b` — três revisores frescos em paralelo, em worktrees próprias (removidas). **Regra e fluxo:** 1
+  Important reproduzido — **I1**: a requisição aprovada com o material ativo e inativado depois volta a
+  `AGUARDANDO_APROVACAO_VALOR` na separação (Etapa 94) e o `/aprovar-valor` recusava pela E1v, prendendo o item ativo
+  (seguindo a própria E3) → a condição vale só com `data_aprovacao` nula (**B741**); 1 Minor — **M1**: a fila de separação
+  dizia "separar 2" no item inativo → zerada como o detalhe. **Perfil e concorrência:** 0 Critical/Important; 7 cenários × 30
+  rodadas sem aprovação com material já inativo nem reserva órfã; a única janela é a declarada do `/aprovar-valor`; 2 Minor
+  declarados (família inativa junto → **C231**; a E3 num item só → D (114)). **Sabotagem:** 33 novas, 18 derrubaram, 5
+  inalcançáveis, 1 equivalente, 9 sem prova → 9 cenários (`requisicaoMaterialInativoFase5.api.test.js`, com I1 e M1: 11).
+  Controle positivo das duas correções: 3 sabotagens, todas vermelhas.
+- **Suíte final (medida):** `test:api` **376/376** arquivos; `test:almoxarifado` **44/0**; `test:validation` 4/0,
+  `test:safealter` 3/0, `test:sqlite` 10/0; client **115** suítes / **1623** testes; `CI=true build` *Compiled successfully*.
+- **Divergências do plano:** (1) a Fase 2 trouxe a RN-08 e as literais por fila; (2) a **RN-02** dizia "recusa a liberação
+  por valor" sem distinguir a primeira aprovação — **estava errado** para a requisição já aprovada que volta à alçada (I1);
+  (3) a RN-08 só falava do detalhe — a fila de separação tinha ficado de fora (M1); (4) a E3 não diz o que fazer numa
+  requisição de um item só (declarado).
+
+## Retro (4 números)
+
+1. **Rodadas de correção até verde:** **1** no código (I1 + M1, Fase 5); **1** de redesenho antes do commit, pela revisão
+   do plano (literais por fila e RN-08). Nenhum teste antigo mudou.
+2. **Achados da revisão:** Fase 2 — **7 reais** de 7 (R1–R7), nenhum que travava; Fase 5 — **2 de produção** (I1 Important,
+   M1 Minor), **2 Minor declarados** sem correção, **9** cenários sem prova, **0** ruído.
+3. **Paralelismo:** **0** galhos (não houve tela); revisores em paralelo na Fase 5, cada um na sua worktree, sem
+   retrabalho.
+4. **Defeito que escapou:** *(preencher na Etapa 115)*. Da Etapa 113: **um de documento** — a C229 e a próxima tarefa
+   diziam que a separação recusava material inativo (medido: aceitava), e a C229 citava a **B738** no lugar da **B739**; e
+   o cabeçalho do documento de novidades tinha parado na Etapa 110 (112 e 113 não o atualizaram). Nenhum defeito de código
+   da 113 apareceu nesta etapa.
+
+## Próxima tarefa detalhada — Etapa 115
+
+*(A série desta etapa foi B740–B744, C230–C231, A61 — a 115 começa em **B745**, **C232**, **A62**; confira com `grep -oE`
+antes.)*
+
+**Como foi escolhida (mapa `specs/modulo-almoxarifado/README.md` e os C abertos, medidos em 2026-10-15):** as features 🟡
+continuam 00, 01, 05, 06, 21, 22 e 23. Candidatos:
+
+1. **C225 — desligar a série deixa as séries "em estoque"** (feature 01, com a 6b). **Medido** (sonda
+   `server/tests/sonda/e115f0.js`, não versionada): material com `controle_serie = 1`, físico 2 e as séries A1, A2
+   *EM_ESTOQUE*; `PUT /materiais/:id { controle_serie: 0 }` pelo **Almoxarife** → **200**; `POST /movimentacoes/v2` SAIDA 2 sem
+   série → **201**, físico 0; as séries continuam **EM_ESTOQUE**. Religar depois cai na recusa da 112 (B729) para o
+   Almoxarife e o Administrador regulariza. **Não depende do P.O.** se a escolha for a régua da 112 (abaixo).
+2. **C226 — a Entrada sem lote que cruza o ligar do lote** (feature 01). **Medido** (mesma sonda): com a trava do material
+   segura 300 ms, o `PUT { controle_lote: 1 }` respondeu **200 em 3 ms** — o salvar que liga controle **não** pega a trava; só o
+   que inativa pega (113; `routes/almoxarifado.js` ~:793, `inativa ? trava.naTravaDoMaterial(...) : gravar()`). O motor lê
+   `controle_lote` e grava dentro da trava (Etapa 97), então ligar controle sob a mesma trava fecha a janela: a Entrada
+   termina antes (e o saldo sem lote dela é visto pela guarda da 112) ou começa depois (e exige lote). **Não depende do P.O.**
+3. **C228** (documento aberto de material inativado) — **depende do P.O.** se a resposta for recusar inativar com documento
+   aberto (inverte a B734). **C219** (Entrada manual sem documento de cliente) — **depende do P.O.** **C224** (aviso ao
+   Administrador que liga controle) — **depende do P.O.** (aviso ou recusa). **C221** (corrida rara de família, 1 de 30) —
+   baixo valor. **C230/C231** (desta etapa) — consequência da B734; a C230 anda com a C228 (**P.O.**).
+
+**Escolhida: C226 + C225** (o par "ligar/desligar controle com saldo", sem P.O.).
+
+**Contrato candidato (decisão — letra B, caminho reversível):**
+- **C226:** o `UPDATE` do PUT de material roda sob `trava.naTravaDoMaterial` também quando **liga** `controle_lote` ou
+  `controle_serie` (a condição `inativa` vira `inativa || ligaControle`); nenhuma mensagem nova (a recusa é a da 112).
+  Cenário: segurar a trava do material → o PUT que liga espera e vê o saldo que a "Entrada" deixou (403 da 112 para o
+  Almoxarife); 12 rodadas Entrada sem lote × ligar → nunca saldo sem lote com o controle ligado sem a recusa/regularização.
+- **C225 — (a)** desligar `controle_serie` de material com séries *EM_ESTOQUE*/*BLOQUEADA* é recusado (400/403) para quem não
+  tem `ajustar_estoque`, com a contagem e o caminho (*Lotes e Séries → Séries → Regularizar séries*); o Administrador desliga
+  e as séries ficam como estão (a régua da 112, B728); **(b)** recusar para todos até baixar as séries; **(c)** desligar baixa
+  as séries automaticamente (*BAIXADA*, com trilha) — mais forte, mexe no histórico das séries. Medir antes: o que a tela de
+  Séries e a etiqueta fazem com série *EM_ESTOQUE* de material sem controle; se `BLOQUEADA` entra na conta.
+
+**Pontos de atenção:** a trava não é reentrante (o PUT não pode chamar o motor dentro da seção); o `ativo IS ?` e a condição
+de família (113, 110) continuam no mesmo `UPDATE`; a guarda de lote/série da 112 (`condicaoSaldoIdentificadoSql`) já lê o
+saldo dentro do comando — sob a trava, ela passa a ver a Entrada que está gravando.
+
+**O que já está pronto e não precisa reabrir:** a requisição de material inativo (esta etapa); inativar com saldo e o
+Reativar (113); a guarda de ligar lote/série com saldo (112).

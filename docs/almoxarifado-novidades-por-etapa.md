@@ -11,11 +11,14 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-15):** **Etapa 110 fechada** (o Saldo Inicial do cadastro de material passa pelo
+> **Onde o desenvolvimento está (2026-10-15):** **Etapa 114 fechada** (a requisição de um material inativado é recusada na
+> aprovação, no envio e na separação, em vez de ficar aprovada e parada — **C229** resolvido); a próxima do almoxarifado é a
+> **115** — ver "Onde estamos e o que vem a seguir". *(Esta frase tinha parado na Etapa 110 — as Etapas 112 e 113 não a
+> atualizaram; as duas estão na seção delas e em "Onde estamos".)* *(Antes: Etapa 110 fechada (o Saldo Inicial do cadastro de material passa pelo
 > motor de estoque, só para quem movimenta e só para material sem lote, série, inspeção ou cliente — **C215** resolvido; e
 > inativar uma família no mesmo instante em que alguém cadastra material nela não deixa mais a família inativa com material
 > ativo — **C218** resolvido); a próxima do almoxarifado é a **112** — ver "Onde estamos e o que vem a seguir"; a 111 é de
-> Compras. *(Antes: Etapa 108 fechada — trocar o dono de um material com saldo ou movimentação passa a ser só do
+> Compras.)* *(Antes: Etapa 108 fechada — trocar o dono de um material com saldo ou movimentação passa a ser só do
 > Administrador, **C213** resolvido.)* *(Antes ainda: Etapa 106 fechada — desfazer
 > o ajuste de material de cliente passa a ser só do Administrador, **C211** resolvido.)* *(A frase abaixo, de 2026-10-09, parou na Etapa 97 e ficou assim até a 106 — as
 > Etapas 98 a 104 estão no fim, em "Onde estamos e o que vem a seguir"; fica dito, não apagado.)*
@@ -124,7 +127,9 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Sessenta itens para rodar em produção ANTES do deploy — cinquenta e sete são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Sessenta e um itens para rodar em produção ANTES do deploy — cinquenta e oito são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-15 (Etapa 114) de sessenta para sessenta e um**, com a **A61** — as requisições em aberto com item pendente de material inativo; opcional.)*
 
 *(**Atualizado em 2026-10-15 (Etapa 112) de cinquenta e oito para cinquenta e nove**, com a **A59** — os materiais com lote ou série ligados e saldo não identificado (sem lote atribuído, ou séries diferentes do físico); opcional.)*
 
@@ -2236,12 +2241,44 @@ recusa diz isso — reative a família antes); depois dê saída do saldo (ou **
 libere o que estiver retido, e só então inative de novo. Se o saldo for fantasma (não existe na prateleira), quem corrige é
 o Administrador, com um **Ajuste**.
 
+**A61 (NOVA, da Etapa 114 — as requisições em aberto com item pendente de material inativo).** A partir da Etapa 114 a
+aprovação, o envio do rascunho e a separação recusam o item de material inativo (**C229**). As requisições que já estão
+nesse estado (feitas antes do "Inativar", ou aprovadas antes desta etapa) aparecem aqui. **Nada aqui é obrigatório.**
+Somente leitura:
+
+```sql
+SELECT q.id, q.numero, q.status, q.solicitante_nome, m.codigo, m.nome,
+       i.quantidade_solicitada AS pedido,
+       COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0) AS entregue,
+       COALESCE(i.quantidade_separada, 0) AS separado
+  FROM requisicoes_almoxarifado q
+  JOIN itens_requisicao_almoxarifado i ON i.requisicao_id = q.id
+  JOIN materiais_almoxarifado m ON m.id = i.material_id
+ WHERE COALESCE(q.ativo, 1) = 1
+   AND q.status NOT IN ('REJEITADO', 'CANCELADO', 'ENTREGUE', 'ENCERRADA')
+   AND (m.ativo IS NULL OR m.ativo <> 1)
+   AND ROUND(COALESCE(i.quantidade_solicitada, 0) - COALESCE(i.quantidade_entregue, i.quantidade_atendida, 0), 6) > 0
+ ORDER BY q.status, q.id;
+```
+
+*(Conferida numa sonda contra o esquema real: acha a pendente, a *Aguardando estoque* com `ativo` nulo e o rascunho;
+**não** acha o item já entregue, a cancelada, a excluída nem a de material ativo.)*
+
+**Como ler o resultado:** **vazia** — nada a fazer. **`PENDENTE` / `AGUARDANDO_APROVACAO_VALOR`** — a aprovação vai recusar;
+reative o material (**Materiais → Inativos → Reativar**) ou rejeite (reprove a liberação). **`RASCUNHO`** — o envio vai
+recusar; reative ou cancele o rascunho. **Status de aprovada** (`APROVADO`, `AGUARDANDO_ESTOQUE`, `AGUARDANDO_COMPRA`,
+reservadas, `EM_SEPARACAO`, `PARCIALMENTE_ATENDIDA`…) — o item não separa mais (e nada entra num material inativo): reative
+e atenda, ou separe os outros itens com 0 neste e, entregue o resto, **Encerre**. **`separado` > `entregue`** — há material
+na caixa de um material inativo (a entrega recusa): reative para entregar, ou devolva o separado à prateleira.
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B739; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B744; as em aberto esperam você, as tomadas estão escritas com o descartado
+
+*(**Atualizado em 2026-10-15 com as cinco da Etapa 114 — B740 a B744.**)*
 
 *(**Atualizado em 2026-10-15 com as sete da Etapa 113 — B733 a B739.**)*
 
@@ -7644,7 +7681,56 @@ todos os tipos é o que não deixa nenhum escapar (o estorno de um Ajuste també
 **B739 (NOVA, da Etapa 113) — a próxima etapa do almoxarifado (114) é a requisição de material inativado.** Medido nesta
 etapa: uma requisição **pendente** de um material que foi inativado é **aprovada** (*APROVADO*) sem reservar nada, e o
 resto do caminho dela (separar, entregar) recusa material inativo (**C229**). A C219 (Entrada manual sem documento de
-cliente) continua esperando você. Ver a próxima tarefa no plano da Etapa 113.
+cliente) continua esperando você. Ver a próxima tarefa no plano da Etapa 113. *(Feita — Etapa 114. A frase "o resto do
+caminho (separar, entregar) recusa material inativo" **estava errada** quanto à separação: medido na Etapa 114, a separação
+aceitava o item de material inativo e só a entrega recusava, com o material já na caixa.)*
+
+**B740 (NOVA, da Etapa 114) — a requisição com item de material inativo é recusada na aprovação, no envio e na separação.**
+**O que foi escolhido:** a aprovação comum, a aprovação por valor e a automática recusam a requisição que tem item ainda não
+entregue de material inativo — inteira, sem reservar nada; o envio do rascunho recusa como a criação; a separação recusa a
+linha do item inativo com quantidade maior que zero. A mensagem diz o código do material e o caminho (`a113a657`).
+**O que foi descartado:** (b) aprovar e **avisar** (a requisição continuaria presa — com saldo a entrega recusa, zerada ela
+espera uma chegada que o sistema nunca aceita — e a tela de hoje não mostra aviso do Aprovar); aprovar **só os itens
+ativos** (muda o pedido de quem requisitou sem ele saber).
+**Por quê:** aprovar não levava a lugar nenhum; recusar na hora diz a quem aprova o que fazer. **Reversível:** a regra mora
+numa função só; voltar ao "aprovar sem reservar" é tirar a chamada.
+
+**B741 (NOVA, da Etapa 114, da revisão do código) — a aprovação por valor só recusa na primeira aprovação.**
+**O que foi escolhido:** a liberação por valor recusa a requisição de material inativo só quando ela **nunca** foi aprovada.
+A que já foi aprovada (com o material ativo) e voltou a *Aguard. Aprov. Valor* na separação porque o custo passou do limite
+é liberada como sempre — o item inativo fica pendente e a separação o recusa (`071f6c7b`). E o material inativado no
+instante entre a liberação gravar e a reserva acontecer também não volta a liberação atrás (a requisição fica *Aguard.
+estoque* nesse item).
+**O que foi descartado:** recusar sempre (a revisão reproduziu: seguindo a mensagem da separação — "separe os outros itens
+com 0 neste" —, a separação caía na alçada e a liberação recusava, prendendo o item ativo; antes da Etapa 114 essa
+requisição era liberada); recusar depois de gravar (responderia erro com a requisição já aprovada).
+**Por quê:** inativar depois de aprovar é permitido (**B734**) e a requisição aprovada não pode ficar presa por isso.
+**Reversível:** é uma condição no comando que grava.
+
+**B742 (NOVA, da Etapa 114, da revisão do plano) — o detalhe e a fila de separação dizem 0 para o item de material inativo.**
+**O que foi escolhido:** o detalhe da requisição e a fila de separação mostram **0** de separável e de entregável no item
+de material inativo, então a janela de separação já abre com 0 nele; e a recusa da separação manda *"separe os outros itens
+com 0 neste"* (`a113a657`, a fila em `071f6c7b`).
+**O que foi descartado:** deixar o número de antes (a janela pré-preenchia o máximo e o Confirmar recusava a rodada
+inteira, inclusive os itens ativos) e mandar "cancelar a requisição" (quem separa não cancela requisição alheia, e com
+material na caixa ninguém cancela).
+**Por quê:** o número da tela tem de ser o que o servidor aceita (a régua da Etapa 95).
+
+**B743 (NOVA, da Etapa 114, da revisão do plano) — a mensagem diz quem reativa e o gesto certo de cada fila.**
+**O que foi escolhido:** *"Reative o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia)"* — os perfis lidos de quem edita material, a mesma permissão do botão Reativar — e o fim
+da frase muda com a fila: *"ou rejeite a requisição"* (aprovação comum), *"ou reprove a liberação por valor"* (o gesto
+daquela fila é o **Reprovar**; o Rejeitar só aceita *Pendente*), *"ou cancele o rascunho e faça outro sem ele"* (envio),
+*"ou separe os outros itens com 0 neste"* (separação) (`a113a657`).
+**O que foi descartado:** uma frase só, "reative ou rejeite" (o Gestor aprova e não reativa; o aprovador de valor não usa o
+Rejeitar).
+**Por quê:** a mensagem é o que o usuário segue; cada caminho foi conferido por uma jornada que executa o gesto.
+
+**B744 (NOVA, da Etapa 114) — a próxima etapa do almoxarifado (115) é a série desligada com séries em estoque (C225) e a
+Entrada que cruza o ligar do lote (C226).** Medido nesta etapa: desligar a série de um material com 2 séries *Em estoque*
+passa pelo Almoxarife (200), a Saída sem série seguinte baixa o físico a 0 e as séries continuam *Em estoque*; e o salvar
+que liga *Controle por lote* não espera a trava do material (com a trava segura por 300 ms, respondeu em 3 ms) — a Entrada
+sem lote que está gravando passa por baixo. A C228 (documento aberto) e a C219 continuam esperando você. Ver a próxima
+tarefa no plano da Etapa 114.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -9932,11 +10018,26 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      código, não medido). **O que fazer:** em **Materiais → Inativos**, **Reativar** o material, concluir (ou processar) e
      inativar de novo.
 
-229. **NOVO (da Etapa 113, medido) — uma requisição pendente de material inativado é aprovada sem reservar nada.** A
+229. **✅ RESOLVIDO NA ETAPA 114 (`a113a657`, `071f6c7b`) — a requisição de material inativo é recusada na aprovação, no
+     envio e na separação (**B740**–**B743**); as que já existem: **A61**.** O texto original (com uma correção: dizia que a
+     separação recusava material inativo — **estava errado**, a separação aceitava e só a entrega recusava, e a referência
+     à **B738** devia ser **B739**): **NOVO (da Etapa 113, medido) — uma requisição pendente de material inativado é aprovada sem reservar nada.** A
      requisição feita antes do "Inativar" continua pendente; aprová-la responde *APROVADO*, com o material sem reserva, e o
      resto do caminho (separar, entregar) recusa material inativo. **O que fazer:** antes de inativar, cancele as
      requisições pendentes do material; se já aprovou, **Reativar** e atender (ou cancelar). Candidata da **Etapa 114**
      (**B738**).
+
+230. **NOVO (da Etapa 114) — a requisição aprovada antes de o material ser inativado fica com o item pendente.** Inativar
+     material zerado com requisição aprovada é permitido (**B734**); a requisição continua no status em que estava
+     (*Aguard. estoque*, *Aprovado*…), a separação recusa o item (*"⟨material⟩: material inativo não pode ser separado.
+     …"*) e nada entra num material inativo. **O que fazer:** reativar e atender; ou separar os outros itens com 0 neste,
+     entregar o resto e **Encerrar**. A consulta **A61** lista as que existem.
+
+231. **NOVO (da Etapa 114, da revisão do código) — se a família do material também foi inativada, quem a mensagem nomeia
+     não consegue reativar.** A recusa da aprovação manda reativar o material e nomeia Administrador, Almoxarife ou
+     Engenharia; mas, com a família inativa, o Reativar recusa (*"Família inativa — não é possível vincular novos itens"*)
+     e reativar a família é só do Administrador (Configurações). **O que fazer:** o Administrador reativa a família e
+     depois o material; ou quem aprova rejeita a requisição (o Rejeitar continua funcionando).
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -11009,6 +11110,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   da confirmação, com o texto do servidor (o botão continua em todo material ativo).
 - **(113) Documento aberto não impede inativar** (**B734**) — a saída é o Reativar (**C228**, **C229**).
 - **(113) O Reativar não mostra o histórico de quem inativou** — está na Auditoria (entidade Material, *Desativação*).
+- **(114) A tela não avisa antes de clicar Aprovar** que a requisição tem material inativo — a recusa aparece no aviso
+  vermelho depois do clique (o detalhe não mostra selo de inativo no item; só o separável 0).
+- **(114) A requisição pendente que não aprova mais continua recebendo o lembrete** de requisição parada — o aprovador é
+  cobrado por uma requisição que sempre recusa até alguém reativar ou rejeitar.
+- **(114) A recusa da separação manda "separar os outros itens com 0"** mesmo numa requisição de um item só — ali, separar
+  com 0 leva a *Em Separação* com a caixa vazia, de onde quem pediu cancela (ou o almoxarifado reativa o material).
+- **(114) A liberação por valor no mesmo instante do "Inativar"** de um material zerado da requisição: a liberação passa e
+  esse item fica *Aguard. estoque* (**B741**) — janela de milissegundos, o estado de inativar depois de aprovar (**C230**).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -11911,6 +12020,12 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(114) Nenhum clique foi dado nesta etapa no navegador.** A tela não mudou: as recusas novas chegam pelos avisos vermelhos
+que já mostram a mensagem do servidor (Aprovar, Aprovar liberação, Enviar, Confirmar separação), e o 0 do item inativo vem
+do servidor. O servidor foi provado pela rota e pelo serviço (**24** + **11** cenários, **6** jornadas de integração). O que
+**só o navegador** prova: (1) a recusa do Aprovar inteira legível no aviso; (2) a janela de **Iniciar Separação** de uma
+requisição com um item inativo abre com **0** nele e o Confirmar passa com os outros itens.
 
 **(113) Nenhum clique foi dado nesta etapa no navegador.** A tela de Materiais mudou (o filtro **Inativos**, o selo, o
 **Reativar** e o aviso do **Inativar**) e está coberta por testes de tela com a resposta do servidor simulada, não por um
@@ -23419,17 +23534,100 @@ lote ao mesmo tempo, a recusa que aparecia era a do lote, não a do saldo — co
 sabotagens** novas: 20 derrubaram teste, 7 eram inalcançáveis e **14** mostraram cenários sem prova — viraram testes
 (`6ed479a6`).
 
+## Etapa 114 — A requisição de um material inativado não é mais aprovada para ficar parada (2026-10-15)
+
+Material inativo não se movimenta. Até aqui, uma requisição feita antes de o material ser inativado continuava na fila de
+aprovação e era **aprovada**: se havia saldo, ela ficava *Aprovado* sem reserva, o almoxarife separava para a caixa e a
+entrega recusava — o material ficava preso na caixa; se o material estava zerado (o caminho normal desde a Etapa 113), ela
+ia para *Aguard. estoque* e esperava para sempre uma chegada que o sistema nunca aceita. Agora a aprovação, o envio do
+rascunho e a separação recusam na hora, dizendo qual material está inativo, quem pode reativá-lo e o que fazer em cada fila.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Aprovar a requisição de material inativado passava: *Aprovado* sem reserva (com saldo) ou *Aguard. estoque* para sempre (zerado) | Recusado, sem reservar nada; a requisição continua *Pendente* (**B740**) |
+| Com um item ativo e um inativo, a aprovação reservava só o ativo (*Parcialmente reservada*) | A requisição inteira é recusada, nenhum item fica reservado |
+| A liberação por valor e a aprovação automática faziam o mesmo | A liberação recusa (*"… ou reprove a liberação por valor."*); a automática deixa *Pendente* |
+| O rascunho salvo antes do "Inativar" era enviado (e até aprovado sozinho) | O envio recusa e ele continua rascunho |
+| A separação levava o material inativo para a caixa, e a entrega recusava depois | A separação recusa a linha do item inativo; a janela já abre com 0 nele (**B742**) |
+| O detalhe e a fila de separação diziam "separar 2" no item inativo | Dizem 0 |
+| — | A mensagem nomeia quem reativa e o gesto de cada fila (**B743**) |
+
+### As regras, com o cenário exato
+
+Preparação: dois materiais nossos, **PRF-0401** (com 5 em estoque) e **PRF-0402** (zerado); usuários **Ana** (Almoxarife),
+**Gil** (Gestor), **Rui** (requisitante) e o **administrador**.
+
+**1. A recusa na aprovação.** Rui abre uma requisição de 2 do PRF-0402. Ana inativa o PRF-0402 (**Materiais → Inativar**;
+zerado, passa). Gil abre a requisição e clica **Aprovar** → aviso vermelho: *"A requisição ⟨número⟩ tem material inativo:
+PRF-0402. Reative o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou rejeite a requisição."* A requisição continua *Pendente*.
+
+**2. O gesto de quem aprova.** Gil não reativa (o Reativar é de quem edita material). Ele clica **Rejeitar**, informa o
+motivo → *Rejeitada*. Ou: Ana, em **Materiais**, filtro **Inativos**, **Reativar** o PRF-0402 → *"Material reativado"*; dá
+**Entrada** de 5; Gil aprova → *Totalmente reservada*.
+
+**3. Item ativo junto não passa.** Rui pede 2 do PRF-0401 e 2 do PRF-0402 (inativo). **Aprovar** → a mesma recusa, só com
+o PRF-0402; o PRF-0401 **não** fica reservado (antes ficava *Parcialmente reservada*).
+
+**4. A liberação por valor.** Com a alçada ligada (Configurações → limite baixo), a requisição do PRF-0402 inativo vai a
+*Aguard. Aprov. Valor*; **Aprovar liberação** → *"A requisição ⟨número⟩ tem material inativo: PRF-0402. Reative o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou reprove a
+liberação por valor."*; o **Reprovar** funciona.
+
+**5. O rascunho.** Rui salva um rascunho com o PRF-0402 ativo; Ana o inativa; Rui clica **Enviar** → *"O rascunho ⟨número⟩
+tem material inativo: PRF-0402. Reative o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou cancele o rascunho e faça outro sem ele."* Continua *Rascunho*; **Cancelar**
+funciona.
+
+**6. A separação de uma requisição já aprovada.** Uma requisição aprovada **antes** do "Inativar" (consulta **A61**) com o
+PRF-0401 e um material inativado: **Iniciar Separação** → a janela abre com **0** no item inativo; **Confirmar** separa o
+PRF-0401. Digitando 1 no item inativo → *"⟨material⟩: material inativo não pode ser separado. Reative o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou separe os outros
+itens com 0 neste."*, nada é gravado. Entregue o PRF-0401 e **Encerre** a requisição.
+
+**7. O que continua livre.** A requisição sem material inativo aprova como sempre; o item de material inativo **já
+entregue** não conta; a requisição aprovada com o material ativo que volta à alçada na separação é liberada normalmente
+(**B741**).
+
+### O que esta etapa NÃO cobre
+
+1. **A tela não avisa antes** de clicar Aprovar (D (114)); o lembrete de requisição parada continua indo.
+2. **As requisições já aprovadas** de material inativado depois ficam com o item pendente (**C230**); a **A61** as lista.
+3. **Família inativa junto**: quem a mensagem nomeia não reativa — só o Administrador reativa a família (**C231**).
+4. A **C228** (documento aberto não impede inativar) e a **C219** — decisões suas.
+
+### O que a revisão encontrou
+
+A **medição** (Fase 0) reproduziu as três portas aprovando e mostrou que a **separação não recusava** material inativo —
+a C229 dizia que sim (**estava errado**; só a entrega recusava, com o material já na caixa) — e que o envio do rascunho não
+conferia o material. A **revisão do plano** achou sete pontos: a mensagem mandava o Gestor reativar (ele não pode) e o
+aprovador de valor "rejeitar" (o gesto dele é o Reprovar); mandava quem separa "cancelar a requisição" (ele não pode); e a
+janela de separação pré-preenchia o máximo no item inativo, de modo que o Confirmar recusava a rodada inteira — daí a
+mensagem por fila (**B743**) e o 0 no detalhe (**B742**). A **revisão adversarial do código** (três revisores, executando)
+achou um defeito real: a requisição aprovada com o material ativo, inativado depois, que voltava à alçada de valor na
+separação, ficava presa — a liberação recusava (**B741**, corrigido); e a fila de separação ainda dizia "separar 2" no item
+inativo (corrigido). As corridas (7 cenários × 30 rodadas de inativar no meio de aprovar, liberar, criar, enviar e separar)
+não deixaram nenhuma aprovação com material já inativo nem reserva solta. O terceiro revisor fez **33 sabotagens** novas: 18
+derrubaram teste, 6 eram inalcançáveis ou equivalentes e **9** mostraram cenários sem prova — viraram testes (`071f6c7b`).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 114 entregue (2026-10-15):** **a requisição de um material inativado não é mais aprovada para ficar parada.** A
+  aprovação comum, a por valor e a automática recusam a requisição com item pendente de material inativo, sem reservar
+  nada; o envio do rascunho e a separação também recusam; o detalhe e a fila dizem 0 no item inativo (**C229** resolvido).
+  **O que é seu:** a consulta **A61** (opcional); as decisões **B740 a B744** (a **B740** — recusar em vez de aprovar e
+  avisar — e a **B741** — a liberação por valor só recusa na primeira aprovação — são reversíveis e a alternativa é sua); os
+  avisos **C230** e **C231**; as limitações **(114)** em D e as verificações **(114)** em F. **Próxima: Etapa 115 — a série
+  desligada com séries em estoque (C225) e a Entrada que cruza o ligar do lote (C226) — ver a "próxima tarefa detalhada" no
+  plano da Etapa 114.**
 
 - **Etapa 113 entregue (2026-10-15):** **inativar material com saldo é recusado, e a tela de Materiais reativa.** O
   "Inativar" com saldo ou retenção é recusado para todos, com o caminho na mensagem (**C217**, **C227** resolvidos);
   reativar confere a família (**C220** resolvido); a lista ganha **Inativos** e **Reativar**. **O que é seu:** a consulta
   **A60** (opcional); as decisões **B733 a B739** (a **B733** — recusar também para o Administrador — e a **B734** —
   documento aberto não impede — são reversíveis e a alternativa é sua); os avisos **C228** e **C229**; as limitações
-  **(113)** em D e as verificações **(113)** em F. **Próxima: Etapa 114 — a requisição de material inativado (C229) — ver
-  a "próxima tarefa detalhada" no plano da Etapa 113.**
+  **(113)** em D e as verificações **(113)** em F. ~~**Próxima: Etapa 114 — a requisição de material inativado (C229) — ver
+  a "próxima tarefa detalhada" no plano da Etapa 113.**~~ *(Feita — Etapa 114.)*
 
 - **Etapa 112 entregue (2026-10-15):** **ligar lote ou série num material que já tem saldo passa a ser do Administrador.**
   Com o saldo ainda sem lote (ou sem as séries), o Almoxarife e a Engenharia recebem a recusa ao salvar o cadastro, com o

@@ -396,8 +396,8 @@ inclusive o Administrador — e nada muda:
 Movimentações no extrato, requisição pendente, pedido de compra aberto e conferência aberta **não** impedem inativar um
 material zerado. Mas, depois de inativado, uma conferência de inventário aberta que o contou não conclui (*"Ajuste
 bloqueado: ⟨código⟩: Material inativo não pode ser movimentado"*, e nenhum ajuste da conferência é aplicado), uma nota de
-pedido que o traz não é processada, e uma requisição pendente dele é aprovada sem reservar nada. Nesses casos, reative o
-material, termine o documento e inative de novo. Uma Entrada lançada no mesmo instante do "Inativar" nunca deixa o material
+pedido que o traz não é processada, e uma requisição que o pede não é aprovada, não é enviada e não separa esse item
+(7.8). Nesses casos, reative o material, termine o documento e inative de novo. Uma Entrada lançada no mesmo instante do "Inativar" nunca deixa o material
 inativo com saldo: ou a Entrada entra primeiro e o "Inativar" é recusado, ou o "Inativar" passa e a Entrada é recusada.
 
 **Reativar.** Na mesma lista, o filtro de status **Inativos** mostra só os materiais inativos, com o selo **Inativo**. Nas
@@ -1608,6 +1608,7 @@ Os status e as passagens permitidas entre eles são fixos; qualquer tentativa fo
   *AAAA-MM-DD* e ser um dia que existe; fora disso — *15/09/2026*, *2026-02-30* — a criação é recusada, sem gravar nada:
   *"data_necessidade deve estar no formato AAAA-MM-DD"*.
 - **Rascunho é do dono.** Só o solicitante envia o próprio rascunho: *"Apenas o solicitante pode enviar o rascunho"*; e só rascunho pode ser enviado: *"Apenas rascunhos podem ser enviados"*.
+- **O envio confere de novo se os materiais estão ativos.** Um rascunho salvo antes de um material dele ser inativado é recusado no envio, e continua rascunho, sem e-mail nem avaliação: *"O rascunho ⟨número⟩ tem material inativo: ⟨códigos⟩. Reative o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou cancele o rascunho e faça outro sem ele."* (7.8).
 - **A ordem dos itens é a do pedido.** Os itens são gravados e mostrados — no detalhe, no comprovante e na fila de separação — na ordem em que o solicitante os incluiu, tanto na tela do almoxarifado quanto na de requisição das outras áreas.
 
 **Enviar é o gatilho de tudo.** Enquanto está em Rascunho, a requisição não dispara e-mail, não é avaliada pelas regras de aprovação nem pela alçada de valor, e não é vista pelo almoxarifado. É o envio que a coloca em circulação — e é **no envio** que o sistema decide quais regras de aprovação ela precisa cumprir (8.4).
@@ -1711,6 +1712,34 @@ O painel de detalhe da requisição termina com o bloco **Anexos**, depois dos b
 As regras de formato, tamanho, permissão e registro de download estão em **15.2.4**.
 
 ---
+
+### 7.8 Requisição de um material que foi inativado
+
+Material inativo não se movimenta (2.11), então uma requisição que pede um material inativado depois de feita não tem
+como ser atendida. O sistema recusa na hora em que alguém tentaria seguir com ela, em vez de deixá-la andar até a entrega:
+
+- **Aprovar** (8.1), **aprovar por valor** (8.3) e a **aprovação automática** (8.5) recusam a requisição que tem algum item
+  ainda não entregue de material inativo — inteira, sem reservar nada, nem dos outros itens. A requisição continua onde
+  estava (*Pendente* ou *Aguard. Aprov. Valor*). Na aprovação comum: *"A requisição ⟨número⟩ tem material inativo:
+  ⟨códigos⟩. Reative o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou rejeite a
+  requisição."*; na aprovação por valor, a frase termina com *"… ou reprove a liberação por valor."* A automática não
+  mostra mensagem: a requisição simplesmente fica *Pendente*, e quem aprova recebe a recusa acima.
+- **Enviar o rascunho** é recusado (7.2).
+- **Separar** (10.2): a linha de um item de material inativo com quantidade maior que zero recusa a confirmação inteira,
+  sem gravar nada: *"⟨material⟩: material inativo não pode ser separado. Reative o material em Materiais → Inativos
+  (Administrador, Almoxarife ou Engenharia) ou separe os outros itens com 0 neste."* A janela de separação já abre com 0
+  nesse item, e o detalhe da requisição e a fila de separação mostram 0 de separável e de entregável para ele.
+- **Entregar** um material inativo que já estava na caixa é recusado pelo motor (*"⟨material⟩: Material inativo não pode
+  ser movimentado"*): reative para entregar, ou devolva o separado à prateleira (10.2b).
+
+A lista de códigos traz cada material inativo uma vez, na ordem dos itens. Item já todo entregue não conta. Quem reativa é
+quem edita material — os perfis entre parênteses na mensagem; o Gestor, que aprova mas não edita material, rejeita ou pede a
+reativação. Depois de reativar, a mesma requisição é aprovada (e reserva) como qualquer outra.
+
+O que já foi aprovado **antes** de o material ser inativado continua no status em que estava: a separação recusa o item
+(acima) e nada entra num material inativo; o caminho é reativar e atender, ou separar os outros itens com 0 neste,
+entregar o resto e **Encerrar** (7.6). Se essa requisição voltar à aprovação por valor na separação (8.3), a liberação
+passa normalmente — a recusa da aprovação por valor vale só para a requisição que ainda não foi aprovada nenhuma vez.
 
 ## 8. Aprovações
 

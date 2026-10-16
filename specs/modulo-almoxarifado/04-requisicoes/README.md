@@ -1,6 +1,7 @@
 # 04 — Requisições de Materiais
 
 > **Status:** 🟢 — Etapa 3 entregue (2026-08-05); ciclo ponta a ponta rascunho→entrega→confirmação→encerramento · **Spec original:** seção 5
+> **Etapa 114 (2026-10-15, plano `48277da8`, T1 `a113a657`, T2 `52435e81`, Fase 5 `071f6c7b`) — a requisição com item pendente de material inativo não é aprovada, enviada nem separada (C229).** `/aprovar` e a aprovação automática recusam dentro da seção da trava, antes de reservar (400 E1; a automática deixa PENDENTE); `/aprovar-valor` recusa na condição do `UPDATE` de `aprovarValor`, só na primeira aprovação (E1v); `/enviar` recusa (E2); a separação recusa a linha do item inativo (E3); o detalhe e a fila dizem 0 de separável/entregável. Ver a seção da Etapa 114 no fim.
 > **Etapa 102 (2026-10-15, plano `5ae9ced3`, T1 `99043a57`, T3 `5746553b`, T4 `f18cae5d`) — material na caixa não se encerra, em status nenhum.** `PUT /api/almoxarifado/requisicoes/:id/encerrar` usa `recusaEncerrar(status, itens)` (`requisitionStateMachine.js`): todo status de `STATUS_COM_CAIXA` com caixa (régua da B524) → 400 E1, também na nova tentativa do compare-and-set; a *Entregue* encerra sempre (não retém caixa). A tela mostra a frase E1 no lugar do botão na *Parcialmente Atendida* com caixa (`podeEncerrar`). O sufixo da recusa de saldo por caixa perde *"entregue o que existe e encerre a requisição"* (B701). C204 resolvido.
 > **Etapa 101 (2026-10-15, T1 `6dcced8e`, T2 `38e04309`, T3 `dfdad6b1`, T4 `f7139676`) — a *Em Separação* vazia tem saída e material com série só se pede inteiro.** A *Em Separação* com a caixa vazia **cancela** (nada entregue; as duas rotas, autorização de sempre) ou **encerra** (algo entregue); com material na caixa, as recusas M1/E1 dizem o que fazer; os cancelamentos entram na trava por requisição; a criação, o rascunho, a cópia e o envio recusam fração de material com série. **C195 e C202 resolvidos** — ver a seção "Etapa 101" no fim. Continua 🟢.
 > **Etapa 99 (2026-10-15, `314837d6..3e14653a`: T1 `7353265d`, T2 `b8e16e4c`, T2b `c9087106`, T3 `3e14653a`) — a separação recusa o que não é separável e a conferência conta a caixa (regra na feature 05).** O que toca a requisição: `PUT /requisicoes/:id/separar` (e `/separacao`) recusa com 400 a forma inválida **antes** da alçada de valor e da reivindicação, então um payload inválido não muda o status (antes ia para *Em Separação*, ou gravava *Aguardando aprovação de valor*); `conferir-separacao` recusa a caixa vazia (*"Nenhum item separado"*). **Pendência declarada desta feature (C202, 2026-10-15):** a **criação** de requisição aceita fração de material com série (pedir 1,5 → 201) — ver a seção "Etapa 99" no fim. Continua 🟢.
@@ -338,3 +339,41 @@ Atendida.)*
 caixa ficam (B703, A53); o botão Encerrar não confere o perfil de aprovação antes do clique (anterior, inalterado).
 
 **Status:** continua 🟢 — fecha a C204 sem abrir pendência de requisição.
+
+## Etapa 114 — a requisição de material inativo não é aprovada, enviada nem separada (2026-10-15)
+
+Plano: `docs/superpowers/plans/2026-10-15-almoxarifado-etapa114-requisicao-de-material-inativo.md` (design + plano
+`48277da8`). Branch `etapa-e114` (código: T1 `a113a657`, T2 `52435e81`, Fase 5 `071f6c7b`).
+
+*(**Correção à vista:** a C229 e a próxima tarefa do plano da Etapa 113 diziam que, depois da aprovação sem reserva, *"a
+separação e a entrega recusam"*. **Estava errado quanto à separação:** medido na Fase 0, `PUT /separar` aceitava o item de
+material inativo (200 `EM_SEPARACAO`) e só a entrega recusava, com o material já na caixa. Esta spec não dizia nada sobre
+material inativo depois da criação — a criação já recusava (`requisitionCreateService`); o envio do rascunho não.)*
+
+**Entregue:**
+- [x] **RN-01 — o `/aprovar` recusa** — `a113a657` (B740): `reservarItensAprovacao` confere, dentro da seção da trava e
+  antes de reservar qualquer item, os itens pendentes de material inativo (`requisicaoMaterialInativo.codigosInativosPendentes`)
+  → 400 E1, PENDENTE, nenhuma reserva (nem do item ativo), sem auditoria.
+- [x] **RN-02 — o `/aprovar-valor` recusa** — `a113a657`, `071f6c7b` (B741): `SEM_MATERIAL_INATIVO_SQL` no `UPDATE` de
+  `aprovarValor`, **só com `data_aprovacao` nula** (Fase 5, I1: a já aprovada que volta à alçada na separação é liberada);
+  releitura status → gate → E1v; o pós-aprovação desta porta roda com `recusarInativo: false`.
+- [x] **RN-03 — a aprovação automática não aprova** — `a113a657`: o `MATERIAL_INATIVO` cai no `catch` → PENDENTE.
+- [x] **RN-04 — o envio do rascunho recusa** — `a113a657` (E2), depois das recusas de hoje (dono, status, urgência, OS,
+  série).
+- [x] **RN-05 — a separação recusa o item inativo** — `a113a657` (E3, em `validarFormaDaSeparacao`, depois da quantidade
+  inválida e antes da fração de série; tudo ou nada).
+- [x] **RN-06 — item já entregue não conta** — `a113a657` (régua de 6 casas, JS e SQL; legado 1e-16 provado em `071f6c7b`).
+- [x] **RN-07 — a ordem das recusas do `/aprovar`** — `a113a657`.
+- [x] **RN-08 — o detalhe e a fila dizem 0** — detalhe `a113a657` (`normalizarItem`, campo novo `material_ativo`), fila
+  `071f6c7b` (`listarFilaSeparacao`, Fase 5 M1).
+- [x] **Integração** — `52435e81` (6 jornadas: reativar → aprovar → separar → entregar; Gestor rejeita; rascunho
+  cancelado; reprovar a liberação; legado → reativar → entregar; legado misto → separar com 0 → entregar → encerrar).
+- [x] **Fase 5** — `071f6c7b`: três revisores; I1 e M1 corrigidos; 33 sabotagens (18 vermelhas, 6
+  inalcançáveis/equivalentes, 9 sem prova → 9 cenários); concorrência 7 × 30 rodadas sem achado.
+
+**Fica de fora (com o porquê):** a requisição **já aprovada** cujo material foi inativado depois fica com o item pendente
+(C230 — a família da C228, decisão do P.O.; a A61 lista); a tela não avisa antes do clique e o lembrete continua (D (114));
+família inativa junto (C231).
+
+**Status:** continua 🟢 — fecha a C229.
+

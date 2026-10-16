@@ -1,17 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-15 (Etapa 113) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-15 (Etapa 114) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112 e 113) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113 e 114) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 113 ENTREGUE · próxima do almoxarifado: Etapa 114)
+> ## Onde o desenvolvimento está — 2026-10-15 (Etapa 114 ENTREGUE · próxima do almoxarifado: Etapa 115)
 >
-> **O desenvolvimento parou aqui: Etapa 113 fechada — 2026-10-15.** A **Etapa 113 (inativar material com saldo é recusado,
+> **O desenvolvimento parou aqui: Etapa 114 fechada — 2026-10-15.** A **Etapa 114 (a requisição de um material inativado
+> não é mais aprovada para ficar parada)**: aprovar, aprovar por valor e a aprovação automática recusam a requisição que
+> tem item pendente de material inativo, sem reservar nada; o envio do rascunho e a separação também recusam; a janela de
+> separação abre com 0 no item inativo. A mensagem diz quem reativa e o que fazer em cada fila. **Próxima: Etapa 115** — a
+> série desligada com séries em estoque (C225) e a Entrada que cruza o ligar do lote (C226) — ver a próxima tarefa no
+> plano da 114.
+>
+> **Etapa 113, 2026-10-15.** A **Etapa 113 (inativar material com saldo é recusado,
 > e a tela de Materiais passa a reativar)**: o "Inativar" de um material com saldo ou com algo retido é recusado para
 > todos, com uma mensagem que diz quanto há e o que fazer (dar saída, ajustar ou devolver ao cliente); a lista de
 > Materiais ganha o filtro **Inativos** e o botão **Reativar**, que recusa quando a família do material está inativa.
 > **Próxima: Etapa 114** — a requisição pendente de um material inativado (C229) — ver a próxima tarefa no plano da 113.
+> *(Feita — Etapa 114.)*
 >
 > **Etapa 112, 2026-10-15.** A **Etapa 112 (ligar lote ou série num material que
 > já tem saldo passa a ser do Administrador)**: marcar *Controle por lote* ou *Controle por número de série* num material
@@ -6438,6 +6446,55 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 114 — A requisição de um material inativado não é mais aprovada para ficar parada (ENTREGUE — 2026-10-15)
+
+**O que mudou, em uma frase:** a requisição que pede um material que foi inativado depois de feita é recusada ao aprovar,
+ao enviar o rascunho e ao separar o item — em vez de ser aprovada e ficar parada.
+
+**O problema que ela resolve.** Material inativo não se movimenta. Uma requisição feita antes do "Inativar" era aprovada
+mesmo assim: com saldo, ficava *Aprovado* sem reserva, era separada para a caixa e a entrega recusava (o material preso na
+caixa); zerada, ia para *Aguard. estoque* e esperava para sempre.
+
+| Antes | Agora |
+|---|---|
+| Aprovar passava (*Aprovado* sem reserva ou *Aguard. estoque* para sempre) | Recusado; continua *Pendente*, nada reservado |
+| Item ativo + item inativo: só o ativo era reservado | A requisição inteira é recusada |
+| A liberação por valor e a automática aprovavam | A liberação recusa; a automática deixa *Pendente* |
+| O rascunho com material inativado era enviado | O envio recusa; continua rascunho |
+| A separação levava o item inativo para a caixa | Recusa a linha; a janela abre com 0 nele |
+
+**A regra agora.**
+- Aprovar: *"A requisição ⟨número⟩ tem material inativo: ⟨códigos⟩. Reative o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou rejeite a requisição."*
+- Aprovar liberação por valor: a mesma, terminando em *"… ou reprove a liberação por valor."* — só para a requisição que
+  ainda não foi aprovada nenhuma vez.
+- Enviar o rascunho: *"O rascunho ⟨número⟩ tem material inativo: ⟨códigos⟩. Reative o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou cancele o rascunho e faça outro
+  sem ele."*
+- Separar o item: *"⟨material⟩: material inativo não pode ser separado. Reative o material em Materiais → Inativos (Administrador, Almoxarife ou Engenharia) ou separe os outros itens com 0 neste."*
+
+### Roteiro de teste manual
+
+Preparação: **PRF-0401** (5 em estoque) e **PRF-0402** (zerado), nossos; **Ana** (Almoxarife), **Gil** (Gestor), **Rui**
+(requisitante) e o **administrador**.
+
+1. **Pedir.** Rui, **Requisições → Nova**, 2 do PRF-0402 → *Pendente*.
+2. **Inativar.** Ana, **Materiais**, na linha do PRF-0402, **Inativar** → *"Material inativado"*.
+3. **A recusa.** Gil abre a requisição e clica **Aprovar** → aviso vermelho *"A requisição … tem material inativo:
+   PRF-0402. …"*; ela continua *Pendente*.
+4. **Reativar e aprovar.** Ana, **Materiais**, filtro **Inativos**, **Reativar** o PRF-0402; dá **Entrada** de 5; Gil
+   **Aprovar** → *Totalmente reservada*.
+5. **Rejeitar.** Repita 1–3 com outra requisição; Gil **Rejeitar** com motivo → *Rejeitada*.
+6. **Item ativo junto.** Rui pede 2 do PRF-0401 e 2 do PRF-0402 (inativo); **Aprovar** → a recusa só com o PRF-0402; em
+   **Reservas**, nada do PRF-0401 para essa requisição.
+7. **Rascunho.** Rui salva rascunho com o PRF-0401 (ativo); Ana o inativa (zere antes com uma Saída); Rui **Enviar** →
+   *"O rascunho … tem material inativo …"*; **Cancelar** o rascunho funciona.
+8. **Separação de uma já aprovada.** Numa requisição aprovada antes de um material dela ser inativado (consulta **A61**),
+   **Iniciar Separação** → a janela abre com **0** no item inativo; **Confirmar** separa os outros; digitando 1 nele → a
+   recusa da separação, nada gravado.
+
+**O que esta etapa NÃO cobre.** A tela não avisa antes do clique; o lembrete de requisição parada continua indo; a
+requisição já aprovada de material inativado depois fica com o item pendente (C230 — reativar e atender, ou separar os
+outros, entregar e encerrar); se a família do material também foi inativada, só o Administrador reativa (C231).
+
 ## Etapa 113 — Inativar material com saldo é recusado, e a tela de Materiais passa a reativar (ENTREGUE — 2026-10-15)
 
 **O que mudou, em uma frase:** o "Inativar" de um material que ainda tem saldo (ou algo reservado, bloqueado, em inspeção
@@ -6486,7 +6543,7 @@ Preparação: um material **CHP-0301** (nosso) e um **CHP-0302** de um cliente, 
 
 **O que esta etapa NÃO cobre.** Documento aberto não impede inativar: uma conferência aberta ou uma nota de pedido que
 trazem o material travam depois (C228 — **Reativar**, concluir, inativar de novo); uma requisição pendente de material
-inativado é aprovada sem reserva (C229 — a próxima etapa). A tela não avisa antes do clique. Os materiais que já estão
+inativado é aprovada sem reserva (C229 — a próxima etapa; *paga na Etapa 114*). A tela não avisa antes do clique. Os materiais que já estão
 inativos com saldo: consulta **A60**.
 
 ## Etapa 112 — Ligar lote ou série num material que já tem saldo passa a ser do Administrador (ENTREGUE — 2026-10-15)
