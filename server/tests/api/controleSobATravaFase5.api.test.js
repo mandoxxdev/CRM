@@ -140,13 +140,29 @@ const ALMOXARIFE = { id: 3, nome: 'Almox Teste', role: 'user', email: 'almox@tes
       g.soltar();
     }
     assert.strictEqual(g.armado, false, 'gancho nao disparou');
-    assert.strictEqual(est.status, 200, JSON.stringify(est.body));
+    // Etapa 116 (C232, RN-08): ate a 116 este cenario prendia o estorno 200 com as series "Entregue" (o estado da C232 pela
+    // corrida). Agora o desligar que cai entre a guarda previa e a reversao recusa sob a trava, e o catch desfaz o resto.
+    assert.strictEqual(est.status, 400, JSON.stringify(est.body));
+    assert.strictEqual(est.body.error, `Não é possível estornar: esta saída baixou 2 série(s) do material ${m.codigo} e o `
+      + 'controle por número de série foi desligado depois — o estorno devolveria o saldo sem devolver as séries. Religue o '
+      + 'controle por número de série no cadastro do material e estorne de novo.');
     const p = await estado.put;
     assert.strictEqual(p.status, 200, JSON.stringify(p.body)); // o desligar caiu antes das series voltarem (0 presentes)
     const pres = (await dbAllP(`SELECT COUNT(*) n FROM series_almoxarifado WHERE material_id = ?
       AND status IN ('EM_ESTOQUE','BLOQUEADA')`, [m.id]))[0].n;
     assert.strictEqual((await linha(m.id)).controle_serie, 0);
     assert.strictEqual(pres, 0, 'o estorno devolveu as series a Em estoque num material de serie desligada (C225 pelo estorno)');
+    // o catch desfez o claim e o credito: a Saida continua de pe, sem linha de ESTORNO, fisico 0, series Entregue
+    const saida = (await dbAllP('SELECT cancelado FROM movimentacoes_almoxarifado WHERE id = ?', [saidaId]))[0];
+    assert.strictEqual(saida.cancelado, 0, 'o claim do estorno recusado ficou');
+    const est2 = (await dbAllP("SELECT COUNT(*) n FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'ESTORNO'", [m.id]))[0].n;
+    assert.strictEqual(est2, 0, 'linha de ESTORNO de um estorno recusado');
+    const fis = (await dbAllP('SELECT quantidade_atual q FROM materiais_almoxarifado WHERE id = ?', [m.id]))[0].q;
+    assert.strictEqual(fis, 0, 'o credito do estorno recusado ficou');
+    const linhaSaldo = (await dbAllP('SELECT COALESCE(SUM(quantidade), 0) q FROM estoque_saldo_almoxarifado WHERE material_id = ?', [m.id]))[0].q;
+    assert.strictEqual(linhaSaldo, 0, 'a linha de saldo do estorno recusado ficou');
+    const entregues = (await dbAllP("SELECT COUNT(*) n FROM series_almoxarifado WHERE material_id = ? AND status = 'ENTREGUE'", [m.id]))[0].n;
+    assert.strictEqual(entregues, 2);
   });
 
   await close();
