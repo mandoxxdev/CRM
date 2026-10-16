@@ -25,7 +25,9 @@ jest.mock('react-toastify', () => ({
 }));
 let mockUser = null;
 jest.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: mockUser }) }));
-jest.mock('../../services/permissionsCache', () => ({ getEffectiveUser: (u) => u }));
+// Fase 5 (r3): o usuario EFETIVO pode ser outro que o logado — a aba decide pelo efetivo (o mesmo do portao da tela).
+let mockEfetivo;
+jest.mock('../../services/permissionsCache', () => ({ getEffectiveUser: (u) => (mockEfetivo !== undefined ? mockEfetivo : u) }));
 
 const ADMIN_SISTEMA = { id: 5, nome: 'Admin do sistema', role: 'admin' };
 const ADM_PERFIL = { id: 4, nome: 'Adm', role: 'user', perfil_almoxarifado: 'ADMINISTRADOR' };
@@ -55,7 +57,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
 });
-afterEach(() => { act(() => root.unmount()); container.remove(); });
+afterEach(() => { act(() => root.unmount()); container.remove(); mockEfetivo = undefined; });
 
 async function renderAba(user) {
   mockUser = user;
@@ -108,6 +110,13 @@ describe('C259 (Etapa 125) — RN-16/RN-17: a aba Famílias', () => {
     await clicar(container.querySelector('.almox-familia-cabecalho'));
     await act(async () => { await Promise.resolve(); });
     expect(porTexto('a', /Cadastrar primeiro item/)).toHaveLength(1);
+  });
+
+  test('[RN-16, Fase 5 r3] decide pelo usuario EFETIVO: logado Administrador, efetivo administrador do sistema -> somente leitura', async () => {
+    mockEfetivo = ADMIN_SISTEMA;
+    await renderAba(ADM_PERFIL);
+    expect(container.textContent).toContain(FRASE);
+    expect(botoes('Editar')).toHaveLength(0);
   });
 
   test('[RN-17] perfil Administrador: a aba como antes (os botões, sem a frase)', async () => {
