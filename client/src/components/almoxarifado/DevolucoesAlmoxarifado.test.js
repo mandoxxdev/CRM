@@ -166,6 +166,26 @@ describe('DevolucoesAlmoxarifado — saída de origem e limite de quantidade', (
     expect(zerada.textContent).toMatch(/devolvid/i);
   });
 
+  test('Etapa 121 (C253): a saída cujas peças voltaram por outra entrada diz isso, não "devolvido por inteiro"', async () => {
+    saidasDoBanco = [
+      { ...SAIDA_ZERADA, id: 503, quantidade: 2, quantidade_devolvida: 0, quantidade_reentrada: 2, saldo_devolvivel: 0 },
+      { ...SAIDA_COM_SALDO, id: 504, quantidade: 2, quantidade_devolvida: 0, quantidade_reentrada: 1, saldo_devolvivel: 1 },
+      SAIDA_ZERADA,
+    ];
+    await abrirModal();
+    await escolherMaterial(MATERIAL.id);
+    const opcoes = [...campo('dev-saida').querySelectorAll('option')];
+    const voltou = opcoes.find((o) => o.value === '503');
+    const parcial = opcoes.find((o) => o.value === '504');
+    expect(voltou.disabled).toBe(true);
+    expect(voltou.textContent).toMatch(/2 já voltaram ao estoque por outra entrada/);
+    expect(voltou.textContent).not.toMatch(/devolvido por inteiro/);
+    expect(parcial.disabled).toBe(false);
+    expect(parcial.textContent).toMatch(/devolvível 1 · 1 já voltou ao estoque por outra entrada/);
+    // A metade positiva: a saída devolvida de verdade continua dizendo "já devolvido por inteiro".
+    expect(opcoes.find((o) => o.value === '502').textContent).toMatch(/já devolvido por inteiro/);
+  });
+
   test('escolhida a saída, a quantidade fica limitada ao saldo devolvível', async () => {
     await abrirModal();
     await escolherMaterial(MATERIAL.id);

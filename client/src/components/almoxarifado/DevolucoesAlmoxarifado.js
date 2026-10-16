@@ -188,7 +188,12 @@ const DevolucoesAlmoxarifado = () => {
     else if (s.os_id) partes.push(`OS ${s.os_id}`);
     if (s.usuario_nome) partes.push(s.usuario_nome);
     if (s.lote) partes.push(`lote ${s.lote}`);
-    partes.push(s.saldo_devolvivel > 0 ? `devolvível ${s.saldo_devolvivel}` : 'já devolvido por inteiro');
+    // Etapa 121 (C253): o que voltou ao estoque por uma entrada que não cita esta saída (Entrada avulsa, devolução avulsa)
+    // já não se devolve — sem dizer isso, a saída zerada apareceria como "já devolvido por inteiro" sem devolução nenhuma.
+    const reentrada = Number(s.quantidade_reentrada) || 0;
+    if (s.saldo_devolvivel > 0) partes.push(`devolvível ${s.saldo_devolvivel}`);
+    else if (!(reentrada > 0)) partes.push('já devolvido por inteiro');
+    if (reentrada > 0) partes.push(`${reentrada} já ${reentrada > 1 ? 'voltaram' : 'voltou'} ao estoque por outra entrada`);
     return partes.join(' · ');
   };
 
