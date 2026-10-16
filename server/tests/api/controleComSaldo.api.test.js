@@ -344,14 +344,17 @@ const E4 = (codigo) => `O cadastro do material ${codigo} mudou enquanto era salv
     await grava(ENGENHARIA, await material(), { familia_id: f, controle_lote: 1 }, { familia_id: f, controle_lote: 1 });
   });
 
-  await test('[RN-06 F5] o Administrador mantem ligado e outra aba desliga na janela: sem condicao -> 200, fica ligado', async () => {
+  // Etapa 115 (Fase 5, revisor 2; B750): este cenario dizia 'sem condicao -> 200, fica ligado' — o salvar do Administrador
+  // religava calado o lote que outra aba acabou de desligar. Desde a 115 a condicao do controle lido vale para todos: 409 E4.
+  await test('[RN-06 F5 / 115] o Administrador mantem ligado e outra aba desliga na janela: 409 E4, o desligar fica', async () => {
     const m = await material({ extra: { controle_lote: 1 } });
     injecoes = [{ sql: SQL_LEITURA,
       depois: () => dbRun(db, 'UPDATE materiais_almoxarifado SET controle_lote = 0 WHERE id = ?', [m.id]) }];
     const r = await put(ADM_PERFIL, m.id, { nome: 'Adm grava', controle_lote: 1 });
     assert.strictEqual(injecoes.length, 0, 'injecao nao consumida');
-    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
-    assert.strictEqual((await linha(m.id)).controle_lote, 1);
+    assert.strictEqual(r.status, 409, JSON.stringify(r.body));
+    assert.strictEqual(r.body.error, E4(m.codigo));
+    assert.strictEqual((await linha(m.id)).controle_lote, 0);
   });
 
   await test('[RN-07 F5] o Administrador liga com saldo e a familia nova e inativada na janela -> 400 da familia, nunca E1', async () => {

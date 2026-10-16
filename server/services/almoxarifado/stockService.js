@@ -2880,7 +2880,16 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
       // de ENTRADA acima) — devolver serie ao estoque nunca pode ficar "negativo". Fix round 1
       // (Task 5): guarda o retorno (afetadas[]) para o catch poder compensar via
       // `desfazerReverterSaida` se o ledger falhar depois.
-      if (material.controle_serie) seriesSaidaRevertidas = await seriesService.reverterSaida(db, user, mov.id);
+      //
+      // Etapa 115 (Fase 5, revisor 2): o controle de serie e relido AQUI, sob a trava do material — o `material` acima foi
+      // lido fora dela, antes do credito. O PUT que desliga a serie grava sob a mesma trava com a condicao "sem serie
+      // presente" (C225); lendo o controle velho, este estorno devolvia as series a EM_ESTOQUE depois do desligar do
+      // Almoxarife e deixava-as orfas (26/30 rodadas). Sob a trava: o desligar antes -> nada volta (C232); depois -> as
+      // series voltam e o desligar ve as presentes. Dentro da secao so a escrita das series (nenhuma outra porta).
+      seriesSaidaRevertidas = await trava.naTravaDoMaterial(mov.material_id, async () => {
+        const agora = await dbGet(db, 'SELECT controle_serie FROM materiais_almoxarifado WHERE id = ?', [mov.material_id]);
+        return agora && Number(agora.controle_serie) === 1 ? seriesService.reverterSaida(db, user, mov.id) : [];
+      });
     } else if (mov.tipo === 'AJUSTE') {
       // Etapa 97 (T1; Fase 2, B-2): o estorno do AJUSTE que REDUZ o total (o de ida subiu) e uma porta avulsa — levava a
       // caixa (e, sem caixa, o reservado: r1b). A guarda e a do ajuste (`motivoRecusaAjustePorRetencao` com a caixa,

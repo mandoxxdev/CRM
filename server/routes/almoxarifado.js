@@ -714,7 +714,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     if (guardaDesligarSerie) {
       try {
         const msg = await recusaDesligarSerie();
-        if (msg) return res.status(403).json({ error: msg });
+        if (msg) {
+          // Fase 5 (revisor 1, M2): a mesma releitura da guarda de ligar (113, P2) — uma Entrada entre a leitura e esta
+          // contagem fazia a E1 sair antes da recusa de inativar (RN-07).
+          const msgInativar = await recusaInativarAgora();
+          if (msgInativar) return res.status(400).json({ error: msgInativar });
+          return res.status(403).json({ error: msg });
+        }
       } catch (errSerie) {
         return res.status(500).json({ error: errSerie.message });
       }
@@ -788,13 +794,15 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // Entrada sem lote que caiu depois da leitura nao fica presa.
     let condControle = '';
     const paramsControle = [];
-    // Etapa 115 (Fase 2, R4): as duas colunas, ligadas ou nao — um salvar lido com o controle desligado (renomear) que
-    // gravasse depois de o Administrador ligar a serie apagava o ligar calado e deixava as series orfas, por fora da E1.
+    // Etapa 115 (Fase 2, R4; Fase 5, revisor 2): as duas colunas, ligadas ou nao, para TODOS — um salvar lido com o
+    // controle desligado (renomear) que gravasse depois de outra aba ligar a serie apagava o ligar calado (series orfas,
+    // por fora da E1); e o do Administrador, sem a condicao, religava calado o lote que o Almoxarife acabou de desligar
+    // (16/30 rodadas) — com uma Entrada sem lote logo depois, o estado da C226. Nao gravou -> o 409 E4 (B750).
+    for (const col of ['controle_lote', 'controle_serie']) {
+      condControle += ` AND COALESCE(${col}, 0) = ?`;
+      paramsControle.push(Number(current[col] || 0) === 1 ? 1 : 0);
+    }
     if (!podeRegularizar) {
-      for (const col of ['controle_lote', 'controle_serie']) {
-        condControle += ` AND COALESCE(${col}, 0) = ?`;
-        paramsControle.push(Number(current[col] || 0) === 1 ? 1 : 0);
-      }
       if (guardaControle) condControle += ` AND ${materialService.condicaoSaldoIdentificadoSql(controlesQueLiga)}`;
       // Etapa 115 (RN-06): desligar a serie so grava se continua sem serie presente.
       if (guardaDesligarSerie) condControle += ` AND ${materialService.SEM_SERIE_PRESENTE_SQL}`;
