@@ -952,7 +952,7 @@ const LITERAIS_CONFERENCIA = {
   // Compras (que tambem confere) seria mandado a um gesto que recebe 403.
   DEPOIS_DA_ENTRADA: 'Recebimento já deu entrada no estoque — a conferência não pode mais mudar quantidade nem situação; '
     + 'se a contagem estava errada, corrija o estoque por um ajuste (perfil Administrador ou Almoxarife do almoxarifado)',
-  NAO_APROVA: 'A conferência não aprova o recebimento — use "Aprovar", que dá a entrada no estoque',
+  NAO_APROVA: 'A conferência não aprova o recebimento — a entrada no estoque é pelo "Aprovar" ou pelo "Processar Nota"',
   ENCERRADA: (s) => `A conferência já foi encerrada (situação atual: ${s}) — a situação segue pelo fluxo do recebimento`,
   MUDOU: 'O recebimento mudou de situação enquanto a conferência era salva — recarregue e confira de novo',
   ITEM_JA_ENTROU: 'Item já deu entrada no estoque — a quantidade dele não muda mais; se a contagem estava errada, '

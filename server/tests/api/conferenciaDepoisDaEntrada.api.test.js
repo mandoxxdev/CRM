@@ -27,7 +27,7 @@ const API = '/api/almoxarifado';
 const L2 = 'Recebimento já deu entrada no estoque — a conferência não pode mais mudar quantidade nem situação; '
   + 'se a contagem estava errada, corrija o estoque por um ajuste (perfil Administrador ou Almoxarife do almoxarifado)';
 const L3 = 'Esta nota já está sendo processada';
-const L4 = 'A conferência não aprova o recebimento — use "Aprovar", que dá a entrada no estoque';
+const L4 = 'A conferência não aprova o recebimento — a entrada no estoque é pelo "Aprovar" ou pelo "Processar Nota"';
 const L5 = (s) => `A conferência já foi encerrada (situação atual: ${s}) — a situação segue pelo fluxo do recebimento`;
 const L7 = "Item já deu entrada no estoque — a quantidade dele não muda mais; se a contagem estava errada, corrija o estoque por um ajuste (perfil Administrador ou Almoxarife do almoxarifado)";
 const L6 = 'O recebimento mudou de situação enquanto a conferência era salva — recarregue e confira de novo';
