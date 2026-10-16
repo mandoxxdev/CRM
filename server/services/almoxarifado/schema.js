@@ -771,6 +771,27 @@ async function migrateBackfillConferenciaFinalizadaEm(db) {
   if (r.changes > 0) console.log(`✅ Migração ${MIGRATION_BACKFILL_CONFERENCIA_FINALIZADA} aplicada (${r.changes} recebimento(s) com a conferência finalizada)`);
 }
 
+const MIGRATION_REPARO_FAMILIA_PAI_ZERO = 'reparo_familia_pai_zero';
+
+/**
+ * Etapa 123 (C223, RN-14; B795) — a familia gravada com `parent_id = 0` vira raiz (`NULL`). O "0" nao aponta para familia
+ * nenhuma: a aba Familias ja a mostra como raiz (`ehRaiz`), mas o cadastro de material a recusava como subfamilia
+ * (`parent_id IS NULL` / `!== null`) e criar subfamilia sob ela tambem. O PUT fechou a porta na Etapa 103 e o POST nesta
+ * (RN-13). Ledger por custo; re-executar e inofensivo (nenhuma porta grava 0 depois desta etapa). Pai que aponta para id
+ * inexistente fica de fora (nao medido em lugar nenhum; a A73 o mostra). Exportada para o teste.
+ */
+async function migrateRepararFamiliaPaiZero(db) {
+  await dbRun(db, `CREATE TABLE IF NOT EXISTS schema_migrations_almoxarifado (
+    id TEXT PRIMARY KEY,
+    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+  const applied = await dbGet(db, 'SELECT 1 as ok FROM schema_migrations_almoxarifado WHERE id = ?', [MIGRATION_REPARO_FAMILIA_PAI_ZERO]);
+  if (applied) return;
+  const r = await dbRun(db, 'UPDATE familias_material_almoxarifado SET parent_id = NULL WHERE parent_id = 0');
+  await dbRun(db, 'INSERT OR IGNORE INTO schema_migrations_almoxarifado (id) VALUES (?)', [MIGRATION_REPARO_FAMILIA_PAI_ZERO]);
+  if (r.changes > 0) console.log(`✅ Migração ${MIGRATION_REPARO_FAMILIA_PAI_ZERO} aplicada (${r.changes} família(s) com pai 0 viraram família principal)`);
+}
+
 const MIGRATION_BACKFILL_EXECUCAO_NC = 'backfill_execucao_estado_nc';
 
 /**
@@ -2427,6 +2448,8 @@ async function initSchemaUmaExecucao(db) {
   await migrateBackfillPedidoFechadoAutomaticamente(db);
   // Etapa 122 (C255b): idem para a conferencia finalizada (a coluna nasce em `recebCols`, acima).
   await migrateBackfillConferenciaFinalizadaEm(db);
+  // Etapa 123 (C223): a familia de pai 0 vira raiz (a tabela e a coluna nascem acima, em "Familias de material").
+  await migrateRepararFamiliaPaiZero(db);
 
   // ── Solicitações de compra (integração futura) ──
   await dbRun(db, `CREATE TABLE IF NOT EXISTS solicitacoes_compra_almoxarifado (
@@ -2940,6 +2963,7 @@ module.exports = {
   // Etapa 122 (C255a): o cenario do legado roda a migracao depois de montar o pedido e as trilhas.
   migrateBackfillPedidoFechadoAutomaticamente,
   migrateBackfillConferenciaFinalizadaEm, // Etapa 122 (C255b), idem
+  migrateRepararFamiliaPaiZero, // Etapa 123 (C223), idem
   CATEGORIAS_SEED,
   FAMILIAS_SEED,
   SETORES_ALMOX_SEED,

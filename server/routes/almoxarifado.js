@@ -2825,7 +2825,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     const { nome, descricao, categoria_id, codigo, tipo_uso, parent_id } = req.body;
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
     const tipoUsoVal = ['administrativo', 'industrial', 'ambos'].includes(tipo_uso) ? tipo_uso : 'ambos';
-    const parentId = parent_id ? parseInt(parent_id, 10) : null;
+    // Etapa 123 (C223, RN-13; B795): a regua do PUT (Etapa 103, achado M4) — informado e nao vazio, so inteiro positivo; o
+    // resto e a literal de pai inexistente. O POST tinha ficado de fora: `"0"` gravava parent_id = 0 (raiz para a aba
+    // Familias, subfamilia para o cadastro de material), `"abc"` virava raiz calada e `"1.5"` subfamilia da familia 1.
+    if (parent_id !== undefined && parent_id !== null && parent_id !== ''
+      && !/^[1-9]\d*$/.test(String(parent_id).trim())) {
+      return res.status(400).json({ error: 'Família pai não encontrada' });
+    }
+    const parentId = parent_id ? parseInt(String(parent_id).trim(), 10) : null;
 
     // Etapa 123 (C221, RN-01..RN-01d): a subfamilia so nasce se o pai AINDA e raiz ativa — a conferencia de
     // validateParentFamilia volta como condicao no proprio INSERT (o molde da C218, Etapa 110). Sem isto, o "Inativar" da
