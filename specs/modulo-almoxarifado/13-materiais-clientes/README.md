@@ -1,6 +1,7 @@
 # 13 — Materiais Pertencentes a Clientes
 
-> **Status:** 🟢 — **Etapa 8 entregue em 2026-08-12** (`f26b635..5b5eb55`) **+ Etapa 106 (2026-10-15, `d6493a7e..0c8ec372`): o estorno do ajuste exige a mesma permissão do ajuste (C211 resolvido)** **+ Etapa 108 (2026-10-15, `cd7d5118..bc415eb6`): trocar o dono de material com histórico exige a mesma permissão (C213 resolvido)** · **Spec original:** seção 17 (fundamental para industrialização GMP)
+> **Status:** 🟢 — **Etapa 8 entregue em 2026-08-12** (`f26b635..5b5eb55`) **+ Etapa 123 (2026-10-16, `c97fe07f`): o dono do material tem de
+> estar em Clientes — `POST`/`PUT /materiais` com dono inexistente → 400 (C216 resolvido; a regra mora na spec 01, seção "Etapa 123")** **+ Etapa 106 (2026-10-15, `d6493a7e..0c8ec372`): o estorno do ajuste exige a mesma permissão do ajuste (C211 resolvido)** **+ Etapa 108 (2026-10-15, `cd7d5118..bc415eb6`): trocar o dono de material com histórico exige a mesma permissão (C213 resolvido)** · **Spec original:** seção 17 (fundamental para industrialização GMP)
 > **Última atualização:** 2026-10-15 (Etapa 108)
 >
 > Material de cliente deixou de ser ilha e virou **material normal com dono**

@@ -1,17 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-16 (Etapa 122) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-16 (Etapa 123) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121 e 122) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122 e 123) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 122 ENTREGUE · próxima do almoxarifado: Etapa 123)
+> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 123 ENTREGUE · próxima do almoxarifado: Etapa 124)
 >
-> **O desenvolvimento parou aqui: Etapa 122 fechada — 2026-10-16.** A **Etapa 122 (a aprovação que falha não prende material,
+> **O desenvolvimento parou aqui: Etapa 123 fechada — 2026-10-16.** A **Etapa 123 (reorganizar famílias sem corrida, e o dono que
+> existe)**: criar, reativar e mudar de nível uma família no mesmo instante em que outra pessoa a inativa, cadastra material nela
+> ou a reorganiza não deixa mais subfamília ativa sob família inativa, terceiro nível nem material com o par errado; o salvar não
+> desfaz mais a mudança de outra pessoa feita no meio; o cadastro de material recusa dono que não está em Clientes; e a família de
+> "pai 0" deixa de nascer e vira família principal no boot.
+> **Próxima: Etapa 124** — ver a próxima tarefa no plano da 123.
+>
+> **Etapa 122, 2026-10-16.** A **Etapa 122 (a aprovação que falha não prende material,
 > e o estado não mora na Auditoria)**: o *Aprovar* que falha ao gravar o status não deixa reserva de pé (e o *Aprovar valor*
 > responde sucesso com ela); o estorno da nota reabre o pedido de compra fechado pelo sistema e o relatório de fornecedor conta a
 > conferência finalizada sem depender de uma linha da Auditoria; e a linha do excedente autorizado vem depois da quantidade.
-> **Próxima: Etapa 123** — ver a próxima tarefa no plano da 122.
+> *(Próxima, na época: Etapa 123 — entregue acima.)*
 >
 > **Etapa 121, 2026-10-16.** A **Etapa 121 (o que já voltou não se devolve de novo, e a
 > Auditoria depois do ato não desfaz o ato)**: a Devolução não aceita devolver de novo as peças com série que já voltaram ao
@@ -6492,6 +6499,57 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 123 — Reorganizar famílias sem corrida, e o dono que existe (ENTREGUE — 2026-10-16)
+
+**O que mudou, em uma frase:** reorganizar famílias enquanto outra pessoa mexe nelas não deixa mais a hierarquia num estado
+proibido, e o cadastro de material só aceita como dono um cliente que está em Clientes.
+
+**O problema que ela resolve.** Criar uma subfamília, reativá-la, mudá-la de família principal ou transformar uma família em
+subfamília conferia a regra num passo e gravava no seguinte. Com duas pessoas no mesmo segundo — uma criando a subfamília, outra
+inativando a família principal —, as duas passavam: subfamília ativa debaixo de família inativa (18 e 22 de 30 tentativas, medido),
+família com três níveis, material com a subfamília de uma família e a família de outra. O renomear da aba Famílias, por gravar o pai
+lido ao abrir, desfazia a mudança de família principal feita por outra pessoa no meio. E, pela API, o cadastro aceitava um dono que
+não está em Clientes e uma família com "pai 0", que a aba mostrava como principal e o cadastro de material recusava.
+
+| Antes | Agora |
+|---|---|
+| Criar ou reativar subfamília junto com o *Inativar* da principal: subfamília ativa sob principal inativa | A recusa de sempre para quem chega por último |
+| Transformar família em subfamília enquanto alguém cadastra material ou cria subfamília nela: material errado ou terceiro nível | A recusa de sempre |
+| Renomear na aba Famílias enquanto outra pessoa muda a família principal: o renomear desfazia | *"A família mudou enquanto era salva — nada foi gravado. Recarregue a família e salve de novo."* |
+| Salvar material enquanto outra pessoa muda a família dele: o salvar desfazia | *"O cadastro do material ⟨código⟩ mudou enquanto era salvo — …"* |
+| *Inativar* com uma subfamília nascendo e sumindo no meio: *"Família inativada"* com a família ativa | *"A família mudou enquanto era inativada — nada foi gravado. Tente de novo."* |
+| Pela API, dono 99999 (não existe): material cadastrado | Recusado, nada gravado |
+| Pela API, família com pai *"0"*, *"abc"*, *"1.5"* | *"Família pai não encontrada"* |
+| Família de pai 0 que já existe | Família principal depois do boot |
+
+### Roteiro de teste manual
+
+As corridas só se reproduzem com duas pessoas no mesmo segundo (forçadas nos testes automáticos). O que se clica é a regra.
+Pré-requisitos: login como **administrador**; um cliente **Caldeiraria Teste** em **Clientes**.
+
+1. **Almoxarifado → Configurações → Famílias** → **Nova família** *Tubos Teste 123* → salvar: *"Família criada!"*.
+2. No cartão dela → **Nova subfamília** *Tubos redondos* → salvar: *"Subfamília criada!"*; ela aparece dentro do cartão.
+3. No cartão *Tubos Teste 123* → **Inativar** → confirmar: *"Não é possível remover: família possui 1 subfamília(s) ativa(s)"*.
+4. Editar a subfamília → mudar o nome → salvar: *"Subfamília atualizada!"* (ela continua dentro do mesmo cartão).
+5. **Materiais → Novo** → família *Tubos Teste 123*, subfamília *Tubos redondos* → **Proprietário**: *Caldeiraria Teste* → preencha o
+   resto → salvar: o material é criado como material de cliente. O seletor só oferece clientes cadastrados (inclusive os inativos).
+6. **Duas abas (opcional, precisa de dois cliques no mesmo segundo):** numa, edite a subfamília; na outra, mude-a de família
+   principal pela API — quem salvar por último recebe *"A família mudou enquanto era salva — …"*; feche, abra de novo e salve.
+7. **Pela API (opcional):** `POST /api/almoxarifado/materiais` com `"proprietario_cliente_id": 99999` → *"O cliente dono informado
+   (#99999) não existe em Clientes — escolha um cliente cadastrado ou deixe o material como estoque próprio."*;
+   `POST /api/almoxarifado/familias` com `{"nome": "Teste", "parent_id": "0"}` → *"Família pai não encontrada"*.
+
+### O que esta etapa não cobre
+
+- O formulário aberto há minutos ainda grava a família que mostra, se outra pessoa a mudou entre abrir e salvar.
+- O pai que aponta para família inexistente (a consulta **A73** mostra); o que as corridas já deixaram (**A74**); o dono fantasma
+  (**A72**).
+- As decisões pendentes do P.O. (**B755**, **B761**/**C239**, **C224**, o resto da **C225**, **C228**, **C219**, **C230**, o reparo
+  da **C246**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: nenhuma tela mudou; o roteiro acima é o que os testes automáticos (pelas rotas e
+pelo serviço) e dois boots reais provam, escrito para você conferir à mão.
 
 ## Etapa 122 — A aprovação que falha não prende material, e o estado não mora na Auditoria (ENTREGUE — 2026-10-16)
 

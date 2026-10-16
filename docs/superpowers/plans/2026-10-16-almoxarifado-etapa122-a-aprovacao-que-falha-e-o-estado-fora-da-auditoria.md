@@ -193,7 +193,10 @@ galho roda só os próprios arquivos.
   + **3** Minor reais (3 corrigidos, 1 declarado), r3 **2** Important + **11** Minor sem prova (todos viraram teste); **0** ruído.
 3. **Paralelismo:** **1** galho em paralelo de fato (T1), **0** retrabalho; três revisores em paralelo na Fase 5; **0** custo de
    ambiente (a suíte inteira, uma por vez).
-4. **Defeito que escapou:** *(preencher na Etapa 123)*.
+4. **Defeito que escapou** *(preenchido na Etapa 123)*: **0 de código** — a revisão da 123 (três revisores, executando, sobre família,
+   material e dono) não achou nada da 122; as três janelas que ela achou são anteriores (Etapa 110 e antes). **1 de documentação:** o
+   cabeçalho "Onde o desenvolvimento está" de `docs/almoxarifado-novidades-por-etapa.md` parou na **120** — nem a 121 nem a 122 o
+   atualizaram (o checklist da `fechar-etapa` pede o cabeçalho do **guia**, não o do documento de novidades); corrigido na 123, dito.
 
 ## Próxima tarefa detalhada — Etapa 123
 

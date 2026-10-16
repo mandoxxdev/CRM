@@ -1,6 +1,8 @@
 # 01 — Cadastros de Materiais
 
-> **Status:** 🟡 — **continua 🟡. Etapa 116 (`fe93cc10..96a90ce2`): o formulário de material manda os controles que leu ao
+> **Status:** 🟡 — **continua 🟡. Etapa 123 (`40b7e08e..0106f6b5`): reorganizar famílias confere e grava no mesmo passo (C221),
+> o dono do material tem de estar em Clientes (C216) e o pai 0 deixa de nascer e vira família principal no boot (C223)** — ver a
+> seção "Etapa 123", no fim. Não fecha item do checklist (regras de integridade do cadastro). Antes: **Etapa 116 (`fe93cc10..96a90ce2`): o formulário de material manda os controles que leu ao
 > abrir e o salvar que desfaria o controle mudado por outra pessoa é recusado (C233); o estorno de Saída com séries (e a
 > exclusão de requisição) com a série desligada depois é recusado (C232)** — ver a seção "Etapa 116", no fim. Não fecha item
 > do checklist (regra de integridade do cadastro). Antes: **Etapa 115 (`e60e34e1..385d938f`): o salvar que liga ou desliga lote/série grava sob a trava do
@@ -328,7 +330,7 @@ Inicial** da criação grava ENTRADA fora do motor (`materialService.createMater
 - [x] **Fase 5** — `e5584a85`: o PUT de família não regrava o `ativo` omitido (B727) e a 2ª tentativa do "já inativada por
   outro" leva a condição; 9 cenários novos das sabotagens verdes.
 - [ ] **Fora, de propósito (B726):** ~~reativar material em família inativa (**C220**)~~ — *feita na Etapa 113*, mudar o nível de família e criar
-  subfamília sob raiz sendo inativada (**C221**), ~~ligar lote/série/inspeção num material com saldo (**C222**)~~ — *a
+  subfamília sob raiz sendo inativada (**C221**) — *feita na Etapa 123 (seção abaixo)*, ~~ligar lote/série/inspeção num material com saldo (**C222**)~~ — *a
   C222 foi feita na Etapa 112 (seção abaixo).*
 
 **A C215 estava parcialmente errada — fica dito.** Ela dizia que o saldo inicial pulava "as regras da Entrada da tela"
@@ -465,3 +467,31 @@ Plano: `docs/superpowers/plans/2026-10-15-almoxarifado-etapa116-controles-lidos-
 **O plano desta etapa dizia "o estorno (Administrador ou Almoxarife)" — estava errado:** estornar exige `ajustar_estoque`
 (Administrador e Gestor). A seção "Etapa 115" acima marcava a C232 e a C233 como abertas; as duas fecharam aqui (a C232 menos
 a devolução).
+
+## Etapa 123 — reorganizar famílias sem corrida, o dono que existe e o pai 0 (2026-10-16)
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa123-a-reorganizacao-de-familias-sem-corrida-e-o-dono-que-existe.md`.
+
+- [x] **Gravações de família com a conferência no comando (C221)** — `9f035163`. `POST /familias` com pai: `INSERT … SELECT …
+  WHERE EXISTS` (pai raiz ativa); `PUT /familias/:id`: `parent_id IS <lido>` sempre, o pai conferido ativo e raiz, `NOT EXISTS`
+  material quando o nível muda, `NOT EXISTS` subfamília quando vira sub. Não gravou → uma releitura só, pelas **mesmas** funções da
+  primeira passada (404 → pai mudou 409 → itens → subfamílias ativas → reativação → inativas → materiais → pai); desfeito na janela →
+  uma tentativa a mais; de novo → 409. Literal nova só no `POST`: *"A família principal mudou enquanto a subfamília era criada —
+  nada foi gravado. Tente de novo."* (B793).
+- [x] **Dono que existe (C216)** — `c97fe07f`. `materialService.assertDonoExiste` (`SELECT 1 FROM clientes`): no `createMaterial`
+  (saldo inicial → dono → família) e no `PUT /materiais/:id` só quando o dono muda para um id, depois do 403 da troca. 400 *"O
+  cliente dono informado (#⟨n⟩) não existe em Clientes — escolha um cliente cadastrado ou deixe o material como estoque próprio."*
+  Cliente inativo aceito; sem condição no comando (B794).
+- [x] **Pai 0 (C223)** — `c63c1b4b`. `POST /familias` com a régua do `PUT` (`/^[1-9]d*$/`, senão *"Família pai não encontrada"*,
+  depois do nome); `schema.migrateRepararFamiliaPaiZero` (ledger `reparo_familia_pai_zero`, no `initSchema`) (B795).
+- [x] **Integração** — `bbef8aea` (rota e serviço).
+- [x] **Fase 5** — `91e95c80`: o `ativo` informado sem transição confere o lido (B796), o `PUT` de material confere o par
+  família/subfamília lido (B798), o *Inativar* que não grava não diz "já inativa" (B797); `0106f6b5`: seis cenários das sabotagens.
+- [ ] **Fora, de propósito:** o pai que aponta para família inexistente (não reparado; A73); o formulário aberto há minutos ainda grava
+  a família que mostra (o "último que salva vence", D (123)).
+
+**A C223 estava errada — fica dito.** Ela dizia "legado de antes da Etapa 103"; a 103 fechou o `PUT`, e o `POST /familias`
+continuou gravando `parent_id = 0` com `"0"` (e `"1.5"` como pai 1) até esta etapa. **A C221 estava incompleta:** o terceiro nível
+(raiz que vira sub com sub nascendo nela; sub que entra numa raiz que está virando sub) e a mudança para uma raiz sendo inativada
+são a mesma forma e não estavam nela. **A seção "Etapa 108" acima diz "cliente inexistente" sem dizer como ele aparece — e a C216
+dizia "o cliente foi apagado": estava errado**, o sistema não apaga cliente (só inativa).

@@ -11,10 +11,15 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-16):** **Etapa 120 fechada** (o lançamento que já valeu responde sucesso mesmo com a
+> **Onde o desenvolvimento está (2026-10-16):** **Etapa 123 fechada** (reorganizar famílias enquanto outra pessoa mexe nelas não
+> deixa mais subfamília ativa sob família inativa, terceiro nível nem material com o par errado — **C221** resolvido; o cadastro
+> recusa dono que não está em Clientes — **C216** resolvido; e a família de "pai 0" vira família principal no boot e não nasce
+> mais — **C223** resolvido); a próxima do almoxarifado é a **124** — ver "Onde estamos e o que vem a seguir". *(Esta frase tinha
+> parado na Etapa 120 — as Etapas 121 e 122 não a atualizaram; as duas estão na seção delas e em "Onde estamos". Fica dito.)*
+> *(Antes: **Etapa 120 fechada** (o lançamento que já valeu responde sucesso mesmo com a
 > Auditoria falhando, **C250**; a saída cujas séries voltaram por uma Entrada não estorna em dobro com a série desligada,
 > **C234**; e a exclusão da requisição não devolve de novo as séries que já voltaram, **C251**); a próxima do almoxarifado é a
-> **121** — ver "Onde estamos e o que vem a seguir". *(Antes: Etapa 119 fechada (o que já valeu não se perde nem responde erro — a saída
+> **121** — ver "Onde estamos e o que vem a seguir".)* *(Antes: Etapa 119 fechada (o que já valeu não se perde nem responde erro — a saída
 > com lote que falha no meio devolve o endereço já baixado, **C249**; o estorno concluído responde sucesso mesmo com a auditoria
 > falhando, **C248**; desfeita a devolução e estornada a entrega, a entrada original das séries estorna, **C242**); a próxima do
 > almoxarifado era a **120**.)* *(Antes: Etapa 118 fechada (o estorno que falha no meio desfaz
@@ -141,8 +146,11 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Setenta e um itens para rodar em produção ANTES do deploy — sessenta e oito são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Setenta e quatro itens para rodar em produção ANTES do deploy — setenta e um são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
 
+*(**Atualizado em 2026-10-16 (Etapa 123) de setenta e um para setenta e quatro**, com a **A72** — materiais com dono que não está
+em Clientes —, a **A73** — famílias com pai 0 ou pai inexistente, e o material nelas — e a **A74** — o que as corridas da
+reorganização de famílias deixaram; as três opcionais e somente leitura.)*
 *(**Atualizado em 2026-10-16 (Etapa 122) de sessenta e nove para setenta e um**, com a **A70** — reservas presas em requisições rejeitadas, canceladas ou pendentes — e a **A71** — pedidos e conferências que perderam a linha da Auditoria entre a Etapa 121 e a 122; as duas opcionais.)*
 
 *(**Atualizado em 2026-10-16 (Etapa 121) de sessenta e oito para sessenta e nove**, com a **A69** — entregas em que a Devolução pode ter devolvido de novo peças que já tinham voltado por outra entrada; opcional.)*
@@ -2628,12 +2636,104 @@ por fornecedor* conta como **não conferido**. Se a conferência foi finalizada 
 `UPDATE recebimentos_material_almoxarifado SET conferencia_finalizada_em = '⟨data⟩' WHERE id = ⟨id⟩`; se não, nada a fazer. Só muda
 o relatório.
 
+**A72 (NOVA, da Etapa 123 — materiais com dono que não está em Clientes).** Uma consulta, somente leitura; **opcional**. Até a
+Etapa 123 a API aceitava gravar como dono um número que não está em Clientes (**C216**); o material aparece como *"cliente #⟨n⟩"*
+nas mensagens, com as regras de material de cliente ligadas e nenhum cliente para cobrar ou devolver. Desde a 123 isso é recusado.
+
+```sql
+SELECT m.id, m.codigo, m.nome, m.proprietario_cliente_id, m.ativo, m.quantidade_atual
+  FROM materiais_almoxarifado m
+ WHERE m.proprietario_cliente_id IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM clientes c WHERE c.id = m.proprietario_cliente_id)
+ ORDER BY m.codigo;
+```
+
+*(Conferida numa sonda contra o código de antes da etapa: acha o material cadastrado pela API com o dono 99999 e **não** acha o de
+um cliente cadastrado nem o de um cliente **inativo**. Contra o código da etapa, o mesmo cadastro é recusado e a consulta sai vazia.)*
+
+**Como ler o resultado:** **vazia** — nada a fazer. Cada linha é um material com dono fantasma. O Administrador decide o dono
+certo e corrige em **Materiais → editar → Proprietário** (um cliente cadastrado, ou *GMP (estoque próprio)* se o material é nosso);
+com saldo ou movimentação, trocar o dono é só dele (a **A56** mostra as trocas já feitas).
+
+**A73 (NOVA, da Etapa 123 — famílias com pai 0 ou pai inexistente).** Duas consultas, somente leitura; **opcional**. A família
+gravada com "pai 0" (**C223**) era família principal para a aba Famílias e subfamília para o cadastro de material. **O boot desta
+versão a transforma em família principal sozinho** (uma vez, com registro no log: *"Migração reparo_familia_pai_zero aplicada (N
+família(s) com pai 0 viraram família principal)"*); rode **antes** do deploy só para saber quais são. O pai que aponta para uma
+família que não existe **não** é reparado (não foi medido em lugar nenhum — o sistema não apaga família).
+
+```sql
+-- (a) as familias
+SELECT f.id, f.codigo, f.nome, f.parent_id, f.ativo,
+       CASE WHEN f.parent_id = 0 THEN 'pai 0 (o boot corrige)' ELSE 'pai inexistente' END AS caso
+  FROM familias_material_almoxarifado f
+ WHERE f.parent_id IS NOT NULL
+   AND (f.parent_id = 0 OR NOT EXISTS (SELECT 1 FROM familias_material_almoxarifado p WHERE p.id = f.parent_id))
+ ORDER BY f.codigo;
+
+-- (b) o material que aponta para uma familia de pai 0 (antes do boot)
+SELECT m.id, m.codigo, m.ativo, m.familia_id, m.subfamilia_id,
+       CASE WHEN f.id = m.familia_id THEN 'na familia' ELSE 'na subfamilia' END AS onde
+  FROM materiais_almoxarifado m
+  JOIN familias_material_almoxarifado f ON f.parent_id = 0 AND (f.id = m.familia_id OR f.id = m.subfamilia_id)
+ ORDER BY m.codigo;
+```
+
+*(Conferidas numa sonda: (a) acha a família de pai 0 gravada pelo cadastro de antes da etapa e a de pai 9999, e **não** acha a
+família principal nem a subfamília bem formada; (b) acha o material com a família de pai 0 no campo Família e o que a tem no campo
+Subfamília, e **não** o de uma família principal.)*
+
+**Como ler o resultado:** **(a) vazia** — nada a fazer. *pai 0*: depois do boot ela é família principal — confira se é isso que
+ela é; se era para ser subfamília de outra, reorganize pela API. *pai inexistente*: edite pela API escolhendo o pai certo (ou
+nenhum). **(b)**: o material **na família** passa a estar numa família principal (certo); o material **na subfamília** fica com o
+par errado depois do boot (a família de pai 0 vira principal) — edite o material e escolha a subfamília certa (ou nenhuma).
+
+**A74 (NOVA, da Etapa 123 — o que as corridas da reorganização de famílias deixaram).** Três consultas, somente leitura;
+**opcional**. Até a Etapa 123, criar ou reativar uma subfamília, mudar uma família de nível ou de família principal no mesmo
+instante em que outra pessoa inativava a família principal, cadastrava material ou reorganizava a mesma família podia deixar o que
+as regras proíbem (**C221** — medido: 18 a 22 de 30 rodadas na criação de subfamília com o *Inativar* da família principal).
+
+```sql
+-- (a) subfamilia ativa sob familia principal inativa
+SELECT s.id, s.codigo, s.nome, p.codigo AS familia_principal, p.ativo AS principal_ativa
+  FROM familias_material_almoxarifado s
+  JOIN familias_material_almoxarifado p ON p.id = s.parent_id
+ WHERE s.ativo = 1 AND COALESCE(p.ativo, 0) <> 1
+ ORDER BY s.codigo;
+
+-- (b) terceiro nivel: familia cujo pai tambem tem pai
+SELECT n.id, n.codigo, n.nome, s.codigo AS pai, s.parent_id AS avo_id
+  FROM familias_material_almoxarifado n
+  JOIN familias_material_almoxarifado s ON s.id = n.parent_id
+ WHERE s.parent_id IS NOT NULL AND s.parent_id <> 0
+ ORDER BY n.codigo;
+
+-- (c) material com o par familia/subfamilia que nao bate
+SELECT m.id, m.codigo, m.ativo, f.codigo AS familia, f.parent_id AS familia_tem_pai,
+       s.codigo AS subfamilia, s.parent_id AS principal_da_subfamilia
+  FROM materiais_almoxarifado m
+  LEFT JOIN familias_material_almoxarifado f ON f.id = m.familia_id
+  LEFT JOIN familias_material_almoxarifado s ON s.id = m.subfamilia_id
+ WHERE (f.parent_id IS NOT NULL AND f.parent_id <> 0)
+    OR (m.subfamilia_id IS NOT NULL AND COALESCE(s.parent_id, -1) <> COALESCE(m.familia_id, -2))
+ ORDER BY m.codigo;
+```
+
+*(Conferidas numa sonda contra o código de antes da etapa: as janelas da criação de subfamília, da raiz que vira subfamília com
+material e com subfamília nascendo, e da subfamília que muda de família principal com material geram uma linha em (a), (b) e duas
+em (c); a família e a subfamília bem formadas, a subfamília **inativa** sob família inativa e o material de par certo **não**
+aparecem. Contra o código da etapa as mesmas janelas são recusadas e as três saem vazias.)*
+
+**Como ler o resultado:** **vazias** — nada a fazer. **(a)**: reative a família principal (Configurações → Famílias) se a
+subfamília continua em uso, ou inative a subfamília. **(b)**: a neta tem de subir — pela API, mude o pai dela para a família
+principal (ou nenhum). **(c)**: o material aparece com "Subfamília inválida…" ao mudar de família; edite-o e escolha o par certo.
+A (c) também lista o material antigo gravado com a subfamília no campo Família (o legado conhecido desde a Etapa 100).
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B792; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B799; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -8493,6 +8593,61 @@ quantidades anteriores sem linha). **Reversível.**
 **B755**, a **B761**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230** e o reparo da **C246** continuam
 esperando vocês.
 
+**B793 (NOVA, da Etapa 123) — reorganizar famílias confere e grava no mesmo passo.** Antes: criar uma subfamília, reativá-la,
+mudá-la de família principal e transformar família em subfamília (ou o inverso) conferiam a regra e gravavam em passos separados;
+com o *Inativar* da família principal, o cadastro de material ou outra reorganização no meio, ficava subfamília ativa sob família
+inativa, terceiro nível ou material com o par errado (**C221** — medido). **O que foi escolhido** (`9f035163`): o molde da **C218**
+— a condição de cada conferência vai **dentro** do comando que grava; quando não grava, o sistema relê pelas **mesmas**
+conferências e responde a recusa de hoje, com a mesma mensagem; se o que impedia sumiu, tenta uma vez mais; mudou de novo, recusa
+com *"A família principal mudou enquanto a subfamília era criada — nada foi gravado. Tente de novo."* (literal nova, na criação)
+ou a de sempre da edição. **E a edição que não muda o pai** (a da aba Famílias: nome, descrição, tipo de uso) passa a conferir que
+o pai continua o que ela leu — achado na revisão do plano: o renomear regravava o pai lido e desfazia uma mudança feita por outra
+pessoa no meio (reabria a C221 pelo único gesto da tela); agora recebe *"A família mudou enquanto era salva — nada foi gravado.
+Recarregue a família e salve de novo."* **Descartado:** uma trava em memória por família (mexeria nas seis portas da trava por
+material sem necessidade) e uma transação no banco (a conexão é uma só, compartilhada por todas as telas). **Reversível.**
+
+**B794 (NOVA, da Etapa 123) — o dono do material tem de estar em Clientes.** Antes: pela API, gravar como dono um número que não
+está em Clientes passava (**C216** — medido: 201 no cadastro, 200 na edição). **O que foi escolhido** (`c97fe07f`): 400 com *"O
+cliente dono informado (#⟨n⟩) não existe em Clientes — escolha um cliente cadastrado ou deixe o material como estoque próprio."*,
+no cadastro (depois da recusa do Saldo Inicial, antes da família) e na edição **só quando o dono muda** para um número (depois da
+recusa da permissão de trocar o dono). Conta só a **existência**: o cliente **inativo** continua aceito, porque a tela o oferece.
+O material cujo cliente não existe (legado) continua editável enquanto o dono não muda. Conferido **antes** de gravar, sem a
+condição no comando: nenhuma tela do sistema apaga cliente (Clientes só inativa). **Descartado:** recusar cliente inativo (a
+recusa apareceria só ao salvar um cliente que a tela oferece) e a condição no comando (protegeria de uma exclusão que não existe).
+**Reversível.**
+
+**B795 (NOVA, da Etapa 123) — o "pai 0" deixa de nascer e o que existe vira família principal.** Antes: o cadastro de família pela
+API gravava o pai *"0"* como 0, *"abc"* como família principal calada e *"1.5"* como subfamília da família 1 (**C223** — medido;
+a C223 dizia que era só legado, **estava errada**). **O que foi escolhido** (`c63c1b4b`): o cadastro usa a régua que a edição usa
+desde a Etapa 103 — pai informado tem de ser número inteiro positivo, senão *"Família pai não encontrada"* (inclui o 0 numérico, que
+virava família principal calado); e o boot transforma a família de pai 0 em família principal, uma vez (a **A73** diz quais são).
+**Descartado:** reparar também o pai que aponta para família inexistente (não medido; a A73 mostra) e aceitar *"1.5"* como 1.
+**Reversível:** o reparo só troca 0 por vazio.
+
+**B796 (NOVA, da Etapa 123, da revisão; anterior a ela) — a edição de família que informa a situação (ativa/inativa) sem mudá-la
+confere a situação lida.** Antes: pela API, `{ativo: 1}` numa subfamília ativa, com ela e a família principal inativadas no meio,
+reativava a subfamília sob a principal inativa; `{ativo: 0}` numa família inativa reativada com material no meio a reinativava com
+o material dentro (achado pelo revisor de concorrência, com a janela forçada). **O que foi escolhido** (`91e95c80`): a gravação só
+vale se a situação ainda é a lida; senão *"A família mudou enquanto era salva — …"*. A tela não manda a situação ao editar.
+**Reversível.**
+
+**B797 (NOVA, da Etapa 123, da revisão; anterior a ela — da Etapa 110) — o "Inativar" que não grava não diz mais "já inativa".**
+Antes: se uma subfamília nascia e era inativada no meio do *Inativar* da família principal, a resposta era "já inativa" com a
+família **ativa** — o aviso *"Família inativada"* mentia. **O que foi escolhido** (`91e95c80`): *"A família mudou enquanto era
+inativada — nada foi gravado. Tente de novo."* (literal nova); clicar de novo inativa. **Descartado:** tentar de novo sozinho (mais
+um ramo de releitura para um caso de duas pessoas no mesmo segundo). **Reversível.**
+
+**B798 (NOVA, da Etapa 123, da revisão; anterior a ela) — a edição de material confere a família e a subfamília que leu.** Antes:
+o salvar gravava de volta o par família/subfamília lido ao abrir, mesmo sem mudar — com outra pessoa movendo o material e
+inativando a família antiga (ou transformando a subfamília antiga em família principal) no meio, o material voltava para o par
+velho (achado pelo revisor de concorrência, com a janela forçada). **O que foi escolhido** (`91e95c80`): o salvar só grava se o
+par ainda é o lido (o molde do dono, Etapa 108); senão *"O cadastro do material ⟨código⟩ mudou enquanto era salvo — nada foi
+gravado. Recarregue o material e salve de novo."* (a de sempre). **Reversível.**
+
+**B799 (NOVA, da Etapa 123) — a próxima etapa do almoxarifado (124).** Ver a "próxima tarefa detalhada" no plano da Etapa 123. A
+**B755**, a **B761**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230** e o reparo da **C246** continuam
+esperando vocês.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -10684,7 +10839,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      Medido com todos esses casos (201). **O que fazer:** até a correção, cadastre o material com saldo **0** e lance a
      **Entrada** pela tela de Movimentações. É a candidata da **Etapa 110** (**B719**).
 
-216. **NOVO (anterior à Etapa 108, achado na medição dela) — o cadastro aceita um dono que não existe.** Pela API, gravar
+216. **✅ RESOLVIDO NA ETAPA 123 (`c97fe07f`) — o cadastro e a edição recusam dono que não está em Clientes (**B794**); os
+     que já estão assim: **A72**. ⚠️ Este item estava errado num ponto:** *"o cliente foi apagado"* — o sistema **não apaga**
+     cliente (Clientes só inativa, e o inativo continua em Clientes); o *"cliente #⟨n⟩"* só aparece por número gravado errado
+     pela API. O texto original: **NOVO (anterior à Etapa 108, achado na medição dela) — o cadastro aceita um dono que não existe.** Pela API, gravar
      como dono um número de cliente que não está em Clientes passa (200); a tela não deixa (o seletor só tem clientes
      cadastrados). O material passa a aparecer como *"cliente #⟨n⟩"* nas mensagens. **O que fazer:** nada no dia a dia; se
      aparecer *"cliente #⟨n⟩"* num material, o cliente foi apagado ou o número foi gravado errado — o Administrador corrige
@@ -10722,7 +10880,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      com a família dele inativa. **O que fazer:** reative a família antes; a **A58** acha os casos. Candidata a uma etapa
      futura (**B726**).
 
-221. **NOVO (anterior à Etapa 110, achado na medição dela) — outras escritas de família conferem e gravam em passos
+221. **✅ RESOLVIDO NA ETAPA 123 (`9f035163`, `91e95c80`) — criar, reativar e mudar de nível conferem e gravam no mesmo
+     passo, e a edição confere o pai e a situação lidos (**B793**, **B796**); o que já ficou assim: **A74**. ⚠️ Este item estava
+     incompleto:** além das janelas que ele nomeia, a Fase 0 da 123 mediu o terceiro nível (a família principal que vira
+     subfamília enquanto nasce uma subfamília nela, ou a subfamília que entra numa família que está virando subfamília) e a
+     subfamília que muda para uma família principal sendo inativada — a mesma forma, não escritas aqui. E "não medidas por
+     corrida" deixou de valer: criar subfamília × *Inativar* a principal deu 18 e 22 de 30 rodadas. O texto original: **NOVO (anterior à Etapa 110, achado na medição dela) — outras escritas de família conferem e gravam em passos
      separados.** Mudar o nível de uma família (raiz que vira subfamília, subfamília que muda de raiz) confere que ela não
      tem material e depois grava; criar uma subfamília, ou reativar uma, confere que a raiz está ativa e depois grava — a
      revisão da Etapa 110 **reproduziu** as duas últimas: subfamília ativa sob família principal inativa. Disparadas no mesmo
@@ -10743,7 +10906,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      **O que fazer:** ligue os controles no cadastro, antes de qualquer saldo; para material que já tem saldo, o
      Administrador regulariza (Lotes → regularizar séries, ou Ajuste). Candidata a uma etapa futura (**B726**).
 
-223. **NOVO (anterior à Etapa 110, achado na revisão do plano dela) — família gravada com "pai 0" é raiz para a tela de
+223. **✅ RESOLVIDO NA ETAPA 123 (`c63c1b4b`) — o cadastro de família recusa o pai 0 e o boot transforma em família principal
+     a que já existe (**B795**, **A73**). ⚠️ Este item estava errado:** *"legado de antes da Etapa 103"* — a 103 fechou a
+     **edição**; o **cadastro** de família pela API continuou gravando o pai *"0"* como 0 até a Etapa 123 (medido). O texto original: **NOVO (anterior à Etapa 110, achado na revisão do plano dela) — família gravada com "pai 0" é raiz para a tela de
      Famílias e subfamília para o cadastro de material.** Legado de antes da Etapa 103 (o "0" gravado como pai): a aba
      Famílias a trata como família principal, mas o cadastro de material a recusa como subfamília (*"A família escolhida é
      uma subfamília — …"*). **O que fazer:** se aparecer, edite a família e salve com a família pai vazia.
@@ -10976,6 +11141,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      fechado pelo sistema ou uma conferência finalizada com a linha da Auditoria falhando (só com erro de banco) ficam sem o estado
      novo depois do deploy — a migração lê essas linhas. O pedido não reabre no estorno da nota; o recebimento sai *não conferido*
      no relatório. **O que fazer:** rode a **A71** e acerte o que ela listar.
+
+258. **NOVO (da Etapa 123) — salvar uma família ou um material que outra pessoa reorganizou no meio do salvar é recusado.** A
+     edição da aba **Famílias** (nome, descrição, tipo de uso) recebe *"A família mudou enquanto era salva — nada foi gravado.
+     Recarregue a família e salve de novo."* quando outra pessoa mudou a família principal dela no mesmo instante; a edição de
+     **material** recebe *"O cadastro do material ⟨código⟩ mudou enquanto era salvo — nada foi gravado. Recarregue o material e
+     salve de novo."* quando outra pessoa mudou a família ou a subfamília dele; o *Inativar* da família pode responder *"A família
+     mudou enquanto era inativada — nada foi gravado. Tente de novo."* Antes, o salvar desfazia a mudança do outro sem avisar
+     (**B793**, **B797**, **B798**). Só com duas pessoas mexendo no mesmo cadastro no mesmo segundo. **O que fazer:** recarregue
+     (feche e abra o cadastro) e salve de novo.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -12115,6 +12289,19 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   num banco de antes da etapa (a migração preencheu o pedido fechado pelo sistema e não o fechado à mão).
 - **(122) A guarda "só grava a linha do excedente se a quantidade foi gravada"** não tem como ser provada por teste de ponta a
   ponta: a decisão já descarta o item que não é do recebimento; ficou pela segurança.
+- **(123) O dono do material é conferido antes de gravar, não no mesmo passo** (**B794**): nenhuma tela apaga cliente; se um dia
+  houver exclusão de cliente, a conferência passa a ter corrida com ela.
+- **(123) O reparo do boot cobre só o pai 0.** O pai que aponta para família inexistente fica como está (a **A73** mostra); o
+  reparo não grava linha na Auditoria (só o log do boot).
+- **(123) As corridas da reorganização de famílias** são provadas com a janela forçada, uma a uma (**26 + 7 + 6** cenários); na
+  corrida natural de 30 rodadas, duas das combinações (a família principal que vira subfamília × o cadastro de material nela; o
+  renomear × a mudança de família principal) não acontecem nem no código de antes (a janela é estreita demais) — o teste
+  natural é guarda, não prova.
+- **(123) O pai, a situação e o par família/subfamília lidos** só protegem o que muda **dentro** de um salvar. O formulário aberto
+  há minutos manda o par que mostrava ao abrir: se outra pessoa mudou a família do material **depois** de o formulário abrir e
+  **antes** do clique em Salvar, o salvar grava de volta a família que o formulário mostra (conferida como uma troca de família,
+  com as recusas de sempre) — o "último que salva vence" dos campos do cadastro (o mesmo da **C233** antes da 116, para os
+  controles).
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -13017,6 +13204,13 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(123) Nenhum clique foi dado nesta etapa no navegador.** Nenhuma tela mudou: as recusas novas chegam pelo aviso vermelho que já
+mostra a mensagem do servidor, e as corridas só existem com duas pessoas no mesmo segundo (forçadas nos testes). Tudo foi provado
+pela rota e pelo serviço (**59** cenários em seis arquivos novos, um deles a jornada de integração; corridas forçadas pelos revisores) e
+por dois boots reais (banco novo e banco de antes da etapa com uma família de pai 0). O que **só o navegador** prova: o roteiro da
+Etapa 123 no guia — criar subfamília, o *Inativar* recusado, e o aviso ao gravar um material de cliente pela tela (que nunca recusa,
+porque o seletor só oferece clientes cadastrados).
 
 **(122) Nenhum clique foi dado nesta etapa no navegador.** Nenhuma tela mudou: o pedido que reabre, o relatório que conta e as
 aprovações que não prendem material são do servidor, e as falhas de banco só existem forçadas. Tudo foi provado pela rota e pelo
@@ -25287,9 +25481,94 @@ do código** (três revisores, cada um na sua cópia, executando): o de **regra*
 sobre um fechamento à mão feito durante o boot (10 em 10) — corrigidas; o de **sabotagem** fez **73** sabotagens: dois pontos de
 produção sem prova (a Auditoria do excedente no fiscal, as migrações chamadas no boot) e onze menores — todos viraram teste.
 
+## Etapa 123 — Reorganizar famílias sem corrida, e o dono que existe (2026-10-16)
+
+As famílias de material têm dois níveis — família principal e subfamília — e regras que impedem estados sem sentido: subfamília
+ativa debaixo de uma família principal inativa (onde nenhum material novo entra), uma subfamília com filhas (o terceiro nível), um
+material com a subfamília de uma família e a família de outra. Cada regra era conferida num passo e gravada no passo seguinte:
+quando duas pessoas mexiam nas mesmas famílias no mesmo segundo — uma criando uma subfamília, outra inativando a família principal;
+uma transformando a família em subfamília, outra cadastrando material nela —, as duas passavam, e o estado proibido ficava. Medido:
+criar subfamília com o *Inativar* da família principal no mesmo instante deixou a subfamília ativa sob a principal inativa em 18 e
+22 de 30 tentativas. A etapa fecha essas portas, e mais duas pequenas: o cadastro de material aceitava pela API um dono que não está
+em Clientes, e o cadastro de família pela API gravava o pai "0" — uma família que a aba Famílias mostrava como principal e o
+cadastro de material recusava como subfamília.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Criar subfamília no mesmo instante do *Inativar* da família principal: subfamília ativa sob principal inativa | Quem chega por último recebe a recusa de sempre (**B793**) |
+| Reativar subfamília no mesmo instante do *Inativar* da principal: o mesmo | O mesmo |
+| Transformar família em subfamília no mesmo instante em que alguém cadastra material nela (ou cria subfamília nela): material de família principal numa subfamília, ou terceiro nível | Recusa de sempre (*"Não é possível transformar em subfamília: …"*, *"Família com subfamília(s) ativa(s) não pode virar subfamília"*) |
+| Renomear a subfamília na aba Famílias enquanto outra pessoa a muda de família principal: o renomear a devolvia para a principal antiga | *"A família mudou enquanto era salva — …"*; a mudança do outro fica (**B793**) |
+| Salvar um material enquanto outra pessoa muda a família dele: o salvar desfazia a mudança | *"O cadastro do material ⟨código⟩ mudou enquanto era salvo — …"* (**B798**) |
+| *Inativar* com uma subfamília nascendo e sumindo no meio: *"Família inativada"* com a família ativa | *"A família mudou enquanto era inativada — nada foi gravado. Tente de novo."* (**B797**) |
+| Pela API, material com dono 99999 (cliente que não existe): cadastrado | *"O cliente dono informado (#99999) não existe em Clientes — …"* (**B794**) |
+| Pela API, família com pai *"0"*: gravada com pai 0; *"abc"* virava família principal; *"1.5"* virava subfamília da família 1 | *"Família pai não encontrada"* (**B795**) |
+| Família de pai 0 que já existe: principal na aba Famílias, recusada no cadastro de material | O boot a transforma em família principal, uma vez |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **administrador**; um cliente **Caldeiraria Teste** em Clientes. As corridas só se reproduzem com duas pessoas no
+mesmo segundo (forçadas nos testes automáticos); o que se clica é a regra, que é a mesma de sempre.
+
+**1. Criar subfamília continua como sempre.** **Almoxarifado → Configurações → Famílias** → **Nova família** *Tubos Teste 123* →
+salvar → no cartão dela, **Nova subfamília** *Tubos redondos* → salvar: *"Subfamília criada!"*. Se outra pessoa inativou a família
+principal no mesmo instante, a recusa é *"Subfamília não pode ter filhos (máximo 2 níveis)"* (a de sempre para família principal
+inativa) e nada é criado.
+
+**2. O *Inativar* da família principal com subfamília ativa.** No cartão *Tubos Teste 123* → **Inativar** → confirmar: *"Não é
+possível remover: família possui 1 subfamília(s) ativa(s)"*. Inative a subfamília primeiro (**Inativar** nela), depois a principal:
+*"Família inativada"*.
+
+**3. Renomear não desfaz a reorganização de outra pessoa.** Editar a subfamília → mudar o nome → salvar: *"Subfamília
+atualizada!"*. Se, no mesmo segundo, outra pessoa a moveu para outra família principal, a recusa é *"A família mudou enquanto era
+salva — nada foi gravado. Recarregue a família e salve de novo."* — feche, abra de novo e salve.
+
+**4. O dono do material.** **Materiais → Novo** → família *Tubos Teste 123* (reative-a se inativou no cenário 2) → **Proprietário**:
+*Caldeiraria Teste* → salvar: o material é criado como material de cliente. O seletor só oferece clientes cadastrados (inclusive
+os inativos) — a recusa nova só aparece pela API: `POST /api/almoxarifado/materiais` com `"proprietario_cliente_id": 99999` →
+400 *"O cliente dono informado (#99999) não existe em Clientes — escolha um cliente cadastrado ou deixe o material como estoque
+próprio."*
+
+**5. O pai 0.** Só pela API: `POST /api/almoxarifado/familias` com `{"nome": "Teste", "parent_id": "0"}` → 400 *"Família pai não
+encontrada"* (o mesmo com `0`, `"abc"`, `"1.5"`, `-1`); sem `parent_id`, ou com ele vazio, cria família principal.
+
+### O que esta etapa NÃO cobre
+
+1. **O formulário aberto há minutos** ainda grava a família que mostra, se outra pessoa a mudou entre abrir e salvar — o "último
+   que salva vence" dos campos do cadastro (**D (123)**).
+2. **O pai que aponta para família inexistente** não é reparado — a **A73** mostra.
+3. **O que as corridas já deixaram** antes do deploy — a **A74** acha; o dono fantasma — **A72**.
+4. A **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230** e o reparo da **C246** — decisões
+   suas.
+
+### O que a revisão encontrou
+
+A **medição** reproduziu as oito janelas antes de qualquer código — três delas (o terceiro nível e a mudança para uma família
+principal sendo inativada) não estavam escritas na C221 — e mostrou que a C223 **estava errada**: o pai 0 não era só legado, o
+cadastro de família pela API ainda o gravava. A **revisão do plano** (um revisor, antes do código) achou a **trava**: o renomear da
+aba Famílias regravava o pai lido ao abrir e desfazia a mudança feita por outra pessoa no meio — reabria a C221 pelo único gesto
+da tela; e duas correções (uma releitura só para todas as recusas, para a mistura de inativar e mudar de pai não virar a recusa
+errada; e o número de linhas gravadas como única prova de que a subfamília nasceu). A **revisão adversarial do código** (três
+revisores, cada um na sua cópia, executando): o de **regra** comparou 475 edições de família no código de antes e no novo — saíram
+idênticas, recusa por recusa; o de **concorrência** achou três janelas anteriores à etapa, da mesma forma — a edição que informa a
+situação sem mudá-la, o salvar do material que devolvia a família antiga e o *Inativar* que dizia "já inativa" com a família ativa —
+corrigidas (**B796**, **B797**, **B798**); o de **sabotagem** fez **78** sabotagens: 68 derrubaram teste pela asserção certa, 4 eram
+equivalentes ou impossíveis, e **6** mostraram cenários sem prova — viraram teste.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 123 entregue (2026-10-16):** **reorganizar famílias sem corrida, e o dono que existe.** Criar, reativar e mudar de nível
+  uma família no mesmo instante em que outra pessoa a inativa, cadastra material nela ou a reorganiza não deixa mais estado
+  proibido (**C221** resolvido); a edição confere o pai, a situação e o par família/subfamília que leu (**B793**, **B796**, **B798**);
+  o cadastro de material recusa dono que não está em Clientes (**C216** resolvido); e o pai 0 deixa de nascer e o que existe vira
+  família principal no boot (**C223** resolvido — estava errada). **O que é seu:** as consultas **A72**, **A73** e **A74**
+  (opcionais); as decisões **B793 a B798** (reversíveis); o aviso **C258**; as limitações **(123)** em D e a verificação **(123)**
+  em F.
+  **Próxima: Etapa 124 — ver a "próxima tarefa detalhada" no plano da Etapa 123.**
 
 - **Etapa 122 entregue (2026-10-16):** **a aprovação que falha não prende material, e o estado não mora na Auditoria.** O *Aprovar*
   que falha ao gravar o status desfaz a reserva; o *Aprovar valor* responde sucesso com ela (**C254** resolvido); o estorno da
@@ -25297,7 +25576,7 @@ produção sem prova (a Auditoria do excedente no fiscal, as migrações chamada
   resolvido); a linha do excedente autorizado vem depois da quantidade (**B791**). **O que é seu:** as consultas **A70** e **A71**
   (opcionais); as decisões **B788 a B791** (reversíveis — a **B788** mexe numa tabela do Compras); os avisos **C256** e **C257**; as
   limitações **(122)** em D e a verificação **(122)** em F.
-  **Próxima: Etapa 123 — ver a "próxima tarefa detalhada" no plano da Etapa 122.**
+  *(Próxima, na época: Etapa 123 — entregue acima.)*
 
 - **Etapa 121 entregue (2026-10-16):** **o que já voltou não se devolve de novo, e a Auditoria depois do ato não desfaz o ato.**
   A Devolução não devolve de novo as peças que voltaram por outra entrada (**C253** resolvido); o ato que já está feito

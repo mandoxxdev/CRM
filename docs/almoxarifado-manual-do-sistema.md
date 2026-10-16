@@ -187,6 +187,25 @@ subfamílias próprias (ativas ou inativas — a hierarquia nunca passa de dois 
 
 Renomear ou editar a família sem mudar o pai continua livre, com ou sem material.
 
+**Criar uma subfamília pela API** segue a mesma régua da família pai: ela tem de ser um número inteiro positivo de uma família
+**principal e ativa**. Um pai que não é número inteiro positivo (zero, texto, número com casas decimais, negativo) é recusado com
+*"Família pai não encontrada"*, nada é gravado — a família só nasce como principal quando o pai vem vazio ou não vem. Pai que é
+subfamília, ou que está inativo, é recusado com *"Subfamília não pode ter filhos (máximo 2 níveis)"*. A falta do nome é
+conferida primeiro (*"Nome é obrigatório"*).
+
+**Reorganizar famílias enquanto outra pessoa mexe nelas nunca deixa a hierarquia num estado proibido.** Criar uma subfamília,
+reativá-la, mudá-la de família principal ou transformar uma família em subfamília (e o inverso) é conferido e gravado no mesmo
+passo — junto com o "Inativar" da família principal, o cadastro de material e as outras reorganizações. Quem chega por último
+recebe a recusa que receberia se tivesse chegado depois, com a mesma mensagem das tabelas acima: por exemplo, criar uma
+subfamília no mesmo instante em que a família principal é inativada dá *"Subfamília não pode ter filhos (máximo 2 níveis)"*, e
+transformar em subfamília uma família na qual alguém acabou de cadastrar material dá *"Não é possível transformar em subfamília:
+a família tem 1 material(is) cadastrado(s) (contando os inativos)"*. Se o que impedia nasceu e sumiu durante o salvar, o sistema
+tenta de novo uma vez sozinho; se mudou de novo, a recusa é *"A família principal mudou enquanto a subfamília era criada — nada
+foi gravado. Tente de novo."* (na criação) ou *"A família mudou enquanto era salva — nada foi gravado. Recarregue a família e
+salve de novo."* (na edição). **A edição da aba Famílias (nome, descrição, tipo de uso) também recebe essa última recusa quando
+outra pessoa mudou a família principal dela no meio do salvar**, e quando a situação (ativa/inativa) que a edição informa mudou
+no meio — o salvar não desfaz a mudança do outro.
+
 *(Etapa 103 — G10b: as mudanças de nível passaram a ser recusadas com material; antes a API as aceitava e recriava material com a subfamília no lugar da família.)*
 
 Inativar e reativar famílias **pela API** segue as mesmas regras da tela, com as mesmas mensagens — e algumas a mais,
@@ -199,8 +218,9 @@ porque a tela não reativa família:
 | Reativar uma subfamília cuja família principal está inativa | Recusado: *"Não é possível reativar: a família principal desta subfamília está inativa — reative a família principal antes"* |
 | Reativar uma subfamília cuja família principal não existe mais | Recusado: *"Família pai não encontrada"* |
 | Situação (ativo) diferente de ativo/inativo | Recusado: *"Ativo inválido: use 0 ou 1"* |
+| "Inativar" no instante em que uma subfamília nasce e é inativada de novo | Recusado: *"A família mudou enquanto era inativada — nada foi gravado. Tente de novo."* — clicar de novo inativa |
 
-A recusa por itens vem antes da recusa por subfamília. **Cadastrar material e inativar a família no mesmo instante** (dois usuários, dois cliques) nunca deixa a família inativa com o material ativo: o sistema confere e grava no mesmo passo, e quem chega por último recebe a recusa de sempre — o cadastro, *"Família inativa — não é possível vincular novos itens"* (ou *"Subfamília inválida para a família selecionada"*); o Inativar, *"Não é possível remover: família possui N item(ns) ativo(s)"*. O mesmo vale para a edição de material que troca de família ou de subfamília; se o cadastro mudar no meio do salvar por outro motivo, a recusa é *"O cadastro do material ⟨código⟩ mudou enquanto era salvo — nada foi gravado. Recarregue o material e salve de novo."* Salvar a família sem mudar a situação (ativa/inativa) — como a aba Famílias faz ao editar nome, descrição e tipo de uso — não regrava a situação: um Inativar feito por outra pessoa no mesmo instante continua valendo. Se a família mudar duas vezes no meio de um Inativar pela edição, a recusa é *"A família mudou enquanto era salva — nada foi gravado. Recarregue a família e salve de novo."* Uma família que **já está** inativa pode ser renomeada ou
+A recusa por itens vem antes da recusa por subfamília. **Cadastrar material e inativar a família no mesmo instante** (dois usuários, dois cliques) nunca deixa a família inativa com o material ativo: o sistema confere e grava no mesmo passo, e quem chega por último recebe a recusa de sempre — o cadastro, *"Família inativa — não é possível vincular novos itens"* (ou *"Subfamília inválida para a família selecionada"*); o Inativar, *"Não é possível remover: família possui N item(ns) ativo(s)"*. O mesmo vale para a edição de material que troca de família ou de subfamília — e para a que **não** troca: se outra pessoa mudou a família ou a subfamília do material enquanto ele era salvo, o salvar não a desfaz. Se o cadastro mudar no meio do salvar por esse ou por outro motivo, a recusa é *"O cadastro do material ⟨código⟩ mudou enquanto era salvo — nada foi gravado. Recarregue o material e salve de novo."* Salvar a família sem mudar a situação (ativa/inativa) — como a aba Famílias faz ao editar nome, descrição e tipo de uso — não regrava a situação: um Inativar feito por outra pessoa no mesmo instante continua valendo. Se a família mudar duas vezes no meio de um Inativar pela edição, a recusa é *"A família mudou enquanto era salva — nada foi gravado. Recarregue a família e salve de novo."* Uma família que **já está** inativa pode ser renomeada ou
 editada normalmente, mesmo que ainda tenha itens ativos ou subfamílias ativas dentro dela. Para reativar uma
 subfamília de família inativa, reative primeiro a família principal.
 
@@ -369,6 +389,13 @@ O bloco **Propriedade** tem um campo, **Proprietário**, que por padrão vem em 
 > *"Material de cliente só sai com OS ou projeto desse mesmo cliente, exige número de documento no recebimento e não entra na reposição, na sugestão de compra nem no valor do estoque próprio."*
 
 Não existe cadastro separado de "material de cliente": ele é material normal, com dono — e por isso tem lote, série, endereço, extrato e etiqueta como qualquer outro. As regras completas de propriedade estão na seção 16.
+
+**O proprietário tem de ser um cliente cadastrado em Clientes** — inclusive um cliente marcado como inativo, que o campo também
+oferece. Pela API, gravar como dono um número que não está em Clientes é recusado, no cadastro e na edição, sem gravar nada:
+*"O cliente dono informado (#⟨n⟩) não existe em Clientes — escolha um cliente cadastrado ou deixe o material como estoque
+próprio."* No cadastro com Saldo Inicial, a recusa do saldo inicial vem antes; na edição, a da permissão de trocar o dono (16.2)
+vem antes. Um material cujo cliente não está mais em Clientes (aparece nas mensagens como *"cliente #⟨n⟩"*) continua editável
+enquanto o proprietário não é trocado.
 
 **Trocar o proprietário de um material que já se movimentou é só do Administrador** (16.2). Para quem edita material, o campo continua aberto: salvar sem mexer nele não muda nada, e num material recém-cadastrado, sem saldo e sem nenhuma movimentação, o proprietário escolhido errado se corrige livremente.
 
