@@ -590,6 +590,10 @@ const RecebimentosAlmoxarifado = () => {
       // A recusa fica NO MODAL (RN-05): a lista "{MAT}: motivo" do servidor diz qual item trocar,
       // e um toast que some em segundos deixaria o operador sem saber qual.
       setErroProcessar(err.response?.data?.error || 'Erro ao processar nota');
+      // Etapa 130 (Fase 2 I4): o processamento que falha no MEIO ja deu entrada dos itens anteriores (a nota parcial). Sem recarregar,
+      // o painel continuava mostrando esses itens com o lote, as series e o valor abertos — e salvar os dados fiscais com eles
+      // editados recusa (o servidor so aceita o eco do item que entrou). Recarregar tambem tira da janela o item que ja entrou.
+      abrirDetalhe(detalhe.id);
     } finally {
       setSaving(false);
     }
@@ -1158,8 +1162,14 @@ const RecebimentosAlmoxarifado = () => {
                     Preencha lote e séries e clique em Salvar Dados Fiscais antes de Processar a Nota — o processamento lê o que está salvo, não o que está digitado.
                   </div>
                 )}
-                {(detalhe.itens || []).map((item) => (
-                  <div key={item.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--gmp-border)', fontSize: '0.85rem' }}>
+                {(detalhe.itens || []).map((item) => {
+                  // Etapa 130 (RN-07, B840): o item que JA deu entrada no estoque (a nota que entrou em parte) tem o lote, as series
+                  // e o valor unitario travados — o servidor recusa muda-los (o lote e as series ja foram criados no estoque, e o
+                  // valor ja foi usado no custo). ICMS e reducao continuam abertos: ninguem os le depois da entrada (B839).
+                  const jaEntrou = !!item.entrada_estoque_em;
+                  return (
+                  <div key={item.id} data-testid={`item-detalhe-${item.id}`}
+                    style={{ padding: '8px 0', borderBottom: '1px solid var(--gmp-border)', fontSize: '0.85rem' }}>
                     <div style={{ display: 'flex', gap: 10 }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 600 }}>{item.material_nome}</div>
@@ -1193,6 +1203,7 @@ const RecebimentosAlmoxarifado = () => {
                       <>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginTop: 6 }}>
                           <input className="almox-input" type="number" step="0.01" placeholder="Vlr. unit."
+                            disabled={jaEntrou}
                             value={item.valor_unitario ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
                             onChange={(e) => atualizarItemDetalhe(item.id, 'valor_unitario', e.target.value)} />
                           <input className="almox-input" type="number" step="0.01" placeholder="ICMS"
@@ -1209,16 +1220,18 @@ const RecebimentosAlmoxarifado = () => {
                             data_fabricacao` existia desde a Task 1 sem NENHUM escritor — este
                             campo é o escritor, e a tela de Lotes é o leitor. */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 6, marginTop: 6 }}>
-                          <input className="almox-input" placeholder="Lote"
+                          <input className="almox-input" placeholder="Lote" disabled={jaEntrou}
                             value={item.lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
                             onChange={(e) => atualizarItemDetalhe(item.id, 'lote', e.target.value)} />
                           <input className="almox-input" type="date" placeholder="Validade" title="Validade do lote"
+                            disabled={jaEntrou}
                             value={item.data_validade_lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
                             onChange={(e) => atualizarItemDetalhe(item.id, 'data_validade_lote', e.target.value)} />
                           <input className="almox-input" type="date" placeholder="Fabricação" title="Data de fabricação do lote"
+                            disabled={jaEntrou}
                             value={item.data_fabricacao_lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
                             onChange={(e) => atualizarItemDetalhe(item.id, 'data_fabricacao_lote', e.target.value)} />
-                          <input className="almox-input" placeholder="Corrida"
+                          <input className="almox-input" placeholder="Corrida" disabled={jaEntrou}
                             value={item.corrida_lote ?? ''} style={{ fontSize: '0.75rem', padding: '4px 6px' }}
                             onChange={(e) => atualizarItemDetalhe(item.id, 'corrida_lote', e.target.value)} />
                         </div>
@@ -1228,16 +1241,22 @@ const RecebimentosAlmoxarifado = () => {
                           return (
                             <div className="almox-field" style={{ gridColumn: '1 / -1', marginTop: 6 }}>
                               <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>Séries (uma por linha) — <span style={{ color: seriesPreenchidas === quantidadeEsperada ? 'var(--gmp-text-light)' : 'var(--gmp-error)' }}>{seriesPreenchidas}/{quantidadeEsperada}</span></label>
-                              <textarea className="almox-textarea" rows={2} value={item.series || ''}
+                              <textarea className="almox-textarea" rows={2} value={item.series || ''} disabled={jaEntrou}
                                 style={{ fontSize: '0.75rem', padding: '4px 6px' }}
                                 onChange={(e) => atualizarItemDetalhe(item.id, 'series', e.target.value)} />
                             </div>
                           );
                         })()}
+                        {jaEntrou && (
+                          <div style={{ color: 'var(--gmp-text-light)', fontSize: '0.72rem', marginTop: 4 }}>
+                            Já deu entrada no estoque — lote, séries e valor unitário não mudam mais por aqui.
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
-                ))}
+                  );
+                })}
                 {/* Etapa 36 (RN-18): a autorização de excedente. `pode(...)` aqui é conveniência
                     de interface — esconder a caixa de quem não pode marcá-la —, NÃO segurança: o
                     hook falha aberto e é o `conferirRecebimento` que checa `autorizar_excedente`
