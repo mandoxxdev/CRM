@@ -11,11 +11,14 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-16):** **Etapa 128 fechada** (os Indicadores e o painel do almoxarifado passam a mostrar o
+> **Onde o desenvolvimento está (2026-10-16):** **Etapa 129 fechada** (a conferência do recebimento e os dados fiscais não mudam
+> mais um recebimento que já deu entrada no estoque — recusam com a frase do que fazer: **C266** resolvido, com a consulta **A77** para o
+> que já foi mudado antes; e o relatório novo **Perdas por motivo** mostra quanto se perdeu, por tipo e motivo, com o valor); a próxima do
+> almoxarifado é a **130** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 128 fechada** (os Indicadores e o painel do almoxarifado passam a mostrar o
 > **tempo médio de recebimento** — da chegada da nota ao estoque, com a régua para vocês confirmarem (letra **E**); a contagem por
 > endereço que deixa o disponível negativo passa a avisar o que houve e o que fazer — **C209** resolvido; e, do núcleo, o perfil
-> retirado não volta mais sozinho depois de 5 minutos na sessão aberta); a próxima do almoxarifado é a **129** — ver "Onde estamos e o
-> que vem a seguir".
+> retirado não volta mais sozinho depois de 5 minutos na sessão aberta); a próxima do almoxarifado era a **129**.)*
 > *(Antes: **Etapa 127 fechada** (quem perde o perfil Administrador deixa de ver os botões ao
 > recarregar a página — **C264** resolvido, do núcleo; e a fila de separação e a janela de separação dividem o separável entre itens do
 > mesmo material com o número que a separação aceita — a fila prometia o que a separação recusava, e a janela abria zero onde a separação
@@ -168,8 +171,10 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Setenta e seis itens para rodar em produção ANTES do deploy — setenta e três são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Setenta e sete itens para rodar em produção ANTES do deploy — setenta e quatro são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
 
+*(**Atualizado em 2026-10-16 (Etapa 129) de setenta e seis para setenta e sete**, com a **A77** — os recebimentos que a conferência
+mudou depois da entrada no estoque (o estado que a C266 deixava); opcional e somente leitura.)*
 *(**Atualizado em 2026-10-16 (Etapa 128) de setenta e cinco para setenta e seis**, com a **A76** — os materiais com o disponível
 negativo hoje (o estado que o aviso novo da contagem passa a explicar); opcional e somente leitura.)*
 *(**Atualizado em 2026-10-16 (Etapa 124) de setenta e quatro para setenta e cinco**, com a **A75** — materiais inativos gravados
@@ -2808,12 +2813,53 @@ sobra (Administrador ou Almoxarife — e, se ele estava separado na caixa de uma
 antes), **desbloqueie** o que se perdeu (Administrador ou Gestor) ou **decida a inspeção**. A **A49** lista, desse conjunto, as
 requisições com material na caixa.
 
+**A77 (NOVA, da Etapa 129 — os recebimentos que a conferência mudou depois da entrada no estoque).** Uma consulta, somente leitura;
+**opcional**. Até a Etapa 128 a conferência (e, para o item já entrado, os dados fiscais) aceitava mudar a quantidade e a situação de
+um recebimento que já tinha dado entrada no estoque (**C266**, resolvido nesta etapa). O que já foi mudado assim antes do deploy continua
+no banco: o item que ganhou quantidade depois e nunca entrou, o item cuja quantidade no documento já não é a que entrou, e o recebimento
+marcado *Aprovado* pela conferência sem estoque nenhum. A consulta lista esses itens.
+
+```sql
+SELECT r.id AS recebimento_id, r.numero, r.status, r.created_at AS recebido_em, ri.id AS item_id, m.codigo AS material,
+       CAST(COALESCE(CASE WHEN ri.quantidade_recebida IS NULL
+              OR (typeof(ri.quantidade_recebida) = 'text' AND TRIM(ri.quantidade_recebida) = '')
+            THEN ri.quantidade_esperada ELSE ri.quantidade_recebida END, 0) AS REAL) AS no_documento,
+       mv.quantidade AS entrou, COALESCE(mv.cancelado, 0) AS entrada_estornada, ri.entrada_estoque_em,
+       CASE WHEN ri.entrada_estoque_em IS NULL THEN 'SEM_ENTRADA' ELSE 'DIFERENTE_DA_ENTRADA' END AS achado
+  FROM recebimentos_material_almoxarifado r
+  JOIN recebimentos_material_itens_almoxarifado ri ON ri.recebimento_id = r.id
+  JOIN materiais_almoxarifado m ON m.id = ri.material_id
+  LEFT JOIN movimentacoes_almoxarifado mv ON mv.id = ri.movimentacao_entrada_id
+ WHERE (r.status IN ('PROCESSADO', 'APROVADO') AND ri.entrada_estoque_em IS NULL
+        AND CAST(COALESCE(CASE WHEN ri.quantidade_recebida IS NULL
+              OR (typeof(ri.quantidade_recebida) = 'text' AND TRIM(ri.quantidade_recebida) = '')
+            THEN ri.quantidade_esperada ELSE ri.quantidade_recebida END, 0) AS REAL) > 0.000001)
+    OR (ri.entrada_estoque_em IS NOT NULL AND mv.id IS NOT NULL
+        AND ABS(mv.quantidade - CAST(COALESCE(CASE WHEN ri.quantidade_recebida IS NULL
+              OR (typeof(ri.quantidade_recebida) = 'text' AND TRIM(ri.quantidade_recebida) = '')
+            THEN ri.quantidade_esperada ELSE ri.quantidade_recebida END, 0) AS REAL)) > 0.000001)
+ ORDER BY r.id, ri.id;
+```
+
+*(Conferida no teste de integração da etapa, o mesmo texto: acha o aprovado com item que ganhou quantidade sem entrar, o processado com
+o item reescrito depois da entrada, o aprovado sem entrada nenhuma, o *Reprovado* (a conferência antiga) com o item entrado reescrito e o
+aprovado sem entrada com a quantidade vazia (vale a esperada); **não** acha o recebimento limpo, o item 0, o estornado sem mudança, nem o
+que ainda não foi aprovado. Mostra `entrada_estornada` = 1 quando a entrada do item foi estornada.)*
+
+**Como ler o resultado:** **vazia** — nada a fazer. **`SEM_ENTRADA`**: o documento diz que chegou e o estoque nunca recebeu. Se o
+material está na prateleira, dê a entrada por um **Ajuste** (perfil Administrador ou Almoxarife) com a referência do recebimento; se
+não chegou, a quantidade do documento está errada (é só registro: nada a mexer no estoque). Um recebimento processado **antes da Etapa 6**
+não tem a hora da entrada e aparece aqui sem ter problema — confira `recebido_em`. **`DIFERENTE_DA_ENTRADA`**: o estoque recebeu
+`entrou` e o documento diz `no_documento`; o estoque é o que vale (a conta a pagar e o pedido de compra foram feitos com o que entrou).
+Se a contagem estava errada, corrija o estoque por um **Ajuste**; se o documento é que está errado, deixe-o — nada mais o lê para estoque.
+Itens que entraram **antes da Etapa 71** não têm o vínculo com a movimentação e não são comparados.
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B829; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B837; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -8956,6 +9002,64 @@ vocês) e, se couber, as **perdas com valor** no relatório (feature 21). A **B8
 resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da **C246**/**C247**, a tabela de conversões, o grupo acima de família e
 a régua do tempo de recebimento (letra **E**) continuam esperando vocês.
 
+**B830 (NOVA, da Etapa 129) — depois da entrada no estoque, a conferência não muda mais o recebimento; a contagem errada se corrige
+por ajuste (C266).** Com o recebimento *Processado* ou *Aprovado*, ou com qualquer item que já entrou, a conferência recusa (*"Recebimento
+já deu entrada no estoque — a conferência não pode mais mudar quantidade nem situação; se a contagem estava errada, corrija o estoque por
+um ajuste (perfil Administrador ou Almoxarife do almoxarifado)"*), antes de gravar qualquer coisa. Os dados fiscais recusam mudar a
+quantidade do item que já entrou (o eco da mesma quantidade, que o modal da nota manda, continua). Isto aposenta uma metade da decisão
+D10 da Etapa 43: *"reconferir depois do processamento abre não conformidade nova"* — a reconferência nem chega lá. A divergência
+descoberta depois continua registrável como não conformidade pela API (a tela não abre não conformidade manual — **D (129)**), mas o
+documento congela o que está no item, não a recontagem. **Descartado:** aceitar a quantidade e reabrir a entrada (estornaria e daria
+entrada de novo — perigoso sem transação); aceitar e só registrar (o documento e o estoque divergiriam para sempre, que é a C266).
+**Reversível** (uma condição no serviço).
+
+**B831 (NOVA, da Etapa 129) — a conferência não marca *Aprovado*, e a situação só muda enquanto o recebimento está na conferência.**
+*Aprovado* é o que a aprovação grava **depois** de dar entrada; marcado pela conferência, o recebimento ficava aprovado sem estoque.
+Agora: *"A conferência não aprova o recebimento — a entrada no estoque é pelo "Aprovar" ou pelo "Processar Nota""*. Os outros resultados da conferência
+(*Reprovado*, *Parcialmente aprovado*, *Bloqueado*) continuam, e de qualquer um deles se volta a *Em conferência*. Depois que o
+recebimento seguiu para Compras ou Faturamento, a situação não muda mais pela conferência (*"A conferência já foi encerrada (situação
+atual: ⟨situação⟩) — a situação segue pelo fluxo do recebimento"*); a **quantidade**, sem mexer na situação, continua aceita até a entrada
+(os dados fiscais aceitam a mesma coisa). **Descartado:** tirar *Aprovado* da lista de situações (a resposta seria *"Status inválido"*,
+sem dizer o que fazer). **Reversível.**
+
+**B832 (NOVA, da Etapa 129) — o relatório de perdas com valor nasce fechado (Administrador, Gestor, Compras).** É dado de custo, como o
+*Custo por projeto* (fechado desde a Etapa 14). O *Sucata — financeiro*, que mostra valor e é aberto a todos, é anterior a essa decisão e
+não foi mudado. **Atenção (revisão do código, medido):** o fechamento barra só a **soma pronta** — qualquer perfil do módulo vê a
+quantidade perdida no Histórico de movimentações e o custo de cada material no cadastro, e a conta dá o mesmo valor (**C268**).
+**Descartado:** abrir a todos (como a sucata) e fechar o custo no cadastro (mexe em várias telas — fica para uma etapa própria).
+**Reversível** (uma linha no registro de relatórios).
+
+**B833 (NOVA, da Etapa 129) — o que é "perda" no relatório.** As movimentações *Perda* e *Perda em terceiro* não estornadas, por tipo e
+motivo; o valor é a quantidade × o custo **atual** do material (o livro não guarda o custo de cada lançamento — o mesmo de *Custo por
+projeto* e *Sucata — financeiro*), em centavos. A **sucata** (tem relatório próprio) e o **ajuste negativo** (correção de contagem, não
+perda declarada) ficam fora; o material de **cliente** fica fora (patrimônio alheio, quase sempre sem custo); o material inativado conta.
+A quantidade não é somada (cada material tem sua unidade). **Descartado:** somar sucata e ajuste negativo (seriam três perguntas num
+número); valorar pelo custo da época (o dado não existe). **Reversível.**
+
+**B834 (NOVA, da Etapa 129) — a conferência que perde a corrida com o processamento recusa, e o que ela já gravou fica.** Se o
+processamento da nota começa no meio de uma conferência, o item que ainda não foi gravado recusa (*"Esta nota já está sendo
+processada"*, ou a frase da entrada); os itens gravados antes ficam, com o aviso e a não conformidade de cada um, e a situação, se já
+tinha sido gravada, também fica. O processamento lê os itens depois de começar, então o que ficou gravado é o que ele usa.
+**Descartado:** desfazer o que foi gravado (sem transação, o desfazer também pode falhar no meio); segurar a trava por material na
+conferência (porta nova na trava; a conferência não põe saldo no disponível). **Reversível.**
+
+**B835 (NOVA, da Etapa 129; da revisão do código) — os dados fiscais também recusam durante o processamento.** Salvar o modal da nota com
+itens enquanto outra pessoa processa a mesma nota gravava a quantidade de um item que o processamento já tinha lido (documento 1, estoque
+4 — medido). Agora: *"Esta nota já está sendo processada"*, antes de gravar; salvar só o cabeçalho (sem itens) continua aceito (o
+processamento leu o cabeçalho antes). Na corrida exata (a marca chega entre o cabeçalho e o item), o cabeçalho fica gravado e o item
+recusa. **Descartado:** recusar também o cabeçalho (o modal salva a nota em partes, e o cabeçalho não muda o estoque). **Reversível.**
+
+**B836 (NOVA, da Etapa 129) — `GET /api/usuarios/:id/grupos` não muda nesta etapa.** Notado na revisão da 128: só exige estar
+logado. Medido agora: a lista de usuários e o cadastro de um usuário já devolvem a qualquer logado o papel, o administrador do sistema e
+os módulos; o `/grupos` mostra **a mais** o perfil do almoxarifado e da frota, a permissão por ação (inclusive as negadas) e a descrição
+dos grupos. É da mesma natureza (um mapa de "a quem pedir o quê") e é do núcleo. **Descartado:** fechar só o `/grupos` (o cadastro de
+usuários e o cache de permissões do próprio usuário o leem; fechar uma das três leituras não fecha a classe). Fica para uma etapa do
+núcleo que feche as três juntas. **Reversível** (nada mudou).
+
+**B837 (NOVA, da Etapa 129) — a próxima etapa do almoxarifado (130).** Ver a "próxima tarefa detalhada" no plano da Etapa 129. A
+**B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da **C246**/**C247**,
+a tabela de conversões, o grupo acima de família e a régua do tempo de recebimento (letra **E**) continuam esperando vocês.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -11525,13 +11629,27 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      recusava o segundo. **Agora** as duas dizem o número que a separação aceita. **O que fazer (até o deploy):** na janela de
      separação, confira o número de cada item contra o *Saldo* e digite a quantidade certa; o Confirmar aceita.
 
-266. **NOVO (da revisão da Etapa 128; anterior a ela) — a conferência do recebimento aceita mudar a quantidade e a situação depois
-     da entrada no estoque.** A rota de conferência não confere a situação do recebimento: num recebimento já *Aprovado*, ela aceita
+266. **✅ RESOLVIDO NA ETAPA 129 (`d16b8350`, `bce8f530`, `6a8b93b4`; B830, B831, B834, B835) — depois da entrada no estoque, a conferência e os
+     dados fiscais recusam mudar o recebimento; o que já foi mudado antes, a A77 acha.** O texto original: **NOVO (da revisão da Etapa
+     128; anterior a ela) — a conferência do recebimento aceita mudar a quantidade e a situação depois da entrada no estoque.** A rota de conferência não confere a situação do recebimento: num recebimento já *Aprovado*, ela aceita
      mudar a quantidade recebida de um item que não entrou (ele nunca mais entra — o processar responde *"Recebimento já
      aprovado/processado"*) e aceita trocar a situação (para *Reprovado*, e o *Aprovar* volta a dar entrada; ou para *Aprovado*, e a nota
      que falhou no meio fica dada como pronta sem o item que faltava). Só pela API — a tela não manda a situação. O tempo médio de
      recebimento herda: a nota marcada *Aprovada* assim conta como "entrou inteira" (**B825**). **O que fazer:** não use a
-     conferência depois do processamento; se usou, confira o estoque do item contra a nota. É a próxima etapa (**B829**).
+     conferência depois do processamento; se usou, confira o estoque do item contra a nota. É a próxima etapa (**B829**). *(Etapa 129: o
+     "o que fazer" agora é a consulta **A77**; e a medição achou mais três formas — a conferência marcava *Aprovado* sem estoque, respondia
+     "sucesso" para recebimento inexistente e gravava durante o processamento — e os dados fiscais mudavam a quantidade do item já entrado.)*
+267. **NOVO (da Etapa 129; anterior a ela) — os dados fiscais ainda mudam o lote, a série e os valores de um item que já entrou no
+     estoque.** A Etapa 129 fechou a **quantidade** do item já entrado nas duas portas (conferência e dados fiscais), mas o modal da nota
+     continua aceitando, para esse item, o lote, a validade, a fabricação, a corrida, as séries e os valores (unitário, total, ICMS, IPI).
+     O estoque e as séries já foram criados com os valores da entrada, então o documento passa a dizer outra coisa que o livro. Só pela
+     API ou por uma nota parcial (*Em entrada de NF* com um item já entrado). **O que fazer:** não corrija lote ou série de um item que
+     já entrou pelo modal da nota; use a tela de Lotes/Séries. Candidata de etapa futura (o mesmo molde da C266).
+268. **NOVO (da revisão da Etapa 129; anterior a ela) — o custo de cada material é visível a qualquer perfil do módulo.** O cadastro de
+     materiais e o extrato devolvem o custo médio e o custo unitário a quem abre o almoxarifado, e o Histórico de movimentações mostra a
+     quantidade de cada perda. Por isso o relatório *Perdas por motivo*, fechado para Administrador, Gestor e Compras (**B832**), barra só
+     a soma pronta: a conta (quantidade × custo) se faz com o que está aberto — o mesmo vale para o *Custo por projeto*, fechado desde a
+     Etapa 14. **O que fazer:** se o custo é sigiloso, diga — fechar o custo no cadastro é uma etapa própria (mexe em várias telas).
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -12736,6 +12854,18 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(128) O perfil que muda na sessão aberta só vale quando a tela relê as permissões** (ao entrar num módulo ou a cada 5 minutos) ou
   ao recarregar — não na hora (**B828**). O servidor recusa cada gravação, como sempre.
 
+- **(129) A divergência descoberta depois da entrada não tem tela.** A conferência recusa (**B830**); a não conformidade manual existe
+  só pela API (a tela de Não conformidades lista e decide, não abre) e congela o que está no item, não a recontagem. O caminho na tela é
+  o **Ajuste** de estoque (Administrador ou Almoxarife).
+- **(129) Na corrida com o processamento, o que a conferência já gravou fica** (**B834**) — e, nos dados fiscais, o cabeçalho
+  (**B835**). Uma marca de processamento com mais de 10 minutos é tratada como vencida (a mesma régua do segundo *Processar*): se um
+  processamento real passar disso, a conferência volta a gravar e a **A77** acha o item que ficou diferente.
+- **(129) Numa nota parcial (*Em entrada de NF* com um item já entrado), a conferência recusa tudo e os dados fiscais aceitam a quantidade
+  dos itens que ainda não entraram** — de propósito: a conferência é da etapa do almoxarifado, e a nota parcial está no Faturamento.
+- **(129) O relatório de perdas não soma a quantidade** (cada material tem sua unidade), não abre por material nem por projeto (o *Custo
+  por projeto* já soma as perdas com projeto no consumido), e não mostra a perda de material de **cliente** (patrimônio alheio, sem
+  custo) — inclusive a perda em terceiro da chapa do cliente.
+
 ### E. Regras que foram DEDUZIDAS e nunca confirmadas com vocês — perguntas, não requisitos atendidos (E1, a remessa mista; E2, o tempo de recebimento)
 
 **"Uma remessa não pode misturar materiais de donos diferentes."** O sistema hoje **recusa** montar
@@ -13646,6 +13776,13 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(129) Nenhum clique foi dado nesta etapa no navegador.** Nenhuma tela mudou de código: o que mudou é a resposta do servidor à
+conferência e aos dados fiscais (as recusas novas aparecem no aviso vermelho que as telas já mostram) e um relatório novo na lista de
+Relatórios (a tela é a mesma, dirigida pelo registro). Provados pelo servidor, pela rota e pelo serviço (**44** cenários em três
+arquivos novos, um deles de integração). O que **só o navegador** prova: o roteiro da Etapa 129 no guia — o aviso vermelho com a frase da
+conferência depois da entrada no painel de Recebimentos (só alcançável pela API, porque o painel some depois da conferência — o roteiro
+mostra como), e a chave *Perdas por motivo* em **Relatórios → Gestão** com a coluna de valor e o Exportar.
 
 **(128) Nenhum clique foi dado nesta etapa no navegador.** Mudaram o painel do almoxarifado (o cartão *Tempo médio de recebimento*),
 a tela de Movimentações (o aviso amarelo novo depois do ajuste com localização) e a sessão aberta (o perfil relido) — provados por
@@ -26400,7 +26537,7 @@ continua restrito (antes, os botões voltavam).
 
 1. **A lista dos recebimentos** do tempo médio, por fornecedor ou por material — é um número (**D (128)**).
 2. **A régua confirmada** — é deduzida; a pergunta está na **E2**.
-3. **A conferência que muda o recebimento depois da entrada** (**C266**) — a próxima etapa (**B829**).
+3. **A conferência que muda o recebimento depois da entrada** (**C266**) — a próxima etapa (**B829**). *(Entregue na Etapa 129.)*
 4. **O aviso fora da tela de Movimentações** (e-mail, notificação) — a **A76** acha os materiais que já estão assim.
 5. **O perfil na hora** em que é tirado, sem a tela reler — **D (128)**.
 6. As decisões que esperam vocês: **B808**, **B755**, **B761**/**C239**, **C224**, **C225**, **C228**, **C219**, **C230**,
@@ -26420,16 +26557,112 @@ o servidor aceita e que ninguém ganha nem perde perfil indevidamente, e achou q
 diferente do que a tela mostrava (corrigido); o de **sabotagem** fez **24** sabotagens além das 21 já feitas: as 14 que mostraram cenário
 faltando viraram cenários novos; as outras 5 foram provadas inofensivas.
 
+## Etapa 129 — A conferência depois da entrada e as perdas com valor (2026-10-16)
+
+Duas coisas. A primeira é de integridade: a conferência do recebimento aceitava mudar a quantidade e a situação de um recebimento que
+já tinha dado entrada no estoque — um item ganhava quantidade e nunca entrava, um recebimento *Aprovado* virava *Reprovado* e era
+aprovado de novo, e a conferência podia marcar *Aprovado* um recebimento que nunca deu entrada. Só pela API (a tela não manda a
+situação), mas o estoque e o documento ficavam contando histórias diferentes. Agora a conferência recusa, com a frase do que fazer, e os
+dados fiscais não mudam mais a quantidade de um item que já entrou. A segunda é um número que a gestão pedia: **quanto se perdeu** — o
+relatório novo *Perdas por motivo*, com o valor.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Recebimento *Aprovado*: a conferência mudava a quantidade de um item (que nunca mais entrava) — 200 | Recusa: *"Recebimento já deu entrada no estoque — … corrija o estoque por um ajuste (perfil Administrador ou Almoxarife do almoxarifado)"* (**B830**) |
+| *Aprovado* → conferência *Reprovado* → *Aprovar* dava entrada de novo | A conferência recusa; o *Aprovar* continua recusando *"Recebimento já aprovado/processado"* |
+| A conferência marcava *Aprovado* sem estoque nenhum | *"A conferência não aprova o recebimento — a entrada no estoque é pelo "Aprovar" ou pelo "Processar Nota""* (**B831**) |
+| Nota em *Em entrada de NF* voltava para *Em conferência* pela conferência | *"A conferência já foi encerrada (situação atual: EM_ENTRADA_NF) — a situação segue pelo fluxo do recebimento"* |
+| Conferência de um recebimento que não existe: *"sucesso"* | *"Recebimento não encontrado"* |
+| Conferência e dados fiscais gravavam durante o processamento da nota | *"Esta nota já está sendo processada"* (**B834**, **B835**) |
+| Dados fiscais mudavam a quantidade de um item já entrado | *"Item já deu entrada no estoque — a quantidade dele não muda mais; …"* (o eco da mesma quantidade continua) |
+| Perdas: só a lista do Histórico, sem valor | **Relatórios → Gestão → Perdas por motivo**: por tipo e motivo, lançamentos, materiais e o valor pelo custo atual (**B832**, **B833**) |
+
+### As regras, com o cenário exato
+
+Preparação: o **Administrador** do almoxarifado, um **Almoxarife**, um **Gestor** e um **Compras**; material comum **PORCA** (unidade
+*PC*, custo unitário 2,50); uma localização **A-01**. As recusas da conferência só aparecem pela API (o painel de conferência só existe
+enquanto o recebimento está *Recebido* ou *Em conferência*, e não manda a situação) — use a chamada pelo console do navegador que o guia
+mostra, logado como Administrador.
+
+**1. A conferência depois da entrada.** **Recebimento → Novo** com PORCA, 5, e leve-o pelo fluxo até **Processar Nota** (*Iniciar
+conferência* → *Finalizar conferência* → *Encaminhar a Compras* → *Finalizar compras* → *Iniciar faturamento* → **Dados fiscais** →
+**Processar Nota**). Pela API, `PUT
+/api/almoxarifado/recebimentos/⟨id⟩/conferir` com `{"itens":[{"id":⟨item⟩,"quantidade_recebida":3}]}`: **409** *"Recebimento já deu
+entrada no estoque — a conferência não pode mais mudar quantidade nem situação; se a contagem estava errada, corrija o estoque por um
+ajuste (perfil Administrador ou Almoxarife do almoxarifado)"*. O item continua 5, nenhuma não conformidade nova. Com
+`{"status":"REPROVADO"}`: a mesma recusa; o recebimento continua *Processado*.
+- **Se a contagem estava errada:** como Almoxarife, **Movimentações → Nova Movimentação → Ajuste**, PORCA, A-01, a quantidade certa.
+
+**2. A conferência não aprova.** Novo recebimento de PORCA, 2. Pela API, `{"status":"APROVADO"}`: **400** *"A conferência não aprova o
+recebimento — a entrada no estoque é pelo "Aprovar" ou pelo "Processar Nota""*. O recebimento continua *Recebido* e segue o fluxo.
+
+**3. A situação depois da conferência.** Leve um recebimento até **Faturamento** (*Iniciar conferência* → *Finalizar conferência* →
+*Encaminhar a Compras* → *Finalizar compras* → *Iniciar faturamento*). Pela API, `{"status":"EM_CONFERENCIA"}`: **409** *"A conferência
+já foi encerrada (situação atual: EM_ENTRADA_NF) — a situação segue pelo fluxo do recebimento"*. Só a quantidade (`{"itens":[…]}`),
+sem a situação: **200** — o mesmo que o modal da nota aceita. *Bloqueado* → *Em conferência* pela conferência: aceito.
+
+**4. Durante o processamento.** Enquanto a nota é processada (o *Processar Nota* em andamento), a conferência e o modal da nota com
+itens respondem *"Esta nota já está sendo processada"*. Salvar só o cabeçalho da nota continua aceito.
+
+**5. O item que já entrou, nos dados fiscais.** Numa nota que entrou em parte (*Em entrada de NF* com um item já no estoque — o
+processamento falhou no meio), o modal da nota que manda **outra** quantidade para o item que entrou: **409** *"Item já deu entrada no
+estoque — a quantidade dele não muda mais; se a contagem estava errada, corrija o estoque por um ajuste (perfil Administrador ou
+Almoxarife do almoxarifado)"*. O modal que reenvia a mesma quantidade (o que a tela faz) passa; os itens que não entraram continuam
+editáveis; o *Processar* seguinte dá a entrada do que faltava.
+
+**6. Perdas por motivo.** Como Administrador, PORCA com 10 na A-01. **Movimentações → Nova Movimentação → Perda**, 3, motivo do
+cadastro *Avaria*, justificativa *caiu da empilhadeira*. **Relatórios → Gestão → Perdas por motivo**: uma linha *PERDA · Cadastro ·
+Avaria · 1 lançamento · 1 material · valor 7,50*. A nota do rodapé começa com *"Soma as perdas do livro — PERDA e PERDA_TERCEIRO (perda
+de material em terceiro) —, sem as estornadas."* Estorne a perda no livro de Movimentações (Administrador ou Gestor): a linha some.
+Mude o custo do material para 3: o valor das perdas antigas muda junto (custo atual, declarado na nota). **Exportar** gera a planilha com
+as oito colunas.
+- **Quem vê:** Administrador, Gestor e Compras. O Almoxarife não vê a chave na lista e, pela URL, recebe *"Sem permissão para este
+  relatório"*.
+
+### O que esta etapa NÃO cobre
+
+1. **Lote, série e valores do item já entrado nos dados fiscais** (**C267**) — só a quantidade foi fechada.
+2. **A tela de não conformidade manual** e a recontagem congelada nela — **D (129)**.
+3. **O custo de cada material** continua visível a todo o módulo — o relatório fechado barra só a soma (**C268**, **B832**).
+4. **`/usuarios/:id/grupos`** — medido e mantido (**B836**).
+5. As decisões que esperam vocês: **B808**, **B755**, **B761**/**C239**, **C224**, **C225**, **C228**, **C219**, **C230**,
+   **C246**/**C247**, a tabela de conversões, o grupo acima de família e a régua do tempo de recebimento (**E2**).
+
+### O que a revisão encontrou
+
+A **medição** reproduziu os três casos da C266 pela rota e achou mais três: a conferência marcava *Aprovado* sem estoque, respondia
+"sucesso" para um recebimento que não existe e gravava durante o processamento; e instrumentou a suíte inteira para saber quem chamava a
+conferência (245 chamadas; só dois testes antigos dependiam do "aceita depois da entrada"). A **revisão do plano** (antes do código)
+achou que os dados fiscais tinham o mesmo furo para o item já entrado, que a consulta de legado daria falso positivo em quatro situações
+(o estorno, por exemplo, não limpa a marca da entrada), que a primeira frase da recusa mandava abrir uma não conformidade que nenhuma
+tela abre e que a guarda da não conformidade ficaria sem teste; tudo entrou antes da primeira linha de código. A **revisão adversarial do
+código** (três revisores, executando): o de **regra** achou que os dados fiscais ainda gravavam a quantidade de um item que o
+processamento já tinha lido, numa corrida real (documento 1, estoque 4 — corrigido, **B835**) e que a consulta A77 deixava de fora o
+*Reprovado* da conferência antiga (corrigido); o de **permissão** mediu a tabela de perfil × rota (o perfil é conferido antes de
+qualquer recusa nova), achou que a frase *"corrija por um ajuste"* mandava o Compras a um gesto que ele não pode (a frase diz agora o
+perfil) e que o custo de cada material já estava aberto (**C268**); e mostrou que um comentário do código dizia que o ajuste de material
+nosso passava por *ajustar_estoque* — estava errado, o gate é *movimentar*, corrigido dizendo isso. O de **sabotagem** fez **29**
+sabotagens além das 36 já feitas: **13** mostraram cenário faltando e viraram cenários novos; **6** foram provadas inofensivas.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 129 entregue (2026-10-16):** **a conferência depois da entrada e as perdas com valor.** A conferência e os dados fiscais
+  recusam mudar um recebimento que já deu entrada no estoque, a conferência não marca mais *Aprovado* e não grava durante o
+  processamento (**C266** resolvido — **B830**, **B831**, **B834**, **B835**); o relatório **Perdas por motivo** mostra o valor do que se
+  perdeu (**B832**, **B833**). **O que é seu:** a consulta **A77** (opcional); as decisões **B830 a B836** (reversíveis); os avisos **C267**
+  e **C268**; as limitações **(129)** em D e a verificação **(129)** em F. **Próxima: Etapa 130 — ver a "próxima tarefa detalhada" no
+  plano da Etapa 129.**
 
 - **Etapa 128 entregue (2026-10-16):** **o tempo do recebimento, o aviso da retenção e o perfil que não pisca.** O painel e os
   Indicadores mostram o tempo médio de recebimento (**B823** a **B825**, régua na **E2**); a contagem por endereço que deixa o disponível
   negativo avisa e diz o caminho (**C209** resolvido — **B826**, **B827**); o perfil retirado não volta depois de 5 minutos (do núcleo,
   **B828**). **O que é seu:** a pergunta da **E2** (a régua); a consulta **A76** (opcional); as decisões **B823 a B828** (reversíveis);
-  o aviso **C266**; as limitações **(128)** em D e a verificação **(128)** em F. **Próxima: Etapa 129 — ver a "próxima tarefa
-  detalhada" no plano da Etapa 128.**
+  o aviso **C266**; as limitações **(128)** em D e a verificação **(128)** em F.
+  *(Próxima, na época: Etapa 129 — entregue acima.)*
 
 - **Etapa 127 entregue (2026-10-16):** **o perfil que saiu, e o separável dividido.** Quem perde o perfil Administrador deixa de ver os
   botões ao recarregar a página (**C264** resolvido, do núcleo — **B818**); a Fila de separação e a janela de separação dividem o

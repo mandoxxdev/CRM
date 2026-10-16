@@ -121,14 +121,14 @@ integração (RN-17).
 **`PUT /api/almoxarifado/recebimentos/:id/conferir`** — payload inalterado (`status?`, `itens?`, `autorizar_excedente?`); 200
 `{ success: true }` inalterado. Recusas novas (literais exatas):
 
-- 400 `L4` = `A conferência não aprova o recebimento — use "Aprovar", que dá a entrada no estoque`
+- 400 `L4` = `A conferência não aprova o recebimento — a entrada no estoque é pelo "Aprovar" ou pelo "Processar Nota"`
 - 404 `Recebimento não encontrado`
-- 409 `L2` = `Recebimento já deu entrada no estoque — a conferência não pode mais mudar quantidade nem situação; se a contagem estava errada, corrija o estoque por um ajuste`
+- 409 `L2` = `Recebimento já deu entrada no estoque — a conferência não pode mais mudar quantidade nem situação; se a contagem estava errada, corrija o estoque por um ajuste (perfil Administrador ou Almoxarife do almoxarifado)` *(Fase 5, r2 A2: o perfil entrou na literal)*
 - 409 `Esta nota já está sendo processada`
 - 409 `L5` = `` `A conferência já foi encerrada (situação atual: ${status}) — a situação segue pelo fluxo do recebimento` ``
 - 409 `L6` = `O recebimento mudou de situação enquanto a conferência era salva — recarregue e confira de novo`
 
-**`PUT /api/almoxarifado/recebimentos/:id/fiscal`** (RN-09) — recusa nova: 409 `L7` = `Item já deu entrada no estoque — a quantidade dele não muda mais; se a contagem estava errada, corrija o estoque por um ajuste`.
+**`PUT /api/almoxarifado/recebimentos/:id/fiscal`** (RN-09) — recusa nova: 409 `L7` = `Item já deu entrada no estoque — a quantidade dele não muda mais; se a contagem estava errada, corrija o estoque por um ajuste (perfil Administrador ou Almoxarife do almoxarifado)` *(Fase 5, r2 A2: o perfil entrou na literal)*.
 
 `receiptService.conferirRecebimento(db, user, id, data)` lança os mesmos (`{ status }` no erro). Exporta `LITERAIS_CONFERENCIA` (L2, L4,
 L5(fn), L6) para os testes.
@@ -141,14 +141,14 @@ L5(fn), L6) para os testes.
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 — tronco (serviço do recebimento)** — `receiptService.conferirRecebimento` (RN-01..RN-07) + `conferenciaDepoisDaEntrada.api.test.js`
+- [x] **T1 — tronco (serviço do recebimento)** — `receiptService.conferirRecebimento` (RN-01..RN-07) + `conferenciaDepoisDaEntrada.api.test.js`
   + a mudança à vista de `naoConformidadeGanchos` (6) e `naoConformidadeRegressao` (2).
-- [ ] **T2 — galho (relatório)** — `reportService.relatorioPerdasPorMotivo` + `reportRegistry` + dispatcher em `extended.js` +
+- [x] **T2 — galho (relatório)** — `reportService.relatorioPerdasPorMotivo` + `reportRegistry` + dispatcher em `extended.js` +
   `relatorioPerdasPorMotivo.api.test.js`. RN-10..RN-16. Independente da T1 (outra regra, outro arquivo); serializada pela regra "um
   teste por vez".
-- [ ] **T3 — integração** — `conferenciaDepoisDaEntradaIntegracao.api.test.js`: RN-08 (rota **e** serviço, a A77) e RN-17 (cruza o motor,
+- [x] **T3 — integração** — `conferenciaDepoisDaEntradaIntegracao.api.test.js`: RN-08 (rota **e** serviço, a A77) e RN-17 (cruza o motor,
   o estorno e o relatório).
-- [ ] **T4 — fechamento** — novidades (B830+, C266 resolvida, C267+ se houver, A77, D (129), F se houver, a seção da etapa, cabeçalho),
+- [x] **T4 — fechamento** — novidades (B830+, C266 resolvida, C267+ se houver, A77, D (129), F se houver, a seção da etapa, cabeçalho),
   specs 08 (C266, o D10 da 43 que muda), 09 (o D10, se lá estiver), 21 (perdas), mapa, guia, manual, este plano (retro, "Próxima tarefa
   detalhada — Etapa 130"), o "defeito que escapou" da retro da 128. CLAUDE.md: a trava **não** muda (a conferência não pega a trava por
   material; ela recusa no comando).
@@ -157,3 +157,111 @@ Sem migração (nenhuma coluna, nenhuma tabela): a prova de primeiro boot não s
 
 A suíte inteira roda **uma por vez**; revisores rodam só os próprios arquivos, sob a trava de máquina
 (`scratchpad/e129-lock.sh`, diretório `maquina-testes.lock`), nunca junto com a suíte.
+
+## Execução — o que aconteceu
+
+- **Fase 0** — sonda `e129fase0.js` (não versionada, sob a trava `e129-lock.sh`): os três casos da C266 reproduzidos pela rota, e mais
+  três (APROVADO sem estoque a partir de RECEBIDO, 200 em id inexistente, gravação com a marca viva). Instrumentação da suíte inteira
+  (245 chamadas ao `/conferir`; restauro por cópia, md5 conferido): só o D10 da 43 (dois testes) dependia do 200 depois da entrada.
+- **Testes escritos antes do código** e rodados **vermelhos**: 3/16 (T1), 0/7 (T2), 1/4 (T3). Os que passavam no código antigo eram
+  controles (os status de conferência que aceitam, o item estranho, o que não muda, a A77 — SQL só do teste), provados pelas sabotagens.
+- **Fase 2 antes do código de produção:** 3 Important + 7 Minor, todos aceitos (ver o topo). Design e plano `53b41202`.
+- **Divergências da execução:** (1) a RN-09 (o `/fiscal`) entrou pela Fase 2 — não estava no plano original; (2) o cenário RN-13f da
+  Etapa 122 (`estadoForaDaAuditoriaFase5`, UPDATE do item com `changes 0` simulado) passou de 200 para 409 (o item do recebimento que não
+  grava perdeu uma corrida, RN-06) — mudado à vista, a trilha continua provada ausente; (3) a contagem do registro passou de 25 para 26
+  chaves (`relatoriosRegistro`) e os relatórios fechados para a PRODUÇÃO de 3 para 4 (`relatoriosJornada`, Fase 2 I3); (4) a literal L4
+  dizia *use "Aprovar"* — a tela de Recebimentos **não tem** o botão Aprovar (só o *Processar Nota*); trocada no fechamento para *"a
+  entrada no estoque é pelo "Aprovar" ou pelo "Processar Nota""* (`6a8b93b4`).
+- **Controles positivos** (âncora contada = 1, md5 antes/sabotado/restaurado, restauro por cópia — `e129-bateria.js` no scratchpad):
+  **36** antes da Fase 5 (35 caem pela asserção certa; **1 equivalente**: a própria `entrada_estoque_em IS NULL` no WHERE do item, coberta
+  pelo `NOT EXISTS` de item entrado do mesmo recebimento — mantida como cinto) e **19** na Fase 5 (todas caem).
+- **Migração:** nenhuma (sem coluna, sem tabela) — a prova de primeiro boot não se aplica.
+- **CLAUDE.md:** a seção da trava **não mudou** — a conferência e o `/fiscal` não pegam a trava por material; recusam no comando
+  (condição no `WHERE`), e não põem saldo no disponível nem reservam. **Compras:** nada.
+- **Suíte (antes dos commits de código T1..T3):** `test:api` **435/435** (a primeira rodada deu 434/435: o RN-13f da 122, acima);
+  `test:almoxarifado` **44/0**; `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 10/0; client **126** suítes / **1744** testes;
+  `CI=true build` *Compiled successfully*. Commits `d16b8350` (T1), `b1f1e64f` (T2), `b0efb4d4` (T3).
+- **Fase 5** — três revisores frescos em paralelo sob a **trava de máquina**; o de sabotagem numa worktree própria (`CRM-wt-e129-r3`,
+  removida com as junções desfeitas antes). Eu não rodei nada enquanto eles trabalhavam.
+  - **Regra (r1): 1 Important + 5 Minor.** **I1 (reproduzido, corrida real)** — o `/fiscal` ignorava a marca de processamento: com o
+    *Processar* em andamento, salvar o modal da nota gravava a quantidade de um item ainda na fila (documento 1, físico 4, PROCESSADO) →
+    o `/fiscal` com itens recusa *"Esta nota já está sendo processada"* antes de gravar, e o UPDATE do item leva o `NOT EXISTS` da marca
+    (**B835**). **M1** — a A77 do teste não tinha os achados nem o `entrada_estornada` que o plano prometia → acrescentados. **M2
+    (reproduzido)** — a A77 deixava de fora o *Reprovado* da conferência antiga com item entrado → o ramo da diferença não filtra o
+    status. **M3** — a assimetria conferência × `/fiscal` na nota parcial → declarada (D (129)). **M4** — a perda de material de cliente
+    não aparece → declarada. **M5** — sem quantidade mesmo com um material só → declarado (o padrão da `ajustes-por-motivo`).
+  - **Permissão (r2): 2 achados.** **A1 (reproduzido, anterior)** — o valor das perdas se calcula com o que está aberto (o histórico com a
+    quantidade e o cadastro com o custo de cada material) → **C268**, e a B832 diz que o gate barra só a soma. **A2 (reproduzido)** — a
+    literal *"corrija por um ajuste"* mandava o Compras (que confere) a um gesto que recebe 403 (o ajuste é `movimentar`) → as literais
+    dizem o perfil. E o comentário de `ownerRules.js` dizia que o ajuste de material nosso *"segue em ajustar_estoque"* — **estava errado**
+    (o Gestor leva 403), corrigido dizendo isso. Resistiu: o perfil vem antes de qualquer recusa nova (tabela perfil × rota medida no
+    relatório dele), lista e export pelo mesmo `can()`, nenhuma tela muda. Sobre o `/usuarios/:id/grupos`: a justificativa da B836 é
+    verdadeira; o que ele expõe **a mais** (perfil do almoxarifado e da frota, permissão por ação, negações, descrição) ficou escrito na B836.
+  - **Sabotagem (r3): 29** sabotagens novas, **19** sobreviveram: **13** (a) faltava asserção → viraram cenários (centavos 0,35 × 3,
+    materiais distintos, `ultimo_em` pelo MAX, desempate motivo/tipo, `material_id` vazio, a RN-02 antes da RN-03, a marca antes do UPDATE
+    do status, a janela de 9 min e meio, o aumento no `/fiscal`, o item sem quantidade, o item de outro recebimento, o APROVADO sem item
+    entrado na guarda e na corrida, a A77 com a recebida nula); **6** (b) equivalentes provados (o `DATE()` do início, o `GROUP BY` sem o
+    id, os ganchos com `itens` × `gravados`, o `catch` dos ganchos, o `push` antes do `changes`, o `ORDER BY` da A77). As outras 10 das 29 caíram.
+- **Fase 5, commit:** `bce8f530` (o `/fiscal` sob a marca, as literais com o perfil, o comentário de `ownerRules`, a A77 nova e os 14
+  cenários). Controles das correções: 19 sabotagens (as 3 do `/fiscal` sob a marca + as 16 dos sobreviventes do r3 e do r1-M2), todas
+  caem pela asserção certa, md5 restaurado.
+- **Suíte final (medida depois da Fase 5, antes da documentação):** `test:api` **435/435**; `test:almoxarifado` **44/0**;
+  `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 10/0; client **126** suítes / **1744** testes; `CI=true build` *Compiled
+  successfully*. **Depois da troca da L4** (`6a8b93b4`), rodada de novo: os mesmos números (`test:api` 435/435, `test:almoxarifado` 44/0, 4/0, 3/0,
+  10/0, client 126 / 1744, build compilado).
+- **T4 — fechamento** (o commit de documentação — ver `git log`): novidades (cabeçalho, A77, B830–B837, C266 resolvida, C267, C268,
+  D (129), F (129), a seção da etapa, "Onde estamos"), specs 08 e 21, mapa, guia, manual (14.2b, 15b.3 e o relatório novo), este plano,
+  o "defeito que escapou" da retro da 128.
+
+## Tasks — estado
+
+- [x] **T1** `d16b8350` (Fase 5 `bce8f530`; a literal L4 `6a8b93b4`) · [x] **T2** `b1f1e64f` (Fase 5 `bce8f530`) · [x] **T3** `b0efb4d4` (Fase 5 `bce8f530`) ·
+  [x] **T4** — o commit de documentação.
+
+## Retro (4 números)
+
+1. **Rodadas de correção até verde:** **1** (Fase 5: o `/fiscal` sob a marca, as literais, a A77 e 14 cenários). Testes antigos que
+   mudaram à vista: `naoConformidadeGanchos` (6) e `naoConformidadeRegressao` (2) (o D10 da 43, B830), `estadoForaDaAuditoriaFase5`
+   RN-13f (200 → 409), `relatoriosRegistro` (25 → 26) e `relatoriosJornada` (3 → 4).
+2. **Achados da revisão:** Fase 2 — **3 Important + 7 Minor, todos reais**. Fase 5 — r1 **1 Important + 5 Minor** reais (2 corrigidos,
+  3 declarados); r2 **2** reais (1 corrigido, 1 registrado na C268, anterior); r3 **19** sobreviventes — 13 viraram cenários, 6
+  equivalentes provados; **0** ruído.
+3. **Paralelismo:** **0** galhos em paralelo de fato (T2 é galho por regra, mas "um teste por vez" a serializa), **0** retrabalho; **1**
+   revisor na Fase 2 e **3** em paralelo na Fase 5 sob a trava.
+4. **Defeito que escapou:** *(preencher na Etapa 130)*.
+
+## Próxima tarefa detalhada — Etapa 130
+
+*(A série desta etapa foi B830–B837, C267, C268, A77 — a 130 começa em **B838**, **C269**, **A78**; confira com `grep -oE` antes.)*
+
+**Medido em 2026-10-16 (Fase 0 e Fase 5 desta etapa):** sem o P.O., três candidatas; a primeira é integridade, no mesmo molde da C266.
+
+1. **C267 — o `/fiscal` ainda muda lote, série e valores de um item que já entrou (feature 08) — a principal. Não depende do P.O.**
+   `PUT /api/almoxarifado/recebimentos/:id/fiscal` (`receiptService.salvarDadosFiscal`) só fechou a **quantidade** do item entrado
+   (`assertQuantidadeDoItemEntradoIntacta`, RN-09 desta etapa) e a gravação durante o processamento (B835). Para o item com
+   `entrada_estoque_em`, o UPDATE ainda aceita `lote`, `data_validade_lote`, `data_fabricacao_lote`, `corrida_lote`, `series`,
+   `valor_unitario`, `valor_total`, `valor_icms`, `valor_ipi`, `reducao_icms_percent`. **Medir antes de congelar:** o lote e as séries já
+   foram criados na entrada (`lotService`, `series_almoxarifado` com `recebimento_item_id`) — mudar o texto no item diverge do lote real;
+   o valor unitário alimentou o custo médio na entrada (o motor) e a conta a pagar sai do cabeçalho (`gerarContaPagar(rec)`) — corrigir
+   valor depois da entrada pode ser legítimo (nota fiscal corrigida) ou não; quem o lê depois (relatórios de custo, devolução ao
+   fornecedor — `returnService` e o valor da devolução?). **Contrato candidato (reversível, letra B):** para o item entrado, os campos de
+   lote e série só aceitam o eco (409 senão, com uma literal no molde da L7 dizendo onde corrigir — a tela de Lotes/Séries); os valores,
+   decidir pela medição (se nada os lê depois da entrada, aceitar e declarar; se o custo médio ou a devolução os lê, recusar). **Pontos de
+   atenção:** o modal da nota reenvia **todos** os campos de todos os itens (o eco tem de passar, inclusive datas em formatos diferentes e
+   `series` como texto/JSON — normalizar antes de comparar); o NULL legado; o teste RN-09 desta etapa e o `recebimentoChegouZero`.
+2. **Núcleo — as três leituras de usuário (B836):** `GET /api/usuarios`, `GET /api/usuarios/:id` e `GET /api/usuarios/:id/grupos` só
+   exigem token. Medido: o `/grupos` expõe a mais o perfil do almoxarifado/frota e as permissões por ação. Fechar as três juntas exige
+   medir quem chama (o seletor de responsável em várias telas usa a lista; `UsuarioForm`; o `permissionsCache` do próprio usuário) — o
+   próprio usuário e quem gerencia usuários continuam lendo. **Baixa**; reversível.
+3. **Feature 21 — os relatórios de custo e o custo aberto (C268):** depende do P.O. dizer se o custo é sigiloso. **Não implemente** sem a
+   resposta; se ele responder, o caminho é fechar `custo_medio`/`custo_unitario` nas leituras de material para quem não tem
+   `gerenciar_reposicao` (várias telas — medir).
+4. **Dependem do P.O. — NÃO implemente:** **B808**, **B755**, **B761**/**C239**, **C224**, o resto da **C225**, **C228**, **C219**,
+   **C230**, o reparo da **C246** (e a **C247**), a tabela de conversões e o grupo acima de família, a **régua do tempo de recebimento
+   (E2)**, a **C268** (o custo sigiloso?); na 05, os itens de produto e a **C198**; na 06, a **B11** e a Engenharia; na 21, a valorização
+   por cliente e previsto × realizado; na 22, **B13**, **B101**/G30, **G38**.
+
+**Escolhida: a C267 (1)**, com a medição dos valores antes de prometer o contrato deles.
+
+**O que já está pronto e não precisa reabrir:** a conferência depois da entrada (`assertConferenciaPermitida`, RN-01..RN-06 — a C267 é
+só do `/fiscal`); a quantidade do item entrado e a marca no `/fiscal` (RN-09, B835); o relatório `perdas-por-motivo` (B832, B833); a A77.

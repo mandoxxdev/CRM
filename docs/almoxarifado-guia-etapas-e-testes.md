@@ -1,18 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-16 (Etapa 128) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-16 (Etapa 129) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127 e 128) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128 e 129) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 128 ENTREGUE · próxima do almoxarifado: Etapa 129)
+> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 129 ENTREGUE · próxima do almoxarifado: Etapa 130)
 >
-> **O desenvolvimento parou aqui: Etapa 128 fechada — 2026-10-16.** A **Etapa 128 (o tempo do recebimento, o aviso da retenção e o
+> **O desenvolvimento parou aqui: Etapa 129 fechada — 2026-10-16.** A **Etapa 129 (a conferência depois da entrada e as perdas com
+> valor)**: a conferência do recebimento e o modal da nota deixam de mudar um recebimento que já deu entrada no estoque (recusam com a
+> frase do que fazer — corrigir o estoque por um ajuste), a conferência não marca mais *Aprovado* e não grava durante o processamento; e o
+> relatório novo **Perdas por motivo** (Administrador, Gestor e Compras) diz quanto se perdeu, por tipo e motivo, com o valor.
+> **Próxima: Etapa 130** — ver a próxima tarefa no plano da 129.
+>
+> **Etapa 128, 2026-10-16.** A **Etapa 128 (o tempo do recebimento, o aviso da retenção e o
 > perfil que não pisca)**: o painel e o relatório Indicadores mostram o **tempo médio de recebimento** (da chegada da nota à entrada no
 > estoque — régua para vocês confirmarem); a contagem por endereço que deixa o estoque abaixo do reservado, bloqueado, em inspeção ou
 > no terceiro grava e mostra um aviso amarelo com o caminho; e, do núcleo, quem perde um perfil com a sessão aberta não vê mais os
 > botões voltarem cinco minutos depois.
-> **Próxima: Etapa 129** — ver a próxima tarefa no plano da 128.
+> *(Próxima, na época: Etapa 129 — entregue acima.)*
 >
 > **Etapa 127, 2026-10-16.** A **Etapa 127 (o perfil que saiu, e o separável dividido)**: quem
 > perde o perfil Administrador do almoxarifado deixa de ver os botões ao recarregar a página (antes, só saindo e entrando); e a Fila de
@@ -6532,6 +6538,58 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 129 — A conferência depois da entrada e as perdas com valor (ENTREGUE — 2026-10-16)
+
+**O que mudou, em uma frase:** a conferência do recebimento (e o modal da nota, para o item que já entrou) deixa de mudar um
+recebimento que já deu entrada no estoque — recusa com a frase do que fazer —, e o relatório novo *Perdas por motivo* diz quanto se
+perdeu, com o valor.
+
+**O problema que ela resolve.** A conferência aceitava mudar a quantidade e a situação de um recebimento já aprovado: um item ganhava
+quantidade e nunca entrava, um recebimento aprovado virava reprovado e era aprovado de novo, e a conferência podia marcar *Aprovado* um
+recebimento sem estoque nenhum. A tela não fazia isso (o painel de conferência some depois da conferência), mas qualquer chamada direta
+fazia, e o documento e o estoque ficavam contando histórias diferentes. E a gestão não tinha o valor das perdas — só a lista.
+
+| Antes | Agora |
+|---|---|
+| Conferência de um recebimento aprovado: aceita | Recusa: *"Recebimento já deu entrada no estoque — a conferência não pode mais mudar quantidade nem situação; se a contagem estava errada, corrija o estoque por um ajuste (perfil Administrador ou Almoxarife do almoxarifado)"* |
+| A conferência marcava *Aprovado* sem estoque | *"A conferência não aprova o recebimento — a entrada no estoque é pelo "Aprovar" ou pelo "Processar Nota""* |
+| A conferência gravava durante o processamento da nota | *"Esta nota já está sendo processada"* |
+| O modal da nota mudava a quantidade do item que já entrou | *"Item já deu entrada no estoque — a quantidade dele não muda mais; …"* |
+| Perdas sem valor | **Relatórios → Gestão → Perdas por motivo**, com o valor pelo custo atual |
+
+**Roteiro de teste (10 minutos).** As recusas da conferência só aparecem por uma chamada direta (o painel não oferece o gesto). Para
+fazê-la: com o sistema aberto e logado como **Administrador**, abra o console do navegador (F12 → *Console*) e cole, trocando ⟨API⟩ pelo
+endereço da API que aparece na aba *Rede* (ex.: `http://localhost:5000/api`), ⟨id⟩ pelo número do recebimento e ⟨item⟩ pelo id do item
+(também na aba *Rede*, na resposta de `GET /almoxarifado/recebimentos/⟨id⟩`):
+
+```js
+fetch('⟨API⟩/almoxarifado/recebimentos/⟨id⟩/conferir', { method: 'PUT',
+  headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (localStorage.getItem('token') || sessionStorage.getItem('token')) },
+  body: JSON.stringify({ itens: [{ id: ⟨item⟩, quantidade_recebida: 3 }] }) }).then((r) => r.json()).then(console.log);
+```
+
+1. **Recebimento → Novo**: **PORCA** (unidade PC), 5. Leve-o pelo fluxo até o fim (*Iniciar conferência*, *Finalizar conferência*,
+   *Encaminhar a Compras*, *Finalizar compras*, *Iniciar faturamento*, os **Dados fiscais** da nota e **Processar Nota**). Rode o `fetch` acima: *"Recebimento já deu entrada no estoque — a
+   conferência não pode mais mudar quantidade nem situação; se a contagem estava errada, corrija o estoque por um ajuste (perfil
+   Administrador ou Almoxarife do almoxarifado)"*. Reabra o recebimento: o item continua 5.
+2. Troque o `body` por `{ status: 'REPROVADO' }`: a mesma frase; o recebimento continua *Processado*.
+3. Novo recebimento de PORCA, 2 (sem avançar). `body` `{ status: 'APROVADO' }`: *"A conferência não aprova o recebimento — a entrada
+   no estoque é pelo "Aprovar" ou pelo "Processar Nota""*. O recebimento continua *Recebido* e segue o fluxo normalmente.
+4. Novo recebimento; leve-o até o Faturamento (*Iniciar conferência*, *Finalizar conferência*, *Encaminhar a Compras*, *Finalizar
+   compras*, *Iniciar faturamento*). `body` `{ status: 'EM_CONFERENCIA' }`: *"A conferência já foi encerrada (situação atual:
+   EM_ENTRADA_NF) — a situação segue pelo fluxo do recebimento"*. O modal da nota (*Dados fiscais*) continua salvando normalmente.
+5. Na tela, o painel de conferência de um recebimento *Recebido* continua igual: digite a quantidade conferida e **Salvar
+   Conferência** → *"Conferência salva"*.
+6. **Movimentações → Nova Movimentação → Perda**: PORCA, 3 (custo unitário 2,50), motivo *Avaria* (da lista), justificativa *caiu da
+   empilhadeira*. **Relatórios → Gestão → Perdas por motivo**: *PERDA · Cadastro · Avaria · 1 · 1 · 7,50*. **Exportar** gera a planilha.
+   Estorne a perda (Administrador ou Gestor, no livro de Movimentações): a linha some.
+7. Entre como **Almoxarife**: a chave *Perdas por motivo* não aparece em Relatórios. Como **Gestor** ou **Compras**, aparece.
+
+**O que esta etapa NÃO cobre.** O lote, a série e os valores de um item já entrado ainda mudam pelo modal da nota (**C267**); a
+divergência descoberta depois da entrada não tem tela de não conformidade (o caminho é o **Ajuste**); o custo de cada material continua
+visível a todo o módulo, então o relatório fechado barra só a soma (**C268**); o relatório não soma quantidade, não abre por material nem
+por projeto e não mostra a perda de material de cliente; `/usuarios/:id/grupos` foi medido e mantido (**B836**).
+
 ## Etapa 128 — O tempo do recebimento, o aviso da retenção e o perfil que não pisca (ENTREGUE — 2026-10-16)
 
 **O que mudou, em uma frase:** o painel passa a dizer quanto tempo a nota leva da chegada ao estoque; a contagem que deixa o estoque
@@ -6576,7 +6634,7 @@ minutos depois, voltarem.
    cliques: continua restrito.
 
 **O que esta etapa NÃO cobre.** A lista dos recebimentos por trás do tempo médio (é um número); a régua confirmada (é deduzida — a
-pergunta está na letra E das novidades); a conferência que muda o recebimento depois da entrada (**C266**, a próxima etapa); o aviso
+pergunta está na letra E das novidades); a conferência que muda o recebimento depois da entrada (**C266**, a próxima etapa — *entregue na Etapa 129*); o aviso
 fora da tela de Movimentações; e o perfil na hora em que é tirado, sem a tela reler as permissões.
 
 ## Etapa 127 — O perfil que saiu, e o separável dividido (ENTREGUE — 2026-10-16)

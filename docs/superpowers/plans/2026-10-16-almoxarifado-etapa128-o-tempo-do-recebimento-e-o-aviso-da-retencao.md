@@ -243,7 +243,11 @@ arquivos de servidor ao mesmo tempo, nem jest junto).
    **0** ruído.
 3. **Paralelismo:** **0** galhos em paralelo de fato (T2 e T4 são galhos por regra, mas "um teste por vez" os serializa), **0**
    retrabalho; **1** revisor na Fase 2 e **3** revisores em paralelo na Fase 5 sob a trava.
-4. **Defeito que escapou:** *(preencher na Etapa 129)*.
+4. **Defeito que escapou:** **nenhum encontrado** (preenchido na Etapa 129). A 129 exercitou o que a 128 deixou
+   registrado: a **C266** (achada pela revisão da 128) foi reproduzida e fechada, e a premissa da **B825** (*"depois de Processado ou
+   Aprovado, nada mais entra"*) ficou mais forte — a conferência agora recusa mudar esses recebimentos. O que a 129 achou no `/fiscal`
+   (a quantidade do item entrado e a gravação durante o processamento) é **anterior** à 128 e não foi entregue por ela; a frase *"corrija
+   por um ajuste"* é desta etapa. O aviso da retenção (B826/B827) e o perfil (B828) não foram tocados.
 
 **O "defeito que escapou" da 127** (preenchido aqui): **nenhum encontrado**. A 128 exercitou o que a 127 entregou — a **geração** do
 cache de permissões (a busca invalidada no meio não grava) é a base do ouvinte novo, e o cenário RN-21 *"a busca de geração velha não

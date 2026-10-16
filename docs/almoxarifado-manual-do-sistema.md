@@ -3184,6 +3184,20 @@ espaços é "não informado"; um número (inclusive escrito como texto, *" 4 "*)
 
 **O campo só existe nessas duas situações.** Depois que o documento sai do almoxarifado, a quantidade já é base de custo médio e de conta a pagar, e corrigi-la pelo painel seria mexer no passado sem deixar rastro.
 
+**Depois que o recebimento deu entrada no estoque, a conferência não o muda mais** — nem a quantidade, nem a situação. Vale também para quem chama a conferência por integração, sem a tela. Com o recebimento **PROCESSADO** ou **APROVADO**, ou com qualquer item que já entrou (a nota que entrou em parte), a conferência é recusada antes de gravar qualquer coisa:
+
+> *"Recebimento já deu entrada no estoque — a conferência não pode mais mudar quantidade nem situação; se a contagem estava errada, corrija o estoque por um ajuste (perfil Administrador ou Almoxarife do almoxarifado)"*
+
+As outras regras da conferência, na ordem em que o sistema as confere:
+
+- **A conferência não aprova.** A situação *Aprovado* é a que a aprovação grava depois de dar entrada no estoque; pedida pela conferência, é recusada: *"A conferência não aprova o recebimento — a entrada no estoque é pelo "Aprovar" ou pelo "Processar Nota""*. Os outros resultados da conferência — *Reprovado*, *Parcialmente aprovado*, *Bloqueado* — continuam, e de qualquer um deles se volta a *Em conferência*.
+- **Recebimento que não existe:** *"Recebimento não encontrado"*.
+- **Durante o processamento da nota** (o *Processar Nota* ou o *Aprovar* em andamento, por até 10 minutos): *"Esta nota já está sendo processada"*.
+- **A situação só muda enquanto o recebimento está na conferência** (*Recebido*, *Em conferência*, *Conferido — Almoxarifado*, *Reprovado*, *Parcialmente aprovado*, *Bloqueado*). Depois que ele seguiu para Compras ou Faturamento: *"A conferência já foi encerrada (situação atual: ⟨situação⟩) — a situação segue pelo fluxo do recebimento"*. A quantidade, sem mexer na situação, continua aceita até a entrada.
+- Se o processamento começa enquanto a conferência está sendo gravada, o item que ainda não foi gravado recusa com uma dessas frases — ou com *"O recebimento mudou de situação enquanto a conferência era salva — recarregue e confira de novo"* — e os itens gravados antes ficam (com o aviso e a não conformidade deles).
+
+**Nos dados fiscais, o item que já entrou só aceita a própria quantidade.** O modal da nota reenvia a quantidade de todos os itens; para o item que já está no estoque (a nota que entrou em parte), mandar outra quantidade é recusado antes de gravar: *"Item já deu entrada no estoque — a quantidade dele não muda mais; se a contagem estava errada, corrija o estoque por um ajuste (perfil Administrador ou Almoxarife do almoxarifado)"*. Os itens que não entraram continuam editáveis. Salvar os dados fiscais **com itens** durante o processamento da nota é recusado com *"Esta nota já está sendo processada"*; salvar só o cabeçalho continua aceito.
+
 #### Receber mais do que o esperado exige autorização
 
 Quantidade recebida **acima** da esperada é recusada, e a recusa vale em **qualquer momento em que a quantidade recebida é informada** — ao criar o recebimento, ao salvar a conferência e ao salvar os dados fiscais:
@@ -4351,12 +4365,12 @@ Enquanto o documento está **Aberto**, ele ainda acompanha o fato:
 | Confere de novo com outra quantidade ainda divergente | **Os números são atualizados** — continua sendo **um** documento |
 | Confere de novo e a diferença **desaparece** | O documento é **cancelado sozinho**, com o motivo: *"Divergência corrigida na reconferência: recebida ⟨X⟩ de ⟨Y⟩ esperada"* |
 | Salva a conferência **sem mudar nada** depois de o documento ter sido decidido | **Nada acontece** — documento encerrado não reabre, e não nasce outro |
-| Confere de novo um recebimento **já processado** | **Nada é cancelado nem reescrito**; pode nascer documento novo, se aparecer diferença que não existia |
+| Confere de novo um recebimento **que já deu entrada no estoque** | **A conferência é recusada** (14.2b) — o documento fica como está |
 
-A última linha é a que mais importa, e a regra é assimétrica de propósito: depois que a nota foi
-processada — material no estoque, conta a pagar gerada —, o documento **não pode ser apagado** por
-uma correção posterior de tela. Criar documento é reversível; apagar o registro de uma falta que já
-virou estoque e dinheiro, não.
+A última linha é a que mais importa: depois que a nota foi processada — material no estoque, conta a
+pagar gerada —, o documento **não pode ser apagado nem reescrito** por uma correção posterior. Se a
+contagem estava errada, o estoque se corrige por um **ajuste** (Movimentações), e o documento continua
+contando o que foi observado na conferência.
 
 ### 15b.4 Decidir
 
@@ -6400,6 +6414,29 @@ com o bloco Ajustes e com o **Histórico de movimentações** filtrado pelo grup
 recorte** — os indicadores contam uma janela móvel até agora, e o histórico mostra só as 500 linhas
 mais recentes e inclui materiais de clientes. Material inválido no filtro (pela API) é recusado com
 *"Parâmetro "material_id" deve ser um número inteiro positivo"*.
+
+### Perdas por motivo
+
+No grupo **Gestão**, visível só para os perfis **Administrador**, **Gestor** e **Compras** (para os outros
+perfis a chave não aparece e, pelo endereço direto, a resposta é *"Sem permissão para este relatório"*), com
+filtros opcionais **Data início**, **Data fim** e **Material**. Uma linha por **tipo** e **motivo**:
+
+| Coluna | O que conta |
+|---|---|
+| **Tipo** | *PERDA* (perda no almoxarifado) ou *PERDA_TERCEIRO* (perda de material que estava num terceiro) |
+| **Origem** / **Motivo (id)** / **Motivo** | o motivo da lista (6.4b), pelo **nome atual** (desativado aparece com *"(desativado)"*); sem motivo da lista, *"Texto livre"* / *"Sem motivo do cadastro"* |
+| **Lançamentos** | quantas perdas |
+| **Materiais** | quantos materiais diferentes |
+| **Valor (custo atual)** | a soma de quantidade perdida × custo do material, em centavos |
+| **Último em** | a perda mais recente da linha |
+
+Do maior valor para o menor. O custo é o **atual** do material — o custo médio, ou o custo unitário quando
+ainda não há média — e não o da época da perda: o livro não guarda o custo de cada lançamento, então o valor
+de um período fechado muda quando chega nota nova (a mesma régua do **Custo por projeto** e da **Sucata —
+financeiro**). A quantidade não é somada (cada material tem sua unidade). Ficam fora: as perdas estornadas, a
+**sucata** (relatório próprio), os ajustes negativos e os materiais de **clientes**; material inativado conta.
+As datas comparam o dia em UTC. Material inválido no filtro (pela API) é recusado com *"Parâmetro
+"material_id" deve ser um número inteiro positivo"*.
 
 ### Qualidade por fornecedor
 
