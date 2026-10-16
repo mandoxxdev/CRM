@@ -1065,7 +1065,7 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
     }
   }
   // Etapa 95 (T0, B468): o separado de ANTES da rodada (retrato, molde do `planejadaAntes`) — a regua da 60 usa o
-  // teto do inicio da rodada, porque ela ja subtrai os outros itens da rodada (`totalPorMaterial`); com o teto em
+  // teto do inicio da rodada, porque ela ja subtrai o que os outros itens da rodada tiram do livre (`tiraDoLivre`, Etapa 127); com o teto em
   // memoria subtrairia duas vezes. E a caixa sem reserva de um item da propria requisicao, com um separado dado.
   const separadoAntes = new Map(itens.map((i) => [i.id, getSeparado(i)]));
   const caixaSemReservaDe = (i, separado) => Math.max(0, separado - getEntregue(i) - num(i.reservado_para_item));
@@ -1096,6 +1096,8 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
     if (!reguaDivergencia.has(item.id)) {
       reguaDivergencia.set(item.id, {
         maxInicial: max, pend: pendenteSeparacao(item), estoque: tetoCom((i) => separadoAntes.get(i.id)),
+        // Etapa 127 (Fase 5, r1): a parte propria do teto no inicio da rodada — os irmaos so tiram dele o que passa dela.
+        propria: reservaPropriaSeparavel(saldo.reservado_para_item, separadoAntes.get(item.id) - getEntregue(item)),
         material_id: item.material_id, origens: new Set(), saldoOrigem: null, total: 0, motivo: null, motivoTroca: null,
       });
     }
@@ -1179,13 +1181,17 @@ async function separarSemTrava(db, requisicaoId, itensSeparados = [], user) {
   const divergenciaPorItem = new Map();
   // Fase 5: dois itens do MESMO material dividem o disponivel na rodada — o que um separa sai do
   // separavel do outro (10 livres, 6 + 4: nenhum dos dois e divergente).
-  const totalPorMaterial = new Map();
+  // Etapa 127 (Fase 5, r1; RN-17): a regua desconta de cada item so o que os IRMAOS tiram do livre (o que passa da reserva propria
+  // deles) e nao toca a propria do item — a mesma conta do modal e da fila (dividirSeparavel). Antes descontava a quantidade inteira:
+  // reservados 4 + 4 separados 4 e 3, o modal pedia o motivo (maximo 4) e o servidor gravava maximo 0, "nao divergente".
+  const tiraDoLivre = new Map();
   for (const r of reguaDivergencia.values()) {
-    totalPorMaterial.set(r.material_id, (totalPorMaterial.get(r.material_id) || 0) + r.total);
+    tiraDoLivre.set(r.material_id, (tiraDoLivre.get(r.material_id) || 0) + Math.max(0, r.total - r.propria));
   }
   for (const [itemId, r] of reguaDivergencia) {
-    const outros = totalPorMaterial.get(r.material_id) - r.total;
-    const base = Math.min(r.pend, Math.max(0, r.estoque - outros));
+    const outros = tiraDoLivre.get(r.material_id) - Math.max(0, r.total - r.propria);
+    const propria = Math.min(r.propria, Math.max(0, r.estoque));
+    const base = Math.min(r.pend, propria + Math.max(0, r.estoque - propria - outros));
     const umaChave = r.origens.size === 1 && r.saldoOrigem !== null;
     const maximo = umaChave ? Math.min(base, Math.max(0, r.saldoOrigem)) : base;
     const divergente = r.total < maximo - 1e-9;

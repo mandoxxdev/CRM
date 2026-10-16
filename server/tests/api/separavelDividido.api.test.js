@@ -58,9 +58,10 @@ const S2 = (nome, q, max, pend, disp) => `${nome}: não é possível separar ${q
     assert.deepStrictEqual(div([{ id: 1, material_id: 9, pendente: 4, teto: 2, propria: 0 },
       { id: 2, material_id: 9, pendente: 4, teto: 6, propria: 4 }]), { 1: 2, 2: 4 });
   });
-  await test('[127 RN-16] dividirSeparavel: fracao (livre 0,5, dois de 0,3) -> 0,3 e 0,2 (arredondado); materiais diferentes nao dividem', async () => {
-    assert.deepStrictEqual(div([{ id: 1, material_id: 9, pendente: 0.3, teto: 0.5, propria: 0 },
-      { id: 2, material_id: 9, pendente: 0.3, teto: 0.5, propria: 0 }]), { 1: 0.3, 2: 0.2 });
+  // Fase 5 (r3, D6): o caso 0,5/0,3 era vazio (0.5 - 0.3 === 0.2 em JS); 0,3 - 0,1 da 0.19999999999999998 sem o arredondamento.
+  await test('[127 RN-16] dividirSeparavel: fracao (livre 0,3, pedidos 0,1 e 0,3) -> 0,1 e 0,2 (arredondado); materiais diferentes nao dividem', async () => {
+    assert.deepStrictEqual(div([{ id: 1, material_id: 9, pendente: 0.1, teto: 0.3, propria: 0 },
+      { id: 2, material_id: 9, pendente: 0.3, teto: 0.3, propria: 0 }]), { 1: 0.1, 2: 0.2 });
     assert.deepStrictEqual(div([{ id: 1, material_id: 9, pendente: 4, teto: 4, propria: 0 },
       { id: 2, material_id: 8, pendente: 4, teto: 4, propria: 0 }]), { 1: 4, 2: 4 });
   });
@@ -68,6 +69,13 @@ const S2 = (nome, q, max, pend, disp) => `${nome}: não é possível separar ${q
     assert.deepStrictEqual(div([{ id: 1, material_id: 9, pendente: 0, teto: 4, propria: 0 },
       { id: 2, material_id: 9, pendente: 4, teto: 4, propria: 0 }]), { 1: 0, 2: 4 });
     assert.deepStrictEqual(div([{ id: 1, material_id: 9, pendente: 4, teto: 1, propria: 3 }]), { 1: 1 });
+  });
+  await test('[127 RN-16, Fase 5 r3] dividirSeparavel: tres irmaos acumulam (2, 2, 1 de 5); pendente abaixo da propria nao devolve ao pote; o pote usado nao come a propria', async () => {
+    assert.deepStrictEqual(div([1, 2, 3].map((id) => ({ id, material_id: 9, pendente: 2, teto: 5, propria: 0 }))), { 1: 2, 2: 2, 3: 1 });
+    assert.deepStrictEqual(div([{ id: 1, material_id: 9, pendente: 1, teto: 6, propria: 4 },
+      { id: 2, material_id: 9, pendente: 6, teto: 2, propria: 0 }]), { 1: 1, 2: 2 });
+    assert.deepStrictEqual(div([{ id: 1, material_id: 9, pendente: 4, teto: 4, propria: 0 },
+      { id: 2, material_id: 9, pendente: 4, teto: 3, propria: 1 }]), { 1: 4, 2: 1 });
   });
   await test('[127 RN-16, Fase 2 I1] dividirSeparavel: o inativo reservado (teto 0, propria 4) da 0 e nao consome', async () => {
     assert.deepStrictEqual(div([{ id: 1, material_id: 9, pendente: 4, teto: 0, propria: 4 },
@@ -171,7 +179,8 @@ const S2 = (nome, q, max, pend, disp) => `${nome}: não é possível separar ${q
     assert.strictEqual(r42.status, 200, JSON.stringify(r42.body));
   });
 
-  await test('[127 RN-13] a ordem do pedido: o item SEM reserva primeiro (a reserva no segundo, montada no banco), livre 2 -> a fila 2 e 4; a porta aceita 2+4 e recusa 3+4', async () => {
+  // Fase 5 (r3): este estado da o mesmo em qualquer ordem — quem prende a ORDEM e a RN-10 e a RN-14 (sabotar o ORDER BY para DESC as derruba).
+  await test('[127 RN-13] o item SEM reserva primeiro (a reserva no segundo, montada no banco), livre 2 -> a fila 2 e 4; a porta aceita 2+4 e recusa 3+4', async () => {
     const m = await material(4);
     const { R, ids } = await req([[m.id, 4], [m.id, 4]]);
     await aprovar(R);
@@ -218,6 +227,94 @@ const S2 = (nome, q, max, pend, disp) => `${nome}: não é possível separar ${q
     await dbRun(db, 'UPDATE materiais_almoxarifado SET ativo = 0 WHERE id = ?', [m.id]);
     assert.deepStrictEqual(await doDetalhe(R, ids, 'saldo_separavel'), [0, 0]);
     assert.deepStrictEqual(await doDetalhe(R, ids, 'saldo_separavel_reserva'), [0, 0]);
+  });
+
+  // Fase 5 (r3): reserva e caixa no mesmo item, entrega parcial, caixa acima da reserva, fracao e status que nao separa.
+  await test('[127 RN-15, Fase 5 r3] reserva com caixa: pedidos 6 e 4, reserva 4 no primeiro, +2 livres, separa 2 no primeiro -> detalhe 4/2, reserva 2/0, fila 4 e 0; a porta recusa 4+1', async () => {
+    const m = await material(4);
+    const { R, ids } = await req([[m.id, 6], [m.id, 4]]);
+    await aprovar(R);
+    await entrar(m.id, 2);
+    assert.strictEqual((await separar(R, [[ids[0], 2]])).status, 200);
+    assert.deepStrictEqual(await doDetalhe(R, ids, 'saldo_separavel'), [4, 2]);
+    assert.deepStrictEqual(await doDetalhe(R, ids, 'saldo_separavel_reserva'), [2, 0]);
+    assert.deepStrictEqual(await separavelDaFila(R, ids), [4, 0]);
+    const r = await separar(R, [[ids[0], 4], [ids[1], 1]]);
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+  });
+  await test('[127 RN-15, Fase 5 r3] entrega parcial: reserva 4, separa 3 e entrega 2 no primeiro, +2 livres -> reserva 1/0, fila 1 e 2; a porta aceita 1+2', async () => {
+    const m = await material(4);
+    const { R, ids } = await req([[m.id, 4], [m.id, 4]]);
+    await aprovar(R);
+    assert.strictEqual((await separar(R, [[ids[0], 3]])).status, 200);
+    const en = await como('ALMOX').put(API + '/requisicoes/' + R + '/entregar', { itens_atendidos: [{ item_id: ids[0], quantidade_atendida: 2 }] });
+    assert.strictEqual(en.status, 200, JSON.stringify(en.body));
+    await entrar(m.id, 2);
+    assert.deepStrictEqual(await doDetalhe(R, ids, 'saldo_separavel_reserva'), [1, 0]);
+    assert.deepStrictEqual(await separavelDaFila(R, ids), [1, 2]);
+    const r = await separar(R, [[ids[0], 1], [ids[1], 2]]);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+  });
+  await test('[127 RN-15, Fase 5 r3] caixa acima da reserva da 0 (nunca negativo); a fracao sai exata (0,3 reservado, 0,1 separado -> 0,2)', async () => {
+    const m = await material(0);
+    const a1 = await req([[m.id, 4], [m.id, 4]]);
+    await aprovar(a1.R);
+    await entrar(m.id, 6);
+    assert.strictEqual((await separar(a1.R, [[a1.ids[0], 4]])).status, 200);
+    assert.deepStrictEqual(await doDetalhe(a1.R, a1.ids, 'saldo_separavel_reserva'), [0, 0]);
+    const m2 = await material(0.3);
+    const b = await req([[m2.id, 0.3], [m2.id, 0.3]]);
+    await aprovar(b.R);
+    assert.strictEqual((await separar(b.R, [[b.ids[0], 0.1]])).status, 200);
+    assert.deepStrictEqual(await doDetalhe(b.R, b.ids, 'saldo_separavel_reserva'), [0.2, 0]);
+  });
+  await test('[127 RN-14, Fase 5 r3] fora de PODE_SEPARAR (Pronta para retirada) o separavel da fila e 0 para todos, mesmo com saldo', async () => {
+    const m = await material(0);
+    const { R, ids } = await req([[m.id, 4], [m.id, 4]]);
+    await aprovar(R);
+    await entrar(m.id, 8);
+    assert.strictEqual((await separar(R, [[ids[0], 4]])).status, 200);
+    const lib = await como('ALMOX').put(API + '/requisicoes/' + R + '/liberar-retirada', {});
+    assert.strictEqual(lib.status, 200, JSON.stringify(lib.body));
+    const l = await daFila(R);
+    assert.ok(l, 'premissa: a pronta para retirada esta na fila (Entregar)');
+    assert.strictEqual(l.status, 'PRONTA_PARA_RETIRADA');
+    assert.ok(l.itens.some((i) => i.item_id === ids[1]), 'metade positiva: o segundo (a separar 4) esta na linha');
+    assert.deepStrictEqual(ids.map((id) => (l.itens.find((i) => i.item_id === id) || { separavel: 0 }).separavel), [0, 0]);
+  });
+
+  // Fase 5 (r1, Important): a regua da divergencia que a porta GRAVA usa a mesma conta (o irmao so tira o que passa da propria).
+  const rodadaItens = async (R) => JSON.parse((await dbGet(db, 'SELECT itens_json FROM separacoes_requisicao_almoxarifado WHERE requisicao_id=? ORDER BY id DESC LIMIT 1', [R])).itens_json);
+  const separarComMotivo = (R, trios) => como('ALMOX').put(`${API}/requisicoes/${R}/separar`, {
+    itens_separados: trios.map(([item_id, q, motivo]) => ({ item_id, quantidade_separada: q, ...(motivo ? { motivo_divergencia: motivo } : {}) })),
+  });
+  await test('[127 RN-17, Fase 5 r1] a divergencia gravada: reservados 4+4 separados 4 e 3 -> o 2 e divergente com maximo 4; o 1 nao (maximo 4)', async () => {
+    const m = await material(8);
+    const { R, ids } = await req([[m.id, 4], [m.id, 4]]);
+    await aprovar(R);
+    const r = await separarComMotivo(R, [[ids[0], 4], [ids[1], 3, 'faltou um']]);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    const [e1, e2] = await rodadaItens(R);
+    assert.deepStrictEqual([e1.maximo, e1.divergente], [4, false]);
+    assert.deepStrictEqual([e2.maximo, e2.divergente, e2.motivo_divergencia], [4, true, 'faltou um']);
+  });
+  await test('[127 RN-17, Fase 5 r1] reserva 4 no 1 + 2 livres, separados 4 e 1 -> o 2 divergente com maximo 2; controle: so o 2 com 1 -> o mesmo', async () => {
+    const m = await material(4);
+    const a1 = await req([[m.id, 4], [m.id, 4]]);
+    await aprovar(a1.R);
+    await entrar(m.id, 2);
+    const r = await separarComMotivo(a1.R, [[a1.ids[0], 4], [a1.ids[1], 1]]);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    const [, e2] = await rodadaItens(a1.R);
+    assert.deepStrictEqual([e2.maximo, e2.divergente], [2, true]);
+    const m2 = await material(4);
+    const b = await req([[m2.id, 4], [m2.id, 4]]);
+    await aprovar(b.R);
+    await entrar(m2.id, 2);
+    const r2 = await separarComMotivo(b.R, [[b.ids[1], 1]]);
+    assert.strictEqual(r2.status, 200, JSON.stringify(r2.body));
+    const [so2] = await rodadaItens(b.R);
+    assert.deepStrictEqual([so2.maximo, so2.divergente], [2, true]);
   });
 
   terminou = true;
