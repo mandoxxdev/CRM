@@ -270,6 +270,84 @@ const PNG = Buffer.from('89504E470D0A1A0A0000000D4948445200000001000000010806000
     assert.strictEqual(await presentes(m), 3, 'uma serie ficou Entregue sem saida no livro');
   });
 
+  /**
+   * Fase 5 da 121 (r1, #1): o desfazer do ESTORNO pelo livro (`desfazerReverterSaida`/`desfazerReverterEntrada`, Etapa 118)
+   * com a Auditoria da COMPENSACAO falhando sempre (o INSERT de Auditoria quebrado) e o livro do estorno falhando uma vez.
+   * Antes: o desfazer parava na 1a serie, o catch de fora na 2a, e o claim e o saldo nunca voltavam — a movimentacao ficava
+   * "cancelada" sem estorno (repetir: "Movimentação já cancelada") e as series sem bater com o fisico.
+   */
+  async function estornoComDesfazerFalhando(tipo) {
+    const m = await material({ controle_serie: 1 });
+    assert.strictEqual((await v2({ material_id: m, tipo: 'ENTRADA', quantidade: 2, series: [`D${tipo}-A`, `D${tipo}-B`] })).status, 201);
+    let alvo = (await dbGet(db, 'SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? ORDER BY id DESC LIMIT 1', [m])).id;
+    if (tipo === 'SAIDA') {
+      const ids = (await dbAll(db, 'SELECT id FROM series_almoxarifado WHERE material_id = ? ORDER BY numero', [m])).map((x) => x.id);
+      assert.strictEqual((await v2({ material_id: m, tipo: 'SAIDA', quantidade: 2, serie_ids: ids })).status, 201);
+      alvo = (await dbGet(db, 'SELECT id FROM movimentacoes_almoxarifado WHERE material_id = ? ORDER BY id DESC LIMIT 1', [m])).id;
+    }
+    const original = db.run; let livroFalhou = false; let compFalhas = 0;
+    db.run = function (sql, params, cb) {
+      if (typeof params === 'function') { cb = params; params = []; }
+      if (!livroFalhou && typeof sql === 'string' && /INSERT INTO movimentacoes_almoxarifado/.test(sql)
+        && /ESTORNO/.test(JSON.stringify(params || []) + sql)) {
+        livroFalhou = true; setImmediate(() => cb.call({}, new Error('livro do estorno falhou (teste)'))); return this;
+      }
+      if (typeof sql === 'string' && sql.includes('INSERT INTO auditoria_log_almoxarifado') && Array.isArray(params)
+        && params[0] === 'serie' && params[2] === 'COMPENSACAO') {
+        compFalhas += 1; setImmediate(() => cb.call({}, new Error('falha forcada da auditoria serie/COMPENSACAO (teste)'))); return this;
+      }
+      return original.call(db, sql, params, cb);
+    };
+    const warn = console.warn; console.warn = () => {};
+    let r;
+    try { r = await request(app).post(`${api}/movimentacoes/${alvo}/cancelar`).send({ motivo: 'ada121c' }); } finally { db.run = original; console.warn = warn; }
+    assert.ok(livroFalhou && compFalhas > 0, `ganchos: livro=${livroFalhou} comp=${compFalhas}`);
+    return { m, alvo, r };
+  }
+
+  await test('[RN-12l] (Fase 5, r1) estorno de Saida com o livro falhando e a Auditoria do desfazer falhando: desfaz tudo, repetir estorna', async () => {
+    const { m, alvo, r } = await estornoComDesfazerFalhando('SAIDA');
+    assert.strictEqual(r.status, 500, corpo(r));
+    assert.ok(/livro do estorno falhou/.test(r.body.error), `o erro original sumiu: ${corpo(r)}`);
+    const mv = await dbGet(db, 'SELECT COALESCE(cancelado, 0) c, movimento_estorno_id e FROM movimentacoes_almoxarifado WHERE id = ?', [alvo]);
+    assert.deepStrictEqual({ ...mv }, { c: 0, e: null }, 'a movimentacao ficou presa como cancelada sem estorno');
+    assert.strictEqual(await fisico(m), 0);
+    assert.strictEqual(await presentes(m), 0);
+    const r2 = await request(app).post(`${api}/movimentacoes/${alvo}/cancelar`).send({ motivo: 'ada121c' });
+    assert.strictEqual(r2.status, 200, corpo(r2));
+    assert.strictEqual(await fisico(m), 2);
+    assert.strictEqual(await presentes(m), 2);
+  });
+
+  await test('[RN-12m] (Fase 5, r1) estorno de Entrada com o livro falhando e a Auditoria do desfazer falhando: desfaz tudo, repetir estorna', async () => {
+    const { m, alvo, r } = await estornoComDesfazerFalhando('ENTRADA');
+    assert.strictEqual(r.status, 500, corpo(r));
+    assert.ok(/livro do estorno falhou/.test(r.body.error), `o erro original sumiu: ${corpo(r)}`);
+    const mv = await dbGet(db, 'SELECT COALESCE(cancelado, 0) c, movimento_estorno_id e FROM movimentacoes_almoxarifado WHERE id = ?', [alvo]);
+    assert.deepStrictEqual({ ...mv }, { c: 0, e: null }, 'a movimentacao ficou presa como cancelada sem estorno');
+    assert.strictEqual(await fisico(m), 2);
+    assert.strictEqual(await presentes(m), 2);
+    const r2 = await request(app).post(`${api}/movimentacoes/${alvo}/cancelar`).send({ motivo: 'ada121c' });
+    assert.strictEqual(r2.status, 200, corpo(r2));
+    assert.strictEqual(await fisico(m), 0);
+    assert.strictEqual(await presentes(m), 0);
+  });
+
+  await test('[RN-12n] (Fase 5, r1) estoques minimos em lote: a Auditoria do 1o material falhando nao perde a dos seguintes', async () => {
+    const ids = [await material(), await material(), await material()];
+    const conta = async () => (await dbGet(db, `SELECT COUNT(*) n FROM auditoria_log_almoxarifado WHERE entidade = 'material'
+      AND acao = 'ATUALIZACAO' AND entidade_id IN (${ids.join(',')})`)).n;
+    const err = console.error; console.error = () => {};
+    let r;
+    try {
+      r = await comAuditoriaFalhando('material', 'ATUALIZACAO', () => request(app).put(`${api}/configuracoes/estoques-minimos`)
+        .send({ materiais: ids.map((id) => ({ id, quantidade_minima: 7 })) }));
+    } finally { console.error = err; }
+    assert.strictEqual(r.status, 200, corpo(r));
+    for (const id of ids) assert.strictEqual((await dbGet(db, 'SELECT quantidade_minima q FROM materiais_almoxarifado WHERE id = ?', [id])).q, 7);
+    assert.strictEqual(await conta(), 2, 'a falha do 1o material perdeu a trilha dos seguintes');
+  });
+
   console.log(`\n${passed} passaram, ${failed} falharam\n`);
   await close();
   process.exit(failed ? 1 : 0);

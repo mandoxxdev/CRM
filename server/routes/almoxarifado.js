@@ -154,7 +154,9 @@ async function auditarLoteMaterial(db, req, materiais, antesPorId, campos) {
       dadosNovos[campo] = novo;
     }
     if (!Object.keys(dadosNovos).length) continue;
-    await audit.registrarAuditoria(db, {
+    // Etapa 121 (Fase 5, r1; C252, B784): por material, nao-fatal — o `.catch` do chamador envolve o laco inteiro, e a falha
+    // da linha do 1o material perdia a trilha de todos os seguintes (os minimos gravados, 0 linhas de Auditoria em vez de 2).
+    await audit.registrarAuditoriaDoAto(db, {
       entidade: 'material', entidade_id: Number(m.id), acao: 'ATUALIZACAO',
       usuario_id: req.user.id, usuario_nome: req.user.nome || req.user.email,
       dados_anteriores: dadosAnteriores, dados_novos: dadosNovos,

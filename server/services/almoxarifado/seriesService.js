@@ -251,7 +251,10 @@ async function desfazerReverterSaida(db, afetadas) {
       [a.anterior.status, a.anterior.movimentacao_saida_id, a.linha.id]);
     afetadas.pop();
     if (linha) {
-      await registrarAuditoria(db, {
+      // Etapa 121 (Fase 5, r1; C252, B784): a Auditoria do desfazer nao pode parar o desfazer — com ela falhando sempre, o
+      // laco parava na 1a serie, o catch de fora na 2a, e o claim e o saldo do estorno nunca voltavam (movimentacao presa
+      // como cancelada sem estorno; series sem bater com o fisico). O mesmo das tres de desfazerEntrada/desfazerSaida (D8).
+      await registrarAuditoriaDoAto(db, {
         entidade: 'serie', entidade_id: linha.id, acao: 'COMPENSACAO',
         usuario_id: null, usuario_nome: 'sistema',
         dados_anteriores: { status: a.linha.status }, dados_novos: { status: a.anterior.status },
@@ -329,7 +332,10 @@ async function desfazerReverterEntrada(db, afetadas) {
         a.anterior.movimentacao_entrada_id ?? null, a.linha.id]);
     afetadas.pop();
     if (linha) {
-      await registrarAuditoria(db, {
+      // Etapa 121 (Fase 5, r1; C252, B784): a Auditoria do desfazer nao pode parar o desfazer — com ela falhando sempre, o
+      // laco parava na 1a serie, o catch de fora na 2a, e o claim e o saldo do estorno nunca voltavam (movimentacao presa
+      // como cancelada sem estorno; series sem bater com o fisico). O mesmo das tres de desfazerEntrada/desfazerSaida (D8).
+      await registrarAuditoriaDoAto(db, {
         entidade: 'serie', entidade_id: linha.id, acao: 'COMPENSACAO',
         usuario_id: null, usuario_nome: 'sistema',
         dados_anteriores: { status: a.linha.status }, dados_novos: { status: a.anterior.status },
