@@ -477,3 +477,128 @@ describe('MateriaisAlmoxarifado — RN-38.05: ?familia_id=<sub> na URL rebusca q
     expect(params).not.toHaveProperty('subfamilia_id');
   });
 });
+
+// Etapa 113 (RN-07): o servidor passou a recusar inativar material com saldo, com uma mensagem que diz o saldo e o
+// caminho (zerar ou devolver ao cliente). O "Inativar" jogava a mensagem fora (`catch {}` com texto fixo) — o usuario via
+// "Erro ao inativar material" sem saber por que nem o que fazer.
+describe('MateriaisAlmoxarifado — RN-07 (Etapa 113): o Inativar mostra a recusa do servidor', () => {
+  const { toast } = require('react-toastify');
+  const E1 = 'Não é possível inativar o material CHP-001: o saldo físico é 50. Material inativo não pode ser movimentado, '
+    + 'então esse saldo ficaria preso. Antes de inativar, zere o saldo com uma Saída ou um Ajuste.';
+  const clicarInativar = async (codigo) => {
+    const botao = linhaDe(codigo).querySelector('button[title="Inativa o material (não apaga o histórico)"]');
+    expect(botao).toBeTruthy();
+    await act(async () => { botao.click(); });
+  };
+  let confirmOriginal;
+  beforeEach(() => { confirmOriginal = window.confirm; window.confirm = jest.fn(() => true); });
+  afterEach(() => { window.confirm = confirmOriginal; });
+
+  test('recusa com mensagem: o toast mostra a mensagem do servidor, literal', async () => {
+    api.delete.mockRejectedValue({ response: { status: 400, data: { error: E1 } } });
+    await renderizar();
+    await clicarInativar('CHP-001');
+    expect(api.delete).toHaveBeenCalledWith('/almoxarifado/materiais/1');
+    expect(toast.error).toHaveBeenCalledWith(E1);
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  test('[controle] falha sem mensagem (rede): o texto generico de sempre', async () => {
+    api.delete.mockRejectedValue(new Error('Network Error'));
+    await renderizar();
+    await clicarInativar('CHP-001');
+    expect(toast.error).toHaveBeenCalledWith('Erro ao inativar material');
+  });
+
+  test('[controle] sucesso continua dizendo "Material inativado"', async () => {
+    api.delete.mockResolvedValue({ data: { success: true } });
+    await renderizar();
+    await clicarInativar('CHP-001');
+    expect(toast.success).toHaveBeenCalledWith('Material inativado');
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+});
+
+// Etapa 113 (RN-08): o filtro "Inativos" e o Reativar — a unica volta, pela tela, de um material inativado.
+describe('MateriaisAlmoxarifado — RN-08 (Etapa 113): Inativos e Reativar', () => {
+  const { toast } = require('react-toastify');
+  const INATIVO = { ...MATERIAL_NOSSO, id: 21, codigo: 'INA-001', nome: 'Chapa inativa', ativo: 0, quantidade_atual: 4 };
+  const INATIVO_NULL = { ...MATERIAL_NOSSO, id: 22, codigo: 'INA-002', nome: 'Chapa legado', ativo: null };
+  const ATIVO = { ...MATERIAL_NOSSO, id: 23, codigo: 'ATV-001', nome: 'Chapa ativa', ativo: 1 };
+  const FAMILIA_INATIVA = 'Família inativa — não é possível vincular novos itens';
+  const titulos = (codigo) => [...linhaDe(codigo).querySelectorAll('button')].map((b) => b.getAttribute('title'));
+  let confirmOriginal;
+  beforeEach(() => {
+    confirmOriginal = window.confirm; window.confirm = jest.fn(() => true);
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/materiais') return Promise.resolve({ data: [INATIVO, INATIVO_NULL, ATIVO] });
+      if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
+      return Promise.resolve({ data: [] });
+    });
+  });
+  afterEach(() => { window.confirm = confirmOriginal; });
+
+  test('o filtro de status tem "Inativos" e manda status=inativo', async () => {
+    await renderizar();
+    const select = [...container.querySelectorAll('select')].find((el) => [...el.options].some((o) => o.value === 'zerado'));
+    expect([...select.options].map((o) => [o.value, o.textContent])).toContainEqual(['inativo', 'Inativos']);
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+      setter.call(select, 'inativo');
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(async () => { await new Promise((r) => setTimeout(r, 350)); });
+    const chamadas = api.get.mock.calls.filter(([url]) => url === '/almoxarifado/materiais');
+    expect(chamadas[chamadas.length - 1][1]).toEqual({ params: { status: 'inativo' } });
+  });
+
+  test('linha inativa (0 e NULL): selo Inativo e Reativar, sem Inativar/Requisitar/Entrada/Saída; a ativa ao contrário', async () => {
+    await renderizar();
+    for (const codigo of ['INA-001', 'INA-002']) {
+      expect(linhaDe(codigo).textContent).toContain('Inativo');
+      const t = titulos(codigo);
+      expect(t).toContain('Reativa o material (volta às listas e a movimentar)');
+      expect(t).not.toContain('Inativa o material (não apaga o histórico)');
+      expect(t).not.toContain('Requisitar');
+      expect(t).not.toContain('Entrada rápida de estoque neste material');
+      expect(t).not.toContain('Saída rápida de estoque neste material');
+      expect(t).toContain('Extrato');
+    }
+    const t = titulos('ATV-001');
+    expect(t).toContain('Inativa o material (não apaga o histórico)');
+    expect(t).toContain('Entrada rápida de estoque neste material');
+    expect(t).not.toContain('Reativa o material (volta às listas e a movimentar)');
+    expect(linhaDe('ATV-001').textContent).not.toContain('Inativo');
+  });
+
+  const clicarReativar = async (codigo) => {
+    const b = linhaDe(codigo).querySelector('button[title="Reativa o material (volta às listas e a movimentar)"]');
+    expect(b).toBeTruthy();
+    await act(async () => { b.click(); });
+  };
+
+  test('Reativar manda PUT { ativo: 1 } do material da linha e diz "Material reativado"', async () => {
+    api.put.mockResolvedValue({ data: { id: 21, ativo: 1 } });
+    await renderizar();
+    await clicarReativar('INA-001');
+    expect(window.confirm).toHaveBeenCalledWith('Reativar o material "Chapa inativa"?');
+    expect(api.put).toHaveBeenCalledWith('/almoxarifado/materiais/21', { ativo: 1 });
+    expect(toast.success).toHaveBeenCalledWith('Material reativado');
+  });
+
+  test('Reativar recusado (família inativa): o toast mostra a mensagem do servidor', async () => {
+    api.put.mockRejectedValue({ response: { status: 400, data: { error: FAMILIA_INATIVA } } });
+    await renderizar();
+    await clicarReativar('INA-002');
+    expect(toast.error).toHaveBeenCalledWith(FAMILIA_INATIVA);
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  test('[controle] Reativar sem editar_material: barrado antes do PUT', async () => {
+    mockBloquearSeNaoPode = jest.fn((acao) => acao !== 'editar_material');
+    await renderizar();
+    await clicarReativar('INA-001');
+    expect(mockBloquearSeNaoPode).toHaveBeenCalledWith('editar_material', expect.anything());
+    expect(api.put).not.toHaveBeenCalled();
+  });
+});

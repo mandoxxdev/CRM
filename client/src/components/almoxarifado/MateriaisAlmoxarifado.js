@@ -10,7 +10,7 @@ import { SkeletonTable } from '../SkeletonLoader';
 import {
   FiPlus, FiSearch, FiEdit, FiTrash2, FiImage, FiPackage,
   FiArrowUp, FiArrowDown, FiAlertTriangle, FiRefreshCw, FiMap, FiClipboard, FiFileText, FiTag,
-  FiCheckSquare, FiPaperclip
+  FiCheckSquare, FiPaperclip, FiRotateCcw
 } from 'react-icons/fi';
 import AlmoxPageHeader from './AlmoxPageHeader';
 import AnexosModal from './AnexosModal';
@@ -128,8 +128,22 @@ const MateriaisAlmoxarifado = () => {
       await api.delete(`/almoxarifado/materiais/${id}`);
       toast.success('Material inativado');
       loadMateriais();
-    } catch {
-      toast.error('Erro ao inativar material');
+    } catch (err) {
+      // Etapa 113 (RN-07): a recusa do servidor diz o saldo que impede inativar e o caminho (zerar / devolver ao cliente).
+      toast.error(err?.response?.data?.error || 'Erro ao inativar material');
+    }
+  };
+
+  // Etapa 113 (RN-08): o filtro "Inativos" lista o que foi inativado, e daqui se reativa — sem isto um material inativado
+  // (com saldo antigo, ou com inventario/nota aberta) nao tinha volta pela tela. O servidor confere a familia (RN-05).
+  const handleReativar = async (id, nome) => {
+    if (!window.confirm(`Reativar o material "${nome}"?`)) return;
+    try {
+      await api.put(`/almoxarifado/materiais/${id}`, { ativo: 1 });
+      toast.success('Material reativado');
+      loadMateriais();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Erro ao reativar material');
     }
   };
 
@@ -177,7 +191,11 @@ const MateriaisAlmoxarifado = () => {
     ]);
   }, [familias]);
 
+  // Etapa 113 (RN-08): `ativo` 0 ou NULL e inativo (a regua do servidor); ausente na linha = ativo.
+  const estaInativo = (m) => m.ativo === 0 || m.ativo === null;
+
   const getStatus = (m) => {
+    if (estaInativo(m)) return { label: 'Inativo', cls: 'zerado' };
     if (m.quantidade_atual === 0) return { label: 'Zerado', cls: 'zerado' };
     if (m.quantidade_minima > 0 && m.quantidade_atual <= m.quantidade_minima) return { label: 'Crítico', cls: 'critico' };
     if (m.quantidade_minima > 0 && m.quantidade_atual <= m.quantidade_minima * 1.5) return { label: 'Baixo', cls: 'baixo' };
@@ -244,6 +262,7 @@ const MateriaisAlmoxarifado = () => {
           <option value="ok">OK</option>
           <option value="critico">Crítico</option>
           <option value="zerado">Zerado</option>
+          <option value="inativo">Inativos</option>
         </select>
         {(search || categoria || familiaFilter || statusFilter) && (
           <button className="btn-almox-secondary" onClick={() => { setSearch(''); setCategoria(''); setFamiliaFilter(''); setStatusFilter(''); }}>
@@ -346,10 +365,12 @@ const MateriaisAlmoxarifado = () => {
                           onClick={() => setExtratoMaterialId(m.id)}>
                           <FiFileText />
                         </button>
+                        {!estaInativo(m) && (
                         <button className="almox-btn-icon primary" title="Requisitar"
                           onClick={(e) => { if (!bloquearSeNaoPode('requisitar', e)) return; navigate(`/almoxarifado/requisicoes/nova?material_id=${m.id}`); }}>
                           <FiClipboard />
                         </button>
+                        )}
                         {m.localizacao_padrao_id && (
                           <button className="almox-btn-icon primary" title="Ver no mapa"
                             onClick={() => navigate(`/almoxarifado/mapa?loc=${m.localizacao_padrao_id}`)}>
@@ -372,6 +393,7 @@ const MateriaisAlmoxarifado = () => {
                           onClick={(e) => { if (!bloquearSeNaoPode('gerenciar_plano_inspecao', e)) return; setPlanoMaterial(m); }}>
                           <FiCheckSquare />
                         </button>
+                        {!estaInativo(m) && (<>
                         <button className="almox-btn-icon success" title="Entrada rápida de estoque neste material"
                           onClick={(e) => { if (!bloquearSeNaoPode('movimentar', e)) return; openMovModal(m, 'ENTRADA'); }}>
                           <FiArrowUp />
@@ -380,6 +402,7 @@ const MateriaisAlmoxarifado = () => {
                           onClick={(e) => { if (!bloquearSeNaoPode('movimentar', e)) return; openMovModal(m, 'SAIDA'); }}>
                           <FiArrowDown />
                         </button>
+                        </>)}
                         {/* Etapa 34 — anexos do material (ficha técnica, certificado, desenho).
                             SEM `bloquearSeNaoPode`, de propósito e ao contrário de todos os
                             vizinhos: `anexar_documento` é de sete perfis e `editar_material` de
@@ -397,10 +420,17 @@ const MateriaisAlmoxarifado = () => {
                           onClick={(e) => { if (!bloquearSeNaoPode('editar_material', e)) return; navigate(`/almoxarifado/materiais/editar/${m.id}`); }}>
                           <FiEdit />
                         </button>
-                        <button className="almox-btn-icon danger" title="Inativa o material (não apaga o histórico)"
-                          onClick={(e) => { if (!bloquearSeNaoPode('editar_material', e)) return; handleDelete(m.id, m.nome); }}>
-                          <FiTrash2 />
-                        </button>
+                        {estaInativo(m) ? (
+                          <button className="almox-btn-icon success" title="Reativa o material (volta às listas e a movimentar)"
+                            onClick={(e) => { if (!bloquearSeNaoPode('editar_material', e)) return; handleReativar(m.id, m.nome); }}>
+                            <FiRotateCcw />
+                          </button>
+                        ) : (
+                          <button className="almox-btn-icon danger" title="Inativa o material (não apaga o histórico)"
+                            onClick={(e) => { if (!bloquearSeNaoPode('editar_material', e)) return; handleDelete(m.id, m.nome); }}>
+                            <FiTrash2 />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
