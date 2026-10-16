@@ -280,10 +280,16 @@ async function reverterEntrada(db, user, movimentacaoId, { saidaId = null, afeta
       ? await dbGet(db, `
       UPDATE series_almoxarifado
          SET status = 'ENTREGUE', status_motivo = 'Devolução estornada', movimentacao_saida_id = ?,
-             movimentacao_entrada_id = COALESCE((SELECT ea.entrada_anterior_id FROM series_entrada_anterior_almoxarifado ea
-               WHERE ea.serie_id = series_almoxarifado.id AND ea.movimentacao_entrada_id = ?), movimentacao_entrada_id),
+             -- Fase 5 (revisor 1; RN-09): "linha com entrada anterior NULL" (serie que nasceu sem entrada — regularizacao) volta
+             -- a NULL; so "sem linha" (legado) mantem a entrada da devolucao. O COALESCE tratava os dois igual.
+             movimentacao_entrada_id = CASE
+               WHEN EXISTS (SELECT 1 FROM series_entrada_anterior_almoxarifado ea
+                 WHERE ea.serie_id = series_almoxarifado.id AND ea.movimentacao_entrada_id = ?)
+               THEN (SELECT ea.entrada_anterior_id FROM series_entrada_anterior_almoxarifado ea
+                 WHERE ea.serie_id = series_almoxarifado.id AND ea.movimentacao_entrada_id = ?)
+               ELSE movimentacao_entrada_id END,
              updated_at = CURRENT_TIMESTAMP
-       WHERE id = ? AND status = 'EM_ESTOQUE' RETURNING *`, [saidaId, movimentacaoId, s.id])
+       WHERE id = ? AND status = 'EM_ESTOQUE' RETURNING *`, [saidaId, movimentacaoId, movimentacaoId, s.id])
       : await dbGet(db, `
       UPDATE series_almoxarifado
          SET status = 'ESTORNADA', status_motivo = 'Entrada estornada', updated_at = CURRENT_TIMESTAMP

@@ -301,6 +301,76 @@ const SUPER = { id: 1, nome: 'Super Teste', role: 'admin', is_superadmin: 1, ema
     assert.strictEqual(await fisico(m), 2);
   });
 
+  // ── Fase 5 (revisor 1) ──────────────────────────────────────────────────────────────────────────────────────────────
+  await test('[RN-09] serie sem entrada (regularizada) devolvida e desfeita volta a sem entrada, nao fica na entrada da devolucao', async () => {
+    const m = await material({ controle_serie: 1 });
+    await mov(m, { tipo: 'ENTRADA', quantidade: 1, series: ['R1'] });
+    await dbRun(db, 'UPDATE series_almoxarifado SET movimentacao_entrada_id = NULL WHERE material_id = ?', [m.id]); // como a regularizacao
+    const sid = (await dbGet(db, 'SELECT id FROM series_almoxarifado WHERE material_id = ?', [m.id])).id;
+    const s1 = await mov(m, { tipo: 'SAIDA', quantidade: 1, serie_ids: [sid] });
+    const d = await request(app).post('/api/almoxarifado/devolucoes').send({ material_id: m.id, quantidade: 1,
+      motivo: 'NAO_UTILIZADO', destino: 'ESTOQUE', movimentacao_saida_id: s1, series: ['R1'] });
+    assert.strictEqual(d.status, 201, JSON.stringify(d.body));
+    const ed = await ultimo(m, 'ENTRADA_DEVOLUCAO');
+    assert.deepStrictEqual((await series(m)).map((x) => x.e), [ed], 'premissa: a devolucao ligou a serie a entrada dela');
+    const r = await estornar(ed);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.deepStrictEqual((await series(m)).map((x) => [x.status, x.e, x.s]), [['ENTREGUE', null, s1]],
+      'a serie ficou na entrada da devolucao estornada');
+  });
+
+  // ── Fase 5 (revisor 3, S17) ─────────────────────────────────────────────────────────────────────────────────────────
+  await test('[RN-11] a gravacao da entrada anterior falhando nao derruba a devolucao: 201; desfeita, fica como a do legado (RN-07)', async () => {
+    const m = await material({ controle_serie: 1 });
+    const e1 = await mov(m, { tipo: 'ENTRADA', quantidade: 1, series: ['N1'] });
+    const sid = (await dbGet(db, 'SELECT id FROM series_almoxarifado WHERE material_id = ?', [m.id])).id;
+    const s1 = await mov(m, { tipo: 'SAIDA', quantidade: 1, serie_ids: [sid] });
+    const original = db.run; let disparou = false;
+    db.run = function (sql, params, cb) {
+      if (typeof params === 'function') { cb = params; params = []; }
+      if (!disparou && typeof sql === 'string' && sql.includes('INTO series_entrada_anterior_almoxarifado')) {
+        disparou = true;
+        setImmediate(() => cb.call({}, new Error('falha forcada da entrada anterior (teste)')));
+        return this;
+      }
+      return original.call(db, sql, params, cb);
+    };
+    let d;
+    try {
+      d = await request(app).post('/api/almoxarifado/devolucoes').send({ material_id: m.id, quantidade: 1,
+        motivo: 'NAO_UTILIZADO', destino: 'ESTOQUE', movimentacao_saida_id: s1, series: ['N1'] });
+    } finally { db.run = original; }
+    assert.ok(disparou, 'gancho nao disparou');
+    assert.strictEqual(d.status, 201, JSON.stringify(d.body));
+    const ed = await ultimo(m, 'ENTRADA_DEVOLUCAO');
+    assert.strictEqual(await fisico(m), 1);
+    assert.deepStrictEqual((await series(m)).map((x) => [x.status, x.e]), [['EM_ESTOQUE', ed]]);
+    assert.strictEqual((await estornar(ed)).status, 200);
+    assert.strictEqual((await estornar(s1)).status, 200);
+    const r = await estornar(e1);
+    assert.strictEqual(r.status, 400, 'sem a linha, a entrada original recusa como no legado');
+    assert.strictEqual(await fisico(m), 1);
+  });
+
+  await test('[RN-10] saida com lote e serie: a serie recusada e o 2o credito de volta falhando -> 500, enderecos e fisico batem', async () => {
+    const m = await material({ controle_lote: 1, controle_serie: 1 });
+    const A = await loc(); const B = await loc(); const C = await loc();
+    await mov(m, { tipo: 'ENTRADA', quantidade: 1, lote: 'L1', localizacao_destino_id: A, series: ['K1'] });
+    await mov(m, { tipo: 'ENTRADA', quantidade: 1, lote: 'L1', localizacao_destino_id: B, series: ['K2'] });
+    await mov(m, { tipo: 'ENTRADA', quantidade: 1, lote: 'L2', localizacao_destino_id: C, series: ['K3'] });
+    const sid = async (n) => (await dbGet(db, 'SELECT id FROM series_almoxarifado WHERE material_id = ? AND numero = ?', [m.id, n])).id;
+    const l1 = await loteId(m, 'L1');
+    const ids = [await sid('K1'), await sid('K3')]; // K3 e do L2: o claim de serie recusa depois de o lote ja ter baixado A e B
+    const sem = await v2(m, { tipo: 'SAIDA', quantidade: 2, lote_id: l1, serie_ids: ids });
+    assert.strictEqual(sem.status, 400, `premissa: a serie de outro lote e recusada (${JSON.stringify(sem.body)})`);
+    assert.deepStrictEqual([await linha(m, A), await linha(m, B), await linha(m, C)], [1, 1, 1], 'premissa: a recusa simples desfaz');
+    const r = await comCreditoFalhando(2, () => v2(m, { tipo: 'SAIDA', quantidade: 2, lote_id: l1, serie_ids: ids }));
+    assert.strictEqual(r.status, 500, JSON.stringify(r.body));
+    assert.strictEqual(await fisico(m), 3);
+    assert.deepStrictEqual([await linha(m, A), await linha(m, B), await linha(m, C)], [1, 1, 1], 'linha creditada em dobro');
+    assert.deepStrictEqual((await series(m)).map((x) => x.status), ['EM_ESTOQUE', 'EM_ESTOQUE', 'EM_ESTOQUE']);
+  });
+
   await test('[RN-08] entrega de requisicao com lote, 2o endereco falhando -> 500, fisico 6, A 3 e B 3; de novo -> entrega, fisico 1', async () => {
     const { m, A, B, lt } = await loteEmDoisEnderecos();
     const req = (await dbRun(db, `INSERT INTO requisicoes_almoxarifado (numero, solicitante_id, solicitante_nome, status)

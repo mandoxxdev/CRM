@@ -383,7 +383,7 @@ async function claimSaldoDoLote(db, materialId, loteId, locPreferida, quantidade
       FROM estoque_saldo_almoxarifado WHERE material_id = ? AND lote_id IS ?`, [materialId, loteId]);
     return { ok: false, disponivel: Q.qtd(total.total) };
   }
-  return { ok: true, linhas: aplicados };
+  return { ok: true }; // Etapa 119: as linhas ficam no rastreador do chamador (`aplicados`); `linhas` nao tinha mais leitor
 }
 
 /**
@@ -2208,12 +2208,17 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
           // compensar, ZERA `saldoLinhasSaidaParaReverter` (e `reverterFisicoDaSaida` já zera
           // `saidaFisicoAplicado` sozinha) — fix round 1: sem isto, o catch amplo (que também olha
           // essas variáveis) tentaria reverter de novo o que esta compensação local já reverteu.
-          for (const l of saldoLinhasSaidaParaReverter) {
+          // Etapa 119 (Fase 5, revisores 1 e 2; RN-10): CONSOME o rastreador linha a linha. Zerar só no fim deixava, com o 2o
+          // credito falhando (uma falha de banco so, depois da recusa de negocio da serie), o rastreador cheio — e o catch amplo
+          // creditava de novo a linha ja devolvida (medido: lote em A 3 e B 3, serie de outro lote -> A com 3 a mais; sem lote,
+          // o mesmo). Anterior a etapa.
+          while (saldoLinhasSaidaParaReverter.length) {
+            const l = saldoLinhasSaidaParaReverter[0];
             await dbRun(db, `UPDATE estoque_saldo_almoxarifado
               SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
               [l.quantidade, l.id]);
+            saldoLinhasSaidaParaReverter.shift();
           }
-          saldoLinhasSaidaParaReverter = [];
           await reverterFisicoDaSaida();
           throw e;
         }
