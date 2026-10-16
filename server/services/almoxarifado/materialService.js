@@ -540,6 +540,36 @@ function mensagemDesligarSerieSemPermissao(codigo, { presentes, fisico }, perfil
 }
 
 /**
+ * Etapa 116 (C233, RN-01/RN-02) — os controles que o salvar DESFARIA: lido (o que o formulario mostrava ao abrir) diferente
+ * do gravado (outra pessoa mudou depois) E o salvar grava nele um valor diferente do gravado. Lido diferente mas gravando o
+ * mesmo do gravado (marcou igual, ou a chave veio omitida) nao desfaz nada. Chave ausente em `lidos` nao e comparada
+ * (RN-03). Devolve `['lote'|'serie']`, na ordem lote, serie.
+ */
+function controlesDesfeitos(lidos, gravado, merged) {
+  if (!lidos || typeof lidos !== 'object') return [];
+  const b = (v) => (Number(v) === 1 || v === true ? 1 : 0);
+  const desfeitos = [];
+  for (const [col, nome] of [['controle_lote', 'lote'], ['controle_serie', 'serie']]) {
+    if (lidos[col] === undefined) continue;
+    if (b(lidos[col]) !== b(gravado[col]) && b(merged[col]) !== b(gravado[col])) desfeitos.push(nome);
+  }
+  return desfeitos;
+}
+
+/** E1 da Etapa 116 (409, contrato congelado no plano). `gravado` diz o verbo quando e um controle so. */
+function mensagemControleMudadoPorOutro(codigo, desfeitos, gravado) {
+  const NOMES = { lote: 'lote', serie: 'número de série' };
+  const nomes = desfeitos.map((d) => NOMES[d]).join(' e por ');
+  let verbo = 'mudado';
+  if (desfeitos.length === 1) {
+    const col = desfeitos[0] === 'lote' ? 'controle_lote' : 'controle_serie';
+    verbo = Number(gravado[col]) === 1 ? 'ligado' : 'desligado';
+  }
+  return `O controle por ${nomes} do material ${codigo} foi ${verbo} por outra pessoa depois que você abriu o cadastro — `
+    + 'salvar desfaria essa mudança, e nada foi gravado. Recarregue o material e salve de novo.';
+}
+
+/**
  * Etapa 113 (C217, C227, RN-01..RN-04) — inativar material com saldo prende o saldo: o motor recusa movimentar material
  * inativo e nenhuma tela reativa. Por isso inativar exige o fisico e as quatro retencoes zerados (6 casas), para TODOS
  * (B733: o padrao "so quem regulariza" da 112 nao serve — quem regulariza tambem ficaria preso).
@@ -602,4 +632,5 @@ module.exports = {
   mensagemSaldoInicialRecusado, mensagemSaldoInicialSemPermissao,
   controlesLigados, saldoNaoIdentificado, mensagemControleSemPermissao, condicaoSaldoIdentificadoSql,
   mudaControle, desligaSerie, seriesPresentes, SEM_SERIE_PRESENTE_SQL, mensagemDesligarSerieSemPermissao,
+  controlesDesfeitos, mensagemControleMudadoPorOutro,
 };

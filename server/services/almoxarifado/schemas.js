@@ -314,7 +314,13 @@ const MaterialSchema = MaterialShape.superRefine(refineUnidadesFator);
 // PUT — shape parcial (preserve-when-omitted é resolvido na rota, não aqui; ver
 // routes/almoxarifado.js). .partial() precisa ser aplicado ANTES do superRefine — Zod não
 // permite .partial() em cima de um schema que já carrega refinamentos (ZodEffects).
-const MaterialUpdateSchema = MaterialShape.partial().superRefine(refineUnidadesFator);
+//
+// Etapa 116 (C233, RN-03): `controles_lidos` — os controles que o formulario mostrava ao abrir. So no PUT; SEM DECLARAR
+// AQUI o z.object descarta a chave em silencio e a conferencia nunca liga (a armadilha da reserva_id/lote_id/codigo_auto).
+// Nao entra no UPDATE (a lista e MATERIAL_UPDATE_COLUMNS).
+const MaterialUpdateSchema = MaterialShape.partial().extend({
+  controles_lidos: z.object({ controle_lote: FlagSchema, controle_serie: FlagSchema }).optional(),
+}).superRefine(refineUnidadesFator);
 
 // ── Requisições (Etapa 3, Task 1) ──────────────────────────────────────────────
 // Schema único usado pelas DUAS rotas de criação (/api/almoxarifado/requisicoes e

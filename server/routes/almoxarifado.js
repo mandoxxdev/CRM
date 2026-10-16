@@ -646,6 +646,16 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       merged[col] = MATERIAL_BOOL_FIELDS.has(col) ? bool01(val(col)) : val(col);
     }
 
+    // Etapa 116 (C233, RN-01..RN-04; B752/B753): o formulario manda os controles que mostrava ao abrir. Se outra pessoa
+    // mudou um deles depois e este salvar o desfaria, 409 — ANTES de qualquer outra recusa (cada uma seria calculada sobre um
+    // controle que o usuario nao viu: a recusa do desligar da 115 "enganava" assim). Protecao de concorrencia, nao de
+    // autorizacao (RN-05): `controles_lidos` vem do corpo, e as guardas de perfil abaixo continuam lendo o gravado. Sem a
+    // chave, o comportamento da 115 (B750, a condicao com o `current`).
+    const desfeitos = materialService.controlesDesfeitos(req.body.controles_lidos, current, merged);
+    if (desfeitos.length > 0) {
+      return res.status(409).json({ error: materialService.mensagemControleMudadoPorOutro(current.codigo, desfeitos, current) });
+    }
+
     // Etapa 108 (C213, RN-01..RN-06): trocar o dono de material com historico exige `ajustar_material_cliente` — sem
     // isto o Almoxarife tirava o cliente, ajustava como material nosso e devolvia o cliente, e a troca levava o saldo e o
     // historico de um dono para o outro. Compara com o GRAVADO (o formulario sempre manda a chave). Autorizacao ANTES das
