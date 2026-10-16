@@ -108,6 +108,12 @@ const LIDOS0 = { controle_lote: false, controle_serie: false };
     }
   });
 
+  await test('[RN-01] (Fase 5, R7) o codigo da E1 e o gravado, mesmo com o salvar trocando o codigo', async () => {
+    const m = await material({ controle_serie: 1 });
+    await recusaE1(ALMOXARIFE, m, { codigo: 'NOVO-116', controle_serie: false, controles_lidos: LIDOS0 },
+      'número de série', 'ligado', { nome: `Peca ${seq}`, controle_lote: 0, controle_serie: 1 });
+  });
+
   // ── RN-02 ──────────────────────────────────────────────────────────────────────────────────────────────────────────
   await test('[RN-02] leu 0, gravado 1, o salvar manda 1 (marcou igual): 200, nada desfeito', async () => {
     const m = await material({ controle_serie: 1 });

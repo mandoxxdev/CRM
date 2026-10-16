@@ -133,6 +133,8 @@ const E2 = (codigo, n) => `Não é possível estornar: esta saída baixou ${n} s
     await stockService.cancelarMovimentacao(db, SUPER, saidaId, 'compensacao e116', { compensacao: true });
     const e = await estado(m, saidaId);
     assert.deepStrictEqual([e.fisico, e.cancelado], [2, 1]);
+    // (Fase 5, revisor 3, K12) e, com a serie desligada, nao devolve as series (o ramo so as reverte com ela ligada)
+    assert.deepStrictEqual(e.series, ['ENTREGUE', 'ENTREGUE']);
   });
 
   // ── RN-09 ──────────────────────────────────────────────────────────────────────────────────────────────────────────

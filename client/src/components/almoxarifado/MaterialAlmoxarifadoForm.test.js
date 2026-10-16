@@ -20,7 +20,7 @@
  */
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useNavigate } from 'react-router-dom';
 // Etapa 35: LEGENDA_ABC é a constante exportada que a tela e o manual citam (RN-35.03).
 import MaterialAlmoxarifadoForm, { LEGENDA_ABC, AVISO_SALDO_INICIAL } from './MaterialAlmoxarifadoForm';
 import api from '../../services/api';
@@ -984,6 +984,49 @@ describe('MaterialAlmoxarifadoForm — RN-06 (Etapa 116): o PUT diz os controles
     const payload = api.put.mock.calls[0][1];
     expect(payload.controle_serie).toBe(false);
     expect(payload.controles_lidos).toEqual({ controle_lote: false, controle_serie: true });
+  });
+
+  test('(Fase 5, C6) abre com o lote ligado: controles_lidos.controle_lote true', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/familias') return Promise.resolve({ data: FAMILIAS });
+      if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
+      if (url.startsWith('/almoxarifado/materiais/')) {
+        return Promise.resolve({ data: { ...MATERIAL_DO_CLIENTE, controle_lote: 1, controle_serie: 0 } });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    await renderizarEdicao();
+    await submeter();
+    expect(api.put.mock.calls[0][1].controles_lidos).toEqual({ controle_lote: true, controle_serie: false });
+  });
+
+  test('(Fase 5, C5/R7) trocar de material sem desmontar a tela: o PUT leva os lidos do material NOVO', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/almoxarifado/familias') return Promise.resolve({ data: FAMILIAS });
+      if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
+      if (url === '/almoxarifado/materiais/78') {
+        return Promise.resolve({ data: { ...MATERIAL_DO_CLIENTE, id: 78, codigo: 'CHP-078', controle_serie: 1 } });
+      }
+      if (url.startsWith('/almoxarifado/materiais/')) return Promise.resolve({ data: MATERIAL_DO_CLIENTE });
+      return Promise.resolve({ data: [] });
+    });
+    let navegar;
+    function Navegador() { navegar = useNavigate(); return null; }
+    await act(async () => {
+      root.render(
+        <MemoryRouter initialEntries={['/almoxarifado/materiais/77/editar']}>
+          <Navegador />
+          <Routes><Route path="/almoxarifado/materiais/:id/editar" element={<MaterialAlmoxarifadoForm />} /></Routes>
+        </MemoryRouter>,
+      );
+    });
+    await esperarEfeitos();
+    await act(async () => { navegar('/almoxarifado/materiais/78/editar'); });
+    await esperarEfeitos();
+    expect(caixa('Controle por número de série').checked).toBe(true);
+    await submeter();
+    expect(api.put.mock.calls[0][0]).toBe('/almoxarifado/materiais/78');
+    expect(api.put.mock.calls[0][1].controles_lidos).toEqual({ controle_lote: false, controle_serie: true });
   });
 
   test('cadastro novo (POST) nao leva controles_lidos', async () => {
