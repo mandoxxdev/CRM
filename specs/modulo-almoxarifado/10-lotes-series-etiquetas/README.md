@@ -929,3 +929,14 @@ de teste, registrados de propósito.
 - [x] **Inventário:** contagem em fração de material com série recusada; a conclusão devolve `series_a_regularizar` e a
   tela manda para a **regularização** desta feature (cujo limite é exatamente a diferença).
 - **Continua fora:** o inventário não pede as séries contadas; série `BLOQUEADA` não desce pelo ajuste.
+
+## Etapa 119 (2026-10-16) — a saída de lote em vários endereços que falha no meio, e a série reativada
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa119-o-que-ja-valeu-nao-se-perde.md` (a etapa é do motor — spec 03).
+
+- [x] **A saída com lote que drena mais de um endereço e falha no meio devolve os endereços já baixados (C249)** — `df037855`
+  (`claimSaldoDoLote` com o rastreador do chamador). A regra "o saldo do lote é agregado nas duas pontas" não muda.
+- [x] **A série reativada por uma entrada guarda a entrada que tinha** (`series_entrada_anterior_almoxarifado`; C242, B776) —
+  `c098535c`. Só o estorno da entrada de uma devolução que citou a saída a lê.
+
+Continua 🟢.

@@ -1,17 +1,22 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-16 (Etapa 118) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-16 (Etapa 119) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117 e 118) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118 e 119) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 118 ENTREGUE · próxima do almoxarifado: Etapa 119)
+> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 119 ENTREGUE · próxima do almoxarifado: Etapa 120)
 >
-> **O desenvolvimento parou aqui: Etapa 118 fechada — 2026-10-16.** A **Etapa 118 (o estorno que falha no meio desfaz tudo,
+> **O desenvolvimento parou aqui: Etapa 119 fechada — 2026-10-16.** A **Etapa 119 (o que já valeu não se perde nem responde
+> erro)**: a saída e a entrega de requisição com lote que falham no meio de dois endereços devolvem o endereço já baixado; o
+> estorno concluído responde sucesso mesmo com a auditoria falhando (e o pedido de compra reabre); e, desfeita a devolução de
+> peças com série e estornada a entrega, a entrada original delas estorna. **Próxima: Etapa 120** — ver a próxima tarefa no
+> plano da 119.
+>
+> **Etapa 118, 2026-10-16.** A **Etapa 118 (o estorno que falha no meio desfaz tudo,
 > em qualquer tipo de movimento)**: o estorno de bloqueio, desbloqueio, ajuste e transferência que falha por erro de banco
 > desfaz o que já fez; todo estorno roda inteiro na espera do material; o bloqueio de série no instante do estorno não faz mais
-> o estorno pular a série; e a devolução no meio de um estorno diz a verdade. **Próxima: Etapa 119** — ver a próxima tarefa no
-> plano da 118.
+> o estorno pular a série; e a devolução no meio de um estorno diz a verdade. *(Próxima, na época: Etapa 119 — entregue acima.)*
 >
 > **Etapa 117, 2026-10-16.** A **Etapa 117 (a devolução desfeita pelo livro deixa de
 > contar, e o estorno que falha não deixa estoque negativo)**: estornar a entrada de uma devolução registrada por engano faz a
@@ -6470,6 +6475,50 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 119 — O que já valeu não se perde nem responde erro (ENTREGUE — 2026-10-16)
+
+**O que mudou, em uma frase:** o que já aconteceu deixa de ser perdido ou escondido por um erro que vem depois — o endereço já
+baixado de uma saída com lote volta quando o segundo falha, o estorno concluído responde sucesso mesmo se a auditoria falhar, e a
+entrada original de peças com série volta a se estornar depois de desfeita a devolução e estornada a entrega.
+
+**O problema que ela resolve.** Uma saída (ou entrega de requisição) de um lote em dois endereços que falhava no segundo deixava o
+primeiro baixado, com o estoque do material de volta — os dois nunca mais batiam. O estorno que já tinha valido e falhava só na
+auditoria respondia erro e não reabria o pedido de compra. E quem desfazia a devolução de peças com série e estornava a entrega
+ficava com a entrada original recusando o estorno para sempre.
+
+| Antes | Agora |
+|---|---|
+| Saída de 5 de um lote em A (3) e B (3), erro no 2º endereço: estoque 6, A 0, B 3 | Estoque 6, A 3, B 3; repetir dá certo |
+| Estorno concluído com a auditoria falhando: erro; de novo, *"Movimentação já cancelada"* | Sucesso; o resto roda |
+| Desfazer a devolução e estornar a entrega: a entrada original recusava o estorno | A entrada original estorna |
+
+### Roteiro de teste manual
+
+Só o passo a passo abaixo se reproduz clicando (os outros dois consertos pedem erro de banco forçado — teste automatizado).
+Pré-requisitos: login como **administrador**; um material com **Controle por número de série**, **PRF-1191**, sem saldo.
+
+1. **Movimentações → Nova** → *Entrada* de 1 do PRF-1191 com a série **V1** → estoque 1.
+2. *Saída* de 1 com a série V1 → estoque 0; em **Lotes e Séries → Séries**, V1 *Entregue*.
+3. **Devoluções → Nova Devolução** → escolha essa saída, destino **Estoque**, série V1 → estoque 1; V1 *Em estoque*.
+4. Em **Movimentações**, estorne a linha *Entrada de devolução* → estoque 0; V1 *Entregue*.
+5. Estorne a *Saída* do passo 2 → estoque 1; V1 *Em estoque*.
+6. Estorne a *Entrada* do passo 1 → **sucesso**: estoque 0, V1 *Estornada*. (Antes desta etapa: *"estorno de entrada recusado:
+   ha series desta entrada ja movimentadas — estorne as saidas primeiro"*.)
+7. *(Opcional)* Repita do passo 1 com outra série, mas faça **duas** voltas de entrega e devolução antes de desfazer; desfaça na
+   ordem inversa (a entrada da 2ª devolução, a 2ª saída, a entrada da 1ª devolução, a 1ª saída, a entrada) → todos com sucesso.
+
+### O que esta etapa não cobre
+
+- As peças **devolvidas antes do deploy** cuja devolução for desfeita continuam presas à entrada da devolução — a consulta **A67**
+  acha e diz o que fazer.
+- O lançamento comum que é gravado e falha ao registrar a auditoria continua respondendo erro com o lançamento feito (**C250**):
+  confira o extrato antes de repetir.
+- O estorno de uma saída com lote devolve tudo numa linha do lote, não aos endereços de onde saiu (como sempre).
+- A quarentena desfeita pela entrada (**C239**) e as decisões pendentes do P.O.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (pelas rotas do servidor) provam,
+escrito para você conferir à mão.
+
 ## Etapa 118 — O estorno que falha no meio desfaz tudo, em qualquer tipo de movimento (ENTREGUE — 2026-10-16)
 
 **O que mudou, em uma frase:** se o banco falhar no meio de um estorno — de qualquer tipo —, o sistema desfaz o que o estorno já
@@ -6513,7 +6562,7 @@ endereço **A** e um segundo endereço **B**; um material com **Controle por nú
 - O estorno **interrompido** (erro de banco duplo ou queda do servidor no meio) deixa a movimentação marcada sem o estorno ter
   acontecido — a consulta **A66** acha (**C246**); duas falhas seguidas deixam uma linha *Estorno* a mais (**C247**).
 - O estorno que conclui e falha na auditoria responde erro (**C248**); a saída com lote que falha no meio de dois endereços —
-  medida, candidata da Etapa 119 (**C249**).
+  medida, candidata da Etapa 119 (**C249**). *(As duas resolvidas na Etapa 119.)*
 - A quarentena desfeita pela entrada (**C239**) e as decisões pendentes do P.O.
 
 ## Etapa 117 — A devolução desfeita pelo livro deixa de contar, e o estorno que falha não deixa estoque negativo (ENTREGUE — 2026-10-16)

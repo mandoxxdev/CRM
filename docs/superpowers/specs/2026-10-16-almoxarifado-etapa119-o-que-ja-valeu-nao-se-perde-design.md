@@ -31,7 +31,10 @@
    vazio e o `catch` amplo não credita em dobro. O motor passa `saldoLinhasSaidaParaReverter` (já `[]`) como acumulador.
 2. **C248** — a auditoria `CANCELAMENTO` vira não-fatal (`try` + `console.warn`), como `auditarEstornoDeAjuste` logo abaixo.
    O estorno concluído responde 200 e o resto (pedido, recálculo, alerta, aviso) roda.
-3. **C242** — coluna nova `series_almoxarifado.movimentacao_entrada_anterior_id` (`safeAlter`). `entradaSeries` grava nela o
+3. **C242** — *(**Este item estava errado e foi trocado na Fase 2**: a coluna única na série só resolve uma devolução; com duas
+   devoluções encadeadas (S1 → D1 → S2 → D2) a D2 a sobrescrevia e o estorno da D1 não achava mais a entrada original — medido pelo
+   revisor do plano. O entregue é a tabela `series_entrada_anterior_almoxarifado`, chave (série, entrada que reativou), gravada no
+   vínculo série → entrada depois do livro; ver o plano. O texto original segue.)* Coluna nova `series_almoxarifado.movimentacao_entrada_anterior_id` (`safeAlter`). `entradaSeries` grava nela o
    `movimentacao_entrada_id` que a série tinha ao ser **reativada** (`NULL` na criação); o estorno da entrada de uma devolução
    que citou a saída (`reverterEntrada` com `saidaId`) devolve a série à entrada anterior
    (`COALESCE(movimentacao_entrada_anterior_id, movimentacao_entrada_id)`); os dois desfazeres (`desfazerEntrada`,

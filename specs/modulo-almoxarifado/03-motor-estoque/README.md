@@ -1,7 +1,7 @@
 # 03 — Motor de Estoque (saldos, movimentações, livro, saídas)
 
 > **Status:** 🟢 — Etapa 1 entregue (2026-08-04): motor v2 com regra crítica/emergencial/centro de custo/custo médio, livro com filtros e extrato do item, estorno com motivo (backend + tela). A validação de vencido/lote reprovado que dependia da feature 10 foi entregue na Etapa 6, Task 3 (ver [10-lotes-series-etiquetas](../10-lotes-series-etiquetas/README.md)). · **Spec original:** seções 7 (fórmula de saldo), 13 (saídas), 30 (livro de movimentações)
-> **Última atualização:** 2026-10-16 (**Etapa 118 — o estorno que falha no meio desfaz tudo, em todos os ramos, sob a trava**: uma seção da trava do efeito ao livro em todos os ramos de `cancelarMovimentacao`, um rastreador por efeito (C238), as guardas de série de novo dentro da seção, o acumulador das séries e das linhas sem lote (C245, I-3), o claim desfeito uma vez só; `ad75feda`, `50aeb457`; ver a seção "Etapa 118" no fim; o motor continua 🟢). Antes: 2026-10-09 (**Etapa 97 — as portas avulsas do motor recusam levar o material que está na caixa sem reserva de uma requisição**: a régua "livre de caixa" (`caixaSql.js`; o `disponivelSql` não muda, B491) na saída comum v1/v2 (todos os `TIPOS_SAIDA` que tiram do disponível), `REMESSA_TERCEIRO`, bloqueio avulso (guarda nova, sem contar o reservado), reserva manual, `AJUSTE`/`AJUSTE_INVENTARIO` sem localização (só quando reduz o total), estorno de entrada e estornos do `AJUSTE` e do `DESBLOQUEIO`; a entrega e as reservas de requisição na régua de hoje (B492); `permite_saldo_negativo` não dispensa a caixa (B498 invertida); `registrarMovimentacao` e `criarReserva` sob a trava do material (`naTravaDoMaterial`, B494). Range `eb7cd9d8..3fc39310` (T0 `9ace72b2`, T1 `65dc74b2`, T2 `9dbf11c0`, T3 `3046eb4a`, Fase 5 `3251b014`, `3810f79a`, `c427bf6d`, `3fc39310`); ver a seção "Etapa 97" no fim; o motor continua 🟢). Antes: 2026-10-09 (**Etapa 96 — o motor grava a quantidade arredondada a 6 casas e as recusas comparam com folga de 1e-9 (C176 resolvido)**; ver a seção "Etapa 96" no fim; o motor continua 🟢). Antes: 2026-10-08 (**Etapa 91 — `reserva_id` só numa saída que consome a reserva (D(77)); o alerta de estoque mínimo roda depois de soltar a trava por material**; ver a seção "Etapa 91" no fim; o motor continua 🟢). Antes: 2026-09-30 (**Etapa 62 — o AJUSTE de material com série pede as séries; por endereço e o estorno recusados**; ver a seção "Etapa 62" no fim; antes: **Etapa 51 — a saída sem lote baixa o ENDEREÇO de onde o material sai**; ver a seção "Etapa 51" no fim; o motor continua 🟢). Anterior: 2026-08-13 (**Etapa 8c — `RETORNO_TRANSFORMACAO`, e o custo médio
+> **Última atualização:** 2026-10-16 (**Etapa 119 — o que já valeu não se perde nem responde erro**: `claimSaldoDoLote` com o rastreador do chamador (C249, também a entrega de requisição com lote); a auditoria `CANCELAMENTO` não-fatal (C248); a série reativada guarda a entrada anterior e o estorno da devolução a devolve (C242); `df037855`, `5c661a56`, `c098535c`, `86a6ace2`, `f37cef55`; ver a seção da Etapa 119 no fim.) · *(Antes:* **Etapa 118 — o estorno que falha no meio desfaz tudo, em todos os ramos, sob a trava**: uma seção da trava do efeito ao livro em todos os ramos de `cancelarMovimentacao`, um rastreador por efeito (C238), as guardas de série de novo dentro da seção, o acumulador das séries e das linhas sem lote (C245, I-3), o claim desfeito uma vez só; `ad75feda`, `50aeb457`; ver a seção "Etapa 118" no fim; o motor continua 🟢). Antes: 2026-10-09 (**Etapa 97 — as portas avulsas do motor recusam levar o material que está na caixa sem reserva de uma requisição**: a régua "livre de caixa" (`caixaSql.js`; o `disponivelSql` não muda, B491) na saída comum v1/v2 (todos os `TIPOS_SAIDA` que tiram do disponível), `REMESSA_TERCEIRO`, bloqueio avulso (guarda nova, sem contar o reservado), reserva manual, `AJUSTE`/`AJUSTE_INVENTARIO` sem localização (só quando reduz o total), estorno de entrada e estornos do `AJUSTE` e do `DESBLOQUEIO`; a entrega e as reservas de requisição na régua de hoje (B492); `permite_saldo_negativo` não dispensa a caixa (B498 invertida); `registrarMovimentacao` e `criarReserva` sob a trava do material (`naTravaDoMaterial`, B494). Range `eb7cd9d8..3fc39310` (T0 `9ace72b2`, T1 `65dc74b2`, T2 `9dbf11c0`, T3 `3046eb4a`, Fase 5 `3251b014`, `3810f79a`, `c427bf6d`, `3fc39310`); ver a seção "Etapa 97" no fim; o motor continua 🟢). Antes: 2026-10-09 (**Etapa 96 — o motor grava a quantidade arredondada a 6 casas e as recusas comparam com folga de 1e-9 (C176 resolvido)**; ver a seção "Etapa 96" no fim; o motor continua 🟢). Antes: 2026-10-08 (**Etapa 91 — `reserva_id` só numa saída que consome a reserva (D(77)); o alerta de estoque mínimo roda depois de soltar a trava por material**; ver a seção "Etapa 91" no fim; o motor continua 🟢). Antes: 2026-09-30 (**Etapa 62 — o AJUSTE de material com série pede as séries; por endereço e o estorno recusados**; ver a seção "Etapa 62" no fim; antes: **Etapa 51 — a saída sem lote baixa o ENDEREÇO de onde o material sai**; ver a seção "Etapa 51" no fim; o motor continua 🟢). Anterior: 2026-08-13 (**Etapa 8c — `RETORNO_TRANSFORMACAO`, e o custo médio
 > deixando de ter um alimentador só.** Três mudanças deste motor, detalhadas abaixo: (1) o tipo
 > novo `RETORNO_TRANSFORMACAO` (`9c7ec75`), **entrada com custo**, dedicado (fora da rota genérica)
 > e presente nos **dois** ramos do motor — tem linha própria na tabela de efeitos, em "Tipos de
@@ -813,7 +813,7 @@ Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa118-estorno-que-falh
   chamador); `desfazerReverterSaida`/`desfazerReverterEntrada` consomem a lista (sem auditoria `COMPENSACAO` em dobro).
 - [x] **`claimSaldoSemLote` com acumulador** (Fase 5, revisor 1, I-3) — `50aeb457`: a linha já debitada entra no desfazer quando a
   seguinte falha (estorno de entrada e saída sem lote). *Fora:* `claimSaldoDoLote`, a mesma forma na saída com lote — medida no fechamento: físico 6 com os endereços em 0 e 3
-  (**C249**).
+  (**C249**). *(Entregue na Etapa 119, `df037855` — ver abaixo.)*
 - [x] **As guardas de série de novo dentro da seção** (Fase 5, revisores 1 e 2; B773) — `50aeb457`: a da entrada (séries presentes) e
   a da saída (séries que reentraram), com as literais de sempre, antes de qualquer efeito. Fora da trava, um bloqueio de série ou
   uma Entrada com o número da série entre a guarda e a seção fazia o estorno pular a série e responder 200.
@@ -823,7 +823,35 @@ Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa118-estorno-que-falh
   simultâneos: o segundo é 400 *"transicao invalida: BLOQUEADA -> BLOQUEADA"* (era 409).
 - [ ] **Fora (declarado):** o claim preso por falha dupla ou queda do processo (**C246**, **A66**); a falha dupla do vínculo e da
   limpeza da linha `ESTORNO` (**C247**, A66); a auditoria `CANCELAMENTO` que falha depois do estorno concluído responde erro
-  (**C248**). Os três anteriores à etapa e só com falha de banco — a transação de verdade vem com o Postgres.
+  (**C248** — *entregue na Etapa 119, `5c661a56`*). Os três anteriores à etapa e só com falha de banco — a transação de verdade vem com o Postgres.
 
 Testes: `estornoQueFalhaDesfaz.api.test.js` (28), `estornoQueFalhaIntegracao.api.test.js` (4); `serieRotas.api.test.js` ajustado
 (409 → 400). Continua 🟢.
+
+## Etapa 119 (2026-10-16) — o que já valeu não se perde nem responde erro
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa119-o-que-ja-valeu-nao-se-perde.md`. Design:
+`docs/superpowers/specs/2026-10-16-almoxarifado-etapa119-o-que-ja-valeu-nao-se-perde-design.md`.
+
+- [x] **`claimSaldoDoLote(…, { aplicados })` — o rastreador do chamador (C249)** — `df037855`. Cada linha do lote entra nele logo
+  depois do seu débito; no `ok: false` o desfazer **consome** o rastreador (sem crédito em dobro no catch amplo; com o crédito
+  falhando no meio, o catch amplo credita o que falta). Único chamador: `registrarMovimentacaoSemTrava`, que passa
+  `saldoLinhasSaidaParaReverter`. Vale para a entrega de requisição com lote (mesmo motor; medido na Fase 2: 500, físico 6, A 0, B 3).
+- [x] **A auditoria `CANCELAMENTO` não-fatal (C248, B775)** — `5c661a56`: `try` + `console.warn`; o estorno concluído responde 200 e
+  o resto (pedido de compra, recálculo, alerta, aviso) roda.
+- [x] **A série reativada guarda a entrada anterior (C242, B776)** — `c098535c`: tabela `series_entrada_anterior_almoxarifado`
+  (chave série + entrada que reativou), gravada no vínculo série → entrada depois do livro (não-fatal); `reverterEntrada` com
+  `saidaId` devolve a série a ela (`COALESCE` — sem a linha, como antes); `desfazerReverterEntrada` restaura a entrada. A Fase 2
+  trocou a coluna única na série pela tabela (duas devoluções encadeadas sobrescreviam a coluna).
+- [ ] **Fora (declarado):** a auditoria depois do `INSERT` do livro em `registrarMovimentacao` continua fatal — 500 com o lançamento
+  gravado (**C250**, medido; o comentário do motor a declara congelada); as séries reativadas antes da etapa (**A67**); o estorno de
+  saída com lote continua devolvendo tudo na linha da chave (spec 10).
+
+- [x] **(Fase 5) O desfazer local do claim de série consome o rastreador** (r1 e r2; anterior à etapa) — `f37cef55`: com o 2º crédito
+  falhando, o catch amplo creditava de novo a linha já devolvida (com e sem lote). **RN-10.**
+- [x] **(Fase 5) A entrada anterior `NULL` volta a `NULL`** (`CASE WHEN EXISTS`, r1) — `f37cef55` (**RN-09**); a gravação da tabela
+  não-fatal provada (**RN-11**, r3); o `linhas` do retorno de `claimSaldoDoLote` removido (sem leitor).
+- [ ] **Fora (declarado, Fase 5):** o catch amplo que falha no meio do próprio desfazer (duas falhas seguidas) não devolve o físico —
+  anterior à etapa (**D (119)**).
+
+Testes: `oQueJaValeuNaoSePerde.api.test.js` (13), `oQueJaValeuIntegracao.api.test.js` (2). Continua 🟢.

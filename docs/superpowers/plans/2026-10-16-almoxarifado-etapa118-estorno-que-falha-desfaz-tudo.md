@@ -155,7 +155,11 @@ Sem tela (a E1 aparece pela mensagem que a tela de Devoluções já mostra).
 3. **Paralelismo:** **0** galhos (T1 e T2 mexem em regra compartilhada; a T3 só testa); revisores em paralelo na Fase 5 (três, cada
    um na sua worktree), sem retrabalho. Um retrabalho de processo: a primeira rodada da suíte da T1 foi interrompida porque o
    arquivo da T3 (que depende da T2) já estava em `tests/api` — o runner o pegaria; tirado e rodado de novo.
-4. **Defeito que escapou:** *(preencher na Etapa 119)*. Da Etapa 117: **nenhum** introduzido por ela; uma afirmação errada na spec
+4. **Defeito que escapou:** *(preenchido na Etapa 119)* **nenhum introduzido por esta etapa.** Um anterior a ela, na mesma forma
+   que ela corrigiu em `claimSaldoSemLote` (I-3) e declarou em `claimSaldoDoLote` (C249), escapou da revisão: o desfazer **local** do
+   claim de série na saída zerava o rastreador só no fim — com a série recusada e o 2º crédito de volta falhando (uma falha de banco
+   só), o catch amplo creditava de novo a linha já devolvida (com e sem lote). Achado na Fase 5 da 119 (revisores 1 e 2), corrigido
+   em `f37cef55`. A C248 e a C249, declaradas aqui, foram resolvidas na 119 (`5c661a56`, `df037855`). Da Etapa 117: **nenhum** introduzido por ela; uma afirmação errada na spec
    03 (o ramo de entrada fora da trava), corrigida à vista.
 
 ## Próxima tarefa detalhada — Etapa 119

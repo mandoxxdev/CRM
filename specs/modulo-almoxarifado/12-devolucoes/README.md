@@ -394,3 +394,19 @@ Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa118-estorno-que-falh
 - [ ] **Fora:** o estorno interrompido deixa a recusa de pé até o suporte desmarcar a linha (**C246**, **A66**).
 
 Continua 🟢. Testes: `estornoQueFalhaDesfaz.api.test.js` (RN-07, RN-09), `estornoQueFalhaIntegracao.api.test.js` (i, iv).
+
+## Etapa 119 (2026-10-16) — desfeita a devolução, a série volta à entrada de onde veio
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa119-o-que-ja-valeu-nao-se-perde.md` (a etapa é do motor — spec 03).
+
+**A seção da Etapa 117 acima dizia que, com série, o estorno da entrada da devolução que citou a saída "devolve as séries a
+*Entregue* naquela saída" e que "o desfazer devolve o vínculo anterior". Estava incompleto — fica dito, não apagado:** o vínculo
+com a **entrada** não voltava; a série ficava presa à entrada da devolução (já estornada), e, estornada a saída, a entrada original
+recusava para sempre (C242, declarada na 117).
+
+- [x] **O estorno da entrada da devolução devolve a série também à entrada de onde veio (C242, B776)** — `c098535c`, pela tabela
+  `series_entrada_anterior_almoxarifado` (série + entrada que reativou). Vale com duas devoluções encadeadas da mesma peça.
+- [x] **(Fase 5) A série que nasceu sem entrada volta a sem entrada** (não fica na entrada da devolução estornada) — `f37cef55`.
+- [ ] **Fora:** a série devolvida antes do deploy fica como era (**A67**).
+
+Continua 🟢. Testes: `oQueJaValeuNaoSePerde.api.test.js` (RN-05, RN-05b, RN-06, RN-07, RN-09, RN-11), `oQueJaValeuIntegracao.api.test.js` (ii).
