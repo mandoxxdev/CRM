@@ -836,6 +836,13 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // de outra aba inativar o material (e a familia) regravava o 1: material ativo em familia inativa, por fora da RN-05.
     condControle += ' AND ativo IS ?';
     paramsControle.push(current.ativo ?? null);
+    // Etapa 123 (Fase 5, r2 I2; anterior a esta etapa): o par familia/subfamilia e gravado do lido mesmo quando nao mudou
+    // (o formulario manda os dois com o valor que leu; a API pode omitir) — e a condicao da familia so entra quando o valor
+    // mudou. Um salvar lido antes de outra aba mover o material (F1 -> F2) que gravasse depois de o F1 ser inativado (ou de a
+    // subfamilia antiga virar raiz) devolvia o par velho: material ativo em familia inativa, ou par que nao bate. Com o par
+    // lido no WHERE, nao grava -> o 409 E4 (B798). O molde e o do dono (Etapa 108).
+    condControle += ' AND familia_id IS ? AND subfamilia_id IS ?';
+    paramsControle.push(current.familia_id ?? null, current.subfamilia_id ?? null);
     try {
       // Etapa 113 (RN-04 d): inativar grava sob a trava do material (a mesma razao do DELETE); o resto do PUT, como sempre.
       const gravar = () => dbRun(db, `UPDATE materiais_almoxarifado SET
@@ -3061,6 +3068,14 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       const condicoesSempre = () => {
         let sql = ' AND parent_id IS ?';
         const params = [current.parent_id ?? null];
+        // Fase 5 (r2 I1, anterior a esta etapa — B796): `ativo` INFORMADO sem transicao (igual ao lido) era gravado sem
+        // condicao — o COALESCE so protege o omitido. `{ativo: 1}` numa sub ativa, com a sub e a raiz inativadas no meio,
+        // reativava a sub sob a raiz inativa; `{ativo: 0}` numa familia inativa reativada (com material novo) no meio a
+        // reinativava com o material dentro. A inativacao (1 -> 0) tem a sua condicao (abaixo, da 110); o resto leva o lido.
+        if (ativoInformado && !inativa) {
+          sql += ' AND ativo IS ?';
+          params.push(current.ativo ?? null);
+        }
         if (paiConferido) {
           sql += ' AND EXISTS (SELECT 1 FROM familias_material_almoxarifado WHERE id = ? AND ativo = 1 AND parent_id IS NULL)';
           params.push(paiConferido);
@@ -3107,6 +3122,11 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                 if (errA) return res.status(500).json({ error: errA.message });
                 if (!agora) return res.status(404).json({ error: 'Família não encontrada' });
                 if ((agora.parent_id ?? null) !== (current.parent_id ?? null)) return res.status(409).json({ error: L409 });
+                // Fase 5 (r2 I1): o `ativo` informado mudou no meio — o que esta tela leu nao vale mais. A inativacao fica de
+                // fora: "outro ja inativou" grava o resto (Etapa 110).
+                if (ativoInformado && !inativa && (agora.ativo ?? null) !== (current.ativo ?? null)) {
+                  return res.status(409).json({ error: L409 });
+                }
                 conferir((errC, literal) => {
                   if (errC) return res.status(500).json({ error: errC.message });
                   if (literal) return res.status(400).json({ error: literal });
@@ -3171,6 +3191,12 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
                   return res.status(400).json({ error: `Não é possível remover: família possui ${recusa.subs} subfamília(s) ativa(s)` });
                 }
                 if (recusa.naoExiste) return res.status(404).json({ error: 'Família não encontrada' });
+                // Etapa 123 (Fase 5, r2 M1, anterior — da 110; B797): nada impede E a familia continua ativa — o que impedia
+                // nasceu e sumiu na janela (uma subfamilia criada e inativada no meio). Responder "ja inativa" mentia: o
+                // toast dizia "Família inativada" com ela ativa. 409, nada gravado; clicar de novo inativa.
+                if (Number(recusa.atual.ativo) === 1) {
+                  return res.status(409).json({ error: 'A família mudou enquanto era inativada — nada foi gravado. Tente de novo.' });
+                }
                 return res.json({ success: true, ja_inativo: true });
               });
             }
