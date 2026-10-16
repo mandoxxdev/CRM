@@ -328,13 +328,16 @@ const SUPER = { id: 1, nome: 'Super Teste', role: 'admin', is_superadmin: 1, ema
     assert.strictEqual(await fisico(m), 0);
   });
 
-  await test('[R2] uma ENTRADA_DEVOLUCAO digitada com a referencia DEV-<id> e estornada nao mata a devolucao (E3, fisico 10)', async () => {
+  await test('[R2] uma ENTRADA_DEVOLUCAO digitada (legado) com a referencia DEV-<id> e estornada nao mata a devolucao (E3, fisico 10)', async () => {
     const m = await material();
     await mov(m, { tipo: 'ENTRADA', quantidade: 10 });
     const saidaId = await mov(m, { tipo: 'SAIDA', quantidade: 2 });
     const d = await devolver(m, saidaId, 2);
     assert.strictEqual(d.status, 201, JSON.stringify(d.body));
-    const forjada = await mov(m, { tipo: 'ENTRADA_DEVOLUCAO', quantidade: 1, referencia: `DEV-${d.body.id}` });
+    // desde a Fase 5 a Entrada v2 recusa a referencia DEV-<n> nesse tipo; a linha digitada vem do legado (direto no banco)
+    const forjada = (await dbRun(db, `INSERT INTO movimentacoes_almoxarifado (material_id, tipo, quantidade, saldo_anterior, saldo_posterior,
+      motivo, referencia, usuario_id, usuario_nome) VALUES (?, 'ENTRADA_DEVOLUCAO', 1, 10, 11, 'legado', ?, 1, 'x')`, [m.id, `DEV-${d.body.id}`])).lastID;
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_atual = 11 WHERE id = ?', [m.id]);
     assert.strictEqual(await fisico(m), 11);
     assert.strictEqual((await estornar(forjada)).status, 200);
     assert.strictEqual(await fisico(m), 10);

@@ -43,6 +43,12 @@ async function validarSaidaOriginal(db, { movimentacaoSaidaId, materialId, quant
     throw erro400(`A movimentação ${movimentacaoSaidaId} é do tipo ${saida.tipo} e não é uma entrega devolvível `
       + `(devolvíveis: ${TIPOS_SAIDA_DEVOLVIVEL.join(', ')})`);
   }
+  // Etapa 117 (Fase 5, revisor 1; C244): a entrega de uma requisicao EXCLUIDA nao se devolve — a exclusao ja devolveu ao
+  // estoque o que faltava voltar (e a saida fica de pe no livro, sem o selo de estornada). Devolver de novo contava em dobro:
+  // entrega 2, excluir (5), devolver 2 -> 7.
+  if (await requisicaoExcluida(db, saida.requisicao_id)) {
+    throw erro400(`A saída ${movimentacaoSaidaId} é de uma requisição excluída — a exclusão já devolveu o material ao estoque`);
+  }
   // Etapa 117 (C236, RN-01): so a devolucao viva — a que teve a entrada estornada pelo livro tirou o material de novo, e
   // conta-la recusava devolver o que esta de fato fora ("ja foram devolvidos 2 e restam 0" com o material na rua).
   const { devolvida } = await dbGet(db,
@@ -60,6 +66,16 @@ async function validarSaidaOriginal(db, { movimentacaoSaidaId, materialId, quant
   }
   return saida;
 }
+
+/** Etapa 117 (C244): a requisicao da saida foi excluida (`ativo = 0`). */
+async function requisicaoExcluida(db, requisicaoId) {
+  if (!requisicaoId) return false;
+  const r = await dbGet(db, 'SELECT COALESCE(ativo, 1) AS ativo FROM requisicoes_almoxarifado WHERE id = ?', [requisicaoId]);
+  return !!r && Number(r.ativo) === 0;
+}
+/** O mesmo, em SQL correlacionado com a saida (apelido `alias`) — para o INSERT condicional e a lista. */
+const requisicaoNaoExcluidaSql = (alias) => `NOT EXISTS (SELECT 1 FROM requisicoes_almoxarifado rqx
+  WHERE rqx.id = ${alias}.requisicao_id AND COALESCE(rqx.ativo, 1) = 0)`;
 
 async function registrarDevolucao(db, user, data) {
   const {
@@ -136,6 +152,22 @@ async function registrarDevolucao(db, user, data) {
     throw erro400(`Material com controle de série: informe ${quantidade} número(s) de série para `
       + `${quantidade} unidade(s) devolvida(s) — recebidos ${seriesInformadas.length}`);
   }
+  // Etapa 117 (Fase 5, revisor 1; B766): com a entrega citada, cada serie tem de ter saido NELA (Entregue com o vinculo a
+  // ela, ou sem vinculo — legado anterior ao vinculo). Desde a 117 o estorno da entrada da devolucao devolve as series da
+  // entrada a "Entregue" na saida citada; uma serie digitada errada (inexistente: nascia nova) ou de outra saida passava a
+  // constar daquela saida — fisico 1 com 2 series presentes. A tela so oferece as series da entrega.
+  if (saidaOriginal && destinoAceitaSerie && material.controle_serie) {
+    for (const numero of seriesInformadas) {
+      const sr = await dbGet(db, 'SELECT status, movimentacao_saida_id FROM series_almoxarifado WHERE material_id = ? AND numero = ?',
+        [material_id, numero]);
+      const daSaida = sr && sr.status === 'ENTREGUE'
+        && (sr.movimentacao_saida_id == null || Number(sr.movimentacao_saida_id) === Number(movimentacao_saida_id));
+      if (!daSaida) {
+        throw erro400(`A série ${numero} não saiu na saída ${movimentacao_saida_id} — informe as séries desta entrega `
+          + '(a lista mostra as que estão fora) ou registre a devolução sem citar a entrega.');
+      }
+    }
+  }
 
   // ARMADILHA do destino SUCATA: ele faz ENTRADA_DEVOLUCAO e DEPOIS SUCATA (correcao do bug de
   // saldo). A guarda de status do lote vive no ramo de SAIDA do motor, entao um lote
@@ -170,6 +202,7 @@ async function registrarDevolucao(db, user, data) {
     ? await dbRun(db, `INSERT INTO devolucoes_material_almoxarifado ${colunas}
       SELECT ?,?,?,?,?,?,?,?,?,?,?,?
       WHERE EXISTS (SELECT 1 FROM movimentacoes_almoxarifado s WHERE s.id = ? AND COALESCE(s.cancelado, 0) = 0
+        AND ${requisicaoNaoExcluidaSql('s')}
         AND ROUND(s.quantidade - (SELECT COALESCE(SUM(d.quantidade), 0) FROM devolucoes_material_almoxarifado d
           WHERE d.movimentacao_saida_id = s.id AND ${DEVOLUCAO_VIVA_SQL}), 6) >= ROUND(?, 6) ${Q.FOLGA_SQL})`,
     [...valores, movimentacao_saida_id, Q.qtd(quantidade)])
@@ -191,7 +224,8 @@ async function registrarDevolucao(db, user, data) {
   // `exigeSerie` so onde a serie e suportada — declarar nos destinos SUCATA/RETRABALHO travaria a
   // devolucao de material serializado para eles sem oferecer caminho nenhum. Continua no 4o
   // argumento, nunca no body.
-  const opcoesEntrada = { exigeLote: true, exigeSerie: destinoAceitaSerie };
+  // `daDevolucao` (Etapa 117, B764): so esta porta grava ENTRADA_DEVOLUCAO com a referencia DEV-<id>.
+  const opcoesEntrada = { exigeLote: true, exigeSerie: destinoAceitaSerie, daDevolucao: true };
 
   // ── COMPENSACAO DA DEVOLUCAO (conserto da Etapa 7, fora do plano) ───────────────────────────
   //
@@ -409,6 +443,7 @@ async function listarSaidasElegiveis(db, materialId, { limite = 30 } = {}) {
       FROM movimentacoes_almoxarifado mv
       LEFT JOIN requisicoes_almoxarifado req ON req.id = mv.requisicao_id
      WHERE mv.material_id = ? AND COALESCE(mv.cancelado,0) = 0 AND mv.tipo IN (${marcadores})
+       AND ${requisicaoNaoExcluidaSql('mv')}
      ORDER BY mv.created_at DESC, mv.id DESC
      LIMIT ?`, [materialId, ...TIPOS_SAIDA_DEVOLVIVEL, limite]);
 

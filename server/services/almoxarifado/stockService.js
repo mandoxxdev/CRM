@@ -1065,6 +1065,14 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
   // na recusa de sempre logo abaixo (Fase 2, M1). O que arredonda a 0 cai na recusa de zero de cada porta.
   const quantidade = quantidadeCrua === undefined || quantidadeCrua === null ? quantidadeCrua : Q.qtd(quantidadeCrua);
   if (!user?.id) throw Object.assign(new Error('Usuário responsável obrigatório'), { status: 400 });
+  // Etapa 117 (Fase 5, revisores 1 e 3; B764): a ENTRADA_DEVOLUCAO com a referencia `DEV-<numero>` so nasce da propria
+  // devolucao (`returnService`, opcao `daDevolucao`). A regua da devolucao viva identifica a entrada da devolucao pela
+  // primeira ENTRADA_DEVOLUCAO com a referencia — uma digitada na Entrada v2 ANTES da devolucao (com o proximo numero) virava
+  // "a entrada da devolucao": a E1 da sucata era contornada (9 -> 7) e o estorno da digitada matava a devolucao (10 -> 12).
+  if (tipo === 'ENTRADA_DEVOLUCAO' && /^DEV-\d+$/i.test(String(referencia || '').trim()) && opcoes.daDevolucao !== true) {
+    throw Object.assign(new Error(`A referência ${String(referencia).trim()} é reservada às devoluções — a entrada de devolução `
+      + 'com essa referência só é registrada pela tela de Devoluções.'), { status: 400 });
+  }
   // quantidade 0 só é aceita para AJUSTE com localização (zera aquela localização e recalcula
   // o total do material — espelha o superRefine de MovimentacaoSchema) OU para AJUSTE_INVENTARIO
   // (Etapa 10, achado da revisão final de branch): a conclusão da conferência manda o valor
@@ -2854,34 +2862,46 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
   // Etapa 117 (C235, RN-06): o desfazer dos efeitos de serie e saldo numa funcao so, chamada de dentro da secao do ramo de
   // saida (sob a trava) ou do catch de fora (os outros ramos). Idempotente: zera os rastreadores ao terminar — o catch de
   // fora, chamado depois do de dentro, nao desfaz em dobro. A ordem e a do fix round 1 da 6b (comentario no catch).
+  // Fase 5 (revisor 2, A1): cada rastreador e zerado logo DEPOIS do seu passo dar certo — se um passo falhar, o catch de fora
+  // refaz so o que falta (o que falhou e os seguintes); zerar so no fim fazia o de fora repetir os ja feitos (a linha de saldo
+  // debitada duas vezes: fisico 3 com as linhas em 1).
   const desfazerEfeitosDoEstorno = async () => {
     if (seriesSaidaRevertidas.length > 0) {
       await seriesService.desfazerReverterSaida(db, seriesSaidaRevertidas);
+      seriesSaidaRevertidas = [];
     }
     if (seriesEntradaRevertidas.length > 0) {
       await seriesService.desfazerReverterEntrada(db, seriesEntradaRevertidas);
+      seriesEntradaRevertidas = [];
     }
     if (compensarLinha) {
+      const linha = compensarLinha;
       await dbRun(db, `UPDATE estoque_saldo_almoxarifado
         SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP
         WHERE material_id = ? AND localizacao_id IS ? AND lote_id IS ?`,
-        [compensarLinha.delta, mov.material_id, compensarLinha.loc || null, compensarLinha.loteId || null]);
+        [linha.delta, mov.material_id, linha.loc || null, linha.loteId || null]);
+      compensarLinha = null;
     }
     if (compensarLinhasClaim) {
-      for (const l of compensarLinhasClaim) {
+      // linha a linha: a que ja voltou sai da lista (o refazer de fora devolve so as que faltam)
+      while (compensarLinhasClaim.length) {
+        const l = compensarLinhasClaim[0];
         await dbRun(db, `UPDATE estoque_saldo_almoxarifado
           SET quantidade = ${Q.qtdSql('quantidade + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [l.quantidade, l.id]);
+        compensarLinhasClaim.shift();
       }
+      compensarLinhasClaim = null;
     }
     if (compensarQuantidadeMaterial) {
+      const delta = compensarQuantidadeMaterial;
       await dbRun(db, `UPDATE materiais_almoxarifado SET quantidade_atual = ${Q.qtdSql('quantidade_atual + ?')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-        [compensarQuantidadeMaterial, mov.material_id]);
+        [delta, mov.material_id]);
+      compensarQuantidadeMaterial = null;
     }
     if (compensarSyncLocalizacaoPadrao) {
       await syncSaldoLocalizacaoPadrao(db, mov.material_id, compensarSyncLocalizacaoPadrao.loteId);
+      compensarSyncLocalizacaoPadrao = null;
     }
-    seriesSaidaRevertidas = []; seriesEntradaRevertidas = [];
-    compensarLinha = null; compensarLinhasClaim = null; compensarQuantidadeMaterial = null; compensarSyncLocalizacaoPadrao = null;
   };
 
   try {
