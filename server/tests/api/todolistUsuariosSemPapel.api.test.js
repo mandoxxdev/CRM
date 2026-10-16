@@ -49,6 +49,7 @@ for (const [rotulo, user] of [['administrador', { id: 1, role: 'admin', is_super
     const [s, x] = await get('/api/todolist/board');
     assert.strictEqual(s, 200);
     assert.deepStrictEqual(x.usuarios, ESPERADO);
+    for (const l of x.usuarios) assert.deepStrictEqual(Object.keys(l), ['id', 'nome', 'email']);
     assert.ok(Array.isArray(x.colunas) && x.colunas.length === 4, 'metade positiva: o quadro veio');
     assert.strictEqual(x.tarefas.length, 1);
     assert.strictEqual(x.tarefas[0].responsavel_nome, 'carla');
@@ -56,7 +57,9 @@ for (const [rotulo, user] of [['administrador', { id: 1, role: 'admin', is_super
 }
 
 test('[RN-08] servico: listUsuariosAtivos devolve as mesmas linhas', async () => {
-  assert.deepStrictEqual(await todolistService.listUsuariosAtivos(db), ESPERADO);
+  const linhas = await todolistService.listUsuariosAtivos(db);
+  assert.deepStrictEqual(linhas, ESPERADO);
+  for (const l of linhas) assert.deepStrictEqual(Object.keys(l), ['id', 'nome', 'email']);
 });
 
 (async () => {
@@ -64,7 +67,9 @@ test('[RN-08] servico: listUsuariosAtivos devolve as mesmas linhas', async () =>
     id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, email TEXT UNIQUE NOT NULL, senha TEXT NOT NULL,
     cargo TEXT, role TEXT DEFAULT 'usuario', ativo INTEGER DEFAULT 1, created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
-  for (const [id, nome, role, ativo] of [[1, 'Bruno', 'admin', 1], [2, 'ana', 'usuario', 1], [3, 'Davi', 'admin', 0], [4, 'carla', 'gerente', 1]]) {
+  for (const [id, nome, role, ativo] of [[1, 'Bruno', 'admin', 1], [2, 'ana', 'usuario', 1], [3, 'Davi', 'admin', 0], [4, 'carla', 'gerente', 1],
+    // Fase 5 r3 T4: "so os ativos" e ativo = 1 exato — 2 e 'true' ficam fora (com "ativo <> 0" entrariam)
+    [5, 'Eva', 'usuario', 2], [6, 'Fabio', 'usuario', 'true']]) {
     await run('INSERT INTO usuarios (id, nome, email, senha, role, ativo) VALUES (?, ?, ?, ?, ?, ?)', [id, nome, `${nome.toLowerCase()}@t.com`, 'x', role, ativo]);
   }
   app = express();
