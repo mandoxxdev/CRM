@@ -1,17 +1,23 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-16 (Etapa 124) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-16 (Etapa 125) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123 e 124) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124 e 125) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 124 ENTREGUE · próxima do almoxarifado: Etapa 125)
+> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 125 ENTREGUE · próxima do almoxarifado: Etapa 126)
 >
-> **O desenvolvimento parou aqui: Etapa 124 fechada — 2026-10-16.** A **Etapa 124 (a família que o formulário leu, e a reativação
+> **O desenvolvimento parou aqui: Etapa 125 fechada — 2026-10-16.** A **Etapa 125 (o cadastro que o formulário leu, inteiro)**: o
+> formulário de material aberto não desfaz mais nenhum campo que outra pessoa mudou enquanto ele estava aberto — nem o custo que a
+> nota atualizou (avisa quais campos e pede para recarregar); o *Reativar* da aba Famílias não volta mais o nome antigo; e a aba
+> Famílias fica somente leitura para o administrador do sistema sem perfil no almoxarifado, em vez de mostrar botões que recusam.
+> **Próxima: Etapa 126** — ver a próxima tarefa no plano da 125.
+>
+> **Etapa 124, 2026-10-16.** A **Etapa 124 (a família que o formulário leu, e a reativação
 > que a recusa pede)**: o formulário de material aberto não desfaz mais a família ou a subfamília que outra pessoa mudou enquanto
 > ele estava aberto (avisa e pede para recarregar); a recusa da requisição de material inativo diz qual família reativar antes do
 > material; e a aba **Famílias** mostra as inativas, com o botão **Reativar**.
-> **Próxima: Etapa 125** — ver a próxima tarefa no plano da 124.
+> *(Próxima, na época: Etapa 125 — entregue acima.)*
 >
 > **Etapa 123, 2026-10-16.** A **Etapa 123 (reorganizar famílias sem corrida, e o dono que
 > existe)**: criar, reativar e mudar de nível uma família no mesmo instante em que outra pessoa a inativa, cadastra material nela
@@ -6505,6 +6511,46 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 125 — O cadastro que o formulário leu, inteiro (ENTREGUE — 2026-10-16)
+
+**O que mudou, em uma frase:** salvar um material não desfaz mais nenhum campo que outra pessoa (ou a nota, no custo) mudou enquanto o
+formulário estava aberto; reativar uma família não volta o nome antigo; e quem só pode ver a aba Famílias não vê mais botões que
+recusam.
+
+**O problema que ela resolve.** Depois da Etapa 124, o formulário protegia a família e os controles, mas o resto do cadastro era gravado
+com o que ele mostrava ao abrir. Duas pessoas no mesmo material — uma corrige a unidade, a outra só renomeia — e a segunda desfazia a
+primeira. O custo que a nota atualiza voltava ao antigo quando alguém salvava um formulário aberto antes. O *Reativar* de família
+mandava o nome da lista e desfazia um renomear recente. E o administrador do sistema sem perfil no almoxarifado via *Nova Família*,
+*Editar*, *Inativar* e *Reativar*, e todos respondiam *"Acesso restrito …"*.
+
+| Antes | Agora |
+|---|---|
+| A aba B troca a unidade; a aba A só renomeia e salva — a unidade da B voltava | *"O campo "Unidade de Medida" do material ⟨código⟩ foi mudado por outra pessoa depois que você abriu o cadastro — salvar desfaria essa mudança, e nada foi gravado. Recarregue o material e salve de novo."* |
+| Formulário aberto, chega a nota com custo novo, salvar voltava o custo | *"O campo "Custo Unitário" … foi mudado …"*; o custo da nota fica |
+| *Reativar* voltava o nome da lista | O nome gravado fica |
+| Administrador do sistema sem perfil: botões que recusam | A aba somente leitura, com *"Somente leitura — cadastrar, editar, inativar e reativar famílias é do Administrador do almoxarifado ou do Super Administrador; peça a um deles."* |
+
+**Roteiro de teste (5 minutos).**
+
+1. Entre como **Almoxarife**. Abra um material sem saldo (**CAD-T1**, unidade *PC*) em **Materiais → Editar** em duas abas (A e B).
+2. Aba **B**: *Unidade de Medida* → *KG*, *Estoque Mínimo* → 3 → **Salvar**: *"Material atualizado!"*.
+3. Aba **A**: mude só o nome → **Salvar**: *"Os campos "Unidade de Medida" e "Estoque Mínimo" do material CAD-T1 foram mudados por
+   outra pessoa depois que você abriu o cadastro — salvar desfaria essas mudanças, e nada foi gravado. Recarregue o material e salve de
+   novo."* — a tela fica aberta.
+4. Feche, abra **CAD-T1** de novo (mostra *KG* e 3), mude o nome → **Salvar**: *"Material atualizado!"*.
+5. Abra **CAD-T1 → Editar** e deixe aberto; em outra aba, receba uma nota com CAD-T1 a valor unitário 37,50 (**Recebimento →
+   processar a nota**). Volte, mude a marca → **Salvar**: *"O campo "Custo Unitário" do material CAD-T1 foi mudado …"*. Recarregue: o
+   custo é 37,50.
+6. Entre como **Administrador** do almoxarifado em duas abas: na aba A, **Configurações → Famílias** com uma família inativa. Na aba B,
+   **Editar** essa família e renomeie → **Salvar**. Na aba A, **Reativar**: *"Família reativada"*; recarregue: o nome é o novo.
+7. Entre como usuário **Administrador do Sistema** que não é Super Administrador e não tem perfil no almoxarifado.
+   **Configurações → Famílias**: a frase *"Somente leitura — …; peça a um deles."* no topo, sem *Nova Família*, *Editar*,
+   *Inativar* ou *Reativar*; *Adicionar item* continua.
+
+**O que esta etapa NÃO cobre.** O *Editar* da aba Famílias continua gravando o nome, a descrição e o tipo de uso que a lista mostrava
+(último que salva vence); as outras abas de Configurações continuam mostrando ao administrador do sistema sem perfil gestos que
+recusam (C261); e se ele deve ou não configurar o almoxarifado é uma decisão sua (B808).
 
 ## Etapa 124 — A família que o formulário leu, e a reativação que a recusa pede (ENTREGUE — 2026-10-16)
 

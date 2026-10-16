@@ -48,7 +48,9 @@ mandaria o que leu). Almoxarife, salvo dito. A lista congelada (`CAMPOS_LIDOS`, 
 - **RN-03 — sem `campos_lidos`** → o de hoje (200, o corpo gravado). **Chave parcial:** só as colunas presentes são comparadas;
   chave fora da lista (`quantidade_atual`, `familia_id`, `controle_lote`, `nome_qualquer`) é descartada pelo schema e não é
   comparada.
-- **RN-04 — lido = gravado, o usuário muda** (nome, unidade) → **200**, gravado, Auditoria `EDICAO` com o de/para.
+- **RN-04 — lido = gravado, o usuário muda** (nome, unidade) → **200**, gravado, Auditoria com o de/para. *(Dizia
+  "Auditoria `EDICAO`" — **estava errado** (Fase 5, r1 M2): a edição de material grava `acao: 'ATUALIZACAO'`; o teste só contava
+  linhas e passava com a frase errada; agora prende a ação.)*
 - **RN-05 — o falso 409 não existe:** o payload **real** do formulário (o `handleSubmit`: texto `''` para `null`, números como
   texto, `unidade: 'UN'` para unidade `null`, `classe_abc: null`, `fator_conversao_compra: null` sem unidade de compra, caixas
   `true/false`) de um material que ninguém mudou → **200**, para um material com todas as colunas preenchidas **e** para um com
@@ -138,17 +140,104 @@ Depois a família: inativada pela rota, renomeada por outro Administrador pela r
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 — tronco (D (124) item 1)** — `services/almoxarifado/camposLidos.js` (a lista), `services/almoxarifado/schemas.js`
+- [x] **T1 — tronco (D (124) item 1)** `0bedb9fe` (+ Fase 5 `d2cbd4e1`, `4d07084d`) — `services/almoxarifado/camposLidos.js` (a lista), `services/almoxarifado/schemas.js`
   (`campos_lidos`), `services/almoxarifado/materialService.js` (`camposDesfeitos`, `mensagemCamposMudadosPorOutro`),
   `routes/almoxarifado.js` (`PUT /materiais/:id`, logo depois do 409 da família). RN-01..RN-07.
-- [ ] **T2 — galho (D (124) item 2)** — `routes/almoxarifado.js` (`PUT /familias/:id`, trecho disjunto ~2911). RN-10, RN-11. Regra
+- [x] **T2 — galho (D (124) item 2)** `3308faae` (+ Fase 5 `d2cbd4e1`) — `routes/almoxarifado.js` (`PUT /familias/:id`, trecho disjunto ~2911). RN-10, RN-11. Regra
   disjunta da T1 (família × material).
-- [ ] **T3 — galho (tela)** — `MaterialAlmoxarifadoForm.js` (+ teste). RN-08. Contra o contrato congelado (mock HTTP).
-- [ ] **T4 — galho (tela)** — `ConfiguracoesAlmoxarifado.js` (`TabFamilias`: o *Reativar* `{ativo: 1}` — RN-12; somente leitura —
+- [x] **T3 — galho (tela)** `07f8124d` — `MaterialAlmoxarifadoForm.js` (+ teste). RN-08. Contra o contrato congelado (mock HTTP).
+- [x] **T4 — galho (tela)** `d4948a7b` (+ Fase 5 `4d07084d`) — `ConfiguracoesAlmoxarifado.js` (`TabFamilias`: o *Reativar* `{ativo: 1}` — RN-12; somente leitura —
   RN-16/17) + `utils/systemPermissions.js` (`podeGravarConfigAlmox` — RN-15) + testes.
-- [ ] **T6 — integração** — `server/tests/api/camposLidosIntegracao.api.test.js` (acima).
-- [ ] **T5 — fechamento** — novidades (B805–B809, C261+, D (125)), specs 01 e 23, mapa, guia, manual, plano; CLAUDE.md só se a
+- [x] **T6 — integração** `ddba344d` — `server/tests/api/camposLidosIntegracao.api.test.js` (acima).
+- [x] **T5 — fechamento** (o commit de documentação desta etapa — ver `git log`) — novidades (B805–B810, C261–C262, D (125)), specs 01 e 23, mapa, guia, manual, plano; CLAUDE.md só se a
   trava mudar (não deve: o 409 novo sai antes do `UPDATE`).
 
 A suíte inteira roda **uma por vez**, sempre na branch; galho e revisores rodam só os próprios arquivos e nunca junto com a suíte
 (nem dois arquivos de servidor ao mesmo tempo, nem jest junto).
+
+## Execução — o que aconteceu
+
+- **Fase 0** (sonda `e125fase0.js`, não versionada): duas abas — a unidade desfeita (200 e 200); o custo gravado por fora regravado pelo
+  formulário aberto; o *Reativar* com o nome da lista voltando "Nome velho"; `{ativo: 1}` sem nome → 400; o administrador do sistema
+  sem perfil → 403 na família. Um agente de leitura mediu a matriz inteira de Configurações (C261) e a C259 errada no "o que fazer".
+- **Fase 2 antes do código de produção** (só o arquivo de teste da T1 foi escrito antes, sem rodar): 0 Critical, 1 Important, 7 Minor,
+  todos aceitos (topo). Design e plano `13f3f37e`.
+- **TDD:** T1 vermelho 19/31 antes do código; T2 vermelho 4/7; T4 vermelho 5/30. **Divergência:** na T3 o código veio antes do teste
+  (67/67 de primeira); a prova são 5 sabotagens, todas pela asserção certa.
+- **Paralelismo: nenhum galho rodou em paralelo de fato.** T2, T3 e T4 eram galhos (regra disjunta), executados em sequência na branch
+  por quem escreveu o plano (tasks pequenas; a regra "um teste por vez na máquina" faria o galho esperar de qualquer jeito). Os três
+  revisores da Fase 5 rodaram em paralelo, com uma **trava de máquina** (`e125-lock.js` no scratchpad: `mkdir` atômico antes de cada
+  execução de teste ou sonda) — o de sabotagem numa worktree própria (`CRM-wt-e125-r3`, removida com as junções desfeitas antes).
+  **Uma falha minha da regra:** depois de r1 e r2 terminarem e com r3 ainda rodando, rodei três arquivos de servidor **fora** da trava
+  (os cenários novos da Fase 5); r3 não relatou falso vermelho, mas a regra foi quebrada uma vez — dito aqui.
+- **Controles positivos** (âncora contada = 1, md5 antes/sabotado/restaurado, restauro por cópia; `e125-sabota.js`): T1 **11** (4
+  normalizações passaram na primeira passada → viraram os cenários RN-05b antes de dar a task por feita); T2 **3**; T3 **5**; T4 **7** (o
+  *Adicionar item* escondido passou na primeira versão — a asserção era `> 0` — e o cenário passou a contar os links); T6 **4** (o custo
+  fora do `WHERE` não derruba a integração, de propósito: a janela só a `materialCamposLidos` injeta); Fase 5 **4**.
+- **Migração:** nenhuma (sem coluna, sem ledger) — a prova de primeiro boot não se aplica.
+- **Fase 5** — três revisores frescos em paralelo. **Regra (r1):** não refutou; 3 Minor — o 0 que a aba Estoques mínimos regrava
+  (corrigido, **B809**), a RN-04 com `EDICAO` (spec errada, corrigida à vista), `{nome: 5}` → 500 (anterior, corrigido); mediu 540
+  combinações de usuário de `podeGravarConfigAlmox` contra o servidor (0 divergências). **Concorrência (r2):** 1 Minor reproduzido — a
+  janela declarada era 9/30 rodadas de dois salvares simultâneos desfazendo a outra aba (35 de 37 colunas) → cada coluna lida vai no
+  `WHERE` (`d2cbd4e1`); confirmou a Entrada injetada na janela (5/5 → 409 geral) e o `{ativo: 1}` sem nome contra renomear, inativar
+  e mudar de pai (sem estado proibido); a trava por material não muda. **Sabotagem (r3):** **228** sabotagens, **126** derrubaram pela
+  asserção certa, **102** sobreviveram — 22 das 37 colunas sem teste próprio, o custo mudado pelo usuário, o vazio que vira número, o
+  lido `"4.50"`, o texto que só muda de caixa, o usuário efetivo na aba → **43** cenários em `materialCamposLidosFase5` + 1 na aba
+  (`4d07084d`); os outros sobreviventes são equivalentes no caminho real (provados pelo revisor).
+- **Suíte final (medida depois de `4d07084d`, antes da documentação):** `test:api` **424/424**; `test:almoxarifado` **44/0**;
+  `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 10/0; client **116** suítes / **1657** testes; `CI=true build`
+  *Compiled successfully*. (Antes da Fase 5: 423/423, 44/0, 4/0, 3/0, 10/0, 116/1656, build ok — medidos com todo o código da etapa
+  na árvore, antes de ele ser dividido nos commits T1..T6.)
+- **Divergências do plano:** (1) a T3 sem TDD (acima); (2) a Fase 5 generalizou a condição do `WHERE` que o plano limitava ao custo;
+  (3) o mínimo e o máximo ganharam o tipo `numero0` (não estava no contrato); (4) a RN-04 dizia `EDICAO` (errado); (5) os galhos não
+  rodaram em paralelo; (6) os testes da C259 ficaram em `FamiliasSomenteLeitura.test.js` (não havia arquivo de teste de
+  `systemPermissions` no cliente); (7) o comentário do normalizador de número diz "NaN nunca é igual a NaN" — com `Object.is` é igual;
+  o ramo só separa dois legados não numéricos diferentes (inalcançável pelas rotas, r3) — comentário impreciso, código certo, deixado.
+- **CLAUDE.md:** a seção da trava **não mudou** (nada desta etapa põe saldo no disponível nem reserva; o 409 novo e as condições do
+  `WHERE` saem no próprio comando, sem trava — r2). **Compras:** nenhum código tocado.
+
+## Retro (4 números)
+
+1. **Rodadas de correção até verde:** **1** (Fase 5: três correções de produção + 44 cenários numa rodada). Nenhum teste antigo mudou
+   de comportamento; dois cenários de `Familias.test.js` mudaram o corpo esperado do *Reativar* (`{ativo: 1}`).
+2. **Achados da revisão:** Fase 2 — **1 Important + 7 Minor, todos reais**. Fase 5 — r1 **3** Minor reais (2 da etapa, 1 anterior); r2
+   **1** Minor real (da etapa); r3 **102** sobreviventes — os que importavam viraram 44 cenários, o resto foi provado equivalente; **0**
+   ruído.
+3. **Paralelismo:** **0** galhos em paralelo de fato (3 galhos em sequência), **0** retrabalho; **3** revisores em paralelo na Fase 5
+   sob a trava de máquina (sem esgotar portas desta vez); 1 quebra da regra por mim (acima).
+4. **Defeito que escapou:** *(preencher na Etapa 126)*.
+
+## Próxima tarefa detalhada — Etapa 126
+
+*(A série desta etapa foi B805–B810, C261–C262, nenhuma A — a 126 começa em **B811**, **C263**, **A76**; confira com `grep -oE` antes.)*
+
+**Como foi escolhida (mapa e os C abertos, medidos em 2026-10-16):** as features 🟡 continuam 00, 01, 05, 06, 21, 22 e 23. O que
+**não** depende do P.O.:
+
+1. **C261 — as outras abas de Configurações para o administrador do sistema sem perfil** (feature 23). **Medido nesta etapa** (agente de
+   leitura, a matriz inteira): *leem e não gravam* — Tipos de material (`POST/PUT/DELETE /tipos-material`), Estoques mínimos (`PUT
+   /configuracoes/estoques-minimos`), Setores (`POST/PUT/DELETE /setores`), Localizações (`POST/PUT/DELETE /localizacoes`), Liberação
+   por valor (`PUT /configuracoes/liberacao-valor`); *falham ao abrir* — Alertas (`GET /configuracoes/alertas-estoque`), Regras de
+   aprovação (`GET /regras-aprovacao`), Configurações gerais (`GET /configuracoes`); e o *Editar/Salvar Posições* do mapa de
+   localizações (`PUT /mapa/localizacoes/posicoes`, `canConfigureAlmox` inline). Todas recusam com 403 *"Acesso restrito —
+   administrador do Almoxarifado ou Super Administrador"*. Funcionam para ele: Categorias, Motivos, Almoxarifados (dentro de Setores),
+   Perfis, Materiais por setor. **Molde pronto:** `podeGravarConfigAlmox` + a frase da aba Famílias (`FRASE_FAMILIAS_SOMENTE_LEITURA`,
+   B808). **Pontos de atenção:** as três que falham ao abrir precisam de um estado próprio (não chamar o `GET` que recusa, ou mostrar a
+   frase no lugar do erro); a seção *Almoxarifados* vive dentro de *Setores* e **funciona** para ele (`requirePermission('configurar')`)
+   — não esconder; a **B808** (alargar o servidor) tornaria isto desnecessário — o caminho reversível é estreitar a tela, que a B808
+   pode desfazer numa linha. **Não depende do P.O.**
+2. **D (125) — o *Editar* da aba Famílias com os campos lidos** (feature 01): o *Editar* manda nome, descrição e tipo de uso da lista.
+   Molde: `familia_lida`/`campos_lidos` (lido ≠ gravado **e** gravaria ≠ gravado → 409, e o lido no `WHERE`); decidir no plano o nome
+   da chave e a literal (nomear o campo); a recusa *"A família mudou enquanto era salva — …"* (L409) já existe para o pai. Pequeno; cabe
+   junto da 1. **Não depende do P.O.**
+3. **Dependem do P.O.:** **B808** (o administrador do sistema configura o almoxarifado?), **B755**, **B761**/**C239**, **C224**, o resto da
+   **C225**, **C228**, **C219**, **C230**, o reparo da **C246** (e a **C247**); e, na feature 01, a tabela de conversões e o grupo acima de
+   família.
+
+**Escolhida: C261 (as outras abas somente leitura para quem o servidor recusa) + o *Editar* da aba Famílias com os campos lidos.**
+
+**Contrato candidato:** nenhuma rota nova para a C261 (só a tela); para o *Editar*, `PUT /familias/:id` com a chave nova dos lidos →
+409 com literal nova, depois da validação do nome e antes das conferências de nível; sem a chave, o de hoje.
+
+**O que já está pronto e não precisa reabrir:** os campos lidos do material (B805, B806, B809), com o `WHERE` da janela; o nome omitido
+no `PUT /familias` (B807); a aba Famílias somente leitura (B808).

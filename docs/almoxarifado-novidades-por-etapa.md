@@ -11,10 +11,15 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-16):** **Etapa 124 fechada** (o formulário de material aberto há minutos não desfaz mais
+> **Onde o desenvolvimento está (2026-10-16):** **Etapa 125 fechada** (o formulário de material aberto não desfaz mais **nenhum**
+> campo que outra pessoa — ou o recebimento, no custo — mudou enquanto ele estava aberto: avisa quais e pede para recarregar —
+> **D (124)** resolvida; o *Reativar* da aba Famílias não volta mais o nome antigo; e a aba Famílias fica somente leitura para o
+> administrador do sistema sem perfil, em vez de oferecer botões que recusam — **C259** resolvido na aba Famílias, as outras abas
+> viram a **C261**); a próxima do almoxarifado é a **126** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 124 fechada** (o formulário de material aberto há minutos não desfaz mais
 > a família ou a subfamília que outra pessoa mudou — **D (123)** resolvida; a recusa da requisição de material inativo manda
 > reativar a família antes, quando ela também está inativa — **C231** resolvido; e a aba **Famílias** passa a mostrar as inativas
-> e a reativá-las, o que nenhuma tela fazia); a próxima do almoxarifado é a **125** — ver "Onde estamos e o que vem a seguir".
+> e a reativá-las, o que nenhuma tela fazia); a próxima do almoxarifado era a **125**.)*
 > *(Antes: **Etapa 123 fechada** (reorganizar famílias enquanto outra pessoa mexe nelas não
 > deixa mais subfamília ativa sob família inativa, terceiro nível nem material com o par errado — **C221** resolvido; o cadastro
 > recusa dono que não está em Clientes — **C216** resolvido; e a família de "pai 0" vira família principal no boot e não nasce
@@ -2766,7 +2771,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B804; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B810; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -8723,6 +8728,61 @@ de editar). **Reversível.**
 **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230** e o reparo da **C246**/**C247**
 continuam esperando vocês.
 
+**B805 (NOVA, da Etapa 125) — o formulário de material manda os outros campos que leu.** Antes: o formulário protegia os controles
+(116) e a família (124); o resto do cadastro era gravado com o que ele mostrava ao abrir — medido: duas abas no mesmo material, uma
+troca a unidade e a outra só renomeia, as duas com sucesso e a unidade desfeita (**D (124)**). **O que foi escolhido** (`0bedb9fe`,
+`07f8124d`, `d2cbd4e1`): o formulário manda os 37 campos que mostra (fora os controles de lote/série e a família, que já têm a
+conferência deles), como estavam ao abrir; se algum mudou depois **e** o salvar o desfaria, nada é gravado e a resposta nomeia os
+campos com o rótulo da tela — *"O campo "Unidade de Medida" do material ⟨código⟩ foi mudado por outra pessoa depois que você abriu o cadastro — salvar desfaria essa mudança, e nada foi gravado. Recarregue o material e salve de novo."* (vários:
+*"Os campos "Unidade de Medida" e "Estoque Mínimo" … foram mudados … — salvar desfaria essas mudanças, …"*). Se o usuário digitou o
+mesmo que o outro gravou, passa. Vem depois da recusa dos controles e da família e antes de todas as outras. E a mudança que cai
+**dentro** do próprio salvar (outra aba salvando no mesmo segundo) recebe a recusa geral *"O cadastro do material ⟨código⟩ mudou
+enquanto era salvo — …"* (Fase 5: antes da correção, 9 de 30 salvares simultâneos desfaziam a outra aba). Sem a informação (outras
+telas, a API), o de antes. **Descartado:** (a) **uma informação só** que juntasse os controles, a família e os campos (mudaria o que a
+116 e a 124 combinaram e as duas frases delas); (b) **mesclar** — gravar o campo do outro quando o usuário não mexeu nele, sem
+recusa (seria uma segunda regra ao lado da 116/124, que recusam; quem só renomeou veria a unidade mudar sem saber); (c) um carimbo
+de "última alteração" do cadastro inteiro (o estoque grava as quantidades a cada movimento — B800 (a)). **Reversível.**
+
+**B806 (NOVA, da Etapa 125) — o custo unitário entra na conferência.** O recebimento grava no cadastro o custo da última compra; o
+formulário aberto durante um recebimento regravava o custo antigo sem aviso (medido). **O que foi escolhido** (`0bedb9fe`): o custo é
+um dos campos conferidos — com o formulário aberto durante uma entrada com custo, o salvar recusa nomeando *"Custo Unitário"*.
+**Descartado:** (a) deixá-lo de fora como as quantidades (o defeito continua); (b) a regra de mesclar só para ele. **Custo:** um aviso a
+mais quando um recebimento com custo cai com o formulário aberto; recarregar resolve. **Reversível.**
+
+**B807 (NOVA, da Etapa 125) — o *Reativar* da aba Famílias não manda o nome.** Antes mandava o nome que a lista mostrava, e um
+renomear de outro administrador feito depois de a lista carregar voltava (medido). **O que foi escolhido** (`3308faae`,
+`d4948a7b`, `d2cbd4e1`): a edição de família sem o nome mantém o nome gravado (o molde da **B803** para descrição e tipo de uso); o
+*Reativar* manda só a reativação. O nome informado vazio continua *"Nome é obrigatório"* (e o nome que não é texto também, pela API —
+antes dava erro interno). **Consequência para a API:** inativar pela edição sem mandar o nome, que antes era recusado por falta de
+nome, agora passa às regras de inativação de sempre (com item ativo: *"Não é possível remover: família possui 1 item(ns) ativo(s)"*).
+**Descartado:** (a) o *Reativar* conferir o nome lido e recusar se mudou (reativar não precisa do nome; recusar faria recarregar sem
+motivo); (b) a tela reler a família antes de reativar (a corrida continua, menor). **Reversível.**
+
+**B808 (NOVA, da Etapa 125) — a aba Famílias fica somente leitura para quem o servidor recusa (C259).** O administrador do sistema
+(sem ser Super Administrador, sem perfil Administrador do almoxarifado e sem ser administrador do módulo) abre Configurações, e as
+rotas de família recusam a ele. **O que foi escolhido** (`d4948a7b`): para ele a aba mostra as famílias, subfamílias e itens sem
+*Nova Família*, *Nova subfamília*, *Editar*, *Inativar* e *Reativar*, com *"Somente leitura — cadastrar, editar, inativar e reativar
+famílias é do Administrador do almoxarifado ou do Super Administrador; peça a um deles."*; os gestos de **material** (*Adicionar
+item*, *Cadastrar primeiro item*, editar o item) ficam — esses o servidor deixa. **Nenhuma permissão mudou.** **Descartado:**
+(a) **alargar o servidor** — deixar o administrador do sistema configurar o almoxarifado, que é o que o resto do sistema já diz dele
+(o cadastro de usuários mostra *"Acesso total (Admin / Super Admin)"* e a aba Perfis recusa dar perfil a ele dizendo que *"tem acesso
+total ao almoxarifado"*); amplia quem grava em cerca de 30 telas de configuração, e um teste da base prende a recusa de propósito
+(*"um role:'admin' sem is_superadmin mudou a regra — canConfigureAlmox afrouxou"*). **Isto é decisão de vocês: o administrador do
+sistema deve configurar o almoxarifado?** Se sim, é uma linha no servidor e a aba volta ao normal sozinha; (b) fechar a tela inteira
+para ele (perderia Categorias, Motivos, Almoxarifados, Perfis e Materiais por setor, que funcionam); (c) as outras abas no mesmo passo
+— viram a **C261**. **Reversível.**
+
+**B809 (NOVA, da Etapa 125, da revisão) — mínimo e máximo vazios valem zero na conferência.** A aba **Estoques mínimos**, ao mudar só
+o prazo de um material, regrava o mínimo e o máximo vazios como 0; o formulário aberto antes recusava (*"O campo "Estoque Máximo" …
+foi mudado …"*) por um campo que ninguém mudou de verdade (achado pelo revisor de regra, reproduzido). **O que foi escolhido**
+(`d2cbd4e1`): para o Estoque Mínimo e o Estoque Máximo, vazio e 0 são o mesmo na conferência. Nos outros números (Ponto de
+Reposição, Lote Econômico, peso, custo, quantidade por compra), vazio → 0 é mudança e recusa. **Reversível.**
+
+**B810 (NOVA, da Etapa 125) — a próxima etapa do almoxarifado (126).** Ver a "próxima tarefa detalhada" no plano da Etapa 125: a
+**C261** (as outras abas de Configurações com o mesmo descompasso) e o *Editar* da aba Famílias com o nome, a descrição e o tipo de uso
+lidos — nenhuma das duas depende de vocês. A **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a
+**C230**, o reparo da **C246**/**C247** e a **B808** (o administrador do sistema configura o almoxarifado?) continuam esperando vocês.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -11230,7 +11290,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      (**B793**, **B797**, **B798**). Só com duas pessoas mexendo no mesmo cadastro no mesmo segundo. **O que fazer:** recarregue
      (feche e abra o cadastro) e salve de novo.
 
-259. **NOVO (da Etapa 124, da revisão; anterior a ela) — o administrador do sistema sem perfil no almoxarifado vê a aba Famílias, e
+259. **✅ RESOLVIDO NA ABA FAMÍLIAS NA ETAPA 125 (`d4948a7b`; B808) — a aba fica somente leitura para ele, com a frase de quem é;
+     as outras abas viram a C261. O "o que fazer" abaixo ESTAVA ERRADO:** dar o perfil Administrador a um administrador do sistema
+     **não funciona** — a aba Perfis recusa (*"Este usuário já é administrador (superadmin, admin de sistema ou admin do módulo) e tem
+     acesso total ao almoxarifado. …"*) e o cadastro de usuários desabilita o *Administrador do módulo* para ele. O caminho que existe é
+     um Administrador do almoxarifado ou o Super Administrador fazer o gesto (ou a decisão **B808**). O texto original: **NOVO (da
+     Etapa 124, da revisão; anterior a ela) — o administrador do sistema sem perfil no almoxarifado vê a aba Famílias, e
      os botões dela recusam.** Quem é administrador do sistema (sem ser Super Administrador, sem perfil Administrador do almoxarifado
      e sem ser administrador do módulo) abre **Configurações → Famílias** e vê *Nova família*, *Editar*, *Inativar* e, desde a 124,
      *Reativar* — e cada um responde *"Acesso restrito — administrador do Almoxarifado ou Super Administrador"*. A tela e o servidor
@@ -11241,6 +11306,22 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      se outra pessoa mudou a família ou a subfamília dele, o **Salvar** responde *"A família do material ⟨código⟩ foi mudada por outra pessoa depois que você abriu o cadastro — salvar desfaria essa mudança, e nada foi gravado. Recarregue o material e salve de novo."* (ou *"A subfamília do material …"*) e nada
      é gravado — antes, o salvar desfazia a mudança sem aviso (**B800**). **O que fazer:** feche, abra o material de novo (ele já
      mostra a família nova) e salve. O que tinha sido digitado e não salvo precisa ser digitado de novo.
+
+261. **NOVO (da Etapa 125, medido) — o administrador do sistema sem perfil vê outras abas de Configurações que não gravam.** O
+     mesmo descompasso da C259, nas outras abas: para quem é administrador do sistema sem perfil Administrador do almoxarifado (e sem
+     ser Super Administrador nem administrador do módulo), **Tipos de material**, **Estoques mínimos**, **Setores**, **Localizações** e
+     **Liberação por valor** mostram os dados e cada gravação responde *"Acesso restrito — administrador do Almoxarifado ou Super
+     Administrador"*; **Alertas de estoque**, **Regras de aprovação** e **Configurações gerais** já falham ao abrir; e o *Editar/Salvar
+     Posições* do mapa de localizações também recusa. **Categorias**, **Motivos**, **Almoxarifados**, **Perfis de acesso** e **Materiais
+     por setor** funcionam para ele. **O que fazer:** peça o gesto a um Administrador do almoxarifado ou ao Super Administrador (ou
+     decida a **B808**). Candidata da próxima etapa.
+
+262. **NOVO (da Etapa 125) — salvar um material que outra pessoa mudou é recusado, nomeando os campos.** Com o formulário de material
+     aberto, se outra pessoa mudou algum campo dele (ou um recebimento com custo mudou o *Custo Unitário*), o **Salvar** responde *"O
+     campo "⟨rótulo⟩" do material ⟨código⟩ foi mudado por outra pessoa depois que você abriu o cadastro — salvar desfaria essa mudança,
+     e nada foi gravado. Recarregue o material e salve de novo."* (ou *"Os campos … foram mudados …"*) e nada é gravado — antes, o
+     salvar desfazia a mudança sem aviso (**B805**, **B806**). **O que fazer:** feche, abra o material de novo (ele já mostra o que o
+     outro gravou) e salve. O que tinha sido digitado e não salvo precisa ser digitado de novo.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -12405,6 +12486,15 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   ficar velha; o passo seguinte sempre diz a verdade (medido pelo revisor de concorrência: nenhum beco).
 - **(124) A mudança da família que cai dentro do próprio salvar** (entre a leitura e a gravação, milissegundos) continua com a
   recusa geral *"O cadastro do material ⟨código⟩ mudou enquanto era salvo — …"* (**B798**), não com a nova.
+- **(125) O *Editar* da aba Famílias continua no "último que salva vence".** Ele manda o nome, a descrição e o tipo de uso que a
+  lista mostrava: se outro administrador mudou a família no mesmo minuto, o *Editar* volta o que a lista mostrava. Candidata da
+  próxima etapa (o mesmo molde dos campos lidos).
+- **(125) Os campos que o formulário de material não mostra** (categoria e subcategoria do catálogo antigo, fornecedor por código,
+  unidade e fator de consumo) não são conferidos — o formulário não os manda, e o servidor os preserva.
+- **(125) O formulário recusa por mudança que não se vê na tela em um caso:** a unidade de compra e a quantidade por compra são o
+  mesmo *"Como é comprado"*; mudar só a quantidade num material sem unidade de compra (só pela API) recusa nomeando *"Como é
+  comprado"*, que a tela mostra vazio.
+- **(125) As outras abas de Configurações** com o administrador do sistema sem perfil — a **C261**.
 
 ### E. Uma regra que foi DEDUZIDA e nunca confirmada com vocês — pergunta, não requisito atendido
 
@@ -13307,6 +13397,13 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(125) Nenhum clique foi dado nesta etapa no navegador.** Duas telas mudaram — o formulário de material (manda os campos lidos) e
+a aba **Famílias** (o *Reativar* sem o nome; somente leitura para o administrador do sistema sem perfil) — e foram provadas por teste
+de componente com a fronteira HTTP simulada (**5** casos novos do formulário, **6** da aba somente leitura, **2** do *Reativar*); o
+servidor, pela rota e pelo serviço (**91** cenários em quatro arquivos novos, um deles a jornada de integração). O que **só o
+navegador** prova: o roteiro da Etapa 125 no guia — o aviso vermelho nomeando os campos ao salvar com duas abas, a frase *Somente
+leitura* no topo da aba Famílias para o administrador do sistema, e o *Reativar* que mantém o nome novo.
 
 **(124) Nenhum clique foi dado nesta etapa no navegador.** Duas telas mudaram — o formulário de material (manda a família lida) e a
 aba **Famílias** (as inativas, o selo e o *Reativar*) — e foram provadas por teste de componente com a fronteira HTTP simulada
@@ -25740,9 +25837,86 @@ cartão inativo expandido (corrigido) e o administrador do sistema que vê botõ
 corridas de 30 rodadas, que duas abas nunca desfazem a mudança uma da outra; o de **sabotagem** fez **90** sabotagens: 74 derrubaram
 teste pela asserção certa, 4 eram equivalentes, e **12** mostraram cenários sem prova — viraram teste.
 
+## Etapa 125 — O cadastro que o formulário leu, inteiro (2026-10-16)
+
+A Etapa 124 fechou o furo da família: o formulário de material aberto há minutos não desfaz mais a família que outra pessoa trocou.
+Mas o resto do cadastro continuava no "último que salva vence": duas pessoas no mesmo material, uma corrige a unidade e a outra só
+renomeia — a segunda desfazia a unidade da primeira sem ninguém saber. E o custo unitário, que o recebimento atualiza com a última
+compra, voltava ao valor antigo quando alguém salvava um formulário aberto antes da nota. Esta etapa estende a conferência ao cadastro
+inteiro, faz o *Reativar* de família parar de voltar o nome antigo, e tira da aba Famílias os botões que o administrador do sistema
+via e que sempre recusavam.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Duas abas no mesmo material; a aba B troca a unidade e salva; a aba A só renomeia e salva — a unidade da B era desfeita | *"O campo "Unidade de Medida" do material ⟨código⟩ foi mudado por outra pessoa depois que você abriu o cadastro — salvar desfaria essa mudança, e nada foi gravado. Recarregue o material e salve de novo."* — nada gravado (**B805**) |
+| Vários campos mudados pelo outro | *"Os campos "Unidade de Medida" e "Estoque Mínimo" do material ⟨código⟩ foram mudados por outra pessoa … — salvar desfaria essas mudanças, …"* |
+| Formulário aberto, chega a nota com custo novo; o salvar voltava o custo antigo | *"O campo "Custo Unitário" do material ⟨código⟩ foi mudado …"* — o custo da nota fica (**B806**) |
+| Duas abas salvando no mesmo segundo: às vezes as duas "salvavam" e uma desfazia a outra | Uma delas recebe *"O cadastro do material ⟨código⟩ mudou enquanto era salvo — nada foi gravado. Recarregue o material e salve de novo."* |
+| *Reativar* de uma família que outro administrador renomeou depois de a lista carregar voltava o nome antigo | O nome novo fica (**B807**) |
+| O administrador do sistema sem perfil via *Nova Família*, *Editar*, *Inativar* e *Reativar* — e todos respondiam *"Acesso restrito …"* | A aba mostra a árvore sem esses botões, com *"Somente leitura — cadastrar, editar, inativar e reativar famílias é do Administrador do almoxarifado ou do Super Administrador; peça a um deles."* (**B808**) |
+
+### As regras, com o cenário exato
+
+Preparação: usuário **Almoxarife** (ou Administrador); um material **CAD-T1** sem saldo, unidade *PC*, Estoque Mínimo 0.
+
+**1. Duas abas, campos diferentes.** Abra **Materiais → CAD-T1 → Editar** em duas abas do navegador (A e B). Na aba **B**, troque a
+*Unidade de Medida* para *KG* e o *Estoque Mínimo* para 3 → **Salvar**: *"Material atualizado!"*. Na aba **A** (que ainda mostra *PC*
+e 0), mude só o nome → **Salvar**: *"Os campos "Unidade de Medida" e "Estoque Mínimo" do material CAD-T1 foram mudados por outra pessoa
+depois que você abriu o cadastro — salvar desfaria essas mudanças, e nada foi gravado. Recarregue o material e salve de novo."* O
+formulário continua aberto. Feche, abra **CAD-T1** de novo (mostra *KG* e 3), mude o nome → **Salvar**: *"Material atualizado!"*.
+
+**2. Digitar o mesmo que o outro gravou passa.** Repita o cenário 1, mas na aba **A** troque também a unidade para *KG* e o mínimo para
+3 antes de salvar: salva normalmente.
+
+**3. O custo da nota.** Abra **CAD-T1 → Editar** e deixe aberto. Em outra aba, receba uma **nota** com 2 unidades de CAD-T1 a valor
+unitário 37,50 (Recebimento → processar a nota — a Entrada avulsa de Movimentações não grava custo). Volte ao formulário, mude a marca → **Salvar**: *"O campo "Custo Unitário"
+do material CAD-T1 foi mudado por outra pessoa depois que você abriu o cadastro — salvar desfaria essa mudança, e nada foi gravado.
+Recarregue o material e salve de novo."* Recarregue: o custo é 37,50.
+
+**4. O *Reativar* não volta o nome.** Entrando como **Administrador** do almoxarifado em duas abas: na aba A, **Configurações →
+Famílias**, com uma família inativa **Teste 125** na lista. Na aba B, **Editar** a mesma família → nome *Teste 125 novo* → **Salvar**.
+Na aba A (que ainda mostra *Teste 125*), **Reativar**: *"Família reativada"*. Recarregue: o nome é *Teste 125 novo*.
+
+**5. A aba somente leitura.** Entre como um usuário com perfil do sistema **Administrador** que não é Super Administrador, não tem
+perfil no almoxarifado e não é administrador do módulo. **Configurações → Famílias**: a frase *"Somente leitura — cadastrar, editar,
+inativar e reativar famílias é do Administrador do almoxarifado ou do Super Administrador; peça a um deles."* no topo; nenhum *Nova
+Família*, *Nova subfamília*, *Editar*, *Inativar* ou *Reativar*; *Adicionar item* continua (cadastrar material ele pode). Entre como
+Administrador do almoxarifado: a aba como sempre, sem a frase.
+
+### O que esta etapa NÃO cobre
+
+1. **O *Editar* da aba Famílias** continua no "último que salva vence" (nome, descrição e tipo de uso da lista) — D (125), candidata
+   da 126.
+2. **As outras abas de Configurações** com o administrador do sistema sem perfil — **C261**, candidata da 126.
+3. **Se o administrador do sistema deve configurar o almoxarifado** — decisão sua (**B808**).
+4. A **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230** e o reparo da
+   **C246**/**C247** — decisões suas.
+
+### O que a revisão encontrou
+
+A **medição** reproduziu os defeitos antes de qualquer código (a unidade desfeita por duas abas; o custo da nota voltando; o nome
+antigo voltando no *Reativar*) e mediu aba a aba o que o administrador do sistema consegue em Configurações — de onde saíram a
+**C261** e a correção da **C259** (o "o que fazer" dela não funcionava). A **revisão do plano** (antes do código) não achou falso
+aviso em 12 materiais com dados antigos esquisitos e achou que a aba somente leitura esconderia também *Cadastrar primeiro item*, que
+o servidor deixa — ficou. A **revisão adversarial do código** (três revisores, executando): o de **regra** não refutou e achou o 0 que a
+aba Estoques mínimos regrava (**B809**) e um erro interno com nome numérico pela API (corrigidos); o de **concorrência** mediu que dois
+salvares no mesmo segundo ainda desfaziam um ao outro em 9 de 30 rodadas — a conferência passou a valer também nesse instante; o de
+**sabotagem** fez **228** sabotagens: 126 derrubaram teste pela asserção certa, e as que sobreviveram mostraram que 22 dos 37 campos não
+tinham teste próprio — viraram 43 cenários.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 125 entregue (2026-10-16):** **o cadastro que o formulário leu, inteiro.** O formulário de material aberto não desfaz mais
+  nenhum campo que outra pessoa (ou o recebimento, no custo) mudou — **D (124)** resolvida (**B805**, **B806**, **B809**); o *Reativar*
+  de família não volta o nome antigo (**B807**); a aba Famílias fica somente leitura para o administrador do sistema sem perfil
+  (**C259** resolvido na aba — o "o que fazer" dela estava errado; **B808**). **O que é seu:** a decisão **B808** (o administrador do
+  sistema configura o almoxarifado?); as decisões **B805 a B809** (reversíveis); os avisos **C261** e **C262**; as limitações
+  **(125)** em D e a verificação **(125)** em F. Nenhuma consulta nova em A. **Próxima: Etapa 126 — ver a "próxima tarefa
+  detalhada" no plano da Etapa 125.**
 
 - **Etapa 124 entregue (2026-10-16):** **a família que o formulário leu, e a reativação que a recusa pede.** O formulário de material
   aberto não desfaz mais a família ou a subfamília que outra pessoa mudou (**D (123)** resolvida, **B800**); a recusa da requisição

@@ -65,7 +65,8 @@ pessoa. O `GET /materiais/:id` devolve as colunas cruas (`SELECT m.*` + `enrichM
 - **D5 — C259: a aba Famílias fica somente leitura para quem o servidor recusa (B808).** Um teste do cliente nomeia a regra do
   servidor (`podeGravarConfigAlmox` = Super Administrador, administrador do módulo ou perfil Administrador — o `canConfigureAlmox`
   do servidor, sem o administrador do sistema); para os outros, a aba mostra a árvore sem *Nova família*, *Nova subfamília*,
-  *Editar*, *Inativar* e *Reativar*, com uma frase que diz de quem é. **Não amplia nem estreita permissão nenhuma no servidor.**
+  *Editar*, *Inativar* e *Reativar*, com uma frase que diz de quem é (**Fase 2, I1:** os gestos de *material* — *Adicionar item*,
+  *Cadastrar primeiro item*, editar o item — ficam; o servidor os deixa). **Não amplia nem estreita permissão nenhuma no servidor.**
   **Descartado:** (a) **alargar o servidor** (`canConfigureAlmox` aceitar o administrador do sistema — o que o 409 dos perfis e o
   cadastro de usuários já dizem, "acesso total"): amplia quem grava em ~30 rotas de configuração, e um teste da base prende o 403
   de propósito (`auditoriaConfiguracaoJornada`: *"um role:'admin' sem is_superadmin mudou a regra — canConfigureAlmox afrouxou"*) —

@@ -1096,6 +1096,21 @@ Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa122-a-aprovacao-que-
 - Varredura (`grep auditoria_log_almoxarifado` em `services/` e `routes/`, fora de INSERT/DDL): não sobra leitura da Auditoria como
   estado; o resto é a tela de Auditoria e as migrações que leem o passado uma vez.
 
+## Etapa 125 (2026-10-16) — a aba Famílias somente leitura para quem o servidor recusa (C259)
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa125-o-cadastro-que-o-formulario-leu-inteiro.md`.
+
+- [x] **`podeGravarConfigAlmox`** (`client/src/utils/systemPermissions.js`) — a regra do `canConfigureAlmox` do **servidor** (Super
+  Administrador, administrador do módulo, perfil Administrador), sem o administrador do sistema que o `canConfigureAlmox` do cliente
+  aceita (540 combinações de usuário conferidas pelo revisor, 0 divergências). A aba Famílias esconde os gestos de família para quem
+  não passa — `d4948a7b`, `4d07084d` (B808). Nenhuma permissão do servidor mudou.
+- **Medido (Fase 0):** a camada de perfil (`getPerfilFromUser`) faz do administrador do sistema um **ADMINISTRADOR** — passa em
+  `requirePermission(configurar)` (Categorias, Motivos, Almoxarifados, Perfis, Auditoria) —, mas `denyUnlessAlmoxAdmin` o recusa
+  (Tipos, Famílias, Estoques mínimos, Setores, Localizações, Liberação por valor, Alertas, Regras de aprovação, Configurações gerais).
+  As duas regras do servidor discordam entre si; qual vale é a **B808**. As outras abas: **C261**.
+- **A C259 dizia "dê a essa pessoa o perfil Administrador" — estava errado:** `PUT /perfis-usuario/:id` de um administrador do sistema
+  responde 409 (*"… tem acesso total ao almoxarifado …"*) e o cadastro de usuários desabilita o *Administrador do módulo* para ele.
+
 ## Regras essenciais + testes de API exigidos
 
 | Regra | Teste |

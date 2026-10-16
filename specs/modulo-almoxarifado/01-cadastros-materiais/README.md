@@ -1,6 +1,9 @@
 # 01 — Cadastros de Materiais
 
-> **Status:** 🟡 — **continua 🟡. Etapa 124 (`a5e9d30f..5b5e3998`): o formulário de material manda a família e a subfamília que
+> **Status:** 🟡 — **continua 🟡. Etapa 125 (`13f3f37e..4d07084d`): o formulário de material manda os outros 37 campos que
+> leu (`campos_lidos`) e o salvar que desfaria a mudança de outra pessoa — ou do recebimento, no custo — é recusado nomeando os campos
+> (D (124), B805, B806, B809); o *Reativar* da aba Famílias não manda o nome (B807); a aba Famílias fica somente leitura para quem o
+> servidor recusa (C259, B808)** — ver a seção "Etapa 125", no fim. Não fecha item do checklist. Antes: **Etapa 124 (`a5e9d30f..5b5e3998`): o formulário de material manda a família e a subfamília que
 > leu e o salvar que desfaria a mudança de outra pessoa é recusado (D (123), B800); a aba Famílias lista as inativas e as reativa
 > sem apagar descrição e tipo de uso (B802, B803)** — ver a seção "Etapa 124", no fim. Não fecha item do checklist. Antes:
 > **Etapa 123 (`40b7e08e..0106f6b5`): reorganizar famílias confere e grava no mesmo passo (C221),
@@ -524,3 +527,30 @@ Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa124-a-familia-que-o-
 **A seção "Etapa 123" acima marca "o formulário aberto há minutos ainda grava a família que mostra" como fora** — fechado aqui.
 **A spec dizia, na lista de Famílias (topo), "CRUD (rotas de `/familias`)" como se a tela cobrisse o CRUD:** a tela não reativava
 (a aba só pedia as ativas) — **estava incompleto**; a reativação existia só pela API até esta etapa.
+
+## Etapa 125 — o cadastro que o formulário leu, inteiro (2026-10-16)
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa125-o-cadastro-que-o-formulario-leu-inteiro.md` (design e plano
+`13f3f37e`).
+
+- [x] **Os campos lidos (D (124))** — `0bedb9fe`, `d2cbd4e1`. `campos_lidos` (37 colunas, `services/almoxarifado/camposLidos.js`, um tipo
+  só `string | number | boolean | null`) declarada no `MaterialUpdateSchema`; `materialService.camposDesfeitos`: por coluna presente,
+  lido ≠ gravado **e** merged ≠ gravado, comparados normalizados (texto `''`/`null`; número; mínimo e máximo com `null` = 0 — B809; id
+  `0`/`null`; caixa 0/1) → 409 *"O campo "⟨rótulo⟩" do material ⟨código⟩ foi mudado por outra pessoa depois que você abriu o
+  cadastro — salvar desfaria essa mudança, e nada foi gravado. Recarregue o material e salve de novo."* (plural: *"Os campos … foram
+  mudados … essas mudanças, …"*). Depois do 409 dos controles e do da família, antes do 403 do dono. Cada coluna lida vai também no
+  `WHERE` do `UPDATE` (Fase 5) — a mudança que cai dentro do salvar dá o 409 geral (B798). O custo unitário entra (B806). Sem a chave,
+  o de antes (B805).
+- [x] **O formulário manda os campos lidos** — `07f8124d` (`CAMPOS_LIDOS` exportada; ref gravado em `loadMaterial` com os valores crus;
+  não vai no POST).
+- [x] **`PUT /familias/:id` com o nome omitido preserva o gravado** — `3308faae`, `d2cbd4e1` (`CASE WHEN` no próprio `UPDATE`; informado
+  vazio, `null` ou não texto → 400 *"Nome é obrigatório"*) (B807).
+- [x] **A aba Famílias: *Reativar* `{ativo: 1}` e somente leitura para quem o servidor recusa** — `d4948a7b`, `4d07084d`
+  (`podeGravarConfigAlmox`; os gestos de família somem, os de material ficam; a frase *"Somente leitura — …"*) (B807, B808).
+- [x] **Integração** — `ddba344d` (duas abas pela rota; a Entrada com custo pelo motor; a família reativada sem o nome).
+- [x] **Fase 5** — `d2cbd4e1`, `4d07084d` (três revisores; a janela do salvar fechada; 228 sabotagens, 43 cenários novos).
+- [ ] **Fora, de propósito:** o *Editar* da aba Famílias (nome, descrição e tipo de uso da lista) continua no "último que salva vence"
+  (D (125), candidata da 126); os campos que o formulário não manda (categoria/subcategoria antigas, fornecedor por código, unidade e
+  fator de consumo); as outras abas de Configurações com o administrador do sistema (C261).
+
+**A seção "Etapa 124" acima marca "os outros campos do cadastro" e "o *Reativar* manda o nome da lista" como fora** — fechados aqui.

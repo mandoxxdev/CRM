@@ -190,7 +190,10 @@ A suíte inteira roda **uma por vez**, sempre na branch; galho e revisores rodam
 3. **Paralelismo:** **0** galhos em paralelo de fato (3 galhos executados em sequência), **0** retrabalho; **3** revisores em paralelo
    na Fase 5. Custo de ambiente: esgotamento de portas efêmeras por arquivos de teste em paralelo (revisores) — falso vermelho,
    refeito em série.
-4. **Defeito que escapou:** *(preencher na Etapa 125)*.
+4. **Defeito que escapou (preenchido na Etapa 125): 1, de documentação.** O "o que fazer" da **C259** (*"dê a essa pessoa o perfil
+   Administrador do almoxarifado"*) não funciona: a aba Perfis responde 409 para o administrador do sistema (*"… tem acesso total ao
+   almoxarifado …"*) e o cadastro de usuários desabilita o *Administrador do módulo* para ele — medido na Fase 0 da 125 e corrigido à
+   vista na C259. Nenhum defeito de código da 124 apareceu (os três revisores da 125 releram o PUT de material e o de família).
 
 ## Próxima tarefa detalhada — Etapa 125
 
