@@ -39,6 +39,11 @@
  * nao ha o que falhar no ponto da escrita. Os cenarios de `req` malformado e de `req.get` que
  * LANCA guardam essa promessa na porta de entrada, que e onde ela pode ser cumprida.
  *
+ * Etapa 120 (C250, B778): a frase "mudaria a semantica congelada da auditoria de movimentacao" ESTAVA ERRADA como regra
+ * permanente — a Etapa 25 so nao decidiu. A 120 decidiu e mediu: a auditoria do motor roda depois do livro, e a excecao dela
+ * fazia todos os chamadores lerem "nada aconteceu" com o lancamento feito (entrega baixando duas vezes, retalho orfao). Desde a
+ * 120 ela tem `try/catch` e so registra no log. A regua da RN-05 (a origem montada fora, sem nada a falhar aqui) continua valendo.
+ *
  * Executar: cd server && node tests/api/origemMovimentacao.api.test.js
  */
 const assert = require('assert');

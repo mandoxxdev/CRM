@@ -2368,19 +2368,31 @@ async function registrarMovimentacaoSemTrava(db, user, params, opcoes = {}) {
 
   // Etapa 25 (RN-04/RN-05): `ip` e `user_agent` de onde a movimentacao partiu. `camposDeOrigem`
   // e funcao PURA sobre `user.origem` — um objeto ja montado pelo middleware do modulo, sem
-  // nenhum acesso a Express aqui dentro. E por isso que esta linha NAO ganhou `try/catch`: a
-  // auditoria de movimentacao nunca teve um (59 das 60 chamadas de `registrarAuditoria` do
-  // modulo estao sem `try`), criar um agora mudaria a semantica congelada — hoje, auditoria que
-  // falha derruba a resposta com 500 — e esta etapa nao decidiu isso. Sem `req` (job de fundo,
-  // teste com `user` literal) o retorno e `{}` e a trilha fica exatamente como era.
-  await registrarAuditoria(db, {
-    entidade: 'movimentacao', entidade_id: result.lastID, acao: tipo,
-    usuario_id: user.id, usuario_nome: user.nome || user.email,
-    dados_novos: {
-      material_id, tipo, quantidade, saldo_posterior: saldoPosterior, ...camposDeOrigem(user),
-    },
-    justificativa,
-  });
+  // nenhum acesso a Express aqui dentro. Sem `req` (job de fundo, teste com `user` literal) o
+  // retorno e `{}` e a trilha fica exatamente como era.
+  //
+  // Etapa 120 (C250, B778): NAO-FATAL. Ate a 120 este comentario declarava a semantica "auditoria que falha derruba a resposta
+  // com 500" congelada de proposito (a Etapa 25 nao quis decidir) — e ela estava errada para o motor: aqui o lancamento ja
+  // valeu (livro, estoque, series, vinculos), e todos os chamadores leem a excecao como "nada aconteceu". Medido na Fase 0 da
+  // 120: a Entrada repetida lancava duas vezes; a entrega de requisicao nao gravava o entregue e a segunda baixava de novo; a
+  // devolucao completa virava ESTADO_PARCIAL; o retalho estornava a baixa e deixava a entrada do retalho orfa; o Saldo Inicial
+  // do cadastro apagava o material com a Entrada no livro. Nenhum dos 30 chamadores usa a excecao para desfazer o que o motor
+  // gravou (sem ela nem tem o id). O log registra; o livro e o extrato continuam dizendo quem lancou e quando (`usuario_id`,
+  // `usuario_nome`, `created_at`) — o que se perde e a linha na tela de Auditoria (com o ip/user_agent de origem; medido na
+  // Fase 2: `GET /auditoria?entidade=movimentacao` -> total 0). So esta auditoria: a falha ANTES do livro continua erro (o
+  // catch amplo acima).
+  try {
+    await registrarAuditoria(db, {
+      entidade: 'movimentacao', entidade_id: result.lastID, acao: tipo,
+      usuario_id: user.id, usuario_nome: user.nome || user.email,
+      dados_novos: {
+        material_id, tipo, quantidade, saldo_posterior: saldoPosterior, ...camposDeOrigem(user),
+      },
+      justificativa,
+    });
+  } catch (audErr) {
+    console.warn(`[almoxarifado] auditoria do lancamento falhou (movimentacao ${result.lastID}): ${audErr.message}`);
+  }
 
   const verificarAlerta = async () => {
     try {
