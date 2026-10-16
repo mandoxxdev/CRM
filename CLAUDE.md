@@ -112,7 +112,9 @@ de requisição) **não** pega: só aumenta o livre, e quem reserva sob a trava 
 há, nunca mais (B441, Etapa 92). A separação e a entrega não pegavam até a Etapa 94; pegam desde a 95. Desde a
 Etapa 97 (B494) o motor inteiro (`registrarMovimentacao` — saída avulsa, ajuste) e a reserva manual (`criarReserva`)
 também pegam, por `naTravaDoMaterial` (não aninha fora de `comLockDosMateriais`). Esta linha dizia "saída avulsa e
-reserva manual **não** pegam (D (91))" e estava errada desde a 97 — enganou o plano da 102 (G87, Etapa 104).
+reserva manual **não** pegam (D (91))" e estava errada desde a 97 — enganou o plano da 102 (G87, Etapa 104). Desde a Etapa 116 o ramo de **saída** do estorno (`cancelarMovimentacao`) roda inteiro sob `naTravaDoMaterial`, com o
+controle de série relido no começo. A conferência devolução × estorno não usa a trava: vai no próprio comando, com `NOT EXISTS`
+de devolução viva no claim do estorno e `INSERT … WHERE EXISTS` na devolução.
 
 **Há outra trava, por requisição** (Etapa 93): `services/almoxarifado/travaPorRequisicao.js`
 (`serializarNaRequisicao`) serializa os cinco gestos do almoxarife numa requisição — separar,
