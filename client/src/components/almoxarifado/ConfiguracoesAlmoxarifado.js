@@ -481,6 +481,12 @@ const TabTiposMaterial = () => {
 const FORM_FAMILIA_VAZIO = { nome: '', descricao: '', codigo: '', tipo_uso: 'ambos' };
 const ehRaiz = (f) => f.parent_id === null || f.parent_id === undefined;
 const porNome = (a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR');
+// Etapa 124 (RN-16..RN-19, B802): a aba lista também as INATIVAS (`?ativo=all`) — era a única tela que podia reativar uma
+// família e não mostrava nenhuma: a recusa da requisição de material inativo manda reativar a família aqui. NULL é inativa
+// (a leitura do servidor: `ativo !== 1`). As inativas vão depois das ativas.
+const ehInativa = (f) => Number(f.ativo) !== 1;
+const ativasPrimeiro = (a, b) => (ehInativa(a) - ehInativa(b)) || porNome(a, b);
+const SELO_INATIVA_STYLE = { fontSize: '0.7rem', background: 'rgba(120,144,156,0.15)', color: 'var(--gmp-text-light)', padding: '2px 10px', borderRadius: 20, fontWeight: 600 };
 
 const TabFamilias = () => {
   const [familias, setFamilias] = useState([]);
@@ -497,17 +503,26 @@ const TabFamilias = () => {
 
   useEffect(() => { loadFamilias(); }, []);
 
-  const raizes = familias.filter(ehRaiz).sort(porNome);
-  const subsDe = (raizId) => familias.filter(f => !ehRaiz(f) && String(f.parent_id) === String(raizId)).sort(porNome);
+  const raizes = familias.filter(ehRaiz).sort(ativasPrimeiro);
   // F3 da revisao da Etapa 37: sub cujo pai NAO esta na lista (raiz inativada por fora, so com
   // UPDATE direto — as rotas recusam) sumiria da arvore em silencio. Aparece num bloco proprio.
-  const orfas = familias.filter(f => !ehRaiz(f) && !raizes.some(r => String(r.id) === String(f.parent_id))).sort(porNome);
+  // Etapa 124 (RN-19): com as inativas na lista, a orfa e a sub sem raiz na lista OU a sub ATIVA sob raiz inativa (o estado
+  // que as rotas recusam) — esta continua no bloco, e nao dentro do cartao da raiz inativa.
+  const ehOrfa = (f) => {
+    if (ehRaiz(f)) return false;
+    const raiz = raizes.find(r => String(r.id) === String(f.parent_id));
+    return !raiz || (!ehInativa(f) && ehInativa(raiz));
+  };
+  const subsDe = (raizId) => familias.filter(f => !ehRaiz(f) && String(f.parent_id) === String(raizId) && !ehOrfa(f))
+    .sort(ativasPrimeiro);
+  const orfas = familias.filter(ehOrfa).sort(porNome);
   const pai = parentForm ? familias.find(f => String(f.id) === String(parentForm)) : null;
 
   const loadFamilias = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/almoxarifado/familias');
+      // RN-16: `?ativo=all` — sem ele a inativa some da única tela que pode reativá-la (o molde das Categorias, `?todos=1`).
+      const res = await api.get('/almoxarifado/familias?ativo=all');
       setFamilias(res.data);
     } catch { toast.error('Erro ao carregar famílias'); }
     finally { setLoading(false); }
@@ -599,6 +614,23 @@ const TabFamilias = () => {
       loadFamilias();
     } catch (err) { toast.error(err.response?.data?.error || 'Erro ao inativar'); }
   };
+
+  // RN-17: `ativo: 1` EXPLÍCITO e o `nome` (obrigatório na rota) — o Editar não manda `ativo` e por isso não reativa. A recusa
+  // do servidor (subfamília de raiz inativa, perfil sem acesso) vai para o toast com a literal.
+  const handleReativar = async (fam) => {
+    try {
+      await api.put(`/almoxarifado/familias/${fam.id}`, { nome: fam.nome, ativo: 1 });
+      toast.success(ehRaiz(fam) ? 'Família reativada' : 'Subfamília reativada');
+      loadFamilias();
+    } catch (err) { toast.error(err.response?.data?.error || 'Erro ao reativar'); }
+  };
+  const botaoReativar = (fam, size = 12) => (
+    <button type="button" className="btn-almox-secondary" title="Reativar" style={{ fontSize: '0.72rem', padding: '4px 10px' }}
+      onClick={() => handleReativar(fam)}>
+      <FiRotateCcw size={size} /> Reativar
+    </button>
+  );
+  const seloInativa = (fam) => ehInativa(fam) && <span className="almox-selo-inativa" style={SELO_INATIVA_STYLE}>Inativa</span>;
 
   // Tabela de itens de uma família/subfamília expandida — a mesma para os dois níveis.
   const renderItens = (fam, linkNovo) => {
@@ -758,9 +790,12 @@ const TabFamilias = () => {
                   <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#4facfe', fontSize: '0.8rem' }}>{sub.codigo}</span>
                   <span style={{ fontWeight: 500 }}>{sub.nome}</span>
                   <span style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)' }}>família: {sub.parent_nome || sub.parent_id}</span>
+                  {seloInativa(sub)}
                   <span style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
                     <button type="button" className="almox-btn-icon" title="Editar" onClick={() => handleEditar(sub)}><FiEdit2 size={14} /></button>
-                    <button type="button" className="almox-btn-icon danger" title="Inativar" onClick={() => handleInativar(sub)}><FiTrash2 size={14} /></button>
+                    {ehInativa(sub)
+                      ? botaoReativar(sub)
+                      : <button type="button" className="almox-btn-icon danger" title="Inativar" onClick={() => handleInativar(sub)}><FiTrash2 size={14} /></button>}
                   </span>
                 </div>
               ))}
@@ -770,8 +805,9 @@ const TabFamilias = () => {
             const expandida = !!expandidas[fam.id];
             const subs = subsDe(fam.id);
             const linkNovoRaiz = `/almoxarifado/materiais/novo?familia_id=${fam.id}`;
+            const raizInativa = ehInativa(fam);
             return (
-              <div key={fam.id} className="almox-familia-card" style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, overflow: 'hidden' }}>
+              <div key={fam.id} className={`almox-familia-card${raizInativa ? ' almox-familia-inativa' : ''}`} style={{ background: 'var(--gmp-surface)', border: '1px solid var(--gmp-border)', borderRadius: 12, overflow: 'hidden', opacity: raizInativa ? 0.85 : 1 }}>
                 {/* Cabeçalho INTEIRO clicável (expande/colapsa a raiz). A sub-lista fica FORA dele,
                     como irmã dentro do cartão — senão clicar numa ação da sub expandiria a raiz. */}
                 <div className="almox-familia-cabecalho" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', cursor: 'pointer' }}
@@ -785,15 +821,21 @@ const TabFamilias = () => {
                       <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{fam.nome}</span>
                       {seloContagem(fam)}
                       {seloTipoUso(fam)}
+                      {seloInativa(fam)}
                     </div>
                     {fam.descricao && <div style={{ fontSize: '0.75rem', color: 'var(--gmp-text-light)', marginTop: 4 }}>{fam.descricao}</div>}
                   </div>
+                  {/* RN-18: a inativa nao oferece Adicionar item nem Inativar — oferece Editar e Reativar. */}
                   <div style={{ display: 'flex', gap: 6 }} onClick={e => e.stopPropagation()}>
-                    <Link to={linkNovoRaiz} className="btn-almox-secondary" style={{ fontSize: '0.75rem', padding: '6px 12px' }}>
-                      <FiPlus size={12} /> Adicionar item
-                    </Link>
+                    {!raizInativa && (
+                      <Link to={linkNovoRaiz} className="btn-almox-secondary" style={{ fontSize: '0.75rem', padding: '6px 12px' }}>
+                        <FiPlus size={12} /> Adicionar item
+                      </Link>
+                    )}
                     <button className="almox-btn-icon" onClick={() => handleEditar(fam)} title="Editar"><FiEdit2 size={13} /></button>
-                    <button className="almox-btn-icon danger" onClick={() => handleInativar(fam)} title="Inativar"><FiTrash2 size={13} /></button>
+                    {raizInativa
+                      ? botaoReativar(fam)
+                      : <button className="almox-btn-icon danger" onClick={() => handleInativar(fam)} title="Inativar"><FiTrash2 size={13} /></button>}
                   </div>
                 </div>
 
@@ -809,9 +851,11 @@ const TabFamilias = () => {
                     <span style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--gmp-text-light)' }}>
                       Subfamílias{subs.length ? ` (${subs.length})` : ''}
                     </span>
-                    <button type="button" className="btn-almox-secondary" style={{ fontSize: '0.75rem', padding: '4px 10px' }} onClick={() => handleNovaSub(fam)}>
-                      <FiPlus size={12} /> Nova subfamília
-                    </button>
+                    {!raizInativa && (
+                      <button type="button" className="btn-almox-secondary" style={{ fontSize: '0.75rem', padding: '4px 10px' }} onClick={() => handleNovaSub(fam)}>
+                        <FiPlus size={12} /> Nova subfamília
+                      </button>
+                    )}
                   </div>
                   {subs.length === 0 ? (
                     <div style={{ fontSize: '0.8rem', color: 'var(--gmp-text-light)', opacity: 0.8 }}>Nenhuma subfamília</div>
@@ -831,12 +875,17 @@ const TabFamilias = () => {
                               <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{sub.nome}</span>
                               {seloContagem(sub)}
                               {seloTipoUso(sub)}
+                              {seloInativa(sub)}
                               <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
-                                <Link to={linkNovoSub} className="btn-almox-secondary" style={{ fontSize: '0.72rem', padding: '4px 10px' }}>
-                                  <FiPlus size={12} /> Adicionar item
-                                </Link>
+                                {!ehInativa(sub) && (
+                                  <Link to={linkNovoSub} className="btn-almox-secondary" style={{ fontSize: '0.72rem', padding: '4px 10px' }}>
+                                    <FiPlus size={12} /> Adicionar item
+                                  </Link>
+                                )}
                                 <button className="almox-btn-icon" onClick={() => handleEditar(sub)} title="Editar"><FiEdit2 size={13} /></button>
-                                <button className="almox-btn-icon danger" onClick={() => handleInativar(sub)} title="Inativar"><FiTrash2 size={13} /></button>
+                                {ehInativa(sub)
+                                  ? botaoReativar(sub)
+                                  : <button className="almox-btn-icon danger" onClick={() => handleInativar(sub)} title="Inativar"><FiTrash2 size={13} /></button>}
                               </div>
                             </div>
                             {sub.descricao && <div style={{ fontSize: '0.72rem', color: 'var(--gmp-text-light)', paddingLeft: 42, marginTop: -4, marginBottom: 4 }}>{sub.descricao}</div>}

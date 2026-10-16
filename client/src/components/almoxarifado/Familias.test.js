@@ -63,7 +63,7 @@ beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   jest.clearAllMocks();
   api.get.mockImplementation((url) => {
-    if (url === '/almoxarifado/familias') return Promise.resolve({ data: FAMILIAS });
+    if (url === '/almoxarifado/familias?ativo=all') return Promise.resolve({ data: FAMILIAS });
     if (url === '/almoxarifado/familias/3/itens') return Promise.resolve({ data: ITENS_ESFERAS });
     return Promise.resolve({ data: [] });
   });
@@ -111,7 +111,7 @@ const botaoSalvar = () => botaoPorTexto(container, /^\s*Salvar/);
 describe('TabFamilias — RN-37.01: a árvore é desenhada na própria aba', () => {
   test('(a) só raízes viram cartões; as subs aparecem dentro da raiz certa com a contagem da fixture', async () => {
     await renderAbaFamilias();
-    expect(api.get).toHaveBeenCalledWith('/almoxarifado/familias');
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/familias?ativo=all');
 
     // Quatro famílias na fixture, DOIS cartões: subfamília não é cartão irmão.
     expect(cartoes()).toHaveLength(2);
@@ -168,7 +168,7 @@ describe('TabFamilias — RN-37.02: "Nova subfamília" no cartão da raiz', () =
     expect(corpo).toEqual({ nome: 'Agulhas', descricao: '', codigo: '', tipo_uso: 'ambos', parent_id: 1 });
     expect(toast.success).toHaveBeenCalledWith('Subfamília criada!');
     // A lista recarrega (o GET inicial + o de depois do POST).
-    expect(api.get.mock.calls.filter((c) => c[0] === '/almoxarifado/familias')).toHaveLength(2);
+    expect(api.get.mock.calls.filter((c) => c[0] === '/almoxarifado/familias?ativo=all')).toHaveLength(2);
   });
 
   test('(b2) "Nova subfamília" na OUTRA raiz trava o pai dela — não é a primeira da lista', async () => {
@@ -231,7 +231,7 @@ describe('TabFamilias — RN-37.04: inativar subfamília', () => {
     await clicar(subDe(cartaoDe('ROL'), 'ROL-ROL').querySelector('button[title="Inativar"]'));
     expect(api.delete).toHaveBeenCalledWith('/almoxarifado/familias/4');
     expect(toast.success).toHaveBeenCalledWith('Subfamília inativada');
-    expect(api.get.mock.calls.filter((c) => c[0] === '/almoxarifado/familias')).toHaveLength(2);
+    expect(api.get.mock.calls.filter((c) => c[0] === '/almoxarifado/familias?ativo=all')).toHaveLength(2);
   });
 
   test('(d3) [controle] cancelar no confirm NÃO chama o DELETE', async () => {
@@ -299,7 +299,7 @@ describe('TabFamilias — revisão da Etapa 37 (F3): subfamília cujo pai não e
   test('aparece no bloco "Subfamílias sem família ativa", não como cartão nem dentro de uma raiz', async () => {
     const ORFA = { id: 9, codigo: 'RAO-SUB', nome: 'Sub Orfa', descricao: '', parent_id: 13, parent_nome: 'Raiz Orfa', tipo_uso: 'ambos', ativo: 1, qtd_itens: 0 };
     api.get.mockImplementation((url) => {
-      if (url === '/almoxarifado/familias') return Promise.resolve({ data: [...FAMILIAS, ORFA] });
+      if (url === '/almoxarifado/familias?ativo=all') return Promise.resolve({ data: [...FAMILIAS, ORFA] });
       return Promise.resolve({ data: [] });
     });
     await renderAbaFamilias();
@@ -316,5 +316,110 @@ describe('TabFamilias — revisão da Etapa 37 (F3): subfamília cujo pai não e
   test('[controle] sem órfã o bloco não existe', async () => {
     await renderAbaFamilias();
     expect(container.querySelector('.almox-familia-orfas')).toBeNull();
+  });
+});
+
+/**
+ * Etapa 124 (RN-16..RN-19, Fase 2 C1) — a aba lista as INATIVAS e as reativa. Antes ela pedia só as ativas e não tinha
+ * Reativar: a recusa da requisição de material inativo mandava reativar a família "em Configurações → Famílias", e nenhuma
+ * tela fazia isso — nem para o Administrador.
+ */
+describe('TabFamilias — Etapa 124: as inativas aparecem e se reativam', () => {
+  const VEDACOES = { id: 20, codigo: 'VED', nome: 'Vedações', descricao: '', parent_id: null, parent_nome: null, tipo_uso: 'ambos', ativo: 0, qtd_itens: 2 };
+  const ORINGS = { id: 21, codigo: 'VED-ORI', nome: 'O-rings', descricao: '', parent_id: 20, parent_nome: 'Vedações', tipo_uso: 'ambos', ativo: 0, qtd_itens: 1 };
+  const AGULHAS = { id: 22, codigo: 'ROL-AGU', nome: 'Agulhas', descricao: '', parent_id: 1, parent_nome: 'Rolamentos', tipo_uso: 'ambos', ativo: 0, qtd_itens: 0 };
+  const COM_INATIVAS = [...FAMILIAS, VEDACOES, ORINGS, AGULHAS];
+  const mock = (lista = COM_INATIVAS) => api.get.mockImplementation((url) => {
+    if (url === '/almoxarifado/familias?ativo=all') return Promise.resolve({ data: lista });
+    return Promise.resolve({ data: [] });
+  });
+  const selo = (el) => [...el.querySelectorAll('.almox-selo-inativa')];
+  const linkAdicionar = (el) => [...el.querySelectorAll('a')].find((a) => /Adicionar item/.test(a.textContent));
+
+  test('[RN-16] pede ?ativo=all e mostra a raiz inativa como cartão e a sub inativa dentro da raiz certa, com o selo "Inativa"', async () => {
+    mock();
+    await renderAbaFamilias();
+    expect(api.get).toHaveBeenCalledWith('/almoxarifado/familias?ativo=all');
+    expect(api.get.mock.calls.some((c) => c[0] === '/almoxarifado/familias')).toBe(false);
+    const ved = cartaoDe('VED');
+    expect(ved).toBeTruthy();
+    expect(selo(ved.querySelector('.almox-familia-cabecalho')).map((s) => s.textContent)).toEqual(['Inativa']);
+    expect(subDe(ved, 'VED-ORI')).toBeTruthy();
+    const agu = subDe(cartaoDe('ROL'), 'ROL-AGU');
+    expect(selo(agu).map((s) => s.textContent)).toEqual(['Inativa']);
+    // metade positiva: a ativa nao tem selo
+    expect(selo(cartaoDe('PAR'))).toHaveLength(0);
+    expect(selo(subDe(cartaoDe('ROL'), 'ROL-ESF'))).toHaveLength(0);
+  });
+
+  test('[RN-17] Reativar a raiz manda PUT {nome, ativo: 1}, toast "Família reativada" e recarrega', async () => {
+    mock();
+    await renderAbaFamilias();
+    await clicar(cartaoDe('VED').querySelector('.almox-familia-cabecalho button[title="Reativar"]'));
+    expect(api.put).toHaveBeenCalledWith('/almoxarifado/familias/20', { nome: 'Vedações', ativo: 1 });
+    expect(toast.success).toHaveBeenCalledWith('Família reativada');
+    expect(api.get.mock.calls.filter((c) => c[0] === '/almoxarifado/familias?ativo=all')).toHaveLength(2);
+  });
+
+  test('[RN-17] Reativar a sub: "Subfamília reativada"; a recusa do servidor vai para o toast com a literal', async () => {
+    mock();
+    await renderAbaFamilias();
+    await clicar(subDe(cartaoDe('ROL'), 'ROL-AGU').querySelector('button[title="Reativar"]'));
+    expect(api.put).toHaveBeenCalledWith('/almoxarifado/familias/22', { nome: 'Agulhas', ativo: 1 });
+    expect(toast.success).toHaveBeenCalledWith('Subfamília reativada');
+    const LIT = 'Não é possível reativar: a família principal desta subfamília está inativa — reative a família principal antes';
+    api.put.mockRejectedValueOnce({ response: { status: 400, data: { error: LIT } } });
+    await clicar(subDe(cartaoDe('VED'), 'VED-ORI').querySelector('button[title="Reativar"]'));
+    expect(toast.error).toHaveBeenCalledWith(LIT);
+  });
+
+  test('[RN-18] a inativa nao oferece Adicionar item, Nova subfamília nem Inativar; oferece Editar e Reativar', async () => {
+    mock();
+    await renderAbaFamilias();
+    const ved = cartaoDe('VED');
+    const cab = ved.querySelector('.almox-familia-cabecalho');
+    expect(linkAdicionar(cab)).toBeUndefined();
+    expect(cab.querySelector('button[title="Inativar"]')).toBeNull();
+    expect(cab.querySelector('button[title="Editar"]')).not.toBeNull();
+    expect(botaoPorTexto(ved, /Nova subfamília/)).toBeUndefined();
+    const agu = subDe(cartaoDe('ROL'), 'ROL-AGU');
+    expect(linkAdicionar(agu)).toBeUndefined();
+    expect(agu.querySelector('button[title="Inativar"]')).toBeNull();
+    expect(agu.querySelector('button[title="Reativar"]')).not.toBeNull();
+  });
+
+  test('[RN-18] o Editar da inativa continua sem `ativo` (nao reativa calado)', async () => {
+    mock();
+    await renderAbaFamilias();
+    await clicar(cartaoDe('VED').querySelector('.almox-familia-cabecalho button[title="Editar"]'));
+    preencher(inputNome(), 'Vedações e juntas');
+    await clicar(botaoSalvar());
+    const [rota, corpo] = api.put.mock.calls[0];
+    expect(rota).toBe('/almoxarifado/familias/20');
+    expect(corpo).not.toHaveProperty('ativo');
+  });
+
+  test('[RN-19] as ativas continuam como hoje: Adicionar item, Nova subfamília e Inativar, sem Reativar', async () => {
+    mock();
+    await renderAbaFamilias();
+    const rol = cartaoDe('ROL');
+    const cab = rol.querySelector('.almox-familia-cabecalho');
+    expect(linkAdicionar(cab)).toBeTruthy();
+    expect(cab.querySelector('button[title="Inativar"]')).not.toBeNull();
+    expect(cab.querySelector('button[title="Reativar"]')).toBeNull();
+    expect(botaoPorTexto(rol, /Nova subfamília/)).toBeTruthy();
+    expect(subDe(rol, 'ROL-ESF').querySelector('button[title="Reativar"]')).toBeNull();
+  });
+
+  test('[RN-19] sub ATIVA sob raiz inativa vai para o bloco das órfãs, não para dentro do cartão', async () => {
+    const ATIVA_SOB_INATIVA = { ...ORINGS, id: 23, codigo: 'VED-PLA', nome: 'Planas', ativo: 1 };
+    mock([...COM_INATIVAS, ATIVA_SOB_INATIVA]);
+    await renderAbaFamilias();
+    const bloco = container.querySelector('.almox-familia-orfas');
+    expect(bloco).not.toBeNull();
+    expect(bloco.textContent).toMatch(/VED-PLA/);
+    expect(bloco.textContent).not.toMatch(/VED-ORI/);
+    expect(subDe(cartaoDe('VED'), 'VED-PLA')).toBeUndefined();
+    expect(subDe(cartaoDe('VED'), 'VED-ORI')).toBeTruthy();
   });
 });
