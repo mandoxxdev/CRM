@@ -148,15 +148,30 @@ async function registrarDevolucao(db, user, data) {
     }
   }
 
-  const r = await dbRun(db, `INSERT INTO devolucoes_material_almoxarifado
-    (material_id, quantidade, motivo, condicao, destino, origem_os_id, origem_projeto_id,
-     responsavel_id, responsavel_nome, observacoes, movimentacao_saida_id, lote_id)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, [
+  // Etapa 116 (Fase 5, revisor 2): com vinculo, a linha so nasce se a saida continua nao estornada e o que se devolve ainda
+  // cabe no restante — a conferencia de `validarSaidaOriginal` e a gravacao num comando so. Lidas antes, separadas, duas
+  // devolucoes simultaneas da mesma saida passavam as duas (30/30: fisico 7 para 5), e o estorno concorrente tambem (o claim
+  // do estorno tem a condicao inversa: nenhuma devolucao viva). Nao gravou -> a validacao de novo diz por que.
+  const valores = [
     material_id, quantidade, motivo, condicao || null, destinoFinal,
     origemOsFinal, origemProjetoFinal,
     user.id, user.nome || user.email, observacoes || null,
     movimentacao_saida_id || null, loteFinalId,
-  ]);
+  ];
+  const colunas = `(material_id, quantidade, motivo, condicao, destino, origem_os_id, origem_projeto_id,
+     responsavel_id, responsavel_nome, observacoes, movimentacao_saida_id, lote_id)`;
+  const r = movimentacao_saida_id
+    ? await dbRun(db, `INSERT INTO devolucoes_material_almoxarifado ${colunas}
+      SELECT ?,?,?,?,?,?,?,?,?,?,?,?
+      WHERE EXISTS (SELECT 1 FROM movimentacoes_almoxarifado s WHERE s.id = ? AND COALESCE(s.cancelado, 0) = 0
+        AND ROUND(s.quantidade - (SELECT COALESCE(SUM(d.quantidade), 0) FROM devolucoes_material_almoxarifado d
+          WHERE d.movimentacao_saida_id = s.id), 6) >= ROUND(?, 6) ${Q.FOLGA_SQL})`,
+    [...valores, movimentacao_saida_id, Q.qtd(quantidade)])
+    : await dbRun(db, `INSERT INTO devolucoes_material_almoxarifado ${colunas} VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, valores);
+  if (!r.changes) {
+    await validarSaidaOriginal(db, { movimentacaoSaidaId: movimentacao_saida_id, materialId: material_id, quantidade });
+    throw erro400(`A saída ${movimentacao_saida_id} mudou enquanto a devolução era gravada — nada foi gravado. Tente de novo.`);
+  }
 
   // `referencia` em TODAS as movimentacoes de TODOS os destinos (Etapa 7, Task 1). Ate aqui so
   // ESTOQUE/QUARENTENA gravavam: a devolucao que virava sucata ficava sem nenhum fio ligando o

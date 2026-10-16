@@ -1840,6 +1840,21 @@ async function excluirSemTrava(db, requisicaoId, user, justificativa, alertServi
             throw err;
           }
           if (sr.length) series = sr.map((s) => s.numero);
+        } else {
+          // Etapa 116 (C232, Fase 5 revisor 1): a mesma regra do estorno pelo livro — a entrega que baixou series de um
+          // material com a serie DESLIGADA depois nao e desfeita: a ENTRADA sem serie devolvia o fisico e as series ficavam
+          // Entregue, e aqui pior que no livro (a requisicao some e nao ha "estorne de novo"). Validado antes da primeira
+          // ENTRADA (Fase 5 da 58: tudo ou nada). Religar destrava (as series voltam pelo ramo acima).
+          // eslint-disable-next-line no-await-in-loop
+          const fora = await dbGet(db, `SELECT COUNT(*) AS n FROM series_almoxarifado
+            WHERE status IN ('ENTREGUE', 'SUCATEADA') AND movimentacao_saida_id = ?`, [g.id]);
+          if (Number(fora && fora.n) > 0) {
+            const err = new Error(`${nome}: esta entrega baixou ${fora.n} série(s) e o controle por número de série do material `
+              + 'foi desligado depois — excluir a requisição devolveria o saldo sem devolver as séries. Religue o controle por '
+              + 'número de série no cadastro do material e exclua de novo.');
+            err.status = 400;
+            throw err;
+          }
         }
         partes.push({ material, nome, quantidade: liquido, destino, lote_id: g.lote_id || undefined, series });
       }

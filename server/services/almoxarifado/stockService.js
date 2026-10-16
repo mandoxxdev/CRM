@@ -2409,6 +2409,24 @@ async function contarSeriesDaSaida(db, movimentoId) {
 /** A recusa da 6b (series da saida que ja reentraram) — tambem usada pela 116 com a serie desligada (Fase 2, R3). */
 const MSG_SERIES_REENTRARAM = 'estorno de saida recusado: series desta saida ja reentraram no estoque — a devolucao ja repos o material';
 
+/**
+ * Etapa 116 (Fase 5, revisor 1): a devolucao "viva" — a que NAO teve a sua ENTRADA_DEVOLUCAO estornada pelo livro. Sem isto
+ * a devolucao estornada continuava contando: a Saida ficava inestornavel com a E3 dizendo que o material voltou, quando o
+ * estorno da devolucao ja o tinha tirado de novo. SQL correlacionado com o apelido `d` (devolucoes_material_almoxarifado).
+ * A devolucao legada (sem a referencia DEV-<id>, antes da Etapa 7) conta — conservador.
+ */
+const DEVOLUCAO_VIVA_SQL = `NOT EXISTS (SELECT 1 FROM movimentacoes_almoxarifado ed
+  WHERE ed.referencia = 'DEV-' || d.id AND ed.tipo = 'ENTRADA_DEVOLUCAO' AND COALESCE(ed.cancelado, 0) = 1)`;
+
+/** RN-10: a recusa do estorno de uma Saida que ja teve devolucao viva, ou null. */
+async function recusaDoEstornoDeSaidaDevolvida(db, mov, unidade) {
+  const dev = await dbGet(db, `SELECT COALESCE(SUM(d.quantidade), 0) AS q FROM devolucoes_material_almoxarifado d
+    WHERE d.movimentacao_saida_id = ? AND ${DEVOLUCAO_VIVA_SQL}`, [mov.id]);
+  const devolvida = Q.qtd(Number(dev && dev.q) || 0);
+  if (!(devolvida > Q.QTD_FOLGA)) return null;
+  return mensagemEstornoDeSaidaDevolvida(devolvida, Q.qtd(mov.quantidade - devolvida), unidade || 'un');
+}
+
 /** E3 da Etapa 116 (400; Fase 2, R2): a saida que ja teve devolucao. */
 function mensagemEstornoDeSaidaDevolvida(devolvida, restante, unidade) {
   if (restante > Q.QTD_FOLGA) {
@@ -2680,13 +2698,8 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
   // este e o lado que faltava. A conta e a mesma da devolucao (`SUM(quantidade)` das devolucoes da saida). Antes das guardas
   // de serie: com devolucao, religar a serie (a E2) nao adiantaria. A compensacao interna nao passa.
   if (tiposSaida.includes(mov.tipo) && opcoesEstorno.compensacao !== true) {
-    const dev = await dbGet(db, `SELECT COALESCE(SUM(quantidade), 0) AS q FROM devolucoes_material_almoxarifado
-      WHERE movimentacao_saida_id = ?`, [movimentoId]);
-    const devolvida = Q.qtd(Number(dev && dev.q) || 0);
-    if (devolvida > Q.QTD_FOLGA) {
-      throw Object.assign(new Error(mensagemEstornoDeSaidaDevolvida(devolvida, Q.qtd(mov.quantidade - devolvida),
-        material.unidade || 'un')), { status: 400 });
-    }
+    const msgDevolvida = await recusaDoEstornoDeSaidaDevolvida(db, mov, material.unidade);
+    if (msgDevolvida) throw Object.assign(new Error(msgDevolvida), { status: 400 });
   }
 
   if (tiposSaida.includes(mov.tipo) && material.controle_serie) {
@@ -2759,10 +2772,20 @@ async function cancelarMovimentacao(db, user, movimentoId, motivo, opcoesEstorno
   // de duas chamadas concorrentes para o mesmo movimentoId, só uma tem changes = 1 — essa é a
   // única que segue para reverter saldo; a outra falha aqui, antes de tocar em qualquer saldo.
   // Também zera regularizacao_pendente aqui (achado do review: estorno deixava a pendência viva).
+  // Etapa 116 (Fase 5, revisor 2): na Saida, o claim so vale se nenhuma devolucao viva cita a saida — a conferencia e a
+  // gravacao num comando so. A guarda acima le fora de qualquer trava, e a devolucao concorrente (que grava a linha dela com
+  // a condicao inversa, `cancelado = 0`, em returnService) passava entre as duas: 30/30 rodadas com o fisico em dobro.
+  const claimSemDevolucao = tiposSaida.includes(mov.tipo) && opcoesEstorno.compensacao !== true;
   const claim = await dbRun(db, `UPDATE movimentacoes_almoxarifado
     SET cancelado = 1, cancelado_por = ?, cancelado_em = CURRENT_TIMESTAMP, cancelamento_motivo = ?, regularizacao_pendente = 0
-    WHERE id = ? AND cancelado = 0`, [user.id, motivo, movimentoId]);
+    WHERE id = ? AND cancelado = 0${claimSemDevolucao ? ` AND NOT EXISTS (SELECT 1 FROM devolucoes_material_almoxarifado d
+      WHERE d.movimentacao_saida_id = movimentacoes_almoxarifado.id AND ${DEVOLUCAO_VIVA_SQL})` : ''}`,
+  [user.id, motivo, movimentoId]);
   if (!claim.changes) {
+    if (claimSemDevolucao) {
+      const msgDevolvida = await recusaDoEstornoDeSaidaDevolvida(db, mov, material.unidade);
+      if (msgDevolvida) throw Object.assign(new Error(msgDevolvida), { status: 400 });
+    }
     // Etapa 74 (Fase 5): outro estorno ganhou o claim — o que ESTE liberou volta para quem esperava.
     await recriarReservasDoEstorno(db, user, liberadasNoEstorno, movimentoId);
     await recalcularStatusAposEstorno(db, requisicoesDoEstorno);
