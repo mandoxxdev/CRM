@@ -443,7 +443,10 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
         sql += ` AND m.quantidade_atual = 0`;
       }
 
-      sql += ` AND m.ativo = 1 ORDER BY f.nome ASC, m.nome ASC`;
+      // Etapa 113 (RN-08): `status=inativo` lista SO os inativos (a tela reativa daqui); sem ele, so os ativos, como sempre —
+      // os seletores das outras telas nao mandam esse valor.
+      sql += status === 'inativo' ? ' AND (m.ativo IS NULL OR m.ativo <> 1)' : ' AND m.ativo = 1';
+      sql += ` ORDER BY f.nome ASC, m.nome ASC`;
 
       db.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -587,6 +590,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     'classe_abc', 'unidade_compra', 'fator_conversao_compra', 'unidade_consumo', 'fator_conversao_consumo',
   ];
 
+  // Etapa 113 (R4 da Fase 2): o E1 de inativar diz a quem nao movimenta (Engenharia) que o zerar e do almoxarifado.
+  const opcoesInativar = (user) => ({ podeMovimentar: can(user, 'movimentar'), perfil: getPerfilFromUser(user) });
+
   // POST /api/almoxarifado/materiais — criar
   //
   // requirePermission('criar_material'): o gate global do módulo (linha ~71) só checa ACESSO, não
@@ -649,6 +655,16 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       return res.status(errDono.status || 500).json({ error: errDono.message });
     }
 
+    // Etapa 113 (C217, C227, RN-01, RN-06): o PUT tambem inativa (`ativo` esta em MATERIAL_UPDATE_COLUMNS) — a mesma regra do
+    // DELETE, para todos, depois da guarda do dono e antes da do controle; recusa = nada gravado. E reativar (0 -> 1) confere
+    // a familia (C220, RN-05, abaixo). `!current.ativo`: a mesma leitura do motor (NULL e inativo).
+    const inativa = !!current.ativo && Number(merged.ativo) === 0;
+    const reativa = !current.ativo && Number(merged.ativo) === 1;
+    if (inativa) {
+      const preso = materialService.saldoQuePrendeInativacao(current);
+      if (preso) return res.status(400).json({ error: materialService.mensagemInativarComSaldo(current.codigo, preso, opcoesInativar(req.user)) });
+    }
+
     // Etapa 112 (C222, RN-01..RN-04, RN-07): ligar lote ou serie (0 -> 1, comparado com o GRAVADO — o formulario sempre
     // manda as chaves) num material cujo saldo nao esta identificado (sobra sem lote atribuido; fisico diferente das series
     // presentes) exige `ajustar_estoque`: depois de ligar, a saida desse saldo e recusada ate ser regularizado, e
@@ -678,7 +694,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     const familiaOmitted = req.body.familia_id === undefined;
     const familiaChanged = merged.familia_id !== current.familia_id;
     // Etapa 110 (RN-07): o que foi validado aqui volta como condicao no UPDATE (corrida da familia, C218).
-    const validouFamilia = !familiaOmitted && familiaChanged;
+    // Etapa 113 (C220, RN-05): reativar e vincular de novo — confere a familia gravada (ou a do corpo) mesmo sem mudanca;
+    // material ativo em familia inativa e o estado que o "Inativar" da familia proibe.
+    const validouFamilia = (!familiaOmitted && familiaChanged) || (reativa && !!merged.familia_id);
     if (validouFamilia) {
       try {
         await validateFamiliaAtiva(merged.familia_id);
@@ -692,7 +710,7 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // foi inativada (todas as inativadas pelo DELETE furado de antes da 37) ficava ineditavel com
     // 400. "Novo de fato" = o valor MUDOU em relacao ao gravado, ou a familia mudou.
     const subfamiliaChanged = String(merged.subfamilia_id || '') !== String(current.subfamilia_id || '');
-    const validouSub = !!merged.subfamilia_id && (subfamiliaChanged || familiaChanged);
+    const validouSub = !!merged.subfamilia_id && (subfamiliaChanged || familiaChanged || reativa);
     if (validouSub) {
       try {
         await validateSubfamilia(merged.subfamilia_id, merged.familia_id);
@@ -745,19 +763,34 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       }
       if (guardaControle) condControle += ` AND ${materialService.condicaoSaldoIdentificadoSql(controlesQueLiga)}`;
     }
+    // Etapa 113 (RN-04): inativar so grava se o saldo continua zerado — para todos.
+    if (inativa) condControle += ` AND ${materialService.SEM_SALDO_SQL}`;
+    // Etapa 113 (RN-04 c, R2 da Fase 2): `ativo` e gravado do lido mesmo com a chave omitida — sem isto um salvar lido antes
+    // de outra aba inativar o material (e a familia) regravava o 1: material ativo em familia inativa, por fora da RN-05.
+    condControle += ' AND ativo IS ?';
+    paramsControle.push(current.ativo ?? null);
     try {
-      const escrita = await dbRun(db, `UPDATE materiais_almoxarifado SET
+      // Etapa 113 (RN-04 d): inativar grava sob a trava do material (a mesma razao do DELETE); o resto do PUT, como sempre.
+      const gravar = () => dbRun(db, `UPDATE materiais_almoxarifado SET
         ${MATERIAL_UPDATE_COLUMNS.map((c) => `${c} = ?`).join(', ')},
         updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND proprietario_cliente_id IS ? AND ${condFamilia.sql}${condControle}`,
         [...MATERIAL_UPDATE_COLUMNS.map((c) => merged[c]), req.params.id, current.proprietario_cliente_id ?? null,
           ...condFamilia.params, ...paramsControle]);
+      const escrita = inativa ? await trava.naTravaDoMaterial(current.id, gravar) : await gravar();
       if (escrita.changes === 0) {
         const agora = await dbGet(db, 'SELECT proprietario_cliente_id FROM materiais_almoxarifado WHERE id = ?', [req.params.id]);
         if (!agora) return res.status(404).json({ error: 'Material não encontrado' });
         if ((agora.proprietario_cliente_id ?? null) !== (current.proprietario_cliente_id ?? null)) {
           return res.status(409).json({ error: `O dono do material ${current.codigo} mudou enquanto este cadastro era salvo — `
             + 'nada foi gravado. Recarregue o material e salve de novo.' });
+        }
+        // Etapa 113 (RN-06): a mesma ordem da guarda previa — inativar, controle, familia.
+        if (inativa) {
+          const releitura = await dbGet(db, `SELECT ativo, ${materialService.COLUNAS_INATIVAR_SQL}, proprietario_cliente_id
+            FROM materiais_almoxarifado WHERE id = ?`, [req.params.id]);
+          const presoAgora = materialService.saldoQuePrendeInativacao(releitura);
+          if (presoAgora) return res.status(400).json({ error: materialService.mensagemInativarComSaldo(current.codigo, presoAgora, opcoesInativar(req.user)) });
         }
         // RN-07: a mesma ordem da guarda previa — controle antes da familia.
         if (guardaControle) {
@@ -864,22 +897,43 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
   // tentativa sem efeito com o verbo do ato com efeito e o log mentindo por EXCESSO (RN-03).
   // Se um dia houver valor em registrar tentativas, isso pede um verbo PROPRIO, nao este.
   // O `ativo` lido segue servindo de `dados_anteriores` no caso que realmente desativa.
+  //
+  // Etapa 113 (C217, C227, RN-01..RN-04): inativar com saldo ou retencao e recusado PARA TODOS — o motor recusa movimentar
+  // material inativo e nenhuma tela reativa, entao o saldo ficava preso (medido: Almoxarife, Engenharia e Administrador
+  // inativavam material com 5). A conferencia vai tambem no UPDATE (`SEM_SALDO_SQL` + `ativo = 1`): uma Entrada que cai
+  // entre a leitura e a gravacao e vista. `changes` passa a decidir a auditoria (so quem desativou de fato audita); id
+  // inexistente e material ja inativo continuam 200 `{ success: true }` (contrato da Etapa 19), agora sem escrita.
   app.delete('/api/almoxarifado/materiais/:id', requirePermission('editar_material'), async (req, res) => {
     try {
       const antes = await dbGet(db, `SELECT id, codigo, nome, ativo FROM materiais_almoxarifado WHERE id = ?`,
         [req.params.id]);
-      await dbRun(db, `UPDATE materiais_almoxarifado SET ativo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-        [req.params.id]);
+      if (!antes || !antes.ativo) return res.json({ success: true });
+      // Sem guarda previa: a condicao do UPDATE e a releitura abaixo SAO a guarda (uma previa repetiria a mesma mensagem).
+
+      // RN-04 (d): sob a trava do material — o motor le `ativo` e credita dentro dela (Etapa 97), entao uma Entrada que leu
+      // "ativo" termina antes deste UPDATE (e o saldo dela o recusa) ou comeca depois (e recusa material inativo).
+      const escrita = await trava.naTravaDoMaterial(antes.id, () => dbRun(db, `UPDATE materiais_almoxarifado SET ativo = 0,
+        updated_at = CURRENT_TIMESTAMP WHERE id = ? AND ativo = 1 AND ${materialService.SEM_SALDO_SQL}`, [req.params.id]));
+      if (escrita.changes === 0) {
+        const agora = await dbGet(db, `SELECT ativo, ${materialService.COLUNAS_INATIVAR_SQL}, proprietario_cliente_id
+          FROM materiais_almoxarifado WHERE id = ?`, [req.params.id]);
+        if (!agora || !agora.ativo) return res.json({ success: true });
+        const presoAgora = materialService.saldoQuePrendeInativacao(agora);
+        if (presoAgora) {
+          return res.status(400).json({ error: materialService.mensagemInativarComSaldo(antes.codigo, presoAgora, opcoesInativar(req.user)) });
+        }
+        return res.status(409).json({ error: `O material ${antes.codigo} mudou enquanto era inativado — nada foi gravado. `
+          + 'Recarregue a lista e tente de novo.' });
+      }
 
       // Pos-escrita e best-effort: o material JA esta inativo neste ponto: derrubar a resposta por
       // causa do log desfaria nada e devolveria erro para um ato que aconteceu.
       //
-      // Etapa 23 (RN-03): `antes.ativo === 1` — so audita quando havia o que desativar. Aqui o
-      // conserto e DIFERENTE das outras quatro rotas de exclusao: elas ganharam `AND ativo = 1`
-      // no WHERE para o `changes` decidir 404/`ja_inativo`; esta responde `success: true` tambem
-      // para id inexistente (contrato declarado na Etapa 19) e isso fica INALTERADO — o que muda
-      // e so a condicao da auditoria, sem tocar no corpo da resposta.
-      if (antes && antes.ativo === 1) {
+      // Etapa 23 (RN-03): so audita quando havia o que desativar. Esta rota responde `success: true`
+      // tambem para id inexistente (contrato declarado na Etapa 19) e isso fica INALTERADO. Desde a
+      // 113 quem decide e o `changes` do UPDATE condicionado (outra aba que inativou na janela nao
+      // vira uma segunda DESATIVACAO).
+      {
         try {
           await audit.registrarAuditoria(db, {
             entidade: 'material', entidade_id: antes.id, acao: 'DESATIVACAO',

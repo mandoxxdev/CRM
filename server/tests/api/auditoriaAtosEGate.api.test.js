@@ -206,7 +206,8 @@ async function criarRequisicao(db, { status = 'PENDENTE', itens = [], solicitant
   // ── RN-07 (a): DELETE /materiais/:id audita DESATIVACAO ──────────────────────────────────
   await test('RN-07 material: DELETE /materiais/:id audita DESATIVACAO com o de/para real', async () => {
     setUser(ADMIN);
-    const mat = await novoMaterial(db, { qtd: 5, ativo: 1 });
+    // Etapa 113 (B733): inativar exige saldo zerado — o material do cenario nasce sem saldo.
+    const mat = await novoMaterial(db, { qtd: 0, ativo: 1 });
 
     const res = await request(app).delete(`/api/almoxarifado/materiais/${mat.id}`);
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));

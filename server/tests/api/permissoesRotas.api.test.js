@@ -523,7 +523,8 @@ const saldoDe = (db, matId) => dbGet(db, 'SELECT quantidade_atual FROM materiais
   });
 
   await test('[DELETE /materiais/:id] ALMOXARIFE -> 200, material inativado', async () => {
-    const matId = await criarMaterial(db);
+    // Etapa 113 (B733): inativar exige saldo zerado.
+    const matId = await criarMaterial(db, { qtd: 0 });
     setUser(ALMOXARIFE);
     const res = await request(app).delete(`/api/almoxarifado/materiais/${matId}`);
     assert.strictEqual(res.status, 200, JSON.stringify(res.body));

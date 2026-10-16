@@ -487,7 +487,61 @@ function condicaoSaldoIdentificadoSql(ligados) {
   return partes.length ? partes.join(' AND ') : '1 = 1';
 }
 
+/**
+ * Etapa 113 (C217, C227, RN-01..RN-04) — inativar material com saldo prende o saldo: o motor recusa movimentar material
+ * inativo e nenhuma tela reativa. Por isso inativar exige o fisico e as quatro retencoes zerados (6 casas), para TODOS
+ * (B733: o padrao "so quem regulariza" da 112 nao serve — quem regulariza tambem ficaria preso).
+ */
+const COLUNAS_INATIVAR = [
+  ['quantidade_atual', null],
+  ['quantidade_reservada', 'reservado'],
+  ['quantidade_bloqueada', 'bloqueado'],
+  ['quantidade_em_inspecao', 'em inspeção'],
+  ['quantidade_em_terceiros', 'em terceiros'],
+];
+/** A coluna do material que LE as cinco, para a leitura previa e a releitura. */
+const COLUNAS_INATIVAR_SQL = COLUNAS_INATIVAR.map(([c]) => c).join(', ');
+/** RN-04: a mesma regua no WHERE do UPDATE que inativa. */
+const SEM_SALDO_SQL = COLUNAS_INATIVAR.map(([c]) => `ROUND(COALESCE(${c}, 0), 6) = 0`).join(' AND ');
+
+/**
+ * `null` quando inativar e livre; senao `{ fisico, retidos: [[rotulo, q]], cliente }`. `row` e uma linha de
+ * materiais_almoxarifado com as cinco colunas e `proprietario_cliente_id`.
+ */
+function saldoQuePrendeInativacao(row) {
+  if (!row) return null;
+  const fisico = r6(row.quantidade_atual);
+  const retidos = [];
+  for (const [col, rotulo] of COLUNAS_INATIVAR) {
+    if (!rotulo) continue;
+    const q = r6(row[col]);
+    if (Math.abs(q) > EPS_CONTROLE) retidos.push([rotulo, q]);
+  }
+  if (Math.abs(fisico) <= EPS_CONTROLE && retidos.length === 0) return null;
+  return { fisico: fisico === 0 ? 0 : fisico, retidos, cliente: Number(row.proprietario_cliente_id) > 0 };
+}
+
+/**
+ * E1 da Etapa 113 (contrato congelado no plano, com as variantes da Fase 2: R3 fisico negativo, R7 so retencao, R4 perfil
+ * que nao movimenta). `opcoes.podeMovimentar` / `opcoes.perfil` vem da rota (o servico nao checa permissao).
+ */
+function mensagemInativarComSaldo(codigo, preso, { podeMovimentar = true, perfil = '' } = {}) {
+  const retidos = preso.retidos.length ? ` (${preso.retidos.map(([r, q]) => `${r} ${String(q)}`).join(', ')})` : '';
+  let zerar;
+  if (preso.fisico < 0) zerar = 'zere o saldo com uma Entrada ou um Ajuste.';
+  else if (preso.cliente) zerar = 'devolva o saldo ao cliente ("Devolver ao cliente", em Materiais de Clientes).';
+  else zerar = 'zere o saldo com uma Saída ou um Ajuste.';
+  let caminho;
+  if (preso.retidos.length && preso.fisico !== 0) caminho = `Libere primeiro o que está retido e, depois, ${zerar}`;
+  else if (preso.retidos.length) caminho = 'Libere o que está retido antes de inativar.';
+  else caminho = `Antes de inativar, ${zerar}`;
+  const quem = podeMovimentar ? '' : ` Seu perfil (${perfil}) não movimenta estoque: peça isso ao almoxarifado.`;
+  return `Não é possível inativar o material ${codigo}: o saldo físico é ${String(preso.fisico)}${retidos}. Material inativo `
+    + `não pode ser movimentado, então esse saldo ficaria preso. ${caminho}${quem}`;
+}
+
 module.exports = {
+  COLUNAS_INATIVAR_SQL, SEM_SALDO_SQL, saldoQuePrendeInativacao, mensagemInativarComSaldo,
   FAMILIA_E_SUBFAMILIA,
   bool01, validateFamiliaAtiva, validateSubfamilia, resolveLocalizacaoFromFk, validarLocalizacaoPadrao,
   proximoCodigo, createMaterial, TENTATIVAS_CODIGO_AUTO,

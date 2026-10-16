@@ -58,6 +58,10 @@ const ENGENHARIA = { id: 6, nome: 'Eng Teste', role: 'user', email: 'eng@test.co
     const inat1 = await as(ADM, () => request(app).delete(`/api/almoxarifado/familias/${fam}`));
     assert.strictEqual(inat1.status, 400, `inativar com material ativo: ${inat1.status} ${JSON.stringify(inat1.body)}`);
     assert.strictEqual(inat1.body.error, 'Não é possível remover: família possui 2 item(ns) ativo(s)');
+    // Etapa 113 (B733): inativar exige saldo zerado — o K110-1 ainda tem as 5 da Entrada; sai antes.
+    const sai = await as(ALMOXARIFE, () => request(app).post('/api/almoxarifado/movimentacoes/v2')
+      .send({ material_id: r2.body.id, tipo: 'SAIDA', quantidade: 5, motivo: 'k1', justificativa: 'zerar antes de inativar' }));
+    assert.strictEqual(sai.status, 201, `saida: ${sai.status} ${JSON.stringify(sai.body)}`);
     for (const id of [r2.body.id, r3.body.id]) {
       const d = await as(ADM, () => request(app).delete(`/api/almoxarifado/materiais/${id}`));
       assert.strictEqual(d.status, 200, `inativar material: ${d.status} ${JSON.stringify(d.body)}`);
