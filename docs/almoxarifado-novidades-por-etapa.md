@@ -11,10 +11,14 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-16):** **Etapa 129 fechada** (a conferência do recebimento e os dados fiscais não mudam
+> **Onde o desenvolvimento está (2026-10-16):** **Etapa 130 fechada** (os dados fiscais não mudam mais o lote, as séries nem o valor de
+> um item que já deu entrada no estoque — recusam com a frase do que fazer, e o painel trava esses campos: **C267** resolvido, com a
+> consulta **A78** para o que já foi mudado antes; e, do núcleo, o cadastro e as permissões de um usuário passam a ser lidos só por ele
+> mesmo e por quem gerencia usuários — **B841**, **B842**); a próxima do almoxarifado é a **131** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 129 fechada** (a conferência do recebimento e os dados fiscais não mudam
 > mais um recebimento que já deu entrada no estoque — recusam com a frase do que fazer: **C266** resolvido, com a consulta **A77** para o
 > que já foi mudado antes; e o relatório novo **Perdas por motivo** mostra quanto se perdeu, por tipo e motivo, com o valor); a próxima do
-> almoxarifado é a **130** — ver "Onde estamos e o que vem a seguir".
+> almoxarifado era a **130**.)*
 > *(Antes: **Etapa 128 fechada** (os Indicadores e o painel do almoxarifado passam a mostrar o
 > **tempo médio de recebimento** — da chegada da nota ao estoque, com a régua para vocês confirmarem (letra **E**); a contagem por
 > endereço que deixa o disponível negativo passa a avisar o que houve e o que fazer — **C209** resolvido; e, do núcleo, o perfil
@@ -171,8 +175,11 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Setenta e sete itens para rodar em produção ANTES do deploy — setenta e quatro são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Setenta e oito itens para rodar em produção ANTES do deploy — setenta e cinco são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
 
+*(**Atualizado em 2026-10-16 (Etapa 130) de setenta e sete para setenta e oito**, com a **A78** — os itens de recebimento cujo lote ou
+séries no documento já não batem com o estoque (o que os dados fiscais deixavam mudar depois da entrada — **C267**); opcional e somente
+leitura.)*
 *(**Atualizado em 2026-10-16 (Etapa 129) de setenta e seis para setenta e sete**, com a **A77** — os recebimentos que a conferência
 mudou depois da entrada no estoque (o estado que a C266 deixava); opcional e somente leitura.)*
 *(**Atualizado em 2026-10-16 (Etapa 128) de setenta e cinco para setenta e seis**, com a **A76** — os materiais com o disponível
@@ -2854,12 +2861,71 @@ não tem a hora da entrada e aparece aqui sem ter problema — confira `recebido
 Se a contagem estava errada, corrija o estoque por um **Ajuste**; se o documento é que está errado, deixe-o — nada mais o lê para estoque.
 Itens que entraram **antes da Etapa 71** não têm o vínculo com a movimentação e não são comparados.
 
+**A78 (NOVA, da Etapa 130 — o lote e as séries que os dados fiscais mudaram depois da entrada no estoque).** Duas consultas,
+somente leitura; **opcional**. Até a Etapa 129 o modal da nota (os dados fiscais) aceitava mudar o lote, a validade, a fabricação, a
+corrida, as séries e o valor de um item que já tinha dado entrada — numa nota que entrou em parte, ou pela API (**C267**, resolvido nesta
+etapa). O estoque continuou com o que entrou; o documento passou a dizer outra coisa. A primeira consulta lista o item cujo lote no
+documento não bate com o lote do estoque; a segunda, a série que o documento lista e o estoque não tem para aquele item.
+
+```sql
+SELECT CASE WHEN ri.lote_id IS NULL THEN 'LOTE_SEM_REGISTRO' ELSE 'LOTE_DIFERENTE' END AS achado,
+       r.id AS recebimento_id, r.numero, ri.id AS item_id, m.codigo AS material,
+       ri.lote AS lote_no_documento, l.codigo AS lote_no_estoque,
+       ri.data_validade_lote AS validade_no_documento, l.data_validade AS validade_no_estoque,
+       ri.data_fabricacao_lote AS fabricacao_no_documento, l.data_fabricacao AS fabricacao_no_estoque,
+       ri.corrida_lote AS corrida_no_documento, l.corrida AS corrida_no_estoque
+  FROM recebimentos_material_itens_almoxarifado ri
+  JOIN recebimentos_material_almoxarifado r ON r.id = ri.recebimento_id
+  JOIN materiais_almoxarifado m ON m.id = ri.material_id
+  LEFT JOIN lotes_almoxarifado l ON l.id = ri.lote_id
+ WHERE ri.entrada_estoque_em IS NOT NULL
+   AND ((ri.lote_id IS NULL AND TRIM(COALESCE(ri.lote, '')) <> '')
+     OR (l.id IS NOT NULL AND (TRIM(COALESCE(ri.lote, '')) <> TRIM(COALESCE(l.codigo, ''))
+       OR COALESCE(SUBSTR(TRIM(ri.data_validade_lote), 1, 10), '') <> COALESCE(SUBSTR(TRIM(l.data_validade), 1, 10), '')
+       OR COALESCE(SUBSTR(TRIM(ri.data_fabricacao_lote), 1, 10), '') <> COALESCE(SUBSTR(TRIM(l.data_fabricacao), 1, 10), '')
+       OR TRIM(COALESCE(ri.corrida_lote, '')) <> TRIM(COALESCE(l.corrida, '')))))
+ ORDER BY r.id, ri.id;
+```
+
+```sql
+WITH RECURSIVE partes(item_id, resto, numero) AS (
+  SELECT ri.id, REPLACE(COALESCE(ri.series, ''), char(13), '') || char(10), NULL
+    FROM recebimentos_material_itens_almoxarifado ri
+    JOIN materiais_almoxarifado m ON m.id = ri.material_id
+   WHERE ri.entrada_estoque_em IS NOT NULL AND m.controle_serie = 1
+  UNION ALL
+  SELECT item_id, SUBSTR(resto, INSTR(resto, char(10)) + 1), TRIM(SUBSTR(resto, 1, INSTR(resto, char(10)) - 1))
+    FROM partes WHERE resto <> ''
+)
+SELECT 'SERIE_SEM_REGISTRO' AS achado, ri.recebimento_id, r.numero, ri.id AS item_id, p.numero AS serie_no_documento
+  FROM partes p
+  JOIN recebimentos_material_itens_almoxarifado ri ON ri.id = p.item_id
+  JOIN recebimentos_material_almoxarifado r ON r.id = ri.recebimento_id
+ WHERE p.numero IS NOT NULL AND p.numero <> ''
+   AND NOT EXISTS (SELECT 1 FROM series_almoxarifado s WHERE s.recebimento_item_id = ri.id AND s.numero = p.numero)
+ ORDER BY ri.recebimento_id, ri.id, p.numero;
+```
+
+*(Conferidas no teste de integração da etapa, o mesmo texto: acham o lote do documento diferente do lote do estoque, a validade
+diferente, o lote de texto sem registro e a série listada que o estoque não tem para o item; **não** acham o item limpo, a validade com
+hora nem as séries com quebra de linha do Windows ou linhas vazias.)*
+
+**Como ler o resultado:** **vazias** — nada a fazer. **`LOTE_DIFERENTE`**: o estoque recebeu o lote `lote_no_estoque` (com a validade, a
+fabricação e a corrida dele) e o documento diz outra coisa; o estoque é o que vale — a etiqueta do recebimento imprime o que o documento
+diz, então reimprima pela tela de **Lotes** se a etiqueta já foi usada. **`LOTE_SEM_REGISTRO`**: o item entrou **sem** lote e o
+documento ganhou um depois (ou o item entrou antes da Etapa 6, quando o lote ainda não era registrado — nesse caso não há problema).
+**`SERIE_SEM_REGISTRO`**: o documento lista uma série que não entrou por este item (as que entraram estão em **Lotes → Séries** do
+material). Se o material está fisicamente com o número que o documento diz, o caminho é o mesmo da recusa nova: o Administrador do
+almoxarifado estorna a entrada e dá a entrada de novo com os certos (**C269** — o pedido de compra e a reserva de quem esperava voltam a
+esperar). Uma série cujo vínculo com o recebimento falhou na entrada (registrado só no log do servidor) também aparece; confira em
+**Lotes → Séries**. O **valor** não tem como ser conferido depois: o livro de movimentações não guarda custo.
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B837; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B843; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -9060,6 +9126,55 @@ núcleo que feche as três juntas. **Reversível** (nada mudou).
 **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da **C246**/**C247**,
 a tabela de conversões, o grupo acima de família e a régua do tempo de recebimento (letra **E**) continuam esperando vocês.
 
+**B838 (NOVA, da Etapa 130) — o lote e as séries de um item que já entrou no estoque só aceitam o eco nos dados fiscais.** A entrada cria
+o lote (código, validade, fabricação, corrida) e as séries com o que o item tinha; depois dela o texto do item é lido pela etiqueta da
+nota, pela devolução do reprovado (o texto é a reserva do lote) e por quem consulta o recebimento. Mudar o texto fazia o documento
+contradizer o estoque (medido). Agora o modal da nota que manda **outro** lote, validade, fabricação, corrida ou outras séries para o item
+que entrou recusa: *"Item já deu entrada no estoque — o lote e as séries dele ficaram registrados no estoque com o que a nota tinha na
+entrada e não mudam mais pela nota; para corrigir o estoque, o Administrador do almoxarifado estorna a entrada e dá a entrada de novo (o
+documento da nota continua como entrou, e o pedido de compra e a reserva de quem esperava voltam a esperar)"*. O modal reenvia todos os
+campos de todos os itens: o eco (o mesmo valor, com espaços, a data com hora ou em DD/MM/AAAA, as séries em outra ordem) passa.
+**Descartado:** levar a mudança para o lote e as séries do estoque (seria um "editar lote" que não existe e mexeria em saldo de lote e
+em séries já entregues); aceitar e só avisar (o documento mentiria). **Reversível.**
+
+**B839 (NOVA, da Etapa 130) — o valor unitário e o total do item que entrou também só aceitam o eco; o ICMS, o IPI e a redução não.**
+Medido quem lê cada valor **depois** da entrada: o unitário alimentou o custo médio **na** entrada e é lido depois pelo painel do
+comprador (*último custo de entrada*) — mudá-lo fazia o comprador ver um custo que o estoque nunca teve; o total é quantidade × unitário
+do mesmo item; o ICMS, o IPI e a redução ninguém lê. Recusa do unitário e do total: *"Item já deu entrada no estoque — o valor unitário
+e o total dele não mudam mais: a entrada no estoque já foi feita com o valor que a nota tinha"*. O 0, o vazio e o ilegível continuam
+"não informado" (a regra de sempre do modal). **Descartado:** recusar os cinco (o imposto da linha não move nada) e aceitar os cinco.
+Não há gesto que corrija o custo de uma entrada com valor errado (o estorno não reverte custo — decisão da Etapa 1): **C269**.
+**Reversível.**
+
+**B840 (NOVA, da Etapa 130) — o painel do recebimento trava o que o servidor recusa.** No Faturamento, o item que já entrou mostra
+*Vlr. unit.*, *Lote*, *Validade*, *Fabricação*, *Corrida* e *Séries* desabilitados, com a frase *"Já deu entrada no estoque — lote,
+séries e valor unitário não mudam mais por aqui."*; o ICMS e a redução continuam editáveis. E o *Processar* que falha no meio (é assim
+que nasce a nota parcial) atualiza no painel só os itens que acabaram de entrar — o que foi digitado e não salvo nos outros fica.
+**Descartado:** recarregar o painel inteiro (apagava o digitado). **Reversível.**
+
+**B841 (NOVA, da Etapa 130; do núcleo) — o cadastro e as permissões de um usuário são lidos só por ele mesmo e por quem gerencia
+usuários.** Fecha a **B836**. Medido quem lê: o cache de permissões de cada usuário (sempre o **próprio**), o cadastro de usuários e as
+abas de Admin (só o administrador do sistema chega) e duas abas das Configurações do almoxarifado (*Liberação por valor* e *Regras de
+aprovação*, do administrador do módulo), que usam da lista só o nome, o e-mail e se está ativo. Agora `GET /api/usuarios/:id` e
+`/api/usuarios/:id/grupos` respondem ao próprio e a quem gerencia usuários (super administrador ou papel *admin*); os outros recebem
+*"Acesso negado — apenas o próprio usuário ou administradores do sistema"*, também para um usuário que não existe (não revela quem
+existe). A lista (`GET /api/usuarios`) continua inteira para quem gerencia e vem só com id, nome, e-mail e ativo para os outros.
+**Descartado:** recusar a lista (as duas abas do almoxarifado quebrariam para o administrador do módulo); devolver setor, cargo ou
+departamento na lista reduzida (ninguém lê); esconder os usuários ocultos (mudaria o que as abas mostram). **Reversível.** As outras
+leituras de usuário que continuam abertas estão na **C270**.
+
+**B842 (NOVA, da Etapa 130; do núcleo; da revisão do código) — usuário desativado ou apagado perde o papel de administrador na hora.**
+O servidor relê do banco, a cada requisição, o papel de quem chama; quando o usuário estava **desativado ou apagado** (o token continua
+válido por até 24 horas), ele seguia com o papel do **token** — o administrador desativado continuava administrador (medido: lia a lista
+inteira e o cadastro dos outros, onde o rebaixado levava a recusa). Agora, sem a linha ativa no banco, a requisição segue sem papel de
+administrador, sem super administrador, sem módulo administrado e sem o perfil que o token trazia. Um erro do banco nessa releitura
+**não** rebaixa ninguém. **Descartado:** responder 401 (sessão encerrada) ao desativado — derrubaria toda requisição dele, inclusive as
+que hoje só mostram menos; fica para uma etapa do núcleo que revise a sessão do desativado. **Reversível.**
+
+**B843 (NOVA, da Etapa 130) — a próxima etapa do almoxarifado (131).** Ver a "próxima tarefa detalhada" no plano da Etapa 130. A
+**B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da **C246**/**C247**,
+a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**) e a **C268** continuam esperando vocês.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -11639,8 +11754,13 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      conferência depois do processamento; se usou, confira o estoque do item contra a nota. É a próxima etapa (**B829**). *(Etapa 129: o
      "o que fazer" agora é a consulta **A77**; e a medição achou mais três formas — a conferência marcava *Aprovado* sem estoque, respondia
      "sucesso" para recebimento inexistente e gravava durante o processamento — e os dados fiscais mudavam a quantidade do item já entrado.)*
-267. **NOVO (da Etapa 129; anterior a ela) — os dados fiscais ainda mudam o lote, a série e os valores de um item que já entrou no
-     estoque.** A Etapa 129 fechou a **quantidade** do item já entrado nas duas portas (conferência e dados fiscais), mas o modal da nota
+267. **✅ RESOLVIDO NA ETAPA 130 (`7b70b969`, `c9411c4c`, `b377709b`; B838, B839, B840) — os dados fiscais ainda mudam o lote, a série
+     e os valores de um item que já entrou no estoque.** *(Etapa 130: o modal da nota recusa mudar o lote, a validade, a fabricação, a
+     corrida, as séries, o valor unitário e o total do item que entrou — o eco passa —, e o painel trava esses campos; o ICMS, o IPI e a
+     redução continuam aceitos (ninguém os lê). A consulta **A78** acha o que já foi mudado antes. **O "O que fazer" abaixo estava
+     errado:** ele mandava usar a tela de Lotes/Séries, e **nenhum** gesto ali corrige o lote ou o número de uma série — o *Regularizar
+     séries* é acerto de inventário (físico × séries presentes) e recusa trocar uma série pela outra (medido). O caminho que existe é
+     estornar a entrada e dar a entrada de novo — **C269**.)* A Etapa 129 fechou a **quantidade** do item já entrado nas duas portas (conferência e dados fiscais), mas o modal da nota
      continua aceitando, para esse item, o lote, a validade, a fabricação, a corrida, as séries e os valores (unitário, total, ICMS, IPI).
      O estoque e as séries já foram criados com os valores da entrada, então o documento passa a dizer outra coisa que o livro. Só pela
      API ou por uma nota parcial (*Em entrada de NF* com um item já entrado). **O que fazer:** não corrija lote ou série de um item que
@@ -11650,6 +11770,24 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      quantidade de cada perda. Por isso o relatório *Perdas por motivo*, fechado para Administrador, Gestor e Compras (**B832**), barra só
      a soma pronta: a conta (quantidade × custo) se faz com o que está aberto — o mesmo vale para o *Custo por projeto*, fechado desde a
      Etapa 14. **O que fazer:** se o custo é sigiloso, diga — fechar o custo no cadastro é uma etapa própria (mexe em várias telas).
+
+269. **NOVO (da Etapa 130; anterior a ela) — o lote, a série ou o valor digitados errado numa nota que já deu entrada não têm conserto
+     limpo.** O único caminho para o lote e as séries é o Administrador do almoxarifado **estornar a entrada** no livro de Movimentações e
+     dar a **Entrada** de novo com os certos (é o que a recusa nova diz; só ele tem os dois gestos — o estorno é do Administrador e do
+     Gestor, a Entrada do Administrador e do Almoxarife). Medido o que vem junto: numa nota contra **pedido de compra**, o estorno reabre
+     o pedido (volta a *pendente*, aparece nos pendentes e aceita uma segunda nota) e a solicitação de compra, e **solta a reserva** de
+     quem esperava o material (a requisição volta a aguardar compra, com o material livre no estoque); a Entrada manual não recompõe
+     nada disso. O **documento da nota continua como entrou** (o estorno não desfaz a entrada do item) — a etiqueta da nota imprime o lote
+     antigo. Com material **crítico**, o estorno recusa enquanto a inspeção não for decidida e, se houve reprovado, para sempre. E não há
+     gesto que corrija o **valor**: o estorno não reverte o custo médio. **O que fazer:** antes de **Processar a Nota**, confira lote,
+     séries e valores no painel; depois do caminho acima, feche o pedido e refaça a reserva pelos gestos de Compras e de Reservas, e
+     reimprima a etiqueta pela tela de **Lotes**. Candidata de etapa futura: o estorno da entrada de nota liberar o item para os dados
+     fiscais (decisão de vocês: o documento deve seguir o estoque corrigido?).
+270. **NOVO (da revisão da Etapa 130; do núcleo, anterior a ela) — três outras leituras de usuário continuam abertas a qualquer
+     logado.** `GET /api/usuarios/por-modulo/:modulo` devolve, de quem tem acesso ao módulo pedido e é do mesmo setor, o papel, o cargo,
+     o setor, o departamento, se é oculto e a data de criação (`por-modulo/admin` lista os administradores); `/api/usuarios/comercial` e
+     `/api/usuarios/filtrar` também devolvem o papel (a segunda só para uma marca que o próprio tem). São os seletores de responsável das
+     telas — fechar exige medir cada um, como a **B841** fez com as três. **O que fazer:** nada por enquanto; candidata de etapa do núcleo.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -12866,6 +13004,17 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   por projeto* já soma as perdas com projeto no consumido), e não mostra a perda de material de **cliente** (patrimônio alheio, sem
   custo) — inclusive a perda em terceiro da chapa do cliente.
 
+- **(130) O documento da nota guarda o que entrou.** Corrigido o estoque pelo caminho da recusa (estorno + Entrada), o lote, as séries
+  e o valor no documento do recebimento continuam os da entrada (**C269**); a etiqueta da nota imprime o lote antigo.
+- **(130) O ICMS, o IPI, a redução e as marcas de conferência do item que entrou continuam editáveis pelo modal da nota** (**B839**) —
+  ninguém os lê depois da entrada.
+- **(130) Valor com texto depois do número** (`10abc`) vale o número, como sempre valeu no modal (o mesmo número que o servidor
+  gravaria) — para o item que entrou, isso é eco se o número for o mesmo.
+- **(130) A lista reduzida de usuários mostra também os inativos e os ocultos** — como a lista inteira sempre mostrou (as abas do
+  almoxarifado filtram os inativos; os ocultos aparecem, como antes) (**B841**).
+- **(130) O usuário desativado com o token válido continua entrando nas telas** de usuário comum até o token vencer (24 h) — o que
+  mudou é que ele não é mais administrador (**B842**).
+
 ### E. Regras que foram DEDUZIDAS e nunca confirmadas com vocês — perguntas, não requisitos atendidos (E1, a remessa mista; E2, o tempo de recebimento)
 
 **"Uma remessa não pode misturar materiais de donos diferentes."** O sistema hoje **recusa** montar
@@ -13776,6 +13925,13 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(130) Nenhum clique foi dado nesta etapa no navegador.** Mudou o painel do recebimento (os campos travados do item que entrou e a
+atualização depois do *Processar* que falha) — provado por teste com a tela real e só a fronteira HTTP simulada (**5** casos); o servidor,
+pela rota e pelo serviço (**16** cenários do modal da nota, **6** de integração com a nota parcial de verdade, **7** das leituras de usuário
+com o enriquecimento real). O que **só o navegador** prova: o roteiro da Etapa 130 no guia — os campos cinza com a frase no item que
+entrou, o aviso vermelho com a frase do lote ao salvar pela API, e as abas *Liberação por valor* e *Regras de aprovação* das Configurações
+listando os usuários para o administrador do módulo.
 
 **(129) Nenhum clique foi dado nesta etapa no navegador.** Nenhuma tela mudou de código: o que mudou é a resposta do servidor à
 conferência e aos dados fiscais (as recusas novas aparecem no aviso vermelho que as telas já mostram) e um relatório novo na lista de
@@ -26646,16 +26802,102 @@ perfil) e que o custo de cada material já estava aberto (**C268**); e mostrou q
 nosso passava por *ajustar_estoque* — estava errado, o gate é *movimentar*, corrigido dizendo isso. O de **sabotagem** fez **29**
 sabotagens além das 36 já feitas: **13** mostraram cenário faltando e viraram cenários novos; **6** foram provadas inofensivas.
 
+## Etapa 130 — O item que entrou não muda pela nota, e as leituras de usuário (2026-10-16)
+
+Duas coisas. A primeira fecha o que a Etapa 129 deixou aberto no recebimento: numa nota que entrou em parte (o *Processar* falhou no
+meio), o modal da nota aceitava mudar o lote, as séries e o valor de um item que **já estava no estoque** — o documento passava a dizer
+um lote e umas séries que o estoque não tinha, a etiqueta saía com o texto novo, e o comprador via como "último custo de entrada" um valor
+que nunca entrou. Agora a nota recusa, com a frase do que fazer, e o painel trava esses campos. A segunda é do núcleo: qualquer usuário
+logado lia o cadastro e o mapa de permissões de qualquer outro (inclusive quem é administrador e o que cada um pode ou não fazer); agora
+só o próprio e quem gerencia usuários — e o administrador desativado deixa de ser administrador na hora.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Nota parcial: o modal da nota trocava o lote, a validade, a corrida e as séries de um item que já entrou — 200 | *"Item já deu entrada no estoque — o lote e as séries dele ficaram registrados no estoque … para corrigir o estoque, o Administrador do almoxarifado estorna a entrada e dá a entrada de novo (…)"* (**B838**) |
+| … e o valor unitário e o total (o comprador via o valor novo como último custo de entrada) | *"Item já deu entrada no estoque — o valor unitário e o total dele não mudam mais: a entrada no estoque já foi feita com o valor que a nota tinha"* (**B839**) |
+| O painel deixava editar esses campos no item que entrou (e perdia o modal na recusa) | Campos cinza com *"Já deu entrada no estoque — lote, séries e valor unitário não mudam mais por aqui."*; ICMS e redução abertos (**B840**) |
+| O *Processar* que falhava no meio deixava o item que entrou com os campos abertos | O painel atualiza só os itens que entraram; o digitado nos outros fica (**B840**) |
+| Qualquer logado lia o cadastro e as permissões de qualquer usuário | Só o próprio e quem gerencia usuários; os outros: *"Acesso negado — apenas o próprio usuário ou administradores do sistema"* (**B841**) |
+| A lista de usuários vinha inteira para todos | Inteira para quem gerencia; id, nome, e-mail e ativo para os outros (**B841**) |
+| O administrador desativado (token ainda válido) continuava administrador | Sem a linha ativa no banco, nenhum poder de administrador (**B842**) |
+
+### As regras, com o cenário exato
+
+Preparação: o **Administrador** do almoxarifado (que também gerencia usuários), um **Almoxarife** e um usuário **comum**; material
+**VÁLVULA** com *Controle por lote* e *Controle por série*, localização padrão **A-01**; material **FLANGE** com *Controle por série* e uma
+peça de série **X1** já em estoque (**Movimentações → Nova Movimentação → Entrada**, 1, série X1).
+
+**1. A nota que entra em parte.** **Recebimento → Novo** com VÁLVULA 2 e FLANGE 1; leve-o até o Faturamento (*Iniciar conferência* →
+*Finalizar conferência* → *Encaminhar a Compras* → *Finalizar compras* → *Iniciar faturamento*). No painel, VÁLVULA: lote **L-ORIG**,
+validade, séries **S1** e **S2**, valor unitário 10; FLANGE: série **X1**. **Preencher Dados da NF** → **Salvar Dados Fiscais** →
+**Processar Nota** → Confirmar: a recusa vem do item FLANGE (*"serie X1 ja esta em estoque"*), mas a VÁLVULA **já entrou**. No painel, os
+campos *Vlr. unit.*, *Lote*, *Validade*, *Fabricação*, *Corrida* e *Séries* da VÁLVULA ficam cinza, com a frase *"Já deu entrada no
+estoque — lote, séries e valor unitário não mudam mais por aqui."*; o ICMS continua editável; os campos da FLANGE continuam abertos.
+**Preencher Dados da NF** → **Salvar Dados Fiscais**: salva (o modal reenvia o que está gravado).
+
+**2. A recusa do lote e do valor.** Pela API (o painel não deixa editar), `PUT /api/almoxarifado/recebimentos/⟨id⟩/fiscal` com
+`{"itens":[{"id":⟨item da VÁLVULA⟩,"lote":"L-NOVO"}]}`: **409** *"Item já deu entrada no estoque — o lote e as séries dele ficaram
+registrados no estoque com o que a nota tinha na entrada e não mudam mais pela nota; para corrigir o estoque, o Administrador do
+almoxarifado estorna a entrada e dá a entrada de novo (o documento da nota continua como entrou, e o pedido de compra e a reserva de quem
+esperava voltam a esperar)"*. Com `"valor_unitario": 99`: **409** *"Item já deu entrada no estoque — o valor unitário e o total dele não
+mudam mais: a entrada no estoque já foi feita com o valor que a nota tinha"*. Com `"valor_icms": 5`: **200**.
+
+**3. O resto da nota segue.** No painel, troque a série da FLANGE para **X2**, **Salvar Dados Fiscais** → **Processar Nota**: a nota fecha
+*Processado*. Em **Lotes**, a VÁLVULA tem o lote L-ORIG com as séries S1 e S2; em **Reposição**, o detalhe do material mostra
+*Último custo de entrada* 10.
+
+**4. Se o lote estava errado.** Como **Administrador**: **Movimentações** → a entrada da VÁLVULA → o botão de estorno (seta para trás) → **Estornar Movimentação**; depois **Nova
+Movimentação → Entrada**, VÁLVULA, 2, lote e séries certos. O estoque fica com o certo; o documento da nota continua com L-ORIG (**C269**).
+
+**5. As leituras de usuário.** Logado como o usuário **comum**, abra o sistema: a seleção de módulos e o menu funcionam (o próprio lê as
+suas permissões). Pela API, `GET /api/usuarios/⟨id do Administrador⟩`: **403** *"Acesso negado — apenas o próprio usuário ou
+administradores do sistema"*; `GET /api/usuarios`: a lista só com id, nome, e-mail e ativo. Como **administrador do módulo** almoxarifado
+(sem ser administrador do sistema), **Configurações → Liberação por valor** e **Regras de aprovação** continuam listando os usuários para
+marcar aprovadores. Como **administrador do sistema**, **Admin → Usuários** mostra tudo, como antes.
+
+### O que esta etapa NÃO cobre
+
+1. **O documento da nota depois do conserto** — continua como entrou (**C269**); o valor errado de uma entrada não tem gesto de conserto.
+2. **O ICMS, o IPI e a redução** do item que entrou continuam editáveis (**B839**).
+3. **As outras leituras de usuário** (`/por-modulo`, `/comercial`, `/filtrar`) — **C270**.
+4. **A sessão do usuário desativado** (ele continua logado como usuário comum até o token vencer) — **B842**.
+5. As decisões que esperam vocês: **B808**, **B755**, **B761**/**C239**, **C224**, **C225**, **C228**, **C219**, **C230**,
+   **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (**E2**) e a **C268**.
+
+### O que a revisão encontrou
+
+A **medição** reproduziu a C267 pela rota com uma nota de verdade (o documento dizia L-NOVO e 99; o estoque, L-ORIG e custo 10; o
+comprador via 99) e instrumentou a suíte inteira para saber quem mandava o item já entrado ao modal da nota (três chamadas; uma mudou à
+vista). A **revisão do plano** (antes do código) achou que o caminho que a primeira versão da recusa mandava seguir reabre o pedido de
+compra e solta a reserva de quem esperava, que só o Administrador faz os dois gestos dele, que com material crítico o estorno recusa, que
+o painel não se atualizava depois do *Processar* que falha no meio, um leitor a mais (a etiqueta) e duas frases que afirmavam fato falso;
+tudo entrou antes da primeira linha de código. A **revisão adversarial do código** (três revisores, executando): o de **regra** achou que,
+depois do caminho da recusa, o documento fica com o texto antigo para sempre (a frase passou a dizer isso, **C269**), que a atualização
+do painel apagava o digitado nos outros itens (corrigido) e que uma data com lixo no fim passava como eco (corrigido); o de **permissão**
+mediu a tabela perfil × rota e achou que o administrador **desativado** continuava administrador pelo token (corrigido, **B842**) e as
+outras leituras abertas (**C270**); o de **sabotagem** fez **38** sabotagens além das **40** já feitas: **6** mostraram cenário faltando
+(o valor **menor**, o "99,5", o status real da falha no meio, o import e a chamada do registro, a data com lixo no começo) e viraram
+cenários; **6** foram provadas inofensivas.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 130 entregue (2026-10-16):** **o item que entrou não muda pela nota, e as leituras de usuário.** Os dados fiscais recusam
+  mudar o lote, as séries, o valor unitário e o total de um item que já deu entrada no estoque, e o painel trava esses campos (**C267**
+  resolvido — **B838**, **B839**, **B840**); do núcleo, o cadastro e as permissões de um usuário são lidos só por ele e por quem gerencia
+  usuários, e o administrador desativado deixa de ser administrador (**B841**, **B842**). **O que é seu:** a consulta **A78** (opcional);
+  as decisões **B838 a B842** (reversíveis); os avisos **C269** e **C270**; as limitações **(130)** em D e a verificação **(130)** em F.
+  **Próxima: Etapa 131 — ver a "próxima tarefa detalhada" no plano da Etapa 130.**
 
 - **Etapa 129 entregue (2026-10-16):** **a conferência depois da entrada e as perdas com valor.** A conferência e os dados fiscais
   recusam mudar um recebimento que já deu entrada no estoque, a conferência não marca mais *Aprovado* e não grava durante o
   processamento (**C266** resolvido — **B830**, **B831**, **B834**, **B835**); o relatório **Perdas por motivo** mostra o valor do que se
   perdeu (**B832**, **B833**). **O que é seu:** a consulta **A77** (opcional); as decisões **B830 a B836** (reversíveis); os avisos **C267**
-  e **C268**; as limitações **(129)** em D e a verificação **(129)** em F. **Próxima: Etapa 130 — ver a "próxima tarefa detalhada" no
-  plano da Etapa 129.**
+  e **C268**; as limitações **(129)** em D e a verificação **(129)** em F.
+  *(Próxima, na época: Etapa 130 — entregue acima.)*
 
 - **Etapa 128 entregue (2026-10-16):** **o tempo do recebimento, o aviso da retenção e o perfil que não pisca.** O painel e os
   Indicadores mostram o tempo médio de recebimento (**B823** a **B825**, régua na **E2**); a contagem por endereço que deixa o disponível

@@ -101,7 +101,7 @@ Nenhum teste de servidor chama as três rotas; os testes do client que as tocam 
 
 ## Literais
 
-- **L8** = `Item já deu entrada no estoque — o lote e as séries dele ficaram registrados no estoque com o que a nota tinha na entrada e não mudam mais pela nota; para corrigir, o Administrador do almoxarifado estorna a entrada e dá a entrada de novo (o pedido de compra e a reserva de quem esperava voltam a esperar)`
+- **L8** = `Item já deu entrada no estoque — o lote e as séries dele ficaram registrados no estoque com o que a nota tinha na entrada e não mudam mais pela nota; para corrigir o estoque, o Administrador do almoxarifado estorna a entrada e dá a entrada de novo (o documento da nota continua como entrou, e o pedido de compra e a reserva de quem esperava voltam a esperar)`
 - **L9** = `Item já deu entrada no estoque — o valor unitário e o total dele não mudam mais: a entrada no estoque já foi feita com o valor que a nota tinha`
 - **L10** = `Acesso negado — apenas o próprio usuário ou administradores do sistema`
 

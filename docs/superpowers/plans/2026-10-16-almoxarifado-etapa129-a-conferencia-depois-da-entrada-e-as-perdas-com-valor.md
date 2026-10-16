@@ -228,7 +228,11 @@ A suíte inteira roda **uma por vez**; revisores rodam só os próprios arquivos
   equivalentes provados; **0** ruído.
 3. **Paralelismo:** **0** galhos em paralelo de fato (T2 é galho por regra, mas "um teste por vez" a serializa), **0** retrabalho; **1**
    revisor na Fase 2 e **3** em paralelo na Fase 5 sob a trava.
-4. **Defeito que escapou:** *(preencher na Etapa 130)*.
+4. **Defeito que escapou:** *(preenchido na Etapa 130)* **1**, da própria 129 (de documento): o "o que fazer" da **C267** e o contrato candidato
+   da "Próxima tarefa" acima mandavam corrigir lote/série "pela tela de Lotes/Séries" — **não existe** gesto ali que corrija o lote ou o número de uma série (o *Regularizar
+   séries* é acerto de inventário e recusa a troca; medido na Fase 0 da 130, sonda `e130fase0`). Corrigido na 130 (a C267 diz que estava
+   errada; a L8 nova diz o caminho que existe). Nenhum defeito de código da 129 apareceu: a instrumentação da suíte na 130 achou as três
+   chamadas do `/fiscal` com item entrado todas no próprio teste da 129, e o RN-09 dela continuou verde com a guarda estendida.
 
 ## Próxima tarefa detalhada — Etapa 130
 

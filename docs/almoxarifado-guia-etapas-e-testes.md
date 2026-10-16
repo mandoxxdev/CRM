@@ -1,17 +1,23 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-16 (Etapa 129) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-16 (Etapa 130) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128 e 129) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129 e 130) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 129 ENTREGUE · próxima do almoxarifado: Etapa 130)
+> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 130 ENTREGUE · próxima do almoxarifado: Etapa 131)
 >
-> **O desenvolvimento parou aqui: Etapa 129 fechada — 2026-10-16.** A **Etapa 129 (a conferência depois da entrada e as perdas com
+> **O desenvolvimento parou aqui: Etapa 130 fechada — 2026-10-16.** A **Etapa 130 (o item que entrou não muda pela nota, e as leituras
+> de usuário)**: numa nota que entrou em parte, o modal da nota deixa de mudar o lote, as séries e o valor de um item que já está no
+> estoque (recusa com a frase do que fazer) e o painel mostra esses campos travados; e, do núcleo, o cadastro e as permissões de um
+> usuário passam a ser lidos só por ele mesmo e por quem gerencia usuários — e o administrador desativado deixa de ser administrador na
+> hora. **Próxima: Etapa 131** — ver a próxima tarefa no plano da 130.
+>
+> **Etapa 129, 2026-10-16.** A **Etapa 129 (a conferência depois da entrada e as perdas com
 > valor)**: a conferência do recebimento e o modal da nota deixam de mudar um recebimento que já deu entrada no estoque (recusam com a
 > frase do que fazer — corrigir o estoque por um ajuste), a conferência não marca mais *Aprovado* e não grava durante o processamento; e o
 > relatório novo **Perdas por motivo** (Administrador, Gestor e Compras) diz quanto se perdeu, por tipo e motivo, com o valor.
-> **Próxima: Etapa 130** — ver a próxima tarefa no plano da 129.
+> *(Próxima, na época: Etapa 130 — entregue acima.)*
 >
 > **Etapa 128, 2026-10-16.** A **Etapa 128 (o tempo do recebimento, o aviso da retenção e o
 > perfil que não pisca)**: o painel e o relatório Indicadores mostram o **tempo médio de recebimento** (da chegada da nota à entrada no
@@ -6537,6 +6543,64 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 130 — O item que entrou não muda pela nota, e as leituras de usuário (ENTREGUE — 2026-10-16)
+
+**O que mudou, em uma frase:** numa nota que entrou em parte, o modal da nota não muda mais o lote, as séries nem o valor de um item que
+já está no estoque — recusa com a frase do que fazer, e o painel mostra esses campos travados —; e o cadastro e as permissões de um
+usuário passam a ser lidos só por ele mesmo e por quem gerencia usuários.
+
+**O problema que ela resolve.** Quando o *Processar Nota* falha no meio, os itens que já passaram ficam no estoque e a nota continua no
+Faturamento. Ali, o modal da nota aceitava trocar o lote, as séries e o valor desses itens: o documento passava a dizer um lote e umas
+séries que o estoque não tinha, a etiqueta saía com o texto novo e o comprador via, como último custo de entrada, um valor que nunca
+entrou. E qualquer pessoa logada conseguia ler, pela API, quem é administrador e o que cada usuário pode ou não fazer.
+
+| Antes | Agora |
+|---|---|
+| O modal da nota trocava lote, validade, corrida e séries do item que já entrou | Recusa: *"Item já deu entrada no estoque — o lote e as séries dele ficaram registrados no estoque … (o documento da nota continua como entrou, …)"* |
+| … e o valor unitário e o total | Recusa: *"Item já deu entrada no estoque — o valor unitário e o total dele não mudam mais: a entrada no estoque já foi feita com o valor que a nota tinha"* |
+| No painel, os campos do item que entrou ficavam abertos | Ficam cinza, com *"Já deu entrada no estoque — lote, séries e valor unitário não mudam mais por aqui."* (ICMS e redução abertos) |
+| Qualquer logado lia o cadastro e as permissões de qualquer usuário | Só o próprio e quem gerencia usuários; a lista vem com nome, e-mail e ativo para os outros |
+| O administrador desativado continuava administrador até o token vencer | Deixa de ser na hora |
+
+**Roteiro de teste (10 minutos).** Prepare, como **Administrador**: o material **VÁLVULA** com *Controle por lote* e *Controle por série*
+(localização padrão A-01) e o material **FLANGE** com *Controle por série*; e uma **Entrada** de FLANGE, 1, série **X1**
+(**Movimentações → Nova Movimentação → Entrada**). É a série X1 já em estoque que faz o processamento falhar no meio, de propósito.
+
+1. **Recebimento → Novo**: VÁLVULA 2 e FLANGE 1. Leve-o até o Faturamento (*Iniciar conferência*, *Finalizar conferência*, *Encaminhar a
+   Compras*, *Finalizar compras*, *Iniciar faturamento*). No painel, VÁLVULA: lote **L-ORIG**, validade, séries **S1** e **S2** (uma por
+   linha), *Vlr. unit.* 10; FLANGE: série **X1**. **Preencher Dados da NF** → preencha a nota → **Salvar Dados Fiscais**.
+2. **Processar Nota** → **Confirmar**: a janela mostra a recusa da FLANGE (*"… serie X1 ja esta em estoque"*). Feche a janela: no painel,
+   os campos *Vlr. unit.*, *Lote*, *Validade*, *Fabricação*, *Corrida* e *Séries* da **VÁLVULA** estão cinza, com a frase *"Já deu entrada
+   no estoque — lote, séries e valor unitário não mudam mais por aqui."*; o *ICMS* dela continua editável; os campos da FLANGE continuam
+   abertos (e o que você tinha digitado neles continua lá).
+3. **Preencher Dados da NF** → **Salvar Dados Fiscais**: *"Dados fiscais salvos"* (o modal reenvia o que está gravado — passa).
+4. Pela chamada direta (F12 → *Console*, logado como Administrador; ⟨API⟩, ⟨id⟩ e ⟨item da VÁLVULA⟩ como no roteiro da Etapa 129):
+
+   ```js
+   fetch('⟨API⟩/almoxarifado/recebimentos/⟨id⟩/fiscal', { method: 'PUT',
+     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (localStorage.getItem('token') || sessionStorage.getItem('token')) },
+     body: JSON.stringify({ itens: [{ id: ⟨item da VÁLVULA⟩, lote: 'L-NOVO' }] }) }).then((r) => r.json()).then(console.log);
+   ```
+
+   Resposta: *"Item já deu entrada no estoque — o lote e as séries dele ficaram registrados no estoque com o que a nota tinha na entrada e
+   não mudam mais pela nota; para corrigir o estoque, o Administrador do almoxarifado estorna a entrada e dá a entrada de novo (o
+   documento da nota continua como entrou, e o pedido de compra e a reserva de quem esperava voltam a esperar)"*. Troque por
+   `valor_unitario: 99`: *"Item já deu entrada no estoque — o valor unitário e o total dele não mudam mais: a entrada no estoque já foi
+   feita com o valor que a nota tinha"*. Por `valor_icms: 5`: `{ success: true }`.
+5. No painel, troque a série da FLANGE para **X2** → **Salvar Dados Fiscais** → **Processar Nota** → Confirmar: a nota fecha *Processado*.
+   Em **Lotes**, a VÁLVULA tem o lote L-ORIG com S1 e S2; em **Reposição**, o detalhe da VÁLVULA mostra *Último custo de entrada* 10.
+6. **As leituras de usuário.** Entre como um usuário **comum** (sem ser administrador do sistema): a seleção de módulos e o menu
+   funcionam como antes. Pelo console, `fetch('⟨API⟩/usuarios/1', { headers: { Authorization: 'Bearer ' + localStorage.getItem('token') } })
+   .then((r) => r.json()).then(console.log)` (1 = outro usuário): *"Acesso negado — apenas o próprio usuário ou administradores do
+   sistema"*; `⟨API⟩/usuarios`: a lista só com id, nome, e-mail e ativo. Como **administrador do módulo** almoxarifado, **Configurações →
+   Liberação por valor** e **Regras de aprovação** listam os usuários para marcar. Como **administrador do sistema**, **Admin → Usuários**
+   mostra tudo, como antes.
+
+**O que esta etapa NÃO cobre.** O documento da nota depois do conserto pelo estorno continua como entrou, e o valor errado de uma entrada
+não tem gesto de conserto (**C269**); o ICMS, o IPI e a redução do item que entrou continuam editáveis; as leituras de usuário dos
+seletores de responsável (`/por-modulo`, `/comercial`, `/filtrar`) continuam abertas (**C270**); o usuário desativado continua logado
+como usuário comum até o token vencer (**B842**).
 
 ## Etapa 129 — A conferência depois da entrada e as perdas com valor (ENTREGUE — 2026-10-16)
 
