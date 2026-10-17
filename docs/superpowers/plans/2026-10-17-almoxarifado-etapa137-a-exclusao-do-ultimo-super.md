@@ -74,12 +74,12 @@ registros não encontrado"*; **L-404** = *"Usuário não encontrado"* (as três 
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 — C292 (tronco: serviço + rota)** — `sqliteConcurrency.js` `execEmTransacao` (RN-04, testes em `tests/sqliteConcurrency.test.js`);
+- [x] **T1 — C292 (tronco: serviço + rota)** — `sqliteConcurrency.js` `execEmTransacao` (RN-04, testes em `tests/sqliteConcurrency.test.js`);
   `index.js` `DELETE` (RN-01..RN-03). Teste novo `tests/api/usuarioExclusaoCorrida.api.test.js`. Vermelhos antes. O cenário estático de
   `chatSocketInativoNoServidor` que ancora no `await db.exec(stmts.join('\\n'))` é reancorado.
-- [ ] **T2 — C291** — `systemPermissions.js` `simOuNao` + `sanitizeSuperAdminPayload`; a recusa L-SUPER no `POST`/`PUT` (RN-05).
-- [ ] **T3 — C293** — `index.js` `PATCH`/`PUT` e `ativoDaCriacao` pela `simOuNao` (RN-06, RN-07).
-- [ ] **T4 — fechamento** — novidades (B884+, C291/C292/C293 resolvidas, D (136) do `PUT` resolvida, D (137), F (137), a seção da etapa,
+- [x] **T2 — C291** — `systemPermissions.js` `simOuNao` + `sanitizeSuperAdminPayload`; a recusa L-SUPER no `POST`/`PUT` (RN-05).
+- [x] **T3 — C293** — `index.js` `PATCH`/`PUT` e `ativoDaCriacao` pela `simOuNao` (RN-06, RN-07).
+- [x] **T4 — fechamento** — novidades (B884+, C291/C292/C293 resolvidas, D (136) do `PUT` resolvida, D (137), F (137), a seção da etapa,
   cabeçalho), spec 23, mapa, guia, manual (5.2e/5.2g/5.2h), este plano (retro, "Próxima tarefa detalhada — Etapa 138"), o "defeito que
   escapou" da retro da 136.
 
@@ -95,3 +95,106 @@ cai); a transferência sem a condição do motivo (RN-02 cai); o `DELETE` final 
 com 500); o 404 virando 200 (RN-03); `execEmTransacao` com o ROLLBACK fora da vaga (RN-04b); sem retry (RN-04c); `sanitize` de volta ao
 `isTruthyFlag` (RN-05 `"true"`); o ausente de volta a 0 (RN-05); a L-SUPER fora (RN-05); `PATCH` de volta ao `isTruthyFlag` (RN-06); `PUT`
 sem o "igual ao gravado" (RN-07 legado) e sem a régua (RN-07 `"true"`); a régua depois de `deactivating` (RN-07 o próprio `"true"`).
+
+## Execução — o que aconteceu
+
+- **Fase 0** — medida por mim: `scratchpad/e137/sonda-f0.js` (o `index.js` real em pasta vazia, molde `scratchpad/e136/r2-nucleo2.js`):
+  C292 reproduzida 6/6 em três pares e 3/6 num par novo (exclusão × inativar). O gatilho no banco medido para descartar (a recuperação do
+  boot e os testes que zeram supers no arquivo).
+- **Fase 2 antes do código de produção:** 2 Critical + 6 Important + 4 Minor, todos aceitos (ver o topo). **O design mudou** (a
+  `transacaoDeEscrita` de vários ticks → um `exec` com o motivo decidido antes de escrever); o teste do serviço (RN-04) foi reescrito e
+  rodado **vermelho** de novo antes do código (5/5); o da rota, `usuarioExclusaoCorrida`, **10/12 vermelhos** antes do código (os 2 verdes:
+  a metade positiva com três supers e o "quem não é super" — fixação, caem por sabotagem).
+- **Commits:** T1 `cbe8c079`; T2 + T3 `c73951c4`; Fase 5 `c31687d4`; fechamento — o commit de documentação (ver `git log`).
+- **Divergências do plano:** (1) **T2 e T3 saíram num commit só** (`c73951c4`) — os dois são "a régua de sim ou não" e mexem nas mesmas
+  linhas do `PUT`; o plano (M12) previa três. (2) O teste da RN-02 com o destino padrão **não provava a trava**: o perdedor transferia para
+  o ator já apagado e a FK o recusava (500) — os cenários usam um terceiro como destino, e a RN-01b prende o destino padrão. (3) O motivo
+  `DESTINO` sobreviveu à primeira bateria (S4): com o `ULTIMO_SUPER` antes, a corrida A × B nunca chega a ele — virou a **RN-01c** (o destino
+  apagado no meio por outra aba), que cai. (4) **Fase 5 r2:** o motivo `ATOR` (quem exclui ainda é super ativo) entrou à frente dos outros;
+  com ele o `ULTIMO_SUPER` ficou **inalcançável** (sobra ao menos o ator) — mantido como guarda de reserva e declarado (D (137)); a S1
+  (o motivo sem a guarda) passa a sobreviver por isso. (5) O teste novo passou a subir o servidor com `RATE_LIMIT_MAX` (as corridas
+  passam das 500 requisições em 15 min e tomavam 429).
+- **Controles positivos** (âncora contada = 1, md5 antes/sabotado/restaurado, restauro por cópia, `scratchpad/e137/bateria.js`): **T1** S1–S8
+  e S2b (8 caem; S4 cai depois da RN-01c; **S8** — a rota de volta ao `exec` com BEGIN/COMMIT — sobrevive na rota: só difere num erro
+  inesperado no meio, e a âncora estática do `chatSocketInativoNoServidor` prende o `execEmTransacao`); **T2/T3** N1–N7 e N3b (8 caem);
+  **Fase 5** F1 (sem o `ATOR` — cai na RN-01d, rodada 9 de 16) e F2 (o "igual ao gravado" com lista — cai).
+- **Boot:** a etapa mexe em rotas do `index.js`, não no boot; o teste sobe o `index.js` real em pasta vazia, e o boot à mão com
+  `CRM_DATA_DIR` vazio (`scratchpad/e137/boot.sh`) subiu duas vezes na mesma pasta (*"Banco de dados totalmente inicializado"*, login 200; os
+  dois avisos `duplicate column` de `materiais_escritorio` no primeiro boot são de antes desta etapa). **Migração:** nenhuma.
+- **CLAUDE.md:** a seção da trava por material **não mudou** (a etapa não toca saldo).
+- **Suíte antes de cada commit de código:** antes de `cbe8c079`: `test:api` **452/453** — o único vermelho era o próprio
+  `usuarioExclusaoCorrida` com os 5 cenários da T2/T3 ainda sem código (o commit da T1 levou o arquivo só com os cenários da T1, rodado à
+  parte: 8/0; `chatSocketInativoNoServidor` 9/0); `test:almoxarifado` **44/0**; `test:validation` 4/0, `test:safealter` 3/0,
+  `test:sqlite` 15/0; client **133** suítes / **1780** testes; `CI=true build` *Compiled successfully*. Antes de `c73951c4`: `test:api`
+  **453/453**, o resto igual. Antes de `c31687d4`: `test:api` **453/453**; `test:almoxarifado` 44/0; 4/0, 3/0, `test:sqlite` **16/0**;
+  client 133 / 1780; build *Compiled successfully*.
+- **Fase 5** — três revisores frescos em paralelo sob a trava de máquina; o de sabotagem na worktree própria `CRM-wt-e137-r3` (removida com
+  as junções desfeitas antes).
+  - **Regra (r1): 2 Minor desta etapa** — o `[1]` passando como "igual ao gravado" (**corrigido**, `c31687d4`) e o legado `"true"` em texto
+    editado com `"true"` mantido (**declarado**, B887 — é o preço do "a tela devolve o que leu"); **anterior:** a renumeração de propostas com
+    o ROLLBACK pela fila (**C294**).
+  - **Permissão (r2): 0 desta etapa.** Fuzz de 60 rodadas (três supers, duas abas cada, todas as portas, legados com `ativo` nulo/2/texto):
+    nenhuma sem super ativo. **Anterior, reproduzido 1/6:** o super rebaixado no meio da exclusão que já mandou a concluía — **corrigido** na
+    exclusão (`ATOR`, `c31687d4`); nas outras gravações, **C295**.
+  - **Sabotagem (r3): 55** sabotagens novas, **35** caíram, **20** sobreviveram: **4** por falta de cenário (R30, D18, R25, E6 — viraram
+    cenários em `c31687d4` e caem), **5** de ordem entre duas recusas simultâneas não contratada (D2, D3, R23, R24, R26 — declarado, D (137)),
+    **11** equivalentes ou inalcançáveis provadas (R15, R17, R18, R22, R31, D1, D8, D17, E1, E5, E7).
+- **Suíte final (depois da Fase 5, antes da documentação):** a de antes de `c31687d4` (acima) — a documentação não toca código.
+- **T4 — fechamento** (o commit de documentação): novidades (cabeçalho, B884–B888, C291/C292/C293 resolvidas, C294 e C295, a D (136) da
+  edição resolvida, D (137), F (137), a seção da etapa, "Onde estamos"), spec 23 (a seção da Etapa 137, o item da 136 marcado e a frase
+  errada do plano da 136 dita), mapa (linha 23, a última atualização), guia (cabeçalho, seção, roteiro), manual (5.2e — o *ativo* pela
+  régua na criação, na edição e no inativar; 5.2h — a exclusão conferida no instante de gravar e o *Super administrador*), este plano, o
+  "defeito que escapou" da retro da 136.
+
+## Tasks — estado
+
+- [x] **T1** `cbe8c079` (Fase 5 `c31687d4`) · [x] **T2** e [x] **T3** `c73951c4` (Fase 5 `c31687d4`) · [x] **T4** — o commit de documentação.
+
+## Retro (4 números)
+
+1. **Rodadas de correção até verde:** **1** (Fase 5: o `ATOR` e o "igual ao gravado" só com valor simples, mais os 4 cenários). Testes
+   antigos mudados: **1** arquivo — `chatSocketInativoNoServidor` (o cenário estático do `DELETE` reancorado no `execEmTransacao`).
+2. **Achados da revisão:** Fase 2 — **2 Critical + 6 Important + 4 Minor, todos reais** (C1 medido por sonda; os dois Critical mudaram o
+   design). Fase 5 — r1 **2** desta etapa (1 corrigido, 1 declarado) + **1** anterior (C294); r2 **0** desta etapa + **1** anterior
+   reproduzido (corrigido na exclusão, C295 no resto); r3 **4** sobreviventes reais (viraram cenários) + **16** equivalentes, inalcançáveis
+   ou de ordem não contratada; **0** ruído.
+3. **Paralelismo:** **0** galhos em paralelo (o mesmo `index.js` e o "um teste de servidor por vez"), **0** retrabalho; **1** revisor na
+   Fase 2, **3** em paralelo na Fase 5 sob a trava, e **1** agente de medição (só leitura) em paralelo com a suíte, para a escolha da 138.
+4. **Defeito que escapou:** *(preencher na Etapa 138)*.
+
+## Próxima tarefa detalhada — Etapa 138
+
+*(A série desta etapa foi B884–B888, C294–C295, nenhuma A — a 138 começa em **B889**, **C296**, **A84**; confira com `grep -oE` antes.)*
+
+**Medido (agente de medição, só leitura, nesta etapa):** as candidatas livres do almoxarifado acabaram (medido na 136) e as do núcleo
+também — a C291–C293 e a C292 foram as últimas; a C294 (propostas) e a C295 (geral) são as anteriores novas. O que sobra na letra **C** é
+orientação a quem opera (C256–C263), regra de negócio (C109, C117/C118, C139 — do P.O.), ou precisa de transação de banco de verdade (C98,
+C110 — depois da migração para Postgres). Em **Compras** (`specs/modulo-compras/README.md`, `docs/compras-novidades-por-etapa.md` letra G)
+o que é livre é pequeno e de valor baixo (exportar pedidos um a um, a lista vazia que não cita o filtro, o build de deploy que ignora o
+lint — G3). **O de maior valor livre está nas propostas.**
+
+**Escolhida: a varredura do "payload parcial zera colunas" nos `PUT` das propostas e vizinhos** (perda de dado silenciosa; já apareceu
+duas vezes — nos itens e no contato; `specs/proposta-editavel/CHECKLIST-teste-fix-2026-07-21.md:115`, item oferecido e nunca feito).
+**Fase 0 (medir antes de prometer):** para cada `PUT`, mandar só um campo e conferir no banco se os outros sobreviveram:
+`index.js` `app.put('/api/clientes/:id'` (~5193), `'/api/propostas/:id'` (~8160), `'/api/propostas/:id/customizacoes'` (~5829),
+`'/itens/descricoes'` (~5897), `'/clausulas/:clausulaId'` (~6063), `'/fotos/:fotoId'` (~6226), `'/variaveis-manuais'` (~6267),
+`'/api/produtos/:id'` (~15058), `'/api/oportunidades/:id'` (~15242). **Contrato a decidir por porta (B, reversível):** ausente = mantém
+(`COALESCE` ou montar o `SET` só com o que veio) × presente nulo/vazio = limpa; a tela de hoje manda o objeto inteiro — medir o que cada
+tela manda (`client/src/components/proposta/`, `Clientes`, `Produtos`, `Oportunidades`) antes de mudar, porque a tela que manda `""` para
+"apagar" tem de continuar apagando. **Pontos de atenção:** `normalizarMaiusculas` e os campos calculados (totais, `updated_at`); o review
+obrigatório da proposta (`specs/proposta-editavel/review-proposta.md` — rodar as invariantes antes de mexer no template/paginação; a
+varredura não deve tocar no template); molde de teste com o `index.js` real em pasta vazia (`usuarioExclusaoCorrida.api.test.js`, com
+`RATE_LIMIT_MAX`). **Junto, pequena:** a **C294** (a renumeração de propostas, `index.js` ~5573, passa a `db.execEmTransacao` — o mesmo
+conserto da exclusão; teste no molde da RN-04b). **Alternativa se a medição achar pouco:** o índice e a paginação da lista de propostas
+(`specs/lentidao-api-propostas/2026-07-21-lentidao-api-propostas.md`, Frente B — a Frente A já está feita; o índice é pequeno e seguro).
+
+**Dependem do P.O. — NÃO implemente:** **B853**/**C279**, **B808**, **B755**, **B761**/**C239**, **C224**, o resto da **C225**, **C228**,
+**C219**, **C230**, o reparo da **C246** (e a **C247**), a tabela de conversões e o grupo acima de família, a **régua do tempo de
+recebimento (E2)**, a **C268**, a **C269**, **C275**, **C276**, **C277**, **C109**, **C117**/**C118**, **C139**, **C278**; na 05, os itens
+de produto e a **C198**; na 06, a **B11** e a Engenharia; na 21, a valorização por cliente e previsto × realizado; na 22, **B13**,
+**B101**/G30, **G38**; no Compras, D-35, D-37, D-78, D-90, G9/G30, G4, G15, B63, B60, B62; nas propostas, a verificação do dono da proposta
+(Fase 12 de `specs/proposta-editavel/tasks.md`) e o filtro por permissão do histórico (`auditoria.md`). Pendem de Postgres: **C98**, **C110**.
+
+**O que já está pronto e não precisa reabrir:** a exclusão de usuário com o motivo decidido dentro da transação (`ATOR`, `NAO_ENCONTRADO`,
+`ULTIMO_SUPER`, `DESTINO`); `db.execEmTransacao` (reutilizável — é o conserto da C294); a régua `simOuNao`/`campoAusente` e
+`superAdminInvalido` em `systemPermissions.js`; o "igual ao gravado" do `PUT` de usuário.

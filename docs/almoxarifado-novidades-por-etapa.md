@@ -11,13 +11,19 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-17):** **Etapa 136 fechada** (a entrega de dois itens do mesmo material não baixa mais um para
+> **Onde o desenvolvimento está (2026-10-17):** **Etapa 137 fechada** (do núcleo: dois super administradores excluindo um ao outro no
+> mesmo instante não deixam mais o sistema sem nenhum — a exclusão confere de novo, antes de gravar, quem exclui, o usuário, o último super e
+> o destino dos registros, e não grava nada se algo mudou: **C292** resolvido, **B884**; e o cadastro de usuários pela API lê *Super
+> administrador* e *ativo* pela régua de sim ou não — sem o campo mantém, `"true"` é sim, o botão de inativar com `"true"` reativa: **C291**
+> e **C293** resolvidos, **B885** a **B887**; a revisão achou duas falhas anteriores, **C294** e **C295**); a próxima é a **138**, a
+> primeira fora do almoxarifado e do cadastro de usuários — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 136 fechada** (a entrega de dois itens do mesmo material não baixa mais um para
 > recusar o outro **por endereço**: o que sai do endereço de onde cada item foi separado — ou do endereço escolhido — sai antes do que vai
 > pela regra automática, e a parte automática de um item não esvazia mais a origem do outro; a recusa que vinha depois da primeira baixa
 > da **D (135)** sumiu, **B877** e **B878**; e, do núcleo, a senha e o *ativo* que não servem são recusados com a frase do que mandar, a
 > edição com senha em número que nunca respondia responde, e dois super administradores se rebaixando ao mesmo tempo não deixam mais o
 > sistema sem nenhum: **C285**, **C287**, **C288**, **C289** e **C290** resolvidos, **B879** a **B882**; a revisão achou duas falhas
-> anteriores do cadastro de usuários, **C291** e **C292**); a próxima é a **137** — ver "Onde estamos e o que vem a seguir".
+> anteriores do cadastro de usuários, **C291** e **C292**); a próxima era a **137**.)*
 > *(Antes: **Etapa 135 fechada** (a entrega de dois itens do mesmo material numa requisição não
 > baixa mais um para recusar o outro — a recusa sai antes de qualquer baixa, e a janela de entrega divide o que sobra entre eles: o
 > **entregável de irmãos** da **D (127)**, **B869** a **B872**, com o material crítico que o detalhe prometia além da caixa — **C286**
@@ -3041,7 +3047,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B883; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B888; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -9577,6 +9583,52 @@ usuário deixava de entrar; o vazio e o nulo contavam como "desativar" (o admini
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
 as perguntas da **C275**, **C276** e **C277** continuam esperando vocês.
 
+**B884 (NOVA, da Etapa 137; do núcleo) — a exclusão de usuário decide o último super administrador dentro da própria gravação.** Fecha a
+**C292**, **reproduzida** nesta etapa: dois super administradores excluindo um ao outro no mesmo instante passavam os dois — 6 em 6
+tentativas, nenhum super ativo (e o mesmo com a exclusão contra o rebaixamento, contra o próprio se rebaixando em outra aba e, em metade
+das vezes, contra o botão de inativar). A conferência de antes continua (a recusa cedo); agora a exclusão confere de novo **no início da
+própria gravação, antes de escrever qualquer coisa**: quem exclui ainda é super administrador ativo, o usuário ainda existe, não é o
+último super ativo e o destino dos registros ainda existe. Se algum falhar, nada é transferido nem apagado, e a resposta é a de hoje de
+cada caso — *"Apenas Super Administradores podem excluir usuários"*, *"Usuário não encontrado"*, *"Não é possível excluir o último Super
+Administrador ativo do sistema"* ou *"Usuário de destino dos registros não encontrado"* (esta antes saía como erro interno de banco).
+**Junto (achado da revisão):** um super rebaixado no meio de uma exclusão que ele já tinha mandado ainda a concluía — agora não.
+**Descartados:** (a) uma regra no próprio banco que recusasse ficar sem super ativo — é migração, e trancaria a recuperação do
+reinício (a **B861**) e o reparo feito com o servidor parado; (b) uma gravação em vários passos com conferência no fim e desfazer — a
+revisão do plano **mediu** que o desfazer apagaria junto o salvamento de outra pessoa feito no mesmo instante por algumas telas de
+propostas, e que o usuário alvo seria desconectado por uma exclusão que depois voltava atrás; (c) uma trava na memória só da exclusão —
+não cobre o rebaixamento nem o inativar. **Reversível** (só código).
+
+**B885 (NOVA, da Etapa 137; do núcleo) — *Super administrador* pela régua de sim ou não, e ausente mantém.** Fecha a **C291**: um super
+editando outro super pela API sem o campo o rebaixava, e o último super editando a si mesmo sem o campo era recusado como "remover o
+último super". Agora, na edição, o campo ausente, nulo ou vazio **mantém** o que estava; `1`, `true`, `"1"` e `"true"` fazem super;
+`0`, `false`, `"0"` e `"false"` tiram; qualquer outro valor é recusado sem gravar, na criação e na edição, com *"Super administrador
+inválido: envie 1 (sim) ou 0 (não)"*. **Junto (achado da revisão do plano):** o `"true"` de um super **rebaixava** (só o número 1 contava
+como sim). Para quem não é super o campo continua simplesmente ignorado (nem recusa). Na criação, sem o campo continua criando comum.
+**Descartado:** ignorar em silêncio o valor fora da régua — a integração que manda `"sim"` acharia que promoveu. **Reversível.**
+
+**B886 (NOVA, da Etapa 137; do núcleo) — o botão de inativar pela régua de sim ou não.** Fecha a parte da **C293** do inativar: pela API,
+qualquer valor que não fosse o número 1 **desativava** — inclusive `"true"` e o pedido sem o campo. Agora `"true"`/`"1"`/`true`/`1`
+reativam, `"false"`/`"0"`/`false`/`0` desativam, e o resto — inclusive o pedido sem o campo — é recusado sem mudar nada, com *"Ativo
+inválido: envie 1 (ativo) ou 0 (inativo)"*. A tela sempre manda 1 ou 0. **Muda o contrato** para quem chamava sem o campo (antes
+desativava). **Descartado:** manter o pedido sem o campo como "desativar". **Reversível.**
+
+**B887 (NOVA, da Etapa 137; do núcleo) — *ativo* na edição pela régua, sem recusar o que a tela leu.** Fecha a outra parte da **C293** e a
+limitação **D (136)** da edição: pela API, `"true"` gravava o texto e a pessoa deixava de entrar (a criação já aceitava `"true"` desde a
+**B879**). Agora, na edição: ausente, nulo ou vazio mantém (a **B882**); **o mesmo valor que já está gravado** mantém; `"true"`/`"1"`/
+`true`/`1` gravam 1, `"false"`/`"0"`/`false`/`0` gravam 0; o resto é recusado sem gravar com *"Ativo inválido: envie 1 (ativo) ou 0
+(inativo)"*. O "mesmo valor que já está gravado" existe por causa da tela: o formulário devolve o que leu, e um usuário antigo com *ativo*
+2 (ou `"true"` em texto) editado **sem mexer** na caixa *Usuário ativo* continua como estava, em vez de virar recusa. **Consequência que
+fica (achado da revisão):** esse usuário antigo com `"true"` em texto não entra, e editá-lo com `"true"` também o mantém assim — para que
+ele entre, marque a caixa *Usuário ativo* (ela grava 1) ou use o botão de reativar (a **A79** acha esses usuários). **Descartados:** recusar
+todo valor fora da régua (o usuário antigo editado pela tela viraria recusa — era o motivo da D (136)); aplicar a régua antes do "mesmo
+valor" (o formulário salvo sem mexer na caixa reativaria quem a tela mostra desmarcado). **Reversível.**
+
+**B888 (NOVA, da Etapa 137) — a próxima etapa (138).** Ver a "próxima tarefa detalhada" no plano da Etapa 137 — com as candidatas do
+almoxarifado e do núcleo esgotadas, ela sai de **fora** do almoxarifado (propostas). A **B853** (com a **C279**), a **B808**, a **B755**,
+a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da **C246**/**C247**, a tabela de
+conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e as perguntas da **C275**,
+**C276** e **C277** continuam esperando vocês.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -12314,20 +12366,31 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 290. **✅ RESOLVIDO NA ETAPA 136 (B881) — NOVO (da revisão do plano da Etapa 136; do núcleo, anterior a ela) — editar usuário pela API
      com a senha em número nunca respondia.** O servidor não caía (a proteção de processo segurava o erro), mas a requisição ficava sem
      resposta até o tempo limite de quem chamou; nada era gravado. Agora responde *"Senha inválida: envie a senha como texto"*.
-291. **NOVO (da Etapa 136; do núcleo, anterior a ela; lido no código, e reproduzido no próprio super) — um super administrador editando outro super pela API sem o campo
+291. **✅ RESOLVIDO NA ETAPA 137 (B885) — sem o campo mantém, e `"true"` faz super.** O texto original: **NOVO (da Etapa 136; do núcleo, anterior a ela; lido no código, e reproduzido no próprio super) — um super administrador editando outro super pela API sem o campo
      *Super administrador* o rebaixa.** O servidor trata a falta do campo como "não é super" quando quem edita é super (a tela sempre manda
      o campo). Com o último super, a edição de si mesmo sem o campo é recusada como "remover o último super". **O que fazer:** nada pela
      tela; integrações que editam usuário mandam o campo. Candidata da próxima etapa do núcleo (só mudar a marca quando o campo vier).
-292. **NOVO (da revisão da Etapa 136; do núcleo, anterior a ela; reproduzido 6 em 6) — dois super administradores excluindo um ao outro
+292. **✅ RESOLVIDO NA ETAPA 137 (B884) — a exclusão confere de novo, antes de gravar.** O texto original: **NOVO (da revisão da Etapa 136; do núcleo, anterior a ela; reproduzido 6 em 6) — dois super administradores excluindo um ao outro
      ao mesmo tempo deixam o sistema sem nenhum super ativo.** A exclusão confere "o último super" antes e apaga depois; o mesmo vale para
      excluir um enquanto o outro se rebaixa (basta uma pessoa com duas abas). O rebaixamento e a desativação já conferem no instante da
      gravação (**B880**); a exclusão não. Ninguém ganha acesso: o próximo reinício recupera pelo administrador padrão (a **B861**), se ele
      existir. **O que fazer:** não excluir super administradores em duas abas ao mesmo tempo; se acontecer, reinicie o servidor. Candidata
      da próxima etapa do núcleo.
-293. **NOVO (da revisão da Etapa 136; do núcleo, anterior a ela) — pela API, o botão de inativar desativa com qualquer valor que não seja
+293. **✅ RESOLVIDO NA ETAPA 137 (B886, B887) — a mesma régua de sim ou não no inativar e na edição.** O texto original: **NOVO (da revisão da Etapa 136; do núcleo, anterior a ela) — pela API, o botão de inativar desativa com qualquer valor que não seja
      1, e a edição grava *ativo* "true" ou 2 cru.** O inativar com `"true"` desativa (fica 0 — erra para o lado seguro); a edição com
      `"true"` grava o texto e o usuário deixa de entrar (a criação aceita "true" como ativo desde a **B879** — os dois lados ficaram
      diferentes). A tela manda sempre 1 ou 0. **O que fazer:** nada; candidata pequena (a mesma régua de sim ou não na edição e no inativar).
+294. **NOVO (da revisão da Etapa 137; das propostas, anterior a ela; lido no código, não reproduzido) — a renumeração de propostas que falha
+     no meio pode desfazer uma gravação de outra pessoa feita no mesmo instante.** A renumeração grava tudo de uma vez; se um passo falha, o
+     desfazer é mandado **depois** das gravações que entraram na fila enquanto ela falhava, e as desfaz junto (a pessoa recebeu "salvo").
+     É o mesmo defeito que a exclusão de usuário tinha e a Etapa 137 corrigiu (**B884**). Só acontece se a renumeração falhar — o que não
+     se espera em operação normal. **O que fazer:** nada; candidata pequena (a renumeração passa a desfazer no mesmo passo, como a exclusão).
+295. **NOVO (da revisão da Etapa 137; do núcleo, anterior a ela; reproduzido só na exclusão — 1 em 6) — a permissão de quem age é
+     conferida na entrada do pedido, não no instante da gravação.** Um administrador rebaixado (ou desativado) enquanto o pedido dele já
+     corria ainda o concluía. Na **exclusão de usuário** isso foi fechado nesta etapa (a exclusão confere quem exclui de novo, **B884**); nas
+     outras gravações (editar usuário, inativar, e as do resto do sistema) a janela é de milissegundos e não deixa o sistema sem super
+     administrador (a trava do último super confere no instante da gravação). **O que fazer:** nada; só rebaixe um administrador quando
+     ele não estiver no meio de uma ação.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -13606,7 +13669,21 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   automática deixa o "sem lote atribuído" negativo. Com as passadas, mais entregas chegam a isso (antes paravam no meio, recusadas).
 - **(136) A edição de usuário** não passou pela régua de sim ou não da criação (**B879**): *ativo* "true" ou 2 na edição continua gravado
   cru (**C293**). A exclusão do último super em corrida não mudou (**C292**). Perdendo a corrida do último super com o usuário apagado no
-  meio, a resposta é a do último super, não *"Usuário não encontrado"*.
+  meio, a resposta é a do último super, não *"Usuário não encontrado"*. *(Resolvidas na Etapa 137 a edição e o inativar com "true" e a
+  exclusão em corrida — **B887**, **B886**, **B884**; a frase do usuário apagado no meio continua valendo para a edição e o inativar.)*
+- **(137) Um erro inesperado no meio da exclusão de usuário** (não a recusa: um disco cheio, uma tabela nova com regra que o sistema não
+  conhece) desfaz a exclusão inteira — e, se no mesmo milissegundo uma das poucas telas que gravam por um caminho próprio (algumas de
+  propostas) tiver gravado, desfaz essa gravação junto. A recusa (último super, usuário ou destino que sumiu, quem exclui que deixou de ser
+  super) **não** desfaz nada — ela decide antes de escrever. Não reproduzido; a revisão do plano mediu o mecanismo.
+- **(137) O usuário antigo com *ativo* `"true"` em texto** continua sem entrar quando editado com `"true"` (o mesmo valor gravado mantém —
+  **B887**); para ele entrar, marque a caixa *Usuário ativo* ou use o botão de reativar.
+- **(137) Quando dois campos do cadastro estão errados ao mesmo tempo** (por exemplo *ativo* e *Super administrador* fora da régua), qual
+  das duas recusas aparece primeiro não é regra — nada é gravado em nenhum caso.
+- **(137) A recusa "último Super Administrador" da exclusão** ficou como guarda de reserva: com a exclusão exigindo que quem exclui seja
+  super ativo (e não seja o próprio alvo), sempre sobra ao menos ele, e quem perde a corrida recebe *"Apenas Super Administradores podem
+  excluir usuários"*. A frase continua no código para o dia em que a exclusão deixar de exigir super.
+- **(137) A prova do "rebaixado no meio da exclusão"** depende de uma corrida que acontece em poucas rodadas (1 de 6 na revisão; na bateria,
+  a sabotagem caiu na rodada 9 de 16); o teste prende a regra em toda rodada, mas só a prova quando a corrida acontece.
 
 ### E. Regras que foram DEDUZIDAS e nunca confirmadas com vocês — perguntas, não requisitos atendidos (E1, a remessa mista; E2, o tempo de recebimento)
 
@@ -14518,6 +14595,12 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(137) Nenhum clique foi dado no navegador.** A exclusão, o *Super administrador* e o *ativo* foram provados com o servidor de verdade, em
+pasta vazia, dentro da suíte (21 cenários, com as corridas de dois e três super administradores — exclusão contra exclusão, contra
+rebaixamento, contra o próprio em outra aba e contra o inativar), e a gravação em um passo só pelo serviço (6 cenários). O que **só o
+navegador** prova: o roteiro da Etapa 137 no guia — **Admin → Usuários**: excluir um usuário comum transferindo os registros, inativar e
+reativar pelo botão da lista, e editar um usuário pelo formulário **sem** mexer na caixa *Usuário ativo* (salva sem recusa).
 
 **(136) Nenhum clique foi dado no navegador.** A ordem das baixas foi provada pela rota e pelo serviço com o servidor de teste (20
 cenários, e um teste da revisão de mais de 3.100 entregas aleatórias comparando o código novo com o de antes: nenhuma diferença no que a
@@ -27917,17 +28000,93 @@ antes paravam no meio saíram inteiras; o de **permissão** não achou caminho n
 "true" (**C293**); o de **sabotagem** fez **47** sabotagens além das **14** já feitas: **16** sobreviveram, **9** por falta de cenário —
 viraram cenários e caem — e **7** foram provadas inofensivas.
 
+## Etapa 137 — A exclusão do último super administrador e a régua de sim ou não do cadastro de usuários (2026-10-17)
+
+Desde a Etapa 136, dois super administradores rebaixando ou desativando um ao outro no mesmo instante não deixam mais o sistema sem
+nenhum. A **exclusão** ainda deixava: cada um conferia "sobra outro super?", os dois viam que sim e os dois excluíam. Agora a exclusão
+confere de novo no início da própria gravação — quem exclui ainda é super, o usuário ainda existe, sobra outro super, o destino dos
+registros ainda existe — e, se algo mudou, não grava nada. Junto, o cadastro de usuários pela API passa a ler *Super administrador* e
+*ativo* pela mesma régua de sim ou não da criação: um super editando outro sem o campo não o rebaixa mais, o `"true"` promove (antes
+rebaixava), e o botão de inativar com `"true"` reativa (antes desativava).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Dois super administradores excluindo um ao outro ao mesmo tempo: os dois passavam, nenhum super | Um passa; o outro recebe *"Apenas Super Administradores podem excluir usuários"* e nada dele é gravado (**B884**, **C292**) |
+| A exclusão contra o rebaixamento, contra o próprio em outra aba ou contra o inativar: o mesmo | Sobra sempre um super (**B884**) |
+| O mesmo usuário excluído em duas abas: as duas diziam *"Usuário excluído com sucesso"* | A segunda diz *"Usuário não encontrado"* (**B884**) |
+| O destino dos registros excluído no meio da exclusão: erro interno de banco | *"Usuário de destino dos registros não encontrado"*, nada feito (**B884**) |
+| Um super rebaixado no meio de uma exclusão que já tinha mandado ainda excluía | Recusado (**B884**) |
+| Super editando outro super pela API sem o campo *Super administrador*: rebaixava | Mantém (**B885**, **C291**) |
+| *Super administrador* `"true"` pela API: rebaixava; `2` ou `"sim"`: rebaixava | `"true"` faz super; o que não é sim ou não: *"Super administrador inválido: envie 1 (sim) ou 0 (não)"* (**B885**) |
+| Inativar pela API com `"true"` ou sem o campo: desativava | `"true"` reativa; sem o campo ou fora da régua: *"Ativo inválido: envie 1 (ativo) ou 0 (inativo)"* (**B886**, **C293**) |
+| Editar pela API com *ativo* `"true"`: gravava o texto e a pessoa deixava de entrar; `2` gravava 2 | `"true"` grava ativo; `2` num ativo é recusado; o usuário antigo com 2 editado pela tela continua como estava (**B887**, **C293**) |
+
+### As regras, com o cenário exato
+
+Preparação: dois super administradores, **A** e **B**, cada um entrado na sua sessão (dois navegadores, ou um anônimo), e um usuário
+comum **C**. As corridas só aparecem pela API (dois pedidos no mesmo instante); pela tela vale o roteiro do guia.
+
+**1. A exclusão cruzada.** A e B, no mesmo instante, excluem um ao outro (`DELETE /api/usuarios/:id`): um recebe *"Usuário excluído com
+sucesso"*; o outro, *"Apenas Super Administradores podem excluir usuários"* (o usuário dele já não existe) ou é desconectado. Em
+**Admin → Usuários** sobra exatamente um super, e os registros de quem sobrou continuam dele.
+
+**2. O mesmo usuário em duas abas.** O mesmo super exclui **C** em duas abas ao mesmo tempo: uma diz *"Usuário excluído com sucesso"*, a
+outra *"Usuário não encontrado"*.
+
+**3. O *Super administrador* pela API.** A edita B (`PUT /api/usuarios/:id`) sem o campo `is_superadmin`: B continua super. Com
+`"is_superadmin": "true"` num comum: vira super. Com `"is_superadmin": 2`: *"Super administrador inválido: envie 1 (sim) ou 0 (não)"*, nada
+gravado. O último super editando a si mesmo sem o campo: salva (antes: *"Não é possível remover ou desativar o último Super Administrador
+ativo do sistema"*).
+
+**4. O inativar pela API.** `PATCH /api/usuarios/:id/status` com `{"ativo": "true"}` reativa; com `{}` ou `{"ativo": "sim"}`: *"Ativo
+inválido: envie 1 (ativo) ou 0 (inativo)"*, nada muda. Pela tela o botão continua igual.
+
+**5. O *ativo* da edição.** `PUT` com `"ativo": "true"` num inativo: ele passa a entrar. Com `"ativo": 2` num ativo: *"Ativo inválido:
+envie 1 (ativo) ou 0 (inativo)"*. Um usuário antigo com *ativo* 2 gravado, editado pelo formulário sem mexer na caixa *Usuário ativo*:
+salva, e continua como estava.
+
+### O que esta etapa NÃO cobre
+
+1. **Um erro inesperado no meio da exclusão** (não a recusa) desfaz a exclusão e, no mesmo milissegundo, pode desfazer uma gravação de
+   algumas telas de propostas (D (137)); e a **renumeração de propostas** que falha tem o mesmo defeito que a exclusão tinha (**C294**).
+2. **A permissão de quem age** nas outras gravações continua conferida na entrada do pedido (**C295**) — só a exclusão confere de novo.
+3. **O usuário antigo com *ativo* `"true"` em texto** só volta a entrar pela caixa *Usuário ativo* ou pelo botão de reativar (**B887**).
+4. As decisões que esperam vocês: **B853**, **B808**, **B755**, **B761**/**C239**, **C224**, **C225**, **C228**, **C219**, **C230**,
+   **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (**E2**), a **C268**, a **C269** e as
+   perguntas da **C275** a **C277**.
+
+### O que a revisão encontrou
+
+A **medição** reproduziu a exclusão em corrida (6 em 6, e um par novo — contra o inativar — em 3 de 6). A **revisão do plano** (antes do
+código) derrubou o desenho original: uma gravação em vários passos com desfazer no fim **mediu-se** que apagaria junto o salvamento de
+outra pessoa e desconectaria o usuário alvo de uma exclusão que depois voltava atrás — o desenho virou "decidir antes de escrever, num
+passo só"; e achou o `"true"` do *Super administrador* rebaixando e o perdedor da corrida com erro interno de banco. A **revisão adversarial
+do código** (três revisores, executando): o de **regra** achou o *ativo* em lista passando como "o mesmo valor" (corrigido) e o usuário
+antigo em texto (declarado, **B887**); o de **permissão**, em 60 rodadas de três super administradores com duas abas cada, não achou
+caminho para ficar sem super, e achou o super rebaixado concluindo uma exclusão em andamento (corrigido, **B884**; nas outras gravações,
+**C295**); o de **sabotagem** fez **55** sabotagens além das **19** do autor: **35** caíram, **4** sobreviventes viraram cenários e caem,
+e as outras foram provadas inofensivas ou são ordem entre duas recusas simultâneas (não contratada).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 137 entregue (2026-10-17):** **a exclusão do último super administrador e a régua de sim ou não do cadastro de usuários** (do
+  núcleo). A exclusão confere de novo, no início da gravação, quem exclui, o usuário, o último super e o destino, e não grava nada se algo
+  mudou (**C292** resolvido — **B884**); *Super administrador* e *ativo* pela régua de sim ou não na edição e no inativar, sem recusar o que
+  a tela leu (**C291**, **C293** resolvidos — **B885** a **B887**). **O que é seu:** nenhuma consulta nova em A (a **A79** continua achando
+  *ativo* fora de 0 e 1); a pergunta **B853**; as decisões **B884 a B887** (reversíveis); os avisos **C294** e **C295**; as limitações
+  **(137)** em D e a verificação **(137)** em F. **Próxima: Etapa 138 — ver a "próxima tarefa detalhada" no plano da Etapa 137.**
 
 - **Etapa 136 entregue (2026-10-17):** **a entrega que tira de um endereço antes do automático, e o cadastro de usuários pela API** (spec
   05 e núcleo). As baixas da entrega saem na ordem endereço → lote → automático, e a recusa por endereço depois da primeira baixa da
   **D (135)** sumiu (**B877**, **B878**); a senha e o *ativo* que não servem são recusados, a edição com *ativo* vazio mantém o que estava e
   o último super não some em corrida de rebaixamento ou desativação (**C285**, **C287**, **C288**, **C289**, **C290** resolvidos — **B879** a
   **B882**). **O que é seu:** nenhuma consulta nova em A (a **A79** continua achando *ativo* fora de 0 e 1); a pergunta **B853**; as decisões
-  **B877 a B882** (reversíveis); os avisos **C291** a **C293**; as limitações **(136)** em D e a verificação **(136)** em F. **Próxima:
-  Etapa 137 — ver a "próxima tarefa detalhada" no plano da Etapa 136.**
+  **B877 a B882** (reversíveis); os avisos **C291** a **C293**; as limitações **(136)** em D e a verificação **(136)** em F.
+  *(Próxima, na época: Etapa 137 — entregue acima.)*
 
 - **Etapa 135 entregue (2026-10-17):** **a entrega de dois itens do mesmo material, e três detalhes do cadastro de usuários** (spec 05 e
   núcleo). A entrega confere a requisição inteira antes de baixar e a janela de entrega divide o saldo livre entre as linhas do mesmo

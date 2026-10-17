@@ -1049,7 +1049,13 @@ O **chat em tempo real** segue a mesma regra. No instante em que o usuário é d
 
 Ao **sair**, o chat é fechado junto: quem entrar depois no mesmo navegador abre o seu, sem herdar o de quem saiu.
 
-Ninguém se desativa: tanto o botão de inativar quanto o formulário recusam desativar o próprio usuário com *"Não é possível desativar o próprio usuário"*. Editar um usuário sem informar se ele está ativo — ou com o campo vazio ou nulo — mantém o que estava gravado (e não conta como desativá-lo). Criar um usuário sem informar se ele está ativo — ou com o campo vazio — o cria **ativo**; ao criar, *ativo* aceita só sim ou não: `1`, `true`, `"1"` ou `"true"` criam ativo; `0`, `false`, `"0"` ou `"false"` criam inativo; qualquer outro valor é recusado sem gravar nada com *"Ativo inválido: envie 1 (ativo) ou 0 (inativo)"*. A tela sempre manda 1 ou 0.
+Ninguém se desativa: tanto o botão de inativar quanto o formulário recusam desativar o próprio usuário com *"Não é possível desativar o próprio usuário"*.
+
+*Ativo* aceita só **sim ou não**: `1`, `true`, `"1"` ou `"true"` é ativo; `0`, `false`, `"0"` ou `"false"` é inativo. Qualquer outro valor é recusado sem gravar nada com
+
+> *"Ativo inválido: envie 1 (ativo) ou 0 (inativo)"*
+
+— ao **criar**, ao **editar** e no botão de **inativar/reativar**. Criar sem informar se o usuário está ativo — ou com o campo vazio — o cria **ativo**. Editar sem informar, com o campo vazio ou nulo, ou com **o mesmo valor que já está gravado** mantém o que estava (e não conta como desativá-lo): o formulário devolve o valor que leu, e salvá-lo sem mexer na caixa *Usuário ativo* nunca muda nem recusa o *ativo* — inclusive de um usuário antigo gravado com um valor fora de sim ou não, que continua como estava (e, se o valor não é 1, continua sem entrar até a caixa ser marcada ou o usuário ser reativado). O botão de inativar exige o valor: sem ele, a recusa acima. A tela sempre manda 1 ou 0 no botão.
 
 O que a desativação **não** alcança: os **links de fotos, avatares e anexos** já gerados abrem até vencer (de 15 minutos a 25 horas, conforme o tipo) — eles não consultam a sessão; a pessoa desativada não consegue link novo. E algumas telas que baixam arquivo por um caminho próprio recebem a recusa do servidor sem voltar ao login naquele clique; o clique seguinte volta.
 
@@ -1131,9 +1137,22 @@ Ao editar, a senha vazia (ou ausente) mantém a senha atual. O campo *ativo* seg
 **O último super administrador ativo.** Rebaixar ou desativar o último super administrador ativo (o que entra no sistema) é recusado: pelo
 formulário com *"Não é possível remover ou desativar o último Super Administrador ativo do sistema"*, pelo botão de inativar com *"Não é
 possível desativar o último Super Administrador ativo do sistema"*, e a exclusão com *"Não é possível excluir o último Super Administrador
-ativo do sistema"*. No rebaixamento e na desativação a conferência é feita no próprio instante da gravação: com dois super administradores,
-cada um rebaixando ou desativando o outro ao mesmo tempo, um dos dois é recusado e sempre sobra um. Um super administrador que esteja
-inativo não conta como "o outro".
+ativo do sistema"*. A conferência é feita no próprio instante da gravação: com dois super administradores, cada um rebaixando,
+desativando ou excluindo o outro ao mesmo tempo, um dos dois é recusado e sempre sobra um. Um super administrador que esteja inativo não
+conta como "o outro".
+
+**Excluir usuário** (só o super administrador) transfere os registros do usuário para o destino escolhido (por padrão, quem exclui) e apaga
+os dados pessoais dele (grupos, permissões, inscrições de aviso). No instante de gravar, o sistema confere de novo — e, se algo mudou
+desde o clique, não transfere nem apaga nada: quem exclui deixou de ser super administrador ativo (*"Apenas Super Administradores podem
+excluir usuários"*), o usuário já foi excluído (*"Usuário não encontrado"* — por exemplo, excluído em outra aba), ele é o último super
+administrador ativo, ou o destino dos registros já não existe (*"Usuário de destino dos registros não encontrado"*). Ninguém exclui o
+próprio usuário (*"Não é possível excluir o próprio usuário"*).
+
+**Super administrador** só é dado ou tirado por um super administrador; para os demais, o campo é ignorado. Ele aceita só sim ou não
+(`1`, `true`, `"1"`, `"true"` / `0`, `false`, `"0"`, `"false"`); ao criar sem o campo, o usuário nasce comum; ao editar sem o campo —
+ou com ele vazio ou nulo —, mantém o que estava. Qualquer outro valor é recusado sem gravar nada com
+
+> *"Super administrador inválido: envie 1 (sim) ou 0 (não)"*
 
 ### 5.3 Usuário sem perfil definido é tratado como chão de fábrica
 

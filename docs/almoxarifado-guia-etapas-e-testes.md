@@ -1,18 +1,26 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-17 (Etapa 136) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-17 (Etapa 137) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135 e 136) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136 e 137) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-17 (Etapa 136 ENTREGUE · próxima: Etapa 137)
+> ## Onde o desenvolvimento está — 2026-10-17 (Etapa 137 ENTREGUE · próxima: Etapa 138)
 >
-> **O desenvolvimento parou aqui: Etapa 136 fechada — 2026-10-17.** A **Etapa 136 (a entrega que tira de um endereço antes do automático,
+> **O desenvolvimento parou aqui: Etapa 137 fechada — 2026-10-17.** A **Etapa 137 (a exclusão do último super administrador e a
+> régua de sim ou não do cadastro de usuários, do núcleo)**: dois super administradores excluindo um ao outro no mesmo instante não deixam
+> mais o sistema sem nenhum — a exclusão confere de novo, no instante de gravar, quem exclui, o usuário, o último super e o destino, e não
+> grava nada se algo mudou; e, pela API, *Super administrador* e *ativo* seguem a régua de sim ou não (sem o campo mantém; `"true"` é sim;
+> o botão de inativar com `"true"` reativa). Nenhuma consulta nova. **Próxima: Etapa 138** — a primeira fora do almoxarifado e do
+> cadastro de usuários (propostas); ver a próxima tarefa no plano da 137.
+>
+> **Etapa 136, 2026-10-17.** A **Etapa 136 (a entrega que tira de um endereço antes do automático,
 > e o cadastro de usuários pela API)**: quando uma linha foi separada de um endereço certo e outra sem dizer de onde, a entrega tira primeiro
 > do endereço certo e só depois pela regra automática — a mesma entrega sai inteira (antes a parte automática de uma linha podia esvaziar o
 > endereço da outra, e a segunda era recusada com o estoque já baixado); e, do núcleo, a senha e o *ativo* que não servem são recusados com a
 > frase do que mandar, e dois super administradores se rebaixando ao mesmo tempo não deixam mais o sistema sem nenhum. Nenhuma consulta
-> nova. **Próxima: Etapa 137** — ver a próxima tarefa no plano da 136.
+> nova.
+> *(Próxima, na época: Etapa 137 — entregue acima.)*
 >
 > **Etapa 135, 2026-10-17.** A **Etapa 135 (a entrega de dois itens do mesmo material, e três
 > detalhes do cadastro de usuários)**: quando a requisição pede o mesmo material em duas linhas, a entrega confere as duas antes de baixar
@@ -6586,6 +6594,39 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 137 — A exclusão do último super administrador e a régua de sim ou não do cadastro de usuários (ENTREGUE — 2026-10-17)
+
+**O que mudou, em uma frase:** excluir um super administrador confere de novo, no instante de gravar, se quem exclui ainda é super, se o
+usuário e o destino dos registros ainda existem e se sobra outro super — e não grava nada se algo mudou; e o cadastro de usuários pela API
+lê *Super administrador* e *ativo* pela régua de sim ou não (sem o campo mantém; `"true"` é sim).
+
+**O problema que ela resolve.** Dois super administradores excluindo um ao outro no mesmo instante passavam os dois, e o sistema ficava
+sem nenhum (só o reinício recuperava). Pela API, um super editando outro sem o campo *Super administrador* o rebaixava, o `"true"` também
+rebaixava, e o botão de inativar com `"true"` desativava.
+
+| Antes | Agora |
+|---|---|
+| Exclusão cruzada de dois super administradores: nenhum sobrava | Sobra um; o outro recebe *"Apenas Super Administradores podem excluir usuários"* |
+| O mesmo usuário excluído em duas abas: as duas diziam sucesso | A segunda diz *"Usuário não encontrado"* |
+| Editar pela API sem o campo *Super administrador*: rebaixava | Mantém |
+| Inativar pela API com `"true"`: desativava | Reativa; sem o campo: *"Ativo inválido: envie 1 (ativo) ou 0 (inativo)"* |
+
+**Roteiro de teste (5 minutos, pela tela).** Entre como super administrador.
+
+1. **Excluir com transferência.** **Admin → Usuários** → crie um usuário comum *Teste 137* → na lista, **Excluir** nele, escolha você
+   como destino dos registros e confirme: *Teste 137* some da lista.
+2. **Inativar e reativar.** Crie outro usuário → **Inativar** (o ícone na linha) → confirme: fica *Inativo* → **Reativar**: volta a
+   *Ativo* e entra.
+3. **Editar sem mexer na caixa.** Abra um usuário no formulário, mude só o **Nome** e **Salvar**: salva, e o *Usuário ativo* e o *Super
+   administrador* continuam como estavam.
+4. **Você mesmo.** Abra o seu próprio usuário no formulário, desmarque **Usuário ativo** e **Salvar**: *"Não é possível desativar o
+   próprio usuário"*, e nada muda. (As corridas — duas abas no mesmo instante — só se reproduzem pela API.)
+
+**O que esta etapa NÃO cobre.** Um erro inesperado no meio da exclusão desfaz a exclusão e, no mesmo milissegundo, pode desfazer uma
+gravação de algumas telas de propostas; a renumeração de propostas tem o mesmo defeito que a exclusão tinha (**C294**). Nas outras
+gravações, a permissão de quem age continua conferida na entrada do pedido (**C295**). O usuário antigo com *ativo* `"true"` em texto só
+volta a entrar pela caixa *Usuário ativo* ou pelo botão de reativar.
 
 ## Etapa 136 — A entrega que tira de um endereço antes do automático, e o cadastro de usuários pela API (ENTREGUE — 2026-10-17)
 

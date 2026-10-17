@@ -175,7 +175,12 @@ cai pelo "nada mudou"); o `finally` só do item (RN-05 cai pela substituição);
    reais (viraram cenários) + **7** equivalentes ou quase, provadas; **0** ruído.
 3. **Paralelismo:** **0** galhos em paralelo (o "um teste de servidor por vez" serializa), **0** retrabalho; **1** revisor na Fase 2, **3**
    em paralelo na Fase 5 sob a trava.
-4. **Defeito que escapou:** *(preencher na Etapa 137)*.
+4. **Defeito que escapou:** **0 no código da 136** — as corridas do `PUT`/`PATCH` (a guarda no `UPDATE`) aguentaram o fuzz
+   de 60 rodadas do r2 da 137 (três supers, duas abas cada), e o `ativoDaCriacao` virou base da régua da 137 sem mudar de comportamento. **1
+   premissa errada deste plano**, pega na Fase 2 da 137: a "próxima tarefa" dizia que o caminho (b) exigia "quebrar o `exec` em comandos
+   sob a fila de escrita" — feito assim (uma transação de vários ticks), ele engoliria no ROLLBACK a escrita de `db.prepare` que entrasse
+   no meio e mostraria o não confirmado ao login do alvo (o `exec` do driver é exclusivo; vários ticks não são). E a frase "o `DELETE` não
+   muda (só um super exclui)" já tinha sido dita errada na Fase 5 desta etapa.
 
 ## Próxima tarefa detalhada — Etapa 137
 

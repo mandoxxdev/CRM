@@ -1347,9 +1347,37 @@ Plano: `docs/superpowers/plans/2026-10-17-almoxarifado-etapa136-a-ordem-das-baix
   (dois supers, zero super ativo). B880, C285. RN-10.
 - [x] **Fase 5** — `ddded5a2`: a régua fechada (`'on'`, `' 1'`...), o super com `ativo` nulo que não conta, o `PUT` desativando em corrida, o
   200 da corrida que tem de ter gravado.
-- [ ] **A exclusão em corrida (C292)**, **o super editando super sem o campo (C291)** e **o inativar/a edição com "true" (C293)** —
-  anteriores, achados nesta etapa; candidatas da Etapa 137 (ver o plano da 136).
+- [x] **A exclusão em corrida (C292)**, **o super editando super sem o campo (C291)** e **o inativar/a edição com "true" (C293)** —
+  anteriores, achados nesta etapa; resolvidos na **Etapa 137** (`cbe8c079`, `c73951c4`, Fase 5 `c31687d4`, ver abaixo).
+  ⚠️ **Uma frase do plano da 136 estava errada:** *"o `DELETE` não muda (só um super exclui)"* sugeria que bastava ser super para não
+  haver corrida — a exclusão cruzada zerava os supers 6 em 6.
 
 Testes: `usuarioSenhaAtivoCorrida.api.test.js` (8 — o `index.js` real em pasta vazia, corridas com `Promise.all`); o
 `chatSocketInativoNoServidor` (dois cenários estáticos) passou a ancorar no texto novo do `UPDATE` do `PATCH` e no `finishUpdate` em
 `function`.
+
+## Etapa 137 (2026-10-17) — a exclusão do último super em corrida (C292) e a régua de sim ou não do cadastro (C291, C293)
+
+Plano: `docs/superpowers/plans/2026-10-17-almoxarifado-etapa137-a-exclusao-do-ultimo-super.md`; design com a Fase 0 medida e a correção
+do próprio design pela Fase 2: `docs/superpowers/specs/2026-10-17-almoxarifado-etapa137-a-exclusao-do-ultimo-super-design.md`.
+
+- [x] **A exclusão decide dentro da própria transação, antes de escrever** — `cbe8c079` (Fase 5 `c31687d4`): o primeiro comando do `exec`
+  grava o motivo (`ATOR` → `NAO_ENCONTRADO` → `ULTIMO_SUPER` → `DESTINO` → `OK`) em `temp.usuarios_exclusao_motivo` pelo token da
+  requisição; todo comando seguinte só age com `OK`; sempre `COMMIT`. 403 *"Apenas Super Administradores podem excluir usuários"* / 404 /
+  403 L-EXC / 400 do destino. Reproduzida antes 6/6. B884, C292. RN-01, RN-01b, RN-01c, RN-01d, RN-02, RN-03.
+- [x] **`db.execEmTransacao(corpo)`** — `cbe8c079` (`sqliteConcurrency.js`): `BEGIN IMMEDIATE` + corpo + `COMMIT` num `exec` (exclusivo no
+  driver) numa vaga da fila; o ROLLBACK na mesma vaga; retry do BUSY (também no `COMMIT`, Fase 5). RN-04.
+- [x] **`is_superadmin` pela régua e ausente mantém** — `c73951c4`: `simOuNao`, `campoAusente`, `superAdminInvalido` em
+  `systemPermissions.js`; 400 *"Super administrador inválido: envie 1 (sim) ou 0 (não)"*. B885, C291. RN-05.
+- [x] **O inativar e o `ativo` da edição pela régua** — `c73951c4` (Fase 5 `c31687d4`: o "igual ao gravado" só com valor simples). B886,
+  B887, C293. RN-06, RN-07. A D (136) da edição resolvida.
+- [ ] **A permissão de quem age nas outras gravações** (C295) e **a renumeração de propostas com o ROLLBACK pela fila** (C294) — anteriores,
+  achados na Fase 5; não são desta etapa (C295 é geral do sistema; C294 é de propostas — candidata pequena).
+
+⚠️ **O design desta etapa estava errado na primeira versão, e foi corrigido antes do código** (Fase 2): ele afirmava que *"as leituras já
+viam o não confirmado com o `exec` em texto"* — **estava errado**: o `Database::Exec` do driver é exclusivo; e a transação de vários
+ticks que ele propunha engolia, no ROLLBACK, a escrita de `db.prepare` que entrasse no meio (medido).
+
+Testes: `usuarioExclusaoCorrida.api.test.js` (21 — o `index.js` real em pasta vazia, corridas com `Promise.all`, gatilhos de ordem no
+arquivo do teste), `sqliteConcurrency.test.js` (+6, RN-04); o `chatSocketInativoNoServidor` (o cenário estático do `DELETE`) passou a
+ancorar no `execEmTransacao` e no motivo `OK`.
