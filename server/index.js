@@ -8418,12 +8418,30 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
         const sets = parcial.colunas.map((c) => `${c} = ?`);
         const params = parcial.params.slice();
         // Calculadas ou com regra própria (exceções declaradas na Etapa 138):
-        // - o número e a revisão, sempre (o número já mantém o gravado quando não veio);
-        sets.push('numero_proposta = ?', 'revisao = ?');
-        params.push(numeroFinal, novaRevisao);
-        // - o responsável, sempre: vazio/ausente = o gravado, ou quem salva (o de sempre);
-        sets.push('responsavel_id = ?');
-        params.push(responsavelIdFinal);
+        // - o número, a revisão e o responsável, só quando MUDAM (Fase 5): regravá-los com o que foi lido desfazia uma
+        //   renumeração ou outra gravação feita entre a leitura e esta (o número vazio/ausente mantém o gravado; o
+        //   responsável vazio/ausente = o gravado, ou quem salva — o de sempre);
+        if (numeroFinal !== propostaAtual.numero_proposta) {
+          sets.push('numero_proposta = ?');
+          params.push(numeroFinal);
+        }
+        if (novaRevisao !== propostaAtual.revisao) {
+          sets.push('revisao = ?');
+          params.push(novaRevisao);
+        }
+        if (responsavelIdFinal !== propostaAtual.responsavel_id) {
+          sets.push('responsavel_id = ?');
+          params.push(responsavelIdFinal);
+        }
+        // - trocar o cliente apaga o contato e o projeto da proposta que não vieram (Fase 5): eram do cliente anterior, e a
+        //   capa preferia o contato gravado ao do cadastro — a proposta do cliente B saía com o contato do A. Antes desta
+        //   etapa a tela os apagava em todo salvamento;
+        const clienteNovo = tem('cliente_id') ? parcial.params[parcial.colunas.indexOf('cliente_id')] : propostaAtual.cliente_id;
+        if (tem('cliente_id') && clienteNovo !== propostaAtual.cliente_id) {
+          for (const k of ['cliente_contato', 'cliente_telefone', 'cliente_email', 'projeto_id']) {
+            if (!tem(k)) { sets.push(`${k} = NULL`); }
+          }
+        }
         // - o motivo só vale para rejeitada: entra quando o status ou o motivo vieram;
         if (tem('status') || tem('motivo_nao_venda')) {
           sets.push('motivo_nao_venda = ?');
@@ -8440,6 +8458,18 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
         sets.push('html_rendered = ?', 'probabilidade = COALESCE(?, probabilidade)', 'updated_at = CURRENT_TIMESTAMP');
         params.push(html_rendered || null, probabilidadeFinal);
         params.push(id);
+        // As regras cruzadas (motivo × status, desconto × margem × status, data × status) decidiram com o que foi LIDO para os
+        // campos que não vieram. Gravando só o que veio, duas gravações parciais simultâneas — uma só com a margem 20, outra só
+        // com o status "enviada" — passavam cada uma pela regra com o valor velho da outra e juntas deixavam a proposta enviada
+        // com desconto acima de 5% sem aprovação (Fase 5, reproduzido 5/6). Então: quando um desses campos veio, a gravação só
+        // acontece se os outros, os que não vieram, ainda estão como foram lidos; senão, 409 e nada é gravado.
+        const CAMPOS_CRUZADOS = ['status', 'margem_desconto', 'motivo_nao_venda', 'data_fechamento'];
+        let guardaSql = '';
+        if (CAMPOS_CRUZADOS.some((k) => tem(k))) {
+          for (const k of CAMPOS_CRUZADOS) {
+            if (!tem(k)) { guardaSql += ` AND ${k} IS ?`; params.push(propostaAtual[k]); }
+          }
+        }
         
         // Verificar se o número final não está duplicado (exceto para a própria proposta)
         db.get(`SELECT id FROM propostas WHERE numero_proposta = ? AND id != ?`, [numeroFinal, id], (err, existing) => {
@@ -8453,17 +8483,24 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
           }
 
           db.run(
-            `UPDATE propostas SET ${sets.join(', ')} WHERE id = ?`,
+            `UPDATE propostas SET ${sets.join(', ')} WHERE id = ?${guardaSql}`,
             params,
-            (err) => {
+            function aposAtualizar(err) {
               if (err) {
                 // Tratar erro de UNIQUE constraint especificamente
                 if (err.message && err.message.includes('UNIQUE constraint')) {
-                  return res.status(400).json({ 
-                    error: `O número da proposta "${numeroFinal}" já está em uso. Por favor, use outro número ou deixe o sistema gerar automaticamente.` 
+                  return res.status(400).json({
+                    error: `O número da proposta "${numeroFinal}" já está em uso. Por favor, use outro número ou deixe o sistema gerar automaticamente.`
                   });
                 }
                 return res.status(500).json({ error: 'Erro ao atualizar proposta: ' + err.message });
+              }
+              // A guarda das regras cruzadas não casou: outra gravação mudou status, margem, motivo ou data no meio.
+              if (guardaSql && this && this.changes === 0) {
+                return res.status(409).json({
+                  error: 'A proposta foi alterada por outra gravação no mesmo instante. Recarregue a proposta e salve de novo.',
+                  code: 'PROPOSTA_ALTERADA'
+                });
               }
 
             // `itens` ausente (Etapa 138): os itens ficam como estão — nada a apagar, reinserir, religar nem auditar.

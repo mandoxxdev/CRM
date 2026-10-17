@@ -355,6 +355,232 @@ test('[RN-07] titulo / razao social presente e vazio -> 400 com a mensagem da cr
   }
 });
 
+// ── Fase 5 ────────────────────────────────────────────────────────────────────────────────
+test('[RN-13] trocar o cliente apaga o contato e o projeto da proposta que nao vieram (eram do cliente anterior)', async () => {
+  const id = await novaProposta();
+  const outro = await novoCliente();
+  const a = await linhaP(id);
+  assert.ok(a.cliente_contato && a.projeto_id, JSON.stringify(a));
+  let r = await j('PUT', `/propostas/${id}`, ctx.T, { cliente_id: outro, titulo: 'Troca' });
+  assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
+  let d = await linhaP(id);
+  assert.deepStrictEqual([d.cliente_id, d.cliente_contato, d.cliente_telefone, d.cliente_email, d.projeto_id], [outro, null, null, null, null]);
+  assert.deepStrictEqual([d.idioma, d.moeda, d.incoterm], [a.idioma, a.moeda, a.incoterm], 'a troca de cliente apagou o que nao e do cliente');
+  // o que veio junto com a troca fica
+  r = await j('PUT', `/propostas/${id}`, ctx.T, { cliente_id: ctx.clienteId, cliente_contato: 'novo contato' });
+  assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
+  d = await linhaP(id);
+  assert.deepStrictEqual([d.cliente_id, d.cliente_contato, d.cliente_telefone], [ctx.clienteId, 'NOVO CONTATO', null]);
+  // o mesmo cliente mandado de novo nao apaga nada (RN-01c)
+  await soMudou(id, { cliente_id: ctx.clienteId, titulo: 'Mesmo cliente' }, { titulo: ['TROCA', 'MESMO CLIENTE'] });
+});
+
+const L_CONFLITO = 'A proposta foi alterada por outra gravação no mesmo instante. Recarregue a proposta e salve de novo.';
+const furaDesconto = async (id) => {
+  const p = await linhaP(id);
+  const aprov = (await get("SELECT COUNT(*) n FROM aprovacoes WHERE proposta_id = ? AND status = 'aprovado'", [id])).n;
+  return !['rascunho', 'desconto_aprovado'].includes(p.status) && Number(p.margem_desconto) > 5 && aprov === 0 ? JSON.stringify([p.status, p.margem_desconto]) : null;
+};
+const aceitos = (r) => r[0] === 200 || (r[0] === 403 && r[1].error === L_DESC) || (r[0] === 409 && r[1].error === L_CONFLITO);
+
+test('[RN-14] duas gravacoes parciais ao mesmo tempo (so a margem 20 x so o status enviada) nao furam o desconto: 409 para a que leu velho', async () => {
+  const furos = []; let conflitos = 0;
+  for (let k = 0; k < 8; k++) {
+    const id = await novaProposta();
+    const rs = await Promise.all([
+      j('PUT', `/propostas/${id}`, ctx.T, { margem_desconto: 20 }),
+      j('PUT', `/propostas/${id}`, ctx.T, { status: 'enviada' }),
+    ]);
+    for (const r of rs) assert.ok(aceitos(r), `rodada ${k}: ${JSON.stringify(r)}`);
+    conflitos += rs.filter((r) => r[0] === 409).length;
+    // toda resposta 200 esta no banco (a outra nao grava o campo dela): sem isto, um 409 trocado por 200 calado passaria
+    const p = await linhaP(id);
+    if (rs[0][0] === 200) assert.strictEqual(Number(p.margem_desconto), 20, `rodada ${k}: a margem respondeu 200 e nao gravou`);
+    if (rs[1][0] === 200) assert.strictEqual(p.status, 'enviada', `rodada ${k}: o status respondeu 200 e nao gravou`);
+    const f = await furaDesconto(id);
+    if (f) furos.push(`rodada ${k}: ${f}`);
+  }
+  assert.deepStrictEqual(furos, [], `enviada com desconto acima de 5% sem aprovacao (conflitos: ${conflitos})`);
+});
+
+test('[RN-14] a tela salvando rascunho com margem 20 ao mesmo tempo que so o status enviada pela API: nao fura', async () => {
+  const furos = [];
+  for (let k = 0; k < 6; k++) {
+    const id = await novaProposta();
+    const [, g] = await j('GET', `/propostas/${id}`, ctx.T);
+    const tela = { cliente_id: g.cliente_id, titulo: g.titulo, status: 'rascunho', margem_desconto: 20, valor_total: g.valor_total, motivo_nao_venda: null,
+      data_fechamento: null, tipo_proposta: g.tipo_proposta, itens: (g.itens || []).map((i) => ({ descricao: i.descricao, quantidade: i.quantidade, valor_unitario: i.valor_unitario, valor_total: i.valor_total, codigo_produto: i.codigo_produto, acessorios: '[]' })) };
+    const rs = await Promise.all([j('PUT', `/propostas/${id}`, ctx.T, tela), j('PUT', `/propostas/${id}`, ctx.T, { status: 'enviada' })]);
+    for (const r of rs) assert.ok(aceitos(r), `rodada ${k}: ${JSON.stringify(r)}`);
+    const f = await furaDesconto(id);
+    if (f) furos.push(`rodada ${k}: ${f}`);
+  }
+  assert.deepStrictEqual(furos, []);
+});
+
+test('[RN-14] rejeitar com motivo ao mesmo tempo que apagar o motivo nao deixa rejeitada sem motivo', async () => {
+  const furos = [];
+  for (let k = 0; k < 8; k++) {
+    const id = await novaProposta();
+    const rs = await Promise.all([
+      j('PUT', `/propostas/${id}`, ctx.T, { status: 'rejeitada', motivo_nao_venda: 'preco' }),
+      j('PUT', `/propostas/${id}`, ctx.T, { motivo_nao_venda: '' }),
+    ]);
+    for (const r of rs) assert.ok(r[0] === 200 || (r[0] === 400 && r[1].error === L_MOTIVO) || (r[0] === 409 && r[1].error === L_CONFLITO), `rodada ${k}: ${JSON.stringify(r)}`);
+    const p = await linhaP(id);
+    if (p.status === 'rejeitada' && !p.motivo_nao_venda) furos.push(`rodada ${k}`);
+    if (rs[0][0] === 200) assert.deepStrictEqual([p.status, p.motivo_nao_venda], ['rejeitada', 'PRECO'], `rodada ${k}: rejeitar respondeu 200 e nao gravou`);
+    else if (rs[1][0] === 200) assert.strictEqual(p.motivo_nao_venda, null, `rodada ${k}: apagar o motivo respondeu 200 e nao gravou`);
+  }
+  assert.deepStrictEqual(furos, [], 'rejeitada sem motivo');
+});
+
+test('[RN-15] o numero, a revisao e o responsavel so entram na gravacao quando mudam (nao desfazem uma renumeracao feita no meio)', async () => {
+  const id = await novaProposta();
+  await run('CREATE TABLE IF NOT EXISTS e138_toque (coluna TEXT)');
+  await run('DELETE FROM e138_toque');
+  for (const c of ['numero_proposta', 'revisao', 'responsavel_id']) {
+    await run(`DROP TRIGGER IF EXISTS e138_toque_${c}`);
+    await run(`CREATE TRIGGER e138_toque_${c} AFTER UPDATE OF ${c} ON propostas WHEN NEW.id = ${id} BEGIN INSERT INTO e138_toque (coluna) VALUES ('${c}'); END`);
+  }
+  try {
+    await soMudou(id, { titulo: 'Sem toque' }, { titulo: ['PROP', 'SEM TOQUE'] });
+    assert.deepStrictEqual((await all('SELECT coluna FROM e138_toque')).map((x) => x.coluna), [], 'o PUT {titulo} regravou numero/revisao/responsavel');
+    // a metade positiva: o valor que muda a revisao toca o numero e a revisao
+    const r = await j('PUT', `/propostas/${id}`, ctx.T, { valor_total: 999 });
+    assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
+    assert.deepStrictEqual((await all('SELECT coluna FROM e138_toque ORDER BY coluna')).map((x) => x.coluna), ['numero_proposta', 'revisao']);
+  } finally {
+    for (const c of ['numero_proposta', 'revisao', 'responsavel_id']) await run(`DROP TRIGGER IF EXISTS e138_toque_${c}`);
+  }
+});
+
+// ── Fase 5, revisor de sabotagem (r3): cada cenario nomeia as sabotagens sobreviventes que ele derruba ──
+const hoje = () => new Date().toISOString().split('T')[0];
+test('[X01 P03,P18] rejeitada com motivo: PUT {status: rejeitada} sem motivo -> 200 e o motivo gravado fica', async () => {
+  const id = await novaProposta();
+  await run("UPDATE propostas SET status = 'rejeitada', motivo_nao_venda = 'CARO', data_fechamento = '2026-01-02' WHERE id = ?", [id]);
+  await soMudou(id, { status: 'rejeitada' }, {});
+  assert.strictEqual((await linhaP(id)).motivo_nao_venda, 'CARO');
+});
+test('[X02 P04] PUT {status: rejeitada, motivo: "   "} -> 400', async () => {
+  const id = await novaProposta();
+  const r = await j('PUT', `/propostas/${id}`, ctx.T, { status: 'rejeitada', motivo_nao_venda: '   ' });
+  assert.deepStrictEqual([r[0], r[1] && r[1].error], [400, L_MOTIVO]);
+});
+test('[X03 P05] aprovada com data: PUT {data_fechamento: null} -> a data vira hoje (nao nula)', async () => {
+  const id = await novaProposta();
+  await run("UPDATE propostas SET status = 'aprovada', data_fechamento = '2026-01-02' WHERE id = ?", [id]);
+  await soMudou(id, { data_fechamento: null }, { data_fechamento: ['2026-01-02', hoje()] });
+});
+test('[X04 P11] margem exatamente 5 numa enviada sem aprovacao -> 200', async () => {
+  const id = await novaProposta();
+  await run('UPDATE propostas SET margem_desconto = 5 WHERE id = ?', [id]);
+  await soMudou(id, { status: 'enviada' }, { status: ['rascunho', 'enviada'] });
+});
+test('[X05 P14] responsavel de OUTRO usuario: PUT {titulo} pelo admin mantem o responsavel', async () => {
+  const id = await novaProposta();
+  const u = await run("INSERT INTO usuarios (nome, email, senha) VALUES ('Outro', ?, 'x')", [`outro${Date.now()}@t.com`]);
+  await run('UPDATE propostas SET responsavel_id = ? WHERE id = ?', [u.lastID, id]);
+  await soMudou(id, { titulo: 'Resp' }, { titulo: ['PROP', 'RESP'] });
+  assert.strictEqual((await linhaP(id)).responsavel_id, u.lastID);
+});
+test('[X06 P33] responsavel nulo: PUT {titulo} -> responsavel vira quem salva (o de sempre)', async () => {
+  const id = await novaProposta();
+  const adm = (await get('SELECT id FROM usuarios WHERE email = ?', [SEED.email])).id;
+  await run('UPDATE propostas SET responsavel_id = NULL WHERE id = ?', [id]);
+  await soMudou(id, { titulo: 'Resp2' }, { titulo: ['PROP', 'RESP2'], responsavel_id: [null, adm] });
+});
+test('[X07 P16] rejeitada: PUT {motivo_nao_venda: "novo"} sozinho grava o motivo', async () => {
+  const id = await novaProposta();
+  await run("UPDATE propostas SET status = 'rejeitada', motivo_nao_venda = 'CARO', data_fechamento = '2026-01-02' WHERE id = ?", [id]);
+  await soMudou(id, { motivo_nao_venda: 'novo' }, { motivo_nao_venda: ['CARO', 'NOVO'] });
+});
+test('[X08 P17] enviada com motivo legado: PUT {titulo} nao apaga o motivo (ausente mantem)', async () => {
+  const id = await novaProposta();
+  await run("UPDATE propostas SET status = 'enviada', motivo_nao_venda = 'LEG' WHERE id = ?", [id]);
+  await soMudou(id, { titulo: 'Leg' }, { titulo: ['PROP', 'LEG'] });
+});
+test('[X09a P20] projeto_id vazio grava null (a transformacao de sempre)', async () => {
+  const id = await novaProposta();
+  await soMudou(id, { projeto_id: '' }, { projeto_id: [ctx.projetoId, null] });
+});
+test('[X09b P19] cliente_id vazio grava null (a transformacao de sempre)', async () => {
+  const id = await novaProposta();
+  // sem cliente, o contato e o projeto da proposta (do cliente anterior) tambem saem (RN-13)
+  await soMudou(id, { cliente_id: '' }, { cliente_id: [ctx.clienteId, null], cliente_contato: ['MARIA', null], cliente_telefone: ['1188', null],
+    cliente_email: ['m@m.com', null], projeto_id: [ctx.projetoId, null] });
+});
+test('[X10 P23] PUT {valor_total: 0} grava 0 (nao null)', async () => {
+  const id = await novaProposta();
+  const r = await j('PUT', `/propostas/${id}`, ctx.T, { valor_total: 0 });
+  assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
+  assert.strictEqual((await linhaP(id)).valor_total, 0);
+});
+test('[X11 P24] PUT {margem_desconto: null} grava 0', async () => {
+  const id = await novaProposta();
+  await soMudou(id, { margem_desconto: null }, { margem_desconto: [2, 0] });
+});
+test('[X12 P25+mapa] toda coluna do mapa da proposta que nenhum teste escreve: presente grava', async () => {
+  const id = await novaProposta();
+  const c2 = await novoCliente();
+  const [, pj] = await j('POST', '/projetos', ctx.T, { cliente_id: c2, nome: 'Proj X12' });
+  const corpo = { cliente_id: c2, projeto_id: pj.id, validade: '2027-01-15', prazo_entrega: 'pz2', observacoes: 'obs2', familia_produto: 'FAM2',
+    lembrete_data: '2027-02-02', lembrete_mensagem: 'msg2', cliente_telefone: '2199', cliente_email: 'n@n.com', idioma: 'en', moeda: 'USD',
+    incoterm: 'CIF', unidade_negocio: 'UN2' };
+  const r = await j('PUT', `/propostas/${id}`, ctx.T, corpo);
+  assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
+  const d = await linhaP(id);
+  const nao = Object.keys(corpo).filter((k) => String(d[k]).toUpperCase() !== String(corpo[k]).toUpperCase());
+  assert.deepStrictEqual(nao, [], 'nao gravou: ' + nao.map((k) => `${k}=${JSON.stringify(d[k])}`).join(' '));
+});
+test('[X13 P26] PUT {itens: null} -> o de sempre (presente vazio): apaga os itens', async () => {
+  const id = await novaProposta();
+  const r = await j('PUT', `/propostas/${id}`, ctx.T, { itens: null });
+  assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
+  assert.deepStrictEqual(await itensP(id), []);
+});
+test('[X14 P29] PUT {itens mudados} sem valor_total: a revisao sobe e o registro NAO diz Valor Total', async () => {
+  const id = await novaProposta();
+  const r = await j('PUT', `/propostas/${id}`, ctx.T, { itens: [{ ...ITENS[0], quantidade: 3 }, ITENS[1]] });
+  assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
+  assert.strictEqual((await linhaP(id)).revisao, 1);
+  const rev = await get('SELECT mudancas FROM proposta_revisoes WHERE proposta_id = ? ORDER BY id DESC LIMIT 1', [id]);
+  assert.ok(rev, 'sem registro de revisao');
+  assert.ok(!JSON.parse(rev.mudancas).some((m) => m.campo === 'Valor Total'), rev.mudancas);
+});
+test('[X15 P32] proposta sem cliente gravado: PUT {cliente_id, valor_total} -> REV01 no numero', async () => {
+  const id = await novaProposta();
+  await run('UPDATE propostas SET cliente_id = NULL WHERE id = ?', [id]);
+  const a = await linhaP(id);
+  const r = await j('PUT', `/propostas/${id}`, ctx.T, { cliente_id: ctx.clienteId, valor_total: 999 });
+  assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
+  assert.strictEqual((await linhaP(id)).numero_proposta, a.numero_proposta.replace(/REV00$/, 'REV01'));
+});
+test('[X16 C02,C08+mapa] cliente: toda coluna do mapa presente grava com a transformacao', async () => {
+  const c = await novoCliente();
+  const corpo = { nome_fantasia: 'fant2', cnpj: '99.888.777/0001-66', segmento: 'seg2', email: 'Novo@X.com', endereco: 'rua b', estado: 'rj', cep: '20000-000',
+    contato_principal: 'ana', observacoes: 'obs2', status: 'inativo' };
+  const r = await j('PUT', `/clientes/${c}`, ctx.T, corpo);
+  assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
+  const d = await get('SELECT * FROM clientes WHERE id = ?', [c]);
+  const up = ['nome_fantasia', 'segmento', 'endereco', 'estado', 'contato_principal', 'observacoes'];
+  const nao = Object.keys(corpo).filter((k) => d[k] !== (up.includes(k) ? corpo[k].toUpperCase() : corpo[k]));
+  assert.deepStrictEqual(nao, [], 'nao gravou: ' + nao.map((k) => `${k}=${JSON.stringify(d[k])}`).join(' '));
+});
+test('[X17 O03,O04+mapa] oportunidade: toda coluna do mapa presente grava', async () => {
+  const [, op] = await j('POST', '/oportunidades', ctx.T, { cliente_id: ctx.clienteId, titulo: 'OpX', descricao: 'd', valor_estimado: 1000, probabilidade: 70, etapa: 'negociacao', status: 'ativa' });
+  const c2 = await novoCliente();
+  const [, pj] = await j('POST', '/projetos', ctx.T, { cliente_id: c2, nome: 'Proj X17' });
+  const u = await run("INSERT INTO usuarios (nome, email, senha) VALUES ('Outro2', ?, 'x')", [`outro2${Date.now()}@t.com`]);
+  const corpo = { cliente_id: c2, projeto_id: pj.id, descricao: 'D2', valor_estimado: 2500, probabilidade: 30, status: 'perdida', responsavel_id: u.lastID };
+  const r = await j('PUT', `/oportunidades/${op.id}`, ctx.T, corpo);
+  assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
+  const d = await get('SELECT * FROM oportunidades WHERE id = ?', [op.id]);
+  const nao = Object.keys(corpo).filter((k) => d[k] !== corpo[k]);
+  assert.deepStrictEqual(nao, [], 'nao gravou: ' + nao.map((k) => `${k}=${JSON.stringify(d[k])}`).join(' '));
+});
+
 // ── RN-09 ─────────────────────────────────────────────────────────────────────────────────
 test('[RN-09] cliente: ausente mantem (telefone so; razao social so); logo vazia limpa', async () => {
   const c = await novoCliente();

@@ -49,4 +49,21 @@ describe('montarPayloadProposta (RN-08)', () => {
       familia_produto: null, regiao_busca: null, desconto_percentual: 0, preco_tabela: null, acessorios: '[]' }]);
     expect(naRede(montarPayloadProposta({ form: { ...formBase, motivo_nao_venda: 'CARO' }, itens: [], statusSalvar: 'rejeitada', valorTotal: 0, maxDesc: 0, exigeMotivo: true })).motivo_nao_venda).toBe('CARO');
   });
+
+  // Fase 5 (r3, K05): sem o `...form`, toda edicao de titulo, descricao, garantia... sumiria calada.
+  test('[RN-08] os campos do formulário passam como estão (título, descrição, número, garantia, validade)', () => {
+    const corpo = naRede(montar({ ...formBase, titulo: 'NOVO', descricao: 'D', garantia: '12 MESES', validade: '2027-01-01' }));
+    expect(corpo).toMatchObject({ numero_proposta: '001-01-AB-2026-REV00', titulo: 'NOVO', descricao: 'D', garantia: '12 MESES', validade: '2027-01-01' });
+  });
+
+  // Fase 5 (r3, K06/K07): nenhum teste renderiza o PropostaForm; a chamada fica presa pelo texto (os argumentos certos, o total dos itens).
+  test('[RN-08] o PropostaForm monta o corpo por montarPayloadProposta com os argumentos certos', () => {
+    // eslint-disable-next-line global-require
+    const fs = require('fs');
+    // eslint-disable-next-line global-require
+    const path = require('path');
+    const fonte = fs.readFileSync(path.join(__dirname, 'PropostaForm.js'), 'utf8');
+    expect(fonte.split('const payload = montarPayloadProposta({ form, itens, statusSalvar, valorTotal, maxDesc, exigeMotivo });').length).toBe(2);
+    expect(fonte.split('const valorTotal = subtotalItens;').length).toBe(2);
+  });
 });
