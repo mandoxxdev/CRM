@@ -197,7 +197,11 @@ sem a releitura (RN-03), o `encerrarSocketsSeInativo` que não derruba no erro (
    1 C) + o M8 confirmado e corrigido; r3 **11** sobreviventes — 8 viraram cenários, 3 equivalentes provados; **0** ruído.
 3. **Paralelismo:** **0** galhos em paralelo de fato (T3 e T4 são galhos, mas o "um teste por vez" os serializa), **0** retrabalho; **1**
    revisor na Fase 2 e **3** em paralelo na Fase 5 sob a trava.
-4. **Defeito que escapou:** *(preencher na Etapa 133)*.
+4. **Defeito que escapou:** **0 de código** — medido na Etapa 133: o `chatSocketInativoNoServidor` e os demais da 132 seguem verdes na
+   suíte inteira (445/445), e a sonda da 133 no `index.js` real com pasta vazia não mostrou nada do chat, do socket ou das três portas
+   fora do previsto. **1 de documento:** a "Próxima tarefa detalhada" desta etapa dizia que o super sem o papel *admin* "pode **perder** a
+   gravação das permissões" no `UsuarioForm` — medido na 133, não perde o que havia (o `DELETE` dos módulos é o primeiro e falha); perde a
+   mudança feita na tela, com o aviso *"Usuário salvo, mas houve erro ao salvar permissões de módulos"*. Corrigido no design da 133.
 
 ## Próxima tarefa detalhada — Etapa 133
 

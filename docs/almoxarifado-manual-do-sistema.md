@@ -1053,6 +1053,40 @@ Ninguém se desativa: tanto o botão de inativar quanto o formulário recusam de
 
 O que a desativação **não** alcança: os **links de fotos, avatares e anexos** já gerados abrem até vencer (de 15 minutos a 25 horas, conforme o tipo) — eles não consultam a sessão; a pessoa desativada não consegue link novo. E algumas telas que baixam arquivo por um caminho próprio recebem a recusa do servidor sem voltar ao login naquele clique; o clique seguinte volta.
 
+### 5.2f Quem gerencia grupos, permissões e logs
+
+As abas **Permissões** e **Logs** de **Admin**, e a gravação dos módulos de um usuário no formulário de usuário, são de **quem gerencia
+usuários** — a mesma régua do cadastro de usuários: o **super administrador** (qualquer que seja o papel dele) e quem tem o papel de
+**administrador** (escrito com qualquer combinação de maiúsculas e minúsculas, sem espaços em volta). Quem gerencia usuários cria, edita e
+exclui grupos, coloca e tira pessoas dos grupos, liga e desliga módulos num grupo ou direto num usuário, e lê os logs de auditoria.
+
+Para os demais — inclusive o administrador de um módulo, mesmo o da Administração, e o perfil Administrador do almoxarifado — gravar uma
+permissão é recusado com
+
+> *"Apenas administradores podem gerenciar permissões"*
+
+as outras ações de grupos e permissões com
+
+> *"Acesso negado"*
+
+e os logs com
+
+> *"Acesso negado. Apenas administradores podem visualizar logs."*
+
+— sem mudar nada. Cada pessoa continua podendo ler as **próprias** permissões (é com elas que o sistema monta o menu dela).
+
+Ao salvar um usuário no formulário, o sistema grava o cadastro, apaga os módulos marcados direto nele e grava os que estão marcados agora;
+o usuário passa a entrar nos módulos novos e deixa de entrar nos desmarcados a partir da ação seguinte. Para um usuário com o papel
+*admin* ou super administrador, o formulário não grava módulos (ele já entra em todos).
+
+**Criar ordem de serviço** (pelo Operacional ou pela OS comercial) é liberado ao super administrador e a quem tem o papel de
+administrador. Para os demais usuários, conforme a configuração do banco, a criação pode ser recusada com *"Erro ao verificar
+permissões"*.
+
+Duas ações seguem uma régua mais estreita, só o papel escrito exatamente *admin*: **excluir uma solicitação de aprovação** (o botão só
+aparece para esse papel; os outros recebem *"Apenas administradores podem excluir solicitações de aprovação"*) e o **cadastro de
+materiais de escritório da Engenharia** (*"Apenas admin"*).
+
 ### 5.3 Usuário sem perfil definido é tratado como chão de fábrica
 
 O perfil de uma pessoa é resolvido nesta ordem:

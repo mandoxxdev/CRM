@@ -1,17 +1,23 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-16 (Etapa 132) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-16 (Etapa 133) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131 e 132) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132 e 133) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 132 ENTREGUE · próxima: Etapa 133)
+> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 133 ENTREGUE · próxima: Etapa 134)
 >
-> **O desenvolvimento parou aqui: Etapa 132 fechada — 2026-10-16.** A **Etapa 132 (o desativado sai do chat na hora, e a Lista de
+> **O desenvolvimento parou aqui: Etapa 133 fechada — 2026-10-16.** A **Etapa 133 (as abas Permissões e Logs para todo administrador do
+> sistema, do núcleo)**: o super administrador com qualquer papel e o papel *admin* com outra caixa passam a usar as abas Permissões e
+> Logs e a salvar os módulos no formulário de usuário (antes o salvar avisava *"Usuário salvo, mas houve erro ao salvar permissões de
+> módulos"*), e a criar ordem de serviço; a revisão achou duas escaladas anteriores a super (**C279**, **C280** — rode a consulta **A82**).
+> **Próxima: Etapa 134** — ver a próxima tarefa no plano da 133.
+>
+> **Etapa 132, 2026-10-16.** A **Etapa 132 (o desativado sai do chat na hora, e a Lista de
 > Tarefas sem o papel, do núcleo)**: no instante em que o administrador desativa ou exclui alguém, a tela de chat aberta dessa pessoa
 > volta ao login com o aviso de sessão encerrada, e uma conexão nova do chat com o token velho é recusada; a Lista de Tarefas deixa de
-> trazer o papel de todos; e o administrador não consegue mais se desativar pelo próprio formulário. **Próxima: Etapa 133** — ver a
-> próxima tarefa no plano da 132.
+> trazer o papel de todos; e o administrador não consegue mais se desativar pelo próprio formulário.
+> *(Próxima, na época: Etapa 133 — entregue acima.)*
 >
 > **Etapa 131, 2026-10-16.** A **Etapa 131 (as listas de usuário e a sessão do desativado,
 > do núcleo)**: os seletores de responsável (propostas, projetos, OS…) deixam de trazer o papel, o setor e o departamento de cada usuário
@@ -6557,6 +6563,39 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 133 — As abas Permissões e Logs para todo administrador do sistema (ENTREGUE — 2026-10-16)
+
+**O que mudou, em uma frase:** o super administrador (com qualquer papel) e o papel *admin* escrito com outra caixa passam a usar as abas
+**Permissões** e **Logs** e a salvar os módulos no formulário de usuário — o que o cadastro de usuários já os deixava fazer.
+
+**O problema que ela resolve.** O sistema já tratava essas pessoas como administradores do sistema: elas abriam a tela de Administração e
+editavam usuários. Mas a aba Permissões e a aba Logs recusavam, e ao salvar um usuário aparecia *"Usuário salvo, mas houve erro ao salvar
+permissões de módulos. Tente editar novamente."* — o cadastro era gravado e os módulos marcados não. Junto: o mesmo administrador não
+conseguia criar ordem de serviço, e apagar mensagem do chat pelo endereço com zero não avisava a conversa.
+
+| Antes | Agora |
+|---|---|
+| A aba Permissões recusava com *"Acesso negado"* o super sem o papel *admin* | Carrega e grava grupos, membros e permissões |
+| Salvar um usuário avisava *"Usuário salvo, mas houve erro ao salvar permissões de módulos"* | Os módulos gravam e o usuário entra no módulo que ganhou |
+| A aba Logs recusava com *"Acesso negado. Apenas administradores podem visualizar logs."* | Carrega |
+| Criar ordem de serviço dava *"Erro ao verificar permissões"* ao super sem o papel | Cria |
+
+**Roteiro de teste (5 minutos).** Como o **administrador semeado**, em **Admin → Usuários**, crie um usuário **S** com *Super
+administrador* marcado e papel *Usuário*, e um usuário **comum** sem nenhum módulo além do Comercial.
+
+1. **A aba Permissões.** Saia e entre como **S** → **Admin → Permissões**: a lista de grupos carrega. Crie um grupo, marque um módulo nele,
+   adicione o comum ao grupo — tudo grava, sem aviso de erro.
+2. **O salvar dos módulos.** Ainda como **S**, **Admin → Usuários** → edite o comum → marque **Financeiro** → Salvar: volta para a lista
+   **sem** o aviso *"Usuário salvo, mas houve erro…"*. Entre como o comum: o Financeiro abre. Volte como **S**, desmarque, salve: o comum
+   perde o Financeiro.
+3. **A aba Logs.** Como **S**, **Admin → Logs**: a lista carrega.
+4. **Quem não é administrador continua de fora.** Como o comum, a área de Administração não abre (como antes).
+
+**O que esta etapa NÃO cobre.** Excluir solicitação de aprovação e o cadastro de materiais de escritório da Engenharia continuam só com o
+papel *admin* exato (**C275**, **C276**); quem cria ordem de serviço sem ser administrador é pergunta para vocês (**C277**); o
+administrador do sistema que não é super consegue trocar a senha de um super e entrar como ele, e o e-mail `admin@gmp.com.br` vira super
+a cada reinício (**C279**, **C280** — achados da revisão, anteriores; a **C280** é a candidata da próxima etapa; rode a consulta **A82**).
 
 ## Etapa 132 — O desativado sai do chat na hora, e a Lista de Tarefas sem o papel (ENTREGUE — 2026-10-16)
 

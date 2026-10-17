@@ -11,11 +11,16 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-16):** **Etapa 132 fechada** (do núcleo: o usuário desativado ou apagado sai também do **chat
+> **Onde o desenvolvimento está (2026-10-16):** **Etapa 133 fechada** (do núcleo: as abas **Permissões** e **Logs** e o salvar dos
+> módulos no formulário de usuário passam a aceitar o super administrador com qualquer papel e o papel *admin* com qualquer caixa — **C273**
+> resolvido, **B855** a **B857**, com a consulta **A80**; o aviso de mensagem apagada do chat chega à conversa certa — **C274** resolvido,
+> **B858**; e a revisão achou duas escaladas anteriores, sérias — **C279** e **C280**, com a consulta **A82**); a próxima é a **134** — ver
+> "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 132 fechada** (do núcleo: o usuário desativado ou apagado sai também do **chat
 > em tempo real** na hora — a conexão aberta cai com o aviso de sessão encerrada e a conexão nova é recusada — **C271** resolvido, **B848**
 > a **B850**; a Lista de Tarefas deixa de mostrar o papel de todos — **C272** resolvido, **B851**; e o administrador não se desativa mais
 > pelo formulário nem pelo id com zero, e editar um usuário pela API sem o campo *ativo* não o tranca fora — **B852**, com a consulta
-> **A79**); a próxima é a **133** — ver "Onde estamos e o que vem a seguir".
+> **A79**); a próxima era a **133**.)*
 > *(Antes: **Etapa 131 fechada** (do núcleo: os seletores de responsável deixam de mostrar o papel,
 > o setor e o departamento dos outros usuários a quem não gerencia usuários — **C270** resolvido, **B844**; e o usuário desativado ou
 > apagado é desconectado na primeira ação, com o aviso *"Sessão encerrada"* no login — **B845**, **B846**); a próxima era a **132**.)*
@@ -183,8 +188,12 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Setenta e nove itens para rodar em produção ANTES do deploy — setenta e seis são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Oitenta e dois itens para rodar em produção ANTES do deploy — setenta e nove são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
 
+*(**Atualizado em 2026-10-16 (Etapa 133) de setenta e nove para oitenta e dois**, com a **A80** — quem passa a mexer em permissões e
+logs (o super administrador sem o papel *admin* e o papel *admin* escrito com outra caixa); a **A81** — se a tabela de grupos de
+produção tem a coluna que o portão da ordem de serviço procura; e a **A82** — quem tem o e-mail que o sistema torna super administrador a
+cada reinício. As três opcionais e somente leitura.)*
 *(**Atualizado em 2026-10-16 (Etapa 132) de setenta e oito para setenta e nove**, com a **A79** — os usuários gravados com *ativo* vazio
 ou com outro valor, que não conseguem entrar; opcional e somente leitura.)*
 *(**Atualizado em 2026-10-16 (Etapa 130) de setenta e sete para setenta e oito**, com a **A78** — os itens de recebimento cujo lote ou
@@ -2947,12 +2956,55 @@ WHERE ativo IS NULL OR ativo NOT IN (0, 1);
 (grava 0). **Atenção ao `is_superadmin = 1`**: se todos os super administradores que você conhece aparecem aqui, quem ainda entra como
 super é só quem **não** aparece — reative pelo formulário de um super que entra, antes de qualquer outra mudança.
 
+**A80 (NOVA, da Etapa 133 — quem passa a mexer em permissões e logs).** As abas **Permissões** e **Logs** de **Admin** (e o salvar dos
+módulos no formulário de usuário) aceitavam só o papel *admin* escrito exatamente assim. Desde a Etapa 133 aceitam quem o cadastro de
+usuários já aceitava: o **super administrador com qualquer papel** e o papel *admin* **com qualquer caixa** (*Admin*, *ADMIN*). É uma
+ampliação de acesso (**B855**); esta consulta mostra quem a ganha.
+
+```sql
+SELECT id, nome, email, role, is_superadmin
+FROM usuarios
+WHERE ativo = 1
+  AND (is_superadmin = 1 OR LOWER(role) = 'admin')
+  AND (role IS NULL OR role <> 'admin');
+```
+
+**Como ler o resultado:** **vazia** — ninguém novo passa (todos os administradores já tinham o papel *admin* exato). **Linhas:** cada uma
+passa a abrir as abas Permissões e Logs e a gravar módulos e grupos de qualquer usuário. Se alguém ali não deveria: tire o super
+(**Admin → Usuários → editar**) ou mude o papel para *usuario*.
+
+**A81 (NOVA, da Etapa 133 — o portão da ordem de serviço).** Criar ordem de serviço (`POST` de ordens de serviço, pelas telas do
+Operacional e da OS comercial) consulta uma coluna *modulo* na tabela de grupos de permissão que um banco novo **não tem** — e então
+responde *"Erro ao verificar permissões"* a quem não é administrador (**C277**). Esta consulta diz como o banco de produção está.
+
+```sql
+SELECT name FROM pragma_table_info('grupos_permissoes') WHERE name = 'modulo';
+```
+
+**Como ler o resultado:** **vazia** — o banco é como o novo: só o administrador (desde a 133, também o super sem o papel e o *Admin*) cria
+ordem de serviço; os outros recebem o erro. **Uma linha** — o banco antigo tem a coluna: o portão deixa **todos** os usuários logados
+criarem ordem de serviço (com ou sem grupo). Nos dois casos, quem deve criar ordem de serviço é a pergunta da **C277**.
+
+**A82 (NOVA, da Etapa 133 — o e-mail que vira super administrador a cada reinício).** A cada vez que o servidor sobe, o usuário com o
+e-mail `admin@gmp.com.br` é feito super administrador. Quem gerencia usuários pode trocar o próprio e-mail (ou o de outro) para esse
+(**C280**). Esta consulta mostra quem é hoje.
+
+```sql
+SELECT id, nome, email, role, is_superadmin, ativo
+FROM usuarios
+WHERE LOWER(TRIM(email)) = 'admin@gmp.com.br';
+```
+
+**Como ler o resultado:** **uma linha, do administrador que vocês conhecem** — nada a fazer. **Outra pessoa** — ela é (ou será, no
+próximo reinício) super administradora: troque o e-mail dela de volta e confira os super administradores em **Admin → Usuários**.
+**Vazia** — ninguém é promovido no reinício.
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B854; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B860; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -9288,11 +9340,51 @@ Medido na revisão: o botão de inativar só exige gerenciar usuários — o adm
 gerencia usuários desativa qualquer um, menos o último super. **Opção (b)** — desativar (e editar) um super só por outro super, como a
 exclusão: a consequência é que o administrador do sistema não consegue mais tirar um super que saiu da empresa sem chamar outro super.
 Não implementado — é regra de quem manda em quem.
+*(**Atualizado na Etapa 133:** a revisão de permissão mediu que, além de desativar, o administrador do sistema que não é super **troca a
+senha, o e-mail e o papel** de um super administrador pelo formulário — e, com a senha nova, **entra como ele** (é super na prática).
+Isto pesa na escolha: com a opção (a), quem gerencia usuários é, na prática, super. Registrado como **C279**; continua esperando vocês.)*
 
 **B854 (NOVA, da Etapa 132) — a próxima etapa (133).** Ver a "próxima tarefa detalhada" no plano da Etapa 132. A **B808**, a **B755**, a
 **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da **C246**/**C247**, a tabela de
 conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e a **B853** continuam
 esperando vocês.
+
+**B855 (NOVA, da Etapa 133; do núcleo) — as permissões passam a ser de quem gerencia usuários (ampliação de acesso).** Fecha a **C273**.
+As rotas da aba **Permissões** (grupos, membros, permissões do grupo) e as do salvar dos módulos no formulário de usuário aceitavam só o
+papel *admin* escrito exatamente assim: o super administrador com outro papel e o papel *Admin* com maiúscula **abriam** a tela de
+Administração, mas a aba Permissões não carregava e o salvar do formulário respondia *"Usuário salvo, mas houve erro ao salvar permissões
+de módulos. Tente editar novamente."* — o cadastro gravava, os módulos não (medido no servidor de verdade). Agora a régua é a do cadastro
+de usuários: **super administrador com qualquer papel, ou papel *admin* com qualquer caixa**. As permissões de um usuário continuam
+legíveis por ele mesmo; a consulta interna "tenho permissão?" responde *admin* para quem o portão de módulo já deixa passar. As mensagens
+de recusa não mudaram (*"Acesso negado"*; *"Apenas administradores podem gerenciar permissões"*). **Ampliação:** quem ganha está na
+consulta **A80**; não achamos escalada nova — quem ganhou já passava no cadastro (e já podia dar a si mesmo o papel *admin*).
+**Descartado:** manter o papel exato (a tela seguia quebrada para quem o servidor já reconhece como administrador do sistema); só o super
+(tiraria o papel *admin* das próprias abas — regressão); a recusa do cadastro, *"Acesso negado — apenas administradores do sistema"* (mudaria
+a frase que a tela mostra). **Reversível.**
+
+**B856 (NOVA, da Etapa 133; do núcleo) — a aba Logs, a mesma régua.** A aba **Logs** é irmã de Usuários e Permissões na mesma tela;
+recusava o super sem o papel e o *Admin* com *"Acesso negado. Apenas administradores podem visualizar logs."* (a frase continua para os
+outros). **Descartado:** deixar os logs no papel exato (a tela abriria com duas abas de três funcionando). **Reversível.**
+
+**B857 (NOVA, da Etapa 133; do núcleo) — criar ordem de serviço: o administrador passa como em todo portão de módulo.** Achado da revisão do
+plano (a medição inicial estava errada — dizia que esse portão deixava todos passarem): criar ordem de serviço só funcionava com o papel
+*admin* exato; o super sem o papel e o *Admin* recebiam *"Erro ao verificar permissões"*. Agora passam (a régua de todo portão de módulo).
+**Os outros usuários continuam recebendo o erro** (**C277**) — quem deve criar ordem de serviço sem ser administrador (Operacional?
+Comercial? o comercial sem grupo?) é decisão que esta etapa não toma. **Descartado:** consertar o portão inteiro com a régua "operacional
+ou comercial" (abriria criar OS a todo usuário sem grupo, pela regra do comercial); não mexer (o super seguia sem criar OS). **Reversível.**
+
+**B858 (NOVA, da Etapa 133; do núcleo) — o aviso de mensagem apagada vai para a conversa certa.** Fecha a **C274**. Apagar uma mensagem
+pelo endereço com zero (`/conversas/03/…`) apagava, mas o aviso ia para uma sala vazia; agora vai pelo número da conversa. **Reversível.**
+
+**B859 (NOVA, da Etapa 133; do núcleo) — o administrador do módulo Administração continua sem gerenciar permissões.** O cadastro oferece
+"administrador do módulo" também para a Administração, mas quem só tem isso não gerencia usuários (o cadastro o recusa) — e continua
+recusado nas permissões e nos logs. **Descartado:** deixá-lo passar nas permissões (mexeria em acesso de todos sem poder editar o
+cadastro — régua nova, sem pedido). **Reversível.**
+
+**B860 (NOVA, da Etapa 133) — a próxima etapa (134).** Ver a "próxima tarefa detalhada" no plano da Etapa 133 (escolhida por medição dos
+mapas do almoxarifado e do Compras). A **B853** (agora com a **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da
+**C225**, a **C228**, a **C219**, a **C230**, o reparo da **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do
+tempo de recebimento (letra **E**), a **C268**, a **C269** e as perguntas da **C275**, **C276** e **C277** continuam esperando vocês.
 
 ### C. Furos e mudanças de número que quem opera precisa saber
 
@@ -11928,14 +12020,47 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      tela de perfis do almoxarifado mostra a quem a configura quem é forçado a Administrador (o super administrador e o administrador do
      sistema) — informação que a tela usa, para um público restrito. **O que fazer:** nada por enquanto; candidata de etapa do núcleo
      (medir se a tela lê o papel e reduzir a id, nome e e-mail).
-273. **NOVO (da revisão da Etapa 131; do núcleo, anterior a ela) — o super administrador sem o papel *admin* não abre as telas de
+273. **✅ RESOLVIDO NA ETAPA 133 (B855, B856, B857)** — as permissões, os logs e o criar ordem de serviço aceitam quem gerencia usuários
+     (o super com qualquer papel, o papel *admin* com qualquer caixa). *(Medido na 133: o salvar do formulário não **perdia** os módulos
+     que havia, como a próxima tarefa da 132 dizia — perdia a mudança feita na tela, com o aviso.)* O texto original fica abaixo.
+     **NOVO (da revisão da Etapa 131; do núcleo, anterior a ela) — o super administrador sem o papel *admin* não abre as telas de
      permissão.** As rotas de permissões (`/api/permissoes/…`) aceitam só o papel *admin* escrito exatamente assim; o super administrador
      com outro papel, ou um papel *Admin* com maiúscula, leva recusa — enquanto o cadastro de usuários os aceita. **O que fazer:** dê o
      papel *admin* a quem é super administrador; candidata de etapa do núcleo (usar a mesma régua do cadastro).
-274. **NOVO (da revisão da Etapa 132; do núcleo, anterior a ela) — apagar uma mensagem do chat pelo endereço com zero não avisa os
+274. **✅ RESOLVIDO NA ETAPA 133 (B858)** — o aviso vai pelo número da conversa. O texto original fica abaixo.
+     **NOVO (da revisão da Etapa 132; do núcleo, anterior a ela) — apagar uma mensagem do chat pelo endereço com zero não avisa os
      outros na hora.** A exclusão de mensagem avisa a conversa pelo número escrito no endereço; com zero à esquerda (`/conversas/03/…`) a
      mensagem é apagada, mas o aviso vai para uma conversa que não existe — os outros só veem a exclusão ao recarregar. Só alcança quem
      chama a API à mão (a tela manda o número sem zero). **O que fazer:** nada; candidata de etapa do núcleo (normalizar o número).
+275. **NOVO (da medição da Etapa 133; do núcleo, anterior a ela) — excluir uma solicitação de aprovação continua só com o papel *admin*
+     exato.** O botão de excluir na tela de Aprovações aparece só para o papel *admin* escrito assim, e o servidor recusa os outros com
+     *"Apenas administradores podem excluir solicitações de aprovação"* — o super sem o papel e o *Admin* com maiúscula também. Não mudou
+     na 133: quem apaga solicitação de aprovação do comercial é regra do comercial, não de quem gerencia usuários. **O que fazer:** dê o
+     papel *admin* a quem deve excluir; se o super também deve, é uma linha (servidor e tela).
+276. **NOVO (da medição da Etapa 133; do núcleo, anterior a ela) — o cadastro de materiais de escritório da Engenharia aceita só o papel
+     *admin* exato.** Listar para cadastro, criar, editar, a foto e excluir respondem *"Apenas admin"* ao super sem o papel e ao *Admin*.
+     A Engenharia depende de vocês (spec 06) — não mudou. **O que fazer:** dê o papel *admin* a quem cuida do cadastro.
+277. **NOVO (da revisão do plano da Etapa 133; do núcleo, anterior a ela) — criar ordem de serviço dá *"Erro ao verificar permissões"* a
+     quem não é administrador.** O portão consulta uma coluna que a tabela de grupos de um banco novo não tem; o erro recusa todos os
+     outros usuários (num banco antigo **com** a coluna, deixa todos passarem). Desde a 133 o super sem o papel e o *Admin* passam
+     (**B857**). **O que fazer:** rode a **A81** para saber o caso de produção; a pergunta é quem deve criar ordem de serviço (o
+     Operacional? o Comercial? qualquer um?) — com a resposta, a régua é o portão de módulo comum.
+278. **NOVO (da revisão da Etapa 133; anterior a ela) — outros lugares que leem o papel *admin* exato, sem efeito de acesso medido.** O
+     filtro por setor das listas de usuário por módulo trata o *Admin* com maiúscula como não administrador (mostra só o setor dele); no
+     formulário de usuário, um alvo com papel *Admin* não tem os módulos travados (o salvar grava módulos à toa, sem dano) e o selo da lista
+     o mostra como usuário comum; o seletor de papel do formulário não oferece *Admin*. **O que fazer:** nada — o formulário só grava
+     *admin* minúsculo; papel com outra caixa só nasce pela API.
+279. **NOVO (da revisão da Etapa 133; do núcleo, anterior a ela) — o administrador do sistema que não é super troca a senha de um super
+     e entra como ele.** Pelo formulário de usuário, quem gerencia usuários muda senha, e-mail e papel de um super administrador (só o campo
+     "super" é protegido) — reproduzido: com a senha nova, o login como o super funcionou. Na prática, quem gerencia usuários é super. Esta
+     etapa não piora (as permissões não afetam super). **O que fazer:** dê o papel *admin* só a quem vocês confiariam o super; a régua (só
+     super edita super?) é a **B853**.
+280. **NOVO (da revisão da Etapa 133; do núcleo, anterior a ela) — trocar o e-mail para `admin@gmp.com.br` faz super administrador no
+     próximo reinício.** A cada boot, o usuário com esse e-mail é promovido a super. Reproduzido: o administrador do sistema (não super)
+     trocou o próprio e-mail para esse, o servidor reiniciou e ele passou a excluir usuários (o que só o super faz). **O que fazer:** rode a
+     **A82** antes do deploy e depois de cada reinício suspeito; candidata da próxima etapa do núcleo (**B860**).
+281. **NOVO (da revisão da Etapa 133; anterior a ela) — a consulta interna "tenho permissão?" responde sem o *permitido* quando não há
+     permissão.** Responde só *motivo: sem_permissao*. Nenhuma tela usa essa consulta. **O que fazer:** nada.
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -13183,6 +13308,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   entrada na conversa, que relê o usuário (**B848**).
 - **(132) Duas abas do mesmo usuário, saindo e entrando de novo numa delas**: a outra aba ignora o aviso de sessão encerrada da conexão
   antiga (é de outra sessão) e só volta ao login no próximo clique; a conexão dela já foi derrubada pelo servidor, então nada vaza.
+- **(133) O papel *admin* com espaço** (*" admin "*) não é administrador em lugar nenhum (nem no cadastro, nem nos portões, nem nas
+  permissões) — a régua compara o texto sem aparar. O formulário não grava papel assim; só a API.
+- **(133) As réguas que continuam no papel exato** — excluir solicitação de aprovação (**C275**), o cadastro de materiais de escritório da
+  Engenharia (**C276**) e os pontos sem efeito de acesso (**C278**) — ficaram de fora de propósito: o dono de cada uma não é "quem gerencia
+  usuários".
 
 ### E. Regras que foram DEDUZIDAS e nunca confirmadas com vocês — perguntas, não requisitos atendidos (E1, a remessa mista; E2, o tempo de recebimento)
 
@@ -14094,6 +14224,16 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(133) Um boot de verdade foi feito, sem navegador — e virou teste da suíte.** O servidor de verdade sobe com pasta de dados vazia dentro
+da suíte (o arquivo novo das permissões): o super administrador com papel *usuario* e o papel *Admin* fazem o salvar do formulário de
+usuário (o cadastro, apagar os módulos, gravar cada módulo) e o usuário alvo passa a entrar no módulo que ganhou — e deixa de entrar no que
+perdeu; fazem a aba Permissões inteira (grupo, membro, permissão do grupo, listas, exclusões) e abrem os Logs; criam ordem de serviço; o
+administrador do módulo Administração e o comum são recusados com as frases de hoje e nada muda; e apagar mensagem pelo endereço com zero
+avisa quem está na conversa (e só ele). A sonda da medição repetiu o quadro inteiro depois da mudança. O que **só o navegador** prova: o
+roteiro da Etapa 133 no guia — entrar como super administrador **sem** o papel *admin*, abrir **Admin → Permissões** e **Admin → Logs**
+(as duas carregam), e salvar os módulos de um usuário no formulário sem o aviso *"Usuário salvo, mas houve erro ao salvar permissões de
+módulos"*.
 
 **(132) Um boot de verdade foi feito, sem navegador — e virou teste da suíte.** O servidor de verdade sobe com pasta de dados vazia dentro
 da suíte (o arquivo novo do chat): quatro usuários com a conversa aberta; o botão de inativar, a caixa do formulário e a exclusão derrubam
@@ -27192,9 +27332,75 @@ tabela perfil × canal no servidor de verdade e achou o administrador se desativ
 fez **49** sabotagens além das **23** já feitas: **8** mostraram cenário faltando (as réguas do id e do *ativo*, o zero à esquerda na sala,
 o fechamento da conexão, a sessão só na aba, a conexão velha ainda aberta) e viraram cenários; **3** foram provadas inofensivas.
 
+## Etapa 133 — As abas Permissões e Logs para todo administrador do sistema (2026-10-16)
+
+Do núcleo. O sistema reconhece como administrador do sistema o **super administrador** (com qualquer papel) e o papel *admin* (com
+qualquer caixa) — é assim que ele abre a tela de Administração e o cadastro de usuários. Mas as abas **Permissões** e **Logs**, e o salvar
+dos módulos no formulário de usuário, só aceitavam o papel *admin* escrito exatamente assim: o super sem esse papel abria a tela e via as
+duas abas recusarem, e ao salvar um usuário recebia *"Usuário salvo, mas houve erro ao salvar permissões de módulos. Tente editar
+novamente."* — o cadastro gravava, os módulos não. Agora as três respondem a quem gerencia usuários. De quebra, o mesmo administrador passa
+a criar ordem de serviço, e o aviso de mensagem apagada do chat chega à conversa certa.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| O super sem o papel *admin* (ou o *Admin* com maiúscula) via a aba Permissões recusar com *"Acesso negado"* | A aba carrega e grava grupos, membros e permissões (**B855**) |
+| Salvar um usuário avisava *"Usuário salvo, mas houve erro ao salvar permissões de módulos"* e os módulos não mudavam | Os módulos gravam; o usuário entra no módulo que ganhou (**B855**) |
+| A aba Logs recusava com *"Acesso negado. Apenas administradores podem visualizar logs."* | Carrega (**B856**) |
+| Criar ordem de serviço dava *"Erro ao verificar permissões"* ao super sem o papel | Cria (**B857**); os não administradores seguem com o erro (**C277**) |
+| Apagar mensagem pelo endereço com zero não avisava a conversa | Avisa (**B858**) |
+
+### As regras, com o cenário exato
+
+Preparação: o **administrador semeado**; em **Admin → Usuários**, crie um usuário **S** com *Super administrador* marcado e papel
+*Usuário*, e um usuário comum **C**.
+
+**1. A aba Permissões.** Entre como **S** → **Admin → Permissões**: a lista de grupos carrega; crie um grupo, marque um módulo nele e
+adicione o **C** — tudo grava. Entrando como **C**, a mesma aba recusa com *"Acesso negado"*.
+
+**2. O salvar dos módulos.** Como **S**, edite o **C** em **Admin → Usuários**, marque o módulo **Financeiro** e salve: volta para a lista
+sem aviso. Entre como **C**: o **Financeiro** abre. Edite de novo, desmarque, salve: o **C** perde o Financeiro.
+
+**3. A aba Logs.** Como **S**, **Admin → Logs** carrega a lista. Pela API, o **C** recebe *"Acesso negado. Apenas administradores podem
+visualizar logs."*.
+
+**4. Quem não gerencia usuários continua de fora.** Pela API, um usuário com só *administrador do módulo Administração* recebe *"Apenas
+administradores podem gerenciar permissões"* ao gravar uma permissão e *"Acesso negado"* nas outras — e nada muda.
+
+### O que esta etapa NÃO cobre
+
+1. **Excluir solicitação de aprovação** e o **cadastro de materiais de escritório da Engenharia** continuam só com o papel *admin* exato
+   (**C275**, **C276**).
+2. **Quem cria ordem de serviço sem ser administrador** é pergunta de vocês (**C277**, consulta **A81**).
+3. **O administrador do sistema troca a senha de um super e entra como ele**, e **o e-mail `admin@gmp.com.br` vira super a cada reinício**
+   — anteriores, achados na revisão (**C279**, ligado à **B853**; **C280**, consulta **A82**, candidata da próxima etapa).
+4. As decisões que esperam vocês: **B853**, **B808**, **B755**, **B761**/**C239**, **C224**, **C225**, **C228**, **C219**, **C230**,
+   **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (**E2**), a **C268** e a **C269**.
+
+### O que a revisão encontrou
+
+A **medição** subiu o servidor de verdade com quatro perfis e mostrou o super sem o papel recusado em todas as rotas de permissões e nos
+logs, enquanto o cadastro o aceitava. A **revisão do plano** (antes do código) achou a medição **errada** num ponto: o portão de criar ordem
+de serviço não deixava todos passarem, recusava todos menos o papel exato com um erro — entrou na etapa só para o administrador (**B857**),
+o resto virou a **C277**; e mais três ajustes de teste. A **revisão adversarial do código** (três revisores, executando): o de **regra** não
+achou nada além de dois detalhes anteriores (**C281**); o de **permissão** montou a tabela de onze perfis × rotas no servidor de verdade e
+não achou escalada nova — achou duas **anteriores** à etapa e sérias, reproduzidas: o administrador do sistema que troca a senha de um
+super e entra como ele (**C279**) e o e-mail que vira super no reinício (**C280**); o de **sabotagem** fez **22** sabotagens além das
+**10** já feitas: **8** mostraram cenário faltando no corpo das rotas que mudaram de lugar (a ordem da lista, a atualização da permissão
+que já existe, as restrições, o grupo inativo, o *ativo* do grupo, a saída de um membro só, o aviso fora da conversa) e viraram cenários;
+**3** foram provadas inofensivas.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 133 entregue (2026-10-16):** **as abas Permissões e Logs para todo administrador do sistema** (do núcleo). As permissões, os
+  logs e o criar ordem de serviço aceitam o super com qualquer papel e o papel *admin* com qualquer caixa (**C273** resolvido — **B855** a
+  **B857**); o aviso de mensagem apagada chega à conversa certa (**C274** resolvido — **B858**). **O que é seu:** as consultas **A80**,
+  **A81** e **A82** (opcionais); a pergunta **B853** (agora com a **C279**) e as da **C275** a **C277**; as decisões **B855 a B859**
+  (reversíveis); os avisos **C278** a **C281**; as limitações **(133)** em D e a verificação **(133)** em F.
+  **Próxima: Etapa 134 — ver a "próxima tarefa detalhada" no plano da Etapa 133.**
 
 - **Etapa 132 entregue (2026-10-16):** **o desativado sai do chat na hora, e a Lista de Tarefas sem o papel** (do núcleo). A conexão do
   chat relê o usuário ao conectar, ao entrar na conversa e ao digitar, e cai na hora ao desativar ou excluir (**C271** resolvido — **B848**
@@ -27202,7 +27408,7 @@ o fechamento da conexão, a sessão só na aba, a conexão velha ainda aberta) e
   formulário nem pelo endereço com zero, e editar sem o campo *ativo* não tranca ninguém fora (**B852**). **O que é seu:** a consulta
   **A79** (opcional); a pergunta **B853**; as decisões **B848 a B852** (reversíveis); o aviso **C274**; as limitações **(132)** em D e a
   verificação **(132)** em F.
-  **Próxima: Etapa 133 — ver a "próxima tarefa detalhada" no plano da Etapa 132.**
+  *(Próxima, na época: Etapa 133 — entregue acima.)*
 
 - **Etapa 131 entregue (2026-10-16):** **as listas de usuário e a sessão do desativado** (do núcleo). Os seletores de responsável mostram
   de cada usuário só o que a tela usa para quem não gerencia usuários (**C270** resolvido — **B844**); o desativado ou apagado é
