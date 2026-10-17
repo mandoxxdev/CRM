@@ -301,12 +301,38 @@ function sanitizeGhostUserPayload(actor, body) {
   return data;
 }
 
+/**
+ * Etapa 137 (C291, C293): a regua de sim ou nao do cadastro de usuario — 1 (`1`, `true`, `"1"`, `"true"`), 0 (`0`, `false`, `"0"`,
+ * `"false"`), `null` (o resto). Fechada de proposito: `"TRUE"`, `" 1"`, `2` e `"sim"` nao sao nem sim nem nao.
+ */
+function simOuNao(valor) {
+  if (valor === 1 || valor === true || valor === '1' || valor === 'true') return 1;
+  if (valor === 0 || valor === false || valor === '0' || valor === 'false') return 0;
+  return null;
+}
+
+/** Ausente, nulo ou vazio: o campo nao veio (a edicao mantem o que estava). */
+function campoAusente(valor) {
+  return valor === undefined || valor === null || valor === '';
+}
+
+/** Etapa 137 (C291, RN-05): `is_superadmin` presente que a regua nao reconhece, vindo de quem pode dar super — a rota recusa (400). */
+function superAdminInvalido(actor, body) {
+  if (!canGrantSuperAdmin(actor) || !body) return false;
+  return !campoAusente(body.is_superadmin) && simOuNao(body.is_superadmin) === null;
+}
+
 function sanitizeSuperAdminPayload(actor, body) {
   const data = sanitizeGhostUserPayload(actor, body);
   if (!canGrantSuperAdmin(actor)) {
     delete data.is_superadmin;
+  } else if (campoAusente(data.is_superadmin) || simOuNao(data.is_superadmin) === null) {
+    // Etapa 137 (C291, RN-05): sem o campo (ou nulo, ou vazio) a edicao MANTEM — gravava 0, e um super editando outro super pela API
+    // sem o campo o rebaixava (o ultimo super editando a si era recusado como "remover o ultimo super"). O POST sem o campo cria 0
+    // (`is_superadmin !== undefined ? ... : 0`). Fora da regua a rota ja recusou (`superAdminInvalido`); aqui o campo so sai.
+    delete data.is_superadmin;
   } else {
-    data.is_superadmin = isTruthyFlag(data.is_superadmin) ? 1 : 0;
+    data.is_superadmin = simOuNao(data.is_superadmin); // Etapa 137 (Fase 2 I8): o "true" de um super rebaixava (isTruthyFlag)
   }
   if (data.admin_modulos !== undefined) {
     const mods = parseAdminModulos(data.admin_modulos).filter((m) => MODULE_ADMIN_KEYS.includes(m));
@@ -394,6 +420,9 @@ module.exports = {
   idDoTokenValido,
   syncModuleAdminProfiles,
   sanitizeSuperAdminPayload,
+  simOuNao,
+  campoAusente,
+  superAdminInvalido,
   isTruthyFlag,
   countActiveSuperAdmins,
   wouldRemoveLastSuperAdmin,

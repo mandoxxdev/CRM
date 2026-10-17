@@ -246,6 +246,9 @@ const {
   enrichUserFromDb,
   syncModuleAdminProfiles,
   sanitizeSuperAdminPayload,
+  simOuNao,
+  campoAusente,
+  superAdminInvalido,
   isTruthyFlag,
   wouldRemoveLastSuperAdmin,
   requireAdministrativoConfig,
@@ -3750,11 +3753,11 @@ const LITERAL_SENHA_NAO_TEXTO = 'Senha inválida: envie a senha como texto';
 // (daria acesso a quem a integracao pode ter querido inativo). O PUT nao muda (a tela devolve o que leu — D (136)).
 const LITERAL_ATIVO_INVALIDO = 'Ativo inválido: envie 1 (ativo) ou 0 (inativo)';
 function ativoDaCriacao(ativo) {
-  if (ativo === undefined || ativo === null || ativo === '') return 1; // Etapa 135 (C284, RN-08): como a coluna nasce
-  if (ativo === 1 || ativo === true || ativo === '1' || ativo === 'true') return 1;
-  if (ativo === 0 || ativo === false || ativo === '0' || ativo === 'false') return 0;
-  return null;
+  if (campoAusente(ativo)) return 1; // Etapa 135 (C284, RN-08): como a coluna nasce
+  return simOuNao(ativo); // Etapa 137 (C293): a mesma regua do PUT, do PATCH /status e do is_superadmin
 }
+// Etapa 137 (C291, RN-05; Fase 2 I8): o `is_superadmin` de um super fora da regua de sim ou nao (o "true" rebaixava; o 2 tambem).
+const LITERAL_SUPER_INVALIDO = 'Super administrador inválido: envie 1 (sim) ou 0 (não)';
 // Etapa 136 (C285, RN-10): a trava do ultimo super no PROPRIO comando que grava. A conferencia de antes (`wouldRemoveLastSuperAdmin`)
 // conta num SELECT e o UPDATE grava depois: dois supers se rebaixando ao mesmo tempo passavam os dois (10/10, zero super ativo). Com o
 // `?` = 1 o UPDATE so grava se o alvo nao for super que entra (a regua do login, `ativo = 1`) ou se sobrar outro.
@@ -3801,6 +3804,10 @@ app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
   const ativoNaCriacao = ativoDaCriacao(ativo);
   if (ativoNaCriacao === null) {
     return res.status(400).json({ error: LITERAL_ATIVO_INVALIDO });
+  }
+
+  if (superAdminInvalido(req.user, req.body)) {
+    return res.status(400).json({ error: LITERAL_SUPER_INVALIDO });
   }
 
   // Etapa 134 (C280, RN-03): o e-mail do administrador padrao so e dado por um super (o boot o recupera como super quando nao ha super ativo).
@@ -3866,7 +3873,7 @@ app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
 app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) => {
   const { id } = req.params;
 
-  db.get('SELECT id, email FROM usuarios WHERE id = ?', [id], (lookupErr, existing) => {
+  db.get('SELECT id, email, ativo FROM usuarios WHERE id = ?', [id], (lookupErr, existing) => {
     if (lookupErr) return res.status(500).json({ error: lookupErr.message });
     if (!existing) return res.status(404).json({ error: 'Usuário não encontrado' });
 
@@ -3903,10 +3910,6 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
     pode_editar_conta,
   } = sanitized;
 
-  // Etapa 136 (C288, RN-08; Fase 2 M3): `ativo` "" ou nulo e AUSENTE — mantem o que havia. O "" gravava "" (o usuario deixava de entrar)
-  // e os dois contavam como "desativar" (a recusa do proprio usuario e a trava do ultimo super), com o COALESCE mantendo o valor no nulo.
-  const ativo = (ativoCru === '' || ativoCru === null) ? undefined : ativoCru;
-
   // Etapa 136 (C289, RN-07; C290): senha verdadeira que nao e texto -> 400 (o falso continua "nao muda a senha").
   if (senha && typeof senha !== 'string') {
     return res.status(400).json({ error: LITERAL_SENHA_NAO_TEXTO });
@@ -3916,8 +3919,25 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
     return res.status(400).json({ error: 'Senha deve ter no mínimo 6 caracteres' });
   }
 
+  // Etapa 136 (C288, RN-08; Fase 2 M3): `ativo` "" ou nulo e AUSENTE — mantem o que havia. O "" gravava "" (o usuario deixava de entrar)
+  // e os dois contavam como "desativar" (a recusa do proprio usuario e a trava do ultimo super), com o COALESCE mantendo o valor no nulo.
+  // Etapa 137 (C293, RN-07): o resto pela regua de sim ou nao — o "true" gravava o texto (a pessoa deixava de entrar) e o 2 gravava 2.
+  // IGUAL AO GRAVADO (pelo texto) tambem mantem: a tela devolve o que leu, e o legado com 2 (ou "true" em texto) editado sem mexer na
+  // caixa nao pode virar 400 (D (136)). A regua vem antes de `deactivating`: o proprio com "true" nao e "desativar o proprio" (Fase 2 M9).
+  let ativo;
+  if (campoAusente(ativoCru) || String(ativoCru) === String(existing.ativo)) {
+    ativo = undefined;
+  } else {
+    ativo = simOuNao(ativoCru);
+    if (ativo === null) return res.status(400).json({ error: LITERAL_ATIVO_INVALIDO });
+  }
+
+  if (superAdminInvalido(req.user, req.body)) {
+    return res.status(400).json({ error: LITERAL_SUPER_INVALIDO });
+  }
+
   const removingSuper = is_superadmin !== undefined && !isTruthyFlag(is_superadmin);
-  const deactivating = ativo !== undefined && !isTruthyFlag(ativo);
+  const deactivating = ativo === 0;
 
   // Etapa 132 (Fase 5 r2 M8): a mesma recusa do PATCH de status — pela caixa "Usuario ativo" do proprio formulario o
   // administrador se desativava (200) e caia na hora.
@@ -4027,7 +4047,10 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
 // Inativar / reativar usuário (admins do sistema) — ação reversível, mantém o histórico.
 app.patch('/api/usuarios/:id/status', authenticateToken, requireManageUsers, (req, res) => {
   const { id } = req.params;
-  const ativo = isTruthyFlag(req.body?.ativo) ? 1 : 0;
+  // Etapa 137 (C293, RN-06): pela regua de sim ou nao. Antes, tudo que nao fosse 1 desativava — o "true" (e o corpo sem o campo) tambem.
+  // A tela manda sempre 0 ou 1 (Usuarios.js); o resto e recusado, antes de "desativar o proprio usuario".
+  const ativo = simOuNao(req.body?.ativo);
+  if (ativo === null) return res.status(400).json({ error: LITERAL_ATIVO_INVALIDO });
 
   // Etapa 132 (Fase 5 r2 N1): pelo numero — com o texto, '/usuarios/02/status' do proprio 2 passava ('2' !== '02') e o SQLite
   // casava a linha 2.

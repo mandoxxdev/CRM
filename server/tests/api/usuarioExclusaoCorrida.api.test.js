@@ -6,6 +6,9 @@
  *         em corrida sobra um (C292); RN-01b com o destino padrao (o proprio ator); RN-01c o destino apagado no meio -> 400, nunca 500
  *   RN-02 quem perde a corrida nao escreve nada (nem purge, nem transferencia)
  *   RN-03 o alvo apagado no meio e 404, sem nada feito
+ *   RN-05 `is_superadmin` pela regua de sim ou nao, e ausente mantem — um super editando outro sem o campo nao o rebaixa (C291)
+ *   RN-06 o inativar (PATCH /status) pela regua de sim ou nao; o resto -> 400 (C293)
+ *   RN-07 o `ativo` da edicao (PUT) pela regua, sem recusar o que a tela leu (C293)
  *
  * Plano: docs/superpowers/plans/2026-10-17-almoxarifado-etapa137-a-exclusao-do-ultimo-super.md
  * Molde: usuarioSenhaAtivoCorrida.api.test.js (pasta vazia, porta livre, morreComOPai). O banco e lido e preparado por uma conexao crua
@@ -28,6 +31,7 @@ const L_ACESSO_NEGADO = 'Acesso negado — apenas administradores do sistema';
 const L_SO_SUPER_EXCLUI = 'Apenas Super Administradores podem excluir usuários';
 const L_NAO_ENCONTRADO = 'Usuário não encontrado';
 const L_ATIVO = 'Ativo inválido: envie 1 (ativo) ou 0 (inativo)';
+const L_SUPER = 'Super administrador inválido: envie 1 (sim) ou 0 (não)';
 const L_PROPRIO = 'Não é possível desativar o próprio usuário';
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -279,6 +283,149 @@ test('[RN-01c] o destino apagado no meio: 400 "destino nao encontrado", nunca 50
     }
   }
   console.log(`    (destino apagado: ${JSON.stringify(cont)})`);
+});
+
+test('[RN-05] um super editando outro super sem o campo (ou nulo, ou vazio) nao o rebaixa; com 0 rebaixa; com 1 promove', async () => {
+  await soOSemente();
+  const s = await criar({ is_superadmin: 1, nome: 'Super Dois' });
+  for (const extra of [{}, { is_superadmin: null }, { is_superadmin: '' }]) {
+    const [st, x] = await j('PUT', `/usuarios/${s.id}`, ctx.T, corpo(s, { nome: 'Super Dois Editado', ativo: 1, ...extra }));
+    assert.strictEqual(st, 200, JSON.stringify(x));
+    const l = await linha(s.id);
+    assert.deepStrictEqual([l.nome, Number(l.is_superadmin)], ['SUPER DOIS EDITADO', 1], `sem o campo (${JSON.stringify(extra)}) rebaixou`);
+  }
+  const c = await criar({ nome: 'Comum Dois' });
+  const [st0] = await j('PUT', `/usuarios/${c.id}`, ctx.T, corpo(c, { ativo: 1 }));
+  assert.strictEqual(st0, 200);
+  assert.strictEqual(Number((await linha(c.id)).is_superadmin), 0, 'sem o campo promoveu o comum');
+  // metade positiva: com o campo vale
+  assert.strictEqual((await j('PUT', `/usuarios/${s.id}`, ctx.T, corpo(s, { ativo: 1, is_superadmin: 0 })))[0], 200);
+  assert.strictEqual(Number((await linha(s.id)).is_superadmin), 0, 'com 0 nao rebaixou');
+  assert.strictEqual((await j('PUT', `/usuarios/${c.id}`, ctx.T, corpo(c, { ativo: 1, is_superadmin: 1 })))[0], 200);
+  assert.strictEqual(Number((await linha(c.id)).is_superadmin), 1, 'com 1 nao promoveu');
+  // o POST sem o campo continua criando comum
+  const n = await criar({ nome: 'Sem Campo' });
+  assert.strictEqual(Number((await linha(n.id)).is_superadmin), 0);
+});
+
+test('[RN-05] o ultimo super editando a si mesmo sem o campo: 200 e continua super (antes: 403 "remover o ultimo super")', async () => {
+  await soOSemente();
+  assert.deepStrictEqual(await supersAtivos(), [ctx.seedId]);
+  const eu = await linha(ctx.seedId);
+  const [st, x] = await j('PUT', `/usuarios/${ctx.seedId}`, ctx.T, { nome: 'Semente Editado', email: SEED.email, cargo: 'Adm', role: 'admin', ativo: 1 });
+  assert.strictEqual(st, 200, JSON.stringify(x));
+  assert.deepStrictEqual(await supersAtivos(), [ctx.seedId], 'o semente se rebaixou');
+  assert.strictEqual((await linha(ctx.seedId)).nome, 'SEMENTE EDITADO');
+  // metade positiva: com o campo 0, continua a trava do ultimo super
+  const [st2, x2] = await j('PUT', `/usuarios/${ctx.seedId}`, ctx.T, { nome: eu.nome, email: SEED.email, cargo: 'Adm', role: 'admin', ativo: 1, is_superadmin: 0 });
+  assert.deepStrictEqual([st2, x2 && x2.error], [403, L_ULTIMO_PUT]);
+});
+
+test('[RN-05] quem nao e super: o campo continua ignorado (nao promove, nao rebaixa)', async () => {
+  await soOSemente();
+  const adm = await criar({ nome: 'Admin Comum', role: 'admin' });
+  const tokAdm = await login(adm.email, ctx.senha);
+  const s = await criar({ is_superadmin: 1, nome: 'Super Tres' });
+  const c = await criar({ nome: 'Comum Tres' });
+  assert.strictEqual((await j('PUT', `/usuarios/${c.id}`, tokAdm, corpo(c, { ativo: 1, is_superadmin: 1 })))[0], 200);
+  assert.strictEqual(Number((await linha(c.id)).is_superadmin), 0, 'o admin comum promoveu');
+  assert.strictEqual((await j('PUT', `/usuarios/${s.id}`, tokAdm, corpo(s, { ativo: 1, is_superadmin: 0 })))[0], 200);
+  assert.strictEqual(Number((await linha(s.id)).is_superadmin), 1, 'o admin comum rebaixou');
+});
+
+test('[RN-05] is_superadmin pela regua: "true" promove, "false" rebaixa; fora da regua -> 400 L-SUPER e nada gravado (POST e PUT)', async () => {
+  await soOSemente();
+  const c = await criar({ nome: 'Regua Super' });
+  assert.strictEqual((await j('PUT', `/usuarios/${c.id}`, ctx.T, corpo(c, { ativo: 1, is_superadmin: 'true' })))[0], 200);
+  assert.strictEqual(Number((await linha(c.id)).is_superadmin), 1, '"true" nao promoveu');
+  assert.strictEqual((await j('PUT', `/usuarios/${c.id}`, ctx.T, corpo(c, { ativo: 1, is_superadmin: 'false' })))[0], 200);
+  assert.strictEqual(Number((await linha(c.id)).is_superadmin), 0, '"false" nao rebaixou');
+  const s = await criar({ nome: 'Super Regua', is_superadmin: 'true' });
+  assert.strictEqual(Number((await linha(s.id)).is_superadmin), 1, 'o POST com "true" nao criou super');
+  for (const v of [2, 'sim', [], {}, 'TRUE', -1]) {
+    const [st, x] = await j('PUT', `/usuarios/${s.id}`, ctx.T, corpo(s, { nome: 'Nao Grava', ativo: 1, is_superadmin: v }));
+    assert.deepStrictEqual([st, x && x.error], [400, L_SUPER], `PUT is_superadmin ${JSON.stringify(v)}`);
+    const l = await linha(s.id);
+    assert.deepStrictEqual([l.nome, Number(l.is_superadmin)], ['SUPER REGUA', 1], `PUT is_superadmin ${JSON.stringify(v)} gravou`);
+    const antes = (await get('SELECT COUNT(*) AS n FROM usuarios')).n;
+    const [sp, xp] = await j('POST', '/usuarios', ctx.T, { nome: 'Nao Cria', email: novoEmail(), senha: ctx.senha, cargo: 'C', role: 'usuario', is_superadmin: v });
+    assert.deepStrictEqual([sp, xp && xp.error], [400, L_SUPER], `POST is_superadmin ${JSON.stringify(v)}`);
+    assert.strictEqual((await get('SELECT COUNT(*) AS n FROM usuarios')).n, antes, `POST is_superadmin ${JSON.stringify(v)} gravou`);
+  }
+  // quem nao e super: o campo fora da regua continua so ignorado (nem 400)
+  const adm = await criar({ nome: 'Admin Regua', role: 'admin' });
+  const tokAdm = await login(adm.email, ctx.senha);
+  assert.strictEqual((await j('PUT', `/usuarios/${c.id}`, tokAdm, corpo(c, { ativo: 1, is_superadmin: 'sim' })))[0], 200);
+  assert.strictEqual(Number((await linha(c.id)).is_superadmin), 0);
+});
+
+test('[RN-07] PUT: o proprio administrador com ativo "true" -> 200 (nao e "desativar o proprio"; Fase 2 M9)', async () => {
+  await soOSemente();
+  const eu = await linha(ctx.seedId);
+  const [st, x] = await j('PUT', `/usuarios/${ctx.seedId}`, ctx.T, { nome: eu.nome, email: SEED.email, cargo: 'Adm', role: 'admin', ativo: 'true', is_superadmin: 1 });
+  assert.strictEqual(st, 200, JSON.stringify(x));
+  assert.strictEqual((await linha(ctx.seedId)).ativo, 1);
+});
+
+test('[RN-06] PATCH /status pela regua de sim ou nao: "true" reativa, "false" desativa; o resto (inclusive ausente) -> 400, nada muda', async () => {
+  await soOSemente();
+  const u = await criar({ nome: 'Status' });
+  for (const [v, esperado] of [['false', 0], ['true', 1], [0, 0], [1, 1], [false, 0], [true, 1], ['0', 0], ['1', 1]]) {
+    const [st, x] = await j('PATCH', `/usuarios/${u.id}/status`, ctx.T, { ativo: v });
+    assert.strictEqual(st, 200, `${JSON.stringify(v)}: ${JSON.stringify(x)}`);
+    assert.strictEqual(x.ativo, esperado, `resposta ${JSON.stringify(v)}`);
+    assert.strictEqual((await linha(u.id)).ativo, esperado, `gravado ${JSON.stringify(v)}`);
+  }
+  assert.ok(await login(u.email, ctx.senha), 'o "1" final nao reativou');
+  for (const corpoRuim of [{}, { ativo: null }, { ativo: '' }, { ativo: 2 }, { ativo: 'sim' }, { ativo: [] }, { ativo: {} }, { ativo: 'TRUE' }, { ativo: -1 }]) {
+    const [st, x] = await j('PATCH', `/usuarios/${u.id}/status`, ctx.T, corpoRuim);
+    assert.deepStrictEqual([st, x && x.error], [400, L_ATIVO], `PATCH ${JSON.stringify(corpoRuim)}`);
+    assert.strictEqual((await linha(u.id)).ativo, 1, `PATCH ${JSON.stringify(corpoRuim)} mudou o ativo`);
+  }
+  // a recusa vem antes de "desativar o proprio usuario"; o "false" no proprio continua o 403
+  assert.deepStrictEqual((await j('PATCH', `/usuarios/${ctx.seedId}/status`, ctx.T, { ativo: 'sim' })).map((y, k) => (k ? y && y.error : y)), [400, L_ATIVO]);
+  assert.deepStrictEqual((await j('PATCH', `/usuarios/${ctx.seedId}/status`, ctx.T, { ativo: 'false' })).map((y, k) => (k ? y && y.error : y)), [403, L_PROPRIO]);
+});
+
+test('[RN-07] PUT: "true" ativa e entra, "false" desativa; 2 num ativo -> 400 e nada muda; o proprio com "false" -> 403', async () => {
+  await soOSemente();
+  const u = await criar({ nome: 'Edita', ativo: 0 });
+  const [s1, x1] = await j('PUT', `/usuarios/${u.id}`, ctx.T, corpo(u, { ativo: 'true' }));
+  assert.strictEqual(s1, 200, JSON.stringify(x1));
+  assert.strictEqual((await linha(u.id)).ativo, 1, '"true" gravou cru');
+  assert.ok(await login(u.email, ctx.senha), '"true" nao entra');
+  assert.strictEqual((await j('PUT', `/usuarios/${u.id}`, ctx.T, corpo(u, { ativo: 'false' })))[0], 200);
+  assert.strictEqual((await linha(u.id)).ativo, 0, '"false" nao desativou');
+  assert.strictEqual((await j('PUT', `/usuarios/${u.id}`, ctx.T, corpo(u, { ativo: '1' })))[0], 200);
+  assert.strictEqual((await linha(u.id)).ativo, 1);
+  for (const v of [2, 'sim', [], {}, 'TRUE', -1]) {
+    const [st, x] = await j('PUT', `/usuarios/${u.id}`, ctx.T, corpo(u, { nome: 'Nao Grava', ativo: v }));
+    assert.deepStrictEqual([st, x && x.error], [400, L_ATIVO], `PUT ativo ${JSON.stringify(v)}`);
+    const l = await linha(u.id);
+    assert.deepStrictEqual([l.ativo, l.nome], [1, 'EDITA'], `PUT ativo ${JSON.stringify(v)} gravou`);
+  }
+  const eu = await linha(ctx.seedId);
+  const [s3, x3] = await j('PUT', `/usuarios/${ctx.seedId}`, ctx.T, { nome: eu.nome, email: SEED.email, cargo: 'Adm', role: 'admin', ativo: 'false', is_superadmin: 1 });
+  assert.deepStrictEqual([s3, x3 && x3.error], [403, L_PROPRIO]);
+});
+
+test('[RN-07] PUT: o legado com ativo 2 editado pela tela (devolve o 2 que leu) -> 200, o nome muda e o ativo continua 2', async () => {
+  await soOSemente();
+  const u = await criar({ nome: 'Legado' });
+  await run('UPDATE usuarios SET ativo = 2 WHERE id = ?', [u.id]);
+  const [st, x] = await j('PUT', `/usuarios/${u.id}`, ctx.T, corpo(u, { nome: 'Legado Editado', ativo: 2 }));
+  assert.strictEqual(st, 200, JSON.stringify(x));
+  const l = await linha(u.id);
+  assert.deepStrictEqual([l.nome, l.ativo], ['LEGADO EDITADO', 2]);
+  // o mesmo legado com "2" em texto (a tela devolve numero, mas a regua compara pelo texto) tambem passa
+  assert.strictEqual((await j('PUT', `/usuarios/${u.id}`, ctx.T, corpo(u, { nome: 'Legado Texto', ativo: '2' })))[0], 200);
+  // e com a caixa marcada (1) passa a ativo de verdade
+  assert.strictEqual((await j('PUT', `/usuarios/${u.id}`, ctx.T, corpo(u, { ativo: 1 })))[0], 200);
+  assert.strictEqual((await linha(u.id)).ativo, 1);
+  assert.ok(await login(u.email, ctx.senha), 'o legado reativado nao entra');
+  // metade negativa: num ativo (1), o 2 e recusado (nao e o que a tela leu)
+  const [s2, x2] = await j('PUT', `/usuarios/${u.id}`, ctx.T, corpo(u, { ativo: 2 }));
+  assert.deepStrictEqual([s2, x2 && x2.error], [400, L_ATIVO]);
 });
 
 (async () => {
