@@ -20,7 +20,12 @@ const fs = require('fs');
 const os = require('os');
 const { gerarHTMLPropostaPremiumV2 } = require('../templates/propostaPremiumV2');
 const { getClausulasDefault } = require('../clausulasDefault');
+const { servirAssetsProposta } = require('./helpers/servirAssetsProposta');
 const puppeteer = require('puppeteer');
+
+// Etapa 139: os assets (fontes, logos, hero) servidos por um servidor efemero — sem isso o preview os pedia a
+// http://localhost:5000 e as medidas (I5, I6, as paginas) dependiam de haver um npm run dev de pe.
+let assets = null;
 
 const proposta = { numero_proposta: '01/R00', titulo: 'T', razao_social: 'X', cnpj: '1', cliente_email: 'a@b.c' };
 const itens = Array.from({ length: 30 }, (_, i) => ({
@@ -37,15 +42,38 @@ const clausulasFormatoBanco = getClausulasDefault().map((c, i) => ({
 // (a) formato default (com `numero`)
 const clausulasFormatoDefault = getClausulasDefault().map(c => ({ numero: c.numero, titulo: c.titulo, conteudo: c.conteudo }));
 
+// (c) Etapa 139 (RN-139.01) — o que o editor GRAVA ao incluir cláusula: a renumeração (renumerarClausulas) pula o 24,
+// que é a seção de preço; a 24ª editável vira 5.25 e a CONSIDERAÇÃO FINAL vai para 5.26. De a33dfca1 (28/07/2026) até
+// a Etapa 139 o template tirava da lista toda 5.25+ que não fosse a consideração final e não a renderizava em lugar
+// nenhum — e o salvamento seguinte do preview a apagava do banco (o diff marca como removida o que não está no
+// #proposalSource). A I1 antiga comparava o #proposalSource com as páginas e não via: a cláusula sumia dos dois.
+function formatoBancoComIncluidas(titulosNovos) {
+  const linhas = clausulasFormatoBanco.map(c => ({ ...c }));
+  const cf = linhas.pop(); // 5.25 CONSIDERAÇÃO FINAL
+  titulosNovos.forEach((t, k) => linhas.push({ id: 900 + k, proposta_id: 288, ordem: linhas.length, ativo: 1, titulo: `5.${25 + k} ${t}`, conteudo: `<p>Texto da ${t}.</p>` }));
+  linhas.push({ ...cf, ordem: linhas.length, titulo: `5.${25 + titulosNovos.length} CONSIDERAÇÃO FINAL` });
+  return linhas;
+}
+const INCLUIDA = 'CLAUSULA INCLUIDA PELO USUARIO';
+const clausulasBancoInclusao = formatoBancoComIncluidas([INCLUIDA]);
+const clausulasBancoDuas = formatoBancoComIncluidas([`${INCLUIDA} A`, `${INCLUIDA} B`]);
+
+// I1 contra a ENTRADA: o título como o template o imprime (numero + titulo no default; o título com o prefixo no
+// banco). Os subtítulos x.y.z da seção de preço imprimem o prefixo num atributo (data-titulo-prefixo), não no texto.
+const titulosDaEntrada = (clausulas) => clausulas.map((c) => {
+  const t = String(c.numero ? `${c.numero} ${c.titulo}` : c.titulo).trim();
+  return /^\d+\.\d+\.\d+\s/.test(t) ? t.replace(/^\d+\.\d+\.\d+\s+/, '') : t;
+});
+
 async function medirInvariantes(browser, clausulas, rotulo) {
-  const html = gerarHTMLPropostaPremiumV2(proposta, itens, totais, { clausulas_custom: clausulas }, null, false, true);
+  const html = gerarHTMLPropostaPremiumV2(proposta, itens, totais, { clausulas_custom: clausulas }, assets.baseURL, false, true);
   const tmp = path.join(os.tmpdir(), `invariantes-${rotulo}.html`);
   fs.writeFileSync(tmp, html);
   const page = await browser.newPage();
   await page.setViewport({ width: 900, height: 1300 });
   await page.goto('file:///' + tmp.replace(/\\/g, '/'), { waitUntil: 'networkidle0' });
   await new Promise(r => setTimeout(r, 1500));
-  const r = await page.evaluate(() => {
+  const r = await page.evaluate((titulosEntrada) => {
     const TOL = 3;
     const gen = Array.from(document.querySelectorAll('.proposal-page[data-generated="1"]'));
     const vis = Array.from(document.querySelectorAll('.proposal-page')).filter(p => p.style.display !== 'none');
@@ -56,6 +84,10 @@ async function medirInvariantes(browser, clausulas, rotulo) {
     const titulosFonte = Array.from(src.querySelectorAll('[data-clausula-campo="titulo"]')).map(h => (h.textContent || '').trim()).filter(Boolean);
     const textoPaginas = gen.map(p => p.textContent || '').join('\n');
     const titulosSumidos = titulosFonte.filter(t => !textoPaginas.includes(t));
+    // I1 (Etapa 139) — títulos da ENTRADA presentes nas páginas, e a página de cada um (para a ordem)
+    const entradaSumidos = titulosEntrada.filter(t => !textoPaginas.includes(t));
+    const paginaDoTitulo = {};
+    titulosEntrada.forEach((t) => { const ps = pagCom(t); paginaDoTitulo[t] = ps.length ? ps[0] : null; });
 
     // I2/I4 — tabela 5.23 / condição / 5.24
     const paginasTabela = [];
@@ -88,8 +120,8 @@ async function medirInvariantes(browser, clausulas, rotulo) {
       Array.from(pc.children).forEach((ch) => { if (ch.getBoundingClientRect().bottom > bottom + TOL) overflowCount++; });
     });
 
-    return { totalPaginasGeradas: gen.length, titulosSumidos, paginasTabela, fragsSemThead, totalLinhas, pag524, pagCondicao, pagAssin, numeracaoOk, overflowCount };
-  });
+    return { totalPaginasGeradas: gen.length, titulosSumidos, entradaSumidos, paginaDoTitulo, paginasTabela, fragsSemThead, totalLinhas, pag524, pagCondicao, pagAssin, numeracaoOk, overflowCount };
+  }, titulosDaEntrada(clausulas));
   await page.close();
   return r;
 }
@@ -97,15 +129,31 @@ async function medirInvariantes(browser, clausulas, rotulo) {
 (async () => {
   let failed = 0;
   const check = (rotulo, cond, msg) => { if (cond) console.log(`  ✓ [${rotulo}] ${msg}`); else { console.error(`  ✗ [${rotulo}] ${msg}`); failed++; } };
+  assets = await servirAssetsProposta();
   const browser = await puppeteer.launch({ headless: 'new' });
 
-  for (const [rotulo, clausulas] of [['default', clausulasFormatoDefault], ['banco', clausulasFormatoBanco]]) {
+  const cenarios = [
+    ['default', clausulasFormatoDefault, []],
+    ['banco', clausulasFormatoBanco, []],
+    ['banco+inclusao', clausulasBancoInclusao, [`5.25 ${INCLUIDA}`]],
+    ['banco+duas', clausulasBancoDuas, [`5.25 ${INCLUIDA} A`, `5.26 ${INCLUIDA} B`]],
+  ];
+  for (const [rotulo, clausulas, incluidas] of cenarios) {
     const r = await medirInvariantes(browser, clausulas, rotulo);
     console.log(`\n=== cenário "${rotulo}" ===`);
-    console.log(JSON.stringify({ ...r, titulosSumidos: r.titulosSumidos.slice(0, 3) }));
+    console.log(JSON.stringify({ ...r, titulosSumidos: r.titulosSumidos.slice(0, 3), entradaSumidos: r.entradaSumidos.slice(0, 3), paginaDoTitulo: undefined }));
     const ultima = r.totalPaginasGeradas;
     const ultimaTabela = r.paginasTabela[r.paginasTabela.length - 1] || -1;
     check(rotulo, r.titulosSumidos.length === 0, `I1: nenhuma cláusula some (sumidas: ${r.titulosSumidos.length})`);
+    check(rotulo, r.entradaSumidos.length === 0, `I1: nenhuma cláusula da ENTRADA some (sumidas: ${r.entradaSumidos.length}${r.entradaSumidos.length ? ` — ${r.entradaSumidos[0]}` : ''})`);
+    // RN-139.01b — a 5.25+ incluída fica depois da seção de preço (5.24) e antes/junto da CONSIDERAÇÃO FINAL, na ordem salva
+    let anterior = 0;
+    incluidas.forEach((t) => {
+      const p = r.paginaDoTitulo[t];
+      check(rotulo, p != null && p >= ultimaTabela && r.pag524.length > 0 && p <= Math.min(...r.pag524) && p >= anterior,
+        `RN-139.01: "${t}" (pág. ${p}) depois da tabela de preços (pág. ${ultimaTabela}) e antes/junto da CONSIDERAÇÃO FINAL (pág. ${r.pag524})`);
+      anterior = p || anterior;
+    });
     check(rotulo, r.pag524.length > 0, 'I2: 5.24 CONSIDERAÇÃO FINAL presente');
     check(rotulo, r.pag524.length === 0 || Math.min(...r.pag524) > ultimaTabela, `I2: 5.24 (pág. ${r.pag524}) depois da tabela 5.23 completa (última pág. ${ultimaTabela})`);
     check(rotulo, r.pag524.length === 0 || r.pagCondicao.length === 0 || Math.min(...r.pag524) >= Math.max(...r.pagCondicao), 'I2: 5.24 depois da condição de pagamento');
@@ -119,6 +167,7 @@ async function medirInvariantes(browser, clausulas, rotulo) {
   }
 
   await browser.close();
+  await assets.fechar();
   console.log(failed ? `\n${failed} FALHA(S)` : '\nTODOS OS INVARIANTES OK');
   process.exit(failed ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

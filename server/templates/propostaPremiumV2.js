@@ -1191,6 +1191,15 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
         // Sem esta exclusão a 5.23 apareceria duas vezes — uma no meio da lista de cláusulas
         // e outra na seção de preço.
         const demaisSem524e525 = demaisClausulas.filter((c) => !ehTextoDa524(c) && !ehPos525(c));
+        // Etapa 139 (RN-139.01, invariante I1) — as 5.25+ que NÃO são a consideração final vêm depois da seção de preço
+        // (5.24) e antes da página de assinatura, na ordem salva. A renumeração do editor pula o 24: incluir UMA cláusula
+        // numa proposta padrão já gera uma 5.25 normal (e a CF vira 5.26). De a33dfca1 (28/07/2026) até aqui o filtro acima
+        // as tirava da lista e nada as renderizava: sumiam do preview e do PDF, e o salvamento seguinte do preview as
+        // apagava (o diff marca como removida a cláusula do banco que não está no #proposalSource).
+        const clausulasPos525Normal = demaisClausulas.filter((c) => ehPos525(c) && !ehConsideracaoFinal(c) && !ehTextoDa524(c));
+        const clausulasPos525NormalHtml = clausulasPos525Normal
+          .map((c) => renderClausulaCustom(c, demaisClausulas.indexOf(c) + 1))
+          .join('');
         const clausulasConsideracao = demaisClausulas.filter(ehConsideracaoFinal);
         const clausula525Html = clausulasConsideracao
           .map((c) => renderClausulaCustom(c, demaisClausulas.indexOf(c) + 1))
@@ -1208,6 +1217,7 @@ function gerarHTMLPropostaPremiumV2(proposta, itens, totais, templateConfig = nu
           </section>
           ${demaisSem524e525.map((c, i) => renderClausulaCustom(c, i + 1)).join('')}
           ${sec524PrecoHtml}
+          ${clausulasPos525NormalHtml}
           <section class="block avoid-break pagina-assinatura" data-page-break="before">
             <div class="assinatura-topo">${clausula525Html}</div>
             <div class="assinatura-meio">${camposAssinaturaManualHtml}</div>
