@@ -256,6 +256,7 @@ const {
   persistSeedAdmin,
   generatePassword,
 } = require('./services/runtimeSecrets');
+const superPadrao = require('./services/superPadrao');
 const { deveIncluirNoBackup, backupMaisRecente } = require('./services/backupPackage');
 const { validarTokenBackup } = require('./services/backupAuth');
 const { criarAuthenticateToken } = require('./services/authenticateToken');
@@ -1207,7 +1208,11 @@ function initializeDatabase(onReadyCallback) {
     // nascia e ninguem conseguia entrar ate o segundo boot. A coluna e garantida AQUI, no
     // callback do CREATE, e o seed so roda depois; em banco existente o ALTER responde
     // "duplicate column" e segue.
-    db.run('ALTER TABLE usuarios ADD COLUMN is_superadmin INTEGER DEFAULT 0', () => seedAdminInicial());
+    // Etapa 134 (Fase 2 I1): a regua de "super ativo" do seed (C280) le `ativo` — num banco antigo sem a coluna ela so chegava pelo
+    // PRAGMA, mais abaixo, DEPOIS do seed. Garantida aqui tambem, antes; "duplicate column" e ignorado como o de baixo.
+    db.run('ALTER TABLE usuarios ADD COLUMN ativo INTEGER DEFAULT 1', () => {
+      db.run('ALTER TABLE usuarios ADD COLUMN is_superadmin INTEGER DEFAULT 0', () => seedAdminInicial());
+    });
   });
 
   // Clientes
@@ -2169,10 +2174,29 @@ function initializeDatabase(onReadyCallback) {
     process.env.SEED_ADMIN_PASSWORD || (resolvedSeed && resolvedSeed.password) || null;
   const seedFromEnv = Boolean(process.env.SEED_ADMIN_EMAIL && process.env.SEED_ADMIN_PASSWORD);
 
+  // Etapa 134 (C280, RN-01/RN-02): primeiro a recuperacao — o administrador padrao vira super SO se nao ha super ativo (ate a 133 era a
+  // cada boot, no callback do PRAGMA, e quem trocasse o proprio e-mail para esse virava super); depois o seed, que tambem so nasce sem
+  // super ativo (o administrador padrao apagado ou renomeado nao volta com a senha antiga do arquivo/env). Encadeado: deterministico.
+  // Falha da regua (Fase 2 I1): fechada — registra, nao promove nem cria; o proximo boot tenta de novo.
+  superPadrao.promoverSuperPadraoSemSuperAtivo(db)
+    .then((n) => { if (n > 0) console.log('✅ Sem Super Administrador ativo: administrador padrão promovido (recuperação)'); })
+    .catch((e) => console.error('❌ Promoção do administrador padrão não verificada:', e.message))
+    .then(() => {
   db.get('SELECT * FROM usuarios WHERE email = ?', [seedAdminEmail], (err, row) => {
     if (row) {
       return;
     }
+    superPadrao.haSuperAtivo(db).then((ha) => {
+      if (ha) {
+        console.log('Admin inicial não recriado: já há Super Administrador ativo');
+        return;
+      }
+      criarSeed();
+    }, (e) => console.error('❌ Admin inicial não criado — a verificação de super ativo falhou:', e.message));
+  });
+    });
+
+  function criarSeed() {
     if (!seedAdminPassword) {
       seedAdminPassword = generatePassword();
       persistSeedAdmin(PERSISTENT_DATA_DIR, seedAdminEmail, seedAdminPassword);
@@ -2192,7 +2216,7 @@ function initializeDatabase(onReadyCallback) {
         }
       }
     );
-  });
+  }
   }
 
   // Remover usuário "administrator" se existir (nome exato ou similar)
@@ -2585,13 +2609,8 @@ function executeMigrations(callback) {
       safeCreateIndex(`CREATE INDEX IF NOT EXISTS idx_usuarios_is_superadmin ON usuarios(is_superadmin)`, 'is_superadmin');
       safeCreateIndex(`CREATE INDEX IF NOT EXISTS idx_usuarios_is_oculto ON usuarios(is_oculto)`, 'is_oculto');
 
-      // Super admin padrão: admin@gmp.com.br
-      db.run(
-        `UPDATE usuarios SET is_superadmin = 1 WHERE email = 'admin@gmp.com.br' AND COALESCE(is_superadmin, 0) = 0`,
-        (superErr) => {
-          if (!superErr) console.log('✅ Super administrador padrão verificado');
-        }
-      );
+      // Etapa 134 (C280): o "super admin padrao" que vivia aqui (promovia o admin@gmp.com.br a CADA boot) virou recuperacao, em
+      // seedAdminInicial (services/superPadrao.js) — so sem super ativo.
 
       // Tabela de perfil Frota por usuário (padrão alinhado ao almoxarifado)
       db.run(`CREATE TABLE IF NOT EXISTS perfil_frota_usuario (
@@ -3766,6 +3785,11 @@ app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
     return res.status(400).json({ error: 'Senha deve ter no mínimo 6 caracteres' });
   }
 
+  // Etapa 134 (C280, RN-03): o e-mail do administrador padrao so e dado por um super (o boot o recupera como super quando nao ha super ativo).
+  if (!isSuperAdmin(req.user) && superPadrao.ehEmailDoSuperPadrao(email)) {
+    return res.status(403).json({ error: superPadrao.LITERAL_EMAIL_RESERVADO });
+  }
+
   const hashedPassword = bcrypt.hashSync(senha, 10);
 
   db.run(
@@ -3823,9 +3847,16 @@ app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
 app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) => {
   const { id } = req.params;
 
-  db.get('SELECT id FROM usuarios WHERE id = ?', [id], (lookupErr, existing) => {
+  db.get('SELECT id, email FROM usuarios WHERE id = ?', [id], (lookupErr, existing) => {
     if (lookupErr) return res.status(500).json({ error: lookupErr.message });
     if (!existing) return res.status(404).json({ error: 'Usuário não encontrado' });
+
+  // Etapa 134 (C280, RN-03): quem nao e super nao poe o e-mail do administrador padrao em quem nao o tinha (editar quem ja o tem, com
+  // o e-mail igual, segue — a regua de quem edita super e a B853).
+  if (!isSuperAdmin(req.user) && superPadrao.ehEmailDoSuperPadrao(req.body && req.body.email)
+    && !superPadrao.ehEmailDoSuperPadrao(existing.email)) {
+    return res.status(403).json({ error: superPadrao.LITERAL_EMAIL_RESERVADO });
+  }
 
   normalizarMaiusculas(req.body, ['nome', 'cargo']);
   const sanitized = sanitizeSuperAdminPayload(req.user, req.body);
