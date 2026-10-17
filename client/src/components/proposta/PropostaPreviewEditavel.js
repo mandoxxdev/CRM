@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { mensagemDoErroEmBlob } from '../../utils/baixarDocumentoPedido';
 import {
   FiSave, FiClock, FiX, FiDownload, FiRefreshCw, FiImage, FiTag, FiMoreHorizontal,
 } from 'react-icons/fi';
@@ -146,7 +147,8 @@ export default function PropostaPreviewEditavel() {
       setCamposEditados({});
       setMudancasPendentes(false);
     } catch (e) {
-      toast.error('Erro ao carregar proposta.');
+      // Etapa 141 (RN-141.03/07): o servidor recusa o documento com desconto sem aprovacao — o editor mostra a frase dele.
+      toast.error(await mensagemDoErroEmBlob(e, 'Erro ao carregar proposta.'));
     } finally {
       setLoading(false);
     }
@@ -1429,7 +1431,7 @@ export default function PropostaPreviewEditavel() {
       setTimeout(() => URL.revokeObjectURL(url), 100);
     } catch (e) {
       console.error('baixarPdf error:', e);
-      toast.error('Erro ao gerar PDF.');
+      toast.error(await mensagemDoErroEmBlob(e, 'Erro ao gerar PDF.')); // RN-141.07: o erro vem dentro do Blob
     } finally {
       setBaixandoPdf(false);
     }

@@ -4,6 +4,7 @@ import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { nomeArquivoPdfProposta } from '../../utils/nomeArquivoPdf';
 import { toast } from 'react-toastify';
+import { mensagemDoErroEmBlob } from '../../utils/baixarDocumentoPedido';
 import { FiArrowLeft, FiEye, FiDownload, FiEdit, FiSend, FiCheck, FiX, FiCopy, FiRotateCcw, FiClock, FiTrash2, FiFileText, FiUpload } from 'react-icons/fi';
 import { formatDateBR, formatDateTimeBR, isPropostaInativa } from '../../utils/formatDate';
 import './PropostaDetalhe.css';
@@ -101,7 +102,7 @@ export default function PropostaDetalhe() {
     api.get(`/propostas/${id}/premium`, { responseType: 'text' }).then(({ data }) => {
       const url = URL.createObjectURL(new Blob([data], { type: 'text/html;charset=utf-8' }));
       window.open(url, '_blank');
-    }).catch(() => toast.error('Erro ao abrir proposta.'));
+    }).catch(async (e) => toast.error(await mensagemDoErroEmBlob(e, 'Erro ao abrir proposta.'))); // RN-141.07: a frase do servidor
   };
 
   const baixarPdfGerado = async () => {
@@ -124,7 +125,7 @@ export default function PropostaDetalhe() {
       URL.revokeObjectURL(url);
       toast.success('PDF baixado.');
     } catch (e) {
-      toast.error(e.response?.data?.error || 'Erro ao gerar PDF.');
+      toast.error(await mensagemDoErroEmBlob(e, 'Erro ao gerar PDF.')); // RN-141.07: o erro vem dentro do Blob
     } finally {
       setPdfLoading(false);
     }

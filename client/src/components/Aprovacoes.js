@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { SkeletonTable } from './SkeletonLoader';
+import { aprovacaoValeParaProposta } from '../utils/aprovacaoDescontoVale';
 import './Aprovacoes.css';
 import './Loading.css';
 
@@ -168,11 +169,8 @@ const Aprovacoes = () => {
             const aprovacoesRes = await api.get('/aprovacoes', {
               params: { proposta_id: proposta.id, status: 'aprovado' }
             });
-            const temAprovacao = aprovacoesRes.data?.some(ap => 
-              ap.proposta_id === proposta.id && 
-              ap.status === 'aprovado' && 
-              ap.valor_desconto === proposta.margem_desconto
-            );
+            // Etapa 141 (RN-141.09): so a aprovacao que VALE esconde a proposta — a decidida por quem pediu (B912) nao libera nada.
+            const temAprovacao = (aprovacoesRes.data || []).some((ap) => aprovacaoValeParaProposta(ap, proposta));
             return { ...proposta, temAprovacao };
           } catch (error) {
             return { ...proposta, temAprovacao: false };

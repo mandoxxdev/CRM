@@ -6,6 +6,7 @@ import { getEffectiveUser } from '../../services/permissionsCache';
 import { canAccessAdministrativoConfig } from '../../utils/systemPermissions';
 import { useComercialResponsaveis } from '../../hooks/useComercialResponsaveis';
 import { toast } from 'react-toastify';
+import { mensagemDoErroEmBlob } from '../../utils/baixarDocumentoPedido';
 import { FiPlus, FiSearch, FiSettings, FiEye, FiDownload, FiEdit, FiTrash2, FiSend, FiCheck, FiX, FiCopy, FiRotateCcw, FiFileText, FiMoreHorizontal } from 'react-icons/fi';
 import { formatDateBR, formatDateTimeBR, normalizePropostasResponse, isPropostaInativa } from '../../utils/formatDate';
 import './PropostasList.css';
@@ -125,7 +126,9 @@ export default function PropostasList() {
       URL.revokeObjectURL(url);
       toast.success('PDF baixado.');
     } catch (e) {
-      toast.error(e.response?.data?.error || 'Erro ao gerar PDF.');
+      // Etapa 141 (RN-141.07): com responseType blob o JSON do erro vem dentro de um Blob — a frase do servidor (ex.: o desconto sem
+      // aprovacao) so chega lida de dentro dele.
+      toast.error(await mensagemDoErroEmBlob(e, 'Erro ao gerar PDF.'));
     } finally {
       setPdfId(null);
     }
