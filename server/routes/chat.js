@@ -250,7 +250,8 @@ module.exports = function registerChatRoutes(app, db, authenticateToken, chatSoc
         Number(req.params.msgId),
         req.user.id
       );
-      chatSocket?.io?.to(`conversa:${req.params.id}`).emit('mensagem_excluida', {
+      // Etapa 133 (C274, B858): a sala pelo numero, como o servico e o payload — com /conversas/03/... a sala era `conversa:03`, vazia.
+      chatSocket?.io?.to(`conversa:${Number(req.params.id)}`).emit('mensagem_excluida', {
         id: Number(req.params.msgId),
         conversa_id: Number(req.params.id),
       });
