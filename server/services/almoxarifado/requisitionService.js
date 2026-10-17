@@ -1540,6 +1540,23 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
 
   const origemPorItem = new Map();
   const pedidoPorOrigem = new Map();
+  const soLotePendentes = []; // Etapa 136 (RN-03)
+  const validarOrigemDaEntrega = async (item, { origemId, loteId, lido }, qtdComOrigem, planejada) => {
+    try {
+      const lidoNorm = stockService.normalizarCodigoLido(lido);
+      await checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qtdComOrigem, pedidoPorOrigem);
+      origemPorItem.set(item.id, { origemId, loteId, lido: lidoNorm, qtdComOrigem });
+    } catch (e) {
+      let msg = `${item.material_nome}: ${e.message}`;
+      if (planejada) {
+        const loc = await dbGet(db, 'SELECT codigo FROM localizacoes_almoxarifado WHERE id = ?', [origemId]);
+        msg = `${item.material_nome}: a origem da separação (${loc ? loc.codigo : origemId}) não serve mais (${e.message}) — entregue escolhendo de onde sai`;
+      }
+      const err = new Error(msg);
+      err.status = e.status || 400;
+      throw err;
+    }
+  };
   const substituicoes = new Map(); // Etapa 63: item.id -> substituicao da origem separada
   for (const item of itens) {
     const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
@@ -1592,20 +1609,32 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
       }
     }
     if (!origemId && !loteId && semEscolha && !loteSeries) continue;
-    try {
-      const lidoNorm = stockService.normalizarCodigoLido(lido);
-      await checarOrigemItem(db, item, { origemId, loteId, lidoNorm }, qtdComOrigem, pedidoPorOrigem);
-      origemPorItem.set(item.id, { origemId, loteId, lido: lidoNorm, qtdComOrigem });
-    } catch (e) {
-      let msg = `${item.material_nome}: ${e.message}`;
-      if (planejada) {
-        const loc = await dbGet(db, 'SELECT codigo FROM localizacoes_almoxarifado WHERE id = ?', [origemId]);
-        msg = `${item.material_nome}: a origem da separação (${loc ? loc.codigo : origemId}) não serve mais (${e.message}) — entregue escolhendo de onde sai`;
+    // Etapa 136 (RN-03): o "so lote" (lote sem endereco) e conferido DEPOIS de todos os estritos — ele sai na passada 1, depois deles.
+    if (!origemId && loteId) { soLotePendentes.push({ item, loteId, lido, qtdComOrigem }); continue; }
+    await validarOrigemDaEntrega(item, { origemId, loteId, lido }, qtdComOrigem, planejada);
+  }
+  // Etapa 136 (RN-03; V7b da Fase 0): o so lote tira do lote em qualquer endereco DEPOIS que os estritos (endereco, mesmo lote) sairam —
+  // a chave `m|null|L` do `pedidoPorOrigem` recebe o que eles pedem. Antes as duas chaves eram conferidas separadas: L so em A 2, o so
+  // lote 2 e o estrito (A, L) 2 passavam os dois, e o laco baixava o primeiro e recusava o segundo. Com saldo negativo permitido o motor
+  // nao confere o lote (grava a linha negativa) e nao se soma (Fase 2 I2: somar recusaria o que o motor aceita).
+  const lotesSemeados = new Set();
+  for (const p of soLotePendentes) {
+    const chave = `${p.item.material_id}|null|${p.loteId}`;
+    if (!lotesSemeados.has(chave)) {
+      lotesSemeados.add(chave);
+      // eslint-disable-next-line no-await-in-loop
+      const { permite_negativo: permiteNegativo } = await saldoDisponivelParaItem(db, p.item);
+      if (!permiteNegativo) {
+        let estritos = 0;
+        for (const [k, q] of pedidoPorOrigem) {
+          const [m, o, l] = k.split('|');
+          if (m === String(p.item.material_id) && o !== 'null' && l === String(p.loteId)) estritos += q;
+        }
+        if (estritos > 0) pedidoPorOrigem.set(chave, (pedidoPorOrigem.get(chave) || 0) + estritos);
       }
-      const err = new Error(msg);
-      err.status = e.status || 400;
-      throw err;
     }
+    // eslint-disable-next-line no-await-in-loop
+    await validarOrigemDaEntrega(p.item, { origemId: null, loteId: p.loteId, lido: p.lido }, p.qtdComOrigem, false);
   }
 
   // Etapa 94 Fase 5 (B464): a alcada de valor DEPOIS das recusas da propria entrega. Com a sexta seta (B462) a
@@ -1655,6 +1684,21 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
 
   const entregas = [];
 
+  // Etapa 136 (RN-01/RN-02, D (135)): as baixas saem em TRES PASSADAS, cada uma na ordem do laco — (0) os pedacos com ENDERECO (a origem
+  // planejada ou a escolhida: estritos), (1) os com LOTE e sem endereco, (2) os AUTOMATICOS. Antes era item a item: o automatico de um item
+  // tira do endereco padrao e depois do de mais saldo (`claimSaldoSemLote`/`claimSaldoDoLote`), e esse endereco podia ser a origem planejada
+  // de um irmao que vinha DEPOIS — a recusa estrita do motor saia no irmao com o primeiro ja baixado (Fase 0, V1: A 3, B 2, item 1 sem
+  // origem, item 2 de A -> 400 "O saldo em A (1) nao cobre a quantidade (2)" e metade da entrega feita; ja na primeira rodada). Os estritos
+  // cabem juntos (a previa, `pedidoPorOrigem`) e nenhum automatico chega antes deles. Dentro de um item a ordem dos pedacos nao muda (o com
+  // origem ja vinha antes do automatico — as series se dividem na mesma ordem). A ordem nao muda o que o motor aceita: a guarda do
+  // disponivel vale so para o pedaco sem reserva, o da reserva baixa fisico e reservado juntos, e a soma e a mesma em qualquer ordem.
+  // Descartados: recusar na previa (V1 cabe: A da 2 ao item 2, B da 2 ao item 1), o automatico excluir os enderecos planejados (opcao nova
+  // no motor, que todas as portas de saida leem) e reordenar so os itens (nao resolve o excedente automatico do proprio item planejado).
+  //
+  // A leitura fresca de cada item (a E1 de antes da baixa) roda para todos ANTES da primeira baixa — le o mesmo que a previa lia sem os
+  // irmaos, mais frouxa que ela (o efeito na caixa nunca passa do efeito no disponivel); a previa continua sendo quem decide, e o motor a
+  // guarda que vale.
+  const planos = [];
   for (const item of itens) {
     const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
     const qtyEntregar = entrada ? Q.qtd(num(entrada.quantidade_atendida)) : 0; // Etapa 96: como a previa
@@ -1723,109 +1767,122 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
 
     // Etapa 63: com a planejada so para parte (o separado pendente), a baixa se divide em pedacos
     // "com origem" (estrita) e "automaticos". Sem divisao, cada baixa e um pedaco so.
-    const qtdOrigemItem = origemPorItem.has(item.id) ? origemPorItem.get(item.id).qtdComOrigem : 0;
+    // Etapa 136: cada pedaco leva a passada em que sai (0 com endereco, 1 so lote, 2 automatico).
+    const origemDoItem = origemPorItem.get(item.id);
+    const passadaComOrigem = origemDoItem && origemDoItem.origemId ? 0 : 1;
+    const qtdOrigemItem = origemDoItem ? origemDoItem.qtdComOrigem : 0;
     const pedacos = [];
     let comOrigemRestante = qtdOrigemItem;
     for (const b of baixas) {
       let q = b.quantidade;
       if (comOrigemRestante > 1e-9) {
         const parte = Math.min(q, comOrigemRestante);
-        pedacos.push({ ...b, quantidade: parte, comOrigem: true });
+        pedacos.push({ ...b, quantidade: parte, comOrigem: true, passada: passadaComOrigem });
         comOrigemRestante = Q.qtd(comOrigemRestante - parte); // Etapa 96: idem
         q = Q.qtd(q - parte);
       }
-      if (q > 1e-9) pedacos.push({ ...b, quantidade: q, comOrigem: false });
+      if (q > 1e-9) pedacos.push({ ...b, quantidade: q, comOrigem: false, passada: 2 });
     }
-    const movimentosDoItem = [];
-
-    let entregueAcumulado = getEntregue(item);
-    // Etapa 61 (RN-02): as series se dividem entre as baixas, em ordem (a 1a baixa leva as primeiras).
-    const seriesRestantes = [...(seriesPorItem.get(item.id)?.ids || [])];
-    // Etapa 63 (Fase 5): o registro sai num finally — se um pedaco do item falhar depois de outro ja
-    // baixado, o livro mostra a saida e a troca nao pode ficar sem registro.
-    try {
-    for (const baixa of pedacos) {
-      try {
-        // eslint-disable-next-line no-await-in-loop
-        const mov = await stockService.registrarMovimentacao(db, user, {
-          material_id: item.material_id,
-          tipo: 'SAIDA',
-          quantidade: baixa.quantidade,
-          reserva_id: baixa.reserva_id,
-          ...(seriesPorItem.has(item.id) ? { serie_ids: seriesRestantes.splice(0, baixa.quantidade) } : {}),
-          ...(baixa.comOrigem ? {
-            localizacao_origem_id: origemPorItem.get(item.id).origemId || undefined,
-            lote_id: origemPorItem.get(item.id).loteId || undefined,
-            codigo_lido_origem: origemPorItem.get(item.id).lido || undefined,
-          } : {}),
-          // Etapa 63 (Fase 5, critico): o pedaco AUTOMATICO de um item com serie leva o lote das series —
-          // sem ele o fisico drenava pelo ramo sem lote e as series do lote L saiam (o defeito que a
-          // Fase 2 da Etapa 61 fechou, reaberto pela divisao da baixa).
-          ...(!baixa.comOrigem && seriesPorItem.get(item.id)?.loteSeries ? { lote_id: seriesPorItem.get(item.id).loteSeries } : {}),
-          motivo: `Requisição ${reqRow.numero}`,
-          referencia: reqRow.os_referencia || reqRow.numero,
-          justificativa: `Entrega requisição ${reqRow.numero}`,
-          requisicao_id: requisicaoId,
-          projeto_id: reqRow.projeto_id || undefined,
-          cliente_id: reqRow.cliente_id || undefined,
-          centro_custo_id: reqRow.centro_custo_id || undefined,
-        }, {
-          origemEstrita: baixa.comOrigem && !!origemPorItem.get(item.id)?.origemId,
-          exigeSerie: true,
-          // Etapa 77 (C136): a marca que deixa o motor consumir a reserva de origem REQUISICAO
-          // DESTA requisicao — sem ela o motor recusa (a reserva da requisicao so sai pela entrega).
-          requisicaoDaEntrega: requisicaoId,
-        });
-        movimentosDoItem.push(mov.id);
-      } catch (e) {
-        const err = new Error(`${item.material_nome}: ${e.message}`);
-        err.status = e.status;
-        throw err;
-      }
-
-      entregueAcumulado += baixa.quantidade;
-      // Etapa 93 (T4, Fase 2 M4): gravacao RELATIVA. Antes gravava o acumulado ABSOLUTO lido no comeco da
-      // entrega: uma segunda entrega concorrente (fora da trava por requisicao) perdia a sua parte no item
-      // — 4 saidas e entregue 2, e a tela oferecia entregar "o que faltava" (C156, 10/10 sem gancho). No
-      // SQLite o lado direito do SET le os valores ANTIGOS da linha. COALESCE com quantidade_atendida como o
-      // getEntregue (dado antigo com entregue NULL).
-      // eslint-disable-next-line no-await-in-loop
-      await dbRun(db,
-        `UPDATE itens_requisicao_almoxarifado SET quantidade_entregue = ${Q.qtdSql('COALESCE(quantidade_entregue, quantidade_atendida, 0) + ?')},
-            quantidade_atendida = ${Q.qtdSql('COALESCE(quantidade_entregue, quantidade_atendida, 0) + ?')},
-            quantidade_separada = ${Q.qtdSql('MAX(COALESCE(quantidade_separada, 0), COALESCE(quantidade_entregue, quantidade_atendida, 0) + ?)')}
-          WHERE id=?`,
-        [baixa.quantidade, baixa.quantidade, baixa.quantidade, item.id]);
-    }
-    } finally {
-
-    // Etapa 63 (RN-01/02): o registro da substituicao, DEPOIS das baixas do item (um por item por
-    // entrega, com os ids das movimentacoes). O lote que saiu vem do LIVRO (no automatico o motor
-    // escolhe). Sem transacao: se um item seguinte falhar, este fica baixado E registrado.
-    if (substituicoes.has(item.id) && movimentosDoItem.length) {
-      const s = substituicoes.get(item.id);
-      // eslint-disable-next-line no-await-in-loop
-      const lotes = await dbAll(db, `SELECT DISTINCT lote_id FROM movimentacoes_almoxarifado
-        WHERE id IN (${movimentosDoItem.map(() => '?').join(',')})`, movimentosDoItem);
-      const loteSaida = s.saiuLote || (lotes.length === 1 ? lotes[0].lote_id : null);
-      // eslint-disable-next-line no-await-in-loop
-      await dbRun(db, `INSERT INTO substituicoes_origem_requisicao
-        (requisicao_id, item_id, material_id, quantidade, localizacao_planejada_id, lote_planejado_id,
-         localizacao_saida_id, lote_saida_id, automatica, movimentacao_ids, motivo, usuario_id, usuario_nome)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [requisicaoId, item.id, item.material_id, s.quantidade, s.planOrigem, s.planLote,
-        s.saiuOrigem, loteSaida, s.automatica ? 1 : 0, JSON.stringify(movimentosDoItem), s.motivo,
-        user.id, nomeDoUsuario(user)]);
-    }
-    }
-
-    // Etapa 59 (RN-04): entregue todo o separado, a origem planejada nao vale mais.
-    if (item.origem_separacao_id && Math.max(getSeparado(item), entregueAcumulado) - entregueAcumulado <= 1e-9) {
-      // eslint-disable-next-line no-await-in-loop
-      await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET origem_separacao_id = NULL, lote_separacao_id = NULL WHERE id = ?', [item.id]);
-    }
-    entregas.push({ item_id: item.id, quantidade: qtyEntregar });
+    planos.push({
+      item, qtyEntregar, pedacos, movimentosDoItem: [], entregueAcumulado: getEntregue(item),
+      // Etapa 61 (RN-02): as series se dividem entre as baixas, em ordem (a 1a baixa leva as primeiras).
+      seriesRestantes: [...(seriesPorItem.get(item.id)?.ids || [])],
+    });
   }
+
+  // Etapa 63 (Fase 5): o registro sai num finally — se um pedaco falhar depois de outro ja baixado, o livro mostra a saida e a troca nao
+  // pode ficar sem registro. Etapa 136 (RN-05): o finally cobre as tres passadas — todo item que teve baixa, nao so o da vez.
+  try {
+    for (const passada of [0, 1, 2]) {
+      for (const plano of planos) {
+        const { item } = plano;
+        for (const baixa of plano.pedacos) {
+          if (baixa.passada !== passada) continue;
+          try {
+            // eslint-disable-next-line no-await-in-loop
+            const mov = await stockService.registrarMovimentacao(db, user, {
+              material_id: item.material_id,
+              tipo: 'SAIDA',
+              quantidade: baixa.quantidade,
+              reserva_id: baixa.reserva_id,
+              ...(seriesPorItem.has(item.id) ? { serie_ids: plano.seriesRestantes.splice(0, baixa.quantidade) } : {}),
+              ...(baixa.comOrigem ? {
+                localizacao_origem_id: origemPorItem.get(item.id).origemId || undefined,
+                lote_id: origemPorItem.get(item.id).loteId || undefined,
+                codigo_lido_origem: origemPorItem.get(item.id).lido || undefined,
+              } : {}),
+              // Etapa 63 (Fase 5, critico): o pedaco AUTOMATICO de um item com serie leva o lote das series —
+              // sem ele o fisico drenava pelo ramo sem lote e as series do lote L saiam (o defeito que a
+              // Fase 2 da Etapa 61 fechou, reaberto pela divisao da baixa).
+              ...(!baixa.comOrigem && seriesPorItem.get(item.id)?.loteSeries ? { lote_id: seriesPorItem.get(item.id).loteSeries } : {}),
+              motivo: `Requisição ${reqRow.numero}`,
+              referencia: reqRow.os_referencia || reqRow.numero,
+              justificativa: `Entrega requisição ${reqRow.numero}`,
+              requisicao_id: requisicaoId,
+              projeto_id: reqRow.projeto_id || undefined,
+              cliente_id: reqRow.cliente_id || undefined,
+              centro_custo_id: reqRow.centro_custo_id || undefined,
+            }, {
+              origemEstrita: baixa.comOrigem && !!origemPorItem.get(item.id)?.origemId,
+              exigeSerie: true,
+              // Etapa 77 (C136): a marca que deixa o motor consumir a reserva de origem REQUISICAO
+              // DESTA requisicao — sem ela o motor recusa (a reserva da requisicao so sai pela entrega).
+              requisicaoDaEntrega: requisicaoId,
+            });
+            plano.movimentosDoItem.push(mov.id);
+          } catch (e) {
+            const err = new Error(`${item.material_nome}: ${e.message}`);
+            err.status = e.status;
+            throw err;
+          }
+
+          plano.entregueAcumulado += baixa.quantidade;
+          // Etapa 93 (T4, Fase 2 M4): gravacao RELATIVA. Antes gravava o acumulado ABSOLUTO lido no comeco da
+          // entrega: uma segunda entrega concorrente (fora da trava por requisicao) perdia a sua parte no item
+          // — 4 saidas e entregue 2, e a tela oferecia entregar "o que faltava" (C156, 10/10 sem gancho). No
+          // SQLite o lado direito do SET le os valores ANTIGOS da linha. COALESCE com quantidade_atendida como o
+          // getEntregue (dado antigo com entregue NULL).
+          // eslint-disable-next-line no-await-in-loop
+          await dbRun(db,
+            `UPDATE itens_requisicao_almoxarifado SET quantidade_entregue = ${Q.qtdSql('COALESCE(quantidade_entregue, quantidade_atendida, 0) + ?')},
+                quantidade_atendida = ${Q.qtdSql('COALESCE(quantidade_entregue, quantidade_atendida, 0) + ?')},
+                quantidade_separada = ${Q.qtdSql('MAX(COALESCE(quantidade_separada, 0), COALESCE(quantidade_entregue, quantidade_atendida, 0) + ?)')}
+              WHERE id=?`,
+            [baixa.quantidade, baixa.quantidade, baixa.quantidade, item.id]);
+        }
+      }
+    }
+  } finally {
+    for (const plano of planos) {
+      const { item, movimentosDoItem } = plano;
+      if (!movimentosDoItem.length) continue;
+      // Etapa 63 (RN-01/02): o registro da substituicao, DEPOIS das baixas (um por item por
+      // entrega, com os ids das movimentacoes). O lote que saiu vem do LIVRO (no automatico o motor
+      // escolhe). Sem transacao: se um pedaco seguinte falhar, este fica baixado E registrado.
+      if (substituicoes.has(item.id)) {
+        const s = substituicoes.get(item.id);
+        // eslint-disable-next-line no-await-in-loop
+        const lotes = await dbAll(db, `SELECT DISTINCT lote_id FROM movimentacoes_almoxarifado
+          WHERE id IN (${movimentosDoItem.map(() => '?').join(',')})`, movimentosDoItem);
+        const loteSaida = s.saiuLote || (lotes.length === 1 ? lotes[0].lote_id : null);
+        // eslint-disable-next-line no-await-in-loop
+        await dbRun(db, `INSERT INTO substituicoes_origem_requisicao
+          (requisicao_id, item_id, material_id, quantidade, localizacao_planejada_id, lote_planejado_id,
+           localizacao_saida_id, lote_saida_id, automatica, movimentacao_ids, motivo, usuario_id, usuario_nome)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [requisicaoId, item.id, item.material_id, s.quantidade, s.planOrigem, s.planLote,
+          s.saiuOrigem, loteSaida, s.automatica ? 1 : 0, JSON.stringify(movimentosDoItem), s.motivo,
+          user.id, nomeDoUsuario(user)]);
+      }
+      // Etapa 59 (RN-04): entregue todo o separado, a origem planejada nao vale mais. Etapa 136: no finally, para todo item que teve
+      // baixa (a passada de outro item pode falhar depois deste ter saido inteiro).
+      if (item.origem_separacao_id && Math.max(getSeparado(item), plano.entregueAcumulado) - plano.entregueAcumulado <= 1e-9) {
+        // eslint-disable-next-line no-await-in-loop
+        await dbRun(db, 'UPDATE itens_requisicao_almoxarifado SET origem_separacao_id = NULL, lote_separacao_id = NULL WHERE id = ?', [item.id]);
+      }
+    }
+  }
+  for (const plano of planos) entregas.push({ item_id: plano.item.id, quantidade: plano.qtyEntregar });
 
   if (entregas.length === 0) {
     const err = new Error('Informe ao menos uma quantidade maior que zero para entregar');
