@@ -5576,7 +5576,10 @@ app.post('/api/propostas/renumerar', authenticateToken, async (req, res) => {
     }
 
     // Fase 1: valores temporários únicos · Fase 2: valores finais (ambos distintos → sem colisão).
-    const stmts = ['BEGIN IMMEDIATE TRANSACTION;'];
+    // Etapa 138 (C294): numa transação só, por db.execEmTransacao — se um passo falha, o ROLLBACK roda NA MESMA VAGA da fila. Antes,
+    // o ROLLBACK ia pelo catch, DEPOIS das gravações que já esperavam na fila: elas rodavam dentro da transação aberta, respondiam
+    // 200 e eram desfeitas junto (medido: 35 de 90 edições de cliente numa rajada).
+    const stmts = [];
     for (const u of updates) {
       stmts.push(`UPDATE propostas SET numero_proposta='__RENUM_${u.id}' WHERE id=${u.id};`);
     }
@@ -5584,12 +5587,10 @@ app.post('/api/propostas/renumerar', authenticateToken, async (req, res) => {
       const escaped = u.novo.replace(/'/g, "''");
       stmts.push(`UPDATE propostas SET numero_proposta='${escaped}', updated_at=CURRENT_TIMESTAMP WHERE id=${u.id};`);
     }
-    stmts.push('COMMIT;');
-    await db.exec(stmts.join('\n'));
+    await db.execEmTransacao(stmts.join('\n'));
 
     res.json({ success: true, alteradas: updates.length, total: ativas.length });
   } catch (e) {
-    try { await db.exec('ROLLBACK;'); } catch (_) { /* já desfeita */ }
     console.error('❌ Erro ao renumerar propostas:', e.message);
     res.status(500).json({ error: e.message });
   }
