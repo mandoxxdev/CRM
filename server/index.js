@@ -226,6 +226,7 @@ const { getClausulasDefault, resolverClausulasParaPreview } = require('./clausul
 // chaveDe: a religação das variáveis manuais no PUT /api/propostas/:id usa (Etapa 138, C296 — sem ela o salvamento nunca respondia).
 const { diffItensParaLog, chaveDe, nomeDe, resumoLado, mesclarItensPreservandoCampos } = require('./propostaItensDiff');
 const { presente, montarSetParcial } = require('./atualizacaoParcial');
+const { lerMargemDesconto, MSG_MARGEM_INVALIDA } = require('./margemDesconto');
 const { lerAcessorios, totalAcessoriosDosItens, serializarAcessorios } = require('./acessoriosItem');
 const { resolverCamposCustomizacao } = require('./propostaCustomizacoes');
 const propostaEngine = require('./propostaCompositionEngine');
@@ -7929,6 +7930,13 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Título é obrigatório' });
   }
 
+  // Etapa 139 (RN-139.04, C299): a margem pela régua — "10,5" passava pela regra dos 5% (não é > 5) e era gravado como texto.
+  const margemLida = lerMargemDesconto(margem_desconto);
+  if (!margemLida.ok) {
+    return res.status(400).json({ error: MSG_MARGEM_INVALIDA });
+  }
+  const margemNum = margemLida.valor;
+
   if (status === 'rejeitada' && (!motivo_nao_venda || !String(motivo_nao_venda).trim())) {
     return res.status(400).json({ error: 'Motivo da não venda é obrigatório quando a proposta está perdida/rejeitada.' });
   }
@@ -7970,7 +7978,7 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
 
   // VALIDAÇÃO: Se desconto > 5% e status não for rascunho, verificar se há aprovação aprovada
   // Permitir salvar como rascunho mesmo sem aprovação
-  if (margem_desconto > 5 && status && status !== 'rascunho') {
+  if (margemNum > 5 && status && status !== 'rascunho') {
     // Para novas propostas com status diferente de rascunho, não permitir salvar sem aprovação
     return res.status(403).json({ 
       error: 'Não é possível salvar uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve ser salva como rascunho até que a autorização seja aprovada.' 
@@ -7978,7 +7986,7 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
   }
   
   // Se desconto > 5% e não tem status definido ou é rascunho, forçar status rascunho
-  if (margem_desconto > 5 && (!status || status === 'rascunho')) {
+  if (margemNum > 5 && (!status || status === 'rascunho')) {
     status = 'rascunho';
   }
 
@@ -8029,7 +8037,7 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
         [clienteIdNum, projetoIdFinal, numeroFinal, titulo, descricao, valor_total || 0,
           validade || null, condicoes_pagamento || '', prazo_entrega || '', garantia || '', observacoes || '', status || 'rascunho',
           responsavelIdNum, createdByIdNum, status === 'rejeitada' ? (motivo_nao_venda || null) : null, origem_busca || null,
-          familia_produto || null, lembrete_data || null, lembrete_mensagem || null, margem_desconto || 0, 0,
+          familia_produto || null, lembrete_data || null, lembrete_mensagem || null, margemNum, 0,
           cliente_contato || null, cliente_telefone || null, cliente_email || null,
           oportunidade_id != null ? oportunidade_id : null, tipo_proposta || null, expira_em || null,
           idioma || null, moeda || null, incoterm || null, unidade_negocio || null,
@@ -8045,7 +8053,7 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
               numeroFinal,
               titulo,
               status: status || 'rascunho',
-              margem_desconto: margem_desconto || 0
+              margem_desconto: margemNum
             });
             // Race de concorrência: outro usuário gravou esse número entre a checagem e o INSERT.
             // Em vez de erro, gera o próximo número livre e tenta de novo.
@@ -8193,6 +8201,11 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
   const corpo = req.body || {};
   const tem = (k) => presente(corpo, k);
   const probabilidadeFinal = probabilidade != null && probabilidade !== '' ? parseInt(probabilidade, 10) : null;
+  // Etapa 139 (RN-139.04, C299): a margem do corpo pela régua, normalizada ANTES de tudo que a lê (a regra dos 5% pelo
+  // efetivo, o montarSetParcial, o registro da revisão): "10,5" passava pela regra (não é > 5) e era gravado como texto.
+  // A recusa sai depois do 404 e do título (a ordem das recusas da Etapa 138).
+  const margemDoCorpo = tem('margem_desconto') ? lerMargemDesconto(corpo.margem_desconto) : null;
+  if (margemDoCorpo && margemDoCorpo.ok) corpo.margem_desconto = margemDoCorpo.valor;
 
   // Buscar proposta atual completa para comparação
   db.get(`SELECT * FROM propostas WHERE id = ?`, [id], (err, propostaAtual) => {
@@ -8206,11 +8219,18 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
 
     const efetivo = (k) => (tem(k) ? corpo[k] : propostaAtual[k]);
     const statusEf = efetivo('status');
-    const margemEf = efetivo('margem_desconto');
+    // RN-139.04d: a margem GRAVADA que a régua não lê (texto "10,5" de antes da Etapa 139, ou fora de 0 a 100) conta como
+    // acima de 5 na regra do desconto — pelo valor cru, "10,5" > 5 era falso e o envio passava sem aprovação.
+    const margemGravada = lerMargemDesconto(propostaAtual.margem_desconto);
+    const margemEf = tem('margem_desconto') ? corpo.margem_desconto : (margemGravada.ok ? margemGravada.valor : Infinity);
 
     // Título presente e vazio: antes gravava '' (ou 500 de banco com null). A mesma mensagem da criação.
     if (tem('titulo') && (titulo == null || !String(titulo).trim())) {
       return res.status(400).json({ error: 'Título é obrigatório' });
+    }
+
+    if (margemDoCorpo && !margemDoCorpo.ok) {
+      return res.status(400).json({ error: MSG_MARGEM_INVALIDA });
     }
 
     if ((tem('status') || tem('motivo_nao_venda')) && statusEf === 'rejeitada') {
@@ -8997,6 +9017,21 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Cliente e produtos são obrigatórios' });
   }
 
+  // Etapa 139 (RN-139.05, C300): a margem pela régua da criação, e a regra dos 5% do POST /api/propostas. Antes esta porta
+  // gravava status e margem do corpo sem regra nenhuma: uma proposta "enviada" com 50% de desconto nascia sem aprovação.
+  // A tela (GerarPropostaModal) não manda nem margem nem status — para ela nada muda.
+  const margemLidaAuto = lerMargemDesconto(outrosDados.margem_desconto);
+  if (!margemLidaAuto.ok) {
+    return res.status(400).json({ error: MSG_MARGEM_INVALIDA });
+  }
+  const margemAuto = margemLidaAuto.valor;
+  if (margemAuto > 5 && outrosDados.status && outrosDados.status !== 'rascunho') {
+    return res.status(403).json({
+      error: 'Não é possível salvar uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve ser salva como rascunho até que a autorização seja aprovada.'
+    });
+  }
+  const statusAuto = margemAuto > 5 ? 'rascunho' : (outrosDados.status || 'rascunho');
+
   // Verificar se todos os produtos são da família "Hélices e Acessórios"
   // A verificação será feita ao buscar os produtos do banco
 
@@ -9100,14 +9135,14 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
           outrosDados.descricao || '', valorTotal,
           validadeFinal, outrosDados.condicoes_pagamento || '',
           outrosDados.prazo_entrega || '', outrosDados.garantia || '',
-          outrosDados.observacoes || '', outrosDados.status || 'rascunho',
+          outrosDados.observacoes || '', statusAuto,
           responsavelIdNum, createdByIdNum,
           outrosDados.motivo_nao_venda || null,
           outrosDados.origem_busca || null,
           outrosDados.familia_produto || null,
           outrosDados.lembrete_data || null,
           outrosDados.lembrete_mensagem || null,
-          outrosDados.margem_desconto || 0,
+          margemAuto,
           0,
           outrosDados.cliente_contato || null,
           outrosDados.cliente_telefone || null,
@@ -14287,6 +14322,13 @@ app.post('/api/aprovacoes', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'proposta_id e solicitado_por são obrigatórios' });
   }
 
+  // Etapa 139 (RN-139.06): o desconto pedido pela régua da margem — a aprovação o copia para propostas.margem_desconto
+  // (PUT /api/aprovacoes/:id), então era uma quarta porta de margem sem conferência ("10,5", 500, -3 entravam).
+  const descontoLido = lerMargemDesconto(valor_desconto);
+  if (!descontoLido.ok) {
+    return res.status(400).json({ error: MSG_MARGEM_INVALIDA });
+  }
+
   // Buscar usuário que pode aprovar descontos
   db.get(
     'SELECT id, nome FROM usuarios WHERE pode_aprovar_descontos = 1 AND ativo = 1 LIMIT 1',
@@ -14307,7 +14349,7 @@ app.post('/api/aprovacoes', authenticateToken, (req, res) => {
           proposta_id, tipo, valor_desconto, valor_total, valor_com_desconto,
           valor_desconto_rs, solicitado_por, status, observacoes
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [proposta_id, tipo || 'desconto', valor_desconto || 0, valor_total || 0, valor_com_desconto || 0,
+        [proposta_id, tipo || 'desconto', descontoLido.valor, valor_total || 0, valor_com_desconto || 0,
          valor_desconto_rs || 0, solicitado_por, status || 'pendente', observacoes || ''],
         function(err) {
           if (err) {
