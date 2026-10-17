@@ -67,17 +67,19 @@ function portaLivre() {
 const SEED = { email: 'e141super@t.com', senha: 'E141super!senha' };
 process.on('exit', () => { try { if (filho) filho.kill(); } catch (e) { /* ja saiu */ } });
 
-async function subir() {
+async function subir(extraEnv = {}) {
   logArq = path.join(pasta, 'index.log');
   porta = await portaLivre();
   if (porta === 5000) porta = await portaLivre();
   const env = { ...process.env };
   for (const k of ['NODE_ENV', 'NODE_OPTIONS', 'RUN_ALL_GUARDA_EXIT', 'PORT', 'CRM_DATA_DIR', 'JWT_SECRET',
     'SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD', 'FALHA_SQL_INJETADA', 'RATE_LIMIT_WINDOW_MS', 'ATRASO_SQL_INJETADO']) delete env[k];
-  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000' });
+  for (const k of ['FALHA_SQL_METODOS', 'FALHA_SQL_MSG']) delete env[k];
+  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000', ...extraEnv });
   const out = fs.openSync(logArq, 'a');
   saiu = null;
-  filho = spawn(process.execPath, ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js'), 'index.js'], {
+  filho = spawn(process.execPath, ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js'),
+    '-r', path.join(__dirname, '..', 'helpers', 'falhaSqlInjetada.js'), 'index.js'], {
     cwd: SERVER_DIR, env, stdio: ['pipe', out, out], windowsHide: true,
   });
   filho.on('exit', (code) => { saiu = code; });
@@ -113,7 +115,7 @@ const all = (sql, p = []) => new Promise((res, rej) => cru.all(sql, p, (e, r) =>
 const get = async (sql, p = []) => (await all(sql, p))[0];
 
 const L = {
-  DOCUMENTO: 'Não é possível gerar o documento (visualização ou PDF) de uma proposta com desconto acima de 5% sem a aprovação desse desconto. Peça a aprovação em Comercial → Aprovações; se a proposta já saiu do rascunho, emita uma nova revisão e salve-a para pedir a aprovação.',
+  DOCUMENTO: 'Não é possível gerar o documento (visualização ou PDF) de uma proposta com desconto acima de 5% sem a aprovação desse desconto. Peça a aprovação em Comercial → Aprovações; se a proposta já saiu do rascunho, volte-a para rascunho (Nova revisão, ou o status Rascunho no formulário) e salve-a para pedir a aprovação.',
   PROPOSTA_404: 'Proposta não encontrada',
   ID_INVALIDO: 'ID da proposta inválido',
 };
@@ -297,40 +299,89 @@ test('[RN-141.06] sem login 401; id invalido 400; proposta inexistente 404 (nao 
 });
 
 // ── RN-141.08: os R$ do pedido (C306) ───────────────────────────────────────────────────────
-test('[RN-141.08] o pedido grava total, desconto e valor com desconto da proposta, nao do corpo; a atividade diz os mesmos', async () => {
-  const pid = await novaProposta('vend', { margem_desconto: 30, valor_total: 100000 });
-  assert.strictEqual((await get('SELECT valor_total FROM propostas WHERE id = ?', [pid])).valor_total, 100000, 'o total gravado');
-  const aid = await pedir('vend', pid, 30, { valor_total: 1, valor_desconto_rs: 100, valor_com_desconto: 99999 });
-  const a = await get('SELECT valor_desconto, valor_total, valor_desconto_rs, valor_com_desconto FROM aprovacoes WHERE id = ?', [aid]);
-  assert.deepStrictEqual(a, { valor_desconto: 30, valor_total: 100000, valor_desconto_rs: 30000, valor_com_desconto: 70000 });
-  // a atividade e gravada depois da resposta (sem esperar): a desta proposta, pelo titulo, ate 5 s
-  const { numero_proposta: num } = await get('SELECT numero_proposta FROM propostas WHERE id = ?', [pid]);
-  let at;
-  for (let k = 0; k < 25 && !at; k++) {
-    at = await get("SELECT descricao FROM atividades WHERE tipo = 'aprovacao_desconto' AND titulo = ?", [`Aprovação de Desconto: ${num}`]);
-    if (!at) await pausa(200);
+const item = (valor, extra = {}) => ({ descricao: 'Item', quantidade: 1, unidade: 'UN', valor_unitario: valor, valor_total: valor, codigo_produto: 'P1', ...extra });
+const valoresPedido = (aid) => get('SELECT valor_total, valor_desconto_rs, valor_com_desconto FROM aprovacoes WHERE id = ?', [aid]);
+/** A atividade do aprovador deste pedido (gravada depois da resposta, sem esperar): a primeira com id acima da marca, ate 5 s. */
+async function atividadeDepois(marca) {
+  for (let k = 0; k < 25; k++) {
+    const at = await get("SELECT descricao FROM atividades WHERE tipo = 'aprovacao_desconto' AND id > ? ORDER BY id LIMIT 1", [marca]);
+    if (at) return at;
+    await pausa(200);
   }
-  assert.ok(at, 'a atividade do aprovador nao foi criada');
-  assert.ok(at.descricao.includes('Valor Total: R$ 100000.00') && at.descricao.includes('Desconto: R$ 30000.00')
-    && at.descricao.includes('Valor com Desconto: R$ 70000.00'), at.descricao);
+  throw new Error('a atividade do aprovador nao foi criada');
+}
+const marcaAtividade = async () => (await get('SELECT COALESCE(MAX(id), 0) m FROM atividades')).m;
+
+test('[RN-141.08] o pedido grava o total do DOCUMENTO (os itens), nao o do corpo nem o valor_total gravado; a atividade diz os mesmos', async () => {
+  // Fase 5 r1/r2 I-1: o PUT grava valor_total do corpo sem conferir com os itens — 100 numa proposta de R$ 100.000
+  const pid = await novaProposta('vend', { margem_desconto: 3, valor_total: 100000, itens: [item(100000)] });
+  assert.strictEqual((await j('PUT', `/propostas/${pid}`, ctx.tok.vend, { valor_total: 100 }))[0], 200);
+  assert.strictEqual((await get('SELECT valor_total FROM propostas WHERE id = ?', [pid])).valor_total, 100, 'o PUT gravou 100');
+  const marca = await marcaAtividade();
+  const aid = await pedir('vend', pid, 30, { valor_total: 1, valor_desconto_rs: 100, valor_com_desconto: 99999 });
+  assert.deepStrictEqual(await valoresPedido(aid), { valor_total: 100000, valor_desconto_rs: 30000, valor_com_desconto: 70000 });
+  const at = await atividadeDepois(marca);
+  assert.ok(at.descricao.includes('desconto de 30%') && at.descricao.includes('Valor Total: R$ 100000.00')
+    && at.descricao.includes('Desconto: R$ 30000.00') && at.descricao.includes('Valor com Desconto: R$ 70000.00'), at.descricao);
+  // o mesmo total que o documento mostra (a conta e a do documento)
+  const pr = await doc(`/propostas/${pid}/premium`, ctx.tok.vend);
+  assert.strictEqual(pr.status, 200);
+  assert.ok(pr.buf.toString('utf8').includes('100.000,00'), 'o documento nao mostra R$ 100.000,00');
 });
 
-test('[RN-141.08] sem os valores no corpo, calculados; centavos arredondados; total em texto numerico vale, nao numero -> 0', async () => {
-  const pid = await novaProposta('vend', { margem_desconto: 7.5, valor_total: 1234.57 });
-  const aid = await pedir('vend', pid, 7.5);
-  const a = await get('SELECT valor_total, valor_desconto_rs, valor_com_desconto FROM aprovacoes WHERE id = ?', [aid]);
-  // 1234.57 * 7.5 / 100 = 92.59275 -> 92.59; 1234.57 - 92.59 = 1141.98
-  assert.deepStrictEqual(a, { valor_total: 1234.57, valor_desconto_rs: 92.59, valor_com_desconto: 1141.98 });
-  const p2 = await novaProposta('vend', { margem_desconto: 10 });
-  await run("UPDATE propostas SET valor_total = 'abc' WHERE id = ?", [p2]);
-  const a2 = await get('SELECT valor_total, valor_desconto_rs, valor_com_desconto FROM aprovacoes WHERE id = ?', [await pedir('vend', p2, 10, { valor_total: 500 })]);
-  assert.deepStrictEqual(a2, { valor_total: 0, valor_desconto_rs: 0, valor_com_desconto: 0 });
-  await run("UPDATE propostas SET valor_total = '1.234,56' WHERE id = ?", [p2]);
-  const a3 = await get('SELECT valor_total FROM aprovacoes WHERE id = ?', [await pedir('vend', p2, 10)]);
-  assert.strictEqual(a3.valor_total, 0, 'virgula nao e lida');
-  await run("UPDATE propostas SET valor_total = '1500' WHERE id = ?", [p2]);
-  const a4 = await get('SELECT valor_total, valor_desconto_rs, valor_com_desconto FROM aprovacoes WHERE id = ?', [await pedir('vend', p2, 10)]);
-  assert.deepStrictEqual(a4, { valor_total: 1500, valor_desconto_rs: 150, valor_com_desconto: 1350 });
+test('[RN-141.08] a conta e a do documento: quantidade, varios itens, quantidade 0 conta 1, acessorios e preco_base entram; centavos arredondados e desconto + com desconto = total', async () => {
+  const pid = await novaProposta('vend', { margem_desconto: 10, itens: [item(1000.55), item(117, { quantidade: 2 }), item(0, { quantidade: 3 })] });
+  // 1000,55 + 234 + 0 = 1234,55; 10% = 123,455 -> 123,46 (truncar daria 123,45); com desconto 1111,09 (round(T - D cru) daria 1111,10)
+  const v = await valoresPedido(await pedir('vend', pid, 10));
+  assert.deepStrictEqual(v, { valor_total: 1234.55, valor_desconto_rs: 123.46, valor_com_desconto: 1111.09 });
+  assert.strictEqual(Math.round((v.valor_desconto_rs + v.valor_com_desconto) * 100), Math.round(v.valor_total * 100), 'desconto + com desconto != total');
+  const p2 = await novaProposta('vend', { margem_desconto: 10, itens: [item(500, { quantidade: 0, acessorios: [{ descricao: 'Acc', quantidade: 2, valor_unitario: 50 }] })] });
+  // a API grava quantidade 0 como 1; o legado pode ter 0 gravado — o documento le 0 como 1
+  await run('UPDATE proposta_itens SET quantidade = 0 WHERE proposta_id = ?', [p2]);
+  assert.deepStrictEqual(await valoresPedido(await pedir('vend', p2, 10)), { valor_total: 600, valor_desconto_rs: 60, valor_com_desconto: 540 },
+    'quantidade 0 conta como 1 e os acessorios entram (como no documento)');
+  // item sem valor unitario usa o preco_base do produto (o LEFT JOIN por codigo do documento)
+  await run("INSERT INTO produtos (codigo, nome, preco_base) VALUES ('PB141', 'Produto 141', 250)");
+  const p3 = await novaProposta('vend', { margem_desconto: 10, itens: [item(0, { codigo_produto: 'PB141', quantidade: 2 })] });
+  assert.deepStrictEqual(await valoresPedido(await pedir('vend', p3, 10)), { valor_total: 500, valor_desconto_rs: 50, valor_com_desconto: 450 },
+    'o preco_base do produto entra (como no documento)');
+});
+
+test('[RN-141.08] sem itens, o valor_total gravado (parseFloat, como o documento); nao numero -> 0', async () => {
+  const pid = await novaProposta('vend', { margem_desconto: 10, valor_total: 1500, itens: [] });
+  assert.strictEqual((await get('SELECT COUNT(*) n FROM proposta_itens WHERE proposta_id = ?', [pid])).n, 0, 'a proposta tem itens');
+  assert.deepStrictEqual(await valoresPedido(await pedir('vend', pid, 10, { valor_total: 7 })), { valor_total: 1500, valor_desconto_rs: 150, valor_com_desconto: 1350 });
+  await run("UPDATE propostas SET valor_total = 'abc' WHERE id = ?", [pid]);
+  assert.deepStrictEqual(await valoresPedido(await pedir('vend', pid, 10, { valor_total: 500 })), { valor_total: 0, valor_desconto_rs: 0, valor_com_desconto: 0 });
+});
+
+// ── a conferencia que falha no banco fecha (Fase 5 r3: R1/R2/R3) — subidas com a falha injetada na leitura das aprovacoes ─────
+const FALHA_CONFERENCIA = String.raw`^SELECT id, valor_desconto, aprovado_por, solicitado_por FROM aprovacoes WHERE proposta_id = \? AND status = 'aprovado'`;
+const falhas = [];
+function testComFalha(msgFalha, name, fn) { falhas.push([msgFalha, name, fn]); }
+const ctxFalha = {};
+testComFalha('falha injetada pelo teste', '[RN-141.06] erro de banco na conferencia: /premium 500, /pdf 500, nada gravado, navegador fechado; a margem ate 5 nem consulta', async () => {
+  const pid = ctxFalha.p50;
+  const antes = await retrato(pid);
+  const marca = tamLog();
+  for (const u of [`/propostas/${pid}/premium`, `/propostas/${pid}/premium?embed=1`]) {
+    const r = await doc(u, ctxFalha.tok);
+    assert.deepStrictEqual([r.status, r.json && r.json.error], [500, 'Erro ao verificar aprovação de desconto'], `${u}: ${r.buf.toString('utf8').slice(0, 200)}`);
+  }
+  const pd = await doc(`/propostas/${pid}/pdf`, ctxFalha.tok);
+  assert.strictEqual(pd.status, 500, `pdf: ${pd.buf.toString('utf8').slice(0, 200)}`);
+  assert.ok(pd.json && /^Erro ao gerar PDF: falha injetada pelo teste/.test(pd.json.error), JSON.stringify(pd.json));
+  await pausa(1500);
+  assert.deepStrictEqual(await retrato(pid), antes, 'a falha gravou o retrato');
+  assert.ok(!logDesde(marca).includes(`[PDF] proposta ${pid} `), 'a falha abriu o navegador');
+  assert.ok(logDesde(marca).includes('[falha injetada]'), 'a falha nao foi injetada (o teste seria vazio)');
+  const ok = await doc(`/propostas/${ctxFalha.p3}/premium`, ctxFalha.tok);
+  assert.strictEqual(ok.status, 200, 'a margem ate 5 nao depende da consulta');
+});
+testComFalha('SQLITE_BUSY: database is locked', '[RN-141.06] conferencia com o banco ocupado: /premium 503 com retryAfter', async () => {
+  const r = await doc(`/propostas/${ctxFalha.p50}/premium`, ctxFalha.tok);
+  assert.deepStrictEqual([r.status, r.json && r.json.error, r.json && r.json.retryAfter],
+    [503, 'Banco de dados temporariamente ocupado. Tente novamente em alguns segundos.', 2], r.buf.toString('utf8').slice(0, 200));
 });
 
 (async () => {
@@ -358,6 +409,18 @@ test('[RN-141.08] sem os valores no corpo, calculados; centavos arredondados; to
     assert.strictEqual(sc, 200, JSON.stringify(cli));
     ctx.clienteId = cli.id;
     for (const [name, fn] of testes) {
+      if (saiu !== null) { failed++; console.error(`  ✗ ${name}: o servidor caiu antes (codigo ${saiu})`); continue; }
+      try { await fn(); passed++; console.log(`  ✓ ${name}`); } catch (e) {
+        failed++; console.error(`  ✗ ${name}: ${String(e.message).replace(/\s*\n\s*/g, ' ')}`);
+      }
+    }
+    // as subidas com a conferencia falhando (o mesmo banco; o segredo do token mora na pasta)
+    ctxFalha.tok = ctx.tok.vend;
+    ctxFalha.p50 = await novaProposta('vend', { margem_desconto: 50 });
+    ctxFalha.p3 = await novaProposta('vend', { margem_desconto: 3 });
+    for (const [msgFalha, name, fn] of falhas) {
+      await descer();
+      await subir({ FALHA_SQL_INJETADA: FALHA_CONFERENCIA, FALHA_SQL_METODOS: 'all', FALHA_SQL_MSG: msgFalha });
       if (saiu !== null) { failed++; console.error(`  ✗ ${name}: o servidor caiu antes (codigo ${saiu})`); continue; }
       try { await fn(); passed++; console.log(`  ✓ ${name}`); } catch (e) {
         failed++; console.error(`  ✗ ${name}: ${String(e.message).replace(/\s*\n\s*/g, ' ')}`);

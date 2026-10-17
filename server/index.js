@@ -229,7 +229,8 @@ const { presente, montarSetParcial } = require('./atualizacaoParcial');
 const { lerMargemDesconto, MSG_MARGEM_INVALIDA } = require('./margemDesconto');
 // Etapa 140 (C301-C303): quem libera o desconto acima de 5% e com que aprovacao ele casa.
 const aprovacaoDesconto = require('./aprovacaoDesconto');
-const { lerAcessorios, totalAcessoriosDosItens, serializarAcessorios } = require('./acessoriosItem');
+const { lerAcessorios, serializarAcessorios } = require('./acessoriosItem');
+const { ITENS_SQL: ITENS_DO_DOCUMENTO_SQL, subtotalDosItens, totalDoDocumento } = require('./totalDocumentoProposta');
 const { resolverCamposCustomizacao } = require('./propostaCustomizacoes');
 const propostaEngine = require('./propostaCompositionEngine');
 const { invalidateComercialResponsaveisCache } = require('./services/comercialResponsaveisCache');
@@ -9486,13 +9487,8 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
         // Os ACESSÓRIOS entram aqui também. Este é o total do PREVIEW, e o do PDF é montado
         // noutro ponto do arquivo: são dois cálculos para a mesma conta, e foi por isso que
         // o preview saiu somando só os equipamentos enquanto a tabela já listava os
-        // acessórios. Mexeu num, mexa no outro — os dois usam totalAcessoriosDosItens.
-        const subtotal = itensArray.reduce((sum, item) => {
-          const qtd = parseFloat(item.quantidade) || 1;
-          const preco = parseFloat(item.valor_unitario) ||
-                       parseFloat(item.preco_base) || 0;
-          return sum + (qtd * preco);
-        }, 0) + totalAcessoriosDosItens(itensArray);
+        // acessórios. Desde a Etapa 141 a conta é uma só (totalDocumentoProposta.js), usada também pelo pedido de aprovação.
+        const subtotal = subtotalDosItens(itensArray);
         
         // Calcular ICMS e IPI
         const icms = itensArray.reduce((sum, item) => {
@@ -9511,7 +9507,7 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
         }, 0);
         
         // Total = subtotal (sem impostos) ou usar valor_total da proposta se não houver itens
-        const total = itensArray.length > 0 ? subtotal : (parseFloat(proposta.valor_total) || 0);
+        const total = totalDoDocumento(itensArray, proposta.valor_total);
         
         // Formatar data
         let dataEmissao = '';
@@ -9790,13 +9786,8 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
     });
     
     const itensArray = Array.isArray(itens) ? itens : [];
-    const subtotal = itensArray.reduce((sum, item) => {
-      const qtd = parseFloat(item.quantidade) || 1;
-      const preco = parseFloat(item.valor_unitario) || parseFloat(item.preco_base) || 0;
-      return sum + (qtd * preco);
-      // Os acessórios entram logo abaixo, e não aqui dentro: eles são linhas próprias na
-      // tabela de preços, com quantidade e valor próprios, não parte do preço do equipamento.
-    }, 0) + totalAcessoriosDosItens(itensArray);
+    // A mesma conta do preview e do pedido de aprovação (totalDocumentoProposta.js, Etapa 141).
+    const subtotal = subtotalDosItens(itensArray);
     const icms = itensArray.reduce((sum, item) => {
       const produto = item || {};
       const quantidade = parseFloat(item?.quantidade) || 1;
@@ -9811,7 +9802,7 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
       const ipiPercent = parseFloat(produto?.ipi) || 0;
       return sum + (valorUnitario * quantidade * ipiPercent / 100);
     }, 0);
-    const total = itensArray.length > 0 ? subtotal : (parseFloat(proposta.valor_total) || 0);
+    const total = totalDoDocumento(itensArray, proposta.valor_total);
     
     let dataEmissao = '';
     let dataValidade = '';
@@ -14386,10 +14377,12 @@ app.post('/api/aprovacoes', authenticateToken, (req, res) => {
 
     // Etapa 141 (RN-141.08, C306): os valores em reais do pedido saem da PROPOSTA, nao do corpo — antes o total, o desconto em R$ e o
     // valor com desconto que o aprovador ve eram os que o pedido dissesse (pela API, 30% numa proposta de R$ 100.000 dizendo
-    // "Desconto: R$ 100"). Os do corpo sao ignorados sem erro (as telas mandam os mesmos numeros, do valor_total gravado).
-    const totalLido = Number(propostaAlvo.valor_total);
-    const totalPedido = Number.isFinite(totalLido) ? totalLido : 0;
+    // "Desconto: R$ 100"). O total e o do DOCUMENTO (a soma dos itens, totalDocumentoProposta.js) — Fase 5 r1/r2 I-1: a primeira versao
+    // lia propostas.valor_total, que o PUT grava do corpo sem conferir com os itens. Os do corpo sao ignorados sem erro.
+    db.all(ITENS_DO_DOCUMENTO_SQL, [proposta_id], (errItens, itensPedido) => {
+    if (errItens) return res.status(500).json({ error: errItens.message });
     const centavos = (v) => Math.round(v * 100) / 100;
+    const totalPedido = centavos(totalDoDocumento(itensPedido, propostaAlvo.valor_total));
     const descontoRsPedido = centavos(totalPedido * descontoLido.valor / 100);
     const comDescontoPedido = centavos(totalPedido - descontoRsPedido);
 
@@ -14478,6 +14471,7 @@ app.post('/api/aprovacoes', authenticateToken, (req, res) => {
         );
       }
     );
+    }); // fecha os itens do pedido (Etapa 141)
   });
 });
 
