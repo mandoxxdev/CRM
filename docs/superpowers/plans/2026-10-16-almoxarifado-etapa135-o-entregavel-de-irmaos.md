@@ -100,16 +100,16 @@ material (qualquer requisição ativa com caixa). **Segunda rodada** = a condiç
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 — tronco (servidor do almoxarifado)** — `requisitionService.js`: a prévia ajustada pelos irmãos (RN-01; uma função pura para o
+- [x] **T1 — tronco (servidor do almoxarifado)** — `requisitionService.js`: a prévia ajustada pelos irmãos (RN-01; uma função pura para o
   efeito, exportada para o teste) e os campos do detalhe (RN-02). Teste `tests/api/entregavelDeIrmaos.api.test.js` (RN-01..RN-05, RN-07; rota
   **e** serviço), escrito e rodado **vermelho** antes do código.
-- [ ] **T2 — galho (cliente, contra o contrato)** — `RequisicoesList.js` (RN-06). Teste `RequisicoesEntregavelDividido.test.js`, vermelho
+- [x] **T2 — galho (cliente, contra o contrato)** — `RequisicoesList.js` (RN-06). Teste `RequisicoesEntregavelDividido.test.js`, vermelho
   antes.
-- [ ] **T3 — núcleo** — `index.js` (RN-08, RN-09, RN-10), `client/src/components/Usuarios.js` (o filtro). Teste
+- [x] **T3 — núcleo** — `index.js` (RN-08, RN-09, RN-10), `client/src/components/Usuarios.js` (o filtro). Teste
   `tests/api/usuarioPelaApi.api.test.js` (o `index.js` real, reinício no mesmo data dir) e um teste de cliente para a lista, vermelhos antes.
   O RN-01d de `superPadraoNoBoot.api.test.js` criava o super fantasma pelo `POST` com `ativo: null` — com a RN-08 ele nasceria ativo: o
   cenário passa a gravar o `ativo` nulo **no arquivo** (mudança declarada no teste).
-- [ ] **T4 — fechamento** — novidades (B869+, C286+ se houver, D (135), F (135), C282/C283/C284 resolvidas, a seção da etapa, cabeçalho),
+- [x] **T4 — fechamento** — novidades (B869+, C286+ se houver, D (135), F (135), C282/C283/C284 resolvidas, a seção da etapa, cabeçalho),
   spec 05 (o item do entregável de irmãos, a D (127)), spec do núcleo se houver, mapa, guia, manual, este plano (retro, "Próxima tarefa
   detalhada — Etapa 136"), o "defeito que escapou" da retro da 134.
 
@@ -126,3 +126,95 @@ disponível (RN-01 cai pelo "nada mudou"); sem o ajuste da caixa sem reserva (o 
 segundo, na segunda rodada, lê o teto — tem de cair); `saldo_entregavel_proprio` com `r` no lugar de `max(c, r)` (RN-03 cai); o cliente sem
 a divisão no pré-preenchimento e sem ela no `max` (RN-06 cai); `ativo` cru de volta (RN-08 cai); a guarda do e-mail fora (RN-09 cai); a
 limpeza de volta (RN-10 cai).
+
+## Execução — o que aconteceu
+
+- **Fase 0** — medida por mim: `scratchpad/e135/sonda-f0.js` (`testApp` real, rota) com quatro estados (S1 o da spec, S1′, S2 a segunda
+  rodada no mesmo livre, S3); a C282 lida no `index.js` e medida no histórico (`git log -S` — só o commit inicial) e nos bancos locais
+  (nenhum usuário com *administrator* no nome); a C283/C284 lidas nas rotas.
+- **Fase 2 antes do código de produção:** 0 Critical + 3 Important + 5 Minor, todos aceitos (ver o topo). Os quatro testes novos foram
+  escritos e rodados **vermelhos** antes do código: `entregavelDeIrmaos` 9/12 vermelhos (os 3 verdes eram os cenários que prendem o que já
+  valia — RN-01 S5, RN-04, RN-05 — e caem por sabotagem), `usuarioPelaApi` 5/5, `RequisicoesEntregavelDividido` 4/5 (o 5º é o "servidor sem os
+  campos", a conta de antes), `Usuarios.administrator` 1/1. Design e plano `b3bf01c0`.
+- **Commits:** T1 `35425c3d`; T2 `39d82137`; T3 `3eee5f4f`; Fase 5 `70a77c0f`; fechamento — o commit de documentação (ver `git log`).
+- **Divergências do plano:** (1) a RN-02b (o crítico na caixa, C286) entrou na Fase 2 — não estava no plano original; (2) o cenário P1 (a
+  primeira rodada com o físico abaixo da caixa sem reserva) entrou na RN-01, e a janela **não** divide esse caso (D (135)); (3) o "+0,01" da
+  RN-03 vai no último item cuja conta ficou abaixo do entregável dele (Fase 2 I2); (4) o teste estático da RN-10 contava `DELETE FROM usuarios
+  WHERE id = ?` — a rota de exclusão usa `${targetId}`; corrigido para contar todos os `DELETE` de usuário (um só, o da rota), sem caixa (Fase
+  5 U15).
+- **Controles positivos** (âncora contada = 1, md5 antes/sabotado/restaurado, restauro por cópia, `scratchpad/e135/bateria.js`): **17** antes
+  da Fase 5 (T1 S1–S7, T2 C1–C4, T3 N1–N5 e N3b — todas caem pelo cenário certo; a N5 foi conferida à mão porque o harness não lia a linha do
+  jest sem `describe`) e **17** da Fase 5 (as sobreviventes do r3, `sab-f5.json`) — todas caem depois dos cenários novos.
+- **Boot:** `usuarioPelaApi.api.test.js` sobe o `index.js` real em pasta vazia e **reinicia na mesma pasta** (RN-10); `superPadraoNoBoot`
+  (o RN-01d com o `ativo` anulado no arquivo) também. **Migração:** nenhuma.
+- **CLAUDE.md:** a seção da trava **não mudou** — a prévia roda dentro das travas de hoje (por requisição → por material) e não pega trava
+  nova; nenhuma porta nova põe saldo no disponível.
+- **Suíte antes dos commits de código (`35425c3d`, `39d82137`, `3eee5f4f`):** `test:api` **450/450**; `test:almoxarifado` **44/0**;
+  `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 10/0; client **133** suítes / **1774** testes; `CI=true build` *Compiled
+  successfully*.
+- **Fase 5** — três revisores frescos em paralelo sob a trava de máquina; o de sabotagem na worktree própria `CRM-wt-e135-r3` (removida com
+  as junções desfeitas antes). Eu não rodei teste enquanto eles trabalhavam.
+  - **Regra (r1): 0 desta etapa.** Fuzz diferencial (`r1-fuzz.js`, mais de 2.800 estados: a entrega combinada × a mesma item a item × a
+    janela × a janela +0,01; frações, 2–3 irmãos, outro material no meio, saldo negativo permitido; e `r1-fuzz-perturba.js` com a invariante
+    quebrada), com controle positivo no `requisitionService.js` de `518757a5` (7 baixas pela metade). Anteriores, reproduzidos: **C287**
+    (`ativo` "true"), **C288** (`ativo` `""` no `PUT`), **C289** (senha numérica, 500).
+  - **Permissão (r2): 0 desta etapa** (os campos novos não expõem nada; a prévia não abre caminho sem `separar_emitir` nem fura crítico ou
+    alçada; a ordem das guardas do e-mail; `ativo` exótico não escala; o fim da limpeza não dá acesso). Anteriores: o `ativo` "true" (= C287)
+    e o detalhe sem dono (declarado desde a Etapa 15).
+  - **Sabotagem (r3): 53** sabotagens novas, **30** caíram, **23** sobreviveram: **17** por falta de cenário (Z1–Z7 do servidor, K1–K6 do
+    cliente, U9/U13/U15 do núcleo — viraram cenários em `70a77c0f` e caem), **6** equivalentes provadas (A1, A6, A10, B4, B9, P10).
+- **Suíte final (depois da Fase 5, antes da documentação):** `test:api` **450/450**; `test:almoxarifado` **44/0**; `test:validation` 4/0,
+  `test:safealter` 3/0, `test:sqlite` 10/0; client **133** suítes / **1780** testes; `CI=true build` *Compiled successfully*.
+- **T4 — fechamento** (o commit de documentação): novidades (cabeçalho, B869–B876, C282/C283/C284 resolvidas, C286–C289, D (135), F (135), a
+  D (127) do entregável marcada, a seção da etapa, "Onde estamos"), spec 05 (o item do entregável de irmãos, o bloco da Etapa 135), spec 23 (a
+  seção da Etapa 135), mapa (linhas 05 e 23, a última atualização), guia (cabeçalho, seção, roteiro), manual (7.5 — irmãos, o crítico, a
+  janela preenchida, a frase da baixa um a um reescrita; 5.2e e 5.2g; 5.2h nova), este plano, o "defeito que escapou" da retro da 134.
+
+## Tasks — estado
+
+- [x] **T1** `35425c3d` (Fase 5 `70a77c0f`) · [x] **T2** `39d82137` (Fase 5 `70a77c0f`) · [x] **T3** `3eee5f4f` (Fase 5 `70a77c0f`) ·
+  [x] **T4** — o commit de documentação.
+
+## Retro (4 números)
+
+1. **Rodadas de correção até verde:** **1** (Fase 5: só cenários novos e um comentário do `index.js` — nenhuma correção de código de
+   produção). Testes antigos mudados: **1** arquivo — `superPadraoNoBoot` (o RN-01d cria o fantasma pelo arquivo; o s6 exige o 400 novo).
+2. **Achados da revisão:** Fase 2 — **3 Important + 5 Minor, todos reais** (I1 e I3 reproduzidos por sonda). Fase 5 — r1 **0** desta etapa,
+   **3** anteriores reproduzidos (C287–C289); r2 **0** desta etapa, **2** anteriores (um = C287, o outro declarado desde a 15); r3 **17**
+   sobreviventes reais (viraram cenários) + **6** equivalentes provadas; **0** ruído.
+3. **Paralelismo:** **0** galhos em paralelo (o "um teste de servidor por vez" serializa), **0** retrabalho; **1** revisor na Fase 2, **3**
+   em paralelo na Fase 5 sob a trava.
+4. **Defeito que escapou:** *(preencher na Etapa 136)*.
+
+## Próxima tarefa detalhada — Etapa 136
+
+*(A série desta etapa foi B869–B876, C286–C289, nenhuma A — a 136 começa em **B877**, **C290**, **A84**; confira com `grep -oE` antes.)*
+
+**Escolhida: a recusa por endereço depois da primeira baixa (D (135), spec 05, livre).** A conferência antes da baixa da entrega (RN-01
+desta etapa) conta as quantidades de todos os itens, mas não os endereços: quando o excedente **automático** de um item (`stockService`, a
+saída sem origem tira primeiro do endereço padrão e depois do de mais saldo) esvazia o endereço de onde **outro** item do mesmo material foi
+separado (a origem planejada, `origem_separacao_id`), a recusa desse outro — *"⟨mat⟩: a origem da separação (A-01) não serve mais (…) —
+entregue escolhendo de onde sai"* — sai do `checarOrigemItem` **antes** das baixas só para o que a prévia conhece (`pedidoPorOrigem` soma
+as origens escolhidas e planejadas), não para o que o automático do irmão vai levar; a recusa do motor viria depois da primeira baixa. **Não
+reproduzido** (Fase 2 M4, r1 "não coberto"). **Medir primeiro (Fase 0, sonda no `testApp` real):** dois itens do mesmo material, o item 2
+separado do endereço A-01 (com origem planejada), o item 1 na segunda rodada sem origem, A-01 sendo o endereço de mais saldo; entregar os
+dois → quem recusa, quando, e o que ficou baixado. Se reproduzir, a correção é a prévia simular também a escolha de endereço do automático
+(ou o automático do irmão excluir as origens planejadas da mesma entrega — decisão B reversível); se não reproduzir, a marca na spec 05 e um
+teste que prende. **Atenção:** a entrega está sob a trava por requisição e a por material (CLAUDE.md, ordem requisição → material); a escolha
+de endereço do automático mora no motor (`stockService.registrarMovimentacao`), que outras portas usam — não mexer nele sem medir os leitores.
+
+**Pequenas, do núcleo, junto se couber (livres, todas reproduzidas na 135):** **C289** (`POST /api/usuarios` com senha que não é texto → 400,
+como o e-mail), **C288** (`PUT` com `ativo` `""` tratado como ausente), **C287** (`ativo` "true"/2 na criação gravado pela régua de
+verdadeiro/falso — cuidado: muda o que integrações gravam; decisão B reversível), **C285** (a corrida dos dois rebaixamentos — contar no
+próprio comando que grava).
+
+**Dependem do P.O. — NÃO implemente:** **B853**/**C279**, **B808**, **B755**, **B761**/**C239**, **C224**, o resto da **C225**, **C228**,
+**C219**, **C230**, o reparo da **C246** (e a **C247**), a tabela de conversões e o grupo acima de família, a **régua do tempo de
+recebimento (E2)**, a **C268**, a **C269**, **C275**, **C276**, **C277**; na 05, os itens de produto e a **C198**; na 06, a **B11** e a
+Engenharia; na 21, a valorização por cliente e previsto × realizado; na 22, **B13**, **B101**/G30, **G38**; no Compras, D-35, D-37, D-78,
+D-90, G9/G30, G4, G15, B63.
+
+**O que já está pronto e não precisa reabrir:** a prévia da entrega que conta os irmãos (`efeitoDaEntregaNoMaterial`,
+`saldoAjustadoPelosIrmaos` em `requisitionService.js`, com teste puro) e os campos `saldo_entregavel`/`saldo_entregavel_proprio` do detalhe;
+a janela de entrega que divide (`quantidadesIniciaisEntrega`, `maxEntregaNaTela`); o molde do fuzz diferencial
+(`scratchpad/e135/r1-fuzz.js` — a mesma entrega inteira × item a item) serve para medir a 136.

@@ -1,17 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-16 (Etapa 134) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-17 (Etapa 135) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133 e 134) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134 e 135) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 134 ENTREGUE · próxima: Etapa 135)
+> ## Onde o desenvolvimento está — 2026-10-17 (Etapa 135 ENTREGUE · próxima: Etapa 136)
 >
-> **O desenvolvimento parou aqui: Etapa 134 fechada — 2026-10-16.** A **Etapa 134 (o super administrador do reinício e a trilha que
+> **O desenvolvimento parou aqui: Etapa 135 fechada — 2026-10-17.** A **Etapa 135 (a entrega de dois itens do mesmo material, e três
+> detalhes do cadastro de usuários)**: quando a requisição pede o mesmo material em duas linhas, a entrega confere as duas antes de baixar
+> e a janela de entrega divide o saldo livre entre elas (antes entregava a primeira e recusava a segunda, com o estoque já baixado); e, do
+> núcleo, *ativo* vazio na criação pela API grava ativo, e-mail que não é texto é recusado e o reinício não apaga ninguém pelo nome.
+> Nenhuma consulta nova. **Próxima: Etapa 136** — ver a próxima tarefa no plano da 135.
+>
+> **Etapa 134, 2026-10-16.** A **Etapa 134 (o super administrador do reinício e a trilha que
 > faltava na Auditoria, do núcleo)**: reiniciar o servidor só faz super administrador quem tem o e-mail `admin@gmp.com.br` quando não há
 > nenhum super ativo, e só um super dá esse e-mail a alguém (**C280** resolvido); o administrador inicial apagado não volta sozinho; a
 > Auditoria mostra a aprovação automática e a decisão de inspeção, e as ações do estoque com nome em português. Rode a consulta **A83**
-> (com a **A82**). **Próxima: Etapa 135** — ver a próxima tarefa no plano da 134.
+> (com a **A82**).
+> *(Próxima, na época: Etapa 135 — entregue acima.)*
 >
 > **Etapa 133, 2026-10-16.** A **Etapa 133 (as abas Permissões e Logs para todo administrador do
 > sistema, do núcleo)**: o super administrador com qualquer papel e o papel *admin* com outra caixa passam a usar as abas Permissões e
@@ -6571,6 +6578,46 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 135 — A entrega de dois itens do mesmo material, e três detalhes do cadastro de usuários (ENTREGUE — 2026-10-17)
+
+**O que mudou, em uma frase:** quando uma requisição pede o mesmo material em duas linhas, a entrega confere as duas antes de baixar
+qualquer coisa e a janela de entrega divide entre elas o saldo livre — e, do núcleo, o cadastro de usuários pela API e o reinício do
+servidor deixam de gravar lixo ou apagar alguém pelo nome.
+
+**O problema que ela resolve.** Duas linhas do mesmo material, já entregues em parte, esperam o mesmo material chegar. Chegam 2: a janela
+de entrega oferecia 2 para cada linha, e ao confirmar o sistema entregava a primeira e **depois** recusava a segunda — a mensagem dizia
+*"não é possível entregar"*, mas o estoque já tinha baixado. No núcleo: um usuário criado por integração com *ativo* vazio não entrava;
+e-mail mandado como número ou lista virava *[object Object]*; e o reinício do servidor apagava, sem aviso, quem tivesse *administrator* no
+nome (e a tela de Usuários escondia o *administrator*).
+
+| Antes | Agora |
+|---|---|
+| Duas linhas na segunda rodada, 2 livres: a janela abria 2 e 2 | Abre 2 e vazio; digitar 1 na primeira libera 1 para a segunda |
+| Confirmar 2 + 2 baixava a primeira e recusava a segunda | Recusa antes de qualquer baixa, e nada muda |
+| Material crítico: o detalhe prometia a entrega além da caixa | Só a caixa |
+| Criar usuário pela API com *ativo* vazio: não entrava | Entra (ativo) |
+| E-mail que não é texto pela API: gravava lixo | *"E-mail inválido: envie o e-mail como texto"* |
+| O reinício apagava quem tem *administrator* no nome | Não apaga ninguém |
+
+**Roteiro de teste (10 minutos).** Prepare um material **sem saldo** (por exemplo *Parafuso M8*, unidade PC).
+
+1. **Monte a requisição.** Crie uma requisição com **duas linhas** de 4 PC desse material e aprove. Dê entrada de **4 PC**. No detalhe →
+   **Iniciar Separação** → 2 em cada linha → confirme. Entregue (**Confirmar Entrega e Baixar Estoque**): a requisição fica **Parcialmente
+   Atendida**, 2 entregues em cada linha. Dê entrada de mais **2 PC**.
+2. **A janela divide.** No detalhe → **Completar Entrega**: a primeira linha vem com **2**, a segunda **vazia** (o campo não aceita mais
+   que 0). Digite **1** na primeira: a segunda passa a aceitar **1**. Digite 1 na segunda e **✅ Confirmar Entrega**: as duas ficam com 3
+   entregues e o estoque do material zera.
+3. **O caso de sempre não muda.** Material com 8 em estoque, requisição com duas linhas de 4 (as duas reservadas na aprovação), separe 4 e 3,
+   entregue 2 da primeira. **Completar Entrega** abre **2** e **3** — confirme: entrega as duas.
+4. **O reinício não apaga ninguém** (quem cuida do servidor reinicia). Em **Admin → Usuários**, crie *System Administrator* (qualquer e-mail).
+   Reinicie o servidor: ele continua na lista e entra com a senha que você deu.
+
+**O que esta etapa NÃO cobre.** Se uma contagem por endereço tirou do estoque material que estava separado (o aviso da Etapa 104), a janela
+pode oferecer às duas linhas mais do que a entrega aceita — a entrega recusa antes de baixar e você diminui a quantidade. A recusa *"a
+origem da separação não serve mais"* de uma linha cujo endereço a outra esvaziou ainda pode vir depois da primeira baixa. A Fila de
+separação não mudou (ela não oferece entregar além do que foi separado). Três detalhes do cadastro de usuários **pela API**, sem efeito de
+acesso, ficaram registrados (**C287** a **C289**).
 
 ## Etapa 134 — O super administrador do reinício e a trilha que faltava na Auditoria (ENTREGUE — 2026-10-16)
 

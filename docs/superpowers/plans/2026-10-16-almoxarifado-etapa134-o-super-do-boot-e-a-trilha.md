@@ -175,7 +175,10 @@ removida (RN-05 cai); um rótulo removido (RN-06 cai).
    cenários) + **1** equivalente provado; **0** ruído.
 3. **Paralelismo:** **0** galhos em paralelo (o "um teste de servidor por vez" serializa, e a RN-07 cruza T2 e T3), **0** retrabalho; **1**
    revisor na Fase 2, **3** em paralelo na Fase 5 sob a trava.
-4. **Defeito que escapou:** *(preencher na Etapa 135)*.
+4. **Defeito que escapou:** **0** (medido na Etapa 135). Os revisores da 135 sondaram o cadastro e o boot da 134 com o `index.js` real
+   (super criado com `ativo` "true" não entra e não conta como ativo — a recuperação do boot segue; o fim da limpeza do *administrator* não
+   muda quem é super) e não acharam nada da 134. A **C282** da 134, *"lida no código, não reproduzida"*, foi **reproduzida** na 135 (era
+   real — resolvida); a C287 e a C288 são vizinhas da B867, anteriores a ela.
 
 ## Próxima tarefa detalhada — Etapa 135
 

@@ -11,11 +11,16 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-16):** **Etapa 134 fechada** (do núcleo: o reinício só faz super administrador o
+> **Onde o desenvolvimento está (2026-10-17):** **Etapa 135 fechada** (a entrega de dois itens do mesmo material numa requisição não
+> baixa mais um para recusar o outro — a recusa sai antes de qualquer baixa, e a janela de entrega divide o que sobra entre eles: o
+> **entregável de irmãos** da **D (127)**, **B869** a **B872**, com o material crítico que o detalhe prometia além da caixa — **C286**
+> resolvido; e, do núcleo, criar usuário com *ativo* vazio grava ativo, o e-mail que não é texto é recusado e o reinício não apaga mais
+> quem tem *administrator* no nome: **C284**, **C283** e **C282** resolvidos, **B873** a **B875**); a próxima é a **136** — ver "Onde
+> estamos e o que vem a seguir".
+> *(Antes: **Etapa 134 fechada** (do núcleo: o reinício só faz super administrador o
 > `admin@gmp.com.br` — e só recria o administrador inicial — quando não há nenhum super ativo, e só um super dá esse e-mail: **C280**
 > resolvido, **B861** a **B863** e **B867**, consulta **A83**; e a Auditoria ganha a aprovação automática e a decisão de inspeção, com os
-> onze nomes crus em português: **C123** e **C36** resolvidos — a C36 estava errada —, **B864** a **B866**); a próxima é a **135** — ver
-> "Onde estamos e o que vem a seguir".
+> onze nomes crus em português: **C123** e **C36** resolvidos — a C36 estava errada —, **B864** a **B866**); a próxima era a **135**.)*
 > *(Antes: **Etapa 133 fechada** (do núcleo: as abas **Permissões** e **Logs** e o salvar dos
 > módulos no formulário de usuário passam a aceitar o super administrador com qualquer papel e o papel *admin* com qualquer caixa — **C273**
 > resolvido, **B855** a **B857**, com a consulta **A80**; o aviso de mensagem apagada do chat chega à conversa certa — **C274** resolvido,
@@ -3030,7 +3035,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B868; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B876; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -9473,6 +9478,52 @@ criação (os que já existem continuariam contando — ver a **C284**). **Rever
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
 as perguntas da **C275**, **C276** e **C277** continuam esperando vocês.
 
+**B869 (NOVA, da Etapa 135) — a entrega confere a requisição inteira antes de baixar: o que um item leva sai do que o outro do mesmo
+material pode levar.** Fecha a **D (127)** do entregável de irmãos. Medido: quando dois itens do mesmo material já entregues em parte
+(com a caixa vazia) disputam o mesmo saldo livre, o sistema baixava o primeiro e só então recusava o segundo — a tela dizia *"não é
+possível entregar"* com metade da entrega feita. Agora a conferência antes da baixa conta, item a item na ordem da requisição, o que os
+anteriores do mesmo material levam (o que passa da reserva de cada um, e a caixa sem reserva que sai com eles), e a recusa sai **antes de
+qualquer baixa**, com a mesma frase de sempre (*"⟨material⟩: não é possível entregar ⟨q⟩ ⟨un⟩. Máximo: ⟨m⟩ (pendente: ⟨p⟩, disponível:
+⟨d⟩)"* — os números já descontados do irmão). **Descartado:** (a) uma fórmula fechada do "pote" dos irmãos — igual na prática, mas
+prometeria o que a baixa recusa quando a contagem por endereço deixou o físico abaixo da caixa (**C186**, só avisa); a conferência que imita
+a baixa não depende disso; (b) uma frase nova nomeando o irmão — a janela já não deixa chegar lá, e a separação também recusa sem ela.
+**Reversível.**
+
+**B870 (NOVA, da Etapa 135) — a janela de entrega divide o saldo livre entre itens do mesmo material, como a de separação.** O detalhe da
+requisição passa a mandar, por item, o teto do item sozinho e a parte dele que não se divide (a caixa e a reserva próprias); a janela
+pré-preenche cada item com o que sobra depois dos anteriores do mesmo material, nas quatro entradas (o detalhe aberto ou recarregado,
+**Completar Entrega**, **Entregar escolhendo de onde sai…** e **Confirmar Entrega e Baixar Estoque**), e o máximo do campo acompanha o
+que se digita no irmão. **Descartado:** o servidor dividir o número do detalhe (o mesmo que a 127 descartou: a divisão depende do que se
+digita). **Reversível.**
+
+**B871 (NOVA, da Etapa 135, achado da revisão do plano) — o material crítico entrega, também no detalhe, só o que está na caixa.** A
+entrega já recusava acima da caixa (*"material crítico só sai depois de separado e conferido"*); o detalhe prometia a segunda rodada
+inteira e o botão de um clique mandava o que seria recusado. Fecha a **C286**. **Reversível.**
+
+**B872 (NOVA, da Etapa 135) — a Fila de separação não muda.** Medido: o *entregável agora* da fila nunca passa da caixa, e a caixa de cada
+item é dele — dois itens na segunda rodada aparecem com *Separar* e *Aguardando saldo*, não com *Entregar*. **Descartado:** levar a fila à
+segunda rodada da entrega (a fila ensina a separar antes de entregar). **Reversível.**
+
+**B873 (NOVA, da Etapa 135; do núcleo) — criar usuário com *ativo* vazio grava ativo.** Fecha a **C284**. Pela API, *ativo* nulo ou vazio
+gravava um usuário que não entra; agora grava 1 (como a coluna nasce). *0* continua desativado; os outros valores continuam como vêm
+(**C287**). **Descartado:** recusar o vazio com 400 (a tela não manda vazio; integrações antigas passariam a falhar). **Reversível.**
+
+**B874 (NOVA, da Etapa 135; do núcleo) — o e-mail que não é texto é recusado.** Fecha a **C283**. Criar ou editar usuário com e-mail em
+número, lista, objeto ou booleano (e nulo, na edição) responde *"E-mail inválido: envie o e-mail como texto"* e nada é gravado. A edição
+**sem** o campo e-mail continua a recusa de hoje (erro do banco). **Descartado:** aceitar a edição sem e-mail mantendo o atual (mudaria o
+contrato da edição). **Reversível.**
+
+**B875 (NOVA, da Etapa 135; do núcleo) — o reinício não apaga mais usuário pelo nome.** Fecha a **C282**, agora **reproduzida** (o
+*SYSTEM ADMINISTRATOR* criado pela tela sumia no reinício). A limpeza servia a um usuário antigo que nenhum código cria desde o primeiro
+commit (medido no histórico; nenhum banco local tem um); saiu, e com ela o filtro da tela **Admin → Usuários** que escondia quem se chama
+*administrator* (fora da lista, não se edita nem se exclui). **Descartado:** restringir ao nome exato — apagar usuário no reinício, sem
+aviso, é o gesto que não se desfaz. **Reversível.**
+
+**B876 (NOVA, da Etapa 135) — a próxima etapa (136).** Ver a "próxima tarefa detalhada" no plano da Etapa 135. A **B853** (com a
+**C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
+**C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
+as perguntas da **C275**, **C276** e **C277** continuam esperando vocês.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -12170,16 +12221,19 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      **A82** antes do deploy e depois de cada reinício suspeito; candidata da próxima etapa do núcleo (**B860**).
 281. **NOVO (da revisão da Etapa 133; anterior a ela) — a consulta interna "tenho permissão?" responde sem o *permitido* quando não há
      permissão.** Responde só *motivo: sem_permissao*. Nenhuma tela usa essa consulta. **O que fazer:** nada.
-282. **NOVO (da medição da Etapa 134; do núcleo, anterior a ela) — a cada reinício, o servidor apaga o usuário que tem "administrator" no
+282. **✅ RESOLVIDO NA ETAPA 135 (B875) — reproduzido: o *SYSTEM ADMINISTRATOR* criado pela tela sumia no reinício; a limpeza saiu.** O
+     texto original, que valia até a 134: **NOVO (da medição da Etapa 134; do núcleo, anterior a ela) — a cada reinício, o servidor apaga o usuário que tem "administrator" no
      nome.** Uma limpeza antiga do boot exclui todo usuário cujo **nome** contém *administrator* (sem diferença de maiúscula), menos o de
      e-mail `admin@gmp.com.br` — e o cadastro grava o nome em maiúsculas, então um *"SYSTEM ADMINISTRATOR"* criado hoje some no próximo
      reinício, sem aviso. *Administrador*, em português, não é atingido. Lido no código, não reproduzido. **O que fazer:** não use
      *administrator* no nome de usuário; candidata de etapa do núcleo (apagar a limpeza, que servia a um usuário antigo).
-283. **NOVO (da revisão da Etapa 134; do núcleo, anterior a ela) — criar ou editar usuário pela API com e-mail que não é texto grava
+283. **✅ RESOLVIDO NA ETAPA 135 (B874) — o e-mail que não é texto é recusado com *"E-mail inválido: envie o e-mail como texto"*.** O
+     texto original: **NOVO (da revisão da Etapa 134; do núcleo, anterior a ela) — criar ou editar usuário pela API com e-mail que não é texto grava
      lixo.** Um e-mail enviado como lista ou objeto é gravado como *[object Object]* (como número, vira o número em texto) — o usuário não
      consegue entrar com e-mail nenhum. Não dá acesso a nada (reproduzido). A tela sempre manda texto. **O que fazer:** nada; candidata
      pequena (recusar com 400 o e-mail que não é texto).
-284. **NOVO (da revisão da Etapa 134; do núcleo, anterior a ela) — criar usuário pela API com *ativo* vazio grava um usuário que não
+284. **✅ RESOLVIDO NA ETAPA 135 (B873) — *ativo* nulo ou vazio na criação grava ativo.** O texto original: **NOVO (da revisão da
+     Etapa 134; do núcleo, anterior a ela) — criar usuário pela API com *ativo* vazio grava um usuário que não
      entra.** O login exige *ativo*; a criação aceita o campo vazio (a tela sempre manda). Desde a **B867** um super assim não conta mais
      como ativo. **O que fazer:** se um usuário criado por integração não consegue entrar, confira o *ativo* em **Admin → Usuários** (a A79
      acha esses casos); candidata pequena (gravar 1 quando vier vazio, como a edição faz desde a 132).
@@ -12187,6 +12241,19 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      desativando os dois últimos super administradores no mesmo instante podem passar os dois.** A trava do último super conta e grava em
      passos separados. Mesmo que aconteça, ninguém ganha acesso (o reinício recupera pelo `admin@gmp.com.br`, que só um super dá —
      **B863**). **O que fazer:** nada; candidata (contar no próprio comando que grava).
+286. **✅ RESOLVIDO NA ETAPA 135 (B871) — NOVO (da revisão do plano da Etapa 135; anterior a ela) — o detalhe da requisição prometia
+     entregar material crítico além do que está na caixa.** Depois de uma entrega parcial, com a caixa vazia e saldo livre, o detalhe
+     mostrava o pendente como entregável; a entrega recusava (*"material crítico só sai depois de separado e conferido"*) e o botão de um
+     clique mandava o que seria recusado. Agora o detalhe mostra só a caixa.
+287. **NOVO (da revisão da Etapa 135; do núcleo, anterior a ela) — criar usuário pela API com *ativo* "true" (texto) ou 2 grava assim, a
+     tela mostra *Ativo* e o usuário não entra.** O login exige ativo = 1. Só pela API (a tela manda número); não dá acesso a nada
+     (reproduzido). **O que fazer:** nada; candidata pequena (gravar 1 ou 0 pela régua de verdadeiro/falso do sistema).
+288. **NOVO (da revisão da Etapa 135; do núcleo, anterior a ela — Etapa 132) — editar usuário pela API com *ativo* vazio ("") grava
+     vazio e o usuário deixa de entrar.** A edição só mantém o atual quando o campo vem nulo ou ausente. Só pela API; a tela manda número
+     (reproduzido). **O que fazer:** nada; candidata pequena (tratar o vazio como ausente, como a criação faz desde a 135).
+289. **NOVO (da revisão da Etapa 135; do núcleo, anterior a ela) — criar usuário pela API com a senha em número responde erro interno
+     (500).** A conferência dos 6 caracteres não vale para número e a gravação falha; nada é gravado (reproduzido). **O que fazer:** nada;
+     candidata pequena (recusar 400 a senha que não é texto, como o e-mail desde a 135).
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -13379,7 +13446,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   antes ficavam sempre). O servidor recusa cada gravação, como sempre.
 - **(127) A fila mostra uma divisão — a da ordem do pedido** (**B821**): com 4 para dois itens de 4, ela diz 4 e 0, mas a separação
   aceita também 0 e 4, ou 2 e 2. O detalhe do item (o máximo dele sozinho) continua dizendo 4.
-- **(127) O *entregável* da fila não foi medido** com dois itens do mesmo material — não mudou.
+- **(127) O *entregável* da fila não foi medido** com dois itens do mesmo material — não mudou. *(✅ Etapa 135: medido — a fila não
+  diverge, porque não passa da caixa; quem divergia eram o detalhe e a entrega na segunda rodada — resolvido, **B869**, **B870**.)*
 - **(128) O tempo médio de recebimento não mostra a lista** dos recebimentos que entraram na conta, nem por fornecedor — é um número
   (média e mediana) e duas contagens. Os recebimentos processados antes da Etapa 6 não têm a hora da entrada e não aparecem; o que tem a
   data de chegada vazia também fica fora (nenhuma tela grava isso). A inspeção depois da entrada não conta.
@@ -13447,6 +13515,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   há reconstrução: o histórico não é reescrito.
 - **(134) E-mail com espaço no meio ou caractere invisível** (*admin@gmp .com.br*) não leva a recusa do e-mail reservado — e também não é
   o e-mail do administrador padrão para o login nem para o reinício: não dá acesso a nada.
+- **(135) Com o físico abaixo da caixa sem reserva** (a contagem por endereço que leva material separado — **C186**, que só avisa), a
+  janela de entrega pode pré-preencher dois itens do mesmo material com mais do que a entrega aceita; a entrega recusa **antes de qualquer
+  baixa** (*"Máximo: 0"*), e o almoxarife diminui a quantidade. A janela não divide esse caso.
+- **(135) A conferência antes da baixa conta as quantidades, não os endereços.** Quando a entrega de um item sai pelo automático e esvazia
+  o endereço de onde o outro item foi separado, a recusa desse outro (*"a origem da separação não serve mais"*) ainda pode vir **depois** da
+  primeira baixa, como antes. Não reproduzido; anterior à etapa.
+- **(135) A edição de usuário sem o campo e-mail** continua recusada pelo banco (erro interno), como antes (**B874**); e o e-mail vazio
+  ("") é texto e passa pela guarda nova.
 
 ### E. Regras que foram DEDUZIDAS e nunca confirmadas com vocês — perguntas, não requisitos atendidos (E1, a remessa mista; E2, o tempo de recebimento)
 
@@ -14358,6 +14434,13 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(135) Nenhum clique foi dado no navegador.** A entrega de itens do mesmo material foi provada pela rota e pelo serviço com o servidor de
+teste (24 cenários, e um teste de mais de 2.800 estados da revisão comparando a entrega inteira com a mesma entrega item a item), e a
+janela pela tela-contrato (11 cenários). O reinício que não apaga mais o *SYSTEM ADMINISTRATOR* foi feito com o servidor de verdade, na
+mesma pasta de dados, dentro da suíte. O que **só o navegador** prova: o roteiro da Etapa 135 no guia — a janela de **Completar Entrega**
+abrindo *2* e vazio para dois itens do mesmo material, o máximo do campo mudando ao digitar no outro, e o usuário *Administrator*
+aparecendo em **Admin → Usuários** depois de reiniciar.
 
 **(134) Os reinícios de verdade foram feitos, sem navegador — e viraram teste da suíte.** O servidor de verdade sobe com pasta de dados
 vazia, é **reiniciado na mesma pasta** e sobe também com um banco antigo montado à mão (sem a marca de super, e sem a de ativo): quem
@@ -27608,9 +27691,85 @@ super pela API — não conseguiu; achou dois detalhes anteriores (**C283**, **C
 item, as medidas, o super criando com o e-mail, o e-mail gravado com outra caixa, o super com *ativo* vazio, a falha injetada no boot) e
 viraram cenários, e **1** foi provada inofensiva (o número guardado como texto, que o banco converte).
 
+## Etapa 135 — A entrega de dois itens do mesmo material, e três detalhes do cadastro de usuários (2026-10-17)
+
+Uma requisição pode pedir o mesmo material em duas linhas (duas OS, dois setores, duas datas). Quando as duas já foram entregues em parte
+e chega material para completá-las, o saldo livre que chegou é **um só** para as duas. Até aqui a tela oferecia o saldo inteiro a cada
+linha, e ao confirmar o sistema **entregava a primeira e recusava a segunda** — a mensagem dizia *"não é possível entregar"* com metade
+da entrega já feita e o estoque baixado. Agora a entrega confere a requisição inteira antes de baixar qualquer coisa, e a janela de
+entrega divide o saldo entre as linhas do mesmo material, como a janela de separação já fazia. No caso comum — as duas linhas com a
+própria reserva, a caixa de cada uma separada — nada muda: cada linha leva o que é dela. Do núcleo, três detalhes do cadastro de usuários
+pela API e do reinício do servidor.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Duas linhas do mesmo material já entregues em parte, 2 livres: a janela abria 2 e 2 | Abre 2 e vazio; digitar 1 na primeira libera 1 para a segunda (**B870**) |
+| Confirmar 2 + 2 entregava a primeira e recusava a segunda, com o estoque baixado | Recusa antes de qualquer baixa, com *"… não é possível entregar 2 PC. Máximo: 0 (pendente: 2, disponível: 0)"*, e nada muda (**B869**) |
+| O detalhe prometia entregar material **crítico** além da caixa, e a entrega recusava | O detalhe mostra só a caixa (**B871**, **C286**) |
+| Criar usuário pela API com *ativo* vazio gravava um usuário que não entra | Grava ativo (**B873**, **C284**) |
+| E-mail em número, lista ou objeto pela API gravava *[object Object]* | *"E-mail inválido: envie o e-mail como texto"*, nada gravado (**B874**, **C283**) |
+| O reinício apagava, sem aviso, quem tivesse *administrator* no nome; a tela de Usuários escondia o *administrator* | Não apaga nem esconde ninguém (**B875**, **C282**) |
+
+### As regras, com o cenário exato
+
+Preparação: um material **sem** saldo (ex.: *Parafuso M8*, PC). Uma requisição com **duas linhas** de 4 PC desse material, aprovada.
+Entrada de 4 PC. Separe 2 em cada linha e entregue 2 em cada (**Parcialmente Atendida**). Entrada de mais **2 PC**.
+
+**1. A janela divide.** No detalhe da requisição → **Completar Entrega**: a primeira linha abre com **2**, a segunda **vazia** (máximo 0).
+Digite **1** na primeira: o máximo da segunda vira **1**. Confirme 1 + 1: as duas ficam com 3 entregues e o estoque zera.
+
+**2. A entrega recusa antes de baixar** (só pela API, a tela já não deixa): `PUT /api/almoxarifado/requisicoes/:id/entregar` com 2 e 2 →
+*"Parafuso M8: não é possível entregar 2 PC. Máximo: 0 (pendente: 2, disponível: 0)"*, e o estoque, os entregues e o status ficam como
+estavam.
+
+**3. O caso comum não muda.** Requisição com duas linhas de 4 de um material com 8 em estoque (as duas reservadas), separadas 4 e 3,
+entregue 2 da primeira: **Completar Entrega** abre 2 e 3, e confirma.
+
+**4. O crítico.** No cenário 1, marque o material como **crítico**: o detalhe deixa de oferecer a entrega das duas linhas (a caixa está
+vazia) — separe e confira antes, como sempre.
+
+**5. O cadastro de usuários pela API.** `POST /api/usuarios` com `"ativo": null` → o usuário entra; com `"email": 123` → *"E-mail inválido:
+envie o e-mail como texto"*. Crie, pela tela, um usuário *System Administrator*, reinicie o servidor: ele continua em **Admin → Usuários**
+e entra.
+
+### O que esta etapa NÃO cobre
+
+1. **O físico abaixo da caixa** (a contagem por endereço que levou material separado — **C186**): a janela pode oferecer às duas linhas mais
+   do que a entrega aceita; a entrega recusa antes de baixar (D (135)).
+2. **A recusa por endereço** de uma linha cuja origem de separação a outra linha esvaziou ainda vem depois da primeira baixa (D (135)).
+3. **A Fila de separação** não mudou — ela não oferece entregar além da caixa (**B872**).
+4. **Detalhes do cadastro de usuários pela API, anteriores, sem efeito de acesso:** *ativo* "true" (**C287**), *ativo* vazio na edição
+   (**C288**), senha em número (**C289**).
+5. As decisões que esperam vocês: **B853**, **B808**, **B755**, **B761**/**C239**, **C224**, **C225**, **C228**, **C219**, **C230**,
+   **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (**E2**), a **C268**, a **C269** e as
+   perguntas da **C275** a **C277**.
+
+### O que a revisão encontrou
+
+A **medição** (antes do plano) mostrou que o cenário que a especificação pedia — duas linhas reservadas, separadas 4 e 3, entrega parcial —
+**não** divergia; o defeito estava na segunda rodada de duas linhas sem reserva própria. A **revisão do plano** (antes do código) achou três
+pontos importantes, todos tratados antes do código: o mesmo defeito na primeira rodada quando o físico cai abaixo da caixa (agora recusado
+antes da baixa; a janela não divide — D (135)); um teste que passaria sem a correção; e o material crítico que o detalhe prometia além da
+caixa (**C286**). A **revisão adversarial do código** (três revisores, executando): o de **regra** comparou a entrega inteira com a mesma
+entrega item a item em mais de 2.800 estados (frações, três linhas, outro material no meio, saldo negativo permitido) — nenhuma diferença,
+e o mesmo teste no código de antes achou as baixas pela metade; achou três detalhes anteriores do cadastro de usuários (**C287** a
+**C289**); o de **permissão** não achou caminho novo; o de **sabotagem** fez **53** sabotagens além das **17** já feitas: **23**
+sobreviveram, **17** por falta de cenário (reserva dentro da caixa, três linhas, a caixa de uma terceira linha, o detalhe recarregado com a
+janela aberta, outro material) — viraram cenários e caem — e **6** foram provadas inofensivas.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 135 entregue (2026-10-17):** **a entrega de dois itens do mesmo material, e três detalhes do cadastro de usuários** (spec 05 e
+  núcleo). A entrega confere a requisição inteira antes de baixar e a janela de entrega divide o saldo livre entre as linhas do mesmo
+  material (o entregável de irmãos da **D (127)** — **B869** a **B872**; o crítico além da caixa no detalhe, **C286** resolvido); criar
+  usuário com *ativo* vazio grava ativo, o e-mail que não é texto é recusado e o reinício não apaga ninguém pelo nome (**C284**, **C283** e
+  **C282** resolvidos — **B873** a **B875**). **O que é seu:** nenhuma consulta nova em A; a pergunta **B853**; as decisões **B869 a B875**
+  (reversíveis); os avisos **C287** a **C289**; as limitações **(135)** em D e a verificação **(135)** em F. **Próxima: Etapa 136 — ver a
+  "próxima tarefa detalhada" no plano da Etapa 135.**
 
 - **Etapa 134 entregue (2026-10-16):** **o super administrador do reinício e a trilha que faltava na Auditoria** (do núcleo e da spec 23).
   O reinício só promove o `admin@gmp.com.br` e só cria o administrador inicial sem nenhum super ativo, e só um super dá esse e-mail
@@ -27618,7 +27777,8 @@ viraram cenários, e **1** foi provada inofensiva (o número guardado como texto
   onze nomes crus viraram português (**C123** e **C36** resolvidos — a C36 **estava errada** —, **B864** a **B866**); **C19**, **C25**,
   **C105** e **C111** marcados como resolvidos (já estavam no código). **O que é seu:** a consulta **A83** (com a **A82**); a pergunta
   **B853**; as decisões **B861 a B867** (reversíveis); os avisos **C282** a **C285**; as limitações **(134)** em D e a verificação **(134)**
-  em F. **Próxima: Etapa 135 — ver a "próxima tarefa detalhada" no plano da Etapa 134.**
+  em F.
+  *(Próxima, na época: Etapa 135 — entregue acima.)*
 
 - **Etapa 133 entregue (2026-10-16):** **as abas Permissões e Logs para todo administrador do sistema** (do núcleo). As permissões, os
   logs e o criar ordem de serviço aceitam o super com qualquer papel e o papel *admin* com qualquer caixa (**C273** resolvido — **B855** a
