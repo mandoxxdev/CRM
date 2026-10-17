@@ -184,7 +184,9 @@ limpeza de volta (RN-10 cai).
    sobreviventes reais (viraram cenários) + **6** equivalentes provadas; **0** ruído.
 3. **Paralelismo:** **0** galhos em paralelo (o "um teste de servidor por vez" serializa), **0** retrabalho; **1** revisor na Fase 2, **3**
    em paralelo na Fase 5 sob a trava.
-4. **Defeito que escapou:** *(preencher na Etapa 136)*.
+4. **Defeito que escapou:** **0** desta etapa (medido na Etapa 136: o fuzz diferencial de 3.169 entregas do r1 da 136 não achou
+   divergência na prévia dos irmãos). A **D (135)** do endereço, declarada aqui como "não reproduzida", **foi reproduzida** na 136 — e o texto
+   dela estava errado (a recusa era a estrita do motor, e já na primeira rodada): não escapou (estava declarada), mas foi declarada mal.
 
 ## Próxima tarefa detalhada — Etapa 136
 

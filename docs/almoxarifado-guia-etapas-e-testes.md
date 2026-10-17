@@ -1,17 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-17 (Etapa 135) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-17 (Etapa 136) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134 e 135) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135 e 136) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-17 (Etapa 135 ENTREGUE · próxima: Etapa 136)
+> ## Onde o desenvolvimento está — 2026-10-17 (Etapa 136 ENTREGUE · próxima: Etapa 137)
 >
-> **O desenvolvimento parou aqui: Etapa 135 fechada — 2026-10-17.** A **Etapa 135 (a entrega de dois itens do mesmo material, e três
+> **O desenvolvimento parou aqui: Etapa 136 fechada — 2026-10-17.** A **Etapa 136 (a entrega que tira de um endereço antes do automático,
+> e o cadastro de usuários pela API)**: quando uma linha foi separada de um endereço certo e outra sem dizer de onde, a entrega tira primeiro
+> do endereço certo e só depois pela regra automática — a mesma entrega sai inteira (antes a parte automática de uma linha podia esvaziar o
+> endereço da outra, e a segunda era recusada com o estoque já baixado); e, do núcleo, a senha e o *ativo* que não servem são recusados com a
+> frase do que mandar, e dois super administradores se rebaixando ao mesmo tempo não deixam mais o sistema sem nenhum. Nenhuma consulta
+> nova. **Próxima: Etapa 137** — ver a próxima tarefa no plano da 136.
+>
+> **Etapa 135, 2026-10-17.** A **Etapa 135 (a entrega de dois itens do mesmo material, e três
 > detalhes do cadastro de usuários)**: quando a requisição pede o mesmo material em duas linhas, a entrega confere as duas antes de baixar
 > e a janela de entrega divide o saldo livre entre elas (antes entregava a primeira e recusava a segunda, com o estoque já baixado); e, do
 > núcleo, *ativo* vazio na criação pela API grava ativo, e-mail que não é texto é recusado e o reinício não apaga ninguém pelo nome.
-> Nenhuma consulta nova. **Próxima: Etapa 136** — ver a próxima tarefa no plano da 135.
+> Nenhuma consulta nova.
+> *(Próxima, na época: Etapa 136 — entregue acima.)*
 >
 > **Etapa 134, 2026-10-16.** A **Etapa 134 (o super administrador do reinício e a trilha que
 > faltava na Auditoria, do núcleo)**: reiniciar o servidor só faz super administrador quem tem o e-mail `admin@gmp.com.br` quando não há
@@ -6578,6 +6586,43 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 136 — A entrega que tira de um endereço antes do automático, e o cadastro de usuários pela API (ENTREGUE — 2026-10-17)
+
+**O que mudou, em uma frase:** a entrega tira primeiro o que sai de um endereço certo (de onde a linha foi separada, ou o escolhido em
+**Sai de**), depois o que sai só de um lote, e por último o que vai pela regra automática — e, do núcleo, o cadastro de usuários pela API
+recusa a senha e o *ativo* que não servem, e o último super administrador não some quando dois administradores agem no mesmo instante.
+
+**O problema que ela resolve.** Duas linhas do mesmo material: uma separada da prateleira A-01, outra separada sem dizer de onde. Na
+entrega, a linha sem origem sai pela regra automática (o endereço padrão, depois o de mais saldo) e podia tirar justamente de A-01, antes da
+outra. A segunda linha era então recusada — *"O saldo em A-01 (1) não cobre a quantidade (2) — a saída tiraria de outros endereços"* —
+com a primeira já entregue e o estoque baixado.
+
+| Antes | Agora |
+|---|---|
+| Linha sem origem + linha separada de A-01 (A-01 com 3, B-02 com 2): a segunda era recusada depois de baixar a primeira | As duas saem: A-01 dá 2 à linha separada dali, B-02 dá 2 à outra |
+| O lote que não cabia nas duas linhas: baixava a primeira e recusava a segunda | Recusa antes de baixar: *"… Saldo insuficiente no lote L-7. Disponível: 0 PC"* |
+| Senha em número pela API: erro, ou a edição sem resposta | *"Senha inválida: envie a senha como texto"* |
+| *ativo* "true" ou 2 ao criar pela API: aparecia *Ativo* e não entrava | "true" cria ativo; o que não é sim ou não: *"Ativo inválido: envie 1 (ativo) ou 0 (inativo)"* |
+| Dois super administradores se rebaixando ao mesmo tempo: nenhum sobrava | Sobra um; o outro é recusado |
+
+**Roteiro de teste (10 minutos).** Crie (ou use) dois endereços, **A-01** e **B-02**, e um material **sem saldo** (por exemplo *Parafuso
+M8*, unidade PC).
+
+1. **Monte a requisição.** Crie uma requisição com **duas linhas** de 2 PC desse material e aprove. Dê entrada de **3 PC em A-01** e de **2
+   PC em B-02**.
+2. **Separe.** No detalhe → **Iniciar Separação**: na primeira linha 2, com **Sai de** em *"Qualquer endereço (automático)"*; na segunda 2,
+   com **Sai de** em **A-01**. Confirme.
+3. **Entregue de um clique.** **Confirmar Entrega e Baixar Estoque**: a requisição fica **Entregue**. Em Estoque, o saldo por endereço do
+   material mostra **A-01: 1** e **B-02: 0**; no histórico de movimentações, a saída da segunda linha diz que saiu de **A-01**.
+4. **(Opcional, com lote.)** Material com lote: entrada de 2 no lote *L-7* em A-01 e 5 sem lote. Duas linhas de 2: separe a segunda de
+   **A-01 — lote L-7**; em **Entregar escolhendo de onde sai…**, escolha para a primeira um **Sai de** com o lote *L-7* sem endereço (se a
+   tela não oferecer, pule — vale pela API). Confirme: *"… Saldo insuficiente no lote L-7. Disponível: 0 PC"*, e nada sai.
+
+**O que esta etapa NÃO cobre.** A exclusão de dois super administradores um pelo outro, no mesmo instante, ainda pode deixar o sistema sem
+nenhum (o reinício recupera — **C292**). A edição de usuário pela API com *ativo* "true" continua gravando cru, e um super editando outro
+pela API sem o campo *Super administrador* o rebaixa (**C293**, **C291**) — pela tela nada disso acontece. A saída automática sem lote
+continua tirando só do saldo sem lote.
 
 ## Etapa 135 — A entrega de dois itens do mesmo material, e três detalhes do cadastro de usuários (ENTREGUE — 2026-10-17)
 

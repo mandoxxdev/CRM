@@ -11,12 +11,18 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-17):** **Etapa 135 fechada** (a entrega de dois itens do mesmo material numa requisição não
+> **Onde o desenvolvimento está (2026-10-17):** **Etapa 136 fechada** (a entrega de dois itens do mesmo material não baixa mais um para
+> recusar o outro **por endereço**: o que sai do endereço de onde cada item foi separado — ou do endereço escolhido — sai antes do que vai
+> pela regra automática, e a parte automática de um item não esvazia mais a origem do outro; a recusa que vinha depois da primeira baixa
+> da **D (135)** sumiu, **B877** e **B878**; e, do núcleo, a senha e o *ativo* que não servem são recusados com a frase do que mandar, a
+> edição com senha em número que nunca respondia responde, e dois super administradores se rebaixando ao mesmo tempo não deixam mais o
+> sistema sem nenhum: **C285**, **C287**, **C288**, **C289** e **C290** resolvidos, **B879** a **B882**; a revisão achou duas falhas
+> anteriores do cadastro de usuários, **C291** e **C292**); a próxima é a **137** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 135 fechada** (a entrega de dois itens do mesmo material numa requisição não
 > baixa mais um para recusar o outro — a recusa sai antes de qualquer baixa, e a janela de entrega divide o que sobra entre eles: o
 > **entregável de irmãos** da **D (127)**, **B869** a **B872**, com o material crítico que o detalhe prometia além da caixa — **C286**
 > resolvido; e, do núcleo, criar usuário com *ativo* vazio grava ativo, o e-mail que não é texto é recusado e o reinício não apaga mais
-> quem tem *administrator* no nome: **C284**, **C283** e **C282** resolvidos, **B873** a **B875**); a próxima é a **136** — ver "Onde
-> estamos e o que vem a seguir".
+> quem tem *administrator* no nome: **C284**, **C283** e **C282** resolvidos, **B873** a **B875**); a próxima era a **136**.)*
 > *(Antes: **Etapa 134 fechada** (do núcleo: o reinício só faz super administrador o
 > `admin@gmp.com.br` — e só recria o administrador inicial — quando não há nenhum super ativo, e só um super dá esse e-mail: **C280**
 > resolvido, **B861** a **B863** e **B867**, consulta **A83**; e a Auditoria ganha a aprovação automática e a decisão de inspeção, com os
@@ -3035,7 +3041,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B876; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B883; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -9524,6 +9530,53 @@ aviso, é o gesto que não se desfaz. **Reversível.**
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
 as perguntas da **C275**, **C276** e **C277** continuam esperando vocês.
 
+**B877 (NOVA, da Etapa 136) — a entrega baixa primeiro o que sai de um endereço, depois o que sai só de um lote, e por último o automático.**
+Fecha a limitação **(135)** da letra D ("a conferência antes da baixa conta as quantidades, não os endereços"). Medido: com A-01 com 3 e
+B-02 com 2, uma linha separada sem origem e outra separada de A-01, 2 cada, a entrega saía pela primeira, cuja parte automática tirava de
+A-01 (o endereço de mais saldo), e recusava a segunda **depois** de baixar a primeira — *"⟨material⟩: O saldo em A-01 (1) não cobre a
+quantidade (2) — a saída tiraria de outros endereços"*. Já na primeira entrega (não só depois de uma entrega parcial, como a D dizia), com o
+endereço padrão, com o excedente automático da própria linha planejada e com o lote escolhido sem endereço. Agora as baixas da mesma
+entrega saem em três passadas, cada uma na ordem da requisição: o que tem endereço (a origem da separação ou o escolhido), o que tem só o
+lote, e o automático; a mesma entrega sai inteira (A-01 dá 2 à segunda linha, B-02 dá 2 à primeira). O que a entrega aceita **não muda**
+(a guarda do disponível só olha a soma) — mudam o endereço de onde a parte automática sai e, quando duas recusas cabem, qual aparece
+primeiro. **Descartado:** (a) recusar a entrega antes de baixar e mandar "escolher de onde sai" — a entrega cabe; (b) a parte automática
+evitar os endereços planejados (uma opção nova no motor de estoque, que todas as saídas usam); (c) entregar primeiro as linhas planejadas —
+não resolve a parte automática da própria linha planejada. **Reversível.**
+
+**B878 (NOVA, da Etapa 136) — o lote escolhido sem endereço conta o que as outras linhas tiram de um endereço desse lote.** Com o lote
+*L-7* só em A-01, com 2, uma linha com *L-7* sem endereço e outra separada de A-01 no *L-7*, 2 cada: cada uma cabia sozinha, a entrega
+baixava a primeira e recusava a segunda. Agora recusa antes de qualquer baixa, com a frase de sempre — *"⟨material⟩: Saldo insuficiente no
+lote L-7. Disponível: 0 ⟨un⟩"* — e o disponível já descontado. **Em material que permite saldo negativo não conta**: ali a saída de um lote
+não confere o saldo do lote (grava a linha negativa), e contar recusaria o que a saída aceita (achado da revisão do plano). **Reversível.**
+
+**B879 (NOVA, da Etapa 136; do núcleo) — *ativo* na criação pela régua de sim ou não.** Fecha a **C287**. Pela API, *ativo* "true" ou 2
+gravava cru: a tela mostrava *Ativo* e o usuário não entrava. Agora `1`, `true`, `"1"` e `"true"` criam ativo; `0`, `false`, `"0"` e
+`"false"` criam inativo; vazio ou ausente, ativo (a **B873**); qualquer outro valor é recusado sem gravar: *"Ativo inválido: envie 1
+(ativo) ou 0 (inativo)"*. **Muda o que uma integração grava** com "true"/"false" (antes cru, agora 1/0) e passa a recusar o resto.
+**Descartado:** gravar 0 para o que não se reconhece (faria "true" virar inativo) e gravar 1 (daria acesso a quem a integração pode ter
+querido inativo). A **edição** não muda — a tela devolve o que leu, e um usuário antigo com *ativo* 2 editado pela tela seria recusado
+(D (136)). **Reversível.**
+
+**B880 (NOVA, da Etapa 136; do núcleo) — a trava do último super administrador confere no instante da gravação.** Fecha a **C285**,
+agora **reproduzida**: dois super administradores, cada um rebaixando o outro ao mesmo tempo (ou desativando), passavam os dois — 10 em 10
+tentativas, nenhum super ativo. Agora o próprio comando que grava só grava se sobrar outro super que entra; quem perde recebe a recusa de
+hoje (*"Não é possível remover ou desativar o último Super Administrador ativo do sistema"* no formulário, *"Não é possível desativar o
+último Super Administrador ativo do sistema"* no botão de inativar). A conferência de antes continua (a recusa cedo). **A exclusão não
+mudou** — ver a **C292**. **Reversível.**
+
+**B881 (NOVA, da Etapa 136; do núcleo) — a senha que não é texto é recusada.** Fecha a **C289** e a **C290**. Criar com senha em número
+dava erro interno; editar com senha em número **nunca respondia** (a tela ficaria esperando). Agora os dois respondem *"Senha inválida:
+envie a senha como texto"*, sem gravar nada; na edição, a senha vazia continua "não mudar". **Reversível.**
+
+**B882 (NOVA, da Etapa 136; do núcleo) — *ativo* vazio ou nulo na edição mantém o que estava.** Fecha a **C288**. O vazio gravava vazio e o
+usuário deixava de entrar; o vazio e o nulo contavam como "desativar" (o administrador editando a si mesmo pela API era recusado com *"Não
+é possível desativar o próprio usuário"*). **Reversível.**
+
+**B883 (NOVA, da Etapa 136) — a próxima etapa (137).** Ver a "próxima tarefa detalhada" no plano da Etapa 136. A **B853** (com a
+**C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
+**C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
+as perguntas da **C275**, **C276** e **C277** continuam esperando vocês.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -12237,7 +12290,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      entra.** O login exige *ativo*; a criação aceita o campo vazio (a tela sempre manda). Desde a **B867** um super assim não conta mais
      como ativo. **O que fazer:** se um usuário criado por integração não consegue entrar, confira o *ativo* em **Admin → Usuários** (a A79
      acha esses casos); candidata pequena (gravar 1 quando vier vazio, como a edição faz desde a 132).
-285. **NOVO (da revisão da Etapa 134; do núcleo, anterior a ela; lido no código, não reproduzido) — dois administradores rebaixando ou
+285. **✅ RESOLVIDO NA ETAPA 136 (B880) — reproduzido (10 em 10, nenhum super ativo) e fechado: o comando que grava confere.** O texto
+     original: **NOVO (da revisão da Etapa 134; do núcleo, anterior a ela; lido no código, não reproduzido) — dois administradores rebaixando ou
      desativando os dois últimos super administradores no mesmo instante podem passar os dois.** A trava do último super conta e grava em
      passos separados. Mesmo que aconteça, ninguém ganha acesso (o reinício recupera pelo `admin@gmp.com.br`, que só um super dá —
      **B863**). **O que fazer:** nada; candidata (contar no próprio comando que grava).
@@ -12245,15 +12299,35 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      entregar material crítico além do que está na caixa.** Depois de uma entrega parcial, com a caixa vazia e saldo livre, o detalhe
      mostrava o pendente como entregável; a entrega recusava (*"material crítico só sai depois de separado e conferido"*) e o botão de um
      clique mandava o que seria recusado. Agora o detalhe mostra só a caixa.
-287. **NOVO (da revisão da Etapa 135; do núcleo, anterior a ela) — criar usuário pela API com *ativo* "true" (texto) ou 2 grava assim, a
+287. **✅ RESOLVIDO NA ETAPA 136 (B879) — "true" cria ativo, "false" inativo, o resto é recusado.** O texto original: **NOVO (da revisão
+     da Etapa 135; do núcleo, anterior a ela) — criar usuário pela API com *ativo* "true" (texto) ou 2 grava assim, a
      tela mostra *Ativo* e o usuário não entra.** O login exige ativo = 1. Só pela API (a tela manda número); não dá acesso a nada
      (reproduzido). **O que fazer:** nada; candidata pequena (gravar 1 ou 0 pela régua de verdadeiro/falso do sistema).
-288. **NOVO (da revisão da Etapa 135; do núcleo, anterior a ela — Etapa 132) — editar usuário pela API com *ativo* vazio ("") grava
+288. **✅ RESOLVIDO NA ETAPA 136 (B882) — o vazio e o nulo na edição mantêm o que estava.** O texto original: **NOVO (da revisão da Etapa
+     135; do núcleo, anterior a ela — Etapa 132) — editar usuário pela API com *ativo* vazio ("") grava
      vazio e o usuário deixa de entrar.** A edição só mantém o atual quando o campo vem nulo ou ausente. Só pela API; a tela manda número
      (reproduzido). **O que fazer:** nada; candidata pequena (tratar o vazio como ausente, como a criação faz desde a 135).
-289. **NOVO (da revisão da Etapa 135; do núcleo, anterior a ela) — criar usuário pela API com a senha em número responde erro interno
+289. **✅ RESOLVIDO NA ETAPA 136 (B881) — *"Senha inválida: envie a senha como texto"*, na criação e na edição.** O texto original:
+     **NOVO (da revisão da Etapa 135; do núcleo, anterior a ela) — criar usuário pela API com a senha em número responde erro interno
      (500).** A conferência dos 6 caracteres não vale para número e a gravação falha; nada é gravado (reproduzido). **O que fazer:** nada;
      candidata pequena (recusar 400 a senha que não é texto, como o e-mail desde a 135).
+290. **✅ RESOLVIDO NA ETAPA 136 (B881) — NOVO (da revisão do plano da Etapa 136; do núcleo, anterior a ela) — editar usuário pela API
+     com a senha em número nunca respondia.** O servidor não caía (a proteção de processo segurava o erro), mas a requisição ficava sem
+     resposta até o tempo limite de quem chamou; nada era gravado. Agora responde *"Senha inválida: envie a senha como texto"*.
+291. **NOVO (da Etapa 136; do núcleo, anterior a ela; lido no código, e reproduzido no próprio super) — um super administrador editando outro super pela API sem o campo
+     *Super administrador* o rebaixa.** O servidor trata a falta do campo como "não é super" quando quem edita é super (a tela sempre manda
+     o campo). Com o último super, a edição de si mesmo sem o campo é recusada como "remover o último super". **O que fazer:** nada pela
+     tela; integrações que editam usuário mandam o campo. Candidata da próxima etapa do núcleo (só mudar a marca quando o campo vier).
+292. **NOVO (da revisão da Etapa 136; do núcleo, anterior a ela; reproduzido 6 em 6) — dois super administradores excluindo um ao outro
+     ao mesmo tempo deixam o sistema sem nenhum super ativo.** A exclusão confere "o último super" antes e apaga depois; o mesmo vale para
+     excluir um enquanto o outro se rebaixa (basta uma pessoa com duas abas). O rebaixamento e a desativação já conferem no instante da
+     gravação (**B880**); a exclusão não. Ninguém ganha acesso: o próximo reinício recupera pelo administrador padrão (a **B861**), se ele
+     existir. **O que fazer:** não excluir super administradores em duas abas ao mesmo tempo; se acontecer, reinicie o servidor. Candidata
+     da próxima etapa do núcleo.
+293. **NOVO (da revisão da Etapa 136; do núcleo, anterior a ela) — pela API, o botão de inativar desativa com qualquer valor que não seja
+     1, e a edição grava *ativo* "true" ou 2 cru.** O inativar com `"true"` desativa (fica 0 — erra para o lado seguro); a edição com
+     `"true"` grava o texto e o usuário deixa de entrar (a criação aceita "true" como ativo desde a **B879** — os dois lados ficaram
+     diferentes). A tela manda sempre 1 ou 0. **O que fazer:** nada; candidata pequena (a mesma régua de sim ou não na edição e no inativar).
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -13518,11 +13592,21 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(135) Com o físico abaixo da caixa sem reserva** (a contagem por endereço que leva material separado — **C186**, que só avisa), a
   janela de entrega pode pré-preencher dois itens do mesmo material com mais do que a entrega aceita; a entrega recusa **antes de qualquer
   baixa** (*"Máximo: 0"*), e o almoxarife diminui a quantidade. A janela não divide esse caso.
-- **(135) A conferência antes da baixa conta as quantidades, não os endereços.** Quando a entrega de um item sai pelo automático e esvazia
+- ~~**(135) A conferência antes da baixa conta as quantidades, não os endereços.**~~ **✅ RESOLVIDA NA ETAPA 136 (B877, B878)** — e o texto
+  abaixo **estava errado** em dois pontos: a recusa que vinha depois da primeira baixa era a do endereço (*"O saldo em A-01 (1) não cobre a
+  quantidade (2) — a saída tiraria de outros endereços"*), não *"a origem da separação não serve mais"*; e acontecia já na primeira
+  entrega, reproduzida. O texto original: Quando a entrega de um item sai pelo automático e esvazia
   o endereço de onde o outro item foi separado, a recusa desse outro (*"a origem da separação não serve mais"*) ainda pode vir **depois** da
   primeira baixa, como antes. Não reproduzido; anterior à etapa.
 - **(135) A edição de usuário sem o campo e-mail** continua recusada pelo banco (erro interno), como antes (**B874**); e o e-mail vazio
   ("") é texto e passa pela guarda nova.
+- **(136) A parte automática de um item com número de série** leva o lote das séries e não entra na conferência antes da baixa. Não
+  reproduzido e, pela revisão, inalcançável: as séries escolhidas, distintas e em estoque, limitam o pedido ao que o lote tem.
+- **(136) A saída automática sem lote** continua tirando só do saldo sem lote (a **B204**): num material só com saldo em lote, a entrega
+  automática deixa o "sem lote atribuído" negativo. Com as passadas, mais entregas chegam a isso (antes paravam no meio, recusadas).
+- **(136) A edição de usuário** não passou pela régua de sim ou não da criação (**B879**): *ativo* "true" ou 2 na edição continua gravado
+  cru (**C293**). A exclusão do último super em corrida não mudou (**C292**). Perdendo a corrida do último super com o usuário apagado no
+  meio, a resposta é a do último super, não *"Usuário não encontrado"*.
 
 ### E. Regras que foram DEDUZIDAS e nunca confirmadas com vocês — perguntas, não requisitos atendidos (E1, a remessa mista; E2, o tempo de recebimento)
 
@@ -14434,6 +14518,13 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(136) Nenhum clique foi dado no navegador.** A ordem das baixas foi provada pela rota e pelo serviço com o servidor de teste (20
+cenários, e um teste da revisão de mais de 3.100 entregas aleatórias comparando o código novo com o de antes: nenhuma diferença no que a
+entrega aceita, e as 48 entregas que antes paravam no meio saíram inteiras). O cadastro de usuários foi provado com o servidor de verdade,
+em pasta vazia, dentro da suíte (8 cenários, com as corridas de dois super administradores). O que **só o navegador** prova: o roteiro da
+Etapa 136 no guia — a entrega de **Confirmar Entrega e Baixar Estoque** saindo inteira com uma linha separada de A-01 e outra sem origem,
+e o saldo por endereço depois.
 
 **(135) Nenhum clique foi dado no navegador.** A entrega de itens do mesmo material foi provada pela rota e pelo serviço com o servidor de
 teste (24 cenários, e um teste de mais de 2.800 estados da revisão comparando a entrega inteira com a mesma entrega item a item), e a
@@ -27759,17 +27850,92 @@ e o mesmo teste no código de antes achou as baixas pela metade; achou três det
 sobreviveram, **17** por falta de cenário (reserva dentro da caixa, três linhas, a caixa de uma terceira linha, o detalhe recarregado com a
 janela aberta, outro material) — viraram cenários e caem — e **6** foram provadas inofensivas.
 
+## Etapa 136 — A entrega que tira de um endereço antes do automático, e o cadastro de usuários pela API (2026-10-17)
+
+Uma requisição pode pedir o mesmo material em duas linhas, e o almoxarife pode ter separado uma delas de uma prateleira certa (A-01) e a
+outra sem dizer de onde. Na entrega, a linha sem origem sai pela regra automática — o endereço padrão, depois o de mais saldo —, e ela
+podia tirar justamente de A-01, antes da outra linha. O sistema então recusava a segunda linha (*"O saldo em A-01 não cobre a
+quantidade"*) **depois** de ter baixado a primeira. Agora a entrega tira primeiro o que tem endereço certo e só depois o automático: a mesma
+entrega sai inteira, e cada linha sai de onde foi separada. Do núcleo, quatro detalhes do cadastro de usuários pela API, e a trava do último
+super administrador passa a valer também quando dois administradores agem no mesmo instante.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Linha separada sem origem + linha separada de A-01: a primeira tirava de A-01 e a segunda era recusada com o estoque já baixado | As duas saem; A-01 dá à linha separada dali, o automático tira dos outros endereços (**B877**) |
+| O mesmo com A-01 como endereço padrão, com a parte automática da própria linha planejada ou com o lote escolhido sem endereço | Idem (**B877**) |
+| Lote só em A-01 que não cabia nas duas linhas: baixava a primeira e recusava a segunda | Recusa antes de qualquer baixa: *"⟨material⟩: Saldo insuficiente no lote L-7. Disponível: 0 PC"* (**B878**) |
+| Criar usuário com *ativo* "true" ou 2 pela API: a tela dizia *Ativo* e ele não entrava | "true" cria ativo, "false" inativo; o resto: *"Ativo inválido: envie 1 (ativo) ou 0 (inativo)"* (**B879**, **C287**) |
+| Dois super administradores se rebaixando ao mesmo tempo: os dois passavam, nenhum super | Um passa, o outro é recusado (**B880**, **C285**) |
+| Senha em número pela API: erro interno ao criar; ao editar, a requisição nunca respondia | *"Senha inválida: envie a senha como texto"* (**B881**, **C289**, **C290**) |
+| Editar com *ativo* vazio pela API: o usuário deixava de entrar | Mantém o que estava (**B882**, **C288**) |
+
+### As regras, com o cenário exato
+
+Preparação: dois endereços, **A-01** e **B-02**. Um material **sem** saldo (ex.: *Parafuso M8*, PC). Uma requisição com **duas linhas** de
+2 PC desse material, aprovada. Entrada de **3 PC em A-01** e de **2 PC em B-02**.
+
+**1. A entrega sai inteira.** No detalhe → **Iniciar Separação**: a primeira linha 2, **sem** escolher de onde; a segunda 2, de **A-01**.
+Confirme. **Confirmar Entrega e Baixar Estoque**: a requisição fica **Entregue**; o saldo por endereço do material mostra **A-01 com 1** e
+**B-02 com 0** — a segunda linha saiu de A-01 (o histórico diz *"saiu de A-01"*) e a primeira, pela regra automática, de B-02. Antes desta
+etapa, a mesma entrega era recusada com *"Parafuso M8: O saldo em A-01 (1) não cobre a quantidade (2) — a saída tiraria de outros
+endereços"* e a primeira linha ficava entregue.
+
+**2. O que não cabe é recusado antes** (lote; pela API ou pelo **Sai de** da janela). Material com lote *L-7* **só em A-01, com 2**, e 5 sem
+lote. Duas linhas de 2: a primeira entregue com o **lote L-7 sem endereço**, a segunda separada de **A-01 no L-7**. Entregue as duas:
+*"⟨material⟩: Saldo insuficiente no lote L-7. Disponível: 0 PC"*, e nada sai. Com mais 2 do *L-7* em A-01, a mesma entrega passa.
+
+**3. O cadastro de usuários pela API.** `POST /api/usuarios` com `"ativo": "true"` → o usuário entra; com `"ativo": 2` → *"Ativo inválido:
+envie 1 (ativo) ou 0 (inativo)"*; com `"senha": 1234567` → *"Senha inválida: envie a senha como texto"* (o mesmo no `PUT`, que antes
+ficava sem resposta). `PUT /api/usuarios/:id` com `"ativo": ""` → mantém o que estava.
+
+**4. O último super administrador.** Com dois super administradores, cada um, na sua sessão, rebaixa o outro no mesmo instante (pela API):
+um recebe 200, o outro *"Não é possível remover ou desativar o último Super Administrador ativo do sistema"*, e sobra um super.
+
+### O que esta etapa NÃO cobre
+
+1. **A exclusão** de dois super administradores um pelo outro, no mesmo instante, ainda pode deixar o sistema sem super ativo (**C292** — o
+   reinício recupera).
+2. **A edição** de usuário pela API com *ativo* "true" ou 2 continua gravando cru; o botão de inativar desativa com qualquer valor que não
+   seja 1 (**C293**). Um super editando outro super pela API sem o campo *Super administrador* o rebaixa (**C291**).
+3. **A parte automática de um item com série** não entra na conferência antes da baixa (inalcançável — D (136)); e a saída automática sem
+   lote continua tirando só do saldo sem lote (**B204**).
+4. As decisões que esperam vocês: **B853**, **B808**, **B755**, **B761**/**C239**, **C224**, **C225**, **C228**, **C219**, **C230**,
+   **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (**E2**), a **C268**, a **C269** e as
+   perguntas da **C275** a **C277**.
+
+### O que a revisão encontrou
+
+A **medição** (antes do plano) reproduziu a limitação que a Etapa 135 tinha declarado sem medir — e ela era maior do que a declaração dizia:
+acontecia já na primeira entrega e com outra frase. A **revisão do plano** (antes do código) achou três pontos importantes, todos tratados
+antes do código: um saldo esperado errado no cenário do endereço padrão; a conferência do lote recusando o que o material com saldo negativo
+permitido aceita; e que a edição com senha em número não derrubava o servidor — ficava sem responder (**C290**). A **revisão adversarial do
+código** (três revisores, executando): o de **regra** comparou o código novo com o de antes em **3.169** entregas aleatórias (endereços,
+lotes, reservas, frações, segunda rodada, saldo negativo permitido) — nenhuma diferença no que a entrega aceita, e as **48** entregas que
+antes paravam no meio saíram inteiras; o de **permissão** não achou caminho novo e achou a exclusão em corrida (**C292**) e o inativar com
+"true" (**C293**); o de **sabotagem** fez **47** sabotagens além das **14** já feitas: **16** sobreviveram, **9** por falta de cenário —
+viraram cenários e caem — e **7** foram provadas inofensivas.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 136 entregue (2026-10-17):** **a entrega que tira de um endereço antes do automático, e o cadastro de usuários pela API** (spec
+  05 e núcleo). As baixas da entrega saem na ordem endereço → lote → automático, e a recusa por endereço depois da primeira baixa da
+  **D (135)** sumiu (**B877**, **B878**); a senha e o *ativo* que não servem são recusados, a edição com *ativo* vazio mantém o que estava e
+  o último super não some em corrida de rebaixamento ou desativação (**C285**, **C287**, **C288**, **C289**, **C290** resolvidos — **B879** a
+  **B882**). **O que é seu:** nenhuma consulta nova em A (a **A79** continua achando *ativo* fora de 0 e 1); a pergunta **B853**; as decisões
+  **B877 a B882** (reversíveis); os avisos **C291** a **C293**; as limitações **(136)** em D e a verificação **(136)** em F. **Próxima:
+  Etapa 137 — ver a "próxima tarefa detalhada" no plano da Etapa 136.**
 
 - **Etapa 135 entregue (2026-10-17):** **a entrega de dois itens do mesmo material, e três detalhes do cadastro de usuários** (spec 05 e
   núcleo). A entrega confere a requisição inteira antes de baixar e a janela de entrega divide o saldo livre entre as linhas do mesmo
   material (o entregável de irmãos da **D (127)** — **B869** a **B872**; o crítico além da caixa no detalhe, **C286** resolvido); criar
   usuário com *ativo* vazio grava ativo, o e-mail que não é texto é recusado e o reinício não apaga ninguém pelo nome (**C284**, **C283** e
   **C282** resolvidos — **B873** a **B875**). **O que é seu:** nenhuma consulta nova em A; a pergunta **B853**; as decisões **B869 a B875**
-  (reversíveis); os avisos **C287** a **C289**; as limitações **(135)** em D e a verificação **(135)** em F. **Próxima: Etapa 136 — ver a
-  "próxima tarefa detalhada" no plano da Etapa 135.**
+  (reversíveis); os avisos **C287** a **C289**; as limitações **(135)** em D e a verificação **(135)** em F.
+  *(Próxima, na época: Etapa 136 — entregue acima.)*
 
 - **Etapa 134 entregue (2026-10-16):** **o super administrador do reinício e a trilha que faltava na Auditoria** (do núcleo e da spec 23).
   O reinício só promove o `admin@gmp.com.br` e só cria o administrador inicial sem nenhum super ativo, e só um super dá esse e-mail

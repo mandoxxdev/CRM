@@ -1325,8 +1325,31 @@ Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa135-o-entregavel-de-
 - [x] **O boot não apaga mais usuário pelo nome, e a tela de Usuários não esconde o *administrator*** — `3eee5f4f`. B875. RN-10.
   Reproduzido antes (a C282 era "lido, não reproduzido").
 - [x] **Os cenários da Fase 5** — `70a77c0f` (o POST sem e-mail, o nome exato e minúsculo, a contagem de `DELETE` sem caixa).
-- [ ] **`ativo` "true" ou 2 na criação (C287), `ativo` `""` na edição (C288), senha em número (C289)** — anteriores, achados na Fase 5,
-  registrados, sem efeito de acesso; candidatas pequenas.
+- [x] **`ativo` "true" ou 2 na criação (C287), `ativo` `""` na edição (C288), senha em número (C289)** — anteriores, achados na Fase 5;
+  resolvidos na **Etapa 136** (`2797fd71`, ver abaixo).
 
 Testes: `usuarioPelaApi.api.test.js` (5 — o `index.js` real com reinício no mesmo data dir), `Usuarios.administrator.test.js`; o RN-01d de
 `superPadraoNoBoot` passou a anular o `ativo` do super fantasma no arquivo (o `POST` com `ativo: null` agora grava 1).
+
+## Etapa 136 (2026-10-17) — quatro pequenas do cadastro de usuários (C285, C287, C288, C289) e a C290
+
+Plano: `docs/superpowers/plans/2026-10-17-almoxarifado-etapa136-a-ordem-das-baixas.md` (a etapa é da spec 05; estas vieram junto).
+
+- [x] **Senha que não é texto → 400 *"Senha inválida: envie a senha como texto"*** — `2797fd71`: no `POST` depois do e-mail não texto e antes
+  dos 6 caracteres; no `PUT` só a verdadeira (o falso continua "não muda"). B881, C289. RN-07. **C290** (achada na Fase 2): o `PUT` com
+  senha número **nunca respondia** — o `hashSync` lançava no callback do `db.get` e o `installProcessGuards` segurava a exceção.
+- [x] **`ativo` `""` ou nulo no `PUT` é ausente** — `2797fd71`: mantém o que havia e não conta como "desativar" (a recusa do próprio usuário
+  nem a trava do último super). B882, C288. RN-08.
+- [x] **`ativo` da criação pela régua de sim ou não** — `2797fd71` (`ativoDaCriacao`): `1`/`true`/`"1"`/`"true"` → 1, `0`/`false`/`"0"`/`"false"`
+  → 0, ausente/nulo/`""` → 1, o resto → 400 *"Ativo inválido: envie 1 (ativo) ou 0 (inativo)"*. B879, C287. RN-09. O `PUT` não mudou (D (136)).
+- [x] **A trava do último super no próprio comando que grava** — `2797fd71`: `GUARDA_ULTIMO_SUPER_SQL` no `WHERE` do `UPDATE` do `PUT`
+  (rebaixando ou desativando) e do `PATCH /status` (desativando); `changes = 0` → 403 com a literal de cada rota. Reproduzida antes 10/10
+  (dois supers, zero super ativo). B880, C285. RN-10.
+- [x] **Fase 5** — `ddded5a2`: a régua fechada (`'on'`, `' 1'`...), o super com `ativo` nulo que não conta, o `PUT` desativando em corrida, o
+  200 da corrida que tem de ter gravado.
+- [ ] **A exclusão em corrida (C292)**, **o super editando super sem o campo (C291)** e **o inativar/a edição com "true" (C293)** —
+  anteriores, achados nesta etapa; candidatas da Etapa 137 (ver o plano da 136).
+
+Testes: `usuarioSenhaAtivoCorrida.api.test.js` (8 — o `index.js` real em pasta vazia, corridas com `Promise.all`); o
+`chatSocketInativoNoServidor` (dois cenários estáticos) passou a ancorar no texto novo do `UPDATE` do `PATCH` e no `finishUpdate` em
+`function`.
