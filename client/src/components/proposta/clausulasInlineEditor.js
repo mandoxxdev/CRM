@@ -93,6 +93,14 @@ export function sincronizarCampoParaSource(doc, key, campo, valor) {
   return true;
 }
 
+// Etapa 139 (RN-139.07) — a página de assinatura (.pagina-assinatura) é da CONSIDERAÇÃO FINAL, que fecha o documento
+// (I2/I3). O editor numera pela ordem do #proposalSource e pula o 24 (seção de preço): uma cláusula posta DEPOIS da CF
+// ganhava o número seguinte ao dela (CF 5.25, nova 5.26) e o template — que renderiza as 5.25+ depois da seção de preço e
+// a CF sempre na página de assinatura — imprimia 5.24 → 5.26 → 5.25. Por isso nada entra depois da CF nem a CF sai de lá.
+function naPaginaDeAssinatura(el) {
+  return !!(el && typeof el.closest === 'function' && el.closest('.pagina-assinatura'));
+}
+
 export function moverClausulaNoSource(doc, key, direcao) {
   return comWrapperNormalizado(doc, () => {
     const source = getSource(doc);
@@ -106,6 +114,7 @@ export function moverClausulaNoSource(doc, key, direcao) {
     if (idx === -1 || alvo < 0 || alvo >= secoes.length) return false;
     const atual = secoes[idx];
     const vizinho = secoes[alvo];
+    if (naPaginaDeAssinatura(atual) || naPaginaDeAssinatura(vizinho)) return false;
     if (direcao < 0) vizinho.insertAdjacentElement('beforebegin', atual);
     else vizinho.insertAdjacentElement('afterend', atual);
     return true;
@@ -147,7 +156,10 @@ export function adicionarClausulaAoSource(doc, apósKey) {
     secao.appendChild(h3);
     secao.appendChild(div);
     const referencia = apósKey ? buscarSecao(doc, apósKey) : null;
-    if (referencia) referencia.insertAdjacentElement('afterend', secao);
+    // RN-139.07: "+ cláusula" na CONSIDERAÇÃO FINAL (ou sem referência) entra ANTES da página de assinatura.
+    const paginaAssinatura = source.querySelector('.pagina-assinatura');
+    if (referencia && !naPaginaDeAssinatura(referencia)) referencia.insertAdjacentElement('afterend', secao);
+    else if (paginaAssinatura) paginaAssinatura.insertAdjacentElement('beforebegin', secao);
     else source.appendChild(secao);
     return key;
   });

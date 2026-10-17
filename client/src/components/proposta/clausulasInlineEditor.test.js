@@ -364,3 +364,69 @@ describe('ehClausulaNovaVazia (remoção implícita da cláusula nova vazia)', (
     expect(ehClausulaNovaVazia({ key: 'default-5.4', titulo: '', conteudo: '' })).toBe(false);
   });
 });
+
+describe('Etapa 139 (RN-139.07): nada entra depois da CONSIDERAÇÃO FINAL', () => {
+  // Fixture com o que o template emite no fim da seção 5: as cláusulas, a seção de preço (slot 24) e a página de
+  // assinatura com a CONSIDERAÇÃO FINAL dentro de .assinatura-topo.
+  function montarComAssinatura(doc) {
+    const root = montarFixture(doc, [
+      ['1', '5.1 PRAZO', '<p>A</p>'],
+      ['2', '5.2 TRANSPORTE', '<p>B</p>'],
+    ]);
+    const preco = doc.createElement('section');
+    preco.setAttribute('data-clausula-key', '90');
+    preco.setAttribute('data-clausula-slot', '24');
+    preco.innerHTML = '<h3 data-clausula-campo="titulo">5.24 PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS</h3><div data-clausula-campo="conteudo"><p>P</p></div>';
+    root.appendChild(preco);
+    const pagina = doc.createElement('section');
+    pagina.className = 'block avoid-break pagina-assinatura';
+    const topo = doc.createElement('div');
+    topo.className = 'assinatura-topo';
+    const cf = doc.createElement('section');
+    cf.setAttribute('data-clausula-key', '99');
+    cf.innerHTML = '<h3 data-clausula-campo="titulo">5.25 CONSIDERAÇÃO FINAL</h3><div data-clausula-campo="conteudo"><p>Z</p></div>';
+    topo.appendChild(cf);
+    pagina.appendChild(topo);
+    root.appendChild(pagina);
+    return root;
+  }
+  const titulos = () => lerClausulasDoSource(document).map((c) => c.titulo);
+
+  test('RN-139.07a: "+ cláusula" na CF entra antes da página de assinatura — a nova vira 5.25 e a CF 5.26', () => {
+    montarComAssinatura(document);
+    const key = adicionarClausulaAoSource(document, '99');
+    expect(document.querySelector(`[data-clausula-key="${key}"]`).closest('.pagina-assinatura')).toBeNull();
+    // a ordem do 23 em diante precisa de 23 cláusulas antes: aqui basta a ordem relativa (nova antes da CF)
+    renumerarClausulas(document);
+    const t = titulos();
+    expect(t.indexOf('5.3 Nova Cláusula')).toBeLessThan(t.indexOf('5.4 CONSIDERAÇÃO FINAL'));
+    expect(t.indexOf('5.3 Nova Cláusula')).toBeGreaterThan(-1);
+    expect(t.indexOf('5.4 CONSIDERAÇÃO FINAL')).toBeGreaterThan(-1);
+  });
+
+  test('RN-139.07a: sem referência também entra antes da página de assinatura', () => {
+    montarComAssinatura(document);
+    const key = adicionarClausulaAoSource(document, null);
+    const nova = document.querySelector(`[data-clausula-key="${key}"]`);
+    expect(nova.closest('.pagina-assinatura')).toBeNull();
+    expect(nova.nextElementSibling.classList.contains('pagina-assinatura')).toBe(true);
+  });
+
+  test('RN-139.07a: "+ cláusula" numa cláusula comum continua entrando logo depois dela', () => {
+    montarComAssinatura(document);
+    const key = adicionarClausulaAoSource(document, '1');
+    expect(lerClausulasDoSource(document).map((c) => c.key).slice(0, 3)).toEqual(['1', key, '2']);
+  });
+
+  test('RN-139.07b/c: descer para depois da CF e subir a CF não fazem nada', () => {
+    montarComAssinatura(document);
+    const antes = titulos();
+    // a vizinha da CF na lista editável é a 5.2 (a seção de preço tem slot e fica fora)
+    expect(moverClausulaNoSource(document, '2', 1)).toBe(false);
+    expect(moverClausulaNoSource(document, '99', -1)).toBe(false);
+    expect(titulos()).toEqual(antes);
+    expect(document.querySelector('[data-clausula-key="99"]').closest('.pagina-assinatura')).not.toBeNull();
+    // e o movimento comum continua funcionando
+    expect(moverClausulaNoSource(document, '2', -1)).toBe(true);
+  });
+});
