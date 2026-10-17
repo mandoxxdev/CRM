@@ -8,7 +8,7 @@ import { toast } from 'react-toastify';
 import { FiSave, FiX, FiUser, FiFileText, FiEye, FiDownload, FiPlus, FiTrash2, FiBarChart2, FiUpload, FiPaperclip, FiPercent, FiSend } from 'react-icons/fi';
 import SelecaoProdutosPremium from '../SelecaoProdutosPremium';
 import {
-  STATUS_PROPOSTA,
+  opcoesStatusProposta,
   ORIGENS_BUSCA,
   MOTIVOS_NAO_VENDA,
   REGIOES_BUSCA,
@@ -101,6 +101,8 @@ export default function PropostaForm() {
   const effectiveUser = getEffectiveUser(user);
   const isEdit = Boolean(id);
   const [form, setForm] = useState({ ...defaultForm });
+  // Etapa 140 (RN-140.12b): o status GRAVADO (o do carregamento) — o seletor só oferece "Desconto aprovado" quando a proposta já está nele.
+  const [statusGravado, setStatusGravado] = useState('rascunho');
   const [itens, setItens] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
@@ -223,6 +225,7 @@ export default function PropostaForm() {
           probabilidade: data.probabilidade != null ? Number(data.probabilidade) : 50,
           data_fechamento: data.data_fechamento ? data.data_fechamento.split('T')[0] : ''
         });
+        setStatusGravado(data.status ?? 'rascunho');
         setPdfAnexo(data.pdf_proposta_cliente || null);
         setPdfNome(data.pdf_proposta_nome || data.pdf_proposta_cliente || '');
         setItens((data.itens || []).map((i) => {
@@ -564,6 +567,7 @@ export default function PropostaForm() {
                   await api.post(`/propostas/${id}/enviar`);
                   toast.success('Proposta enviada.');
                   setForm((f) => ({ ...f, status: 'enviada' }));
+                  setStatusGravado('enviada');
                 } catch (e) {
                   toast.error(e.response?.data?.error || 'Erro ao enviar proposta.');
                 }
@@ -654,7 +658,9 @@ export default function PropostaForm() {
             <div className="proposta-form-field">
               <label>Status da proposta *</label>
               <select value={form.status} onChange={(e) => handleStatusChange(e.target.value)}>
-                {STATUS_PROPOSTA.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                {opcoesStatusProposta(statusGravado).map((s) => (
+                  <option key={s.value} value={s.value} disabled={s.disabled} title={s.title}>{s.label}</option>
+                ))}
               </select>
             </div>
             <div className="proposta-form-field">

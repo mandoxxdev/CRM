@@ -13,6 +13,17 @@ import { SkeletonTable } from './SkeletonLoader';
 import './Aprovacoes.css';
 import './Loading.css';
 
+/**
+ * Etapa 140 (RN-140.11/12a, C302): Aprovar e Rejeitar só aparecem onde o servidor diz que quem está logado pode decidir
+ * (`pode_decidir`: aprovador — "Pode aprovar descontos" ou super — e não dono do pedido — quem pediu ou o responsável da proposta).
+ * Falha ABERTO: sem o campo (servidor antigo), mostra — quem decide é o PUT /aprovacoes/:id, que recusa com a frase.
+ */
+export function podeDecidirNaTela(aprovacao) {
+  if (!aprovacao) return false;
+  const status = aprovacao.status || 'pendente';
+  return status === 'pendente' && aprovacao.pode_decidir !== false;
+}
+
 const Aprovacoes = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -59,11 +70,8 @@ const Aprovacoes = () => {
 
   const handleAprovar = async (id) => {
     try {
-      const user = JSON.parse(localStorage.getItem('user'));
-      const response = await api.put(`/aprovacoes/${id}`, {
-        status: 'aprovado',
-        aprovado_por: user?.id
-      });
+      // Etapa 140 (RN-140.03): o servidor grava quem está logado como quem decidiu.
+      const response = await api.put(`/aprovacoes/${id}`, { status: 'aprovado' });
       console.log('✅ Aprovação confirmada:', response.data);
       toast.success('Desconto aprovado! A proposta ficou como Desconto aprovado — envie-a para liberar o documento.');
       loadAprovacoes();
@@ -89,11 +97,9 @@ const Aprovacoes = () => {
     }
 
     try {
-      const user = JSON.parse(localStorage.getItem('user'));
       const response = await api.put(`/aprovacoes/${aprovacaoSelecionada.id}`, {
         status: 'rejeitado',
-        motivo_rejeicao: motivoRejeicao.trim(),
-        aprovado_por: user?.id
+        motivo_rejeicao: motivoRejeicao.trim()
       });
       console.log('✅ Solicitação rejeitada:', response.data);
       toast.success('Solicitação rejeitada com sucesso');
@@ -487,7 +493,7 @@ const Aprovacoes = () => {
                       >
                         <FiEye />
                       </button>
-                      {aprovacao.status === 'pendente' && (
+                      {podeDecidirNaTela(aprovacao) && (
                         <>
                           <button
                             className="btn-action btn-approve"
@@ -633,7 +639,13 @@ const Aprovacoes = () => {
                 </div>
               )}
 
-              {aprovacaoSelecionada.status === 'pendente' && (
+              {(aprovacaoSelecionada.status || 'pendente') === 'pendente' && !podeDecidirNaTela(aprovacaoSelecionada) && (
+                <div className="detail-section" data-testid="aguardando-aprovador">
+                  <p>Aguardando a decisão de quem pode aprovar descontos. Quem pediu e o responsável da proposta não decidem o pedido.</p>
+                </div>
+              )}
+
+              {podeDecidirNaTela(aprovacaoSelecionada) && (
                 <div className="detail-section">
                   <h3>Rejeitar Solicitação</h3>
                   <textarea
@@ -666,7 +678,7 @@ const Aprovacoes = () => {
                 console.log('🔍 Aprovação completa:', aprovacaoSelecionada);
                 console.log('🔍 Status é pendente?', status === 'pendente');
                 
-                if (status === 'pendente' || status === null || status === undefined) {
+                if ((status === 'pendente' || status === null || status === undefined) && podeDecidirNaTela(aprovacaoSelecionada)) {
                   return (
                     <>
                       <button
