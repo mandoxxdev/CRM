@@ -153,7 +153,7 @@ ao exato (RN-04); uma rota de permissões de volta ao `index.js` (RN-05); o `DEL
    **8** sobreviventes reais (viraram cenários) + **3** equivalentes provados; **0** ruído.
 3. **Paralelismo:** **0** galhos em paralelo (as tasks tocam o `index.js` ou dependem dele), **0** retrabalho; **1** revisor na Fase 2,
    **3** em paralelo na Fase 5 sob a trava e **1** agente de medição (só leitura) para a próxima etapa.
-4. **Defeito que escapou:** *(preencher na Etapa 134)*.
+4. **Defeito que escapou:** **0** da 133 (medido na 134: os três revisores da Fase 5 da 134 rodaram sobre o cadastro e o boot de usuários no servidor real e não acharam defeito das rotas de permissões, dos logs, do portão da OS nem do aviso do chat). A **C280**, achada pelo r2 da 133, era anterior e foi resolvida na 134 (`31947ced`).
 
 ## Próxima tarefa detalhada — Etapa 134
 

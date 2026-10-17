@@ -1,17 +1,23 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-16 (Etapa 133) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-16 (Etapa 134) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132 e 133) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133 e 134) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 133 ENTREGUE · próxima: Etapa 134)
+> ## Onde o desenvolvimento está — 2026-10-16 (Etapa 134 ENTREGUE · próxima: Etapa 135)
 >
-> **O desenvolvimento parou aqui: Etapa 133 fechada — 2026-10-16.** A **Etapa 133 (as abas Permissões e Logs para todo administrador do
+> **O desenvolvimento parou aqui: Etapa 134 fechada — 2026-10-16.** A **Etapa 134 (o super administrador do reinício e a trilha que
+> faltava na Auditoria, do núcleo)**: reiniciar o servidor só faz super administrador quem tem o e-mail `admin@gmp.com.br` quando não há
+> nenhum super ativo, e só um super dá esse e-mail a alguém (**C280** resolvido); o administrador inicial apagado não volta sozinho; a
+> Auditoria mostra a aprovação automática e a decisão de inspeção, e as ações do estoque com nome em português. Rode a consulta **A83**
+> (com a **A82**). **Próxima: Etapa 135** — ver a próxima tarefa no plano da 134.
+>
+> **Etapa 133, 2026-10-16.** A **Etapa 133 (as abas Permissões e Logs para todo administrador do
 > sistema, do núcleo)**: o super administrador com qualquer papel e o papel *admin* com outra caixa passam a usar as abas Permissões e
 > Logs e a salvar os módulos no formulário de usuário (antes o salvar avisava *"Usuário salvo, mas houve erro ao salvar permissões de
 > módulos"*), e a criar ordem de serviço; a revisão achou duas escaladas anteriores a super (**C279**, **C280** — rode a consulta **A82**).
-> **Próxima: Etapa 134** — ver a próxima tarefa no plano da 133.
+> *(Próxima, na época: Etapa 134 — entregue acima.)*
 >
 > **Etapa 132, 2026-10-16.** A **Etapa 132 (o desativado sai do chat na hora, e a Lista de
 > Tarefas sem o papel, do núcleo)**: no instante em que o administrador desativa ou exclui alguém, a tela de chat aberta dessa pessoa
@@ -5080,6 +5086,8 @@ requisição. Nos comandos abaixo ele é `$TOKEN`.
    característica (`PUT /planos-inspecao/<id>`), a **Edição** aparece com o nominal antigo → novo.
    **E confira o outro lado:** a decisão de inspeção do passo 6 **não** aparece na Auditoria. Ela
    nunca apareceu — é limitação anterior a esta etapa, e está declarada no furo **C36**.
+   *(**Etapa 134:** esta frase **estava errada** — a decisão sempre deixou uma linha, sob **Entidade = Movimentação**, com o nome cru;
+   desde a 134 ela aparece também em **Entidade = Inspeção**, ação **Inspeção decidida** — ver a seção da Etapa 134.)*
 
 ### O que esta etapa NÃO cobre
 
@@ -5246,7 +5254,7 @@ qualquer requisição do sistema logado; abaixo ele é `$TOKEN`.
   cortou (o servidor aceita até 500, mas a tela não pede). O filtro de material resolve o caso
   prático; paginar de verdade é etapa própria, e tem de vir com um sinal de truncamento. Furo
   **C39**.
-- **Decidir inspeção continua sem aparecer na Auditoria** — furo **C36**, anterior a esta etapa.
+- **Decidir inspeção continua sem aparecer na Auditoria** — furo **C36**, anterior a esta etapa. *(Etapa 134: estava errado — aparecia sob Movimentação com o nome cru; desde a 134 aparece em **Entidade = Inspeção**.)*
 - **Plano herdado da família** (**B59**) — a tela busca o plano **do material**.
 - **Não conformidade formal numerada** e **liberação sob desvio autorizado** — os dois fluxos
   próprios que ainda faltam para a inspeção ficar completa.
@@ -6563,6 +6571,49 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 134 — O super administrador do reinício e a trilha que faltava na Auditoria (ENTREGUE — 2026-10-16)
+
+**O que mudou, em uma frase:** reiniciar o servidor deixa de fazer super administrador quem tem o e-mail `admin@gmp.com.br` (só faz isso
+quando não há nenhum super ativo), só um super pode dar esse e-mail, e a Auditoria passa a mostrar a aprovação automática de requisição e a
+decisão de inspeção — com os nomes das ações em português.
+
+**O problema que ela resolve.** Quem gerencia usuários sem ser super (o papel *Administrador*) podia trocar o próprio e-mail para
+`admin@gmp.com.br` e, no próximo reinício, virar super administrador. E o administrador inicial que um super apagava voltava sozinho no
+reinício, com a senha antiga. Na Auditoria, a requisição aprovada sozinha não aparecia no filtro *Aprovação*, e decidir uma inspeção
+deixava só uma linha técnica (*DECISAO_INSPECAO*, sem aprovado × reprovado) — vários nomes apareciam crus no filtro.
+
+| Antes | Agora |
+|---|---|
+| O *Administrador* trocava o próprio e-mail para `admin@gmp.com.br` | *"O e-mail admin@gmp.com.br é reservado ao administrador padrão — só um Super Administrador pode atribuí-lo"* |
+| Todo reinício fazia super quem tinha esse e-mail | Só quando não há nenhum super ativo (a recuperação de banco antigo) |
+| O administrador inicial apagado voltava no reinício | Não volta enquanto houver super ativo |
+| A aprovação automática não aparecia em *Ação = Aprovação* | Aparece, em nome de *"Sistema (automático)"* |
+| A decisão de inspeção só como *DECISAO_INSPECAO* em *Movimentação* | **Entidade = Inspeção**, ação **Inspeção decidida**, com os números e quem decidiu |
+| *RESERVA*, *QUARENTENA* e outros nove nomes crus no filtro | Nomes em português |
+
+**Roteiro de teste (10 minutos).** Como o **administrador semeado**, em **Admin → Usuários**, crie um usuário **A** com papel
+*Administrador* e **sem** *Super administrador*.
+
+1. **O e-mail reservado.** Saia e entre como **A** → **Admin → Usuários** → edite o próprio **A** → troque o e-mail para
+   `admin@gmp.com.br` → **Salvar**: aparece *"O e-mail admin@gmp.com.br é reservado ao administrador padrão — só um Super Administrador
+   pode atribuí-lo"* e o e-mail não muda. Tente também **Novo usuário** com esse e-mail: a mesma frase.
+2. **O super pode.** Entre como o **semeado** e faça a mesma troca no **A**: salva. Saia e entre como **A** com `admin@gmp.com.br`.
+3. **O reinício não promove** (quem cuida do servidor reinicia). Depois do reinício, entre como **A** e tente excluir um usuário de teste:
+   *"Apenas Super Administradores podem excluir usuários"*. Em **Admin → Usuários**, o **A** continua sem o selo de super.
+4. **A aprovação automática na Auditoria.** **Almoxarifado → Configurações → Configurações Gerais → Aprovação Automática** ligada. Crie uma
+   requisição de um material com saldo (ela já nasce *Totalmente Reservada*). **Almoxarifado → Auditoria → Ação = Aprovação**: a linha da
+   requisição com o usuário *"Sistema (automático)"*; em **Detalhes**, o status e quem enviou. Desligue a aprovação automática depois.
+5. **A decisão de inspeção na Auditoria.** Em **Inspeções**, decida um item (por exemplo 7 aprovados e 3 reprovados, encaminhamento
+   *Devolver*, uma observação). **Auditoria → Entidade = Inspeção**: a linha **Inspeção decidida** em seu nome, com os números e a
+   observação. **Entidade = Movimentação** mostra a **Decisão de inspeção (estoque)**.
+6. **Os nomes.** Abra o filtro **Ação**: nenhuma opção com nome em maiúsculas e sublinhado (*Reserva*, *Quarentena*, *Decisão de inspeção
+   (estoque)*…).
+
+**O que esta etapa NÃO cobre.** O administrador do sistema que não é super ainda consegue trocar a senha de um super e entrar como ele —
+é a pergunta **B853** (**C279**); as decisões e aprovações automáticas feitas antes do deploy não ganham a linha nova; detalhes anteriores
+sem efeito de acesso ficaram registrados (**C282** a **C285**). **Para quem cuida do servidor:** apagar o administrador inicial e
+reiniciar não o recria mais enquanto houver um super ativo — o procedimento de recuperação está na consulta **A83**.
 
 ## Etapa 133 — As abas Permissões e Logs para todo administrador do sistema (ENTREGUE — 2026-10-16)
 

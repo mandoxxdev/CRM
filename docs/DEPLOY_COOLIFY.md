@@ -152,6 +152,12 @@ PORT=3000
 Na primeira inicialização com banco vazio, o log do container mostrará:
 `Admin inicial criado - credenciais em server/data/.runtime-secrets.json`
 
+O administrador inicial só é criado (e o usuário `admin@gmp.com.br` só é promovido a super administrador) quando o banco **não tem
+nenhum super administrador ativo**. Com um super ativo, apagar o administrador inicial e reiniciar **não** o recria. Para recuperar o
+acesso quando ninguém sabe a senha de nenhum super: pare o container, marque os super administradores como não super
+(`UPDATE usuarios SET is_superadmin = 0`) no `server/data/database.sqlite` e suba de novo — o boot promove o `admin@gmp.com.br` ou
+recria o administrador inicial com a senha de `.runtime-secrets.json` (ou de `SEED_ADMIN_PASSWORD`).
+
 Monte volume persistente em `/app/server/data` para preservar banco, uploads e segredos entre deploys.
 
 ### 2. Forçar Uso do Dockerfile (IMPORTANTE!)

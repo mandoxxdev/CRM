@@ -96,15 +96,15 @@ excluir usuários`.
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 — tronco (núcleo: o boot e o cadastro)** — `services/superPadrao.js`; `index.js`: a promoção e o seed encadeados em
+- [x] **T1 — tronco (núcleo: o boot e o cadastro)** — `services/superPadrao.js`; `index.js`: a promoção e o seed encadeados em
   `seedAdminInicial` (RN-01, RN-02), o `UPDATE` do `PRAGMA` sai, o 403 L4 no `POST`/`PUT` (RN-03). Teste `tests/api/superPadraoNoBoot.api.test.js`
   (o `index.js` real com reinício no mesmo data dir; o banco antigo criado à mão; e a fiação estática: o `UPDATE` incondicional não sobra),
   escrito e rodado **vermelho** antes do código.
-- [ ] **T2 — C123** — `routes/almoxarifado.js` (`tentarAprovacaoAutomatica`). Teste `tests/api/auditoriaDaAprovacaoAutomatica.api.test.js`
+- [x] **T2 — C123** — `routes/almoxarifado.js` (`tentarAprovacaoAutomatica`). Teste `tests/api/auditoriaDaAprovacaoAutomatica.api.test.js`
   (RN-04), vermelho antes.
-- [ ] **T3 — C36 + rótulos** — `inspectionService.js`, `auditLabels.js`. Teste `tests/api/auditoriaDaInspecao.api.test.js` (RN-05, RN-06,
+- [x] **T3 — C36 + rótulos** — `inspectionService.js`, `auditLabels.js`. Teste `tests/api/auditoriaDaInspecao.api.test.js` (RN-05, RN-06,
   RN-07), vermelho antes.
-- [ ] **T4 — fechamento** — novidades (B861+, C123/C36/C19/C25/C105/C111/C280 resolvidas, a C36 corrigida dizendo que estava errada, C282+,
+- [x] **T4 — fechamento** — novidades (B861+, C123/C36/C19/C25/C105/C111/C280 resolvidas, a C36 corrigida dizendo que estava errada, C282+,
   A83, D (134), F (134), a seção da etapa, cabeçalho), spec 23, mapa, guia, manual, este plano (retro, "Próxima tarefa detalhada — Etapa 135"),
   o "defeito que escapou" da retro da 133. CLAUDE.md: a trava **não** muda.
 
@@ -122,4 +122,85 @@ removida (RN-05 cai); um rótulo removido (RN-06 cai).
 
 ## Execução — o que aconteceu
 
-*(preenchido durante a etapa)*
+- **Fase 0** — medida por mim: o `index.js` lido (a promoção a cada boot, o seed pelo e-mail, quem grava e-mail); a sonda
+  `scratchpad/e134/sonda-f0-audit.js` (`testApp` real) reproduziu a C123 (0 linhas de Aprovação na automática) e mostrou que **a C36
+  estava errada** (a decisão grava `movimentacao / DECISAO_INSPECAO`, cru) e os 11 verbos crus; `sonda-c25.js` conferiu as cinco rotas de
+  upload (C25 resolvida na 86); C19, C105 e C111 conferidas no código (67 e 129).
+- **Fase 2 antes do código de produção:** 0 Critical + 4 Important + 4 Minor de cenário + 3 de texto, todos aceitos (ver o topo). Os três
+  testes novos foram escritos e rodados **vermelhos** antes do código: T1 2/9 (o RN-01b — banco antigo — já passava, é a metade de
+  hoje que fica), T2 1/6, T3 1/7. Design e plano `88433661`.
+- **Commits:** T1 `31947ced`; T2 `fc6a9f17`; T3 `72ca7070`; Fase 5 `eb4c3bf8`.
+- **Divergências do plano:** (1) a régua de "super ativo" mudou na Fase 5 para `ativo = 1` (era `COALESCE(ativo, 1)`, a de
+  `countActiveSuperAdmins`) — achado do r1, B867 — e a mudança foi também em `countActiveSuperAdmins` (anterior); (2) a sabotagem S8 da T1
+  (a ordem) quebrava a sintaxe — trocada pela S8b (a promoção atrasada), que cai; (3) o `/enviar` responde 200, não 201 (Fase 2 M4).
+- **Controles positivos** (âncora contada = 1, md5 antes/sabotado/restaurado, restauro por cópia, `scratchpad/e134/bateria.js`): **17**
+  antes da Fase 5 (T1 S1–S7 e S8b; T2/T3 S9–S16) e **10** da Fase 5 (F1–F10) — todos caem pelo cenário certo, restaurados com o md5 de antes.
+- **Boot:** pasta vazia, reinício na mesma pasta, banco antigo sem `is_superadmin`, banco antigo sem `ativo` nem `is_superadmin`, banco sem
+  super ativo, super com `ativo` nulo e falha injetada (`tests/helpers/falhaSqlInjetada.js`) — tudo dentro da suíte
+  (`superPadraoNoBoot.api.test.js`, o `index.js` real). **Migração:** nenhuma coluna nova (o `ALTER … ativo` no `CREATE` é a mesma coluna
+  que o `PRAGMA` já criava, só antes — provado pelo RN-01b′).
+- **CLAUDE.md:** a seção da trava **não mudou** (nada aqui mexe em saldo; a linha nova da inspeção é um `INSERT` dentro da seção, sem trava
+  nova).
+- **Suíte antes dos commits de código (`31947ced`, `fc6a9f17`, `72ca7070`):** `test:api` **448/448**; `test:almoxarifado` **44/0**;
+  `test:validation` 4/0, `test:safealter` 3/0, `test:sqlite` 10/0; client **131** suítes / **1768** testes; `CI=true build` *Compiled
+  successfully*.
+- **Fase 5** — três revisores frescos em paralelo sob a trava de máquina; o de sabotagem na worktree própria `CRM-wt-e134-r3` (removida
+  com as junções desfeitas antes). Eu não rodei teste enquanto eles trabalhavam.
+  - **Regra (r1): 1 Minor real, reproduzido** (`r1-fantasma.js`, o `index.js` real): o super criado com `ativo` nulo não entra e contava
+    como ativo — a trava do último super deixou o único que entra se rebaixar, e a recuperação do boot ficou travada. Corrigido (**B867**,
+    `eb4c3bf8`); a criação com `ativo` nulo fica registrada (**C284**). O resto: sem achado por RN.
+  - **Permissão (r2): 0 desta etapa** (tabela de ataques no servidor real, `r2-auth.js`: e-mail próprio, caixa, espaços, POST, lista/objeto,
+    `is_superadmin` no corpo, zerar os super pela API). Anteriores: **C283** (e-mail que não é texto grava lixo — reproduzido) e **C285**
+    (corrida de dois rebaixamentos — lido, não reproduzido). A C279 não piora.
+  - **Sabotagem (r3): 29** sabotagens novas, **19** caíram, **10** sobreviveram por falta de cenário → viraram cenários (`eb4c3bf8`) e caem
+    na bateria F; **1** equivalente provado (o `entidade_id` em texto: a coluna é `INTEGER`, o SQLite converte).
+- **Suíte final (depois da Fase 5, antes da documentação):** `test:api` **448/448**; `test:almoxarifado` **44/0**; `test:validation` 4/0,
+  `test:safealter` 3/0, `test:sqlite` 10/0; client **131** suítes / **1768** testes; `CI=true build` *Compiled successfully*.
+- **T4 — fechamento** (o commit de documentação — ver `git log`): novidades (cabeçalho, A83, A82 atualizada, B861–B868, C19/C25/C36/C105/
+  C111/C123/C280 resolvidas — a C36 dizendo que estava errada —, C282–C285, D (134), F (134), a seção da etapa, "Onde estamos"), spec 23,
+  spec 09 (a frase errada da C36), mapa, guia (com as duas frases erradas da C36 corrigidas à vista), manual (5.2g, 5.8, 8.5),
+  `docs/DEPLOY_COOLIFY.md` (a recuperação do acesso), este plano, o "defeito que escapou" da retro da 133.
+
+## Tasks — estado
+
+- [x] **T1** `31947ced` (Fase 5 `eb4c3bf8`) · [x] **T2** `fc6a9f17` · [x] **T3** `72ca7070` (Fase 5 `eb4c3bf8`) · [x] **T4** — o commit de
+  documentação.
+
+## Retro (4 números)
+
+1. **Rodadas de correção até verde:** **1** (Fase 5: a régua do super ativo + os cenários). Testes antigos mudados: **2** — o (8) de
+   `inspecaoIntegracao` (afirmava a frase falsa da C36) e o título/cobertura do `auditLabels`.
+2. **Achados da revisão:** Fase 2 — **4 Important + 7 Minor, todos reais** (o I1 medido no boot real). Fase 5 — r1 **1 Minor real**
+   (reproduzido, corrigido); r2 **0** desta etapa, **2** anteriores (1 reproduzido, 1 lido); r3 **10** sobreviventes reais (viraram
+   cenários) + **1** equivalente provado; **0** ruído.
+3. **Paralelismo:** **0** galhos em paralelo (o "um teste de servidor por vez" serializa, e a RN-07 cruza T2 e T3), **0** retrabalho; **1**
+   revisor na Fase 2, **3** em paralelo na Fase 5 sob a trava.
+4. **Defeito que escapou:** *(preencher na Etapa 135)*.
+
+## Próxima tarefa detalhada — Etapa 135
+
+*(A série desta etapa foi B861–B868, C282–C285, A83 — a 135 começa em **B869**, **C286**, **A84**; confira com `grep -oE` antes.)*
+
+**Escolhida: o entregável de irmãos (spec 05, livre)** — o candidato 3 do plano da 133, que a 134 não alcançou.
+`specs/modulo-almoxarifado/05-separacao-picking/README.md` ≈983 (*"O entregável de irmãos — não medido nesta etapa (D (127))"*). A 127
+fez a **fila**, a **janela** e a **porta** da separação dividirem o separável entre itens do mesmo material da mesma requisição (C265); o
+**entregável** (`entregavel = min(separado − entregue, disponível)`, ≈299 da spec 05; `entregavelPeloMotor`, ≈747) nunca foi medido com
+irmãos. **Medir primeiro (Fase 0, com sonda no `testApp` real):** requisição com dois itens do mesmo material, reservados 4 + 4, separados
+4 e 3, entrega parcial de um — o que a fila (`GET /api/almoxarifado/fila-separacao`, `etapas[]` e "entregável agora"), o detalhe e a porta
+da entrega (`requisitionService` — a entrega, sob `comTravaDaRequisicao`) dizem, e se a fila promete o que a entrega recusa (o padrão da
+C265). Se não divergir, a etapa é a marca na spec 05 e um teste que prende; se divergir, é a C265 da entrega. **Atenção:** a entrega pega a
+trava por material **e** a por requisição (CLAUDE.md, ordem requisição → material); o `entregavelPeloMotor` desconta a reserva do item.
+
+**Pequenas, do núcleo, junto se couber (livres, todas medidas na 134):** **C284** (o `POST /api/usuarios` grava `ativo` nulo — gravar 1,
+como o `PUT` faz desde a 132), **C283** (recusar 400 o e-mail que não é texto no `POST`/`PUT`), **C282** (a limpeza do boot que apaga quem
+tem *administrator* no nome — `index.js` ≈2196; medir se algum banco depende dela antes de apagar).
+
+**Dependem do P.O. — NÃO implemente:** **B853**/**C279**, **B808**, **B755**, **B761**/**C239**, **C224**, o resto da **C225**, **C228**,
+**C219**, **C230**, o reparo da **C246** (e a **C247**), a tabela de conversões e o grupo acima de família, a **régua do tempo de
+recebimento (E2)**, a **C268**, a **C269**, **C275**, **C276**, **C277**; na 05, os itens de produto e a **C198**; na 06, a **B11** e a
+Engenharia; na 21, a valorização por cliente e previsto × realizado; na 22, **B13**, **B101**/G30, **G38**; no Compras, D-35, D-37, D-78,
+D-90, G9/G30, G4, G15, B63.
+
+**O que já está pronto e não precisa reabrir:** o boot e o cadastro do super (`services/superPadrao.js`, `superPadraoNoBoot.api.test.js` —
+o molde de reinício no mesmo data dir e de falha injetada no boot); a Auditoria da aprovação automática e da inspeção, e os rótulos de todo
+tipo do motor (a cobertura do `auditLabels` lê o `schema.js`: tipo novo sem rótulo derruba o teste).

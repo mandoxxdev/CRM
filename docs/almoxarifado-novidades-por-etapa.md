@@ -11,11 +11,15 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-16):** **Etapa 133 fechada** (do núcleo: as abas **Permissões** e **Logs** e o salvar dos
+> **Onde o desenvolvimento está (2026-10-16):** **Etapa 134 fechada** (do núcleo: o reinício só faz super administrador o
+> `admin@gmp.com.br` — e só recria o administrador inicial — quando não há nenhum super ativo, e só um super dá esse e-mail: **C280**
+> resolvido, **B861** a **B863** e **B867**, consulta **A83**; e a Auditoria ganha a aprovação automática e a decisão de inspeção, com os
+> onze nomes crus em português: **C123** e **C36** resolvidos — a C36 estava errada —, **B864** a **B866**); a próxima é a **135** — ver
+> "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 133 fechada** (do núcleo: as abas **Permissões** e **Logs** e o salvar dos
 > módulos no formulário de usuário passam a aceitar o super administrador com qualquer papel e o papel *admin* com qualquer caixa — **C273**
 > resolvido, **B855** a **B857**, com a consulta **A80**; o aviso de mensagem apagada do chat chega à conversa certa — **C274** resolvido,
-> **B858**; e a revisão achou duas escaladas anteriores, sérias — **C279** e **C280**, com a consulta **A82**); a próxima é a **134** — ver
-> "Onde estamos e o que vem a seguir".
+> **B858**; e a revisão achou duas escaladas anteriores, sérias — **C279** e **C280**, com a consulta **A82**); a próxima era a **134**.)*
 > *(Antes: **Etapa 132 fechada** (do núcleo: o usuário desativado ou apagado sai também do **chat
 > em tempo real** na hora — a conexão aberta cai com o aviso de sessão encerrada e a conexão nova é recusada — **C271** resolvido, **B848**
 > a **B850**; a Lista de Tarefas deixa de mostrar o papel de todos — **C272** resolvido, **B851**; e o administrador não se desativa mais
@@ -188,8 +192,11 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Oitenta e dois itens para rodar em produção ANTES do deploy — setenta e nove são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Oitenta e três itens para rodar em produção ANTES do deploy — oitenta são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
 
+*(**Atualizado em 2026-10-16 (Etapa 134) de oitenta e dois para oitenta e três**, com a **A83** — quantos super administradores ativos
+há em produção: com pelo menos um, o reinício deixa de promover quem tem o e-mail `admin@gmp.com.br`, e o administrador inicial apagado
+deixa de voltar sozinho. Somente leitura; vale rodar junto da **A82**.)*
 *(**Atualizado em 2026-10-16 (Etapa 133) de setenta e nove para oitenta e dois**, com a **A80** — quem passa a mexer em permissões e
 logs (o super administrador sem o papel *admin* e o papel *admin* escrito com outra caixa); a **A81** — se a tabela de grupos de
 produção tem a coluna que o portão da ordem de serviço procura; e a **A82** — quem tem o e-mail que o sistema torna super administrador a
@@ -2998,13 +3005,32 @@ WHERE LOWER(TRIM(email)) = 'admin@gmp.com.br';
 **Como ler o resultado:** **uma linha, do administrador que vocês conhecem** — nada a fazer. **Outra pessoa** — ela é (ou será, no
 próximo reinício) super administradora: troque o e-mail dela de volta e confira os super administradores em **Admin → Usuários**.
 **Vazia** — ninguém é promovido no reinício.
+*(**Etapa 134:** desde esta etapa o reinício só promove esse e-mail quando **não há nenhum** super administrador ativo — ver a **A83**.
+Pela tela, quem não é super não consegue mais dar esse e-mail a ninguém (**C280** resolvido).)*
+
+**A83 (NOVA, da Etapa 134 — quantos super administradores ativos há).** Desde a Etapa 134 o reinício do servidor só faz super
+administrador quem tem o e-mail `admin@gmp.com.br`, e só cria o administrador inicial (o do arquivo de credenciais ou das variáveis do
+servidor), quando **não há nenhum** super administrador ativo — é a recuperação de um banco sem administrador, não mais uma regra de todo
+reinício. Esta consulta diz em qual caso produção está.
+
+```sql
+SELECT id, nome, email, role, ativo
+FROM usuarios
+WHERE COALESCE(is_superadmin, 0) = 1 AND COALESCE(ativo, 1) = 1;
+```
+
+**Como ler o resultado:** **uma ou mais linhas** (o caso esperado) — o reinício não promove nem cria ninguém; confira que são pessoas que
+devem ser super. **Vazia** — o próximo reinício promove o `admin@gmp.com.br` (se existir) ou cria o administrador inicial com a senha do
+arquivo de credenciais. **O que muda para recuperar o acesso:** apagar o administrador inicial e reiniciar **não** o traz mais de volta
+enquanto houver um super ativo. Se ninguém souber a senha de nenhum super, pare o servidor, marque os super administradores como não super
+(ou inativos) direto no banco, e suba de novo — o reinício recupera pelo `admin@gmp.com.br` ou recria o administrador inicial.
 
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B860; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B868; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -9386,6 +9412,67 @@ mapas do almoxarifado e do Compras). A **B853** (agora com a **C279**), a **B808
 **C225**, a **C228**, a **C219**, a **C230**, o reparo da **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do
 tempo de recebimento (letra **E**), a **C268**, a **C269** e as perguntas da **C275**, **C276** e **C277** continuam esperando vocês.
 
+**B861 (NOVA, da Etapa 134; do núcleo) — o reinício só faz super administrador o `admin@gmp.com.br` quando não há nenhum super ativo.**
+Fecha a **C280**. Até a 133, todo reinício promovia quem tivesse esse e-mail — e quem gerencia usuários (o papel *admin*, sem ser super)
+trocava o próprio e-mail para esse e, no reinício seguinte, passava a fazer o que só o super faz (excluir usuários, dar super). A promoção
+existia para o banco antigo: a marca de super nasceu depois dos usuários e chega desligada para todos; o administrador padrão virava o
+primeiro super. Agora ela é **recuperação**: só acontece se não há **nenhum** super administrador ativo, e roda antes da criação do
+administrador inicial, no mesmo encadeamento. Pela tela não se chega a zero super ativo (o último não se desativa nem se exclui), então na
+prática ela só age em banco antigo ou editado à mão. **Descartado:** apagar a promoção (um banco antigo ficaria sem nenhum super — ninguém
+gerenciaria nada); manter (a escalada); promover só se o e-mail for o do administrador inicial (não fecha: o administrador inicial **é**
+esse e-mail por padrão). Se a verificação de "há super ativo" falhar no boot, nada é promovido nem criado (fica no log; o próximo
+reinício tenta de novo). Consulta: **A83**. **Reversível.**
+
+**B862 (NOVA, da Etapa 134; do núcleo) — o administrador inicial só é criado quando não há super ativo.** Até a 133, o reinício procurava
+o administrador inicial **pelo e-mail** e, se não achava, criava um super novo com a senha do arquivo de credenciais ou das variáveis do
+servidor — o super que **apagou** ou **renomeou** o administrador inicial (porque a senha vazou, por exemplo) o via voltar com a senha
+antiga. Agora só nasce se não há nenhum super ativo; com um, o log diz *"Admin inicial não recriado: já há Super Administrador ativo"*.
+Instalação nova: igual (nasce). **O que muda para quem opera:** o caminho "apagar o administrador e reiniciar para recuperar a senha" deixa
+de funcionar enquanto houver um super ativo — o procedimento novo está na **A83**. **Consequência declarada:** num banco antigo **sem** a
+marca de super, com o e-mail do administrador inicial configurado diferente de `admin@gmp.com.br`, o `admin@gmp.com.br` é promovido e o
+administrador inicial novo **não** é criado (até a 133 nasciam os dois). **Descartado:** reservar também o e-mail do administrador inicial
+(quem o pega não ganha nada). **Reversível.**
+
+**B863 (NOVA, da Etapa 134; do núcleo) — o e-mail `admin@gmp.com.br` só é dado por um super administrador.** Criar ou editar usuário
+pondo esse e-mail (sem diferença de maiúscula e com espaços nas pontas) em quem não o tinha, por quem não é super, recusa com *"O e-mail
+admin@gmp.com.br é reservado ao administrador padrão — só um Super Administrador pode atribuí-lo"* — e nada é gravado (o formulário mostra
+a frase e não segue para os módulos). Editar quem **já** tem o e-mail, com ele igual, segue como hoje. É defesa em profundidade: com a
+**B861** a escalada já não fecha, mas a recuperação promoveria quem tivesse pego o e-mail. **Descartado:** recusar sempre (o administrador
+do sistema não editaria mais o administrador padrão — quem edita super é a **B853**, de vocês); e-mail que não é texto pela API também não
+leva essa recusa (segue o erro de hoje). **Reversível.**
+
+**B864 (NOVA, da Etapa 134) — a aprovação automática grava a linha *Aprovação* na Auditoria.** Fecha a **C123**. A linha sai em nome de
+*"Sistema (automático)"* — o mesmo nome que a requisição guarda como aprovador —, sem usuário do sistema ligado a ela, e leva nos detalhes
+o status gravado, as reservas, `aprovacao: automatica` e quem enviou a requisição. Vale nas duas portas (criar e enviar o rascunho).
+Se a Auditoria falhar, a aprovação vale e a tela responde como sempre. **Descartado:** uma ação nova *Aprovação automática* (o filtro
+*Aprovação* deixaria de achar essas requisições — e a pergunta da tela é "quem aprovou"); gravar com o usuário de quem enviou (o filtro de
+usuário mostraria a mesma pessoa com dois nomes, e a linha diria que ela aprovou). **Reversível.**
+
+**B865 (NOVA, da Etapa 134) — decidir inspeção grava a linha da inspeção na Auditoria.** Fecha a **C36** (cujo texto **estava errado** —
+ver lá). **Entidade = Inspeção**, ação **Inspeção decidida**, o número da inspeção, quem decidiu, aprovado, reprovado, encaminhamento,
+se ficou conforme, quantas medidas e as observações (como justificativa). Recusa (conta que não fecha, item já decidido) não grava nada;
+falha da Auditoria não desfaz a decisão. **Descartado:** só dar rótulo à linha que o motor de estoque já gravava (não diz aprovado ×
+reprovado nem o número); gravar sob *Item do recebimento* (o documento da decisão é a inspeção, e o filtro por entidade a separa do
+excedente). **Reversível.**
+
+**B866 (NOVA, da Etapa 134) — onze ações do estoque ganham nome na Auditoria.** A tela mostrava crus os nomes técnicos de onze tipos de
+movimento que o motor grava — *RESERVA*, *QUARENTENA*, *DECISAO_INSPECAO* e outros; agora: *Reserva*, *Liberação de reserva*,
+*Retrabalho*, *Quarentena*, *Liberação da inspeção*, *Reprovação na inspeção*, *Decisão de inspeção (estoque)*, *Remessa a terceiro*,
+*Retorno de terceiro*, *Estorno*, *Ajuste de inventário*. O *(estoque)* é para não confundir com a linha nova da inspeção (**B865**). Os
+filtros continuam trazendo as mesmas linhas — muda só o nome da opção. **Reversível.**
+
+**B867 (NOVA, da Etapa 134, achado da revisão; do núcleo) — "super ativo" é o super que consegue entrar.** A revisão mediu que um super
+administrador criado pela API com *ativo* vazio **não entra** (o login exige ativo) mas **contava** como ativo: a trava do último super
+deixava o único super que entra se rebaixar, e a recuperação do reinício (**B861**) ficava travada por ele. Agora as duas contas usam a régua
+do login (ativo = 1). Efeito: com um super que não entra, o último que entra não se rebaixa nem se desativa (*"Não é possível remover ou
+desativar o último Super Administrador ativo do sistema"*), e o reinício recupera. **Descartado:** só corrigir a gravação do *ativo* vazio na
+criação (os que já existem continuariam contando — ver a **C284**). **Reversível.**
+
+**B868 (NOVA, da Etapa 134) — a próxima etapa (135).** Ver a "próxima tarefa detalhada" no plano da Etapa 134. A **B853** (com a
+**C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
+**C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
+as perguntas da **C275**, **C276** e **C277** continuam esperando vocês.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -9551,7 +9638,10 @@ tempo de recebimento (letra **E**), a **C268**, a **C269** e as perguntas da **C
    5 caracteres. É de propósito (letra B34) — mas avise a equipe antes, para não parecer
    travamento.
 
-19. **(16) Requisição com data de necessidade ilegível NUNCA alerta atraso — em silêncio.**
+19. **✅ RESOLVIDO NA ETAPA 67 (conferido e marcado na Etapa 134 — o item tinha ficado sem a marca)** — a criação recusa a data que não é
+   AAAA-MM-DD de um dia que existe, com *"data_necessidade deve estar no formato AAAA-MM-DD"*; as três portas de criação passam pela
+   mesma régua e nenhuma rota regrava a data. O texto original fica abaixo.
+   ~~**(16) Requisição com data de necessidade ilegível NUNCA alerta atraso — em silêncio.**~~
    O campo aceita texto livre por API (`01/01/2020` grava e a régua de data não o enxerga
    nunca). Pelas telas o formato é sempre correto (campo de data); o risco é só integração/
    API direta. A validação de formato no servidor ficou como pendência nomeada na spec 20.
@@ -9568,7 +9658,11 @@ tempo de recebimento (letra **E**), a **C268**, a **C269** e as perguntas da **C
    amplo do que a verdade.** O que fazer na prática: tratar o webhook como credencial ao decidir
    quem vira administrador do módulo, e rotacionar o token se essa lista mudar.
 
-25. **(20 / relembrando G7) Mandar um arquivo do tipo errado ou grande demais em qualquer upload
+25. **✅ RESOLVIDO NA ETAPA 86 (conferido e marcado na Etapa 134, nas cinco rotas)** — tipo errado responde 400 com a frase da rota
+   (*"Apenas imagens são permitidas"*, *"Certificado deve ser PDF ou imagem"*, *"Comprovante deve ser PDF ou imagem"*, *"Assinatura deve
+   ser imagem (PNG, JPEG ou WebP)"*); grande demais, 413 *"Arquivo grande demais (máximo 10 MB)"* (2 MB na assinatura). O texto original
+   fica abaixo.
+   ~~**(20 / relembrando G7) Mandar um arquivo do tipo errado ou grande demais em qualquer upload~~
    do módulo responde `Erro interno do servidor`, sem dizer o motivo.** Vale para as cinco rotas
    que recebem arquivo (foto de material, certificado de lote, comprovante de sucata, calibração
    e assinatura de entrega). A validação **funciona** — nada é gravado e nenhum arquivo órfão fica
@@ -9728,8 +9822,14 @@ tempo de recebimento (letra **E**), a **C268**, a **C269** e as perguntas da **C
    colunas de lote com escritor e sem leitor) só foram percebidas muito depois.
    **Não é perda de dado:** as medidas ficam gravadas e completas. Falta a janela para olhá-las.
 
-36. **(27) A decisão de inspeção continua sem rastro na Auditoria — e isso é anterior a esta
-   etapa.** Filtrando a Auditoria por **Entidade = Plano de inspeção**, aparecem as criações,
+36. **✅ RESOLVIDO NA ETAPA 134 (B865) — e o texto abaixo ESTAVA ERRADO.** Ele diz que decidir uma inspeção "nunca gerou linha de
+   auditoria" e que isso "foi verificado". Medido na 134: a decisão **sempre** gravou uma linha — sob a entidade **Movimentação**, com a
+   ação crua *DECISAO_INSPECAO* e a quantidade retida inteira (sem aprovado × reprovado, sem o número da inspeção); a verificação da
+   Etapa 27 olhou só o serviço de inspeção e o filtro *Plano de inspeção*, não o motor. O que faltava de fato era a linha que responde
+   "quem decidiu o quê": desde a 134, **Entidade = Inspeção**, ação **Inspeção decidida**, com aprovado, reprovado, encaminhamento e as
+   observações, em nome de quem decidiu; a linha do motor ganhou o rótulo *Decisão de inspeção (estoque)*. O texto original fica abaixo.
+   ~~**(27) A decisão de inspeção continua sem rastro na Auditoria — e isso é anterior a esta
+   etapa.**~~ Filtrando a Auditoria por **Entidade = Plano de inspeção**, aparecem as criações,
    edições e desativações de característica. Mas **decidir uma inspeção nunca gerou linha de
    auditoria** — nem antes, nem agora com as medidas. O que existe do ato é a linha no **livro de
    movimentações** (tipo *Decisão de inspeção*, com quem fez e de onde veio) e o registro da
@@ -10622,7 +10722,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      processando — e o aviso não se corrige. Na prática uma nota não leva 10 minutos (simulado, não medido). **O que
      fazer:** nada; se acontecer, conferir os itens da nota no livro de movimentações (**B327**).
 
-105. **NOVO (anterior à Etapa 70, só pela API) — salvar a conferência com "status: APROVADO" aprova sem dar entrada.**
+105. **✅ RESOLVIDO NA ETAPA 129 (conferido e marcado na Etapa 134)** — a conferência recusa *"A conferência não aprova o recebimento — a
+     entrada no estoque é pelo "Aprovar" ou pelo "Processar Nota""*. O texto original fica abaixo.
+     ~~**NOVO (anterior à Etapa 70, só pela API) — salvar a conferência com "status: APROVADO" aprova sem dar entrada.**~~
      A rota de conferência aceita mudar a situação para *Aprovado*; o recebimento fica aprovado **sem** o material ter
      entrado, e depois **Processar** responde *"Nota já processada"* — o material nunca entra. A tela não manda isso.
      **O que fazer:** integrações não devem mudar a situação pela conferência; se um recebimento aparecer *Aprovado* sem
@@ -10664,8 +10766,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      se um estorno der erro, conferir o livro antes de tentar de novo; se o estorno aparece feito e o pedido não
      descontou, a **A35 (a)** acha o caso.
 
-111. **NOVO (anterior à Etapa 71, só pela API) — salvar a conferência de uma nota já processada reescreve a quantidade
-     conferida.** A rota de conferência não confere a situação do recebimento: chamada depois de *Processado*, ela grava a
+111. **✅ RESOLVIDO NA ETAPA 129 (conferido e marcado na Etapa 134)** — a conferência de recebimento processado (ou com item já entrado)
+     recusa com a frase do que fazer, e a gravação do item confere a situação no próprio comando. O texto original fica abaixo.
+     ~~**NOVO (anterior à Etapa 71, só pela API) — salvar a conferência de uma nota já processada reescreve a quantidade
+     conferida.**~~ A rota de conferência não confere a situação do recebimento: chamada depois de *Processado*, ela grava a
      nova contagem — que não mexe no estoque (a entrada já foi), mas passa a ser o número lido por relatórios e pela
      escolha do item no estorno de notas antigas (**B332**). A revisão do plano registrou o caso como alcançável só pela
      API (não foi medido pela tela). **O que fazer:** integrações não devem regravar a conferência de nota processada.
@@ -10753,7 +10857,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      do mesmo jeito (**B359**). As aprovadas assim no passado: **A37 (3)**. A configuração nasce desligada: o defeito
      só existia onde alguém a ligou.
 
-123. **NOVO, da Etapa 73 (anterior, não corrigido) — a aprovação automática não grava a trilha *Aprovação*.** Ela deixa
+123. **✅ RESOLVIDO NA ETAPA 134 (B864)** — a aprovação automática grava a linha *Aprovação* da requisição, com o usuário *"Sistema
+     (automático)"* (o mesmo nome que a requisição guarda) e, nos detalhes, quem enviou. O texto original fica abaixo.
+     ~~**NOVO, da Etapa 73 (anterior, não corrigido) — a aprovação automática não grava a trilha *Aprovação*.**~~ Ela deixa
      o aprovador *"Sistema (automático)"* e a data de aprovação na requisição, e a reserva deixa a trilha dela — mas
      **não** grava o registro *Aprovação* na **Auditoria** (sonda: 17 aprovadas automaticamente, 0 registros). Nenhum
      indicador nem relatório lê esse registro (os de prazo usam a data da requisição). **O que fazer:** para saber
@@ -12055,12 +12161,32 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      "super" é protegido) — reproduzido: com a senha nova, o login como o super funcionou. Na prática, quem gerencia usuários é super. Esta
      etapa não piora (as permissões não afetam super). **O que fazer:** dê o papel *admin* só a quem vocês confiariam o super; a régua (só
      super edita super?) é a **B853**.
-280. **NOVO (da revisão da Etapa 133; do núcleo, anterior a ela) — trocar o e-mail para `admin@gmp.com.br` faz super administrador no
-     próximo reinício.** A cada boot, o usuário com esse e-mail é promovido a super. Reproduzido: o administrador do sistema (não super)
+280. **✅ RESOLVIDO NA ETAPA 134 (B861, B862, B863)** — o reinício só promove esse e-mail quando não há nenhum super ativo, e quem não é
+     super recebe *"O e-mail admin@gmp.com.br é reservado ao administrador padrão — só um Super Administrador pode atribuí-lo"* ao tentar
+     dá-lo a alguém. O texto original fica abaixo.
+     ~~**NOVO (da revisão da Etapa 133; do núcleo, anterior a ela) — trocar o e-mail para `admin@gmp.com.br` faz super administrador no
+     próximo reinício.**~~ A cada boot, o usuário com esse e-mail é promovido a super. Reproduzido: o administrador do sistema (não super)
      trocou o próprio e-mail para esse, o servidor reiniciou e ele passou a excluir usuários (o que só o super faz). **O que fazer:** rode a
      **A82** antes do deploy e depois de cada reinício suspeito; candidata da próxima etapa do núcleo (**B860**).
 281. **NOVO (da revisão da Etapa 133; anterior a ela) — a consulta interna "tenho permissão?" responde sem o *permitido* quando não há
      permissão.** Responde só *motivo: sem_permissao*. Nenhuma tela usa essa consulta. **O que fazer:** nada.
+282. **NOVO (da medição da Etapa 134; do núcleo, anterior a ela) — a cada reinício, o servidor apaga o usuário que tem "administrator" no
+     nome.** Uma limpeza antiga do boot exclui todo usuário cujo **nome** contém *administrator* (sem diferença de maiúscula), menos o de
+     e-mail `admin@gmp.com.br` — e o cadastro grava o nome em maiúsculas, então um *"SYSTEM ADMINISTRATOR"* criado hoje some no próximo
+     reinício, sem aviso. *Administrador*, em português, não é atingido. Lido no código, não reproduzido. **O que fazer:** não use
+     *administrator* no nome de usuário; candidata de etapa do núcleo (apagar a limpeza, que servia a um usuário antigo).
+283. **NOVO (da revisão da Etapa 134; do núcleo, anterior a ela) — criar ou editar usuário pela API com e-mail que não é texto grava
+     lixo.** Um e-mail enviado como lista ou objeto é gravado como *[object Object]* (como número, vira o número em texto) — o usuário não
+     consegue entrar com e-mail nenhum. Não dá acesso a nada (reproduzido). A tela sempre manda texto. **O que fazer:** nada; candidata
+     pequena (recusar com 400 o e-mail que não é texto).
+284. **NOVO (da revisão da Etapa 134; do núcleo, anterior a ela) — criar usuário pela API com *ativo* vazio grava um usuário que não
+     entra.** O login exige *ativo*; a criação aceita o campo vazio (a tela sempre manda). Desde a **B867** um super assim não conta mais
+     como ativo. **O que fazer:** se um usuário criado por integração não consegue entrar, confira o *ativo* em **Admin → Usuários** (a A79
+     acha esses casos); candidata pequena (gravar 1 quando vier vazio, como a edição faz desde a 132).
+285. **NOVO (da revisão da Etapa 134; do núcleo, anterior a ela; lido no código, não reproduzido) — dois administradores rebaixando ou
+     desativando os dois últimos super administradores no mesmo instante podem passar os dois.** A trava do último super conta e grava em
+     passos separados. Mesmo que aconteça, ninguém ganha acesso (o reinício recupera pelo `admin@gmp.com.br`, que só um super dá —
+     **B863**). **O que fazer:** nada; candidata (contar no próprio comando que grava).
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -13313,6 +13439,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(133) As réguas que continuam no papel exato** — excluir solicitação de aprovação (**C275**), o cadastro de materiais de escritório da
   Engenharia (**C276**) e os pontos sem efeito de acesso (**C278**) — ficaram de fora de propósito: o dono de cada uma não é "quem gerencia
   usuários".
+- **(134) O `admin@gmp.com.br` inativo, sem nenhum super ativo:** o reinício o promove a super (como antes) — mas ele não entra, e o
+  administrador inicial não é criado porque o e-mail existe. Recuperar exige reativá-lo direto no banco. Caso de banco editado à mão; pela
+  tela não se chega lá.
+- **(134) A linha nova da Auditoria não aparece para decisões antigas** — inspeções decididas e requisições aprovadas automaticamente
+  **antes** do deploy continuam só com o que tinham (a linha do motor de estoque, com o rótulo novo; o aprovador na própria requisição). Não
+  há reconstrução: o histórico não é reescrito.
+- **(134) E-mail com espaço no meio ou caractere invisível** (*admin@gmp .com.br*) não leva a recusa do e-mail reservado — e também não é
+  o e-mail do administrador padrão para o login nem para o reinício: não dá acesso a nada.
 
 ### E. Regras que foram DEDUZIDAS e nunca confirmadas com vocês — perguntas, não requisitos atendidos (E1, a remessa mista; E2, o tempo de recebimento)
 
@@ -14224,6 +14358,16 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(134) Os reinícios de verdade foram feitos, sem navegador — e viraram teste da suíte.** O servidor de verdade sobe com pasta de dados
+vazia, é **reiniciado na mesma pasta** e sobe também com um banco antigo montado à mão (sem a marca de super, e sem a de ativo): quem
+recebeu o e-mail `admin@gmp.com.br` de um super continua não super depois do reinício; o administrador inicial apagado ou renomeado não
+volta; o banco sem super ativo recupera pelo `admin@gmp.com.br` e só por ele; o banco antigo o promove já no primeiro boot; e uma falha
+injetada na verificação deixa o servidor de pé sem criar ninguém. A Auditoria da aprovação automática e da decisão de inspeção, e os onze
+nomes novos, foram provados pela tela-contrato. O que **só o navegador** prova: o roteiro da Etapa 134 no guia — como administrador do
+sistema (não super), tentar trocar o próprio e-mail para `admin@gmp.com.br` em **Admin → Usuários** (o aviso com a frase), e abrir
+**Almoxarifado → Auditoria** filtrando **Ação = Aprovação** depois de uma requisição aprovada sozinha, e **Entidade = Inspeção** depois de
+decidir uma inspeção.
 
 **(133) Um boot de verdade foi feito, sem navegador — e virou teste da suíte.** O servidor de verdade sobe com pasta de dados vazia dentro
 da suíte (o arquivo novo das permissões): o super administrador com papel *usuario* e o papel *Admin* fazem o salvar do formulário de
@@ -27391,16 +27535,97 @@ super e entra como ele (**C279**) e o e-mail que vira super no reinício (**C280
 que já existe, as restrições, o grupo inativo, o *ativo* do grupo, a saída de um membro só, o aviso fora da conversa) e viraram cenários;
 **3** foram provadas inofensivas.
 
+## Etapa 134 — O super administrador do reinício e a trilha que faltava na Auditoria (2026-10-16)
+
+Do núcleo e da Auditoria. Até aqui, **todo reinício do servidor fazia super administrador quem tivesse o e-mail `admin@gmp.com.br`** — e
+quem gerencia usuários, sem ser super, podia trocar o próprio e-mail para esse e, no reinício seguinte, passar a fazer o que só o super faz.
+Agora o reinício só faz isso quando o sistema está **sem nenhum** super administrador (a recuperação de um banco antigo), e só um super pode
+dar esse e-mail a alguém. O administrador inicial que um super apagou também não volta mais sozinho. E a Auditoria ganhou as duas linhas que
+faltavam para responder "quem decidiu": a **aprovação automática** de requisição e a **decisão de inspeção** — e os nomes técnicos que
+apareciam crus no filtro (*RESERVA*, *QUARENTENA*…) viraram nomes em português.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Quem gerencia usuários trocava o próprio e-mail para `admin@gmp.com.br` e virava super no reinício | Recusa com *"O e-mail admin@gmp.com.br é reservado ao administrador padrão — só um Super Administrador pode atribuí-lo"*; e o reinício só promove sem nenhum super ativo (**B861**, **B863**) |
+| O administrador inicial apagado (ou com o e-mail trocado) voltava no reinício, com a senha antiga | Não volta enquanto houver um super ativo (**B862**); a recuperação de acesso está na **A83** |
+| A aprovação automática não aparecia no filtro *Aprovação* da Auditoria | Aparece, em nome de *"Sistema (automático)"* (**B864**) |
+| Decidir inspeção deixava só uma linha *DECISAO_INSPECAO* em *Movimentação*, sem aprovado × reprovado | A linha **Inspeção decidida** em **Entidade = Inspeção**, com os números e quem decidiu (**B865**) |
+| O filtro de ação mostrava *RESERVA*, *QUARENTENA*, *DECISAO_INSPECAO* e outros oito crus | Nomes em português (**B866**) |
+| Um super criado pela API com *ativo* vazio (não entra) contava como ativo e deixava o último super que entra se rebaixar | Não conta (**B867**) |
+
+### As regras, com o cenário exato
+
+Preparação: o **administrador semeado** (super); em **Admin → Usuários**, crie um usuário **A** com papel *Administrador* (sem *Super
+administrador*) e um comum **C**.
+
+**1. O e-mail reservado.** Entre como **A** → **Admin → Usuários** → edite a si mesmo e troque o e-mail para `admin@gmp.com.br` (ou
+`ADMIN@GMP.com.br`) → salvar: aviso *"O e-mail admin@gmp.com.br é reservado ao administrador padrão — só um Super Administrador pode
+atribuí-lo"*, e nada muda. O mesmo ao criar um usuário novo com esse e-mail. Entrando como o **semeado**, a mesma troca no **A** salva.
+
+**2. O reinício não promove.** Com o **A** já com o e-mail `admin@gmp.com.br` (dado pelo semeado), reinicie o servidor: o **A** continua
+sem a marca de super em **Admin → Usuários**, e excluir um usuário entrando como ele responde *"Apenas Super Administradores podem excluir
+usuários"*.
+
+**3. O administrador inicial não volta.** Com outro super ativo, exclua o administrador semeado e reinicie: ele não reaparece na lista, e o
+login com a senha dele responde *"Email ou senha inválidos"*.
+
+**4. A aprovação automática na Auditoria.** **Configurações → Configurações Gerais → Aprovação Automática** ligada; crie uma requisição de
+um material com saldo → ela já nasce *Totalmente Reservada*. **Almoxarifado → Auditoria → Ação = Aprovação**: a linha da requisição, com o
+usuário *"Sistema (automático)"*; em **Detalhes**, o status, as reservas, *aprovacao: automatica* e quem enviou.
+
+**5. A decisão de inspeção na Auditoria.** Decida uma inspeção (7 aprovados, 3 reprovados, encaminhamento *Devolver*, uma observação).
+**Auditoria → Entidade = Inspeção**: a linha **Inspeção decidida**, em seu nome, com aprovado 7, reprovado 3, o encaminhamento e a
+observação na justificativa. Em **Entidade = Movimentação** está também a **Decisão de inspeção (estoque)** (o retido que saiu da inspeção).
+
+**6. Os nomes.** No filtro **Ação** não sobra opção com nome técnico: *Reserva*, *Quarentena*, *Decisão de inspeção (estoque)*,
+*Inspeção decidida*.
+
+### O que esta etapa NÃO cobre
+
+1. **Quem edita um super administrador** (o administrador do sistema troca a senha de um super e entra como ele) continua a pergunta
+   **B853** (**C279**) — esta etapa não mexeu nisso.
+2. **Decisões e aprovações automáticas antigas** não ganham a linha nova (D (134)).
+3. **Detalhes anteriores, achados na medição e na revisão, sem efeito de acesso:** o e-mail que não é texto pela API (**C283**), o *ativo*
+   vazio na criação pela API (**C284**), a corrida de dois rebaixamentos simultâneos (**C285**) e a limpeza do boot que apaga quem tem
+   *administrator* no nome (**C282**).
+4. As decisões que esperam vocês: **B853**, **B808**, **B755**, **B761**/**C239**, **C224**, **C225**, **C228**, **C219**, **C230**,
+   **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (**E2**), a **C268**, a **C269** e as
+   perguntas da **C275** a **C277**.
+
+### O que a revisão encontrou
+
+A **medição** achou que a **C36 estava errada**: a decisão de inspeção sempre deixou uma linha na Auditoria — a do motor de estoque, sem
+os números, sob *Movimentação* e com o nome cru; daí também os onze nomes crus. E conferiu que a **C19**, a **C25**, a **C105** e a **C111**
+estavam resolvidas sem a marca. A **revisão do plano** (antes do código) achou quatro pontos importantes, todos corrigidos antes do código:
+num banco antigo **sem** a marca de ativo a verificação nova falharia e o primeiro boot ficaria sem super; o e-mail que não é texto
+derrubaria o servidor; um teste antigo afirmava a frase falsa da C36; e o caminho de recuperação do operador muda (A83). A **revisão
+adversarial do código** (três revisores, executando): o de **regra** achou o super com *ativo* vazio que não entra e contava como ativo
+(**B867**, corrigido); o de **permissão** tentou virar super por todos os caminhos de gravar e-mail, por variações do e-mail e zerando os
+super pela API — não conseguiu; achou dois detalhes anteriores (**C283**, **C285**); o de **sabotagem** fez **29** sabotagens além das
+**17** já feitas: **19** caíram, **10** sobreviveram por falta de cenário (duas decisões ao mesmo tempo, o número da inspeção diferente do
+item, as medidas, o super criando com o e-mail, o e-mail gravado com outra caixa, o super com *ativo* vazio, a falha injetada no boot) e
+viraram cenários, e **1** foi provada inofensiva (o número guardado como texto, que o banco converte).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 134 entregue (2026-10-16):** **o super administrador do reinício e a trilha que faltava na Auditoria** (do núcleo e da spec 23).
+  O reinício só promove o `admin@gmp.com.br` e só cria o administrador inicial sem nenhum super ativo, e só um super dá esse e-mail
+  (**C280** resolvido — **B861** a **B863**, **B867**); a aprovação automática e a decisão de inspeção gravam a linha delas na Auditoria, e
+  onze nomes crus viraram português (**C123** e **C36** resolvidos — a C36 **estava errada** —, **B864** a **B866**); **C19**, **C25**,
+  **C105** e **C111** marcados como resolvidos (já estavam no código). **O que é seu:** a consulta **A83** (com a **A82**); a pergunta
+  **B853**; as decisões **B861 a B867** (reversíveis); os avisos **C282** a **C285**; as limitações **(134)** em D e a verificação **(134)**
+  em F. **Próxima: Etapa 135 — ver a "próxima tarefa detalhada" no plano da Etapa 134.**
 
 - **Etapa 133 entregue (2026-10-16):** **as abas Permissões e Logs para todo administrador do sistema** (do núcleo). As permissões, os
   logs e o criar ordem de serviço aceitam o super com qualquer papel e o papel *admin* com qualquer caixa (**C273** resolvido — **B855** a
   **B857**); o aviso de mensagem apagada chega à conversa certa (**C274** resolvido — **B858**). **O que é seu:** as consultas **A80**,
   **A81** e **A82** (opcionais); a pergunta **B853** (agora com a **C279**) e as da **C275** a **C277**; as decisões **B855 a B859**
   (reversíveis); os avisos **C278** a **C281**; as limitações **(133)** em D e a verificação **(133)** em F.
-  **Próxima: Etapa 134 — ver a "próxima tarefa detalhada" no plano da Etapa 133.**
+  *(Próxima, na época: Etapa 134 — entregue acima.)*
 
 - **Etapa 132 entregue (2026-10-16):** **o desativado sai do chat na hora, e a Lista de Tarefas sem o papel** (do núcleo). A conexão do
   chat relê o usuário ao conectar, ao entrar na conversa e ao digitar, e cai na hora ao desativar ou excluir (**C271** resolvido — **B848**

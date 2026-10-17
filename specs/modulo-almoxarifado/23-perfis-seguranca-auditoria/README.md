@@ -22,6 +22,8 @@
 > ALMOXARIFE]` no mapa, mais uma regra por **identidade** (quem pediu a requisição) checada no serviço; ver o bloco
 > "Etapa 77" logo abaixo. O status 🟡-forte não muda — a etapa é da feature 07). Antes: 2026-08-29 (**Etapa 24, `a81e51a..4680daa`: a perna Perfis começa** — `QUALIDADE` em `permissions.js` (`a81e51a`), a revogação auditando com `EXCLUSAO` e o `dados_anteriores` nos dois caminhos (`9f7c309`), `ADMINISTRADOR` fora do seletor com a razão visível e os 7 primeiros testes da aba (`b13de4a`), a integração que dá e tira perfil e lê pela tela-contrato (`b9a5848`) e o rótulo do perfil no 403 do client (`4680daa`); ver o bloco "Etapa 24" no fim). Antes: 2026-08-28 (**Etapa 23, `0fe8d02..4f1aeb9`: a trilha para de mentir por omissão e por excesso** — o retry de `SQLITE_BUSY` para de responder erro e gravar assim mesmo (`0fe8d02`), `PUT /configuracoes` vira um `UPDATE` único com `CASE` (`b6b7b24`/`d507ccc`), as **cinco** rotas de exclusão distinguem "não existe" de "já inativa" (`9858bec`) e a leitura pela tela-contrato prova que a trilha mostra **um** ato (`4f1aeb9`); ver o bloco "Etapa 23" no fim e o checklist "Trilha honesta"). Antes: 2026-08-28 (**Etapa 22, `8c6ffbe..169458d`: a trilha ganha leitor** — tela `/almoxarifado/auditoria` com os quatro filtros novos, o de/para calculado no servidor, a rota de opções alimentada pelo banco e os **três índices** que a tabela nunca teve; ver o bloco "Etapa 22" no fim e o checklist "Auditoria visível"). Antes: 2026-08-28 (Etapa 21, `d5c8d3a..07a4b1c`: **nada desta feature mudou** — a etapa é do núcleo do CRM e fecha os itens que a Etapa 20 empurrou para cá dizendo "é do core"; registrada no bloco "Etapa 21 — o que era do núcleo" no fim deste arquivo, e o item de backup do checklist de Segurança ganhou a medição que faltava). Antes: 2026-08-28 (Etapa 20, `1b0f0e9..a3f5135`: a rota de foto de material para de mentir sucesso, de deixar órfão e de não auditar; a leitura de configurações para de devolver segredo em claro e o PUT genérico para de aceitá-lo; ler o mapa de permissões por setor passa a exigir o mesmo que escrevê-lo). Antes: 2026-08-28 (Etapa 19, `a574b3a..55e4144`: os 23 endpoints de cadastro e configuração passam a auditar, com diff nas configurações, segredo mascarado e três correções de comportamento que o log exigia). Antes: 2026-08-28 (Etapa 18: a trilha do inventário). Antes: 2026-08-11 — auditoria de cauda: corrigida a afirmação "auditoria não é usada em produção" (era verdade em 2026-08-02, foi superada pelas Etapas 3–6 e ninguém atualizou aqui), corrigida a contagem de ações (14, não 15) e nomeados os dois buracos reais de auditoria que restam
 >
+> **Etapa 134 (2026-10-16):** do núcleo — o boot só promove o `admin@gmp.com.br` e só cria o seed sem super ativo (`services/superPadrao.js`), e o `POST`/`PUT /api/usuarios` recusam 403 o e-mail reservado a quem não é super (`31947ced`, Fase 5 `eb4c3bf8`; B861–B863, B867, A83, C280 resolvida); a Auditoria ganha a aprovação automática (`fc6a9f17`; B864, C123 resolvida) e a decisão de inspeção, com os 11 verbos do motor rotulados (`72ca7070`; B865, B866, C36 resolvida — **a C36 estava errada**). O status 🟡-forte não muda.
+>
 > **Etapa 133 (2026-10-16):** do núcleo — as 13 rotas de `/api/permissoes/*` saem do `index.js` para `services/rotasDePermissoes.js` com a régua `canManageUsers` (antes `role === 'admin'` exato), os logs (`/api/auditoria/logs`) idem e o portão de criar OS com `bypassModuleRestrictions` (`5fda2eda`, Fase 5 `cdaec0f3`; B855–B857, C273 resolvida); o `mensagem_excluida` pela sala do número (`d5282228`; B858, C274 resolvida). Achados anteriores registrados: C275–C281 (C279 e C280 são escaladas reais do administrador do sistema a super). O status 🟡-forte não muda.
 >
 > **Etapa 132 (2026-10-16):** do núcleo — o chat em tempo real relê o usuário ao conectar, ao entrar na conversa e ao digitar, e as três portas que desativam ou apagam derrubam a conexão na hora (`6a77a4cb`, `4c451c60`, `7ca9e395`, Fase 5 `55226494`, `146065f4`; B848–B850, C271 resolvida na parte do chat); a Lista de Tarefas sem o papel (`45f604bb`; B851, C272 resolvida); o administrador não se desativa pelo formulário nem pelo id com zero, e o PUT sem `ativo` não grava NULL (Fase 5 `1d13093e`; B852, A79). Continua 🟡-forte. Ver a seção da Etapa 132 no fim do checklist.
@@ -1258,8 +1260,8 @@ Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa133-a-regua-das-perm
 - [x] **O corpo das rotas movidas preso por cenário** — Fase 5 `cdaec0f3` (8 sobreviventes da sabotagem).
 - [ ] **Excluir aprovação e o cadastro de materiais de escritório da Engenharia** continuam no papel exato — de outro dono (C275, C276);
   não mudou de propósito.
-- [ ] **O administrador do sistema troca a senha de um super; o e-mail `admin@gmp.com.br` vira super no boot** — anteriores, achados na
-  Fase 5 (C279 — depende da B853; C280 — livre, candidata da 134).
+- [ ] **O administrador do sistema troca a senha de um super** — anterior, achado na Fase 5 (C279 — depende da B853).
+- [x] **O e-mail `admin@gmp.com.br` vira super no boot** — *(era `[ ]`, C280)* — feito na **Etapa 134** (`31947ced`, Fase 5 `eb4c3bf8`), abaixo.
 
 **Correção desta spec / do plano da 132:** a "Próxima tarefa detalhada — Etapa 133" dizia que o super sem o papel *admin* "pode **perder** a
 gravação das permissões" no `UsuarioForm` — **estava errado**: não perde o que havia (o `DELETE` dos módulos é o primeiro e falha), perde a
@@ -1269,6 +1271,32 @@ mudança feita na tela, com o aviso. E o design da 133 dizia que o portão de cr
 Testes: `rotasDePermissoes.api.test.js` (13 — o registrador com SQLite real, matriz de seis perfis, a recusa não grava, o corpo de hoje,
 a fiação estática), `permissoesNoServidor.api.test.js` (9 — sobe o `index.js` real com pasta vazia: o salvar do `UsuarioForm`, a aba
 Permissões, os logs, a OS, a C274 com um socket dentro e outro fora da conversa).
+
+## Etapa 134 (2026-10-16) — o super administrador do boot (C280) e a trilha que faltava (C123, C36)
+
+Plano: `docs/superpowers/plans/2026-10-16-almoxarifado-etapa134-o-super-do-boot-e-a-trilha.md`.
+
+- [x] **A promoção do boot vira recuperação** — `31947ced`: `superPadrao.promoverSuperPadraoSemSuperAtivo` (um `UPDATE` com `NOT EXISTS`
+  de super ativo), encadeada antes do seed em `seedAdminInicial`; o `UPDATE` incondicional do callback do `PRAGMA` saiu; o `CREATE`
+  garante `ativo` antes de `is_superadmin` (Fase 2 I1). B861. RN-01.
+- [x] **O seed só nasce sem super ativo** — `31947ced`. B862. RN-02.
+- [x] **O e-mail reservado só por super** — `31947ced`: 403 L4 no `POST`/`PUT /api/usuarios` (sem caixa e espaços; o `PUT` lê o e-mail
+  atual e deixa passar quem já o tem). B863. RN-03.
+- [x] **"Super ativo" é o que entra (`ativo = 1`)** — Fase 5 `eb4c3bf8` (r1): `superPadrao` e `countActiveSuperAdmins`. B867.
+- [x] **A aprovação automática grava `requisicao / APROVACAO`** — `fc6a9f17`. B864. RN-04. *(C123 — era item da perna Auditoria.)*
+- [x] **Decidir inspeção grava `inspecao / INSPECAO_DECIDIDA`** — `72ca7070`. B865. RN-05. *(C36.)*
+- [x] **Os 11 tipos do motor com rótulo, e a cobertura lendo o `schema.js`** — `72ca7070`. B866. RN-06.
+- [ ] **O e-mail que não é texto, o `ativo` vazio na criação, a corrida dos dois rebaixamentos, a limpeza do "administrator"** — anteriores,
+  registrados (C282–C285), sem efeito de acesso; candidatas pequenas.
+
+**Correção desta spec / da letra C:** a C36 (e a spec 09, e o teste (8) de `inspecaoIntegracao`) diziam que decidir inspeção "não deixa
+linha na Auditoria" — **estava errado**: o motor sempre gravou `movimentacao / DECISAO_INSPECAO`; o que faltava era a linha com os números,
+sob a inspeção, e o rótulo. E o design desta etapa dizia "pela API não se chega a zero super ativo" — **estava incompleto** (Fase 5 r1): um
+super gravado com `ativo` nulo não entra e contava como ativo (B867).
+
+Testes: `superPadraoNoBoot.api.test.js` (14 — o `index.js` real com reinício no mesmo data dir, banco antigo sem `is_superadmin` e sem
+`ativo`, banco sem super ativo, super com `ativo` nulo, falha injetada no boot), `auditoriaDaAprovacaoAutomatica.api.test.js` (6),
+`auditoriaDaInspecao.api.test.js` (9, com a integração RN-07); alterados `inspecaoIntegracao` (8) e `auditLabels`.
 
 ## Regras essenciais + testes de API exigidos
 

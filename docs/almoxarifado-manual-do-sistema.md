@@ -1087,6 +1087,27 @@ Duas ações seguem uma régua mais estreita, só o papel escrito exatamente *ad
 aparece para esse papel; os outros recebem *"Apenas administradores podem excluir solicitações de aprovação"*) e o **cadastro de
 materiais de escritório da Engenharia** (*"Apenas admin"*).
 
+### 5.2g O administrador padrão e o primeiro super administrador
+
+O e-mail `admin@gmp.com.br` é o do **administrador padrão**. Só um **super administrador** pode dá-lo a alguém — ao criar um usuário
+ou ao trocar o e-mail de um usuário que não o tinha. Para quem gerencia usuários sem ser super, a gravação é recusada, sem mudar nada, com
+
+> *"O e-mail admin@gmp.com.br é reservado ao administrador padrão — só um Super Administrador pode atribuí-lo"*
+
+A comparação ignora maiúsculas e espaços nas pontas. Editar o usuário que **já** tem esse e-mail, mantendo-o, segue normalmente.
+
+**Ao ligar o servidor**, o sistema confere se existe **pelo menos um super administrador ativo**:
+
+- **Existe** — nada muda: ninguém é promovido e nenhum administrador é criado. Isso vale inclusive se o administrador inicial tiver sido
+  apagado ou tido o e-mail trocado — ele **não** volta sozinho.
+- **Não existe** (um banco antigo, de antes da marca de super administrador, ou um banco editado diretamente) — o usuário com o e-mail
+  `admin@gmp.com.br`, se existir, vira super administrador; se nem ele existir, o sistema cria o **administrador inicial** com o e-mail e
+  a senha da configuração do servidor (ou do arquivo de credenciais gerado na primeira instalação).
+
+**Recuperar o acesso quando ninguém sabe a senha de nenhum super administrador:** com o servidor parado, quem administra o banco marca os
+super administradores como não super (ou inativos); ao ligar de novo, o sistema faz a recuperação acima. Pelas telas não é possível chegar
+a "nenhum super administrador ativo": o último não pode ser desativado nem excluído.
+
 ### 5.3 Usuário sem perfil definido é tratado como chão de fábrica
 
 O perfil de uma pessoa é resolvido nesta ordem:
@@ -1232,6 +1253,10 @@ O mesmo vale para os outros atos que gravam uma linha na Auditoria **depois** de
 Não vale para o que a Auditoria registra **antes** do ato (a série, o lote e o dono do material dentro de uma movimentação): ali, se a Auditoria falhar, o ato não acontece e a tela mostra o erro — repetir é o certo.
 
 A razão de as duas recusarem em vez de simplesmente não achar nada: numa auditoria, **lista vazia parece prova de que nada aconteceu**. Uma data escrita errada que devolvesse zero linhas levaria alguém a concluir, com toda a boa-fé, que ninguém mexeu em nada naquele período.
+
+**A decisão de inspeção na Auditoria.** Decidir uma inspeção grava duas linhas: a da **inspeção** (*Entidade* **Inspeção**, ação **Inspeção decidida**, com o número da inspeção, quem decidiu, a quantidade aprovada e a reprovada, o encaminhamento, se ficou conforme, quantas medidas foram registradas e as observações como justificativa) e a do **estoque** (*Entidade* **Movimentação**, ação **Decisão de inspeção (estoque)**, com a quantidade retida que saiu da inspeção). Para "quem decidiu o quê", use a primeira. Uma decisão recusada não grava nenhuma das duas.
+
+**As ações do estoque têm nome.** Toda movimentação aparece com o nome do tipo — inclusive as de retenção, que não mexem no saldo físico: *Reserva*, *Liberação de reserva*, *Quarentena*, *Liberação da inspeção*, *Reprovação na inspeção*, *Decisão de inspeção (estoque)*, *Remessa a terceiro*, *Retorno de terceiro*, *Retrabalho*, *Estorno* e *Ajuste de inventário*.
 
 **Ações com nomes diferentes para o mesmo ato aparecem juntas.** O sistema, por razões históricas, gravou o mesmo ato com nomes diferentes conforme a tela que o registrou. O filtro de ação mostra **uma** opção por ato — escolher "Criação" traz todas as grafias juntas, e você não perde nenhuma linha por causa disso. Ao mesmo tempo, cada linha da lista continua mostrando, em letra miúda embaixo do rótulo, **o nome exato que está gravado**. A tela agrupa para facilitar a busca; ela não esconde o que o registro diz.
 
@@ -2045,7 +2070,7 @@ Três ressalvas:
 - **Urgência "Crítico" nunca é auto-aprovada** — justamente a que mais chama atenção precisa de olho humano. Vale também para um rascunho antigo em que a urgência esteja escrita de outro jeito (*"critico"*).
 - A aprovação automática **só corre depois** da alçada por valor. Requisição que caiu em *Aguard. Aprov. Valor* não é auto-aprovada.
 - **Requisição com assinatura de regra pendente não é auto-aprovada** (8.4) — ela fica **Pendente**, sem nenhuma reserva (as regras são conferidas antes de reservar).
-- A aprovação automática registra o aprovador e a data na própria requisição, mas **não** grava o registro *Aprovação* na **Auditoria** — para saber quem aprovou uma requisição automática, leia o aprovador nela.
+- A aprovação automática registra o aprovador (*"Sistema (automático)"*) e a data na própria requisição, e grava na **Auditoria** a linha **Aprovação** da requisição em nome de *"Sistema (automático)"* — nos detalhes, o status gravado, as reservas feitas e quem enviou a requisição. Ela aparece no filtro de ação **Aprovação**, junto com as aprovações feitas por pessoas; não aparece no filtro de usuário (não é de ninguém). Se o registro na Auditoria falhar, a aprovação vale do mesmo jeito (5.8).
 
 > As regras de aprovação em vigor são estas: **segregação**, **limite por valor**, **regras de aprovação configuráveis** (inclusive por urgência e por material de cliente) e **aprovação automática**.
 
