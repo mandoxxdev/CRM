@@ -316,6 +316,7 @@ const sufixo = `${Date.now() % 1000000}`;
       "SELECT * FROM auditoria_log_almoxarifado WHERE entidade = 'inspecao' AND entidade_id = ? AND acao = 'INSPECAO_DECIDIDA'",
       [ctx.inspecaoId]);
     assert.strictEqual(daInspecao.length, 1, `a decisao nao gravou a linha da inspecao: ${JSON.stringify(daInspecao)}`);
+    assert.strictEqual(JSON.parse(daInspecao[0].dados_novos).medidas_registradas, 1, 'a linha nao conta a medida do cenario (3)');
     const doMotor = await dbAll(db,
       "SELECT id FROM auditoria_log_almoxarifado WHERE entidade = 'movimentacao' AND acao = 'DECISAO_INSPECAO'");
     assert.ok(doMotor.length >= 1, 'a linha do motor sumiu');

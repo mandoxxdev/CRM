@@ -70,6 +70,11 @@ test('[RN-01][RN-03] o servico: ehEmailDoSuperPadrao, a promocao com e sem super
   await m.run('UPDATE usuarios SET is_superadmin = 1 WHERE id = 3');
   assert.strictEqual(await sp.promoverSuperPadraoSemSuperAtivo(m.db), 0, 'com super ativo, nao promove');
   assert.strictEqual((await m.all('SELECT is_superadmin FROM usuarios WHERE id = 1'))[0].is_superadmin, 0);
+  // Fase 5 r1 M1: o super com `ativo` nulo nao entra (o login exige ativo = 1) e nao conta como ativo
+  await m.run('UPDATE usuarios SET is_superadmin = 0');
+  await m.run("INSERT INTO usuarios (id, email, ativo, is_superadmin) VALUES (4, 'fantasma@t.com', NULL, 1)");
+  assert.strictEqual(await sp.haSuperAtivo(m.db), false, 'o super com ativo nulo conta como ativo');
+  assert.strictEqual(await sp.promoverSuperPadraoSemSuperAtivo(m.db), 1, 'o super com ativo nulo travou a promocao');
   m.db.close();
 });
 
@@ -97,7 +102,7 @@ const pastas = [];
 process.on('exit', () => { try { if (filho) filho.kill(); } catch (e) { /* ja saiu */ } });
 
 /** Sobe o index.js na `pasta` atual; `seed` = credenciais do env (ou null: sem SEED_ADMIN_*); espera o login de `login`. */
-async function subir({ seed = SEED, login = SEED } = {}) {
+async function subir({ seed = SEED, login = SEED, falha = null } = {}) {
   logArq = path.join(pasta, 'index.log');
   porta = await portaLivre();
   if (porta === 5000) porta = await portaLivre();
@@ -106,15 +111,24 @@ async function subir({ seed = SEED, login = SEED } = {}) {
     'SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD']) delete env[k];
   Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta) });
   if (seed) Object.assign(env, { SEED_ADMIN_EMAIL: seed.email, SEED_ADMIN_PASSWORD: seed.senha });
+  delete env.FALHA_SQL_INJETADA;
+  if (falha) env.FALHA_SQL_INJETADA = falha;
   const out = fs.openSync(logArq, 'a');
   saiu = null;
-  filho = spawn(process.execPath, ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js'), 'index.js'], {
+  filho = spawn(process.execPath, ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js'),
+    '-r', path.join(__dirname, '..', 'helpers', 'falhaSqlInjetada.js'), 'index.js'], {
     cwd: SERVER_DIR, env, stdio: ['pipe', out, out], windowsHide: true,
   });
   filho.on('exit', (code) => { saiu = code; });
   const fim = Date.now() + 60000;
   while (Date.now() < fim) {
     if (saiu !== null) throw new Error(`o index.js saiu cedo (codigo ${saiu})`);
+    if (login === null) {
+      // sem login a esperar: o banco pronto (a linha do log que o boot escreve depois do seed e das migracoes)
+      if (fs.readFileSync(logArq, 'utf8').includes('Banco de dados totalmente inicializado')) { await pausa(1500); return null; }
+      await pausa(200);
+      continue;
+    }
     try {
       // `/health` responde antes do banco estar pronto: o login so e 200 depois do seed e da promocao.
       const [s, x] = await j('POST', '/auth/login', null, login);
@@ -206,6 +220,14 @@ test('[RN-03] quem nao e super nao poe o e-mail do administrador padrao (proprio
 });
 
 test('[RN-03] o super da o e-mail; quem ja o tem e editado com ele igual (inclusive por quem nao e super)', async () => {
+  // o super cria com o e-mail (o POST nao barra o super), gravado com outra caixa; quem o tem edita a si mesmo com ele igual (Fase 5 r3)
+  const [sy, y] = await j('POST', '/usuarios', ctx.T, { nome: 'Pessoa Y', email: 'ADMIN@GMP.COM.BR', senha: ctx.senha, cargo: 'C', role: 'admin' });
+  assert.strictEqual(sy, 200, `o super nao criou com o e-mail: ${JSON.stringify(y)}`);
+  const tokY = await login('ADMIN@GMP.COM.BR', ctx.senha);
+  const [sy2, y2] = await j('PUT', `/usuarios/${y.id}`, tokY, { nome: 'Pessoa Y2', email: 'ADMIN@GMP.COM.BR', cargo: 'C', role: 'admin', ativo: 1 });
+  assert.strictEqual(sy2, 200, `quem ja tem o e-mail (com outra caixa) nao se editou: ${JSON.stringify(y2)}`);
+  const [sy3] = await j('DELETE', `/usuarios/${y.id}`, ctx.T);
+  assert.strictEqual(sy3, 200);
   const [s, x] = await j('PUT', `/usuarios/${ctx.id.A}`, ctx.T, { nome: 'Pessoa A', email: PADRAO, cargo: 'C', role: 'admin', ativo: 1 });
   assert.strictEqual(s, 200, JSON.stringify(x));
   ctx.tok.A = await login(PADRAO, ctx.senha);
@@ -269,6 +291,43 @@ async function noArquivoVivo(tok) {
   assert.strictEqual(s, 200);
   return l.filter((u) => Number(u.is_superadmin) === 1 && Number(u.ativo) === 1).map((u) => u.id).sort((a, b) => a - b);
 }
+
+test('[RN-01d] o super com ativo nulo (nao entra) nao trava a recuperacao nem conta para a trava do ultimo super (Fase 5 r1 M1)', async () => {
+  const tA = await login(PADRAO, ctx.senha);
+  const [sg, g] = await j('POST', '/usuarios', tA, { nome: 'Fantasma', email: 'fantasma134@t.com', senha: ctx.senha, cargo: 'C',
+    role: 'usuario', is_superadmin: 1, ativo: null });
+  assert.strictEqual(sg, 200, JSON.stringify(g));
+  assert.strictEqual(await login('fantasma134@t.com', ctx.senha), null, 'premissa: o super com ativo nulo nao entra');
+  const [sd, xd] = await j('PUT', `/usuarios/${ctx.id.A}`, tA, { nome: 'Pessoa A', email: PADRAO, cargo: 'C', role: 'admin', is_superadmin: 0 });
+  assert.deepStrictEqual([sd, xd && xd.error], [403, 'Não é possível remover ou desativar o último Super Administrador ativo do sistema'],
+    'o unico super que entra se rebaixou (o fantasma contou)');
+  await descer();
+  await noArquivo(async ({ run }) => {
+    await run('UPDATE usuarios SET is_superadmin = 0');
+    await run('UPDATE usuarios SET is_superadmin = 1, ativo = NULL WHERE id = ?', [ctx.id.S2]);
+  });
+  const T = await subir({ login: { email: PADRAO, senha: ctx.senha } });
+  const [, me] = await j('GET', '/auth/me', T);
+  assert.strictEqual(Number(me.user.is_superadmin), 1, 'o super com ativo nulo contou como ativo e travou a recuperacao');
+  assert.strictEqual(await login('s2134@t.com', ctx.senha), null, 'premissa: o super com ativo nulo nao entra');
+});
+
+test('[RN-02] a verificacao de super ativo falha no boot: o seed NAO nasce, e o processo segue (falha fechada)', async () => {
+  await descer();
+  novaPasta();
+  await subir({ login: null, falha: String.raw`^SELECT 1 AS ok FROM usuarios WHERE COALESCE\(is_superadmin` });
+  assert.strictEqual(saiu, null, 'o processo caiu');
+  assert.strictEqual(await login(SEED.email, SEED.senha), null, 'o seed nasceu com a regua falhando');
+  assert.ok(fs.readFileSync(logArq, 'utf8').includes('Admin inicial não criado — a verificação de super ativo falhou'), 'o log nao diz');
+});
+
+test('[RN-01] a promocao falha no boot: o seed ainda nasce na pasta vazia (a falha so no log)', async () => {
+  await descer();
+  novaPasta();
+  await subir({ falha: String.raw`^UPDATE usuarios SET is_superadmin = 1\s+WHERE email` });
+  assert.ok(await login(SEED.email, SEED.senha), 'o seed nao nasceu');
+  assert.ok(fs.readFileSync(logArq, 'utf8').includes('Promoção do administrador padrão não verificada'), 'o log nao diz');
+});
 
 test('[RN-01b] banco antigo sem a coluna is_superadmin, sem SEED no env: o boot cria a coluna e promove o administrador padrao', async () => {
   await descer();

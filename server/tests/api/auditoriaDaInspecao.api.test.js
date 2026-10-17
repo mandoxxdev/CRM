@@ -127,6 +127,36 @@ const ROTULOS_NOVOS = {
     assert.strictEqual((await todasDaInspecao()).length, de, 'a segunda decisao gravou');
   });
 
+  await test('[RN-05] duas decisoes ao mesmo tempo no mesmo item: uma vale, a outra recusa, e so UMA linha (Fase 5 r3)', async () => {
+    const mat = await materialCritico();
+    const { itemId } = await itemRetido(mat, 4);
+    const antes = (await todasDaInspecao()).length;
+    const r = await Promise.allSettled([
+      inspectionService.decidirInspecao(db, ADMIN, itemId, { quantidade_aprovada: 4, quantidade_reprovada: 0 }),
+      inspectionService.decidirInspecao(db, QUAL, itemId, { quantidade_aprovada: 4, quantidade_reprovada: 0 }),
+    ]);
+    const ok = r.filter((x) => x.status === 'fulfilled');
+    const nao = r.filter((x) => x.status === 'rejected');
+    assert.strictEqual(ok.length, 1, JSON.stringify(r.map((x) => x.status)));
+    assert.strictEqual(nao[0].reason.message, 'Item já foi decidido por outra inspeção');
+    assert.strictEqual((await todasDaInspecao()).length, antes + 1, 'a decisao recusada gravou linha');
+  });
+
+  await test('[RN-05] a linha leva o id da INSPECAO (nao o do item): recebimento de dois itens, decide o segundo (Fase 5 r3)', async () => {
+    const m1 = await materialCritico();
+    const m2 = await materialCritico();
+    const rec = await receiptService.criarRecebimento(db, ADMIN, { nota_fiscal: `NF-134-${++seq}`,
+      itens: [{ material_id: m1, quantidade: 2 }, { material_id: m2, quantidade: 3 }] });
+    await receiptService.aprovarRecebimento(db, ADMIN, rec.id);
+    const its = await dbAll(db, 'SELECT id, material_id FROM recebimentos_material_itens_almoxarifado WHERE recebimento_id = ? ORDER BY id', [rec.id]);
+    const r = await decidirPelaRota(its[1].id, { quantidade_aprovada: 3, quantidade_reprovada: 0 });
+    assert.strictEqual(r.status, 201, JSON.stringify(r.body));
+    assert.notStrictEqual(r.body.id, its[1].id, 'premissa: o id da inspecao e o do item diferem');
+    const ls = await linhasDaInspecao(r.body.id);
+    assert.strictEqual(ls.length, 1, 'a linha nao esta no id da inspecao');
+    assert.deepStrictEqual([JSON.parse(ls[0].dados_novos).recebimento_item_id, JSON.parse(ls[0].dados_novos).material_id], [its[1].id, m2]);
+  });
+
   await test('[RN-05] a Auditoria indisponivel na hora: 201, a inspecao gravada e o saldo movido', async () => {
     const mat = await materialCritico();
     const { itemId } = await itemRetido(mat, 6);

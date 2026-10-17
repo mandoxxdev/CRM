@@ -317,7 +317,9 @@ function sanitizeSuperAdminPayload(actor, body) {
 
 function countActiveSuperAdmins(db, excludeUserId = null) {
   return new Promise((resolve, reject) => {
-    let sql = 'SELECT COUNT(*) as cnt FROM usuarios WHERE COALESCE(is_superadmin, 0) = 1 AND COALESCE(ativo, 1) = 1';
+    // Etapa 134 (Fase 5 r1 M1): `ativo = 1`, a regua do login — o super gravado com `ativo` nulo nao entra, e contado aqui deixava o
+    // unico super que entra se rebaixar ou desativar.
+    let sql = 'SELECT COUNT(*) as cnt FROM usuarios WHERE COALESCE(is_superadmin, 0) = 1 AND ativo = 1';
     const params = [];
     if (excludeUserId != null) {
       sql += ' AND id != ?';
