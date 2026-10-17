@@ -163,7 +163,7 @@ test('[RN-09] POST: ativo pela regua de sim/nao (1/true/"1"/"true" -> 1; 0/false
     assert.strictEqual(await login(u.email, ctx.senha), null, `${JSON.stringify(v)} entrou`);
   }
   const antes = (await lista(ctx.T)).length;
-  for (const v of [2, 'sim', 'TRUE ', [], {}, -1]) {
+  for (const v of [2, 'sim', 'TRUE ', [], {}, -1, 'on', 'yes', '2', ' 1', '01', 1.0001, 'True']) { // Fase 5 r3 (C7): a regua e fechada
     const [s, x] = await j('POST', '/usuarios', ctx.T, { nome: 'Ativo Ruim', email: novoEmail(), senha: ctx.senha, cargo: 'C', role: 'usuario', ativo: v });
     assert.deepStrictEqual([s, x && x.error], [400, L_ATIVO], `ativo ${JSON.stringify(v)}`);
   }
@@ -180,16 +180,25 @@ async function rodadaCruzada(ator, tirar) {
   const [r1, r2] = await Promise.all([tirar(ator.tok, s), tirar(tokS, ator)]);
   const depois = (await lista(ator.tok).catch(() => [])).filter((u) => !!u.is_superadmin && u.ativo === 1).map((u) => u.id);
   const depois2 = depois.length ? depois : (await lista(tokS)).filter((u) => !!u.is_superadmin && u.ativo === 1).map((u) => u.id);
-  return { r: [r1, r2], ativos: depois2, novo: { id: s.id, email: s.email, nome: s.nome, tok: tokS, role: 'usuario' } };
+  return { r: [r1, r2], ativos: depois2, alvos: [s.id, ator.id], novo: { id: s.id, email: s.email, nome: s.nome, tok: tokS, role: 'usuario' } };
 }
 
 test('[RN-10] PUT: dois supers se rebaixando ao mesmo tempo — em toda rodada um 200 e um 403, e sobra um super ativo', async () => {
   const eu = (await lista(ctx.T)).find((y) => y.email === SEED.email);
   let ator = { id: eu.id, email: eu.email, nome: eu.nome, role: eu.role, tok: ctx.T };
-  const tirar = (tok, alvo) => j('PUT', `/usuarios/${alvo.id}`, tok, { ...corpo(alvo), is_superadmin: 0 });
+  // Fase 5 r3 (C10): cada lado manda um nome proprio — todo 200 tem de ter gravado (o 200 sem gravar e o this.changes ignorado)
+  let rodada = 0;
+  const tirar = (tok, alvo) => j('PUT', `/usuarios/${alvo.id}`, tok, { ...corpo(alvo), nome: `R136-${rodada}-${alvo.id}`, is_superadmin: 0 });
   const contagem = {};
   for (let i = 0; i < 10; i++) {
-    const { r, ativos, novo } = await rodadaCruzada(ator, tirar);
+    rodada = i;
+    const { r, ativos, novo, alvos } = await rodadaCruzada(ator, tirar);
+    for (let k = 0; k < 2; k++) {
+      if (r[k][0] !== 200) continue;
+      const tok = ativos.length ? (ativos[0] === ator.id ? ator.tok : novo.tok) : ctx.T;
+      const l = (await lista(tok)).find((u) => u.id === alvos[k]);
+      assert.strictEqual(l && l.nome, `R136-${i}-${alvos[k]}`, `rodada ${i}: o 200 do lado ${k} nao gravou — ${JSON.stringify(r)}`);
+    }
     // o perdedor: 403 da trava (a literal) ou, se o vencedor gravou antes de ele passar da autenticacao, ja nao e super e o campo some
     // (200 sem rebaixar ninguem — Fase 2 M1). O que nao pode: os dois rebaixarem (zero super ativo — o defeito de antes, 10/10).
     assert.strictEqual(ativos.length, 1, `rodada ${i}: ${JSON.stringify(r)} — supers ativos ${JSON.stringify(ativos)}`);
@@ -200,6 +209,38 @@ test('[RN-10] PUT: dois supers se rebaixando ao mesmo tempo — em toda rodada u
     ator = ativos[0] === ator.id ? ator : novo;
   }
   console.log(`    (PUT: ${JSON.stringify(contagem)})`);
+  ctx.T = ator.tok;
+});
+
+test('[RN-10] F5 C9: PUT desativando (ativo 0, sem rebaixar) ao mesmo tempo — sobra um super ativo', async () => {
+  const eu = (await lista(ctx.T)).find((y) => !!y.is_superadmin && y.ativo === 1);
+  let ator = { id: eu.id, email: eu.email, nome: eu.nome, role: eu.role, tok: ctx.T };
+  const tirar = (tok, alvo) => j('PUT', `/usuarios/${alvo.id}`, tok, { ...corpo(alvo), is_superadmin: 1, ativo: 0 });
+  for (let i = 0; i < 5; i++) {
+    const { r, ativos, novo } = await rodadaCruzada(ator, tirar);
+    assert.strictEqual(ativos.length, 1, `rodada ${i}: ${JSON.stringify(r)} — supers ativos ${JSON.stringify(ativos)}`);
+    for (const [st, x] of r) {
+      assert.ok(st === 200 || st === 401 || (st === 403 && x && x.error === L_ULTIMO_PUT), `rodada ${i}: ${JSON.stringify(r)}`);
+    }
+    ator = ativos[0] === ator.id ? ator : novo;
+  }
+  ctx.T = ator.tok;
+});
+
+test('[RN-10] F5 C8: um super com ativo NULO (nao entra) nao conta como "o outro" — a corrida continua deixando um super ativo', async () => {
+  const sqlite3 = require('sqlite3');
+  const banco = new sqlite3.Database(path.join(pasta, 'database.sqlite'));
+  await new Promise((ok, ko) => banco.run("INSERT INTO usuarios (nome, email, senha, cargo, role, is_superadmin, ativo) VALUES ('NULO 136', 'nulo136@t.com', 'x', 'C', 'admin', 1, NULL)",
+    (e) => (e ? ko(e) : ok())));
+  await new Promise((ok) => banco.close(ok));
+  const eu = (await lista(ctx.T)).find((y) => !!y.is_superadmin && y.ativo === 1);
+  let ator = { id: eu.id, email: eu.email, nome: eu.nome, role: eu.role, tok: ctx.T };
+  const tirar = (tok, alvo) => j('PUT', `/usuarios/${alvo.id}`, tok, { ...corpo(alvo), is_superadmin: 0 });
+  for (let i = 0; i < 5; i++) {
+    const { r, ativos, novo } = await rodadaCruzada(ator, tirar);
+    assert.strictEqual(ativos.length, 1, `rodada ${i}: ${JSON.stringify(r)} — supers ativos ${JSON.stringify(ativos)}`);
+    ator = ativos[0] === ator.id ? ator : novo;
+  }
   ctx.T = ator.tok;
 });
 

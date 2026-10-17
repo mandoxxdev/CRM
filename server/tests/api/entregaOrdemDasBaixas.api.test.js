@@ -322,6 +322,110 @@ process.on('exit', (code) => {
     assert.ok(!fila.some((x) => Number(x.id) === Number(c.R)), 'a entregue continua na fila');
   });
 
+  // ── Fase 5 (r3): os cenarios que as sabotagens sobreviventes pediram ──────────────────────────────────────
+  const valueApprovalService = require('../../services/almoxarifado/requisitionValueApprovalService');
+
+  await test('[RN-01] F5 C1: a leitura fresca roda para todos ANTES da primeira baixa — o saldo que some entre a previa e a baixa recusa sem baixar nada', async () => {
+    const A = await loc('A'); const B = await loc('B');
+    const c = await montar();
+    await entrada(c.m, 3, A.id); await entrada(c.m, 2, B.id);
+    await separar(c.R, [{ item_id: c.ids[0], quantidade_separada: 2 }, { item_id: c.ids[1], quantidade_separada: 2, localizacao_origem_id: A.id }]);
+    const antes = await foto(c);
+    const original = valueApprovalService.verificarBloqueioLiberacao;
+    valueApprovalService.verificarBloqueioLiberacao = async (...a) => {
+      // entre a previa e a baixa (sem passar pelo motor): o material perde 4 do disponivel
+      await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = 4 WHERE id = ?', [c.m]);
+      return original(...a);
+    };
+    let r;
+    try { r = await entregar(c.R, [{ item_id: c.ids[0], quantidade_atendida: 2 }, { item_id: c.ids[1], quantidade_atendida: 2 }]); } finally {
+      valueApprovalService.verificarBloqueioLiberacao = original;
+    }
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    assert.ok(/não é possível entregar 2 PC\. Máximo:/.test(r.body.error), r.body.error);
+    const depois = await foto(c);
+    assert.deepStrictEqual([depois.f, depois.saidas, depois.its], [antes.f, 0, antes.its], 'a recusa da leitura fresca baixou alguma coisa');
+    await dbRun(db, 'UPDATE materiais_almoxarifado SET quantidade_bloqueada = 0 WHERE id = ?', [c.m]);
+  });
+
+  await test('[RN-03] F5 C2: so lote com leitura e sem endereco — a recusa de sempre, antes de qualquer baixa', async () => {
+    const A = await loc('A');
+    const c = await montar();
+    const L = `LC2-${seq}`;
+    await entrada(c.m, 4, A.id, L);
+    const l1 = await loteId(c.m, L);
+    await separar(c.R, [{ item_id: c.ids[0], quantidade_separada: 2 }, { item_id: c.ids[1], quantidade_separada: 2, localizacao_origem_id: A.id, lote_id: l1 }]);
+    const r = await entregar(c.R, [{ item_id: c.ids[0], quantidade_atendida: 1, lote_id: l1, codigo_lido_origem: A.codigo }, { item_id: c.ids[1], quantidade_atendida: 2 }]);
+    assert.deepStrictEqual([r.status, r.body.error], [400, `${c.nome}: Para confirmar a origem pela leitura, informe a localização de origem`]);
+    assert.strictEqual((await foto(c)).saidas, 0);
+  });
+
+  await test('[RN-03] F5 C3: dois so lote do mesmo lote somam os estritos UMA vez — 200', async () => {
+    const A = await loc('A'); const B = await loc('B');
+    const c = await montar({ sols: [1, 1, 2] });
+    const L = `LC3-${seq}`;
+    await entrada(c.m, 2, A.id, L); await entrada(c.m, 2, B.id, L);
+    const l1 = await loteId(c.m, L);
+    await separar(c.R, [{ item_id: c.ids[0], quantidade_separada: 1 }, { item_id: c.ids[1], quantidade_separada: 1 },
+      { item_id: c.ids[2], quantidade_separada: 2, localizacao_origem_id: A.id, lote_id: l1 }]);
+    const r = await entregar(c.R, [{ item_id: c.ids[0], quantidade_atendida: 1, lote_id: l1 }, { item_id: c.ids[1], quantidade_atendida: 1, lote_id: l1 },
+      { item_id: c.ids[2], quantidade_atendida: 2 }]);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    assert.deepStrictEqual([await saldoEm(c.m, A.id, l1), await saldoEm(c.m, B.id, l1), await status(c)], [0, 0, 'ENTREGUE']);
+  });
+
+  await test('[RN-01] F5 C4: dentro do item o excedente sai antes da reserva — a falha dele nao consome a reserva', async () => {
+    const A = await loc('A');
+    const c = await montar({ sols: [3], antes: async (m) => { await entrada(m, 1, A.id); } }); // reserva 1
+    await entrada(c.m, 4, A.id);
+    await separar(c.R, [{ item_id: c.ids[0], quantidade_separada: 3 }]);
+    const antes = await foto(c);
+    assert.strictEqual(antes.r, 1, 'premissa: reserva 1');
+    const original = stockService.registrarMovimentacao;
+    stockService.registrarMovimentacao = async (...args) => {
+      if (args[2].reserva_id === undefined) throw Object.assign(new Error('falha injetada no excedente'), { status: 400 });
+      return original(...args);
+    };
+    let r;
+    try { r = await entregar(c.R, [{ item_id: c.ids[0], quantidade_atendida: 3 }]); } finally { stockService.registrarMovimentacao = original; }
+    assert.deepStrictEqual([r.status, r.body.error], [400, `${c.nome}: falha injetada no excedente`]);
+    const depois = await foto(c);
+    assert.deepStrictEqual([depois.r, depois.its[0][1], depois.saidas], [1, 0, 0], 'a reserva saiu antes do excedente');
+  });
+
+  await test('[RN-04] F5 C5: na mesma passada os itens saem na ordem do laco (dois automaticos: o primeiro tira do de mais saldo)', async () => {
+    const A = await loc('A'); const B = await loc('B');
+    const c = await montar({ sols: [1, 2] });
+    await entrada(c.m, 3, A.id); await entrada(c.m, 2, B.id);
+    await separar(c.R, [{ item_id: c.ids[0], quantidade_separada: 1 }, { item_id: c.ids[1], quantidade_separada: 2 }]);
+    const r = await entregar(c.R, [{ item_id: c.ids[0], quantidade_atendida: 1 }, { item_id: c.ids[1], quantidade_atendida: 2 }]);
+    assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+    // item 1: A 3 -> 2; item 2: A 2 empata com B 2 e vence pelo id -> A 0, B 2. Invertido: o item 2 tira A 2 (A 1) e o item 1 tira B -> A 1, B 1
+    const s = await dbAll(db, "SELECT quantidade q FROM movimentacoes_almoxarifado WHERE material_id = ? AND tipo = 'SAIDA' ORDER BY id", [c.m]);
+    assert.deepStrictEqual(s.map((x) => Number(x.q)), [1, 2], 'a ordem do laco mudou');
+    assert.deepStrictEqual([await saldoEm(c.m, A.id), await saldoEm(c.m, B.id)], [0, 2]);
+  });
+
+  await test('[RN-05] F5 C6: a falha na PRIMEIRA baixa nao grava substituicao vazia de quem ainda nao saiu', async () => {
+    const A = await loc('A'); const B = await loc('B');
+    const c = await montar();
+    await entrada(c.m, 5, A.id); await entrada(c.m, 5, B.id);
+    await separar(c.R, [{ item_id: c.ids[0], quantidade_separada: 2, localizacao_origem_id: A.id }, { item_id: c.ids[1], quantidade_separada: 2 }]);
+    const original = stockService.registrarMovimentacao;
+    stockService.registrarMovimentacao = async () => { throw Object.assign(new Error('falha injetada na primeira'), { status: 400 }); };
+    let r;
+    try {
+      r = await entregar(c.R, [{ item_id: c.ids[0], quantidade_atendida: 2, origem_automatica: true }, { item_id: c.ids[1], quantidade_atendida: 2, localizacao_origem_id: B.id }]);
+    } finally { stockService.registrarMovimentacao = original; }
+    assert.strictEqual(r.status, 400, JSON.stringify(r.body));
+    const subs = await dbAll(db, 'SELECT id FROM substituicoes_origem_requisicao WHERE requisicao_id = ?', [c.R]);
+    assert.deepStrictEqual(subs, [], 'substituicao gravada sem baixa');
+    // metade positiva: sem a falha, a automatica vira substituicao
+    const ok = await entregar(c.R, [{ item_id: c.ids[0], quantidade_atendida: 2, origem_automatica: true }, { item_id: c.ids[1], quantidade_atendida: 2, localizacao_origem_id: B.id }]);
+    assert.strictEqual(ok.status, 200, JSON.stringify(ok.body));
+    assert.strictEqual((await dbAll(db, 'SELECT id FROM substituicoes_origem_requisicao WHERE requisicao_id = ?', [c.R])).length, 1);
+  });
+
   terminou = true;
   console.log(`\n${passed} passed, ${failed} failed\n`);
   process.exit(failed > 0 ? 1 : 0);
