@@ -223,7 +223,9 @@ const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
 const { getClausulasDefault, resolverClausulasParaPreview } = require('./clausulasDefault');
-const { diffItensParaLog, nomeDe, resumoLado, mesclarItensPreservandoCampos } = require('./propostaItensDiff');
+// chaveDe: a religação das variáveis manuais no PUT /api/propostas/:id usa (Etapa 138, C296 — sem ela o salvamento nunca respondia).
+const { diffItensParaLog, chaveDe, nomeDe, resumoLado, mesclarItensPreservandoCampos } = require('./propostaItensDiff');
+const { presente, montarSetParcial } = require('./atualizacaoParcial');
 const { lerAcessorios, totalAcessoriosDosItens, serializarAcessorios } = require('./acessoriosItem');
 const { resolverCamposCustomizacao } = require('./propostaCustomizacoes');
 const propostaEngine = require('./propostaCompositionEngine');
@@ -5193,28 +5195,32 @@ app.delete('/api/variaveis-tecnicas/:id', authenticateToken, (req, res) => {
 app.put('/api/clientes/:id', authenticateToken, (req, res) => {
   var id = req.params.id;
   var body = req.body || {};
+  // Etapa 138 — só as colunas que vieram (ausente mantém; presente, inclusive '', grava com a transformação de sempre). Antes,
+  // `{telefone}` dava 500 (razão social nula) e `{razao_social}` zerava as outras 13 colunas, logo e status inclusive. A tela manda
+  // o objeto inteiro, então para ela nada muda.
+  if (presente(body, 'razao_social') && (body.razao_social == null || !String(body.razao_social).trim())) {
+    return res.status(400).json({ error: 'Razão social é obrigatória' });
+  }
+  var mesmo = function (v) { return v; };
+  var parcial = montarSetParcial(body, {
+    razao_social: toUpper,
+    nome_fantasia: toUpper,
+    cnpj: mesmo,
+    segmento: toUpper,
+    telefone: mesmo,
+    email: mesmo,
+    endereco: toUpper,
+    cidade: toUpper,
+    estado: toUpper,
+    cep: mesmo,
+    contato_principal: toUpper,
+    observacoes: toUpper,
+    status: mesmo,
+    logo_url: function (v) { return v || null; }
+  });
   db.run(
-    `UPDATE clientes SET razao_social = ?, nome_fantasia = ?, cnpj = ?, segmento = ?,
-      telefone = ?, email = ?, endereco = ?, cidade = ?, estado = ?, cep = ?,
-      contato_principal = ?, observacoes = ?, status = ?, logo_url = ?, updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?`,
-    [
-      toUpper(body.razao_social),
-      toUpper(body.nome_fantasia),
-      body.cnpj,
-      toUpper(body.segmento),
-      body.telefone,
-      body.email,
-      toUpper(body.endereco),
-      toUpper(body.cidade),
-      toUpper(body.estado),
-      body.cep,
-      toUpper(body.contato_principal),
-      toUpper(body.observacoes),
-      body.status,
-      body.logo_url || null,
-      id
-    ],
+    `UPDATE clientes SET ${parcial.sql ? parcial.sql + ', ' : ''}updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    parcial.params.concat([id]),
     (err) => {
       if (err) {
         return res.status(500).json({ error: err.message });
@@ -8178,14 +8184,13 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
       probabilidade, data_fechamento
   } = req.body;
 
-  if (status === 'rejeitada' && (!motivo_nao_venda || !String(motivo_nao_venda).trim())) {
-    return res.status(400).json({ error: 'Motivo da não venda é obrigatório quando a proposta está perdida/rejeitada.' });
-  }
-
-  let dataFechamentoFinal = data_fechamento || null;
-  if (!dataFechamentoFinal && (status === 'aprovada' || status === 'rejeitada')) {
-    dataFechamentoFinal = new Date().toISOString().split('T')[0];
-  }
+  // Etapa 138 — payload parcial: a chave AUSENTE mantém a coluna; a PRESENTE (inclusive null/'') grava com a transformação de
+  // sempre. Antes, mandar só o título zerava cliente, valor, status, margem, os contatos e APAGAVA os itens; e a tela, que não
+  // carrega projeto/contatos/idioma/moeda/incoterm/unidade, zerava esses oito em todo salvamento. As regras que olham outra coluna
+  // (motivo × status, desconto × status, data de fechamento × status, sufixo REV × cliente) usam o valor EFETIVO: o do corpo se
+  // veio, senão o gravado — e só rodam quando um dos campos delas veio.
+  const corpo = req.body || {};
+  const tem = (k) => presente(corpo, k);
   const probabilidadeFinal = probabilidade != null && probabilidade !== '' ? parseInt(probabilidade, 10) : null;
 
   // Buscar proposta atual completa para comparação
@@ -8193,15 +8198,40 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
-    
+
     if (!propostaAtual) {
       return res.status(404).json({ error: 'Proposta não encontrada' });
     }
-    
-    // VALIDAÇÃO: Se desconto > 5% e status não for rascunho/desconto_aprovado, verificar se há aprovação aprovada
-    if (margem_desconto > 5 && status && status !== 'rascunho' && status !== 'desconto_aprovado') {
+
+    const efetivo = (k) => (tem(k) ? corpo[k] : propostaAtual[k]);
+    const statusEf = efetivo('status');
+    const margemEf = efetivo('margem_desconto');
+
+    // Título presente e vazio: antes gravava '' (ou 500 de banco com null). A mesma mensagem da criação.
+    if (tem('titulo') && (titulo == null || !String(titulo).trim())) {
+      return res.status(400).json({ error: 'Título é obrigatório' });
+    }
+
+    if ((tem('status') || tem('motivo_nao_venda')) && statusEf === 'rejeitada') {
+      const motivoEf = efetivo('motivo_nao_venda');
+      if (!motivoEf || !String(motivoEf).trim()) {
+        return res.status(400).json({ error: 'Motivo da não venda é obrigatório quando a proposta está perdida/rejeitada.' });
+      }
+    }
+
+    // Data de fechamento: ausente mantém a gravada; vazia com o status efetivo aprovada/rejeitada vira hoje (o de sempre).
+    let dataFechamentoFinal = (tem('data_fechamento') ? data_fechamento : propostaAtual.data_fechamento) || null;
+    if (!dataFechamentoFinal && (tem('status') || tem('data_fechamento')) && (statusEf === 'aprovada' || statusEf === 'rejeitada')) {
+      dataFechamentoFinal = new Date().toISOString().split('T')[0];
+    }
+    const gravarDataFechamento = tem('data_fechamento') || dataFechamentoFinal !== (propostaAtual.data_fechamento || null);
+
+    // VALIDAÇÃO: Se desconto > 5% e status não for rascunho/desconto_aprovado, verificar se há aprovação aprovada.
+    // Pela margem e pelo status EFETIVOS: antes, `{status: 'enviada'}` sem a margem passava (e a gravava 0).
+    if ((tem('margem_desconto') || tem('status')) && margemEf > 5 && statusEf && statusEf !== 'rascunho' && statusEf !== 'desconto_aprovado') {
       // Verificar se existe uma aprovação aprovada para esta proposta com este desconto
       // Usar comparação com tolerância para valores decimais (evita problemas de precisão)
+      const margem_desconto = margemEf;
       const margemDescontoArredondada = Math.round(margem_desconto * 100) / 100;
       
       db.all(
@@ -8300,14 +8330,15 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
           return res.status(500).json({ error: 'Erro ao buscar itens da proposta: ' + err.message });
         }
         
-        // Comparar valor total (com tolerância para decimais)
+        // Comparar valor total (com tolerância para decimais) — só se veio (ausente mantém o gravado)
         const valorTotalAtual = Math.round((parseFloat(propostaAtual.valor_total) || 0) * 100) / 100;
         const valorTotalNovo = Math.round((parseFloat(valor_total) || 0) * 100) / 100;
-        const valorTotalMudou = Math.abs(valorTotalAtual - valorTotalNovo) > 0.01;
-        
-        // Comparar itens
+        const valorTotalMudou = tem('valor_total') && Math.abs(valorTotalAtual - valorTotalNovo) > 0.01;
+
+        // Comparar itens — só se vieram: `itens` ausente não toca nos itens (nem apaga, nem reinsere)
+        const itensVieram = tem('itens');
         const itensNovos = (itens && Array.isArray(itens)) ? itens : [];
-        const itensMudaram = compararItens(itensAtuais || [], itensNovos);
+        const itensMudaram = itensVieram && compararItens(itensAtuais || [], itensNovos);
 
         // Só incrementar revisão se itens ou valor total mudaram
         const deveIncrementarRevisao = itensMudaram || valorTotalMudou;
@@ -8322,23 +8353,24 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
           deveIncrementarRevisao
         });
         
-        // Preparar dados novos para comparação
+        // Preparar dados novos para comparação — pelos valores EFETIVOS (com o corpo cru, `{valor_total}` registrava
+        // título, status, cliente... como "(vazio)" no histórico de revisões)
         const dadosNovos = {
-          cliente_id,
-          projeto_id,
-          titulo,
-          descricao,
-          valor_total: valor_total || 0,
-          validade,
-          condicoes_pagamento,
-          prazo_entrega,
-          garantia,
-          observacoes,
-          status,
+          cliente_id: efetivo('cliente_id'),
+          projeto_id: efetivo('projeto_id'),
+          titulo: efetivo('titulo'),
+          descricao: efetivo('descricao'),
+          valor_total: tem('valor_total') ? (valor_total || 0) : propostaAtual.valor_total,
+          validade: efetivo('validade'),
+          condicoes_pagamento: efetivo('condicoes_pagamento'),
+          prazo_entrega: efetivo('prazo_entrega'),
+          garantia: efetivo('garantia'),
+          observacoes: efetivo('observacoes'),
+          status: statusEf,
           responsavel_id: finalResponsavelId,
-          familia_produto,
-          lembrete_data,
-          lembrete_mensagem
+          familia_produto: efetivo('familia_produto'),
+          lembrete_data: efetivo('lembrete_data'),
+          lembrete_mensagem: efetivo('lembrete_mensagem')
         };
 
         // Comparar e gerar log de mudanças
@@ -8350,15 +8382,63 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
         // Definir funções auxiliares antes de usá-las
         function atualizarProposta() {
         // Validar e normalizar valores antes de atualizar
-        const clienteIdFinal = cliente_id ? (parseInt(cliente_id) > 0 ? parseInt(cliente_id) : null) : null;
-        let projetoIdFinal = null;
-        if (projeto_id) {
-          const projetoIdNum = parseInt(projeto_id);
-          if (!isNaN(projetoIdNum) && projetoIdNum > 0) {
-            projetoIdFinal = projetoIdNum;
-          }
-        }
         const responsavelIdFinal = finalResponsavelId ? (parseInt(finalResponsavelId) > 0 ? parseInt(finalResponsavelId) : null) : null;
+        const ouNulo = (v) => v || null;
+        const ouVazio = (v) => v || '';
+        // Só as colunas que vieram no corpo (Etapa 138), cada uma com a transformação de sempre.
+        const parcial = montarSetParcial(corpo, {
+          cliente_id: (v) => (v ? (parseInt(v) > 0 ? parseInt(v) : null) : null),
+          projeto_id: (v) => { const n = parseInt(v); return v && !isNaN(n) && n > 0 ? n : null; },
+          titulo: (v) => v,
+          descricao: (v) => v,
+          valor_total: (v) => v || 0,
+          validade: ouNulo,
+          condicoes_pagamento: ouVazio,
+          prazo_entrega: ouVazio,
+          garantia: ouVazio,
+          observacoes: ouVazio,
+          status: (v) => v,
+          origem_busca: ouNulo,
+          familia_produto: ouNulo,
+          lembrete_data: ouNulo,
+          lembrete_mensagem: ouNulo,
+          margem_desconto: (v) => v || 0,
+          cliente_contato: ouNulo,
+          cliente_telefone: ouNulo,
+          cliente_email: ouNulo,
+          oportunidade_id: (v) => (v != null ? v : null),
+          tipo_proposta: ouNulo,
+          expira_em: ouNulo,
+          idioma: ouNulo,
+          moeda: ouNulo,
+          incoterm: ouNulo,
+          unidade_negocio: ouNulo
+        });
+        const sets = parcial.colunas.map((c) => `${c} = ?`);
+        const params = parcial.params.slice();
+        // Calculadas ou com regra própria (exceções declaradas na Etapa 138):
+        // - o número e a revisão, sempre (o número já mantém o gravado quando não veio);
+        sets.push('numero_proposta = ?', 'revisao = ?');
+        params.push(numeroFinal, novaRevisao);
+        // - o responsável, sempre: vazio/ausente = o gravado, ou quem salva (o de sempre);
+        sets.push('responsavel_id = ?');
+        params.push(responsavelIdFinal);
+        // - o motivo só vale para rejeitada: entra quando o status ou o motivo vieram;
+        if (tem('status') || tem('motivo_nao_venda')) {
+          sets.push('motivo_nao_venda = ?');
+          params.push(statusEf === 'rejeitada' ? (efetivo('motivo_nao_venda') || null) : null);
+        }
+        // - a data de fechamento, quando veio ou o status a preencheu;
+        if (gravarDataFechamento) {
+          sets.push('data_fechamento = ?');
+          params.push(dataFechamentoFinal);
+        }
+        // - html_rendered é limpo em TODO salvamento: o retrato que o PDF grava (coluna, css_snapshot, pdf_gerado_at, checksum,
+        //   proposta_snapshot) só é regravado com ela vazia. Mantida, o retrato ficaria o da primeira geração para sempre;
+        // - probabilidade nula/vazia mantém (COALESCE, o de sempre).
+        sets.push('html_rendered = ?', 'probabilidade = COALESCE(?, probabilidade)', 'updated_at = CURRENT_TIMESTAMP');
+        params.push(html_rendered || null, probabilidadeFinal);
+        params.push(id);
         
         // Verificar se o número final não está duplicado (exceto para a própria proposta)
         db.get(`SELECT id FROM propostas WHERE numero_proposta = ? AND id != ?`, [numeroFinal, id], (err, existing) => {
@@ -8372,24 +8452,8 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
           }
 
           db.run(
-            `UPDATE propostas SET cliente_id = ?, projeto_id = ?, numero_proposta = ?, titulo = ?,
-              descricao = ?, valor_total = ?, validade = ?, condicoes_pagamento = ?, prazo_entrega = ?,
-              garantia = ?, observacoes = ?, status = ?, responsavel_id = ?,
-              motivo_nao_venda = ?, origem_busca = ?, familia_produto = ?,
-              lembrete_data = ?, lembrete_mensagem = ?, margem_desconto = ?, revisao = ?,
-              cliente_contato = ?, cliente_telefone = ?, cliente_email = ?,
-              oportunidade_id = ?, tipo_proposta = ?, expira_em = ?,
-              idioma = ?, moeda = ?, incoterm = ?, unidade_negocio = ?, html_rendered = ?,
-              probabilidade = COALESCE(?, probabilidade), data_fechamento = ?, updated_at = CURRENT_TIMESTAMP
-             WHERE id = ?`,
-            [clienteIdFinal, projetoIdFinal, numeroFinal, titulo, descricao, valor_total || 0,
-              validade || null, condicoes_pagamento || '', prazo_entrega || '', garantia || '', observacoes || '', status,
-              responsavelIdFinal, status === 'rejeitada' ? (motivo_nao_venda || null) : null, origem_busca || null, familia_produto || null,
-              lembrete_data || null, lembrete_mensagem || null, margem_desconto || 0, novaRevisao,
-              cliente_contato || null, cliente_telefone || null, cliente_email || null,
-              oportunidade_id != null ? oportunidade_id : null, tipo_proposta || null, expira_em || null,
-              idioma || null, moeda || null, incoterm || null, unidade_negocio || null, html_rendered || null,
-              probabilidadeFinal, dataFechamentoFinal, id],
+            `UPDATE propostas SET ${sets.join(', ')} WHERE id = ?`,
+            params,
             (err) => {
               if (err) {
                 // Tratar erro de UNIQUE constraint especificamente
@@ -8400,6 +8464,15 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
                 }
                 return res.status(500).json({ error: 'Erro ao atualizar proposta: ' + err.message });
               }
+
+            // `itens` ausente (Etapa 138): os itens ficam como estão — nada a apagar, reinserir, religar nem auditar.
+            if (!itensVieram) {
+              return res.json({
+                message: 'Proposta atualizada com sucesso',
+                numero_proposta: numeroFinal,
+                revisao: novaRevisao
+              });
+            }
 
             // Deletar itens antigos e inserir novos
             db.run('DELETE FROM proposta_itens WHERE proposta_id = ?', [id], (err) => {
@@ -8576,8 +8649,9 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
         // além de queimar um número que nenhuma proposta usaria.
         //
         // É a mesma substituição que POST /propostas/:id/revisao já fazia certo.
+        // Pelo cliente EFETIVO (Etapa 138): `{valor_total}` sem o cliente também troca o sufixo REV.
         let numeroFinal = numero_proposta;
-        if (cliente_id && deveIncrementarRevisao) {
+        if (efetivo('cliente_id') && deveIncrementarRevisao) {
           const numeroAtualProposta = String(propostaAtual.numero_proposta || '').trim();
           const sufixoRev = `REV${String(novaRevisao).padStart(2, '0')}`;
           if (/REV\s*\d+\s*$/i.test(numeroAtualProposta)) {
@@ -15242,11 +15316,21 @@ app.post('/api/oportunidades', authenticateToken, (req, res) => {
 app.put('/api/oportunidades/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
   normalizarMaiusculas(req.body, ['titulo', 'descricao', 'etapa']);
-  const { cliente_id, projeto_id, titulo, descricao, valor_estimado, probabilidade, etapa, status, responsavel_id } = req.body;
+  const corpo = req.body || {};
+  // Etapa 138 — só as colunas que vieram (ausente mantém; presente grava como sempre). Antes, `{etapa}` dava 500 (título nulo) e
+  // `{titulo}` zerava cliente, valor, probabilidade, etapa e status.
+  if (presente(corpo, 'titulo') && (corpo.titulo == null || !String(corpo.titulo).trim())) {
+    return res.status(400).json({ error: 'Título é obrigatório' });
+  }
+  const mesmo = (v) => v;
+  const parcial = montarSetParcial(corpo, {
+    cliente_id: mesmo, projeto_id: mesmo, titulo: mesmo, descricao: mesmo, valor_estimado: mesmo,
+    probabilidade: mesmo, etapa: mesmo, status: mesmo, responsavel_id: mesmo
+  });
 
   db.run(
-    'UPDATE oportunidades SET cliente_id = ?, projeto_id = ?, titulo = ?, descricao = ?, valor_estimado = ?, probabilidade = ?, etapa = ?, status = ?, responsavel_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [cliente_id, projeto_id, titulo, descricao, valor_estimado, probabilidade, etapa, status, responsavel_id, id],
+    `UPDATE oportunidades SET ${parcial.sql ? parcial.sql + ', ' : ''}updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    parcial.params.concat([id]),
     (err) => {
       if (err) {
         return res.status(500).json({ error: err.message });
