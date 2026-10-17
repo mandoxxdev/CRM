@@ -212,6 +212,8 @@ test('[RN-03] quem nao e super nao poe o e-mail do administrador padrao (proprio
   // Fase 2 I2: e-mail que nao e texto nao derruba o processo nem leva o L4; ausente segue o 500 NOT NULL de hoje
   const [s6, x6] = await j('PUT', `/usuarios/${ctx.id.X}`, ctx.tok.A, { nome: 'Pessoa X', email: 123, cargo: 'C', role: 'usuario', ativo: 1 });
   assert.notStrictEqual(x6 && x6.error, L4, 'email numerico levou o L4');
+  // Etapa 135 (C283, RN-09; Fase 2 M5): e o 400 do e-mail que nao e texto
+  assert.deepStrictEqual([s6, x6 && x6.error], [400, 'E-mail inválido: envie o e-mail como texto']);
   const [s7, x7] = await j('PUT', `/usuarios/${ctx.id.X}`, ctx.tok.A, { nome: 'Pessoa X', cargo: 'C', role: 'usuario', ativo: 1 });
   assert.notStrictEqual(x7 && x7.error, L4);
   assert.strictEqual(s7, 500, `sem email: ${s7} ${JSON.stringify(x7)}`);
@@ -293,10 +295,14 @@ async function noArquivoVivo(tok) {
 }
 
 test('[RN-01d] o super com ativo nulo (nao entra) nao trava a recuperacao nem conta para a trava do ultimo super (Fase 5 r1 M1)', async () => {
-  const tA = await login(PADRAO, ctx.senha);
-  const [sg, g] = await j('POST', '/usuarios', tA, { nome: 'Fantasma', email: 'fantasma134@t.com', senha: ctx.senha, cargo: 'C',
-    role: 'usuario', is_superadmin: 1, ativo: null });
+  // Mudado na Etapa 135 (C284, RN-08): o POST com `ativo: null` passou a gravar 1 — o fantasma nasce pelo POST e tem o `ativo` anulado
+  // NO ARQUIVO, com o servidor parado (o PUT com ativo nulo nao anula: COALESCE). Ordem da Fase 2 (M3): criar -> descer -> anular -> subir.
+  const [sg, g] = await j('POST', '/usuarios', await login(PADRAO, ctx.senha), { nome: 'Fantasma', email: 'fantasma134@t.com',
+    senha: ctx.senha, cargo: 'C', role: 'usuario', is_superadmin: 1, ativo: null });
   assert.strictEqual(sg, 200, JSON.stringify(g));
+  await descer();
+  await noArquivo(async ({ run }) => { await run('UPDATE usuarios SET ativo = NULL WHERE id = ?', [g.id]); });
+  const tA = await subir({ login: { email: PADRAO, senha: ctx.senha } });
   assert.strictEqual(await login('fantasma134@t.com', ctx.senha), null, 'premissa: o super com ativo nulo nao entra');
   const [sd, xd] = await j('PUT', `/usuarios/${ctx.id.A}`, tA, { nome: 'Pessoa A', email: PADRAO, cargo: 'C', role: 'admin', is_superadmin: 0 });
   assert.deepStrictEqual([sd, xd && xd.error], [403, 'Não é possível remover ou desativar o último Super Administrador ativo do sistema'],

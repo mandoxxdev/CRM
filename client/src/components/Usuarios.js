@@ -44,10 +44,9 @@ const Usuarios = ({ deferMs = 200 }) => {
         params: { limit: 200, offset: 0 },
         timeout: 25000,
       });
-      const usuariosFiltrados = (response.data || []).filter(
-        usuario => usuario.nome.toLowerCase() !== 'administrator'
-      );
-      setUsuarios(usuariosFiltrados);
+      // Etapa 135 (C282, RN-10): a lista escondia quem se chama "administrator" (o usuario antigo que o boot apagava); o boot nao
+      // apaga mais, e um usuario fora da lista nao se edita, desativa nem exclui pela tela.
+      setUsuarios(response.data || []);
     } catch (error) {
       console.error('Erro ao carregar usuários:', error);
       

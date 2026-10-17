@@ -2219,26 +2219,9 @@ function initializeDatabase(onReadyCallback) {
   }
   }
 
-  // Remover usuário "administrator" se existir (nome exato ou similar)
-  db.all('SELECT id, nome, email FROM usuarios WHERE LOWER(nome) = ? OR LOWER(nome) LIKE ?', 
-    ['administrator', '%administrator%'], 
-    (err, rows) => {
-      if (!err && rows && rows.length > 0) {
-        rows.forEach(user => {
-          // Não remover se for o admin padrão
-          if (user.email !== 'admin@gmp.com.br') {
-            db.run('DELETE FROM usuarios WHERE id = ?', [user.id], (deleteErr) => {
-              if (deleteErr) {
-                console.error(`Erro ao remover usuário ${user.nome}:`, deleteErr);
-              } else {
-                console.log(`✅ Usuário "${user.nome}" removido`);
-              }
-            });
-          }
-        });
-      }
-    }
-  );
+  // Etapa 135 (C282, RN-10): a limpeza que apagava, a cada boot, todo usuario com "administrator" no nome (menos o do e-mail padrao)
+  // saiu — servia a um usuario antigo que nenhum codigo cria desde o primeiro commit, e apagava sem aviso quem se chamasse assim hoje
+  // (o cadastro grava o nome em maiusculas). Apagar usuario no boot e o gesto irreversivel; nao apagar e o reversivel (letra B).
 
   // Executar migrações após um pequeno delay (500ms para subir mais rápido)
   setTimeout(() => {
@@ -3757,6 +3740,9 @@ app.post('/familias', authenticateToken, criarOuReativarFamilia);
 // /comercial, /filtrar e /por-modulo primeiro (senao cairiam no `/:id`).
 registrarLeituraDeUsuarios(app, { getDb: () => db, authenticateToken });
 
+// Etapa 135 (C283, RN-09): a recusa do e-mail que nao e texto, no POST e no PUT de /api/usuarios.
+const LITERAL_EMAIL_NAO_TEXTO = 'E-mail inválido: envie o e-mail como texto';
+
 app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
   normalizarMaiusculas(req.body, ['nome', 'cargo']);
   const sanitized = sanitizeSuperAdminPayload(req.user, req.body);
@@ -3781,6 +3767,11 @@ app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
     return res.status(400).json({ error: 'Nome, email e senha são obrigatórios' });
   }
 
+  // Etapa 135 (C283, RN-09): e-mail que nao e texto (numero, lista, objeto, booleano) gravava lixo ("[object Object]").
+  if (typeof email !== 'string') {
+    return res.status(400).json({ error: LITERAL_EMAIL_NAO_TEXTO });
+  }
+
   if (senha.length < 6) {
     return res.status(400).json({ error: 'Senha deve ter no mínimo 6 caracteres' });
   }
@@ -3791,6 +3782,9 @@ app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
   }
 
   const hashedPassword = bcrypt.hashSync(senha, 10);
+  // Etapa 135 (C284, RN-08): `ativo` nulo ou "" gravava nulo — um usuario que nao entra (o login exige ativo). Vazio e 1, como a
+  // coluna nasce (DEFAULT 1) e como a edicao mantem o que havia (COALESCE, Etapa 132). O resto como veio (0 continua 0).
+  const ativoNaCriacao = (ativo === undefined || ativo === null || ativo === '') ? 1 : ativo;
 
   db.run(
     'INSERT INTO usuarios (nome, email, senha, cargo, role, ativo, pode_aprovar_descontos, setor, departamento, flag_vendedor, flag_compras, flag_ti, is_superadmin, admin_modulos, is_oculto) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -3800,7 +3794,7 @@ app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
       hashedPassword,
       cargo || '',
       role || 'usuario',
-      ativo !== undefined ? ativo : 1,
+      ativoNaCriacao,
       pode_aprovar_descontos !== undefined ? pode_aprovar_descontos : 0,
       setor || null,
       departamento || null,
@@ -3829,7 +3823,7 @@ app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
             email,
             cargo,
             role: role || 'usuario',
-            ativo: ativo !== undefined ? ativo : 1,
+            ativo: ativoNaCriacao,
             pode_aprovar_descontos: pode_aprovar_descontos !== undefined ? pode_aprovar_descontos : 0,
             setor: setor || null,
             departamento: departamento || null,
@@ -3850,6 +3844,12 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
   db.get('SELECT id, email FROM usuarios WHERE id = ?', [id], (lookupErr, existing) => {
     if (lookupErr) return res.status(500).json({ error: lookupErr.message });
     if (!existing) return res.status(404).json({ error: 'Usuário não encontrado' });
+
+  // Etapa 135 (C283, RN-09): e-mail presente que nao e texto (inclusive nulo) -> 400, nada gravado. Sem o campo segue o de hoje (o
+  // NOT NULL da coluna, 500 — preso em superPadraoNoBoot; declarado em D).
+  if (req.body && req.body.email !== undefined && typeof req.body.email !== 'string') {
+    return res.status(400).json({ error: LITERAL_EMAIL_NAO_TEXTO });
+  }
 
   // Etapa 134 (C280, RN-03): quem nao e super nao poe o e-mail do administrador padrao em quem nao o tinha (editar quem ja o tem, com
   // o e-mail igual, segue — a regua de quem edita super e a B853).
