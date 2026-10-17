@@ -61,9 +61,11 @@ test('[RN-05] PUT: encerrarSocketsSeInativo(id) no finishUpdate, depois do if (e
   depois(corpo, 'return res.status(500).json({ error: err.message });', 'if (chatSocket) chatSocket.encerrarSocketsSeInativo(id);');
 });
 
-test('[RN-05] DELETE: encerrarSocketsDoUsuario(targetId) depois do db.exec da transacao e antes do catch', () => {
+test('[RN-05] DELETE: encerrarSocketsDoUsuario(targetId) depois da transacao confirmada com o motivo OK e antes do catch', () => {
   const t = trecho("app.delete('/api/usuarios/:id'", "app.get('/api/clientes'");
-  depois(t, "await db.exec(stmts.join('\\n'));", 'if (chatSocket) chatSocket.encerrarSocketsDoUsuario(targetId);');
+  // Etapa 137 (C292): a transacao e o `execEmTransacao` e a exclusao so aconteceu com o motivo OK — o encerrar vem depois dos dois
+  depois(t, "await db.execEmTransacao(stmts.join('\\n'));", 'if (chatSocket) chatSocket.encerrarSocketsDoUsuario(targetId);');
+  depois(t, "if (motivo !== 'OK') return res.status(500)", 'if (chatSocket) chatSocket.encerrarSocketsDoUsuario(targetId);');
   assert.ok(t.indexOf('chatSocket.encerrarSocketsDoUsuario(targetId)') < t.indexOf('} catch (e) {'));
 });
 

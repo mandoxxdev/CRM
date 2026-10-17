@@ -255,6 +255,27 @@ function wrapDatabase(db) {
     return promise;
   };
 
+  /**
+   * Etapa 137 (C292, RN-04): `BEGIN IMMEDIATE` + corpo + `COMMIT` num `exec` so — exclusivo no driver (nenhum `db.get`/`db.all` da
+   * conexao entra no meio) — numa vaga da fila de escrita. Se o `exec` falha, o `ROLLBACK` roda NA MESMA VAGA, antes de soltar a fila:
+   * mandado depois pela fila (como a exclusao de usuario fazia), ele rodava depois das escritas que entraram enquanto o `exec` falhava —
+   * elas caiam dentro da transacao aberta e eram desfeitas. O ROLLBACK que falha ("no transaction is active": o BUSY no BEGIN nao abriu
+   * nada) e engolido e o erro original sobe; o BUSY tenta de novo (retryAsync). O corpo NAO leva BEGIN/COMMIT.
+   * Fica (D (137)): a escrita de `db.prepare` nao passa pela fila e pode entrar entre dois comandos do `exec`; o ROLLBACK de um erro
+   * inesperado a desfaz. Quem precisa recusar sem erro decide DENTRO do corpo, antes de escrever, e termina em COMMIT (a exclusao).
+   */
+  db.execEmTransacao = function execEmTransacao(corpo) {
+    const sql = `BEGIN IMMEDIATE;\n${corpo}\nCOMMIT;`;
+    return enqueueWrite(() =>
+      retryAsync((done) => {
+        originalExec(sql, (err) => {
+          if (!err) return done(null);
+          originalExec('ROLLBACK;', () => done(err));
+        });
+      }, 'execEmTransacao')
+    );
+  };
+
   db.__orionWrapped = true;
   return db;
 }

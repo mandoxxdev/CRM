@@ -4159,24 +4159,48 @@ app.delete('/api/usuarios/:id', authenticateToken, requireDeleteUsers, async (re
       }
     }
 
-    // Monta uma única transação atômica (ids são inteiros validados → seguro interpolar).
-    const stmts = ['BEGIN IMMEDIATE TRANSACTION;'];
+    // Etapa 137 (C292, RN-01..RN-03): a conferencia de cima e a recusa CEDO; o estado pode mudar nas dezenas de leituras de PRAGMA
+    // ate aqui (dois supers excluindo um ao outro passavam os dois — 6/6, zero super ativo). A decisao e tomada DE NOVO dentro da propria
+    // transacao, ANTES de qualquer escrita: o primeiro comando grava o motivo pelo token da requisicao e todo comando seguinte so age com
+    // o motivo OK. Sempre COMMIT — recusada, a transacao nao escreveu nada (nada a desfazer: um ROLLBACK desfaria tambem a escrita de
+    // `db.prepare` que tenha entrado entre dois comandos — Fase 2 C1). Um `exec` so: exclusivo no driver, nenhuma leitura ve o meio
+    // (Fase 2 C2). Ids sao inteiros validados e o token e hexadecimal -> seguro interpolar.
+    const token = require('crypto').randomBytes(12).toString('hex');
+    const MOTIVO_OK = `EXISTS (SELECT 1 FROM temp.usuarios_exclusao_motivo WHERE token = '${token}' AND motivo = 'OK')`;
+    const guardaDoAlvo = GUARDA_ULTIMO_SUPER_SQL.replace('?', () => '1');
+    const stmts = [
+      'CREATE TEMP TABLE IF NOT EXISTS usuarios_exclusao_motivo (token TEXT PRIMARY KEY, motivo TEXT NOT NULL);',
+      `INSERT INTO temp.usuarios_exclusao_motivo (token, motivo) SELECT '${token}', CASE
+        WHEN NOT EXISTS (SELECT 1 FROM usuarios WHERE id = ${targetId}) THEN 'NAO_ENCONTRADO'
+        WHEN EXISTS (SELECT 1 FROM usuarios WHERE id = ${targetId} AND NOT ${guardaDoAlvo}) THEN 'ULTIMO_SUPER'
+        WHEN NOT EXISTS (SELECT 1 FROM usuarios WHERE id = ${transferToId}) THEN 'DESTINO'
+        ELSE 'OK' END;`,
+    ];
     let transferidos = 0;
     for (const { table, column } of refs) {
       // Remove a linha quando a tabela é de dados pessoais OU quando a coluna faz parte de
       // um índice UNIQUE (tabela de associação — transferir violaria a restrição UNIQUE).
       const remover = PURGE_TABLES.has(table) || (await colunaTemUnique(table, column));
       if (remover) {
-        stmts.push(`DELETE FROM "${table}" WHERE "${column}" = ${targetId};`);
+        stmts.push(`DELETE FROM "${table}" WHERE "${column}" = ${targetId} AND ${MOTIVO_OK};`);
       } else {
-        stmts.push(`UPDATE "${table}" SET "${column}" = ${transferToId} WHERE "${column}" = ${targetId};`);
+        stmts.push(`UPDATE "${table}" SET "${column}" = ${transferToId} WHERE "${column}" = ${targetId} AND ${MOTIVO_OK};`);
         transferidos += 1;
       }
     }
-    stmts.push(`DELETE FROM usuarios WHERE id = ${targetId};`);
-    stmts.push('COMMIT;');
+    stmts.push(`DELETE FROM usuarios WHERE id = ${targetId} AND ${MOTIVO_OK};`);
 
-    await db.exec(stmts.join('\n'));
+    // Etapa 137 (Fase 2 I6): o ROLLBACK de um erro inesperado roda na mesma vaga da fila (`execEmTransacao`), nao depois dela.
+    await db.execEmTransacao(stmts.join('\n'));
+    const decisao = await db.get('SELECT motivo FROM temp.usuarios_exclusao_motivo WHERE token = ?', [token]);
+    await db.run('DELETE FROM temp.usuarios_exclusao_motivo WHERE token = ?', [token]);
+    const motivo = decisao && decisao.motivo;
+    if (motivo === 'NAO_ENCONTRADO') return res.status(404).json({ error: 'Usuário não encontrado' });
+    if (motivo === 'ULTIMO_SUPER') {
+      return res.status(403).json({ error: 'Não é possível excluir o último Super Administrador ativo do sistema' });
+    }
+    if (motivo === 'DESTINO') return res.status(400).json({ error: 'Usuário de destino dos registros não encontrado' });
+    if (motivo !== 'OK') return res.status(500).json({ error: 'A exclusão não confirmou o resultado' });
     invalidateComercialResponsaveisCache();
     // Etapa 132 (C271, RN-04): apagado -> os sockets abertos do chat dele caem na hora (a sala nao sai com a linha).
     if (chatSocket) chatSocket.encerrarSocketsDoUsuario(targetId);
@@ -4187,11 +4211,8 @@ app.delete('/api/usuarios/:id', authenticateToken, requireDeleteUsers, async (re
       colunasTransferidas: transferidos,
     });
   } catch (e) {
-    try {
-      await db.exec('ROLLBACK;');
-    } catch (_) {
-      /* transação pode já ter sido desfeita pelo SQLite */
-    }
+    // Etapa 137 (Fase 2 I6): sem o ROLLBACK daqui — ele ia pela fila, depois das escritas alheias que tinham entrado na transacao aberta,
+    // e as desfazia; o `execEmTransacao` ja desfez na mesma vaga.
     return respondDbError(res, e, 'usuarios:excluir');
   }
 });

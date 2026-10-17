@@ -361,6 +361,92 @@ async function run() {
     assert(!logs.includes('[SQLite] WAL mode enabled'), `nao pode dizer enabled: ${JSON.stringify(logs)}`);
   });
 
+  // ---------------------------------------------------------------------------
+  // Etapa 137 (C292, RN-04): `db.execEmTransacao(corpo)` — BEGIN IMMEDIATE + corpo + COMMIT num exec so (exclusivo no driver), numa vaga
+  // da fila; se falha, o ROLLBACK roda NA MESMA VAGA. Antes, a rota de exclusao mandava o ROLLBACK pela fila, depois das escritas que
+  // entraram nela enquanto o exec falhava: elas rodavam dentro da transacao aberta e o ROLLBACK as desfazia (Fase 2 I6).
+  // Plano: docs/superpowers/plans/2026-10-17-almoxarifado-etapa137-a-exclusao-do-ultimo-super.md
+  // ---------------------------------------------------------------------------
+
+  const bancoDeArquivo = async (nome) => {
+    const arquivo = path.join(os.tmpdir(), `orion-rn137-${nome}-${process.pid}-${Date.now()}.db`);
+    const db = new sqlite3.Database(arquivo);
+    db.configure('busyTimeout', 0);
+    await runCru(db, 'CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)');
+    await runCru(db, "INSERT INTO t (id, v) VALUES (1, 'a')");
+    wrapDatabase(db);
+    return { db, arquivo };
+  };
+  const apagar137 = async ({ db, arquivo }) => {
+    await fecharCru(db);
+    for (const sufixo of ['', '-wal', '-shm']) { try { fs.unlinkSync(arquivo + sufixo); } catch (e) { /* nao existe */ } }
+  };
+  const semTransacaoAberta = async (db) => { await db.exec('BEGIN IMMEDIATE; ROLLBACK;'); }; // "within a transaction" se ficou aberta
+  const todas = (db) => new Promise((r, j) => db.all('SELECT id, v FROM t ORDER BY id', [], (e, x) => (e ? j(e) : r(x))));
+
+  await test('[RN-04a] execEmTransacao: o corpo inteiro grava, numa transacao', async () => {
+    const b = await bancoDeArquivo('a');
+    try {
+      assert(typeof b.db.execEmTransacao === 'function', 'wrapDatabase nao expoe execEmTransacao');
+      await b.db.execEmTransacao("UPDATE t SET v = 'b' WHERE id = 1;\nINSERT INTO t (v) VALUES ('c');");
+      assert(JSON.stringify(await todas(b.db)) === JSON.stringify([{ id: 1, v: 'b' }, { id: 2, v: 'c' }]), JSON.stringify(await todas(b.db)));
+      await semTransacaoAberta(b.db);
+    } finally { await apagar137(b); }
+  });
+
+  await test('[RN-04b] execEmTransacao: o corpo que falha no meio -> ROLLBACK na mesma vaga; a escrita enfileirada enquanto isso GRAVA', async () => {
+    const b = await bancoDeArquivo('b');
+    try {
+      const corpoGrande = Array.from({ length: 400 }, (_, k) => `INSERT INTO t (v) VALUES ('meio-${k}');`).join('\n');
+      const pTx = b.db.execEmTransacao(`UPDATE t SET v = 'meio' WHERE id = 1;\n${corpoGrande}\nINSERT INTO tabela_que_nao_existe (x) VALUES (1);`);
+      const pFora = b.db.run("INSERT INTO t (v) VALUES ('fora')"); // enfileirada enquanto o corpo roda
+      let pego = null;
+      try { await pTx; } catch (e) { pego = e; }
+      await pFora;
+      assert(pego && /no such table/i.test(pego.message), `o erro do corpo nao chegou: ${pego && pego.message}`);
+      assert(JSON.stringify(await todas(b.db)) === JSON.stringify([{ id: 1, v: 'a' }, { id: 2, v: 'fora' }]),
+        `o ROLLBACK nao desfez o corpo ou desfez a escrita de fora: ${JSON.stringify((await todas(b.db)).slice(0, 4))}`);
+      await semTransacaoAberta(b.db);
+    } finally { await apagar137(b); }
+  });
+
+  await test('[RN-04c] execEmTransacao: BEGIN IMMEDIATE com o lock de outra conexao tenta de novo ate soltar', async () => {
+    await comLockDeEscrita('rn137c', async ({ principal, rival }) => {
+      const tr = principal.execEmTransacao('UPDATE t SET ativo = 7 WHERE id = 1;');
+      await esperar(120);
+      await runCru(rival, 'COMMIT');
+      await tr;
+      const l = await getCru(rival, 'SELECT ativo FROM t WHERE id = 1');
+      assert(l.ativo === 7, `nao gravou depois do retry: ${JSON.stringify(l)}`);
+      await semTransacaoAberta(principal);
+    });
+  });
+
+  await test('[RN-04d] execEmTransacao: o lock que nunca solta -> SQLITE_BUSY chega e nada fica aberto', async () => {
+    await comLockDeEscrita('rn137d', async ({ principal, rival }) => {
+      let pego = null;
+      try { await principal.execEmTransacao('UPDATE t SET ativo = 9 WHERE id = 1;'); } catch (e) { pego = e; }
+      assert(pego && isSqliteBusy(pego), `esperado SQLITE_BUSY: ${pego && pego.message}`);
+      await runCru(rival, 'ROLLBACK');
+      await semTransacaoAberta(principal);
+      await runCru(rival, 'BEGIN IMMEDIATE'); // o comLockDeEscrita solta no finally
+    });
+  });
+
+  await test('[RN-04e] execEmTransacao: o COMMIT que falha (FK adiada) -> ROLLBACK e o erro chega', async () => {
+    const b = await bancoDeArquivo('e');
+    try {
+      await b.db.exec('PRAGMA foreign_keys = ON;');
+      await b.db.exec('CREATE TABLE pai (id INTEGER PRIMARY KEY); CREATE TABLE filho (id INTEGER PRIMARY KEY, pai_id INTEGER REFERENCES pai(id) DEFERRABLE INITIALLY DEFERRED);');
+      let pego = null;
+      try { await b.db.execEmTransacao('INSERT INTO filho (pai_id) VALUES (42);'); } catch (e) { pego = e; }
+      assert(pego && /FOREIGN KEY/i.test(pego.message), `o erro do COMMIT nao chegou: ${pego && pego.message}`);
+      const n = await getCru(b.db, 'SELECT COUNT(*) AS n FROM filho');
+      assert(n.n === 0, `o COMMIT que falhou deixou a linha: ${JSON.stringify(n)}`);
+      await semTransacaoAberta(b.db);
+    } finally { await apagar137(b); }
+  });
+
   console.log(`\nsqliteConcurrency: ${passed} passed, ${failed} failed`);
   process.exit(failed > 0 ? 1 : 0);
 }
