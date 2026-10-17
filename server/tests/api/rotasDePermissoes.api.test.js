@@ -203,6 +203,48 @@ const L2 = 'Apenas administradores podem gerenciar permissões';
     assert.deepStrictEqual(c3.body, { permitido: true, motivo: 'permissao_grupo' });
   });
 
+  // ── Fase 5 r3 (sabotagens que sobreviveram por falta de asserção): "o corpo de hoje" das rotas movidas ────────────
+  await test('[RN-01 corpo] a lista de grupos sai por nome (nem por id crescente nem decrescente)', async () => {
+    await run(db, "INSERT INTO grupos_permissoes (id, nome, descricao) VALUES (30, 'AAA', 'x'), (20, 'ZZZ', 'x')");
+    const r = await pede('S', 'get', '/api/permissoes/grupos');
+    assert.deepStrictEqual(r.body.map((x) => x.nome), ['AAA', 'G10', 'ZZZ']);
+    await run(db, 'DELETE FROM grupos_permissoes WHERE id IN (20, 30)');
+  });
+
+  await test('[RN-01 corpo] o POST de uma permissao que ja existe atualiza (permissao 1 e as restricoes); o INSERT grava as restricoes', async () => {
+    const base = { usuario_id: 8, grupo_id: null, modulo: 'frota', acao: 'visualizar', permissao: 1 };
+    const c = await pede('a', 'post', '/api/permissoes', { ...base, restricao_cliente_id: 77, restricao_regiao: 'SUL' });
+    assert.deepStrictEqual([c.status, c.body.message], [200, 'Permissão criada com sucesso']);
+    const [l1] = await all(db, 'SELECT permissao, restricao_cliente_id, restricao_regiao FROM permissoes WHERE id = ?', [c.body.id]);
+    assert.deepStrictEqual(l1, { permissao: 1, restricao_cliente_id: 77, restricao_regiao: 'SUL' });
+    const u = await pede('A', 'post', '/api/permissoes', { ...base, restricao_cliente_id: null, restricao_regiao: 'NORTE' });
+    assert.deepStrictEqual([u.status, u.body], [200, { message: 'Permissão atualizada com sucesso', id: c.body.id }]);
+    const [l2] = await all(db, 'SELECT permissao, restricao_cliente_id, restricao_regiao FROM permissoes WHERE id = ?', [c.body.id]);
+    assert.deepStrictEqual(l2, { permissao: 1, restricao_cliente_id: null, restricao_regiao: 'NORTE' });
+    assert.strictEqual((await all(db, "SELECT id FROM permissoes WHERE usuario_id = 8 AND modulo = 'frota'")).length, 1, 'nao duplica');
+  });
+
+  await test('[RN-01 corpo] o grupo: POST sem ativo nasce ativo; PUT grava o ativo 0; o membro sai sozinho (o outro fica)', async () => {
+    const g = await pede('S', 'post', '/api/permissoes/grupos', { nome: 'SEM-ATIVO', descricao: 'x' });
+    const [l1] = await all(db, 'SELECT ativo FROM grupos_permissoes WHERE id = ?', [g.body.id]);
+    assert.strictEqual(l1.ativo, 1);
+    for (const uid of [6, 7]) await pede('S', 'post', `/api/permissoes/grupos/${g.body.id}/usuarios`, { usuario_id: uid });
+    await pede('A', 'delete', `/api/permissoes/grupos/${g.body.id}/usuarios/6`);
+    const membros = await pede('A', 'get', `/api/permissoes/grupos/${g.body.id}/usuarios`);
+    assert.deepStrictEqual(membros.body.map((x) => x.id), [7], 'so o 6 saiu');
+    await pede('a', 'put', `/api/permissoes/grupos/${g.body.id}`, { nome: 'SEM-ATIVO', descricao: 'y', ativo: 0 });
+    const [l2] = await all(db, 'SELECT ativo, descricao FROM grupos_permissoes WHERE id = ?', [g.body.id]);
+    assert.deepStrictEqual(l2, { ativo: 0, descricao: 'y' });
+    // /verificar pelo grupo INATIVO: nao vale
+    await run(db, "INSERT INTO permissoes (usuario_id, grupo_id, modulo, acao, permissao) VALUES (NULL, ?, 'qualidade', 'visualizar', 1)", [g.body.id]);
+    atual = { id: 7, role: 'usuario', is_superadmin: 0, admin_modulos: [] };
+    const v = await request(app).get('/api/permissoes/verificar?modulo=qualidade&acao=visualizar');
+    assert.deepStrictEqual(v.body, { motivo: 'sem_permissao' }, 'o grupo inativo nao da permissao');
+    await run(db, 'UPDATE grupos_permissoes SET ativo = 1 WHERE id = ?', [g.body.id]);
+    const v2 = await request(app).get('/api/permissoes/verificar?modulo=qualidade&acao=visualizar');
+    assert.deepStrictEqual(v2.body, { permitido: true, motivo: 'permissao_grupo' }, 'metade positiva: o grupo ativo da');
+  });
+
   // ── RN-05 — a fiacao (estatico, sem comentarios) ─────────────────────────────────────────
   const semComentario = (txt) => txt.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
   const indexJs = semComentario(fs.readFileSync(path.join(__dirname, '..', '..', 'index.js'), 'utf8'));

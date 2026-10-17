@@ -32,7 +32,9 @@ function test(name, fn) { testes.push([name, fn]); }
 
 // ── C274 — estatico ───────────────────────────────────────────────────────────────────────
 test('[RN-07] routes/chat.js: o mensagem_excluida vai para a sala pelo numero', () => {
-  const fonte = fs.readFileSync(path.join(SERVER_DIR, 'routes', 'chat.js'), 'utf8');
+  // sem as linhas de comentario (Fase 5 r3 R18: o literal num comentario passava)
+  const fonte = fs.readFileSync(path.join(SERVER_DIR, 'routes', 'chat.js'), 'utf8')
+    .split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
   const i = fonte.indexOf("app.delete('/api/chat/conversas/:id/mensagens/:msgId'");
   assert.ok(i > 0);
   const corpo = fonte.slice(i, fonte.indexOf('});', fonte.indexOf("emit('mensagem_excluida'", i)));
@@ -246,6 +248,10 @@ test('[RN-07] C274: apagar a mensagem pelo endereco com zero avisa quem esta na 
   abertos.push(c);
   assert.strictEqual(await c.pronto, 'conectado');
   c.emit('join_conversa', conv);
+  // Fase 5 r3 R18: um socket conectado FORA da conversa nao pode receber o aviso (o emit para o io inteiro passava)
+  const fora = conectar(porta, ctx.tok.alvoX);
+  abertos.push(fora);
+  assert.strictEqual(await fora.pronto, 'conectado');
   await pausa(300);
   const [ms, m] = await j('POST', `/chat/conversas/${conv}/mensagens`, ctx.T, { conteudo: 'APAGAR-133' });
   assert.strictEqual(ms, 200, JSON.stringify(m));
@@ -255,6 +261,9 @@ test('[RN-07] C274: apagar a mensagem pelo endereco com zero avisa quem esta na 
   assert.deepStrictEqual([ds, d], [200, { success: true }]);
   assert.ok(await ate(() => c.recebeu('mensagem_excluida').length > 0, 3000), 'C recebe o aviso de mensagem apagada');
   assert.deepStrictEqual(c.recebeu('mensagem_excluida').map((e) => e[1]), [{ id: msgId, conversa_id: conv }]);
+  await pausa(300);
+  assert.deepStrictEqual(fora.recebeu('mensagem_excluida'), [], 'quem nao esta na conversa nao recebe');
+  assert.strictEqual(fora.conectado, true, 'metade positiva: o de fora segue conectado');
 });
 
 (async () => {
