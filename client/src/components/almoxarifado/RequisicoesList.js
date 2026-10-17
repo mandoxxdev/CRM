@@ -77,6 +77,35 @@ const maxQtdEntrega = (item) => {
   }
   return Math.min(pendente, separadoDisponivel, estoque);
 };
+// Etapa 135 (RN-06; D (127)): a entrega divide o livre entre itens do mesmo material (irmãos) pela conta da 127 — a parte PRÓPRIA do
+// item (`saldo_entregavel_proprio`: a caixa e a reserva dele) não é dividida; o que passa dela sai do livre do material, o mesmo para
+// todos os irmãos (`saldo_entregavel` é o teto do item sozinho). Antes cada irmão abria com o próprio máximo: dois itens já entregues em
+// parte com 2 livres abriam 2 e 2, e o servidor recusava o segundo. Servidor sem os campos: tudo próprio — nada dividido (a conta de antes).
+const saldoEntregavel = (item) => Math.max(0, Number(item.saldo_entregavel ?? maxQtdEntrega(item)) || 0);
+const entregavelProprio = (item) => Math.min(saldoEntregavel(item),
+  Math.max(0, Number(item.saldo_entregavel_proprio ?? saldoEntregavel(item)) || 0));
+const tiraDoLivreNaEntrega = (item, quantidade) => Math.max(0, (Number(quantidade) || 0) - entregavelProprio(item));
+const maxEntregaNaTela = (item, outrosMesmoMaterial = 0) => {
+  const proprio = entregavelProprio(item);
+  return Math.min(maxQtdEntrega(item),
+    proprio + Math.max(0, saldoEntregavel(item) - proprio - (Number(outrosMesmoMaterial) || 0)));
+};
+// O pré-preenchimento: cada item, na ordem do pedido, com o que sobra do livre depois dos irmãos anteriores. Só os > 0.
+const quantidadesIniciaisEntrega = (itens) => {
+  const jaContado = {};
+  const qtds = {};
+  (itens || []).forEach((item) => {
+    const outros = jaContado[item.material_id] || 0;
+    const quantidade = Number(maxEntregaNaTela(item, outros).toFixed(6));
+    jaContado[item.material_id] = outros + tiraDoLivreNaEntrega(item, quantidade);
+    if (quantidade > 0) qtds[item.id] = quantidade;
+  });
+  return qtds;
+};
+// O que os OUTROS irmãos estão entregando no modal agora — só o que passa da parte própria de cada um.
+const entregandoOutrosDoMaterial = (itens, item, quantidades) => (itens || [])
+  .filter((i) => i.id !== item.id && Number(i.material_id) === Number(item.material_id))
+  .reduce((s, i) => s + tiraDoLivreNaEntrega(i, Math.max(0, parseFloat((quantidades || {})[i.id]) || 0)), 0);
 const temEntregavel = (itens) => (itens || []).some((i) => maxQtdEntrega(i) > 0);
 const totalPendente = (itens) => (itens || []).reduce((s, i) => s + getPendente(i), 0);
 const temPendenteComEstoque = (itens) => temEntregavel(itens);
@@ -521,11 +550,8 @@ const RequisicoesList = () => {
   const aplicarDetalhe = useCallback((data, id) => {
     setDetalhe(data);
     loadedDetalheIdRef.current = id;
-    const qtdsEntrega = {};
-    (data.itens || []).forEach((i) => {
-      qtdsEntrega[i.id] = maxQtdEntrega(i);
-    });
-    setQuantidadesEntrega(qtdsEntrega);
+    // Etapa 135 (RN-06): dividido entre irmãos.
+    setQuantidadesEntrega(quantidadesIniciaisEntrega(data.itens));
     setQuantidadesSeparacao(quantidadesIniciaisSeparacao(data.itens));
   }, []);
 
@@ -895,11 +921,7 @@ const RequisicoesList = () => {
       toast.error('Requisição não carregada');
       return;
     }
-    const qtds = {};
-    fonte.itens.forEach((i) => {
-      const qtd = maxQtdEntrega(i);
-      if (qtd > 0) qtds[i.id] = qtd;
-    });
+    const qtds = quantidadesIniciaisEntrega(fonte.itens); // Etapa 135 (RN-06): dividido entre irmãos
     if (Object.keys(qtds).length === 0) {
       console.error('[RequisicoesList] abrirModalEntrega: nenhum item entregável', fonte);
       toast.error('Nenhum item disponível para entrega. Verifique separação e estoque.');
@@ -914,11 +936,7 @@ const RequisicoesList = () => {
       toast.error('Requisição não carregada');
       return;
     }
-    const qtds = {};
-    detalhe.itens.forEach((i) => {
-      const qtd = maxQtdEntrega(i);
-      if (qtd > 0) qtds[i.id] = qtd;
-    });
+    const qtds = quantidadesIniciaisEntrega(detalhe.itens); // Etapa 135 (RN-06): dividido entre irmãos
     const itens_atendidos = montarItensEntrega(detalhe, qtds);
     if (!itens_atendidos.length) {
       console.error('[RequisicoesList] handleConfirmarEntrega: nenhum item entregável', {
@@ -2502,7 +2520,7 @@ const RequisicoesList = () => {
                   </div>
                   <div>
                     <input className="almox-count-input" type="number" min="0" step="1"
-                      max={maxQtdEntrega(item)}
+                      max={maxEntregaNaTela(item, entregandoOutrosDoMaterial(detalhe.itens, item, quantidadesEntrega))}
                       value={quantidadesEntrega[item.id] ?? ''}
                       onChange={e => setQuantidadesEntrega(q => ({ ...q, [item.id]: e.target.value }))} />
                     <div style={{ fontSize: '0.7rem', color: 'var(--gmp-text-light)', textAlign: 'right', marginTop: 2 }}>{item.unidade}</div>
