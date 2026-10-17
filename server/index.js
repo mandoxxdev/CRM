@@ -8260,13 +8260,30 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
     // Pela margem e pelo status EFETIVOS: antes, `{status: 'enviada'}` sem a margem passava (e a gravava 0).
     // Etapa 140 (RN-140.09, C301): vale também para "desconto aprovado" — antes ela ficava de fora, e trocar a margem de uma proposta já
     // aprovada (10% → 50%) passava e o /enviar a mandava. Na "desconto aprovado" a recusa diz que o desconto não é o aprovado.
+    // Etapa 140 (Fase 5, r1 I-1 / r2 I3): trocar o responsável de uma proposta com pedido de desconto pendente é recusado — o
+    // responsável é dono do pedido (não o decide), e trocá-lo pelo PUT, aprovar e trocar de volta contornava a regra.
+    const novoResponsavel = tem('responsavel_id') && corpo.responsavel_id != null && corpo.responsavel_id !== '' ? Number(corpo.responsavel_id) : null;
+    if (novoResponsavel != null && novoResponsavel !== Number(propostaAtual.responsavel_id)) {
+      return db.get(
+        "SELECT COUNT(*) AS n FROM aprovacoes WHERE proposta_id = ? AND tipo = 'desconto' AND COALESCE(NULLIF(status, ''), 'pendente') = 'pendente'",
+        [id],
+        (errPend, pend) => {
+          if (errPend) return res.status(500).json({ error: errPend.message });
+          if (pend && pend.n > 0) return res.status(409).json({ error: aprovacaoDesconto.MSG.RESPONSAVEL_PENDENTE });
+          return regraDoDesconto();
+        }
+      );
+    }
+    return regraDoDesconto();
+
+    function regraDoDesconto() {
     if ((tem('margem_desconto') || tem('status')) && margemEf > 5 && statusEf && statusEf !== 'rascunho') {
       // Verificar se existe uma aprovação aprovada para esta proposta com este desconto (a régua de casamento de sempre, extraída para
       // aprovacaoDesconto.casaComAprovacao — o valor da aprovação passa pela régua da margem; o ilegível não casa).
       const margem_desconto = margemEf;
 
       db.all(
-        `SELECT id, valor_desconto FROM aprovacoes
+        `SELECT id, valor_desconto, aprovado_por, solicitado_por FROM aprovacoes
          WHERE proposta_id = ?
          AND status = 'aprovado'
          AND tipo = 'desconto'`,
@@ -8296,6 +8313,7 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
     } else {
       // Se desconto <= 5% ou é rascunho, continuar normalmente
       continuarAtualizacao();
+    }
     }
     
     function continuarAtualizacao() {
@@ -14336,12 +14354,13 @@ app.post('/api/aprovacoes', authenticateToken, (req, res) => {
   }
 
   // Etapa 140 (RN-140.06): proposta inexistente é 404 — antes era o 500 cru da chave estrangeira.
-  db.get('SELECT id, numero_proposta, titulo, responsavel_id FROM propostas WHERE id = ?', [proposta_id], (errP, propostaAlvo) => {
+  db.get('SELECT id, numero_proposta, titulo, responsavel_id, created_by FROM propostas WHERE id = ?', [proposta_id], (errP, propostaAlvo) => {
     if (errP) return res.status(500).json({ error: errP.message });
     if (!propostaAlvo) return res.status(404).json({ error: 'Proposta não encontrada' });
 
-    // Etapa 140 (RN-140.07): a atividade vai para um aprovador (coluna ou super) que NÃO é quem pede — antes ia para o primeiro com a
-    // coluna, que podia ser o próprio solicitante. Prefere quem não é oculto, depois quem tem a coluna, depois o menor id.
+    // Etapa 140 (RN-140.07): a atividade vai para um aprovador (coluna ou super) que NÃO é dono do pedido (quem pede, o responsável e
+    // quem criou a proposta — Fase 5, r1 M-1) — antes ia para o primeiro com a coluna, que podia ser o próprio solicitante. Prefere quem
+    // não é oculto, depois quem tem a coluna, depois o menor id. Só sobram donos → ninguém poderia decidir → 400.
     db.all(
       `SELECT id, nome FROM usuarios
        WHERE ativo = 1 AND (pode_aprovar_descontos = 1 OR COALESCE(is_superadmin, 0) = 1)
@@ -14355,7 +14374,8 @@ app.post('/api/aprovacoes', authenticateToken, (req, res) => {
         if (!aprovadores || aprovadores.length === 0) {
           return res.status(400).json({ error: aprovacaoDesconto.MSG.SEM_APROVADOR });
         }
-        const aprovador = aprovadores.find((u) => Number(u.id) !== Number(solicitanteId));
+        const donos = aprovacaoDesconto.donosDoPedido(solicitanteId, propostaAlvo);
+        const aprovador = aprovadores.find((u) => !donos.includes(Number(u.id)));
         if (!aprovador) {
           return res.status(400).json({ error: aprovacaoDesconto.MSG.SO_VOCE });
         }
@@ -14443,7 +14463,7 @@ app.get('/api/aprovacoes', authenticateToken, (req, res) => {
 
     let query = `SELECT a.*,
                  p.numero_proposta, p.titulo as proposta_titulo, p.valor_total as proposta_valor_total,
-                 p.responsavel_id as proposta_responsavel_id,
+                 p.responsavel_id as proposta_responsavel_id, p.created_by as proposta_created_by,
                  u1.nome as solicitado_por_nome, u2.nome as aprovado_por_nome,
                  c.razao_social as cliente_nome
                  FROM aprovacoes a
@@ -14475,8 +14495,9 @@ app.get('/api/aprovacoes', authenticateToken, (req, res) => {
         query += ' AND 0';
       } else {
         query += ` AND a.solicitado_por != ? AND (p.responsavel_id IS NULL OR p.responsavel_id != ?)
+          AND (p.created_by IS NULL OR p.created_by != ?)
           AND (a.aprovado_por IS NULL OR a.aprovado_por = ?)`;
-        params.push(userId, userId, userId);
+        params.push(userId, userId, userId, userId);
       }
     }
 
@@ -14491,12 +14512,12 @@ app.get('/api/aprovacoes', authenticateToken, (req, res) => {
       // Adicionar campo tipo para cada aprovação, e (Etapa 140, RN-140.11) se quem lista pode decidir esta — a tela só mostra os
       // botões onde pode; quem decide é o PUT.
       const rowsWithTipo = (rows || []).map(row => {
-        const { proposta_responsavel_id: responsavel, ...resto } = row;
+        const { proposta_responsavel_id: responsavel, proposta_created_by: criador, ...resto } = row;
         return {
           ...resto,
           tipo: row.solicitado_por === userId ? 'enviada' : 'recebida',
           pode_decidir: (row.status || 'pendente') === 'pendente' && souAprovador
-            && !aprovacaoDesconto.ehDonoDoPedido(userId, row, responsavel)
+            && !aprovacaoDesconto.ehDonoDoPedido(userId, row, { responsavel_id: responsavel, created_by: criador })
         };
       });
 
@@ -14549,7 +14570,8 @@ app.put('/api/aprovacoes/:id', authenticateToken, (req, res) => {
   }
 
   db.get(
-    `SELECT a.*, p.responsavel_id AS proposta_responsavel_id, p.status AS proposta_status, p.id AS proposta_existe
+    `SELECT a.*, p.responsavel_id AS proposta_responsavel_id, p.created_by AS proposta_created_by, p.status AS proposta_status,
+            p.margem_desconto AS proposta_margem, p.id AS proposta_existe
      FROM aprovacoes a LEFT JOIN propostas p ON p.id = a.proposta_id WHERE a.id = ?`,
     [id],
     (err, aprovacao) => {
@@ -14568,8 +14590,8 @@ app.put('/api/aprovacoes/:id', authenticateToken, (req, res) => {
         if (!aprovacaoDesconto.ehAprovador(eu)) {
           return res.status(403).json({ error: aprovacaoDesconto.MSG.SEM_PERMISSAO });
         }
-        // RN-140.02: o dono do pedido (quem pediu ou o responsável da proposta) não decide — nem o super (B906, B907).
-        if (aprovacaoDesconto.ehDonoDoPedido(decisorId, aprovacao, aprovacao.proposta_responsavel_id)) {
+        // RN-140.02: o dono do pedido (quem pediu, o responsável ou quem criou a proposta) não decide — nem o super (B906, B907).
+        if (aprovacaoDesconto.ehDonoDoPedido(decisorId, aprovacao, { responsavel_id: aprovacao.proposta_responsavel_id, created_by: aprovacao.proposta_created_by })) {
           return res.status(403).json({ error: aprovacaoDesconto.MSG.PROPRIO });
         }
         // RN-140.04: só pedido pendente se decide (antes dava para aprovar o rejeitado).
@@ -14591,50 +14613,76 @@ app.put('/api/aprovacoes/:id', authenticateToken, (req, res) => {
           valorLido = lido.valor;
         }
 
-        // (1) o pedido, só se ainda pendente — duas decisões ao mesmo tempo: uma passa, a outra 409.
-        const updateQuery = status === 'aprovado'
-          ? `UPDATE aprovacoes SET status = ?, aprovado_por = ?, aprovado_em = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pendente'`
-          : `UPDATE aprovacoes SET status = ?, aprovado_por = ?, motivo_rejeicao = ?, aprovado_em = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pendente'`;
-        const updateParams = status === 'aprovado'
-          ? [status, decisorId, id]
-          : [status, decisorId, String(motivo_rejeicao).trim(), id];
-
-        db.run(updateQuery, updateParams, function aposDecidir(errUp) {
-          if (errUp) {
-            console.error('❌ Erro ao atualizar aprovação:', errUp);
-            return res.status(500).json({ error: errUp.message });
-          }
-          if (this.changes === 0) {
-            return res.status(409).json({ error: aprovacaoDesconto.MSG.JA_DECIDIDA });
-          }
-
-          const responder = () => res.json({
-            message: `Aprovação ${status === 'aprovado' ? 'aprovada' : 'rejeitada'} com sucesso`,
-            id: parseInt(id),
-            status: status
+        // Pendente = 'pendente', vazio ou nulo (o dado de antes; a leitura acima já o tratava assim — Fase 5, r1 M-2).
+        const PENDENTE_SQL = "COALESCE(NULLIF(status, ''), 'pendente') = 'pendente'";
+        const responder = () => res.json({
+          message: `Aprovação ${status === 'aprovado' ? 'aprovada' : 'rejeitada'} com sucesso`,
+          id: parseInt(id),
+          status: status
+        });
+        const gravarPedido = (feito) => {
+          const updateQuery = status === 'aprovado'
+            ? `UPDATE aprovacoes SET status = ?, aprovado_por = ?, aprovado_em = CURRENT_TIMESTAMP WHERE id = ? AND ${PENDENTE_SQL}`
+            : `UPDATE aprovacoes SET status = ?, aprovado_por = ?, motivo_rejeicao = ?, aprovado_em = CURRENT_TIMESTAMP WHERE id = ? AND ${PENDENTE_SQL}`;
+          const updateParams = status === 'aprovado'
+            ? [status, decisorId, id]
+            : [status, decisorId, String(motivo_rejeicao).trim(), id];
+          db.run(updateQuery, updateParams, function aposDecidir(errUp) {
+            if (errUp) {
+              console.error('❌ Erro ao atualizar aprovação:', errUp);
+              return feito(errUp);
+            }
+            return feito(null, this.changes);
           });
-          if (!(status === 'aprovado' && ehDesconto)) return responder();
+        };
 
-          // (2) a proposta, só se ainda em rascunho ou desconto aprovado — ANTES da resposta (antes era fogo e esquece, depois dela).
-          const statusAnterior = aprovacao.proposta_status;
-          db.run(
-            `UPDATE propostas SET margem_desconto = ?, status = 'desconto_aprovado', updated_at = CURRENT_TIMESTAMP
-             WHERE id = ? AND status IN ('rascunho', 'desconto_aprovado')`,
-            [valorLido, aprovacao.proposta_id],
-            function aposProposta(errProp) {
-              const desfazer = (resposta) => db.run(
-                `UPDATE aprovacoes SET status = 'pendente', aprovado_por = NULL, aprovado_em = NULL
-                 WHERE id = ? AND status = 'aprovado' AND aprovado_por = ?`,
-                [id, decisorId],
-                () => resposta()
-              );
-              if (errProp) {
-                console.error('❌ Erro ao atualizar proposta após aprovação de desconto:', errProp);
-                return desfazer(() => res.status(500).json({ error: errProp.message }));
-              }
-              // (3) a proposta saiu do rascunho entre a leitura e a gravação: o pedido volta a pendente e nada fica aprovado.
-              if (this.changes === 0) {
-                return desfazer(() => res.status(409).json({ error: aprovacaoDesconto.MSG.PROPOSTA_SAIU }));
+        if (!(status === 'aprovado' && ehDesconto)) {
+          // rejeitar (ou outro tipo): só o pedido, só se ainda pendente — duas decisões ao mesmo tempo: uma passa, a outra 409.
+          return gravarPedido((errUp, mudou) => {
+            if (errUp) return res.status(500).json({ error: errUp.message });
+            if (!mudou) return res.status(409).json({ error: aprovacaoDesconto.MSG.JA_DECIDIDA });
+            return responder();
+          });
+        }
+
+        // Aprovar um desconto (Fase 5, r2 I1 — a ordem é PROPOSTA PRIMEIRO). Gravando o pedido primeiro, havia um instante em que ele já
+        // estava "aprovado" e a proposta não: um /enviar nesse instante casava com ele, a gravação da proposta falhava, o pedido voltava a
+        // pendente — e a proposta ficava enviada com um desconto que ninguém aprovou. Agora:
+        // (1) a proposta, só se ainda em rascunho/desconto aprovado E o pedido ainda pendente (no mesmo UPDATE) — enquanto o pedido não for
+        //     "aprovado", nada casa com ele: o pior caso é uma "desconto aprovado" sem aprovação, que nem salva acima de 5 nem envia;
+        // (2) o pedido, só se ainda pendente; se outro o decidiu no meio, (3) a proposta volta ao que era (se ninguém mexeu) e 409;
+        // (4) o histórico de status e a resposta — tudo ANTES da resposta (antes era fogo e esquece, depois dela).
+        const statusAnterior = aprovacao.proposta_status;
+        const margemAnterior = aprovacao.proposta_margem;
+        db.run(
+          `UPDATE propostas SET margem_desconto = ?, status = 'desconto_aprovado', updated_at = CURRENT_TIMESTAMP
+           WHERE id = ? AND status IN ('rascunho', 'desconto_aprovado')
+             AND EXISTS (SELECT 1 FROM aprovacoes WHERE id = ? AND ${PENDENTE_SQL})`,
+          [valorLido, aprovacao.proposta_id, id],
+          function aposProposta(errProp) {
+            if (errProp) {
+              console.error('❌ Erro ao atualizar proposta antes da aprovação de desconto:', errProp);
+              return res.status(500).json({ error: errProp.message });
+            }
+            if (this.changes === 0) {
+              // nada gravado: ou a proposta saiu do rascunho, ou o pedido foi decidido por outro no meio
+              return db.get('SELECT status FROM aprovacoes WHERE id = ?', [id], (errA, agora) => {
+                if (errA) return res.status(500).json({ error: errA.message });
+                const aindaPendente = agora && ((agora.status || 'pendente') === 'pendente');
+                return res.status(409).json({ error: aindaPendente ? aprovacaoDesconto.MSG.PROPOSTA_SAIU : aprovacaoDesconto.MSG.JA_DECIDIDA });
+              });
+            }
+            return gravarPedido((errUp, mudou) => {
+              if (errUp || !mudou) {
+                // (3) o pedido não ficou aprovado: a proposta volta ao que era, se ainda está como esta aprovação a deixou
+                return db.run(
+                  `UPDATE propostas SET status = ?, margem_desconto = ?, updated_at = CURRENT_TIMESTAMP
+                   WHERE id = ? AND status = 'desconto_aprovado' AND margem_desconto IS ?`,
+                  [statusAnterior, margemAnterior, aprovacao.proposta_id, valorLido],
+                  () => (errUp
+                    ? res.status(500).json({ error: errUp.message })
+                    : res.status(409).json({ error: aprovacaoDesconto.MSG.JA_DECIDIDA }))
+                );
               }
               // (4) o histórico de status, e a resposta.
               if (statusAnterior !== 'desconto_aprovado') {
@@ -14644,9 +14692,9 @@ app.put('/api/aprovacoes/:id', authenticateToken, (req, res) => {
                 );
               }
               return responder();
-            }
-          );
-        });
+            });
+          }
+        );
       });
     }
   );
@@ -18783,33 +18831,42 @@ app.post('/api/propostas/:id/assinar', authenticateToken, (req, res) => {
 
   // Etapa 140 (RN-140.13; Fase 2, I1): a assinatura põe a proposta em "aprovada" de qualquer status — passa pela regra dos 5%, como o
   // envio. Antes uma rascunho com 50% sem aprovação virava ganha (e a tela liberava o documento). Nenhuma tela roteada chama esta rota.
-  db.get('SELECT id, margem_desconto FROM propostas WHERE id = ?', [id], (errP, proposta) => {
+  db.get('SELECT id, status, margem_desconto FROM propostas WHERE id = ?', [id], (errP, proposta) => {
     if (errP) return res.status(500).json({ error: errP.message });
     if (!proposta) return res.status(404).json({ error: 'Proposta não encontrada' });
     aprovacaoDesconto.margemLiberada(db, id, aprovacaoDesconto.margemParaRegra(proposta.margem_desconto), (errAprov, liberado) => {
       if (errAprov) return res.status(500).json({ error: errAprov.message });
       if (!liberado) return res.status(403).json({ error: aprovacaoDesconto.MSG.ASSINAR });
+      // Fase 5 (r2 I2): o status primeiro, só se a margem ainda é a conferida — um PUT que a troca no meio (rascunho 3% → 50%) não leva
+      // a proposta a ganha com 50%. Antes o UPDATE era só por id, depois da assinatura e depois da resposta.
       db.run(
-        `INSERT INTO assinaturas_digitais
-         (proposta_id, usuario_id, tipo_assinatura, dados_assinatura, ip_address, user_agent, status)
-         VALUES (?, ?, ?, ?, ?, ?, 'aprovada')`,
-        [id, req.user.id, tipo_assinatura || 'eletronica', JSON.stringify(dados_assinatura), ipAddress, userAgent],
-        function(err) {
-          if (err) {
-            return res.status(500).json({ error: err.message });
+        'UPDATE propostas SET status = ? WHERE id = ? AND margem_desconto IS ?',
+        ['aprovada', id, proposta.margem_desconto],
+        function aposStatus(errSt) {
+          if (errSt) return res.status(500).json({ error: errSt.message });
+          if (this.changes === 0) {
+            return res.status(409).json({
+              error: 'A proposta foi alterada por outra gravação no mesmo instante. Recarregue a proposta e salve de novo.',
+              code: 'PROPOSTA_ALTERADA'
+            });
           }
-
-          // Atualizar status da proposta para aprovada
-          db.run('UPDATE propostas SET status = ? WHERE id = ?', ['aprovada', id], (err) => {
-            if (err) {
-              console.error('Erro ao atualizar status da proposta:', err);
+          db.run(
+            `INSERT INTO assinaturas_digitais
+             (proposta_id, usuario_id, tipo_assinatura, dados_assinatura, ip_address, user_agent, status)
+             VALUES (?, ?, ?, ?, ?, ?, 'aprovada')`,
+            [id, req.user.id, tipo_assinatura || 'eletronica', JSON.stringify(dados_assinatura), ipAddress, userAgent],
+            function aposAssinatura(err) {
+              if (err) {
+                // sem a assinatura, o status volta ao que era (se ninguém mexeu)
+                return db.run("UPDATE propostas SET status = ? WHERE id = ? AND status = 'aprovada'", [proposta.status, id],
+                  () => res.status(500).json({ error: err.message }));
+              }
+              return res.json({
+                message: 'Proposta assinada com sucesso',
+                assinatura_id: this.lastID
+              });
             }
-          });
-
-          res.json({
-            message: 'Proposta assinada com sucesso',
-            assinatura_id: this.lastID
-          });
+          );
         }
       );
     });

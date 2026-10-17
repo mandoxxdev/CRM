@@ -103,13 +103,14 @@ const get = async (sql, p = []) => (await all(sql, p))[0];
 
 const L = {
   SEM_PERMISSAO: 'Você não tem permissão para aprovar descontos. Peça a um usuário com "Pode aprovar descontos".',
-  PROPRIO: 'Quem pediu a aprovação do desconto não pode decidi-la. Peça a outro aprovador.',
+  PROPRIO: 'Quem pediu a aprovação do desconto, o responsável e quem criou a proposta não podem decidi-la. Peça a outro aprovador.',
   JA_DECIDIDA: 'Esta solicitação de aprovação já foi decidida. Recarregue a lista.',
   VALOR_PEDIDO: 'O desconto desta solicitação não é um número de 0 a 100. Rejeite-a e peça uma nova.',
   PROPOSTA_SAIU: 'A proposta desta solicitação não está mais em rascunho nem com desconto aprovado. Rejeite a solicitação ou volte a proposta para rascunho.',
   PROPOSTA_404: 'Proposta não encontrada',
   PROPOSTA_ID: 'proposta_id é obrigatório',
-  SO_VOCE: 'Só você pode aprovar descontos, e quem pede não decide o próprio pedido. Configure outro usuário com "Pode aprovar descontos" na gestão de usuários.',
+  SO_VOCE: 'Ninguém além de quem pede, do responsável e de quem criou a proposta pode aprovar este desconto. Configure outro usuário com "Pode aprovar descontos" na gestão de usuários.',
+  RESPONSAVEL_PENDENTE: 'Não é possível trocar o responsável de uma proposta com pedido de aprovação de desconto pendente. Aguarde a decisão ou peça que o pedido seja rejeitado.',
   SEM_APROVADOR: 'Nenhum usuário configurado para aprovar descontos. Configure um usuário na gestão de usuários.',
   DA_SO_APROVACAO: 'O status "Desconto aprovado" só é dado pela aprovação do desconto, em Comercial → Aprovações. Se a proposta estava com desconto aprovado, ela mudou depois de aberta: recarregue-a.',
   DA_MARGEM: 'O desconto acima de 5% desta proposta não é o que foi aprovado. Para mudar o desconto, salve a proposta como rascunho e peça nova aprovação.',
@@ -292,6 +293,8 @@ test('[RN-140.05] aprovar atualiza a proposta ANTES da resposta e registra o his
   const aid2 = await pedir('vend', pid, 40);
   assert.strictEqual((await aprovar('aprov2', aid2))[0], 200);
   assert.deepStrictEqual([(await linhaP(pid)).status, (await linhaP(pid)).margem_desconto], ['desconto_aprovado', 40]);
+  const hs = await get("SELECT COUNT(*) n FROM proposta_status_history WHERE proposta_id = ? AND status_novo = 'desconto_aprovado'", [pid]);
+  assert.strictEqual(hs.n, 1, 'Fase 5 r3 B11: o historico ganhou uma linha desconto_aprovado -> desconto_aprovado');
 });
 
 // ── RN-140.06 / 07: o pedido ─────────────────────────────────────────────────────────────
@@ -504,6 +507,7 @@ test('[RN-140.11] GET /aprovacoes: pode_decidir so para aprovador, em pedido pen
   assert.deepStrictEqual(await mapa('adm'), { [doVend]: false, [doAprov1]: false, [decidido]: false });
   const rec1 = await mapa('aprov1', '?tipo=recebida');
   assert.ok(doVend in rec1 && !(doAprov1 in rec1), `recebidas do aprov1: ${JSON.stringify(rec1)}`);
+  assert.ok(!(decidido in rec1), 'Fase 5 r3 D5: a recebida traz o pedido que outro aprovador ja decidiu');
   const recS = await mapa('super', '?tipo=recebida');
   assert.ok(doVend in recS && doAprov1 in recS, `recebidas do super: ${JSON.stringify(recS)}`);
   assert.deepStrictEqual(await mapa('vend', '?tipo=recebida'), {});
@@ -585,6 +589,156 @@ test('[RN-140.13] Fase 2 I1: /assinar com margem acima de 5 sem aprovacao -> 403
   assert.strictEqual(await conta(pid3), 1);
 });
 
+test('[RN-140.02] Fase 5 r1 I-1 / r2 I3: quem CRIOU a proposta nao decide, e trocar o responsavel com pedido pendente e recusado', async () => {
+  // aprov1 cria a proposta pondo o vend como responsavel; o vend pede
+  const pid = await novaProposta('aprov1', { margem_desconto: 30, responsavel_id: ctx.id.vend });
+  const p0 = await linhaP(pid);
+  assert.deepStrictEqual([p0.responsavel_id, p0.created_by], [ctx.id.vend, ctx.id.aprov1]);
+  const aid = await pedir('vend', pid, 30);
+  await recusaDecisao('aprov1', aid, { status: 'aprovado' }, 403, L.PROPRIO);
+  const [, lista] = await j('GET', '/aprovacoes', ctx.tok.aprov1);
+  assert.strictEqual(lista.find((x) => x.id === aid).pode_decidir, false);
+  const [, rec] = await j('GET', '/aprovacoes?tipo=recebida', ctx.tok.aprov1);
+  assert.ok(!rec.some((x) => x.id === aid), 'a proposta que ele criou aparece como recebida');
+  // o contorno: aprov1 responsavel da propria proposta, um colega pede; trocar o responsavel com o pedido pendente -> 409
+  const pid2 = await novaProposta('aprov2', { margem_desconto: 30 });
+  const aid2 = await pedir('vend', pid2, 30);
+  await recusaPut('aprov2', pid2, { responsavel_id: ctx.id.vend }, 409, L.RESPONSAVEL_PENDENTE);
+  // o mesmo responsavel de novo (o formulario manda sempre) e o vazio (mantem) passam
+  let r = await j('PUT', `/propostas/${pid2}`, ctx.tok.aprov2, { responsavel_id: ctx.id.aprov2, titulo: 'Mesmo resp' });
+  assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
+  r = await j('PUT', `/propostas/${pid2}`, ctx.tok.aprov2, { responsavel_id: '', titulo: 'Resp vazio' });
+  assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
+  // decidido o pedido, a troca volta a passar
+  assert.strictEqual((await rejeitar('aprov1', aid2))[0], 200);
+  r = await j('PUT', `/propostas/${pid2}`, ctx.tok.aprov2, { responsavel_id: ctx.id.vend });
+  assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
+});
+
+test('[RN-140.07] Fase 5 r1 M-1: o aviso nao vai para o responsavel nem para quem criou; so donos aprovam -> 400', async () => {
+  const pid = await novaProposta('aprov1', { margem_desconto: 20 }); // aprov1 cria e e o responsavel
+  const [s1, x1] = await j('POST', '/aprovacoes', ctx.tok.vend, { proposta_id: pid, tipo: 'desconto', valor_desconto: 20 });
+  assert.strictEqual(s1, 200, JSON.stringify(x1));
+  assert.strictEqual(x1.aprovador_id, ctx.id.aprov2);
+  const salvo = await all('SELECT id, pode_aprovar_descontos p, is_superadmin s FROM usuarios');
+  try {
+    await run('UPDATE usuarios SET pode_aprovar_descontos = 0, is_superadmin = 0 WHERE id != ?', [ctx.id.aprov1]);
+    const n = await contaA();
+    const r = await j('POST', '/aprovacoes', ctx.tok.vend, { proposta_id: pid, tipo: 'desconto', valor_desconto: 20 });
+    assert.deepStrictEqual([r[0], r[1] && r[1].error], [400, L.SO_VOCE]);
+    assert.strictEqual(await contaA(), n);
+  } finally {
+    for (const u of salvo) await run('UPDATE usuarios SET pode_aprovar_descontos = ?, is_superadmin = ? WHERE id = ?', [u.p, u.s, u.id]);
+  }
+});
+
+test('[RN-140.10] Fase 5 r2 M1: aprovacao de antes decidida por quem pediu, ou por ninguem, nao libera o envio', async () => {
+  for (const decisor of ['vend', null]) {
+    const pid = await novaProposta('vend', { margem_desconto: 40 });
+    await run("INSERT INTO aprovacoes (proposta_id, tipo, valor_desconto, solicitado_por, aprovado_por, status) VALUES (?, 'desconto', 40, ?, ?, 'aprovado')",
+      [pid, ctx.id.vend, decisor ? ctx.id[decisor] : null]);
+    await recusaEnviar('vend', pid, 403, L.ENVIAR);
+    await recusaPut('vend', pid, { status: 'enviada' }, 403, L.DESC_PUT);
+  }
+  // a decidida por outro libera (controle)
+  const pid = await novaProposta('vend', { margem_desconto: 40 });
+  await run("INSERT INTO aprovacoes (proposta_id, tipo, valor_desconto, solicitado_por, aprovado_por, status) VALUES (?, 'desconto', 40, ?, ?, 'aprovado')",
+    [pid, ctx.id.vend, ctx.id.aprov1]);
+  const r = await j('POST', `/propostas/${pid}/enviar`, ctx.tok.vend);
+  assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
+});
+
+test('[RN-140.04] Fase 5 r1 M-2: pedido com status vazio ou nulo (dado de antes) e pendente — se decide', async () => {
+  for (const st of [null, '']) {
+    const pid = await novaProposta('vend', { margem_desconto: 12 });
+    const ins = await run("INSERT INTO aprovacoes (proposta_id, tipo, valor_desconto, solicitado_por, status) VALUES (?, 'desconto', 12, ?, ?)", [pid, ctx.id.vend, st]);
+    const r = await aprovar('aprov1', ins.lastID);
+    assert.strictEqual(r[0], 200, `${JSON.stringify(st)}: ${JSON.stringify(r[1])}`);
+    assert.deepStrictEqual([(await linhaA(ins.lastID)).status, (await linhaP(pid)).status], ['aprovado', 'desconto_aprovado']);
+  }
+});
+
+// ── Fase 5, r3: os sobreviventes reais viraram cenarios ─────────────────────────────────────────────────────────────
+test('[RN-140.10/13] r3 A7: aprovacao aprovada de OUTRO tipo com o mesmo numero nao libera envio, assinatura nem o PUT', async () => {
+  const pid = await novaProposta('vend', { margem_desconto: 30 });
+  await run("INSERT INTO aprovacoes (proposta_id, tipo, valor_desconto, solicitado_por, aprovado_por, status) VALUES (?, 'prazo', 30, ?, ?, 'aprovado')",
+    [pid, ctx.id.vend, ctx.id.aprov1]);
+  await recusaEnviar('vend', pid, 403, L.ENVIAR);
+  const r = await j('POST', `/propostas/${pid}/assinar`, ctx.tok.vend, {});
+  assert.deepStrictEqual([r[0], r[1] && r[1].error], [403, L.ASSINAR]);
+  await recusaPut('vend', pid, { status: 'enviada' }, 403, L.DESC_PUT);
+});
+
+test('[RN-140.13] r3 G1: /assinar com a margem gravada ilegivel conta como acima de 5 -> 403, nenhuma assinatura', async () => {
+  const pid = await novaProposta('vend', { margem_desconto: 2 });
+  await run("UPDATE propostas SET margem_desconto = '10,5' WHERE id = ?", [pid]);
+  const a = await linhaP(pid);
+  const r = await j('POST', `/propostas/${pid}/assinar`, ctx.tok.vend, {});
+  assert.deepStrictEqual([r[0], r[1] && r[1].error], [403, L.ASSINAR]);
+  assert.deepStrictEqual(mudou(a, await linhaP(pid)), {});
+  assert.strictEqual((await get('SELECT COUNT(*) n FROM assinaturas_digitais WHERE proposta_id = ?', [pid])).n, 0);
+});
+
+test('[RN-140.11] r3 D3: o pedido que o aprovador abriu numa proposta de outro nao aparece nas recebidas dele', async () => {
+  const pid = await novaProposta('vend', { margem_desconto: 14 }); // vend cria e e o responsavel
+  const aid = await pedir('aprov1', pid, 14);
+  const [, rec] = await j('GET', '/aprovacoes?tipo=recebida', ctx.tok.aprov1);
+  assert.ok(!rec.some((x) => x.id === aid), 'o proprio pedido aparece nas recebidas');
+  const [, rec2] = await j('GET', '/aprovacoes?tipo=recebida', ctx.tok.aprov2);
+  assert.ok(rec2.some((x) => x.id === aid), 'nas recebidas de outro aprovador tem de aparecer');
+});
+
+test('[RN-140.07] r3 C3/C4/C5: o aviso vai para um aprovador ATIVO e nao oculto; o super sem a coluna recebe se for o unico', async () => {
+  const salvo = await all('SELECT id, pode_aprovar_descontos p, is_superadmin s, ativo a, is_oculto o FROM usuarios');
+  try {
+    const pedirAprovador = async () => {
+      const pid = await novaProposta('vend', { margem_desconto: 20 });
+      const [s1, x1] = await j('POST', '/aprovacoes', ctx.tok.vend, { proposta_id: pid, tipo: 'desconto', valor_desconto: 20 });
+      assert.strictEqual(s1, 200, JSON.stringify(x1));
+      return x1.aprovador_id;
+    };
+    assert.strictEqual(await pedirAprovador(), ctx.id.aprov1, 'o controle: o primeiro com a coluna');
+    await run('UPDATE usuarios SET is_oculto = 1 WHERE id = ?', [ctx.id.aprov1]);
+    assert.strictEqual(await pedirAprovador(), ctx.id.aprov2, 'C5: foi para o oculto');
+    await run('UPDATE usuarios SET is_oculto = 0, ativo = 0 WHERE id = ?', [ctx.id.aprov1]);
+    assert.strictEqual(await pedirAprovador(), ctx.id.aprov2, 'C3: foi para o inativo');
+    await run('UPDATE usuarios SET ativo = 1 WHERE id = ?', [ctx.id.aprov1]);
+    await run('UPDATE usuarios SET pode_aprovar_descontos = 0 WHERE id != ?', [ctx.id.super]);
+    assert.strictEqual(await pedirAprovador(), ctx.id.super, 'C4: o super sem a coluna nao recebeu');
+  } finally {
+    for (const u of salvo) {
+      await run('UPDATE usuarios SET pode_aprovar_descontos = ?, is_superadmin = ?, ativo = ?, is_oculto = ? WHERE id = ?', [u.p, u.s, u.a, u.o, u.id]);
+    }
+  }
+});
+
+test('[RN-140.10] r3 F3: /enviar com a margem gravada nula envia (a guarda compara com IS, nao com =)', async () => {
+  const pid = await novaProposta('vend', { margem_desconto: 0 });
+  await run('UPDATE propostas SET margem_desconto = NULL WHERE id = ?', [pid]);
+  const r = await j('POST', `/propostas/${pid}/enviar`, ctx.tok.vend);
+  assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
+  assert.strictEqual((await linhaP(pid)).status, 'enviada');
+});
+
+test('[RN-140.09] r3 E4: a mensagem do 403 sai pelo status EFETIVO — de desconto aprovado para enviada com outra margem e a de sempre', async () => {
+  const { pid } = await propostaAprovada('vend', 10);
+  await recusaPut('vend', pid, { status: 'enviada', margem_desconto: 50 }, 403, L.DESC_PUT);
+  await recusaPut('vend', pid, { margem_desconto: 50 }, 403, L.DA_MARGEM);
+});
+
+test('[RN-140.02] r3 B2: a ordem — o dono sai antes do ja decidido', async () => {
+  const { aid } = await propostaComPedido('aprov1', 20);
+  assert.strictEqual((await rejeitar('aprov2', aid))[0], 200);
+  await recusaDecisao('aprov1', aid, { status: 'aprovado' }, 403, L.PROPRIO);
+});
+
+test('[RN-140.02] r3 B3: a ordem — sem permissao sai antes do ja decidido (e nao revela que foi decidido)', async () => {
+  const { aid: aid2 } = await propostaComPedido('vend', 20);
+  assert.strictEqual((await rejeitar('aprov1', aid2))[0], 200);
+  await recusaDecisao('vend', aid2, { status: 'aprovado' }, 403, L.SEM_PERMISSAO);
+  await recusaDecisao('adm', aid2, { status: 'aprovado' }, 403, L.SEM_PERMISSAO);
+});
+
 // ── T3: o fluxo inteiro, pela rota ───────────────────────────────────────────────────────
 test('[integracao] vendedor pede, nao se libera por nenhum dos tres caminhos; o aprovador aprova; o formulario salva sem mexer; envia', async () => {
   const pid = await novaProposta('vend', { margem_desconto: 30 });
@@ -614,7 +768,7 @@ test('[integracao] vendedor pede, nao se libera por nenhum dos tres caminhos; o 
 // ── com a janela aberta (atrasoSqlInjetado): as corridas que as guardas fecham, de forma deterministica ─────────────────────
 // O envio confere a aprovacao com a consulta de aprovacaoDesconto.margemLiberada; a aprovacao grava o pedido com este UPDATE.
 const ATRASO = {
-  ATRASO_SQL_INJETADO: String.raw`^SELECT id, valor_desconto FROM aprovacoes WHERE proposta_id = \? AND status = 'aprovado' AND tipo = 'desconto'$|^UPDATE aprovacoes SET status = \?, aprovado_por = \?, aprovado_em`,
+  ATRASO_SQL_INJETADO: String.raw`^SELECT id, valor_desconto, aprovado_por, solicitado_por FROM aprovacoes WHERE proposta_id = \? AND status = 'aprovado' AND tipo = 'desconto'$|^UPDATE propostas SET margem_desconto = \?, status = 'desconto_aprovado'`,
   ATRASO_SQL_MS: '600',
 };
 
@@ -631,18 +785,44 @@ testComAtraso('[RN-140.10] janela aberta: o PUT troca a margem enquanto o envio 
   assert.deepStrictEqual([p.status, p.margem_desconto], ['rascunho', 50]);
 });
 
-testComAtraso('[RN-140.05] janela aberta: a proposta e enviada entre o pedido gravado e a proposta -> o pedido volta a pendente e 409', async () => {
+testComAtraso('[RN-140.05] Fase 5 r2 I1: janela entre a proposta gravada e o pedido — o envio NAO casa com o pedido ainda pendente', async () => {
+  const pid = await novaProposta('vend', { margem_desconto: 30 });
+  const aid = await pedir('vend', pid, 30);
+  const ap = aprovar('aprov1', aid);
+  await pausa(150); // a proposta ja foi gravada desconto_aprovado 30; o pedido ainda e pendente
+  assert.deepStrictEqual([(await linhaP(pid)).status, (await linhaA(aid)).status], ['desconto_aprovado', 'pendente'], 'a janela nao abriu');
+  await recusaEnviar('vend', pid, 403, L.ENVIAR);
+  const r = await ap;
+  assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
+  assert.deepStrictEqual([(await linhaP(pid)).status, (await linhaA(aid)).status], ['desconto_aprovado', 'aprovado']);
+});
+
+testComAtraso('[RN-140.05] Fase 5 r2 I1: rejeitado por outro na janela — a proposta volta ao que era e 409, nada fica aprovado', async () => {
   const pid = await novaProposta('vend', { margem_desconto: 3 });
   const aid = await pedir('vend', pid, 20);
   const ap = aprovar('aprov1', aid);
-  await pausa(150); // o pedido ja foi gravado como aprovado; a proposta ainda nao
-  const env = await j('POST', `/propostas/${pid}/enviar`, ctx.tok.vend);
-  assert.strictEqual(env[0], 200, JSON.stringify(env[1]));
+  await pausa(150);
+  const rj = await rejeitar('aprov2', aid);
+  assert.strictEqual(rj[0], 200, JSON.stringify(rj[1]));
   const r = await ap;
-  assert.deepStrictEqual([r[0], r[1] && r[1].error], [409, L.PROPOSTA_SAIU]);
+  assert.deepStrictEqual([r[0], r[1] && r[1].error], [409, L.JA_DECIDIDA]);
   const a = await linhaA(aid); const p = await linhaP(pid);
-  assert.deepStrictEqual([a.status, a.aprovado_por, a.aprovado_em], ['pendente', null, null]);
-  assert.deepStrictEqual([p.status, p.margem_desconto], ['enviada', 3]);
+  assert.deepStrictEqual([a.status, a.aprovado_por], ['rejeitado', ctx.id.aprov2]);
+  assert.deepStrictEqual([p.status, p.margem_desconto], ['rascunho', 3]);
+});
+
+testComAtraso('[RN-140.13] Fase 5 r2 I2: o PUT troca a margem enquanto a assinatura confere -> 409, a proposta nao vira ganha', async () => {
+  const { pid } = await propostaAprovada('vend', 30);
+  assert.strictEqual((await j('PUT', `/propostas/${pid}`, ctx.tok.vend, { status: 'rascunho' }))[0], 200);
+  const as = j('POST', `/propostas/${pid}/assinar`, ctx.tok.vend, {});
+  await pausa(150); // a assinatura ja leu a margem 30 e esta conferindo a aprovacao
+  const put = await j('PUT', `/propostas/${pid}`, ctx.tok.vend, { margem_desconto: 50 });
+  assert.strictEqual(put[0], 200, JSON.stringify(put[1]));
+  const r = await as;
+  assert.deepStrictEqual([r[0], r[1] && r[1].error, r[1] && r[1].code], [409, L.CONFLITO, 'PROPOSTA_ALTERADA']);
+  const p = await linhaP(pid);
+  assert.deepStrictEqual([p.status, p.margem_desconto], ['rascunho', 50]);
+  assert.strictEqual((await get('SELECT COUNT(*) n FROM assinaturas_digitais WHERE proposta_id = ?', [pid])).n, 0);
 });
 
 (async () => {

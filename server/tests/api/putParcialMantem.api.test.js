@@ -275,7 +275,10 @@ test('[RN-05b] o desconto acima de 5% pela margem gravada: so o status nao fura 
   assert.deepStrictEqual(mudou(a, await linhaP(id), ['html_rendered']), {}, 'a recusa gravou algo');
   await soMudou(id, { titulo: 'Com desconto' }, { titulo: ['PROP', 'COM DESCONTO'] });
   // a metade positiva: com a aprovacao do desconto, o mesmo status passa
-  await run("INSERT INTO aprovacoes (proposta_id, tipo, valor_desconto, status, solicitado_por) VALUES (?, 'desconto', 10, 'aprovado', (SELECT MIN(id) FROM usuarios))", [id]);
+  // Etapa 140 (B912): a aprovacao que vale foi decidida por OUTRA pessoa — a sem decisor (ou decidida por quem pediu) nao libera mais.
+  const [su, u2] = await j('POST', '/usuarios', ctx.T, { nome: 'Aprov 138', email: `aprov138-${Date.now()}@t.com`, senha: 'Senha!138', cargo: 'C', role: 'usuario', setor: '', pode_aprovar_descontos: 1 });
+  assert.strictEqual(su, 200, JSON.stringify(u2));
+  await run("INSERT INTO aprovacoes (proposta_id, tipo, valor_desconto, status, solicitado_por, aprovado_por) VALUES (?, 'desconto', 10, 'aprovado', (SELECT MIN(id) FROM usuarios), ?)", [id, u2.id]);
   await soMudou(id, { status: 'enviada' }, { status: ['rascunho', 'enviada'] });
 });
 

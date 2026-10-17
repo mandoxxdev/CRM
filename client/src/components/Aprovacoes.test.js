@@ -89,3 +89,20 @@ test('[RN-140.12a] no modal de um pedido que pode decidir: Aprovar e o motivo, e
   await act(async () => { aprovar.click(); });
   expect(api.put).toHaveBeenCalledWith('/aprovacoes/1', { status: 'aprovado' });
 });
+
+test('[RN-140.03] Fase 5 r3 H5: o Rejeitar manda só o status e o motivo (o servidor grava quem está logado)', async () => {
+  api.put.mockResolvedValue({ data: { message: 'ok', id: 1, status: 'rejeitado' } });
+  await montar();
+  const linhas = [...container.querySelectorAll('tbody tr')];
+  await act(async () => { linhas[0].querySelector('button[title="Ver detalhes"]').click(); });
+  const caixa = container.querySelector('.textarea-rejeicao');
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+    setter.call(caixa, 'caro demais');
+    caixa.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const rejeitar = [...container.querySelectorAll('.modal-actions button')].find((b) => b.textContent.includes('Confirmar Rejeição'));
+  expect(rejeitar).toBeTruthy();
+  await act(async () => { rejeitar.click(); });
+  expect(api.put).toHaveBeenCalledWith('/aprovacoes/1', { status: 'rejeitado', motivo_rejeicao: 'caro demais' });
+});
