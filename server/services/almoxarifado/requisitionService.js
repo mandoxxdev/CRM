@@ -133,6 +133,33 @@ function sufixoDisponivelNegativo(nomeMaterial, unidade, saldo) {
       : 'liberar outra reserva deste material ou desbloquear');
 }
 
+/**
+ * Etapa 135 (RN-01) — o que a entrega de `quantidade` de um item tira do material, para a previa contar os irmaos seguintes: do
+ * disponivel, o que passa da reserva do item (a reserva sai primeiro e nao mexe no disponivel — o laco de baixa e o motor); da caixa
+ * sem reserva, quanto a do item cai (a caixa cai q, ou a zero na segunda rodada, que sobe o separado ate o entregue; a reserva cai q).
+ * Pura; arredondada a 1e-6.
+ */
+function efeitoDaEntregaNoMaterial(caixaDoItem, reservaDoItem, quantidade) {
+  const c = Math.max(0, num(caixaDoItem));
+  const r = Math.max(0, num(reservaDoItem));
+  const q = Math.max(0, num(quantidade));
+  const c2 = q > c ? 0 : c - q;
+  const r2 = Math.max(0, r - q);
+  return { disponivel: Q.qtd(Math.max(0, q - r)), caixaSemReserva: Q.qtd(Math.max(0, c - r) - Math.max(0, c2 - r2)) };
+}
+
+/** Etapa 135 (RN-01): a leitura fresca de saldoDisponivelParaItem com o que os irmaos anteriores da previa ja levaram. Pura. */
+function saldoAjustadoPelosIrmaos(saldo, efeito) {
+  if (!efeito) return saldo;
+  return {
+    ...saldo,
+    disponivel: Q.qtd(saldo.disponivel - efeito.disponivel),
+    disponivel_material: Q.qtd(saldo.disponivel_material - efeito.disponivel),
+    caixa_outros_itens: Q.qtd(Math.max(0, saldo.caixa_outros_itens - efeito.caixaSemReserva)),
+    caixa_outras_requisicoes: saldo.caixa_outras_requisicoes,
+  };
+}
+
 /** Etapa 95 (T0b, B477): o teto do item para a entrega, a partir da leitura fresca de saldoDisponivelParaItem. */
 function tetoDaLeitura(item, saldo) {
   return tetoSeparacao(saldo.disponivel - saldo.reservado_para_item, saldo.reservado_para_item,
@@ -165,8 +192,21 @@ function normalizarItem(item) {
     : undefined;
   // Etapa 98 (T3, B509): o entregavel e o que o motor deixa sair — so o argumento `estoque` de maxEntregar muda
   // (o disponivel do material negativo da 0); `teto` (o separavel) e `saldo_atual` ficam como antes.
-  const entregavel = inativo ? 0 : maxEntregar(item,
+  const entregavelSozinho = inativo ? 0 : maxEntregar(item,
     entregavelPeloMotor(estoque - reservaItem, reservaItem, Number(item.motor_permite_negativo) === 1), teto);
+  // Etapa 135 (RN-02b, C286; Fase 2 I3): material CRITICO so sai ate a caixa (a porta recusa acima dela — o F2 da Etapa 28); o detalhe
+  // prometia a segunda rodada inteira (2 com a caixa vazia) e a porta recusava.
+  const caixa = Q.qtd(Math.max(0, separado - entregue));
+  const critico = Number(item.material_critico) === 1;
+  const entregavel = critico ? Q.qtd(Math.min(entregavelSozinho, caixa)) : entregavelSozinho;
+  // Etapa 135 (RN-02): o teto e a parte PROPRIA do entregavel (aditivos, so o detalhe — quem traz a caixa sem reserva). Na segunda rodada
+  // (a unica em que a entrega passa da caixa) o teto e a caixa + o teto de separacao (= max(c, r) + o livre do material depois de toda a
+  // caixa sem reserva) e a propria e max(c, r): a caixa e a reserva do item sao dele; so o que passa delas sai do livre que os irmaos
+  // dividem (a conta da 127, dividirSeparavel). Fora dela (e no critico, e com nada a entregar) os dois sao o entregavel: nada a dividir.
+  const segundaRodada = !critico && entregavel > Q.QTD_FOLGA && entregue > 0 && caixa < pendente;
+  const camposEntregavel = !temCaixa ? {} : (segundaRodada
+    ? { saldo_entregavel: Q.qtd(caixa + teto), saldo_entregavel_proprio: Q.qtd(Math.max(caixa, Math.max(0, reservaItem))) }
+    : { saldo_entregavel: entregavel, saldo_entregavel_proprio: entregavel });
   // Etapa 95 (Fase 5): a coluna crua da consulta do detalhe e insumo do teto, nao contrato — nao vai para o JSON.
   // Etapa 98 (T3): idem a regra do motor (insumo do entregavel).
   const { caixa_sem_reserva_outros: _caixaCrua, motor_permite_negativo: _permiteCru, ...resto } = item; // eslint-disable-line no-unused-vars
@@ -180,6 +220,7 @@ function normalizarItem(item) {
     saldo_atual: item.saldo_atual == null ? estoque : Q.qtd(num(item.saldo_atual)),
     // Etapa 127 (RN-15): `saldo_separavel_reserva` — a parte do teto que e reserva propria (nao e dividida entre os irmaos); o modal
     // desconta dos irmaos so o que passa dela. Aditivo; 0 no inativo (como o teto).
+    ...camposEntregavel,
     ...(temCaixa ? { saldo_separavel: teto, quantidade_separavel: maxSeparar(item, teto),
       saldo_separavel_reserva: inativo ? 0 : reservaPropriaSeparavel(reservaItem, separado - entregue) } : {}),
   };
@@ -1574,6 +1615,10 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
   // que segue conferindo com leitura fresca); passou dela, a alcada roda antes de qualquer baixa, como antes.
   // Mantida na entrega (nao removida) como defesa se a separacao deixar passar algo.
   let algoAEntregar = false;
+  // Etapa 135 (RN-01; D (127)): a previa conta o que os irmaos ANTERIORES desta entrega (itens do mesmo material, na ordem do laco)
+  // levam — o que o laco de baixa vera na leitura fresca depois de cada baixa, sob a mesma trava. Antes cada irmao era lido sozinho: dois
+  // na segunda rodada no mesmo livre passavam aqui e o laco baixava o primeiro e recusava o segundo (400 com metade da entrega feita).
+  const efeitoDosIrmaos = new Map(); // material_id -> { disponivel, caixaSemReserva } ja levados nesta previa
   for (const item of itens) {
     const entrada = itensAtendidos?.find((ia) => Number(ia.item_id) === Number(item.id));
     // Etapa 96 (Fase 2, M4): a quantidade arredondada antes de comparar (a previa nao passa pela porta do motor).
@@ -1581,7 +1626,7 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
     if (qty <= 0) continue;
     algoAEntregar = true;
     // eslint-disable-next-line no-await-in-loop
-    const saldo = await saldoDisponivelParaItem(db, item);
+    const saldo = saldoAjustadoPelosIrmaos(await saldoDisponivelParaItem(db, item), efeitoDosIrmaos.get(String(item.material_id)));
     // Etapa 98 (T3, B509): o que o motor deixa sair — com o disponivel do material negativo, 0 (e a recusa E190
     // abaixo, antes de qualquer baixa); fora disso o `disponivel + reserva do item` de antes, byte a byte.
     const disponivel = entregavelPeloMotor(saldo.disponivel_material, saldo.reservado_para_item, saldo.permite_negativo);
@@ -1595,6 +1640,10 @@ async function entregarSemTrava(db, requisicaoId, itensAtendidos, user, alertSer
       err.status = 400;
       throw err;
     }
+    const efeito = efeitoDaEntregaNoMaterial(getSeparado(item) - getEntregue(item), saldo.reservado_para_item, qty);
+    const antes = efeitoDosIrmaos.get(String(item.material_id)) || { disponivel: 0, caixaSemReserva: 0 };
+    efeitoDosIrmaos.set(String(item.material_id), { disponivel: antes.disponivel + efeito.disponivel,
+      caixaSemReserva: antes.caixaSemReserva + efeito.caixaSemReserva });
   }
   if (!algoAEntregar) {
     const err = new Error('Informe ao menos uma quantidade maior que zero para entregar');
@@ -2263,6 +2312,8 @@ module.exports = {
   maxSeparar,
   maxEntregar,
   entregavelPeloMotor, // Etapa 98 (T3, B509)
+  efeitoDaEntregaNoMaterial, // Etapa 135 (RN-01)
+  saldoAjustadoPelosIrmaos, // Etapa 135 (RN-01)
   permiteNegativoSql, // Etapa 98 (T3): o detalhe (routes/almoxarifado.js) traz a regra do motor
   normalizarItem,
   todosItensCompletos,
