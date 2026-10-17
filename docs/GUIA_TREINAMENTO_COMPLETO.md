@@ -172,6 +172,11 @@ Após o login, você verá a **Tela de Seleção de Módulos** com 5 opções:
 - O sistema sugere endereço ao digitar o CEP
 - Você pode adicionar logo do cliente depois
 
+**Ao salvar uma edição:**
+- O sistema grava os campos do formulário como estão: o campo que você apagou fica vazio; tirar a logo (o botão de remover) apaga a logo.
+- A **Razão Social** não pode ficar vazia nem só com espaços: o sistema recusa com *"Razão social é obrigatória"* e não grava nada.
+- Pela integração (API), a edição pode trazer só alguns campos: os que não vierem ficam como estavam; os que vierem vazios são apagados.
+
 #### 3.2.3 Visualização de Cliente
 
 **O que você vê:**
@@ -268,6 +273,23 @@ Após o login, você verá a **Tela de Seleção de Módulos** com 5 opções:
 - Altere valores
 - Atualize status
 
+**Ao salvar a edição — o que o sistema grava:**
+- Os campos do formulário como estão: o que você apagou fica vazio (inclusive o **Tipo** "—" e a **Data de fechamento** em branco).
+- Os campos que o formulário **não mostra** — o projeto, o contato, o telefone e o e-mail próprios da proposta, o idioma, a moeda, o
+  incoterm e a unidade de negócio (que chegam pela cópia de uma proposta, pela geração automática ou pela integração) — ficam como estavam.
+  A exceção: **trocar o cliente** apaga o contato, o telefone, o e-mail e o projeto próprios da proposta, porque eram do cliente anterior —
+  a capa passa a mostrar os do cadastro do cliente novo.
+- As variáveis manuais preenchidas no preview continuam ligadas aos itens depois do salvamento.
+- A **revisão** (o `REVnn` no fim do número) sobe só quando os itens ou o valor total mudam.
+- O título não pode ficar vazio: *"Título é obrigatório"*. Proposta perdida/rejeitada exige o motivo: *"Motivo da não venda é obrigatório
+  quando a proposta está perdida/rejeitada."*. Desconto acima de 5% sem aprovação não sai do rascunho: *"Não é possível alterar o status de
+  uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve permanecer como rascunho até que a autorização seja aprovada."*
+- Proposta aprovada ou rejeitada sem data de fechamento recebe a data do dia.
+- Pela integração (API), a edição pode trazer só alguns campos: os que não vierem ficam como estavam; os que vierem vazios são apagados; sem
+  a lista de itens, os itens não mudam. Se duas gravações da mesma proposta chegam ao mesmo tempo e uma delas muda o status, a margem, o motivo
+  ou a data de fechamento, a outra — se dependia desses valores — é recusada com *"A proposta foi alterada por outra gravação no mesmo
+  instante. Recarregue a proposta e salve de novo."* e nada dela é gravado.
+
 **Ações disponíveis:**
 - ✏️ Editar
 - 📄 Gerar PDF
@@ -334,6 +356,9 @@ Templates personalizáveis para padronizar o visual das propostas.
 - Criar Proposta a partir da Oportunidade
 - Adicionar Atividades
 - Definir Lembrete
+
+**Ao salvar uma edição pela integração (API):** os campos que não vierem ficam como estavam; o título não pode ficar vazio (*"Título é
+obrigatório"*).
 
 ### 3.5 Gestão de Atividades
 

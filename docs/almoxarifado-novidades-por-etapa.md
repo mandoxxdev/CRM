@@ -11,12 +11,17 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-17):** **Etapa 137 fechada** (do núcleo: dois super administradores excluindo um ao outro no
+> **Onde o desenvolvimento está (2026-10-17):** **Etapa 138 fechada** (das propostas e do núcleo: salvar proposta, cliente e
+> oportunidade grava só o que veio — o que não veio fica, o que veio vazio apaga; a tela de propostas deixou de apagar os oito campos que não
+> mostra, e duas gravações da mesma proposta ao mesmo tempo não furam mais o desconto: **B889** a **B897**; salvar proposta com variável
+> manual voltou a terminar, **C296** resolvido; a renumeração que falha não desfaz mais o que os outros gravaram, **C294** resolvido; a
+> consulta nova **A84**; a medição e a revisão acharam três falhas anteriores, **C297** a **C299**); a próxima é a **139** — ver "Onde estamos e o que vem
+> a seguir".
+> *(Antes: **Etapa 137 fechada** (do núcleo: dois super administradores excluindo um ao outro no
 > mesmo instante não deixam mais o sistema sem nenhum — a exclusão confere de novo, antes de gravar, quem exclui, o usuário, o último super e
 > o destino dos registros, e não grava nada se algo mudou: **C292** resolvido, **B884**; e o cadastro de usuários pela API lê *Super
 > administrador* e *ativo* pela régua de sim ou não — sem o campo mantém, `"true"` é sim, o botão de inativar com `"true"` reativa: **C291**
-> e **C293** resolvidos, **B885** a **B887**; a revisão achou duas falhas anteriores, **C294** e **C295**); a próxima é a **138**, a
-> primeira fora do almoxarifado e do cadastro de usuários — ver "Onde estamos e o que vem a seguir".
+> e **C293** resolvidos, **B885** a **B887**; a revisão achou duas falhas anteriores, **C294** e **C295**); a próxima era a **138**.)*
 > *(Antes: **Etapa 136 fechada** (a entrega de dois itens do mesmo material não baixa mais um para
 > recusar o outro **por endereço**: o que sai do endereço de onde cada item foi separado — ou do endereço escolhido — sai antes do que vai
 > pela regra automática, e a parte automática de um item não esvazia mais a origem do outro; a recusa que vinha depois da primeira baixa
@@ -209,7 +214,10 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Oitenta e três itens para rodar em produção ANTES do deploy — oitenta são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Oitenta e quatro itens para rodar em produção ANTES do deploy — oitenta e um são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-17 (Etapa 138) de oitenta e três para oitenta e quatro**, com a **A84** — as variáveis manuais de proposta que
+ficaram ligadas a itens que não existem mais (o salvamento que nunca terminava, **C296**). Opcional e somente leitura.)*
 
 *(**Atualizado em 2026-10-16 (Etapa 134) de oitenta e dois para oitenta e três**, com a **A83** — quantos super administradores ativos
 há em produção: com pelo menos um, o reinício deixa de promover quem tem o e-mail `admin@gmp.com.br`, e o administrador inicial apagado
@@ -3042,12 +3050,33 @@ arquivo de credenciais. **O que muda para recuperar o acesso:** apagar o adminis
 enquanto houver um super ativo. Se ninguém souber a senha de nenhum super, pare o servidor, marque os super administradores como não super
 (ou inativos) direto no banco, e suba de novo — o reinício recupera pelo `admin@gmp.com.br` ou recria o administrador inicial.
 
+**A84 (NOVA, da Etapa 138 — as variáveis manuais de proposta que ficaram ligadas a itens que não existem mais).** Até a Etapa 138, salvar
+pelo formulário uma proposta com variável manual preenchida gravava a proposta e os itens, mas não religava as variáveis aos itens novos
+(**C296**). O preview e o PDF as reencontram pelo código do produto gravado junto delas; as que não têm esse código não aparecem mais no
+documento. Opcional e somente leitura.
+
+```sql
+SELECT v.proposta_id,
+       COUNT(*) AS orfas,
+       SUM(CASE WHEN COALESCE(TRIM(v.item_chave), '') = '' THEN 1 ELSE 0 END) AS sem_identidade
+FROM proposta_variaveis_manuais v
+LEFT JOIN proposta_itens i ON i.id = v.item_id AND i.proposta_id = v.proposta_id
+WHERE i.id IS NULL
+GROUP BY v.proposta_id
+ORDER BY v.proposta_id;
+```
+
+**Como ler o resultado:** **vazia** — nada a fazer. **Linhas com `sem_identidade` = 0** — o preview e o PDF ainda mostram esses valores
+(reencontrados pelo código do produto, enquanto o item com aquele código estiver na proposta); nada a fazer. **Linhas com `sem_identidade`
+maior que 0** — nessas propostas há valores que o documento não mostra mais: abra a proposta no preview editável, preencha de novo as
+variáveis que aparecem em branco e salve.
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B888; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B898; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -9629,6 +9658,79 @@ a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a 
 conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e as perguntas da **C275**,
 **C276** e **C277** continuam esperando vocês.
 
+**B889 (NOVA, da Etapa 138; das propostas e do núcleo) — salvar grava só o que veio: o que não veio fica, o que veio vazio apaga.**
+Proposta, cliente e oportunidade, pela tela e pela API. Antes, o que o pedido não trazia era apagado: só o telefone de um cliente dava erro
+de banco e só a razão social apagava as outras treze informações (logo e situação inclusive); só o título de uma proposta zerava valor,
+cliente, status, margem, contatos e tipo e **apagava os itens**; e a tela de propostas apagava, em todo salvamento, os oito campos que ela
+não mostra (projeto, os três contatos da proposta, idioma, moeda, incoterm, unidade de negócio — que chegam pela cópia de proposta, pela
+geração automática e pela integração). Agora o que não veio não entra na gravação; o que veio — inclusive vazio — grava como sempre gravou
+(o vazio que apagava continua apagando). Pedido sem nenhum campo conhecido responde sucesso e não muda nada. **Descartados:** (a) "vazio
+mantém" — não haveria como apagar pela API; (b) ler o registro e regravar tudo com o que faltou — a gravação de outra aba feita no meio
+seria desfeita. Na proposta, o número, a revisão e o responsável só entram na gravação quando mudam (achado da revisão: regravá-los com o
+que foi lido desfazia uma renumeração feita no meio). **Reversível** (só código).
+
+**B890 (NOVA, da Etapa 138; das propostas) — o formulário de proposta manda o vazio explicitamente.** Com a **B889**, um campo que o
+formulário simplesmente não mandasse ficaria como estava — e era assim que ele "apagava" o *Tipo* ("—"), a *Data de fechamento*, a
+oportunidade e a expiração. Agora ele manda esses quatro vazios de propósito, e apagar continua apagando. O *Responsável* vazio continua
+não sendo mandado (o servidor mantém o gravado, ou põe quem salva — como sempre). **Descartado:** tratar "não veio" como "apagar" só nesses
+quatro campos no servidor — duas regras na mesma tela, e quem integra pela API não saberia qual vale. **Reversível.**
+
+**B891 (NOVA, da Etapa 138; das propostas) — as exceções do salvamento de proposta.** Quatro campos não seguem a **B889**: (1) o retrato
+do PDF guardado na proposta é **limpo em todo salvamento**, como sempre — o sistema só regrava o retrato e a data de "PDF gerado" quando
+ele está vazio, e mantê-lo deixaria os da primeira geração para sempre; (2) a *probabilidade* vazia ou ausente mantém a gravada (como
+sempre); (3) o *Responsável* vazio ou ausente mantém o gravado, ou vira quem salva (como sempre); (4) o *número* e a *revisão* são
+calculados e sempre gravados (o número não mandado mantém o gravado). **Reversível.**
+
+**B892 (NOVA, da Etapa 138; das propostas) — os itens e a revisão.** Salvar sem a lista de itens não mexe nos itens (antes os apagava); a
+lista vazia apaga todos, como sempre. A revisão sobe só se os itens vieram e mudaram ou o valor total veio e mudou; quando sobe, o número
+troca o sufixo `REVnn` pelo cliente gravado se o cliente não veio (antes, sem o cliente no pedido, a revisão subia e o número ficava
+`REV00`), e o histórico de revisões compara com o que fica gravado (antes, só o valor no pedido registrava título, status e cliente como
+"(vazio)"). **Reversível.**
+
+**B893 (NOVA, da Etapa 138; das propostas) — as regras que olham dois campos usam o gravado quando um não vem.** O motivo da não venda
+(status × motivo), o desconto acima de 5% (margem × status) e a data de fechamento automática (status × data) conferem o valor do pedido
+se veio, senão o gravado — e só quando um dos dois campos veio. **Muda o contrato pela API em três casos:** (a) só o status *enviada* numa
+proposta com margem acima de 5% sem aprovação é recusado com *"Não é possível alterar o status de uma proposta com desconto acima de 5%
+sem aprovação prévia. A proposta deve permanecer como rascunho até que a autorização seja aprovada."* (antes passava e zerava a margem);
+(b) só a margem 10 numa proposta *enviada* sem aprovação recebe a mesma recusa (antes passava e apagava o status); (c) só o status
+*aprovada* numa proposta que já tem data de fechamento **mantém** a data (antes a trocava por hoje). Só o status *enviada* numa
+*rejeitada* apaga o motivo, como sempre (só a rejeitada guarda motivo). Uma *rejeitada* antiga sem motivo continua editável nos outros
+campos. Pela tela nada muda (ela manda os dois campos de cada regra juntos). **Reversível.**
+
+**B894 (NOVA, da Etapa 138; das propostas e do núcleo) — obrigatório vazio é recusado com a mensagem da criação.** Título da proposta e da
+oportunidade vazio ou só com espaços: *"Título é obrigatório"*; razão social do cliente: *"Razão social é obrigatória"*. Nada é gravado.
+Antes gravava vazio (ou dava erro de banco com nulo). As telas já exigem os dois. Na proposta, a ordem das recusas é: proposta não
+encontrada → título → motivo → desconto (antes o motivo vinha antes da busca da proposta). A criação de proposta com título só de espaços
+continua aceita (**D (138)**). **Reversível.**
+
+**B895 (NOVA, da Etapa 138; das propostas) — a renumeração de propostas desfaz só a si mesma.** Fecha a **C294**. A renumeração que
+falhava no meio desfazia, junto, edições de outras pessoas que tinham acabado de receber "salvo" — medido: numa rajada de 30 edições de
+cliente mandada junto com uma renumeração que falha, 15, 13 e 7 sumiram em três rodadas. Agora o desfazer acontece no mesmo passo da
+renumeração, antes de qualquer outra gravação. É o mesmo conserto da exclusão de usuário (**B884**). **Reversível.**
+
+**B896 (NOVA, da Etapa 138; das propostas; achado da revisão) — duas gravações da mesma proposta ao mesmo tempo: a que leu o velho é
+recusada.** Com a **B889**, duas gravações só pela API — uma mandando só a margem 20, a outra só o status *enviada* — passavam cada uma pela
+regra do desconto com o valor velho da outra e, juntas, deixavam a proposta enviada com desconto acima de 5% sem aprovação (reproduzido 5
+em 6; e 6 em 6 com a tela salvando o rascunho com margem 20 ao mesmo tempo); o mesmo com rejeitar × apagar o motivo (rejeitada sem
+motivo). Agora, quando o pedido traz status, margem, motivo ou data de fechamento, a gravação só acontece se os outros desses quatro — os
+que não vieram — ainda estão como foram lidos; senão nada é gravado e a resposta é *"A proposta foi alterada por outra gravação no mesmo
+instante. Recarregue a proposta e salve de novo."* (409). A tela manda os quatro juntos, então não recebe esta recusa por causa dela.
+**Descartado:** declarar a corrida e deixar (a primeira versão do plano fazia isso) — a revisão mostrou que a tela mais um pedido pela API
+bastavam. **Reversível.**
+
+**B897 (NOVA, da Etapa 138; das propostas; achado da revisão) — trocar o cliente da proposta apaga o contato e o projeto dela.** Antes desta
+etapa, todo salvamento pela tela apagava os três contatos da proposta e o projeto; com a **B889** eles ficariam — e, trocando o cliente, a
+capa da proposta do cliente B saía com o contato, o telefone e o e-mail do cliente A (a capa prefere o contato da proposta ao do cadastro).
+Agora, quando o cliente muda, o contato, o telefone, o e-mail e o projeto da proposta que **não** vieram no pedido são apagados (a capa volta
+a mostrar os do cadastro do cliente novo); os que vieram junto com a troca ficam. Salvar com o mesmo cliente não apaga nada.
+**Descartado:** manter (a capa mentiria). **Reversível.**
+
+**B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
+**C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
+**C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
+as perguntas da **C275**, **C276** e **C277** continuam esperando vocês; nas propostas, a verificação de quem é o dono da proposta e o
+filtro por permissão do histórico.
+
 ### C. Furos e mudanças de número que quem opera precisa saber
 
 1. **✅ RESOLVIDO NA ETAPA 10 — a conferência de inventário mudava saldo de material de cliente
@@ -12380,17 +12482,45 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      1, e a edição grava *ativo* "true" ou 2 cru.** O inativar com `"true"` desativa (fica 0 — erra para o lado seguro); a edição com
      `"true"` grava o texto e o usuário deixa de entrar (a criação aceita "true" como ativo desde a **B879** — os dois lados ficaram
      diferentes). A tela manda sempre 1 ou 0. **O que fazer:** nada; candidata pequena (a mesma régua de sim ou não na edição e no inativar).
-294. **NOVO (da revisão da Etapa 137; das propostas, anterior a ela; lido no código, não reproduzido) — a renumeração de propostas que falha
-     no meio pode desfazer uma gravação de outra pessoa feita no mesmo instante.** A renumeração grava tudo de uma vez; se um passo falha, o
-     desfazer é mandado **depois** das gravações que entraram na fila enquanto ela falhava, e as desfaz junto (a pessoa recebeu "salvo").
-     É o mesmo defeito que a exclusão de usuário tinha e a Etapa 137 corrigiu (**B884**). Só acontece se a renumeração falhar — o que não
-     se espera em operação normal. **O que fazer:** nada; candidata pequena (a renumeração passa a desfazer no mesmo passo, como a exclusão).
+294. **✅ RESOLVIDO NA ETAPA 138 (B895) — reproduzido e fechado: a renumeração desfaz no mesmo passo.** Medido pela rota: uma renumeração
+     que falha no último passo, com uma rajada de 30 edições de cliente mandada junto, desfazia 15, 13 e 7 delas em três rodadas — todas
+     tinham respondido "salvo". **Este item estava impreciso em duas coisas:** dizia "lido no código, não reproduzido" (agora reproduzido) e
+     "as gravações que entraram na fila enquanto ela falhava" — **não é qualquer gravação feita durante a renumeração**: quem chega durante
+     ela espera e grava depois do desfazer; perde só quem já estava sendo atendido quando a renumeração começou (uma rajada no mesmo
+     instante). O texto original: **NOVO (da revisão da Etapa 137; das propostas, anterior a ela; lido no código, não reproduzido) — a
+     renumeração de propostas que falha no meio pode desfazer uma gravação de outra pessoa feita no mesmo instante.** A renumeração grava
+     tudo de uma vez; se um passo falha, o desfazer é mandado **depois** das gravações que entraram na fila enquanto ela falhava, e as desfaz
+     junto (a pessoa recebeu "salvo"). É o mesmo defeito que a exclusão de usuário tinha e a Etapa 137 corrigiu (**B884**). Só acontece se a
+     renumeração falhar — o que não se espera em operação normal. **O que fazer:** nada; candidata pequena (a renumeração passa a desfazer no
+     mesmo passo, como a exclusão).
 295. **NOVO (da revisão da Etapa 137; do núcleo, anterior a ela; reproduzido só na exclusão — 1 em 6) — a permissão de quem age é
      conferida na entrada do pedido, não no instante da gravação.** Um administrador rebaixado (ou desativado) enquanto o pedido dele já
      corria ainda o concluía. Na **exclusão de usuário** isso foi fechado nesta etapa (a exclusão confere quem exclui de novo, **B884**); nas
      outras gravações (editar usuário, inativar, e as do resto do sistema) a janela é de milissegundos e não deixa o sistema sem super
      administrador (a trava do último super confere no instante da gravação). **O que fazer:** nada; só rebaixe um administrador quando
      ele não estiver no meio de uma ação.
+296. **✅ RESOLVIDO NA ETAPA 138 — NOVO (achado na medição da Etapa 138; das propostas, anterior a ela, desde 30/07/2026; reproduzido) —
+     salvar uma proposta que tem variável manual preenchida nunca terminava.** Desde a correção de 30/07 que religa as variáveis manuais aos
+     itens depois do salvamento, a religação usava uma função que o servidor nunca carregou: em **todo** salvamento pelo formulário de uma
+     proposta com alguma variável manual preenchida no preview, a gravação acontecia (a proposta e os itens eram salvos), mas a resposta
+     nunca chegava — a tela ficava em "salvando" até o tempo limite (30 s) e mostrava erro, e as variáveis ficavam ligadas aos itens antigos
+     (o preview e o PDF as reencontram pelo código do produto, quando ele está gravado junto delas). Agora o salvamento responde e as
+     variáveis são religadas. **O que fazer:** a consulta **A84** diz se alguma variável ficou sem como ser reencontrada; quem viu o erro ao
+     salvar nesse período pode conferir que a proposta foi gravada (ela foi).
+297. **NOVO (da medição da Etapa 138; dos produtos, anterior a ela; lido no código) — a classificação de área do produto não se apaga.** No
+     cadastro de produto, apagar a *Classificação de área* e salvar mantém a anterior: o formulário cai no valor antigo quando o campo fica
+     vazio, e o servidor ignora o vazio. **O que fazer:** para trocar, escolha outra classificação; para apagar, não há caminho pela tela
+     hoje. Candidata pequena (decidir se o vazio apaga — é regra do cadastro de produto).
+298. **NOVO (da revisão da Etapa 138; das propostas, anterior a ela; reproduzido) — com dois itens do mesmo produto, tirar o primeiro troca
+     as variáveis manuais.** Uma proposta com o mesmo produto duas vezes, cada um com sua variável manual preenchida (por exemplo *TAG-A* e
+     *TAG-B*): tirar o primeiro item e salvar deixa o item que ficou com o valor do que saiu (*TAG-A*), e o dele se perde. A religação e o
+     reparo do preview reconhecem o item pelo código do produto e pela posição entre os iguais. **O que fazer:** ao tirar um de dois itens
+     iguais, confira as variáveis manuais do que ficou no preview.
+299. **NOVO (da revisão da Etapa 138; das propostas, anterior a ela; reproduzido) — a margem de desconto escrita com vírgula ou com letras
+     passa pela conferência dos 5%.** Pela API, `"10,5"` ou `"10abc"` como margem não é lida como número: a conferência do desconto acima de
+     5% não vê o valor como maior que 5, aprova o envio e grava o texto. A tela manda sempre número. Margem negativa também é aceita.
+     **O que fazer:** nada pela tela; quem integra deve mandar a margem como número com ponto. Candidata pequena (recusar a margem que não é
+     número).
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -13684,6 +13814,21 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   excluir usuários"*. A frase continua no código para o dia em que a exclusão deixar de exigir super.
 - **(137) A prova do "rebaixado no meio da exclusão"** depende de uma corrida que acontece em poucas rodadas (1 de 6 na revisão; na bateria,
   a sabotagem caiu na rodada 9 de 16); o teste prende a regra em toda rodada, mas só a prova quando a corrida acontece.
+- **(138) Duas gravações da mesma proposta ao mesmo tempo pela API**, quando uma traz status, margem, motivo ou data de fechamento e a
+  outra muda um desses no meio: a segunda recebe *"A proposta foi alterada por outra gravação no mesmo instante. Recarregue a proposta e
+  salve de novo."* e nada dela é gravado (**B896**) — quem integra precisa tentar de novo. Duas gravações de outros campos (título, itens)
+  ao mesmo tempo continuam valendo as duas, cada uma no que mandou.
+- **(138) Itens que não são lista** (um texto, um objeto) apagam todos os itens da proposta, como a lista vazia — como sempre.
+- **(138) A revisão sobe sem trocar o sufixo `REVnn` do número** quando a proposta não tem cliente gravado nem no pedido (como sempre); a
+  próxima, com cliente, pula um número.
+- **(138) A gravação dos itens da proposta** não passa pela fila de gravações do sistema; se uma renumeração falhar no mesmo milissegundo,
+  ela ainda pode ser desfeita junto (a **D (137)**; a janela ficou menor, não fechou).
+- **(138) Salvar um cliente ou uma oportunidade que não existe** continua respondendo sucesso sem gravar nada (como sempre).
+- **(138) Criar proposta com título só de espaços** continua aceito (a edição recusa); a regra da criação não mudou.
+- **(138) O formulário de propostas não mostra** projeto, contatos da proposta, idioma, moeda, incoterm e unidade de negócio — agora apenas
+  não os apaga. Mudá-los só pela API.
+- **(138) A probabilidade e o responsável vazios no salvamento de proposta mantêm o gravado** (não apagam), como sempre — não seguem a
+  regra "o que veio vazio apaga" (**B891**).
 
 ### E. Regras que foram DEDUZIDAS e nunca confirmadas com vocês — perguntas, não requisitos atendidos (E1, a remessa mista; E2, o tempo de recebimento)
 
@@ -14595,6 +14740,16 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(138) Nenhum clique foi dado no navegador.** O salvamento parcial foi provado com o servidor de verdade, em pasta vazia, dentro da suíte (17
+cenários de proposta, cliente e oportunidade, mais 2 da renumeração com uma rajada de 30 edições), o montador da gravação pelo serviço (5) e
+o corpo que o formulário de proposta manda pelo client (4). O que **só o navegador** prova: o roteiro da Etapa 138 no guia —
+**Comercial → Propostas → Editar** de uma proposta com variável manual preenchida no preview (o salvamento termina e a variável continua
+no preview); apagar o *Tipo* e a *Data de fechamento* e salvar (ficam vazios ao reabrir); e **Clientes → Editar** apagando o e-mail (fica
+vazio, o resto igual). **E a revisão obrigatória da proposta** (`specs/proposta-editavel/review-proposta.md`) não está inteira verde **antes
+e depois** desta etapa: dois testes de navegador do documento (`propostaSumarioOverflow` — o sumário estourado deveria sumir — e
+`propostaCapaHero` — a faixa branca na borda da capa) já falhavam na base de que a etapa partiu, que não toca o documento; os outros 20 e o
+do editor (32) passam. Conferir a capa e o sumário de uma proposta grande no navegador.
 
 **(137) Nenhum clique foi dado no navegador.** A exclusão, o *Super administrador* e o *ativo* foram provados com o servidor de verdade, em
 pasta vazia, dentro da suíte (21 cenários, com as corridas de dois e três super administradores — exclusão contra exclusão, contra
@@ -28069,16 +28224,118 @@ caminho para ficar sem super, e achou o super rebaixado concluindo uma exclusão
 **C295**); o de **sabotagem** fez **55** sabotagens além das **19** do autor: **35** caíram, **4** sobreviventes viraram cenários e caem,
 e as outras foram provadas inofensivas ou são ordem entre duas recusas simultâneas (não contratada).
 
+## Etapa 138 — O salvamento que só grava o que veio: propostas, clientes e oportunidades (2026-10-17)
+
+Salvar uma proposta, um cliente ou uma oportunidade pela API apagava tudo o que o pedido não trazia. Mandar só o novo telefone de um
+cliente dava erro; mandar só a razão social apagava as outras treze informações do cadastro — logo e situação inclusive. Mandar só o
+título de uma proposta zerava o valor, o cliente, a margem, o status, os contatos e **apagava os itens**. E a própria tela de propostas,
+que não mostra projeto, contatos da proposta, idioma, moeda, incoterm e unidade de negócio, apagava esses oito campos em todo salvamento.
+Agora cada salvamento grava só o que veio: o que não veio fica como estava, e o que veio vazio continua apagando, como sempre. Junto, um
+defeito antigo que fazia o salvamento de uma proposta com variável manual preenchida **nunca terminar** (a tela ficava em "salvando"), e
+a renumeração de propostas que, ao falhar, desfazia a gravação de outras pessoas feita no mesmo instante.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Salvar a proposta pela tela apagava projeto, contatos da proposta, idioma, moeda, incoterm e unidade de negócio (vindos da cópia, da geração automática ou da integração) | Ficam como estavam (**B889**) |
+| Salvar uma proposta que tem variável manual preenchida no preview: a tela ficava em "salvando" e terminava em erro, embora tivesse gravado | Salva e responde; as variáveis continuam ligadas aos itens (**C296**) |
+| API: só o título de uma proposta → valor 0, cliente, status, margem, contatos e tipo apagados, **itens apagados**, revisão +1 | Só o título muda (**B889**, **B892**) |
+| API: só o status de uma proposta → erro de banco | Só o status muda (**B889**) |
+| API: só o status *enviada* numa proposta com desconto acima de 5% sem aprovação → passava (e zerava a margem) | *"Não é possível alterar o status de uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve permanecer como rascunho até que a autorização seja aprovada."* (**B893**) |
+| API: só o valor total → a revisão subia mas o número continuava `REV00`; o histórico de revisões listava título, status e cliente como "(vazio)" | O número troca para `REV01`; o histórico lista só *Valor Total* (**B892**) |
+| API: título ou razão social vazios → gravava vazio, ou erro de banco | *"Título é obrigatório"* / *"Razão social é obrigatória"*, nada gravado (**B894**) |
+| API: só o telefone de um cliente → erro de banco; só a razão social → as outras 13 informações apagadas | Só o que veio muda (**B889**) |
+| API: só a etapa de uma oportunidade → erro de banco; só o título → cliente, valor, probabilidade, etapa e situação apagados | Só o que veio muda (**B889**) |
+| Apagar o *Tipo* ou a *Data de fechamento* no formulário de proposta | Continua apagando (o formulário passou a mandar o vazio explicitamente — **B890**) |
+| A renumeração de propostas que falhava no meio desfazia edições de outras pessoas que tinham respondido "salvo" (35 de 90 numa rajada medida) | Desfaz só a si mesma (**B895**, **C294**) |
+| API: duas gravações ao mesmo tempo — só a margem 20 e só o status *enviada* — deixavam a proposta enviada com desconto sem aprovação | A que leu o velho recebe *"A proposta foi alterada por outra gravação no mesmo instante. Recarregue a proposta e salve de novo."* e nada dela é gravado (**B896**) |
+| Trocar o cliente da proposta (com contato gravado na proposta): a capa saía com o contato do cliente anterior | O contato e o projeto da proposta saem; a capa mostra os do cliente novo (**B897**) |
+
+### As regras, com o cenário exato
+
+Preparação: um cliente com todos os campos preenchidos e uma logo; uma proposta desse cliente com dois itens, *Tipo* *Técnica*, uma data de
+fechamento, e uma variável manual preenchida no preview. Os cenários "pela API" se fazem com qualquer cliente HTTP (o token do login), em
+`PUT /api/propostas/:id`, `PUT /api/clientes/:id` e `PUT /api/oportunidades/:id`.
+
+**1. A tela de propostas não apaga o que não mostra.** Abra a proposta em **Comercial → Propostas → Editar**, mude só a garantia e salve.
+O salvamento termina (antes, com a variável manual preenchida, ficava em "salvando"); a variável continua no preview; e, se a proposta veio
+de uma cópia de outra que tinha contato, idioma ou incoterm, eles continuam lá.
+
+**2. A tela continua apagando o que você apaga.** No mesmo formulário, escolha *Tipo* "—" e apague a *Data de fechamento*; salve e reabra:
+os dois estão vazios.
+
+**3. Só o que veio (API).** `PUT /api/propostas/:id` com `{"titulo": "Novo título"}` → só o título muda; itens, valor, cliente, status e
+revisão ficam. `{"status": "enviada"}` → só o status. `PUT /api/clientes/:id` com `{"telefone": "(21) 2222-3333"}` → só o telefone.
+`PUT /api/oportunidades/:id` com `{"etapa": "fechamento"}` → só a etapa.
+
+**4. O que veio vazio apaga (API).** `{"tipo_proposta": null}` apaga o tipo; `{"logo_url": ""}` tira a logo do cliente; `{"itens": []}`
+apaga os itens da proposta (como sempre).
+
+**5. Obrigatório vazio é recusado (API).** `{"titulo": ""}` (ou só espaços) numa proposta ou oportunidade → *"Título é obrigatório"*;
+`{"razao_social": ""}` num cliente → *"Razão social é obrigatória"*. Nada é gravado.
+
+**6. As regras que olham dois campos usam o gravado quando um não vem (API).** Proposta com margem de desconto 10 e sem aprovação, em
+rascunho: `{"status": "enviada"}` → *"Não é possível alterar o status de uma proposta com desconto acima de 5% sem aprovação prévia. A
+proposta deve permanecer como rascunho até que a autorização seja aprovada."*. Proposta em rascunho: `{"status": "rejeitada"}` sem motivo
+→ *"Motivo da não venda é obrigatório quando a proposta está perdida/rejeitada."*. `{"status": "aprovada"}` sem data → a data de
+fechamento vira hoje; numa que já tinha data, a data fica.
+
+**7. Trocar o cliente.** Numa proposta que tem contato próprio gravado (veio de uma cópia, por exemplo), troque o cliente no formulário e
+salve: abra o preview — a capa mostra o contato, o telefone e o e-mail do cadastro do cliente novo.
+
+**8. A revisão só sobe quando itens ou valor mudam.** `{"valor_total": 400}` → a revisão sobe e o número termina em `REV01`; o histórico de
+revisões mostra só *Valor Total*. `{"titulo": "x"}` → a revisão não muda.
+
+### O que esta etapa NÃO cobre
+
+1. **Duas gravações da mesma proposta ao mesmo tempo pela API**, quando uma traz status, margem, motivo ou data de fechamento: a que leu o
+   valor velho é recusada (409) e quem integra precisa tentar de novo (D (138)). A tela não recebe esta recusa por causa dela mesma.
+2. **A classificação de área do produto não se apaga** pela tela nem pela API (**C297**) — o vazio mantém a anterior.
+3. **Salvar um cliente ou uma oportunidade que não existe** continua respondendo sucesso sem gravar nada (D (138)); a criação de proposta
+   com título só de espaços continua aceita (D (138)).
+4. **O formulário de propostas da tela** continua sem mostrar projeto, contatos da proposta, idioma, moeda, incoterm e unidade de negócio —
+   agora só não os apaga.
+5. **A verificação de que quem salva é o dono da proposta** e o filtro por permissão do histórico continuam esperando vocês (Fase 12 da spec
+   da proposta editável).
+6. As decisões que esperam vocês: **B853**, **B808**, **B755**, **B761**/**C239**, **C224**, **C225**, **C228**, **C219**, **C230**,
+   **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (**E2**), a **C268**, a **C269** e as
+   perguntas da **C275** a **C277**.
+
+### O que a revisão encontrou
+
+A **medição** confirmou a perda em três das nove gravações medidas (proposta, cliente e oportunidade; as cinco do preview editável e a de
+produto já mantinham o que não vinha) e achou, sem procurar, o salvamento de proposta que nunca terminava (**C296**). A **revisão do plano**
+(antes do código) achou que o teste planejado para a renumeração **não reproduzia** o defeito — quem chega durante a renumeração espera;
+só uma rajada no mesmo instante reproduz — e cinco pontos importantes (o sufixo `REVnn`, o histórico de revisões, o pedido sem campo, a
+corrida desconto × status e três consequências das regras), todos aceitos. A **revisão adversarial do código** (três revisores,
+executando): o de **regra** achou a capa da proposta com o contato do cliente anterior depois de trocar o cliente (corrigido, **B897**) e
+dois anteriores (**C298**; a revisão sem sufixo numa proposta sem cliente, D (138)); o de **permissão** reproduziu a corrida do desconto (5 em
+6, e 6 em 6 com a tela) e a de rejeitar sem motivo (corrigidas, **B896**), o número regravado com o valor lido (corrigido) e a margem com
+vírgula (anterior, **C299**); o de **sabotagem** fez **90** sabotagens além das **25** do autor: **36** caíram, **51** sobreviveram por falta
+de cenário e viraram **20** cenários novos (que as derrubam), e **3** são equivalentes.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 138 entregue (2026-10-17):** **o salvamento que só grava o que veio** (das propostas e do núcleo). Proposta, cliente e
+  oportunidade gravam só o que o pedido trouxe — o que não veio fica, o que veio vazio apaga (**B889** a **B895**); a tela de propostas deixou
+  de apagar projeto, contatos, idioma, moeda, incoterm e unidade de negócio, e continua apagando o que o vendedor apaga (**B890**); duas
+  gravações da mesma proposta ao mesmo tempo não furam mais o desconto (**B896**); trocar o cliente apaga o contato da proposta (**B897**);
+  salvar proposta com variável manual voltou a terminar (**C296** resolvido); a renumeração que falha não desfaz mais o que os outros
+  gravaram (**C294** resolvido — e o texto dela estava impreciso). **O que é seu:** a consulta **A84** (opcional); a pergunta **B853**; as
+  decisões **B889 a B897** (reversíveis); os avisos **C297** a **C299**; as limitações **(138)** em D e a verificação **(138)** em F (que
+  inclui os dois testes da revisão obrigatória da proposta que já falhavam antes). **Próxima: Etapa 139 — ver a "próxima tarefa detalhada"
+  no plano da Etapa 138.**
 
 - **Etapa 137 entregue (2026-10-17):** **a exclusão do último super administrador e a régua de sim ou não do cadastro de usuários** (do
   núcleo). A exclusão confere de novo, no início da gravação, quem exclui, o usuário, o último super e o destino, e não grava nada se algo
   mudou (**C292** resolvido — **B884**); *Super administrador* e *ativo* pela régua de sim ou não na edição e no inativar, sem recusar o que
   a tela leu (**C291**, **C293** resolvidos — **B885** a **B887**). **O que é seu:** nenhuma consulta nova em A (a **A79** continua achando
   *ativo* fora de 0 e 1); a pergunta **B853**; as decisões **B884 a B887** (reversíveis); os avisos **C294** e **C295**; as limitações
-  **(137)** em D e a verificação **(137)** em F. **Próxima: Etapa 138 — ver a "próxima tarefa detalhada" no plano da Etapa 137.**
+  **(137)** em D e a verificação **(137)** em F.
+  *(Próxima, na época: Etapa 138 — entregue acima.)*
 
 - **Etapa 136 entregue (2026-10-17):** **a entrega que tira de um endereço antes do automático, e o cadastro de usuários pela API** (spec
   05 e núcleo). As baixas da entrega saem na ordem endereço → lote → automático, e a recusa por endereço depois da primeira baixa da

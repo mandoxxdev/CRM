@@ -1,18 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-17 (Etapa 137) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-17 (Etapa 138) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136 e 137) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137 e 138) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-17 (Etapa 137 ENTREGUE · próxima: Etapa 138)
+> ## Onde o desenvolvimento está — 2026-10-17 (Etapa 138 ENTREGUE · próxima: Etapa 139)
 >
-> **O desenvolvimento parou aqui: Etapa 137 fechada — 2026-10-17.** A **Etapa 137 (a exclusão do último super administrador e a
+> **O desenvolvimento parou aqui: Etapa 138 fechada — 2026-10-17.** A **Etapa 138 (o salvamento que só grava o que veio — propostas,
+> clientes e oportunidades; fora do almoxarifado)**: salvar grava só o que o pedido trouxe — o que não veio fica, o que veio vazio apaga; a
+> tela de propostas deixou de apagar os campos que não mostra (projeto, contatos da proposta, idioma, moeda, incoterm, unidade de negócio),
+> salvar uma proposta com variável manual preenchida voltou a terminar, trocar o cliente apaga o contato da proposta, e a renumeração de
+> propostas que falha não desfaz mais o que os outros gravaram. Uma consulta nova, opcional (**A84**). **Próxima: Etapa 139** — ver a
+> próxima tarefa no plano da 138.
+>
+> **Etapa 137, 2026-10-17.** A **Etapa 137 (a exclusão do último super administrador e a
 > régua de sim ou não do cadastro de usuários, do núcleo)**: dois super administradores excluindo um ao outro no mesmo instante não deixam
 > mais o sistema sem nenhum — a exclusão confere de novo, no instante de gravar, quem exclui, o usuário, o último super e o destino, e não
 > grava nada se algo mudou; e, pela API, *Super administrador* e *ativo* seguem a régua de sim ou não (sem o campo mantém; `"true"` é sim;
-> o botão de inativar com `"true"` reativa). Nenhuma consulta nova. **Próxima: Etapa 138** — a primeira fora do almoxarifado e do
-> cadastro de usuários (propostas); ver a próxima tarefa no plano da 137.
+> o botão de inativar com `"true"` reativa). Nenhuma consulta nova.
+> *(Próxima, na época: Etapa 138 — entregue acima.)*
 >
 > **Etapa 136, 2026-10-17.** A **Etapa 136 (a entrega que tira de um endereço antes do automático,
 > e o cadastro de usuários pela API)**: quando uma linha foi separada de um endereço certo e outra sem dizer de onde, a entrega tira primeiro
@@ -6594,6 +6601,42 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 138 — O salvamento que só grava o que veio: propostas, clientes e oportunidades (ENTREGUE — 2026-10-17)
+
+**O que mudou, em uma frase:** salvar uma proposta, um cliente ou uma oportunidade grava só o que o pedido trouxe — o que não veio fica
+como estava, o que veio vazio continua apagando.
+
+**O problema que ela resolve.** A tela de propostas não mostra projeto, contatos da proposta, idioma, moeda, incoterm nem unidade de
+negócio — e apagava esses campos em todo salvamento (eles chegam pela cópia de uma proposta, pela geração automática e pela integração).
+Uma proposta com variável manual preenchida no preview ficava em "salvando" e terminava em erro, embora tivesse gravado. Pela API, mandar
+só um campo apagava os outros (o título de uma proposta apagava até os itens).
+
+| Antes | Agora |
+|---|---|
+| Salvar a proposta pela tela apagava projeto, contatos, idioma, moeda, incoterm e unidade de negócio | Ficam |
+| Salvar proposta com variável manual: "salvando" até dar erro | Salva e responde; a variável continua no preview |
+| Trocar o cliente de uma proposta com contato próprio: a capa ficava com o contato do cliente anterior | A capa mostra o contato do cliente novo |
+| Pela API, só o título de uma proposta: itens apagados, valor 0, status vazio | Só o título muda |
+| Pela API, título ou razão social vazios: gravava vazio ou dava erro de banco | *"Título é obrigatório"* / *"Razão social é obrigatória"* |
+
+**Roteiro de teste (5 minutos, pela tela).** Entre com um usuário do Comercial.
+
+1. **Variável manual.** Abra uma proposta com itens, vá ao **preview editável**, preencha uma variável manual (um campo em branco do
+   descritivo) e **Salvar**. Volte a **Comercial → Propostas → Editar** dessa proposta, mude só a **Garantia** e **Salvar**: o salvamento
+   termina com sucesso (antes ficava em "salvando"), e no preview a variável continua preenchida.
+2. **Apagar continua apagando.** No mesmo formulário escolha **Tipo** "—" e apague a **Data de fechamento**; **Salvar** e reabra: os dois
+   estão vazios.
+3. **Trocar o cliente.** Numa proposta com contato próprio gravado (vinda da integração, ou a cópia de uma dessas — se não houver nenhuma,
+   pule), troque o **Cliente** e salve; abra o preview: a capa mostra o contato, o telefone e o e-mail do cadastro do cliente novo.
+4. **Cliente.** **Clientes → Editar** um cliente com logo e e-mail; apague só o **E-mail** e **Salvar**: o e-mail fica vazio, a logo e o
+   resto continuam.
+
+**O que esta etapa NÃO cobre.** Duas gravações da mesma proposta ao mesmo tempo pela API, quando uma traz status, margem, motivo ou data de
+fechamento: a que leu o valor velho é recusada com *"A proposta foi alterada por outra gravação no mesmo instante. Recarregue a proposta e
+salve de novo."*. A classificação de área do produto não se apaga (**C297**); com dois itens iguais, tirar o primeiro troca as variáveis
+manuais (**C298**); a margem com vírgula pela API passa pela conferência dos 5% (**C299**). O formulário continua sem mostrar os campos que
+agora apenas não apaga. A verificação de quem é o dono da proposta continua esperando o P.O.
 
 ## Etapa 137 — A exclusão do último super administrador e a régua de sim ou não do cadastro de usuários (ENTREGUE — 2026-10-17)
 

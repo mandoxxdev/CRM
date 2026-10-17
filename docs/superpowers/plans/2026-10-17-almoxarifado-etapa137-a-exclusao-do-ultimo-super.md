@@ -160,7 +160,11 @@ sem o "igual ao gravado" (RN-07 legado) e sem a régua (RN-07 `"true"`); a régu
    ou de ordem não contratada; **0** ruído.
 3. **Paralelismo:** **0** galhos em paralelo (o mesmo `index.js` e o "um teste de servidor por vez"), **0** retrabalho; **1** revisor na
    Fase 2, **3** em paralelo na Fase 5 sob a trava, e **1** agente de medição (só leitura) em paralelo com a suíte, para a escolha da 138.
-4. **Defeito que escapou:** *(preencher na Etapa 138)*.
+4. **Defeito que escapou:** **nenhum de código; um de texto** (preenchido na Etapa 138). O `db.execEmTransacao` desta etapa foi
+   reusado na renumeração de propostas e a Fase 5 da 138 não achou defeito nele nem na exclusão. Mas a **C294**, escrita na Fase 5 desta
+   etapa, estava **imprecisa**: dizia "lido no código, não reproduzido" e que o desfazer pegava "as gravações que entraram na fila enquanto
+   ela falhava" — a 138 **reproduziu** (35 de 90 numa rajada) e mediu que só perde quem já estava sendo atendido quando a renumeração
+   começou; quem chega durante ela espera o `exec` (exclusivo no driver) e grava depois do desfazer.
 
 ## Próxima tarefa detalhada — Etapa 138
 

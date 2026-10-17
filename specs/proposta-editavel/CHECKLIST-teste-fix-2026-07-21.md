@@ -112,7 +112,7 @@ Extra: renumeração automática das cláusulas reserva o slot **5.23** (editáv
 ### Backlog (não bloqueia; anotado em `auditoria.md`)
 - [ ] Histórico: agrupar entradas consecutivas do mesmo usuário; filtros por usuário/tipo/período; controle de permissão (só admin/comercial).
 - [ ] Auditoria de itens cobre só o save do formulário (`PUT /propostas/:id`). Produtos adicionados por outros fluxos (criar de oportunidade, duplicar proposta, importação) não entram no histórico.
-- [ ] (Ofereci) Varredura por outros endpoints de save com o mesmo risco de "payload parcial zera colunas não enviadas" (já apareceu em itens e em contato).
+- [x] (Ofereci) Varredura por outros endpoints de save com o mesmo risco de "payload parcial zera colunas não enviadas" (já apareceu em itens e em contato). — **Feita na Etapa 138** (`f755896e`, Fase 5 `43980b9b`): medidos os nove `PUT` (proposta, cliente, oportunidade, produto e as cinco do preview editável); três zeravam — o `PUT /api/propostas/:id` (só o título zerava valor, cliente, status e apagava os itens; o formulário zerava 8 colunas que não carrega), o `PUT /api/clientes/:id` e o `PUT /api/oportunidades/:id` — e passaram a gravar só o que veio (`montarSetParcial`). As cinco do preview e a de produto já preservavam. Junto: o salvamento com variável manual que nunca respondia (`chaveDe` não importado, C296) e a renumeração (C294, `6eec66f9`). Plano: `docs/superpowers/plans/2026-10-17-almoxarifado-etapa138-payload-parcial-nos-put.md`.
 
 ---
 
