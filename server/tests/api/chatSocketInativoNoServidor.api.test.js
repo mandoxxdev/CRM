@@ -48,14 +48,14 @@ function depois(txt, antes, chamada) {
 
 test('[RN-05] PATCH /status: encerrarSocketsDoUsuario so com ativo === 0, depois do UPDATE sem erro', () => {
   const t = trecho("app.patch('/api/usuarios/:id/status'", "app.delete('/api/usuarios/:id'");
-  depois(t, "db.run('UPDATE usuarios SET ativo = ? WHERE id = ?'", 'if (ativo === 0 && chatSocket) chatSocket.encerrarSocketsDoUsuario(id);');
-  const u = t.indexOf("db.run('UPDATE usuarios SET ativo = ? WHERE id = ?'");
+  depois(t, 'db.run(`UPDATE usuarios SET ativo = ? WHERE id = ? AND ${GUARDA_ULTIMO_SUPER_SQL}`' /* Etapa 136 (C285): a guarda no UPDATE */, 'if (ativo === 0 && chatSocket) chatSocket.encerrarSocketsDoUsuario(id);');
+  const u = t.indexOf('db.run(`UPDATE usuarios SET ativo = ? WHERE id = ? AND ${GUARDA_ULTIMO_SUPER_SQL}`' /* Etapa 136 (C285): a guarda no UPDATE */);
   depois(t.slice(u), "return respondDbError(res, err, 'usuarios:status');", 'chatSocket.encerrarSocketsDoUsuario(id)');
 });
 
 test('[RN-05] PUT: encerrarSocketsSeInativo(id) no finishUpdate, depois do if (err)', () => {
   const t = trecho("app.put('/api/usuarios/:id'", "app.patch('/api/usuarios/:id/status'");
-  const f = t.indexOf('const finishUpdate = (err) => {');
+  const f = t.indexOf('const finishUpdate = function feito(err) {'); // Etapa 136 (C285): function, para ler this.changes
   assert.ok(f >= 0);
   const corpo = t.slice(f, t.indexOf('};', f));
   depois(corpo, 'return res.status(500).json({ error: err.message });', 'if (chatSocket) chatSocket.encerrarSocketsSeInativo(id);');

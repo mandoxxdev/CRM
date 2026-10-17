@@ -3742,6 +3742,24 @@ registrarLeituraDeUsuarios(app, { getDb: () => db, authenticateToken });
 
 // Etapa 135 (C283, RN-09): a recusa do e-mail que nao e texto, no POST e no PUT de /api/usuarios.
 const LITERAL_EMAIL_NAO_TEXTO = 'E-mail inválido: envie o e-mail como texto';
+// Etapa 136 (C289, RN-07; C290): a senha que nao e texto. No POST o `hashSync` lancava no handler (500); no PUT lancava DENTRO do callback do
+// `db.get` — o installProcessGuards segura a excecao e a requisicao nunca respondia.
+const LITERAL_SENHA_NAO_TEXTO = 'Senha inválida: envie a senha como texto';
+// Etapa 136 (C287, RN-09): o `ativo` da criacao pela regua de sim/nao; o resto e recusado (gravava "true" ou 2 cru: a tela mostrava Ativo e
+// o login, que exige 1, recusava). Descartados: gravar 0 para o desconhecido (`isTruthyFlag`, que faria "true" virar inativo) e gravar 1
+// (daria acesso a quem a integracao pode ter querido inativo). O PUT nao muda (a tela devolve o que leu — D (136)).
+const LITERAL_ATIVO_INVALIDO = 'Ativo inválido: envie 1 (ativo) ou 0 (inativo)';
+function ativoDaCriacao(ativo) {
+  if (ativo === undefined || ativo === null || ativo === '') return 1; // Etapa 135 (C284, RN-08): como a coluna nasce
+  if (ativo === 1 || ativo === true || ativo === '1' || ativo === 'true') return 1;
+  if (ativo === 0 || ativo === false || ativo === '0' || ativo === 'false') return 0;
+  return null;
+}
+// Etapa 136 (C285, RN-10): a trava do ultimo super no PROPRIO comando que grava. A conferencia de antes (`wouldRemoveLastSuperAdmin`)
+// conta num SELECT e o UPDATE grava depois: dois supers se rebaixando ao mesmo tempo passavam os dois (10/10, zero super ativo). Com o
+// `?` = 1 o UPDATE so grava se o alvo nao for super que entra (a regua do login, `ativo = 1`) ou se sobrar outro.
+const GUARDA_ULTIMO_SUPER_SQL = `(? = 0 OR NOT (COALESCE(is_superadmin, 0) = 1 AND ativo = 1)
+  OR EXISTS (SELECT 1 FROM usuarios o WHERE o.id != usuarios.id AND COALESCE(o.is_superadmin, 0) = 1 AND o.ativo = 1))`;
 
 app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
   normalizarMaiusculas(req.body, ['nome', 'cargo']);
@@ -3772,8 +3790,17 @@ app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
     return res.status(400).json({ error: LITERAL_EMAIL_NAO_TEXTO });
   }
 
+  if (typeof senha !== 'string') {
+    return res.status(400).json({ error: LITERAL_SENHA_NAO_TEXTO });
+  }
+
   if (senha.length < 6) {
     return res.status(400).json({ error: 'Senha deve ter no mínimo 6 caracteres' });
+  }
+
+  const ativoNaCriacao = ativoDaCriacao(ativo);
+  if (ativoNaCriacao === null) {
+    return res.status(400).json({ error: LITERAL_ATIVO_INVALIDO });
   }
 
   // Etapa 134 (C280, RN-03): o e-mail do administrador padrao so e dado por um super (o boot o recupera como super quando nao ha super ativo).
@@ -3782,10 +3809,7 @@ app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
   }
 
   const hashedPassword = bcrypt.hashSync(senha, 10);
-  // Etapa 135 (C284, RN-08): `ativo` nulo ou "" gravava vazio — um usuario que nao entra (o login exige ativo). Vazio e 1, como a
-  // coluna nasce (DEFAULT 1). O resto como veio (0 continua 0; "true" ou 2 gravam crus e nao entram — C287). A edicao mantem o
-  // que havia so com nulo (COALESCE, Etapa 132): o "" no PUT grava "" (C288).
-  const ativoNaCriacao = (ativo === undefined || ativo === null || ativo === '') ? 1 : ativo;
+  // Etapa 135 (C284, RN-08) e 136 (C287, RN-09): `ativoDaCriacao`, acima.
 
   db.run(
     'INSERT INTO usuarios (nome, email, senha, cargo, role, ativo, pode_aprovar_descontos, setor, departamento, flag_vendedor, flag_compras, flag_ti, is_superadmin, admin_modulos, is_oculto) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -3866,7 +3890,7 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
     email,
     cargo,
     role,
-    ativo,
+    ativo: ativoCru,
     senha,
     pode_aprovar_descontos,
     setor,
@@ -3878,6 +3902,15 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
     admin_modulos,
     pode_editar_conta,
   } = sanitized;
+
+  // Etapa 136 (C288, RN-08; Fase 2 M3): `ativo` "" ou nulo e AUSENTE — mantem o que havia. O "" gravava "" (o usuario deixava de entrar)
+  // e os dois contavam como "desativar" (a recusa do proprio usuario e a trava do ultimo super), com o COALESCE mantendo o valor no nulo.
+  const ativo = (ativoCru === '' || ativoCru === null) ? undefined : ativoCru;
+
+  // Etapa 136 (C289, RN-07; C290): senha verdadeira que nao e texto -> 400 (o falso continua "nao muda a senha").
+  if (senha && typeof senha !== 'string') {
+    return res.status(400).json({ error: LITERAL_SENHA_NAO_TEXTO });
+  }
 
   if (senha && senha.length < 6) {
     return res.status(400).json({ error: 'Senha deve ter no mínimo 6 caracteres' });
@@ -3902,9 +3935,14 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
       return res.status(400).json({ error: 'Email já cadastrado para outro usuário' });
     }
 
-    const finishUpdate = (err) => {
+    const guardar = (removingSuper || deactivating) ? 1 : 0; // Etapa 136 (C285, RN-10)
+    const finishUpdate = function feito(err) {
       if (err) {
         return res.status(500).json({ error: err.message });
+      }
+      // Etapa 136 (C285, RN-10): perdeu a corrida do ultimo super — nada gravado, nada a sincronizar.
+      if (guardar && this && this.changes === 0) {
+        return res.status(403).json({ error: 'Não é possível remover ou desativar o último Super Administrador ativo do sistema' });
       }
       // Etapa 132 (C271, RN-04): o `ativo` vem cru do corpo (0, NULL sem o campo, 'true') — so a releitura diz se o usuario
       // ficou sem linha ativa; se ficou, os sockets do chat dele caem na hora. Resolve sempre (nao rejeita).
@@ -3920,7 +3958,7 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
     if (senha) {
       const hashedPassword = bcrypt.hashSync(senha, 10);
       db.run(
-        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = COALESCE(?, ativo), pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, is_superadmin = COALESCE(?, is_superadmin), admin_modulos = COALESCE(?, admin_modulos), pode_editar_conta = COALESCE(?, pode_editar_conta), is_oculto = 0, senha = ? WHERE id = ?',
+        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = COALESCE(?, ativo), pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, is_superadmin = COALESCE(?, is_superadmin), admin_modulos = COALESCE(?, admin_modulos), pode_editar_conta = COALESCE(?, pode_editar_conta), is_oculto = 0, senha = ? WHERE id = ? AND ' + GUARDA_ULTIMO_SUPER_SQL,
         [
           nome,
           email,
@@ -3937,13 +3975,14 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
           admin_modulos !== undefined ? admin_modulos : null,
           pode_editar_conta !== undefined ? (pode_editar_conta ? 1 : 0) : null,
           hashedPassword,
-          id
+          id,
+          guardar,
         ],
         finishUpdate
       );
     } else {
       db.run(
-        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = COALESCE(?, ativo), pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, is_superadmin = COALESCE(?, is_superadmin), admin_modulos = COALESCE(?, admin_modulos), pode_editar_conta = COALESCE(?, pode_editar_conta), is_oculto = 0 WHERE id = ?',
+        'UPDATE usuarios SET nome = ?, email = ?, cargo = ?, role = ?, ativo = COALESCE(?, ativo), pode_aprovar_descontos = ?, setor = ?, departamento = ?, flag_vendedor = ?, flag_compras = ?, flag_ti = ?, is_superadmin = COALESCE(?, is_superadmin), admin_modulos = COALESCE(?, admin_modulos), pode_editar_conta = COALESCE(?, pode_editar_conta), is_oculto = 0 WHERE id = ? AND ' + GUARDA_ULTIMO_SUPER_SQL,
         [
           nome,
           email,
@@ -3959,7 +3998,8 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
           is_superadmin !== undefined ? is_superadmin : null,
           admin_modulos !== undefined ? admin_modulos : null,
           pode_editar_conta !== undefined ? (pode_editar_conta ? 1 : 0) : null,
-          id
+          id,
+          guardar,
         ],
         finishUpdate
       );
@@ -4015,9 +4055,13 @@ app.patch('/api/usuarios/:id/status', authenticateToken, requireManageUsers, (re
           return res.status(404).json({ error: 'Usuário não encontrado' });
         }
 
-        db.run('UPDATE usuarios SET ativo = ? WHERE id = ?', [ativo, id], (err) => {
+        // Etapa 136 (C285, RN-10): desativando, a guarda do ultimo super no proprio UPDATE.
+        db.run(`UPDATE usuarios SET ativo = ? WHERE id = ? AND ${GUARDA_ULTIMO_SUPER_SQL}`, [ativo, id, ativo === 0 ? 1 : 0], function feito(err) {
           if (err) {
             return respondDbError(res, err, 'usuarios:status');
+          }
+          if (ativo === 0 && this && this.changes === 0) {
+            return res.status(403).json({ error: 'Não é possível desativar o último Super Administrador ativo do sistema' });
           }
           invalidateComercialResponsaveisCache();
           // Etapa 132 (C271, RN-04): desativado -> os sockets abertos do chat dele recebem sessao_encerrada e caem na hora
