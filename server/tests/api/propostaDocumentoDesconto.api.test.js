@@ -296,6 +296,43 @@ test('[RN-141.06] sem login 401; id invalido 400; proposta inexistente 404 (nao 
   await recusado(pid, { pdf: false });
 });
 
+// ── RN-141.08: os R$ do pedido (C306) ───────────────────────────────────────────────────────
+test('[RN-141.08] o pedido grava total, desconto e valor com desconto da proposta, nao do corpo; a atividade diz os mesmos', async () => {
+  const pid = await novaProposta('vend', { margem_desconto: 30, valor_total: 100000 });
+  assert.strictEqual((await get('SELECT valor_total FROM propostas WHERE id = ?', [pid])).valor_total, 100000, 'o total gravado');
+  const aid = await pedir('vend', pid, 30, { valor_total: 1, valor_desconto_rs: 100, valor_com_desconto: 99999 });
+  const a = await get('SELECT valor_desconto, valor_total, valor_desconto_rs, valor_com_desconto FROM aprovacoes WHERE id = ?', [aid]);
+  assert.deepStrictEqual(a, { valor_desconto: 30, valor_total: 100000, valor_desconto_rs: 30000, valor_com_desconto: 70000 });
+  // a atividade e gravada depois da resposta (sem esperar): a desta proposta, pelo titulo, ate 5 s
+  const { numero_proposta: num } = await get('SELECT numero_proposta FROM propostas WHERE id = ?', [pid]);
+  let at;
+  for (let k = 0; k < 25 && !at; k++) {
+    at = await get("SELECT descricao FROM atividades WHERE tipo = 'aprovacao_desconto' AND titulo = ?", [`Aprovação de Desconto: ${num}`]);
+    if (!at) await pausa(200);
+  }
+  assert.ok(at, 'a atividade do aprovador nao foi criada');
+  assert.ok(at.descricao.includes('Valor Total: R$ 100000.00') && at.descricao.includes('Desconto: R$ 30000.00')
+    && at.descricao.includes('Valor com Desconto: R$ 70000.00'), at.descricao);
+});
+
+test('[RN-141.08] sem os valores no corpo, calculados; centavos arredondados; total em texto numerico vale, nao numero -> 0', async () => {
+  const pid = await novaProposta('vend', { margem_desconto: 7.5, valor_total: 1234.57 });
+  const aid = await pedir('vend', pid, 7.5);
+  const a = await get('SELECT valor_total, valor_desconto_rs, valor_com_desconto FROM aprovacoes WHERE id = ?', [aid]);
+  // 1234.57 * 7.5 / 100 = 92.59275 -> 92.59; 1234.57 - 92.59 = 1141.98
+  assert.deepStrictEqual(a, { valor_total: 1234.57, valor_desconto_rs: 92.59, valor_com_desconto: 1141.98 });
+  const p2 = await novaProposta('vend', { margem_desconto: 10 });
+  await run("UPDATE propostas SET valor_total = 'abc' WHERE id = ?", [p2]);
+  const a2 = await get('SELECT valor_total, valor_desconto_rs, valor_com_desconto FROM aprovacoes WHERE id = ?', [await pedir('vend', p2, 10, { valor_total: 500 })]);
+  assert.deepStrictEqual(a2, { valor_total: 0, valor_desconto_rs: 0, valor_com_desconto: 0 });
+  await run("UPDATE propostas SET valor_total = '1.234,56' WHERE id = ?", [p2]);
+  const a3 = await get('SELECT valor_total FROM aprovacoes WHERE id = ?', [await pedir('vend', p2, 10)]);
+  assert.strictEqual(a3.valor_total, 0, 'virgula nao e lida');
+  await run("UPDATE propostas SET valor_total = '1500' WHERE id = ?", [p2]);
+  const a4 = await get('SELECT valor_total, valor_desconto_rs, valor_com_desconto FROM aprovacoes WHERE id = ?', [await pedir('vend', p2, 10)]);
+  assert.deepStrictEqual(a4, { valor_total: 1500, valor_desconto_rs: 150, valor_com_desconto: 1350 });
+});
+
 (async () => {
   console.log('\n=== Etapa 141 (propostas): o documento barrado no servidor (C304) e os R$ do pedido (C306) ===\n');
   try {

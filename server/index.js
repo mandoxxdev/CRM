@@ -14360,9 +14360,9 @@ function gerarHTMLOS(os, osItens = []) {
 // ========== ROTAS DE APROVAÇÕES ==========
 // Criar solicitação de aprovação
 app.post('/api/aprovacoes', authenticateToken, (req, res) => {
+  // valor_total, valor_com_desconto e valor_desconto_rs do corpo sao ignorados (Etapa 141, RN-141.08): saem da proposta, abaixo.
   const {
-    proposta_id, tipo, valor_desconto, valor_total, valor_com_desconto,
-    valor_desconto_rs, observacoes
+    proposta_id, tipo, valor_desconto, observacoes
   } = req.body || {};
   // Etapa 140 (RN-140.06, C303): o pedido nasce PENDENTE e em nome de QUEM ESTÁ LOGADO. Antes o status e o solicitado_por vinham do
   // corpo — o pedido podia nascer aprovado, em nome de outra pessoa. A tela manda os dois (pendente e o próprio id): são ignorados, sem erro.
@@ -14380,9 +14380,18 @@ app.post('/api/aprovacoes', authenticateToken, (req, res) => {
   }
 
   // Etapa 140 (RN-140.06): proposta inexistente é 404 — antes era o 500 cru da chave estrangeira.
-  db.get('SELECT id, numero_proposta, titulo, responsavel_id, created_by FROM propostas WHERE id = ?', [proposta_id], (errP, propostaAlvo) => {
+  db.get('SELECT id, numero_proposta, titulo, responsavel_id, created_by, valor_total FROM propostas WHERE id = ?', [proposta_id], (errP, propostaAlvo) => {
     if (errP) return res.status(500).json({ error: errP.message });
     if (!propostaAlvo) return res.status(404).json({ error: 'Proposta não encontrada' });
+
+    // Etapa 141 (RN-141.08, C306): os valores em reais do pedido saem da PROPOSTA, nao do corpo — antes o total, o desconto em R$ e o
+    // valor com desconto que o aprovador ve eram os que o pedido dissesse (pela API, 30% numa proposta de R$ 100.000 dizendo
+    // "Desconto: R$ 100"). Os do corpo sao ignorados sem erro (as telas mandam os mesmos numeros, do valor_total gravado).
+    const totalLido = Number(propostaAlvo.valor_total);
+    const totalPedido = Number.isFinite(totalLido) ? totalLido : 0;
+    const centavos = (v) => Math.round(v * 100) / 100;
+    const descontoRsPedido = centavos(totalPedido * descontoLido.valor / 100);
+    const comDescontoPedido = centavos(totalPedido - descontoRsPedido);
 
     // Etapa 140 (RN-140.07): a atividade vai para um aprovador (coluna ou super) que NÃO é dono do pedido (quem pede, o responsável e
     // quem criou a proposta — Fase 5, r1 M-1) — antes ia para o primeiro com a coluna, que podia ser o próprio solicitante. Prefere quem
@@ -14406,14 +14415,13 @@ app.post('/api/aprovacoes', authenticateToken, (req, res) => {
           return res.status(400).json({ error: aprovacaoDesconto.MSG.SO_VOCE });
         }
 
-        const num = (v) => Number(v) || 0;
         db.run(
           `INSERT INTO aprovacoes (
             proposta_id, tipo, valor_desconto, valor_total, valor_com_desconto,
             valor_desconto_rs, solicitado_por, status, observacoes
           ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pendente', ?)`,
-          [proposta_id, tipo || 'desconto', descontoLido.valor, valor_total || 0, valor_com_desconto || 0,
-           valor_desconto_rs || 0, solicitanteId, observacoes || ''],
+          [proposta_id, tipo || 'desconto', descontoLido.valor, totalPedido, comDescontoPedido,
+           descontoRsPedido, solicitanteId, observacoes || ''],
           function(err) {
             if (err) {
               console.error('Erro ao criar aprovação:', err);
@@ -14436,7 +14444,7 @@ app.post('/api/aprovacoes', authenticateToken, (req, res) => {
                 } else if (proposta) {
                   // Criar atividade para o aprovador. Os valores ausentes não derrubam a descrição (antes: `undefined.toFixed`).
                   const tituloAtividade = `Aprovação de Desconto: ${proposta.numero_proposta || proposta.titulo}`;
-                  const descricaoAtividade = `Solicitação de aprovação de desconto de ${descontoLido.valor}% na proposta ${proposta.numero_proposta || proposta.titulo}${proposta.cliente_nome ? ` - Cliente: ${proposta.cliente_nome}` : ''}.\n\nValor Total: R$ ${num(valor_total).toFixed(2)}\nDesconto: R$ ${num(valor_desconto_rs).toFixed(2)}\nValor com Desconto: R$ ${num(valor_com_desconto).toFixed(2)}\n\n${observacoes || ''}`;
+                  const descricaoAtividade = `Solicitação de aprovação de desconto de ${descontoLido.valor}% na proposta ${proposta.numero_proposta || proposta.titulo}${proposta.cliente_nome ? ` - Cliente: ${proposta.cliente_nome}` : ''}.\n\nValor Total: R$ ${totalPedido.toFixed(2)}\nDesconto: R$ ${descontoRsPedido.toFixed(2)}\nValor com Desconto: R$ ${comDescontoPedido.toFixed(2)}\n\n${observacoes || ''}`;
 
                   db.run(
                     `INSERT INTO atividades (
