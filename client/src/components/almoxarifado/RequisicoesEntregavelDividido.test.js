@@ -149,3 +149,61 @@ describe('Etapa 135 (RN-06) — a janela de entrega divide o livre entre irmãos
     expect(inputs().map((i) => i.value)).toEqual(['2', '2']);
   });
 });
+
+const it2 = (extra) => ({ ...ITEM, ...extra });
+describe('Etapa 135 (Fase 5, r3) — os cenários que as sabotagens sobreviventes pediram', () => {
+  test('[135 RN-06, Fase 5 r3 K1] o foco da janela recarrega o detalhe com o modal aberto: continua 2 e vazio, e manda so o primeiro', async () => {
+    requisicao = { ...REQ, status: 'PARCIALMENTE_ATENDIDA', itens: [it2({ id: 1 }), it2({ id: 2 })] };
+    await renderizar();
+    await clicar('Completar Entrega');
+    expect(inputs().map((i) => i.value)).toEqual(['2', '']);
+    await act(async () => { window.dispatchEvent(new Event('focus')); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
+    expect(inputs().map((i) => i.value)).toEqual(['2', '']);
+    await clicar('✅ Confirmar Entrega');
+    expect(enviado()).toEqual([{ item_id: 1, quantidade_atendida: 2 }]);
+  });
+  test('[135 RN-06, Fase 5 r3 K2] fracao: 0,1 no primeiro deixa 0,2 (nao 0.19999999999999998) no segundo', async () => {
+    requisicao = { ...REQ, status: 'PARCIALMENTE_ATENDIDA', itens: [
+      it2({ id: 1, quantidade_entregavel: 0.1, saldo_entregavel: 0.3, saldo_entregavel_proprio: 0 }),
+      it2({ id: 2, quantidade_entregavel: 0.3, saldo_entregavel: 0.3, saldo_entregavel_proprio: 0 })] };
+    await renderizar();
+    await clicar('Completar Entrega');
+    expect(inputs().map((i) => i.value)).toEqual(['0.1', '0.2']);
+  });
+  test('[135 RN-06, Fase 5 r3 K3] o teto acima do entregavel (S6: 3, 4, 2) nao abre mais que o entregavel: 3 e 1', async () => {
+    requisicao = { ...REQ, status: 'PARCIALMENTE_ATENDIDA', itens: [
+      it2({ id: 1, quantidade_separada: 3, quantidade_entregue: 1, quantidade_atendida: 1, quantidade_entregavel: 3, saldo_entregavel: 4, saldo_entregavel_proprio: 2 }),
+      it2({ id: 2, quantidade_entregavel: 2, saldo_entregavel: 2, saldo_entregavel_proprio: 0 })] };
+    await renderizar();
+    await clicar('Completar Entrega');
+    expect(inputs().map((i) => i.value)).toEqual(['3', '1']);
+  });
+  test('[135 RN-06, Fase 5 r3 K4] o irmao digitado acima do livre nao tira a parte propria do outro: o max do primeiro continua 1', async () => {
+    requisicao = { ...REQ, status: 'PARCIALMENTE_ATENDIDA', itens: [
+      it2({ id: 1, quantidade_entregue: 1, quantidade_atendida: 1, quantidade_separada: 1, quantidade_entregavel: 2, saldo_entregavel: 2, saldo_entregavel_proprio: 1 }),
+      it2({ id: 2, quantidade_entregavel: 1, saldo_entregavel: 1, saldo_entregavel_proprio: 0 })] };
+    await renderizar();
+    await clicar('Completar Entrega');
+    await digitar(inputs()[1], '2');
+    expect(inputs()[0].max).toBe('1');
+  });
+  test('[135 RN-06, Fase 5 r3 K5] tres irmaos: o primeiro abaixo da propria nao libera livre para os outros', async () => {
+    requisicao = { ...REQ, status: 'PARCIALMENTE_ATENDIDA', itens: [
+      it2({ id: 1, quantidade_entregue: 1, quantidade_atendida: 1, quantidade_separada: 2, quantidade_entregavel: 3, saldo_entregavel: 3, saldo_entregavel_proprio: 1 }),
+      it2({ id: 2 }), it2({ id: 3 })] };
+    await renderizar();
+    await clicar('Completar Entrega');
+    expect(inputs().map((i) => i.value)).toEqual(['3', '', '']);
+    await digitar(inputs()[0], '0');
+    await digitar(inputs()[2], '2');
+    expect(inputs()[1].max).toBe('0');
+  });
+  test('[135 RN-06, Fase 5 r3 K6] item de outro material nao divide: os dois com max 2', async () => {
+    requisicao = { ...REQ, status: 'PARCIALMENTE_ATENDIDA', itens: [it2({ id: 1 }), it2({ id: 2, material_id: 20, material_codigo: 'MAT-2' })] };
+    await renderizar();
+    await clicar('Completar Entrega');
+    expect(inputs().map((i) => i.value)).toEqual(['2', '2']);
+    expect(inputs().map((i) => i.max)).toEqual(['2', '2']);
+  });
+});

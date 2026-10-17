@@ -3782,8 +3782,9 @@ app.post('/api/usuarios', authenticateToken, requireManageUsers, (req, res) => {
   }
 
   const hashedPassword = bcrypt.hashSync(senha, 10);
-  // Etapa 135 (C284, RN-08): `ativo` nulo ou "" gravava nulo — um usuario que nao entra (o login exige ativo). Vazio e 1, como a
-  // coluna nasce (DEFAULT 1) e como a edicao mantem o que havia (COALESCE, Etapa 132). O resto como veio (0 continua 0).
+  // Etapa 135 (C284, RN-08): `ativo` nulo ou "" gravava vazio — um usuario que nao entra (o login exige ativo). Vazio e 1, como a
+  // coluna nasce (DEFAULT 1). O resto como veio (0 continua 0; "true" ou 2 gravam crus e nao entram — C287). A edicao mantem o
+  // que havia so com nulo (COALESCE, Etapa 132): o "" no PUT grava "" (C288).
   const ativoNaCriacao = (ativo === undefined || ativo === null || ativo === '') ? 1 : ativo;
 
   db.run(

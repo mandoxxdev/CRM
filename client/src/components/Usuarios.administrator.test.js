@@ -31,6 +31,7 @@ beforeEach(() => {
     if (url === '/usuarios') {
       return Promise.resolve({ data: [
         { id: 7, nome: 'ADMINISTRATOR', email: 'adm7@t.com', role: 'usuario', ativo: 1, is_superadmin: 0, admin_modulos: '[]' },
+        { id: 9, nome: 'administrator', email: 'adm9@t.com', role: 'usuario', ativo: 1, is_superadmin: 0, admin_modulos: '[]' }, // Fase 5 r3 (U13): legado minusculo
         { id: 8, nome: 'MARIA SILVA', email: 'maria@t.com', role: 'usuario', ativo: 1, is_superadmin: 0, admin_modulos: '[]' },
       ] });
     }
@@ -46,4 +47,5 @@ test('[135 RN-10] a lista mostra o usuário ADMINISTRATOR (e o outro, a metade p
   await act(async () => { await new Promise((r) => setTimeout(r, 10)); });
   expect(container.textContent).toContain('MARIA SILVA');
   expect(container.textContent).toContain('ADMINISTRATOR');
+  expect(container.textContent).toContain('adm9@t.com');
 });

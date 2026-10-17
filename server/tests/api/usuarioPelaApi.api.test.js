@@ -31,7 +31,7 @@ test('[RN-10] estatico: o boot nao procura nem apaga usuario pelo nome "administ
   assert.ok(!/administrator/i.test(fonteIndex), 'o index.js ainda menciona "administrator" fora de comentario');
   // metade positiva: a regua acha o que existe (a rota de exclusao continua)
   assert.ok(/DELETE FROM usuarios WHERE id = \$\{targetId\}/.test(fonteIndex), 'premissa: a exclusao de usuario pela rota');
-  assert.strictEqual((fonteIndex.match(/DELETE FROM usuarios/g) || []).length, 1, 'outro DELETE de usuario no index.js');
+  assert.strictEqual((fonteIndex.match(/delete\s+from\s+usuarios/gi) || []).length, 1, 'outro DELETE de usuario no index.js'); // Fase 5 r3 (U15): sem caixa
 });
 
 // ── o servidor real ───────────────────────────────────────────────────────────────────────
@@ -125,6 +125,11 @@ test('[RN-09] POST com e-mail que nao e texto: 400 com a literal, nenhuma linha;
     assert.deepStrictEqual([s, x && x.error], [400, L_EMAIL], `POST ${JSON.stringify(email)}`);
   }
   assert.strictEqual((await lista(ctx.T)).length, antes, 'o POST recusado gravou');
+  // Fase 5 r3 (U9): sem e-mail, ou nulo, continua a recusa de antes (a guarda nova vem depois dela)
+  for (const extra of [{}, { email: null }]) {
+    const [s0, x0] = await j('POST', '/usuarios', ctx.T, { nome: 'Sem Email', senha: ctx.senha, cargo: 'C', role: 'usuario', ...extra });
+    assert.deepStrictEqual([s0, x0 && x0.error], [400, 'Nome, email e senha são obrigatórios'], JSON.stringify(extra));
+  }
   const [s, c] = await j('POST', '/usuarios', ctx.T, { nome: 'Email Bom', email: novoEmail(), senha: ctx.senha, cargo: 'C', role: 'usuario' });
   assert.strictEqual(s, 200, JSON.stringify(c));
   ctx.alvo = c;
@@ -144,15 +149,18 @@ test('[RN-09] PUT com e-mail que nao e texto (inclusive nulo): 400 com a literal
   assert.deepStrictEqual([s404, x404 && x404.error], [404, 'Usuário não encontrado'], 'o 404 vem antes');
 });
 
-test('[RN-10] reinicio no mesmo data dir: o usuario com "administrator" no nome continua, e entra', async () => {
+test('[RN-10] reinicio no mesmo data dir: o usuario com "administrator" no nome (e o de nome exato) continua, e entra', async () => {
   const email = novoEmail();
   const [s, c] = await j('POST', '/usuarios', ctx.T, { nome: 'System Administrator', email, senha: ctx.senha, cargo: 'C', role: 'usuario' });
   assert.strictEqual(s, 200, JSON.stringify(c));
+  const [sx, cx] = await j('POST', '/usuarios', ctx.T, { nome: 'Administrator', email: novoEmail(), senha: ctx.senha, cargo: 'C', role: 'usuario' });
+  assert.strictEqual(sx, 200, JSON.stringify(cx)); // Fase 5 r3 (U15): o nome exato tambem
   assert.strictEqual((await lista(ctx.T)).find((u) => u.id === c.id).nome, 'SYSTEM ADMINISTRATOR', 'premissa: gravado em maiusculas');
   await descer();
   ctx.T = await subir();
   const u = (await lista(ctx.T)).find((x) => x.id === c.id);
   assert.ok(u, 'o reinicio apagou o usuario');
+  assert.ok((await lista(ctx.T)).find((x) => x.id === cx.id), 'o reinicio apagou o de nome exato');
   assert.ok(await login(email, ctx.senha), 'nao entrou depois do reinicio');
 });
 
