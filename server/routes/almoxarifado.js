@@ -3927,8 +3927,9 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
     // ou a NC do mesmo material terminar de distribuir, e le o saldo dentro da trava (C131). A leitura
     // dos materiais e a espera da trava tambem ficam num try (Fase 2, achado 2): falhou ali, a
     // requisicao fica PENDENTE (201), como qualquer outra falha desta porta — nunca 500.
+    let aprovada;
     try {
-      return await requisitionService.comTravaDaRequisicao(db, requisicaoId, async () => {
+      aprovada = await requisitionService.comTravaDaRequisicao(db, requisicaoId, async () => {
         let pos;
         try {
           pos = await requisitionService.prepararPosAprovacao(db, requisicaoId, user, reqRow);
@@ -3957,6 +3958,19 @@ module.exports = function (app, db, authenticateToken, PERSISTENT_DATA_DIR, chec
       console.warn(`[almoxarifado-aprovacao-automatica] Falha ao aprovar automaticamente a requisição ${requisicaoId}; fica PENDENTE: ${e.message}`);
       return null;
     }
+    // Etapa 134 (C123, RN-04): a linha *Aprovacao* que so o /aprovar manual gravava. Depois de soltar a trava, nao fatal (o status ja
+    // foi gravado). `usuario_id` nulo e o nome que a requisicao guarda: quem aprovou foi o sistema; quem enviou vai nos dados.
+    if (aprovada) {
+      await audit.registrarAuditoriaDoAto(db, {
+        entidade: 'requisicao', entidade_id: Number(reqRow.id), acao: 'APROVACAO',
+        usuario_id: null, usuario_nome: 'Sistema (automático)',
+        dados_novos: {
+          status: aprovada.status, reservas: aprovada.reservas, aprovacao: 'automatica',
+          enviado_por_id: user && user.id != null ? user.id : null, enviado_por_nome: user ? (user.nome || user.email || null) : null,
+        },
+      });
+    }
+    return aprovada;
   }
 
   // POST /api/almoxarifado/requisicoes — criar requisição
