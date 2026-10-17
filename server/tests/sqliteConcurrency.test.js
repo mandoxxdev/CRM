@@ -422,6 +422,29 @@ async function run() {
     });
   });
 
+  await test('[RN-04c] F5 r3 (E6): o COMMIT que da BUSY (journal DELETE, leitura aberta de outra conexao) -> ROLLBACK, tenta de novo e grava', async () => {
+    const arq = path.join(os.tmpdir(), `orion-rn137-commitbusy-${process.pid}-${Date.now()}.db`);
+    const principal = new sqlite3.Database(arq); principal.configure('busyTimeout', 0);
+    const rival = new sqlite3.Database(arq); rival.configure('busyTimeout', 0);
+    try {
+      await runCru(principal, 'PRAGMA journal_mode = DELETE');
+      await runCru(principal, 'CREATE TABLE t (id INTEGER PRIMARY KEY, ativo INTEGER)');
+      await runCru(principal, 'INSERT INTO t VALUES (1, 1)');
+      wrapDatabase(principal);
+      await runCru(rival, 'BEGIN');
+      await getCru(rival, 'SELECT * FROM t'); // SHARED aberto: o COMMIT do principal nao pega o EXCLUSIVE
+      const tr = principal.execEmTransacao('UPDATE t SET ativo = 7 WHERE id = 1;');
+      setTimeout(() => rival.run('COMMIT'), 120);
+      await tr;
+      const l = await getCru(rival, 'SELECT ativo FROM t WHERE id = 1');
+      assert(l.ativo === 7, `nao gravou depois do COMMIT BUSY: ${JSON.stringify(l)}`);
+      await semTransacaoAberta(principal);
+    } finally {
+      await fecharCru(principal); await fecharCru(rival);
+      for (const s of ['', '-journal', '-wal', '-shm']) { try { fs.unlinkSync(arq + s); } catch (e) { /* nao existe */ } }
+    }
+  });
+
   await test('[RN-04d] execEmTransacao: o lock que nunca solta -> SQLITE_BUSY chega e nada fica aberto', async () => {
     await comLockDeEscrita('rn137d', async ({ principal, rival }) => {
       let pego = null;

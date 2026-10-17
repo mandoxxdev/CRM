@@ -69,8 +69,9 @@ async function subir() {
   if (porta === 5000) porta = await portaLivre();
   const env = { ...process.env };
   for (const k of ['NODE_ENV', 'NODE_OPTIONS', 'RUN_ALL_GUARDA_EXIT', 'PORT', 'CRM_DATA_DIR', 'JWT_SECRET',
-    'SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD', 'FALHA_SQL_INJETADA']) delete env[k];
-  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha });
+    'SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD', 'FALHA_SQL_INJETADA', 'RATE_LIMIT_WINDOW_MS']) delete env[k];
+  // RATE_LIMIT_MAX: as corridas fazem mais de 500 requisicoes do mesmo IP em 15 min (o limite do /api devolvia 429 no meio)
+  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000' });
   const out = fs.openSync(logArq, 'a');
   saiu = null;
   filho = spawn(process.execPath, ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js'), 'index.js'], {
@@ -177,7 +178,8 @@ async function conferirExclusao(rotulo, [st, x], ator, alvo) {
     assert.deepStrictEqual(l, { usuario: false, permissoes: 0, push: 0, followupDe: ator.dest || ator.id }, `${rotulo}: o 200 nao apagou/transferiu`);
     return 'ok';
   }
-  if (st === 403 && x && x.error === L_EXC) {
+  // Fase 5 r2: o perdedor cujo ator ja foi excluido/rebaixado cai no motivo ATOR (a literal de so super exclui) antes do ULTIMO_SUPER
+  if (st === 403 && x && [L_EXC, L_SO_SUPER_EXCLUI].includes(x.error)) {
     assert.deepStrictEqual(l, { usuario: true, permissoes: 1, push: 1, followupDe: alvo.id }, `${rotulo}: o 403 deixou a exclusao pela metade`);
     return 'recusado';
   }
@@ -198,7 +200,8 @@ test('[RN-01][RN-02] A exclui B x B exclui A ao mesmo tempo: um 200, sobra um su
     recusas += [c1, c2].filter((c) => c === 'recusado').length;
   }
   console.log(`    (DELETE x DELETE: ${JSON.stringify(cont)}; recusas L-EXC ${recusas})`);
-  // sem nenhuma recusa da trava o cenario nao provou o ROLLBACK (o perdedor so caiu na autenticacao)
+  // sem nenhuma recusa o cenario nao provou que o perdedor nao escreveu (precisa de pelo menos uma rodada em que os dois passaram da
+  // autenticacao: o perdedor chega a transacao e e recusado la — pelo ATOR, ja que o ator dele foi apagado)
   assert.ok(recusas >= 1, `nenhuma rodada chegou a trava do DELETE: ${JSON.stringify(cont)}`);
 });
 
@@ -426,6 +429,82 @@ test('[RN-07] PUT: o legado com ativo 2 editado pela tela (devolve o 2 que leu) 
   // metade negativa: num ativo (1), o 2 e recusado (nao e o que a tela leu)
   const [s2, x2] = await j('PUT', `/usuarios/${u.id}`, ctx.T, corpo(u, { ativo: 2 }));
   assert.deepStrictEqual([s2, x2 && x2.error], [400, L_ATIVO]);
+});
+
+// ── Fase 5 ─────────────────────────────────────────────────────────────────────────────────
+
+test('[RN-01d] F5 r2: quem exclui e conferido de novo na transacao — o super rebaixado no meio nao conclui a exclusao de outro', async () => {
+  // a ordem real das gravacoes, por gatilhos no arquivo do teste (nao no codigo): upd = o rebaixamento de B, del = a exclusao de C
+  await run('CREATE TABLE IF NOT EXISTS e137_log (seq INTEGER PRIMARY KEY AUTOINCREMENT, o TEXT)');
+  await run("CREATE TRIGGER IF NOT EXISTS e137_td AFTER DELETE ON usuarios BEGIN INSERT INTO e137_log (o) VALUES ('del:' || old.id); END");
+  await run(`CREATE TRIGGER IF NOT EXISTS e137_tu AFTER UPDATE OF is_superadmin ON usuarios WHEN COALESCE(old.is_superadmin, -1) != COALESCE(new.is_superadmin, -1)
+    BEGIN INSERT INTO e137_log (o) VALUES ('upd:' || new.id || ':s' || COALESCE(new.is_superadmin, 'n')); END`);
+  const cont = {}; let janela = 0;
+  try {
+    for (let i = 0; i < 16; i++) {
+      const [A, B] = await parDeSupers();
+      const c = await criar({ is_superadmin: 1, nome: 'Terceiro' }, A.tok); // tres supers: o ultimo super nao protege C
+      const desde = (await get('SELECT COALESCE(MAX(seq), 0) AS m FROM e137_log')).m;
+      const pDel = j('DELETE', `/usuarios/${c.id}?transferToId=${A.id}`, B.tok);
+      await pausa(i % 4); // o atraso varia: a janela e entre a autenticacao do DELETE e a transacao dele
+      const pPut = putRebaixa(A, B);
+      const [rd, rp] = await Promise.all([pDel, pPut]);
+      const log = (await all('SELECT o FROM e137_log WHERE seq > ? ORDER BY seq', [desde])).map((x) => x.o);
+      const iUpd = log.indexOf(`upd:${B.id}:s0`); const iDel = log.indexOf(`del:${c.id}`);
+      const k = `${rd[0]}/${rp[0]}`; cont[k] = (cont[k] || 0) + 1;
+      assert.ok(!(iUpd >= 0 && iDel > iUpd), `rodada ${i}: B foi rebaixado e DEPOIS excluiu C — ${JSON.stringify({ rd, rp, log })}`);
+      if (iUpd >= 0 && iDel < 0 && rd[0] === 403) janela += 1;
+      assert.ok(rd[0] === 200 || (rd[0] === 403 && rd[1] && rd[1].error === L_SO_SUPER_EXCLUI) || rd[0] === 401, `rodada ${i}: ${JSON.stringify(rd)}`);
+    }
+  } finally {
+    await run('DROP TRIGGER IF EXISTS e137_td'); await run('DROP TRIGGER IF EXISTS e137_tu');
+  }
+  console.log(`    (ator rebaixado no meio: ${JSON.stringify(cont)}; rodadas em que o rebaixamento veio antes e a exclusao foi recusada: ${janela})`);
+});
+
+test('[RN-07] F5 r1/r3: o "igual ao gravado" e so de valor simples e pelo texto — [1], [0], [], " 1", "01", "1.0" -> 400 L-ATIVO', async () => {
+  await soOSemente();
+  const a = await criar({ nome: 'Ativo F5' });
+  for (const v of [[1], ['1'], [[1]], ' 1', '01', '1.0']) {
+    const [st, x] = await j('PUT', `/usuarios/${a.id}`, ctx.T, corpo(a, { nome: 'Nao Grava', ativo: v }));
+    assert.deepStrictEqual([st, x && x.error], [400, L_ATIVO], `ativo (1), PUT ativo ${JSON.stringify(v)}`);
+    assert.deepStrictEqual([(await linha(a.id)).nome, (await linha(a.id)).ativo], ['ATIVO F5', 1]);
+  }
+  const z = await criar({ nome: 'Inativo F5', ativo: 0 });
+  for (const v of [[], [0]]) {
+    const [st, x] = await j('PUT', `/usuarios/${z.id}`, ctx.T, corpo(z, { nome: 'Nao Grava', ativo: v }));
+    assert.deepStrictEqual([st, x && x.error], [400, L_ATIVO], `inativo (0), PUT ativo ${JSON.stringify(v)}`);
+    assert.deepStrictEqual([(await linha(z.id)).nome, (await linha(z.id)).ativo], ['INATIVO F5', 0]);
+  }
+  // metade positiva: o valor simples igual ao gravado mantem (o 1 num ativo, o "0" num inativo)
+  assert.strictEqual((await j('PUT', `/usuarios/${a.id}`, ctx.T, corpo(a, { nome: 'Ativo F5b', ativo: 1 })))[0], 200);
+  assert.strictEqual((await j('PUT', `/usuarios/${z.id}`, ctx.T, corpo(z, { nome: 'Inativo F5b', ativo: '0' })))[0], 200);
+  assert.deepStrictEqual([(await linha(a.id)).ativo, (await linha(z.id)).ativo], [1, 0]);
+});
+
+test('[RN-07] F5 r1: o legado com ativo "true" em TEXTO editado com "true" mantem o texto (a tela devolve o que leu — B887); com 1 entra', async () => {
+  await soOSemente();
+  const u = await criar({ nome: 'Legado Texto' });
+  await run("UPDATE usuarios SET ativo = 'true' WHERE id = ?", [u.id]);
+  assert.strictEqual((await j('PUT', `/usuarios/${u.id}`, ctx.T, corpo(u, { ativo: 'true' })))[0], 200);
+  assert.strictEqual((await linha(u.id)).ativo, 'true', 'o "true" igual ao gravado mudou o legado (decisao B887: mantem)');
+  assert.strictEqual(await login(u.email, ctx.senha), null, 'premissa: o legado em texto nao entra');
+  assert.strictEqual((await j('PUT', `/usuarios/${u.id}`, ctx.T, corpo(u, { ativo: 1 })))[0], 200);
+  assert.ok(await login(u.email, ctx.senha), 'com 1 nao entrou');
+});
+
+test('[RN-03] F5 r3 (D18): DELETE com o alvo E o destino inexistentes -> 404 (o alvo vem antes do destino)', async () => {
+  await soOSemente();
+  const r = await j('DELETE', '/usuarios/999137?transferToId=999138', ctx.T);
+  assert.deepStrictEqual([r[0], r[1] && r[1].error], [404, L_NAO_ENCONTRADO]);
+});
+
+test('[RN-05] F5 r3 (R25): o proprio super com ativo "false" e is_superadmin fora da regua -> 400 L-SUPER (a forma antes do "desativar o proprio")', async () => {
+  await soOSemente();
+  const eu = await linha(ctx.seedId);
+  const r = await j('PUT', `/usuarios/${ctx.seedId}`, ctx.T, { nome: eu.nome, email: SEED.email, cargo: 'Adm', role: 'admin', ativo: 'false', is_superadmin: 2 });
+  assert.deepStrictEqual([r[0], r[1] && r[1].error], [400, L_SUPER]);
+  assert.strictEqual((await linha(ctx.seedId)).ativo, 1);
 });
 
 (async () => {

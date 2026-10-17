@@ -3925,7 +3925,8 @@ app.put('/api/usuarios/:id', authenticateToken, requireManageUsers, (req, res) =
   // IGUAL AO GRAVADO (pelo texto) tambem mantem: a tela devolve o que leu, e o legado com 2 (ou "true" em texto) editado sem mexer na
   // caixa nao pode virar 400 (D (136)). A regua vem antes de `deactivating`: o proprio com "true" nao e "desativar o proprio" (Fase 2 M9).
   let ativo;
-  if (campoAusente(ativoCru) || String(ativoCru) === String(existing.ativo)) {
+  // Etapa 137 (Fase 5 r1/r3): o "igual ao gravado" so com valor simples — com lista, String([1]) === "1" mantinha em vez de recusar.
+  if (campoAusente(ativoCru) || (typeof ativoCru !== 'object' && String(ativoCru) === String(existing.ativo))) {
     ativo = undefined;
   } else {
     ativo = simOuNao(ativoCru);
@@ -4191,9 +4192,15 @@ app.delete('/api/usuarios/:id', authenticateToken, requireDeleteUsers, async (re
     const token = require('crypto').randomBytes(12).toString('hex');
     const MOTIVO_OK = `EXISTS (SELECT 1 FROM temp.usuarios_exclusao_motivo WHERE token = '${token}' AND motivo = 'OK')`;
     const guardaDoAlvo = GUARDA_ULTIMO_SUPER_SQL.replace('?', () => '1');
+    // Etapa 137 (Fase 5 r2): quem exclui tambem e conferido de novo — a permissao (requireDeleteUsers) so e lida na entrada, e o super
+    // rebaixado (ou desativado, ou excluido) nas leituras de PRAGMA ainda concluia a exclusao de outro super enquanto sobrasse um terceiro.
+    // Com o ATOR conferido (um super ativo que nao e o alvo), o ULTIMO_SUPER fica inalcancavel — sobra ao menos o proprio ator; ele fica
+    // como a afirmacao da regra, para o dia em que a exclusao deixar de exigir super (declarado no plano da 137).
+    const atorId = Number.isInteger(Number(req.user.id)) ? Number(req.user.id) : -1;
     const stmts = [
       'CREATE TEMP TABLE IF NOT EXISTS usuarios_exclusao_motivo (token TEXT PRIMARY KEY, motivo TEXT NOT NULL);',
       `INSERT INTO temp.usuarios_exclusao_motivo (token, motivo) SELECT '${token}', CASE
+        WHEN NOT EXISTS (SELECT 1 FROM usuarios WHERE id = ${atorId} AND COALESCE(is_superadmin, 0) = 1 AND ativo = 1) THEN 'ATOR'
         WHEN NOT EXISTS (SELECT 1 FROM usuarios WHERE id = ${targetId}) THEN 'NAO_ENCONTRADO'
         WHEN EXISTS (SELECT 1 FROM usuarios WHERE id = ${targetId} AND NOT ${guardaDoAlvo}) THEN 'ULTIMO_SUPER'
         WHEN NOT EXISTS (SELECT 1 FROM usuarios WHERE id = ${transferToId}) THEN 'DESTINO'
@@ -4218,6 +4225,7 @@ app.delete('/api/usuarios/:id', authenticateToken, requireDeleteUsers, async (re
     const decisao = await db.get('SELECT motivo FROM temp.usuarios_exclusao_motivo WHERE token = ?', [token]);
     await db.run('DELETE FROM temp.usuarios_exclusao_motivo WHERE token = ?', [token]);
     const motivo = decisao && decisao.motivo;
+    if (motivo === 'ATOR') return res.status(403).json({ error: 'Apenas Super Administradores podem excluir usuários' });
     if (motivo === 'NAO_ENCONTRADO') return res.status(404).json({ error: 'Usuário não encontrado' });
     if (motivo === 'ULTIMO_SUPER') {
       return res.status(403).json({ error: 'Não é possível excluir o último Super Administrador ativo do sistema' });
