@@ -49,9 +49,12 @@ O paginador lê filhos diretos de `#proposalSource`, clona `#proposalPageTemplat
 | 2 | ELABORAÇÃO DA PROPOSTA | texto fixo |
 | 3 | OFERTA | tabela dinâmica (`ofertaRows`) |
 | 4 | ESCOPO DE FORNECIMENTO | gerado de `equipItems` (array por item) |
-| 5+ | CONDIÇÕES GERAIS | cláusulas (customizadas ou padrão de `clausulasDefault.js`) |
-| 5.23 | PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS | **misto**: textos editáveis + tabelas calculadas (ver abaixo) |
-| — | ASSINATURAS | bloco fixo |
+| 5+ | CONDIÇÕES GERAIS | cláusulas (customizadas ou padrão de `clausulasDefault.js`) — 5.1 a 5.23 no padrão |
+| 5.24 | PREÇO, CONDIÇÃO DE PAGAMENTO E IMPOSTOS | **misto**: textos editáveis + tabelas calculadas (ver abaixo) |
+| 5.25+ | cláusulas incluídas pelo usuário além da 5.23 (a renumeração do editor pula o 24) | `clausulasPos525NormalHtml` — depois da seção de preço, na ordem salva (Etapa 139; de `a33dfca1` até ela não eram renderizadas) |
+| — | ASSINATURAS | bloco fixo, com a CONSIDERAÇÃO FINAL (5.25 no padrão, ou o número que tiver) no topo |
+
+*(Etapa 139: esta tabela chamava a seção de preço de **5.23** — **estava velha**; desde `a33dfca1` ela é a 5.24, e o título "Seção 5.23" abaixo é o nome antigo dela.)*
 
 ---
 

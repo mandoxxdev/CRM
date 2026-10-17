@@ -188,7 +188,7 @@ pelo corpo (RN-05b/e); `html_rendered` dentro do parcial (RN-06); o 400 L-TITULO
    sobreviventes reais (viraram cenários) + **3** equivalentes; **0** ruído.
 3. **Paralelismo:** **0** galhos em paralelo (o mesmo `index.js` e o "um teste de servidor por vez"), **0** retrabalho; **1** agente de
    medição (só leitura) na Fase 0, **1** revisor na Fase 2, **3** em paralelo na Fase 5 sob a trava.
-4. **Defeito que escapou:** *(preencher na Etapa 139)*.
+4. **Defeito que escapou:** **0** (medido na Etapa 139). Nada do que a 139 achou nasceu na 138: a cláusula 5.25+ que sumia (desde `a33dfca1`, 28/07/2026), o teste do hero errado (desde `b8429e2d`), a geração automática sem a regra dos 5 % (C300) e a autorização da aprovação do desconto (C301–C303) são anteriores; a C299, que a 138 registrou, foi fechada na 139. A 138 tinha razão ao registrar os dois vermelhos da revisão como anteriores a ela — mas o diagnóstico "já falhavam" escondia um defeito real de produção desde julho.
 
 ## Próxima tarefa detalhada — Etapa 139
 

@@ -11,12 +11,17 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-17):** **Etapa 138 fechada** (das propostas e do núcleo: salvar proposta, cliente e
+> **Onde o desenvolvimento está (2026-10-17):** **Etapa 139 fechada** (das propostas: a revisão obrigatória da proposta voltou a ficar
+> inteira verde — uma das duas falhas antigas era um defeito real do documento: **a cláusula incluída pelo vendedor além da 5.23 sumia do
+> preview e do PDF, e a edição seguinte a apagava** (desde 28/07/2026); voltou a sair depois da seção de preço, **B899**, **B904**; a outra
+> era o teste que estava errado; e a margem de desconto que não é número é recusada em todas as portas, **C299** resolvido, **C300** achado
+> e resolvido, **B900** a **B903**; as consultas novas **A85** e **A86**; a revisão achou três falhas anteriores na aprovação do desconto,
+> **C301** a **C303**); a próxima é a **140** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 138 fechada** (das propostas e do núcleo: salvar proposta, cliente e
 > oportunidade grava só o que veio — o que não veio fica, o que veio vazio apaga; a tela de propostas deixou de apagar os oito campos que não
 > mostra, e duas gravações da mesma proposta ao mesmo tempo não furam mais o desconto: **B889** a **B897**; salvar proposta com variável
 > manual voltou a terminar, **C296** resolvido; a renumeração que falha não desfaz mais o que os outros gravaram, **C294** resolvido; a
-> consulta nova **A84**; a medição e a revisão acharam três falhas anteriores, **C297** a **C299**); a próxima é a **139** — ver "Onde estamos e o que vem
-> a seguir".
+> consulta nova **A84**; a medição e a revisão acharam três falhas anteriores, **C297** a **C299**); a próxima era a **139**.)*
 > *(Antes: **Etapa 137 fechada** (do núcleo: dois super administradores excluindo um ao outro no
 > mesmo instante não deixam mais o sistema sem nenhum — a exclusão confere de novo, antes de gravar, quem exclui, o usuário, o último super e
 > o destino dos registros, e não grava nada se algo mudou: **C292** resolvido, **B884**; e o cadastro de usuários pela API lê *Super
@@ -214,7 +219,11 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Oitenta e quatro itens para rodar em produção ANTES do deploy — oitenta e um são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Oitenta e seis itens para rodar em produção ANTES do deploy — oitenta e três são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-17 (Etapa 139) de oitenta e quatro para oitenta e seis**, com a **A85** — as propostas com cláusula 5.25 ou
+mais que voltam a aparecer no documento, e as que o salvamento apagou sem o vendedor pedir — e a **A86** — margens de desconto e pedidos
+de aprovação fora da régua de 0 a 100. As duas somente leitura; a A85 vale rodar antes do deploy.)*
 
 *(**Atualizado em 2026-10-17 (Etapa 138) de oitenta e três para oitenta e quatro**, com a **A84** — as variáveis manuais de proposta que
 ficaram ligadas a itens que não existem mais (o salvamento que nunca terminava, **C296**). Opcional e somente leitura.)*
@@ -3071,12 +3080,57 @@ ORDER BY v.proposta_id;
 maior que 0** — nessas propostas há valores que o documento não mostra mais: abra a proposta no preview editável, preencha de novo as
 variáveis que aparecem em branco e salve.
 
+**A85 (NOVA, da Etapa 139 — as cláusulas 5.25 ou mais que voltam a aparecer, e as que foram apagadas sem pedido).** De 28/07/2026 até
+a Etapa 139, uma cláusula numerada 5.25 ou mais que não fosse a CONSIDERAÇÃO FINAL **não aparecia** no preview nem no PDF — e é o número
+que o editor dá à cláusula incluída além da 5.23. Pior: a edição seguinte no preview a **apagava** (a exclusão é lógica — a linha fica com
+`ativo = 0`). Depois do deploy as que ainda estão ativas **voltam a aparecer** no documento, inclusive no PDF de proposta já enviada se ele
+for gerado de novo. Somente leitura.
+
+```sql
+SELECT c.proposta_id, p.numero_proposta, c.id AS clausula_id, c.titulo, c.ativo, c.updated_at
+FROM proposta_clausulas c
+JOIN propostas p ON p.id = c.proposta_id
+WHERE TRIM(c.titulo) LIKE '5.%'
+  AND CAST(SUBSTR(TRIM(c.titulo), 3) AS INTEGER) >= 25
+  AND UPPER(c.titulo) NOT LIKE '%CONSIDERA%FINAL%'
+  AND UPPER(c.titulo) NOT LIKE '%PRE%O, CONDI%O DE PAGAMENTO E IMPOSTOS%'
+ORDER BY c.ativo DESC, c.proposta_id, c.ordem;
+```
+
+**Como ler o resultado:** **vazia** — nada a fazer. **Linhas com `ativo` = 1** — cláusulas que o vendedor incluiu e que o documento
+escondia; depois do deploy elas aparecem depois da seção de preço. Abra o preview de cada proposta e confira se a cláusula ainda é
+desejada (o vendedor pode ter desistido dela ao vê-la sumir, ou incluído outra igual). Se a CONSIDERAÇÃO FINAL dessa proposta estiver com
+número **menor** que o da cláusula (ex.: CF 5.25 e cláusula 5.26), o documento sai fora de ordem até alguém incluir, mover ou remover uma
+cláusula no preview (D (139)). **Linhas com `ativo` = 0 e `updated_at` depois de 28/07/2026** — candidatas a cláusula apagada pelo
+defeito; pergunte ao vendedor. Para devolver uma, `UPDATE proposta_clausulas SET ativo = 1 WHERE id = <clausula_id>;` (ela volta na
+posição de `ordem` que tinha).
+
+**A86 (NOVA, da Etapa 139 — margens de desconto e pedidos de aprovação fora da régua).** Desde a Etapa 139 a margem de desconto só é
+aceita como número de 0 a 100 (**B900**). O que foi gravado antes, pela API, como texto (`"10,5"`) ou fora da faixa, continua lá: a
+margem em texto conta como acima de 5 % ao enviar a proposta (pede aprovação — **B901**), e o formulário de proposta a lê como 0 e a
+grava como 0 no próximo salvamento, sem avisar (D (139)); uma margem acima de 100 faz o salvamento pelo formulário ser recusado. E um
+pedido de aprovação antigo fora da régua, se aprovado, copia o valor para a proposta (D (139)). Somente leitura.
+
+```sql
+SELECT 'proposta' AS onde, id, numero_proposta AS referencia, status, margem_desconto AS valor, typeof(margem_desconto) AS tipo
+FROM propostas
+WHERE typeof(margem_desconto) NOT IN ('integer', 'real', 'null') OR margem_desconto < 0 OR margem_desconto > 100
+UNION ALL
+SELECT 'aprovacao', id, proposta_id, status, valor_desconto, typeof(valor_desconto)
+FROM aprovacoes
+WHERE typeof(valor_desconto) NOT IN ('integer', 'real', 'null') OR valor_desconto < 0 OR valor_desconto > 100;
+```
+
+**Como ler o resultado:** **vazia** — nada a fazer (o esperado: a tela sempre mandou número de 0 a 100). **Linhas `proposta`** — abra a
+proposta e corrija a margem pelo formulário (ou pelo pedido de aprovação). **Linhas `aprovacao` com `status` pendente** — recuse o
+pedido e peça um novo; não aprove (a aprovação copiaria o valor para a proposta).
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B898; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B905; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -9725,6 +9779,44 @@ Agora, quando o cliente muda, o contato, o telefone, o e-mail e o projeto da pro
 a mostrar os do cadastro do cliente novo); os que vieram junto com a troca ficam. Salvar com o mesmo cliente não apaga nada.
 **Descartado:** manter (a capa mentiria). **Reversível.**
 
+**B899 (NOVA, da Etapa 139; das propostas) — a cláusula incluída além da 5.23 sai depois da seção de preço.** A numeração do editor do
+preview pula o 24 (a seção de preço): incluir uma cláusula numa proposta padrão a numera 5.25 e empurra a CONSIDERAÇÃO FINAL para 5.26.
+De 28/07/2026 até esta etapa o documento não a mostrava (e a edição seguinte a apagava). Agora as cláusulas 5.25 ou mais que não são a
+consideração final saem **depois da seção de preço (5.24) e antes da página de assinatura**, na ordem salva — o lugar que tinham antes de
+28/07 e o que o número impresso promete. **Descartado:** antes da seção de preço (o documento imprimiria 5.25 antes de 5.24); renumerar no
+servidor (mudaria títulos gravados sem ninguém ver). **Consequência a saber:** propostas que hoje escondem uma cláusula dessas passam a
+mostrá-la (**A85**). **Reversível.**
+
+**B900 (NOVA, da Etapa 139; das propostas) — a margem de desconto só como número de 0 a 100, com ponto.** Fecha a **C299**. Na criação, na
+edição, na geração automática e no pedido de aprovação: vazio é 0; número ou texto com número com ponto (`10.5`) de 0 a 100 é aceito;
+qualquer outra coisa (`10,5`, `10abc`, `-1`, `101`) é recusada com *"Margem de desconto inválida: informe um número de 0 a 100, com
+ponto como separador decimal."* e nada é gravado. A tela manda sempre número — nada muda para ela. **Descartado:** aceitar a vírgula
+convertendo (`10,5` → 10,5) — adivinhar o formato de quem integra é pior que recusar dizendo o formato; e manter negativo/acima de 100.
+**Reversível.**
+
+**B901 (NOVA, da Etapa 139; das propostas) — a margem gravada que o sistema não lê como número conta como acima de 5 %.** Uma margem
+gravada antes da B900 como texto (`10,5`) passava pela regra do desconto ao enviar (o texto não é "maior que 5"). Agora, ao mudar o
+status ou a margem pela edição, a margem gravada ilegível conta como acima de 5 %: enviar sem aprovação é recusado com a mensagem de
+sempre do desconto. Salvar só o título continua passando. **Descartado:** tratar como 0 (liberaria o envio). **Reversível.**
+
+**B902 (NOVA, da Etapa 139; das propostas) — a geração automática de proposta segue a regra dos 5 %.** Fecha a **C300**. Com margem acima
+de 5 % e um status que não é rascunho, a geração é recusada com *"Não é possível salvar uma proposta com desconto acima de 5% sem
+aprovação prévia. A proposta deve ser salva como rascunho até que a autorização seja aprovada."* (a mesma da criação); sem status, nasce
+rascunho. A tela de geração não manda margem nem status — nada muda para ela. **Reversível.**
+
+**B903 (NOVA, da Etapa 139; das propostas) — o pedido de aprovação de desconto usa a mesma régua.** O valor pedido é copiado para a margem
+da proposta quando o pedido é aprovado; por isso ele passa pela B900 (400 com a mesma mensagem). **Reversível.**
+
+**B904 (NOVA, da Etapa 139; das propostas) — no preview, nada entra depois da CONSIDERAÇÃO FINAL, e a cláusula nova deixada em branco não
+deixa buraco.** "+ cláusula" na própria consideração final punha a nova depois dela (o documento sairia 5.24 → 5.26 → 5.25); agora ela
+entra antes da página de assinatura (nova 5.25, consideração final 5.26). Descer uma cláusula para depois da consideração final, ou subir
+a consideração final, não faz nada. E a cláusula nova deixada em branco sai ao salvar **e a numeração se refaz sem ela** (antes, a
+consideração final ficava gravada 5.26 sem nenhuma 5.25). O salvamento comum não muda título nenhum. **Descartado:** o documento reordenar
+a consideração final por último e corrigir números (mudaria títulos gravados sem o vendedor ver). **Reversível.**
+
+**B905 (NOVA, da Etapa 139) — a próxima etapa (140).** Ver a "próxima tarefa detalhada" no plano da Etapa 139: a autorização da aprovação
+do desconto (**C301** a **C303**). As decisões que esperam vocês continuam as da **B898**.
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -12516,11 +12608,28 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      *TAG-B*): tirar o primeiro item e salvar deixa o item que ficou com o valor do que saiu (*TAG-A*), e o dele se perde. A religação e o
      reparo do preview reconhecem o item pelo código do produto e pela posição entre os iguais. **O que fazer:** ao tirar um de dois itens
      iguais, confira as variáveis manuais do que ficou no preview.
-299. **NOVO (da revisão da Etapa 138; das propostas, anterior a ela; reproduzido) — a margem de desconto escrita com vírgula ou com letras
+299. **✅ RESOLVIDO NA ETAPA 139 (B900, B901) — a margem que não é número de 0 a 100 é recusada em todas as portas.** O texto original:
+     **NOVO (da revisão da Etapa 138; das propostas, anterior a ela; reproduzido) — a margem de desconto escrita com vírgula ou com letras
      passa pela conferência dos 5%.** Pela API, `"10,5"` ou `"10abc"` como margem não é lida como número: a conferência do desconto acima de
      5% não vê o valor como maior que 5, aprova o envio e grava o texto. A tela manda sempre número. Margem negativa também é aceita.
      **O que fazer:** nada pela tela; quem integra deve mandar a margem como número com ponto. Candidata pequena (recusar a margem que não é
      número).
+300. **✅ RESOLVIDO NA ETAPA 139 (B902) — NOVO (achado na medição da Etapa 139; das propostas, anterior a ela; reproduzido) — a geração
+     automática de proposta não tinha a regra dos 5 %.** Pela API, a geração automática gravava o status e a margem que viessem: uma proposta
+     *enviada* com 50 % de desconto nascia sem aprovação. A tela de geração nunca mandou nem um nem outro. **O que fazer:** nada.
+301. **NOVO (das revisões da Etapa 139; das propostas, anterior a ela; reproduzido pela API) — dá para enviar uma proposta com desconto acima
+     de 5 % sem aprovação passando pelo status *desconto aprovado*.** O botão de enviar não olha a margem — só se o status é rascunho ou
+     *desconto aprovado*. E a edição pela API aceita pôr o status *desconto aprovado* por conta própria (`{"status": "desconto_aprovado",
+     "margem_desconto": 50}` numa rascunho sem aprovação → aceito), e trocar a margem de uma proposta já com *desconto aprovado* não passa
+     pela regra. **O que fazer:** nada pela tela; a próxima etapa (**B905**).
+302. **NOVO (da revisão da Etapa 139; das propostas, anterior a ela; reproduzido pela API) — quem pediu a aprovação do desconto pode aprová-la,
+     e sem ter permissão de aprovar.** Decidir um pedido de aprovação não confere se a pessoa tem *Pode aprovar descontos* nem se é quem
+     pediu: um vendedor sem a permissão aprovou o próprio pedido de 30 % e enviou a proposta. **O que fazer:** até a próxima etapa, confira em
+     **Comercial → Aprovações** os descontos aprovados (a aprovação grava quem a decidiu); a próxima etapa (**B905**).
+303. **NOVO (da revisão da Etapa 139; das propostas, anterior a ela; reproduzido pela API) — o pedido de aprovação pode nascer aprovado, e em
+     nome de outra pessoa.** A criação do pedido grava a situação e o "solicitado por" que vierem no pedido. E um pedido antigo com valor fora
+     da régua (de antes da **B903**), se aprovado, copia o valor para a margem da proposta. A tela manda sempre *pendente* e quem está
+     logado. **O que fazer:** a consulta **A86** lista os pedidos fora da régua; a próxima etapa (**B905**).
 
 ### D. Limitações declaradas — são decisão, não esquecimento
 
@@ -13827,6 +13936,18 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(138) Criar proposta com título só de espaços** continua aceito (a edição recusa); a regra da criação não mudou.
 - **(138) O formulário de propostas não mostra** projeto, contatos da proposta, idioma, moeda, incoterm e unidade de negócio — agora apenas
   não os apaga. Mudá-los só pela API.
+- **(139) A proposta que já tem uma cláusula gravada depois da CONSIDERAÇÃO FINAL** (CF 5.25 e a cláusula 5.26 — o que o editor gravava
+  antes da **B904**) sai fora de ordem (5.24 → 5.26 → 5.25) até alguém incluir, mover ou remover uma cláusula no preview, que renumera.
+  Salvar só uma edição de texto **não** conserta (a **A85** lista essas propostas).
+- **(139) O editor do preview mostra a numeração fora de ordem até salvar** quando se inclui ou remove uma cláusula perto da seção de
+  preço (ex.: 5.23, 5.25, 5.24): ela pula o 24 contando a posição. Depois de salvar e recarregar, sai na ordem certa (como antes).
+- **(139) A CONSIDERAÇÃO FINAL como primeira cláusula da seção 5** (proposta sem nenhuma outra cláusula) sairia duas vezes — a primeira
+  cláusula não passa pelos filtros. Não acontece com as cláusulas padrão nem com nenhuma proposta medida; anterior.
+- **(139) O formulário de proposta lê uma margem gravada em texto (`10,5`) como 0** e a grava como 0 no próximo salvamento, sem avisar; uma
+  margem gravada acima de 100 faz o salvamento pelo formulário ser recusado com a mensagem da **B900** até alguém corrigir a margem, e a
+  tela de Aprovações recusa pedir aprovação para uma margem gravada em texto. Só existe se a API gravou assim antes desta etapa (**A86**).
+- **(139) A aprovação casa com a margem com folga de 0,01 ponto** — uma margem até cerca de 0,015 acima da aprovada passa (como sempre).
+- **(139) Pedido de aprovação para uma proposta que não existe** responde erro de banco cru (500) em vez de "proposta não encontrada".
 - **(138) A probabilidade e o responsável vazios no salvamento de proposta mantêm o gravado** (não apagam), como sempre — não seguem a
   regra "o que veio vazio apaga" (**B891**).
 
@@ -14740,6 +14861,14 @@ provadas por teste de componente com a fronteira HTTP simulada (**8** casos novo
 2. **A recusa inteira legível** no aviso vermelho ao salvar com saldo, entrando como Engenharia — e o formulário continua
    aberto.
 3. **O extrato** do material cadastrado com saldo mostra a Entrada *Saldo inicial de cadastro* com a prateleira padrão.
+
+**(139) Nenhum clique foi dado no navegador pelo usuário.** O documento foi provado num navegador sem tela, dentro da revisão obrigatória da
+proposta (agora **22/22**, com as imagens e as fontes carregadas): a cláusula incluída além da 5.23 aparece depois da seção de preço, uma
+vez só e na ordem; o sumário grande some; o hero da capa sem faixa branca no preview e no PDF. A inclusão pela rota (as rotas de cláusula
+de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o editor (jsdom). O que **só o navegador** prova: o roteiro da
+Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
+salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
+(o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
 
 **(138) Nenhum clique foi dado no navegador.** O salvamento parcial foi provado com o servidor de verdade, em pasta vazia, dentro da suíte (17
 cenários de proposta, cliente e oportunidade, mais 2 da renumeração com uma rajada de 30 edições), o montador da gravação pelo serviço (5) e
@@ -28315,9 +28444,89 @@ dois anteriores (**C298**; a revisão sem sufixo numa proposta sem cliente, D (1
 vírgula (anterior, **C299**); o de **sabotagem** fez **90** sabotagens além das **25** do autor: **36** caíram, **51** sobreviveram por falta
 de cenário e viraram **20** cenários novos (que as derrubam), e **3** são equivalentes.
 
+## Etapa 139 — A cláusula que sumia da proposta, a capa medida de verdade e a margem que não é número (2026-10-17)
+
+A revisão obrigatória da proposta — o conjunto de testes que confere o documento antes de qualquer mudança nele — vinha com duas falhas
+"conhecidas" desde julho. Medida a causa de cada uma: **uma era um defeito real e grave do documento**. Desde 28/07/2026, a cláusula que o
+vendedor incluía no preview além da 5.23 (o editor a chama de 5.25, porque o 24 é a seção de preço) **não aparecia no preview nem no PDF**
+— e, na edição seguinte, o preview a **apagava** sem ninguém pedir. Ela voltou a sair, depois da seção de preço e antes da página de
+assinatura. A outra falha era o próprio teste, que media a capa sem conseguir carregar a imagem. Junto: a margem de desconto escrita com
+vírgula, com letras, negativa ou acima de 100 passou a ser recusada em todas as portas, e a geração automática de proposta ganhou a regra
+dos 5 %.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| "+ cláusula" no preview de uma proposta padrão: a cláusula nova (5.25) não aparecia no preview nem no PDF, e a edição seguinte a apagava | Aparece depois da seção de preço (5.24) e antes da página de assinatura; nada é apagado (**B899**) |
+| "+ cláusula" na CONSIDERAÇÃO FINAL punha a nova depois dela, na página de assinatura | A nova entra antes da página de assinatura; a consideração final continua por último (**B904**) |
+| "+ cláusula" deixada em branco e salvar: a consideração final ficava gravada com o número seguinte (5.26 sem 5.25) | A nova em branco sai e a numeração se refaz sem ela (**B904**) |
+| API: margem `10,5`, `10abc`, `-1` ou `101` era gravada — e `10,5` passava pela regra dos 5 % (a proposta ficava enviada com desconto sem aprovação) | *"Margem de desconto inválida: informe um número de 0 a 100, com ponto como separador decimal."*, nada gravado (**B900**) |
+| API: uma margem gravada em texto deixava enviar sem aprovação | Conta como acima de 5 %: pede a aprovação (**B901**) |
+| API: a geração automática criava proposta *enviada* com 50 % de desconto sem aprovação | Recusa com a mensagem do desconto; sem status nasce rascunho (**B902**) |
+| API: pedido de aprovação com desconto `10,5` ou 500 era gravado | A mesma recusa da margem (**B903**) |
+| A revisão obrigatória da proposta com 2 falhas (20/22) | **22/22** |
+
+### As regras, com o cenário exato
+
+Preparação: uma proposta com as cláusulas padrão (5.1 a 5.23, a seção de preço 5.24 e a CONSIDERAÇÃO FINAL 5.25), aberta em **Comercial
+→ Propostas → Preview editável**. Os cenários "pela API" se fazem com qualquer cliente HTTP (o token do login).
+
+**1. A cláusula incluída aparece (B899).** Passe o mouse na CONSIDERAÇÃO FINAL, clique em "+ cláusula", dê um título e um texto, salve e
+recarregue. A nova aparece como **5.25**, logo depois das tabelas de preço e fiscais; a CONSIDERAÇÃO FINAL vira **5.26**, na página das
+assinaturas. Baixe o PDF: o mesmo. Edite qualquer outra cláusula e salve: a 5.25 continua lá.
+
+**2. Nada depois da consideração final (B904).** Na última cláusula antes da CONSIDERAÇÃO FINAL, a seta de descer não faz nada; na
+CONSIDERAÇÃO FINAL, a seta de subir não faz nada.
+
+**3. A cláusula em branco não deixa buraco (B904).** "+ cláusula" na CONSIDERAÇÃO FINAL, não escreva nada e salve: a nova some e a
+consideração final continua **5.25**.
+
+**4. A margem (B900, API).** `POST /api/propostas` (ou `PUT /api/propostas/:id`) com `"margem_desconto": "10,5"` → 400 *"Margem de
+desconto inválida: informe um número de 0 a 100, com ponto como separador decimal."*, nada gravado; com `"10.5"` → aceito e gravado como
+10,5. `-1` e `101` → a mesma recusa. Vazio → 0.
+
+**5. A margem velha em texto pede aprovação (B901, API).** Numa proposta com a margem gravada `10,5` (de antes), rascunho, sem aprovação:
+`PUT {"status": "enviada"}` → 403 *"Não é possível alterar o status de uma proposta com desconto acima de 5% sem aprovação prévia. A
+proposta deve permanecer como rascunho até que a autorização seja aprovada."*.
+
+**6. A geração automática (B902, API).** `POST /api/propostas/gerar-automatica` com `"margem_desconto": 50, "status": "enviada"` → 403
+*"Não é possível salvar uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve ser salva como rascunho até que a
+autorização seja aprovada."*; sem o status → criada como rascunho. Exatamente 5 % com *enviada* → criada enviada (a regra é "acima de 5").
+
+### O que esta etapa NÃO cobre
+
+1. **A autorização da aprovação do desconto** — quem pediu pode aprovar o próprio pedido sem ter a permissão (**C302**), o pedido pode nascer
+   aprovado (**C303**) e o status *desconto aprovado* pode ser posto pela API sem aprovação e enviado (**C301**). É a próxima etapa.
+2. **As propostas que já têm cláusula gravada depois da consideração final** saem fora de ordem até uma inclusão, movimento ou remoção no
+   preview (D (139), **A85**).
+3. **As cláusulas apagadas pelo defeito** não voltam sozinhas: a **A85** as lista para alguém decidir.
+4. As decisões que esperam vocês continuam as da **B898**.
+
+### O que a revisão encontrou
+
+A **medição** rodou os dois testes em commits antigos, um por um: o do sumário ficou vermelho exatamente no commit de 28/07/2026 que tirou
+as cláusulas 5.25+ do documento (o caso de teste caiu de 40 para 19 páginas e o sumário passou a caber); o da capa, no commit que passou a
+carregar a imagem por endereço (sem servidor de pé o teste não a via). E achou a geração automática sem a regra dos 5 % (**C300**). A
+**revisão do plano** (antes do código) achou sete pontos importantes, todos aceitos — o principal: "+ cláusula" na própria consideração
+final imprimiria 5.24 → 5.26 → 5.25 (**B904**). A **revisão adversarial do código** (três revisores, executando): o de **regra** achou a
+cláusula nova em branco deixando buraco na numeração (corrigido, **B904**) e uma frase errada do plano (corrigida); o de **permissão**
+achou, anteriores, o vendedor aprovando o próprio desconto e o pedido que nasce aprovado (**C302**, **C303**, e a **C301** ampliada); o
+de **sabotagem** fez **50** sabotagens: **36** caíram, **10** sobreviveram por falta de cenário e viraram cenários (um deles achou que o
+próprio teste não carregava as fontes da proposta — corrigido), e **4** são equivalentes.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 139 entregue (2026-10-17):** **a cláusula que sumia da proposta, a capa medida de verdade e a margem que não é número** (das
+  propostas). A cláusula incluída além da 5.23 volta a sair, depois da seção de preço, e não é mais apagada pelo salvamento seguinte
+  (**B899**); o editor não põe nada depois da consideração final e a cláusula em branco não deixa buraco (**B904**); a margem só como número
+  de 0 a 100 em todas as portas (**B900**, **B903** — **C299** resolvido), a margem velha em texto pede aprovação (**B901**), a geração
+  automática com a regra dos 5 % (**B902** — **C300** resolvido). A revisão obrigatória da proposta voltou a **22/22**. **O que é seu:** as
+  consultas **A85** (rodar antes do deploy: as cláusulas que voltam a aparecer e as apagadas) e **A86**; a pergunta **B853**; as decisões
+  **B899 a B904** (reversíveis); os avisos **C301** a **C303**; as limitações **(139)** em D e a verificação **(139)** em F. **Próxima:
+  Etapa 140 — ver a "próxima tarefa detalhada" no plano da Etapa 139.**
 
 - **Etapa 138 entregue (2026-10-17):** **o salvamento que só grava o que veio** (das propostas e do núcleo). Proposta, cliente e
   oportunidade gravam só o que o pedido trouxe — o que não veio fica, o que veio vazio apaga (**B889** a **B895**); a tela de propostas deixou
@@ -28326,8 +28535,8 @@ de cenário e viraram **20** cenários novos (que as derrubam), e **3** são equ
   salvar proposta com variável manual voltou a terminar (**C296** resolvido); a renumeração que falha não desfaz mais o que os outros
   gravaram (**C294** resolvido — e o texto dela estava impreciso). **O que é seu:** a consulta **A84** (opcional); a pergunta **B853**; as
   decisões **B889 a B897** (reversíveis); os avisos **C297** a **C299**; as limitações **(138)** em D e a verificação **(138)** em F (que
-  inclui os dois testes da revisão obrigatória da proposta que já falhavam antes). **Próxima: Etapa 139 — ver a "próxima tarefa detalhada"
-  no plano da Etapa 138.**
+  inclui os dois testes da revisão obrigatória da proposta que já falhavam antes).
+  *(Próxima, na época: Etapa 139 — entregue acima.)*
 
 - **Etapa 137 entregue (2026-10-17):** **a exclusão do último super administrador e a régua de sim ou não do cadastro de usuários** (do
   núcleo). A exclusão confere de novo, no início da gravação, quem exclui, o usuário, o último super e o destino, e não grava nada se algo

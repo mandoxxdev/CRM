@@ -289,6 +289,24 @@ Após o login, você verá a **Tela de Seleção de Módulos** com 5 opções:
   a lista de itens, os itens não mudam. Se duas gravações da mesma proposta chegam ao mesmo tempo e uma delas muda o status, a margem, o motivo
   ou a data de fechamento, a outra — se dependia desses valores — é recusada com *"A proposta foi alterada por outra gravação no mesmo
   instante. Recarregue a proposta e salve de novo."* e nada dela é gravado.
+- A **margem de desconto** é um número de 0 a 100 (o formulário só aceita isso). Pela integração (API), na criação, na edição, na geração
+  automática e no pedido de aprovação de desconto, vazio vale 0 e o número pode vir como texto com ponto (`10.5`); vírgula, letras, negativo
+  ou acima de 100 são recusados com *"Margem de desconto inválida: informe um número de 0 a 100, com ponto como separador decimal."* e nada
+  é gravado. Uma margem gravada que o sistema não consegue ler como número conta como acima de 5% na hora de enviar (pede aprovação).
+- A **geração automática** de proposta segue a mesma regra do desconto da criação: margem acima de 5% com um status que não seja rascunho é
+  recusada com *"Não é possível salvar uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve ser salva como rascunho até
+  que a autorização seja aprovada."*; sem status, a proposta nasce rascunho. Exatamente 5% não precisa de aprovação.
+
+**Cláusulas no preview editável — onde cada uma aparece:**
+- As condições gerais vão de 5.1 a 5.23; a **5.24** é a seção de preço (tabela de preços, condição de pagamento, FINAME e impostos); a
+  **CONSIDERAÇÃO FINAL** fecha o documento, na página das assinaturas, qualquer que seja o número dela.
+- A numeração das cláusulas pula o 24, que é da seção de preço: uma cláusula incluída depois da 5.23 recebe o número **5.25** (e a
+  consideração final passa para 5.26). As cláusulas 5.25 em diante aparecem **depois da seção de preço e antes da página das assinaturas**,
+  na ordem em que foram salvas — no preview e no PDF.
+- **+ cláusula** na CONSIDERAÇÃO FINAL inclui a nova **antes** dela. Nada pode ficar depois da consideração final: descer a cláusula que está
+  logo antes dela, ou subir a própria consideração final, não faz nada.
+- Uma cláusula incluída e deixada em branco (sem texto e com o título "Nova Cláusula") não é gravada, e a numeração se refaz sem ela ao
+  salvar.
 
 **Ações disponíveis:**
 - ✏️ Editar

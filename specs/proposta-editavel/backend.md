@@ -112,7 +112,27 @@ O corpo pode ser **parcial**. Regra por chave (`montarSetParcial`, `server/atual
 
 Exceções: `html_rendered` é sempre limpo (o retrato do PDF só é regravado com ele vazio); `probabilidade` nula/vazia mantém (`COALESCE`); `responsavel_id` vazio/ausente = o gravado, ou quem salva; `numero_proposta`, `revisao` e `responsavel_id` só entram quando mudam. A revisão sobe só se `itens` ou `valor_total` vieram e mudaram; o sufixo `REVnn` e o `proposta_revisoes` usam os valores efetivos (o do corpo, senão o gravado). Trocar `cliente_id` apaga `cliente_contato`/`cliente_telefone`/`cliente_email`/`projeto_id` que não vieram.
 
-Recusas, nesta ordem: 404 *"Proposta não encontrada"* → 400 *"Título é obrigatório"* (título presente vazio ou só espaços) → 400 *"Motivo da não venda é obrigatório quando a proposta está perdida/rejeitada."* → 403 *"Não é possível alterar o status de uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve permanecer como rascunho até que a autorização seja aprovada."* → (na gravação) 409 `PROPOSTA_ALTERADA` *"A proposta foi alterada por outra gravação no mesmo instante. Recarregue a proposta e salve de novo."* quando o corpo traz status, margem, motivo ou data de fechamento e um desses que **não** veio mudou entre a leitura e a gravação. As regras do motivo, do desconto e da data de fechamento automática usam o valor efetivo e só rodam quando um dos campos delas veio.
+Recusas, nesta ordem: 404 *"Proposta não encontrada"* → 400 *"Título é obrigatório"* (título presente vazio ou só espaços) → 400 *"Margem de desconto inválida: informe um número de 0 a 100, com ponto como separador decimal."* (Etapa 139, só quando a margem veio) → 400 *"Motivo da não venda é obrigatório quando a proposta está perdida/rejeitada."* → 403 *"Não é possível alterar o status de uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve permanecer como rascunho até que a autorização seja aprovada."* → (na gravação) 409 `PROPOSTA_ALTERADA` *"A proposta foi alterada por outra gravação no mesmo instante. Recarregue a proposta e salve de novo."* quando o corpo traz status, margem, motivo ou data de fechamento e um desses que **não** veio mudou entre a leitura e a gravação. As regras do motivo, do desconto e da data de fechamento automática usam o valor efetivo e só rodam quando um dos campos delas veio.
+
+### A margem de desconto (Etapa 139, C299/C300)
+
+Uma régua só, `lerMargemDesconto` (`server/margemDesconto.js`), em **quatro** portas: `POST /api/propostas`, `PUT /api/propostas/:id`
+(só quando a chave veio), `POST /api/propostas/gerar-automatica` e `POST /api/aprovacoes` (`valor_desconto`).
+
+| Valor | Resultado |
+|---|---|
+| ausente no `POST`/geração, `null`, `''`, só espaços | **0** (número) |
+| número finito de 0 a 100 (`-0` vira 0) | o número |
+| texto que é número com ponto (`" 10.5 "`), de 0 a 100 | o número |
+| qualquer outra coisa — `"10,5"`, `"10abc"`, `"1e2"`, `".5"`, `-1`, `101`, `true`, `false`, lista, objeto, `NaN`, `Infinity` | **400** *"Margem de desconto inválida: informe um número de 0 a 100, com ponto como separador decimal."*, nada gravado |
+
+O corpo do `PUT` é normalizado (texto → número) **antes** de tudo que lê a margem (a regra dos 5 %, o `montarSetParcial`, o registro da
+revisão). A **margem gravada** que a régua não lê (texto de antes desta régua, ou fora de 0 a 100) conta como **acima de 5** na regra do
+desconto do `PUT` — enviar sem aprovação dá 403. Ordem no `POST`: título → margem → motivo → cliente → desconto. Na geração automática:
+cliente/produtos → margem → **403** com a mensagem do `POST` (*"Não é possível salvar uma proposta com desconto acima de 5% sem aprovação
+prévia. A proposta deve ser salva como rascunho até que a autorização seja aprovada."*) quando a margem passa de 5 e o `status` veio e não é
+rascunho; margem acima de 5 sem status → rascunho. **Não coberto (C301–C303):** `/enviar` não olha a margem, o `PUT` aceita
+`desconto_aprovado` por conta própria, e as aprovações não conferem quem aprova.
 
 O formulário (`client/src/components/proposta/PropostaForm.js`) monta o corpo em `montarPayloadProposta` (`payloadProposta.js`) e manda `null` — não `undefined` — para *Tipo*, *Data de fechamento*, oportunidade e expiração vazios.
 

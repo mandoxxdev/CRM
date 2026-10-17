@@ -6,9 +6,14 @@
 
 ## Invariantes — regras que NUNCA podem quebrar
 
+> **Numeração (corrigida na Etapa 139 — a tabela abaixo estava velha):** desde `a33dfca1` (28/07/2026) a seção de **preço** (tabela,
+> condição de pagamento, FINAME/fiscais) é a **5.24** e a **CONSIDERAÇÃO FINAL** é a **5.25**; a **5.23** é uma cláusula comum (ITENS
+> EXCLUSOS no padrão). Onde a tabela diz "5.23" leia **seção de preço (5.24)**; onde diz "5.24 CONSIDERAÇÃO FINAL" leia **5.25**. Os testes
+> já usavam a numeração nova; só este texto não.
+
 | # | Invariante | Verificado por |
 |---|---|---|
-| I1 | **Nenhuma cláusula some.** Toda cláusula presente na fonte (`#proposalSource`) aparece nas páginas geradas — em qualquer formato de dado (default ou banco) | `propostaInvariantes.test.js` |
+| I1 | **Nenhuma cláusula some.** Toda cláusula **da entrada** (`clausulas_custom`) aparece nas páginas geradas, **uma vez só**, em qualquer formato de dado (default ou banco) — inclusive as **5.25+ que não são a consideração final**, que saem depois da seção de preço e antes da página de assinatura. *Até a Etapa 139 esta linha dizia "toda cláusula presente na fonte (`#proposalSource`)" e o teste media isso — **estava errado**: a cláusula que o template deixa de renderizar some da fonte e das páginas, e comparar uma com a outra não via nada (foi assim que as 5.25+ sumiram de `a33dfca1` à Etapa 139 sem a revisão acusar).* | `propostaInvariantes.test.js` (cenários `banco+inclusao`, `banco+duas`, `banco+preco-legado`), `propostaSumarioOverflow.test.js`, `tests/api/propostaClausulaAlem524.api.test.js` |
 | I2 | **5.24 (CONSIDERAÇÃO FINAL) sempre DEPOIS da 5.23** (tabela de preços + condição de pagamento) — nunca no meio da lista | `propostaInvariantes.test.js` |
 | I3 | **Assinaturas sempre na ÚLTIMA página** (com a 5.24 imediatamente antes/junto) | `propostaInvariantes.test.js` |
 | I4 | **Tabela da 5.23 íntegra e em ordem**: todas as linhas (nº itens + TOTAL), montada completa ANTES da condição de pagamento; todo fragmento repetindo o `thead` | `propostaInvariantes.test.js`, `proposta523OrdemCondicao.test.js`, `proposta523TheadRepetido.test.js` |
@@ -16,7 +21,7 @@
 | I6 | **Nada ultrapassa o rodapé** — nenhum bloco além da área útil de nenhuma página gerada | `propostaInvariantes.test.js` + script de overflow |
 | I7 | Seção **4**, seção 5, 5.23 e 5.24 iniciam em **página nova** (`data-page-break="before"`). A 4 é verificada nos dois ramos: com itens e sem nenhum item | `propostaQuebras.test.js` |
 | I8 | 5.23 (preço/FINAME/fiscais) renderiza nos **dois caminhos** (default e custom/inline), com os **textos editáveis** (abertura e condição de pagamento) e as **tabelas calculadas** | `proposta523Fixa.test.js`, `proposta523Editavel.test.js` |
-| I9 | Capa: hero 100% da largura sem faixa branca; nome/**contato**/CNPJ/email/telefone presentes, centralizados e com rótulo em cima | `propostaCapaHero.test.js` (pixel exige `pngjs`), `propostaCapaContatoCadastro.test.js`, `propostaCapaContato.test.js`, `propostaCapaCamposCentralizados.test.js` |
+| I9 | Capa: hero 100% da largura sem faixa branca; nome/**contato**/CNPJ/email/telefone presentes, centralizados e com rótulo em cima. O hero é medido **com a imagem carregada**, no preview (URL) e no PDF (embutido) — de `b8429e2d` à Etapa 139 o teste acusava "linha branca" porque a imagem não carregava sem um servidor na porta 5000 (o teste estava errado, não a capa) | `propostaCapaHero.test.js` (pixel exige `pngjs`), `propostaCapaContatoCadastro.test.js`, `propostaCapaContato.test.js`, `propostaCapaCamposCentralizados.test.js` |
 | I10 | **Tabela DADOS DA CONTRATADA sozinha na página**, e a paginação não muda conforme a imagem carrega (mesmo resultado com imagem presente, ausente/404 ou chegando tarde) | `propostaTabelaContratadaPaginaPropria.test.js` |
 | I11 | **PDF abaixo do teto de peso**: fotos entram como JPEG (`DCTDecode`), preview segue em WebP por URL, logos permanecem PNG | `propostaPdfPesoImagens.test.js` |
 | I12 | **Número da proposta no cabeçalho**, na mesma linha do título: `PROPOSTA TÉCNICA COMERCIAL: Nº <numero>` (número num `<span class="page-header-num">`) | `propostaHeaderNumero.test.js`, `propostaHeaderPadraoSempre.test.js` |
@@ -59,7 +64,7 @@
     (violando I2). O template usa `ehConsideracaoFinal()` (título sem acento/caixa começando por
     "consideracao final") para mandá-la sempre para a página de assinatura, qualquer que seja o
     número salvo. Travado em `proposta523Editavel.test.js`.
-13. **O que é `data-clausula-slot="23"`.** Marca os blocos de texto que moram DENTRO da seção de
+13. **O que é `data-clausula-slot="24"`** *(este item dizia `"23"` — **estava velho**: desde `a33dfca1` a seção de preço é a 5.24 e o atributo é `"24"`; corrigido na Etapa 139)*. Marca os blocos de texto que moram DENTRO da seção de
     preço (entre a tabela de preços e as tabelas fiscais). Eles são cláusulas de verdade — editáveis
     e persistidas — mas ficam de fora da renumeração, da contagem 5.1…5.22/5.24, da reordenação e
     da barra de controles inline. Mover uma cláusula "para dentro" desse grupo quebraria a ordem
@@ -75,6 +80,17 @@
     banco tem `propostas.cliente_contato` preenchido — sem acrescentar
     `c.contato_principal as cliente_contato_cadastro` às duas queries de `server/index.js`, a capa
     mostra `—` para todas. Ver a nota em `template.md`.
+
+16. **Cláusula 5.25+ que não é a CONSIDERAÇÃO FINAL é cláusula de verdade.** A renumeração do editor (`renumerarClausulas`) pula o 24
+    (a seção de preço): incluir **uma** cláusula numa proposta padrão já gera uma **5.25** normal e empurra a consideração final para
+    5.26. O template as renderiza depois da seção de preço e antes da página de assinatura (`clausulasPos525NormalHtml`). **Nunca as
+    filtre sem renderizar:** de `a33dfca1` à Etapa 139 o filtro ficou e a renderização saiu — elas sumiam do preview e do PDF e, como o
+    salvamento do preview marca como removida toda cláusula do banco ausente do `#proposalSource`, a edição seguinte as **apagava**
+    (`ativo = 0`). E o editor não põe nada depois da CF (`naPaginaDeAssinatura`), senão a ordem impressa sai 5.24 → 5.26 → 5.25.
+17. **Teste de navegador da proposta serve os próprios assets.** O preview pede hero, logos e **fontes** por URL
+    (`${baseURL}/api/assets/...`, padrão `http://localhost:5000`). Abrir o HTML como arquivo sem servidor mede com imagem quebrada e
+    fonte de reserva — o resultado muda conforme haja ou não um `npm run dev` de pé. Use `tests/helpers/servirAssetsProposta.js` (com
+    **CORS**: `@font-face` de outra origem é bloqueada sem ele, imagem não) e passe `baseURL` como 5º argumento do template.
 
 ## Como rodar a validação (obrigatório antes de merge)
 
@@ -112,12 +128,21 @@ node tests/propostaCustomizacoes.test.js
 cd ../client && CI=true npx react-scripts test src/components/proposta/clausulasInlineEditor.test.js --watchAll=false
 ```
 
-Critério: **tudo verde**. Qualquer invariante quebrado bloqueia o merge.
+E pela rota (o `index.js` real, em pasta vazia — entra no `npm run test:api`):
+
+```bash
+cd server && node tests/api/propostaClausulaAlem524.api.test.js   # a 5.25 incluída pelas rotas sai no preview (I1)
+```
+
+Critério: **tudo verde**. Qualquer invariante quebrado bloqueia o merge. *(De julho à Etapa 138 a revisão rodava com dois vermelhos
+conhecidos — `propostaSumarioOverflow` e `propostaCapaHero`; a Etapa 139 achou que o primeiro era uma regressão real de I1 e o segundo
+um teste errado, e a revisão voltou a 22/22.)*
 
 ## Validação manual complementar (quando mexer em área visual)
 
 - Abrir uma proposta REAL grande (ex.: 288, 30 itens, cláusulas customizadas) no preview editável e percorrer todas as páginas.
-- Conferir: capa (hero/campos, incluindo o **contato**) → sumário (presente ou ausente conforme couber) → seções 1–4 → 5.1–5.22 → 5.23 (abertura → tabela completa → condição de pagamento → FINAME/fiscais) → 5.24 + assinaturas na última página.
+- Conferir: capa (hero/campos, incluindo o **contato**) → sumário (presente ou ausente conforme couber) → seções 1–4 → 5.1–5.23 → 5.24 (abertura → tabela completa → condição de pagamento → FINAME/fiscais) → as 5.25+ incluídas pelo usuário, se houver → consideração final + assinaturas na última página.
+- Incluir uma cláusula pelo "+ cláusula" da consideração final, salvar, recarregar: a nova aparece (5.25) depois da seção de preço e a consideração final vira 5.26.
 - Editar os textos da 5.23 no preview, salvar, recarregar e baixar o PDF: o texto novo tem de
   sobreviver nos dois, e a tabela de preços tem de continuar entre a abertura e a condição.
 - Baixar o PDF e repetir a conferência (o PDF usa o mesmo paginador).

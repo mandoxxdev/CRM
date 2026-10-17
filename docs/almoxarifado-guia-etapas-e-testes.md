@@ -1,18 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-17 (Etapa 138) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-17 (Etapa 139) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137 e 138) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138 e 139) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-17 (Etapa 138 ENTREGUE · próxima: Etapa 139)
+> ## Onde o desenvolvimento está — 2026-10-17 (Etapa 139 ENTREGUE · próxima: Etapa 140)
 >
-> **O desenvolvimento parou aqui: Etapa 138 fechada — 2026-10-17.** A **Etapa 138 (o salvamento que só grava o que veio — propostas,
+> **O desenvolvimento parou aqui: Etapa 139 fechada — 2026-10-17.** A **Etapa 139 (a cláusula que sumia da proposta, a capa medida de
+> verdade e a margem que não é número; das propostas, fora do almoxarifado)**: a cláusula que o vendedor inclui no preview além da 5.23
+> volta a aparecer — depois da seção de preço — e não é mais apagada pelo salvamento seguinte; o "+ cláusula" na consideração final entra
+> antes dela; a margem de desconto só como número de 0 a 100; a revisão obrigatória da proposta voltou a ficar inteira verde. Duas
+> consultas novas (**A85**, rodar antes do deploy; **A86**). **Próxima: Etapa 140** — a autorização da aprovação do desconto; ver a
+> próxima tarefa no plano da 139.
+>
+> **Etapa 138, 2026-10-17.** A **Etapa 138 (o salvamento que só grava o que veio — propostas,
 > clientes e oportunidades; fora do almoxarifado)**: salvar grava só o que o pedido trouxe — o que não veio fica, o que veio vazio apaga; a
 > tela de propostas deixou de apagar os campos que não mostra (projeto, contatos da proposta, idioma, moeda, incoterm, unidade de negócio),
 > salvar uma proposta com variável manual preenchida voltou a terminar, trocar o cliente apaga o contato da proposta, e a renumeração de
-> propostas que falha não desfaz mais o que os outros gravaram. Uma consulta nova, opcional (**A84**). **Próxima: Etapa 139** — ver a
-> próxima tarefa no plano da 138.
+> propostas que falha não desfaz mais o que os outros gravaram. Uma consulta nova, opcional (**A84**).
 >
 > **Etapa 137, 2026-10-17.** A **Etapa 137 (a exclusão do último super administrador e a
 > régua de sim ou não do cadastro de usuários, do núcleo)**: dois super administradores excluindo um ao outro no mesmo instante não deixam
@@ -6601,6 +6607,39 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 139 — A cláusula que sumia da proposta, a capa medida de verdade e a margem que não é número (ENTREGUE — 2026-10-17)
+
+**O que mudou, em uma frase:** a cláusula que o vendedor inclui no preview da proposta além da 5.23 volta a aparecer no documento (depois
+da seção de preço) e não é mais apagada, e a margem de desconto só é aceita como número de 0 a 100.
+
+**O problema que ela resolve.** Desde 28/07/2026, incluir uma cláusula no preview de uma proposta padrão criava a **5.25** (o 24 é a seção
+de preço) — e ela não aparecia no preview nem no PDF; na edição seguinte, o preview a apagava. O defeito estava escondido atrás de um teste
+"que já falhava" na revisão obrigatória da proposta. Pela API, a margem de desconto escrita com vírgula passava pela regra dos 5 %.
+
+| Antes | Agora |
+|---|---|
+| "+ cláusula" no preview: a nova não aparecia e a edição seguinte a apagava | Aparece como 5.25, depois das tabelas de preço; a consideração final vira 5.26 |
+| "+ cláusula" na consideração final: a nova ia para depois dela | Entra antes da página de assinatura |
+| "+ cláusula" deixada em branco e salvar: a consideração final ficava 5.26 sem 5.25 | A nova em branco sai e a numeração se refaz |
+| Pela API, margem `10,5`, `-1` ou `101`: gravada (e `10,5` passava pelos 5 %) | *"Margem de desconto inválida: informe um número de 0 a 100, com ponto como separador decimal."* |
+| Pela API, geração automática enviada com 50 % de desconto | *"Não é possível salvar uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve ser salva como rascunho até que a autorização seja aprovada."* |
+
+**Roteiro de teste (5 minutos, pela tela).** Entre com um usuário do Comercial e abra uma proposta com as cláusulas padrão no **preview
+editável** (**Comercial → Propostas → Preview**).
+
+1. **Incluir no fim.** Passe o mouse na **CONSIDERAÇÃO FINAL** → **+ cláusula** → escreva um título e um texto → **Salvar** → recarregue a
+   página: a nova aparece como **5.25** logo depois das tabelas de preço e impostos, e a **5.26 CONSIDERAÇÃO FINAL** fica na página das
+   assinaturas. **Baixe o PDF**: o mesmo.
+2. **Ela não some.** Edite o texto de outra cláusula qualquer, **Salvar**, recarregue: a 5.25 continua lá.
+3. **Em branco não conta.** **+ cláusula** na CONSIDERAÇÃO FINAL, não escreva nada, **Salvar**, recarregue: a nova não aparece e a
+   consideração final continua com o número de antes.
+4. **Não passa da consideração final.** Na última cláusula antes da CONSIDERAÇÃO FINAL, a seta de **descer** não faz nada.
+
+**O que esta etapa NÃO cobre.** Quem pediu a aprovação de um desconto ainda consegue aprová-la pela API sem ter a permissão (**C302**), o
+pedido pode nascer aprovado (**C303**) e o status *desconto aprovado* pode ser posto pela API sem aprovação (**C301**) — é a próxima etapa.
+A proposta que já tem uma cláusula gravada depois da consideração final sai fora de ordem até alguém incluir, mover ou remover uma
+cláusula no preview (**A85** lista essas propostas, e também as cláusulas que o defeito apagou — elas não voltam sozinhas).
 
 ## Etapa 138 — O salvamento que só grava o que veio: propostas, clientes e oportunidades (ENTREGUE — 2026-10-17)
 
