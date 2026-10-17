@@ -57,6 +57,10 @@ function formatoBancoComIncluidas(titulosNovos) {
 const INCLUIDA = 'CLAUSULA INCLUIDA PELO USUARIO';
 const clausulasBancoInclusao = formatoBancoComIncluidas([INCLUIDA]);
 const clausulasBancoDuas = formatoBancoComIncluidas([`${INCLUIDA} A`, `${INCLUIDA} B`]);
+// Fase 5 (sabotagem F02): o texto de preço LEGADO salvo com prefixo 5.25+ é da seção de preço (ehTextoDa524 olha o título),
+// não uma 5.25 normal — tem de sair UMA vez só, dentro da 5.24.
+const clausulasBancoPrecoLegado = formatoBancoComIncluidas([INCLUIDA]).map((c) => (/PRE[ÇC]O, CONDI[ÇC][ÃA]O DE PAGAMENTO E IMPOSTOS/.test(c.titulo)
+  ? { ...c, titulo: c.titulo.replace(/^5\.24 /, '5.27 ') } : c));
 
 // I1 contra a ENTRADA: o título como o template o imprime (numero + titulo no default; o título com o prefixo no
 // banco). Os subtítulos x.y.z da seção de preço imprimem o prefixo num atributo (data-titulo-prefixo), não no texto.
@@ -88,6 +92,14 @@ async function medirInvariantes(browser, clausulas, rotulo) {
     const entradaSumidos = titulosEntrada.filter(t => !textoPaginas.includes(t));
     const paginaDoTitulo = {};
     titulosEntrada.forEach((t) => { const ps = pagCom(t); paginaDoTitulo[t] = ps.length ? ps[0] : null; });
+    // Fase 5 (sabotagens F01/F02/F06): cada título da entrada sai UMA vez, as chaves do #proposalSource são únicas, e a
+    // posição de cada título no texto corrido (para a ordem dentro da mesma página)
+    const ocorrencias = (t) => textoPaginas.split(t).length - 1;
+    const titulosRepetidos = titulosEntrada.filter((t) => ocorrencias(t) > 1);
+    const chaves = Array.from(src.querySelectorAll('[data-clausula-key]')).map((e) => e.getAttribute('data-clausula-key'));
+    const chavesRepetidas = chaves.filter((k, i) => chaves.indexOf(k) !== i);
+    const posicaoNoTexto = {};
+    titulosEntrada.forEach((t) => { posicaoNoTexto[t] = textoPaginas.indexOf(t); });
 
     // I2/I4 — tabela 5.23 / condição / 5.24
     const paginasTabela = [];
@@ -120,7 +132,7 @@ async function medirInvariantes(browser, clausulas, rotulo) {
       Array.from(pc.children).forEach((ch) => { if (ch.getBoundingClientRect().bottom > bottom + TOL) overflowCount++; });
     });
 
-    return { totalPaginasGeradas: gen.length, titulosSumidos, entradaSumidos, paginaDoTitulo, paginasTabela, fragsSemThead, totalLinhas, pag524, pagCondicao, pagAssin, numeracaoOk, overflowCount };
+    return { totalPaginasGeradas: gen.length, titulosSumidos, entradaSumidos, paginaDoTitulo, titulosRepetidos, chavesRepetidas, posicaoNoTexto, paginasTabela, fragsSemThead, totalLinhas, pag524, pagCondicao, pagAssin, numeracaoOk, overflowCount };
   }, titulosDaEntrada(clausulas));
   await page.close();
   return r;
@@ -137,11 +149,12 @@ async function medirInvariantes(browser, clausulas, rotulo) {
     ['banco', clausulasFormatoBanco, []],
     ['banco+inclusao', clausulasBancoInclusao, [`5.25 ${INCLUIDA}`]],
     ['banco+duas', clausulasBancoDuas, [`5.25 ${INCLUIDA} A`, `5.26 ${INCLUIDA} B`]],
+    ['banco+preco-legado', clausulasBancoPrecoLegado, [`5.25 ${INCLUIDA}`]],
   ];
   for (const [rotulo, clausulas, incluidas] of cenarios) {
     const r = await medirInvariantes(browser, clausulas, rotulo);
     console.log(`\n=== cenário "${rotulo}" ===`);
-    console.log(JSON.stringify({ ...r, titulosSumidos: r.titulosSumidos.slice(0, 3), entradaSumidos: r.entradaSumidos.slice(0, 3), paginaDoTitulo: undefined }));
+    console.log(JSON.stringify({ ...r, titulosSumidos: r.titulosSumidos.slice(0, 3), entradaSumidos: r.entradaSumidos.slice(0, 3), paginaDoTitulo: undefined, posicaoNoTexto: undefined }));
     const ultima = r.totalPaginasGeradas;
     const ultimaTabela = r.paginasTabela[r.paginasTabela.length - 1] || -1;
     check(rotulo, r.titulosSumidos.length === 0, `I1: nenhuma cláusula some (sumidas: ${r.titulosSumidos.length})`);
@@ -154,6 +167,12 @@ async function medirInvariantes(browser, clausulas, rotulo) {
         `RN-139.01: "${t}" (pág. ${p}) depois da tabela de preços (pág. ${ultimaTabela}) e antes/junto da CONSIDERAÇÃO FINAL (pág. ${r.pag524})`);
       anterior = p || anterior;
     });
+    // a ordem salva também DENTRO da mesma página (F06)
+    const posicoes = incluidas.map((t) => r.posicaoNoTexto[t]);
+    check(rotulo, posicoes.every((p, i) => p >= 0 && (i === 0 || p > posicoes[i - 1])), `RN-139.01: as incluídas na ordem salva no texto (${posicoes})`);
+    check(rotulo, r.titulosRepetidos.length === 0, `I1: nenhum título sai duas vezes (${r.titulosRepetidos.slice(0, 2)})`);
+    check(rotulo, r.chavesRepetidas.length === 0, `I1: nenhuma cláusula duas vezes no #proposalSource (chaves ${r.chavesRepetidas.slice(0, 3)})`);
+    check(rotulo, r.pag524.length > 0 && r.pag524.every((p) => r.pagAssin.includes(p)), `I3: a CONSIDERAÇÃO FINAL só na página de assinatura (${r.pag524} ⊆ ${r.pagAssin})`);
     check(rotulo, r.pag524.length > 0, 'I2: 5.24 CONSIDERAÇÃO FINAL presente');
     check(rotulo, r.pag524.length === 0 || Math.min(...r.pag524) > ultimaTabela, `I2: 5.24 (pág. ${r.pag524}) depois da tabela 5.23 completa (última pág. ${ultimaTabela})`);
     check(rotulo, r.pag524.length === 0 || r.pagCondicao.length === 0 || Math.min(...r.pag524) >= Math.max(...r.pagCondicao), 'I2: 5.24 depois da condição de pagamento');

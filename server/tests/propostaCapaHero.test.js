@@ -44,6 +44,14 @@ async function medir(browser, baseURL, forPdfServer, rotulo) {
   console.log(`[${rotulo}] geometria:`, JSON.stringify(geo));
   if (!geo) { falha('capa/hero/img nao encontrados'); await page.close(); return failed; }
   if (!geo.carregou) { falha(`imagem do hero não carregou (naturalWidth ${geo.naturalWidth}, src ${geo.src})`); await page.close(); return failed; }
+  // Fase 5 (sabotagem H02): as fontes também vêm do servidor efêmero — uma rota errada no helper deixaria todos os testes
+  // que o usam medindo com a fonte de reserva, sem ninguém notar. Century Gothic carregada, nenhuma fonte com erro.
+  const fontes = await page.evaluate(async () => {
+    await document.fonts.ready;
+    const todas = Array.from(document.fonts);
+    return { carregadas: todas.filter(f => f.status === 'loaded').map(f => f.family).length, comErro: todas.filter(f => f.status === 'error').length };
+  });
+  if (fontes.comErro > 0 || fontes.carregadas === 0) falha(`fontes da proposta não carregaram (${JSON.stringify(fontes)})`);
   if (Math.abs(geo.imgX - geo.pageX) > 0.6) falha(`img comeca ${(geo.imgX - geo.pageX).toFixed(2)}px depois da borda da pagina`);
   if (Math.abs((geo.imgX + geo.imgW) - (geo.pageX + geo.pageW)) > 0.6) falha('img nao alcanca a borda direita');
 

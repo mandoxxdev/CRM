@@ -9,6 +9,7 @@ import {
   htmlParaTexto,
   renumerarClausulas,
   ehClausulaNovaVazia,
+  descartarClausulasNovasVazias,
 } from './clausulasInlineEditor';
 
 // Fixture equivalente ao HTML gerado por clausulasSection (propostaPremiumV2.js, Task 1):
@@ -418,6 +419,29 @@ describe('Etapa 139 (RN-139.07): nada entra depois da CONSIDERAÇÃO FINAL', () 
     expect(lerClausulasDoSource(document).map((c) => c.key).slice(0, 3)).toEqual(['1', key, '2']);
   });
 
+  test('Fase 5: "+ cláusula" na CF salvo sem preencher — a nova sai e a CF volta ao número dela (sem buraco)', () => {
+    montarComAssinatura(document);
+    renumerarClausulas(document);
+    expect(titulos()).toContain('5.3 CONSIDERAÇÃO FINAL');
+    adicionarClausulaAoSource(document, '99');
+    renumerarClausulas(document);
+    expect(titulos()).toContain('5.4 CONSIDERAÇÃO FINAL');
+    expect(descartarClausulasNovasVazias(document)).toBe(1);
+    expect(titulos()).toContain('5.3 CONSIDERAÇÃO FINAL');
+    expect(titulos().some((t) => /Nova Cláusula/.test(t))).toBe(false);
+  });
+
+  test('Fase 5: a nova preenchida fica, e sem nova vazia nenhum título muda', () => {
+    montarComAssinatura(document);
+    const key = adicionarClausulaAoSource(document, '99');
+    renumerarClausulas(document);
+    document.querySelector(`[data-clausula-key="${key}"] [data-clausula-campo="conteudo"]`).innerHTML = '<p>texto</p>';
+    const antes = titulos();
+    expect(descartarClausulasNovasVazias(document)).toBe(0);
+    expect(titulos()).toEqual(antes);
+    expect(antes).toContain('5.3 Nova Cláusula');
+  });
+
   test('RN-139.07b/c: descer para depois da CF e subir a CF não fazem nada', () => {
     montarComAssinatura(document);
     const antes = titulos();
@@ -429,4 +453,19 @@ describe('Etapa 139 (RN-139.07): nada entra depois da CONSIDERAÇÃO FINAL', () 
     // e o movimento comum continua funcionando
     expect(moverClausulaNoSource(document, '2', -1)).toBe(true);
   });
+});
+
+// A fiação: nenhum teste renderiza o PropostaPreviewEditavel (o preview vive num iframe com o HTML do servidor), então o
+// chamado é preso pelo texto — o descarte tem de acontecer dentro do salvarClausulas, ANTES de ler o #proposalSource.
+test('Fase 5 (fiação): salvarClausulas descarta as novas vazias antes de ler o #proposalSource', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, 'PropostaPreviewEditavel.js'), 'utf8');
+  const ini = src.indexOf('async function salvarClausulas(doc) {');
+  expect(ini).toBeGreaterThan(-1);
+  const corpo = src.slice(ini, src.indexOf('async function aplicarDiffClausulas', ini));
+  const iDescarte = corpo.indexOf('descartarClausulasNovasVazias(doc);');
+  const iLeitura = corpo.indexOf('lerClausulasDoSource(doc)');
+  expect(iDescarte).toBeGreaterThan(-1);
+  expect(iLeitura).toBeGreaterThan(iDescarte);
 });

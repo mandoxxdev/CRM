@@ -208,6 +208,20 @@ export function ehClausulaNovaVazia(clausula) {
   return semPrefixo === '' || semPrefixo === TITULO_CLAUSULA_NOVA;
 }
 
+// Etapa 139 (Fase 5) — antes de ler o #proposalSource para salvar, tira dele as cláusulas novas intocadas e, se tirou
+// alguma, renumera. A renumeração já tinha contado a nova: com "+ cláusula" na CONSIDERAÇÃO FINAL a nova virava 5.25 e a
+// CF 5.26; o salvamento descartava a nova vazia (ehClausulaNovaVazia) mas gravava a CF como 5.26, e o documento saía
+// 5.24 → 5.26 sem 5.25. O mesmo buraco abria no meio da lista. Só renumera quando descarta algo: o salvamento comum não
+// muda nenhum título. Retorna quantas tirou.
+export function descartarClausulasNovasVazias(doc) {
+  const vazias = lerClausulasDoSource(doc)
+    .map((c) => ({ ...c, titulo: (c.titulo || '').trim(), conteudo: htmlParaTexto(c.conteudo) }))
+    .filter(ehClausulaNovaVazia);
+  vazias.forEach((c) => removerClausulaDoSource(doc, c.key));
+  if (vazias.length > 0) renumerarClausulas(doc);
+  return vazias.length;
+}
+
 export function renumerarClausulas(doc) {
   const source = doc.querySelector('#proposalSource');
   if (!source) return false;

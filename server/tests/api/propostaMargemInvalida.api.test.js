@@ -143,7 +143,7 @@ async function recusaPost(corpo, status, msg, rota = '/propostas') {
 
 // ── a régua ───────────────────────────────────────────────────────────────────────────────
 test('[RN-139.04] a regua: vazio e 0 a 100 aceitos (numero ou texto com ponto), o resto recusado', async () => {
-  const aceitos = [[null, 0], ['', 0], ['   ', 0], [0, 0], [5, 5], [100, 100], [10.5, 10.5], ['10.5', 10.5], [' 7 ', 7], ['100.0', 100], ['0', 0]];
+  const aceitos = [[null, 0], ['', 0], ['   ', 0], [0, 0], [5, 5], [100, 100], [10.5, 10.5], ['10.5', 10.5], [' 7 ', 7], ['100.0', 100], ['0', 0], [-0, 0]];
   for (const [v, esperado] of aceitos) assert.deepStrictEqual(lerMargemDesconto(v), { ok: true, valor: esperado }, `aceito ${JSON.stringify(v)}`);
   const recusados = ['10,5', '10abc', -1, '-1', 101, '101', 100.0001, true, false, [], [5], {}, NaN, Infinity, '1e2', '0x10', '.5', '5.', 'abc'];
   for (const v of recusados) assert.deepStrictEqual(lerMargemDesconto(v), { ok: false }, `recusado ${String(v)}`);
@@ -233,6 +233,36 @@ test('[RN-139.06] POST /aprovacoes: desconto que nao e numero de 0 a 100 -> 400,
   const r = await j('POST', '/aprovacoes', ctx.T, { proposta_id: id, tipo: 'desconto', valor_desconto: 12.5, solicitado_por: u.id });
   assert.ok(r[0] === 200 || r[0] === 201, JSON.stringify(r));
   assert.strictEqual((await get('SELECT valor_desconto v FROM aprovacoes WHERE proposta_id = ? ORDER BY id DESC', [id])).v, 12.5);
+});
+
+// ── Fase 5 (sabotagens B03/C01/D06/E02, B05/D03) ──────────────────────────────────────────
+test('[RN-139.04] Fase 5: so espacos grava o NUMERO 0 em todas as portas (o SQLite nao converte "   " em REAL)', async () => {
+  const id = await novaProposta({ margem_desconto: '   ' });
+  assert.deepStrictEqual(await tipoMargem(id), { t: 'real', m: 0 }, 'POST');
+  await run('UPDATE propostas SET margem_desconto = 2 WHERE id = ?', [id]);
+  let r = await j('PUT', `/propostas/${id}`, ctx.T, { margem_desconto: '   ' });
+  assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
+  assert.deepStrictEqual(await tipoMargem(id), { t: 'real', m: 0 }, 'PUT');
+  r = await j('POST', '/propostas/gerar-automatica', ctx.T, { cliente_id: ctx.clienteId, produtos: [{ id: ctx.produtoId, quantidade: 1 }], margem_desconto: '   ' });
+  assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
+  assert.deepStrictEqual(await tipoMargem(r[1].id), { t: 'real', m: 0 }, 'gerar-automatica');
+  const u = await get('SELECT MIN(id) id FROM usuarios');
+  await run('UPDATE usuarios SET pode_aprovar_descontos = 1 WHERE id = ?', [u.id]);
+  r = await j('POST', '/aprovacoes', ctx.T, { proposta_id: id, tipo: 'desconto', valor_desconto: '   ', solicitado_por: u.id });
+  assert.ok(r[0] === 200 || r[0] === 201, JSON.stringify(r));
+  const ap = await get('SELECT typeof(valor_desconto) t, valor_desconto m FROM aprovacoes WHERE proposta_id = ? ORDER BY id DESC', [id]);
+  assert.deepStrictEqual({ t: ap.t, m: ap.m }, { t: 'real', m: 0 }, 'aprovacoes');
+});
+
+test('[RN-139.04/05] Fase 5: exatamente 5% com status enviada passa (o limite e "acima de 5"), no POST e na geracao', async () => {
+  const [s, p] = await j('POST', '/propostas', ctx.T, corpoPost({ margem_desconto: 5, status: 'enviada' }));
+  assert.strictEqual(s, 200, JSON.stringify(p));
+  assert.deepStrictEqual([(await linhaP(p.id)).status, (await linhaP(p.id)).margem_desconto], ['enviada', 5]);
+  const [s2, p2] = await j('POST', '/propostas/gerar-automatica', ctx.T, { cliente_id: ctx.clienteId, produtos: [{ id: ctx.produtoId, quantidade: 1 }], margem_desconto: '5', status: 'enviada' });
+  assert.strictEqual(s2, 200, JSON.stringify(p2));
+  assert.deepStrictEqual([(await linhaP(p2.id)).status, (await linhaP(p2.id)).margem_desconto], ['enviada', 5]);
+  // e o passo seguinte cai: 5.01
+  await recusaPost(corpoPost({ margem_desconto: 5.01, status: 'enviada' }), 403, L_DESC_POST);
 });
 
 // ── geração automática ────────────────────────────────────────────────────────────────────

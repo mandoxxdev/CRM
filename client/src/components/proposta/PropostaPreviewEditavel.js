@@ -17,6 +17,7 @@ import {
   htmlParaTexto,
   renumerarClausulas,
   ehClausulaNovaVazia,
+  descartarClausulasNovasVazias,
 } from './clausulasInlineEditor';
 import { nomeArquivoPdfProposta } from '../../utils/nomeArquivoPdf';
 import { aplicarMascaraNoNoEditavel } from '../../utils/telefoneContentEditable';
@@ -1264,6 +1265,8 @@ export default function PropostaPreviewEditavel() {
 
   async function salvarClausulas(doc) {
     const snapshotOriginal = clausulas; // carregado por carregarPreview() ao abrir a proposta
+    // Etapa 139: a cláusula nova intocada sai do documento e a numeração se refaz sem ela (senão a CF gravava 5.26 sem 5.25).
+    descartarClausulasNovasVazias(doc);
     let listaAtual = lerClausulasDoSource(doc)
       .map((c) => ({ ...c, titulo: (c.titulo || '').trim(), conteudo: htmlParaTexto(c.conteudo) }))
       // Remoção implícita: corpo+título vazios, OU cláusula nova (temp-*) intocada cujo

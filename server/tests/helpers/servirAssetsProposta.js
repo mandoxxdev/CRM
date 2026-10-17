@@ -18,6 +18,10 @@ const SERVER_DIR = path.join(__dirname, '..', '..');
 
 async function servirAssetsProposta(opcoes = {}) {
   const app = express();
+  // O cors do index.js (app.use(cors(...)), global): sem ele a FONTE pedida de outra origem (o HTML do teste é file://)
+  // é bloqueada — imagem não precisa de CORS, @font-face precisa. Achado da sabotagem H02 da Fase 5: até aqui o helper
+  // servia o hero mas as fontes davam ERR_FAILED, e as medidas continuavam com a fonte de reserva.
+  app.use(require('cors')());
   app.use('/api/assets/proposta', express.static(opcoes.pastaProposta || path.join(SERVER_DIR, 'assets', 'proposta')));
   app.use('/api/assets/fonts', express.static(path.join(SERVER_DIR, 'assets', 'fonts')));
   const srv = await new Promise((res, rej) => {
