@@ -227,6 +227,8 @@ const { getClausulasDefault, resolverClausulasParaPreview } = require('./clausul
 const { diffItensParaLog, chaveDe, nomeDe, resumoLado, mesclarItensPreservandoCampos } = require('./propostaItensDiff');
 const { presente, montarSetParcial } = require('./atualizacaoParcial');
 const { lerMargemDesconto, MSG_MARGEM_INVALIDA } = require('./margemDesconto');
+// Etapa 140 (C301-C303): quem libera o desconto acima de 5% e com que aprovacao ele casa.
+const aprovacaoDesconto = require('./aprovacaoDesconto');
 const { lerAcessorios, totalAcessoriosDosItens, serializarAcessorios } = require('./acessoriosItem');
 const { resolverCamposCustomizacao } = require('./propostaCustomizacoes');
 const propostaEngine = require('./propostaCompositionEngine');
@@ -8240,6 +8242,13 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
       }
     }
 
+    // Etapa 140 (RN-140.08, C301): "desconto aprovado" só pela aprovação (PUT /api/aprovacoes/:id). Antes o PUT aceitava entrar nele por
+    // conta própria — e o seletor de status do formulário o oferecia: rascunho com 10% sem aprovação → "Desconto aprovado" → Enviar.
+    // Quem já está nele e o manda de novo (o formulário manda sempre) passa.
+    if (tem('status') && corpo.status === 'desconto_aprovado' && propostaAtual.status !== 'desconto_aprovado') {
+      return res.status(403).json({ error: aprovacaoDesconto.MSG.DA_SO_APROVACAO });
+    }
+
     // Data de fechamento: ausente mantém a gravada; vazia com o status efetivo aprovada/rejeitada vira hoje (o de sempre).
     let dataFechamentoFinal = (tem('data_fechamento') ? data_fechamento : propostaAtual.data_fechamento) || null;
     if (!dataFechamentoFinal && (tem('status') || tem('data_fechamento')) && (statusEf === 'aprovada' || statusEf === 'rejeitada')) {
@@ -8247,18 +8256,19 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
     }
     const gravarDataFechamento = tem('data_fechamento') || dataFechamentoFinal !== (propostaAtual.data_fechamento || null);
 
-    // VALIDAÇÃO: Se desconto > 5% e status não for rascunho/desconto_aprovado, verificar se há aprovação aprovada.
+    // VALIDAÇÃO: Se desconto > 5% e status não for rascunho, verificar se há aprovação aprovada.
     // Pela margem e pelo status EFETIVOS: antes, `{status: 'enviada'}` sem a margem passava (e a gravava 0).
-    if ((tem('margem_desconto') || tem('status')) && margemEf > 5 && statusEf && statusEf !== 'rascunho' && statusEf !== 'desconto_aprovado') {
-      // Verificar se existe uma aprovação aprovada para esta proposta com este desconto
-      // Usar comparação com tolerância para valores decimais (evita problemas de precisão)
+    // Etapa 140 (RN-140.09, C301): vale também para "desconto aprovado" — antes ela ficava de fora, e trocar a margem de uma proposta já
+    // aprovada (10% → 50%) passava e o /enviar a mandava. Na "desconto aprovado" a recusa diz que o desconto não é o aprovado.
+    if ((tem('margem_desconto') || tem('status')) && margemEf > 5 && statusEf && statusEf !== 'rascunho') {
+      // Verificar se existe uma aprovação aprovada para esta proposta com este desconto (a régua de casamento de sempre, extraída para
+      // aprovacaoDesconto.casaComAprovacao — o valor da aprovação passa pela régua da margem; o ilegível não casa).
       const margem_desconto = margemEf;
-      const margemDescontoArredondada = Math.round(margem_desconto * 100) / 100;
-      
+
       db.all(
-        `SELECT id, valor_desconto FROM aprovacoes 
-         WHERE proposta_id = ? 
-         AND status = 'aprovado' 
+        `SELECT id, valor_desconto FROM aprovacoes
+         WHERE proposta_id = ?
+         AND status = 'aprovado'
          AND tipo = 'desconto'`,
         [id],
         (err, aprovacoes) => {
@@ -8266,24 +8276,15 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
             console.error('Erro ao verificar aprovação:', err);
             return res.status(500).json({ error: 'Erro ao verificar aprovação de desconto' });
           }
-          
-          console.log('🔍 Verificando aprovações:', {
-            propostaId: id,
-            margemDesconto: margem_desconto,
-            margemDescontoArredondada,
-            aprovacoesEncontradas: aprovacoes
-          });
-          
-          // Verificar se alguma aprovação tem valor de desconto compatível (com tolerância)
-          const temAprovacao = aprovacoes && aprovacoes.some(ap => {
-            const valorDescontoArredondado = Math.round((ap.valor_desconto || 0) * 100) / 100;
-            return Math.abs(valorDescontoArredondado - margemDescontoArredondada) < 0.01; // Tolerância de 0.01%
-          });
-          
+
+          const temAprovacao = aprovacaoDesconto.casaComAprovacao(aprovacoes, margem_desconto);
+
           if (!temAprovacao) {
             console.error('❌ Nenhuma aprovação encontrada para o desconto:', margem_desconto);
-            return res.status(403).json({ 
-              error: 'Não é possível alterar o status de uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve permanecer como rascunho até que a autorização seja aprovada.' 
+            return res.status(403).json({
+              error: statusEf === 'desconto_aprovado'
+                ? aprovacaoDesconto.MSG.DA_MARGEM
+                : 'Não é possível alterar o status de uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve permanecer como rascunho até que a autorização seja aprovada.'
             });
           }
           
@@ -8818,22 +8819,37 @@ app.get('/api/propostas/:id/status-history', authenticateToken, (req, res) => {
 app.post('/api/propostas/:id/enviar', authenticateToken, (req, res) => {
   const { id } = req.params;
   const userId = req.user?.id;
-  db.get('SELECT id, status FROM propostas WHERE id = ?', [id], (err, proposta) => {
+  db.get('SELECT id, status, margem_desconto FROM propostas WHERE id = ?', [id], (err, proposta) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!proposta) return res.status(404).json({ error: 'Proposta não encontrada' });
     if (!['rascunho', 'desconto_aprovado'].includes(proposta.status)) {
       return res.status(400).json({ error: 'Só é possível enviar proposta em rascunho ou com desconto aprovado' });
     }
     const statusAnterior = proposta.status;
-    db.run(
-      `UPDATE propostas SET status = 'enviada', enviada_em = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      [id],
-      (errUpdate) => {
-        if (errUpdate) return res.status(500).json({ error: errUpdate.message });
-        registrarStatusProposta(id, statusAnterior, 'enviada', userId, 'Proposta enviada ao cliente', () => {});
-        res.json({ message: 'Proposta marcada como enviada', status: 'enviada', enviada_em: new Date().toISOString() });
-      }
-    );
+    // Etapa 140 (RN-140.10, C301): o envio passa pela regra dos 5% — antes só olhava o status, e uma rascunho (ou uma "desconto
+    // aprovado" com a margem trocada depois) com 50% era enviada sem aprovação. A margem gravada ilegível conta como acima de 5.
+    const margem = aprovacaoDesconto.margemParaRegra(proposta.margem_desconto);
+    aprovacaoDesconto.margemLiberada(db, id, margem, (errAprov, liberado) => {
+      if (errAprov) return res.status(500).json({ error: errAprov.message });
+      if (!liberado) return res.status(403).json({ error: aprovacaoDesconto.MSG.ENVIAR });
+      // A gravação confere que status e margem ainda são os lidos: um PUT que trocou a margem no meio não sai enviado com ela.
+      db.run(
+        `UPDATE propostas SET status = 'enviada', enviada_em = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND status = ? AND margem_desconto IS ?`,
+        [id, statusAnterior, proposta.margem_desconto],
+        function aposEnviar(errUpdate) {
+          if (errUpdate) return res.status(500).json({ error: errUpdate.message });
+          if (this.changes === 0) {
+            return res.status(409).json({
+              error: 'A proposta foi alterada por outra gravação no mesmo instante. Recarregue a proposta e salve de novo.',
+              code: 'PROPOSTA_ALTERADA'
+            });
+          }
+          registrarStatusProposta(id, statusAnterior, 'enviada', userId, 'Proposta enviada ao cliente', () => {});
+          res.json({ message: 'Proposta marcada como enviada', status: 'enviada', enviada_em: new Date().toISOString() });
+        }
+      );
+    });
   });
 });
 
@@ -14302,24 +14318,14 @@ function gerarHTMLOS(os, osItens = []) {
 app.post('/api/aprovacoes', authenticateToken, (req, res) => {
   const {
     proposta_id, tipo, valor_desconto, valor_total, valor_com_desconto,
-    valor_desconto_rs, solicitado_por, status, observacoes
-  } = req.body;
+    valor_desconto_rs, observacoes
+  } = req.body || {};
+  // Etapa 140 (RN-140.06, C303): o pedido nasce PENDENTE e em nome de QUEM ESTÁ LOGADO. Antes o status e o solicitado_por vinham do
+  // corpo — o pedido podia nascer aprovado, em nome de outra pessoa. A tela manda os dois (pendente e o próprio id): são ignorados, sem erro.
+  const solicitanteId = req.user.id;
 
-  console.log('📥 Dados recebidos para criar aprovação:', {
-    proposta_id,
-    tipo,
-    valor_desconto,
-    valor_total,
-    valor_com_desconto,
-    valor_desconto_rs,
-    solicitado_por,
-    status,
-    observacoes
-  });
-
-  if (!proposta_id || !solicitado_por) {
-    console.error('❌ Dados obrigatórios faltando:', { proposta_id, solicitado_por });
-    return res.status(400).json({ error: 'proposta_id e solicitado_por são obrigatórios' });
+  if (!proposta_id) {
+    return res.status(400).json({ error: aprovacaoDesconto.MSG.PROPOSTA_ID });
   }
 
   // Etapa 139 (RN-139.06): o desconto pedido pela régua da margem — a aprovação o copia para propostas.margem_desconto
@@ -14329,152 +14335,182 @@ app.post('/api/aprovacoes', authenticateToken, (req, res) => {
     return res.status(400).json({ error: MSG_MARGEM_INVALIDA });
   }
 
-  // Buscar usuário que pode aprovar descontos
-  db.get(
-    'SELECT id, nome FROM usuarios WHERE pode_aprovar_descontos = 1 AND ativo = 1 LIMIT 1',
-    [],
-    (err, aprovador) => {
-      if (err) {
-        console.error('Erro ao buscar aprovador:', err);
-        return res.status(500).json({ error: err.message });
-      }
+  // Etapa 140 (RN-140.06): proposta inexistente é 404 — antes era o 500 cru da chave estrangeira.
+  db.get('SELECT id, numero_proposta, titulo, responsavel_id FROM propostas WHERE id = ?', [proposta_id], (errP, propostaAlvo) => {
+    if (errP) return res.status(500).json({ error: errP.message });
+    if (!propostaAlvo) return res.status(404).json({ error: 'Proposta não encontrada' });
 
-      if (!aprovador) {
-        return res.status(400).json({ error: 'Nenhum usuário configurado para aprovar descontos. Configure um usuário na gestão de usuários.' });
-      }
-
-      // Criar aprovação
-      db.run(
-        `INSERT INTO aprovacoes (
-          proposta_id, tipo, valor_desconto, valor_total, valor_com_desconto,
-          valor_desconto_rs, solicitado_por, status, observacoes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [proposta_id, tipo || 'desconto', descontoLido.valor, valor_total || 0, valor_com_desconto || 0,
-         valor_desconto_rs || 0, solicitado_por, status || 'pendente', observacoes || ''],
-        function(err) {
-          if (err) {
-            console.error('Erro ao criar aprovação:', err);
-            console.error('Dados recebidos:', { proposta_id, tipo, valor_desconto, valor_total, valor_com_desconto, valor_desconto_rs, solicitado_por, status, observacoes });
-            return res.status(500).json({ error: err.message });
-          }
-
-          const aprovacaoId = this.lastID;
-
-          // Buscar dados da proposta para criar atividade
-          db.get(
-            `SELECT p.numero_proposta, p.titulo, c.razao_social as cliente_nome
-             FROM propostas p
-             LEFT JOIN clientes c ON p.cliente_id = c.id
-             WHERE p.id = ?`,
-            [proposta_id],
-            (err, proposta) => {
-              if (err) {
-                console.error('Erro ao buscar proposta:', err);
-                // Não bloquear a criação da aprovação se falhar ao buscar proposta
-              } else if (proposta) {
-                // Criar atividade para o aprovador
-                const tituloAtividade = `Aprovação de Desconto: ${proposta.numero_proposta || proposta.titulo}`;
-                const descricaoAtividade = `Solicitação de aprovação de desconto de ${valor_desconto}% na proposta ${proposta.numero_proposta || proposta.titulo}${proposta.cliente_nome ? ` - Cliente: ${proposta.cliente_nome}` : ''}.\n\nValor Total: R$ ${valor_total.toFixed(2)}\nDesconto: R$ ${valor_desconto_rs.toFixed(2)}\nValor com Desconto: R$ ${valor_com_desconto.toFixed(2)}\n\n${observacoes || ''}`;
-
-                db.run(
-                  `INSERT INTO atividades (
-                    titulo, descricao, tipo, data_agendada, prioridade, status, responsavel_id, created_by
-                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                  [
-                    tituloAtividade,
-                    descricaoAtividade,
-                    'aprovacao_desconto',
-                    new Date().toISOString().split('T')[0],
-                    'alta',
-                    'pendente',
-                    aprovador.id,
-                    solicitado_por
-                  ],
-                  (err) => {
-                    if (err) {
-                      console.error('Erro ao criar atividade de aprovação:', err);
-                      // Não bloquear a criação da aprovação se falhar ao criar atividade
-                    } else {
-                      console.log(`✅ Atividade de aprovação criada para usuário ${aprovador.nome} (ID: ${aprovador.id})`);
-                    }
-                  }
-                );
-              }
-            }
-          );
-
-          res.json({ id: aprovacaoId, message: 'Solicitação de aprovação criada com sucesso', aprovador_id: aprovador.id });
+    // Etapa 140 (RN-140.07): a atividade vai para um aprovador (coluna ou super) que NÃO é quem pede — antes ia para o primeiro com a
+    // coluna, que podia ser o próprio solicitante. Prefere quem não é oculto, depois quem tem a coluna, depois o menor id.
+    db.all(
+      `SELECT id, nome FROM usuarios
+       WHERE ativo = 1 AND (pode_aprovar_descontos = 1 OR COALESCE(is_superadmin, 0) = 1)
+       ORDER BY COALESCE(is_oculto, 0) ASC, COALESCE(pode_aprovar_descontos, 0) DESC, id ASC`,
+      [],
+      (err, aprovadores) => {
+        if (err) {
+          console.error('Erro ao buscar aprovador:', err);
+          return res.status(500).json({ error: err.message });
         }
-      );
-    }
-  );
+        if (!aprovadores || aprovadores.length === 0) {
+          return res.status(400).json({ error: aprovacaoDesconto.MSG.SEM_APROVADOR });
+        }
+        const aprovador = aprovadores.find((u) => Number(u.id) !== Number(solicitanteId));
+        if (!aprovador) {
+          return res.status(400).json({ error: aprovacaoDesconto.MSG.SO_VOCE });
+        }
+
+        const num = (v) => Number(v) || 0;
+        db.run(
+          `INSERT INTO aprovacoes (
+            proposta_id, tipo, valor_desconto, valor_total, valor_com_desconto,
+            valor_desconto_rs, solicitado_por, status, observacoes
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pendente', ?)`,
+          [proposta_id, tipo || 'desconto', descontoLido.valor, valor_total || 0, valor_com_desconto || 0,
+           valor_desconto_rs || 0, solicitanteId, observacoes || ''],
+          function(err) {
+            if (err) {
+              console.error('Erro ao criar aprovação:', err);
+              return res.status(500).json({ error: err.message });
+            }
+
+            const aprovacaoId = this.lastID;
+
+            // Buscar dados da proposta para criar atividade
+            db.get(
+              `SELECT p.numero_proposta, p.titulo, c.razao_social as cliente_nome
+               FROM propostas p
+               LEFT JOIN clientes c ON p.cliente_id = c.id
+               WHERE p.id = ?`,
+              [proposta_id],
+              (err, proposta) => {
+                if (err) {
+                  console.error('Erro ao buscar proposta:', err);
+                  // Não bloquear a criação da aprovação se falhar ao buscar proposta
+                } else if (proposta) {
+                  // Criar atividade para o aprovador. Os valores ausentes não derrubam a descrição (antes: `undefined.toFixed`).
+                  const tituloAtividade = `Aprovação de Desconto: ${proposta.numero_proposta || proposta.titulo}`;
+                  const descricaoAtividade = `Solicitação de aprovação de desconto de ${descontoLido.valor}% na proposta ${proposta.numero_proposta || proposta.titulo}${proposta.cliente_nome ? ` - Cliente: ${proposta.cliente_nome}` : ''}.\n\nValor Total: R$ ${num(valor_total).toFixed(2)}\nDesconto: R$ ${num(valor_desconto_rs).toFixed(2)}\nValor com Desconto: R$ ${num(valor_com_desconto).toFixed(2)}\n\n${observacoes || ''}`;
+
+                  db.run(
+                    `INSERT INTO atividades (
+                      titulo, descricao, tipo, data_agendada, prioridade, status, responsavel_id, created_by
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                      tituloAtividade,
+                      descricaoAtividade,
+                      'aprovacao_desconto',
+                      new Date().toISOString().split('T')[0],
+                      'alta',
+                      'pendente',
+                      aprovador.id,
+                      solicitanteId
+                    ],
+                    (err) => {
+                      if (err) {
+                        console.error('Erro ao criar atividade de aprovação:', err);
+                        // Não bloquear a criação da aprovação se falhar ao criar atividade
+                      } else {
+                        console.log(`✅ Atividade de aprovação criada para usuário ${aprovador.nome} (ID: ${aprovador.id})`);
+                      }
+                    }
+                  );
+                }
+              }
+            );
+
+            res.json({ id: aprovacaoId, message: 'Solicitação de aprovação criada com sucesso', aprovador_id: aprovador.id });
+          }
+        );
+      }
+    );
+  });
 });
+
+// Etapa 140: a linha do usuário logado para a regra do aprovador (coluna ou super) — o req.user não traz a coluna.
+function lerAprovadorLogado(req, cb) {
+  db.get('SELECT id, pode_aprovar_descontos, is_superadmin FROM usuarios WHERE id = ? AND ativo = 1', [req.user.id], cb);
+}
 
 // Listar aprovações
 app.get('/api/aprovacoes', authenticateToken, (req, res) => {
   const { status, proposta_id, tipo } = req.query;
   const userId = req.user.id;
-  
-  let query = `SELECT a.*, 
-               p.numero_proposta, p.titulo as proposta_titulo, p.valor_total as proposta_valor_total,
-               u1.nome as solicitado_por_nome, u2.nome as aprovado_por_nome,
-               c.razao_social as cliente_nome
-               FROM aprovacoes a
-               LEFT JOIN propostas p ON a.proposta_id = p.id
-               LEFT JOIN clientes c ON p.cliente_id = c.id
-               LEFT JOIN usuarios u1 ON a.solicitado_por = u1.id
-               LEFT JOIN usuarios u2 ON a.aprovado_por = u2.id
-               WHERE 1=1`;
-  const params = [];
 
-  if (status) {
-    query += ' AND a.status = ?';
-    params.push(status);
-  }
+  lerAprovadorLogado(req, (errU, eu) => {
+    if (errU) return res.status(500).json({ error: errU.message });
+    const souAprovador = aprovacaoDesconto.ehAprovador(eu);
 
-  if (proposta_id) {
-    query += ' AND a.proposta_id = ?';
-    params.push(proposta_id);
-  }
+    let query = `SELECT a.*,
+                 p.numero_proposta, p.titulo as proposta_titulo, p.valor_total as proposta_valor_total,
+                 p.responsavel_id as proposta_responsavel_id,
+                 u1.nome as solicitado_por_nome, u2.nome as aprovado_por_nome,
+                 c.razao_social as cliente_nome
+                 FROM aprovacoes a
+                 LEFT JOIN propostas p ON a.proposta_id = p.id
+                 LEFT JOIN clientes c ON p.cliente_id = c.id
+                 LEFT JOIN usuarios u1 ON a.solicitado_por = u1.id
+                 LEFT JOIN usuarios u2 ON a.aprovado_por = u2.id
+                 WHERE 1=1`;
+    const params = [];
 
-  // Filtro de tipo: enviada ou recebida
-  if (tipo === 'enviada') {
-    query += ' AND a.solicitado_por = ?';
-    params.push(userId);
-  } else if (tipo === 'recebida') {
-    // Aprovações recebidas são aquelas onde o usuário pode aprovar (pode_aprovar_descontos = 1)
-    // e que ainda não foram aprovadas/rejeitadas por ele
-    query += ` AND EXISTS (
-      SELECT 1 FROM usuarios 
-      WHERE id = ? AND pode_aprovar_descontos = 1 AND ativo = 1
-    ) AND (a.aprovado_por IS NULL OR a.aprovado_por = ?)`;
-    params.push(userId, userId);
-  }
-
-  query += ' ORDER BY a.created_at DESC';
-
-  db.all(query, params, (err, rows) => {
-    if (err) {
-      console.error('Erro ao buscar aprovações:', err);
-      return res.status(500).json({ error: err.message });
+    if (status) {
+      query += ' AND a.status = ?';
+      params.push(status);
     }
-    
-    // Adicionar campo tipo para cada aprovação
-    const rowsWithTipo = (rows || []).map(row => ({
-      ...row,
-      tipo: row.solicitado_por === userId ? 'enviada' : 'recebida'
-    }));
-    
-    res.json(rowsWithTipo);
+
+    if (proposta_id) {
+      query += ' AND a.proposta_id = ?';
+      params.push(proposta_id);
+    }
+
+    // Filtro de tipo: enviada ou recebida
+    if (tipo === 'enviada') {
+      query += ' AND a.solicitado_por = ?';
+      params.push(userId);
+    } else if (tipo === 'recebida') {
+      // Etapa 140 (RN-140.11): recebidas = quem lista é aprovador (coluna OU super — antes só a coluna) e não é dono do pedido (quem
+      // pediu ou o responsável da proposta), e o pedido ainda não foi decidido por outro.
+      if (!souAprovador) {
+        query += ' AND 0';
+      } else {
+        query += ` AND a.solicitado_por != ? AND (p.responsavel_id IS NULL OR p.responsavel_id != ?)
+          AND (a.aprovado_por IS NULL OR a.aprovado_por = ?)`;
+        params.push(userId, userId, userId);
+      }
+    }
+
+    query += ' ORDER BY a.created_at DESC';
+
+    db.all(query, params, (err, rows) => {
+      if (err) {
+        console.error('Erro ao buscar aprovações:', err);
+        return res.status(500).json({ error: err.message });
+      }
+
+      // Adicionar campo tipo para cada aprovação, e (Etapa 140, RN-140.11) se quem lista pode decidir esta — a tela só mostra os
+      // botões onde pode; quem decide é o PUT.
+      const rowsWithTipo = (rows || []).map(row => {
+        const { proposta_responsavel_id: responsavel, ...resto } = row;
+        return {
+          ...resto,
+          tipo: row.solicitado_por === userId ? 'enviada' : 'recebida',
+          pode_decidir: (row.status || 'pendente') === 'pendente' && souAprovador
+            && !aprovacaoDesconto.ehDonoDoPedido(userId, row, responsavel)
+        };
+      });
+
+      res.json(rowsWithTipo);
+    });
   });
 });
 
 // Obter aprovação por ID
 app.get('/api/aprovacoes/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
-  
+
   db.get(
-    `SELECT a.*, 
+    `SELECT a.*,
      p.numero_proposta, p.titulo as proposta_titulo, p.valor_total as proposta_valor_total,
      u1.nome as solicitado_por_nome, u2.nome as aprovado_por_nome,
      c.razao_social as cliente_nome
@@ -14500,100 +14536,120 @@ app.get('/api/aprovacoes/:id', authenticateToken, (req, res) => {
 // Aprovar ou rejeitar
 app.put('/api/aprovacoes/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
-  const { status, motivo_rejeicao, aprovado_por } = req.body;
-
-  console.log('📥 PUT /api/aprovacoes/:id - Dados recebidos:', {
-    id,
-    status,
-    motivo_rejeicao: motivo_rejeicao ? motivo_rejeicao.substring(0, 50) + '...' : null,
-    aprovado_por,
-    userId: req.user.id
-  });
+  const { status, motivo_rejeicao } = req.body || {};
+  // Etapa 140 (RN-140.03): quem decide é quem está logado — o `aprovado_por` do corpo é ignorado (antes gravava o do corpo).
+  const decisorId = req.user.id;
 
   if (!status || !['aprovado', 'rejeitado'].includes(status)) {
-    console.error('❌ Status inválido:', status);
     return res.status(400).json({ error: 'Status deve ser "aprovado" ou "rejeitado"' });
   }
 
-  if (status === 'rejeitado' && (!motivo_rejeicao || !motivo_rejeicao.trim())) {
-    console.error('❌ Motivo da rejeição não fornecido');
+  if (status === 'rejeitado' && (!motivo_rejeicao || !String(motivo_rejeicao).trim())) {
     return res.status(400).json({ error: 'Motivo da rejeição é obrigatório' });
   }
 
-  // Buscar aprovação para atualizar a proposta se aprovada
-  db.get('SELECT * FROM aprovacoes WHERE id = ?', [id], (err, aprovacao) => {
-    if (err) {
-      console.error('❌ Erro ao buscar aprovação:', err);
-      return res.status(500).json({ error: err.message });
-    }
-    if (!aprovacao) {
-      console.error('❌ Aprovação não encontrada:', id);
-      return res.status(404).json({ error: 'Aprovação não encontrada' });
-    }
-
-    console.log('✅ Aprovação encontrada:', aprovacao);
-
-    // Usar o ID do usuário autenticado se aprovado_por não foi fornecido
-    const aprovadoPorFinal = aprovado_por || req.user.id;
-
-    // Atualizar aprovação
-    const updateQuery = status === 'aprovado'
-      ? `UPDATE aprovacoes SET status = ?, aprovado_por = ?, aprovado_em = CURRENT_TIMESTAMP WHERE id = ?`
-      : `UPDATE aprovacoes SET status = ?, aprovado_por = ?, motivo_rejeicao = ?, aprovado_em = CURRENT_TIMESTAMP WHERE id = ?`;
-    
-    const updateParams = status === 'aprovado'
-      ? [status, aprovadoPorFinal, id]
-      : [status, aprovadoPorFinal, motivo_rejeicao.trim(), id];
-
-    console.log('🔄 Executando update:', { updateQuery, updateParams });
-
-    db.run(updateQuery, updateParams, function(err) {
+  db.get(
+    `SELECT a.*, p.responsavel_id AS proposta_responsavel_id, p.status AS proposta_status, p.id AS proposta_existe
+     FROM aprovacoes a LEFT JOIN propostas p ON p.id = a.proposta_id WHERE a.id = ?`,
+    [id],
+    (err, aprovacao) => {
       if (err) {
-        console.error('❌ Erro ao atualizar aprovação:', err);
+        console.error('❌ Erro ao buscar aprovação:', err);
         return res.status(500).json({ error: err.message });
       }
+      if (!aprovacao) {
+        return res.status(404).json({ error: 'Aprovação não encontrada' });
+      }
 
-      console.log('✅ Aprovação atualizada. Linhas afetadas:', this.changes);
+      lerAprovadorLogado(req, (errU, eu) => {
+        if (errU) return res.status(500).json({ error: errU.message });
+        // Etapa 140 (RN-140.01, C302): decidir (aprovar OU rejeitar) exige a coluna "Pode aprovar descontos" ou super. Antes
+        // qualquer usuário logado decidia — o vendedor aprovava o próprio pedido de 30% e enviava a proposta.
+        if (!aprovacaoDesconto.ehAprovador(eu)) {
+          return res.status(403).json({ error: aprovacaoDesconto.MSG.SEM_PERMISSAO });
+        }
+        // RN-140.02: o dono do pedido (quem pediu ou o responsável da proposta) não decide — nem o super (B906, B907).
+        if (aprovacaoDesconto.ehDonoDoPedido(decisorId, aprovacao, aprovacao.proposta_responsavel_id)) {
+          return res.status(403).json({ error: aprovacaoDesconto.MSG.PROPRIO });
+        }
+        // RN-140.04: só pedido pendente se decide (antes dava para aprovar o rejeitado).
+        if ((aprovacao.status || 'pendente') !== 'pendente') {
+          return res.status(409).json({ error: aprovacaoDesconto.MSG.JA_DECIDIDA });
+        }
 
-      // Se aprovado, atualizar margem_desconto e status da proposta para desconto_aprovado
-      if (status === 'aprovado' && aprovacao.tipo === 'desconto' && aprovacao.proposta_id) {
-        db.get('SELECT id, status FROM propostas WHERE id = ?', [aprovacao.proposta_id], (errProp, proposta) => {
-          if (errProp) {
-            console.error('❌ Erro ao buscar proposta para atualizar desconto:', errProp);
-            return;
+        const ehDesconto = aprovacao.tipo === 'desconto' && aprovacao.proposta_id;
+        let valorLido = null;
+        if (status === 'aprovado' && ehDesconto) {
+          // RN-140.05: o valor pedido pela régua da margem (A86: o pedido antigo fora dela era copiado para a proposta) e a proposta
+          // ainda em rascunho ou desconto aprovado (antes uma enviada/aprovada era REBAIXADA para desconto aprovado).
+          const lido = lerMargemDesconto(aprovacao.valor_desconto);
+          if (!lido.ok) return res.status(400).json({ error: aprovacaoDesconto.MSG.VALOR_PEDIDO });
+          if (aprovacao.proposta_existe == null) return res.status(404).json({ error: 'Proposta não encontrada' });
+          if (!aprovacaoDesconto.STATUS_ACEITA_APROVACAO.includes(aprovacao.proposta_status)) {
+            return res.status(409).json({ error: aprovacaoDesconto.MSG.PROPOSTA_SAIU });
           }
-          const statusAnterior = proposta?.status || 'rascunho';
+          valorLido = lido.valor;
+        }
+
+        // (1) o pedido, só se ainda pendente — duas decisões ao mesmo tempo: uma passa, a outra 409.
+        const updateQuery = status === 'aprovado'
+          ? `UPDATE aprovacoes SET status = ?, aprovado_por = ?, aprovado_em = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pendente'`
+          : `UPDATE aprovacoes SET status = ?, aprovado_por = ?, motivo_rejeicao = ?, aprovado_em = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pendente'`;
+        const updateParams = status === 'aprovado'
+          ? [status, decisorId, id]
+          : [status, decisorId, String(motivo_rejeicao).trim(), id];
+
+        db.run(updateQuery, updateParams, function aposDecidir(errUp) {
+          if (errUp) {
+            console.error('❌ Erro ao atualizar aprovação:', errUp);
+            return res.status(500).json({ error: errUp.message });
+          }
+          if (this.changes === 0) {
+            return res.status(409).json({ error: aprovacaoDesconto.MSG.JA_DECIDIDA });
+          }
+
+          const responder = () => res.json({
+            message: `Aprovação ${status === 'aprovado' ? 'aprovada' : 'rejeitada'} com sucesso`,
+            id: parseInt(id),
+            status: status
+          });
+          if (!(status === 'aprovado' && ehDesconto)) return responder();
+
+          // (2) a proposta, só se ainda em rascunho ou desconto aprovado — ANTES da resposta (antes era fogo e esquece, depois dela).
+          const statusAnterior = aprovacao.proposta_status;
           db.run(
-            `UPDATE propostas SET margem_desconto = ?, status = 'desconto_aprovado', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-            [aprovacao.valor_desconto, aprovacao.proposta_id],
-            (errUpd) => {
-              if (errUpd) {
-                console.error('❌ Erro ao atualizar proposta após aprovação de desconto:', errUpd);
-              } else {
-                console.log('✅ Proposta atualizada para desconto_aprovado:', aprovacao.proposta_id);
-                if (statusAnterior !== 'desconto_aprovado') {
-                  registrarStatusProposta(
-                    aprovacao.proposta_id,
-                    statusAnterior,
-                    'desconto_aprovado',
-                    aprovadoPorFinal,
-                    `Desconto de ${aprovacao.valor_desconto}% aprovado`,
-                    () => {}
-                  );
-                }
+            `UPDATE propostas SET margem_desconto = ?, status = 'desconto_aprovado', updated_at = CURRENT_TIMESTAMP
+             WHERE id = ? AND status IN ('rascunho', 'desconto_aprovado')`,
+            [valorLido, aprovacao.proposta_id],
+            function aposProposta(errProp) {
+              const desfazer = (resposta) => db.run(
+                `UPDATE aprovacoes SET status = 'pendente', aprovado_por = NULL, aprovado_em = NULL
+                 WHERE id = ? AND status = 'aprovado' AND aprovado_por = ?`,
+                [id, decisorId],
+                () => resposta()
+              );
+              if (errProp) {
+                console.error('❌ Erro ao atualizar proposta após aprovação de desconto:', errProp);
+                return desfazer(() => res.status(500).json({ error: errProp.message }));
               }
+              // (3) a proposta saiu do rascunho entre a leitura e a gravação: o pedido volta a pendente e nada fica aprovado.
+              if (this.changes === 0) {
+                return desfazer(() => res.status(409).json({ error: aprovacaoDesconto.MSG.PROPOSTA_SAIU }));
+              }
+              // (4) o histórico de status, e a resposta.
+              if (statusAnterior !== 'desconto_aprovado') {
+                return registrarStatusProposta(
+                  aprovacao.proposta_id, statusAnterior, 'desconto_aprovado', decisorId,
+                  `Desconto de ${valorLido}% aprovado`, () => responder()
+                );
+              }
+              return responder();
             }
           );
         });
-      }
-
-      res.json({ 
-        message: `Aprovação ${status === 'aprovado' ? 'aprovada' : 'rejeitada'} com sucesso`,
-        id: parseInt(id),
-        status: status
       });
-    });
-  });
+    }
+  );
 });
 
 // Deletar aprovação (apenas para admins)
@@ -18725,29 +18781,39 @@ app.post('/api/propostas/:id/assinar', authenticateToken, (req, res) => {
   const ipAddress = req.ip || req.connection.remoteAddress;
   const userAgent = req.get('user-agent');
 
-  db.run(
-    `INSERT INTO assinaturas_digitais 
-     (proposta_id, usuario_id, tipo_assinatura, dados_assinatura, ip_address, user_agent, status)
-     VALUES (?, ?, ?, ?, ?, ?, 'aprovada')`,
-    [id, req.user.id, tipo_assinatura || 'eletronica', JSON.stringify(dados_assinatura), ipAddress, userAgent],
-    function(err) {
-      if (err) {
-        return res.status(500).json({ error: err.message });
-      }
-      
-      // Atualizar status da proposta para aprovada
-      db.run('UPDATE propostas SET status = ? WHERE id = ?', ['aprovada', id], (err) => {
-        if (err) {
-          console.error('Erro ao atualizar status da proposta:', err);
-        }
-      });
+  // Etapa 140 (RN-140.13; Fase 2, I1): a assinatura põe a proposta em "aprovada" de qualquer status — passa pela regra dos 5%, como o
+  // envio. Antes uma rascunho com 50% sem aprovação virava ganha (e a tela liberava o documento). Nenhuma tela roteada chama esta rota.
+  db.get('SELECT id, margem_desconto FROM propostas WHERE id = ?', [id], (errP, proposta) => {
+    if (errP) return res.status(500).json({ error: errP.message });
+    if (!proposta) return res.status(404).json({ error: 'Proposta não encontrada' });
+    aprovacaoDesconto.margemLiberada(db, id, aprovacaoDesconto.margemParaRegra(proposta.margem_desconto), (errAprov, liberado) => {
+      if (errAprov) return res.status(500).json({ error: errAprov.message });
+      if (!liberado) return res.status(403).json({ error: aprovacaoDesconto.MSG.ASSINAR });
+      db.run(
+        `INSERT INTO assinaturas_digitais
+         (proposta_id, usuario_id, tipo_assinatura, dados_assinatura, ip_address, user_agent, status)
+         VALUES (?, ?, ?, ?, ?, ?, 'aprovada')`,
+        [id, req.user.id, tipo_assinatura || 'eletronica', JSON.stringify(dados_assinatura), ipAddress, userAgent],
+        function(err) {
+          if (err) {
+            return res.status(500).json({ error: err.message });
+          }
 
-      res.json({ 
-        message: 'Proposta assinada com sucesso',
-        assinatura_id: this.lastID 
-      });
-    }
-  );
+          // Atualizar status da proposta para aprovada
+          db.run('UPDATE propostas SET status = ? WHERE id = ?', ['aprovada', id], (err) => {
+            if (err) {
+              console.error('Erro ao atualizar status da proposta:', err);
+            }
+          });
+
+          res.json({
+            message: 'Proposta assinada com sucesso',
+            assinatura_id: this.lastID
+          });
+        }
+      );
+    });
+  });
 });
 
 // Obter assinaturas de uma proposta

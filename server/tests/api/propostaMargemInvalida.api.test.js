@@ -302,6 +302,10 @@ test('[RN-139.05] gerar-automatica: margem > 5 com status enviada -> 403 (antes 
     ctx.clienteId = await novoCliente();
     const ins = await run("INSERT INTO produtos (codigo, nome, familia, preco_base) VALUES ('E139-P', 'Prod 139', 'FAM', 100)");
     ctx.produtoId = ins.lastID;
+    // Etapa 140 (RN-140.07): quem pede o desconto não é quem o decide — os pedidos abaixo são feitos pelo super do seed, então tem de
+    // existir OUTRO aprovador (senão 400 "Só você pode aprovar descontos..."). A regra não afrouxa: o teste ganha o aprovador.
+    const [sa, ua] = await j('POST', '/usuarios', ctx.T, { nome: 'Aprov 139', email: 'aprov139@t.com', senha: 'Senha!139', cargo: 'C', role: 'usuario', setor: '', pode_aprovar_descontos: 1 });
+    assert.strictEqual(sa, 200, `criar o aprovador: ${sa} ${JSON.stringify(ua)}`);
     for (const [name, fn] of testes) {
       if (saiu !== null) { failed++; console.error(`  ✗ ${name}: o servidor caiu antes (codigo ${saiu})`); continue; }
       try { await fn(); passed++; console.log(`  ✓ ${name}`); } catch (e) {
