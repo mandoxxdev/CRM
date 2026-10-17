@@ -44,6 +44,8 @@ const nonConformityService = require('./nonConformityService');
 // Etapa 91 (T2, D1/B419): a trava por material (modulo sem nenhum `require` — sem ciclo). Pelo OBJETO
 // do modulo: os testes espiam `trava.comLockDoMaterial`.
 const trava = require('./travaPorMaterial');
+// Etapa 134 (C36): a linha da decisao na Auditoria (pelo objeto, como as outras chamadas novas — ver routes/almoxarifado.js).
+const audit = require('./audit');
 
 const ENCAMINHAMENTOS = ['DEVOLVER', 'ANALISE_ENGENHARIA', 'SUBSTITUICAO'];
 
@@ -363,6 +365,21 @@ async function decidirInspecaoSobTrava(db, user, itemId, item, calc, reserva) {
     await dbRun(db, `INSERT INTO medidas_inspecao_almoxarifado (${cols.join(',')})
       VALUES ${medidasResolvidas.map(() => placeholder).join(',')}`, params);
   }
+
+  // Etapa 134 (C36, RN-05): a linha da DECISAO na Auditoria. A C36 dizia que decidir "nunca gerou linha" — estava errada: o motor grava
+  // `movimentacao / DECISAO_INSPECAO` (o retido inteiro, sem aprovado x reprovado nem o numero da inspecao). Esta e a do documento,
+  // com os numeros, em nome de quem decidiu. Nao fatal: os dois claims e o INSERT ja aconteceram (C252). Sob a trava, mas so um INSERT
+  // a mais, antes do aviso/NC/distribuicao — a ordem deles nao muda.
+  await audit.registrarAuditoriaDoAto(db, {
+    entidade: 'inspecao', entidade_id: ins.lastID, acao: 'INSPECAO_DECIDIDA',
+    usuario_id: user.id, usuario_nome: user.nome || user.email,
+    dados_novos: {
+      recebimento_id: item.recebimento_id, recebimento_item_id: Number(itemId), material_id: item.material_id,
+      quantidade_aprovada: aprovada, quantidade_reprovada: reprovada, encaminhamento: data.encaminhamento || null,
+      conforme: reprovada === 0 ? 1 : 0, medidas_registradas: medidasResolvidas ? medidasResolvidas.length : 0,
+    },
+    justificativa: data.observacoes || null,
+  });
 
   // Etapa 17 (RN-02/RN-03, gancho C4.1): aviso pos-commit — os dois claims e o INSERT ja
   // aconteceram quando chegamos aqui, entao o try/catch abaixo so pode custar o e-mail, nunca a

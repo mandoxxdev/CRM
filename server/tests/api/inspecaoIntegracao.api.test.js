@@ -299,7 +299,10 @@ const sufixo = `${Date.now() % 1000000}`;
       `dados_novos da EDICAO nao trazem o nominal novo: ${alteracao.dados_novos}`);
   });
 
-  await test('(8) a decisao de inspecao NAO deixa rastro na auditoria — declarado, nao esquecido', async () => {
+  // Etapa 134 (C36): este cenario afirmava "a decisao NAO deixa rastro na auditoria" — e a frase da C36, e ESTAVA ERRADA desde que o
+  // motor audita: a decisao sempre gravou `movimentacao / DECISAO_INSPECAO` (o filtro abaixo, por entidade LIKE '%inspec%', nao a via).
+  // Desde a 134 ela grava tambem `inspecao / INSPECAO_DECIDIDA` (RN-05); o cenario agora prende as duas.
+  await test('(8) a decisao de inspecao deixa rastro na auditoria: a linha da inspecao (134) e a do motor', async () => {
     assert.ok(ctx.inspecaoId, 'guarda: o cenario (3) precisa ter gravado a inspecao');
 
     // Metade positiva: a trilha do PLANO existe (cenario 7), entao a auditoria esta viva neste
@@ -310,10 +313,12 @@ const sufixo = `${Date.now() % 1000000}`;
       'guarda: sem nenhum ato de plano na trilha, a ausencia de ato de inspecao nao prova nada');
 
     const daInspecao = await dbAll(db,
-      "SELECT * FROM auditoria_log_almoxarifado WHERE entidade LIKE '%inspec%' AND entidade <> 'plano_inspecao'");
-    assert.strictEqual(daInspecao.length, 0,
-      'apareceu rastro de inspecao na trilha: `inspectionService` passou a auditar e a documentacao '
-      + `da Etapa 27 ficou desatualizada — ${JSON.stringify(daInspecao.map((a) => a.entidade))}`);
+      "SELECT * FROM auditoria_log_almoxarifado WHERE entidade = 'inspecao' AND entidade_id = ? AND acao = 'INSPECAO_DECIDIDA'",
+      [ctx.inspecaoId]);
+    assert.strictEqual(daInspecao.length, 1, `a decisao nao gravou a linha da inspecao: ${JSON.stringify(daInspecao)}`);
+    const doMotor = await dbAll(db,
+      "SELECT id FROM auditoria_log_almoxarifado WHERE entidade = 'movimentacao' AND acao = 'DECISAO_INSPECAO'");
+    assert.ok(doMotor.length >= 1, 'a linha do motor sumiu');
   });
 
   await close();

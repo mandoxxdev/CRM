@@ -219,10 +219,15 @@ function verbosDeTransicao() {
       // stockService.js:1367-1372 — `acao: tipo`, o tipo da movimentacao.
       ...movementTypes.TIPOS_ENTRADA, ...movementTypes.TIPOS_SAIDA, ...movementTypes.TIPOS_DEVOLUCAO,
     ];
+    // Etapa 134 (RN-06): o motor audita TODO tipo (`acao: tipo`), nao so os de movementTypes — a retencao (RESERVA, QUARENTENA,
+    // DECISAO_INSPECAO...) aparecia crua na tela. A regua passa a ler os tres vetores do schema.js.
+    const schemaAlmox = require('../../services/almoxarifado/schema');
+    const dinamicosMotor = [...schemaAlmox.TIPOS_MOVIMENTO, ...schemaAlmox.TIPOS_RETENCAO, ...schemaAlmox.TIPOS_DEDICADOS];
+    assert.ok(new Set(dinamicosMotor).size >= 34, 'os vetores do schema deixaram de ser lidos');
     const dinamicosRecebimento = verbosDeTransicao(); // receiptService.js:236-239
     const dinamicosConferencia = ['CONTAGEM', 'RECONTAGEM']; // routes/almoxarifado.js:1284-1287
 
-    const uniao = [...new Set([...literais, ...dinamicosMovimentacao,
+    const uniao = [...new Set([...literais, ...dinamicosMovimentacao, ...dinamicosMotor,
       ...dinamicosRecebimento, ...dinamicosConferencia])];
     assert.ok(uniao.length >= 68, `uniao caiu para ${uniao.length}: alguma fonte parou de ser lida`);
     // Etapa 45: 18 -> 19 com DEVOLUCAO_FORNECEDOR. O numero e EXATO de proposito (o comentario do
@@ -240,7 +245,7 @@ function verbosDeTransicao() {
   // numero virar 26. A assercao e `>= 25` de proposito (entidade nova nao pode derrubar este
   // teste por CONTAGEM — so por FALTA DE ROTULO), mas o titulo mentindo faria o proximo leitor
   // achar que a varredura parou de ver algo.
-  await test('cobertura das entidades: os 26 literais tem rotulo (nenhum e dinamico)', () => {
+  await test('cobertura das entidades: todos os literais tem rotulo (eram 26 na Etapa 27; a 134 acrescentou inspecao) (nenhum e dinamico)', () => {
     const saida = execFileSync('grep',
       ['-rhoP', "(?<![A-Za-z_])entidade: '\\K[a-z_]+", ...DIRS_AUDITADOS], { encoding: 'utf8' });
     const entidades = [...new Set(saida.split('\n').filter(Boolean))];

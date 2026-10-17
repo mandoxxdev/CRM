@@ -85,6 +85,8 @@ const ROTULOS_ENTIDADE = Object.freeze({
   // Etapa 27: o plano de inspeção do material (característica, nominal e os dois desvios) nasce
   // auditado — quem muda a tolerância muda, por número, qual peça reprova (RN-03). Mesma regra da
   // `categoria` acima: sem esta linha o teste de cobertura de entidades fica vermelho de propósito.
+  // Etapa 134 (C36): a decisao de inspecao ganha linha propria na trilha (o documento e a inspecao, id da inspecao).
+  inspecao: 'Inspeção',
   plano_inspecao: 'Plano de inspeção',
   recebimento: 'Recebimento',
   // Etapa 36 (RN-18): o excedente autorizado e ato do ITEM, nao do documento — o id que importa na
@@ -190,6 +192,9 @@ const GRUPOS_ACAO = congelarGrupos([
   // varredura le o literal `acao: 'EXCEDENTE_AUTORIZADO'` do receiptService. E o mesmo buraco de
   // fiacao que a Etapa 30 pagou num fix-round por nao existir regua na epoca.
   { rotulo: 'Excedente autorizado', verbos: ['EXCEDENTE_AUTORIZADO'] },
+  // Etapa 134 (C36, RN-05): a decisao da inspecao (o documento). Verbo proprio, e NAO o DECISAO_INSPECAO do motor (rotulado abaixo
+  // como "(estoque)"): o motor grava o retido inteiro, sem aprovado x reprovado; esta linha e a que responde "quem decidiu o que".
+  { rotulo: 'Inspeção decidida', verbos: ['INSPECAO_DECIDIDA'] },
 
   // Nao conformidade numerada (Etapa 43, RN-09) — TRES rotulos distintos, e NAO um grupo so.
   // Agrupar os tres num 'Nao conformidade' unico foi considerado e DESCARTADO pela mesma regra
@@ -275,6 +280,19 @@ const GRUPOS_ACAO = congelarGrupos([
   { rotulo: 'Devolução ao fornecedor', verbos: ['DEVOLUCAO_FORNECEDOR'] },
   { rotulo: 'Perda em terceiro', verbos: ['PERDA_TERCEIRO'] },
   { rotulo: 'Consumo em terceiro', verbos: ['CONSUMO_TERCEIRO'] },
+  // Etapa 134 (RN-06): os 11 tipos que o motor grava (`acao: tipo`) e que a tela mostrava CRUS — a regua de cobertura so lia os de
+  // movementTypes (entrada, saida, devolucao) e deixava a retencao de fora. Agora o cenario le os tres vetores do schema.js.
+  { rotulo: 'Reserva', verbos: ['RESERVA'] },
+  { rotulo: 'Liberação de reserva', verbos: ['LIBERACAO_RESERVA'] },
+  { rotulo: 'Retrabalho', verbos: ['RETRABALHO'] },
+  { rotulo: 'Quarentena', verbos: ['QUARENTENA'] },
+  { rotulo: 'Liberação da inspeção', verbos: ['LIBERACAO_INSPECAO'] },
+  { rotulo: 'Reprovação na inspeção', verbos: ['REPROVACAO_INSPECAO'] },
+  { rotulo: 'Decisão de inspeção (estoque)', verbos: ['DECISAO_INSPECAO'] },
+  { rotulo: 'Remessa a terceiro', verbos: ['REMESSA_TERCEIRO'] },
+  { rotulo: 'Retorno de terceiro', verbos: ['RETORNO_TERCEIRO'] },
+  { rotulo: 'Estorno', verbos: ['ESTORNO'] },
+  { rotulo: 'Ajuste de inventário', verbos: ['AJUSTE_INVENTARIO'] },
 ]);
 
 /**
