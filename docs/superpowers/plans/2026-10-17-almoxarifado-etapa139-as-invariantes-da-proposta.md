@@ -208,7 +208,9 @@ Nenhuma migração. Nenhuma mudança de permissão.
    sobreviventes reais (viraram cenários, um deles achou o CORS) + **4** equivalentes; **0** ruído.
 3. **Paralelismo:** **0** galhos em paralelo de fato (a mesma árvore e o "um teste de servidor por vez"); **0** retrabalho; **1** revisor na
    Fase 2, **3** em paralelo na Fase 5 sob a trava (o r3 na worktree própria `CRM-wt-e139-r3`, removida, com a branch apagada).
-4. **Defeito que escapou:** *(preencher na Etapa 140)*.
+4. **Defeito que escapou:** **2, de documentação, nenhum de código** (achados na Fase 0 da Etapa 140): o texto da **C301** dizia "nada pela
+   tela" — o mesmo furo existia pela tela (o seletor de status do formulário oferecia *Desconto aprovado*); o "O que fazer" da **C302** dizia
+   que a aprovação grava quem a decidiu — o `aprovado_por` vinha do corpo. Os dois corrigidos nas novidades dizendo que estavam errados.
 
 ## Próxima tarefa detalhada — Etapa 140
 

@@ -60,6 +60,12 @@ engolida pelo guarda global); (f) proposta inexistente no `POST /api/aprovacoes`
    confere que status e margem não mudaram desde a leitura (409, a frase da Etapa 138).
 6. A tela de Aprovações só mostra Aprovar/Rejeitar onde o servidor diz que a pessoa pode decidir (`pode_decidir`, falha aberto).
 
+**O que a Fase 2 e a Fase 5 mudaram neste desenho** (detalhe no plano): o dono do pedido inclui o **responsável** (Fase 2) e **quem criou a
+proposta** (Fase 5 — trocar o responsável pelo `PUT` contornava; e a troca com pedido pendente é recusada); a ordem das gravações da
+aprovação do item 1 **virou proposta primeiro** (Fase 5 — o pedido aprovado antes da proposta deixava um `/enviar` casar com ele); a
+assinatura também passa pela regra dos 5 % e grava com guarda; a aprovação decidida por quem pediu, ou sem decisor, não casa; o pedido com
+status vazio conta como pendente.
+
 Descartado: tabela de alçadas por valor (é regra do P.O.); bloquear só o vendedor e liberar o super a aprovar o próprio (B906); recusar no
 `POST /api/aprovacoes` o corpo com `status`/`solicitado_por` (quebraria a tela, que os manda); mudar `POST /api/propostas` e a geração
 automática (já recusam margem > 5 fora do rascunho; *desconto aprovado* ≤ 5 nascendo por eles é inofensivo — D (140)).

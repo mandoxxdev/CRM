@@ -1,18 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-17 (Etapa 139) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-17 (Etapa 140) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138 e 139) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139 e 140) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-17 (Etapa 139 ENTREGUE · próxima: Etapa 140)
+> ## Onde o desenvolvimento está — 2026-10-17 (Etapa 140 ENTREGUE · próxima: Etapa 141)
 >
-> **O desenvolvimento parou aqui: Etapa 139 fechada — 2026-10-17.** A **Etapa 139 (a cláusula que sumia da proposta, a capa medida de
+> **O desenvolvimento parou aqui: Etapa 140 fechada — 2026-10-17.** A **Etapa 140 (o desconto acima de 5 % só sai com a aprovação de
+> outra pessoa; das propostas, fora do almoxarifado)**: quem decide um pedido de desconto tem *Pode aprovar descontos* ou é super, e nem
+> quem pediu, nem o responsável, nem quem criou a proposta o decide; a tela de Aprovações só mostra Aprovar/Rejeitar a quem pode; o pedido
+> nasce pendente em nome de quem pede; *Desconto aprovado* só a aprovação dá (o seletor do formulário o mostra desabilitado); o Enviar
+> confere o desconto. Duas consultas novas, para rodar antes do deploy (**A87**, **A88**). **Próxima: Etapa 141** — o documento da proposta
+> barrado no servidor para rascunho e *desconto aprovado* (**C304**); ver a próxima tarefa no plano da 140.
+>
+> **Etapa 139, 2026-10-17.** A **Etapa 139 (a cláusula que sumia da proposta, a capa medida de
 > verdade e a margem que não é número; das propostas, fora do almoxarifado)**: a cláusula que o vendedor inclui no preview além da 5.23
 > volta a aparecer — depois da seção de preço — e não é mais apagada pelo salvamento seguinte; o "+ cláusula" na consideração final entra
 > antes dela; a margem de desconto só como número de 0 a 100; a revisão obrigatória da proposta voltou a ficar inteira verde. Duas
-> consultas novas (**A85**, rodar antes do deploy; **A86**). **Próxima: Etapa 140** — a autorização da aprovação do desconto; ver a
-> próxima tarefa no plano da 139.
+> consultas novas (**A85**, rodar antes do deploy; **A86**).
+> *(Próxima, na época: Etapa 140 — entregue acima.)*
 >
 > **Etapa 138, 2026-10-17.** A **Etapa 138 (o salvamento que só grava o que veio — propostas,
 > clientes e oportunidades; fora do almoxarifado)**: salvar grava só o que o pedido trouxe — o que não veio fica, o que veio vazio apaga; a
@@ -6608,6 +6615,45 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 140 — O desconto acima de 5 % só sai com a aprovação de outra pessoa (ENTREGUE — 2026-10-17)
+
+**O que mudou, em uma frase:** o desconto acima de 5 % numa proposta só é liberado quando **outra pessoa** com *Pode aprovar descontos*
+(ou um super administrador) aprova o pedido — o vendedor não consegue mais liberar o próprio desconto.
+
+**O problema que ela resolve.** A regra dos 5 % existia, mas qualquer vendedor a contornava: os botões Aprovar/Rejeitar da tela de
+Aprovações apareciam para todos (inclusive para quem pediu) e funcionavam; e no formulário da proposta dava para escolher o status
+*Desconto aprovado* numa rascunho com 10 %, salvar e enviar.
+
+| Antes | Agora |
+|---|---|
+| Aprovar/Rejeitar em **Comercial → Aprovações** para qualquer um, inclusive para quem pediu | Só para quem pode decidir aquele pedido; para os outros, *"Aguardando a decisão de quem pode aprovar descontos. Quem pediu e o responsável da proposta não decidem o pedido."* |
+| O aprovador decidia o desconto da própria proposta | Nem quem pediu, nem o responsável, nem quem criou a proposta decidem |
+| Status *Desconto aprovado* escolhível no formulário | Desabilitado (a dica diz *"Dado pela aprovação do desconto, em Comercial → Aprovações"*); habilitado só quando a proposta já está nele |
+| **Enviar proposta** não olhava o desconto | Desconto acima de 5 % sem aprovação: *"Não é possível enviar uma proposta com desconto acima de 5% sem a aprovação desse desconto. Peça a aprovação em Comercial → Aprovações."* |
+| Aprovar o pedido de uma proposta já enviada a voltava para *desconto aprovado* | *"A proposta desta solicitação não está mais em rascunho nem com desconto aprovado. Rejeite a solicitação ou volte a proposta para rascunho."* |
+
+**Roteiro de teste (10 minutos, pela tela).** Prepare três usuários em **Admin → Usuários**: **V** sem *Pode aprovar descontos*, **A1** e
+**A2** com.
+
+1. **O pedido sai sozinho.** Entre como **V**, crie uma proposta com um item, aplique **10 %** de desconto e **Salvar**: aparece
+   *"Proposta salva. Solicitação de aprovação de desconto enviada."*
+2. **O seletor.** Abra a proposta de novo: no **Status da proposta**, *Desconto aprovado* está **desabilitado**.
+3. **Quem pediu não decide.** Ainda como **V**, abra **Comercial → Aprovações**: o pedido está pendente e **sem** os botões Aprovar e
+   Rejeitar; no olho, o aviso de que quem pediu e o responsável não decidem.
+4. **O Enviar confere.** Na proposta (rascunho, 10 %), **Enviar proposta**: *"Não é possível enviar uma proposta com desconto acima de 5% sem
+   a aprovação desse desconto. Peça a aprovação em Comercial → Aprovações."*
+5. **Outro aprovador decide.** Entre como **A1**, **Comercial → Aprovações**: o pedido tem Aprovar e Rejeitar; **Aprovar** → *"Desconto
+   aprovado! A proposta ficou como Desconto aprovado — envie-a para liberar o documento."*
+6. **Enviar.** Entre como **V**, abra a proposta: o status é *Desconto aprovado* (habilitado); **Salvar** sem mexer passa; **Enviar
+   proposta** → *"Proposta enviada."*
+7. **O aprovador e a própria proposta.** Como **A1**, crie uma proposta com 10 % e salve. Em Aprovações, **A1** não tem os botões nesse
+   pedido; **A2** tem.
+
+**O que esta etapa NÃO cobre.** O preview e o PDF de uma rascunho ou *desconto aprovado* só são bloqueados na tela, não no servidor
+(**C304** — é a próxima etapa). Quem pode editar a proposta de outro continua sem conferência (**C305**, espera a decisão da verificação do
+dono). A aprovação vale pelo percentual: trocar os itens ou o valor depois não a derruba (**B910**, pergunta em aberto). Propostas e pedidos
+antigos fora da regra nova não mudam sozinhos — rode **A87** e **A88** antes do deploy.
+
 ## Etapa 139 — A cláusula que sumia da proposta, a capa medida de verdade e a margem que não é número (ENTREGUE — 2026-10-17)
 
 **O que mudou, em uma frase:** a cláusula que o vendedor inclui no preview da proposta além da 5.23 volta a aparecer no documento (depois
@@ -6638,6 +6684,7 @@ editável** (**Comercial → Propostas → Preview**).
 
 **O que esta etapa NÃO cobre.** Quem pediu a aprovação de um desconto ainda consegue aprová-la pela API sem ter a permissão (**C302**), o
 pedido pode nascer aprovado (**C303**) e o status *desconto aprovado* pode ser posto pela API sem aprovação (**C301**) — é a próxima etapa.
+*(Resolvidos na Etapa 140 — e o caminho do status também existia pela tela.)*
 A proposta que já tem uma cláusula gravada depois da consideração final sai fora de ordem até alguém incluir, mover ou remover uma
 cláusula no preview (**A85** lista essas propostas, e também as cláusulas que o defeito apagou — elas não voltam sozinhas).
 

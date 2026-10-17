@@ -131,8 +131,36 @@ revisão). A **margem gravada** que a régua não lê (texto de antes desta rég
 desconto do `PUT` — enviar sem aprovação dá 403. Ordem no `POST`: título → margem → motivo → cliente → desconto. Na geração automática:
 cliente/produtos → margem → **403** com a mensagem do `POST` (*"Não é possível salvar uma proposta com desconto acima de 5% sem aprovação
 prévia. A proposta deve ser salva como rascunho até que a autorização seja aprovada."*) quando a margem passa de 5 e o `status` veio e não é
-rascunho; margem acima de 5 sem status → rascunho. **Não coberto (C301–C303):** `/enviar` não olha a margem, o `PUT` aceita
-`desconto_aprovado` por conta própria, e as aprovações não conferem quem aprova.
+rascunho; margem acima de 5 sem status → rascunho. *(Esta seção dizia "Não coberto (C301–C303): /enviar não olha a margem, o PUT aceita
+desconto_aprovado por conta própria, e as aprovações não conferem quem aprova" — resolvido na Etapa 140, abaixo.)*
+
+### A autorização do desconto acima de 5 % (Etapa 140, C301–C303)
+
+Plano com as RN e os contratos: `docs/superpowers/plans/2026-10-17-almoxarifado-etapa140-a-autorizacao-do-desconto.md`. Regras em
+`server/aprovacaoDesconto.js` (as mensagens literais em `MSG`); rotas no `index.js`. Teste: `tests/api/aprovacaoDescontoAutorizacao.api.test.js`
+(duas subidas; a segunda com `tests/helpers/atrasoSqlInjetado.js`, que atrasa o callback de um SQL escolhido para abrir a janela entre leitura
+e gravação).
+
+- **Aprovador** = `pode_aprovar_descontos = 1` **ou** `is_superadmin = 1`, lido do banco na hora (o `req.user` não traz a coluna). Admin de
+  papel não basta. **Dono do pedido** = `solicitado_por`, `propostas.responsavel_id` e `propostas.created_by` — o dono não decide, nem o super.
+- **`PUT /api/aprovacoes/:id`** (aprovar ou rejeitar): 400 status/motivo → 404 → 403 *sem permissão* → 403 *dono* → 409 *já decidida* (pendente
+  = `'pendente'`, vazio ou nulo) → (aprovar desconto) 400 *valor fora da régua* → 404 proposta → 409 *proposta saiu* (só rascunho e
+  `desconto_aprovado` aceitam). `aprovado_por` = `req.user`. **Ordem das gravações ao aprovar:** a proposta primeiro (`WHERE status IN
+  ('rascunho','desconto_aprovado') AND EXISTS (pedido pendente)`), depois o pedido (`WHERE pendente`); se o pedido foi decidido no meio, a
+  proposta volta ao status e à margem lidos (`WHERE status = 'desconto_aprovado' AND margem IS <a gravada>`) e 409. Tudo antes da resposta.
+- **`POST /api/aprovacoes`**: `status` e `solicitado_por` do corpo ignorados (nasce `pendente`, de `req.user`); 400 sem `proposta_id` → 400 régua
+  → 404 proposta → 400 sem aprovador → 400 só donos aprovam. A atividade vai para o primeiro aprovador ativo não dono (não oculto, com a
+  coluna, menor id).
+- **`GET /api/aprovacoes`**: cada linha com `pode_decidir` (pendente e aprovador e não dono); `tipo=recebida` com a mesma regra.
+- **`PUT /api/propostas/:id`**: 403 ao **entrar** em `desconto_aprovado` (depois do motivo, antes do desconto); 409 ao trocar o
+  `responsavel_id` com pedido de desconto pendente; a regra dos 5 % vale para todo status que não é rascunho, inclusive `desconto_aprovado`
+  (com a mensagem própria).
+- **`POST /api/propostas/:id/enviar`** e **`/assinar`**: margem gravada (ilegível = acima de 5) acima de 5 só com aprovação que casa; a gravação
+  confere a margem (`IS`) e, no envio, o status — senão 409 `PROPOSTA_ALTERADA`. A assinatura grava o status antes da assinatura.
+- **Casar** (`casaComAprovacao`): aprovação `aprovado`, tipo `desconto`, com `aprovado_por` não nulo e diferente de `solicitado_por`, valor pela
+  régua da margem, diferença < 0,01 ponto depois de arredondar a duas casas. Só pelo percentual (**B910**).
+- **Não coberto:** `/premium` e `/pdf` não barram rascunho nem `desconto_aprovado` no servidor (**C304**, próxima); quem edita a proposta de
+  outro (Fase 12, **C305**).
 
 O formulário (`client/src/components/proposta/PropostaForm.js`) monta o corpo em `montarPayloadProposta` (`payloadProposta.js`) e manda `null` — não `undefined` — para *Tipo*, *Data de fechamento*, oportunidade e expiração vazios.
 

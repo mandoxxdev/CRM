@@ -297,6 +297,35 @@ Após o login, você verá a **Tela de Seleção de Módulos** com 5 opções:
   recusada com *"Não é possível salvar uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve ser salva como rascunho até
   que a autorização seja aprovada."*; sem status, a proposta nasce rascunho. Exatamente 5% não precisa de aprovação.
 
+**Desconto acima de 5% — a aprovação:**
+- Salvar uma proposta com desconto acima de 5% a deixa como **Rascunho** e cria sozinho um pedido de aprovação em **Comercial → Aprovações**,
+  em nome de quem salvou (*"Proposta salva. Solicitação de aprovação de desconto enviada."*). O pedido nasce sempre **pendente**.
+- **Quem decide:** um usuário com **Pode aprovar descontos** marcado no cadastro (**Admin → Usuários**) ou um super administrador. Não
+  decidem o pedido — nem o super — **quem o pediu**, **o responsável** pela proposta e **quem a criou**. A tela de Aprovações só mostra
+  Aprovar e Rejeitar a quem pode decidir aquele pedido; para os outros mostra *"Aguardando a decisão de quem pode aprovar descontos. Quem
+  pediu e o responsável da proposta não decidem o pedido."* Pela integração, quem não tem a permissão recebe *"Você não tem permissão para
+  aprovar descontos. Peça a um usuário com "Pode aprovar descontos"."* e o dono recebe *"Quem pediu a aprovação do desconto, o responsável e
+  quem criou a proposta não podem decidi-la. Peça a outro aprovador."*
+- Se ninguém além dos donos pode aprovar, o pedido não é criado: *"Ninguém além de quem pede, do responsável e de quem criou a proposta pode
+  aprovar este desconto. Configure outro usuário com "Pode aprovar descontos" na gestão de usuários."* O aviso do pedido vai para um
+  aprovador que não é dono.
+- Só se decide pedido **pendente** (*"Esta solicitação de aprovação já foi decidida. Recarregue a lista."*), e só se aprova enquanto a
+  proposta está em Rascunho ou com Desconto aprovado (*"A proposta desta solicitação não está mais em rascunho nem com desconto aprovado.
+  Rejeite a solicitação ou volte a proposta para rascunho."*). Aprovar põe a proposta em **Desconto aprovado** com o percentual do pedido.
+- O status **Desconto aprovado** só é dado pela aprovação: no formulário ele aparece desabilitado, a não ser na proposta que já está nele.
+  Pela integração: *"O status "Desconto aprovado" só é dado pela aprovação do desconto, em Comercial → Aprovações. Se a proposta estava com
+  desconto aprovado, ela mudou depois de aberta: recarregue-a."*
+- Numa proposta com Desconto aprovado, o desconto acima de 5% tem de ser o aprovado: *"O desconto acima de 5% desta proposta não é o que foi
+  aprovado. Para mudar o desconto, salve a proposta como rascunho e peça nova aprovação."* Aplicar um desconto acima de 5% pelo botão de
+  desconto do formulário já volta a proposta para Rascunho, e o salvamento cria um pedido novo. Baixar para 5% ou menos não pede nada.
+- **Enviar proposta** (e a assinatura) confere o desconto: acima de 5% só sai com uma aprovação **aprovada** do mesmo percentual, decidida por
+  alguém que não é quem a pediu — *"Não é possível enviar uma proposta com desconto acima de 5% sem a aprovação desse desconto. Peça a
+  aprovação em Comercial → Aprovações."* A aprovação vale pelo percentual: trocar os itens ou o valor depois, ou abrir uma nova revisão, não
+  a derruba. Se a proposta mudou entre a conferência e a gravação: *"A proposta foi alterada por outra gravação no mesmo instante. Recarregue
+  a proposta e salve de novo."*
+- Enquanto houver pedido de desconto pendente, o responsável pela proposta não pode ser trocado: *"Não é possível trocar o responsável de
+  uma proposta com pedido de aprovação de desconto pendente. Aguarde a decisão ou peça que o pedido seja rejeitado."*
+
 **Cláusulas no preview editável — onde cada uma aparece:**
 - As condições gerais vão de 5.1 a 5.23; a **5.24** é a seção de preço (tabela de preços, condição de pagamento, FINAME e impostos); a
   **CONSIDERAÇÃO FINAL** fecha o documento, na página das assinaturas, qualquer que seja o número dela.
