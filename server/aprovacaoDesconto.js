@@ -30,6 +30,8 @@ const MSG = {
   DA_MARGEM: 'O desconto acima de 5% desta proposta não é o que foi aprovado. Para mudar o desconto, salve a proposta como rascunho e peça nova aprovação.',
   ENVIAR: 'Não é possível enviar uma proposta com desconto acima de 5% sem a aprovação desse desconto. Peça a aprovação em Comercial → Aprovações.',
   ASSINAR: 'Não é possível assinar uma proposta com desconto acima de 5% sem a aprovação desse desconto. Peça a aprovação em Comercial → Aprovações.',
+  // Etapa 141 (RN-141.01/02/03, C304): o preview e o PDF. Fora do rascunho a saida e a nova revisao (volta a rascunho; salvar pede a aprovacao).
+  DOCUMENTO: 'Não é possível gerar o documento (visualização ou PDF) de uma proposta com desconto acima de 5% sem a aprovação desse desconto. Peça a aprovação em Comercial → Aprovações; se a proposta já saiu do rascunho, emita uma nova revisão e salve-a para pedir a aprovação.',
 };
 
 /** Status da proposta em que uma aprovação de desconto ainda pode ser aplicada (RN-140.05). */

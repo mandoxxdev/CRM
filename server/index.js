@@ -9430,6 +9430,20 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
       return sendOnce(404, { error: 'Proposta não encontrada' });
     }
 
+    // Etapa 141 (RN-141.02/03, C304): o documento so sai com o desconto liberado — margem gravada ate 5, ou acima (ou ilegivel) com
+    // aprovacao que casa; a regra do /enviar (aprovacaoDesconto.margemLiberada), em qualquer status e tambem no embed do editor (o embed
+    // e o mesmo documento, so sem a barra de impressao — Fase 2, I3). Antes so os botoes da tela barravam: o editor aberto numa aba, nova
+    // revisao com 50% noutra, e o documento saia com 50% sem aprovacao. Usa a margem DESTA linha (a que gera o documento).
+    aprovacaoDesconto.margemLiberada(db, id, aprovacaoDesconto.margemParaRegra(proposta.margem_desconto), (errAprov, liberado) => {
+    if (errAprov) {
+      console.error('Erro ao verificar aprovação de desconto (premium):', errAprov);
+      if (errAprov.message && (errAprov.message.includes('database is locked') || errAprov.message.includes('SQLITE_BUSY'))) {
+        return sendOnce(503, { error: 'Banco de dados temporariamente ocupado. Tente novamente em alguns segundos.', retryAfter: 2 });
+      }
+      return sendOnce(500, { error: 'Erro ao verificar aprovação de desconto' });
+    }
+    if (!liberado) return sendOnce(403, { error: aprovacaoDesconto.MSG.DOCUMENTO });
+
     // Aplicar customizações de campos editáveis (se existirem)
     db.get('SELECT * FROM proposta_customizacoes WHERE proposta_id = ?', [id], (errC, custom) => {
     if (errC) console.error('Erro ao buscar customizacoes para preview:', errC);
@@ -9689,6 +9703,7 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
       }
     });
     }); // fecha db.get customizacoes
+    }); // fecha margemLiberada (Etapa 141)
   });
   } catch (topError) {
     console.error('Erro no handler /api/propostas/:id/premium:', topError);
@@ -9744,6 +9759,17 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
     
     if (!proposta) {
       return res.status(404).json({ error: 'Proposta não encontrada' });
+    }
+
+    // Etapa 141 (RN-141.01, C304): o PDF so sai com o desconto liberado (a regra do /enviar), em qualquer status — e a recusa vem
+    // ANTES de tudo: nem o navegador abre nem o retrato (html_rendered, css_snapshot, pdf_gerado_at, checksum, proposta_snapshot) e
+    // gravado. Usa a margem desta linha, a mesma que gera o documento.
+    const descontoLiberado = await new Promise((resolve, reject) => {
+      aprovacaoDesconto.margemLiberada(db, id, aprovacaoDesconto.margemParaRegra(proposta.margem_desconto),
+        (errAprov, ok) => (errAprov ? reject(errAprov) : resolve(ok)));
+    });
+    if (!descontoLiberado) {
+      return res.status(403).json({ error: aprovacaoDesconto.MSG.DOCUMENTO });
     }
     
     proposta.numero_proposta = proposta.numero_proposta || 'N/A';
