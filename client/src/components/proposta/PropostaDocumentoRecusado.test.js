@@ -25,7 +25,7 @@ jest.mock('../../context/AuthContext', () => ({
 }));
 jest.mock('react-toastify', () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warning: jest.fn() } }));
 
-const L_DOCUMENTO = 'Não é possível gerar o documento (visualização ou PDF) de uma proposta com desconto acima de 5% sem a aprovação desse desconto. Peça a aprovação em Comercial → Aprovações; se a proposta já saiu do rascunho, emita uma nova revisão e salve-a para pedir a aprovação.';
+const L_DOCUMENTO = 'Não é possível gerar o documento (visualização ou PDF) de uma proposta com desconto acima de 5% sem a aprovação desse desconto. Peça a aprovação em Comercial → Aprovações; se a proposta já saiu do rascunho, volte-a para rascunho (Nova revisão, ou o status Rascunho no formulário) e salve-a para pedir a aprovação.';
 const erro403 = (data) => Object.assign(new Error('403'), { response: { status: 403, data } });
 
 let container; let root;
@@ -102,11 +102,12 @@ function pontosVelhos(src, comCarregar = true) {
     : /toast\.error\((?:e(?:rr)?\.response\?\.data\?\.error \|\| )?'(Erro ao gerar PDF\.|Erro ao abrir proposta\.)'\)/g;
   return src.match(re) || [];
 }
+// Fase 5 r3 (K1–K3): a chamada inteira, com o await — sem ele o toast mostraria "[object Promise]".
 const PONTOS = {
-  'PropostasList.js': ["mensagemDoErroEmBlob(e, 'Erro ao gerar PDF.')"],
-  'PropostaDetalhe.js': ["mensagemDoErroEmBlob(e, 'Erro ao abrir proposta.')", "mensagemDoErroEmBlob(e, 'Erro ao gerar PDF.')"],
-  'PropostaForm.js': ["mensagemDoErroEmBlob(e, 'Erro ao abrir proposta.')", "mensagemDoErroEmBlob(e, 'Erro ao gerar PDF.')"],
-  'PropostaPreviewEditavel.js': ["mensagemDoErroEmBlob(e, 'Erro ao carregar proposta.')", "mensagemDoErroEmBlob(e, 'Erro ao gerar PDF.')"],
+  'PropostasList.js': ["toast.error(await mensagemDoErroEmBlob(e, 'Erro ao gerar PDF.'))"],
+  'PropostaDetalhe.js': ["toast.error(await mensagemDoErroEmBlob(e, 'Erro ao abrir proposta.'))", "toast.error(await mensagemDoErroEmBlob(e, 'Erro ao gerar PDF.'))"],
+  'PropostaForm.js': ["toast.error(await mensagemDoErroEmBlob(e, 'Erro ao abrir proposta.'))", "toast.error(await mensagemDoErroEmBlob(e, 'Erro ao gerar PDF.'))"],
+  'PropostaPreviewEditavel.js': ["toast.error(await mensagemDoErroEmBlob(e, 'Erro ao carregar proposta.'))", "toast.error(await mensagemDoErroEmBlob(e, 'Erro ao gerar PDF.'))"],
 };
 
 test('[RN-141.07] lista, detalhe, formulário e editor leem a frase do servidor nos documentos (nenhum toast fixo sobrou)', () => {
