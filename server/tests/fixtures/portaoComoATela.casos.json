@@ -15,6 +15,9 @@
     { "nome": "role ADMIN (maiusculo) passa", "user": { "id": 1, "role": "ADMIN" }, "linhas": [{ "modulo": "almoxarifado", "permissao": 1 }], "modulos": ["comercial"], "espera": true },
     { "nome": "super (is_superadmin 1) passa", "user": { "id": 1, "role": "usuario", "is_superadmin": 1 }, "linhas": [{ "modulo": "almoxarifado", "permissao": 1 }], "modulos": ["comercial"], "espera": true },
     { "nome": "admin do modulo Comercial (admin_modulos) nao passa sem a linha", "user": { "id": 7, "role": "usuario", "admin_modulos": ["comercial"] }, "linhas": [{ "modulo": "almoxarifado", "permissao": 1 }], "modulos": ["comercial"], "espera": false },
+    { "nome": "Etapa 148: a linha do Operacional com permissao 0 - o par Comercial ou Operacional nao entra", "user": { "id": 7, "role": "usuario" }, "linhas": [{ "modulo": "operacional", "permissao": 0 }], "modulos": ["comercial", "operacional"], "espera": false },
+    { "nome": "Etapa 148: so a linha de Engenharia / Projetos - o par Comercial ou Operacional nao entra", "user": { "id": 8, "role": "usuario" }, "linhas": [{ "modulo": "engenharia_projetos", "permissao": 1 }], "modulos": ["comercial", "operacional"], "espera": false },
+    { "nome": "Etapa 148: so a linha do Operacional num par com o Comercial pelo admin do modulo - admin_modulos nao abre o par", "user": { "id": 7, "role": "usuario", "admin_modulos": ["comercial", "operacional"] }, "linhas": [{ "modulo": "almoxarifado", "permissao": 1 }], "modulos": ["comercial", "operacional"], "espera": false },
     { "nome": "frota sem linha nenhuma entra (o portao da tela)", "user": { "id": 7, "role": "usuario" }, "linhas": [], "modulos": ["frota"], "espera": true }
   ]
 }

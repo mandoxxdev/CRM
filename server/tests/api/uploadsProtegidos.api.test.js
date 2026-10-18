@@ -337,9 +337,10 @@ test('RN-81.04: index.js e chat.js importam cabecalhosUploadSeguro de urlUpload'
 });
 
 // [caminho, handler, fabrica, middlewares antes do handler]. Etapa 147 (C319, RN-147.01): o download do contrato passa tambem pelo
-// portao do modelo da proposta, entre o login e o handler (o handler continua o testado aqui).
+// portao do modelo da proposta, entre o login e o handler (o handler continua o testado aqui). Etapa 148 (C335, RN-148.02): o PDF da OS
+// passa pelo portao da OS pelo numero (Comercial ou Operacional pela regua da tela), tambem entre o login e o handler.
 const ROTAS = [
-  ['/api/operacional/ordens-servico/:id/pdf', 'servirPdfOs', 'criarServirPdfOs({ db, uploadsOSDir })', 'authenticateToken'],
+  ['/api/operacional/ordens-servico/:id/pdf', 'servirPdfOs', 'criarServirPdfOs({ db, uploadsOSDir })', 'authenticateToken, exigirComercialOuOperacionalNaOS'],
   ['/api/proposta-template/contrato-anexo/:arquivo', 'servirContratoAnexo',
     'criarServirContratoAnexo({ db, uploadsContratoDir })', 'authenticateToken, exigirComercialNoModeloDaProposta'],
 ];

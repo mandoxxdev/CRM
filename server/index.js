@@ -3013,7 +3013,7 @@ function checkAnyModulePermission(requiredModules) {
 // passam pelo mesmo portao — o barrado criava o pedido pela API; a tela de Aprovacoes e as que pedem aprovacao estao todas no Comercial.
 const PORTAO_DAS_PROPOSTAS_DESLIGADO = String(process.env.PROPOSTAS_PORTAO_DE_MODULO || '').trim().toLowerCase() === 'desligado';
 if (PORTAO_DAS_PROPOSTAS_DESLIGADO) {
-  console.warn('⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado: as rotas /api/propostas*, as do modelo da proposta e as das listas de preço NAO exigem o módulo Comercial (só o login).');
+  console.warn('⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado: as rotas /api/propostas*, as do modelo da proposta, as das listas de preço e as do modelo de contrato por família NAO exigem o módulo Comercial, e as da ordem de serviço pelo número NAO exigem o Comercial ou o Operacional (só o login).');
 }
 const portaoDasPropostas = criarPortaoDasPropostas({
   getDb: () => db,
@@ -3028,6 +3028,11 @@ const exigirComercialOuOperacionalNaProposta = portaoDasPropostas.exigir(['comer
 // modelo direto do banco (nao por HTTP) e as imagens saem por /api/uploads e /api/assets, fora do portao (RN-147.04). As 5 rotas das
 // listas de preco (C329, RN-147.02) usam o exigirComercialNasPropostas: a tela da lista so existe no Comercial. O interruptor e o mesmo.
 const exigirComercialNoModeloDaProposta = portaoDasPropostas.exigir('comercial', { tambemAdminDoModuloCom: { admin: 'comercial', tela: 'administrativo' } });
+// Etapa 148 (C335, RN-148.02, B965): as 5 rotas da OS pelo numero (GET /:id, /:id/itens, /:id/pdf, POST /:id/gerar-pdf e GET
+// /os-itens/:os_id) — a regua da tela das duas telas que abrem a OS: /comercial/ordens-servico/editar/:id (Comercial) e
+// /fabrica/ordens-servico/editar/:id (Operacional). O gerar-pdf busca por HTTP interno so /api/uploads/produtos (estatico, fora do portao).
+// As 3 do modelo de contrato por familia (C341, RN-148.01, B966) usam o exigirComercialNasPropostas: a tela da familia so existe no Comercial.
+const exigirComercialOuOperacionalNaOS = portaoDasPropostas.exigir(['comercial', 'operacional']);
 
 // Etapa 21 (RN-04). Precedencia: variaveis de ambiente `SMTP_*` -> valores abaixo.
 // A regua mora em `services/emailConfig.js` (funcao pura, testada em
@@ -5975,7 +5980,7 @@ app.put('/api/propostas/:id/itens/descricoes', authenticateToken, exigirComercia
 });
 
 // GET /api/clausulas-modelos — lista os modelos de contrato (para o select da família)
-app.get('/api/clausulas-modelos', authenticateToken, (req, res) => {
+app.get('/api/clausulas-modelos', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   db.all(`SELECT m.id, m.nome, m.descricao, m.is_padrao,
                  (SELECT COUNT(*) FROM clausulas_modelo_itens i WHERE i.modelo_id = m.id) AS total_clausulas
@@ -5988,7 +5993,7 @@ app.get('/api/clausulas-modelos', authenticateToken, (req, res) => {
 });
 
 // GET /api/clausulas-modelos/:id/clausulas — cláusulas de um modelo (para conferência)
-app.get('/api/clausulas-modelos/:id/clausulas', authenticateToken, (req, res) => {
+app.get('/api/clausulas-modelos/:id/clausulas', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   db.all('SELECT numero, titulo, conteudo, ordem FROM clausulas_modelo_itens WHERE modelo_id = ? ORDER BY ordem ASC',
     [req.params.id], (err, rows) => {
@@ -5998,7 +6003,7 @@ app.get('/api/clausulas-modelos/:id/clausulas', authenticateToken, (req, res) =>
 });
 
 // PUT /api/familias/:id/clausulas-modelo — vincula (ou desvincula) o modelo da família
-app.put('/api/familias/:id/clausulas-modelo', authenticateToken, (req, res) => {
+app.put('/api/familias/:id/clausulas-modelo', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const bruto = req.body && req.body.clausulas_modelo_id;
   // Vazio/null desvincula: a família volta a usar o modelo padrão.
@@ -20908,7 +20913,7 @@ app.get('/api/operacional/ordens-servico/proximo-numero', authenticateToken, che
 });
 
 // Rota para buscar OS específica - permite acesso comercial e operacional
-app.get('/api/operacional/ordens-servico/:id', authenticateToken, (req, res) => {
+app.get('/api/operacional/ordens-servico/:id', authenticateToken, exigirComercialOuOperacionalNaOS, (req, res) => {
   const { id } = req.params;
   
   // Query simples - buscar apenas a OS, sem JOINs que podem causar erro
@@ -21103,7 +21108,7 @@ app.delete('/api/operacional/ordens-servico/:id', authenticateToken, checkModule
 });
 
 // Gerar PDF da OS usando Puppeteer (POST para gerar e salvar)
-app.post('/api/operacional/ordens-servico/:id/gerar-pdf', authenticateToken, async (req, res) => {
+app.post('/api/operacional/ordens-servico/:id/gerar-pdf', authenticateToken, exigirComercialOuOperacionalNaOS, async (req, res) => {
   const { id } = req.params;
 
   try {
@@ -21647,10 +21652,10 @@ app.post('/api/operacional/ordens-servico/:id/gerar-pdf', authenticateToken, asy
 // PDF da OS — Etapa 81: saiu a montagem estatica /uploads/ordens-servico (abria sem login, nome
 // adivinhavel). O pdf_url gravado continua o mesmo; a rota acha o arquivo pelo basename dele.
 const servirPdfOs = criarServirPdfOs({ db, uploadsOSDir });
-app.get('/api/operacional/ordens-servico/:id/pdf', authenticateToken, servirPdfOs);
+app.get('/api/operacional/ordens-servico/:id/pdf', authenticateToken, exigirComercialOuOperacionalNaOS, servirPdfOs);
 
 // Itens da OS
-app.get('/api/operacional/os-itens/:os_id', authenticateToken, (req, res) => {
+app.get('/api/operacional/os-itens/:os_id', authenticateToken, exigirComercialOuOperacionalNaOS, (req, res) => {
   const { os_id } = req.params;
   db.all('SELECT * FROM os_itens WHERE os_id = ? ORDER BY item_numero, id', [os_id], (err, rows) => {
     if (err) {
@@ -21661,7 +21666,7 @@ app.get('/api/operacional/os-itens/:os_id', authenticateToken, (req, res) => {
 });
 
 // Itens da OS por ID da OS (rota alternativa)
-app.get('/api/operacional/ordens-servico/:id/itens', authenticateToken, (req, res) => {
+app.get('/api/operacional/ordens-servico/:id/itens', authenticateToken, exigirComercialOuOperacionalNaOS, (req, res) => {
   const { id } = req.params;
   db.all('SELECT * FROM os_itens WHERE os_id = ? ORDER BY item_numero, id', [id], (err, rows) => {
     if (err) {
