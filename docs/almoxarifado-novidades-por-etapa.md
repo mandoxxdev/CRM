@@ -11,13 +11,17 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-17):** **Etapa 140 fechada** (das propostas: **o desconto acima de 5 % só sai com a aprovação de
+> **Onde o desenvolvimento está (2026-10-18):** **Etapa 141 fechada** (das propostas: **o documento da proposta só sai com o desconto
+> aprovado** — o "Ver proposta", o PDF e o editor do preview recusam, no servidor, a proposta com desconto acima de 5 % sem aprovação
+> válida, em qualquer status (antes só os botões da tela barravam, e o editor aberto numa aba baixava o PDF com o desconto trocado noutra);
+> o pedido de aprovação mostra os valores em reais do documento: **C304** e **C306** resolvidos, **B914** a **B917**; as consultas novas
+> **A89** (rodar antes do deploy) e **A90**; o aviso novo **C307**); a próxima é a **142** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 140 fechada** (das propostas: **o desconto acima de 5 % só sai com a aprovação de
 > outra pessoa que pode aprovar descontos** — antes qualquer vendedor liberava o próprio desconto por três caminhos, um deles pela própria
 > tela de proposta; quem decide tem *Pode aprovar descontos* ou é super, e nem quem pediu, nem o responsável, nem quem criou a proposta
 > decide; o pedido nasce pendente em nome de quem pede; *Desconto aprovado* só pela aprovação; o envio e a assinatura passam pela regra dos
 > 5 %: **C301**, **C302** e **C303** resolvidos — os textos da C301 e da C302 estavam errados —, **B906** a **B913**; as consultas novas
-> **A87** e **A88**, para rodar antes do deploy; os avisos novos **C304** a **C306**); a próxima é a **141** — ver "Onde estamos e o que vem
-> a seguir".
+> **A87** e **A88**, para rodar antes do deploy; os avisos novos **C304** a **C306**); a próxima era a **141**.)*
 > *(Antes: **Etapa 139 fechada** (das propostas: a revisão obrigatória da proposta voltou a ficar
 > inteira verde — uma das duas falhas antigas era um defeito real do documento: **a cláusula incluída pelo vendedor além da 5.23 sumia do
 > preview e do PDF, e a edição seguinte a apagava** (desde 28/07/2026); voltou a sair depois da seção de preço, **B899**, **B904**; a outra
@@ -226,7 +230,11 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Oitenta e oito itens para rodar em produção ANTES do deploy — oitenta e cinco são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Noventa itens para rodar em produção ANTES do deploy — oitenta e sete são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-18 (Etapa 141) de oitenta e oito para noventa**, com a **A89** — as propostas que perdem a visualização e o
+PDF, por terem desconto acima de 5 % sem aprovação válida — e a **A90** — as aprovações antigas decididas pelo responsável ou por quem
+criou a proposta. As duas somente leitura; a A89 vale rodar antes do deploy.)*
 
 *(**Atualizado em 2026-10-17 (Etapa 139) de oitenta e quatro para oitenta e seis**, com a **A85** — as propostas com cláusula 5.25 ou
 mais que voltam a aparecer no documento, e as que o salvamento apagou sem o vendedor pedir — e a **A86** — margens de desconto e pedidos
@@ -3184,12 +3192,60 @@ aprovado por outra pessoa; se a proposta ainda está em rascunho ou com *descont
 vendedor um pedido novo); se já foi enviada, confira com o vendedor. **`sem situacao (agora pendente)`** — aparece na tela de Aprovações
 como pendente e pode ser decidido; rejeite-o se for antigo.
 
+**A89 (NOVA, da Etapa 141 — as propostas que deixam de ter visualização e PDF).** Desde a Etapa 141 o documento da proposta (o "Ver
+proposta", o PDF e o editor do preview) só sai quando o desconto está liberado: até 5 %, ou acima com uma aprovação válida do mesmo
+percentual (decidida por outra pessoa que não quem pediu). **Vale para qualquer status** — inclusive enviada e ganha. Esta consulta lista
+quem deixa de ter documento no deploy. Somente leitura.
+
+```sql
+SELECT p.id, p.numero_proposta, p.status, p.margem_desconto, p.responsavel_id,
+       CASE WHEN p.html_rendered IS NOT NULL AND p.html_rendered <> '' THEN 'sim' ELSE 'nao' END AS tem_retrato_antigo
+FROM propostas p
+WHERE p.margem_desconto IS NOT NULL AND TRIM(CAST(p.margem_desconto AS TEXT)) <> ''
+  AND (typeof(p.margem_desconto) NOT IN ('integer', 'real') OR p.margem_desconto > 5)
+  AND NOT EXISTS (
+    SELECT 1 FROM aprovacoes a
+    WHERE a.proposta_id = p.id AND a.status = 'aprovado' AND a.tipo = 'desconto'
+      AND a.aprovado_por IS NOT NULL AND a.aprovado_por != a.solicitado_por
+      AND typeof(a.valor_desconto) IN ('integer', 'real')
+      AND ABS(ROUND(a.valor_desconto, 2) - ROUND(p.margem_desconto, 2)) < 0.01)
+ORDER BY p.status, p.id;
+```
+
+**Como ler o resultado:** **vazia** — nada a fazer (o banco local medido na Etapa 141 — cópia de 09/10, 57 propostas — não tem nenhuma
+proposta com desconto acima de 5 %). **Linhas `rascunho`** — normal: esperam a aprovação; quem abrir o documento vê a frase da recusa.
+**Linhas `desconto_aprovado`, `enviada`, `aprovada` ou `rejeitada`** — saíram com desconto sem aprovação válida (os caminhos da **C301** a
+**C303**, ou aprovadas por quem pediu — **B912**): o vendedor perde o "Ver proposta" e o PDF. Para recuperar, ele volta a proposta para
+**Rascunho** (Nova revisão, ou o status Rascunho no formulário), salva (o pedido sai sozinho) e outro aprovador aprova; depois envia de
+novo. **Atenção às `aprovada`:** voltar a rascunho tira a proposta das ganhas nos relatórios até ela ser aceita de novo (D (141)) — se o
+cliente já tem o documento, talvez valha deixar a proposta como está. **Margem em texto** (`typeof` não numérico) — não é lida pela régua e
+conta como acima de 5. **`tem_retrato_antigo = sim`** — o HTML do último PDF gerado continua gravado e sai na leitura da proposta pela API
+(D (141)).
+
+**A90 (NOVA, da Etapa 141 — as aprovações antigas decididas pelo responsável ou por quem criou a proposta).** Desde a Etapa 140 o
+responsável e quem criou a proposta não decidem o pedido; mas as aprovações gravadas **antes** dela, decididas por eles, continuam valendo
+(só as decididas por quem pediu deixaram de valer — **A88**, **B912**). Ver **C307**. Somente leitura.
+
+```sql
+SELECT a.id, a.proposta_id, p.numero_proposta, p.status, a.valor_desconto, a.solicitado_por, a.aprovado_por,
+       p.responsavel_id, p.created_by, a.aprovado_em
+FROM aprovacoes a
+JOIN propostas p ON p.id = a.proposta_id
+WHERE a.tipo = 'desconto' AND a.status = 'aprovado' AND a.aprovado_por IS NOT NULL
+  AND (a.aprovado_por = p.responsavel_id OR a.aprovado_por = p.created_by)
+ORDER BY a.proposta_id, a.id;
+```
+
+**Como ler o resultado:** **vazia** — nada a fazer. **Linhas** — o desconto foi aprovado pelo dono da proposta (o responsável de hoje — que
+pode ter mudado depois — ou quem a criou). A aprovação continua liberando o envio e o documento; se vocês quiserem que ela deixe de valer,
+rejeitar não é possível (já está decidida): a saída é o vendedor mudar o desconto e pedir de novo. É decisão de vocês (**C307**).
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B913; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B917; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -9935,6 +9991,35 @@ continuariam liberando o envio a cada nova revisão. Agora não liberam (**A88**
 barrado no servidor para rascunho e *desconto aprovado* (**C304**). As decisões que esperam vocês continuam as da **B898**, mais a
 **B910**.
 
+**B914 (NOVA, da Etapa 141; das propostas) — o documento da proposta só sai com o desconto liberado, em qualquer status.** Fecha a
+**C304**. O "Ver proposta", o PDF e o editor do preview recusam a proposta cujo desconto passa de 5 % (ou foi gravado de um jeito que o
+sistema não lê) sem aprovação válida, com *"Não é possível gerar o documento (visualização ou PDF) de uma proposta com desconto acima de 5%
+sem a aprovação desse desconto. Peça a aprovação em Comercial → Aprovações; se a proposta já saiu do rascunho, volte-a para rascunho (Nova
+revisão, ou o status Rascunho no formulário) e salve-a para pedir a aprovação."* — e a recusa vem antes de qualquer gravação (o PDF não
+abre o navegador nem grava nada). **Escolhido:** a regra do desconto (a mesma do Enviar), não a do status. **Descartado:** barrar pelo
+status como os botões da tela fazem (rascunho com desconto até 5 % não tem nada a aprovar, e a prévia dela pela API continua útil);
+isentar enviada e ganha (as antigas com desconto auto-aprovado continuariam imprimindo — a **A89** as lista); deixar o editor do preview
+de fora (a revisão do plano mostrou que ele recebe o **mesmo** documento completo, só sem o botão de imprimir — a primeira versão do
+desenho dizia o contrário e estava errada). **Consequência a saber:** proposta antiga já enviada ou ganha com desconto sem aprovação
+válida perde o documento até alguém aprovar o desconto (D (141)). **Reversível** (duas conferências no servidor).
+
+**B915 (NOVA, da Etapa 141; das propostas) — os valores em reais do pedido de aprovação são os do documento.** Fecha a **C306**. O valor
+total, o desconto em reais e o valor com desconto que o aprovador vê (na tela de Aprovações e no aviso) saem da **mesma conta que o
+documento faz** — a soma dos itens (quantidade × valor unitário, ou o preço base do produto quando o item não tem valor, mais os
+acessórios; sem itens, o valor total gravado na proposta) —, arredondados a centavos; o que vier no pedido é ignorado, sem erro.
+**Descartado:** usar o valor total gravado na proposta (a revisão do código mostrou que ele é gravado do que a tela ou a API mandam, sem
+conferir com os itens: "R$ 100" numa proposta de R$ 100.000 — era a primeira versão desta etapa); recusar o pedido com valores
+divergentes (a tela tomaria recusa por arredondamento). **Reversível.**
+
+**B916 (NOVA, da Etapa 141; das propostas) — a tela mostra a frase do servidor, e o "Nova solicitação" não esconde a proposta cuja aprovação
+não vale.** Os botões de PDF (lista, detalhe, formulário e editor), o "Ver proposta" e o carregar do editor mostravam uma frase genérica
+quando o servidor recusava ("Erro ao gerar PDF.") — agora mostram a frase da recusa. E o modal **Nova solicitação** de Aprovações escondia
+a proposta que tivesse qualquer aprovação de mesmo valor, inclusive a decidida pelo próprio vendedor antes da Etapa 140 (que não vale
+mais, **B912**) — a proposta sumia do modal para sempre; agora só a aprovação válida esconde. **Reversível.**
+
+**B917 (NOVA, da Etapa 141) — a próxima etapa (142).** Ver a "próxima tarefa detalhada" no plano da Etapa 141. As decisões que esperam
+vocês continuam as da **B898**, mais a **B910** e a **C307**.
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -12754,7 +12839,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      nome de outra pessoa.** A criação do pedido grava a situação e o "solicitado por" que vierem no pedido. E um pedido antigo com valor fora
      da régua (de antes da **B903**), se aprovado, copia o valor para a margem da proposta. A tela manda sempre *pendente* e quem está
      logado. **O que fazer:** a consulta **A86** lista os pedidos fora da régua; a próxima etapa (**B905**).
-304. **NOVO (da revisão do plano da Etapa 140; das propostas, anterior a ela; lido no código) — o documento da proposta não é barrado no
+304. **✅ RESOLVIDO NA ETAPA 141 (B914; A89 para o que já foi gravado) — e o texto abaixo descrevia o furo pelo status, o que era
+     estreito:** o furo era o do **desconto** — valia também para proposta enviada ou ganha com desconto sem aprovação válida, e o editor do
+     preview recebia o documento completo. O texto original:
+     **NOVO (da revisão do plano da Etapa 140; das propostas, anterior a ela; lido no código) — o documento da proposta não é barrado no
      servidor.** O preview e o PDF de uma proposta em rascunho ou com *desconto aprovado* só ficam bloqueados **na tela** (os botões); quem
      abre o editor do preview direto pelo endereço, ou deixa o editor aberto numa aba enquanto troca o desconto noutra, baixa o PDF com um
      desconto ainda não aprovado. **O que fazer:** nada pela tela no uso normal; a próxima etapa (**B913**).
@@ -12762,12 +12850,19 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      salvamento não confere quem é o dono da proposta (é a Fase 12 das propostas, que espera vocês): pela API, um vendedor troca o
      responsável, o desconto ou o status da proposta de outro. A Etapa 140 fechou o uso disso para aprovar o próprio desconto (**B907**).
      **O que fazer:** nada novo; a decisão é a da verificação do dono.
-306. **NOVO (da revisão da Etapa 140; das propostas, anterior a ela; lido no código) — os valores em reais do pedido de aprovação são os que
+306. **✅ RESOLVIDO NA ETAPA 141 (B915) — e o "O que fazer" abaixo era fraco:** conferir "o valor na proposta" não bastava, porque o valor
+     total gravado na proposta também vem do que a tela ou a API mandam; o pedido agora usa a conta do documento (a soma dos itens). O
+     texto original:
+     **NOVO (da revisão da Etapa 140; das propostas, anterior a ela; lido no código) — os valores em reais do pedido de aprovação são os que
      o pedido trouxe.** O percentual aplicado é o pedido (conferido pela régua), mas o valor total, o desconto em reais e o valor com desconto
      que o aprovador vê na tela de Aprovações vêm do pedido sem conferência com a proposta — pela API, um pedido de 30 % numa proposta grande
      pode dizer "Desconto: R$ 100". A tela sempre manda os valores certos. **O que fazer:** o aprovador confere o valor na proposta antes de
      aprovar descontos grandes.
-
+307. **NOVO (da revisão da Etapa 141; das propostas, anterior a ela; lido no código) — a aprovação antiga decidida pelo responsável ou por
+     quem criou a proposta continua valendo.** A Etapa 140 impediu o dono (quem pediu, o responsável, quem criou) de decidir o pedido, e
+     tirou a validade só das aprovações decididas por **quem pediu** (**B912**). As decididas antes dela pelo responsável ou pelo criador
+     da proposta continuam liberando o envio e o documento. Pedido novo não chega a isso (a decisão confere o dono). **O que fazer:** a
+     consulta **A90** lista; se vocês quiserem que elas deixem de valer, é uma regra a mais em `casaComAprovacao` (decisão de vocês).
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -14086,6 +14181,19 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(139) A aprovação casa com a margem com folga de 0,01 ponto** — uma margem até cerca de 0,015 acima da aprovada passa (como sempre).
 - **(139) Pedido de aprovação para uma proposta que não existe** responde erro de banco cru (500) em vez de "proposta não encontrada".
   *(Resolvido na Etapa 140: *"Proposta não encontrada"*, **B908**.)*
+- **(141) O editor do preview não abre proposta com desconto sem aprovação** — mostra a frase da recusa (**B914**). No uso normal ele só se
+  abre fora do rascunho, pela lista; quem precisa editar cláusulas de uma rascunho com desconto pendente espera a aprovação.
+- **(141) A proposta ganha antiga com desconto sem aprovação válida perde o documento**, e o caminho para recuperar (voltar a rascunho,
+  pedir, aprovar, enviar e aceitar de novo) **tira a proposta das ganhas nos relatórios** no meio do caminho (**A89**).
+- **(141) A aprovação apagada pelo administrador** (**Comercial → Aprovações → Excluir**, só administrador) tira o documento da proposta — inclusive de uma ganha. A
+  exclusão não foi restringida.
+- **(141) O retrato do último PDF gerado** (o HTML gravado na proposta) continua saindo na leitura da proposta pela API, e o histórico de
+  retratos continua no banco (nenhuma tela os mostra). Todo salvamento e toda nova revisão o apagam; as propostas antigas o têm (**A89**,
+  coluna `tem_retrato_antigo`).
+- **(141) O valor total gravado na proposta** (o da lista e dos relatórios) continua o que a tela ou a API mandam; só o pedido de aprovação
+  passou a usar a conta do documento (**B915**).
+- **(141) As telas antigas fora de menu** (a lista e o preview da primeira versão) continuam com a frase genérica no erro; não estão em rota
+  nenhuma.
 - **(140) As notificações não avisam pedido de aprovação pendente.** A rota das notificações monta a lista dos pendentes mas só devolve os
   lembretes (de propósito, desde antes: "aprovação não é lembrete"); o aviso do pedido é a atividade criada para o aprovador. Não mexido.
 - **(140) O administrador de usuários pode dar a si mesmo *Pode aprovar descontos*.** Quem gerencia usuários é de confiança; a etapa não
@@ -15027,6 +15135,12 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(141) Nenhum clique foi dado no navegador.** O documento barrado foi provado pela rota, com o servidor de verdade em pasta vazia (13
+cenários, quatro subidas — duas com a leitura das aprovações falhando de propósito), e as telas por testes que montam o formulário de
+proposta e a tela de Aprovações. O que **só o navegador** prova: o roteiro da Etapa 141 no guia — com o editor do preview aberto numa aba,
+noutra aba voltar a proposta para rascunho e pôr 50 % de desconto; na aba do editor, **PDF** mostra a frase da recusa (e não baixa nada);
+recarregar o editor mostra a mesma frase; voltar o desconto para o aprovado e o PDF baixa.
 
 **(140) Nenhum clique foi dado no navegador.** A autorização foi provada pela rota, com o servidor de verdade em pasta vazia (46
 cenários, duas subidas — a segunda com a janela entre leitura e gravação aberta de propósito, para as corridas), e as telas por testes que
@@ -28752,9 +28866,78 @@ qualquer um editando qualquer proposta (**C305**) e os valores em reais do pedid
 cenário. O de **sabotagem** fez **55** sabotagens: **33** caíram, **16** sobreviveram por falta de cenário (viraram cenários — inclusive
 um teste que monta o formulário de proposta) e **6** são equivalentes.
 
+## Etapa 141 — O documento da proposta só sai com o desconto aprovado (2026-10-18)
+
+Desde a Etapa 140 o desconto acima de 5 % só é **enviado** com a aprovação de outra pessoa — mas o **documento** (o "Ver proposta", o PDF e
+o editor do preview) só era barrado pelos botões da tela. Com o editor aberto numa aba e, noutra, a proposta voltando para rascunho com
+50 % de desconto, o botão PDF do editor baixava o documento com 50 % sem ninguém ter aprovado. Agora o servidor recusa o documento de
+qualquer proposta cujo desconto acima de 5 % não tem aprovação válida — em qualquer status — e a tela mostra a frase da recusa. E o pedido
+de aprovação passou a mostrar ao aprovador os valores em reais que o documento mostra, não os que o pedido dizia.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Editor do preview aberto + proposta voltando a rascunho com 50 % noutra aba → **PDF** baixava com 50 % | *"Não é possível gerar o documento (visualização ou PDF) de uma proposta com desconto acima de 5% sem a aprovação desse desconto. Peça a aprovação em Comercial → Aprovações; se a proposta já saiu do rascunho, volte-a para rascunho (Nova revisão, ou o status Rascunho no formulário) e salve-a para pedir a aprovação."* (**B914**) |
+| O editor do preview, aberto pelo endereço, mostrava o documento de qualquer proposta | A mesma frase ao carregar (**B914**) |
+| Proposta antiga enviada ou ganha com desconto auto-aprovado imprimia normalmente | Perde o documento até o desconto ser aprovado (**B914**, **A89**) |
+| Na recusa do PDF ou do "Ver proposta", a tela dizia *"Erro ao gerar PDF."* / *"Erro ao abrir proposta."* | Mostra a frase do servidor (**B916**) |
+| O pedido de aprovação gravava o valor total, o desconto e o valor com desconto que viessem nele (pela API, "Desconto: R$ 100" numa proposta de R$ 100.000) | Saem da conta do documento — a soma dos itens (**B915**) |
+| No **Nova solicitação** de Aprovações, a proposta com uma aprovação antiga decidida pelo próprio vendedor sumia da lista para sempre | Só some a que tem aprovação válida (**B916**) |
+
+### As regras, com o cenário exato
+
+Preparação: **V** (vendedor, sem *Pode aprovar descontos*) e **A1** (com a permissão).
+
+**1. O cenário do editor aberto (B914).** Como **V**, crie uma proposta com 10 % de desconto e salve (o pedido sai sozinho); como **A1**,
+aprove em **Comercial → Aprovações**; como **V**, **Enviar proposta**. Na lista de propostas, clique no olho: o editor do preview abre numa
+aba. Noutra aba, abra a mesma proposta, **Nova revisão** (ela volta para rascunho), troque o desconto para **50 %** e salve. Volte à aba do
+editor e clique **PDF**: aparece *"Não é possível gerar o documento (visualização ou PDF) de uma proposta com desconto acima de 5% sem a
+aprovação desse desconto. Peça a aprovação em Comercial → Aprovações; se a proposta já saiu do rascunho, volte-a para rascunho (Nova
+revisão, ou o status Rascunho no formulário) e salve-a para pedir a aprovação."* e nada é baixado. Recarregue o editor: a mesma frase.
+Volte o desconto para **10 %** (o aprovado) e salve: o PDF do editor baixa de novo.
+
+**2. Até 5 % não pede nada.** Uma proposta com 3 % abre e baixa normalmente (pela tela, o documento continua aparecendo só depois de
+enviar, como sempre).
+
+**3. Os valores em reais do pedido (B915).** Numa proposta com um item de R$ 100.000 e 30 % de desconto, salve: em **Comercial →
+Aprovações**, o pedido mostra *Valor total* R$ 100.000,00, *Desconto* R$ 30.000,00 e *Valor com desconto* R$ 70.000,00 — os mesmos números
+do documento, mesmo que o valor total gravado na proposta tenha sido mudado pela API.
+
+**4. Pela API.** `GET /api/propostas/<id>/pdf`, `/premium` ou `/premium?embed=1` de uma rascunho com 50 % sem aprovação → **403** com a
+frase do cenário 1; proposta inexistente → **404** *"Proposta não encontrada"* (antes do 403). `POST /api/aprovacoes` com
+`"valor_total": 1, "valor_desconto_rs": 100` → gravado o da conta do documento.
+
+### O que esta etapa NÃO cobre
+
+1. **Quem pode editar a proposta** (a verificação do dono) continua esperando vocês (**C305**).
+2. **A aprovação vale pelo percentual**, não pelo valor (**B910** — pergunta para vocês).
+3. **As aprovações antigas decididas pelo responsável ou por quem criou a proposta** continuam valendo (**C307**, **A90**).
+4. O valor total gravado na proposta (lista, relatórios) não foi conferido com os itens; o retrato do último PDF continua saindo na leitura
+   da proposta pela API; a exclusão de aprovação pelo administrador tira o documento (D (141)).
+
+### O que a revisão encontrou
+
+A **medição** achou que o editor do preview só se abre, pela tela, fora do rascunho — e que nenhum outro caminho do servidor gera o
+documento. A **revisão do plano** (antes do código) achou cinco pontos importantes, todos aceitos — entre eles que o editor recebe o mesmo
+documento completo (a ideia de deixá-lo de fora estava errada) e que a frase da recusa precisava dizer o caminho para a proposta já enviada.
+A **revisão adversarial do código** (três revisores, executando): o de **regra** e o de **permissão** acharam o mesmo ponto desta etapa — o
+pedido lia o valor total gravado na proposta, que a API grava sem conferir com os itens (**B915**: passou a ser a conta do documento) — e,
+de antes, as aprovações decididas pelo responsável (**C307**); o de regra também achou a frase sem saída para *desconto aprovado*
+(corrigida). O de **sabotagem** fez **31** sabotagens: **18** caíram, **9** sobreviveram por falta de cenário (viraram cenários — inclusive
+a falha de banco na conferência, que precisava fechar, e um teste que monta a tela de Aprovações) e **4** são equivalentes.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 141 entregue (2026-10-18):** **o documento da proposta só sai com o desconto aprovado** (das propostas). O "Ver proposta", o
+  PDF e o editor do preview recusam a proposta com desconto acima de 5 % sem aprovação válida, em qualquer status (**B914** — **C304**
+  resolvido); o pedido de aprovação mostra os valores em reais do documento (**B915** — **C306** resolvido); a tela mostra a frase da
+  recusa e o *Nova solicitação* não esconde a proposta cuja aprovação não vale (**B916**). A revisão obrigatória da proposta continua
+  **22/22**. **O que é seu:** as consultas **A89** (rodar antes do deploy: as propostas que perdem o documento) e **A90**; a pergunta
+  **B910** e a **B853**; as decisões **B914 a B916** (reversíveis); o aviso **C307**; as limitações **(141)** em D e a verificação **(141)**
+  em F. **Próxima: Etapa 142 — ver a "próxima tarefa detalhada" no plano da Etapa 141.**
 
 - **Etapa 140 entregue (2026-10-17):** **o desconto acima de 5 % só sai com a aprovação de outra pessoa** (das propostas). Decide quem tem
   *Pode aprovar descontos* ou é super, e nunca o dono do pedido (**B906**, **B907**); o pedido nasce pendente, em nome de quem pede
@@ -28763,7 +28946,7 @@ um teste que monta o formulário de proposta) e **6** são equivalentes.
   **C302** e **C303** resolvidos (os textos da C301 e da C302 estavam errados). A revisão obrigatória da proposta continua **22/22**. **O
   que é seu:** as consultas **A87** e **A88** (rodar antes do deploy); a pergunta **B910** (a aprovação pelo percentual) e a **B853**; as
   decisões **B906 a B912** (reversíveis); os avisos **C304** a **C306**; as limitações **(140)** em D e a verificação **(140)** em F.
-  **Próxima: Etapa 141 — ver a "próxima tarefa detalhada" no plano da Etapa 140.**
+  *(Próxima, na época: Etapa 141 — entregue acima.)*
 
 - **Etapa 139 entregue (2026-10-17):** **a cláusula que sumia da proposta, a capa medida de verdade e a margem que não é número** (das
   propostas). A cláusula incluída além da 5.23 volta a sair, depois da seção de preço, e não é mais apagada pelo salvamento seguinte

@@ -159,8 +159,15 @@ e gravação).
   confere a margem (`IS`) e, no envio, o status — senão 409 `PROPOSTA_ALTERADA`. A assinatura grava o status antes da assinatura.
 - **Casar** (`casaComAprovacao`): aprovação `aprovado`, tipo `desconto`, com `aprovado_por` não nulo e diferente de `solicitado_por`, valor pela
   régua da margem, diferença < 0,01 ponto depois de arredondar a duas casas. Só pelo percentual (**B910**).
-- **Não coberto:** `/premium` e `/pdf` não barram rascunho nem `desconto_aprovado` no servidor (**C304**, próxima); quem edita a proposta de
-  outro (Fase 12, **C305**).
+- **`GET /premium` (com ou sem `embed`) e `GET /pdf`** (Etapa 141, **C304** resolvido): margem gravada acima de 5 (ou ilegível) sem aprovação
+  que case → 403 `MSG.DOCUMENTO`, em **qualquer** status — logo depois do 404, com a margem da linha que gera o documento, antes de gravar o
+  retrato e de abrir o navegador. Erro de banco na conferência: `/premium` 503 (busy/locked, `retryAfter: 2`) ou 500 *"Erro ao verificar
+  aprovação de desconto"*; `/pdf` 500 pelo `catch`. *(Esta linha dizia "Não coberto: `/premium` e `/pdf` não barram rascunho nem
+  `desconto_aprovado`" — o furo era o do desconto, não o do status; resolvido.)* Teste: `tests/api/propostaDocumentoDesconto.api.test.js`.
+- **`POST /api/aprovacoes`** grava `valor_total`, `valor_desconto_rs` e `valor_com_desconto` da conta do documento
+  (`server/totalDocumentoProposta.js` — a mesma do `/premium` e do `/pdf`), ignorando o corpo (Etapa 141, **C306** resolvido).
+- **Não coberto:** quem edita a proposta de outro (Fase 12, **C305**); as aprovações antigas decididas pelo responsável ou pelo criador
+  continuam casando (**C307**).
 
 O formulário (`client/src/components/proposta/PropostaForm.js`) monta o corpo em `montarPayloadProposta` (`payloadProposta.js`) e manda `null` — não `undefined` — para *Tipo*, *Data de fechamento*, oportunidade e expiração vazios.
 
@@ -174,7 +181,9 @@ Ao gerar o HTML, verificar se existem customizações:
 4. Se existir, usar as cláusulas customizadas em vez das do `condicoesNano4You.js`
 
 ### PDF (`/api/propostas/:id/pdf`)
-Aplicar a mesma lógica acima antes de gerar o PDF via PDFKit.
+Aplicar a mesma lógica acima e gerar o PDF no servidor com **Puppeteer** (o mesmo HTML do preview, com as imagens embutidas). *(Esta linha
+dizia "via PDFKit" — **estava errada**: o PDF da proposta é gerado pelo Chrome headless desde antes desta spec ser revista; corrigida na
+Etapa 141.)* Desde a Etapa 141 as duas rotas recusam o desconto não liberado (acima) antes de qualquer coisa.
 
 ---
 

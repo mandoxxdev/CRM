@@ -92,6 +92,11 @@
     fonte de reserva — o resultado muda conforme haja ou não um `npm run dev` de pé. Use `tests/helpers/servirAssetsProposta.js` (com
     **CORS**: `@font-face` de outra origem é bloqueada sem ele, imagem não) e passe `baseURL` como 5º argumento do template.
 
+18. **O total do documento mora em `server/totalDocumentoProposta.js`** (Etapa 141). O `/premium` e o `/pdf` tinham duas cópias da mesma
+    conta ("mexeu num, mexa no outro"); agora as duas rotas e o pedido de aprovação do desconto usam `subtotalDosItens`/`totalDoDocumento`.
+    E as duas rotas recusam (403) a proposta com desconto acima de 5% sem aprovação que case **antes** de montar o documento — os testes de
+    navegador desta revisão chamam o template direto e não passam por essa recusa; a rota é provada em `tests/api/propostaDocumentoDesconto.api.test.js`.
+
 ## Como rodar a validação (obrigatório antes de merge)
 
 ```bash

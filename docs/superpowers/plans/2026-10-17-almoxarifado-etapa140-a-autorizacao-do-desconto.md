@@ -216,7 +216,10 @@ Tudo **tronco** (a mesma árvore, o `index.js` e o "um teste de servidor por vez
    **6** equivalentes; **0** ruído.
 3. **Paralelismo:** **0** galhos em paralelo de fato (o `index.js` e o "um teste de servidor por vez"); **0** retrabalho; **1** revisor na
    Fase 2, **3** em paralelo na Fase 5 sob a trava.
-4. **Defeito que escapou:** *(preencher na Etapa 141)*.
+4. **Defeito que escapou:** **1** — o modal *Nova solicitação* de Aprovações (`components/Aprovacoes.js`) continuou escondendo a proposta
+   cuja aprovação de mesmo valor tinha sido decidida por quem pediu: a **B912** tirou a validade dessas aprovações no servidor, mas a tela as
+   contava como válidas, e a proposta sumia do modal para sempre. Achado na Fase 2 da Etapa 141 (I1) e corrigido lá (**RN-141.09**,
+   `be150a88`; teste que monta o modal em `317bf471`). A Fase 5 da 140 olhou o servidor e a tela do formulário, não esse modal.
 
 ## Próxima tarefa detalhada — Etapa 141
 

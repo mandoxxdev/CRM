@@ -323,6 +323,18 @@ Após o login, você verá a **Tela de Seleção de Módulos** com 5 opções:
   aprovação em Comercial → Aprovações."* A aprovação vale pelo percentual: trocar os itens ou o valor depois, ou abrir uma nova revisão, não
   a derruba. Se a proposta mudou entre a conferência e a gravação: *"A proposta foi alterada por outra gravação no mesmo instante. Recarregue
   a proposta e salve de novo."*
+- **O documento da proposta** (o "Ver proposta", o PDF e o editor do preview) segue a mesma regra, em qualquer status: com desconto acima de
+  5%, só sai com uma aprovação aprovada do mesmo percentual, decidida por alguém que não é quem a pediu. Senão aparece *"Não é possível gerar
+  o documento (visualização ou PDF) de uma proposta com desconto acima de 5% sem a aprovação desse desconto. Peça a aprovação em Comercial →
+  Aprovações; se a proposta já saiu do rascunho, volte-a para rascunho (Nova revisão, ou o status Rascunho no formulário) e salve-a para
+  pedir a aprovação."* e nada é gerado — vale também para o editor do preview que já estava aberto quando o desconto foi trocado noutra tela.
+  Até 5% o documento sai sempre (pela tela, os botões do documento aparecem depois do envio).
+- O pedido de aprovação mostra ao aprovador o **valor total**, o **desconto em reais** e o **valor com desconto** calculados como o
+  documento os calcula — a soma dos itens (quantidade × valor unitário, ou o preço base do produto quando o item não tem valor; quantidade
+  vazia ou zero conta 1), mais os acessórios; sem itens, o valor total da proposta —, com o desconto arredondado a centavos e o valor com
+  desconto igual ao total menos o desconto.
+- Em **Comercial → Aprovações → Nova Solicitação**, a lista traz as propostas em Rascunho com desconto acima de 5% que ainda não têm uma
+  aprovação válida desse percentual (uma aprovação decidida pela própria pessoa que pediu não conta).
 - Enquanto houver pedido de desconto pendente, o responsável pela proposta não pode ser trocado: *"Não é possível trocar o responsável de
   uma proposta com pedido de aprovação de desconto pendente. Aguarde a decisão ou peça que o pedido seja rejeitado."*
 

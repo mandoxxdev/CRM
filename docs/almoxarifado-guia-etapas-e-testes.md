@@ -1,18 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-17 (Etapa 140) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-18 (Etapa 141) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139 e 140) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140 e 141) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-17 (Etapa 140 ENTREGUE · próxima: Etapa 141)
+> ## Onde o desenvolvimento está — 2026-10-18 (Etapa 141 ENTREGUE · próxima: Etapa 142)
 >
-> **O desenvolvimento parou aqui: Etapa 140 fechada — 2026-10-17.** A **Etapa 140 (o desconto acima de 5 % só sai com a aprovação de
+> **O desenvolvimento parou aqui: Etapa 141 fechada — 2026-10-18.** A **Etapa 141 (o documento da proposta só sai com o desconto
+> aprovado; das propostas, fora do almoxarifado)**: o "Ver proposta", o PDF e o editor do preview recusam, no servidor, a proposta com
+> desconto acima de 5 % sem aprovação válida — em qualquer status — e a tela mostra a frase da recusa; o pedido de aprovação mostra os
+> valores em reais do documento. Duas consultas novas (**A89**, rodar antes do deploy; **A90**). **Próxima: Etapa 142** — ver a próxima
+> tarefa no plano da 141.
+>
+> **Etapa 140, 2026-10-17.** A **Etapa 140 (o desconto acima de 5 % só sai com a aprovação de
 > outra pessoa; das propostas, fora do almoxarifado)**: quem decide um pedido de desconto tem *Pode aprovar descontos* ou é super, e nem
 > quem pediu, nem o responsável, nem quem criou a proposta o decide; a tela de Aprovações só mostra Aprovar/Rejeitar a quem pode; o pedido
 > nasce pendente em nome de quem pede; *Desconto aprovado* só a aprovação dá (o seletor do formulário o mostra desabilitado); o Enviar
 > confere o desconto. Duas consultas novas, para rodar antes do deploy (**A87**, **A88**). **Próxima: Etapa 141** — o documento da proposta
 > barrado no servidor para rascunho e *desconto aprovado* (**C304**); ver a próxima tarefa no plano da 140.
+> *(Próxima, na época: Etapa 141 — entregue acima.)*
 >
 > **Etapa 139, 2026-10-17.** A **Etapa 139 (a cláusula que sumia da proposta, a capa medida de
 > verdade e a margem que não é número; das propostas, fora do almoxarifado)**: a cláusula que o vendedor inclui no preview além da 5.23
@@ -6615,6 +6622,42 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 141 — O documento da proposta só sai com o desconto aprovado (ENTREGUE — 2026-10-18)
+
+**O que mudou, em uma frase:** o "Ver proposta", o PDF e o editor do preview recusam a proposta com desconto acima de 5 % que não tem
+aprovação válida — o servidor recusa, não só os botões da tela —, e o pedido de aprovação mostra ao aprovador os valores em reais do
+documento.
+
+**O problema que ela resolve.** Os botões da tela escondiam o documento da rascunho, mas o editor do preview (aberto numa aba, ou direto
+pelo endereço) baixava o PDF de qualquer proposta: com ele aberto, bastava voltar a proposta para rascunho noutra aba e pôr 50 % de
+desconto para o PDF sair com 50 % sem aprovação. E o pedido de aprovação gravava os valores em reais que viessem nele.
+
+| Antes | Agora |
+|---|---|
+| Editor do preview aberto + desconto trocado para 50 % noutra aba → o **PDF** baixava | *"Não é possível gerar o documento (visualização ou PDF) de uma proposta com desconto acima de 5% sem a aprovação desse desconto. Peça a aprovação em Comercial → Aprovações; se a proposta já saiu do rascunho, volte-a para rascunho (Nova revisão, ou o status Rascunho no formulário) e salve-a para pedir a aprovação."* |
+| Recusa do PDF mostrava *"Erro ao gerar PDF."* | Mostra a frase do servidor |
+| Proposta antiga enviada ou ganha com desconto auto-aprovado imprimia | Perde o documento até o desconto ser aprovado (**A89** lista) |
+| Pedido de aprovação com os valores em reais que viessem nele | Os do documento (a soma dos itens) |
+| No *Nova solicitação*, a proposta com aprovação antiga decidida pelo próprio vendedor não aparecia | Aparece (só some a que tem aprovação válida) |
+
+**Roteiro de teste (10 minutos, pela tela).** Prepare **V** (sem *Pode aprovar descontos*) e **A1** (com) em **Admin → Usuários**.
+
+1. **Preparar.** Como **V**, crie uma proposta com um item e **10 %** de desconto e **Salvar** (o pedido sai sozinho). Como **A1**, em
+   **Comercial → Aprovações**, **Aprovar**. Como **V**, abra a proposta e **Enviar proposta**.
+2. **O editor aberto.** Na lista de propostas, clique no **olho** dessa proposta: o editor do preview abre numa aba nova. **PDF** baixa
+   normalmente.
+3. **O desconto trocado noutra aba.** Noutra aba, abra a proposta, **Nova revisão** (ela volta para rascunho), troque o desconto para
+   **50 %** e **Salvar**.
+4. **A recusa.** Volte à aba do editor e clique **PDF**: aparece a frase acima e nada é baixado. Recarregue a aba: a mesma frase.
+5. **De volta ao aprovado.** Na outra aba, volte o desconto para **10 %** e **Salvar**; no editor, recarregue e **PDF**: baixa.
+6. **Os reais do pedido.** Crie uma proposta com um item de **R$ 100.000** e **30 %**, **Salvar**; em **Comercial → Aprovações**, o pedido
+   mostra *Valor total* R$ 100.000,00, *Desconto* R$ 30.000,00 e *Valor com desconto* R$ 70.000,00.
+
+**O que esta etapa NÃO cobre.** Quem pode editar a proposta de outro continua sem conferência (**C305**). A aprovação vale pelo percentual
+(**B910**). As aprovações antigas decididas pelo responsável ou por quem criou a proposta continuam valendo (**C307**, **A90**). O editor do
+preview não abre proposta com desconto pendente (mostra a frase); a proposta ganha antiga que precisar do documento sai das ganhas enquanto
+volta a rascunho; o retrato do último PDF continua saindo na leitura da proposta pela API (D (141)). Rode **A89** antes do deploy.
+
 ## Etapa 140 — O desconto acima de 5 % só sai com a aprovação de outra pessoa (ENTREGUE — 2026-10-17)
 
 **O que mudou, em uma frase:** o desconto acima de 5 % numa proposta só é liberado quando **outra pessoa** com *Pode aprovar descontos*
@@ -6650,7 +6693,7 @@ Aprovações apareciam para todos (inclusive para quem pediu) e funcionavam; e n
    pedido; **A2** tem.
 
 **O que esta etapa NÃO cobre.** O preview e o PDF de uma rascunho ou *desconto aprovado* só são bloqueados na tela, não no servidor
-(**C304** — é a próxima etapa). Quem pode editar a proposta de outro continua sem conferência (**C305**, espera a decisão da verificação do
+(**C304** — é a próxima etapa; *resolvido na Etapa 141, e vale para qualquer status com desconto sem aprovação*). Quem pode editar a proposta de outro continua sem conferência (**C305**, espera a decisão da verificação do
 dono). A aprovação vale pelo percentual: trocar os itens ou o valor depois não a derruba (**B910**, pergunta em aberto). Propostas e pedidos
 antigos fora da regra nova não mudam sozinhos — rode **A87** e **A88** antes do deploy.
 
