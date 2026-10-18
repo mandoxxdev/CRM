@@ -306,6 +306,14 @@ Após o login, você verá a **Tela de Seleção de Módulos** com 5 opções:
 - A **geração automática** de proposta segue a mesma regra do desconto da criação: margem acima de 5% com um status que não seja rascunho é
   recusada com *"Não é possível salvar uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve ser salva como rascunho até
   que a autorização seja aprovada."*; sem status, a proposta nasce rascunho. Exatamente 5% não precisa de aprovação.
+- Na **geração automática** (pela integração — não há botão para ela nas telas), cada produto pedido tem de trazer o número (id) de um
+  produto do cadastro: um número inteiro maior que zero, que também pode vir escrito como texto (`"5"`). Faltando o número, ou com zero,
+  negativo, número quebrado ou algo que não é número, a geração é recusada com *"Produto inválido: cada produto da proposta deve trazer o id
+  de um produto cadastrado."*. Se algum número não for de produto cadastrado, é recusada com *"Produto não encontrado (id 99999).
+  Atualize a lista de produtos e tente de novo."* — com os números que faltam, sem repetir, na ordem em que vieram (com mais de dez, os dez
+  primeiros e "e mais N"). Em nenhuma das duas recusas a proposta é criada. Produto inativo conta como cadastrado; o mesmo produto pedido
+  duas vezes vira dois itens. A ordem das conferências: cliente e produtos informados → cada produto um registro → margem → desconto acima
+  de 5% fora do rascunho → o número de cada produto → produto cadastrado → cliente válido.
 - Pela integração (API), a lista de itens da criação, da edição e os produtos da geração automática precisam ser uma **lista de itens**, e
   cada item um registro com os seus campos. Uma lista com um item vazio, um número ou um texto no lugar do item — ou com um item em que algum
   campo, fora a lista de acessórios, não é texto nem número — é recusada com *"Item inválido: cada item da proposta deve ser um objeto."*;
@@ -361,6 +369,16 @@ Após o login, você verá a **Tela de Seleção de Módulos** com 5 opções:
   aprovação válida desse percentual (uma aprovação decidida pela própria pessoa que pediu não conta).
 - Enquanto houver pedido de desconto pendente, o responsável pela proposta não pode ser trocado: *"Não é possível trocar o responsável de
   uma proposta com pedido de aprovação de desconto pendente. Aguarde a decisão ou peça que o pedido seja rejeitado."*
+
+**Salvar no preview editável:**
+- O botão de salvar grava as cláusulas, os campos manuais de cada item (variáveis preenchidas na proposta e a descrição na tabela de preços)
+  e os campos da capa. Se a proposta foi salva em outra aba ou por outra pessoa depois que o preview abriu, os itens dela mudaram e os campos
+  manuais dos itens desta aba **não são gravados**: em vez de *"Alterações salvas."* aparece o aviso *"Alguns campos dos itens não foram
+  gravados: os itens desta proposta mudaram depois que o preview abriu (ela foi salva em outra aba ou por outra pessoa). O preview foi
+  recarregado — confira e preencha de novo."*, e o preview se recarrega com o que está gravado. As cláusulas e os campos da capa do mesmo
+  salvamento são gravados normalmente.
+- **Emitir revisão** com alterações pendentes salva antes; se aparecer esse aviso, a revisão **não** é emitida — confira, preencha de novo e
+  emita outra vez.
 
 **Cláusulas no preview editável — onde cada uma aparece:**
 - As condições gerais vão de 5.1 a 5.23; a **5.24** é a seção de preço (tabela de preços, condição de pagamento, FINAME e impostos); a

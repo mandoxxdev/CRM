@@ -236,7 +236,7 @@ Todas as tasks tocam o `index.js` ou o `propostaItensDiff.js` e o teste da rota 
    errada:** o commit `a0e5fc6c` e a armadilha 20 diziam "a resposta chega" — valia só para o item que não é objeto; a B934 a fez valer.
 3. **Paralelismo:** **0** galhos em paralelo de fato (T2 e T3 eram galhos, feitas em sequência — o "um teste por vez" e o arquivo de teste
    único); **0** retrabalho; **1** revisor na Fase 2, **3** em paralelo na Fase 5 sob a trava (o r3 numa worktree própria, removida).
-4. **Defeito que escapou:** *(preencher na Etapa 144)*.
+4. **Defeito que escapou:** **0** de código (a Etapa 144 mediu de novo as três portas e o `JOIN` pela rota; nada desta etapa voltou a falhar). **1** afirmação errada de documento: este plano (o contrato, "o modal da geração mandam sempre lista de objetos", e o ponto de atenção da próxima tarefa, "a tela mostra o erro no toast") tratava o `GerarPropostaModal` como tela viva — ele não é importado por nada desde `7a8c7242` (Fase 2 C-1 da 144, **C316**). E a C313 dizia "a tela manda só produtos do catálogo" — também errado (corrigido na C313).
 
 ## Próxima tarefa detalhada — Etapa 144
 
@@ -249,7 +249,7 @@ e cria a proposta sem item nenhum e valor 0; com um produto achado e outro não,
 sugerido:** depois do `buscarProdutos`, se algum `id` pedido não foi achado, **400** antes de gerar número e de criar (literal a fixar no
 plano, ex.: *"Produto não encontrado: <ids>. Atualize a lista de produtos e tente de novo."*); decidir e registrar em B se o produto
 **inativo** conta como achado (hoje conta — o `SELECT` não filtra `ativo`) e se o `id` repetido é um item por vez (hoje é). **Pontos de
-atenção:** a tela (`GerarPropostaModal`) mostra o erro no toast (`err.response.data.error`); a ordem das recusas da rota está escrita na
+atenção:** a tela (`GerarPropostaModal`) mostra o erro no toast (`err.response.data.error`) *(— **estava errado**: o modal não é usado por tela nenhuma desde `7a8c7242`; Fase 2 C-1 da Etapa 144)*; a ordem das recusas da rota está escrita na
 RN-143.03 e presa no `propostaItemInvalido.api.test.js` (*"Cliente e produtos são obrigatórios"* → item → margem → a nova); prove pela rota
 (o `index.js` real em pasta vazia — o molde é esse mesmo arquivo) que nenhuma proposta nasce. **Se couber:** a **D (142)** do preview numa
 aba velha (`PUT .../variaveis-manuais` com `item_id` que não é mais da proposta responde `{ok:true}` sem gravar) — medir se a tela pode

@@ -1,18 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-18 (Etapa 143) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-18 (Etapa 144) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142 e 143) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143 e 144) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-18 (Etapa 143 ENTREGUE · próxima: Etapa 144)
+> ## Onde o desenvolvimento está — 2026-10-18 (Etapa 144 ENTREGUE · próxima: Etapa 145)
 >
-> **O desenvolvimento parou aqui: Etapa 143 fechada — 2026-10-18.** A **Etapa 143 (o item que não é item é recusado antes de gravar, e
+> **O desenvolvimento parou aqui: Etapa 144 fechada — 2026-10-18.** A **Etapa 144 (a geração automática recusa o produto que não existe,
+> e o preview avisa quando um campo não foi gravado; das propostas, fora do almoxarifado)**: pela integração, a geração automática com um
+> produto que não existe (ou com o número do produto escrito como texto) criava a proposta vazia; agora recusa com uma frase e nada é
+> criado — e o número em texto passa a valer; o preview editável aberto numa aba antiga avisa que os campos dos itens não foram gravados, em
+> vez de *"Alterações salvas."*, e o *Emitir revisão* não emite em cima deles. Nenhuma consulta nova.
+> **Próxima: Etapa 145** — as rotas de proposta exigirem o módulo (**C317**); ver a próxima tarefa no plano da 144.
+>
+> **Etapa 143, 2026-10-18.** A **Etapa 143 (o item que não é item é recusado antes de gravar, e
 > cada item usa um produto só; das propostas, fora do almoxarifado)**: pela integração, a lista de itens com um item vazio (ou que não é
 > item) é recusada sem gravar nada — antes o salvamento nunca respondia e às vezes apagava os itens; o histórico de edições conta o que o
 > vendedor fez (tirar o primeiro de dois iguais = um item removido) e registra a troca de descrição; o preview, o PDF e o pedido de
 > aprovação deixam de mostrar em dobro o item cujo código está no cadastro com e sem espaço. Uma consulta nova, opcional (**A92**).
-> **Próxima: Etapa 144** — ver a próxima tarefa no plano da 143.
+> *(Próxima, na época: Etapa 144 — entregue acima.)*
 >
 > **Etapa 142, 2026-10-18.** A **Etapa 142 (com o mesmo produto duas vezes, cada item fica com o
 > que é dele; das propostas, fora do almoxarifado)**: numa proposta com o mesmo equipamento mais de uma vez, tirar o primeiro e salvar não
@@ -6635,6 +6642,44 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 144 — A geração automática recusa o produto que não existe, e o preview avisa quando um campo não foi gravado (ENTREGUE — 2026-10-18)
+
+**O que mudou, em uma frase:** a geração automática de proposta pela integração recusa o produto que não existe (antes criava a proposta
+vazia) e aceita o número do produto escrito como texto; e o preview editável aberto numa aba antiga avisa que os campos dos itens não foram
+gravados, em vez de dizer que salvou.
+
+**O problema que ela resolve.** Pela integração, `produtos: [{ "id": 99999 }]` criava uma proposta sem item nenhum, valor zero, com
+sucesso; com o número em texto (`"5"`) de um produto que existe, também. E o vendedor que deixava o preview de uma proposta aberto numa aba,
+salvava a proposta pelo formulário noutra e voltava ao preview para mexer na descrição da tabela via *"Alterações salvas."* — sem nada ter
+sido gravado nos itens.
+
+| Antes | Agora |
+|---|---|
+| Geração automática com produto que não existe → proposta vazia, sucesso | *"Produto não encontrado (id 99999). Atualize a lista de produtos e tente de novo."*, nada criado |
+| Produto sem número, com zero, negativo ou quebrado → proposta vazia | *"Produto inválido: cada produto da proposta deve trazer o id de um produto cadastrado."*, nada criado |
+| Número do produto em texto (`"5"`) → proposta vazia | O item entra |
+| Preview numa aba antiga → *"Alterações salvas."* sem gravar os campos dos itens | Aviso amarelo: *"Alguns campos dos itens não foram gravados: … O preview foi recarregado — confira e preencha de novo."* |
+| *Emitir revisão* numa aba antiga, com alteração pendente → emitia | Avisa e não emite; o segundo clique emite |
+
+**Roteiro de teste (10 minutos).**
+
+1. **O preview numa aba antiga (pela tela).** Abra uma proposta com pelo menos um item no **preview editável** (**Comercial → Propostas**,
+   a proposta, **Preview editável**) e deixe essa aba aberta. Noutra aba, abra a mesma proposta no formulário e clique em **Salvar**
+   (*"Proposta atualizada."*). Volte à primeira aba, mude a descrição de um item na tabela de preços e clique em **Salvar**: aparece o aviso
+   amarelo *"Alguns campos dos itens não foram gravados: os itens desta proposta mudaram depois que o preview abriu (ela foi salva em outra
+   aba ou por outra pessoa). O preview foi recarregado — confira e preencha de novo."* e o preview se recarrega. Mude a descrição de novo e
+   **Salvar**: *"Alterações salvas."* e a descrição fica.
+2. **O Emitir revisão (pela tela).** Repita o passo 1 até antes do salvar; em vez de **Salvar**, clique em **Emitir revisão** e confirme
+   salvar antes: sai o aviso e a revisão **não** é emitida (o número continua o mesmo). Clique em **Emitir revisão** de novo: emite.
+3. **O produto que não existe (pela integração).** Com uma ferramenta de API autenticada, `POST /api/propostas/gerar-automatica` com
+   `{ "cliente_id": <um cliente>, "produtos": [{ "id": 99999 }] }`: **400** com *"Produto não encontrado (id 99999). Atualize a lista de
+   produtos e tente de novo."*; em **Comercial → Propostas**, nenhuma proposta nova. Com `[{ "id": "<o número de um produto, entre
+   aspas>" }]`: a proposta nasce com o item.
+
+**O que esta etapa NÃO cobre.** A quantidade da geração automática pela integração continua sem régua (**C314**); o cliente que não existe
+continua dando erro interno (**C315**); a geração automática não tem tela desde julho — religar ou apagar é decisão de vocês (**C316**); as
+rotas de proposta não exigem o módulo (**C317**, a próxima etapa); a geração automática responde antes de gravar os itens (**C318**).
+
 ## Etapa 143 — O item que não é item é recusado antes de gravar, e cada item usa um produto só (ENTREGUE — 2026-10-18)
 
 **O que mudou, em uma frase:** a integração que manda um item vazio na lista recebe uma frase de recusa e nada é gravado; o histórico de
@@ -6670,7 +6715,7 @@ no total do pedido de aprovação do desconto.
    continua igual.
 
 **O que esta etapa NÃO cobre.** O cadastro continua aceitando código de produto com espaço nas pontas ou só de espaços (**C312**, decisão de
-vocês); a geração automática com um produto que não existe ainda cria proposta vazia (**C313**, a próxima etapa); o item vazio `{}` dentro
+vocês); a geração automática com um produto que não existe ainda cria proposta vazia (**C313** — *resolvido na Etapa 144*); o item vazio `{}` dentro
 da lista continua sendo gravado como item sem descrição (D (143)).
 
 ## Etapa 142 — Com o mesmo produto duas vezes, cada item fica com o que é dele (ENTREGUE — 2026-10-18)

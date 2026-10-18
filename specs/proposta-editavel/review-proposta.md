@@ -158,6 +158,7 @@ E pela rota (o `index.js` real, em pasta vazia — entra no `npm run test:api`):
 cd server && node tests/api/propostaClausulaAlem524.api.test.js   # a 5.25 incluída pelas rotas sai no preview (I1)
 cd server && node tests/api/propostaItensIguais.api.test.js       # Etapa 142: itens iguais pelo PUT, o /premium e o preview
 cd server && node tests/api/propostaItemInvalido.api.test.js     # Etapa 143: o item que não é objeto (C310), o histórico e um produto por item (C311)
+cd server && node tests/api/propostaProdutoInexistente.api.test.js  # Etapa 144: o produto que não existe na geração automática (C313) e o preview numa aba velha (ignorados)
 ```
 
 Critério: **tudo verde**. Qualquer invariante quebrado bloqueia o merge. *(De julho à Etapa 138 a revisão rodava com dois vermelhos

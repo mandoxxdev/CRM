@@ -11,12 +11,19 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-18):** **Etapa 143 fechada** (das propostas: **o item que não é item é recusado antes de gravar,
+> **Onde o desenvolvimento está (2026-10-18):** **Etapa 144 fechada** (das propostas: **a geração automática recusa o produto que não
+> existe, e o preview avisa quando um campo não foi gravado** — pela integração, a geração automática com um produto que não existe (ou com
+> o número do produto escrito como texto) criava a proposta vazia e respondia sucesso; agora recusa com a frase do produto que faltou e
+> nenhuma proposta nasce (**C313** resolvido — e o texto dela estava errado: dizia que a tela só mandava produtos do catálogo, e a tela não
+> existe desde julho, **C316**); o preview aberto numa aba antiga deixa de dizer *"Alterações salvas."* sem ter gravado os campos dos itens:
+> **B936** a **B943**; nenhuma consulta nova; os avisos novos **C314** a **C318**); a próxima é a **145** — ver "Onde estamos e o que vem a
+> seguir".
+> *(Antes: **Etapa 143 fechada** (das propostas: **o item que não é item é recusado antes de gravar,
 > o histórico conta o que aconteceu e cada item usa um produto só** — pela integração, uma lista de itens com um item vazio fazia o
 > salvamento da proposta nunca responder e, às vezes, apagar os itens (**C310**); agora é recusada com uma frase, sem gravar nada; o
 > histórico de itens deixa de registrar "editado" no item que ficou quando se tira o primeiro de dois iguais; e o documento deixa de mostrar
 > duas vezes o item cujo código existe no cadastro com e sem espaço no fim (**C311**): **C310** e **C311** resolvidos, **B929** a **B935**; a
-> consulta nova **A92**; os avisos novos **C312** e **C313**); a próxima é a **144** — ver "Onde estamos e o que vem a seguir".
+> consulta nova **A92**; os avisos novos **C312** e **C313**); a próxima era a **144**.)*
 > *(Antes: **Etapa 142 fechada** (das propostas: **com o mesmo produto duas vezes na proposta, cada
 > item fica com o que é dele** — tirar o primeiro de dois iguais deixava no que ficou a variável manual do que saiu (**C298**), todo
 > salvamento copiava a descrição da tabela, a tag e os acessórios do último igual para os outros (**C308**) e o preview dividia as
@@ -3322,7 +3329,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B935; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B943; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -10189,6 +10196,41 @@ blindar cada conta que lê o campo (deixaria gravar o lixo). **Reversível.**
 vocês continuam as da **B928**, mais a **C312** (corrigir os códigos de produto com espaço). A 144 escolhida é a **C313** (a
 geração automática com produto que não existe — recusar antes de criar).
 
+**B936 (NOVA, da Etapa 144; das propostas) — na geração automática, o produto inativo conta como cadastrado.** Um produto inativado continua
+podendo entrar numa proposta gerada pela integração, como sempre. **Descartado:** recusar o inativo — o item manual e o documento aceitam
+produto inativo, e recusar só aqui seria uma regra diferente por porta sem ninguém ter pedido. **Reversível** (uma condição na busca).
+
+**B937 (NOVA, da Etapa 144; das propostas) — o mesmo produto pedido duas vezes na geração automática vira dois itens**, como sempre.
+**Descartado:** juntar num item só somando a quantidade (mudaria o que a integração grava sem pedido). **Reversível.**
+
+**B938 (NOVA, da Etapa 144; das propostas) — o número do produto escrito como texto (`"5"`) vale como o número.** Antes o item sumia e a
+proposta nascia vazia. **Descartado:** recusar como "não encontrado" (o produto existe — a recusa mentiria) ou como "sem número" (o resto da
+integração das propostas aceita o número em texto). **Reversível.**
+
+**B939 (NOVA, da Etapa 144; das propostas) — o preview numa aba antiga continua gravando o que dá e avisa do resto, sem erro.** As duas
+gravações dos campos dos itens respondem sucesso dizendo quantos não foram gravados; a tela mostra o aviso. **Descartado:** responder erro
+(409) — o salvamento do preview faz quatro gravações em sequência e o erro na segunda deixaria as descrições e os campos da capa sem
+gravar. **Reversível.**
+
+**B940 (NOVA, da Etapa 144; das propostas) — com o aviso, o *Emitir revisão* não emite.** Quem pediu *Emitir revisão* com alterações
+pendentes numa aba antiga vê o aviso e a revisão não sai; o segundo clique, com o preview já recarregado, emite — mesmo que ele só tenha
+mexido numa cláusula (que foi gravada). **Descartado:** emitir mesmo assim (a revisão sairia sem o valor que o vendedor achou que salvou).
+**Reversível.**
+
+**B941 (NOVA, da Etapa 144; das propostas) — a ordem dos itens removidos dentro de um mesmo salvamento, no histórico, não foi fixada.** O
+histórico é lido do mais novo para o mais antigo, sem desempate entre linhas gravadas no mesmo segundo; fixar a ordem da gravação não
+mudaria o que a tela mostra. **Descartado:** desempatar a leitura pelo número interno (mudaria a ordem de todo o histórico sem pedido).
+**Reversível.**
+
+**B942 (NOVA, da Etapa 144; das propostas) — a descrição da tabela do preview passa a gravar só pelo número inteiro de item da proposta.** A
+mesma régua da variável manual: `"5.0"` e `true`, que antes casavam por acaso com o item 5 e o item 1, deixam de gravar (e contam como não
+gravados). Só a integração manda isso; o preview manda o número. **Descartado:** contar pelo resultado da gravação (o texto com casa decimal
+continuaria gravando por acaso, e as duas gravações do mesmo salvamento teriam réguas diferentes). **Reversível.**
+
+**B943 (NOVA, da Etapa 144) — a próxima etapa (145).** Ver a "próxima tarefa detalhada" no plano da Etapa 144. A escolhida é a **C317**
+(as rotas de proposta exigirem o módulo, com uma consulta para rodar antes do deploy: quem perderia o acesso). As decisões que esperam
+vocês continuam as da **B935**, mais a **C316** (religar ou apagar a geração automática) e a régua de quantidade da **C314**.
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -13065,10 +13107,37 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      não duplica mais, mas a proposta pode usar o produto "errado" dos dois (o de código igual ao do item; a geração automática grava o
      código com o espaço, e o formulário, ao salvar, o tira — o item passa a usar o outro). **O que fazer:** a consulta **A92** lista; corrigir
      no cadastro. Tirar os espaços sozinho no cadastro é decisão de vocês (muda códigos gravados).
-313. **NOVO (da revisão do plano da Etapa 143; das propostas, anterior a ela; lido no código e reproduzido) — a geração automática com
+313. **✅ RESOLVIDO NA ETAPA 144 (B936, B937, B938) — e o texto abaixo estava errado em dois pontos:** "a tela manda só produtos do
+     catálogo" — **não há tela**: o botão da geração automática saiu da lista de propostas em 29/07/2026 (**C316**); e "um produto excluído
+     entre a escolha e o envio" — o cadastro **não exclui** produto, só inativa (e o inativo continua valendo, **B936**). E era maior: o
+     produto sem número, com número zero, negativo, quebrado, e o número **em texto** de um produto que existe também criavam a proposta
+     vazia. Agora: *"Produto inválido: cada produto da proposta deve trazer o id de um produto cadastrado."* ou *"Produto não encontrado (id
+     99999). Atualize a lista de produtos e tente de novo."*, e nenhuma proposta nasce; o número em texto vale (**B938**). O texto original:
+     **NOVO (da revisão do plano da Etapa 143; das propostas, anterior a ela; lido no código e reproduzido) — a geração automática com
      produto que não existe cria proposta vazia.** Pela API, `produtos: [{ "id": 99999 }]` (ou um produto excluído entre a escolha e o
      envio) cria a proposta sem nenhum item e valor 0, com sucesso. A tela manda só produtos do catálogo. **O que fazer:** nada pela tela;
      apagar a proposta vazia, se aparecer. Candidata pequena (recusar quando nenhum produto é encontrado).
+314. **NOVO (medido na Etapa 144; das propostas, anterior a ela; reproduzido pela API) — a quantidade da geração automática não tem régua.**
+     Pela integração, `"quantidade": "abc"` grava o texto no item e deixa o **valor da proposta vazio**; `-3` grava um total negativo; `0` vira
+     1. A criação e a edição de proposta também não conferem a quantidade. **O que fazer:** nada pela tela (as telas não deixam); quem
+     integra deve mandar número positivo. Se quantidade negativa deve ser recusada ou é um jeito de dar desconto é decisão de vocês.
+315. **NOVO (medido na Etapa 144; das propostas, anterior a ela; reproduzido pela API) — o cliente que não existe dá erro interno.** Na
+     geração automática e na criação de proposta, um cliente que não existe responde erro do servidor com a frase do número
+     (*"Erro ao gerar número da proposta: Número não gerado"* / *"Não foi possível gerar o número da proposta"*), em vez de uma recusa que
+     diga o que houve. Nada é criado. **O que fazer:** nada pela tela (ela só lista clientes ativos).
+316. **NOVO (da revisão do plano da Etapa 144; das propostas, anterior a ela; lido no código) — a geração automática não tem tela.** O botão
+     *Proposta automática* saiu da lista de propostas em 29/07/2026 e a janela dele ficou no código sem que nenhuma tela a abra; a geração
+     automática só é alcançada pela integração. Se o botão voltar, a recusa do produto sai na mensagem de erro da janela (lido no código,
+     não testado). **O que fazer:** decidir se religa o botão ou se apaga a porta e a janela.
+317. **NOVO (da revisão da Etapa 144; das propostas, anterior a ela; reproduzido pela API) — as rotas de proposta não exigem o módulo.**
+     Qualquer usuário logado, mesmo sem grupo nem acesso ao Comercial, cria proposta, gera proposta automática e grava no preview de uma
+     proposta de outra pessoa, pela integração (as telas só aparecem para quem tem o módulo). **O que fazer:** nada antes da próxima etapa,
+     que é esta (com uma consulta para ver, antes do deploy, quem usa proposta sem ter o módulo). Não é a pergunta de quem pode editar a
+     proposta de outro vendedor (**C305**), que continua com vocês.
+318. **NOVO (da revisão da Etapa 144; das propostas, anterior a ela; reproduzido pela API) — a geração automática responde antes de gravar os
+     itens.** A resposta de sucesso sai logo depois de criar a proposta; os itens são gravados em seguida, sem esperar e sem conferir erro —
+     com 100 000 itens a resposta chegou com 5 gravados (os outros vieram depois). Uma falha nessa gravação deixaria a proposta com valor e
+     sem itens, respondendo sucesso (não reproduzido). **O que fazer:** nada pela tela (não há tela, **C316**).
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -14400,6 +14469,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(144) A gravação dos campos dos itens pelo preview responde sucesso mesmo para uma proposta que não existe**, dizendo quantos não
+  gravou (antes, só sucesso). Nada é gravado.
+- **(144) O aviso do preview não diz quantos campos** não foram gravados: o preview manda todos os campos do documento (os vazios e os não
+  tocados), e o número seria o de campos, não o do que o vendedor editou.
+- **(144) Na geração automática, o número do produto acima de 9 007 199 254 740 991** é recusado como "produto inválido" (não existe
+  produto com esse número).
 - **(143) O item vazio `{}` na lista** continua sendo gravado (um item sem descrição), como sempre — só o que não é registro, ou o
   registro com um campo que é registro ou lista (fora os acessórios), é recusado.
 - **(143) O preview e o PDF ficaram um pouco mais lentos com um cadastro de produtos grande** — medido na revisão: com 20 000 produtos e
@@ -15365,6 +15440,12 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(144) Nenhum clique foi dado no navegador.** A geração automática não tem tela (**C316**) — foi provada pela rota, com o servidor de
+verdade em pasta vazia (11 cenários, um com a gravação falhando de propósito). O aviso do preview foi provado pela resposta do servidor e por
+uma régua do código da tela (o editor roda dentro de um quadro que o teste automático não executa). O que **só o navegador** prova: o
+roteiro da Etapa 144 no guia — o preview aberto numa aba, a proposta salva noutra, o salvar da primeira mostrando o aviso amarelo e
+recarregando; e o *Emitir revisão* com alteração pendente não emitindo.
 
 **(143) Nenhum clique foi dado no navegador.** O que a etapa muda só aparece pela integração (o item que não é item), pelo histórico de
 edições e pelo documento com um cadastro de produtos com códigos repetidos — tudo provado pela rota, com o servidor de verdade em pasta
@@ -29294,9 +29375,86 @@ histórico (fechado pela B934); o de **sabotagem** fez **59** sabotagens: **45**
 de cenário — entre elas a escolha do produto "mais antigo" quando nenhum tem o código igual, que nenhum teste exercitava; viraram cenários.
 Nenhum defeito no código entregue.
 
+## Etapa 144 — A geração automática recusa o produto que não existe, e o preview avisa quando um campo não foi gravado (2026-10-18)
+
+Dois consertos pequenos nas propostas. Pela integração, a geração automática de proposta com um produto que não existe — ou com o número
+do produto escrito de um jeito que o sistema não reconhecia — criava a proposta **vazia**, sem item nenhum e com valor zero, e respondia que
+tinha dado certo; agora recusa com uma frase que diz qual produto não foi achado, e nenhuma proposta nasce. E o preview editável aberto
+numa aba antiga (de antes de alguém salvar a proposta noutra aba) dizia *"Alterações salvas."* sem ter gravado os campos dos itens — a
+variável manual e a descrição da tabela; agora avisa que esses campos não foram gravados e recarrega o preview.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Geração automática com um produto que não existe → proposta criada vazia (valor 0), com sucesso; com um que existe e um que não, só com o que existe | *"Produto não encontrado (id 99999). Atualize a lista de produtos e tente de novo."* e nenhuma proposta nasce (**C313** resolvido) |
+| Produto sem número, com número zero, negativo, quebrado ou que não é número → proposta vazia | *"Produto inválido: cada produto da proposta deve trazer o id de um produto cadastrado."* e nenhuma proposta nasce |
+| O número do produto escrito como texto (`"5"`) → o item sumia e a proposta nascia vazia | Vale como o número: o item entra (**B938**) |
+| Muitos produtos de uma vez (mais de 32 mil) → erro interno | A recusa (ou a proposta) chega |
+| Preview numa aba antiga → *"Alterações salvas."*, e os campos dos itens não tinham sido gravados | *"Alguns campos dos itens não foram gravados: os itens desta proposta mudaram depois que o preview abriu (ela foi salva em outra aba ou por outra pessoa). O preview foi recarregado — confira e preencha de novo."* (**B939**) |
+| *Emitir revisão* numa aba antiga, com alterações pendentes → salvava sem os campos dos itens e emitia | Avisa e **não** emite; o segundo clique, com o preview já recarregado, emite (**B940**) |
+
+### As regras, com o cenário exato
+
+**1. O produto que não existe (B936, B937 — C313).** Pela integração (a tela da geração automática não está em menu nenhum — **C316**):
+`POST /api/propostas/gerar-automatica` com `{ "cliente_id": <um cliente>, "produtos": [{ "id": 99999 }] }` responde **400**
+*"Produto não encontrado (id 99999). Atualize a lista de produtos e tente de novo."* — e a lista de propostas continua com o mesmo número de
+propostas. Com `[{ "id": <um que existe> }, { "id": 99999 }, { "id": 88888 }]`: *"Produto não encontrado (id 99999, 88888). …"* — os que
+faltam, sem repetir, na ordem; com mais de dez, os dez primeiros e *"e mais N"*. O produto **inativo** continua valendo (**B936**); o mesmo
+produto duas vezes vira dois itens, como sempre (**B937**).
+
+**2. O produto sem número que valha (B938).** `{ "produtos": [{}] }`, `[{ "id": 0 }]`, `[{ "id": -1 }]`, `[{ "id": 1.5 }]`,
+`[{ "id": "abc" }]`, `[{ "id": true }]` → **400** *"Produto inválido: cada produto da proposta deve trazer o id de um produto
+cadastrado."*. `[{ "id": "5" }]` (o número em texto) **vale**: a proposta nasce com o item do produto 5.
+
+**3. A ordem das recusas.** Primeiro *"Cliente e produtos são obrigatórios"*; depois o item que não é registro (*"Item inválido: cada item da
+proposta deve ser um objeto."*); a margem inválida; o desconto acima de 5 % fora do rascunho (403); o produto sem número; o produto que não
+existe; e só então *"Cliente inválido"*.
+
+**4. O preview numa aba antiga (B939, B940, B942).** Abra o **preview editável** de uma proposta com produtos do catálogo (**Comercial →
+Propostas**, a proposta, **Preview editável**) e deixe a aba aberta. Noutra aba, abra a mesma proposta no formulário e **Salvar**. Volte à
+primeira aba, mude a descrição de um item na tabela de preços (ou uma variável manual de um item) e **Salvar**: sai o aviso amarelo *"Alguns campos dos itens
+não foram gravados: os itens desta proposta mudaram depois que o preview abriu (ela foi salva em outra aba ou por outra pessoa). O preview foi
+recarregado — confira e preencha de novo."* (antes: *"Alterações salvas."*). Preencha de novo e **Salvar**: *"Alterações salvas."* e o valor
+fica. As cláusulas e os campos da capa editados no mesmo salvamento são gravados como sempre.
+
+### O que esta etapa NÃO cobre
+
+1. **A quantidade da geração automática pela integração** continua sem régua (`"abc"` deixa o valor da proposta vazio; `-3` dá total
+   negativo) — **C314**.
+2. **O cliente que não existe** na geração automática e na criação continua respondendo erro interno com a frase do número — **C315**.
+3. **A tela da geração automática** não está em menu nenhum desde julho; religar o botão ou apagar a porta é decisão de vocês — **C316**.
+4. **A ordem das linhas do histórico gravadas no mesmo segundo** não foi fixada (**B941**).
+5. **Quem pode editar a proposta** continua esperando vocês (**C305**); a aprovação pelo percentual (**B910**); as aprovações antigas do
+   responsável (**C307**); a classificação de área do produto (**B924**); a volta das variáveis do item incluído de novo (**B926**); os
+   códigos de produto com espaço (**C312**).
+
+### O que a revisão encontrou
+
+A **medição** (antes do código, pela integração, com o servidor de verdade) mostrou que o furo era maior do que o aviso dizia: além do
+produto que não existe, o número do produto **em texto** — de um produto que existe — também fazia a proposta nascer vazia. A **revisão do
+plano** achou que a tela da geração automática **não existe desde julho** (o aviso dizia que a tela só mandava produtos do catálogo —
+**C316**) e que o aviso do preview, se dissesse quantos campos, diria um número enganoso (o preview manda todos os campos); e uma
+busca que dava erro interno com mais de 32 mil produtos. A **revisão adversarial do código** (três revisores, executando): o de **regra**
+não achou nada — comparou a etapa com a versão anterior, caso a caso, e o caso válido sai idêntico; o de **permissão** não achou caminho
+novo — um milhão de produtos, números enormes, texto hostil e falha de banco injetada respondem e não criam nada —, achou que a gravação da
+descrição da tabela **nunca respondia** com o banco ocupado (anterior; corrigido, agora responde erro) e dois furos anteriores: as rotas de
+proposta não exigem o módulo (**C317**, a próxima etapa) e a geração automática responde antes de gravar os itens (**C318**); o de
+**sabotagem** fez **29** sabotagens: **12** caíram, **5** são equivalentes e **9** sobreviveram por falta de cenário (o relatório dele somava 12; nomeou 9) — entre elas uma régua
+do código da tela que deixaria passar o *"Alterações salvas."* junto com o aviso; viraram cenários. Nenhum defeito no código entregue.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 144 entregue (2026-10-18):** **a geração automática recusa o produto que não existe, e o preview avisa quando um campo não foi
+  gravado** (das propostas). A geração automática recusa, sem criar nada, o produto sem número que valha e o que não existe (**C313**
+  resolvido — o texto dela estava errado), e o número em texto passa a valer (**B936**, **B937**, **B938**); o preview aberto numa aba
+  antiga avisa em vez de dizer *"Alterações salvas."* e o *Emitir revisão* não emite em cima do campo perdido (**B939**, **B940**,
+  **B942**). A revisão obrigatória da proposta continua **23/23** (+ editor 39/39) e ganha o teste novo da rota. **O que é seu:** os avisos
+  **C314** a **C318** (a **C316**, religar ou apagar a geração automática, e a régua de quantidade da **C314** são decisão de vocês); as
+  decisões **B936 a B942** (reversíveis); as perguntas de antes (**B910**, **B853**, **B924**, **B926**, **C312**); as limitações
+  **(144)** em D e a verificação **(144)** em F. **Próxima: Etapa 145 — ver a "próxima tarefa detalhada" no plano da Etapa 144.**
 
 - **Etapa 143 entregue (2026-10-18):** **o item que não é item é recusado antes de gravar, e cada item usa um produto só** (das
   propostas). O salvamento, a criação e a geração automática recusam, sem gravar nada, a lista com item vazio ou que não é item
@@ -29304,8 +29462,7 @@ Nenhum defeito no código entregue.
   (**B931**, **B933**); o documento e o pedido de aprovação usam um produto só por item (**B932** — **C311** resolvido). A revisão
   obrigatória da proposta continua **23/23** (+ editor 39/39) e ganha o teste novo da rota. **O que é seu:** a consulta **A92** (opcional);
   os avisos **C312** e **C313**; as decisões **B929 a B934** (reversíveis); as perguntas de antes (**B910**, **B853**, **B924**, **B926**);
-  as limitações **(143)** em D e a verificação **(143)** em F. **Próxima: Etapa 144 — ver a "próxima tarefa detalhada" no plano da
-  Etapa 143.**
+  as limitações **(143)** em D e a verificação **(143)** em F. *(Próxima, na época: Etapa 144 — entregue acima.)*
 
 - **Etapa 142 entregue (2026-10-18):** **com o mesmo produto duas vezes, cada item fica com o que é dele** (das propostas). O formulário
   diz ao servidor qual item gravado é cada um (**B918** — **C298** resolvido); cada item igual mantém a sua descrição da tabela, tag e

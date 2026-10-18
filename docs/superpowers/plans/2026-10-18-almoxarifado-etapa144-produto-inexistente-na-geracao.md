@@ -112,19 +112,19 @@ na ordem) ou `{ erro: MSG_PRODUTO_SEM_ID }`; `msgProdutoNaoEncontrado(idsFaltand
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 — tronco.** `idsDosProdutos`/`msgProdutoNaoEncontrado` + a rota (RN-144.01/02/03): a busca pelo id normalizado, o `find` pelo
+- [x] **T1 — tronco — `19878ec2`.** `idsDosProdutos`/`msgProdutoNaoEncontrado` + a rota (RN-144.01/02/03): a busca pelo id normalizado, o `find` pelo
   id normalizado (o texto de dígitos casa), as duas recusas antes de gerar número. Teste da rota novo
   `server/tests/api/propostaProdutoInexistente.api.test.js` (pasta vazia, molde `propostaItemInvalido.api.test.js`): cada corpo da tabela
   da Fase 0 → status + mensagem literal + a contagem de propostas igual (banco lido por fora); o id em texto vira item; o inativo e o
   repetido passam como antes; a ordem inteira das recusas (RN-144.03), com a da 143 na frente. Puros no mesmo arquivo. Controles
   positivos: tirar cada recusa; aceitar id 0; voltar o `find` estrito; recusar depois do `INSERT`.
-- [ ] **T2 — galho (servidor, só consome `idInteiro`).** `ignorados` nas duas rotas do preview (RN-144.04). Cenários pela rota no mesmo
+- [x] **T2 — `19878ec2` (Fase 5: `2d7fc95e`) — galho (servidor, só consome `idInteiro`).** `ignorados` nas duas rotas do preview (RN-144.04). Cenários pela rota no mesmo
   arquivo: aba velha (ids vencidos depois de um `PUT` da proposta) → `ignorados` = o número de entradas, nada gravado; a do item da proposta
   grava e não conta; `item_id` em texto de dígitos de um item da proposta grava e não conta. Controle: contar errado (0 fixo).
-- [ ] **T3 — galho (client, contra o contrato).** `avisoValoresIgnorados` + o `salvar()` (RN-144.05). Teste jest puro do texto (0 → `null`,
+- [x] **T3 — `19878ec2` (Fase 5: `2d7fc95e`, o `desfechoDoSalvar`) — galho (client, contra o contrato).** `avisoValoresIgnorados` + o `salvar()` (RN-144.05). Teste jest puro do texto (0 → `null`,
   1 e 3 o mesmo texto), da soma, e a régua da fiação do `salvar()` pelo fonte, com controle que acusa o `salvar()` antigo. *(Previa também
   um teste do `GerarPropostaModal` — **saiu** na Fase 2, C-1: o modal não é usado.)*
-- [ ] **T4 — integração (cruza T1 e T2).** No arquivo da T1: proposta gerada pela geração automática (com id em texto) → o `PUT` da
+- [x] **T4 — `19878ec2` — integração (cruza T1 e T2).** No arquivo da T1: proposta gerada pela geração automática (com id em texto) → o `PUT` da
   proposta pelo formulário (ids novos) → o preview velho grava variáveis e descrições com os ids de antes → `ignorados` > 0 e nada gravado;
   com os ids novos → `ignorados` 0 e gravado. Entra pela rota; o pela-função é o puro da T1.
 
@@ -166,16 +166,99 @@ T1 e T2 dividem o `index.js` e o arquivo de teste da rota → executadas **em se
 
 ## Execução
 
-*(preenchido durante a execução)*
+- **Linha de base** (a árvore da main `de7ef101`, antes de qualquer código): `test:api` **462/462**; `test:almoxarifado` **44/0**;
+  `test:validation`/`safealter`/`sqlite` verdes (16/0); client **141** suítes / **1819** testes; `CI=true build` *Compiled successfully*;
+  revisão obrigatória **23/23** + o teste da rota da 143 (21/0) + editor **39/39**.
+- **T1–T4 num commit só — `19878ec2`.** Divergência do plano: o plano previa um commit por task; T1, T2 e T4 dividem o `index.js` e o arquivo
+  de teste da rota, e a T3 (client) consome o campo novo da T2 — um commit, com o porquê de cada RN no corpo. Outra divergência (Fase 2): o
+  teste do `GerarPropostaModal` previsto na T3 **saiu** (o modal não é usado — C316); a régua da fiação do `salvar()` entrou no lugar.
+  Controles **K1–K12** (servidor: tirar cada recusa — a K1 caiu por *timeout*, o que levou à **K1b**, que cai pela mensagem —, o `find`
+  estrito, aceitar id 0, sem `isSafeInteger`, `ignorados` 0 nas duas rotas, as descrições sem conferir a proposta, a mensagem com 9, o
+  `IN (?, …)` de antes (cai no cenário de 40 000 ids), contar a entrada sem chave, o id que não vale virar id cru, a recusa do id antes da
+  margem) e **J1–J5** (client: devolver `true`, somar só uma resposta, o sucesso sempre, o texto, a soma aceitar negativo) — **todos caíram
+  pela asserção certa**, md5 restaurado.
+- **Suíte antes de `19878ec2`:** `test:api` **463/463**; `test:almoxarifado` **44/0**; `test:validation`/`safealter`/`sqlite` verdes
+  (16/0); client **142** / **1823**; build *Compiled successfully*; revisão obrigatória **23/23** + as rotas (21/0 da 143, **10/0** desta)
+  + editor **39/39**.
+- **Consulta A:** nenhuma nova. A proposta vazia que a C313 criava não é distinguível de um rascunho sem itens feito à mão (a geração
+  automática não grava a origem), e a rota não tem tela desde julho (C316) — uma consulta "propostas sem item e valor 0" listaria rascunhos
+  legítimos. Declarado, não inventado.
 
 ## Fase 5 — três revisores frescos em paralelo, sob a trava
 
-*(preenchido durante a execução)*
+- **Regra (r1): 0 Critical, 0 Important, 0 Minor.** Executou contra a `de7ef101` e a `19878ec2` o mesmo roteiro: o caso válido (ordem,
+  quantidade, `numero_item`, total, a linha inteira da proposta) **idêntico** nas duas; a ordem completa das recusas (inclusive
+  `responsavel_id: "abc"`, `cliente_id: 99999` → 500, a C315); as recusas não consomem número de proposta (003, 004, 8 recusas, 005);
+  ids de 2^53 − 1 por número e por texto no `json_each`; o `ignorados` em proposta que não existe, entrada repetida, valor vazio; o reparo
+  das variáveis da 142 roda antes e a entrada velha conta 1; o preview normal (ids do `/premium?embed=1`) dá `ignorados` 0; o servidor
+  antigo (sem o campo) continua *"Alterações salvas."*. Anteriores, sem ação: a resposta da geração ecoa `quantidade` em texto (C314).
+- **Autorização (r2): 0 Critical, 0 Important desta; 1 Minor tocado (anterior); 2 anteriores.** **M** o `itens/descricoes` gravava por
+  `stmt.run` sem callback: com `SQLITE_BUSY` a exceção saía solta e a resposta **nunca chegava** (40 s de espera; o `variaveis-manuais`, no
+  mesmo cenário, 500 em 1,7 s) — anterior (o mesmo padrão na `de7ef101`), mas a etapa reescreveu o trecho → **corrigido**: os `UPDATE` em
+  sequência pelo `executarEmSequencia`, 500 que chega; cenário com a falha injetada. **Anteriores:** as rotas de `/api/propostas` não
+  exigem o módulo (usuário sem grupo nem módulo gera proposta e grava no preview da proposta de outro) → **C317**; a geração automática
+  responde 200 antes de gravar os itens (`stmt.finalize()` sem callback; com 100 000 itens a resposta sai com 5 gravados) → **C318**.
+  **Verificado e correto, executado:** 401 sem login nas três rotas; a mensagem "não encontrado" não revela nada que o `GET /api/produtos`
+  já não mostre a qualquer logado; o `ignorados` não é oráculo (1 para item de outra proposta, item que não existe e proposta que não
+  existe); 1 milhão de `{id: 9}` → 400 em 164 ms; 600 mil ids → 400 em 337 ms; texto de 1 MB, `1e308`, injeção no id → *"Produto
+  inválido"*; `__proto__` sem poluição; 100 mil entradas nas duas rotas do preview; falha injetada nas consultas novas → 500 sem gravar.
+- **Sabotagem (r3, worktree própria `CRM-wt-e144-r3`): 29 sabotagens — 12 caíram, 9 sobreviventes reais nomeadas (o relatório somava 12), 5 equivalentes (provadas); 0
+  defeitos.** Servidor (4): **s11** a entrada de texto vazio nas descrições sem asserção; **s13** `"5.0"`/`true` nas descrições (a B942) sem
+  cenário; **s10** gravar pelo id cru — o SQLite não converte `' 5'` e o `trim` do JS sim: perda calada; **s20** 11 ids. Client (5,
+  a régua do `salvar()` por trechos soltos): **c1** um `toast.success` a mais, **c2** o `return` num ramo morto, **c3** a soma anulada,
+  **c5** uma resposta anulada antes da soma, **c6** `return true` no `try` → o desfecho virou função pura (`desfechoDoSalvar`, testada por
+  valor) e a régua prende o fim do `try` como bloco contíguo, um toast e um `return` só. Equivalentes provadas: sem a dedupe, `faltando`
+  com repetição, `json_each` sem `Number`, o id em texto no `UPDATE`, o "não encontrado" depois de montar os itens (locais, descartados),
+  o "Produto inválido" dentro do `then`, `Number.isFinite`/`parseInt` na soma.
+- **Controles da Fase 5, rodados por mim:** **F1** as descrições pelo `stmt` de antes (o cenário da falha cai: 200 em vez de 500); **S10,
+  S11, S13, S20** reaplicadas com as âncoras novas; no client **c1, c2, c3, c5, c6** no fonte de verdade e **J6/J7** no desfecho — **todos
+  caíram pela asserção certa**, md5 restaurado.
+- **Fase 5 — `2d7fc95e`.** O teste da rota passou de 10 para **11** cenários; o do client de 4 para **10**.
+- **Suíte antes de `2d7fc95e`:** `test:api` **463/463**; `test:almoxarifado` **44/0**; `test:validation`/`safealter`/`sqlite` verdes (16/0); client **142**
+  suítes / **1829** testes; `CI=true build` *Compiled successfully*; revisão obrigatória da proposta **23/23** + as rotas (21/0 da 143,
+  **11/0** desta) + editor **39/39**. É também a verificação do fechamento (depois dela só mudaram documentos).
 
 ## Retro (4 números)
 
-*(preenchido no fechamento)*
+1. **Rodadas de correção até verde:** **1** (a Fase 5). Testes antigos mudados: **0**.
+2. **Achados da revisão:** Fase 2 — **1 Critical + 4 Important + 6 Minor, todos reais** (o Critical: a tela da geração automática não
+   existe desde julho — o plano, e o da 143, diziam o contrário). Fase 5 — r1 **0**; r2 **1 Minor** tocado pela etapa (anterior, corrigido)
+   + **2** anteriores (C317, C318); r3 **0** defeitos + **9** sobreviventes reais nomeadas (o relatório somava 12) (viraram cenários e a régua nova) + **5** equivalentes;
+   **0** ruído.
+3. **Paralelismo:** **0** galhos em paralelo de fato (T2 e T3 eram galhos, feitas em sequência — o "um teste por vez" e o tamanho); **0**
+   retrabalho; **1** revisor na Fase 2, **3** em paralelo na Fase 5 sob a trava (o r3 numa worktree própria, removida).
+4. **Defeito que escapou:** *(preencher na Etapa 145)*.
 
 ## Próxima tarefa detalhada — Etapa 145
 
-*(preenchido no fechamento)*
+*(A série desta etapa foi B936–B943, C314–C318, nenhuma A — a 145 começa em **B944**, **C319**, **A93**; confira com `grep -oE` antes.)*
+
+**Escolhida: a C317 (das propostas) — as rotas de `/api/propostas` não exigem o módulo.** Reproduzido pelo r2 da Fase 5 desta etapa: um
+usuário `role: 'usuario'` sem grupo nem permissão de módulo gera proposta (`POST /api/propostas/gerar-automatica` → 200) e grava no preview
+da proposta de outro (`PUT .../itens/descricoes`, `PUT .../variaveis-manuais` → 200). **Onde:** todo `app.*('/api/propostas...` do
+`index.js` só tem `authenticateToken`; `checkModulePermission` existe (`index.js` ~2996) e só **uma** rota do comercial o usa
+(`/api/comercial/ordens-servico`, `checkModulePermission('comercial')`). **Fase 0 obrigatória (medir antes de prometer):** qual o nome do
+módulo que a tela usa para abrir Propostas (o `ModuleRoute`/menu do client) e como `portoesDeModulo` decide (admin, grupos, o fallback);
+quantas rotas são; quem as chama além da tela (o preview, o PDF, a aprovação, a integração); e uma consulta **A93** para rodar em produção
+**antes do deploy**: os usuários ativos que criaram/editaram proposta nos últimos 90 dias e **não** têm o módulo — eles perderiam o acesso.
+**Desenho reversível sugerido:** `checkModulePermission('<o módulo da tela>')` nas rotas de proposta, num `app.use` do prefixo **só se**
+`req.user` não for reatribuído depois (a armadilha da Etapa 25 — cada rota redeclara o `authenticateToken`; prove pela rota, com um
+cenário que entra pelo `index.js` real); a recusa com a mensagem do módulo que já existe. **Não é a C305** (quem pode editar a proposta
+de outro — a verificação do dono, P.O.): esta é só a camada de módulo. **Se couber:** a **C318** (a geração automática responder depois de
+gravar os itens: esperar o `finalize`, e com erro 500 sem deixar a proposta pela metade) e a **C315** (o cliente que não existe → 400 com
+frase, nas duas portas).
+
+**Dependem do P.O. — NÃO implemente:** **B853**/**C279**, **B808**, **B755**, **B761**/**C239**, **C224**, o resto da **C225**, **C228**,
+**C219**, **C230**, o reparo da **C246** (e a **C247**), a tabela de conversões e o grupo acima de família, a **régua do tempo de
+recebimento (E2)**, a **C268**, a **C269**, **C275**, **C276**, **C277**, **C109**, **C117**/**C118**, **C139**, **C278**; na 05, os itens
+de produto e a **C198**; na 06, a **B11** e a Engenharia; na 21, a valorização por cliente e previsto × realizado; na 22, **B13**,
+**B101**/G30, **G38**; no Compras, D-35, D-37, D-78, D-90, G9/G30, G4, G15, B63, B60, B62; nas propostas, a verificação do dono da proposta
+(Fase 12 de `specs/proposta-editavel/tasks.md`; também a **C305**), o filtro por permissão do histórico (`auditoria.md`), a **B910**, a
+**C307**, a Frente B da lentidão das propostas (`specs/lentidao-api-propostas/...`, marcada "não executar"), a **C297** (**B924**), a
+pergunta da **B926**, a **C312** (aparar ou corrigir os códigos de produto com espaço) e agora a **C316** (religar ou apagar a geração
+automática sem tela) e a régua de quantidade da **C314** (se quantidade negativa é desconto ou erro). Pendem de Postgres: **C98**, **C110**.
+
+**O que já está pronto e não precisa reabrir:** `idsDosProdutos`/`msgProdutoNaoEncontrado`/`MSG_PRODUTO_SEM_ID`
+(`server/propostaItensDiff.js`) e as duas recusas da geração automática, com a busca por `json_each`; o `ignorados` das duas rotas do
+preview, com a régua `idInteiro` + os ids da proposta nas duas; `desfechoDoSalvar` (`client/src/components/proposta/avisoValoresIgnorados.js`)
+e a fiação do `salvar()`; o teste da rota `tests/api/propostaProdutoInexistente.api.test.js` (11 cenários, um com a falha injetada).

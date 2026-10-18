@@ -137,7 +137,10 @@ Identidade = código do produto, senão descrição, senão nome — cada parte 
   linhas novas diferente do corpo: nada.
 - **Antes de parear**, o `PUT` grava o reparo da leitura contra os atuais (`planoMaterializacao`): a órfã que o reparo põe num item passa a
   apontar para ele; a que não cabe é aposentada. O `PUT .../variaveis-manuais` faz o mesmo antes do upsert, e ignora `item_id` que não é
-  inteiro ou não é item da proposta (resposta `{ ok: true }` igual).
+  inteiro ou não é item da proposta. *(Esta frase dizia "resposta `{ ok: true }` igual" — **ficou velha na Etapa 144**: a resposta passou
+  a ser `{ ok: true, ignorados: N }`, N = as entradas com `item_id` e `chave` que não gravaram por o item não ser desta proposta — o
+  preview numa aba velha, D (142), RN-144.04. O `PUT .../itens/descricoes` usa a mesma régua — `idInteiro` + os ids da proposta, B942 — e
+  responde igual; seus `UPDATE` vão em sequência com o erro no callback — 500 que chega, Fase 5 r2.)*
 - **Reparo da leitura** (`/premium` e `/pdf`, `repararVariaveisManuais`): a órfã viva com `item_chave` vai, agrupada pelo item velho
   (ordem numérica), para um item atual da mesma identidade **sem nenhuma variável viva**; a aposentada nunca. *(Até a Etapa 142 o reparo
   contava a posição por linha — dividia as variáveis de um item entre dois iguais, **C309** — e punha órfã em item que já tinha a mesma
@@ -161,6 +164,18 @@ banco antigo, falha injetada), `variaveisManuaisReligar`/`variaveisManuaisIdenti
   menor id (ativo ou não, como antes); item sem código ou só de espaços não junta nenhum. *(Até a Etapa 143 o `JOIN` comparava aparado contra
   um `UNIQUE` cru: `'PJ1'` e `'PJ1 '` duplicavam o item no documento e no total do pedido; um produto de código só de espaços juntava em
   todo item manual.)* O `GET /api/propostas/:id` junta por igualdade crua (um produto no máximo pelo `UNIQUE`).
+
+### A geração automática — o produto de cada linha (Etapa 144, C313)
+
+`POST /api/propostas/gerar-automatica` (sem tela desde `7a8c7242` — C316; só pela API). Cada `produtos[i].id` tem de ser inteiro positivo
+seguro — número, ou texto só de dígitos (aparado; `"5"` vale como 5, B938) — senão **400** *"Produto inválido: cada produto da proposta
+deve trazer o id de um produto cadastrado."*; e tem de existir no cadastro (inativo vale, B936), senão **400** *"Produto não encontrado (id
+99999, 88888). Atualize a lista de produtos e tente de novo."* (os ids que faltam, sem repetir, na ordem; mais de 10 → os 10 primeiros e
+*" e mais N"*). Nenhuma proposta nasce em nenhuma recusa (`idsDosProdutos`, `msgProdutoNaoEncontrado` em `server/propostaItensDiff.js`).
+O mesmo id repetido = um item por ocorrência (B937). A busca é `IN (SELECT value FROM json_each(?))` (sem o limite de 32 766 variáveis).
+Ordem das recusas: *"Cliente e produtos são obrigatórios"* → *"Item inválido…"* (143) → margem → 403 do desconto → **produto sem id** →
+**produto não encontrado** → *"Cliente inválido"* → *"Responsável inválido"* → *"Usuário inválido"* → 500 do número. Teste:
+`server/tests/api/propostaProdutoInexistente.api.test.js`.
 
 ### A margem de desconto (Etapa 139, C299/C300)
 
