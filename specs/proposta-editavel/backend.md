@@ -281,6 +281,32 @@ Testes: `tests/api/propostaModeloPortao.api.test.js` (as 25 rotas pelo fonte e u
 `tests/api/propostaClausulasGrava.api.test.js` (o gatilho do SQLite como falha real; o modelo e o BUSY pelo `FALHA_SQL_INJETADA`),
 `tests/api/uploadsProtegidos.api.test.js` (o registro do download do contrato), `client/src/components/proposta/avisoValoresIgnorados.test.js`.
 
+### A OS pelo número e o modelo de contrato por família no portão; a proposta que não existe nas cláusulas (Etapa 148, C335, C341, C342)
+
+Plano: `docs/superpowers/plans/2026-10-18-almoxarifado-etapa148-o-modulo-na-os-e-no-modelo-de-contrato.md`. Commits `d69a5cf6` (o portão), `9149c024` (a proposta que não existe) e `9dccf0dd` (Fase 5).
+
+- **A OS pelo número** (as **5** `GET /api/operacional/ordens-servico/:id`, `/:id/itens`, `/:id/pdf`, `POST /:id/gerar-pdf`,
+  `GET /api/operacional/os-itens/:os_id`): `exigirComercialOuOperacionalNaOS = portaoDasPropostas.exigir(['comercial', 'operacional'])` logo
+  depois do `authenticateToken` (RN-148.02, B965) — a régua da tela das duas telas que montam o `OSFormPage`/`OSDetalhesForm`
+  (`/comercial/ordens-servico/editar/:id` e `/fabrica/ordens-servico/editar/:id`). Recusa: 403 `{ error: 'Acesso negado ao módulo', modulo:
+  ['comercial', 'operacional'] }`, log `modulo = 'comercial|operacional'`. O `gerar-pdf` só busca por HTTP interno `/api/uploads/produtos/` e o
+  logo de reserva (estáticos, fora do portão — RN-148.04). As vizinhas (lista, `proximo-numero`, `POST`/`PUT`/`DELETE` da OS e dos itens)
+  ficam com a régua antiga (B969, C277, C332, C345).
+- **O modelo de contrato por família** (as **3** `GET /api/clausulas-modelos`, `GET /api/clausulas-modelos/:id/clausulas`,
+  `PUT /api/familias/:id/clausulas-modelo`): `exigirComercialNasPropostas` (RN-148.01, B966 — o `ModalFamiliaForm` só é montado em
+  `/comercial/produtos/grupo/:grupoId`). O `resolverModeloClausulas` acha o modelo pelo **nome** da família dos itens; renomear a família
+  (`PUT /api/familias/:id`, só login) muda o modelo efetivo (C343).
+- O mesmo 503 do BUSY, o 500 *"Erro ao verificar permissões"* e o interruptor `PROPOSTAS_PORTAO_DE_MODULO=desligado` (B967); o aviso do boot
+  cita as 8.
+- **A proposta que não existe nas cláusulas** (C342, RN-148.05, B968): o middleware `propostaDasClausulasExiste(responderErro, soSe)` no
+  `inicializar` e no `reordenar` (depois do portão; no `reordenar`, só com `ordem` lista — o 400 do corpo continua antes):
+  `SELECT id AS proposta_das_clausulas FROM propostas WHERE id = ?` sem linha → 404 `{ error: 'Proposta não encontrada' }`; erro → a frase
+  "Nenhuma cláusula foi gravada" (`inicializar`) / "A ordem não foi alterada" (`reordenar`), 503 no BUSY. A inativa (`ativo = 0`) existe.
+
+Testes: `tests/api/osModeloContratoPortao.api.test.js` (as 8 pelo fonte e uma a uma, 15 perfis contra a decisão da tela, o PDF da OS pela
+rota para o Comercial e para o Operacional, o desligado, o BUSY), `tests/api/propostaClausulasGrava.api.test.js` (os cenários RN-148.05),
+`tests/api/uploadsProtegidos.api.test.js` (o registro do PDF da OS) e 3 casos novos em `tests/fixtures/portaoComoATela.casos.json`.
+
 ### A margem de desconto (Etapa 139, C299/C300)
 
 Uma régua só, `lerMargemDesconto` (`server/margemDesconto.js`), em **quatro** portas: `POST /api/propostas`, `PUT /api/propostas/:id`

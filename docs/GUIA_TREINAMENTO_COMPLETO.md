@@ -423,6 +423,8 @@ pessoa a deixa sem permissão nenhuma — e quem não tem permissão nenhuma ent
 - Quando o salvamento é recusado, o aviso vermelho mostra o motivo dado pelo sistema (sem conexão, aparece *"Erro ao salvar alterações."*);
   as alterações continuam na tela para salvar de novo, e nada do que vinha depois naquele salvamento (campos manuais dos itens, descrições,
   campos da capa) é gravado até lá.
+- Copiar ou reordenar as cláusulas de uma proposta que não existe mais é recusado com *"Proposta não encontrada"* (uma proposta excluída
+  pela lista continua existindo como inativa e segue normalmente).
 - Na primeira vez que as cláusulas de uma proposta são alteradas, o sistema copia para ela as cláusulas do modelo de contrato da família dos
   itens (havendo equipamento, o de equipamento; sem modelo próprio, o modelo padrão). A cópia é **inteira ou nada**: se o banco recusar
   uma cláusula, nenhuma fica e aparece *"Erro ao copiar as cláusulas da proposta (<o erro do banco>). Nenhuma cláusula foi gravada — salve
@@ -490,6 +492,12 @@ logotipos e as imagens fixas da GMP: o logo, o cabeçalho, o rodapé e a capa en
 - Arraste e solte componentes
 - Preview em tempo real
 - Salve como padrão
+
+**O modelo de contrato da família.** No cadastro da família de produto (**Comercial → Produtos → um grupo → editar a família**) escolhe-se o
+**modelo de contrato** — o conjunto de cláusulas que toda proposta nova dessa família recebe (sem escolha, vale o modelo padrão). Ver a lista
+de modelos e trocar o modelo de uma família exigem o **Comercial** (a regra da seção 3.3); os outros recebem *"Acesso negado ao módulo"*.
+A proposta acha o modelo pelo **nome** da família gravado nos itens: renomear uma família muda o modelo que as propostas novas com
+itens daquele nome recebem.
 
 #### 3.3.5 Listas de Preço
 
@@ -625,6 +633,11 @@ obrigatório"*).
 Comercial deixa entrar vê a lista; os outros recebem *"Acesso negado ao módulo"*. Criar e editar a OS usa as regras do **Operacional**
 (o número da OS e os itens dela): quem só tem o acesso ao Comercial pela regra de "nenhuma permissão" pode ver a lista e não conseguir
 criar a OS.
+
+**Quem abre uma OS.** Abrir uma OS para editar, ver os itens dela, gerar o PDF e baixá-lo exige o **Comercial ou o Operacional** — as duas
+telas que abrem a OS com os itens e o PDF (**Comercial → Ordens de Serviço**, pelo lápis, e a tela de detalhes da OS da Fábrica) —, com a mesma regra de acesso das propostas
+(seção 3.3) aplicada a cada um dos dois módulos: basta um. A conferência é feita em cada operação, inclusive pela integração; quem não pode
+recebe *"Acesso negado ao módulo"*, a tentativa fica registrada em **Administração → Logs** e o PDF não é gerado.
 
 **Visualizações:**
 - Tabela completa
@@ -1001,6 +1014,10 @@ Mapa interativo mostrando todas as máquinas vendidas e suas localizações.
 - Tempo Estimado
 
 #### 6.2.2 Acompanhamento de OS
+
+**Quem abre a OS.** Abrir a OS, os itens, gerar e baixar o PDF exige o **Operacional** ou o **Comercial** (a regra da seção 3.7.1). Quem
+tem só o Operacional abre a tela de detalhes da OS (os itens e o PDF) pelo endereço `/fabrica/ordens-servico/editar/<número interno>`; o
+lápis da lista **Fábrica → Ordens de Serviço** abre o formulário da OS.
 
 **Status:**
 - Aberta

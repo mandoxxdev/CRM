@@ -305,7 +305,10 @@ As respostas de sucesso não mudam (corpo e status).
    frase nova manda "salvar de novo" — só uma sonda que simulou o client inteiro (o `diffClausulas` real) achou.
 3. **Paralelismo:** **0** galhos em paralelo de fato (T1–T3 dividem o `index.js`; T5 é uma linha no client); **0** retrabalho; **1**
    revisor na Fase 2, **3** em paralelo na Fase 5 sob a trava (o r3 numa worktree própria, removida).
-4. **Defeito que escapou:** *(preencher na Etapa 148)*.
+4. **Defeito que escapou:** **0 de código** (a Etapa 148 mediu de novo o portão do modelo e das listas e as cláusulas — os testes da
+   147 seguem verdes e a revisão da 148 não achou nada nelas). **1 de documento:** a "próxima tarefa detalhada" listava o `OrdensServico` e o
+   `OSForm` entre as telas que chamam a OS pelo número — não chamam (o lápis da lista da Fábrica abre o `OSForm`, que usa a lista e o `PUT`,
+   régua antiga); só o `OSFormPage`/`OSDetalhesForm` e o `OSComercialForm` chamam (medido na Fase 0 da 148).
 
 ## Próxima tarefa detalhada — Etapa 148
 

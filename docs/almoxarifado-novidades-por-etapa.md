@@ -11,13 +11,18 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-18):** **Etapa 147 fechada** (das propostas/Comercial: **o modelo da proposta e as listas de
+> **Onde o desenvolvimento está (2026-10-18):** **Etapa 148 fechada** (do Comercial/Operacional: **a ordem de serviço aberta pelo
+> número e o modelo de contrato por família pedem o módulo, e as cláusulas de uma proposta que não existe dizem "não encontrada"** — quem a
+> tela barra do Comercial e da Fábrica lia uma OS inteira (com o valor), os itens e o PDF dela pela integração, e trocava o modelo de
+> contrato de uma família; agora toma *"Acesso negado ao módulo"*, e quem abre a OS pelo Comercial ou pela Fábrica não perde nada (**C335**,
+> **C342** resolvidos; **C341** resolvido na parte das rotas); **B965** a **B970**; a consulta **A96** (opcional); os avisos novos **C343** a
+> **C345**); a próxima é a **149** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 147 fechada** (das propostas/Comercial: **o modelo da proposta e as listas de
 > preço pedem o Comercial, e as cláusulas da proposta só dizem "pronto" depois de gravar** — quem a tela barra do Comercial alterava o
 > modelo de todas as propostas e as listas de preço pela integração; agora toma *"Acesso negado ao módulo"*, e o administrador do Comercial
 > que entra por Configurações continua editando o modelo (**C319**, **C329** resolvidos); copiar e reordenar as cláusulas viram "tudo ou
 > nada" (**C327** resolvido), o aviso do preview diz o motivo e o preview não regrava mais as cláusulas na vizinha depois de uma falha;
-> **B958** a **B964**; a consulta **A95** (opcional); os avisos novos **C337** a **C342**); a próxima é a **148** — ver "Onde estamos e o
-> que vem a seguir".
+> **B958** a **B964**; a consulta **A95** (opcional); os avisos novos **C337** a **C342**); a próxima era a **148**.)*
 > *(Antes: **Etapa 146 fechada** (das propostas: **a criação, o salvamento e a cópia da proposta só
 > dizem "pronto" depois de gravar os itens, e o salvamento confere o cliente** — quando o banco recusava um item, a proposta era criada,
 > salva ou copiada com sucesso sem ele, e no salvamento os itens que havia também se perdiam; agora sai *"Erro ao gravar os itens da
@@ -267,7 +272,11 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Noventa e cinco itens para rodar em produção ANTES do deploy — noventa e duas são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Noventa e seis itens para rodar em produção ANTES do deploy — noventa e três são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-18 (Etapa 148) de noventa e cinco para noventa e seis**, com a **A96** — quem é responsável por alguma ordem de
+serviço e passa a ser barrado nela, e todos os que passam a ser barrados na OS pelo número e no modelo de contrato por família (**C335**,
+**C341**). **Somente leitura, opcional:** no banco medido, ninguém que usa perde.)*
 
 *(**Atualizado em 2026-10-18 (Etapa 147) de noventa e quatro para noventa e cinco**, com a **A95** — quem criou lista de preço e passa a
 ser barrado nas listas, e todos os que passam a ser barrados no modelo da proposta e nas listas (**C319**, **C329**). **Somente leitura,
@@ -3436,6 +3445,61 @@ cliente vazio deixa a proposta assim — **C330**): abra cada uma em **Comercial
 formulário exige o cliente). **Linhas na 2** — o mesmo; o cliente antigo não volta. *(Rodada no banco local, cópia de 09/10: **0** e
 **0**; controle numa cópia com uma proposta sem cliente e outra apontando para o cliente 987654: a 1 achou a primeira e a 2 a segunda.)*
 
+**A96 (NOVA, da Etapa 148 — opcional — quem perde a OS pelo número e o modelo de contrato por família).** Desde a Etapa 148 abrir uma
+ordem de serviço pelo número (a tela de edição da OS, os itens dela, gerar e baixar o PDF) exige o **Comercial ou o Operacional**, e o
+modelo de contrato por família (a lista de modelos no cadastro da família e a troca do modelo) exige o **Comercial** — pela mesma régua da
+tela das propostas (a da **A93**). A ordem de serviço **não guarda quem a criou**, só o responsável; a consulta 1 acha os responsáveis que
+perdem a OS, a 2 lista todos os que perdem. Somente leitura.
+
+```sql
+-- 1) quem é responsável por alguma OS e passa a ser barrado na OS pelo número (a régua da tela: nem o Comercial nem o Operacional)
+WITH linhas AS (
+  SELECT ug.usuario_id, p.modulo, p.permissao FROM usuarios_grupos ug
+    JOIN grupos_permissoes gp ON gp.id = ug.grupo_id AND gp.ativo = 1
+    JOIN permissoes p ON p.grupo_id = gp.id
+  UNION ALL
+  SELECT p.usuario_id, p.modulo, p.permissao FROM permissoes p WHERE p.usuario_id IS NOT NULL AND p.grupo_id IS NULL
+)
+SELECT u.id, u.nome, u.email,
+  (SELECT GROUP_CONCAT(DISTINCT l.modulo) FROM linhas l WHERE l.usuario_id = u.id AND l.permissao = 1) AS modulos_que_tem,
+  COUNT(o.id) AS os_como_responsavel, MAX(o.data_abertura) AS ultima_os
+FROM ordens_servico o JOIN usuarios u ON u.id = o.responsavel_id
+WHERE u.ativo = 1
+  AND COALESCE(u.is_superadmin, 0) NOT IN (1, '1')
+  AND LOWER(COALESCE(u.role, '')) <> 'admin'
+  AND EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id)
+  AND NOT EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id AND l.modulo IN ('comercial', 'operacional') AND l.permissao = 1)
+GROUP BY u.id ORDER BY ultima_os DESC;
+
+-- 2) todos os usuários ativos que passam a ser barrados na OS pelo número e/ou no modelo de contrato por família
+WITH linhas AS (
+  SELECT ug.usuario_id, p.modulo, p.permissao FROM usuarios_grupos ug
+    JOIN grupos_permissoes gp ON gp.id = ug.grupo_id AND gp.ativo = 1
+    JOIN permissoes p ON p.grupo_id = gp.id
+  UNION ALL
+  SELECT p.usuario_id, p.modulo, p.permissao FROM permissoes p WHERE p.usuario_id IS NOT NULL AND p.grupo_id IS NULL
+)
+SELECT u.id, u.nome, u.email,
+  (SELECT GROUP_CONCAT(DISTINCT l.modulo) FROM linhas l WHERE l.usuario_id = u.id AND l.permissao = 1) AS modulos_que_tem,
+  CASE WHEN EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id AND l.modulo = 'operacional' AND l.permissao = 1)
+       THEN 'só o modelo de contrato (a OS continua pelo Operacional)' ELSE 'a OS e o modelo de contrato' END AS perde
+FROM usuarios u
+WHERE u.ativo = 1
+  AND COALESCE(u.is_superadmin, 0) NOT IN (1, '1')
+  AND LOWER(COALESCE(u.role, '')) <> 'admin'
+  AND EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id)
+  AND NOT EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id AND l.modulo = 'comercial' AND l.permissao = 1)
+ORDER BY u.nome;
+```
+
+**Como ler o resultado:** **a 1 vazia** — nenhum responsável por OS perde o acesso a ela. **Linhas na 1** — quem é responsável por OS e
+vai tomar *"Acesso negado ao módulo"* ao abri-la: se deve continuar, dê-lhe o **Operacional** (ou o Comercial) antes do deploy. **A 2** — todos
+os que perdem; a coluna *perde* diz se é **só o modelo de contrato** (quem tem o Operacional e não o Comercial — a OS continua) ou **a OS e
+o modelo de contrato**. Quem não abre ordem de serviço nem cadastra família pode ficar como está. *(Rodada no banco local, cópia de 09/10: a
+1 **vazia** e a 2 com os **4** de sempre — os usuários com permissões só de Compras, Almoxarifado ou Engenharia / Projetos, "a OS e o modelo
+de contrato"; controle numa cópia com a OS passada para um desses usuários, outra OS de um usuário com o Comercial e o Operacional, e um
+quarto ganhando o Operacional: a 1 achou só o primeiro; a 2 marcou o quarto como "só o modelo de contrato".)*
+
 **A95 (NOVA, da Etapa 147 — opcional — quem perde o modelo da proposta e as listas de preço).** Desde a Etapa 147 o modelo da proposta
 (Configurações → Template de proposta, o editor visual, os blocos e a biblioteca de textos) e as listas de preço exigem o **Comercial**
 pela mesma régua da tela das propostas (a da **A93**); o modelo aceita também o administrador do módulo Comercial que tem o
@@ -3498,7 +3562,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B964; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B970; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -10516,6 +10580,37 @@ precisam ser feitas de novo. **Reversível.**
 **B964 (NOVA, da Etapa 147) — a próxima etapa (148).** Ver a "próxima tarefa detalhada" no plano da Etapa 147. As decisões que esperam
 vocês continuam as da **B957** (nada novo).
 
+**B965 (NOVA, da Etapa 148; do Comercial/Operacional) — a ordem de serviço aberta pelo número aceita o Comercial ou o Operacional.** As
+duas telas que a abrem (**Comercial → Ordens de Serviço → editar** e a tela de detalhes da OS da Fábrica, aberta pelo
+endereço — o lápis da lista da Fábrica abre o formulário da OS, que não usa estas operações) decidem; ler a OS, os itens,
+gerar e baixar o PDF seguem a mesma régua da tela. **Descartado:** (a) a régua do Operacional das rotas vizinhas (trancaria fora a OS do
+Comercial, que lê a OS pelo número); (b) a régua antiga do servidor (libera o Comercial a todo usuário sem grupo — no banco medido não
+fecharia nada); (c) o Comercial ver só parte da OS (muda o que a tela recebe; não pedido). **Reversível.**
+
+**B966 (NOVA, da Etapa 148; do Comercial) — o modelo de contrato por família exige só o Comercial.** A tela da família só existe no
+Comercial (**Comercial → Produtos → um grupo → editar a família**). **Descartado:** (a) o caminho de Configurações da **B958** (a tela de
+Configurações que mexe em família — as opções das variáveis por família — não lista nem troca o modelo de contrato); (b) fechar junto as outras 19 operações de família (criar, editar, apagar, fotos, variáveis) — são lidas pelo
+formulário da proposta e pelos produtos; etapa própria (**C343**). **Atenção (revisão do plano):** o portão fecha a troca **direta** do
+modelo; como a proposta acha o modelo pelo **nome** da família gravado nos itens, renomear uma família (só o login) ainda muda o contrato
+das propostas novas (**C343**). *(A revisão do plano dizia "renomear ou clonar"; clonar família é só do administrador desde antes — a parte do
+clonar estava errada.)* **Reversível.**
+
+**B967 (NOVA, da Etapa 148) — a mesma chave da B946 desliga também estas 8 operações** (`PROPOSTAS_PORTAO_DE_MODULO=desligado`; o aviso
+do servidor ao subir passa a citar a ordem de serviço pelo número e o modelo de contrato por família). **Descartado:** uma chave só para a
+OS (o portão é o mesmo e a régua não tranca ninguém que a tela deixa entrar — o descarte da **B960**). **Reversível.**
+
+**B968 (NOVA, da Etapa 148; das propostas) — copiar ou reordenar as cláusulas de uma proposta que não existe responde "não encontrada"; a
+inativa continua.** **Descartado:** "não encontrada" também para a proposta inativa (o preview de uma inativa ainda abre pelo detalhe;
+mudaria o que a tela faz hoje). **Reversível.**
+
+**B969 (NOVA, da Etapa 148; do Operacional) — a criação da OS, o número da próxima, os itens e a edição/exclusão da OS ficam com a régua de
+hoje.** **Descartado:** alinhar tudo agora — quem cria OS é a pergunta da **C277** (de vocês). **Consequências declaradas:** quem cria a OS
+só pela integração (sem tela) e não tem o Comercial nem o Operacional toma *"Acesso negado"* ao gerar o PDF dela (esperado até a C277); e a
+**lista** da OS do Operacional, com a régua antiga, ainda entrega a OS inteira a um perfil que o portão novo barra (**C345**). **Reversível.**
+
+**B970 (NOVA, da Etapa 148) — a próxima etapa (149).** Ver a "próxima tarefa detalhada" no plano da Etapa 148. As decisões que esperam
+vocês continuam as da **B957** (nada novo).
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -13495,7 +13590,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      chance de *"A proposta foi alterada por outra gravação no mesmo instante"* cresce um pouco com milhares de itens. Dois salvamentos da
      mesma proposta exatamente ao mesmo tempo (duas abas, dois vendedores) podem deixar os itens dos dois, repetidos — como antes da etapa.
      **O que fazer:** se aparecer item repetido, apagar o que sobrou e salvar.
-335. **NOVO (da revisão da Etapa 146; do Operacional, anterior a ela; reproduzido) — uma ordem de serviço lida pelo número interno só pede
+335. **✅ RESOLVIDO NA ETAPA 148 (B965)** — abrir a OS pelo número, os itens, gerar e baixar o PDF exigem o Comercial ou o Operacional
+     pela régua da tela (sobram a lista do Operacional com a régua antiga — **C345** — e a criação, **C277**/**C332**). *(O texto original:)*
+     **NOVO (da revisão da Etapa 146; do Operacional, anterior a ela; reproduzido) — uma ordem de serviço lida pelo número interno só pede
      o login.** A leitura de uma OS, os itens dela e o PDF dela respondem a qualquer usuário logado (um usuário só do Almoxarifado leu os 56
      campos e o valor de uma OS) — a lista fechada não protege o dado, porque os números são sequenciais. **O que fazer:** nada pela tela.
      Candidata: o mesmo portão das listas.
@@ -13520,12 +13617,31 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 340. **NOVO (da revisão da Etapa 147; das propostas) — se a cópia das cláusulas falha e a limpeza também falha, a proposta fica com parte
      das cláusulas.** A frase manda usar o **Resetar cláusulas**; o próximo salvamento avisa e recarrega o preview com as que ficaram, mas
      não completa a cópia. Só acontece com o banco falhando duas vezes seguidas. **O que fazer:** **Resetar cláusulas** e refazer as mudanças.
-341. **NOVO (da revisão do plano da Etapa 147; do Comercial, anterior a ela; lido no código) — o modelo de contrato por família só pede o
+341. **✅ RESOLVIDO EM PARTE NA ETAPA 148 (B966)** — a lista de modelos, as cláusulas de um modelo e a troca do modelo da família exigem o
+     Comercial pela régua da tela. **Continua:** a criação de lista de preço grava as linhas sem conferir cada uma; e renomear ou clonar uma
+     família ainda muda o modelo efetivo (**C343**). *(O texto original:)*
+     **NOVO (da revisão do plano da Etapa 147; do Comercial, anterior a ela; lido no código) — o modelo de contrato por família só pede o
      login** (a lista de modelos, as cláusulas de um modelo e a troca do modelo de uma família — que decide as cláusulas das propostas
      novas dela); e a criação de lista de preço grava as linhas sem conferir cada uma. **O que fazer:** nada pela tela. Candidata da 148.
-342. **NOVO (da revisão da Etapa 147; das propostas, anterior a ela; reproduzido) — copiar ou reordenar as cláusulas de uma proposta que
+342. **✅ RESOLVIDO NA ETAPA 148 (B968)** — as duas respondem *"Proposta não encontrada"* e não gravam nada (antes, a ordem respondia "pronto"
+     sem gravar nada — o histórico da edição é recusado pelo banco para uma proposta que não existe). *(O texto original:)*
+     **NOVO (da revisão da Etapa 147; das propostas, anterior a ela; reproduzido) — copiar ou reordenar as cláusulas de uma proposta que
      não existe** responde erro interno com a mensagem do banco (a cópia; antes nem respondia) ou sucesso (a ordem), em vez de *"não
      encontrada"*. Só pela integração. **O que fazer:** nada.
+343. **NOVO (da Etapa 148; do Comercial, anterior a ela; lido no código e na revisão do plano) — as outras 19 operações de família de
+     produto só pedem o login** (criar, editar, apagar, fotos, esquemático, variáveis e opções de variáveis; clonar é só do administrador).
+     E a proposta acha o modelo de contrato pelo **nome** da família gravado nos itens: renomear uma família muda o contrato das propostas
+     novas — sem passar pela troca do modelo, que agora exige o Comercial. **O que
+     fazer:** nada pela tela (o cadastro de família está no Comercial). Candidata: o mesmo portão nas operações de família, medindo antes quem
+     as lê (o formulário da proposta, os produtos).
+344. **NOVO (da revisão do plano da Etapa 148; do Comercial, anterior a ela; lido no código) — o formulário da família salva e engole a
+     recusa da troca do modelo de contrato.** Quem perdeu o Comercial no meio da sessão (a tela ainda aberta) vê a família salva e o modelo
+     não mudou, sem aviso. **O que fazer:** nada; reabrir a família mostra o modelo gravado.
+345. **NOVO (da revisão da Etapa 148; do Operacional, anterior a ela; reproduzido) — a lista de ordens de serviço do Operacional usa a régua
+     antiga e entrega a OS inteira a um perfil que o portão novo barra.** Só com uma permissão do Operacional gravada à mão com o grupo
+     número 0 (o sistema não grava assim pela tela): a tela barra a Fábrica, a OS pelo número dá *"Acesso negado"*, mas a lista responde com
+     todas as OS, com o valor. A seleção de OS do Almoxarifado (número, situação e cliente, até 300) responde a qualquer logado — é o que a
+     tela do Almoxarifado usa. **O que fazer:** nada. Candidata: a régua da tela na lista do Operacional (junto da **C332**).
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -14857,6 +14973,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(148) A criação da OS, o número da próxima, os itens e a edição e a exclusão da OS ficam com a régua de hoje** (**B969**, **C277**,
+  **C332**); a lista do Operacional também (**C345**).
+- **(148) As outras operações de família de produto continuam só com o login**, e renomear uma família ainda muda o modelo de contrato
+  efetivo (**C343**); a criação de lista de preço continua gravando as linhas sem conferir cada uma (o resto da **C341**).
 - **(147) As imagens do modelo da proposta não aparecem no documento** (logo, cabeçalho, rodapé, capa — **C339**, como antes).
 - **(147) A leitura de uma OS pelo número e o modelo de contrato por família continuam só com o login** (**C335**, **C341**, **B961**).
 - **(147) Quando as cláusulas falham, o resto do salvamento do preview espera o próximo salvar** (**C337**); e a cópia pela metade (o banco
@@ -15842,6 +15962,12 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(148) Nenhum clique foi dado no navegador.** Tudo foi provado pela rota, com o servidor de verdade em pasta vazia (as 8 operações uma a
+uma com 15 perfis de usuário; o PDF da OS gerado e baixado por quem tem só o Comercial e por quem tem só o Operacional, com o Chromium de
+verdade). O que **só o navegador** prova: o roteiro da Etapa 148 no guia — **Comercial → Ordens de Serviço → editar** uma OS (os itens, **GERAR
+PDF**, **VER PDF**) com um usuário só do Comercial; a mesma tela da Fábrica, pelo endereço, com um só do Operacional; e **Comercial → Produtos →
+um grupo → editar a família**, trocar o modelo de contrato e salvar.
 
 **(147) Nenhum clique foi dado no navegador.** Tudo foi provado pela rota, com o servidor de verdade em pasta vazia (as 25 operações uma a
 uma com 17 perfis de usuário; a falha de uma cláusula provocada por uma regra no próprio banco; o PDF como vendedor). O que **só o
@@ -30105,9 +30231,88 @@ não achou caminho para o barrado (maiúsculas, barras, uploads, 21 perfis de us
 real) nem ninguém que perca o PDF; o de **sabotagem** fez 19 sabotagens novas — 14 caíram, 1 é equivalente e 4 sobreviveram por falta de
 cenário (o banco ocupado com o desfazer falhando, a 2ª leitura do modelo, um erro engolido no client) — viraram cenários.
 
+## Etapa 148 — A ordem de serviço aberta pelo número e o modelo de contrato por família pedem o módulo, e as cláusulas de uma proposta que não existe dizem "não encontrada" (2026-10-18)
+
+Dois consertos de **acesso**, no Comercial e no Operacional, e um de resposta nas propostas. Uma ordem de serviço tem número sequencial,
+e abri-la pelo número (a tela de edição, os itens, o PDF) pedia só o login: um usuário só do Almoxarifado, que a tela não deixa entrar no
+Comercial nem na Fábrica, lia uma OS inteira — cliente, prazos, valor — e gerava o PDF dela pela integração, uma por uma. Agora a OS aberta
+pelo número pede o **Comercial ou o Operacional**, as duas telas que a abrem; quem já abre a OS por uma delas não perde nada, nem o PDF. O
+segundo conserto é no **modelo de contrato por família** (o que decide quais cláusulas uma proposta nova daquela família recebe): a lista dos
+modelos e a troca do modelo de uma família passam a pedir o **Comercial**, onde fica o cadastro da família. E copiar ou reordenar as
+cláusulas de uma proposta que não existe — só pela integração — passa a responder *"Proposta não encontrada"* em vez de um erro interno (ou
+de um "pronto" que não tinha gravado nada).
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Um usuário só do Almoxarifado (a tela não lhe mostra o Comercial nem a Fábrica) lia qualquer OS pelo número, com o valor, os itens e o PDF, e gerava o PDF dela pela integração | *"Acesso negado ao módulo"* em cada uma das 5 operações, e a tentativa no log; o PDF barrado nem é gerado (**C335** resolvido) |
+| Quem abre a OS em **Comercial → Ordens de Serviço → editar** ou na tela de detalhes da OS da Fábrica | Continua abrindo, vendo os itens, gerando e baixando o PDF (**B965**) |
+| O mesmo usuário trocava o modelo de contrato de uma família (e mudava as cláusulas de todas as propostas novas dela) | *"Acesso negado ao módulo"*; o cadastro da família, no Comercial, continua trocando (**C341** resolvido na parte das rotas, **B966**) |
+| Copiar as cláusulas de uma proposta que não existe → erro interno com a mensagem do banco; reordenar → "pronto" sem ter gravado nada | *"Proposta não encontrada"* nas duas, e nada gravado (**C342** resolvido, **B968**) |
+
+### As regras, com o cenário exato
+
+**1. A OS aberta pelo número pede o Comercial ou o Operacional (B965, B967 — C335).** Entre com um usuário que tem só a permissão do
+**Almoxarifado** (por permissão direta): a tela não mostra o Comercial nem a Fábrica. Pela integração, `GET
+/api/operacional/ordens-servico/<número interno>`, `.../itens`, `.../pdf`, `GET /api/operacional/os-itens/<número interno>` ou `POST
+.../gerar-pdf` → **403** `{ "error": "Acesso negado ao módulo", "modulo": ["comercial", "operacional"] }`, e **Administração → Logs** mostra o
+acesso negado a *Comercial ou Operacional* (antes: **200** com a OS inteira). Com um usuário que tem só o **Comercial**: **Comercial → Ordens
+de Serviço → editar** (o lápis) uma OS abre, mostra os itens, **GERAR PDF** gera e **VER PDF** abre, como sempre. Com um que tem só o
+**Operacional**: o mesmo na tela de detalhes da OS da Fábrica, pelo endereço `/fabrica/ordens-servico/editar/<número interno>` (o lápis da
+lista **Fábrica → Ordens de Serviço** abre o formulário da OS, que não passa por estas operações). A variável `PROPOSTAS_PORTAO_DE_MODULO=desligado` (a mesma da **B946**) desliga também estas
+operações.
+
+**2. O modelo de contrato por família pede o Comercial (B966 — C341).** Com o usuário só do Almoxarifado, `GET /api/clausulas-modelos` ou
+`PUT /api/familias/<família>/clausulas-modelo` → **403** `{ "error": "Acesso negado ao módulo", "modulo": "comercial" }` (antes: **200**, e o
+modelo da família mudava). Com o vendedor (Comercial): **Comercial → Produtos → um grupo → editar a família**, escolher outro **modelo de
+contrato** e salvar — a próxima proposta nova dessa família recebe as cláusulas do modelo escolhido, como sempre. Um usuário só do
+Operacional também recebe o *"Acesso negado"* aqui (a tela da família é do Comercial).
+
+**3. As cláusulas de uma proposta que não existe (B968 — C342).** Só pela integração: `POST /api/propostas/<número que não existe>/clausulas/inicializar`
+ou `PUT .../clausulas/reordenar` → **404** `{ "error": "Proposta não encontrada" }`, nada gravado. A proposta **inativa** existe e continua
+como antes. Se o banco falhar ao conferir a proposta: *"Erro ao copiar as cláusulas da proposta (<o erro do banco>). Nenhuma cláusula foi
+gravada — salve de novo."* (copiar) ou *"Erro ao gravar a nova ordem das cláusulas (<o erro>). A ordem não foi alterada — salve de novo."*
+(reordenar); banco ocupado, a tela tenta de novo sozinha.
+
+### O que esta etapa NÃO cobre
+
+1. **Criar a OS, o número da próxima, os itens e a edição e a exclusão da OS** ficam com a régua de hoje (**B969**; quem cria OS é a
+   pergunta da **C277**, e a **C332**); e a **lista** de OS do Operacional também — ela ainda entrega a OS a um perfil raro que o portão novo
+   barra (**C345**).
+2. **As outras operações de família de produto** (criar, editar, apagar, fotos, variáveis) continuam só com o login; e como a proposta
+   acha o modelo de contrato pelo **nome** da família, renomear uma família ainda muda o contrato das propostas novas (**C343**).
+3. **O formulário da família não avisa** quando a troca do modelo é recusada (só acontece se o Comercial for tirado com a tela aberta —
+   **C344**).
+4. **A criação de lista de preço** continua gravando as linhas sem conferir cada uma (o resto da **C341**).
+
+### O que a revisão encontrou
+
+A **medição** (antes do código) achou as duas telas que abrem a OS pelo número (o Comercial e a Fábrica) e que só o cadastro da família,
+no Comercial, troca o modelo de contrato — e que, no banco medido, só os mesmos 4 usuários que a tela já barra perdem (**A96**). A **revisão do
+plano** achou que a ordem das conferências da proposta inexistente contrariava o teste e o código (o erro do corpo continua primeiro), que o
+modelo de contrato também muda por renomear a família (**C343**; dizia também "clonar" — clonar é só do administrador, essa parte estava
+errada), que o aviso do servidor ao subir diria "Comercial" para a OS e
+que o formulário da família engole a recusa (**C344**). A **revisão adversarial do código** (três revisores, executando): o de **regra**
+comparou as rotas ligadas e desligadas byte a byte para quem a tela deixa passar (iguais) e números de proposta escritos de jeitos estranhos
+(a conferência e a gravação concordam); o de **permissão** comparou 21 perfis de usuário com a decisão da tela tirada do código real (0
+diferenças), tentou dezenas de variações de endereço e outras montagens do PDF (nenhuma passa) e achou um perfil raro a quem a lista do
+Operacional ainda entrega a OS (**C345**); o de **sabotagem** fez 27 sabotagens novas — 23 caíram, 1 é equivalente (o histórico de uma
+proposta que não existe já era recusado pelo banco) e 3 sobreviveram por falta de cenário (o portão registrando "acesso negado" para quem
+passa, a conferência lendo o número vizinho, a régua do par só pelo comportamento) — viraram cenários.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 148 entregue (2026-10-18):** **a ordem de serviço aberta pelo número e o modelo de contrato por família pedem o módulo, e as
+  cláusulas de uma proposta que não existe dizem "não encontrada"** (do Comercial/Operacional). Quem a tela barra do Comercial e da Fábrica é
+  barrado nas 5 operações da OS pelo número e nas 3 do modelo de contrato; quem abre a OS pelo Comercial ou pela Fábrica não perde nada, o PDF
+  inclusive (**B965**, **B966**, **B967** — **C335** resolvido, **C341** na parte das rotas); copiar ou reordenar as cláusulas de uma proposta
+  que não existe responde *"Proposta não encontrada"* (**B968** — **C342** resolvido). Commits `d69a5cf6`, `9149c024` e `9dccf0dd`. **O que é seu:** a consulta **A96**
+  (opcional); os avisos **C343** a **C345**; as decisões **B965 a B969** (reversíveis); as perguntas de antes (**B949**, **B910**, **B853**, **B924**,
+  **B926**, **C277**, **C312**, **C314**, **C316**, **C330**); as limitações **(148)** em D e a verificação **(148)** em F. **Próxima: Etapa 149 — ver
+  a "próxima tarefa detalhada" no plano da Etapa 148.**
 
 - **Etapa 147 entregue (2026-10-18):** **o modelo da proposta e as listas de preço pedem o Comercial, e as cláusulas da proposta só
   dizem "pronto" depois de gravar** (das propostas/Comercial). Quem a tela barra do Comercial é barrado nas 20 operações do modelo e nas 5
@@ -30116,7 +30321,7 @@ cenário (o banco ocupado com o desfazer falhando, a 2ª leitura do modelo, um e
   preview diz o motivo (**B962**) e o preview não regrava as cláusulas na vizinha depois de uma falha (**B963**, achado da revisão). Commits
   `2f558a3e` e `e8a76073`. **O que é seu:** a consulta **A95** (opcional); os avisos **C337** a **C342**; as decisões **B958 a B963** (reversíveis); as
   perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **C312**, **C314**, **C316**, **C330**); as limitações **(147)** em D e a
-  verificação **(147)** em F. **Próxima: Etapa 148 — ver a "próxima tarefa detalhada" no plano da Etapa 147.**
+  verificação **(147)** em F. *(Próxima, na época: Etapa 148 — entregue acima.)*
 
 - **Etapa 146 entregue (2026-10-18):** **a criação, o salvamento e a cópia da proposta só dizem "pronto" depois de gravar os itens, e o
   salvamento confere o cliente** (das propostas). O item que o banco recusa desfaz a criação e a cópia e, no salvamento, nada muda — os
