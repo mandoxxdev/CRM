@@ -8,7 +8,7 @@
  * testada por valor, e a fiação do salvar() é presa pelo FONTE como um bloco contíguo e exato (Fase 5, r3: uma régua de trechos soltos
  * deixava passar um toast.success a mais, um return num ramo morto e a soma anulada), com controles que mostram que ela acusa cada um.
  */
-import { avisoValoresIgnorados, somarIgnorados, desfechoDoSalvar } from './avisoValoresIgnorados';
+import { avisoValoresIgnorados, somarIgnorados, desfechoDoSalvar, mensagemDaFalhaDoSalvar } from './avisoValoresIgnorados';
 
 const fs = require('fs');
 const path = require('path');
@@ -79,7 +79,7 @@ test('[RN-144.05] o salvar() do preview: as duas respostas, o desfecho delas no 
   expect(corpo.length).toBeGreaterThan(100);
   expect(tryDoSalvar(corpo).length).toBeGreaterThan(100);
   expect(fiacaoDoAviso(corpo)).toEqual(TUDO_CERTO);
-  expect(FONTE).toMatch(/import \{ desfechoDoSalvar \} from '\.\/avisoValoresIgnorados';/);
+  expect(FONTE).toMatch(/import \{ desfechoDoSalvar, mensagemDaFalhaDoSalvar \} from '\.\/avisoValoresIgnorados';/); // Etapa 147: + a frase do catch
   // o Emitir revisão continua parando quando o salvar() devolve false
   expect(FONTE).toMatch(/const salvou = await salvar\(\);\s*if \(!salvou\) return;/);
 });
@@ -126,5 +126,32 @@ describe('controles: a régua acusa cada fiação errada (o salvar() antigo e as
   test('o toast fixo no lugar do desfecho', () => {
     const r = fiacaoDoAviso(corpoDoSalvar(troca('toast[desfecho.tipo](desfecho.mensagem);', "toast.success('Alterações salvas.');")));
     expect(r.desfecho).toBe(false);
+  });
+});
+
+// ── Etapa 147 (RN-147.07, B962): o aviso vermelho do salvar() mostra a frase do servidor ─────────────────────────────────────
+describe('[RN-147.07] mensagemDaFalhaDoSalvar e a fiação do catch do salvar()', () => {
+  const PARTE = 'Erro ao copiar as cláusulas da proposta (SQLITE_BUSY: database is locked). A proposta ficou com parte das cláusulas — use Resetar cláusulas e salve de novo.';
+  test('com o error do servidor: a frase dele; sem ele (rede, corpo vazio, sem texto, não-texto): o genérico de sempre', () => {
+    expect(mensagemDaFalhaDoSalvar({ response: { status: 500, data: { error: PARTE } } })).toBe(PARTE);
+    expect(mensagemDaFalhaDoSalvar({ response: { status: 403, data: { error: 'Acesso negado ao módulo', modulo: 'comercial' } } })).toBe('Acesso negado ao módulo');
+    for (const e of [undefined, null, new Error('Network Error'), { response: {} }, { response: { data: null } }, { response: { data: { error: '   ' } } }, { response: { data: { error: { x: 1 } } } }, { response: { data: '<html>' } }]) {
+      expect(mensagemDaFalhaDoSalvar(e)).toBe('Erro ao salvar alterações.');
+    }
+  });
+  const catchDoSalvar = (src) => {
+    const corpo = corpoDoSalvar(src);
+    const ini = corpo.indexOf('} catch (e) {');
+    return ini < 0 ? '' : corpo.slice(ini, corpo.indexOf('} finally {', ini));
+  };
+  const CERTO = /^\} catch \(e\) \{\s*toast\.error\(mensagemDaFalhaDoSalvar\(e\)\);\s*return false;\s*$/;
+  test('o catch do salvar() usa a frase do servidor (um toast só, e devolve false)', () => {
+    expect(catchDoSalvar(FONTE)).toMatch(CERTO);
+    expect(FONTE).toMatch(/import \{ desfechoDoSalvar, mensagemDaFalhaDoSalvar \} from '\.\/avisoValoresIgnorados';/);
+  });
+  test('controle: o catch antigo (o texto fixo) não passa na régua', () => {
+    const antigo = FONTE.replace('toast.error(mensagemDaFalhaDoSalvar(e));', () => "toast.error('Erro ao salvar alterações.');");
+    expect(antigo).not.toBe(FONTE);
+    expect(catchDoSalvar(antigo)).not.toMatch(CERTO);
   });
 });

@@ -12,8 +12,13 @@
  * `hasModuleAccess` (client) — se uma das duas mudar sozinha, um dos testes cai (RN-145.04).
  *
  * `desligado` (PROPOSTAS_PORTAO_DE_MODULO=desligado no ambiente — RN-145.03, B946): o portao passa todos, o de antes da etapa.
+ *
+ * Etapa 147 (C319, RN-147.01, B958): `exigir(modulos, { tambemAdminDoModuloCom: { admin, tela } })` — quando a tela abre a mesma coisa
+ * por um segundo caminho. O modelo da proposta (ConfigTemplateProposta) abre em /comercial E embutido em /configuracoes (aba Comercial ->
+ * Template de proposta), que exige o modulo `tela` (Administrativo) pela regua da tela e `canConfigureModule(user, admin)` — o
+ * administrador do modulo `admin` (Comercial) em `admin_modulos`. Sem isto o portao trancaria fora quem a tela deixa editar o modelo.
  */
-const { bypassModuleRestrictions } = require('./systemPermissions');
+const { bypassModuleRestrictions, isModuleAdmin } = require('./systemPermissions');
 const { MODULOS_LIBERADOS_SEM_LINHA_NA_TELA } = require('./modulosSistema');
 const { isSqliteBusy, respondDbError } = require('./sqliteConcurrency');
 
@@ -41,9 +46,19 @@ function temModuloComoATela(user, linhas, modulos) {
   return mods.some((m) => MODULOS_LIBERADOS_SEM_LINHA_NA_TELA.includes(m));
 }
 
+/**
+ * Etapa 147 (RN-147.01): o segundo caminho da tela — o modulo `caminho.tela` pela regua da tela E administrador do modulo `caminho.admin`
+ * (`admin_modulos`, o `canConfigureModule` do client sem o super/role admin, que nem chegam aqui). Sem `caminho`, ninguem passa por ele.
+ */
+function passaPeloCaminhoDeConfiguracoes(user, linhas, caminho) {
+  if (!caminho || !caminho.admin || !caminho.tela) return false;
+  return isModuleAdmin(user, caminho.admin) && temModuloComoATela(user, linhas, [caminho.tela]);
+}
+
 function criarPortaoDasPropostas({ getDb, registrar, desligado }) {
-  function exigir(modulos) {
+  function exigir(modulos, opcoes = {}) {
     const mods = Array.isArray(modulos) ? modulos.slice() : [modulos];
+    const caminho = opcoes.tambemAdminDoModuloCom || null;
     return (req, res, next) => {
       if (desligado) return next();
       if (bypassModuleRestrictions(req.user)) return next();
@@ -55,6 +70,7 @@ function criarPortaoDasPropostas({ getDb, registrar, desligado }) {
           return res.status(500).json({ error: 'Erro ao verificar permissões' });
         }
         if (temModuloComoATela(req.user, linhas, mods)) return next();
+        if (passaPeloCaminhoDeConfiguracoes(req.user, linhas, caminho)) return next();
         registrar(req, mods.join('|'));
         return res.status(403).json({ error: 'Acesso negado ao módulo', modulo: mods.length === 1 ? mods[0] : mods });
       });
@@ -63,4 +79,4 @@ function criarPortaoDasPropostas({ getDb, registrar, desligado }) {
   return { exigir };
 }
 
-module.exports = { criarPortaoDasPropostas, temModuloComoATela, SQL_LINHAS_DA_TELA };
+module.exports = { criarPortaoDasPropostas, temModuloComoATela, passaPeloCaminhoDeConfiguracoes, SQL_LINHAS_DA_TELA };

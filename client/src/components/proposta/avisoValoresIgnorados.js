@@ -28,3 +28,13 @@ export function desfechoDoSalvar(respostaVariaveis, respostaDescricoes) {
   if (aviso) return { tipo: 'warning', mensagem: aviso, ok: false };
   return { tipo: 'success', mensagem: 'Alterações salvas.', ok: true };
 }
+
+/**
+ * Etapa 147 (RN-147.07, B962): o aviso vermelho quando o salvar() do preview falha — a frase do servidor (o campo error da resposta: as das
+ * cláusulas, "Acesso negado ao módulo", ...) e, sem ela (rede caída, resposta sem corpo ou sem texto), o "Erro ao salvar alterações.".
+ * Sem a frase, o vendedor não sabia que a cópia das cláusulas tinha ficado pela metade e que precisava usar o Resetar cláusulas (C340).
+ */
+export function mensagemDaFalhaDoSalvar(e) {
+  const doServidor = e && e.response && e.response.data && e.response.data.error;
+  return typeof doServidor === 'string' && doServidor.trim() ? doServidor : 'Erro ao salvar alterações.';
+}

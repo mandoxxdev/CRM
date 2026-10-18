@@ -336,10 +336,12 @@ test('RN-81.04: index.js e chat.js importam cabecalhosUploadSeguro de urlUpload'
   assert.ok(re.test(fontesRotas.find((x) => x.arq === 'routes/chat.js').src), 'chat.js nao importa');
 });
 
+// [caminho, handler, fabrica, middlewares antes do handler]. Etapa 147 (C319, RN-147.01): o download do contrato passa tambem pelo
+// portao do modelo da proposta, entre o login e o handler (o handler continua o testado aqui).
 const ROTAS = [
-  ['/api/operacional/ordens-servico/:id/pdf', 'servirPdfOs', 'criarServirPdfOs({ db, uploadsOSDir })'],
+  ['/api/operacional/ordens-servico/:id/pdf', 'servirPdfOs', 'criarServirPdfOs({ db, uploadsOSDir })', 'authenticateToken'],
   ['/api/proposta-template/contrato-anexo/:arquivo', 'servirContratoAnexo',
-    'criarServirContratoAnexo({ db, uploadsContratoDir })'],
+    'criarServirContratoAnexo({ db, uploadsContratoDir })', 'authenticateToken, exigirComercialNoModeloDaProposta'],
 ];
 /**
  * Toda chamada `app.<x>(` / `router.<x>(` cujo PRIMEIRO argumento e a string `caminho`, em todas
@@ -375,22 +377,22 @@ test('controle: registrosDoCaminho acha app.use/router.get e ignora comentario e
   } finally { FONTES.splice(0, FONTES.length, ...salvo); }
 });
 
-for (const [caminho, handler] of ROTAS) {
+for (const [caminho, handler, , antes] of ROTAS) {
   test(`revisao: ${caminho} em UM registro so (app/router, qualquer verbo, index.js + routes), com authenticateToken`, () => {
     const regs = registrosDoCaminho(caminho);
     assert.strictEqual(regs.length, 1,
       `registros: ${regs.map((x) => `${x.arq}:${x.linha} ${x.bloco}`).join(' | ')}`);
     assert.strictEqual(regs[0].arq, 'index.js');
-    assert.strictEqual(regs[0].bloco, `app.get('${caminho}', authenticateToken, ${handler})`);
+    assert.strictEqual(regs[0].bloco, `app.get('${caminho}', ${antes}, ${handler})`);
   });
 }
 
-for (const [caminho, handler, fabrica] of ROTAS) {
+for (const [caminho, handler, fabrica, antes] of ROTAS) {
   test(`RN-81.01/02: GET ${caminho} registrada uma vez, com authenticateToken, servida pelo handler testado`, () => {
     const alvo = `app.get('${caminho}'`;
     const regs = fonteIndex.split('\n').filter((l) => l.trim().startsWith(alvo));
     assert.strictEqual(regs.length, 1, `esperava 1 registro de ${alvo}, achei ${regs.length}`);
-    assert.strictEqual(regs[0].trim(), `${alvo}, authenticateToken, ${handler});`);
+    assert.strictEqual(regs[0].trim(), `${alvo}, ${antes}, ${handler});`);
     assert.ok(fonteIndex.includes(`const ${handler} = ${fabrica};`), `${handler} nao vem de ${fabrica}`);
   });
 }

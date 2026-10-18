@@ -129,7 +129,7 @@ function completarModeloClausulas(nome, clausulasDoCodigo) {
 function resolverModeloClausulas(propostaId, callback) {
   db.get('SELECT id FROM clausulas_modelo WHERE is_padrao = 1 AND ativo = 1 ORDER BY id ASC LIMIT 1', [], (errP, padrao) => {
     const idPadrao = padrao ? padrao.id : null;
-    if (errP) return callback(null, idPadrao);
+    if (errP) return callback(errP, idPadrao); // Etapa 147 (I-3): o erro vai junto (so o inicializar o confere; os outros seguem com o padrao)
     db.all(
       `SELECT DISTINCT f.clausulas_modelo_id AS modelo_id
          FROM proposta_itens pi
@@ -138,7 +138,8 @@ function resolverModeloClausulas(propostaId, callback) {
         WHERE pi.proposta_id = ?`,
       [propostaId],
       (err, linhas) => {
-        if (err || !linhas || linhas.length === 0) return callback(null, idPadrao);
+        if (err) return callback(err, idPadrao);
+        if (!linhas || linhas.length === 0) return callback(null, idPadrao);
         // Qualquer item sem modelo proprio (ou apontando para o padrao) puxa tudo para o
         // padrao — e a regra "equipamento prevalece".
         const temPadrao = linhas.some((l) => l.modelo_id == null || String(l.modelo_id) === String(idPadrao));
@@ -172,7 +173,8 @@ function carregarClausulasDaProposta(propostaId, callback) {
 function carregarClausulasDoModelo(modeloId, callback) {
   if (!modeloId) return callback(null, getClausulasDefault());
   db.all('SELECT numero, titulo, conteudo FROM clausulas_modelo_itens WHERE modelo_id = ? ORDER BY ordem ASC', [modeloId], (err, rows) => {
-    if (err || !rows || rows.length === 0) return callback(null, getClausulasDefault());
+    if (err) return callback(err, getClausulasDefault()); // Etapa 147 (I-3): idem
+    if (!rows || rows.length === 0) return callback(null, getClausulasDefault());
     callback(null, rows);
   });
 }
@@ -3011,7 +3013,7 @@ function checkAnyModulePermission(requiredModules) {
 // passam pelo mesmo portao — o barrado criava o pedido pela API; a tela de Aprovacoes e as que pedem aprovacao estao todas no Comercial.
 const PORTAO_DAS_PROPOSTAS_DESLIGADO = String(process.env.PROPOSTAS_PORTAO_DE_MODULO || '').trim().toLowerCase() === 'desligado';
 if (PORTAO_DAS_PROPOSTAS_DESLIGADO) {
-  console.warn('⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado: as rotas /api/propostas* NAO exigem o módulo Comercial (só o login).');
+  console.warn('⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado: as rotas /api/propostas*, as do modelo da proposta e as das listas de preço NAO exigem o módulo Comercial (só o login).');
 }
 const portaoDasPropostas = criarPortaoDasPropostas({
   getDb: () => db,
@@ -3020,6 +3022,12 @@ const portaoDasPropostas = criarPortaoDasPropostas({
 });
 const exigirComercialNasPropostas = portaoDasPropostas.exigir('comercial');
 const exigirComercialOuOperacionalNaProposta = portaoDasPropostas.exigir(['comercial', 'operacional']);
+// Etapa 147 (C319, RN-147.01, B958/B959): as 20 rotas do modelo da proposta (/api/proposta-template*, /api/proposta-blocos*,
+// /api/proposta-texto-biblioteca*) — o Comercial pela regua da tela OU o outro caminho por onde a tela abre o modelo: Configuracoes ->
+// Comercial -> Template de proposta (o Administrativo pela regua da tela + administrador do modulo Comercial). O PDF e o preview leem o
+// modelo direto do banco (nao por HTTP) e as imagens saem por /api/uploads e /api/assets, fora do portao (RN-147.04). As 5 rotas das
+// listas de preco (C329, RN-147.02) usam o exigirComercialNasPropostas: a tela da lista so existe no Comercial. O interruptor e o mesmo.
+const exigirComercialNoModeloDaProposta = portaoDasPropostas.exigir('comercial', { tambemAdminDoModuloCom: { admin: 'comercial', tela: 'administrativo' } });
 
 // Etapa 21 (RN-04). Precedencia: variaveis de ambiente `SMTP_*` -> valores abaixo.
 // A regua mora em `services/emailConfig.js` (funcao pura, testada em
@@ -6015,14 +6023,24 @@ app.post('/api/propostas/:id/clausulas/inicializar', authenticateToken, exigirCo
     // Escolhe o modelo de contrato pela FAMILIA dos itens (equipamento prevalece na mistura)
     // e copia as clausulas DELE. A copia continua sendo por proposta, entao editar aqui nao
     // afeta nem o modelo nem as outras propostas.
-    resolverModeloClausulas(id, (_errModelo, modeloId) => {
-      carregarClausulasDoModelo(modeloId, (_errCl, defaults) => {
-        const stmt = db.prepare(
-          'INSERT INTO proposta_clausulas (proposta_id, ordem, titulo, conteudo) VALUES (?, ?, ?, ?)'
-        );
-        defaults.forEach((c, i) => stmt.run([id, i, `${c.numero} ${c.titulo}`, c.conteudo]));
-        stmt.finalize((err) => {
-          if (err) return res.status(500).json({ error: err.message });
+    resolverModeloClausulas(id, (errModelo, modeloId) => {
+      carregarClausulasDoModelo(modeloId, (errCl, defaults) => {
+        // Etapa 147 (Fase 2 I-3): o erro de banco ao escolher ou ler o modelo de contrato recusa — antes caia calado no padrao de
+        // equipamento, com outra contagem, e o preview relacionava por posicao as clausulas erradas.
+        const errDoModelo = errModelo || errCl;
+        if (errDoModelo) return responderClausulasNaoCopiadas(res, errDoModelo, false);
+        // Etapa 147 (C327, RN-147.05): uma por uma, com o erro de cada uma conferido, e a resposta so depois da ultima. Antes, o
+        // statement preparado sem callback perdia a linha que falhava (ou a rota nao respondia) — e o preview relaciona as copiadas
+        // por POSICAO (salvarClausulas), entao uma a menos jogava a edicao do vendedor na clausula errada. Na falha, as gravadas saem.
+        const linhas = defaults.map((c, i) => [id, i, `${c.numero} ${c.titulo}`, c.conteudo]);
+        gravarItensEmSequencia(SQL_CLAUSULA_DA_PROPOSTA, linhas, (err, ids) => {
+          if (err) {
+            if (ids.length === 0) return responderClausulasNaoCopiadas(res, err, false);
+            return db.run('DELETE FROM proposta_clausulas WHERE proposta_id = ? AND id IN (SELECT value FROM json_each(?))', [id, JSON.stringify(ids)], (errLimpa) => {
+              if (errLimpa) console.error('❌ Cláusulas da proposta', id, ': as copiadas antes da falha não saíram:', errLimpa.message);
+              return responderClausulasNaoCopiadas(res, err, Boolean(errLimpa));
+            });
+          }
 
           db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (_, u) => {
             registrarEdicaoLog(id, usuarioId, u?.nome || 'N/A', 'clausulas_inicializadas', null, null, null,
@@ -6062,16 +6080,31 @@ app.put('/api/propostas/:id/clausulas/reordenar', authenticateToken, exigirComer
 
   if (!Array.isArray(ordem)) return res.status(400).json({ error: 'ordem deve ser um array de IDs' });
 
-  const stmt = db.prepare('UPDATE proposta_clausulas SET ordem = ? WHERE id = ? AND proposta_id = ?');
-  ordem.forEach((clausulaId, index) => stmt.run([index, clausulaId, id]));
-  stmt.finalize((err) => {
-    if (err) return res.status(500).json({ error: err.message });
+  // Etapa 147 (C327, RN-147.06): le a ordem atual, grava a nova uma por uma (erro conferido em cada linha) e, se uma falha, devolve a
+  // ordem lida as que ja tinham mudado. Antes, o statement preparado sem callback deixava a ordem meio nova, meio velha (ou nao respondia).
+  const SQL_ORDEM = 'UPDATE proposta_clausulas SET ordem = ? WHERE id = ? AND proposta_id = ?';
+  db.all('SELECT id, ordem FROM proposta_clausulas WHERE proposta_id = ?', [id], (errLer, atuais) => {
+    if (errLer) return responderOrdemNaoGravada(res, errLer, 'leitura');
+    const ordemDe = new Map((atuais || []).map((c) => [String(c.id), c.ordem]));
+    const linhas = ordem.map((clausulaId, index) => [index, clausulaId, id]);
+    gravarItensEmSequencia(SQL_ORDEM, linhas, (err, gravadas) => {
+      if (err) {
+        // as que ja mudaram (as primeiras `gravadas.length` da lista) voltam a ordem lida; id que nao e da proposta nao tinha mudado nada
+        const devolver = linhas.slice(0, gravadas.length)
+          .filter(([, clausulaId]) => ordemDe.has(String(clausulaId)))
+          .map(([, clausulaId]) => [ordemDe.get(String(clausulaId)), clausulaId, id]);
+        return gravarItensEmSequencia(SQL_ORDEM, devolver, (errVolta) => {
+          if (errVolta) console.error('❌ Cláusulas da proposta', id, ': a ordem anterior não voltou:', errVolta.message);
+          return responderOrdemNaoGravada(res, err, errVolta ? 'misturada' : 'mantida');
+        }, 'Cláusulas da proposta (devolvendo a ordem)');
+      }
 
-    db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (_, u) => {
-      registrarEdicaoLog(id, usuarioId, u?.nome || 'N/A', 'clausula_reordenada', null, null, null, JSON.stringify(ordem));
-    });
+      db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (_, u) => {
+        registrarEdicaoLog(id, usuarioId, u?.nome || 'N/A', 'clausula_reordenada', null, null, null, JSON.stringify(ordem));
+      });
 
-    res.json({ ok: true });
+      res.json({ ok: true });
+    }, 'Cláusulas da proposta (nova ordem)');
   });
 });
 
@@ -9145,7 +9178,7 @@ function conferirClienteDaProposta(clienteIdNum, res, seguir) {
 // processo (uncaughtException) e a rota respondia sucesso sem ele (medido nas quatro portas: geracao automatica, POST, PUT e copia; o PUT
 // nem respondia). No primeiro erro para e devolve o erro E os ids ja gravados (o PUT desfaz por eles). Sem transacao de proposito (B948):
 // a conexao e uma so, e um BEGIN pegaria as escritas de outras requisicoes no meio.
-function gravarItensEmSequencia(sql, linhas, feito) {
+function gravarItensEmSequencia(sql, linhas, feito, rotulo = 'Itens da proposta') {
   const ids = [];
   let i = 0;
   const proximo = () => {
@@ -9153,7 +9186,7 @@ function gravarItensEmSequencia(sql, linhas, feito) {
     const params = linhas[i++];
     db.run(sql, params, function aposItem(err) {
       if (err) {
-        console.error('❌ Itens da proposta: erro ao gravar o item', i, '-', err.message);
+        console.error(`❌ ${rotulo}: erro ao gravar a linha`, i, '-', err.message);
         return feito(err, ids);
       }
       ids.push(this.lastID);
@@ -9190,6 +9223,30 @@ function gravarItensDaPropostaNova(sql, propostaId, numeroProposta, linhas, feit
 }
 
 // Etapa 146 (RN-146.02): os itens novos do PUT que nao vao ficar — pela lista de ids (json_each: sem o limite de variaveis do SQLite).
+// Etapa 147 (C327, RN-147.05/06): as clausulas da proposta gravadas pelo gravarItensEmSequencia e as frases das duas rotas.
+const SQL_CLAUSULA_DA_PROPOSTA = 'INSERT INTO proposta_clausulas (proposta_id, ordem, titulo, conteudo) VALUES (?, ?, ?, ?)';
+function msgClausulasNaoCopiadas(detalhe, ficouParte) {
+  const base = `Erro ao copiar as cláusulas da proposta (${detalhe})`;
+  return ficouParte
+    ? `${base}. A proposta ficou com parte das cláusulas — use Resetar cláusulas e salve de novo.`
+    : `${base}. Nenhuma cláusula foi gravada — salve de novo.`;
+}
+// Fase 2 I-5: SQLITE_BUSY com o desfazer feito (nada ficou) -> 503 (o client repete sozinho; as rotas sao idempotentes depois do desfazer).
+function responderClausulasNaoCopiadas(res, err, ficouParte) {
+  if (!ficouParte && isSqliteBusy(err)) return respondDbError(res, err, 'propostas:clausulas');
+  return res.status(500).json({ error: msgClausulasNaoCopiadas(err.message, ficouParte) });
+}
+function responderOrdemNaoGravada(res, err, caso) {
+  if (caso !== 'misturada' && isSqliteBusy(err)) return respondDbError(res, err, 'propostas:clausulas');
+  return res.status(500).json({ error: msgOrdemNaoGravada(err.message, caso) });
+}
+function msgOrdemNaoGravada(detalhe, caso) {
+  const base = `Erro ao gravar a nova ordem das cláusulas (${detalhe})`;
+  if (caso === 'leitura') return `${base}. A ordem não foi alterada — salve de novo.`;
+  if (caso === 'misturada') return `${base}. A ordem ficou misturada — confira as cláusulas antes de enviar a proposta e salve de novo.`;
+  return `${base}. A ordem anterior foi mantida — salve de novo.`;
+}
+
 function apagarItensNovos(propostaId, ids, feito) {
   db.run('DELETE FROM proposta_itens WHERE proposta_id = ? AND id IN (SELECT value FROM json_each(?))', [propostaId, JSON.stringify(ids)], feito);
 }
@@ -10283,7 +10340,7 @@ app.get('/api/propostas/:id/pdf', authenticateToken, exigirComercialNasPropostas
 
 // ========== ROTAS DE CONFIGURAÇÃO DE TEMPLATE DE PROPOSTA ==========
 // Obter configuração do template
-app.get('/api/proposta-template', authenticateToken, (req, res) => {
+app.get('/api/proposta-template', authenticateToken, exigirComercialNoModeloDaProposta, (req, res) => {
   const { familia } = req.query;
   let query = 'SELECT * FROM proposta_template_config';
   const params = [];
@@ -10357,7 +10414,7 @@ app.get('/api/proposta-template', authenticateToken, (req, res) => {
 });
 
 // Salvar/Atualizar configuração do template
-app.post('/api/proposta-template', authenticateToken, (req, res) => {
+app.post('/api/proposta-template', authenticateToken, exigirComercialNoModeloDaProposta, (req, res) => {
   const {
     familia,
     nome_empresa,
@@ -10523,7 +10580,7 @@ app.post('/api/proposta-template', authenticateToken, (req, res) => {
 });
 
 // Listar templates salvos
-app.get('/api/proposta-template/list', authenticateToken, (req, res) => {
+app.get('/api/proposta-template/list', authenticateToken, exigirComercialNoModeloDaProposta, (req, res) => {
   const { familia } = req.query;
   let query = 'SELECT id, nome_template, familia, is_padrao, created_at, updated_at FROM proposta_template_config';
   const params = [];
@@ -10544,7 +10601,7 @@ app.get('/api/proposta-template/list', authenticateToken, (req, res) => {
 });
 
 // Carregar template específico
-app.get('/api/proposta-template/:id', authenticateToken, (req, res) => {
+app.get('/api/proposta-template/:id', authenticateToken, exigirComercialNoModeloDaProposta, (req, res) => {
   const { id } = req.params;
   
   db.get('SELECT * FROM proposta_template_config WHERE id = ?', [id], (err, config) => {
@@ -10559,7 +10616,7 @@ app.get('/api/proposta-template/:id', authenticateToken, (req, res) => {
 });
 
 // Salvar como novo template
-app.post('/api/proposta-template/save-as', authenticateToken, (req, res) => {
+app.post('/api/proposta-template/save-as', authenticateToken, exigirComercialNoModeloDaProposta, (req, res) => {
   const {
     nome_template,
     familia,
@@ -10615,7 +10672,7 @@ app.post('/api/proposta-template/save-as', authenticateToken, (req, res) => {
 });
 
 // Restaurar template padrão
-app.post('/api/proposta-template/restore-default', authenticateToken, (req, res) => {
+app.post('/api/proposta-template/restore-default', authenticateToken, exigirComercialNoModeloDaProposta, (req, res) => {
   const { familia } = req.body;
   
   // Deletar templates personalizados da família
@@ -10638,7 +10695,7 @@ app.post('/api/proposta-template/restore-default', authenticateToken, (req, res)
 });
 
 // Upload de logo
-app.post('/api/proposta-template/logo', authenticateToken, uploadLogo.single('logo'), (req, res) => {
+app.post('/api/proposta-template/logo', authenticateToken, exigirComercialNoModeloDaProposta, uploadLogo.single('logo'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Nenhum arquivo enviado' });
   }
@@ -10675,7 +10732,7 @@ app.post('/api/proposta-template/logo', authenticateToken, uploadLogo.single('lo
 });
 
 // Upload de imagem de cabeçalho
-app.post('/api/proposta-template/header-image', authenticateToken, uploadHeader.single('headerImage'), (req, res) => {
+app.post('/api/proposta-template/header-image', authenticateToken, exigirComercialNoModeloDaProposta, uploadHeader.single('headerImage'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Nenhum arquivo enviado' });
   }
@@ -10712,7 +10769,7 @@ app.post('/api/proposta-template/header-image', authenticateToken, uploadHeader.
 });
 
 // Upload de imagem de rodapé (com autenticação)
-app.post('/api/proposta-template/footer-image', authenticateToken, uploadFooter.single('footerImage'), (req, res) => {
+app.post('/api/proposta-template/footer-image', authenticateToken, exigirComercialNoModeloDaProposta, uploadFooter.single('footerImage'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Nenhum arquivo enviado' });
   }
@@ -10749,7 +10806,7 @@ app.post('/api/proposta-template/footer-image', authenticateToken, uploadFooter.
 });
 
 // Upload de imagem de CAPA (área azul/onda)
-app.post('/api/proposta-template/cover-image', authenticateToken, uploadCover.single('coverImage'), (req, res) => {
+app.post('/api/proposta-template/cover-image', authenticateToken, exigirComercialNoModeloDaProposta, uploadCover.single('coverImage'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
   db.get('SELECT cover_image_url FROM proposta_template_config ORDER BY id DESC LIMIT 1', [], (err, config) => {
     if (config && config.cover_image_url) {
@@ -10771,7 +10828,7 @@ app.post('/api/proposta-template/cover-image', authenticateToken, uploadCover.si
 });
 
 // Upload de contrato anexo (Word/PDF) – acompanha a proposta
-app.post('/api/proposta-template/contrato-anexo', authenticateToken, uploadContrato.single('contratoAnexo'), (req, res) => {
+app.post('/api/proposta-template/contrato-anexo', authenticateToken, exigirComercialNoModeloDaProposta, uploadContrato.single('contratoAnexo'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Nenhum arquivo enviado' });
   }
@@ -10799,7 +10856,7 @@ app.post('/api/proposta-template/contrato-anexo', authenticateToken, uploadContr
 });
 
 // ========== Blocos técnicos/comerciais (motor de composição) ==========
-app.get('/api/proposta-blocos', authenticateToken, (req, res) => {
+app.get('/api/proposta-blocos', authenticateToken, exigirComercialNoModeloDaProposta, (req, res) => {
   const { familia, tipo, ativo } = req.query;
   let query = 'SELECT * FROM proposta_blocos WHERE 1=1';
   const params = [];
@@ -10812,7 +10869,7 @@ app.get('/api/proposta-blocos', authenticateToken, (req, res) => {
     res.json(rows || []);
   });
 });
-app.post('/api/proposta-blocos', authenticateToken, (req, res) => {
+app.post('/api/proposta-blocos', authenticateToken, exigirComercialNoModeloDaProposta, (req, res) => {
   const { familia, tipo, nome, conteudo_html, ordem, regras_condicionais, ativo } = req.body;
   const regras = typeof regras_condicionais === 'string' ? regras_condicionais : (regras_condicionais ? JSON.stringify(regras_condicionais) : null);
   db.run(
@@ -10824,7 +10881,7 @@ app.post('/api/proposta-blocos', authenticateToken, (req, res) => {
     }
   );
 });
-app.put('/api/proposta-blocos/:id', authenticateToken, (req, res) => {
+app.put('/api/proposta-blocos/:id', authenticateToken, exigirComercialNoModeloDaProposta, (req, res) => {
   const { id } = req.params;
   const { familia, tipo, nome, conteudo_html, ordem, regras_condicionais, ativo } = req.body;
   const regras = typeof regras_condicionais === 'string' ? regras_condicionais : (regras_condicionais ? JSON.stringify(regras_condicionais) : null);
@@ -10837,7 +10894,7 @@ app.put('/api/proposta-blocos/:id', authenticateToken, (req, res) => {
     }
   );
 });
-app.delete('/api/proposta-blocos/:id', authenticateToken, (req, res) => {
+app.delete('/api/proposta-blocos/:id', authenticateToken, exigirComercialNoModeloDaProposta, (req, res) => {
   db.run('DELETE FROM proposta_blocos WHERE id = ?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ message: 'Bloco excluído' });
@@ -10845,7 +10902,7 @@ app.delete('/api/proposta-blocos/:id', authenticateToken, (req, res) => {
 });
 
 // ========== Biblioteca de textos (dados brutos vs exibição) ==========
-app.get('/api/proposta-texto-biblioteca', authenticateToken, (req, res) => {
+app.get('/api/proposta-texto-biblioteca', authenticateToken, exigirComercialNoModeloDaProposta, (req, res) => {
   const { familia, chave, ativo } = req.query;
   let query = 'SELECT * FROM proposta_texto_biblioteca WHERE 1=1';
   const params = [];
@@ -10858,7 +10915,7 @@ app.get('/api/proposta-texto-biblioteca', authenticateToken, (req, res) => {
     res.json(rows || []);
   });
 });
-app.post('/api/proposta-texto-biblioteca', authenticateToken, (req, res) => {
+app.post('/api/proposta-texto-biblioteca', authenticateToken, exigirComercialNoModeloDaProposta, (req, res) => {
   const { chave, texto_bruto, texto_exibicao, familia, ativo } = req.body;
   db.run(
     'INSERT INTO proposta_texto_biblioteca (chave, texto_bruto, texto_exibicao, familia, ativo) VALUES (?, ?, ?, ?, ?)',
@@ -10869,7 +10926,7 @@ app.post('/api/proposta-texto-biblioteca', authenticateToken, (req, res) => {
     }
   );
 });
-app.put('/api/proposta-texto-biblioteca/:id', authenticateToken, (req, res) => {
+app.put('/api/proposta-texto-biblioteca/:id', authenticateToken, exigirComercialNoModeloDaProposta, (req, res) => {
   const { id } = req.params;
   const { chave, texto_bruto, texto_exibicao, familia, ativo } = req.body;
   db.run(
@@ -10881,7 +10938,7 @@ app.put('/api/proposta-texto-biblioteca/:id', authenticateToken, (req, res) => {
     }
   );
 });
-app.delete('/api/proposta-texto-biblioteca/:id', authenticateToken, (req, res) => {
+app.delete('/api/proposta-texto-biblioteca/:id', authenticateToken, exigirComercialNoModeloDaProposta, (req, res) => {
   db.run('DELETE FROM proposta_texto_biblioteca WHERE id = ?', [req.params.id], (err) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ message: 'Texto excluído' });
@@ -17301,7 +17358,7 @@ function ensureListaPrecosTables(cb) {
 }
 
 // Criar uma lista de preços a partir de uma planilha já parseada no navegador
-app.post('/api/comercial/listas-precos', authenticateToken, (req, res) => {
+app.post('/api/comercial/listas-precos', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { nome, arquivo_nome, colunas, itens } = req.body || {};
   if (!nome || !Array.isArray(colunas) || !Array.isArray(itens)) {
     return res.status(400).json({ error: 'Envie nome, colunas[] e itens[].' });
@@ -17336,7 +17393,7 @@ app.post('/api/comercial/listas-precos', authenticateToken, (req, res) => {
 });
 
 // Listar as listas de preços cadastradas
-app.get('/api/comercial/listas-precos', authenticateToken, (req, res) => {
+app.get('/api/comercial/listas-precos', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   ensureListaPrecosTables((errTbl) => {
     if (errTbl) return res.status(500).json({ error: errTbl.message });
     db.all(
@@ -17354,7 +17411,7 @@ app.get('/api/comercial/listas-precos', authenticateToken, (req, res) => {
 });
 
 // Detalhe (colunas) de uma lista
-app.get('/api/comercial/listas-precos/:id', authenticateToken, (req, res) => {
+app.get('/api/comercial/listas-precos/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   ensureListaPrecosTables((errTbl) => {
     if (errTbl) return res.status(500).json({ error: errTbl.message });
     db.get(`SELECT id, nome, arquivo_nome, colunas, total_itens, created_at FROM listas_precos WHERE id = ?`,
@@ -17369,7 +17426,7 @@ app.get('/api/comercial/listas-precos/:id', authenticateToken, (req, res) => {
 });
 
 // Itens de uma lista, com busca e paginação
-app.get('/api/comercial/listas-precos/:id/itens', authenticateToken, (req, res) => {
+app.get('/api/comercial/listas-precos/:id/itens', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   ensureListaPrecosTables((errTbl) => {
     if (errTbl) return res.status(500).json({ error: errTbl.message });
     const { id } = req.params;
@@ -17408,7 +17465,7 @@ app.get('/api/comercial/listas-precos/:id/itens', authenticateToken, (req, res) 
 });
 
 // Excluir uma lista (e seus itens)
-app.delete('/api/comercial/listas-precos/:id', authenticateToken, (req, res) => {
+app.delete('/api/comercial/listas-precos/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   ensureListaPrecosTables((errTbl) => {
     if (errTbl) return res.status(500).json({ error: errTbl.message });
     db.run(`DELETE FROM listas_precos_itens WHERE lista_id = ?`, [req.params.id], (e1) => {
@@ -17882,7 +17939,7 @@ app.use('/api/uploads/covers', express.static(uploadsCoverDir, { setHeaders: cab
 // Contrato anexo (Word/PDF) – download para anexar à proposta. Etapa 81: sai so com login e so
 // se for o contrato_anexo_url de alguma linha (services/arquivosProtegidos.js, RN-81.02).
 const servirContratoAnexo = criarServirContratoAnexo({ db, uploadsContratoDir });
-app.get('/api/proposta-template/contrato-anexo/:arquivo', authenticateToken, servirContratoAnexo);
+app.get('/api/proposta-template/contrato-anexo/:arquivo', authenticateToken, exigirComercialNoModeloDaProposta, servirContratoAnexo);
 
 // Chat uploads servidos em server/routes/chat.js
 
