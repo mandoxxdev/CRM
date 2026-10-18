@@ -213,4 +213,17 @@ function msgProdutoNaoEncontrado(faltando) {
   return `Produto não encontrado (id ${unicos.slice(0, 10).join(', ')}${resto}). Atualize a lista de produtos e tente de novo.`;
 }
 
-module.exports = { idsDosProdutos, msgProdutoNaoEncontrado, MSG_PRODUTO_SEM_ID, validarItensDoCorpo, MSG_ITENS_LISTA, MSG_ITEM_INVALIDO, diffItensParaLog, chaveDe, identidadeDe, idInteiro, parearItens, nomeDe, resumoLado, CAMPOS_COMPARAR, mesclarItensPreservandoCampos, CAMPOS_PRESERVAR };
+// Etapa 145 (RN-145.06, C315): o cliente que nao existe, nas duas portas de criacao (antes 500 com a mensagem do numero da proposta).
+function msgClienteNaoEncontrado(id) {
+  return `Cliente não encontrado (id ${id}). Atualize a lista de clientes e tente de novo.`;
+}
+
+// Etapa 145 (RN-145.05, C318): as duas mensagens da geracao automatica que falha ao gravar os itens.
+function msgItensNaoGravados(detalhe, numeroIncompleta) {
+  const base = `Erro ao gravar os itens da proposta (${detalhe})`;
+  return numeroIncompleta
+    ? `${base}. A proposta ${numeroIncompleta} ficou incompleta — exclua-a e gere de novo.`
+    : `${base}. Nenhuma proposta foi criada — tente de novo.`;
+}
+
+module.exports = { msgClienteNaoEncontrado, msgItensNaoGravados, idsDosProdutos, msgProdutoNaoEncontrado, MSG_PRODUTO_SEM_ID, validarItensDoCorpo, MSG_ITENS_LISTA, MSG_ITEM_INVALIDO, diffItensParaLog, chaveDe, identidadeDe, idInteiro, parearItens, nomeDe, resumoLado, CAMPOS_COMPARAR, mesclarItensPreservandoCampos, CAMPOS_PRESERVAR };

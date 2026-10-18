@@ -1,0 +1,20 @@
+{
+  "_sobre": "Etapa 145 (C317, RN-145.04): a mesma tabela roda contra temModuloComoATela (server/services/portaoDasPropostas.js, em server/tests/api/propostaPortaoModulo.api.test.js) e contra hasModuleAccess (client/src/services/permissionsCache.js, em client/src/services/permissionsCache.portaoComoATela.test.js). Se uma das duas reguas mudar sozinha, um dos testes cai. 'modulos' com mais de um = basta um.",
+  "casos": [
+    { "nome": "sem linha nenhuma: Comercial entra (B63)", "user": { "id": 7, "role": "usuario" }, "linhas": [], "modulos": ["comercial"], "espera": true },
+    { "nome": "sem linha nenhuma: Operacional nao entra", "user": { "id": 7, "role": "usuario" }, "linhas": [], "modulos": ["operacional"], "espera": false },
+    { "nome": "sem linha nenhuma: Comercial ou Operacional entra (pelo Comercial)", "user": { "id": 7, "role": "usuario" }, "linhas": [], "modulos": ["comercial", "operacional"], "espera": true },
+    { "nome": "so a linha de outro modulo: Comercial nao entra", "user": { "id": 7, "role": "usuario" }, "linhas": [{ "modulo": "almoxarifado", "permissao": 1 }], "modulos": ["comercial"], "espera": false },
+    { "nome": "a linha do Comercial com permissao 0 conta como linha: nao entra", "user": { "id": 7, "role": "usuario" }, "linhas": [{ "modulo": "comercial", "permissao": 0 }], "modulos": ["comercial"], "espera": false },
+    { "nome": "a linha do Comercial com permissao 1: entra", "user": { "id": 7, "role": "usuario" }, "linhas": [{ "modulo": "compras", "permissao": 1 }, { "modulo": "comercial", "permissao": 1 }], "modulos": ["comercial"], "espera": true },
+    { "nome": "a linha do Operacional: o par Comercial ou Operacional entra", "user": { "id": 7, "role": "usuario" }, "linhas": [{ "modulo": "operacional", "permissao": 1 }], "modulos": ["comercial", "operacional"], "espera": true },
+    { "nome": "a linha do Operacional: so o Comercial nao entra", "user": { "id": 7, "role": "usuario" }, "linhas": [{ "modulo": "operacional", "permissao": 1 }], "modulos": ["comercial"], "espera": false },
+    { "nome": "permissao em texto '1' nao vale (a tela compara com === 1)", "user": { "id": 7, "role": "usuario" }, "linhas": [{ "modulo": "comercial", "permissao": "1" }], "modulos": ["comercial"], "espera": false },
+    { "nome": "modulo com maiuscula nao casa", "user": { "id": 7, "role": "usuario" }, "linhas": [{ "modulo": "Comercial", "permissao": 1 }], "modulos": ["comercial"], "espera": false },
+    { "nome": "role admin passa sem linha do modulo", "user": { "id": 1, "role": "admin" }, "linhas": [{ "modulo": "almoxarifado", "permissao": 1 }], "modulos": ["comercial"], "espera": true },
+    { "nome": "role ADMIN (maiusculo) passa", "user": { "id": 1, "role": "ADMIN" }, "linhas": [{ "modulo": "almoxarifado", "permissao": 1 }], "modulos": ["comercial"], "espera": true },
+    { "nome": "super (is_superadmin 1) passa", "user": { "id": 1, "role": "usuario", "is_superadmin": 1 }, "linhas": [{ "modulo": "almoxarifado", "permissao": 1 }], "modulos": ["comercial"], "espera": true },
+    { "nome": "admin do modulo Comercial (admin_modulos) nao passa sem a linha", "user": { "id": 7, "role": "usuario", "admin_modulos": ["comercial"] }, "linhas": [{ "modulo": "almoxarifado", "permissao": 1 }], "modulos": ["comercial"], "espera": false },
+    { "nome": "frota sem linha nenhuma entra (o portao da tela)", "user": { "id": 7, "role": "usuario" }, "linhas": [], "modulos": ["frota"], "espera": true }
+  ]
+}

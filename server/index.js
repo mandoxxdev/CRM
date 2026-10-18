@@ -223,7 +223,7 @@ const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
 const { getClausulasDefault, resolverClausulasParaPreview } = require('./clausulasDefault');
-const { diffItensParaLog, nomeDe, resumoLado, mesclarItensPreservandoCampos, idInteiro, validarItensDoCorpo, idsDosProdutos, msgProdutoNaoEncontrado } = require('./propostaItensDiff');
+const { diffItensParaLog, nomeDe, resumoLado, mesclarItensPreservandoCampos, idInteiro, validarItensDoCorpo, idsDosProdutos, msgProdutoNaoEncontrado, msgClienteNaoEncontrado, msgItensNaoGravados } = require('./propostaItensDiff');
 // Etapa 142 (C298, C309): as variáveis manuais × os itens — a religação do PUT, o reparo da leitura e a gravação do reparo (puros).
 const { planoReligacao, repararVariaveisManuais, planoMaterializacao } = require('./variaveisManuaisItens');
 const { presente, montarSetParcial } = require('./atualizacaoParcial');
@@ -272,6 +272,7 @@ const { validarTokenBackup } = require('./services/backupAuth');
 const { criarAuthenticateToken } = require('./services/authenticateToken');
 const { registrarTentativaAcessoNegado: registrarAcessoNegadoNoLog } = require('./services/acessoNegadoLog');
 const { criarPortoesDeModulo } = require('./services/portaoDeModulo');
+const { criarPortaoDasPropostas } = require('./services/portaoDasPropostas');
 const {
   mascararValorConfig,
   podeGravarSegredo,
@@ -3001,6 +3002,23 @@ function checkAnyModulePermission(requiredModules) {
   return portoesDeModulo().checkAnyModulePermission(requiredModules);
 }
 
+// Etapa 145 (C317, RN-145.01 a 03): o portao das 49 rotas /api/propostas* — a regua da TELA (services/portaoDasPropostas.js), nao a do
+// checkModulePermission (que libera o Comercial a todo usuario sem grupo — B63 — e por isso nao mudaria nada no banco medido; B944).
+// Vai em CADA rota, logo depois do authenticateToken (antes do multer: o arquivo do barrado nao chega ao disco) — nao num app.use do
+// prefixo, que rodaria o login duas vezes por pedido. O GET /api/propostas/:id aceita tambem o Operacional: a OS do Operacional busca
+// nele os itens da proposta (B945). PROPOSTAS_PORTAO_DE_MODULO=desligado desliga o portao sem deploy (B946).
+const PORTAO_DAS_PROPOSTAS_DESLIGADO = String(process.env.PROPOSTAS_PORTAO_DE_MODULO || '').trim().toLowerCase() === 'desligado';
+if (PORTAO_DAS_PROPOSTAS_DESLIGADO) {
+  console.warn('⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado: as rotas /api/propostas* NAO exigem o módulo Comercial (só o login).');
+}
+const portaoDasPropostas = criarPortaoDasPropostas({
+  getDb: () => db,
+  registrar: (req, modulo) => registrarTentativaAcessoNegado(req, modulo),
+  desligado: PORTAO_DAS_PROPOSTAS_DESLIGADO,
+});
+const exigirComercialNasPropostas = portaoDasPropostas.exigir('comercial');
+const exigirComercialOuOperacionalNaProposta = portaoDasPropostas.exigir(['comercial', 'operacional']);
+
 // Etapa 21 (RN-04). Precedencia: variaveis de ambiente `SMTP_*` -> valores abaixo.
 // A regua mora em `services/emailConfig.js` (funcao pura, testada em
 // `tests/api/emailConfigCore.api.test.js`); aqui fica so a fiacao.
@@ -5408,7 +5426,7 @@ function getPropostaListColumns(cb) {
   });
 }
 
-app.get('/api/propostas', authenticateToken, (req, res) => {
+app.get('/api/propostas', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   getPropostaListColumns((colErr, prCols) => {
     if (colErr) return respondDbError(res, colErr, 'propostas:list:cols');
 
@@ -5485,7 +5503,7 @@ app.get('/api/propostas', authenticateToken, (req, res) => {
 });
 
 // Opções para cadastro de propostas (status, motivos, origens — alimentam gráficos do dashboard)
-app.get('/api/propostas/opcoes/comercial', authenticateToken, (req, res) => {
+app.get('/api/propostas/opcoes/comercial', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   res.json({
     status: [
       { value: 'rascunho', label: 'Rascunho' },
@@ -5499,7 +5517,7 @@ app.get('/api/propostas/opcoes/comercial', authenticateToken, (req, res) => {
   });
 });
 
-app.get('/api/propostas/:id', authenticateToken, (req, res) => {
+app.get('/api/propostas/:id', authenticateToken, exigirComercialOuOperacionalNaProposta, (req, res) => {
   const { id } = req.params;
   
   db.get(
@@ -5539,7 +5557,7 @@ app.get('/api/propostas/:id', authenticateToken, (req, res) => {
 });
 
 // Endpoint para gerar número da proposta (sem salvar)
-app.get('/api/propostas/gerar-numero/:cliente_id', authenticateToken, (req, res) => {
+app.get('/api/propostas/gerar-numero/:cliente_id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { cliente_id } = req.params;
   const responsavel_id = req.query.responsavel_id || req.user.id;
   const revisao = parseInt(req.query.revisao) || 0;
@@ -5559,7 +5577,7 @@ app.get('/api/propostas/gerar-numero/:cliente_id', authenticateToken, (req, res)
 // (apenas Super Admin). Reescreve só os 2 primeiros segmentos (geral-cliente), preservando
 // iniciais/ano/revisão. Números fora do padrão são ignorados. Transação em 2 fases para não
 // violar o índice UNIQUE de numero_proposta durante o processo.
-app.post('/api/propostas/renumerar', authenticateToken, async (req, res) => {
+app.post('/api/propostas/renumerar', authenticateToken, exigirComercialNasPropostas, async (req, res) => {
   if (!isSuperAdmin(req.user)) {
     return res.status(403).json({ error: 'Apenas Super Administradores podem renumerar propostas' });
   }
@@ -5611,7 +5629,7 @@ app.post('/api/propostas/renumerar', authenticateToken, async (req, res) => {
 });
 
 // Endpoint para buscar histórico de revisões de uma proposta
-app.get('/api/propostas/:id/revisoes', authenticateToken, (req, res) => {
+app.get('/api/propostas/:id/revisoes', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   
   db.all(
@@ -5675,7 +5693,7 @@ function converterDataParaBrasil(dataString) {
 }
 
 // Listar follow-ups de uma proposta
-app.get('/api/propostas/:id/followups', authenticateToken, (req, res) => {
+app.get('/api/propostas/:id/followups', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) {
     console.error('❌ Banco de dados não está disponível');
     return res.status(500).json({ error: 'Banco de dados não está disponível' });
@@ -5729,7 +5747,7 @@ app.get('/api/propostas/:id/followups', authenticateToken, (req, res) => {
 });
 
 // Adicionar follow-up a uma proposta
-app.post('/api/propostas/:id/followups', authenticateToken, (req, res) => {
+app.post('/api/propostas/:id/followups', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) {
     console.error('❌ Banco de dados não está disponível');
     return res.status(500).json({ error: 'Banco de dados não está disponível' });
@@ -5837,7 +5855,7 @@ function registrarEdicaoLog(propostaId, usuarioId, usuarioNome, tipo, campo, cla
 }
 
 // GET /api/propostas/:id/customizacoes
-app.get('/api/propostas/:id/customizacoes', authenticateToken, (req, res) => {
+app.get('/api/propostas/:id/customizacoes', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id } = req.params;
   db.get('SELECT * FROM proposta_customizacoes WHERE proposta_id = ?', [id], (err, row) => {
@@ -5847,7 +5865,7 @@ app.get('/api/propostas/:id/customizacoes', authenticateToken, (req, res) => {
 });
 
 // PUT /api/propostas/:id/customizacoes
-app.put('/api/propostas/:id/customizacoes', authenticateToken, (req, res) => {
+app.put('/api/propostas/:id/customizacoes', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id } = req.params;
   const usuarioId = req.user.id;
@@ -5891,7 +5909,7 @@ app.put('/api/propostas/:id/customizacoes', authenticateToken, (req, res) => {
 });
 
 // GET /api/propostas/:id/clausulas
-app.get('/api/propostas/:id/clausulas', authenticateToken, (req, res) => {
+app.get('/api/propostas/:id/clausulas', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id } = req.params;
   db.all(
@@ -5915,7 +5933,7 @@ app.get('/api/propostas/:id/clausulas', authenticateToken, (req, res) => {
 
 // PUT /api/propostas/:id/itens/descricoes — texto da coluna DESCRIÇÃO da tabela de preços,
 // digitado direto no preview. Um por item; vazio volta ao nome do produto + modelo.
-app.put('/api/propostas/:id/itens/descricoes', authenticateToken, (req, res) => {
+app.put('/api/propostas/:id/itens/descricoes', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id } = req.params;
   const lista = Array.isArray(req.body && req.body.descricoes) ? req.body.descricoes : null;
@@ -5983,7 +6001,7 @@ app.put('/api/familias/:id/clausulas-modelo', authenticateToken, (req, res) => {
 });
 
 // POST /api/propostas/:id/clausulas/inicializar — copia defaults para a tabela
-app.post('/api/propostas/:id/clausulas/inicializar', authenticateToken, (req, res) => {
+app.post('/api/propostas/:id/clausulas/inicializar', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id } = req.params;
   const usuarioId = req.user.id;
@@ -6017,7 +6035,7 @@ app.post('/api/propostas/:id/clausulas/inicializar', authenticateToken, (req, re
 });
 
 // POST /api/propostas/:id/clausulas/resetar — volta para as cláusulas padrão
-app.post('/api/propostas/:id/clausulas/resetar', authenticateToken, (req, res) => {
+app.post('/api/propostas/:id/clausulas/resetar', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id } = req.params;
   const usuarioId = req.user.id;
@@ -6034,7 +6052,7 @@ app.post('/api/propostas/:id/clausulas/resetar', authenticateToken, (req, res) =
 });
 
 // PUT /api/propostas/:id/clausulas/reordenar — deve vir ANTES de /:clausulaId
-app.put('/api/propostas/:id/clausulas/reordenar', authenticateToken, (req, res) => {
+app.put('/api/propostas/:id/clausulas/reordenar', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id } = req.params;
   const { ordem } = req.body; // array de IDs na nova ordem: [3, 1, 2, ...]
@@ -6056,7 +6074,7 @@ app.put('/api/propostas/:id/clausulas/reordenar', authenticateToken, (req, res) 
 });
 
 // POST /api/propostas/:id/clausulas — cria nova cláusula
-app.post('/api/propostas/:id/clausulas', authenticateToken, (req, res) => {
+app.post('/api/propostas/:id/clausulas', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id } = req.params;
   const { titulo, conteudo } = req.body;
@@ -6093,7 +6111,7 @@ app.post('/api/propostas/:id/clausulas', authenticateToken, (req, res) => {
 });
 
 // PUT /api/propostas/:id/clausulas/:clausulaId — edita cláusula
-app.put('/api/propostas/:id/clausulas/:clausulaId', authenticateToken, (req, res) => {
+app.put('/api/propostas/:id/clausulas/:clausulaId', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id, clausulaId } = req.params;
   const { titulo, conteudo } = req.body;
@@ -6129,7 +6147,7 @@ app.put('/api/propostas/:id/clausulas/:clausulaId', authenticateToken, (req, res
 });
 
 // DELETE /api/propostas/:id/clausulas/:clausulaId — remove cláusula (soft delete)
-app.delete('/api/propostas/:id/clausulas/:clausulaId', authenticateToken, (req, res) => {
+app.delete('/api/propostas/:id/clausulas/:clausulaId', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id, clausulaId } = req.params;
   const usuarioId = req.user.id;
@@ -6159,7 +6177,7 @@ app.delete('/api/propostas/:id/clausulas/:clausulaId', authenticateToken, (req, 
 // leva, alem de `arquivo` (o nome, como no banco), um `url` assinado RELATIVO — o client usa esse
 // `url` e NUNCA monta o endereco pelo nome (sem assinatura daria 404).
 // GET /api/propostas/:id/fotos — lista fotos ativas
-app.get('/api/propostas/:id/fotos', authenticateToken, (req, res) => {
+app.get('/api/propostas/:id/fotos', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   db.all('SELECT * FROM proposta_fotos WHERE proposta_id = ? AND ativo = 1 ORDER BY id ASC', [req.params.id], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -6168,7 +6186,7 @@ app.get('/api/propostas/:id/fotos', authenticateToken, (req, res) => {
 });
 
 // POST /api/propostas/:id/fotos — sobe uma foto (o cliente itera para várias)
-app.post('/api/propostas/:id/fotos', authenticateToken, uploadPropostaFoto.single('foto'), async (req, res) => {
+app.post('/api/propostas/:id/fotos', authenticateToken, exigirComercialNasPropostas, uploadPropostaFoto.single('foto'), async (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id } = req.params;
   const usuarioId = req.user.id;
@@ -6201,7 +6219,7 @@ app.post('/api/propostas/:id/fotos', authenticateToken, uploadPropostaFoto.singl
 // arquivo de novo a cada vez.
 // Compartilhar o arquivo entre linhas é seguro porque o DELETE daqui é lógico (ativo = 0) e
 // nunca remove o arquivo do disco — apagar uma cópia não quebra as outras.
-app.post('/api/propostas/:id/fotos/:fotoId/duplicar', authenticateToken, (req, res) => {
+app.post('/api/propostas/:id/fotos/:fotoId/duplicar', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id, fotoId } = req.params;
   const usuarioId = req.user.id;
@@ -6233,7 +6251,7 @@ app.post('/api/propostas/:id/fotos/:fotoId/duplicar', authenticateToken, (req, r
 // POST /api/propostas/:id/fotos/:fotoId/restaurar — desfaz a exclusão de uma foto.
 // Só é possível porque o DELETE daqui é lógico (ativo = 0) e o arquivo continua no disco:
 // restaurar devolve a MESMA foto, com o mesmo id, e não uma cópia.
-app.post('/api/propostas/:id/fotos/:fotoId/restaurar', authenticateToken, (req, res) => {
+app.post('/api/propostas/:id/fotos/:fotoId/restaurar', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id, fotoId } = req.params;
   db.get('SELECT * FROM proposta_fotos WHERE id = ? AND proposta_id = ?', [fotoId, id], (err, foto) => {
@@ -6256,7 +6274,7 @@ app.post('/api/propostas/:id/fotos/:fotoId/restaurar', authenticateToken, (req, 
 });
 
 // PUT /api/propostas/:id/fotos/:fotoId — atualiza posição/tamanho/página
-app.put('/api/propostas/:id/fotos/:fotoId', authenticateToken, (req, res) => {
+app.put('/api/propostas/:id/fotos/:fotoId', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id, fotoId } = req.params;
   const { pagina, pos_x, pos_y, largura } = req.body;
@@ -6277,7 +6295,7 @@ app.put('/api/propostas/:id/fotos/:fotoId', authenticateToken, (req, res) => {
 });
 
 // DELETE /api/propostas/:id/fotos/:fotoId — remove foto (soft delete)
-app.delete('/api/propostas/:id/fotos/:fotoId', authenticateToken, (req, res) => {
+app.delete('/api/propostas/:id/fotos/:fotoId', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id, fotoId } = req.params;
   const usuarioId = req.user.id;
@@ -6333,7 +6351,7 @@ function materializarVariaveisManuais(propostaId, itensAtuais, aposentar, feito)
 // PUT /api/propostas/:id/variaveis-manuais — grava os valores preenchidos direto na
 // proposta (variáveis técnicas do tipo manual_proposta). Upsert por (item, chave);
 // valor vazio remove a linha (o campo volta a renderizar como espaço em branco).
-app.put('/api/propostas/:id/variaveis-manuais', authenticateToken, (req, res) => {
+app.put('/api/propostas/:id/variaveis-manuais', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id } = req.params;
   const valores = Array.isArray(req.body && req.body.valores) ? req.body.valores : null;
@@ -6390,7 +6408,7 @@ app.put('/api/propostas/:id/variaveis-manuais', authenticateToken, (req, res) =>
 // A revisão atual é lida do SUFIXO do número, não da coluna `revisao`: o número é o que
 // o cliente vê no documento, e as duas podem divergir (propostas antigas, importações).
 // A coluna é atualizada junto para as duas voltarem a bater.
-app.post('/api/propostas/:id/revisao', authenticateToken, (req, res) => {
+app.post('/api/propostas/:id/revisao', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id } = req.params;
   const usuarioId = req.user.id;
@@ -6428,7 +6446,7 @@ app.post('/api/propostas/:id/revisao', authenticateToken, (req, res) => {
 });
 
 // GET /api/propostas/:id/edicoes-log
-app.get('/api/propostas/:id/edicoes-log', authenticateToken, (req, res) => {
+app.get('/api/propostas/:id/edicoes-log', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id } = req.params;
   const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -7973,7 +7991,7 @@ function gerarNumeroPropostaComVerificacao(cliente_id, responsavel_id, revisao, 
   });
 }
 
-app.post('/api/propostas', authenticateToken, (req, res) => {
+app.post('/api/propostas', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   try {
     normalizarMaiusculas(req.body, ['titulo', 'descricao', 'condicoes_pagamento', 'prazo_entrega', 'garantia', 'observacoes', 'origem_busca', 'motivo_nao_venda', 'familia_produto', 'lembrete_mensagem', 'cliente_contato']);
     if (req.body.itens && Array.isArray(req.body.itens)) {
@@ -8218,6 +8236,9 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
     }); // Fecha callback do db.get
   }; // Fecha processarProposta
 
+  // Etapa 145 (RN-145.06/07, C315): o cliente que nao existe, depois do 403 dos 5 % e antes do numero — nos dois ramos (antes: 500 com a
+  // mensagem do numero sem numero_proposta; 500 com a da chave estrangeira com ele).
+  conferirClienteDaProposta(clienteIdNum, res, () => {
   // Se número não foi fornecido, gerar automaticamente
   if (!numero_proposta && clienteIdNum) {
     try {
@@ -8249,6 +8270,7 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
     console.error('❌ Cliente não fornecido para gerar número da proposta');
     return res.status(400).json({ error: 'Cliente é obrigatório para gerar o número da proposta automaticamente' });
   }
+  }); // conferirClienteDaProposta
   } catch (error) {
     console.error('❌ Erro geral ao processar POST /api/propostas:', error);
     console.error('❌ Stack trace:', error.stack);
@@ -8256,7 +8278,7 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
   }
 });
 
-app.put('/api/propostas/:id', authenticateToken, (req, res) => {
+app.put('/api/propostas/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   normalizarMaiusculas(req.body, ['titulo', 'descricao', 'condicoes_pagamento', 'prazo_entrega', 'garantia', 'observacoes', 'origem_busca', 'motivo_nao_venda', 'familia_produto', 'lembrete_mensagem', 'cliente_contato']);
   if (req.body.itens && Array.isArray(req.body.itens)) {
@@ -8829,7 +8851,7 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
   }); // Fim do db.get
 });
 
-app.delete('/api/propostas/:id', authenticateToken, (req, res) => {
+app.delete('/api/propostas/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
 
   db.get('SELECT id, status, ativo FROM propostas WHERE id = ?', [id], (err, proposta) => {
@@ -8876,7 +8898,7 @@ function registrarStatusProposta(propostaId, statusAnterior, statusNovo, usuario
 }
 
 // GET histórico de status da proposta
-app.get('/api/propostas/:id/status-history', authenticateToken, (req, res) => {
+app.get('/api/propostas/:id/status-history', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   db.all(
     `SELECT h.*, u.nome as usuario_nome FROM proposta_status_history h
@@ -8891,7 +8913,7 @@ app.get('/api/propostas/:id/status-history', authenticateToken, (req, res) => {
 });
 
 // POST enviar proposta (rascunho → enviada)
-app.post('/api/propostas/:id/enviar', authenticateToken, (req, res) => {
+app.post('/api/propostas/:id/enviar', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   const userId = req.user?.id;
   db.get('SELECT id, status, margem_desconto FROM propostas WHERE id = ?', [id], (err, proposta) => {
@@ -8929,7 +8951,7 @@ app.post('/api/propostas/:id/enviar', authenticateToken, (req, res) => {
 });
 
 // POST marcar como visualizada (enviada → visualizada)
-app.post('/api/propostas/:id/marcar-visualizada', authenticateToken, (req, res) => {
+app.post('/api/propostas/:id/marcar-visualizada', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   const userId = req.user?.id;
   db.get('SELECT id, status FROM propostas WHERE id = ?', [id], (err, proposta) => {
@@ -8955,7 +8977,7 @@ app.post('/api/propostas/:id/marcar-visualizada', authenticateToken, (req, res) 
 // conta como ganha - taxa de conversao, valor aprovado, ranking de vendedores, data de
 // fechamento. 'aceita' nao aparecia em NENHUMA consulta de relatorio, entao a proposta
 // fechada por este botao ficava invisivel nos numeros. Corrigido a pedido do usuario.
-app.post('/api/propostas/:id/aceitar', authenticateToken, (req, res) => {
+app.post('/api/propostas/:id/aceitar', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   const userId = req.user?.id;
   const { observacao } = req.body || {};
@@ -8981,7 +9003,7 @@ app.post('/api/propostas/:id/aceitar', authenticateToken, (req, res) => {
 });
 
 // POST rejeitar proposta (enviada/visualizada → rejeitada)
-app.post('/api/propostas/:id/rejeitar', authenticateToken, (req, res) => {
+app.post('/api/propostas/:id/rejeitar', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   const userId = req.user?.id;
   const { motivo_rejeicao, observacao } = req.body || {};
@@ -9005,7 +9027,7 @@ app.post('/api/propostas/:id/rejeitar', authenticateToken, (req, res) => {
 });
 
 // POST nova revisão (cria novo rascunho a partir da proposta atual; incrementa revisao)
-app.post('/api/propostas/:id/nova-revisao', authenticateToken, (req, res) => {
+app.post('/api/propostas/:id/nova-revisao', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   const userId = req.user?.id;
   db.get('SELECT * FROM propostas WHERE id = ?', [id], (err, proposta) => {
@@ -9027,7 +9049,7 @@ app.post('/api/propostas/:id/nova-revisao', authenticateToken, (req, res) => {
 });
 
 // POST clonar proposta (nova proposta com mesmo cliente/itens, status rascunho, novo número)
-app.post('/api/propostas/:id/clone', authenticateToken, (req, res) => {
+app.post('/api/propostas/:id/clone', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   const userId = req.user?.id;
   db.get('SELECT * FROM propostas WHERE id = ?', [id], (err, proposta) => {
@@ -9085,7 +9107,7 @@ app.post('/api/propostas/:id/clone', authenticateToken, (req, res) => {
 });
 
 // ========== ROTA PARA REMOVER LEMBRETE ==========
-app.put('/api/propostas/:id/remover-lembrete', authenticateToken, (req, res) => {
+app.put('/api/propostas/:id/remover-lembrete', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   
   db.run(
@@ -9101,7 +9123,53 @@ app.put('/api/propostas/:id/remover-lembrete', authenticateToken, (req, res) => 
 });
 
 // ========== ROTA DE GERAÇÃO AUTOMÁTICA DE PROPOSTA ==========
-app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
+// Etapa 145 (RN-145.06, C315): o cliente tem de existir antes de gerar o numero e de criar — antes a geracao automatica e o POST sem
+// numero respondiam 500 com a mensagem do numero ("Numero nao gerado"), e o POST com numero, 500 com a da chave estrangeira. O cliente
+// inativo conta como achado (B947, a regra do produto inativo). `seguir()` so roda com o cliente achado.
+function conferirClienteDaProposta(clienteIdNum, res, seguir) {
+  db.get('SELECT id FROM clientes WHERE id = ?', [clienteIdNum], (err, cliente) => {
+    if (err) return res.status(500).json({ error: 'Erro ao verificar o cliente: ' + err.message });
+    if (!cliente) return res.status(400).json({ error: msgClienteNaoEncontrado(clienteIdNum) });
+    return seguir();
+  });
+}
+
+// Etapa 145 (RN-145.05, C318): os itens da geracao automatica, um depois do outro, e o `feito` so no fim — antes era um statement
+// preparado sem callback e `finalize()` sem esperar: a resposta 200 saia com 34 de 200 itens gravados (medido), e o erro de um item
+// sumia calado. No primeiro erro para; desfaz (os itens primeiro; so com eles fora, a proposta — Fase 2 M-9) e devolve a mensagem.
+// Sem transacao de proposito (B948): a conexao e uma so, e um BEGIN pegaria as escritas de outras requisicoes no meio.
+function gravarItensDaGeracaoAutomatica(propostaId, numeroProposta, linhas, feito) {
+  const sql = `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade,
+              valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca,
+              tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo,
+              materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  let i = 0;
+  const proximo = () => {
+    if (i >= linhas.length) return feito(null);
+    const params = linhas[i++];
+    db.run(sql, params, (err) => {
+      if (!err) return proximo();
+      console.error('❌ Geração automática: erro ao gravar o item', i, 'da proposta', propostaId, '-', err.message);
+      db.run('DELETE FROM proposta_itens WHERE proposta_id = ?', [propostaId], (errItens) => {
+        if (errItens) {
+          console.error('❌ Geração automática: os itens gravados da proposta', propostaId, 'não saíram:', errItens.message);
+          return feito(msgItensNaoGravados(err.message, numeroProposta));
+        }
+        db.run('DELETE FROM propostas WHERE id = ?', [propostaId], (errProposta) => {
+          if (errProposta) {
+            console.error('❌ Geração automática: a proposta', propostaId, 'não saiu:', errProposta.message);
+            return feito(msgItensNaoGravados(err.message, numeroProposta));
+          }
+          return feito(msgItensNaoGravados(err.message, null));
+        });
+      });
+    });
+  };
+  proximo();
+}
+
+app.post('/api/propostas/gerar-automatica', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { cliente_id, projeto_id, produtos, ...outrosDados } = req.body;
 
   if (!cliente_id || !produtos || !Array.isArray(produtos) || produtos.length === 0) {
@@ -9219,6 +9287,8 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
       return res.status(400).json({ error: 'Usuário inválido' });
     }
 
+    // Etapa 145 (RN-145.06/07): o cliente que nao existe, depois de "Usuario invalido" e antes do numero.
+    conferirClienteDaProposta(clienteIdNum, res, () => {
     // Gerar número da proposta usando a função padrão
     gerarNumeroProposta(clienteIdNum, responsavelIdNum, 0, (err, numeroProposta) => {
       if (err || !numeroProposta) {
@@ -9271,17 +9341,8 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
 
           const propostaId = this.lastID;
 
-          // Inserir itens
-          const stmt = db.prepare(
-            `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade,
-              valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca,
-              tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo,
-              materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-          );
-
-          itens.forEach((item, idx) => {
-            stmt.run([
+          // Inserir itens — Etapa 145 (RN-145.05, C318): em sequencia, e a resposta so depois do ultimo
+          const linhasItens = itens.map((item, idx) => ([
               propostaId, item.descricao || item.nome || '', item.quantidade || 1, item.unidade || 'UN',
               item.valor_unitario || 0, item.valor_total || 0,
               item.codigo_produto || null, item.familia_produto || null, item.regiao_busca || null,
@@ -9292,15 +9353,16 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
               item.numero_item != null ? item.numero_item : idx + 1,
             Number(item.desconto_percentual) || 0,
             (item.preco_tabela != null ? Number(item.preco_tabela) : null)
-            ]);
+          ]));
+
+          gravarItensDaGeracaoAutomatica(propostaId, numeroProposta, linhasItens, (erroItens) => {
+            if (erroItens) return res.status(500).json({ error: erroItens });
+            res.json({ id: propostaId, numero_proposta: numeroProposta, valor_total: valorTotal, itens });
           });
-
-          stmt.finalize();
-
-          res.json({ id: propostaId, numero_proposta: numeroProposta, valor_total: valorTotal, itens });
         }
       );
     });
+    }); // conferirClienteDaProposta
   }).catch(err => {
     res.status(500).json({ error: err.message });
   });
@@ -9398,7 +9460,7 @@ function resolverTemplateConfig(rows, familiaTemplate) {
   return { ...preferida, variaveis_proposta_por_familia: mapa };
 }
 
-app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
+app.get('/api/propostas/:id/premium', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   let responseSent = false;
   let timeoutId = null;
 
@@ -9755,7 +9817,7 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
 // com a URL do servidor baixava TODAS as propostas (cliente, itens, precos, condicoes) trocando o
 // numero. O gate e o mesmo de GET /api/propostas/:id (so authenticateToken): quem le a proposta em
 // JSON le o PDF. Teste: tests/api/propostaPdfExigeLogin.api.test.js.
-app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
+app.get('/api/propostas/:id/pdf', authenticateToken, exigirComercialNasPropostas, async (req, res) => {
   const { id } = req.params;
   
   if (!id || isNaN(parseInt(id))) {
@@ -17909,7 +17971,7 @@ app.post('/api/produtos/:id/imagem', authenticateToken, uploadProduto.single('im
 });
 
 // Upload de cotação
-app.post('/api/propostas/:id/anexar-cotacao', authenticateToken, upload.single('arquivo'), (req, res) => {
+app.post('/api/propostas/:id/anexar-cotacao', authenticateToken, exigirComercialNasPropostas, upload.single('arquivo'), (req, res) => {
   const { id } = req.params;
   
   if (!req.file) {
@@ -17969,7 +18031,7 @@ app.post('/api/propostas/:id/anexar-cotacao', authenticateToken, upload.single('
 });
 
 // Download de cotação
-app.get('/api/propostas/:id/cotacao', authenticateToken, (req, res) => {
+app.get('/api/propostas/:id/cotacao', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   
   db.get('SELECT anexo_cotacao FROM propostas WHERE id = ?', [id], (err, proposta) => {
@@ -18018,7 +18080,7 @@ app.get('/api/propostas/:id/cotacao', authenticateToken, (req, res) => {
 });
 
 // Remover cotação
-app.delete('/api/propostas/:id/cotacao', authenticateToken, (req, res) => {
+app.delete('/api/propostas/:id/cotacao', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   
   db.get('SELECT anexo_cotacao FROM propostas WHERE id = ?', [id], (err, proposta) => {
@@ -18049,7 +18111,7 @@ app.delete('/api/propostas/:id/cotacao', authenticateToken, (req, res) => {
 });
 
 // Upload de PDF da proposta enviada ao cliente
-app.post('/api/propostas/:id/pdf-anexo', authenticateToken, uploadPropostaPdf.single('arquivo'), (req, res) => {
+app.post('/api/propostas/:id/pdf-anexo', authenticateToken, exigirComercialNasPropostas, uploadPropostaPdf.single('arquivo'), (req, res) => {
   const { id } = req.params;
 
   if (!req.file) {
@@ -18097,7 +18159,7 @@ app.post('/api/propostas/:id/pdf-anexo', authenticateToken, uploadPropostaPdf.si
 });
 
 // Download/visualização do PDF anexado da proposta
-app.get('/api/propostas/:id/pdf-anexo', authenticateToken, (req, res) => {
+app.get('/api/propostas/:id/pdf-anexo', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   const inline = req.query.inline === '1' || req.query.inline === 'true';
 
@@ -18130,7 +18192,7 @@ app.get('/api/propostas/:id/pdf-anexo', authenticateToken, (req, res) => {
 });
 
 // Remover PDF anexado da proposta
-app.delete('/api/propostas/:id/pdf-anexo', authenticateToken, (req, res) => {
+app.delete('/api/propostas/:id/pdf-anexo', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
 
   db.get('SELECT pdf_proposta_cliente FROM propostas WHERE id = ?', [id], (err, proposta) => {
@@ -18890,7 +18952,7 @@ app.put('/api/configuracoes/:chave', authenticateToken, requireAdministrativoCon
 
 // ========== ROTAS DE ASSINATURA DIGITAL ==========
 // Assinar proposta
-app.post('/api/propostas/:id/assinar', authenticateToken, (req, res) => {
+app.post('/api/propostas/:id/assinar', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   const { tipo_assinatura, dados_assinatura } = req.body;
   const ipAddress = req.ip || req.connection.remoteAddress;
@@ -18941,7 +19003,7 @@ app.post('/api/propostas/:id/assinar', authenticateToken, (req, res) => {
 });
 
 // Obter assinaturas de uma proposta
-app.get('/api/propostas/:id/assinaturas', authenticateToken, (req, res) => {
+app.get('/api/propostas/:id/assinaturas', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   db.all(
     `SELECT 

@@ -51,6 +51,13 @@ const MODULOS_SISTEMA = [
  */
 const MODULOS_LIBERADOS_SEM_GRUPO = ['comercial'];
 
+/**
+ * Etapa 145 (C317, RN-145.04): o que o portao de rota da TELA (`hasModuleAccess`) libera ao usuario sem NENHUMA linha de permissao —
+ * o espelho de `MODULOS_LIBERADOS_SEM_PERMISSAO_PORTAO` (client/src/constants/modulosMeta.js). E a regua do portao das propostas
+ * (services/portaoDasPropostas.js). O teste cruzado modulosClienteServidor.api.test.js cai se as duas listas divergirem.
+ */
+const MODULOS_LIBERADOS_SEM_LINHA_NA_TELA = ['comercial', 'frota'];
+
 /** As chaves em que o servidor grava "administrador do modulo" (antigo MODULE_ADMIN_KEYS). */
 function chavesComAdminDeModulo() {
   return MODULOS_SISTEMA.filter((m) => m.aceitaAdminDeModulo).map((m) => m.chave);
@@ -77,4 +84,4 @@ function nomeDoModulo(chave) {
   }).join(' ou ');
 }
 
-module.exports = { MODULOS_SISTEMA, MODULOS_LIBERADOS_SEM_GRUPO, nomeDoModulo, chavesComAdminDeModulo, tiposPadrao, TIPO_ADMINISTRATIVO: ADM, TIPO_INDUSTRIAL: IND };
+module.exports = { MODULOS_SISTEMA, MODULOS_LIBERADOS_SEM_GRUPO, MODULOS_LIBERADOS_SEM_LINHA_NA_TELA, nomeDoModulo, chavesComAdminDeModulo, tiposPadrao, TIPO_ADMINISTRATIVO: ADM, TIPO_INDUSTRIAL: IND };

@@ -5,6 +5,9 @@
  *
  * Etapa 141 (Fase 5 r3): `FALHA_SQL_METODOS` (padrao "run,get") acrescenta `all` — a conferencia do desconto le as aprovacoes por
  * `db.all` — e `FALHA_SQL_MSG` troca a mensagem do erro (ex.: "SQLITE_BUSY: database is locked", para provar o 503).
+ *
+ * Etapa 145 (C318): `FALHA_SQL_PULAR=N` deixa passar as N primeiras chamadas que casam (contadas juntas, em todos os metodos) e faz
+ * falhar da N+1 em diante — prova a falha no MEIO de uma sequencia (o 3o item de 5 da geracao automatica). Sem ela, falha desde a 1a.
  */
 const path = require('path');
 
@@ -15,9 +18,14 @@ if (padrao) {
   const re = new RegExp(padrao);
   const metodos = String(process.env.FALHA_SQL_METODOS || 'run,get').split(',').map((s) => s.trim()).filter(Boolean);
   const msg = process.env.FALHA_SQL_MSG || 'falha injetada pelo teste';
+  let pular = Math.max(0, parseInt(process.env.FALHA_SQL_PULAR || '0', 10) || 0);
   for (const m of metodos) {
     const orig = sqlite3.Database.prototype[m];
     sqlite3.Database.prototype[m] = function comFalha(sql, ...rest) {
+      if (re.test(String(sql)) && pular > 0) {
+        pular -= 1;
+        return orig.call(this, sql, ...rest);
+      }
       if (re.test(String(sql))) {
         const cb = rest.find((x) => typeof x === 'function');
         process.stdout.write(`[falha injetada] ${String(sql).slice(0, 60).replace(/\s+/g, ' ')}\n`);

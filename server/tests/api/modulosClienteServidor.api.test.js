@@ -159,6 +159,17 @@ const menos = (a, b) => a.filter((x) => !b.includes(x));
     );
   });
 
+  test('[RN-145.04] o portao das propostas usa a lista "sem linha" da TELA, igual a do cliente, e o le sem literal proprio', () => {
+    const { MODULOS_LIBERADOS_SEM_LINHA_NA_TELA } = require('../../services/modulosSistema');
+    const portao = listaDoCliente(src, 'MODULOS_LIBERADOS_SEM_PERMISSAO_PORTAO');
+    assert.ok(Array.isArray(MODULOS_LIBERADOS_SEM_LINHA_NA_TELA), 'MODULOS_LIBERADOS_SEM_LINHA_NA_TELA nao exportado por modulosSistema');
+    assert.deepStrictEqual(ordenado(MODULOS_LIBERADOS_SEM_LINHA_NA_TELA), ordenado(portao),
+      'a lista "sem linha" do portao das propostas divergiu da do portao de rota do cliente (RN-145.04)');
+    const corpo = fs.readFileSync(path.join(__dirname, '..', '..', 'services', 'portaoDasPropostas.js'), 'utf8');
+    assert.ok(/MODULOS_LIBERADOS_SEM_LINHA_NA_TELA\.includes\(m\)/.test(corpo), 'temModuloComoATela nao le MODULOS_LIBERADOS_SEM_LINHA_NA_TELA');
+    assert.ok(!/'frota'/.test(corpo), "portaoDasPropostas.js tem 'frota' escrito");
+  });
+
   test('RN-111.08 fiacao: os dois portoes do servidor e os dois do cliente leem as listas, sem literal proprio', () => {
     // Desde a revisao da Fase 5 da 111 os portoes moram em services/portaoDeModulo.js (portaoDeModulo.api.test.js os executa).
     const idx = fs.readFileSync(path.join(__dirname, '..', '..', 'services', 'portaoDeModulo.js'), 'utf8');
