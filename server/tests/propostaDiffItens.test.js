@@ -81,4 +81,46 @@ test('DUPLICATAS: editar uma entre várias iguais ainda é detectado (par por po
   assert.strictEqual(d.removidos.length, 0);
 });
 
+// Etapa 143 (RN-143.04): o historico usa o MESMO pareamento da mesclagem e da religacao (parearItens). Antes pareava por posicao dentro
+// do grupo de iguais, e tirar o primeiro de dois (com o id do que ficou) registrava "editado" no primeiro e "removido" no segundo.
+test('[RN-143.04] por id: tirar o PRIMEIRO de dois iguais registra so "removido" (o primeiro), nenhuma edicao', () => {
+  const antes = [{ id: 11, codigo_produto: 'P', descricao: 'Bomba', quantidade: 1, valor_unitario: 100, valor_total: 100 },
+    { id: 12, codigo_produto: 'P', descricao: 'Bomba', quantidade: 2, valor_unitario: 100, valor_total: 200 }];
+  const d = diffItensParaLog(antes, [{ id: 12, codigo_produto: 'P', descricao: 'Bomba', quantidade: 2, valor_unitario: 100, valor_total: 200 }]);
+  assert.deepStrictEqual(d.removidos.map((x) => x.id), [11]);
+  assert.strictEqual(d.editados.length, 0, 'pareou pela posicao: editou o primeiro');
+  assert.strictEqual(d.adicionados.length, 0);
+});
+test('[RN-143.04] por id: editar o segundo de dois iguais e reordenar edita o SEGUNDO', () => {
+  const antes = [{ id: 11, codigo_produto: 'P', descricao: 'Bomba', quantidade: 1, valor_total: 100 },
+    { id: 12, codigo_produto: 'P', descricao: 'Bomba', quantidade: 2, valor_total: 200 }];
+  const d = diffItensParaLog(antes, [{ id: 12, codigo_produto: 'P', descricao: 'Bomba', quantidade: 5, valor_total: 500 }, { id: 11, codigo_produto: 'P', descricao: 'Bomba', quantidade: 1, valor_total: 100 }]);
+  assert.strictEqual(d.editados.length, 1);
+  assert.deepStrictEqual(d.editados[0].mudancas.find((m) => m.campo === 'quantidade'), { campo: 'quantidade', label: 'Qtd', antes: 2, depois: 5 });
+  assert.strictEqual(d.removidos.length + d.adicionados.length, 0);
+});
+test('[RN-143.04, B931] por id: o item novo da mesma identidade de um que saiu e "adicionado" + "removido" (como a religacao)', () => {
+  const antes = [{ id: 11, codigo_produto: 'P', descricao: 'Bomba', quantidade: 1 }, { id: 12, codigo_produto: 'P', descricao: 'Bomba', quantidade: 1 }];
+  const d = diffItensParaLog(antes, [{ id: 11, codigo_produto: 'P', descricao: 'Bomba', quantidade: 1 }, { codigo_produto: 'P', descricao: 'Bomba', quantidade: 1 }]);
+  assert.deepStrictEqual([d.adicionados.length, d.removidos.map((x) => x.id), d.editados.length], [1, [12], 0]);
+});
+test('[RN-143.04] por id: produto trocado na mesma linha (o id nao vale) = removido + adicionado', () => {
+  const d = diffItensParaLog([{ id: 11, codigo_produto: 'P', descricao: 'Bomba' }], [{ id: 11, codigo_produto: 'Q', descricao: 'Outra' }]);
+  assert.deepStrictEqual([d.adicionados.map((x) => x.codigo_produto), d.removidos.map((x) => x.codigo_produto), d.editados.length], [['Q'], ['P'], 0]);
+});
+test('[RN-143.04, Fase 2 I-4] item manual com SO a descricao editada e o id: uma edicao "Descricao: A -> B" (nao some do historico)', () => {
+  const d = diffItensParaLog([{ id: 11, descricao: 'SERVICO A', quantidade: 1 }], [{ id: 11, descricao: 'SERVICO B', quantidade: 1 }]);
+  assert.deepStrictEqual([d.adicionados.length, d.removidos.length, d.editados.length], [0, 0, 1]);
+  assert.deepStrictEqual(d.editados[0].mudancas, [{ campo: 'descricao', label: 'Descrição', antes: 'SERVICO A', depois: 'SERVICO B' }]);
+  assert.strictEqual(d.editados[0].nome, 'SERVICO B');
+});
+test('[RN-143.04] a descricao em caixa baixa gravada antes (dado antigo) contra a do corpo em caixa alta nao e edicao', () => {
+  const d = diffItensParaLog([{ id: 11, codigo_produto: 'P', descricao: 'bomba p ', quantidade: 1 }], [{ id: 11, codigo_produto: 'P', descricao: 'BOMBA P', quantidade: 1 }]);
+  assert.strictEqual(d.editados.length, 0);
+});
+test('[RN-143.04] sem ids: a identidade aparada e sem caixa (" p " = "P"), como a mesclagem — nao e removido + adicionado', () => {
+  const d = diffItensParaLog([{ codigo_produto: 'P', descricao: 'Bomba', quantidade: 1 }], [{ codigo_produto: ' p ', descricao: 'Bomba', quantidade: 1 }]);
+  assert.deepStrictEqual([d.adicionados.length, d.removidos.length, d.editados.length], [0, 0, 0]);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`); process.exit(failed?1:0);

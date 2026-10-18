@@ -109,10 +109,12 @@ O corpo pode ser **parcial**. Regra por chave (`montarSetParcial`, `server/atual
 | presente, inclusive `null`/`''` | grava com a transformação de sempre (`|| ''` nos textos de condição/prazo/garantia/observações, `|| null` nos outros, `|| 0` em valor e margem) |
 | `itens` ausente | os itens não são tocados (nem apagados, nem reinseridos, nem auditados) |
 | `itens` presente | apaga e reinsere com `mesclarItensPreservandoCampos`, religa as variáveis manuais (`[]`/`null` apaga todos) — desde a Etapa 142 pelo **pareamento** abaixo |
+| `itens` presente que não é lista nem `null` (objeto, texto, número) | **400** *"Itens inválidos: os itens da proposta devem ser enviados como uma lista."*, nada gravado (Etapa 143, B930 — antes apagava os itens com 200) |
+| `itens` com elemento que não é objeto (`null`, número, texto, lista) | **400** *"Item inválido: cada item da proposta deve ser um objeto."*, nada gravado (Etapa 143, C310 — antes `[null]` fazia o `PUT` nunca responder e, com o corpo de tamanho diferente do gravado, depois de apagar os itens e regravar a proposta). `{}` passa (item sem descrição, o de sempre). Mesma guarda (`validarItensDoCorpo`, `server/propostaItensDiff.js`) no `POST /api/propostas` e nos `produtos` do `POST /api/propostas/gerar-automatica` |
 
 Exceções: `html_rendered` é sempre limpo (o retrato do PDF só é regravado com ele vazio); `probabilidade` nula/vazia mantém (`COALESCE`); `responsavel_id` vazio/ausente = o gravado, ou quem salva; `numero_proposta`, `revisao` e `responsavel_id` só entram quando mudam. A revisão sobe só se `itens` ou `valor_total` vieram e mudaram; o sufixo `REVnn` e o `proposta_revisoes` usam os valores efetivos (o do corpo, senão o gravado). Trocar `cliente_id` apaga `cliente_contato`/`cliente_telefone`/`cliente_email`/`projeto_id` que não vieram.
 
-Recusas, nesta ordem: 404 *"Proposta não encontrada"* → 400 *"Título é obrigatório"* (título presente vazio ou só espaços) → 400 *"Margem de desconto inválida: informe um número de 0 a 100, com ponto como separador decimal."* (Etapa 139, só quando a margem veio) → 400 *"Motivo da não venda é obrigatório quando a proposta está perdida/rejeitada."* → 403 *"Não é possível alterar o status de uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve permanecer como rascunho até que a autorização seja aprovada."* → (na gravação) 409 `PROPOSTA_ALTERADA` *"A proposta foi alterada por outra gravação no mesmo instante. Recarregue a proposta e salve de novo."* quando o corpo traz status, margem, motivo ou data de fechamento e um desses que **não** veio mudou entre a leitura e a gravação. As regras do motivo, do desconto e da data de fechamento automática usam o valor efetivo e só rodam quando um dos campos delas veio.
+Recusas, nesta ordem: 404 *"Proposta não encontrada"* → 400 *"Título é obrigatório"* (título presente vazio ou só espaços) → 400 *"Margem de desconto inválida: informe um número de 0 a 100, com ponto como separador decimal."* (Etapa 139, só quando a margem veio) → 400 dos itens (Etapa 143, as duas mensagens da tabela acima) → 400 *"Motivo da não venda é obrigatório quando a proposta está perdida/rejeitada."* → 403 "desconto aprovado" só pela aprovação e 409 do responsável trocado com pedido pendente (Etapa 140 — *esta lista não os tinha; estava velha, corrigida na Etapa 143*) → 403 *"Não é possível alterar o status de uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve permanecer como rascunho até que a autorização seja aprovada."* → (na gravação) 409 `PROPOSTA_ALTERADA` *"A proposta foi alterada por outra gravação no mesmo instante. Recarregue a proposta e salve de novo."* quando o corpo traz status, margem, motivo ou data de fechamento e um desses que **não** veio mudou entre a leitura e a gravação. As regras do motivo, do desconto e da data de fechamento automática usam o valor efetivo e só rodam quando um dos campos delas veio.
 
 ### Itens iguais: o item reconhecido pelo `id` e as variáveis manuais (Etapa 142, C298/C308/C309)
 
@@ -146,6 +148,19 @@ Identidade = código do produto, senão descrição, senão nome — cada parte 
 
 Testes: `tests/propostaItensIguais.test.js` (revisão obrigatória), `tests/api/propostaItensIguais.api.test.js` (rota, `/premium`, `/pdf`,
 banco antigo, falha injetada), `variaveisManuaisReligar`/`variaveisManuaisIdentidade` (com as funções reais desde a 142).
+
+### O histórico de itens e o produto de cada item (Etapa 143, C311)
+
+- **Histórico** (`diffItensParaLog`, `proposta_edicoes_log`): pelo **mesmo** `parearItens` da mesclagem e da religação. Item do corpo com par →
+  "editado" se mudou algum de descrição (aparada, sem caixa), quantidade, unidade, valor unitário, total, família ou região; sem par →
+  "adicionado"; atual que saiu → "removido". Tirar o primeiro de dois iguais (com o `id` do que ficou) registra só "removido". *(Até a
+  Etapa 143 o histórico pareava por posição dentro do grupo de iguais e registrava "editado" no primeiro + "removido" no segundo; e não
+  comparava a descrição.)*
+- **O produto do item** (`JOIN_PRODUTO_DO_ITEM`, `server/totalDocumentoProposta.js`): o `/premium`, o `/pdf` e a conta do pedido de
+  aprovação (`ITENS_SQL`) juntam a cada item **no máximo um** produto — o de código igual ao do item, senão o de código igual aparado de
+  menor id (ativo ou não, como antes); item sem código ou só de espaços não junta nenhum. *(Até a Etapa 143 o `JOIN` comparava aparado contra
+  um `UNIQUE` cru: `'PJ1'` e `'PJ1 '` duplicavam o item no documento e no total do pedido; um produto de código só de espaços juntava em
+  todo item manual.)* O `GET /api/propostas/:id` junta por igualdade crua (um produto no máximo pelo `UNIQUE`).
 
 ### A margem de desconto (Etapa 139, C299/C300)
 

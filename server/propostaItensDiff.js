@@ -13,6 +13,10 @@ function nomeDe(item) {
 // por valor numérico (250000 == "250000" == 250000.0), evitando falso-positivo
 // por formatação.
 const CAMPOS_COMPARAR = [
+  // Etapa 143 (RN-143.04, Fase 2 I-4): com o pareamento por id, o item manual com a descricao editada fica com o SEU gravado (os dois sem
+  // codigo) — sem comparar a descricao, trocar so o texto dele nao deixava rastro (antes era "removido A + adicionado B"). Sem caixa e
+  // aparada: o servidor grava em caixa alta, e o dado antigo em caixa baixa nao pode virar edicao em todo salvamento.
+  { campo: 'descricao', label: 'Descrição', numerico: false, caixa: true },
   { campo: 'quantidade', label: 'Qtd', numerico: true },
   { campo: 'unidade', label: 'Unidade', numerico: false },
   { campo: 'valor_unitario', label: 'Valor unit.', numerico: true },
@@ -21,8 +25,9 @@ const CAMPOS_COMPARAR = [
   { campo: 'regiao_busca', label: 'Região', numerico: false },
 ];
 
-function normaliza(valor, numerico) {
+function normaliza(valor, numerico, caixa) {
   if (valor == null) return '';
+  if (caixa) return String(valor).trim().toUpperCase();
   if (numerico) {
     const n = Number(valor);
     return Number.isNaN(n) ? String(valor).trim() : String(n);
@@ -30,45 +35,27 @@ function normaliza(valor, numerico) {
   return String(valor).trim();
 }
 
-// Agrupa itens por chaveDe preservando a ORDEM (lista por chave). Necessário
-// porque uma proposta pode ter varios itens do MESMO produto (mesmo
-// codigo_produto) — um Map simples colapsaria as duplicatas numa entrada so e
-// quebraria a deteccao de inclusao/remocao.
-function agruparPorChave(itens) {
-  const m = new Map();
-  for (const it of (itens || [])) {
-    const k = chaveDe(it);
-    if (!m.has(k)) m.set(k, []);
-    m.get(k).push(it);
-  }
-  return m;
-}
-
+// Etapa 143 (RN-143.04): o histórico usa o MESMO pareamento da mesclagem e da religação (parearItens, abaixo): o item do corpo com par
+// é comparado com o SEU gravado; sem par, "adicionado"; o gravado que saiu, "removido". Antes agrupava por chaveDe e pareava por POSIÇÃO
+// dentro do grupo de iguais — tirar o primeiro de dois (com o id do que ficou) registrava "editado" no primeiro e "removido" no segundo,
+// enquanto as variáveis manuais e os campos preservados seguiam o certo. Por id, o item novo da mesma identidade de um que saiu é
+// "adicionado" + "removido" — o que a religação faz com as variáveis dele (B931).
 function diffItensParaLog(itensAtuais, itensNovos) {
-  const antes = agruparPorChave(itensAtuais);
-  const depois = agruparPorChave(itensNovos);
-  const adicionados = [], removidos = [], editados = [];
-  const chaves = new Set([...antes.keys(), ...depois.keys()]);
-
-  for (const k of chaves) {
-    const listaA = antes.get(k) || [];
-    const listaD = depois.get(k) || [];
-    const pares = Math.min(listaA.length, listaD.length);
-    // Pares (mesma chave, mesma posicao) -> possivel edicao, agrupada por item.
-    for (let i = 0; i < pares; i++) {
-      const mudancas = [];
-      for (const { campo, label, numerico } of CAMPOS_COMPARAR) {
-        if (normaliza(listaA[i][campo], numerico) !== normaliza(listaD[i][campo], numerico)) {
-          mudancas.push({ campo, label, antes: listaA[i][campo], depois: listaD[i][campo] });
-        }
+  const novos = Array.isArray(itensNovos) ? itensNovos : [];
+  const { pares, sairam } = parearItens(itensAtuais, novos);
+  const adicionados = [], editados = [];
+  novos.forEach((novo, idx) => {
+    const atual = pares[idx];
+    if (!atual) { adicionados.push(novo); return; }
+    const mudancas = [];
+    for (const { campo, label, numerico, caixa } of CAMPOS_COMPARAR) {
+      if (normaliza(atual[campo], numerico, caixa) !== normaliza(novo[campo], numerico, caixa)) {
+        mudancas.push({ campo, label, antes: atual[campo], depois: novo[campo] });
       }
-      if (mudancas.length > 0) editados.push({ chave: k, nome: nomeDe(listaD[i]), mudancas });
     }
-    // Sobras em "depois" = itens adicionados; sobras em "antes" = itens removidos.
-    for (let i = pares; i < listaD.length; i++) adicionados.push(listaD[i]);
-    for (let i = pares; i < listaA.length; i++) removidos.push(listaA[i]);
-  }
-  return { adicionados, removidos, editados };
+    if (mudancas.length > 0) editados.push({ chave: chaveDe(novo), nome: nomeDe(novo), mudancas });
+  });
+  return { adicionados, removidos: sairam, editados };
 }
 
 // Campos que o formulário de edição NÃO gerencia e, portanto, não envia no
@@ -171,6 +158,21 @@ function mesclarItensPreservandoCampos(itensAtuais, itensNovos) {
   });
 }
 
+// Etapa 143 (RN-143.01/02/03, C310) — o corpo cujo `itens` não é lista, ou tem elemento que não é objeto, é recusado ANTES de qualquer
+// gravação, nas três portas que criam ou regravam itens (o PUT e o POST de /api/propostas, a geração automática). Antes: `[null]` fazia o
+// PUT nunca responder (a exceção saía num callback do banco) e, com o corpo de tamanho diferente do gravado, depois do DELETE dos itens;
+// número, texto e lista viravam item vazio com 200; o POST engolia o nulo; a geração automática dava 500. `null` e ausente passam (o
+// `itens: null` do PUT apaga todos — contrato da Etapa 138); `{}` dentro da lista passa (o de sempre: item sem descrição).
+const MSG_ITENS_LISTA = 'Itens inválidos: os itens da proposta devem ser enviados como uma lista.';
+const MSG_ITEM_INVALIDO = 'Item inválido: cada item da proposta deve ser um objeto.';
+const ehObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+function validarItensDoCorpo(itens) {
+  if (itens === undefined || itens === null) return null;
+  if (!Array.isArray(itens)) return MSG_ITENS_LISTA;
+  for (let i = 0; i < itens.length; i++) if (!ehObjeto(itens[i])) return MSG_ITEM_INVALIDO;
+  return null;
+}
+
 // Monta um resumo legível de um lado (antes/depois) de uma edição agrupada.
 // Ex.: "Qtd: 1, Valor unit.: 250000" — usado no valor_anterior/valor_novo do log.
 function resumoLado(mudancas, lado) {
@@ -180,4 +182,4 @@ function resumoLado(mudancas, lado) {
   }).join(', ');
 }
 
-module.exports = { diffItensParaLog, chaveDe, identidadeDe, idInteiro, parearItens, nomeDe, resumoLado, CAMPOS_COMPARAR, mesclarItensPreservandoCampos, CAMPOS_PRESERVAR };
+module.exports = { validarItensDoCorpo, MSG_ITENS_LISTA, MSG_ITEM_INVALIDO, diffItensParaLog, chaveDe, identidadeDe, idInteiro, parearItens, nomeDe, resumoLado, CAMPOS_COMPARAR, mesclarItensPreservandoCampos, CAMPOS_PRESERVAR };

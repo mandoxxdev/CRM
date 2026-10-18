@@ -105,6 +105,15 @@
     velho e só preenche item sem variável viva. **Nunca volte a um `Map` por `chaveDe`**: com o mesmo produto duas vezes ele guarda só o
     último, e todo salvamento copiava a descrição da tabela, a tag e os acessórios do último para os outros (C308).
 
+20. **O produto do item se junta por um texto só, e no máximo um por item** (Etapa 143, C311). `JOIN_PRODUTO_DO_ITEM`
+    (`server/totalDocumentoProposta.js`) é o `LEFT JOIN produtos` do `/premium`, do `/pdf` e da conta do pedido de aprovação (`ITENS_SQL`):
+    o produto de código igual ao do item, senão o de código igual **aparado** de menor id; item sem código (ou só espaços) não junta nada.
+    **Nunca volte a `TRIM(a) = TRIM(b)` puro**: o `UNIQUE` de `produtos.codigo` é do texto cru e o cadastro não apara — com `'PJ1'` e
+    `'PJ1 '` o item saía duas vezes no documento (e o total do pedido de aprovação, em dobro), e com um produto de código só de espaços todo
+    item manual juntava esse produto. Na mesma etapa: o `PUT`/`POST` de `/api/propostas` e a geração automática recusam (400) o item que
+    não é objeto **antes** de gravar (`validarItensDoCorpo`, C310) — `[null]` fazia o `PUT` nunca responder; e o histórico de itens
+    (`diffItensParaLog`) pareia pelo mesmo `parearItens` da armadilha 19.
+
 ## Como rodar a validação (obrigatório antes de merge)
 
 ```bash
@@ -147,6 +156,7 @@ E pela rota (o `index.js` real, em pasta vazia — entra no `npm run test:api`):
 ```bash
 cd server && node tests/api/propostaClausulaAlem524.api.test.js   # a 5.25 incluída pelas rotas sai no preview (I1)
 cd server && node tests/api/propostaItensIguais.api.test.js       # Etapa 142: itens iguais pelo PUT, o /premium e o preview
+cd server && node tests/api/propostaItemInvalido.api.test.js     # Etapa 143: o item que não é objeto (C310), o histórico e um produto por item (C311)
 ```
 
 Critério: **tudo verde**. Qualquer invariante quebrado bloqueia o merge. *(De julho à Etapa 138 a revisão rodava com dois vermelhos

@@ -223,7 +223,7 @@ const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
 const { getClausulasDefault, resolverClausulasParaPreview } = require('./clausulasDefault');
-const { diffItensParaLog, nomeDe, resumoLado, mesclarItensPreservandoCampos, idInteiro } = require('./propostaItensDiff');
+const { diffItensParaLog, nomeDe, resumoLado, mesclarItensPreservandoCampos, idInteiro, validarItensDoCorpo } = require('./propostaItensDiff');
 // Etapa 142 (C298, C309): as variáveis manuais × os itens — a religação do PUT, o reparo da leitura e a gravação do reparo (puros).
 const { planoReligacao, repararVariaveisManuais, planoMaterializacao } = require('./variaveisManuaisItens');
 const { presente, montarSetParcial } = require('./atualizacaoParcial');
@@ -231,7 +231,7 @@ const { lerMargemDesconto, MSG_MARGEM_INVALIDA } = require('./margemDesconto');
 // Etapa 140 (C301-C303): quem libera o desconto acima de 5% e com que aprovacao ele casa.
 const aprovacaoDesconto = require('./aprovacaoDesconto');
 const { lerAcessorios, serializarAcessorios } = require('./acessoriosItem');
-const { ITENS_SQL: ITENS_DO_DOCUMENTO_SQL, subtotalDosItens, totalDoDocumento } = require('./totalDocumentoProposta');
+const { ITENS_SQL: ITENS_DO_DOCUMENTO_SQL, JOIN_PRODUTO_DO_ITEM, subtotalDosItens, totalDoDocumento } = require('./totalDocumentoProposta');
 const { resolverCamposCustomizacao } = require('./propostaCustomizacoes');
 const propostaEngine = require('./propostaCompositionEngine');
 const { invalidateComercialResponsaveisCache } = require('./services/comercialResponsaveisCache');
@@ -7999,6 +7999,13 @@ app.post('/api/propostas', authenticateToken, (req, res) => {
   }
   const margemNum = margemLida.valor;
 
+  // Etapa 143 (RN-143.02, C310): itens que não é lista, ou item que não é objeto, é recusado antes de criar a proposta (antes o nulo
+  // sumia calado no try por item, e número/texto viravam item vazio).
+  const itensInvalidosPost = validarItensDoCorpo(itens);
+  if (itensInvalidosPost) {
+    return res.status(400).json({ error: itensInvalidosPost });
+  }
+
   if (status === 'rejeitada' && (!motivo_nao_venda || !String(motivo_nao_venda).trim())) {
     return res.status(400).json({ error: 'Motivo da não venda é obrigatório quando a proposta está perdida/rejeitada.' });
   }
@@ -8293,6 +8300,14 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
 
     if (margemDoCorpo && !margemDoCorpo.ok) {
       return res.status(400).json({ error: MSG_MARGEM_INVALIDA });
+    }
+
+    // Etapa 143 (RN-143.01, C310): itens que não é lista (nem null), ou item que não é objeto, é recusado ANTES de qualquer gravação —
+    // a proposta, a revisão, o reparo das variáveis, os itens e o histórico. Antes `[null]` fazia o PUT nunca responder (a exceção saía
+    // no callback do banco) e, com o corpo de tamanho diferente do gravado, só depois do DELETE dos itens.
+    const itensInvalidosPut = tem('itens') ? validarItensDoCorpo(corpo.itens) : null;
+    if (itensInvalidosPut) {
+      return res.status(400).json({ error: itensInvalidosPut });
     }
 
     if ((tem('status') || tem('motivo_nao_venda')) && statusEf === 'rejeitada') {
@@ -9077,6 +9092,11 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
   if (!cliente_id || !produtos || !Array.isArray(produtos) || produtos.length === 0) {
     return res.status(400).json({ error: 'Cliente e produtos são obrigatórios' });
   }
+  // Etapa 143 (RN-143.03, C310): produto que não é objeto — antes 500 com a mensagem do JavaScript (`null`) ou proposta vazia (número, texto).
+  const produtosInvalidos = validarItensDoCorpo(produtos);
+  if (produtosInvalidos) {
+    return res.status(400).json({ error: produtosInvalidos });
+  }
 
   // Etapa 139 (RN-139.05, C300): a margem pela régua da criação, e a regra dos 5% do POST /api/propostas. Antes esta porta
   // gravava status e margem do corpo sem regra nenhuma: uma proposta "enviada" com 50% de desconto nascia sem aprovação.
@@ -9452,7 +9472,7 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
              pr.descricao as produto_descricao, pr.especificacoes_tecnicas, pr.familia as produto_familia,
              pr.preco_base, pr.icms, pr.ipi
       FROM proposta_itens pi
-      LEFT JOIN produtos pr ON TRIM(COALESCE(pi.codigo_produto,'')) = TRIM(COALESCE(pr.codigo,''))
+      ${JOIN_PRODUTO_DO_ITEM}
       WHERE pi.proposta_id = ?
       ORDER BY pi.id
     `, [id], (err, itens) => {
@@ -9763,7 +9783,7 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
                pr.descricao as produto_descricao, pr.especificacoes_tecnicas, pr.familia as produto_familia,
                pr.preco_base, pr.icms, pr.ipi
         FROM proposta_itens pi
-        LEFT JOIN produtos pr ON TRIM(COALESCE(pi.codigo_produto,'')) = TRIM(COALESCE(pr.codigo,''))
+        ${JOIN_PRODUTO_DO_ITEM}
         WHERE pi.proposta_id = ?
         ORDER BY pi.id
       `, [id], (err, rows) => {
