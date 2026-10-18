@@ -37,37 +37,10 @@ const t = (nome, fn) => {
 const run = (sql, p = []) => new Promise((res, rej) => db.run(sql, p, function (e) { e ? rej(e) : res(this); }));
 const all = (sql, p = []) => new Promise((res, rej) => db.all(sql, p, (e, r) => e ? rej(e) : res(r || [])));
 
-// Copia fiel de repararVariaveisManuais (server/index.js).
-function repararVariaveisManuais(vmRows, itens) {
-  if (!Array.isArray(vmRows) || vmRows.length === 0) return vmRows || [];
-  const lista = Array.isArray(itens) ? itens : [];
-  const idsAtuais = new Set(lista.map((i) => String(i.id)));
-  if (vmRows.every((v) => idsAtuais.has(String(v.item_id)))) return vmRows;
-  const identidade = (it) => String(
-    (it.codigo_produto && String(it.codigo_produto).trim())
-    || (it.descricao && String(it.descricao).trim())
-    || (it.nome && String(it.nome).trim()) || ''
-  );
-  const contador = new Map();
-  const porChave = new Map();
-  lista.forEach((it) => {
-    const base = identidade(it);
-    if (!base) return;
-    const n = (contador.get(base) || 0) + 1;
-    contador.set(base, n);
-    porChave.set(base + '#' + n, it.id);
-  });
-  const usados = new Map();
-  return vmRows.map((v) => {
-    if (idsAtuais.has(String(v.item_id))) return v;
-    const base = String(v.item_chave || '').trim();
-    if (!base) return v;
-    const n = (usados.get(base) || 0) + 1;
-    usados.set(base, n);
-    const novoId = porChave.get(base + '#' + n);
-    return novoId != null ? { ...v, item_id: novoId } : v;
-  });
-}
+// Desde a Etapa 142 este teste usa a funcao REAL (variaveisManuaisItens.repararVariaveisManuais) — antes trazia uma copia do index.js.
+// Aqui o salvamento NAO religa nem aposenta nada (o caso da religacao que nao aconteceu): e o reparo da leitura sozinho. Pelo PUT de
+// verdade, o produto removido tem as variaveis aposentadas e NAO volta ao ser readicionado (RN-142.06/10).
+const { repararVariaveisManuais } = require('../variaveisManuaisItens');
 
 // Como o template monta o mapa: "<item_id>:<chave>".
 const comoOTemplateVe = (vmRows, itens) => {
@@ -157,6 +130,24 @@ const MASSEIRA = { codigo_produto: '20-01-MHY-30-01', descricao: 'MASSEIRA HELIC
       ['PRIMEIRO', 'SEGUNDO']));
   t('e cada uma aponta para um item diferente',
     () => assert.strictEqual(new Set(reparado2.map((v) => String(v.item_id))).size, 2));
+
+  console.log('\n[C309] (Etapa 142) as variaveis de um item orfao vao juntas para o mesmo item');
+  t('duas variaveis do mesmo item velho, dois iguais atuais: as duas no primeiro (antes: uma em cada)', () => {
+    const rows = [
+      { item_id: 900, chave: 'tag', valor: 'A', item_chave: MOINHO.codigo_produto },
+      { item_id: 900, chave: 'serie', valor: 'S', item_chave: MOINHO.codigo_produto },
+    ];
+    const r = repararVariaveisManuais(rows, itens2);
+    assert.deepStrictEqual(r.map((v) => String(v.item_id)), [String(itens2[0].id), String(itens2[0].id)]);
+  });
+  t('orfa viva nao vai para item que ja tem variavel (sem linha dobrada)', () => {
+    const rows = [
+      { item_id: itens2[0].id, chave: 'nota', valor: 'VIVA', item_chave: MOINHO.codigo_produto },
+      { item_id: 901, chave: 'nota', valor: 'ORFA', item_chave: MOINHO.codigo_produto },
+    ];
+    const r = repararVariaveisManuais(rows, [itens2[0]]);
+    assert.deepStrictEqual(r.filter((v) => String(v.item_id) === String(itens2[0].id)).map((v) => v.valor), ['VIVA']);
+  });
 
   console.log('\n[seguranca] o conserto nao inventa nem estraga nada');
   t('linha sem identidade gravada (dado antigo) e deixada como esta', () => {

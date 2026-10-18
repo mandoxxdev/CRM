@@ -24,7 +24,7 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs');
 const sqlite3 = require('sqlite3');
-const { chaveDe } = require('../propostaItensDiff');
+const { planoReligacao } = require('../variaveisManuaisItens');
 
 const arq = path.join(os.tmpdir(), `vm-religar-${Date.now()}.sqlite`);
 const db = new sqlite3.Database(arq);
@@ -39,34 +39,16 @@ const t = (nome, fn) => {
 const run = (sql, p = []) => new Promise((res, rej) => db.run(sql, p, function (e) { e ? rej(e) : res(this); }));
 const all = (sql, p = []) => new Promise((res, rej) => db.all(sql, p, (e, r) => e ? rej(e) : res(r || [])));
 
-// Copia fiel de religarVariaveisManuais (server/index.js, PUT /api/propostas/:id).
-async function religar(propostaId, itensAntigos) {
-  if (!itensAntigos.length) return;
-  const chavesComOrdinal = (lista) => {
-    const contador = new Map();
-    return lista.map((it) => {
-      const base = chaveDe(it);
-      const n = (contador.get(base) || 0) + 1;
-      contador.set(base, n);
-      return base + '#' + n;
-    });
-  };
-  const valores = await all('SELECT item_id, chave, valor FROM proposta_variaveis_manuais WHERE proposta_id = ?', [propostaId]);
-  if (!valores.length) return;
-  const deIdAntigo = new Map();
-  chavesComOrdinal(itensAntigos).forEach((k, i) => deIdAntigo.set(String(itensAntigos[i].id), k));
-  const novos = await all('SELECT id, codigo_produto, descricao FROM proposta_itens WHERE proposta_id = ? ORDER BY id ASC', [propostaId]);
-  if (!novos.length) return;
-  const paraIdNovo = new Map();
-  chavesComOrdinal(novos).forEach((k, i) => paraIdNovo.set(k, novos[i].id));
-  // NAO-DESTRUTIVO: so reaponta o item_id de quem casou. Nada e apagado.
-  const paraAtualizar = [];
-  deIdAntigo.forEach((k, idAntigo) => {
-    const idNovo = paraIdNovo.get(k);
-    if (idNovo != null && String(idNovo) !== String(idAntigo)) paraAtualizar.push([idNovo, propostaId, idAntigo]);
-  });
-  for (const r of paraAtualizar) {
-    await run("UPDATE OR REPLACE proposta_variaveis_manuais SET item_id = ? WHERE proposta_id = ? AND item_id = ?", r);
+// Desde a Etapa 142 este teste usa a funcao REAL (variaveisManuaisItens.planoReligacao) — antes trazia uma copia do index.js, que podia
+// divergir sem ninguem ver. A aplicacao no banco e a mesma do PUT: UPDATE OR REPLACE do item_id e a aposentadoria (item_removido_em).
+async function religar(propostaId, itensAntigos, corpo) {
+  const novos = await all('SELECT id FROM proposta_itens WHERE proposta_id = ? ORDER BY id ASC', [propostaId]);
+  const { mover, aposentar } = planoReligacao(itensAntigos, corpo, novos.map((n) => n.id));
+  for (const [velho, novo] of mover) {
+    await run("UPDATE OR REPLACE proposta_variaveis_manuais SET item_id = ? WHERE proposta_id = ? AND item_id = ?", [novo, propostaId, velho]);
+  }
+  for (const velho of aposentar) {
+    await run("UPDATE proposta_variaveis_manuais SET item_removido_em = datetime('now') WHERE proposta_id = ? AND item_id = ? AND item_removido_em IS NULL", [propostaId, velho]);
   }
 }
 
@@ -78,7 +60,7 @@ async function salvarProposta(propostaId, itensNovos, { comReligar }) {
     await run('INSERT INTO proposta_itens (proposta_id, codigo_produto, descricao) VALUES (?, ?, ?)',
       [propostaId, it.codigo_produto || null, it.descricao || null]);
   }
-  if (comReligar) await religar(propostaId, antigos);
+  if (comReligar) await religar(propostaId, antigos, itensNovos);
   return antigos;
 }
 
@@ -87,7 +69,7 @@ const valoresVisiveis = async (propostaId) => {
   const linhas = await all(`SELECT pi.codigo_produto AS cod, vm.chave, vm.valor
                               FROM proposta_variaveis_manuais vm
                               JOIN proposta_itens pi ON pi.id = vm.item_id
-                             WHERE vm.proposta_id = ?
+                             WHERE vm.proposta_id = ? AND vm.item_removido_em IS NULL
                              ORDER BY pi.id, vm.chave`, [propostaId]);
   return linhas.map((l) => `${l.cod}:${l.chave}=${l.valor}`);
 };
@@ -96,7 +78,7 @@ const valoresVisiveis = async (propostaId) => {
   await run('CREATE TABLE proposta_itens (id INTEGER PRIMARY KEY AUTOINCREMENT, proposta_id INTEGER, codigo_produto TEXT, descricao TEXT)');
   await run(`CREATE TABLE proposta_variaveis_manuais (
     id INTEGER PRIMARY KEY AUTOINCREMENT, proposta_id INTEGER NOT NULL, item_id INTEGER NOT NULL,
-    chave TEXT NOT NULL, valor TEXT NOT NULL DEFAULT '', UNIQUE(proposta_id, item_id, chave))`);
+    chave TEXT NOT NULL, valor TEXT NOT NULL DEFAULT '', item_removido_em TEXT, UNIQUE(proposta_id, item_id, chave))`);
 
   const MOINHO = { codigo_produto: '10-02-MLY-2-01', descricao: 'MOINHO DE LABORATORIO MLY' };
   const MASSEIRA = { codigo_produto: '20-01-MHY-30-01', descricao: 'MASSEIRA HELICOIDAL ATM' };
@@ -157,6 +139,17 @@ const valoresVisiveis = async (propostaId) => {
   t('cada copia mantem o SEU valor (o ordinal evita a troca)',
     () => assert.deepStrictEqual(iguais.map((r) => r.valor), ['PRIMEIRO', 'SEGUNDO']));
 
+  console.log('\n[itens iguais] C298 (Etapa 142): tirar o PRIMEIRO de dois iguais, com o id do que ficou');
+  const doisDepois = await all('SELECT * FROM proposta_itens WHERE proposta_id = 3 ORDER BY id');
+  await salvarProposta(3, [{ ...MOINHO, id: doisDepois[1].id }], { comReligar: true });
+  const ficou = await all(`SELECT vm.valor FROM proposta_variaveis_manuais vm JOIN proposta_itens pi ON pi.id = vm.item_id
+                             WHERE vm.proposta_id = 3 AND vm.item_removido_em IS NULL`, []);
+  t('o que ficou mantem o SEU valor (SEGUNDO), e nao o do que saiu (antes: PRIMEIRO)',
+    () => assert.deepStrictEqual(ficou.map((r) => r.valor), ['SEGUNDO']));
+  const aposentada = await all('SELECT valor FROM proposta_variaveis_manuais WHERE proposta_id = 3 AND item_removido_em IS NOT NULL', []);
+  t('o valor do que saiu fica no banco, aposentado (nada e apagado)',
+    () => assert.deepStrictEqual(aposentada.map((r) => r.valor), ['PRIMEIRO']));
+
   console.log('\n[remocao] item excluido: valor some da proposta mas NAO do banco');
   // Mudanca deliberada de comportamento (nao e o teste se acomodando ao codigo): a versao
   // anterior apagava tudo e reinseria so o que casasse, entao uma falha de casamento
@@ -193,7 +186,7 @@ const valoresVisiveis = async (propostaId) => {
   const antigos4 = await all('SELECT * FROM proposta_itens WHERE proposta_id = 4 ORDER BY id');
   await run('DELETE FROM proposta_itens WHERE proposta_id = 4');
   // Religa AGORA, com a tabela de itens ainda vazia (o adiantamento).
-  await religar(4, antigos4);
+  await religar(4, antigos4, [MOINHO]);
   // So depois os itens sao inseridos, como o stmt.run faria fora da fila.
   await run('INSERT INTO proposta_itens (proposta_id, codigo_produto, descricao) VALUES (?, ?, ?)',
     [4, MOINHO.codigo_produto, MOINHO.descricao]);

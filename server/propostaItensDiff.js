@@ -93,10 +93,67 @@ const CAMPOS_PRESERVAR = [
   'acessorios',
 ];
 
+// Identidade do item para reconhecê-lo entre o que está gravado e o que o salvamento manda: a de chaveDe, sem caixa (o banco
+// grava a descrição em caixa alta e o corpo pode vir em outra — Etapa 142, B922).
+function identidadeDe(item) {
+  return chaveDe(item || {}).toUpperCase();
+}
+
+// O id do corpo só "vale" se for inteiro (número ou texto só de dígitos) — null/undefined/'' nunca pareiam (senão dois itens sem id
+// casariam por String(undefined)).
+function idInteiro(v) {
+  if (typeof v === 'number') return Number.isInteger(v) ? String(v) : null;
+  if (typeof v === 'string' && /^\d+$/.test(v.trim())) return String(Number(v.trim()));
+  return null;
+}
+const temCodigo = (it) => String((it && it.codigo_produto) || '').trim() !== '';
+
+// Etapa 142 (C298, C308) — QUAL item gravado cada item do corpo do PUT é. O salvamento apaga e reinsere todos os itens; quem sabe qual dos
+// dois iguais saiu é a tela, que manda o id do item gravado (RN-142.01).
+//   por id (RN-142.02): com pelo menos um id que vale — inteiro, de um atual ainda não usado, da mesma identidade (ou os dois sem código:
+//     item manual com a descrição editada) — cada item com id que vale fica com o seu; os outros são novos; o atual que ninguém reclamou saiu.
+//   por posição (RN-142.03): sem id que vale, o k-ésimo igual do corpo fica com o k-ésimo igual gravado; saem os que sobram (os últimos).
+// Devolve { porId, pares (atual ou null, por índice do corpo), sairam }.
+function parearItens(itensAtuais, itensCorpo) {
+  const atuais = Array.isArray(itensAtuais) ? itensAtuais : [];
+  const corpo = Array.isArray(itensCorpo) ? itensCorpo : [];
+  const porIdAtual = new Map();
+  atuais.forEach((a) => { const k = idInteiro(a && a.id); if (k != null && !porIdAtual.has(k)) porIdAtual.set(k, a); });
+  const usados = new Set();
+  const paresPorId = corpo.map((it) => {
+    const k = idInteiro(it && it.id);
+    if (k == null || usados.has(k)) return null;
+    const a = porIdAtual.get(k);
+    if (!a) return null;
+    const mesma = identidadeDe(a) === identidadeDe(it) || (!temCodigo(a) && !temCodigo(it));
+    if (!mesma) return null;
+    usados.add(k);
+    return a;
+  });
+  let pares;
+  let porId = paresPorId.some((p) => p != null);
+  if (porId) {
+    pares = paresPorId;
+  } else {
+    const fila = new Map();
+    atuais.forEach((a) => { const k = identidadeDe(a); if (!fila.has(k)) fila.set(k, []); fila.get(k).push(a); });
+    pares = corpo.map((it) => { const l = fila.get(identidadeDe(it)); return l && l.length ? l.shift() : null; });
+  }
+  const pareados = new Set(pares.filter(Boolean));
+  const sairam = atuais.filter((a) => !pareados.has(a));
+  return { porId, pares, sairam };
+}
+
 function mesclarItensPreservandoCampos(itensAtuais, itensNovos) {
-  const antesMap = new Map((itensAtuais || []).map((i) => [chaveDe(i), i]));
-  return (itensNovos || []).map((novo) => {
-    const antigo = antesMap.get(chaveDe(novo));
+  // Etapa 142 (C298/C308): o item pareado preserva do SEU gravado. Antes um Map por chaveDe guardava só o ÚLTIMO de cada produto, e
+  // com o mesmo produto duas vezes os dois recebiam os campos do último (a descrição da tabela, a tag, os acessórios do primeiro sumiam
+  // em todo salvamento). Sem par (item novo): o último igual que não saiu — o de antes, sem herdar do que acabou de sair (B920).
+  const { pares, sairam } = parearItens(itensAtuais, itensNovos);
+  const sairamSet = new Set(sairam);
+  const ultimoIgual = new Map();
+  (itensAtuais || []).forEach((i) => { if (!sairamSet.has(i)) ultimoIgual.set(identidadeDe(i), i); });
+  return (Array.isArray(itensNovos) ? itensNovos : []).map((novo, idx) => {
+    const antigo = pares[idx] || ultimoIgual.get(identidadeDe(novo));
     if (!antigo) return novo; // item novo: não há de onde preservar
     const merged = { ...novo };
     for (const campo of CAMPOS_PRESERVAR) {
@@ -118,4 +175,4 @@ function resumoLado(mudancas, lado) {
   }).join(', ');
 }
 
-module.exports = { diffItensParaLog, chaveDe, nomeDe, resumoLado, CAMPOS_COMPARAR, mesclarItensPreservandoCampos, CAMPOS_PRESERVAR };
+module.exports = { diffItensParaLog, chaveDe, identidadeDe, parearItens, nomeDe, resumoLado, CAMPOS_COMPARAR, mesclarItensPreservandoCampos, CAMPOS_PRESERVAR };

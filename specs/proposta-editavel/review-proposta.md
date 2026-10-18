@@ -97,6 +97,14 @@
     E as duas rotas recusam (403) a proposta com desconto acima de 5% sem aprovação que case **antes** de montar o documento — os testes de
     navegador desta revisão chamam o template direto e não passam por essa recusa; a rota é provada em `tests/api/propostaDocumentoDesconto.api.test.js`.
 
+19. **O item da proposta é reconhecido pelo `id` que a tela manda** (Etapa 142, C298/C308/C309). O `PUT /api/propostas/:id` apaga e
+    reinsere os itens; `parearItens` (`server/propostaItensDiff.js`) diz qual gravado cada item do corpo é — pelo `id` quando a tela o manda
+    (`montarPayloadProposta` + o carregamento do `proposta/PropostaForm.js`), senão pela posição entre os iguais. A mesclagem dos campos
+    preservados e a religação das variáveis manuais usam **o mesmo** pareamento; a variável do item que saiu é **aposentada**
+    (`item_removido_em`), nunca apagada; o reparo da leitura (`server/variaveisManuaisItens.js`, do `/premium` e do `/pdf`) agrupa por item
+    velho e só preenche item sem variável viva. **Nunca volte a um `Map` por `chaveDe`**: com o mesmo produto duas vezes ele guarda só o
+    último, e todo salvamento copiava a descrição da tabela, a tag e os acessórios do último para os outros (C308).
+
 ## Como rodar a validação (obrigatório antes de merge)
 
 ```bash
@@ -127,6 +135,7 @@ node tests/propostaCapaLogoCliente.test.js
 node tests/propostaFonteEmbed.test.js
 node tests/propostaDiffItens.test.js
 node tests/propostaItensPreservar.test.js
+node tests/propostaItensIguais.test.js        # Etapa 142: itens iguais — o pareamento, a mesclagem, a religação e o reparo
 node tests/propostaCustomizacoes.test.js
 
 # Client (jsdom)
@@ -137,11 +146,12 @@ E pela rota (o `index.js` real, em pasta vazia — entra no `npm run test:api`):
 
 ```bash
 cd server && node tests/api/propostaClausulaAlem524.api.test.js   # a 5.25 incluída pelas rotas sai no preview (I1)
+cd server && node tests/api/propostaItensIguais.api.test.js       # Etapa 142: itens iguais pelo PUT, o /premium e o preview
 ```
 
 Critério: **tudo verde**. Qualquer invariante quebrado bloqueia o merge. *(De julho à Etapa 138 a revisão rodava com dois vermelhos
 conhecidos — `propostaSumarioOverflow` e `propostaCapaHero`; a Etapa 139 achou que o primeiro era uma regressão real de I1 e o segundo
-um teste errado, e a revisão voltou a 22/22.)*
+um teste errado, e a revisão voltou a 22/22. A Etapa 142 acrescentou o `propostaItensIguais.test.js`: **23/23**.)*
 
 ## Validação manual complementar (quando mexer em área visual)
 
