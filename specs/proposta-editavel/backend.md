@@ -194,7 +194,7 @@ lido no boot) desliga (B946). A mesma tabela de casos (`server/tests/fixtures/po
 `hasModuleAccess`. Testes: `tests/api/propostaPortaoModulo.api.test.js` (cada rota pela rota, 17 perfis), o cruzado
 `modulosClienteServidor.api.test.js` e `client/src/services/permissionsCache.portaoComoATela.test.js`. Fora do portão (declarado):
 `/api/proposta-template*`, `/api/proposta-blocos*`, `/api/proposta-texto-biblioteca*` (C319) e as rotas de outros prefixos que leem
-proposta (C320).
+proposta (C320). *(Desde a Etapa 147 as do modelo e as das listas de preço passam por um portão — ver a seção da 147 abaixo; a C320 continua.)*
 
 ### A geração automática grava antes de responder; o cliente que não existe (Etapa 145, C318, C315)
 
@@ -245,6 +245,41 @@ por `gravarItensEmSequencia` (`db.run` um a um; devolve o erro **e** os ids já 
 
 Testes: `tests/api/propostaSalvarGrava.api.test.js` (a falha real por um **gatilho do SQLite** gravado por fora — passa por qualquer
 caminho de gravação — e as limpezas pelo `FALHA_SQL_INJETADA`), `tests/api/propostaPortaoModulo.api.test.js` (o cenário da RN-146.06).
+
+### O portão no modelo da proposta e nas listas de preço; as cláusulas gravadas antes de responder (Etapa 147, C319, C329, C327)
+
+Plano: `docs/superpowers/plans/2026-10-18-almoxarifado-etapa147-o-modulo-no-modelo-e-nas-listas.md`. Commits `2f558a3e` (o portão, as cláusulas) e `e8a76073` (Fase 5).
+
+- **O modelo da proposta** (as **20** rotas `/api/proposta-template*`, `/api/proposta-blocos*`, `/api/proposta-texto-biblioteca*`, inclusive o
+  download `GET /api/proposta-template/contrato-anexo/:arquivo`): `exigirComercialNoModeloDaProposta` logo depois do `authenticateToken` (antes
+  do `multer` nos 5 uploads) = `portaoDasPropostas.exigir('comercial', { tambemAdminDoModuloCom: { admin: 'comercial', tela: 'administrativo' } })`
+  — a régua da tela da 145 **ou** o segundo caminho por onde a tela abre o modelo (`ConfigTemplateProposta` embutido em `/configuracoes`, aba
+  Comercial → Template de proposta: o Administrativo pela régua da tela **e** `admin_modulos` com `comercial` — `passaPeloCaminhoDeConfiguracoes`,
+  RN-147.01, B958). O caminho de Configurações abre também `/list`, `/:id`, `save-as`, `restore-default`, os blocos e a biblioteca, que a
+  tela embutida não chama (B958, o mesmo dado); ninguém no client chama os blocos nem a biblioteca (B959).
+- **As listas de preço** (as **5** `/api/comercial/listas-precos*`): `exigirComercialNasPropostas` (RN-147.02; a tela só existe no Comercial).
+- O mesmo corpo de recusa, o log `acesso_negado`, o 503 do BUSY e o interruptor `PROPOSTAS_PORTAO_DE_MODULO=desligado` da 145 (B960).
+- **O documento não chama o modelo por HTTP** (RN-147.04): o `/premium` e o `/pdf` leem `proposta_template_config` direto do banco (só as
+  margens e o mapa de variáveis por família entram no `gerarHTMLPropostaPremiumV2`); as imagens saem por `/api/uploads` e `/api/assets`
+  (`express.static`, fora do portão). **O template não usa** `logo_url`/`header_image_url`/`footer_image_url`/`cover_image_url` — só as funções
+  mortas `gerarHTMLPropostaFromComponentes`/`gerarHTMLPropostaPremium` usavam (C339).
+- **As cláusulas da proposta** (C327): o `POST /api/propostas/:id/clausulas/inicializar` grava as do modelo por `gravarItensEmSequencia`
+  (`SQL_CLAUSULA_DA_PROPOSTA`) — falha numa → apaga as gravadas pelos ids → 500 *"Erro ao copiar as cláusulas da proposta (<msg>). Nenhuma
+  cláusula foi gravada — salve de novo."* (limpeza que falha: *"… A proposta ficou com parte das cláusulas — use Resetar cláusulas e salve de
+  novo."*); o erro de banco em `resolverModeloClausulas`/`carregarClausulasDoModelo` (que agora devolvem o erro no 1º argumento — os outros
+  chamadores o ignoram, como antes) recusa com a frase "Nenhuma"; o `PUT .../clausulas/reordenar` lê a ordem atual, grava em sequência e, na
+  falha, devolve a ordem lida às que já mudaram (*"Erro ao gravar a nova ordem das cláusulas (<msg>). A ordem anterior foi mantida — salve de
+  novo."* / *"… A ordem ficou misturada — confira as cláusulas antes de enviar a proposta e salve de novo."* / leitura: *"… A ordem não foi
+  alterada — salve de novo."*). `SQLITE_BUSY` com o desfazer feito → 503 `context: 'propostas:clausulas'` (o `api.js` do client repete).
+  Frases em `msgClausulasNaoCopiadas`/`msgOrdemNaoGravada` (`index.js`).
+- **O preview mostra a frase do servidor** quando o `salvar()` falha (`mensagemDaFalhaDoSalvar`, `client/src/components/proposta/avisoValoresIgnorados.js`,
+  RN-147.07, B962).
+- **O preview não relaciona pela posição as cláusulas que o servidor já tinha** (RN-147.08, B963, Fase 5 r1 I-1): com `jaInicializado` no
+  `salvarClausulas`, as cláusulas não são gravadas, o `salvar()` grava o resto, mostra `AVISO_CLAUSULAS_JA_GRAVADAS`, recarrega e devolve `false`.
+
+Testes: `tests/api/propostaModeloPortao.api.test.js` (as 25 rotas pelo fonte e uma a uma, 17 perfis, o PDF pela rota, o desligado, o BUSY),
+`tests/api/propostaClausulasGrava.api.test.js` (o gatilho do SQLite como falha real; o modelo e o BUSY pelo `FALHA_SQL_INJETADA`),
+`tests/api/uploadsProtegidos.api.test.js` (o registro do download do contrato), `client/src/components/proposta/avisoValoresIgnorados.test.js`.
 
 ### A margem de desconto (Etapa 139, C299/C300)
 
@@ -329,5 +364,8 @@ Toda vez que `PUT /customizacoes` ou qualquer rota de cláusula for chamada:
 
 ## Inicialização de Cláusulas
 Quando o usuário editar cláusulas pela primeira vez em uma proposta que ainda não tem customizações:
-- Copiar todas as cláusulas padrão de `condicoesNano4You.js` para `proposta_clausulas`
+- Copiar todas as cláusulas **do modelo de contrato da proposta** para `proposta_clausulas` — o modelo da família dos itens
+  (`resolverModeloClausulas`: equipamento prevalece; sem modelo próprio, o modelo padrão `clausulas_modelo.is_padrao = 1`; sem modelo
+  nenhum, `getClausulasDefault()`), **uma por uma, tudo ou nada** (Etapa 147, RN-147.05). *(Esta linha dizia "copiar todas as cláusulas
+  padrão de `condicoesNano4You.js`" — **estava errado** desde a escolha do modelo pela família; corrigido na Etapa 147.)*
 - A partir daí, usar apenas as da tabela para aquela proposta

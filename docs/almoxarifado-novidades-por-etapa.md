@@ -11,12 +11,19 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-18):** **Etapa 146 fechada** (das propostas: **a criação, o salvamento e a cópia da proposta só
+> **Onde o desenvolvimento está (2026-10-18):** **Etapa 147 fechada** (das propostas/Comercial: **o modelo da proposta e as listas de
+> preço pedem o Comercial, e as cláusulas da proposta só dizem "pronto" depois de gravar** — quem a tela barra do Comercial alterava o
+> modelo de todas as propostas e as listas de preço pela integração; agora toma *"Acesso negado ao módulo"*, e o administrador do Comercial
+> que entra por Configurações continua editando o modelo (**C319**, **C329** resolvidos); copiar e reordenar as cláusulas viram "tudo ou
+> nada" (**C327** resolvido), o aviso do preview diz o motivo e o preview não regrava mais as cláusulas na vizinha depois de uma falha;
+> **B958** a **B964**; a consulta **A95** (opcional); os avisos novos **C337** a **C342**); a próxima é a **148** — ver "Onde estamos e o
+> que vem a seguir".
+> *(Antes: **Etapa 146 fechada** (das propostas: **a criação, o salvamento e a cópia da proposta só
 > dizem "pronto" depois de gravar os itens, e o salvamento confere o cliente** — quando o banco recusava um item, a proposta era criada,
 > salva ou copiada com sucesso sem ele, e no salvamento os itens que havia também se perdiam; agora sai *"Erro ao gravar os itens da
 > proposta (…)"* e a proposta fica como estava (**C323** resolvido); salvar com um cliente que não existe recebe uma frase (**C322**
 > resolvido — e o texto dela estava errado); a lista de OS do Comercial pela régua da tela (**C321** resolvido); **B952** a **B957**; a
-> consulta **A94** (opcional); os avisos novos **C327** a **C336**); a próxima é a **147** — ver "Onde estamos e o que vem a seguir".
+> consulta **A94** (opcional); os avisos novos **C327** a **C336**); a próxima era a **147**.)*
 > *(Antes: **Etapa 145 fechada** (das propostas: **as rotas da proposta exigem o Comercial pela
 > régua da tela, a geração automática só responde depois de gravar os itens e o cliente que não existe é recusado** — quem a tela barra
 > do Comercial (um usuário só do Almoxarifado, por exemplo) criava, gerava e editava proposta e pedia aprovação de desconto pela
@@ -260,7 +267,11 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Noventa e quatro itens para rodar em produção ANTES do deploy — noventa e uma são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Noventa e cinco itens para rodar em produção ANTES do deploy — noventa e duas são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-18 (Etapa 147) de noventa e quatro para noventa e cinco**, com a **A95** — quem criou lista de preço e passa a
+ser barrado nas listas, e todos os que passam a ser barrados no modelo da proposta e nas listas (**C319**, **C329**). **Somente leitura,
+opcional:** no banco medido, ninguém que usa perde.)*
 
 *(**Atualizado em 2026-10-18 (Etapa 146) de noventa e três para noventa e quatro**, com a **A94** — as propostas sem cliente ou com um
 cliente que não existe mais (o salvamento passa a conferir o cliente que muda). **Somente leitura, opcional.**)*
@@ -3425,12 +3436,69 @@ cliente vazio deixa a proposta assim — **C330**): abra cada uma em **Comercial
 formulário exige o cliente). **Linhas na 2** — o mesmo; o cliente antigo não volta. *(Rodada no banco local, cópia de 09/10: **0** e
 **0**; controle numa cópia com uma proposta sem cliente e outra apontando para o cliente 987654: a 1 achou a primeira e a 2 a segunda.)*
 
+**A95 (NOVA, da Etapa 147 — opcional — quem perde o modelo da proposta e as listas de preço).** Desde a Etapa 147 o modelo da proposta
+(Configurações → Template de proposta, o editor visual, os blocos e a biblioteca de textos) e as listas de preço exigem o **Comercial**
+pela mesma régua da tela das propostas (a da **A93**); o modelo aceita também o administrador do módulo Comercial que tem o
+**Administrativo** (é por onde a tela de Configurações o deixa entrar). O modelo **não guarda quem o alterou**, então a consulta 1 só
+acha uso pelas listas de preço; a 2 lista todos os que perdem. Somente leitura.
+
+```sql
+-- 1) quem criou lista de preço e passa a ser barrado nas listas de preço (a régua da tela, copiada; o modelo da proposta não guarda quem alterou)
+WITH linhas AS (
+  SELECT ug.usuario_id, p.modulo, p.permissao FROM usuarios_grupos ug
+    JOIN grupos_permissoes gp ON gp.id = ug.grupo_id AND gp.ativo = 1
+    JOIN permissoes p ON p.grupo_id = gp.id
+  UNION ALL
+  SELECT p.usuario_id, p.modulo, p.permissao FROM permissoes p WHERE p.usuario_id IS NOT NULL AND p.grupo_id IS NULL
+)
+SELECT u.id, u.nome, u.email,
+  (SELECT GROUP_CONCAT(DISTINCT l.modulo) FROM linhas l WHERE l.usuario_id = u.id AND l.permissao = 1) AS modulos_que_tem,
+  COUNT(lp.id) AS listas_criadas, MAX(lp.created_at) AS ultima_lista
+FROM listas_precos lp JOIN usuarios u ON u.id = lp.created_by
+WHERE u.ativo = 1
+  AND COALESCE(u.is_superadmin, 0) NOT IN (1, '1')
+  AND LOWER(COALESCE(u.role, '')) <> 'admin'
+  AND EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id)
+  AND NOT EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id AND l.modulo = 'comercial' AND l.permissao = 1)
+GROUP BY u.id ORDER BY ultima_lista DESC;
+
+-- 2) todos os usuários ativos que passam a ser barrados no modelo da proposta (Configurações -> Template de proposta) e nas listas
+WITH linhas AS (
+  SELECT ug.usuario_id, p.modulo, p.permissao FROM usuarios_grupos ug
+    JOIN grupos_permissoes gp ON gp.id = ug.grupo_id AND gp.ativo = 1
+    JOIN permissoes p ON p.grupo_id = gp.id
+  UNION ALL
+  SELECT p.usuario_id, p.modulo, p.permissao FROM permissoes p WHERE p.usuario_id IS NOT NULL AND p.grupo_id IS NULL
+)
+SELECT u.id, u.nome, u.email,
+  (SELECT GROUP_CONCAT(DISTINCT l.modulo) FROM linhas l WHERE l.usuario_id = u.id AND l.permissao = 1) AS modulos_que_tem,
+  CASE WHEN COALESCE(u.admin_modulos, '') LIKE '%"comercial"%'
+        AND EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id AND l.modulo = 'administrativo' AND l.permissao = 1)
+       THEN 'só as listas (o modelo continua por Configurações)' ELSE 'o modelo e as listas' END AS perde
+FROM usuarios u
+WHERE u.ativo = 1
+  AND COALESCE(u.is_superadmin, 0) NOT IN (1, '1')
+  AND LOWER(COALESCE(u.role, '')) <> 'admin'
+  AND EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id)
+  AND NOT EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id AND l.modulo = 'comercial' AND l.permissao = 1)
+ORDER BY u.nome;
+```
+
+**Como ler o resultado:** **a 1 vazia** — ninguém que criou lista de preço perde o acesso. **Linhas na 1** — quem importou lista e vai
+tomar *"Acesso negado ao módulo"* nela: se deve continuar, dê-lhe o **Comercial** antes do deploy. **A 2** — todos os que perdem; a coluna
+*perde* diz se é **só as listas** (o administrador do Comercial com o Administrativo) ou **o modelo e as listas**. Quem não usa
+Configurações → Template de proposta nem a Lista de Preços pode ficar como está. Se a 1 der *"no such table: listas_precos"*, ninguém
+nunca criou lista (a tabela nasce na primeira). *(Rodada no banco local, cópia de 09/10: a 1 **vazia** (nenhuma lista) e a 2 com os **4**
+de sempre — os usuários com permissões só de Compras, Almoxarifado ou Engenharia / Projetos, "o modelo e as listas"; controle numa cópia
+com uma lista criada por um desses usuários, outra por um usuário com o Comercial, e um terceiro promovido a administrador do Comercial
+com o Administrativo: a 1 achou só o primeiro; a 2 marcou o terceiro como "só as listas".)*
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B957; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B964; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -10416,6 +10484,38 @@ também esta. **Reversível.**
 **B957 (NOVA, da Etapa 146) — a próxima etapa (147).** Ver a "próxima tarefa detalhada" no plano da Etapa 146. As decisões que esperam
 vocês continuam as da **B951**, mais a **C330** (a proposta pode ficar sem cliente?).
 
+**B958 (NOVA, da Etapa 147; do Comercial) — o modelo da proposta aceita também o caminho de Configurações.** Quem a tela deixa abrir
+**Configurações → Comercial → Template de proposta** (o administrador do módulo Comercial que tem o Administrativo) continua editando o
+modelo, mesmo sem o Comercial; as listas de preço, não (a tela delas só existe no Comercial). Esse caminho abre as 20 operações do modelo,
+inclusive as que a tela de Configurações não usa (a lista de modelos salvos, salvar como, restaurar o padrão, blocos e textos) — é o mesmo
+dado. **Descartado:** (a) só o Comercial (trancaria fora quem a tela deixa editar o modelo — no banco medido, ninguém); (b) a régua antiga
+do servidor (libera o Comercial a todo usuário sem grupo — não mudaria nada no banco medido, **B944**). **Reversível.**
+
+**B959 (NOVA, da Etapa 147; do Comercial) — os blocos e a biblioteca de textos ficam com a régua do modelo.** Nenhuma tela os usa hoje
+(são do motor de composição do modelo). **Descartado:** só o administrador (uma régua à parte para o que não tem tela seria chute).
+**Reversível.**
+
+**B960 (NOVA, da Etapa 147) — a mesma chave da B946 desliga também estas 25 operações** (`PROPOSTAS_PORTAO_DE_MODULO=desligado`; o aviso
+do servidor ao subir passa a citar o modelo e as listas). **Descartado:** uma chave por grupo de rotas. **Reversível.**
+
+**B961 (NOVA, da Etapa 147) — as cláusulas (C327) entraram; a OS pelo número (C335) não.** A C335 mexe no Operacional e nas rotas que a
+OS do Comercial usa (**C332**), e o Operacional tem outras rotas só com o login — é a próxima etapa, medida. **Descartado:** fechar só as 4
+da C335 (deixaria a leitura dos itens da OS aberta com o mesmo dado). **Reversível.**
+
+**B962 (NOVA, da Etapa 147; das propostas) — o aviso vermelho do salvamento do preview mostra a frase do servidor.** Sem a frase, o
+vendedor não sabia que a cópia das cláusulas tinha ficado pela metade. **Descartado:** manter o *"Erro ao salvar alterações."* de sempre (era
+o plano antes da revisão). **Consequência:** qualquer recusa aparece com o texto do servidor (por exemplo *"Acesso negado ao módulo"*).
+**Reversível** (uma linha da tela).
+
+**B963 (NOVA, da Etapa 147, revisão do código; das propostas) — o preview que acha as cláusulas do modelo e as encontra já gravadas não
+mexe nelas.** Avisa (*"As cláusulas desta proposta já estavam gravadas … faça as mudanças de novo."*), grava o resto e recarrega.
+**Descartado:** (a) recarregar o preview em toda falha (o vendedor perderia edições sem relação com a falha); (b) o servidor recusar a
+segunda cópia (a mesma informação, e a tela ainda teria de tratá-la). **Consequência:** as mudanças nas cláusulas daquele salvamento
+precisam ser feitas de novo. **Reversível.**
+
+**B964 (NOVA, da Etapa 147) — a próxima etapa (148).** Ver a "próxima tarefa detalhada" no plano da Etapa 147. As decisões que esperam
+vocês continuam as da **B957** (nada novo).
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -13333,7 +13433,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      itens.** A resposta de sucesso sai logo depois de criar a proposta; os itens são gravados em seguida, sem esperar e sem conferir erro —
      com 100 000 itens a resposta chegou com 5 gravados (os outros vieram depois). Uma falha nessa gravação deixaria a proposta com valor e
      sem itens, respondendo sucesso (não reproduzido). **O que fazer:** nada pela tela (não há tela, **C316**).
-319. **NOVO (da Fase 0 da Etapa 145; das propostas, anterior a ela; lido no código e reproduzido) — a configuração do modelo da proposta
+319. **✅ RESOLVIDO NA ETAPA 147 (B958, B959)** — as 20 operações do modelo da proposta exigem o Comercial pela régua da tela, ou o caminho
+     de Configurações (administrador do Comercial com o Administrativo). E o texto dizia que "o logo e as imagens do modelo podem ser lidos
+     por outras telas" — o documento da proposta **não usa** as imagens do modelo (**C339**). *(O texto original:)*
+     **NOVO (da Fase 0 da Etapa 145; das propostas, anterior a ela; lido no código e reproduzido) — a configuração do modelo da proposta
      só pede o login.** As 20 rotas do modelo da proposta, dos blocos de texto e da biblioteca de textos (fora das rotas de proposta) não
      exigem o Comercial: quem a tela barra do Comercial cria um bloco de texto pela integração (reproduzido na revisão). **O que fazer:**
      nada pela tela (a configuração do modelo está no Comercial). Candidata: o mesmo portão nessas rotas, medindo antes quem as chama (o
@@ -13372,13 +13475,17 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      10 000 pedidos negados com um cabeçalho de navegador de 8 KB aumentaram o banco em 81 MB (o cabeçalho é gravado inteiro). O limite de
      pedidos por endereço (500 a cada 15 minutos) segura um atacante sozinho. A etapa só somou rotas a esse caminho. **O que fazer:**
      nada; se o banco crescer sem motivo, olhar o log de acesso negado.
-327. **NOVO (da Fase 0 da Etapa 146; das propostas, anterior a ela; lido no código) — as cláusulas da proposta gravam várias linhas sem
+327. **✅ RESOLVIDO NA ETAPA 147 — e o texto abaixo subestimava:** a cópia das cláusulas com uma linha a menos não só "desarrumava": a tela
+     relaciona as copiadas **pela posição**, então a edição do vendedor caía na cláusula errada (e às vezes a gravação nem respondia). Agora
+     a cópia e a ordem são "tudo ou nada" (**C337**, **C340**). *(O texto original:)*
+     **NOVO (da Fase 0 da Etapa 146; das propostas, anterior a ela; lido no código) — as cláusulas da proposta gravam várias linhas sem
      conferir cada uma.** Copiar as cláusulas padrão para a proposta e reordenar as cláusulas gravam linha a linha sem olhar o erro de cada
      uma (o defeito da **C323**, nas cláusulas). **O que fazer:** nada; reordenar de novo conserta a ordem.
 328. **NOVO (da Fase 0 da Etapa 146; de outros módulos, anterior a ela; lido no código) — o mesmo jeito de gravar em outros 11 lugares**
      (as cláusulas do modelo de contrato, materiais do escritório, variáveis técnicas, clientes da viagem, listas de preço, solicitações de
      material e de compra). Registro; **o que fazer:** nada.
-329. **NOVO (da Fase 0 da Etapa 146; do Comercial, anterior a ela; lido no código) — as listas de preço do Comercial só pedem o login.**
+329. **✅ RESOLVIDO NA ETAPA 147** — as listas de preço exigem o Comercial pela régua da tela. *(O texto original:)*
+     **NOVO (da Fase 0 da Etapa 146; do Comercial, anterior a ela; lido no código) — as listas de preço do Comercial só pedem o login.**
      Criar, listar, ler e apagar lista de preço não confere o módulo. **O que fazer:** nada (a tela fica no Comercial).
 330. **NOVO (da Etapa 146; das propostas, anterior a ela; reproduzido) — EM ABERTO, espera vocês — salvar com o cliente vazio deixa a
      proposta sem cliente.** Pela integração, o salvamento com o cliente vazio, nulo, zero ou que não é número grava a proposta sem cliente
@@ -13401,6 +13508,24 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      que não existe dá erro interno** com a mensagem do banco (só pela integração). **O que fazer:** nada pela tela.
 334. **NOVO (da revisão do plano da Etapa 146; das propostas, anterior a ela; lido no código) — a cópia não leva os campos manuais do
      preview nem as customizações do documento.** **O que fazer:** preencher de novo na cópia.
+337. **NOVO (da revisão do plano da Etapa 147; das propostas) — quando a gravação das cláusulas falha, o resto daquele salvamento do
+     preview não é gravado** (os campos manuais dos itens, as descrições, os campos da capa) — já era assim para as outras falhas. **O que
+     fazer:** salvar de novo.
+338. **NOVO (da revisão da Etapa 147; das propostas, anterior a ela; lido no código) — duas abas salvando o preview da mesma proposta ao
+     mesmo tempo podem copiar as cláusulas duas vezes**, e a volta da ordem depois de uma falha pode desfazer a ordem que a outra aba gravou
+     no mesmo instante. **O que fazer:** se aparecer cláusula repetida, apagar a que sobrou.
+339. **NOVO (da revisão do plano da Etapa 147; do Comercial, anterior a ela; lido no código) — o logo, o cabeçalho, o rodapé e a capa
+     enviados em Template de proposta não aparecem no documento da proposta.** O documento usa as imagens fixas da GMP; do modelo, ele usa
+     as margens e as variáveis por família. **O que fazer:** nada — se quiserem as imagens do modelo no documento, é uma decisão de vocês.
+340. **NOVO (da revisão da Etapa 147; das propostas) — se a cópia das cláusulas falha e a limpeza também falha, a proposta fica com parte
+     das cláusulas.** A frase manda usar o **Resetar cláusulas**; o próximo salvamento avisa e recarrega o preview com as que ficaram, mas
+     não completa a cópia. Só acontece com o banco falhando duas vezes seguidas. **O que fazer:** **Resetar cláusulas** e refazer as mudanças.
+341. **NOVO (da revisão do plano da Etapa 147; do Comercial, anterior a ela; lido no código) — o modelo de contrato por família só pede o
+     login** (a lista de modelos, as cláusulas de um modelo e a troca do modelo de uma família — que decide as cláusulas das propostas
+     novas dela); e a criação de lista de preço grava as linhas sem conferir cada uma. **O que fazer:** nada pela tela. Candidata da 148.
+342. **NOVO (da revisão da Etapa 147; das propostas, anterior a ela; reproduzido) — copiar ou reordenar as cláusulas de uma proposta que
+     não existe** responde erro interno com a mensagem do banco (a cópia; antes nem respondia) ou sucesso (a ordem), em vez de *"não
+     encontrada"*. Só pela integração. **O que fazer:** nada.
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -14732,6 +14857,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(147) As imagens do modelo da proposta não aparecem no documento** (logo, cabeçalho, rodapé, capa — **C339**, como antes).
+- **(147) A leitura de uma OS pelo número e o modelo de contrato por família continuam só com o login** (**C335**, **C341**, **B961**).
+- **(147) Quando as cláusulas falham, o resto do salvamento do preview espera o próximo salvar** (**C337**); e a cópia pela metade (o banco
+  falhando duas vezes) fica até alguém usar o Resetar cláusulas (**C340**).
 - **(146) Durante o salvamento, os itens aparecem duas vezes por alguns segundos** numa proposta com milhares de itens (**B952**, **C331**).
 - **(146) O cliente vazio no salvamento continua deixando a proposta sem cliente** (**B954**, **C330**, com vocês).
 - **(146) O caso "os itens continuam os de antes"** só acontece se o banco falhar duas vezes seguidas: os dados da proposta (título,
@@ -15713,6 +15842,12 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(147) Nenhum clique foi dado no navegador.** Tudo foi provado pela rota, com o servidor de verdade em pasta vazia (as 25 operações uma a
+uma com 17 perfis de usuário; a falha de uma cláusula provocada por uma regra no próprio banco; o PDF como vendedor). O que **só o
+navegador** prova: o roteiro da Etapa 147 no guia — o vendedor usando Config. template (salvar, logo, contrato) e a Lista de Preços sem
+nenhum *"Acesso negado"*; o administrador do Comercial com o Administrativo em **Configurações → Comercial → Template de proposta**; e o
+preview editável salvando uma cláusula mudada e uma ordem nova.
 
 **(146) Nenhum clique foi dado no navegador.** Tudo foi provado pela rota, com o servidor de verdade em pasta vazia (a falha de um item
 provocada por uma regra no próprio banco, as limpezas por falha injetada). O que **só o navegador** prova: o roteiro da Etapa 146 no guia —
@@ -29886,9 +30021,102 @@ antes do fechamento (agora o pior caso é o de antes: itens repetidos). O de per
 ramos raros de limpeza, a revisão sem mudança, os acessórios no salvamento, o cliente escrito com letras ou em hexadecimal, a cópia cuja
 leitura falha) — viraram 8 cenários novos, e o teste passou de 18 para 26.
 
+## Etapa 147 — O modelo da proposta e as listas de preço pedem o Comercial, e as cláusulas da proposta só dizem "pronto" depois de gravar (2026-10-18)
+
+Três consertos do lado do servidor, no Comercial, e um aviso mais claro na tela. O principal é de **acesso**: a configuração do modelo
+da proposta (Configurações → Template de proposta, o editor visual, os blocos e a biblioteca de textos) e as **listas de preço**
+pediam só o login. Quem a tela não deixa entrar no Comercial (um usuário só do Almoxarifado, por exemplo) alterava o modelo de todas as
+propostas, subia arquivo e apagava lista de preço pela integração. Agora vale a mesma régua da tela das propostas, com um detalhe: o
+modelo também abre por **Configurações**, e quem a tela deixa chegar lá (o administrador do módulo Comercial com acesso ao
+Administrativo) continua entrando. O segundo conserto é nas **cláusulas da proposta**. Ao salvar o preview pela primeira vez, as
+cláusulas padrão são copiadas para a proposta; ao mover uma cláusula, a ordem é gravada. As duas gravações perdiam calado a linha que o
+banco recusava, e às vezes a tela nem recebia resposta. Na cópia era pior: a tela relaciona as cláusulas copiadas pela posição, então
+com uma a menos a edição do vendedor caía na cláusula errada. Agora a cópia é inteira ou nada, e a ordem nova entra inteira ou volta a de
+antes. E o aviso vermelho do salvamento do preview passa a dizer **o que** deu errado, no lugar do *"Erro ao salvar alterações."* de
+sempre.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Um usuário só do Almoxarifado (a tela não lhe mostra o Comercial) alterava o modelo das propostas, subia logo e contrato, criava bloco de texto e apagava lista de preço pela integração | *"Acesso negado ao módulo"* em cada uma das 25 operações, e a tentativa no log; o arquivo enviado é recusado antes de chegar ao disco (**C319**, **C329** resolvidos) |
+| O administrador do módulo Comercial com o Administrativo editava o modelo em Configurações | Continua editando (o segundo caminho da tela — **B958**); as listas de preço pedem o Comercial |
+| Copiar as cláusulas padrão com o banco recusando a 4ª → "salvo" com as cláusulas que entraram, e as edições do vendedor caíam na cláusula errada | *"Erro ao copiar as cláusulas da proposta (…). Nenhuma cláusula foi gravada — salve de novo."* e nenhuma fica (**C327** resolvido) |
+| Mover cláusulas com o banco recusando uma linha → "salvo" com a ordem meio nova, meio velha (às vezes sem resposta) | *"Erro ao gravar a nova ordem das cláusulas (…). A ordem anterior foi mantida — salve de novo."* e a ordem é a de antes |
+| Um erro do banco ao escolher o modelo de contrato da proposta copiava calado o padrão de equipamento (outra lista, outra contagem) | O mesmo *"Nenhuma cláusula foi gravada"*; o padrão continua só para quem não tem modelo |
+| Banco ocupado no meio dessas duas gravações → o mesmo erro genérico | A tela tenta de novo sozinha (o desfazer foi feito, nada ficou pela metade) |
+| Qualquer falha ao salvar o preview → *"Erro ao salvar alterações."* | A frase do servidor (a das cláusulas, *"Acesso negado ao módulo"*, …); sem frase (rede caída), o texto de sempre |
+| Depois de um salvamento do preview que falhou no meio, salvar de novo podia gravar o texto de cada cláusula na vizinha, apagar uma e sumir com a CONSIDERAÇÃO FINAL — com *"Alterações salvas."* | O preview percebe que as cláusulas já estavam gravadas, não mexe nelas, avisa e recarrega com o que está gravado |
+
+### As regras, com o cenário exato
+
+**1. O modelo da proposta e as listas pedem o Comercial (B958, B959, B960 — C319, C329).** Entre com um usuário que tem só a permissão
+do **Almoxarifado** (por permissão direta): a tela não mostra o Comercial nem a aba Comercial de Configurações. Pela integração,
+`GET /api/proposta-template`, `POST /api/proposta-blocos` ou `GET /api/comercial/listas-precos` → **403** `{ "error": "Acesso negado ao
+módulo", "modulo": "comercial" }`, e **Administração → Logs** mostra o acesso negado ao Comercial (antes: **200**, e o bloco era criado).
+Com um vendedor que tem o **Comercial**: **Comercial → Propostas → Config. template** (ou **Configurações → Comercial → Template de
+proposta**) abre, salva, sobe o logo e o contrato e baixa o contrato, como sempre; **Comercial → Lista de Preços** importa, busca e exclui.
+O administrador do módulo **Comercial** que tem o **Administrativo** (e não o Comercial) abre **Configurações → Comercial → Template de
+proposta** e salva — mas a lista de preços, só no Comercial, recebe o *"Acesso negado"*. A variável `PROPOSTAS_PORTAO_DE_MODULO=desligado`
+(a mesma da **B946**) desliga também estas 25.
+
+**2. A cópia das cláusulas é inteira ou nada (B961 — C327).** Numa proposta nova, abra **Comercial → Propostas → Preview editável**,
+mude o texto de uma cláusula e salve: *"Alterações salvas."* e a cláusula mudada está lá ao recarregar, como sempre. O caso do erro só
+aparece com o banco recusando uma linha (disco cheio, banco travado por muito tempo): *"Erro ao copiar as cláusulas da proposta (<o erro
+do banco>). Nenhuma cláusula foi gravada — salve de novo."* no aviso vermelho, e as mudanças continuam na tela para salvar de novo. Se
+até a limpeza falhar: *"… A proposta ficou com parte das cláusulas — use Resetar cláusulas e salve de novo."* (**C340**).
+
+**3. A ordem nova entra inteira ou volta a de antes (C327).** No preview, mova uma cláusula para cima e salve: a ordem nova ao recarregar.
+Com o banco recusando uma linha: *"Erro ao gravar a nova ordem das cláusulas (<o erro>). A ordem anterior foi mantida — salve de novo."*.
+Se nem a volta der certo: *"… A ordem ficou misturada — confira as cláusulas antes de enviar a proposta e salve de novo."*; se a leitura
+da ordem atual falhar: *"… A ordem não foi alterada — salve de novo."*.
+
+**4. O aviso diz o que deu errado (B962).** Qualquer recusa do servidor ao salvar o preview aparece com a frase dele. Sem frase (a rede
+caiu), continua *"Erro ao salvar alterações."*. Quando a falha é nas cláusulas, o resto daquele salvamento (campos manuais dos itens,
+descrições, campos da capa) não é gravado naquela vez — salvar de novo grava tudo (**C337**, já era assim).
+
+**5. O preview não regrava as cláusulas na vizinha (B963 — a revisão).** Se o salvamento anterior falhou depois de copiar as cláusulas
+(ou outra aba as salvou), o próximo **Salvar** não mexe nas cláusulas: grava o resto e mostra o aviso amarelo *"As cláusulas desta proposta
+já estavam gravadas (por um salvamento anterior que não terminou ou por outra aba) e as mudanças nelas não foram gravadas agora. O preview
+foi recarregado com o que está gravado — confira as cláusulas e faça as mudanças de novo."*. O **Emitir revisão** não emite nesse caso.
+
+### O que esta etapa NÃO cobre
+
+1. **As imagens do modelo** (logo, cabeçalho, rodapé, capa enviados em Template de proposta) **não aparecem no documento da proposta**,
+   que usa as imagens fixas da GMP — como antes (**C339**).
+2. **A leitura de uma OS pelo número** (os itens e o PDF dela) continua pedindo só o login (**C335**, **B961**); e o modelo de contrato por
+   família (`/api/clausulas-modelos*`) também (**C341**).
+3. **Duas abas salvando o preview da mesma proposta ao mesmo tempo** podem copiar as cláusulas duas vezes, como antes (**C338**).
+4. **Se a cópia e a limpeza falham juntas**, a proposta fica com parte das cláusulas até alguém usar o **Resetar cláusulas** — o próximo
+   salvamento avisa e recarrega, mas não completa a cópia (**C340**).
+5. **Copiar ou reordenar as cláusulas de uma proposta que não existe** (só pela integração) responde erro interno com a mensagem do banco
+   em vez de *"não encontrada"* (**C342**; antes nem respondia).
+
+### O que a revisão encontrou
+
+A **medição** (antes do código) achou que o modelo da proposta abre por **dois** caminhos na tela (o Comercial e Configurações) — o
+portão só com o Comercial teria trancado fora o administrador do Comercial que entra por Configurações. A **revisão do plano** achou que a
+regra do documento estava escrita errado (o documento da proposta não usa as imagens do modelo — **C339**), que o nome do botão na frase
+era outro (**Resetar cláusulas**) e que, com a frase genérica na tela, o vendedor salvaria de novo em cima de uma cópia pela metade. A
+**revisão adversarial do código** (três revisores, executando): o de **regra** comparou dezenas de cenários entre o sistema antes e depois
+(o documento saiu idêntico byte a byte) e achou o defeito que importou — **salvar de novo depois de uma falha regravava as cláusulas na
+vizinha** (o mecanismo é anterior, mas a frase nova levava o vendedor a ele) — corrigido antes do fechamento (cenário 5); o de **permissão**
+não achou caminho para o barrado (maiúsculas, barras, uploads, 21 perfis de usuário estranhos com a decisão da tela tirada do código
+real) nem ninguém que perca o PDF; o de **sabotagem** fez 19 sabotagens novas — 14 caíram, 1 é equivalente e 4 sobreviveram por falta de
+cenário (o banco ocupado com o desfazer falhando, a 2ª leitura do modelo, um erro engolido no client) — viraram cenários.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 147 entregue (2026-10-18):** **o modelo da proposta e as listas de preço pedem o Comercial, e as cláusulas da proposta só
+  dizem "pronto" depois de gravar** (das propostas/Comercial). Quem a tela barra do Comercial é barrado nas 20 operações do modelo e nas 5
+  das listas; o administrador do Comercial que entra por Configurações continua no modelo (**B958**, **B959**, **B960** — **C319**, **C329**
+  resolvidos); a cópia e a ordem das cláusulas viram "tudo ou nada" (**B961** — **C327** resolvido, e o texto dela subestimava); o aviso do
+  preview diz o motivo (**B962**) e o preview não regrava as cláusulas na vizinha depois de uma falha (**B963**, achado da revisão). Commits
+  `2f558a3e` e `e8a76073`. **O que é seu:** a consulta **A95** (opcional); os avisos **C337** a **C342**; as decisões **B958 a B963** (reversíveis); as
+  perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **C312**, **C314**, **C316**, **C330**); as limitações **(147)** em D e a
+  verificação **(147)** em F. **Próxima: Etapa 148 — ver a "próxima tarefa detalhada" no plano da Etapa 147.**
 
 - **Etapa 146 entregue (2026-10-18):** **a criação, o salvamento e a cópia da proposta só dizem "pronto" depois de gravar os itens, e o
   salvamento confere o cliente** (das propostas). O item que o banco recusa desfaz a criação e a cópia e, no salvamento, nada muda — os
@@ -29896,8 +30124,8 @@ leitura falha) — viraram 8 cenários novos, e o teste passou de 18 para 26.
   existe recebe uma frase (**B954** — **C322** resolvido, e o texto dela estava errado); a lista de OS do Comercial pela régua da tela
   (**B956** — **C321** resolvido). Commits `b4856722` e `917f3683`. **O que é seu:** a consulta **A94** (opcional); a pergunta **C330** (a proposta pode
   ficar sem cliente?); os avisos **C327** a **C336**; as decisões **B952 a B956** (reversíveis); as perguntas de antes (**B949**, **B910**,
-  **B853**, **B924**, **B926**, **C312**, **C314**, **C316**); as limitações **(146)** em D e a verificação **(146)** em F. **Próxima: Etapa
-  147 — ver a "próxima tarefa detalhada" no plano da Etapa 146.**
+  **B853**, **B924**, **B926**, **C312**, **C314**, **C316**); as limitações **(146)** em D e a verificação **(146)** em F. *(Próxima, na época: Etapa
+  147 — entregue acima.)*
 
 - **Etapa 145 entregue (2026-10-18):** **as rotas da proposta exigem o Comercial, a geração automática só responde depois de gravar, e o
   cliente que não existe é recusado** (das propostas). Quem a tela barra do Comercial é barrado nas 49 rotas de proposta e nas 5 de

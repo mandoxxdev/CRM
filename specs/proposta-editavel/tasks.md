@@ -247,7 +247,7 @@ Substituição do painel lateral `EditorClausulas` por edição direta no previe
 - [x] Rota `/premium?embed=1` sempre monta a seção 5 a partir de lista estruturada (`resolverClausulasParaPreview`: custom do banco ou `getClausulasDefault()`), nunca do HTML fixo
 - [x] Módulo `client/src/components/proposta/clausulasInlineEditor.js` — manipulação de `#proposalSource` (ler/sincronizar/mover/remover/adicionar/diff/renumerar), coberto por testes jsdom
 - [x] `PropostaPreviewEditavel.js`: campos da cláusula viram `contentEditable` no iframe, com controles ↑↓/+/🗑; repaginação debounced + restauração de cursor
-- [x] Salvamento unificado no botão "Salvar alterações" (diff contra snapshot → POST/PUT/DELETE/reordenar); relink de `default-`/`temp-` para id real; idempotente em retry após falha parcial
+- [x] Salvamento unificado no botão "Salvar alterações" (diff contra snapshot → POST/PUT/DELETE/reordenar); relink de `default-`/`temp-` para id real; idempotente em retry após falha parcial *(só desde a Etapa 147 para o `inicializar` — antes a cópia parcial fazia o retry relacionar as cláusulas erradas; e se a cópia **e** a limpeza falham, o retry sem o Resetar ainda grava só as que ficaram — C340)*
 - [x] Toolbar: botão "Cláusulas" removido, adicionado "Resetar cláusulas"
 - [x] Fix (revisão final): título default renderizava sem o número "5.x" mas era persistido com ele → primeiro save apagava os números no banco. Corrigido (`renderClausulaCustom` numera default; `diffClausulas`/`houveMudanca` normalizam HTML×texto)
 - [x] Fix (QA ao vivo): edição parava de funcionar segundos após carregar, pois o script do template repagina sozinho (load+250ms / resize) e recriava os nós sem reaplicar `contentEditable`. Resolvido com `MutationObserver` em `#proposalDocument`

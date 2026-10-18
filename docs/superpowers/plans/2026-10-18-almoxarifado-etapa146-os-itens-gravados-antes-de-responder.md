@@ -274,7 +274,10 @@ As respostas de sucesso não mudam (corpo e status).
    para proteger contra o PUT simultâneo e fez o contrário; só uma sonda executada achou (dois revisores, independentes).
 3. **Paralelismo:** **0** galhos em paralelo de fato (T1–T4 dividem o `PUT` e o arquivo de teste); **0** retrabalho; **1** revisor na Fase
    2, **3** em paralelo na Fase 5 sob a trava (o r3 numa worktree própria, removida).
-4. **Defeito que escapou:** *(preencher na Etapa 147)*.
+4. **Defeito que escapou:** *(preenchido na Etapa 147)* **0** de código da 146 (as rotas que ela mudou — criação, salvamento, cópia, lista de
+   OS — não entraram em nenhum achado da 147); **1** subestimação de documento: a **C327** (escrita na Fase 0 desta etapa) dizia que as cláusulas
+   gravadas sem conferir só desarrumavam a ordem (*"reordenar de novo conserta"*) — a Fase 0 da 147 mediu que a cópia com uma linha a menos
+   joga a edição do vendedor na cláusula errada (o preview relaciona pela posição) e que a rota podia não responder.
 
 ## Próxima tarefa detalhada — Etapa 147
 

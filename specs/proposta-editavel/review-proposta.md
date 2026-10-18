@@ -162,6 +162,8 @@ cd server && node tests/api/propostaProdutoInexistente.api.test.js  # Etapa 144:
 cd server && node tests/api/propostaPortaoModulo.api.test.js       # Etapa 145: o portão do Comercial nas 49 rotas da proposta e nas 5 de aprovação (C317)
 cd server && node tests/api/propostaGeracaoGrava.api.test.js       # Etapa 145: a geração automática grava antes de responder (C318) e o cliente que não existe (C315)
 cd server && node tests/api/propostaSalvarGrava.api.test.js       # Etapa 146: criação, salvamento e cópia gravam os itens antes de responder (C323) e o cliente do salvamento (C322)
+cd server && node tests/api/propostaClausulasGrava.api.test.js    # Etapa 147: inicializar e reordenar as cláusulas gravam em sequência, tudo ou nada (C327)
+cd server && node tests/api/propostaModeloPortao.api.test.js      # Etapa 147: o portão no modelo da proposta e nas listas de preço (C319, C329) e o PDF pela rota
 ```
 
 Critério: **tudo verde**. Qualquer invariante quebrado bloqueia o merge. *(De julho à Etapa 138 a revisão rodava com dois vermelhos

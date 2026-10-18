@@ -197,13 +197,13 @@ Após o login, você verá a **Tela de Seleção de Módulos** com 5 opções:
 ### 3.3 Gestão de Propostas
 
 **Quem pode usar as propostas.** As propostas — lista, criação, edição, preview editável, fotos, cláusulas, PDF, envio, aceite, cópia,
-lembretes — e os pedidos de aprovação de desconto ficam no módulo **Comercial**, e o sistema confere o acesso em **cada operação**,
+lembretes —, os pedidos de aprovação de desconto, o template de proposta (veja 3.3.4) e as listas de preço ficam no módulo **Comercial**, e o sistema confere o acesso em **cada operação**,
 inclusive quando ela chega pela integração, com a mesma regra que decide se o Comercial aparece na tela:
 
 - o administrador do sistema e o super administrador entram sempre;
 - quem tem alguma permissão de módulo (dada diretamente ao usuário ou por um grupo **ativo**) entra só se uma delas for a do Comercial;
 - quem não tem permissão nenhuma entra no Comercial;
-- ser administrador de um módulo não basta — vale a permissão do módulo.
+- ser administrador de um módulo não basta — vale a permissão do módulo (a única exceção é o template de proposta, veja 3.3.4).
 
 Quem não pode recebe *"Acesso negado ao módulo"*, e a tentativa fica registrada em **Administração → Logs**. Os arquivos enviados para a
 proposta (fotos, cotação, PDF anexo) são recusados antes de chegar ao servidor. **Exceção:** a ordem de serviço do Operacional busca os
@@ -420,6 +420,24 @@ pessoa a deixa sem permissão nenhuma — e quem não tem permissão nenhuma ent
   salvamento são gravados normalmente.
 - **Emitir revisão** com alterações pendentes salva antes; se aparecer esse aviso, a revisão **não** é emitida — confira, preencha de novo e
   emita outra vez.
+- Quando o salvamento é recusado, o aviso vermelho mostra o motivo dado pelo sistema (sem conexão, aparece *"Erro ao salvar alterações."*);
+  as alterações continuam na tela para salvar de novo, e nada do que vinha depois naquele salvamento (campos manuais dos itens, descrições,
+  campos da capa) é gravado até lá.
+- Na primeira vez que as cláusulas de uma proposta são alteradas, o sistema copia para ela as cláusulas do modelo de contrato da família dos
+  itens (havendo equipamento, o de equipamento; sem modelo próprio, o modelo padrão). A cópia é **inteira ou nada**: se o banco recusar
+  uma cláusula, nenhuma fica e aparece *"Erro ao copiar as cláusulas da proposta (<o erro do banco>). Nenhuma cláusula foi gravada — salve
+  de novo."* — o mesmo vale quando o sistema não consegue ler o modelo de contrato. Se nem a limpeza for possível, a frase termina em *"A
+  proposta ficou com parte das cláusulas — use Resetar cláusulas e salve de novo."*: use o botão **Resetar cláusulas** antes de salvar de
+  novo (ele volta as cláusulas ao padrão, descartando as edições delas).
+- A **ordem** das cláusulas também é gravada inteira ou não é: se o banco recusar uma linha, a ordem anterior volta e aparece *"Erro ao
+  gravar a nova ordem das cláusulas (<o erro>). A ordem anterior foi mantida — salve de novo."*; se nem a volta der certo, *"… A ordem ficou
+  misturada — confira as cláusulas antes de enviar a proposta e salve de novo."*; se não for possível ler a ordem atual, *"… A ordem não foi
+  alterada — salve de novo."*. Com o banco momentaneamente ocupado, a tela tenta de novo sozinha antes de mostrar o aviso.
+- Se as cláusulas da proposta já tinham sido gravadas por um salvamento anterior que não terminou (ou por outra aba) e o preview ainda
+  mostrava as cláusulas do modelo, o salvamento **não mexe nas cláusulas**: grava o resto, mostra o aviso *"As cláusulas desta proposta já
+  estavam gravadas (por um salvamento anterior que não terminou ou por outra aba) e as mudanças nelas não foram gravadas agora. O preview
+  foi recarregado com o que está gravado — confira as cláusulas e faça as mudanças de novo."* e recarrega o preview; nesse caso o **Emitir
+  revisão** não emite.
 
 **Cláusulas no preview editável — onde cada uma aparece:**
 - As condições gerais vão de 5.1 a 5.23; a **5.24** é a seção de preço (tabela de preços, condição de pagamento, FINAME e impostos); a
@@ -446,6 +464,15 @@ pessoa a deixa sem permissão nenhuma — e quem não tem permissão nenhuma ent
 **O que são:**
 Templates personalizáveis para padronizar o visual das propostas.
 
+**Quem pode configurar:** quem entra no **Comercial** (a mesma regra das propostas, acima) — por **Comercial → Propostas → Config.
+template**, pelo editor visual ou por **Configurações → Comercial → Template de proposta** — e também o **administrador do módulo
+Comercial** (marcado no cadastro do usuário) que tem acesso ao **Administrativo**, pela aba de Configurações. Os outros recebem *"Acesso
+negado ao módulo"*, inclusive ao enviar logo, cabeçalho, rodapé, capa ou contrato (o arquivo é recusado antes de chegar ao servidor) e ao
+baixar o contrato.
+
+**O que o documento da proposta usa do template:** as margens de impressão e as variáveis técnicas por família. O documento usa os
+logotipos e as imagens fixas da GMP: o logo, o cabeçalho, o rodapé e a capa enviados aqui ficam guardados, mas não aparecem no documento.
+
 **Como configurar:**
 1. Acesse "Configurações" → "Templates de Proposta"
 2. Clique em "Novo Template"
@@ -463,6 +490,12 @@ Templates personalizáveis para padronizar o visual das propostas.
 - Arraste e solte componentes
 - Preview em tempo real
 - Salve como padrão
+
+#### 3.3.5 Listas de Preço
+
+Em **Comercial → Lista de Preços** importa-se uma planilha (as colunas viram as colunas da lista), busca-se por qualquer palavra das
+colunas (cada palavra digitada tem de aparecer na linha) e exclui-se a lista. Só quem entra no Comercial usa as listas — os outros
+recebem *"Acesso negado ao módulo"*. Ser administrador do módulo Comercial, sem o acesso ao Comercial, não basta aqui.
 
 ### 3.4 Gestão de Oportunidades
 

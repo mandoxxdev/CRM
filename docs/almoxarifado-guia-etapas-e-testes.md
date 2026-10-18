@@ -1,18 +1,25 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-18 (Etapa 146) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-18 (Etapa 147) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144 e 145) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146 e 147) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-18 (Etapa 146 ENTREGUE · próxima: Etapa 147)
+> ## Onde o desenvolvimento está — 2026-10-18 (Etapa 147 ENTREGUE · próxima: Etapa 148)
 >
-> **O desenvolvimento parou aqui: Etapa 146 fechada — 2026-10-18.** A **Etapa 146 (criar, salvar e copiar a proposta só dizem "pronto"
+> **O desenvolvimento parou aqui: Etapa 147 fechada — 2026-10-18.** A **Etapa 147 (o modelo da proposta e as listas de preço pedem o
+> Comercial, e as cláusulas da proposta só dizem "pronto" depois de gravar; das propostas/Comercial, fora do almoxarifado)**: quem a tela
+> barra do Comercial deixa de alterar o modelo das propostas e as listas de preço pela integração (*"Acesso negado ao módulo"*); o
+> administrador do Comercial que entra por Configurações continua editando o modelo. Copiar as cláusulas padrão para a proposta e mudar a
+> ordem delas viram "tudo ou nada", o aviso vermelho do preview diz o motivo e o preview não regrava mais as cláusulas na vizinha depois de
+> uma falha. Uma consulta nova, opcional (**A95**). **Próxima: Etapa 148** — ver a próxima tarefa no plano da 147.
+>
+> **Etapa 146, 2026-10-18.** A **Etapa 146 (criar, salvar e copiar a proposta só dizem "pronto"
 > depois de gravar os itens, e o salvamento confere o cliente; das propostas, fora do almoxarifado)**: quando o banco recusava um item, a
 > proposta era criada, salva ou copiada com sucesso sem ele — e, no salvamento, os itens que já estavam na proposta também se perdiam;
 > agora aparece *"Erro ao gravar os itens da proposta (…)"* e a proposta fica como estava. A cópia só abre depois de copiar todos os itens;
 > salvar com um cliente que não existe recebe uma frase em vez de um erro interno; a lista de OS do Comercial usa a régua da tela.
-> Nenhuma consulta bloqueante (a **A94** é opcional). **Próxima: Etapa 147** — ver a próxima tarefa no plano da 146.
+> Nenhuma consulta bloqueante (a **A94** é opcional). *(Próxima, na época: Etapa 147 — entregue acima.)*
 >
 > **Etapa 145, 2026-10-18.** A **Etapa 145 (as rotas da proposta exigem o Comercial, a geração
 > automática só responde depois de gravar, e o cliente que não existe é recusado; das propostas, fora do almoxarifado)**: quem a tela
@@ -6656,6 +6663,49 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 147 — O modelo da proposta e as listas de preço pedem o Comercial, e as cláusulas da proposta só dizem "pronto" depois de gravar (ENTREGUE — 2026-10-18)
+
+**O que mudou, em uma frase:** a configuração do modelo da proposta e as listas de preço passam a conferir o acesso ao Comercial com a
+mesma régua da tela (o modelo também por Configurações); copiar as cláusulas padrão para a proposta e mudar a ordem delas viram "tudo ou
+nada"; e o aviso vermelho do salvamento do preview diz o que deu errado.
+
+**O problema que ela resolve.** Quem a tela não deixa entrar no Comercial alterava o modelo de todas as propostas, subia arquivo e apagava
+lista de preço pela integração. E, quando o banco recusava uma linha, o preview dizia "salvo" com cláusulas faltando — e, como a tela
+casa as cláusulas copiadas pela posição, a edição do vendedor podia ir parar na cláusula errada.
+
+| Antes | Agora |
+|---|---|
+| Usuário só do Almoxarifado mexia no modelo e nas listas pela integração | *"Acesso negado ao módulo"* em cada operação, e o registro no log |
+| Administrador do Comercial com o Administrativo editava o modelo em Configurações | Continua editando; as listas de preço pedem o Comercial |
+| Cópia das cláusulas com uma linha recusada → "salvo" com cláusulas faltando | *"Erro ao copiar as cláusulas da proposta (…). Nenhuma cláusula foi gravada — salve de novo."* |
+| Ordem das cláusulas com uma linha recusada → meio nova, meio velha | *"Erro ao gravar a nova ordem das cláusulas (…). A ordem anterior foi mantida — salve de novo."* |
+| Qualquer falha ao salvar o preview → *"Erro ao salvar alterações."* | A frase do servidor |
+| Salvar de novo depois de uma falha no meio podia gravar o texto de cada cláusula na vizinha | O preview avisa que as cláusulas já estavam gravadas, não mexe nelas e recarrega |
+
+**Roteiro de teste (10 minutos).**
+
+1. **O vendedor não perde nada (pela tela).** Com um usuário que tem o **Comercial**: **Comercial → Propostas → Config. template** abre;
+   mude uma margem e salve; suba um logo e um contrato e baixe o contrato. **Comercial → Lista de Preços**: importe uma planilha, busque um
+   código, abra e exclua a lista. Nenhum *"Acesso negado"*.
+2. **O caminho de Configurações.** Com um usuário que tem o **Administrativo** (sem o Comercial) e é **administrador do módulo Comercial**
+   (Administração → Usuários): **Configurações → Comercial → Template de proposta** abre e salva. Pela integração,
+   `GET /api/comercial/listas-precos` com o token dele → **403** `{ "error": "Acesso negado ao módulo", "modulo": "comercial" }`.
+3. **Quem a tela barra (pela integração).** Com um usuário que só tem o **Almoxarifado**: `POST /api/proposta-blocos` com `{ "nome": "x" }`
+   → **403** com o mesmo corpo, e **Administração → Logs** mostra o acesso negado ao Comercial (antes: **201** e o bloco criado).
+4. **As cláusulas (pela tela).** Numa proposta nova, **Preview editável**: mude o texto de uma cláusula e salve (*"Alterações salvas."*);
+   recarregue — a mudança está na cláusula certa. Mova uma cláusula para cima, salve e recarregue — a ordem nova.
+
+O erro de uma linha só aparece com o banco recusando a gravação — não dá para provocar pela tela; os testes automáticos o provocam com uma
+regra no próprio banco.
+
+**O que esta etapa NÃO cobre.** As imagens enviadas em Template de proposta (logo, cabeçalho, rodapé, capa) não aparecem no documento da
+proposta, que usa as imagens fixas da GMP (**C339**, como antes); a leitura de uma OS pelo número e o modelo de contrato por família
+continuam só com o login (**C335**, **C341**); duas abas salvando o preview da mesma proposta podem copiar as cláusulas duas vezes
+(**C338**); se a cópia e a limpeza falham juntas, a proposta fica com parte das cláusulas até alguém usar o **Resetar cláusulas** (**C340**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor, pela rota) provam, escrito
+para você conferir à mão — em especial os passos 1, 2 e 4 só o navegador mostra.
 
 ## Etapa 146 — Criar, salvar e copiar a proposta só dizem "pronto" depois de gravar os itens, e o salvamento confere o cliente (ENTREGUE — 2026-10-18)
 
