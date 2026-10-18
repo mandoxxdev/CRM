@@ -111,7 +111,8 @@
     **Nunca volte a `TRIM(a) = TRIM(b)` puro**: o `UNIQUE` de `produtos.codigo` é do texto cru e o cadastro não apara — com `'PJ1'` e
     `'PJ1 '` o item saía duas vezes no documento (e o total do pedido de aprovação, em dobro), e com um produto de código só de espaços todo
     item manual juntava esse produto. Na mesma etapa: o `PUT`/`POST` de `/api/propostas` e a geração automática recusam (400) o item que
-    não é objeto **antes** de gravar (`validarItensDoCorpo`, C310) — `[null]` fazia o `PUT` nunca responder; e o histórico de itens
+    não é objeto, ou cujo campo (fora `acessorios`) é objeto ou lista, **antes** de gravar (`validarItensDoCorpo`, C310, B934) — `[null]`
+    e `[{ descricao: {} }]` faziam o `PUT` nunca responder; e o histórico de itens
     (`diffItensParaLog`) pareia pelo mesmo `parearItens` da armadilha 19.
 
 ## Como rodar a validação (obrigatório antes de merge)

@@ -16,9 +16,11 @@ const CAMPOS_COMPARAR = [
   // Etapa 143 (RN-143.04, Fase 2 I-4): com o pareamento por id, o item manual com a descricao editada fica com o SEU gravado (os dois sem
   // codigo) — sem comparar a descricao, trocar so o texto dele nao deixava rastro (antes era "removido A + adicionado B"). Sem caixa e
   // aparada: o servidor grava em caixa alta, e o dado antigo em caixa baixa nao pode virar edicao em todo salvamento.
-  { campo: 'descricao', label: 'Descrição', numerico: false, caixa: true },
-  { campo: 'quantidade', label: 'Qtd', numerico: true },
-  { campo: 'unidade', label: 'Unidade', numerico: false },
+  // `gravado` (Fase 5, r1 M-2): compara o valor que o INSERT GRAVA, nao o cru do corpo — `descricao || nome`, `quantidade || 1`,
+  // `unidade || 'UN'`. Sem isso o corpo com `nome` e sem `descricao` (so pela API) registrava "Descricao: X -> —" em todo salvamento.
+  { campo: 'descricao', label: 'Descrição', numerico: false, caixa: true, gravado: (it) => it.descricao || it.nome || '' },
+  { campo: 'quantidade', label: 'Qtd', numerico: true, gravado: (it) => it.quantidade || 1 },
+  { campo: 'unidade', label: 'Unidade', numerico: false, gravado: (it) => it.unidade || 'UN' },
   { campo: 'valor_unitario', label: 'Valor unit.', numerico: true },
   { campo: 'valor_total', label: 'Total', numerico: true },
   { campo: 'familia_produto', label: 'Família', numerico: false },
@@ -48,9 +50,11 @@ function diffItensParaLog(itensAtuais, itensNovos) {
     const atual = pares[idx];
     if (!atual) { adicionados.push(novo); return; }
     const mudancas = [];
-    for (const { campo, label, numerico, caixa } of CAMPOS_COMPARAR) {
-      if (normaliza(atual[campo], numerico, caixa) !== normaliza(novo[campo], numerico, caixa)) {
-        mudancas.push({ campo, label, antes: atual[campo], depois: novo[campo] });
+    for (const { campo, label, numerico, caixa, gravado } of CAMPOS_COMPARAR) {
+      const antes = gravado ? gravado(atual) : atual[campo];
+      const depois = gravado ? gravado(novo) : novo[campo];
+      if (normaliza(antes, numerico, caixa) !== normaliza(depois, numerico, caixa)) {
+        mudancas.push({ campo, label, antes, depois });
       }
     }
     if (mudancas.length > 0) editados.push({ chave: chaveDe(novo), nome: nomeDe(novo), mudancas });
@@ -165,11 +169,17 @@ function mesclarItensPreservandoCampos(itensAtuais, itensNovos) {
 // `itens: null` do PUT apaga todos — contrato da Etapa 138); `{}` dentro da lista passa (o de sempre: item sem descrição).
 const MSG_ITENS_LISTA = 'Itens inválidos: os itens da proposta devem ser enviados como uma lista.';
 const MSG_ITEM_INVALIDO = 'Item inválido: cada item da proposta deve ser um objeto.';
+// Fase 5 (r1 I-1, r2 M, B934): também o item cujo CAMPO é objeto ou lista (fora `acessorios`, que é lista de propósito). `descricao: {}`
+// com o corpo do tamanho do gravado fazia o PUT nunca responder do mesmo jeito (o `.trim` do compararItens dentro do callback do banco), e
+// de outro tamanho gravava "[object Object]" com 200; no histórico, uma descrição com `toString` que não é função derrubava o registro.
 const ehObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const ehEscalar = (v) => v === null || v === undefined || typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean';
+const CAMPOS_ESTRUTURADOS = new Set(['acessorios']);
+const itemValido = (it) => ehObjeto(it) && Object.keys(it).every((k) => CAMPOS_ESTRUTURADOS.has(k) || ehEscalar(it[k]));
 function validarItensDoCorpo(itens) {
   if (itens === undefined || itens === null) return null;
   if (!Array.isArray(itens)) return MSG_ITENS_LISTA;
-  for (let i = 0; i < itens.length; i++) if (!ehObjeto(itens[i])) return MSG_ITEM_INVALIDO;
+  for (let i = 0; i < itens.length; i++) if (!itemValido(itens[i])) return MSG_ITEM_INVALIDO;
   return null;
 }
 

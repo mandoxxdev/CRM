@@ -161,9 +161,21 @@ test('[RN-143.01] puro: validarItensDoCorpo — lista de objetos, [] , null e au
     assert.strictEqual(validarItensDoCorpo(v), ITEM, JSON.stringify(v));
   }
 });
+test('[RN-143.01, F5 r1 I-1/r2, B934] puro: o item cujo campo e objeto ou lista (fora acessorios) e recusado; acessorios em lista ou texto passa', () => {
+  for (const it of [{ ...P, descricao: { a: 1 } }, { ...P, descricao: ['x'] }, { ...P, unidade: {} }, { ...P, codigo_produto: ['x'] },
+    { ...P, quantidade: { a: 1 } }, { ...P, id: { a: 1 } }, { ...P, nome: {} }, { ...P, tag: { a: 1 } }]) {
+    assert.strictEqual(validarItensDoCorpo([{ ...Q }, it]), ITEM, JSON.stringify(it));
+  }
+  for (const it of [{ ...P, acessorios: [{ descricao: 'A', valor: 1 }] }, { ...P, acessorios: '[]' }, { ...P, acessorios: null },
+    { ...P, quantidade: '2', ativo: true, x: null, id: 7 }]) {
+    assert.strictEqual(validarItensDoCorpo([it]), null, JSON.stringify(it));
+  }
+});
 
 // ── RN-143.01: o PUT ──────────────────────────────────────────────────────────────────────
-const CORPOS_ITEM = [[null], [null, P], [P, null], [5], ['x'], [[P]], [P, 7], [null, P, Q]];
+// Os ultimos tres (F5 r1 I-1): item objeto com um CAMPO objeto/lista, do mesmo tamanho do gravado — o PUT nunca respondia do mesmo jeito.
+const CORPOS_ITEM = [[null], [null, P], [P, null], [5], ['x'], [[P]], [P, 7], [null, P, Q],
+  [{ ...P, descricao: { a: 1 } }, { ...Q }], [{ ...P, unidade: {} }, { ...Q }], [{ ...P, quantidade: { a: 1 } }]];
 test('[RN-143.01, C310] PUT com item que nao e objeto: 400 com a mensagem, a resposta chega e NADA muda (tamanho igual e diferente do gravado)', async () => {
   for (const itens of CORPOS_ITEM) {
     const id = await propostaComTudo();
@@ -194,6 +206,8 @@ test('[RN-143.01] PUT: o que passa continua passando — itens null apaga (contr
   r = await responde('PUT', `/propostas/${id}`, { itens: [{ ...Q }] });
   assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
   assert.deepStrictEqual(await codigos(id), ['Q143']);
+  r = await responde('PUT', `/propostas/${id}`, { itens: [{ ...Q, acessorios: [{ descricao: 'Acessorio 143', quantidade: 1, valor_unitario: 3 }] }] });
+  assert.strictEqual(r[0], 200, 'acessorios em lista deixou de passar: ' + JSON.stringify(r[1]));
   r = await responde('PUT', `/propostas/${id}`, { itens: [{}] });
   assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
   assert.strictEqual((await itensP(id)).length, 1, 'o objeto vazio passou a ser recusado (fora do escopo)');
@@ -236,9 +250,18 @@ test('[RN-143.02] POST: o que passa continua passando — itens null/ausente/[] 
   assert.deepStrictEqual([r[0], r[1].error], [400, 'Título é obrigatório']);
 });
 
+test('[RN-143.02, F5 r3 S08/S10] POST: a ordem — a margem vem antes dos itens; os itens antes do motivo da nao venda', async () => {
+  let r = await responde('POST', '/propostas', { cliente_id: ctx.clienteId, titulo: 'Ordem 1', status: 'rejeitada', itens: [null] });
+  assert.deepStrictEqual([r[0], r[1].error], [400, ITEM], 'a guarda dos itens do POST devia vir antes do motivo');
+  r = await responde('POST', '/propostas', { cliente_id: ctx.clienteId, titulo: 'Ordem 2', margem_desconto: '10,5', itens: [null] });
+  assert.strictEqual(r[0], 400);
+  assert.ok(/^Margem de desconto inválida/.test(r[1].error), 'a margem devia vir antes dos itens: ' + r[1].error);
+});
+
 // ── RN-143.03: a geracao automatica ───────────────────────────────────────────────────────
 test('[RN-143.03] gerar-automatica com produto que nao e objeto: 400 com a mensagem (antes 500 ou proposta vazia) e nenhuma proposta nasce', async () => {
-  for (const produtos of [[null], [null, { id: ctx.produtoId }], [5], ['x'], [[{ id: ctx.produtoId }]], [{ id: ctx.produtoId }, null]]) {
+  for (const produtos of [[null], [null, { id: ctx.produtoId }], [5], ['x'], [[{ id: ctx.produtoId }]], [{ id: ctx.produtoId }, null],
+    [{ id: { a: 1 } }], [{ id: ctx.produtoId, quantidade: { a: 1 } }]]) {
     const n0 = await contarPropostas();
     const [s, x] = await responde('POST', '/propostas/gerar-automatica', { cliente_id: ctx.clienteId, produtos });
     assert.strictEqual(s, 400, `${JSON.stringify(produtos)}: ${JSON.stringify(x)}`);
@@ -250,9 +273,13 @@ test('[RN-143.03] gerar-automatica com produto que nao e objeto: 400 com a mensa
   const [s, x] = await responde('POST', '/propostas/gerar-automatica', { cliente_id: ctx.clienteId, produtos: [{ id: ctx.produtoId, quantidade: 2 }] });
   assert.strictEqual(s, 200, JSON.stringify(x));
   assert.deepStrictEqual(await codigos(x.id), ['PJ143']);
-  // e a recusa de antes continua na frente
-  const r = await responde('POST', '/propostas/gerar-automatica', { cliente_id: ctx.clienteId, produtos: [] });
+  // e a recusa de antes continua na frente; a da margem vem DEPOIS (F5 r3 S12/S13)
+  let r = await responde('POST', '/propostas/gerar-automatica', { cliente_id: ctx.clienteId, produtos: [] });
   assert.deepStrictEqual([r[0], r[1].error], [400, 'Cliente e produtos são obrigatórios']);
+  r = await responde('POST', '/propostas/gerar-automatica', { produtos: [null] });
+  assert.deepStrictEqual([r[0], r[1].error], [400, 'Cliente e produtos são obrigatórios'], 'sem cliente, a recusa de antes devia vir primeiro');
+  r = await responde('POST', '/propostas/gerar-automatica', { cliente_id: ctx.clienteId, produtos: [null], margem_desconto: '10,5' });
+  assert.deepStrictEqual([r[0], r[1].error], [400, ITEM], 'a guarda dos produtos devia vir antes da margem');
 });
 
 // ── RN-143.04: o historico pelo pareamento ────────────────────────────────────────────────
@@ -351,12 +378,44 @@ test('[RN-143.05] so o codigo aparado casa: o item " PJ243" (gravado com espaco)
   assert.ok(h.includes('JOTA COM ESPACO') && !h.includes('JOTA CENTO E QUARENTA E TRES'), 'o codigo igual nao venceu o de menor id');
 });
 
+test('[RN-143.04, F5 r1 M-2] historico: o corpo com nome e sem descricao (o INSERT grava descricao = nome) nao registra edicao em todo salvamento', async () => {
+  const id = await novaProposta([{ nome: 'Fulano servico', quantidade: 1, unidade: 'UN', valor_unitario: 5, valor_total: 5 }]);
+  const [it] = await itensP(id);
+  assert.strictEqual(it.descricao, 'Fulano servico', 'o cenario nao funciona: o INSERT nao gravou a descricao pelo nome');
+  for (let k = 0; k < 2; k++) {
+    const r = await responde('PUT', `/propostas/${id}`, { itens: [{ id: (await itensP(id))[0].id, nome: 'Fulano servico', valor_unitario: 5, valor_total: 5 }] });
+    assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
+  }
+  assert.deepStrictEqual(await logItens(id), [], 'edicao falsa (descricao/unidade/quantidade pelo valor cru do corpo)');
+});
 test('[RN-143.04, Fase 2 I-4] historico pela rota: o item manual com SO a descricao editada (com o id) registra a edicao da descricao', async () => {
   const id = await novaProposta([{ descricao: 'Servico A', quantidade: 1, unidade: 'UN', valor_unitario: 5, valor_total: 5 }]);
   const [it] = await itensP(id);
   const r = await responde('PUT', `/propostas/${id}`, { itens: [{ id: it.id, descricao: 'Servico B', quantidade: 1, unidade: 'UN', valor_unitario: 5, valor_total: 5 }] });
   assert.strictEqual(r[0], 200, JSON.stringify(r[1]));
   assert.deepStrictEqual(await logItens(id), ['item_editado:SERVICO B:Descrição: SERVICO A>Descrição: SERVICO B']);
+});
+
+test('[RN-143.05, F5 r3 Q2/Q3] nenhum produto de codigo igual: o aparado de MENOR id, uma vez so (documento e total do pedido)', async () => {
+  // os produtos 'PJ143' (menor id) e 'PJ143 ' ja existem; o item gravado pela API com ' PJ143' nao e igual a nenhum dos dois
+  const id = await novaProposta([{ descricao: 'Item m5', quantidade: 1, unidade: 'UN', valor_unitario: VALOR, valor_total: VALOR, codigo_produto: ' PJ143', familia_produto: FAM }], { valor_total: VALOR });
+  assert.deepStrictEqual(await codigos(id), [' PJ143'], 'o cenario nao funciona: o codigo com espaco nao foi gravado');
+  const h = await premium(id);
+  assert.ok(conta(h, VALOR_TXT) > 0, 'o cenario nao funciona: o valor nao saiu');
+  const hu = h.toUpperCase();
+  assert.ok(hu.includes('JOTA CENTO E QUARENTA E TRES') && !hu.includes('JOTA COM ESPACO'), 'nao saiu o de menor id (ou sairam os dois)');
+  const [sa, xa] = await j('POST', '/aprovacoes', ctx.T, { proposta_id: id, valor_desconto: 10 });
+  assert.strictEqual(sa, 200, JSON.stringify(xa));
+  const [ap] = await all('SELECT valor_total FROM aprovacoes WHERE proposta_id = ? ORDER BY id DESC LIMIT 1', [id]);
+  assert.strictEqual(ap.valor_total, VALOR, 'o pedido de aprovacao somou o item em dobro');
+});
+test('[RN-143.05, Fase 2 M-10, F5 r3 Q13] o produto inativo entra na escolha: o inativo de codigo igual vence, o item sai uma vez', async () => {
+  const pInativo = await criarProduto('PI143', 'Produto inativo 143');
+  await criarProduto('PI143 ', 'Produto ativo espaco 143');
+  await run('UPDATE produtos SET ativo = 0 WHERE id = ?', [pInativo]);
+  const id = await novaProposta([{ descricao: 'Item pi', quantidade: 1, unidade: 'UN', valor_unitario: VALOR, valor_total: VALOR, codigo_produto: 'PI143', familia_produto: FAM }], { valor_total: VALOR });
+  const hu = (await premium(id)).toUpperCase();
+  assert.ok(hu.includes('PRODUTO INATIVO 143') && !hu.includes('PRODUTO ATIVO ESPACO 143'), 'o inativo de codigo igual deixou de vencer (ou sairam os dois)');
 });
 
 /** Os valores das variaveis manuais que o /premium imprime, por posicao do item no documento (o mesmo da 142). */

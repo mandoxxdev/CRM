@@ -123,4 +123,13 @@ test('[RN-143.04] sem ids: a identidade aparada e sem caixa (" p " = "P"), como 
   assert.deepStrictEqual([d.adicionados.length, d.removidos.length, d.editados.length], [0, 0, 0]);
 });
 
+test('[RN-143.04, F5 r3 D8] o espaco nas pontas da descricao do CORPO tambem nao e edicao', () => {
+  const d = diffItensParaLog([{ id: 11, descricao: 'BOMBA P', quantidade: 1 }], [{ id: 11, descricao: ' BOMBA P ', quantidade: 1 }]);
+  assert.strictEqual(d.editados.length, 0);
+});
+test('[RN-143.04, F5 r1 M-2] o valor gravado: descricao pelo nome, quantidade 1 e unidade UN quando o corpo nao manda', () => {
+  const d = diffItensParaLog([{ id: 11, descricao: 'FULANO', quantidade: 1, unidade: 'UN' }], [{ id: 11, nome: 'FULANO' }]);
+  assert.strictEqual(d.editados.length, 0, JSON.stringify(d.editados));
+});
+
 console.log(`\n${passed} passed, ${failed} failed`); process.exit(failed?1:0);
