@@ -20,12 +20,23 @@ export function avisoValoresIgnorados(n) {
 }
 
 /**
- * O desfecho do salvar() do preview (Fase 5, r3): qual toast, com que texto, e o que o salvar() devolve — por valor, num lugar só.
- * Com algum campo ignorado: aviso e `ok: false` (o Emitir revisão não emite, B940); senão "Alterações salvas." e `ok: true`.
+ * Etapa 147 (Fase 5 r1 I-1, RN-147.08): o preview achava que a proposta ainda usava as cláusulas padrão, mas o servidor já as tinha
+ * gravado (um salvamento anterior que falhou no meio, a cópia que ficou pela metade, outra aba). Relacionar as gravadas pela posição, aí,
+ * gravava o texto de uma cláusula na vizinha e apagava a última — calado. As mudanças nas cláusulas não são gravadas e o preview recarrega.
  */
-export function desfechoDoSalvar(respostaVariaveis, respostaDescricoes) {
+export const AVISO_CLAUSULAS_JA_GRAVADAS = 'As cláusulas desta proposta já estavam gravadas (por um salvamento anterior que não terminou ou por outra aba) e as mudanças nelas não foram gravadas agora. O preview foi recarregado com o que está gravado — confira as cláusulas e faça as mudanças de novo.';
+
+/**
+ * O desfecho do salvar() do preview (Fase 5, r3): qual toast, com que texto, e o que o salvar() devolve — por valor, num lugar só.
+ * Com algum campo ignorado, ou com as cláusulas já gravadas (Etapa 147): aviso e `ok: false` (o Emitir revisão não emite, B940); senão
+ * "Alterações salvas." e `ok: true`.
+ */
+export function desfechoDoSalvar(respostaVariaveis, respostaDescricoes, clausulasJaGravadas = false) {
+  const avisos = [];
+  if (clausulasJaGravadas === true) avisos.push(AVISO_CLAUSULAS_JA_GRAVADAS);
   const aviso = avisoValoresIgnorados(somarIgnorados(respostaVariaveis, respostaDescricoes));
-  if (aviso) return { tipo: 'warning', mensagem: aviso, ok: false };
+  if (aviso) avisos.push(aviso);
+  if (avisos.length > 0) return { tipo: 'warning', mensagem: avisos.join(' '), ok: false };
   return { tipo: 'success', mensagem: 'Alterações salvas.', ok: true };
 }
 

@@ -289,6 +289,54 @@ test('[RN-147.05/06, Fase 2 I-5] SQLITE_BUSY: na 3a clausula do inicializar (as 
   });
 });
 
+// ── Fase 5 (r3 R12/R13/R14, r1 M-2) ──────────────────────────────────────────────────────────────────────────────────────
+test('[RN-147.05, Fase 5 r3 R14] o erro na 2a consulta do modelo (os itens x familias da proposta): 500 "Nenhuma" e nada fica', async () => {
+  const pid = await proposta('Ini itens falha');
+  await comFalha({ FALHA_SQL_INJETADA: 'FROM proposta_itens pi', FALHA_SQL_METODOS: 'all', FALHA_SQL_MSG: 'falha dos itens x familias' }, async () => {
+    const [s, x] = await responde('POST', `/propostas/${pid}/clausulas/inicializar`);
+    assert.deepStrictEqual([s, x], [500, { error: INI_NADA('falha dos itens x familias') }]);
+    await pausa(200);
+    assert.deepStrictEqual(await clausulas(pid), []);
+    assert.ok(/\[falha injetada\] SELECT DISTINCT f\.clausulas_modelo_id/.test(fs.readFileSync(logArq, 'utf8')), 'a falha injetada nao casou');
+  });
+});
+
+test('[RN-147.05/06, Fase 5 r3 R12/R13] BUSY com o desfazer FALHANDO nao vira 503 (o client repetiria em cima da metade): 500 com a frase', async () => {
+  // inicializar: BUSY na 3a + a limpeza recusada pelo gatilho -> 500 "parte"
+  const pid = await proposta('Ini busy limpeza');
+  await alvo(pid, 'delete');
+  await comFalha({ FALHA_SQL_INJETADA: '^INSERT INTO proposta_clausulas', FALHA_SQL_METODOS: 'run', FALHA_SQL_PULAR: '2', FALHA_SQL_MSG: BUSY }, async () => {
+    const [s, x] = await responde('POST', `/propostas/${pid}/clausulas/inicializar`);
+    assert.deepStrictEqual([s, x], [500, { error: INI_PARTE(BUSY) }]);
+    await pausa(200);
+    assert.deepStrictEqual((await clausulas(pid)).map((c) => c.ordem), [0, 1], 'as duas gravadas antes do BUSY');
+  });
+  // reordenar: BUSY no 3o UPDATE em diante (a devolucao tambem cai) -> 500 "misturada"
+  const pOrd = await propostaInicializada('Ord busy devolucao');
+  const antes = await clausulas(pOrd);
+  await comFalha({ FALHA_SQL_INJETADA: '^UPDATE proposta_clausulas SET ordem', FALHA_SQL_METODOS: 'run', FALHA_SQL_PULAR: '2', FALHA_SQL_MSG: BUSY }, async () => {
+    const [s, x] = await responde('PUT', `/propostas/${pOrd}/clausulas/reordenar`, { ordem: antes.map((c) => c.id).reverse() });
+    assert.deepStrictEqual([s, x], [500, { error: ORD_MISTURADA(BUSY) }]);
+  });
+});
+
+test('[RN-147.06, Fase 5 r1 M-2] ids escritos como texto ("6.0", " 5") que o banco casa: a devolucao os acha e a ordem de antes fica', async () => {
+  const pid = await propostaInicializada('Ord ids texto');
+  const antes = await clausulas(pid);
+  const [a, b, c] = antes.slice(-3).reverse();
+  await alvo(pid, 'ordem2');
+  const [s, x] = await responde('PUT', `/propostas/${pid}/clausulas/reordenar`, { ordem: [`${a.id}.0`, ` ${b.id}`, c.id] });
+  assert.deepStrictEqual([s, x], [500, { error: ORD_MANTIDA(GATILHO) }]);
+  await pausa(200);
+  assert.deepStrictEqual(await clausulas(pid), antes, 'as duas que mudaram (pelo texto) nao voltaram');
+  // a metade positiva: sem a falha, os mesmos ids em texto gravam a ordem nova
+  await semAlvo(pid);
+  const [s2] = await responde('PUT', `/propostas/${pid}/clausulas/reordenar`, { ordem: [`${a.id}.0`, ` ${b.id}`, c.id] });
+  assert.strictEqual(s2, 200);
+  const depois = await clausulas(pid);
+  assert.deepStrictEqual([a, b, c].map((k) => depois.find((d) => d.id === k.id).ordem), [0, 1, 2]);
+});
+
 (async () => {
   console.log('\n=== Etapa 147 (propostas): as clausulas da proposta gravam uma por uma e conferem o erro (C327) ===\n');
   try {

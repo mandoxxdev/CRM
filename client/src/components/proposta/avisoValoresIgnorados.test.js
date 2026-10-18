@@ -8,7 +8,7 @@
  * testada por valor, e a fiação do salvar() é presa pelo FONTE como um bloco contíguo e exato (Fase 5, r3: uma régua de trechos soltos
  * deixava passar um toast.success a mais, um return num ramo morto e a soma anulada), com controles que mostram que ela acusa cada um.
  */
-import { avisoValoresIgnorados, somarIgnorados, desfechoDoSalvar, mensagemDaFalhaDoSalvar } from './avisoValoresIgnorados';
+import { avisoValoresIgnorados, somarIgnorados, desfechoDoSalvar, mensagemDaFalhaDoSalvar, AVISO_CLAUSULAS_JA_GRAVADAS } from './avisoValoresIgnorados';
 
 const fs = require('fs');
 const path = require('path');
@@ -67,7 +67,7 @@ function fiacaoDoAviso(corpo) {
     soAtribuidasUmaVez: conta(t, 'respostaVariaveis =') === 2 && conta(t, 'respostaDescricoes =') === 2
       && /let respostaVariaveis = null;\s*let respostaDescricoes = null;/.test(t),
     // o fim do try, contíguo: o desfecho das duas respostas, o toast dele, o recarregar e o retorno dele
-    desfecho: /setMudancasPendentes\(false\);\s*const desfecho = desfechoDoSalvar\(respostaVariaveis, respostaDescricoes\);\s*toast\[desfecho\.tipo\]\(desfecho\.mensagem\);\s*carregarPreview\(\);\s*return desfecho\.ok;\s*$/.test(t),
+    desfecho: /setMudancasPendentes\(false\);\s*const desfecho = desfechoDoSalvar\(respostaVariaveis, respostaDescricoes, clausulasJaGravadas\);\s*toast\[desfecho\.tipo\]\(desfecho\.mensagem\);\s*carregarPreview\(\);\s*return desfecho\.ok;\s*$/.test(t),
     umToast: (t.match(/\btoast[.[]/g) || []).length === 1,
     umReturn: (t.match(/\breturn\b/g) || []).length === 1,
   };
@@ -116,7 +116,7 @@ describe('controles: a régua acusa cada fiação errada (o salvar() antigo e as
     expect([r.desfecho, r.umReturn]).toEqual([false, false]);
   });
   test('c3: o desfecho de outra coisa que não as duas respostas', () => {
-    const r = fiacaoDoAviso(corpoDoSalvar(troca('desfechoDoSalvar(respostaVariaveis, respostaDescricoes)', 'desfechoDoSalvar(null, null)')));
+    const r = fiacaoDoAviso(corpoDoSalvar(troca('desfechoDoSalvar(respostaVariaveis, respostaDescricoes, clausulasJaGravadas)', 'desfechoDoSalvar(null, null, clausulasJaGravadas)')));
     expect(r.desfecho).toBe(false);
   });
   test('c4/c5: uma das respostas anulada antes do desfecho', () => {
@@ -153,5 +153,41 @@ describe('[RN-147.07] mensagemDaFalhaDoSalvar e a fiação do catch do salvar()'
     const antigo = FONTE.replace('toast.error(mensagemDaFalhaDoSalvar(e));', () => "toast.error('Erro ao salvar alterações.');");
     expect(antigo).not.toBe(FONTE);
     expect(catchDoSalvar(antigo)).not.toMatch(CERTO);
+  });
+});
+
+// ── Etapa 147 (Fase 5 r1 I-1, RN-147.08): as cláusulas que o servidor já tinha gravado não são relacionadas pela posição ───────
+describe('[RN-147.08] o preview que achava as cláusulas padrão e o servidor já as tinha (jaInicializado)', () => {
+  const L_CL = 'As cláusulas desta proposta já estavam gravadas (por um salvamento anterior que não terminou ou por outra aba) e as mudanças nelas não foram gravadas agora. O preview foi recarregado com o que está gravado — confira as cláusulas e faça as mudanças de novo.';
+  test('o desfecho: com as cláusulas já gravadas, o aviso (texto literal) e ok false; junto com os campos ignorados, os dois avisos', () => {
+    expect(AVISO_CLAUSULAS_JA_GRAVADAS).toBe(L_CL);
+    expect(desfechoDoSalvar(null, null, true)).toEqual({ tipo: 'warning', mensagem: L_CL, ok: false });
+    expect(desfechoDoSalvar({ data: { ignorados: 1 } }, null, true)).toEqual({ tipo: 'warning', mensagem: `${L_CL} ${avisoValoresIgnorados(1)}`, ok: false });
+    // a metade positiva: sem o terceiro argumento (ou falso, ou qualquer coisa que não seja true) continua o de antes
+    for (const x of [undefined, false, 'true', 1, null]) expect(desfechoDoSalvar(null, null, x)).toEqual({ tipo: 'success', mensagem: 'Alterações salvas.', ok: true });
+  });
+  const corpoDe = (src, nome, proximo) => { const i = src.indexOf(`async function ${nome}(`); const f = src.indexOf(`async function ${proximo}(`, i); return i < 0 || f < 0 ? '' : src.slice(i, f); };
+  const RE_INI = /const inicializacao = await api\.post\(`\/propostas\/\$\{id\}\/clausulas\/inicializar`\);\s*(?:\/\/[^\n]*\n\s*)*if \(inicializacao && inicializacao\.data && inicializacao\.data\.jaInicializado\) return true;\s*const res = await api\.get\(`\/propostas\/\$\{id\}\/clausulas`\);/;
+  test('a fiação: o salvarClausulas devolve true no jaInicializado ANTES de ler e relacionar; o salvar() passa isso ao desfecho', () => {
+    const sc = corpoDe(FONTE, 'salvarClausulas', 'aplicarDiffClausulas');
+    expect(sc.length).toBeGreaterThan(100);
+    expect(sc).toMatch(RE_INI);
+    expect(tryDoSalvar(corpoDoSalvar(FONTE))).toMatch(/let clausulasJaGravadas = false;\s*if \(doc\) \{\s*clausulasJaGravadas = \(await salvarClausulas\(doc\)\) === true;/);
+  });
+  test('controle: sem o retorno no jaInicializado (o de antes), a régua acusa', () => {
+    const antigo = FONTE.replace(/\s*if \(inicializacao && inicializacao\.data && inicializacao\.data\.jaInicializado\) return true;/, () => '');
+    expect(antigo).not.toBe(FONTE);
+    expect(corpoDe(antigo, 'salvarClausulas', 'aplicarDiffClausulas')).not.toMatch(RE_INI);
+  });
+  // Fase 5 r3 C3: um .catch nas chamadas das cláusulas engoliria a frase do servidor antes do toast (RN-147.07)
+  const engole = (src) => {
+    const b = corpoDe(src, 'salvarClausulas', 'aplicarDiffClausulas') + corpoDe(src, 'aplicarDiffClausulas', 'salvar');
+    return b.length > 200 && !/\.catch\(/.test(b) && !/\btry\s*\{/.test(b);
+  };
+  test('[RN-147.07, Fase 5 r3 C3] as chamadas das cláusulas não engolem o erro (sem .catch nem try) — e o controle acusa', () => {
+    expect(engole(FONTE)).toBe(true);
+    const comCatch = FONTE.replace('await api.post(`/propostas/${id}/clausulas/inicializar`)', () => 'await api.post(`/propostas/${id}/clausulas/inicializar`).catch(() => {})');
+    expect(comCatch).not.toBe(FONTE);
+    expect(engole(comCatch)).toBe(false);
   });
 });

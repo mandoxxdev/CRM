@@ -1287,7 +1287,10 @@ export default function PropostaPreviewEditavel() {
         });
       if (!houveMudanca) return;
 
-      await api.post(`/propostas/${id}/clausulas/inicializar`);
+      const inicializacao = await api.post(`/propostas/${id}/clausulas/inicializar`);
+      // Etapa 147 (Fase 5 r1 I-1, RN-147.08): o servidor já tinha as cláusulas (um salvamento anterior que falhou no meio, a cópia pela
+      // metade, outra aba) — relacionar pela posição gravaria o texto na cláusula errada. Não grava as cláusulas; o salvar() avisa e recarrega.
+      if (inicializacao && inicializacao.data && inicializacao.data.jaInicializado) return true;
       const res = await api.get(`/propostas/${id}/clausulas`);
       const frescas = res.data?.clausulas || [];
 
@@ -1356,8 +1359,9 @@ export default function PropostaPreviewEditavel() {
       // false: o Emitir revisão não emite em cima do valor perdido (B940).
       let respostaVariaveis = null;
       let respostaDescricoes = null;
+      let clausulasJaGravadas = false;
       if (doc) {
-        await salvarClausulas(doc);
+        clausulasJaGravadas = (await salvarClausulas(doc)) === true;
         const variaveisManuais = lerVariaveisManuaisDoSource(doc);
         if (variaveisManuais.length > 0) {
           respostaVariaveis = await api.put(`/propostas/${id}/variaveis-manuais`, { valores: variaveisManuais });
@@ -1371,7 +1375,7 @@ export default function PropostaPreviewEditavel() {
         await api.put(`/propostas/${id}/customizacoes`, camposEditados);
       }
       setMudancasPendentes(false);
-      const desfecho = desfechoDoSalvar(respostaVariaveis, respostaDescricoes);
+      const desfecho = desfechoDoSalvar(respostaVariaveis, respostaDescricoes, clausulasJaGravadas);
       toast[desfecho.tipo](desfecho.mensagem);
       carregarPreview();
       return desfecho.ok;

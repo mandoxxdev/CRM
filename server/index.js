@@ -6085,18 +6085,25 @@ app.put('/api/propostas/:id/clausulas/reordenar', authenticateToken, exigirComer
   const SQL_ORDEM = 'UPDATE proposta_clausulas SET ordem = ? WHERE id = ? AND proposta_id = ?';
   db.all('SELECT id, ordem FROM proposta_clausulas WHERE proposta_id = ?', [id], (errLer, atuais) => {
     if (errLer) return responderOrdemNaoGravada(res, errLer, 'leitura');
-    const ordemDe = new Map((atuais || []).map((c) => [String(c.id), c.ordem]));
+    const ordemDe = new Map((atuais || []).map((c) => [c.id, c.ordem]));
     const linhas = ordem.map((clausulaId, index) => [index, clausulaId, id]);
-    gravarItensEmSequencia(SQL_ORDEM, linhas, (err, gravadas) => {
+    gravarItensEmSequencia(SQL_ORDEM, linhas, (err) => {
       if (err) {
-        // as que ja mudaram (as primeiras `gravadas.length` da lista) voltam a ordem lida; id que nao e da proposta nao tinha mudado nada
-        const devolver = linhas.slice(0, gravadas.length)
-          .filter(([, clausulaId]) => ordemDe.has(String(clausulaId)))
-          .map(([, clausulaId]) => [ordemDe.get(String(clausulaId)), clausulaId, id]);
-        return gravarItensEmSequencia(SQL_ORDEM, devolver, (errVolta) => {
-          if (errVolta) console.error('❌ Cláusulas da proposta', id, ': a ordem anterior não voltou:', errVolta.message);
-          return responderOrdemNaoGravada(res, err, errVolta ? 'misturada' : 'mantida');
-        }, 'Cláusulas da proposta (devolvendo a ordem)');
+        // Fase 5 (r1 M-2): as que mudaram saem de uma RELEITURA comparada com a ordem lida antes — nao dos ids do corpo: o SQLite casa
+        // '6.0' ou ' 5' com o id 6/5 (afinidade numerica) e a comparacao por texto as deixava de fora dizendo "mantida".
+        return db.all('SELECT id, ordem FROM proposta_clausulas WHERE proposta_id = ?', [id], (errReler, agora) => {
+          if (errReler) {
+            console.error('❌ Cláusulas da proposta', id, ': a ordem não foi relida para voltar:', errReler.message);
+            return responderOrdemNaoGravada(res, err, 'misturada');
+          }
+          const devolver = (agora || [])
+            .filter((c) => ordemDe.has(c.id) && ordemDe.get(c.id) !== c.ordem)
+            .map((c) => [ordemDe.get(c.id), c.id, id]);
+          return gravarItensEmSequencia(SQL_ORDEM, devolver, (errVolta) => {
+            if (errVolta) console.error('❌ Cláusulas da proposta', id, ': a ordem anterior não voltou:', errVolta.message);
+            return responderOrdemNaoGravada(res, err, errVolta ? 'misturada' : 'mantida');
+          }, 'Cláusulas da proposta (devolvendo a ordem)');
+        });
       }
 
       db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioId], (_, u) => {
