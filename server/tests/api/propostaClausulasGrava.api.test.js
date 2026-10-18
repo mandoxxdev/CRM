@@ -351,7 +351,14 @@ test('[RN-148.05, C342] inicializar e reordenar de uma proposta que nao existe: 
   assert.deepStrictEqual([s1, x1, s2, x2], [404, NAO_ENCONTRADA, 404, NAO_ENCONTRADA]);
   await pausa(300);
   assert.deepStrictEqual(await clausulas(fantasma), []);
-  assert.deepStrictEqual(await logsDoId(fantasma), [], 'o reordenar de antes gravava o log de uma proposta que nao existe');
+  // Fase 5 r3 R17: com as chaves estrangeiras ligadas (o index.js liga), o log de edicao de uma proposta que nao existe ja era recusado pelo
+  // banco — esta assercao nao fica vermelha sem a conferencia numa pasta vazia (declarado: equivalente aqui; vale para tabela antiga sem a FK)
+  assert.deepStrictEqual(await logsDoId(fantasma), []);
+  // Fase 5 r3 R15: o fantasma ADJACENTE (o id anterior existe) — a conferencia le o id pedido, nao um vizinho
+  const adjacente = (await all('SELECT MAX(id) + 1 AS id FROM propostas'))[0].id;
+  const [s5, x5] = await responde('POST', `/propostas/${adjacente}/clausulas/inicializar`);
+  const [s6, x6] = await responde('PUT', `/propostas/${adjacente}/clausulas/reordenar`, { ordem: [1] });
+  assert.deepStrictEqual([s5, x5, s6, x6], [404, NAO_ENCONTRADA, 404, NAO_ENCONTRADA], 'o id logo depois do ultimo');
   // a validacao do corpo continua antes da conferencia (sem leitura do banco)
   const [s3, x3] = await responde('PUT', `/propostas/${fantasma}/clausulas/reordenar`, { ordem: 'x' });
   assert.deepStrictEqual([s3, x3], [400, { error: 'ordem deve ser um array de IDs' }]);

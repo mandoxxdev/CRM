@@ -230,7 +230,8 @@ test('[RN-148.01/02, C341, C335] o usuario que a tela barra do Comercial e da Fa
     if (s !== 403 || JSON.stringify(x) !== JSON.stringify(esperado)) errados.push(`${r.metodo} ${r.rota}: ${s} ${JSON.stringify(x).slice(0, 80)}`);
   }
   assert.deepStrictEqual(errados, []);
-  await pausa(500);
+  // Fase 5 r3 R14: o gerar-pdf leva segundos no Chromium — um handler que rodasse depois do 403 gravaria o pdf_url depois de uma pausa curta
+  await pausa(5000);
   assert.strictEqual(await retrato(), antes, 'uma rota barrada mudou a familia, a OS, os itens ou os modelos de contrato');
   assert.deepStrictEqual(arquivosDaPasta(), arquivos0, 'o gerar-pdf barrado gravou arquivo');
   assert.deepStrictEqual(await negados(b.id), [
@@ -272,11 +273,16 @@ test('[RN-148.01/04] a metade positiva: quem tem so o Comercial le os modelos de
   const [sv, v] = await j('PUT', `/familias/${ctx.familia}/clausulas-modelo`, u.T, { clausulas_modelo_id: null });
   assert.deepStrictEqual([sv, v], [200, { ok: true, clausulas_modelo_id: null }]);
   await fluxoDaOs(u, 'Comercial');
+  // Fase 5 r3 R13: quem passa nao vira "acesso negado" no log
+  await pausa(500);
+  assert.deepStrictEqual(await negados(u.id), [], 'o portao registrou acesso negado para quem passou');
 });
 
 test('[RN-148.02/04] quem tem so o Operacional (direta, nao administrador) le a OS, os itens, gera e baixa o PDF — e toma 403 no modelo de contrato', async () => {
   const u = ctx.u.soOperacional;
   await fluxoDaOs(u, 'Operacional');
+  await pausa(500);
+  assert.deepStrictEqual(await negados(u.id), [], 'o portao registrou acesso negado para quem passou (Fase 5 r3 R13)');
   const [s1, x1] = await j('GET', '/clausulas-modelos', u.T);
   const [s2, x2] = await j('PUT', `/familias/${ctx.familia}/clausulas-modelo`, u.T, { clausulas_modelo_id: ctx.outroModelo });
   assert.deepStrictEqual([s1, x1, s2, x2], [403, NEGADO_COM, 403, NEGADO_COM]);
