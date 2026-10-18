@@ -11,12 +11,18 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-18):** **Etapa 145 fechada** (das propostas: **as rotas da proposta exigem o Comercial pela
+> **Onde o desenvolvimento está (2026-10-18):** **Etapa 146 fechada** (das propostas: **a criação, o salvamento e a cópia da proposta só
+> dizem "pronto" depois de gravar os itens, e o salvamento confere o cliente** — quando o banco recusava um item, a proposta era criada,
+> salva ou copiada com sucesso sem ele, e no salvamento os itens que havia também se perdiam; agora sai *"Erro ao gravar os itens da
+> proposta (…)"* e a proposta fica como estava (**C323** resolvido); salvar com um cliente que não existe recebe uma frase (**C322**
+> resolvido — e o texto dela estava errado); a lista de OS do Comercial pela régua da tela (**C321** resolvido); **B952** a **B957**; a
+> consulta **A94** (opcional); os avisos novos **C327** a **C336**); a próxima é a **147** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 145 fechada** (das propostas: **as rotas da proposta exigem o Comercial pela
 > régua da tela, a geração automática só responde depois de gravar os itens e o cliente que não existe é recusado** — quem a tela barra
 > do Comercial (um usuário só do Almoxarifado, por exemplo) criava, gerava e editava proposta e pedia aprovação de desconto pela
 > integração; agora toma *"Acesso negado ao módulo"*, e quem abre o Comercial não perde nada (**C317** resolvido em parte — o usuário sem
 > nenhuma permissão continua entrando, **B949**, decisão de vocês); **C315** e **C318** resolvidos; **B944** a **B951**; a consulta nova
-> **A93**, **bloqueante do deploy**; os avisos novos **C319** a **C326**); a próxima é a **146** — ver "Onde estamos e o que vem a seguir".
+> **A93**, **bloqueante do deploy**; os avisos novos **C319** a **C326**); a próxima era a **146**.)*
 > *(Antes: **Etapa 144 fechada** (das propostas: **a geração automática recusa o produto que não
 > existe, e o preview avisa quando um campo não foi gravado** — pela integração, a geração automática com um produto que não existe (ou com
 > o número do produto escrito como texto) criava a proposta vazia e respondia sucesso; agora recusa com a frase do produto que faltou e
@@ -254,7 +260,10 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Noventa e três itens para rodar em produção ANTES do deploy — noventa são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Noventa e quatro itens para rodar em produção ANTES do deploy — noventa e uma são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-18 (Etapa 146) de noventa e três para noventa e quatro**, com a **A94** — as propostas sem cliente ou com um
+cliente que não existe mais (o salvamento passa a conferir o cliente que muda). **Somente leitura, opcional.**)*
 
 *(**Atualizado em 2026-10-18 (Etapa 145) de noventa e dois para noventa e três**, com a **A93** — quem usou proposta nos últimos 90 dias e
 passa a ser barrado nas rotas de proposta e de aprovação (**C317**). **Somente leitura e BLOQUEANTE: rode antes do deploy.**)*
@@ -3398,12 +3407,30 @@ nenhum tem grupo — o banco não tem grupo nenhum); controle numa cópia com do
 terceiro só há 200 dias (mas que **aprovou** um desconto há 2 dias), um quarto que ganhou o Comercial e um usuário num grupo ativo sem
 permissão nenhuma: a 1 achou exatamente os três — os dois e o que aprovou.)*
 
+**A94 (NOVA, da Etapa 146 — opcional — as propostas sem cliente ou com um cliente que não existe mais).** Desde a Etapa 146 o salvamento
+da proposta confere o cliente **quando ele muda**: salvar com o mesmo cliente de sempre continua valendo, mesmo que ele tenha sumido do
+cadastro. A consulta mostra as propostas que estão nessa situação, para vocês escolherem o cliente certo no formulário. Somente leitura.
+
+```sql
+-- 1) propostas sem cliente
+SELECT id, numero_proposta, titulo, status, updated_at FROM propostas WHERE cliente_id IS NULL ORDER BY updated_at DESC;
+
+-- 2) propostas cujo cliente não existe mais no cadastro
+SELECT p.id, p.numero_proposta, p.cliente_id, p.status FROM propostas p
+WHERE p.cliente_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM clientes c WHERE c.id = p.cliente_id) ORDER BY p.id;
+```
+
+**Como ler o resultado:** **as duas vazias** — nada a fazer. **Linhas na 1** — propostas sem cliente (pela integração, salvar com o
+cliente vazio deixa a proposta assim — **C330**): abra cada uma em **Comercial → Propostas → Editar**, escolha o cliente e salve (o
+formulário exige o cliente). **Linhas na 2** — o mesmo; o cliente antigo não volta. *(Rodada no banco local, cópia de 09/10: **0** e
+**0**; controle numa cópia com uma proposta sem cliente e outra apontando para o cliente 987654: a 1 achou a primeira e a 2 a segunda.)*
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B951; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B957; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -10356,6 +10383,39 @@ proposta pelo mesmo furo). **Reversível.**
 **B951 (NOVA, da Etapa 145) — a próxima etapa (146).** Ver a "próxima tarefa detalhada" no plano da Etapa 145. As decisões que esperam
 vocês continuam as da **B943**, mais a **B949** (o usuário sem nenhuma permissão).
 
+**B952 (NOVA, da Etapa 146; das propostas) — o salvamento grava os itens novos antes de tudo e só tira os antigos no fim.** Se um item
+novo não grava, os novos que já entraram saem e **nada** da edição fica (dados, número, revisão, histórico, itens, campos do preview).
+**Descartado:** (a) continuar apagando os antigos primeiro e, na falha, regravá-los a partir do que foi lido (a regravação falha pelo
+mesmo motivo que a gravação — e aí os itens somem de vez); (b) gravar os itens depois dos dados da proposta (a falha deixaria o valor, a
+revisão e o número novos com os itens antigos); (c) uma transação do banco (a conexão é uma só — a razão da **B948**). **Consequência:**
+enquanto os novos entram e os antigos ainda não saíram, quem abrir a proposta vê os itens duas vezes (segundos, com milhares — **C331**).
+Os antigos saem pela lista dos que **foram lidos** no começo do salvamento: a primeira versão tirava "tudo que não é dos novos", e a
+revisão (r1 e r2) mediu que **dois salvamentos ao mesmo tempo** da mesma proposta deixavam **zero itens** com os dois respondendo sucesso
+(5 de 5 com 20 itens) — corrigido antes do fechamento; o pior caso voltou a ser o de antes da etapa: os itens dos dois salvamentos juntos,
+repetidos e visíveis. **Reversível.**
+
+**B953 (NOVA, da Etapa 146; das propostas) — a criação e a cópia usam as frases da geração automática**, inclusive o *"exclua-a e gere de
+novo"* da proposta incompleta. **Descartado:** uma frase por porta (três textos para o mesmo fato; o vendedor não sabe por qual porta a tela
+salvou). **Reversível** (um texto).
+
+**B954 (NOVA, da Etapa 146; das propostas) — o salvamento só confere o cliente que muda para um número.** O cliente vazio, nulo ou que não é
+número continua deixando a proposta sem cliente, como a Etapa 138 decidiu manter (há um teste que prende isso). **Descartado:** recusar
+como a criação (*"Cliente é obrigatório"* / *"Cliente inválido"*) — muda o que a 138 decidiu; fica como pergunta (**C330**): a proposta
+pode ficar sem cliente? **Reversível.**
+
+**B955 (NOVA, da Etapa 146; das propostas) — a cópia (Clonar) entrou na etapa** (o plano nomeava a criação e o salvamento). Era o mesmo
+defeito, na mesma tabela, e a cópia ainda respondia antes de copiar (300 itens: 11 copiados no instante da resposta — o formulário da cópia
+abre logo em seguida). **Descartado:** deixar como aviso. **Reversível.**
+
+**B956 (NOVA, da Etapa 146; do Comercial) — a lista de OS do Comercial usa a régua da tela das propostas (C321).** **Descartado:** manter a
+régua antiga (a tela e o servidor discordam para quem está num grupo sem nenhuma permissão — a tela abre o Comercial e a lista dava
+*"Acesso negado"* — e para quem tem só permissões de outros módulos — a tela barra e a lista abria pela integração). **Consequência:** quem
+passa a ver a lista ainda pode tomar *"Acesso negado"* ao criar a OS, que usa rotas do Operacional (**C332**). A chave da **B946** desliga
+também esta. **Reversível.**
+
+**B957 (NOVA, da Etapa 146) — a próxima etapa (147).** Ver a "próxima tarefa detalhada" no plano da Etapa 146. As decisões que esperam
+vocês continuam as da **B951**, mais a **C330** (a proposta pode ficar sem cliente?).
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -13283,14 +13343,21 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      executivo, o mapa de máquinas vendidas, a elegibilidade de custos de viagem, as notificações e a ordem de serviço do Operacional
      respondem a qualquer logado. Elas só **leem**. **O que fazer:** nada pela tela. Fechar cada uma é uma etapa própria (cada uma tem
      outros usuários legítimos).
-321. **NOVO (da revisão do plano da Etapa 145; do Comercial, anterior a ela; lido no código) — a lista de ordens de serviço do Comercial
+321. **✅ RESOLVIDO NA ETAPA 146 (B956)** — a lista de ordens de serviço do Comercial usa a régua da tela das propostas (sobra a **C332**).
+     *(O texto original:)* **NOVO (da revisão do plano da Etapa 145; do Comercial, anterior a ela; lido no código) — a lista de ordens de serviço do Comercial
      segue a régua antiga do servidor.** Quem está num grupo sem nenhuma permissão abre o Comercial (a tela deixa) e toma *"Acesso negado
      ao módulo"* na aba de ordens de serviço; quem tem permissões só de outros módulos e nenhum grupo não abre o Comercial, mas a rota o
      deixa ler. **O que fazer:** nada (no banco medido não há grupo nenhum). Alinhar à régua da tela é uma linha.
-322. **NOVO (da revisão do plano da Etapa 145; das propostas, anterior a ela; lido no código) — salvar a proposta aceita um cliente que
+322. **✅ RESOLVIDO NA ETAPA 146 (B954) — e o texto abaixo estava errado:** salvar com um cliente que não existe **não gravava** — dava
+     erro interno (500) com a mensagem do banco (*"FOREIGN KEY constraint failed"*: o servidor liga as chaves estrangeiras; medido pela
+     rota). Agora: *"Cliente não encontrado (id 99999). Atualize a lista de clientes e tente de novo."*. O que de fato grava é o cliente
+     **vazio** (proposta sem cliente — **C330**). *(O texto original:)* **NOVO (da revisão do plano da Etapa 145; das propostas, anterior a ela; lido no código) — salvar a proposta aceita um cliente que
      não existe.** A criação e a geração automática recusam desde a Etapa 145, mas o salvamento de uma proposta existente com um cliente
      que não existe grava (pela integração). A tela só lista clientes cadastrados. **O que fazer:** nada pela tela. Candidata pequena.
-323. **NOVO (da revisão do plano da Etapa 145; das propostas, anterior a ela; lido no código) — a criação de proposta grava os itens sem
+323. **✅ RESOLVIDO NA ETAPA 146 (B952, B953, B955)** — a criação, o salvamento e a cópia gravam os itens um a um e só respondem depois do
+     último; o item que falha desfaz a criação e a cópia e, no salvamento, nada muda. Reproduzido antes do conserto (uma regra no banco
+     recusando um item): criação **200** com 4 de 5 itens; salvamento **200** sem o item e sem os antigos (às vezes sem resposta); cópia
+     **201** sem o item. *(O texto original:)* **NOVO (da revisão do plano da Etapa 145; das propostas, anterior a ela; lido no código) — a criação de proposta grava os itens sem
      conferir o erro de cada um.** O mesmo defeito que a geração automática tinha (**C318**): um item que não grava some calado e a
      proposta é criada com sucesso, sem ele. Não reproduzido (precisa de falha do banco no meio). **O que fazer:** nada pela tela.
      Candidata: a gravação em sequência da geração automática.
@@ -13305,6 +13372,35 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      10 000 pedidos negados com um cabeçalho de navegador de 8 KB aumentaram o banco em 81 MB (o cabeçalho é gravado inteiro). O limite de
      pedidos por endereço (500 a cada 15 minutos) segura um atacante sozinho. A etapa só somou rotas a esse caminho. **O que fazer:**
      nada; se o banco crescer sem motivo, olhar o log de acesso negado.
+327. **NOVO (da Fase 0 da Etapa 146; das propostas, anterior a ela; lido no código) — as cláusulas da proposta gravam várias linhas sem
+     conferir cada uma.** Copiar as cláusulas padrão para a proposta e reordenar as cláusulas gravam linha a linha sem olhar o erro de cada
+     uma (o defeito da **C323**, nas cláusulas). **O que fazer:** nada; reordenar de novo conserta a ordem.
+328. **NOVO (da Fase 0 da Etapa 146; de outros módulos, anterior a ela; lido no código) — o mesmo jeito de gravar em outros 11 lugares**
+     (as cláusulas do modelo de contrato, materiais do escritório, variáveis técnicas, clientes da viagem, listas de preço, solicitações de
+     material e de compra). Registro; **o que fazer:** nada.
+329. **NOVO (da Fase 0 da Etapa 146; do Comercial, anterior a ela; lido no código) — as listas de preço do Comercial só pedem o login.**
+     Criar, listar, ler e apagar lista de preço não confere o módulo. **O que fazer:** nada (a tela fica no Comercial).
+330. **NOVO (da Etapa 146; das propostas, anterior a ela; reproduzido) — EM ABERTO, espera vocês — salvar com o cliente vazio deixa a
+     proposta sem cliente.** Pela integração, o salvamento com o cliente vazio, nulo, zero ou que não é número grava a proposta sem cliente
+     (a tela exige o cliente). A Etapa 138 decidiu manter (**B954**). **Pergunta:** a proposta pode ficar sem cliente? Se não, a recusa é a
+     da criação (*"Cliente é obrigatório"*). A **A94** lista as que estão assim.
+331. **NOVO (consequência da B952) — durante o salvamento de uma proposta grande, os itens aparecem duas vezes por alguns segundos**, e a
+     chance de *"A proposta foi alterada por outra gravação no mesmo instante"* cresce um pouco com milhares de itens. Dois salvamentos da
+     mesma proposta exatamente ao mesmo tempo (duas abas, dois vendedores) podem deixar os itens dos dois, repetidos — como antes da etapa.
+     **O que fazer:** se aparecer item repetido, apagar o que sobrou e salvar.
+335. **NOVO (da revisão da Etapa 146; do Operacional, anterior a ela; reproduzido) — uma ordem de serviço lida pelo número interno só pede
+     o login.** A leitura de uma OS, os itens dela e o PDF dela respondem a qualquer usuário logado (um usuário só do Almoxarifado leu os 56
+     campos e o valor de uma OS) — a lista fechada não protege o dado, porque os números são sequenciais. **O que fazer:** nada pela tela.
+     Candidata: o mesmo portão das listas.
+336. **NOVO (da revisão da Etapa 146; cosmético) — o número de cliente enorme sai arredondado na frase.** Pela integração, `cliente_id`
+     com 20 dígitos responde *"Cliente não encontrado (id 100000000000000000000)"*. **O que fazer:** nada.
+332. **NOVO (da revisão do plano da Etapa 146; do Comercial/Operacional, anterior a ela; lido no código) — criar a OS pelo Comercial usa
+     rotas do Operacional.** O número da OS e os itens dela exigem o Operacional pela régua antiga: quem passa a ver a lista de OS do
+     Comercial (grupo sem nenhuma permissão) pode tomar *"Acesso negado"* ao criar. **O que fazer:** nada (no banco medido não há grupo).
+333. **NOVO (da revisão do plano da Etapa 146; das propostas, anterior a ela; lido no código) — salvar com um projeto ou um responsável
+     que não existe dá erro interno** com a mensagem do banco (só pela integração). **O que fazer:** nada pela tela.
+334. **NOVO (da revisão do plano da Etapa 146; das propostas, anterior a ela; lido no código) — a cópia não leva os campos manuais do
+     preview nem as customizações do documento.** **O que fazer:** preencher de novo na cópia.
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -14636,6 +14732,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(146) Durante o salvamento, os itens aparecem duas vezes por alguns segundos** numa proposta com milhares de itens (**B952**, **C331**).
+- **(146) O cliente vazio no salvamento continua deixando a proposta sem cliente** (**B954**, **C330**, com vocês).
+- **(146) O caso "os itens continuam os de antes"** só acontece se o banco falhar duas vezes seguidas: os dados da proposta (título,
+  valor, revisão) ficam salvos e os itens não — a frase diz isso, e salvar de novo resolve.
 - **(145) O usuário sem nenhuma permissão entra nas propostas** (a regra de sempre da tela) — inclusive o recém-criado e o que teve o
   último módulo revogado (**B949**, com vocês). Para trancar alguém, desative o usuário.
 - **(145) O portão vale para as rotas de proposta e de aprovação**, não para as outras que mostram dados de proposta (**C319**, **C320**,
@@ -15613,6 +15713,11 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(146) Nenhum clique foi dado no navegador.** Tudo foi provado pela rota, com o servidor de verdade em pasta vazia (a falha de um item
+provocada por uma regra no próprio banco, as limpezas por falha injetada). O que **só o navegador** prova: o roteiro da Etapa 146 no guia —
+criar, salvar (com um campo manual do preview preenchido) e **Clonar** pela tela, sem nenhuma mudança para o vendedor; e a lista de OS do
+Comercial com o usuário de um grupo sem permissão nenhuma.
 
 **(145) Nenhum clique foi dado no navegador.** Tudo foi provado pela rota, com o servidor de verdade em pasta vazia (as 49 rotas de proposta
 e as 5 de aprovação uma a uma, com 17 perfis de usuário). O que **só o navegador** prova: o roteiro da Etapa 145 no guia — o vendedor com o
@@ -29683,7 +29788,7 @@ e *"Cliente inválido"* vêm antes.
    configuração do modelo da proposta só pede o login (**C319**); a lista de OS do Comercial segue a régua antiga (**C321**).
 3. **Quem tem o Operacional lê a proposta inteira**, não só os itens da OS (**C324**).
 4. **Salvar a proposta com um cliente que não existe** continua gravando (**C322**); a criação grava os itens sem conferir o erro de cada um
-   (**C323**).
+   (**C323**). *(As duas resolvidas na Etapa 146 — e a C322 estava errada: não gravava, dava erro interno; a C321 também.)*
 5. **Quem pode editar a proposta de outro vendedor** continua com vocês (**C305**); a quantidade da integração (**C314**); a geração
    automática sem tela (**C316**).
 
@@ -29701,9 +29806,98 @@ equivalentes e 8 sobreviveram por falta de cenário (a permissão desligada, a d
 ocupado, uma rota escrita com aspas duplas, a frase da limpeza, o número do cliente com letras) — viraram cenários. Nenhum defeito no
 código entregue.
 
+## Etapa 146 — Criar, salvar e copiar a proposta só dizem "pronto" depois de gravar os itens, e o salvamento confere o cliente (2026-10-18)
+
+Quatro consertos nas propostas, do lado do servidor. O principal: quando o banco recusava um item, a proposta era **criada, salva ou
+copiada com sucesso — sem ele**, e ninguém ficava sabendo. No salvamento era pior: os itens que já estavam na proposta eram apagados antes
+de gravar os novos, então o item que falhava sumia **e** levava junto o que havia (às vezes a tela nem recebia resposta). Agora os três só
+dizem "pronto" depois do último item gravado; se um item falha, o vendedor vê *"Erro ao gravar os itens da proposta (…)"* e a proposta fica
+exatamente como estava. Além disso, a cópia de proposta respondia antes de copiar os itens (300 itens: 11 copiados no instante da
+resposta); salvar com um cliente que não existe dava erro interno com a mensagem do banco; e a lista de ordens de serviço do Comercial
+passa a usar a mesma régua de acesso da tela.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Criar uma proposta com 5 itens e o banco recusar o 3º → "Proposta criada." com 4 itens | *"Erro ao gravar os itens da proposta (…). Nenhuma proposta foi criada — tente de novo."* e nada fica (**C323** resolvido) |
+| Salvar a proposta (X, Y, Z) trocando um item e o banco recusar o novo → "Proposta atualizada." com só os dois que gravaram; X, Y e Z já tinham sido apagados; a revisão andava (às vezes a tela ficava esperando para sempre) | *"Erro ao gravar os itens da proposta (…). Nada foi alterado — tente salvar de novo."* — itens, número, revisão, histórico e variáveis do preview exatamente como estavam |
+| Copiar uma proposta de 300 itens → "Proposta clonada" com 11 itens copiados naquele instante (os outros chegavam depois); um item que falhava sumia da cópia | "Proposta clonada" só com os 300 copiados; se um falha, nenhuma cópia nasce e a frase da criação aparece |
+| Salvar a proposta com um cliente que não existe (pela integração) → erro interno *"Erro ao atualizar proposta: SQLITE_CONSTRAINT: FOREIGN KEY constraint failed"* | *"Cliente não encontrado (id 99999). Atualize a lista de clientes e tente de novo."* e nada é gravado (**C322** resolvido — e o texto dela estava errado: dizia que gravava) |
+| Lista de ordens de serviço do Comercial: quem estava num grupo sem nenhuma permissão abria o Comercial e tomava *"Acesso negado"* na lista; quem a tela barra lia a lista pela integração | A mesma régua da tela das propostas (**C321** resolvido) |
+| O salvamento gravava uma linha no histórico de revisões antes de saber se ia conseguir salvar | A linha só entra depois que a proposta foi salva |
+
+### As regras, com o cenário exato
+
+**1. Criar não diz "pronto" sem os itens (B953 — C323).** Em **Comercial → Propostas → Nova proposta**, preencha cliente, título e três
+itens e salve: *"Proposta criada."* e os três estão no detalhe, como sempre. O caso do erro só aparece com o banco recusando um item (disco
+cheio, banco travado por muito tempo); nele, a mensagem é *"Erro ao gravar os itens da proposta (<o erro do banco>). Nenhuma proposta foi
+criada — tente de novo."* e a lista de propostas continua sem ela. Se até a limpeza falhar: *"… A proposta <número> ficou incompleta —
+exclua-a e gere de novo."*.
+
+**2. Salvar grava os itens novos antes de mexer em qualquer outra coisa (B952).** Abra uma proposta com três itens, **Editar**, troque a
+descrição de um, acrescente um quarto e salve: *"Proposta atualizada."*, os quatro itens no detalhe, o campo que o formulário não mostra
+(modelo, descritivo técnico) continua lá e o valor que você digitou no preview para o item continua no item. Com o banco recusando um item
+novo: *"Erro ao gravar os itens da proposta (<o erro>). Nada foi alterado — tente salvar de novo."* — recarregue: o título, o número, a
+revisão e os itens são os de antes. Os dois casos raros: se o banco aceitou os dados da proposta mas não deixou tirar os itens antigos,
+*"… Os outros dados da proposta foram salvos, mas os itens continuam os de antes — confira e salve de novo."*; se nem a limpeza dos novos
+saiu, *"… A proposta <número> ficou com itens repetidos — recarregue, confira os itens e salve de novo."*. As outras recusas do salvamento
+(o número que já é de outra proposta, a proposta alterada por outra pessoa no mesmo instante) continuam com a mesma frase de antes — e os
+itens novos que já tinham sido gravados saem antes da resposta.
+
+**3. A cópia só responde com os itens copiados (B955).** Em **Comercial → Propostas**, abra uma proposta e clique em **Clonar** (ou no ícone de copiar da
+lista): *"Proposta clonada."* e o formulário da cópia abre com todos os itens (com a descrição da tabela e os acessórios). Se um item não puder ser copiado, nenhuma cópia nasce e aparece a frase do
+cenário 1.
+
+**4. O cliente que não existe no salvamento (B954 — C322).** Pela integração, `PUT /api/propostas/<id>` com `{ "cliente_id": 99999 }` →
+**400** *"Cliente não encontrado (id 99999). Atualize a lista de clientes e tente de novo."* (antes: **500** com a mensagem do banco) e nada
+muda. Salvar com o **mesmo** cliente, com **outro** que existe ou com um **inativo** continua valendo (trocar o cliente apaga o contato e o
+projeto que eram do anterior, como desde a Etapa 138). O cliente **vazio** continua deixando a proposta sem cliente, como antes (**B954**,
+**C330**). A ordem: a proposta que não existe (404) e o desconto acima de 5 % sem aprovação (403) vêm antes.
+
+**5. A lista de OS do Comercial pela régua da tela (B956 — C321).** Entre com um usuário que está num grupo ativo **sem nenhuma permissão**
+(a tela deixa abrir o Comercial): **Comercial → Ordens de Serviço** mostra a lista (antes: *"Acesso negado ao módulo"*). Com um usuário que
+só tem o Operacional por permissão direta (a tela não lhe mostra o Comercial), `GET /api/comercial/ordens-servico` → **403** `{ "error":
+"Acesso negado ao módulo", "modulo": "comercial" }` e o acesso negado no log (antes: **200** com a lista).
+
+### O que esta etapa NÃO cobre
+
+1. **Enquanto o salvamento grava os itens novos, quem abrir a proposta vê os itens duas vezes** (os antigos ainda não saíram) — segundos,
+   só com milhares de itens (**B952**, **C331**).
+2. **Dois salvamentos da mesma proposta ao mesmo tempo** (duas abas) podem deixar os itens dos dois, repetidos — como antes (**C331**).
+3. **Salvar com o cliente vazio continua deixando a proposta sem cliente** (pela integração; a tela exige o cliente) — **C330**, com vocês.
+4. **As cláusulas da proposta** (inicializar, reordenar) e outros módulos ainda gravam várias linhas sem conferir o erro de cada uma
+   (**C327**, **C328**); as **listas de preço** do Comercial só pedem o login (**C329**).
+5. **Quem passa a ver a lista de OS do Comercial** (grupo sem permissão nenhuma) ainda toma *"Acesso negado"* ao criar a OS, que usa rotas do
+   Operacional (**C332**); a leitura de uma OS pelo número só pede o login (**C335**). O projeto ou o responsável que não existe no salvamento ainda dá erro interno (**C333**). A cópia não leva os
+   valores do preview nem as customizações do documento (**C334**).
+
+### O que a revisão encontrou
+
+A **medição** (antes do código) achou que o salvamento era pior do que o aviso dizia (perdia também os itens que havia, e às vezes nem
+respondia), que a cópia tinha o mesmo defeito e que o aviso do cliente estava errado (não gravava — dava erro interno). A **revisão do
+plano** pediu que o ponto exato da gravação ficasse escrito (há **dois** testes de número duplicado no salvamento), que o histórico de
+revisões só fosse gravado depois de a proposta estar salva, e os cenários da proposta alterada por outra pessoa no meio do salvamento. A
+**revisão adversarial do código** (três revisores, executando): o de **regra** comparou 28 cenários entre o sistema antes e depois (itens
+iguais, variáveis do preview, revisões, cliente) — idênticos fora o que a etapa mudou — e, junto com o de **permissão**, achou um defeito
+**da etapa**: **dois salvamentos ao mesmo tempo** da mesma proposta apagavam todos os itens, com os dois respondendo sucesso — corrigido
+antes do fechamento (agora o pior caso é o de antes: itens repetidos). O de permissão achou ainda a leitura de OS pelo número só com login
+(**C335**, anterior). O de **sabotagem** fez 27 sabotagens novas: 8 caíram, 6 são equivalentes e 13 sobreviveram por falta de cenário (os
+ramos raros de limpeza, a revisão sem mudança, os acessórios no salvamento, o cliente escrito com letras ou em hexadecimal, a cópia cuja
+leitura falha) — viraram 8 cenários novos, e o teste passou de 18 para 26.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 146 entregue (2026-10-18):** **a criação, o salvamento e a cópia da proposta só dizem "pronto" depois de gravar os itens, e o
+  salvamento confere o cliente** (das propostas). O item que o banco recusa desfaz a criação e a cópia e, no salvamento, nada muda — os
+  itens novos entram antes e os antigos só saem no fim (**B952**, **B953**, **B955** — **C323** resolvido); salvar com um cliente que não
+  existe recebe uma frase (**B954** — **C322** resolvido, e o texto dela estava errado); a lista de OS do Comercial pela régua da tela
+  (**B956** — **C321** resolvido). Commits `b4856722` e `917f3683`. **O que é seu:** a consulta **A94** (opcional); a pergunta **C330** (a proposta pode
+  ficar sem cliente?); os avisos **C327** a **C336**; as decisões **B952 a B956** (reversíveis); as perguntas de antes (**B949**, **B910**,
+  **B853**, **B924**, **B926**, **C312**, **C314**, **C316**); as limitações **(146)** em D e a verificação **(146)** em F. **Próxima: Etapa
+  147 — ver a "próxima tarefa detalhada" no plano da Etapa 146.**
 
 - **Etapa 145 entregue (2026-10-18):** **as rotas da proposta exigem o Comercial, a geração automática só responde depois de gravar, e o
   cliente que não existe é recusado** (das propostas). Quem a tela barra do Comercial é barrado nas 49 rotas de proposta e nas 5 de
@@ -29712,8 +29906,8 @@ código entregue.
   falhar (**B948** — **C318** resolvido); o cliente que não existe é recusado com uma frase nas duas portas (**B947** — **C315**
   resolvido). Commits `68227035` e `b7848925`. **O que é seu:** a consulta **A93** — **bloqueante do deploy**; a pergunta **B949** (o usuário
   sem nenhuma permissão); os avisos **C319** a **C326**; as decisões **B944 a B950** (reversíveis); as perguntas de antes (**B910**,
-  **B853**, **B924**, **B926**, **C312**, **C314**, **C316**); as limitações **(145)** em D e a verificação **(145)** em F. **Próxima: Etapa
-  146 — ver a "próxima tarefa detalhada" no plano da Etapa 145.**
+  **B853**, **B924**, **B926**, **C312**, **C314**, **C316**); as limitações **(145)** em D e a verificação **(145)** em F. *(Próxima, na época: Etapa
+  146 — entregue acima.)*
 
 - **Etapa 144 entregue (2026-10-18):** **a geração automática recusa o produto que não existe, e o preview avisa quando um campo não foi
   gravado** (das propostas). A geração automática recusa, sem criar nada, o produto sem número que valha e o que não existe (**C313**

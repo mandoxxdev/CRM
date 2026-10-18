@@ -294,7 +294,11 @@ T2 e T3 dividem a rota da geração automática e o arquivo de teste → em sequ
 3. **Paralelismo:** **0** galhos em paralelo de fato (T2/T3 eram galhos; feitas em sequência — dividem a rota e o arquivo de teste, e a
    sabotagem do `index.js` da T1 não pode rodar junto); **0** retrabalho; **1** revisor na Fase 2, **3** em paralelo na Fase 5 sob a trava
    (o r3 numa worktree própria, removida).
-4. **Defeito que escapou:** *(preencher na Etapa 146)*.
+4. **Defeito que escapou:** *(preenchido na Etapa 146)* **0 de código** da 145; **1 afirmação errada de documento** — a **C322** dizia que o
+   `PUT` com cliente que não existe **grava**; a Fase 0 da 146 mediu **500** com a mensagem da chave estrangeira (a mesma correção que a
+   145 fez para o `POST` com número, não estendida ao `PUT`). E **1 subestimação**: a **C323** foi descrita só na criação — o `PUT`
+   (que apaga os antigos antes) perdia também os itens que havia, e às vezes nem respondia; e a cópia respondia antes de gravar
+   (anteriores à 145; fechados na 146).
 
 ## Próxima tarefa detalhada — Etapa 146
 

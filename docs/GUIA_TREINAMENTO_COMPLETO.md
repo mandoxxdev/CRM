@@ -269,7 +269,11 @@ pessoa a deixa sem permissão nenhuma — e quem não tem permissão nenhuma ent
    - Clique em "Salvar como Rascunho" ou "Enviar"
 
 **Funcionalidades avançadas:**
-- **Duplicar Proposta:** Crie uma nova baseada em uma existente
+- **Duplicar Proposta (Clonar):** Crie uma nova baseada em uma existente. A cópia nasce como rascunho, com número próprio, o título
+  começando por "[Cópia]" e todos os itens da original (com a descrição da tabela e os acessórios); o formulário da cópia só abre
+  depois de todos os itens copiados. Os campos manuais preenchidos no preview e as customizações do documento **não** vão para a cópia.
+  Se o banco não aceitar um item, nenhuma cópia nasce e aparece *"Erro ao gravar os itens da proposta (<o erro do banco>). Nenhuma
+  proposta foi criada — tente de novo."*.
 - **Versões:** Sistema de versionamento automático
 - **Anexos:** Adicione documentos, imagens, especificações
 - **Histórico:** Veja todas as alterações e quem fez
@@ -305,7 +309,18 @@ pessoa a deixa sem permissão nenhuma — e quem não tem permissão nenhuma ent
   ainda não tem nenhuma variável preenchida — todas as de um item juntas, nunca duas para o mesmo campo; o próximo salvamento (da proposta
   ou do preview) grava essa ligação. Pela integração, sem o número interno de cada item, o sistema reconhece os itens iguais pela ordem em
   que aparecem.
-- A **revisão** (o `REVnn` no fim do número) sobe só quando os itens ou o valor total mudam.
+- A **revisão** (o `REVnn` no fim do número) sobe só quando os itens ou o valor total mudam, e só entra no histórico de revisões quando o
+  salvamento deu certo.
+- **Os itens são gravados primeiro.** Ao salvar, o sistema grava os itens da edição antes de qualquer outra coisa e só tira os itens
+  antigos depois que a proposta foi salva. Se o banco não aceitar um item, **nada da edição é gravado** — nem os dados da proposta, nem o
+  número, nem a revisão, nem os itens — e aparece *"Erro ao gravar os itens da proposta (<o erro do banco>). Nada foi alterado — tente
+  salvar de novo."*. Dois casos raros, quando o banco falha duas vezes seguidas: *"Erro ao gravar os itens da proposta (<o erro>). Os
+  outros dados da proposta foram salvos, mas os itens continuam os de antes — confira e salve de novo."* e *"Erro ao gravar os itens da
+  proposta (<o erro>). A proposta <número> ficou com itens repetidos — recarregue, confira os itens e salve de novo."*. Numa proposta
+  com milhares de itens, quem a abrir no instante do salvamento pode ver os itens duas vezes por alguns segundos; e dois salvamentos da
+  mesma proposta exatamente ao mesmo tempo (duas abas, duas pessoas) podem deixar os itens dos dois, repetidos — apague o que sobrou e salve. As outras recusas do
+  salvamento (o número já usado por outra proposta, a proposta alterada por outra gravação no mesmo instante) mantêm a frase de sempre, e
+  os itens da edição que já tinham sido gravados são retirados antes.
 - O título não pode ficar vazio: *"Título é obrigatório"*. Proposta perdida/rejeitada exige o motivo: *"Motivo da não venda é obrigatório
   quando a proposta está perdida/rejeitada."*. Desconto acima de 5% sem aprovação não sai do rascunho: *"Não é possível alterar o status de
   uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve permanecer como rascunho até que a autorização seja aprovada."*
@@ -333,7 +348,10 @@ pessoa a deixa sem permissão nenhuma — e quem não tem permissão nenhuma ent
   com *"Cliente não encontrado (id 99999). Atualize a lista de clientes e tente de novo."* e nada é criado — nem o número da proposta é
   gasto. Na criação, essa conferência vem depois das do título, da margem, dos itens, do motivo, do cliente informado, do responsável e do
   desconto acima de 5%.
-- Na **geração automática**, todos os itens são gravados antes de a resposta chegar. Se o banco falhar ao gravar um item, nada fica — nem a
+- Na **edição**, trocar o cliente por um que não está cadastrado é recusado com a mesma frase e nada é gravado; a conferência vem depois
+  das do título, da margem, dos itens, do motivo e do desconto acima de 5%, e só acontece quando o cliente muda. Pela integração, enviar o
+  cliente vazio (ou algo que não é número) deixa a proposta sem cliente.
+- Na **criação de proposta** e na **geração automática**, todos os itens são gravados antes de a resposta chegar. Se o banco falhar ao gravar um item, nada fica — nem a
   proposta, nem os itens já gravados — e a resposta é *"Erro ao gravar os itens da proposta (<o erro do banco>). Nenhuma proposta foi
   criada — tente de novo."*; se até a limpeza falhar, *"Erro ao gravar os itens da proposta (<o erro do banco>). A proposta <número> ficou
   incompleta — exclua-a e gere de novo."*. Com dezenas de milhares de itens a resposta demora alguns segundos.
@@ -569,6 +587,11 @@ obrigatório"*).
 ### 3.7 Ordens de Serviço Comerciais
 
 #### 3.7.1 Lista de OS
+
+**Quem vê a lista.** A lista de ordens de serviço do Comercial segue a mesma regra de acesso das propostas (seção 3.3): quem o
+Comercial deixa entrar vê a lista; os outros recebem *"Acesso negado ao módulo"*. Criar e editar a OS usa as regras do **Operacional**
+(o número da OS e os itens dela): quem só tem o acesso ao Comercial pela regra de "nenhuma permissão" pode ver a lista e não conseguir
+criar a OS.
 
 **Visualizações:**
 - Tabela completa

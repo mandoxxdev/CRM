@@ -1,19 +1,26 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-18 (Etapa 145) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-18 (Etapa 146) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
 Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144 e 145) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-18 (Etapa 145 ENTREGUE · próxima: Etapa 146)
+> ## Onde o desenvolvimento está — 2026-10-18 (Etapa 146 ENTREGUE · próxima: Etapa 147)
 >
-> **O desenvolvimento parou aqui: Etapa 145 fechada — 2026-10-18.** A **Etapa 145 (as rotas da proposta exigem o Comercial, a geração
+> **O desenvolvimento parou aqui: Etapa 146 fechada — 2026-10-18.** A **Etapa 146 (criar, salvar e copiar a proposta só dizem "pronto"
+> depois de gravar os itens, e o salvamento confere o cliente; das propostas, fora do almoxarifado)**: quando o banco recusava um item, a
+> proposta era criada, salva ou copiada com sucesso sem ele — e, no salvamento, os itens que já estavam na proposta também se perdiam;
+> agora aparece *"Erro ao gravar os itens da proposta (…)"* e a proposta fica como estava. A cópia só abre depois de copiar todos os itens;
+> salvar com um cliente que não existe recebe uma frase em vez de um erro interno; a lista de OS do Comercial usa a régua da tela.
+> Nenhuma consulta bloqueante (a **A94** é opcional). **Próxima: Etapa 147** — ver a próxima tarefa no plano da 146.
+>
+> **Etapa 145, 2026-10-18.** A **Etapa 145 (as rotas da proposta exigem o Comercial, a geração
 > automática só responde depois de gravar, e o cliente que não existe é recusado; das propostas, fora do almoxarifado)**: quem a tela
 > barra do Comercial (um usuário só do Almoxarifado, por exemplo) deixa de criar, gerar e editar proposta — e de pedir aprovação de
 > desconto — pela integração; recebe *"Acesso negado ao módulo"*. Quem abre o Comercial não perde nada, e o Operacional continua lendo a
 > proposta da ordem de serviço. **Uma consulta nova, BLOQUEANTE do deploy (A93):** quem usou proposta nos últimos 90 dias e vai perder o
 > acesso. Uma pergunta nova para vocês (**B949** — o usuário sem nenhuma permissão continua entrando no Comercial).
-> **Próxima: Etapa 146** — ver a próxima tarefa no plano da 145.
+> *(Próxima, na época: Etapa 146 — entregue acima.)*
 >
 > **Etapa 144, 2026-10-18.** A **Etapa 144 (a geração automática recusa o produto que não existe,
 > e o preview avisa quando um campo não foi gravado; das propostas, fora do almoxarifado)**: pela integração, a geração automática com um
@@ -6650,6 +6657,53 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 146 — Criar, salvar e copiar a proposta só dizem "pronto" depois de gravar os itens, e o salvamento confere o cliente (ENTREGUE — 2026-10-18)
+
+**O que mudou, em uma frase:** a criação, o salvamento e a cópia da proposta só respondem depois de gravar o último item — e, se um item
+não pode ser gravado, a proposta fica exatamente como estava e o vendedor vê a frase do erro; o salvamento recusa com uma frase o cliente
+que não existe; e a lista de ordens de serviço do Comercial usa a mesma régua de acesso da tela.
+
+**O problema que ela resolve.** Quando o banco recusava um item (disco cheio, banco travado por muito tempo), a proposta era criada com
+*"Proposta criada."* sem aquele item; no salvamento, os itens que já estavam na proposta eram apagados antes, então o que falhava sumia e
+levava os outros junto (e às vezes a tela ficava esperando sem resposta); a cópia respondia antes de terminar de copiar e o formulário da
+cópia podia abrir com parte dos itens. Salvar com um cliente que não existe dava erro interno.
+
+| Antes | Agora |
+|---|---|
+| Item que o banco recusa na criação → "Proposta criada." sem ele | *"Erro ao gravar os itens da proposta (…). Nenhuma proposta foi criada — tente de novo."* |
+| Item que o banco recusa no salvamento → "Proposta atualizada." e os itens antigos perdidos | *"Erro ao gravar os itens da proposta (…). Nada foi alterado — tente salvar de novo."* e tudo como estava |
+| **Clonar** uma proposta grande → o formulário da cópia abria com parte dos itens | Abre com todos os itens |
+| Salvar com cliente que não existe (integração) → erro interno | *"Cliente não encontrado (id 99999). Atualize a lista de clientes e tente de novo."* |
+| Grupo sem nenhuma permissão: abria o Comercial e tomava *"Acesso negado"* na lista de OS | A lista abre |
+
+**Roteiro de teste (10 minutos).**
+
+1. **Criar, salvar e clonar não mudaram para o vendedor (pela tela).** Em **Comercial → Propostas → Nova proposta**, escolha um cliente,
+   ponha um título e três itens e **Salvar**: *"Proposta criada."*, os três no detalhe. **Editar**, troque a descrição de um item,
+   acrescente um quarto e **Salvar**: *"Proposta atualizada."* e os quatro no detalhe. Abra o **Preview editável**, preencha um campo manual
+   de um item, salve o preview; volte ao formulário, salve de novo: o campo continua preenchido no preview. No detalhe, **Clonar**: *"Proposta
+   clonada."* e o formulário da cópia abre com os quatro itens.
+2. **O cliente que não existe (pela integração).** Com o token de um vendedor, `PUT /api/propostas/<id>` com `{ "cliente_id": 99999 }` →
+   **400** *"Cliente não encontrado (id 99999). Atualize a lista de clientes e tente de novo."*; recarregue a proposta na tela: nada mudou.
+   Com o número de outro cliente cadastrado → **200**, e a proposta passa a ser desse cliente.
+3. **A lista de OS do Comercial (pela tela).** Entre com um usuário que está num grupo ativo sem nenhuma permissão: **Comercial → Ordens de
+   Serviço** mostra a lista (antes, *"Acesso negado ao módulo"*). Com um usuário que só tem o **Operacional** (o Comercial nem aparece),
+   `GET /api/comercial/ordens-servico` pela integração → **403** `{ "error": "Acesso negado ao módulo", "modulo": "comercial" }`.
+
+O erro de um item só aparece com o banco recusando a gravação — não dá para provocar pela tela; os testes automáticos o provocam com uma
+regra no próprio banco que recusa um item de propósito.
+
+**O que esta etapa NÃO cobre.** Enquanto o salvamento troca os itens de uma proposta muito grande, quem a abrir naquele instante pode ver os
+itens duas vezes (segundos — **C331**); dois salvamentos da mesma proposta ao mesmo tempo (duas abas) podem deixar os itens dos dois,
+repetidos, como antes. Salvar com o cliente **vazio** pela integração continua deixando a proposta sem cliente (**C330**,
+com vocês; a tela exige o cliente). As cláusulas da proposta e outros módulos ainda gravam várias linhas sem conferir cada uma (**C327**,
+**C328**); as listas de preço do Comercial só pedem o login (**C329**); quem passa a ver a lista de OS do Comercial ainda toma *"Acesso
+negado"* ao criar a OS, que usa rotas do Operacional (**C332**); o projeto ou responsável que não existe no salvamento ainda dá erro
+interno (**C333**); a cópia não leva os campos manuais do preview nem as customizações do documento (**C334**).
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor, pela rota) provam, escrito
+para você conferir à mão — em especial o passo 1 e o 3 só o navegador mostra.
+
 ## Etapa 145 — As rotas da proposta exigem o Comercial, a geração automática só responde depois de gravar, e o cliente que não existe é recusado (ENTREGUE — 2026-10-18)
 
 **O que mudou, em uma frase:** o servidor passa a conferir, em cada operação de proposta e de pedido de aprovação de desconto, a mesma
@@ -6695,7 +6749,8 @@ ambiente do servidor (e reiniciar) desliga a conferência sem novo deploy.
 proposta a quem não tem o Comercial — busca global, painéis, relatórios, notificações (**C320**) —, a configuração do modelo da proposta só
 pede o login (**C319**) e a lista de OS do Comercial segue a regra antiga do servidor (**C321**). Quem tem o Operacional lê a proposta
 inteira, com valores (**C324**). Salvar a proposta com um cliente que não existe continua gravando pela integração (**C322**), e a criação
-grava os itens sem conferir o erro de cada um (**C323**).
+grava os itens sem conferir o erro de cada um (**C323**). *(As duas resolvidas na Etapa 146 — e a C322 estava errada: não gravava, dava erro
+interno; a lista de OS do Comercial, **C321**, também.)*
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor, pela rota) provam, escrito
 para você conferir à mão — em especial os passos 1 e 3 só o navegador mostra.

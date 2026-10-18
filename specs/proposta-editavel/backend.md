@@ -108,17 +108,17 @@ O corpo pode ser **parcial**. Regra por chave (`montarSetParcial`, `server/atual
 | ausente | a coluna nem entra no `UPDATE` (fica como está) |
 | presente, inclusive `null`/`''` | grava com a transformação de sempre (`|| ''` nos textos de condição/prazo/garantia/observações, `|| null` nos outros, `|| 0` em valor e margem) |
 | `itens` ausente | os itens não são tocados (nem apagados, nem reinseridos, nem auditados) |
-| `itens` presente | apaga e reinsere com `mesclarItensPreservandoCampos`, religa as variáveis manuais (`[]`/`null` apaga todos) — desde a Etapa 142 pelo **pareamento** abaixo |
+| `itens` presente | grava os itens **novos** (com `mesclarItensPreservandoCampos`) **antes** de tudo e só apaga os antigos depois do `UPDATE`, religa as variáveis manuais (`[]`/`null` apaga todos) — desde a Etapa 142 pelo **pareamento** abaixo. *(Esta linha dizia "apaga e reinsere" — **ficou velha na Etapa 146** (RN-146.02): a ordem passou a ser grava os novos → … → apaga os antigos, abaixo.)* |
 | `itens` presente que não é lista nem `null` (objeto, texto, número) | **400** *"Itens inválidos: os itens da proposta devem ser enviados como uma lista."*, nada gravado (Etapa 143, B930 — antes apagava os itens com 200) |
 | `itens` com elemento que não é objeto (`null`, número, texto, lista), ou com um campo (fora `acessorios`) objeto ou lista (Fase 5, B934) | **400** *"Item inválido: cada item da proposta deve ser um objeto."*, nada gravado (Etapa 143, C310 — antes `[null]` fazia o `PUT` nunca responder e, com o corpo de tamanho diferente do gravado, depois de apagar os itens e regravar a proposta). `{}` passa (item sem descrição, o de sempre). Mesma guarda (`validarItensDoCorpo`, `server/propostaItensDiff.js`) no `POST /api/propostas` e nos `produtos` do `POST /api/propostas/gerar-automatica` |
 
 Exceções: `html_rendered` é sempre limpo (o retrato do PDF só é regravado com ele vazio); `probabilidade` nula/vazia mantém (`COALESCE`); `responsavel_id` vazio/ausente = o gravado, ou quem salva; `numero_proposta`, `revisao` e `responsavel_id` só entram quando mudam. A revisão sobe só se `itens` ou `valor_total` vieram e mudaram; o sufixo `REVnn` e o `proposta_revisoes` usam os valores efetivos (o do corpo, senão o gravado). Trocar `cliente_id` apaga `cliente_contato`/`cliente_telefone`/`cliente_email`/`projeto_id` que não vieram.
 
-Recusas, nesta ordem: 404 *"Proposta não encontrada"* → 400 *"Título é obrigatório"* (título presente vazio ou só espaços) → 400 *"Margem de desconto inválida: informe um número de 0 a 100, com ponto como separador decimal."* (Etapa 139, só quando a margem veio) → 400 dos itens (Etapa 143, as duas mensagens da tabela acima) → 400 *"Motivo da não venda é obrigatório quando a proposta está perdida/rejeitada."* → 403 "desconto aprovado" só pela aprovação e 409 do responsável trocado com pedido pendente (Etapa 140 — *esta lista não os tinha; estava velha, corrigida na Etapa 143*) → 403 *"Não é possível alterar o status de uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve permanecer como rascunho até que a autorização seja aprovada."* → (na gravação) 409 `PROPOSTA_ALTERADA` *"A proposta foi alterada por outra gravação no mesmo instante. Recarregue a proposta e salve de novo."* quando o corpo traz status, margem, motivo ou data de fechamento e um desses que **não** veio mudou entre a leitura e a gravação. As regras do motivo, do desconto e da data de fechamento automática usam o valor efetivo e só rodam quando um dos campos delas veio.
+Recusas, nesta ordem: 404 *"Proposta não encontrada"* → 400 *"Título é obrigatório"* (título presente vazio ou só espaços) → 400 *"Margem de desconto inválida: informe um número de 0 a 100, com ponto como separador decimal."* (Etapa 139, só quando a margem veio) → 400 dos itens (Etapa 143, as duas mensagens da tabela acima) → 400 *"Motivo da não venda é obrigatório quando a proposta está perdida/rejeitada."* → 403 "desconto aprovado" só pela aprovação e 409 do responsável trocado com pedido pendente (Etapa 140 — *esta lista não os tinha; estava velha, corrigida na Etapa 143*) → 403 *"Não é possível alterar o status de uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve permanecer como rascunho até que a autorização seja aprovada."* → 400 *"Cliente não encontrado (id 99999). Atualize a lista de clientes e tente de novo."* (Etapa 146, só quando o `cliente_id` do corpo é um número diferente do gravado) → (na gravação) 400 dos dois testes de número duplicado → 409 `PROPOSTA_ALTERADA` *"A proposta foi alterada por outra gravação no mesmo instante. Recarregue a proposta e salve de novo."* quando o corpo traz status, margem, motivo ou data de fechamento e um desses que **não** veio mudou entre a leitura e a gravação. As regras do motivo, do desconto e da data de fechamento automática usam o valor efetivo e só rodam quando um dos campos delas veio.
 
 ### Itens iguais: o item reconhecido pelo `id` e as variáveis manuais (Etapa 142, C298/C308/C309)
 
-O `PUT` apaga e reinsere os itens (ids novos, AUTOINCREMENT). Quem diz qual item gravado é cada item do corpo é
+O `PUT` regrava os itens (ids novos, AUTOINCREMENT — desde a Etapa 146 grava os novos antes e apaga os antigos depois). Quem diz qual item gravado é cada item do corpo é
 `parearItens(atuais, corpo)` (`server/propostaItensDiff.js`), usado **pela mesclagem e pela religação**:
 
 | Corpo | Pareamento |
@@ -207,7 +207,44 @@ ou sem `numero_proposta`), `SELECT id FROM clientes WHERE id = ?` pelo número l
 99999). Atualize a lista de clientes e tente de novo."* (`msgClienteNaoEncontrado`); erro de leitura → **500** *"Erro ao verificar o
 cliente: <msg>"*; inativo vale (B947). Teste: `tests/api/propostaGeracaoGrava.api.test.js` (com `FALHA_SQL_PULAR` e `FALHA_SQL_MSGS` do
 `tests/helpers/falhaSqlInjetada.js`). O `PUT /api/propostas/:id` não confere o cliente (C322) e o `POST /api/propostas` grava os itens sem
-conferir o erro de cada um (C323).
+conferir o erro de cada um (C323). *(Esta frase **ficou velha na Etapa 146**: as duas foram fechadas — seção abaixo. E a C322 estava
+errada como foi escrita: o `PUT` com cliente que não existe não gravava — dava 500 com a mensagem da chave estrangeira.)*
+
+### Os itens gravados antes de responder — criação, salvamento e cópia; o cliente do salvamento (Etapa 146, C323, C322, C321)
+
+Plano: `docs/superpowers/plans/2026-10-18-almoxarifado-etapa146-os-itens-gravados-antes-de-responder.md`. As quatro portas que gravam
+`proposta_itens` (a geração automática, o `POST /api/propostas`, o `PUT /api/propostas/:id` e o `POST /api/propostas/:id/clone`) gravam
+por `gravarItensEmSequencia` (`db.run` um a um; devolve o erro **e** os ids já gravados). *(Até a Etapa 146 as três últimas usavam
+`db.prepare` + `stmt.run` sem callback: o erro virava evento `error` do statement, sem ouvinte, e caía na guarda do processo
+(`uncaughtException`) — a rota respondia sucesso sem o item; o `PUT` às vezes nem respondia; a cópia respondia 201 antes de gravar.)*
+
+- **Criação e cópia** (`gravarItensDaPropostaNova` + `desfazerPropostaCriada`, as mesmas da geração automática): resposta só depois do
+  último item (corpo de sempre: `{ id, numero_proposta, ...corpo }` e `201 { message: 'Proposta clonada', id, numero_proposta }`). Falha →
+  apaga os itens, depois a proposta → **500** *"Erro ao gravar os itens da proposta (<msg>). Nenhuma proposta foi criada — tente de novo."*;
+  uma exclusão que falha → *"… A proposta <número> ficou incompleta — exclua-a e gere de novo."* (B953). A cópia lê os itens da origem com
+  `ORDER BY id`; a leitura que falha desfaz a cópia com a mesma frase.
+- **Salvamento** (`PUT`, RN-146.02): logo depois da leitura dos itens atuais, **antes** do ramo do número, os itens novos (mesclados) são
+  gravados. Falha → os novos já gravados saem (`apagarItensNovos`, `id IN (SELECT value FROM json_each(?))`) → **500** *"Erro ao gravar os
+  itens da proposta (<msg>). Nada foi alterado — tente salvar de novo."* (`msgItensNaoSalvos`, `server/propostaItensDiff.js`). Depois: os
+  dois testes de número → `UPDATE` (guarda 409) → **`proposta_revisoes`** (passou para depois do `UPDATE` valer — antes era gravado antes
+  do número e ficava em toda recusa posterior) → reparo das variáveis → apaga os antigos (**os ids lidos** no começo, `id IN (SELECT value FROM json_each(?))` — *a primeira versão era
+  `NOT IN` os novos e, com dois `PUT` ao mesmo tempo, cada um apagava os novos do outro: 0 itens, os dois 200 — Fase 5 r1/r2*) →
+  histórico de edições dos itens (antes era disparado antes de os `INSERT` terminarem) → religação pelos **ids devolvidos** (antes um
+  `SELECT` depois do `DELETE`) → 200. Toda recusa entre os novos gravados e o `UPDATE` valer (os dois 400 e os dois 500 do número, o 400 do
+  `UNIQUE`, o 500 do `UPDATE`, o 409) passa por `responderDesfazendo`: os novos saem e a resposta é a de antes. Os antigos que não saem →
+  os novos saem → **500** *"… Os outros dados da proposta foram salvos, mas os itens continuam os de antes — confira e salve de novo."*;
+  a limpeza dos novos que falha → **500** *"… A proposta <número> ficou com itens repetidos — recarregue, confira os itens e salve de
+  novo."* (com o erro da recusa nos parênteses). Sem transação (B948/B952); entre os novos e a saída dos antigos a proposta mostra os
+  itens duas vezes, e dois `PUT` simultâneos podem deixar os itens dos dois (C331).
+- **O cliente do salvamento** (RN-146.04, C322): `cliente_id` do corpo que o `parseInt` lê como inteiro positivo **diferente do gravado**
+  → `conferirClienteDaProposta` (400 *"Cliente não encontrado (id 99999). …"* / 500 *"Erro ao verificar o cliente: <msg>"*), depois de
+  todas as recusas e antes de qualquer gravação. Ausente, igual, vazio/texto/zero/negativo/nulo (grava sem cliente — X09b da 138) não lê
+  (B954, C330).
+- **A lista de OS do Comercial** (`GET /api/comercial/ordens-servico`, RN-146.06, C321): `exigirComercialNasPropostas` no lugar do
+  `checkModulePermission('comercial')` (B956).
+
+Testes: `tests/api/propostaSalvarGrava.api.test.js` (a falha real por um **gatilho do SQLite** gravado por fora — passa por qualquer
+caminho de gravação — e as limpezas pelo `FALHA_SQL_INJETADA`), `tests/api/propostaPortaoModulo.api.test.js` (o cenário da RN-146.06).
 
 ### A margem de desconto (Etapa 139, C299/C300)
 
