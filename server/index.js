@@ -223,7 +223,7 @@ const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
 const { getClausulasDefault, resolverClausulasParaPreview } = require('./clausulasDefault');
-const { diffItensParaLog, nomeDe, resumoLado, mesclarItensPreservandoCampos } = require('./propostaItensDiff');
+const { diffItensParaLog, nomeDe, resumoLado, mesclarItensPreservandoCampos, idInteiro } = require('./propostaItensDiff');
 // Etapa 142 (C298, C309): as variáveis manuais × os itens — a religação do PUT, o reparo da leitura e a gravação do reparo (puros).
 const { planoReligacao, repararVariaveisManuais, planoMaterializacao } = require('./variaveisManuaisItens');
 const { presente, montarSetParcial } = require('./atualizacaoParcial');
@@ -6282,15 +6282,19 @@ app.delete('/api/propostas/:id/fotos/:fotoId', authenticateToken, (req, res) => 
   });
 });
 
-// Roda [sql, params] um depois do outro (db.run passa pela fila de escrita); para no primeiro erro e o devolve.
+// Roda [sql, params] um depois do outro (db.run passa pela fila de escrita) e devolve o PRIMEIRO erro no fim. Não para no erro: um
+// passo que falha não leva os seguintes junto — se o UPDATE que move uma variável falhasse, as aposentadorias depois dele não rodavam e
+// a C298 voltava pelo reparo da leitura (Fase 5, r2 M1). É o que os statements preparados de antes faziam (todos rodavam; o erro
+// chegava no finalize).
 function executarEmSequencia(passos, feito) {
   let i = 0;
-  const proximo = (err) => {
-    if (err || i >= passos.length) return feito(err || null);
+  let primeiroErro = null;
+  const proximo = () => {
+    if (i >= passos.length) return feito(primeiroErro);
     const [sql, params] = passos[i++];
-    db.run(sql, params, (e) => proximo(e));
+    db.run(sql, params, (e) => { if (e && !primeiroErro) primeiroErro = e; proximo(); });
   };
-  proximo(null);
+  proximo();
 }
 
 // Etapa 142 (RN-142.11/12): grava o reparo das variáveis manuais órfãs (variaveisManuaisItens.planoMaterializacao) contra os itens
@@ -6330,13 +6334,18 @@ app.put('/api/propostas/:id/variaveis-manuais', authenticateToken, (req, res) =>
   db.all('SELECT id, codigo_produto, descricao FROM proposta_itens WHERE proposta_id = ? ORDER BY id', [id], (errItens, itensDaProposta) => {
     if (errItens) return res.status(500).json({ error: errItens.message });
     const idsDaProposta = new Set((itensDaProposta || []).map((i) => String(i.id)));
-    materializarVariaveisManuais(id, itensDaProposta || [], false, () => {
+    // Aposenta também a órfã que não cabe (Fase 5, r3 Z1): sem isso, apagar no preview a variável do item fazia a órfã do item que saiu
+    // cair nele na leitura seguinte. A RN-142.12 dizia "nada é aposentado aqui" — estava errado.
+    materializarVariaveisManuais(id, itensDaProposta || [], true, () => {
       // Grava também QUAL item é esse (item_chave), lendo direto da linha do item — o que permite reencontrar o valor depois que o
       // salvamento da proposta recria os itens com ids novos (ver o comentário da coluna, na criação da tabela).
       const passos = [];
       valores.forEach((v) => {
         if (!v || v.chave == null || v.item_id == null) return;
-        if (!idsDaProposta.has(String(v.item_id))) return; // item que não é desta proposta (aba velha): ignorado
+        // Só item que É desta proposta, e só id inteiro (número ou texto de dígitos): a aba velha manda ids que não existem mais, e um
+        // id em lista ([5]) passava pelo String() e gravava lixo (Fase 5, r2 M2).
+        const itemId = idInteiro(v.item_id);
+        if (itemId == null || !idsDaProposta.has(itemId)) return;
         const valor = String(v.valor ?? '').trim();
         if (valor) {
           passos.push([`INSERT INTO proposta_variaveis_manuais (proposta_id, item_id, chave, valor, item_chave)
@@ -6346,9 +6355,9 @@ app.put('/api/propostas/:id/variaveis-manuais', authenticateToken, (req, res) =>
             ))
             ON CONFLICT(proposta_id, item_id, chave)
             DO UPDATE SET valor = excluded.valor, item_chave = COALESCE(excluded.item_chave, item_chave), item_removido_em = NULL,
-                          updated_at = datetime('now')`, [id, v.item_id, String(v.chave), valor, v.item_id]]);
+                          updated_at = datetime('now')`, [id, Number(itemId), String(v.chave), valor, Number(itemId)]]);
         } else {
-          passos.push(['DELETE FROM proposta_variaveis_manuais WHERE proposta_id = ? AND item_id = ? AND chave = ?', [id, v.item_id, String(v.chave)]]);
+          passos.push(['DELETE FROM proposta_variaveis_manuais WHERE proposta_id = ? AND item_id = ? AND chave = ?', [id, Number(itemId), String(v.chave)]]);
         }
       });
       executarEmSequencia(passos, (err) => {

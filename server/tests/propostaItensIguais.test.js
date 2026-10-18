@@ -28,6 +28,12 @@ test('[identidade] codigo, senao descricao, sem espacos nas pontas e sem caixa',
   assert.strictEqual(identidadeDe({ codigo_produto: ' p-1 ', descricao: 'x' }), 'P-1');
   assert.strictEqual(identidadeDe({ codigo_produto: '', descricao: ' Item 1 ' }), 'ITEM 1');
   assert.strictEqual(identidadeDe({}), '');
+  assert.strictEqual(identidadeDe(null), '');
+});
+test('[identidade] codigo so de espacos cai para a descricao (como o item_chave gravado; Fase 5 r1 M-1)', () => {
+  assert.strictEqual(identidadeDe({ codigo_produto: '   ', descricao: 'Item Livre' }), 'ITEM LIVRE');
+  const r = repararVariaveisManuais([{ id: 1, item_id: 5, chave: 'tag', valor: 'A', item_chave: 'Item Livre', item_removido_em: null }], [{ id: 10, codigo_produto: ' ', descricao: 'ITEM LIVRE' }]);
+  assert.deepStrictEqual(r.map((l) => l.item_id), [10]);
 });
 
 // ── RN-142.02 ─────────────────────────────────────────────────────────────────────────────
@@ -42,9 +48,20 @@ test('[RN-142.02] por id: item sem id e novo (sem par), mesmo havendo igual sobr
   assert.deepStrictEqual(ids(r.pares), [1, null]);
   assert.deepStrictEqual(r.sairam.map((a) => a.id), [2]);
 });
-test('[RN-142.02] id em texto so de digitos vale', () => {
-  const r = parearItens([P(1), P(2)], [{ codigo_produto: 'P', id: '2' }]);
-  assert.deepStrictEqual(ids(r.pares), [2]);
+test('[RN-142.02] id em texto so de digitos vale (com espacos nas pontas e zero a esquerda)', () => {
+  for (const id of ['2', ' 2', '02', '0002 ']) {
+    const r = parearItens([P(1), P(2)], [{ codigo_produto: 'P', id }]);
+    assert.deepStrictEqual(ids(r.pares), [2], 'id ' + JSON.stringify(id));
+  }
+});
+test('[RN-142.02] item manual cujo codigo foi apagado (o id fica): e produto trocado — saiu + novo (B925)', () => {
+  const r = parearItens([{ id: 1, codigo_produto: 'X1', descricao: 'A' }], [{ id: 1, codigo_produto: '', descricao: 'A' }]);
+  assert.deepStrictEqual(ids(r.pares), [null]);
+  assert.deepStrictEqual(r.sairam.map((a) => a.id), [1]);
+});
+test('[RN-142.02] codigo so de espacos conta como sem codigo (o id do item manual vale)', () => {
+  const r = parearItens([{ id: 1, codigo_produto: '  ', descricao: 'A' }], [{ id: 1, codigo_produto: '', descricao: 'B' }]);
+  assert.deepStrictEqual(ids(r.pares), [1]);
 });
 test('[RN-142.02] item manual com a descricao editada: o id vale (nenhum dos dois tem codigo)', () => {
   const r = parearItens([{ id: 7, codigo_produto: null, descricao: 'BOMBA' }], [{ id: 7, codigo_produto: null, descricao: 'BOMBA X' }]);
@@ -90,6 +107,10 @@ test('[RN-142.03] por posicao: o k-esimo igual com o k-esimo; sobra do corpo sem
   assert.deepStrictEqual(ids(r.pares), [5, 1, null]);
   assert.deepStrictEqual(r.sairam.map((a) => a.id), [2, 3]);
 });
+test('[RN-142.03] por posicao, item manual com a descricao em outra caixa casa (identidade sem caixa)', () => {
+  const r = parearItens([{ id: 1, codigo_produto: null, descricao: 'BOMBA' }], [{ codigo_produto: null, descricao: 'Bomba' }]);
+  assert.deepStrictEqual(ids(r.pares), [1]);
+});
 test('[RN-142.03] corpo vazio, null ou nao-lista: todos saem', () => {
   for (const corpo of [[], null, undefined, 'x']) {
     const r = parearItens([P(1), P(2)], corpo);
@@ -113,16 +134,18 @@ test('[RN-142.04] por id: o que ficou mantem os seus campos (tirou o primeiro)',
   );
   assert.deepStrictEqual(m.map((x) => x.tag + '/' + x.descricao_tabela), ['Y/linha 2']);
 });
-test('[RN-142.04] sem par: herda do ultimo igual que NAO saiu (B920, Fase 2 M3)', () => {
+// Fase 5 (r1 I-1): a primeira versao excluia o que saiu ("Fase 2 M3") e o produto tirado e incluido de novo no mesmo salvamento perdia a
+// descricao da tabela e o descritivo. Voltou ao de antes da etapa: sem par, o ultimo gravado da mesma identidade (B920).
+test('[RN-142.04] sem par: herda do ultimo gravado da mesma identidade, mesmo o que saiu (B920, o de antes da etapa)', () => {
   const m = mesclarItensPreservandoCampos(
     [P(1, { descricao_tabela: 'linha 1' }), P(2, { descricao_tabela: 'linha 2' })],
     [{ codigo_produto: 'P', id: 1 }, { codigo_produto: 'P' }]
   );
-  assert.deepStrictEqual(m.map((x) => x.descricao_tabela), ['linha 1', 'linha 1']);
+  assert.deepStrictEqual(m.map((x) => x.descricao_tabela), ['linha 1', 'linha 2']);
 });
-test('[RN-142.04] sem par e todos os iguais sairam: nao herda nada', () => {
-  const m = mesclarItensPreservandoCampos([P(1, { descricao_tabela: 'linha 1' }), { id: 2, codigo_produto: 'Q' }], [{ codigo_produto: 'Q', id: 2 }, { codigo_produto: 'P' }]);
-  assert.strictEqual(m[1].descricao_tabela, undefined);
+test('[RN-142.04] tirar P e incluir P de novo no mesmo salvamento (com Q ficando): o P novo recupera os campos', () => {
+  const m = mesclarItensPreservandoCampos([P(1, { descricao_tabela: 'linha 1', descritivo_tecnico: 'DT' }), { id: 2, codigo_produto: 'Q' }], [{ codigo_produto: 'Q', id: 2 }, { codigo_produto: 'P' }]);
+  assert.deepStrictEqual([m[1].descricao_tabela, m[1].descritivo_tecnico], ['linha 1', 'DT']);
 });
 test('[RN-142.04] por posicao, o item a mais de um produto presente herda do ultimo igual (o de hoje)', () => {
   const m = mesclarItensPreservandoCampos([P(1, { modelo: 'M1' }), P(2, { modelo: 'M2' })], [{ codigo_produto: 'P' }, { codigo_produto: 'P' }, { codigo_produto: 'P' }]);
@@ -189,6 +212,14 @@ test('[RN-142.07] aposentada nunca e candidata, nem com item vazio do mesmo prod
 test('[RN-142.07] item_chave em outra caixa casa; sem item_chave fica como esta', () => {
   const r = repararVariaveisManuais([v(1, 5, 'tag', 'A', { item_chave: 'p' }), v(2, 6, 'tag', 'Z', { item_chave: null })], [P(10), P(11)]);
   assert.deepStrictEqual(porItem(r), ['10:tag=A', '6:tag=Z']);
+});
+test('[RN-142.07] ids velhos em ordem NUMERICA (99 antes de 100), nao de texto', () => {
+  const r = repararVariaveisManuais([v(1, 100, 'tag', 'B'), v(2, 99, 'tag', 'A')], [P(200), P(201)]);
+  assert.deepStrictEqual(porItem(r), ['200:tag=A', '201:tag=B']);
+});
+test('[RN-142.07] item_removido_em vazio ("" — a coluna limpa com texto vazio) conta como viva', () => {
+  const r = repararVariaveisManuais([v(1, 5, 'tag', 'A', { item_removido_em: '' })], [P(10)]);
+  assert.deepStrictEqual(r.map((l) => l.item_id), [10]);
 });
 test('[RN-142.07] sem orfa: devolve as linhas como estao; vazio -> []', () => {
   const linhas = [v(1, 10, 'tag', 'A')];

@@ -56,17 +56,19 @@ function portaLivre() {
 const SEED = { email: 'e142seed@t.com', senha: 'E142seed!senha' };
 process.on('exit', () => { try { if (filho) filho.kill(); } catch (e) { /* ja saiu */ } });
 
-async function subir() {
+async function subir(extraEnv = {}) {
   logArq = path.join(pasta, 'index.log');
   porta = await portaLivre();
   if (porta === 5000) porta = await portaLivre();
   const env = { ...process.env };
   for (const k of ['NODE_ENV', 'NODE_OPTIONS', 'RUN_ALL_GUARDA_EXIT', 'PORT', 'CRM_DATA_DIR', 'JWT_SECRET',
     'SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD', 'FALHA_SQL_INJETADA', 'RATE_LIMIT_WINDOW_MS']) delete env[k];
-  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000' });
+  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000' }, extraEnv);
   const out = fs.openSync(logArq, 'a');
   saiu = null;
-  filho = spawn(process.execPath, ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js'), 'index.js'], {
+  const preload = ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js')];
+  if (extraEnv.FALHA_SQL_INJETADA) preload.push('-r', path.join(__dirname, '..', 'helpers', 'falhaSqlInjetada.js'));
+  filho = spawn(process.execPath, [...preload, 'index.js'], {
     cwd: SERVER_DIR, env, stdio: ['pipe', out, out], windowsHide: true,
   });
   filho.on('exit', (code) => { saiu = code; });
@@ -301,6 +303,58 @@ test('[RN-142.12] o preview grava normalmente para os itens da proposta (o upser
   assert.strictEqual(r[0], 400);
 });
 
+// ── Fase 5 ────────────────────────────────────────────────────────────────────────────────
+test('[RN-142.12, F5 r3 Z1] legado (A viva, B orfa de item que saiu): apagar A no preview nao faz a B aparecer no item', async () => {
+  const id = await novaProposta([{ ...P }]);
+  const [it] = await itensP(id);
+  await gravarVars(id, [{ item_id: it.id, chave: CHAVE, valor: 'TAG-A' }]);
+  await run('INSERT INTO proposta_variaveis_manuais (proposta_id, item_id, chave, valor, item_chave) VALUES (?, ?, ?, ?, ?)', [id, 999101, CHAVE, 'TAG-B', 'P142']);
+  await gravarVars(id, [{ item_id: it.id, chave: CHAVE, valor: '' }]);
+  assert.deepStrictEqual(await noPremium(id), ['1:'], 'o valor do item que saiu apareceu no que ficou');
+  assert.deepStrictEqual(await aposentadas(id), ['TAG-B']);
+});
+
+test('[RN-142.07/12, F5 r3 Z2] item manual (sem codigo): a identidade e a descricao; orfao, o /premium o repara', async () => {
+  const id = await novaProposta([{ ...P, codigo_produto: '', descricao: 'Item Livre Z2' }]);
+  const [it] = await itensP(id);
+  await gravarVars(id, [{ item_id: it.id, chave: CHAVE, valor: 'MAN' }]);
+  const [linha] = await vm(id);
+  assert.strictEqual(String(linha.item_chave).toUpperCase(), 'ITEM LIVRE Z2');
+  await run('UPDATE proposta_variaveis_manuais SET item_id = 990201 WHERE id = ?', [linha.id]);
+  assert.deepStrictEqual(await noPremium(id), ['1:MAN']);
+});
+
+test('[RN-142.12, F5 r2 M2] item_id que nao e inteiro (lista, objeto, fracao) no preview nao grava nada', async () => {
+  const id = await novaProposta([{ ...P }]);
+  const [it] = await itensP(id);
+  await gravarVars(id, [{ item_id: [it.id], chave: CHAVE, valor: 'L' }, { item_id: { id: it.id }, chave: CHAVE, valor: 'O' }, { item_id: it.id + 0.5, chave: CHAVE, valor: 'F' }]);
+  assert.deepStrictEqual(await vm(id), []);
+  await gravarVars(id, [{ item_id: String(it.id), chave: CHAVE, valor: 'TXT' }]);
+  assert.deepStrictEqual((await vm(id)).map((l) => [l.item_id, l.valor]), [[it.id, 'TXT']], 'o id em texto de digitos deixou de gravar');
+});
+
+test('[RN-142.07, F5 r3 S37/S38] o /pdf usa o mesmo reparo: o retrato gravado tem a TAG-B no item que ficou e nao a TAG-A', async () => {
+  const { id, its } = await doisPComTags();
+  await salvar(id, [{ ...P, id: its[1].id }]);
+  const [ficou] = await itensP(id);
+  // a linha viva da TAG-B fica orfa (como se a religacao nao tivesse acontecido): so o reparo do /pdf a poe no item
+  await run('UPDATE proposta_variaveis_manuais SET item_id = 996001 WHERE proposta_id = ? AND item_removido_em IS NULL', [id]);
+  const [s] = await j('GET', `/propostas/${id}/pdf`, ctx.T, undefined, true);
+  assert.strictEqual(s, 200);
+  let html = '';
+  const ate = Date.now() + 15000;
+  while (Date.now() < ate) {
+    html = String(((await all('SELECT html_rendered FROM propostas WHERE id = ?', [id]))[0] || {}).html_rendered || '');
+    if (html.includes('data-variavel-manual')) break;
+    await pausa(300);
+  }
+  const re = new RegExp(`data-variavel-manual="${CHAVE}" data-variavel-item="${ficou.id}">([^<]*)<`);
+  const m = re.exec(html);
+  assert.ok(m, 'o retrato do /pdf nao tem a variavel do item');
+  assert.strictEqual(m[1], 'TAG-B');
+  assert.ok(!html.includes('TAG-A'), 'a TAG-A (aposentada) saiu no PDF');
+});
+
 (async () => {
   console.log('\n=== Etapa 142 (propostas): a identidade do item no salvamento — itens iguais (C298, C308, C309) ===\n');
   try {
@@ -338,6 +392,20 @@ test('[RN-142.12] o preview grava normalmente para os itens da proposta (o upser
       assert.ok(/Coluna item_removido_em verificada/.test(fs.readFileSync(logArq, 'utf8')));
       passed++; console.log(`  ✓ ${nome}`);
     } catch (e) { failed++; console.error(`  ✗ ${nome}: ${String(e.message).replace(/\s*\n\s*/g, ' ')}`); }
+    // ── F5 r2 M1 / r3 S30: o passo que falha nao leva os seguintes junto (subida com o UPDATE que move as variaveis falhando) ──
+    const nome2 = '[RN-142.05/06, F5 r2 M1] o UPDATE que move falha: a aposentadoria roda mesmo assim e o /premium mostra a TAG-B no que ficou';
+    try {
+      await descer();
+      await new Promise((r) => cru.close(() => r()));
+      ctx.T = await subir({ FALHA_SQL_INJETADA: '^UPDATE OR REPLACE proposta_variaveis_manuais SET item_id' });
+      abrirCru();
+      const { id, its } = await doisPComTags();
+      await salvar(id, [{ ...P, id: its[1].id }]);
+      assert.ok(/\[falha injetada\] UPDATE OR REPLACE proposta_variaveis_manuais/.test(fs.readFileSync(logArq, 'utf8')), 'a falha nao foi injetada');
+      assert.deepStrictEqual(await aposentadas(id), ['TAG-A'], 'a aposentadoria nao rodou depois do passo que falhou');
+      assert.deepStrictEqual(await noPremium(id), ['1:TAG-B']);
+      passed++; console.log(`  ✓ ${nome2}`);
+    } catch (e) { failed++; console.error(`  ✗ ${nome2}: ${String(e.message).replace(/\s*\n\s*/g, ' ')}`); }
   } catch (e) { failed++; console.error('  ✗ preparo:', e.message); }
   if (cru) await new Promise((r) => cru.close(() => r()));
   await descer();

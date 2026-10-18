@@ -93,10 +93,14 @@ const CAMPOS_PRESERVAR = [
   'acessorios',
 ];
 
-// Identidade do item para reconhecê-lo entre o que está gravado e o que o salvamento manda: a de chaveDe, sem caixa (o banco
-// grava a descrição em caixa alta e o corpo pode vir em outra — Etapa 142, B922).
+// Identidade do item para reconhecê-lo entre o que está gravado e o que o salvamento manda: a de chaveDe (código, senão descrição,
+// senão nome), sem caixa (o banco grava a descrição em caixa alta e o corpo pode vir em outra — Etapa 142, B922) e com cada parte
+// aparada ANTES de cair para a seguinte — como o item_chave gravado (COALESCE(NULLIF(TRIM(codigo), ''), NULLIF(TRIM(descricao), '')));
+// com chaveDe um código só de espaços dava identidade vazia (Fase 5, r1 M-1).
 function identidadeDe(item) {
-  return chaveDe(item || {}).toUpperCase();
+  const it = item || {};
+  const t = (v) => (v == null ? '' : String(v).trim());
+  return (t(it.codigo_produto) || t(it.descricao) || t(it.nome)).toUpperCase();
 }
 
 // O id do corpo só "vale" se for inteiro (número ou texto só de dígitos) — null/undefined/'' nunca pareiam (senão dois itens sem id
@@ -147,11 +151,12 @@ function parearItens(itensAtuais, itensCorpo) {
 function mesclarItensPreservandoCampos(itensAtuais, itensNovos) {
   // Etapa 142 (C298/C308): o item pareado preserva do SEU gravado. Antes um Map por chaveDe guardava só o ÚLTIMO de cada produto, e
   // com o mesmo produto duas vezes os dois recebiam os campos do último (a descrição da tabela, a tag, os acessórios do primeiro sumiam
-  // em todo salvamento). Sem par (item novo): o último igual que não saiu — o de antes, sem herdar do que acabou de sair (B920).
-  const { pares, sairam } = parearItens(itensAtuais, itensNovos);
-  const sairamSet = new Set(sairam);
+  // em todo salvamento). Sem par (item novo): o último gravado da mesma identidade, mesmo que tenha acabado de sair — o de antes da
+  // etapa (B920; a primeira versão excluía o que saiu e o produto tirado e incluído de novo no mesmo salvamento perdia a descrição da
+  // tabela e o descritivo — Fase 5, r1 I-1).
+  const { pares } = parearItens(itensAtuais, itensNovos);
   const ultimoIgual = new Map();
-  (itensAtuais || []).forEach((i) => { if (!sairamSet.has(i)) ultimoIgual.set(identidadeDe(i), i); });
+  (Array.isArray(itensAtuais) ? itensAtuais : []).forEach((i) => { ultimoIgual.set(identidadeDe(i), i); });
   return (Array.isArray(itensNovos) ? itensNovos : []).map((novo, idx) => {
     const antigo = pares[idx] || ultimoIgual.get(identidadeDe(novo));
     if (!antigo) return novo; // item novo: não há de onde preservar
@@ -175,4 +180,4 @@ function resumoLado(mudancas, lado) {
   }).join(', ');
 }
 
-module.exports = { diffItensParaLog, chaveDe, identidadeDe, parearItens, nomeDe, resumoLado, CAMPOS_COMPARAR, mesclarItensPreservandoCampos, CAMPOS_PRESERVAR };
+module.exports = { diffItensParaLog, chaveDe, identidadeDe, idInteiro, parearItens, nomeDe, resumoLado, CAMPOS_COMPARAR, mesclarItensPreservandoCampos, CAMPOS_PRESERVAR };
