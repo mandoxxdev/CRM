@@ -72,7 +72,9 @@ function emptyItem() {
   };
 }
 
-function produtoParaItem(p) {
+// Exportada para teste (Etapa 142, Fase 5 r3 S42): o item do catálogo nasce SEM `id` — o id do produto não é id de item gravado, e o
+// servidor o tomaria como tal (o item novo "roubaria" o par do gravado de mesmo produto).
+export function produtoParaItem(p) {
   const preco = Number(p.preco_base) || 0;
   return {
     descricao: p.nome || p.descricao || '',

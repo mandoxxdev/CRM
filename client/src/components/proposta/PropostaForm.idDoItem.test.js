@@ -88,3 +88,13 @@ test('[RN-142.01] C298: tirar o PRIMEIRO de dois iguais -> o corpo leva só o se
   expect(corpo.itens).toHaveLength(1);
   expect(corpo.itens[0]).toMatchObject({ id: 12, codigo_produto: 'P142' });
 });
+
+// Fase 5 (r3 S42): o item incluído pelo catálogo nasce sem `id` — o id do PRODUTO não pode ir como id de item gravado (com o mesmo
+// número de um item gravado do mesmo produto, o item novo "roubaria" o par dele no servidor).
+test('[RN-142.01] o item do catálogo vai sem id, mesmo com o id do produto igual ao de um item gravado', async () => {
+  // eslint-disable-next-line global-require
+  const { produtoParaItem } = require('./PropostaForm');
+  const novo = produtoParaItem({ id: 11, codigo: 'P142', nome: 'BOMBA P', preco_base: 100 });
+  expect(Object.prototype.hasOwnProperty.call(novo, 'id')).toBe(false);
+  expect(novo).toMatchObject({ codigo_produto: 'P142', descricao: 'BOMBA P' });
+});
