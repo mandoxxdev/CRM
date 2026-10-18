@@ -3007,6 +3007,8 @@ function checkAnyModulePermission(requiredModules) {
 // Vai em CADA rota, logo depois do authenticateToken (antes do multer: o arquivo do barrado nao chega ao disco) — nao num app.use do
 // prefixo, que rodaria o login duas vezes por pedido. O GET /api/propostas/:id aceita tambem o Operacional: a OS do Operacional busca
 // nele os itens da proposta (B945). PROPOSTAS_PORTAO_DE_MODULO=desligado desliga o portao sem deploy (B946).
+// Fase 5 (r2 I-1): as 5 rotas /api/aprovacoes (o pedido de aprovacao do desconto, que ao ser aprovado muda a margem e o status da proposta)
+// passam pelo mesmo portao — o barrado criava o pedido pela API; a tela de Aprovacoes e as que pedem aprovacao estao todas no Comercial.
 const PORTAO_DAS_PROPOSTAS_DESLIGADO = String(process.env.PROPOSTAS_PORTAO_DE_MODULO || '').trim().toLowerCase() === 'desligado';
 if (PORTAO_DAS_PROPOSTAS_DESLIGADO) {
   console.warn('⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado: as rotas /api/propostas* NAO exigem o módulo Comercial (só o login).');
@@ -14451,7 +14453,7 @@ function gerarHTMLOS(os, osItens = []) {
 
 // ========== ROTAS DE APROVAÇÕES ==========
 // Criar solicitação de aprovação
-app.post('/api/aprovacoes', authenticateToken, (req, res) => {
+app.post('/api/aprovacoes', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   // valor_total, valor_com_desconto e valor_desconto_rs do corpo sao ignorados (Etapa 141, RN-141.08): saem da proposta, abaixo.
   const {
     proposta_id, tipo, valor_desconto, observacoes
@@ -14582,7 +14584,7 @@ function lerAprovadorLogado(req, cb) {
 }
 
 // Listar aprovações
-app.get('/api/aprovacoes', authenticateToken, (req, res) => {
+app.get('/api/aprovacoes', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { status, proposta_id, tipo } = req.query;
   const userId = req.user.id;
 
@@ -14656,7 +14658,7 @@ app.get('/api/aprovacoes', authenticateToken, (req, res) => {
 });
 
 // Obter aprovação por ID
-app.get('/api/aprovacoes/:id', authenticateToken, (req, res) => {
+app.get('/api/aprovacoes/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
 
   db.get(
@@ -14684,7 +14686,7 @@ app.get('/api/aprovacoes/:id', authenticateToken, (req, res) => {
 });
 
 // Aprovar ou rejeitar
-app.put('/api/aprovacoes/:id', authenticateToken, (req, res) => {
+app.put('/api/aprovacoes/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   const { status, motivo_rejeicao } = req.body || {};
   // Etapa 140 (RN-140.03): quem decide é quem está logado — o `aprovado_por` do corpo é ignorado (antes gravava o do corpo).
@@ -14830,7 +14832,7 @@ app.put('/api/aprovacoes/:id', authenticateToken, (req, res) => {
 });
 
 // Deletar aprovação (apenas para admins)
-app.delete('/api/aprovacoes/:id', authenticateToken, (req, res) => {
+app.delete('/api/aprovacoes/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   
   console.log('🗑️ DELETE /api/aprovacoes/:id - Tentativa de deletar aprovação:', id);

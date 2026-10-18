@@ -71,7 +71,7 @@ async function subir(extraEnv = {}) {
   if (porta === 5000) porta = await portaLivre();
   const env = { ...process.env };
   for (const k of ['NODE_ENV', 'NODE_OPTIONS', 'RUN_ALL_GUARDA_EXIT', 'PORT', 'CRM_DATA_DIR', 'JWT_SECRET',
-    'SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD', 'FALHA_SQL_INJETADA', 'FALHA_SQL_MSG', 'FALHA_SQL_METODOS', 'FALHA_SQL_PULAR', 'PROPOSTAS_PORTAO_DE_MODULO', 'RATE_LIMIT_WINDOW_MS']) delete env[k];
+    'SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD', 'FALHA_SQL_INJETADA', 'FALHA_SQL_MSG', 'FALHA_SQL_METODOS', 'FALHA_SQL_PULAR', 'FALHA_SQL_MSGS', 'PROPOSTAS_PORTAO_DE_MODULO', 'RATE_LIMIT_WINDOW_MS']) delete env[k];
   Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000' }, extraEnv);
   const out = fs.openSync(logArq, 'a');
   saiu = null;
@@ -176,6 +176,10 @@ test('[RN-145.06, B947] o cliente inativo conta como achado (as duas portas cria
   await run("UPDATE clientes SET status = 'inativo' WHERE id = ?", [ctx.inativo]);
   const [s1, x1] = await gerar({ cliente_id: ctx.inativo, produtos: [{ id: ctx.produto }] });
   const [s2, x2] = await responde('POST', '/propostas', { titulo: 'X', cliente_id: ctx.inativo });
+  // Fase 5 r3 R28: o cliente_id com lixo depois dos digitos vale pelo parseInt (o de sempre) e confere o cliente pelo numero lido
+  const [s3, x3] = await gerar({ cliente_id: `${ctx.clienteId}abc`, produtos: [{ id: ctx.produto }] });
+  const [s4, x4] = await responde('POST', '/propostas', { titulo: 'X', cliente_id: `${ctx.clienteId}abc` });
+  assert.deepStrictEqual([s3, s4], [200, 200], JSON.stringify([x3, x4]));
   assert.deepStrictEqual([s1, s2], [200, 200], JSON.stringify([x1, x2]));
 });
 
@@ -234,7 +238,8 @@ test('[RN-145.05, C318] a falha no 1o item e no 3o de 5: 500 com a frase, e nem 
 
 test('[RN-145.05, Fase 2 M-9] a limpeza que falha: 500 dizendo que a proposta ficou incompleta (sem itens, ou com os que gravaram)', async () => {
   // a proposta nao sai: fica sem itens
-  await reboot({ FALHA_SQL_INJETADA: '^INSERT INTO proposta_itens|^DELETE FROM propostas WHERE', FALHA_SQL_PULAR: '2' });
+  await reboot({ FALHA_SQL_INJETADA: '^INSERT INTO proposta_itens|^DELETE FROM propostas WHERE', FALHA_SQL_PULAR: '2',
+    FALHA_SQL_MSGS: JSON.stringify({ '^DELETE FROM propostas WHERE': 'limpeza presa' }) }); // Fase 5 r3 R24: a frase traz o erro do ITEM
   const [p0, i0] = await contar();
   const [s1, x1] = await gerar({ cliente_id: ctx.clienteId, produtos: cinco() });
   await pausa(150);
@@ -242,7 +247,8 @@ test('[RN-145.05, Fase 2 M-9] a limpeza que falha: 500 dizendo que a proposta fi
   assert.deepStrictEqual([s1, x1], [500, { error: ITENS_INCOMPLETA(INJ, ult.numero_proposta) }]);
   assert.deepStrictEqual(await contar(), [p0 + 1, i0], 'a proposta incompleta devia ficar, sem itens');
   // os itens nao saem: a proposta NAO e apagada (fica com os dois que gravaram)
-  await reboot({ FALHA_SQL_INJETADA: '^INSERT INTO proposta_itens|^DELETE FROM proposta_itens', FALHA_SQL_PULAR: '2' });
+  await reboot({ FALHA_SQL_INJETADA: '^INSERT INTO proposta_itens|^DELETE FROM proposta_itens', FALHA_SQL_PULAR: '2',
+    FALHA_SQL_MSGS: JSON.stringify({ '^DELETE FROM proposta_itens': 'limpeza presa' }) });
   const [p1, i1] = await contar();
   const [s2, x2] = await gerar({ cliente_id: ctx.clienteId, produtos: cinco() });
   await pausa(150);

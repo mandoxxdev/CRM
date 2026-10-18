@@ -19,6 +19,10 @@ if (padrao) {
   const metodos = String(process.env.FALHA_SQL_METODOS || 'run,get').split(',').map((s) => s.trim()).filter(Boolean);
   const msg = process.env.FALHA_SQL_MSG || 'falha injetada pelo teste';
   let pular = Math.max(0, parseInt(process.env.FALHA_SQL_PULAR || '0', 10) || 0);
+  // Etapa 145 (Fase 5 r3 R24): `FALHA_SQL_MSGS` = JSON { "<regex>": "<mensagem>" } — a mensagem da 1a regex que casar com o SQL (o resto
+  // usa FALHA_SQL_MSG). Distingue o erro do item do erro da limpeza quando os dois falham na mesma requisicao.
+  const porSql = Object.entries(process.env.FALHA_SQL_MSGS ? JSON.parse(process.env.FALHA_SQL_MSGS) : {}).map(([k, v]) => [new RegExp(k), v]);
+  const msgDe = (sql) => { const achada = porSql.find(([r]) => r.test(String(sql))); return achada ? achada[1] : msg; };
   for (const m of metodos) {
     const orig = sqlite3.Database.prototype[m];
     sqlite3.Database.prototype[m] = function comFalha(sql, ...rest) {
@@ -29,7 +33,7 @@ if (padrao) {
       if (re.test(String(sql))) {
         const cb = rest.find((x) => typeof x === 'function');
         process.stdout.write(`[falha injetada] ${String(sql).slice(0, 60).replace(/\s+/g, ' ')}\n`);
-        if (cb) setImmediate(() => cb.call({}, new Error(msg)));
+        if (cb) setImmediate(() => cb.call({}, new Error(msgDe(sql))));
         return this;
       }
       return orig.call(this, sql, ...rest);

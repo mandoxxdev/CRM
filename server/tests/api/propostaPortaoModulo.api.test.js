@@ -5,6 +5,7 @@
  *   RN-145.01  as 49 rotas passam pelo portao logo depois do login (antes do multer): quem a tela barra do Comercial toma 403
  *   RN-145.02  o GET /api/propostas/:id aceita tambem o Operacional (a OS do Operacional le os itens da proposta)
  *   RN-145.03  PROPOSTAS_PORTAO_DE_MODULO=desligado desliga o portao
+ *   RN-145.08  as 5 rotas /api/aprovacoes (o pedido de aprovacao do desconto) passam pelo mesmo portao (Fase 5, r2 I-1)
  *   RN-145.04  a regua do portao e a da tela: a tabela compartilhada (tests/fixtures/portaoComoATela.casos.json) e, por usuario, a
  *              decisao do portao = temModuloComoATela sobre as permissoes que o GET /api/usuarios/:id/grupos (a fonte da tela) devolve
  *
@@ -126,6 +127,8 @@ const FONTE = fs.readFileSync(path.join(SERVER_DIR, 'index.js'), 'utf8');
 const ROTAS = [...FONTE.matchAll(/^app\.(get|post|put|patch|delete)\('(\/api\/propostas[^']*)', ([^\n]*)$/gm)]
   .map((m) => ({ metodo: m[1].toUpperCase(), rota: m[2], resto: m[3] }));
 const ehOPar = (r) => r.metodo === 'GET' && r.rota === '/api/propostas/:id';
+const APROVACOES = [...FONTE.matchAll(/^app\.(get|post|put|patch|delete)\('(\/api\/aprovacoes[^']*)', ([^\n]*)$/gm)]
+  .map((m) => ({ metodo: m[1].toUpperCase(), rota: m[2], resto: m[3] }));
 const UPLOADS = { '/api/propostas/:id/fotos': 'foto', '/api/propostas/:id/anexar-cotacao': 'arquivo', '/api/propostas/:id/pdf-anexo': 'arquivo' };
 
 function arquivosDaPasta() {
@@ -155,7 +158,7 @@ const retratoDaProposta = async () => JSON.stringify([
 ]);
 const contarNegados = async (id) => (await all("SELECT COUNT(*) AS n FROM logs_auditoria WHERE tipo = 'acesso_negado' AND usuario_id = ? AND modulo = 'comercial' AND nome_modulo = 'Comercial'", [id]))[0].n;
 
-async function usuario(nome, { role = 'usuario', grupos = [], diretas = [], diretasZero = [] } = {}) {
+async function usuario(nome, { role = 'usuario', grupos = [], diretas = [], diretasZero = [], diretasCrus = [] } = {}) {
   const email = `${nome}@e145.t`;
   const [s, u] = await j('POST', '/usuarios', ctx.T, { nome, email, senha: 'Senha!145p', cargo: 'C', role, setor: '' });
   assert.ok(s === 200 || s === 201, `usuario ${nome}: ${s} ${JSON.stringify(u)}`);
@@ -163,6 +166,8 @@ async function usuario(nome, { role = 'usuario', grupos = [], diretas = [], dire
   for (const g of grupos) await run('INSERT INTO usuarios_grupos (usuario_id, grupo_id) VALUES (?, ?)', [id, g]);
   for (const m of diretas) await run("INSERT INTO permissoes (usuario_id, grupo_id, modulo, acao, permissao) VALUES (?, NULL, ?, 'acesso', 1)", [id, m]);
   for (const m of diretasZero) await run("INSERT INTO permissoes (usuario_id, grupo_id, modulo, acao, permissao) VALUES (?, 0, ?, 'acesso', 1)", [id, m]);
+  // [modulo, acao, permissao] crus (Fase 5 r3 R6/R7): a linha de permissao 0 (o rotasDePermissoes grava) e a de outra acao contam como linha
+  for (const [m, acao, p] of diretasCrus) await run('INSERT INTO permissoes (usuario_id, grupo_id, modulo, acao, permissao) VALUES (?, NULL, ?, ?, ?)', [id, m, acao, p]);
   return { id, nome, role, email };
 }
 async function logar(u) {
@@ -183,7 +188,21 @@ test('[RN-145.04] puro: temModuloComoATela da a decisao da tabela compartilhada 
 test('[RN-145.01] fonte: as 49 rotas /api/propostas* tem o portao como 2o middleware, logo depois do login (antes do multer)', () => {
   assert.strictEqual(ROTAS.length, 49, `esperava 49 rotas, achei ${ROTAS.length}`);
   // regua independente: toda linha do index.js com '/api/propostas, menos a listagem da raiz /api (texto)
-  const linhas = FONTE.split('\n').filter((l) => l.includes("'/api/propostas") && !/^\s*propostas: '\/api\/propostas',$/.test(l));
+  // Fase 5 r3 R16: qualquer aspa (simples, dupla, crase) — uma rota nova escrita com aspas duplas passaria sem o portao
+  const linhas = FONTE.split('\n').filter((l) => /["'`]\/api\/propostas/.test(l) && !/^\s*propostas: '\/api\/propostas',$/.test(l));
+  // e nenhum outro arquivo do servidor (routes/, services/ — os modulos montam no `rotasModulos`, um Router) registra rota de proposta
+  const fora = [];
+  const varrer = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      if (['node_modules', 'tests', 'data', 'uploads', 'backups'].includes(e.name) || e.name.startsWith('.')) continue;
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) varrer(p);
+      else if (e.name.endsWith('.js') && p !== path.join(SERVER_DIR, 'index.js') && /\.(get|post|put|patch|delete|all|use|route)\(\s*["'`]\/api\/(propostas|aprovacoes)/.test(fs.readFileSync(p, 'utf8'))) fora.push(path.relative(SERVER_DIR, p));
+    }
+  };
+  varrer(SERVER_DIR);
+  assert.deepStrictEqual(fora, [], 'rota de proposta/aprovacao registrada fora do index.js escaparia desta regua');
+  assert.ok(fs.existsSync(path.join(SERVER_DIR, 'routes', 'compras.js')), 'a varredura nao enxerga routes/ (controle: o arquivo de Compras existe)');
   assert.strictEqual(linhas.length, ROTAS.length, "ha registro de rota de proposta fora do formato app.<verbo>('/api/propostas...', ...) numa linha so");
   assert.ok(!/app\.(use|all)\(\s*['"`]\/api\/propostas/.test(FONTE), 'app.use/app.all no prefixo das propostas');
   const sem = ROTAS.filter((r) => !r.resto.startsWith(ehOPar(r) ? 'authenticateToken, exigirComercialOuOperacionalNaProposta, ' : 'authenticateToken, exigirComercialNasPropostas, '))
@@ -191,6 +210,36 @@ test('[RN-145.01] fonte: as 49 rotas /api/propostas* tem o portao como 2o middle
   assert.deepStrictEqual(sem, []);
   assert.strictEqual(ROTAS.filter(ehOPar).length, 1);
   assert.strictEqual(Object.keys(UPLOADS).filter((u) => ROTAS.some((r) => r.rota === u && /\.single\(/.test(r.resto))).length, 3, 'as tres rotas com multer');
+});
+
+test('[RN-145.08] fonte: as 5 rotas /api/aprovacoes tem o portao como 2o middleware', () => {
+  assert.strictEqual(APROVACOES.length, 5, `esperava 5 rotas de aprovacoes, achei ${APROVACOES.length}`);
+  const linhas = FONTE.split('\n').filter((l) => l.includes("'/api/aprovacoes"));
+  assert.strictEqual(linhas.length, 5, 'ha registro de rota de aprovacoes fora do formato numa linha so');
+  assert.deepStrictEqual(APROVACOES.filter((r) => !r.resto.startsWith('authenticateToken, exigirComercialNasPropostas, ')).map((r) => r.metodo + ' ' + r.rota), []);
+});
+
+test('[RN-145.08, Fase 5 r2 I-1] o barrado toma 403 nas 5 rotas de aprovacoes e nenhum pedido nasce; quem tem o Comercial lista', async () => {
+  const b = ctx.u.soOperacional;
+  const antes = JSON.stringify(await all('SELECT * FROM aprovacoes ORDER BY id'));
+  const log0 = await contarNegados(b.id);
+  const out = [];
+  for (const r of APROVACOES) {
+    const u = r.rota.replace('/api', '').replace(':id', '1');
+    const corpo = r.metodo === 'GET' || r.metodo === 'DELETE' ? undefined : { proposta_id: ctx.prop, valor_desconto: 30, status: 'aprovado' };
+    const [s, x] = await j(r.metodo, u, b.T, corpo);
+    out.push([r.metodo + ' ' + r.rota, s, JSON.stringify(x)]);
+  }
+  assert.deepStrictEqual(out, APROVACOES.map((r) => [r.metodo + ' ' + r.rota, 403, JSON.stringify(NEGADO)]));
+  await pausa(200);
+  assert.strictEqual(JSON.stringify(await all('SELECT * FROM aprovacoes ORDER BY id')), antes, 'um pedido de aprovacao nasceu');
+  assert.strictEqual(await contarNegados(b.id) - log0, 5);
+  // a metade positiva: quem a tela deixa abrir o Comercial pede a aprovacao e lista
+  const [sp, xp] = await j('POST', '/aprovacoes', ctx.u.diretaComercial.T, { proposta_id: ctx.prop, valor_desconto: 30 });
+  assert.strictEqual(sp, 200, JSON.stringify(xp));
+  const [sl, xl] = await j('GET', '/aprovacoes', ctx.u.diretaComercial.T);
+  assert.strictEqual(sl, 200, JSON.stringify(xl));
+  assert.ok(Array.isArray(xl) && xl.some((a) => a.id === xp.id), 'a lista nao trouxe o pedido criado');
 });
 
 // ── RN-145.01/02: pela rota, cada uma das 49 ──────────────────────────────────────────────
@@ -246,6 +295,7 @@ test('[RN-145.04, Fase 2 I-3] para cada usuario, o portao decide o que a tela de
   const esperado = {
     semNada: 200, diretaComercial: 200, grupoComercial: 200, grupoVazio: 200, soGrupoInativo: 200, admin: 200, superU: 200,
     soOperacional: 403, soAlmox: 403, grupoInativoComAlmox: 403, diretaZeroComercial: 403, orfaoComercial: 403, grupoSoOperacional: 403,
+    comercialPermissao0: 403, almoxOutraAcao: 403, adminDoModuloComercial: 403, roleAdmin: 200,
   };
   const linhas = [];
   for (const k of Object.keys(esperado)) {
@@ -297,6 +347,12 @@ test('[RN-145.01, Fase 2 I-2] SQLITE_BUSY ao ler as permissoes: 503 (o client re
   assert.deepStrictEqual([s, x], [503, { error: 'Banco temporariamente ocupado. Tente novamente em alguns segundos.', code: 'SQLITE_BUSY', retryAfter: 3, context: 'portao:propostas' }]);
   const [sa] = await j('GET', '/propostas', ctx.T);
   assert.strictEqual(sa, 200, 'o administrador passa sem ler as linhas');
+  // Fase 5 r3 R9: o super que nao e role admin, e o role admin que nao e super, tambem passam sem ler (o seed e os dois ao mesmo tempo)
+  for (const k of ['superU', 'roleAdmin']) {
+    await logar(ctx.u[k]);
+    const [sk, xk] = await j('GET', '/propostas', ctx.u[k].T);
+    assert.strictEqual(sk, 200, `${k} sob o BUSY: ${JSON.stringify(xk).slice(0, 120)}`);
+  }
   await descer();
   ctx.T = await subir({ FALHA_SQL_INJETADA: FALHA, FALHA_SQL_METODOS: 'all' });
   await logar(b);
@@ -339,8 +395,15 @@ test('[RN-145.01, Fase 2 I-2] SQLITE_BUSY ao ler as permissoes: 503 (o client re
       diretaZeroComercial: await usuario('dzero', { diretas: ['almoxarifado'], diretasZero: ['comercial'] }),
       orfaoComercial: await usuario('orfao', { grupos: [999], diretas: ['almoxarifado'] }),
       grupoSoOperacional: await usuario('gop', { grupos: [902] }),
+      comercialPermissao0: await usuario('cp0', { diretasCrus: [['comercial', 'acesso', 0]] }),
+      almoxOutraAcao: await usuario('aoa', { diretasCrus: [['almoxarifado', 'editar', 1]] }),
+      adminDoModuloComercial: await usuario('admmod', { diretas: ['almoxarifado'] }),
+      roleAdmin: await usuario('radm', { role: 'admin', diretas: ['almoxarifado'] }),
     };
     await run('UPDATE usuarios SET is_superadmin = 1 WHERE id = ?', [ctx.u.superU.id]);
+    // Fase 5 r3 R8: o administrador do modulo Comercial (admin_modulos) nao passa sem a linha — a tela tambem nao o deixa
+    await run("UPDATE usuarios SET admin_modulos = '[\"comercial\"]' WHERE id = ?", [ctx.u.adminDoModuloComercial.id]);
+    assert.strictEqual((await all('SELECT is_superadmin, role FROM usuarios WHERE id = ?', [ctx.u.roleAdmin.id]))[0].is_superadmin, 0, 'o role admin do cenario nao pode ser super');
     ctx.u.superU.superadmin = true;
     for (const u of Object.values(ctx.u)) await logar(u);
     for (const [name, fn] of testes) {
