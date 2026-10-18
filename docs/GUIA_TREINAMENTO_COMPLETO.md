@@ -306,6 +306,20 @@ Após o login, você verá a **Tela de Seleção de Módulos** com 5 opções:
 - A **geração automática** de proposta segue a mesma regra do desconto da criação: margem acima de 5% com um status que não seja rascunho é
   recusada com *"Não é possível salvar uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve ser salva como rascunho até
   que a autorização seja aprovada."*; sem status, a proposta nasce rascunho. Exatamente 5% não precisa de aprovação.
+- Pela integração (API), a lista de itens da criação, da edição e os produtos da geração automática precisam ser uma **lista de itens**, e
+  cada item um registro com os seus campos. Uma lista com um item vazio, um número ou um texto no lugar do item — ou com um item em que algum
+  campo, fora a lista de acessórios, não é texto nem número — é recusada com *"Item inválido: cada item da proposta deve ser um objeto."*;
+  os itens enviados como outra coisa que não uma lista são recusados com *"Itens inválidos: os itens da proposta devem ser enviados como
+  uma lista."*. Nos dois casos nada é gravado — nem a proposta, nem a revisão, nem os itens. A lista vazia (ou os itens enviados como nulos
+  na edição) apaga os itens, como sempre.
+- O **histórico de edições** (no preview editável, botão **Histórico**) registra, a cada salvamento, cada item incluído, removido ou
+  editado — com o que mudou (descrição, quantidade, unidade, valor unitário, total, família, região), antes e depois. Com o mesmo
+  produto mais de uma vez, ele segue o mesmo reconhecimento do salvamento: tirar o primeiro de dois itens iguais aparece como **um item removido**, e editar o segundo aparece como edição do segundo.
+  Trocar a descrição de um item manual (sem código de produto) aparece como edição da descrição. Uma diferença só de maiúsculas, minúsculas
+  ou espaços nas pontas da descrição não conta como edição.
+- No documento (preview, PDF) e no total do pedido de aprovação de desconto, cada item da proposta usa **no máximo um** produto do cadastro:
+  o de código igual ao do item; se não houver, o de mesmo código ignorando espaços nas pontas (o mais antigo, se houver mais de um). Um item
+  sem código de produto (item manual) não usa produto nenhum do cadastro — sai com o próprio texto.
 
 **Desconto acima de 5% — a aprovação:**
 - Salvar uma proposta com desconto acima de 5% a deixa como **Rascunho** e cria sozinho um pedido de aprovação em **Comercial → Aprovações**,

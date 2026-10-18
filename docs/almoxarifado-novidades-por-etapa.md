@@ -11,13 +11,18 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-18):** **Etapa 142 fechada** (das propostas: **com o mesmo produto duas vezes na proposta, cada
+> **Onde o desenvolvimento está (2026-10-18):** **Etapa 143 fechada** (das propostas: **o item que não é item é recusado antes de gravar,
+> o histórico conta o que aconteceu e cada item usa um produto só** — pela integração, uma lista de itens com um item vazio fazia o
+> salvamento da proposta nunca responder e, às vezes, apagar os itens (**C310**); agora é recusada com uma frase, sem gravar nada; o
+> histórico de itens deixa de registrar "editado" no item que ficou quando se tira o primeiro de dois iguais; e o documento deixa de mostrar
+> duas vezes o item cujo código existe no cadastro com e sem espaço no fim (**C311**): **C310** e **C311** resolvidos, **B929** a **B935**; a
+> consulta nova **A92**; os avisos novos **C312** e **C313**); a próxima é a **144** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 142 fechada** (das propostas: **com o mesmo produto duas vezes na proposta, cada
 > item fica com o que é dele** — tirar o primeiro de dois iguais deixava no que ficou a variável manual do que saiu (**C298**), todo
 > salvamento copiava a descrição da tabela, a tag e os acessórios do último igual para os outros (**C308**) e o preview dividia as
 > variáveis de um item entre dois (**C309**); o formulário passa a dizer ao servidor qual item gravado é cada um, e a variável manual do
 > item que saiu é guardada à parte, sem voltar para outro item: **C298**, **C308** e **C309** resolvidos, **B918** a **B928**; a consulta
-> nova **A91**; o aviso novo **C310**; a revisão obrigatória da proposta passa a **23/23**); a próxima é a **143** — ver "Onde estamos e o
-> que vem a seguir".
+> nova **A91**; o aviso novo **C310**; a revisão obrigatória da proposta passa a **23/23**); a próxima era a **143**.)*
 > *(Antes: **Etapa 141 fechada** (das propostas: **o documento da proposta só sai com o desconto
 > aprovado** — o "Ver proposta", o PDF e o editor do preview recusam, no servidor, a proposta com desconto acima de 5 % sem aprovação
 > válida, em qualquer status (antes só os botões da tela barravam, e o editor aberto numa aba baixava o PDF com o desconto trocado noutra);
@@ -237,7 +242,11 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Noventa e um itens para rodar em produção ANTES do deploy — oitenta e oito são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Noventa e dois itens para rodar em produção ANTES do deploy — oitenta e nove são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-18 (Etapa 143) de noventa e um para noventa e dois**, com a **A92** — os produtos com o mesmo código a menos de
+espaços nas pontas, ou com código só de espaços, e os itens de proposta que o documento mostrava em dobro por causa deles (**C311**).
+Somente leitura e opcional.)*
 
 *(**Atualizado em 2026-10-18 (Etapa 142) de noventa para noventa e um**, com a **A91** — as propostas com o mesmo produto mais de uma vez
 em que os itens iguais podem ter recebido os campos uns dos outros (**C308**). Somente leitura e opcional.)*
@@ -3278,12 +3287,42 @@ texto de cada item e salve (depois do deploy, cada um fica com o seu). **`combin
 diferentes; nada a fazer. *(Rodada no banco local, cópia de 09/10: **0** linhas — a proposta com produto repetido não tem nenhum desses
 campos preenchido; controle numa cópia com dois iguais copiados e dois diferentes: achou os dois, com 1 e 2 combinações.)*
 
+**A92 (NOVA, da Etapa 143 — os produtos de código repetido a menos de espaços, e os itens de proposta que saíam em dobro no documento).**
+Até a Etapa 143, o preview, o PDF e o total do pedido de aprovação do desconto juntavam a cada item **todos** os produtos cujo código, sem
+os espaços das pontas, era o do item — e o cadastro aceita `PJ1` e `PJ1 ` como produtos diferentes. O item saía duas vezes no documento
+e o total do pedido de aprovação dobrava (**C311**). E o produto de código só de espaços era juntado a todo item manual (sem código).
+Depois do deploy, cada item usa um produto só; a consulta mostra onde isso acontecia. Somente leitura; opcional.
+
+```sql
+-- 1) os produtos de mesmo código a menos de espaços nas pontas, e os de código só de espaços
+SELECT TRIM(codigo) AS codigo_aparado, COUNT(*) AS n, GROUP_CONCAT('[' || codigo || ']', ' ') AS codigos
+FROM produtos GROUP BY TRIM(codigo) HAVING COUNT(*) > 1 OR TRIM(codigo) = '';
+
+-- 2) quantos itens de proposta saíam em dobro no documento (e em quantas propostas)
+SELECT COUNT(*) AS itens_afetados, COUNT(DISTINCT pi.proposta_id) AS propostas
+FROM proposta_itens pi
+WHERE TRIM(COALESCE(pi.codigo_produto, '')) <> ''
+  AND (SELECT COUNT(*) FROM produtos pr WHERE TRIM(pr.codigo) = TRIM(pi.codigo_produto)) > 1;
+
+-- 3) quantos itens manuais (sem código) juntavam um produto de código só de espaços
+SELECT COUNT(*) AS itens_sem_codigo_que_juntavam FROM proposta_itens pi
+WHERE TRIM(COALESCE(pi.codigo_produto, '')) = '' AND EXISTS (SELECT 1 FROM produtos pr WHERE TRIM(pr.codigo) = '');
+```
+
+**Como ler o resultado:** **as três vazias ou zero** — nada a fazer. **Linhas na 1** — há produtos que parecem o mesmo (`PJ1` e `PJ1 `)
+ou de código em branco: depois do deploy o documento usa o de código igual ao do item (ou o mais antigo); vale corrigir o cadastro (tirar o
+espaço, ou inativar o repetido) — é a **C312**. **Número na 2 ou na 3** — essas propostas, antes do deploy, mostravam o item em dobro (ou o
+item manual com o nome de outro produto) no preview e no PDF, e o pedido de aprovação de desconto delas pode ter sido gravado com o total em
+dobro: confira os pedidos pendentes dessas propostas em **Comercial → Aprovações**. *(Rodada no banco local, cópia de 09/10: **nenhuma
+linha** na 1 e **0** na 2 e na 3; controle numa cópia com `A`, `A `, um código só de espaços e quatro itens: a 1 achou os dois grupos, a 2
+contou 2 itens em 2 propostas e a 3 contou 1.)*
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B928; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B935; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -10113,6 +10152,43 @@ caía no produto incluído depois. **Reversível.**
 vocês continuam as da **B898**, mais a **B910**, a **C307** e agora a **B924** (a C297) e a **B926** (se o produto incluído de novo deve
 trazer de volta as variáveis manuais).
 
+**B929 (NOVA, da Etapa 143; das propostas) — o item que não é item é recusado, não ignorado.** Pela integração, a lista de itens com um item
+vazio, um número ou um texto no lugar de um item é recusada com *"Item inválido: cada item da proposta deve ser um objeto."*, sem gravar
+nada — na criação, na edição e na geração automática. **Descartado:** ignorar o item vazio e gravar o resto (a criação já fazia isso,
+calada: a proposta nascia sem o item que quem integrou achava que tinha mandado — esconder o erro de quem integra é pior que recusar).
+**Reversível.**
+
+**B930 (NOVA, da Etapa 143; das propostas) — a lista de itens que não é lista também é recusada; a lista nula continua apagando.** Itens
+enviados como um registro, um texto ou um número são recusados com *"Itens inválidos: os itens da proposta devem ser enviados como uma
+lista."* (antes a edição apagava os itens com sucesso — a D (142)). A lista **nula** na edição continua apagando todos os itens: está
+escrita assim desde a Etapa 138. **Descartado:** recusar também a nula (mudaria um contrato escrito sem ninguém ter pedido). **Reversível.**
+
+**B931 (NOVA, da Etapa 143; das propostas) — no histórico, o item novo igual a um que saiu conta como "incluído" + "removido".** Quando a
+tela manda o número interno dos itens e o vendedor tira um de dois iguais e inclui outro do mesmo produto, o histórico registra a inclusão e
+a remoção — é o que acontece com as variáveis manuais do que saiu (guardadas à parte, **B919**). A descrição da tabela, a tag e o descritivo
+do novo vêm, como antes, do último igual gravado (**B920**). **Descartado:** registrar "editado" (o histórico diria uma coisa e as variáveis
+outra). **Reversível.**
+
+**B932 (NOVA, da Etapa 143; das propostas) — cada item usa um produto só: o de código igual, senão o mais antigo de mesmo código sem
+espaços.** No documento e no total do pedido de aprovação. O item sem código (manual) não usa nenhum. **Descartado:** tirar os espaços do
+código no cadastro (muda o que está gravado e a regra de código único — fica para vocês, **C312**) e escolher "qualquer um" dos repetidos.
+**Reversível.**
+
+**B933 (NOVA, da Etapa 143; das propostas) — a descrição do item entra no histórico.** Trocar a descrição de um item passa a aparecer como
+"editado: Descrição: antes → depois" (antes, a do item manual aparecia como "removido + incluído", e a do item com código não aparecia).
+Diferença só de maiúsculas, minúsculas ou espaços nas pontas não conta. **Descartado:** comparar a descrição só no item manual (uma regra por
+tipo de item, sem ganho). **Reversível.**
+
+**B934 (NOVA, da Etapa 143, da revisão; das propostas) — o item com um campo que não é texto nem número também é recusado.** Pela
+integração, um item cuja descrição, unidade, código, quantidade (ou qualquer campo que não seja a lista de acessórios) vem como um registro
+ou uma lista é recusado com a mesma *"Item inválido: cada item da proposta deve ser um objeto."*. A revisão reproduziu que a descrição
+`{}` fazia o salvamento nunca responder do mesmo jeito da **C310**, e com outro número de itens gravava *"[object Object]"*. **Descartado:**
+blindar cada conta que lê o campo (deixaria gravar o lixo). **Reversível.**
+
+**B935 (NOVA, da Etapa 143) — a próxima etapa (144).** Ver a "próxima tarefa detalhada" no plano da Etapa 143. As decisões que esperam
+vocês continuam as da **B928**, mais a **C312** (corrigir os códigos de produto com espaço). A 144 escolhida é a **C313** (a
+geração automática com produto que não existe — recusar antes de criar).
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -12970,10 +13046,29 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      da leitura dividia as variáveis manuais de um item entre dois iguais.** Um item com duas variáveis manuais preenchidas, de um produto
      que aparece duas vezes, mostrava no preview uma delas no primeiro e a outra no segundo, quando o salvamento não as tinha religado.
      **O que fazer:** nada.
-310. **NOVO (da revisão da Etapa 142; das propostas, anterior a ela; reproduzido pela API) — um item vazio na lista faz o salvamento da
+310. **✅ RESOLVIDO NA ETAPA 143 (B929, B930, B934) — e o texto abaixo estava impreciso:** `[null, {...}]` **não** apagava sempre — com a
+     lista do mesmo tamanho da gravada o erro saía antes de apagar; com tamanho **diferente** (`[null]` contra dois itens) os itens eram
+     apagados, e antes disso a proposta já tinha sido regravada (título, revisão, número). Era também maior: número ou texto no lugar do
+     item virava item vazio com sucesso, a criação engolia o item vazio e a geração automática respondia erro interno; e (achado na revisão
+     da 143) um item com a descrição `{}` travava do mesmo jeito. Agora as três portas recusam antes de gravar. O texto original:
+     **NOVO (da revisão da Etapa 142; das propostas, anterior a ela; reproduzido pela API) — um item vazio na lista faz o salvamento da
      proposta nunca responder.** Pela API, `"itens": [null]` deixa a resposta sem chegar (a tela fica esperando até o tempo limite), e
      `[null, {...}]` apaga os itens antes de travar. A tela nunca manda item vazio. **O que fazer:** nada pela tela; quem integra não deve
      mandar item nulo. Candidata pequena (recusar o item que não é objeto antes de apagar).
+311. **✅ RESOLVIDO NA ETAPA 143 (B932; A92 para o que já aconteceu) — NOVO (medido na Etapa 143; das propostas, anterior a ela;
+     reproduzido) — o item saía duas vezes no documento quando o código do produto existia com e sem espaço.** O cadastro aceita `PJ1` e
+     `PJ1 ` como produtos diferentes, e o preview, o PDF e o total do pedido de aprovação juntavam os dois ao item `PJ1`: o item aparecia
+     em dobro e o total do pedido dobrava. Um produto de código só de espaços era juntado a todo item manual (que saía com o nome dele).
+     **O que fazer:** a consulta **A92**.
+312. **NOVO (da Etapa 143; do cadastro de produtos, anterior a ela; reproduzido pela API) — o código do produto é gravado com os espaços
+     das pontas, e pode ser só de espaços.** `PJ1` e `PJ1 ` são dois produtos; `"   "` é aceito como código. Depois da **C311** o documento
+     não duplica mais, mas a proposta pode usar o produto "errado" dos dois (o de código igual ao do item; a geração automática grava o
+     código com o espaço, e o formulário, ao salvar, o tira — o item passa a usar o outro). **O que fazer:** a consulta **A92** lista; corrigir
+     no cadastro. Tirar os espaços sozinho no cadastro é decisão de vocês (muda códigos gravados).
+313. **NOVO (da revisão do plano da Etapa 143; das propostas, anterior a ela; lido no código e reproduzido) — a geração automática com
+     produto que não existe cria proposta vazia.** Pela API, `produtos: [{ "id": 99999 }]` (ou um produto excluído entre a escolha e o
+     envio) cria a proposta sem nenhum item e valor 0, com sucesso. A tela manda só produtos do catálogo. **O que fazer:** nada pela tela;
+     apagar a proposta vazia, se aparecer. Candidata pequena (recusar quando nenhum produto é encontrado).
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -14296,13 +14391,24 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   números já vencidos porque outra aba salvou antes) o servidor reconhece os iguais pela posição: tirar o primeiro de dois deixa no que ficou
   a variável do primeiro (a do segundo fica guardada à parte, **B919**).
 - **(142) O histórico de itens** (o registro de item incluído, editado e removido) continua comparando os iguais pela posição: tirar o primeiro
-  de dois pode aparecer como "editado" + "removido" em vez de só "removido".
+  de dois pode aparecer como "editado" + "removido" em vez de só "removido". *(Resolvido na Etapa 143: o histórico usa o mesmo
+  reconhecimento do salvamento — só "removido" quando a tela manda o número do item; sem o número, ainda pela posição.)*
 - **(142) O preview aberto numa aba velha** (de antes de um salvamento da proposta noutra aba) responde que gravou e não grava nada para os
   itens que não existem mais — antes também se perdia (gravava num lugar que o documento não lia).
 - **(142) Se o banco falhar no meio do salvamento** (a leitura das variáveis, ou a gravação dos itens novos), as variáveis ficam sem item e o
   conserto da leitura as reencontra pelo produto; no caso de dois iguais isso pode mostrar a do item que saiu, até o próximo salvamento.
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
-  também guarda à parte as variáveis manuais deles.
+  também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
+  apagando.)*
+- **(143) O item vazio `{}` na lista** continua sendo gravado (um item sem descrição), como sempre — só o que não é registro, ou o
+  registro com um campo que é registro ou lista (fora os acessórios), é recusado.
+- **(143) O preview e o PDF ficaram um pouco mais lentos com um cadastro de produtos grande** — medido na revisão: com 20 000 produtos e
+  50 itens, de cerca de 80 ms para cerca de 130 ms por abertura (a escolha de um produto só por item). Não cresce mais que o tamanho do
+  cadastro.
+- **(143) O produto do item continua diferenciando maiúsculas de minúsculas e não ignora tabulação** — `pj2` não usa o produto `PJ2`
+  (como sempre).
+- **(143) A edição pela integração sem a quantidade ou a unidade** grava 1 e "UN" (como sempre) e o histórico agora compara com isso — não
+  registra mais "Unidade: UN → —" em todo salvamento sem unidade.
 - **(142) A primeira subida depois do deploy** cria o campo novo das variáveis manuais; uma gravação do preview que chegasse no mesmo segundo,
   antes de ele existir, daria erro (raro: só na subida).
 - **(141) O editor do preview não abre proposta com desconto sem aprovação** — mostra a frase da recusa (**B914**). No uso normal ele só se
@@ -15259,6 +15365,12 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(143) Nenhum clique foi dado no navegador.** O que a etapa muda só aparece pela integração (o item que não é item), pelo histórico de
+edições e pelo documento com um cadastro de produtos com códigos repetidos — tudo provado pela rota, com o servidor de verdade em pasta
+vazia (21 cenários, inclusive o PDF pelo retrato que ele grava e o pedido de aprovação). O que **só o navegador** prova: o roteiro da Etapa
+143 no guia — numa proposta com o mesmo produto duas vezes, tirar o primeiro e salvar; no preview editável, botão **Histórico**, uma linha só, *Produto
+removido*; e, com um produto cadastrado de novo com um espaço no fim do código, o preview mostrar o item uma vez.
 
 **(142) Nenhum clique foi dado no navegador.** Os itens iguais foram provados pela rota, com o servidor de verdade em pasta vazia (18
 cenários, três subidas — uma sobre o banco antigo sem o campo novo e uma com a gravação das variáveis falhando de propósito), pelo PDF (o
@@ -29118,9 +29230,82 @@ banco no meio da gravação e um número em lista; corrigidos) e, de antes, o it
 fez **43** sabotagens: **20** caíram, **12** são equivalentes, **11** sobreviveram por falta de cenário (viraram cenários, inclusive o PDF
 pela rota) e achou um defeito desta etapa — apagar no preview a variável de um item fazia aparecer a do item que saiu (corrigido).
 
+## Etapa 143 — O item que não é item é recusado antes de gravar, e cada item usa um produto só (2026-10-18)
+
+Três consertos pequenos no salvamento e no documento da proposta. Pela integração, uma lista de itens com um item vazio fazia o salvamento
+nunca responder — e, às vezes, apagar os itens da proposta; agora é recusada com uma frase, e nada é gravado. O histórico de edições passa a
+contar o que o vendedor fez: tirar o primeiro de dois itens iguais aparece como um item removido, não mais como "editado o primeiro e
+removido o segundo". E o preview, o PDF e o pedido de aprovação do desconto deixam de mostrar em dobro o item cujo código está no cadastro
+duas vezes — com e sem um espaço no fim.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Pela integração, `"itens": [null]` → a resposta nunca chegava; com outro número de itens, os itens eram apagados | *"Item inválido: cada item da proposta deve ser um objeto."* e nada é gravado (**B929** — **C310** resolvido) |
+| Um número ou texto no lugar do item virava um item vazio; na criação o item vazio sumia calado; a geração automática dava erro interno | A mesma frase, nas três portas (**B929**) |
+| Itens enviados como um registro em vez de uma lista apagavam os itens | *"Itens inválidos: os itens da proposta devem ser enviados como uma lista."* (**B930**) |
+| Item com a descrição `{}` travava o salvamento do mesmo jeito | Recusado com a frase do item (**B934**) |
+| Tirar o primeiro de dois iguais → histórico *Produto editado* (no primeiro) + *Produto removido* | Só *Produto removido* (**B931**) |
+| Trocar só a descrição de um item manual → *removido* + *incluído*; a de um item com código não aparecia | *Produto editado — Descrição: antes → depois* (**B933**) |
+| Produtos `PJ1` e `PJ1 ` no cadastro → o item `PJ1` saía duas vezes no documento e o total do pedido de aprovação dobrava | Uma vez, com o produto `PJ1` (**B932** — **C311** resolvido; **A92** mostra onde acontecia) |
+| Produto de código só de espaços → todo item manual saía com o nome dele | O item manual sai com o próprio texto |
+
+### As regras, com o cenário exato
+
+**1. O item vazio pela integração (B929, B930, B934 — C310).** `PUT /api/propostas/<id>` com `{ "titulo": "Novo", "itens": [null] }`
+responde **400** *"Item inválido: cada item da proposta deve ser um objeto."* — e a proposta continua com o título, a revisão, o número e os
+itens de antes. O mesmo para `[5]`, `["x"]`, `[[...]]`, `[{ "descricao": {} }]`, no `POST /api/propostas` (nenhuma proposta nasce) e nos
+`produtos` de `POST /api/propostas/gerar-automatica`. `{ "itens": {} }` responde **400** *"Itens inválidos: os itens da proposta devem
+ser enviados como uma lista."*. `{ "itens": null }` continua apagando os itens; sem a chave `itens`, os itens não mudam. Pela tela nada
+muda: o formulário sempre manda a lista certa.
+
+**2. O histórico de quem tira o primeiro de dois iguais (B931).** Crie uma proposta com o mesmo produto **duas vezes** (quantidades 1 e
+2) e **Salvar**. Tire o **primeiro** (lixeira) e **Salvar**. No **preview editável** da proposta, botão **Histórico** (painel *Histórico de Edições*): uma linha só: *Produto
+removido* com o nome do produto — nenhuma *Produto editado*.
+
+**3. A descrição no histórico (B933).** Numa proposta com um item manual (sem produto do catálogo), troque só a descrição e **Salvar**:
+*Produto editado — Descrição: <antes> → <depois>*.
+
+**4. O produto de código repetido (B932 — C311).** Em **Produtos**, cadastre um produto com o código de um que já existe e **um espaço no
+fim** (ex.: `PJ1 `). Abra o preview de uma proposta com o item `PJ1`: o item aparece **uma vez** (antes, duas) e o valor total é o de
+sempre. Peça aprovação de um desconto dessa proposta: o *Valor total* do pedido é o do documento (antes, o dobro).
+
+### O que esta etapa NÃO cobre
+
+1. **O cadastro continua aceitando código com espaço nas pontas ou só de espaços** (**C312**, decisão de vocês).
+2. **A geração automática com um produto que não existe** continua criando proposta vazia (**C313**).
+3. **O item vazio `{}`** continua sendo gravado como item sem descrição (D (143)).
+4. **Quem pode editar a proposta** continua esperando vocês (**C305**); a aprovação pelo percentual (**B910**); as aprovações antigas do
+   responsável (**C307**); a classificação de área do produto (**B924**); a volta das variáveis do item incluído de novo (**B926**).
+
+### O que a revisão encontrou
+
+A **medição** (antes do código, pela integração, com o servidor de verdade) mostrou que o furo do item vazio era maior do que o aviso dizia
+— número e texto no lugar do item viravam item vazio, a criação engolia o item vazio e a geração automática dava erro interno — e que a
+suspeita do produto de código repetido era real: o item saía duas vezes no documento (**C311**). A **revisão do plano** (antes do código)
+achou um ponto crítico — a mesma junção dos produtos morava numa terceira consulta, a do total do pedido de aprovação, que ficaria com o
+dobro enquanto o documento mostrava o valor certo — e quatro importantes, entre eles que o item manual com só a descrição trocada sumiria do
+histórico (por isso a descrição entrou na comparação, **B933**). A **revisão adversarial do código** (três revisores, executando): o de
+**regra** achou que um item com a **descrição** `{}` ainda travava o salvamento do mesmo jeito (anterior; fechado pela **B934**) e que um
+corpo sem descrição registrava edição falsa em todo salvamento (corrigido); o de **permissão** não achou caminho novo para mexer no que não
+devia — 50 mil itens, aninhamento profundo e falha de banco injetada respondem — e achou o mesmo campo hostil derrubando o registro do
+histórico (fechado pela B934); o de **sabotagem** fez **59** sabotagens: **45** caíram, **6** são equivalentes e **8** sobreviveram por falta
+de cenário — entre elas a escolha do produto "mais antigo" quando nenhum tem o código igual, que nenhum teste exercitava; viraram cenários.
+Nenhum defeito no código entregue.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 143 entregue (2026-10-18):** **o item que não é item é recusado antes de gravar, e cada item usa um produto só** (das
+  propostas). O salvamento, a criação e a geração automática recusam, sem gravar nada, a lista com item vazio ou que não é item
+  (**B929**, **B930**, **B934** — **C310** resolvido); o histórico de itens segue o reconhecimento do salvamento e registra a descrição
+  (**B931**, **B933**); o documento e o pedido de aprovação usam um produto só por item (**B932** — **C311** resolvido). A revisão
+  obrigatória da proposta continua **23/23** (+ editor 39/39) e ganha o teste novo da rota. **O que é seu:** a consulta **A92** (opcional);
+  os avisos **C312** e **C313**; as decisões **B929 a B934** (reversíveis); as perguntas de antes (**B910**, **B853**, **B924**, **B926**);
+  as limitações **(143)** em D e a verificação **(143)** em F. **Próxima: Etapa 144 — ver a "próxima tarefa detalhada" no plano da
+  Etapa 143.**
 
 - **Etapa 142 entregue (2026-10-18):** **com o mesmo produto duas vezes, cada item fica com o que é dele** (das propostas). O formulário
   diz ao servidor qual item gravado é cada um (**B918** — **C298** resolvido); cada item igual mantém a sua descrição da tabela, tag e
@@ -29128,8 +29313,7 @@ pela rota) e achou um defeito desta etapa — apagar no preview a variável de u
   **B926**); o conserto da leitura junta as variáveis por item (**B921** — **C309** resolvido) e é gravado nos salvamentos (**B927**). A
   revisão obrigatória da proposta passa a **23/23**. **O que é seu:** a consulta **A91** (opcional); as perguntas **B910**, **B853**,
   **B924** (a C297) e **B926** (o produto incluído de novo deve trazer as variáveis de volta?); as decisões **B918 a B927** (reversíveis);
-  o aviso **C310**; as limitações **(142)** em D e a verificação **(142)** em F. **Próxima: Etapa 143 — ver a "próxima tarefa detalhada"
-  no plano da Etapa 142.**
+  o aviso **C310**; as limitações **(142)** em D e a verificação **(142)** em F. *(Próxima, na época: Etapa 143 — entregue acima.)*
 
 - **Etapa 141 entregue (2026-10-18):** **o documento da proposta só sai com o desconto aprovado** (das propostas). O "Ver proposta", o
   PDF e o editor do preview recusam a proposta com desconto acima de 5 % sem aprovação válida, em qualquer status (**B914** — **C304**

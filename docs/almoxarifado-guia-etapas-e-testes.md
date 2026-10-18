@@ -1,17 +1,24 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-18 (Etapa 142) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-18 (Etapa 143) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141 e 142) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142 e 143) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-18 (Etapa 142 ENTREGUE · próxima: Etapa 143)
+> ## Onde o desenvolvimento está — 2026-10-18 (Etapa 143 ENTREGUE · próxima: Etapa 144)
 >
-> **O desenvolvimento parou aqui: Etapa 142 fechada — 2026-10-18.** A **Etapa 142 (com o mesmo produto duas vezes, cada item fica com o
+> **O desenvolvimento parou aqui: Etapa 143 fechada — 2026-10-18.** A **Etapa 143 (o item que não é item é recusado antes de gravar, e
+> cada item usa um produto só; das propostas, fora do almoxarifado)**: pela integração, a lista de itens com um item vazio (ou que não é
+> item) é recusada sem gravar nada — antes o salvamento nunca respondia e às vezes apagava os itens; o histórico de edições conta o que o
+> vendedor fez (tirar o primeiro de dois iguais = um item removido) e registra a troca de descrição; o preview, o PDF e o pedido de
+> aprovação deixam de mostrar em dobro o item cujo código está no cadastro com e sem espaço. Uma consulta nova, opcional (**A92**).
+> **Próxima: Etapa 144** — ver a próxima tarefa no plano da 143.
+>
+> **Etapa 142, 2026-10-18.** A **Etapa 142 (com o mesmo produto duas vezes, cada item fica com o
 > que é dele; das propostas, fora do almoxarifado)**: numa proposta com o mesmo equipamento mais de uma vez, tirar o primeiro e salvar não
 > passa mais a variável manual dele para o que ficou; salvar não copia mais a descrição da tabela, a tag e os acessórios do último para os
-> outros; a variável do item que saiu fica guardada à parte e não volta para outro item. Uma consulta nova, opcional (**A91**). **Próxima:
-> Etapa 143** — ver a próxima tarefa no plano da 142.
+> outros; a variável do item que saiu fica guardada à parte e não volta para outro item. Uma consulta nova, opcional (**A91**).
+> *(Próxima, na época: Etapa 143 — entregue acima.)*
 >
 > **Etapa 141, 2026-10-18.** A **Etapa 141 (o documento da proposta só sai com o desconto
 > aprovado; das propostas, fora do almoxarifado)**: o "Ver proposta", o PDF e o editor do preview recusam, no servidor, a proposta com
@@ -6628,6 +6635,44 @@ calado).
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
 
+## Etapa 143 — O item que não é item é recusado antes de gravar, e cada item usa um produto só (ENTREGUE — 2026-10-18)
+
+**O que mudou, em uma frase:** a integração que manda um item vazio na lista recebe uma frase de recusa e nada é gravado; o histórico de
+edições registra o que o vendedor fez com itens iguais; e o documento não mostra mais em dobro o item cujo código está no cadastro duas
+vezes (com e sem um espaço no fim).
+
+**O problema que ela resolve.** Pela integração, `"itens": [null]` fazia o salvamento da proposta nunca responder — e, com outro número de
+itens, apagava os itens antes de travar. No histórico, tirar o primeiro de dois itens iguais aparecia como "editado o primeiro, removido o
+segundo". E um produto cadastrado de novo com um espaço no fim do código (`PJ1 `) fazia o item `PJ1` sair duas vezes no preview, no PDF e
+no total do pedido de aprovação do desconto.
+
+| Antes | Agora |
+|---|---|
+| Item vazio na lista (pela API) → o salvamento não respondia, às vezes apagava os itens | *"Item inválido: cada item da proposta deve ser um objeto."*, nada gravado |
+| Itens enviados como um registro em vez de lista → os itens eram apagados | *"Itens inválidos: os itens da proposta devem ser enviados como uma lista."* |
+| Tirar o primeiro de dois iguais → *Produto editado* + *Produto removido* no histórico | Só *Produto removido* |
+| Trocar só a descrição de um item manual → *removido* + *adicionado* | *Produto editado — Descrição: antes → depois* |
+| Produtos `PJ1` e `PJ1 ` → o item `PJ1` saía duas vezes no documento; o pedido de aprovação, com o dobro | Uma vez; o pedido com o valor do documento (**A92** mostra onde acontecia) |
+
+**Roteiro de teste (10 minutos, pela tela).**
+
+1. **O histórico de dois iguais.** Crie uma proposta com o mesmo produto **duas vezes** (quantidade 1 no primeiro, 2 no segundo) e
+   **Salvar**. No formulário, clique na lixeira do **primeiro** item e **Salvar** (*"Proposta atualizada."*). Abra o **preview editável** e
+   clique em **Histórico**: no painel *Histórico de Edições* há uma linha *Produto removido* com o nome do produto — e nenhuma *Produto
+   editado*.
+2. **A descrição no histórico.** Na mesma proposta, inclua um item sem produto do catálogo (item manual) com a descrição *Serviço A* e
+   **Salvar**; troque a descrição para *Serviço B* e **Salvar**. No **Histórico**: *Produto editado — Descrição: SERVIÇO A → SERVIÇO B*.
+3. **O produto de código repetido.** Em **Produtos**, cadastre um produto novo com o **mesmo código** de um produto que está numa proposta,
+   com **um espaço no fim** (ex.: `PJ1 `). Abra o preview dessa proposta: o item aparece **uma vez**, com o mesmo valor total de antes.
+   (Depois do teste, inative ou apague o produto de teste.)
+4. **O item vazio (pela integração, opcional).** Com uma ferramenta de API autenticada, `PUT /api/propostas/<id>` com
+   `{ "itens": [null] }`: a resposta chega na hora, **400**, com *"Item inválido: cada item da proposta deve ser um objeto."*; a proposta
+   continua igual.
+
+**O que esta etapa NÃO cobre.** O cadastro continua aceitando código de produto com espaço nas pontas ou só de espaços (**C312**, decisão de
+vocês); a geração automática com um produto que não existe ainda cria proposta vazia (**C313**, a próxima etapa); o item vazio `{}` dentro
+da lista continua sendo gravado como item sem descrição (D (143)).
+
 ## Etapa 142 — Com o mesmo produto duas vezes, cada item fica com o que é dele (ENTREGUE — 2026-10-18)
 
 **O que mudou, em uma frase:** numa proposta com o mesmo equipamento mais de uma vez, cada item passa a ficar com a sua variável manual, a
@@ -6662,7 +6707,7 @@ Variáveis técnicas**, selecione-a para a família de um produto em **Configura
 **O que esta etapa NÃO cobre.** A integração que salva sem o número interno de cada item continua reconhecendo os iguais pela posição; o
 histórico de itens também (D (142)). O item incluído de novo não traz de volta as variáveis manuais do que saiu — se vocês preferirem que
 traga, é a pergunta da **B926**. A classificação de área do produto que não se apaga ficou para vocês (**B924**, **C297**). Um item vazio
-na lista, pela API, ainda trava o salvamento (**C310**).
+na lista, pela API, ainda trava o salvamento (**C310** — *resolvido na Etapa 143*).
 
 ## Etapa 141 — O documento da proposta só sai com o desconto aprovado (ENTREGUE — 2026-10-18)
 

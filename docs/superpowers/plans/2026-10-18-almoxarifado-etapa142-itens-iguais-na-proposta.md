@@ -208,7 +208,8 @@ direto: o reparo é provado pela rota no teste novo.
    uma sugestão aceita da Fase 2 — M3; a 12, "nada é aposentado aqui") e a Fase 0 errou o arquivo do formulário (leu o código morto).
 3. **Paralelismo:** **0** galhos em paralelo de fato (a T3 era galho, feita em sequência — o "um teste por vez" e o tamanho); **0**
    retrabalho; **1** revisor na Fase 2, **3** em paralelo na Fase 5 sob a trava (o r3 numa worktree própria, removida).
-4. **Defeito que escapou:** *(preencher na Etapa 143)*.
+4. **Defeito que escapou:** **0** (preenchido na Etapa 143: os três revisores da 143 e as 59 sabotagens não acharam defeito no código entregue
+   pela 142; o que a 143 achou — o item com campo objeto que trava o `PUT` e o `JOIN` que duplica o item, C311 — é anterior à 142).
 
 ## Próxima tarefa detalhada — Etapa 143
 
