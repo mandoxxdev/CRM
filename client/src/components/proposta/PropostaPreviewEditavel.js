@@ -23,6 +23,7 @@ import {
 import { nomeArquivoPdfProposta } from '../../utils/nomeArquivoPdf';
 import { aplicarMascaraNoNoEditavel } from '../../utils/telefoneContentEditable';
 import { resolveFotoPropostaUrl } from '../../utils/resolveUploadAssinadoUrl';
+import { avisoValoresIgnorados, somarIgnorados } from './avisoValoresIgnorados';
 import './PropostaPreviewEditavel.css';
 
 const CAMPOS_EDITAVEIS = [
@@ -1350,24 +1351,31 @@ export default function PropostaPreviewEditavel() {
     setSalvando(true);
     try {
       const doc = iframeRef.current?.contentDocument;
+      // Etapa 144 (RN-144.04/05, D (142)): as duas rotas dos campos dos itens dizem quantos não gravaram (o item não é mais desta
+      // proposta — o preview abriu antes de um salvamento noutra aba). Com algum, a tela avisa em vez de "Alterações salvas." e devolve
+      // false: o Emitir revisão não emite em cima do valor perdido (B940).
+      let respostaVariaveis = null;
+      let respostaDescricoes = null;
       if (doc) {
         await salvarClausulas(doc);
         const variaveisManuais = lerVariaveisManuaisDoSource(doc);
         if (variaveisManuais.length > 0) {
-          await api.put(`/propostas/${id}/variaveis-manuais`, { valores: variaveisManuais });
+          respostaVariaveis = await api.put(`/propostas/${id}/variaveis-manuais`, { valores: variaveisManuais });
         }
         const descricoes = lerDescricoesTabelaDoSource(doc);
         if (descricoes.length > 0) {
-          await api.put(`/propostas/${id}/itens/descricoes`, { descricoes });
+          respostaDescricoes = await api.put(`/propostas/${id}/itens/descricoes`, { descricoes });
         }
       }
       if (Object.keys(camposEditados).length > 0) {
         await api.put(`/propostas/${id}/customizacoes`, camposEditados);
       }
       setMudancasPendentes(false);
-      toast.success('Alterações salvas.');
+      const aviso = avisoValoresIgnorados(somarIgnorados(respostaVariaveis, respostaDescricoes));
+      if (aviso) toast.warning(aviso);
+      else toast.success('Alterações salvas.');
       carregarPreview();
-      return true;
+      return !aviso;
     } catch (e) {
       toast.error('Erro ao salvar alterações.');
       return false;

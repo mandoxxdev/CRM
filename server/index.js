@@ -223,7 +223,7 @@ const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
 const { getClausulasDefault, resolverClausulasParaPreview } = require('./clausulasDefault');
-const { diffItensParaLog, nomeDe, resumoLado, mesclarItensPreservandoCampos, idInteiro, validarItensDoCorpo } = require('./propostaItensDiff');
+const { diffItensParaLog, nomeDe, resumoLado, mesclarItensPreservandoCampos, idInteiro, validarItensDoCorpo, idsDosProdutos, msgProdutoNaoEncontrado } = require('./propostaItensDiff');
 // Etapa 142 (C298, C309): as variáveis manuais × os itens — a religação do PUT, o reparo da leitura e a gravação do reparo (puros).
 const { planoReligacao, repararVariaveisManuais, planoMaterializacao } = require('./variaveisManuaisItens');
 const { presente, montarSetParcial } = require('./atualizacaoParcial');
@@ -5920,17 +5920,27 @@ app.put('/api/propostas/:id/itens/descricoes', authenticateToken, (req, res) => 
   const { id } = req.params;
   const lista = Array.isArray(req.body && req.body.descricoes) ? req.body.descricoes : null;
   if (!lista) return res.status(400).json({ error: 'descricoes deve ser um array de {item_id, texto}' });
-  const stmt = db.prepare('UPDATE proposta_itens SET descricao_tabela = ? WHERE id = ? AND proposta_id = ?');
-  lista.forEach((d) => {
-    if (!d || d.item_id == null) return;
-    const texto = String(d.texto == null ? '' : d.texto).trim();
-    // Vazio grava NULL: assim a descrição volta a ser o nome do produto + modelo, em vez de
-    // ficar uma linha em branco na tabela.
-    stmt.run([texto || null, d.item_id, id]);
-  });
-  stmt.finalize((err) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ ok: true });
+  // Etapa 144 (RN-144.04, B942): só item que É desta proposta, pelo id inteiro (a régua do variaveis-manuais), e a resposta diz quantos
+  // não gravaram — o preview numa aba velha manda ids que o salvamento da proposta já trocou. Antes o UPDATE cru respondia { ok: true }
+  // sem gravar nada (e casava "5.0" e true pela afinidade de tipo).
+  db.all('SELECT id FROM proposta_itens WHERE proposta_id = ?', [id], (errItens, itensDaProposta) => {
+    if (errItens) return res.status(500).json({ error: errItens.message });
+    const idsDaProposta = new Set((itensDaProposta || []).map((i) => String(i.id)));
+    let ignorados = 0;
+    const stmt = db.prepare('UPDATE proposta_itens SET descricao_tabela = ? WHERE id = ? AND proposta_id = ?');
+    lista.forEach((d) => {
+      if (!d || d.item_id == null) return;
+      const itemId = idInteiro(d.item_id);
+      if (itemId == null || !idsDaProposta.has(itemId)) { ignorados += 1; return; }
+      const texto = String(d.texto == null ? '' : d.texto).trim();
+      // Vazio grava NULL: assim a descrição volta a ser o nome do produto + modelo, em vez de
+      // ficar uma linha em branco na tabela.
+      stmt.run([texto || null, Number(itemId), id]);
+    });
+    stmt.finalize((err) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ ok: true, ignorados });
+    });
   });
 });
 
@@ -6340,12 +6350,15 @@ app.put('/api/propostas/:id/variaveis-manuais', authenticateToken, (req, res) =>
       // Grava também QUAL item é esse (item_chave), lendo direto da linha do item — o que permite reencontrar o valor depois que o
       // salvamento da proposta recria os itens com ids novos (ver o comentário da coluna, na criação da tabela).
       const passos = [];
+      // Etapa 144 (RN-144.04, D (142)): quantos não gravaram por o item não ser (mais) desta proposta — a tela avisa em vez de dizer
+      // "Alterações salvas." (antes respondia { ok: true } e o preview numa aba velha não gravava nada, calado).
+      let ignorados = 0;
       valores.forEach((v) => {
         if (!v || v.chave == null || v.item_id == null) return;
         // Só item que É desta proposta, e só id inteiro (número ou texto de dígitos): a aba velha manda ids que não existem mais, e um
         // id em lista ([5]) passava pelo String() e gravava lixo (Fase 5, r2 M2).
         const itemId = idInteiro(v.item_id);
-        if (itemId == null || !idsDaProposta.has(itemId)) return;
+        if (itemId == null || !idsDaProposta.has(itemId)) { ignorados += 1; return; }
         const valor = String(v.valor ?? '').trim();
         if (valor) {
           passos.push([`INSERT INTO proposta_variaveis_manuais (proposta_id, item_id, chave, valor, item_chave)
@@ -6362,7 +6375,7 @@ app.put('/api/propostas/:id/variaveis-manuais', authenticateToken, (req, res) =>
       });
       executarEmSequencia(passos, (err) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ ok: true });
+        res.json({ ok: true, ignorados });
       });
     });
   });
@@ -9113,6 +9126,14 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
   }
   const statusAuto = margemAuto > 5 ? 'rascunho' : (outrosDados.status || 'rascunho');
 
+  // Etapa 144 (RN-144.01, C313): o id de cada produto, antes de buscar. Antes o produto sem id (ou com id que não é inteiro) sumia calado
+  // e a proposta nascia vazia; e o id em TEXTO do produto que existe também sumia (o find comparava número com texto) — agora vale (B938).
+  const idsLidosAuto = idsDosProdutos(produtos);
+  if (idsLidosAuto.erro) {
+    return res.status(400).json({ error: idsLidosAuto.erro });
+  }
+  const idsPedidosAuto = idsLidosAuto.ids;
+
   // Verificar se todos os produtos são da família "Hélices e Acessórios"
   // A verificação será feita ao buscar os produtos do banco
 
@@ -9125,16 +9146,22 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
 
   const buscarProdutos = () => {
     return new Promise((resolve, reject) => {
-      const produtosIds = produtos.map(p => p.id);
-      const placeholders = produtosIds.map(() => '?').join(',');
-      
-      db.all(`SELECT * FROM produtos WHERE id IN (${placeholders})`, produtosIds, (err, produtosData) => {
+      // Uma consulta só, pelos ids sem repetição: json_each em vez de IN (?, ?, ...) — que estoura em 32 766 variáveis (Fase 2 I-3).
+      const idsUnicos = [...new Set(idsPedidosAuto)];
+      db.all('SELECT * FROM produtos WHERE id IN (SELECT value FROM json_each(?))', [JSON.stringify(idsUnicos.map(Number))], (err, produtosData) => {
         if (err) {
           return reject(err);
         }
+        const porId = new Map((produtosData || []).map((p) => [String(p.id), p]));
+        // Etapa 144 (RN-144.02, C313): o produto que não existe recusa, antes de gerar o número e de criar — antes a proposta nascia sem
+        // ele (vazia, ou só com os achados), calada. O inativo conta como achado (o de sempre — B936).
+        const faltando = idsUnicos.filter((k) => !porId.has(k));
+        if (faltando.length > 0) {
+          return resolve(msgProdutoNaoEncontrado(faltando));
+        }
 
-        produtos.forEach(produtoReq => {
-          const produto = produtosData.find(p => p.id === produtoReq.id);
+        produtos.forEach((produtoReq, i) => {
+          const produto = porId.get(idsPedidosAuto[i]);
           if (produto) {
             const quantidade = produtoReq.quantidade || 1;
             const valorUnitario = produto.preco_base || 0;
@@ -9154,12 +9181,15 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, (req, res) => {
           }
         });
 
-        resolve();
+        resolve(null);
       });
     });
   };
 
-  buscarProdutos().then(() => {
+  buscarProdutos().then((erroProduto) => {
+    if (erroProduto) {
+      return res.status(400).json({ error: erroProduto });
+    }
     const finalResponsavelId = outrosDados.responsavel_id || req.user.id;
     
     // Validar e normalizar projeto_id (deve ser NULL se vazio, 0 ou inválido)

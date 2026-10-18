@@ -1,0 +1,20 @@
+// Etapa 144 (RN-144.05, D (142)): o preview aberto numa aba velha manda ids de itens que não existem mais (o salvamento da proposta
+// apaga e reinsere os itens, com ids novos). O servidor não grava esses valores e responde quantos foram (`ignorados`); a tela deixa de
+// dizer "Alterações salvas." e avisa — antes o vendedor achava que tinha salvo.
+
+/** Soma o `ignorados` das respostas do salvamento do preview. Resposta sem o campo (servidor antigo) conta 0. */
+export function somarIgnorados(...respostas) {
+  return respostas.reduce((soma, r) => {
+    const n = Number(r && r.data && r.data.ignorados);
+    return soma + (Number.isFinite(n) && n > 0 ? n : 0);
+  }, 0);
+}
+
+/** O aviso do preview quando algum valor não foi gravado, ou `null` quando foram todos. */
+export function avisoValoresIgnorados(n) {
+  const k = Number(n) || 0;
+  if (k <= 0) return null;
+  // Sem número de propósito (Fase 2 I-1): o preview manda todos os campos do documento, então o número seria o de campos, não o do que
+  // o vendedor editou.
+  return 'Alguns campos dos itens não foram gravados: os itens desta proposta mudaram depois que o preview abriu (ela foi salva em outra aba ou por outra pessoa). O preview foi recarregado — confira e preencha de novo.';
+}

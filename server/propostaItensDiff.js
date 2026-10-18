@@ -192,4 +192,25 @@ function resumoLado(mudancas, lado) {
   }).join(', ');
 }
 
-module.exports = { validarItensDoCorpo, MSG_ITENS_LISTA, MSG_ITEM_INVALIDO, diffItensParaLog, chaveDe, identidadeDe, idInteiro, parearItens, nomeDe, resumoLado, CAMPOS_COMPARAR, mesclarItensPreservandoCampos, CAMPOS_PRESERVAR };
+// Etapa 144 (RN-144.01, C313) — o id de cada produto da geração automática. Vale o inteiro positivo seguro (número, ou texto só de
+// dígitos, aparado — o id em texto do produto que existe era descartado calado e a proposta nascia vazia, B938); o resto (ausente, nulo,
+// booleano, fracionário, zero, negativo, texto que não é só dígitos, número além de 2^53 - 1) recusa a lista inteira. Devolve os ids como
+// texto do inteiro, na ordem do pedido (com repetição: o mesmo id duas vezes é um item por vez, B937).
+const MSG_PRODUTO_SEM_ID = 'Produto inválido: cada produto da proposta deve trazer o id de um produto cadastrado.';
+function idsDosProdutos(produtos) {
+  const ids = [];
+  for (const p of produtos || []) {
+    const k = idInteiro(p && p.id);
+    if (k == null || !Number.isSafeInteger(Number(k)) || Number(k) <= 0) return { erro: MSG_PRODUTO_SEM_ID };
+    ids.push(k);
+  }
+  return { ids };
+}
+// RN-144.02 — a recusa do produto que não existe: os ids sem repetição, na ordem; até 10, e " e mais N" para o resto.
+function msgProdutoNaoEncontrado(faltando) {
+  const unicos = [...new Set((faltando || []).map(String))];
+  const resto = unicos.length > 10 ? ` e mais ${unicos.length - 10}` : '';
+  return `Produto não encontrado (id ${unicos.slice(0, 10).join(', ')}${resto}). Atualize a lista de produtos e tente de novo.`;
+}
+
+module.exports = { idsDosProdutos, msgProdutoNaoEncontrado, MSG_PRODUTO_SEM_ID, validarItensDoCorpo, MSG_ITENS_LISTA, MSG_ITEM_INVALIDO, diffItensParaLog, chaveDe, identidadeDe, idInteiro, parearItens, nomeDe, resumoLado, CAMPOS_COMPARAR, mesclarItensPreservandoCampos, CAMPOS_PRESERVAR };
