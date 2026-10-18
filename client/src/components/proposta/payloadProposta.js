@@ -27,6 +27,10 @@ export function montarPayloadProposta({ form, itens, statusSalvar, valorTotal, m
     lembrete_data: form.lembrete_data || null,
     lembrete_mensagem: form.lembrete_mensagem || null,
     itens: itens.map((i) => ({
+      // Etapa 142 (C298, RN-142.01): o id do item GRAVADO vai junto — é o que diz ao servidor qual dos itens iguais saiu (sem ele,
+      // tirar o primeiro de dois do mesmo produto deixava o que ficou com as variáveis manuais e os campos do que saiu). Item
+      // incluído na tela vai sem a chave.
+      ...(i.id != null ? { id: i.id } : {}),
       descricao: i.descricao,
       quantidade: i.quantidade,
       unidade: i.unidade,

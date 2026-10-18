@@ -240,6 +240,9 @@ export default function PropostaForm() {
             : (precoTabela != null ? precoTabela : (Number(i.valor_unitario) || 0));
           const qtd = Number(i.quantidade) || 1;
           return {
+            // Etapa 142 (C298, RN-142.01): o id do item gravado fica no estado e volta no salvar (montarPayloadProposta) — é como o
+            // servidor sabe qual dos itens iguais o vendedor tirou.
+            id: i.id,
             descricao: i.descricao ?? '',
             quantidade: qtd,
             unidade: i.unidade ?? 'UN',

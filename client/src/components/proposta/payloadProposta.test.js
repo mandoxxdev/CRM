@@ -50,6 +50,22 @@ describe('montarPayloadProposta (RN-08)', () => {
     expect(naRede(montarPayloadProposta({ form: { ...formBase, motivo_nao_venda: 'CARO' }, itens: [], statusSalvar: 'rejeitada', valorTotal: 0, maxDesc: 0, exigeMotivo: true })).motivo_nao_venda).toBe('CARO');
   });
 
+  // Etapa 142 (RN-142.01, C298): o id do item gravado vai junto; o item incluído na tela vai sem a chave.
+  test('[RN-142.01] o item gravado leva o id; o novo vai sem a chave', () => {
+    const corpo = naRede(montarPayloadProposta({
+      form: formBase,
+      itens: [
+        { id: 12, descricao: 'P', quantidade: 1, unidade: 'UN', valor_unitario: 1, valor_total: 1, codigo_produto: 'P1', acessorios: [] },
+        { descricao: 'P', quantidade: 1, unidade: 'UN', valor_unitario: 1, valor_total: 1, codigo_produto: 'P1', acessorios: [] },
+        { id: null, descricao: 'Q', quantidade: 1, unidade: 'UN', valor_unitario: 1, valor_total: 1, codigo_produto: 'Q1', acessorios: [] },
+      ],
+      statusSalvar: 'rascunho', valorTotal: 3, maxDesc: 0, exigeMotivo: false
+    }));
+    expect(corpo.itens[0].id).toBe(12);
+    expect(Object.prototype.hasOwnProperty.call(corpo.itens[1], 'id')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(corpo.itens[2], 'id')).toBe(false);
+  });
+
   // Fase 5 (r3, K05): sem o `...form`, toda edicao de titulo, descricao, garantia... sumiria calada.
   test('[RN-08] os campos do formulário passam como estão (título, descrição, número, garantia, validade)', () => {
     const corpo = naRede(montar({ ...formBase, titulo: 'NOVO', descricao: 'D', garantia: '12 MESES', validade: '2027-01-01' }));
