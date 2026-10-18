@@ -6016,7 +6016,7 @@ app.put('/api/familias/:id/clausulas-modelo', authenticateToken, exigirComercial
 });
 
 // POST /api/propostas/:id/clausulas/inicializar — copia defaults para a tabela
-app.post('/api/propostas/:id/clausulas/inicializar', authenticateToken, exigirComercialNasPropostas, (req, res) => {
+app.post('/api/propostas/:id/clausulas/inicializar', authenticateToken, exigirComercialNasPropostas, propostaDasClausulasExiste((res, err) => responderClausulasNaoCopiadas(res, err, false)), (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id } = req.params;
   const usuarioId = req.user.id;
@@ -6077,7 +6077,7 @@ app.post('/api/propostas/:id/clausulas/resetar', authenticateToken, exigirComerc
 });
 
 // PUT /api/propostas/:id/clausulas/reordenar — deve vir ANTES de /:clausulaId
-app.put('/api/propostas/:id/clausulas/reordenar', authenticateToken, exigirComercialNasPropostas, (req, res) => {
+app.put('/api/propostas/:id/clausulas/reordenar', authenticateToken, exigirComercialNasPropostas, propostaDasClausulasExiste((res, err) => responderOrdemNaoGravada(res, err, 'leitura'), (req) => Array.isArray(req.body && req.body.ordem)), (req, res) => {
   if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
   const { id } = req.params;
   const { ordem } = req.body; // array de IDs na nova ordem: [3, 1, 2, ...]
@@ -9251,6 +9251,21 @@ function responderClausulasNaoCopiadas(res, err, ficouParte) {
 function responderOrdemNaoGravada(res, err, caso) {
   if (caso !== 'misturada' && isSqliteBusy(err)) return respondDbError(res, err, 'propostas:clausulas');
   return res.status(500).json({ error: msgOrdemNaoGravada(err.message, caso) });
+}
+// Etapa 148 (C342, RN-148.05, B968): copiar ou reordenar as clausulas de uma proposta que NAO existe -> 404 (antes: o inicializar dava 500
+// com a chave estrangeira e o reordenar 200, gravando o log de edicao de uma proposta inexistente). A inativa (ativo = 0) existe: segue.
+// `soSe(req)` falso pula a conferencia (o 400 do corpo do reordenar continua antes de qualquer leitura). Erro ao ler -> `responderErro`.
+const SQL_PROPOSTA_DAS_CLAUSULAS = 'SELECT id AS proposta_das_clausulas FROM propostas WHERE id = ?';
+function propostaDasClausulasExiste(responderErro, soSe) {
+  return (req, res, next) => {
+    if (soSe && !soSe(req)) return next();
+    if (!db) return res.status(503).json({ error: 'Banco de dados não disponível' });
+    db.get(SQL_PROPOSTA_DAS_CLAUSULAS, [req.params.id], (err, proposta) => {
+      if (err) return responderErro(res, err);
+      if (!proposta) return res.status(404).json({ error: 'Proposta não encontrada' });
+      return next();
+    });
+  };
 }
 function msgOrdemNaoGravada(detalhe, caso) {
   const base = `Erro ao gravar a nova ordem das cláusulas (${detalhe})`;

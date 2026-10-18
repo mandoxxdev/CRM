@@ -7,6 +7,9 @@
  *   RN-147.06  PUT /api/propostas/:id/clausulas/reordenar: le a ordem atual, grava em sequencia; a que falha devolve a ordem lida -> 500;
  *              a devolucao que falha -> a frase da ordem misturada; a leitura que falha -> "Nada foi alterado"
  *
+ *   RN-148.05  (Etapa 148, C342) as duas, de uma proposta que NAO existe -> 404 "Proposta não encontrada" (antes: 500 da chave estrangeira /
+ *              200 com log de edicao); a inativa existe e segue; o erro ao ler a proposta -> a frase de cada rota (503 no BUSY)
+ *
  * A falha e REAL: gatilhos do SQLite gravados por fora, restritos a uma proposta-alvo (tabela e147_alvo), passam pelo statement preparado
  * de antes desta etapa e pelo `db.run` de agora. A leitura da ordem atual falha pelo FALHA_SQL_INJETADA (um reboot).
  *
@@ -335,6 +338,57 @@ test('[RN-147.06, Fase 5 r1 M-2] ids escritos como texto ("6.0", " 5") que o ban
   assert.strictEqual(s2, 200);
   const depois = await clausulas(pid);
   assert.deepStrictEqual([a, b, c].map((k) => depois.find((d) => d.id === k.id).ordem), [0, 1, 2]);
+});
+
+// ── Etapa 148 (C342, RN-148.05): a proposta que nao existe ────────────────────────────────────────────────────────────────
+const NAO_ENCONTRADA = { error: 'Proposta não encontrada' };
+const logsDoId = (pid) => all('SELECT tipo FROM proposta_edicoes_log WHERE proposta_id = ?', [pid]);
+
+test('[RN-148.05, C342] inicializar e reordenar de uma proposta que nao existe: 404 "Proposta não encontrada", nada gravado e nenhum log de edicao', async () => {
+  const fantasma = (await all('SELECT COALESCE(MAX(id), 0) + 1000 AS id FROM propostas'))[0].id;
+  const [s1, x1] = await responde('POST', `/propostas/${fantasma}/clausulas/inicializar`);
+  const [s2, x2] = await responde('PUT', `/propostas/${fantasma}/clausulas/reordenar`, { ordem: [1, 2, 3] });
+  assert.deepStrictEqual([s1, x1, s2, x2], [404, NAO_ENCONTRADA, 404, NAO_ENCONTRADA]);
+  await pausa(300);
+  assert.deepStrictEqual(await clausulas(fantasma), []);
+  assert.deepStrictEqual(await logsDoId(fantasma), [], 'o reordenar de antes gravava o log de uma proposta que nao existe');
+  // a validacao do corpo continua antes da conferencia (sem leitura do banco)
+  const [s3, x3] = await responde('PUT', `/propostas/${fantasma}/clausulas/reordenar`, { ordem: 'x' });
+  assert.deepStrictEqual([s3, x3], [400, { error: 'ordem deve ser um array de IDs' }]);
+});
+
+test('[RN-148.05, B968] a metade positiva: a proposta INATIVA existe — inicializar copia as clausulas e reordenar grava, como antes', async () => {
+  const pid = await proposta('Inativa 148');
+  await run('UPDATE propostas SET ativo = 0 WHERE id = ?', [pid]);
+  const [s, x] = await responde('POST', `/propostas/${pid}/clausulas/inicializar`);
+  assert.deepStrictEqual([s, x && x.total], [200, N_DEFAULT], JSON.stringify(x));
+  const antes = await clausulas(pid);
+  const nova = antes.map((c) => c.id).reverse();
+  const [s2, x2] = await responde('PUT', `/propostas/${pid}/clausulas/reordenar`, { ordem: nova });
+  assert.deepStrictEqual([s2, x2], [200, { ok: true }]);
+  const depois = await clausulas(pid);
+  assert.deepStrictEqual(nova.map((id) => depois.find((d) => d.id === id).ordem), nova.map((_, i) => i));
+});
+
+test('[RN-148.05] o erro ao ler a proposta: inicializar 500 "Nenhuma clausula foi gravada", reordenar 500 "A ordem não foi alterada"; no BUSY, 503', async () => {
+  const pid = await proposta('Ler proposta falha');
+  const pOrd = await propostaInicializada('Ler proposta falha ord');
+  const antes = await clausulas(pOrd);
+  const FALHA = 'proposta_das_clausulas FROM propostas';
+  await comFalha({ FALHA_SQL_INJETADA: FALHA, FALHA_SQL_METODOS: 'get', FALHA_SQL_MSG: 'falha da proposta' }, async () => {
+    const [s1, x1] = await responde('POST', `/propostas/${pid}/clausulas/inicializar`);
+    const [s2, x2] = await responde('PUT', `/propostas/${pOrd}/clausulas/reordenar`, { ordem: antes.map((c) => c.id).reverse() });
+    assert.deepStrictEqual([s1, x1, s2, x2], [500, { error: INI_NADA('falha da proposta') }, 500, { error: ORD_LEITURA('falha da proposta') }]);
+    assert.ok(/\[falha injetada\] SELECT id AS proposta_das_clausulas/.test(fs.readFileSync(logArq, 'utf8')), 'a falha injetada nao casou com a conferencia (o teste nao provou nada)');
+    await pausa(200);
+    assert.deepStrictEqual([await clausulas(pid), await clausulas(pOrd)], [[], antes]);
+  });
+  await comFalha({ FALHA_SQL_INJETADA: FALHA, FALHA_SQL_METODOS: 'get', FALHA_SQL_MSG: BUSY }, async () => {
+    const [s1, x1] = await responde('POST', `/propostas/${pid}/clausulas/inicializar`);
+    const [s2, x2] = await responde('PUT', `/propostas/${pOrd}/clausulas/reordenar`, { ordem: antes.map((c) => c.id).reverse() });
+    assert.deepStrictEqual([s1, x1, s2, x2], [503, CORPO_503, 503, CORPO_503]);
+    assert.deepStrictEqual([await clausulas(pid), await clausulas(pOrd)], [[], antes]);
+  });
 });
 
 (async () => {
