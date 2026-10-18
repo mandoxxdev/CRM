@@ -223,8 +223,9 @@ const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
 const { getClausulasDefault, resolverClausulasParaPreview } = require('./clausulasDefault');
-// chaveDe: a religação das variáveis manuais no PUT /api/propostas/:id usa (Etapa 138, C296 — sem ela o salvamento nunca respondia).
-const { diffItensParaLog, chaveDe, nomeDe, resumoLado, mesclarItensPreservandoCampos } = require('./propostaItensDiff');
+const { diffItensParaLog, nomeDe, resumoLado, mesclarItensPreservandoCampos } = require('./propostaItensDiff');
+// Etapa 142 (C298, C309): as variáveis manuais × os itens — a religação do PUT, o reparo da leitura e a gravação do reparo (puros).
+const { planoReligacao, repararVariaveisManuais, planoMaterializacao } = require('./variaveisManuaisItens');
 const { presente, montarSetParcial } = require('./atualizacaoParcial');
 const { lerMargemDesconto, MSG_MARGEM_INVALIDA } = require('./margemDesconto');
 // Etapa 140 (C301-C303): quem libera o desconto acima de 5% e com que aprovacao ele casa.
@@ -1565,6 +1566,15 @@ function initializeDatabase(onReadyCallback) {
   )`, (err) => {
     if (err) console.error('❌ Erro ao criar tabela proposta_variaveis_manuais:', err);
     else console.log('✅ Tabela proposta_variaveis_manuais criada/verificada');
+
+    // item_removido_em (Etapa 142, RN-142.06/08): a variável do item que SAIU no salvamento da proposta é aposentada aqui, nunca apagada —
+    // não aparece mais no documento nem passa para outro item (nem para o mesmo produto incluído de novo). Desfazer = limpar a coluna.
+    // Independente do ALTER do item_chave abaixo (aquele dá return no erro).
+    db.run('ALTER TABLE proposta_variaveis_manuais ADD COLUMN item_removido_em TEXT', (errRem) => {
+      const jaTem = errRem && String(errRem.message || '').indexOf('duplicate column') !== -1;
+      if (errRem && !jaTem) console.error('❌ Erro ao adicionar item_removido_em:', errRem.message);
+      else console.log('✅ Coluna item_removido_em verificada em proposta_variaveis_manuais');
+    });
 
     // item_chave: QUAL produto o valor pertence, gravado junto do valor.
     // Sem isto o valor só sabe apontar para proposta_itens.id — e o salvamento da proposta
@@ -6272,6 +6282,38 @@ app.delete('/api/propostas/:id/fotos/:fotoId', authenticateToken, (req, res) => 
   });
 });
 
+// Roda [sql, params] um depois do outro (db.run passa pela fila de escrita); para no primeiro erro e o devolve.
+function executarEmSequencia(passos, feito) {
+  let i = 0;
+  const proximo = (err) => {
+    if (err || i >= passos.length) return feito(err || null);
+    const [sql, params] = passos[i++];
+    db.run(sql, params, (e) => proximo(e));
+  };
+  proximo(null);
+}
+
+// Etapa 142 (RN-142.11/12): grava o reparo das variáveis manuais órfãs (variaveisManuaisItens.planoMaterializacao) contra os itens
+// atuais — a órfã que o reparo põe num item passa a apontar para ele; com `aposentar`, a que não cabe em ninguém é aposentada.
+// Erro de banco aqui não impede a gravação que vem depois (o reparo da leitura continua valendo) — só é registrado.
+function materializarVariaveisManuais(propostaId, itensAtuais, aposentar, feito) {
+  db.all('SELECT * FROM proposta_variaveis_manuais WHERE proposta_id = ?', [propostaId], (errVm, linhas) => {
+    if (errVm || !linhas || linhas.length === 0) {
+      if (errVm) console.error('[variaveis manuais] leitura para materializar:', errVm.message);
+      return feito();
+    }
+    const plano = planoMaterializacao(linhas, itensAtuais);
+    const passos = plano.mover.map(([linhaId, itemId]) => ["UPDATE proposta_variaveis_manuais SET item_id = ?, updated_at = datetime('now') WHERE id = ? AND proposta_id = ?", [itemId, linhaId, propostaId]]);
+    if (aposentar) {
+      plano.aposentar.forEach((linhaId) => passos.push(["UPDATE proposta_variaveis_manuais SET item_removido_em = datetime('now'), updated_at = datetime('now') WHERE id = ? AND proposta_id = ? AND item_removido_em IS NULL", [linhaId, propostaId]]));
+    }
+    executarEmSequencia(passos, (err) => {
+      if (err) console.error('[variaveis manuais] materializar:', err.message);
+      feito();
+    });
+  });
+}
+
 // PUT /api/propostas/:id/variaveis-manuais — grava os valores preenchidos direto na
 // proposta (variáveis técnicas do tipo manual_proposta). Upsert por (item, chave);
 // valor vazio remove a linha (o campo volta a renderizar como espaço em branco).
@@ -6281,30 +6323,38 @@ app.put('/api/propostas/:id/variaveis-manuais', authenticateToken, (req, res) =>
   const valores = Array.isArray(req.body && req.body.valores) ? req.body.valores : null;
   if (!valores) return res.status(400).json({ error: 'valores deve ser um array de {item_id, chave, valor}' });
 
-  // Grava também QUAL item é esse (item_chave), lendo direto da linha do item. É o que
-  // permite reencontrar o valor depois que o salvamento da proposta recria os itens com
-  // ids novos — ver o comentário da coluna, na criação da tabela.
-  const upsert = db.prepare(`
-    INSERT INTO proposta_variaveis_manuais (proposta_id, item_id, chave, valor, item_chave)
-    VALUES (?, ?, ?, ?, (
-      SELECT COALESCE(NULLIF(TRIM(pi.codigo_produto), ''), NULLIF(TRIM(pi.descricao), ''))
-        FROM proposta_itens pi WHERE pi.id = ?
-    ))
-    ON CONFLICT(proposta_id, item_id, chave)
-    DO UPDATE SET valor = excluded.valor, item_chave = excluded.item_chave, updated_at = datetime('now')
-  `);
-  const remover = db.prepare('DELETE FROM proposta_variaveis_manuais WHERE proposta_id = ? AND item_id = ? AND chave = ?');
-  valores.forEach((v) => {
-    if (!v || v.chave == null || v.item_id == null) return;
-    const valor = String(v.valor ?? '').trim();
-    if (valor) upsert.run([id, v.item_id, String(v.chave), valor, v.item_id]);
-    else remover.run([id, v.item_id, String(v.chave)]);
-  });
-  upsert.finalize((errU) => {
-    remover.finalize((errR) => {
-      const err = errU || errR;
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ ok: true });
+  // Etapa 142 (RN-142.12): antes de gravar, o reparo da leitura vira gravação (a órfã que o documento mostrou num item passa a apontar
+  // para ele) — senão apagar no preview um valor que veio do reparo não apagava nada e ele voltava; e a órfã continuava viva para cair
+  // no produto incluído depois. E só grava para item que É da proposta: o editor aberto numa aba velha manda ids que não existem mais
+  // (antes criava uma órfã sem identidade, ou apagava o item_chave da linha aposentada).
+  db.all('SELECT id, codigo_produto, descricao FROM proposta_itens WHERE proposta_id = ? ORDER BY id', [id], (errItens, itensDaProposta) => {
+    if (errItens) return res.status(500).json({ error: errItens.message });
+    const idsDaProposta = new Set((itensDaProposta || []).map((i) => String(i.id)));
+    materializarVariaveisManuais(id, itensDaProposta || [], false, () => {
+      // Grava também QUAL item é esse (item_chave), lendo direto da linha do item — o que permite reencontrar o valor depois que o
+      // salvamento da proposta recria os itens com ids novos (ver o comentário da coluna, na criação da tabela).
+      const passos = [];
+      valores.forEach((v) => {
+        if (!v || v.chave == null || v.item_id == null) return;
+        if (!idsDaProposta.has(String(v.item_id))) return; // item que não é desta proposta (aba velha): ignorado
+        const valor = String(v.valor ?? '').trim();
+        if (valor) {
+          passos.push([`INSERT INTO proposta_variaveis_manuais (proposta_id, item_id, chave, valor, item_chave)
+            VALUES (?, ?, ?, ?, (
+              SELECT COALESCE(NULLIF(TRIM(pi.codigo_produto), ''), NULLIF(TRIM(pi.descricao), ''))
+                FROM proposta_itens pi WHERE pi.id = ?
+            ))
+            ON CONFLICT(proposta_id, item_id, chave)
+            DO UPDATE SET valor = excluded.valor, item_chave = COALESCE(excluded.item_chave, item_chave), item_removido_em = NULL,
+                          updated_at = datetime('now')`, [id, v.item_id, String(v.chave), valor, v.item_id]]);
+        } else {
+          passos.push(['DELETE FROM proposta_variaveis_manuais WHERE proposta_id = ? AND item_id = ? AND chave = ?', [id, v.item_id, String(v.chave)]]);
+        }
+      });
+      executarEmSequencia(passos, (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ ok: true });
+      });
     });
   });
 });
@@ -8552,6 +8602,10 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
               });
             }
 
+            // Etapa 142 (RN-142.11): antes de apagar os itens, grava o que o reparo da leitura mostraria — a órfã que o reparo põe num item
+            // atual passa a apontar para ele (e anda com o par logo abaixo); a que não cabe em ninguém é aposentada. Sem isto a órfã que
+            // sobrava (de antes da 142, ou de um salvamento que falhou) ia parar no produto incluído depois.
+            materializarVariaveisManuais(id, itensAtuais || [], true, () => {
             // Deletar itens antigos e inserir novos
             db.run('DELETE FROM proposta_itens WHERE proposta_id = ?', [id], (err) => {
               if (err) {
@@ -8612,60 +8666,22 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
                 diffItens.editados.forEach((e) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_editado', e.nome, null, resumoLado(e.mudancas, 'antes'), resumoLado(e.mudancas, 'depois')));
               });
 
-              // As variáveis manuais (proposta_variaveis_manuais) são chaveadas por
-              // item_id, e o bloco acima APAGA e REINSERE todos os itens — que voltam com
-              // ids NOVOS. Sem religar, os valores digitados no preview viram órfãos e a
-              // proposta reabre com os campos em branco.
-              // Sintoma relatado (30/07/2026): "salvo e ficam, mas quando adiciono outro
-              // produto, elas zeram" — salvar sem mexer nos itens não mudava id nenhum, por
-              // isso parecia intermitente.
-              // A religação usa a MESMA identidade que a mesclagem e a auditoria já usam
-              // (chaveDe = codigo_produto || descricao || nome), com o índice da ocorrência
-              // para não trocar os valores entre dois itens iguais na mesma proposta.
+              // As variáveis manuais (proposta_variaveis_manuais) são chaveadas por item_id, e o bloco acima APAGA e REINSERE todos os
+              // itens — que voltam com ids NOVOS. Sem religar, os valores digitados no preview viram órfãos (relato de 30/07/2026: "quando
+              // adiciono outro produto, elas zeram").
+              // Etapa 142 (C298): a religação usa o MESMO pareamento da mesclagem (parearItens): pelo id do item gravado, que a tela manda
+              // (RN-142.01/02), e só sem id pela posição entre os iguais (RN-142.03). Antes era sempre a posição: com o mesmo produto duas
+              // vezes, tirar o PRIMEIRO deixava o que ficou com o valor do que saiu. O item que saiu tem as variáveis APOSENTADAS
+              // (item_removido_em), nunca apagadas — nada se perde se o casamento falhar, mas também não volta para outro item.
               const religarVariaveisManuais = (feito) => {
-                const antigos = itensAtuais || [];
-                if (antigos.length === 0) return feito();
-                const chavesComOrdinal = (lista) => {
-                  const contador = new Map();
-                  return lista.map((it) => {
-                    const base = chaveDe(it);
-                    const n = (contador.get(base) || 0) + 1;
-                    contador.set(base, n);
-                    return base + '#' + n;
-                  });
-                };
-                db.all('SELECT item_id, chave, valor FROM proposta_variaveis_manuais WHERE proposta_id = ?', [id], (errVm, valores) => {
-                  if (errVm || !valores || valores.length === 0) return feito();
-                  const deIdAntigo = new Map();
-                  chavesComOrdinal(antigos).forEach((k, i) => deIdAntigo.set(String(antigos[i].id), k));
-                  db.all('SELECT id, codigo_produto, descricao FROM proposta_itens WHERE proposta_id = ? ORDER BY id ASC', [id], (errNovos, novos) => {
-                    if (errNovos || !novos || novos.length === 0) return feito();
-                    const paraIdNovo = new Map();
-                    chavesComOrdinal(novos).forEach((k, i) => paraIdNovo.set(k, novos[i].id));
-                    // NUNCA apagar. A primeira versão disto fazia DELETE de todos os
-                    // valores e reinseria só os religados: bastava o casamento falhar por
-                    // qualquer motivo (código do produto mudado, item sem código, formato
-                    // inesperado) para APAGAR tudo e não repor nada — perda total, e em
-                    // TODO salvamento, não só ao mexer nos itens.
-                    // Agora só reaponta o item_id de quem casou. O que não casar fica
-                    // intocado: não renderiza (o item não existe mais), mas também não é
-                    // destruído. Não volta sozinho se o produto for readicionado — a
-                    // identidade vive na linha do ITEM, que foi apagada; recuperar exigiria
-                    // gravar essa identidade junto do valor.
-                    const paraAtualizar = [];
-                    deIdAntigo.forEach((k, idAntigo) => {
-                      const idNovo = paraIdNovo.get(k);
-                      if (idNovo != null && String(idNovo) !== String(idAntigo)) {
-                        paraAtualizar.push([idNovo, id, idAntigo]);
-                      }
-                    });
-                    if (paraAtualizar.length === 0) return feito();
-                    // OR REPLACE por causa do UNIQUE(proposta_id, item_id, chave): se já
-                    // existir linha no destino, a religada vence.
-                    const upd = db.prepare("UPDATE OR REPLACE proposta_variaveis_manuais SET item_id = ?, updated_at = datetime('now') WHERE proposta_id = ? AND item_id = ?");
-                    paraAtualizar.forEach((r) => upd.run(r));
-                    upd.finalize(() => feito());
-                  });
+                db.all('SELECT id FROM proposta_itens WHERE proposta_id = ? ORDER BY id ASC', [id], (errNovos, novos) => {
+                  if (errNovos) return feito();
+                  const { mover, aposentar } = planoReligacao(itensAtuais || [], itensNovos, (novos || []).map((n) => n.id));
+                  const passos = [];
+                  // OR REPLACE por causa do UNIQUE(proposta_id, item_id, chave): o destino é sempre um id recém-criado (sem linha).
+                  mover.forEach(([velho, novo]) => passos.push(["UPDATE OR REPLACE proposta_variaveis_manuais SET item_id = ?, updated_at = datetime('now') WHERE proposta_id = ? AND item_id = ?", [novo, id, velho]]));
+                  aposentar.forEach((velho) => passos.push(["UPDATE proposta_variaveis_manuais SET item_removido_em = datetime('now'), updated_at = datetime('now') WHERE proposta_id = ? AND item_id = ? AND item_removido_em IS NULL", [id, velho]]));
+                  executarEmSequencia(passos, () => feito());
                 });
               };
 
@@ -8689,6 +8705,7 @@ app.put('/api/propostas/:id', authenticateToken, (req, res) => {
                 });
               });
             });
+            }); // fim do materializarVariaveisManuais
           }
         );
         }); // Fim da verificação de número duplicado
@@ -9293,46 +9310,7 @@ function carregarVariaveisDasFamilias(templateConfig, callback) {
 // Também trata 'Geral' como linha padrão: é o balde que o POST usa quando `familia` vem
 // vazio ("WHERE familia IS NULL OR familia = 'Geral'"), mas a leitura antiga só aceitava
 // NULL ou '', descartando justamente a configuração default.
-// Reaponta valores manuais orfaos usando a identidade do item gravada na propria linha
-// (item_chave). E o CONSERTO NA LEITURA: mesmo que a religacao no salvamento nao tenha
-// acontecido — ou tenha falhado — o valor volta a casar com o item certo aqui.
-// Devolve as linhas ja com item_id corrigido; nao escreve no banco (leitura nao deve
-// depender de escrita para funcionar).
-function repararVariaveisManuais(vmRows, itens) {
-  if (!Array.isArray(vmRows) || vmRows.length === 0) return vmRows || [];
-  const lista = Array.isArray(itens) ? itens : [];
-  const idsAtuais = new Set(lista.map((i) => String(i.id)));
-  // Se nenhuma linha esta orfa, nao ha o que consertar.
-  if (vmRows.every((v) => idsAtuais.has(String(v.item_id)))) return vmRows;
-
-  const identidade = (it) => String(
-    (it.codigo_produto && String(it.codigo_produto).trim())
-    || (it.descricao && String(it.descricao).trim())
-    || (it.nome && String(it.nome).trim())
-    || ''
-  );
-  // Indice da ocorrencia, para nao trocar valores entre dois itens iguais na proposta.
-  const contador = new Map();
-  const porChave = new Map();
-  lista.forEach((it) => {
-    const base = identidade(it);
-    if (!base) return;
-    const n = (contador.get(base) || 0) + 1;
-    contador.set(base, n);
-    porChave.set(base + '#' + n, it.id);
-  });
-
-  const usados = new Map();
-  return vmRows.map((v) => {
-    if (idsAtuais.has(String(v.item_id))) return v;
-    const base = String(v.item_chave || '').trim();
-    if (!base) return v; // linha antiga, sem identidade gravada: nada a fazer
-    const n = (usados.get(base) || 0) + 1;
-    usados.set(base, n);
-    const novoId = porChave.get(base + '#' + n);
-    return novoId != null ? { ...v, item_id: novoId } : v;
-  });
-}
+// repararVariaveisManuais (o conserto na leitura das variáveis manuais órfãs) mora em server/variaveisManuaisItens.js desde a Etapa 142.
 
 function resolverTemplateConfig(rows, familiaTemplate) {
   const lista = (Array.isArray(rows) ? rows.slice() : []).sort((a, b) => (b.id || 0) - (a.id || 0));
@@ -9570,7 +9548,7 @@ app.get('/api/propostas/:id/premium', authenticateToken, (req, res) => {
           if (!errF && Array.isArray(fotosRows) && fotosRows.length > 0) templateConfig.fotos_proposta = fotosRows;
 
           // Valores das variáveis "Manual na Proposta" preenchidos no preview editável
-          db.all('SELECT item_id, chave, valor, item_chave FROM proposta_variaveis_manuais WHERE proposta_id = ?', [id], (errVM, vmRows) => {
+          db.all('SELECT * FROM proposta_variaveis_manuais WHERE proposta_id = ?', [id], (errVM, vmRows) => {
           if (errVM) console.error('Erro ao buscar variáveis manuais (ignorado, preview segue):', errVM.message);
           if (!errVM && Array.isArray(vmRows) && vmRows.length > 0) {
             // Conserta aqui quem ficou órfão por troca de id dos itens.
@@ -9974,7 +9952,7 @@ app.get('/api/propostas/:id/pdf', authenticateToken, async (req, res) => {
 
     // Valores das variáveis "Manual na Proposta" preenchidos no preview editável
     const variaveisManuaisPdf = await new Promise((resolve) => {
-      db.all('SELECT item_id, chave, valor, item_chave FROM proposta_variaveis_manuais WHERE proposta_id = ?', [id], (err, rows) => resolve(rows || []));
+      db.all('SELECT * FROM proposta_variaveis_manuais WHERE proposta_id = ?', [id], (err, rows) => resolve(rows || []));
     });
     if (variaveisManuaisPdf.length > 0) {
       templateConfig = templateConfig || {};
