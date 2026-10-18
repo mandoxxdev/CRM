@@ -355,6 +355,51 @@ test('[T5, RN-146.01/02/03/04] cria, preenche a variavel, salva trocando o clien
   assert.deepStrictEqual({ ...(await estado(x1.id)), totalItens: 0 }, { ...e, totalItens: 0 });
 });
 
+// ── Fase 5 ───────────────────────────────────────────────────────────────────────────────
+test('[RN-146.02, Fase 5 r1/r2] dois salvamentos ao mesmo tempo nunca deixam a proposta sem itens (a 1a versao: 0 itens, os dois 200)', async () => {
+  const nomes = Array.from({ length: 20 }, (_, i) => 'C' + i);
+  for (let rodada = 0; rodada < 3; rodada++) {
+    const p = await novaProposta(nomes);
+    const corpo = { itens: corpoDosItens(p.ids, nomes, ['NOVO']) };
+    const [a, b] = await Promise.all([responde('PUT', `/propostas/${p.id}`, corpo), responde('PUT', `/propostas/${p.id}`, corpo)]);
+    assert.deepStrictEqual([a[0], b[0]], [200, 200], JSON.stringify([a[1], b[1]]));
+    const n = (await descricoes(p.id)).length;
+    assert.ok(n >= 21, `rodada ${rodada}: a proposta ficou com ${n} itens (esperado pelo menos os 21 de um dos salvamentos)`);
+  }
+});
+
+test('[RN-146.02, Fase 5 r3 R9] o salvamento sem mudanca de itens nem de valor nao grava revisao', async () => {
+  const p = await novaProposta();
+  const antes = await estado(p.id);
+  const [s, x] = await responde('PUT', `/propostas/${p.id}`, { titulo: 'So o titulo' });
+  assert.strictEqual(s, 200, JSON.stringify(x));
+  const e = await estado(p.id);
+  assert.deepStrictEqual([e.revisoes, e.prop.revisao, e.prop.titulo], [antes.revisoes, antes.prop.revisao, 'SO O TITULO']);
+});
+
+test('[RN-146.02, Fase 5 r3 R14] o salvamento grava os acessorios do item e a lista vazia os limpa', async () => {
+  const p = await novaProposta(['A']);
+  const ac = [{ descricao: 'ACX', quantidade: 2, valor_unitario: 5 }];
+  const [s, x] = await responde('PUT', `/propostas/${p.id}`, { itens: [{ id: p.ids[0], descricao: 'A', acessorios: ac }] });
+  assert.strictEqual(s, 200, JSON.stringify(x));
+  let [it] = await all('SELECT id, acessorios FROM proposta_itens WHERE proposta_id = ?', [p.id]);
+  assert.deepStrictEqual(JSON.parse(it.acessorios), ac);
+  const [s2, x2] = await responde('PUT', `/propostas/${p.id}`, { itens: [{ id: it.id, descricao: 'A', acessorios: [] }] });
+  assert.strictEqual(s2, 200, JSON.stringify(x2));
+  [it] = await all('SELECT acessorios FROM proposta_itens WHERE proposta_id = ?', [p.id]);
+  assert.deepStrictEqual(JSON.parse(it.acessorios), []);
+});
+
+test('[RN-146.04, Fase 5 r3 R17] o cliente e conferido pela mesma regua que o grava ("99999abc" e "0x1869F" sao o 99999)', async () => {
+  const p = await novaProposta();
+  const antes = await estado(p.id);
+  for (const v of ['99999abc', '0x1869F', ' 99999']) {
+    const [s, x] = await responde('PUT', `/propostas/${p.id}`, { cliente_id: v });
+    assert.deepStrictEqual([s, x], [400, { error: NAO_CLIENTE(99999) }], JSON.stringify(v));
+  }
+  assert.deepStrictEqual(await estado(p.id), antes);
+});
+
 // ── as limpezas, com a falha injetada (reboots) ──────────────────────────────────────────
 test('[RN-146.01] a limpeza da criacao que falha: 500 dizendo que a proposta ficou incompleta', async () => {
   await reboot({ FALHA_SQL_INJETADA: '^INSERT INTO proposta_itens|^DELETE FROM propostas WHERE', FALHA_SQL_PULAR: '2',
@@ -387,11 +432,12 @@ test('[RN-146.02] os antigos que nao saem: 500 "continuam os de antes", o cabeca
   await reboot({});
   const p = await novaProposta();
   const antes = await estado(p.id);
-  await reboot({ FALHA_SQL_INJETADA: '^DELETE FROM proposta_itens WHERE proposta_id = \\?( AND id NOT IN |$)' });
+  await reboot({ FALHA_SQL_INJETADA: '^DELETE FROM proposta_itens WHERE id IN ' });
   const [s, x] = await responde('PUT', `/propostas/${p.id}`, { titulo: 'Salvo', itens: corpoDosItens(p.ids, ['X', 'Y', 'Z'], ['W']) });
   assert.deepStrictEqual([s, x], [500, { error: SALVAR_ANTIGOS(INJ) }]);
   const e = await estado(p.id);
   assert.deepStrictEqual([e.prop.titulo, e.itens], ['SALVO', antes.itens], 'o cabecalho devia estar salvo e os itens os de antes');
+  assert.strictEqual(e.edicoes, antes.edicoes, 'Fase 5 r3 R10: o historico de itens foi gravado num salvamento cujos itens nao trocaram');
   for (const vazio of [[], null]) {
     const [s2, x2] = await responde('PUT', `/propostas/${p.id}`, { itens: vazio });
     assert.deepStrictEqual([s2, x2], [500, { error: SALVAR_ANTIGOS(INJ) }], `itens: ${JSON.stringify(vazio)}`);
@@ -409,6 +455,64 @@ test('[RN-146.02, RN-146.04] o UPDATE que falha depois dos itens novos: a respos
   assert.deepStrictEqual(await estado(p.id), antes, 'o UPDATE que falhou deixou itens novos ou a revisao');
   const [s2, x2] = await responde('PUT', `/propostas/${p.id}`, { cliente_id: ctx.outroCliente });
   assert.deepStrictEqual([s2, x2], [500, { error: `Erro ao verificar o cliente: ${INJ}` }]);
+  await reboot({});
+});
+
+// ── Fase 5 r3: os ramos de limpeza que nenhum cenario percorria ──────────────────────────
+const DUP_REV = (n) => `O número da proposta "${n}" já está em uso por outra proposta. Por favor, use outro número ou deixe o sistema gerar automaticamente.`;
+async function comRev01Ocupado() {
+  const p = await novaProposta();
+  const rev01 = p.numero.replace(/REV00$/, 'REV01');
+  const [s, x] = await responde('POST', '/propostas', { titulo: 'Ocupa REV01', cliente_id: ctx.clienteId, numero_proposta: rev01 });
+  assert.deepStrictEqual([s, x && x.numero_proposta], [200, rev01]);
+  return { ...p, rev01 };
+}
+
+test('[RN-146.02, Fase 5 r3 R1-R3] a recusa depois dos itens novos com a limpeza deles falhando: "itens repetidos" com a frase da recusa e o numero gravado', async () => {
+  await reboot({});
+  const p = await comRev01Ocupado();
+  await reboot({ FALHA_SQL_INJETADA: '^DELETE FROM proposta_itens WHERE proposta_id = \\? AND id IN ', FALHA_SQL_MSGS: JSON.stringify({ '^DELETE FROM proposta_itens': 'limpeza presa' }) });
+  const [s, x] = await responde('PUT', `/propostas/${p.id}`, { itens: corpoDosItens(p.ids, ['X', 'Y', 'Z'], ['W']) });
+  assert.deepStrictEqual([s, x], [500, { error: SALVAR_REPETIDOS(DUP_REV(p.rev01), p.numero) }]);
+  assert.strictEqual((await descricoes(p.id)).length, 7, 'os 3 antigos e os 4 novos que nao sairam');
+});
+
+test('[RN-146.02, Fase 5 r3 R4/R5] os antigos que nao saem e os novos tambem nao: "itens repetidos" com o numero ja gravado (REV01)', async () => {
+  await reboot({});
+  const p = await novaProposta();
+  await reboot({ FALHA_SQL_INJETADA: '^DELETE FROM proposta_itens WHERE (id IN |proposta_id = \\? AND id IN )' });
+  const [s, x] = await responde('PUT', `/propostas/${p.id}`, { itens: corpoDosItens(p.ids, ['X', 'Y', 'Z'], ['W']) });
+  const rev01 = p.numero.replace(/REV00$/, 'REV01');
+  assert.deepStrictEqual([s, x], [500, { error: SALVAR_REPETIDOS(INJ, rev01) }]);
+  const e = await estado(p.id);
+  assert.deepStrictEqual([e.prop.numero_proposta, e.itens.length], [rev01, 7]);
+});
+
+test('[RN-146.02, Fase 5 r3 R20/R21] o 400 do UNIQUE e o 500 da leitura do numero (os dois ramos) desfazem os itens novos', async () => {
+  await reboot({});
+  const p = await novaProposta();
+  const antes = await estado(p.id);
+  await reboot({ FALHA_SQL_INJETADA: '^UPDATE propostas SET', FALHA_SQL_MSG: 'SQLITE_CONSTRAINT: UNIQUE constraint failed: propostas.numero_proposta' });
+  const [s, x] = await responde('PUT', `/propostas/${p.id}`, { titulo: 'T', itens: corpoDosItens(p.ids, ['X', 'Y', 'Z'], ['W']) });
+  const rev01 = p.numero.replace(/REV00$/, 'REV01');
+  assert.deepStrictEqual([s, x], [400, { error: `O número da proposta "${rev01}" já está em uso. Por favor, use outro número ou deixe o sistema gerar automaticamente.` }]);
+  assert.deepStrictEqual(await estado(p.id), antes, 'o 400 do UNIQUE deixou itens novos');
+  await reboot({ FALHA_SQL_INJETADA: '^SELECT id FROM propostas WHERE numero_proposta' });
+  // sem revisao (os mesmos itens, um numero novo): o ramo que confere o numero enviado
+  const [s1, x1] = await responde('PUT', `/propostas/${p.id}`, { numero_proposta: 'E146-NOVO-REV00', itens: corpoDosItens(p.ids, ['X', 'Y', 'Z']) });
+  assert.deepStrictEqual([s1, x1], [500, { error: `Erro ao verificar número da proposta: ${INJ}` }]);
+  assert.deepStrictEqual(await estado(p.id), antes, 'o 500 do numero (sem revisao) deixou itens novos');
+  // com revisao (item novo): o teste de dentro da gravacao
+  const [s2, x2] = await responde('PUT', `/propostas/${p.id}`, { itens: corpoDosItens(p.ids, ['X', 'Y', 'Z'], ['W']) });
+  assert.deepStrictEqual([s2, x2], [500, { error: `Erro ao verificar número da proposta: ${INJ}` }]);
+  assert.deepStrictEqual(await estado(p.id), antes, 'o 500 do numero (com revisao) deixou itens novos');
+});
+
+test('[RN-146.03, Fase 5 r3 R22] a copia cuja leitura dos itens falha: 500 com a frase e nenhuma copia', async () => {
+  await reboot({ FALHA_SQL_INJETADA: '^SELECT \\* FROM proposta_itens WHERE proposta_id = \\? ORDER BY id', FALHA_SQL_METODOS: 'all' });
+  const p = (await all('SELECT id FROM propostas ORDER BY id LIMIT 1'))[0];
+  const [s, x] = await semNada(() => responde('POST', `/propostas/${p.id}/clone`, {}), 'clone');
+  assert.deepStrictEqual([s, x], [500, { error: CRIACAO_NADA(INJ) }]);
   await reboot({});
 });
 

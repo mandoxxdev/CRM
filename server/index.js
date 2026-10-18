@@ -8656,12 +8656,16 @@ app.put('/api/propostas/:id', authenticateToken, exigirComercialNasPropostas, (r
             // sobrava (de antes da 142, ou de um salvamento que falhou) ia parar no produto incluído depois. (Os itens novos já gravados
             // não entram: o reparo é contra os itens LIDOS.)
             materializarVariaveisManuais(id, itensAtuais || [], true, () => {
-            // Etapa 146 (RN-146.02): os novos já estão gravados (acima, antes de tudo); aqui saem os ANTIGOS — todo item da proposta que não
-            // é um dos novos (pela lista: um PUT simultâneo não leva os novos deste). Sem novos (`itens: []`/`null`, contrato da 138): todos.
-            const apagarAntigos = idsNovos.length > 0
-              ? ['DELETE FROM proposta_itens WHERE proposta_id = ? AND id NOT IN (SELECT value FROM json_each(?))', [id, JSON.stringify(idsNovos)]]
-              : ['DELETE FROM proposta_itens WHERE proposta_id = ?', [id]];
-            db.run(apagarAntigos[0], apagarAntigos[1], (err) => {
+            // Etapa 146 (RN-146.02): os novos já estão gravados (acima, antes de tudo); aqui saem os ANTIGOS — os itens LIDOS no começo deste
+            // salvamento, pela lista dos ids deles (`itens: []`/`null`, contrato da 138: todos os lidos). Fase 5 (r1/r2 Important): a
+            // primeira versão apagava "todo item que não é um dos novos" — com dois PUT ao mesmo tempo, cada um apagava os novos do outro e a
+            // proposta ficava com ZERO itens, os dois respondendo 200 (medido 5 de 5 com 20 itens). Pelos lidos, o pior caso volta a ser o de
+            // antes da etapa: os itens dos dois salvamentos juntos (repetidos e visíveis), nunca perdidos.
+            const idsAntigos = (itensAtuais || []).map((i) => i.id);
+            const apagarAntigos = (feitoAntigos) => (idsAntigos.length === 0
+              ? feitoAntigos(null)
+              : db.run('DELETE FROM proposta_itens WHERE id IN (SELECT value FROM json_each(?)) AND proposta_id = ?', [JSON.stringify(idsAntigos), id], feitoAntigos));
+            apagarAntigos((err) => {
               if (err) {
                 // O cabeçalho já foi salvo; os antigos ficaram. Os novos saem para não duplicar (se não saírem: "itens repetidos").
                 console.error('❌ PUT da proposta', id, ': os itens antigos não saíram:', err.message);
