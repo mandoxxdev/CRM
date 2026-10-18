@@ -108,11 +108,44 @@ O corpo pode ser **parcial**. Regra por chave (`montarSetParcial`, `server/atual
 | ausente | a coluna nem entra no `UPDATE` (fica como está) |
 | presente, inclusive `null`/`''` | grava com a transformação de sempre (`|| ''` nos textos de condição/prazo/garantia/observações, `|| null` nos outros, `|| 0` em valor e margem) |
 | `itens` ausente | os itens não são tocados (nem apagados, nem reinseridos, nem auditados) |
-| `itens` presente | apaga e reinsere com `mesclarItensPreservandoCampos`, religa as variáveis manuais (`[]`/`null` apaga todos) |
+| `itens` presente | apaga e reinsere com `mesclarItensPreservandoCampos`, religa as variáveis manuais (`[]`/`null` apaga todos) — desde a Etapa 142 pelo **pareamento** abaixo |
 
 Exceções: `html_rendered` é sempre limpo (o retrato do PDF só é regravado com ele vazio); `probabilidade` nula/vazia mantém (`COALESCE`); `responsavel_id` vazio/ausente = o gravado, ou quem salva; `numero_proposta`, `revisao` e `responsavel_id` só entram quando mudam. A revisão sobe só se `itens` ou `valor_total` vieram e mudaram; o sufixo `REVnn` e o `proposta_revisoes` usam os valores efetivos (o do corpo, senão o gravado). Trocar `cliente_id` apaga `cliente_contato`/`cliente_telefone`/`cliente_email`/`projeto_id` que não vieram.
 
 Recusas, nesta ordem: 404 *"Proposta não encontrada"* → 400 *"Título é obrigatório"* (título presente vazio ou só espaços) → 400 *"Margem de desconto inválida: informe um número de 0 a 100, com ponto como separador decimal."* (Etapa 139, só quando a margem veio) → 400 *"Motivo da não venda é obrigatório quando a proposta está perdida/rejeitada."* → 403 *"Não é possível alterar o status de uma proposta com desconto acima de 5% sem aprovação prévia. A proposta deve permanecer como rascunho até que a autorização seja aprovada."* → (na gravação) 409 `PROPOSTA_ALTERADA` *"A proposta foi alterada por outra gravação no mesmo instante. Recarregue a proposta e salve de novo."* quando o corpo traz status, margem, motivo ou data de fechamento e um desses que **não** veio mudou entre a leitura e a gravação. As regras do motivo, do desconto e da data de fechamento automática usam o valor efetivo e só rodam quando um dos campos delas veio.
+
+### Itens iguais: o item reconhecido pelo `id` e as variáveis manuais (Etapa 142, C298/C308/C309)
+
+O `PUT` apaga e reinsere os itens (ids novos, AUTOINCREMENT). Quem diz qual item gravado é cada item do corpo é
+`parearItens(atuais, corpo)` (`server/propostaItensDiff.js`), usado **pela mesclagem e pela religação**:
+
+| Corpo | Pareamento |
+|---|---|
+| pelo menos um `itens[].id` que vale (inteiro — número ou texto de dígitos —, de um item atual ainda não usado, mesma identidade; ou os dois sem código) | **por id**: cada item com `id` que vale fica com o seu; os outros são novos; o atual que ninguém reclamou **saiu** |
+| nenhum `id` que vale | **por posição**: o k-ésimo item de identidade P com o k-ésimo atual de identidade P; saem os que sobram |
+
+Identidade = código do produto, senão descrição, senão nome — cada parte aparada, em caixa alta (`identidadeDe`). O formulário
+(`proposta/PropostaForm.js` + `montarPayloadProposta`) manda o `id` do item gravado; o item incluído na tela vai sem.
+
+- **Mesclagem** (`CAMPOS_PRESERVAR`): o pareado preserva do **seu** atual; o sem par, do último atual da mesma identidade (mesmo que tenha
+  saído). *(Até a Etapa 142 um `Map` por `chaveDe` guardava só o último igual, e todo salvamento copiava os campos dele para os outros —
+  **C308**.)*
+- **Religação** (`variaveisManuaisItens.planoReligacao`): as variáveis do atual pareado vão para a linha nova do mesmo índice; as do
+  atual que saiu são **aposentadas** (`proposta_variaveis_manuais.item_removido_em`, coluna da Etapa 142) — nunca apagadas. Contagem de
+  linhas novas diferente do corpo: nada.
+- **Antes de parear**, o `PUT` grava o reparo da leitura contra os atuais (`planoMaterializacao`): a órfã que o reparo põe num item passa a
+  apontar para ele; a que não cabe é aposentada. O `PUT .../variaveis-manuais` faz o mesmo antes do upsert, e ignora `item_id` que não é
+  inteiro ou não é item da proposta (resposta `{ ok: true }` igual).
+- **Reparo da leitura** (`/premium` e `/pdf`, `repararVariaveisManuais`): a órfã viva com `item_chave` vai, agrupada pelo item velho
+  (ordem numérica), para um item atual da mesma identidade **sem nenhuma variável viva**; a aposentada nunca. *(Até a Etapa 142 o reparo
+  contava a posição por linha — dividia as variáveis de um item entre dois iguais, **C309** — e punha órfã em item que já tinha a mesma
+  chave.)*
+- A variável do item que saiu **não volta** quando o produto é incluído de novo (**B926**) — a correção de 30/07/2026 (`9aae799d`)
+  prometia o contrário; a promessa foi revogada pela Etapa 142, de propósito.
+- Sem `id` (integração antiga), a C298 continua: tirar o primeiro de dois iguais deixa no que ficou a variável do primeiro (D (142)).
+
+Testes: `tests/propostaItensIguais.test.js` (revisão obrigatória), `tests/api/propostaItensIguais.api.test.js` (rota, `/premium`, `/pdf`,
+banco antigo, falha injetada), `variaveisManuaisReligar`/`variaveisManuaisIdentidade` (com as funções reais desde a 142).
 
 ### A margem de desconto (Etapa 139, C299/C300)
 

@@ -279,7 +279,17 @@ Após o login, você verá a **Tela de Seleção de Módulos** com 5 opções:
   incoterm e a unidade de negócio (que chegam pela cópia de uma proposta, pela geração automática ou pela integração) — ficam como estavam.
   A exceção: **trocar o cliente** apaga o contato, o telefone, o e-mail e o projeto próprios da proposta, porque eram do cliente anterior —
   a capa passa a mostrar os do cadastro do cliente novo.
-- As variáveis manuais preenchidas no preview continuam ligadas aos itens depois do salvamento.
+- As variáveis manuais preenchidas no preview continuam ligadas aos itens depois do salvamento — também quando a proposta tem o **mesmo
+  produto mais de uma vez**: o formulário diz ao sistema qual item gravado é cada linha, e cada item fica com as suas variáveis manuais e
+  com os seus campos que o formulário não mostra (a descrição digitada na tabela de preços, a tag, os acessórios, o prazo individual, o
+  descritivo). Tirar um de dois itens iguais deixa no que ficou o que é dele.
+- As variáveis manuais do item **tirado** da proposta ficam guardadas, mas não aparecem mais no documento e não passam para outro item —
+  nem para o mesmo produto incluído de novo depois, que abre com os campos manuais em branco para o vendedor preencher. Já a descrição da
+  tabela, a tag e o descritivo de um produto incluído de novo (ou incluído uma segunda vez) vêm do último item gravado desse produto.
+- Se uma variável manual ficou sem item (um salvamento antigo que não a religou), o preview e o PDF a mostram no item do mesmo produto que
+  ainda não tem nenhuma variável preenchida — todas as de um item juntas, nunca duas para o mesmo campo; o próximo salvamento (da proposta
+  ou do preview) grava essa ligação. Pela integração, sem o número interno de cada item, o sistema reconhece os itens iguais pela ordem em
+  que aparecem.
 - A **revisão** (o `REVnn` no fim do número) sobe só quando os itens ou o valor total mudam.
 - O título não pode ficar vazio: *"Título é obrigatório"*. Proposta perdida/rejeitada exige o motivo: *"Motivo da não venda é obrigatório
   quando a proposta está perdida/rejeitada."*. Desconto acima de 5% sem aprovação não sai do rascunho: *"Não é possível alterar o status de

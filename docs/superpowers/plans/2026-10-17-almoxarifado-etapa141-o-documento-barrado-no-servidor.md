@@ -172,7 +172,9 @@ e `app.get('/api/propostas/:id/pdf', authenticateToken,` não muda (o `propostaP
    pedido pelo `valor_total` gravado) — a Fase 2 a viu passar, as duas lentes da Fase 5 a pegaram.
 3. **Paralelismo:** **0** galhos em paralelo de fato (a T3 era galho, mas foi feita em sequência — o "um teste por vez" e o tamanho); **0**
    retrabalho; **1** revisor na Fase 2, **3** em paralelo na Fase 5 sob a trava (o r3 numa worktree própria, removida).
-4. **Defeito que escapou:** *(preencher na Etapa 142)*.
+4. **Defeito que escapou:** **0** (preenchido na Etapa 142). A 142 mexeu nas mesmas rotas (`/premium`, `/pdf`) e no `PUT` da proposta: o
+   `propostaDocumentoDesconto.api.test.js` (13) ficou verde nas duas rodadas da suíte, e nenhum dos achados das revisões da 142 (Fase 2: 12;
+   Fase 5: 1 defeito + 11 sem cenário + 7 menores) era da 141 — os anteriores achados (C308, C309, C310, os D (142)) vêm de antes dela.
 
 ## Próxima tarefa detalhada — Etapa 142
 

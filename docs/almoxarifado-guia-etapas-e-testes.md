@@ -1,17 +1,23 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-18 (Etapa 141) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-18 (Etapa 142) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140 e 141) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141 e 142) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-18 (Etapa 141 ENTREGUE · próxima: Etapa 142)
+> ## Onde o desenvolvimento está — 2026-10-18 (Etapa 142 ENTREGUE · próxima: Etapa 143)
 >
-> **O desenvolvimento parou aqui: Etapa 141 fechada — 2026-10-18.** A **Etapa 141 (o documento da proposta só sai com o desconto
+> **O desenvolvimento parou aqui: Etapa 142 fechada — 2026-10-18.** A **Etapa 142 (com o mesmo produto duas vezes, cada item fica com o
+> que é dele; das propostas, fora do almoxarifado)**: numa proposta com o mesmo equipamento mais de uma vez, tirar o primeiro e salvar não
+> passa mais a variável manual dele para o que ficou; salvar não copia mais a descrição da tabela, a tag e os acessórios do último para os
+> outros; a variável do item que saiu fica guardada à parte e não volta para outro item. Uma consulta nova, opcional (**A91**). **Próxima:
+> Etapa 143** — ver a próxima tarefa no plano da 142.
+>
+> **Etapa 141, 2026-10-18.** A **Etapa 141 (o documento da proposta só sai com o desconto
 > aprovado; das propostas, fora do almoxarifado)**: o "Ver proposta", o PDF e o editor do preview recusam, no servidor, a proposta com
 > desconto acima de 5 % sem aprovação válida — em qualquer status — e a tela mostra a frase da recusa; o pedido de aprovação mostra os
-> valores em reais do documento. Duas consultas novas (**A89**, rodar antes do deploy; **A90**). **Próxima: Etapa 142** — ver a próxima
-> tarefa no plano da 141.
+> valores em reais do documento. Duas consultas novas (**A89**, rodar antes do deploy; **A90**).
+> *(Próxima, na época: Etapa 142 — entregue acima.)*
 >
 > **Etapa 140, 2026-10-17.** A **Etapa 140 (o desconto acima de 5 % só sai com a aprovação de
 > outra pessoa; das propostas, fora do almoxarifado)**: quem decide um pedido de desconto tem *Pode aprovar descontos* ou é super, e nem
@@ -6621,6 +6627,42 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 142 — Com o mesmo produto duas vezes, cada item fica com o que é dele (ENTREGUE — 2026-10-18)
+
+**O que mudou, em uma frase:** numa proposta com o mesmo equipamento mais de uma vez, cada item passa a ficar com a sua variável manual, a
+sua descrição na tabela de preços, a sua tag e os seus acessórios — tirar um deles ou salvar de novo não passa mais o que é de um para o
+outro.
+
+**O problema que ela resolve.** Duas bombas iguais, cada uma com a sua tag preenchida no preview (*TAG-A* e *TAG-B*): tirar a primeira e
+salvar deixava na que ficou a *TAG-A*, e a *TAG-B* sumia. E, mesmo sem tirar nada, todo salvamento copiava para a primeira a descrição
+digitada na tabela de preços, a tag e os acessórios da última.
+
+| Antes | Agora |
+|---|---|
+| Tirar a primeira de duas bombas iguais e salvar → a que ficou mostrava a tag da que saiu | Mostra a sua; a da que saiu fica guardada, sem aparecer |
+| Salvar uma proposta com o mesmo produto duas vezes copiava a descrição da tabela, a tag e os acessórios do último para o primeiro | Cada um mantém os seus (**A91** lista o que pode ter sido copiado) |
+| No preview, duas variáveis de um mesmo item "perdido" apareciam uma em cada item igual | As duas no mesmo item |
+| Apagar no preview um valor que tinha voltado sozinho → ele voltava de novo | Apaga |
+| Tirar um produto e incluí-lo de novo trazia de volta as variáveis manuais dele | Abre com os campos manuais em branco (a descrição da tabela e o descritivo continuam voltando) |
+
+**Roteiro de teste (10 minutos, pela tela).** Prepare uma variável técnica do tipo **Manual na Proposta** em **Configurações → Comercial →
+Variáveis técnicas**, selecione-a para a família de um produto em **Configurações → Comercial → Template de proposta**.
+
+1. **Dois iguais.** Crie uma proposta com esse produto **duas vezes** e **Salvar**.
+2. **Preencher no preview.** Abra o **preview editável**: preencha a variável manual com *TAG-A* no primeiro item e *TAG-B* no segundo; na
+   tabela de preços, escreva *linha 1* na descrição do primeiro e *linha 2* na do segundo; salve o preview.
+3. **Salvar sem mexer.** Volte ao formulário, mude só a quantidade de um item e **Salvar**. No preview: *linha 1* e *linha 2*, cada uma no
+   seu (antes, *linha 2* nos dois).
+4. **Tirar o primeiro.** No formulário, clique na lixeira do **primeiro** item e **Salvar** (*"Proposta atualizada."*). No preview, o item
+   que ficou mostra *TAG-B* e *linha 2*.
+5. **Incluir de novo.** Inclua o produto outra vez e **Salvar**: o item novo abre com a variável manual em branco (a *TAG-A* não volta).
+6. **Apagar no preview.** Apague a *TAG-B* no preview e salve; recarregue: continua apagada.
+
+**O que esta etapa NÃO cobre.** A integração que salva sem o número interno de cada item continua reconhecendo os iguais pela posição; o
+histórico de itens também (D (142)). O item incluído de novo não traz de volta as variáveis manuais do que saiu — se vocês preferirem que
+traga, é a pergunta da **B926**. A classificação de área do produto que não se apaga ficou para vocês (**B924**, **C297**). Um item vazio
+na lista, pela API, ainda trava o salvamento (**C310**).
 
 ## Etapa 141 — O documento da proposta só sai com o desconto aprovado (ENTREGUE — 2026-10-18)
 

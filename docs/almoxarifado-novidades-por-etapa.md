@@ -11,11 +11,18 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-18):** **Etapa 141 fechada** (das propostas: **o documento da proposta só sai com o desconto
+> **Onde o desenvolvimento está (2026-10-18):** **Etapa 142 fechada** (das propostas: **com o mesmo produto duas vezes na proposta, cada
+> item fica com o que é dele** — tirar o primeiro de dois iguais deixava no que ficou a variável manual do que saiu (**C298**), todo
+> salvamento copiava a descrição da tabela, a tag e os acessórios do último igual para os outros (**C308**) e o preview dividia as
+> variáveis de um item entre dois (**C309**); o formulário passa a dizer ao servidor qual item gravado é cada um, e a variável manual do
+> item que saiu é guardada à parte, sem voltar para outro item: **C298**, **C308** e **C309** resolvidos, **B918** a **B928**; a consulta
+> nova **A91**; o aviso novo **C310**; a revisão obrigatória da proposta passa a **23/23**); a próxima é a **143** — ver "Onde estamos e o
+> que vem a seguir".
+> *(Antes: **Etapa 141 fechada** (das propostas: **o documento da proposta só sai com o desconto
 > aprovado** — o "Ver proposta", o PDF e o editor do preview recusam, no servidor, a proposta com desconto acima de 5 % sem aprovação
 > válida, em qualquer status (antes só os botões da tela barravam, e o editor aberto numa aba baixava o PDF com o desconto trocado noutra);
 > o pedido de aprovação mostra os valores em reais do documento: **C304** e **C306** resolvidos, **B914** a **B917**; as consultas novas
-> **A89** (rodar antes do deploy) e **A90**; o aviso novo **C307**); a próxima é a **142** — ver "Onde estamos e o que vem a seguir".
+> **A89** (rodar antes do deploy) e **A90**; o aviso novo **C307**); a próxima era a **142**.)*
 > *(Antes: **Etapa 140 fechada** (das propostas: **o desconto acima de 5 % só sai com a aprovação de
 > outra pessoa que pode aprovar descontos** — antes qualquer vendedor liberava o próprio desconto por três caminhos, um deles pela própria
 > tela de proposta; quem decide tem *Pode aprovar descontos* ou é super, e nem quem pediu, nem o responsável, nem quem criou a proposta
@@ -230,7 +237,10 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Noventa itens para rodar em produção ANTES do deploy — oitenta e sete são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Noventa e um itens para rodar em produção ANTES do deploy — oitenta e oito são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-18 (Etapa 142) de noventa para noventa e um**, com a **A91** — as propostas com o mesmo produto mais de uma vez
+em que os itens iguais podem ter recebido os campos uns dos outros (**C308**). Somente leitura e opcional.)*
 
 *(**Atualizado em 2026-10-18 (Etapa 141) de oitenta e oito para noventa**, com a **A89** — as propostas que perdem a visualização e o
 PDF, por terem desconto acima de 5 % sem aprovação válida — e a **A90** — as aprovações antigas decididas pelo responsável ou por quem
@@ -3240,12 +3250,40 @@ ORDER BY a.proposta_id, a.id;
 pode ter mudado depois — ou quem a criou). A aprovação continua liberando o envio e o documento; se vocês quiserem que ela deixe de valer,
 rejeitar não é possível (já está decidida): a saída é o vendedor mudar o desconto e pedir de novo. É decisão de vocês (**C307**).
 
+**A91 (NOVA, da Etapa 142 — as propostas com o mesmo produto mais de uma vez cujos itens podem ter recebido os campos uns dos outros).**
+Até a Etapa 142, todo salvamento pelo formulário de uma proposta com o mesmo produto mais de uma vez copiava para todos os itens desse
+produto a descrição digitada na tabela de preços, a tag, os acessórios, o prazo individual e o descritivo do **último** deles (**C308**).
+Não há como saber, pelo banco, qual era o texto de cada um antes — a consulta lista onde os iguais estão **todos com os mesmos** desses
+campos preenchidos (a marca do estrago). Somente leitura; opcional.
+
+```sql
+SELECT pi.proposta_id, p.numero_proposta,
+       COALESCE(NULLIF(TRIM(pi.codigo_produto), ''), TRIM(pi.descricao)) AS produto,
+       COUNT(*) AS vezes,
+       COUNT(DISTINCT COALESCE(pi.descricao_tabela, '') || '|' || COALESCE(pi.tag, '') || '|' || COALESCE(pi.acessorios, '') || '|'
+             || COALESCE(pi.prazo_individual, '') || '|' || COALESCE(pi.descritivo_tecnico, '')) AS combinacoes_distintas,
+       SUM(CASE WHEN COALESCE(TRIM(pi.descricao_tabela), '') <> '' OR COALESCE(TRIM(pi.tag), '') <> ''
+                  OR COALESCE(TRIM(pi.acessorios), '') NOT IN ('', '[]') OR COALESCE(TRIM(pi.prazo_individual), '') <> ''
+                  OR COALESCE(TRIM(pi.descritivo_tecnico), '') <> '' THEN 1 ELSE 0 END) AS com_campo_preenchido
+FROM proposta_itens pi
+JOIN propostas p ON p.id = pi.proposta_id
+GROUP BY pi.proposta_id, produto
+HAVING COUNT(*) > 1 AND com_campo_preenchido > 0
+ORDER BY pi.proposta_id, produto;
+```
+
+**Como ler o resultado:** **vazia** — nada a fazer. **`combinacoes_distintas` = 1** — os itens iguais dessa proposta estão com a mesma
+descrição da tabela, tag, acessórios, prazo e descritivo: se eles deveriam ser diferentes, abra a proposta no preview editável, corrija o
+texto de cada item e salve (depois do deploy, cada um fica com o seu). **`combinacoes_distintas` maior que 1** — os itens já têm textos
+diferentes; nada a fazer. *(Rodada no banco local, cópia de 09/10: **0** linhas — a proposta com produto repetido não tem nenhum desses
+campos preenchido; controle numa cópia com dois iguais copiados e dois diferentes: achou os dois, com 1 e 2 combinações.)*
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B917; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B928; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -10020,6 +10058,61 @@ mais, **B912**) — a proposta sumia do modal para sempre; agora só a aprovaç�
 **B917 (NOVA, da Etapa 141) — a próxima etapa (142).** Ver a "próxima tarefa detalhada" no plano da Etapa 141. As decisões que esperam
 vocês continuam as da **B898**, mais a **B910** e a **C307**.
 
+**B918 (NOVA, da Etapa 142; das propostas) — o formulário diz ao servidor qual item gravado é cada um.** Fecha a **C298**. O salvamento da
+proposta apaga e regrava os itens; com o mesmo produto duas vezes, o servidor sozinho só via "um a menos" e casava pela posição — tirar o
+primeiro deixava no que ficou a variável manual do que saiu. Agora o formulário manda junto o número interno de cada item que já estava
+gravado (o item incluído na tela vai sem ele), e o servidor reconhece cada item por esse número; só quando ele não vem (integração, tela
+antiga) cai na posição entre os iguais, como antes. **Descartado:** uma chave nova gravada no item (mudaria o banco e a importação, para o
+mesmo efeito); recusar o salvamento sem os números (quebraria a integração). **Reversível.**
+
+**B919 (NOVA, da Etapa 142; das propostas) — a variável manual do item que saiu é guardada à parte, não apagada.** Quando um item sai da
+proposta no salvamento, as variáveis manuais dele ficam no banco marcadas com a data em que saíram e deixam de aparecer no documento.
+**Descartado:** apagar (irreversível — a correção de 30/07/2026 já tinha aprendido que apagar no salvamento perde dado quando o casamento
+falha). **Reversível:** limpar a marca devolve a linha ao estado de antes.
+
+**B920 (NOVA, da Etapa 142; das propostas) — o item novo de um produto que já está na proposta herda os campos do último igual, como antes.**
+O item **reconhecido** fica com os seus campos (a descrição da tabela, a tag, os acessórios, o prazo, o descritivo — **C308**); o item
+**novo** de um produto que já estava (ou acabou de sair) recebe os do último gravado desse produto, como sempre foi. **Descartado:** o novo
+nascer sem nada (a primeira versão desta etapa excluía o que acabou de sair; a revisão mostrou que o produto tirado e incluído de novo no
+mesmo salvamento perdia a descrição e o descritivo, que antes voltavam). **Reversível.**
+
+**B921 (NOVA, da Etapa 142; das propostas) — o conserto da leitura junta as variáveis por item e só preenche item sem nenhuma.** Quando uma
+variável manual ficou sem item (um salvamento antigo que não a religou), o preview e o PDF a reencontram pelo produto: todas as de um item
+antigo vão juntas para o mesmo item (**C309**), e só para item desse produto que ainda não tem variável nenhuma — nunca duas para o mesmo
+campo. **Descartado:** a regra de antes (por linha e por posição), que dividia e dobrava. **Reversível.**
+
+**B922 (NOVA, da Etapa 142; das propostas) — o produto é reconhecido sem diferença de maiúsculas e espaços.** O banco grava a descrição em
+caixa alta; um item sem código mandado em outra caixa deixava de ser reconhecido e perdia os campos. **Reversível.**
+
+**B923 (NOVA, da Etapa 142; das propostas) — número de item que não vale é ignorado, sem erro.** Número de item de outra proposta, repetido,
+de outro produto, em texto que não é número ou fracionado: o item é tratado como novo; nenhuma recusa nova. **Descartado:** recusar com
+mensagem (a tela nunca manda assim, e a integração antiga continua funcionando). **Reversível.**
+
+**B924 (NOVA, da Etapa 142; dos produtos) — a C297 (a classificação de área que não se apaga) fica para vocês.** A medição mostrou que o
+campo *Classificação de Área* está marcado como obrigatório na tela (com o asterisco) e não tem gesto de limpar, e que o valor mora em dois lugares do
+cadastro (a leitura cai no segundo quando o primeiro está vazio) — fazer o vazio apagar exige decidir se o campo é obrigatório e qual dos
+dois manda. **Escolhido:** não mexer. **Descartado:** fazer o vazio apagar só pela API (não apagaria nada na tela, pelo segundo lugar).
+
+**B925 (NOVA, da Etapa 142; das propostas) — apagar o código do produto de um item é trocar de produto.** O item que tinha código e ficou
+sem (com o mesmo número interno) é tratado como "saiu um, entrou outro": as variáveis manuais dele são guardadas à parte (**B919**). O item
+**sem código** dos dois lados (item manual) continua reconhecido mesmo com a descrição editada. **Reversível.**
+
+**B926 (NOVA, da Etapa 142; das propostas) — a variável manual do item que saiu não volta quando o produto é incluído de novo.** Até aqui,
+tirar um produto e incluí-lo de novo (no mesmo salvamento ou depois) trazia de volta as variáveis manuais que ele tinha — era uma promessa
+da correção de 30/07/2026. Agora não traz: o item incluído abre com os campos manuais em branco. **Por quê:** com dois iguais, "trazer de
+volta" punha a tag do equipamento que saiu no que foi incluído depois — uma tag errada no documento do cliente; um campo em branco o
+vendedor vê e preenche. **Descartado:** manter a volta (a revisão desta etapa mostrou que ela era o caminho pelo qual a C298 voltava).
+**Reversível:** os valores continuam no banco (**B919**); se vocês preferirem a volta, é uma regra a mais no conserto da leitura.
+
+**B927 (NOVA, da Etapa 142; das propostas) — o conserto da leitura é gravado nos salvamentos.** O salvamento da proposta e o do preview
+gravam o que o conserto da leitura mostraria (a variável sem item passa a apontar para o item em que aparece) e guardam à parte a que não
+cabe em item nenhum. Sem isso, apagar no preview um valor que tinha vindo do conserto não apagava (ele voltava), e a variável que sobrava
+caía no produto incluído depois. **Reversível.**
+
+**B928 (NOVA, da Etapa 142) — a próxima etapa (143).** Ver a "próxima tarefa detalhada" no plano da Etapa 142. As decisões que esperam
+vocês continuam as da **B898**, mais a **B910**, a **C307** e agora a **B924** (a C297) e a **B926** (se o produto incluído de novo deve
+trazer de volta as variáveis manuais).
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -12802,11 +12895,16 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      (o preview e o PDF as reencontram pelo código do produto, quando ele está gravado junto delas). Agora o salvamento responde e as
      variáveis são religadas. **O que fazer:** a consulta **A84** diz se alguma variável ficou sem como ser reencontrada; quem viu o erro ao
      salvar nesse período pode conferir que a proposta foi gravada (ela foi).
-297. **NOVO (da medição da Etapa 138; dos produtos, anterior a ela; lido no código) — a classificação de área do produto não se apaga.** No
+297. **MEDIDO NA ETAPA 142 — decisão de vocês (B924):** o campo está marcado obrigatório na tela e o valor mora em dois lugares do cadastro
+     (a leitura cai no segundo quando o primeiro fica vazio); o texto abaixo continua certo. O texto original:
+     **NOVO (da medição da Etapa 138; dos produtos, anterior a ela; lido no código) — a classificação de área do produto não se apaga.** No
      cadastro de produto, apagar a *Classificação de área* e salvar mantém a anterior: o formulário cai no valor antigo quando o campo fica
      vazio, e o servidor ignora o vazio. **O que fazer:** para trocar, escolha outra classificação; para apagar, não há caminho pela tela
      hoje. Candidata pequena (decidir se o vazio apaga — é regra do cadastro de produto).
-298. **NOVO (da revisão da Etapa 138; das propostas, anterior a ela; reproduzido) — com dois itens do mesmo produto, tirar o primeiro troca
+298. **✅ RESOLVIDO NA ETAPA 142 (B918, B919, B921, B927).** Pela tela, tirar o primeiro de dois iguais deixa no que ficou a variável dele; a
+     do que saiu fica guardada à parte (não aparece). **Pela integração sem o número interno do item** a posição entre os iguais continua
+     valendo (D (142)). O texto original:
+     **NOVO (da revisão da Etapa 138; das propostas, anterior a ela; reproduzido) — com dois itens do mesmo produto, tirar o primeiro troca
      as variáveis manuais.** Uma proposta com o mesmo produto duas vezes, cada um com sua variável manual preenchida (por exemplo *TAG-A* e
      *TAG-B*): tirar o primeiro item e salvar deixa o item que ficou com o valor do que saiu (*TAG-A*), e o dele se perde. A religação e o
      reparo do preview reconhecem o item pelo código do produto e pela posição entre os iguais. **O que fazer:** ao tirar um de dois itens
@@ -12863,6 +12961,19 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      tirou a validade só das aprovações decididas por **quem pediu** (**B912**). As decididas antes dela pelo responsável ou pelo criador
      da proposta continuam liberando o envio e o documento. Pedido novo não chega a isso (a decisão confere o dono). **O que fazer:** a
      consulta **A90** lista; se vocês quiserem que elas deixem de valer, é uma regra a mais em `casaComAprovacao` (decisão de vocês).
+308. **✅ RESOLVIDO NA ETAPA 142 (B918, B920; A91 para o que já foi gravado) — NOVO (achado na medição da Etapa 142; das propostas, anterior a
+     ela; reproduzido) — com o mesmo produto duas vezes, todo salvamento copiava os campos do último para os outros.** A descrição digitada
+     na tabela de preços, a tag, os acessórios, o prazo individual e o descritivo do primeiro item eram trocados pelos do último igual em
+     **todo** salvamento pelo formulário, sem tirar item nenhum. **O que fazer:** a consulta **A91** lista as propostas em que os iguais
+     estão todos com os mesmos textos.
+309. **✅ RESOLVIDO NA ETAPA 142 (B921) — NOVO (achado na medição da Etapa 142; das propostas, anterior a ela; reproduzido) — o conserto
+     da leitura dividia as variáveis manuais de um item entre dois iguais.** Um item com duas variáveis manuais preenchidas, de um produto
+     que aparece duas vezes, mostrava no preview uma delas no primeiro e a outra no segundo, quando o salvamento não as tinha religado.
+     **O que fazer:** nada.
+310. **NOVO (da revisão da Etapa 142; das propostas, anterior a ela; reproduzido pela API) — um item vazio na lista faz o salvamento da
+     proposta nunca responder.** Pela API, `"itens": [null]` deixa a resposta sem chegar (a tela fica esperando até o tempo limite), e
+     `[null, {...}]` apaga os itens antes de travar. A tela nunca manda item vazio. **O que fazer:** nada pela tela; quem integra não deve
+     mandar item nulo. Candidata pequena (recusar o item que não é objeto antes de apagar).
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -14181,6 +14292,19 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(139) A aprovação casa com a margem com folga de 0,01 ponto** — uma margem até cerca de 0,015 acima da aprovada passa (como sempre).
 - **(139) Pedido de aprovação para uma proposta que não existe** responde erro de banco cru (500) em vez de "proposta não encontrada".
   *(Resolvido na Etapa 140: *"Proposta não encontrada"*, **B908**.)*
+- **(142) Sem o número interno do item** (integração antiga, a tela de antes desta etapa aberta numa aba, ou o formulário aberto com os
+  números já vencidos porque outra aba salvou antes) o servidor reconhece os iguais pela posição: tirar o primeiro de dois deixa no que ficou
+  a variável do primeiro (a do segundo fica guardada à parte, **B919**).
+- **(142) O histórico de itens** (o registro de item incluído, editado e removido) continua comparando os iguais pela posição: tirar o primeiro
+  de dois pode aparecer como "editado" + "removido" em vez de só "removido".
+- **(142) O preview aberto numa aba velha** (de antes de um salvamento da proposta noutra aba) responde que gravou e não grava nada para os
+  itens que não existem mais — antes também se perdia (gravava num lugar que o documento não lia).
+- **(142) Se o banco falhar no meio do salvamento** (a leitura das variáveis, ou a gravação dos itens novos), as variáveis ficam sem item e o
+  conserto da leitura as reencontra pelo produto; no caso de dois iguais isso pode mostrar a do item que saiu, até o próximo salvamento.
+- **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
+  também guarda à parte as variáveis manuais deles.
+- **(142) A primeira subida depois do deploy** cria o campo novo das variáveis manuais; uma gravação do preview que chegasse no mesmo segundo,
+  antes de ele existir, daria erro (raro: só na subida).
 - **(141) O editor do preview não abre proposta com desconto sem aprovação** — mostra a frase da recusa (**B914**). No uso normal ele só se
   abre fora do rascunho, pela lista; quem precisa editar cláusulas de uma rascunho com desconto pendente espera a aprovação.
 - **(141) A proposta ganha antiga com desconto sem aprovação válida perde o documento**, e o caminho para recuperar (voltar a rascunho,
@@ -15135,6 +15259,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(142) Nenhum clique foi dado no navegador.** Os itens iguais foram provados pela rota, com o servidor de verdade em pasta vazia (18
+cenários, três subidas — uma sobre o banco antigo sem o campo novo e uma com a gravação das variáveis falhando de propósito), pelo PDF (o
+retrato que ele grava) e pelo formulário montado num teste (tirar o primeiro de dois iguais e salvar). O que **só o navegador** prova: o
+roteiro da Etapa 142 no guia — numa proposta com o mesmo produto duas vezes, preencher no preview uma variável manual diferente em cada um
+(*TAG-A*, *TAG-B*) e uma descrição diferente na tabela de preços; voltar ao formulário, tirar o **primeiro** item e salvar; no preview, o
+que ficou mostra *TAG-B* e a descrição dele.
 
 **(141) Nenhum clique foi dado no navegador.** O documento barrado foi provado pela rota, com o servidor de verdade em pasta vazia (13
 cenários, quatro subidas — duas com a leitura das aprovações falhando de propósito), e as telas por testes que montam o formulário de
@@ -28927,9 +29058,78 @@ de antes, as aprovações decididas pelo responsável (**C307**); o de regra tam
 (corrigida). O de **sabotagem** fez **31** sabotagens: **18** caíram, **9** sobreviveram por falta de cenário (viraram cenários — inclusive
 a falha de banco na conferência, que precisava fechar, e um teste que monta a tela de Aprovações) e **4** são equivalentes.
 
+## Etapa 142 — Com o mesmo produto duas vezes, cada item fica com o que é dele (2026-10-18)
+
+Uma proposta pode ter o mesmo equipamento mais de uma vez — duas bombas iguais, cada uma com a sua tag, a sua descrição na tabela de preços
+e as suas variáveis preenchidas no preview. Até aqui o sistema confundia as duas: tirar a primeira e salvar deixava na que ficou a tag da
+que saiu; e todo salvamento, mesmo sem tirar nada, copiava para a primeira a descrição, a tag e os acessórios da última. Agora o formulário
+diz ao servidor qual item gravado é cada um, cada item fica com o que é dele, e o que pertencia ao item que saiu fica guardado à parte, sem
+aparecer em outro item.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Duas bombas iguais com *TAG-A* e *TAG-B*; tirar a primeira e salvar → a que ficou mostrava *TAG-A* | Mostra *TAG-B*; a *TAG-A* fica guardada, sem aparecer (**B918**, **B919**) |
+| Todo salvamento de uma proposta com o mesmo produto duas vezes copiava a descrição da tabela, a tag e os acessórios do último para o primeiro | Cada um mantém os seus (**B918**, **C308**; **A91** lista o que pode ter sido copiado) |
+| Um item com duas variáveis manuais "perdidas" aparecia com uma no primeiro igual e a outra no segundo | As duas no mesmo item (**B921**, **C309**) |
+| Apagar no preview um valor que tinha voltado sozinho → ele voltava de novo | Apaga (**B927**) |
+| Tirar um produto e incluí-lo de novo trazia de volta as variáveis manuais dele | Abre com os campos manuais em branco; a descrição da tabela e o descritivo continuam voltando (**B926**, **B920**) |
+
+### As regras, com o cenário exato
+
+Preparação: uma variável técnica do tipo **Manual na Proposta** (em **Configurações → Comercial → Variáveis técnicas**), selecionada
+para a família em **Configurações → Comercial → Template de proposta**, e um produto dessa família.
+
+**1. Tirar o primeiro de dois iguais (B918, B919 — C298).** Crie uma proposta com esse produto **duas vezes** e salve. Abra o **preview
+editável**, preencha a variável manual com *TAG-A* no primeiro e *TAG-B* no segundo e salve o preview. Volte ao formulário, tire o
+**primeiro** item (lixeira) e **Salvar**. No preview, o item que ficou mostra *TAG-B*. Nenhuma mensagem nova: o salvamento responde como
+sempre (*"Proposta atualizada."*).
+
+**2. Cada um com a sua descrição (B918 — C308).** Na mesma proposta com o produto duas vezes, escreva no preview uma descrição diferente
+para cada um na coluna DESCRIÇÃO da tabela de preços e salve. Volte ao formulário, mude só a quantidade de um deles e **Salvar**. No
+preview, cada item continua com a sua descrição (antes os dois ficavam com a do segundo).
+
+**3. O que saiu não volta (B926).** Depois do cenário 1, inclua o produto de novo e salve: o item incluído abre com a variável manual em
+branco (a *TAG-A* não volta).
+
+**4. Pela integração.** `PUT /api/propostas/<id>` com `"itens": [{ ..., "id": <número do item gravado> }]` reconhece o item pelo número;
+sem o `id`, pela posição entre os iguais (D (142)); número de outra proposta, repetido ou que não é número é ignorado, sem erro
+(**B923**). `PUT /api/propostas/<id>/variaveis-manuais` com `item_id` que não é item da proposta não grava nada e responde `{ "ok": true }`.
+
+### O que esta etapa NÃO cobre
+
+1. **A integração que não manda o número do item** continua reconhecendo os iguais pela posição (D (142)).
+2. **O histórico de itens** continua comparando os iguais pela posição (D (142)).
+3. **A classificação de área do produto** que não se apaga (**C297**) ficou para vocês (**B924**).
+4. **Quem pode editar a proposta** continua esperando vocês (**C305**); a aprovação pelo percentual (**B910**); as aprovações antigas do
+   responsável (**C307**).
+
+### O que a revisão encontrou
+
+A **medição** achou, além da C298, dois defeitos anteriores no mesmo lugar — a cópia dos campos do último igual em todo salvamento
+(**C308**) e a divisão das variáveis de um item no preview (**C309**). A **revisão do plano** (antes do código) achou um ponto crítico — a
+medição dizia que o formulário já guardava o número de cada item, e não guardava (a correção só no envio não teria resolvido nada pela tela;
+a medição tinha lido uma tela antiga, fora de uso) — e quatro importantes, entre eles que o conserto da leitura precisava ser gravado nos
+salvamentos. A **revisão adversarial do código** (três revisores, executando): o de **regra** achou que a etapa invertia sem dizer a
+promessa de 30/07 ("readicionar traz de volta" — agora decisão escrita, **B926**) e que o produto tirado e incluído de novo perdia a
+descrição (corrigido, **B920**); o de **permissão** não achou caminho para mexer em outra proposta e achou dois pontos menores (a falha de
+banco no meio da gravação e um número em lista; corrigidos) e, de antes, o item vazio que trava o salvamento (**C310**); o de **sabotagem**
+fez **43** sabotagens: **20** caíram, **12** são equivalentes, **11** sobreviveram por falta de cenário (viraram cenários, inclusive o PDF
+pela rota) e achou um defeito desta etapa — apagar no preview a variável de um item fazia aparecer a do item que saiu (corrigido).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 142 entregue (2026-10-18):** **com o mesmo produto duas vezes, cada item fica com o que é dele** (das propostas). O formulário
+  diz ao servidor qual item gravado é cada um (**B918** — **C298** resolvido); cada item igual mantém a sua descrição da tabela, tag e
+  acessórios (**C308** resolvido); a variável manual do item que saiu fica guardada à parte e não volta para outro item (**B919**,
+  **B926**); o conserto da leitura junta as variáveis por item (**B921** — **C309** resolvido) e é gravado nos salvamentos (**B927**). A
+  revisão obrigatória da proposta passa a **23/23**. **O que é seu:** a consulta **A91** (opcional); as perguntas **B910**, **B853**,
+  **B924** (a C297) e **B926** (o produto incluído de novo deve trazer as variáveis de volta?); as decisões **B918 a B927** (reversíveis);
+  o aviso **C310**; as limitações **(142)** em D e a verificação **(142)** em F. **Próxima: Etapa 143 — ver a "próxima tarefa detalhada"
+  no plano da Etapa 142.**
 
 - **Etapa 141 entregue (2026-10-18):** **o documento da proposta só sai com o desconto aprovado** (das propostas). O "Ver proposta", o
   PDF e o editor do preview recusam a proposta com desconto acima de 5 % sem aprovação válida, em qualquer status (**B914** — **C304**
@@ -28937,7 +29137,7 @@ a falha de banco na conferência, que precisava fechar, e um teste que monta a t
   recusa e o *Nova solicitação* não esconde a proposta cuja aprovação não vale (**B916**). A revisão obrigatória da proposta continua
   **22/22**. **O que é seu:** as consultas **A89** (rodar antes do deploy: as propostas que perdem o documento) e **A90**; a pergunta
   **B910** e a **B853**; as decisões **B914 a B916** (reversíveis); o aviso **C307**; as limitações **(141)** em D e a verificação **(141)**
-  em F. **Próxima: Etapa 142 — ver a "próxima tarefa detalhada" no plano da Etapa 141.**
+  em F. *(Próxima, na época: Etapa 142 — entregue acima.)*
 
 - **Etapa 140 entregue (2026-10-17):** **o desconto acima de 5 % só sai com a aprovação de outra pessoa** (das propostas). Decide quem tem
   *Pode aprovar descontos* ou é super, e nunca o dono do pedido (**B906**, **B907**); o pedido nasce pendente, em nome de quem pede
