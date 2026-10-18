@@ -223,7 +223,7 @@ const nodemailer = require('nodemailer');
 const { gerarPDFProposta } = require('./gerarPDFProposta');
 const { getPropostaEquipamentosOnlyHTML } = require('./condicoesNano4You');
 const { getClausulasDefault, resolverClausulasParaPreview } = require('./clausulasDefault');
-const { diffItensParaLog, nomeDe, resumoLado, mesclarItensPreservandoCampos, idInteiro, validarItensDoCorpo, idsDosProdutos, msgProdutoNaoEncontrado, msgClienteNaoEncontrado, msgItensNaoGravados } = require('./propostaItensDiff');
+const { diffItensParaLog, nomeDe, resumoLado, mesclarItensPreservandoCampos, idInteiro, validarItensDoCorpo, idsDosProdutos, msgProdutoNaoEncontrado, msgClienteNaoEncontrado, msgItensNaoGravados, msgItensNaoSalvos } = require('./propostaItensDiff');
 // Etapa 142 (C298, C309): as variáveis manuais × os itens — a religação do PUT, o reparo da leitura e a gravação do reparo (puros).
 const { planoReligacao, repararVariaveisManuais, planoMaterializacao } = require('./variaveisManuaisItens');
 const { presente, montarSetParcial } = require('./atualizacaoParcial');
@@ -8171,68 +8171,40 @@ app.post('/api/propostas', authenticateToken, exigirComercialNasPropostas, (req,
         const propostaId = this.lastID;
         console.log('✅ Proposta criada com ID:', propostaId);
 
-        // Inserir itens
-        if (itens && Array.isArray(itens) && itens.length > 0) {
-          try {
-            const stmt = db.prepare(
-              `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade,
-                valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca,
-                tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo,
-                materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela, acessorios)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-            );
-
-            itens.forEach((item, index) => {
-              try {
-                stmt.run([
-                  propostaId,
-                  item.descricao || item.nome || '',
-                  item.quantidade || 1,
-                  item.unidade || 'UN',
-                  item.valor_unitario || 0,
-                  item.valor_total || 0,
-                  item.codigo_produto || null,
-                  item.familia_produto || null,
-                  item.regiao_busca || null,
-                  item.tag || null,
-                  item.modelo || null,
-                  item.categoria || null,
-                  item.descricao_resumida || null,
-                  item.descritivo_tecnico || null,
-                  item.dados_processo || null,
-                  item.materiais_construtivos || null,
-                  item.utilidades_requeridas || null,
-                  item.opcionais || null,
-                  item.exclusoes || null,
-                  item.prazo_individual || null,
-                  item.numero_item != null ? item.numero_item : (index + 1),
-                Number(item.desconto_percentual) || 0,
-                (item.preco_tabela != null ? Number(item.preco_tabela) : null),
-                serializarAcessorios(item.acessorios)
-                ]);
-              } catch (itemErr) {
-                console.error(`❌ Erro ao inserir item ${index}:`, itemErr);
-                console.error(`❌ Item que causou erro:`, item);
-              }
-            });
-
-            stmt.finalize((finalizeErr) => {
-              if (finalizeErr) {
-                console.error('❌ Erro ao finalizar statement:', finalizeErr);
-              }
-              console.log('✅ Proposta salva com sucesso. ID:', propostaId, 'Número:', numeroFinal);
-              res.json({ id: propostaId, numero_proposta: numeroFinal, ...req.body });
-            });
-          } catch (stmtErr) {
-            console.error('❌ Erro ao preparar statement para itens:', stmtErr);
-            // Continuar mesmo se houver erro ao inserir itens
-            console.log('✅ Proposta salva com sucesso (sem itens). ID:', propostaId, 'Número:', numeroFinal);
-            res.json({ id: propostaId, numero_proposta: numeroFinal, ...req.body });
-          }
-        } else {
+        // Inserir itens — Etapa 146 (RN-146.01, C323): em sequencia, e a resposta so depois do ultimo. Antes era um statement preparado sem
+        // callback dentro de try/catch por item: o erro do SQLite vem no callback (nunca em excecao), caia na guarda do processo e a
+        // proposta nascia sem o item, com 200 (medido: 5 itens com o 3o falhando -> 200 com 4). Falha -> desfaz a proposta (RN-145.05).
+        const linhasItens = (Array.isArray(itens) ? itens : []).map((item, index) => ([
+          propostaId,
+          item.descricao || item.nome || '',
+          item.quantidade || 1,
+          item.unidade || 'UN',
+          item.valor_unitario || 0,
+          item.valor_total || 0,
+          item.codigo_produto || null,
+          item.familia_produto || null,
+          item.regiao_busca || null,
+          item.tag || null,
+          item.modelo || null,
+          item.categoria || null,
+          item.descricao_resumida || null,
+          item.descritivo_tecnico || null,
+          item.dados_processo || null,
+          item.materiais_construtivos || null,
+          item.utilidades_requeridas || null,
+          item.opcionais || null,
+          item.exclusoes || null,
+          item.prazo_individual || null,
+          item.numero_item != null ? item.numero_item : (index + 1),
+          Number(item.desconto_percentual) || 0,
+          (item.preco_tabela != null ? Number(item.preco_tabela) : null),
+          serializarAcessorios(item.acessorios)
+        ]));
+        gravarItensDaPropostaNova(SQL_ITEM_CRIACAO, propostaId, numeroFinal, linhasItens, (erroItens) => {
+          if (erroItens) return res.status(500).json({ error: erroItens });
           console.log('✅ Proposta salva com sucesso. ID:', propostaId, 'Número:', numeroFinal);
           res.json({ id: propostaId, numero_proposta: numeroFinal, ...req.body });
-        }
+        });
       }
     );
     }); // Fecha callback do db.get
@@ -8430,7 +8402,18 @@ app.put('/api/propostas/:id', authenticateToken, exigirComercialNasPropostas, (r
     }
     }
     
+    // Etapa 146 (RN-146.04/05, C322): o cliente que MUDOU para um número tem de existir — depois de todas as recusas e antes de qualquer
+    // gravação. Antes: 500 com a mensagem crua da chave estrangeira (o servidor liga as chaves). Ausente, igual ao gravado, ou
+    // vazio/texto/nulo (que grava a proposta sem cliente — X09b da 138): segue como antes, sem ler (B954). Inativo conta (B947).
     function continuarAtualizacao() {
+      const clienteLido = tem('cliente_id') ? parseInt(corpo.cliente_id) : NaN;
+      if (Number.isInteger(clienteLido) && clienteLido > 0 && clienteLido !== Number(propostaAtual.cliente_id)) {
+        return conferirClienteDaProposta(clienteLido, res, seguirAtualizacao);
+      }
+      return seguirAtualizacao();
+    }
+
+    function seguirAtualizacao() {
       const revisaoAtual = propostaAtual.revisao || 0;
       const finalResponsavelId = responsavel_id || propostaAtual.responsavel_id || req.user.id;
       
@@ -8627,11 +8610,11 @@ app.put('/api/propostas/:id', authenticateToken, exigirComercialNasPropostas, (r
         // Verificar se o número final não está duplicado (exceto para a própria proposta)
         db.get(`SELECT id FROM propostas WHERE numero_proposta = ? AND id != ?`, [numeroFinal, id], (err, existing) => {
           if (err) {
-            return res.status(500).json({ error: 'Erro ao verificar número da proposta: ' + err.message });
+            return responderDesfazendo(500, { error: 'Erro ao verificar número da proposta: ' + err.message });
           }
           if (existing) {
-            return res.status(400).json({ 
-              error: `O número da proposta "${numeroFinal}" já está em uso por outra proposta. Por favor, use outro número ou deixe o sistema gerar automaticamente.` 
+            return responderDesfazendo(400, {
+              error: `O número da proposta "${numeroFinal}" já está em uso por outra proposta. Por favor, use outro número ou deixe o sistema gerar automaticamente.`
             });
           }
 
@@ -8642,20 +8625,23 @@ app.put('/api/propostas/:id', authenticateToken, exigirComercialNasPropostas, (r
               if (err) {
                 // Tratar erro de UNIQUE constraint especificamente
                 if (err.message && err.message.includes('UNIQUE constraint')) {
-                  return res.status(400).json({
+                  return responderDesfazendo(400, {
                     error: `O número da proposta "${numeroFinal}" já está em uso. Por favor, use outro número ou deixe o sistema gerar automaticamente.`
                   });
                 }
-                return res.status(500).json({ error: 'Erro ao atualizar proposta: ' + err.message });
+                return responderDesfazendo(500, { error: 'Erro ao atualizar proposta: ' + err.message });
               }
               // A guarda das regras cruzadas não casou: outra gravação mudou status, margem, motivo ou data no meio.
               if (guardaSql && this && this.changes === 0) {
-                return res.status(409).json({
+                return responderDesfazendo(409, {
                   error: 'A proposta foi alterada por outra gravação no mesmo instante. Recarregue a proposta e salve de novo.',
                   code: 'PROPOSTA_ALTERADA'
                 });
               }
 
+            // Etapa 146 (Fase 2 I-2): o histórico de revisão só depois do UPDATE valer — antes ele era gravado antes do número e do UPDATE, e
+            // toda recusa posterior deixava uma revisão que não aconteceu.
+            registrarRevisao(() => {
             // `itens` ausente (Etapa 138): os itens ficam como estão — nada a apagar, reinserir, religar nem auditar.
             if (!itensVieram) {
               return res.json({
@@ -8667,57 +8653,28 @@ app.put('/api/propostas/:id', authenticateToken, exigirComercialNasPropostas, (r
 
             // Etapa 142 (RN-142.11): antes de apagar os itens, grava o que o reparo da leitura mostraria — a órfã que o reparo põe num item
             // atual passa a apontar para ele (e anda com o par logo abaixo); a que não cabe em ninguém é aposentada. Sem isto a órfã que
-            // sobrava (de antes da 142, ou de um salvamento que falhou) ia parar no produto incluído depois.
+            // sobrava (de antes da 142, ou de um salvamento que falhou) ia parar no produto incluído depois. (Os itens novos já gravados
+            // não entram: o reparo é contra os itens LIDOS.)
             materializarVariaveisManuais(id, itensAtuais || [], true, () => {
-            // Deletar itens antigos e inserir novos
-            db.run('DELETE FROM proposta_itens WHERE proposta_id = ?', [id], (err) => {
+            // Etapa 146 (RN-146.02): os novos já estão gravados (acima, antes de tudo); aqui saem os ANTIGOS — todo item da proposta que não
+            // é um dos novos (pela lista: um PUT simultâneo não leva os novos deste). Sem novos (`itens: []`/`null`, contrato da 138): todos.
+            const apagarAntigos = idsNovos.length > 0
+              ? ['DELETE FROM proposta_itens WHERE proposta_id = ? AND id NOT IN (SELECT value FROM json_each(?))', [id, JSON.stringify(idsNovos)]]
+              : ['DELETE FROM proposta_itens WHERE proposta_id = ?', [id]];
+            db.run(apagarAntigos[0], apagarAntigos[1], (err) => {
               if (err) {
-                return res.status(500).json({ error: err.message });
-              }
-
-              // Sem itens no payload não há inserção para esperar.
-              let insercoesDeItens = Promise.resolve();
-              if (itens && Array.isArray(itens) && itens.length > 0) {
-                const stmt = db.prepare(
-                  `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade,
-                    valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca,
-                    tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo,
-                    materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela, descricao_tabela, acessorios)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-                );
-
-                // Preserva campos que o formulário não envia (modelo, descritivo_tecnico,
-                // categoria, etc.) a partir dos itens existentes — senão o re-INSERT os apaga.
-                const itensParaInserir = mesclarItensPreservandoCampos(itensAtuais || [], itens);
-                itensParaInserir.forEach((item, idx) => {
-                  stmt.run([
-                    id, item.descricao || item.nome || '', item.quantidade || 1, item.unidade || 'UN',
-                    item.valor_unitario || 0, item.valor_total || 0,
-                    item.codigo_produto || null, item.familia_produto || null, item.regiao_busca || null,
-                    item.tag || null, item.modelo || null, item.categoria || null,
-                    item.descricao_resumida || null, item.descritivo_tecnico || null, item.dados_processo || null,
-                    item.materiais_construtivos || null, item.utilidades_requeridas || null,
-                    item.opcionais || null, item.exclusoes || null, item.prazo_individual || null,
-                    item.numero_item != null ? item.numero_item : idx + 1,
-                  Number(item.desconto_percentual) || 0,
-                  (item.preco_tabela != null ? Number(item.preco_tabela) : null),
-                  // Vem da mesclagem (CAMPOS_PRESERVAR): o formulário não envia este campo,
-                  // então sem grava-lo aqui o texto digitado no preview se perderia no save.
-                  (item.descricao_tabela != null ? item.descricao_tabela : null),
-                  // Sempre JSON, inclusive '[]'. Ver serializarAcessorios: string vazia faria
-                  // a mesclagem "restaurar" acessórios que o vendedor acabou de apagar.
-                  serializarAcessorios(item.acessorios)
-                  ]);
+                // O cabeçalho já foi salvo; os antigos ficaram. Os novos saem para não duplicar (se não saírem: "itens repetidos").
+                console.error('❌ PUT da proposta', id, ': os itens antigos não saíram:', err.message);
+                if (idsNovos.length === 0) return res.status(500).json({ error: msgItensNaoSalvos(err.message, 'antigos') });
+                return apagarItensNovos(id, idsNovos, (errLimpeza) => {
+                  if (errLimpeza) return res.status(500).json({ error: msgItensNaoSalvos(err.message, 'repetidos', numeroFinal) });
+                  return res.status(500).json({ error: msgItensNaoSalvos(err.message, 'antigos') });
                 });
-
-                // O finalize com callback é o que garante a ordem: só depois dele os itens
-                // novos existem para serem lidos. Ver o comentário da religação abaixo.
-                insercoesDeItens = new Promise((pronto) => stmt.finalize(() => pronto()));
               }
 
-              // Auditoria: registrar inclusão/edição/remoção de itens no log de
-              // histórico — só APÓS o update + reinserção dos itens terem sido
-              // persistidos com sucesso (evita logar mudanças de um save que falhou).
+              // Auditoria: registrar inclusão/edição/remoção de itens no log de histórico — só depois de os novos estarem gravados E os
+              // antigos fora (Etapa 146: antes este bloco rodava logo depois de AGENDAR as inserções, e o comentário dizia "só APÓS ... com
+              // sucesso" — não conferia com o código).
               const usuarioIdAuditoriaItens = req.user.id;
               db.get('SELECT nome FROM usuarios WHERE id = ?', [usuarioIdAuditoriaItens], (_, uAuditoriaItens) => {
                 const usuarioNomeAuditoriaItens = uAuditoriaItens?.nome || req.user.email || 'N/A';
@@ -8729,74 +8686,116 @@ app.put('/api/propostas/:id', authenticateToken, exigirComercialNasPropostas, (r
                 diffItens.editados.forEach((e) => registrarEdicaoLog(id, usuarioIdAuditoriaItens, usuarioNomeAuditoriaItens, 'item_editado', e.nome, null, resumoLado(e.mudancas, 'antes'), resumoLado(e.mudancas, 'depois')));
               });
 
-              // As variáveis manuais (proposta_variaveis_manuais) são chaveadas por item_id, e o bloco acima APAGA e REINSERE todos os
-              // itens — que voltam com ids NOVOS. Sem religar, os valores digitados no preview viram órfãos (relato de 30/07/2026: "quando
-              // adiciono outro produto, elas zeram").
+              // As variáveis manuais (proposta_variaveis_manuais) são chaveadas por item_id, e o salvamento REGRAVA todos os itens — que
+              // voltam com ids NOVOS. Sem religar, os valores digitados no preview viram órfãos (relato de 30/07/2026: "quando adiciono
+              // outro produto, elas zeram").
               // Etapa 142 (C298): a religação usa o MESMO pareamento da mesclagem (parearItens): pelo id do item gravado, que a tela manda
               // (RN-142.01/02), e só sem id pela posição entre os iguais (RN-142.03). Antes era sempre a posição: com o mesmo produto duas
               // vezes, tirar o PRIMEIRO deixava o que ficou com o valor do que saiu. O item que saiu tem as variáveis APOSENTADAS
               // (item_removido_em), nunca apagadas — nada se perde se o casamento falhar, mas também não volta para outro item.
+              // Etapa 146 (Fase 2 M-6): os ids novos são os que a gravação devolveu, na ordem do corpo (antes um SELECT depois do DELETE —
+              // a mesma lista sem concorrência; com dois PUT ao mesmo tempo podia devolver os do outro).
               const religarVariaveisManuais = (feito) => {
-                db.all('SELECT id FROM proposta_itens WHERE proposta_id = ? ORDER BY id ASC', [id], (errNovos, novos) => {
-                  if (errNovos) return feito();
-                  const { mover, aposentar } = planoReligacao(itensAtuais || [], itensNovos, (novos || []).map((n) => n.id));
-                  const passos = [];
-                  // OR REPLACE por causa do UNIQUE(proposta_id, item_id, chave): o destino é sempre um id recém-criado (sem linha).
-                  mover.forEach(([velho, novo]) => passos.push(["UPDATE OR REPLACE proposta_variaveis_manuais SET item_id = ?, updated_at = datetime('now') WHERE proposta_id = ? AND item_id = ?", [novo, id, velho]]));
-                  aposentar.forEach((velho) => passos.push(["UPDATE proposta_variaveis_manuais SET item_removido_em = datetime('now'), updated_at = datetime('now') WHERE proposta_id = ? AND item_id = ? AND item_removido_em IS NULL", [id, velho]]));
-                  executarEmSequencia(passos, () => feito());
-                });
+                const { mover, aposentar } = planoReligacao(itensAtuais || [], itensNovos, idsNovos);
+                const passos = [];
+                // OR REPLACE por causa do UNIQUE(proposta_id, item_id, chave): o destino é sempre um id recém-criado (sem linha).
+                mover.forEach(([velho, novo]) => passos.push(["UPDATE OR REPLACE proposta_variaveis_manuais SET item_id = ?, updated_at = datetime('now') WHERE proposta_id = ? AND item_id = ?", [novo, id, velho]]));
+                aposentar.forEach((velho) => passos.push(["UPDATE proposta_variaveis_manuais SET item_removido_em = datetime('now'), updated_at = datetime('now') WHERE proposta_id = ? AND item_id = ? AND item_removido_em IS NULL", [id, velho]]));
+                executarEmSequencia(passos, () => feito());
               };
 
-              // ORDEM IMPORTA, e de um jeito que não aparece lendo o código de cima a baixo:
-              // os INSERTs dos itens usam db.prepare/stmt.run, que NÃO passa pela fila de
-              // escrita do wrapDatabase (ela cobre run/get/all/exec, não prepare). Já o
-              // SELECT dos ids novos, feito com db.all, passa pela fila. Sem esperar o
-              // finalize, o SELECT podia rodar ANTES das inserções, não encontrar item algum
-              // e a religação simplesmente não fazer nada — os valores continuariam órfãos,
-              // com o mesmo sintoma de antes e nenhum erro para indicar o motivo.
-              //
-              // A resposta também espera a religação: o cliente recarrega o preview logo em
-              // seguida, e responder antes devolveria a proposta ainda com os campos vazios.
-              insercoesDeItens.then(() => {
-                religarVariaveisManuais(() => {
-                  res.json({
-                    message: 'Proposta atualizada com sucesso',
-                    numero_proposta: numeroFinal,
-                    revisao: novaRevisao
-                  });
+              // A resposta espera a religação: o cliente recarrega o preview logo em seguida, e responder antes devolveria a proposta
+              // ainda com os campos vazios.
+              religarVariaveisManuais(() => {
+                res.json({
+                  message: 'Proposta atualizada com sucesso',
+                  numero_proposta: numeroFinal,
+                  revisao: novaRevisao
                 });
               });
             });
             }); // fim do materializarVariaveisManuais
+            }); // fim do registrarRevisao
           }
         );
         }); // Fim da verificação de número duplicado
         }
-        
-        function salvarHistoricoEAtualizar() {
-          // Salvar histórico de revisão apenas se a revisão foi incrementada
-          if (deveIncrementarRevisao) {
-            db.run(
-              `INSERT INTO proposta_revisoes (proposta_id, revisao, dados_anteriores, dados_novos, mudancas, revisado_por)
-               VALUES (?, ?, ?, ?, ?, ?)`,
-              [id, revisaoAtual, dadosAnterioresTexto, dadosNovosTexto, mudancasTexto, req.user.id],
-              (err) => {
-                if (err) {
-                  console.error('Erro ao salvar histórico de revisão:', err);
-                  // Continuar mesmo se falhar ao salvar histórico
-                }
-                
-                // Agora atualizar a proposta
-                atualizarProposta();
+
+        // Salvar histórico de revisão apenas se a revisão foi incrementada — Etapa 146 (Fase 2 I-2): chamado DEPOIS do UPDATE valer.
+        function registrarRevisao(feito) {
+          if (!deveIncrementarRevisao) return feito();
+          db.run(
+            `INSERT INTO proposta_revisoes (proposta_id, revisao, dados_anteriores, dados_novos, mudancas, revisado_por)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [id, revisaoAtual, dadosAnterioresTexto, dadosNovosTexto, mudancasTexto, req.user.id],
+            (err) => {
+              if (err) {
+                console.error('Erro ao salvar histórico de revisão:', err);
+                // Continuar mesmo se falhar ao salvar histórico
               }
-            );
-          } else {
-            // Se não incrementou revisão, apenas atualizar a proposta sem salvar histórico
-            atualizarProposta();
-          }
+              feito();
+            }
+          );
         }
-        
+
+        function salvarHistoricoEAtualizar() {
+          atualizarProposta();
+        }
+
+        // Etapa 146 (RN-146.02, C323): os itens NOVOS, gravados antes de qualquer outra coisa (número, cabeçalho, histórico, variáveis) —
+        // antes o PUT apagava os antigos e reinseria por statement preparado sem conferir o erro: o item que falhava sumia, os antigos
+        // também, e a rota respondia 200 (ou nunca respondia). Falha num item → os novos já gravados saem e nada mudou.
+        const itensParaInserir = (itensVieram && Array.isArray(itens) && itens.length > 0)
+          ? mesclarItensPreservandoCampos(itensAtuais || [], itens) // preserva campos que o formulário não envia (Etapa 142)
+          : [];
+        let idsNovos = [];
+        // Toda saída depois dos novos gravados e antes de o UPDATE valer passa por aqui: os novos saem e a resposta é a de antes.
+        // Se a limpeza falhar: "itens repetidos", com o erro da recusa (Fase 2 M-11).
+        function responderDesfazendo(status, corpoResposta) {
+          if (idsNovos.length === 0) return res.status(status).json(corpoResposta);
+          return apagarItensNovos(id, idsNovos, (errLimpeza) => {
+            if (errLimpeza) {
+              console.error('❌ PUT da proposta', id, ': os itens novos não saíram:', errLimpeza.message);
+              return res.status(500).json({ error: msgItensNaoSalvos(corpoResposta.error, 'repetidos', propostaAtual.numero_proposta) });
+            }
+            return res.status(status).json(corpoResposta);
+          });
+        }
+        function gravarItensNovos(seguir) {
+          if (itensParaInserir.length === 0) return seguir();
+          const linhas = itensParaInserir.map((item, idx) => ([
+            id, item.descricao || item.nome || '', item.quantidade || 1, item.unidade || 'UN',
+            item.valor_unitario || 0, item.valor_total || 0,
+            item.codigo_produto || null, item.familia_produto || null, item.regiao_busca || null,
+            item.tag || null, item.modelo || null, item.categoria || null,
+            item.descricao_resumida || null, item.descritivo_tecnico || null, item.dados_processo || null,
+            item.materiais_construtivos || null, item.utilidades_requeridas || null,
+            item.opcionais || null, item.exclusoes || null, item.prazo_individual || null,
+            item.numero_item != null ? item.numero_item : idx + 1,
+            Number(item.desconto_percentual) || 0,
+            (item.preco_tabela != null ? Number(item.preco_tabela) : null),
+            // Vem da mesclagem (CAMPOS_PRESERVAR): o formulário não envia este campo,
+            // então sem grava-lo aqui o texto digitado no preview se perderia no save.
+            (item.descricao_tabela != null ? item.descricao_tabela : null),
+            // Sempre JSON, inclusive '[]'. Ver serializarAcessorios: string vazia faria
+            // a mesclagem "restaurar" acessórios que o vendedor acabou de apagar.
+            serializarAcessorios(item.acessorios)
+          ]));
+          return gravarItensEmSequencia(SQL_ITEM_COMPLETO, linhas, (err, ids) => {
+            idsNovos = ids;
+            if (!err) return seguir();
+            const detalhe = err.message;
+            if (ids.length === 0) return res.status(500).json({ error: msgItensNaoSalvos(detalhe, 'nada') });
+            return apagarItensNovos(id, ids, (errLimpeza) => {
+              if (errLimpeza) {
+                console.error('❌ PUT da proposta', id, ': os itens novos não saíram:', errLimpeza.message);
+                return res.status(500).json({ error: msgItensNaoSalvos(detalhe, 'repetidos', propostaAtual.numero_proposta) });
+              }
+              return res.status(500).json({ error: msgItensNaoSalvos(detalhe, 'nada') });
+            });
+          });
+        }
+
         // Revisão mexe SÓ no sufixo REV. O sequencial (098 em 098-02-AJ-2026-REV02)
         // é identidade da proposta: sai uma vez, na criação, e não anda mais.
         //
@@ -8809,6 +8808,7 @@ app.put('/api/propostas/:id', authenticateToken, exigirComercialNasPropostas, (r
         // É a mesma substituição que POST /propostas/:id/revisao já fazia certo.
         // Pelo cliente EFETIVO (Etapa 138): `{valor_total}` sem o cliente também troca o sufixo REV.
         let numeroFinal = numero_proposta;
+        gravarItensNovos(() => { // Etapa 146 (RN-146.02, Fase 2 I-1): os itens novos ANTES do ramo do número
         if (efetivo('cliente_id') && deveIncrementarRevisao) {
           const numeroAtualProposta = String(propostaAtual.numero_proposta || '').trim();
           const sufixoRev = `REV${String(novaRevisao).padStart(2, '0')}`;
@@ -8833,10 +8833,10 @@ app.put('/api/propostas/:id', authenticateToken, exigirComercialNasPropostas, (r
             // Verificar se o número já existe em outra proposta
             db.get(`SELECT id FROM propostas WHERE numero_proposta = ? AND id != ?`, [numeroEnviado, id], (err, existing) => {
               if (err) {
-                return res.status(500).json({ error: 'Erro ao verificar número da proposta: ' + err.message });
+                return responderDesfazendo(500, { error: 'Erro ao verificar número da proposta: ' + err.message });
               }
               if (existing) {
-                return res.status(400).json({ error: 'O número da proposta já está em uso por outra proposta.' });
+                return responderDesfazendo(400, { error: 'O número da proposta já está em uso por outra proposta.' });
               }
               // Se não existe, usar o número enviado
               numeroFinal = numeroEnviado;
@@ -8848,8 +8848,9 @@ app.put('/api/propostas/:id', authenticateToken, exigirComercialNasPropostas, (r
             salvarHistoricoEAtualizar();
           }
         }
+        }); // fim do gravarItensNovos
       }); // Fim do db.all
-    } // Fim da função continuarAtualizacao
+    } // Fim da função seguirAtualizacao
   }); // Fim do db.get
 });
 
@@ -9076,31 +9077,30 @@ app.post('/api/propostas/:id/clone', authenticateToken, exigirComercialNasPropos
         function (errInsert) {
           if (errInsert) return res.status(500).json({ error: errInsert.message });
           const novaId = this.lastID;
-          db.all('SELECT * FROM proposta_itens WHERE proposta_id = ?', [id], (errItens, itens) => {
-            if (!errItens && itens && itens.length > 0) {
-              const stmt = db.prepare(
-                `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade, valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca, tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo, materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela, descricao_tabela, acessorios) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-              );
-              itens.forEach((item, idx) => {
-                stmt.run([
-                  novaId, item.descricao, item.quantidade, item.unidade, item.valor_unitario, item.valor_total,
-                  item.codigo_produto, item.familia_produto, item.regiao_busca,
-                  item.tag || null, item.modelo || null, item.categoria || null,
-                  item.descricao_resumida || null, item.descritivo_tecnico || null, item.dados_processo || null,
-                  item.materiais_construtivos || null, item.utilidades_requeridas || null,
-                  item.opcionais || null, item.exclusoes || null, item.prazo_individual || null,
-                  item.numero_item != null ? item.numero_item : idx + 1,
-                Number(item.desconto_percentual) || 0,
-                (item.preco_tabela != null ? Number(item.preco_tabela) : null),
-                // Clonar proposta tem que trazer o texto da tabela e os acessorios: sem eles
-                // a copia nasce mais pobre que a origem, e o vendedor redigita tudo.
-                (item.descricao_tabela != null ? item.descricao_tabela : null),
-                serializarAcessorios(item.acessorios)
-                ]);
-              });
-              stmt.finalize();
-            }
-            res.status(201).json({ message: 'Proposta clonada', id: novaId, numero_proposta: numeroNovo });
+          // Etapa 146 (RN-146.03, C323): os itens da copia em sequencia, e o 201 so depois do ultimo — antes respondia antes de gravar (300
+          // itens: 11 no banco na resposta) e o item que falhava sumia calado; a leitura que falhava fazia a copia nascer sem itens.
+          db.all('SELECT * FROM proposta_itens WHERE proposta_id = ? ORDER BY id', [id], (errItens, itens) => {
+            const pronto = () => res.status(201).json({ message: 'Proposta clonada', id: novaId, numero_proposta: numeroNovo });
+            if (errItens) return desfazerPropostaCriada(novaId, numeroNovo, errItens.message, (msg) => res.status(500).json({ error: msg }));
+            const linhas = (itens || []).map((item, idx) => ([
+              novaId, item.descricao, item.quantidade, item.unidade, item.valor_unitario, item.valor_total,
+              item.codigo_produto, item.familia_produto, item.regiao_busca,
+              item.tag || null, item.modelo || null, item.categoria || null,
+              item.descricao_resumida || null, item.descritivo_tecnico || null, item.dados_processo || null,
+              item.materiais_construtivos || null, item.utilidades_requeridas || null,
+              item.opcionais || null, item.exclusoes || null, item.prazo_individual || null,
+              item.numero_item != null ? item.numero_item : idx + 1,
+              Number(item.desconto_percentual) || 0,
+              (item.preco_tabela != null ? Number(item.preco_tabela) : null),
+              // Clonar proposta tem que trazer o texto da tabela e os acessorios: sem eles
+              // a copia nasce mais pobre que a origem, e o vendedor redigita tudo.
+              (item.descricao_tabela != null ? item.descricao_tabela : null),
+              serializarAcessorios(item.acessorios)
+            ]));
+            gravarItensDaPropostaNova(SQL_ITEM_COMPLETO, novaId, numeroNovo, linhas, (erroItens) => {
+              if (erroItens) return res.status(500).json({ error: erroItens });
+              return pronto();
+            });
           });
         }
       );
@@ -9136,40 +9136,76 @@ function conferirClienteDaProposta(clienteIdNum, res, seguir) {
   });
 }
 
-// Etapa 145 (RN-145.05, C318): os itens da geracao automatica, um depois do outro, e o `feito` so no fim — antes era um statement
-// preparado sem callback e `finalize()` sem esperar: a resposta 200 saia com 34 de 200 itens gravados (medido), e o erro de um item
-// sumia calado. No primeiro erro para; desfaz (os itens primeiro; so com eles fora, a proposta — Fase 2 M-9) e devolve a mensagem.
-// Sem transacao de proposito (B948): a conexao e uma so, e um BEGIN pegaria as escritas de outras requisicoes no meio.
-function gravarItensDaGeracaoAutomatica(propostaId, numeroProposta, linhas, feito) {
-  const sql = `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade,
-              valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca,
-              tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo,
-              materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+// Etapa 145 (RN-145.05, C318) / Etapa 146 (RN-146.01/02/03, C323): os itens da proposta, um depois do outro, e o `feito` so no fim —
+// antes era um statement preparado sem callback: o erro de um item virava evento 'error' do statement, sem ouvinte, caia na guarda do
+// processo (uncaughtException) e a rota respondia sucesso sem ele (medido nas quatro portas: geracao automatica, POST, PUT e copia; o PUT
+// nem respondia). No primeiro erro para e devolve o erro E os ids ja gravados (o PUT desfaz por eles). Sem transacao de proposito (B948):
+// a conexao e uma so, e um BEGIN pegaria as escritas de outras requisicoes no meio.
+function gravarItensEmSequencia(sql, linhas, feito) {
+  const ids = [];
   let i = 0;
   const proximo = () => {
-    if (i >= linhas.length) return feito(null);
+    if (i >= linhas.length) return feito(null, ids);
     const params = linhas[i++];
-    db.run(sql, params, (err) => {
-      if (!err) return proximo();
-      console.error('❌ Geração automática: erro ao gravar o item', i, 'da proposta', propostaId, '-', err.message);
-      db.run('DELETE FROM proposta_itens WHERE proposta_id = ?', [propostaId], (errItens) => {
-        if (errItens) {
-          console.error('❌ Geração automática: os itens gravados da proposta', propostaId, 'não saíram:', errItens.message);
-          return feito(msgItensNaoGravados(err.message, numeroProposta));
-        }
-        db.run('DELETE FROM propostas WHERE id = ?', [propostaId], (errProposta) => {
-          if (errProposta) {
-            console.error('❌ Geração automática: a proposta', propostaId, 'não saiu:', errProposta.message);
-            return feito(msgItensNaoGravados(err.message, numeroProposta));
-          }
-          return feito(msgItensNaoGravados(err.message, null));
-        });
-      });
+    db.run(sql, params, function aposItem(err) {
+      if (err) {
+        console.error('❌ Itens da proposta: erro ao gravar o item', i, '-', err.message);
+        return feito(err, ids);
+      }
+      ids.push(this.lastID);
+      return proximo();
     });
   };
   proximo();
 }
+
+// A proposta recem-criada cujos itens nao gravaram: apaga os itens e, so com eles fora, a proposta (Fase 2 M-9 da 145). `feito(msg)`.
+function desfazerPropostaCriada(propostaId, numeroProposta, detalhe, feito) {
+  db.run('DELETE FROM proposta_itens WHERE proposta_id = ?', [propostaId], (errItens) => {
+    if (errItens) {
+      console.error('❌ Itens da proposta: os itens gravados da proposta', propostaId, 'não saíram:', errItens.message);
+      return feito(msgItensNaoGravados(detalhe, numeroProposta));
+    }
+    db.run('DELETE FROM propostas WHERE id = ?', [propostaId], (errProposta) => {
+      if (errProposta) {
+        console.error('❌ Itens da proposta: a proposta', propostaId, 'não saiu:', errProposta.message);
+        return feito(msgItensNaoGravados(detalhe, numeroProposta));
+      }
+      return feito(msgItensNaoGravados(detalhe, null));
+    });
+  });
+}
+
+// Os itens de uma proposta que acabou de nascer (geracao automatica, POST, copia): grava em sequencia; no erro, desfaz a proposta.
+// `feito(null)` com tudo gravado, `feito(mensagem)` com a frase da RN-145.05.
+function gravarItensDaPropostaNova(sql, propostaId, numeroProposta, linhas, feito) {
+  gravarItensEmSequencia(sql, linhas, (err) => {
+    if (!err) return feito(null);
+    return desfazerPropostaCriada(propostaId, numeroProposta, err.message, feito);
+  });
+}
+
+// Etapa 146 (RN-146.02): os itens novos do PUT que nao vao ficar — pela lista de ids (json_each: sem o limite de variaveis do SQLite).
+function apagarItensNovos(propostaId, ids, feito) {
+  db.run('DELETE FROM proposta_itens WHERE proposta_id = ? AND id IN (SELECT value FROM json_each(?))', [propostaId, JSON.stringify(ids)], feito);
+}
+
+const SQL_ITEM_GERACAO = `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade,
+              valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca,
+              tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo,
+              materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+const SQL_ITEM_CRIACAO = `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade,
+                valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca,
+                tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo,
+                materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela, acessorios)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+// O PUT e a copia gravam tambem a descricao da tabela (a mesclagem / a origem a trazem).
+const SQL_ITEM_COMPLETO = `INSERT INTO proposta_itens (proposta_id, descricao, quantidade, unidade,
+                    valor_unitario, valor_total, codigo_produto, familia_produto, regiao_busca,
+                    tag, modelo, categoria, descricao_resumida, descritivo_tecnico, dados_processo,
+                    materiais_construtivos, utilidades_requeridas, opcionais, exclusoes, prazo_individual, numero_item, desconto_percentual, preco_tabela, descricao_tabela, acessorios)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 app.post('/api/propostas/gerar-automatica', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { cliente_id, projeto_id, produtos, ...outrosDados } = req.body;
@@ -9357,7 +9393,7 @@ app.post('/api/propostas/gerar-automatica', authenticateToken, exigirComercialNa
             (item.preco_tabela != null ? Number(item.preco_tabela) : null)
           ]));
 
-          gravarItensDaGeracaoAutomatica(propostaId, numeroProposta, linhasItens, (erroItens) => {
+          gravarItensDaPropostaNova(SQL_ITEM_GERACAO, propostaId, numeroProposta, linhasItens, (erroItens) => {
             if (erroItens) return res.status(500).json({ error: erroItens });
             res.json({ id: propostaId, numero_proposta: numeroProposta, valor_total: valorTotal, itens });
           });
@@ -20680,7 +20716,9 @@ app.get('/api/operacional/ordens-servico', authenticateToken, checkModulePermiss
 });
 
 // Ordens de Serviço - Módulo Comercial (acesso sem permissão operacional)
-app.get('/api/comercial/ordens-servico', authenticateToken, checkModulePermission('comercial'), (req, res) => {
+// Etapa 146 (RN-146.06, C321): a lista de OS do Comercial pela regua da tela (o portao das propostas) — antes o checkModulePermission
+// barrava quem esta num grupo ativo sem nenhuma linha (a tela abre o Comercial) e liberava quem so tem diretas de outros modulos (a tela barra).
+app.get('/api/comercial/ordens-servico', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   try {
     const { search, status, prioridade, proposta_id } = req.query;
     

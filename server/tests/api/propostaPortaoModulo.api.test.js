@@ -310,6 +310,24 @@ test('[RN-145.04, Fase 2 I-3] para cada usuario, o portao decide o que a tela de
   assert.deepStrictEqual(linhas, Object.entries(esperado).map(([k, st]) => [k, st, st, st]));
 });
 
+// ── RN-146.06 (Etapa 146, C321): a lista de OS do Comercial pela mesma regua ──────────────
+test('[RN-146.06, C321] GET /api/comercial/ordens-servico: o portao das propostas no registro, e cada usuario decide como a tela (antes: o grupo sem linha tomava 403 e o so-Operacional passava)', async () => {
+  const reg = FONTE.split('\n').filter((l) => /app\.\w+\(\s*["'`]\/api\/comercial\/ordens-servico["'`]/.test(l));
+  assert.strictEqual(reg.length, 1, 'esperava um registro da rota');
+  assert.ok(reg[0].includes("'/api/comercial/ordens-servico', authenticateToken, exigirComercialNasPropostas, "), reg[0]);
+  const esperado = { semNada: 200, diretaComercial: 200, grupoComercial: 200, grupoVazio: 200, superU: 200, roleAdmin: 200,
+    soOperacional: 403, soAlmox: 403, grupoSoOperacional: 403, comercialPermissao0: 403 };
+  const linhas = [];
+  for (const k of Object.keys(esperado)) {
+    const [s, x] = await j('GET', '/comercial/ordens-servico', ctx.u[k].T);
+    linhas.push([k, s, s === 403 ? x : null]);
+  }
+  assert.deepStrictEqual(linhas, Object.entries(esperado).map(([k, st]) => [k, st, st === 403 ? NEGADO : null]));
+  await pausa(200);
+  const log = await all("SELECT modulo, nome_modulo FROM logs_auditoria WHERE tipo = 'acesso_negado' AND usuario_id = ? ORDER BY id DESC LIMIT 1", [ctx.u.soOperacional.id]);
+  assert.deepStrictEqual(log, [{ modulo: 'comercial', nome_modulo: 'Comercial' }]);
+});
+
 test('[RN-145.01] a metade positiva: quem a tela deixa abrir o Comercial gera proposta e grava no preview', async () => {
   for (const k of ['semNada', 'diretaComercial', 'grupoComercial', 'grupoVazio']) {
     const u = ctx.u[k];

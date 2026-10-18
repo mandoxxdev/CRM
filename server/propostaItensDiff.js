@@ -226,4 +226,13 @@ function msgItensNaoGravados(detalhe, numeroIncompleta) {
     : `${base}. Nenhuma proposta foi criada — tente de novo.`;
 }
 
-module.exports = { msgClienteNaoEncontrado, msgItensNaoGravados, idsDosProdutos, msgProdutoNaoEncontrado, MSG_PRODUTO_SEM_ID, validarItensDoCorpo, MSG_ITENS_LISTA, MSG_ITEM_INVALIDO, diffItensParaLog, chaveDe, identidadeDe, idInteiro, parearItens, nomeDe, resumoLado, CAMPOS_COMPARAR, mesclarItensPreservandoCampos, CAMPOS_PRESERVAR };
+// Etapa 146 (RN-146.02, C323): o salvamento (PUT) que nao gravou os itens. `caso`: 'nada' (os novos falharam e sairam — nada mudou),
+// 'antigos' (o cabecalho foi salvo, os antigos nao sairam e os novos sim), 'repetidos' (a limpeza dos novos falhou — ficam os dois).
+function msgItensNaoSalvos(detalhe, caso, numero) {
+  const base = `Erro ao gravar os itens da proposta (${detalhe})`;
+  if (caso === 'repetidos') return `${base}. A proposta ${numero} ficou com itens repetidos — recarregue, confira os itens e salve de novo.`;
+  if (caso === 'antigos') return `${base}. Os outros dados da proposta foram salvos, mas os itens continuam os de antes — confira e salve de novo.`;
+  return `${base}. Nada foi alterado — tente salvar de novo.`;
+}
+
+module.exports = { msgItensNaoSalvos, msgClienteNaoEncontrado, msgItensNaoGravados, idsDosProdutos, msgProdutoNaoEncontrado, MSG_PRODUTO_SEM_ID, validarItensDoCorpo, MSG_ITENS_LISTA, MSG_ITEM_INVALIDO, diffItensParaLog, chaveDe, identidadeDe, idInteiro, parearItens, nomeDe, resumoLado, CAMPOS_COMPARAR, mesclarItensPreservandoCampos, CAMPOS_PRESERVAR };
