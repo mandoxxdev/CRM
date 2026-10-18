@@ -174,8 +174,40 @@ deve trazer o id de um produto cadastrado."*; e tem de existir no cadastro (inat
 *" e mais N"*). Nenhuma proposta nasce em nenhuma recusa (`idsDosProdutos`, `msgProdutoNaoEncontrado` em `server/propostaItensDiff.js`).
 O mesmo id repetido = um item por ocorrência (B937). A busca é `IN (SELECT value FROM json_each(?))` (sem o limite de 32 766 variáveis).
 Ordem das recusas: *"Cliente e produtos são obrigatórios"* → *"Item inválido…"* (143) → margem → 403 do desconto → **produto sem id** →
-**produto não encontrado** → *"Cliente inválido"* → *"Responsável inválido"* → *"Usuário inválido"* → 500 do número. Teste:
-`server/tests/api/propostaProdutoInexistente.api.test.js`.
+**produto não encontrado** → *"Cliente inválido"* → *"Responsável inválido"* → *"Usuário inválido"* → **cliente não encontrado** (Etapa 145)
+→ 500 do número. Teste: `server/tests/api/propostaProdutoInexistente.api.test.js`. *(Esta frase terminava em "→ 500 do número" logo depois
+de "Usuário inválido" — **ficou velha na Etapa 145**: o cliente que não existe passou a ser 400 antes do número, abaixo.)*
+
+### O portão do Comercial nas rotas da proposta e da aprovação (Etapa 145, C317)
+
+Plano: `docs/superpowers/plans/2026-10-18-almoxarifado-etapa145-o-modulo-nas-rotas-da-proposta.md`. As **49** rotas `/api/propostas*` e as
+**5** `/api/aprovacoes*` do `index.js` têm, logo depois do `authenticateToken` (antes do `multer` nas três de upload), o portão
+`exigirComercialNasPropostas` (`server/services/portaoDasPropostas.js`); o `GET /api/propostas/:id` usa `exigirComercialOuOperacionalNaProposta`
+(a OS do Operacional busca nele os itens — B945). **A régua é a do portão de rota da tela** (`hasModuleAccess` do client), sobre as mesmas
+linhas que o `GET /api/usuarios/:id/grupos` devolve (as dos grupos **ativos** + as diretas com `grupo_id IS NULL`): super ou `role` admin
+passa sem ler; com alguma linha, passa só com `modulo = 'comercial'` (ou `'operacional'` no par) e `permissao === 1`; sem nenhuma linha,
+passa em `MODULOS_LIBERADOS_SEM_LINHA_NA_TELA` (`['comercial', 'frota']`, B63 — ver B949). **Não** é o `checkModulePermission` (que
+libera o Comercial a todo usuário sem grupo ativo — B944). Recusa **403** `{ error: 'Acesso negado ao módulo', modulo: 'comercial' }` (o par:
+`modulo: ['comercial', 'operacional']`) e uma linha `acesso_negado` em `logs_auditoria`; `SQLITE_BUSY` → **503** pelo `respondDbError`
+(`context: 'portao:propostas'`); outro erro → **500** *"Erro ao verificar permissões"*. `PROPOSTAS_PORTAO_DE_MODULO=desligado` (ambiente,
+lido no boot) desliga (B946). A mesma tabela de casos (`server/tests/fixtures/portaoComoATela.casos.json`) roda contra o servidor e contra o
+`hasModuleAccess`. Testes: `tests/api/propostaPortaoModulo.api.test.js` (cada rota pela rota, 17 perfis), o cruzado
+`modulosClienteServidor.api.test.js` e `client/src/services/permissionsCache.portaoComoATela.test.js`. Fora do portão (declarado):
+`/api/proposta-template*`, `/api/proposta-blocos*`, `/api/proposta-texto-biblioteca*` (C319) e as rotas de outros prefixos que leem
+proposta (C320).
+
+### A geração automática grava antes de responder; o cliente que não existe (Etapa 145, C318, C315)
+
+`POST /api/propostas/gerar-automatica` grava os itens **um por um** (`gravarItensDaGeracaoAutomatica`, `db.run` em sequência) e só responde
+depois do último (a resposta continua `{ id, numero_proposta, valor_total, itens }`). No primeiro erro: apaga os itens, depois a proposta, e
+**500** *"Erro ao gravar os itens da proposta (<erro do item>). Nenhuma proposta foi criada — tente de novo."*; se uma das duas exclusões
+falhar (a proposta só é apagada com os itens fora), **500** *"… A proposta <número> ficou incompleta — exclua-a e gere de novo."*. Sem
+transação (B948). **Cliente:** na geração automática (depois de *"Usuário inválido"*) e no `POST /api/propostas` (depois do 403 dos 5 %, com
+ou sem `numero_proposta`), `SELECT id FROM clientes WHERE id = ?` pelo número lido (`parseInt`) → **400** *"Cliente não encontrado (id
+99999). Atualize a lista de clientes e tente de novo."* (`msgClienteNaoEncontrado`); erro de leitura → **500** *"Erro ao verificar o
+cliente: <msg>"*; inativo vale (B947). Teste: `tests/api/propostaGeracaoGrava.api.test.js` (com `FALHA_SQL_PULAR` e `FALHA_SQL_MSGS` do
+`tests/helpers/falhaSqlInjetada.js`). O `PUT /api/propostas/:id` não confere o cliente (C322) e o `POST /api/propostas` grava os itens sem
+conferir o erro de cada um (C323).
 
 ### A margem de desconto (Etapa 139, C299/C300)
 

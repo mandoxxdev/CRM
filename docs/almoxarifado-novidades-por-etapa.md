@@ -11,13 +11,18 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-18):** **Etapa 144 fechada** (das propostas: **a geração automática recusa o produto que não
+> **Onde o desenvolvimento está (2026-10-18):** **Etapa 145 fechada** (das propostas: **as rotas da proposta exigem o Comercial pela
+> régua da tela, a geração automática só responde depois de gravar os itens e o cliente que não existe é recusado** — quem a tela barra
+> do Comercial (um usuário só do Almoxarifado, por exemplo) criava, gerava e editava proposta e pedia aprovação de desconto pela
+> integração; agora toma *"Acesso negado ao módulo"*, e quem abre o Comercial não perde nada (**C317** resolvido em parte — o usuário sem
+> nenhuma permissão continua entrando, **B949**, decisão de vocês); **C315** e **C318** resolvidos; **B944** a **B951**; a consulta nova
+> **A93**, **bloqueante do deploy**; os avisos novos **C319** a **C326**); a próxima é a **146** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 144 fechada** (das propostas: **a geração automática recusa o produto que não
 > existe, e o preview avisa quando um campo não foi gravado** — pela integração, a geração automática com um produto que não existe (ou com
 > o número do produto escrito como texto) criava a proposta vazia e respondia sucesso; agora recusa com a frase do produto que faltou e
 > nenhuma proposta nasce (**C313** resolvido — e o texto dela estava errado: dizia que a tela só mandava produtos do catálogo, e a tela não
 > existe desde julho, **C316**); o preview aberto numa aba antiga deixa de dizer *"Alterações salvas."* sem ter gravado os campos dos itens:
-> **B936** a **B943**; nenhuma consulta nova; os avisos novos **C314** a **C318**); a próxima é a **145** — ver "Onde estamos e o que vem a
-> seguir".
+> **B936** a **B943**; nenhuma consulta nova; os avisos novos **C314** a **C318**); a próxima era a **145**.)*
 > *(Antes: **Etapa 143 fechada** (das propostas: **o item que não é item é recusado antes de gravar,
 > o histórico conta o que aconteceu e cada item usa um produto só** — pela integração, uma lista de itens com um item vazio fazia o
 > salvamento da proposta nunca responder e, às vezes, apagar os itens (**C310**); agora é recusada com uma frase, sem gravar nada; o
@@ -249,7 +254,10 @@ Consolidado aqui de propósito, para ser revisado de uma vez. Cada item repete, 
 está detalhado na seção da etapa correspondente e no
 `docs/almoxarifado-guia-etapas-e-testes.md` — **esta é a lista curta; lá está o passo a passo.**
 
-### A. Noventa e dois itens para rodar em produção ANTES do deploy — oitenta e nove são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+### A. Noventa e três itens para rodar em produção ANTES do deploy — noventa são consulta, dois são ação fora do sistema, e um é uma limpeza de disco que roda sozinha
+
+*(**Atualizado em 2026-10-18 (Etapa 145) de noventa e dois para noventa e três**, com a **A93** — quem usou proposta nos últimos 90 dias e
+passa a ser barrado nas rotas de proposta e de aprovação (**C317**). **Somente leitura e BLOQUEANTE: rode antes do deploy.**)*
 
 *(**Atualizado em 2026-10-18 (Etapa 143) de noventa e um para noventa e dois**, com a **A92** — os produtos com o mesmo código a menos de
 espaços nas pontas, ou com código só de espaços, e os itens de proposta que o documento mostrava em dobro por causa deles (**C311**).
@@ -3324,12 +3332,78 @@ dobro: confira os pedidos pendentes dessas propostas em **Comercial → Aprovaç
 linha** na 1 e **0** na 2 e na 3; controle numa cópia com `A`, `A `, um código só de espaços e quatro itens: a 1 achou os dois grupos, a 2
 contou 2 itens em 2 propostas e a 3 contou 1.)*
 
+**A93 (NOVA, da Etapa 145 — BLOQUEANTE DO DEPLOY — quem usa proposta e passa a ser barrado nas rotas de proposta).** Desde a Etapa 145
+as rotas de proposta exigem o **Comercial** pela mesma régua da tela: quem tem alguma permissão (direta ou de um grupo ativo) e nenhuma do
+Comercial passa a receber *"Acesso negado ao módulo"* nas propostas e nas aprovações de desconto — a tela já não o deixava abrir o Comercial, mas pela integração (ou por um atalho
+salvo) ele ainda criava, gerava e editava proposta. **Rode antes do deploy**: se a consulta 1 trouxer alguém que deve continuar usando
+propostas, dê a ele a permissão do Comercial (**Administração → Permissões**, ou o grupo dele) **antes** de subir — senão ele fica trancado
+fora no primeiro pedido. Somente leitura.
+
+```sql
+-- 1) quem criou, editou, mudou o status de proposta, pediu ou decidiu aprovação de desconto nos últimos 90 dias e passa a ser barrado (a régua da tela, copiada)
+WITH linhas AS (
+  SELECT ug.usuario_id, p.modulo, p.permissao FROM usuarios_grupos ug
+    JOIN grupos_permissoes gp ON gp.id = ug.grupo_id AND gp.ativo = 1
+    JOIN permissoes p ON p.grupo_id = gp.id
+  UNION ALL
+  SELECT p.usuario_id, p.modulo, p.permissao FROM permissoes p WHERE p.usuario_id IS NOT NULL AND p.grupo_id IS NULL
+),
+recentes AS (
+  SELECT created_by AS usuario_id, created_at AS quando FROM propostas WHERE created_at >= datetime('now', '-90 days')
+  UNION ALL SELECT usuario_id, created_at FROM proposta_edicoes_log WHERE created_at >= datetime('now', '-90 days')
+  UNION ALL SELECT usuario_id, created_at FROM proposta_status_history WHERE created_at >= datetime('now', '-90 days')
+  UNION ALL SELECT solicitado_por, created_at FROM aprovacoes WHERE created_at >= datetime('now', '-90 days')
+  UNION ALL SELECT aprovado_por, aprovado_em FROM aprovacoes WHERE aprovado_em >= datetime('now', '-90 days')
+)
+SELECT u.id, u.nome, u.email,
+  (SELECT GROUP_CONCAT(DISTINCT l.modulo) FROM linhas l WHERE l.usuario_id = u.id AND l.permissao = 1) AS modulos_que_tem,
+  COUNT(*) AS registros_90_dias, MAX(r.quando) AS ultimo_registro
+FROM recentes r JOIN usuarios u ON u.id = r.usuario_id
+WHERE u.ativo = 1
+  AND COALESCE(u.is_superadmin, 0) NOT IN (1, '1')
+  AND LOWER(COALESCE(u.role, '')) <> 'admin'
+  AND EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id)
+  AND NOT EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id AND l.modulo = 'comercial' AND l.permissao = 1)
+GROUP BY u.id ORDER BY ultimo_registro DESC;
+
+-- 2) todos os usuários ativos que passam a ser barrados nas rotas de proposta (com ou sem uso recente)
+WITH linhas AS (
+  SELECT ug.usuario_id, p.modulo, p.permissao FROM usuarios_grupos ug
+    JOIN grupos_permissoes gp ON gp.id = ug.grupo_id AND gp.ativo = 1
+    JOIN permissoes p ON p.grupo_id = gp.id
+  UNION ALL
+  SELECT p.usuario_id, p.modulo, p.permissao FROM permissoes p WHERE p.usuario_id IS NOT NULL AND p.grupo_id IS NULL
+)
+SELECT u.id, u.nome, u.email,
+  (SELECT GROUP_CONCAT(DISTINCT l.modulo) FROM linhas l WHERE l.usuario_id = u.id AND l.permissao = 1) AS modulos_que_tem,
+  CASE WHEN EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id AND l.modulo = 'operacional' AND l.permissao = 1)
+       THEN 'sim' ELSE 'não' END AS ainda_le_a_proposta_pela_os
+FROM usuarios u
+WHERE u.ativo = 1
+  AND COALESCE(u.is_superadmin, 0) NOT IN (1, '1')
+  AND LOWER(COALESCE(u.role, '')) <> 'admin'
+  AND EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id)
+  AND NOT EXISTS (SELECT 1 FROM linhas l WHERE l.usuario_id = u.id AND l.modulo = 'comercial' AND l.permissao = 1)
+ORDER BY u.nome;
+```
+
+**Como ler o resultado:** **a 1 vazia** — pode subir; ninguém que usou proposta nos últimos 90 dias perde o acesso. **Linhas na 1** — cada
+uma é alguém que usou proposta e vai tomar *"Acesso negado ao módulo"*: se ele deve continuar, conceda o **Comercial** antes do deploy; se
+não deve (usava sem ter o módulo), nada a fazer — é o que a etapa fecha. **A 2** é a lista completa de quem a tela já barrava do Comercial
+e agora também a API barra (para conferência; `ainda_le_a_proposta_pela_os = sim` — quem tem o Operacional continua lendo a proposta pela
+ordem de serviço). Se algo der errado depois do deploy, a variável de ambiente `PROPOSTAS_PORTAO_DE_MODULO=desligado` no servidor desliga
+o portão sem novo deploy (**B946**). *(Rodada no banco local, cópia de 09/10: **0** linhas na 1 — os quatro que usaram proposta são três
+super e um usuário com o Comercial — e **4** na 2 (os usuários com permissões só de Compras, Almoxarifado ou Engenharia / Projetos;
+nenhum tem grupo — o banco não tem grupo nenhum); controle numa cópia com dois desses usuários criando/editando proposta há 3 e 10 dias, um
+terceiro só há 200 dias (mas que **aprovou** um desconto há 2 dias), um quarto que ganhou o Comercial e um usuário num grupo ativo sem
+permissão nenhuma: a 1 achou exatamente os três — os dois e o que aprovou.)*
+
 **A(107) (remissão — da Etapa 107 de Compras/core) — Categorias (ou tipos de material) em dobro desde a instalação.**
 Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 107). Sinal no log de todo boot:
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B943; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B951; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -10231,6 +10305,57 @@ continuaria gravando por acaso, e as duas gravações do mesmo salvamento teriam
 (as rotas de proposta exigirem o módulo, com uma consulta para rodar antes do deploy: quem perderia o acesso). As decisões que esperam
 vocês continuam as da **B935**, mais a **C316** (religar ou apagar a geração automática) e a régua de quantidade da **C314**.
 
+**B944 (NOVA, da Etapa 145; das propostas) — as rotas de proposta exigem o Comercial pela régua da TELA, não pela do servidor.** Quem
+abre o Comercial na tela continua usando as propostas; quem a tela barra do Comercial passa a ser barrado também pela integração
+(*"Acesso negado ao módulo"*). A régua é a do portão de rota da tela: administrador e super passam; com alguma permissão (direta ou de
+um grupo ativo), só passa quem tem a do Comercial; sem permissão nenhuma, passa (a regra de sempre, **B63** — ver a **B949**).
+**Descartado:** a régua de módulo que o servidor já tinha (a sugerida no plano anterior) — ela libera o Comercial a todo usuário que não
+está em grupo nenhum e, no banco medido (nenhum grupo cadastrado, todo acesso por permissão direta), **não mudaria nada**: os usuários
+que a tela já barra continuariam gerando proposta pela integração. Descartada também a régua estrita (sem permissão nenhuma = sem
+módulo): trancaria quem hoje abre o Comercial sem nenhuma permissão. **Consequência:** ninguém que abre o Comercial na tela perde nada
+nas rotas de proposta; perde quem só chegava a elas pela integração (a consulta **A93** lista, e é **bloqueante do deploy**). Outras
+rotas ainda mostram dados de proposta a quem a tela barra (**C320**), e a outra rota do Comercial (as ordens de serviço) segue a régua
+antiga (**C321**). **Reversível:** a variável de ambiente da **B946**, ou o revert de um commit.
+
+**B945 (NOVA, da Etapa 145; das propostas) — a leitura de uma proposta aceita também o Operacional.** A ordem de serviço aberta pelo
+Operacional busca os itens na proposta quando ela mesma não tem itens; sem esta exceção, o usuário do Operacional sem o Comercial veria a
+OS sem itens, sem aviso. **Descartado:** só o Comercial (a OS abriria vazia, calada) e liberar a leitura a qualquer logado (a proposta
+inteira, com valores, a qualquer um). **Consequência (Fase 5, r1):** quem tem o Operacional lê a proposta **inteira** — valores, margem,
+condições, contato do cliente — de qualquer número, não só os itens da OS (**C324**). **Reversível.**
+
+**B946 (NOVA, da Etapa 145; das propostas) — uma chave para desligar o portão sem novo deploy.** Com a variável de ambiente
+`PROPOSTAS_PORTAO_DE_MODULO=desligado` no servidor (maiúscula e espaço não importam), as rotas de proposta e de aprovação voltam a pedir
+só o login, como antes da etapa, e o servidor avisa no log ao subir. **Descartado:** só o revert do código (exige deploy, e a **A93** pode
+não ver um uso que não deixa histórico — uma integração que só lê, por exemplo). **Reversível** por definição.
+
+**B947 (NOVA, da Etapa 145; das propostas) — o cliente inativo conta como achado** na criação e na geração automática (a regra do
+produto inativo, **B936**). **Descartado:** recusar o inativo (regra nova sem pedido; a tela só lista os ativos). **Reversível.**
+
+**B948 (NOVA, da Etapa 145; das propostas) — a geração automática desfaz pela limpeza, não por transação.** Se um item não grava, os já
+gravados e a proposta são apagados; se a limpeza também falhar, a resposta diz que a proposta ficou incompleta e qual é o número dela.
+**Descartado:** abrir uma transação no banco (a conexão é uma só, e a transação pegaria as gravações de outras pessoas no meio — a mesma
+razão do motor de estoque). **Consequência:** enquanto os itens são gravados, outra tela pode ver a proposta com parte dos itens — 9 s com
+100 000 itens (medido; com dezenas, milissegundos). **Reversível.**
+
+**B949 (NOVA, da Etapa 145 — EM ABERTO, espera vocês; das propostas e do núcleo) — o usuário sem nenhuma permissão entra nas
+propostas.** É a regra de sempre da tela (**B63**), que a régua nova herdou de propósito. A revisão (r2) mediu duas consequências: o
+usuário **recém-criado** pela tela de usuários nasce sem permissão nenhuma — e, até receber uma, abre o Comercial e cria proposta; e
+**revogar o último módulo** de alguém (a tela de permissões apaga a linha) o deixa sem permissão nenhuma — e com isso ele **ganha** o
+Comercial. Para trancar alguém de fato, hoje, **desative o usuário**. **As opções:** (a) manter como está (nada muda); (b) "sem
+permissão nenhuma = sem módulo" na tela e na integração — o usuário novo só entra no que lhe for dado, e revogar tranca; quem hoje entra
+no Comercial sem permissão nenhuma perde o acesso (no banco local: **0** usuários comuns ativos sem permissão nenhuma); (c) manter a
+regra e fazer a tela de usuários exigir pelo menos um módulo ao criar e ao revogar. Mudar é uma linha de código (a lista "sem permissão"
+da tela e do servidor), mas muda quem acessa o quê no sistema inteiro — por isso fica com vocês.
+
+**B950 (NOVA, da Etapa 145, Fase 5; das propostas) — o pedido de aprovação do desconto passa pelo mesmo portão.** A revisão (r2) mostrou
+que quem a tela barra do Comercial pedia, pela integração, a aprovação de um desconto — que, aprovado por quem pode, muda a margem e o
+status da proposta. As cinco rotas de aprovação passam a exigir o Comercial pela mesma régua (a tela de Aprovações e as que pedem
+aprovação estão todas no Comercial; a chave da **B946** desliga as duas). **Descartado:** deixar para outra etapa (era uma escrita na
+proposta pelo mesmo furo). **Reversível.**
+
+**B951 (NOVA, da Etapa 145) — a próxima etapa (146).** Ver a "próxima tarefa detalhada" no plano da Etapa 145. As decisões que esperam
+vocês continuam as da **B943**, mais a **B949** (o usuário sem nenhuma permissão).
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -13121,7 +13246,10 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      Pela integração, `"quantidade": "abc"` grava o texto no item e deixa o **valor da proposta vazio**; `-3` grava um total negativo; `0` vira
      1. A criação e a edição de proposta também não conferem a quantidade. **O que fazer:** nada pela tela (as telas não deixam); quem
      integra deve mandar número positivo. Se quantidade negativa deve ser recusada ou é um jeito de dar desconto é decisão de vocês.
-315. **NOVO (medido na Etapa 144; das propostas, anterior a ela; reproduzido pela API) — o cliente que não existe dá erro interno.** Na
+315. **✅ RESOLVIDO NA ETAPA 145 (B947)** — a criação e a geração automática respondem *"Cliente não encontrado (id 99999). Atualize a lista
+     de clientes e tente de novo."* e nada é criado; o cliente inativo continua valendo. *E o texto abaixo estava incompleto:* com o número da
+     proposta informado, a criação dava outro erro interno (*"Erro ao salvar proposta: SQLITE_CONSTRAINT: FOREIGN KEY constraint failed"*).
+     O texto original: **NOVO (medido na Etapa 144; das propostas, anterior a ela; reproduzido pela API) — o cliente que não existe dá erro interno.** Na
      geração automática e na criação de proposta, um cliente que não existe responde erro do servidor com a frase do número
      (*"Erro ao gerar número da proposta: Número não gerado"* / *"Não foi possível gerar o número da proposta"*), em vez de uma recusa que
      diga o que houve. Nada é criado. **O que fazer:** nada pela tela (ela só lista clientes ativos).
@@ -13129,15 +13257,54 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      *Proposta automática* saiu da lista de propostas em 29/07/2026 e a janela dele ficou no código sem que nenhuma tela a abra; a geração
      automática só é alcançada pela integração. Se o botão voltar, a recusa do produto sai na mensagem de erro da janela (lido no código,
      não testado). **O que fazer:** decidir se religa o botão ou se apaga a porta e a janela.
-317. **NOVO (da revisão da Etapa 144; das propostas, anterior a ela; reproduzido pela API) — as rotas de proposta não exigem o módulo.**
+317. **✅ RESOLVIDO EM PARTE NA ETAPA 145 (B944, B945, B946, B950; A93 bloqueante do deploy)** — as 49 rotas de proposta e as 5 de
+     aprovação exigem o Comercial pela régua da tela: quem a tela barra do Comercial toma *"Acesso negado ao módulo"*. **E o texto abaixo
+     estava errado num ponto:** "mesmo sem grupo nem acesso ao Comercial" — o usuário **sem permissão nenhuma** entra no Comercial pela regra
+     de sempre da tela (**B63**), e a régua nova (a da tela) o deixa entrar também; o que fecha é o usuário que tem permissões de outros
+     módulos e não a do Comercial. O sem permissão nenhuma é a **B949**, com vocês. O texto original:
+     **NOVO (da revisão da Etapa 144; das propostas, anterior a ela; reproduzido pela API) — as rotas de proposta não exigem o módulo.**
      Qualquer usuário logado, mesmo sem grupo nem acesso ao Comercial, cria proposta, gera proposta automática e grava no preview de uma
      proposta de outra pessoa, pela integração (as telas só aparecem para quem tem o módulo). **O que fazer:** nada antes da próxima etapa,
      que é esta (com uma consulta para ver, antes do deploy, quem usa proposta sem ter o módulo). Não é a pergunta de quem pode editar a
      proposta de outro vendedor (**C305**), que continua com vocês.
-318. **NOVO (da revisão da Etapa 144; das propostas, anterior a ela; reproduzido pela API) — a geração automática responde antes de gravar os
+318. **✅ RESOLVIDO NA ETAPA 145 (B948)** — os itens são gravados um a um e a resposta só sai depois do último; a falha num item desfaz a
+     proposta e responde *"Erro ao gravar os itens da proposta (…). Nenhuma proposta foi criada — tente de novo."*. O texto original:
+     **NOVO (da revisão da Etapa 144; das propostas, anterior a ela; reproduzido pela API) — a geração automática responde antes de gravar os
      itens.** A resposta de sucesso sai logo depois de criar a proposta; os itens são gravados em seguida, sem esperar e sem conferir erro —
      com 100 000 itens a resposta chegou com 5 gravados (os outros vieram depois). Uma falha nessa gravação deixaria a proposta com valor e
      sem itens, respondendo sucesso (não reproduzido). **O que fazer:** nada pela tela (não há tela, **C316**).
+319. **NOVO (da Fase 0 da Etapa 145; das propostas, anterior a ela; lido no código e reproduzido) — a configuração do modelo da proposta
+     só pede o login.** As 20 rotas do modelo da proposta, dos blocos de texto e da biblioteca de textos (fora das rotas de proposta) não
+     exigem o Comercial: quem a tela barra do Comercial cria um bloco de texto pela integração (reproduzido na revisão). **O que fazer:**
+     nada pela tela (a configuração do modelo está no Comercial). Candidata: o mesmo portão nessas rotas, medindo antes quem as chama (o
+     logo e as imagens do modelo podem ser lidos por outras telas).
+320. **NOVO (da revisão da Etapa 145; anterior a ela; reproduzido) — outras rotas ainda mostram dados de proposta a quem a tela barra do
+     Comercial.** A busca global (título da proposta e nome do cliente), os painéis (o geral, o avançado e o de vendas), o relatório
+     executivo, o mapa de máquinas vendidas, a elegibilidade de custos de viagem, as notificações e a ordem de serviço do Operacional
+     respondem a qualquer logado. Elas só **leem**. **O que fazer:** nada pela tela. Fechar cada uma é uma etapa própria (cada uma tem
+     outros usuários legítimos).
+321. **NOVO (da revisão do plano da Etapa 145; do Comercial, anterior a ela; lido no código) — a lista de ordens de serviço do Comercial
+     segue a régua antiga do servidor.** Quem está num grupo sem nenhuma permissão abre o Comercial (a tela deixa) e toma *"Acesso negado
+     ao módulo"* na aba de ordens de serviço; quem tem permissões só de outros módulos e nenhum grupo não abre o Comercial, mas a rota o
+     deixa ler. **O que fazer:** nada (no banco medido não há grupo nenhum). Alinhar à régua da tela é uma linha.
+322. **NOVO (da revisão do plano da Etapa 145; das propostas, anterior a ela; lido no código) — salvar a proposta aceita um cliente que
+     não existe.** A criação e a geração automática recusam desde a Etapa 145, mas o salvamento de uma proposta existente com um cliente
+     que não existe grava (pela integração). A tela só lista clientes cadastrados. **O que fazer:** nada pela tela. Candidata pequena.
+323. **NOVO (da revisão do plano da Etapa 145; das propostas, anterior a ela; lido no código) — a criação de proposta grava os itens sem
+     conferir o erro de cada um.** O mesmo defeito que a geração automática tinha (**C318**): um item que não grava some calado e a
+     proposta é criada com sucesso, sem ele. Não reproduzido (precisa de falha do banco no meio). **O que fazer:** nada pela tela.
+     Candidata: a gravação em sequência da geração automática.
+324. **NOVO (da revisão da Etapa 145; consequência da **B945**) — quem tem o Operacional lê a proposta inteira.** A leitura da proposta
+     que a ordem de serviço do Operacional usa devolve tudo — valores, margem, condições de pagamento, contato do cliente — de qualquer
+     número de proposta, não só os itens que a OS mostra. Antes da etapa, qualquer logado lia; agora, só Comercial e Operacional.
+     **O que fazer:** nada. Candidata: devolver só os itens quando o acesso vier só pelo Operacional (muda o que a OS recebe — medir antes).
+325. **NOVO (da revisão da Etapa 145; do núcleo, anterior a ela; reproduzido) — uma permissão gravada com o número interno 0 some da
+     leitura da tela.** A tela e o portão das propostas passam a discordar para esse usuário (a tela abre o Comercial, a integração
+     barra). Só acontece com um número 0 gravado à mão no banco (o sistema nunca gera 0). **O que fazer:** nada.
+326. **NOVO (da revisão da Etapa 145; do núcleo, anterior a ela; reproduzido) — cada acesso negado grava uma linha no log, sem teto.**
+     10 000 pedidos negados com um cabeçalho de navegador de 8 KB aumentaram o banco em 81 MB (o cabeçalho é gravado inteiro). O limite de
+     pedidos por endereço (500 a cada 15 minutos) segura um atacante sozinho. A etapa só somou rotas a esse caminho. **O que fazer:**
+     nada; se o banco crescer sem motivo, olhar o log de acesso negado.
 ### D. Limitações declaradas — são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -14469,6 +14636,12 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(145) O usuário sem nenhuma permissão entra nas propostas** (a regra de sempre da tela) — inclusive o recém-criado e o que teve o
+  último módulo revogado (**B949**, com vocês). Para trancar alguém, desative o usuário.
+- **(145) O portão vale para as rotas de proposta e de aprovação**, não para as outras que mostram dados de proposta (**C319**, **C320**,
+  **C321**); o Operacional lê a proposta inteira pela ordem de serviço (**C324**).
+- **(145) A geração automática com dezenas de milhares de itens** segura a resposta até gravar todos (100 000 itens: 9 s, medido; as outras
+  telas continuaram respondendo em milissegundos). Durante esse tempo a proposta já aparece, com parte dos itens (**B948**).
 - **(144) A gravação dos campos dos itens pelo preview responde sucesso mesmo para uma proposta que não existe**, dizendo quantos não
   gravou (antes, só sucesso). Nada é gravado.
 - **(144) O aviso do preview não diz quantos campos** não foram gravados: o preview manda todos os campos do documento (os vazios e os não
@@ -15440,6 +15613,11 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(145) Nenhum clique foi dado no navegador.** Tudo foi provado pela rota, com o servidor de verdade em pasta vazia (as 49 rotas de proposta
+e as 5 de aprovação uma a uma, com 17 perfis de usuário). O que **só o navegador** prova: o roteiro da Etapa 145 no guia — o vendedor com o
+Comercial usando lista, formulário, preview (salvar, fotos, PDF) e aprovações sem nenhum *"Acesso negado"*; e o usuário do Operacional
+abrindo uma ordem de serviço sem itens próprios e vendo os itens da proposta.
 
 **(144) Nenhum clique foi dado no navegador.** A geração automática não tem tela (**C316**) — foi provada pela rota, com o servidor de
 verdade em pasta vazia (11 cenários, um com a gravação falhando de propósito). O aviso do preview foi provado pela resposta do servidor e por
@@ -29443,9 +29621,99 @@ proposta não exigem o módulo (**C317**, a próxima etapa) e a geração autom�
 **sabotagem** fez **29** sabotagens: **12** caíram, **5** são equivalentes e **9** sobreviveram por falta de cenário (o relatório dele somava 12; nomeou 9) — entre elas uma régua
 do código da tela que deixaria passar o *"Alterações salvas."* junto com o aviso; viraram cenários. Nenhum defeito no código entregue.
 
+## Etapa 145 — As rotas da proposta exigem o Comercial, a geração automática só responde depois de gravar, e o cliente que não existe é recusado (2026-10-18)
+
+Três consertos nas propostas, todos do lado do servidor. O principal: a tela só mostrava o Comercial a quem tinha o módulo, mas o
+servidor aceitava qualquer pessoa logada nas rotas de proposta — quem a tela barrava do Comercial (um usuário só do Almoxarifado, por
+exemplo) criava proposta, gerava proposta automática e gravava no preview da proposta de outro vendedor pela integração. Agora o servidor
+usa a mesma régua da tela: quem abre o Comercial continua fazendo tudo; quem a tela barra recebe *"Acesso negado ao módulo"*. **Antes do
+deploy, rode a consulta A93** — ela lista quem usou proposta nos últimos 90 dias e vai perder o acesso. Além disso, a geração automática
+respondia "pronto" antes de terminar de gravar os itens (e um item que falhava sumia calado); e o cliente que não existe dava erro interno
+em vez de uma frase.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Usuário só do Almoxarifado (a tela não lhe mostra o Comercial) cria, gera e edita proposta pela integração | *"Acesso negado ao módulo"* nas 49 rotas de proposta, e o acesso negado fica no log de auditoria com o módulo *Comercial* (**C317** resolvido, em parte — ver a **B949**) |
+| O mesmo usuário pede a aprovação de um desconto pela integração (e, aprovada, muda a margem e o status da proposta) | *"Acesso negado ao módulo"* nas 5 rotas de aprovação (**B950**) |
+| Usuário do Operacional sem o Comercial abre a ordem de serviço e ela busca os itens na proposta | Continua igual — a leitura da proposta aceita o Operacional (**B945**) |
+| Arquivo enviado para a proposta (foto, cotação, PDF anexo) por quem não tem o Comercial | Recusado **antes** de o arquivo chegar ao disco |
+| Geração automática com 200 itens → "pronto" com 34 itens gravados (os outros chegavam depois); um item que falhava sumia | "Pronto" só depois do último item; se um item falha, nada fica e sai *"Erro ao gravar os itens da proposta (…). Nenhuma proposta foi criada — tente de novo."* (**C318** resolvido) |
+| Cliente que não existe → erro interno com a frase do número da proposta (ou da chave estrangeira) | *"Cliente não encontrado (id 99999). Atualize a lista de clientes e tente de novo."*, nas duas portas, e nada é criado (**C315** resolvido) |
+
+### As regras, com o cenário exato
+
+**1. Quem a tela barra do Comercial é barrado nas propostas (B944).** Crie um usuário comum e dê a ele **só** o módulo Almoxarifado
+(**Administração → Permissões**). Entre com ele: o Comercial não aparece (como sempre). Pela integração, com o token
+dele, `GET /api/propostas` → **403** `{ "error": "Acesso negado ao módulo", "modulo": "comercial" }` (antes: **200** com a lista). O mesmo
+em `POST /api/propostas/gerar-automatica`, no preview (`PUT /api/propostas/<id>/variaveis-manuais`) e nas outras 46. Em **Administração →
+Logs** aparece o acesso negado com o módulo *Comercial*. Dê a ele também o **Comercial** e repita: **200**.
+
+**2. Quem abre o Comercial não perde nada.** O vendedor com o Comercial (por permissão direta ou pelo grupo), o administrador, o super e o
+usuário **sem permissão nenhuma** (a regra de sempre — **B949**) continuam com a lista, o detalhe, o formulário, o preview, as fotos, as
+cláusulas, o PDF, as aprovações e a geração automática. O usuário num grupo ativo **sem permissão nenhuma** também (a tela o deixa abrir o
+Comercial; a régua antiga do servidor o barraria).
+
+**3. O Operacional lê a proposta da ordem de serviço (B945).** O usuário só do Operacional abre uma ordem de serviço sem itens próprios em
+**Operacional → Ordens de serviço** e os itens vêm da proposta, como antes. Pela integração, `GET /api/propostas/<id>` → **200**; qualquer
+outra rota de proposta → **403**. Sem Comercial nem Operacional: `GET /api/propostas/<id>` → **403** `{ "error": "Acesso negado ao módulo",
+"modulo": ["comercial", "operacional"] }`, e o log diz *Comercial ou Operacional*.
+
+**4. Desligar sem deploy (B946).** Com `PROPOSTAS_PORTAO_DE_MODULO=desligado` no ambiente do servidor (reiniciado), o log do boot mostra
+*"⚠️ PROPOSTAS_PORTAO_DE_MODULO=desligado: as rotas /api/propostas* NAO exigem o módulo Comercial (só o login)."* e o usuário do cenário 1
+volta a passar. Tirando a variável e reiniciando, volta a ser barrado.
+
+**5. A geração automática responde depois de gravar (B948 — C318).** Pela integração, gere uma proposta com 3 000 produtos: quando a
+resposta chega, os 3 000 itens já estão na proposta (antes, uma fração). Se o banco falhar num item, a resposta é **500** *"Erro ao
+gravar os itens da proposta (<o erro do banco>). Nenhuma proposta foi criada — tente de novo."* e nem a proposta nem os itens ficam; se
+até a limpeza falhar, *"… A proposta <número> ficou incompleta — exclua-a e gere de novo."*.
+
+**6. O cliente que não existe (B947 — C315).** `POST /api/propostas/gerar-automatica` com `{ "cliente_id": 99999, "produtos": [{ "id":
+<um produto> }] }` → **400** *"Cliente não encontrado (id 99999). Atualize a lista de clientes e tente de novo."*; o mesmo em `POST
+/api/propostas` com `{ "titulo": "X", "cliente_id": 99999 }`, com ou sem `numero_proposta`. Nenhuma proposta nasce, e o número da próxima
+continua o mesmo. O cliente **inativo** continua valendo. A ordem: o desconto acima de 5 % fora do rascunho (403), o produto que não existe
+e *"Cliente inválido"* vêm antes.
+
+### O que esta etapa NÃO cobre
+
+1. **O usuário sem nenhuma permissão continua entrando** nas propostas — inclusive o recém-criado e o que teve o último módulo revogado
+   (**B949**, decisão de vocês). Para trancar alguém de fato, desative o usuário.
+2. **Outras rotas ainda mostram dados de proposta** a quem a tela barra (busca global, painéis, relatórios, notificações — **C320**); a
+   configuração do modelo da proposta só pede o login (**C319**); a lista de OS do Comercial segue a régua antiga (**C321**).
+3. **Quem tem o Operacional lê a proposta inteira**, não só os itens da OS (**C324**).
+4. **Salvar a proposta com um cliente que não existe** continua gravando (**C322**); a criação grava os itens sem conferir o erro de cada um
+   (**C323**).
+5. **Quem pode editar a proposta de outro vendedor** continua com vocês (**C305**); a quantidade da integração (**C314**); a geração
+   automática sem tela (**C316**).
+
+### O que a revisão encontrou
+
+A **medição** (antes do código) mudou o desenho: o plano anterior sugeria usar a régua de módulo que o servidor já tinha — mas ela libera
+o Comercial a todo usuário que não está em grupo, e o banco medido **não tem grupo nenhum**: o conserto não mudaria nada. A **revisão do
+plano** corrigiu a contagem (49 rotas, não 50), pediu que o banco ocupado respondesse "tente de novo" (que a tela repete) e não erro, que
+o teste provasse que a decisão do servidor é a da tela **para cada usuário** (não só na função) e que a consulta **A93** fosse escrita. A
+**revisão adversarial do código** (três revisores, executando): o de **regra** não achou nada — comparou 27 perfis de usuário entre a tela
+e o servidor e a geração automática antes e depois (idêntica no caso válido); o de **permissão** não achou caminho para o barrado nas 49
+rotas (maiúsculas, barras, métodos, upload, token de usuário rebaixado) e achou o **pedido de aprovação** aberto (fechado nesta etapa,
+**B950**) e o usuário sem nenhuma permissão entrando (**B949**); o de **sabotagem** fez 29 sabotagens novas — 19 caíram, 2 são
+equivalentes e 8 sobreviveram por falta de cenário (a permissão desligada, a de outra ação, o administrador do módulo, o super sob banco
+ocupado, uma rota escrita com aspas duplas, a frase da limpeza, o número do cliente com letras) — viraram cenários. Nenhum defeito no
+código entregue.
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 145 entregue (2026-10-18):** **as rotas da proposta exigem o Comercial, a geração automática só responde depois de gravar, e o
+  cliente que não existe é recusado** (das propostas). Quem a tela barra do Comercial é barrado nas 49 rotas de proposta e nas 5 de
+  aprovação (**B944**, **B950** — **C317** resolvido em parte), o Operacional continua lendo a proposta da ordem de serviço (**B945**), e
+  uma variável de ambiente desliga o portão sem deploy (**B946**); a geração automática grava os itens antes de responder e desfaz se
+  falhar (**B948** — **C318** resolvido); o cliente que não existe é recusado com uma frase nas duas portas (**B947** — **C315**
+  resolvido). Commits `68227035` e `b7848925`. **O que é seu:** a consulta **A93** — **bloqueante do deploy**; a pergunta **B949** (o usuário
+  sem nenhuma permissão); os avisos **C319** a **C326**; as decisões **B944 a B950** (reversíveis); as perguntas de antes (**B910**,
+  **B853**, **B924**, **B926**, **C312**, **C314**, **C316**); as limitações **(145)** em D e a verificação **(145)** em F. **Próxima: Etapa
+  146 — ver a "próxima tarefa detalhada" no plano da Etapa 145.**
 
 - **Etapa 144 entregue (2026-10-18):** **a geração automática recusa o produto que não existe, e o preview avisa quando um campo não foi
   gravado** (das propostas). A geração automática recusa, sem criar nada, o produto sem número que valha e o que não existe (**C313**
@@ -29454,7 +29722,7 @@ do código da tela que deixaria passar o *"Alterações salvas."* junto com o av
   **B942**). A revisão obrigatória da proposta continua **23/23** (+ editor 39/39) e ganha o teste novo da rota. **O que é seu:** os avisos
   **C314** a **C318** (a **C316**, religar ou apagar a geração automática, e a régua de quantidade da **C314** são decisão de vocês); as
   decisões **B936 a B942** (reversíveis); as perguntas de antes (**B910**, **B853**, **B924**, **B926**, **C312**); as limitações
-  **(144)** em D e a verificação **(144)** em F. **Próxima: Etapa 145 — ver a "próxima tarefa detalhada" no plano da Etapa 144.**
+  **(144)** em D e a verificação **(144)** em F. *(Próxima, na época: Etapa 145 — entregue acima.)*
 
 - **Etapa 143 entregue (2026-10-18):** **o item que não é item é recusado antes de gravar, e cada item usa um produto só** (das
   propostas). O salvamento, a criação e a geração automática recusam, sem gravar nada, a lista com item vazio ou que não é item

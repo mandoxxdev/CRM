@@ -196,6 +196,21 @@ Após o login, você verá a **Tela de Seleção de Módulos** com 5 opções:
 
 ### 3.3 Gestão de Propostas
 
+**Quem pode usar as propostas.** As propostas — lista, criação, edição, preview editável, fotos, cláusulas, PDF, envio, aceite, cópia,
+lembretes — e os pedidos de aprovação de desconto ficam no módulo **Comercial**, e o sistema confere o acesso em **cada operação**,
+inclusive quando ela chega pela integração, com a mesma regra que decide se o Comercial aparece na tela:
+
+- o administrador do sistema e o super administrador entram sempre;
+- quem tem alguma permissão de módulo (dada diretamente ao usuário ou por um grupo **ativo**) entra só se uma delas for a do Comercial;
+- quem não tem permissão nenhuma entra no Comercial;
+- ser administrador de um módulo não basta — vale a permissão do módulo.
+
+Quem não pode recebe *"Acesso negado ao módulo"*, e a tentativa fica registrada em **Administração → Logs**. Os arquivos enviados para a
+proposta (fotos, cotação, PDF anexo) são recusados antes de chegar ao servidor. **Exceção:** a ordem de serviço do Operacional busca os
+itens na proposta de origem — por isso quem tem o **Operacional** consegue abrir uma proposta para leitura (só a leitura de uma proposta;
+o resto continua exigindo o Comercial). **Para tirar o acesso de alguém de fato, desative o usuário**: retirar a última permissão de uma
+pessoa a deixa sem permissão nenhuma — e quem não tem permissão nenhuma entra no Comercial.
+
 #### 3.3.1 Lista de Propostas
 
 **Visualizações disponíveis:**
@@ -313,7 +328,15 @@ Após o login, você verá a **Tela de Seleção de Módulos** com 5 opções:
   Atualize a lista de produtos e tente de novo."* — com os números que faltam, sem repetir, na ordem em que vieram (com mais de dez, os dez
   primeiros e "e mais N"). Em nenhuma das duas recusas a proposta é criada. Produto inativo conta como cadastrado; o mesmo produto pedido
   duas vezes vira dois itens. A ordem das conferências: cliente e produtos informados → cada produto um registro → margem → desconto acima
-  de 5% fora do rascunho → o número de cada produto → produto cadastrado → cliente válido.
+  de 5% fora do rascunho → o número de cada produto → produto cadastrado → cliente válido → cliente cadastrado.
+- Na **criação de proposta** e na **geração automática**, o cliente tem de estar cadastrado (ativo ou inativo): senão a proposta é recusada
+  com *"Cliente não encontrado (id 99999). Atualize a lista de clientes e tente de novo."* e nada é criado — nem o número da proposta é
+  gasto. Na criação, essa conferência vem depois das do título, da margem, dos itens, do motivo, do cliente informado, do responsável e do
+  desconto acima de 5%.
+- Na **geração automática**, todos os itens são gravados antes de a resposta chegar. Se o banco falhar ao gravar um item, nada fica — nem a
+  proposta, nem os itens já gravados — e a resposta é *"Erro ao gravar os itens da proposta (<o erro do banco>). Nenhuma proposta foi
+  criada — tente de novo."*; se até a limpeza falhar, *"Erro ao gravar os itens da proposta (<o erro do banco>). A proposta <número> ficou
+  incompleta — exclua-a e gere de novo."*. Com dezenas de milhares de itens a resposta demora alguns segundos.
 - Pela integração (API), a lista de itens da criação, da edição e os produtos da geração automática precisam ser uma **lista de itens**, e
   cada item um registro com os seus campos. Uma lista com um item vazio, um número ou um texto no lugar do item — ou com um item em que algum
   campo, fora a lista de acessórios, não é texto nem número — é recusada com *"Item inválido: cada item da proposta deve ser um objeto."*;

@@ -227,7 +227,12 @@ T1 e T2 dividem o `index.js` e o arquivo de teste da rota → executadas **em se
    **0** ruído.
 3. **Paralelismo:** **0** galhos em paralelo de fato (T2 e T3 eram galhos, feitas em sequência — o "um teste por vez" e o tamanho); **0**
    retrabalho; **1** revisor na Fase 2, **3** em paralelo na Fase 5 sob a trava (o r3 numa worktree própria, removida).
-4. **Defeito que escapou:** *(preencher na Etapa 145)*.
+4. **Defeito que escapou** *(preenchido na Etapa 145)*: **0** de código (o r1 da 145 executou a geração automática da `38520b4e` e da
+   `68227035` e o caso válido sai idêntico); **2** afirmações erradas de documento: (1) o "desenho reversível sugerido" da próxima tarefa
+   abaixo — `checkModulePermission('comercial')` — **não mudaria nada** no banco medido (0 grupos: a régua do servidor libera o Comercial a
+   todo usuário sem grupo), e a reprodução do r2 citada ("sem grupo nem permissão") continua passando com qualquer régua (B63) — a 145
+   usou a régua da tela; (2) a C315 dizia que o `POST /api/propostas` com cliente que não existe dava *"Não foi possível gerar o número da
+   proposta"* — com `numero_proposta` informado dava outro 500 (*"…FOREIGN KEY constraint failed"*), medido na Fase 0 da 145.
 
 ## Próxima tarefa detalhada — Etapa 145
 

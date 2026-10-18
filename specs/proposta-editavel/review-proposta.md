@@ -159,6 +159,8 @@ cd server && node tests/api/propostaClausulaAlem524.api.test.js   # a 5.25 inclu
 cd server && node tests/api/propostaItensIguais.api.test.js       # Etapa 142: itens iguais pelo PUT, o /premium e o preview
 cd server && node tests/api/propostaItemInvalido.api.test.js     # Etapa 143: o item que não é objeto (C310), o histórico e um produto por item (C311)
 cd server && node tests/api/propostaProdutoInexistente.api.test.js  # Etapa 144: o produto que não existe na geração automática (C313) e o preview numa aba velha (ignorados)
+cd server && node tests/api/propostaPortaoModulo.api.test.js       # Etapa 145: o portão do Comercial nas 49 rotas da proposta e nas 5 de aprovação (C317)
+cd server && node tests/api/propostaGeracaoGrava.api.test.js       # Etapa 145: a geração automática grava antes de responder (C318) e o cliente que não existe (C315)
 ```
 
 Critério: **tudo verde**. Qualquer invariante quebrado bloqueia o merge. *(De julho à Etapa 138 a revisão rodava com dois vermelhos
