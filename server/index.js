@@ -5927,7 +5927,7 @@ app.put('/api/propostas/:id/itens/descricoes', authenticateToken, (req, res) => 
     if (errItens) return res.status(500).json({ error: errItens.message });
     const idsDaProposta = new Set((itensDaProposta || []).map((i) => String(i.id)));
     let ignorados = 0;
-    const stmt = db.prepare('UPDATE proposta_itens SET descricao_tabela = ? WHERE id = ? AND proposta_id = ?');
+    const passos = [];
     lista.forEach((d) => {
       if (!d || d.item_id == null) return;
       const itemId = idInteiro(d.item_id);
@@ -5935,9 +5935,11 @@ app.put('/api/propostas/:id/itens/descricoes', authenticateToken, (req, res) => 
       const texto = String(d.texto == null ? '' : d.texto).trim();
       // Vazio grava NULL: assim a descrição volta a ser o nome do produto + modelo, em vez de
       // ficar uma linha em branco na tabela.
-      stmt.run([texto || null, Number(itemId), id]);
+      passos.push(['UPDATE proposta_itens SET descricao_tabela = ? WHERE id = ? AND proposta_id = ?', [texto || null, Number(itemId), id]]);
     });
-    stmt.finalize((err) => {
+    // Em sequência, com o erro de cada UPDATE no callback (Fase 5, r2): o stmt.run sem callback de antes fazia o SQLITE_BUSY virar
+    // exceção solta e a resposta nunca chegava.
+    executarEmSequencia(passos, (err) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ ok: true, ignorados });
     });

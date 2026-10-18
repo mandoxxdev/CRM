@@ -18,3 +18,13 @@ export function avisoValoresIgnorados(n) {
   // o vendedor editou.
   return 'Alguns campos dos itens não foram gravados: os itens desta proposta mudaram depois que o preview abriu (ela foi salva em outra aba ou por outra pessoa). O preview foi recarregado — confira e preencha de novo.';
 }
+
+/**
+ * O desfecho do salvar() do preview (Fase 5, r3): qual toast, com que texto, e o que o salvar() devolve — por valor, num lugar só.
+ * Com algum campo ignorado: aviso e `ok: false` (o Emitir revisão não emite, B940); senão "Alterações salvas." e `ok: true`.
+ */
+export function desfechoDoSalvar(respostaVariaveis, respostaDescricoes) {
+  const aviso = avisoValoresIgnorados(somarIgnorados(respostaVariaveis, respostaDescricoes));
+  if (aviso) return { tipo: 'warning', mensagem: aviso, ok: false };
+  return { tipo: 'success', mensagem: 'Alterações salvas.', ok: true };
+}

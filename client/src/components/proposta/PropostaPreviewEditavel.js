@@ -23,7 +23,7 @@ import {
 import { nomeArquivoPdfProposta } from '../../utils/nomeArquivoPdf';
 import { aplicarMascaraNoNoEditavel } from '../../utils/telefoneContentEditable';
 import { resolveFotoPropostaUrl } from '../../utils/resolveUploadAssinadoUrl';
-import { avisoValoresIgnorados, somarIgnorados } from './avisoValoresIgnorados';
+import { desfechoDoSalvar } from './avisoValoresIgnorados';
 import './PropostaPreviewEditavel.css';
 
 const CAMPOS_EDITAVEIS = [
@@ -1371,11 +1371,10 @@ export default function PropostaPreviewEditavel() {
         await api.put(`/propostas/${id}/customizacoes`, camposEditados);
       }
       setMudancasPendentes(false);
-      const aviso = avisoValoresIgnorados(somarIgnorados(respostaVariaveis, respostaDescricoes));
-      if (aviso) toast.warning(aviso);
-      else toast.success('Alterações salvas.');
+      const desfecho = desfechoDoSalvar(respostaVariaveis, respostaDescricoes);
+      toast[desfecho.tipo](desfecho.mensagem);
       carregarPreview();
-      return !aviso;
+      return desfecho.ok;
     } catch (e) {
       toast.error('Erro ao salvar alterações.');
       return false;

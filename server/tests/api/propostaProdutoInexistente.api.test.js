@@ -65,17 +65,20 @@ function portaLivre() {
 const SEED = { email: 'e144seed@t.com', senha: 'E144seed!senha' };
 process.on('exit', () => { try { if (filho) filho.kill(); } catch (e) { /* ja saiu */ } });
 
-async function subir() {
+async function subir(extraEnv = {}) {
   logArq = path.join(pasta, 'index.log');
   porta = await portaLivre();
   if (porta === 5000) porta = await portaLivre();
   const env = { ...process.env };
   for (const k of ['NODE_ENV', 'NODE_OPTIONS', 'RUN_ALL_GUARDA_EXIT', 'PORT', 'CRM_DATA_DIR', 'JWT_SECRET',
-    'SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD', 'FALHA_SQL_INJETADA', 'RATE_LIMIT_WINDOW_MS']) delete env[k];
-  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000' });
+    'SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD', 'FALHA_SQL_INJETADA', 'FALHA_SQL_MSG', 'FALHA_SQL_METODOS', 'RATE_LIMIT_WINDOW_MS']) delete env[k];
+  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000' }, extraEnv);
   const out = fs.openSync(logArq, 'a');
   saiu = null;
-  filho = spawn(process.execPath, ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js'), 'index.js'], {
+  const preload = ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js')];
+  if (extraEnv.FALHA_SQL_INJETADA) preload.push('-r', path.join(__dirname, '..', 'helpers', 'falhaSqlInjetada.js'));
+  const marcas = fs.existsSync(logArq) ? (fs.readFileSync(logArq, 'utf8').match(/Banco de dados totalmente inicializado/g) || []).length : 0;
+  filho = spawn(process.execPath, [...preload, 'index.js'], {
     cwd: SERVER_DIR, env, stdio: ['pipe', out, out], windowsHide: true,
   });
   filho.on('exit', (code) => { saiu = code; });
@@ -86,7 +89,7 @@ async function subir() {
       const [s, x] = await j('POST', '/auth/login', null, SEED);
       if (s === 200 && x && x.token) {
         const ate = Date.now() + 30000;
-        while (Date.now() < ate && !/Banco de dados totalmente inicializado/.test(fs.readFileSync(logArq, 'utf8'))) await pausa(200);
+        while (Date.now() < ate && (fs.readFileSync(logArq, 'utf8').match(/Banco de dados totalmente inicializado/g) || []).length <= marcas) await pausa(200);
         await pausa(1500);
         return x.token;
       }
@@ -159,6 +162,7 @@ test('[RN-144.02] puro: msgProdutoNaoEncontrado — sem repeticao, na ordem, ate
   const doze = Array.from({ length: 12 }, (_, i) => String(i + 1));
   assert.strictEqual(msgProdutoNaoEncontrado(doze), nao('1, 2, 3, 4, 5, 6, 7, 8, 9, 10 e mais 2'));
   assert.strictEqual(msgProdutoNaoEncontrado(doze.slice(0, 10)), nao('1, 2, 3, 4, 5, 6, 7, 8, 9, 10'));
+  assert.strictEqual(msgProdutoNaoEncontrado(doze.slice(0, 11)), nao('1, 2, 3, 4, 5, 6, 7, 8, 9, 10 e mais 1'), 'com 11 (F5 r3 s20)');
   assert.strictEqual(msgProdutoNaoEncontrado([...doze.slice(0, 10), '1', '2']), nao('1, 2, 3, 4, 5, 6, 7, 8, 9, 10'), 'repetido conta no "e mais"');
 });
 
@@ -273,6 +277,17 @@ test('[RN-144.04] itens/descricoes: responde quantos nao gravaram; o da proposta
   assert.deepStrictEqual([s, x], [200, { ok: true, ignorados: 3 }]);
   assert.deepStrictEqual(await descTabela(id), [null, 'Tabela Q']);
   assert.deepStrictEqual(await descTabela(outra), [null, null], 'gravou na outra proposta');
+  // F5 r3 s11: a entrada de texto vazio com item que nao e da proposta tambem conta (o preview manda todos os campos)
+  [s, x] = await responde('PUT', `/propostas/${id}/itens/descricoes`, { descricoes: [{ item_id: 999999, texto: '' }] });
+  assert.deepStrictEqual([s, x], [200, { ok: true, ignorados: 1 }]);
+  // F5 r3 s13 (B942): "5.0" e true nao casam mais pela afinidade do SQLite
+  [s, x] = await responde('PUT', `/propostas/${id}/itens/descricoes`, { descricoes: [{ item_id: `${i2}.0`, texto: 'X' }, { item_id: true, texto: 'X' }] });
+  assert.deepStrictEqual([s, x], [200, { ok: true, ignorados: 2 }]);
+  assert.deepStrictEqual(await descTabela(id), [null, 'Tabela Q'], '"5.0" ou true gravou');
+  // F5 r3 s10: o id com um espaco que o SQLite nao converte (nbsp) e aparado pelo idInteiro e GRAVA — gravar pelo id cru perdia calado
+  [s, x] = await responde('PUT', `/propostas/${id}/itens/descricoes`, { descricoes: [{ item_id: '\u00a0' + i1, texto: 'Y' }] });
+  assert.deepStrictEqual([s, x], [200, { ok: true, ignorados: 0 }]);
+  assert.deepStrictEqual(await descTabela(id), ['Y', 'Tabela Q']);
 });
 
 // ── integracao ────────────────────────────────────────────────────────────────────────────
@@ -306,6 +321,22 @@ test('[RN-144.01..04] integracao: gerada com id em texto -> o formulario salva (
   assert.deepStrictEqual([s, x], [200, { ok: true, ignorados: 0 }]);
   assert.deepStrictEqual((await vars(id)).map((v) => v.valor), ['novo', 'novo']);
   assert.deepStrictEqual(await descTabela(id), ['novo', 'novo']);
+});
+
+test('[RN-144.04, F5 r2] itens/descricoes com o UPDATE falhando: 500 que chega, nada gravado (antes: stmt.run sem callback, a resposta nunca chegava)', async () => {
+  const id = await propostaPQ();
+  const [i1] = (await itensP(id)).map((i) => i.id);
+  await descer();
+  ctx.T = await subir({ FALHA_SQL_INJETADA: '^UPDATE proposta_itens SET descricao_tabela', FALHA_SQL_MSG: 'SQLITE_BUSY: database is locked' });
+  const [s, x] = await responde('PUT', `/propostas/${id}/itens/descricoes`, { descricoes: [{ item_id: i1, texto: 'Z' }] });
+  assert.deepStrictEqual([s, x], [500, { error: 'SQLITE_BUSY: database is locked' }]);
+  assert.deepStrictEqual(await descTabela(id), [null, null]);
+  // a metade positiva: sem a falha (o servidor de volta ao normal) grava
+  await descer();
+  ctx.T = await subir();
+  const [s2, x2] = await responde('PUT', `/propostas/${id}/itens/descricoes`, { descricoes: [{ item_id: i1, texto: 'Z' }] });
+  assert.deepStrictEqual([s2, x2], [200, { ok: true, ignorados: 0 }]);
+  assert.deepStrictEqual(await descTabela(id), ['Z', null]);
 });
 
 (async () => {
