@@ -388,6 +388,31 @@ projeto das listas, o vendedor seguindo o clique até as leituras da proposta, 1
 (o dono dos prefixos `/api/clientes` e `/api/projetos`: as listas com a cadeia nova nas camadas); `client/src/components/Notificacoes.test.js`
 (o clique e a rota `propostas/editar/:id` → `PropostaForm` no bloco `/comercial` do `App.js`).
 
+### A edição do custo de viagem, os valores da rota e a localização pelo servidor (Etapa 157, C372, C374, C375, C376)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa157-edicao-do-custo-de-viagem-e-cidades-do-client.md`. Commits `4c9de31d`, `00dbce2b`, `a04ab574`, `10b6f756` e `fab87f82` (a
+correção da revisão). Status: entregue; nenhum endpoint novo nem mudado no contrato.
+
+- [x] **RN-157.01 (C372, B1004)** — abrir para editar só sugere a rota (`assinaturaDaRota` sobre o objeto normalizado; a primeira mudança
+  num dos sete campos apaga a assinatura para sempre na edição); o contador descarta a resposta velha (resposta, erro, `finally`); o Aplicar
+  aéreo marca a passagem — `00dbce2b`, `fab87f82`.
+- [x] **RN-157.02 (C374)** — `client/src/utils/valoresDaRota.js`, uma função para o automático, a confirmação e o Aplicar; a taxa no modal —
+  `4c9de31d`.
+- [x] **RN-157.03 (C375, B1005, B1006)** — `client/src/utils/coordenadasDoCliente.js`; as listas de cidades saíram da `CustosViagens` e da
+  `PreviewRota`; a resposta de um cliente que já não é o escolhido não vale; o escolhido entra na lista e tem as regras pedidas na hora; o
+  Salvar do cadastro espera as regras — `a04ab574`, `fab87f82`.
+- [x] **RN-157.04 (D (156))** — `clientes-proximos`: a mesma cidade e o endereço por `normalizarNome`, o estado sem caixa — `10b6f756`.
+- [x] **C376 (Fase 5)** — `calcular-rota` compara o `tipo_viagem` sem caixa (o POST/PUT o gravam em maiúsculas); a edição o põe em
+  minúsculas — `fab87f82`.
+- [ ] **O resumo por tipo** (`GET /api/custos-viagens/resumo`, `CASE WHEN tipo_viagem = 'ida'`) — **fora, de propósito**: nenhuma tela usa
+  `custo_ida`/`custo_volta`/`custo_ida_volta`; mudar a consulta mudaria números que ninguém vê (D (157)).
+- [ ] **A coordenada do endereço guardada** (C377) — **fora**: é do cadastro de clientes, e a frequência de consultas não mudou nesta etapa.
+
+Testes: `client/src/components/CustosViagensEdicao.test.js` (a tela com o `api.js` real e o adaptador falso: 32 cenários),
+`client/src/components/PreviewRota.test.js` (3, o `react-leaflet` simulado), `client/src/utils/valoresDaRota.test.js` (3),
+`client/src/utils/coordenadasDoCliente.test.js` (5); no servidor, `tests/api/coordenadasPrazo.api.test.js` (+3: os próximos de São Paulo
+dos dois lados e o tipo em maiúsculas).
+
 ### A repetição do 503 com os filtros, e o prazo e a cidade das coordenadas (Etapa 156, C369, C361, C370, C371)
 
 Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa156-repeticao-listas-recusadas-e-prazo-do-mapa.md`. **Nenhuma rota muda.** Commits `03ecf059`, `438ab108`, `02545473` e a correção da revisão `95fed61a`.

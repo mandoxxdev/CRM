@@ -1061,12 +1061,35 @@ ao mesmo endereço enquanto a primeira espera é recusada na hora — para não 
 na tela naquele momento.
 
 **A localização dos clientes** do Comercial sai de dois jeitos. O **ponto do cliente no mapa** dos **Custos de viagem** e da prévia da
-rota, para o cliente com endereço completo, vem de um serviço de mapas da internet, que tem **5 segundos** para responder; se ele não
-responder a tempo, responder com erro ou não achar o endereço, vale a **cidade**. A **rota** (a distância e o custo sugerido), os **clientes
+rota vem sempre do servidor: para o cliente com endereço completo, de um serviço de mapas da internet, que tem **5 segundos** para
+responder; se ele não responder a tempo, responder com erro ou não achar o endereço — e para o cliente sem endereço —, vale a **cidade**. Se
+o servidor não der o ponto (sem acesso, rede caída), a prévia da rota deixa o cliente fora do mapa e da rota e mostra *"(sem localização no
+mapa)"* ao lado do nome na legenda; o *"Total: N ponto(s) na rota"* conta a origem e os clientes localizados. A **rota** (a distância e o custo sugerido), os **clientes
 próximos**, o **valor recomendado da visita** e os mapas do Comercial usam sempre a **cidade**: de uma lista de 345 cidades, comparando o nome
 sem diferença de maiúsculas, acento ou espaço nas pontas (*"SAO BERNARDO DO CAMPO"* é *"São Bernardo do Campo"*), e só se a cidade for **do
 estado do cliente** (um cliente de *Rio Claro / RJ* não é localizado em Rio Claro de SP); se a cidade não estiver na lista, vale o **centro do
-estado**; sem cidade nem estado, o centro do Brasil. A distância da rota e da visita é contada a partir de São Bernardo do Campo.
+estado**; sem cidade nem estado, o centro do Brasil. A distância da rota e da visita é contada a partir de São Bernardo do Campo. Nos
+**clientes próximos**, dois clientes na **mesma cidade** (o nome comparado sem maiúsculas, acento ou espaço nas pontas, e o mesmo estado)
+ficam a **5 km** um do outro quando os endereços são diferentes e a **2 km** quando um deles não tem endereço ou o endereço é o mesmo.
+
+**Editar um custo de viagem.** Abrir um custo gravado para editar **não troca** nenhum valor: a rota é recalculada e aparece no quadro como
+sugestão (distância, tempo, custo sugerido e o detalhamento), com a frase *"Sugestão recalculada agora — os valores gravados foram
+mantidos. Clique em Aplicar Valores Sugeridos para usá-la."*; clicar **Atualizar** sem mexer grava os mesmos valores. Ao abrir, o modal da
+passagem aérea não aparece (o quadro mostra *"Esta viagem requer passagem aérea devido à distância superior a 600km"* quando for o caso).
+**Aplicar Valores Sugeridos** troca a distância, o tempo, o custo sugerido e os quatro custos pelos da rota (e, numa rota aérea, conta como a
+escolha da passagem para aquela distância). Mudar um campo que entra no cálculo — o cliente, a cidade, o estado, o tipo, o número de pessoas,
+a data de ida ou de volta — faz a edição se comportar como um custo novo daí em diante: o recálculo preenche os campos, e o modal da
+passagem aérea volta a valer.
+
+**Os valores da rota no formulário.** O preenchimento automático, o botão **Aplicar Valores Sugeridos** e o **Aceitar e Continuar com
+Passagem Aérea** preenchem os mesmos campos: na viagem de carro, transporte = combustível + pedágio, hospedagem, alimentação e outros = o
+estacionamento; na aérea, transporte = passagem + taxa de embarque (R$ 75 por pessoa), hospedagem, alimentação e outros = R$ 0,00. A soma dos
+quatro é o custo sugerido. Uma resposta de cálculo que chega depois de uma mudança mais nova (ou depois de fechar o formulário) é
+descartada.
+
+**O cliente da viagem.** Num custo novo, o cliente escolhido entra na viagem e tem as **regras de visita** verificadas na hora; trocar de
+cliente troca as duas coisas. Clicar **Salvar** antes de as regras do cliente chegarem mostra *"Aguarde a verificação das regras do cliente
+antes de salvar."* e não grava nada — isso **bloqueia** só até a verificação terminar.
 
 A **busca do topo** (**Ctrl+K**, em qualquer módulo) procura clientes, projetos, propostas, atividades e produtos — todos levam a telas do
 **Comercial**, e cada resultado só aparece a quem pode abrir a tela dele. Quem não tem acesso ao Comercial (pela mesma regra que decide se a

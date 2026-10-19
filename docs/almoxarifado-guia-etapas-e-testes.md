@@ -1,18 +1,26 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-19 (Etapa 156) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-19 (Etapa 157) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155 e 156) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156 e 157) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 156 ENTREGUE · próxima: Etapa 157)
+> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 157 ENTREGUE · próxima: Etapa 158)
 >
-> **O desenvolvimento parou aqui: Etapa 156 fechada — 2026-10-19.** A **Etapa 156 (o pedido repetido com o banco ocupado, a lista
+> **O desenvolvimento parou aqui: Etapa 157 fechada — 2026-10-19.** A **Etapa 157 (editar um custo de viagem não troca os valores
+> gravados, e a localização dos clientes vem do servidor; consertos de tela nos Custos de viagem do Comercial, sem regra de acesso nova)**:
+> abrir um custo gravado para editar mantém a distância e os custos e mostra a rota recalculada como sugestão, com o botão **Aplicar Valores
+> Sugeridos**; o Aplicar e a confirmação da passagem aérea põem a taxa de embarque; um custo de ida e volta não é mais recalculado como só ida;
+> a localização do cliente sem endereço vem do servidor (sem a lista própria da tela, que mandava quase todo cliente de SP para São Bernardo),
+> e o que o servidor não localiza fica fora do mapa; a viagem fica com o último cliente escolhido; os clientes próximos na mesma cidade com e
+> sem acento ficam a 5/2 km. Nenhuma consulta nova. **Próxima: Etapa 158** — ver a próxima tarefa no plano da 157.
+>
+> **Etapa 156, 2026-10-19.** A **Etapa 156 (o pedido repetido com o banco ocupado, a lista
 > recusada que diz o motivo, e o prazo da consulta de endereço; consertos técnicos, sem regra de acesso nova)**: com o banco ocupado, o
 > segundo pedido a uma lista com outro filtro espera e repete (antes falhava na hora); nas telas do Almoxarifado que usam a lista de clientes
 > ou de projetos, a lista recusada diz o motivo sob o seletor; nos **Custos de viagem**, a localização do cliente não espera mais o serviço
 > de mapas para sempre (5 s) e a localização pela cidade acha a cidade do cadastro — **os números de rota, visita e clientes próximos mudam**
-> (**B1002**). Nenhuma consulta nova. **Próxima: Etapa 157** — ver a próxima tarefa no plano da 156.
+> (**B1002**). Nenhuma consulta nova. *(Próxima, na época: Etapa 157 — entregue acima.)*
 >
 > **Etapa 155, 2026-10-19.** A **Etapa 155 (o cliente e a OS das Reservas com nome, a busca do topo
 > que diz por que não busca, e o produto da OS pelo código certo; consertos de tela, sem regra de acesso nova)**: em **Almoxarifado →
@@ -6723,6 +6731,51 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 157 — Editar um custo de viagem não troca os valores gravados, e a localização dos clientes vem do servidor (ENTREGUE — 2026-10-19)
+
+**O que mudou, em uma frase:** nos **Custos de viagem**, abrir um custo para editar não troca mais os valores gravados — a rota recalculada
+vira uma sugestão que se aplica com um clique —, e a localização dos clientes vem sempre do servidor.
+
+**O problema que ela resolve.** Abrir um custo gravado para editar (até para corrigir a descrição) recalculava a rota e trocava a distância
+e os custos pelos recalculados; **Atualizar** gravava os novos — e, desde a Etapa 156, os recalculados saem diferentes (a rota acha a cidade
+do cadastro). Um custo de ida e volta voltava recalculado como só ida. O botão **Aplicar Valores Sugeridos** e a confirmação da passagem
+aérea esqueciam a taxa de embarque. A tela localizava o cliente sem endereço por uma lista própria que quase nunca achava a cidade (todo
+cliente de SP ia para São Bernardo do Campo). E, trocando de cliente rápido, a viagem podia sair com as regras de visita do anterior.
+
+| Antes | Agora |
+|---|---|
+| Editar: distância e custos trocados pelos recalculados | Os gravados ficam; a sugestão aparece com *"Sugestão recalculada agora — os valores gravados foram mantidos. Clique em Aplicar Valores Sugeridos para usá-la."* |
+| Editar um custo de ida e volta: recalculado como só ida, seletor em "Ida" | Ida e volta, com a data da volta |
+| Aplicar / confirmar a passagem aérea: sem a taxa de embarque | Passagem + taxa (R$ 75 por pessoa); o modal lista a taxa |
+| Cliente sem endereço: localizado por uma lista da tela (quase sempre São Bernardo) | Pelo servidor (a cidade do cadastro); sem resposta, *"(sem localização no mapa)"* na prévia |
+| Trocar de cliente rápido: as regras do anterior podiam valer | As do último; o Salvar espera com *"Aguarde a verificação das regras do cliente antes de salvar."* |
+| Próximos de *SÃO PAULO*: o de *SAO PAULO* a 0 km | 5 km (outro endereço) ou 2 km |
+
+**Roteiro de teste (10 minutos).**
+
+1. **Editar não troca.** Em **Comercial → Custos de viagem**, clique no lápis (**Editar**) de um custo antigo. Confira: o quadro da rota com
+   a distância recalculada e, abaixo do botão **Aplicar Valores Sugeridos**, a frase *"Sugestão recalculada agora — os valores gravados foram
+   mantidos..."*; os campos de custo com os valores gravados. Clique **Atualizar**: a linha da lista fica com a mesma distância e o mesmo
+   total. Abra de novo, clique **Aplicar Valores Sugeridos**: a frase some e os custos mudam para os da rota.
+2. **Mudar um campo.** Abra para editar e mude o **Número de Pessoas**: os custos são recalculados na hora (como num custo novo) e a frase
+   some.
+3. **Ida e volta.** Abra um custo de ida e volta: o seletor **Tipo de Viagem** em *"Ida e Volta"* e a **Data da Volta** com a data gravada.
+4. **Passagem aérea.** Num custo novo para um cliente a mais de 600 km, o modal mostra *"Taxa de Embarque: R$ 75,00"*; **Aceitar e Continuar
+   com Passagem Aérea** põe no transporte a passagem mais a taxa. Na edição de um custo assim, **nenhum** modal abre ao abrir.
+5. **A localização.** Num custo novo, escolha um cliente **sem endereço** de Campinas, adicione um cliente próximo e **Salve**: a **Preview da
+   Rota** mostra os dois nas cidades deles (nenhum em São Bernardo). Cadastre dois clientes em *São Paulo* e *Sao Paulo* (com e sem acento,
+   endereços diferentes): nos próximos do primeiro, o segundo a **5 km**.
+6. **O último cliente.** Num custo novo, escolha um cliente e logo outro e clique **Salvar** imediatamente: se as regras ainda não chegaram,
+   aparece *"Aguarde a verificação das regras do cliente antes de salvar."*; um instante depois, o Salvar grava com o segundo cliente.
+
+**O que esta etapa NÃO cobre.** O resumo por tipo de viagem do servidor (não aparece em tela) compara o tipo com a grafia exata; a
+localização do cliente com endereço consulta o serviço de mapas a cada abertura (**C377**); o cliente sem cidade fica sem localização e a
+cidade fora da lista, no centro do estado; **Atualizar** depois de **Aplicar** registra *"50 → 50.00"* no histórico.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (a tela em jsdom com a camada de
+comunicação de verdade; a prévia com o mapa simulado; o servidor de verdade com um serviço de mapas local) provam, escrito para você conferir
+à mão. Commits `4c9de31d`, `00dbce2b`, `a04ab574`, `10b6f756` e `fab87f82`.
 
 ## Etapa 156 — O pedido repetido com o banco ocupado, a lista recusada que diz o motivo, e o prazo da consulta de endereço (ENTREGUE — 2026-10-19)
 

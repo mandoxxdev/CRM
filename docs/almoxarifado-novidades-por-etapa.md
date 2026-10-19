@@ -11,13 +11,20 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-19):** **Etapa 156 fechada** (consertos técnicos, sem regra de acesso nova: **o pedido repetido
+> **Onde o desenvolvimento está (2026-10-19):** **Etapa 157 fechada** (consertos de tela nos **Custos de viagem** do Comercial, sem regra
+> de acesso nova: **abrir um custo para editar não troca os valores gravados** — a rota recalculada vira sugestão, com o botão **Aplicar
+> Valores Sugeridos** (**C372** resolvido, **B1004**); o Aplicar e a confirmação da passagem aérea põem a taxa de embarque (**C374**, novo e
+> resolvido); a localização do cliente vem do servidor, sem a cópia da lista de cidades da tela (**C375**, novo e resolvido, **B1005**); o
+> custo de ida e volta não é mais recalculado como só ida (**C376**, novo e resolvido); a viagem fica com as regras do último cliente escolhido
+> (**B1006**); os *clientes próximos* na mesma cidade com e sem acento a 5/2 km; **B1004** a **B1007**; o aviso novo **C377** (de antes));
+> a próxima é a **158** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 156 fechada** (consertos técnicos, sem regra de acesso nova: **o pedido repetido
 > com o banco ocupado, a lista recusada que diz o motivo, e o prazo da consulta de endereço** — com o banco ocupado, o segundo pedido a uma
 > lista com outro filtro espera e repete em vez de falhar na hora (**C369** resolvido, **B1001**); as telas do Almoxarifado dizem por que a
 > lista de clientes ou de projetos veio vazia (**C366** resolvido); a coordenada do cliente com endereço não espera mais o serviço de mapas
 > para sempre (**C361** resolvido) e a coordenada pela cidade acha a cidade do cadastro (**C370**, novo e resolvido — **os números de rota,
 > visita e clientes próximos mudam**, **B1002**); **B1001** a **B1003**; os avisos novos **C370** a **C373** (três resolvidos aqui, um de
-> antes — **C372**)); a próxima é a **157** — ver "Onde estamos e o que vem a seguir".
+> antes — **C372**)); a próxima era a **157**.)*
 > *(Antes: **Etapa 155 fechada** (consertos de tela, sem regra de acesso nova: **o cliente e a OS das
 > Reservas com nome, a busca do topo que diz por que não busca, e o produto da OS pelo código certo** — o seletor de cliente das Reservas
 > saía em branco (**C367** resolvido) e o de OS com o número interno (**C368**, novo e resolvido); sem o Comercial, a busca do *Ctrl+K* diz por
@@ -3896,7 +3903,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B1003; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B1007; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -11170,6 +11177,36 @@ Rio Claro/SP; *ÁGUA BOA/MG*, Água Boa/MT a 1.226 km de São Bernardo — achad
 **B1003 (NOVA, da Etapa 156) — a próxima etapa (157).** Ver a "próxima tarefa detalhada" no plano da Etapa 156. As decisões que esperam
 vocês: as da **B957**, a **B988** e a **B989**; a **B1002** pede um olhar (os números mudam — é correção, mas é visível).
 
+**B1004 (NOVA, da Etapa 157; do Comercial) — abrir um custo de viagem para editar só SUGERE a rota recalculada; o botão Aplicar troca os
+valores, e aplicar uma sugestão aérea conta como a escolha da passagem.** Abrir para editar recalcula a rota e a mostra no quadro, com a frase
+*"Sugestão recalculada agora — os valores gravados foram mantidos. Clique em Aplicar Valores Sugeridos para usá-la."*; os campos ficam com
+os gravados e **Atualizar** sem mexer grava os mesmos (**C372**). A primeira mudança num campo que recalcula (o cliente, a cidade, o estado, o
+tipo, o número de pessoas, as datas) volta ao comportamento do cadastro — o recálculo preenche —, para sempre naquela edição (voltar o campo
+não traz os gravados de volta). Na abertura, o modal da passagem aérea não abre; **Aplicar** uma sugestão aérea marca a passagem como
+escolhida para aquela distância. **Descartado:** (a) não recalcular nada ao abrir — a pessoa não veria que a rota mudou desde a gravação
+(com a **B1002**, mudou para muita gente); (b) recalcular e perguntar num modal ao abrir — um passo a mais em toda edição, inclusive para
+corrigir a descrição; (c) no Aplicar aéreo, abrir o modal da passagem — perguntaria de novo o que a pessoa acabou de escolher.
+**Reversível:** só da tela (`00dbce2b`, `fab87f82`).
+
+**B1005 (NOVA, da Etapa 157; do Comercial) — a tela dos custos de viagem não tem mais lista própria de cidades: a localização do cliente vem
+do servidor, e o cliente que o servidor não localiza fica fora do mapa.** A tela e a prévia da rota tinham uma cópia da lista de cidades (e
+um "São Bernardo do Campo" de recuo) usada para todo cliente sem endereço — que quase nunca achava a cidade do cadastro (**C375**). Agora
+perguntam ao servidor por todo cliente (sem endereço, o servidor responde pela cidade, sem consultar o serviço de mapas). Se o servidor
+recusar ou não responder, o cliente fica **sem localização**: fora do mapa e da rota, marcado *"(sem localização no mapa)"* na legenda.
+**Descartado:** (a) manter a cópia com a comparação do servidor — duas listas para manter iguais; (b) um ponto de recuo (São Bernardo) —
+desenhava o cliente onde ele não está. **Custo declarado:** um pedido a mais ao servidor por cliente sem endereço (nenhum ao serviço de
+mapas). **Reversível:** `a04ab574`.
+
+**B1006 (NOVA, da Etapa 157; do Comercial) — num custo novo, o Salvar espera as regras de visita do último cliente escolhido.** O cliente
+escolhido entra na viagem e tem as regras verificadas na hora (o anterior sai); se a pessoa clicar **Salvar** antes de as regras chegarem
+(um instante), aparece *"Aguarde a verificação das regras do cliente antes de salvar."* e nada é gravado. Antes, até a localização do
+novo cliente chegar — e para sempre, se ele não tinha cidade —, a viagem era gravada com a lista e as regras do cliente **anterior** (a
+autorização de visita podia ser pulada). **Descartado:** deixar salvar com as regras ainda não lidas — pularia a autorização. **Reversível:**
+só da tela (`fab87f82`).
+
+**B1007 (NOVA, da Etapa 157) — a próxima etapa (158).** Ver a "próxima tarefa detalhada" no plano da Etapa 157. As decisões que esperam
+vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar.
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -14367,15 +14404,36 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 371. **✅ NOVO E RESOLVIDO NA ETAPA 156 (RN-156.03; da medição da Etapa 156, anterior a ela; lido no código) — a consulta do endereço ia
      com "+" no lugar dos espaços.** O endereço era mandado ao serviço de mapas como *"RUA+DAS+FLORES,+CAMPINAS..."* (o sinal de mais
      literal). Agora com espaços. O efeito no serviço de mapas **não foi medido** (os testes não o chamam).
-372. **NOVO (da revisão do plano da Etapa 156; do Comercial, anterior a ela; lido no código) — abrir um custo de viagem para editar
-     recalcula a rota e sobrescreve os custos do formulário.** Em **Comercial → Custos de viagem**, abrir um custo gravado para editar
+372. **✅ RESOLVIDO NA ETAPA 157 (RN-157.01, B1004)** — abrir para editar mantém os valores gravados e mostra a rota recalculada como
+     sugestão, com o botão **Aplicar Valores Sugeridos**. *O texto original, de antes da correção:* **NOVO (da revisão do plano da Etapa 156;
+     do Comercial, anterior a ela; lido no código) — abrir um custo de viagem para editar recalcula a rota e sobrescreve os custos do
+     formulário.** Em **Comercial → Custos de viagem**, abrir um custo gravado para editar
      (mesmo só para corrigir a descrição) recalcula a rota e troca a distância, o transporte, a hospedagem, a alimentação, os outros custos e
      o custo sugerido pelos recalculados; salvar grava os novos. Com a **B1002**, os recalculados podem sair diferentes dos gravados. **O que
      fazer:** ao editar um custo antigo, conferir os valores antes de salvar. Candidata: recalcular só quando o destino mudar (é da tela).
 373. **✅ NOVO E RESOLVIDO NA ETAPA 156 (Fase 5; do núcleo, anterior a ela; reproduzido) — com o banco ocupado, a repetição do pedido ia
      com o login de quem saiu.** Se a pessoa saísse (ou outra entrasse na mesma aba) enquanto um pedido esperava o banco, a repetição ia
      com o login antigo. Agora vai com o login de agora (sem login, vai sem — a rota protegida responde que a sessão acabou).
-### D. Limitações declaradas — são decisão, não esquecimento
+374. **✅ NOVO E RESOLVIDO NA ETAPA 157 (RN-157.02; da medição da Etapa 157, do Comercial, anterior a ela; medido no código) — o Aplicar
+     Valores Sugeridos e a confirmação da passagem aérea deixavam a taxa de embarque de fora.** O custo sugerido do servidor soma passagem +
+     taxa de embarque (R$ 75 por pessoa) + alimentação + hospedagem; o preenchimento automático punha a taxa no transporte, o botão e a
+     confirmação não — o total do formulário ficava abaixo do sugerido; a confirmação deixava em "outros" o estacionamento de uma rota
+     anterior, e o botão não atualizava a distância nem o sugerido. Agora os três caminhos preenchem os mesmos campos com os mesmos valores.
+375. **✅ NOVO E RESOLVIDO NA ETAPA 157 (RN-157.03, B1005; da medição da Etapa 157, do Comercial, anterior a ela; medido no código) — a
+     tela dos custos de viagem localizava o cliente sem endereço por uma lista própria que quase nunca achava a cidade.** A tela e a prévia
+     da rota só perguntavam ao servidor quando o cliente tinha endereço; sem endereço, uma lista própria com a grafia exata (*"Campinas"*)
+     — o cadastro grava em maiúsculas, então quase todo cliente de SP ia para São Bernardo do Campo. Agora a localização vem do servidor.
+376. **✅ NOVO E RESOLVIDO NA ETAPA 157 (Fase 5; do Comercial, anterior a ela; reproduzido no servidor e na tela) — todo custo de ida e
+     volta aberto para editar era recalculado como só ida.** O cadastro dos custos grava o tipo em maiúsculas (*IDA_E_VOLTA*) e o cálculo da
+     rota só reconhecia o minúsculo: a sugestão saía como só ida (Curitiba: R$ 397,72 em vez de R$ 1.005,45), o seletor mostrava *"Ida"* e a
+     data da volta sumia — e o Aplicar gravaria isso. Agora o cálculo compara sem maiúsculas e a edição mostra o tipo certo. *(O resumo por
+     tipo do servidor tem a mesma comparação; nenhuma tela usa esses totais — D (157).)*
+377. **NOVO (da revisão de permissão da Etapa 157; do Comercial, anterior a ela; lido no código e medido) — a localização do cliente com
+     endereço consulta o serviço de mapas a cada vez.** Não há memória das respostas: abrir a mesma tela cinco vezes com o mesmo cliente são
+     cinco consultas ao serviço de mapas da internet (que tem limite de uso). A tela não multiplica as consultas (a Etapa 157 não mudou isso —
+     o cliente sem endereço não consulta). **O que fazer:** nada no dia a dia; se o serviço começar a recusar, é isto. Candidata: guardar a
+     coordenada do endereço no cadastro.
+### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
   transferência é imediata. Volta a fazer sentido se houver obra externa ou segundo prédio.
@@ -15706,6 +15764,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(157) Os custos de viagem, o que ficou como antes.** O resumo por tipo de viagem do servidor (os totais de ida, de volta e de ida e
+  volta) compara o tipo com a grafia exata — e o cadastro grava em maiúsculas, então esses três totais saem zero; **nenhuma tela os mostra**.
+  A prévia da rota desenha o cliente onde o servidor disser — para a cidade fora da lista de 345, o centro do estado; sem estado, o centro do
+  Brasil. O cliente sem cidade ou estado entra na viagem sem localização e sem rota. Com um cliente sem localização no meio da viagem, os
+  números da legenda e dos marcadores pulam (seguem a ordem da viagem). **Atualizar** depois de **Aplicar** registra no histórico a troca
+  *"50 → 50.00"* mesmo sem mudança de valor (o servidor compara o texto — de antes). A coordenada que falhou é pedida de novo ao salvar e na
+  prévia (até três pedidos ao servidor, nenhum ao serviço de mapas no caso da recusa). A edição não mexe nos clientes da viagem (o servidor
+  não regrava a lista na edição — como antes).
 - **(156) As gravações com o banco ocupado continuam como antes** — o segundo pedido de gravação ao mesmo endereço é recusado na hora
   (**B1001**); só as leituras se reconhecem pelos filtros. Uma tela que troca o filtro rápido e não descarta a resposta velha pode mostrar a
   do filtro anterior se ela chegar depois (como a busca do topo antes da 155) — de antes, em várias telas; nas Reservas o teste mostrou a
@@ -15716,6 +15782,9 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   grafia igual sem maiúsculas — *"SÃO PAULO"* e *"SAO PAULO"* ficam no mesmo ponto, a 0 km. O mapa das máquinas vendidas, o mapa do painel e
   a lista de custos usam a mesma regra nova sem teste próprio. A tela de custos e a prévia da rota têm uma cópia própria da lista de cidades
   (o recuo dela quando o servidor não responde) com a comparação exata de antes — com o servidor respondendo em até 5 s, ela quase não roda.
+  **Esta última frase estava errada** (medido na Etapa 157): a cópia rodava para **todo** cliente sem endereço, porque a tela só perguntava ao
+  servidor quando havia endereço (**C375**). *(Etapa 157: a cópia saiu — a localização vem do servidor, **B1005**; e os clientes próximos na
+  mesma cidade com e sem acento ficam a 5/2 km.)*
 - **(155) A busca do topo decide na tela com a régua da moldura** — sem o Comercial ela diz por que não busca (**B999**); com as permissões
   guardadas vencidas e a leitura delas falhando, ela busca como antes e o servidor decide (falha aberto, de propósito). A lista de OS das
   Reservas traz as 300 mais recentes: a reserva de uma OS mais antiga continua *"OS #<id>"* na coluna. O segundo pedido ao mesmo endereço com
@@ -16740,6 +16809,11 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(157) Nenhum clique foi dado no navegador.** A tela dos custos de viagem foi provada em jsdom com a camada de comunicação de verdade (o
+axios real, o servidor simulado na fronteira) e a prévia da rota com o mapa simulado; o servidor, de verdade, com o serviço de mapas local.
+Vale conferir à mão: abrir um custo antigo para editar (a frase e os valores gravados), o **Aplicar**, um custo de ida e volta (o seletor e
+a data da volta), e a prévia de uma viagem com dois clientes.
 
 **(156) Nenhum clique foi dado no navegador.** A camada de comunicação foi provada com o axios de verdade e o servidor simulado na
 fronteira (o banco ocupado, filtros diferentes, o mesmo pedido, o login trocado no meio); as quatro telas pelos testes de tela (jsdom), com o
@@ -31632,9 +31706,10 @@ RJ* fica no centro do RJ (não em Rio Claro de SP); um de *Rio Branco / AC*, em 
 1. **As gravações com o banco ocupado** continuam como antes (**B1001**).
 2. **As outras listas** das telas do Almoxarifado (centros de custo, OS, endereços) continuam caladas quando falham — são do próprio módulo.
 3. **A lista de cidades tem 345 cidades**; fora dela, o centro do estado (como antes). A cópia da lista que a tela de custos usa quando o
-   servidor não responde continua com a comparação exata.
+   servidor não responde continua com a comparação exata. *(Saiu na Etapa 157 — e rodava para todo cliente sem endereço, não só quando o
+   servidor não respondia, **C375**.)*
 4. **Abrir um custo antigo para editar recalcula e sobrescreve os custos** (**C372**, de antes) — com a B1002, os recalculados podem sair
-   diferentes dos gravados.
+   diferentes dos gravados. *(Resolvido na Etapa 157 — **B1004**.)*
 
 ### O que a revisão encontrou
 
@@ -31651,9 +31726,99 @@ certa, 10 acharam asserções faltando (a cópia rasa, o download, o filtro obje
 do prazo, o aviso falso de "não respondeu"), 3 não mudam nada. Tudo virou correção e teste. Commits `75e772cf`, `03ecf059`, `438ab108`,
 `02545473` e `95fed61a` (a correção da revisão).
 
+## Etapa 157 — Editar um custo de viagem não troca os valores gravados, e a localização dos clientes vem do servidor (2026-10-19)
+
+Uma etapa de **consertos de tela** nos **Custos de viagem** do Comercial, sem regra de acesso nova. Abrir um custo de viagem gravado para
+editar — mesmo só para corrigir a descrição — recalculava a rota e **trocava** a distância e os custos do formulário pelos recalculados;
+clicar **Atualizar** gravava os novos. Desde a Etapa 156 a rota acha a cidade do cadastro, então os recalculados saem diferentes dos gravados
+(um custo antigo de *CAMPINAS* gravado com 20 km voltava com 104 km). Agora abrir para editar **mantém** os valores gravados e mostra a rota
+recalculada como **sugestão**, com o botão **Aplicar Valores Sugeridos** para quem quiser trocá-los. A medição achou mais quatro coisas de
+antes: o botão **Aplicar** e a confirmação da passagem aérea deixavam a **taxa de embarque** de fora (o total ficava R$ 75 por pessoa abaixo
+do custo sugerido); a tela e a prévia da rota tinham uma **cópia própria** da lista de cidades que quase nunca achava a cidade do cadastro
+(todo cliente sem endereço de SP aparecia em São Bernardo do Campo); todo custo de **ida e volta** aberto para editar era recalculado como
+**só ida** (o tipo é gravado em maiúsculas); e, ao trocar de cliente rápido, a viagem podia sair gravada com a lista e as regras de visita do
+cliente **anterior**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Comercial → Custos de viagem → Editar**: a rota era recalculada e a distância e os custos do formulário eram trocados pelos recalculados | Os valores gravados ficam; a rota recalculada aparece como sugestão, com *"Sugestão recalculada agora — os valores gravados foram mantidos. Clique em Aplicar Valores Sugeridos para usá-la."* — **C372** resolvido, **B1004** |
+| Editar um custo de até 600 km que agora passe disso abria o modal da passagem aérea ao abrir | Não abre; o quadro mostra o aviso de passagem aérea |
+| Editar e mudar um campo da rota (cliente, cidade, estado, tipo, pessoas, datas) | Igual ao cadastro: o recálculo preenche os campos |
+| **Aplicar Valores Sugeridos** de uma viagem aérea: transporte sem a taxa de embarque; distância e custo sugerido não mudavam | Passagem + taxa de embarque; distância, tempo e custo sugerido da rota — **C374**, novo e resolvido |
+| A confirmação da passagem aérea: sem a taxa, e "outros" com o estacionamento de uma rota anterior | Passagem + taxa, outros R$ 0,00; o modal lista a **Taxa de Embarque** |
+| Um custo de **ida e volta** aberto para editar: recalculado como **só ida** (Curitiba: R$ 397,72 em vez de R$ 1.005,45), o seletor em "Ida", a data da volta escondida | Ida e volta, com a data da volta — **C376**, novo e resolvido |
+| A localização de um cliente **sem endereço** nos custos de viagem e na prévia da rota: uma lista própria da tela, que mandava quase todo cliente de SP para São Bernardo | A do servidor (a cidade do cadastro, com o estado certo) — **C375**, novo e resolvido |
+| A prévia da rota com um cliente cuja localização o servidor não deu: desenhado em São Bernardo | Fora do mapa e da rota, marcado *"(sem localização no mapa)"* na legenda — **B1005** |
+| Escolher um cliente e logo outro (ou um sem cidade): a viagem podia gravar a lista e as regras de visita do primeiro | As do último escolhido; enquanto as regras dele não chegam, o Salvar diz *"Aguarde a verificação das regras do cliente antes de salvar."* — **B1006** |
+| Os *clientes próximos* de um cliente de *SÃO PAULO*: o de *SAO PAULO* (sem acento) a **0 km** | A **5 km** (endereços diferentes) ou **2 km** (sem endereço ou o mesmo) — a "mesma cidade" sem maiúsculas, acento ou espaço |
+
+### As regras, com o cenário exato
+
+**1. Editar não troca os gravados (C372, B1004).** Em **Comercial → Custos de viagem**, abra um custo antigo com **Editar** (o lápis). O
+quadro da rota aparece com a distância e o custo sugerido recalculados e, logo abaixo do botão **Aplicar Valores Sugeridos**, a frase
+*"Sugestão recalculada agora — os valores gravados foram mantidos. Clique em Aplicar Valores Sugeridos para usá-la."*. Os campos de custo
+continuam com os valores gravados; clique **Atualizar** sem mexer: a lista mostra o custo com a distância e o total de antes. Abra de novo e
+clique **Aplicar Valores Sugeridos**: a frase some e os custos, a distância e o custo sugerido passam a ser os da rota. Abra de novo e mude o
+**Número de Pessoas**: os custos são recalculados e preenchidos, como num custo novo (voltar ao número antigo não traz os gravados de volta).
+
+**2. A passagem aérea (B1004).** Abra para editar um custo cuja rota recalculada passe de 600 km: **nenhum** modal abre; o quadro mostra
+*"Esta viagem requer passagem aérea devido à distância superior a 600km"*. Clicar **Aplicar Valores Sugeridos** conta como a escolha da
+passagem: mudar a data da volta depois (mesma distância) não pergunta de novo. Num custo novo para um destino aéreo, o modal lista
+*"Taxa de Embarque: R$ 75,00"* (por pessoa) e **Aceitar e Continuar com Passagem Aérea** põe no transporte a passagem **mais** a taxa e
+R$ 0,00 em outros — a soma dos quatro custos é o *Custo Total Estimado* do modal.
+
+**3. Ida e volta (C376).** Abra para editar um custo de ida e volta: o seletor **Tipo de Viagem** mostra *"Ida e Volta"* e o campo **Data da
+Volta** aparece com a data gravada; a sugestão é a de ida e volta.
+
+**4. A localização vem do servidor (C375, B1005).** Num custo novo, escolha um cliente **sem endereço** de *Campinas*: os clientes próximos e
+a prévia da rota (ao salvar com mais de um cliente) o põem em Campinas, não em São Bernardo. Se o servidor não der a localização de um
+cliente (sem acesso, rede caída), a prévia o deixa de fora do mapa e da rota e mostra *"(sem localização no mapa)"* ao lado do nome na
+legenda; o *"Total: N ponto(s) na rota"* conta só os localizados (mais a origem).
+
+**5. O último cliente escolhido vale (B1006).** Num custo novo, escolha um cliente e logo outro: a viagem é gravada com o segundo e com as
+regras de visita dele. Clicar **Salvar** antes de as regras do cliente chegarem mostra *"Aguarde a verificação das regras do cliente antes
+de salvar."* no topo da tela; um instante depois, o Salvar grava.
+
+**6. A mesma cidade nos próximos.** Cadastre um cliente em *São Paulo* (com acento) e outro em *Sao Paulo* (sem), com endereços diferentes,
+ambos SP. Num custo novo, escolha o primeiro: na janela de clientes próximos, o segundo aparece a **5 km** (antes, 0).
+
+### O que esta etapa NÃO cobre
+
+1. **O resumo por tipo de viagem** do servidor ainda compara o tipo com a grafia exata — nenhuma tela mostra esses totais (D).
+2. **A localização do cliente com endereço** chama o serviço de mapas a cada abertura (sem guardar a resposta) — como antes (**C377**).
+3. **O cliente sem cidade ou estado** não tem localização nem rota; cidade fora da lista de 345 fica no centro do estado (como antes) — e a
+   prévia o desenha lá, porque o servidor sempre devolve um ponto.
+4. **Atualizar depois de Aplicar** registra no histórico a troca *"50 → 50.00"* mesmo quando o valor é o mesmo (o servidor compara texto — de
+   antes).
+
+### O que a revisão encontrou
+
+A **medição** (antes do código) achou a taxa de embarque fora do Aplicar e da confirmação (**C374**) e a cópia da lista de cidades que não
+perguntava ao servidor pelo cliente sem endereço (**C375**) — e que a limitação da Etapa 156 que dizia que essa cópia *"quase não roda"*
+estava errada. A **revisão do plano** (1 grave, 9 médios, 11 pequenos) mostrou que perguntar ao servidor também pelo cliente sem endereço
+abria a troca rápida de cliente para todos (a resposta do primeiro valendo para o segundo), e fechou o ciclo da frase, da resposta velha e da
+passagem aérea no Aplicar. A **revisão adversarial do código** (três revisores, executando): o de **regra** achou que todo custo de ida e
+volta aberto para editar era recalculado como só ida (**C376**) e que trocar para um cliente sem cidade deixava as regras do anterior; o de
+**permissão** não achou nada que vaze (a rota de localização barra quem não tem o Comercial antes de consultar o serviço de mapas; o cliente
+sem endereço não gera consulta externa); o de **sabotagem** fez 56 sabotagens — 17 caíram, 22 acharam asserções faltando (cada campo que
+dispara o recálculo, a resposta velha com erro, o Aplicar terrestre, as regras de visita de um cliente que já não é o escolhido, o valor da
+taxa no modal), 17 não mudam nada. Tudo virou correção e teste. Commits `4c9de31d`, `00dbce2b`, `a04ab574`, `10b6f756` e `fab87f82` (a correção da revisão).
+
 ## Onde estamos e o que vem a seguir
 
-*(Este título tinha sumido no fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+*(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 157 entregue (2026-10-19):** **editar um custo de viagem não troca os valores gravados, e a localização dos clientes vem do
+  servidor** (consertos de tela nos Custos de viagem, sem regra de acesso nova). Abrir para editar mostra a rota recalculada como sugestão e
+  mantém os gravados (**B1004** — **C372** resolvido); o Aplicar e a confirmação da passagem põem a taxa de embarque (**C374**); a localização
+  vem do servidor, sem a lista da tela (**B1005** — **C375**); a ida e volta não vira só ida na edição (**C376**); a viagem fica com o último
+  cliente escolhido e o Salvar espera as regras dele (**B1006**); a mesma cidade com e sem acento nos próximos. Commits `4c9de31d`, `00dbce2b`, `a04ab574`, `10b6f756` e `fab87f82` (a correção da revisão).
+  **O que é seu:** as decisões **B1004** a **B1006** (reversíveis); o aviso **C377** (de antes); as perguntas de antes (**B949**, **B910**,
+  **B853**, **B924**, **B926**, **B988**, **B989**, **C277**, **C312**, **C314**, **C316**, **C330**); a **B1002** (os números mudam); as
+  limitações **(157)** em D e a verificação **(157)** em F.
+  **Próxima: Etapa 158 — ver a "próxima tarefa detalhada" no plano da Etapa 157.**
 
 - **Etapa 156 entregue (2026-10-19):** **o pedido repetido com o banco ocupado, a lista recusada que diz o motivo, e o prazo da consulta
   de endereço** (consertos técnicos, sem regra de acesso nova). Com o banco ocupado, a leitura com outros filtros espera e repete (**B1001** —
@@ -31664,7 +31829,7 @@ do prazo, o aviso falso de "não respondeu"), 3 não mudam nada. Tudo virou corr
   decisão **B1002** (os números mudam — conferir); o aviso **C372** (editar um custo antigo recalcula); as decisões **B1001** (reversível); as
   perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**, **C277**, **C312**, **C314**, **C316**, **C330**); as
   limitações **(156)** em D e a verificação **(156)** em F.
-  **Próxima: Etapa 157 — ver a "próxima tarefa detalhada" no plano da Etapa 156.**
+  *(Próxima, na época: Etapa 157 — entregue acima.)*
 
 - **Etapa 155 entregue (2026-10-19):** **o cliente e a OS das Reservas com nome, a busca do topo que diz por que não busca, e o produto da OS
   pelo código certo** (consertos de tela, sem regra de acesso nova). Os seletores de cliente e de OS das Reservas mostram a razão social e o

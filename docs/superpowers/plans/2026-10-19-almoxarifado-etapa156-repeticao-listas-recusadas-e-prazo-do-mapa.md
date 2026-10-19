@@ -268,7 +268,9 @@ novo, teste novo) tocam arquivos e regras disjuntas. T4 depende de T1 e T2. **T2
    régua geográfica "por raio" sem a UF de cada ponto não separa homônimo de vizinho — o dado certo (a UF) era barato e a régua cara.
 3. **Paralelismo:** **1** galho de código em paralelo de fato (a T2 num executor em worktree própria, enquanto T1 e T3 rodavam aqui; *fast
    forward*, **0** retrabalho); **1** revisor na Fase 2 (antes do código), **3** em paralelo na Fase 5 sob a trava (o r3 em worktree própria).
-4. **Defeito que escapou:** *(preencher na Etapa 157)*.
+4. **Defeito que escapou:** **nenhum do código da 156**; **um do documento** — a D (156) afirmava que a cópia da lista de cidades da tela
+   de custos *"quase não roda"* com o servidor respondendo em até 5 s; a medição da 157 mostrou que ela rodava para **todo** cliente sem
+   endereço (a tela só perguntava ao servidor com endereço — **C375**). A Fase 5 da 156 conferiu o servidor e não a tela que o consome.
 
 ## Próxima tarefa detalhada — Etapa 157
 
