@@ -56,3 +56,11 @@ test('[RN-157.03] a coordenada que ja veio nao e pedida de novo; a invalida do s
   expect([coordenadaValida([1, 2]), coordenadaValida([1, NaN]), coordenadaValida(['1', 2]), coordenadaValida([1]), coordenadaValida(null)])
     .toEqual([true, false, false, false, false]);
 });
+
+
+// Fase 5 r3 U03
+test('[RN-157.03, Fase 5 r3 U03] id vazio (o select sem cliente): null, sem pedido', async () => {
+  responder = () => [404, { error: 'nao achou' }];
+  expect(await obterCoordenadasDoCliente({ id: '', cidade: 'CAMPINAS', estado: 'SP' })).toBeNull();
+  expect(pedidos).toEqual([]);
+});

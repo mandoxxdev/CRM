@@ -311,6 +311,32 @@ test('[RN-157.04, integracao] os proximos de um cliente de SÃO PAULO: o de SAO 
   assert.ok(km(ctx.campinas) > 60 && km(ctx.campinas) < 100, `Campinas a ${km(ctx.campinas)} km`);
 });
 
+test('[RN-157.04, Fase 5 r3 S02-S04, integracao] do ponto de vista do SAO PAULO sem acento (estado " SP"): o de São Paulo com RUA SÃO JOÃO 1 a 2 km, o de outro endereco (estado "sp" legado) a 5, o sem endereco a 2', async () => {
+  const [s, prox] = await j('GET', `/custos-viagens/clientes-proximos/${ctx.spMesmoEndereco}?raio_km=100`);
+  assert.strictEqual(s, 200, JSON.stringify(prox));
+  const km = (id) => (prox.find((p) => p.id === id) || {}).distancia_km;
+  assert.strictEqual((prox.find((p) => p.id === ctx.spOutroEndereco) || {}).estado, 'sp', 'o legado em minusculas (o UPDATE do preparo)');
+  assert.deepStrictEqual([km(ctx.sp), km(ctx.spOutroEndereco), km(ctx.spSemEndereco)], [2, 5, 2], JSON.stringify(prox).slice(0, 600));
+});
+
+test('[Fase 5 r1 I-1, C376, integracao]a rota com o tipo como o servidor o grava (IDA_E_VOLTA, em maiusculas) = ida_e_volta (antes: calculada como so ida)', async () => {
+  const q = (tipo) => `/custos-viagens/calcular-rota?destino_cidade=CURITIBA&destino_estado=PR&tipo_viagem=${tipo}&numero_pessoas=1`;
+  const [s1, maiusc] = await j('GET', q('IDA_E_VOLTA'));
+  const [s2, minusc] = await j('GET', q('ida_e_volta'));
+  const [s3, ida] = await j('GET', q('ida'));
+  assert.ok(s1 === 200 && s2 === 200 && s3 === 200, `${s1} ${s2} ${s3}`);
+  assert.strictEqual(maiusc.custo_sugerido, minusc.custo_sugerido, `IDA_E_VOLTA ${maiusc.custo_sugerido} x ida_e_volta ${minusc.custo_sugerido}`);
+  assert.ok(minusc.custo_sugerido > ida.custo_sugerido, `ida e volta ${minusc.custo_sugerido} <= ida ${ida.custo_sugerido} (o cenario nao separaria)`);
+  // e o cadastro grava mesmo em maiusculas (senao o cenario nao seria o da tela)
+  const [sp, criado] = await j('POST', '/custos-viagens', { cliente_id: ctx.campinas, data_viagem: '2026-10-20', destino: 'CAMPINAS - SP',
+    destino_cidade: 'CAMPINAS', destino_estado: 'SP', tipo_viagem: 'ida_e_volta', numero_pessoas: 1, custo_transporte: 10 });
+  assert.ok(sp === 200 || sp === 201, JSON.stringify(criado));
+  const [sl, lista] = await j('GET', '/custos-viagens');
+  assert.strictEqual(sl, 200);
+  const gravado = lista.find((c) => c.id === criado.id) || lista[0];
+  assert.strictEqual(gravado.tipo_viagem, 'IDA_E_VOLTA');
+});
+
 (async () => {
   console.log('\n=== Etapa 156: o prazo da consulta de endereco e a cidade do cadastro (C361, C370, C371) ===\n');
   try {
@@ -335,6 +361,8 @@ test('[RN-157.04, integracao] os proximos de um cliente de SÃO PAULO: o de SAO 
     const banco = new sqlite3.Database(path.join(pasta, 'database.sqlite'));
     banco.configure('busyTimeout', 15000);
     await new Promise((res, rej) => banco.run("INSERT INTO propostas (cliente_id, numero_proposta, titulo, status, valor_total, created_at) VALUES (?, 'E156-0001', 'Proposta 156', 'aprovada', 1560, datetime('now'))", [ctx.campinas], (e) => (e ? rej(e) : res())));
+    // Fase 5 r3 S02: um cadastro legado com o estado em minusculas (o POST /clientes ja grava em maiusculas)
+    await new Promise((res, rej) => banco.run("UPDATE clientes SET estado = 'sp' WHERE id = ?", [ctx.spOutroEndereco], (e) => (e ? rej(e) : res())));
     await new Promise((res) => banco.close(() => res()));
     for (const [name, fn] of testes) {
       if (saiu !== null) { failed++; console.error(`  ✗ ${name}: o servidor caiu antes (codigo ${saiu})`); continue; }

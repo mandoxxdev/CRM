@@ -88,3 +88,19 @@ test('[RN-157.03] a coordenada que ja veio (os proximos) nao e pedida de novo', 
   expect(marcadores()[1]).toEqual([-23.1857, -46.8978]);
   expect(pedidos).toEqual([]);
 });
+
+
+// Fase 5 r3 P03: a resposta de uma busca velha nao sobrescreve a lista nova
+test('[RN-157.03, Fase 5 r3 P03] a lista de clientes troca com a busca de A em curso: a resposta velha de A nao sobrescreve a de B', async () => {
+  const orig = api.defaults.adapter;
+  api.defaults.adapter = async (config) => {
+    if (config.url === '/custos-viagens/coordenadas-cliente/5') await pausa(300);
+    return orig(config);
+  };
+  const A = [{ id: 5, razao_social: 'Cliente Campinas', cidade: 'CAMPINAS', estado: 'SP', endereco: null }];
+  const B = [{ id: 6, razao_social: 'Proximo', cidade: 'JUNDIAI', estado: 'SP', coordenadas: [-23.1857, -46.8978] }];
+  await act(async () => { root.render(<PreviewRota origem={ORIGEM} clientes={A} onClose={() => {}} />); });
+  await act(async () => { root.render(<PreviewRota origem={ORIGEM} clientes={B} onClose={() => {}} />); });
+  await act(async () => { await pausa(450); });
+  expect(marcadores()).toEqual([ORIGEM, [-23.1857, -46.8978]]);
+});

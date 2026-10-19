@@ -15521,7 +15521,8 @@ app.get('/api/custos-viagens/calcular-rota', authenticateToken, exigirComercialN
   }
   
   // Sugerir valores baseados na distância e tipo de viagem
-  const tipo = tipo_viagem || 'ida_e_volta';
+  // Etapa 157 (Fase 5 r1 I-1, C376): sem caixa — o POST/PUT gravam o tipo em maiusculas (IDA_E_VOLTA), e a rota calculava "so ida"
+  const tipo = String(tipo_viagem || 'ida_e_volta').trim().toLowerCase() || 'ida_e_volta';
   const multiplicador = tipo === 'ida_e_volta' ? 2 : 1;
   
   // Calcular número de pessoas e quantidade de noites

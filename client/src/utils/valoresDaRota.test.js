@@ -11,7 +11,8 @@ const TERRESTRE = {
 };
 const AEREO = {
   distancia_km: 700, tempo_estimado_horas: 2.38, requer_passagem_aerea: true, custo_sugerido: 840 + 75 + 120 + 180,
-  detalhes: { custo_passagem_aerea: 840, custo_taxa_embarque: 75, custo_pedagio: 0, custo_alimentacao: 120, custo_hospedagem: 180 },
+  // (Fase 5 r3 V02) um estacionamento no detalhe aereo nao entra em outros — o servidor hoje nao o manda, a regra nao depende disso
+  detalhes: { custo_passagem_aerea: 840, custo_taxa_embarque: 75, custo_pedagio: 0, custo_alimentacao: 120, custo_hospedagem: 180, custo_estacionamento: 20 },
 };
 const soma = (v) => ['custo_transporte', 'custo_hospedagem', 'custo_alimentacao', 'custo_outros'].reduce((s, k) => s + parseFloat(v[k]), 0);
 

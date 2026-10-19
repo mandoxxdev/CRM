@@ -404,6 +404,7 @@ const CustosViagens = () => {
       setClientesSelecionados([]);
       setRotaCalculada(null);
       setElegibilidade(null);
+      setVerificandoElegibilidade(false);
       setPassagemAereaConfirmada(false);
       setDistanciaConfirmada(null);
       return;
@@ -430,6 +431,15 @@ const CustosViagens = () => {
       destino_estado: cliente.estado || ''
     }));
 
+    // RN-157.03 (Fase 5 r1 I-2/M-1): o escolhido entra na lista da viagem e tem as regras verificadas JA — antes, ate a coordenada chegar
+    // (e para sempre, no cliente sem cidade), o Salvar usava a lista e a elegibilidade do cliente anterior
+    const clienteBase = { ...cliente, id: parseInt(clienteId) };
+    setClientesSelecionados([clienteBase]);
+    setElegibilidade(null);
+    verificarElegibilidade(clienteId).catch(error => {
+      console.error('Erro ao verificar elegibilidade:', error);
+    });
+
     // Limpar rota calculada anterior se cliente não tiver cidade/estado
     if (!cliente.cidade || !cliente.estado) {
       setRotaCalculada(null);
@@ -437,37 +447,21 @@ const CustosViagens = () => {
       return;
     }
 
-    // Buscar coordenadas exatas em background (não bloquear)
+    // Buscar coordenadas em background (não bloquear)
     try {
       const coords = await obterCoordenadasCliente(cliente);
       if (clienteEscolhidoRef.current !== String(clienteId)) return; // RN-157.03: escolheram outro cliente enquanto esperava
-      const clienteComCoords = { 
-        id: parseInt(clienteId), 
-        ...cliente, 
-        coordenadas: coords 
-      };
-      
       // Atualizar clientes selecionados com coordenadas
-      setClientesSelecionados([clienteComCoords]);
+      setClientesSelecionados([{ ...clienteBase, coordenadas: coords }]);
     } catch (error) {
       console.error('Erro ao obter coordenadas do cliente:', error);
       if (clienteEscolhidoRef.current !== String(clienteId)) return;
-      // Mesmo com erro, adicionar cliente sem coordenadas (será calculado depois)
-      setClientesSelecionados([{ 
-        id: parseInt(clienteId), 
-        ...cliente 
-      }]);
     }
-    
-    // Verificar elegibilidade e buscar clientes próximos em paralelo
-    if (clienteId) {
-      Promise.all([
-        verificarElegibilidade(clienteId),
-        buscarClientesProximos(clienteId)
-      ]).catch(error => {
-        console.error('Erro ao verificar elegibilidade ou buscar clientes próximos:', error);
-      });
-    }
+
+    // Buscar clientes próximos
+    buscarClientesProximos(clienteId).catch(error => {
+      console.error('Erro ao buscar clientes próximos:', error);
+    });
   };
 
   const verificarElegibilidade = async (clienteId) => {
@@ -483,7 +477,7 @@ const CustosViagens = () => {
       if (clienteEscolhidoRef.current !== String(clienteId)) return;
       setElegibilidade(null);
     } finally {
-      setVerificandoElegibilidade(false);
+      if (clienteEscolhidoRef.current === String(clienteId)) setVerificandoElegibilidade(false);
     }
   };
 
@@ -512,7 +506,7 @@ const CustosViagens = () => {
       setClientesProximos([]);
       setMostrarModalClientesProximos(false);
     } finally {
-      setCarregandoClientesProximos(false);
+      if (clienteEscolhidoRef.current === String(clienteId)) setCarregandoClientesProximos(false);
     }
   };
 
@@ -566,6 +560,13 @@ const CustosViagens = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // RN-157.03 (Fase 5 r1 M-1, B1006): no cadastro, enquanto as regras do cliente escolhido estao sendo verificadas, o Salvar espera
+    if (!editingCusto && verificandoElegibilidade) {
+      setMensagemErro('Aguarde a verificação das regras do cliente antes de salvar.');
+      setTimeout(() => setMensagemErro(null), 5000);
+      return;
+    }
+
     // Verificar se precisa de autorização
     if (!editingCusto && elegibilidade && !elegibilidade.todas_obrigatorias_atendidas) {
       setMostrarModalAutorizacao(true);
@@ -780,7 +781,8 @@ const CustosViagens = () => {
       destino: custo.destino || '',
       destino_cidade: custo.destino_cidade || '',
       destino_estado: custo.destino_estado || '',
-      tipo_viagem: custo.tipo_viagem || 'ida_e_volta',
+      // Fase 5 r1 I-1 (C376): o servidor grava o tipo em maiusculas (IDA_E_VOLTA); o seletor e a rota usam minusculas
+      tipo_viagem: String(custo.tipo_viagem || 'ida_e_volta').trim().toLowerCase(),
       numero_pessoas: custo.numero_pessoas || 1,
       distancia_km: custo.distancia_km || 0,
       tempo_estimado_horas: custo.tempo_estimado_horas || 0,

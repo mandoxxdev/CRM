@@ -37,6 +37,7 @@ const CustosViagens = require('./CustosViagens').default;
 const FRASE = 'Sugestão recalculada agora — os valores gravados foram mantidos. Clique em Aplicar Valores Sugeridos para usá-la.';
 const CLIENTE = { id: 5, razao_social: 'Cliente Campinas', cidade: 'CAMPINAS', estado: 'SP', endereco: null, status: 'ativo' };
 const CLIENTE_B = { id: 6, razao_social: 'Cliente Jundiai', cidade: 'JUNDIAI', estado: 'SP', endereco: null, status: 'ativo' };
+const CLIENTE_SEM_CIDADE = { id: 7, razao_social: 'Cliente Sem Cidade', cidade: null, estado: null, endereco: null, status: 'ativo' };
 const GRAVADO = {
   id: 1, codigo_visita: 'V-0001', cliente_id: 5, cliente_nome: 'Cliente Campinas', data_viagem: '2026-10-20', data_volta: null,
   tipo_viagem: null, numero_pessoas: null, origem_cidade: 'São Bernardo do Campo', origem_estado: 'SP', destino: 'CAMPINAS - SP',
@@ -57,7 +58,7 @@ function aereo(km, pessoas) {
     custo_sugerido: d.custo_passagem_aerea + d.custo_taxa_embarque + d.custo_alimentacao + d.custo_hospedagem };
 }
 
-let proximosPara; let custos; let rotaPara; let atrasoDaRota; let coordPara; let atrasoDaCoord; let pedidos; let corpos;
+let elegivelPara; let atrasoDaEleg; let proximosPara; let custos;let rotaPara; let atrasoDaRota; let coordPara; let atrasoDaCoord; let pedidos; let corpos;
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
 function resposta(config, status, data) {
   if (status >= 400) {
@@ -83,14 +84,16 @@ beforeEach(() => {
   pedidos = [];
   corpos = [];
   proximosPara = () => [];
-  api.defaults.adapter = async (config) => {
+  elegivelPara = () => true;
+  atrasoDaEleg = () => 0;
+api.defaults.adapter = async (config) => {
     const [caminho, consulta] = config.url.split('?');
     const q = new URLSearchParams(consulta || '');
     pedidos.push(`${config.method.toUpperCase()} ${config.url}`);
     if (config.method !== 'get') corpos.push({ metodo: config.method.toUpperCase(), url: caminho, corpo: JSON.parse(config.data || '{}') });
     if (caminho === '/custos-viagens' && config.method === 'get') return resposta(config, 200, custos);
     if (caminho === '/custos-viagens/resumo') return resposta(config, 200, {});
-    if (caminho === '/clientes') return resposta(config, 200, [CLIENTE, CLIENTE_B]);
+    if (caminho === '/clientes') return resposta(config, 200, [CLIENTE, CLIENTE_B, CLIENTE_SEM_CIDADE]);
     if (caminho === '/custos-viagens/calcular-rota') {
       const atraso = atrasoDaRota(q);
       const r = rotaPara(q);
@@ -106,7 +109,13 @@ beforeEach(() => {
       return resposta(config, 200, { coordenadas: c, lat: c[0], lon: c[1] });
     }
     m = caminho.match(/^\/custos-viagens\/verificar-elegibilidade\/(\d+)$/);
-    if (m) return resposta(config, 200, { todas_obrigatorias_atendidas: true, regras: {}, cliente_id: Number(m[1]) });
+    if (m) {
+      const atraso = atrasoDaEleg(m[1]);
+      if (atraso) await pausa(atraso);
+      const ok = elegivelPara(m[1]);
+      return resposta(config, 200, { todas_obrigatorias_atendidas: ok, cliente_id: Number(m[1]),
+        regras: ok ? {} : { propostas: { nome: 'Ter proposta aprovada', atendida: false, obrigatoria: true } } });
+    }
     if (/^\/custos-viagens\/clientes-proximos\//.test(caminho)) return resposta(config, 200, proximosPara(caminho.split('/').pop()));
     if (config.method === 'put' || config.method === 'post') return resposta(config, 200, { message: 'ok', id: 99 });
     if (caminho === '/custos-viagens/analise/cliente') return resposta(config, 200, []);
@@ -299,21 +308,68 @@ async function salvarNovo() {
   return corpos.find((c) => c.metodo === 'POST' && c.url === '/custos-viagens').corpo;
 }
 
-test('[RN-157.03, C375, Fase 2 K1] no Novo: o cliente sem endereco pergunta a coordenada ao servidor; escolher A (lento) e logo B: vale B', async () => {
+test('[RN-157.03, C375, Fase 2 K1] no Novo: o cliente sem endereco pergunta a coordenada ao servidor; escolher A (lento, nao elegivel) e logo B: vale B', async () => {
   atrasoDaCoord = (id) => (id === '5' ? 300 : 0);
+  atrasoDaEleg = (id) => (id === '5' ? 300 : 0);
+  elegivelPara = (id) => id !== '5';
   await montar();
   await clicar(container.querySelector('.btn-premium'));
   await digitar(campo('Cliente *'), '5');
   await digitar(campo('Cliente *'), '6');
   await act(async () => { await pausa(450); });
   expect(pedidos).toContain('GET /custos-viagens/coordenadas-cliente/5'); // antes: sem endereco, nenhum pedido (a lista do client)
-  expect(pedidos).toContain('GET /custos-viagens/coordenadas-cliente/6');
+  expect(pedidos).toContain('GET /custos-viagens/verificar-elegibilidade/5'); // pedida e respondida depois — e descartada
   expect(pedidos).toContain('GET /custos-viagens/verificar-elegibilidade/6');
-  expect(pedidos).not.toContain('GET /custos-viagens/verificar-elegibilidade/5'); // a resposta de A chegou depois e nao disparou nada
   expect(pedidos.filter((p) => p.startsWith('GET /custos-viagens/clientes-proximos/5'))).toEqual([]);
+  expect(botao('Registrar Viagem')).toBeUndefined(); // as regras de A (nao atendidas) nao valem para B
   const corpo = await salvarNovo();
   expect(String(corpo.cliente_id)).toBe('6');
   expect(corpo.clientes_viagem).toEqual([{ id: 6, ordem: 1, distancia_km: null }]);
+});
+
+test('[RN-157.03, Fase 5 r1 I-2] escolher A (elegivel) e depois C sem cidade (nao elegivel): a viagem e de C e o Salvar pede a autorizacao', async () => {
+  elegivelPara = (id) => id !== '7';
+  await montar();
+  await clicar(container.querySelector('.btn-premium'));
+  await digitar(campo('Cliente *'), '5');
+  expect(await esperar(() => pedidos.includes('GET /custos-viagens/verificar-elegibilidade/5'))).toBe(true);
+  await digitar(campo('Cliente *'), '7');
+  expect(await esperar(() => !!botao('Registrar Viagem'))).toBe(true); // antes: as regras de A ficavam e o Salvar gravava sem autorizacao
+  expect(pedidos).toContain('GET /custos-viagens/verificar-elegibilidade/7');
+  await clicar(botao('Registrar Viagem'));
+  expect(texto()).toContain('Motivo da Autorização');
+  expect(corpos.some((c) => c.metodo === 'POST')).toBe(false);
+});
+
+test('[RN-157.03, Fase 5 r1 M-1, B1006] escolher A e logo B (lentos): a lista ja e de B; enquanto as regras de B sao verificadas, o Salvar espera (a resposta de A nao libera)', async () => {
+  atrasoDaEleg = (id) => (id === '5' ? 120 : 450);
+  atrasoDaCoord = (id) => (id === '6' ? 700 : 0);
+  await montar();
+  await clicar(container.querySelector('.btn-premium'));
+  await digitar(campo('Cliente *'), '5');
+  await digitar(campo('Cliente *'), '6');
+  await act(async () => { await pausa(220); }); // as regras de A ja chegaram (e foram descartadas); as de B nao
+  const form = container.querySelector('form.custo-form');
+  await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+  expect(texto()).toContain('Aguarde a verificação das regras do cliente antes de salvar.');
+  expect(corpos.some((c) => c.metodo === 'POST')).toBe(false);
+  await act(async () => { await pausa(330); }); // as regras de B chegaram; a coordenada de B ainda nao
+  const corpo = await salvarNovo();
+  expect(String(corpo.cliente_id)).toBe('6');
+  expect(corpo.clientes_viagem).toEqual([{ id: 6, ordem: 1, distancia_km: null }]); // antes: [{ id: 5 }] — a lista de A
+});
+
+test('[RN-157.01, Fase 5 r1 I-1, C376] abrir um custo gravado como IDA_E_VOLTA (o servidor grava em maiusculas): o seletor em Ida e Volta, a volta aparece, a rota pedida como ida_e_volta', async () => {
+  custos = [{ ...GRAVADO, tipo_viagem: 'IDA_E_VOLTA', data_volta: '2026-10-22' }];
+  await montar();
+  await abrirEdicao();
+  expect(await esperar(() => texto().includes(FRASE))).toBe(true);
+  expect(campo('Tipo de Viagem').value).toBe('ida_e_volta');
+  expect(campo('Data da Volta *').value).toBe('2026-10-22');
+  const pedido = pedidosDaRota()[0];
+  expect(pedido).toContain('tipo_viagem=ida_e_volta');
+  const corpo = await atualizar();
+  expect([corpo.distancia_km, corpo.custo_sugerido]).toEqual([20, 80]); // continua sem trocar os gravados
 });
 
 test('[RN-157.03, integracao T2+T3] escolher um cliente sem endereco, adicionar um proximo e Salvar: a Preview com os dois nas coordenadas do servidor', async () => {
@@ -334,4 +390,206 @@ test('[RN-157.03, integracao T2+T3] escolher um cliente sem endereco, adicionar 
   expect(pos).toEqual([[-23.715, -46.555], [-22.9056, -47.0608], PROXIMO.coordenadas]);
   expect(texto()).toContain('Total: 3 ponto(s) na rota');
   expect(texto()).not.toContain('(sem localização no mapa)');
+});
+
+test('[RN-157.03, Fase 5 r1 M-1] escolher A (nao elegivel) e depois B: enquanto as regras de B nao chegam, as de A nao valem (nada de "Registrar Viagem")', async () => {
+  elegivelPara = (id) => id !== '5';
+  atrasoDaEleg = (id) => (id === '6' ? 400 : 0);
+  await montar();
+  await clicar(container.querySelector('.btn-premium'));
+  await digitar(campo('Cliente *'), '5');
+  expect(await esperar(() => !!botao('Registrar Viagem'))).toBe(true); // a metade positiva: as regras de A apareceram
+  await digitar(campo('Cliente *'), '6');
+  expect(botao('Registrar Viagem')).toBeUndefined();
+  await act(async () => { await pausa(450); });
+  expect(botao('Registrar Viagem')).toBeUndefined();
+  expect(botao('Salvar')).toBeDefined();
+});
+
+
+// ── Fase 5 r3: as assercoes que a sabotagem achou faltando (as sondas do revisor, adotadas) ──────────────────────────────────────
+function interceptar(fn) {
+  const orig = api.defaults.adapter;
+  api.defaults.adapter = async (config) => {
+    // o pedido atendido aqui tambem conta em pedidos (o adaptador de base o contaria)
+    let atendido = false;
+    const r = await fn(config, (status, data) => { atendido = true; pedidos.push(config.method.toUpperCase() + " " + config.url); return resposta(config, status, data); });
+    return atendido ? r : orig(config);
+  };
+}
+const caminhoDe = (config) => config.url.split('?')[0];
+const consultaDe = (config) => new URLSearchParams(config.url.split('?')[1] || '');
+const APLICADO = ['62.00', '0.00', '40.00', '0.00'];
+async function abrirEdicaoComFrase() {
+  await montar();
+  await abrirEdicao();
+  expect(await esperar(() => texto().includes(FRASE))).toBe(true);
+}
+async function novo() {
+  await montar();
+  await clicar(container.querySelector('.btn-premium'));
+  expect(texto()).toContain('Novo Custo de Viagem');
+}
+
+const MUDANCAS = [
+  ['destino_cidade', 'Destino - Cidade *', 'JUNDIAI'],
+  ['destino_estado', 'Destino - Estado *', 'MG'],
+  ['tipo_viagem', 'Tipo de Viagem', 'ida'],
+  ['data_viagem', 'Data da Viagem (Ida) *', '2026-10-21'],
+  ['data_volta', 'Data da Volta *', '2026-10-22'],
+];
+test.each(MUDANCAS)('[RN-157.01, Fase 5 r3 A] na edicao, mudar %s sai do modo sugestao: o formulario recebe a rota e a frase some', async (_c, rotulo, valor) => {
+  await abrirEdicaoComFrase();
+  await digitar(campo(rotulo), valor);
+  expect(await esperar(() => JSON.stringify(custosDoForm()) === JSON.stringify(APLICADO))).toBe(true);
+  expect(texto()).not.toContain(FRASE);
+});
+
+test('[RN-157.01, Fase 5 r3 A7] na edicao, trocar o cliente por outro da MESMA cidade sai do modo sugestao', async () => {
+  const CLIENTE_C = { id: 7, razao_social: 'Outro de Campinas', cidade: 'CAMPINAS', estado: 'SP', endereco: null, status: 'ativo' };
+  interceptar((config, r) => (caminhoDe(config) === '/clientes' ? r(200, [CLIENTE, CLIENTE_B, CLIENTE_C]) : undefined));
+  await abrirEdicaoComFrase();
+  await digitar(campo('Cliente *'), '7');
+  expect(await esperar(() => JSON.stringify(custosDoForm()) === JSON.stringify(APLICADO))).toBe(true);
+  expect(texto()).not.toContain(FRASE);
+});
+
+test('[RN-157.01, Fase 5 r3 B] o erro de um calculo velho (lento) nao apaga o quadro do ultimo', async () => {
+  await abrirEdicaoComFrase();
+  interceptar(async (config, r) => {
+    if (caminhoDe(config) === '/custos-viagens/calcular-rota' && consultaDe(config).get('numero_pessoas') === '2') { await pausa(300); return r(500, { error: 'x' }); }
+    return undefined;
+  });
+  await digitar(campo('Número de Pessoas'), '2');
+  await digitar(campo('Número de Pessoas'), '3');
+  await act(async () => { await pausa(450); });
+  expect(texto()).toContain('Detalhes (3 pessoas)');
+  expect(campo('Custo Alimentação (R$)').value).toBe('120.00');
+});
+
+test('[RN-157.01, Fase 5 r3 C] o fim de um calculo velho nao desliga o "Calculando rota..." do ultimo, ainda em curso', async () => {
+  await abrirEdicaoComFrase();
+  interceptar(async (config) => {
+    if (caminhoDe(config) === '/custos-viagens/calcular-rota') {
+      const p = consultaDe(config).get('numero_pessoas');
+      if (p === '2') await pausa(50);
+      if (p === '3') await pausa(400);
+    }
+    return undefined;
+  });
+  await digitar(campo('Número de Pessoas'), '2');
+  await digitar(campo('Número de Pessoas'), '3');
+  await act(async () => { await pausa(150); });
+  expect(texto()).toContain('Calculando rota...');
+  expect(texto()).not.toContain('Detalhes (');
+  await act(async () => { await pausa(400); });
+  expect(texto()).toContain('Detalhes (3 pessoas)');
+});
+
+test('[RN-157.01, Fase 5 r3 D] no Novo, apagar a cidade de destino com o calculo em curso: a resposta nao preenche', async () => {
+  atrasoDaRota = () => 300;
+  await novo();
+  await digitar(campo('Cliente *'), '5');
+  expect(await esperar(() => pedidosDaRota().length === 1)).toBe(true);
+  await digitar(campo('Destino - Cidade *'), '');
+  await act(async () => { await pausa(450); });
+  expect(custosDoForm()).toEqual(['', '', '', '']);
+  expect(texto()).not.toContain('Detalhes (');
+});
+
+test('[RN-157.01, Fase 5 r3 E] Aplicar uma sugestao TERRESTRE nao confirma passagem: a aerea seguinte (distancia parecida) abre o modal', async () => {
+  rotaPara = (q) => (q.get('destino_cidade') === 'RECIFE' ? aereo(605, 1) : terrestre(600, 1));
+  await abrirEdicaoComFrase();
+  await clicar(botao('Aplicar Valores Sugeridos'));
+  await digitar(campo('Destino - Cidade *'), 'RECIFE');
+  expect(await esperar(() => !!botao('Aceitar e Continuar com Passagem Aérea'))).toBe(true);
+});
+
+test('[RN-157.03, Fase 5 r3 F] escolher A (coordenada lenta), Cancelar e abrir o Novo: a resposta de A nao dispara nada no Novo', async () => {
+  atrasoDaCoord = (id) => (id === '5' ? 300 : 0);
+  await novo();
+  await digitar(campo('Cliente *'), '5');
+  await clicar(container.querySelector('.custo-form .form-actions .btn-secondary'));
+  await clicar(container.querySelector('.btn-premium'));
+  await act(async () => { await pausa(450); });
+  expect(pedidos).toContain('GET /custos-viagens/coordenadas-cliente/5');
+  expect(pedidos.filter((p) => p.startsWith('GET /custos-viagens/clientes-proximos/5'))).toEqual([]); // nem os proximos de A
+  expect(texto()).not.toContain('Clientes incluídos na viagem');
+});
+
+const VALINHOS = { id: 8, razao_social: 'Vizinho Valinhos', cidade: 'VALINHOS', estado: 'SP', endereco: null, distancia_km: 12, coordenadas: [-22.97, -46.99] };
+const ITUPEVA = { id: 9, razao_social: 'Vizinho Itupeva', cidade: 'ITUPEVA', estado: 'SP', endereco: null, distancia_km: 9, coordenadas: [-23.15, -47.05] };
+test('[RN-157.03, Fase 5 r3 G] os proximos de A (lentos) chegam depois de escolher B: o modal nao mostra os de A', async () => {
+  interceptar(async (config, r) => {
+    if (caminhoDe(config) === '/custos-viagens/clientes-proximos/5') { await pausa(300); return r(200, [VALINHOS]); }
+    return undefined;
+  });
+  await novo();
+  await digitar(campo('Cliente *'), '5');
+  await act(async () => { await pausa(60); });
+  await digitar(campo('Cliente *'), '6');
+  await act(async () => { await pausa(450); });
+  expect(pedidos.some((p) => p.startsWith('GET /custos-viagens/clientes-proximos/5'))).toBe(true);
+  expect(texto()).not.toContain('Vizinho Valinhos');
+});
+
+test('[RN-157.03, Fase 5 r3 H] o erro dos proximos de A (lento) depois de escolher B: o modal de B continua', async () => {
+  interceptar(async (config, r) => {
+    if (caminhoDe(config) === '/custos-viagens/clientes-proximos/5') { await pausa(300); return r(500, { error: 'x' }); }
+    if (caminhoDe(config) === '/custos-viagens/clientes-proximos/6') return r(200, [ITUPEVA]);
+    return undefined;
+  });
+  await novo();
+  await digitar(campo('Cliente *'), '5');
+  await act(async () => { await pausa(60); });
+  await digitar(campo('Cliente *'), '6');
+  expect(await esperar(() => texto().includes('Vizinho Itupeva'))).toBe(true);
+  await act(async () => { await pausa(450); });
+  expect(texto()).toContain('Vizinho Itupeva');
+});
+
+test('[RN-157.03, Fase 5 r3 I] a elegibilidade de A (coordenada rapida, elegibilidade lenta) chega depois de escolher B: vale a de B', async () => {
+  interceptar(async (config, r) => {
+    if (caminhoDe(config) === '/custos-viagens/verificar-elegibilidade/5') { await pausa(300); return r(200, { todas_obrigatorias_atendidas: false, regras: {}, cliente_id: 5 }); }
+    return undefined;
+  });
+  await novo();
+  await digitar(campo('Cliente *'), '5');
+  await act(async () => { await pausa(60); });
+  await digitar(campo('Cliente *'), '6');
+  await act(async () => { await pausa(450); });
+  expect(pedidos).toContain('GET /custos-viagens/verificar-elegibilidade/5'); // a de A FOI pedida: a guarda da elegibilidade e alcancavel
+  expect(texto()).toContain('Todas as regras obrigatórias foram atendidas');
+  expect(texto()).not.toContain('Algumas regras obrigatórias não foram atendidas');
+});
+
+test('[RN-157.03, Fase 5 r3 J] o erro da elegibilidade de A (lento) depois de escolher B: a de B continua', async () => {
+  interceptar(async (config, r) => {
+    if (caminhoDe(config) === '/custos-viagens/verificar-elegibilidade/5') { await pausa(300); return r(500, { error: 'x' }); }
+    return undefined;
+  });
+  await novo();
+  await digitar(campo('Cliente *'), '5');
+  await act(async () => { await pausa(60); });
+  await digitar(campo('Cliente *'), '6');
+  await act(async () => { await pausa(450); });
+  expect(texto()).toContain('Todas as regras obrigatórias foram atendidas');
+});
+
+async function ateOModalAereo() {
+  rotaPara = (q) => (q.get('destino_cidade') === 'RECIFE' ? aereo(2600, 1) : terrestre(300, 1));
+  await novo();
+  await digitar(campo('Cliente *'), '5');
+  expect(await esperar(() => campo('Custo Outros (R$)').value === '20.00')).toBe(true);
+  expect(texto()).toContain('300 km');
+  await digitar(campo('Destino - Cidade *'), 'RECIFE');
+  expect(await esperar(() => !!botao('Aceitar e Continuar com Passagem Aérea'))).toBe(true);
+}
+test('[RN-157.02, Fase 5 r3 K] com o modal da passagem aberto, o quadro da rota terrestre anterior nao fica na tela', async () => {
+  await ateOModalAereo();
+  expect(texto()).not.toContain('300 km');
+});
+test('[RN-157.02, Fase 5 r3 L] o modal da passagem lista o VALOR da taxa de embarque (R$ 75,00 por pessoa)', async () => {
+  await ateOModalAereo();
+  expect(texto()).toMatch(/Taxa de Embarque: R\$\s75,00/);
 });
