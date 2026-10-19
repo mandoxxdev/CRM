@@ -15,8 +15,10 @@
  *                                             que a varredura leu (para provar que ela enxerga routes/ e services/)
  *
  * `raiz` (opcional) troca a pasta varrida — o controle positivo do proprio helper (custosViagensPortao) roda sobre fontes sinteticas.
- * Os registros que o texto nao ve (receptor apelidado, app[verbo], .call, o verbo search, arquivo sem extensao ou em tests/) ficam
- * com a leitura das camadas do Express de verdade (despejaCamadasDoExpress.js).
+ * Os registros que o texto nao ve (um VERBO por receptor apelidado com o caminho num identificador — `apelido.get(IDENT)` —, app[verbo]
+ * escondido, o verbo search, arquivo sem extensao ou em tests/) ficam com a leitura das camadas do Express de verdade
+ * (despejaCamadasDoExpress.js). O `.use(` nao literal, por qualquer receptor (apelido inclusive), o texto ve desde a Etapa 155 (RN-155.05):
+ * um middleware global por apelido as camadas nao acusam (ele roda no caminho neutro, na mesma posicao).
  * A varredura le .js, .cjs e .mjs, inclusive o arquivo que comeca com ponto, e pula node_modules, tests, data, uploads, backups e .git.
  */
 const fs = require('fs');
@@ -39,8 +41,10 @@ function arquivosDoServidor(raiz = SERVER_DIR) {
   return out;
 }
 
-// Medidos (Etapa 151, conferidos de novo na 152): 4 middlewares sem caminho, o router dos modulos (sem prefixo) e um comentario.
+// Medidos (Etapa 151, conferidos de novo na 152): 4 middlewares sem caminho, o router dos modulos (sem prefixo) e um comentario. Etapa 155
+// (RN-155.05): o `.use(` por qualquer receptor acrescentou o middleware de login do socket.io (`io.use`, nao e o Express).
 const REGISTROS_NAO_LITERAIS_MEDIDOS = [
+  `${path.join('services', 'chat', 'socket.js')}: io.use(criarAuthSocket(jwtSecret, db));`,
   'index.js: app.use((req, res, next) => {', "index.js: app.use(cors({ exposedHeaders: ['Content-Disposition'] }));",
   "index.js: app.use(express.json({ limit: '15mb' }));", 'index.js: app.use(express.static(clientBuildPath, { etag: true, lastModified: true, maxAge: 0 }));',
   'index.js: app.use(rotasModulos);',
@@ -58,7 +62,14 @@ function registrosNaoLiterais(caminhosProtegidos, { raiz } = {}) {
     const linhaDe = (i) => linhas[src.slice(0, i).split('\n').length - 1].trim();
     const res = [
       /\b\w+\s*\[\s*["'`](get|post|put|patch|delete|all|use|route)["'`]\s*\]/g,
-      /\b(app|router|r|\w*[Rr]outer)\.(get|post|put|patch|delete|all|use|route)\(\s*[^\s'"`[)]/g,
+      /\b(app|router|r|\w*[Rr]outer)\.(get|post|put|patch|delete|all|route)\(\s*[^\s'"`[)]/g,
+      // Etapa 155 (RN-155.05, Fase 5 r3 R2 da 154): o `.use(` por QUALQUER receptor — ou sem receptor colado — com o 1o argumento que nao e
+      // texto literal (funcao, identificador, chamada, lista). Um middleware GLOBAL por apelido (`const apelido = app; apelido.use(fn)`), por
+      // parametro com outro nome, encadeado (`app.use(a).use(b)`), com quebra de linha antes do `.use`, `?.use` ou `(apelido).use` escapava da
+      // regex de cima (so `app|router|r|*Router`) e das camadas (um global roda no caminho neutro, na mesma posicao). Medido no servidor: os 7 da
+      // lista (o `io.use` do socket.io entrou). Custo declarado: um `.use(` novo de biblioteca (`passport.use(new …)`) derruba os testes da
+      // regua — de proposito: alguem confere e o acrescenta a REGISTROS_NAO_LITERAIS_MEDIDOS.
+      /\.\s*use\s*\(\s*[^\s'"`)]/g,
       // Etapa 153 (Fase 5 r3, familia 1): o registro por `.call`/`.apply` (`app.get.call(app, '/api/...', ...)`), em qualquer receptor (o
       // `.bind` fica de fora: o servidor faz `db.get.bind(db)` no sqliteConcurrency — a leitura das camadas cobre o registro por bind)
       /\b\w+\.(get|post|put|patch|delete|all|use|route|search|param)\.(call|apply)\(/g,

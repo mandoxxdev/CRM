@@ -255,7 +255,7 @@ test('[RN-152.01, Fase 5 r3 A1/A6] as camadas do Express montado: so as 19 atend
 });
 
 // ── Fase 5 r3 A5: o controle positivo do proprio helper, sobre fontes sinteticas ───────────
-test('[Fase 5 r3 A5] o helper da regua do fonte acusa cada forma que promete ver (montado, receptor qualquer, app[verbo], identificador, .cjs/.mjs, arquivo com ponto, subpasta, caixa, duplicado) — e nao acusa o montado de outro prefixo', () => {
+test('[Fase 5 r3 A5, Etapa 155 RN-155.05] o helper da regua do fonte acusa cada forma que promete ver (montado, receptor qualquer, app[verbo], identificador, .cjs/.mjs, arquivo com ponto, subpasta, caixa, duplicado, o .use nao literal por qualquer receptor) — e nao acusa o montado de outro prefixo', () => {
   const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'e152-regua-'));
   try {
     const escreve = (rel, txt) => { fs.mkdirSync(path.dirname(path.join(raiz, rel)), { recursive: true }); fs.writeFileSync(path.join(raiz, rel), txt); };
@@ -270,8 +270,27 @@ test('[Fase 5 r3 A5] o helper da regua do fonte acusa cada forma que promete ver
     escreve('maiusc.js', "rotas.get('/API/Custos-Viagens/' + x, h);\n"); // a caixa do montado (r3 S24)
     escreve('grande.js', `// ${'x'.repeat(6000)}\napp.get('/api/custos-viagens/z', h);\n`); // o registro depois dos 4 KB (r3 S26)
     escreve(path.join('node_modules', 'x.js'), 'app.get(CAMINHO, h);\n'); // pulado de proposito
+    // Etapa 155 (RN-155.05, Fase 5 r3 R2 da 154): o `.use(` nao literal por qualquer receptor — o apelido de app, o parametro com outro nome,
+    // a lista, o encadeado (dois na linha), a quebra de linha, o `?.`, os parenteses e o socket.io; o `.use` com caminho literal nao
+    escreve(path.join('u', 'apelido.js'), 'const apelido155 = app;\napelido155.use((req, res, next) => next());\n');
+    escreve(path.join('u', 'param.js'), 'module.exports = (servidor) => { servidor.use(mw); };\n');
+    escreve(path.join('u', 'lista.js'), 'app.use([a, b]);\n');
+    escreve(path.join('u', 'encadeado.js'), 'app.use(express.json()).use(mw2);\n');
+    escreve(path.join('u', 'quebra.js'), 'app\n  .use(fn);\n');
+    escreve(path.join('u', 'opcional.js'), 'apelido?.use(fn);\n');
+    escreve(path.join('u', 'parenteses.js'), '(apelido).use(fn);\n');
+    escreve(path.join('u', 'socket.js'), 'io.use(auth);\n');
+    escreve(path.join('u', 'literal.js'), "apelido.use('/x', mw);\napp.use(`/y`, mw);\napp.use( \"/z\", mw);\n");
     const achados = regua.registrosNaoLiterais([B], { raiz });
     assert.deepStrictEqual(achados, [
+      `${path.join('u', 'apelido.js')}: apelido155.use((req, res, next) => next());`,
+      `${path.join('u', 'param.js')}: module.exports = (servidor) => { servidor.use(mw); };`,
+      `${path.join('u', 'lista.js')}: app.use([a, b]);`,
+      `${path.join('u', 'encadeado.js')}: app.use(express.json()).use(mw2);`, `${path.join('u', 'encadeado.js')}: app.use(express.json()).use(mw2);`,
+      `${path.join('u', 'quebra.js')}: .use(fn);`,
+      `${path.join('u', 'opcional.js')}: apelido?.use(fn);`,
+      `${path.join('u', 'parenteses.js')}: (apelido).use(fn);`,
+      `${path.join('u', 'socket.js')}: io.use(auth);`,
       `${path.join('a', 'montado.js')}: meuRouter.get('/api/cust' + 'os-viagens/x', h);`,
       `${path.join('a', 'template.mjs')}: rotas.post(\`/api/custos-viagens/\${x}\`, h);`,
       `${path.join('b', '.oculto.cjs')}: app['post']('/x', h);`,
