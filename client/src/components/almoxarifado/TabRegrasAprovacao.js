@@ -14,6 +14,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
+import { casaBusca } from '../../utils/buscaNoNavegador';
 import { FiEdit2, FiPlus, FiRefreshCw, FiSave, FiX } from 'react-icons/fi';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -185,11 +186,8 @@ const TabRegrasAprovacao = () => {
     return <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>;
   }
 
-  const usuariosFiltrados = usuarios.filter((u) => {
-    if (!busca.trim()) return true;
-    const q = busca.toLowerCase();
-    return (u.nome || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q);
-  });
+  // Etapa 160 (RN-160.06, C395): testava o termo aparado mas comparava sem aparar (" ana" nao achava "Ana")
+  const usuariosFiltrados = usuarios.filter((u) => casaBusca(busca, u.nome, u.email));
 
   return (
     <div style={{ maxWidth: 900 }}>

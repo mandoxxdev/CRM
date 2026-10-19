@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { casaBusca, normalizarBusca } from '../../utils/buscaNoNavegador';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
@@ -946,11 +947,9 @@ const RecebimentosAlmoxarifado = () => {
 
   const formatMoney = (v) => (v != null && v !== '' ? Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—');
 
-  const materiaisFiltrados = buscaMat.length >= 2
-    ? materiais.filter((m) =>
-      m.nome.toLowerCase().includes(buscaMat.toLowerCase()) ||
-      m.codigo.toLowerCase().includes(buscaMat.toLowerCase())
-    ).slice(0, 6)
+  // Etapa 160 (RN-160.06, C395): o minimo de 2 letras e a busca medem o termo aparado; material sem nome nao quebra
+  const materiaisFiltrados = normalizarBusca(buscaMat).length >= 2
+    ? materiais.filter((m) => casaBusca(buscaMat, m.nome, m.codigo)).slice(0, 6)
     : [];
 
   // `undefined` e nao `0` quando nao ha detalhe (achado F2 da revisao final da Etapa 35): este e o

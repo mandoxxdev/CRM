@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { casaBusca, normalizarBusca } from '../../utils/buscaNoNavegador';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
@@ -85,11 +86,9 @@ const RequisicaoForm = () => {
   }, [setorFixo]);
 
   useEffect(() => {
-    if (busca.length < 2) { setResultados([]); return; }
-    const filtered = materiais.filter(m =>
-      m.nome.toLowerCase().includes(busca.toLowerCase()) ||
-      m.codigo.toLowerCase().includes(busca.toLowerCase())
-    ).slice(0, 8);
+    // Etapa 160 (RN-160.06, C395): o minimo de 2 letras e a busca medem o termo aparado; material sem nome nao quebra
+    if (normalizarBusca(busca).length < 2) { setResultados([]); return; }
+    const filtered = materiais.filter(m => casaBusca(busca, m.nome, m.codigo)).slice(0, 8);
     setResultados(filtered);
   }, [busca, materiais]);
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { casaBusca } from '../../utils/buscaNoNavegador';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
@@ -1428,10 +1429,8 @@ const TabEstoquesMinimos = ({ podeGravar = true }) => {
     } finally { setSaving(false); }
   };
 
-  const materiaisFiltrados = materiais.filter(m =>
-    m.nome.toLowerCase().includes(buscaFiltro.toLowerCase()) ||
-    m.codigo.toLowerCase().includes(buscaFiltro.toLowerCase())
-  );
+  // Etapa 160 (RN-160.06, C395): aparado; material sem nome nao quebra
+  const materiaisFiltrados = materiais.filter(m => casaBusca(buscaFiltro, m.nome, m.codigo));
 
   const countEditados = Object.keys(editados).length;
 
@@ -3280,11 +3279,8 @@ const TabLiberacaoValor = ({ podeGravar = true }) => {
     }
   };
 
-  const usuariosFiltrados = usuarios.filter((u) => {
-    if (!buscaUsuario.trim()) return true;
-    const q = buscaUsuario.toLowerCase();
-    return (u.nome || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q);
-  });
+  // Etapa 160 (RN-160.06, C395; Fase 2 I5): testava o termo aparado mas comparava sem aparar (" ana" nao achava "Ana")
+  const usuariosFiltrados = usuarios.filter((u) => casaBusca(buscaUsuario, u.nome, u.email));
 
   if (loading) return <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>;
 
@@ -3418,11 +3414,8 @@ const TabPerfisAcesso = () => {
     }
   };
 
-  const filtrados = usuarios.filter((u) => {
-    if (!busca.trim()) return true;
-    const q = busca.toLowerCase();
-    return (u.nome || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q);
-  });
+  // Etapa 160 (RN-160.06, C395; Fase 2 I5): testava o termo aparado mas comparava sem aparar (" ana" nao achava "Ana")
+  const filtrados = usuarios.filter((u) => casaBusca(busca, u.nome, u.email));
 
   if (loading) return <div className="almox-loading"><FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> Carregando...</div>;
 

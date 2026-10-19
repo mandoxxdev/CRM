@@ -94,7 +94,11 @@ const MateriaisAlmoxarifado = () => {
     return () => clearTimeout(t);
   }, [search, categoria, familiaFilter, statusFilter, familiasKey]);
 
+  // Etapa 160 (RN-160.06, C395): a pausa de 300 ms nao impede dois pedidos em voo — so a resposta do ultimo mexe na lista (o
+  // contador fica aqui dentro: o inativar tambem chama; Fase 2 M7)
+  const pedidoMateriaisRef = useRef(0);
   const loadMateriais = async () => {
+    const meu = ++pedidoMateriaisRef.current;
     setLoading(true);
     try {
       const params = {};
@@ -114,11 +118,13 @@ const MateriaisAlmoxarifado = () => {
       }
       if (statusFilter) params.status = statusFilter;
       const res = await api.get('/almoxarifado/materiais', { params });
+      if (meu !== pedidoMateriaisRef.current) return;
       setMateriais(res.data);
     } catch {
+      if (meu !== pedidoMateriaisRef.current) return;
       toast.error('Erro ao carregar materiais');
     } finally {
-      setLoading(false);
+      if (meu === pedidoMateriaisRef.current) setLoading(false);
     }
   };
 
