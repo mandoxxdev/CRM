@@ -20,7 +20,8 @@
  * Etapa 158 — RN-158.01/02 (C377): a coordenada do endereco fica guardada no cadastro do cliente (geo_lat, geo_lon e geo_termo — o termo
  *   que a gerou). `termoDaConsulta` e a UMA funcao que monta o termo (a consulta e a memoria usam a mesma — mudou o endereco, a cidade ou o
  *   estado, muda o termo e a memoria deixa de valer); `coordenadaGuardada` diz se a memoria vale para o termo atual (o termo nao nulo, o
- *   geo_termo texto igual a ele, a latitude e a longitude numeros finitos — Fase 2 M5 e o cenario do lixo gravado por fora).
+ *   geo_termo texto igual a ele, a latitude e a longitude numeros finitos e na faixa — Fase 2 M5, o lixo gravado por fora e a Fase 5 r1 M2).
+ *   A resposta do servico fora da faixa e respondida como antes, mas nao e guardada.
  */
 const http = require('http');
 const https = require('https');
@@ -429,12 +430,19 @@ function termoDaConsulta(endereco, cidade, estado) {
   return `${endereco}, ${cidade}, ${estado}, Brasil`.replace(/\s+/g, ' ').trim();
 }
 
+// Latitude entre -90 e 90 e longitude entre -180 e 180, numeros finitos (Fase 5 r1 M2: uma resposta absurda do servico de mapas nao fica
+// guardada para sempre — antes da memoria, ela valia so para aquela abertura).
+function coordenadaPlausivel(lat, lon) {
+  return typeof lat === 'number' && typeof lon === 'number' && Number.isFinite(lat) && Number.isFinite(lon)
+    && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
+}
+
 // A coordenada guardada no cadastro do cliente, se ela vale para o termo atual; senao null.
 function coordenadaGuardada(cliente, termo) {
   if (!cliente || typeof termo !== 'string' || !termo) return null;
   if (typeof cliente.geo_termo !== 'string' || cliente.geo_termo !== termo) return null;
   const { geo_lat: lat, geo_lon: lon } = cliente;
-  if (typeof lat !== 'number' || typeof lon !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (!coordenadaPlausivel(lat, lon)) return null;
   return [lat, lon];
 }
 
@@ -544,6 +552,7 @@ function obterCoordenadasCidade(cidade, estado) {
 module.exports = {
   termoDaConsulta,
   coordenadaGuardada,
+  coordenadaPlausivel,
   geocodificarEndereco,
   obterCoordenadasExatas,
   obterCoordenadasCidade,

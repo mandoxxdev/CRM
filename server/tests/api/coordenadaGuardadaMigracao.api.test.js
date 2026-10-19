@@ -240,6 +240,43 @@ test('[RN-158.01, Fase 2 I2] o UPDATE da memoria falha: 200 com a coordenada do 
   } finally { await descer(); }
 });
 
+test('[RN-158.04, Fase 2 M2, Fase 5 r3 R18/R21] as ALTERs da coordenada falham: o erro de cada coluna no log; a rota responde pelo servico, sem memoria (nao 500)', async () => {
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'e158-alterfalha-'));
+  ctx.pastas.push(pasta);
+  const log = await subir(pasta, { FALHA_SQL_INJETADA: 'ALTER TABLE clientes ADD COLUMN geo' });
+  try {
+    for (const c of ['geo_lat', 'geo_lon', 'geo_termo']) {
+      assert.ok(new RegExp(`Erro ao adicionar coluna ${c} em clientes: falha injetada pelo teste`).test(log), `a falha da coluna ${c} nao foi para o log`);
+    }
+    assert.ok(!(await colunas(pasta)).some((c) => /^geo_/.test(c)), 'a falha nao foi injetada (as colunas existem)');
+    const [sc, c] = await j('POST', '/clientes', { razao_social: 'Sem Memoria 158', cidade: 'Campinas', estado: 'SP', endereco: 'Rua A 1' });
+    assert.strictEqual(sc, 200, JSON.stringify(c));
+    fronteira.pedidos = []; fronteira.lat = '-22.7'; fronteira.lon = '-47.7';
+    const [s, x] = await j('GET', `/custos-viagens/coordenadas-cliente/${c.id}`);
+    assert.deepStrictEqual([s, x], [200, { coordenadas: [-22.7, -47.7], lat: -22.7, lon: -47.7 }]);
+    const [s2] = await j('GET', `/custos-viagens/coordenadas-cliente/${c.id}`);
+    assert.strictEqual(s2, 200);
+    assert.strictEqual(fronteira.pedidos.length, 2, 'sem as colunas, a segunda abertura tambem consulta');
+    await pausa(300);
+    assert.strictEqual(saiu, null, 'o UPDATE sem as colunas derrubou o index.js');
+  } finally { await descer(); }
+});
+
+test('[RN-158.03, Fase 5 r1 M3] a leitura do cliente falha: o 500 literal da rota e nenhum pedido ao servico de mapas', async () => {
+  assert.ok(ctx.antigo, 'o cenario do banco antigo nao rodou');
+  await subir(ctx.antigo, { FALHA_SQL_INJETADA: '^SELECT \\* FROM clientes WHERE id = \\?$', FALHA_SQL_METODOS: 'get' });
+  try {
+    fronteira.pedidos = [];
+    const [s, x] = await j('GET', '/custos-viagens/coordenadas-cliente/77');
+    assert.deepStrictEqual([s, x], [500, { error: 'falha injetada pelo teste' }]);
+    assert.strictEqual(fronteira.pedidos.length, 0);
+    assert.ok(/\[falha injetada\] SELECT \* FROM clientes WHERE id/.test(fs.readFileSync(logAtual, 'utf8')), 'a falha nao foi injetada');
+    // a metade positiva: outra leitura de clientes (a lista) responde
+    const [sl, lista] = await j('GET', '/clientes');
+    assert.ok(sl === 200 && lista.some((c) => c.id === 77), `${sl}`);
+  } finally { await descer(); }
+});
+
 (async () => {
   console.log('\n=== Etapa 158: a migracao da coordenada guardada e o erro ao grava-la (C377) ===\n');
   ctx.pastas = [];

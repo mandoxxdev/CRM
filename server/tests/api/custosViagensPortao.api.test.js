@@ -580,30 +580,38 @@ test('[RN-158.05/07, D (157)] o resumo soma por tipo sem caixa e sem espaco (o I
   const u = ctx.u.diretaComercial;
   const [s0, r0] = await j('GET', '/custos-viagens/resumo', u.T);
   assert.strictEqual(s0, 200);
+  // Fase 5 r3 R30-R36: cada tipo como a tela grava (maiusculas) E com espaco/minusculas (legado), mais um que nao e nenhum dos tres
   const ida = await lancar158(u, 'ida', 111);
+  const idaEsp = await lancar158(u, 'ida', 777);
   const idaVolta = await lancar158(u, 'ida_e_volta', 222);
+  const idaVoltaEsp = await lancar158(u, 'ida_e_volta', 999);
+  const voltaTela = await lancar158(u, 'volta', 555);
   const voltaLegado = await lancar158(u, 'volta', 333);
   const outro = await lancar158(u, 'ida', 444);
+  const nossos = [ida, idaEsp, idaVolta, idaVoltaEsp, voltaTela, voltaLegado, outro];
   // o que a tela grava (o POST passa o tipo para maiusculas) — senao o cenario nao seria o de producao
-  const gravados = await all(`SELECT id, tipo_viagem FROM custos_viagens WHERE id IN (${[ida, idaVolta, voltaLegado, outro].join(',')}) ORDER BY id`);
-  assert.deepStrictEqual(gravados.map((g) => g.tipo_viagem), ['IDA', 'IDA_E_VOLTA', 'VOLTA', 'IDA']);
-  // o legado em minusculas com espaco, e um tipo que nao e nenhum dos tres
+  const gravados = await all(`SELECT id, tipo_viagem FROM custos_viagens WHERE id IN (${nossos.join(',')}) ORDER BY id`);
+  assert.deepStrictEqual(gravados.map((g) => g.tipo_viagem), ['IDA', 'IDA', 'IDA_E_VOLTA', 'IDA_E_VOLTA', 'VOLTA', 'VOLTA', 'IDA']);
+  // os legados com espaco e caixa trocada, e um tipo que nao e nenhum dos tres (o voltaTela fica VOLTA, como a tela grava)
+  await run("UPDATE custos_viagens SET tipo_viagem = ' IDA ' WHERE id = ?", [idaEsp]);
+  await run("UPDATE custos_viagens SET tipo_viagem = ' ida_e_volta ' WHERE id = ?", [idaVoltaEsp]);
   await run("UPDATE custos_viagens SET tipo_viagem = ' volta ' WHERE id = ?", [voltaLegado]);
   await run("UPDATE custos_viagens SET tipo_viagem = 'outro' WHERE id = ?", [outro]);
   const [s1, r1] = await j('GET', '/custos-viagens/resumo', u.T);
   assert.strictEqual(s1, 200);
   const dif = (k) => Math.round(((r1[k] || 0) - (r0[k] || 0)) * 100) / 100;
   assert.deepStrictEqual([dif('custo_ida'), dif('custo_volta'), dif('custo_ida_volta'), dif('total_custo_geral'), r1.total_viagens - r0.total_viagens],
-    [111, 333, 222, 1110, 4], `o resumo antes ${JSON.stringify(r0)} depois ${JSON.stringify(r1)}`);
+    [111 + 777, 555 + 333, 222 + 999, 3441, 7], `o resumo antes ${JSON.stringify(r0)} depois ${JSON.stringify(r1)}`);
   // o filtro da lista (a tela manda ?tipo_viagem=ida|volta|ida_e_volta)
   const ids = async (q) => { const [s, l] = await j('GET', `/custos-viagens${q}`, u.T); assert.strictEqual(s, 200, JSON.stringify(l).slice(0, 200)); return l.map((c) => c.id); };
-  const nossos = [ida, idaVolta, voltaLegado, outro];
   const dosNossos = (lista) => nossos.filter((id) => lista.includes(id));
-  assert.deepStrictEqual(dosNossos(await ids('?tipo_viagem=ida')), [ida], 'o filtro ida');
-  assert.deepStrictEqual(dosNossos(await ids('?tipo_viagem=volta')), [voltaLegado], 'o filtro volta');
-  assert.deepStrictEqual(dosNossos(await ids('?tipo_viagem=ida_e_volta')), [idaVolta], 'o filtro ida_e_volta');
-  assert.deepStrictEqual(dosNossos(await ids('?tipo_viagem=IDA_E_VOLTA')), [idaVolta], 'o filtro em maiusculas');
+  assert.deepStrictEqual(dosNossos(await ids('?tipo_viagem=ida')), [ida, idaEsp], 'o filtro ida');
+  assert.deepStrictEqual(dosNossos(await ids('?tipo_viagem=volta')), [voltaTela, voltaLegado], 'o filtro volta');
+  assert.deepStrictEqual(dosNossos(await ids('?tipo_viagem=ida_e_volta')), [idaVolta, idaVoltaEsp], 'o filtro ida_e_volta');
+  assert.deepStrictEqual(dosNossos(await ids('?tipo_viagem=IDA_E_VOLTA')), [idaVolta, idaVoltaEsp], 'o filtro em maiusculas');
+  assert.deepStrictEqual(dosNossos(await ids('?tipo_viagem=%20ida%20')), [ida, idaEsp], 'o filtro com espaco');
   assert.deepStrictEqual(dosNossos(await ids('?tipo_viagem=')), nossos, 'o filtro vazio filtrou');
+  assert.deepStrictEqual(dosNossos(await ids('?tipo_viagem=%20%20')), nossos, 'o filtro so de espacos filtrou');
   assert.deepStrictEqual(dosNossos(await ids('')), nossos, 'sem filtro');
   // limpa (nao deixa custos a mais para os cenarios de baixo)
   for (const id of nossos) assert.strictEqual((await j('DELETE', `/custos-viagens/${id}`, u.T))[0], 200);
@@ -636,6 +644,60 @@ test('[RN-158.06, M7 da 157] o Atualizar com os mesmos valores em texto ("350.00
   // o gravado continua certo
   const gravado = (await all('SELECT custo_transporte, custo_alimentacao, distancia_km, total_custo FROM custos_viagens WHERE id = ?', [id]))[0];
   assert.deepStrictEqual(gravado, { custo_transporte: 360, custo_alimentacao: 80, distancia_km: 100.5, total_custo: 440 });
+  // Fase 5 r1 M1: as formas que o banco tambem grava como o mesmo numero (".5", "1e0", "+80", " 100.5 ", "5.") nao sao troca
+  const [sg2, g2] = await j('GET', `/custos-viagens/${id}`, u.T);
+  assert.strictEqual(sg2, 200);
+  const [s3] = await j('PUT', `/custos-viagens/${id}`, u.T, { ...g2, tempo_estimado_horas: '125e-2', custo_alimentacao: '+80', distancia_km: ' 100.5 ',
+    custo_transporte: '360.', custo_sugerido: '.43e3', numero_pessoas: '1e0' });
+  assert.strictEqual(s3, 200);
+  // Fase 5 r2 S1: a troca minima que o banco grava (0 -> 0.0000000001) entra — a tolerancia de antes a escondia
+  const [s4] = await j('PUT', `/custos-viagens/${id}`, u.T, { ...g2, custo_outros: '0.0000000001' });
+  assert.strictEqual(s4, 200);
+  assert.ok(await aguardar158(async () => (await historico()).length >= 2), 'a troca minima nao gravou historico');
+  await pausa(300);
+  const h2 = await historico();
+  assert.strictEqual(h2.length, 2, `as formas do mesmo numero gravaram historico: ${JSON.stringify(h2).slice(0, 600)}`);
+  const m2 = JSON.parse(h2[1].mudancas);
+  assert.deepStrictEqual(m2.map((x) => x.campo).sort(), ['custo_outros', 'total_custo'], JSON.stringify(m2));
+  assert.deepStrictEqual((await all('SELECT custo_outros, tempo_estimado_horas FROM custos_viagens WHERE id = ?', [id]))[0], { custo_outros: 1e-10, tempo_estimado_horas: 1.25 });
+});
+
+test('[RN-158.06, Fase 5 r3 R40-R47/R50] a regua do numero: espaco, sinal, expoente e a hospedagem nao sao troca; texto ("abc", "0x3E8") e troca; o nulo gravado por fora vale 0', async () => {
+  const u = ctx.u.diretaComercial;
+  const id = await lancar158(u, 'ida', 350, { custo_hospedagem: 50, custo_outros: 1000, distancia_km: -5 });
+  const historico = async () => all('SELECT mudancas FROM custos_viagens_historico WHERE custo_viagem_id = ? ORDER BY id', [id]);
+  const lido = async () => (await j('GET', `/custos-viagens/${id}`, u.T))[1];
+  const esperarLinhas = async (n) => { assert.ok(await aguardar158(async () => (await historico()).length >= n), `a troca real nao gravou a linha ${n}`); await pausa(300); return historico(); };
+  // os mesmos valores em outras formas que o banco grava como o mesmo numero
+  const g = await lido();
+  assert.deepStrictEqual([g.custo_hospedagem, g.custo_outros, g.distancia_km], [50, 1000, -5], JSON.stringify(g).slice(0, 200));
+  assert.strictEqual((await j('PUT', `/custos-viagens/${id}`, u.T, { ...g, custo_hospedagem: '50.00', custo_transporte: ' 350.00 ', distancia_km: '-5.0', custo_outros: '1e3' }))[0], 200);
+  // a troca real seguinte: texto num campo de valor compara como texto (0 -> "abc"; o total nao muda — parseFloat("abc") || 0)
+  assert.strictEqual((await j('PUT', `/custos-viagens/${id}`, u.T, { ...g, custo_alimentacao: 'abc' }))[0], 200);
+  let h = await esperarLinhas(1);
+  assert.strictEqual(h.length, 1, `as formas do mesmo numero gravaram historico: ${JSON.stringify(h).slice(0, 600)}`);
+  let m = JSON.parse(h[0].mudancas);
+  assert.deepStrictEqual(m.map((x) => [x.campo, x.valor_anterior, x.valor_novo]), [['custo_alimentacao', 0, 'abc']], JSON.stringify(m));
+  // hexadecimal: o banco grava o texto — e troca (custo_outros e o total)
+  const g2 = await lido();
+  assert.strictEqual((await j('PUT', `/custos-viagens/${id}`, u.T, { ...g2, custo_outros: '0x3E8' }))[0], 200);
+  h = await esperarLinhas(2);
+  assert.strictEqual(h.length, 2);
+  m = JSON.parse(h[1].mudancas);
+  assert.deepStrictEqual(m.map((x) => x.campo).sort(), ['custo_outros', 'total_custo'], JSON.stringify(m));
+  // o nulo gravado por fora (legado) vale 0: "0.00" sobre ele nao e troca
+  const outroId = await lancar158(u, 'ida', 100);
+  await run('UPDATE custos_viagens SET custo_alimentacao = NULL WHERE id = ?', [outroId]);
+  const [, g3] = await j('GET', `/custos-viagens/${outroId}`, u.T);
+  assert.strictEqual(g3.custo_alimentacao, null);
+  assert.strictEqual((await j('PUT', `/custos-viagens/${outroId}`, u.T, { ...g3, custo_alimentacao: '0.00' }))[0], 200);
+  assert.strictEqual((await j('PUT', `/custos-viagens/${outroId}`, u.T, { ...g3, custo_transporte: '101' }))[0], 200);
+  const h3 = async () => all('SELECT mudancas FROM custos_viagens_historico WHERE custo_viagem_id = ? ORDER BY id', [outroId]);
+  assert.ok(await aguardar158(async () => (await h3()).length >= 1), 'a troca real do segundo custo nao gravou');
+  await pausa(300);
+  const linhas3 = await h3();
+  assert.strictEqual(linhas3.length, 1, `o "0.00" sobre o nulo gravou historico: ${JSON.stringify(linhas3).slice(0, 400)}`);
+  assert.deepStrictEqual(JSON.parse(linhas3[0].mudancas).map((x) => x.campo).sort(), ['custo_transporte', 'total_custo']);
 });
 
 async function aguardar158(cond, ms = 3000) {

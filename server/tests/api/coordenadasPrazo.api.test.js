@@ -494,6 +494,22 @@ test('[RN-158.01] o cliente sem endereco: nenhum pedido e nada gravado; a memori
   assert.strictEqual(fronteira.pedidos.length, 2);
 });
 
+test('[RN-158.01, Fase 5 r1 M2] a resposta absurda do servico (lat 999): respondida como antes, mas NAO guardada; a memoria fora da faixa gravada por fora nao vale', async () => {
+  const id = await criar158('Memoria 158 G', 'Campinas', 'Rua Nove 9');
+  fronteira.modo = 'responde'; fronteira.lat = '999'; fronteira.lon = '-999'; fronteira.pedidos = [];
+  assert.deepStrictEqual((await coordDe(id))[1].coordenadas, [999, -999]);
+  await pausa(300);
+  assert.strictEqual((await memoria(id)).geo_termo, null, 'a coordenada absurda foi guardada');
+  fronteira.lat = '90'; fronteira.lon = '-180'; // a borda da faixa vale (a metade positiva)
+  assert.deepStrictEqual((await coordDe(id))[1].coordenadas, [90, -180]);
+  assert.strictEqual(fronteira.pedidos.length, 2, 'depois da absurda, a abertura seguinte nao consultou');
+  assert.ok(await aguardar(async () => (await memoria(id)).geo_lat === 90), 'a borda da faixa nao foi guardada');
+  await sql('UPDATE clientes SET geo_lat = 90.5 WHERE id = ?', [id]);
+  fronteira.lat = '-1.5'; fronteira.lon = '-2.5';
+  assert.deepStrictEqual((await coordDe(id))[1].coordenadas, [-1.5, -2.5]);
+  assert.strictEqual(fronteira.pedidos.length, 3, 'a memoria fora da faixa valeu');
+});
+
 test('[RN-158.01, Fase 2 M6] a consulta lenta de um endereco que mudou no meio nao grava a coordenada do endereco velho', async () => {
   const id = await criar158('Memoria 158 E', 'Campinas', 'Rua Seis 6');
   fronteira.modo = 'lento'; fronteira.lat = '-19'; fronteira.lon = '-29'; fronteira.pedidos = [];
@@ -508,6 +524,67 @@ test('[RN-158.01, Fase 2 M6] a consulta lenta de um endereco que mudou no meio n
   fronteira.pedidos = [];
   await coordDe(id);
   assert.ok(await aguardar(async () => (await memoria(id)).geo_termo === 'RUA SETE 7, CAMPINAS, SP, Brasil'), 'a lenta sem mudanca nao gravou');
+});
+
+test('[RN-158.01, B1009, Fase 5 r3 R23] com a escrita do banco presa por outra conexao, a abertura responde sem esperar; a memoria grava quando solta', async () => {
+  const id = await criar158('Memoria 158 K', 'Campinas', 'Rua Catorze 14');
+  fronteira.modo = 'responde'; fronteira.lat = '-20.5'; fronteira.lon = '-40.5'; fronteira.pedidos = [];
+  const b = new sqlite3.Database(path.join(pasta, 'database.sqlite'));
+  b.configure('busyTimeout', 15000);
+  await new Promise((r, x) => b.run('BEGIN IMMEDIATE', (e) => (e ? x(e) : r())));
+  let solto = false;
+  const soltar = () => new Promise((r) => { if (solto) return r(); solto = true; b.run('COMMIT', () => b.close(() => r())); });
+  // solta sozinho em 3 s: a abertura que esperasse a gravacao levaria ~3 s (e a assercao do tempo cai), nao o prazo do fetch
+  const relogio = setTimeout(() => { soltar(); }, 3000);
+  try {
+    const t0 = Date.now();
+    const [s, x] = await coordDe(id);
+    const ms = Date.now() - t0;
+    assert.deepStrictEqual([s, x.coordenadas], [200, [-20.5, -40.5]]);
+    assert.ok(ms < 1500, `a abertura esperou a escrita da memoria: ${ms} ms`);
+    await pausa(300);
+    assert.strictEqual((await memoria(id)).geo_termo, null, 'gravou com o banco preso (o cenario nao prenderia nada)');
+    await soltar();
+    assert.ok(await aguardar(async () => (await memoria(id)).geo_lat === -20.5, 8000), 'nao gravou depois de soltar');
+  } finally { clearTimeout(relogio); await soltar(); }
+});
+
+test('[RN-158.01, Fase 5 r3 R25] a consulta lenta: mudar a cidade ou o estado no meio tambem nao grava a coordenada velha', async () => {
+  for (const [campo, valor] of [['cidade', 'Jundiai'], ['estado', 'MG']]) {
+    const id = await criar158(`Memoria 158 L ${campo}`, 'Campinas', 'Rua Quinze 15');
+    fronteira.modo = 'lento'; fronteira.lat = '-21'; fronteira.lon = '-41'; fronteira.pedidos = [];
+    const abrindo = coordDe(id);
+    await aguardar(async () => fronteira.pedidos.length === 1, 2000);
+    assert.strictEqual((await j('PUT', `/clientes/${id}`, { [campo]: valor }))[0], 200);
+    assert.strictEqual((await abrindo)[0], 200);
+    await pausa(400);
+    assert.strictEqual((await memoria(id)).geo_termo, null, `gravou o termo velho depois de mudar ${campo}`);
+  }
+});
+
+test('[RN-158.01, Fase 2 M1, Fase 5 r3 R02-R05/R08] sem cidade ou sem estado nao consulta nem grava; o endereco so de espacos consulta (como antes); o espaco a frente sai do termo; a memoria infinita nao vale', async () => {
+  fronteira.modo = 'responde'; fronteira.lat = '-22'; fronteira.lon = '-42'; fronteira.pedidos = [];
+  const semUf = await criar158('Memoria 158 M', 'Campinas', 'Rua Dez 10', '');
+  const semCid = await criar158('Memoria 158 N', '', 'Rua Onze 11');
+  assert.strictEqual((await coordDe(semUf))[0], 200);
+  assert.strictEqual((await coordDe(semCid))[0], 200);
+  await pausa(300);
+  assert.strictEqual(fronteira.pedidos.length, 0, 'sem cidade/estado consultou');
+  assert.deepStrictEqual([(await memoria(semUf)).geo_termo, (await memoria(semCid)).geo_termo], [null, null]);
+  const esp = await criar158('Memoria 158 O', 'Campinas', 'Rua Doze 12');
+  await sql("UPDATE clientes SET endereco = '   ' WHERE id = ?", [esp]);
+  await coordDe(esp);
+  assert.strictEqual(fronteira.pedidos.length, 1, 'M1: o endereco so de espacos deixou de consultar');
+  assert.strictEqual(fronteira.pedidos[0].params.q, ', CAMPINAS, SP, Brasil');
+  await sql("UPDATE clientes SET endereco = '  RUA TREZE 13 ' WHERE id = ?", [esp]);
+  await coordDe(esp);
+  assert.strictEqual(fronteira.pedidos.length, 2);
+  assert.strictEqual(fronteira.pedidos[1].params.q, 'RUA TREZE 13 , CAMPINAS, SP, Brasil', 'o espaco a frente ficou no termo');
+  assert.ok(await aguardar(async () => (await memoria(esp)).geo_termo === 'RUA TREZE 13 , CAMPINAS, SP, Brasil'), 'o termo gravado nao e o da consulta');
+  // a memoria infinita (gravada por fora) nao vale
+  await sql('UPDATE clientes SET geo_lat = 9e999 WHERE id = ?', [esp]);
+  const [si, xi] = await coordDe(esp);
+  assert.ok(si === 200 && xi.lat === -22 && fronteira.pedidos.length === 3, `a memoria infinita valeu: ${JSON.stringify(xi)} (${fronteira.pedidos.length} pedidos)`);
 });
 
 test('[RN-158.03, B1008, integracao T4] as listas nao mostram a memoria; o PUT da tela (o objeto do GET + geo_* forjado) e o POST nao a gravam', async () => {

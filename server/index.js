@@ -213,7 +213,7 @@ const archiver = require('archiver');
 const { decodificarImagemBase64, filtroImagemMulter, multerComLimiteNoErro, tratarArquivoGrandeDemais, tratarErroFormatoImagem } = require('./services/imagemUpload');
 const { tratarErroGlobalApi } = require('./services/errosApi');
 // Etapa 156 (RN-156.03/04, C361, C370, C371): o servico de mapas com prazo e a cidade sem caixa nem acento — os chamadores nao mudam.
-const { obterCoordenadasCidade, normalizarNome, termoDaConsulta, coordenadaGuardada, geocodificarEndereco } = require('./services/coordenadas');
+const { obterCoordenadasCidade, normalizarNome, termoDaConsulta, coordenadaGuardada, coordenadaPlausivel, geocodificarEndereco } = require('./services/coordenadas');
 // Etapa 85 (RN-85.02): o MulterError LIMIT_FILE_SIZE nao carrega o limite; o embrulho anexa
 // `err.limiteBytes` (limits.fileSize de quem recusou) para o tratarArquivoGrandeDemais responder
 // 413 "Arquivo grande demais (máximo N MB)". Todo multer deste arquivo e criado por este `multer`.
@@ -15406,7 +15406,8 @@ app.get('/api/custos-viagens/coordenadas-cliente/:cliente_id', authenticateToken
       } else {
         res.status(500).json({ error: 'Não foi possível obter coordenadas' });
       }
-      if (doServico) {
+      // Fase 5 r1 M2: a resposta fora da faixa nao e guardada (vale so para esta abertura, como antes)
+      if (doServico && coordenadaPlausivel(doServico[0], doServico[1])) {
         db.run(
           'UPDATE clientes SET geo_lat = ?, geo_lon = ?, geo_termo = ? WHERE id = ? AND endereco IS ? AND cidade IS ? AND estado IS ?',
           [doServico[0], doServico[1], termo, cliente.id, cliente.endereco, cliente.cidade, cliente.estado],
@@ -16208,21 +16209,27 @@ app.post('/api/custos-viagens', authenticateToken, exigirComercialNasPropostas, 
 // Atualizar custo de viagem
 // Etapa 158 (RN-158.06, M7 da 157): no historico, os campos de valor comparam como numero — a tela manda "350.00" (valoresDaRota) sobre
 // o 350 gravado, e a comparacao por texto registrava a troca "350 -> 350.00" (e uma linha inteira de historico sem mudanca nenhuma).
-// Numero e o number finito ou o texto /^\s*-?\d+(\.\d+)?\s*$/ (Fase 2 M7: "0x1A" e "1e3" nao); vazio, nulo e ausente = 0 (como o `|| ''`).
+// Numero e o number finito ou o texto que o SQLite grava como numero numa coluna REAL/INTEGER: decimal com sinal, ponto e expoente opcionais
+// e espacos nas pontas (".5", "5.", "1e3", " 50 " — Fase 5 r1 M1: a regua da Fase 2 M7 recusava ".5" e "1e3", que o banco grava como 0.5
+// e 1000, e a troca falsa continuava); "0x1A" nao (o banco grava o texto). Vazio, nulo e ausente = 0 (como o `|| ''`). Igualdade exata
+// (Fase 5 r2 S1: a tolerancia de 1e-9 escondia do historico a troca 50 -> 50.0000000001, que o banco grava).
 // Se um dos lados nao e numero, compara como texto (como antes). O que se grava nao muda.
 const CAMPOS_DE_VALOR_DO_CUSTO = new Set(['numero_pessoas', 'distancia_km', 'tempo_estimado_horas', 'custo_transporte', 'custo_hospedagem',
   'custo_alimentacao', 'custo_outros', 'total_custo', 'custo_sugerido']);
 function valorDoCustoComoNumero(v) {
   if (v == null || v === '') return 0;
   if (typeof v === 'number') return Number.isFinite(v) ? v : null;
-  if (typeof v === 'string' && /^\s*-?\d+(\.\d+)?\s*$/.test(v)) return parseFloat(v);
+  if (typeof v === 'string' && /^\s*[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?\s*$/.test(v)) {
+    const n = Number(v.trim());
+    return Number.isFinite(n) ? n : null;
+  }
   return null;
 }
 function mesmoValorDoCusto(campo, atual, novo) {
   if (CAMPOS_DE_VALOR_DO_CUSTO.has(campo)) {
     const a = valorDoCustoComoNumero(atual);
     const b = valorDoCustoComoNumero(novo);
-    if (a !== null && b !== null) return Math.abs(a - b) < 1e-9;
+    if (a !== null && b !== null) return a === b;
   }
   return String(atual || '') === String(novo || '');
 }
