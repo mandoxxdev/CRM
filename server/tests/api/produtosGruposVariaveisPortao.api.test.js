@@ -211,6 +211,14 @@ test('[RN-150.01/02/03/04, C346, C347] fonte: as 25 com o portao certo como 2o m
     .map((l) => { const m = l.match(/\.(\w+)\(\s*\[?\s*["'`]([^"'`]+)/); return `${m[1].toUpperCase()} ${m[2]}`; }).sort();
   const esperado = [...GRUPOS, ...PRODUTOS, ...CODIGO, ...VARIAVEIS, CLONAR].map(([m, r]) => `${m} ${r}`).sort();
   assert.deepStrictEqual(verboCaminho, esperado, 'registros fora do formato app.<verbo>(\'...\', ...) numa linha so, ou a mais');
+  // Fase 5 r3 S01-S04: a regua acima so via o 1o registro de cada linha. Esta conta TODOS no texto inteiro (o \s atravessa a quebra de
+  // linha): um segundo registro na mesma linha, um registro quebrado em duas linhas ou um caminho em lista aparecem aqui.
+  const reTodos = /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`](\/(?:api\/)?(?:grupos|produtos|variaveis-tecnicas)(?:\/[^"'`]*)?)["'`]/g;
+  const todosNoTexto = [...FONTE.matchAll(reTodos)].map((m) => `${m[1].toUpperCase()} ${m[2]}`).sort();
+  assert.deepStrictEqual(todosNoTexto, esperado, 'um registro a mais (na mesma linha, em duas linhas ou em lista) escaparia do portao');
+  // e nenhum app.use com o caminho montado (concatenado ou em template): o caminho nao seria lido por nenhuma das reguas
+  assert.deepStrictEqual(FONTE.split('\n').filter((l) => /\bapp\.(use|all|get|post|put|patch|delete)\(\s*(["'`][^"'`]*["'`]\s*\+|`[^`]*\$\{)/.test(l)), [],
+    'um registro com o caminho montado escaparia das reguas do fonte');
   // nenhum outro arquivo do servidor registra estes caminhos (Compras monta /api/compras/grupos — outra tabela)
   const fora = []; const vistos = [];
   const varrer = (d) => {
@@ -237,7 +245,9 @@ test('[RN-150.01/02/03/04, C346, C347] fonte: as 25 com o portao certo como 2o m
   assert.ok(achar(['POST', '/api/grupos/:id/foto']).resto.startsWith("authenticateToken, exigirComercialNasPropostas, uploadGrupo.single('foto'), "), 'a foto do grupo: o multer antes do portao');
   assert.ok(achar(['POST', '/api/produtos/:id/imagem']).resto.startsWith("authenticateToken, exigirComercialNasPropostas, uploadProduto.single('imagem'), "), 'a imagem do produto: o multer antes do portao');
   assert.strictEqual(achar(CLONAR).resto, 'authenticateToken, (req, res) => {', 'RN-150.03: o clonar ganhou middleware');
-  assert.ok(FONTE.includes("const exigirComercialNasVariaveisTecnicas = portaoDasPropostas.exigir('comercial', { tambemAdminDoModuloCom: { admin: 'comercial', tela: 'administrativo' } });"),
+  // Fase 5 r3 S09: a definicao no inicio da linha (uma copia num comentario nao conta) e uma so
+  const defs = FONTE.match(/^\s*(const|let|var)\s+exigirComercialNasVariaveisTecnicas\s*=.*$/gm) || [];
+  assert.deepStrictEqual(defs.map((l) => l.trim()), ["const exigirComercialNasVariaveisTecnicas = portaoDasPropostas.exigir('comercial', { tambemAdminDoModuloCom: { admin: 'comercial', tela: 'administrativo' } });"],
     'o portao das variaveis tecnicas nao e o do plano');
 });
 
@@ -440,9 +450,20 @@ test('[RN-150.05] PROPOSTAS_PORTAO_DE_MODULO=desligado: as 25 abrem ao barrado (
     }
     const [sc, criada] = await j('POST', '/variaveis-tecnicas', b.T, { nome: 'DESLIGADO 150', chave: 'desligado_150' });
     if (sc !== 201) errados.push(`POST variaveis: ${sc} ${JSON.stringify(criada)}`);
+    // Fase 5 r3 S27: tambem as escritas que apagam (o desligado nao pode tratar o metodo a parte)
+    const [sd] = await j('DELETE', `/variaveis-tecnicas/${criada.id}`, b.T);
+    if (sd !== 200) errados.push(`DELETE variaveis: ${sd}`);
+    const [spc, pc] = await j('POST', '/produtos', b.T, { codigo: 'E150-DESL-01', nome: 'Produto do desligado', familia: 'FAM150' });
+    if (spc !== 200) errados.push(`POST produto: ${spc} ${JSON.stringify(pc)}`);
+    const [spd] = await j('DELETE', `/produtos/${pc && pc.id}`, b.T);
+    if (spd !== 200) errados.push(`DELETE produto: ${spd}`);
     const [sg] = await j('PUT', `/grupos/${ctx.grupo}`, b.T, { nome: 'GRUPO 150', numero: 70 });
     if (sg !== 200) errados.push(`PUT grupo: ${sg}`);
     assert.deepStrictEqual(errados, []);
+    assert.deepStrictEqual([
+      (await all('SELECT ativo FROM variaveis_tecnicas WHERE id = ?', [criada.id]))[0].ativo,
+      (await all('SELECT ativo FROM produtos WHERE codigo = ?', ['E150-DESL-01']))[0].ativo,
+    ], [0, 0], 'o DELETE do desligado respondeu 200 sem apagar');
   } finally {
     await descer();
     ctx.T = await subir();
