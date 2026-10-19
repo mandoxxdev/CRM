@@ -16206,6 +16206,27 @@ app.post('/api/custos-viagens', authenticateToken, exigirComercialNasPropostas, 
 });
 
 // Atualizar custo de viagem
+// Etapa 158 (RN-158.06, M7 da 157): no historico, os campos de valor comparam como numero — a tela manda "350.00" (valoresDaRota) sobre
+// o 350 gravado, e a comparacao por texto registrava a troca "350 -> 350.00" (e uma linha inteira de historico sem mudanca nenhuma).
+// Numero e o number finito ou o texto /^\s*-?\d+(\.\d+)?\s*$/ (Fase 2 M7: "0x1A" e "1e3" nao); vazio, nulo e ausente = 0 (como o `|| ''`).
+// Se um dos lados nao e numero, compara como texto (como antes). O que se grava nao muda.
+const CAMPOS_DE_VALOR_DO_CUSTO = new Set(['numero_pessoas', 'distancia_km', 'tempo_estimado_horas', 'custo_transporte', 'custo_hospedagem',
+  'custo_alimentacao', 'custo_outros', 'total_custo', 'custo_sugerido']);
+function valorDoCustoComoNumero(v) {
+  if (v == null || v === '') return 0;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'string' && /^\s*-?\d+(\.\d+)?\s*$/.test(v)) return parseFloat(v);
+  return null;
+}
+function mesmoValorDoCusto(campo, atual, novo) {
+  if (CAMPOS_DE_VALOR_DO_CUSTO.has(campo)) {
+    const a = valorDoCustoComoNumero(atual);
+    const b = valorDoCustoComoNumero(novo);
+    if (a !== null && b !== null) return Math.abs(a - b) < 1e-9;
+  }
+  return String(atual || '') === String(novo || '');
+}
+
 app.put('/api/custos-viagens/:id', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
@@ -16281,7 +16302,7 @@ app.put('/api/custos-viagens/:id', authenticateToken, exigirComercialNasProposta
     // Detectar mudanças
     const mudancas = [];
     Object.keys(dadosNovos).forEach(key => {
-      if (String(viagemAtual[key] || '') !== String(dadosNovos[key] || '')) {
+      if (!mesmoValorDoCusto(key, viagemAtual[key], dadosNovos[key])) {
         mudancas.push({
           campo: key,
           valor_anterior: viagemAtual[key],

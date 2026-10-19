@@ -7,7 +7,7 @@
  *   RN-152.02  GET /api/custos-viagens/resumo registrado antes do GET /:id — responde o resumo (antes: 404 "Custo de viagem nao
  *              encontrado", o /:id atendia com id = 'resumo')
  *   RN-152.03  PROPOSTAS_PORTAO_DE_MODULO=desligado: as 19 voltam ao so login; o aviso do boot as cita
- *   Etapa 158: RN-158.05 o resumo por tipo sem caixa; RN-158.07 o filtro tipo_viagem da lista
+ *   Etapa 158: RN-158.05 o resumo por tipo sem caixa; RN-158.07 o filtro tipo_viagem da lista; RN-158.06 o historico sem trocas falsas
  *
  * Molde: clientesProjetosPortao.api.test.js (Etapa 151). Plano:
  * docs/superpowers/plans/2026-10-19-almoxarifado-etapa152-custos-de-viagem-pelo-modulo.md
@@ -608,6 +608,44 @@ test('[RN-158.05/07, D (157)] o resumo soma por tipo sem caixa e sem espaco (o I
   // limpa (nao deixa custos a mais para os cenarios de baixo)
   for (const id of nossos) assert.strictEqual((await j('DELETE', `/custos-viagens/${id}`, u.T))[0], 200);
 });
+
+test('[RN-158.06, M7 da 157] o Atualizar com os mesmos valores em texto ("350.00" sobre 350) nao grava historico; a troca real grava so os campos que mudaram', async () => {
+  const u = ctx.u.diretaComercial;
+  const id = await lancar158(u, 'ida_e_volta', 350, { custo_alimentacao: 80, numero_pessoas: 1, distancia_km: 100.5, tempo_estimado_horas: 1.25, custo_sugerido: 430 });
+  const [sg, g] = await j('GET', `/custos-viagens/${id}`, u.T);
+  assert.ok(sg === 200 && g.custo_transporte === 350 && g.distancia_km === 100.5 && g.total_custo === 430, JSON.stringify(g).slice(0, 300));
+  const historico = async () => all('SELECT mudancas FROM custos_viagens_historico WHERE custo_viagem_id = ? ORDER BY id', [id]);
+  assert.deepStrictEqual(await historico(), []);
+  // o que a tela manda depois do Aplicar (valoresDaRota: os custos com duas casas) — os mesmos valores
+  const [s1] = await j('PUT', `/custos-viagens/${id}`, u.T, { ...g, custo_transporte: '350.00', custo_alimentacao: '80.0', custo_hospedagem: '', custo_outros: '0.00',
+    numero_pessoas: '1.0', distancia_km: '100.50', tempo_estimado_horas: '1.250', custo_sugerido: '430.00' });
+  assert.strictEqual(s1, 200);
+  // Fase 2 I4: o PUT responde antes de gravar o historico — uma troca real em seguida, e so depois que a linha dela chega, conta-se
+  const [s2] = await j('PUT', `/custos-viagens/${id}`, u.T, { ...g, custo_transporte: '360' });
+  assert.strictEqual(s2, 200);
+  const linhas = await aguardar158(async () => { const h = await historico(); return h.length >= 1 ? h : null; });
+  assert.ok(linhas, 'a troca real nao gravou historico (o cenario nao provaria a ausencia)');
+  await pausa(300);
+  const h = await historico();
+  assert.strictEqual(h.length, 1, `o Atualizar com os mesmos valores gravou historico: ${JSON.stringify(h).slice(0, 600)}`);
+  const m = JSON.parse(h[0].mudancas);
+  assert.deepStrictEqual(m.map((x) => x.campo).sort(), ['custo_transporte', 'total_custo'], JSON.stringify(m));
+  const transporte = m.find((x) => x.campo === 'custo_transporte');
+  const total = m.find((x) => x.campo === 'total_custo');
+  assert.deepStrictEqual([transporte.valor_anterior, transporte.valor_novo, total.valor_anterior, total.valor_novo], [350, '360', 430, 440]);
+  // o gravado continua certo
+  const gravado = (await all('SELECT custo_transporte, custo_alimentacao, distancia_km, total_custo FROM custos_viagens WHERE id = ?', [id]))[0];
+  assert.deepStrictEqual(gravado, { custo_transporte: 360, custo_alimentacao: 80, distancia_km: 100.5, total_custo: 440 });
+});
+
+async function aguardar158(cond, ms = 3000) {
+  const fim = Date.now() + ms;
+  for (;;) {
+    const v = await cond();
+    if (v || Date.now() > fim) return v;
+    await pausa(50);
+  }
+}
 
 (async () => {
   console.log('\n=== Etapa 152: os custos de viagem exigem o Comercial, e o resumo da tela responde (C350, C356) ===\n');
