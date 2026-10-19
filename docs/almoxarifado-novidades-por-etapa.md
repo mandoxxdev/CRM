@@ -11,12 +11,19 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-19):** **Etapa 158 fechada** (consertos técnicos nos **Custos de viagem** do Comercial, sem regra
+> **Onde o desenvolvimento está (2026-10-19):** **Etapa 159 fechada** (consertos técnicos no Comercial, sem regra de acesso nova: **os
+> filtros e as buscas que não filtravam** — o filtro *Segmento* da lista de clientes filtra (**C384**, novo e resolvido, **B1012**); as buscas de
+> texto acham a letra acentuada em qualquer caixa (*"são"* acha *"SÃO"* — **C385**, novo e resolvido, **B1013**); a busca dos custos de viagem
+> recarrega e procura o código, os clientes e o destino (**C386**, novo e resolvido, **B1014**); o *Remover Lembrete* das Atividades não esvazia a
+> lista (**C387**, novo e resolvido); o cadastro de cliente responde o gravado (**C381** resolvido, **B1015**); o custo sem tipo grava
+> *IDA_E_VOLTA* (**C382** em parte, **B1016**); **B1012** a **B1017**; os avisos novos **C388** e **C389** (de antes)); a próxima é a **160** — ver
+> "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 158 fechada** (consertos técnicos nos **Custos de viagem** do Comercial, sem regra
 > de acesso nova: **o ponto do mapa do endereço do cliente fica guardado no cadastro** — a localização não consulta mais o serviço de mapas
 > da internet a cada abertura, só quando o endereço muda (**C377** resolvido, **B1008**, **B1009**); o filtro *Tipo de viagem* da lista
 > filtra (**C378**, novo e resolvido); o resumo por tipo conta o tipo gravado em maiúsculas (**C379**, novo e resolvido); o histórico do
 > custo não registra mais *"350 → 350.00"* (**C380**, novo e resolvido, **B1010**); **B1008** a **B1011**; os avisos novos **C381** a
-> **C383** (de antes)); a próxima é a **159** — ver "Onde estamos e o que vem a seguir".
+> **C383** (de antes)); a próxima era a **159**.)*
 > *(Antes: **Etapa 157 fechada** (consertos de tela nos **Custos de viagem** do Comercial, sem regra
 > de acesso nova: **abrir um custo para editar não troca os valores gravados** — a rota recalculada vira sugestão, com o botão **Aplicar
 > Valores Sugeridos** (**C372** resolvido, **B1004**); o Aplicar e a confirmação da passagem aérea põem a taxa de embarque (**C374**, novo e
@@ -3909,7 +3916,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B1011; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B1017; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -11239,6 +11246,51 @@ uma mudança do valor gravado, junto com a do custo que a causou). **Reversível
 **B1011 (NOVA, da Etapa 158) — a próxima etapa (159).** Ver a "próxima tarefa detalhada" no plano da Etapa 158. As decisões que esperam
 vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1008** a **B1010** são reversíveis.
 
+**B1012 (NOVA, da Etapa 159; do Comercial) — o filtro Segmento da lista de clientes passa a filtrar.** A tela mandava a escolha e o
+servidor nem a lia (**C384**). Agora a lista mostra só os clientes do segmento escolhido, comparado sem diferença de maiúsculas (inclusive
+nas letras acentuadas — o cadastro grava *"COSMÉTICOS"*) nem de espaço nas pontas; cliente sem segmento só aparece em *"Todos os
+segmentos"*. **Os números mudam:** a lista (e o **Exportar Excel**) com um segmento escolhido passa a ter só aquele segmento. A comparação é
+feita depois da consulta, no servidor, porque o banco não muda a caixa da letra acentuada. **Descartado:** comparar no banco (o
+*"Cosméticos"* do filtro não acharia o *"COSMÉTICOS"* gravado). As outras telas que leem a lista de clientes (Almoxarifado, Operacional)
+não mandam o segmento e não mudam. **Reversível:** `531f3576`.
+
+**B1013 (NOVA, da Etapa 159; do Comercial) — a busca de texto acha a letra acentuada em qualquer caixa, mas o acento conta.** As buscas de
+clientes, propostas, OS do Comercial, produtos de uma família, a busca do topo e a dos custos de viagem procuram cada campo com o texto
+digitado (sem os espaços das pontas), em maiúsculas e em minúsculas: *"são"* acha *"SÃO JOSÉ"* (o gravado) e *"são josé"* (o antigo em
+minúsculas) (**C385**). **Os números mudam:** mais resultados nas buscas com letra acentuada; o texto só de espaços deixa de esvaziar a lista
+(passa a não filtrar); o texto com espaço no fim passa a achar. **Escolhido:** a caixa não conta, o **acento conta** (*"sao"* não acha
+*"SÃO"*). **Descartado:** ignorar também o acento — mudaria o resultado de todas as buscas de uma vez (*"para"* acharia *"pará"*), e é uma
+decisão sobre o que vocês querem achar. **Limites declarados:** um cadastro antigo com letras acentuadas maiúsculas e minúsculas misturadas
+(*"Ótica Paixão"*) só é achado com a mesma grafia; *%* e *_* continuam valendo como "qualquer texto" e "qualquer letra" (como antes); um
+termo que não é texto (pela integração) não filtra; um texto colado na forma decomposta (de um PDF, por exemplo) vale como o digitado
+(revisão do código, r1). **Reversível:** `531f3576`, `49909fa2`.
+
+**B1014 (NOVA, da Etapa 159; do Comercial) — a busca dos custos de viagem procura no servidor, com uma pausa de 300 ms.** O campo
+*"Buscar viagem por código, cliente ou destino..."* não recarregava a lista e, quando outro filtro a recarregava, procurava só o código
+(**C386**). Agora o servidor procura o texto no código da visita, na razão social e no nome fantasia do cliente principal e dos demais
+clientes da viagem, no destino e na cidade do destino; a tela pede a lista 300 ms depois da última tecla — e o mesmo para os filtros de
+distância e valor e para a sugestão escolhida (antes, a sugestão recarregava na hora). **Os números mudam:** a lista com texto digitado
+passa a mostrar os custos que casam (antes, todos ou nenhum). Um filtro trocado durante a pausa vale no pedido dela (revisão do código,
+r1). **Descartado:** (a) filtrar no navegador — a lista vem limitada a 500 custos; (b) manter só o código — o campo promete cliente e
+destino. **Reversível:** `68869661`, `49909fa2`.
+
+**B1015 (NOVA, da Etapa 159; do Comercial) — o cadastro de cliente responde o que ficou gravado.** `POST /api/clientes` respondia o pedido
+de volta (com campos que não foram gravados — **C381**); agora responde o cliente relido do banco (sem o ponto do mapa — **B1008**). Se a
+releitura falhar, a resposta é só o número do cliente, com o erro no registro do servidor — **não** um erro: o cliente já foi gravado, e uma
+tela que visse erro faria a pessoa cadastrar de novo. **Descartado:** responder erro quando a releitura falha. A tela usa só o número (nada
+muda para ela). **Reversível:** `303841a2`.
+
+**B1016 (NOVA, da Etapa 159; do Comercial) — o tipo padrão de um custo de viagem, e o que fica da C382.** Um custo gravado pela integração
+sem tipo, com tipo vazio ou só de espaços fica *"IDA_E_VOLTA"* (antes *"ida_e_volta"* em minúsculas, ou os espaços); o tipo é gravado sem
+espaço nas pontas. **Fica como estava (C382):** a origem padrão que a tela põe num custo antigo sem origem, e o tipo antigo em minúsculas que
+passa a maiúsculas ao atualizar, entram no histórico — são gravações de verdade, e o histórico registra o que o banco grava (**B1010**);
+escondê-las do histórico seria uma regra nova. **Também fica:** a edição pela integração sem o tipo troca um *"IDA"* gravado por
+*"IDA_E_VOLTA"* (a edição substitui o custo inteiro — de antes). **Reversível:** `303841a2`.
+
+**B1017 (NOVA, da Etapa 159) — a próxima etapa (160).** Ver a "próxima tarefa detalhada" no plano da Etapa 159. As decisões que esperam
+vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1012** a **B1016** são reversíveis (a **B1013**
+pergunta se o acento deve contar).
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -14477,11 +14529,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 380. **✅ NOVO E RESOLVIDO NA ETAPA 158 (RN-158.06, B1010; era a D (157)) — o histórico de um custo de viagem registrava trocas que não
      aconteceram.** Atualizar depois do **Aplicar Valores Sugeridos** registrava *"350 → 350.00"* (o servidor comparava o texto), e uma
      alteração inteira sem nenhuma mudança de valor. Agora os campos de valor comparam o número.
-381. **NOVO (da revisão do plano da Etapa 158; do Comercial, anterior a ela; lido no código) — cadastrar um cliente pela API devolve, na
+381. **✅ RESOLVIDO NA ETAPA 159 (RN-159.05, B1015)** — a resposta do cadastro de cliente é o cliente como ficou gravado. *O texto original,
+     de antes da correção:* **NOVO (da revisão do plano da Etapa 158; do Comercial, anterior a ela; lido no código) — cadastrar um cliente pela API devolve, na
      resposta, tudo o que foi mandado.** A resposta do cadastro de cliente repete o corpo do pedido, inclusive campos que não foram gravados
      (como o ponto do mapa). Nada disso é gravado (o cadastro grava só os campos dele). **O que fazer:** nada — é só o eco da resposta; quem
      integrar pela API deve ler o cliente de novo para saber o que ficou.
-382. **NOVO (da revisão do plano da Etapa 158; do Comercial, anterior a ela; lido no código) — editar um custo de viagem antigo pode
+382. **EM PARTE NA ETAPA 159 (RN-159.06, B1016)** — pela integração, o custo sem tipo grava *"IDA_E_VOLTA"* (não mais *"ida_e_volta"* em
+     minúsculas); a origem padrão e o tipo legado no histórico **continuam** (são gravações de verdade — B1010, B1016). *O texto original:*
+     **NOVO (da revisão do plano da Etapa 158; do Comercial, anterior a ela; lido no código) — editar um custo de viagem antigo pode
      registrar no histórico trocas reais que a pessoa não fez.** Um custo antigo sem origem gravada ganha, ao abrir para editar, a origem
      padrão (Av. Angelo Demarchi 130, São Bernardo do Campo) — e o primeiro **Atualizar** a grava e a registra no histórico; um tipo legado em
      minúsculas passa para maiúsculas e também é registrado. São gravações de verdade (o valor no banco muda), não trocas falsas. Pela API, sem
@@ -14491,6 +14546,30 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      próximos vem com o ponto da cidade, não o do endereço.** Os clientes próximos são calculados pela cidade do cadastro (como sempre) e
      entram na viagem e na prévia da rota com esse ponto; o ponto guardado do endereço vale só para o cliente escolhido diretamente. **O que
      fazer:** nada; a prévia de uma viagem com próximos mostra-os no ponto da cidade.
+384. **✅ NOVO E RESOLVIDO NA ETAPA 159 (RN-159.01, B1012; da medição da Etapa 159, do Comercial, anterior a ela; lido no código) — o
+     filtro "Segmento" da lista de clientes não filtrava nada.** A tela mandava a escolha (*"Cosméticos"*) e o servidor nem a lia: a lista
+     (e o **Exportar Excel**) voltava com todos os segmentos. Agora filtra, sem diferença de maiúsculas nem de espaço nas pontas.
+385. **✅ NOVO E RESOLVIDO NA ETAPA 159 (RN-159.02, B1013; da medição da Etapa 159, do Comercial e da busca do topo, anterior a ela; medido
+     no banco) — a busca de texto não achava a letra acentuada digitada em minúscula.** O cadastro grava os nomes em maiúsculas
+     (*"SÃO JOSÉ"*) e o banco só ignora a caixa das letras sem acento: *"são"* não achava *"SÃO"* nas listas de clientes, de propostas, das
+     OS do Comercial, nos produtos de uma família, no **Ctrl+K** e nas sugestões de cliente dos custos de viagem; o texto com espaço nas
+     pontas também não achava. Agora acha (o acento continua contando — **B1013**).
+386. **✅ NOVO E RESOLVIDO NA ETAPA 159 (RN-159.03, B1014; da medição da Etapa 159, do Comercial, anterior a ela; lido no código) — a busca
+     dos custos de viagem não recarregava a lista e, quando recarregava, só procurava o código.** Digitar não mudava nada; trocar outro
+     filtro com um nome digitado esvaziava a lista; os filtros de distância e valor também não recarregavam. Agora a lista recarrega e
+     procura o código, os clientes da viagem e o destino.
+387. **✅ NOVO E RESOLVIDO NA ETAPA 159 (RN-159.04; da medição da Etapa 159, do Comercial, anterior a ela; lido no código) — remover um
+     lembrete com o filtro "Todos os responsáveis" esvaziava a lista das Atividades.** O recarregamento depois do **Remover Lembrete** pedia
+     as atividades de um responsável chamado *"todos"*; a lista ficava vazia até trocar o filtro. Agora recarrega com as de todos.
+388. **NOVO (da medição da Etapa 159; do Comercial, anterior a ela; lido no código) — os cadastros de projeto, proposta, oportunidade e
+     atividade pela integração respondem o que foi mandado.** Como o de cliente fazia antes da Etapa 159 (**C381**): a resposta repete o
+     pedido, inclusive campos que não foram gravados. **O que fazer:** nada — as telas usam só o número; quem integrar pela API deve ler o
+     registro de novo.
+389. **NOVO (da medição da Etapa 159; do Comercial, anterior a ela; lido no código) — o seletor Segmento do formulário do cliente mostra
+     "Selecione..." ao editar um cliente com segmento.** O cadastro grava o segmento em maiúsculas (*"COSMÉTICOS"*) e as opções do seletor
+     estão em minúsculas (*"Cosméticos"*): nenhuma casa, e o seletor aparece vazio. Salvar sem mexer **não** apaga o segmento (o valor
+     gravado vai de volta); escolher uma opção grava a nova. **O que fazer:** ao editar, conferir o segmento só se for trocá-lo. Candidata:
+     casar a opção sem diferença de maiúsculas (é da tela).
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -15822,6 +15901,11 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(159) As buscas e os filtros do Comercial, o que ficou de fora.** O acento conta nas buscas (*"sao"* não acha *"SÃO"*) e um cadastro
+  antigo com letras acentuadas maiúsculas e minúsculas misturadas só é achado com a mesma grafia (**B1013**); *%* e *_* continuam curingas.
+  A busca dos custos espera 300 ms depois da última tecla (também para a sugestão escolhida e os filtros de distância e valor). Os outros
+  cadastros pela integração respondem o que foi mandado (**C388**); o seletor *Segmento* do formulário aparece vazio ao editar (**C389**). O
+  resto da **C382** fica (**B1016**). O filtro *Usuário* do painel conta só o responsável da proposta (regra).
 - **(158) O ponto guardado do endereço, o que ficou de fora.** O ponto não expira com o tempo — vale até o endereço, a cidade ou o estado
   mudarem; trocar o serviço de mapas (a configuração do servidor) não apaga os já guardados; para forçar nova consulta de todos, basta apagar
   as três colunas do ponto no cadastro (nenhuma consulta obrigatória antes do deploy). Duas aberturas simultâneas de um cliente ainda sem ponto
@@ -16876,6 +16960,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(159) Nenhum clique foi dado no navegador.** As rotas foram provadas pelo servidor de verdade (em pasta vazia, com cadastros gravados
+pela rota — em maiúsculas — e antigos em minúsculas gravados por fora, contados contra o banco, e um segundo boot com a releitura do
+cadastro falhando); as telas de Clientes, Custos de viagem e Atividades em jsdom com a camada de comunicação de verdade, e a das OS com a
+comunicação simulada. Vale conferir à mão: o segmento *"Cosméticos"* na lista de clientes (e o **Exportar Excel**); *"são"* na busca de
+clientes, de propostas e no **Ctrl+K**; o nome de um cliente digitado na busca dos custos (sem clicar na sugestão); e o **Remover
+Lembrete** com *"Todos os responsáveis"*.
 
 **(158) Nenhum clique foi dado no navegador, e o serviço de mapas de verdade nunca foi chamado.** O ponto guardado foi provado pelo
 servidor de verdade (em pasta vazia, sobre um banco com o cadastro de clientes de antes da etapa e num segundo boot) com um serviço de mapas
@@ -31949,9 +32040,102 @@ grava; o de **sabotagem** fez 47 sabotagens — 17 caíram, 24 acharam asserçõ
 mudados no meio da consulta, a migração que falha, os tipos com espaço, as bordas da régua do número), 5 não mudam nada e 1 não se alcança.
 Tudo virou correção e teste. Commits `f677e0a6`, `6f050dc9`, `af67f3c8` e `858055df` (a correção da revisão).
 
+## Etapa 159 — Os filtros e as buscas do Comercial que não filtravam, a busca com letra acentuada, e o cadastro que responde o gravado (2026-10-19)
+
+Uma etapa de **consertos técnicos** no Comercial, sem regra de acesso nova. A Etapa 158 achou um filtro da tela dos custos de viagem que o
+servidor nem lia; esta mediu **todas** as telas do Comercial, chave por chave, e achou o mesmo padrão em outros lugares: o filtro
+**Segmento** da lista de clientes não filtrava nada; a busca dos **Custos de viagem** (*"por código, cliente ou destino"*) não recarregava a
+lista — e, quando outro filtro a recarregava, procurava só o código e esvaziava a lista; os filtros de distância e valor também não
+recarregavam; e, nas **Atividades**, remover um lembrete com *"Todos os responsáveis"* esvaziava a lista. No caminho apareceu um defeito
+maior, que atinge toda busca de texto do Comercial: o cadastro grava os nomes em maiúsculas (*"SÃO JOSÉ"*) e o banco só ignora a caixa das
+letras **sem** acento — buscar *"são"*, *"ação"* ou *"válvula"* não achava nada. E duas sobras da 158: o cadastro de cliente pela
+integração respondia o que foi mandado (e não o que ficou gravado), e um custo de viagem gravado sem tipo ficava com o tipo em minúsculas.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| **Comercial → Clientes**, *"Todos os segmentos"* → *"Cosméticos"*: a lista continuava com todos os segmentos | Só os de Cosméticos — **C384**, novo e resolvido (**B1012**) |
+| Buscar *"são"* na lista de clientes, de propostas, das OS, nos produtos de uma família ou no **Ctrl+K**: nada (o cadastro grava *"SÃO"*) | Acha o gravado em maiúsculas e o antigo em minúsculas — **C385**, novo e resolvido (**B1013**) |
+| Buscar com espaço no fim (*"acme "*) na lista de clientes ou nas OS: nada | Os espaços das pontas não contam (**B1013**) |
+| **Custos de viagem**, digitar na busca: a lista não mudava; com outro filtro trocado, a lista ficava **vazia** | A lista recarrega 300 ms depois de parar de digitar e procura o código, os clientes da viagem e o destino — **C386**, novo e resolvido (**B1014**) |
+| Custos de viagem, **Distância** e **Valor** de **Mais Filtros**: nada mudava até outro filtro mudar | A lista recarrega sozinha (**B1014**) |
+| **Atividades**, *"Todos os responsáveis"* → **Remover Lembrete**: a lista ficava vazia | A lista recarrega com as atividades de todos — **C387**, novo e resolvido |
+| Cadastrar cliente pela integração: a resposta repetia o pedido, com campos que não foram gravados | A resposta é o cliente como ficou gravado — **C381** resolvido (**B1015**) |
+| Custo de viagem gravado sem tipo (só pela integração): *"ida_e_volta"* em minúsculas | *"IDA_E_VOLTA"*, como a tela grava — **C382** em parte (**B1016**) |
+
+### As regras, com o cenário exato
+
+**1. O filtro Segmento (C384, B1012).** Em **Comercial → Clientes**, escolha *"Cosméticos"* no seletor ao lado da busca: só os clientes de
+cosméticos ficam na lista (o segmento é comparado sem diferença de maiúsculas, inclusive nas acentuadas, nem de espaço nas pontas — os
+cadastros antigos gravados de outro jeito também entram). Com um texto na busca, valem os dois juntos. *"Todos os segmentos"* mostra todos;
+cliente sem segmento só aparece aí. **Exportar Excel** exporta a lista como está na tela. Trocar de segmento depressa mostra só a resposta
+do último. Nenhuma mensagem nova.
+
+**2. A busca com letra acentuada (C385, B1013).** Com um cliente cadastrado como *"São José Usinagem"* (o sistema grava *"SÃO JOSÉ
+USINAGEM"*), digite *"são"* na busca de **Clientes**: ele aparece — antes, não. Vale também *"São"*, *"SÃO"* e *" são "* (os espaços das
+pontas não contam), e para a busca de **Propostas** (número, título, cliente), das **Ordens de Serviço** do Comercial (número, descrição,
+cliente, proposta), dos **produtos de uma família** e do **Ctrl+K**. Um cadastro antigo gravado em minúsculas (*"ação legada"*) é achado por
+*"ação"* e por *"AÇÃO"*. **O acento conta:** *"sao"* não acha *"SÃO"*. Uma busca só de espaços não filtra.
+
+**3. A busca dos custos de viagem (C386, B1014).** Em **Comercial → Custos de viagem**, digite parte do nome de um cliente sem clicar na
+sugestão: um instante depois de parar de digitar, a lista mostra só as viagens em que ele é o cliente principal **ou** um dos clientes da
+viagem. O código (*"VIS-0003"*), o destino e a cidade do destino também servem. Clicar numa sugestão mostra só as viagens daquele cliente;
+voltar a digitar depois disso espera o mesmo instante; apagar o texto mostra todas. Digitar e, logo em seguida, trocar o status para
+*"Aprovado"*: a lista mostra só as aprovadas que casam com o texto. Em **Mais Filtros**, **Distância máxima** = 100 recarrega sozinho e
+deixa só as de até 100 km (o mesmo para a distância mínima e os valores); **Limpar Filtros** volta a todas. Se duas buscas saírem em
+sequência, só a resposta da última aparece.
+
+**4. O Remover Lembrete das Atividades (C387).** Em **Comercial → Atividades**, escolha *"Todos os responsáveis"*, clique num lembrete de
+proposta, **Remover Lembrete** e **Confirmar Remoção**: a lista continua com as atividades e os lembretes de todos (só o removido sai) —
+antes ficava vazia até trocar o filtro.
+
+**5. O cadastro de cliente responde o que ficou gravado (C381, B1015).** Pela integração, `POST /api/clientes` com
+*"razao_social": "resposta gravada"* responde o cliente gravado, com *"RESPOSTA GRAVADA"* em maiúsculas, o status e as datas — sem os campos
+que não são do cadastro. Na tela nada muda (ela usa só o número do cliente). Se a releitura falhar depois de gravar, a resposta é só o
+número do cliente (o cliente já existe) e o registro do servidor guarda *"Erro ao reler o cliente cadastrado ⟨número⟩: …"*.
+
+**6. O tipo padrão do custo de viagem (C382, B1016).** Pela integração, um custo gravado sem tipo, com tipo vazio ou só de espaços fica
+*"IDA_E_VOLTA"* (antes, *"ida_e_volta"* em minúsculas, ou os espaços); o tipo é gravado sem espaço nas pontas. A tela sempre manda o tipo.
+
+### O que esta etapa NÃO cobre
+
+1. **O acento continua contando** nas buscas, e um cadastro antigo com maiúsculas e minúsculas acentuadas misturadas (*"Ótica Paixão"*)
+   só é achado com a mesma grafia (**B1013**).
+2. **O resto da C382 fica:** um custo antigo sem origem ganha a origem padrão ao abrir para editar, e um tipo antigo em minúsculas passa a
+   maiúsculas ao atualizar — as duas coisas entram no histórico porque são gravações de verdade (**B1010**, **B1016**).
+3. **Os outros cadastros pela integração** (projetos, propostas, oportunidades, atividades) continuam respondendo o que foi mandado
+   (**C388**, de antes).
+4. **O seletor Segmento do formulário do cliente** mostra *"Selecione..."* ao editar um cliente com segmento (**C389**, de antes).
+5. **O filtro Usuário do painel** conta só o responsável da proposta (é regra — a lista de propostas conta também quem criou).
+
+### O que a revisão encontrou
+
+A **medição** (cada chave que cada tela do Comercial manda, conferida na rota que a atende) achou o segmento, a busca dos custos e o
+recarregamento das Atividades; a **revisão do plano** (0 grave, 7 médios, 10 pequenos) achou que a medição tinha errado uma tela (os
+produtos de uma família mandam a busca — a medição dizia que a tela não era usada), que a busca do topo tinha o mesmo defeito do acento, que
+duas telas refiltravam sem aparar, que a lista de clientes passaria a mostrar a resposta velha de um segmento anterior e que os filtros de
+distância e valor dos custos também não recarregavam — tudo entrou na etapa. A **revisão adversarial do código** (três revisores,
+executando): o de **regra** achou que um filtro trocado durante a pausa da busca dos custos (o status, por exemplo) se perdia no pedido
+seguinte — a lista mostrava pendentes com *"Aprovado"* escolhido — e que um texto colado em forma decomposta (de um PDF, por exemplo) não
+achava nada; o de **permissão** não achou nada que vaze (a resposta nova do cadastro tem as mesmas informações da ficha do cliente; nenhuma
+busca abre dado novo; nenhuma injeção); o de **sabotagem** fez 39 sabotagens — 18 sobreviveram por falta de asserção (as outras colunas de
+cada busca, cada tipo da busca do topo, o aparar na edição do custo, os outros recarregamentos das Atividades, a aba Propostas das OS) e
+todas ganharam o cenário que as derruba. Commits `531f3576`, `68869661`, `303841a2`, `6bc42a36`, `650b8395` e `49909fa2` (a correção da revisão).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 159 entregue (2026-10-19):** **os filtros e as buscas do Comercial que não filtravam, a busca com letra acentuada, e o cadastro
+  que responde o gravado** (consertos técnicos no Comercial, sem regra de acesso nova). O filtro *Segmento* dos clientes filtra (**B1012** —
+  **C384**); as buscas acham *"são"* no gravado *"SÃO"* (**B1013** — **C385**); a busca dos custos recarrega e procura o código, os clientes e
+  o destino (**B1014** — **C386**); o *Remover Lembrete* com *"Todos"* não esvazia as Atividades (**C387**); o cadastro de cliente responde o
+  gravado (**B1015** — **C381**); o custo sem tipo grava *IDA_E_VOLTA* (**B1016** — **C382** em parte). Commits `531f3576`, `68869661`, `303841a2`, `6bc42a36`, `650b8395` e `49909fa2` (a correção da revisão). **O que é
+  seu:** as decisões **B1012** a **B1016** (reversíveis; a **B1013** pergunta se o acento deve contar); os avisos **C388** e **C389** (de antes);
+  as perguntas de antes (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**, **C277**, **C312**, **C314**, **C316**, **C330**); a
+  **B1002** (os números mudam); as limitações **(159)** em D e a verificação **(159)** em F. Nenhuma consulta nova antes do deploy.
+  **Próxima: Etapa 160 — ver a "próxima tarefa detalhada" no plano da Etapa 159.**
 
 - **Etapa 158 entregue (2026-10-19):** **o ponto do mapa do endereço guardado no cadastro do cliente, e o resumo, o filtro e o histórico
   dos custos de viagem contando certo** (consertos técnicos nos Custos de viagem, sem regra de acesso nova). A localização do cliente com
@@ -31962,7 +32146,7 @@ Tudo virou correção e teste. Commits `f677e0a6`, `6f050dc9`, `af67f3c8` e `858
   (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**, **C277**, **C312**, **C314**, **C316**, **C330**); a **B1002** (os números
   mudam); as limitações **(158)** em D e a verificação **(158)** em F. Nenhuma consulta nova antes do deploy (as colunas novas entram sozinhas
   no primeiro boot).
-  **Próxima: Etapa 159 — ver a "próxima tarefa detalhada" no plano da Etapa 158.**
+  *(Próxima, na época: Etapa 159 — entregue acima.)*
 
 - **Etapa 157 entregue (2026-10-19):** **editar um custo de viagem não troca os valores gravados, e a localização dos clientes vem do
   servidor** (consertos de tela nos Custos de viagem, sem regra de acesso nova). Abrir para editar mostra a rota recalculada como sugestão e

@@ -1,18 +1,26 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-19 (Etapa 158) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-19 (Etapa 159) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157 e 158) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158 e 159) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 158 ENTREGUE · próxima: Etapa 159)
+> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 159 ENTREGUE · próxima: Etapa 160)
 >
-> **O desenvolvimento parou aqui: Etapa 158 fechada — 2026-10-19.** A **Etapa 158 (o ponto do endereço guardado no cadastro do cliente, e
+> **O desenvolvimento parou aqui: Etapa 159 fechada — 2026-10-19.** A **Etapa 159 (os filtros e as buscas do Comercial que não
+> filtravam, a busca com letra acentuada, e o cadastro que responde o gravado; consertos técnicos no Comercial, sem regra de acesso nova)**:
+> o filtro *Segmento* da lista de clientes filtra; as buscas de clientes, propostas, OS, produtos e do Ctrl+K acham *"são"* no cadastro
+> gravado como *"SÃO"*; a busca dos **Custos de viagem** recarrega enquanto se digita e procura o código, os clientes e o destino (e os filtros
+> de distância e valor recarregam); o **Remover Lembrete** das Atividades com *"Todos"* não esvazia a lista; o cadastro de cliente pela
+> integração responde o que ficou gravado. Nenhuma consulta nova antes do deploy. **Próxima: Etapa 160** — ver a próxima tarefa no plano da
+> 159.
+>
+> **Etapa 158, 2026-10-19.** A **Etapa 158 (o ponto do endereço guardado no cadastro do cliente, e
 > o resumo, o filtro e o histórico dos custos de viagem contando certo; consertos técnicos nos Custos de viagem do Comercial, sem regra de
 > acesso nova)**: a localização de um cliente com endereço consulta o serviço de mapas da internet só na primeira vez e quando o endereço, a
 > cidade ou o estado mudam (o ponto fica guardado no cadastro; a falha não é guardada); o filtro *Tipo de viagem* da lista filtra; o resumo
 > por tipo conta o tipo gravado em maiúsculas; o **Histórico** de um custo só registra o que mudou de valor. Nenhuma consulta nova antes do
-> deploy (as colunas entram sozinhas no primeiro boot). **Próxima: Etapa 159** — ver a próxima tarefa no plano da 158.
+> deploy (as colunas entram sozinhas no primeiro boot). *(Próxima, na época: Etapa 159 — entregue acima.)*
 >
 > **Etapa 157, 2026-10-19.** A **Etapa 157 (editar um custo de viagem não troca os valores
 > gravados, e a localização dos clientes vem do servidor; consertos de tela nos Custos de viagem do Comercial, sem regra de acesso nova)**:
@@ -6738,6 +6746,51 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 159 — Os filtros e as buscas do Comercial que não filtravam, a busca com letra acentuada, e o cadastro que responde o gravado (ENTREGUE — 2026-10-19)
+
+**O que mudou, em uma frase:** no Comercial, o filtro **Segmento** da lista de clientes filtra, as buscas acham *"são"* no cadastro gravado
+como *"SÃO"*, a busca dos **Custos de viagem** procura o código, o cliente e o destino enquanto se digita, e o **Remover Lembrete** das
+Atividades não esvazia mais a lista.
+
+**O problema que ela resolve.** Algumas telas do Comercial mandavam um filtro que o servidor não lia (o **Segmento** dos clientes), ou que a
+própria tela não aplicava (a busca e os filtros de distância e valor dos custos de viagem), ou que mandava errado (o recarregamento das
+Atividades depois de remover um lembrete). E toda busca de texto falhava na letra acentuada minúscula, porque o cadastro grava em maiúsculas
+e o banco só ignora a caixa das letras sem acento.
+
+| Antes | Agora |
+|---|---|
+| **Clientes**, *"Todos os segmentos"* → *"Cosméticos"*: a lista continuava com todos | Só os de Cosméticos (e o Exportar Excel exporta só eles) |
+| Buscar *"são"* (clientes, propostas, OS, produtos, Ctrl+K): nada | Acha *"SÃO JOSÉ…"* (e o cadastro antigo em minúsculas) |
+| Buscar com espaço no fim (*"acme "*): nada | Os espaços das pontas não contam |
+| **Custos de viagem**, digitar na busca: a lista não mudava | A lista recarrega 300 ms depois de parar de digitar, pelo código, cliente ou destino |
+| Custos: texto digitado e outro filtro trocado: lista **vazia** | Os custos que casam com o texto |
+| Custos: **Distância máxima** = 100: nada mudava até outro filtro | A lista recarrega e mostra só os de até 100 km |
+| **Atividades**, *"Todos os responsáveis"*, **Remover Lembrete**: a lista ficava vazia | A lista recarrega com todos |
+
+**Roteiro de teste (5 minutos).**
+
+1. **O segmento.** Em **Comercial → Clientes**, escolha *"Cosméticos"* no seletor de segmento: só os clientes de cosméticos ficam; troque
+   para *"Químico"* e de volta para *"Todos os segmentos"*. Clique **Exportar Excel** com *"Cosméticos"* escolhido: a planilha tem só eles.
+2. **A busca com acento.** Ainda em **Clientes**, digite *"são"* (minúsculo, com til) com um cliente *"SÃO …"* cadastrado: ele aparece.
+   Faça o mesmo em **Propostas** (uma palavra acentuada do título), em **Ordens de Serviço** e no **Ctrl+K**. Digite *"sao"* sem til: não
+   acha (o acento conta).
+3. **A busca dos custos.** Em **Comercial → Custos de viagem**, digite parte do nome de um cliente sem clicar na sugestão: depois de um
+   instante a lista mostra só as viagens dele (também as em que ele é um dos clientes adicionais). Digite o código de uma visita
+   (*"VIS-0003"*) ou a cidade do destino: idem. Clique numa sugestão: só as viagens daquele cliente. Apague o texto: todas.
+4. **Distância e valor.** Clique **Mais Filtros**, ponha **Distância Máxima** = 100: a lista muda sozinha. **Limpar Filtros**: todas de
+   volta.
+5. **As Atividades.** Em **Comercial → Atividades**, escolha *"Todos os responsáveis"*, clique num lembrete de proposta, **Remover
+   Lembrete** e **Confirmar Remoção**: a lista continua com as atividades de todos (só o lembrete removido sai).
+
+**O que esta etapa NÃO cobre.** O acento continua contando nas buscas (*"sao"* não acha *"SÃO"*); um cadastro antigo com maiúsculas e
+minúsculas acentuadas misturadas só é achado com a mesma grafia. O seletor *Segmento* do formulário do cliente mostra *"Selecione..."* ao
+editar um cliente com segmento (de antes — o segmento gravado não se perde ao salvar). O filtro *Usuário* do painel conta só o responsável da
+proposta. Os outros cadastros pela integração (projetos, propostas, oportunidades, atividades) continuam respondendo o que foi mandado.
+
+*Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (o servidor de verdade em pasta vazia,
+com cadastros gravados pela tela e antigos em minúsculas; as telas em jsdom com a camada de comunicação de verdade) provam, escrito para
+você conferir à mão. Commits `531f3576`, `68869661`, `303841a2`, `6bc42a36`, `650b8395` e `49909fa2` (a correção da revisão).
 
 ## Etapa 158 — O ponto do endereço guardado no cadastro do cliente, e o resumo, o filtro e o histórico dos custos de viagem contando certo (ENTREGUE — 2026-10-19)
 

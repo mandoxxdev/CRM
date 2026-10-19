@@ -388,6 +388,36 @@ projeto das listas, o vendedor seguindo o clique até as leituras da proposta, 1
 (o dono dos prefixos `/api/clientes` e `/api/projetos`: as listas com a cadeia nova nas camadas); `client/src/components/Notificacoes.test.js`
 (o clique e a rota `propostas/editar/:id` → `PropostaForm` no bloco `/comercial` do `App.js`).
 
+### Os filtros e as buscas do Comercial, a busca com letra acentuada e o cadastro que responde o gravado (Etapa 159, C381, C382, C384–C387)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa159-filtros-do-comercial-que-o-servidor-ignorava.md`. Commits `531f3576`, `68869661`, `303841a2`, `6bc42a36`, `650b8395` e `49909fa2` (a correção da revisão).
+Status: entregue; nenhuma rota nova; um parâmetro novo (`busca` em `GET /api/custos-viagens`); a resposta do `POST /api/clientes` passa a ser
+o cliente gravado.
+
+- [x] **RN-159.01 (C384, B1012)** — `GET /api/clientes?segmento=` filtra (no JavaScript, depois da consulta: o segmento aparado em
+  maiúsculas pelo `toUpperCase`; não texto = sem filtro) — `531f3576`; a tela descarta a resposta velha — `6bc42a36`.
+- [x] **RN-159.02 (C385, B1013)** — `server/services/buscaSemCaixa.js` (`formasDoTermo`, `condicaoDeBusca`: o termo aparado como veio, em
+  maiúsculas e em minúsculas, `COALESCE(col, '') LIKE ?` por forma e coluna) em `GET /api/clientes`, `/api/propostas`,
+  `/api/comercial/ordens-servico`, `/api/produtos` e `/api/busca-global` — `531f3576`; as telas das OS e das sugestões dos custos aparam —
+  `6bc42a36`, `68869661`.
+- [x] **RN-159.03 (C386, B1014)** — `GET /api/custos-viagens?busca=` (o código, o cliente principal e os adicionais, o destino e a cidade);
+  a tela com a pausa de 300 ms, o contador da lista e os filtros de distância/valor — `68869661`.
+- [x] **RN-159.04 (C387)** — `paramsDoFiltro` nos cinco recarregamentos das Atividades — `650b8395`.
+- [x] **RN-159.05 (C381, B1015)** — `POST /api/clientes` responde o cliente relido (sem `geo_*`); a releitura que falha → `{ id }` com o
+  log — `303841a2`.
+- [x] **RN-159.06 (C382 em parte, B1016)** — `tipoDaViagemGravado`: o tipo aparado, o ausente/vazio → `IDA_E_VOLTA` — `303841a2`.
+- [ ] **O resto da C382** (a origem padrão e o tipo legado no histórico) — **fora**: são gravações de verdade; escondê-las é regra (B1016).
+- [ ] **O eco dos outros `POST`** (projetos, propostas, oportunidades, atividades) — **fora** (C388, de antes).
+- [ ] **O seletor Segmento do formulário** (C389, de antes) — **fora**: é da tela do formulário, não um filtro.
+
+*A Fase 0 do plano dizia que o `Produtos.js` não era montado por rota nenhuma — **estava errado** (Fase 2 I1): `/comercial/produtos/familia/:id`
+monta `ProdutosPorFamilia`, que desenha o `Produtos.js`; a busca dele entrou na RN-159.02.*
+
+Testes: `server/tests/api/filtrosDoComercial.api.test.js` (novo, 10: a função, as cinco buscas, o segmento, a busca dos custos, a resposta do
+cadastro, o tipo, o fluxo de tela e a releitura que falha num segundo boot); `client/src/components/Clientes.filtroSegmento.test.js` (3),
+`CustosViagensBusca.test.js` (4), `Atividades.filtroTodos.test.js` (2), `OrdensServicoComercial.busca.test.js` (1) — o `api.js` real com o
+adaptador falso (as OS com o `api` simulado, como o teste das abas).
+
 ### A coordenada do endereço guardada no cadastro, o resumo, o filtro e o histórico dos custos de viagem (Etapa 158, C377, C378, C379, C380)
 
 Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa158-coordenada-guardada-resumo-e-historico-dos-custos.md`. Commits `f677e0a6`,

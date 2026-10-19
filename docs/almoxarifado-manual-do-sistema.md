@@ -1093,7 +1093,17 @@ informação da linha) registra uma alteração a cada **Atualizar** que muda al
 Nos campos de valor — número de pessoas, distância, tempo estimado, transporte, hospedagem, alimentação, outros, total e custo sugerido — a
 comparação é pelo **número**: *"350"*, *"350.00"* e *" 350 "* são o mesmo valor, vazio vale zero, e qualquer diferença de valor, por menor
 que seja, é registrada; um texto que não é número compara como texto. Se nenhum campo mudou, nada é registrado. O resumo do servidor soma o
-custo de ida, de volta e de ida e volta pelo tipo, sem diferença de maiúsculas nem de espaço nas pontas.
+custo de ida, de volta e de ida e volta pelo tipo, sem diferença de maiúsculas nem de espaço nas pontas. Um custo gravado sem tipo (só pela
+integração — a tela sempre manda o tipo) fica como **ida e volta**; o tipo é gravado sem espaço nas pontas.
+
+**A busca da lista dos custos.** O campo *"Buscar viagem por código, cliente ou destino..."* procura o texto digitado (sem os espaços das
+pontas) no **código da visita**, na **razão social** e no **nome fantasia** do cliente da viagem — o principal e os demais clientes da
+viagem —, no **destino** e na **cidade do destino**. A lista é pedida de novo **300 milissegundos depois** de a pessoa parar de digitar; o
+mesmo vale para os filtros **Distância mínima/máxima** e **Valor mínimo/máximo** de **Mais Filtros** (aplicados sobre a lista que o
+servidor devolveu, de até 500 custos) e para o cliente escolhido numa sugestão. Escolher a sugestão filtra pelos custos daquele cliente
+(o texto deixa de valer); apagar o texto volta à lista sem filtro; **Limpar Filtros** apaga todos e pede a lista de novo. Os outros filtros
+(datas, status, tipo, ordenação) pedem a lista na hora. Só a resposta do último pedido aparece: a de um pedido anterior que chegue depois é
+descartada.
 
 **Os valores da rota no formulário.** O preenchimento automático, o botão **Aplicar Valores Sugeridos** e o **Aceitar e Continuar com
 Passagem Aérea** preenchem os mesmos campos: na viagem de carro, transporte = combustível + pedágio, hospedagem, alimentação e outros = o
@@ -1111,8 +1121,22 @@ tela do Comercial abre) vê a busca abrir com o campo desligado e a frase *"A bu
 produtos do Comercial, e você não tem acesso ao Comercial."*; **Esc**, o **X** ou o clique fora fecham. Se as permissões que a tela guarda já
 venceram (elas valem 5 minutos), a busca as lê de novo ao abrir e decide quando chegam — se a leitura falhar, ela busca normalmente e o
 servidor só devolve o que a pessoa pode ver. A busca começa com 2 letras (*"Digite pelo menos 2 caracteres para buscar"*), espera a pessoa
-parar de digitar e mostra **só a resposta do último termo** digitado; quando não consegue buscar (banco ocupado, rede), diz *"Não foi
+parar de digitar e mostra **só a resposta do último termo** digitado (sem os espaços das pontas, com a mesma regra de maiúsculas das listas, abaixo); quando não consegue buscar (banco ocupado, rede), diz *"Não foi
 possível buscar agora. Tente de novo em instantes."* — e, quando busca e não acha, *"Nenhum resultado encontrado"*.
+
+**As buscas e os filtros das listas do Comercial.** O cadastro grava os nomes em **maiúsculas** (*"SÃO JOSÉ USINAGEM"*). As buscas de
+texto — a da lista de **Clientes** (razão social, nome fantasia, CNPJ), a da lista de **Propostas** (número, título, razão social e nome
+fantasia do cliente), a das **Ordens de Serviço** do Comercial (número da OS, descrição, cliente, número da proposta), a dos **produtos de
+uma família**, a da **busca do topo** e a dos **Custos de viagem** — ignoram os espaços das pontas e acham o texto em qualquer combinação de
+maiúsculas e minúsculas, **inclusive nas letras acentuadas**: *"são"*, *"São"* e *"SÃO"* acham *"SÃO JOSÉ"* e também um cadastro antigo
+gravado em minúsculas; um texto colado de outro programa (que às vezes traz o acento separado da letra) vale como o digitado. Duas exceções, por como o banco compara: **o acento conta** (*"sao"* não acha *"SÃO"*), e um cadastro antigo com
+letras acentuadas maiúsculas e minúsculas misturadas (*"Ótica Paixão"*) só é achado digitando com a mesma grafia. Uma busca só de espaços
+não filtra. Os caracteres *%* e *_* na busca valem como "qualquer texto" e "qualquer letra". O filtro **Segmento** da lista de Clientes
+mostra só os clientes daquele segmento — comparado sem diferença de maiúsculas (inclusive as acentuadas) nem de espaço nas pontas —, junto
+com a busca de texto, se houver; *"Todos os segmentos"* mostra todos, e o **Exportar Excel** exporta a lista como está na tela. Cliente sem
+segmento só aparece em *"Todos os segmentos"*. Ao trocar o filtro ou a busca depressa, a lista mostra só a resposta do último pedido. Nas
+**Atividades**, o filtro *"Todos os responsáveis"* continua valendo depois de **Remover Lembrete**: a lista recarrega com as atividades e os
+lembretes de todos. Ao cadastrar um cliente, a tela recebe o cadastro como ficou gravado (em maiúsculas).
 
 ### 5.2e Usuário desativado ou excluído
 

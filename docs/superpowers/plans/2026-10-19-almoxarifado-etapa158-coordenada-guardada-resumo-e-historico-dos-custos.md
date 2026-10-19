@@ -245,7 +245,9 @@ T2 → T3 → T4); um executor paralelo em worktree não se paga em três trocas
    SQLite decidiu; e um teste de resumo que sobrescrevia o único caso que provava a regra (o `VOLTA` da tela).
 3. **Paralelismo:** **0** galhos de código em paralelo (três tasks pequenas de servidor — o plano decidiu assim); **1** revisor na Fase 2 (antes do
    código), **3** em paralelo na Fase 5 sob a trava (o r3 em worktree própria) — **1** incidente de trava (o r1 apagou a do r3; sem efeito medido).
-4. **Defeito que escapou:** *(preencher na Etapa 159)*.
+4. **Defeito que escapou:** **0** no que ela entregou (preenchido na Etapa 159: a medição da 159 percorreu todas as telas do Comercial e
+   achou o mesmo padrão do C378 em outras — o filtro *Segmento* (C384), a busca dos custos (C386), o *Remover Lembrete* das Atividades (C387)
+   — e a busca com letra acentuada (C385), todos **de antes** da 158; a parte técnica da C382, que a 158 declarou, foi feita na 159).
 
 ## Próxima tarefa detalhada — Etapa 159
 
