@@ -193,9 +193,10 @@ async function logar(u) {
 test('[RN-149.01/02/03/04, C343, C345] fonte: as 13 do cadastro com exigirComercialNasPropostas, as 8 de Configuracoes com exigirComercialNaFamiliaPorConfiguracoes, o clonar sem portao e a lista de OS com exigirOperacionalNaListaDeOS — como 2o middleware', () => {
   assert.deepStrictEqual(VINTE_E_UMA.filter((r) => r.resto === '(nao registrada)').map((r) => r.rota), [], 'uma rota de familia sumiu do fonte');
   // regua independente: todo registro (qualquer verbo, use/all/route, qualquer aspa) de /familias ou /api/familias, no index.js
-  const reFam = /\.(get|post|put|patch|delete|all|use|route)\(\s*["'`]\/(api\/)?familias(["'`/])/;
+  // Fase 5 r3 R18: tambem o caminho em lista (app.get(['/api/familias/todas'], ...))
+  const reFam = /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`]\/(api\/)?familias(["'`/])/;
   const verboCaminho = FONTE.split('\n').filter((l) => reFam.test(l))
-    .map((l) => { const m = l.match(/\.(\w+)\(\s*["'`]([^"'`]+)/); return `${m[1].toUpperCase()} ${m[2]}`; }).sort();
+    .map((l) => { const m = l.match(/\.(\w+)\(\s*\[?\s*["'`]([^"'`]+)/); return `${m[1].toUpperCase()} ${m[2]}`; }).sort();
   const esperado = [...CADASTRO, ...CONFIG, ['POST', '/api/familias/:id/clonar'], ['PUT', '/api/familias/:id/clausulas-modelo']]
     .map(([m, r]) => `${m} ${r}`).sort();
   assert.deepStrictEqual(verboCaminho, esperado, 'registros de familia fora do formato app.<verbo>(\'...\', ...) numa linha so, ou a mais');
@@ -314,7 +315,9 @@ test('[RN-149.02] o administrador do Comercial com o Administrativo (Configuraco
   const nomeAntes = (await all('SELECT nome FROM familias_produto WHERE id = ?', [ctx.familia]))[0].nome;
   const [s1, x1] = await j('PUT', `/familias/${ctx.familia}`, u.T, { nome: 'RENOMEADA POR CONFIG' });
   const [s2, x2] = await j('GET', '/familias', u.T);
-  assert.deepStrictEqual([s1, x1, s2, x2], [403, NEGADO_COM, 403, NEGADO_COM]);
+  // Fase 5 r3 R2: trocar as variaveis da familia e do cadastro (a tela de Opcoes por familia so le as variaveis)
+  const [s3, x3] = await j('PUT', `/familias/${ctx.familia}/variaveis`, u.T, { variaveis: [{ chave: 'trocada' }] });
+  assert.deepStrictEqual([s1, x1, s2, x2, s3, x3], [403, NEGADO_COM, 403, NEGADO_COM, 403, NEGADO_COM]);
   assert.strictEqual((await all('SELECT nome FROM familias_produto WHERE id = ?', [ctx.familia]))[0].nome, nomeAntes, 'renomear passou');
 });
 
@@ -374,12 +377,14 @@ test('[RN-149.01/02/04] por usuario: o cadastro decide como a tela do Comercial;
 test('[RN-149.05] PROPOSTAS_PORTAO_DE_MODULO=desligado: as familias abrem ao barrado e a lista de OS volta a regua antiga (a direta com grupo 0 passa, o so-Almoxarifado nao); ligado de novo, barra', async () => {
   const b = ctx.u.soAlmox;
   const g0 = ctx.u.operacionalGrupo0;
+  // Fase 5 r3 R16: ligado, o boot nao avisa (o log ate aqui e so do boot ligado)
+  assert.ok(!/PROPOSTAS_PORTAO_DE_MODULO=desligado/.test(fs.readFileSync(logArq, 'utf8')), 'o aviso do desligado saiu com o portao ligado');
   await descer();
   ctx.T = await subir({ PROPOSTAS_PORTAO_DE_MODULO: 'desligado' });
   try {
     await logar(b); await logar(g0);
     const log = fs.readFileSync(logArq, 'utf8');
-    assert.ok(/PROPOSTAS_PORTAO_DE_MODULO=desligado/.test(log) && /cadastro de família/.test(log) && /lista de ordens de serviço do Operacional/.test(log)
+    assert.ok(/PROPOSTAS_PORTAO_DE_MODULO=desligado/.test(log) && /cadastro de família/.test(log) && /a lista de ordens de serviço do Operacional volta à régua antiga do módulo/.test(log) && /cadastro de família NAO exigem o Comercial \(só o login\)/.test(log)
       && /ordem de serviço pelo número/.test(log) && /modelo de contrato por família/.test(log) && /modelo da proposta/.test(log) && /listas de preço/.test(log),
     'o aviso do boot nao cita o cadastro de familia e a lista de OS');
     const [s1] = await j('GET', '/familias', b.T);

@@ -17404,6 +17404,12 @@ app.post('/api/comercial/listas-precos', authenticateToken, exigirComercialNasPr
   // Etapa 149 (RN-149.06, Fase 2 M-2): as linhas montadas ANTES de gravar a lista — um valor que nao vira texto (so pela integracao; a
   // tela manda texto) recusa sem deixar lista nenhuma.
   const nomeLista = String(nome).trim();
+  // Fase 5 (r1 M-2): o nome de coluna que nao vira texto culpava a linha 1 — qualquer linha falharia.
+  for (let k = 0; k < colunas.length; k++) {
+    try { String(colunas[k]); } catch (e) {
+      return res.status(400).json({ error: `A coluna ${k + 1} da planilha não pôde ser lida (${e.message}). A lista não foi criada.` });
+    }
+  }
   const linhas = [];
   for (let k = 0; k < itens.length; k++) {
     try {
@@ -17423,10 +17429,12 @@ app.post('/api/comercial/listas-precos', authenticateToken, exigirComercialNasPr
         // Fase 2 M-3: o BUSY ao gravar a lista -> 503 (nada ficou; o client repete); outro erro, a mensagem do banco (a de antes).
         if (errIns) return isSqliteBusy(errIns) ? respondDbError(res, errIns, 'listas-precos') : res.status(500).json({ error: errIns.message });
         const listaId = this.lastID;
-        // Etapa 149 (resto da C341, RN-149.06, B975): uma por uma, com o erro de cada uma conferido, e o 201 so depois da ultima. Antes o
-        // statement preparado sem callback perdia a linha que falhava e a rota respondia "importada (N itens)" com linhas a menos. Na falha,
-        // as linhas gravadas e a lista saem (sem transacao — B948: a conexao e uma so).
-        gravarItensEmSequencia(SQL_LINHA_DA_LISTA_DE_PRECOS, linhas.map((l) => [listaId, l[0], l[1]]), (errLinha) => {
+        // Etapa 149 (resto da C341, RN-149.06, B975): em blocos de LINHAS_POR_BLOCO_DA_LISTA, um depois do outro, com o erro de cada um
+        // conferido, e o 201 so depois do ultimo. Antes o statement preparado sem callback perdia a linha que falhava e a rota respondia
+        // "importada (N itens)" com linhas a menos. Na falha, as linhas gravadas e a lista saem (sem transacao — B948: a conexao e uma so).
+        // Fase 5 (r1 M-1): uma por uma era 2,3x mais lento que o de antes pela rota (100 000 linhas: 16,5 s contra 7,3 s; o client desiste
+        // em 30 s e a lista nasce mesmo assim) — em blocos, o bloco que falha nao grava nenhuma linha dele (o INSERT e um so).
+        gravarLinhasDaListaEmBlocos(listaId, linhas, (errLinha) => {
           if (!errLinha) return res.status(201).json({ id: listaId, total_itens: itens.length });
           desfazerListaDePrecosCriada(listaId, (errDesfazer) => {
             if (errDesfazer) {
@@ -17436,12 +17444,32 @@ app.post('/api/comercial/listas-precos', authenticateToken, exigirComercialNasPr
             if (isSqliteBusy(errLinha)) return respondDbError(res, errLinha, 'listas-precos');
             return res.status(500).json({ error: `${msgLinhasDaListaNaoGravadas(errLinha.message)}. A lista não foi criada — importe a planilha de novo.` });
           });
-        }, 'Linhas da lista de preços');
+        });
       }
     );
   });
 });
-const SQL_LINHA_DA_LISTA_DE_PRECOS = 'INSERT INTO listas_precos_itens (lista_id, dados, busca) VALUES (?, ?, ?)';
+// 100 linhas x 3 parametros = 300, abaixo do limite antigo de 999 variaveis do SQLite.
+const LINHAS_POR_BLOCO_DA_LISTA = 100;
+function gravarLinhasDaListaEmBlocos(listaId, linhas, feito) {
+  let i = 0;
+  const proximo = () => {
+    if (i >= linhas.length) return feito(null);
+    const bloco = linhas.slice(i, i + LINHAS_POR_BLOCO_DA_LISTA);
+    i += bloco.length;
+    const sql = 'INSERT INTO listas_precos_itens (lista_id, dados, busca) VALUES ' + bloco.map(() => '(?, ?, ?)').join(', ');
+    const params = [];
+    for (const l of bloco) params.push(listaId, l[0], l[1]);
+    db.run(sql, params, (err) => {
+      if (err) {
+        console.error('❌ Linhas da lista de preços: erro ao gravar o bloco que termina na linha', i, '-', err.message);
+        return feito(err);
+      }
+      return proximo();
+    });
+  };
+  proximo();
+}
 function msgLinhasDaListaNaoGravadas(detalhe) {
   return `Erro ao gravar as linhas da lista de preços (${detalhe})`;
 }

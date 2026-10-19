@@ -2,11 +2,13 @@
  * Etapa 149 (Comercial, resto da C341) — a criacao da lista de preco grava as linhas uma por uma, confere o erro de cada uma e so responde
  * depois da ultima, pelo `index.js` de verdade (pasta vazia).
  *
- *   RN-149.06  POST /api/comercial/listas-precos: as linhas pelo gravarItensEmSequencia; a que falha apaga as gravadas e a lista -> 500
+ *   RN-149.06  POST /api/comercial/listas-precos: as linhas em blocos de 100 (Fase 5 r1 M-1), um depois do outro; o bloco que falha
+ *              (nenhuma linha dele fica — o INSERT e um so) apaga as gravadas e a lista -> 500
  *              "Erro ao gravar as linhas da lista de preços (<msg>). A lista não foi criada — importe a planilha de novo."; o BUSY com o
  *              desfazer feito -> 503 (context listas-precos); o desfazer que falha -> a frase "ficou incompleta" com o nome (sem 503)
  *
- * A falha da linha e REAL: um gatilho do SQLite gravado por fora recusa a linha de CODIGO 'P3' (passa pelo statement preparado de antes
+ * A falha da linha e REAL: um gatilho do SQLite gravado por fora recusa a linha de CODIGO 'P150' (no 2o bloco: o 1o, de 100, fica gravado
+ * ate o desfazer) (passa pelo statement preparado de antes
  * desta etapa e pelo `db.run` de agora); outro recusa o DELETE (o desfazer). O BUSY e a falha da lista vem do FALHA_SQL_INJETADA (reboot).
  *
  * Molde: propostaClausulasGrava.api.test.js. Plano:
@@ -110,7 +112,7 @@ const linhasDe = async (nome) => (await all('SELECT i.id, i.dados FROM listas_pr
 const todasAsLinhas = async () => (await all('SELECT COUNT(*) AS n FROM listas_precos_itens'))[0].n;
 
 const GATILHO_LINHA = `CREATE TRIGGER e149_recusa_linha BEFORE INSERT ON listas_precos_itens
-  WHEN json_extract(NEW.dados, '$.CODIGO') = 'P3' AND (SELECT nome FROM listas_precos WHERE id = NEW.lista_id) LIKE 'ALVO%'
+  WHEN json_extract(NEW.dados, '$.CODIGO') = 'P150' AND (SELECT nome FROM listas_precos WHERE id = NEW.lista_id) LIKE 'ALVO%'
   BEGIN SELECT RAISE(ABORT, 'linha recusada pelo teste'); END`;
 const GATILHO_DESFAZER = `CREATE TRIGGER e149_recusa_desfazer BEFORE DELETE ON listas_precos_itens
   WHEN (SELECT nome FROM listas_precos WHERE id = OLD.lista_id) LIKE 'ALVO%'
@@ -128,16 +130,34 @@ test('[RN-149.06] o fluxo da tela pela rota: criar (201, total) -> a lista apare
   assert.deepStrictEqual([sd, det.colunas], [200, COLUNAS]);
   const [si, it] = await j('GET', `/comercial/listas-precos/${x.id}/itens?q=boa%20item%203`, ctx.u.T);
   assert.deepStrictEqual([si, it.total, it.itens.map((i) => i.CODIGO)], [200, 1, ['P3']]);
+  // Fase 5 r3 L3b: a busca cobre todas as colunas (o codigo e o preco, nao so a descricao)
+  const [sc, porCodigo] = await j('GET', `/comercial/listas-precos/${x.id}/itens?q=p4`, ctx.u.T);
+  const [sp, porPreco] = await j('GET', `/comercial/listas-precos/${x.id}/itens?q=50,00`, ctx.u.T);
+  assert.deepStrictEqual([sc, porCodigo.itens.map((i) => i.CODIGO), sp, porPreco.itens.map((i) => i.CODIGO)], [200, ['P4'], 200, ['P5']]);
   const [se, ex] = await j('DELETE', `/comercial/listas-precos/${x.id}`, ctx.u.T);
   assert.deepStrictEqual([se, ex], [200, { success: true }]);
   assert.deepStrictEqual([await listasCom('LISTA BOA 149'), await todasAsLinhas()], [[], 0]);
+  // Fase 5 r3 L2: a busca em minusculas — o LIKE do SQLite so ignora maiuscula em ASCII, entao "válvula" so acha "VÁLVULA" porque a busca
+  // e gravada em minusculas
+  const [sa, xa] = await criar(ctx.u.T, 'LISTA ACENTO 149', [{ CODIGO: 'V1', DESCRICAO: 'VÁLVULA ESFÉRICA', PRECO: '1' }, { CODIGO: 'V2', DESCRICAO: 'REGISTRO', PRECO: '2' }]);
+  assert.strictEqual(sa, 201, JSON.stringify(xa));
+  const [sv, val] = await j('GET', `/comercial/listas-precos/${xa.id}/itens?q=${encodeURIComponent('válvula')}`, ctx.u.T);
+  assert.deepStrictEqual([sv, val.itens.map((i) => i.CODIGO)], [200, ['V1']], 'a busca com acento nao acha o item em maiusculas');
+  await j('DELETE', `/comercial/listas-precos/${xa.id}`, ctx.u.T);
+  // mais de um bloco (Fase 5 r1 M-1): 250 linhas, na ordem, nenhuma a mais nem a menos
+  const [s2, x2] = await criar(ctx.u.T, 'LISTA GRANDE 149', planilha('GR', 250));
+  assert.deepStrictEqual([s2, x2 && x2.total_itens], [201, 250]);
+  const grandes = (await linhasDe('LISTA GRANDE 149')).map((l) => JSON.parse(l.dados).CODIGO);
+  assert.deepStrictEqual(grandes, Array.from({ length: 250 }, (_, k) => `P${k + 1}`), 'as 250 linhas nao estao todas, na ordem');
+  const [se2] = await j('DELETE', `/comercial/listas-precos/${x2.id}`, ctx.u.T);
+  assert.strictEqual(se2, 200);
 });
 
 // ── a linha que o banco recusa ────────────────────────────────────────────────────────────
-test('[RN-149.06] a 3a de 5 linhas recusada pelo banco: 500 com a frase, e nem a lista nem as 2 primeiras linhas ficam', async () => {
+test('[RN-149.06] a linha 150 de 200 recusada pelo banco (o 2o bloco): 500 com a frase, e nem a lista nem as 100 do 1o bloco ficam', async () => {
   await run(GATILHO_LINHA);
   try {
-    const [s, x] = await criar(ctx.u.T, 'ALVO 149 A', planilha('ALVO'));
+    const [s, x] = await criar(ctx.u.T, 'ALVO 149 A', planilha('ALVO', 200));
     assert.deepStrictEqual([s, x], [500, { error: msgNaoCriada('SQLITE_CONSTRAINT: linha recusada pelo teste') }]);
     await pausa(1000);
     assert.deepStrictEqual([await listasCom('ALVO 149 A'), await todasAsLinhas()], [[], 0], 'a lista ou as linhas gravadas antes da falha ficaram');
@@ -154,17 +174,23 @@ test('[RN-149.06, Fase 2 M-2] uma linha que nao vira texto (so pela integracao):
   const itens = [{ CODIGO: 'P1', DESCRICAO: 'OK', PRECO: '1' }, { CODIGO: { toString: 1 }, DESCRICAO: 'RUIM', PRECO: '2' }];
   const [s, x] = await criar(ctx.u.T, 'RUIM 149', itens);
   assert.deepStrictEqual([s, x], [400, { error: 'A linha 2 da planilha não pôde ser lida (Cannot convert object to primitive value). A lista não foi criada.' }]);
+  await pausa(1000); // Fase 5 r3 L10: uma gravacao disparada sem esperar terminaria depois da conferencia
   assert.deepStrictEqual(await listasCom('RUIM 149'), []);
+  // Fase 5 r1 M-2: o nome de coluna que nao vira texto culpa a coluna, nao a linha
+  const [s2, x2] = await j('POST', '/comercial/listas-precos', ctx.u.T, { nome: 'COLUNA RUIM 149', colunas: ['CODIGO', { toString: 1 }], itens: [{ CODIGO: 'P1' }] });
+  assert.deepStrictEqual([s2, x2], [400, { error: 'A coluna 2 da planilha não pôde ser lida (Cannot convert object to primitive value). A lista não foi criada.' }]);
+  await pausa(1000);
+  assert.deepStrictEqual(await listasCom('COLUNA RUIM 149'), []);
 });
 
-test('[RN-149.06] a linha recusada e o desfazer tambem recusado: 500 com a frase "ficou incompleta" e o nome — a lista fica com as 2 primeiras', async () => {
+test('[RN-149.06] a linha recusada e o desfazer tambem recusado: 500 com a frase "ficou incompleta" e o nome — a lista fica com o 1o bloco', async () => {
   await run(GATILHO_LINHA);
   await run(GATILHO_DESFAZER);
   try {
     // Fase 2 M-5: a frase usa o nome gravado (aparado), nao o que chegou
-    const [s, x] = await criar(ctx.u.T, '  ALVO 149 B  ', planilha('ALVO'));
+    const [s, x] = await criar(ctx.u.T, '  ALVO 149 B  ', planilha('ALVO', 200));
     assert.deepStrictEqual([s, x], [500, { error: msgIncompleta('SQLITE_CONSTRAINT: linha recusada pelo teste', 'ALVO 149 B') }]);
-    assert.strictEqual((await linhasDe('ALVO 149 B')).length, 2, 'a frase diz "ficou incompleta" — as 2 primeiras estao la');
+    assert.strictEqual((await linhasDe('ALVO 149 B')).length, 100, 'a frase diz "ficou incompleta" — o 1o bloco esta la');
   } finally {
     await run('DROP TRIGGER IF EXISTS e149_recusa_linha');
     await run('DROP TRIGGER IF EXISTS e149_recusa_desfazer');
@@ -175,13 +201,30 @@ test('[RN-149.06] a linha recusada e o desfazer tambem recusado: 500 com a frase
   assert.deepStrictEqual(await linhasDe('ALVO 149 B'), []);
 });
 
+test('[RN-149.06, Fase 5 r3 L8] a linha recusada e o DELETE da propria lista recusado no desfazer: 500 "ficou incompleta" — a lista fica, sem linhas', async () => {
+  await run(GATILHO_LINHA);
+  await run(`CREATE TRIGGER e149_recusa_lista BEFORE DELETE ON listas_precos WHEN OLD.nome LIKE 'ALVO%'
+    BEGIN SELECT RAISE(ABORT, 'lista presa pelo teste'); END`);
+  try {
+    const [s, x] = await criar(ctx.u.T, 'ALVO 149 C', planilha('ALVO', 200));
+    assert.deepStrictEqual([s, x], [500, { error: msgIncompleta('SQLITE_CONSTRAINT: linha recusada pelo teste', 'ALVO 149 C') }]);
+    assert.deepStrictEqual([(await listasCom('ALVO 149 C')).length, (await linhasDe('ALVO 149 C')).length], [1, 0], 'a lista ficou (sem linhas), como a frase diz');
+  } finally {
+    await run('DROP TRIGGER IF EXISTS e149_recusa_linha');
+    await run('DROP TRIGGER IF EXISTS e149_recusa_lista');
+  }
+  const [lista] = await listasCom('ALVO 149 C');
+  const [se] = await j('DELETE', `/comercial/listas-precos/${lista.id}`, ctx.u.T);
+  assert.strictEqual(se, 200);
+});
+
 // ── o BUSY e a lista que nao grava: reboots ───────────────────────────────────────────────
-test('[RN-149.06] SQLITE_BUSY na 3a linha: 503 (o client repete), nada fica; a falha ao gravar a lista continua 500 com a mensagem do banco, e o BUSY nela vira 503', async () => {
+test('[RN-149.06] SQLITE_BUSY no 3o bloco: 503 (o client repete), nada fica; a falha ao gravar a lista continua 500 com a mensagem do banco, e o BUSY nela vira 503', async () => {
   await descer();
   ctx.T = await subir({ FALHA_SQL_INJETADA: 'INSERT INTO listas_precos_itens', FALHA_SQL_PULAR: '2', FALHA_SQL_MSG: 'SQLITE_BUSY: database is locked' });
   try {
     await logar(ctx.u);
-    const [s, x] = await criar(ctx.u.T, 'BUSY 149', planilha('BUSY'));
+    const [s, x] = await criar(ctx.u.T, 'BUSY 149', planilha('BUSY', 250));
     assert.deepStrictEqual([s, x], [503, { error: 'Banco temporariamente ocupado. Tente novamente em alguns segundos.', code: 'SQLITE_BUSY', retryAfter: 3, context: 'listas-precos' }]);
     await pausa(1000);
     assert.deepStrictEqual(await listasCom('BUSY 149'), [], 'a lista do BUSY ficou');
@@ -190,9 +233,9 @@ test('[RN-149.06] SQLITE_BUSY na 3a linha: 503 (o client repete), nada fica; a f
     await descer();
     ctx.T = await subir({ FALHA_SQL_INJETADA: 'INSERT INTO listas_precos_itens|DELETE FROM listas_precos_itens', FALHA_SQL_PULAR: '2', FALHA_SQL_MSG: 'SQLITE_BUSY: database is locked' });
     await logar(ctx.u);
-    const [sb, xb] = await criar(ctx.u.T, 'BUSY INCOMPLETA 149', planilha('BI'));
+    const [sb, xb] = await criar(ctx.u.T, 'BUSY INCOMPLETA 149', planilha('BI', 250));
     assert.deepStrictEqual([sb, xb], [500, { error: msgIncompleta('SQLITE_BUSY: database is locked', 'BUSY INCOMPLETA 149') }]);
-    assert.strictEqual((await linhasDe('BUSY INCOMPLETA 149')).length, 2);
+    assert.strictEqual((await linhasDe('BUSY INCOMPLETA 149')).length, 200);
     await descer();
     ctx.T = await subir({ FALHA_SQL_INJETADA: 'INSERT INTO listas_precos \\(' });
     await logar(ctx.u);
