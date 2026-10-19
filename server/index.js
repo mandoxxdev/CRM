@@ -4487,7 +4487,16 @@ app.post('/api/clientes', authenticateToken, exigirComercialNasPropostas, (req, 
       if (err) {
         return res.status(500).json({ error: err.message });
       }
-      res.json({ id: this.lastID, ...req.body });
+      // Etapa 159 (RN-159.05, C381): responde o cliente gravado (lido do banco, sem geo_*), nao o eco do corpo. A releitura que falha
+      // ou nao acha a linha responde { id }: o cliente ja existe, e um 500 faria a tela cadastrar de novo (B1015)
+      const id = this.lastID;
+      db.get('SELECT * FROM clientes WHERE id = ? -- releitura do cadastro', [id], (errL, linha) => {
+        if (errL || !linha) {
+          console.error(`Erro ao reler o cliente cadastrado ${id}: ${errL ? errL.message : 'linha nao encontrada'}`);
+          return res.json({ id });
+        }
+        res.json(semCoordenadaGuardada(linha));
+      });
     }
   );
 });
@@ -16063,9 +16072,18 @@ app.get('/api/custos-viagens/verificar-elegibilidade/:cliente_id', authenticateT
   });
 });
 
+// Etapa 159 (RN-159.06, C382): o tipo gravado e aparado; ausente, nulo, vazio ou so de espacos -> IDA_E_VOLTA (o padrao vinha depois do
+// normalizarMaiusculas e gravava 'ida_e_volta' em minusculas; o so de espacos era gravado como veio). Chamada depois do normalizarMaiusculas.
+function tipoDaViagemGravado(body) {
+  if (!body || typeof body !== 'object') return;
+  const t = typeof body.tipo_viagem === 'string' ? body.tipo_viagem.trim() : '';
+  body.tipo_viagem = t || 'IDA_E_VOLTA';
+}
+
 // Criar novo custo de viagem
 app.post('/api/custos-viagens', authenticateToken, exigirComercialNasPropostas, (req, res) => {
   normalizarMaiusculas(req.body, ['origem', 'origem_cidade', 'origem_estado', 'destino', 'destino_cidade', 'destino_estado', 'tipo_viagem', 'descricao', 'motivo_autorizacao']);
+  tipoDaViagemGravado(req.body);
   const {
     cliente_id,
     proposta_id,
@@ -16149,7 +16167,7 @@ app.post('/api/custos-viagens', authenticateToken, exigirComercialNasPropostas, 
         destino,
         destino_cidade || null,
         destino_estado || null,
-        tipo_viagem || 'ida_e_volta',
+        tipo_viagem,
         numero_pessoas || 1,
         distancia_km || 0,
         tempo_estimado_horas || 0,
@@ -16253,6 +16271,7 @@ app.put('/api/custos-viagens/:id', authenticateToken, exigirComercialNasProposta
   const { id } = req.params;
   const userId = req.user.id;
   normalizarMaiusculas(req.body, ['origem', 'origem_cidade', 'origem_estado', 'destino', 'destino_cidade', 'destino_estado', 'tipo_viagem', 'descricao']);
+  tipoDaViagemGravado(req.body);
   const {
     cliente_id,
     proposta_id,
@@ -16308,7 +16327,7 @@ app.put('/api/custos-viagens/:id', authenticateToken, exigirComercialNasProposta
       destino,
       destino_cidade: destino_cidade || null,
       destino_estado: destino_estado || null,
-      tipo_viagem: tipo_viagem || 'ida_e_volta',
+      tipo_viagem,
       numero_pessoas: numero_pessoas || 1,
       distancia_km: distancia_km || 0,
       tempo_estimado_horas: tempo_estimado_horas || 0,

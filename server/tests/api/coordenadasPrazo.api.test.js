@@ -609,7 +609,7 @@ test('[RN-158.03, B1008, integracao T4] as listas nao mostram a memoria; o PUT d
   fronteira.modo = 'responde'; fronteira.pedidos = [];
   assert.deepStrictEqual((await coordDe(id))[1].coordenadas, [-10.1, -20.2]);
   assert.strictEqual(fronteira.pedidos.length, 0);
-  // o POST com geo_* no corpo nao grava (a resposta ecoa o corpo — de antes, C)
+  // o POST com geo_* no corpo nao grava (desde a Etapa 159 a resposta e o cliente gravado, sem geo_* — RN-159.05, C381)
   const [sc, c] = await j('POST', '/clientes', { razao_social: 'Memoria 158 F', cidade: 'Campinas', estado: 'SP', endereco: 'Rua Oito 8', geo_lat: 5, geo_lon: 6, geo_termo: 'RUA OITO 8, CAMPINAS, SP, Brasil' });
   assert.strictEqual(sc, 200);
   const doPost = await memoria(c.id);
