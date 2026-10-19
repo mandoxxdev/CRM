@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 import './CustosViagens.css';
 import PreviewRota from './PreviewRota';
+import { valoresDaRota } from '../utils/valoresDaRota';
 
 const CustosViagens = () => {
   const [loading, setLoading] = useState(true);
@@ -323,47 +324,8 @@ const CustosViagens = () => {
       
       setRotaCalculada(response.data);
       
-      // Debug: verificar se os dados estão chegando
-      console.log('Rota calculada:', response.data);
-      console.log('Detalhes:', response.data.detalhes);
-      console.log('Distância:', response.data.distancia_km);
-      console.log('Custo sugerido:', response.data.custo_sugerido);
-      
-      // Preencher automaticamente os campos
-      // Para viagens terrestres: transporte = combustível + pedágio
-      // Para viagens aéreas: transporte = passagem aérea
-      let custoTransporte = 0;
-      if (response.data.requer_passagem_aerea) {
-        custoTransporte = (response.data.detalhes.custo_passagem_aerea || 0) + (response.data.detalhes.custo_taxa_embarque || 0);
-      } else {
-        custoTransporte = (response.data.detalhes.custo_combustivel || 0) + (response.data.detalhes.custo_pedagio || 0);
-      }
-      
-      // Garantir que os valores não sejam zero se a distância for válida
-      const custoHospedagem = response.data.detalhes.custo_hospedagem || 0;
-      const custoAlimentacao = response.data.detalhes.custo_alimentacao || 0;
-      const custoEstacionamento = response.data.detalhes.custo_estacionamento || 0;
-      
-      console.log('Custos calculados:', {
-        transporte: custoTransporte,
-        hospedagem: custoHospedagem,
-        alimentacao: custoAlimentacao,
-        estacionamento: custoEstacionamento,
-        total: response.data.custo_sugerido
-      });
-      
-      // Aplicar valores automaticamente
-      setFormData(prev => ({
-        ...prev,
-        distancia_km: response.data.distancia_km || 0,
-        tempo_estimado_horas: response.data.tempo_estimado_horas || 0,
-        custo_transporte: custoTransporte.toFixed(2),
-        custo_hospedagem: custoHospedagem.toFixed(2),
-        custo_alimentacao: custoAlimentacao.toFixed(2),
-        custo_outros: custoEstacionamento.toFixed(2),
-        custo_sugerido: response.data.custo_sugerido || 0,
-        requer_passagem_aerea: response.data.requer_passagem_aerea || false
-      }));
+      // Preencher automaticamente os campos (RN-157.02: a mesma funcao da confirmacao da passagem e do Aplicar)
+      setFormData(prev => ({ ...prev, ...valoresDaRota(response.data) }));
     } catch (error) {
       console.error('Erro ao calcular rota:', error);
       // Não mostrar alert - apenas limpar rota calculada
@@ -386,17 +348,8 @@ const CustosViagens = () => {
       setPassagemAereaConfirmada(true);
       setDistanciaConfirmada(rotaPendente.distancia_km);
       
-      // Preencher automaticamente os campos
-      setFormData(prev => ({
-        ...prev,
-        distancia_km: rotaPendente.distancia_km,
-        tempo_estimado_horas: rotaPendente.tempo_estimado_horas,
-        custo_transporte: (rotaPendente.detalhes.custo_passagem_aerea || 0).toFixed(2),
-        custo_hospedagem: (rotaPendente.detalhes.custo_hospedagem || 0).toFixed(2),
-        custo_alimentacao: (rotaPendente.detalhes.custo_alimentacao || 0).toFixed(2),
-        custo_sugerido: rotaPendente.custo_sugerido,
-        requer_passagem_aerea: rotaPendente.requer_passagem_aerea || false
-      }));
+      // Preencher automaticamente os campos (RN-157.02, C374: com a taxa de embarque, outros 0)
+      setFormData(prev => ({ ...prev, ...valoresDaRota(rotaPendente) }));
     }
   };
 
@@ -1162,20 +1115,8 @@ const CustosViagens = () => {
 
   const aplicarSugestao = () => {
     if (rotaCalculada) {
-      const detalhes = rotaCalculada.detalhes;
-      // Para viagens terrestres: transporte = combustível + pedágio
-      // Para viagens aéreas: transporte = passagem aérea
-      const custoTransporte = rotaCalculada.requer_passagem_aerea
-        ? (detalhes.custo_passagem_aerea || 0)
-        : ((detalhes.custo_combustivel || 0) + (detalhes.custo_pedagio || 0));
-      
-      setFormData(prev => ({
-        ...prev,
-        custo_transporte: custoTransporte.toFixed(2),
-        custo_hospedagem: (detalhes.custo_hospedagem || 0).toFixed(2),
-        custo_alimentacao: (detalhes.custo_alimentacao || 0).toFixed(2),
-        custo_outros: (detalhes.custo_estacionamento || 0).toFixed(2)
-      }));
+      // RN-157.02 (C374): os mesmos campos e valores do preenchimento automatico (antes: sem a taxa de embarque, sem distancia, tempo e sugerido)
+      setFormData(prev => ({ ...prev, ...valoresDaRota(rotaCalculada) }));
     }
   };
 
@@ -2486,6 +2427,7 @@ const CustosViagens = () => {
                   <h5>Detalhamento de Custos:</h5>
                   <ul>
                     <li>Passagem Aérea: {formatCurrency(rotaPendente.detalhes.custo_passagem_aerea || 0)}</li>
+                    <li>Taxa de Embarque: {formatCurrency(rotaPendente.detalhes.custo_taxa_embarque || 0)}</li>
                     <li>Alimentação: {formatCurrency(rotaPendente.detalhes.custo_alimentacao || 0)}</li>
                     <li>Hospedagem: {formatCurrency(rotaPendente.detalhes.custo_hospedagem || 0)}</li>
                   </ul>
