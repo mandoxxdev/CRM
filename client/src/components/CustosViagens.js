@@ -83,6 +83,10 @@ const CustosViagens = () => {
   const [sugestaoSemAplicar, setSugestaoSemAplicar] = useState(false);
   // RN-157.03 (Fase 2 K1): o ultimo cliente escolhido — a resposta (coordenada, elegibilidade, proximos) de outro nao vale
   const clienteEscolhidoRef = useRef(null);
+  // Etapa 159 (RN-159.03, Fase 2 I5b): so a resposta (ou a falha) do ultimo pedido da lista mexe nela, venha de qualquer chamador
+  const pedidoDaListaRef = useRef(0);
+  // o recarregamento com pausa (a busca, o cliente escolhido e os filtros do navegador) nao roda na montagem — a carga inicial ja pede
+  const montouListaRef = useRef(false);
 
   const [formData, setFormData] = useState({
     cliente_id: '',
@@ -128,7 +132,17 @@ const CustosViagens = () => {
       loadCustos();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtros.cliente_id, filtros.proposta_id, filtros.data_inicio, filtros.data_fim, filtros.status_aprovacao, filtros.tipo_viagem, ordenacao]);
+  }, [filtros.proposta_id, filtros.data_inicio, filtros.data_fim, filtros.status_aprovacao, filtros.tipo_viagem, ordenacao]);
+
+  // Etapa 159 (RN-159.03, C386; Fase 2 I5a/I6): o texto da busca, o cliente escolhido na sugestao e os filtros de distancia e valor
+  // recarregam a lista 300 ms depois da ultima mudanca — um pedido so (antes o texto nao recarregava, e voltar a digitar depois de
+  // escolher a sugestao disparava um pedido na hora pelo cliente_id que se apagava)
+  useEffect(() => {
+    if (!montouListaRef.current) { montouListaRef.current = true; return undefined; }
+    const espera = setTimeout(() => { loadCustos(); }, 300);
+    return () => clearTimeout(espera);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtros.busca_cliente, filtros.cliente_id, filtros.distancia_min, filtros.distancia_max, filtros.valor_min, filtros.valor_max]);
 
   // Calcular rota automaticamente quando cliente ou destino mudar
   useEffect(() => {
@@ -189,6 +203,7 @@ const CustosViagens = () => {
   };
 
   const loadCustos = async () => {
+    const meu = ++pedidoDaListaRef.current;
     try {
       const params = new URLSearchParams();
       if (filtros.cliente_id) params.append('cliente_id', filtros.cliente_id);
@@ -197,16 +212,16 @@ const CustosViagens = () => {
       if (filtros.data_fim) params.append('data_fim', filtros.data_fim);
       if (filtros.status_aprovacao) params.append('status_aprovacao', filtros.status_aprovacao);
       if (filtros.tipo_viagem) params.append('tipo_viagem', filtros.tipo_viagem);
-      if (filtros.busca_cliente && !filtros.cliente_id) {
-        // Se está buscando por texto, tentar encontrar código
-        params.append('codigo_visita', filtros.busca_cliente);
-      }
+      // Etapa 159 (RN-159.03, C386): o texto procura o codigo, o cliente (principal ou adicional) e o destino — no servidor
+      const termoDaBusca = (filtros.busca_cliente || '').trim();
+      if (termoDaBusca && !filtros.cliente_id) params.append('busca', termoDaBusca);
       if (ordenacao.campo) {
         params.append('ordenar_por', ordenacao.campo);
         params.append('ordem', ordenacao.ordem);
       }
       
       const response = await api.get(`/custos-viagens?${params.toString()}`);
+      if (meu !== pedidoDaListaRef.current) return;
       let custosFiltrados = response.data || [];
       
       // Filtros adicionais no frontend (distância e valor)
@@ -225,6 +240,7 @@ const CustosViagens = () => {
       
       setCustos(custosFiltrados);
     } catch (error) {
+      if (meu !== pedidoDaListaRef.current) return;
       console.error('Erro ao carregar custos:', error);
       setCustos([]);
     }
@@ -262,7 +278,9 @@ const CustosViagens = () => {
     }
   };
 
-  const filtrarClientes = (listaClientes, busca) => {
+  const filtrarClientes = (listaClientes, buscaDigitada) => {
+    // Etapa 159 (RN-159.02, Fase 2 I3): aparado, como no servidor — "acme " nao some das sugestoes que o servidor devolveu
+    const busca = (buscaDigitada || '').trim();
     if (!busca) {
       setClientesFiltrados(listaClientes.slice(0, 50)); // Limitar a 50 para performance
       return;

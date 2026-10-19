@@ -15816,6 +15816,16 @@ app.get('/api/custos-viagens', authenticateToken, exigirComercialNasPropostas, (
     query += ' AND cv.codigo_visita LIKE ?';
     params.push(`%${codigo_visita}%`);
   }
+
+  // Etapa 159 (RN-159.03, C386): a busca de texto da tela ("por código, cliente ou destino") — o codigo, o cliente principal, um cliente
+  // adicional da viagem, o destino e a cidade do destino, nas tres formas (RN-159.02). Antes a tela mandava o texto como codigo_visita.
+  const buscaCv = condicaoDeBusca(['cv.codigo_visita', 'c.razao_social', 'c.nome_fantasia', 'cv.destino', 'cv.destino_cidade'], req.query.busca);
+  if (buscaCv.sql) {
+    const buscaAd = condicaoDeBusca(['ca.razao_social', 'ca.nome_fantasia'], req.query.busca);
+    query += ` AND (${buscaCv.sql} OR EXISTS (SELECT 1 FROM viagem_clientes vb JOIN clientes ca ON ca.id = vb.cliente_id
+      WHERE vb.custo_viagem_id = cv.id AND ${buscaAd.sql}))`;
+    params.push(...buscaCv.params, ...buscaAd.params);
+  }
   
   if (created_by) {
     query += ' AND cv.created_by = ?';
