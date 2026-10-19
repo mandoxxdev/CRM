@@ -58,10 +58,12 @@ async function subir(extraEnv = {}) {
   const env = { ...process.env };
   for (const k of ['NODE_ENV', 'NODE_OPTIONS', 'RUN_ALL_GUARDA_EXIT', 'PORT', 'CRM_DATA_DIR', 'JWT_SECRET', 'API_URL',
     'SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD', 'FALHA_SQL_INJETADA', 'FALHA_SQL_MSG', 'FALHA_SQL_METODOS', 'FALHA_SQL_PULAR', 'FALHA_SQL_MSGS', 'PROPOSTAS_PORTAO_DE_MODULO', 'RATE_LIMIT_WINDOW_MS']) delete env[k];
-  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000' }, extraEnv);
+  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000',
+    CAMADAS_SAIDA: path.join(pasta, 'camadas.json'), CAMADAS_AMOSTRAS: JSON.stringify(AMOSTRAS_DAS_CAMADAS) }, extraEnv);
   const out = fs.openSync(logArq, 'a');
   saiu = null;
   const preload = ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js')];
+  preload.push('-r', path.join(__dirname, '..', 'helpers', 'despejaCamadasDoExpress.js')); // Fase 5 r3 A1: as camadas do Express
   if (extraEnv.FALHA_SQL_INJETADA) preload.push('-r', path.join(__dirname, '..', 'helpers', 'falhaSqlInjetada.js'));
   const marcas = fs.existsSync(logArq) ? (fs.readFileSync(logArq, 'utf8').match(/Banco de dados totalmente inicializado/g) || []).length : 0;
   filho = spawn(process.execPath, [...preload, 'index.js'], {
@@ -123,11 +125,22 @@ const DEZENOVE_DEF = [
 ];
 const achar = ([m, r]) => (TODOS.find((x) => x.metodo === m && x.rota === r) || { metodo: m, rota: r, resto: '(nao registrada)', pos: -1 });
 const DEZENOVE = DEZENOVE_DEF.map(achar);
+// Fase 5 r3 A1/A6: as amostras que o preload despeja — cada uma das 19 instanciada, e caminhos que nenhuma das 19 atende (um registro
+// escondido que os atendesse apareceria em `rotas`), em verbos que a tela nao usa
+const instancia = (rota) => rota.replace(':cliente_id', '7').replace(':anexo_id', '8').replace(':id', '9');
+const NEUTRO = '/api/zz-neutro-152';
+const EXTRAS = [`${B}/exportar`, `${B}/9/exportar`, `${B}/a/b/c`, `${B}/a/b/c/d`, '/API/CUSTOS-VIAGENS/9', `${B}.json`];
+const AMOSTRAS_DAS_CAMADAS = [
+  ...DEZENOVE_DEF.map(([m, r]) => [m, instancia(r)]), ['GET', NEUTRO],
+  ...EXTRAS.flatMap((c) => ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'SEARCH'].map((m) => [m, c])),
+  ...['PATCH', 'SEARCH', 'PROPFIND'].flatMap((m) => [[m, B], [m, `${B}/9`]]),
+];
 
 function caminhoDe(r) {
   // o DELETE do custo vai num custo virgem: o editado ou o autorizado sem regras nao apaga (500 de chave estrangeira — C359, de antes)
   const idDoCusto = r.metodo === 'DELETE' && r.rota === `${B}/:id` ? ctx.apagar : ctx.custo;
   let u = r.rota.replace(':cliente_id', String(ctx.cliente)).replace(':anexo_id', String(ctx.anexo)).replace(':id', String(idDoCusto));
+  if (r.rota.endsWith('/clientes-proximos/:cliente_id')) u += '?raio_km=100'; // a tela manda sempre (Fase 5 r3 A4)
   if (r.rota.endsWith('/calcular-rota')) u += '?destino_cidade=Campinas&destino_estado=SP&tipo_viagem=ida_e_volta&numero_pessoas=1';
   if (r.rota === B && r.metodo === 'GET') u += `?cliente_id=${ctx.cliente}&status_aprovacao=pendente`;
   return u;
@@ -211,6 +224,7 @@ test('[RN-152.01/02, C350] fonte: as 19 com o exigirComercialNasPropostas como 2
   const { fora, vistos } = regua.registrosForaDoIndex(/["'`]\/(api\/)?custos-viagens/i);
   assert.deepStrictEqual(fora, [], 'rota registrada fora do index.js escaparia desta regua');
   assert.ok(vistos.includes(path.join('routes', 'almoxarifado.js')) && vistos.includes(path.join('services', 'portaoDasPropostas.js')), 'a varredura nao enxerga routes/ ou services/');
+  assert.ok(['routes/compras/', 'services/almoxarifado/', 'config/'].every((d) => vistos.some((v) => v.startsWith(path.join(...d.split('/').filter(Boolean)) + path.sep))), 'a varredura nao desce nas subpastas (Fase 5 r3 A5)');
   assert.ok(!/app\.use\(\s*\[?\s*["'`]\/(api\/)?custos-viagens/i.test(FONTE), 'um app.use no prefixo atenderia antes do portao');
   const sem = DEZENOVE.filter((r) => !r.resto.startsWith('authenticateToken, exigirComercialNasPropostas, '))
     .map((r) => `${r.metodo} ${r.rota}: ${r.resto.slice(0, 80)}`);
@@ -223,6 +237,70 @@ test('[RN-152.01/02, C350] fonte: as 19 com o exigirComercialNasPropostas como 2
   assert.ok(porId > 0 && achar(['GET', `${B}/resumo`]).pos < porId, 'o resumo depois do /:id');
 });
 
+// ── Fase 5 r3 A1/A6: as camadas do Express de verdade ─────────────────────────────────────
+test('[RN-152.01, Fase 5 r3 A1/A6] as camadas do Express montado: so as 19 atendem /api/custos-viagens*, cada uma com o login e o portao do Comercial antes de tudo, nenhum middleware so delas, nenhum app.param', () => {
+  const arq = path.join(pasta, 'camadas.json');
+  assert.ok(fs.existsSync(arq), 'o preload nao despejou as camadas');
+  const cam = JSON.parse(fs.readFileSync(arq, 'utf8'));
+  assert.ok(!cam.erro, `o despejo falhou: ${cam.erro}`);
+  assert.deepStrictEqual(cam.params, [], 'um app.param roda antes do login e do portao de toda rota com aquele parametro');
+  // toda rota (em qualquer verbo, de qualquer arquivo, com qualquer forma de registro) que casa uma amostra e uma das 19
+  assert.deepStrictEqual(cam.rotas, DEZENOVE_DEF.map(([m, r]) => `${m.toLowerCase()} ${r}`).sort(),
+    'uma rota a mais atende um caminho /api/custos-viagens* (registrada por uma forma que a regua do fonte nao le?)');
+  const neutro = cam.despacho.find((d) => d.caminho === NEUTRO);
+  const mwsNeutro = neutro.out.filter((o) => o.tipo === 'mw').map((o) => o.nome);
+  assert.ok(neutro && !neutro.atendida && mwsNeutro.includes('authenticateToken') === false && mwsNeutro.length >= 3, `o caminho neutro: ${JSON.stringify(neutro).slice(0, 300)}`);
+  const errados = [];
+  DEZENOVE_DEF.forEach(([m, r]) => {
+    const d = cam.despacho.find((x) => x.metodo === m && x.caminho === instancia(r));
+    const rota = d && d.out.find((o) => o.tipo === 'rota');
+    if (!d || !d.atendida || !rota || rota.caminho !== r) { errados.push(`${m} ${r}: atendida por ${rota ? rota.caminho : 'ninguem'}`); return; }
+    if (rota.handles[0] !== 'authenticateToken' || rota.handles[1] !== 'portao:comercial') errados.push(`${m} ${r}: ${rota.handles.slice(0, 3).join(', ')}`);
+    // os middlewares que rodam antes sao os de todo pedido (os mesmos, na mesma ordem, do caminho neutro) — nenhum pendurado so no prefixo
+    const mws = d.out.filter((o) => o.tipo !== 'rota').map((o) => (o.tipo === 'mw' ? o.nome : `router:${o.nome}@${o.em}`));
+    if (JSON.stringify(mws) !== JSON.stringify(mwsNeutro.slice(0, mws.length)) || d.out.some((o) => o.tipo === 'router')) errados.push(`${m} ${r}: middlewares ${mws.join(' > ')}`);
+  });
+  assert.deepStrictEqual(errados, []);
+  // os caminhos que nenhuma das 19 atende, em qualquer verbo, nao sao atendidos por ninguem
+  const atendidosAMais = cam.despacho.filter((d) => d.caminho !== NEUTRO && d.atendida && !DEZENOVE_DEF.some(([m, r]) => m === d.metodo && instancia(r) === d.caminho))
+    .map((d) => `${d.metodo} ${d.caminho} -> ${d.out.find((o) => o.tipo === 'rota').caminho}`);
+  // (o /:id atende os caminhos de um segmento — /API/CUSTOS-VIAGENS/9 e o mesmo GET /:id: o Express nao diferencia a caixa)
+  assert.deepStrictEqual(atendidosAMais.filter((x) => !/^(GET|PUT|DELETE) \/API\/CUSTOS-VIAGENS\/9 -> \/api\/custos-viagens\/:id$/.test(x)
+    && !/^(GET|PUT|DELETE) \/api\/custos-viagens\/exportar -> \/api\/custos-viagens\/:id$/.test(x)
+    && !/^GET \/api\/custos-viagens\.json -> \/api\/custos-viagens$/.test(x)), [], 'um caminho que nenhuma das 19 atende foi atendido');
+});
+
+// ── Fase 5 r3 A5: o controle positivo do proprio helper, sobre fontes sinteticas ───────────
+test('[Fase 5 r3 A5] o helper da regua do fonte acusa cada forma que promete ver (montado, receptor qualquer, app[verbo], identificador, .cjs/.mjs, arquivo com ponto, subpasta, caixa, duplicado) — e nao acusa o montado de outro prefixo', () => {
+  const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'e152-regua-'));
+  try {
+    const escreve = (rel, txt) => { fs.mkdirSync(path.dirname(path.join(raiz, rel)), { recursive: true }); fs.writeFileSync(path.join(raiz, rel), txt); };
+    escreve('index.js', "app.get('/api/custos-viagens', authenticateToken, h);\n");
+    escreve(path.join('a', 'montado.js'), "meuRouter.get('/api/cust' + 'os-viagens/x', h);\n");
+    escreve(path.join('a', 'template.mjs'), 'rotas.post(`/api/custos-viagens/${x}`, h);\n');
+    escreve(path.join('b', '.oculto.cjs'), "app['post']('/x', h);\n");
+    escreve(path.join('c', 'd', 'ident.js'), 'router.get(CAMINHO, h);\n');
+    escreve('dup.js', 'app.get(CAMINHO, h);\napp.get(CAMINHO, h);\n');
+    escreve('fora.js', "app.get('/API/Custos-Viagens/y', h);\n");
+    escreve('outro.js', "app.get('/api/frotas/' + base, h);\nr.get(`/api/producao/${base}`, h);\n");
+    escreve('maiusc.js', "rotas.get('/API/Custos-Viagens/' + x, h);\n"); // a caixa do montado (r3 S24)
+    escreve('grande.js', `// ${'x'.repeat(6000)}\napp.get('/api/custos-viagens/z', h);\n`); // o registro depois dos 4 KB (r3 S26)
+    escreve(path.join('node_modules', 'x.js'), 'app.get(CAMINHO, h);\n'); // pulado de proposito
+    const achados = regua.registrosNaoLiterais([B], { raiz });
+    assert.deepStrictEqual(achados, [
+      `${path.join('a', 'montado.js')}: meuRouter.get('/api/cust' + 'os-viagens/x', h);`,
+      `${path.join('a', 'template.mjs')}: rotas.post(\`/api/custos-viagens/\${x}\`, h);`,
+      `${path.join('b', '.oculto.cjs')}: app['post']('/x', h);`,
+      `${path.join('c', 'd', 'ident.js')}: router.get(CAMINHO, h);`,
+      'dup.js: app.get(CAMINHO, h);', 'dup.js: app.get(CAMINHO, h);',
+      "maiusc.js: rotas.get('/API/Custos-Viagens/' + x, h);",
+    ].sort());
+    const { fora, vistos } = regua.registrosForaDoIndex(/["'`]\/(api\/)?custos-viagens/i, { raiz });
+    assert.deepStrictEqual(fora.sort(), [path.join('a', 'template.mjs'), 'fora.js', 'grande.js', 'maiusc.js'].sort());
+    assert.ok(!vistos.includes('index.js') && vistos.includes(path.join('b', '.oculto.cjs')) && !vistos.some((v) => v.startsWith('node_modules')), JSON.stringify(vistos));
+  } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
+});
+
 // ── RN-152.01: pela rota, cada uma das 19 ─────────────────────────────────────────────────
 test('[RN-152.01, C350] o usuario que a tela barra do Comercial (so a direta do Almoxarifado) toma 403 em cada uma das 19 — e nada muda, nem no disco; a lista de clientes ele le', async () => {
   const b = ctx.u.soAlmox;
@@ -232,20 +310,27 @@ test('[RN-152.01, C350] o usuario que a tela barra do Comercial (so a direta do 
   assert.ok(arquivos0.some((a) => /comprovante_/.test(a)), 'a pasta nao tem o comprovante do preparo (o retrato do disco nao veria nada)');
   assert.deepStrictEqual(await negados(b.id), [], 'o usuario barrado ja tinha log');
   const errados = [];
+  let chamadas = 0;
   for (const r of DEZENOVE) {
-    const [s, x] = await chamar(r, b.T);
-    if (s !== 403 || JSON.stringify(x) !== JSON.stringify(NEGADO_COM)) errados.push(`${r.metodo} ${r.rota}: ${s} ${JSON.stringify(x).slice(0, 80)}`);
+    // com a query que a tela manda e, quando ha query, tambem sem ela (Fase 5 r3 A4: um portao que so abrisse com um filtro)
+    const caminhos = [caminhoDe(r), ...(caminhoDe(r).includes('?') ? [caminhoDe(r).split('?')[0]] : [])];
+    for (const c of caminhos) {
+      const [s, x] = await cru(r.metodo, c, b.T, corpoDe(r));
+      chamadas++;
+      if (s !== 403 || JSON.stringify(x) !== JSON.stringify(NEGADO_COM)) errados.push(`${r.metodo} ${c}: ${s} ${JSON.stringify(x).slice(0, 80)}`);
+    }
   }
   assert.deepStrictEqual(errados, []);
+  assert.strictEqual(chamadas, 22, 'as 19 e as 3 com query sem ela');
   await pausa(1500);
   assert.strictEqual(await retrato(), antes, 'uma rota barrada mudou um custo, um anexo, o historico, os clientes da viagem ou o log de autorizacao');
   assert.deepStrictEqual(arquivosDaPasta(), arquivos0, 'o comprovante do barrado chegou ao disco');
-  assert.deepStrictEqual(await negados(b.id), [{ modulo: 'comercial', nome_modulo: 'Comercial', n: 19 }], 'cada 403 registra o acesso negado no log, com o modulo do portao');
+  assert.deepStrictEqual(await negados(b.id), [{ modulo: 'comercial', nome_modulo: 'Comercial', n: 22 }], 'cada 403 registra o acesso negado no log, com o modulo do portao');
   // a metade positiva: a lista de clientes (aberta desde a 151 — o Almoxarifado a le) — sem log novo
   const [sc, cl] = await j('GET', '/clientes', b.T);
   assert.ok(sc === 200 && cl.some((c) => c.id === ctx.cliente), `lista de clientes: ${sc} ${JSON.stringify(cl).slice(0, 120)}`);
   await pausa(300);
-  assert.deepStrictEqual(await negados(b.id), [{ modulo: 'comercial', nome_modulo: 'Comercial', n: 19 }], 'a lista de clientes registrou acesso negado');
+  assert.deepStrictEqual(await negados(b.id), [{ modulo: 'comercial', nome_modulo: 'Comercial', n: 22 }], 'a lista de clientes registrou acesso negado');
 });
 
 // ── as metades positivas, em fluxo, pela rota (o gesto da tela, um depois do outro) ─────────
@@ -320,6 +405,10 @@ test('[RN-152.01/02, integracao] o vendedor (so o Comercial) faz a viagem inteir
   const conferido = (await all('SELECT COUNT(*) AS n, SUM(total_custo) AS s FROM custos_viagens'))[0];
   assert.deepStrictEqual([sr1, r1.total_viagens, r1.total_custo_geral], [200, conferido.n, conferido.s], `RN-152.02 o resumo depois: ${JSON.stringify(r1)}`);
   assert.strictEqual(r1.total_viagens, r0.total_viagens + 2, 'o resumo nao contou o lancado e o duplicado');
+  // Fase 5 r3 A2: os quatro cartoes da tela, contra o banco
+  const cartoes = (await all('SELECT AVG(total_custo) AS m, COUNT(DISTINCT cliente_id) AS c FROM custos_viagens'))[0];
+  assert.deepStrictEqual([r1.custo_medio_viagem, r1.clientes_visitados], [cartoes.m, cartoes.c], `RN-152.02 o custo medio e os clientes visitados: ${JSON.stringify(r1)}`);
+  assert.ok(cartoes.c >= 1 && cartoes.c < r1.total_viagens, 'o cenario nao distingue clientes visitados de viagens (sem DISTINCT daria o mesmo)');
   // apaga o duplicado (sem historico nem log); o lancado, editado e autorizado sem regras, NAO apaga — C359, de antes (a chave estrangeira
   // do historico e do log de autorizacao); o teste prende o que e hoje, para a mudanca ser vista
   ok(await j('DELETE', `/custos-viagens/${dup[1].id}`, u.T));
@@ -385,9 +474,19 @@ test('[RN-152.03] PROPOSTAS_PORTAO_DE_MODULO=desligado: as 19 abrem ao barrado e
     for (const u of [ctx.u.grupoAlmox, b]) {
       Object.assign(ctx, await custoComComprovante(`DESLIGADO 152 ${u.nome}`));
       const arquivoDoAnexo = (await all('SELECT nome_arquivo FROM custos_viagens_anexos WHERE id = ?', [ctx.anexo]))[0].nome_arquivo;
+      const resp = {};
       for (const r of DEZENOVE) {
-        const [s, x] = await chamar(r, u.T);
+        const [s, x, buf] = await chamar(r, u.T);
+        resp[`${r.metodo} ${r.rota}`] = [x, buf];
         if (s !== 200) errados.push(`${u.nome} ${r.metodo} ${r.rota}: ${s} ${JSON.stringify(x).slice(0, 80)}`);
+      }
+      // Fase 5 r3 A3: as leituras do desligado trazem o que a tela le (nao so 200)
+      const lido = (k) => resp[k][0];
+      if (!(lido(`GET ${B}/:id`).id === ctx.custo && Array.isArray(lido(`GET ${B}`)) && lido(`GET ${B}`).some((x) => x.id === ctx.custo)
+        && CAMPOS_RESUMO.every((k) => k in lido(`GET ${B}/resumo`)) && resp[`GET ${B}/:id/comprovante/:anexo_id`][1].equals(COMPROVANTE)
+        && lido(`GET ${B}/:id/comprovantes`).some((x) => x.id === ctx.anexo) && lido(`GET ${B}/:id/historico`).length === 1
+        && lido(`GET ${B}/clientes-proximos/:cliente_id`).some((x) => x.id === ctx.cliente2) && lido(`GET ${B}/analise/cliente`).some((x) => x.cliente_id === ctx.cliente))) {
+        errados.push(`${u.nome}: uma leitura do desligado respondeu 200 sem o conteudo`);
       }
       feitos.push({ u, custo: ctx.custo, anexo: ctx.anexo, apagar: ctx.apagar, arquivoDoAnexo });
     }
@@ -402,6 +501,7 @@ test('[RN-152.03] PROPOSTAS_PORTAO_DE_MODULO=desligado: as 19 abrem ao barrado e
       assert.ok(hist.length === 1 && /DESTINO DO BARRADO \d+/.test(hist[0].dados_novos), `${u.nome}: o PUT do desligado respondeu 200 sem gravar`);
       const anexos = await all("SELECT nome_arquivo FROM custos_viagens_anexos WHERE custo_viagem_id = ? AND nome_original = 'barrado152.txt'", [custo]);
       assert.ok(anexos.length === 1 && arquivosDaPasta().some((a) => a.endsWith(anexos[0].nome_arquivo)), `${u.nome}: o comprovante do desligado nao chegou ao disco`);
+      assert.strictEqual((await all('SELECT status_aprovacao FROM custos_viagens WHERE id = ?', [custo]))[0].status_aprovacao, 'aprovado', `${u.nome}: o aprovar do desligado respondeu 200 sem gravar`);
       const lancados = await all("SELECT id, created_by FROM custos_viagens WHERE destino LIKE 'DESTINO DO BARRADO %' AND created_by = ?", [u.id]);
       assert.strictEqual(lancados.length, 2, `${u.nome}: o POST e o duplicar do desligado nao lancaram (o duplicado copia o destino ja editado pelo PUT)`);
     }

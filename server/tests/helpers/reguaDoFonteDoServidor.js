@@ -14,6 +14,9 @@
  *                                             uma funcao do texto), e todos os
  *                                             que a varredura leu (para provar que ela enxerga routes/ e services/)
  *
+ * `raiz` (opcional) troca a pasta varrida — o controle positivo do proprio helper (custosViagensPortao) roda sobre fontes sinteticas.
+ * Os registros que o texto nao ve (receptor apelidado, app[verbo], .call, o verbo search, arquivo sem extensao ou em tests/) ficam
+ * com a leitura das camadas do Express de verdade (despejaCamadasDoExpress.js).
  * A varredura le .js, .cjs e .mjs, inclusive o arquivo que comeca com ponto, e pula node_modules, tests, data, uploads, backups e .git.
  */
 const fs = require('fs');
@@ -22,17 +25,17 @@ const path = require('path');
 const SERVER_DIR = path.join(__dirname, '..', '..');
 const PULAR = ['node_modules', 'tests', 'data', 'uploads', 'backups', '.git'];
 
-function arquivosDoServidor() {
+function arquivosDoServidor(raiz = SERVER_DIR) {
   const out = [];
   const andar = (d) => {
     for (const e of fs.readdirSync(d, { withFileTypes: true })) {
       if (PULAR.includes(e.name)) continue;
       const p = path.join(d, e.name);
       if (e.isDirectory()) andar(p);
-      else if (/\.(c|m)?js$/.test(e.name)) out.push({ rel: path.relative(SERVER_DIR, p), src: fs.readFileSync(p, 'utf8') });
+      else if (/\.(c|m)?js$/.test(e.name)) out.push({ rel: path.relative(raiz, p), src: fs.readFileSync(p, 'utf8') });
     }
   };
-  andar(SERVER_DIR);
+  andar(raiz);
   return out;
 }
 
@@ -46,11 +49,11 @@ const REGISTROS_NAO_LITERAIS_MEDIDOS = [
 
 const canon = (s) => s.toLowerCase().replace(/^\/api(?=\/)/, '');
 
-function registrosNaoLiterais(caminhosProtegidos) {
+function registrosNaoLiterais(caminhosProtegidos, { raiz } = {}) {
   if (!Array.isArray(caminhosProtegidos) || caminhosProtegidos.length === 0) throw new Error('registrosNaoLiterais: diga os caminhos protegidos');
   const protegidos = caminhosProtegidos.map((c) => canon(c.replace(/\/+$/, '')) + '/');
   const achados = [];
-  for (const { rel, src } of arquivosDoServidor()) {
+  for (const { rel, src } of arquivosDoServidor(raiz)) {
     const linhas = src.split('\n');
     const linhaDe = (i) => linhas[src.slice(0, i).split('\n').length - 1].trim();
     const res = [
@@ -70,9 +73,9 @@ function registrosNaoLiterais(caminhosProtegidos) {
   return achados.sort();
 }
 
-function registrosForaDoIndex(re) {
+function registrosForaDoIndex(re, { raiz } = {}) {
   const fora = []; const vistos = [];
-  for (const { rel, src } of arquivosDoServidor()) {
+  for (const { rel, src } of arquivosDoServidor(raiz)) {
     if (rel === 'index.js') continue;
     vistos.push(rel);
     const casa = typeof re === 'function' ? re(src) : re.test(src);

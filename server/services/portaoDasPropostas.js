@@ -59,7 +59,9 @@ function criarPortaoDasPropostas({ getDb, registrar, desligado }) {
   function exigir(modulos, opcoes = {}) {
     const mods = Array.isArray(modulos) ? modulos.slice() : [modulos];
     const caminho = opcoes.tambemAdminDoModuloCom || null;
-    return (req, res, next) => {
+    // Etapa 152 (Fase 5 r3 A1): o portao leva os modulos na funcao — o teste le as camadas do Express de verdade
+    // (tests/helpers/despejaCamadasDoExpress.js) e reconhece o portao de cada rota por eles. Nao muda a decisao.
+    const portao = (req, res, next) => {
       if (desligado) return next();
       if (bypassModuleRestrictions(req.user)) return next();
       getDb().all(SQL_LINHAS_DA_TELA, [req.user.id, req.user.id], (err, linhas) => {
@@ -75,6 +77,9 @@ function criarPortaoDasPropostas({ getDb, registrar, desligado }) {
         return res.status(403).json({ error: 'Acesso negado ao módulo', modulo: mods.length === 1 ? mods[0] : mods });
       });
     };
+    portao.modulosDoPortao = mods.slice();
+    portao.caminhoDoPortao = caminho;
+    return portao;
   }
   return { exigir };
 }
