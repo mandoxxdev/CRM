@@ -7,6 +7,10 @@ import { toast } from 'react-toastify';
 import { FiX, FiSave, FiChevronDown, FiChevronUp } from 'react-icons/fi';
 import './Operacional.css';
 import './OSForm.css';
+import { opcaoQueCasa, precisaOpcaoAMais } from '../../utils/opcaoDoSelect';
+
+const TIPOS_OS = ['fabricacao', 'manutencao', 'montagem', 'reparo'];
+const PRIORIDADES_OS = ['baixa', 'normal', 'alta', 'urgente'];
 
 const OSForm = ({ os, onClose }) => {
   const { user } = useAuth();
@@ -159,8 +163,10 @@ const OSForm = ({ os, onClose }) => {
         proposta_id: os.proposta_id || null,
         projeto_id: os.projeto_id || '',
         cliente_id: os.cliente_id || '',
-        tipo_os: os.tipo_os || 'fabricacao',
-        prioridade: os.prioridade || 'normal',
+        // Etapa 160 (RN-160.08, Fase 2 I1): o gravado e MANUTENCAO/ALTA (o servidor poe em maiusculas) e as opcoes sao minusculas —
+        // sem casar, o select mostrava a primeira opcao ("Fabricação", "Baixa") e quem "corrigia" gravava errado
+        tipo_os: opcaoQueCasa(os.tipo_os, TIPOS_OS) || 'fabricacao',
+        prioridade: opcaoQueCasa(os.prioridade, PRIORIDADES_OS) || 'normal',
         status: os.status || 'pendente',
         data_abertura: os.data_abertura ? os.data_abertura.split('T')[0] : new Date().toISOString().split('T')[0],
         data_prevista: os.data_prevista ? os.data_prevista.split('T')[0] : '',
@@ -375,6 +381,7 @@ const OSForm = ({ os, onClose }) => {
                   <option value="manutencao">Manutenção</option>
                   <option value="montagem">Montagem</option>
                   <option value="reparo">Reparo</option>
+                  {precisaOpcaoAMais(formData.tipo_os, TIPOS_OS) && <option value={formData.tipo_os}>{formData.tipo_os}</option>}
                 </select>
               </div>
               <div className="form-group">
@@ -387,6 +394,7 @@ const OSForm = ({ os, onClose }) => {
                   <option value="normal">Normal</option>
                   <option value="alta">Alta</option>
                   <option value="urgente">Urgente</option>
+                  {precisaOpcaoAMais(formData.prioridade, PRIORIDADES_OS) && <option value={formData.prioridade}>{formData.prioridade}</option>}
                 </select>
               </div>
               <div className="form-group">

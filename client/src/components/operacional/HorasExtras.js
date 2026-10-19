@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import { FiPlus, FiSearch, FiCheckCircle, FiXCircle, FiFilter } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import HoraExtraForm from './HoraExtraForm';
+import { casaBusca } from '../../utils/buscaNoNavegador';
 import './Operacional.css';
 
 const HorasExtras = () => {
@@ -16,7 +17,8 @@ const HorasExtras = () => {
 
   useEffect(() => {
     loadHorasExtras();
-  }, [search, filterStatus]);
+  // Etapa 160 (RN-160.05, C394): a busca filtra no navegador (abaixo) — digitar nao recarrega a lista
+  }, [filterStatus]);
 
   const loadHorasExtras = async () => {
     try {
@@ -46,6 +48,9 @@ const HorasExtras = () => {
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
   };
+
+  // Etapa 160 (RN-160.05, C394): a caixa Buscar nao ia a lugar nenhum — filtra a lista carregada nas colunas mostradas
+  const visiveis = horasExtras.filter((he) => casaBusca(search, he.colaborador_nome, he.tipo_hora_extra));
 
   if (showForm) {
     return <HoraExtraForm horaExtra={selectedHoraExtra} onClose={() => { setShowForm(false); setSelectedHoraExtra(null); loadHorasExtras(); }} />;
@@ -88,10 +93,10 @@ const HorasExtras = () => {
               </tr>
             </thead>
             <tbody>
-              {horasExtras.length === 0 ? (
+              {visiveis.length === 0 ? (
                 <tr><td colSpan="7" className="no-data">Nenhuma hora extra encontrada</td></tr>
               ) : (
-                horasExtras.map((he) => (
+                visiveis.map((he) => (
                   <tr key={he.id}>
                     <td><strong>{he.colaborador_nome}</strong></td>
                     <td>{new Date(he.data).toLocaleDateString('pt-BR')}</td>

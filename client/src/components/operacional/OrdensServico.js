@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
@@ -21,18 +21,24 @@ const OrdensServico = () => {
     loadOS();
   }, [search, filterStatus, filterPrioridade]);
 
+  // Etapa 160 (RN-160.01, C390): com o filtro de prioridade valendo no servidor, a resposta de um pedido anterior que chega depois
+  // trocaria a lista pela do filtro velho — so a do ultimo pedido mexe na lista (o contador fica aqui dentro: o excluir tambem chama)
+  const pedidoRef = useRef(0);
   const loadOS = async () => {
+    const meu = ++pedidoRef.current;
     try {
       setLoading(true);
       const response = await api.get('/operacional/ordens-servico', {
         params: { search, status: filterStatus, prioridade: filterPrioridade }
       });
+      if (meu !== pedidoRef.current) return;
       setOrdensServico(response.data || []);
     } catch (error) {
+      if (meu !== pedidoRef.current) return;
       console.error('Erro ao carregar OS:', error);
       toast.error('Erro ao carregar ordens de serviço');
     } finally {
-      setLoading(false);
+      if (meu === pedidoRef.current) setLoading(false);
     }
   };
 
@@ -171,7 +177,8 @@ const OrdensServico = () => {
                     </td>
                     <td>{os.tipo_os || '-'}</td>
                     <td>
-                      <span className={`priority-badge priority-${os.prioridade || 'normal'}`}>
+                      {/* Etapa 160 (Fase 2 I1): o gravado e ALTA; o CSS tem .priority-alta */}
+                      <span className={`priority-badge priority-${String(os.prioridade || 'normal').trim().toLowerCase()}`}>
                         {os.prioridade || 'Normal'}
                       </span>
                     </td>

@@ -9,6 +9,7 @@ import './Producao.css';
 const ParadasProducao = () => {
   const [meta, setMeta] = useState(null);
   const [paradas, setParadas] = useState([]);
+  const [ativas, setAtivas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({ maquina_id: '', motivo_id: '', motivo_texto: '', op_id: '', observacoes: '' });
@@ -22,6 +23,9 @@ const ParadasProducao = () => {
         api.get('/producao/paradas', { params: { em_andamento: '1' } }),
       ]);
       setMeta(m);
+      // Etapa 160 (RN-160.05, C394): as em andamento vem do pedido filtrado — antes ele era descartado e elas saiam do historico,
+      // que o servidor corta nas 500 mais recentes (uma parada aberta mais antiga sumia do quadro e nao dava para encerrar)
+      setAtivas(Array.isArray(res.data) ? res.data : []);
       const hist = await api.get('/producao/paradas');
       setParadas(hist.data || []);
     } catch (e) {
@@ -68,7 +72,6 @@ const ParadasProducao = () => {
     }
   };
 
-  const ativas = paradas.filter((p) => !p.data_fim);
 
   return (
     <div className="producao-page">

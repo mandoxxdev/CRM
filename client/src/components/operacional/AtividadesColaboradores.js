@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import { FiPlus, FiSearch, FiFilter, FiPlay, FiCheckCircle, FiClock } from 'react-icons/fi';
 import { SkeletonTable } from '../SkeletonLoader';
 import AtividadeForm from './AtividadeForm';
+import { casaBusca } from '../../utils/buscaNoNavegador';
 import './Operacional.css';
 
 const AtividadesColaboradores = () => {
@@ -18,7 +19,8 @@ const AtividadesColaboradores = () => {
     loadAtividades();
     const interval = setInterval(loadAtividades, 30000); // Atualizar a cada 30s
     return () => clearInterval(interval);
-  }, [search, filterStatus]);
+  // Etapa 160 (RN-160.05, C394): a busca filtra no navegador (abaixo) — digitar nao recarrega a lista
+  }, [filterStatus]);
 
   const loadAtividades = async () => {
     try {
@@ -53,6 +55,9 @@ const AtividadesColaboradores = () => {
     if (!date) return '-';
     return new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   };
+
+  // Etapa 160 (RN-160.05, C394): a caixa Buscar nao ia a lugar nenhum — filtra a lista carregada nas colunas mostradas
+  const visiveis = atividades.filter((a) => casaBusca(search, a.colaborador_nome, a.tipo_atividade, a.descricao, a.numero_os));
 
   if (showForm) {
     return <AtividadeForm atividade={selectedAtividade} onClose={() => { setShowForm(false); setSelectedAtividade(null); loadAtividades(); }} />;
@@ -95,10 +100,10 @@ const AtividadesColaboradores = () => {
               </tr>
             </thead>
             <tbody>
-              {atividades.length === 0 ? (
+              {visiveis.length === 0 ? (
                 <tr><td colSpan="7" className="no-data">Nenhuma atividade encontrada</td></tr>
               ) : (
-                atividades.map((atividade) => (
+                visiveis.map((atividade) => (
                   <tr key={atividade.id}>
                     <td><strong>{atividade.colaborador_nome}</strong></td>
                     <td>{atividade.tipo_atividade}</td>
