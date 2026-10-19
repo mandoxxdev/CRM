@@ -388,6 +388,33 @@ projeto das listas, o vendedor seguindo o clique até as leituras da proposta, 1
 (o dono dos prefixos `/api/clientes` e `/api/projetos`: as listas com a cadeia nova nas camadas); `client/src/components/Notificacoes.test.js`
 (o clique e a rota `propostas/editar/:id` → `PropostaForm` no bloco `/comercial` do `App.js`).
 
+### A coordenada do endereço guardada no cadastro, o resumo, o filtro e o histórico dos custos de viagem (Etapa 158, C377, C378, C379, C380)
+
+Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa158-coordenada-guardada-resumo-e-historico-dos-custos.md`. Commits `f677e0a6`,
+`6f050dc9`, `af67f3c8` e `858055df` (a correção da revisão). Status: entregue; nenhum endpoint novo; contratos iguais (o resumo e a lista com
+os números certos; o filtro `tipo_viagem` passa a valer).
+
+- [x] **RN-158.01/02 (C377, B1009)** — `clientes.geo_lat`, `geo_lon`, `geo_termo`; `termoDaConsulta` (a mesma função da consulta e da
+  memória) e `coordenadaGuardada` em `server/services/coordenadas.js`; a rota `coordenadas-cliente` lê por `SELECT *`, responde a memória do
+  termo atual, senão consulta e grava **depois de responder**, sem `updated_at`, com `WHERE` no endereço, na cidade e no estado lidos; a falha
+  e o ponto fora da faixa não gravam (`coordenadaPlausivel`) — `f677e0a6`, `858055df`.
+- [x] **RN-158.03 (B1008)** — `semCoordenadaGuardada` em `GET /api/clientes` e `/api/clientes/:id`; `POST`/`PUT` já ignoravam (lista
+  branca) — `f677e0a6`.
+- [x] **RN-158.04** — as três colunas por `ALTER` encadeado no callback do `CREATE TABLE clientes`; provado em pasta vazia, sobre o banco
+  com o `CREATE` de antes, no segundo boot e com as `ALTER`s falhando (a rota segue sem memória) — `f677e0a6`, `858055df`.
+- [x] **RN-158.05 (C379, era D (157))** — o resumo por `LOWER(TRIM(tipo_viagem))` — `6f050dc9`, `858055df` (fixtures com espaço).
+- [x] **RN-158.06 (C380, B1010, era D (157))** — `mesmoValorDoCusto`: os nove campos de valor comparam o número (a régua do que o SQLite
+  grava como número; igualdade exata) — `af67f3c8`, `858055df` (a régua da Fase 2 M7 **estava estreita demais**: deixava *".5"* e *"1e3"*
+  como troca falsa — r1 M1; e a tolerância de 1e-9 escondia a troca mínima — r2 S1).
+- [x] **RN-158.07 (C378, achado na Fase 2)** — o filtro `tipo_viagem` do `GET /api/custos-viagens`, sem caixa e sem espaço — `6f050dc9`.
+- [ ] **Os clientes próximos com o ponto do endereço** — **fora**: continuam pela cidade (C383, de antes); usar a memória neles mudaria a
+  distância de todos os próximos — é decisão de regra, não conserto.
+
+Testes: `tests/api/coordenadasPrazo.api.test.js` (+10: a memória, a invalidação por cada campo e por fora, a falha, o lixo e o ponto
+absurdo, a corrida com endereço/cidade/estado, o banco preso, as listas e o `PUT` da tela), `tests/api/coordenadaGuardadaMigracao.api.test.js`
+(novo, 6: pasta vazia, banco antigo, segundo boot, o `UPDATE` que falha, as `ALTER`s que falham, a leitura que falha),
+`tests/api/custosViagensPortao.api.test.js` (+3: o resumo e o filtro com fixtures, o histórico, a régua do número).
+
 ### A edição do custo de viagem, os valores da rota e a localização pelo servidor (Etapa 157, C372, C374, C375, C376)
 
 Plano: `docs/superpowers/plans/2026-10-19-almoxarifado-etapa157-edicao-do-custo-de-viagem-e-cidades-do-client.md`. Commits `4c9de31d`, `00dbce2b`, `a04ab574`, `10b6f756` e `fab87f82` (a
@@ -405,8 +432,8 @@ correção da revisão). Status: entregue; nenhum endpoint novo nem mudado no co
 - [x] **C376 (Fase 5)** — `calcular-rota` compara o `tipo_viagem` sem caixa (o POST/PUT o gravam em maiúsculas); a edição o põe em
   minúsculas — `fab87f82`.
 - [ ] **O resumo por tipo** (`GET /api/custos-viagens/resumo`, `CASE WHEN tipo_viagem = 'ida'`) — **fora, de propósito**: nenhuma tela usa
-  `custo_ida`/`custo_volta`/`custo_ida_volta`; mudar a consulta mudaria números que ninguém vê (D (157)).
-- [ ] **A coordenada do endereço guardada** (C377) — **fora**: é do cadastro de clientes, e a frequência de consultas não mudou nesta etapa.
+  `custo_ida`/`custo_volta`/`custo_ida_volta`; mudar a consulta mudaria números que ninguém vê (D (157)). *(Feito na Etapa 158 — `6f050dc9`: o resumo dava 0 para todo custo da tela, **C379**.)*
+- [ ] **A coordenada do endereço guardada** (C377) — **fora**: é do cadastro de clientes, e a frequência de consultas não mudou nesta etapa. *(Feito na Etapa 158 — `f677e0a6`.)*
 
 Testes: `client/src/components/CustosViagensEdicao.test.js` (a tela com o `api.js` real e o adaptador falso: 32 cenários),
 `client/src/components/PreviewRota.test.js` (3, o `react-leaflet` simulado), `client/src/utils/valoresDaRota.test.js` (3),

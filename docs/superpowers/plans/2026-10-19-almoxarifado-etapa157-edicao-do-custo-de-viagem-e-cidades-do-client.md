@@ -269,7 +269,9 @@ sequência (sem executor paralelo: o custo de uma worktree a mais não se paga e
    guarda da elegibilidade) estava errada.
 3. **Paralelismo:** **0** galhos de código em paralelo (quatro tasks pequenas de uma tela e uma rota — o plano decidiu assim); **1** revisor na
    Fase 2 (antes do código), **3** em paralelo na Fase 5 sob a trava (o r3 em worktree própria).
-4. **Defeito que escapou:** *(preencher na Etapa 158)*.
+4. **Defeito que escapou:** **0** no que a 157 entregou (medido na Etapa 158: as três revisões da 158 passaram pela mesma tela e pelo mesmo
+   servidor e não acharam defeito da edição, dos valores da rota nem da localização). A 158 achou, **de antes**, na mesma tela, o filtro *Tipo de
+   viagem* que o servidor nem lia (**C378**) — a medição da 157 olhou a edição e as cidades, não os filtros da lista.
 
 ## Próxima tarefa detalhada — Etapa 158
 

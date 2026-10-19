@@ -11,13 +11,19 @@
 > do núcleo" — separá-la faria o laço ficar aberto em dois documentos que ninguém cruza. O título
 > deste arquivo continua dizendo "almoxarifado" por causa dos links que já apontam para ele.
 >
-> **Onde o desenvolvimento está (2026-10-19):** **Etapa 157 fechada** (consertos de tela nos **Custos de viagem** do Comercial, sem regra
+> **Onde o desenvolvimento está (2026-10-19):** **Etapa 158 fechada** (consertos técnicos nos **Custos de viagem** do Comercial, sem regra
+> de acesso nova: **o ponto do mapa do endereço do cliente fica guardado no cadastro** — a localização não consulta mais o serviço de mapas
+> da internet a cada abertura, só quando o endereço muda (**C377** resolvido, **B1008**, **B1009**); o filtro *Tipo de viagem* da lista
+> filtra (**C378**, novo e resolvido); o resumo por tipo conta o tipo gravado em maiúsculas (**C379**, novo e resolvido); o histórico do
+> custo não registra mais *"350 → 350.00"* (**C380**, novo e resolvido, **B1010**); **B1008** a **B1011**; os avisos novos **C381** a
+> **C383** (de antes)); a próxima é a **159** — ver "Onde estamos e o que vem a seguir".
+> *(Antes: **Etapa 157 fechada** (consertos de tela nos **Custos de viagem** do Comercial, sem regra
 > de acesso nova: **abrir um custo para editar não troca os valores gravados** — a rota recalculada vira sugestão, com o botão **Aplicar
 > Valores Sugeridos** (**C372** resolvido, **B1004**); o Aplicar e a confirmação da passagem aérea põem a taxa de embarque (**C374**, novo e
 > resolvido); a localização do cliente vem do servidor, sem a cópia da lista de cidades da tela (**C375**, novo e resolvido, **B1005**); o
 > custo de ida e volta não é mais recalculado como só ida (**C376**, novo e resolvido); a viagem fica com as regras do último cliente escolhido
 > (**B1006**); os *clientes próximos* na mesma cidade com e sem acento a 5/2 km; **B1004** a **B1007**; o aviso novo **C377** (de antes));
-> a próxima é a **158** — ver "Onde estamos e o que vem a seguir".
+> a próxima era a **158**.)*
 > *(Antes: **Etapa 156 fechada** (consertos técnicos, sem regra de acesso nova: **o pedido repetido
 > com o banco ocupado, a lista recusada que diz o motivo, e o prazo da consulta de endereço** — com o banco ocupado, o segundo pedido a uma
 > lista com outro filtro espera e repete em vez de falhar na hora (**C369** resolvido, **B1001**); as telas do Almoxarifado dizem por que a
@@ -3903,7 +3909,7 @@ Consulta e limpeza em `docs/compras-novidades-por-etapa.md`, **A9** (G16, Etapa 
 *"Nao foi possivel criar idx_categorias_almox_nome … ha categorias com nome repetido"*. Enquanto houver duplicata,
 Configurações → Categorias aceita nome repetido. (Fora da contagem do título: a consulta mora no documento de Compras.)
 
-### B. Decisões de negócio — B1 a B530 e B700 a B1007; as em aberto esperam você, as tomadas estão escritas com o descartado
+### B. Decisões de negócio — B1 a B530 e B700 a B1011; as em aberto esperam você, as tomadas estão escritas com o descartado
 
 *(**Atualizado em 2026-10-16 com as sete da Etapa 116 — B752 a B758.**)*
 
@@ -11207,6 +11213,32 @@ só da tela (`fab87f82`).
 **B1007 (NOVA, da Etapa 157) — a próxima etapa (158).** Ver a "próxima tarefa detalhada" no plano da Etapa 157. As decisões que esperam
 vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar.
 
+**B1008 (NOVA, da Etapa 158; do Comercial) — o ponto guardado do endereço do cliente não aparece nas listas de clientes.** O cadastro do
+cliente passou a guardar o ponto do mapa que o serviço de mapas devolveu para o endereço (**C377**). A lista de clientes (que também o
+Almoxarifado e o Operacional leem) e a ficha do cliente **não** o mostram: ele só sai pela localização dos custos de viagem, que exige o
+Comercial — a mesma régua de quem o produz. **Descartado:** (a) deixar sair nas listas — mudaria o que três módulos recebem, por um dado que
+nenhuma tela deles usa; (b) guardar numa tabela à parte — mais uma tabela para um dado que é do cliente. O que fica: o endereço continua nas
+listas, e dele o ponto se deduz. **Reversível:** `f677e0a6` (é tirar as três colunas da resposta das duas listas).
+
+**B1009 (NOVA, da Etapa 158; do Comercial) — a tela recebe a localização antes de o ponto ser guardado.** Quando o serviço de mapas
+responde, o servidor devolve o ponto à tela e só depois o grava no cadastro, sem esperar. Com o banco ocupado por outra gravação, a tela não
+fica esperando (a gravação espera sozinha); se a gravação falhar, o erro fica no registro do servidor e a próxima abertura consulta de novo.
+A gravação também não mexe na data de alteração do cliente (é memória, não edição) e só acontece se o endereço, a cidade e o estado ainda forem
+os que foram consultados. **Descartado:** esperar a gravação antes de responder — com o banco ocupado, a tela esperaria até 30 segundos por um
+dado que é só memória, e o prazo de 5 segundos da consulta (Etapa 156) perderia o sentido. **Reversível:** `f677e0a6`.
+
+**B1010 (NOVA, da Etapa 158; do Comercial) — o que é "o mesmo valor" no histórico de um custo de viagem.** Nos campos de valor (número de
+pessoas, distância, tempo, os quatro custos, o total e o custo sugerido), o histórico compara o **número**: o que o banco grava como o mesmo
+número é o mesmo valor (*"350"*, *"350.00"*, *" 350 "*, *".5"* e *"0.5"*, *"1e3"* e *"1000"*); vazio e nulo valem zero, como já valiam; a
+comparação é **exata** — qualquer diferença que o banco grave entra no histórico. Um texto que não é número (*"abc"*, *"0x3E8"*) compara como
+texto, como antes. **Descartado:** (a) a régua mais estreita da revisão do plano (só dígitos e ponto) — deixava *".5"* e *"1e3"* como troca
+falsa, e o banco os grava como número (revisão do código, r1); (b) uma tolerância de 0,000000001 — escondia do histórico uma troca que o banco
+grava (revisão do código, r2). **Custo declarado:** um total que muda só na última casa por arredondamento de soma aparece como alteração (é
+uma mudança do valor gravado, junto com a do custo que a causou). **Reversível:** `af67f3c8`, `858055df`.
+
+**B1011 (NOVA, da Etapa 158) — a próxima etapa (159).** Ver a "próxima tarefa detalhada" no plano da Etapa 158. As decisões que esperam
+vocês: as da **B957**, a **B988** e a **B989**; a **B1002** continua pedindo um olhar; a **B1008** a **B1010** são reversíveis.
+
 **B898 (NOVA, da Etapa 138) — a próxima etapa (139).** Ver a "próxima tarefa detalhada" no plano da Etapa 138. A **B853** (com a
 **C279**), a **B808**, a **B755**, a **B761**/**C239**, a **C224**, o resto da **C225**, a **C228**, a **C219**, a **C230**, o reparo da
 **C246**/**C247**, a tabela de conversões, o grupo acima de família, a régua do tempo de recebimento (letra **E**), a **C268**, a **C269** e
@@ -14427,12 +14459,38 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
      volta aberto para editar era recalculado como só ida.** O cadastro dos custos grava o tipo em maiúsculas (*IDA_E_VOLTA*) e o cálculo da
      rota só reconhecia o minúsculo: a sugestão saía como só ida (Curitiba: R$ 397,72 em vez de R$ 1.005,45), o seletor mostrava *"Ida"* e a
      data da volta sumia — e o Aplicar gravaria isso. Agora o cálculo compara sem maiúsculas e a edição mostra o tipo certo. *(O resumo por
-     tipo do servidor tem a mesma comparação; nenhuma tela usa esses totais — D (157).)*
-377. **NOVO (da revisão de permissão da Etapa 157; do Comercial, anterior a ela; lido no código e medido) — a localização do cliente com
+     tipo do servidor tem a mesma comparação; nenhuma tela usa esses totais — D (157). Resolvido na Etapa 158 — **C379**.)*
+377. **✅ RESOLVIDO NA ETAPA 158 (RN-158.01/02, B1009)** — o ponto que o serviço de mapas devolve para o endereço fica guardado no cadastro
+     do cliente e vale enquanto o endereço, a cidade e o estado não mudarem; a falha não é guardada. *O texto original, de antes da
+     correção:* **NOVO (da revisão de permissão da Etapa 157; do Comercial, anterior a ela; lido no código e medido) — a localização do cliente com
      endereço consulta o serviço de mapas a cada vez.** Não há memória das respostas: abrir a mesma tela cinco vezes com o mesmo cliente são
      cinco consultas ao serviço de mapas da internet (que tem limite de uso). A tela não multiplica as consultas (a Etapa 157 não mudou isso —
      o cliente sem endereço não consulta). **O que fazer:** nada no dia a dia; se o serviço começar a recusar, é isto. Candidata: guardar a
      coordenada do endereço no cadastro.
+378. **✅ NOVO E RESOLVIDO NA ETAPA 158 (RN-158.07; da revisão do plano da Etapa 158, do Comercial, anterior a ela; lido no código) — o
+     filtro "Tipo de viagem" da lista dos custos de viagem não filtrava nada.** A tela mandava a escolha (*"Ida"*, *"Volta"*, *"Ida e
+     Volta"*) e o servidor nem a lia: a lista voltava com todos os tipos. Agora filtra, sem diferença de maiúsculas nem de espaço nas pontas.
+379. **✅ NOVO E RESOLVIDO NA ETAPA 158 (RN-158.05; era a D (157)) — os totais por tipo do resumo dos custos de viagem davam zero.** O
+     cadastro grava o tipo em maiúsculas e o resumo comparava com minúsculas: o custo de ida, de volta e de ida e volta do resumo do servidor
+     ficavam em zero para todo custo lançado pela tela (só um legado em minúsculas contava). Nenhuma tela mostra esses totais. Agora cada
+     custo conta no seu tipo.
+380. **✅ NOVO E RESOLVIDO NA ETAPA 158 (RN-158.06, B1010; era a D (157)) — o histórico de um custo de viagem registrava trocas que não
+     aconteceram.** Atualizar depois do **Aplicar Valores Sugeridos** registrava *"350 → 350.00"* (o servidor comparava o texto), e uma
+     alteração inteira sem nenhuma mudança de valor. Agora os campos de valor comparam o número.
+381. **NOVO (da revisão do plano da Etapa 158; do Comercial, anterior a ela; lido no código) — cadastrar um cliente pela API devolve, na
+     resposta, tudo o que foi mandado.** A resposta do cadastro de cliente repete o corpo do pedido, inclusive campos que não foram gravados
+     (como o ponto do mapa). Nada disso é gravado (o cadastro grava só os campos dele). **O que fazer:** nada — é só o eco da resposta; quem
+     integrar pela API deve ler o cliente de novo para saber o que ficou.
+382. **NOVO (da revisão do plano da Etapa 158; do Comercial, anterior a ela; lido no código) — editar um custo de viagem antigo pode
+     registrar no histórico trocas reais que a pessoa não fez.** Um custo antigo sem origem gravada ganha, ao abrir para editar, a origem
+     padrão (Av. Angelo Demarchi 130, São Bernardo do Campo) — e o primeiro **Atualizar** a grava e a registra no histórico; um tipo legado em
+     minúsculas passa para maiúsculas e também é registrado. São gravações de verdade (o valor no banco muda), não trocas falsas. Pela API, sem
+     o tipo no pedido, a edição grava *"ida_e_volta"* em minúsculas (a tela sempre manda o tipo). **O que fazer:** nada; ao ler o histórico de
+     um custo antigo, saber que a primeira alteração pode trazer a origem e o tipo.
+383. **NOVO (da revisão do plano da Etapa 158; do Comercial, anterior a ela; lido no código) — o cliente acrescentado pela lista de clientes
+     próximos vem com o ponto da cidade, não o do endereço.** Os clientes próximos são calculados pela cidade do cadastro (como sempre) e
+     entram na viagem e na prévia da rota com esse ponto; o ponto guardado do endereço vale só para o cliente escolhido diretamente. **O que
+     fazer:** nada; a prévia de uma viagem com próximos mostra-os no ponto da cidade.
 ### D. Limitações declaradas— são decisão, não esquecimento
 
 - **Transferência não tem "em trânsito"** — cortado por decisão sua: o cliente tem um site só e a
@@ -15764,6 +15822,14 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
 - **(142) A lista de itens vazia ou que não é lista** (`"itens": null` ou `{}` pela API) apaga os itens, como desde a Etapa 138 — e agora
   também guarda à parte as variáveis manuais deles. *(Na Etapa 143 a que não é lista passou a ser recusada, **B930**; a nula continua
   apagando.)*
+- **(158) O ponto guardado do endereço, o que ficou de fora.** O ponto não expira com o tempo — vale até o endereço, a cidade ou o estado
+  mudarem; trocar o serviço de mapas (a configuração do servidor) não apaga os já guardados; para forçar nova consulta de todos, basta apagar
+  as três colunas do ponto no cadastro (nenhuma consulta obrigatória antes do deploy). Duas aberturas simultâneas de um cliente ainda sem ponto
+  consultam as duas. Os clientes próximos, a rota, o valor da visita e os mapas do Comercial continuam pela cidade (**C383**). Um ponto
+  impossível devolvido pelo serviço é usado naquela abertura, como antes, só não é guardado. A migração das colunas no cadastro roda
+  encadeada ao criar a tabela; a revisão mostrou que soltá-la logo depois também funciona hoje (o banco executa na ordem) — a forma
+  encadeada ficou por ser a segura, e **os testes não a distinguem**. Um tipo de viagem gravado fora dos três (só por fora do sistema) não
+  entra em nenhum total do resumo.
 - **(157) Os custos de viagem, o que ficou como antes.** O resumo por tipo de viagem do servidor (os totais de ida, de volta e de ida e
   volta) compara o tipo com a grafia exata — e o cadastro grava em maiúsculas, então esses três totais saem zero; **nenhuma tela os mostra**.
   A prévia da rota desenha o cliente onde o servidor disser — para a cidade fora da lista de 345, o centro do estado; sem estado, o centro do
@@ -15771,7 +15837,8 @@ não há caso passado a conferir. O que quem opera precisa saber está nas decis
   números da legenda e dos marcadores pulam (seguem a ordem da viagem). **Atualizar** depois de **Aplicar** registra no histórico a troca
   *"50 → 50.00"* mesmo sem mudança de valor (o servidor compara o texto — de antes). A coordenada que falhou é pedida de novo ao salvar e na
   prévia (até três pedidos ao servidor, nenhum ao serviço de mapas no caso da recusa). A edição não mexe nos clientes da viagem (o servidor
-  não regrava a lista na edição — como antes).
+  não regrava a lista na edição — como antes). *(Etapa 158: o resumo por tipo conta o tipo em maiúsculas — **C379** — e o histórico não
+  registra mais *"50 → 50.00"* — **C380**.)*
 - **(156) As gravações com o banco ocupado continuam como antes** — o segundo pedido de gravação ao mesmo endereço é recusado na hora
   (**B1001**); só as leituras se reconhecem pelos filtros. Uma tela que troca o filtro rápido e não descarta a resposta velha pode mostrar a
   do filtro anterior se ela chegar depois (como a busca do topo antes da 155) — de antes, em várias telas; nas Reservas o teste mostrou a
@@ -16809,6 +16876,13 @@ de verdade, em pasta vazia), a margem nas quatro portas (13 cenários) e o edito
 Etapa 139 no guia — numa proposta padrão, **Comercial → Propostas → Preview editável**, "+ cláusula" na CONSIDERAÇÃO FINAL, escrever,
 salvar, recarregar (a nova aparece 5.25, depois da seção de preço, e a consideração final 5.26 na página de assinatura) e baixar o PDF
 (o mesmo); e "+ cláusula" deixada em branco + salvar (a consideração final continua 5.25).
+
+**(158) Nenhum clique foi dado no navegador, e o serviço de mapas de verdade nunca foi chamado.** O ponto guardado foi provado pelo
+servidor de verdade (em pasta vazia, sobre um banco com o cadastro de clientes de antes da etapa e num segundo boot) com um serviço de mapas
+local que responde, demora, pendura, recusa e devolve lista vazia ou ponto absurdo; o resumo, o filtro e o histórico pelas rotas, contra o
+banco. Nenhuma tela mudou. Vale conferir à mão: **Comercial → Custos de viagem**, o filtro *"Ida"* (só os de ida); um custo editado com
+**Aplicar Valores Sugeridos** e **Atualizar** (o **Histórico** sem alteração nova); e um cliente com endereço escolhido duas vezes num custo
+novo (a segunda, na hora).
 
 **(157) Nenhum clique foi dado no navegador.** A tela dos custos de viagem foi provada em jsdom com a camada de comunicação de verdade (o
 axios real, o servidor simulado na fronteira) e a prévia da rota com o mapa simulado; o servidor, de verdade, com o serviço de mapas local.
@@ -31806,9 +31880,89 @@ sem endereço não gera consulta externa); o de **sabotagem** fez 56 sabotagens 
 dispara o recálculo, a resposta velha com erro, o Aplicar terrestre, as regras de visita de um cliente que já não é o escolhido, o valor da
 taxa no modal), 17 não mudam nada. Tudo virou correção e teste. Commits `4c9de31d`, `00dbce2b`, `a04ab574`, `10b6f756` e `fab87f82` (a correção da revisão).
 
+## Etapa 158 — A localização do endereço fica guardada no cadastro do cliente, e o resumo, o filtro e o histórico dos custos de viagem contam certo (2026-10-19)
+
+Uma etapa de **consertos técnicos** nos **Custos de viagem** do Comercial, sem regra de acesso nova. Para pôr no mapa um cliente com
+endereço completo, o sistema pergunta a um serviço de mapas da internet — que tem limite de uso — e fazia isso **a cada abertura**, para o
+mesmo cliente e o mesmo endereço. Agora o ponto que o serviço devolve fica **guardado no cadastro do cliente** e vale enquanto o endereço, a
+cidade e o estado não mudarem: abrir a tela de novo não pergunta mais nada à internet; mudar o endereço faz a próxima abertura perguntar de
+novo. A mesma etapa fechou três contas erradas dos custos de viagem: o filtro **Tipo de viagem** da lista não filtrava nada (o servidor nem
+lia a escolha); os totais por tipo do resumo davam **zero** para todo custo lançado pela tela (o tipo é gravado em maiúsculas); e o
+**Histórico** de um custo registrava trocas que não aconteceram, como *"350 → 350.00"*, toda vez que se atualizava depois do **Aplicar
+Valores Sugeridos**.
+
+### Antes → Agora
+
+| Antes | Agora |
+|---|---|
+| Abrir os custos de viagem (ou a prévia da rota) com um cliente com endereço: uma consulta ao serviço de mapas da internet **a cada vez** | Uma consulta na primeira vez; as seguintes usam o ponto guardado no cadastro — **C377** resolvido |
+| Mudar o endereço, a cidade ou o estado do cliente | A próxima abertura consulta de novo e guarda o ponto novo |
+| O serviço de mapas não responde, recusa ou não acha o endereço | Como antes, vale a cidade — e **nada** é guardado: a próxima abertura tenta de novo |
+| A lista de clientes (e a ficha do cliente) | Igual — o ponto guardado não aparece nelas (**B1008**) |
+| **Comercial → Custos de viagem**, filtro *"Todos os Tipos"* → *"Ida"*: a lista continuava com todos os tipos | Só os custos de ida (e o mesmo para *"Volta"* e *"Ida e Volta"*) — **C378**, novo e resolvido |
+| O resumo por tipo do servidor (custo de ida, de volta e de ida e volta): **zero** para todo custo lançado pela tela | Cada custo no total do seu tipo — **C379**, novo e resolvido |
+| **Atualizar** depois do **Aplicar Valores Sugeridos**: o **Histórico** com *"custo_transporte: 350 → 350.00"* (e uma alteração registrada sem nada ter mudado) | Só o que mudou de valor; nada mudou, nada registrado — **C380**, novo e resolvido |
+
+### As regras, com o cenário exato
+
+**1. O ponto do endereço guardado (C377, B1009).** Em **Comercial → Custos de viagem**, clique **Novo Custo** e escolha um cliente com
+endereço, cidade e estado preenchidos. Na primeira vez o sistema consulta o serviço de mapas (até 5 segundos); feche, abra de novo e escolha o
+mesmo cliente: a localização vem na hora, sem consultar a internet. O ponto **não atrasa** a tela: ela recebe a resposta antes de o ponto ser
+guardado. Não há mensagem nova — o que muda é a velocidade e o número de consultas.
+
+**2. Mudou o endereço, consulta de novo.** Em **Comercial → Clientes**, edite esse cliente e troque o endereço (ou a cidade, ou o estado);
+salve. Volte aos custos e escolha o cliente: o sistema consulta de novo e guarda o ponto do endereço novo. Trocar só o telefone, o e-mail ou
+a razão social **não** consulta de novo. Voltar ao endereço antigo também consulta (só o último ponto guardado é lembrado). Se, enquanto uma
+consulta demorada está em andamento, alguém muda o endereço, a cidade ou o estado do cliente, o ponto que chegar **não** é guardado.
+
+**3. A falha não é guardada.** Se o serviço de mapas não responder em 5 segundos, recusar (por excesso de uso) ou não achar o endereço, vale
+a cidade do cadastro, como antes, e nada é guardado — a próxima abertura tenta o serviço de novo. Um ponto impossível devolvido pelo serviço
+(latitude fora de −90 a 90 ou longitude fora de −180 a 180) é usado só naquela abertura, sem ser guardado.
+
+**4. O filtro Tipo de viagem (C378).** Em **Comercial → Custos de viagem**, troque *"Todos os Tipos"* por *"Ida"*: só os custos de ida ficam
+na lista; *"Volta"* e *"Ida e Volta"*, idem; *"Todos os Tipos"* volta a mostrar tudo. A comparação não liga para maiúsculas nem para espaço
+nas pontas (os custos antigos gravados de outro jeito também entram).
+
+**5. O histórico só com o que mudou (C380, B1010).** Abra um custo com **Editar**, clique **Aplicar Valores Sugeridos** sem que a rota tenha
+mudado e **Atualizar**; abra o **Histórico** (o ícone de informação da linha): nenhuma alteração nova. Edite de novo, mude o **Transporte**
+de 350 para 360 e **Atualize**: o histórico ganha uma alteração com *"custo_transporte: 350 → 360"* e *"total_custo"* (o total também
+mudou). Nos campos de valor (número de pessoas, distância, tempo, os quatro custos, o total e o custo sugerido) *"350"*, *"350.00"* e
+*" 350 "* são o mesmo valor; qualquer diferença de valor, por menor que seja, é registrada.
+
+### O que esta etapa NÃO cobre
+
+1. **Os clientes próximos e a rota** continuam pela cidade do cadastro (como antes) — o ponto guardado do endereço vale só para o mapa da
+   viagem e a prévia da rota dos clientes escolhidos diretamente; os acrescentados pela lista de próximos vêm com o ponto da cidade.
+2. **O ponto guardado não expira** com o tempo: vale até o endereço mudar. Trocar o serviço de mapas não apaga os pontos já guardados.
+3. **Duas aberturas ao mesmo tempo** do mesmo cliente ainda sem ponto guardado consultam as duas.
+4. **O resumo por tipo** continua sem tela que o mostre; um tipo gravado fora dos três (só por fora do sistema) não entra em nenhum total.
+
+### O que a revisão encontrou
+
+A **revisão do plano** (0 grave, 5 médios, 13 pequenos) mostrou que esperar a gravação do ponto antes de responder punha a tela atrás da
+fila de gravação do banco (até 30 s com o banco ocupado — desfaria o prazo de 5 s da Etapa 156); que o filtro **Tipo de viagem** da tela era
+ignorado pelo servidor (**C378**, entrou na etapa); e que três testes previstos passariam sem provar nada. A **revisão adversarial do código**
+(três revisores, executando): o de **regra** achou que *".5"* e *"1e3"* — que o banco grava como 0,5 e 1000 — ainda viravam troca falsa no
+histórico, e que um ponto absurdo do serviço ficaria guardado para sempre; o de **permissão** não achou nada que vaze (o ponto guardado só sai
+pela rota do Comercial; 339 leituras conferidas) e achou que a tolerância da comparação escondia do histórico uma troca mínima que o banco
+grava; o de **sabotagem** fez 47 sabotagens — 17 caíram, 24 acharam asserções faltando (a tela que não espera a gravação, a cidade e o estado
+mudados no meio da consulta, a migração que falha, os tipos com espaço, as bordas da régua do número), 5 não mudam nada e 1 não se alcança.
+Tudo virou correção e teste. Commits `f677e0a6`, `6f050dc9`, `af67f3c8` e `858055df` (a correção da revisão).
+
 ## Onde estamos e o que vem a seguir
 
 *(Este título tinha sumidono fechamento da Etapa 54 — as linhas abaixo ficaram coladas na seção dela; restaurado.)*
+
+- **Etapa 158 entregue (2026-10-19):** **o ponto do mapa do endereço guardado no cadastro do cliente, e o resumo, o filtro e o histórico
+  dos custos de viagem contando certo** (consertos técnicos nos Custos de viagem, sem regra de acesso nova). A localização do cliente com
+  endereço consulta o serviço de mapas só na primeira vez e quando o endereço muda (**B1009** — **C377** resolvido); o ponto não aparece nas
+  listas de clientes (**B1008**); o filtro *Tipo de viagem* filtra (**C378**); o resumo por tipo conta o tipo em maiúsculas (**C379**); o
+  histórico só registra o que mudou de valor (**B1010** — **C380**). Commits `f677e0a6`, `6f050dc9`, `af67f3c8` e `858055df` (a correção da
+  revisão). **O que é seu:** as decisões **B1008** a **B1010** (reversíveis); os avisos **C381** a **C383** (de antes); as perguntas de antes
+  (**B949**, **B910**, **B853**, **B924**, **B926**, **B988**, **B989**, **C277**, **C312**, **C314**, **C316**, **C330**); a **B1002** (os números
+  mudam); as limitações **(158)** em D e a verificação **(158)** em F. Nenhuma consulta nova antes do deploy (as colunas novas entram sozinhas
+  no primeiro boot).
+  **Próxima: Etapa 159 — ver a "próxima tarefa detalhada" no plano da Etapa 158.**
 
 - **Etapa 157 entregue (2026-10-19):** **editar um custo de viagem não troca os valores gravados, e a localização dos clientes vem do
   servidor** (consertos de tela nos Custos de viagem, sem regra de acesso nova). Abrir para editar mostra a rota recalculada como sugestão e
@@ -31818,7 +31972,7 @@ taxa no modal), 17 não mudam nada. Tudo virou correção e teste. Commits `4c9d
   **O que é seu:** as decisões **B1004** a **B1006** (reversíveis); o aviso **C377** (de antes); as perguntas de antes (**B949**, **B910**,
   **B853**, **B924**, **B926**, **B988**, **B989**, **C277**, **C312**, **C314**, **C316**, **C330**); a **B1002** (os números mudam); as
   limitações **(157)** em D e a verificação **(157)** em F.
-  **Próxima: Etapa 158 — ver a "próxima tarefa detalhada" no plano da Etapa 157.**
+  *(Próxima, na época: Etapa 158 — entregue acima.)*
 
 - **Etapa 156 entregue (2026-10-19):** **o pedido repetido com o banco ocupado, a lista recusada que diz o motivo, e o prazo da consulta
   de endereço** (consertos técnicos, sem regra de acesso nova). Com o banco ocupado, a leitura com outros filtros espera e repete (**B1001** —

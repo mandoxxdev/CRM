@@ -1062,7 +1062,13 @@ na tela naquele momento.
 
 **A localização dos clientes** do Comercial sai de dois jeitos. O **ponto do cliente no mapa** dos **Custos de viagem** e da prévia da
 rota vem sempre do servidor: para o cliente com endereço completo, de um serviço de mapas da internet, que tem **5 segundos** para
-responder; se ele não responder a tempo, responder com erro ou não achar o endereço — e para o cliente sem endereço —, vale a **cidade**. Se
+responder; se ele não responder a tempo, responder com erro ou não achar o endereço — e para o cliente sem endereço —, vale a **cidade**. O
+ponto que o serviço devolve fica **guardado no cadastro do cliente**: enquanto o endereço, a cidade e o estado do cadastro não mudarem, as
+próximas aberturas usam o ponto guardado, sem consultar o serviço de novo; mudar qualquer um dos três (pela edição do cliente ou por qualquer
+outro caminho) faz a próxima abertura consultar de novo — e só o último ponto guardado é lembrado. Uma consulta que falhou não guarda nada (a
+próxima abertura tenta de novo), e um ponto impossível (latitude fora de −90 a 90 ou longitude fora de −180 a 180) vale só naquela abertura.
+O ponto é guardado depois de a tela recebê-lo, e só se o endereço, a cidade e o estado ainda forem os consultados; ele não muda a data de
+alteração do cliente e não aparece na lista de clientes nem na ficha do cliente. Se
 o servidor não der o ponto (sem acesso, rede caída), a prévia da rota deixa o cliente fora do mapa e da rota e mostra *"(sem localização no
 mapa)"* ao lado do nome na legenda; o *"Total: N ponto(s) na rota"* conta a origem e os clientes localizados. A **rota** (a distância e o custo sugerido), os **clientes
 próximos**, o **valor recomendado da visita** e os mapas do Comercial usam sempre a **cidade**: de uma lista de 345 cidades, comparando o nome
@@ -1080,6 +1086,14 @@ passagem aérea não aparece (o quadro mostra *"Esta viagem requer passagem aér
 escolha da passagem para aquela distância). Mudar um campo que entra no cálculo — o cliente, a cidade, o estado, o tipo, o número de pessoas,
 a data de ida ou de volta — faz a edição se comportar como um custo novo daí em diante: o recálculo preenche os campos, e o modal da
 passagem aérea volta a valer.
+
+**A lista e o histórico dos custos.** O filtro **Tipo de viagem** da lista (*"Ida"*, *"Volta"*, *"Ida e Volta"*) mostra só os custos daquele
+tipo, sem diferença de maiúsculas nem de espaço nas pontas; *"Todos os Tipos"* mostra todos. O **Histórico** de um custo (o ícone de
+informação da linha) registra uma alteração a cada **Atualizar** que muda algum campo, com o valor de antes e o novo de cada campo que mudou.
+Nos campos de valor — número de pessoas, distância, tempo estimado, transporte, hospedagem, alimentação, outros, total e custo sugerido — a
+comparação é pelo **número**: *"350"*, *"350.00"* e *" 350 "* são o mesmo valor, vazio vale zero, e qualquer diferença de valor, por menor
+que seja, é registrada; um texto que não é número compara como texto. Se nenhum campo mudou, nada é registrado. O resumo do servidor soma o
+custo de ida, de volta e de ida e volta pelo tipo, sem diferença de maiúsculas nem de espaço nas pontas.
 
 **Os valores da rota no formulário.** O preenchimento automático, o botão **Aplicar Valores Sugeridos** e o **Aceitar e Continuar com
 Passagem Aérea** preenchem os mesmos campos: na viagem de carro, transporte = combustível + pedágio, hospedagem, alimentação e outros = o

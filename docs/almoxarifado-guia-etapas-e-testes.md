@@ -1,19 +1,26 @@
 # Almoxarifado — Guia das Etapas e Testes Manuais
 
-> Atualizado em 2026-10-19 (Etapa 157) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
+> Atualizado em 2026-10-19 (Etapa 158) · Branch: `main` (antes: `desenvolvimento-almoxarifado`) · Como rodar: `npm run dev` (raiz do projeto)
 > **Nota de 2026-10-07:** `main` e `desenvolvimento-almoxarifado` foram unificadas (merge da branch na `main`); este guia é a versão completa da branch mais as correções do lote de Compras (Etapas 35, 37 e 38 da linha `main` — unidades do material, subfamílias), cujas seções estão em `docs/compras-novidades-por-etapa.md`. A partir daqui o desenvolvimento é na `main`.
 
-Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156 e 157) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
+Este documento explica, em linguagem simples, o que mudou no módulo Almoxarifado até agora (Etapas 1 a 20, 22 a 77, 91 a 99, 101, 102, 104, 106, 108, 110, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157 e 158) e tem um roteiro de cliques para você testar manualmente no navegador cada etapa. A **Etapa 21 é do núcleo do CRM**, não do módulo — está aqui mesmo assim, porque nasceu de um corte de escopo da Etapa 20. As **Etapas 38 a 41 também não são do módulo** — as quatro são do **módulo Compras** —, e estão aqui pelo mesmo motivo: a 38 fecha o laço que a Etapa 37 deixou aberto, a 39 passa a **acompanhar o prazo** do pedido que a 38 criou (inclusive com um alerta na tela de Alertas do almoxarifado), a 40 dá tela às outras duas abas do Compras — **Fornecedores** e **Cotações** — e decide onde um fornecedor **inativo** some (o seletor do Recebimento do almoxarifado) e onde continua, e a 41 dá **itens** à cotação e o botão **"Gerar pedido"**, que cria o pedido de compra que o Recebimento do almoxarifado consome. A **Etapa 42 é a única das cinco que fica nos DOIS lados**: o gancho que fecha o pedido roda dentro do processamento da nota, no **Almoxarifado**, e o efeito (status *Recebido*, selo de atraso que cai) aparece no **Compras** — é ela que encerra a cadeia cotação → pedido → recebimento → pedido fechado.
 
-> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 157 ENTREGUE · próxima: Etapa 158)
+> ## Onde o desenvolvimento está — 2026-10-19 (Etapa 158 ENTREGUE · próxima: Etapa 159)
 >
-> **O desenvolvimento parou aqui: Etapa 157 fechada — 2026-10-19.** A **Etapa 157 (editar um custo de viagem não troca os valores
+> **O desenvolvimento parou aqui: Etapa 158 fechada — 2026-10-19.** A **Etapa 158 (o ponto do endereço guardado no cadastro do cliente, e
+> o resumo, o filtro e o histórico dos custos de viagem contando certo; consertos técnicos nos Custos de viagem do Comercial, sem regra de
+> acesso nova)**: a localização de um cliente com endereço consulta o serviço de mapas da internet só na primeira vez e quando o endereço, a
+> cidade ou o estado mudam (o ponto fica guardado no cadastro; a falha não é guardada); o filtro *Tipo de viagem* da lista filtra; o resumo
+> por tipo conta o tipo gravado em maiúsculas; o **Histórico** de um custo só registra o que mudou de valor. Nenhuma consulta nova antes do
+> deploy (as colunas entram sozinhas no primeiro boot). **Próxima: Etapa 159** — ver a próxima tarefa no plano da 158.
+>
+> **Etapa 157, 2026-10-19.** A **Etapa 157 (editar um custo de viagem não troca os valores
 > gravados, e a localização dos clientes vem do servidor; consertos de tela nos Custos de viagem do Comercial, sem regra de acesso nova)**:
 > abrir um custo gravado para editar mantém a distância e os custos e mostra a rota recalculada como sugestão, com o botão **Aplicar Valores
 > Sugeridos**; o Aplicar e a confirmação da passagem aérea põem a taxa de embarque; um custo de ida e volta não é mais recalculado como só ida;
 > a localização do cliente sem endereço vem do servidor (sem a lista própria da tela, que mandava quase todo cliente de SP para São Bernardo),
 > e o que o servidor não localiza fica fora do mapa; a viagem fica com o último cliente escolhido; os clientes próximos na mesma cidade com e
-> sem acento ficam a 5/2 km. Nenhuma consulta nova. **Próxima: Etapa 158** — ver a próxima tarefa no plano da 157.
+> sem acento ficam a 5/2 km. Nenhuma consulta nova. *(Próxima, na época: Etapa 158 — entregue acima.)*
 >
 > **Etapa 156, 2026-10-19.** A **Etapa 156 (o pedido repetido com o banco ocupado, a lista
 > recusada que diz o motivo, e o prazo da consulta de endereço; consertos técnicos, sem regra de acesso nova)**: com o banco ocupado, o
@@ -6731,6 +6738,45 @@ calado).
 
 *Nenhum clique no navegador foi dado nesta etapa*: o roteiro acima é o que os testes automáticos (servidor) provam,
 escrito para você conferir à mão — em especial o passo 1 pela conferência da nota não foi medido na tela.
+
+## Etapa 158 — O ponto do endereço guardado no cadastro do cliente, e o resumo, o filtro e o histórico dos custos de viagem contando certo (ENTREGUE — 2026-10-19)
+
+**O que mudou, em uma frase:** nos **Custos de viagem**, a localização de um cliente com endereço consulta o serviço de mapas da internet só
+na primeira vez (e quando o endereço muda), e o filtro *Tipo de viagem*, o resumo por tipo e o **Histórico** de um custo passam a contar
+certo.
+
+**O problema que ela resolve.** Toda abertura dos custos de viagem (e da prévia da rota) com um cliente com endereço consultava o serviço de
+mapas da internet — que tem limite de uso — para o mesmo endereço, de novo e de novo. O filtro *Tipo de viagem* da lista não filtrava nada; os
+totais por tipo do resumo davam zero; e o **Histórico** registrava *"350 → 350.00"* depois de cada **Aplicar Valores Sugeridos**.
+
+| Antes | Agora |
+|---|---|
+| Cliente com endereço: uma consulta ao serviço de mapas a cada abertura | Uma na primeira vez; depois, o ponto guardado no cadastro |
+| Mudar o endereço, a cidade ou o estado | A próxima abertura consulta de novo |
+| O serviço não responde ou não acha | A cidade, como antes; nada guardado — tenta de novo na próxima |
+| Filtro *"Ida"*: todos os custos continuavam na lista | Só os de ida |
+| Resumo por tipo: zero | O total de cada tipo |
+| **Histórico** depois de **Aplicar** + **Atualizar**: *"350 → 350.00"* | Nada registrado se nenhum valor mudou |
+
+**Roteiro de teste (5 minutos).**
+
+1. **O ponto guardado.** Em **Comercial → Custos de viagem**, clique **Novo Custo** e escolha um cliente com endereço, cidade e estado. Feche,
+   clique **Novo Custo** de novo e escolha o mesmo cliente: a localização (os clientes próximos e o mapa) vem na hora.
+2. **O endereço mudou.** Em **Comercial → Clientes**, edite esse cliente, troque o endereço e salve; volte aos custos e escolha-o: a primeira
+   abertura consulta de novo (pode levar até 5 segundos); a seguinte é imediata. Trocar só o telefone não muda nada.
+3. **O filtro.** Na lista dos custos, troque *"Todos os Tipos"* por *"Ida"*: só os custos de ida; *"Ida e Volta"*: só os de ida e volta;
+   *"Todos os Tipos"*: todos.
+4. **O histórico.** Clique no lápis (**Editar**) de um custo, clique **Aplicar Valores Sugeridos** e **Atualizar**; clique no ícone de
+   informação (**Histórico**) da linha: nenhuma alteração nova se a rota não mudou. Edite de novo, mude o **Transporte** (ex.: de 350 para 360)
+   e **Atualize**: o histórico mostra *"custo_transporte: 350 → 360"* e o *"total_custo"*.
+
+**O que esta etapa NÃO cobre.** Os clientes próximos, a rota e o valor da visita continuam pela cidade do cadastro (como antes); o ponto
+guardado não expira com o tempo (só quando o endereço muda); duas aberturas ao mesmo tempo de um cliente sem ponto guardado consultam as duas;
+o resumo por tipo continua sem tela.
+
+*Nenhum clique no navegador foi dado nesta etapa*, e o serviço de mapas de verdade nunca foi chamado: o roteiro acima é o que os testes
+automáticos (o servidor de verdade em pasta vazia, sobre um banco de antes da etapa e num segundo boot, com um serviço de mapas local) provam,
+escrito para você conferir à mão. Commits `f677e0a6`, `6f050dc9`, `af67f3c8` e `858055df`.
 
 ## Etapa 157 — Editar um custo de viagem não troca os valores gravados, e a localização dos clientes vem do servidor (ENTREGUE — 2026-10-19)
 

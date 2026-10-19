@@ -17,7 +17,8 @@
 > `2000-01-01 00:00:00` antes. **M1** o termo mantém a guarda por verdade (`"   "` consulta, como hoje). **M2** a rota lê `SELECT *` (a ALTER que
 > falhou não deixa a rota em 500 para sempre). **M3** o POST ecoa o corpo (de antes, C). **M4** a frase do "voltar ao anterior". **M5** a memória
 > exige o termo atual não nulo e `geo_termo` texto. **M6** o `UPDATE` da memória só grava se o endereço ainda é o lido. **M7** número é só
-> `/^s*-?d+(.d+)?s*$/` (e vazio/nulo/ausente = 0). **M8** as trocas reais do legado em C. **M11** T3 cria o próprio custo. **M-mig** a regex do
+> `/^\s*-?\d+(\.\d+)?\s*$/` (e vazio/nulo/ausente = 0) — **estava estreita demais** (Fase 5 r1 M1: `".5"` e `"1e3"`, que o banco grava como
+> número, continuavam troca falsa); a régua final é a do que o SQLite grava como número, com igualdade exata (RN-158.06). **M8** as trocas reais do legado em C. **M11** T3 cria o próprio custo. **M-mig** a regex do
 > log com `no such column|duplicate column`, o banco antigo com o CREATE exato, controle positivo. **T4** manda o objeto do GET mais um `geo_*`
 > forjado e confere o banco.
 
@@ -96,9 +97,11 @@
   minúsculas continua contando. Os outros campos do resumo não mudam.
 - **RN-158.06 (M7 da 157)** — No `PUT /custos-viagens/:id`, os campos de valor (`numero_pessoas`, `distancia_km`, `tempo_estimado_horas`,
   `custo_transporte`, `custo_hospedagem`, `custo_alimentacao`, `custo_outros`, `total_custo`, `custo_sugerido`) comparam **como número** quando os
-  dois lados são números — número é `number` finito ou texto `/^s*-?d+(.d+)?s*$/` (`"50.00"` = `50`; `"0x1A"`, `"1e3"` não — Fase 2 M7);
-  vazio, nulo e ausente = 0, como já era pelo `|| ''`; se um lado não é número, compara
-  como texto (como antes). `"50.00"` sobre `50` → **nenhuma** mudança, e, sem nenhuma, **nenhuma linha** no histórico. `"60"` sobre `50` → a
+  dois lados são números — número é `number` finito ou texto `/^\s*[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?\s*$/` com valor finito (o que
+  o SQLite grava como número numa coluna REAL/INTEGER: `"50.00"` = `50`, `".5"` = `0.5`, `"1e3"` = `1000`, `" 50 "` = `50`; `"0x1A"` não), e a
+  igualdade é **exata** (**B1010**); vazio, nulo e ausente = 0, como já era pelo `|| ''`; se um lado não é número, compara como texto (como
+  antes). *(Esta RN dizia `/^\s*-?\d+(\.\d+)?\s*$/` com tolerância de 1e-9 — **estava errada** nas duas pontas: a régua deixava `".5"` e `"1e3"`
+  como troca falsa (Fase 5 r1 M1) e a tolerância escondia a troca `50 → 50.0000000001` que o banco grava (Fase 5 r2 S1).)* `"50.00"` sobre `50` → **nenhuma** mudança, e, sem nenhuma, **nenhuma linha** no histórico. `"60"` sobre `50` → a
   mudança registrada (`valor_anterior` 50, `valor_novo` "60"). Os outros campos comparam como antes. O que se grava no custo não muda.
 
 - **RN-158.07 (Fase 2 I3)** — `GET /api/custos-viagens?tipo_viagem=ida|volta|ida_e_volta` (o filtro *Tipo de viagem* da lista, que a tela já
@@ -118,7 +121,7 @@
 
 ## Tasks (sort topológico)
 
-- [ ] **T1 (tronco — servidor: migração + serviço + rota) — RN-158.01..04.**
+- [x] **T1 (`f677e0a6`, Fase 5 `858055df`) (tronco — servidor: migração + serviço + rota) — RN-158.01..04.**
   `server/services/coordenadas.js`: `termoDaConsulta(endereco, cidade, estado)` → o termo (ou `null` sem um dos três), usado por
   `geocodificarEndereco` (a mesma string de hoje — o teste do C371 prende) e exportado; `coordenadaGuardadaValida(cliente, termo)`.
   `server/index.js`: as três colunas no callback do `CREATE` de `clientes`; a rota lê `id, endereco, cidade, estado, geo_lat, geo_lon,
@@ -139,16 +142,16 @@
   `no such table|no column named|SQLITE_ERROR` no log; (b) numa pasta com um `database.sqlite` antigo (só `clientes`, sem as colunas, com um
   cliente com endereço e um `updated_at` conhecido) → as colunas entram, o cliente intacto (todos os campos de antes iguais), log limpo; a rota
   responde e grava a memória; (c) um segundo boot na mesma pasta → log limpo, a memória ainda lá e a chamada não consulta (0 pedidos).
-- [ ] **T2 (galho — servidor) — RN-158.05.** `index.js`: o `CASE WHEN LOWER(TRIM(tipo_viagem)) = '...'` nos três. Teste no
+- [x] **T2 (`6f050dc9`, com a RN-158.07; Fase 5 `858055df`) (galho — servidor) — RN-158.05.** `index.js`: o `CASE WHEN LOWER(TRIM(tipo_viagem)) = '...'` nos três. Teste no
   `custosViagensPortao.api.test.js`: os três totais do resumo **contra o banco** (`SUM(CASE WHEN LOWER(TRIM(tipo_viagem)) = ...)`) e o
   `custo_ida_volta` > 0 com o custo lançado pela rota (gravado `IDA_E_VOLTA`); mais um custo `IDA` lançado e um legado `'volta'` em minúsculas
   gravado por fora → cada total com o seu.
-- [ ] **T3 (galho — servidor) — RN-158.06.** `index.js`: no `PUT /custos-viagens/:id`, `mesmoValor(campo, atual, novo)` — os nove numéricos
+- [x] **T3 (`af67f3c8`, Fase 5 `858055df`) (galho — servidor) — RN-158.06.** `index.js`: no `PUT /custos-viagens/:id`, `mesmoValor(campo, atual, novo)` — os nove numéricos
   por número (`Number(x)` finito, vazio/nulo = 0), o resto como hoje. Teste no `custosViagensPortao.api.test.js`: com o custo do preparo
   editado, `PUT` com `"350.00"`, `"80.0"` e `numero_pessoas: "1"` sobre 350/80/1 e o resto igual → **nenhuma** linha nova no histórico; `PUT`
   com `custo_transporte: "360"` → **uma** linha, com só `custo_transporte` (50→... valores certos) e **sem** `total_custo` falso
   (o total muda de verdade — entra); o texto não numérico num campo de valor compara como texto.
-- [ ] **T4 (integração — cruza T1 e o cadastro do cliente):** no `coordenadasPrazo`, o fluxo de tela pelas rotas: criar o cliente com endereço
+- [x] **T4 (`f677e0a6`, no mesmo commit da T1 — o cenário RN-158.03 do `coordenadasPrazo`) (integração — cruza T1 e o cadastro do cliente):** no `coordenadasPrazo`, o fluxo de tela pelas rotas: criar o cliente com endereço
   (`POST /clientes`) → abrir a coordenada (1 pedido) → abrir de novo (0) → editar o cadastro pela rota da tela (`PUT /clientes/:id` com o objeto
   inteiro que o `GET /clientes/:id` devolveu, endereço trocado) → abrir (1 pedido, o termo novo) — o objeto do `GET` não pode trazer as colunas
   de volta no `PUT` (RN-158.03). E o serviço direto: `termoDaConsulta` = o `q` que chega à fronteira.
@@ -166,3 +169,115 @@ T2 → T3 → T4); um executor paralelo em worktree não se paga em três trocas
 4. A primeira boa resposta grava; duas aberturas simultâneas do mesmo cliente sem memória consultam as duas (aceito — memória, não fila; D).
 5. **Declarar em D:** a memória não expira por tempo (o endereço não mudou → a coordenada não muda); quem quiser forçar nova consulta põe
    `NULL` nas colunas (A, se o P.O. pedir — nenhuma consulta obrigatória antes do deploy); duas aberturas simultâneas consultam as duas.
+
+## Execução (o que divergiu do plano)
+
+- **Tudo em sequência, aqui** (como o plano previa): T1 (com a T4 no mesmo arquivo de teste) → T2 (com a RN-158.07, que a Fase 2 acrescentou) →
+  T3. **0** retrabalho entre tasks. Os testes foram escritos antes do código (vermelhos medidos: `coordenadasPrazo` 14/6 — *"no such column:
+  geo_lat"*; a migração 0/4; o portão 8/2 — o resumo com `custo_ida_volta` sem o lançado e o histórico com *"numero_pessoas 1 → 1.0"*).
+- **Divergências:** (1) a RN-158.01 previa "espera o `UPDATE` e responde" — a Fase 2 I1 inverteu antes do código (responde e grava depois,
+  **B1009**); (2) o teste do `updated_at` (i) foi feito com o `2000-01-01 00:00:00` gravado por fora (Fase 2 I5); (3) o "nenhuma linha no
+  histórico" com a troca real em seguida (Fase 2 I4); (4) o T3 cria o próprio custo (M11); (5) o cenário do `SELECT` que falha (Fase 2 I2) **não
+  foi escrito na T1** — a Fase 5 achou (r1 M3, r3 R22) e ele entrou na correção.
+- **Controles positivos (K1–K16, todos caíram pela asserção certa):** K1 sem ler a memória → 4 cenários; K2 sem a guarda do endereço no
+  `UPDATE` → o M6; K3 com `updated_at` no `UPDATE` → o (i); K4/K4b sem a checagem dos números (lat; só lon) → o lixo; **K5c** sem as duas guardas
+  do termo → o M5 (*"a memória sem termo valeu"*) — K5 e K5b sozinhas são **equivalentes** (uma cobre a outra); K6/K7 as listas com a linha
+  inteira → *"lista mostra geo_lat"*; K8 sem as `ALTER`s → os 4 da migração; K9 o erro de gravação sem log (lançando) → *"o erro não foi para o
+  log"* (o processo não cai: o invólucro do banco engole a exceção do callback — **declarado**); K10/K14 o resumo sem `LOWER`/sem `TRIM`; K11/K15
+  o filtro exato/sem `TRIM`; K12 a comparação por texto de antes; K16 o sugerido fora da lista.
+- **A prova de primeiro boot:** pasta vazia antes da etapa (`boot0`) — 0 `no such table|no column named`; os dois avisos de `duplicate column`
+  de `materiais_escritorio` são de antes (fora da régua do teste, que conta só `no such table|no column named|no such column` e as linhas com
+  `geo_*`). Depois: o teste de migração prova pasta vazia, banco antigo (o `CREATE` exato de `99781bd0`, sem `logo_url`), segundo boot, o
+  `UPDATE` que falha, as `ALTER`s que falham e a leitura que falha.
+- **Nenhuma consulta A nova** (as colunas entram sozinhas no primeiro boot; nenhum dado gravado muda).
+
+## Fase 5 — revisão adversarial (três revisores frescos, em paralelo, sob a trava)
+
+- **r1 (regra) — 0 Critical, 0 Important, 3 Minor, reproduzidos.** **M1** *".5"* e *"1e3"* (o banco grava 0,5 e 1000) continuavam troca falsa
+  no histórico — a régua da Fase 2 M7 **estava estreita demais**; **M2** um ponto absurdo do serviço (`lat 999`) ficava guardado para sempre;
+  **M3** o cenário do `SELECT` que falha (Fase 2 I2) não existia. Conferido certo: a memória, a corrida, o contrato, o resumo, o filtro, nenhuma
+  troca real perdida. **Incidente:** o r1 apagou por engano a trava do r3 por volta das 16:03 (o `rmdir` depois de desistir de esperar) — os
+  resultados do r3 dessa janela foram verdes e o r3 não relatou falha por prazo; nenhum achado dependeu dela.
+- **r2 (autorização) — 0 achados de acesso + 1 Minor reproduzido.** Sonda no `index.js` montado (339 GETs com um marcador em `geo_*`): o ponto só
+  sai por `coordenadas-cliente` (Comercial); sem login 401, só Almoxarifado 403, nenhum pedido ao serviço de mapas nem gravação pelo barrado;
+  `geo_*` do corpo nunca grava; o filtro é parametrizado (injeção, array, repetido → lista vazia). **S1** a tolerância de 1e-9 escondia do
+  histórico a troca `50 → 50.0000000001`, que o banco grava. Observação (de antes): o usuário sem nenhuma permissão passa no portão do Comercial
+  como já passava no `PUT /clientes` (o desenho do portão — testes da 152).
+- **r3 (sabotagem, worktree própria `CRM-wt-e158-r3`) — 47 sabotagens: 17 caíram, 24 sobreviveram por falta de asserção (todas provadas por
+  sonda; R43 só por fora), 5 equivalentes (R09, R13, R14, R26, R28), 1 sobrevivente inalcançável (R12 — as `ALTER`s fora do callback funcionam
+  hoje porque o driver executa na ordem; a forma no callback fica, **declarada como não protegida pela suíte**).** As faltas: a tela que não espera
+  a gravação (R23 — 24 ms × 4.108 ms com o banco preso); o `volta` em maiúsculas sem `LOWER` (R32 — o mais grave do T2: o teste sobrescrevia o
+  único `VOLTA`), os tipos com espaço (R31, R33), o filtro com espaço (R35, R36); a migração que falha (R18 sem o log, R21 as colunas explícitas →
+  500 para sempre); o `SELECT` que falha (R22); a cidade e o estado mudados no meio (R25); a régua (R40–R42, R45, R50) e o nulo legado (R43); as
+  guardas do termo (R02–R05) e a memória infinita (R08). **Mudaram de natureza com a correção:** R44/R46 (a tolerância do total) — a igualdade
+  agora é exata (r2 S1), então o total que muda só no arredondamento entra no histórico (é mudança do valor gravado — **B1010**, custo
+  declarado); R47 (`&&` → `||`) ficou **equivalente** com a igualdade exata.
+- **Correção da Fase 5 (`858055df`):** a régua do número é a do SQLite com igualdade exata (r1 M1, r2 S1 — **B1010**); o ponto fora da faixa não
+  é guardado nem vale da memória (`coordenadaPlausivel` — r1 M2); e as asserções: o banco preso (R23), a cidade e o estado no meio (R25), as
+  guardas do termo e a memória infinita (R02–R05, R08), as `ALTER`s que falham (R18, R21), o `SELECT` que falha (R22, r1 M3), o resumo e o
+  filtro com fixtures em maiúsculas e com espaço (R31–R36), a régua e o nulo legado (R40–R43, R45, R50), a troca mínima (r2 S1), o ponto
+  absurdo (r1 M2). **Controles (todos caíram pelo cenário deles, `scratchpad/e158/controles-f5.out`):** R02, R03, R04, R05 → o das guardas; M2a
+  (sem a faixa), M2b (a rota grava sem conferir), **M2c** (a memória sem a faixa) → o do ponto absurdo; R23 → *"a abertura esperou a escrita da
+  memoria: 3032 ms"*; R25 → *"gravou o termo velho depois de mudar cidade"*; R18 → *"a falha da coluna geo_lat nao foi para o log"*; R21 → as
+  `ALTER`s que falham (500) e a leitura; R22 → *"404"* no lugar do 500; R31, R32, R33 → o resumo; R35 → *"o filtro com espaco"*; R36 → *"o filtro
+  so de espacos filtrou"*; R40, R50 → a linha do hexadecimal (só o total); R41, R42 → *"as formas do mesmo numero gravaram historico"*; M1r1 (a
+  régua da Fase 2) → os dois do histórico; R45 → a hospedagem; R43 → *"o \"0.00\" sobre o nulo gravou historico"*; S1r2 (a tolerância) → *"a troca
+  minima nao gravou historico"*.
+
+## Suítes (lidas na saída, `scratchpad/e158/`)
+
+- **Base (antes de qualquer código, `base-api.log`):** `test:api` **477/477**.
+- **Bateria 1 — antes dos commits `38e189ca`..`af67f3c8` (`b1-*.log`):** `test:api` **478/478** arquivos; `test:almoxarifado` **44/0**;
+  `test:validation`/`safealter`/`sqlite` **4/0, 3/0, 16/0**; revisão obrigatória da proposta **23/23** + editor **39/39**; client **152** suítes /
+  **1956** testes; `CI=true build` *Compiled successfully*. Entre os commits da T1, T2 e T3 (estados intermediários), os três arquivos da etapa:
+  20/0, 4/0, 8/0 (T1); 9/0 (T2); 10/0 (T3).
+- **Bateria 2 — antes de `858055df` (depois da Fase 5 — também a do fechamento; depois só mudaram documentos, `b2-*.log`):** `test:api` **478/478** arquivos (uma primeira rodada deu **477/478**: o `superPadraoNoBoot` caiu com `SQLITE_READONLY` — o intermitente de antes registrado na Etapa 141 —, passou **14/14** três vezes sozinho e a rodada cheia repetida deu 478/478; `coordenadasPrazo` **24/0**, `coordenadaGuardadaMigracao` **6/0**, `custosViagensPortao` **11/0**); `test:almoxarifado` **44/0**; **4/0, 3/0, 16/0**; proposta **23/23** + editor **39/39**; client **152** suítes / **1956** testes; `CI=true build` *Compiled successfully*.
+
+## Retro (4 números)
+
+1. **Rodadas de correção até verde:** **1** — a Fase 5 (a régua do número, o ponto fora da faixa e 24 asserções). As três tasks ficaram verdes na
+   primeira aplicação, com controle positivo cada. Testes antigos mudados: **1** (o cenário de integração da 156 mudou de ordem — o 429 depois
+   do responde passaria a sair da memória).
+2. **Achados da revisão:** Fase 2 — **0 Critical + 5 Important + 13 Minor**, todos reais (nenhum ruído; um — a I2 do `SELECT` — aceito e não
+   executado na T1, pego pela Fase 5). Fase 5 — r1 **3** reais; r2 **0** de acesso + **1** real; r3 **24** faltas de asserção reais (provadas) + **5**
+   equivalentes + **1** inalcançável; **0** ruído. **O que mais pesou:** uma régua escrita pelo que *parecia* número (Fase 2) em vez de pelo que o
+   banco *grava* como número — as duas revisões a mexeram em direções opostas (estreitar, depois alargar e tirar a tolerância), e só a sonda no
+   SQLite decidiu; e um teste de resumo que sobrescrevia o único caso que provava a regra (o `VOLTA` da tela).
+3. **Paralelismo:** **0** galhos de código em paralelo (três tasks pequenas de servidor — o plano decidiu assim); **1** revisor na Fase 2 (antes do
+   código), **3** em paralelo na Fase 5 sob a trava (o r3 em worktree própria) — **1** incidente de trava (o r1 apagou a do r3; sem efeito medido).
+4. **Defeito que escapou:** *(preencher na Etapa 159)*.
+
+## Próxima tarefa detalhada — Etapa 159
+
+*(A série desta etapa foi B1008–B1011, C377 resolvido, C378–C383, nenhuma A — a 159 começa em **B1012**, **C384**, **A104**; confira com
+`grep -oE` antes.)*
+
+**Escolhida: os filtros que as telas do Comercial mandam e o servidor ignora — medir antes, nenhuma regra do P.O.** O C378 (o filtro *Tipo de
+viagem* que o servidor nem lia) sugere um padrão: a tela monta `params`/query e a rota não lê. (1) **Medir** (Fase 0): para cada tela do
+Comercial com filtros (`CustosViagens` — `loadCustos` monta cliente, datas, código, criado por, status, ordenação; `Propostas`, `Atividades`,
+`Clientes`, `Oportunidades`, os relatórios do Comercial), listar cada chave que a tela manda e conferir no `req.query` da rota se ela é lida e
+como compara (caixa, espaço, tipo). Medir pelo nome do **contrato** (a chave na URL), não pelo nome que se imagina. (2) Consertar os ignorados
+com a régua da RN-158.07 (parametrizado, sem caixa onde o dado é gravado em maiúsculas por `normalizarMaiusculas`/`toUpper`), cada um com
+teste pela rota do `index.js` montado e fixture que separa (o caso em maiúsculas **e** o legado — a lição do R32). (3) As sobras desta etapa:
+**C382** a parte técnica — o `POST`/`PUT /custos-viagens` sem `tipo_viagem` gravam `'ida_e_volta'` em minúsculas (o padrão não passa pelo
+`normalizarMaiusculas`): passar o padrão a `IDA_E_VOLTA` (registrar em B; a tela sempre manda o tipo); **C381** — o `POST /clientes` responder
+o cliente gravado (lido do banco, sem `geo_*`) em vez do eco do corpo: medir antes quem lê a resposta (`ClienteForm` usa `response.data.id`?) —
+se só o `id` é lido, é reversível (B).
+**Pontos de atenção:** (1) a trava de máquina (um `test:api` por vez); (2) o `custosViagensPortao` tem cenários que contam custos e histórico —
+custos novos por cenário e apagar no fim; (3) `normalizarMaiusculas` no `POST`/`PUT` dos custos e `toUpper` no cadastro de clientes: o dado
+gravado está em maiúsculas — a comparação do filtro tem de saber disso; (4) nunca chamar o Nominatim de verdade (`NOMINATIM_URL` local).
+
+**Dependem do P.O. — NÃO implemente:** a lista inteira do plano da 152 — **B853**/**C279**, **B808**, **B755**, **B761**/**C239**, **C224**, o
+resto da **C225**, **C228**, **C219**, **C230**, o reparo da **C246** e a **C247**, a tabela de conversões e o grupo acima de família, a régua do
+tempo de recebimento (E2), **C268**, **C269**, **C275**, **C276**, **C277**, **C109**, **C117**/**C118**, **C139**, **C278**; na 05, os itens de
+produto e a **C198**; na 06, a **B11** e a Engenharia; na 21, a valorização por cliente e previsto × realizado; na 22, **B13**, **B101**/G30,
+**G38**; no Compras, D-35, D-37, D-78, D-90, G9/G30, G4, G15, B63, B60, B62, a **C348**; nas propostas, a verificação do dono da proposta (Fase
+12 — também a **C305**), o filtro por permissão do histórico, a **B910**, a **C307**, a Frente B da lentidão, a **C297** (**B924**), a **B926**,
+a **C312**, a **C316**, a régua de quantidade da **C314**, a **B949** e a **C330**; no Operacional, a **C332**; do Comercial, a **C354**, a
+**C357**/**B988**, a **C359**/**B989** (e a **C360** junto), a **C358**, e **novo desta etapa: usar o ponto guardado do endereço nos clientes
+próximos e na rota (C383)** — muda a distância de todos os próximos e o custo sugerido, é regra; do núcleo, a **C362**. Pendem de Postgres:
+**C98**, **C110**. **Nada novo do P.O. nesta etapa além da C383** (a **B1008** a **B1010** são reversíveis e estão na letra B).
+
+**O que já está pronto e não precisa reabrir:** o ponto guardado do endereço, a invalidação pelo termo, a gravação depois da resposta, a
+migração (`f677e0a6`, `858055df`); o resumo e o filtro por tipo sem caixa (`6f050dc9`); o histórico pelo número com a régua do SQLite
+(`af67f3c8`, `858055df`).
