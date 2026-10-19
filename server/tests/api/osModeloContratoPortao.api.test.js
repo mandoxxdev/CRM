@@ -19,6 +19,7 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const sqlite3 = require('sqlite3');
+const camadas = require('../helpers/conferirCamadasDoExpress');
 const regua = require('../helpers/reguaDoFonteDoServidor');
 
 const SERVER_DIR = path.join(__dirname, '..', '..');
@@ -58,10 +59,11 @@ async function subir(extraEnv = {}) {
   const env = { ...process.env };
   for (const k of ['NODE_ENV', 'NODE_OPTIONS', 'RUN_ALL_GUARDA_EXIT', 'PORT', 'CRM_DATA_DIR', 'JWT_SECRET', 'API_URL',
     'SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD', 'FALHA_SQL_INJETADA', 'FALHA_SQL_MSG', 'FALHA_SQL_METODOS', 'FALHA_SQL_PULAR', 'FALHA_SQL_MSGS', 'PROPOSTAS_PORTAO_DE_MODULO', 'RATE_LIMIT_WINDOW_MS']) delete env[k];
-  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000' }, extraEnv);
+  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000',
+    ...camadas.envDasCamadas(pasta, AMOSTRAS_DAS_CAMADAS) }, extraEnv);
   const out = fs.openSync(logArq, 'a');
   saiu = null;
-  const preload = ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js')];
+  const preload = ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js'), '-r', camadas.preloadDasCamadas()];
   if (extraEnv.FALHA_SQL_INJETADA) preload.push('-r', path.join(__dirname, '..', 'helpers', 'falhaSqlInjetada.js'));
   const marcas = fs.existsSync(logArq) ? (fs.readFileSync(logArq, 'utf8').match(/Banco de dados totalmente inicializado/g) || []).length : 0;
   filho = spawn(process.execPath, [...preload, 'index.js'], {
@@ -121,6 +123,23 @@ const OS_ROTAS = [
 ];
 const OS = OS_ROTAS.map(([m, r]) => TODOS.find((x) => x.metodo === m && x.rota === r) || { metodo: m, rota: r, resto: '(nao registrada)' });
 const OITO = [...CONTRATO.map((r) => ({ ...r, grupo: 'contrato' })), ...OS.map((r) => ({ ...r, grupo: 'os' }))];
+// Etapa 153 (RN-153.04): as mesmas 8, conferidas nas camadas do Express montado, com o portao que o cenario do fonte espera de cada uma.
+const ROTAS_DAS_CAMADAS = OITO.map((r) => ({ metodo: r.metodo, rota: r.rota, cadeia: camadas.cadeiaDoPortao(r.grupo === 'contrato' ? 'exigirComercialNasPropostas' : 'exigirComercialOuOperacionalNaOS') }));
+const NEUTRO = '/api/zz-neutro-148';
+const AMOSTRAS_DAS_CAMADAS = camadas.amostrasDasCamadas(ROTAS_DAS_CAMADAS, { neutro: NEUTRO });
+// Medidos, de OUTRA etapa no mesmo prefixo (Fase 2 I-1 — a forma objeto vale no despacho com a cadeia dela, sem amostra propria):
+// - o prefixo /api/familias e da Etapa 149: os caminhos extras dele (/api/familias/zz-exportar, /API/FAMILIAS, /API/FAMILIAS/9) caem
+//   nestas 5, com o portao que o familiasListaOsPortao confere (o cadastro e o GET /:id de Configuracoes);
+// - os mesmos caminhos da OS tem PUT/DELETE pela regua antiga do Operacional (authenticateToken, checkModulePermission('operacional') —
+//   a funcao anonima que ele devolve; fora do escopo, B969; o cenario do fonte os prende na lista verboCaminho): casam as amostras da OS
+//   em outro verbo, sem despacho (nenhuma amostra nesses verbos), entao a cadeia so documenta.
+const ALEM_DAS_ROTAS = [
+  ...[['GET', '/api/familias'], ['POST', '/api/familias'], ['PUT', '/api/familias/:id'], ['DELETE', '/api/familias/:id']]
+    .map(([metodo, rota]) => ({ metodo, rota, cadeia: camadas.cadeiaDoPortao('exigirComercialNasPropostas') })),
+  { metodo: 'GET', rota: '/api/familias/:id', cadeia: camadas.cadeiaDoPortao('exigirComercialNaFamiliaPorConfiguracoes') },
+  ...[['PUT', '/api/operacional/ordens-servico/:id'], ['DELETE', '/api/operacional/ordens-servico/:id'], ['PUT', '/api/operacional/os-itens/:id'], ['DELETE', '/api/operacional/os-itens/:id']]
+    .map(([metodo, rota]) => ({ metodo, rota, cadeia: ['authenticateToken', '<anonima>'] })),
+];
 
 const urlDe = (r) => r.rota.replace('/api', '')
   .replace('/clausulas-modelos/:id', `/clausulas-modelos/${ctx.modelo}`)
@@ -222,6 +241,13 @@ test('[RN-148.01/02, C341, C335] fonte: as 3 do modelo de contrato com exigirCom
   assert.deepStrictEqual(sem, []);
   assert.ok(FONTE.includes("const exigirComercialOuOperacionalNaOS = portaoDasPropostas.exigir(['comercial', 'operacional']);"),
     'o portao da OS nao e o do plano');
+});
+
+// ── Etapa 153 (RN-153.04): o que a regua do texto nao le (receptor apelidado, app[verbo], .call, search, arquivo fora do index.js) ──
+test('[RN-148.01/02, Etapa 153 RN-153.04] as camadas do Express montado: so as 3 do modelo de contrato e as 5 da OS (e, no prefixo das familias, as da 149) atendem os caminhos, cada uma com o login e o portao antes de tudo; nenhum middleware so delas, nenhum app.param', () => {
+  const cam = camadas.lerCamadas(pasta);
+  assert.deepStrictEqual(camadas.conferirCamadas(cam, ROTAS_DAS_CAMADAS, { neutro: NEUTRO, alemDasRotas: ALEM_DAS_ROTAS }), []);
+  assert.ok(cam.despacho.length === AMOSTRAS_DAS_CAMADAS.length && cam.despacho.filter((d) => d.atendida).length >= ROTAS_DAS_CAMADAS.length, 'o despejo nao despachou as amostras');
 });
 
 // ── RN-148.01/02: pela rota, cada uma das 8 ───────────────────────────────────────────────

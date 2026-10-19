@@ -20,6 +20,7 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const sqlite3 = require('sqlite3');
+const camadas = require('../helpers/conferirCamadasDoExpress');
 
 const SERVER_DIR = path.join(__dirname, '..', '..');
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -73,10 +74,11 @@ async function subir(extraEnv = {}) {
   const env = { ...process.env };
   for (const k of ['NODE_ENV', 'NODE_OPTIONS', 'RUN_ALL_GUARDA_EXIT', 'PORT', 'CRM_DATA_DIR', 'JWT_SECRET',
     'SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD', 'FALHA_SQL_INJETADA', 'FALHA_SQL_MSG', 'FALHA_SQL_METODOS', 'FALHA_SQL_PULAR', 'PROPOSTAS_PORTAO_DE_MODULO', 'RATE_LIMIT_WINDOW_MS']) delete env[k];
-  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000' }, extraEnv);
+  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000',
+    ...camadas.envDasCamadas(pasta, AMOSTRAS_DAS_CAMADAS) }, extraEnv);
   const out = fs.openSync(logArq, 'a');
   saiu = null;
-  const preload = ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js')];
+  const preload = ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js'), '-r', camadas.preloadDasCamadas()];
   if (extraEnv.FALHA_SQL_INJETADA) preload.push('-r', path.join(__dirname, '..', 'helpers', 'falhaSqlInjetada.js'));
   const marcas = fs.existsSync(logArq) ? (fs.readFileSync(logArq, 'utf8').match(/Banco de dados totalmente inicializado/g) || []).length : 0;
   filho = spawn(process.execPath, [...preload, 'index.js'], {
@@ -130,6 +132,15 @@ const ehOPar = (r) => r.metodo === 'GET' && r.rota === '/api/propostas/:id';
 const APROVACOES = [...FONTE.matchAll(/^app\.(get|post|put|patch|delete)\('(\/api\/aprovacoes[^']*)', ([^\n]*)$/gm)]
   .map((m) => ({ metodo: m[1].toUpperCase(), rota: m[2], resto: m[3] }));
 const UPLOADS = { '/api/propostas/:id/fotos': 'foto', '/api/propostas/:id/anexar-cotacao': 'arquivo', '/api/propostas/:id/pdf-anexo': 'arquivo' };
+// Etapa 153 (RN-153.04): as mesmas rotas, conferidas nas camadas do Express montado (o preload despeja; o cenario confere) — o portao
+// que o cenario do fonte espera de cada uma, mais a lista de OS do Comercial (RN-146.06)
+const ROTAS_DAS_CAMADAS = [
+  ...ROTAS.map((r) => ({ metodo: r.metodo, rota: r.rota, cadeia: camadas.cadeiaDoPortao(ehOPar(r) ? 'exigirComercialOuOperacionalNaProposta' : 'exigirComercialNasPropostas') })),
+  ...APROVACOES.map((r) => ({ metodo: r.metodo, rota: r.rota, cadeia: camadas.cadeiaDoPortao('exigirComercialNasPropostas') })),
+  { metodo: 'GET', rota: '/api/comercial/ordens-servico', cadeia: camadas.cadeiaDoPortao('exigirComercialNasPropostas') },
+];
+const NEUTRO = '/api/zz-neutro-145';
+const AMOSTRAS_DAS_CAMADAS = camadas.amostrasDasCamadas(ROTAS_DAS_CAMADAS, { neutro: NEUTRO });
 
 function arquivosDaPasta() {
   const out = [];
@@ -217,6 +228,13 @@ test('[RN-145.08] fonte: as 5 rotas /api/aprovacoes tem o portao como 2o middlew
   const linhas = FONTE.split('\n').filter((l) => l.includes("'/api/aprovacoes"));
   assert.strictEqual(linhas.length, 5, 'ha registro de rota de aprovacoes fora do formato numa linha so');
   assert.deepStrictEqual(APROVACOES.filter((r) => !r.resto.startsWith('authenticateToken, exigirComercialNasPropostas, ')).map((r) => r.metodo + ' ' + r.rota), []);
+});
+
+// ── Etapa 153 (RN-153.04): o que a regua do texto nao le (receptor apelidado, app[verbo], .call, search, arquivo fora do index.js) ──
+test('[RN-145.01/08, RN-146.06, Etapa 153 RN-153.04] as camadas do Express montado: so as 49 das propostas, as 5 de aprovacoes e a lista de OS do Comercial atendem os 3 prefixos, cada uma com o login e o portao antes de tudo; nenhum middleware so delas, nenhum app.param', () => {
+  const cam = camadas.lerCamadas(pasta);
+  assert.deepStrictEqual(camadas.conferirCamadas(cam, ROTAS_DAS_CAMADAS, { neutro: NEUTRO }), []);
+  assert.ok(cam.despacho.length === AMOSTRAS_DAS_CAMADAS.length && cam.despacho.filter((d) => d.atendida).length >= ROTAS_DAS_CAMADAS.length, 'o despejo nao despachou as amostras');
 });
 
 test('[RN-145.08, Fase 5 r2 I-1] o barrado toma 403 nas 5 rotas de aprovacoes e nenhum pedido nasce; quem tem o Comercial lista', async () => {

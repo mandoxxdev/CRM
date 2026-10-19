@@ -20,6 +20,7 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const sqlite3 = require('sqlite3');
+const camadas = require('../helpers/conferirCamadasDoExpress');
 
 const SERVER_DIR = path.join(__dirname, '..', '..');
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -66,10 +67,11 @@ async function subir(extraEnv = {}) {
   const env = { ...process.env };
   for (const k of ['NODE_ENV', 'NODE_OPTIONS', 'RUN_ALL_GUARDA_EXIT', 'PORT', 'CRM_DATA_DIR', 'JWT_SECRET',
     'SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD', 'FALHA_SQL_INJETADA', 'FALHA_SQL_MSG', 'FALHA_SQL_METODOS', 'FALHA_SQL_PULAR', 'FALHA_SQL_MSGS', 'PROPOSTAS_PORTAO_DE_MODULO', 'RATE_LIMIT_WINDOW_MS']) delete env[k];
-  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000' }, extraEnv);
+  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000',
+    ...camadas.envDasCamadas(pasta, AMOSTRAS_DAS_CAMADAS) }, extraEnv);
   const out = fs.openSync(logArq, 'a');
   saiu = null;
-  const preload = ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js')];
+  const preload = ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js'), '-r', camadas.preloadDasCamadas()];
   if (extraEnv.FALHA_SQL_INJETADA) preload.push('-r', path.join(__dirname, '..', 'helpers', 'falhaSqlInjetada.js'));
   const marcas = fs.existsSync(logArq) ? (fs.readFileSync(logArq, 'utf8').match(/Banco de dados totalmente inicializado/g) || []).length : 0;
   filho = spawn(process.execPath, [...preload, 'index.js'], {
@@ -123,6 +125,13 @@ const TODAS = [...FONTE.matchAll(/^app\.(get|post|put|patch|delete)\('(\/api\/(?
   .map((m) => ({ metodo: m[1].toUpperCase(), rota: m[2], resto: m[3] }));
 const MODELO = TODAS.filter((r) => PREFIXOS_MODELO.test(r.rota));
 const LISTAS = TODAS.filter((r) => r.rota.startsWith('/api/comercial/listas-precos'));
+// Etapa 153 (RN-153.04): as mesmas 25, conferidas nas camadas do Express montado, com o portao que o cenario do fonte espera de cada uma
+const ROTAS_DAS_CAMADAS = [
+  ...MODELO.map((r) => ({ metodo: r.metodo, rota: r.rota, cadeia: camadas.cadeiaDoPortao('exigirComercialNoModeloDaProposta') })),
+  ...LISTAS.map((r) => ({ metodo: r.metodo, rota: r.rota, cadeia: camadas.cadeiaDoPortao('exigirComercialNasPropostas') })),
+];
+const NEUTRO = '/api/zz-neutro-147';
+const AMOSTRAS_DAS_CAMADAS = camadas.amostrasDasCamadas(ROTAS_DAS_CAMADAS, { neutro: NEUTRO });
 const UPLOADS = {
   '/api/proposta-template/logo': ['logo', 'l.png', 'image/png'],
   '/api/proposta-template/header-image': ['headerImage', 'h.png', 'image/png'],
@@ -226,6 +235,13 @@ test('[RN-147.01/02, C319, C329] fonte: as 20 do modelo com exigirComercialNoMod
   assert.strictEqual(Object.keys(UPLOADS).filter((u) => MODELO.some((r) => r.rota === u && r.metodo === 'POST' && /\.single\(/.test(r.resto))).length, 5, 'as cinco rotas com multer');
   assert.ok(FONTE.includes("const exigirComercialNoModeloDaProposta = portaoDasPropostas.exigir('comercial', { tambemAdminDoModuloCom: { admin: 'comercial', tela: 'administrativo' } });"),
     'o portao do modelo nao e o do plano');
+});
+
+// ── Etapa 153 (RN-153.04): o que a regua do texto nao le (receptor apelidado, app[verbo], .call, search, arquivo fora do index.js) ──
+test('[RN-147.01/02, Etapa 153 RN-153.04] as camadas do Express montado: so as 20 do modelo e as 5 das listas atendem os 4 prefixos, cada uma com o login e o portao antes de tudo; nenhum middleware so delas, nenhum app.param', () => {
+  const cam = camadas.lerCamadas(pasta);
+  assert.deepStrictEqual(camadas.conferirCamadas(cam, ROTAS_DAS_CAMADAS, { neutro: NEUTRO }), []);
+  assert.ok(cam.despacho.length === AMOSTRAS_DAS_CAMADAS.length && cam.despacho.filter((d) => d.atendida).length >= ROTAS_DAS_CAMADAS.length, 'o despejo nao despachou as amostras');
 });
 
 // ── RN-147.01/02: pela rota, cada uma das 25 ──────────────────────────────────────────────

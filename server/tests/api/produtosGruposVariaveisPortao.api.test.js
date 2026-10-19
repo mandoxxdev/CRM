@@ -21,6 +21,7 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const sqlite3 = require('sqlite3');
+const camadas = require('../helpers/conferirCamadasDoExpress');
 const regua = require('../helpers/reguaDoFonteDoServidor');
 
 const SERVER_DIR = path.join(__dirname, '..', '..');
@@ -61,10 +62,11 @@ async function subir(extraEnv = {}) {
   const env = { ...process.env };
   for (const k of ['NODE_ENV', 'NODE_OPTIONS', 'RUN_ALL_GUARDA_EXIT', 'PORT', 'CRM_DATA_DIR', 'JWT_SECRET', 'API_URL',
     'SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD', 'FALHA_SQL_INJETADA', 'FALHA_SQL_MSG', 'FALHA_SQL_METODOS', 'FALHA_SQL_PULAR', 'FALHA_SQL_MSGS', 'PROPOSTAS_PORTAO_DE_MODULO', 'RATE_LIMIT_WINDOW_MS']) delete env[k];
-  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000' }, extraEnv);
+  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000',
+    ...camadas.envDasCamadas(pasta, AMOSTRAS_DAS_CAMADAS) }, extraEnv);
   const out = fs.openSync(logArq, 'a');
   saiu = null;
-  const preload = ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js')];
+  const preload = ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js'), '-r', camadas.preloadDasCamadas()];
   if (extraEnv.FALHA_SQL_INJETADA) preload.push('-r', path.join(__dirname, '..', 'helpers', 'falhaSqlInjetada.js'));
   const marcas = fs.existsSync(logArq) ? (fs.readFileSync(logArq, 'utf8').match(/Banco de dados totalmente inicializado/g) || []).length : 0;
   filho = spawn(process.execPath, [...preload, 'index.js'], {
@@ -143,6 +145,14 @@ const VINTE_E_CINCO = [
   ...GRUPOS.map((r) => achar(r, 'grupos')), ...PRODUTOS.map((r) => achar(r, 'produtos')),
   ...CODIGO.map((r) => achar(r, 'codigo')), ...VARIAVEIS.map((r) => achar(r, 'variaveis')),
 ];
+// Etapa 153 (RN-153.04): as mesmas 25, conferidas nas camadas do Express montado, com o portao que o cenario do fonte espera de cada grupo
+// (PORTAO); o clonar aberto de proposito (RN-150.03: so o login e o handler, que barra quem nao e administrador) com a cadeia medida
+const ROTAS_DAS_CAMADAS = [
+  ...VINTE_E_CINCO.map((r) => ({ metodo: r.metodo, rota: r.rota, cadeia: camadas.cadeiaDoPortao(PORTAO[r.grupo]) })),
+  { metodo: CLONAR[0], rota: CLONAR[1], cadeia: ['authenticateToken', '<anonima>'] },
+];
+const NEUTRO = '/api/zz-neutro-150';
+const AMOSTRAS_DAS_CAMADAS = camadas.amostrasDasCamadas(ROTAS_DAS_CAMADAS, { neutro: NEUTRO });
 
 function caminhoDe(r) {
   const id = r.grupo === 'grupos' ? ctx.grupo : r.grupo === 'variaveis' ? ctx.variavel : ctx.produto;
@@ -243,6 +253,13 @@ test('[RN-150.01/02/03/04, C346, C347] fonte: as 25 com o portao certo como 2o m
   const defs = FONTE.match(/^\s*(const|let|var)\s+exigirComercialNasVariaveisTecnicas\s*=.*$/gm) || [];
   assert.deepStrictEqual(defs.map((l) => l.trim()), ["const exigirComercialNasVariaveisTecnicas = portaoDasPropostas.exigir('comercial', { tambemAdminDoModuloCom: { admin: 'comercial', tela: 'administrativo' } });"],
     'o portao das variaveis tecnicas nao e o do plano');
+});
+
+// ── Etapa 153 (RN-153.04): o que a regua do texto nao le (receptor apelidado, app[verbo], .call, search, arquivo fora do index.js) ──
+test('[RN-150.01/02/03/04, Etapa 153 RN-153.04] as camadas do Express montado: so as 25 e o clonar (so o login) atendem os 4 prefixos, cada uma com o login e o portao antes de tudo; nenhum middleware so delas, nenhum app.param', () => {
+  const cam = camadas.lerCamadas(pasta);
+  assert.deepStrictEqual(camadas.conferirCamadas(cam, ROTAS_DAS_CAMADAS, { neutro: NEUTRO }), []);
+  assert.ok(cam.despacho.length === AMOSTRAS_DAS_CAMADAS.length && cam.despacho.filter((d) => d.atendida).length >= ROTAS_DAS_CAMADAS.length, 'o despejo nao despachou as amostras');
 });
 
 // ── RN-150.01/02/04: pela rota, cada uma das 25 ───────────────────────────────────────────

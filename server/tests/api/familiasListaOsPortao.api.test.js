@@ -21,6 +21,7 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const sqlite3 = require('sqlite3');
+const camadas = require('../helpers/conferirCamadasDoExpress');
 const regua = require('../helpers/reguaDoFonteDoServidor');
 
 const SERVER_DIR = path.join(__dirname, '..', '..');
@@ -61,10 +62,11 @@ async function subir(extraEnv = {}) {
   const env = { ...process.env };
   for (const k of ['NODE_ENV', 'NODE_OPTIONS', 'RUN_ALL_GUARDA_EXIT', 'PORT', 'CRM_DATA_DIR', 'JWT_SECRET', 'API_URL',
     'SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD', 'FALHA_SQL_INJETADA', 'FALHA_SQL_MSG', 'FALHA_SQL_METODOS', 'FALHA_SQL_PULAR', 'FALHA_SQL_MSGS', 'PROPOSTAS_PORTAO_DE_MODULO', 'RATE_LIMIT_WINDOW_MS']) delete env[k];
-  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000' }, extraEnv);
+  Object.assign(env, { CRM_DATA_DIR: pasta, PORT: String(porta), SEED_ADMIN_EMAIL: SEED.email, SEED_ADMIN_PASSWORD: SEED.senha, RATE_LIMIT_MAX: '100000',
+    ...camadas.envDasCamadas(pasta, AMOSTRAS_DAS_CAMADAS) }, extraEnv);
   const out = fs.openSync(logArq, 'a');
   saiu = null;
-  const preload = ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js')];
+  const preload = ['-r', path.join(__dirname, '..', 'helpers', 'morreComOPai.js'), '-r', camadas.preloadDasCamadas()];
   if (extraEnv.FALHA_SQL_INJETADA) preload.push('-r', path.join(__dirname, '..', 'helpers', 'falhaSqlInjetada.js'));
   const marcas = fs.existsSync(logArq) ? (fs.readFileSync(logArq, 'utf8').match(/Banco de dados totalmente inicializado/g) || []).length : 0;
   filho = spawn(process.execPath, [...preload, 'index.js'], {
@@ -132,6 +134,18 @@ const CONFIG = [
 const achar = ([m, r], grupo) => ({ ...(TODOS.find((x) => x.metodo === m && x.rota === r) || { metodo: m, rota: r, resto: '(nao registrada)' }), grupo });
 const VINTE_E_UMA = [...CADASTRO.map((r) => achar(r, 'cadastro')), ...CONFIG.map((r) => achar(r, 'config'))];
 const LISTA_OS = achar(['GET', '/api/operacional/ordens-servico'], 'lista');
+// Etapa 153 (RN-153.04): as mesmas, conferidas nas camadas do Express montado, com o portao que o cenario do fonte espera de cada uma;
+// o clonar aberto de proposito (RN-149.03: so o login e o handler, que barra quem nao e administrador) com a cadeia que o despejo da, medida
+const ROTAS_DAS_CAMADAS = [
+  ...VINTE_E_UMA.map((r) => ({ metodo: r.metodo, rota: r.rota, cadeia: camadas.cadeiaDoPortao(r.grupo === 'cadastro' ? 'exigirComercialNasPropostas' : 'exigirComercialNaFamiliaPorConfiguracoes') })),
+  { metodo: 'POST', rota: '/api/familias/:id/clonar', cadeia: ['authenticateToken', '<anonima>'] },
+  { metodo: LISTA_OS.metodo, rota: LISTA_OS.rota, cadeia: camadas.cadeiaDoPortao('exigirOperacionalNaListaDeOS') },
+];
+const NEUTRO = '/api/zz-neutro-149';
+const AMOSTRAS_DAS_CAMADAS = camadas.amostrasDasCamadas(ROTAS_DAS_CAMADAS, { neutro: NEUTRO });
+// medido: o POST do mesmo caminho da lista de OS e a criacao, com outra regua (C277; o cenario do fonte o prende) — authenticateToken e
+// um middleware anonimo; casa a amostra da lista em outro verbo, sem despacho (nenhuma amostra POST nele), entao a cadeia so documenta
+const ALEM_DAS_ROTAS = [{ metodo: 'POST', rota: '/api/operacional/ordens-servico', cadeia: ['authenticateToken', '<anonima>'] }];
 
 const caminhoDe = (r) => r.rota
   .replace('/opcoes/:id', `/opcoes/${ctx.opcao}`)
@@ -234,6 +248,13 @@ test('[RN-149.01/02/03/04, C343, C345] fonte: as 13 do cadastro com exigirComerc
     'o portao de Configuracoes nao e o do plano');
   assert.ok(FONTE.includes("const exigirOperacionalNaListaDeOS = PORTAO_DAS_PROPOSTAS_DESLIGADO ? checkModulePermission('operacional') : portaoDasPropostas.exigir('operacional');"),
     'o portao da lista de OS nao e o do plano (desligado -> a regua antiga)');
+});
+
+// ── Etapa 153 (RN-153.04): o que a regua do texto nao le (receptor apelidado, app[verbo], .call, search, arquivo fora do index.js) ──
+test('[RN-149.01/02/03/04, Etapa 153 RN-153.04] as camadas do Express montado: so as 21 das familias, o clonar (so o login) e a lista de OS atendem os 3 prefixos, cada uma com o login e o portao antes de tudo; nenhum middleware so delas, nenhum app.param', () => {
+  const cam = camadas.lerCamadas(pasta);
+  assert.deepStrictEqual(camadas.conferirCamadas(cam, ROTAS_DAS_CAMADAS, { neutro: NEUTRO, alemDasRotas: ALEM_DAS_ROTAS }), []);
+  assert.ok(cam.despacho.length === AMOSTRAS_DAS_CAMADAS.length && cam.despacho.filter((d) => d.atendida).length >= ROTAS_DAS_CAMADAS.length, 'o despejo nao despachou as amostras');
 });
 
 // ── RN-149.01/02/04: pela rota, cada uma das 22 ───────────────────────────────────────────
