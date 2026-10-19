@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiSearch, FiX, FiUsers, FiBriefcase, FiFileText, FiCalendar, FiPackage, FiDollarSign } from 'react-icons/fi';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { fetchUserPermissions, getCachedUserPermissions } from '../services/permissionsCache';
+import { podeUsarBuscaGlobal, FRASE_BUSCA_SEM_MODULO, FRASE_BUSCA_FALHOU } from '../utils/buscaGlobalAcesso';
 import './BuscaGlobal.css';
 
 const BuscaGlobal = ({ isOpen, onClose }) => {
@@ -9,31 +12,74 @@ const BuscaGlobal = ({ isOpen, onClose }) => {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [erro, setErro] = useState(false);
+  // Etapa 155 (RN-155.02, C364, B999): 'sim' busca; 'nao' diz por que nao busca (a regua da tela nao da o Comercial, o unico modulo dos tipos
+  // da busca); 'verificando' = o cache de permissoes estava frio ao abrir (ele vence em 5 min) e a leitura esta em voo — o que se digita espera.
+  const [acesso, setAcesso] = useState('sim');
+  // Etapa 155 (RN-155.03, C365): o numero do ultimo pedido. Cada busca, o termo curto, o fechar e o abrir o incrementam; so o pedido com o
+  // numero corrente grava resultado, erro e "carregando". Antes, a resposta de um termo anterior (o 503 repetido pelo interceptor, ou so mais
+  // lenta) aparecia com o termo novo no campo.
+  const pedidoRef = useRef(0);
   const inputRef = useRef(null);
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const descartarPedidoEmVoo = () => {
+    pedidoRef.current += 1;
+    setLoading(false);
+  };
 
   useEffect(() => {
-    if (isOpen) {
-      inputRef.current?.focus();
-      setQuery('');
-      setResults([]);
-      setSelectedIndex(0);
+    descartarPedidoEmVoo();
+    if (!isOpen) return undefined;
+    inputRef.current?.focus();
+    setQuery('');
+    setResults([]);
+    setErro(false);
+    setSelectedIndex(0);
+    let vivo = true;
+    const decisao = podeUsarBuscaGlobal(user, user?.id ? getCachedUserPermissions(user.id) : null);
+    if (decisao === null) {
+      setAcesso('verificando');
+      fetchUserPermissions(user.id)
+        .then((data) => { if (vivo) setAcesso(podeUsarBuscaGlobal(user, data || { permissoes: [] }) === false ? 'nao' : 'sim'); })
+        // a leitura falhou ou esgotou o tempo: falha ABERTO — o servidor filtra (a tela so evita a busca que nunca acha nada)
+        .catch(() => { if (vivo) setAcesso('sim'); });
+    } else {
+      setAcesso(decisao ? 'sim' : 'nao');
     }
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
+  // o Esc fecha mesmo com o campo desligado (sem o Comercial o campo nao recebe foco, e o Esc so era ouvido nele — Fase 2 I-2)
   useEffect(() => {
+    if (!isOpen) return undefined;
+    const aoTeclar = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', aoTeclar);
+    return () => window.removeEventListener('keydown', aoTeclar);
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
+    // fechada, ou sem a decisao de acesso, nao pede nada (o atraso de 300 ms de um termo digitado antes de fechar nao dispara — Fase 2 I-4)
+    if (!isOpen || acesso !== 'sim') return undefined;
     const searchTimeout = setTimeout(() => {
       if (query.trim().length >= 2) {
         performSearch(query);
       } else {
+        descartarPedidoEmVoo();
         setResults([]);
+        setErro(false);
       }
     }, 300);
 
     return () => clearTimeout(searchTimeout);
-  }, [query]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, isOpen, acesso]);
 
   const performSearch = async (searchQuery) => {
+    pedidoRef.current += 1;
+    const pedido = pedidoRef.current;
     setLoading(true);
     try {
       // ATENCAO: o baseURL do axios ja termina em '/api' (ver services/api.js).
@@ -42,16 +88,20 @@ const BuscaGlobal = ({ isOpen, onClose }) => {
       const response = await api.get('/busca-global', {
         params: { q: searchQuery }
       });
+      if (pedido !== pedidoRef.current) return; // um pedido mais novo (ou o fechar) ja tomou o lugar deste
       const lista = Array.isArray(response.data) ? response.data : [];
+      setErro(false);
       // Descarta tipos sem rota registrada no App.js: exibi-los levaria o usuario
       // para a home ao clicar, o que parece que "a busca nao funciona".
       setResults(lista.filter((item) => Boolean(getRoute(item.type))));
       setSelectedIndex(0);
     } catch (error) {
+      if (pedido !== pedidoRef.current) return;
       console.error('Erro na busca:', error);
       setResults([]);
+      setErro(true);
     } finally {
-      setLoading(false);
+      if (pedido === pedidoRef.current) setLoading(false);
     }
   };
 
@@ -101,9 +151,8 @@ const BuscaGlobal = ({ isOpen, onClose }) => {
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Escape') {
-      onClose();
-    } else if (e.key === 'ArrowDown') {
+    // o Esc e ouvido no window (acima) — aqui fecharia duas vezes
+    if (e.key === 'ArrowDown') {
       e.preventDefault();
       setSelectedIndex(prev => Math.min(prev + 1, results.length - 1));
     } else if (e.key === 'ArrowUp') {
@@ -127,6 +176,7 @@ const BuscaGlobal = ({ isOpen, onClose }) => {
               type="text"
               className="busca-global-input"
               placeholder="Buscar clientes, projetos, propostas..."
+              disabled={acesso === 'nao'}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -146,14 +196,21 @@ const BuscaGlobal = ({ isOpen, onClose }) => {
         </div>
 
         <div className="busca-global-results">
-          {loading && (
+          {(loading || (acesso === 'verificando' && query.trim().length >= 2)) && (
             <div className="busca-global-loading">
               <div className="loading-spinner-small"></div>
               <span>Buscando...</span>
             </div>
           )}
 
-          {!loading && query.trim().length < 2 && (
+          {acesso === 'nao' && (
+            <div className="busca-global-empty busca-global-sem-modulo">
+              <FiSearch />
+              <p>{FRASE_BUSCA_SEM_MODULO}</p>
+            </div>
+          )}
+
+          {acesso !== 'nao' && !loading && query.trim().length < 2 && (
             <div className="busca-global-empty">
               <FiSearch />
               <p>Digite pelo menos 2 caracteres para buscar</p>
@@ -163,14 +220,14 @@ const BuscaGlobal = ({ isOpen, onClose }) => {
             </div>
           )}
 
-          {!loading && query.trim().length >= 2 && results.length === 0 && (
+          {acesso === 'sim' && !loading && query.trim().length >= 2 && results.length === 0 && (
             <div className="busca-global-empty">
               <FiSearch />
-              <p>Nenhum resultado encontrado</p>
+              <p>{erro ? FRASE_BUSCA_FALHOU : 'Nenhum resultado encontrado'}</p>
             </div>
           )}
 
-          {!loading && results.length > 0 && (
+          {acesso === 'sim' && !loading && results.length > 0 && (
             <div className="busca-global-results-list">
               {results.map((result, index) => {
                 const Icon = getIcon(result.type);

@@ -233,6 +233,24 @@ test('[RN-153.01/02, C355, C352] fonte: as 7 com o exigirComercialNasPropostas e
   assert.deepStrictEqual([pushes, filtrados], [6, 6], 'um tipo e empurrado sem o filtro');
 });
 
+// Etapa 155 (RN-155.02, C364, B999): a busca do client nao busca para quem a regua da tela nao da nenhum modulo dos tipos da busca. O conjunto
+// que o client usa (MODULOS_DA_BUSCA_GLOBAL, client/src/utils/buscaGlobalAcesso.js) = o dos valores de TIPOS_DA_BUSCA_GLOBAL — um tipo novo de
+// outro modulo no servidor sem entrar no client faria a busca calar para quem o pode ver.
+test('[RN-155.02, C364, B999] o client: os modulos com que a busca decide se busca = os modulos de TIPOS_DA_BUSCA_GLOBAL; a busca le o cache e, frio, as permissoes', () => {
+  const mapa = /const TIPOS_DA_BUSCA_GLOBAL = (\{[^}]*\});/.exec(FONTE);
+  // eslint-disable-next-line no-new-func
+  const doServidor = [...new Set(Object.values(Function(`return ${mapa[1]}`)()).flat())].sort();
+  const util = fs.readFileSync(path.join(SERVER_DIR, '..', 'client', 'src', 'utils', 'buscaGlobalAcesso.js'), 'utf8');
+  const doClient = /export const MODULOS_DA_BUSCA_GLOBAL = (\[[^\]]*\]);/.exec(util);
+  assert.ok(doClient, 'o MODULOS_DA_BUSCA_GLOBAL do client');
+  // eslint-disable-next-line no-new-func
+  assert.deepStrictEqual([...Function(`return ${doClient[1]}`)()].sort(), doServidor, 'o client decide com outros modulos que o servidor');
+  assert.ok(doServidor.length >= 1);
+  // a tela decide por essa regua (o cache e, frio, a leitura) — sem os comentarios
+  const tela = fs.readFileSync(path.join(SERVER_DIR, '..', 'client', 'src', 'components', 'BuscaGlobal.js'), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+  assert.ok(tela.includes('podeUsarBuscaGlobal(user, user?.id ? getCachedUserPermissions(user.id) : null)') && tela.includes('fetchUserPermissions(user.id)'), 'a busca nao decide pela regua da tela');
+});
+
 // ── RN-153.04: as camadas do Express de verdade ───────────────────────────────────────────
 test('[RN-153.01/02/04] as camadas do Express montado: so as 8 atendem os 4 prefixos, cada uma com o login e o portao (ou o filtro da busca, com o mapa inteiro) antes de tudo; nenhum middleware so delas, nenhum app.param', () => {
   const cam = camadas.lerCamadas(pasta);
