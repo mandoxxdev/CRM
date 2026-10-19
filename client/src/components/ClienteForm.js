@@ -4,6 +4,17 @@ import api from '../services/api';
 import { FiSearch, FiLoader, FiUpload, FiX } from 'react-icons/fi';
 import { mascararTelefoneDigitando, mascararTelefoneCompleto } from '../utils/telefone';
 import './ClienteForm.css';
+import { opcaoQueCasa, precisaOpcaoAMais } from '../utils/opcaoDoSelect';
+
+const SEGMENTOS = [
+  'Tintas & Vernizes',
+  'Químico',
+  'Cosméticos',
+  'Alimentícios',
+  'Domissanitários',
+  'Saneantes',
+  'Outros'
+];
 
 const ClienteForm = () => {
   const { id } = useParams();
@@ -30,15 +41,7 @@ const ClienteForm = () => {
     logo_url: ''
   });
 
-  const segmentos = [
-    'Tintas & Vernizes',
-    'Químico',
-    'Cosméticos',
-    'Alimentícios',
-    'Domissanitários',
-    'Saneantes',
-    'Outros'
-  ];
+  const segmentos = SEGMENTOS;
 
   const estados = [
     'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
@@ -57,7 +60,13 @@ const ClienteForm = () => {
       const response = await api.get(`/clientes/${id}`);
       // Cadastros antigos vieram sem máscara; mascara na abertura para o campo já mostrar o
       // formato certo, em vez de só depois que o usuário encostar nele.
-      setFormData({ ...response.data, telefone: mascararTelefoneCompleto(response.data.telefone) });
+      // Etapa 160 (RN-160.08, C389): o segmento gravado e "COSMÉTICOS" (o servidor poe em maiusculas) e a opcao e "Cosméticos" — sem
+      // casar, o select mostrava "Selecione..."; o que nao casa com nenhuma opcao aparece como uma opcao a mais
+      setFormData({
+        ...response.data,
+        telefone: mascararTelefoneCompleto(response.data.telefone),
+        segmento: opcaoQueCasa(response.data.segmento, SEGMENTOS),
+      });
       // Se houver logo_url, criar preview
       if (response.data.logo_url) {
         const logoUrl = response.data.logo_url.startsWith('http') 
@@ -512,6 +521,7 @@ const ClienteForm = () => {
                 {segmentos.map(seg => (
                   <option key={seg} value={seg}>{seg}</option>
                 ))}
+                {precisaOpcaoAMais(formData.segmento, SEGMENTOS) && <option value={formData.segmento}>{formData.segmento}</option>}
               </select>
             </div>
             <div className="form-group full-width">
