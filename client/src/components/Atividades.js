@@ -162,7 +162,8 @@ const Atividades = () => {
 
   const handleVisualizarProposta = () => {
     if (modalLembrete && modalLembrete.proposta_id) {
-      navigate(`/propostas/editar/${modalLembrete.proposta_id}`);
+      // Etapa 154 (RN-154.03, Fase 2 M-4): o mesmo endereco do sino — a tela da proposta mora dentro de /comercial
+      navigate(`/comercial/propostas/editar/${modalLembrete.proposta_id}`);
       handleFecharModal();
     }
   };

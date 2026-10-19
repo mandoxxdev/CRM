@@ -52,7 +52,8 @@ const Notificacoes = () => {
 
   const handleNotificationClick = (notificacao) => {
     if (notificacao.proposta_id) {
-      navigate(`/propostas/editar/${notificacao.proposta_id}`);
+      // Etapa 154 (RN-154.03): a tela da proposta mora dentro de /comercial (sem o prefixo, o clique caia na rota inexistente)
+      navigate(`/comercial/propostas/editar/${notificacao.proposta_id}`);
     }
     setShowDropdown(false);
   };
