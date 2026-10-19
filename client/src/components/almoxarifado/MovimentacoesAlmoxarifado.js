@@ -11,6 +11,7 @@ import { extrairCodigoLido } from '../../utils/codigoLido';
 import { justificativaDiferente } from '../../utils/justificativaMovimentacao';
 import CampoCodigoLido from './CampoCodigoLido';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
+import AvisoDaListaRecusada from './AvisoDaListaRecusada';
 import './Almoxarifado.css';
 
 // SUCATA e PERDA foram isentos da guarda de vencimento na Task 3 (Etapa 6) justamente para que
@@ -154,6 +155,7 @@ const MovimentacoesAlmoxarifado = () => {
   const [centrosCusto, setCentrosCusto] = useState([]);
   const [ordensServico, setOrdensServico] = useState([]);
   const [projetos, setProjetos] = useState([]);
+  const [erroProjetos, setErroProjetos] = useState(null);
   const [localizacoes, setLocalizacoes] = useState([]);
   const [estornoTarget, setEstornoTarget] = useState(null);
   const [estornoMotivo, setEstornoMotivo] = useState('');
@@ -473,12 +475,14 @@ const MovimentacoesAlmoxarifado = () => {
     const [cc, os, proj, locs] = await Promise.all([
       api.get('/almoxarifado/centros-custo').catch(() => ({ data: [] })),
       api.get('/almoxarifado/aux/ordens-servico').catch(() => ({ data: [] })),
-      api.get('/projetos').catch(() => ({ data: [] })),
+      // Etapa 156 (RN-156.02, C366): a recusa da lista de projetos (de fora do modulo) fica guardada e o seletor diz o motivo.
+      api.get('/projetos').then((r) => ({ data: r.data, erro: null }), (erro) => ({ data: [], erro })),
       api.get('/almoxarifado/localizacoes').catch(() => ({ data: [] })),
     ]);
     setCentrosCusto(cc.data || []);
     setOrdensServico(os.data || []);
     setProjetos(proj.data || []);
+    setErroProjetos(proj.erro);
     setLocalizacoes(locs.data || []);
   };
 
@@ -1027,6 +1031,7 @@ const MovimentacoesAlmoxarifado = () => {
                         <option key={p.id} value={p.id}>{p.nome}</option>
                       ))}
                     </select>
+                    <AvisoDaListaRecusada erro={erroProjetos} nome="projetos" />
                   </div>
                   <div className="almox-field">
                     <label className="almox-label">Centro de custo</label>

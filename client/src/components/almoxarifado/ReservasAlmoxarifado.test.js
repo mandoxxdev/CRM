@@ -18,6 +18,8 @@ import api from '../../services/api';
 // (`/clientes` vazio, a OS com `numero`) provava o defeito: a tela lia campos que o servidor nao manda.
 import CLIENTE_DO_SERVIDOR from './__fixtures__/clienteDoServidor.json';
 import OS_DO_AUX_DO_SERVIDOR from './__fixtures__/osDoAuxDoServidor.json';
+// Etapa 156 (RN-156.02): o corpo REAL do 403 das listas (o portao das listas) — conferido pelo listasNotificacoesPortao.
+import RECUSA from './__fixtures__/recusaDaListaDoServidor.json';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -435,5 +437,102 @@ describe('[RN-155.01] o cliente e a OS pelos campos que o servidor manda', () =>
     expect(container.querySelector('.almox-modal').textContent).toContain('atualmente em ACME INDUSTRIA LTDA');
     expect(opcoes('Cliente')).toEqual([['', '—'], ['3', 'ACME INDUSTRIA LTDA']]);
     expect(opcoes('Ordem de Serviço')).toEqual([['', '—'], ['42', 'OS-042 — ACME INDUSTRIA LTDA']]);
+  });
+});
+
+// Etapa 156 (RN-156.02, C366): a lista de projetos ou a de clientes recusada (o corpo REAL do 403 do portao das listas — o fixture,
+// conferido pelo teste do servidor listasNotificacoesPortao) deixa de virar seletor vazio calado: cada seletor que ela alimenta diz o motivo
+// logo abaixo, e o resto da tela continua (a outra lista, as opcoes que nao dependem dela). Lido por campo: ha ate 3 avisos na tela de uma vez.
+describe('[RN-156.02, C366] a lista recusada diz o motivo sob o seletor', () => {
+  const recusa403 = () => Object.assign(new Error('Request failed with status code 403'), { response: { status: 403, data: RECUSA } });
+  const FRASE_PROJETOS = 'Sem acesso à lista de projetos: Acesso negado ao módulo. Recarregue a página para conferir suas permissões.';
+  const FRASE_CLIENTES = 'Sem acesso à lista de clientes: Acesso negado ao módulo. Recarregue a página para conferir suas permissões.';
+  const avisoDoCampo = (rotulo) => campoPorLabel(rotulo).closest('.almox-field').querySelector('[role="alert"]');
+  const opcoes = (rotulo) => [...campoPorLabel(rotulo).querySelectorAll('option')].map((o) => o.textContent);
+  const avisoDoFiltro = () => {
+    const prox = container.querySelector('.almox-filters').nextElementSibling;
+    return prox ? prox.querySelector('[role="alert"]') : null;
+  };
+  const recusar = (lista) => {
+    const original = api.get.getMockImplementation();
+    api.get.mockImplementation((url, ...resto) => (url === lista ? Promise.reject(recusa403()) : original(url, ...resto)));
+  };
+  async function abrirNovaReserva() {
+    const botao = [...container.querySelectorAll('button')].find((b) => b.textContent.includes('Nova Reserva'));
+    await act(async () => { botao.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+  }
+
+  test('/projetos recusada: o motivo sob o filtro e sob o Projeto da reserva nova; o Cliente carrega e nao avisa', async () => {
+    recusar('/projetos');
+    await renderizar();
+    expect(avisoDoFiltro()?.textContent).toBe(FRASE_PROJETOS);
+    const filtroProjetos = [...container.querySelectorAll('.almox-filters select')][2];
+    expect([...filtroProjetos.querySelectorAll('option')].map((o) => o.textContent)).toEqual(['Todos os projetos']);
+    await abrirNovaReserva();
+    expect(avisoDoCampo('Projeto')?.textContent).toBe(FRASE_PROJETOS);
+    expect(opcoes('Projeto')).toEqual(['—']);
+    // a metade positiva: a outra lista chegou e o seletor dela nao avisa
+    expect(opcoes('Cliente')).toEqual(['—', 'ACME INDUSTRIA LTDA']);
+    expect(avisoDoCampo('Cliente')).toBeNull();
+  });
+
+  test('/clientes recusada: o motivo sob o Cliente da reserva nova; os projetos carregam, o filtro nao avisa', async () => {
+    recusar('/clientes');
+    await renderizar();
+    expect(avisoDoFiltro()).toBeNull();
+    await abrirNovaReserva();
+    expect(avisoDoCampo('Cliente')?.textContent).toBe(FRASE_CLIENTES);
+    expect(opcoes('Cliente')).toEqual(['—']);
+    expect(opcoes('Projeto')).toEqual(['—', 'Projeto Alfa', 'Projeto Beta']);
+    expect(avisoDoCampo('Projeto')).toBeNull();
+  });
+
+  test('com as duas listas carregadas, nenhum aviso (no filtro, na reserva nova, na transferencia)', async () => {
+    reservasDoBanco = [RESERVA_MANUAL_ATIVA];
+    await renderizar();
+    expect(container.querySelectorAll('[role="alert"]')).toHaveLength(0);
+    await abrirNovaReserva();
+    expect(container.querySelectorAll('[role="alert"]')).toHaveLength(0);
+    await clicarBotaoModal('Cancelar');
+    await clicarAcao(0, 'Transferir');
+    expect(container.querySelector('.almox-modal h2').textContent).toBe('Transferir reserva');
+    expect(container.querySelectorAll('[role="alert"]')).toHaveLength(0);
+    expect(opcoes('Projeto')).toEqual(['—', 'Projeto Alfa', 'Projeto Beta']);
+  });
+
+  test('(Fase 2 I3) transferir a reserva do projeto 12 com /projetos recusada: "Projeto #12 — fora da lista" marcada, o aviso, e "—" manda o projeto vazio', async () => {
+    reservasDoBanco = [{ ...RESERVA_MANUAL_ATIVA, id: 12, projeto_id: 12, cliente_id: 3 }];
+    recusar('/projetos');
+    await renderizar();
+    await clicarAcao(0, 'Transferir');
+    const projeto = campoPorLabel('Projeto');
+    expect(projeto.value).toBe('12');
+    expect(projeto.selectedOptions[0].textContent).toBe('Projeto #12 — fora da lista');
+    expect(avisoDoCampo('Projeto')?.textContent).toBe(FRASE_PROJETOS);
+    // o cliente 3 esta na lista: sem opcao "fora da lista" nem aviso
+    expect(opcoes('Cliente')).toEqual(['—', 'ACME INDUSTRIA LTDA']);
+    expect(avisoDoCampo('Cliente')).toBeNull();
+    preencher(projeto, '');
+    await clicarBotaoModal('Transferir');
+    expect(api.put).toHaveBeenCalledWith('/almoxarifado/reservas/12/transferir', {
+      projeto_id: '', os_id: '', os_referencia: '', cliente_id: 3,
+    });
+  });
+
+  test('transferir a reserva do cliente 7 com /clientes recusada: "Cliente #7 — fora da lista" marcada, e mantida vai no PUT', async () => {
+    reservasDoBanco = [{ ...RESERVA_MANUAL_ATIVA, id: 13, projeto_id: null, cliente_id: 7 }];
+    recusar('/clientes');
+    await renderizar();
+    await clicarAcao(0, 'Transferir');
+    const cliente = campoPorLabel('Cliente');
+    expect(cliente.value).toBe('7');
+    expect(cliente.selectedOptions[0].textContent).toBe('Cliente #7 — fora da lista');
+    expect(avisoDoCampo('Cliente')?.textContent).toBe(FRASE_CLIENTES);
+    expect(avisoDoCampo('Projeto')).toBeNull();
+    preencher(campoPorLabel('Projeto'), '8');
+    await clicarBotaoModal('Transferir');
+    expect(api.put).toHaveBeenCalledWith('/almoxarifado/reservas/13/transferir', {
+      projeto_id: 8, os_id: '', os_referencia: '', cliente_id: 7,
+    });
   });
 });

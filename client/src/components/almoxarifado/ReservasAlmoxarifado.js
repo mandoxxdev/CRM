@@ -6,6 +6,7 @@ import { SkeletonTable } from '../SkeletonLoader';
 import ExtratoMaterialModal from './ExtratoMaterialModal';
 import { useAlmoxPermissoes } from '../../hooks/useAlmoxPermissoes';
 import { useAuth } from '../../context/AuthContext';
+import AvisoDaListaRecusada, { OpcaoForaDaLista } from './AvisoDaListaRecusada';
 import './Almoxarifado.css';
 
 /**
@@ -76,6 +77,8 @@ const ReservasAlmoxarifado = () => {
   const [projetos, setProjetos] = useState([]);
   const [ordensServico, setOrdensServico] = useState([]);
   const [clientes, setClientes] = useState([]);
+  const [erroProjetos, setErroProjetos] = useState(null);
+  const [erroClientes, setErroClientes] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const [statusFilter, setStatusFilter] = useState('ATIVA');
@@ -121,14 +124,18 @@ const ReservasAlmoxarifado = () => {
       // fórmula aqui criaria uma segunda fonte de verdade que divergiria na primeira mudança.
       const [mat, proj, os, cli] = await Promise.all([
         api.get('/almoxarifado/estoque').catch(() => ({ data: [] })),
-        api.get('/projetos').catch(() => ({ data: [] })),
+        // Etapa 156 (RN-156.02, C366): a recusa das duas listas de fora do modulo deixa de virar lista vazia calada — o erro fica guardado
+        // e cada seletor que ela alimenta (o filtro, a reserva nova, a transferencia) diz o motivo logo abaixo.
+        api.get('/projetos').then((r) => ({ data: r.data, erro: null }), (erro) => ({ data: [], erro })),
         api.get('/almoxarifado/aux/ordens-servico').catch(() => ({ data: [] })),
-        api.get('/clientes').catch(() => ({ data: [] })),
+        api.get('/clientes').then((r) => ({ data: r.data, erro: null }), (erro) => ({ data: [], erro })),
       ]);
       setMateriais(mat.data || []);
       setProjetos(proj.data || []);
+      setErroProjetos(proj.erro);
       setOrdensServico(os.data || []);
       setClientes(cli.data || []);
+      setErroClientes(cli.erro);
     })();
   }, []);
 
@@ -345,6 +352,12 @@ const ReservasAlmoxarifado = () => {
           </button>
         )}
       </div>
+      {/* Etapa 156 (RN-156.02): o filtro "Todos os projetos" nao tem rotulo proprio — o motivo vai logo abaixo da barra. */}
+      {erroProjetos && (
+        <div className="almox-filtros-aviso" style={{ marginBottom: 8 }}>
+          <AvisoDaListaRecusada erro={erroProjetos} nome="projetos" />
+        </div>
+      )}
 
       {/* Tabela */}
       <div className="almox-table-container">
@@ -496,6 +509,7 @@ const ReservasAlmoxarifado = () => {
                       <option value="">—</option>
                       {projetos.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
                     </select>
+                    <AvisoDaListaRecusada erro={erroProjetos} nome="projetos" />
                   </div>
                   <div className="almox-field">
                     <label className="almox-label">Ordem de Serviço</label>
@@ -514,6 +528,7 @@ const ReservasAlmoxarifado = () => {
                       <option value="">—</option>
                       {clientes.map((c) => <option key={c.id} value={c.id}>{rotuloCliente(c)}</option>)}
                     </select>
+                    <AvisoDaListaRecusada erro={erroClientes} nome="clientes" />
                   </div>
                   <div className="almox-field">
                     <label className="almox-label">Equipamento</label>
@@ -623,8 +638,10 @@ const ReservasAlmoxarifado = () => {
                   <select className="almox-form-select" value={transferirDestino.projeto_id}
                     onChange={(e) => setTransferirDestino((d) => ({ ...d, projeto_id: e.target.value }))}>
                     <option value="">—</option>
+                    <OpcaoForaDaLista valor={transferirDestino.projeto_id} lista={projetos} rotulo="Projeto" />
                     {projetos.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
                   </select>
+                  <AvisoDaListaRecusada erro={erroProjetos} nome="projetos" />
                 </div>
                 <div className="almox-field">
                   <label className="almox-label">Ordem de Serviço</label>
@@ -646,8 +663,10 @@ const ReservasAlmoxarifado = () => {
                   <select className="almox-form-select" value={transferirDestino.cliente_id}
                     onChange={(e) => setTransferirDestino((d) => ({ ...d, cliente_id: e.target.value }))}>
                     <option value="">—</option>
+                    <OpcaoForaDaLista valor={transferirDestino.cliente_id} lista={clientes} rotulo="Cliente" />
                     {clientes.map((c) => <option key={c.id} value={c.id}>{rotuloCliente(c)}</option>)}
                   </select>
+                  <AvisoDaListaRecusada erro={erroClientes} nome="clientes" />
                 </div>
                 <div className="almox-field almox-form-full">
                   <label className="almox-label">Motivo</label>

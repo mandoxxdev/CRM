@@ -239,15 +239,19 @@ test('[RN-154.02, RN-153.04] as camadas do Express montado: so a das notificacoe
 });
 
 // ── RN-154.01/02: pela rota ───────────────────────────────────────────────────────────────
-test('[RN-154.01/02, C353, C363] quem nenhuma tela das listas admite (so Engenharia / Projetos, so Compras, so Financeiro) toma 403 nas 2 listas (com os filtros das telas), e as notificacoes, com um lembrete de hoje numa proposta dele, voltam [] sem log; o vendedor recebe o lembrete dele', async () => {
+test('[RN-154.01/02, C353, C363] quem nenhuma tela das listas admite (so Engenharia / Projetos, so Compras, so Financeiro) toma 403 nas 2 listas (com os filtros das telas; o corpo = o fixture do client, RN-156.02), e as notificacoes, com um lembrete de hoje numa proposta dele, voltam [] sem log; o vendedor recebe o lembrete dele', async () => {
   const antes = await retrato();
   const errados = [];
+  // Etapa 156 (RN-156.02, C366): o corpo do 403 das duas listas = o fixture com que os testes das quatro telas do Almoxarifado montam a
+  // recusa (a frase do aviso sai do `error` dele). Mudou o corpo aqui, o fixture (e a frase que a tela mostra) tem de mudar junto.
+  const RECUSA_DO_CLIENT = JSON.parse(fs.readFileSync(path.join(CLIENT_SRC, 'components', 'almoxarifado', '__fixtures__', 'recusaDaListaDoServidor.json'), 'utf8'));
   for (const k of ['soEngProjetos', 'soCompras', 'soFinanceiro']) {
     const b = ctx.u[k];
     assert.deepStrictEqual(await negados(b.id), [], `${k} ja tinha log`);
     for (const c of CHAMADAS_DAS_LISTAS()) {
       const [s, x] = await j('GET', c, b.T);
       if (s !== 403 || JSON.stringify(x) !== JSON.stringify(NEGADO_LISTAS)) errados.push(`${k} ${c}: ${s} ${JSON.stringify(x).slice(0, 100)}`);
+      try { assert.deepStrictEqual(x, RECUSA_DO_CLIENT); } catch (e) { errados.push(`${k} ${c}: o corpo do 403 nao e o fixture do client ${JSON.stringify(x).slice(0, 100)}`); }
     }
     const [sn, xn] = await j('GET', '/notificacoes', b.T);
     if (sn !== 200 || JSON.stringify(xn) !== '[]') errados.push(`${k} notificacoes: ${sn} ${JSON.stringify(xn).slice(0, 160)}`);

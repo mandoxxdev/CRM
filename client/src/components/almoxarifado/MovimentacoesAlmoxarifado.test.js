@@ -16,6 +16,8 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import MovimentacoesAlmoxarifado from './MovimentacoesAlmoxarifado';
 import api from '../../services/api';
+// Etapa 156 (RN-156.02): o corpo REAL do 403 de GET /api/projetos (o portao das listas) — conferido pelo listasNotificacoesPortao.
+import RECUSA from './__fixtures__/recusaDaListaDoServidor.json';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -1056,5 +1058,43 @@ describe('MovimentacoesAlmoxarifado — aviso do pedido de compra no estorno (Et
     expect(toast.error.mock.calls).toEqual([[msg]]);
     expect(toast.success).not.toHaveBeenCalled();
     expect(modalAberto()).toBe(true);
+  });
+});
+
+// Etapa 156 (RN-156.02, C366): a lista de projetos recusada diz o motivo sob o Projeto do vinculo; o resto do vinculo (a OS, o centro de
+// custo — leituras do proprio modulo) continua carregado.
+describe('[RN-156.02, C366] o Projeto do vinculo com a lista de projetos recusada', () => {
+  const recusa403 = () => Object.assign(new Error('Request failed with status code 403'), { response: { status: 403, data: RECUSA } });
+  const campoDoModal = (rotulo) => [...container.querySelectorAll('.almox-modal .almox-field')]
+    .find((g) => g.querySelector('label')?.textContent.trim() === rotulo);
+  const opcoes = (rotulo) => [...campoDoModal(rotulo).querySelectorAll('select option')].map((o) => o.textContent.trim());
+  const aviso = (rotulo) => campoDoModal(rotulo).querySelector('[role="alert"]');
+  const comProjetos = (resposta) => {
+    const original = api.get.getMockImplementation();
+    api.get.mockImplementation((url, ...resto) => {
+      if (url === '/projetos') return resposta();
+      if (url === '/almoxarifado/aux/ordens-servico') return Promise.resolve({ data: [{ id: 42, numero_os: 'OS-042', cliente_nome: 'ACME' }] });
+      return original(url, ...resto);
+    });
+  };
+
+  test('/projetos recusada (o fixture): o motivo sob o Projeto, so o "—" nele; a OS carregou e nao avisa', async () => {
+    comProjetos(() => Promise.reject(recusa403()));
+    await abrirModalNovaMovimentacao();
+    await esperarEfeitos();
+    expect(aviso('Projeto')?.textContent)
+      .toBe('Sem acesso à lista de projetos: Acesso negado ao módulo. Recarregue a página para conferir suas permissões.');
+    expect(opcoes('Projeto')).toEqual(['—']);
+    expect(opcoes('Ordem de Serviço')).toEqual(['—', 'OS-042 — ACME']);
+    expect(aviso('Ordem de Serviço')).toBeNull();
+  });
+
+  test('com a lista carregada, nenhum aviso e os projetos como opcoes', async () => {
+    comProjetos(() => Promise.resolve({ data: [{ id: 7, nome: 'Projeto Alfa' }] }));
+    await abrirModalNovaMovimentacao();
+    await esperarEfeitos();
+    expect(aviso('Projeto')).toBeNull();
+    expect(container.querySelectorAll('.almox-modal [role="alert"]')).toHaveLength(0);
+    expect(opcoes('Projeto')).toEqual(['—', 'Projeto Alfa']);
   });
 });

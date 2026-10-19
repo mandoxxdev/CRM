@@ -25,6 +25,8 @@ import { MemoryRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import MaterialAlmoxarifadoForm, { LEGENDA_ABC, AVISO_SALDO_INICIAL, CAMPOS_LIDOS } from './MaterialAlmoxarifadoForm';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
+// Etapa 156 (RN-156.02): o corpo REAL do 403 de GET /api/clientes (o portao das listas) — conferido pelo listasNotificacoesPortao.
+import RECUSA from './__fixtures__/recusaDaListaDoServidor.json';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -136,6 +138,10 @@ function preencher(elemento, valor) {
 }
 
 const proprietario = () => container.querySelector('#material-proprietario');
+// Etapa 156 (RN-156.02): o aviso da lista recusada, lido pelo campo do Proprietario.
+const avisoDoProprietario = () => proprietario().closest('.almox-field').querySelector('[role="alert"]');
+const recusa403 = () => Object.assign(new Error('Request failed with status code 403'), { response: { status: 403, data: RECUSA } });
+const FRASE_CLIENTES_403 = 'Sem acesso à lista de clientes: Acesso negado ao módulo. Recarregue a página para conferir suas permissões.';
 
 // Localiza o <select> de Categoria pelo rótulo da própria seção — funciona igual antes e depois
 // da Etapa 26, então o vermelho do TDD é de asserção, não de seletor que não existe ainda.
@@ -195,11 +201,12 @@ describe('MaterialAlmoxarifadoForm — seção Propriedade', () => {
     expect(payload.proprietario_cliente_id).toBe(2);
   });
 
-  test('a falha ao carregar /clientes nao quebra o cadastro — sobra so a opcao GMP', async () => {
+  test('a recusa de /clientes (o 403 do portao das listas) nao quebra o cadastro — sobra so a opcao GMP, e o motivo sob o seletor', async () => {
     // /clientes e rota core, fora do modulo: quem nao tem acesso a Clientes ainda precisa
-    // conseguir cadastrar material proprio.
+    // conseguir cadastrar material proprio. Etapa 156: com o corpo REAL do 403 (o fixture), nao mais `new Error('403')` — que era a
+    // falha generica, sem `response`, e nao o que o servidor manda.
     api.get.mockImplementation((url) => {
-      if (url === '/clientes') return Promise.reject(new Error('403'));
+      if (url === '/clientes') return Promise.reject(recusa403());
       if (url === '/almoxarifado/familias') return Promise.resolve({ data: [FAMILIA] });
       if (url === '/almoxarifado/proximo-codigo') return Promise.resolve({ data: { codigo: 'CHP-999' } });
       if (url === '/almoxarifado/categorias') return Promise.resolve({ data: CATALOGO });
@@ -207,6 +214,7 @@ describe('MaterialAlmoxarifadoForm — seção Propriedade', () => {
     });
     await renderizarNovo();
     expect([...proprietario().querySelectorAll('option')]).toHaveLength(1);
+    expect(avisoDoProprietario()?.textContent).toBe(FRASE_CLIENTES_403);
     await preencherObrigatorios();
     await submeter();
     expect(api.post).toHaveBeenCalled();
@@ -1227,5 +1235,57 @@ describe('MaterialAlmoxarifadoForm — RN-08 (Etapa 125): o PUT diz os campos qu
     expect(toast.error).toHaveBeenCalledWith(E1);
     expect(toast.success).not.toHaveBeenCalled();
     expect(container.querySelector('form')).not.toBeNull();
+  });
+});
+
+// Etapa 156 (RN-156.02, C366, Fase 2 I3): a lista de clientes recusada diz o motivo sob o Proprietario, e o dono atual que nao esta na lista
+// aparece como a opcao dele, marcada — antes o select mostrava "GMP (estoque próprio)" e o PUT mandava o dono escondido (e escolher GMP nao
+// mudava nada na tela, porque ela ja "dizia" GMP).
+describe('[RN-156.02] o Proprietario com a lista de clientes recusada', () => {
+  const MATERIAL_DO_CLIENTE_7 = { ...MATERIAL_DO_CLIENTE, id: 79, proprietario_cliente_id: 7 };
+  const comClientes = (respostaDeClientes) => {
+    const original = api.get.getMockImplementation();
+    api.get.mockImplementation((url, ...resto) => {
+      if (url === '/clientes') return respostaDeClientes();
+      if (url === '/almoxarifado/materiais/79') return Promise.resolve({ data: MATERIAL_DO_CLIENTE_7 });
+      return original(url, ...resto);
+    });
+  };
+  const opcoes = () => [...proprietario().querySelectorAll('option')].map((o) => o.textContent);
+
+  test('editar o material do cliente 7 com /clientes recusada: "Cliente #7 — fora da lista" marcada e o aviso; GMP manda null', async () => {
+    comClientes(() => Promise.reject(recusa403()));
+    await renderizarEdicao(79);
+    expect(proprietario().value).toBe('7');
+    expect(proprietario().selectedOptions[0].textContent).toBe('Cliente #7 — fora da lista');
+    expect(opcoes()).toEqual(['GMP (estoque próprio)', 'Cliente #7 — fora da lista']);
+    expect(avisoDoProprietario()?.textContent).toBe(FRASE_CLIENTES_403);
+    preencher(proprietario(), '');
+    expect(opcoes()).toEqual(['GMP (estoque próprio)']);
+    await submeter();
+    expect(api.put).toHaveBeenCalled();
+    expect(api.put.mock.calls[0][1].proprietario_cliente_id).toBeNull();
+  });
+
+  test('mantido o dono fora da lista, o PUT manda o 7 (o que a tela mostra e o que grava)', async () => {
+    comClientes(() => Promise.reject(recusa403()));
+    await renderizarEdicao(79);
+    await submeter();
+    expect(api.put.mock.calls[0][1].proprietario_cliente_id).toBe(7);
+  });
+
+  test('a falha que nao e 403 (o banco ocupado depois das repeticoes: um Error sem response) diz "Nao foi possivel carregar"', async () => {
+    comClientes(() => Promise.reject(new Error('Banco de dados não está disponível. Tente recarregar a página.')));
+    await renderizarNovo();
+    expect(avisoDoProprietario()?.textContent)
+      .toBe('Não foi possível carregar a lista de clientes. Recarregue a página para tentar de novo.');
+    expect(opcoes()).toEqual(['GMP (estoque próprio)']);
+  });
+
+  test('com a lista carregada: nenhum aviso, e o dono que esta na lista nao ganha a opcao "fora da lista"', async () => {
+    await renderizarEdicao();
+    expect(proprietario().value).toBe('1');
+    expect(avisoDoProprietario()).toBeNull();
+    expect(opcoes()).toEqual(['GMP (estoque próprio)', 'Cliente Alfa LTDA', 'Cliente Beta SA']);
   });
 });

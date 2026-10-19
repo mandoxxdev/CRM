@@ -13,6 +13,7 @@ import { useAuth } from '../../context/AuthContext';
 import SeloProprietario, { rotuloMaterialComDono } from './SeloProprietario';
 import ExtratoMaterialModal from './ExtratoMaterialModal';
 import EtiquetasPdfModal from './EtiquetasPdfModal';
+import AvisoDaListaRecusada from './AvisoDaListaRecusada';
 import { montarEtiquetaRetalho } from '../../utils/etiquetasPdf';
 import { formatLocalizacaoLabel } from '../../utils/localizacaoLabel';
 import './Almoxarifado.css';
@@ -145,6 +146,7 @@ const SobrasAlmoxarifado = () => {
   const [centrosCusto, setCentrosCusto] = useState([]);
   const [ordensServico, setOrdensServico] = useState([]);
   const [projetos, setProjetos] = useState([]);
+  const [erroProjetos, setErroProjetos] = useState(null);
   const [lotesOrigem, setLotesOrigem] = useState([]);
 
   // { tipo: 'gerar'|'editar'|'solicitar'|'rejeitar'|'destino', sobra?|sucateamento? }
@@ -207,7 +209,8 @@ const SobrasAlmoxarifado = () => {
       api.get('/almoxarifado/localizacoes').catch(() => ({ data: [] })),
       api.get('/almoxarifado/centros-custo').catch(() => ({ data: [] })),
       api.get('/almoxarifado/aux/ordens-servico').catch(() => ({ data: [] })),
-      api.get('/projetos').catch(() => ({ data: [] })),
+      // Etapa 156 (RN-156.02, C366): a recusa da lista de projetos (de fora do modulo) fica guardada e os tres seletores dizem o motivo.
+      api.get('/projetos').then((r) => ({ data: r.data, erro: null }), (erro) => ({ data: [], erro })),
     ]).then(([mat, loc, cc, os, proj]) => {
       if (cancelado) return;
       setMateriais(mat.data || []);
@@ -215,6 +218,7 @@ const SobrasAlmoxarifado = () => {
       setCentrosCusto(cc.data || []);
       setOrdensServico(os.data || []);
       setProjetos(proj.data || []);
+      setErroProjetos(proj.erro);
     });
     return () => { cancelado = true; };
   }, []);
@@ -931,6 +935,7 @@ const SobrasAlmoxarifado = () => {
                         <option value="">—</option>
                         {projetos.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
                       </select>
+                      <AvisoDaListaRecusada erro={erroProjetos} nome="projetos" />
                     </div>
                     <div className="almox-field">
                       <label className="almox-label">Centro de custo</label>
@@ -1011,6 +1016,7 @@ const SobrasAlmoxarifado = () => {
                     <option value="">—</option>
                     {projetos.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
                   </select>
+                  <AvisoDaListaRecusada erro={erroProjetos} nome="projetos" />
                 </div>
                 <div className="almox-field">
                   <label className="almox-label">OS de origem</label>
@@ -1146,6 +1152,7 @@ const SobrasAlmoxarifado = () => {
                     <option value="">—</option>
                     {projetos.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
                   </select>
+                  <AvisoDaListaRecusada erro={erroProjetos} nome="projetos" />
                 </div>
                 <div className="almox-field">
                   <label className="almox-label">OS de origem</label>

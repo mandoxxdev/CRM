@@ -9,6 +9,7 @@ import { resolveMaterialPhotoUrl } from '../../utils/resolveMaterialPhotoUrl';
 import { formatLocalizacaoLabel } from '../../utils/localizacaoLabel';
 import { toast } from 'react-toastify';
 import { FiSave, FiArrowLeft, FiImage, FiRefreshCw } from 'react-icons/fi';
+import AvisoDaListaRecusada, { OpcaoForaDaLista } from './AvisoDaListaRecusada';
 import './Almoxarifado.css';
 
 // Etapa 26: a lista de categorias saiu daqui (era uma de três cópias hardcoded) e passou a vir
@@ -101,9 +102,12 @@ const MaterialAlmoxarifadoForm = () => {
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [savedId, setSavedId] = useState(null);
   // Etapa 8: lista de clientes da seção "Propriedade". Vem de /clientes (rota core, fora do
-  // módulo) — por isso a falha é silenciosa: sem a lista o select fica só com "GMP (estoque
+  // módulo) — por isso a falha não trava a tela: sem a lista o select fica só com "GMP (estoque
   // próprio)" e o cadastro de material continua funcionando, que é o caminho comum.
+  // Etapa 156 (RN-156.02, C366): a falha continua sem travar o cadastro, mas deixa de ser calada — o erro fica guardado e o aviso sob
+  // o seletor diz o motivo (o portao das listas, o banco ocupado); o dono atual fora da lista aparece como "Cliente #<id> — fora da lista".
   const [clientes, setClientes] = useState([]);
+  const [erroClientes, setErroClientes] = useState(null);
   // Etapa 26 (RN-01): o catálogo do cliente, ponto único de busca compartilhado com as duas
   // telas de listagem.
   const { categorias, erro: erroCategorias } = useCategoriasMaterial();
@@ -194,8 +198,8 @@ const MaterialAlmoxarifadoForm = () => {
   useEffect(() => {
     let cancelado = false;
     api.get('/clientes')
-      .then((r) => { if (!cancelado) setClientes(Array.isArray(r.data) ? r.data : []); })
-      .catch(() => { if (!cancelado) setClientes([]); });
+      .then((r) => { if (!cancelado) { setClientes(Array.isArray(r.data) ? r.data : []); setErroClientes(null); } })
+      .catch((e) => { if (!cancelado) { setClientes([]); setErroClientes(e); } });
     return () => { cancelado = true; };
   }, []);
 
@@ -773,10 +777,12 @@ const MaterialAlmoxarifadoForm = () => {
                     onChange={e => set('proprietario_cliente_id', e.target.value)}
                   >
                     <option value="">GMP (estoque próprio)</option>
+                    <OpcaoForaDaLista valor={form.proprietario_cliente_id} lista={clientes} rotulo="Cliente" />
                     {clientes.map(c => (
                       <option key={c.id} value={String(c.id)}>{c.razao_social || c.nome_fantasia}</option>
                     ))}
                   </select>
+                  <AvisoDaListaRecusada erro={erroClientes} nome="clientes" />
                   <small style={{ color: 'var(--gmp-text-light)', fontSize: '0.75rem', display: 'block', marginTop: 2 }}>
                     Material de cliente só sai com OS ou projeto desse mesmo cliente, exige número
                     de documento no recebimento e não entra na reposição, na sugestão de compra

@@ -15,6 +15,8 @@ import { MemoryRouter } from 'react-router-dom';
 import SobrasAlmoxarifado from './SobrasAlmoxarifado';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
+// Etapa 156 (RN-156.02): o corpo REAL do 403 de GET /api/projetos (o portao das listas) — conferido pelo listasNotificacoesPortao.
+import RECUSA from './__fixtures__/recusaDaListaDoServidor.json';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -754,5 +756,67 @@ describe('SobrasAlmoxarifado — sucateamento ligado a NC (Etapa 69, RN-13)', ()
     await renderizar();
     expect(linhasSuc()).toHaveLength(0);
     expect(api.get).not.toHaveBeenCalledWith('/almoxarifado/sucateamentos', expect.anything());
+  });
+});
+
+// Etapa 156 (RN-156.02, C366): a lista de projetos recusada diz o motivo sob os tres seletores que ela alimenta — o Projeto da saida e o
+// Projeto de origem do retalho, o Projeto de origem da sucata —; o resto (a OS de origem, leitura do proprio modulo) continua carregado.
+describe('[RN-156.02, C366] os projetos das sobras com a lista de projetos recusada', () => {
+  const FRASE = 'Sem acesso à lista de projetos: Acesso negado ao módulo. Recarregue a página para conferir suas permissões.';
+  const recusa403 = () => Object.assign(new Error('Request failed with status code 403'), { response: { status: 403, data: RECUSA } });
+  const grupo = (rotulo) => [...container.querySelectorAll('.almox-modal .almox-field')]
+    .find((g) => g.querySelector('label')?.textContent.trim() === rotulo);
+  const opcoes = (rotulo) => [...grupo(rotulo).querySelectorAll('select option')].map((o) => o.textContent.trim());
+  const aviso = (rotulo) => grupo(rotulo).querySelector('[role="alert"]');
+  const comProjetos = (resposta) => {
+    const original = api.get.getMockImplementation();
+    api.get.mockImplementation((url, ...resto) => {
+      if (url === '/projetos') return resposta();
+      if (url === '/almoxarifado/aux/ordens-servico') return Promise.resolve({ data: [{ id: 42, numero_os: 'OS-042', cliente_nome: 'ACME' }] });
+      return original(url, ...resto);
+    });
+  };
+  async function abrirRetalhoComBaixa() {
+    await renderizar();
+    await clicar(botao('Gerar retalho'));
+    marcar(campo('Baixar o material de origem'), true);
+  }
+
+  test('retalho: o motivo sob o Projeto da saida e sob o Projeto de origem; a OS de origem carregou e nao avisa', async () => {
+    comProjetos(() => Promise.reject(recusa403()));
+    await abrirRetalhoComBaixa();
+    expect(aviso('Projeto da saída')?.textContent).toBe(FRASE);
+    expect(aviso('Projeto de origem')?.textContent).toBe(FRASE);
+    expect(opcoes('Projeto da saída')).toEqual(['—']);
+    expect(opcoes('Projeto de origem')).toEqual(['—']);
+    expect(opcoes('OS de origem')).toEqual(['—', 'OS-042 — ACME']);
+    expect(aviso('OS de origem')).toBeNull();
+  });
+
+  test('sucata: o motivo sob o Projeto de origem; a OS de origem carregou', async () => {
+    comProjetos(() => Promise.reject(recusa403()));
+    await renderizar();
+    await abrirAbaSucateamentos();
+    await clicar(botao('Solicitar sucateamento'));
+    expect(aviso('Projeto de origem')?.textContent).toBe(FRASE);
+    expect(opcoes('Projeto de origem')).toEqual(['—']);
+    expect(opcoes('OS de origem')).toEqual(['—', 'OS-042 — ACME']);
+  });
+
+  test('com a lista carregada, nenhum aviso nos dois modais e os projetos como opcoes', async () => {
+    comProjetos(() => Promise.resolve({ data: [{ id: 7, nome: 'Projeto Alfa' }] }));
+    await abrirRetalhoComBaixa();
+    expect(container.querySelectorAll('.almox-modal [role="alert"]')).toHaveLength(0);
+    expect(opcoes('Projeto da saída')).toEqual(['—', 'Projeto Alfa']);
+    expect(opcoes('Projeto de origem')).toEqual(['—', 'Projeto Alfa']);
+  });
+
+  test('com a lista carregada, a sucata tambem nao avisa', async () => {
+    comProjetos(() => Promise.resolve({ data: [{ id: 7, nome: 'Projeto Alfa' }] }));
+    await renderizar();
+    await abrirAbaSucateamentos();
+    await clicar(botao('Solicitar sucateamento'));
+    expect(aviso('Projeto de origem')).toBeNull();
+    expect(opcoes('Projeto de origem')).toEqual(['—', 'Projeto Alfa']);
   });
 });
