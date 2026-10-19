@@ -213,7 +213,7 @@ const archiver = require('archiver');
 const { decodificarImagemBase64, filtroImagemMulter, multerComLimiteNoErro, tratarArquivoGrandeDemais, tratarErroFormatoImagem } = require('./services/imagemUpload');
 const { tratarErroGlobalApi } = require('./services/errosApi');
 // Etapa 156 (RN-156.03/04, C361, C370, C371): o servico de mapas com prazo e a cidade sem caixa nem acento — os chamadores nao mudam.
-const { obterCoordenadasExatas, obterCoordenadasCidade } = require('./services/coordenadas');
+const { obterCoordenadasExatas, obterCoordenadasCidade, normalizarNome } = require('./services/coordenadas');
 // Etapa 85 (RN-85.02): o MulterError LIMIT_FILE_SIZE nao carrega o limite; o embrulho anexa
 // `err.limiteBytes` (limits.fileSize de quem recusou) para o tratarArquivoGrandeDemais responder
 // 413 "Arquivo grande demais (máximo N MB)". Todo multer deste arquivo e criado por este `multer`.
@@ -15424,12 +15424,13 @@ app.get('/api/custos-viagens/clientes-proximos/:cliente_id', authenticateToken, 
         
         // Se ambos estão na mesma cidade, aplicar distância mínima baseada em heurística
         if (distancia < 1 && 
-            clientePrincipal.cidade.toLowerCase().trim() === cliente.cidade.toLowerCase().trim() &&
-            clientePrincipal.estado === cliente.estado) {
+            // Etapa 157 (RN-157.04): a mesma cidade sem caixa, sem acento e sem espaco nas pontas (SAO PAULO = SÃO PAULO), o estado sem caixa
+            normalizarNome(clientePrincipal.cidade) === normalizarNome(cliente.cidade) &&
+            String(clientePrincipal.estado).trim().toUpperCase() === String(cliente.estado).trim().toUpperCase()) {
           // Se ambos têm endereços diferentes, estimar distância mínima de 5km
           // Se não têm endereços ou são iguais, usar 2km como mínimo
           if (cliente.endereco && clientePrincipal.endereco && 
-              cliente.endereco.toLowerCase().trim() !== clientePrincipal.endereco.toLowerCase().trim()) {
+              normalizarNome(cliente.endereco) !== normalizarNome(clientePrincipal.endereco)) {
             distancia = 5; // Estimativa conservadora para endereços diferentes na mesma cidade
           } else {
             distancia = 2; // Distância mínima para mesma cidade

@@ -297,6 +297,20 @@ test('[RN-156.04, integracao] a rota para CAMPINAS (a grafia do cadastro) = a ro
   assert.ok(cli.valor_visita.distancia >= 95 && cli.valor_visita.distancia <= 115, `distancia da visita: ${cli.valor_visita.distancia} km (o centro de SP dava ~20)`);
 });
 
+test('[RN-157.04, integracao] os proximos de um cliente de SÃO PAULO: o de SAO PAULO com outro endereco a 5 km, o sem endereco e o do mesmo endereco (estado " SP") a 2 km (antes os tres a 0 km)', async () => {
+  const [s, prox] = await j('GET', `/custos-viagens/clientes-proximos/${ctx.sp}?raio_km=100`);
+  assert.strictEqual(s, 200, JSON.stringify(prox));
+  const km = (id) => (prox.find((p) => p.id === id) || {}).distancia_km;
+  const cadastro = (id) => prox.find((p) => p.id === id) || {};
+  // o cadastro guardou o que o teste diz (senao o cenario nao provaria a comparacao)
+  assert.strictEqual(cadastro(ctx.spOutroEndereco).cidade, 'SAO PAULO');
+  assert.strictEqual(cadastro(ctx.spSemEndereco).cidade, 'SAO PAULO ');
+  assert.strictEqual(cadastro(ctx.spMesmoEndereco).estado, ' SP');
+  assert.deepStrictEqual([km(ctx.spOutroEndereco), km(ctx.spSemEndereco), km(ctx.spMesmoEndereco)], [5, 2, 2], JSON.stringify(prox).slice(0, 600));
+  // a metade que nao muda: o de Campinas (a ~85 km) continua pela distancia das cidades
+  assert.ok(km(ctx.campinas) > 60 && km(ctx.campinas) < 100, `Campinas a ${km(ctx.campinas)} km`);
+});
+
 (async () => {
   console.log('\n=== Etapa 156: o prazo da consulta de endereco e a cidade do cadastro (C361, C370, C371) ===\n');
   try {
@@ -304,14 +318,19 @@ test('[RN-156.04, integracao] a rota para CAMPINAS (a grafia do cadastro) = a ro
     urlDaFronteira = `http://127.0.0.1:${servidorDeMapas.address().port}/search`;
     pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'e156-coord-'));
     T = await subir();
-    const cria = async (razao, cidade, endereco) => {
-      const [s, c] = await j('POST', '/clientes', { razao_social: razao, cidade, estado: 'SP', endereco });
+    const cria = async (razao, cidade, endereco, estado = 'SP') => {
+      const [s, c] = await j('POST', '/clientes', { razao_social: razao, cidade, estado, endereco });
       assert.strictEqual(s, 200, JSON.stringify(c));
       return c.id;
     };
     ctx.campinas = await cria('Cliente 156 Campinas', 'Campinas', 'Rua das Flores 10');
     ctx.jundiai = await cria('Vizinho 156 Jundiai', 'Jundiai');
     ctx.ribeirao = await cria('Longe 156 Ribeirao', 'Ribeirao Preto');
+    // Etapa 157 (RN-157.04): a mesma cidade com e sem acento — o cadastro grava em maiusculas, com o acento e o espaco que vieram
+    ctx.sp = await cria('Paulista 157 Principal', 'São Paulo', 'Rua São João 1');
+    ctx.spOutroEndereco = await cria('Paulista 157 Outro endereco', 'Sao Paulo', 'Avenida Paulista 900');
+    ctx.spSemEndereco = await cria('Paulista 157 Sem endereco', 'SAO PAULO ');
+    ctx.spMesmoEndereco = await cria('Paulista 157 Mesmo endereco', 'Sao Paulo', 'RUA SAO JOAO 1', ' sp');
     // o relatorio de visitas so lista cliente com proposta: uma, gravada por fora (o banco do index.js montado)
     const banco = new sqlite3.Database(path.join(pasta, 'database.sqlite'));
     banco.configure('busyTimeout', 15000);
