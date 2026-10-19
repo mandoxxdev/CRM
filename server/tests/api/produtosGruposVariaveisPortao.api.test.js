@@ -21,6 +21,7 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const sqlite3 = require('sqlite3');
+const regua = require('../helpers/reguaDoFonteDoServidor');
 
 const SERVER_DIR = path.join(__dirname, '..', '..');
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -213,27 +214,20 @@ test('[RN-150.01/02/03/04, C346, C347] fonte: as 25 com o portao certo como 2o m
   assert.deepStrictEqual(verboCaminho, esperado, 'registros fora do formato app.<verbo>(\'...\', ...) numa linha so, ou a mais');
   // Fase 5 r3 S01-S04: a regua acima so via o 1o registro de cada linha. Esta conta TODOS no texto inteiro (o \s atravessa a quebra de
   // linha): um segundo registro na mesma linha, um registro quebrado em duas linhas ou um caminho em lista aparecem aqui.
-  const reTodos = /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`](\/(?:api\/)?(?:grupos|produtos|variaveis-tecnicas)(?:\/[^"'`]*)?)["'`]/g;
+  const reTodos = /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`](\/(?:api\/)?(?:grupos|produtos|variaveis-tecnicas)(?:\/[^"'`]*)?)["'`]/gi;
   const todosNoTexto = [...FONTE.matchAll(reTodos)].map((m) => `${m[1].toUpperCase()} ${m[2]}`).sort();
   assert.deepStrictEqual(todosNoTexto, esperado, 'um registro a mais (na mesma linha, em duas linhas ou em lista) escaparia do portao');
   // e nenhum app.use com o caminho montado (concatenado ou em template): o caminho nao seria lido por nenhuma das reguas
   assert.deepStrictEqual(FONTE.split('\n').filter((l) => /\bapp\.(use|all|get|post|put|patch|delete)\(\s*(["'`][^"'`]*["'`]\s*\+|`[^`]*\$\{)/.test(l)), [],
     'um registro com o caminho montado escaparia das reguas do fonte');
   // nenhum outro arquivo do servidor registra estes caminhos (Compras monta /api/compras/grupos — outra tabela)
-  const fora = []; const vistos = [];
-  const varrer = (d) => {
-    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-      if (['node_modules', 'tests', 'data', 'uploads', 'backups'].includes(e.name) || e.name.startsWith('.')) continue;
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) varrer(p);
-      else if (e.name.endsWith('.js') && p !== path.join(SERVER_DIR, 'index.js')) {
-        const src = fs.readFileSync(p, 'utf8');
-        vistos.push(path.relative(SERVER_DIR, p));
-        if (/["'`]\/api\/(grupos|produtos|variaveis-tecnicas)["'`/]/.test(src) || /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`]\/(grupos|produtos|variaveis-tecnicas)["'`/]/.test(src)) fora.push(path.relative(SERVER_DIR, p));
-      }
-    }
-  };
-  varrer(SERVER_DIR);
+  // Etapa 152 (T3, retro da 151): a regua de todo o servidor (tests/helpers/reguaDoFonteDoServidor.js) — nenhum registro de app/router
+  // cujo caminho nao seja texto literal (fora os 6 medidos), nenhum caminho montado que possa virar um caminho desta etapa, e a varredura
+  // "fora do index.js" com os arquivos que comecam com ponto e .cjs/.mjs, sem diferenciar a caixa (o Express nao diferencia).
+  assert.deepStrictEqual(regua.registrosNaoLiterais(['/api/grupos', '/api/produtos', '/api/variaveis-tecnicas']),
+    regua.REGISTROS_NAO_LITERAIS_MEDIDOS, 'um registro com o caminho que nao e texto literal (ou montado) escaparia das reguas do fonte');
+  const { fora, vistos } = regua.registrosForaDoIndex((src) => /["'`]\/api\/(grupos|produtos|variaveis-tecnicas)["'`/]/i.test(src)
+    || /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`]\/(grupos|produtos|variaveis-tecnicas)["'`/]/i.test(src));
   assert.deepStrictEqual(fora, [], 'rota registrada fora do index.js escaparia desta regua');
   // controle: a varredura enxerga routes/ e services/ (o router de Compras registra /api/compras/grupos — outro caminho, nao acusa)
   assert.ok(vistos.includes(path.join('routes', 'compras.js')) && vistos.includes(path.join('services', 'portaoDasPropostas.js')), 'a varredura nao enxerga routes/ ou services/');

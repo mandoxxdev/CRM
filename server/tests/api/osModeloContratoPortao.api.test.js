@@ -19,6 +19,7 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const sqlite3 = require('sqlite3');
+const regua = require('../helpers/reguaDoFonteDoServidor');
 
 const SERVER_DIR = path.join(__dirname, '..', '..');
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -193,29 +194,24 @@ test('[RN-148.01/02, C341, C335] fonte: as 3 do modelo de contrato com exigirCom
   // Etapa 151 (retro da 150): as duas reguas acima leem uma linha por vez e so o 1o registro de cada linha. Estas contam TODOS no texto
   // inteiro (o \s atravessa a quebra de linha): um segundo registro na mesma linha, um registro em duas linhas ou um caminho em lista
   // aparecem aqui.
-  const reTodosC = /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`](\/api\/(?:clausulas-modelos?|familias\/:\w+\/clausulas-modelo)(?:\/[^"'`]*)?)["'`]/g;
+  const reTodosC = /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`](\/api\/(?:clausulas-modelos?|familias\/:\w+\/clausulas-modelo)(?:\/[^"'`]*)?)["'`]/gi;
   assert.deepStrictEqual([...FONTE.matchAll(reTodosC)].map((m) => `${m[1]} ${m[2]}`).sort(),
     ['get /api/clausulas-modelos', 'get /api/clausulas-modelos/:id/clausulas', 'put /api/familias/:id/clausulas-modelo'],
     'um registro do modelo de contrato a mais (na mesma linha, em duas linhas ou em lista) escaparia do portao');
-  const reTodosO = /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`](\/api\/operacional\/(?:os-itens\/:\w+|ordens-servico\/:\w+(?:\/(?:itens|pdf|gerar-pdf))?))["'`]/g;
+  const reTodosO = /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`](\/api\/operacional\/(?:os-itens\/:\w+|ordens-servico\/:\w+(?:\/(?:itens|pdf|gerar-pdf))?))["'`]/gi;
   assert.deepStrictEqual([...FONTE.matchAll(reTodosO)].map((m) => `${m[1]} ${m[2]}`).sort(), verboCaminho,
     'um registro da OS a mais (na mesma linha, em duas linhas ou em lista) escaparia do portao');
   assert.deepStrictEqual(FONTE.split('\n').filter((l) => /\bapp\.(use|all|get|post|put|patch|delete)\(\s*(["'`][^"'`]*["'`]\s*\+|`[^`]*\$\{)/.test(l)), [],
     'um registro com o caminho montado escaparia das reguas do fonte');
-  const fora = [];
-  const varrer = (d) => {
-    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-      if (['node_modules', 'tests', 'data', 'uploads', 'backups'].includes(e.name) || e.name.startsWith('.')) continue;
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) varrer(p);
-      else if (e.name.endsWith('.js') && p !== path.join(SERVER_DIR, 'index.js')) {
-        const src = fs.readFileSync(p, 'utf8');
-        if (reContrato.test(src) || reOs.test(src)) fora.push(path.relative(SERVER_DIR, p));
-      }
-    }
-  };
-  varrer(SERVER_DIR);
+  // Etapa 152 (T3, retro da 151): a regua de todo o servidor (tests/helpers/reguaDoFonteDoServidor.js) — nenhum registro de app/router
+  // cujo caminho nao seja texto literal (fora os 6 medidos), nenhum caminho montado que possa virar um caminho desta etapa, e a varredura
+  // "fora do index.js" com os arquivos que comecam com ponto e .cjs/.mjs, sem diferenciar a caixa (o Express nao diferencia).
+  assert.deepStrictEqual(regua.registrosNaoLiterais(['/api/clausulas-modelos', '/api/clausulas-modelo', '/api/familias', '/api/operacional/ordens-servico', '/api/operacional/os-itens']),
+    regua.REGISTROS_NAO_LITERAIS_MEDIDOS, 'um registro com o caminho que nao e texto literal (ou montado) escaparia das reguas do fonte');
+  const reContratoI = new RegExp(reContrato.source, 'i'); const reOsI = new RegExp(reOs.source, 'i');
+  const { fora, vistos } = regua.registrosForaDoIndex((src) => reContratoI.test(src) || reOsI.test(src));
   assert.deepStrictEqual(fora, [], 'rota registrada fora do index.js escaparia desta regua');
+  assert.ok(vistos.includes(path.join('routes', 'compras.js')) && vistos.includes(path.join('services', 'portaoDasPropostas.js')), 'a varredura nao enxerga routes/ ou services/');
   assert.ok(fs.existsSync(path.join(SERVER_DIR, 'routes', 'compras.js')), 'a varredura nao enxerga routes/ (controle: o arquivo de Compras existe)');
   // nenhum app.use no prefixo que atenda antes (o Express atende o primeiro registro que casa)
   assert.ok(!/app\.use\(\s*["'`]\/api\/(operacional|clausulas-modelos|familias)["'`/]/.test(FONTE), 'um app.use no prefixo atenderia antes do portao');

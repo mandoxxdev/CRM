@@ -21,6 +21,7 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const sqlite3 = require('sqlite3');
+const regua = require('../helpers/reguaDoFonteDoServidor');
 
 const SERVER_DIR = path.join(__dirname, '..', '..');
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -202,30 +203,24 @@ test('[RN-149.01/02/03/04, C343, C345] fonte: as 13 do cadastro com exigirComerc
   assert.deepStrictEqual(verboCaminho, esperado, 'registros de familia fora do formato app.<verbo>(\'...\', ...) numa linha so, ou a mais');
   // Etapa 151 (retro da 150): a regua acima le uma linha por vez e so o 1o registro de cada linha. Esta conta TODOS no texto inteiro (o \s
   // atravessa a quebra de linha): um segundo registro na mesma linha, um registro em duas linhas ou um caminho em lista aparecem aqui.
-  const reTodos = /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`](\/(?:api\/)?familias(?:\/[^"'`]*)?)["'`]/g;
+  const reTodos = /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`](\/(?:api\/)?familias(?:\/[^"'`]*)?)["'`]/gi;
   assert.deepStrictEqual([...FONTE.matchAll(reTodos)].map((m) => `${m[1].toUpperCase()} ${m[2]}`).sort(), esperado,
     'um registro de familia a mais (na mesma linha, em duas linhas ou em lista) escaparia do portao');
   // a lista de OS: o caminho exato registrado so pelo GET (o portao) e pelo POST (a criacao, outra regua — C277)
-  const reListaOs = /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`](\/api\/operacional\/ordens-servico)["'`]/g;
+  const reListaOs = /\.(get|post|put|patch|delete|all|use|route)\(\s*\[?\s*["'`](\/api\/operacional\/ordens-servico)["'`]/gi;
   assert.deepStrictEqual([...FONTE.matchAll(reListaOs)].map((m) => `${m[1].toUpperCase()} ${m[2]}`).sort(),
     ['GET /api/operacional/ordens-servico', 'POST /api/operacional/ordens-servico'], 'um registro a mais da lista de OS escaparia do portao');
   assert.deepStrictEqual(FONTE.split('\n').filter((l) => /\bapp\.(use|all|get|post|put|patch|delete)\(\s*(["'`][^"'`]*["'`]\s*\+|`[^`]*\$\{)/.test(l)), [],
     'um registro com o caminho montado escaparia das reguas do fonte');
   // nenhum outro arquivo do servidor registra o caminho inteiro (os routers do Almoxarifado montam /api/almoxarifado/familias — outra tabela)
-  const fora = [];
-  const varrer = (d) => {
-    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-      if (['node_modules', 'tests', 'data', 'uploads', 'backups'].includes(e.name) || e.name.startsWith('.')) continue;
-      const p = path.join(d, e.name);
-      if (e.isDirectory()) varrer(p);
-      else if (e.name.endsWith('.js') && p !== path.join(SERVER_DIR, 'index.js')) {
-        const src = fs.readFileSync(p, 'utf8');
-        if (/["'`]\/api\/familias/.test(src) || /app\.\w+\(\s*["'`]\/familias/.test(src) || /["'`]\/api\/operacional\/ordens-servico["'`]/.test(src)) fora.push(path.relative(SERVER_DIR, p));
-      }
-    }
-  };
-  varrer(SERVER_DIR);
+  // Etapa 152 (T3, retro da 151): a regua de todo o servidor (tests/helpers/reguaDoFonteDoServidor.js) — nenhum registro de app/router
+  // cujo caminho nao seja texto literal (fora os 6 medidos), nenhum caminho montado que possa virar um caminho desta etapa, e a varredura
+  // "fora do index.js" com os arquivos que comecam com ponto e .cjs/.mjs, sem diferenciar a caixa (o Express nao diferencia).
+  assert.deepStrictEqual(regua.registrosNaoLiterais(['/api/familias', '/api/operacional/ordens-servico']),
+    regua.REGISTROS_NAO_LITERAIS_MEDIDOS, 'um registro com o caminho que nao e texto literal (ou montado) escaparia das reguas do fonte');
+  const { fora, vistos } = regua.registrosForaDoIndex((src) => /["'`]\/api\/familias/i.test(src) || /\bapp\.\w+\(\s*\[?\s*["'`]\/familias/i.test(src) || /["'`]\/api\/operacional\/ordens-servico["'`]/i.test(src));
   assert.deepStrictEqual(fora, [], 'rota registrada fora do index.js escaparia desta regua');
+  assert.ok(vistos.includes(path.join('routes', 'almoxarifado.js')) && vistos.includes(path.join('services', 'portaoDasPropostas.js')), 'a varredura nao enxerga routes/ ou services/');
   assert.ok(fs.existsSync(path.join(SERVER_DIR, 'routes', 'almoxarifado.js')), 'a varredura nao enxerga routes/ (controle: o arquivo do Almoxarifado existe)');
   assert.ok(!/app\.use\(\s*["'`]\/(api\/)?(familias|operacional)["'`/]/.test(FONTE), 'um app.use no prefixo atenderia antes do portao');
   const sem = VINTE_E_UMA.filter((r) => !r.resto.startsWith(r.grupo === 'cadastro'
